@@ -2,7 +2,7 @@
   "temas": [
     {
       "id": "mqv7rfayzuh77",
-      "nome": "AxCred - Reanálise"
+      "nome": "AxCred - ReanÃ¡lise"
     },
     {
       "id": "mqv7rupc8b2qe",
@@ -13,6 +13,20 @@
       "nome": "AxCred - Antifraude"
     }
   ],
-  "melhorias": [],
-  "atualizado_em": "2026-06-26T17:37:59.678Z"
+  "melhorias": [
+    {
+      "id": "mqv86fzt5rsna",
+      "titulo": "Indicadores Visuais",
+      "descricao": "Incluir indicadores visuais de status nas abas que segmentam os sacados: não iniciada, em andamento (com identificação do responsável) e concluída (durante a análise).",
+      "tema_id": "mqv7rfayzuh77",
+      "status": "estimada",
+      "estimativa": "2 dias",
+      "dev": "",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-26T17:48:59.897Z"
+    }
+  ],
+  "atualizado_em": "2026-06-26T17:49:28.135Z"
 }
