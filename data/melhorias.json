@@ -39,7 +39,20 @@
       "entrega": "",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:02:14.158Z"
+    },
+    {
+      "id": "mqv8voouu0dmj",
+      "titulo": "Dividir as competências entre sacado CPF e empresas relacionadas",
+      "descricao": "Dividir as competências entre sacado CPF e empresas relacionadas (e vice-versa), mantendo os campos independentes entre si, ou seja, não rodar o sócio junto com o CNPJ permitindo que o analista faça o disparo, dessa forma tendemos a reduzir a sobrecarga e agilizar a resposta.\n\nOBS: Para esse tema será preciso do Anthony",
+      "tema_id": "mqv7s5ezhpc5n",
+      "status": "estimada",
+      "estimativa": "5 dias",
+      "dev": "Gabriel / Anthony",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-26T18:08:37.566Z"
     }
   ],
-  "atualizado_em": "2026-06-26T18:02:39.448Z"
+  "atualizado_em": "2026-06-26T18:08:40.791Z"
 }
