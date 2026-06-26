@@ -103,6 +103,47 @@
     .leg { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); }
     .leg-sq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 
+    /* FILTER BAR */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      padding: 14px 18px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .filter-bar span { font-size: 13px; color: var(--text3); margin-right: 4px; }
+    .filter-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-btn:hover { border-color: var(--border2); color: var(--text); }
+    .filter-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .filter-select {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text2);
+      cursor: pointer;
+      outline: none;
+    }
+    .filter-select:focus { border-color: var(--blue); }
+    .filter-select option { background: var(--bg3); }
+
     /* TEMAS */
     .section-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 16px; }
 
@@ -389,6 +430,108 @@ function buildCharts(temas, melhorias) {
   });
 }
 
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+let _temas = [], _melhorias = [];
+let _ano = null, _mes = null;
+
+function filtradas() {
+  return _melhorias.filter(m => {
+    if (!_ano) return true;
+    const d = new Date(m.criado_em);
+    if (d.getFullYear() !== _ano) return false;
+    if (_mes !== null && d.getMonth() !== _mes) return false;
+    return true;
+  });
+}
+
+function renderConteudo() {
+  const mel = filtradas();
+
+  const totais = {
+    total:       mel.length,
+    backlog:     mel.filter(m => m.status === 'recebida').length,
+    refinamento: mel.filter(m => m.status === 'refinamento').length,
+    estimadas:   mel.filter(m => m.status === 'estimada').length,
+    iniciadas:   mel.filter(m => m.status === 'iniciada').length,
+    negadas:     mel.filter(m => m.status === 'negada').length,
+  };
+
+  const label = _ano
+    ? (_mes !== null ? `${MESES[_mes]} de ${_ano}` : `Ano ${_ano}`)
+    : 'Todos os lançamentos';
+
+  document.getElementById('conteudo').innerHTML = `
+    <div class="summary">
+      <div class="sum-card"><div class="n">${totais.total}</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Total</div></div>
+      <div class="sum-card"><div class="n">${totais.backlog}</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Backlog</div></div>
+      <div class="sum-card"><div class="n">${totais.refinamento}</div><div class="lbl"><span class="dot" style="background:var(--purple)"></span>Refinamento</div></div>
+      <div class="sum-card"><div class="n">${totais.estimadas}</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Estimadas</div></div>
+      <div class="sum-card"><div class="n">${totais.iniciadas}</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Em andamento</div></div>
+      <div class="sum-card"><div class="n">${totais.negadas}</div><div class="lbl"><span class="dot" style="background:var(--red)"></span>Negadas</div></div>
+    </div>
+
+    <div class="charts">
+      <div class="chart-card">
+        <h3>Por tema</h3>
+        <div class="chart-inner"><canvas id="chart-temas"></canvas></div>
+        <div class="chart-legend" id="leg-temas"></div>
+      </div>
+      <div class="chart-card">
+        <h3>Por status</h3>
+        <div class="chart-inner"><canvas id="chart-status"></canvas></div>
+        <div class="chart-legend" id="leg-status"></div>
+      </div>
+    </div>
+
+    <div class="section-title">Melhorias por tema · <span style="font-weight:400;color:var(--text3);font-size:14px">${label}</span></div>
+    ${_temas.length === 0
+      ? `<div class="empty">Nenhum tema cadastrado ainda.</div>`
+      : _temas.map((t, i) => renderTema(t, mel, i)).join('')}
+  `;
+
+  if (_temas.length > 0) {
+    try { buildCharts(_temas, mel); } catch (_) {}
+  }
+}
+
+function buildFilterBar() {
+  const anos = [...new Set(_melhorias.map(m => new Date(m.criado_em).getFullYear()))].sort((a,b) => b - a);
+
+  const anoOpts = anos.map(a => `<option value="${a}" ${_ano===a?'selected':''}>${a}</option>`).join('');
+  const mesOpts = MESES.map((m,i) => `<option value="${i}" ${_mes===i?'selected':''}>${m}</option>`).join('');
+
+  document.getElementById('filter-bar').innerHTML = `
+    <span>Período:</span>
+    <button class="filter-btn ${!_ano ? 'active' : ''}" onclick="setFiltro(null,null)">Tudo</button>
+    <select class="filter-select" onchange="setFiltroAno(this.value)" ${anos.length===0?'disabled':''}>
+      <option value="">— Ano —</option>
+      ${anoOpts}
+    </select>
+    <select class="filter-select" onchange="setFiltroMes(this.value)" ${_ano===null?'disabled':''}>
+      <option value="">— Mês —</option>
+      ${mesOpts}
+    </select>
+  `;
+}
+
+function setFiltro(ano, mes) {
+  _ano = ano; _mes = mes;
+  buildFilterBar();
+  renderConteudo();
+}
+function setFiltroAno(val) {
+  _ano = val ? parseInt(val) : null;
+  _mes = null;
+  buildFilterBar();
+  renderConteudo();
+}
+function setFiltroMes(val) {
+  _mes = val !== '' ? parseInt(val) : null;
+  buildFilterBar();
+  renderConteudo();
+}
+
 async function loadData() {
   const app = document.getElementById('app');
   try {
@@ -397,18 +540,8 @@ async function loadData() {
     const json = await res.json();
     const data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
 
-    const temas     = data.temas     || [];
-    const melhorias = data.melhorias || [];
-
-    // totais
-    const totais = {
-      total:       melhorias.length,
-      estimadas:   melhorias.filter(m => m.status === 'estimada').length,
-      iniciadas:   melhorias.filter(m => m.status === 'iniciada').length,
-      backlog:     melhorias.filter(m => m.status === 'recebida').length,
-      refinamento: melhorias.filter(m => m.status === 'refinamento').length,
-      negadas:     melhorias.filter(m => m.status === 'negada').length,
-    };
+    _temas     = data.temas     || [];
+    _melhorias = data.melhorias || [];
 
     const dt = data.atualizado_em
       ? new Date(data.atualizado_em).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
@@ -416,37 +549,12 @@ async function loadData() {
     document.getElementById('ultima-atualizacao').textContent = `Atualizado em ${dt}`;
 
     app.innerHTML = `
-      <div class="summary">
-        <div class="sum-card"><div class="n">${totais.total}</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Total</div></div>
-        <div class="sum-card"><div class="n">${totais.backlog}</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Backlog</div></div>
-        <div class="sum-card"><div class="n">${totais.refinamento}</div><div class="lbl"><span class="dot" style="background:var(--purple)"></span>Refinamento</div></div>
-        <div class="sum-card"><div class="n">${totais.estimadas}</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Estimadas</div></div>
-        <div class="sum-card"><div class="n">${totais.iniciadas}</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Em andamento</div></div>
-        <div class="sum-card"><div class="n">${totais.negadas}</div><div class="lbl"><span class="dot" style="background:var(--red)"></span>Negadas</div></div>
-      </div>
-
-      <div class="charts">
-        <div class="chart-card">
-          <h3>Por tema</h3>
-          <div class="chart-inner"><canvas id="chart-temas"></canvas></div>
-          <div class="chart-legend" id="leg-temas"></div>
-        </div>
-        <div class="chart-card">
-          <h3>Por status</h3>
-          <div class="chart-inner"><canvas id="chart-status"></canvas></div>
-          <div class="chart-legend" id="leg-status"></div>
-        </div>
-      </div>
-
-      <div class="section-title">Melhorias por tema</div>
-      ${temas.length === 0
-        ? `<div class="empty">Nenhum tema cadastrado ainda.</div>`
-        : temas.map((t, i) => renderTema(t, melhorias, i)).join('')}
+      <div class="filter-bar" id="filter-bar"></div>
+      <div id="conteudo"></div>
     `;
 
-    if (temas.length > 0) {
-      try { buildCharts(temas, melhorias); } catch (_) {}
-    }
+    buildFilterBar();
+    renderConteudo();
 
   } catch (e) {
     app.innerHTML = `<div class="empty">${e.message}</div>`;
