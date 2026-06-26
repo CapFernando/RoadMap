@@ -279,10 +279,10 @@ function badgeHTML(status) {
 
 function metaHTML(m) {
   const items = [];
+  if (m.dev)     items.push(`${svgIcon('user')} ${m.dev}`);
   if (m.status === 'estimada' && m.estimativa)
     items.push(`${svgIcon('clock')} Estimativa: ${m.estimativa}`);
   if (m.status === 'iniciada') {
-    if (m.dev)     items.push(`${svgIcon('user')} ${m.dev}`);
     if (m.inicio)  items.push(`${svgIcon('calendar')} Início: ${formatDate(m.inicio)}`);
     if (m.entrega) items.push(`${svgIcon('calendar')} Entrega: ${formatDate(m.entrega)}`);
   }
