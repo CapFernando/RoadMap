@@ -11,6 +11,10 @@
     {
       "id": "mqv7s5ezhpc5n",
       "nome": "AxCred - Antifraude"
+    },
+    {
+      "id": "mqvbzmhmako90",
+      "nome": "RPA"
     }
   ],
   "melhorias": [
@@ -429,7 +433,20 @@
       "entrega": "",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:48:56.721Z"
+    },
+    {
+      "id": "mqvc0kqb324j4",
+      "titulo": "PDF/A",
+      "descricao": "Encaminho demanda trazida pelo Denner Rocha de Lima Pereira referente à exigência dos cartórios, que atualmente aceitam apenas documentos assinados no formato PDF/A.\n\nEm verificação com a QI Tech, constatamos que a assinatura pela interface (tela) não atende a essa necessidade no momento, pois não realiza a conversão para o padrão exigido — o arquivo enviado em PDF/A acaba sendo convertido para um PDF comum. A alternativa viável é o envio via API, fluxo no qual é possível submeter o PDF/A e indicar o formato final desejado, preservando o padrão aceito pelos cartórios.\n\nCabe destacar que já temos uma operação latente, com prazo para 07/07/2026, que dependerá desse tipo de assinatura. Diante disso, o projeto deverá entrar como urgência na fila de atendimento, em razão do possível travamento dos trâmites caso o documento não fique no padrão solicitado.\n\nSegue abaixo a resposta da QI Tech para referência:\n\n— início da resposta QI Tech —\n\n\"Atualmente, contamos com a funcionalidade de assinatura pelo método PAdES por tela e API. No fluxo padrão, caso seja enviado um arquivo PDF/A, ele será convertido para um PDF comum. Pela API, no entanto, é possível enviar um PDF/A e indicar o formato final desejado. Caso tenham interesse em utilizar essa integração, é só nos avisar que seguimos com o suporte necessário.\"\n\n— fim da resposta QI Tech —",
+      "tema_id": "mqvbzmhmako90",
+      "status": "recebida",
+      "estimativa": "",
+      "dev": "",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-26T19:36:24.563Z"
     }
   ],
-  "atualizado_em": "2026-06-26T18:49:02.751Z"
+  "atualizado_em": "2026-06-26T19:36:25.704Z"
 }
