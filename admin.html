@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — RoadMap de Melhorias</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0E0E0D;
+      --bg2:      #161614;
+      --bg3:      #1E1E1C;
+      --bg4:      #252522;
+      --border:   #2E2E2B;
+      --border2:  #3A3A36;
+      --text:     #ECEAE2;
+      --text2:    #A8A49A;
+      --text3:    #6E6A62;
+      --blue:     #3B8FE8;
+      --amber:    #E89C2F;
+      --green:    #5EA832;
+      --red:      #E84444;
+      --purple:   #9B6FE8;
+      --teal:     #2BBFA0;
+      --radius:   10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── LOGIN ── */
+    #login-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .login-box {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+    .login-box h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .login-box p  { font-size: 14px; color: var(--text2); margin-bottom: 28px; }
+    .login-box input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 16px;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      margin-bottom: 14px;
+      letter-spacing: 2px;
+    }
+    .login-box input:focus { border-color: var(--blue); }
+    .login-box button {
+      width: 100%;
+      padding: 13px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+    }
+    .login-box button:hover { opacity: 0.9; }
+    .login-error { color: var(--red); font-size: 14px; margin-top: 10px; min-height: 20px; }
+
+    /* ── ADMIN APP ── */
+    #admin-app { display: none; }
+
+    header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .header-left h1 { font-size: 18px; font-weight: 600; }
+    .header-left p  { font-size: 13px; color: var(--text2); }
+    .header-right { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* BUTTONS */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary   { background: var(--blue);  color: #fff; }
+    .btn-secondary { background: var(--bg3);   color: var(--text); border: 1px solid var(--border); }
+    .btn-danger    { background: var(--red);   color: #fff; }
+    .btn-success   { background: var(--green); color: #fff; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+    /* MAIN */
+    main { max-width: 1000px; margin: 0 auto; padding: 28px 20px; }
+
+    /* TABS */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    .tab {
+      padding: 10px 18px;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text2);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* CARDS DE LISTA */
+    .list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .list-title { font-size: 17px; font-weight: 600; }
+
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .card-info { flex: 1; min-width: 0; }
+    .card-nome { font-size: 16px; font-weight: 600; color: var(--text); }
+    .card-sub  { font-size: 13px; color: var(--text2); margin-top: 2px; }
+    .card-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+
+    /* BADGE STATUS */
+    .badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+    .badge-recebida   { background:#0C3260; color:#9BC8F8; }
+    .badge-refinamento{ background:#341A6E; color:#C9AEFF; }
+    .badge-regra      { background:#063D30; color:#7EECD8; }
+    .badge-estimada   { background:#5C3608; color:#F9C97A; }
+    .badge-iniciada   { background:#1E4208; color:#B2E07A; }
+    .badge-negada     { background:#5C0A0A; color:#F9A0A0; }
+
+    /* MODAL */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 560px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 28px;
+    }
+    .modal h2 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+
+    /* FORM */
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 500; color: var(--text2); margin-bottom: 6px; }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 15px;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      resize: vertical;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus { border-color: var(--blue); }
+    .form-group select option { background: var(--bg3); }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 500px) { .form-row { grid-template-columns: 1fr; } }
+
+    .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+    /* TOAST */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 13px 20px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 999;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+    #toast.ok  { border-color: var(--green); color: var(--green); }
+    #toast.err { border-color: var(--red);   color: var(--red);   }
+
+    .empty { padding: 48px; text-align: center; color: var(--text3); font-size: 15px; }
+    .saving-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200; font-size: 16px; color: var(--text2);
+    }
+    #conditional-fields { }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <h2>🔐 Área Administrativa</h2>
+    <p>RoadMap de Melhorias · Audax Capital</p>
+    <input type="password" id="senha-input" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')doLogin()" />
+    <button onclick="doLogin()">Entrar</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div id="admin-app">
+  <header>
+    <div class="header-left">
+      <h1>⚙️ Admin — RoadMap de Melhorias</h1>
+      <p>Audax Capital · Produto &amp; Tecnologia</p>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-secondary btn-sm" onclick="window.open('index.html','_blank')">Ver painel público</button>
+      <button class="btn btn-success btn-sm" onclick="saveToGitHub()">💾 Publicar alterações</button>
+      <button class="btn btn-secondary btn-sm" onclick="doLogout()">Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('melhorias')">Melhorias</div>
+      <div class="tab" onclick="switchTab('temas')">Temas</div>
+    </div>
+
+    <!-- ABA MELHORIAS -->
+    <div class="tab-content active" id="tab-melhorias">
+      <div class="list-header">
+        <span class="list-title">Melhorias cadastradas</span>
+        <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova melhoria</button>
+      </div>
+      <div id="lista-melhorias"></div>
+    </div>
+
+    <!-- ABA TEMAS -->
+    <div class="tab-content" id="tab-temas">
+      <div class="list-header">
+        <span class="list-title">Temas cadastrados</span>
+        <button class="btn btn-primary" onclick="openModalTema()">+ Novo tema</button>
+      </div>
+      <div id="lista-temas"></div>
+    </div>
+  </main>
+</div>
+
+<!-- MODAL MELHORIA -->
+<div id="modal-melhoria" class="modal-overlay" style="display:none" onclick="closeIfOverlay(event,'modal-melhoria')">
+  <div class="modal">
+    <h2 id="modal-melhoria-title">Nova melhoria</h2>
+    <input type="hidden" id="m-id" />
+
+    <div class="form-group">
+      <label>Título *</label>
+      <input type="text" id="m-titulo" placeholder="Nome curto da melhoria" />
+    </div>
+    <div class="form-group">
+      <label>Descrição</label>
+      <textarea id="m-descricao" rows="3" placeholder="Texto da área ou editado pelo produto…"></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tema *</label>
+        <select id="m-tema"></select>
+      </div>
+      <div class="form-group">
+        <label>Status *</label>
+        <select id="m-status" onchange="onStatusChange()">
+          <option value="recebida">Recebida (Backlog)</option>
+          <option value="refinamento">Em Refinamento</option>
+          <option value="regra">Validar Regra de Negócio</option>
+          <option value="estimada">Estimada</option>
+          <option value="iniciada">Iniciada</option>
+          <option value="negada">Negada</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="conditional-fields">
+      <!-- Estimada -->
+      <div id="field-estimativa" class="form-group" style="display:none">
+        <label>Estimativa de desenvolvimento</label>
+        <input type="text" id="m-estimativa" placeholder="Ex: 10 dias, 3 semanas…" />
+      </div>
+      <!-- Iniciada -->
+      <div id="field-iniciada" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Desenvolvedor responsável</label>
+            <input type="text" id="m-dev" placeholder="Nome do dev" />
+          </div>
+          <div class="form-group">
+            <label>Data de entrega prevista</label>
+            <input type="date" id="m-entrega" />
+          </div>
+        </div>
+      </div>
+      <!-- Negada -->
+      <div id="field-negada" class="form-group" style="display:none">
+        <label>Motivo da negativa *</label>
+        <textarea id="m-motivo" rows="3" placeholder="Explique o motivo pelo qual a melhoria foi negada…"></textarea>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-melhoria')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveMelhoria()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TEMA -->
+<div id="modal-tema" class="modal-overlay" style="display:none" onclick="closeIfOverlay(event,'modal-tema')">
+  <div class="modal">
+    <h2 id="modal-tema-title">Novo tema</h2>
+    <input type="hidden" id="t-id" />
+    <div class="form-group">
+      <label>Nome do tema *</label>
+      <input type="text" id="t-nome" placeholder="Ex: AXCRED - Reanálise" />
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-tema')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveTema()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────
+const SENHA         = 'AudaxCapital123';
+const GITHUB_TOKEN  = 'SEU_GITHUB_TOKEN_AQUI';
+const GITHUB_USER   = 'CapFernando';
+const GITHUB_REPO   = 'RoadMap';
+const DATA_PATH     = 'data/melhorias.json';
+const API_URL       = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
+
+// ─── STATE ────────────────────────────────────────────────────────
+let state = { temas: [], melhorias: [] };
+let fileSha = null;
+
+// ─── LOGIN ────────────────────────────────────────────────────────
+function doLogin() {
+  const v = document.getElementById('senha-input').value;
+  if (v === SENHA) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-app').style.display = 'block';
+    loadFromGitHub();
+  } else {
+    document.getElementById('login-error').textContent = 'Senha incorreta.';
+    document.getElementById('senha-input').value = '';
+  }
+}
+function doLogout() {
+  document.getElementById('admin-app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('senha-input').value = '';
+  document.getElementById('login-error').textContent = '';
+}
+
+// ─── GITHUB ───────────────────────────────────────────────────────
+async function loadFromGitHub() {
+  try {
+    const res = await fetch(API_URL, {
+      headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (res.status === 404) { renderAll(); return; }
+    if (!res.ok) throw new Error('Erro ao carregar dados do GitHub.');
+    const json = await res.json();
+    fileSha = json.sha;
+    const decoded = JSON.parse(atob(json.content.replace(/\n/g, '')));
+    state = { temas: decoded.temas || [], melhorias: decoded.melhorias || [] };
+    renderAll();
+  } catch (e) {
+    toast(e.message, 'err');
+    renderAll();
+  }
+}
+
+async function saveToGitHub() {
+  showSaving(true);
+  try {
+    state.atualizado_em = new Date().toISOString();
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(state, null, 2))));
+    const body = {
+      message: `chore: atualiza melhorias ${new Date().toLocaleString('pt-BR')}`,
+      content,
+      ...(fileSha ? { sha: fileSha } : {})
+    };
+    const res = await fetch(API_URL, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Erro ao salvar.');
+    }
+    const data = await res.json();
+    fileSha = data.content.sha;
+    toast('Publicado com sucesso! O painel já está atualizado.', 'ok');
+  } catch (e) {
+    toast('Erro: ' + e.message, 'err');
+  } finally {
+    showSaving(false);
+  }
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────
+const STATUS_LABELS = {
+  recebida:'Recebida (Backlog)', refinamento:'Em Refinamento',
+  regra:'Validar Regra de Negócio', estimada:'Estimada',
+  iniciada:'Iniciada', negada:'Negada'
+};
+
+function renderAll() { renderTemas(); renderMelhorias(); }
+
+function renderTemas() {
+  const el = document.getElementById('lista-temas');
+  if (!state.temas.length) { el.innerHTML = '<div class="empty">Nenhum tema cadastrado.</div>'; return; }
+  el.innerHTML = state.temas.map(t => {
+    const n = state.melhorias.filter(m => m.tema_id === t.id).length;
+    return `<div class="card">
+      <div class="card-info">
+        <div class="card-nome">${t.nome}</div>
+        <div class="card-sub">${n} ${n===1?'melhoria':'melhorias'}</div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-secondary btn-sm" onclick="openModalTema('${t.id}')">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteTema('${t.id}')">Excluir</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMelhorias() {
+  const el = document.getElementById('lista-melhorias');
+  if (!state.melhorias.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria cadastrada.</div>'; return; }
+  const sorted = [...state.melhorias].sort((a,b) => {
+    const ta = state.temas.find(t=>t.id===a.tema_id)?.nome || '';
+    const tb = state.temas.find(t=>t.id===b.tema_id)?.nome || '';
+    return ta.localeCompare(tb) || a.titulo.localeCompare(b.titulo);
+  });
+  el.innerHTML = sorted.map(m => {
+    const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '—';
+    const badge = `<span class="badge badge-${m.status}">${STATUS_LABELS[m.status]||m.status}</span>`;
+    let sub = tema;
+    if (m.status === 'estimada' && m.estimativa) sub += ` · ${m.estimativa}`;
+    if (m.status === 'iniciada' && m.dev) sub += ` · ${m.dev}`;
+    if (m.status === 'iniciada' && m.entrega) sub += ` · Entrega: ${formatDate(m.entrega)}`;
+    return `<div class="card">
+      <div class="card-info">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+          <div class="card-nome">${m.titulo}</div>${badge}
+        </div>
+        <div class="card-sub">${sub}</div>
+        ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${m.descricao.substring(0,120)}${m.descricao.length>120?'…':''}</div>` : ''}
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-secondary btn-sm" onclick="openModalMelhoria('${m.id}')">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMelhoria('${m.id}')">Excluir</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ─── MODAL TEMA ───────────────────────────────────────────────────
+function openModalTema(id) {
+  document.getElementById('t-id').value = id || '';
+  document.getElementById('t-nome').value = id ? (state.temas.find(t=>t.id===id)?.nome || '') : '';
+  document.getElementById('modal-tema-title').textContent = id ? 'Editar tema' : 'Novo tema';
+  document.getElementById('modal-tema').style.display = 'flex';
+}
+function saveTema() {
+  const nome = document.getElementById('t-nome').value.trim();
+  if (!nome) { toast('Informe o nome do tema.', 'err'); return; }
+  const id = document.getElementById('t-id').value;
+  if (id) {
+    const t = state.temas.find(t => t.id === id);
+    if (t) t.nome = nome;
+  } else {
+    state.temas.push({ id: uid(), nome });
+  }
+  closeModal('modal-tema');
+  renderAll();
+  toast('Tema salvo. Clique em "Publicar alterações" para ir ao ar.', 'ok');
+}
+function deleteTema(id) {
+  if (!confirm('Excluir este tema? As melhorias vinculadas ficarão sem tema.')) return;
+  state.temas = state.temas.filter(t => t.id !== id);
+  renderAll();
+  toast('Tema removido.', 'ok');
+}
+
+// ─── MODAL MELHORIA ───────────────────────────────────────────────
+function openModalMelhoria(id) {
+  const m = id ? state.melhorias.find(x => x.id === id) : null;
+  document.getElementById('modal-melhoria-title').textContent = m ? 'Editar melhoria' : 'Nova melhoria';
+  document.getElementById('m-id').value        = m?.id        || '';
+  document.getElementById('m-titulo').value    = m?.titulo    || '';
+  document.getElementById('m-descricao').value = m?.descricao || '';
+  document.getElementById('m-estimativa').value= m?.estimativa|| '';
+  document.getElementById('m-dev').value       = m?.dev       || '';
+  document.getElementById('m-entrega').value   = m?.entrega   || '';
+  document.getElementById('m-motivo').value    = m?.motivo_negacao || '';
+
+  // preenche temas no select
+  const sel = document.getElementById('m-tema');
+  sel.innerHTML = state.temas.map(t => `<option value="${t.id}" ${m?.tema_id===t.id?'selected':''}>${t.nome}</option>`).join('');
+  if (!state.temas.length) sel.innerHTML = '<option value="">— Cadastre um tema primeiro —</option>';
+
+  document.getElementById('m-status').value = m?.status || 'recebida';
+  onStatusChange();
+  document.getElementById('modal-melhoria').style.display = 'flex';
+}
+
+function onStatusChange() {
+  const s = document.getElementById('m-status').value;
+  document.getElementById('field-estimativa').style.display = s === 'estimada'  ? 'block' : 'none';
+  document.getElementById('field-iniciada').style.display   = s === 'iniciada'  ? 'block' : 'none';
+  document.getElementById('field-negada').style.display     = s === 'negada'    ? 'block' : 'none';
+}
+
+function saveMelhoria() {
+  const titulo = document.getElementById('m-titulo').value.trim();
+  const temaId = document.getElementById('m-tema').value;
+  const status = document.getElementById('m-status').value;
+  if (!titulo) { toast('Informe o título.', 'err'); return; }
+  if (!temaId) { toast('Selecione um tema.', 'err'); return; }
+  if (status === 'negada' && !document.getElementById('m-motivo').value.trim()) {
+    toast('Informe o motivo da negativa.', 'err'); return;
+  }
+
+  const id = document.getElementById('m-id').value;
+  const obj = {
+    id: id || uid(),
+    titulo,
+    descricao:       document.getElementById('m-descricao').value.trim(),
+    tema_id:         temaId,
+    status,
+    estimativa:      status === 'estimada' ? document.getElementById('m-estimativa').value.trim() : '',
+    dev:             status === 'iniciada' ? document.getElementById('m-dev').value.trim() : '',
+    entrega:         status === 'iniciada' ? document.getElementById('m-entrega').value : '',
+    motivo_negacao:  status === 'negada'   ? document.getElementById('m-motivo').value.trim() : '',
+    criado_em:       id ? (state.melhorias.find(x=>x.id===id)?.criado_em || new Date().toISOString()) : new Date().toISOString(),
+  };
+
+  if (id) {
+    const idx = state.melhorias.findIndex(x => x.id === id);
+    if (idx >= 0) state.melhorias[idx] = obj;
+  } else {
+    state.melhorias.push(obj);
+  }
+
+  closeModal('modal-melhoria');
+  renderAll();
+  toast('Melhoria salva. Clique em "Publicar alterações" para ir ao ar.', 'ok');
+}
+
+function deleteMelhoria(id) {
+  if (!confirm('Excluir esta melhoria?')) return;
+  state.melhorias = state.melhorias.filter(m => m.id !== id);
+  renderAll();
+  toast('Melhoria removida.', 'ok');
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function formatDate(s) {
+  if (!s) return '';
+  const [y,m,d] = s.split('-');
+  return `${d}/${m}/${y}`;
+}
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function closeIfOverlay(e, id) { if (e.target === e.currentTarget) closeModal(id); }
+
+let toastTimer;
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3500);
+}
+
+function showSaving(on) {
+  const id = 'saving-overlay';
+  if (on) {
+    if (document.getElementById(id)) return;
+    const d = document.createElement('div');
+    d.id = id; d.className = 'saving-overlay';
+    d.textContent = 'Publicando no GitHub…';
+    document.body.appendChild(d);
+  } else {
+    document.getElementById(id)?.remove();
+  }
+}
+</script>
+</body>
+</html>
