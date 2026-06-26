@@ -6,6 +6,7 @@
   <title>Admin — RoadMap de Melhorias</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="config.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -394,8 +395,8 @@
 
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────
-const SENHA         = 'AudaxCapital123';
-const GITHUB_TOKEN  = 'SEU_GITHUB_TOKEN_AQUI';
+const SENHA         = window.ADMIN_SENHA   || '';
+const GITHUB_TOKEN  = window.GITHUB_TOKEN  || '';
 const GITHUB_USER   = 'CapFernando';
 const GITHUB_REPO   = 'RoadMap';
 const DATA_PATH     = 'data/melhorias.json';
