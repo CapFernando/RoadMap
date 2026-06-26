@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoadMap de Melhorias — Audax Capital</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0E0E0D;
+      --bg2:      #161614;
+      --bg3:      #1E1E1C;
+      --bg4:      #252522;
+      --border:   #2E2E2B;
+      --border2:  #3A3A36;
+      --text:     #ECEAE2;
+      --text2:    #A8A49A;
+      --text3:    #6E6A62;
+
+      --blue:     #3B8FE8;
+      --blue-bg:  #0C3260;
+      --blue-tx:  #9BC8F8;
+
+      --amber:    #E89C2F;
+      --amber-bg: #5C3608;
+      --amber-tx: #F9C97A;
+
+      --green:    #5EA832;
+      --green-bg: #1E4208;
+      --green-tx: #B2E07A;
+
+      --purple:   #9B6FE8;
+      --purple-bg:#341A6E;
+      --purple-tx:#C9AEFF;
+
+      --teal:     #2BBFA0;
+      --teal-bg:  #063D30;
+      --teal-tx:  #7EECD8;
+
+      --red:      #E84444;
+      --red-bg:   #5C0A0A;
+      --red-tx:   #F9A0A0;
+
+      --radius:   10px;
+      --radius-sm:6px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* HEADER */
+    header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-left h1 { font-size: 20px; font-weight: 600; color: var(--text); }
+    .header-left p  { font-size: 14px; color: var(--text2); margin-top: 2px; }
+    .header-right   { font-size: 13px; color: var(--text3); }
+
+    /* MAIN */
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+    /* SUMMARY CARDS */
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 32px; }
+    .sum-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+    }
+    .sum-card .n   { font-size: 30px; font-weight: 700; color: var(--text); line-height: 1; }
+    .sum-card .lbl { font-size: 13px; color: var(--text2); margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* CHARTS */
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+    @media (max-width: 600px) { .charts { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .chart-card h3 { font-size: 14px; font-weight: 500; color: var(--text2); margin-bottom: 12px; }
+    .chart-inner   { height: 180px; position: relative; }
+    .chart-legend  { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .leg { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); }
+    .leg-sq { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+    /* TEMAS */
+    .section-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 16px; }
+
+    .tema-block { margin-bottom: 14px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+
+    .tema-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: var(--bg2);
+      cursor: pointer;
+      user-select: none;
+      gap: 12px;
+    }
+    .tema-header:hover { background: var(--bg3); }
+    .tema-header-left { display: flex; align-items: center; gap: 12px; }
+    .tema-nome { font-size: 16px; font-weight: 600; color: var(--text); }
+    .tema-count { font-size: 13px; color: var(--text3); }
+    .tema-arrow {
+      color: var(--text3);
+      font-size: 18px;
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+    }
+    .tema-arrow.open { transform: rotate(180deg); }
+
+    .tema-body { display: none; padding: 4px 0 8px; }
+    .tema-body.open { display: block; }
+
+    /* MELHORIAS */
+    .melhoria {
+      margin: 6px 14px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+    }
+
+    .melhoria-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+    .melhoria-titulo { font-size: 16px; font-weight: 600; color: var(--text); flex: 1; }
+    .badge {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .badge-recebida  { background: var(--blue-bg);   color: var(--blue-tx);   }
+    .badge-refinamento{ background: var(--purple-bg); color: var(--purple-tx); }
+    .badge-regra     { background: var(--teal-bg);   color: var(--teal-tx);   }
+    .badge-estimada  { background: var(--amber-bg);  color: var(--amber-tx);  }
+    .badge-iniciada  { background: var(--green-bg);  color: var(--green-tx);  }
+    .badge-negada    { background: var(--red-bg);    color: var(--red-tx);    }
+
+    .melhoria-desc {
+      font-size: 15px;
+      color: var(--text2);
+      line-height: 1.65;
+      margin-bottom: 10px;
+    }
+
+    .melhoria-negada-motivo {
+      background: var(--red-bg);
+      border-left: 3px solid var(--red);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: var(--red-tx);
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    .melhoria-negada-motivo strong { display: block; font-size: 12px; margin-bottom: 2px; opacity: 0.7; }
+
+    .melhoria-meta { display: flex; flex-wrap: wrap; gap: 10px; }
+    .meta-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      color: var(--text2);
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px;
+    }
+    .meta-item svg { width: 14px; height: 14px; opacity: 0.7; flex-shrink: 0; }
+
+    /* EMPTY */
+    .empty {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--text3);
+      font-size: 15px;
+    }
+
+    /* LOADING */
+    .loading { text-align: center; padding: 80px; color: var(--text3); font-size: 15px; }
+
+    /* FOOTER */
+    footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 13px;
+      color: var(--text3);
+      border-top: 1px solid var(--border);
+      margin-top: 32px;
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 16px 18px; }
+      main   { padding: 20px 14px; }
+      .melhoria { margin: 6px 8px; padding: 14px; }
+      .melhoria-titulo { font-size: 15px; }
+      .melhoria-desc   { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>🗺️ RoadMap de Melhorias</h1>
+    <p>Audax Capital · Produto &amp; Tecnologia</p>
+  </div>
+  <div class="header-right" id="ultima-atualizacao">—</div>
+</header>
+
+<main>
+  <div id="app">
+    <div class="loading">Carregando melhorias…</div>
+  </div>
+</main>
+
+<footer>Painel interno · Audax Capital · Produto &amp; Tecnologia</footer>
+
+<script>
+const GITHUB_USER = 'CapFernando';
+const GITHUB_REPO = 'RoadMap';
+const DATA_PATH   = 'data/melhorias.json';
+const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
+
+const STATUS_META = {
+  recebida:    { label: 'Recebida (Backlog)', cls: 'badge-recebida',    cor: '#3B8FE8' },
+  refinamento: { label: 'Em Refinamento',     cls: 'badge-refinamento', cor: '#9B6FE8' },
+  regra:       { label: 'Validar Regra de Negócio', cls: 'badge-regra', cor: '#2BBFA0' },
+  estimada:    { label: 'Estimada',            cls: 'badge-estimada',   cor: '#E89C2F' },
+  iniciada:    { label: 'Iniciada',            cls: 'badge-iniciada',   cor: '#5EA832' },
+  negada:      { label: 'Negada',              cls: 'badge-negada',     cor: '#E84444' },
+};
+
+const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
+
+function svgIcon(name) {
+  const icons = {
+    calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+    clock:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+    user:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+    info:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+    chevron:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`,
+  };
+  return icons[name] || '';
+}
+
+function badgeHTML(status) {
+  const m = STATUS_META[status] || STATUS_META.recebida;
+  return `<span class="badge ${m.cls}">${m.label}</span>`;
+}
+
+function metaHTML(m) {
+  const items = [];
+  if (m.status === 'estimada' && m.estimativa)
+    items.push(`${svgIcon('clock')} ${m.estimativa}`);
+  if (m.status === 'iniciada') {
+    if (m.dev)      items.push(`${svgIcon('user')} ${m.dev}`);
+    if (m.entrega)  items.push(`${svgIcon('calendar')} Entrega: ${m.entrega}`);
+  }
+  if (!items.length) return '';
+  return `<div class="melhoria-meta">${items.map(i => `<span class="meta-item">${i}</span>`).join('')}</div>`;
+}
+
+function motivoHTML(m) {
+  if (m.status !== 'negada' || !m.motivo_negacao) return '';
+  return `<div class="melhoria-negada-motivo"><strong>Motivo da negativa</strong>${m.motivo_negacao}</div>`;
+}
+
+function renderMelhoria(m) {
+  return `
+    <div class="melhoria">
+      <div class="melhoria-top">
+        <div class="melhoria-titulo">${m.titulo}</div>
+        ${badgeHTML(m.status)}
+      </div>
+      ${m.descricao ? `<div class="melhoria-desc">${m.descricao}</div>` : ''}
+      ${motivoHTML(m)}
+      ${metaHTML(m)}
+    </div>`;
+}
+
+function renderTema(tema, melhorias, idx) {
+  const id = `tema-${tema.id}`;
+  const cor = TEMA_CORES[idx % TEMA_CORES.length];
+  const items = melhorias.filter(m => m.tema_id === tema.id);
+  const count = items.length;
+  return `
+    <div class="tema-block">
+      <div class="tema-header" onclick="toggleTema('${id}')" aria-expanded="true" aria-controls="${id}-body">
+        <div class="tema-header-left">
+          <span style="width:12px;height:12px;border-radius:50%;background:${cor};flex-shrink:0;display:inline-block;"></span>
+          <span class="tema-nome">${tema.nome}</span>
+          <span class="tema-count">${count} ${count === 1 ? 'melhoria' : 'melhorias'}</span>
+        </div>
+        <span class="tema-arrow open" id="${id}-arrow">${svgIcon('chevron')}</span>
+      </div>
+      <div class="tema-body open" id="${id}-body">
+        ${count === 0
+          ? `<div style="padding:18px 18px;font-size:14px;color:var(--text3);">Nenhuma melhoria cadastrada neste tema.</div>`
+          : items.map(renderMelhoria).join('')}
+      </div>
+    </div>`;
+}
+
+function toggleTema(id) {
+  const body  = document.getElementById(`${id}-body`);
+  const arrow = document.getElementById(`${id}-arrow`);
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+function buildCharts(temas, melhorias) {
+  // por tema
+  const temaLabels = temas.map(t => t.nome);
+  const temaData   = temas.map(t => melhorias.filter(m => m.tema_id === t.id).length);
+  const temaCores  = temas.map((_, i) => TEMA_CORES[i % TEMA_CORES.length]);
+
+  // por status
+  const stLabels = Object.values(STATUS_META).map(s => s.label);
+  const stKeys   = Object.keys(STATUS_META);
+  const stData   = stKeys.map(k => melhorias.filter(m => m.status === k).length);
+  const stCores  = stKeys.map(k => STATUS_META[k].cor);
+
+  const cfg = (labels, data, cores) => ({
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: cores, borderWidth: 2, borderColor: '#0E0E0D', hoverOffset: 6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '60%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1E1E1C', titleColor: '#ECEAE2', bodyColor: '#A8A49A',
+          borderColor: '#2E2E2B', borderWidth: 1,
+          callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}` }
+        }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chart-temas'), cfg(temaLabels, temaData, temaCores));
+  new Chart(document.getElementById('chart-status'), cfg(stLabels, stData, stCores));
+
+  // legendas
+  const legTema = document.getElementById('leg-temas');
+  temas.forEach((t, i) => {
+    const n = temaData[i];
+    legTema.innerHTML += `<span class="leg"><span class="leg-sq" style="background:${temaCores[i]}"></span>${t.nome} <strong style="color:var(--text);margin-left:2px;">${n}</strong></span>`;
+  });
+
+  const legStatus = document.getElementById('leg-status');
+  stKeys.forEach((k, i) => {
+    if (!stData[i]) return;
+    legStatus.innerHTML += `<span class="leg"><span class="leg-sq" style="background:${stCores[i]}"></span>${stLabels[i]} <strong style="color:var(--text);margin-left:2px;">${stData[i]}</strong></span>`;
+  });
+}
+
+async function loadData() {
+  const app = document.getElementById('app');
+  try {
+    const res = await fetch(`${RAW_URL}?t=${Date.now()}`);
+    if (!res.ok) throw new Error('Não foi possível carregar os dados.');
+    const data = await res.json();
+
+    const temas     = data.temas     || [];
+    const melhorias = data.melhorias || [];
+
+    // totais
+    const totais = {
+      total:       melhorias.length,
+      estimadas:   melhorias.filter(m => m.status === 'estimada').length,
+      iniciadas:   melhorias.filter(m => m.status === 'iniciada').length,
+      backlog:     melhorias.filter(m => m.status === 'recebida').length,
+      refinamento: melhorias.filter(m => m.status === 'refinamento').length,
+      negadas:     melhorias.filter(m => m.status === 'negada').length,
+    };
+
+    const dt = data.atualizado_em
+      ? new Date(data.atualizado_em).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
+      : '—';
+    document.getElementById('ultima-atualizacao').textContent = `Atualizado em ${dt}`;
+
+    app.innerHTML = `
+      <div class="summary">
+        <div class="sum-card"><div class="n">${totais.total}</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Total</div></div>
+        <div class="sum-card"><div class="n">${totais.backlog}</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Backlog</div></div>
+        <div class="sum-card"><div class="n">${totais.refinamento}</div><div class="lbl"><span class="dot" style="background:var(--purple)"></span>Refinamento</div></div>
+        <div class="sum-card"><div class="n">${totais.estimadas}</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Estimadas</div></div>
+        <div class="sum-card"><div class="n">${totais.iniciadas}</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Em andamento</div></div>
+        <div class="sum-card"><div class="n">${totais.negadas}</div><div class="lbl"><span class="dot" style="background:var(--red)"></span>Negadas</div></div>
+      </div>
+
+      <div class="charts">
+        <div class="chart-card">
+          <h3>Por tema</h3>
+          <div class="chart-inner"><canvas id="chart-temas"></canvas></div>
+          <div class="chart-legend" id="leg-temas"></div>
+        </div>
+        <div class="chart-card">
+          <h3>Por status</h3>
+          <div class="chart-inner"><canvas id="chart-status"></canvas></div>
+          <div class="chart-legend" id="leg-status"></div>
+        </div>
+      </div>
+
+      <div class="section-title">Melhorias por tema</div>
+      ${temas.length === 0
+        ? `<div class="empty">Nenhum tema cadastrado ainda.</div>`
+        : temas.map((t, i) => renderTema(t, melhorias, i)).join('')}
+    `;
+
+    if (temas.length > 0) buildCharts(temas, melhorias);
+
+  } catch (e) {
+    app.innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>
