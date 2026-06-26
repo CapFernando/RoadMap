@@ -474,7 +474,8 @@ async function saveToGitHub() {
   showSaving(true);
   try {
     state.atualizado_em = new Date().toISOString();
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(state, null, 2))));
+    const bytes = new TextEncoder().encode(JSON.stringify(state, null, 2));
+    const content = btoa(String.fromCharCode(...bytes));
     const body = {
       message: `chore: atualiza melhorias ${new Date().toLocaleString('pt-BR')}`,
       content,
