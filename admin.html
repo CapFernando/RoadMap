@@ -267,7 +267,7 @@
     <input type="password" id="senha-input" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')doLogin()" />
     <div id="token-field" style="display:none;margin-bottom:0">
       <input type="password" id="token-input" placeholder="GitHub Token (ghp_…)" onkeydown="if(event.key==='Enter')doLogin()" style="margin-top:0;letter-spacing:0" />
-      <p style="font-size:12px;color:var(--text3);text-align:left;margin:-8px 0 14px;line-height:1.5">Necessário ao acessar pelo navegador (não local).</p>
+      <p style="font-size:12px;color:var(--text3);text-align:left;margin:-8px 0 14px;line-height:1.5">Necessário apenas na primeira vez neste navegador.</p>
     </div>
     <button onclick="doLogin()">Entrar</button>
     <div class="login-error" id="login-error"></div>
@@ -411,7 +411,7 @@ let state = { temas: [], melhorias: [] };
 let fileSha = null;
 
 // ─── LOGIN ────────────────────────────────────────────────────────
-let runtimeToken = GITHUB_TOKEN;
+let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
 
 function initLoginScreen() {
   if (!runtimeToken) {
@@ -425,6 +425,7 @@ function doLogin() {
     const t = document.getElementById('token-input').value.trim();
     if (!t) { document.getElementById('login-error').textContent = 'Informe o GitHub Token.'; return; }
     runtimeToken = t;
+    localStorage.setItem('rm_token', t);
   }
   if (v === SENHA) {
     document.getElementById('login-screen').style.display = 'none';
