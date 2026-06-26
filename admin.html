@@ -346,6 +346,11 @@
       </div>
     </div>
 
+    <div class="form-group">
+      <label>Desenvolvedor responsável</label>
+      <input type="text" id="m-dev" placeholder="Nome do dev" />
+    </div>
+
     <div id="conditional-fields">
       <!-- Estimada -->
       <div id="field-estimativa" class="form-group" style="display:none">
@@ -356,17 +361,13 @@
       <div id="field-iniciada" style="display:none">
         <div class="form-row">
           <div class="form-group">
-            <label>Desenvolvedor responsável</label>
-            <input type="text" id="m-dev" placeholder="Nome do dev" />
-          </div>
-          <div class="form-group">
             <label>Data de início</label>
             <input type="date" id="m-inicio" />
           </div>
-        </div>
-        <div class="form-group">
-          <label>Data de entrega prevista</label>
-          <input type="date" id="m-entrega" />
+          <div class="form-group">
+            <label>Data de entrega prevista</label>
+            <input type="date" id="m-entrega" />
+          </div>
         </div>
       </div>
       <!-- Negada -->
@@ -644,7 +645,7 @@ function saveMelhoria() {
     tema_id:         temaId,
     status,
     estimativa:      status === 'estimada' ? document.getElementById('m-estimativa').value.trim() : '',
-    dev:             status === 'iniciada' ? document.getElementById('m-dev').value.trim() : '',
+    dev:             document.getElementById('m-dev').value.trim(),
     inicio:          status === 'iniciada' ? document.getElementById('m-inicio').value : '',
     entrega:         status === 'iniciada' ? document.getElementById('m-entrega').value : '',
     motivo_negacao:  status === 'negada'   ? document.getElementById('m-motivo').value.trim() : '',
