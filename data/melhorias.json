@@ -1,17 +1,8 @@
 {
   "temas": [
-    {
-      "id": "mqv7rfayzuh77",
-      "nome": "AxCred - ReanÃ¡lise"
-    },
-    {
-      "id": "mqv7rupc8b2qe",
-      "nome": "AxCred - Cadastro"
-    },
-    {
-      "id": "mqv7s5ezhpc5n",
-      "nome": "AxCred - Antifraude"
-    }
+    { "id": "mqv7rfayzuh77", "nome": "AxCred - Reanálise" },
+    { "id": "mqv7rupc8b2qe", "nome": "AxCred - Cadastro" },
+    { "id": "mqv7s5ezhpc5n", "nome": "AxCred - Antifraude" }
   ],
   "melhorias": [
     {
