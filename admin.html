@@ -460,7 +460,7 @@ async function loadFromGitHub() {
     if (!res.ok) throw new Error('Erro ao carregar dados do GitHub.');
     const json = await res.json();
     fileSha = json.sha;
-    const decoded = JSON.parse(atob(json.content.replace(/\n/g, '')));
+    const decoded = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
     state = { temas: decoded.temas || [], melhorias: decoded.melhorias || [] };
     renderAll();
   } catch (e) {
