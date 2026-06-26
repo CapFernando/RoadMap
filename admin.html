@@ -265,6 +265,10 @@
     <h2>🔐 Área Administrativa</h2>
     <p>RoadMap de Melhorias · Audax Capital</p>
     <input type="password" id="senha-input" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')doLogin()" />
+    <div id="token-field" style="display:none;margin-bottom:0">
+      <input type="password" id="token-input" placeholder="GitHub Token (ghp_…)" onkeydown="if(event.key==='Enter')doLogin()" style="margin-top:0;letter-spacing:0" />
+      <p style="font-size:12px;color:var(--text3);text-align:left;margin:-8px 0 14px;line-height:1.5">Necessário ao acessar pelo navegador (não local).</p>
+    </div>
     <button onclick="doLogin()">Entrar</button>
     <div class="login-error" id="login-error"></div>
   </div>
@@ -407,8 +411,21 @@ let state = { temas: [], melhorias: [] };
 let fileSha = null;
 
 // ─── LOGIN ────────────────────────────────────────────────────────
+let runtimeToken = GITHUB_TOKEN;
+
+function initLoginScreen() {
+  if (!runtimeToken) {
+    document.getElementById('token-field').style.display = 'block';
+  }
+}
+
 function doLogin() {
   const v = document.getElementById('senha-input').value;
+  if (!runtimeToken) {
+    const t = document.getElementById('token-input').value.trim();
+    if (!t) { document.getElementById('login-error').textContent = 'Informe o GitHub Token.'; return; }
+    runtimeToken = t;
+  }
   if (v === SENHA) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-app').style.display = 'block';
@@ -419,17 +436,20 @@ function doLogin() {
   }
 }
 function doLogout() {
+  if (!GITHUB_TOKEN) { runtimeToken = ''; document.getElementById('token-input').value = ''; }
   document.getElementById('admin-app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('senha-input').value = '';
   document.getElementById('login-error').textContent = '';
 }
 
+initLoginScreen();
+
 // ─── GITHUB ───────────────────────────────────────────────────────
 async function loadFromGitHub() {
   try {
     const res = await fetch(API_URL, {
-      headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' }
+      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
     });
     if (res.status === 404) { renderAll(); return; }
     if (!res.ok) throw new Error('Erro ao carregar dados do GitHub.');
@@ -457,7 +477,7 @@ async function saveToGitHub() {
     const res = await fetch(API_URL, {
       method: 'PUT',
       headers: {
-        Authorization: `token ${GITHUB_TOKEN}`,
+        Authorization: `token ${runtimeToken}`,
         Accept: 'application/vnd.github.v3+json',
         'Content-Type': 'application/json'
       },
