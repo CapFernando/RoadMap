@@ -360,9 +360,13 @@
             <input type="text" id="m-dev" placeholder="Nome do dev" />
           </div>
           <div class="form-group">
-            <label>Data de entrega prevista</label>
-            <input type="date" id="m-entrega" />
+            <label>Data de início</label>
+            <input type="date" id="m-inicio" />
           </div>
+        </div>
+        <div class="form-group">
+          <label>Data de entrega prevista</label>
+          <input type="date" id="m-entrega" />
         </div>
       </div>
       <!-- Negada -->
@@ -601,6 +605,7 @@ function openModalMelhoria(id) {
   document.getElementById('m-descricao').value = m?.descricao || '';
   document.getElementById('m-estimativa').value= m?.estimativa|| '';
   document.getElementById('m-dev').value       = m?.dev       || '';
+  document.getElementById('m-inicio').value    = m?.inicio    || '';
   document.getElementById('m-entrega').value   = m?.entrega   || '';
   document.getElementById('m-motivo').value    = m?.motivo_negacao || '';
 
@@ -640,6 +645,7 @@ function saveMelhoria() {
     status,
     estimativa:      status === 'estimada' ? document.getElementById('m-estimativa').value.trim() : '',
     dev:             status === 'iniciada' ? document.getElementById('m-dev').value.trim() : '',
+    inicio:          status === 'iniciada' ? document.getElementById('m-inicio').value : '',
     entrega:         status === 'iniciada' ? document.getElementById('m-entrega').value : '',
     motivo_negacao:  status === 'negada'   ? document.getElementById('m-motivo').value.trim() : '',
     criado_em:       id ? (state.melhorias.find(x=>x.id===id)?.criado_em || new Date().toISOString()) : new Date().toISOString(),
