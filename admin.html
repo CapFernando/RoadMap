@@ -325,6 +325,7 @@
         <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova melhoria</button>
       </div>
       <div class="status-filters" id="status-filters"></div>
+      <div class="status-filters" id="tema-filters"></div>
       <div id="lista-melhorias"></div>
     </div>
 
@@ -537,11 +538,33 @@ const STATUS_LABELS = {
 };
 
 let _filtroStatus = null;
+let _filtroTema   = null;
 
 function setFiltroStatus(s) {
   _filtroStatus = s;
   renderStatusFilters();
   renderMelhorias();
+}
+
+function setFiltroTema(id) {
+  _filtroTema = id;
+  renderTemaFilters();
+  renderMelhorias();
+}
+
+function renderTemaFilters() {
+  const el = document.getElementById('tema-filters');
+  if (!el || !state.temas.length) { if (el) el.innerHTML = ''; return; }
+  const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
+  el.innerHTML = [
+    `<button class="sf-btn all ${_filtroTema === null ? 'active' : ''}" onclick="setFiltroTema(null)">Todos os temas <strong>${state.melhorias.length}</strong></button>`,
+    ...state.temas.map((t, i) => {
+      const cor = TEMA_CORES[i % TEMA_CORES.length];
+      const n   = state.melhorias.filter(m => m.tema_id === t.id).length;
+      const active = _filtroTema === t.id ? 'active' : '';
+      return `<button class="sf-btn ${active}" style="${active ? `background:${cor}22;color:${cor};border-color:${cor}55` : ''}" onclick="setFiltroTema('${t.id}')">${t.nome} <strong>${n}</strong></button>`;
+    })
+  ].join('');
 }
 
 function renderStatusFilters() {
@@ -563,7 +586,7 @@ function renderStatusFilters() {
   }).join('');
 }
 
-function renderAll() { renderTemas(); renderStatusFilters(); renderMelhorias(); }
+function renderAll() { renderTemas(); renderStatusFilters(); renderTemaFilters(); renderMelhorias(); }
 
 function renderTemas() {
   const el = document.getElementById('lista-temas');
@@ -586,7 +609,10 @@ function renderTemas() {
 function renderMelhorias() {
   const el = document.getElementById('lista-melhorias');
   if (!state.melhorias.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria cadastrada.</div>'; return; }
-  const lista = _filtroStatus ? state.melhorias.filter(m => m.status === _filtroStatus) : state.melhorias;
+  const lista = state.melhorias.filter(m =>
+    (!_filtroStatus || m.status === _filtroStatus) &&
+    (!_filtroTema   || m.tema_id === _filtroTema)
+  );
   if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
   const sorted = [...lista].sort((a,b) => {
     const ta = state.temas.find(t=>t.id===a.tema_id)?.nome || '';
