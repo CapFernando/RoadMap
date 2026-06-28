@@ -49,11 +49,11 @@
       "titulo": "Dividir as competências entre sacado CPF e empresas relacionadas",
       "descricao": "Dividir as competências entre sacado CPF e empresas relacionadas (e vice-versa), mantendo os campos independentes entre si, ou seja, não rodar o sócio junto com o CNPJ permitindo que o analista faça o disparo, dessa forma tendemos a reduzir a sobrecarga e agilizar a resposta.\n\nOBS: Para esse tema será preciso do Anthony",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "estimada",
-      "estimativa": "5 dias",
+      "status": "iniciada",
+      "estimativa": "",
       "dev": "Gabriel / Anthony",
-      "inicio": "",
-      "entrega": "",
+      "inicio": "2026-07-07",
+      "entrega": "2026-07-14",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:08:37.566Z"
     },
@@ -62,11 +62,11 @@
       "titulo": "Novo botão - reprocessamento",
       "descricao": "Disponibilizar um botão de reprocessamento da análise.\n\nOBS: Discutir com Anthony, Paullymax e Gabriel",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "estimada",
-      "estimativa": "5 dias",
+      "status": "iniciada",
+      "estimativa": "",
       "dev": "Gabriel / Anthony",
-      "inicio": "",
-      "entrega": "",
+      "inicio": "2026-07-14",
+      "entrega": "2026-07-20",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:12:41.849Z"
     },
@@ -448,5 +448,5 @@
       "criado_em": "2026-06-26T19:36:24.563Z"
     }
   ],
-  "atualizado_em": "2026-06-28T22:37:03.875Z"
+  "atualizado_em": "2026-06-28T22:39:22.395Z"
 }
