@@ -23,11 +23,11 @@
       "titulo": "Indicadores Visuais",
       "descricao": "Incluir indicadores visuais de status nas abas que segmentam os sacados: não iniciada, em andamento (com identificação do responsável) e concluída (durante a análise).",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "estimada",
-      "estimativa": "2 dias",
+      "status": "iniciada",
+      "estimativa": "",
       "dev": "Gabriel",
-      "inicio": "",
-      "entrega": "",
+      "inicio": "2026-07-02",
+      "entrega": "2027-07-04",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T17:48:59.897Z"
     },
@@ -36,11 +36,11 @@
       "titulo": "Implementar texto padrão",
       "descricao": "Implementar texto padrão por campo nos casos em que o campo não seja preenchido pela automação ou em análises manuais feitas do zero.",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "estimada",
-      "estimativa": "1 dia",
+      "status": "iniciada",
+      "estimativa": "",
       "dev": "Gabriel",
-      "inicio": "",
-      "entrega": "",
+      "inicio": "2026-07-06",
+      "entrega": "2026-07-07",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:02:14.158Z"
     },
@@ -448,5 +448,5 @@
       "criado_em": "2026-06-26T19:36:24.563Z"
     }
   ],
-  "atualizado_em": "2026-06-26T19:36:25.704Z"
+  "atualizado_em": "2026-06-28T22:37:03.875Z"
 }
