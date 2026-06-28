@@ -142,6 +142,30 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
+    /* FILTER STATUS */
+    .status-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+    .sf-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .sf-btn:hover { border-color: var(--border2); color: var(--text); }
+    .sf-btn.active { border-color: transparent; }
+    .sf-btn.all.active   { background: var(--bg4); color: var(--text); border-color: var(--border2); }
+    .sf-btn.recebida.active    { background:#0C3260; color:#9BC8F8; border-color:#1a5080; }
+    .sf-btn.refinamento.active { background:#341A6E; color:#C9AEFF; border-color:#5030A0; }
+    .sf-btn.regra.active       { background:#063D30; color:#7EECD8; border-color:#0A6050; }
+    .sf-btn.estimada.active    { background:#5C3608; color:#F9C97A; border-color:#8C5010; }
+    .sf-btn.iniciada.active    { background:#1E4208; color:#B2E07A; border-color:#306010; }
+    .sf-btn.negada.active      { background:#5C0A0A; color:#F9A0A0; border-color:#8C1010; }
+
     /* CARDS DE LISTA */
     .list-header {
       display: flex;
@@ -300,6 +324,7 @@
         <span class="list-title">Melhorias cadastradas</span>
         <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova melhoria</button>
       </div>
+      <div class="status-filters" id="status-filters"></div>
       <div id="lista-melhorias"></div>
     </div>
 
@@ -340,7 +365,7 @@
           <option value="refinamento">Em Refinamento</option>
           <option value="regra">Validar Regra de Negócio</option>
           <option value="estimada">Estimada</option>
-          <option value="iniciada">Iniciada</option>
+          <option value="iniciada">Iniciar</option>
           <option value="negada">Negada</option>
         </select>
       </div>
@@ -508,10 +533,37 @@ async function saveToGitHub() {
 const STATUS_LABELS = {
   recebida:'Recebida (Backlog)', refinamento:'Em Refinamento',
   regra:'Validar Regra de Negócio', estimada:'Estimada',
-  iniciada:'Iniciada', negada:'Negada'
+  iniciada:'Iniciar', negada:'Negada'
 };
 
-function renderAll() { renderTemas(); renderMelhorias(); }
+let _filtroStatus = null;
+
+function setFiltroStatus(s) {
+  _filtroStatus = s;
+  renderStatusFilters();
+  renderMelhorias();
+}
+
+function renderStatusFilters() {
+  const el = document.getElementById('status-filters');
+  if (!el) return;
+  const todos = [
+    { key: null,          label: 'Todos',                  cls: 'all' },
+    { key: 'recebida',    label: 'Recebida (Backlog)',      cls: 'recebida' },
+    { key: 'refinamento', label: 'Em Refinamento',          cls: 'refinamento' },
+    { key: 'regra',       label: 'Validar Regra',           cls: 'regra' },
+    { key: 'estimada',    label: 'Estimada',                cls: 'estimada' },
+    { key: 'iniciada',    label: 'Iniciar',                 cls: 'iniciada' },
+    { key: 'negada',      label: 'Negada',                  cls: 'negada' },
+  ];
+  el.innerHTML = todos.map(b => {
+    const n = b.key ? state.melhorias.filter(m => m.status === b.key).length : state.melhorias.length;
+    const active = _filtroStatus === b.key ? 'active' : '';
+    return `<button class="sf-btn ${b.cls} ${active}" onclick="setFiltroStatus(${b.key ? `'${b.key}'` : 'null'})">${b.label} <strong>${n}</strong></button>`;
+  }).join('');
+}
+
+function renderAll() { renderTemas(); renderStatusFilters(); renderMelhorias(); }
 
 function renderTemas() {
   const el = document.getElementById('lista-temas');
@@ -534,7 +586,9 @@ function renderTemas() {
 function renderMelhorias() {
   const el = document.getElementById('lista-melhorias');
   if (!state.melhorias.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria cadastrada.</div>'; return; }
-  const sorted = [...state.melhorias].sort((a,b) => {
+  const lista = _filtroStatus ? state.melhorias.filter(m => m.status === _filtroStatus) : state.melhorias;
+  if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
+  const sorted = [...lista].sort((a,b) => {
     const ta = state.temas.find(t=>t.id===a.tema_id)?.nome || '';
     const tb = state.temas.find(t=>t.id===b.tema_id)?.nome || '';
     return ta.localeCompare(tb) || a.titulo.localeCompare(b.titulo);
