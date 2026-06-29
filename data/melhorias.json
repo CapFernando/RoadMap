@@ -15,6 +15,26 @@
     {
       "id": "mqvbzmhmako90",
       "nome": "RPA"
+    },
+    {
+      "id": "tmqyln0ambnov",
+      "nome": "Novo Ambiente"
+    },
+    {
+      "id": "tmqyln0qualif",
+      "nome": "AxCred - Qualificação"
+    },
+    {
+      "id": "tmqyln0infra0",
+      "nome": "AxCred - Infra (Sistema/Banco)"
+    },
+    {
+      "id": "tmqyln0grupo0",
+      "nome": "AxCred - Reanálise de Grupo"
+    },
+    {
+      "id": "tmqyln0stack0",
+      "nome": "AxCred - Migração de Stack"
     }
   ],
   "melhorias": [
@@ -498,6 +518,90 @@
       "estimativa": "",
       "dev": "Emilly Viana",
       "solicitante": "Crisley",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqylc1patrimo",
+      "titulo": "Patrimônio (IR PF)",
+      "descricao": "Patrimônio a partir do IR PF. Novo ambiente, integrado ao Cadastro.",
+      "tema_id": "tmqyln0ambnov",
+      "status": "iniciada",
+      "estimativa": "",
+      "dev": "Cairo",
+      "solicitante": "Pedro Paulo",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqylc2monqual",
+      "titulo": "Monitoramento de qualificação",
+      "descricao": "Monitoramento de qualificação no ambiente de Qualificação.",
+      "tema_id": "tmqyln0qualif",
+      "status": "iniciada",
+      "estimativa": "",
+      "dev": "Cairo",
+      "solicitante": "",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqylc3monsist",
+      "titulo": "Monitoramento do AxCred (travamentos e sobrecarga)",
+      "descricao": "Monitoramento do sistema do AxCred — travamentos e sobrecarga.",
+      "tema_id": "tmqyln0infra0",
+      "status": "iniciada",
+      "estimativa": "",
+      "dev": "Cairo",
+      "solicitante": "",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqylc4monbanc",
+      "titulo": "Monitoramento de sobrecarga no banco de dados",
+      "descricao": "Monitoramento de sobrecarga no banco de dados do AxCred.",
+      "tema_id": "tmqyln0infra0",
+      "status": "iniciada",
+      "estimativa": "",
+      "dev": "Cairo",
+      "solicitante": "",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqylc5supgrup",
+      "titulo": "Suporte na reanálise de grupo",
+      "descricao": "Suporte na reanálise de grupo, a partir de apontamentos/sugestões dos analistas.",
+      "tema_id": "tmqyln0grupo0",
+      "status": "iniciada",
+      "estimativa": "",
+      "dev": "Cairo",
+      "solicitante": "",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqylc6migstk",
+      "titulo": "Migração do AxCred para nova stack (Python → Node)",
+      "descricao": "Migração do AxCred de Python para Node. Atualmente mexendo com a análise de cadastro. Já feitos: Consulta Base RJ (combinação de dois bancos), Domínio, Dashboard com KPIs.",
+      "tema_id": "tmqyln0stack0",
+      "status": "iniciada",
+      "estimativa": "",
+      "dev": "Cairo",
+      "solicitante": "Guilherme Alves",
       "inicio": "",
       "entrega": "",
       "motivo_negacao": "",
