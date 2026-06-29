@@ -369,9 +369,31 @@
       </div>
     </div>
 
-    <div class="form-group">
-      <label>Desenvolvedor responsável</label>
-      <input type="text" id="m-dev" placeholder="Nome do dev" />
+    <div class="form-row">
+      <div class="form-group">
+        <label>Desenvolvedor responsável</label>
+        <input type="text" id="m-dev" placeholder="Nome do dev" />
+      </div>
+      <div class="form-group">
+        <label>Prioridade</label>
+        <select id="m-prioridade">
+          <option value="">— Sem prioridade —</option>
+          <option value="alta">🔴 Alta</option>
+          <option value="media">🟡 Média</option>
+          <option value="baixa">🟢 Baixa</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Solicitante</label>
+        <input type="text" id="m-solicitante" placeholder="Quem solicitou" />
+      </div>
+      <div class="form-group">
+        <label>Data da solicitação</label>
+        <input type="date" id="m-data-solicitacao" />
+      </div>
     </div>
 
     <div id="conditional-fields">
@@ -684,11 +706,14 @@ function openModalMelhoria(id) {
   document.getElementById('m-id').value        = m?.id        || '';
   document.getElementById('m-titulo').value    = m?.titulo    || '';
   document.getElementById('m-descricao').value = m?.descricao || '';
-  document.getElementById('m-estimativa').value= m?.estimativa|| '';
-  document.getElementById('m-dev').value       = m?.dev       || '';
-  document.getElementById('m-inicio').value    = m?.inicio    || '';
-  document.getElementById('m-entrega').value   = m?.entrega   || '';
-  document.getElementById('m-motivo').value    = m?.motivo_negacao || '';
+  document.getElementById('m-estimativa').value      = m?.estimativa       || '';
+  document.getElementById('m-dev').value             = m?.dev              || '';
+  document.getElementById('m-prioridade').value      = m?.prioridade       || '';
+  document.getElementById('m-solicitante').value     = m?.solicitante      || '';
+  document.getElementById('m-data-solicitacao').value= m?.data_solicitacao || '';
+  document.getElementById('m-inicio').value          = m?.inicio           || '';
+  document.getElementById('m-entrega').value         = m?.entrega          || '';
+  document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
 
   // preenche temas no select
   const sel = document.getElementById('m-tema');
@@ -724,11 +749,14 @@ function saveMelhoria() {
     descricao:       document.getElementById('m-descricao').value.trim(),
     tema_id:         temaId,
     status,
-    estimativa:      status === 'estimada' ? document.getElementById('m-estimativa').value.trim() : '',
-    dev:             document.getElementById('m-dev').value.trim(),
-    inicio:          status === 'iniciada' ? document.getElementById('m-inicio').value : '',
-    entrega:         status === 'iniciada' ? document.getElementById('m-entrega').value : '',
-    motivo_negacao:  status === 'negada'   ? document.getElementById('m-motivo').value.trim() : '',
+    estimativa:       status === 'estimada' ? document.getElementById('m-estimativa').value.trim() : '',
+    dev:              document.getElementById('m-dev').value.trim(),
+    prioridade:       document.getElementById('m-prioridade').value,
+    solicitante:      document.getElementById('m-solicitante').value.trim(),
+    data_solicitacao: document.getElementById('m-data-solicitacao').value,
+    inicio:           status === 'iniciada' ? document.getElementById('m-inicio').value : '',
+    entrega:          status === 'iniciada' ? document.getElementById('m-entrega').value : '',
+    motivo_negacao:   status === 'negada'   ? document.getElementById('m-motivo').value.trim() : '',
     criado_em:       id ? (state.melhorias.find(x=>x.id===id)?.criado_em || new Date().toISOString()) : new Date().toISOString(),
   };
 
