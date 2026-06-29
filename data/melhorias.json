@@ -460,6 +460,48 @@
       "entrega": "",
       "motivo_negacao": "",
       "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqylm1desist0",
+      "titulo": "Modal de Motivo de Desistência",
+      "descricao": "Introduz a captura obrigatória de um motivo de desistência no momento em que o card entra na etapa \"Cliente Desistiu\", a partir de uma lista fixa de seis motivos, com campo de observação livre quando o motivo for \"Outro\". O motivo fica armazenado no banco e pode ser consultado posteriormente pelo menu de ações do card, exclusivamente na etapa de desistência. Facilita também o levantamento de dados para o BI.",
+      "tema_id": "mqv7rupc8b2qe",
+      "status": "iniciada",
+      "estimativa": "",
+      "dev": "Emilly Viana",
+      "solicitante": "Marina e Wend",
+      "inicio": "2026-06-29",
+      "entrega": "2026-06-29",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqylm1syncbx0",
+      "titulo": "Sync Bitrix → Axcred (formalização)",
+      "descricao": "Sync do Bitrix para o Axcred nas etapas de formalização. Hoje já existe a sync do Axcred para o Bitrix nas pipelines de formalização.",
+      "tema_id": "mqv7rupc8b2qe",
+      "status": "iniciada",
+      "estimativa": "",
+      "dev": "Emilly Viana",
+      "solicitante": "Wend e Isabella",
+      "inicio": "2026-06-29",
+      "entrega": "2026-06-29",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqylm1notifre",
+      "titulo": "Notificação de Reanálise para os Gestores de Carteira",
+      "descricao": "Notificação de reanálise para os gestores de carteira.\n\nOBS: surgiu na manhã de 29/06 mas a task ainda não foi firmada; sem data determinada.",
+      "tema_id": "mqv7rfayzuh77",
+      "status": "recebida",
+      "estimativa": "",
+      "dev": "Emilly Viana",
+      "solicitante": "Crisley",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
     }
   ],
   "atualizado_em": "2026-06-29T00:00:00.000Z"
