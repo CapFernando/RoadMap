@@ -396,24 +396,23 @@
       </div>
     </div>
 
+    <!-- Datas sempre visíveis -->
+    <div class="form-row">
+      <div class="form-group">
+        <label>Data de início</label>
+        <input type="date" id="m-inicio" />
+      </div>
+      <div class="form-group">
+        <label>Data de entrega prevista</label>
+        <input type="date" id="m-entrega" />
+      </div>
+    </div>
+
     <div id="conditional-fields">
       <!-- Estimada -->
       <div id="field-estimativa" class="form-group" style="display:none">
         <label>Estimativa de desenvolvimento</label>
         <input type="text" id="m-estimativa" placeholder="Ex: 10 dias, 3 semanas…" />
-      </div>
-      <!-- Iniciada -->
-      <div id="field-iniciada" style="display:none">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Data de início</label>
-            <input type="date" id="m-inicio" />
-          </div>
-          <div class="form-group">
-            <label>Data de entrega prevista</label>
-            <input type="date" id="m-entrega" />
-          </div>
-        </div>
       </div>
       <!-- Negada -->
       <div id="field-negada" class="form-group" style="display:none">
@@ -727,9 +726,8 @@ function openModalMelhoria(id) {
 
 function onStatusChange() {
   const s = document.getElementById('m-status').value;
-  document.getElementById('field-estimativa').style.display = s === 'estimada'  ? 'block' : 'none';
-  document.getElementById('field-iniciada').style.display   = s === 'iniciada'  ? 'block' : 'none';
-  document.getElementById('field-negada').style.display     = s === 'negada'    ? 'block' : 'none';
+  document.getElementById('field-estimativa').style.display = s === 'estimada' ? 'block' : 'none';
+  document.getElementById('field-negada').style.display     = s === 'negada'   ? 'block' : 'none';
 }
 
 function saveMelhoria() {
@@ -754,8 +752,8 @@ function saveMelhoria() {
     prioridade:       document.getElementById('m-prioridade').value,
     solicitante:      document.getElementById('m-solicitante').value.trim(),
     data_solicitacao: document.getElementById('m-data-solicitacao').value,
-    inicio:           status === 'iniciada' ? document.getElementById('m-inicio').value : '',
-    entrega:          status === 'iniciada' ? document.getElementById('m-entrega').value : '',
+    inicio:           document.getElementById('m-inicio').value,
+    entrega:          document.getElementById('m-entrega').value,
     motivo_negacao:   status === 'negada'   ? document.getElementById('m-motivo').value.trim() : '',
     criado_em:       id ? (state.melhorias.find(x=>x.id===id)?.criado_em || new Date().toISOString()) : new Date().toISOString(),
   };
