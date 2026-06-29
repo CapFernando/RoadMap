@@ -807,7 +807,13 @@ function renderBacklog() {
     const sp = m.status_planejamento || 'backlog';
     if (sp === 'concluido') return false;
     const noDate = (!m.inicio && !m.entrega);
-    // Show if: no dates, or status is backlog, or all dates fall OUTSIDE the viewed month
+    // Se tem dev + datas dentro do mês atual, já está no Gantt — não mostrar no backlog
+    const inCurrentMonth = !noDate && m.dev && (
+      (!m.inicio || m.inicio <= monthEnd) &&
+      (!m.entrega || m.entrega >= monthStart)
+    );
+    if (inCurrentMonth) return false;
+    // Mostrar se: sem data, ou status backlog, ou datas fora do mês visualizado
     const outsideMonth = !noDate && (
       (m.entrega && m.entrega < monthStart) ||
       (m.inicio  && m.inicio  > monthEnd)
