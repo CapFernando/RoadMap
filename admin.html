@@ -308,6 +308,9 @@
       <button class="btn btn-secondary btn-sm" onclick="doLogout()">Sair</button>
     </div>
   </header>
+  <div id="save-error" style="display:none;background:#5C0A0A;color:#F9A0A0;border-bottom:1px solid #8C1010;padding:10px 24px;font-size:13px;cursor:pointer" onclick="this.style.display='none'">
+    ⚠️ Erro ao publicar — clique aqui para fechar
+  </div>
 
   <main>
     <div class="tabs">
@@ -493,9 +496,10 @@ function doLogout() {
 initLoginScreen();
 
 // ─── GITHUB ───────────────────────────────────────────────────────
-async function loadFromGitHub() {
+async function loadFromGitHub(silent) {
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
       headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
     });
     if (res.status === 404) { renderAll(); return; }
@@ -506,7 +510,7 @@ async function loadFromGitHub() {
     state = { temas: decoded.temas || [], melhorias: decoded.melhorias || [] };
     renderAll();
   } catch (e) {
-    toast(e.message, 'err');
+    if (!silent) toast(e.message, 'err');
     renderAll();
   }
 }
@@ -514,14 +518,17 @@ async function loadFromGitHub() {
 async function saveToGitHub() {
   showSaving(true);
   try {
-    // Busca o SHA mais recente para evitar conflito com saves do Gantt
-    const shaRes = await fetch(API_URL, {
+    // Busca SHA mais recente para evitar conflito
+    const shaRes = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
       headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
     });
-    if (shaRes.ok) {
-      const shaJson = await shaRes.json();
-      fileSha = shaJson.sha;
+    if (!shaRes.ok) {
+      const e = await shaRes.json();
+      throw new Error('Falha ao obter SHA: ' + (e.message || shaRes.status));
     }
+    const shaJson = await shaRes.json();
+    fileSha = shaJson.sha;
 
     state.atualizado_em = new Date().toISOString();
     const bytes = new TextEncoder().encode(JSON.stringify(state, null, 2));
@@ -533,7 +540,7 @@ async function saveToGitHub() {
     const body = {
       message: `chore: atualiza melhorias ${new Date().toLocaleString('pt-BR')}`,
       content,
-      ...(fileSha ? { sha: fileSha } : {})
+      sha: fileSha
     };
     const res = await fetch(API_URL, {
       method: 'PUT',
@@ -550,9 +557,15 @@ async function saveToGitHub() {
     }
     const data = await res.json();
     fileSha = data.content.sha;
-    toast('Publicado com sucesso! O painel já está atualizado.', 'ok');
+
+    // Recarrega do GitHub para confirmar que foi salvo
+    await loadFromGitHub(true);
+    toast('✅ Publicado e confirmado!', 'ok');
   } catch (e) {
-    toast('Erro: ' + e.message, 'err');
+    // Exibe erro permanente até o usuário fechar
+    const errEl = document.getElementById('save-error');
+    if (errEl) { errEl.textContent = '⚠️ ' + e.message; errEl.style.display = 'block'; }
+    toast('Erro ao publicar: ' + e.message, 'err');
   } finally {
     showSaving(false);
   }
