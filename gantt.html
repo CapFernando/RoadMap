@@ -690,7 +690,11 @@ async function saveToGitHub() {
 
     state.atualizado_em = new Date().toISOString();
     const bytes = new TextEncoder().encode(JSON.stringify(state, null, 2));
-    const content = btoa(String.fromCharCode(...bytes));
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    }
+    const content = btoa(binary);
     const body = {
       message: `chore: planejamento ${new Date().toLocaleString('pt-BR')}`,
       content,
