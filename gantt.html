@@ -80,8 +80,8 @@
     }
     .header-left { display: flex; align-items: center; gap: 16px; }
     .header-left h1 { font-size: 17px; font-weight: 600; white-space: nowrap; }
-    .month-nav { display: flex; align-items: center; gap: 6px; }
-    .month-nav span { font-size: 15px; font-weight: 600; min-width: 160px; text-align: center; }
+    .month-nav { display: flex; align-items: center; gap: 4px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 2px; }
+    .month-nav span { font-size: 14px; font-weight: 600; min-width: 130px; text-align: center; }
     .header-right { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
     .btn {
@@ -94,7 +94,8 @@
     .btn-primary   { background: var(--blue);  color: #fff; }
     .btn-secondary { background: var(--bg3);   color: var(--text); border: 1px solid var(--border); }
     .btn-ghost     { background: transparent;  color: var(--text2); border: 1px solid var(--border); }
-    .btn-nav       { background: var(--bg3);   color: var(--text); border: 1px solid var(--border); padding: 6px 10px; font-size: 15px; }
+    .btn-nav       { background: var(--bg4); color: var(--text); border: 1px solid var(--border2); padding: 5px 14px; font-size: 18px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+    .btn-nav:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
     .btn-sm { padding: 6px 11px; font-size: 12px; }
 
     /* ── INDICATORS ── */
@@ -886,21 +887,21 @@ function renderGantt() {
   devs.forEach(dev => {
     const devCards = visible.filter(m => (m.dev || '') === dev && (m.inicio || m.entrega));
 
-    // capacity
+    // capacity — conta apenas dias úteis do mês atual cobertos pelos cards
     const totalWD = workDays.filter(d => !d.holiday).length;
     const occupiedDays = new Set();
     devCards.forEach(m => {
-      if (!m.inicio) return;
-      let cur = new Date(m.inicio + 'T12:00:00');
-      const end = new Date((m.entrega || m.inicio) + 'T12:00:00');
-      while (cur <= end) {
-        const s = toDateStr(cur);
-        if (!isWeekend(cur) && !isHoliday(s)) occupiedDays.add(s);
-        cur.setDate(cur.getDate() + 1);
-      }
+      const startDate = m.inicio || m.entrega;
+      const endDate   = m.entrega || m.inicio;
+      if (!startDate) return;
+      workDays.forEach(wd => {
+        if (!wd.holiday && wd.str >= startDate && wd.str <= endDate) {
+          occupiedDays.add(wd.str);
+        }
+      });
     });
     const occ = occupiedDays.size;
-    const pct = totalWD > 0 ? Math.min(Math.round(occ / totalWD * 100), 999) : 0;
+    const pct = totalWD > 0 ? Math.min(Math.round(occ / totalWD * 100), 100) : 0;
     const over = occ > totalWD;
     const free = Math.max(0, totalWD - occ);
 
