@@ -772,10 +772,21 @@ function renderBacklog() {
     if (!matchesFilters(m)) return false;
     return true;
   });
-  document.getElementById('backlog-count').textContent = list.length;
-  if (!list.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Nenhum item no backlog</div>'; return; }
+  const PRIO_ORDER = { alta: 0, media: 1, baixa: 2, '': 3, undefined: 3 };
+  const sorted = [...list].sort((a, b) => {
+    const pa = PRIO_ORDER[a.prioridade ?? ''] ?? 3;
+    const pb = PRIO_ORDER[b.prioridade ?? ''] ?? 3;
+    if (pa !== pb) return pa - pb;
+    const da = a.inicio || '9999-99-99';
+    const db = b.inicio || '9999-99-99';
+    if (da !== db) return da.localeCompare(db);
+    return (a.titulo || '').localeCompare(b.titulo || '');
+  });
 
-  el.innerHTML = list.map(m => {
+  document.getElementById('backlog-count').textContent = sorted.length;
+  if (!sorted.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Nenhum item no backlog</div>'; return; }
+
+  el.innerHTML = sorted.map(m => {
     const tema = state.temas.find(t => t.id === m.tema_id);
     const temaColor = temaColorOf(m.tema_id);
     const dotCls = prioClass(m.prioridade);
