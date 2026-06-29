@@ -514,6 +514,15 @@ async function loadFromGitHub() {
 async function saveToGitHub() {
   showSaving(true);
   try {
+    // Busca o SHA mais recente para evitar conflito com saves do Gantt
+    const shaRes = await fetch(API_URL, {
+      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (shaRes.ok) {
+      const shaJson = await shaRes.json();
+      fileSha = shaJson.sha;
+    }
+
     state.atualizado_em = new Date().toISOString();
     const bytes = new TextEncoder().encode(JSON.stringify(state, null, 2));
     const content = btoa(String.fromCharCode(...bytes));
@@ -741,21 +750,23 @@ function saveMelhoria() {
   }
 
   const id = document.getElementById('m-id').value;
+  const existing = id ? (state.melhorias.find(x => x.id === id) || {}) : {};
   const obj = {
+    ...existing,  // preserva campos do Gantt (status_planejamento, sprint, etc.)
     id: id || uid(),
     titulo,
-    descricao:       document.getElementById('m-descricao').value.trim(),
-    tema_id:         temaId,
+    descricao:        document.getElementById('m-descricao').value.trim(),
+    tema_id:          temaId,
     status,
-    estimativa:       status === 'estimada' ? document.getElementById('m-estimativa').value.trim() : '',
+    estimativa:       status === 'estimada' ? document.getElementById('m-estimativa').value.trim() : (existing.estimativa || ''),
     dev:              document.getElementById('m-dev').value.trim(),
     prioridade:       document.getElementById('m-prioridade').value,
     solicitante:      document.getElementById('m-solicitante').value.trim(),
     data_solicitacao: document.getElementById('m-data-solicitacao').value,
     inicio:           document.getElementById('m-inicio').value,
     entrega:          document.getElementById('m-entrega').value,
-    motivo_negacao:   status === 'negada'   ? document.getElementById('m-motivo').value.trim() : '',
-    criado_em:       id ? (state.melhorias.find(x=>x.id===id)?.criado_em || new Date().toISOString()) : new Date().toISOString(),
+    motivo_negacao:   status === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
+    criado_em:        existing.criado_em || new Date().toISOString(),
   };
 
   if (id) {

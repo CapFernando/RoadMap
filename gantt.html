@@ -659,6 +659,15 @@ async function loadFromGitHub() {
 async function saveToGitHub() {
   showSaving(true);
   try {
+    // Busca o SHA mais recente para evitar conflito com saves do Admin
+    const shaRes = await fetch(API_URL, {
+      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (shaRes.ok) {
+      const shaJson = await shaRes.json();
+      fileSha = shaJson.sha;
+    }
+
     state.atualizado_em = new Date().toISOString();
     const bytes = new TextEncoder().encode(JSON.stringify(state, null, 2));
     const content = btoa(String.fromCharCode(...bytes));
