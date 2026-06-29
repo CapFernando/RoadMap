@@ -614,10 +614,15 @@ function renderMelhorias() {
     (!_filtroTema   || m.tema_id === _filtroTema)
   );
   if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
+  const STATUS_ORDER = { iniciada:0, estimada:1, regra:2, refinamento:3, recebida:4, negada:5 };
   const sorted = [...lista].sort((a,b) => {
-    const ta = state.temas.find(t=>t.id===a.tema_id)?.nome || '';
-    const tb = state.temas.find(t=>t.id===b.tema_id)?.nome || '';
-    return ta.localeCompare(tb) || a.titulo.localeCompare(b.titulo);
+    const aTemInicio = !!a.inicio;
+    const bTemInicio = !!b.inicio;
+    if (aTemInicio !== bTemInicio) return aTemInicio ? -1 : 1;
+    if (aTemInicio && bTemInicio) return a.inicio.localeCompare(b.inicio);
+    const so = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
+    if (so !== 0) return so;
+    return a.titulo.localeCompare(b.titulo);
   });
   el.innerHTML = sorted.map(m => {
     const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '—';
