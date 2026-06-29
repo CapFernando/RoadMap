@@ -763,12 +763,22 @@ function toggleIndicatorFilter(k) {
 // ── BACKLOG ───────────────────────────────────────────────────────────────
 function renderBacklog() {
   const el = document.getElementById('backlog-list');
+  // Month range for the current view
+  const monthStart = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`;
+  const monthEnd   = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-31`;
+
   const list = state.melhorias.filter(m => {
     if (m.oculto) return false;
+    if (m.status === 'negada') return false;
     const sp = m.status_planejamento || 'backlog';
+    if (sp === 'concluido') return false;
     const noDate = (!m.inicio && !m.entrega);
-    const isBacklog = sp === 'backlog';
-    if (!noDate && !isBacklog) return false;
+    // Show if: no dates, or status is backlog, or all dates fall OUTSIDE the viewed month
+    const outsideMonth = !noDate && (
+      (m.entrega && m.entrega < monthStart) ||
+      (m.inicio  && m.inicio  > monthEnd)
+    );
+    if (!noDate && sp !== 'backlog' && !outsideMonth) return false;
     if (!matchesFilters(m)) return false;
     return true;
   });
