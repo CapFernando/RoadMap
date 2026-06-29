@@ -575,6 +575,26 @@ function isHoliday(dateStr) {
 
 function isWeekend(d) { const w = d.getDay(); return w === 0 || w === 6; }
 
+// Resolve date string to nearest working-day index in workDays array.
+// direction: 'next' rounds up (for start dates), 'prev' rounds down (for end dates).
+function resolveWorkDayIdx(dateStr, workDays, direction) {
+  if (!dateStr) return -1;
+  const exact = workDays.findIndex(d => d.str === dateStr);
+  if (exact >= 0) return exact;
+  // date not in workDays (weekend/holiday or outside month)
+  if (direction === 'next') {
+    const idx = workDays.findIndex(d => d.str > dateStr);
+    return idx >= 0 ? idx : workDays.length; // beyond end of month
+  } else {
+    // prev: last workday before dateStr
+    let idx = -1;
+    for (let i = workDays.length - 1; i >= 0; i--) {
+      if (workDays[i].str < dateStr) { idx = i; break; }
+    }
+    return idx; // -1 means before start of month
+  }
+}
+
 function toDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
@@ -885,10 +905,10 @@ function renderGantt() {
     const tracks = []; // each track = [{start,end}]
     const cardTrack = new Map();
     sorted.forEach(m => {
-      const si = workDays.findIndex(d => d.str === m.inicio);
-      const ei = workDays.findIndex(d => d.str === (m.entrega || m.inicio));
-      const sIdx = si >= 0 ? si : (m.inicio < workDays[0]?.str ? -1 : workDays.length);
-      const eIdx = ei >= 0 ? ei : (m.entrega > workDays[workDays.length-1]?.str ? workDays.length : -1);
+      const startDate = m.inicio || m.entrega;
+      const endDate   = m.entrega || m.inicio;
+      const sIdx = resolveWorkDayIdx(startDate, workDays, 'next');
+      const eIdx = resolveWorkDayIdx(endDate,   workDays, 'prev');
       let placed = false;
       for (let t = 0; t < tracks.length; t++) {
         const last = tracks[t][tracks[t].length-1];
@@ -943,12 +963,14 @@ function renderGantt() {
       const trackIdx = cardTrack.get(m.id) ?? 0;
       const top = trackIdx * 60 + 8;
 
-      let sIdx = workDays.findIndex(d => d.str === m.inicio);
-      let eIdx = workDays.findIndex(d => d.str === (m.entrega || m.inicio));
-      // clip
-      if (sIdx < 0 && m.inicio < (workDays[0]?.str || '')) sIdx = 0;
-      if (eIdx < 0 && (m.entrega || m.inicio) > (workDays[workDays.length-1]?.str || '')) eIdx = workDays.length - 1;
-      if (sIdx < 0 || eIdx < 0 || eIdx < sIdx) return; // outside month
+      const startDate = m.inicio || m.entrega;
+      const endDate   = m.entrega || m.inicio;
+      let sIdx = resolveWorkDayIdx(startDate, workDays, 'next');
+      let eIdx = resolveWorkDayIdx(endDate,   workDays, 'prev');
+      // clip to month bounds
+      if (sIdx >= workDays.length || eIdx < 0 || eIdx < sIdx) return; // outside month
+      sIdx = Math.max(0, sIdx);
+      eIdx = Math.min(workDays.length - 1, eIdx);
 
       const left = sIdx * 52;
       const width = (eIdx - sIdx + 1) * 52 - 4;
