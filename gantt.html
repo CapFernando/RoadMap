@@ -1204,7 +1204,7 @@ function saveTask() {
 
   closeModal('modal-main');
   renderAll();
-  toast('Tarefa salva. Clique em Salvar para publicar.', 'ok');
+  saveToGitHub();
 }
 
 function deleteCurrent() {
@@ -1213,7 +1213,7 @@ function deleteCurrent() {
   state.melhorias = state.melhorias.filter(m => m.id !== editingId);
   closeModal('modal-main');
   renderAll();
-  toast('Tarefa removida.', 'ok');
+  saveToGitHub();
 }
 
 // ── DEVS MODAL ────────────────────────────────────────────────────────────
