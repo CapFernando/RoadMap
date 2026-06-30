@@ -90,8 +90,8 @@
       "status": "iniciada",
       "estimativa": "",
       "dev": "Gabriel",
-      "inicio": "2026-07-07",
-      "entrega": "2026-07-14",
+      "inicio": "2026-07-08",
+      "entrega": "2026-07-15",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:08:37.566Z",
       "prioridade": "",
@@ -687,5 +687,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T16:41:19.229Z"
+  "atualizado_em": "2026-06-30T16:41:44.498Z"
 }
