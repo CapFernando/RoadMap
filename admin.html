@@ -200,6 +200,7 @@
     .badge-regra      { background:#063D30; color:#7EECD8; }
     .badge-estimada   { background:#5C3608; color:#F9C97A; }
     .badge-iniciada   { background:#1E4208; color:#B2E07A; }
+    .badge-concluida  { background:#063D30; color:#7EECD8; }
     .badge-negada     { background:#5C0A0A; color:#F9A0A0; }
 
     /* MODAL */
@@ -602,8 +603,11 @@ async function saveToGitHub() {
 const STATUS_LABELS = {
   recebida:'Recebida (Backlog)', refinamento:'Em Refinamento',
   regra:'Validar Regra de Negócio', estimada:'Estimada',
-  iniciada:'Iniciar', negada:'Negada'
+  iniciada:'Em Andamento', concluida:'Concluída', negada:'Negada'
 };
+function statusKey(m) {
+  return m.status_planejamento === 'concluido' ? 'concluida' : (m.status || 'recebida');
+}
 
 let _filtroStatus = null;
 let _filtroTema   = null;
@@ -644,11 +648,12 @@ function renderStatusFilters() {
     { key: 'refinamento', label: 'Em Refinamento',          cls: 'refinamento' },
     { key: 'regra',       label: 'Validar Regra',           cls: 'regra' },
     { key: 'estimada',    label: 'Estimada',                cls: 'estimada' },
-    { key: 'iniciada',    label: 'Iniciar',                 cls: 'iniciada' },
+    { key: 'iniciada',    label: 'Em Andamento',            cls: 'iniciada' },
+    { key: 'concluida',   label: 'Concluída',               cls: 'concluida' },
     { key: 'negada',      label: 'Negada',                  cls: 'negada' },
   ];
   el.innerHTML = todos.map(b => {
-    const n = b.key ? state.melhorias.filter(m => m.status === b.key).length : state.melhorias.length;
+    const n = b.key ? state.melhorias.filter(m => statusKey(m) === b.key).length : state.melhorias.length;
     const active = _filtroStatus === b.key ? 'active' : '';
     return `<button class="sf-btn ${b.cls} ${active}" onclick="setFiltroStatus(${b.key ? `'${b.key}'` : 'null'})">${b.label} <strong>${n}</strong></button>`;
   }).join('');
@@ -678,11 +683,11 @@ function renderMelhorias() {
   const el = document.getElementById('lista-melhorias');
   if (!state.melhorias.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria cadastrada.</div>'; return; }
   const lista = state.melhorias.filter(m =>
-    (!_filtroStatus || m.status === _filtroStatus) &&
+    (!_filtroStatus || statusKey(m) === _filtroStatus) &&
     (!_filtroTema   || m.tema_id === _filtroTema)
   );
   if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
-  const STATUS_ORDER = { iniciada:0, estimada:1, regra:2, refinamento:3, recebida:4, negada:5 };
+  const STATUS_ORDER = { concluida:-1, iniciada:0, estimada:1, regra:2, refinamento:3, recebida:4, negada:5 };
   const sorted = [...lista].sort((a,b) => {
     const aTemInicio = !!a.inicio;
     const bTemInicio = !!b.inicio;
@@ -694,11 +699,12 @@ function renderMelhorias() {
   });
   el.innerHTML = sorted.map(m => {
     const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '—';
-    const badge = `<span class="badge badge-${m.status}">${STATUS_LABELS[m.status]||m.status}</span>`;
+    const sk = statusKey(m);
+    const badge = `<span class="badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
     let sub = tema;
     if (m.status === 'estimada' && m.estimativa) sub += ` · ${m.estimativa}`;
-    if (m.status === 'iniciada' && m.dev) sub += ` · ${m.dev}`;
-    if (m.status === 'iniciada' && m.entrega) sub += ` · Entrega: ${formatDate(m.entrega)}`;
+    if ((m.status === 'iniciada' || sk === 'concluida') && m.dev) sub += ` · ${m.dev}`;
+    if ((m.status === 'iniciada' || sk === 'concluida') && m.entrega) sub += ` · Entrega: ${formatDate(m.entrega)}`;
     return `<div class="card">
       <div class="card-info">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
