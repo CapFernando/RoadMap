@@ -737,8 +737,8 @@
       "status": "estimada",
       "estimativa": "",
       "dev": "João Vitor",
-      "inicio": "2026-07-20",
-      "entrega": "2026-07-31",
+      "inicio": "2026-07-13",
+      "entrega": "2026-07-17",
       "motivo_negacao": "",
       "criado_em": "2026-06-30T12:07:36.098Z",
       "prioridade": "alta",
@@ -875,5 +875,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T20:25:45.376Z"
+  "atualizado_em": "2026-06-30T20:26:29.814Z"
 }
