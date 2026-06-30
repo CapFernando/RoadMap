@@ -517,6 +517,7 @@
       <div style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="closeModal('modal-main')">Cancelar</button>
         <button id="delete-btn" class="btn delete-btn" onclick="deleteCurrent()" style="display:none">Excluir</button>
+        <button id="backlog-btn" class="btn btn-secondary" onclick="returnToBacklog()" style="display:none;border-color:var(--amber);color:var(--amber-tx)">↩ Voltar ao Backlog</button>
       </div>
       <button class="btn btn-primary" onclick="saveTask()">Salvar</button>
     </div>
@@ -1154,7 +1155,9 @@ function openModal(id, prefillDev, prefillDate) {
   editingId = id || null;
   const m = id ? state.melhorias.find(x => x.id === id) : null;
   document.getElementById('modal-main-title').textContent = m ? 'Editar Tarefa' : 'Nova Tarefa';
-  document.getElementById('delete-btn').style.display = m ? 'inline-flex' : 'none';
+  document.getElementById('delete-btn').style.display  = m ? 'inline-flex' : 'none';
+  // mostra "Voltar ao Backlog" apenas para cards que já têm datas no Gantt
+  document.getElementById('backlog-btn').style.display = (m && (m.inicio || m.entrega)) ? 'inline-flex' : 'none';
 
   // fill tema select
   const es = document.getElementById('e-tema');
@@ -1228,6 +1231,19 @@ function saveTask() {
     state.melhorias.push(obj);
   }
 
+  closeModal('modal-main');
+  renderAll();
+  saveToGitHub();
+}
+
+function returnToBacklog() {
+  if (!editingId) return;
+  const m = state.melhorias.find(x => x.id === editingId);
+  if (!m) return;
+  m.inicio              = '';
+  m.entrega             = '';
+  m.dev                 = '';
+  m.status_planejamento = 'backlog';
   closeModal('modal-main');
   renderAll();
   saveToGitHub();
