@@ -508,7 +508,17 @@
       "inicio": "",
       "entrega": "",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:45:32.267Z"
+      "criado_em": "2026-06-26T18:45:32.267Z",
+      "prioridade": "",
+      "solicitante": "",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "levantar_req",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqva88qzonl1e",
@@ -931,5 +941,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T19:01:52.340Z"
+  "atualizado_em": "2026-06-30T19:02:41.965Z"
 }
