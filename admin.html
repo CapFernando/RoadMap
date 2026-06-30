@@ -195,8 +195,9 @@
 
     /* BADGE STATUS */
     .badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
-    .badge-backlog     { background:#1A2A3A; color:#6A9AC8; }
-    .badge-planejado   { background:#0C3260; color:#9BC8F8; }
+    .badge-backlog      { background:#1A2A3A; color:#6A9AC8; }
+    .badge-levantar_req { background:#2A1A4E; color:#C9AEFF; }
+    .badge-planejado    { background:#0C3260; color:#9BC8F8; }
     .badge-em_andamento{ background:#1E4208; color:#B2E07A; }
     .badge-concluido   { background:#063D30; color:#7EECD8; }
     .badge-atrasado    { background:#5C0A0A; color:#F9A0A0; }
@@ -367,6 +368,7 @@
         <label>Status *</label>
         <select id="m-status" onchange="onStatusChange()">
           <option value="backlog">Backlog</option>
+          <option value="levantar_req">Levantar Requisitos</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em Andamento</option>
           <option value="concluido">Concluído</option>
@@ -599,12 +601,13 @@ async function saveToGitHub() {
 
 // ─── RENDER ───────────────────────────────────────────────────────
 const STATUS_LABELS = {
-  backlog:     'Backlog',
-  planejado:   'Planejado',
-  em_andamento:'Em Andamento',
-  concluido:   'Concluído',
-  atrasado:    'Atrasado',
-  negada:      'Negada',
+  backlog:      'Backlog',
+  levantar_req: 'Levantar Requisitos',
+  planejado:    'Planejado',
+  em_andamento: 'Em Andamento',
+  concluido:    'Concluído',
+  atrasado:     'Atrasado',
+  negada:       'Negada',
   // legado (itens antigos)
   recebida:'Backlog', refinamento:'Planejado', regra:'Planejado',
   estimada:'Planejado', iniciada:'Em Andamento', concluida:'Concluído',
@@ -653,8 +656,9 @@ function renderStatusFilters() {
   if (!el) return;
   const todos = [
     { key: null,          label: 'Todos',        cls: 'all' },
-    { key: 'backlog',     label: 'Backlog',       cls: 'backlog' },
-    { key: 'planejado',   label: 'Planejado',     cls: 'planejado' },
+    { key: 'backlog',      label: 'Backlog',              cls: 'backlog' },
+    { key: 'levantar_req', label: 'Levantar Requisitos', cls: 'levantar_req' },
+    { key: 'planejado',    label: 'Planejado',            cls: 'planejado' },
     { key: 'em_andamento',label: 'Em Andamento',  cls: 'em_andamento' },
     { key: 'concluido',   label: 'Concluído',     cls: 'concluido' },
     { key: 'atrasado',    label: 'Atrasado',      cls: 'atrasado' },
@@ -797,7 +801,7 @@ function onStatusChange() {
 }
 
 // mapa sp → status legado (para compatibilidade com outros campos)
-const SP_TO_STATUS = { backlog:'recebida', planejado:'estimada', em_andamento:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
+const SP_TO_STATUS = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
 
 function saveMelhoria() {
   const titulo = document.getElementById('m-titulo').value.trim();
