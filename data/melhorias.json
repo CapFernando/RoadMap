@@ -707,7 +707,7 @@
       "tema_id": "mqv7rupc8b2qe",
       "status": "recebida",
       "estimativa": "",
-      "dev": "",
+      "dev": "João Vitor",
       "inicio": "2026-07-20",
       "entrega": "2026-07-31",
       "motivo_negacao": "",
@@ -840,5 +840,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T18:04:37.002Z"
+  "atualizado_em": "2026-06-30T18:05:02.413Z"
 }
