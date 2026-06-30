@@ -593,14 +593,23 @@
       "titulo": "Notificação de Reanálise para os Gestores de Carteira",
       "descricao": "Notificação de reanálise para os gestores de carteira.\n\nOBS: surgiu na manhã de 29/06 mas a task ainda não foi firmada; sem data determinada.",
       "tema_id": "mqv7rfayzuh77",
-      "status": "recebida",
+      "status": "iniciada",
       "estimativa": "",
       "dev": "Emilly Viana",
-      "solicitante": "Crisley",
-      "inicio": "",
-      "entrega": "",
+      "inicio": "2026-06-30",
+      "entrega": "2026-07-02",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z"
+      "criado_em": "2026-06-29T00:00:00.000Z",
+      "prioridade": "media",
+      "solicitante": "Crisley",
+      "data_solicitacao": "2026-06-29",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "em_andamento",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqylc1patrimo",
@@ -847,5 +856,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T18:18:26.966Z"
+  "atualizado_em": "2026-06-30T18:22:31.101Z"
 }
