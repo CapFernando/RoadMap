@@ -712,6 +712,9 @@ async function saveToGitHub() {
       (serverData.melhorias || []).forEach(m => { if (!localMelhoriaIds.has(m.id) && !_gDeletedIds.has(m.id)) state.melhorias.push(m); });
     } catch (_) {}
 
+    // Garante que desenvolvedores nunca tenha entradas compostas ("Gabriel / Anthony")
+    state.desenvolvedores = [...new Set(state.desenvolvedores.flatMap(d => splitDevs(d)))];
+
     state.atualizado_em = new Date().toISOString();
     const bytes = new TextEncoder().encode(JSON.stringify(state, null, 2));
     let binary = '';
