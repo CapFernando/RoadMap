@@ -138,17 +138,28 @@
 
     /* ── BACKLOG SIDEBAR ── */
     .backlog-sidebar {
-      width: 220px; flex-shrink: 0; background: var(--bg2);
+      width: 240px; flex-shrink: 0; background: var(--bg2);
       border-right: 1px solid var(--border); display: flex; flex-direction: column;
       overflow: hidden;
     }
     .backlog-header {
-      padding: 12px 14px; font-size: 13px; font-weight: 600;
+      padding: 12px 14px 8px; font-size: 13px; font-weight: 600;
       border-bottom: 1px solid var(--border); color: var(--text2);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .backlog-header-row {
       display: flex; justify-content: space-between; align-items: center;
     }
+    .backlog-search {
+      width: 100%; padding: 6px 10px; font-size: 12px;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-family: 'Inter', sans-serif;
+      outline: none;
+    }
+    .backlog-search:focus { border-color: var(--blue); }
+    .backlog-search::placeholder { color: var(--text3); }
     .backlog-list {
-      flex: 1; overflow-y: auto; padding: 8px;
+      flex: 1; overflow-y: auto; padding: 10px 8px;
     }
     .backlog-list::-webkit-scrollbar { width: 4px; }
     .backlog-list::-webkit-scrollbar-track { background: transparent; }
@@ -156,13 +167,14 @@
 
     .backlog-card {
       background: var(--bg3); border: 1px solid var(--border2);
-      border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
       cursor: grab; user-select: none; transition: border-color 0.15s;
     }
     .backlog-card:hover { border-color: var(--blue); }
     .backlog-card:active { cursor: grabbing; }
-    .backlog-card-title { font-size: 12px; font-weight: 500; color: var(--text); line-height: 1.4; margin-bottom: 4px; }
-    .backlog-card-meta { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+    .backlog-card-title { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 6px; }
+    .backlog-card-desc { font-size: 11px; color: var(--text2); margin-bottom: 6px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .backlog-card-meta { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
 
     /* ── GANTT AREA ── */
     .gantt-area {
@@ -418,8 +430,11 @@
   <div class="main-layout">
     <div class="backlog-sidebar">
       <div class="backlog-header">
-        <span>Backlog</span>
-        <span id="backlog-count" style="font-size:11px;background:var(--bg4);padding:2px 7px;border-radius:10px;">0</span>
+        <div class="backlog-header-row">
+          <span>Backlog</span>
+          <span id="backlog-count" style="font-size:11px;background:var(--bg4);padding:2px 7px;border-radius:10px;">0</span>
+        </div>
+        <input class="backlog-search" id="backlog-search" type="text" placeholder="Buscar por nome, tema ou dev…" oninput="renderBacklog()" />
       </div>
       <div class="backlog-list" id="backlog-list"></div>
     </div>
@@ -877,10 +892,22 @@ function renderBacklog() {
     return (a.titulo || '').localeCompare(b.titulo || '');
   });
 
-  document.getElementById('backlog-count').textContent = sorted.length;
-  if (!sorted.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Nenhum item no backlog</div>'; return; }
+  // aplica busca por nome, tema ou dev
+  const q = (document.getElementById('backlog-search')?.value || '').toLowerCase().trim();
+  const filtered = q ? sorted.filter(m => {
+    const tema = state.temas.find(t => t.id === m.tema_id);
+    return (m.titulo || '').toLowerCase().includes(q)
+        || (tema?.nome || '').toLowerCase().includes(q)
+        || (m.dev || '').toLowerCase().includes(q);
+  }) : sorted;
 
-  el.innerHTML = sorted.map(m => {
+  document.getElementById('backlog-count').textContent = sorted.length;
+  if (!filtered.length) {
+    el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">${q ? 'Nenhum resultado para "' + esc(q) + '"' : 'Nenhum item no backlog'}</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(m => {
     const tema = state.temas.find(t => t.id === m.tema_id);
     const temaColor = temaColorOf(m.tema_id);
     const dotCls = prioClass(m.prioridade);
@@ -890,10 +917,11 @@ function renderBacklog() {
       ondragstart="onBacklogDragStart(event,'${m.id}')"
       onclick="openModal('${m.id}')">
       <div class="backlog-card-title">${esc(m.titulo)}</div>
-      ${m.descricao ? `<div style="font-size:11px;color:var(--text2);margin:3px 0 4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(m.descricao)}</div>` : ''}
+      ${m.descricao ? `<div class="backlog-card-desc">${esc(m.descricao)}</div>` : ''}
       <div class="backlog-card-meta">
-        ${tema ? `<span style="font-size:10px;padding:1px 5px;border-radius:4px;background:${temaColor}22;color:${temaColor};font-weight:600">${esc(tema.nome)}</span>` : ''}
-        ${m.prioridade ? `<span class="card-dot ${dotCls}" style="width:6px;height:6px;border-radius:50%;display:inline-block;margin-left:2px"></span>` : ''}
+        ${tema ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${temaColor}22;color:${temaColor};font-weight:600">${esc(tema.nome)}</span>` : ''}
+        ${m.dev ? `<span style="font-size:10px;color:var(--text3)">${esc(m.dev)}</span>` : ''}
+        ${m.prioridade ? `<span class="card-dot ${dotCls}" style="width:6px;height:6px;border-radius:50%;display:inline-block"></span>` : ''}
       </div>
     </div>`;
   }).join('');
