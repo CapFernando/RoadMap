@@ -103,13 +103,23 @@
       "titulo": "Novo botão - reprocessamento",
       "descricao": "Disponibilizar um botão de reprocessamento da análise.\n\nOBS: Discutir com Anthony, Paullymax e Gabriel",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "recebida",
       "estimativa": "",
-      "dev": "Gabriel / Anthony",
+      "dev": "Gabriel",
       "inicio": "2026-07-14",
       "entrega": "2026-07-20",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:12:41.849Z"
+      "criado_em": "2026-06-26T18:12:41.849Z",
+      "prioridade": "",
+      "solicitante": "",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "backlog",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 46
     },
     {
       "id": "mqv93oddliwpl",
@@ -687,5 +697,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T16:57:20.239Z"
+  "atualizado_em": "2026-06-30T16:57:45.710Z"
 }
