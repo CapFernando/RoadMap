@@ -294,12 +294,22 @@
       "descricao": "Incluir nova etapa no funil \"Validação de Rating\" e incluir automação para enviar ao rating (Laiz) toda vez que houver movimentação para validação de rating o link e o pdf. (mensagem apenas para Laiz)",
       "tema_id": "mqv7rfayzuh77",
       "status": "estimada",
-      "estimativa": "3 dias",
-      "dev": "",
-      "inicio": "",
-      "entrega": "",
+      "estimativa": "",
+      "dev": "Emilly Viana",
+      "inicio": "2026-07-02",
+      "entrega": "2026-07-06",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:27:14.495Z"
+      "criado_em": "2026-06-26T18:27:14.495Z",
+      "prioridade": "media",
+      "solicitante": "",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "planejado",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqv9n7jcw1olv",
@@ -865,5 +875,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T18:37:13.380Z"
+  "atualizado_em": "2026-06-30T18:45:59.264Z"
 }
