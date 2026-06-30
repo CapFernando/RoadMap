@@ -332,12 +332,9 @@ function badgeHTML(status, sp) {
 function metaHTML(m) {
   const items = [];
   if (m.dev)     items.push(`${svgIcon('user')} ${m.dev}`);
-  if (m.status === 'estimada' && m.estimativa)
-    items.push(`${svgIcon('clock')} Estimativa: ${m.estimativa}`);
-  if (m.status === 'iniciada') {
-    if (m.inicio)  items.push(`${svgIcon('calendar')} Início: ${formatDate(m.inicio)}`);
-    if (m.entrega) items.push(`${svgIcon('calendar')} Entrega: ${formatDate(m.entrega)}`);
-  }
+  if (m.inicio)  items.push(`${svgIcon('calendar')} Início: ${formatDate(m.inicio)}`);
+  if (m.entrega) items.push(`${svgIcon('calendar')} Entrega: ${formatDate(m.entrega)}`);
+  if (m.estimativa) items.push(`${svgIcon('clock')} Estimativa: ${m.estimativa}`);
   if (!items.length) return '';
   return `<div class="melhoria-meta">${items.map(i => `<span class="meta-item">${i}</span>`).join('')}</div>`;
 }
