@@ -557,10 +557,7 @@ async function saveToGitHub() {
     }
     const data = await res.json();
     fileSha = data.content.sha;
-
-    // Recarrega do GitHub para confirmar que foi salvo
-    await loadFromGitHub(true);
-    toast('✅ Publicado e confirmado!', 'ok');
+    toast('✅ Publicado!', 'ok');
   } catch (e) {
     // Exibe erro permanente até o usuário fechar
     const errEl = document.getElementById('save-error');
