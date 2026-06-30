@@ -158,10 +158,13 @@
       "status": "iniciada",
       "estimativa": "",
       "dev": "Gabriel",
-      "inicio": "2026-07-31",
-      "entrega": "2026-08-05",
+      "inicio": "2026-07-07",
+      "entrega": "2026-07-14",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:17:42.927Z"
+      "criado_em": "2026-06-26T18:17:42.927Z",
+      "prioridade": "",
+      "solicitante": "",
+      "data_solicitacao": ""
     },
     {
       "id": "mqv98fgorz74n",
@@ -675,14 +678,5 @@
       "criado_em": "2026-06-30T12:10:40.288Z"
     }
   ],
-  "desenvolvedores": [
-    "Gabriel",
-    "Gabriel / Anthony",
-    "João Vitor",
-    "Emilly Viana",
-    "Cairo",
-    "Jhonatan"
-  ],
-  "feriados": [],
-  "atualizado_em": "2026-06-30T14:51:08.098Z"
+  "atualizado_em": "2026-06-30T16:40:23.023Z"
 }
