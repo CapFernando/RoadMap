@@ -756,11 +756,20 @@
       "status": "iniciada",
       "estimativa": "",
       "dev": "Cairo",
-      "solicitante": "Guilherme Alves",
-      "inicio": "",
+      "inicio": "2026-06-01",
       "entrega": "",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z"
+      "criado_em": "2026-06-29T00:00:00.000Z",
+      "prioridade": "alta",
+      "solicitante": "Guilherme Alves",
+      "data_solicitacao": "2026-05-31",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "em_andamento",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqyo01remneg0",
@@ -922,5 +931,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T18:54:18.926Z"
+  "atualizado_em": "2026-06-30T18:58:27.779Z"
 }
