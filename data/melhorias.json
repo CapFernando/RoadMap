@@ -317,12 +317,22 @@
       "descricao": "Deixar o campo para adicionar o atual.\n\nOBS: Já foi entregue, porém cabe melhoria na tela de limites para reaproveitar as anteriores.",
       "tema_id": "mqv7rfayzuh77",
       "status": "estimada",
-      "estimativa": "10 dias",
-      "dev": "",
-      "inicio": "",
-      "entrega": "",
+      "estimativa": "",
+      "dev": "Gabriel",
+      "inicio": "2026-08-03",
+      "entrega": "2026-08-14",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:30:01.704Z"
+      "criado_em": "2026-06-26T18:30:01.704Z",
+      "prioridade": "baixa",
+      "solicitante": "",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "planejado",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqv9on3fy431t",
@@ -885,5 +895,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T18:50:57.704Z"
+  "atualizado_em": "2026-06-30T18:52:24.720Z"
 }
