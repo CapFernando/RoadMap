@@ -757,7 +757,7 @@
       "estimativa": "",
       "dev": "Cairo",
       "inicio": "2026-06-01",
-      "entrega": "",
+      "entrega": "2026-08-31",
       "motivo_negacao": "",
       "criado_em": "2026-06-29T00:00:00.000Z",
       "prioridade": "alta",
@@ -931,5 +931,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T18:58:27.779Z"
+  "atualizado_em": "2026-06-30T18:59:13.518Z"
 }
