@@ -649,9 +649,17 @@ function doLogout() {
 initLoginScreen();
 
 // ── GITHUB ────────────────────────────────────────────────────────────────
+const _gDeletedIds = new Set();
+let   _saveTimer   = null;
+function debouncedSave() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => saveToGitHub(), 2000);
+}
+
 async function loadFromGitHub() {
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
       headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
     });
     if (res.status === 404) { renderAll(); return; }
@@ -680,14 +688,24 @@ async function loadFromGitHub() {
 async function saveToGitHub() {
   showSaving(true);
   try {
-    // Busca o SHA mais recente para evitar conflito com saves do Admin
-    const shaRes = await fetch(API_URL, {
+    // Busca SHA mais recente — obrigatório para evitar conflito
+    const shaRes = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
       headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
     });
-    if (shaRes.ok) {
-      const shaJson = await shaRes.json();
-      fileSha = shaJson.sha;
-    }
+    if (!shaRes.ok) { const e = await shaRes.json(); throw new Error('Falha ao obter SHA: ' + (e.message || shaRes.status)); }
+    const shaJson = await shaRes.json();
+    fileSha = shaJson.sha;
+
+    // Merge: incorpora itens presentes no servidor mas ausentes localmente
+    // (adicionados pelo Admin enquanto esta aba estava aberta)
+    try {
+      const serverData = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g,'')))));
+      const localMelhoriaIds = new Set(state.melhorias.map(m => m.id));
+      const localTemaIds     = new Set(state.temas.map(t => t.id));
+      (serverData.temas     || []).forEach(t => { if (!localTemaIds.has(t.id)     && !_gDeletedIds.has(t.id)) state.temas.push(t); });
+      (serverData.melhorias || []).forEach(m => { if (!localMelhoriaIds.has(m.id) && !_gDeletedIds.has(m.id)) state.melhorias.push(m); });
+    } catch (_) {}
 
     state.atualizado_em = new Date().toISOString();
     const bytes = new TextEncoder().encode(JSON.stringify(state, null, 2));
@@ -699,7 +717,7 @@ async function saveToGitHub() {
     const body = {
       message: `chore: planejamento ${new Date().toLocaleString('pt-BR')}`,
       content,
-      ...(fileSha ? { sha: fileSha } : {})
+      sha: fileSha
     };
     const res = await fetch(API_URL, {
       method: 'PUT',
@@ -1111,7 +1129,7 @@ function onDayDrop(e) {
 
   dragData = { type: null, id: null };
   renderAll();
-  saveToGitHub();
+  debouncedSave();
 }
 
 function onDayCellClick(e, dev, date) {
@@ -1210,6 +1228,7 @@ function saveTask() {
 function deleteCurrent() {
   if (!editingId) return;
   if (!confirm('Excluir esta tarefa?')) return;
+  _gDeletedIds.add(editingId);
   state.melhorias = state.melhorias.filter(m => m.id !== editingId);
   closeModal('modal-main');
   renderAll();
