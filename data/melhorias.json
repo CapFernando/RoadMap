@@ -816,7 +816,7 @@
       "status": "recebida",
       "estimativa": "",
       "dev": "Emilly Viana",
-      "inicio": "",
+      "inicio": "2026-07-06",
       "entrega": "",
       "motivo_negacao": "",
       "criado_em": "2026-06-30T12:10:40.288Z",
@@ -826,7 +826,7 @@
       "sprint": "",
       "estimativa_horas": 0,
       "horas_realizadas": 0,
-      "status_planejamento": "backlog",
+      "status_planejamento": "levantar_req",
       "observacao": "",
       "oculto": false,
       "ordem": 51
@@ -931,5 +931,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T18:59:13.518Z"
+  "atualizado_em": "2026-06-30T19:01:52.340Z"
 }
