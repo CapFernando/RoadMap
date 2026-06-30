@@ -673,11 +673,20 @@
       "status": "iniciada",
       "estimativa": "",
       "dev": "Cairo",
-      "solicitante": "",
-      "inicio": "",
-      "entrega": "",
+      "inicio": "2026-06-29",
+      "entrega": "2026-07-03",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z"
+      "criado_em": "2026-06-29T00:00:00.000Z",
+      "prioridade": "alta",
+      "solicitante": "",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "em_andamento",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqylc3monsist",
@@ -895,5 +904,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T18:52:24.720Z"
+  "atualizado_em": "2026-06-30T18:53:39.658Z"
 }
