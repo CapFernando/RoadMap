@@ -51,13 +51,23 @@
       "titulo": "Indicadores Visuais",
       "descricao": "Incluir indicadores visuais de status nas abas que segmentam os sacados: não iniciada, em andamento (com identificação do responsável) e concluída (durante a análise).",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "recebida",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-02",
-      "entrega": "2027-07-04",
+      "entrega": "2026-07-04",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T17:48:59.897Z"
+      "criado_em": "2026-06-26T17:48:59.897Z",
+      "prioridade": "",
+      "solicitante": "",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "backlog",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 46
     },
     {
       "id": "mqv8ngum4h11m",
@@ -665,5 +675,14 @@
       "criado_em": "2026-06-30T12:10:40.288Z"
     }
   ],
-  "atualizado_em": "2026-06-30T13:49:22.203Z"
+  "desenvolvedores": [
+    "Gabriel",
+    "Gabriel / Anthony",
+    "João Vitor",
+    "Emilly Viana",
+    "Cairo",
+    "Jhonatan"
+  ],
+  "feriados": [],
+  "atualizado_em": "2026-06-30T14:51:08.098Z"
 }
