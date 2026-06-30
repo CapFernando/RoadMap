@@ -461,6 +461,7 @@ const API_URL       = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO
 // ─── STATE ────────────────────────────────────────────────────────
 let state = { temas: [], melhorias: [] };
 let fileSha = null;
+const _deletedIds = new Set();
 
 // ─── LOGIN ────────────────────────────────────────────────────────
 const runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
@@ -529,6 +530,20 @@ async function saveToGitHub() {
     }
     const shaJson = await shaRes.json();
     fileSha = shaJson.sha;
+
+    // Merge: incorpora itens presentes no servidor mas ausentes localmente
+    // (adicionados por outro commit/restore enquanto esta aba estava aberta)
+    try {
+      const serverData = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g, '')))));
+      const localMelhoriaIds = new Set(state.melhorias.map(m => m.id));
+      const localTemaIds     = new Set(state.temas.map(t => t.id));
+      (serverData.temas || []).forEach(t => {
+        if (!localTemaIds.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t);
+      });
+      (serverData.melhorias || []).forEach(m => {
+        if (!localMelhoriaIds.has(m.id) && !_deletedIds.has(m.id)) state.melhorias.push(m);
+      });
+    } catch (_) {}
 
     state.atualizado_em = new Date().toISOString();
     const bytes = new TextEncoder().encode(JSON.stringify(state, null, 2));
@@ -716,6 +731,7 @@ function saveTema() {
 }
 function deleteTema(id) {
   if (!confirm('Excluir este tema? As melhorias vinculadas ficarão sem tema.')) return;
+  _deletedIds.add(id);
   state.temas = state.temas.filter(t => t.id !== id);
   renderAll();
   toast('Tema removido.', 'ok');
@@ -797,6 +813,7 @@ function saveMelhoria() {
 
 function deleteMelhoria(id) {
   if (!confirm('Excluir esta melhoria?')) return;
+  _deletedIds.add(id);
   state.melhorias = state.melhorias.filter(m => m.id !== id);
   renderAll();
   toast('Melhoria removida.', 'ok');
