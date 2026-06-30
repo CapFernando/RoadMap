@@ -552,11 +552,20 @@
       "status": "iniciada",
       "estimativa": "",
       "dev": "Emilly Viana",
-      "solicitante": "Marina e Wend",
-      "inicio": "2026-06-29",
+      "inicio": "2026-06-28",
       "entrega": "2026-06-29",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z"
+      "criado_em": "2026-06-29T00:00:00.000Z",
+      "prioridade": "",
+      "solicitante": "Marina e Wend",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 16,
+      "horas_realizadas": 0,
+      "status_planejamento": "concluido",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 46
     },
     {
       "id": "mqylm1syncbx0",
@@ -733,5 +742,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:32:57.302Z"
+  "atualizado_em": "2026-06-30T17:37:03.261Z"
 }
