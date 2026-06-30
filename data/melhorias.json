@@ -463,9 +463,9 @@
       "tema_id": "mqv7rfayzuh77",
       "status": "recebida",
       "estimativa": "",
-      "dev": "",
-      "inicio": "",
-      "entrega": "",
+      "dev": "João Vitor",
+      "inicio": "2026-07-02",
+      "entrega": "2026-07-02",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:46:23.051Z"
     },
@@ -717,5 +717,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:04:19.061Z"
+  "atualizado_em": "2026-06-30T17:12:58.366Z"
 }
