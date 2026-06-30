@@ -333,12 +333,22 @@
       "descricao": "BP e DRE deve permanecer da análise anterior (atualmente não ficam)",
       "tema_id": "mqv7rfayzuh77",
       "status": "estimada",
-      "estimativa": "1 dia",
-      "dev": "",
-      "inicio": "",
-      "entrega": "",
+      "estimativa": "",
+      "dev": "Gabriel",
+      "inicio": "2026-07-08",
+      "entrega": "2026-07-09",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:31:38.141Z"
+      "criado_em": "2026-06-26T18:31:38.141Z",
+      "prioridade": "media",
+      "solicitante": "",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 8,
+      "horas_realizadas": 0,
+      "status_planejamento": "planejado",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqv9s3z0tttee",
@@ -847,5 +857,13 @@
       "status_planejamento": "planejado"
     }
   ],
-  "atualizado_em": "2026-06-30T18:33:22.806Z"
+  "desenvolvedores": [
+    "Gabriel",
+    "João Vitor",
+    "Emilly Viana",
+    "Cairo",
+    "Jhonatan"
+  ],
+  "feriados": [],
+  "atualizado_em": "2026-06-30T18:37:13.380Z"
 }
