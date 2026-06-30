@@ -526,14 +526,23 @@
       "titulo": "Cruzamento de dados entre cedentes (societário)",
       "descricao": "Cruzamento de dados de um cedente com outro cedente no cadastro:\n- Verificar se o societário do cedente também faz parte do societário de outro cedente.\n- Cruzar dados e trazer indícios.",
       "tema_id": "mqv7rupc8b2qe",
-      "status": "recebida",
+      "status": "estimada",
       "estimativa": "",
       "dev": "João Vitor",
-      "solicitante": "Pedro Paulo",
       "inicio": "2026-07-06",
-      "entrega": "2026-07-06",
+      "entrega": "2026-07-10",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z"
+      "criado_em": "2026-06-29T00:00:00.000Z",
+      "prioridade": "alta",
+      "solicitante": "Pedro Paulo",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "planejado",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 46
     },
     {
       "id": "mqylm1desist0",
@@ -724,5 +733,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:28:11.239Z"
+  "atualizado_em": "2026-06-30T17:28:25.615Z"
 }
