@@ -289,6 +289,10 @@
     <h2>🔐 Área Administrativa</h2>
     <p>RoadMap de Melhorias · Audax Capital</p>
     <input type="password" id="senha-input" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')doLogin()" />
+    <div id="token-field" style="display:none;margin-top:0">
+      <input type="password" id="token-input" placeholder="GitHub Token (ghp_…)" onkeydown="if(event.key==='Enter')doLogin()" style="letter-spacing:0" />
+      <small style="color:var(--text3);font-size:12px;display:block;margin-top:4px">Token necessário apenas no primeiro acesso por este dispositivo.</small>
+    </div>
     <button onclick="doLogin()">Entrar</button>
     <div class="login-error" id="login-error"></div>
   </div>
@@ -464,10 +468,13 @@ let fileSha = null;
 const _deletedIds = new Set();
 
 // ─── LOGIN ────────────────────────────────────────────────────────
-const runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
+let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
 
 function initLoginScreen() {
-  if (localStorage.getItem('rm_logged') === '1') {
+  // Mostra campo de token se não há token disponível (outra máquina, sem config.js)
+  if (!runtimeToken) document.getElementById('token-field').style.display = 'block';
+
+  if (localStorage.getItem('rm_logged') === '1' && runtimeToken) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-app').style.display = 'block';
     loadFromGitHub();
@@ -475,6 +482,13 @@ function initLoginScreen() {
 }
 
 function doLogin() {
+  // Se não tem token, lê do campo e salva no localStorage
+  if (!runtimeToken) {
+    const t = document.getElementById('token-input').value.trim();
+    if (!t) { document.getElementById('login-error').textContent = 'Informe o GitHub Token.'; return; }
+    runtimeToken = t;
+    localStorage.setItem('rm_token', t);
+  }
   const v = document.getElementById('senha-input').value;
   if (v === SENHA) {
     localStorage.setItem('rm_logged', '1');
