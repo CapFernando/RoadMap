@@ -624,6 +624,15 @@ let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
 
 function initLoginScreen() {
   if (!runtimeToken) document.getElementById('token-field').style.display = 'block';
+  // auto-bypass: se já fez login antes neste dispositivo, entra direto
+  if (localStorage.getItem('rm_logged') === '1' && runtimeToken) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('gantt-app').style.display = 'block';
+    const now = new Date();
+    viewYear = now.getFullYear();
+    viewMonth = now.getMonth();
+    loadFromGitHub();
+  }
 }
 function doLogin() {
   const v = document.getElementById('senha-input').value;
@@ -634,6 +643,7 @@ function doLogin() {
     localStorage.setItem('rm_token', t);
   }
   if (v === SENHA) {
+    localStorage.setItem('rm_logged', '1');
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('gantt-app').style.display = 'block';
     const now = new Date();
@@ -647,6 +657,7 @@ function doLogin() {
 }
 function doLogout() {
   if (!GITHUB_TOKEN) { runtimeToken = ''; }
+  localStorage.removeItem('rm_logged');
   document.getElementById('gantt-app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('senha-input').value = '';
@@ -842,17 +853,14 @@ function renderBacklog() {
     if (m.status === 'negada') return false;
     const sp = m.status_planejamento || 'backlog';
     if (sp === 'concluido') return false;
+    // Itens com dev + datas já estão no Gantt — nunca aparecem no backlog
+    if (m.dev && (m.inicio || m.entrega)) return false;
     const noDate = (!m.inicio && !m.entrega);
-    // Se tem dev + datas dentro do mês atual, já está no Gantt — não mostrar no backlog
-    const inCurrentMonth = !noDate && m.dev && (
-      (!m.inicio || m.inicio <= monthEnd) &&
-      (!m.entrega || m.entrega >= monthStart)
-    );
-    if (inCurrentMonth) return false;
-    // Mostrar se: sem data, ou status backlog, ou datas fora do mês visualizado
+    const monthStart2 = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-01`;
+    const monthEnd2   = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-31`;
     const outsideMonth = !noDate && (
-      (m.entrega && m.entrega < monthStart) ||
-      (m.inicio  && m.inicio  > monthEnd)
+      (m.entrega && m.entrega < monthStart2) ||
+      (m.inicio  && m.inicio  > monthEnd2)
     );
     if (!noDate && sp !== 'backlog' && !outsideMonth) return false;
     if (!matchesFilters(m)) return false;
