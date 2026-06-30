@@ -679,11 +679,20 @@ async function loadFromGitHub() {
       desenvolvedores: decoded.desenvolvedores || [],
       feriados:      decoded.feriados       || [],
     };
-    // normaliza: expande "Gabriel / Anthony" → ["Gabriel", "Anthony"] e deduplica
-    const rawDevs = state.desenvolvedores.length
-      ? state.desenvolvedores
-      : state.melhorias.map(m => m.dev).filter(Boolean);
+    // normaliza devs: sempre une lista salva + devs das melhorias (captura devs adicionados via admin)
+    const rawDevs = [
+      ...state.desenvolvedores,
+      ...state.melhorias.map(m => m.dev).filter(Boolean)
+    ];
     state.desenvolvedores = [...new Set(rawDevs.flatMap(d => splitDevs(d)))];
+
+    // auto-promove: demandas com dev + datas já definidas entram no gantt automaticamente
+    state.melhorias.forEach(m => {
+      if (m.dev && (m.inicio || m.entrega) && (!m.status_planejamento || m.status_planejamento === 'backlog')) {
+        m.status_planejamento = 'planejado';
+        m.status = spToStatus('planejado');
+      }
+    });
     renderAll();
   } catch(e) {
     toast(e.message, 'err');
