@@ -39,6 +39,10 @@
     {
       "id": "tmqyo0juridi0",
       "nome": "Jurídico"
+    },
+    {
+      "id": "mr0ls3sf2h41s",
+      "nome": "AxCred - Rating"
     }
   ],
   "melhorias": [
@@ -643,6 +647,22 @@
       "entrega": "",
       "motivo_negacao": "",
       "criado_em": "2026-06-30T12:07:36.098Z"
+    },
+    {
+      "id": "mr0lurdshmoj8",
+      "titulo": "Ambiente de Rating",
+      "descricao": "Diante do crescimento da área, solicitamos a aprovação para implementação de um ambiente exclusivo de Rating no AXCRED, com o objetivo de centralizar todo o histórico de análises e reanálises dos cedentes e fundos, contemplando informações como data da avaliação, classificação de rating, histórico de movimentações, justificativas das alterações e vínculo aos respectivos dossiês.\n\n \n\nComo primeira etapa, será disponibilizado um BI utilizando a base histórica já existente desde fevereiro de 2026. Na sequência, o ambiente no AXCRED permitirá que todas as informações passem a ser registradas diretamente na plataforma, eliminando controles paralelos e proporcionando maior rastreabilidade, padronização e eficiência operacional.\n\n \n\nEssa implementação também servirá como base para futuras evoluções, como a parametrização da metodologia de Rating, monitoramento automatizado da carteira e geração de alertas para reanálises.",
+      "tema_id": "mr0ls3sf2h41s",
+      "status": "recebida",
+      "estimativa": "",
+      "dev": "",
+      "prioridade": "media",
+      "solicitante": "Laiz",
+      "data_solicitacao": "2026-06-29",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-30T12:10:40.288Z"
     }
   ],
   "atualizado_em": "2026-06-30T13:49:22.203Z"
