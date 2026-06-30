@@ -680,11 +680,11 @@
       "titulo": "Campo para sinalização de avalistas do cedente",
       "descricao": "Venho, por meio deste, formalizar a solicitação do Departamento de Cadastro referente ao desenvolvimento de um campo para sinalização de avalistas do cedente no ambiente de cadastro da plataforma AxCred.\n\n \n\nA necessidade dessa funcionalidade foi discutida em reunião com a equipe de Tecnologia, ocasião em que foi alinhada a viabilidade de sua implementação. A demanda atende à solicitação da Diretora de Operações, Nathália Neres, e tem como objetivo permitir que o analista identifique e sinalize, durante a etapa de cadastro, as pessoas que deverão constar como avalistas nos instrumentos contratuais.\n\n \n\nDessa forma, solicitamos, por gentileza, a previsão para o início do desenvolvimento, bem como a estimativa de conclusão da demanda, para que possamos alinhar nosso planejamento interno com o cronograma de implementação.",
       "tema_id": "mqv7rupc8b2qe",
-      "status": "recebida",
+      "status": "estimada",
       "estimativa": "",
-      "dev": "",
+      "dev": "João Vitor",
       "inicio": "2026-07-27",
-      "entrega": "2026-07-31",
+      "entrega": "2026-07-27",
       "motivo_negacao": "",
       "criado_em": "2026-06-30T12:07:36.098Z",
       "prioridade": "alta",
@@ -693,7 +693,7 @@
       "sprint": "",
       "estimativa_horas": 45,
       "horas_realizadas": 0,
-      "status_planejamento": "backlog",
+      "status_planejamento": "planejado",
       "observacao": "",
       "oculto": false,
       "ordem": 46
@@ -724,5 +724,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:21:10.266Z"
+  "atualizado_em": "2026-06-30T17:21:24.943Z"
 }
