@@ -106,8 +106,8 @@
       "status": "recebida",
       "estimativa": "",
       "dev": "Gabriel",
-      "inicio": "2026-07-14",
-      "entrega": "2026-07-20",
+      "inicio": "2026-07-15",
+      "entrega": "2026-07-21",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:12:41.849Z",
       "prioridade": "",
@@ -717,5 +717,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:04:07.601Z"
+  "atualizado_em": "2026-06-30T17:04:14.514Z"
 }
