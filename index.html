@@ -201,6 +201,8 @@
     .badge-estimada  { background: var(--amber-bg);  color: var(--amber-tx);  }
     .badge-iniciada  { background: var(--green-bg);  color: var(--green-tx);  }
     .badge-negada    { background: var(--red-bg);    color: var(--red-tx);    }
+    .badge-planejado { background: #0C326022;        color: #9BC8F8;          }
+    .badge-concluida { background: #1E420822;        color: #B2E07A;          }
 
     .melhoria-desc {
       font-size: 15px;
@@ -293,12 +295,18 @@ const DATA_PATH   = 'data/melhorias.json';
 const API_URL     = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
 
 const STATUS_META = {
-  recebida:    { label: 'Recebida (Backlog)', cls: 'badge-recebida',    cor: '#3B8FE8' },
-  refinamento: { label: 'Em Refinamento',     cls: 'badge-refinamento', cor: '#9B6FE8' },
-  regra:       { label: 'Validar Regra de Negócio', cls: 'badge-regra', cor: '#2BBFA0' },
-  estimada:    { label: 'Estimada',            cls: 'badge-estimada',   cor: '#E89C2F' },
-  iniciada:    { label: 'Iniciar',              cls: 'badge-iniciada',   cor: '#5EA832' },
-  negada:      { label: 'Negada',              cls: 'badge-negada',     cor: '#E84444' },
+  recebida:    { label: 'Backlog',             cls: 'badge-recebida',    cor: '#3B8FE8' },
+  refinamento: { label: 'Em Refinamento',      cls: 'badge-refinamento', cor: '#9B6FE8' },
+  regra:       { label: 'Validar Regra',       cls: 'badge-regra',       cor: '#2BBFA0' },
+  estimada:    { label: 'Estimada',            cls: 'badge-estimada',    cor: '#E89C2F' },
+  iniciada:    { label: 'Em Andamento',        cls: 'badge-iniciada',    cor: '#5EA832' },
+  concluida:   { label: 'Concluída',           cls: 'badge-concluida',   cor: '#5EA832' },
+  negada:      { label: 'Negada',              cls: 'badge-negada',      cor: '#E84444' },
+  // status_planejamento (Gantt)
+  planejado:   { label: 'Planejado',           cls: 'badge-planejado',   cor: '#3B8FE8' },
+  em_andamento:{ label: 'Em Andamento',        cls: 'badge-iniciada',    cor: '#5EA832' },
+  concluido:   { label: 'Concluído',           cls: 'badge-concluida',   cor: '#2BBFA0' },
+  atrasado:    { label: 'Atrasado',            cls: 'badge-negada',      cor: '#E84444' },
 };
 
 const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
@@ -314,9 +322,11 @@ function svgIcon(name) {
   return icons[name] || '';
 }
 
-function badgeHTML(status) {
-  const m = STATUS_META[status] || STATUS_META.recebida;
-  return `<span class="badge ${m.cls}">${m.label}</span>`;
+function badgeHTML(status, sp) {
+  // status_planejamento tem prioridade quando indica que já saiu do backlog
+  const key = (sp && sp !== 'backlog') ? sp : (status || 'recebida');
+  const meta = STATUS_META[key] || STATUS_META.recebida;
+  return `<span class="badge ${meta.cls}">${meta.label}</span>`;
 }
 
 function metaHTML(m) {
@@ -348,7 +358,7 @@ function renderMelhoria(m) {
     <div class="melhoria">
       <div class="melhoria-top">
         <div class="melhoria-titulo">${m.titulo}</div>
-        ${badgeHTML(m.status)}
+        ${badgeHTML(m.status, m.status_planejamento)}
       </div>
       ${m.descricao ? `<div class="melhoria-desc">${m.descricao}</div>` : ''}
       ${motivoHTML(m)}
