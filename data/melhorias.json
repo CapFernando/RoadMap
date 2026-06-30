@@ -530,8 +530,8 @@
       "estimativa": "",
       "dev": "João Vitor",
       "solicitante": "Pedro Paulo",
-      "inicio": "",
-      "entrega": "",
+      "inicio": "2026-07-06",
+      "entrega": "2026-07-06",
       "motivo_negacao": "",
       "criado_em": "2026-06-29T00:00:00.000Z"
     },
@@ -724,5 +724,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:21:46.042Z"
+  "atualizado_em": "2026-06-30T17:28:11.239Z"
 }
