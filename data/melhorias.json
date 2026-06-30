@@ -55,7 +55,7 @@
       "titulo": "Indicadores Visuais",
       "descricao": "Incluir indicadores visuais de status nas abas que segmentam os sacados: não iniciada, em andamento (com identificação do responsável) e concluída (durante a análise).",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "recebida",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-08-19",
@@ -68,7 +68,7 @@
       "sprint": "",
       "estimativa_horas": 0,
       "horas_realizadas": 0,
-      "status_planejamento": "backlog",
+      "status_planejamento": "planejado",
       "observacao": "",
       "oculto": false,
       "ordem": 46
@@ -78,20 +78,21 @@
       "titulo": "Implementar texto padrão",
       "descricao": "Implementar texto padrão por campo nos casos em que o campo não seja preenchido pela automação ou em análises manuais feitas do zero.",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-06",
       "entrega": "2026-07-07",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:02:14.158Z"
+      "criado_em": "2026-06-26T18:02:14.158Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv8voouu0dmj",
       "titulo": "Dividir as competências entre sacado CPF e empresas relacionadas",
       "descricao": "Dividir as competências entre sacado CPF e empresas relacionadas (e vice-versa), mantendo os campos independentes entre si, ou seja, não rodar o sócio junto com o CNPJ permitindo que o analista faça o disparo, dessa forma tendemos a reduzir a sobrecarga e agilizar a resposta.\n\nOBS: Para esse tema será preciso do Anthony",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-31",
@@ -100,14 +101,15 @@
       "criado_em": "2026-06-26T18:08:37.566Z",
       "prioridade": "",
       "solicitante": "",
-      "data_solicitacao": ""
+      "data_solicitacao": "",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv90x6h1ivla",
       "titulo": "Novo botão - reprocessamento",
       "descricao": "Disponibilizar um botão de reprocessamento da análise.\n\nOBS: Discutir com Anthony, Paullymax e Gabriel",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "recebida",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-15",
@@ -120,7 +122,7 @@
       "sprint": "",
       "estimativa_horas": 0,
       "horas_realizadas": 0,
-      "status_planejamento": "backlog",
+      "status_planejamento": "planejado",
       "observacao": "",
       "oculto": false,
       "ordem": 46
@@ -130,20 +132,21 @@
       "titulo": "Barra de progresso",
       "descricao": "Sinalizar quando o ambiente não puxar as informações com prazo máximo de 5 minutos para resposta (já solicitado pessoalmente)",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-24",
       "entrega": "2026-07-27",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:14:50.401Z"
+      "criado_em": "2026-06-26T18:14:50.401Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv94lzm3k6pi",
       "titulo": "Empresa e pessoa relacionada",
       "descricao": "Incluir a opção de adicionar empresa relacionada e pessoa relacionada.",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "recebida",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-02",
@@ -156,7 +159,7 @@
       "sprint": "",
       "estimativa_horas": 0,
       "horas_realizadas": 0,
-      "status_planejamento": "backlog",
+      "status_planejamento": "planejado",
       "observacao": "",
       "oculto": false,
       "ordem": 46
@@ -166,20 +169,21 @@
       "titulo": "Remoção dos campos: Endereço, e-mail e telefone",
       "descricao": "Remover da análise os campos de endereços, e-mail e telefones, quando não forem necessários. (Campo: Informações Gerais)",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-28",
       "entrega": "2026-07-30",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:16:34.528Z"
+      "criado_em": "2026-06-26T18:16:34.528Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv97dhrz9ovy",
       "titulo": "Gerar alertas para o gestor",
       "descricao": "Gerar alertas para análises solicitadas pelo ambiente pelo gestor (no momento ainda mantemos o grupo no whats por isso não identificamos solicitações feitas no ambiente). Criar alertas/aviso para novos entrantes.",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-08",
@@ -188,79 +192,85 @@
       "criado_em": "2026-06-26T18:17:42.927Z",
       "prioridade": "",
       "solicitante": "",
-      "data_solicitacao": ""
+      "data_solicitacao": "",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv98fgorz74n",
       "titulo": "Dívidas ativas",
       "descricao": "Incluir informações sobre dívidas ativas.",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-08-05",
       "entrega": "2026-08-06",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:18:32.136Z"
+      "criado_em": "2026-06-26T18:18:32.136Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv98x2fjcb15",
       "titulo": "Profissão",
       "descricao": "Exibir a profissão dos sócios, quando disponível no VADU.",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-08-06",
       "entrega": "2026-08-07",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:18:54.951Z"
+      "criado_em": "2026-06-26T18:18:54.951Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv99s5t4osa1",
       "titulo": "IE Sócios",
       "descricao": "Trazer as inscrições estaduais vinculadas aos sócios (pelo AGRISK pode ser mais efetivo se não onerar a consulta).",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-08-07",
       "entrega": "2026-08-10",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:19:35.249Z"
+      "criado_em": "2026-06-26T18:19:35.249Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv9agc1nachm",
       "titulo": "Processos e protestos",
       "descricao": "Incluir consultas de processos judiciais e protestos dos CPFs.",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-08-11",
       "entrega": "2026-08-13",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:20:06.577Z"
+      "criado_em": "2026-06-26T18:20:06.577Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv9azya6wm4q",
       "titulo": "Gestão a vista",
       "descricao": "Inserir painel de gestão para visão de tempo gasto por análises para relatório diários, semanais e mensais. (Backlog – Em andamento, Tempo, produtividade)",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-08-13",
       "entrega": "2026-08-19",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:20:32.002Z"
+      "criado_em": "2026-06-26T18:20:32.002Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqv9ca593x894",
       "titulo": "Reaproveitar o documento original",
       "descricao": "Ter uma forma de reaproveitar o documento original para não perder e lançar a nova “reanalise” de antifraude.\n\nOBS: Validar com Jackeline qual impacto da alteração do número da operação",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "recebida",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-21",
@@ -273,7 +283,7 @@
       "sprint": "",
       "estimativa_horas": 0,
       "horas_realizadas": 0,
-      "status_planejamento": "backlog",
+      "status_planejamento": "planejado",
       "observacao": "",
       "oculto": false,
       "ordem": 46
@@ -544,28 +554,30 @@
       "titulo": "Modal de Motivo de Desistência",
       "descricao": "Introduz a captura obrigatória de um motivo de desistência no momento em que o card entra na etapa \"Cliente Desistiu\", a partir de uma lista fixa de seis motivos, com campo de observação livre quando o motivo for \"Outro\". O motivo fica armazenado no banco e pode ser consultado posteriormente pelo menu de ações do card, exclusivamente na etapa de desistência. Facilita também o levantamento de dados para o BI.",
       "tema_id": "mqv7rupc8b2qe",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Emilly Viana",
       "solicitante": "Marina e Wend",
       "inicio": "2026-06-29",
       "entrega": "2026-06-29",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z"
+      "criado_em": "2026-06-29T00:00:00.000Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqylm1syncbx0",
       "titulo": "Sync Bitrix → Axcred (formalização)",
       "descricao": "Sync do Bitrix para o Axcred nas etapas de formalização. Hoje já existe a sync do Axcred para o Bitrix nas pipelines de formalização.",
       "tema_id": "mqv7rupc8b2qe",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "",
       "dev": "Emilly Viana",
       "solicitante": "Wend e Isabella",
       "inicio": "2026-06-29",
       "entrega": "2026-06-29",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z"
+      "criado_em": "2026-06-29T00:00:00.000Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqylm1notifre",
@@ -717,22 +729,29 @@
       "descricao": "Sprint de fundação do projeto RH FOLHA (monday): kickoff, acessos e levantamento de requisitos (BI/Dan e DP), estruturação dos boards + catálogos (Nível/Faixa/Departamento/INSS/IRRF/Feriados), modelagem do Histórico, construção do app (React + Node com monday como banco) e correção das 206 datas de admissão. Cronograma validado com a diretoria (Fernando).\n\nObservadores: Dan Weine (BI), Maryana Vitória (DP).\n\nStatus real: ✅ Concluída.",
       "tema_id": "tmqyp0rhfolha",
       "status": "iniciada",
-      "estimativa": "36h",
+      "estimativa": "",
       "dev": "João Vitor",
-      "prioridade": "alta",
-      "solicitante": "Laylla",
-      "data_solicitacao": "2026-06-23",
       "inicio": "2026-06-23",
       "entrega": "2026-06-26",
       "motivo_negacao": "",
-      "criado_em": "2026-06-30T00:00:00.000Z"
+      "criado_em": "2026-06-30T00:00:00.000Z",
+      "prioridade": "alta",
+      "solicitante": "Laylla",
+      "data_solicitacao": "2026-06-23",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "concluido",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqyp02rhfols2",
       "titulo": "✅ S2 — Sábado de migração (limpeza, app e infraestrutura)",
       "descricao": "Sábado dedicado à migração e limpeza no projeto RH FOLHA (monday): correção das 206 datas no Histórico, backend no ar com cache, contagem de ativos (131), reconciliação dos 3 boards por CPF, limpeza do Cadastro duplicado (8 colunas), importação de Nível/Faixa vigentes, documentos de validação para o RH, coluna de Lançamentos na Folha do Mês, conteinerização em Docker e timeline visual do Histórico.\n\nStatus real: ✅ Concluída.",
       "tema_id": "tmqyp0rhfolha",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "5h",
       "dev": "João Vitor",
       "prioridade": "alta",
@@ -741,14 +760,15 @@
       "inicio": "2026-06-27",
       "entrega": "2026-06-27",
       "motivo_negacao": "",
-      "criado_em": "2026-06-30T00:00:00.000Z"
+      "criado_em": "2026-06-30T00:00:00.000Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqyp03rhfols3",
       "titulo": "🔄 S3 — Cadastro definitivo, ligação ao Histórico e escrita de movimentação",
       "descricao": "Fechar o Cadastro como base mestre do projeto RH FOLHA (monday): ligação ao Histórico de Movimentações, importação da classificação vigente (cargo/nível/faixa/setor), resolução de pendências de dados (datas, CPFs, gestores, classificações) e ativação da escrita de movimentação salarial pelo app (carry-forward).\n\nStatus real: 🔄 Em andamento (S3.3 resolução de pendências em curso).",
       "tema_id": "tmqyp0rhfolha",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "25h",
       "dev": "João Vitor",
       "prioridade": "alta",
@@ -757,14 +777,15 @@
       "inicio": "2026-06-29",
       "entrega": "2026-07-03",
       "motivo_negacao": "",
-      "criado_em": "2026-06-30T00:00:00.000Z"
+      "criado_em": "2026-06-30T00:00:00.000Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqyp04rhfols4",
       "titulo": "🔄 S4 — App de lançamentos completo, cálculos e recorrência",
       "descricao": "Coração operacional do app RH FOLHA (monday): tela de lançamentos de todas as rubricas com lançamento em massa, cálculo de INSS/IRPF com validação e gravação no monday, geração do próximo mês com benefícios fixos e periódicos, e alinhamento da folha à fórmula oficial do BI.\n\nAvanços na S4.4: regra de competência deslocada (folha YYYY-MM usa a aba do mês seguinte) e fórmula do DSR sobre HE = HE × (domingos + feriados) ÷ (dias corridos − domingos − feriados), com sábado como dia útil, validada em 37 colaboradores. Calendário 2026 corrigido; remigração das Horas Extras por competência em curso.\n\nStatus real: 🔄 Em andamento.",
       "tema_id": "tmqyp0rhfolha",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "28h",
       "dev": "João Vitor",
       "prioridade": "alta",
@@ -773,7 +794,8 @@
       "inicio": "2026-07-06",
       "entrega": "2026-07-10",
       "motivo_negacao": "",
-      "criado_em": "2026-06-30T00:00:00.000Z"
+      "criado_em": "2026-06-30T00:00:00.000Z",
+      "status_planejamento": "planejado"
     },
     {
       "id": "mqyp05rhfols5",
@@ -801,5 +823,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:04:19.061Z"
+  "atualizado_em": "2026-06-30T17:53:52.286Z"
 }
