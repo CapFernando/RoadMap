@@ -143,9 +143,19 @@
       "estimativa": "",
       "dev": "Gabriel",
       "inicio": "2026-07-02",
-      "entrega": "2026-07-02",
+      "entrega": "2026-07-04",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:15:33.970Z"
+      "criado_em": "2026-06-26T18:15:33.970Z",
+      "prioridade": "",
+      "solicitante": "",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "backlog",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 46
     },
     {
       "id": "mqv95wps7o6zv",
@@ -697,5 +707,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:01:51.793Z"
+  "atualizado_em": "2026-06-30T17:02:22.486Z"
 }
