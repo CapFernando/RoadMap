@@ -436,6 +436,11 @@ const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Ag
 let _temas = [], _melhorias = [];
 let _ano = null, _mes = null, _dev = null;
 
+function splitDevs(devStr) {
+  if (!devStr) return [];
+  return devStr.split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+}
+
 function filtradas() {
   return _melhorias.filter(m => {
     if (_ano) {
@@ -443,7 +448,7 @@ function filtradas() {
       if (d.getFullYear() !== _ano) return false;
       if (_mes !== null && d.getMonth() !== _mes) return false;
     }
-    if (_dev && m.dev !== _dev) return false;
+    if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
     return true;
   });
 }
@@ -507,7 +512,7 @@ function renderConteudo() {
 
 function buildFilterBar() {
   const anos = [...new Set(_melhorias.map(m => new Date(m.criado_em).getFullYear()))].sort((a,b) => b - a);
-  const devs = [...new Set(_melhorias.map(m => m.dev).filter(Boolean))].sort();
+  const devs = [...new Set(_melhorias.flatMap(m => splitDevs(m.dev)))].sort();
 
   const anoOpts = anos.map(a => `<option value="${a}" ${_ano===a?'selected':''}>${a}</option>`).join('');
   const mesOpts = MESES.map((m,i) => `<option value="${i}" ${_mes===i?'selected':''}>${m}</option>`).join('');
@@ -561,7 +566,7 @@ function setFiltroDev(dev) {
 
 function buildDevChart(temas, melhorias) {
   const card = document.getElementById('chart-devs-card');
-  const devs = [...new Set(melhorias.map(m => m.dev).filter(Boolean))].sort();
+  const devs = [...new Set(melhorias.flatMap(m => splitDevs(m.dev)))].sort();
   if (!devs.length) { if (card) card.style.display = 'none'; return; }
   if (card) card.style.display = '';
 
@@ -569,14 +574,14 @@ function buildDevChart(temas, melhorias) {
 
   const datasets = temas.map((t, i) => ({
     label: t.nome,
-    data: devs.map(dev => melhorias.filter(m => m.dev === dev && m.tema_id === t.id).length),
+    data: devs.map(dev => melhorias.filter(m => splitDevs(m.dev).includes(dev) && m.tema_id === t.id).length),
     backgroundColor: temaCores[i],
     borderWidth: 0,
     borderRadius: 3,
   }));
 
   const semTema = devs.map(dev =>
-    melhorias.filter(m => m.dev === dev && !temas.find(t => t.id === m.tema_id)).length
+    melhorias.filter(m => splitDevs(m.dev).includes(dev) && !temas.find(t => t.id === m.tema_id)).length
   );
   if (semTema.some(v => v > 0)) {
     datasets.push({ label: 'Sem tema', data: semTema, backgroundColor: '#4A4A46', borderWidth: 0, borderRadius: 3 });
@@ -622,7 +627,7 @@ function buildDevChart(temas, melhorias) {
 
   const leg = document.getElementById('leg-devs');
   temas.forEach((t, i) => {
-    const total = devs.reduce((s, dev) => s + melhorias.filter(m => m.dev === dev && m.tema_id === t.id).length, 0);
+    const total = devs.reduce((s, dev) => s + melhorias.filter(m => splitDevs(m.dev).includes(dev) && m.tema_id === t.id).length, 0);
     if (!total) return;
     leg.innerHTML += `<span class="leg"><span class="leg-sq" style="background:${temaCores[i]}"></span>${t.nome} <strong style="color:var(--text);margin-left:2px;">${total}</strong></span>`;
   });
