@@ -684,6 +684,13 @@ function doLogout() {
 }
 initLoginScreen();
 
+// re-renderiza gantt ao redimensionar para recalcular --day-w
+let _resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => renderGantt(), 120);
+});
+
 // ── GITHUB ────────────────────────────────────────────────────────────────
 const _gDeletedIds = new Set();
 let   _saveTimer   = null;
@@ -847,10 +854,13 @@ function renderIndicators() {
     if (counts[sp] !== undefined) counts[sp]++;
   });
   const labels = { backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado', em_andamento:'Em andamento', concluido:'Concluído', atrasado:'Atrasado' };
-  document.getElementById('indicator-bar').innerHTML = Object.keys(counts).map(k => {
+  const total = Object.values(counts).reduce((s, v) => s + v, 0);
+  const todosChip = `<span class="ind-chip ${filters.indicator === '' ? 'planejado active-filter' : ''}" style="background:var(--bg3);border-color:var(--border2);color:var(--text2)" onclick="toggleIndicatorFilter('')">Todos <strong>${total}</strong></span>`;
+  const chips = Object.keys(counts).map(k => {
     const active = filters.indicator === k ? 'active-filter' : '';
     return `<span class="ind-chip ${k} ${active}" onclick="toggleIndicatorFilter('${k}')">${labels[k]} <strong>${counts[k]}</strong></span>`;
   }).join('');
+  document.getElementById('indicator-bar').innerHTML = todosChip + chips;
 }
 
 function toggleIndicatorFilter(k) {
@@ -937,6 +947,13 @@ function renderGantt() {
 
   const workDays = getWorkingDaysOfMonth(viewYear, viewMonth);
   const todayStr = toDateStr(new Date());
+
+  // largura dinâmica: preenche a área disponível independente do tamanho do monitor
+  const ganttArea = document.getElementById('gantt-area');
+  const devLabelW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--dev-label')) || 200;
+  const available = ganttArea ? ganttArea.clientWidth - devLabelW - 2 : workDays.length * 52;
+  const dayW = workDays.length > 0 ? Math.max(44, Math.floor(available / workDays.length)) : 52;
+  document.documentElement.style.setProperty('--day-w', dayW + 'px');
 
   const devs = state.desenvolvedores.length ? state.desenvolvedores : ['(sem dev)'];
   const table = document.getElementById('gantt-table');
@@ -1059,8 +1076,8 @@ function renderGantt() {
       sIdx = Math.max(0, sIdx);
       eIdx = Math.min(workDays.length - 1, eIdx);
 
-      const left = sIdx * 52;
-      const width = (eIdx - sIdx + 1) * 52 - 4;
+      const left = sIdx * dayW;
+      const width = (eIdx - sIdx + 1) * dayW - 4;
 
       const cardH = m.descricao ? 52 : 32;
       html += `<div class="gantt-card gcard-${sp}"
