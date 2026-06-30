@@ -683,13 +683,20 @@
       "status": "recebida",
       "estimativa": "",
       "dev": "",
+      "inicio": "2026-07-27",
+      "entrega": "2026-07-31",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-30T12:07:36.098Z",
       "prioridade": "alta",
       "solicitante": "Adalberto",
       "data_solicitacao": "2026-06-26",
-      "inicio": "",
-      "entrega": "",
-      "motivo_negacao": "",
-      "criado_em": "2026-06-30T12:07:36.098Z"
+      "sprint": "",
+      "estimativa_horas": 45,
+      "horas_realizadas": 0,
+      "status_planejamento": "backlog",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 46
     },
     {
       "id": "mr0lurdshmoj8",
@@ -717,5 +724,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:13:41.993Z"
+  "atualizado_em": "2026-06-30T17:21:10.266Z"
 }
