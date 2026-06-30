@@ -361,6 +361,7 @@ function renderTema(tema, melhorias, idx) {
   const cor = TEMA_CORES[idx % TEMA_CORES.length];
   const items = melhorias.filter(m => m.tema_id === tema.id);
   const count = items.length;
+  if (count === 0) return ''; // oculta tema sem itens (especialmente sob filtro)
   return `
     <div class="tema-block">
       <div class="tema-header" onclick="toggleTema('${id}')" aria-expanded="true" aria-controls="${id}-body">
@@ -372,9 +373,7 @@ function renderTema(tema, melhorias, idx) {
         <span class="tema-arrow open" id="${id}-arrow">${svgIcon('chevron')}</span>
       </div>
       <div class="tema-body open" id="${id}-body">
-        ${count === 0
-          ? `<div style="padding:18px 18px;font-size:14px;color:var(--text3);">Nenhuma melhoria cadastrada neste tema.</div>`
-          : items.map(renderMelhoria).join('')}
+        ${items.map(renderMelhoria).join('')}
       </div>
     </div>`;
 }
