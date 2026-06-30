@@ -555,6 +555,11 @@ let state    = { temas: [], melhorias: [], desenvolvedores: [], feriados: [] };
 let fileSha  = null;
 let viewYear, viewMonth; // 0-indexed month
 
+function splitDevs(str) {
+  if (!str) return [];
+  return str.split(/[\/,]/).map(s => s.trim()).filter(Boolean);
+}
+
 let filters  = { tema: '', dev: '', prio: '', sprint: '', status: '', indicator: '' };
 
 // ── HOLIDAYS ──────────────────────────────────────────────────────────────
@@ -673,11 +678,11 @@ async function loadFromGitHub() {
       desenvolvedores: decoded.desenvolvedores || [],
       feriados:      decoded.feriados       || [],
     };
-    // derive devs from melhoria.dev if missing
-    if (!state.desenvolvedores.length) {
-      const devSet = new Set(state.melhorias.map(m => m.dev).filter(Boolean));
-      state.desenvolvedores = [...devSet];
-    }
+    // normaliza: expande "Gabriel / Anthony" → ["Gabriel", "Anthony"] e deduplica
+    const rawDevs = state.desenvolvedores.length
+      ? state.desenvolvedores
+      : state.melhorias.map(m => m.dev).filter(Boolean);
+    state.desenvolvedores = [...new Set(rawDevs.flatMap(d => splitDevs(d)))];
     renderAll();
   } catch(e) {
     toast(e.message, 'err');
@@ -760,7 +765,7 @@ function applyFilters() {
 function matchesFilters(m) {
   if (m.oculto) return false;
   if (filters.tema   && m.tema_id !== filters.tema)                 return false;
-  if (filters.dev    && (m.dev||'') !== filters.dev)                return false;
+  if (filters.dev    && !splitDevs(m.dev).includes(filters.dev))    return false;
   if (filters.prio   && (m.prioridade||'') !== filters.prio)        return false;
   if (filters.sprint && !(m.sprint||'').toLowerCase().includes(filters.sprint)) return false;
   if (filters.status && (m.status_planejamento||'backlog') !== filters.status) return false;
@@ -909,7 +914,7 @@ function renderGantt() {
 
   // Dev rows
   devs.forEach(dev => {
-    const devCards = visible.filter(m => (m.dev || '') === dev && (m.inicio || m.entrega));
+    const devCards = visible.filter(m => splitDevs(m.dev).includes(dev) && (m.inicio || m.entrega));
 
     // capacity — conta apenas dias úteis do mês atual cobertos pelos cards
     const totalWD = workDays.filter(d => !d.holiday).length;
