@@ -35,6 +35,10 @@
     {
       "id": "tmqyln0stack0",
       "nome": "AxCred - Migração de Stack"
+    },
+    {
+      "id": "tmqyo0juridi0",
+      "nome": "Jurídico"
     }
   ],
   "melhorias": [
@@ -606,7 +610,21 @@
       "entrega": "",
       "motivo_negacao": "",
       "criado_em": "2026-06-29T00:00:00.000Z"
+    },
+    {
+      "id": "mqyo01remneg0",
+      "titulo": "Função para Remover negativação por dentro do ambiente",
+      "descricao": "Módulo de negativar: função para remover a negativação por dentro do próprio ambiente.",
+      "tema_id": "tmqyo0juridi0",
+      "status": "iniciada",
+      "estimativa": "",
+      "dev": "Jhonatan",
+      "solicitante": "Winny",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-30T00:00:00.000Z"
     }
   ],
-  "atualizado_em": "2026-06-29T00:00:00.000Z"
+  "atualizado_em": "2026-06-30T00:00:00.000Z"
 }
