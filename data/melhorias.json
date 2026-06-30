@@ -256,11 +256,11 @@
       "titulo": "Reaproveitar o documento original",
       "descricao": "Ter uma forma de reaproveitar o documento original para não perder e lançar a nova “reanalise” de antifraude.\n\nOBS: Validar com Jackeline qual impacto da alteração do número da operação",
       "tema_id": "mqv7s5ezhpc5n",
-      "status": "iniciada",
+      "status": "recebida",
       "estimativa": "",
       "dev": "Gabriel",
-      "inicio": "2026-08-19",
-      "entrega": "2026-08-21",
+      "inicio": "2026-07-21",
+      "entrega": "2026-07-21",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:21:31.869Z"
     },
@@ -707,5 +707,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:03:30.233Z"
+  "atualizado_em": "2026-06-30T17:03:48.467Z"
 }
