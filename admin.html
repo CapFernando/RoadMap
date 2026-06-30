@@ -195,13 +195,12 @@
 
     /* BADGE STATUS */
     .badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
-    .badge-recebida   { background:#0C3260; color:#9BC8F8; }
-    .badge-refinamento{ background:#341A6E; color:#C9AEFF; }
-    .badge-regra      { background:#063D30; color:#7EECD8; }
-    .badge-estimada   { background:#5C3608; color:#F9C97A; }
-    .badge-iniciada   { background:#1E4208; color:#B2E07A; }
-    .badge-concluida  { background:#063D30; color:#7EECD8; }
-    .badge-negada     { background:#5C0A0A; color:#F9A0A0; }
+    .badge-backlog     { background:#1A2A3A; color:#6A9AC8; }
+    .badge-planejado   { background:#0C3260; color:#9BC8F8; }
+    .badge-em_andamento{ background:#1E4208; color:#B2E07A; }
+    .badge-concluido   { background:#063D30; color:#7EECD8; }
+    .badge-atrasado    { background:#5C0A0A; color:#F9A0A0; }
+    .badge-negada      { background:#5C0A0A; color:#F9A0A0; }
 
     /* MODAL */
     .modal-overlay {
@@ -367,12 +366,11 @@
       <div class="form-group">
         <label>Status *</label>
         <select id="m-status" onchange="onStatusChange()">
-          <option value="recebida">Recebida (Backlog)</option>
-          <option value="refinamento">Em Refinamento</option>
-          <option value="regra">Validar Regra de Negócio</option>
-          <option value="estimada">Estimada</option>
-          <option value="iniciada">Em Andamento</option>
-          <option value="concluida">Concluída</option>
+          <option value="backlog">Backlog</option>
+          <option value="planejado">Planejado</option>
+          <option value="em_andamento">Em Andamento</option>
+          <option value="concluido">Concluído</option>
+          <option value="atrasado">Atrasado</option>
           <option value="negada">Negada</option>
         </select>
       </div>
@@ -601,12 +599,23 @@ async function saveToGitHub() {
 
 // ─── RENDER ───────────────────────────────────────────────────────
 const STATUS_LABELS = {
-  recebida:'Recebida (Backlog)', refinamento:'Em Refinamento',
-  regra:'Validar Regra de Negócio', estimada:'Estimada',
-  iniciada:'Em Andamento', concluida:'Concluída', negada:'Negada'
+  backlog:     'Backlog',
+  planejado:   'Planejado',
+  em_andamento:'Em Andamento',
+  concluido:   'Concluído',
+  atrasado:    'Atrasado',
+  negada:      'Negada',
+  // legado (itens antigos)
+  recebida:'Backlog', refinamento:'Planejado', regra:'Planejado',
+  estimada:'Planejado', iniciada:'Em Andamento', concluida:'Concluído',
 };
 function statusKey(m) {
-  return m.status_planejamento === 'concluido' ? 'concluida' : (m.status || 'recebida');
+  const sp = m.status_planejamento;
+  if (sp && sp !== 'backlog') return sp;
+  // mapeia status legado → novo
+  const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
+                   estimada:'planejado', iniciada:'em_andamento', concluida:'concluido', concluido:'concluido' };
+  return legacy[m.status] || sp || 'backlog';
 }
 
 let _filtroStatus = null;
@@ -643,14 +652,13 @@ function renderStatusFilters() {
   const el = document.getElementById('status-filters');
   if (!el) return;
   const todos = [
-    { key: null,          label: 'Todos',                  cls: 'all' },
-    { key: 'recebida',    label: 'Recebida (Backlog)',      cls: 'recebida' },
-    { key: 'refinamento', label: 'Em Refinamento',          cls: 'refinamento' },
-    { key: 'regra',       label: 'Validar Regra',           cls: 'regra' },
-    { key: 'estimada',    label: 'Estimada',                cls: 'estimada' },
-    { key: 'iniciada',    label: 'Em Andamento',            cls: 'iniciada' },
-    { key: 'concluida',   label: 'Concluída',               cls: 'concluida' },
-    { key: 'negada',      label: 'Negada',                  cls: 'negada' },
+    { key: null,          label: 'Todos',        cls: 'all' },
+    { key: 'backlog',     label: 'Backlog',       cls: 'backlog' },
+    { key: 'planejado',   label: 'Planejado',     cls: 'planejado' },
+    { key: 'em_andamento',label: 'Em Andamento',  cls: 'em_andamento' },
+    { key: 'concluido',   label: 'Concluído',     cls: 'concluido' },
+    { key: 'atrasado',    label: 'Atrasado',      cls: 'atrasado' },
+    { key: 'negada',      label: 'Negada',        cls: 'negada' },
   ];
   el.innerHTML = todos.map(b => {
     const n = b.key ? state.melhorias.filter(m => statusKey(m) === b.key).length : state.melhorias.length;
@@ -702,9 +710,8 @@ function renderMelhorias() {
     const sk = statusKey(m);
     const badge = `<span class="badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
     let sub = tema;
-    if (m.status === 'estimada' && m.estimativa) sub += ` · ${m.estimativa}`;
-    if ((m.status === 'iniciada' || sk === 'concluida') && m.dev) sub += ` · ${m.dev}`;
-    if ((m.status === 'iniciada' || sk === 'concluida') && m.entrega) sub += ` · Entrega: ${formatDate(m.entrega)}`;
+    if (m.dev) sub += ` · ${m.dev}`;
+    if (m.entrega) sub += ` · Entrega: ${formatDate(m.entrega)}`;
     return `<div class="card">
       <div class="card-info">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
@@ -779,53 +786,49 @@ function openModalMelhoria(id) {
   sel.innerHTML = state.temas.map(t => `<option value="${t.id}" ${m?.tema_id===t.id?'selected':''}>${t.nome}</option>`).join('');
   if (!state.temas.length) sel.innerHTML = '<option value="">— Cadastre um tema primeiro —</option>';
 
-  // se o Gantt marcou como concluido, reflete aqui
-  const statusVal = (m?.status_planejamento === 'concluido') ? 'concluida' : (m?.status || 'recebida');
-  document.getElementById('m-status').value = statusVal;
+  document.getElementById('m-status').value = statusKey(m || {}) || 'backlog';
   onStatusChange();
   document.getElementById('modal-melhoria').style.display = 'flex';
 }
 
 function onStatusChange() {
   const s = document.getElementById('m-status').value;
-  document.getElementById('field-estimativa').style.display = s === 'estimada' ? 'block' : 'none';
-  document.getElementById('field-negada').style.display     = s === 'negada'   ? 'block' : 'none';
+  document.getElementById('field-negada').style.display = s === 'negada' ? 'block' : 'none';
 }
+
+// mapa sp → status legado (para compatibilidade com outros campos)
+const SP_TO_STATUS = { backlog:'recebida', planejado:'estimada', em_andamento:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
 
 function saveMelhoria() {
   const titulo = document.getElementById('m-titulo').value.trim();
   const temaId = document.getElementById('m-tema').value;
-  const status = document.getElementById('m-status').value;
+  const sp     = document.getElementById('m-status').value; // agora é o status_planejamento
   if (!titulo) { toast('Informe o título.', 'err'); return; }
   if (!temaId) { toast('Selecione um tema.', 'err'); return; }
-  if (status === 'negada' && !document.getElementById('m-motivo').value.trim()) {
+  if (sp === 'negada' && !document.getElementById('m-motivo').value.trim()) {
     toast('Informe o motivo da negativa.', 'err'); return;
   }
 
   const id = document.getElementById('m-id').value;
   const existing = id ? (state.melhorias.find(x => x.id === id) || {}) : {};
-  // "concluida" no admin mapeia para status_planejamento:'concluido' no gantt
-  const statusSave = status === 'concluida' ? 'iniciada' : status;
-  const spSave     = status === 'concluida' ? 'concluido'
-                   : (existing.status_planejamento === 'concluido' ? 'planejado' : (existing.status_planejamento || 'backlog'));
 
   const obj = {
-    ...existing,  // preserva campos do Gantt (status_planejamento, sprint, etc.)
+    ...existing,
     id: id || uid(),
     titulo,
-    descricao:        document.getElementById('m-descricao').value.trim(),
-    tema_id:          temaId,
-    status:           statusSave,
-    status_planejamento: spSave,
-    estimativa:       status === 'estimada' ? document.getElementById('m-estimativa').value.trim() : (existing.estimativa || ''),
-    dev:              document.getElementById('m-dev').value.trim(),
-    prioridade:       document.getElementById('m-prioridade').value,
-    solicitante:      document.getElementById('m-solicitante').value.trim(),
-    data_solicitacao: document.getElementById('m-data-solicitacao').value,
-    inicio:           document.getElementById('m-inicio').value,
-    entrega:          document.getElementById('m-entrega').value,
-    motivo_negacao:   status === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
-    criado_em:        existing.criado_em || new Date().toISOString(),
+    descricao:           document.getElementById('m-descricao').value.trim(),
+    tema_id:             temaId,
+    status:              SP_TO_STATUS[sp] || 'recebida',
+    status_planejamento: sp,
+    estimativa:          existing.estimativa || '',
+    dev:                 document.getElementById('m-dev').value.trim(),
+    prioridade:          document.getElementById('m-prioridade').value,
+    solicitante:         document.getElementById('m-solicitante').value.trim(),
+    data_solicitacao:    document.getElementById('m-data-solicitacao').value,
+    inicio:              document.getElementById('m-inicio').value,
+    entrega:             document.getElementById('m-entrega').value,
+    motivo_negacao:      sp === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
+    criado_em:           existing.criado_em || new Date().toISOString(),
   };
 
   if (id) {
