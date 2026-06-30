@@ -366,12 +366,22 @@
       "descricao": "Gerar a opção de ter um botão para análise das empresas relacionadas (mesma solicitação que fizemos no cadastro) Marca de seleção com preenchimento sólido (Tirar da planilha e levarmos para banco de dados) \n\nAvaliar possibilidade de puxar as consultas automaticamente já no início da reanalise (lista CNPJs e empresas relacionadas, analista seleciona e o sistema roda a atualização) (verificar no mesmo modelo do antifraude)",
       "tema_id": "mqv7rfayzuh77",
       "status": "estimada",
-      "estimativa": "10 dias",
-      "dev": "",
-      "inicio": "",
-      "entrega": "",
+      "estimativa": "",
+      "dev": "João Vitor",
+      "inicio": "2026-08-03",
+      "entrega": "2026-08-14",
       "motivo_negacao": "",
-      "criado_em": "2026-06-26T18:33:50.364Z"
+      "criado_em": "2026-06-26T18:33:50.364Z",
+      "prioridade": "alta",
+      "solicitante": "Livia",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "planejado",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqv9u1rcrt8g1",
@@ -875,5 +885,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T18:45:59.264Z"
+  "atualizado_em": "2026-06-30T18:50:57.704Z"
 }
