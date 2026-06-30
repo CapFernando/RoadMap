@@ -41,6 +41,10 @@
       "nome": "Jurídico"
     },
     {
+      "id": "tmqyp0rhfolha",
+      "nome": "RH FOLHA (monday)"
+    },
+    {
       "id": "mr0ls3sf2h41s",
       "nome": "AxCred - Rating"
     }
@@ -463,9 +467,9 @@
       "tema_id": "mqv7rfayzuh77",
       "status": "recebida",
       "estimativa": "",
-      "dev": "Emilly Viana",
-      "inicio": "2026-07-02",
-      "entrega": "2026-07-02",
+      "dev": "",
+      "inicio": "",
+      "entrega": "",
       "motivo_negacao": "",
       "criado_em": "2026-06-26T18:46:23.051Z"
     },
@@ -526,23 +530,14 @@
       "titulo": "Cruzamento de dados entre cedentes (societário)",
       "descricao": "Cruzamento de dados de um cedente com outro cedente no cadastro:\n- Verificar se o societário do cedente também faz parte do societário de outro cedente.\n- Cruzar dados e trazer indícios.",
       "tema_id": "mqv7rupc8b2qe",
-      "status": "estimada",
+      "status": "recebida",
       "estimativa": "",
       "dev": "João Vitor",
-      "inicio": "2026-07-06",
-      "entrega": "2026-07-17",
-      "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z",
-      "prioridade": "alta",
       "solicitante": "Pedro Paulo",
-      "data_solicitacao": "",
-      "sprint": "",
-      "estimativa_horas": 0,
-      "horas_realizadas": 0,
-      "status_planejamento": "planejado",
-      "observacao": "",
-      "oculto": false,
-      "ordem": 46
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-29T00:00:00.000Z"
     },
     {
       "id": "mqylm1desist0",
@@ -552,20 +547,11 @@
       "status": "iniciada",
       "estimativa": "",
       "dev": "Emilly Viana",
-      "inicio": "2026-06-28",
+      "solicitante": "Marina e Wend",
+      "inicio": "2026-06-29",
       "entrega": "2026-06-29",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z",
-      "prioridade": "",
-      "solicitante": "Marina e Wend",
-      "data_solicitacao": "",
-      "sprint": "",
-      "estimativa_horas": 16,
-      "horas_realizadas": 0,
-      "status_planejamento": "concluido",
-      "observacao": "",
-      "oculto": false,
-      "ordem": 46
+      "criado_em": "2026-06-29T00:00:00.000Z"
     },
     {
       "id": "mqylm1syncbx0",
@@ -575,20 +561,11 @@
       "status": "iniciada",
       "estimativa": "",
       "dev": "Emilly Viana",
+      "solicitante": "Wend e Isabella",
       "inicio": "2026-06-29",
       "entrega": "2026-06-29",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z",
-      "prioridade": "",
-      "solicitante": "Wend e Isabella",
-      "data_solicitacao": "",
-      "sprint": "",
-      "estimativa_horas": 0,
-      "horas_realizadas": 0,
-      "status_planejamento": "concluido",
-      "observacao": "",
-      "oculto": false,
-      "ordem": 46
+      "criado_em": "2026-06-29T00:00:00.000Z"
     },
     {
       "id": "mqylm1notifre",
@@ -707,23 +684,16 @@
       "titulo": "Campo para sinalização de avalistas do cedente",
       "descricao": "Venho, por meio deste, formalizar a solicitação do Departamento de Cadastro referente ao desenvolvimento de um campo para sinalização de avalistas do cedente no ambiente de cadastro da plataforma AxCred.\n\n \n\nA necessidade dessa funcionalidade foi discutida em reunião com a equipe de Tecnologia, ocasião em que foi alinhada a viabilidade de sua implementação. A demanda atende à solicitação da Diretora de Operações, Nathália Neres, e tem como objetivo permitir que o analista identifique e sinalize, durante a etapa de cadastro, as pessoas que deverão constar como avalistas nos instrumentos contratuais.\n\n \n\nDessa forma, solicitamos, por gentileza, a previsão para o início do desenvolvimento, bem como a estimativa de conclusão da demanda, para que possamos alinhar nosso planejamento interno com o cronograma de implementação.",
       "tema_id": "mqv7rupc8b2qe",
-      "status": "estimada",
+      "status": "recebida",
       "estimativa": "",
-      "dev": "João Vitor",
-      "inicio": "2026-07-27",
-      "entrega": "2026-07-31",
-      "motivo_negacao": "",
-      "criado_em": "2026-06-30T12:07:36.098Z",
+      "dev": "",
       "prioridade": "alta",
       "solicitante": "Adalberto",
       "data_solicitacao": "2026-06-26",
-      "sprint": "",
-      "estimativa_horas": 45,
-      "horas_realizadas": 0,
-      "status_planejamento": "planejado",
-      "observacao": "",
-      "oculto": false,
-      "ordem": 46
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-30T12:07:36.098Z"
     },
     {
       "id": "mr0lurdshmoj8",
@@ -740,6 +710,86 @@
       "entrega": "",
       "motivo_negacao": "",
       "criado_em": "2026-06-30T12:10:40.288Z"
+    },
+    {
+      "id": "mqyp01rhfols1",
+      "titulo": "✅ S1 — Levantamento, Estruturação e Correção de Dados",
+      "descricao": "Sprint de fundação do projeto RH FOLHA (monday): kickoff, acessos e levantamento de requisitos (BI/Dan e DP), estruturação dos boards + catálogos (Nível/Faixa/Departamento/INSS/IRRF/Feriados), modelagem do Histórico, construção do app (React + Node com monday como banco) e correção das 206 datas de admissão. Cronograma validado com a diretoria (Fernando).\n\nObservadores: Dan Weine (BI), Maryana Vitória (DP).\n\nStatus real: ✅ Concluída.",
+      "tema_id": "tmqyp0rhfolha",
+      "status": "iniciada",
+      "estimativa": "36h",
+      "dev": "João Vitor",
+      "prioridade": "alta",
+      "solicitante": "Laylla",
+      "data_solicitacao": "2026-06-23",
+      "inicio": "2026-06-23",
+      "entrega": "2026-06-26",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-30T00:00:00.000Z"
+    },
+    {
+      "id": "mqyp02rhfols2",
+      "titulo": "✅ S2 — Sábado de migração (limpeza, app e infraestrutura)",
+      "descricao": "Sábado dedicado à migração e limpeza no projeto RH FOLHA (monday): correção das 206 datas no Histórico, backend no ar com cache, contagem de ativos (131), reconciliação dos 3 boards por CPF, limpeza do Cadastro duplicado (8 colunas), importação de Nível/Faixa vigentes, documentos de validação para o RH, coluna de Lançamentos na Folha do Mês, conteinerização em Docker e timeline visual do Histórico.\n\nStatus real: ✅ Concluída.",
+      "tema_id": "tmqyp0rhfolha",
+      "status": "iniciada",
+      "estimativa": "5h",
+      "dev": "João Vitor",
+      "prioridade": "alta",
+      "solicitante": "Laylla",
+      "data_solicitacao": "2026-06-23",
+      "inicio": "2026-06-27",
+      "entrega": "2026-06-27",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-30T00:00:00.000Z"
+    },
+    {
+      "id": "mqyp03rhfols3",
+      "titulo": "🔄 S3 — Cadastro definitivo, ligação ao Histórico e escrita de movimentação",
+      "descricao": "Fechar o Cadastro como base mestre do projeto RH FOLHA (monday): ligação ao Histórico de Movimentações, importação da classificação vigente (cargo/nível/faixa/setor), resolução de pendências de dados (datas, CPFs, gestores, classificações) e ativação da escrita de movimentação salarial pelo app (carry-forward).\n\nStatus real: 🔄 Em andamento (S3.3 resolução de pendências em curso).",
+      "tema_id": "tmqyp0rhfolha",
+      "status": "iniciada",
+      "estimativa": "25h",
+      "dev": "João Vitor",
+      "prioridade": "alta",
+      "solicitante": "Laylla",
+      "data_solicitacao": "2026-06-23",
+      "inicio": "2026-06-29",
+      "entrega": "2026-07-03",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-30T00:00:00.000Z"
+    },
+    {
+      "id": "mqyp04rhfols4",
+      "titulo": "🔄 S4 — App de lançamentos completo, cálculos e recorrência",
+      "descricao": "Coração operacional do app RH FOLHA (monday): tela de lançamentos de todas as rubricas com lançamento em massa, cálculo de INSS/IRPF com validação e gravação no monday, geração do próximo mês com benefícios fixos e periódicos, e alinhamento da folha à fórmula oficial do BI.\n\nAvanços na S4.4: regra de competência deslocada (folha YYYY-MM usa a aba do mês seguinte) e fórmula do DSR sobre HE = HE × (domingos + feriados) ÷ (dias corridos − domingos − feriados), com sábado como dia útil, validada em 37 colaboradores. Calendário 2026 corrigido; remigração das Horas Extras por competência em curso.\n\nStatus real: 🔄 Em andamento.",
+      "tema_id": "tmqyp0rhfolha",
+      "status": "iniciada",
+      "estimativa": "28h",
+      "dev": "João Vitor",
+      "prioridade": "alta",
+      "solicitante": "Laylla",
+      "data_solicitacao": "2026-06-23",
+      "inicio": "2026-07-06",
+      "entrega": "2026-07-10",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-30T00:00:00.000Z"
+    },
+    {
+      "id": "mqyp05rhfols5",
+      "titulo": "⏳ S5 — Fechamento mensal, promoção ao Cadastro real e go-live",
+      "descricao": "Reta final do projeto RH FOLHA (monday): fechamento da folha do mês + planilha de saída para a contabilidade, promoção do Cadastro validado para a base oficial, validação número a número com o Power BI e go-live (monday como fonte oficial dos dados de RH e folha).\n\nMeta de entrega: 17/07/2026 (até a chegada do sistema oficial de RH).\n\nStatus real: ⏳ Não iniciada (previsto 13/07 → 17/07).",
+      "tema_id": "tmqyp0rhfolha",
+      "status": "recebida",
+      "estimativa": "27h",
+      "dev": "João Vitor",
+      "prioridade": "alta",
+      "solicitante": "Laylla",
+      "data_solicitacao": "2026-06-23",
+      "inicio": "",
+      "entrega": "",
+      "motivo_negacao": "",
+      "criado_em": "2026-06-30T00:00:00.000Z"
     }
   ],
   "desenvolvedores": [
@@ -751,5 +801,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:40:15.801Z"
+  "atualizado_em": "2026-06-30T17:04:19.061Z"
 }
