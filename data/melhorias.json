@@ -540,14 +540,23 @@
       "titulo": "Cruzamento de dados entre cedentes (societário)",
       "descricao": "Cruzamento de dados de um cedente com outro cedente no cadastro:\n- Verificar se o societário do cedente também faz parte do societário de outro cedente.\n- Cruzar dados e trazer indícios.",
       "tema_id": "mqv7rupc8b2qe",
-      "status": "recebida",
+      "status": "estimada",
       "estimativa": "",
       "dev": "João Vitor",
-      "solicitante": "Pedro Paulo",
-      "inicio": "",
-      "entrega": "",
+      "inicio": "2026-07-06",
+      "entrega": "2026-07-17",
       "motivo_negacao": "",
-      "criado_em": "2026-06-29T00:00:00.000Z"
+      "criado_em": "2026-06-29T00:00:00.000Z",
+      "prioridade": "alta",
+      "solicitante": "Pedro Paulo",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "planejado",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqylm1desist0",
@@ -802,7 +811,7 @@
       "titulo": "⏳ S5 — Fechamento mensal, promoção ao Cadastro real e go-live",
       "descricao": "Reta final do projeto RH FOLHA (monday): fechamento da folha do mês + planilha de saída para a contabilidade, promoção do Cadastro validado para a base oficial, validação número a número com o Power BI e go-live (monday como fonte oficial dos dados de RH e folha).\n\nMeta de entrega: 17/07/2026 (até a chegada do sistema oficial de RH).\n\nStatus real: ⏳ Não iniciada (previsto 13/07 → 17/07).",
       "tema_id": "tmqyp0rhfolha",
-      "status": "iniciada",
+      "status": "estimada",
       "estimativa": "27h",
       "dev": "João Vitor",
       "prioridade": "alta",
@@ -811,7 +820,8 @@
       "inicio": "2026-07-13",
       "entrega": "2026-07-17",
       "motivo_negacao": "",
-      "criado_em": "2026-06-30T00:00:00.000Z"
+      "criado_em": "2026-06-30T00:00:00.000Z",
+      "status_planejamento": "planejado"
     }
   ],
   "desenvolvedores": [
@@ -823,5 +833,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T17:53:52.286Z"
+  "atualizado_em": "2026-06-30T18:03:15.241Z"
 }
