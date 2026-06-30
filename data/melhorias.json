@@ -793,7 +793,7 @@
       "entrega": "2026-06-27",
       "motivo_negacao": "",
       "criado_em": "2026-06-30T00:00:00.000Z",
-      "status_planejamento": "planejado"
+      "status_planejamento": "concluido"
     },
     {
       "id": "mqyp03rhfols3",
@@ -847,14 +847,5 @@
       "status_planejamento": "planejado"
     }
   ],
-  "desenvolvedores": [
-    "Gabriel",
-    "Anthony",
-    "João Vitor",
-    "Emilly Viana",
-    "Cairo",
-    "Jhonatan"
-  ],
-  "feriados": [],
-  "atualizado_em": "2026-06-30T18:22:31.101Z"
+  "atualizado_em": "2026-06-30T18:33:22.806Z"
 }
