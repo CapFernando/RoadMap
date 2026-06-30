@@ -370,7 +370,8 @@
           <option value="refinamento">Em Refinamento</option>
           <option value="regra">Validar Regra de Negócio</option>
           <option value="estimada">Estimada</option>
-          <option value="iniciada">Iniciar</option>
+          <option value="iniciada">Em Andamento</option>
+          <option value="concluida">Concluída</option>
           <option value="negada">Negada</option>
         </select>
       </div>
@@ -772,7 +773,9 @@ function openModalMelhoria(id) {
   sel.innerHTML = state.temas.map(t => `<option value="${t.id}" ${m?.tema_id===t.id?'selected':''}>${t.nome}</option>`).join('');
   if (!state.temas.length) sel.innerHTML = '<option value="">— Cadastre um tema primeiro —</option>';
 
-  document.getElementById('m-status').value = m?.status || 'recebida';
+  // se o Gantt marcou como concluido, reflete aqui
+  const statusVal = (m?.status_planejamento === 'concluido') ? 'concluida' : (m?.status || 'recebida');
+  document.getElementById('m-status').value = statusVal;
   onStatusChange();
   document.getElementById('modal-melhoria').style.display = 'flex';
 }
@@ -795,13 +798,19 @@ function saveMelhoria() {
 
   const id = document.getElementById('m-id').value;
   const existing = id ? (state.melhorias.find(x => x.id === id) || {}) : {};
+  // "concluida" no admin mapeia para status_planejamento:'concluido' no gantt
+  const statusSave = status === 'concluida' ? 'iniciada' : status;
+  const spSave     = status === 'concluida' ? 'concluido'
+                   : (existing.status_planejamento === 'concluido' ? 'planejado' : (existing.status_planejamento || 'backlog'));
+
   const obj = {
     ...existing,  // preserva campos do Gantt (status_planejamento, sprint, etc.)
     id: id || uid(),
     titulo,
     descricao:        document.getElementById('m-descricao').value.trim(),
     tema_id:          temaId,
-    status,
+    status:           statusSave,
+    status_planejamento: spSave,
     estimativa:       status === 'estimada' ? document.getElementById('m-estimativa').value.trim() : (existing.estimativa || ''),
     dev:              document.getElementById('m-dev').value.trim(),
     prioridade:       document.getElementById('m-prioridade').value,
