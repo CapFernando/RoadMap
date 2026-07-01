@@ -606,15 +606,23 @@
       "titulo": "Sync Bitrix → Axcred (formalização)",
       "descricao": "Sync do Bitrix para o Axcred nas etapas de formalização. Hoje já existe a sync do Axcred para o Bitrix nas pipelines de formalização.",
       "tema_id": "mqv7rupc8b2qe",
-      "status": "estimada",
+      "status": "iniciada",
       "estimativa": "",
       "dev": "Emilly Viana",
-      "solicitante": "Wend e Isabella",
       "inicio": "2026-06-29",
       "entrega": "2026-06-29",
       "motivo_negacao": "",
       "criado_em": "2026-06-29T00:00:00.000Z",
-      "status_planejamento": "planejado"
+      "prioridade": "",
+      "solicitante": "Wend e Isabella",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "concluido",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqylm1notifre",
@@ -883,5 +891,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-07-01T11:21:43.372Z"
+  "atualizado_em": "2026-07-01T11:21:52.777Z"
 }
