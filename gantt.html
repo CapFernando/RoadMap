@@ -694,6 +694,24 @@ window.addEventListener('resize', () => {
 // ── GITHUB ────────────────────────────────────────────────────────────────
 const _gDeletedIds = new Set();
 let   _saveTimer   = null;
+let   _ganttPollActive = false;
+setInterval(async () => {
+  if (document.getElementById('gantt-app').style.display === 'none') return;
+  if (_ganttPollActive || _saveTimer || !fileSha) return;
+  _ganttPollActive = true;
+  try {
+    const res = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
+      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.sha !== fileSha) await loadFromGitHub();
+    }
+  } catch(_) {}
+  _ganttPollActive = false;
+}, 30000);
+
 function debouncedSave() {
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => saveToGitHub(), 2000);

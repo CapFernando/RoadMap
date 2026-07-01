@@ -382,7 +382,7 @@ function renderTema(tema, melhorias, idx) {
         <span class="tema-arrow open" id="${id}-arrow">${svgIcon('chevron')}</span>
       </div>
       <div class="tema-body open" id="${id}-body">
-        ${items.map(renderMelhoria).join('')}
+        ${[...items].sort((a,b) => (a.inicio||'9999').localeCompare(b.inicio||'9999')).map(renderMelhoria).join('')}
       </div>
     </div>`;
 }
@@ -641,6 +641,8 @@ function buildDevChart(temas, melhorias) {
   });
 }
 
+let _pollSha = null;
+
 async function loadData() {
   const app = document.getElementById('app');
   try {
@@ -650,6 +652,7 @@ async function loadData() {
     });
     if (!res.ok) throw new Error('Não foi possível carregar os dados.');
     const json = await res.json();
+    _pollSha = json.sha;
     const data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
 
     _temas     = data.temas     || [];
@@ -674,6 +677,32 @@ async function loadData() {
 }
 
 loadData();
+
+let _polling = false;
+setInterval(async () => {
+  if (_polling) return;
+  _polling = true;
+  try {
+    const res = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
+      headers: { Accept: 'application/vnd.github.v3+json' },
+    });
+    if (!res.ok) { _polling = false; return; }
+    const json = await res.json();
+    if (_pollSha && json.sha !== _pollSha) {
+      _pollSha = json.sha;
+      const data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
+      _temas     = data.temas     || [];
+      _melhorias = data.melhorias || [];
+      const dt = data.atualizado_em
+        ? new Date(data.atualizado_em).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
+        : '—';
+      document.getElementById('ultima-atualizacao').textContent = `Atualizado em ${dt}`;
+      renderConteudo();
+    }
+  } catch(_) {}
+  _polling = false;
+}, 30000);
 </script>
 </body>
 </html>
