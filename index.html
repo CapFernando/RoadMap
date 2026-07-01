@@ -293,7 +293,8 @@
 const GITHUB_USER = 'CapFernando';
 const GITHUB_REPO = 'RoadMap';
 const DATA_PATH   = 'data/melhorias.json';
-const API_URL     = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
+// Raw URL: sem rate limit para repositórios públicos (60 req/h da API esgota com múltiplos usuários)
+const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
 
 const STATUS_META = {
   recebida:    { label: 'Backlog',             cls: 'badge-recebida',    cor: '#3B8FE8' },
@@ -641,19 +642,15 @@ function buildDevChart(temas, melhorias) {
   });
 }
 
-let _pollSha = null;
+let _pollTs = null;
 
 async function loadData() {
   const app = document.getElementById('app');
   try {
-    const res = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: { Accept: 'application/vnd.github.v3+json' },
-    });
+    const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) throw new Error('Não foi possível carregar os dados.');
-    const json = await res.json();
-    _pollSha = json.sha;
-    const data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
+    const data = await res.json();
+    _pollTs = data.atualizado_em || null;
 
     _temas     = data.temas     || [];
     _melhorias = data.melhorias || [];
@@ -683,15 +680,11 @@ setInterval(async () => {
   if (_polling) return;
   _polling = true;
   try {
-    const res = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: { Accept: 'application/vnd.github.v3+json' },
-    });
+    const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) { _polling = false; return; }
-    const json = await res.json();
-    if (_pollSha && json.sha !== _pollSha) {
-      _pollSha = json.sha;
-      const data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
+    const data = await res.json();
+    if (_pollTs !== undefined && data.atualizado_em !== _pollTs) {
+      _pollTs    = data.atualizado_em || null;
       _temas     = data.temas     || [];
       _melhorias = data.melhorias || [];
       const dt = data.atualizado_em
