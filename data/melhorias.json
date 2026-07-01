@@ -837,16 +837,22 @@
       "descricao": "Fechar o Cadastro como base mestre do projeto RH FOLHA (monday): ligação ao Histórico de Movimentações, importação da classificação vigente (cargo/nível/faixa/setor), resolução de pendências de dados (datas, CPFs, gestores, classificações) e ativação da escrita de movimentação salarial pelo app (carry-forward).\n\nStatus real: 🔄 Em andamento (S3.3 resolução de pendências em curso).",
       "tema_id": "tmqyp0rhfolha",
       "status": "iniciada",
-      "estimativa": "25h",
+      "estimativa": "",
       "dev": "João Vitor",
-      "prioridade": "alta",
-      "solicitante": "Laylla",
-      "data_solicitacao": "2026-06-23",
       "inicio": "2026-06-29",
       "entrega": "2026-07-03",
       "motivo_negacao": "",
       "criado_em": "2026-06-30T00:00:00.000Z",
-      "status_planejamento": "planejado"
+      "prioridade": "alta",
+      "solicitante": "Laylla",
+      "data_solicitacao": "2026-06-23",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "em_andamento",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqyp04rhfols4",
@@ -891,5 +897,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-07-01T11:21:52.777Z"
+  "atualizado_em": "2026-07-01T11:22:50.429Z"
 }
