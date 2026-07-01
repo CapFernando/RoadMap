@@ -583,15 +583,23 @@
       "titulo": "Modal de Motivo de Desistência",
       "descricao": "Introduz a captura obrigatória de um motivo de desistência no momento em que o card entra na etapa \"Cliente Desistiu\", a partir de uma lista fixa de seis motivos, com campo de observação livre quando o motivo for \"Outro\". O motivo fica armazenado no banco e pode ser consultado posteriormente pelo menu de ações do card, exclusivamente na etapa de desistência. Facilita também o levantamento de dados para o BI.",
       "tema_id": "mqv7rupc8b2qe",
-      "status": "estimada",
+      "status": "iniciada",
       "estimativa": "",
       "dev": "Emilly Viana",
-      "solicitante": "Marina e Wend",
       "inicio": "2026-06-29",
       "entrega": "2026-06-29",
       "motivo_negacao": "",
       "criado_em": "2026-06-29T00:00:00.000Z",
-      "status_planejamento": "planejado"
+      "prioridade": "",
+      "solicitante": "Marina e Wend",
+      "data_solicitacao": "",
+      "sprint": "",
+      "estimativa_horas": 0,
+      "horas_realizadas": 0,
+      "status_planejamento": "concluido",
+      "observacao": "",
+      "oculto": false,
+      "ordem": 51
     },
     {
       "id": "mqylm1syncbx0",
@@ -875,5 +883,5 @@
     "Jhonatan"
   ],
   "feriados": [],
-  "atualizado_em": "2026-06-30T20:32:11.016Z"
+  "atualizado_em": "2026-07-01T11:21:43.372Z"
 }
