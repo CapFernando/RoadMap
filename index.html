@@ -483,9 +483,10 @@ function splitDevs(devStr) {
 function filtradas() {
   return _melhorias.filter(m => {
     if (_ano !== null || _mes !== null) {
-      const d = new Date(m.criado_em);
-      if (_ano !== null && d.getFullYear() !== _ano) return false;
-      if (_mes !== null && d.getMonth() !== _mes) return false;
+      // usa data de início planejada; sem ela usa criado_em (backlog sem data)
+      const ref = m.inicio ? new Date(m.inicio + 'T00:00:00') : new Date(m.criado_em);
+      if (_ano !== null && ref.getFullYear() !== _ano) return false;
+      if (_mes !== null && ref.getMonth() !== _mes) return false;
     }
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
     if (_statusFilter && getStatusKey(m) !== _statusFilter) return false;
@@ -499,9 +500,9 @@ function renderConteudo() {
   // conta por status unificado (usa mel sem filtro de status para mostrar totais reais)
   const melSemStatus = _melhorias.filter(m => {
     if (_ano !== null || _mes !== null) {
-      const d = new Date(m.criado_em);
-      if (_ano !== null && d.getFullYear() !== _ano) return false;
-      if (_mes !== null && d.getMonth() !== _mes) return false;
+      const ref = m.inicio ? new Date(m.inicio + 'T00:00:00') : new Date(m.criado_em);
+      if (_ano !== null && ref.getFullYear() !== _ano) return false;
+      if (_mes !== null && ref.getMonth() !== _mes) return false;
     }
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
     return true;
