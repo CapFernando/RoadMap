@@ -481,9 +481,9 @@ function splitDevs(devStr) {
 
 function filtradas() {
   return _melhorias.filter(m => {
-    if (_ano) {
+    if (_ano !== null || _mes !== null) {
       const d = new Date(m.criado_em);
-      if (d.getFullYear() !== _ano) return false;
+      if (_ano !== null && d.getFullYear() !== _ano) return false;
       if (_mes !== null && d.getMonth() !== _mes) return false;
     }
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
@@ -497,9 +497,9 @@ function renderConteudo() {
 
   // conta por status unificado (usa mel sem filtro de status para mostrar totais reais)
   const melSemStatus = _melhorias.filter(m => {
-    if (_ano) {
+    if (_ano !== null || _mes !== null) {
       const d = new Date(m.criado_em);
-      if (d.getFullYear() !== _ano) return false;
+      if (_ano !== null && d.getFullYear() !== _ano) return false;
       if (_mes !== null && d.getMonth() !== _mes) return false;
     }
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
@@ -519,9 +519,10 @@ function renderConteudo() {
       </div>`;
     }).join('');
 
-  const label = _ano
-    ? (_mes !== null ? `${MESES[_mes]} de ${_ano}` : `Ano ${_ano}`)
-    : 'Todos os lançamentos';
+  const label = (_ano !== null && _mes !== null) ? `${MESES[_mes]} de ${_ano}`
+              : (_ano !== null)                  ? `Ano ${_ano}`
+              : (_mes !== null)                  ? `${MESES[_mes]} — todos os anos`
+              :                                   'Todos os lançamentos';
 
   document.getElementById('conteudo').innerHTML = `
     <div class="summary">${cardsHTML}</div>
@@ -570,12 +571,12 @@ function buildFilterBar() {
   document.getElementById('filter-bar').innerHTML = `
     <div class="filter-row">
       <span>Período:</span>
-      <button class="filter-btn ${!_ano ? 'active' : ''}" onclick="setFiltro(null,null)">Tudo</button>
+      <button class="filter-btn ${_ano===null && _mes===null ? 'active' : ''}" onclick="setFiltro(null,null)">Tudo</button>
       <select class="filter-select" onchange="setFiltroAno(this.value)" ${anos.length===0?'disabled':''}>
         <option value="">— Ano —</option>
         ${anoOpts}
       </select>
-      <select class="filter-select" onchange="setFiltroMes(this.value)" ${_ano===null?'disabled':''}>
+      <select class="filter-select" onchange="setFiltroMes(this.value)">
         <option value="">— Mês —</option>
         ${mesOpts}
       </select>
@@ -596,7 +597,6 @@ function setFiltro(ano, mes) {
 }
 function setFiltroAno(val) {
   _ano = val ? parseInt(val) : null;
-  _mes = null;
   buildFilterBar();
   renderConteudo();
 }
