@@ -650,7 +650,8 @@ function statusKey(m) {
   if (sp && sp !== 'backlog') return sp;
   // mapeia status legado → novo
   const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
-                   estimada:'planejado', iniciada:'em_andamento', concluida:'concluido', concluido:'concluido' };
+                   estimada:'planejado', iniciada:'em_andamento', concluida:'concluido',
+                   concluido:'concluido', negada:'negada' };
   return legacy[m.status] || sp || 'backlog';
 }
 
