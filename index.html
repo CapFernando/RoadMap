@@ -374,25 +374,27 @@ function renderTema(tema, melhorias, idx) {
   if (count === 0) return ''; // oculta tema sem itens (especialmente sob filtro)
   return `
     <div class="tema-block">
-      <div class="tema-header" onclick="toggleTema('${id}')" aria-expanded="true" aria-controls="${id}-body">
+      <div class="tema-header" onclick="toggleTema('${id}')" aria-expanded="false" aria-controls="${id}-body">
         <div class="tema-header-left">
           <span style="width:12px;height:12px;border-radius:50%;background:${cor};flex-shrink:0;display:inline-block;"></span>
           <span class="tema-nome">${tema.nome}</span>
           <span class="tema-count">${count} ${count === 1 ? 'melhoria' : 'melhorias'}</span>
         </div>
-        <span class="tema-arrow open" id="${id}-arrow">${svgIcon('chevron')}</span>
+        <span class="tema-arrow" id="${id}-arrow">${svgIcon('chevron')}</span>
       </div>
-      <div class="tema-body open" id="${id}-body">
+      <div class="tema-body" id="${id}-body">
         ${[...items].sort((a,b) => (a.inicio||'9999').localeCompare(b.inicio||'9999')).map(renderMelhoria).join('')}
       </div>
     </div>`;
 }
 
 function toggleTema(id) {
-  const body  = document.getElementById(`${id}-body`);
-  const arrow = document.getElementById(`${id}-arrow`);
-  body.classList.toggle('open');
+  const body   = document.getElementById(`${id}-body`);
+  const arrow  = document.getElementById(`${id}-arrow`);
+  const header = arrow.closest('[aria-expanded]');
+  const open   = body.classList.toggle('open');
   arrow.classList.toggle('open');
+  if (header) header.setAttribute('aria-expanded', open);
 }
 
 function buildCharts(temas, melhorias) {
