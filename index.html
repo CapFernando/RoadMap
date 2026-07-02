@@ -675,8 +675,9 @@ async function loadData() {
 
 loadData();
 
+// ── SYNC ──────────────────────────────────────────────────────────────
 let _polling = false;
-setInterval(async () => {
+async function checkForUpdates() {
   if (_polling) return;
   _polling = true;
   try {
@@ -695,7 +696,15 @@ setInterval(async () => {
     }
   } catch(_) {}
   _polling = false;
-}, 30000);
+}
+
+// Polling a cada 30s em background
+setInterval(checkForUpdates, 30000);
+
+// Atualiza imediatamente ao voltar para esta aba (vindo do Gantt ou Admin)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForUpdates();
+});
 </script>
 </body>
 </html>
