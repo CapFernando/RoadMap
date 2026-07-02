@@ -695,7 +695,7 @@ window.addEventListener('resize', () => {
 const _gDeletedIds = new Set();
 let   _saveTimer   = null;
 let   _ganttPollActive = false;
-setInterval(async () => {
+async function ganttCheckUpdates() {
   if (document.getElementById('gantt-app').style.display === 'none') return;
   if (_ganttPollActive || _saveTimer || !fileSha) return;
   _ganttPollActive = true;
@@ -710,7 +710,9 @@ setInterval(async () => {
     }
   } catch(_) {}
   _ganttPollActive = false;
-}, 30000);
+}
+setInterval(ganttCheckUpdates, 30000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ganttCheckUpdates(); });
 
 function debouncedSave() {
   clearTimeout(_saveTimer);
@@ -775,6 +777,12 @@ async function saveToGitHub() {
       const localTemaIds     = new Set(state.temas.map(t => t.id));
       (serverData.temas     || []).forEach(t => { if (!localTemaIds.has(t.id)     && !_gDeletedIds.has(t.id)) state.temas.push(t); });
       (serverData.melhorias || []).forEach(m => { if (!localMelhoriaIds.has(m.id) && !_gDeletedIds.has(m.id)) state.melhorias.push(m); });
+      // Merge de desenvolvedores: preserva devs do servidor que não estão na memória local
+      const devSet = new Set(state.desenvolvedores.flatMap(d => splitDevs(d)));
+      (serverData.desenvolvedores || []).forEach(d => splitDevs(d).forEach(sd => devSet.add(sd)));
+      state.desenvolvedores = [...devSet];
+      // Preserva feriados do servidor se o Gantt não os alterou localmente
+      if (!state.feriados || !state.feriados.length) state.feriados = serverData.feriados || [];
     } catch (_) {}
 
     // Garante que desenvolvedores nunca tenha entradas compostas ("Gabriel / Anthony")
@@ -1283,18 +1291,18 @@ function saveTask() {
 
   const sp = document.getElementById('e-status-plan').value;
 
+  const existing = editingId ? (state.melhorias.find(x => x.id === editingId) || {}) : {};
   const obj = {
+    ...existing,  // preserva campos não editados pelo Gantt (estimativa, motivo_negacao, etc.)
     id:                 editingId || uid(),
     titulo,
     descricao:          document.getElementById('e-descricao').value.trim(),
     tema_id:            temaId,
     status:             spToStatus(sp),
-    estimativa:         '',
     dev:                document.getElementById('e-dev').value,
     inicio:             inicio,
     entrega:            fim,
-    motivo_negacao:     '',
-    criado_em:          editingId ? (state.melhorias.find(x=>x.id===editingId)?.criado_em || new Date().toISOString()) : new Date().toISOString(),
+    criado_em:          existing.criado_em || new Date().toISOString(),
     prioridade:         document.getElementById('e-prio').value,
     solicitante:        document.getElementById('e-solicitante').value.trim(),
     data_solicitacao:   document.getElementById('e-data-solic').value,
@@ -1303,8 +1311,8 @@ function saveTask() {
     horas_realizadas:   parseFloat(document.getElementById('e-horas-real').value) || 0,
     status_planejamento: sp,
     observacao:         document.getElementById('e-obs').value.trim(),
-    oculto:             editingId ? (state.melhorias.find(x=>x.id===editingId)?.oculto || false) : false,
-    ordem:              editingId ? (state.melhorias.find(x=>x.id===editingId)?.ordem ?? state.melhorias.length) : state.melhorias.length,
+    oculto:             existing.oculto || false,
+    ordem:              existing.ordem  ?? state.melhorias.length,
   };
 
   if (editingId) {

@@ -513,7 +513,7 @@ function doLogout() {
 initLoginScreen();
 
 let _adminPollActive = false;
-setInterval(async () => {
+async function adminCheckUpdates() {
   if (document.getElementById('admin-app').style.display === 'none') return;
   if (_adminPollActive || !fileSha) return;
   _adminPollActive = true;
@@ -528,7 +528,9 @@ setInterval(async () => {
     }
   } catch(_) {}
   _adminPollActive = false;
-}, 30000);
+}
+setInterval(adminCheckUpdates, 30000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') adminCheckUpdates(); });
 
 // ─── GITHUB ───────────────────────────────────────────────────────
 async function loadFromGitHub(silent) {
@@ -586,7 +588,10 @@ async function saveToGitHub() {
       const devSet = new Set(state.desenvolvedores);
       (serverData.desenvolvedores || []).forEach(d => devSet.add(d));
       state.desenvolvedores = [...devSet];
-      if (!state.feriados || !state.feriados.length) state.feriados = serverData.feriados || [];
+      // Merge de feriados: union por data (admin nunca edita, apenas preserva o que o Gantt criou)
+      const feriadoSet = new Set((state.feriados || []).map(f => f.data || f));
+      (serverData.feriados || []).forEach(f => feriadoSet.add(f.data || f));
+      state.feriados = [...feriadoSet].map(d => (typeof d === 'string' ? { data: d } : d));
     } catch (_) {}
 
     state.atualizado_em = new Date().toISOString();

@@ -412,7 +412,7 @@ function buildCharts(temas, melhorias) {
   // por status
   const stLabels = Object.values(STATUS_META).map(s => s.label);
   const stKeys   = Object.keys(STATUS_META);
-  const stData   = stKeys.map(k => melhorias.filter(m => m.status === k).length);
+  const stData   = stKeys.map(k => melhorias.filter(m => getStatusKey(m) === k).length);
   const stCores  = stKeys.map(k => STATUS_META[k].cor);
 
   const cfg = (labels, data, cores) => ({
