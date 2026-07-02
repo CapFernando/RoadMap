@@ -83,7 +83,13 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 16px 18px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
     }
+    .sum-card:hover { border-color: var(--text3); }
+    .sum-card.active { border-color: var(--text); background: #1E1E1C; }
+    .sum-card.active .n { color: #fff; }
     .sum-card .n   { font-size: 30px; font-weight: 700; color: var(--text); line-height: 1; }
     .sum-card .lbl { font-size: 13px; color: var(--text2); margin-top: 6px; display: flex; align-items: center; gap: 6px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -445,7 +451,28 @@ function buildCharts(temas, melhorias) {
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
 let _temas = [], _melhorias = [];
-let _ano = null, _mes = null, _dev = null;
+let _ano = null, _mes = null, _dev = null, _statusFilter = null;
+
+// Deriva o status unificado de um item (alinhado com Admin e Gantt)
+function getStatusKey(m) {
+  const sp = m.status_planejamento;
+  if (sp && sp !== 'backlog') return sp;
+  const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
+                   estimada:'planejado', iniciada:'em_andamento', concluida:'concluido',
+                   concluido:'concluido', negada:'negada' };
+  return legacy[m.status] || sp || 'backlog';
+}
+
+const STATUS_CARDS = [
+  { key:'total',        label:'Total',              cor:'var(--blue)' },
+  { key:'backlog',      label:'Backlog',             cor:'var(--blue)' },
+  { key:'levantar_req', label:'Levantar Requisitos', cor:'#9B6FE8' },
+  { key:'planejado',    label:'Planejado',           cor:'var(--blue)' },
+  { key:'em_andamento', label:'Em Andamento',        cor:'var(--green)' },
+  { key:'concluido',    label:'Concluído',           cor:'#2BBFA0' },
+  { key:'atrasado',     label:'Atrasado',            cor:'var(--red)' },
+  { key:'negada',       label:'Negada',              cor:'var(--red)' },
+];
 
 function splitDevs(devStr) {
   if (!devStr) return [];
@@ -460,6 +487,7 @@ function filtradas() {
       if (_mes !== null && d.getMonth() !== _mes) return false;
     }
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
+    if (_statusFilter && getStatusKey(m) !== _statusFilter) return false;
     return true;
   });
 }
@@ -467,28 +495,36 @@ function filtradas() {
 function renderConteudo() {
   const mel = filtradas();
 
-  const totais = {
-    total:       mel.length,
-    backlog:     mel.filter(m => m.status === 'recebida').length,
-    refinamento: mel.filter(m => m.status === 'refinamento').length,
-    estimadas:   mel.filter(m => m.status === 'estimada').length,
-    iniciadas:   mel.filter(m => m.status === 'iniciada').length,
-    negadas:     mel.filter(m => m.status === 'negada').length,
-  };
+  // conta por status unificado (usa mel sem filtro de status para mostrar totais reais)
+  const melSemStatus = _melhorias.filter(m => {
+    if (_ano) {
+      const d = new Date(m.criado_em);
+      if (d.getFullYear() !== _ano) return false;
+      if (_mes !== null && d.getMonth() !== _mes) return false;
+    }
+    if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
+    return true;
+  });
+  const counts = { total: melSemStatus.length };
+  STATUS_CARDS.forEach(c => { if (c.key !== 'total') counts[c.key] = melSemStatus.filter(m => getStatusKey(m) === c.key).length; });
+
+  // monta cards: Total sempre aparece; os outros só se count > 0
+  const cardsHTML = STATUS_CARDS
+    .filter(c => c.key === 'total' || counts[c.key] > 0)
+    .map(c => {
+      const isActive = c.key === 'total' ? !_statusFilter : _statusFilter === c.key;
+      return `<div class="sum-card ${isActive ? 'active' : ''}" onclick="setFiltroStatus('${c.key}')">
+        <div class="n">${counts[c.key]}</div>
+        <div class="lbl"><span class="dot" style="background:${c.cor}"></span>${c.label}</div>
+      </div>`;
+    }).join('');
 
   const label = _ano
     ? (_mes !== null ? `${MESES[_mes]} de ${_ano}` : `Ano ${_ano}`)
     : 'Todos os lançamentos';
 
   document.getElementById('conteudo').innerHTML = `
-    <div class="summary">
-      <div class="sum-card"><div class="n">${totais.total}</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Total</div></div>
-      <div class="sum-card"><div class="n">${totais.backlog}</div><div class="lbl"><span class="dot" style="background:var(--blue)"></span>Backlog</div></div>
-      <div class="sum-card"><div class="n">${totais.refinamento}</div><div class="lbl"><span class="dot" style="background:var(--purple)"></span>Refinamento</div></div>
-      <div class="sum-card"><div class="n">${totais.estimadas}</div><div class="lbl"><span class="dot" style="background:var(--amber)"></span>Estimadas</div></div>
-      <div class="sum-card"><div class="n">${totais.iniciadas}</div><div class="lbl"><span class="dot" style="background:var(--green)"></span>Em andamento</div></div>
-      <div class="sum-card"><div class="n">${totais.negadas}</div><div class="lbl"><span class="dot" style="background:var(--red)"></span>Negadas</div></div>
-    </div>
+    <div class="summary">${cardsHTML}</div>
 
     <div class="charts">
       <div class="chart-card">
@@ -572,6 +608,10 @@ function setFiltroMes(val) {
 function setFiltroDev(dev) {
   _dev = dev;
   buildFilterBar();
+  renderConteudo();
+}
+function setFiltroStatus(key) {
+  _statusFilter = (key === 'total' || key === _statusFilter) ? null : key;
   renderConteudo();
 }
 
