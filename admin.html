@@ -542,7 +542,12 @@ async function loadFromGitHub(silent) {
     const json = await res.json();
     fileSha = json.sha;
     const decoded = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
-    state = { temas: decoded.temas || [], melhorias: decoded.melhorias || [] };
+    state = {
+      temas:          decoded.temas          || [],
+      melhorias:      decoded.melhorias       || [],
+      desenvolvedores: decoded.desenvolvedores || [],
+      feriados:       decoded.feriados        || [],
+    };
     renderAll();
   } catch (e) {
     if (!silent) toast(e.message, 'err');
@@ -577,6 +582,11 @@ async function saveToGitHub() {
       (serverData.melhorias || []).forEach(m => {
         if (!localMelhoriaIds.has(m.id) && !_deletedIds.has(m.id)) state.melhorias.push(m);
       });
+      // Preserva devs e feriados cadastrados pelo Gantt — admin não os edita mas não deve apagá-los
+      const devSet = new Set(state.desenvolvedores);
+      (serverData.desenvolvedores || []).forEach(d => devSet.add(d));
+      state.desenvolvedores = [...devSet];
+      if (!state.feriados || !state.feriados.length) state.feriados = serverData.feriados || [];
     } catch (_) {}
 
     state.atualizado_em = new Date().toISOString();
