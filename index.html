@@ -300,8 +300,10 @@
 const GITHUB_USER = 'CapFernando';
 const GITHUB_REPO = 'RoadMap';
 const DATA_PATH   = 'data/melhorias.json';
-// Raw URL: sem rate limit para repositórios públicos (60 req/h da API esgota com múltiplos usuários)
+// Raw URL: sem rate limit — usado para polling em background (aceita delay de CDN)
 const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
+// API URL: dados sempre frescos — usado apenas em refresh forçado (botão / visibilitychange)
+const API_URL     = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
 
 const STATUS_META = {
   recebida:    { label: 'Backlog',             cls: 'badge-recebida',    cor: '#3B8FE8' },
@@ -722,17 +724,46 @@ async function loadData() {
   }
 }
 
+// Aplica dados novos na UI
+function applyData(data) {
+  _pollTs    = data.atualizado_em || null;
+  _temas     = data.temas     || [];
+  _melhorias = data.melhorias || [];
+  _devs = [...new Set([
+    ...(data.desenvolvedores || []).flatMap(d => splitDevs(d)),
+    ..._melhorias.flatMap(m => splitDevs(m.dev))
+  ])].sort();
+  const dt = data.atualizado_em
+    ? new Date(data.atualizado_em).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
+    : '—';
+  const el = document.getElementById('ultima-atualizacao');
+  if (el) el.textContent = `Atualizado em ${dt}`;
+  buildFilterBar();
+  renderConteudo();
+}
+
+// Refresh forçado via GitHub API (dados frescos, ignora CDN)
 async function forceRefresh() {
   const btn = document.getElementById('btn-refresh');
   if (btn) { btn.textContent = '↻ Atualizando…'; btn.disabled = true; }
-  _pollTs = null; // força reload mesmo sem mudança de timestamp
-  await checkForUpdates();
-  if (!_polling && btn) { btn.textContent = '↻ Atualizar'; btn.disabled = false; }
+  try {
+    const res = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
+      headers: { Accept: 'application/vnd.github.v3+json' }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
+      applyData(data);
+    }
+  } catch(_) {}
+  if (btn) { btn.textContent = '↻ Atualizar'; btn.disabled = false; }
 }
 
 loadData();
 
 // ── SYNC ──────────────────────────────────────────────────────────────
+// Polling em background usa raw URL (sem rate limit) — aceita até ~5min de delay de CDN
 let _polling = false;
 async function checkForUpdates() {
   if (_polling) return;
@@ -741,31 +772,17 @@ async function checkForUpdates() {
     const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) { _polling = false; return; }
     const data = await res.json();
-    if (_pollTs !== undefined && data.atualizado_em !== _pollTs) {
-      _pollTs    = data.atualizado_em || null;
-      _temas     = data.temas     || [];
-      _melhorias = data.melhorias || [];
-      _devs = [...new Set([
-        ...(data.desenvolvedores || []).flatMap(d => splitDevs(d)),
-        ..._melhorias.flatMap(m => splitDevs(m.dev))
-      ])].sort();
-      const dt = data.atualizado_em
-        ? new Date(data.atualizado_em).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
-        : '—';
-      document.getElementById('ultima-atualizacao').textContent = `Atualizado em ${dt}`;
-      buildFilterBar();
-      renderConteudo();
-    }
+    if (_pollTs !== undefined && data.atualizado_em !== _pollTs) applyData(data);
   } catch(_) {}
   _polling = false;
 }
 
-// Polling a cada 30s em background
-setInterval(checkForUpdates, 30000);
+// Polling de fundo a cada 60s (raw URL — sem rate limit)
+setInterval(checkForUpdates, 60000);
 
-// Atualiza imediatamente ao voltar para esta aba (vindo do Gantt ou Admin)
+// Ao voltar para a aba: usa API para dados imediatamente frescos
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') checkForUpdates();
+  if (document.visibilityState === 'visible') forceRefresh();
 });
 </script>
 </body>
