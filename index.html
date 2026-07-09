@@ -7,6 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -284,6 +286,7 @@
   <div class="header-right" style="display:flex;align-items:center;gap:16px;">
     <span id="ultima-atualizacao" style="font-size:13px;color:var(--text3)">—</span>
     <button id="btn-refresh" onclick="forceRefresh()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Forçar atualização dos dados" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">↻ Atualizar</button>
+    <button onclick="openExportModal()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Exportar relatório" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⬇ Exportar</button>
     <a href="admin.html" style="font-size:13px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⚙ Admin</a>
   </div>
 </header>
@@ -784,6 +787,199 @@ setInterval(checkForUpdates, 60000);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') forceRefresh();
 });
+
+// ── EXPORTAR ──────────────────────────────────────────────────────────
+const STATUS_BADGE_PRINT = {
+  backlog:      { label: 'Backlog',       bg: '#0C3260', color: '#9BC8F8' },
+  levantar_req: { label: 'Levantar req.', bg: '#341A6E', color: '#C9AEFF' },
+  planejado:    { label: 'Planejado',     bg: '#5C3608', color: '#F9C97A' },
+  em_andamento: { label: 'Em Andamento',  bg: '#063D30', color: '#7EECD8' },
+  concluido:    { label: 'Concluído',     bg: '#1E4208', color: '#B2E07A' },
+  atrasado:     { label: 'Atrasado',      bg: '#5C0A0A', color: '#F9A0A0' },
+  negada:       { label: 'Negada',        bg: '#5C0A0A', color: '#F9A0A0' },
+};
+
+function buildReportHTML() {
+  const mel = filtradas();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+
+  // Descrição do filtro ativo
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let filtroDesc = 'Todos os períodos';
+  if (_mes !== null && _ano !== null) filtroDesc = `${MESES_PT[_mes - 1]} de ${_ano}`;
+  else if (_mes !== null) filtroDesc = MESES_PT[_mes - 1] + ' — todos os anos';
+  else if (_ano !== null) filtroDesc = `Ano ${_ano}`;
+  if (_dev) filtroDesc += ` · ${_dev}`;
+  if (_statusFilter) filtroDesc += ` · ${STATUS_BADGE_PRINT[_statusFilter]?.label || _statusFilter}`;
+
+  // Agrupar por tema
+  const temaOrder = _temas.map(t => t.id);
+  const groups = {};
+  mel.forEach(m => {
+    const k = m.tema_id || '__';
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(m);
+  });
+  const groupKeys = Object.keys(groups).sort((a,b) => {
+    const ia = temaOrder.indexOf(a), ib = temaOrder.indexOf(b);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1; if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  const temasHTML = groupKeys.map((tKey, gi) => {
+    const temaNome = tKey === '__' ? 'Sem tema' : (_temas.find(t => t.id === tKey)?.nome || '—');
+    const cor = TEMA_CORES[gi % TEMA_CORES.length];
+    const items = [...groups[tKey]].sort((a,b) => (a.inicio||'9999').localeCompare(b.inicio||'9999'));
+
+    const cardsHTML = items.map(m => {
+      const sk = getStatusKey(m);
+      const bm = STATUS_BADGE_PRINT[sk] || STATUS_BADGE_PRINT.backlog;
+      const badge = `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:${bm.bg};color:${bm.color};white-space:nowrap;">${bm.label}</span>`;
+      const meta = [];
+      if (m.dev)     meta.push(`👤 ${m.dev}`);
+      if (m.inicio)  meta.push(`📅 Início: ${formatDate(m.inicio)}`);
+      if (m.entrega) meta.push(`🏁 Entrega: ${formatDate(m.entrega)}`);
+      if (m.estimativa) meta.push(`⏱ ${m.estimativa}`);
+      return `<div style="background:#1E1E1C;border:1px solid #2E2E2B;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:${m.descricao||meta.length?'6px':'0'};">
+          <span style="font-size:13px;font-weight:600;color:#ECEAE2;line-height:1.4;">${m.titulo}</span>
+          ${badge}
+        </div>
+        ${m.descricao ? `<div style="font-size:12px;color:#A8A49A;margin-bottom:6px;line-height:1.5;">${m.descricao.substring(0,180)}${m.descricao.length>180?'…':''}</div>` : ''}
+        ${meta.length ? `<div style="font-size:11px;color:#6E6A62;display:flex;flex-wrap:wrap;gap:10px;">${meta.map(i=>`<span>${i}</span>`).join('')}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    return `<div style="margin-bottom:24px;">
+      <div style="display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid #2E2E2B;margin-bottom:10px;">
+        <span style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0;display:inline-block;"></span>
+        <span style="font-size:13px;font-weight:700;color:#ECEAE2;text-transform:uppercase;letter-spacing:.05em;">${temaNome}</span>
+        <span style="font-size:12px;color:#6E6A62;">${items.length} ${items.length===1?'item':'itens'}</span>
+      </div>
+      ${cardsHTML}
+    </div>`;
+  }).join('');
+
+  return `<div id="export-canvas" style="background:#0E0E0D;color:#ECEAE2;font-family:'Inter',sans-serif;padding:32px;min-width:800px;width:800px;">
+    <div style="border-bottom:1px solid #2E2E2B;padding-bottom:20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;">
+      <div>
+        <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">🗺️ RoadMap de Melhorias</div>
+        <div style="font-size:13px;color:#A8A49A;">Audax Capital · Produto &amp; Tecnologia</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:12px;color:#6E6A62;">${filtroDesc}</div>
+        <div style="font-size:11px;color:#6E6A62;margin-top:2px;">Gerado em ${dateStr}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px;">
+      ${Object.entries(STATUS_BADGE_PRINT).map(([k,v]) => {
+        const n = mel.filter(m => getStatusKey(m) === k).length;
+        if (!n) return '';
+        return `<div style="background:#161614;border:1px solid #2E2E2B;border-radius:8px;padding:8px 14px;text-align:center;">
+          <div style="font-size:18px;font-weight:700;color:#ECEAE2;">${n}</div>
+          <div style="font-size:11px;color:#A8A49A;margin-top:1px;">${v.label}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    ${temasHTML}
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #2E2E2B;font-size:11px;color:#6E6A62;text-align:center;">
+      capfernando.github.io/RoadMap
+    </div>
+  </div>`;
+}
+
+function openExportModal() {
+  const mel = filtradas();
+  if (!mel.length) { alert('Nenhuma melhoria visível para exportar.'); return; }
+
+  let overlay = document.getElementById('export-overlay');
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement('div');
+  overlay.id = 'export-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;flex-direction:column;align-items:center;padding:24px;overflow-y:auto;';
+
+  const panel = document.createElement('div');
+  panel.style.cssText = 'background:#161614;border:1px solid #2E2E2B;border-radius:12px;width:100%;max-width:880px;flex-shrink:0;';
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #2E2E2B;">
+      <span style="font-size:15px;font-weight:600;color:#ECEAE2;">Exportar Relatório</span>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button id="btn-dl-img" onclick="downloadExport('img')" style="font-size:13px;background:#3B8FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ Baixar Imagem</button>
+        <button id="btn-dl-pdf" onclick="downloadExport('pdf')" style="font-size:13px;background:#9B6FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ Baixar PDF</button>
+        <button onclick="document.getElementById('export-overlay').remove()" style="font-size:13px;color:#6E6A62;background:none;border:1px solid #2E2E2B;border-radius:7px;padding:7px 14px;cursor:pointer;">✕ Fechar</button>
+      </div>
+    </div>
+    <div style="padding:20px;overflow-x:auto;">
+      <div id="export-preview-wrap" style="transform-origin:top left;">
+        ${buildReportHTML()}
+      </div>
+    </div>`;
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // Scale preview to fit panel
+  requestAnimationFrame(() => {
+    const wrap = document.getElementById('export-preview-wrap');
+    const canvas = document.getElementById('export-canvas');
+    if (!wrap || !canvas) return;
+    const available = panel.clientWidth - 40;
+    const natural = canvas.scrollWidth || 800;
+    const scale = Math.min(1, available / natural);
+    wrap.style.transform = `scale(${scale})`;
+    wrap.style.height = (canvas.scrollHeight * scale) + 'px';
+  });
+}
+
+async function downloadExport(type) {
+  const btnImg = document.getElementById('btn-dl-img');
+  const btnPdf = document.getElementById('btn-dl-pdf');
+  const btn = type === 'img' ? btnImg : btnPdf;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Gerando…'; }
+
+  const el = document.getElementById('export-canvas');
+  if (!el) return;
+
+  try {
+    const canvas = await html2canvas(el, {
+      backgroundColor: '#0E0E0D',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+
+    const now = new Date();
+    const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+
+    if (type === 'img') {
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `roadmap-audax-${stamp}.png`;
+      a.click();
+    } else {
+      const { jsPDF } = window.jspdf;
+      const imgData = canvas.toDataURL('image/png');
+      const pxW = canvas.width, pxH = canvas.height;
+      const ratio = pxH / pxW;
+      const pdfW = 210; // A4 mm
+      const pdfH = Math.min(pdfW * ratio, 297);
+      const orientation = ratio > 1 ? 'p' : 'l';
+      const pdf = new jsPDF({ orientation, unit: 'mm', format: orientation === 'p' ? 'a4' : [pdfW, pdfW * ratio] });
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfW * ratio);
+      pdf.save(`roadmap-audax-${stamp}.pdf`);
+    }
+  } catch(e) {
+    alert('Erro ao gerar exportação. Tente novamente.');
+  }
+
+  if (btnImg) { btnImg.disabled = false; btnImg.textContent = '⬇ Baixar Imagem'; }
+  if (btnPdf) { btnPdf.disabled = false; btnPdf.textContent = '⬇ Baixar PDF'; }
+}
 </script>
 </body>
 </html>
