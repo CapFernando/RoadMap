@@ -494,7 +494,8 @@ function filtradas() {
       if (_mes !== null && ref.getMonth() !== _mes) return false;
     }
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
-    if (_statusFilter && getStatusKey(m) !== _statusFilter) return false;
+    if (_statusFilter) return getStatusKey(m) === _statusFilter;
+    if (['concluido','negada'].includes(getStatusKey(m))) return false;
     return true;
   });
 }
