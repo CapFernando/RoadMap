@@ -905,11 +905,14 @@ function openExportModal() {
   panel.style.cssText = 'background:#161614;border:1px solid #2E2E2B;border-radius:12px;width:100%;max-width:880px;flex-shrink:0;';
 
   panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #2E2E2B;">
-      <span style="font-size:15px;font-weight:600;color:#ECEAE2;">Exportar Relatório</span>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #2E2E2B;flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;gap:6px;">
+        <button id="exp-tab-tema" onclick="switchExportTab('tema')" style="font-size:13px;font-weight:600;background:#3B8FE8;color:#fff;border:none;border-radius:7px;padding:6px 14px;cursor:pointer;">Por Tema</button>
+        <button id="exp-tab-dev"  onclick="switchExportTab('dev')"  style="font-size:13px;font-weight:600;background:#252522;color:#A8A49A;border:1px solid #2E2E2B;border-radius:7px;padding:6px 14px;cursor:pointer;">Por Desenvolvedor</button>
+      </div>
       <div style="display:flex;gap:10px;align-items:center;">
-        <button id="btn-dl-img" onclick="downloadExport('img')" style="font-size:13px;background:#3B8FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ Baixar Imagem</button>
-        <button id="btn-dl-pdf" onclick="downloadExport('pdf')" style="font-size:13px;background:#9B6FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ Baixar PDF</button>
+        <button id="btn-dl-img" onclick="downloadExport('img')" style="font-size:13px;background:#3B8FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ Imagem</button>
+        <button id="btn-dl-pdf" onclick="downloadExport('pdf')" style="font-size:13px;background:#9B6FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ PDF</button>
         <button onclick="document.getElementById('export-overlay').remove()" style="font-size:13px;color:#6E6A62;background:none;border:1px solid #2E2E2B;border-radius:7px;padding:7px 14px;cursor:pointer;">✕ Fechar</button>
       </div>
     </div>
@@ -995,8 +998,132 @@ async function downloadExport(type) {
     alert('Erro ao gerar exportação. Tente novamente.');
   }
 
-  if (btnImg) { btnImg.disabled = false; btnImg.textContent = '⬇ Baixar Imagem'; }
-  if (btnPdf) { btnPdf.disabled = false; btnPdf.textContent = '⬇ Baixar PDF'; }
+  if (btnImg) { btnImg.disabled = false; btnImg.textContent = '⬇ Imagem'; }
+  if (btnPdf) { btnPdf.disabled = false; btnPdf.textContent = '⬇ PDF'; }
+}
+
+let _exportTab = 'tema';
+
+function switchExportTab(tab) {
+  _exportTab = tab;
+  const btnTema = document.getElementById('exp-tab-tema');
+  const btnDev  = document.getElementById('exp-tab-dev');
+  if (btnTema) {
+    btnTema.style.background = tab === 'tema' ? '#3B8FE8' : '#252522';
+    btnTema.style.color      = tab === 'tema' ? '#fff'    : '#A8A49A';
+    btnTema.style.border     = tab === 'tema' ? 'none'    : '1px solid #2E2E2B';
+  }
+  if (btnDev) {
+    btnDev.style.background = tab === 'dev' ? '#3B8FE8' : '#252522';
+    btnDev.style.color      = tab === 'dev' ? '#fff'    : '#A8A49A';
+    btnDev.style.border     = tab === 'dev' ? 'none'    : '1px solid #2E2E2B';
+  }
+  const wrap = document.getElementById('export-preview-wrap');
+  const panel = wrap && wrap.closest('[style*="max-width:880px"]');
+  if (!wrap) return;
+  wrap.innerHTML = tab === 'dev' ? buildDevReportHTML() : buildReportHTML();
+  requestAnimationFrame(() => {
+    const canvas = document.getElementById('export-canvas');
+    if (!canvas || !panel) return;
+    const available = panel.clientWidth - 40;
+    const natural = canvas.scrollWidth || 800;
+    const scale = Math.min(1, available / natural);
+    wrap.style.transform = `scale(${scale})`;
+    wrap.style.height = (canvas.scrollHeight * scale) + 'px';
+  });
+}
+
+function buildDevReportHTML() {
+  const mel = filtradas();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let filtroDesc = 'Todos os períodos';
+  if (_mes !== null && _ano !== null) filtroDesc = `${MESES_PT[_mes - 1]} de ${_ano}`;
+  else if (_mes !== null) filtroDesc = MESES_PT[_mes - 1] + ' — todos os anos';
+  else if (_ano !== null) filtroDesc = `Ano ${_ano}`;
+
+  // Expandir itens por dev (splitDevs)
+  const splitDevs = str => str ? str.split(/[\/,]/).map(s => s.trim()).filter(Boolean) : [];
+
+  const devMap = {};
+  mel.forEach(m => {
+    const devs = splitDevs(m.dev);
+    if (!devs.length) {
+      if (!devMap['—']) devMap['—'] = [];
+      devMap['—'].push(m);
+    } else {
+      devs.forEach(d => {
+        if (!devMap[d]) devMap[d] = [];
+        devMap[d].push(m);
+      });
+    }
+  });
+
+  const devKeys = Object.keys(devMap).sort((a, b) => a === '—' ? 1 : b === '—' ? -1 : a.localeCompare(b));
+
+  const devsHTML = devKeys.map(devName => {
+    const items = [...devMap[devName]].sort((a, b) => {
+      if (!a.entrega && !b.entrega) return 0;
+      if (!a.entrega) return 1;
+      if (!b.entrega) return -1;
+      return a.entrega.localeCompare(b.entrega);
+    });
+
+    const rows = items.map(m => {
+      const tema = _temas.find(t => t.id === m.tema_id)?.nome || '—';
+      const sk = getStatusKey(m);
+      const bm = STATUS_BADGE_PRINT[sk] || STATUS_BADGE_PRINT.backlog;
+      const entrega = m.entrega ? formatDate(m.entrega) : '<span style="color:#6E6A62;">Sem previsão</span>';
+      const inicio  = m.inicio  ? formatDate(m.inicio)  : '—';
+      return `<tr>
+        <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:13px;color:#ECEAE2;font-weight:500;vertical-align:top;">${m.titulo}</td>
+        <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:12px;color:#A8A49A;white-space:nowrap;vertical-align:top;">${tema}</td>
+        <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:12px;color:#A8A49A;white-space:nowrap;vertical-align:top;">${inicio}</td>
+        <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:12px;white-space:nowrap;vertical-align:top;">${entrega}</td>
+        <td style="padding:9px 12px;border-bottom:1px solid #252522;vertical-align:top;">
+          <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:${bm.bg};color:${bm.color};white-space:nowrap;">${bm.label}</span>
+        </td>
+      </tr>`;
+    }).join('');
+
+    return `<div style="margin-bottom:28px;">
+      <div style="display:flex;align-items:center;gap:10px;padding-bottom:8px;border-bottom:2px solid #2E2E2B;margin-bottom:0;">
+        <span style="font-size:15px;font-weight:700;color:#ECEAE2;">👤 ${devName}</span>
+        <span style="font-size:12px;color:#6E6A62;">${items.length} ${items.length===1?'demanda':'demandas'}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#161614;">
+            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;">Demanda</th>
+            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">Tema</th>
+            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">Início</th>
+            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">Entrega</th>
+            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;">Status</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+
+  return `<div id="export-canvas" style="background:#0E0E0D;color:#ECEAE2;font-family:'Inter',sans-serif;padding:32px;min-width:800px;width:800px;">
+    <div style="border-bottom:1px solid #2E2E2B;padding-bottom:20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;">
+      <div>
+        <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">👤 Previsão por Desenvolvedor</div>
+        <div style="font-size:13px;color:#A8A49A;">Audax Capital · Produto &amp; Tecnologia</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:12px;color:#6E6A62;">${filtroDesc}</div>
+        <div style="font-size:11px;color:#6E6A62;margin-top:2px;">Gerado em ${dateStr}</div>
+      </div>
+    </div>
+    ${devsHTML}
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #2E2E2B;font-size:11px;color:#6E6A62;text-align:center;">
+      capfernando.github.io/RoadMap
+    </div>
+  </div>`;
 }
 </script>
 </body>
