@@ -728,10 +728,13 @@ function renderTemas() {
 function renderMelhorias() {
   const el = document.getElementById('lista-melhorias');
   if (!state.melhorias.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria cadastrada.</div>'; return; }
-  const lista = state.melhorias.filter(m =>
-    (!_filtroStatus || statusKey(m) === _filtroStatus) &&
-    (!_filtroTema   || m.tema_id === _filtroTema)
-  );
+  const HIDDEN_BY_DEFAULT = ['concluido', 'negada'];
+  const lista = state.melhorias.filter(m => {
+    const sk = statusKey(m);
+    if (!_filtroStatus && HIDDEN_BY_DEFAULT.includes(sk)) return false;
+    return (!_filtroStatus || sk === _filtroStatus) &&
+           (!_filtroTema   || m.tema_id === _filtroTema);
+  });
   if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
   const STATUS_ORDER = { concluida:-1, iniciada:0, estimada:1, regra:2, refinamento:3, recebida:4, negada:5 };
   const sorted = [...lista].sort((a,b) => {
@@ -743,25 +746,46 @@ function renderMelhorias() {
     if (so !== 0) return so;
     return a.titulo.localeCompare(b.titulo);
   });
-  el.innerHTML = sorted.map(m => {
-    const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '—';
-    const sk = statusKey(m);
-    const badge = `<span class="badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
-    let sub = tema;
-    if (m.dev) sub += ` · ${m.dev}`;
-    if (m.entrega) sub += ` · Entrega: ${formatDate(m.entrega)}`;
-    return `<div class="card">
-      <div class="card-info">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
-          <div class="card-nome">${m.titulo}</div>${badge}
+  // Group by tema
+  const temaOrder = state.temas.map(t => t.id);
+  const groups = {};
+  sorted.forEach(m => {
+    const key = m.tema_id || '__sem_tema__';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(m);
+  });
+  const groupKeys = Object.keys(groups).sort((a, b) => {
+    const ia = temaOrder.indexOf(a), ib = temaOrder.indexOf(b);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  el.innerHTML = groupKeys.map(tKey => {
+    const temaNome = tKey === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === tKey)?.nome || '—');
+    const cards = groups[tKey].map(m => {
+      const sk = statusKey(m);
+      const badge = `<span class="badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
+      let sub = '';
+      if (m.dev) sub += m.dev;
+      if (m.entrega) sub += (sub ? ' · ' : '') + `Entrega: ${formatDate(m.entrega)}`;
+      return `<div class="card">
+        <div class="card-info">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+            <div class="card-nome">${m.titulo}</div>${badge}
+          </div>
+          ${sub ? `<div class="card-sub">${sub}</div>` : ''}
+          ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${m.descricao.substring(0,120)}${m.descricao.length>120?'…':''}</div>` : ''}
         </div>
-        <div class="card-sub">${sub}</div>
-        ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${m.descricao.substring(0,120)}${m.descricao.length>120?'…':''}</div>` : ''}
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-secondary btn-sm" onclick="openModalMelhoria('${m.id}')">Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteMelhoria('${m.id}')">Excluir</button>
-      </div>
+        <div class="card-actions">
+          <button class="btn btn-secondary btn-sm" onclick="openModalMelhoria('${m.id}')">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMelhoria('${m.id}')">Excluir</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:18px;">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;">${temaNome} <span style="font-weight:400;opacity:.7;">(${groups[tKey].length})</span></div>
+      ${cards}
     </div>`;
   }).join('');
 }
