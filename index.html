@@ -963,14 +963,32 @@ async function downloadExport(type) {
       a.click();
     } else {
       const { jsPDF } = window.jspdf;
-      const imgData = canvas.toDataURL('image/png');
-      const pxW = canvas.width, pxH = canvas.height;
-      const ratio = pxH / pxW;
-      const pdfW = 210; // A4 mm
-      const pdfH = Math.min(pdfW * ratio, 297);
-      const orientation = ratio > 1 ? 'p' : 'l';
-      const pdf = new jsPDF({ orientation, unit: 'mm', format: orientation === 'p' ? 'a4' : [pdfW, pdfW * ratio] });
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfW * ratio);
+      const pxW = canvas.width;
+      const pxH = canvas.height;
+      const pdfPageW = 210;  // mm A4
+      const pdfPageH = 297;  // mm A4
+      const mmPerPx = pdfPageW / pxW;
+      const pageHeightPx = Math.floor(pdfPageH / mmPerPx);
+
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+      let yOffset = 0;
+      let pageNum = 0;
+      while (yOffset < pxH) {
+        if (pageNum > 0) pdf.addPage();
+        const sliceH = Math.min(pageHeightPx, pxH - yOffset);
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = pxW;
+        sliceCanvas.height = sliceH;
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.fillStyle = '#0E0E0D';
+        ctx.fillRect(0, 0, pxW, sliceH);
+        ctx.drawImage(canvas, 0, -yOffset);
+        const sliceData = sliceCanvas.toDataURL('image/png');
+        pdf.addImage(sliceData, 'PNG', 0, 0, pdfPageW, sliceH * mmPerPx);
+        yOffset += sliceH;
+        pageNum++;
+      }
       pdf.save(`roadmap-audax-${stamp}.pdf`);
     }
   } catch(e) {
