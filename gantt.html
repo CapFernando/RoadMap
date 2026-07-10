@@ -263,6 +263,14 @@
     }
     .gantt-card:hover { filter: brightness(1.2); z-index: 6; }
     .gantt-card.dragging { opacity: 0.4; }
+    .card-drag-handle {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: rgba(255,255,255,.25); cursor: grab;
+      user-select: none; letter-spacing: -1px;
+    }
+    .card-drag-handle:hover { color: rgba(255,255,255,.7); }
+    .gantt-card .card-row1 { padding-left: 14px; }
     .gantt-card .card-row1 { display: flex; align-items: center; gap: 5px; overflow: hidden; }
     .gantt-card .card-label { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; line-height: 1.2; }
     .gantt-card .card-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
@@ -1118,11 +1126,14 @@ function renderGantt() {
       html += `<div class="gantt-card gcard-${sp}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
-        draggable="true"
-        onmousedown="onCardMouseDown(event)"
-        ondragstart="onCardDragStart(event,'${m.id}')"
+        onclick="openModal('${m.id}')"
         onmouseenter="showTooltip(event,'${m.id}')"
         onmouseleave="hideTooltip()">
+        <span class="card-drag-handle"
+          draggable="true"
+          ondragstart="onCardDragStart(event,'${m.id}')"
+          onclick="event.stopPropagation()"
+          title="Arrastar">⠿</span>
         <div class="card-row1">
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
@@ -1175,23 +1186,7 @@ function positionTooltip(e, el) {
 
 // ── DRAG & DROP ───────────────────────────────────────────────────────────
 let dragData = { type: null, id: null }; // type: 'card' | 'backlog'
-let _cardMouseDownAt = { t: 0, x: 0, y: 0 };
-
-// Registra posição/tempo no mousedown — usado para distinguir clique de drag
-function onCardMouseDown(e) {
-  _cardMouseDownAt = { t: Date.now(), x: e.clientX, y: e.clientY };
-}
-
 function onCardDragStart(e, id) {
-  const dt = Date.now() - _cardMouseDownAt.t;
-  const dx = Math.abs(e.clientX - _cardMouseDownAt.x);
-  const dy = Math.abs(e.clientY - _cardMouseDownAt.y);
-  // Clique rápido sem movimento → cancela drag e abre modal
-  if (dt < 250 && dx < 5 && dy < 5) {
-    e.preventDefault();
-    openModal(id);
-    return;
-  }
   dragData = { type: 'card', id };
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => {
