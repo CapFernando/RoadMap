@@ -39,6 +39,15 @@
     .header-left { display:flex; align-items:center; gap:12px; }
     .header-left h1 { font-size:17px; font-weight:600; }
     .dev-badge { background:var(--blue-bg); color:var(--blue-tx); border-radius:20px; padding:4px 12px; font-size:13px; font-weight:600; }
+    .dev-switcher { position:relative; display:flex; align-items:center; gap:6px; background:var(--blue-bg); color:var(--blue-tx); border-radius:20px; padding:4px 12px; font-size:13px; font-weight:600; cursor:pointer; user-select:none; }
+    .dev-switcher:hover { opacity:.85; }
+    .dev-switcher-arrow { font-size:11px; opacity:.7; }
+    .dev-dropdown { display:none; position:absolute; top:calc(100% + 8px); left:0; min-width:180px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 8px 24px #0008; z-index:200; overflow:hidden; }
+    .dev-dropdown.open { display:block; }
+    .dev-dropdown-item { padding:10px 14px; font-size:13px; color:var(--text); cursor:pointer; transition:background .1s; white-space:nowrap; }
+    .dev-dropdown-item:hover { background:var(--bg3); }
+    .dev-dropdown-item.active { color:var(--blue-tx); font-weight:600; }
+    .dev-dropdown-sep { border-top:1px solid var(--border); margin:4px 0; }
     .header-right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .btn { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; }
     .btn:hover { opacity:.85; }
@@ -154,7 +163,11 @@
   <header>
     <div class="header-left">
       <h1>🗂️ Meu Painel</h1>
-      <span class="dev-badge" id="dev-label">—</span>
+      <div class="dev-switcher" id="dev-switcher" onclick="toggleDevDropdown(event)">
+        <span id="dev-label">—</span>
+        <span class="dev-switcher-arrow">▾</span>
+        <div class="dev-dropdown" id="dev-dropdown"></div>
+      </div>
     </div>
     <div class="header-right">
       <span id="ultima-atualizacao" style="font-size:12px;color:var(--text3);">—</span>
@@ -162,7 +175,6 @@
       <button class="btn btn-secondary btn-sm" onclick="openTemasModal()">🏷 Temas</button>
       <button class="btn btn-secondary btn-sm" onclick="forceRefresh()">↻ Atualizar</button>
       <a href="index.html" class="btn btn-secondary btn-sm" target="_blank">📊 Dashboard</a>
-      <button class="btn btn-secondary btn-sm" onclick="trocarDev()">Trocar dev</button>
     </div>
   </header>
 
@@ -597,6 +609,40 @@ function trocarDev() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-error').textContent = '';
 }
+
+function toggleDevDropdown(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('dev-dropdown');
+  const isOpen = dd.classList.contains('open');
+  if (!isOpen) buildDevDropdown();
+  dd.classList.toggle('open', !isOpen);
+}
+
+function buildDevDropdown() {
+  const dd = document.getElementById('dev-dropdown');
+  const devs = state.desenvolvedores || [];
+  const items = devs.map(d => {
+    const isCur = d === currentDev;
+    return `<div class="dev-dropdown-item${isCur?' active':''}" onclick="switchDevInline('${d}')">${isCur ? '✓ ' : ''}${d}</div>`;
+  }).join('');
+  dd.innerHTML = items + `<div class="dev-dropdown-sep"></div><div class="dev-dropdown-item" onclick="trocarDev()">🔄 Tela de seleção</div>`;
+}
+
+function switchDevInline(name) {
+  document.getElementById('dev-dropdown').classList.remove('open');
+  if (name === currentDev) return;
+  currentDev = name;
+  localStorage.setItem('rm_dev_name', name);
+  document.getElementById('dev-label').textContent = name;
+  _temaFilter = null;
+  buildTemaChips();
+  renderKanban();
+}
+
+// Fecha dropdown ao clicar fora
+document.addEventListener('click', () => {
+  document.getElementById('dev-dropdown')?.classList.remove('open');
+});
 
 // ─── FILTERS ─────────────────────────────────────────────────────
 function buildAnoFilter() {
