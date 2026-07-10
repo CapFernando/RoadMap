@@ -1420,8 +1420,35 @@ async function addDev() {
 
 async function removeDev(i) {
   const name = state.desenvolvedores[i];
-  if (!confirm(`Remover "${name}"?`)) return;
-  state.desenvolvedores.splice(i, 1);
+  const isTeste = name.trim().toLowerCase() === 'teste';
+
+  if (isTeste) {
+    // Dev teste: remove o dev e todas as demandas vinculadas
+    const qtd = (state.melhorias || []).filter(m =>
+      (m.dev || '').split(/[\/,]/).map(d => d.trim().toLowerCase()).includes('teste')
+    ).length;
+    const msg = qtd > 0
+      ? `Remover "${name}" e apagar ${qtd} demanda(s) vinculada(s)?`
+      : `Remover "${name}"?`;
+    if (!confirm(msg)) return;
+    if (qtd > 0 && !confirm('Confirmar exclusão permanente das demandas de Teste?')) return;
+    state.melhorias = (state.melhorias || []).filter(m =>
+      !(m.dev || '').split(/[\/,]/).map(d => d.trim().toLowerCase()).includes('teste')
+    );
+    state.desenvolvedores.splice(i, 1);
+  } else {
+    // Dev normal: só permite remover se não tiver demandas
+    const temDemandas = (state.melhorias || []).some(m =>
+      (m.dev || '').split(/[\/,]/).map(d => d.trim()).includes(name)
+    );
+    if (temDemandas) {
+      toast(`"${name}" possui demandas ativas e não pode ser removido.`, 'err');
+      return;
+    }
+    if (!confirm(`Remover "${name}"?`)) return;
+    state.desenvolvedores.splice(i, 1);
+  }
+
   renderDevsList();
   renderFilters();
   renderGantt();
