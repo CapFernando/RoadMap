@@ -168,11 +168,17 @@
     @media(max-width:900px){ .ger-charts{ grid-template-columns:1fr; } }
     .ger-chart-box {
       background:var(--bg2); border:1px solid var(--border); border-radius:14px;
-      padding:22px 20px; display:flex; flex-direction:column; align-items:center;
+      padding:22px 20px; display:flex; flex-direction:column;
     }
-    .ger-chart-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:18px; letter-spacing:.01em; align-self:flex-start; }
-    .ger-chart-canvas-wrap { width:100%; max-width:340px; }
+    .ger-chart-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:16px; letter-spacing:.01em; }
+    .ger-chart-canvas-wrap { width:100%; max-width:260px; align-self:center; }
     .ger-chart-empty { font-size:13px; color:var(--text3); padding:40px 0; text-align:center; }
+    .ger-legend { margin-top:18px; display:flex; flex-direction:column; gap:7px; width:100%; }
+    .ger-legend-item { display:flex; align-items:center; gap:10px; font-size:13px; font-weight:500; color:#ECEAE2; line-height:1.3; }
+    .ger-legend-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+    .ger-legend-name { flex:1; color:#ECEAE2; }
+    .ger-legend-val { font-weight:700; color:#ECEAE2; white-space:nowrap; }
+    .ger-legend-pct { font-size:11px; color:#A8A49A; white-space:nowrap; min-width:36px; text-align:right; }
     .ger-kpi-delta { display:block; font-size:11px; font-weight:500; margin-top:4px; }
     .delta-up   { color:var(--green); }
     .delta-down { color:var(--red); }
@@ -1120,14 +1126,29 @@ function renderGerencial() {
     { id:'chart-real-dev',  title:'H. Realizadas por Dev',   data: realPorDev  },
   ];
 
-  document.getElementById('ger-charts').innerHTML = chartDefs.map(c =>
-    `<div class="ger-chart-box">
+  document.getElementById('ger-charts').innerHTML = chartDefs.map(c => {
+    const labels = Object.keys(c.data);
+    const vals   = labels.map(k => Math.round(c.data[k]));
+    const total  = vals.reduce((s,v)=>s+v,0)||1;
+    // ordenar do maior p/ menor para legenda HTML
+    const order  = [...labels.map((_,i)=>i)].sort((a,b)=>vals[b]-vals[a]);
+    const legendHTML = order.map(i => {
+      const pct = Math.round(vals[i]/total*100);
+      return `<div class="ger-legend-item">
+        <span class="ger-legend-dot" style="background:${GER_COLORS[i%GER_COLORS.length]}"></span>
+        <span class="ger-legend-name">${labels[i]}</span>
+        <span class="ger-legend-val">${vals[i]}h</span>
+        <span class="ger-legend-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+    return `<div class="ger-chart-box">
       <div class="ger-chart-title">${c.title}</div>
-      ${!Object.keys(c.data).length
+      ${!labels.length
         ? '<div class="ger-chart-empty">Sem dados no período</div>'
-        : `<div class="ger-chart-canvas-wrap"><canvas id="${c.id}"></canvas></div>`}
-    </div>`
-  ).join('');
+        : `<div class="ger-chart-canvas-wrap"><canvas id="${c.id}"></canvas></div>
+           <div class="ger-legend">${legendHTML}</div>`}
+    </div>`;
+  }).join('');
 
   // Registra o plugin apenas uma vez
   if (typeof ChartDataLabels !== 'undefined' && !Chart._dlRegistered) {
@@ -1158,49 +1179,22 @@ function renderGerencial() {
       },
       options: {
         responsive: true,
-        cutout: '48%',
-        layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } },
+        cutout: '50%',
+        layout: { padding: 8 },
         plugins: {
-          legend: {
-            position: 'bottom',
-            align: 'start',
-            labels: {
-              color: '#ECEAE2',
-              font: { size: 13, weight: '600', family: 'Inter' },
-              boxWidth: 13,
-              boxHeight: 13,
-              padding: 12,
-              usePointStyle: true,
-              pointStyle: 'circle',
-              // Legenda ordenada do maior para menor com valores embutidos
-              generateLabels: chart => {
-                const ds = chart.data.datasets[0];
-                const order = [...ds.data.map((v,i)=>i)].sort((a,b)=>ds.data[b]-ds.data[a]);
-                return order.map(i => ({
-                  text: `${chart.data.labels[i]}  —  ${ds.data[i]}h  (${Math.round(ds.data[i]/total*100)}%)`,
-                  fillStyle: ds.backgroundColor[i],
-                  strokeStyle: ds.backgroundColor[i],
-                  lineWidth: 0,
-                  hidden: false,
-                  index: i,
-                  pointStyle: 'circle',
-                }));
-              }
-            }
-          },
+          legend: { display: false },
           tooltip: {
             callbacks: {
-              label: ctx => ` ${ctx.raw}h — ${Math.round(ctx.raw/total*100)}% do total`
+              label: ctx => ` ${ctx.raw}h — ${Math.round(ctx.raw/total*100)}%`
             }
           },
           datalabels: {
-            // Só mostra label na fatia se ela tem >=12% — evita sobreposição em fatias pequenas
             display: ctx => ctx.dataset.data[ctx.dataIndex] / total >= 0.12,
             color: '#fff',
-            font: { size: 13, weight: '800', family: 'Inter' },
-            textShadowColor: 'rgba(0,0,0,.8)',
-            textShadowBlur: 8,
-            formatter: (val) => `${val}h\n${Math.round(val/total*100)}%`,
+            font: { size: 12, weight: '800', family: 'Inter' },
+            textShadowColor: 'rgba(0,0,0,.9)',
+            textShadowBlur: 6,
+            formatter: val => `${val}h\n${Math.round(val/total*100)}%`,
             textAlign: 'center',
             anchor: 'center',
             align: 'center',
