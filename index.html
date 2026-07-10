@@ -457,7 +457,7 @@ function buildCharts(temas, melhorias) {
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
 let _temas = [], _melhorias = [], _devs = [];
-let _ano = null, _mes = null, _dev = null, _statusFilter = null;
+let _ano = null, _mes = null, _dev = null, _statusFilter = null, _temaFilter = null;
 
 // Deriva o status unificado de um item (alinhado com Admin e Gantt)
 function getStatusKey(m) {
@@ -494,6 +494,7 @@ function filtradas() {
       if (_mes !== null && ref.getMonth() !== _mes) return false;
     }
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
+    if (_temaFilter && m.tema_id !== _temaFilter) return false;
     if (_statusFilter) return getStatusKey(m) === _statusFilter;
     if (['concluido','negada'].includes(getStatusKey(m))) return false;
     return true;
@@ -511,6 +512,7 @@ function renderConteudo() {
       if (_mes !== null && ref.getMonth() !== _mes) return false;
     }
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
+    if (_temaFilter && m.tema_id !== _temaFilter) return false;
     return true;
   });
   const counts = { total: melSemStatus.length };
@@ -576,6 +578,12 @@ function buildFilterBar() {
     `<button class="filter-btn ${_dev===d?'active':''}" onclick="setFiltroDev('${d.replace(/'/g,"\\'")}')">${d}</button>`
   ).join('');
 
+  const temaChips = _temas.map((t, i) => {
+    const cor = TEMA_CORES[i % TEMA_CORES.length];
+    const ativo = _temaFilter === t.id;
+    return `<button class="filter-btn ${ativo?'active':''}" onclick="setFiltroTema('${t.id}')" style="${ativo?`background:${cor}20;border-color:${cor};color:${cor};`:''}">${t.nome}</button>`;
+  }).join('');
+
   document.getElementById('filter-bar').innerHTML = `
     <div class="filter-row">
       <span>Período:</span>
@@ -595,7 +603,19 @@ function buildFilterBar() {
       <button class="filter-btn ${!_dev ? 'active' : ''}" onclick="setFiltroDev(null)">Todos</button>
       ${devChips}
     </div>` : ''}
+    ${_temas.length > 0 ? `
+    <div class="filter-row">
+      <span>Tema:</span>
+      <button class="filter-btn ${!_temaFilter ? 'active' : ''}" onclick="setFiltroTema(null)">Todos</button>
+      ${temaChips}
+    </div>` : ''}
   `;
+}
+
+function setFiltroTema(id) {
+  _temaFilter = (id === _temaFilter) ? null : id;
+  buildFilterBar();
+  renderConteudo();
 }
 
 function setFiltro(ano, mes) {
