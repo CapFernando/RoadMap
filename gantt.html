@@ -1120,7 +1120,7 @@ function renderGantt() {
         data-id="${m.id}"
         draggable="true"
         ondragstart="onCardDragStart(event,'${m.id}')"
-        onclick="openModal('${m.id}')"
+        ondblclick="openModal('${m.id}')"
         onmouseenter="showTooltip(event,'${m.id}')"
         onmouseleave="hideTooltip()">
         <div class="card-row1">
