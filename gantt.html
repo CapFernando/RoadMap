@@ -1128,11 +1128,13 @@ function renderGantt() {
       html += `<div class="gantt-card gcard-${sp}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
-        draggable="true"
-        ondragstart="onCardDragStart(event,'${m.id}')"
-        ondragend="onCardDragEnd(event,'${m.id}')"
+        onclick="openModal('${m.id}')"
         onmouseenter="showTooltip(event,'${m.id}')"
         onmouseleave="hideTooltip()">
+        <span class="card-drag-handle"
+          draggable="true"
+          ondragstart="onCardDragStart(event,'${m.id}')"
+          ondragend="onCardDragEnd(event,'${m.id}')">⠿⠿</span>
         <div class="card-row1">
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
@@ -1151,24 +1153,7 @@ function renderGantt() {
   attachCardClickListeners();
 }
 
-function setupGanttCardListener() {
-  const table = document.getElementById('gantt-table');
-  let _tap = { time: 0, id: null };
-  table.addEventListener('mousedown', e => {
-    const card = e.target.closest('.gantt-card');
-    if (!card) return;
-    const id  = card.dataset.id;
-    const now = Date.now();
-    if (now - _tap.time < 400 && _tap.id === id) {
-      e.preventDefault();
-      e.stopPropagation();
-      _tap = { time: 0, id: null };
-      openModal(id);
-    } else {
-      _tap = { time: now, id };
-    }
-  }, true); // capture phase — dispara antes do drag
-}
+function setupGanttCardListener() {} // click handled via onclick on card
 
 function attachCardClickListeners() {} // mantido por compatibilidade, não faz mais nada
 
@@ -1213,9 +1198,10 @@ function onCardDragStart(e, id) {
   _cardWasDragged = true;
   dragData = { type: 'card', id };
   e.dataTransfer.effectAllowed = 'move';
+  const card = e.target.closest('.gantt-card');
+  if (card) e.dataTransfer.setDragImage(card, 20, card.offsetHeight / 2);
   setTimeout(() => {
-    const el = document.querySelector(`.gantt-card[data-id="${id}"]`);
-    if (el) el.classList.add('dragging');
+    if (card) card.classList.add('dragging');
   }, 0);
 }
 
