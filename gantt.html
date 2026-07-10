@@ -698,7 +698,8 @@ window.addEventListener('resize', () => {
 });
 
 // ── GITHUB ────────────────────────────────────────────────────────────────
-const _gDeletedIds = new Set();
+const _gDeletedIds  = new Set();
+const _gDeletedDevs = new Set(); // devs explicitamente removidos — nunca re-merge do servidor
 let   _saveTimer   = null;
 let   _ganttPollActive = false;
 async function ganttCheckUpdates() {
@@ -783,9 +784,11 @@ async function saveToGitHub() {
       const localTemaIds     = new Set(state.temas.map(t => t.id));
       (serverData.temas     || []).forEach(t => { if (!localTemaIds.has(t.id)     && !_gDeletedIds.has(t.id)) state.temas.push(t); });
       (serverData.melhorias || []).forEach(m => { if (!localMelhoriaIds.has(m.id) && !_gDeletedIds.has(m.id)) state.melhorias.push(m); });
-      // Merge de desenvolvedores: preserva devs do servidor que não estão na memória local
+      // Merge de desenvolvedores: preserva devs do servidor, mas respeita remoções explícitas
       const devSet = new Set(state.desenvolvedores.flatMap(d => splitDevs(d)));
-      (serverData.desenvolvedores || []).forEach(d => splitDevs(d).forEach(sd => devSet.add(sd)));
+      (serverData.desenvolvedores || []).forEach(d =>
+        splitDevs(d).forEach(sd => { if (!_gDeletedDevs.has(sd.toLowerCase())) devSet.add(sd); })
+      );
       state.desenvolvedores = [...devSet];
       // Preserva feriados do servidor se o Gantt não os alterou localmente
       if (!state.feriados || !state.feriados.length) state.feriados = serverData.feriados || [];
@@ -1436,17 +1439,21 @@ async function removeDev(i) {
       !(m.dev || '').split(/[\/,]/).map(d => d.trim().toLowerCase()).includes('teste')
     );
     state.desenvolvedores.splice(i, 1);
+    _gDeletedDevs.add('teste');
   } else {
-    // Dev normal: só permite remover se não tiver demandas
-    const temDemandas = (state.melhorias || []).some(m =>
-      (m.dev || '').split(/[\/,]/).map(d => d.trim()).includes(name)
+    // Dev normal: só bloqueia se tiver demandas ATIVAS (excluindo concluído/negada)
+    const STATUS_BLOQUEIO = ['backlog','levantar_req','planejado','em_andamento','deploy','atrasado'];
+    const demandasAtivas = (state.melhorias || []).filter(m =>
+      (m.dev || '').split(/[\/,]/).map(d => d.trim()).includes(name) &&
+      STATUS_BLOQUEIO.includes(m.status_planejamento || 'backlog')
     );
-    if (temDemandas) {
-      toast(`"${name}" possui demandas ativas e não pode ser removido.`, 'err');
+    if (demandasAtivas.length > 0) {
+      toast(`"${name}" possui ${demandasAtivas.length} demanda(s) ativa(s) e não pode ser removido.`, 'err');
       return;
     }
     if (!confirm(`Remover "${name}"?`)) return;
     state.desenvolvedores.splice(i, 1);
+    _gDeletedDevs.add(name.toLowerCase());
   }
 
   renderDevsList();
