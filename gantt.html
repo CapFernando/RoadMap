@@ -1134,7 +1134,7 @@ function renderGantt() {
         draggable="true"
         ondragstart="onCardDragStart(event,'${m.id}')"
         ondragend="onCardDragEnd(event,'${m.id}')"
-        ondblclick="openModal('${m.id}')"
+        onmousedown="onCardMouseDown(event,'${m.id}')"
         onmouseenter="showTooltip(event,'${m.id}')"
         onmouseleave="hideTooltip()">
         <span class="card-drag-handle">⠿⠿</span>
@@ -1157,6 +1157,20 @@ function renderGantt() {
 }
 
 function setupGanttCardListener() {} // no-op
+
+let _lastCardTap = { time: 0, id: null };
+function onCardMouseDown(e, id) {
+  if (e.button !== 0) return; // apenas botão esquerdo
+  const now = Date.now();
+  if (_lastCardTap.id === id && (now - _lastCardTap.time) < 400) {
+    _lastCardTap = { time: 0, id: null };
+    e.preventDefault();  // impede que o segundo clique inicie um drag
+    e.stopPropagation();
+    openModal(id);
+  } else {
+    _lastCardTap = { time: now, id };
+  }
+}
 
 
 function attachCardClickListeners() {} // mantido por compatibilidade, não faz mais nada
