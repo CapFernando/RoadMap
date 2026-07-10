@@ -199,6 +199,7 @@
     .badge-levantar_req { background:#2A1A4E; color:#C9AEFF; }
     .badge-planejado    { background:#0C3260; color:#9BC8F8; }
     .badge-em_andamento{ background:#1E4208; color:#B2E07A; }
+    .badge-deploy      { background:#4A2800; color:#FFB84D; }
     .badge-concluido   { background:#063D30; color:#7EECD8; }
     .badge-atrasado    { background:#5C0A0A; color:#F9A0A0; }
     .badge-negada      { background:#5C0A0A; color:#F9A0A0; }
@@ -371,6 +372,7 @@
           <option value="levantar_req">Levantar Requisitos</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em Andamento</option>
+          <option value="deploy">Deploy</option>
           <option value="concluido">Concluído</option>
           <option value="atrasado">Atrasado</option>
           <option value="negada">Negada</option>
@@ -644,6 +646,7 @@ const STATUS_LABELS = {
   levantar_req: 'Levantar Requisitos',
   planejado:    'Planejado',
   em_andamento: 'Em Andamento',
+  deploy:       'Deploy',
   concluido:    'Concluído',
   atrasado:     'Atrasado',
   negada:       'Negada',
@@ -700,6 +703,7 @@ function renderStatusFilters() {
     { key: 'levantar_req', label: 'Levantar Requisitos', cls: 'levantar_req' },
     { key: 'planejado',    label: 'Planejado',            cls: 'planejado' },
     { key: 'em_andamento',label: 'Em Andamento',  cls: 'em_andamento' },
+    { key: 'deploy',      label: 'Deploy',        cls: 'deploy' },
     { key: 'concluido',   label: 'Concluído',     cls: 'concluido' },
     { key: 'atrasado',    label: 'Atrasado',      cls: 'atrasado' },
     { key: 'negada',      label: 'Negada',        cls: 'negada' },
@@ -865,7 +869,7 @@ function onStatusChange() {
 }
 
 // mapa sp → status legado (para compatibilidade com outros campos)
-const SP_TO_STATUS = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
+const SP_TO_STATUS = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
 
 function saveMelhoria() {
   const titulo = document.getElementById('m-titulo').value.trim();

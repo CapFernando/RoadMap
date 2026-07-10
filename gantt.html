@@ -113,6 +113,7 @@
     .ind-chip.levantar_req   { background:#2A1A4E; border-color:#5A3A9E; color:#C9AEFF; }
     .ind-chip.planejado      { background:#0C3260; border-color:#1a5080; color:#9BC8F8; }
     .ind-chip.em_andamento   { background:#5C3608; border-color:#8C5010; color:#F9C97A; }
+    .ind-chip.deploy         { background:#4A2800; border-color:#7A4800; color:#FFB84D; }
     .ind-chip.concluido      { background:#1E4208; border-color:#306010; color:#B2E07A; }
     .ind-chip.atrasado       { background:#5C0A0A; border-color:#8C1010; color:#F9A0A0; }
     .ind-chip.active-filter { outline: 2px solid rgba(255,255,255,0.3); outline-offset: 1px; }
@@ -273,6 +274,7 @@
     .gcard-levantar_req { background:#2A1A4E; border-color:#5A3A9E; color:#C9AEFF; }
     .gcard-planejado    { background:#0C3260; border-color:#1a5080; color:#9BC8F8; }
     .gcard-em_andamento { background:#5C3608; border-color:#8C5010; color:#F9C97A; }
+    .gcard-deploy       { background:#4A2800; border-color:#7A4800; color:#FFB84D; }
     .gcard-concluido    { background:#1E4208; border-color:#306010; color:#B2E07A; }
     .gcard-atrasado     { background:#5C0A0A; border-color:#8C1010; color:#F9A0A0; }
 
@@ -425,6 +427,7 @@
       <option value="levantar_req">Levantar Requisitos</option>
       <option value="planejado">Planejado</option>
       <option value="em_andamento">Em andamento</option>
+      <option value="deploy">Deploy</option>
       <option value="concluido">Concluído</option>
       <option value="atrasado">Atrasado</option>
     </select>
@@ -493,6 +496,7 @@
           <option value="levantar_req">Levantar Requisitos</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em andamento</option>
+          <option value="deploy">Deploy</option>
           <option value="concluido">Concluído</option>
           <option value="atrasado">Atrasado</option>
         </select>
@@ -874,12 +878,12 @@ function renderFilters() {
 // ── INDICATORS ────────────────────────────────────────────────────────────
 function renderIndicators() {
   const visible = state.melhorias.filter(m => !m.oculto);
-  const counts = { backlog:0, levantar_req:0, planejado:0, em_andamento:0, concluido:0, atrasado:0 };
+  const counts = { backlog:0, levantar_req:0, planejado:0, em_andamento:0, deploy:0, concluido:0, atrasado:0 };
   visible.forEach(m => {
     const sp = m.status_planejamento || 'backlog';
     if (counts[sp] !== undefined) counts[sp]++;
   });
-  const labels = { backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado', em_andamento:'Em andamento', concluido:'Concluído', atrasado:'Atrasado' };
+  const labels = { backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado', em_andamento:'Em andamento', deploy:'Deploy', concluido:'Concluído', atrasado:'Atrasado' };
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
   const todosChip = `<span class="ind-chip ${filters.indicator === '' ? 'planejado active-filter' : ''}" style="background:var(--bg3);border-color:var(--border2);color:var(--text2)" onclick="toggleIndicatorFilter('')">Todos <strong>${total}</strong></span>`;
   const chips = Object.keys(counts).map(k => {
@@ -1410,7 +1414,7 @@ function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 function closeIfOverlay(e, id) { if (e.target === e.currentTarget) closeModal(id); }
 
 function spToStatus(sp) {
-  const map = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
+  const map = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
   return map[sp] || 'recebida';
 }
 
