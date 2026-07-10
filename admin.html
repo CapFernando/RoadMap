@@ -311,6 +311,7 @@
       <button class="btn btn-secondary btn-sm" onclick="window.location.href='gantt.html'">📅 Planejamento</button>
       <button class="btn btn-secondary btn-sm" onclick="window.open('index.html','_blank')">Ver painel público</button>
       <button class="btn btn-success btn-sm" onclick="saveToGitHub()">💾 Publicar alterações</button>
+      <button class="btn btn-secondary btn-sm" onclick="copyAccessLink()" title="Gera link de acesso para novas máquinas">🔗 Link de acesso</button>
       <button class="btn btn-secondary btn-sm" onclick="doLogout()">Sair</button>
     </div>
   </header>
@@ -472,10 +473,20 @@ let fileSha = null;
 const _deletedIds = new Set();
 
 // ─── LOGIN ────────────────────────────────────────────────────────
+// Tenta extrair token do fragmento da URL (#token=ghp_...) — link gerado por outro admin
+(function() {
+  const hash = location.hash.slice(1);
+  const params = new URLSearchParams(hash);
+  const t = params.get('token');
+  if (t && t.startsWith('ghp_')) {
+    localStorage.setItem('rm_token', t);
+    history.replaceState(null, '', location.pathname + location.search); // limpa o hash da URL
+  }
+})();
+
 let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
 
 function initLoginScreen() {
-  // Mostra campo de token se não há token disponível (outra máquina, sem config.js)
   if (!runtimeToken) document.getElementById('token-field').style.display = 'block';
 
   if (localStorage.getItem('rm_logged') === '1' && runtimeToken) {
@@ -483,6 +494,16 @@ function initLoginScreen() {
     document.getElementById('admin-app').style.display = 'block';
     loadFromGitHub();
   }
+}
+
+function copyAccessLink() {
+  if (!runtimeToken) { toast('Token não disponível nesta sessão.', 'err'); return; }
+  const url = `${location.origin}${location.pathname}#token=${runtimeToken}`;
+  navigator.clipboard.writeText(url).then(() => {
+    toast('🔗 Link copiado! Envie para o colega — o token será salvo automaticamente ao abrir.', 'ok');
+  }).catch(() => {
+    prompt('Copie o link abaixo:', url);
+  });
 }
 
 function doLogin() {
