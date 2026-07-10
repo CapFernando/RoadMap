@@ -346,7 +346,7 @@
 </div>
 
 <!-- MODAL MELHORIA -->
-<div id="modal-melhoria" class="modal-overlay" style="display:none" onclick="closeIfOverlay(event,'modal-melhoria')">
+<div id="modal-melhoria" class="modal-overlay" style="display:none">
   <div class="modal">
     <h2 id="modal-melhoria-title">Nova melhoria</h2>
     <input type="hidden" id="m-id" />
@@ -557,7 +557,7 @@ async function loadFromGitHub(silent) {
   }
 }
 
-async function saveToGitHub() {
+async function saveToGitHub(attempt = 1) {
   showSaving(true);
   try {
     // Busca SHA mais recente para evitar conflito
@@ -623,13 +623,19 @@ async function saveToGitHub() {
     fileSha = data.content.sha;
     toast('✅ Publicado!', 'ok');
   } catch (e) {
-    // Exibe erro permanente até o usuário fechar
-    const errEl = document.getElementById('save-error');
-    if (errEl) { errEl.textContent = '⚠️ ' + e.message; errEl.style.display = 'block'; }
-    toast('Erro ao publicar: ' + e.message, 'err');
-  } finally {
     showSaving(false);
+    // Retry automático uma vez em caso de falha de rede
+    if (attempt === 1 && (e instanceof TypeError || (e.message && e.message.includes('fetch')))) {
+      toast('⚠️ Falha de rede, tentando novamente…', 'err');
+      await new Promise(r => setTimeout(r, 2000));
+      return saveToGitHub(2);
+    }
+    const errEl = document.getElementById('save-error');
+    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — seus dados estão seguros, tente publicar novamente.'; errEl.style.display = 'block'; }
+    toast('Erro ao publicar: ' + e.message, 'err');
+    return;
   }
+  showSaving(false);
 }
 
 // ─── RENDER ───────────────────────────────────────────────────────
