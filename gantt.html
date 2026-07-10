@@ -1149,12 +1149,22 @@ function renderGantt() {
   attachCardClickListeners();
 }
 
+let _lastCardTap = { time: 0, id: null };
+
 function attachCardClickListeners() {
   document.querySelectorAll('.gantt-card').forEach(card => {
-    card.addEventListener('dblclick', e => {
-      e.stopPropagation();
-      if (_cardWasDragged) return;
-      openModal(card.dataset.id);
+    card.addEventListener('mousedown', e => {
+      const now = Date.now();
+      const id  = card.dataset.id;
+      if (now - _lastCardTap.time < 400 && _lastCardTap.id === id) {
+        // Duplo clique detectado via mousedown consecutivo
+        e.preventDefault();
+        e.stopPropagation();
+        _lastCardTap = { time: 0, id: null };
+        openModal(id);
+      } else {
+        _lastCardTap = { time: now, id };
+      }
     });
   });
 }
