@@ -59,13 +59,13 @@
 
     /* ── KANBAN ── */
     #kanban-wrap { overflow-x:auto; padding:20px 24px 40px; min-height:calc(100vh - 140px); }
-    #kanban { display:flex; gap:14px; min-width:max-content; align-items:flex-start; }
-    .col { width:290px; flex-shrink:0; }
+    #kanban { display:flex; gap:14px; min-width:max-content; align-items:stretch; }
+    .col { width:290px; flex-shrink:0; min-height:calc(100vh - 200px); display:flex; flex-direction:column; }
     .col-header { display:flex; align-items:center; gap:8px; padding:0 4px 10px; border-bottom:2px solid var(--col-color); margin-bottom:10px; }
     .col-header-dot { width:10px; height:10px; border-radius:50%; background:var(--col-color); flex-shrink:0; }
     .col-header-label { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text2); }
     .col-header-count { font-size:12px; font-weight:600; background:var(--bg3); color:var(--text3); border-radius:10px; padding:1px 8px; }
-    .col-cards { display:flex; flex-direction:column; gap:8px; min-height:80px; }
+    .col-cards { display:flex; flex-direction:column; gap:8px; min-height:80px; flex:1; }
     .col-drop-hint { border:2px dashed var(--border); border-radius:8px; height:80px; display:none; align-items:center; justify-content:center; font-size:12px; color:var(--text3); }
     .col.drag-over .col-drop-hint { display:flex; }
 
@@ -624,16 +624,29 @@ function getFiltered() {
   const ano = document.getElementById('f-ano')?.value || '';
   const mes = document.getElementById('f-mes')?.value;
   const mesN = mes !== '' && mes !== undefined ? parseInt(mes) : null;
+  const now = new Date();
+  const curAno = now.getFullYear();
+  const curMes = now.getMonth(); // 0-based
   return state.melhorias.filter(m => {
     if (!splitDevs(m.dev).includes(currentDev)) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
+    const sk = getStatusKey(m);
+    if (sk === 'negada') return false;
+    // Filtro explícito por período
     if (ano || mesN !== null) {
       const ref = m.inicio ? new Date(m.inicio+'T00:00:00') : new Date(m.criado_em);
       if (ano && ref.getFullYear().toString() !== ano) return false;
       if (mesN !== null && ref.getMonth() !== mesN) return false;
+      return true;
     }
-    const sk = getStatusKey(m);
-    if (sk === 'negada') return false;
+    // Sem filtro: esconde concluídos de meses anteriores
+    if (sk === 'concluido') {
+      const refDate = m.entrega ? new Date(m.entrega+'T00:00:00')
+                    : m.inicio  ? new Date(m.inicio+'T00:00:00')
+                    : new Date(m.criado_em);
+      if (refDate.getFullYear() < curAno) return false;
+      if (refDate.getFullYear() === curAno && refDate.getMonth() < curMes) return false;
+    }
     return true;
   });
 }
