@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -141,6 +142,42 @@
     .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
+
+    /* GERENCIAL */
+    .ger-toolbar { display:flex; gap:16px; align-items:flex-end; margin-bottom:24px; flex-wrap:wrap; }
+    .ger-filter-group { display:flex; flex-direction:column; gap:4px; }
+    .ger-filter-group label { font-size:12px; color:var(--text2); }
+    .ger-filter-group select {
+      background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); padding:8px 12px; font-size:14px; font-family:inherit; outline:none;
+    }
+    .ger-filter-group select:focus { border-color:var(--blue); }
+    .ger-summary { display:flex; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
+    .ger-kpi {
+      flex:1; min-width:140px; background:var(--bg2); border:1px solid var(--border);
+      border-radius:var(--radius); padding:16px 18px;
+    }
+    .ger-kpi-label { font-size:12px; color:var(--text2); margin-bottom:4px; }
+    .ger-kpi-value { font-size:28px; font-weight:700; }
+    .ger-kpi-value.blue { color:var(--blue); }
+    .ger-kpi-value.green { color:var(--green); }
+    .ger-kpi-value.amber { color:var(--amber); }
+    .ger-kpi-value.red { color:var(--red); }
+    .ger-charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-bottom:32px; }
+    .ger-chart-box {
+      background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+      padding:18px; display:flex; flex-direction:column; align-items:center;
+    }
+    .ger-chart-title { font-size:13px; font-weight:600; color:var(--text2); margin-bottom:12px; }
+    .ger-chart-box canvas { max-width:220px; max-height:220px; }
+    .ger-table-wrap { overflow-x:auto; }
+    .ger-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .ger-table th { background:var(--bg3); padding:10px 12px; text-align:left; color:var(--text2); font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; }
+    .ger-table td { padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+    .ger-table tr:hover td { background:var(--bg3); }
+    .ger-table .desvio-pos { color:var(--red); }
+    .ger-table .desvio-neg { color:var(--green); }
+    .ger-table .desvio-zero { color:var(--text2); }
 
     /* FILTER STATUS */
     .status-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
@@ -326,6 +363,7 @@
     <div class="tabs">
       <div class="tab active" onclick="switchTab('melhorias')">Melhorias</div>
       <div class="tab" onclick="switchTab('temas')">Temas</div>
+      <div class="tab" onclick="switchTab('gerencial')">📊 Gerencial</div>
     </div>
 
     <!-- ABA MELHORIAS -->
@@ -346,6 +384,68 @@
         <button class="btn btn-primary" onclick="openModalTema()">+ Novo tema</button>
       </div>
       <div id="lista-temas"></div>
+    </div>
+
+    <!-- ABA GERENCIAL -->
+    <div class="tab-content" id="tab-gerencial">
+      <div class="ger-toolbar">
+        <div class="ger-filter-group">
+          <label>Mês</label>
+          <select id="ger-mes">
+            <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+            <option value="3">Março</option><option value="4">Abril</option>
+            <option value="5">Maio</option><option value="6">Junho</option>
+            <option value="7">Julho</option><option value="8">Agosto</option>
+            <option value="9">Setembro</option><option value="10">Outubro</option>
+            <option value="11">Novembro</option><option value="12">Dezembro</option>
+          </select>
+        </div>
+        <div class="ger-filter-group">
+          <label>Ano</label>
+          <select id="ger-ano"></select>
+        </div>
+        <button class="btn btn-primary" onclick="renderGerencial()">Atualizar</button>
+      </div>
+
+      <div id="ger-summary" class="ger-summary"></div>
+
+      <div class="ger-charts">
+        <div class="ger-chart-box">
+          <div class="ger-chart-title">H. Planejadas por Tema</div>
+          <canvas id="chart-plan-tema"></canvas>
+        </div>
+        <div class="ger-chart-box">
+          <div class="ger-chart-title">H. Realizadas por Tema</div>
+          <canvas id="chart-real-tema"></canvas>
+        </div>
+        <div class="ger-chart-box">
+          <div class="ger-chart-title">H. Planejadas por Dev</div>
+          <canvas id="chart-plan-dev"></canvas>
+        </div>
+        <div class="ger-chart-box">
+          <div class="ger-chart-title">H. Realizadas por Dev</div>
+          <canvas id="chart-real-dev"></canvas>
+        </div>
+      </div>
+
+      <div class="ger-table-wrap">
+        <table class="ger-table" id="ger-table">
+          <thead>
+            <tr>
+              <th>Demanda</th>
+              <th>Tema</th>
+              <th>Dev</th>
+              <th>Início</th>
+              <th>Entrega</th>
+              <th>H. Plan.</th>
+              <th>H. Real.</th>
+              <th>Desvio</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="ger-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </main>
 </div>
@@ -863,6 +963,179 @@ function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   event.currentTarget.classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'gerencial') renderGerencial();
+}
+
+// ─── GERENCIAL ────────────────────────────────────────────────────
+const GER_COLORS = [
+  '#3B8FE8','#5EA832','#E89C2F','#9B6FE8','#2BBFA0',
+  '#E84444','#E84494','#4AB0E8','#A8E83B','#E8C43B'
+];
+
+let gerCharts = {};
+
+function gerDestroyCharts() {
+  Object.values(gerCharts).forEach(c => { try { c.destroy(); } catch(_){} });
+  gerCharts = {};
+}
+
+function gerInitFilters() {
+  const now = new Date();
+  const selMes = document.getElementById('ger-mes');
+  const selAno = document.getElementById('ger-ano');
+  if (!selAno.options.length) {
+    const curY = now.getFullYear();
+    for (let y = curY - 2; y <= curY + 1; y++) {
+      const o = document.createElement('option');
+      o.value = y; o.textContent = y;
+      if (y === curY) o.selected = true;
+      selAno.appendChild(o);
+    }
+  }
+  if (!selMes.value || selMes.value === '0') {
+    selMes.value = now.getMonth() + 1;
+  }
+}
+
+function renderGerencial() {
+  gerInitFilters();
+  gerDestroyCharts();
+
+  const mes = parseInt(document.getElementById('ger-mes').value);
+  const ano = parseInt(document.getElementById('ger-ano').value);
+
+  const STATUS_LABEL = {
+    backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
+    em_andamento:'Em Andamento', deploy:'Deploy', concluido:'Concluído',
+    atrasado:'Atrasado', negada:'Negada'
+  };
+
+  // Filter: items whose início falls in selected month/year (for planned)
+  // realized: items with status_planejamento=concluido AND horas_realizadas > 0
+  const items = (state.melhorias || []).filter(m => {
+    if (!m.inicio) return false;
+    const d = new Date(m.inicio + 'T00:00:00');
+    return d.getFullYear() === ano && d.getMonth() + 1 === mes;
+  });
+
+  const concluidos = items.filter(m => (m.status_planejamento === 'concluido' || m.status === 'concluida') && m.horas_realizadas > 0);
+
+  const totalPlan = items.reduce((s, m) => s + (calcHorasPlanejadas(m.inicio, m.entrega) || 0), 0);
+  const totalReal = concluidos.reduce((s, m) => s + (m.horas_realizadas || 0), 0);
+  const efic = totalPlan > 0 ? Math.round((totalReal / totalPlan) * 100) : 0;
+  const eficClass = efic >= 90 ? 'green' : efic >= 70 ? 'amber' : 'red';
+
+  // KPIs
+  document.getElementById('ger-summary').innerHTML = `
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">Demandas no mês</div>
+      <div class="ger-kpi-value blue">${items.length}</div>
+    </div>
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">H. Planejadas</div>
+      <div class="ger-kpi-value blue">${totalPlan}h</div>
+    </div>
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">H. Realizadas</div>
+      <div class="ger-kpi-value green">${totalReal}h</div>
+    </div>
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">Concluídas</div>
+      <div class="ger-kpi-value green">${concluidos.length}</div>
+    </div>
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">Eficiência</div>
+      <div class="ger-kpi-value ${eficClass}">${efic}%</div>
+    </div>
+  `;
+
+  // Group by tema
+  const temaMap = {};
+  (state.temas || []).forEach(t => { temaMap[t.id] = t.nome; });
+
+  function groupBy(arr, keyFn, valFn) {
+    const map = {};
+    arr.forEach(m => {
+      const k = keyFn(m) || 'Sem tema';
+      map[k] = (map[k] || 0) + (valFn(m) || 0);
+    });
+    return map;
+  }
+
+  const planPorTema = groupBy(items, m => temaMap[m.tema_id], m => calcHorasPlanejadas(m.inicio, m.entrega) || 0);
+  const realPorTema = groupBy(concluidos, m => temaMap[m.tema_id], m => m.horas_realizadas || 0);
+
+  function splitDevsLocal(s) {
+    if (!s) return ['Sem dev'];
+    return s.split(/[\/,]/).map(d => d.trim()).filter(Boolean);
+  }
+
+  function groupByDevs(arr, valFn) {
+    const map = {};
+    arr.forEach(m => {
+      const devs = splitDevsLocal(m.dev);
+      const val = (valFn(m) || 0) / devs.length;
+      devs.forEach(d => { map[d] = (map[d] || 0) + val; });
+    });
+    return map;
+  }
+
+  const planPorDev = groupByDevs(items, m => calcHorasPlanejadas(m.inicio, m.entrega) || 0);
+  const realPorDev = groupByDevs(concluidos, m => m.horas_realizadas || 0);
+
+  function makeChart(canvasId, data, label) {
+    const labels = Object.keys(data);
+    const vals = labels.map(k => Math.round(data[k]));
+    if (!labels.length) {
+      const ctx = document.getElementById(canvasId);
+      if (ctx) { ctx.parentElement.insertAdjacentHTML('beforeend', '<p style="color:var(--text3);font-size:13px;margin-top:8px">Sem dados</p>'); }
+      return null;
+    }
+    const ctx = document.getElementById(canvasId)?.getContext('2d');
+    if (!ctx) return null;
+    return new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{ data: vals, backgroundColor: GER_COLORS.slice(0, labels.length), borderWidth: 2, borderColor: '#1E1E1C' }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#A8A49A', font: { size: 11 }, boxWidth: 12, padding: 10 } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw}h` } }
+        }
+      }
+    });
+  }
+
+  gerCharts['plan-tema'] = makeChart('chart-plan-tema', planPorTema);
+  gerCharts['real-tema'] = makeChart('chart-real-tema', realPorTema);
+  gerCharts['plan-dev']  = makeChart('chart-plan-dev',  planPorDev);
+  gerCharts['real-dev']  = makeChart('chart-real-dev',  realPorDev);
+
+  // Detail table
+  const rows = items.map(m => {
+    const hp = calcHorasPlanejadas(m.inicio, m.entrega) || 0;
+    const hr = m.horas_realizadas || 0;
+    const desvio = hr - hp;
+    const desvioClass = desvio > 0 ? 'desvio-pos' : desvio < 0 ? 'desvio-neg' : 'desvio-zero';
+    const desvioStr = desvio === 0 ? '—' : (desvio > 0 ? '+' : '') + desvio + 'h';
+    const spKey = m.status_planejamento || 'backlog';
+    return `<tr>
+      <td title="${m.titulo}">${m.titulo.length > 40 ? m.titulo.slice(0,40)+'…' : m.titulo}</td>
+      <td>${temaMap[m.tema_id] || '—'}</td>
+      <td>${m.dev || '—'}</td>
+      <td>${formatDate(m.inicio)}</td>
+      <td>${formatDate(m.entrega)}</td>
+      <td>${hp ? hp + 'h' : '—'}</td>
+      <td>${hr ? hr + 'h' : '—'}</td>
+      <td class="${desvioClass}">${desvioStr}</td>
+      <td><span class="badge badge-${spKey}" style="font-size:11px">${STATUS_LABEL[spKey] || spKey}</span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ger-tbody').innerHTML = rows || `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px">Nenhuma demanda com início neste mês.</td></tr>`;
 }
 
 // ─── MODAL TEMA ───────────────────────────────────────────────────
