@@ -4,9 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projetos por Tema — RoadMap</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -15,71 +14,127 @@
       --text:#ECEAE2; --text2:#A8A49A; --text3:#6E6A62;
       --blue:#3B8FE8; --amber:#E89C2F; --green:#5EA832;
       --red:#E84444; --purple:#9B6FE8; --teal:#2BBFA0;
-      --radius:10px;
+      --radius:12px;
     }
     body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; line-height:1.6; min-height:100vh; }
 
     /* ── HEADER ── */
-    header { display:flex; align-items:center; justify-content:space-between; padding:14px 28px; border-bottom:1px solid var(--border); background:var(--bg2); gap:12px; flex-wrap:wrap; }
-    .header-left { display:flex; align-items:center; gap:12px; }
-    .header-left h1 { font-size:17px; font-weight:600; }
-    .header-right { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .btn { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; text-decoration:none; }
+    header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 32px; border-bottom:1px solid var(--border); background:var(--bg2);
+      gap:12px; flex-wrap:wrap; position:sticky; top:0; z-index:10;
+    }
+    .header-left { display:flex; align-items:center; gap:14px; }
+    .header-left h1 { font-size:20px; font-weight:700; }
+    .header-right { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:var(--radius); font-size:14px; font-weight:600; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; text-decoration:none; }
     .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
     .btn-secondary:hover { opacity:.8; }
     .btn-primary { background:var(--blue); color:#fff; }
     .btn-primary:hover { opacity:.85; }
 
     /* ── FILTERS ── */
-    .filters { display:flex; align-items:flex-end; gap:14px; padding:20px 28px 0; flex-wrap:wrap; }
-    .filter-group { display:flex; flex-direction:column; gap:4px; }
-    .filter-group label { font-size:12px; color:var(--text2); }
+    .filters {
+      display:flex; align-items:flex-end; gap:16px; padding:24px 32px 0;
+      flex-wrap:wrap; background:var(--bg);
+    }
+    .filter-group { display:flex; flex-direction:column; gap:5px; }
+    .filter-group label { font-size:12px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.06em; }
     .filter-group select {
-      background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
-      color:var(--text); padding:8px 12px; font-size:14px; font-family:inherit; outline:none;
+      background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); padding:10px 14px; font-size:14px; font-weight:500; font-family:inherit; outline:none; min-width:130px;
     }
     .filter-group select:focus { border-color:var(--blue); }
 
     /* ── MAIN ── */
-    main { padding:24px 28px 60px; }
+    main { padding:24px 32px 80px; display:flex; flex-direction:column; gap:24px; }
 
-    /* ── TEMA SECTION ── */
-    .tema-section { margin-bottom:40px; border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+    /* ── TEMA CARD ── */
+    .tema-card {
+      background:var(--bg2); border:1px solid var(--border); border-radius:16px; overflow:hidden;
+      box-shadow:0 4px 24px #00000033;
+    }
     .tema-header {
       display:flex; align-items:center; justify-content:space-between;
-      padding:16px 20px; background:var(--bg2); border-bottom:1px solid var(--border);
-      flex-wrap:wrap; gap:8px;
+      padding:20px 24px; cursor:pointer; user-select:none; transition:background .15s;
+      gap:16px; flex-wrap:wrap;
     }
-    .tema-title { font-size:16px; font-weight:700; display:flex; align-items:center; gap:10px; }
-    .tema-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
-    .tema-stats { display:flex; gap:16px; flex-wrap:wrap; }
-    .tema-stat { font-size:12px; color:var(--text2); }
-    .tema-stat strong { color:var(--text); font-weight:600; }
-    .tema-body { padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-    @media(max-width:700px) { .tema-body { grid-template-columns:1fr; } }
+    .tema-header:hover { background:var(--bg3); }
+    .tema-header-left { display:flex; align-items:center; gap:14px; }
+    .tema-stripe { width:5px; height:52px; border-radius:4px; flex-shrink:0; }
+    .tema-name { font-size:20px; font-weight:800; color:var(--text); }
+    .tema-sub  { font-size:13px; color:var(--text2); margin-top:2px; }
+    .tema-header-right { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .tema-kpi { text-align:center; background:var(--bg4); border-radius:10px; padding:10px 16px; min-width:90px; }
+    .tema-kpi-val  { font-size:22px; font-weight:800; }
+    .tema-kpi-lbl  { font-size:11px; color:var(--text2); font-weight:500; }
+    .tema-toggle   { font-size:18px; color:var(--text3); transition:transform .2s; flex-shrink:0; }
+    .tema-toggle.open { transform:rotate(180deg); }
 
-    /* ── TOP PROJETOS ── */
-    .panel { background:var(--bg3); border-radius:var(--radius); padding:16px; }
-    .panel-title { font-size:13px; font-weight:600; color:var(--text2); margin-bottom:14px; }
-    .proj-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-    .proj-rank { font-size:12px; font-weight:700; color:var(--text3); width:18px; text-align:right; flex-shrink:0; }
-    .proj-bar-wrap { flex:1; }
-    .proj-name { font-size:12px; color:var(--text); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px; }
-    .proj-bar-bg { background:var(--bg4); border-radius:4px; height:8px; overflow:hidden; }
-    .proj-bar-fill { height:8px; border-radius:4px; transition:width .4s; }
-    .proj-hours { font-size:12px; color:var(--text2); white-space:nowrap; flex-shrink:0; }
+    /* ── BODY ── */
+    .tema-body { padding:0 24px 24px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    @media(max-width:800px) { .tema-body { grid-template-columns:1fr; } }
+
+    /* ── PANEL ── */
+    .panel { background:var(--bg3); border-radius:12px; padding:20px; }
+    .panel-title { font-size:13px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.07em; margin-bottom:18px; display:flex; align-items:center; gap:8px; }
+
+    /* ── PROJETO ROW ── */
+    .proj-item { border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:10px; background:var(--bg2); transition:border-color .15s; }
+    .proj-item:last-child { margin-bottom:0; }
+    .proj-item:hover { border-color:var(--border2); }
+    .proj-item-header {
+      display:flex; align-items:center; gap:12px; padding:12px 16px;
+      cursor:pointer; user-select:none;
+    }
+    .proj-rank { font-size:18px; font-weight:800; color:var(--text3); width:28px; text-align:center; flex-shrink:0; }
+    .proj-info { flex:1; min-width:0; }
+    .proj-name { font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .proj-meta { font-size:12px; color:var(--text2); margin-top:2px; }
+    .proj-hours-summary { text-align:right; flex-shrink:0; }
+    .proj-hours-main { font-size:18px; font-weight:800; }
+    .proj-hours-label { font-size:11px; color:var(--text2); }
+    .proj-chevron { font-size:13px; color:var(--text3); flex-shrink:0; transition:transform .2s; }
+    .proj-chevron.open { transform:rotate(180deg); }
+
+    .proj-detail {
+      display:none; padding:14px 16px 16px; border-top:1px solid var(--border);
+      background:var(--bg4);
+    }
+    .proj-detail.open { display:block; }
+    .proj-bars { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+    .proj-bar-row { display:flex; align-items:center; gap:10px; }
+    .proj-bar-lbl { font-size:12px; font-weight:600; width:80px; flex-shrink:0; }
+    .proj-bar-lbl.plan { color:var(--blue); }
+    .proj-bar-lbl.real { color:var(--green); }
+    .proj-bar-track { flex:1; background:var(--bg3); border-radius:6px; height:12px; overflow:hidden; }
+    .proj-bar-fill { height:12px; border-radius:6px; transition:width .5s; }
+    .proj-bar-fill.plan { background:var(--blue); }
+    .proj-bar-fill.real { background:var(--green); }
+    .proj-bar-val { font-size:13px; font-weight:700; width:50px; text-align:right; flex-shrink:0; }
+    .proj-detail-meta { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--text2); }
+    .proj-detail-meta span strong { color:var(--text); font-weight:600; }
 
     /* ── DEVS ── */
-    .dev-list { display:flex; flex-direction:column; gap:8px; }
-    .dev-row { display:flex; align-items:center; gap:10px; }
-    .dev-avatar { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; }
-    .dev-info { flex:1; }
-    .dev-name  { font-size:13px; color:var(--text); font-weight:500; }
-    .dev-hours { font-size:11px; color:var(--text2); }
-    .dev-pct   { font-size:12px; color:var(--text3); flex-shrink:0; }
+    .dev-list { display:flex; flex-direction:column; gap:12px; }
+    .dev-row { background:var(--bg2); border-radius:10px; padding:14px 16px; display:flex; align-items:flex-start; gap:14px; }
+    .dev-avatar {
+      width:44px; height:44px; border-radius:50%; display:flex; align-items:center;
+      justify-content:center; font-size:16px; font-weight:800; flex-shrink:0;
+    }
+    .dev-content { flex:1; min-width:0; }
+    .dev-name  { font-size:16px; font-weight:700; color:var(--text); }
+    .dev-hours-row { display:flex; gap:16px; margin-top:6px; flex-wrap:wrap; }
+    .dev-hours-item { display:flex; flex-direction:column; }
+    .dev-hours-val  { font-size:17px; font-weight:800; }
+    .dev-hours-lbl  { font-size:11px; color:var(--text2); font-weight:500; margin-top:1px; }
+    .dev-bar-row { margin-top:8px; display:flex; align-items:center; gap:8px; }
+    .dev-bar-track { flex:1; background:var(--bg4); border-radius:4px; height:6px; overflow:hidden; }
+    .dev-bar-fill { height:6px; border-radius:4px; }
+    .dev-pct { font-size:12px; color:var(--text3); font-weight:600; flex-shrink:0; }
 
     /* ── EMPTY ── */
-    .empty-msg { text-align:center; color:var(--text3); font-size:14px; padding:40px 20px; }
+    .empty-msg { text-align:center; color:var(--text3); font-size:16px; padding:60px 20px; }
 
     /* ── TOAST ── */
     #toast { position:fixed; bottom:24px; right:24px; padding:12px 18px; border-radius:var(--radius); font-size:14px; font-weight:500; opacity:0; pointer-events:none; transition:opacity .3s; z-index:999; }
@@ -93,9 +148,9 @@
 <header>
   <div class="header-left">
     <h1>📁 Projetos por Tema</h1>
+    <span id="lbl-updated" style="font-size:12px;color:var(--text3)">—</span>
   </div>
   <div class="header-right">
-    <span id="lbl-updated" style="font-size:12px;color:var(--text3)">—</span>
     <a href="admin.html" class="btn btn-secondary">← Admin</a>
     <a href="index.html" class="btn btn-secondary" target="_blank">📊 Dashboard</a>
   </div>
@@ -118,7 +173,7 @@
     <label>Ano</label>
     <select id="f-ano"><option value="">Todos</option></select>
   </div>
-  <button class="btn btn-primary" onclick="renderPage()">Atualizar</button>
+  <button class="btn btn-primary" onclick="renderPage()">↺ Atualizar</button>
 </div>
 
 <main id="main-content">
@@ -128,44 +183,35 @@
 <div id="toast"></div>
 
 <script>
-// ── CONFIG ───────────────────────────────────────────────────────
-const REPO  = 'CapFernando/RoadMap';
-const FILE  = 'data/melhorias.json';
+const REPO    = 'CapFernando/RoadMap';
+const FILE    = 'data/melhorias.json';
 const API_URL = `https://api.github.com/repos/${REPO}/contents/${FILE}`;
 const RAW_URL = `https://raw.githubusercontent.com/${REPO}/main/${FILE}`;
 
 const COLORS = [
   '#3B8FE8','#5EA832','#E89C2F','#9B6FE8','#2BBFA0',
-  '#E84444','#E84494','#4AB0E8','#A8E83B','#E8C43B',
-  '#FF6B6B','#C9B1FF','#FFD166','#06D6A0','#118AB2'
+  '#E84444','#E84494','#4AB0E8','#FFD166','#06D6A0',
+  '#FF6B6B','#C9B1FF','#118AB2','#A8E83B','#E8C43B'
 ];
-const TEMA_COLORS = COLORS;
 
 let state = { temas:[], melhorias:[], feriados:[] };
-let runtimeToken = window.GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
+const runtimeToken = window.GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
 
-// ── HELPERS ──────────────────────────────────────────────────────
 function toast(msg, type='ok') {
   const el = document.getElementById('toast');
   el.textContent = msg; el.className = 'show ' + type;
   clearTimeout(el._t); el._t = setTimeout(() => el.className = '', 3000);
 }
 
-function formatDate(s) {
-  if (!s) return '';
-  const [y,m,d] = s.split('-');
-  return `${d}/${m}/${y}`;
-}
-
 function calcHorasPlanejadas(inicio, entrega) {
   if (!inicio || !entrega) return null;
-  const ferSet = new Set((state.feriados||[]).map(f => f.data||f).filter(Boolean));
+  const ferSet = new Set((state.feriados||[]).map(f=>f.data||f).filter(Boolean));
   let count = 0;
   const d = new Date(inicio+'T00:00:00'), end = new Date(entrega+'T00:00:00');
   if (end < d) return null;
   while (d <= end) {
     const dw = d.getDay();
-    if (dw !== 0 && dw !== 6 && !ferSet.has(d.toISOString().slice(0,10))) count++;
+    if (dw!==0 && dw!==6 && !ferSet.has(d.toISOString().slice(0,10))) count++;
     d.setDate(d.getDate()+1);
   }
   return count * 8;
@@ -181,30 +227,35 @@ function splitDevs(s) {
   return s.split(/[\/,]/).map(d => d.trim()).filter(Boolean);
 }
 
+function formatDate(s) {
+  if (!s) return '—';
+  const [y,m,d] = s.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 // ── DATA ─────────────────────────────────────────────────────────
 async function loadData() {
   try {
     const headers = runtimeToken
       ? { Authorization:`token ${runtimeToken}`, Accept:'application/vnd.github.v3+json' }
       : {};
-    const res = await fetch(API_URL + '?t=' + Date.now(), { cache:'no-store', headers });
+    const res = await fetch(API_URL+'?t='+Date.now(), { cache:'no-store', headers });
     if (res.ok) {
       const json = await res.json();
-      const raw = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
-      applyData(raw); return;
+      applyData(JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,''))))));
+      return;
     }
   } catch(_){}
   try {
-    const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache:'no-store' });
-    const raw = await res.json();
-    applyData(raw);
-  } catch(e) { toast('Erro ao carregar dados: ' + e.message, 'err'); }
+    const res = await fetch(RAW_URL+'?t='+Date.now(), { cache:'no-store' });
+    applyData(await res.json());
+  } catch(e) { toast('Erro ao carregar dados: '+e.message,'err'); }
 }
 
 function applyData(data) {
-  state.temas      = data.temas      || [];
-  state.melhorias  = data.melhorias  || [];
-  state.feriados   = data.feriados   || [];
+  state.temas     = data.temas     || [];
+  state.melhorias = data.melhorias || [];
+  state.feriados  = data.feriados  || [];
   const dt = data.atualizado_em ? new Date(data.atualizado_em).toLocaleString('pt-BR') : '';
   document.getElementById('lbl-updated').textContent = dt ? `Atualizado em ${dt}` : '';
   buildAnoFilter();
@@ -212,20 +263,35 @@ function applyData(data) {
 }
 
 function buildAnoFilter() {
-  const sel = document.getElementById('f-ano');
+  const sel  = document.getElementById('f-ano');
   const anos = new Set();
   state.melhorias.forEach(m => { if (m.inicio) anos.add(m.inicio.slice(0,4)); });
   const curY = new Date().getFullYear().toString();
   anos.add(curY);
-  const sorted = [...anos].sort((a,b) => b-a);
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">Todos</option>' + sorted.map(y =>
-    `<option value="${y}"${y===cur||(!cur&&y===curY)?'selected':''}>${y}</option>`
-  ).join('');
-  if (!cur) sel.value = curY;
-  // default mes = current month
+  const sorted = [...anos].sort((a,b)=>b-a);
+  const cur = sel.value || curY;
+  sel.innerHTML = '<option value="">Todos</option>' +
+    sorted.map(y=>`<option value="${y}"${y===cur?'selected':''}>${y}</option>`).join('');
+  // default mes = current
   const selM = document.getElementById('f-mes');
-  if (!selM.value) selM.value = new Date().getMonth() + 1;
+  if (!selM.value) selM.value = new Date().getMonth()+1;
+}
+
+// ── TOGGLE ───────────────────────────────────────────────────────
+function toggleTema(id) {
+  const body    = document.getElementById('tema-body-'+id);
+  const chevron = document.getElementById('tema-chev-'+id);
+  const isOpen  = body.style.display !== 'none';
+  body.style.display    = isOpen ? 'none' : 'grid';
+  chevron.classList.toggle('open', !isOpen);
+}
+
+function toggleProj(id) {
+  const detail  = document.getElementById('proj-detail-'+id);
+  const chevron = document.getElementById('proj-chev-'+id);
+  const isOpen  = detail.classList.contains('open');
+  detail.classList.toggle('open', !isOpen);
+  chevron.classList.toggle('open', !isOpen);
 }
 
 // ── RENDER ───────────────────────────────────────────────────────
@@ -233,102 +299,164 @@ function renderPage() {
   const mes = parseInt(document.getElementById('f-mes').value) || null;
   const ano = document.getElementById('f-ano').value || null;
 
-  let items = state.melhorias.filter(m => {
+  const items = state.melhorias.filter(m => {
     if (m.status_planejamento === 'negada') return false;
     if (!m.inicio) return false;
-    const d = new Date(m.inicio + 'T00:00:00');
+    const d = new Date(m.inicio+'T00:00:00');
     if (ano && d.getFullYear().toString() !== ano) return false;
-    if (mes && d.getMonth() + 1 !== mes) return false;
+    if (mes && d.getMonth()+1 !== mes) return false;
     return true;
   });
 
   const temas = state.temas.filter(t => items.some(m => m.tema_id === t.id));
+  const main  = document.getElementById('main-content');
 
-  const main = document.getElementById('main-content');
   if (!temas.length) {
     main.innerHTML = '<div class="empty-msg">Nenhuma demanda encontrada para o período selecionado.</div>';
     return;
   }
 
   main.innerHTML = temas.map((tema, ti) => {
-    const temaItems = items.filter(m => m.tema_id === tema.id);
-    const concluidos = temaItems.filter(m => m.status_planejamento === 'concluido' || m.status === 'concluida');
-    const totalHPlan = temaItems.reduce((s,m) => s + (calcHorasPlanejadas(m.inicio, m.entrega)||0), 0);
-    const totalHReal = temaItems.reduce((s,m) => s + getHorasEfetivas(m), 0);
-    const cor = TEMA_COLORS[ti % TEMA_COLORS.length];
+    const cor        = COLORS[ti % COLORS.length];
+    const temaItems  = items.filter(m => m.tema_id === tema.id);
+    const concluidos = temaItems.filter(m => m.status_planejamento==='concluido'||m.status==='concluida');
+    const totalHPlan = temaItems.reduce((s,m)=>s+(calcHorasPlanejadas(m.inicio,m.entrega)||0),0);
+    const totalHReal = temaItems.reduce((s,m)=>s+getHorasEfetivas(m),0);
 
-    // TOP 5 projetos por horas efetivas
-    const sorted = [...temaItems].sort((a,b) => getHorasEfetivas(b) - getHorasEfetivas(a)).slice(0, 5);
-    const maxH = getHorasEfetivas(sorted[0]) || 1;
+    // ── TOP 5 projetos ──────────────────────────────────────────
+    const top5 = [...temaItems].sort((a,b)=>getHorasEfetivas(b)-getHorasEfetivas(a)).slice(0,5);
+    const maxH = top5.length ? getHorasEfetivas(top5[0]) : 1;
 
-    const projRows = sorted.map((m, i) => {
-      const h = getHorasEfetivas(m);
-      const pct = Math.round((h / maxH) * 100);
-      const isConcl = m.status_planejamento === 'concluido' || m.status === 'concluida';
-      const hrStr = isConcl ? (m.horas_realizadas > 0 ? m.horas_realizadas + 'h' : h + 'h*') : h + 'h plan.';
-      return `<div class="proj-row">
-        <span class="proj-rank">${i+1}.</span>
-        <div class="proj-bar-wrap">
-          <div class="proj-name" title="${m.titulo}">${m.titulo}</div>
-          <div class="proj-bar-bg"><div class="proj-bar-fill" style="width:${pct}%;background:${cor}"></div></div>
+    const projHTML = top5.map((m, i) => {
+      const hPlan = calcHorasPlanejadas(m.inicio, m.entrega) || 0;
+      const hReal = getHorasEfetivas(m);
+      const isConcl = m.status_planejamento==='concluido'||m.status==='concluida';
+      const maxBar  = Math.max(hPlan, hReal, 1);
+      const pctPlan = Math.round(hPlan/maxBar*100);
+      const pctReal = Math.round(hReal/maxBar*100);
+      const devs    = splitDevs(m.dev).join(', ') || '—';
+      const spKey   = m.status_planejamento || 'backlog';
+      const statusLabel = {backlog:'Backlog',levantar_req:'Levantar Req.',planejado:'Planejado',em_andamento:'Em Andamento',deploy:'Deploy',concluido:'Concluído',atrasado:'Atrasado'}[spKey]||spKey;
+      const pid = `${tema.id}-${m.id}`;
+
+      return `<div class="proj-item">
+        <div class="proj-item-header" onclick="toggleProj('${pid}')">
+          <span class="proj-rank">${i+1}</span>
+          <div class="proj-info">
+            <div class="proj-name" title="${m.titulo}">${m.titulo}</div>
+            <div class="proj-meta">${devs}</div>
+          </div>
+          <div class="proj-hours-summary">
+            <div class="proj-hours-main" style="color:${cor}">${hReal}h</div>
+            <div class="proj-hours-label">${isConcl&&m.horas_realizadas>0?'realizadas':'estimadas'}</div>
+          </div>
+          <span class="proj-chevron" id="proj-chev-${pid}">▼</span>
         </div>
-        <span class="proj-hours">${hrStr}</span>
+        <div class="proj-detail" id="proj-detail-${pid}">
+          <div class="proj-bars">
+            <div class="proj-bar-row">
+              <span class="proj-bar-lbl plan">Planejado</span>
+              <div class="proj-bar-track"><div class="proj-bar-fill plan" style="width:${pctPlan}%"></div></div>
+              <span class="proj-bar-val" style="color:#3B8FE8">${hPlan}h</span>
+            </div>
+            <div class="proj-bar-row">
+              <span class="proj-bar-lbl real">Realizado</span>
+              <div class="proj-bar-track"><div class="proj-bar-fill real" style="width:${pctReal}%"></div></div>
+              <span class="proj-bar-val" style="color:#5EA832">${hReal}h${!isConcl||m.horas_realizadas===0?'*':''}</span>
+            </div>
+          </div>
+          <div class="proj-detail-meta">
+            <span><strong>${formatDate(m.inicio)}</strong> início</span>
+            <span><strong>${formatDate(m.entrega)}</strong> entrega</span>
+            <span><strong>${statusLabel}</strong></span>
+          </div>
+        </div>
       </div>`;
     }).join('');
 
-    // Devs do tema
-    const devMap = {};
+    // ── Devs do tema ─────────────────────────────────────────────
+    const devMapPlan = {}, devMapReal = {};
     temaItems.forEach(m => {
-      const devs = splitDevs(m.dev);
-      const h = (calcHorasPlanejadas(m.inicio, m.entrega)||0) / (devs.length||1);
-      devs.forEach(d => { devMap[d] = (devMap[d]||0) + h; });
+      const devs    = splitDevs(m.dev);
+      const isConcl = m.status_planejamento==='concluido'||m.status==='concluida';
+      const hP = (calcHorasPlanejadas(m.inicio,m.entrega)||0) / (devs.length||1);
+      const hR = getHorasEfetivas(m) / (devs.length||1);
+      devs.forEach(d => {
+        devMapPlan[d] = (devMapPlan[d]||0) + hP;
+        if (isConcl) devMapReal[d] = (devMapReal[d]||0) + hR;
+      });
     });
-    const devsArr = Object.entries(devMap).sort((a,b)=>b[1]-a[1]);
-    const totalDevH = devsArr.reduce((s,[,h])=>s+h,0)||1;
+    const devArr = Object.entries(devMapPlan).sort((a,b)=>b[1]-a[1]);
+    const maxDev = devArr.length ? devArr[0][1] : 1;
+    const totalDevPlan = devArr.reduce((s,[,h])=>s+h,0)||1;
 
-    const devRows = devsArr.slice(0,8).map(([dev, h], i) => {
-      const pct = Math.round((h / totalDevH) * 100);
+    const devsHTML = devArr.slice(0,8).map(([dev, hPlan], i) => {
+      const hReal    = Math.round(devMapReal[dev]||0);
+      const hPlanRnd = Math.round(hPlan);
+      const pct      = Math.round(hPlan/totalDevPlan*100);
+      const barPct   = Math.round(hPlan/maxDev*100);
       const initials = dev.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-      const bg = COLORS[i % COLORS.length] + '33';
-      const fg = COLORS[i % COLORS.length];
+      const bg       = COLORS[i%COLORS.length]+'22';
+      const fg       = COLORS[i%COLORS.length];
       return `<div class="dev-row">
         <div class="dev-avatar" style="background:${bg};color:${fg}">${initials}</div>
-        <div class="dev-info">
+        <div class="dev-content">
           <div class="dev-name">${dev}</div>
-          <div class="dev-hours">${Math.round(h)}h planejadas</div>
+          <div class="dev-hours-row">
+            <div class="dev-hours-item">
+              <span class="dev-hours-val" style="color:#3B8FE8">${hPlanRnd}h</span>
+              <span class="dev-hours-lbl">Planejadas</span>
+            </div>
+            ${hReal>0?`<div class="dev-hours-item">
+              <span class="dev-hours-val" style="color:#5EA832">${hReal}h</span>
+              <span class="dev-hours-lbl">Realizadas</span>
+            </div>`:''}
+          </div>
+          <div class="dev-bar-row">
+            <div class="dev-bar-track">
+              <div class="dev-bar-fill" style="width:${barPct}%;background:${fg}"></div>
+            </div>
+            <span class="dev-pct">${pct}%</span>
+          </div>
         </div>
-        <span class="dev-pct">${pct}%</span>
       </div>`;
     }).join('');
 
-    return `<div class="tema-section">
-      <div class="tema-header">
-        <div class="tema-title">
-          <span class="tema-dot" style="background:${cor}"></span>
-          ${tema.nome}
+    return `<div class="tema-card">
+      <div class="tema-header" onclick="toggleTema('${tema.id}')">
+        <div class="tema-header-left">
+          <div class="tema-stripe" style="background:${cor}"></div>
+          <div>
+            <div class="tema-name">${tema.nome}</div>
+            <div class="tema-sub">${temaItems.length} demandas · ${concluidos.length} concluídas</div>
+          </div>
         </div>
-        <div class="tema-stats">
-          <span class="tema-stat"><strong>${temaItems.length}</strong> demandas</span>
-          <span class="tema-stat"><strong>${concluidos.length}</strong> concluídas</span>
-          <span class="tema-stat"><strong>${totalHPlan}h</strong> planejadas</span>
-          <span class="tema-stat"><strong>${totalHReal}h</strong> realizadas/est.</span>
+        <div class="tema-header-right">
+          <div class="tema-kpi">
+            <div class="tema-kpi-val" style="color:var(--blue)">${totalHPlan}h</div>
+            <div class="tema-kpi-lbl">Planejadas</div>
+          </div>
+          <div class="tema-kpi">
+            <div class="tema-kpi-val" style="color:var(--green)">${totalHReal}h</div>
+            <div class="tema-kpi-lbl">Realizadas/Est.</div>
+          </div>
+          <span class="tema-toggle open" id="tema-chev-${tema.id}">▲</span>
         </div>
       </div>
-      <div class="tema-body">
+      <div class="tema-body" id="tema-body-${tema.id}" style="display:grid">
         <div class="panel">
-          <div class="panel-title">🏆 TOP 5 por horas de desenvolvimento</div>
-          ${sorted.length ? projRows : '<p style="color:var(--text3);font-size:13px">Sem demandas</p>'}
+          <div class="panel-title">🏆 Top 5 — horas de desenvolvimento</div>
+          ${top5.length ? projHTML : '<p style="color:var(--text3);font-size:14px">Sem demandas no período</p>'}
         </div>
         <div class="panel">
           <div class="panel-title">👥 Principais atuantes</div>
-          ${devsArr.length ? `<div class="dev-list">${devRows}</div>` : '<p style="color:var(--text3);font-size:13px">Sem devs</p>'}
+          ${devArr.length ? `<div class="dev-list">${devsHTML}</div>` : '<p style="color:var(--text3);font-size:14px">Sem dados</p>'}
         </div>
       </div>
     </div>`;
   }).join('');
 }
 
-// ── INIT ─────────────────────────────────────────────────────────
 loadData();
 </script>
 </body>

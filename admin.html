@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -163,13 +164,14 @@
     .ger-kpi-value.green { color:var(--green); }
     .ger-kpi-value.amber { color:var(--amber); }
     .ger-kpi-value.red { color:var(--red); }
-    .ger-charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-bottom:32px; }
+    .ger-charts { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:32px; }
+    @media(max-width:900px){ .ger-charts{ grid-template-columns:1fr; } }
     .ger-chart-box {
-      background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
-      padding:18px; display:flex; flex-direction:column; align-items:center;
+      background:var(--bg2); border:1px solid var(--border); border-radius:14px;
+      padding:22px 20px; display:flex; flex-direction:column;
     }
-    .ger-chart-title { font-size:13px; font-weight:600; color:var(--text2); margin-bottom:12px; }
-    .ger-chart-box canvas { max-width:220px; max-height:220px; }
+    .ger-chart-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:18px; letter-spacing:.01em; }
+    .ger-chart-empty { font-size:13px; color:var(--text3); padding:32px 0; text-align:center; }
     .ger-kpi-delta { display:block; font-size:11px; font-weight:500; margin-top:4px; }
     .delta-up   { color:var(--green); }
     .delta-down { color:var(--red); }
@@ -1120,28 +1122,69 @@ function renderGerencial() {
   document.getElementById('ger-charts').innerHTML = chartDefs.map(c =>
     `<div class="ger-chart-box">
       <div class="ger-chart-title">${c.title}</div>
-      <canvas id="${c.id}" style="max-width:220px;max-height:220px"></canvas>
-      ${!Object.keys(c.data).length ? '<p class="ger-chart-empty">Sem dados no período</p>' : ''}
+      ${!Object.keys(c.data).length
+        ? '<div class="ger-chart-empty">Sem dados no período</div>'
+        : `<canvas id="${c.id}"></canvas>`}
     </div>`
   ).join('');
+
+  Chart.register(ChartDataLabels);
 
   chartDefs.forEach(c => {
     const labels = Object.keys(c.data);
     if (!labels.length) return;
-    const vals = labels.map(k => Math.round(c.data[k]));
-    const ctx = document.getElementById(c.id)?.getContext('2d');
+    const vals   = labels.map(k => Math.round(c.data[k]));
+    const total  = vals.reduce((s,v) => s+v, 0);
+    const colors = GER_COLORS.slice(0, labels.length);
+    const ctx    = document.getElementById(c.id)?.getContext('2d');
     if (!ctx) return;
+
     gerCharts[c.id] = new Chart(ctx, {
-      type: 'doughnut',
-      data: { labels, datasets: [{ data: vals, backgroundColor: GER_COLORS.slice(0, labels.length), borderWidth: 2, borderColor: '#1E1E1C' }] },
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data: vals,
+          backgroundColor: colors.map(c => c + 'CC'),
+          borderColor:     colors,
+          borderWidth: 2,
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
       options: {
+        indexAxis: 'y',
         responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { right: 16 } },
         plugins: {
-          legend: { position:'bottom', labels:{ color:'#A8A49A', font:{size:11}, boxWidth:12, padding:10 } },
-          tooltip: { callbacks: { label: c => ` ${c.label}: ${c.raw}h` } }
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw}h (${Math.round(ctx.raw/total*100)}%)` } },
+          datalabels: {
+            anchor: 'end',
+            align: 'end',
+            color: '#ECEAE2',
+            font: { size: 13, weight: '700', family: 'Inter' },
+            formatter: (val) => `${val}h`,
+            clamp: true,
+          }
+        },
+        scales: {
+          x: {
+            grid:  { color: '#2E2E2B' },
+            ticks: { color: '#6E6A62', font:{ size:11 }, callback: v => v+'h' },
+          },
+          y: {
+            grid:  { display: false },
+            ticks: { color: '#ECEAE2', font:{ size: 12, weight:'500' } },
+          }
         }
       }
     });
+
+    // Ajusta altura dinamicamente conforme qtd de itens
+    const canvasEl = document.getElementById(c.id);
+    if (canvasEl) canvasEl.parentElement.style.minHeight = Math.max(180, labels.length * 44 + 40) + 'px';
   });
 
   // ── Tabela ───────────────────────────────────────────────────────
