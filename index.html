@@ -461,7 +461,12 @@ function getStatusKey(m) {
   const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
                    estimada:'planejado', iniciada:'em_andamento', concluida:'concluido',
                    concluido:'concluido', negada:'negada' };
-  return legacy[m.status] || sp || 'backlog';
+  const base = legacy[m.status] || sp || 'backlog';
+  if (base === 'backlog' && m.inicio) {
+    const today = new Date().toISOString().slice(0, 10);
+    return m.inicio <= today ? 'em_andamento' : 'planejado';
+  }
+  return base;
 }
 
 const STATUS_CARDS = [
