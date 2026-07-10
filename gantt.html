@@ -1151,7 +1151,8 @@ function renderGantt() {
 
 function attachCardClickListeners() {
   document.querySelectorAll('.gantt-card').forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('dblclick', e => {
+      e.stopPropagation();
       if (_cardWasDragged) return;
       openModal(card.dataset.id);
     });
