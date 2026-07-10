@@ -309,19 +309,13 @@ const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_R
 const API_URL     = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
 
 const STATUS_META = {
-  recebida:    { label: 'Backlog',             cls: 'badge-recebida',    cor: '#3B8FE8' },
-  refinamento: { label: 'Em Refinamento',      cls: 'badge-refinamento', cor: '#9B6FE8' },
-  regra:       { label: 'Validar Regra',       cls: 'badge-regra',       cor: '#2BBFA0' },
-  estimada:    { label: 'Estimada',            cls: 'badge-estimada',    cor: '#E89C2F' },
-  iniciada:    { label: 'Em Andamento',        cls: 'badge-iniciada',    cor: '#5EA832' },
-  concluida:   { label: 'Concluída',           cls: 'badge-concluida',   cor: '#5EA832' },
-  negada:      { label: 'Negada',              cls: 'badge-negada',      cor: '#E84444' },
-  // status_planejamento (Gantt)
-  levantar_req:{ label: 'Levantar Requisitos', cls: 'badge-levantar_req',cor: '#9B6FE8' },
-  planejado:   { label: 'Planejado',           cls: 'badge-planejado',   cor: '#3B8FE8' },
-  em_andamento:{ label: 'Em Andamento',        cls: 'badge-iniciada',    cor: '#5EA832' },
-  concluido:   { label: 'Concluído',           cls: 'badge-concluida',   cor: '#2BBFA0' },
-  atrasado:    { label: 'Atrasado',            cls: 'badge-negada',      cor: '#E84444' },
+  backlog:      { label: 'Backlog',             cls: 'badge-recebida',     cor: '#3B8FE8' },
+  levantar_req: { label: 'Levantar Requisitos', cls: 'badge-levantar_req', cor: '#9B6FE8' },
+  planejado:    { label: 'Planejado',           cls: 'badge-planejado',    cor: '#E89C2F' },
+  em_andamento: { label: 'Em Andamento',        cls: 'badge-iniciada',     cor: '#5EA832' },
+  atrasado:     { label: 'Atrasado',            cls: 'badge-negada',       cor: '#E84444' },
+  concluido:    { label: 'Concluído',           cls: 'badge-concluida',    cor: '#2BBFA0' },
+  negada:       { label: 'Negada',              cls: 'badge-negada',       cor: '#E84444' },
 };
 
 const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
@@ -338,9 +332,8 @@ function svgIcon(name) {
 }
 
 function badgeHTML(status, sp) {
-  // status_planejamento tem prioridade quando indica que já saiu do backlog
-  const key = (sp && sp !== 'backlog') ? sp : (status || 'recebida');
-  const meta = STATUS_META[key] || STATUS_META.recebida;
+  const key = getStatusKey({ status, status_planejamento: sp });
+  const meta = STATUS_META[key] || STATUS_META.backlog;
   return `<span class="badge ${meta.cls}">${meta.label}</span>`;
 }
 
