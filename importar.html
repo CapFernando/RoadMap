@@ -16,80 +16,63 @@
       --border:#332F52; --radius:10px;
     }
     body { font-family:'Inter',sans-serif; background:var(--bg1); color:var(--text1); min-height:100vh; }
-
-    /* ── HEADER ── */
     .header { background:var(--bg2); border-bottom:1px solid var(--border); padding:14px 24px; display:flex; align-items:center; gap:16px; }
     .header h1 { font-size:18px; font-weight:600; }
     .header a  { color:var(--text2); text-decoration:none; font-size:13px; }
     .header a:hover { color:var(--text1); }
-
-    /* ── LAYOUT ── */
     .container { max-width:1200px; margin:0 auto; padding:28px 24px; }
 
-    /* ── STEPS ── */
+    /* STEPS */
     .steps { display:flex; gap:12px; margin-bottom:28px; }
-    .step  { flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
-             padding:14px 18px; cursor:pointer; transition:.15s; }
+    .step  { flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; cursor:pointer; transition:.15s; }
     .step.active { border-color:var(--accent2); background:var(--bg3); }
+    .step.warn   { border-color:var(--yellow) !important; }
     .step-num  { font-size:11px; font-weight:700; color:var(--accent2); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; }
+    .step.warn .step-num { color:var(--yellow); }
     .step-name { font-size:14px; font-weight:600; }
     .step-desc { font-size:12px; color:var(--text3); margin-top:3px; }
-
-    /* ── PANELS ── */
     .panel { display:none; }
     .panel.active { display:block; }
 
-    /* ── CARDS ── */
+    /* CARDS */
     .card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:22px 24px; margin-bottom:20px; }
     .card h2 { font-size:15px; font-weight:600; margin-bottom:14px; }
     .card p  { font-size:13px; color:var(--text2); line-height:1.6; margin-bottom:12px; }
 
-    /* ── TABLE ── */
+    /* TABLE */
     .tbl-wrap { overflow-x:auto; border-radius:var(--radius); border:1px solid var(--border); }
     table { width:100%; border-collapse:collapse; font-size:13px; }
-    thead th {
-      background:var(--bg3); color:var(--text2); font-weight:600; font-size:11px;
-      text-transform:uppercase; letter-spacing:.05em; padding:10px 12px;
-      border-bottom:1px solid var(--border); white-space:nowrap; text-align:left;
-    }
+    thead th { background:var(--bg3); color:var(--text2); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:10px 12px; border-bottom:1px solid var(--border); white-space:nowrap; text-align:left; }
     thead th.req::after { content:' *'; color:var(--red); }
     tbody tr { border-bottom:1px solid var(--border); }
     tbody tr:last-child { border-bottom:none; }
     tbody tr:hover { background:var(--bg3); }
     tbody td { padding:6px 6px; vertical-align:middle; }
-    tbody td input, tbody td select, tbody td textarea {
-      width:100%; background:var(--bg3); color:var(--text1); border:1px solid transparent;
-      border-radius:6px; padding:6px 8px; font-size:12px; font-family:inherit;
-      outline:none; transition:.15s;
-    }
-    tbody td input:focus, tbody td select:focus, tbody td textarea:focus {
-      border-color:var(--accent2); background:var(--bg4);
-    }
+    tbody td input, tbody td select, tbody td textarea { width:100%; background:var(--bg3); color:var(--text1); border:1px solid transparent; border-radius:6px; padding:6px 8px; font-size:12px; font-family:inherit; outline:none; transition:.15s; }
+    tbody td input:focus, tbody td select:focus, tbody td textarea:focus { border-color:var(--accent2); background:var(--bg4); }
     tbody td select option { background:var(--bg3); }
     .td-act { width:36px; text-align:center; }
     .btn-del { background:none; border:none; cursor:pointer; color:var(--red); font-size:16px; padding:4px 8px; border-radius:6px; }
     .btn-del:hover { background:rgba(232,93,93,.15); }
     .row-num { color:var(--text3); font-size:11px; font-weight:600; padding:0 8px; text-align:center; min-width:32px; }
 
-    /* ── BUTTONS ── */
-    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 18px; border-radius:8px;
-           font-size:13px; font-weight:600; cursor:pointer; border:none; transition:.15s; }
+    /* BUTTONS */
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:none; transition:.15s; }
     .btn-primary { background:var(--accent); color:#fff; }
     .btn-primary:hover { background:var(--accent2); }
     .btn-green   { background:var(--green); color:#0F0E17; }
     .btn-green:hover { opacity:.85; }
     .btn-ghost  { background:transparent; color:var(--text2); border:1px solid var(--border); }
     .btn-ghost:hover { border-color:var(--text2); color:var(--text1); }
+    .btn-yellow { background:rgba(240,165,0,.15); color:var(--yellow); border:1px solid var(--yellow); }
+    .btn-yellow:hover { background:rgba(240,165,0,.25); }
     .btn-row    { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; align-items:center; }
 
-    /* ── CSV ── */
-    .csv-area { width:100%; min-height:140px; background:var(--bg3); color:var(--text1);
-                border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px;
-                font-family:'Courier New',monospace; resize:vertical; outline:none; line-height:1.5; }
+    /* CSV */
+    .csv-area { width:100%; min-height:140px; background:var(--bg3); color:var(--text1); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; font-family:'Courier New',monospace; resize:vertical; outline:none; line-height:1.5; }
     .csv-area:focus { border-color:var(--accent2); }
-    .csv-hint { font-size:11px; color:var(--text3); margin-top:6px; }
 
-    /* ── PREVIEW TABLE ── */
+    /* PREVIEW */
     .preview-wrap { overflow-x:auto; }
     .preview-wrap table tbody td { padding:7px 10px; font-size:12px; }
     .badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
@@ -98,14 +81,12 @@
     .badge-err   { background:rgba(232,93,93,.15); color:var(--red); }
     .badge-status { padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
 
-    /* ── PROGRESS ── */
+    /* PROGRESS */
     .progress-bar { width:100%; height:6px; background:var(--bg3); border-radius:3px; overflow:hidden; margin-top:12px; }
     .progress-fill { height:100%; background:var(--green); transition:width .3s; width:0; }
-    .log-box { background:var(--bg3); border:1px solid var(--border); border-radius:8px;
-               padding:12px; font-size:12px; font-family:monospace; max-height:200px; overflow-y:auto;
-               margin-top:12px; color:var(--text2); line-height:1.8; }
+    .log-box { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; font-family:monospace; max-height:200px; overflow-y:auto; margin-top:12px; color:var(--text2); line-height:1.8; }
 
-    /* ── STATUS COLORS ── */
+    /* STATUS */
     .s-backlog      { background:rgba(120,113,163,.2); color:#A89ECC; }
     .s-levantar_req { background:rgba(240,165,0,.15); color:#F0A500; }
     .s-planejado    { background:rgba(74,158,232,.15); color:#4A9EE8; }
@@ -121,18 +102,44 @@
     .msg-ok    { background:rgba(62,201,142,.1); border:1px solid rgba(62,201,142,.3); color:var(--green); }
     .msg-err   { background:rgba(232,93,93,.1); border:1px solid rgba(232,93,93,.3); color:var(--red); }
 
-    .template-dl { display:inline-flex; align-items:center; gap:6px; padding:6px 14px;
-                   border:1px solid var(--border); border-radius:8px; font-size:12px; color:var(--text2);
-                   text-decoration:none; cursor:pointer; background:var(--bg3); }
+    .template-dl { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border:1px solid var(--border); border-radius:8px; font-size:12px; color:var(--text2); text-decoration:none; cursor:pointer; background:var(--bg3); }
     .template-dl:hover { border-color:var(--accent2); color:var(--text1); }
 
-    .col-w-titulo   { min-width:200px; }
-    .col-w-sm       { min-width:120px; }
-    .col-w-xs       { min-width:90px; }
-    .col-w-date     { min-width:130px; }
-    .col-w-num      { min-width:80px; }
-
+    .col-w-titulo { min-width:200px; }
+    .col-w-sm     { min-width:120px; }
+    .col-w-date   { min-width:130px; }
+    .col-w-num    { min-width:80px; }
     select.status-sel { min-width:130px; }
+
+    /* ── DEDUP ── */
+    .dedup-card {
+      background:var(--bg2); border:2px solid var(--yellow); border-radius:var(--radius);
+      margin-bottom:16px; overflow:hidden;
+    }
+    .dedup-header {
+      background:rgba(240,165,0,.1); padding:12px 18px;
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      border-bottom:1px solid rgba(240,165,0,.3);
+    }
+    .dedup-header-left { display:flex; align-items:center; gap:10px; }
+    .sim-pill {
+      font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px;
+      background:rgba(240,165,0,.2); color:var(--yellow); white-space:nowrap;
+    }
+    .sim-pill.high { background:rgba(232,93,93,.2); color:var(--red); }
+    .dedup-title { font-size:13px; font-weight:600; }
+    .dedup-body { display:grid; grid-template-columns:1fr 1fr; gap:0; }
+    .dedup-col { padding:14px 18px; }
+    .dedup-col + .dedup-col { border-left:1px solid var(--border); }
+    .dedup-col-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+    .dedup-col-label.new  { color:var(--blue); }
+    .dedup-col-label.exist { color:var(--text3); }
+    .dedup-field { font-size:12px; color:var(--text2); margin-bottom:4px; }
+    .dedup-field b { color:var(--text1); font-weight:500; }
+    .dedup-field .diff { background:rgba(240,165,0,.15); border-radius:3px; padding:0 4px; color:var(--yellow); }
+    .dedup-actions { padding:12px 18px; display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid var(--border); background:var(--bg3); }
+    .dedup-action-label { font-size:11px; color:var(--text3); align-self:center; margin-right:4px; }
+    .dedup-decided { padding:10px 18px; font-size:12px; color:var(--text3); background:var(--bg3); border-top:1px solid var(--border); font-style:italic; }
   </style>
 </head>
 <body>
@@ -152,47 +159,50 @@
       <div class="step-name">Preencher dados</div>
       <div class="step-desc">Tabela ou colar do Excel/CSV</div>
     </div>
-    <div class="step" id="step-tab-2" onclick="goStep(2)">
+    <div class="step" id="step-tab-2">
       <div class="step-num">Passo 2</div>
+      <div class="step-name">Duplicatas</div>
+      <div class="step-desc">Revisar possíveis duplicatas</div>
+    </div>
+    <div class="step" id="step-tab-3">
+      <div class="step-num">Passo 3</div>
       <div class="step-name">Revisar & validar</div>
       <div class="step-desc">Confira erros antes de importar</div>
     </div>
-    <div class="step" id="step-tab-3" onclick="goStep(3)">
-      <div class="step-num">Passo 3</div>
+    <div class="step" id="step-tab-4">
+      <div class="step-num">Passo 4</div>
       <div class="step-name">Importar</div>
       <div class="step-desc">Enviar para o GitHub</div>
     </div>
   </div>
 
-  <!-- ════════════════════════════════ PASSO 1 ════════════════════════════════ -->
+  <!-- ══════════════════ PASSO 1 ══════════════════ -->
   <div class="panel active" id="panel-1">
 
     <div class="card">
-      <h2>📋 Campos disponíveis</h2>
-      <p>Preencha a tabela abaixo ou cole diretamente do Excel. Campos marcados com <span style="color:var(--red)">*</span> são obrigatórios.</p>
+      <h2>📋 Preencha os dados</h2>
+      <p>Preencha a tabela abaixo ou cole diretamente do Excel. Campos com <span style="color:var(--red)">*</span> são obrigatórios.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
         <button class="template-dl" onclick="downloadTemplate()">⬇ Baixar modelo .csv</button>
         <button class="template-dl" onclick="showCsvPanel()">📋 Colar do Excel / CSV</button>
       </div>
     </div>
 
-    <!-- CSV PASTE PANEL -->
     <div class="card" id="csv-panel" style="display:none">
       <h2>📋 Colar do Excel</h2>
-      <p>Copie as linhas da planilha (Ctrl+C) e cole aqui. A primeira linha deve ser o cabeçalho com os nomes das colunas abaixo.</p>
+      <p>Copie as linhas da planilha (Ctrl+C) e cole aqui. A primeira linha deve ter o cabeçalho.</p>
       <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;font-family:monospace;color:var(--accent2);overflow-x:auto;white-space:nowrap">
         titulo &nbsp;|&nbsp; descricao &nbsp;|&nbsp; tema &nbsp;|&nbsp; dev &nbsp;|&nbsp; status &nbsp;|&nbsp; inicio &nbsp;|&nbsp; entrega &nbsp;|&nbsp; horas_realizadas &nbsp;|&nbsp; solicitante &nbsp;|&nbsp; prioridade
       </div>
-      <p style="font-size:12px;color:var(--text3)">Separador: <b style="color:var(--text2)">TAB</b> (padrão ao copiar do Excel) ou <b style="color:var(--text2)">ponto e vírgula (;)</b></p>
+      <p style="font-size:12px;color:var(--text3)">Separador: <b style="color:var(--text2)">TAB</b> (padrão do Excel) ou <b style="color:var(--text2)">ponto e vírgula (;)</b></p>
       <textarea class="csv-area" id="csv-input" placeholder="Cole aqui o conteúdo copiado do Excel..."></textarea>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="parseCsv()">✔ Processar CSV</button>
+        <button class="btn btn-primary" onclick="parseCsv()">✔ Processar</button>
         <button class="btn btn-ghost" onclick="document.getElementById('csv-panel').style.display='none'">Cancelar</button>
       </div>
       <div id="csv-msg"></div>
     </div>
 
-    <!-- EDITABLE TABLE -->
     <div class="card">
       <h2>Tabela de entrada <span id="row-count" style="font-size:12px;color:var(--text3);font-weight:400"></span></h2>
       <div class="tbl-wrap">
@@ -220,34 +230,40 @@
         <button class="btn btn-primary" onclick="addRow()">+ Adicionar linha</button>
         <button class="btn btn-ghost" onclick="clearRows()" style="color:var(--red);border-color:var(--red)">🗑 Limpar tudo</button>
         <span style="flex:1"></span>
-        <button class="btn btn-primary" onclick="goStep(2)">Revisar →</button>
+        <button class="btn btn-primary" onclick="startDedupCheck()">Verificar duplicatas →</button>
       </div>
     </div>
-
   </div><!-- /panel-1 -->
 
-  <!-- ════════════════════════════════ PASSO 2 ════════════════════════════════ -->
+  <!-- ══════════════════ PASSO 2 — DEDUP ══════════════════ -->
   <div class="panel" id="panel-2">
     <div class="card">
+      <h2>🔍 Verificação de possíveis duplicatas</h2>
+      <p id="dedup-intro"></p>
+      <div id="dedup-summary-msg"></div>
+      <div id="dedup-list"></div>
+      <div class="btn-row" id="dedup-actions-row">
+        <button class="btn btn-ghost" onclick="goStep(1)">← Voltar</button>
+        <button class="btn btn-yellow" onclick="acceptAllNew()" id="btn-accept-all-new">Manter todos como novos</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-primary" id="btn-go-preview" onclick="goStep(3)">Revisar & Validar →</button>
+      </div>
+    </div>
+  </div><!-- /panel-2 -->
+
+  <!-- ══════════════════ PASSO 3 ══════════════════ -->
+  <div class="panel" id="panel-3">
+    <div class="card">
       <h2>🔍 Revisão e validação</h2>
-      <p>Confira os dados abaixo antes de importar. Linhas com erro serão ignoradas na importação.</p>
+      <p>Confira os dados finais. Linhas com erro serão ignoradas.</p>
       <div id="validation-msg"></div>
       <div class="preview-wrap">
         <div class="tbl-wrap">
-          <table id="preview-table">
+          <table>
             <thead>
               <tr>
-                <th>#</th>
-                <th>Título</th>
-                <th>Tema</th>
-                <th>Dev(s)</th>
-                <th>Status</th>
-                <th>Início</th>
-                <th>Entrega</th>
-                <th>H. Realizadas</th>
-                <th>Solicitante</th>
-                <th>Prioridade</th>
-                <th>Validade</th>
+                <th>#</th><th>Título</th><th>Tema</th><th>Dev(s)</th><th>Status</th>
+                <th>Início</th><th>Entrega</th><th>H. Realizadas</th><th>Solicitante</th><th>Prioridade</th><th>Validade</th>
               </tr>
             </thead>
             <tbody id="preview-tbody"></tbody>
@@ -255,15 +271,15 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goStep(1)">← Voltar</button>
+        <button class="btn btn-ghost" onclick="goStep(2)">← Voltar</button>
         <span style="flex:1"></span>
-        <button class="btn btn-primary" id="btn-importar" onclick="goStep(3)">Importar →</button>
+        <button class="btn btn-primary" id="btn-importar" onclick="goStep(4)">Importar →</button>
       </div>
     </div>
-  </div><!-- /panel-2 -->
+  </div><!-- /panel-3 -->
 
-  <!-- ════════════════════════════════ PASSO 3 ════════════════════════════════ -->
-  <div class="panel" id="panel-3">
+  <!-- ══════════════════ PASSO 4 ══════════════════ -->
+  <div class="panel" id="panel-4">
     <div class="card">
       <h2>🚀 Importando para o RoadMap</h2>
       <div id="import-msg"></div>
@@ -274,23 +290,23 @@
         <a href="admin.html" class="btn btn-green">✔ Ver no Admin</a>
       </div>
     </div>
-  </div><!-- /panel-3 -->
+  </div><!-- /panel-4 -->
 
 </div><!-- /container -->
 
 <script>
-// ── CONFIG ─────────────────────────────────────────────────────────────────
+// ── CONFIG ──────────────────────────────────────────────────────────────────
 const GITHUB_USER = 'CapFernando';
 const GITHUB_REPO = 'RoadMap';
 const DATA_PATH   = 'data/melhorias.json';
 const API_URL     = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
 const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
-
 const runtimeToken = (typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '';
 
-// ── STATE ──────────────────────────────────────────────────────────────────
-let temas = [];
-let devs  = [];
+// ── STATE ───────────────────────────────────────────────────────────────────
+let temas = [], devs = [], existingMelhorias = [];
+// decisions[rowIndex] = 'new' | 'skip' | 'update:<existingId>'
+let dedupDecisions = {};
 
 const STATUS_OPTS = [
   { value:'backlog',      label:'Backlog' },
@@ -304,82 +320,84 @@ const STATUS_OPTS = [
 ];
 
 const STATUS_ALIAS = {
-  'backlog':'backlog','back log':'backlog',
-  'levantar req':'levantar_req','levantar_req':'levantar_req','levantamento':'levantar_req','req':'levantar_req',
-  'planejado':'planejado','estimado':'planejado',
+  'backlog':'backlog','levantar req':'levantar_req','levantar_req':'levantar_req','levantamento':'levantar_req',
+  'planejado':'planejado','estimado':'planejado','refinado':'planejado',
   'em andamento':'em_andamento','em_andamento':'em_andamento','andamento':'em_andamento','iniciado':'em_andamento','wip':'em_andamento',
-  'deploy':'deploy','homologacao':'deploy','homologação':'deploy',
-  'concluido':'concluido','concluído':'concluido','finalizado':'concluido','entregue':'concluido','done':'concluido',
+  'deploy':'deploy','homologacao':'deploy','homologação':'deploy','homolog':'deploy',
+  'concluido':'concluido','concluído':'concluido','finalizado':'concluido','entregue':'concluido','done':'concluido','ok':'concluido',
   'atrasado':'atrasado','atraso':'atrasado','delayed':'atrasado',
   'negada':'negada','negado':'negada','cancelado':'negada','cancelada':'negada',
 };
+const PRIO_ALIAS = { 'alta':'alta','high':'alta','1':'alta','media':'media','média':'media','medium':'media','2':'media','baixa':'baixa','low':'baixa','3':'baixa' };
 
-const PRIO_OPTS = ['','alta','media','baixa'];
-const PRIO_ALIAS = { 'alta':'alta','high':'alta','1':'alta','media':'media','média':'media','med':'media','medium':'media','2':'media','baixa':'baixa','low':'baixa','3':'baixa' };
+// ── SIMILARITY ──────────────────────────────────────────────────────────────
+const STOP_WORDS = new Set(['de','da','do','das','dos','para','por','com','em','no','na','nos','nas','e','a','o','as','os','um','uma','que','se','ao','à','pelo','pela','pelos','pelas','este','esta','esse','essa','seu','sua']);
 
-// ── INIT ───────────────────────────────────────────────────────────────────
+function tokenize(text) {
+  return (text||'').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9\s]/g,' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+}
+
+function similarity(a, b) {
+  const ta = new Set(tokenize(a));
+  const tb = new Set(tokenize(b));
+  if (!ta.size || !tb.size) return 0;
+  const intersection = [...ta].filter(w => tb.has(w)).length;
+  const union = new Set([...ta, ...tb]).size;
+  return intersection / union; // Jaccard
+}
+
+// ── INIT ────────────────────────────────────────────────────────────────────
 (async function init() {
   try {
     const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache:'no-store' });
     if (r.ok) {
       const d = await r.json();
       temas = d.temas || [];
-      devs  = (d.desenvolvedores || []).flatMap(v => v.split(/[\/,]/).map(s => s.trim())).filter(Boolean);
+      existingMelhorias = d.melhorias || [];
+      devs = (d.desenvolvedores||[]).flatMap(v => v.split(/[\/,]/).map(s=>s.trim())).filter(Boolean);
     }
   } catch(_) {}
-  addRow(); addRow(); addRow(); // start with 3 empty rows
+  addRow(); addRow(); addRow();
   updateRowCount();
 })();
 
-// ── HELPERS ────────────────────────────────────────────────────────────────
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function uid()   { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function esc(s)  { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function parseDate(s) {
   if (!s) return '';
   s = s.trim();
-  // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  // DD/MM/YYYY
   const m1 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m1) return `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
-  // DD/MM/YY
   const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
   if (m2) return `20${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;
   return '';
 }
 
-function normalizeStatus(s) {
-  return STATUS_ALIAS[(s||'').trim().toLowerCase()] || '';
-}
-
-function normalizePrio(s) {
-  return PRIO_ALIAS[(s||'').trim().toLowerCase()] || '';
-}
-
+function normalizeStatus(s) { return STATUS_ALIAS[(s||'').trim().toLowerCase()] || ''; }
+function normalizePrio(s)   { return PRIO_ALIAS[(s||'').trim().toLowerCase()] || ''; }
 function resolveTema(name) {
   if (!name) return null;
-  const n = name.trim().toLowerCase();
-  return temas.find(t => t.nome.toLowerCase() === n) || null;
+  return temas.find(t => t.nome.toLowerCase() === name.trim().toLowerCase()) || null;
 }
+
+function statusLabel(v) { return STATUS_OPTS.find(s=>s.value===v)?.label || v || '—'; }
 
 function buildStatusSel(val) {
-  return `<select class="status-sel">
-    ${STATUS_OPTS.map(o => `<option value="${o.value}" ${val===o.value?'selected':''}>${o.label}</option>`).join('')}
-  </select>`;
+  return `<select class="status-sel">${STATUS_OPTS.map(o=>`<option value="${o.value}"${val===o.value?' selected':''}>${o.label}</option>`).join('')}</select>`;
 }
-
 function buildPrioSel(val) {
-  return `<select>
-    ${PRIO_OPTS.map(p => `<option value="${p}" ${val===p?'selected':''}>${p||'—'}</option>`).join('')}
-  </select>`;
+  return `<select>${['','alta','media','baixa'].map(p=>`<option value="${p}"${val===p?' selected':''}>${p||'—'}</option>`).join('')}</select>`;
 }
 
-// ── TABLE ──────────────────────────────────────────────────────────────────
-function addRow(data = {}) {
+// ── TABLE ────────────────────────────────────────────────────────────────────
+function addRow(data={}) {
   const tbody = document.getElementById('input-tbody');
   const tr = document.createElement('tr');
   tr.dataset.rid = uid();
@@ -391,196 +409,318 @@ function addRow(data = {}) {
     <td class="col-w-sm">${buildStatusSel(data.status||'planejado')}</td>
     <td class="col-w-date"><input type="date" value="${esc(data.inicio||'')}"></td>
     <td class="col-w-date"><input type="date" value="${esc(data.entrega||'')}"></td>
-    <td class="col-w-num"><input type="number" min="0" step="0.5" placeholder="0" value="${esc(data.horas_realizadas!=null&&data.horas_realizadas!==''?data.horas_realizadas:'')}"></td>
+    <td class="col-w-num"><input type="number" min="0" step="0.5" placeholder="0" value="${data.horas_realizadas!=null&&data.horas_realizadas!==''?esc(data.horas_realizadas):''}"></td>
     <td class="col-w-sm"><input type="text" placeholder="Nome" value="${esc(data.solicitante||'')}"></td>
     <td class="col-w-sm">${buildPrioSel(data.prioridade||'')}</td>
     <td class="col-w-sm"><input type="text" placeholder="Observações" value="${esc(data.descricao||'')}"></td>
-    <td class="td-act"><button class="btn-del" onclick="delRow(this)" title="Remover linha">×</button></td>
-  `;
+    <td class="td-act"><button class="btn-del" onclick="delRow(this)">×</button></td>`;
   tbody.appendChild(tr);
   reindexRows();
 }
 
-function delRow(btn) {
-  btn.closest('tr').remove();
-  reindexRows();
-  updateRowCount();
-}
-
+function delRow(btn) { btn.closest('tr').remove(); reindexRows(); }
 function clearRows() {
   if (!confirm('Limpar todas as linhas?')) return;
   document.getElementById('input-tbody').innerHTML = '';
-  addRow(); addRow(); addRow();
-  reindexRows();
-  updateRowCount();
+  addRow(); addRow(); addRow(); reindexRows();
 }
-
 function reindexRows() {
-  document.querySelectorAll('#input-tbody tr').forEach((tr, i) => {
-    tr.querySelector('.row-num').textContent = i + 1;
-  });
+  document.querySelectorAll('#input-tbody tr').forEach((tr,i) => { tr.querySelector('.row-num').textContent = i+1; });
   updateRowCount();
 }
-
 function updateRowCount() {
   const n = document.querySelectorAll('#input-tbody tr').length;
   document.getElementById('row-count').textContent = `(${n} linha${n!==1?'s':''})`;
 }
 
-// Datalist hints
+// Datalists
 window.addEventListener('DOMContentLoaded', () => {
-  const dl1 = document.createElement('datalist'); dl1.id = 'tema-list';
-  const dl2 = document.createElement('datalist'); dl2.id = 'dev-list';
-  document.body.append(dl1, dl2);
-  // populated after load
+  ['tema-list','dev-list'].forEach(id => { const dl=document.createElement('datalist'); dl.id=id; document.body.append(dl); });
 });
-
-function populateDataLists() {
+setInterval(() => {
   const dl1 = document.getElementById('tema-list');
   const dl2 = document.getElementById('dev-list');
-  if (dl1) dl1.innerHTML = temas.map(t => `<option value="${t.nome}">`).join('');
-  if (dl2) dl2.innerHTML = devs.map(d => `<option value="${d}">`).join('');
-}
-setInterval(populateDataLists, 500);
+  if (dl1) dl1.innerHTML = temas.map(t=>`<option value="${t.nome}">`).join('');
+  if (dl2) dl2.innerHTML = devs.map(d=>`<option value="${d}">`).join('');
+}, 600);
 
-// ── CSV ────────────────────────────────────────────────────────────────────
-function showCsvPanel() {
-  document.getElementById('csv-panel').style.display = '';
-  document.getElementById('csv-input').focus();
-}
+// ── CSV ───────────────────────────────────────────────────────────────────────
+function showCsvPanel() { document.getElementById('csv-panel').style.display=''; document.getElementById('csv-input').focus(); }
 
 function parseCsv() {
   const raw = document.getElementById('csv-input').value.trim();
   if (!raw) { showCsvMsg('Cole algum conteúdo primeiro.','warn'); return; }
-
-  const lines = raw.split(/\r?\n/).filter(l => l.trim());
-  const sep   = lines[0].includes('\t') ? '\t' : ';';
+  const lines = raw.split(/\r?\n/).filter(l=>l.trim());
+  const sep = lines[0].includes('\t') ? '\t' : ';';
   const headers = lines[0].split(sep).map(h => h.trim().toLowerCase()
-    .replace(/[áàâã]/g,'a').replace(/[éêè]/g,'e').replace(/[íì]/g,'i')
-    .replace(/[óôõò]/g,'o').replace(/[ú]/g,'u').replace(/[^a-z0-9_]/g,'_'));
+    .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9_]/g,'_'));
 
-  const COL = {
-    titulo: findCol(headers, ['titulo','título','title','demanda','nome','tarefa']),
-    descricao: findCol(headers, ['descricao','descrição','description','obs','observacao','observações']),
-    tema: findCol(headers, ['tema','theme','projeto','area','área']),
-    dev: findCol(headers, ['dev','desenvolvedor','desenvolvedor_responsavel','responsavel','responsável']),
-    status: findCol(headers, ['status','situacao','situação','estado']),
-    inicio: findCol(headers, ['inicio','início','data_inicio','data_início','start','data_inicio','inicio_previsto']),
-    entrega: findCol(headers, ['entrega','fim','data_entrega','data_fim','end','prazo','deadline']),
-    horas_realizadas: findCol(headers, ['horas_realizadas','horas','h_realizadas','hrs','hours']),
-    solicitante: findCol(headers, ['solicitante','solicitado_por','requester','area_solicitante']),
-    prioridade: findCol(headers, ['prioridade','priority','prio']),
+  function fc(names) {
+    for (const n of names) { const i=headers.findIndex(h=>h===n||h.includes(n)); if(i>=0) return i; } return -1;
+  }
+  const C = {
+    titulo:fc(['titulo','title','demanda','nome','tarefa']),
+    descricao:fc(['descricao','descri','description','obs','observa']),
+    tema:fc(['tema','theme','projeto','area']),
+    dev:fc(['dev','desenvolvedor','responsavel']),
+    status:fc(['status','situacao','situa','estado']),
+    inicio:fc(['inicio','data_inicio','start','inicio_prev']),
+    entrega:fc(['entrega','data_entrega','fim','prazo','deadline','end']),
+    horas:fc(['horas','hrs','hours']),
+    solicitante:fc(['solicitante','requester']),
+    prioridade:fc(['prioridade','priority','prio']),
   };
-
-  let added = 0;
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g,''));
-    if (cols.every(c => !c)) continue;
-    const row = {
-      titulo:           COL.titulo           >= 0 ? cols[COL.titulo]           : '',
-      descricao:        COL.descricao        >= 0 ? cols[COL.descricao]        : '',
-      tema:             COL.tema             >= 0 ? cols[COL.tema]             : '',
-      dev:              COL.dev              >= 0 ? cols[COL.dev]              : '',
-      status:           normalizeStatus(COL.status >= 0 ? cols[COL.status] : '') || 'planejado',
-      inicio:           parseDate(COL.inicio >= 0 ? cols[COL.inicio] : ''),
-      entrega:          parseDate(COL.entrega >= 0 ? cols[COL.entrega] : ''),
-      horas_realizadas: COL.horas_realizadas >= 0 ? cols[COL.horas_realizadas] : '',
-      solicitante:      COL.solicitante      >= 0 ? cols[COL.solicitante]      : '',
-      prioridade:       normalizePrio(COL.prioridade >= 0 ? cols[COL.prioridade] : ''),
-    };
-    addRow(row);
+  let added=0;
+  for (let i=1;i<lines.length;i++) {
+    const cols = lines[i].split(sep).map(c=>c.trim().replace(/^"|"$/g,''));
+    if (cols.every(c=>!c)) continue;
+    addRow({
+      titulo:        C.titulo>=0  ? cols[C.titulo]  : '',
+      descricao:     C.descricao>=0 ? cols[C.descricao] : '',
+      tema:          C.tema>=0    ? cols[C.tema]    : '',
+      dev:           C.dev>=0     ? cols[C.dev]     : '',
+      status:        normalizeStatus(C.status>=0 ? cols[C.status] : '') || 'planejado',
+      inicio:        parseDate(C.inicio>=0  ? cols[C.inicio]  : ''),
+      entrega:       parseDate(C.entrega>=0 ? cols[C.entrega] : ''),
+      horas_realizadas: C.horas>=0 ? cols[C.horas] : '',
+      solicitante:   C.solicitante>=0 ? cols[C.solicitante] : '',
+      prioridade:    normalizePrio(C.prioridade>=0 ? cols[C.prioridade] : ''),
+    });
     added++;
   }
-
-  showCsvMsg(`${added} linha(s) importada(s) com sucesso.`, 'ok');
-  document.getElementById('csv-panel').style.display = 'none';
-  document.getElementById('csv-input').value = '';
+  showCsvMsg(`${added} linha(s) importada(s).`,'ok');
+  document.getElementById('csv-panel').style.display='none';
+  document.getElementById('csv-input').value='';
+}
+function showCsvMsg(msg,type) {
+  const el=document.getElementById('csv-msg');
+  el.innerHTML=`<div class="msg msg-${type==='ok'?'ok':'warn'}" style="margin-top:10px">${msg}</div>`;
+  setTimeout(()=>el.innerHTML='',4000);
 }
 
-function findCol(headers, names) {
-  for (const n of names) {
-    const idx = headers.findIndex(h => h === n || h.includes(n));
-    if (idx >= 0) return idx;
-  }
-  return -1;
-}
-
-function showCsvMsg(msg, type) {
-  const el = document.getElementById('csv-msg');
-  el.innerHTML = `<div class="msg msg-${type==='ok'?'ok':type==='warn'?'warn':'err'}" style="margin-top:10px">${msg}</div>`;
-  setTimeout(() => el.innerHTML = '', 4000);
-}
-
-// ── STEP NAVIGATION ────────────────────────────────────────────────────────
-function goStep(n) {
-  if (n === 2) buildPreview();
-  if (n === 3) runImport();
-  [1,2,3].forEach(i => {
-    document.getElementById('panel-' + i).classList.toggle('active', i === n);
-    document.getElementById('step-tab-' + i).classList.toggle('active', i === n);
-  });
-}
-
-// ── COLLECT ROWS ───────────────────────────────────────────────────────────
+// ── COLLECT ───────────────────────────────────────────────────────────────────
 function collectRows() {
   return Array.from(document.querySelectorAll('#input-tbody tr')).map(tr => {
     const inputs = tr.querySelectorAll('input, select, textarea');
     return {
-      titulo:           inputs[0]?.value?.trim() || '',
-      tema:             inputs[1]?.value?.trim() || '',
-      dev:              inputs[2]?.value?.trim() || '',
-      status:           inputs[3]?.value || 'planejado',
-      inicio:           inputs[4]?.value || '',
-      entrega:          inputs[5]?.value || '',
-      horas_realizadas: inputs[6]?.value !== '' ? parseFloat(inputs[6]?.value) : null,
-      solicitante:      inputs[7]?.value?.trim() || '',
-      prioridade:       inputs[8]?.value || '',
-      descricao:        inputs[9]?.value?.trim() || '',
+      titulo:           inputs[0]?.value?.trim()||'',
+      tema:             inputs[1]?.value?.trim()||'',
+      dev:              inputs[2]?.value?.trim()||'',
+      status:           inputs[3]?.value||'planejado',
+      inicio:           inputs[4]?.value||'',
+      entrega:          inputs[5]?.value||'',
+      horas_realizadas: inputs[6]?.value!==''? parseFloat(inputs[6]?.value) : null,
+      solicitante:      inputs[7]?.value?.trim()||'',
+      prioridade:       inputs[8]?.value||'',
+      descricao:        inputs[9]?.value?.trim()||'',
     };
   }).filter(r => r.titulo);
 }
 
-// ── PREVIEW ────────────────────────────────────────────────────────────────
+// ── STEP NAVIGATION ───────────────────────────────────────────────────────────
+const STEP_COUNT = 4;
+function goStep(n) {
+  if (n===2) return; // dedup handled by startDedupCheck
+  if (n===3) buildPreview();
+  if (n===4) runImport();
+  [1,2,3,4].forEach(i => {
+    document.getElementById('panel-'  +i).classList.toggle('active', i===n);
+    document.getElementById('step-tab-'+i).classList.toggle('active', i===n);
+  });
+  window.scrollTo(0,0);
+}
+
+// ── DEDUP CHECK ────────────────────────────────────────────────────────────────
+const SIM_THRESHOLD = 0.35; // 35% Jaccard triggers review
+
+function startDedupCheck() {
+  const rows = collectRows();
+  if (!rows.length) { alert('Adicione pelo menos uma linha com título antes de continuar.'); return; }
+
+  dedupDecisions = {};
+  const suspects = [];
+
+  rows.forEach((row, idx) => {
+    // Check against existing melhorias
+    let best = null, bestSim = 0;
+    for (const ex of existingMelhorias) {
+      const sim = similarity(row.titulo, ex.titulo);
+      if (sim > bestSim) { bestSim = sim; best = ex; }
+    }
+    // Check against OTHER new rows (lower threshold to catch internal dups)
+    let bestNew = null, bestNewSim = 0, bestNewIdx = -1;
+    for (let j=0; j<idx; j++) {
+      if (!rows[j].titulo) continue;
+      const sim = similarity(row.titulo, rows[j].titulo);
+      if (sim > bestNewSim) { bestNewSim=sim; bestNew=rows[j]; bestNewIdx=j; }
+    }
+
+    const vsExisting = bestSim >= SIM_THRESHOLD;
+    const vsNew      = bestNewSim >= SIM_THRESHOLD + 0.1; // slightly stricter for intra-batch
+
+    if (vsExisting || vsNew) {
+      suspects.push({
+        rowIdx: idx,
+        row,
+        vsExisting: vsExisting ? { item:best, sim:bestSim } : null,
+        vsNew:      vsNew      ? { item:bestNew, sim:bestNewSim, idx:bestNewIdx } : null,
+      });
+    }
+  });
+
+  if (!suspects.length) {
+    // No suspects — skip dedup step
+    document.getElementById('step-tab-2').classList.remove('warn');
+    [1,2,3,4].forEach(i => {
+      document.getElementById('panel-'  +i).classList.toggle('active',i===3);
+      document.getElementById('step-tab-'+i).classList.toggle('active',i===3);
+    });
+    buildPreview();
+    window.scrollTo(0,0);
+    return;
+  }
+
+  renderDedupPanel(rows, suspects);
+  [1,2,3,4].forEach(i => {
+    document.getElementById('panel-'  +i).classList.toggle('active',i===2);
+    document.getElementById('step-tab-'+i).classList.toggle('active',i===2);
+  });
+  document.getElementById('step-tab-2').classList.add('warn');
+  window.scrollTo(0,0);
+}
+
+function renderDedupPanel(rows, suspects) {
+  const intro = document.getElementById('dedup-intro');
+  const list  = document.getElementById('dedup-list');
+
+  intro.textContent = `Encontramos ${suspects.length} linha(s) com títulos similares a demandas existentes ou a outras linhas desta importação. Decida o que fazer com cada uma antes de continuar.`;
+
+  list.innerHTML = suspects.map(s => {
+    const { rowIdx, row, vsExisting, vsNew } = s;
+    const sim = vsExisting ? vsExisting.sim : vsNew.sim;
+    const pct = Math.round(sim * 100);
+    const isHigh = pct >= 65;
+    const matchItem = vsExisting ? vsExisting.item : vsNew.item;
+    const matchOrigin = vsExisting ? 'já existente no sistema' : `linha ${vsNew.idx+1} desta importação`;
+
+    function field(label, newVal, exVal) {
+      const diff = newVal !== exVal && newVal && exVal;
+      return `<div class="dedup-field"><b>${label}:</b> ${esc(newVal||'—')}${diff?` <span class="diff">≠ ${esc(exVal)}</span>`:''}</div>`;
+    }
+
+    return `<div class="dedup-card" id="dedup-card-${rowIdx}">
+      <div class="dedup-header">
+        <div class="dedup-header-left">
+          <span class="sim-pill ${isHigh?'high':''}">${pct}% similar</span>
+          <span class="dedup-title">Linha ${rowIdx+1}: "${esc(row.titulo)}"</span>
+        </div>
+        <span style="font-size:11px;color:var(--text3)">${matchOrigin}</span>
+      </div>
+      <div class="dedup-body">
+        <div class="dedup-col">
+          <div class="dedup-col-label new">🆕 Nova (linha ${rowIdx+1})</div>
+          ${field('Título', row.titulo, matchItem.titulo)}
+          ${field('Tema',   row.tema,   temasMap()[matchItem.tema_id])}
+          ${field('Dev',    row.dev,    matchItem.dev)}
+          ${field('Status', statusLabel(row.status), statusLabel(matchItem.status_planejamento))}
+          ${field('Início', row.inicio, matchItem.inicio)}
+          ${field('Entrega',row.entrega,matchItem.entrega)}
+        </div>
+        <div class="dedup-col">
+          <div class="dedup-col-label exist">📋 ${vsExisting?'Existente':'Linha '+( vsNew.idx+1)}</div>
+          ${field('Título', matchItem.titulo, row.titulo)}
+          ${field('Tema',   temasMap()[matchItem.tema_id], row.tema)}
+          ${field('Dev',    matchItem.dev, row.dev)}
+          ${field('Status', statusLabel(matchItem.status_planejamento), statusLabel(row.status))}
+          ${field('Início', matchItem.inicio, row.inicio)}
+          ${field('Entrega',matchItem.entrega, row.entrega)}
+        </div>
+      </div>
+      <div class="dedup-actions" id="dedup-act-${rowIdx}">
+        <span class="dedup-action-label">Decisão:</span>
+        <button class="btn btn-primary" onclick="decideDuplicate(${rowIdx},'new','${matchItem.id||''}')">✚ Importar como novo card</button>
+        <button class="btn btn-ghost"   onclick="decideDuplicate(${rowIdx},'skip','${matchItem.id||''}')">✕ Pular (não importar)</button>
+        ${vsExisting ? `<button class="btn btn-yellow" onclick="decideDuplicate(${rowIdx},'update','${matchItem.id}')">↻ Atualizar existente</button>` : ''}
+      </div>
+      <div class="dedup-decided" id="dedup-decided-${rowIdx}" style="display:none"></div>
+    </div>`;
+  }).join('');
+}
+
+function temasMap() {
+  const m = {};
+  temas.forEach(t => m[t.id] = t.nome);
+  return m;
+}
+
+function decideDuplicate(rowIdx, decision, existingId) {
+  dedupDecisions[rowIdx] = decision === 'update' ? `update:${existingId}` : decision;
+  const actEl     = document.getElementById('dedup-act-' + rowIdx);
+  const decidedEl = document.getElementById('dedup-decided-' + rowIdx);
+  const card      = document.getElementById('dedup-card-' + rowIdx);
+  const labels    = { new:'✚ Importar como novo card', skip:'✕ Pular esta linha', update:'↻ Atualizar card existente' };
+  actEl.style.display     = 'none';
+  decidedEl.style.display = '';
+  decidedEl.textContent   = `Decisão: ${labels[decision]}`;
+  card.style.opacity = '0.6';
+  checkAllDecided();
+}
+
+function checkAllDecided() {
+  const cards = document.querySelectorAll('[id^="dedup-card-"]');
+  const allDone = Array.from(cards).every(c => {
+    const idx = c.id.replace('dedup-card-','');
+    return !!dedupDecisions[idx];
+  });
+  document.getElementById('btn-go-preview').style.background = allDone ? '' : 'var(--bg4)';
+}
+
+function acceptAllNew() {
+  document.querySelectorAll('[id^="dedup-card-"]').forEach(c => {
+    const idx = c.id.replace('dedup-card-','');
+    if (!dedupDecisions[idx]) decideDuplicate(parseInt(idx), 'new', '');
+  });
+}
+
+// ── PREVIEW ───────────────────────────────────────────────────────────────────
 function buildPreview() {
   const rows = collectRows();
   const tbody = document.getElementById('preview-tbody');
   const msgEl = document.getElementById('validation-msg');
-
   if (!rows.length) {
-    msgEl.innerHTML = '<div class="msg msg-warn">Nenhuma linha com título preenchido encontrada. Volte e preencha os dados.</div>';
+    msgEl.innerHTML = '<div class="msg msg-warn">Nenhuma linha com título preenchido.</div>';
     tbody.innerHTML = '';
     document.getElementById('btn-importar').disabled = true;
     return;
   }
 
-  let erros = 0, avisos = 0;
-  tbody.innerHTML = rows.map((r, i) => {
-    const errs = [];
-    const warns = [];
+  let erros=0, avisos=0;
+  tbody.innerHTML = rows.map((r,i) => {
+    const decision = dedupDecisions[i] || 'new';
+    if (decision === 'skip') return `<tr style="opacity:.35"><td colspan="11" style="text-align:center;padding:8px;color:var(--text3)">— Linha ${i+1} pulada —</td></tr>`;
+
+    const errs=[], warns=[];
     if (!r.titulo) errs.push('Título obrigatório');
     if (r.inicio && r.entrega && r.entrega < r.inicio) errs.push('Entrega < Início');
-    const temaMatch = resolveTema(r.tema);
-    if (r.tema && !temaMatch) warns.push(`Tema "${r.tema}" não encontrado — será criado`);
+    if (r.tema && !resolveTema(r.tema)) warns.push(`Tema "${r.tema}" será criado`);
+    if (decision.startsWith('update:')) warns.push('Atualizará card existente');
 
-    const valid = errs.length === 0;
-    if (!valid) erros++;
+    if (errs.length) erros++;
     if (warns.length) avisos++;
 
-    const statusClass = `badge-status s-${r.status}`;
     const badge = errs.length
       ? `<span class="badge badge-err">✗ ${errs[0]}</span>`
       : warns.length
         ? `<span class="badge badge-warn">⚠ ${warns[0]}</span>`
         : `<span class="badge badge-ok">✓ OK</span>`;
 
-    return `<tr style="${valid?'':'opacity:.5'}">
+    return `<tr style="${errs.length?'opacity:.5':''}">
       <td style="color:var(--text3);font-size:11px;text-align:center">${i+1}</td>
       <td>${esc(r.titulo)}</td>
       <td>${esc(r.tema)||'—'}</td>
       <td>${esc(r.dev)||'—'}</td>
-      <td><span class="${statusClass}">${STATUS_OPTS.find(s=>s.value===r.status)?.label||r.status}</span></td>
-      <td>${r.inicio||'—'}</td>
-      <td>${r.entrega||'—'}</td>
+      <td><span class="badge-status s-${r.status}">${statusLabel(r.status)}</span></td>
+      <td>${r.inicio||'—'}</td><td>${r.entrega||'—'}</td>
       <td>${r.horas_realizadas!=null?r.horas_realizadas:'—'}</td>
       <td>${esc(r.solicitante)||'—'}</td>
       <td>${esc(r.prioridade)||'—'}</td>
@@ -588,150 +728,123 @@ function buildPreview() {
     </tr>`;
   }).join('');
 
-  const valid = rows.filter(r => r.titulo).length - erros;
-  msgEl.innerHTML = erros > 0
-    ? `<div class="msg msg-warn">⚠ ${valid} linha(s) válidas · ${erros} com erro (serão ignoradas) · ${avisos} aviso(s)</div>`
+  const total = rows.filter(r=>r.titulo && dedupDecisions[rows.indexOf(r)]!=='skip').length;
+  const valid = total - erros;
+  msgEl.innerHTML = erros
+    ? `<div class="msg msg-warn">⚠ ${valid} OK · ${erros} com erro · ${avisos} aviso(s)</div>`
     : `<div class="msg msg-ok">✓ ${valid} linha(s) prontas para importar${avisos?` · ${avisos} aviso(s)`:''}</div>`;
-
-  document.getElementById('btn-importar').disabled = valid === 0;
+  document.getElementById('btn-importar').disabled = valid===0;
 }
 
-// ── IMPORT ─────────────────────────────────────────────────────────────────
+// ── IMPORT ────────────────────────────────────────────────────────────────────
 async function runImport() {
-  const msgEl  = document.getElementById('import-msg');
-  const logEl  = document.getElementById('log-box');
-  const prog   = document.getElementById('prog');
-  const actEl  = document.getElementById('import-actions');
+  const msgEl = document.getElementById('import-msg');
+  const logEl = document.getElementById('log-box');
+  const prog  = document.getElementById('prog');
+  const actEl = document.getElementById('import-actions');
+  msgEl.innerHTML=''; logEl.textContent=''; prog.style.width='0'; actEl.style.display='none';
 
-  msgEl.innerHTML = '';
-  logEl.textContent = '';
-  prog.style.width = '0';
-  actEl.style.display = 'none';
+  function log(m) { logEl.textContent+=m+'\n'; logEl.scrollTop=logEl.scrollHeight; }
+  function pct(v) { prog.style.width=v+'%'; }
 
-  function log(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
-  function setProgress(pct) { prog.style.width = pct + '%'; }
+  const rows = collectRows().filter(r=>r.titulo);
+  if (!rows.length) { msgEl.innerHTML='<div class="msg msg-err">Nenhuma linha válida.</div>'; return; }
+  if (!runtimeToken) { msgEl.innerHTML='<div class="msg msg-err">Token GitHub não encontrado.</div>'; return; }
 
-  const rows = collectRows().filter(r => r.titulo);
-  if (!rows.length) {
-    msgEl.innerHTML = '<div class="msg msg-err">Nenhuma linha válida para importar.</div>'; return;
-  }
-
-  if (!runtimeToken) {
-    msgEl.innerHTML = '<div class="msg msg-err">Token do GitHub não encontrado. Verifique o config.js ou localStorage rm_token.</div>'; return;
-  }
-
-  log('🔄 Buscando dados atuais do GitHub...');
-  setProgress(10);
+  log('🔄 Buscando dados atuais do GitHub...'); pct(10);
 
   let currentData, fileSha;
   try {
-    const r = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
-    });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const r = await fetch(API_URL+'?t='+Date.now(), { cache:'no-store', headers:{Authorization:`token ${runtimeToken}`,Accept:'application/vnd.github.v3+json'} });
+    if (!r.ok) throw new Error('HTTP '+r.status);
     const j = await r.json();
     fileSha = j.sha;
     currentData = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));
-    log(`✓ Dados obtidos — ${currentData.melhorias?.length||0} demanda(s) existentes`);
-  } catch(e) {
-    msgEl.innerHTML = `<div class="msg msg-err">Erro ao buscar dados: ${e.message}</div>`;
-    return;
-  }
+    log(`✓ ${currentData.melhorias?.length||0} demanda(s) existentes`);
+  } catch(e) { msgEl.innerHTML=`<div class="msg msg-err">Erro ao buscar dados: ${e.message}</div>`; return; }
 
-  setProgress(25);
+  pct(25);
 
   // Resolve/create temas
-  const temasMap = {};
-  (currentData.temas||[]).forEach(t => temasMap[t.nome.toLowerCase()] = t.id);
+  const tMap = {};
+  (currentData.temas||[]).forEach(t => tMap[t.nome.toLowerCase()]=t.id);
   const novosTemas = [];
-
   rows.forEach(r => {
     if (!r.tema) return;
-    const key = r.tema.trim().toLowerCase();
-    if (!temasMap[key]) {
-      const newId = uid();
-      temasMap[key] = newId;
-      novosTemas.push({ id: newId, nome: r.tema.trim() });
-      log(`⚡ Criando novo tema: "${r.tema.trim()}"`);
+    const k = r.tema.trim().toLowerCase();
+    if (!tMap[k]) { const id=uid(); tMap[k]=id; novosTemas.push({id,nome:r.tema.trim()}); log(`⚡ Novo tema: "${r.tema.trim()}"`); }
+  });
+  if (novosTemas.length) currentData.temas = [...(currentData.temas||[]), ...novosTemas];
+  pct(40);
+
+  const now = new Date().toISOString();
+  let inserts=0, updates=0, skips=0;
+
+  rows.forEach((r, i) => {
+    if (!r.titulo) return;
+    const decision = dedupDecisions[i] || 'new';
+    if (decision==='skip') { skips++; log(`⊘ Linha ${i+1} pulada: "${r.titulo}"`); return; }
+
+    const temaId = r.tema ? tMap[r.tema.trim().toLowerCase()] || null : null;
+    const payload = {
+      titulo: r.titulo, descricao: r.descricao||'',
+      tema_id: temaId, dev: r.dev||'',
+      status_planejamento: r.status||'planejado',
+      inicio: r.inicio||'', entrega: r.entrega||'',
+      horas_realizadas: r.horas_realizadas!=null&&r.horas_realizadas!==''?Number(r.horas_realizadas):0,
+      solicitante: r.solicitante||'', prioridade: r.prioridade||'',
+      atualizado_em: now,
+    };
+
+    if (decision.startsWith('update:')) {
+      const existingId = decision.split(':')[1];
+      const idx = currentData.melhorias.findIndex(m=>m.id===existingId);
+      if (idx>=0) {
+        currentData.melhorias[idx] = { ...currentData.melhorias[idx], ...payload };
+        updates++;
+        log(`↻ Atualizado: "${r.titulo}"`);
+      }
+    } else {
+      currentData.melhorias.push({ id:uid(), criado_em:now, ...payload });
+      inserts++;
+      log(`✚ Adicionado: "${r.titulo}"`);
     }
   });
 
-  if (novosTemas.length) {
-    currentData.temas = [...(currentData.temas||[]), ...novosTemas];
-    log(`✓ ${novosTemas.length} tema(s) adicionado(s)`);
-  }
-
-  setProgress(40);
-
-  // Build new melhorias
-  const now = new Date().toISOString();
-  const novas = rows.filter(r => r.titulo).map(r => {
-    const key = (r.tema||'').trim().toLowerCase();
-    const tema_id = key ? temasMap[key] : null;
-    return {
-      id: uid(),
-      titulo: r.titulo,
-      descricao: r.descricao || '',
-      tema_id,
-      dev: r.dev || '',
-      status_planejamento: r.status || 'planejado',
-      inicio: r.inicio || '',
-      entrega: r.entrega || '',
-      horas_realizadas: r.horas_realizadas != null && r.horas_realizadas !== '' ? Number(r.horas_realizadas) : 0,
-      solicitante: r.solicitante || '',
-      prioridade: r.prioridade || '',
-      criado_em: now,
-      atualizado_em: now,
-    };
-  });
-
-  log(`📦 ${novas.length} demanda(s) preparadas para inserção`);
-  setProgress(55);
-
-  currentData.melhorias = [...(currentData.melhorias||[]), ...novas];
+  pct(70);
   currentData.atualizado_em = now;
-
-  // Encode and PUT
+  log(`📦 ${inserts} novo(s) · ${updates} atualizado(s) · ${skips} pulado(s)`);
   log('📤 Enviando para o GitHub...');
-  setProgress(70);
 
   try {
-    const bytes = new TextEncoder().encode(JSON.stringify(currentData, null, 2));
-    let binary = '';
-    for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i+8192));
-    const content = btoa(binary);
-
+    const bytes = new TextEncoder().encode(JSON.stringify(currentData,null,2));
+    let binary='';
+    for (let i=0;i<bytes.length;i+=8192) binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
     const res = await fetch(API_URL, {
-      method: 'PUT',
-      headers: {
-        Authorization: `token ${runtimeToken}`,
-        Accept: 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ message: `chore: importacao ${novas.length} demandas`, content, sha: fileSha })
+      method:'PUT',
+      headers:{Authorization:`token ${runtimeToken}`,Accept:'application/vnd.github.v3+json','Content-Type':'application/json'},
+      body:JSON.stringify({message:`chore: importacao ${inserts} novas ${updates} atualizadas`,content:btoa(binary),sha:fileSha})
     });
-    if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Erro ao salvar'); }
-    setProgress(100);
-    log(`✓ Importação concluída! ${novas.length} demanda(s) adicionadas.`);
-    msgEl.innerHTML = `<div class="msg msg-ok">✅ ${novas.length} demanda(s) importada(s) com sucesso!</div>`;
-    actEl.style.display = '';
+    if (!res.ok) { const e=await res.json(); throw new Error(e.message||'Erro ao salvar'); }
+    pct(100);
+    log(`✓ Concluído!`);
+    msgEl.innerHTML=`<div class="msg msg-ok">✅ ${inserts} demanda(s) adicionada(s) · ${updates} atualizada(s) · ${skips} ignorada(s)</div>`;
+    actEl.style.display='';
   } catch(e) {
-    msgEl.innerHTML = `<div class="msg msg-err">Erro ao salvar: ${e.message}</div>`;
-    log('✗ Falha: ' + e.message);
+    msgEl.innerHTML=`<div class="msg msg-err">Erro: ${e.message}</div>`;
+    log('✗ '+e.message);
   }
 }
 
-// ── CSV TEMPLATE DOWNLOAD ──────────────────────────────────────────────────
+// ── CSV TEMPLATE ──────────────────────────────────────────────────────────────
 function downloadTemplate() {
-  const header = 'titulo;descricao;tema;dev;status;inicio;entrega;horas_realizadas;solicitante;prioridade';
-  const examples = [
+  const hdr = 'titulo;descricao;tema;dev;status;inicio;entrega;horas_realizadas;solicitante;prioridade';
+  const ex  = [
     'Validação de regra de crédito;Regra nova para score > 700;AxCred - Reanálise;Gabriel;concluido;2025-06-02;2025-06-13;40;Área de Crédito;alta',
     'Dashboard de inadimplência;;Risco;Ana / João;em_andamento;2025-07-01;2025-07-15;;TI;media',
     'Correção bug extrato;;;Maria;concluido;2025-06-10;2025-06-11;8;;baixa',
   ];
-  const csv = [header, ...examples].join('\r\n');
-  const blob = new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8' });
+  const blob = new Blob(['﻿'+[hdr,...ex].join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'modelo_importacao_roadmap.csv';
