@@ -682,6 +682,7 @@ function doLogin() {
     const now = new Date();
     viewYear = now.getFullYear();
     viewMonth = now.getMonth();
+    setupGanttCardListener();
     loadFromGitHub();
   } else {
     document.getElementById('login-error').textContent = 'Senha incorreta.';
@@ -1149,25 +1150,26 @@ function renderGantt() {
   attachCardClickListeners();
 }
 
-let _lastCardTap = { time: 0, id: null };
-
-function attachCardClickListeners() {
-  document.querySelectorAll('.gantt-card').forEach(card => {
-    card.addEventListener('mousedown', e => {
-      const now = Date.now();
-      const id  = card.dataset.id;
-      if (now - _lastCardTap.time < 400 && _lastCardTap.id === id) {
-        // Duplo clique detectado via mousedown consecutivo
-        e.preventDefault();
-        e.stopPropagation();
-        _lastCardTap = { time: 0, id: null };
-        openModal(id);
-      } else {
-        _lastCardTap = { time: now, id };
-      }
-    });
-  });
+function setupGanttCardListener() {
+  const table = document.getElementById('gantt-table');
+  let _tap = { time: 0, id: null };
+  table.addEventListener('mousedown', e => {
+    const card = e.target.closest('.gantt-card');
+    if (!card) return;
+    const id  = card.dataset.id;
+    const now = Date.now();
+    if (now - _tap.time < 400 && _tap.id === id) {
+      e.preventDefault();
+      e.stopPropagation();
+      _tap = { time: 0, id: null };
+      openModal(id);
+    } else {
+      _tap = { time: now, id };
+    }
+  }, true); // capture phase — dispara antes do drag
 }
+
+function attachCardClickListeners() {} // mantido por compatibilidade, não faz mais nada
 
 // ── TOOLTIP ───────────────────────────────────────────────────────────────
 function showTooltip(e, id) {
