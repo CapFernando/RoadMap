@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projetos por Tema — RoadMap</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0E0E0D; --bg2:#161614; --bg3:#1E1E1C; --bg4:#252522;
+      --border:#2E2E2B; --border2:#3A3A36;
+      --text:#ECEAE2; --text2:#A8A49A; --text3:#6E6A62;
+      --blue:#3B8FE8; --amber:#E89C2F; --green:#5EA832;
+      --red:#E84444; --purple:#9B6FE8; --teal:#2BBFA0;
+      --radius:10px;
+    }
+    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; line-height:1.6; min-height:100vh; }
+
+    /* ── HEADER ── */
+    header { display:flex; align-items:center; justify-content:space-between; padding:14px 28px; border-bottom:1px solid var(--border); background:var(--bg2); gap:12px; flex-wrap:wrap; }
+    .header-left { display:flex; align-items:center; gap:12px; }
+    .header-left h1 { font-size:17px; font-weight:600; }
+    .header-right { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; text-decoration:none; }
+    .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
+    .btn-secondary:hover { opacity:.8; }
+    .btn-primary { background:var(--blue); color:#fff; }
+    .btn-primary:hover { opacity:.85; }
+
+    /* ── FILTERS ── */
+    .filters { display:flex; align-items:flex-end; gap:14px; padding:20px 28px 0; flex-wrap:wrap; }
+    .filter-group { display:flex; flex-direction:column; gap:4px; }
+    .filter-group label { font-size:12px; color:var(--text2); }
+    .filter-group select {
+      background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); padding:8px 12px; font-size:14px; font-family:inherit; outline:none;
+    }
+    .filter-group select:focus { border-color:var(--blue); }
+
+    /* ── MAIN ── */
+    main { padding:24px 28px 60px; }
+
+    /* ── TEMA SECTION ── */
+    .tema-section { margin-bottom:40px; border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+    .tema-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 20px; background:var(--bg2); border-bottom:1px solid var(--border);
+      flex-wrap:wrap; gap:8px;
+    }
+    .tema-title { font-size:16px; font-weight:700; display:flex; align-items:center; gap:10px; }
+    .tema-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+    .tema-stats { display:flex; gap:16px; flex-wrap:wrap; }
+    .tema-stat { font-size:12px; color:var(--text2); }
+    .tema-stat strong { color:var(--text); font-weight:600; }
+    .tema-body { padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    @media(max-width:700px) { .tema-body { grid-template-columns:1fr; } }
+
+    /* ── TOP PROJETOS ── */
+    .panel { background:var(--bg3); border-radius:var(--radius); padding:16px; }
+    .panel-title { font-size:13px; font-weight:600; color:var(--text2); margin-bottom:14px; }
+    .proj-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .proj-rank { font-size:12px; font-weight:700; color:var(--text3); width:18px; text-align:right; flex-shrink:0; }
+    .proj-bar-wrap { flex:1; }
+    .proj-name { font-size:12px; color:var(--text); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px; }
+    .proj-bar-bg { background:var(--bg4); border-radius:4px; height:8px; overflow:hidden; }
+    .proj-bar-fill { height:8px; border-radius:4px; transition:width .4s; }
+    .proj-hours { font-size:12px; color:var(--text2); white-space:nowrap; flex-shrink:0; }
+
+    /* ── DEVS ── */
+    .dev-list { display:flex; flex-direction:column; gap:8px; }
+    .dev-row { display:flex; align-items:center; gap:10px; }
+    .dev-avatar { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; }
+    .dev-info { flex:1; }
+    .dev-name  { font-size:13px; color:var(--text); font-weight:500; }
+    .dev-hours { font-size:11px; color:var(--text2); }
+    .dev-pct   { font-size:12px; color:var(--text3); flex-shrink:0; }
+
+    /* ── EMPTY ── */
+    .empty-msg { text-align:center; color:var(--text3); font-size:14px; padding:40px 20px; }
+
+    /* ── TOAST ── */
+    #toast { position:fixed; bottom:24px; right:24px; padding:12px 18px; border-radius:var(--radius); font-size:14px; font-weight:500; opacity:0; pointer-events:none; transition:opacity .3s; z-index:999; }
+    #toast.show { opacity:1; }
+    #toast.ok  { background:#1a3d1a; color:#7EE0A0; border:1px solid #2d6b2d; }
+    #toast.err { background:#3d1a1a; color:#F9A0A0; border:1px solid #6b2d2d; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>📁 Projetos por Tema</h1>
+  </div>
+  <div class="header-right">
+    <span id="lbl-updated" style="font-size:12px;color:var(--text3)">—</span>
+    <a href="admin.html" class="btn btn-secondary">← Admin</a>
+    <a href="index.html" class="btn btn-secondary" target="_blank">📊 Dashboard</a>
+  </div>
+</header>
+
+<div class="filters">
+  <div class="filter-group">
+    <label>Mês</label>
+    <select id="f-mes">
+      <option value="">Todos</option>
+      <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+      <option value="3">Março</option><option value="4">Abril</option>
+      <option value="5">Maio</option><option value="6">Junho</option>
+      <option value="7">Julho</option><option value="8">Agosto</option>
+      <option value="9">Setembro</option><option value="10">Outubro</option>
+      <option value="11">Novembro</option><option value="12">Dezembro</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Ano</label>
+    <select id="f-ano"><option value="">Todos</option></select>
+  </div>
+  <button class="btn btn-primary" onclick="renderPage()">Atualizar</button>
+</div>
+
+<main id="main-content">
+  <div class="empty-msg">Carregando dados…</div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────
+const REPO  = 'CapFernando/RoadMap';
+const FILE  = 'data/melhorias.json';
+const API_URL = `https://api.github.com/repos/${REPO}/contents/${FILE}`;
+const RAW_URL = `https://raw.githubusercontent.com/${REPO}/main/${FILE}`;
+
+const COLORS = [
+  '#3B8FE8','#5EA832','#E89C2F','#9B6FE8','#2BBFA0',
+  '#E84444','#E84494','#4AB0E8','#A8E83B','#E8C43B',
+  '#FF6B6B','#C9B1FF','#FFD166','#06D6A0','#118AB2'
+];
+const TEMA_COLORS = COLORS;
+
+let state = { temas:[], melhorias:[], feriados:[] };
+let runtimeToken = window.GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
+
+// ── HELPERS ──────────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show ' + type;
+  clearTimeout(el._t); el._t = setTimeout(() => el.className = '', 3000);
+}
+
+function formatDate(s) {
+  if (!s) return '';
+  const [y,m,d] = s.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function calcHorasPlanejadas(inicio, entrega) {
+  if (!inicio || !entrega) return null;
+  const ferSet = new Set((state.feriados||[]).map(f => f.data||f).filter(Boolean));
+  let count = 0;
+  const d = new Date(inicio+'T00:00:00'), end = new Date(entrega+'T00:00:00');
+  if (end < d) return null;
+  while (d <= end) {
+    const dw = d.getDay();
+    if (dw !== 0 && dw !== 6 && !ferSet.has(d.toISOString().slice(0,10))) count++;
+    d.setDate(d.getDate()+1);
+  }
+  return count * 8;
+}
+
+function getHorasEfetivas(m) {
+  if (m.horas_realizadas > 0) return m.horas_realizadas;
+  return calcHorasPlanejadas(m.inicio, m.entrega) || 0;
+}
+
+function splitDevs(s) {
+  if (!s) return [];
+  return s.split(/[\/,]/).map(d => d.trim()).filter(Boolean);
+}
+
+// ── DATA ─────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const headers = runtimeToken
+      ? { Authorization:`token ${runtimeToken}`, Accept:'application/vnd.github.v3+json' }
+      : {};
+    const res = await fetch(API_URL + '?t=' + Date.now(), { cache:'no-store', headers });
+    if (res.ok) {
+      const json = await res.json();
+      const raw = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
+      applyData(raw); return;
+    }
+  } catch(_){}
+  try {
+    const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache:'no-store' });
+    const raw = await res.json();
+    applyData(raw);
+  } catch(e) { toast('Erro ao carregar dados: ' + e.message, 'err'); }
+}
+
+function applyData(data) {
+  state.temas      = data.temas      || [];
+  state.melhorias  = data.melhorias  || [];
+  state.feriados   = data.feriados   || [];
+  const dt = data.atualizado_em ? new Date(data.atualizado_em).toLocaleString('pt-BR') : '';
+  document.getElementById('lbl-updated').textContent = dt ? `Atualizado em ${dt}` : '';
+  buildAnoFilter();
+  renderPage();
+}
+
+function buildAnoFilter() {
+  const sel = document.getElementById('f-ano');
+  const anos = new Set();
+  state.melhorias.forEach(m => { if (m.inicio) anos.add(m.inicio.slice(0,4)); });
+  const curY = new Date().getFullYear().toString();
+  anos.add(curY);
+  const sorted = [...anos].sort((a,b) => b-a);
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>' + sorted.map(y =>
+    `<option value="${y}"${y===cur||(!cur&&y===curY)?'selected':''}>${y}</option>`
+  ).join('');
+  if (!cur) sel.value = curY;
+  // default mes = current month
+  const selM = document.getElementById('f-mes');
+  if (!selM.value) selM.value = new Date().getMonth() + 1;
+}
+
+// ── RENDER ───────────────────────────────────────────────────────
+function renderPage() {
+  const mes = parseInt(document.getElementById('f-mes').value) || null;
+  const ano = document.getElementById('f-ano').value || null;
+
+  let items = state.melhorias.filter(m => {
+    if (m.status_planejamento === 'negada') return false;
+    if (!m.inicio) return false;
+    const d = new Date(m.inicio + 'T00:00:00');
+    if (ano && d.getFullYear().toString() !== ano) return false;
+    if (mes && d.getMonth() + 1 !== mes) return false;
+    return true;
+  });
+
+  const temas = state.temas.filter(t => items.some(m => m.tema_id === t.id));
+
+  const main = document.getElementById('main-content');
+  if (!temas.length) {
+    main.innerHTML = '<div class="empty-msg">Nenhuma demanda encontrada para o período selecionado.</div>';
+    return;
+  }
+
+  main.innerHTML = temas.map((tema, ti) => {
+    const temaItems = items.filter(m => m.tema_id === tema.id);
+    const concluidos = temaItems.filter(m => m.status_planejamento === 'concluido' || m.status === 'concluida');
+    const totalHPlan = temaItems.reduce((s,m) => s + (calcHorasPlanejadas(m.inicio, m.entrega)||0), 0);
+    const totalHReal = temaItems.reduce((s,m) => s + getHorasEfetivas(m), 0);
+    const cor = TEMA_COLORS[ti % TEMA_COLORS.length];
+
+    // TOP 5 projetos por horas efetivas
+    const sorted = [...temaItems].sort((a,b) => getHorasEfetivas(b) - getHorasEfetivas(a)).slice(0, 5);
+    const maxH = getHorasEfetivas(sorted[0]) || 1;
+
+    const projRows = sorted.map((m, i) => {
+      const h = getHorasEfetivas(m);
+      const pct = Math.round((h / maxH) * 100);
+      const isConcl = m.status_planejamento === 'concluido' || m.status === 'concluida';
+      const hrStr = isConcl ? (m.horas_realizadas > 0 ? m.horas_realizadas + 'h' : h + 'h*') : h + 'h plan.';
+      return `<div class="proj-row">
+        <span class="proj-rank">${i+1}.</span>
+        <div class="proj-bar-wrap">
+          <div class="proj-name" title="${m.titulo}">${m.titulo}</div>
+          <div class="proj-bar-bg"><div class="proj-bar-fill" style="width:${pct}%;background:${cor}"></div></div>
+        </div>
+        <span class="proj-hours">${hrStr}</span>
+      </div>`;
+    }).join('');
+
+    // Devs do tema
+    const devMap = {};
+    temaItems.forEach(m => {
+      const devs = splitDevs(m.dev);
+      const h = (calcHorasPlanejadas(m.inicio, m.entrega)||0) / (devs.length||1);
+      devs.forEach(d => { devMap[d] = (devMap[d]||0) + h; });
+    });
+    const devsArr = Object.entries(devMap).sort((a,b)=>b[1]-a[1]);
+    const totalDevH = devsArr.reduce((s,[,h])=>s+h,0)||1;
+
+    const devRows = devsArr.slice(0,8).map(([dev, h], i) => {
+      const pct = Math.round((h / totalDevH) * 100);
+      const initials = dev.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+      const bg = COLORS[i % COLORS.length] + '33';
+      const fg = COLORS[i % COLORS.length];
+      return `<div class="dev-row">
+        <div class="dev-avatar" style="background:${bg};color:${fg}">${initials}</div>
+        <div class="dev-info">
+          <div class="dev-name">${dev}</div>
+          <div class="dev-hours">${Math.round(h)}h planejadas</div>
+        </div>
+        <span class="dev-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+
+    return `<div class="tema-section">
+      <div class="tema-header">
+        <div class="tema-title">
+          <span class="tema-dot" style="background:${cor}"></span>
+          ${tema.nome}
+        </div>
+        <div class="tema-stats">
+          <span class="tema-stat"><strong>${temaItems.length}</strong> demandas</span>
+          <span class="tema-stat"><strong>${concluidos.length}</strong> concluídas</span>
+          <span class="tema-stat"><strong>${totalHPlan}h</strong> planejadas</span>
+          <span class="tema-stat"><strong>${totalHReal}h</strong> realizadas/est.</span>
+        </div>
+      </div>
+      <div class="tema-body">
+        <div class="panel">
+          <div class="panel-title">🏆 TOP 5 por horas de desenvolvimento</div>
+          ${sorted.length ? projRows : '<p style="color:var(--text3);font-size:13px">Sem demandas</p>'}
+        </div>
+        <div class="panel">
+          <div class="panel-title">👥 Principais atuantes</div>
+          ${devsArr.length ? `<div class="dev-list">${devRows}</div>` : '<p style="color:var(--text3);font-size:13px">Sem devs</p>'}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── INIT ─────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>

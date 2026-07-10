@@ -170,7 +170,20 @@
     }
     .ger-chart-title { font-size:13px; font-weight:600; color:var(--text2); margin-bottom:12px; }
     .ger-chart-box canvas { max-width:220px; max-height:220px; }
-    .ger-table-wrap { overflow-x:auto; }
+    .ger-kpi-delta { display:block; font-size:11px; font-weight:500; margin-top:4px; }
+    .delta-up   { color:var(--green); }
+    .delta-down { color:var(--red); }
+    .delta-neu  { color:var(--text3); }
+    .ger-chart-empty { font-size:12px; color:var(--text3); margin-top:8px; }
+    .ger-collapse-bar {
+      display:flex; align-items:center; gap:10px; background:var(--bg2);
+      border:1px solid var(--border); border-radius:var(--radius);
+      padding:12px 16px; cursor:pointer; margin-bottom:0; user-select:none;
+      font-size:14px; font-weight:600; transition:background .15s;
+    }
+    .ger-collapse-bar:hover { background:var(--bg3); }
+    .ger-count-badge { background:var(--bg3); color:var(--text2); border-radius:10px; padding:2px 10px; font-size:12px; font-weight:600; }
+    .ger-table-wrap { overflow-x:auto; border:1px solid var(--border); border-top:none; border-radius:0 0 var(--radius) var(--radius); }
     .ger-table { width:100%; border-collapse:collapse; font-size:13px; }
     .ger-table th { background:var(--bg3); padding:10px 12px; text-align:left; color:var(--text2); font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; }
     .ger-table td { padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
@@ -405,42 +418,23 @@
           <select id="ger-ano"></select>
         </div>
         <button class="btn btn-primary" onclick="renderGerencial()">Atualizar</button>
+        <a href="projetos.html" class="btn btn-secondary" target="_blank">📁 Projetos por Tema</a>
       </div>
 
       <div id="ger-summary" class="ger-summary"></div>
+      <div id="ger-charts" class="ger-charts"></div>
 
-      <div class="ger-charts">
-        <div class="ger-chart-box">
-          <div class="ger-chart-title">H. Planejadas por Tema</div>
-          <canvas id="chart-plan-tema"></canvas>
-        </div>
-        <div class="ger-chart-box">
-          <div class="ger-chart-title">H. Realizadas por Tema</div>
-          <canvas id="chart-real-tema"></canvas>
-        </div>
-        <div class="ger-chart-box">
-          <div class="ger-chart-title">H. Planejadas por Dev</div>
-          <canvas id="chart-plan-dev"></canvas>
-        </div>
-        <div class="ger-chart-box">
-          <div class="ger-chart-title">H. Realizadas por Dev</div>
-          <canvas id="chart-real-dev"></canvas>
-        </div>
+      <div class="ger-collapse-bar" onclick="toggleGerTable()">
+        <span id="ger-collapse-label">▶ Detalhamento de demandas</span>
+        <span id="ger-count-badge" class="ger-count-badge"></span>
       </div>
-
-      <div class="ger-table-wrap">
-        <table class="ger-table" id="ger-table">
+      <div id="ger-table-wrap" class="ger-table-wrap" style="display:none">
+        <table class="ger-table">
           <thead>
             <tr>
-              <th>Demanda</th>
-              <th>Tema</th>
-              <th>Dev</th>
-              <th>Início</th>
-              <th>Entrega</th>
-              <th>H. Plan.</th>
-              <th>H. Real.</th>
-              <th>Desvio</th>
-              <th>Status</th>
+              <th>Demanda</th><th>Tema</th><th>Dev</th>
+              <th>Início</th><th>Entrega</th>
+              <th>H. Plan.</th><th>H. Real.</th><th>Desvio</th><th>Status</th>
             </tr>
           </thead>
           <tbody id="ger-tbody"></tbody>
@@ -973,6 +967,7 @@ const GER_COLORS = [
 ];
 
 let gerCharts = {};
+let _gerTableOpen = false;
 
 function gerDestroyCharts() {
   Object.values(gerCharts).forEach(c => { try { c.destroy(); } catch(_){} });
@@ -991,10 +986,15 @@ function gerInitFilters() {
       if (y === curY) o.selected = true;
       selAno.appendChild(o);
     }
-  }
-  if (!selMes.value || selMes.value === '0') {
     selMes.value = now.getMonth() + 1;
   }
+}
+
+function toggleGerTable() {
+  _gerTableOpen = !_gerTableOpen;
+  document.getElementById('ger-table-wrap').style.display = _gerTableOpen ? 'block' : 'none';
+  const lbl = document.getElementById('ger-collapse-label');
+  lbl.textContent = (_gerTableOpen ? '▼' : '▶') + ' Detalhamento de demandas';
 }
 
 function renderGerencial() {
@@ -1010,38 +1010,65 @@ function renderGerencial() {
     atrasado:'Atrasado', negada:'Negada'
   };
 
-  // Filter: items whose início falls in selected month/year (for planned)
-  // realized: items with status_planejamento=concluido AND horas_realizadas > 0
-  const items = (state.melhorias || []).filter(m => {
-    if (!m.inicio) return false;
-    const d = new Date(m.inicio + 'T00:00:00');
-    return d.getFullYear() === ano && d.getMonth() + 1 === mes;
-  });
+  // Horas efetivas: usa realizadas se lançado, senão usa planejadas como fallback
+  function getHorasEfetivas(m) {
+    if (m.horas_realizadas > 0) return m.horas_realizadas;
+    return calcHorasPlanejadas(m.inicio, m.entrega) || 0;
+  }
 
-  const concluidos = items.filter(m => (m.status_planejamento === 'concluido' || m.status === 'concluida') && m.horas_realizadas > 0);
+  function filterMonth(mVal, aVal) {
+    return (state.melhorias || []).filter(m => {
+      if (!m.inicio) return false;
+      const d = new Date(m.inicio + 'T00:00:00');
+      return d.getFullYear() === aVal && d.getMonth() + 1 === mVal;
+    });
+  }
 
-  const totalPlan = items.reduce((s, m) => s + (calcHorasPlanejadas(m.inicio, m.entrega) || 0), 0);
-  const totalReal = concluidos.reduce((s, m) => s + (m.horas_realizadas || 0), 0);
-  const efic = totalPlan > 0 ? Math.round((totalReal / totalPlan) * 100) : 0;
-  const eficClass = efic >= 90 ? 'green' : efic >= 70 ? 'amber' : 'red';
+  const items = filterMonth(mes, ano);
+  const concluidos = items.filter(m => m.status_planejamento === 'concluido' || m.status === 'concluida');
 
-  // KPIs
+  // Mês anterior para comparativo
+  let pmMes = mes - 1, pmAno = ano;
+  if (pmMes === 0) { pmMes = 12; pmAno--; }
+  const prevItems = filterMonth(pmMes, pmAno);
+  const prevConc  = prevItems.filter(m => m.status_planejamento === 'concluido' || m.status === 'concluida');
+
+  const totalPlan     = items.reduce((s, m) => s + (calcHorasPlanejadas(m.inicio, m.entrega) || 0), 0);
+  const totalReal     = concluidos.reduce((s, m) => s + getHorasEfetivas(m), 0);
+  const prevTotalPlan = prevItems.reduce((s, m) => s + (calcHorasPlanejadas(m.inicio, m.entrega) || 0), 0);
+  const prevTotalReal = prevConc.reduce((s, m) => s + getHorasEfetivas(m), 0);
+  const efic          = totalPlan > 0 ? Math.round((totalReal / totalPlan) * 100) : 0;
+  const eficClass     = efic >= 90 ? 'green' : efic >= 70 ? 'amber' : 'red';
+
+  function deltaBadge(curr, prev) {
+    if (!prev && !curr) return '';
+    if (!prev) return `<span class="ger-kpi-delta delta-neu">— sem ref. anterior</span>`;
+    const pct = Math.round(((curr - prev) / prev) * 100);
+    const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '→';
+    const cls   = pct > 0 ? 'delta-up' : pct < 0 ? 'delta-down' : 'delta-neu';
+    return `<span class="ger-kpi-delta ${cls}">${arrow} ${Math.abs(pct)}% vs mês ant.</span>`;
+  }
+
   document.getElementById('ger-summary').innerHTML = `
     <div class="ger-kpi">
       <div class="ger-kpi-label">Demandas no mês</div>
       <div class="ger-kpi-value blue">${items.length}</div>
+      ${deltaBadge(items.length, prevItems.length)}
     </div>
     <div class="ger-kpi">
       <div class="ger-kpi-label">H. Planejadas</div>
       <div class="ger-kpi-value blue">${totalPlan}h</div>
+      ${deltaBadge(totalPlan, prevTotalPlan)}
     </div>
     <div class="ger-kpi">
       <div class="ger-kpi-label">H. Realizadas</div>
       <div class="ger-kpi-value green">${totalReal}h</div>
+      ${deltaBadge(totalReal, prevTotalReal)}
     </div>
     <div class="ger-kpi">
       <div class="ger-kpi-label">Concluídas</div>
       <div class="ger-kpi-value green">${concluidos.length}</div>
+      ${deltaBadge(concluidos.length, prevConc.length)}
     </div>
     <div class="ger-kpi">
       <div class="ger-kpi-label">Eficiência</div>
@@ -1049,7 +1076,7 @@ function renderGerencial() {
     </div>
   `;
 
-  // Group by tema
+  // ── Agrupadores ──────────────────────────────────────────────────
   const temaMap = {};
   (state.temas || []).forEach(t => { temaMap[t.id] = t.nome; });
 
@@ -1059,68 +1086,76 @@ function renderGerencial() {
       const k = keyFn(m) || 'Sem tema';
       map[k] = (map[k] || 0) + (valFn(m) || 0);
     });
-    return map;
+    // Ordena decrescente
+    return Object.fromEntries(Object.entries(map).sort((a,b) => b[1]-a[1]));
   }
-
-  const planPorTema = groupBy(items, m => temaMap[m.tema_id], m => calcHorasPlanejadas(m.inicio, m.entrega) || 0);
-  const realPorTema = groupBy(concluidos, m => temaMap[m.tema_id], m => m.horas_realizadas || 0);
 
   function splitDevsLocal(s) {
     if (!s) return ['Sem dev'];
     return s.split(/[\/,]/).map(d => d.trim()).filter(Boolean);
   }
-
   function groupByDevs(arr, valFn) {
     const map = {};
     arr.forEach(m => {
       const devs = splitDevsLocal(m.dev);
-      const val = (valFn(m) || 0) / devs.length;
+      const val  = (valFn(m) || 0) / devs.length;
       devs.forEach(d => { map[d] = (map[d] || 0) + val; });
     });
-    return map;
+    return Object.fromEntries(Object.entries(map).sort((a,b) => b[1]-a[1]));
   }
 
-  const planPorDev = groupByDevs(items, m => calcHorasPlanejadas(m.inicio, m.entrega) || 0);
-  const realPorDev = groupByDevs(concluidos, m => m.horas_realizadas || 0);
+  const planPorTema = groupBy(items,     m => temaMap[m.tema_id], m => calcHorasPlanejadas(m.inicio, m.entrega) || 0);
+  const realPorTema = groupBy(concluidos,m => temaMap[m.tema_id], m => getHorasEfetivas(m));
+  const planPorDev  = groupByDevs(items,      m => calcHorasPlanejadas(m.inicio, m.entrega) || 0);
+  const realPorDev  = groupByDevs(concluidos, m => getHorasEfetivas(m));
 
-  function makeChart(canvasId, data, label) {
-    const labels = Object.keys(data);
-    const vals = labels.map(k => Math.round(data[k]));
-    if (!labels.length) {
-      const ctx = document.getElementById(canvasId);
-      if (ctx) { ctx.parentElement.insertAdjacentHTML('beforeend', '<p style="color:var(--text3);font-size:13px;margin-top:8px">Sem dados</p>'); }
-      return null;
-    }
-    const ctx = document.getElementById(canvasId)?.getContext('2d');
-    if (!ctx) return null;
-    return new Chart(ctx, {
+  // ── Gráficos ─────────────────────────────────────────────────────
+  const chartDefs = [
+    { id:'chart-plan-tema', title:'H. Planejadas por Tema',  data: planPorTema },
+    { id:'chart-real-tema', title:'H. Realizadas por Tema',  data: realPorTema },
+    { id:'chart-plan-dev',  title:'H. Planejadas por Dev',   data: planPorDev  },
+    { id:'chart-real-dev',  title:'H. Realizadas por Dev',   data: realPorDev  },
+  ];
+
+  document.getElementById('ger-charts').innerHTML = chartDefs.map(c =>
+    `<div class="ger-chart-box">
+      <div class="ger-chart-title">${c.title}</div>
+      <canvas id="${c.id}" style="max-width:220px;max-height:220px"></canvas>
+      ${!Object.keys(c.data).length ? '<p class="ger-chart-empty">Sem dados no período</p>' : ''}
+    </div>`
+  ).join('');
+
+  chartDefs.forEach(c => {
+    const labels = Object.keys(c.data);
+    if (!labels.length) return;
+    const vals = labels.map(k => Math.round(c.data[k]));
+    const ctx = document.getElementById(c.id)?.getContext('2d');
+    if (!ctx) return;
+    gerCharts[c.id] = new Chart(ctx, {
       type: 'doughnut',
-      data: {
-        labels,
-        datasets: [{ data: vals, backgroundColor: GER_COLORS.slice(0, labels.length), borderWidth: 2, borderColor: '#1E1E1C' }]
-      },
+      data: { labels, datasets: [{ data: vals, backgroundColor: GER_COLORS.slice(0, labels.length), borderWidth: 2, borderColor: '#1E1E1C' }] },
       options: {
         responsive: true,
         plugins: {
-          legend: { position: 'bottom', labels: { color: '#A8A49A', font: { size: 11 }, boxWidth: 12, padding: 10 } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw}h` } }
+          legend: { position:'bottom', labels:{ color:'#A8A49A', font:{size:11}, boxWidth:12, padding:10 } },
+          tooltip: { callbacks: { label: c => ` ${c.label}: ${c.raw}h` } }
         }
       }
     });
-  }
+  });
 
-  gerCharts['plan-tema'] = makeChart('chart-plan-tema', planPorTema);
-  gerCharts['real-tema'] = makeChart('chart-real-tema', realPorTema);
-  gerCharts['plan-dev']  = makeChart('chart-plan-dev',  planPorDev);
-  gerCharts['real-dev']  = makeChart('chart-real-dev',  realPorDev);
+  // ── Tabela ───────────────────────────────────────────────────────
+  document.getElementById('ger-count-badge').textContent = `${items.length} demandas`;
 
-  // Detail table
   const rows = items.map(m => {
-    const hp = calcHorasPlanejadas(m.inicio, m.entrega) || 0;
-    const hr = m.horas_realizadas || 0;
-    const desvio = hr - hp;
-    const desvioClass = desvio > 0 ? 'desvio-pos' : desvio < 0 ? 'desvio-neg' : 'desvio-zero';
-    const desvioStr = desvio === 0 ? '—' : (desvio > 0 ? '+' : '') + desvio + 'h';
+    const hp    = calcHorasPlanejadas(m.inicio, m.entrega) || 0;
+    const hrLog = m.horas_realizadas || 0;
+    const hrEf  = getHorasEfetivas(m);
+    const isConcl = m.status_planejamento === 'concluido' || m.status === 'concluida';
+    const desvio  = isConcl ? hrEf - hp : null;
+    const desvioClass = desvio === null ? 'desvio-zero' : desvio > 0 ? 'desvio-pos' : desvio < 0 ? 'desvio-neg' : 'desvio-zero';
+    const desvioStr   = desvio === null ? '—' : desvio === 0 ? '0h' : (desvio > 0 ? '+' : '') + desvio + 'h';
+    const hrStr = isConcl ? (hrLog > 0 ? hrLog + 'h' : hrEf + 'h*') : '—';
     const spKey = m.status_planejamento || 'backlog';
     return `<tr>
       <td title="${m.titulo}">${m.titulo.length > 40 ? m.titulo.slice(0,40)+'…' : m.titulo}</td>
@@ -1129,13 +1164,14 @@ function renderGerencial() {
       <td>${formatDate(m.inicio)}</td>
       <td>${formatDate(m.entrega)}</td>
       <td>${hp ? hp + 'h' : '—'}</td>
-      <td>${hr ? hr + 'h' : '—'}</td>
+      <td>${hrStr}</td>
       <td class="${desvioClass}">${desvioStr}</td>
       <td><span class="badge badge-${spKey}" style="font-size:11px">${STATUS_LABEL[spKey] || spKey}</span></td>
     </tr>`;
   }).join('');
 
-  document.getElementById('ger-tbody').innerHTML = rows || `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px">Nenhuma demanda com início neste mês.</td></tr>`;
+  document.getElementById('ger-tbody').innerHTML = rows ||
+    `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px">Nenhuma demanda com início neste mês.</td></tr>`;
 }
 
 // ─── MODAL TEMA ───────────────────────────────────────────────────
