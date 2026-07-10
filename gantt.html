@@ -664,6 +664,7 @@ function initLoginScreen() {
     const now = new Date();
     viewYear = now.getFullYear();
     viewMonth = now.getMonth();
+    setupGanttCardListener();
     loadFromGitHub();
   }
 }
