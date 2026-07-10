@@ -1119,8 +1119,8 @@ function renderGantt() {
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
         draggable="true"
+        onmousedown="onCardMouseDown(event)"
         ondragstart="onCardDragStart(event,'${m.id}')"
-        ondblclick="openModal('${m.id}')"
         onmouseenter="showTooltip(event,'${m.id}')"
         onmouseleave="hideTooltip()">
         <div class="card-row1">
@@ -1175,8 +1175,23 @@ function positionTooltip(e, el) {
 
 // ── DRAG & DROP ───────────────────────────────────────────────────────────
 let dragData = { type: null, id: null }; // type: 'card' | 'backlog'
+let _cardMouseDownAt = { t: 0, x: 0, y: 0 };
+
+// Registra posição/tempo no mousedown — usado para distinguir clique de drag
+function onCardMouseDown(e) {
+  _cardMouseDownAt = { t: Date.now(), x: e.clientX, y: e.clientY };
+}
 
 function onCardDragStart(e, id) {
+  const dt = Date.now() - _cardMouseDownAt.t;
+  const dx = Math.abs(e.clientX - _cardMouseDownAt.x);
+  const dy = Math.abs(e.clientY - _cardMouseDownAt.y);
+  // Clique rápido sem movimento → cancela drag e abre modal
+  if (dt < 250 && dx < 5 && dy < 5) {
+    e.preventDefault();
+    openModal(id);
+    return;
+  }
   dragData = { type: 'card', id };
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => {
