@@ -128,8 +128,9 @@
       🔗 Primeiro acesso neste dispositivo. Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de continuar.
     </div>
     <div id="dev-grid" class="dev-grid">
-      <div style="color:var(--text3);font-size:13px;padding:20px;">Carregando devs…</div>
+      <div style="color:var(--text3);font-size:13px;padding:20px;grid-column:1/-1;">Carregando devs…</div>
     </div>
+    <button onclick="reloadDevList()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;margin-top:4px;text-decoration:underline;">↻ Atualizar lista</button>
     <div class="login-error" id="login-error"></div>
   </div>
 </div>
@@ -386,12 +387,58 @@ async function saveToGitHub(patch) {
 }
 
 // ─── LOGIN ───────────────────────────────────────────────────────
-async function initApp() {
-  // Carrega devs da raw URL para montar o grid de login
+async function fetchFreshData() {
+  // Tenta API (sempre fresco); fallback para raw URL
+  if (runtimeToken) {
+    try {
+      const res = await fetch(API_URL + '?t=' + Date.now(), {
+        cache: 'no-store',
+        headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        fileSha = json.sha;
+        return JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
+      }
+    } catch(_) {}
+  }
+  // Fallback: raw URL (pode ter cache CDN de ~5 min)
+  const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+  if (res.ok) return res.json();
+  return null;
+}
+
+async function reloadDevList() {
+  const grid = document.getElementById('dev-grid');
+  grid.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:10px;">Atualizando…</div>';
   try {
-    const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache:'no-store' });
-    if (res.ok) {
-      const data = await res.json();
+    const data = await fetchFreshData();
+    if (data) {
+      state.temas = data.temas || [];
+      state.melhorias = data.melhorias || [];
+      state.desenvolvedores = data.desenvolvedores || [];
+      state.feriados = data.feriados || [];
+      _pollTs = data.atualizado_em || null;
+    }
+  } catch(_) {}
+  const devs = getDevList();
+  if (!devs.length) {
+    grid.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:10px;">Nenhum desenvolvedor encontrado.</div>';
+    return;
+  }
+  grid.innerHTML = devs.map(d =>
+    `<button class="dev-btn" onclick="selectDev('${d.replace(/'/g,"\\'")}')">👤 ${d}</button>`
+  ).join('');
+}
+
+async function initApp() {
+  if (!runtimeToken) {
+    document.getElementById('login-aviso').style.display = 'block';
+  }
+
+  try {
+    const data = await fetchFreshData();
+    if (data) {
       state.temas = data.temas || [];
       state.melhorias = data.melhorias || [];
       state.desenvolvedores = data.desenvolvedores || [];
@@ -402,10 +449,6 @@ async function initApp() {
 
   const devs = getDevList();
   const grid = document.getElementById('dev-grid');
-
-  if (!runtimeToken) {
-    document.getElementById('login-aviso').style.display = 'block';
-  }
 
   if (!devs.length) {
     grid.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:10px;">Nenhum desenvolvedor encontrado.</div>';
