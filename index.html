@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RoadMap de Melhorias â€” Audax Capital</title>
+  <title>RoadMap de Melhorias — Audax Capital</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -281,33 +281,33 @@
 
 <header>
   <div class="header-left">
-    <h1>ðŸ—ºï¸ RoadMap de Melhorias</h1>
-    <p>Audax Capital Â· Produto &amp; Tecnologia</p>
+    <h1>🗺️ RoadMap de Melhorias</h1>
+    <p>Audax Capital · Produto &amp; Tecnologia</p>
   </div>
   <div class="header-right" style="display:flex;align-items:center;gap:16px;">
-    <span id="ultima-atualizacao" style="font-size:13px;color:var(--text3)">â€”</span>
-    <button id="btn-refresh" onclick="forceRefresh()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="ForÃ§ar atualizaÃ§Ã£o dos dados" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">â†» Atualizar</button>
-    <button onclick="openExportModal()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Exportar relatÃ³rio" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">â¬‡ Exportar</button>
-    <a href="dev.html" style="font-size:13px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">ðŸ—‚ Meu Painel</a>
-    <a href="admin.html" style="font-size:13px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">âš™ Admin</a>
+    <span id="ultima-atualizacao" style="font-size:13px;color:var(--text3)">—</span>
+    <button id="btn-refresh" onclick="forceRefresh()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Forçar atualização dos dados" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">↻ Atualizar</button>
+    <button onclick="openExportModal()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Exportar relatório" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⬇ Exportar</button>
+    <a href="dev.html" style="font-size:13px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">🗂 Meu Painel</a>
+    <a href="admin.html" style="font-size:13px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⚙ Admin</a>
   </div>
 </header>
 
 <main>
   <div id="app">
-    <div class="loading">Carregando melhoriasâ€¦</div>
+    <div class="loading">Carregando melhorias…</div>
   </div>
 </main>
 
-<footer>Painel interno Â· Audax Capital Â· Produto &amp; Tecnologia</footer>
+<footer>Painel interno · Audax Capital · Produto &amp; Tecnologia</footer>
 
 <script>
 const GITHUB_USER = 'CapFernando';
 const GITHUB_REPO = 'RoadMap';
 const DATA_PATH   = 'data/melhorias.json';
-// Raw URL: sem rate limit â€” usado para polling em background (aceita delay de CDN)
+// Raw URL: sem rate limit — usado para polling em background (aceita delay de CDN)
 const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
-// API URL: dados sempre frescos â€” usado apenas em refresh forÃ§ado (botÃ£o / visibilitychange)
+// API URL: dados sempre frescos — usado apenas em refresh forçado (botão / visibilitychange)
 const API_URL     = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
 
 const STATUS_META = {
@@ -317,7 +317,7 @@ const STATUS_META = {
   em_andamento: { label: 'Em Andamento',        cls: 'badge-iniciada',     cor: '#FFE14D' },
   deploy:       { label: 'Deploy',              cls: 'badge-deploy',       cor: '#E89C2F' },
   atrasado:     { label: 'Atrasado',            cls: 'badge-negada',       cor: '#E84444' },
-  concluido:    { label: 'ConcluÃ­do',           cls: 'badge-concluida',    cor: '#2BBFA0' },
+  concluido:    { label: 'Concluído',           cls: 'badge-concluida',    cor: '#2BBFA0' },
   negada:       { label: 'Negada',              cls: 'badge-negada',       cor: '#E84444' },
 };
 
@@ -343,7 +343,7 @@ function badgeHTML(status, sp) {
 function metaHTML(m) {
   const items = [];
   if (m.dev)     items.push(`${svgIcon('user')} ${m.dev}`);
-  if (m.inicio)  items.push(`${svgIcon('calendar')} InÃ­cio: ${formatDate(m.inicio)}`);
+  if (m.inicio)  items.push(`${svgIcon('calendar')} Início: ${formatDate(m.inicio)}`);
   if (m.entrega) items.push(`${svgIcon('calendar')} Entrega: ${formatDate(m.entrega)}`);
   if (m.estimativa) items.push(`${svgIcon('clock')} Estimativa: ${m.estimativa}`);
   if (!items.length) return '';
@@ -450,7 +450,7 @@ function buildCharts(temas, melhorias) {
   });
 }
 
-const MESES = ['Janeiro','Fevereiro','MarÃ§o','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
 let _temas = [], _melhorias = [], _devs = [];
 let _ano = null, _mes = null, _dev = null, _statusFilter = null, _temaFilter = null;
@@ -477,7 +477,7 @@ const STATUS_CARDS = [
   { key:'planejado',    label:'Planejado',           cor:'var(--blue)' },
   { key:'em_andamento', label:'Em Andamento',        cor:'#FFE14D' },
   { key:'deploy',       label:'Deploy',              cor:'#E89C2F' },
-  { key:'concluido',    label:'ConcluÃ­do',           cor:'#2BBFA0' },
+  { key:'concluido',    label:'Concluído',           cor:'#2BBFA0' },
   { key:'atrasado',     label:'Atrasado',            cor:'var(--red)' },
   { key:'negada',       label:'Negada',              cor:'var(--red)' },
 ];
@@ -490,7 +490,7 @@ function splitDevs(devStr) {
 function filtradas() {
   return _melhorias.filter(m => {
     if (_ano !== null || _mes !== null) {
-      // usa data de inÃ­cio planejada; sem ela usa criado_em (backlog sem data)
+      // usa data de início planejada; sem ela usa criado_em (backlog sem data)
       const ref = m.inicio ? new Date(m.inicio + 'T00:00:00') : new Date(m.criado_em);
       if (_ano !== null && ref.getFullYear() !== _ano) return false;
       if (_mes !== null && ref.getMonth() !== _mes) return false;
@@ -520,7 +520,7 @@ function renderConteudo() {
   const counts = { total: melSemStatus.length };
   STATUS_CARDS.forEach(c => { if (c.key !== 'total') counts[c.key] = melSemStatus.filter(m => getStatusKey(m) === c.key).length; });
 
-  // monta cards: Total sempre aparece; os outros sÃ³ se count > 0
+  // monta cards: Total sempre aparece; os outros só se count > 0
   const cardsHTML = STATUS_CARDS
     .filter(c => c.key === 'total' || counts[c.key] > 0)
     .map(c => {
@@ -533,8 +533,8 @@ function renderConteudo() {
 
   const label = (_ano !== null && _mes !== null) ? `${MESES[_mes]} de ${_ano}`
               : (_ano !== null)                  ? `Ano ${_ano}`
-              : (_mes !== null)                  ? `${MESES[_mes]} â€” todos os anos`
-              :                                   'Todos os lanÃ§amentos';
+              : (_mes !== null)                  ? `${MESES[_mes]} — todos os anos`
+              :                                   'Todos os lançamentos';
 
   document.getElementById('conteudo').innerHTML = `
     <div class="summary">${cardsHTML}</div>
@@ -555,13 +555,13 @@ function renderConteudo() {
     <div class="chart-card" style="margin-bottom:32px;" id="chart-devs-card">
       <h3 onclick="toggleDevChart()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;">
         Por desenvolvedor
-        <span id="dev-chart-arrow" style="font-size:12px;color:var(--text3);transition:transform .2s;">â–¼</span>
+        <span id="dev-chart-arrow" style="font-size:12px;color:var(--text3);transition:transform .2s;">▼</span>
       </h3>
       <div id="chart-devs-inner" style="display:none;position:relative;margin-top:12px;"><canvas id="chart-devs"></canvas></div>
       <div class="chart-legend" id="leg-devs" style="display:none;margin-top:14px;"></div>
     </div>
 
-    <div class="section-title">Melhorias por tema Â· <span style="font-weight:400;color:var(--text3);font-size:14px">${label}</span></div>
+    <div class="section-title">Melhorias por tema · <span style="font-weight:400;color:var(--text3);font-size:14px">${label}</span></div>
     ${_temas.length === 0
       ? `<div class="empty">Nenhum tema cadastrado ainda.</div>`
       : _temas.map((t, i) => renderTema(t, mel, i)).join('')}
@@ -591,14 +591,14 @@ function buildFilterBar() {
 
   document.getElementById('filter-bar').innerHTML = `
     <div class="filter-row">
-      <span>PerÃ­odo:</span>
+      <span>Período:</span>
       <button class="filter-btn ${_ano===null && _mes===null ? 'active' : ''}" onclick="setFiltro(null,null)">Tudo</button>
       <select class="filter-select" onchange="setFiltroAno(this.value)" ${anos.length===0?'disabled':''}>
-        <option value="">â€” Ano â€”</option>
+        <option value="">— Ano —</option>
         ${anoOpts}
       </select>
       <select class="filter-select" onchange="setFiltroMes(this.value)">
-        <option value="">â€” MÃªs â€”</option>
+        <option value="">— Mês —</option>
         ${mesOpts}
       </select>
     </div>
@@ -734,13 +734,13 @@ async function loadData() {
   const app = document.getElementById('app');
   try {
     const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) throw new Error('NÃ£o foi possÃ­vel carregar os dados.');
+    if (!res.ok) throw new Error('Não foi possível carregar os dados.');
     const data = await res.json();
     _pollTs = data.atualizado_em || null;
 
     _temas     = data.temas     || [];
     _melhorias = data.melhorias || [];
-    // une devs do array raiz + devs extraÃ­dos das melhorias (garante que devs sem tarefa apareÃ§am)
+    // une devs do array raiz + devs extraídos das melhorias (garante que devs sem tarefa apareçam)
     _devs = [...new Set([
       ...(data.desenvolvedores || []).flatMap(d => splitDevs(d)),
       ..._melhorias.flatMap(m => splitDevs(m.dev))
@@ -748,7 +748,7 @@ async function loadData() {
 
     const dt = data.atualizado_em
       ? new Date(data.atualizado_em).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
-      : 'â€”';
+      : '—';
     document.getElementById('ultima-atualizacao').textContent = `Atualizado em ${dt}`;
 
     app.innerHTML = `
@@ -775,7 +775,7 @@ function applyData(data) {
   ])].sort();
   const dt = data.atualizado_em
     ? new Date(data.atualizado_em).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
-    : 'â€”';
+    : '—';
   const el = document.getElementById('ultima-atualizacao');
   if (el) el.textContent = `Atualizado em ${dt}`;
   buildFilterBar();
@@ -801,10 +801,10 @@ function dashToast(msg, type = 'ok') {
   _dashToastTimer = setTimeout(() => { el.style.opacity = '0'; }, 5000);
 }
 
-// Refresh forÃ§ado via GitHub API; fallback para raw URL se rate-limitado
+// Refresh forçado via GitHub API; fallback para raw URL se rate-limitado
 async function forceRefresh() {
   const btn = document.getElementById('btn-refresh');
-  if (btn) { btn.textContent = 'â†» Atualizandoâ€¦'; btn.disabled = true; }
+  if (btn) { btn.textContent = '↻ Atualizando…'; btn.disabled = true; }
   try {
     const res = await fetch(API_URL + '?t=' + Date.now(), {
       cache: 'no-store',
@@ -815,29 +815,29 @@ async function forceRefresh() {
       const data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
       applyData(data);
     } else if (res.status === 403 || res.status === 429) {
-      // Rate limit atingido â€” tenta raw URL como fallback
+      // Rate limit atingido — tenta raw URL como fallback
       const rawRes = await fetch(RAW_URL + '?nocache=' + Date.now(), { cache: 'no-store' });
       if (rawRes.ok) {
         const data = await rawRes.json();
         applyData(data);
-        dashToast('âš ï¸ Limite de API atingido. Exibindo cache â€” alteraÃ§Ãµes recentes podem levar atÃ© 5 min para aparecer.', 'err');
+        dashToast('⚠️ Limite de API atingido. Exibindo cache — alterações recentes podem levar até 5 min para aparecer.', 'err');
       } else {
-        dashToast('âš ï¸ Limite de requisiÃ§Ãµes atingido. Aguarde alguns minutos e tente novamente.', 'err');
+        dashToast('⚠️ Limite de requisições atingido. Aguarde alguns minutos e tente novamente.', 'err');
       }
     } else {
-      dashToast('âš ï¸ Erro ao atualizar (HTTP ' + res.status + '). Tente novamente.', 'err');
+      dashToast('⚠️ Erro ao atualizar (HTTP ' + res.status + '). Tente novamente.', 'err');
     }
   } catch(_) {
-    // Fallback silencioso em visibilitychange; notifica sÃ³ quando o usuÃ¡rio clicou
-    if (btn && btn.disabled) dashToast('âš ï¸ Falha de conexÃ£o ao atualizar.', 'err');
+    // Fallback silencioso em visibilitychange; notifica só quando o usuário clicou
+    if (btn && btn.disabled) dashToast('⚠️ Falha de conexão ao atualizar.', 'err');
   }
-  if (btn) { btn.textContent = 'â†» Atualizar'; btn.disabled = false; }
+  if (btn) { btn.textContent = '↻ Atualizar'; btn.disabled = false; }
 }
 
 loadData();
 
-// â”€â”€ SYNC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Polling em background usa raw URL (sem rate limit) â€” aceita atÃ© ~5min de delay de CDN
+// ── SYNC ──────────────────────────────────────────────────────────────
+// Polling em background usa raw URL (sem rate limit) — aceita até ~5min de delay de CDN
 let _polling = false;
 async function checkForUpdates() {
   if (_polling) return;
@@ -851,7 +851,7 @@ async function checkForUpdates() {
   _polling = false;
 }
 
-// Polling de fundo a cada 60s (raw URL â€” sem rate limit)
+// Polling de fundo a cada 60s (raw URL — sem rate limit)
 setInterval(checkForUpdates, 60000);
 
 // Ao voltar para a aba: usa API para dados imediatamente frescos
@@ -859,14 +859,14 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') forceRefresh();
 });
 
-// â”€â”€ EXPORTAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── EXPORTAR ──────────────────────────────────────────────────────────
 const STATUS_BADGE_PRINT = {
   backlog:      { label: 'Backlog',       bg: '#0C3260', color: '#9BC8F8' },
   levantar_req: { label: 'Levantar req.', bg: '#341A6E', color: '#C9AEFF' },
   planejado:    { label: 'Planejado',     bg: '#5C3608', color: '#F9C97A' },
   em_andamento: { label: 'Em Andamento',  bg: '#3D3600', color: '#FFE14D' },
   deploy:       { label: 'Deploy',        bg: '#4A2800', color: '#FFB84D' },
-  concluido:    { label: 'ConcluÃ­do',     bg: '#1E4208', color: '#B2E07A' },
+  concluido:    { label: 'Concluído',     bg: '#1E4208', color: '#B2E07A' },
   atrasado:     { label: 'Atrasado',      bg: '#5C0A0A', color: '#F9A0A0' },
   negada:       { label: 'Negada',        bg: '#5C0A0A', color: '#F9A0A0' },
 };
@@ -876,14 +876,14 @@ function buildReportHTML() {
   const now = new Date();
   const dateStr = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
 
-  // DescriÃ§Ã£o do filtro ativo
-  const MESES_PT = ['Janeiro','Fevereiro','MarÃ§o','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  let filtroDesc = 'Todos os perÃ­odos';
+  // Descrição do filtro ativo
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let filtroDesc = 'Todos os períodos';
   if (_mes !== null && _ano !== null) filtroDesc = `${MESES_PT[_mes - 1]} de ${_ano}`;
-  else if (_mes !== null) filtroDesc = MESES_PT[_mes - 1] + ' â€” todos os anos';
+  else if (_mes !== null) filtroDesc = MESES_PT[_mes - 1] + ' — todos os anos';
   else if (_ano !== null) filtroDesc = `Ano ${_ano}`;
-  if (_dev) filtroDesc += ` Â· ${_dev}`;
-  if (_statusFilter) filtroDesc += ` Â· ${STATUS_BADGE_PRINT[_statusFilter]?.label || _statusFilter}`;
+  if (_dev) filtroDesc += ` · ${_dev}`;
+  if (_statusFilter) filtroDesc += ` · ${STATUS_BADGE_PRINT[_statusFilter]?.label || _statusFilter}`;
 
   // Agrupar por tema
   const temaOrder = _temas.map(t => t.id);
@@ -901,7 +901,7 @@ function buildReportHTML() {
   });
 
   const temasHTML = groupKeys.map((tKey, gi) => {
-    const temaNome = tKey === '__' ? 'Sem tema' : (_temas.find(t => t.id === tKey)?.nome || 'â€”');
+    const temaNome = tKey === '__' ? 'Sem tema' : (_temas.find(t => t.id === tKey)?.nome || '—');
     const cor = TEMA_CORES[gi % TEMA_CORES.length];
     const items = [...groups[tKey]].sort((a,b) => (a.inicio||'9999').localeCompare(b.inicio||'9999'));
 
@@ -910,16 +910,16 @@ function buildReportHTML() {
       const bm = STATUS_BADGE_PRINT[sk] || STATUS_BADGE_PRINT.backlog;
       const badge = `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:${bm.bg};color:${bm.color};white-space:nowrap;">${bm.label}</span>`;
       const meta = [];
-      if (m.dev)     meta.push(`ðŸ‘¤ ${m.dev}`);
-      if (m.inicio)  meta.push(`ðŸ“… InÃ­cio: ${formatDate(m.inicio)}`);
-      if (m.entrega) meta.push(`ðŸ Entrega: ${formatDate(m.entrega)}`);
-      if (m.estimativa) meta.push(`â± ${m.estimativa}`);
+      if (m.dev)     meta.push(`👤 ${m.dev}`);
+      if (m.inicio)  meta.push(`📅 Início: ${formatDate(m.inicio)}`);
+      if (m.entrega) meta.push(`🏁 Entrega: ${formatDate(m.entrega)}`);
+      if (m.estimativa) meta.push(`⏱ ${m.estimativa}`);
       return `<div style="background:#1E1E1C;border:1px solid #2E2E2B;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:${m.descricao||meta.length?'6px':'0'};">
           <span style="font-size:13px;font-weight:600;color:#ECEAE2;line-height:1.4;">${m.titulo}</span>
           ${badge}
         </div>
-        ${m.descricao ? `<div style="font-size:12px;color:#A8A49A;margin-bottom:6px;line-height:1.5;">${m.descricao.substring(0,180)}${m.descricao.length>180?'â€¦':''}</div>` : ''}
+        ${m.descricao ? `<div style="font-size:12px;color:#A8A49A;margin-bottom:6px;line-height:1.5;">${m.descricao.substring(0,180)}${m.descricao.length>180?'…':''}</div>` : ''}
         ${meta.length ? `<div style="font-size:11px;color:#6E6A62;display:flex;flex-wrap:wrap;gap:10px;">${meta.map(i=>`<span>${i}</span>`).join('')}</div>` : ''}
       </div>`;
     }).join('');
@@ -937,8 +937,8 @@ function buildReportHTML() {
   return `<div id="export-canvas" style="background:#0E0E0D;color:#ECEAE2;font-family:'Inter',sans-serif;padding:32px;min-width:800px;width:800px;">
     <div style="border-bottom:1px solid #2E2E2B;padding-bottom:20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;">
       <div>
-        <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">ðŸ—ºï¸ RoadMap de Melhorias</div>
-        <div style="font-size:13px;color:#A8A49A;">Audax Capital Â· Produto &amp; Tecnologia</div>
+        <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">🗺️ RoadMap de Melhorias</div>
+        <div style="font-size:13px;color:#A8A49A;">Audax Capital · Produto &amp; Tecnologia</div>
       </div>
       <div style="text-align:right;">
         <div style="font-size:12px;color:#6E6A62;">${filtroDesc}</div>
@@ -964,7 +964,7 @@ function buildReportHTML() {
 
 function openExportModal() {
   const mel = filtradas();
-  if (!mel.length) { alert('Nenhuma melhoria visÃ­vel para exportar.'); return; }
+  if (!mel.length) { alert('Nenhuma melhoria visível para exportar.'); return; }
 
   let overlay = document.getElementById('export-overlay');
   if (overlay) overlay.remove();
@@ -983,9 +983,9 @@ function openExportModal() {
         <button id="exp-tab-dev"  onclick="switchExportTab('dev')"  style="font-size:13px;font-weight:600;background:#252522;color:#A8A49A;border:1px solid #2E2E2B;border-radius:7px;padding:6px 14px;cursor:pointer;">Por Desenvolvedor</button>
       </div>
       <div style="display:flex;gap:10px;align-items:center;">
-        <button id="btn-dl-img" onclick="downloadExport('img')" style="font-size:13px;background:#3B8FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">â¬‡ Imagem</button>
-        <button id="btn-dl-pdf" onclick="downloadExport('pdf')" style="font-size:13px;background:#9B6FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">â¬‡ PDF</button>
-        <button onclick="document.getElementById('export-overlay').remove()" style="font-size:13px;color:#6E6A62;background:none;border:1px solid #2E2E2B;border-radius:7px;padding:7px 14px;cursor:pointer;">âœ• Fechar</button>
+        <button id="btn-dl-img" onclick="downloadExport('img')" style="font-size:13px;background:#3B8FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ Imagem</button>
+        <button id="btn-dl-pdf" onclick="downloadExport('pdf')" style="font-size:13px;background:#9B6FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ PDF</button>
+        <button onclick="document.getElementById('export-overlay').remove()" style="font-size:13px;color:#6E6A62;background:none;border:1px solid #2E2E2B;border-radius:7px;padding:7px 14px;cursor:pointer;">✕ Fechar</button>
       </div>
     </div>
     <div style="padding:20px;overflow-x:auto;">
@@ -1015,7 +1015,7 @@ async function downloadExport(type) {
   const btnImg = document.getElementById('btn-dl-img');
   const btnPdf = document.getElementById('btn-dl-pdf');
   const btn = type === 'img' ? btnImg : btnPdf;
-  if (btn) { btn.disabled = true; btn.textContent = 'â³ Gerandoâ€¦'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Gerando…'; }
 
   const el = document.getElementById('export-canvas');
   if (!el) return;
@@ -1067,11 +1067,11 @@ async function downloadExport(type) {
       pdf.save(`roadmap-audax-${stamp}.pdf`);
     }
   } catch(e) {
-    alert('Erro ao gerar exportaÃ§Ã£o. Tente novamente.');
+    alert('Erro ao gerar exportação. Tente novamente.');
   }
 
-  if (btnImg) { btnImg.disabled = false; btnImg.textContent = 'â¬‡ Imagem'; }
-  if (btnPdf) { btnPdf.disabled = false; btnPdf.textContent = 'â¬‡ PDF'; }
+  if (btnImg) { btnImg.disabled = false; btnImg.textContent = '⬇ Imagem'; }
+  if (btnPdf) { btnPdf.disabled = false; btnPdf.textContent = '⬇ PDF'; }
 }
 
 let _exportTab = 'tema';
@@ -1110,10 +1110,10 @@ function buildDevReportHTML() {
   const now = new Date();
   const dateStr = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
 
-  const MESES_PT = ['Janeiro','Fevereiro','MarÃ§o','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  let filtroDesc = 'Todos os perÃ­odos';
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let filtroDesc = 'Todos os períodos';
   if (_mes !== null && _ano !== null) filtroDesc = `${MESES_PT[_mes - 1]} de ${_ano}`;
-  else if (_mes !== null) filtroDesc = MESES_PT[_mes - 1] + ' â€” todos os anos';
+  else if (_mes !== null) filtroDesc = MESES_PT[_mes - 1] + ' — todos os anos';
   else if (_ano !== null) filtroDesc = `Ano ${_ano}`;
 
   // Expandir itens por dev (splitDevs)
@@ -1123,8 +1123,8 @@ function buildDevReportHTML() {
   mel.forEach(m => {
     const devs = splitDevs(m.dev);
     if (!devs.length) {
-      if (!devMap['â€”']) devMap['â€”'] = [];
-      devMap['â€”'].push(m);
+      if (!devMap['—']) devMap['—'] = [];
+      devMap['—'].push(m);
     } else {
       devs.forEach(d => {
         if (!devMap[d]) devMap[d] = [];
@@ -1133,7 +1133,7 @@ function buildDevReportHTML() {
     }
   });
 
-  const devKeys = Object.keys(devMap).sort((a, b) => a === 'â€”' ? 1 : b === 'â€”' ? -1 : a.localeCompare(b));
+  const devKeys = Object.keys(devMap).sort((a, b) => a === '—' ? 1 : b === '—' ? -1 : a.localeCompare(b));
 
   const devsHTML = devKeys.map(devName => {
     const items = [...devMap[devName]].sort((a, b) => {
@@ -1144,11 +1144,11 @@ function buildDevReportHTML() {
     });
 
     const rows = items.map(m => {
-      const tema = _temas.find(t => t.id === m.tema_id)?.nome || 'â€”';
+      const tema = _temas.find(t => t.id === m.tema_id)?.nome || '—';
       const sk = getStatusKey(m);
       const bm = STATUS_BADGE_PRINT[sk] || STATUS_BADGE_PRINT.backlog;
-      const entrega = m.entrega ? formatDate(m.entrega) : '<span style="color:#6E6A62;">Sem previsÃ£o</span>';
-      const inicio  = m.inicio  ? formatDate(m.inicio)  : 'â€”';
+      const entrega = m.entrega ? formatDate(m.entrega) : '<span style="color:#6E6A62;">Sem previsão</span>';
+      const inicio  = m.inicio  ? formatDate(m.inicio)  : '—';
       return `<tr>
         <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:13px;color:#ECEAE2;font-weight:500;vertical-align:top;">${m.titulo}</td>
         <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:12px;color:#A8A49A;white-space:nowrap;vertical-align:top;">${tema}</td>
@@ -1162,7 +1162,7 @@ function buildDevReportHTML() {
 
     return `<div style="margin-bottom:28px;">
       <div style="display:flex;align-items:center;gap:10px;padding-bottom:8px;border-bottom:2px solid #2E2E2B;margin-bottom:0;">
-        <span style="font-size:15px;font-weight:700;color:#ECEAE2;">ðŸ‘¤ ${devName}</span>
+        <span style="font-size:15px;font-weight:700;color:#ECEAE2;">👤 ${devName}</span>
         <span style="font-size:12px;color:#6E6A62;">${items.length} ${items.length===1?'demanda':'demandas'}</span>
       </div>
       <table style="width:100%;border-collapse:collapse;">
@@ -1170,7 +1170,7 @@ function buildDevReportHTML() {
           <tr style="background:#161614;">
             <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;">Demanda</th>
             <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">Tema</th>
-            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">InÃ­cio</th>
+            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">Início</th>
             <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">Entrega</th>
             <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;">Status</th>
           </tr>
@@ -1183,8 +1183,8 @@ function buildDevReportHTML() {
   return `<div id="export-canvas" style="background:#0E0E0D;color:#ECEAE2;font-family:'Inter',sans-serif;padding:32px;min-width:800px;width:800px;">
     <div style="border-bottom:1px solid #2E2E2B;padding-bottom:20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;">
       <div>
-        <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">ðŸ‘¤ PrevisÃ£o por Desenvolvedor</div>
-        <div style="font-size:13px;color:#A8A49A;">Audax Capital Â· Produto &amp; Tecnologia</div>
+        <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">👤 Previsão por Desenvolvedor</div>
+        <div style="font-size:13px;color:#A8A49A;">Audax Capital · Produto &amp; Tecnologia</div>
       </div>
       <div style="text-align:right;">
         <div style="font-size:12px;color:#6E6A62;">${filtroDesc}</div>
@@ -1200,4 +1200,3 @@ function buildDevReportHTML() {
 </script>
 </body>
 </html>
-
