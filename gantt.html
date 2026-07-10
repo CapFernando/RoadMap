@@ -1128,13 +1128,13 @@ function renderGantt() {
       html += `<div class="gantt-card gcard-${sp}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
-        onclick="openModal('${m.id}')"
+        draggable="true"
+        ondragstart="onCardDragStart(event,'${m.id}')"
+        ondragend="onCardDragEnd(event,'${m.id}')"
+        onclick="if(!_cardWasDragged)openModal('${m.id}')"
         onmouseenter="showTooltip(event,'${m.id}')"
         onmouseleave="hideTooltip()">
-        <span class="card-drag-handle"
-          draggable="true"
-          ondragstart="onCardDragStart(event,'${m.id}')"
-          ondragend="onCardDragEnd(event,'${m.id}')">⠿⠿</span>
+        <span class="card-drag-handle">⠿⠿</span>
         <div class="card-row1">
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
