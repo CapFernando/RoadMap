@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin — RoadMap de Melhorias</title>
+  <title>Admin â€” RoadMap de Melhorias</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
@@ -40,7 +40,7 @@
       min-height: 100vh;
     }
 
-    /* ── LOGIN ── */
+    /* â”€â”€ LOGIN â”€â”€ */
     #login-screen {
       display: flex;
       align-items: center;
@@ -88,7 +88,7 @@
     .login-box button:hover { opacity: 0.9; }
     .login-error { color: var(--red); font-size: 14px; margin-top: 10px; min-height: 20px; }
 
-    /* ── ADMIN APP ── */
+    /* â”€â”€ ADMIN APP â”€â”€ */
     #admin-app { display: none; }
 
     header {
@@ -267,7 +267,7 @@
     .badge-backlog      { background:#1A2A3A; color:#6A9AC8; }
     .badge-levantar_req { background:#2A1A4E; color:#C9AEFF; }
     .badge-planejado    { background:#0C3260; color:#9BC8F8; }
-    .badge-em_andamento{ background:#1E4208; color:#B2E07A; }
+    .badge-em_andamento{ background:#3D3600; color:#FFE14D; }
     .badge-deploy      { background:#4A2800; color:#FFB84D; }
     .badge-concluido   { background:#063D30; color:#7EECD8; }
     .badge-atrasado    { background:#5C0A0A; color:#F9A0A0; }
@@ -357,14 +357,14 @@
 <!-- LOGIN -->
 <div id="login-screen">
   <div class="login-box">
-    <h2>🔐 Área Administrativa</h2>
-    <p>RoadMap de Melhorias · Audax Capital</p>
+    <h2>ðŸ” Ãrea Administrativa</h2>
+    <p>RoadMap de Melhorias Â· Audax Capital</p>
     <div id="sem-token-aviso" style="display:none;background:#5C3608;color:#F9C97A;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px;line-height:1.5;">
-      🔗 Primeiro acesso neste dispositivo.<br>Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de entrar.
+      ðŸ”— Primeiro acesso neste dispositivo.<br>Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de entrar.
     </div>
     <input type="password" id="senha-input" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')doLogin()" />
     <div id="token-field" style="display:none;margin-top:0">
-      <input type="password" id="token-input" placeholder="GitHub Token (ghp_…)" onkeydown="if(event.key==='Enter')doLogin()" style="letter-spacing:0" />
+      <input type="password" id="token-input" placeholder="GitHub Token (ghp_â€¦)" onkeydown="if(event.key==='Enter')doLogin()" style="letter-spacing:0" />
     </div>
     <button onclick="doLogin()" id="btn-entrar">Entrar</button>
     <div class="login-error" id="login-error"></div>
@@ -375,29 +375,29 @@
 <div id="admin-app">
   <header>
     <div class="header-left">
-      <h1>⚙️ Admin — RoadMap de Melhorias</h1>
-      <p>Audax Capital · Produto &amp; Tecnologia</p>
+      <h1>âš™ï¸ Admin â€” RoadMap de Melhorias</h1>
+      <p>Audax Capital Â· Produto &amp; Tecnologia</p>
     </div>
     <div class="header-right">
-      <button class="btn btn-secondary btn-sm" onclick="window.location.href='gantt.html'">📅 Planejamento</button>
-      <button class="btn btn-secondary btn-sm" onclick="window.open('dev.html','_blank')">🗂 Painel Dev</button>
-      <button class="btn btn-secondary btn-sm" onclick="window.open('index.html','_blank')">Ver painel público</button>
-      <button class="btn btn-success btn-sm" onclick="saveToGitHub()">💾 Publicar alterações</button>
-      <button class="btn btn-secondary btn-sm" onclick="copyAccessLink()" title="Gera link de acesso para novas máquinas">🔗 Link de acesso</button>
+      <button class="btn btn-secondary btn-sm" onclick="window.location.href='gantt.html'">ðŸ“… Planejamento</button>
+      <button class="btn btn-secondary btn-sm" onclick="window.open('dev.html','_blank')">ðŸ—‚ Painel Dev</button>
+      <button class="btn btn-secondary btn-sm" onclick="window.open('index.html','_blank')">Ver painel pÃºblico</button>
+      <button class="btn btn-success btn-sm" onclick="saveToGitHub()">ðŸ’¾ Publicar alteraÃ§Ãµes</button>
+      <button class="btn btn-secondary btn-sm" onclick="copyAccessLink()" title="Gera link de acesso para novas mÃ¡quinas">ðŸ”— Link de acesso</button>
       <button class="btn btn-secondary btn-sm" onclick="doLogout()">Sair</button>
     </div>
   </header>
   <div id="save-error" style="display:none;background:#5C0A0A;color:#F9A0A0;border-bottom:1px solid #8C1010;padding:10px 24px;font-size:13px;cursor:pointer" onclick="this.style.display='none'">
-    ⚠️ Erro ao publicar — clique aqui para fechar
+    âš ï¸ Erro ao publicar â€” clique aqui para fechar
   </div>
 
   <main>
     <div class="tabs">
       <div class="tab active" onclick="switchTab('melhorias')">Melhorias</div>
       <div class="tab" onclick="switchTab('temas')">Temas</div>
-      <div class="tab" onclick="switchTab('gerencial')">📊 Gerencial</div>
-      <div class="tab" onclick="switchTab('acesso')">🔗 Acesso Devs</div>
-      <a href="importar.html" class="tab" style="text-decoration:none">📥 Importar</a>
+      <div class="tab" onclick="switchTab('gerencial')">ðŸ“Š Gerencial</div>
+      <div class="tab" onclick="switchTab('acesso')">ðŸ”— Acesso Devs</div>
+      <a href="importar.html" class="tab" style="text-decoration:none">ðŸ“¥ Importar</a>
     </div>
 
     <!-- ABA MELHORIAS -->
@@ -425,9 +425,9 @@
       <div style="max-width:640px;margin:0 auto;padding:8px 0">
 
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:20px">
-          <h2 style="font-size:15px;font-weight:600;margin-bottom:6px">🔗 Gerar link de acesso para devs</h2>
+          <h2 style="font-size:15px;font-weight:600;margin-bottom:6px">ðŸ”— Gerar link de acesso para devs</h2>
           <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px">
-            Cole abaixo o token do GitHub com permissão de escrita no repositório. O sistema monta o link pronto para você copiar e repassar.
+            Cole abaixo o token do GitHub com permissÃ£o de escrita no repositÃ³rio. O sistema monta o link pronto para vocÃª copiar e repassar.
           </p>
 
           <div style="margin-bottom:16px">
@@ -439,10 +439,10 @@
                 oninput="gerarLinkAcesso()"
                 onfocus="this.type='text'"
                 onblur="this.type='password'" />
-              <button class="btn btn-secondary" onclick="usarTokenAtual()" title="Usar o token já configurado nesta sessão">Usar token atual</button>
+              <button class="btn btn-secondary" onclick="usarTokenAtual()" title="Usar o token jÃ¡ configurado nesta sessÃ£o">Usar token atual</button>
             </div>
             <p style="font-size:11px;color:var(--text3);margin-top:6px">
-              Crie um token em <strong style="color:var(--text2)">github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)</strong> com escopo <strong style="color:var(--text2)">repo</strong>.
+              Crie um token em <strong style="color:var(--text2)">github.com â†’ Settings â†’ Developer settings â†’ Personal access tokens â†’ Tokens (classic)</strong> com escopo <strong style="color:var(--text2)">repo</strong>.
             </p>
           </div>
 
@@ -452,32 +452,32 @@
               <input id="acesso-link-output" type="text" readonly
                 style="flex:1;background:var(--bg2);color:var(--text1);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;font-family:monospace;outline:none;cursor:pointer"
                 onclick="this.select()" />
-              <button class="btn btn-primary" onclick="copiarLinkAcesso()" id="btn-copiar-link">📋 Copiar</button>
+              <button class="btn btn-primary" onclick="copiarLinkAcesso()" id="btn-copiar-link">ðŸ“‹ Copiar</button>
             </div>
             <p style="font-size:11px;color:var(--text3);margin-top:8px">
-              ⚠️ Envie este link por canal seguro (WhatsApp direto, não grupos). Quem tiver o link consegue escrever no repositório.
+              âš ï¸ Envie este link por canal seguro (WhatsApp direto, nÃ£o grupos). Quem tiver o link consegue escrever no repositÃ³rio.
             </p>
           </div>
         </div>
 
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:24px">
-          <h2 style="font-size:15px;font-weight:600;margin-bottom:14px">📋 Como funciona</h2>
+          <h2 style="font-size:15px;font-weight:600;margin-bottom:14px">ðŸ“‹ Como funciona</h2>
           <div style="display:flex;flex-direction:column;gap:12px">
             <div style="display:flex;gap:12px;align-items:flex-start">
               <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</span>
-              <span style="font-size:13px;color:var(--text2);line-height:1.5">Você gera o link acima e repassa para os devs (um link único serve para todos).</span>
+              <span style="font-size:13px;color:var(--text2);line-height:1.5">VocÃª gera o link acima e repassa para os devs (um link Ãºnico serve para todos).</span>
             </div>
             <div style="display:flex;gap:12px;align-items:flex-start">
               <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</span>
-              <span style="font-size:13px;color:var(--text2);line-height:1.5">O dev abre o link → é autenticado automaticamente → digita a senha de acesso → escolhe o próprio nome.</span>
+              <span style="font-size:13px;color:var(--text2);line-height:1.5">O dev abre o link â†’ Ã© autenticado automaticamente â†’ digita a senha de acesso â†’ escolhe o prÃ³prio nome.</span>
             </div>
             <div style="display:flex;gap:12px;align-items:flex-start">
               <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">3</span>
-              <span style="font-size:13px;color:var(--text2);line-height:1.5">O token fica salvo no dispositivo. Da próxima vez o dev pode abrir <strong style="color:var(--text1)">dev.html</strong> diretamente sem o link.</span>
+              <span style="font-size:13px;color:var(--text2);line-height:1.5">O token fica salvo no dispositivo. Da prÃ³xima vez o dev pode abrir <strong style="color:var(--text1)">dev.html</strong> diretamente sem o link.</span>
             </div>
             <div style="display:flex;gap:12px;align-items:flex-start">
               <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">4</span>
-              <span style="font-size:13px;color:var(--text2);line-height:1.5">Tudo que o dev salvar aparece automaticamente no Admin, Gantt e Projetos — é o mesmo arquivo de dados.</span>
+              <span style="font-size:13px;color:var(--text2);line-height:1.5">Tudo que o dev salvar aparece automaticamente no Admin, Gantt e Projetos â€” Ã© o mesmo arquivo de dados.</span>
             </div>
           </div>
         </div>
@@ -489,10 +489,10 @@
     <div class="tab-content" id="tab-gerencial">
       <div class="ger-toolbar">
         <div class="ger-filter-group">
-          <label>Mês</label>
+          <label>MÃªs</label>
           <select id="ger-mes">
             <option value="1">Janeiro</option><option value="2">Fevereiro</option>
-            <option value="3">Março</option><option value="4">Abril</option>
+            <option value="3">MarÃ§o</option><option value="4">Abril</option>
             <option value="5">Maio</option><option value="6">Junho</option>
             <option value="7">Julho</option><option value="8">Agosto</option>
             <option value="9">Setembro</option><option value="10">Outubro</option>
@@ -504,14 +504,14 @@
           <select id="ger-ano"></select>
         </div>
         <button class="btn btn-primary" onclick="renderGerencial()">Atualizar</button>
-        <a href="projetos.html" class="btn btn-secondary" target="_blank">📁 Projetos por Tema</a>
+        <a href="projetos.html" class="btn btn-secondary" target="_blank">ðŸ“ Projetos por Tema</a>
       </div>
 
       <div id="ger-summary" class="ger-summary"></div>
       <div id="ger-charts" class="ger-charts"></div>
 
       <div class="ger-collapse-bar" onclick="toggleGerTable()">
-        <span id="ger-collapse-label">▶ Detalhamento de demandas</span>
+        <span id="ger-collapse-label">â–¶ Detalhamento de demandas</span>
         <span id="ger-count-badge" class="ger-count-badge"></span>
       </div>
       <div id="ger-table-wrap" class="ger-table-wrap" style="display:none">
@@ -519,7 +519,7 @@
           <thead>
             <tr>
               <th>Demanda</th><th>Tema</th><th>Dev</th>
-              <th>Início</th><th>Entrega</th>
+              <th>InÃ­cio</th><th>Entrega</th>
               <th>H. Plan.</th><th>H. Real.</th><th>Desvio</th><th>Status</th>
             </tr>
           </thead>
@@ -537,12 +537,12 @@
     <input type="hidden" id="m-id" />
 
     <div class="form-group">
-      <label>Título *</label>
+      <label>TÃ­tulo *</label>
       <input type="text" id="m-titulo" placeholder="Nome curto da melhoria" />
     </div>
     <div class="form-group">
-      <label>Descrição</label>
-      <textarea id="m-descricao" rows="3" placeholder="Texto da área ou editado pelo produto…"></textarea>
+      <label>DescriÃ§Ã£o</label>
+      <textarea id="m-descricao" rows="3" placeholder="Texto da Ã¡rea ou editado pelo produtoâ€¦"></textarea>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -557,7 +557,7 @@
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em Andamento</option>
           <option value="deploy">Deploy</option>
-          <option value="concluido">Concluído</option>
+          <option value="concluido">ConcluÃ­do</option>
           <option value="atrasado">Atrasado</option>
           <option value="negada">Negada</option>
         </select>
@@ -566,17 +566,17 @@
 
     <div class="form-row">
       <div class="form-group">
-        <label>Desenvolvedor responsável</label>
+        <label>Desenvolvedor responsÃ¡vel</label>
         <select id="m-dev" onchange="onDevSelectChange()"></select>
         <input type="text" id="m-dev-manual" placeholder="Ex: Gabriel / Ana" style="display:none;margin-top:6px" />
       </div>
       <div class="form-group">
         <label>Prioridade</label>
         <select id="m-prioridade">
-          <option value="">— Sem prioridade —</option>
-          <option value="alta">🔴 Alta</option>
-          <option value="media">🟡 Média</option>
-          <option value="baixa">🟢 Baixa</option>
+          <option value="">â€” Sem prioridade â€”</option>
+          <option value="alta">ðŸ”´ Alta</option>
+          <option value="media">ðŸŸ¡ MÃ©dia</option>
+          <option value="baixa">ðŸŸ¢ Baixa</option>
         </select>
       </div>
     </div>
@@ -587,15 +587,15 @@
         <input type="text" id="m-solicitante" placeholder="Quem solicitou" />
       </div>
       <div class="form-group">
-        <label>Data da solicitação</label>
+        <label>Data da solicitaÃ§Ã£o</label>
         <input type="date" id="m-data-solicitacao" />
       </div>
     </div>
 
-    <!-- Datas sempre visíveis -->
+    <!-- Datas sempre visÃ­veis -->
     <div class="form-row">
       <div class="form-group">
-        <label>Data de início</label>
+        <label>Data de inÃ­cio</label>
         <input type="date" id="m-inicio" oninput="atualizaHorasPlanejadas()" />
       </div>
       <div class="form-group">
@@ -611,8 +611,8 @@
         <input type="number" id="m-horas-real" min="0" step="0.5" placeholder="Preenchido pelo dev ao concluir" />
       </div>
       <div class="form-group">
-        <label>Horas planejadas <span style="font-weight:400;color:var(--text3)">(automático)</span></label>
-        <div id="m-horas-plan" style="padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text3);min-height:42px;line-height:1.4;">—</div>
+        <label>Horas planejadas <span style="font-weight:400;color:var(--text3)">(automÃ¡tico)</span></label>
+        <div id="m-horas-plan" style="padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text3);min-height:42px;line-height:1.4;">â€”</div>
       </div>
     </div>
 
@@ -620,16 +620,16 @@
       <!-- Estimada -->
       <div id="field-estimativa" class="form-group" style="display:none">
         <label>Estimativa de desenvolvimento</label>
-        <input type="text" id="m-estimativa" placeholder="Ex: 10 dias, 3 semanas…" />
+        <input type="text" id="m-estimativa" placeholder="Ex: 10 dias, 3 semanasâ€¦" />
       </div>
       <!-- Negada -->
       <div id="field-negada" class="form-group" style="display:none">
         <label>Motivo da negativa *</label>
-        <textarea id="m-motivo" rows="3" placeholder="Explique o motivo pelo qual a melhoria foi negada…"></textarea>
+        <textarea id="m-motivo" rows="3" placeholder="Explique o motivo pelo qual a melhoria foi negadaâ€¦"></textarea>
       </div>
     </div>
 
-    <!-- Vínculo de dependência (readonly) -->
+    <!-- VÃ­nculo de dependÃªncia (readonly) -->
     <div id="m-dep-info" style="display:none;margin-bottom:16px;"></div>
 
     <div class="form-actions">
@@ -646,7 +646,7 @@
     <input type="hidden" id="t-id" />
     <div class="form-group">
       <label>Nome do tema *</label>
-      <input type="text" id="t-nome" placeholder="Ex: AXCRED - Reanálise" />
+      <input type="text" id="t-nome" placeholder="Ex: AXCRED - ReanÃ¡lise" />
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-tema')">Cancelar</button>
@@ -658,7 +658,7 @@
 <div id="toast"></div>
 
 <script>
-// ─── CONFIG ───────────────────────────────────────────────────────
+// â”€â”€â”€ CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SENHA         = window.ADMIN_SENHA   || 'AudaxCapital123';
 const GITHUB_TOKEN  = window.GITHUB_TOKEN  || '';
 const GITHUB_USER   = 'CapFernando';
@@ -666,13 +666,13 @@ const GITHUB_REPO   = 'RoadMap';
 const DATA_PATH     = 'data/melhorias.json';
 const API_URL       = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
 
-// ─── STATE ────────────────────────────────────────────────────────
+// â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let state = { temas: [], melhorias: [] };
 let fileSha = null;
 const _deletedIds = new Set();
 
-// ─── LOGIN ────────────────────────────────────────────────────────
-// Tenta extrair token do fragmento da URL (#token=ghp_...) — link gerado por outro admin
+// â”€â”€â”€ LOGIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Tenta extrair token do fragmento da URL (#token=ghp_...) â€” link gerado por outro admin
 (function() {
   const hash = location.hash.slice(1);
   const params = new URLSearchParams(hash);
@@ -700,17 +700,17 @@ function initLoginScreen() {
 }
 
 function copyAccessLink() {
-  if (!runtimeToken) { toast('Token não disponível nesta sessão.', 'err'); return; }
+  if (!runtimeToken) { toast('Token nÃ£o disponÃ­vel nesta sessÃ£o.', 'err'); return; }
   const url = `${location.origin}${location.pathname}#token=${runtimeToken}`;
   navigator.clipboard.writeText(url).then(() => {
-    toast('🔗 Link copiado! Envie para o colega — o token será salvo automaticamente ao abrir.', 'ok');
+    toast('ðŸ”— Link copiado! Envie para o colega â€” o token serÃ¡ salvo automaticamente ao abrir.', 'ok');
   }).catch(() => {
     prompt('Copie o link abaixo:', url);
   });
 }
 
 function doLogin() {
-  // Se não tem token, lê do campo e salva no localStorage
+  // Se nÃ£o tem token, lÃª do campo e salva no localStorage
   if (!runtimeToken) {
     const t = document.getElementById('token-input').value.trim();
     if (!t) { document.getElementById('login-error').textContent = 'Informe o GitHub Token.'; return; }
@@ -758,7 +758,7 @@ async function adminCheckUpdates() {
 setInterval(adminCheckUpdates, 30000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') adminCheckUpdates(); });
 
-// ─── GITHUB ───────────────────────────────────────────────────────
+// â”€â”€â”€ GITHUB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function loadFromGitHub(silent) {
   try {
     const res = await fetch(API_URL + '?t=' + Date.now(), {
@@ -810,7 +810,7 @@ async function saveToGitHub(attempt = 1) {
       (serverData.melhorias || []).forEach(m => {
         if (!localMelhoriaIds.has(m.id) && !_deletedIds.has(m.id)) state.melhorias.push(m);
       });
-      // Preserva devs e feriados cadastrados pelo Gantt — admin não os edita mas não deve apagá-los
+      // Preserva devs e feriados cadastrados pelo Gantt â€” admin nÃ£o os edita mas nÃ£o deve apagÃ¡-los
       const devSet = new Set(state.desenvolvedores);
       (serverData.desenvolvedores || []).forEach(d => devSet.add(d));
       state.desenvolvedores = [...devSet];
@@ -847,36 +847,36 @@ async function saveToGitHub(attempt = 1) {
     }
     const data = await res.json();
     fileSha = data.content.sha;
-    toast('✅ Publicado!', 'ok');
+    toast('âœ… Publicado!', 'ok');
   } catch (e) {
     showSaving(false);
-    // Retry automático uma vez em caso de falha de rede
+    // Retry automÃ¡tico uma vez em caso de falha de rede
     if (attempt === 1 && (e instanceof TypeError || (e.message && e.message.includes('fetch')))) {
-      toast('⚠️ Falha de rede, tentando novamente…', 'err');
+      toast('âš ï¸ Falha de rede, tentando novamenteâ€¦', 'err');
       await new Promise(r => setTimeout(r, 2000));
       return saveToGitHub(2);
     }
     const errEl = document.getElementById('save-error');
-    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — seus dados estão seguros, tente publicar novamente.'; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = 'âš ï¸ ' + e.message + ' â€” seus dados estÃ£o seguros, tente publicar novamente.'; errEl.style.display = 'block'; }
     toast('Erro ao publicar: ' + e.message, 'err');
     return;
   }
   showSaving(false);
 }
 
-// ─── RENDER ───────────────────────────────────────────────────────
+// â”€â”€â”€ RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const STATUS_LABELS = {
   backlog:      'Backlog',
   levantar_req: 'Levantar Requisitos',
   planejado:    'Planejado',
   em_andamento: 'Em Andamento',
   deploy:       'Deploy',
-  concluido:    'Concluído',
+  concluido:    'ConcluÃ­do',
   atrasado:     'Atrasado',
   negada:       'Negada',
   // legado (itens antigos)
   recebida:'Backlog', refinamento:'Planejado', regra:'Planejado',
-  estimada:'Planejado', iniciada:'Em Andamento', concluida:'Concluído',
+  estimada:'Planejado', iniciada:'Em Andamento', concluida:'ConcluÃ­do',
 };
 function statusKey(m) {
   const sp = m.status_planejamento;
@@ -932,7 +932,7 @@ function renderStatusFilters() {
     { key: 'planejado',    label: 'Planejado',            cls: 'planejado' },
     { key: 'em_andamento',label: 'Em Andamento',  cls: 'em_andamento' },
     { key: 'deploy',      label: 'Deploy',        cls: 'deploy' },
-    { key: 'concluido',   label: 'Concluído',     cls: 'concluido' },
+    { key: 'concluido',   label: 'ConcluÃ­do',     cls: 'concluido' },
     { key: 'atrasado',    label: 'Atrasado',      cls: 'atrasado' },
     { key: 'negada',      label: 'Negada',        cls: 'negada' },
   ];
@@ -1000,22 +1000,22 @@ function renderMelhorias() {
     return ia - ib;
   });
   el.innerHTML = groupKeys.map(tKey => {
-    const temaNome = tKey === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === tKey)?.nome || '—');
+    const temaNome = tKey === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === tKey)?.nome || 'â€”');
     const cards = groups[tKey].map(m => {
       const sk = statusKey(m);
       const badge = `<span class="badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
       let sub = '';
       if (m.dev) sub += m.dev;
-      if (m.entrega) sub += (sub ? ' · ' : '') + `Entrega: ${formatDate(m.entrega)}`;
-      // Dependência de outro card
+      if (m.entrega) sub += (sub ? ' Â· ' : '') + `Entrega: ${formatDate(m.entrega)}`;
+      // DependÃªncia de outro card
       const parentM = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
       const parentBadge = parentM
-        ? `<span style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;">🔗 Dep. de: ${parentM.titulo.substring(0,30)}</span>`
+        ? `<span style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;">ðŸ”— Dep. de: ${parentM.titulo.substring(0,30)}</span>`
         : '';
-      // Dependências abertas deste card
+      // DependÃªncias abertas deste card
       const depCount = state.melhorias.filter(x => x.parent_id === m.id && statusKey(x) !== 'concluido').length;
       const depBadge = depCount > 0
-        ? `<span style="font-size:11px;background:#5C0A0A;color:#F9A0A0;border-radius:4px;padding:2px 7px;">⏳ ${depCount} dep. aberta${depCount>1?'s':''}</span>`
+        ? `<span style="font-size:11px;background:#5C0A0A;color:#F9A0A0;border-radius:4px;padding:2px 7px;">â³ ${depCount} dep. aberta${depCount>1?'s':''}</span>`
         : '';
       return `<div class="card">
         <div class="card-info">
@@ -1023,7 +1023,7 @@ function renderMelhorias() {
             <div class="card-nome">${m.titulo}</div>${badge}${parentBadge}${depBadge}
           </div>
           ${sub ? `<div class="card-sub">${sub}</div>` : ''}
-          ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${m.descricao.substring(0,120)}${m.descricao.length>120?'…':''}</div>` : ''}
+          ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${m.descricao.substring(0,120)}${m.descricao.length>120?'â€¦':''}</div>` : ''}
         </div>
         <div class="card-actions">
           <button class="btn btn-secondary btn-sm" onclick="openModalMelhoria('${m.id}')">Editar</button>
@@ -1038,7 +1038,7 @@ function renderMelhorias() {
   }).join('');
 }
 
-// ─── TABS ─────────────────────────────────────────────────────────
+// â”€â”€â”€ TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -1047,16 +1047,16 @@ function switchTab(name) {
   if (name === 'gerencial') renderGerencial();
 }
 
-// ─── DEV SELECT ───────────────────────────────────────────────────
+// â”€â”€â”€ DEV SELECT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function populateDevSelect(currentVal) {
   const sel = document.getElementById('m-dev');
   const manual = document.getElementById('m-dev-manual');
   const devs = state.desenvolvedores || [];
   const isMultiple = currentVal && currentVal.includes('/') || (currentVal && !devs.includes(currentVal) && currentVal !== '');
   sel.innerHTML =
-    '<option value="">— Nenhum —</option>' +
+    '<option value="">â€” Nenhum â€”</option>' +
     devs.map(d => `<option value="${d}" ${currentVal===d?'selected':''}>${d}</option>`).join('') +
-    '<option value="__manual__" ' + (isMultiple?'selected':'') + '>✏ Múltiplos / outro...</option>';
+    '<option value="__manual__" ' + (isMultiple?'selected':'') + '>âœ MÃºltiplos / outro...</option>';
   if (isMultiple) {
     manual.style.display = 'block';
     manual.value = currentVal;
@@ -1084,7 +1084,7 @@ function getDevValue() {
   return sel.value;
 }
 
-// ─── ACESSO DEVS ──────────────────────────────────────────────────
+// â”€â”€â”€ ACESSO DEVS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function gerarLinkAcesso() {
   const token = document.getElementById('acesso-token-input').value.trim();
   const box   = document.getElementById('acesso-link-box');
@@ -1097,7 +1097,7 @@ function gerarLinkAcesso() {
 
 function usarTokenAtual() {
   const t = (typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '';
-  if (!t) { alert('Nenhum token encontrado nesta sessão. Cole manualmente.'); return; }
+  if (!t) { alert('Nenhum token encontrado nesta sessÃ£o. Cole manualmente.'); return; }
   document.getElementById('acesso-token-input').value = t;
   gerarLinkAcesso();
 }
@@ -1106,12 +1106,12 @@ function copiarLinkAcesso() {
   const out = document.getElementById('acesso-link-output');
   navigator.clipboard.writeText(out.value).then(() => {
     const btn = document.getElementById('btn-copiar-link');
-    btn.textContent = '✔ Copiado!';
-    setTimeout(() => btn.textContent = '📋 Copiar', 2000);
+    btn.textContent = 'âœ” Copiado!';
+    setTimeout(() => btn.textContent = 'ðŸ“‹ Copiar', 2000);
   });
 }
 
-// ─── GERENCIAL ────────────────────────────────────────────────────
+// â”€â”€â”€ GERENCIAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const GER_COLORS = [
   '#3B8FE8','#5EA832','#E89C2F','#9B6FE8','#2BBFA0',
   '#E84444','#E84494','#4AB0E8','#A8E83B','#E8C43B'
@@ -1145,7 +1145,7 @@ function toggleGerTable() {
   _gerTableOpen = !_gerTableOpen;
   document.getElementById('ger-table-wrap').style.display = _gerTableOpen ? 'block' : 'none';
   const lbl = document.getElementById('ger-collapse-label');
-  lbl.textContent = (_gerTableOpen ? '▼' : '▶') + ' Detalhamento de demandas';
+  lbl.textContent = (_gerTableOpen ? 'â–¼' : 'â–¶') + ' Detalhamento de demandas';
 }
 
 function renderGerencial() {
@@ -1157,11 +1157,11 @@ function renderGerencial() {
 
   const STATUS_LABEL = {
     backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
-    em_andamento:'Em Andamento', deploy:'Deploy', concluido:'Concluído',
+    em_andamento:'Em Andamento', deploy:'Deploy', concluido:'ConcluÃ­do',
     atrasado:'Atrasado', negada:'Negada'
   };
 
-  // Horas efetivas: usa realizadas se lançado, senão usa planejadas como fallback
+  // Horas efetivas: usa realizadas se lanÃ§ado, senÃ£o usa planejadas como fallback
   function getHorasEfetivas(m) {
     if (m.horas_realizadas > 0) return m.horas_realizadas;
     return calcHorasPlanejadas(m.inicio, m.entrega) || 0;
@@ -1178,7 +1178,7 @@ function renderGerencial() {
   const items = filterMonth(mes, ano);
   const concluidos = items.filter(m => m.status_planejamento === 'concluido' || m.status === 'concluida');
 
-  // Mês anterior para comparativo
+  // MÃªs anterior para comparativo
   let pmMes = mes - 1, pmAno = ano;
   if (pmMes === 0) { pmMes = 12; pmAno--; }
   const prevItems = filterMonth(pmMes, pmAno);
@@ -1193,16 +1193,16 @@ function renderGerencial() {
 
   function deltaBadge(curr, prev) {
     if (!prev && !curr) return '';
-    if (!prev) return `<span class="ger-kpi-delta delta-neu">— sem ref. anterior</span>`;
+    if (!prev) return `<span class="ger-kpi-delta delta-neu">â€” sem ref. anterior</span>`;
     const pct = Math.round(((curr - prev) / prev) * 100);
-    const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '→';
+    const arrow = pct > 0 ? 'â–²' : pct < 0 ? 'â–¼' : 'â†’';
     const cls   = pct > 0 ? 'delta-up' : pct < 0 ? 'delta-down' : 'delta-neu';
-    return `<span class="ger-kpi-delta ${cls}">${arrow} ${Math.abs(pct)}% vs mês ant.</span>`;
+    return `<span class="ger-kpi-delta ${cls}">${arrow} ${Math.abs(pct)}% vs mÃªs ant.</span>`;
   }
 
   document.getElementById('ger-summary').innerHTML = `
     <div class="ger-kpi">
-      <div class="ger-kpi-label">Demandas no mês</div>
+      <div class="ger-kpi-label">Demandas no mÃªs</div>
       <div class="ger-kpi-value blue">${items.length}</div>
       ${deltaBadge(items.length, prevItems.length)}
     </div>
@@ -1217,17 +1217,17 @@ function renderGerencial() {
       ${deltaBadge(totalReal, prevTotalReal)}
     </div>
     <div class="ger-kpi">
-      <div class="ger-kpi-label">Concluídas</div>
+      <div class="ger-kpi-label">ConcluÃ­das</div>
       <div class="ger-kpi-value green">${concluidos.length}</div>
       ${deltaBadge(concluidos.length, prevConc.length)}
     </div>
     <div class="ger-kpi">
-      <div class="ger-kpi-label">Eficiência</div>
+      <div class="ger-kpi-label">EficiÃªncia</div>
       <div class="ger-kpi-value ${eficClass}">${efic}%</div>
     </div>
   `;
 
-  // ── Agrupadores ──────────────────────────────────────────────────
+  // â”€â”€ Agrupadores â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const temaMap = {};
   (state.temas || []).forEach(t => { temaMap[t.id] = t.nome; });
 
@@ -1260,7 +1260,7 @@ function renderGerencial() {
   const planPorDev  = groupByDevs(items,      m => calcHorasPlanejadas(m.inicio, m.entrega) || 0);
   const realPorDev  = groupByDevs(concluidos, m => getHorasEfetivas(m));
 
-  // ── Gráficos ─────────────────────────────────────────────────────
+  // â”€â”€ GrÃ¡ficos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const chartDefs = [
     { id:'chart-plan-tema', title:'H. Planejadas por Tema',  data: planPorTema },
     { id:'chart-real-tema', title:'H. Realizadas por Tema',  data: realPorTema },
@@ -1286,7 +1286,7 @@ function renderGerencial() {
     return `<div class="ger-chart-box">
       <div class="ger-chart-title">${c.title}</div>
       ${!labels.length
-        ? '<div class="ger-chart-empty">Sem dados no período</div>'
+        ? '<div class="ger-chart-empty">Sem dados no perÃ­odo</div>'
         : `<div class="ger-chart-canvas-wrap"><canvas id="${c.id}"></canvas></div>
            <div class="ger-legend">${legendHTML}</div>`}
     </div>`;
@@ -1327,7 +1327,7 @@ function renderGerencial() {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: ctx => ` ${ctx.raw}h — ${Math.round(ctx.raw/total*100)}%`
+              label: ctx => ` ${ctx.raw}h â€” ${Math.round(ctx.raw/total*100)}%`
             }
           },
           datalabels: {
@@ -1346,7 +1346,7 @@ function renderGerencial() {
     });
   });
 
-  // ── Tabela ───────────────────────────────────────────────────────
+  // â”€â”€ Tabela â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   document.getElementById('ger-count-badge').textContent = `${items.length} demandas`;
 
   const rows = items.map(m => {
@@ -1356,16 +1356,16 @@ function renderGerencial() {
     const isConcl = m.status_planejamento === 'concluido' || m.status === 'concluida';
     const desvio  = isConcl ? hrEf - hp : null;
     const desvioClass = desvio === null ? 'desvio-zero' : desvio > 0 ? 'desvio-pos' : desvio < 0 ? 'desvio-neg' : 'desvio-zero';
-    const desvioStr   = desvio === null ? '—' : desvio === 0 ? '0h' : (desvio > 0 ? '+' : '') + desvio + 'h';
-    const hrStr = isConcl ? (hrLog > 0 ? hrLog + 'h' : hrEf + 'h*') : '—';
+    const desvioStr   = desvio === null ? 'â€”' : desvio === 0 ? '0h' : (desvio > 0 ? '+' : '') + desvio + 'h';
+    const hrStr = isConcl ? (hrLog > 0 ? hrLog + 'h' : hrEf + 'h*') : 'â€”';
     const spKey = m.status_planejamento || 'backlog';
     return `<tr>
-      <td title="${m.titulo}">${m.titulo.length > 40 ? m.titulo.slice(0,40)+'…' : m.titulo}</td>
-      <td>${temaMap[m.tema_id] || '—'}</td>
-      <td>${m.dev || '—'}</td>
+      <td title="${m.titulo}">${m.titulo.length > 40 ? m.titulo.slice(0,40)+'â€¦' : m.titulo}</td>
+      <td>${temaMap[m.tema_id] || 'â€”'}</td>
+      <td>${m.dev || 'â€”'}</td>
       <td>${formatDate(m.inicio)}</td>
       <td>${formatDate(m.entrega)}</td>
-      <td>${hp ? hp + 'h' : '—'}</td>
+      <td>${hp ? hp + 'h' : 'â€”'}</td>
       <td>${hrStr}</td>
       <td class="${desvioClass}">${desvioStr}</td>
       <td><span class="badge badge-${spKey}" style="font-size:11px">${STATUS_LABEL[spKey] || spKey}</span></td>
@@ -1373,10 +1373,10 @@ function renderGerencial() {
   }).join('');
 
   document.getElementById('ger-tbody').innerHTML = rows ||
-    `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px">Nenhuma demanda com início neste mês.</td></tr>`;
+    `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px">Nenhuma demanda com inÃ­cio neste mÃªs.</td></tr>`;
 }
 
-// ─── MODAL TEMA ───────────────────────────────────────────────────
+// â”€â”€â”€ MODAL TEMA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openModalTema(id) {
   document.getElementById('t-id').value = id || '';
   document.getElementById('t-nome').value = id ? (state.temas.find(t=>t.id===id)?.nome || '') : '';
@@ -1395,17 +1395,17 @@ function saveTema() {
   }
   closeModal('modal-tema');
   renderAll();
-  toast('Tema salvo. Clique em "Publicar alterações" para ir ao ar.', 'ok');
+  toast('Tema salvo. Clique em "Publicar alteraÃ§Ãµes" para ir ao ar.', 'ok');
 }
 function deleteTema(id) {
-  if (!confirm('Excluir este tema? As melhorias vinculadas ficarão sem tema.')) return;
+  if (!confirm('Excluir este tema? As melhorias vinculadas ficarÃ£o sem tema.')) return;
   _deletedIds.add(id);
   state.temas = state.temas.filter(t => t.id !== id);
   renderAll();
   toast('Tema removido.', 'ok');
 }
 
-// ─── MODAL MELHORIA ───────────────────────────────────────────────
+// â”€â”€â”€ MODAL MELHORIA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openModalMelhoria(id) {
   const m = id ? state.melhorias.find(x => x.id === id) : null;
   document.getElementById('modal-melhoria-title').textContent = m ? 'Editar melhoria' : 'Nova melhoria';
@@ -1426,31 +1426,31 @@ function openModalMelhoria(id) {
   // preenche temas no select
   const sel = document.getElementById('m-tema');
   sel.innerHTML = state.temas.map(t => `<option value="${t.id}" ${m?.tema_id===t.id?'selected':''}>${t.nome}</option>`).join('');
-  if (!state.temas.length) sel.innerHTML = '<option value="">— Cadastre um tema primeiro —</option>';
+  if (!state.temas.length) sel.innerHTML = '<option value="">â€” Cadastre um tema primeiro â€”</option>';
 
   document.getElementById('m-status').value = statusKey(m || {}) || 'backlog';
   onStatusChange();
 
-  // Info de dependência
+  // Info de dependÃªncia
   const depInfoEl = document.getElementById('m-dep-info');
   let depHTML = '';
   if (m?.parent_id) {
     const par = state.melhorias.find(x => x.id === m.parent_id);
     depHTML += `<div style="background:#341A6E33;border:1px solid #9B6FE855;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px;">
-      🔗 <strong>Dependência de:</strong> ${par ? par.titulo : '(card removido)'}
+      ðŸ”— <strong>DependÃªncia de:</strong> ${par ? par.titulo : '(card removido)'}
     </div>`;
   }
   const childDeps = m ? state.melhorias.filter(x => x.parent_id === m.id) : [];
   if (childDeps.length) {
     depHTML += `<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;font-size:13px;">
-      <div style="font-weight:600;margin-bottom:6px;">Dependências abertas deste card:</div>
+      <div style="font-weight:600;margin-bottom:6px;">DependÃªncias abertas deste card:</div>
       ${childDeps.map(d => {
         const dsk = statusKey(d);
         const done = dsk === 'concluido';
         return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-          <span>${done?'✅':'⏳'}</span>
+          <span>${done?'âœ…':'â³'}</span>
           <span style="flex:1">${d.titulo}</span>
-          <span style="color:var(--text3);font-size:12px;">${d.dev||'—'}</span>
+          <span style="color:var(--text3);font-size:12px;">${d.dev||'â€”'}</span>
           <span style="color:var(--text3);font-size:12px;">${d.entrega?formatDate(d.entrega):''}</span>
           <span class="badge badge-${dsk}" style="font-size:11px;">${STATUS_LABELS[dsk]||dsk}</span>
         </div>`;
@@ -1489,18 +1489,18 @@ function atualizaHorasPlanejadas() {
   const el = document.getElementById('m-horas-plan');
   if (!el) return;
   const hp = calcHorasPlanejadas(inicio, entrega);
-  el.textContent = hp !== null ? `${hp}h (${hp/8} dia(s) útil/úteis × 8h)` : '—';
+  el.textContent = hp !== null ? `${hp}h (${hp/8} dia(s) Ãºtil/Ãºteis Ã— 8h)` : 'â€”';
   el.style.color = hp !== null ? 'var(--text)' : 'var(--text3)';
 }
 
-// mapa sp → status legado (para compatibilidade com outros campos)
+// mapa sp â†’ status legado (para compatibilidade com outros campos)
 const SP_TO_STATUS = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
 
 function saveMelhoria() {
   const titulo = document.getElementById('m-titulo').value.trim();
   const temaId = document.getElementById('m-tema').value;
-  const sp     = document.getElementById('m-status').value; // agora é o status_planejamento
-  if (!titulo) { toast('Informe o título.', 'err'); return; }
+  const sp     = document.getElementById('m-status').value; // agora Ã© o status_planejamento
+  if (!titulo) { toast('Informe o tÃ­tulo.', 'err'); return; }
   if (!temaId) { toast('Selecione um tema.', 'err'); return; }
   if (sp === 'negada' && !document.getElementById('m-motivo').value.trim()) {
     toast('Informe o motivo da negativa.', 'err'); return;
@@ -1538,7 +1538,7 @@ function saveMelhoria() {
 
   closeModal('modal-melhoria');
   renderAll();
-  toast('Melhoria salva. Clique em "Publicar alterações" para ir ao ar.', 'ok');
+  toast('Melhoria salva. Clique em "Publicar alteraÃ§Ãµes" para ir ao ar.', 'ok');
 }
 
 function deleteMelhoria(id) {
@@ -1549,7 +1549,7 @@ function deleteMelhoria(id) {
   toast('Melhoria removida.', 'ok');
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────────
+// â”€â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function formatDate(s) {
   if (!s) return '';
@@ -1574,7 +1574,7 @@ function showSaving(on) {
     if (document.getElementById(id)) return;
     const d = document.createElement('div');
     d.id = id; d.className = 'saving-overlay';
-    d.textContent = 'Publicando no GitHub…';
+    d.textContent = 'Publicando no GitHubâ€¦';
     document.body.appendChild(d);
   } else {
     document.getElementById(id)?.remove();
@@ -1583,3 +1583,4 @@ function showSaving(on) {
 </script>
 </body>
 </html>
+

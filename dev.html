@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Meu Painel — RoadMap de Melhorias</title>
+  <title>Meu Painel â€” RoadMap de Melhorias</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
@@ -23,7 +23,7 @@
     }
     body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; min-height:100vh; }
 
-    /* ── LOGIN ── */
+    /* â”€â”€ LOGIN â”€â”€ */
     #login-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; }
     .login-box { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:40px 36px; width:100%; max-width:400px; text-align:center; }
     .login-box h2 { font-size:22px; font-weight:700; margin-bottom:6px; }
@@ -34,7 +34,7 @@
     .login-aviso { background:var(--amber-bg); color:var(--amber-tx); border-radius:8px; padding:10px 14px; font-size:13px; line-height:1.5; margin-bottom:16px; display:none; }
     .login-error { color:var(--red-tx); font-size:13px; margin-top:8px; }
 
-    /* ── HEADER ── */
+    /* â”€â”€ HEADER â”€â”€ */
     header { background:var(--bg2); border-bottom:1px solid var(--border); padding:14px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
     .header-left { display:flex; align-items:center; gap:12px; }
     .header-left h1 { font-size:17px; font-weight:600; }
@@ -56,7 +56,7 @@
     .btn-success   { background:var(--green); color:#fff; }
     .btn-sm { padding:5px 11px; font-size:12px; }
 
-    /* ── FILTER BAR ── */
+    /* â”€â”€ FILTER BAR â”€â”€ */
     .filter-bar { background:var(--bg2); border-bottom:1px solid var(--border); padding:10px 24px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
     .filter-bar label { font-size:12px; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
     .filter-select { background:var(--bg3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; padding:5px 10px; outline:none; cursor:pointer; }
@@ -66,7 +66,7 @@
     .filter-chip.active { background:var(--blue-bg); border-color:var(--blue); color:var(--blue-tx); }
     .filter-sep { width:1px; height:20px; background:var(--border); }
 
-    /* ── KANBAN ── */
+    /* â”€â”€ KANBAN â”€â”€ */
     #kanban-wrap { overflow-x:auto; padding:20px 24px 40px; min-height:calc(100vh - 140px); }
     #kanban { display:flex; gap:14px; min-width:max-content; align-items:stretch; }
     .col { width:290px; flex-shrink:0; min-height:calc(100vh - 200px); display:flex; flex-direction:column; }
@@ -78,7 +78,7 @@
     .col-drop-hint { border:2px dashed var(--border); border-radius:8px; height:80px; display:none; align-items:center; justify-content:center; font-size:12px; color:var(--text3); }
     .col.drag-over .col-drop-hint { display:flex; }
 
-    /* ── CARD ── */
+    /* â”€â”€ CARD â”€â”€ */
     .kcard {
       background:var(--bg2); border:1px solid var(--border); border-radius:9px;
       padding:12px 14px; cursor:pointer; transition:border-color .15s, transform .1s;
@@ -87,7 +87,7 @@
     .kcard:hover { border-color:var(--border2); transform:translateY(-1px); }
     .kcard.dragging { opacity:.35; pointer-events:none; }
     /* Durante qualquer drag, todos os cards ficam transparentes aos eventos
-       para que a COLUNA inteira seja o alvo — elimina necessidade de precisão */
+       para que a COLUNA inteira seja o alvo â€” elimina necessidade de precisÃ£o */
     #kanban.dragging-active .kcard { pointer-events:none; }
     .kcard-title { font-size:13px; font-weight:600; color:var(--text); line-height:1.4; margin-bottom:6px; }
     .kcard-tema  { font-size:11px; color:var(--text3); margin-bottom:6px; }
@@ -99,13 +99,13 @@
     .badge-backlog      { background:#0C326022; color:var(--blue-tx); }
     .badge-levantar_req { background:var(--purple-bg); color:var(--purple-tx); }
     .badge-planejado    { background:var(--blue-bg);   color:var(--blue-tx); }
-    .badge-em_andamento { background:var(--green-bg);  color:var(--green-tx); }
+    .badge-em_andamento { background:#3D3600;  color:#FFE14D; }
     .badge-deploy       { background:var(--amber-bg);  color:var(--amber-tx); }
     .badge-atrasado     { background:var(--red-bg);    color:var(--red-tx); }
     .badge-concluido    { background:var(--teal-bg);   color:var(--teal-tx); }
     .badge-negada       { background:var(--red-bg);    color:var(--red-tx); }
 
-    /* ── MODAL ── */
+    /* â”€â”€ MODAL â”€â”€ */
     .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:200; padding:20px; }
     .modal { background:var(--bg2); border:1px solid var(--border); border-radius:14px; width:100%; max-width:500px; max-height:90vh; overflow-y:auto; padding:28px; }
     .modal h2 { font-size:18px; font-weight:700; margin-bottom:20px; }
@@ -121,14 +121,14 @@
     .modal-info-row { display:flex; gap:8px; align-items:center; font-size:13px; color:var(--text2); margin-bottom:8px; }
     .modal-info-row strong { color:var(--text); }
 
-    /* ── TOAST ── */
+    /* â”€â”€ TOAST â”€â”€ */
     #toast { position:fixed; bottom:24px; right:24px; z-index:9000; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:500; max-width:360px; line-height:1.4; transition:opacity .3s; opacity:0; pointer-events:none; }
     .saving-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:500; font-size:16px; color:var(--text2); }
 
-    /* ── EMPTY ── */
+    /* â”€â”€ EMPTY â”€â”€ */
     .empty-col { color:var(--text3); font-size:12px; text-align:center; padding:20px 0; }
 
-    /* ── DEPENDÊNCIAS ── */
+    /* â”€â”€ DEPENDÃŠNCIAS â”€â”€ */
     .kcard-parent-info { font-size:11px; color:var(--purple-tx); background:var(--purple-bg); border-radius:4px; padding:3px 8px; margin-bottom:6px; display:inline-block; }
     .kcard-dep-section { border-top:1px solid var(--border); margin-top:8px; padding-top:8px; }
     .dep-row { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text2); padding:4px 0; flex-wrap:wrap; border-bottom:1px solid var(--border); }
@@ -142,10 +142,10 @@
 </head>
 <body>
 
-<!-- ─── LOGIN ─────────────────────────────────────── -->
+<!-- â”€â”€â”€ LOGIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div id="login-screen">
   <div class="login-box">
-    <h2>👤 Meu Painel</h2>
+    <h2>ðŸ‘¤ Meu Painel</h2>
 
     <!-- PASSO 1: Senha -->
     <div id="step-senha">
@@ -156,53 +156,53 @@
       <div class="login-error" id="login-error-senha"></div>
     </div>
 
-    <!-- PASSO 2: Seleção de dev (oculto até senha correta) -->
+    <!-- PASSO 2: SeleÃ§Ã£o de dev (oculto atÃ© senha correta) -->
     <div id="step-dev" style="display:none">
       <p>Selecione seu nome</p>
       <div id="login-aviso" class="login-aviso">
-        🔗 Primeiro acesso neste dispositivo. Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de continuar.
+        ðŸ”— Primeiro acesso neste dispositivo. Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de continuar.
       </div>
       <div id="dev-grid" class="dev-grid">
-        <div style="color:var(--text3);font-size:13px;padding:20px;grid-column:1/-1;">Carregando devs…</div>
+        <div style="color:var(--text3);font-size:13px;padding:20px;grid-column:1/-1;">Carregando devsâ€¦</div>
       </div>
-      <button onclick="reloadDevList()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;margin-top:4px;text-decoration:underline;">↻ Atualizar lista</button>
+      <button onclick="reloadDevList()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;margin-top:4px;text-decoration:underline;">â†» Atualizar lista</button>
       <div class="login-error" id="login-error"></div>
     </div>
   </div>
 </div>
 
-<!-- ─── APP ──────────────────────────────────────── -->
+<!-- â”€â”€â”€ APP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div id="dev-app" style="display:none">
-  <!-- Banner visível apenas para dev "Teste" -->
+  <!-- Banner visÃ­vel apenas para dev "Teste" -->
   <div id="banner-teste" style="display:none;align-items:center;gap:12px;background:#3d1a1a;border-bottom:1px solid #6b2d2d;padding:10px 24px;font-size:13px;color:#F9A0A0;">
-    <span>⚠️ <strong>Conta de teste detectada.</strong> Todos os dados abaixo são de demonstração.</span>
-    <button onclick="limparDadosTeste()" style="margin-left:auto;background:#6b2d2d;color:#F9A0A0;border:1px solid #a04040;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">🗑️ Apagar todos os dados de Teste</button>
+    <span>âš ï¸ <strong>Conta de teste detectada.</strong> Todos os dados abaixo sÃ£o de demonstraÃ§Ã£o.</span>
+    <button onclick="limparDadosTeste()" style="margin-left:auto;background:#6b2d2d;color:#F9A0A0;border:1px solid #a04040;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">ðŸ—‘ï¸ Apagar todos os dados de Teste</button>
   </div>
   <header>
     <div class="header-left">
-      <h1>🗂️ Meu Painel</h1>
+      <h1>ðŸ—‚ï¸ Meu Painel</h1>
       <div class="dev-switcher" id="dev-switcher" onclick="toggleDevDropdown(event)">
-        <span id="dev-label">—</span>
-        <span class="dev-switcher-arrow">▾</span>
+        <span id="dev-label">â€”</span>
+        <span class="dev-switcher-arrow">â–¾</span>
         <div class="dev-dropdown" id="dev-dropdown"></div>
       </div>
     </div>
     <div class="header-right">
-      <span id="ultima-atualizacao" style="font-size:12px;color:var(--text3);">—</span>
+      <span id="ultima-atualizacao" style="font-size:12px;color:var(--text3);">â€”</span>
       <button class="btn btn-primary btn-sm" onclick="openNewModal()">+ Nova demanda</button>
-      <button class="btn btn-secondary btn-sm" onclick="forceRefresh()">↻ Atualizar</button>
+      <button class="btn btn-secondary btn-sm" onclick="forceRefresh()">â†» Atualizar</button>
     </div>
   </header>
 
   <div class="filter-bar">
-    <label>Período:</label>
+    <label>PerÃ­odo:</label>
     <select id="f-ano" class="filter-select" onchange="renderKanban()">
       <option value="">Todos os anos</option>
     </select>
     <select id="f-mes" class="filter-select" onchange="renderKanban()">
       <option value="">Todos os meses</option>
       <option value="0">Janeiro</option><option value="1">Fevereiro</option>
-      <option value="2">Março</option><option value="3">Abril</option>
+      <option value="2">MarÃ§o</option><option value="3">Abril</option>
       <option value="4">Maio</option><option value="5">Junho</option>
       <option value="6">Julho</option><option value="7">Agosto</option>
       <option value="8">Setembro</option><option value="9">Outubro</option>
@@ -218,7 +218,7 @@
   </div>
 </div>
 
-<!-- ─── MODAL: STATUS ────────────────────────────── -->
+<!-- â”€â”€â”€ MODAL: STATUS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div id="modal-status" class="modal-overlay" style="display:none">
   <div class="modal">
     <h2 id="ms-title">Detalhes da Demanda</h2>
@@ -231,7 +231,7 @@
         <option value="em_andamento">Em Andamento</option>
         <option value="deploy">Deploy</option>
         <option value="atrasado">Atrasado</option>
-        <option value="concluido">Concluído</option>
+        <option value="concluido">ConcluÃ­do</option>
       </select>
     </div>
     <div id="ms-horas-group" style="display:none">
@@ -248,12 +248,12 @@
   </div>
 </div>
 
-<!-- ─── MODAL: NOVA DEMANDA ──────────────────────── -->
+<!-- â”€â”€â”€ MODAL: NOVA DEMANDA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div id="modal-new" class="modal-overlay" style="display:none">
   <div class="modal">
     <h2>Nova Demanda</h2>
     <div class="form-group">
-      <label>Título *</label>
+      <label>TÃ­tulo *</label>
       <input type="text" id="n-titulo" placeholder="Descreva a demanda" />
     </div>
     <div class="form-group">
@@ -261,12 +261,12 @@
       <select id="n-tema"></select>
     </div>
     <div class="form-group">
-      <label>Descrição</label>
-      <textarea id="n-desc" placeholder="Detalhes, contexto, requisitos…"></textarea>
+      <label>DescriÃ§Ã£o</label>
+      <textarea id="n-desc" placeholder="Detalhes, contexto, requisitosâ€¦"></textarea>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group">
-        <label>Início previsto</label>
+        <label>InÃ­cio previsto</label>
         <input type="date" id="n-inicio" />
       </div>
       <div class="form-group">
@@ -289,11 +289,11 @@
   </div>
 </div>
 
-<!-- ─── MODAL: LISTA DE TEMAS ────────────────────── -->
+<!-- â”€â”€â”€ MODAL: LISTA DE TEMAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div id="modal-temas" class="modal-overlay" style="display:none">
   <div class="modal" style="max-width:460px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-      <h2 style="margin:0;">🏷 Temas</h2>
+      <h2 style="margin:0;">ðŸ· Temas</h2>
       <button class="btn btn-primary btn-sm" onclick="openTemaForm()">+ Novo tema</button>
     </div>
     <div id="temas-list-modal"></div>
@@ -303,14 +303,14 @@
   </div>
 </div>
 
-<!-- ─── MODAL: FORM TEMA ──────────────────────────── -->
+<!-- â”€â”€â”€ MODAL: FORM TEMA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div id="modal-tema-form" class="modal-overlay" style="display:none;z-index:300;">
   <div class="modal" style="max-width:380px;">
     <h2 id="tema-form-title">Novo tema</h2>
     <input type="hidden" id="t-id" />
     <div class="form-group">
       <label>Nome do tema *</label>
-      <input type="text" id="t-nome" placeholder="Ex: AXCRED – Reanálise" />
+      <input type="text" id="t-nome" placeholder="Ex: AXCRED â€“ ReanÃ¡lise" />
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-tema-form')">Cancelar</button>
@@ -319,22 +319,22 @@
   </div>
 </div>
 
-<!-- ─── MODAL: DEPENDÊNCIA ───────────────────────── -->
+<!-- â”€â”€â”€ MODAL: DEPENDÃŠNCIA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <div id="modal-dep" class="modal-overlay" style="display:none">
   <div class="modal">
-    <h2>🔗 Abrir Dependência</h2>
+    <h2>ðŸ”— Abrir DependÃªncia</h2>
     <input type="hidden" id="dep-parent-id" />
     <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:16px;">
       <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Card pai</div>
-      <div id="dep-parent-title" style="font-weight:600;color:var(--text);font-size:14px;">—</div>
-      <div id="dep-parent-tema" style="font-size:12px;color:var(--text3);margin-top:2px;">—</div>
+      <div id="dep-parent-title" style="font-weight:600;color:var(--text);font-size:14px;">â€”</div>
+      <div id="dep-parent-tema" style="font-size:12px;color:var(--text3);margin-top:2px;">â€”</div>
     </div>
     <div class="form-group">
-      <label>O que está aguardando? *</label>
-      <input type="text" id="dep-titulo" placeholder="Ex: Validação de regra pela área de Crédito" />
+      <label>O que estÃ¡ aguardando? *</label>
+      <input type="text" id="dep-titulo" placeholder="Ex: ValidaÃ§Ã£o de regra pela Ã¡rea de CrÃ©dito" />
     </div>
     <div class="form-group">
-      <label>Responsável (outra área / dev) *</label>
+      <label>ResponsÃ¡vel (outra Ã¡rea / dev) *</label>
       <select id="dep-dev"></select>
     </div>
     <div class="form-group">
@@ -342,12 +342,12 @@
       <input type="date" id="dep-entrega" />
     </div>
     <div class="form-group">
-      <label>Descrição / contexto</label>
-      <textarea id="dep-desc" placeholder="Descreva o que precisa da outra parte…"></textarea>
+      <label>DescriÃ§Ã£o / contexto</label>
+      <textarea id="dep-desc" placeholder="Descreva o que precisa da outra parteâ€¦"></textarea>
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-dep')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveNewDep()">Abrir dependência</button>
+      <button class="btn btn-primary" onclick="saveNewDep()">Abrir dependÃªncia</button>
     </div>
   </div>
 </div>
@@ -355,7 +355,7 @@
 <div id="toast"></div>
 
 <script>
-// ─── CONFIG ──────────────────────────────────────────────────────
+// â”€â”€â”€ CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const GITHUB_TOKEN = window.GITHUB_TOKEN || '';
 const GITHUB_USER  = 'CapFernando';
 const GITHUB_REPO  = 'RoadMap';
@@ -373,7 +373,7 @@ const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}
     // Link com token = credencial completa; pula etapa de senha
     sessionStorage.setItem('rm_dev_authed', '1');
     sessionStorage.setItem('rm_authed_via_link', '1');
-    // Remove token da barra de endereço para não expor em histórico
+    // Remove token da barra de endereÃ§o para nÃ£o expor em histÃ³rico
     const clean = location.pathname;
     history.replaceState(null, '', clean);
   }
@@ -381,14 +381,14 @@ const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}
 
 let runtimeToken = (typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '';
 
-// ─── STATE ───────────────────────────────────────────────────────
+// â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let state = { temas:[], melhorias:[], desenvolvedores:[], feriados:[] };
 let fileSha = '';
 let currentDev = localStorage.getItem('rm_dev_name') || '';
 let _temaFilter = null;
 let _pollTs = null;
 
-// ─── UTILS ───────────────────────────────────────────────────────
+// â”€â”€â”€ UTILS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 function splitDevs(s) { return s ? s.split(/[\/,]/).map(x=>x.trim()).filter(Boolean) : []; }
 function formatDate(s) { if (!s) return ''; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
@@ -424,7 +424,7 @@ function getStatusKey(m) {
 
 const STATUS_LABELS = {
   backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
-  em_andamento:'Em Andamento', deploy:'Deploy', concluido:'Concluído', atrasado:'Atrasado', negada:'Negada'
+  em_andamento:'Em Andamento', deploy:'Deploy', concluido:'ConcluÃ­do', atrasado:'Atrasado', negada:'Negada'
 };
 
 const COLUMNS = [
@@ -432,10 +432,10 @@ const COLUMNS = [
   { key:'em_andamento', label:'Em Andamento', color:'#5EA832', maps:['em_andamento'] },
   { key:'deploy',       label:'Deploy',       color:'#E89C2F', maps:['deploy'] },
   { key:'atrasado',     label:'Atrasado',     color:'#E84444', maps:['atrasado'] },
-  { key:'concluido',    label:'Concluído',    color:'#2BBFA0', maps:['concluido'] },
+  { key:'concluido',    label:'ConcluÃ­do',    color:'#2BBFA0', maps:['concluido'] },
 ];
 
-// ─── LOAD / SAVE ─────────────────────────────────────────────────
+// â”€â”€â”€ LOAD / SAVE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function loadData(useApi = false) {
   try {
     const url = useApi ? API_URL + '?t=' + Date.now() : RAW_URL + '?t=' + Date.now();
@@ -463,7 +463,7 @@ function applyData(data) {
   state.desenvolvedores = data.desenvolvedores || [];
   state.feriados      = data.feriados      || [];
   const dt = data.atualizado_em
-    ? new Date(data.atualizado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+    ? new Date(data.atualizado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}) : 'â€”';
   const el = document.getElementById('ultima-atualizacao');
   if (el) el.textContent = `Atualizado em ${dt}`;
   buildAnoFilter();
@@ -490,7 +490,7 @@ async function saveToGitHub(patch, opts = {}) {
       const p = patch[m.id];
       return p ? { ...m, ...p } : m;
     });
-    // Adiciona novas (não existem no servidor)
+    // Adiciona novas (nÃ£o existem no servidor)
     Object.keys(patch).forEach(id => {
       if (!serverData.melhorias.find(m => m.id === id)) {
         mergedMelhorias.push(patch[id]);
@@ -516,7 +516,7 @@ async function saveToGitHub(patch, opts = {}) {
     const saved = await res.json();
     fileSha = saved.content.sha;
     applyData(merged);
-    toast('✅ Salvo!','ok');
+    toast('âœ… Salvo!','ok');
     return true;
   } catch(e) {
     toast('Erro ao salvar: ' + e.message,'err');
@@ -524,7 +524,7 @@ async function saveToGitHub(patch, opts = {}) {
   } finally { showSaving(false); }
 }
 
-// ─── LOGIN ───────────────────────────────────────────────────────
+// â”€â”€â”€ LOGIN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function fetchFreshData() {
   // Tenta API (sempre fresco); fallback para raw URL
   if (runtimeToken) {
@@ -548,7 +548,7 @@ async function fetchFreshData() {
 
 async function reloadDevList() {
   const grid = document.getElementById('dev-grid');
-  grid.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:10px;">Atualizando…</div>';
+  grid.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:10px;">Atualizandoâ€¦</div>';
   try {
     const data = await fetchFreshData();
     if (data) {
@@ -565,19 +565,19 @@ async function reloadDevList() {
     return;
   }
   grid.innerHTML = devs.map(d =>
-    `<button class="dev-btn" onclick="selectDev('${d.replace(/'/g,"\\'")}')">👤 ${d}</button>`
+    `<button class="dev-btn" onclick="selectDev('${d.replace(/'/g,"\\'")}')">ðŸ‘¤ ${d}</button>`
   ).join('');
 }
 
 async function initApp() {
-  // Se a sessão ainda não foi autenticada com senha, mostra step-senha
+  // Se a sessÃ£o ainda nÃ£o foi autenticada com senha, mostra step-senha
   const authed = sessionStorage.getItem('rm_dev_authed');
   if (!authed) {
-    // step-senha já é o padrão (step-dev está oculto)
+    // step-senha jÃ¡ Ã© o padrÃ£o (step-dev estÃ¡ oculto)
     document.getElementById('login-senha')?.focus();
-    return; // Não carrega devs ainda — espera a senha
+    return; // NÃ£o carrega devs ainda â€” espera a senha
   }
-  // Já autenticado nesta sessão → pula direto para step-dev
+  // JÃ¡ autenticado nesta sessÃ£o â†’ pula direto para step-dev
   document.getElementById('step-senha').style.display = 'none';
   document.getElementById('step-dev').style.display = 'block';
 
@@ -605,10 +605,10 @@ async function initApp() {
   }
 
   grid.innerHTML = devs.map(d =>
-    `<button class="dev-btn" onclick="selectDev('${d.replace(/'/g,"\\'")}')">👤 ${d}</button>`
+    `<button class="dev-btn" onclick="selectDev('${d.replace(/'/g,"\\'")}')">ðŸ‘¤ ${d}</button>`
   ).join('');
 
-  // Auto-login se já tem nome salvo
+  // Auto-login se jÃ¡ tem nome salvo
   if (currentDev && devs.includes(currentDev)) {
     enterApp();
   }
@@ -624,7 +624,7 @@ function verificarSenha() {
   const val = document.getElementById('login-senha').value;
   const correta = window.DEV_SENHA || window.ADMIN_SENHA || '';
   if (!correta) {
-    // Se não houver senha configurada no config.js, passa direto
+    // Se nÃ£o houver senha configurada no config.js, passa direto
     sessionStorage.setItem('rm_dev_authed', '1');
     mostrarStepDev(); return;
   }
@@ -659,7 +659,7 @@ function enterApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('dev-app').style.display = 'block';
   document.getElementById('dev-label').textContent = currentDev;
-  // Exibe banner e botão de limpeza apenas para "Teste"
+  // Exibe banner e botÃ£o de limpeza apenas para "Teste"
   const banner = document.getElementById('banner-teste');
   if (banner) banner.style.display = isDevTeste(currentDev) ? 'flex' : 'none';
   buildAnoFilter();
@@ -674,8 +674,8 @@ async function limparDadosTeste() {
   const total = state.melhorias.filter(m =>
     splitDevs(m.dev).some(d => d.toLowerCase() === 'teste') || isDevTeste(m.dev)
   ).length;
-  if (!confirm(`⚠️ Isso vai excluir PERMANENTEMENTE ${total} demanda(s) do dev "Teste" em todas as páginas.\n\nConfirmar?`)) return;
-  if (!confirm('Tem certeza? A ação não pode ser desfeita.')) return;
+  if (!confirm(`âš ï¸ Isso vai excluir PERMANENTEMENTE ${total} demanda(s) do dev "Teste" em todas as pÃ¡ginas.\n\nConfirmar?`)) return;
+  if (!confirm('Tem certeza? A aÃ§Ã£o nÃ£o pode ser desfeita.')) return;
 
   // Remove todas as melhorias cujo dev (ou um dos devs) seja "Teste"
   state.melhorias = state.melhorias.filter(m =>
@@ -683,7 +683,7 @@ async function limparDadosTeste() {
   );
 
   // Persiste: envia o JSON completo sem as melhorias de Teste
-  if (!runtimeToken) { toast('Sem token — não foi possível salvar.', 'err'); return; }
+  if (!runtimeToken) { toast('Sem token â€” nÃ£o foi possÃ­vel salvar.', 'err'); return; }
   showSaving(true);
   try {
     const shaRes = await fetch(API_URL + '?t=' + Date.now(), {
@@ -707,7 +707,7 @@ async function limparDadosTeste() {
       body: JSON.stringify({ message: 'chore: remove dados dev Teste', content: b64, sha: shaJson.sha })
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Erro ao salvar'); }
-    toast('✅ Dados do dev Teste removidos com sucesso!', 'ok');
+    toast('âœ… Dados do dev Teste removidos com sucesso!', 'ok');
     renderKanban();
   } catch(e) {
     toast('Erro: ' + e.message, 'err');
@@ -717,7 +717,7 @@ async function limparDadosTeste() {
 function trocarDev() {
   localStorage.removeItem('rm_dev_name');
   currentDev = '';
-  // Volta para step-dev (senha já foi validada nesta sessão)
+  // Volta para step-dev (senha jÃ¡ foi validada nesta sessÃ£o)
   document.getElementById('dev-app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('step-senha').style.display = 'none';
@@ -738,9 +738,9 @@ function buildDevDropdown() {
   const devs = state.desenvolvedores || [];
   const items = devs.map(d => {
     const isCur = d === currentDev;
-    return `<div class="dev-dropdown-item${isCur?' active':''}" onclick="switchDevInline('${d}')">${isCur ? '✓ ' : ''}${d}</div>`;
+    return `<div class="dev-dropdown-item${isCur?' active':''}" onclick="switchDevInline('${d}')">${isCur ? 'âœ“ ' : ''}${d}</div>`;
   }).join('');
-  dd.innerHTML = items + `<div class="dev-dropdown-sep"></div><div class="dev-dropdown-item" onclick="trocarDev()">🔄 Tela de seleção</div>`;
+  dd.innerHTML = items + `<div class="dev-dropdown-sep"></div><div class="dev-dropdown-item" onclick="trocarDev()">ðŸ”„ Tela de seleÃ§Ã£o</div>`;
 }
 
 function switchDevInline(name) {
@@ -759,7 +759,7 @@ document.addEventListener('click', () => {
   document.getElementById('dev-dropdown')?.classList.remove('open');
 });
 
-// ─── FILTERS ─────────────────────────────────────────────────────
+// â”€â”€â”€ FILTERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildAnoFilter() {
   const sel = document.getElementById('f-ano');
   if (!sel) return;
@@ -793,14 +793,14 @@ function getFiltered() {
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     const sk = getStatusKey(m);
     if (sk === 'negada') return false;
-    // Filtro explícito por período
+    // Filtro explÃ­cito por perÃ­odo
     if (ano || mesN !== null) {
       const ref = m.inicio ? new Date(m.inicio+'T00:00:00') : new Date(m.criado_em);
       if (ano && ref.getFullYear().toString() !== ano) return false;
       if (mesN !== null && ref.getMonth() !== mesN) return false;
       return true;
     }
-    // Sem filtro: esconde concluídos de meses anteriores
+    // Sem filtro: esconde concluÃ­dos de meses anteriores
     if (sk === 'concluido') {
       const refDate = m.entrega ? new Date(m.entrega+'T00:00:00')
                     : m.inicio  ? new Date(m.inicio+'T00:00:00')
@@ -812,7 +812,7 @@ function getFiltered() {
   });
 }
 
-// ─── KANBAN ──────────────────────────────────────────────────────
+// â”€â”€â”€ KANBAN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderKanban() {
   const kanban = document.getElementById('kanban');
   if (!kanban) return;
@@ -844,13 +844,13 @@ function renderCard(m, colKey) {
   const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
   const badge = `<span class="kcard-badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
   const meta = [];
-  if (m.inicio)  meta.push(`📅 ${formatDate(m.inicio)}`);
-  if (m.entrega) meta.push(`🏁 ${formatDate(m.entrega)}`);
-  if (m.estimativa) meta.push(`⏱ ${m.estimativa}`);
-  // Parent info (este card é dependência de outro)
+  if (m.inicio)  meta.push(`ðŸ“… ${formatDate(m.inicio)}`);
+  if (m.entrega) meta.push(`ðŸ ${formatDate(m.entrega)}`);
+  if (m.estimativa) meta.push(`â± ${m.estimativa}`);
+  // Parent info (este card Ã© dependÃªncia de outro)
   const parent = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
   const parentInfo = parent
-    ? `<div class="kcard-parent-info">🔗 Dep. de: ${parent.titulo.substring(0,38)}${parent.titulo.length>38?'…':''}</div>`
+    ? `<div class="kcard-parent-info">ðŸ”— Dep. de: ${parent.titulo.substring(0,38)}${parent.titulo.length>38?'â€¦':''}</div>`
     : '';
   return `
     <div class="kcard" draggable="true" id="card-${m.id}"
@@ -861,13 +861,13 @@ function renderCard(m, colKey) {
       <div class="kcard-title">${m.titulo}</div>
       ${tema ? `<div class="kcard-tema">${tema}</div>` : ''}
       ${meta.length ? `<div class="kcard-meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>` : ''}
-      ${m.descricao ? `<div style="font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:6px;">${m.descricao.substring(0,90)}${m.descricao.length>90?'…':''}</div>` : ''}
+      ${m.descricao ? `<div style="font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:6px;">${m.descricao.substring(0,90)}${m.descricao.length>90?'â€¦':''}</div>` : ''}
       <div>${badge}</div>
       ${renderDepSection(m)}
     </div>`;
 }
 
-// ─── DEPENDÊNCIAS ────────────────────────────────────────────────
+// â”€â”€â”€ DEPENDÃŠNCIAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getDeps(parentId) {
   return state.melhorias.filter(m => m.parent_id === parentId);
 }
@@ -876,7 +876,7 @@ function hasBlockingDep(id) {
   return getDeps(id).some(d => getStatusKey(d) !== 'concluido');
 }
 
-// Bloqueia avanço (deploy/concluido) se há dep aberta
+// Bloqueia avanÃ§o (deploy/concluido) se hÃ¡ dep aberta
 function checkDepBlock(id, targetColKey) {
   if (['planejado','em_andamento','atrasado'].includes(targetColKey)) return false;
   return hasBlockingDep(id);
@@ -889,19 +889,19 @@ function renderDepSection(m) {
   const rows = deps.map(d => {
     const dsk = getStatusKey(d);
     const done = dsk === 'concluido';
-    const devName = d.dev || '—';
+    const devName = d.dev || 'â€”';
     const dt = d.entrega ? formatDate(d.entrega) : 'sem data';
     return `<div class="dep-row ${done?'dep-done':'dep-open'}">
-      <span>${done?'✅':'⏳'}</span>
-      <span><strong>${d.titulo.substring(0,32)}${d.titulo.length>32?'…':''}</strong></span>
-      <span style="color:var(--text3)">· ${devName} · ${dt}</span>
+      <span>${done?'âœ…':'â³'}</span>
+      <span><strong>${d.titulo.substring(0,32)}${d.titulo.length>32?'â€¦':''}</strong></span>
+      <span style="color:var(--text3)">Â· ${devName} Â· ${dt}</span>
       <span class="kcard-badge badge-${dsk}" style="font-size:10px;">${STATUS_LABELS[dsk]||dsk}</span>
     </div>`;
   }).join('');
   const blocked = deps.some(d => getStatusKey(d) !== 'concluido');
-  const banner = blocked ? `<div class="dep-blocked-banner">🔒 Avanço bloqueado — aguardando dependência</div>` : '';
+  const banner = blocked ? `<div class="dep-blocked-banner">ðŸ”’ AvanÃ§o bloqueado â€” aguardando dependÃªncia</div>` : '';
   const btn = sk === 'em_andamento'
-    ? `<button class="btn-dep-open" onclick="openDepModal('${m.id}',event)">🔗 + Abrir dependência</button>`
+    ? `<button class="btn-dep-open" onclick="openDepModal('${m.id}',event)">ðŸ”— + Abrir dependÃªncia</button>`
     : '';
   return `<div class="kcard-dep-section">${rows}${banner}${btn}</div>`;
 }
@@ -913,13 +913,13 @@ function openDepModal(parentId, event) {
   const tema = state.temas.find(t => t.id === parent.tema_id);
   document.getElementById('dep-parent-id').value = parentId;
   document.getElementById('dep-parent-title').textContent = parent.titulo;
-  document.getElementById('dep-parent-tema').textContent = tema ? tema.nome : '—';
+  document.getElementById('dep-parent-tema').textContent = tema ? tema.nome : 'â€”';
   document.getElementById('dep-titulo').value = '';
   document.getElementById('dep-desc').value = '';
   document.getElementById('dep-entrega').value = '';
   const devs = getDevList();
   document.getElementById('dep-dev').innerHTML =
-    '<option value="">— Selecione o responsável —</option>' +
+    '<option value="">â€” Selecione o responsÃ¡vel â€”</option>' +
     devs.map(d => `<option value="${d}">${d}</option>`).join('');
   document.getElementById('modal-dep').style.display = 'flex';
 }
@@ -930,8 +930,8 @@ async function saveNewDep() {
   const dev      = document.getElementById('dep-dev').value;
   const entrega  = document.getElementById('dep-entrega').value;
   const desc     = document.getElementById('dep-desc').value.trim();
-  if (!titulo) { toast('Informe o que está aguardando.', 'err'); return; }
-  if (!dev)    { toast('Selecione o responsável.', 'err'); return; }
+  if (!titulo) { toast('Informe o que estÃ¡ aguardando.', 'err'); return; }
+  if (!dev)    { toast('Selecione o responsÃ¡vel.', 'err'); return; }
   const parent = state.melhorias.find(m => m.id === parentId);
   if (!parent) return;
   const newDep = {
@@ -952,7 +952,7 @@ async function saveNewDep() {
   await saveToGitHub({ [newDep.id]: newDep });
 }
 
-// ─── DRAG & DROP ─────────────────────────────────────────────────
+// â”€â”€â”€ DRAG & DROP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let dragId = null;
 
 function onDragStart(e, id) {
@@ -973,7 +973,7 @@ function onDragEnd(e) {
 function onDragOver(e, colKey) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
-  // Só atualiza visual se mudou de coluna — evita re-paint desnecessário
+  // SÃ³ atualiza visual se mudou de coluna â€” evita re-paint desnecessÃ¡rio
   const col = document.getElementById('col-'+colKey);
   if (col && !col.classList.contains('drag-over')) {
     document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
@@ -982,7 +982,7 @@ function onDragOver(e, colKey) {
 }
 
 function onDragLeave(e, colKey) {
-  // Só remove o highlight se o cursor saiu para FORA da coluna (não para um filho)
+  // SÃ³ remove o highlight se o cursor saiu para FORA da coluna (nÃ£o para um filho)
   if (!e.currentTarget.contains(e.relatedTarget)) {
     document.getElementById('col-'+colKey)?.classList.remove('drag-over');
   }
@@ -998,11 +998,11 @@ function onDrop(e, colKey) {
   const curSk = getStatusKey(m);
   const col = COLUMNS.find(c => c.key === colKey);
   if (!col || col.maps.includes(curSk)) return; // mesma coluna
-  // Difere para depois que dragend completar — evita re-render durante drag ativo
+  // Difere para depois que dragend completar â€” evita re-render durante drag ativo
   setTimeout(() => {
     if (checkDepBlock(id, colKey)) {
       const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
-      toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
+      toast(`ðŸ”’ Conclua a dependÃªncia antes de avanÃ§ar: "${deps[0]?.titulo || ''}"`, 'err');
       return;
     }
     if (colKey === 'concluido') {
@@ -1013,24 +1013,24 @@ function onDrop(e, colKey) {
   }, 0);
 }
 
-// ─── STATUS MODAL ────────────────────────────────────────────────
+// â”€â”€â”€ STATUS MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openStatusModal(id, preselect) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   const sk = getStatusKey(m);
-  const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '—';
+  const tema = state.temas.find(t => t.id === m.tema_id)?.nome || 'â€”';
   document.getElementById('ms-id').value = id;
   document.getElementById('ms-title').textContent = m.titulo;
   const deps = getDeps(m.id);
   const depsInfoHTML = deps.length ? `
     <div style="background:var(--bg3);border-radius:6px;padding:10px 12px;margin-bottom:12px;">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin-bottom:6px;">Dependências</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin-bottom:6px;">DependÃªncias</div>
       ${deps.map(d => {
         const dsk = getStatusKey(d);
         return `<div style="font-size:12px;margin-bottom:4px;display:flex;gap:6px;align-items:center;">
-          <span>${dsk==='concluido'?'✅':'⏳'}</span>
+          <span>${dsk==='concluido'?'âœ…':'â³'}</span>
           <span style="flex:1">${d.titulo}</span>
-          <span style="color:var(--text3)">${d.dev||'—'}</span>
+          <span style="color:var(--text3)">${d.dev||'â€”'}</span>
           <span style="color:var(--text3)">${d.entrega?formatDate(d.entrega):''}</span>
           <span class="kcard-badge badge-${dsk}" style="font-size:10px;">${STATUS_LABELS[dsk]||dsk}</span>
         </div>`;
@@ -1039,7 +1039,7 @@ function openStatusModal(id, preselect) {
   document.getElementById('ms-info').innerHTML = `
     <div class="modal-info-row"><span>Tema:</span><strong>${tema}</strong></div>
     ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${m.dev}</strong></div>` : ''}
-    ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
+    ${m.inicio ? `<div class="modal-info-row"><span>InÃ­cio:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
     ${m.entrega ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${m.descricao}</div>` : ''}
     ${depsInfoHTML}
@@ -1060,18 +1060,18 @@ function onStatusModalChange() {
     const hp = calcHorasPlanejadas(m?.inicio, m?.entrega);
     const planEl = document.getElementById('ms-horas-plan');
     planEl.textContent = hp !== null
-      ? `⏱ Horas planejadas (dias úteis × 8h): ${hp}h`
-      : '⚠️ Sem datas de início/entrega — horas planejadas não calculadas.';
+      ? `â± Horas planejadas (dias Ãºteis Ã— 8h): ${hp}h`
+      : 'âš ï¸ Sem datas de inÃ­cio/entrega â€” horas planejadas nÃ£o calculadas.';
   }
 }
 
 async function saveStatus() {
   const id = document.getElementById('ms-id').value;
   const newColKey = document.getElementById('ms-status').value;
-  // Bloqueio por dependência
+  // Bloqueio por dependÃªncia
   if (checkDepBlock(id, newColKey)) {
     const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
-    toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
+    toast(`ðŸ”’ Conclua a dependÃªncia antes de avanÃ§ar: "${deps[0]?.titulo || ''}"`, 'err');
     return;
   }
   if (newColKey === 'concluido') {
@@ -1098,7 +1098,7 @@ async function updateStatus(id, colKey, horasRealizadas) {
   m.status = spToStatus[colKey] || 'recebida';
   if (horasRealizadas !== undefined) m.horas_realizadas = horasRealizadas;
   renderKanban();
-  // Persiste — reverte se falhar
+  // Persiste â€” reverte se falhar
   const patch = { [id]: { status_planejamento: colKey, status: m.status,
                            horas_realizadas: m.horas_realizadas || 0 } };
   const ok = await saveToGitHub(patch);
@@ -1110,7 +1110,7 @@ async function updateStatus(id, colKey, horasRealizadas) {
   }
 }
 
-// ─── NOVA DEMANDA ────────────────────────────────────────────────
+// â”€â”€â”€ NOVA DEMANDA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openNewModal() {
   document.getElementById('n-titulo').value = '';
   document.getElementById('n-desc').value = '';
@@ -1119,7 +1119,7 @@ function openNewModal() {
   document.getElementById('n-status').value = 'planejado';
   // Popula temas
   const sel = document.getElementById('n-tema');
-  sel.innerHTML = '<option value="">— Selecione um tema —</option>' +
+  sel.innerHTML = '<option value="">â€” Selecione um tema â€”</option>' +
     state.temas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
   document.getElementById('modal-new').style.display = 'flex';
 }
@@ -1127,7 +1127,7 @@ function openNewModal() {
 async function saveNewDemand() {
   const titulo = document.getElementById('n-titulo').value.trim();
   const temaId = document.getElementById('n-tema').value;
-  if (!titulo) { toast('Informe o título.','err'); return; }
+  if (!titulo) { toast('Informe o tÃ­tulo.','err'); return; }
   if (!temaId) { toast('Selecione um tema.','err'); return; }
   const sp = document.getElementById('n-status').value;
   const spToStatus = { backlog:'recebida', planejado:'estimada', em_andamento:'iniciada' };
@@ -1154,7 +1154,7 @@ async function saveNewDemand() {
   await saveToGitHub(patch);
 }
 
-// ─── TEMAS ───────────────────────────────────────────────────────
+// â”€â”€â”€ TEMAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TEMA_CORES_LIST = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
 
 function openTemasModal() {
@@ -1214,7 +1214,7 @@ async function deleteTema(id) {
   const t = state.temas.find(x => x.id === id);
   const n = state.melhorias.filter(m => m.tema_id === id).length;
   const msg = n > 0
-    ? `Excluir o tema "${t?.nome}"? As ${n} demanda(s) vinculadas ficarão sem tema.`
+    ? `Excluir o tema "${t?.nome}"? As ${n} demanda(s) vinculadas ficarÃ£o sem tema.`
     : `Excluir o tema "${t?.nome}"?`;
   if (!confirm(msg)) return;
   state.temas = state.temas.filter(x => x.id !== id);
@@ -1224,7 +1224,7 @@ async function deleteTema(id) {
   if (!ok) toast('Erro ao excluir tema.', 'err');
 }
 
-// ─── SYNC ────────────────────────────────────────────────────────
+// â”€â”€â”€ SYNC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function forceRefresh() {
   await loadData(true);
   toast('Dados atualizados.','ok');
@@ -1245,7 +1245,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && currentDev) loadData(true);
 });
 
-// ─── UI HELPERS ──────────────────────────────────────────────────
+// â”€â”€â”€ UI HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
 let _toastTimer;
@@ -1265,15 +1265,16 @@ function showSaving(on) {
   if (on) {
     if (document.getElementById(id)) return;
     const d = document.createElement('div');
-    d.id = id; d.className = 'saving-overlay'; d.textContent = 'Salvando…';
+    d.id = id; d.className = 'saving-overlay'; d.textContent = 'Salvandoâ€¦';
     document.body.appendChild(d);
   } else {
     document.getElementById(id)?.remove();
   }
 }
 
-// ─── INIT ────────────────────────────────────────────────────────
+// â”€â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 initApp();
 </script>
 </body>
 </html>
+
