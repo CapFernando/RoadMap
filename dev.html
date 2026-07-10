@@ -189,10 +189,7 @@
     </div>
     <div class="header-right">
       <span id="ultima-atualizacao" style="font-size:12px;color:var(--text3);">—</span>
-      <button class="btn btn-primary btn-sm" onclick="openNewModal()">+ Nova demanda</button>
-      <button class="btn btn-secondary btn-sm" onclick="openTemasModal()">🏷 Temas</button>
       <button class="btn btn-secondary btn-sm" onclick="forceRefresh()">↻ Atualizar</button>
-      <a href="index.html" class="btn btn-secondary btn-sm" target="_blank">📊 Dashboard</a>
     </div>
   </header>
 
@@ -365,14 +362,23 @@ const DATA_PATH    = 'data/melhorias.json';
 const API_URL = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
 const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
 
-// Captura token do URL fragment (#token=...)
+// Captura token da URL (?token= ou #token=) e autentica automaticamente se presente
 (function() {
-  const params = new URLSearchParams(location.hash.slice(1));
-  const t = params.get('token');
-  if (t && t.startsWith('ghp_')) { localStorage.setItem('rm_token', t); history.replaceState(null,'',location.pathname); }
+  const qp = new URLSearchParams(location.search);
+  const hp = new URLSearchParams(location.hash.slice(1));
+  const t  = qp.get('token') || hp.get('token');
+  if (t && t.startsWith('ghp_')) {
+    localStorage.setItem('rm_token', t);
+    // Link com token = credencial completa; pula etapa de senha
+    sessionStorage.setItem('rm_dev_authed', '1');
+    sessionStorage.setItem('rm_authed_via_link', '1');
+    // Remove token da barra de endereço para não expor em histórico
+    const clean = location.pathname;
+    history.replaceState(null, '', clean);
+  }
 })();
 
-let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
+let runtimeToken = (typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '';
 
 // ─── STATE ───────────────────────────────────────────────────────
 let state = { temas:[], melhorias:[], desenvolvedores:[], feriados:[] };
