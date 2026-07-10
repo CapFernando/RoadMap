@@ -1102,7 +1102,11 @@ function renderGantt() {
     });
 
     // Cards layer
-    html += `<div class="gantt-cards-layer" id="cards-layer-${CSS.escape(dev)}" onclick="onLayerClick(event,'${esc(dev)}')">`;
+    html += `<div class="gantt-cards-layer" id="cards-layer-${CSS.escape(dev)}"
+      onclick="onLayerClick(event,'${esc(dev)}')"
+      ondragover="onLayerDragOver(event,'${esc(dev)}')"
+      ondragleave="onLayerDragLeave(event)"
+      ondrop="onLayerDrop(event,'${esc(dev)}')">`;
     devCards.forEach(m => {
       const sp = m.status_planejamento || 'backlog';
       const tema = state.temas.find(t => t.id === m.tema_id);
@@ -1130,7 +1134,7 @@ function renderGantt() {
         draggable="true"
         ondragstart="onCardDragStart(event,'${m.id}')"
         ondragend="onCardDragEnd(event,'${m.id}')"
-        onclick="onCardClick(event,'${m.id}')"
+        ondblclick="openModal('${m.id}')"
         onmouseenter="showTooltip(event,'${m.id}')"
         onmouseleave="hideTooltip()">
         <span class="card-drag-handle">⠿⠿</span>
@@ -1154,19 +1158,6 @@ function renderGantt() {
 
 function setupGanttCardListener() {} // no-op
 
-let _clickTimer = null, _clickTargetId = null;
-function onCardClick(e, id) {
-  if (_cardWasDragged) return;
-  if (_clickTimer && _clickTargetId === id) {
-    clearTimeout(_clickTimer);
-    _clickTimer = null;
-    _clickTargetId = null;
-    openModal(id);
-  } else {
-    _clickTargetId = id;
-    _clickTimer = setTimeout(() => { _clickTimer = null; _clickTargetId = null; }, 350);
-  }
-}
 
 function attachCardClickListeners() {} // mantido por compatibilidade, não faz mais nada
 
@@ -1279,6 +1270,60 @@ function onDayDrop(e) {
   dragData = { type: null, id: null };
   renderAll();
   debouncedSave();
+}
+
+function _layerDayFromEvent(e) {
+  const dw = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-w')) || 52;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const idx = Math.floor(x / dw);
+  const workDays = getWorkingDaysOfMonth(viewYear, viewMonth);
+  return (idx >= 0 && idx < workDays.length) ? workDays[idx] : null;
+}
+
+function onLayerDragOver(e, dev) {
+  e.preventDefault();
+  const d = _layerDayFromEvent(e);
+  document.querySelectorAll('.day-cell.drop-over').forEach(c => c.classList.remove('drop-over'));
+  if (d && !d.holiday) {
+    const cell = document.querySelector(`.day-cell[data-dev="${CSS.escape(dev)}"][data-date="${d.str}"]`);
+    if (cell) cell.classList.add('drop-over');
+    e.dataTransfer.dropEffect = 'move';
+  } else {
+    e.dataTransfer.dropEffect = 'none';
+  }
+}
+
+function onLayerDragLeave(e) {
+  document.querySelectorAll('.day-cell.drop-over').forEach(c => c.classList.remove('drop-over'));
+}
+
+function onLayerDrop(e, dev) {
+  e.preventDefault();
+  document.querySelectorAll('.day-cell.drop-over').forEach(c => c.classList.remove('drop-over'));
+  const d = _layerDayFromEvent(e);
+  if (!d) return;
+  if (d.holiday) { toast('Não é possível alocar em feriados.', 'err'); return; }
+  if (!dragData.id) return;
+  const m = state.melhorias.find(x => x.id === dragData.id);
+  if (!m) return;
+  document.querySelectorAll('.gantt-card.dragging').forEach(el => el.classList.remove('dragging'));
+  const targetDate = d.str;
+  if (dragData.type === 'backlog') {
+    m.dev = dev; m.inicio = targetDate; m.entrega = targetDate;
+    m.status_planejamento = m.status_planejamento === 'backlog' ? 'planejado' : m.status_planejamento;
+    m.status = spToStatus(m.status_planejamento);
+  } else if (dragData.type === 'card') {
+    if (m.inicio && m.entrega) {
+      const dur = Math.round((new Date(m.entrega+'T12:00:00') - new Date(m.inicio+'T12:00:00')) / 86400000);
+      const newEnd = new Date(targetDate+'T12:00:00');
+      newEnd.setDate(newEnd.getDate() + dur);
+      m.inicio = targetDate; m.entrega = toDateStr(newEnd);
+    } else { m.inicio = targetDate; m.entrega = targetDate; }
+    m.dev = dev;
+  }
+  dragData = { type: null, id: null };
+  renderAll(); debouncedSave();
 }
 
 function onDayCellClick(e, dev, date) {
