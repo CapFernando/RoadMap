@@ -173,6 +173,11 @@
 
 <!-- ─── APP ──────────────────────────────────────── -->
 <div id="dev-app" style="display:none">
+  <!-- Banner visível apenas para dev "Teste" -->
+  <div id="banner-teste" style="display:none;align-items:center;gap:12px;background:#3d1a1a;border-bottom:1px solid #6b2d2d;padding:10px 24px;font-size:13px;color:#F9A0A0;">
+    <span>⚠️ <strong>Conta de teste detectada.</strong> Todos os dados abaixo são de demonstração.</span>
+    <button onclick="limparDadosTeste()" style="margin-left:auto;background:#6b2d2d;color:#F9A0A0;border:1px solid #a04040;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">🗑️ Apagar todos os dados de Teste</button>
+  </div>
   <header>
     <div class="header-left">
       <h1>🗂️ Meu Painel</h1>
@@ -639,16 +644,67 @@ function selectDev(name) {
   enterApp();
 }
 
+function isDevTeste(name) {
+  return (name || '').trim().toLowerCase() === 'teste';
+}
+
 function enterApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('dev-app').style.display = 'block';
   document.getElementById('dev-label').textContent = currentDev;
+  // Exibe banner e botão de limpeza apenas para "Teste"
+  const banner = document.getElementById('banner-teste');
+  if (banner) banner.style.display = isDevTeste(currentDev) ? 'flex' : 'none';
   buildAnoFilter();
   buildTemaChips();
   renderKanban();
-  // Carrega com API se tem token para pegar SHA atualizado
   if (runtimeToken) loadData(true);
   startPolling();
+}
+
+async function limparDadosTeste() {
+  if (!isDevTeste(currentDev)) return;
+  const total = state.melhorias.filter(m =>
+    splitDevs(m.dev).some(d => d.toLowerCase() === 'teste') || isDevTeste(m.dev)
+  ).length;
+  if (!confirm(`⚠️ Isso vai excluir PERMANENTEMENTE ${total} demanda(s) do dev "Teste" em todas as páginas.\n\nConfirmar?`)) return;
+  if (!confirm('Tem certeza? A ação não pode ser desfeita.')) return;
+
+  // Remove todas as melhorias cujo dev (ou um dos devs) seja "Teste"
+  state.melhorias = state.melhorias.filter(m =>
+    !splitDevs(m.dev).some(d => d.toLowerCase() === 'teste') && !isDevTeste(m.dev)
+  );
+
+  // Persiste: envia o JSON completo sem as melhorias de Teste
+  if (!runtimeToken) { toast('Sem token — não foi possível salvar.', 'err'); return; }
+  showSaving(true);
+  try {
+    const shaRes = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
+      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!shaRes.ok) throw new Error('Falha ao obter SHA');
+    const shaJson = await shaRes.json();
+    const serverData = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g,'')))));
+    const merged = {
+      ...serverData,
+      melhorias: state.melhorias,
+      atualizado_em: new Date().toISOString()
+    };
+    const json = JSON.stringify(merged, null, 2);
+    const bin  = unescape(encodeURIComponent(json));
+    const b64  = btoa(bin);
+    const res  = await fetch(API_URL, {
+      method: 'PUT',
+      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'chore: remove dados dev Teste', content: b64, sha: shaJson.sha })
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Erro ao salvar'); }
+    toast('✅ Dados do dev Teste removidos com sucesso!', 'ok');
+    renderKanban();
+  } catch(e) {
+    toast('Erro: ' + e.message, 'err');
+  } finally { showSaving(false); }
 }
 
 function trocarDev() {
