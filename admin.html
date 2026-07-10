@@ -1158,24 +1158,26 @@ function renderGerencial() {
       },
       options: {
         responsive: true,
-        cutout: '52%',
-        layout: { padding: 20 },
+        cutout: '48%',
+        layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } },
         plugins: {
           legend: {
             position: 'bottom',
+            align: 'start',
             labels: {
               color: '#ECEAE2',
-              font: { size: 12, weight: '600', family: 'Inter' },
-              boxWidth: 14,
-              boxHeight: 14,
-              padding: 14,
+              font: { size: 13, weight: '600', family: 'Inter' },
+              boxWidth: 13,
+              boxHeight: 13,
+              padding: 12,
               usePointStyle: true,
               pointStyle: 'circle',
-              // Mostra valor na legenda também
+              // Legenda ordenada do maior para menor com valores embutidos
               generateLabels: chart => {
                 const ds = chart.data.datasets[0];
-                return chart.data.labels.map((lbl, i) => ({
-                  text: `${lbl}  •  ${ds.data[i]}h  (${Math.round(ds.data[i]/total*100)}%)`,
+                const order = [...ds.data.map((v,i)=>i)].sort((a,b)=>ds.data[b]-ds.data[a]);
+                return order.map(i => ({
+                  text: `${chart.data.labels[i]}  —  ${ds.data[i]}h  (${Math.round(ds.data[i]/total*100)}%)`,
                   fillStyle: ds.backgroundColor[i],
                   strokeStyle: ds.backgroundColor[i],
                   lineWidth: 0,
@@ -1192,13 +1194,16 @@ function renderGerencial() {
             }
           },
           datalabels: {
-            display: ctx => ctx.dataset.data[ctx.dataIndex] / total >= 0.04,
+            // Só mostra label na fatia se ela tem >=12% — evita sobreposição em fatias pequenas
+            display: ctx => ctx.dataset.data[ctx.dataIndex] / total >= 0.12,
             color: '#fff',
             font: { size: 13, weight: '800', family: 'Inter' },
-            textShadowColor: 'rgba(0,0,0,.6)',
-            textShadowBlur: 6,
+            textShadowColor: 'rgba(0,0,0,.8)',
+            textShadowBlur: 8,
             formatter: (val) => `${val}h\n${Math.round(val/total*100)}%`,
             textAlign: 'center',
+            anchor: 'center',
+            align: 'center',
           }
         }
       }
