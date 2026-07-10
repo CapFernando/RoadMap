@@ -252,7 +252,7 @@
 
     /* Cards on gantt */
     .gantt-cards-layer {
-      position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none;
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
     }
     .gantt-card {
       position: absolute; border-radius: 6px; border: 1px solid;
@@ -1097,13 +1097,12 @@ function renderGantt() {
         data-dev="${esc(dev)}" data-date="${str}" data-holiday="${holiday}"
         ondragover="onDayDragOver(event)"
         ondragleave="onDayDragLeave(event)"
-        ondrop="onDayDrop(event)"
-        onclick="onDayCellClick(event,'${esc(dev)}','${str}')">
+        ondrop="onDayDrop(event)">
       </div>`;
     });
 
     // Cards layer
-    html += `<div class="gantt-cards-layer" id="cards-layer-${CSS.escape(dev)}">`;
+    html += `<div class="gantt-cards-layer" id="cards-layer-${CSS.escape(dev)}" onclick="onLayerClick(event,'${esc(dev)}')">`;
     devCards.forEach(m => {
       const sp = m.status_planejamento || 'backlog';
       const tema = state.temas.find(t => t.id === m.tema_id);
@@ -1283,10 +1282,25 @@ function onDayDrop(e) {
 }
 
 function onDayCellClick(e, dev, date) {
-  // Only open if clicking empty space (not a card)
   if (e.target.classList.contains('gantt-card') || e.target.closest('.gantt-card')) return;
   if (e.currentTarget.dataset.holiday === 'true') return;
   openModal(null, dev, date);
+}
+
+function onLayerClick(e, dev) {
+  // Card click is handled by onCardClick on the card itself
+  if (e.target.closest('.gantt-card')) return;
+  // Click on empty space → create new task for that day
+  const layer = e.currentTarget;
+  const rect  = layer.getBoundingClientRect();
+  const x     = e.clientX - rect.left;
+  const dw    = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--day-w')) || 52;
+  const idx   = Math.floor(x / dw);
+  const workDays = getWorkingDaysOfMonth(viewYear, viewMonth);
+  if (idx < 0 || idx >= workDays.length) return;
+  const d = workDays[idx];
+  if (d.holiday) return;
+  openModal(null, dev, d.str);
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────────
