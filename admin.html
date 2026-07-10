@@ -290,12 +290,14 @@
   <div class="login-box">
     <h2>🔐 Área Administrativa</h2>
     <p>RoadMap de Melhorias · Audax Capital</p>
+    <div id="sem-token-aviso" style="display:none;background:#5C3608;color:#F9C97A;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px;line-height:1.5;">
+      🔗 Primeiro acesso neste dispositivo.<br>Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de entrar.
+    </div>
     <input type="password" id="senha-input" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')doLogin()" />
     <div id="token-field" style="display:none;margin-top:0">
       <input type="password" id="token-input" placeholder="GitHub Token (ghp_…)" onkeydown="if(event.key==='Enter')doLogin()" style="letter-spacing:0" />
-      <small style="color:var(--text3);font-size:12px;display:block;margin-top:4px">Token necessário apenas no primeiro acesso por este dispositivo.</small>
     </div>
-    <button onclick="doLogin()">Entrar</button>
+    <button onclick="doLogin()" id="btn-entrar">Entrar</button>
     <div class="login-error" id="login-error"></div>
   </div>
 </div>
@@ -487,8 +489,12 @@ const _deletedIds = new Set();
 let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
 
 function initLoginScreen() {
-  if (!runtimeToken) document.getElementById('token-field').style.display = 'block';
-
+  if (!runtimeToken) {
+    document.getElementById('sem-token-aviso').style.display = 'block';
+    document.getElementById('btn-entrar').disabled = true;
+    document.getElementById('btn-entrar').style.opacity = '0.4';
+    document.getElementById('btn-entrar').style.cursor = 'not-allowed';
+  }
   if (localStorage.getItem('rm_logged') === '1' && runtimeToken) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-app').style.display = 'block';
