@@ -506,21 +506,21 @@
     <div class="form-row">
       <div class="form-group">
         <label>Data início</label>
-        <input type="date" id="e-inicio" />
+        <input type="date" id="e-inicio" oninput="atualizaHorasPlanGantt()" />
       </div>
       <div class="form-group">
         <label>Data fim</label>
-        <input type="date" id="e-fim" />
+        <input type="date" id="e-fim" oninput="atualizaHorasPlanGantt()" />
       </div>
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Estimativa (horas)</label>
-        <input type="number" id="e-horas" placeholder="8" min="0" />
+        <label>Horas realizadas</label>
+        <input type="number" id="e-horas-real" placeholder="0" min="0" step="0.5" />
       </div>
       <div class="form-group">
-        <label>Horas realizadas</label>
-        <input type="number" id="e-horas-real" placeholder="0" min="0" />
+        <label>Horas planejadas <span style="font-weight:400;opacity:.6">(auto)</span></label>
+        <div id="e-horas-plan" style="padding:8px 10px;background:var(--bg3,#1E1E1C);border:1px solid var(--border,#2E2E2B);border-radius:6px;font-size:13px;color:var(--text3,#6E6A62);min-height:36px;line-height:1.5;">—</div>
       </div>
     </div>
     <div class="form-row">
@@ -1280,6 +1280,7 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-solicitante').value = m?.solicitante || '';
   document.getElementById('e-data-solic').value  = m?.data_solicitacao || '';
   document.getElementById('e-obs').value       = m?.observacao || '';
+  atualizaHorasPlanGantt();
 
   document.getElementById('modal-main').style.display = 'flex';
   setTimeout(() => document.getElementById('e-titulo').focus(), 50);
@@ -1417,6 +1418,31 @@ function closeIfOverlay(e, id) { if (e.target === e.currentTarget) closeModal(id
 function spToStatus(sp) {
   const map = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
   return map[sp] || 'recebida';
+}
+
+function calcHorasPlanejadas(inicio, entrega) {
+  if (!inicio || !entrega) return null;
+  const ferSet = new Set((state.feriados||[]).map(f => f.data || f).filter(Boolean));
+  let count = 0;
+  const d = new Date(inicio + 'T00:00:00');
+  const end = new Date(entrega + 'T00:00:00');
+  if (end < d) return null;
+  while (d <= end) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6 && !ferSet.has(d.toISOString().slice(0,10))) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count * 8;
+}
+
+function atualizaHorasPlanGantt() {
+  const inicio = document.getElementById('e-inicio')?.value;
+  const fim    = document.getElementById('e-fim')?.value;
+  const el     = document.getElementById('e-horas-plan');
+  if (!el) return;
+  const hp = calcHorasPlanejadas(inicio, fim);
+  el.textContent = hp !== null ? `${hp}h (${hp/8} dia(s) útil/úteis × 8h)` : '—';
+  el.style.color = hp !== null ? 'var(--text)' : 'var(--text3,#6E6A62)';
 }
 
 function prioClass(p) {

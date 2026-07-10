@@ -415,11 +415,23 @@
     <div class="form-row">
       <div class="form-group">
         <label>Data de início</label>
-        <input type="date" id="m-inicio" />
+        <input type="date" id="m-inicio" oninput="atualizaHorasPlanejadas()" />
       </div>
       <div class="form-group">
         <label>Data de entrega prevista</label>
-        <input type="date" id="m-entrega" />
+        <input type="date" id="m-entrega" oninput="atualizaHorasPlanejadas()" />
+      </div>
+    </div>
+
+    <!-- Horas -->
+    <div class="form-row">
+      <div class="form-group">
+        <label>Horas realizadas</label>
+        <input type="number" id="m-horas-real" min="0" step="0.5" placeholder="Preenchido pelo dev ao concluir" />
+      </div>
+      <div class="form-group">
+        <label>Horas planejadas <span style="font-weight:400;color:var(--text3)">(automático)</span></label>
+        <div id="m-horas-plan" style="padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text3);min-height:42px;line-height:1.4;">—</div>
       </div>
     </div>
 
@@ -884,6 +896,8 @@ function openModalMelhoria(id) {
   document.getElementById('m-inicio').value          = m?.inicio           || '';
   document.getElementById('m-entrega').value         = m?.entrega          || '';
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
+  document.getElementById('m-horas-real').value      = m?.horas_realizadas != null ? m.horas_realizadas : '';
+  atualizaHorasPlanejadas();
 
   // preenche temas no select
   const sel = document.getElementById('m-tema');
@@ -898,6 +912,31 @@ function openModalMelhoria(id) {
 function onStatusChange() {
   const s = document.getElementById('m-status').value;
   document.getElementById('field-negada').style.display = s === 'negada' ? 'block' : 'none';
+}
+
+function calcHorasPlanejadas(inicio, entrega) {
+  if (!inicio || !entrega) return null;
+  const ferSet = new Set((state.feriados||[]).map(f => f.data || f).filter(Boolean));
+  let count = 0;
+  const d = new Date(inicio + 'T00:00:00');
+  const end = new Date(entrega + 'T00:00:00');
+  if (end < d) return null;
+  while (d <= end) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6 && !ferSet.has(d.toISOString().slice(0,10))) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count * 8;
+}
+
+function atualizaHorasPlanejadas() {
+  const inicio = document.getElementById('m-inicio')?.value;
+  const entrega = document.getElementById('m-entrega')?.value;
+  const el = document.getElementById('m-horas-plan');
+  if (!el) return;
+  const hp = calcHorasPlanejadas(inicio, entrega);
+  el.textContent = hp !== null ? `${hp}h (${hp/8} dia(s) útil/úteis × 8h)` : '—';
+  el.style.color = hp !== null ? 'var(--text)' : 'var(--text3)';
 }
 
 // mapa sp → status legado (para compatibilidade com outros campos)
@@ -932,6 +971,7 @@ function saveMelhoria() {
     inicio:              document.getElementById('m-inicio').value,
     entrega:             document.getElementById('m-entrega').value,
     motivo_negacao:      sp === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
+    horas_realizadas:    parseFloat(document.getElementById('m-horas-real').value) || existing.horas_realizadas || 0,
     criado_em:           existing.criado_em || new Date().toISOString(),
   };
 

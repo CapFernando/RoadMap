@@ -183,13 +183,20 @@
     <div id="ms-info"></div>
     <div class="form-group" id="ms-status-group">
       <label>Mover para</label>
-      <select id="ms-status">
+      <select id="ms-status" onchange="onStatusModalChange()">
         <option value="planejado">Planejado</option>
         <option value="em_andamento">Em Andamento</option>
         <option value="deploy">Deploy</option>
         <option value="atrasado">Atrasado</option>
         <option value="concluido">Concluído</option>
       </select>
+    </div>
+    <div id="ms-horas-group" style="display:none">
+      <div class="form-group">
+        <label>Horas de desenvolvimento *</label>
+        <input type="number" id="ms-horas" min="0.5" step="0.5" placeholder="Ex: 16" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'" />
+      </div>
+      <div id="ms-horas-plan" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:6px;padding:8px 12px;margin-bottom:12px;"></div>
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-status')">Fechar</button>
@@ -270,6 +277,21 @@ let _pollTs = null;
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 function splitDevs(s) { return s ? s.split(/[\/,]/).map(x=>x.trim()).filter(Boolean) : []; }
 function formatDate(s) { if (!s) return ''; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
+
+function calcHorasPlanejadas(inicio, entrega) {
+  if (!inicio || !entrega) return null;
+  const ferSet = new Set((state.feriados||[]).map(f => f.data || f).filter(Boolean));
+  let count = 0;
+  const d = new Date(inicio + 'T00:00:00');
+  const end = new Date(entrega + 'T00:00:00');
+  if (end < d) return null;
+  while (d <= end) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6 && !ferSet.has(d.toISOString().slice(0,10))) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count * 8;
+}
 
 function getStatusKey(m) {
   const sp = m.status_planejamento;
@@ -616,11 +638,16 @@ function onDrop(e, colKey) {
   const col = COLUMNS.find(c => c.key === colKey);
   if (!col || col.maps.includes(curSk)) return; // mesma coluna
   // Difere para depois que dragend completar — evita re-render durante drag ativo
-  setTimeout(() => updateStatus(id, colKey), 0);
+  if (colKey === 'concluido') {
+    // Requer horas — abre modal em vez de mover direto
+    setTimeout(() => openStatusModal(id, colKey), 0);
+  } else {
+    setTimeout(() => updateStatus(id, colKey), 0);
+  }
 }
 
 // ─── STATUS MODAL ────────────────────────────────────────────────
-function openStatusModal(id) {
+function openStatusModal(id, preselect) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   const sk = getStatusKey(m);
@@ -635,34 +662,61 @@ function openStatusModal(id) {
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${m.descricao}</div>` : ''}
   `;
   const sel = document.getElementById('ms-status');
-  sel.value = COLUMNS.find(c => c.maps.includes(sk))?.key || sk;
+  sel.value = preselect || COLUMNS.find(c => c.maps.includes(sk))?.key || sk;
+  document.getElementById('ms-horas').value = m.horas_realizadas || '';
+  onStatusModalChange();
   document.getElementById('modal-status').style.display = 'flex';
+}
+
+function onStatusModalChange() {
+  const isConcluido = document.getElementById('ms-status').value === 'concluido';
+  document.getElementById('ms-horas-group').style.display = isConcluido ? 'block' : 'none';
+  if (isConcluido) {
+    const id = document.getElementById('ms-id').value;
+    const m = state.melhorias.find(x => x.id === id);
+    const hp = calcHorasPlanejadas(m?.inicio, m?.entrega);
+    const planEl = document.getElementById('ms-horas-plan');
+    planEl.textContent = hp !== null
+      ? `⏱ Horas planejadas (dias úteis × 8h): ${hp}h`
+      : '⚠️ Sem datas de início/entrega — horas planejadas não calculadas.';
+  }
 }
 
 async function saveStatus() {
   const id = document.getElementById('ms-id').value;
   const newColKey = document.getElementById('ms-status').value;
-  closeModal('modal-status');
-  await updateStatus(id, newColKey);
+  if (newColKey === 'concluido') {
+    const horas = parseFloat(document.getElementById('ms-horas').value);
+    if (!horas || horas <= 0) { toast('Informe as horas de desenvolvimento.', 'err'); return; }
+    closeModal('modal-status');
+    await updateStatus(id, newColKey, horas);
+  } else {
+    closeModal('modal-status');
+    await updateStatus(id, newColKey);
+  }
 }
 
-async function updateStatus(id, colKey) {
+async function updateStatus(id, colKey, horasRealizadas) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   const spAnterior = m.status_planejamento;
   const stAnterior = m.status;
+  const hrAnterior = m.horas_realizadas;
   const spToStatus = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada',
                        em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
   // Atualiza localmente (otimista)
   m.status_planejamento = colKey;
   m.status = spToStatus[colKey] || 'recebida';
+  if (horasRealizadas !== undefined) m.horas_realizadas = horasRealizadas;
   renderKanban();
   // Persiste — reverte se falhar
-  const patch = { [id]: { status_planejamento: colKey, status: m.status } };
+  const patch = { [id]: { status_planejamento: colKey, status: m.status,
+                           horas_realizadas: m.horas_realizadas || 0 } };
   const ok = await saveToGitHub(patch);
   if (!ok) {
     m.status_planejamento = spAnterior;
     m.status = stAnterior;
+    m.horas_realizadas = hrAnterior;
     renderKanban();
   }
 }
