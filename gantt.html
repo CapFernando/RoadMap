@@ -1126,14 +1126,11 @@ function renderGantt() {
       html += `<div class="gantt-card gcard-${sp}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
-        onclick="openModal('${m.id}')"
+        draggable="true"
+        ondragstart="onCardDragStart(event,'${m.id}')"
+        ondragend="onCardDragEnd(event,'${m.id}')"
         onmouseenter="showTooltip(event,'${m.id}')"
         onmouseleave="hideTooltip()">
-        <span class="card-drag-handle"
-          draggable="true"
-          ondragstart="onCardDragStart(event,'${m.id}')"
-          onclick="event.stopPropagation()"
-          title="Arrastar">⠿</span>
         <div class="card-row1">
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
@@ -1149,6 +1146,16 @@ function renderGantt() {
   });
 
   table.innerHTML = html;
+  attachCardClickListeners();
+}
+
+function attachCardClickListeners() {
+  document.querySelectorAll('.gantt-card').forEach(card => {
+    card.addEventListener('click', () => {
+      if (_cardWasDragged) return;
+      openModal(card.dataset.id);
+    });
+  });
 }
 
 // ── TOOLTIP ───────────────────────────────────────────────────────────────
@@ -1186,13 +1193,21 @@ function positionTooltip(e, el) {
 
 // ── DRAG & DROP ───────────────────────────────────────────────────────────
 let dragData = { type: null, id: null }; // type: 'card' | 'backlog'
+let _cardWasDragged = false;
+
 function onCardDragStart(e, id) {
+  _cardWasDragged = true;
   dragData = { type: 'card', id };
   e.dataTransfer.effectAllowed = 'move';
   setTimeout(() => {
     const el = document.querySelector(`.gantt-card[data-id="${id}"]`);
     if (el) el.classList.add('dragging');
   }, 0);
+}
+
+function onCardDragEnd(e, id) {
+  setTimeout(() => { _cardWasDragged = false; }, 50);
+  document.querySelectorAll('.gantt-card.dragging').forEach(el => el.classList.remove('dragging'));
 }
 
 function onBacklogDragStart(e, id) {
