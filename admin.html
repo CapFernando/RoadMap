@@ -396,6 +396,7 @@
       <div class="tab active" onclick="switchTab('melhorias')">Melhorias</div>
       <div class="tab" onclick="switchTab('temas')">Temas</div>
       <div class="tab" onclick="switchTab('gerencial')">📊 Gerencial</div>
+      <div class="tab" onclick="switchTab('acesso')">🔗 Acesso Devs</div>
     </div>
 
     <!-- ABA MELHORIAS -->
@@ -416,6 +417,71 @@
         <button class="btn btn-primary" onclick="openModalTema()">+ Novo tema</button>
       </div>
       <div id="lista-temas"></div>
+    </div>
+
+    <!-- ABA ACESSO DEVS -->
+    <div class="tab-content" id="tab-acesso">
+      <div style="max-width:640px;margin:0 auto;padding:8px 0">
+
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:20px">
+          <h2 style="font-size:15px;font-weight:600;margin-bottom:6px">🔗 Gerar link de acesso para devs</h2>
+          <p style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px">
+            Cole abaixo o token do GitHub com permissão de escrita no repositório. O sistema monta o link pronto para você copiar e repassar.
+          </p>
+
+          <div style="margin-bottom:16px">
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px">Token do GitHub <span style="color:var(--text3)">(ghp_...)</span></label>
+            <div style="display:flex;gap:8px">
+              <input id="acesso-token-input" type="password"
+                placeholder="ghp_xxxxxxxxxxxxxxxx"
+                style="flex:1;background:var(--bg2);color:var(--text1);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'Inter',sans-serif;outline:none"
+                oninput="gerarLinkAcesso()"
+                onfocus="this.type='text'"
+                onblur="this.type='password'" />
+              <button class="btn btn-secondary" onclick="usarTokenAtual()" title="Usar o token já configurado nesta sessão">Usar token atual</button>
+            </div>
+            <p style="font-size:11px;color:var(--text3);margin-top:6px">
+              Crie um token em <strong style="color:var(--text2)">github.com → Settings → Developer settings → Personal access tokens → Tokens (classic)</strong> com escopo <strong style="color:var(--text2)">repo</strong>.
+            </p>
+          </div>
+
+          <div id="acesso-link-box" style="display:none">
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:6px">Link gerado</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input id="acesso-link-output" type="text" readonly
+                style="flex:1;background:var(--bg2);color:var(--text1);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;font-family:monospace;outline:none;cursor:pointer"
+                onclick="this.select()" />
+              <button class="btn btn-primary" onclick="copiarLinkAcesso()" id="btn-copiar-link">📋 Copiar</button>
+            </div>
+            <p style="font-size:11px;color:var(--text3);margin-top:8px">
+              ⚠️ Envie este link por canal seguro (WhatsApp direto, não grupos). Quem tiver o link consegue escrever no repositório.
+            </p>
+          </div>
+        </div>
+
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:24px">
+          <h2 style="font-size:15px;font-weight:600;margin-bottom:14px">📋 Como funciona</h2>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</span>
+              <span style="font-size:13px;color:var(--text2);line-height:1.5">Você gera o link acima e repassa para os devs (um link único serve para todos).</span>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</span>
+              <span style="font-size:13px;color:var(--text2);line-height:1.5">O dev abre o link → é autenticado automaticamente → digita a senha de acesso → escolhe o próprio nome.</span>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">3</span>
+              <span style="font-size:13px;color:var(--text2);line-height:1.5">O token fica salvo no dispositivo. Da próxima vez o dev pode abrir <strong style="color:var(--text1)">dev.html</strong> diretamente sem o link.</span>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">4</span>
+              <span style="font-size:13px;color:var(--text2);line-height:1.5">Tudo que o dev salvar aparece automaticamente no Admin, Gantt e Projetos — é o mesmo arquivo de dados.</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
 
     <!-- ABA GERENCIAL -->
@@ -977,6 +1043,33 @@ function switchTab(name) {
   event.currentTarget.classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'gerencial') renderGerencial();
+}
+
+// ─── ACESSO DEVS ──────────────────────────────────────────────────
+function gerarLinkAcesso() {
+  const token = document.getElementById('acesso-token-input').value.trim();
+  const box   = document.getElementById('acesso-link-box');
+  const out   = document.getElementById('acesso-link-output');
+  if (!token || !token.startsWith('ghp_')) { box.style.display = 'none'; return; }
+  const base = location.origin + location.pathname.replace('admin.html', 'dev.html');
+  out.value = `${base}?token=${token}`;
+  box.style.display = 'block';
+}
+
+function usarTokenAtual() {
+  const t = (typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '';
+  if (!t) { alert('Nenhum token encontrado nesta sessão. Cole manualmente.'); return; }
+  document.getElementById('acesso-token-input').value = t;
+  gerarLinkAcesso();
+}
+
+function copiarLinkAcesso() {
+  const out = document.getElementById('acesso-link-output');
+  navigator.clipboard.writeText(out.value).then(() => {
+    const btn = document.getElementById('btn-copiar-link');
+    btn.textContent = '✔ Copiado!';
+    setTimeout(() => btn.textContent = '📋 Copiar', 2000);
+  });
 }
 
 // ─── GERENCIAL ────────────────────────────────────────────────────
