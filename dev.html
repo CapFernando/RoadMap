@@ -604,17 +604,19 @@ function onDragOver(e, colKey) {
 function onDragLeave(e, colKey) {
   document.getElementById('col-'+colKey)?.classList.remove('drag-over');
 }
-async function onDrop(e, colKey) {
+function onDrop(e, colKey) {
   e.preventDefault();
-  document.getElementById('col-'+colKey)?.classList.remove('drag-over');
+  document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
   if (!dragId) return;
-  const m = state.melhorias.find(x => x.id === dragId);
+  const id = dragId;
+  dragId = null;
+  const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   const curSk = getStatusKey(m);
   const col = COLUMNS.find(c => c.key === colKey);
   if (!col || col.maps.includes(curSk)) return; // mesma coluna
-  await updateStatus(dragId, colKey);
-  dragId = null;
+  // Difere para depois que dragend completar — evita re-render durante drag ativo
+  setTimeout(() => updateStatus(id, colKey), 0);
 }
 
 // ─── STATUS MODAL ────────────────────────────────────────────────
@@ -647,13 +649,22 @@ async function saveStatus() {
 async function updateStatus(id, colKey) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
-  // Atualiza localmente
+  const spAnterior = m.status_planejamento;
+  const stAnterior = m.status;
+  const spToStatus = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada',
+                       em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
+  // Atualiza localmente (otimista)
   m.status_planejamento = colKey;
-  m.status = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada' }[colKey] || 'recebida';
+  m.status = spToStatus[colKey] || 'recebida';
   renderKanban();
-  // Persiste
+  // Persiste — reverte se falhar
   const patch = { [id]: { status_planejamento: colKey, status: m.status } };
-  await saveToGitHub(patch);
+  const ok = await saveToGitHub(patch);
+  if (!ok) {
+    m.status_planejamento = spAnterior;
+    m.status = stAnterior;
+    renderKanban();
+  }
 }
 
 // ─── NOVA DEMANDA ────────────────────────────────────────────────
