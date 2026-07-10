@@ -1448,7 +1448,8 @@ async function removeDev(i) {
       STATUS_BLOQUEIO.includes(m.status_planejamento || 'backlog')
     );
     if (demandasAtivas.length > 0) {
-      toast(`"${name}" possui ${demandasAtivas.length} demanda(s) ativa(s) e não pode ser removido.`, 'err');
+      const titulos = demandasAtivas.map(m => `• ${m.titulo || m.id}`).join('\n');
+      alert(`"${name}" está vinculado a ${demandasAtivas.length} demanda(s) ativa(s):\n\n${titulos}\n\nCorrija ou reatribua essas demandas antes de remover o dev.`);
       return;
     }
     if (!confirm(`Remover "${name}"?`)) return;
