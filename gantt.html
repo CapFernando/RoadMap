@@ -1393,7 +1393,6 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-status-plan').value = m?.status_planejamento || 'backlog';
   document.getElementById('e-inicio').value    = m?.inicio || prefillDate || '';
   document.getElementById('e-fim').value       = m?.entrega || prefillDate || '';
-  document.getElementById('e-horas').value     = m?.estimativa_horas || '';
   document.getElementById('e-horas-real').value= m?.horas_realizadas || '';
   document.getElementById('e-solicitante').value = m?.solicitante || '';
   document.getElementById('e-data-solic').value  = m?.data_solicitacao || '';
@@ -1457,7 +1456,7 @@ function saveTask() {
     solicitante:        document.getElementById('e-solicitante').value.trim(),
     data_solicitacao:   document.getElementById('e-data-solic').value,
     sprint:             document.getElementById('e-sprint').value.trim(),
-    estimativa_horas:   parseFloat(document.getElementById('e-horas').value) || 0,
+    estimativa_horas:   existing.estimativa_horas || 0,
     horas_realizadas:   parseFloat(document.getElementById('e-horas-real').value) || 0,
     status_planejamento: sp,
     observacao:         document.getElementById('e-obs').value.trim(),
