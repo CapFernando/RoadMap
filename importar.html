@@ -271,7 +271,7 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn btn-ghost" onclick="goStep(2)">← Voltar</button>
+        <button class="btn btn-ghost" onclick="voltarParaDuplicatas()">← Voltar</button>
         <span style="flex:1"></span>
         <button class="btn btn-primary" id="btn-importar" onclick="goStep(4)">Importar →</button>
       </div>
@@ -519,6 +519,16 @@ function collectRows() {
 
 // ── STEP NAVIGATION ───────────────────────────────────────────────────────────
 const STEP_COUNT = 4;
+function voltarParaDuplicatas() {
+  // Se não houve suspeitos, volta direto para o passo 1
+  const temDuplicatas = document.querySelector('[id^="dedup-card-"]');
+  if (!temDuplicatas) { goStep(1); return; }
+  [1,2,3,4].forEach(i => {
+    document.getElementById('panel-'  +i).classList.toggle('active',i===2);
+    document.getElementById('step-tab-'+i).classList.toggle('active',i===2);
+  });
+  window.scrollTo(0,0);
+}
 function goStep(n) {
   if (n===2) return; // dedup handled by startDedupCheck
   if (n===3) buildPreview();
