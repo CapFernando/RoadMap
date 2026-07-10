@@ -566,7 +566,8 @@
     <div class="form-row">
       <div class="form-group">
         <label>Desenvolvedor responsável</label>
-        <input type="text" id="m-dev" placeholder="Nome do dev" />
+        <select id="m-dev" onchange="onDevSelectChange()"></select>
+        <input type="text" id="m-dev-manual" placeholder="Ex: Gabriel / Ana" style="display:none;margin-top:6px" />
       </div>
       <div class="form-group">
         <label>Prioridade</label>
@@ -1045,6 +1046,43 @@ function switchTab(name) {
   if (name === 'gerencial') renderGerencial();
 }
 
+// ─── DEV SELECT ───────────────────────────────────────────────────
+function populateDevSelect(currentVal) {
+  const sel = document.getElementById('m-dev');
+  const manual = document.getElementById('m-dev-manual');
+  const devs = state.desenvolvedores || [];
+  const isMultiple = currentVal && currentVal.includes('/') || (currentVal && !devs.includes(currentVal) && currentVal !== '');
+  sel.innerHTML =
+    '<option value="">— Nenhum —</option>' +
+    devs.map(d => `<option value="${d}" ${currentVal===d?'selected':''}>${d}</option>`).join('') +
+    '<option value="__manual__" ' + (isMultiple?'selected':'') + '>✏ Múltiplos / outro...</option>';
+  if (isMultiple) {
+    manual.style.display = 'block';
+    manual.value = currentVal;
+  } else {
+    manual.style.display = 'none';
+    manual.value = '';
+  }
+}
+
+function onDevSelectChange() {
+  const sel = document.getElementById('m-dev');
+  const manual = document.getElementById('m-dev-manual');
+  if (sel.value === '__manual__') {
+    manual.style.display = 'block';
+    manual.focus();
+  } else {
+    manual.style.display = 'none';
+    manual.value = '';
+  }
+}
+
+function getDevValue() {
+  const sel = document.getElementById('m-dev');
+  if (sel.value === '__manual__') return document.getElementById('m-dev-manual').value.trim();
+  return sel.value;
+}
+
 // ─── ACESSO DEVS ──────────────────────────────────────────────────
 function gerarLinkAcesso() {
   const token = document.getElementById('acesso-token-input').value.trim();
@@ -1374,7 +1412,7 @@ function openModalMelhoria(id) {
   document.getElementById('m-titulo').value    = m?.titulo    || '';
   document.getElementById('m-descricao').value = m?.descricao || '';
   document.getElementById('m-estimativa').value      = m?.estimativa       || '';
-  document.getElementById('m-dev').value             = m?.dev              || '';
+  populateDevSelect(m?.dev || '');
   document.getElementById('m-prioridade').value      = m?.prioridade       || '';
   document.getElementById('m-solicitante').value     = m?.solicitante      || '';
   document.getElementById('m-data-solicitacao').value= m?.data_solicitacao || '';
@@ -1479,7 +1517,7 @@ function saveMelhoria() {
     status:              SP_TO_STATUS[sp] || 'recebida',
     status_planejamento: sp,
     estimativa:          existing.estimativa || '',
-    dev:                 document.getElementById('m-dev').value.trim(),
+    dev:                 getDevValue(),
     prioridade:          document.getElementById('m-prioridade').value,
     solicitante:         document.getElementById('m-solicitante').value.trim(),
     data_solicitacao:    document.getElementById('m-data-solicitacao').value,
