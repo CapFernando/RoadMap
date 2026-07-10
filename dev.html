@@ -146,15 +146,28 @@
 <div id="login-screen">
   <div class="login-box">
     <h2>👤 Meu Painel</h2>
-    <p>Selecione seu nome para acessar suas demandas</p>
-    <div id="login-aviso" class="login-aviso">
-      🔗 Primeiro acesso neste dispositivo. Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de continuar.
+
+    <!-- PASSO 1: Senha -->
+    <div id="step-senha">
+      <p>Digite a senha para acessar o painel</p>
+      <input type="password" id="login-senha" placeholder="Senha de acesso"
+             onkeydown="if(event.key==='Enter') verificarSenha()" autocomplete="off" />
+      <button onclick="verificarSenha()">Entrar</button>
+      <div class="login-error" id="login-error-senha"></div>
     </div>
-    <div id="dev-grid" class="dev-grid">
-      <div style="color:var(--text3);font-size:13px;padding:20px;grid-column:1/-1;">Carregando devs…</div>
+
+    <!-- PASSO 2: Seleção de dev (oculto até senha correta) -->
+    <div id="step-dev" style="display:none">
+      <p>Selecione seu nome</p>
+      <div id="login-aviso" class="login-aviso">
+        🔗 Primeiro acesso neste dispositivo. Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de continuar.
+      </div>
+      <div id="dev-grid" class="dev-grid">
+        <div style="color:var(--text3);font-size:13px;padding:20px;grid-column:1/-1;">Carregando devs…</div>
+      </div>
+      <button onclick="reloadDevList()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;margin-top:4px;text-decoration:underline;">↻ Atualizar lista</button>
+      <div class="login-error" id="login-error"></div>
     </div>
-    <button onclick="reloadDevList()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;margin-top:4px;text-decoration:underline;">↻ Atualizar lista</button>
-    <div class="login-error" id="login-error"></div>
   </div>
 </div>
 
@@ -545,6 +558,17 @@ async function reloadDevList() {
 }
 
 async function initApp() {
+  // Se a sessão ainda não foi autenticada com senha, mostra step-senha
+  const authed = sessionStorage.getItem('rm_dev_authed');
+  if (!authed) {
+    // step-senha já é o padrão (step-dev está oculto)
+    document.getElementById('login-senha')?.focus();
+    return; // Não carrega devs ainda — espera a senha
+  }
+  // Já autenticado nesta sessão → pula direto para step-dev
+  document.getElementById('step-senha').style.display = 'none';
+  document.getElementById('step-dev').style.display = 'block';
+
   if (!runtimeToken) {
     document.getElementById('login-aviso').style.display = 'block';
   }
@@ -584,6 +608,31 @@ function getDevList() {
   return [...new Set([...fromArr, ...fromMel])].sort();
 }
 
+function verificarSenha() {
+  const val = document.getElementById('login-senha').value;
+  const correta = window.DEV_SENHA || window.ADMIN_SENHA || '';
+  if (!correta) {
+    // Se não houver senha configurada no config.js, passa direto
+    sessionStorage.setItem('rm_dev_authed', '1');
+    mostrarStepDev(); return;
+  }
+  if (val === correta) {
+    sessionStorage.setItem('rm_dev_authed', '1');
+    document.getElementById('login-error-senha').textContent = '';
+    mostrarStepDev();
+  } else {
+    document.getElementById('login-error-senha').textContent = 'Senha incorreta.';
+    document.getElementById('login-senha').value = '';
+    document.getElementById('login-senha').focus();
+  }
+}
+
+function mostrarStepDev() {
+  document.getElementById('step-senha').style.display = 'none';
+  document.getElementById('step-dev').style.display = 'block';
+  reloadDevList();
+}
+
 function selectDev(name) {
   currentDev = name;
   localStorage.setItem('rm_dev_name', name);
@@ -605,8 +654,11 @@ function enterApp() {
 function trocarDev() {
   localStorage.removeItem('rm_dev_name');
   currentDev = '';
+  // Volta para step-dev (senha já foi validada nesta sessão)
   document.getElementById('dev-app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('step-senha').style.display = 'none';
+  document.getElementById('step-dev').style.display = 'block';
   document.getElementById('login-error').textContent = '';
 }
 
