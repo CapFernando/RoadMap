@@ -1131,7 +1131,7 @@ function renderGantt() {
         draggable="true"
         ondragstart="onCardDragStart(event,'${m.id}')"
         ondragend="onCardDragEnd(event,'${m.id}')"
-        onclick="if(!_cardWasDragged)openModal('${m.id}')"
+        onclick="onCardClick(event,'${m.id}')"
         onmouseenter="showTooltip(event,'${m.id}')"
         onmouseleave="hideTooltip()">
         <span class="card-drag-handle">⠿⠿</span>
@@ -1153,7 +1153,21 @@ function renderGantt() {
   attachCardClickListeners();
 }
 
-function setupGanttCardListener() {} // click handled via onclick on card
+function setupGanttCardListener() {} // no-op
+
+let _clickTimer = null, _clickTargetId = null;
+function onCardClick(e, id) {
+  if (_cardWasDragged) return;
+  if (_clickTimer && _clickTargetId === id) {
+    clearTimeout(_clickTimer);
+    _clickTimer = null;
+    _clickTargetId = null;
+    openModal(id);
+  } else {
+    _clickTargetId = id;
+    _clickTimer = setTimeout(() => { _clickTimer = null; _clickTargetId = null; }, 350);
+  }
+}
 
 function attachCardClickListeners() {} // mantido por compatibilidade, não faz mais nada
 
