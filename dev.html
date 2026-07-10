@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meu Painel — RoadMap de Melhorias</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="config.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #0E0E0D; --bg2: #161614; --bg3: #1E1E1C; --bg4: #252522;
+      --border: #2E2E2B; --border2: #3A3A36;
+      --text:   #ECEAE2; --text2: #A8A49A; --text3: #6E6A62;
+      --blue:   #3B8FE8; --blue-bg: #0C3260; --blue-tx: #9BC8F8;
+      --green:  #5EA832; --green-bg:#1E4208; --green-tx:#B2E07A;
+      --amber:  #E89C2F; --amber-bg:#4A2800; --amber-tx:#FFB84D;
+      --red:    #E84444; --red-bg:  #5C0A0A; --red-tx:  #F9A0A0;
+      --teal:   #2BBFA0; --teal-bg: #063D30; --teal-tx: #7EECD8;
+      --purple: #9B6FE8; --purple-bg:#341A6E;--purple-tx:#C9AEFF;
+      --radius: 10px;
+    }
+    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; min-height:100vh; }
+
+    /* ── LOGIN ── */
+    #login-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; }
+    .login-box { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:40px 36px; width:100%; max-width:400px; text-align:center; }
+    .login-box h2 { font-size:22px; font-weight:700; margin-bottom:6px; }
+    .login-box p  { font-size:14px; color:var(--text2); margin-bottom:24px; }
+    .dev-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-bottom:20px; }
+    .dev-btn { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:12px 8px; cursor:pointer; font-size:14px; font-weight:500; color:var(--text2); transition:all .15s; }
+    .dev-btn:hover { border-color:var(--blue); color:var(--blue); background:var(--blue-bg); }
+    .login-aviso { background:var(--amber-bg); color:var(--amber-tx); border-radius:8px; padding:10px 14px; font-size:13px; line-height:1.5; margin-bottom:16px; display:none; }
+    .login-error { color:var(--red-tx); font-size:13px; margin-top:8px; }
+
+    /* ── HEADER ── */
+    header { background:var(--bg2); border-bottom:1px solid var(--border); padding:14px 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+    .header-left { display:flex; align-items:center; gap:12px; }
+    .header-left h1 { font-size:17px; font-weight:600; }
+    .dev-badge { background:var(--blue-bg); color:var(--blue-tx); border-radius:20px; padding:4px 12px; font-size:13px; font-weight:600; }
+    .header-right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; }
+    .btn:hover { opacity:.85; }
+    .btn-primary   { background:var(--blue);  color:#fff; }
+    .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
+    .btn-success   { background:var(--green); color:#fff; }
+    .btn-sm { padding:5px 11px; font-size:12px; }
+
+    /* ── FILTER BAR ── */
+    .filter-bar { background:var(--bg2); border-bottom:1px solid var(--border); padding:10px 24px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .filter-bar label { font-size:12px; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+    .filter-select { background:var(--bg3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; padding:5px 10px; outline:none; cursor:pointer; }
+    .filter-select:focus { border-color:var(--blue); }
+    .filter-chip { padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; background:var(--bg3); border:1px solid var(--border); color:var(--text2); cursor:pointer; transition:all .15s; }
+    .filter-chip:hover { border-color:var(--border2); color:var(--text); }
+    .filter-chip.active { background:var(--blue-bg); border-color:var(--blue); color:var(--blue-tx); }
+    .filter-sep { width:1px; height:20px; background:var(--border); }
+
+    /* ── KANBAN ── */
+    #kanban-wrap { overflow-x:auto; padding:20px 24px 40px; min-height:calc(100vh - 140px); }
+    #kanban { display:flex; gap:14px; min-width:max-content; align-items:flex-start; }
+    .col { width:290px; flex-shrink:0; }
+    .col-header { display:flex; align-items:center; gap:8px; padding:0 4px 10px; border-bottom:2px solid var(--col-color); margin-bottom:10px; }
+    .col-header-dot { width:10px; height:10px; border-radius:50%; background:var(--col-color); flex-shrink:0; }
+    .col-header-label { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text2); }
+    .col-header-count { font-size:12px; font-weight:600; background:var(--bg3); color:var(--text3); border-radius:10px; padding:1px 8px; }
+    .col-cards { display:flex; flex-direction:column; gap:8px; min-height:80px; }
+    .col-drop-hint { border:2px dashed var(--border); border-radius:8px; height:80px; display:none; align-items:center; justify-content:center; font-size:12px; color:var(--text3); }
+    .col.drag-over .col-drop-hint { display:flex; }
+
+    /* ── CARD ── */
+    .kcard {
+      background:var(--bg2); border:1px solid var(--border); border-radius:9px;
+      padding:12px 14px; cursor:pointer; transition:border-color .15s, transform .1s;
+      user-select:none;
+    }
+    .kcard:hover { border-color:var(--border2); transform:translateY(-1px); }
+    .kcard.dragging { opacity:.5; }
+    .kcard-title { font-size:13px; font-weight:600; color:var(--text); line-height:1.4; margin-bottom:6px; }
+    .kcard-tema  { font-size:11px; color:var(--text3); margin-bottom:6px; }
+    .kcard-meta  { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; font-size:11px; color:var(--text3); }
+    .kcard-meta span { display:flex; align-items:center; gap:3px; }
+    .kcard-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; display:inline-block; }
+    .kcard-actions { display:flex; gap:6px; margin-top:8px; border-top:1px solid var(--border); padding-top:8px; }
+
+    .badge-backlog      { background:#0C326022; color:var(--blue-tx); }
+    .badge-levantar_req { background:var(--purple-bg); color:var(--purple-tx); }
+    .badge-planejado    { background:var(--blue-bg);   color:var(--blue-tx); }
+    .badge-em_andamento { background:var(--green-bg);  color:var(--green-tx); }
+    .badge-deploy       { background:var(--amber-bg);  color:var(--amber-tx); }
+    .badge-atrasado     { background:var(--red-bg);    color:var(--red-tx); }
+    .badge-concluido    { background:var(--teal-bg);   color:var(--teal-tx); }
+    .badge-negada       { background:var(--red-bg);    color:var(--red-tx); }
+
+    /* ── MODAL ── */
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:200; padding:20px; }
+    .modal { background:var(--bg2); border:1px solid var(--border); border-radius:14px; width:100%; max-width:500px; max-height:90vh; overflow-y:auto; padding:28px; }
+    .modal h2 { font-size:18px; font-weight:700; margin-bottom:20px; }
+    .form-group { margin-bottom:16px; }
+    .form-group label { display:block; font-size:13px; font-weight:600; color:var(--text2); margin-bottom:6px; }
+    .form-group input, .form-group select, .form-group textarea {
+      width:100%; padding:10px 12px; background:var(--bg3); border:1px solid var(--border);
+      border-radius:var(--radius); color:var(--text); font-size:14px; font-family:'Inter',sans-serif; outline:none;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color:var(--blue); }
+    .form-group textarea { resize:vertical; min-height:80px; }
+    .form-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+    .modal-info-row { display:flex; gap:8px; align-items:center; font-size:13px; color:var(--text2); margin-bottom:8px; }
+    .modal-info-row strong { color:var(--text); }
+
+    /* ── TOAST ── */
+    #toast { position:fixed; bottom:24px; right:24px; z-index:9000; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:500; max-width:360px; line-height:1.4; transition:opacity .3s; opacity:0; pointer-events:none; }
+    .saving-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:500; font-size:16px; color:var(--text2); }
+
+    /* ── EMPTY ── */
+    .empty-col { color:var(--text3); font-size:12px; text-align:center; padding:20px 0; }
+  </style>
+</head>
+<body>
+
+<!-- ─── LOGIN ─────────────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-box">
+    <h2>👤 Meu Painel</h2>
+    <p>Selecione seu nome para acessar suas demandas</p>
+    <div id="login-aviso" class="login-aviso">
+      🔗 Primeiro acesso neste dispositivo. Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de continuar.
+    </div>
+    <div id="dev-grid" class="dev-grid">
+      <div style="color:var(--text3);font-size:13px;padding:20px;">Carregando devs…</div>
+    </div>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ─── APP ──────────────────────────────────────── -->
+<div id="dev-app" style="display:none">
+  <header>
+    <div class="header-left">
+      <h1>🗂️ Meu Painel</h1>
+      <span class="dev-badge" id="dev-label">—</span>
+    </div>
+    <div class="header-right">
+      <span id="ultima-atualizacao" style="font-size:12px;color:var(--text3);">—</span>
+      <button class="btn btn-primary btn-sm" onclick="openNewModal()">+ Nova demanda</button>
+      <button class="btn btn-secondary btn-sm" onclick="forceRefresh()">↻ Atualizar</button>
+      <a href="index.html" class="btn btn-secondary btn-sm" target="_blank">📊 Dashboard</a>
+      <button class="btn btn-secondary btn-sm" onclick="trocarDev()">Trocar dev</button>
+    </div>
+  </header>
+
+  <div class="filter-bar">
+    <label>Período:</label>
+    <select id="f-ano" class="filter-select" onchange="renderKanban()">
+      <option value="">Todos os anos</option>
+    </select>
+    <select id="f-mes" class="filter-select" onchange="renderKanban()">
+      <option value="">Todos os meses</option>
+      <option value="0">Janeiro</option><option value="1">Fevereiro</option>
+      <option value="2">Março</option><option value="3">Abril</option>
+      <option value="4">Maio</option><option value="5">Junho</option>
+      <option value="6">Julho</option><option value="7">Agosto</option>
+      <option value="8">Setembro</option><option value="9">Outubro</option>
+      <option value="10">Novembro</option><option value="11">Dezembro</option>
+    </select>
+    <div class="filter-sep"></div>
+    <label>Tema:</label>
+    <div id="tema-chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+  </div>
+
+  <div id="kanban-wrap">
+    <div id="kanban"></div>
+  </div>
+</div>
+
+<!-- ─── MODAL: STATUS ────────────────────────────── -->
+<div id="modal-status" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <h2 id="ms-title">Detalhes da Demanda</h2>
+    <input type="hidden" id="ms-id" />
+    <div id="ms-info"></div>
+    <div class="form-group" id="ms-status-group">
+      <label>Mover para</label>
+      <select id="ms-status">
+        <option value="planejado">Planejado</option>
+        <option value="em_andamento">Em Andamento</option>
+        <option value="deploy">Deploy</option>
+        <option value="atrasado">Atrasado</option>
+        <option value="concluido">Concluído</option>
+      </select>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-status')">Fechar</button>
+      <button class="btn btn-primary" onclick="saveStatus()">Salvar status</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── MODAL: NOVA DEMANDA ──────────────────────── -->
+<div id="modal-new" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <h2>Nova Demanda</h2>
+    <div class="form-group">
+      <label>Título *</label>
+      <input type="text" id="n-titulo" placeholder="Descreva a demanda" />
+    </div>
+    <div class="form-group">
+      <label>Tema *</label>
+      <select id="n-tema"></select>
+    </div>
+    <div class="form-group">
+      <label>Descrição</label>
+      <textarea id="n-desc" placeholder="Detalhes, contexto, requisitos…"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label>Início previsto</label>
+        <input type="date" id="n-inicio" />
+      </div>
+      <div class="form-group">
+        <label>Entrega prevista</label>
+        <input type="date" id="n-entrega" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Status inicial</label>
+      <select id="n-status">
+        <option value="backlog">Backlog (aguardando planejamento)</option>
+        <option value="planejado" selected>Planejado</option>
+        <option value="em_andamento">Em Andamento</option>
+      </select>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveNewDemand()">Criar demanda</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────
+const GITHUB_TOKEN = window.GITHUB_TOKEN || '';
+const GITHUB_USER  = 'CapFernando';
+const GITHUB_REPO  = 'RoadMap';
+const DATA_PATH    = 'data/melhorias.json';
+const API_URL = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
+const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
+
+// Captura token do URL fragment (#token=...)
+(function() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  const t = params.get('token');
+  if (t && t.startsWith('ghp_')) { localStorage.setItem('rm_token', t); history.replaceState(null,'',location.pathname); }
+})();
+
+let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
+
+// ─── STATE ───────────────────────────────────────────────────────
+let state = { temas:[], melhorias:[], desenvolvedores:[], feriados:[] };
+let fileSha = '';
+let currentDev = localStorage.getItem('rm_dev_name') || '';
+let _temaFilter = null;
+let _pollTs = null;
+
+// ─── UTILS ───────────────────────────────────────────────────────
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function splitDevs(s) { return s ? s.split(/[\/,]/).map(x=>x.trim()).filter(Boolean) : []; }
+function formatDate(s) { if (!s) return ''; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
+
+function getStatusKey(m) {
+  const sp = m.status_planejamento;
+  if (sp && sp !== 'backlog') return sp;
+  const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
+                   estimada:'planejado', iniciada:'em_andamento', concluida:'concluido',
+                   concluido:'concluido', negada:'negada' };
+  const base = legacy[m.status] || sp || 'backlog';
+  if (base === 'backlog' && m.inicio) {
+    const today = new Date().toISOString().slice(0,10);
+    return m.inicio <= today ? 'em_andamento' : 'planejado';
+  }
+  return base;
+}
+
+const STATUS_LABELS = {
+  backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
+  em_andamento:'Em Andamento', deploy:'Deploy', concluido:'Concluído', atrasado:'Atrasado', negada:'Negada'
+};
+
+const COLUMNS = [
+  { key:'planejado',    label:'Planejado',    color:'#3B8FE8', maps:['backlog','levantar_req','planejado'] },
+  { key:'em_andamento', label:'Em Andamento', color:'#5EA832', maps:['em_andamento'] },
+  { key:'deploy',       label:'Deploy',       color:'#E89C2F', maps:['deploy'] },
+  { key:'atrasado',     label:'Atrasado',     color:'#E84444', maps:['atrasado'] },
+  { key:'concluido',    label:'Concluído',    color:'#2BBFA0', maps:['concluido'] },
+];
+
+// ─── LOAD / SAVE ─────────────────────────────────────────────────
+async function loadData(useApi = false) {
+  try {
+    const url = useApi ? API_URL + '?t=' + Date.now() : RAW_URL + '?t=' + Date.now();
+    const opts = useApi
+      ? { cache:'no-store', headers:{ Accept:'application/vnd.github.v3+json' } }
+      : { cache:'no-store' };
+    const res = await fetch(url, opts);
+    if (!res.ok) { if (useApi) throw new Error(res.status); return; }
+    let data;
+    if (useApi) {
+      const json = await res.json();
+      fileSha = json.sha;
+      data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
+    } else {
+      data = await res.json();
+    }
+    applyData(data);
+  } catch(e) { console.warn('loadData error', e); }
+}
+
+function applyData(data) {
+  _pollTs = data.atualizado_em || null;
+  state.temas         = data.temas         || [];
+  state.melhorias     = data.melhorias     || [];
+  state.desenvolvedores = data.desenvolvedores || [];
+  state.feriados      = data.feriados      || [];
+  const dt = data.atualizado_em
+    ? new Date(data.atualizado_em).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+  const el = document.getElementById('ultima-atualizacao');
+  if (el) el.textContent = `Atualizado em ${dt}`;
+  buildAnoFilter();
+  buildTemaChips();
+  renderKanban();
+}
+
+async function saveToGitHub(patch) {
+  if (!runtimeToken) { toast('Sem token de acesso. Solicite o link ao administrador.','err'); return false; }
+  showSaving(true);
+  try {
+    // Busca SHA mais recente
+    const shaRes = await fetch(API_URL + '?t=' + Date.now(), {
+      cache:'no-store',
+      headers:{ Authorization:`token ${runtimeToken}`, Accept:'application/vnd.github.v3+json' }
+    });
+    if (!shaRes.ok) throw new Error('Falha ao obter SHA: ' + shaRes.status);
+    const shaJson = await shaRes.json();
+    fileSha = shaJson.sha;
+    const serverData = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g,'')))));
+
+    // Merge: aplica patch sobre os dados do servidor
+    const mergedMelhorias = serverData.melhorias.map(m => {
+      const p = patch[m.id];
+      return p ? { ...m, ...p } : m;
+    });
+    // Adiciona novas (não existem no servidor)
+    Object.keys(patch).forEach(id => {
+      if (!serverData.melhorias.find(m => m.id === id)) {
+        mergedMelhorias.push(patch[id]);
+      }
+    });
+
+    const merged = {
+      ...serverData,
+      melhorias: mergedMelhorias,
+      atualizado_em: new Date().toISOString()
+    };
+
+    const bytes = new TextEncoder().encode(JSON.stringify(merged, null, 2));
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i+8192));
+    const res = await fetch(API_URL, {
+      method:'PUT',
+      headers:{ Authorization:`token ${runtimeToken}`, Accept:'application/vnd.github.v3+json', 'Content-Type':'application/json' },
+      body: JSON.stringify({ message:`chore: dev ${currentDev} atualiza ${new Date().toLocaleString('pt-BR')}`, content:btoa(bin), sha:fileSha })
+    });
+    if (!res.ok) { const e=await res.json(); throw new Error(e.message||'Erro ao salvar'); }
+    const saved = await res.json();
+    fileSha = saved.content.sha;
+    applyData(merged);
+    toast('✅ Salvo!','ok');
+    return true;
+  } catch(e) {
+    toast('Erro ao salvar: ' + e.message,'err');
+    return false;
+  } finally { showSaving(false); }
+}
+
+// ─── LOGIN ───────────────────────────────────────────────────────
+async function initApp() {
+  // Carrega devs da raw URL para montar o grid de login
+  try {
+    const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache:'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      state.temas = data.temas || [];
+      state.melhorias = data.melhorias || [];
+      state.desenvolvedores = data.desenvolvedores || [];
+      state.feriados = data.feriados || [];
+      _pollTs = data.atualizado_em || null;
+    }
+  } catch(_) {}
+
+  const devs = getDevList();
+  const grid = document.getElementById('dev-grid');
+
+  if (!runtimeToken) {
+    document.getElementById('login-aviso').style.display = 'block';
+  }
+
+  if (!devs.length) {
+    grid.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:10px;">Nenhum desenvolvedor encontrado.</div>';
+    return;
+  }
+
+  grid.innerHTML = devs.map(d =>
+    `<button class="dev-btn" onclick="selectDev('${d.replace(/'/g,"\\'")}')">👤 ${d}</button>`
+  ).join('');
+
+  // Auto-login se já tem nome salvo
+  if (currentDev && devs.includes(currentDev)) {
+    enterApp();
+  }
+}
+
+function getDevList() {
+  const fromArr = state.desenvolvedores.flatMap(d => splitDevs(d));
+  const fromMel = state.melhorias.flatMap(m => splitDevs(m.dev));
+  return [...new Set([...fromArr, ...fromMel])].sort();
+}
+
+function selectDev(name) {
+  currentDev = name;
+  localStorage.setItem('rm_dev_name', name);
+  enterApp();
+}
+
+function enterApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dev-app').style.display = 'block';
+  document.getElementById('dev-label').textContent = currentDev;
+  buildAnoFilter();
+  buildTemaChips();
+  renderKanban();
+  // Carrega com API se tem token para pegar SHA atualizado
+  if (runtimeToken) loadData(true);
+  startPolling();
+}
+
+function trocarDev() {
+  localStorage.removeItem('rm_dev_name');
+  currentDev = '';
+  document.getElementById('dev-app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-error').textContent = '';
+}
+
+// ─── FILTERS ─────────────────────────────────────────────────────
+function buildAnoFilter() {
+  const sel = document.getElementById('f-ano');
+  if (!sel) return;
+  const current = sel.value;
+  const anos = [...new Set(state.melhorias.map(m => m.inicio ? m.inicio.slice(0,4) : null).filter(Boolean))].sort((a,b)=>b-a);
+  sel.innerHTML = '<option value="">Todos os anos</option>' + anos.map(a=>`<option value="${a}" ${current===a?'selected':''}>${a}</option>`).join('');
+}
+
+const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
+function buildTemaChips() {
+  const wrap = document.getElementById('tema-chips');
+  if (!wrap) return;
+  wrap.innerHTML = `<button class="filter-chip ${!_temaFilter?'active':''}" onclick="setTema(null)">Todos</button>` +
+    state.temas.map((t,i) => {
+      const cor = TEMA_CORES[i % TEMA_CORES.length];
+      const ativo = _temaFilter === t.id;
+      return `<button class="filter-chip ${ativo?'active':''}" onclick="setTema('${t.id}')" style="${ativo?`background:${cor}20;border-color:${cor};color:${cor};`:''}">${t.nome}</button>`;
+    }).join('');
+}
+function setTema(id) { _temaFilter = id; buildTemaChips(); renderKanban(); }
+
+function getFiltered() {
+  const ano = document.getElementById('f-ano')?.value || '';
+  const mes = document.getElementById('f-mes')?.value;
+  const mesN = mes !== '' && mes !== undefined ? parseInt(mes) : null;
+  return state.melhorias.filter(m => {
+    if (!splitDevs(m.dev).includes(currentDev)) return false;
+    if (_temaFilter && m.tema_id !== _temaFilter) return false;
+    if (ano || mesN !== null) {
+      const ref = m.inicio ? new Date(m.inicio+'T00:00:00') : new Date(m.criado_em);
+      if (ano && ref.getFullYear().toString() !== ano) return false;
+      if (mesN !== null && ref.getMonth() !== mesN) return false;
+    }
+    const sk = getStatusKey(m);
+    if (sk === 'negada') return false;
+    return true;
+  });
+}
+
+// ─── KANBAN ──────────────────────────────────────────────────────
+function renderKanban() {
+  const kanban = document.getElementById('kanban');
+  if (!kanban) return;
+  const items = getFiltered();
+
+  kanban.innerHTML = COLUMNS.map(col => {
+    const cards = items.filter(m => col.maps.includes(getStatusKey(m)));
+    const cardsHTML = cards.length
+      ? cards.map(m => renderCard(m, col.key)).join('')
+      : `<div class="empty-col">Nenhuma demanda</div>`;
+    return `
+      <div class="col" id="col-${col.key}" style="--col-color:${col.color}"
+           ondragover="onDragOver(event,'${col.key}')" ondrop="onDrop(event,'${col.key}')" ondragleave="onDragLeave(event,'${col.key}')">
+        <div class="col-header">
+          <span class="col-header-dot"></span>
+          <span class="col-header-label">${col.label}</span>
+          <span class="col-header-count">${cards.length}</span>
+        </div>
+        <div class="col-cards" id="cards-${col.key}">
+          ${cardsHTML}
+        </div>
+        <div class="col-drop-hint">Soltar aqui</div>
+      </div>`;
+  }).join('');
+}
+
+function renderCard(m, colKey) {
+  const sk = getStatusKey(m);
+  const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
+  const badge = `<span class="kcard-badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
+  const meta = [];
+  if (m.inicio)  meta.push(`📅 ${formatDate(m.inicio)}`);
+  if (m.entrega) meta.push(`🏁 ${formatDate(m.entrega)}`);
+  if (m.estimativa) meta.push(`⏱ ${m.estimativa}`);
+  return `
+    <div class="kcard" draggable="true" id="card-${m.id}"
+         ondragstart="onDragStart(event,'${m.id}')"
+         ondragend="onDragEnd(event)"
+         onclick="openStatusModal('${m.id}')">
+      <div class="kcard-title">${m.titulo}</div>
+      ${tema ? `<div class="kcard-tema">${tema}</div>` : ''}
+      ${meta.length ? `<div class="kcard-meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>` : ''}
+      ${m.descricao ? `<div style="font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:6px;">${m.descricao.substring(0,90)}${m.descricao.length>90?'…':''}</div>` : ''}
+      <div>${badge}</div>
+    </div>`;
+}
+
+// ─── DRAG & DROP ─────────────────────────────────────────────────
+let dragId = null;
+function onDragStart(e, id) {
+  dragId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => { const el = document.getElementById('card-'+id); if(el) el.classList.add('dragging'); }, 0);
+}
+function onDragEnd(e) {
+  document.querySelectorAll('.kcard').forEach(c => c.classList.remove('dragging'));
+  document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
+}
+function onDragOver(e, colKey) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.getElementById('col-'+colKey)?.classList.add('drag-over');
+}
+function onDragLeave(e, colKey) {
+  document.getElementById('col-'+colKey)?.classList.remove('drag-over');
+}
+async function onDrop(e, colKey) {
+  e.preventDefault();
+  document.getElementById('col-'+colKey)?.classList.remove('drag-over');
+  if (!dragId) return;
+  const m = state.melhorias.find(x => x.id === dragId);
+  if (!m) return;
+  const curSk = getStatusKey(m);
+  const col = COLUMNS.find(c => c.key === colKey);
+  if (!col || col.maps.includes(curSk)) return; // mesma coluna
+  await updateStatus(dragId, colKey);
+  dragId = null;
+}
+
+// ─── STATUS MODAL ────────────────────────────────────────────────
+function openStatusModal(id) {
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  const sk = getStatusKey(m);
+  const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '—';
+  document.getElementById('ms-id').value = id;
+  document.getElementById('ms-title').textContent = m.titulo;
+  document.getElementById('ms-info').innerHTML = `
+    <div class="modal-info-row"><span>Tema:</span><strong>${tema}</strong></div>
+    ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${m.dev}</strong></div>` : ''}
+    ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
+    ${m.entrega ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
+    ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${m.descricao}</div>` : ''}
+  `;
+  const sel = document.getElementById('ms-status');
+  sel.value = COLUMNS.find(c => c.maps.includes(sk))?.key || sk;
+  document.getElementById('modal-status').style.display = 'flex';
+}
+
+async function saveStatus() {
+  const id = document.getElementById('ms-id').value;
+  const newColKey = document.getElementById('ms-status').value;
+  closeModal('modal-status');
+  await updateStatus(id, newColKey);
+}
+
+async function updateStatus(id, colKey) {
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  // Atualiza localmente
+  m.status_planejamento = colKey;
+  m.status = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada' }[colKey] || 'recebida';
+  renderKanban();
+  // Persiste
+  const patch = { [id]: { status_planejamento: colKey, status: m.status } };
+  await saveToGitHub(patch);
+}
+
+// ─── NOVA DEMANDA ────────────────────────────────────────────────
+function openNewModal() {
+  document.getElementById('n-titulo').value = '';
+  document.getElementById('n-desc').value = '';
+  document.getElementById('n-inicio').value = '';
+  document.getElementById('n-entrega').value = '';
+  document.getElementById('n-status').value = 'planejado';
+  // Popula temas
+  const sel = document.getElementById('n-tema');
+  sel.innerHTML = '<option value="">— Selecione um tema —</option>' +
+    state.temas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
+  document.getElementById('modal-new').style.display = 'flex';
+}
+
+async function saveNewDemand() {
+  const titulo = document.getElementById('n-titulo').value.trim();
+  const temaId = document.getElementById('n-tema').value;
+  if (!titulo) { toast('Informe o título.','err'); return; }
+  if (!temaId) { toast('Selecione um tema.','err'); return; }
+  const sp = document.getElementById('n-status').value;
+  const spToStatus = { backlog:'recebida', planejado:'estimada', em_andamento:'iniciada' };
+  const newM = {
+    id: uid(),
+    titulo,
+    tema_id: temaId,
+    descricao: document.getElementById('n-desc').value.trim(),
+    dev: currentDev,
+    inicio: document.getElementById('n-inicio').value || '',
+    entrega: document.getElementById('n-entrega').value || '',
+    status: spToStatus[sp] || 'recebida',
+    status_planejamento: sp,
+    estimativa: '',
+    motivo_negacao: '',
+    criado_em: new Date().toISOString(),
+  };
+  // Adiciona localmente
+  state.melhorias.push(newM);
+  closeModal('modal-new');
+  renderKanban();
+  // Persiste
+  const patch = { [newM.id]: newM };
+  await saveToGitHub(patch);
+}
+
+// ─── SYNC ────────────────────────────────────────────────────────
+async function forceRefresh() {
+  await loadData(true);
+  toast('Dados atualizados.','ok');
+}
+
+function startPolling() {
+  setInterval(async () => {
+    try {
+      const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache:'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.atualizado_em !== _pollTs) applyData(data);
+    } catch(_) {}
+  }, 60000);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && currentDev) loadData(true);
+});
+
+// ─── UI HELPERS ──────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+let _toastTimer;
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = type==='err' ? '#5C0A0A' : '#1E4208';
+  el.style.color       = type==='err' ? '#F9A0A0' : '#B2E07A';
+  el.style.border      = `1px solid ${type==='err'?'#7A1A1A':'#2E5A10'}`;
+  el.style.opacity = '1';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.style.opacity='0'; }, 4000);
+}
+
+function showSaving(on) {
+  const id = 'dev-saving';
+  if (on) {
+    if (document.getElementById(id)) return;
+    const d = document.createElement('div');
+    d.id = id; d.className = 'saving-overlay'; d.textContent = 'Salvando…';
+    document.body.appendChild(d);
+  } else {
+    document.getElementById(id)?.remove();
+  }
+}
+
+// ─── INIT ────────────────────────────────────────────────────────
+initApp();
+</script>
+</body>
+</html>
