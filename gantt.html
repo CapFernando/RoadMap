@@ -1405,7 +1405,7 @@ function renderDevsList() {
   ).join('');
 }
 
-function addDev() {
+async function addDev() {
   const name = document.getElementById('new-dev-name').value.trim();
   if (!name) return;
   if (state.desenvolvedores.includes(name)) { toast('Dev já existe.', 'err'); return; }
@@ -1414,16 +1414,18 @@ function addDev() {
   renderDevsList();
   renderFilters();
   renderGantt();
+  await saveToGitHub();
   toast('Dev adicionado.', 'ok');
 }
 
-function removeDev(i) {
+async function removeDev(i) {
   const name = state.desenvolvedores[i];
   if (!confirm(`Remover "${name}"?`)) return;
   state.desenvolvedores.splice(i, 1);
   renderDevsList();
   renderFilters();
   renderGantt();
+  await saveToGitHub();
   toast('Dev removido.', 'ok');
 }
 
