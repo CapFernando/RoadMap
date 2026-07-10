@@ -115,6 +115,17 @@
 
     /* ── EMPTY ── */
     .empty-col { color:var(--text3); font-size:12px; text-align:center; padding:20px 0; }
+
+    /* ── DEPENDÊNCIAS ── */
+    .kcard-parent-info { font-size:11px; color:var(--purple-tx); background:var(--purple-bg); border-radius:4px; padding:3px 8px; margin-bottom:6px; display:inline-block; }
+    .kcard-dep-section { border-top:1px solid var(--border); margin-top:8px; padding-top:8px; }
+    .dep-row { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text2); padding:4px 0; flex-wrap:wrap; border-bottom:1px solid var(--border); }
+    .dep-row:last-of-type { border-bottom:none; }
+    .dep-row.dep-done { color:var(--teal-tx); opacity:.7; }
+    .dep-row.dep-open { color:var(--amber-tx); }
+    .dep-blocked-banner { background:var(--red-bg); color:var(--red-tx); border-radius:5px; padding:5px 8px; font-size:11px; margin-top:6px; font-weight:600; }
+    .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
+    .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
   </style>
 </head>
 <body>
@@ -242,6 +253,39 @@
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-new')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveNewDemand()">Criar demanda</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── MODAL: DEPENDÊNCIA ───────────────────────── -->
+<div id="modal-dep" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <h2>🔗 Abrir Dependência</h2>
+    <input type="hidden" id="dep-parent-id" />
+    <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Card pai</div>
+      <div id="dep-parent-title" style="font-weight:600;color:var(--text);font-size:14px;">—</div>
+      <div id="dep-parent-tema" style="font-size:12px;color:var(--text3);margin-top:2px;">—</div>
+    </div>
+    <div class="form-group">
+      <label>O que está aguardando? *</label>
+      <input type="text" id="dep-titulo" placeholder="Ex: Validação de regra pela área Fiscal" />
+    </div>
+    <div class="form-group">
+      <label>Responsável (outra área / dev) *</label>
+      <select id="dep-dev"></select>
+    </div>
+    <div class="form-group">
+      <label>Data prevista de retorno</label>
+      <input type="date" id="dep-entrega" />
+    </div>
+    <div class="form-group">
+      <label>Descrição / contexto</label>
+      <textarea id="dep-desc" placeholder="Descreva o que precisa da outra parte…"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-dep')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveNewDep()">Abrir dependência</button>
     </div>
   </div>
 </div>
@@ -594,17 +638,109 @@ function renderCard(m, colKey) {
   if (m.inicio)  meta.push(`📅 ${formatDate(m.inicio)}`);
   if (m.entrega) meta.push(`🏁 ${formatDate(m.entrega)}`);
   if (m.estimativa) meta.push(`⏱ ${m.estimativa}`);
+  // Parent info (este card é dependência de outro)
+  const parent = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
+  const parentInfo = parent
+    ? `<div class="kcard-parent-info">🔗 Dep. de: ${parent.titulo.substring(0,38)}${parent.titulo.length>38?'…':''}</div>`
+    : '';
   return `
     <div class="kcard" draggable="true" id="card-${m.id}"
          ondragstart="onDragStart(event,'${m.id}')"
          ondragend="onDragEnd(event)"
          onclick="openStatusModal('${m.id}')">
+      ${parentInfo}
       <div class="kcard-title">${m.titulo}</div>
       ${tema ? `<div class="kcard-tema">${tema}</div>` : ''}
       ${meta.length ? `<div class="kcard-meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>` : ''}
       ${m.descricao ? `<div style="font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:6px;">${m.descricao.substring(0,90)}${m.descricao.length>90?'…':''}</div>` : ''}
       <div>${badge}</div>
+      ${renderDepSection(m)}
     </div>`;
+}
+
+// ─── DEPENDÊNCIAS ────────────────────────────────────────────────
+function getDeps(parentId) {
+  return state.melhorias.filter(m => m.parent_id === parentId);
+}
+
+function hasBlockingDep(id) {
+  return getDeps(id).some(d => getStatusKey(d) !== 'concluido');
+}
+
+// Bloqueia avanço (deploy/concluido) se há dep aberta
+function checkDepBlock(id, targetColKey) {
+  if (['planejado','em_andamento','atrasado'].includes(targetColKey)) return false;
+  return hasBlockingDep(id);
+}
+
+function renderDepSection(m) {
+  const deps = getDeps(m.id);
+  const sk = getStatusKey(m);
+  if (!deps.length && sk !== 'em_andamento') return '';
+  const rows = deps.map(d => {
+    const dsk = getStatusKey(d);
+    const done = dsk === 'concluido';
+    const devName = d.dev || '—';
+    const dt = d.entrega ? formatDate(d.entrega) : 'sem data';
+    return `<div class="dep-row ${done?'dep-done':'dep-open'}">
+      <span>${done?'✅':'⏳'}</span>
+      <span><strong>${d.titulo.substring(0,32)}${d.titulo.length>32?'…':''}</strong></span>
+      <span style="color:var(--text3)">· ${devName} · ${dt}</span>
+      <span class="kcard-badge badge-${dsk}" style="font-size:10px;">${STATUS_LABELS[dsk]||dsk}</span>
+    </div>`;
+  }).join('');
+  const blocked = deps.some(d => getStatusKey(d) !== 'concluido');
+  const banner = blocked ? `<div class="dep-blocked-banner">🔒 Avanço bloqueado — aguardando dependência</div>` : '';
+  const btn = sk === 'em_andamento'
+    ? `<button class="btn-dep-open" onclick="openDepModal('${m.id}',event)">🔗 + Abrir dependência</button>`
+    : '';
+  return `<div class="kcard-dep-section">${rows}${banner}${btn}</div>`;
+}
+
+function openDepModal(parentId, event) {
+  if (event) event.stopPropagation();
+  const parent = state.melhorias.find(m => m.id === parentId);
+  if (!parent) return;
+  const tema = state.temas.find(t => t.id === parent.tema_id);
+  document.getElementById('dep-parent-id').value = parentId;
+  document.getElementById('dep-parent-title').textContent = parent.titulo;
+  document.getElementById('dep-parent-tema').textContent = tema ? tema.nome : '—';
+  document.getElementById('dep-titulo').value = '';
+  document.getElementById('dep-desc').value = '';
+  document.getElementById('dep-entrega').value = '';
+  const devs = getDevList();
+  document.getElementById('dep-dev').innerHTML =
+    '<option value="">— Selecione o responsável —</option>' +
+    devs.map(d => `<option value="${d}">${d}</option>`).join('');
+  document.getElementById('modal-dep').style.display = 'flex';
+}
+
+async function saveNewDep() {
+  const parentId = document.getElementById('dep-parent-id').value;
+  const titulo   = document.getElementById('dep-titulo').value.trim();
+  const dev      = document.getElementById('dep-dev').value;
+  const entrega  = document.getElementById('dep-entrega').value;
+  const desc     = document.getElementById('dep-desc').value.trim();
+  if (!titulo) { toast('Informe o que está aguardando.', 'err'); return; }
+  if (!dev)    { toast('Selecione o responsável.', 'err'); return; }
+  const parent = state.melhorias.find(m => m.id === parentId);
+  if (!parent) return;
+  const newDep = {
+    id: uid(), titulo, descricao: desc, dev,
+    tema_id: parent.tema_id,
+    inicio: new Date().toISOString().slice(0,10),
+    entrega,
+    status: 'iniciada',
+    status_planejamento: 'em_andamento',
+    parent_id: parentId,
+    is_dependency: true,
+    horas_realizadas: 0,
+    criado_em: new Date().toISOString(),
+  };
+  state.melhorias.push(newDep);
+  closeModal('modal-dep');
+  renderKanban();
+  await saveToGitHub({ [newDep.id]: newDep });
 }
 
 // ─── DRAG & DROP ─────────────────────────────────────────────────
@@ -638,12 +774,18 @@ function onDrop(e, colKey) {
   const col = COLUMNS.find(c => c.key === colKey);
   if (!col || col.maps.includes(curSk)) return; // mesma coluna
   // Difere para depois que dragend completar — evita re-render durante drag ativo
-  if (colKey === 'concluido') {
-    // Requer horas — abre modal em vez de mover direto
-    setTimeout(() => openStatusModal(id, colKey), 0);
-  } else {
-    setTimeout(() => updateStatus(id, colKey), 0);
-  }
+  setTimeout(() => {
+    if (checkDepBlock(id, colKey)) {
+      const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
+      toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
+      return;
+    }
+    if (colKey === 'concluido') {
+      openStatusModal(id, colKey); // requer horas
+    } else {
+      updateStatus(id, colKey);
+    }
+  }, 0);
 }
 
 // ─── STATUS MODAL ────────────────────────────────────────────────
@@ -654,12 +796,28 @@ function openStatusModal(id, preselect) {
   const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '—';
   document.getElementById('ms-id').value = id;
   document.getElementById('ms-title').textContent = m.titulo;
+  const deps = getDeps(m.id);
+  const depsInfoHTML = deps.length ? `
+    <div style="background:var(--bg3);border-radius:6px;padding:10px 12px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin-bottom:6px;">Dependências</div>
+      ${deps.map(d => {
+        const dsk = getStatusKey(d);
+        return `<div style="font-size:12px;margin-bottom:4px;display:flex;gap:6px;align-items:center;">
+          <span>${dsk==='concluido'?'✅':'⏳'}</span>
+          <span style="flex:1">${d.titulo}</span>
+          <span style="color:var(--text3)">${d.dev||'—'}</span>
+          <span style="color:var(--text3)">${d.entrega?formatDate(d.entrega):''}</span>
+          <span class="kcard-badge badge-${dsk}" style="font-size:10px;">${STATUS_LABELS[dsk]||dsk}</span>
+        </div>`;
+      }).join('')}
+    </div>` : '';
   document.getElementById('ms-info').innerHTML = `
     <div class="modal-info-row"><span>Tema:</span><strong>${tema}</strong></div>
     ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${m.dev}</strong></div>` : ''}
     ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
     ${m.entrega ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${m.descricao}</div>` : ''}
+    ${depsInfoHTML}
   `;
   const sel = document.getElementById('ms-status');
   sel.value = preselect || COLUMNS.find(c => c.maps.includes(sk))?.key || sk;
@@ -685,6 +843,12 @@ function onStatusModalChange() {
 async function saveStatus() {
   const id = document.getElementById('ms-id').value;
   const newColKey = document.getElementById('ms-status').value;
+  // Bloqueio por dependência
+  if (checkDepBlock(id, newColKey)) {
+    const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
+    toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
+    return;
+  }
   if (newColKey === 'concluido') {
     const horas = parseFloat(document.getElementById('ms-horas').value);
     if (!horas || horas <= 0) { toast('Informe as horas de desenvolvimento.', 'err'); return; }

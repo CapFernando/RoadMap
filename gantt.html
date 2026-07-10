@@ -533,6 +533,7 @@
         <input type="date" id="e-data-solic" />
       </div>
     </div>
+    <div id="e-dep-info" style="display:none"></div>
     <div class="form-group">
       <label>Observação</label>
       <textarea id="e-obs" rows="2" placeholder="Notas internas…"></textarea>
@@ -1121,6 +1122,8 @@ function renderGantt() {
         onmouseleave="hideTooltip()">
         <div class="card-row1">
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
+          ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
+          ${state.melhorias.some(x => x.parent_id === m.id && x.status_planejamento !== 'concluido') ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;">⏳</span>` : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>
         ${tema ? `<div class="card-tema-row"><span class="tema-badge" style="background:${tColor}25;color:${tColor};border-color:${tColor}55">${esc(tema.nome)}</span></div>` : ''}
@@ -1281,6 +1284,32 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-data-solic').value  = m?.data_solicitacao || '';
   document.getElementById('e-obs').value       = m?.observacao || '';
   atualizaHorasPlanGantt();
+
+  // Info de dependência
+  const existingDepEl = document.getElementById('e-dep-info');
+  let depHtml = '';
+  if (m?.parent_id) {
+    const par = state.melhorias.find(x => x.id === m.parent_id);
+    depHtml += `<div style="background:#341A6E33;border:1px solid #9B6FE855;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12px;">
+      🔗 <strong>Dependência de:</strong> ${par ? esc(par.titulo) : '(removido)'}
+    </div>`;
+  }
+  const childDeps = m ? state.melhorias.filter(x => x.parent_id === m.id) : [];
+  if (childDeps.length) {
+    depHtml += `<div style="background:var(--bg3,#1E1E1C);border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:8px;">
+      <div style="font-weight:600;margin-bottom:6px;color:var(--text2,#A8A49A);">Dependências:</div>
+      ${childDeps.map(d => {
+        const done = d.status_planejamento === 'concluido';
+        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+          <span>${done?'✅':'⏳'}</span>
+          <span style="flex:1">${esc(d.titulo)}</span>
+          <span style="color:var(--text3,#6E6A62)">${d.dev||'—'}</span>
+          <span style="color:var(--text3,#6E6A62)">${d.entrega||''}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+  if (existingDepEl) { existingDepEl.innerHTML = depHtml; existingDepEl.style.display = depHtml ? 'block' : 'none'; }
 
   document.getElementById('modal-main').style.display = 'flex';
   setTimeout(() => document.getElementById('e-titulo').focus(), 50);
