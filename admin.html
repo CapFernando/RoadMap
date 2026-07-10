@@ -168,10 +168,11 @@
     @media(max-width:900px){ .ger-charts{ grid-template-columns:1fr; } }
     .ger-chart-box {
       background:var(--bg2); border:1px solid var(--border); border-radius:14px;
-      padding:22px 20px; display:flex; flex-direction:column;
+      padding:22px 20px; display:flex; flex-direction:column; align-items:center;
     }
-    .ger-chart-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:18px; letter-spacing:.01em; }
-    .ger-chart-empty { font-size:13px; color:var(--text3); padding:32px 0; text-align:center; }
+    .ger-chart-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:18px; letter-spacing:.01em; align-self:flex-start; }
+    .ger-chart-canvas-wrap { width:100%; max-width:340px; }
+    .ger-chart-empty { font-size:13px; color:var(--text3); padding:40px 0; text-align:center; }
     .ger-kpi-delta { display:block; font-size:11px; font-weight:500; margin-top:4px; }
     .delta-up   { color:var(--green); }
     .delta-down { color:var(--red); }
@@ -1124,11 +1125,15 @@ function renderGerencial() {
       <div class="ger-chart-title">${c.title}</div>
       ${!Object.keys(c.data).length
         ? '<div class="ger-chart-empty">Sem dados no período</div>'
-        : `<canvas id="${c.id}"></canvas>`}
+        : `<div class="ger-chart-canvas-wrap"><canvas id="${c.id}"></canvas></div>`}
     </div>`
   ).join('');
 
-  Chart.register(ChartDataLabels);
+  // Registra o plugin apenas uma vez
+  if (typeof ChartDataLabels !== 'undefined' && !Chart._dlRegistered) {
+    Chart.register(ChartDataLabels);
+    Chart._dlRegistered = true;
+  }
 
   chartDefs.forEach(c => {
     const labels = Object.keys(c.data);
@@ -1140,51 +1145,64 @@ function renderGerencial() {
     if (!ctx) return;
 
     gerCharts[c.id] = new Chart(ctx, {
-      type: 'bar',
+      type: 'doughnut',
       data: {
         labels,
         datasets: [{
           data: vals,
-          backgroundColor: colors.map(c => c + 'CC'),
-          borderColor:     colors,
-          borderWidth: 2,
-          borderRadius: 6,
-          borderSkipped: false,
+          backgroundColor: colors,
+          borderColor: '#161614',
+          borderWidth: 3,
+          hoverOffset: 8,
         }]
       },
       options: {
-        indexAxis: 'y',
         responsive: true,
-        maintainAspectRatio: false,
-        layout: { padding: { right: 16 } },
+        cutout: '52%',
+        layout: { padding: 20 },
         plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.raw}h (${Math.round(ctx.raw/total*100)}%)` } },
-          datalabels: {
-            anchor: 'end',
-            align: 'end',
-            color: '#ECEAE2',
-            font: { size: 13, weight: '700', family: 'Inter' },
-            formatter: (val) => `${val}h`,
-            clamp: true,
-          }
-        },
-        scales: {
-          x: {
-            grid:  { color: '#2E2E2B' },
-            ticks: { color: '#6E6A62', font:{ size:11 }, callback: v => v+'h' },
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: '#ECEAE2',
+              font: { size: 12, weight: '600', family: 'Inter' },
+              boxWidth: 14,
+              boxHeight: 14,
+              padding: 14,
+              usePointStyle: true,
+              pointStyle: 'circle',
+              // Mostra valor na legenda também
+              generateLabels: chart => {
+                const ds = chart.data.datasets[0];
+                return chart.data.labels.map((lbl, i) => ({
+                  text: `${lbl}  •  ${ds.data[i]}h  (${Math.round(ds.data[i]/total*100)}%)`,
+                  fillStyle: ds.backgroundColor[i],
+                  strokeStyle: ds.backgroundColor[i],
+                  lineWidth: 0,
+                  hidden: false,
+                  index: i,
+                  pointStyle: 'circle',
+                }));
+              }
+            }
           },
-          y: {
-            grid:  { display: false },
-            ticks: { color: '#ECEAE2', font:{ size: 12, weight:'500' } },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.raw}h — ${Math.round(ctx.raw/total*100)}% do total`
+            }
+          },
+          datalabels: {
+            display: ctx => ctx.dataset.data[ctx.dataIndex] / total >= 0.04,
+            color: '#fff',
+            font: { size: 13, weight: '800', family: 'Inter' },
+            textShadowColor: 'rgba(0,0,0,.6)',
+            textShadowBlur: 6,
+            formatter: (val) => `${val}h\n${Math.round(val/total*100)}%`,
+            textAlign: 'center',
           }
         }
       }
     });
-
-    // Ajusta altura dinamicamente conforme qtd de itens
-    const canvasEl = document.getElementById(c.id);
-    if (canvasEl) canvasEl.parentElement.style.minHeight = Math.max(180, labels.length * 44 + 40) + 'px';
   });
 
   // ── Tabela ───────────────────────────────────────────────────────
