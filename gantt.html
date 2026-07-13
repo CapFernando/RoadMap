@@ -900,7 +900,7 @@ function applyFilters() {
 function matchesFilters(m) {
   if (m.oculto) return false;
   if (filters.tema   && m.tema_id !== filters.tema)                 return false;
-  if (filters.dev    && !splitDevs(m.dev).includes(filters.dev))    return false;
+  if (filters.dev && filters.dev !== '__all__' && !splitDevs(m.dev).includes(filters.dev)) return false;
   if (filters.prio   && (m.prioridade||'') !== filters.prio)        return false;
   if (filters.sprint && !(m.sprint||'').toLowerCase().includes(filters.sprint)) return false;
   if (filters.status && (m.status_planejamento||'backlog') !== filters.status) return false;
@@ -926,7 +926,8 @@ function renderFilters() {
   // dev
   const fd = document.getElementById('f-dev');
   const dv = fd ? fd.value : '';
-  fd.innerHTML = `<option value="">Todos devs</option>` +
+  fd.innerHTML = `<option value="">Com demanda no mês</option>` +
+    `<option value="__all__" ${dv==='__all__'?'selected':''}>Todos devs</option>` +
     state.desenvolvedores.map(d => `<option value="${d}" ${dv===d?'selected':''}>${d}</option>`).join('');
 }
 
@@ -1040,7 +1041,7 @@ function renderGantt() {
   const dayW = workDays.length > 0 ? Math.max(44, Math.floor(available / workDays.length)) : 52;
   document.documentElement.style.setProperty('--day-w', dayW + 'px');
 
-  const devs = state.desenvolvedores.length ? state.desenvolvedores : ['(sem dev)'];
+  let devs = state.desenvolvedores.length ? state.desenvolvedores : ['(sem dev)'];
   const table = document.getElementById('gantt-table');
 
   if (!devs.length) {
@@ -1050,6 +1051,23 @@ function renderGantt() {
 
   // filter melhorias
   const visible = state.melhorias.filter(m => !m.oculto && matchesFilters(m));
+
+  // linhas de dev: padrão mostra só quem tem demanda no mês selecionado;
+  // "__all__" mostra todos; dev específico mostra apenas ele
+  if (filters.dev && filters.dev !== '__all__') {
+    devs = devs.filter(d => d === filters.dev);
+  } else if (!filters.dev && workDays.length) {
+    const mStart = workDays[0].str, mEnd = workDays[workDays.length - 1].str;
+    devs = devs.filter(dev => visible.some(m => {
+      if (!splitDevs(m.dev).includes(dev)) return false;
+      const s = m.inicio || m.entrega, e = m.entrega || m.inicio;
+      return s && s <= mEnd && e >= mStart;
+    }));
+    if (!devs.length) {
+      table.innerHTML = '<div class="empty-gantt"><p>Nenhuma demanda lançada neste mês. Selecione "Todos devs" no filtro para ver todos os desenvolvedores.</p></div>';
+      return;
+    }
+  }
 
   // build HTML
   let html = '';
