@@ -81,6 +81,16 @@
     .header-left { display: flex; align-items: center; gap: 16px; }
     .header-left h1 { font-size: 17px; font-weight: 600; white-space: nowrap; }
     .month-nav { display: flex; align-items: center; gap: 4px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 2px; }
+    /* modo visualização (somente leitura) */
+    body.viewer .header-right,
+    body.viewer .header-left a,
+    body.viewer #btn-viewlink { display: none !important; }
+    body.viewer .gantt-card { cursor: default; }
+    body.viewer::after {
+      content: '👁 Modo visualização'; position: fixed; bottom: 14px; right: 14px;
+      background: var(--bg3); border: 1px solid var(--border2); color: var(--text2);
+      font-size: 12px; padding: 6px 12px; border-radius: 8px; z-index: 300; pointer-events: none;
+    }
     .month-nav span { font-size: 14px; font-weight: 600; min-width: 130px; text-align: center; }
     .header-right { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
@@ -400,6 +410,7 @@
         <span id="month-label">—</span>
         <button class="btn btn-nav" onclick="nextMonth()">›</button>
       </div>
+      <button id="btn-viewlink" class="btn btn-ghost btn-sm" onclick="copiarLinkVisualizacao()" title="Gerar link de visualização (somente leitura)">🔗 Link Visualização</button>
     </div>
     <div class="header-right">
       <button class="btn btn-secondary btn-sm" onclick="openDevsModal()">👥 Gerenciar Devs</button>
@@ -552,7 +563,7 @@
         <button id="delete-btn" class="btn delete-btn" onclick="deleteCurrent()" style="display:none">Excluir</button>
         <button id="backlog-btn" class="btn btn-secondary" onclick="returnToBacklog()" style="display:none;border-color:var(--amber);color:var(--amber-tx)">↩ Voltar ao Backlog</button>
       </div>
-      <button class="btn btn-primary" onclick="saveTask()">Salvar</button>
+      <button id="save-btn" class="btn btn-primary" onclick="saveTask()">Salvar</button>
     </div>
   </div>
 </div>
@@ -655,7 +666,27 @@ function getWorkingDaysOfMonth(year, month) {
 // ── LOGIN ─────────────────────────────────────────────────────────────────
 let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
 
+const VIEW_KEY = 'vz-audax-26';
+const VIEWER_MODE = new URLSearchParams(location.search).get('view') === VIEW_KEY;
+
+function copiarLinkVisualizacao() {
+  const link = location.origin + location.pathname + '?view=' + VIEW_KEY;
+  navigator.clipboard.writeText(link)
+    .then(() => toast('Link de visualização copiado!', 'ok'))
+    .catch(() => prompt('Copie o link:', link));
+}
+
 function initLoginScreen() {
+  if (VIEWER_MODE) {
+    document.body.classList.add('viewer');
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('gantt-app').style.display = 'block';
+    const now = new Date();
+    viewYear = now.getFullYear();
+    viewMonth = now.getMonth();
+    loadFromGitHub();
+    return;
+  }
   if (!runtimeToken) document.getElementById('token-field').style.display = 'block';
   // auto-bypass: se já fez login antes neste dispositivo, entra direto
   if (localStorage.getItem('rm_logged') === '1' && runtimeToken) {
@@ -738,15 +769,23 @@ function debouncedSave() {
 
 async function loadFromGitHub() {
   try {
-    const res = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
-    });
-    if (res.status === 404) { renderAll(); return; }
-    if (!res.ok) throw new Error('Erro ao carregar dados do GitHub.');
-    const json = await res.json();
-    fileSha = json.sha;
-    const decoded = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
+    let decoded;
+    if (VIEWER_MODE) {
+      // leitura pública, sem token — arquivo servido pelo próprio site
+      const res = await fetch('data/melhorias.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error('Erro ao carregar dados.');
+      decoded = await res.json();
+    } else {
+      const res = await fetch(API_URL + '?t=' + Date.now(), {
+        cache: 'no-store',
+        headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
+      });
+      if (res.status === 404) { renderAll(); return; }
+      if (!res.ok) throw new Error('Erro ao carregar dados do GitHub.');
+      const json = await res.json();
+      fileSha = json.sha;
+      decoded = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
+    }
     state = {
       temas:         decoded.temas         || [],
       melhorias:     decoded.melhorias      || [],
@@ -775,6 +814,7 @@ async function loadFromGitHub() {
 }
 
 async function saveToGitHub() {
+  if (VIEWER_MODE) return;
   showSaving(true);
   try {
     // Busca SHA mais recente — obrigatório para evitar conflito
@@ -1213,6 +1253,7 @@ let dragData = { type: null, id: null }; // type: 'card' | 'backlog'
 let _cardWasDragged = false;
 
 function onCardDragStart(e, id) {
+  if (VIEWER_MODE) { e.preventDefault(); return; }
   _cardWasDragged = true;
   dragData = { type: 'card', id };
   e.dataTransfer.effectAllowed = 'move';
@@ -1229,6 +1270,7 @@ function onCardDragEnd(e, id) {
 }
 
 function onBacklogDragStart(e, id) {
+  if (VIEWER_MODE) { e.preventDefault(); return; }
   dragData = { type: 'backlog', id };
   e.dataTransfer.effectAllowed = 'move';
 }
@@ -1313,6 +1355,7 @@ function onLayerDragLeave(e) {
 }
 
 function onLayerDrop(e, dev) {
+  if (VIEWER_MODE) return;
   e.preventDefault();
   document.querySelectorAll('.day-cell.drop-over').forEach(c => c.classList.remove('drop-over'));
   const d = _layerDayFromEvent(e);
@@ -1347,6 +1390,7 @@ function onDayCellClick(e, dev, date) {
 }
 
 function onLayerClick(e, dev) {
+  if (VIEWER_MODE) return;
   // Card click is handled by onCardClick on the card itself
   if (e.target.closest('.gantt-card')) return;
   // Click on empty space → create new task for that day
@@ -1424,6 +1468,15 @@ function openModal(id, prefillDev, prefillDate) {
     </div>`;
   }
   if (existingDepEl) { existingDepEl.innerHTML = depHtml; existingDepEl.style.display = depHtml ? 'block' : 'none'; }
+
+  // Modo visualização: campos desabilitados e ações de escrita ocultas
+  if (VIEWER_MODE) {
+    document.querySelectorAll('#modal-main input, #modal-main select, #modal-main textarea')
+      .forEach(el => el.disabled = true);
+    document.getElementById('save-btn').style.display    = 'none';
+    document.getElementById('delete-btn').style.display  = 'none';
+    document.getElementById('backlog-btn').style.display = 'none';
+  }
 
   document.getElementById('modal-main').style.display = 'flex';
   setTimeout(() => document.getElementById('e-titulo').focus(), 50);
