@@ -374,7 +374,7 @@ const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}
   const qp = new URLSearchParams(location.search);
   const hp = new URLSearchParams(location.hash.slice(1));
   const t  = qp.get('token') || hp.get('token');
-  if (t && t.startsWith('ghp_')) {
+  if (t && (t.startsWith('ghp_') || t.startsWith('github_pat_'))) {
     localStorage.setItem('rm_token', t);
     // Link com token = credencial completa; pula etapa de senha
     sessionStorage.setItem('rm_dev_authed', '1');

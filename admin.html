@@ -688,7 +688,7 @@ const _deletedIds = new Set();
   const hash = location.hash.slice(1);
   const params = new URLSearchParams(hash);
   const t = params.get('token');
-  if (t && t.startsWith('ghp_')) {
+  if (t && (t.startsWith('ghp_') || t.startsWith('github_pat_'))) {
     localStorage.setItem('rm_token', t);
     history.replaceState(null, '', location.pathname + location.search); // limpa o hash da URL
   }
@@ -1100,7 +1100,7 @@ function gerarLinkAcesso() {
   const token = document.getElementById('acesso-token-input').value.trim();
   const box   = document.getElementById('acesso-link-box');
   const out   = document.getElementById('acesso-link-output');
-  if (!token || !token.startsWith('ghp_')) { box.style.display = 'none'; return; }
+  if (!token || !(token.startsWith('ghp_') || token.startsWith('github_pat_'))) { box.style.display = 'none'; return; }
   const base = location.origin + location.pathname.replace('admin.html', 'dev.html');
   out.value = `${base}?token=${token}`;
   box.style.display = 'block';
