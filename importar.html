@@ -396,6 +396,15 @@ function buildPrioSel(val) {
   return `<select>${['','alta','media','baixa'].map(p=>`<option value="${p}"${val===p?' selected':''}>${p||'—'}</option>`).join('')}</select>`;
 }
 
+function buildTemaSel(val) {
+  const v = (val||'').trim();
+  const known = temas.some(t => t.nome.toLowerCase() === v.toLowerCase());
+  let opts = `<option value=""${!v?' selected':''}>—</option>`;
+  opts += temas.map(t => `<option value="${esc(t.nome)}"${v.toLowerCase()===t.nome.toLowerCase()?' selected':''}>${esc(t.nome)}</option>`).join('');
+  if (v && !known) opts += `<option value="${esc(v)}" selected>${esc(v)} (novo)</option>`;
+  return `<select class="tema-sel">${opts}</select>`;
+}
+
 // ── TABLE ────────────────────────────────────────────────────────────────────
 function addRow(data={}) {
   const tbody = document.getElementById('input-tbody');
@@ -404,7 +413,7 @@ function addRow(data={}) {
   tr.innerHTML = `
     <td class="row-num"></td>
     <td class="col-w-titulo"><input type="text" placeholder="Ex: Validação de regra de crédito" value="${esc(data.titulo||'')}"></td>
-    <td class="col-w-sm"><input type="text" list="tema-list" placeholder="Ex: AxCred" value="${esc(data.tema||'')}"></td>
+    <td class="col-w-sm">${buildTemaSel(data.tema||'')}</td>
     <td class="col-w-sm"><input type="text" list="dev-list" placeholder="Ex: Gabriel / Ana" value="${esc(data.dev||'')}"></td>
     <td class="col-w-sm">${buildStatusSel(data.status||'planejado')}</td>
     <td class="col-w-date"><input type="date" value="${esc(data.inicio||'')}"></td>
@@ -435,13 +444,20 @@ function updateRowCount() {
 
 // Datalists
 window.addEventListener('DOMContentLoaded', () => {
-  ['tema-list','dev-list'].forEach(id => { const dl=document.createElement('datalist'); dl.id=id; document.body.append(dl); });
+  ['dev-list'].forEach(id => { const dl=document.createElement('datalist'); dl.id=id; document.body.append(dl); });
 });
+let _temaSelCount = -1;
 setInterval(() => {
-  const dl1 = document.getElementById('tema-list');
   const dl2 = document.getElementById('dev-list');
-  if (dl1) dl1.innerHTML = temas.map(t=>`<option value="${t.nome}">`).join('');
   if (dl2) dl2.innerHTML = devs.map(d=>`<option value="${d}">`).join('');
+  // repopula os selects de tema quando a lista de temas carregar/mudar
+  if (temas.length !== _temaSelCount) {
+    _temaSelCount = temas.length;
+    document.querySelectorAll('#input-tbody .tema-sel').forEach(sel => {
+      const cur = sel.value;
+      sel.outerHTML = buildTemaSel(cur);
+    });
+  }
 }, 600);
 
 // ── CSV ───────────────────────────────────────────────────────────────────────
