@@ -546,8 +546,14 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Tema *</label>
-        <select id="m-tema"></select>
+        <label>Sistema *</label>
+        <select id="m-sistema" onchange="onSistemaChange('m')"></select>
+        <input type="text" id="m-sistema-novo" placeholder="Nome do novo sistema" style="display:none;margin-top:6px">
+      </div>
+      <div class="form-group">
+        <label>Módulo</label>
+        <select id="m-modulo" onchange="onModuloChange('m')"></select>
+        <input type="text" id="m-modulo-novo" placeholder="Nome do novo módulo" style="display:none;margin-top:6px">
       </div>
       <div class="form-group">
         <label>Status *</label>
@@ -1423,10 +1429,8 @@ function openModalMelhoria(id) {
   document.getElementById('m-horas-real').value      = m?.horas_realizadas != null ? m.horas_realizadas : '';
   atualizaHorasPlanejadas();
 
-  // preenche temas no select
-  const sel = document.getElementById('m-tema');
-  sel.innerHTML = state.temas.map(t => `<option value="${t.id}" ${m?.tema_id===t.id?'selected':''}>${t.nome}</option>`).join('');
-  if (!state.temas.length) sel.innerHTML = '<option value="">— Cadastre um tema primeiro —</option>';
+  // preenche Sistema / Módulo a partir do tema atual
+  populateSistemaModulo('m', m?.tema_id);
 
   document.getElementById('m-status').value = statusKey(m || {}) || 'backlog';
   onStatusChange();
@@ -1496,12 +1500,72 @@ function atualizaHorasPlanejadas() {
 // mapa sp → status legado (para compatibilidade com outros campos)
 const SP_TO_STATUS = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
 
+// ── SISTEMA / MÓDULO (tema = "Sistema - Módulo") ──────────────────────────
+function parseTemaNome(nome) {
+  const i = (nome||'').indexOf(' - ');
+  return i < 0 ? { sistema:(nome||'').trim(), modulo:'' }
+               : { sistema:nome.slice(0,i).trim(), modulo:nome.slice(i+3).trim() };
+}
+function temaSistemas() {
+  return [...new Set(state.temas.map(t => parseTemaNome(t.nome).sistema).filter(Boolean))];
+}
+function temaModulos(sis) {
+  return [...new Set(state.temas.map(t => parseTemaNome(t.nome))
+    .filter(p => p.sistema.toLowerCase() === (sis||'').toLowerCase() && p.modulo)
+    .map(p => p.modulo))];
+}
+function populateSistemaModulo(prefix, temaId) {
+  const cur    = temaId ? state.temas.find(t => t.id === temaId) : null;
+  const parsed = cur ? parseTemaNome(cur.nome) : { sistema:'', modulo:'' };
+  const sisSel = document.getElementById(prefix+'-sistema');
+  const sistemas = temaSistemas();
+  if (parsed.sistema && !sistemas.some(s => s.toLowerCase() === parsed.sistema.toLowerCase())) sistemas.push(parsed.sistema);
+  sisSel.innerHTML = '<option value="">—</option>' +
+    sistemas.map(s => `<option value="${s}"${s.toLowerCase()===parsed.sistema.toLowerCase()?' selected':''}>${s}</option>`).join('') +
+    '<option value="__novo__">➕ Novo sistema…</option>';
+  const sn = document.getElementById(prefix+'-sistema-novo');
+  sn.style.display = 'none'; sn.value = '';
+  populateModulos(prefix, parsed.sistema, parsed.modulo);
+}
+function populateModulos(prefix, sistema, selMod) {
+  const modSel = document.getElementById(prefix+'-modulo');
+  const mods = temaModulos(sistema);
+  if (selMod && !mods.some(m => m.toLowerCase() === selMod.toLowerCase())) mods.push(selMod);
+  modSel.innerHTML = '<option value="">—</option>' +
+    mods.map(m => `<option value="${m}"${selMod && m.toLowerCase()===selMod.toLowerCase()?' selected':''}>${m}</option>`).join('') +
+    '<option value="__novo__">➕ Novo módulo…</option>';
+  const mn = document.getElementById(prefix+'-modulo-novo');
+  mn.style.display = 'none'; mn.value = '';
+}
+function onSistemaChange(prefix) {
+  const sel = document.getElementById(prefix+'-sistema');
+  document.getElementById(prefix+'-sistema-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
+  populateModulos(prefix, sel.value === '__novo__' ? '' : sel.value, '');
+}
+function onModuloChange(prefix) {
+  const sel = document.getElementById(prefix+'-modulo');
+  document.getElementById(prefix+'-modulo-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
+}
+// Resolve a seleção em um tema_id; cria o tema se não existir. Vazio → mantém o atual.
+function resolveTemaSelecao(prefix, fallbackTemaId) {
+  const sisSel = document.getElementById(prefix+'-sistema');
+  const sis = sisSel.value === '__novo__' ? document.getElementById(prefix+'-sistema-novo').value.trim() : sisSel.value;
+  if (!sis) return fallbackTemaId || '';
+  const modSel = document.getElementById(prefix+'-modulo');
+  const mod = modSel.value === '__novo__' ? document.getElementById(prefix+'-modulo-novo').value.trim() : modSel.value;
+  const nome = mod ? `${sis} - ${mod}` : sis;
+  let t = state.temas.find(x => (x.nome||'').toLowerCase() === nome.toLowerCase());
+  if (!t) { t = { id: uid(), nome }; state.temas.push(t); }
+  return t.id;
+}
+
 function saveMelhoria() {
   const titulo = document.getElementById('m-titulo').value.trim();
-  const temaId = document.getElementById('m-tema').value;
+  const temaId = resolveTemaSelecao('m', document.getElementById('m-id').value ? (state.melhorias.find(x => x.id === document.getElementById('m-id').value)||{}).tema_id : '');
   const sp     = document.getElementById('m-status').value; // agora é o status_planejamento
   if (!titulo) { toast('Informe o título.', 'err'); return; }
-  if (!temaId) { toast('Selecione um tema.', 'err'); return; }
+  // sistema obrigatório apenas para novas demandas; existentes sem tema permanecem como estão
+  if (!temaId && !document.getElementById('m-id').value) { toast('Selecione o sistema.', 'err'); return; }
   if (sp === 'negada' && !document.getElementById('m-motivo').value.trim()) {
     toast('Informe o motivo da negativa.', 'err'); return;
   }
