@@ -651,8 +651,13 @@
     <h2 id="modal-tema-title">Novo tema</h2>
     <input type="hidden" id="t-id" />
     <div class="form-group">
-      <label>Nome do tema *</label>
-      <input type="text" id="t-nome" placeholder="Ex: AXCRED - Reanálise" />
+      <label>Sistema *</label>
+      <select id="t-sistema" onchange="document.getElementById('t-sistema-novo').style.display=this.value==='__novo__'?'block':'none'"></select>
+      <input type="text" id="t-sistema-novo" placeholder="Nome do novo sistema" style="display:none;margin-top:6px" />
+    </div>
+    <div class="form-group">
+      <label>Módulo</label>
+      <input type="text" id="t-modulo" placeholder="Ex: Reanálise (opcional)" />
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-tema')">Cancelar</button>
@@ -1385,17 +1390,31 @@ function renderGerencial() {
 // ─── MODAL TEMA ───────────────────────────────────────────────────
 function openModalTema(id) {
   document.getElementById('t-id').value = id || '';
-  document.getElementById('t-nome').value = id ? (state.temas.find(t=>t.id===id)?.nome || '') : '';
+  const parsed = id ? parseTemaNome(state.temas.find(t=>t.id===id)?.nome || '') : { sistema:'', modulo:'' };
+  const sisSel = document.getElementById('t-sistema');
+  const sistemas = temaSistemas();
+  if (parsed.sistema && !sistemas.some(s => s.toLowerCase() === parsed.sistema.toLowerCase())) sistemas.push(parsed.sistema);
+  sisSel.innerHTML = '<option value="">—</option>' +
+    sistemas.map(s => `<option value="${s}"${s.toLowerCase()===parsed.sistema.toLowerCase()?' selected':''}>${s}</option>`).join('') +
+    '<option value="__novo__">➕ Novo sistema…</option>';
+  const sn = document.getElementById('t-sistema-novo');
+  sn.style.display = 'none'; sn.value = '';
+  document.getElementById('t-modulo').value = parsed.modulo;
   document.getElementById('modal-tema-title').textContent = id ? 'Editar tema' : 'Novo tema';
   document.getElementById('modal-tema').style.display = 'flex';
 }
 function saveTema() {
-  const nome = document.getElementById('t-nome').value.trim();
-  if (!nome) { toast('Informe o nome do tema.', 'err'); return; }
+  const sisSel = document.getElementById('t-sistema');
+  const sis = sisSel.value === '__novo__' ? document.getElementById('t-sistema-novo').value.trim() : sisSel.value;
+  if (!sis) { toast('Selecione o sistema.', 'err'); return; }
+  const mod = document.getElementById('t-modulo').value.trim();
+  const nome = mod ? `${sis} - ${mod}` : sis;
   const id = document.getElementById('t-id').value;
+  const dup = state.temas.find(t => (t.nome||'').toLowerCase() === nome.toLowerCase() && t.id !== id);
+  if (dup) { toast('Já existe um tema com esse Sistema/Módulo.', 'err'); return; }
   if (id) {
     const t = state.temas.find(t => t.id === id);
-    if (t) t.nome = nome;
+    if (t) t.nome = nome; // mesmo id: demandas vinculadas não são afetadas
   } else {
     state.temas.push({ id: uid(), nome });
   }
