@@ -242,6 +242,7 @@
       <div id="ms-horas-plan" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:6px;padding:8px 12px;margin-bottom:12px;"></div>
     </div>
     <div class="form-actions">
+      <button class="btn btn-secondary" onclick="openEditDemand(document.getElementById('ms-id').value)" style="margin-right:auto">✏️ Editar demanda</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-status')">Fechar</button>
       <button class="btn btn-primary" onclick="saveStatus()">Salvar status</button>
     </div>
@@ -251,7 +252,8 @@
 <!-- ─── MODAL: NOVA DEMANDA ──────────────────────── -->
 <div id="modal-new" class="modal-overlay" style="display:none">
   <div class="modal">
-    <h2>Nova Demanda</h2>
+    <h2 id="modal-new-title">Nova Demanda</h2>
+    <input type="hidden" id="n-id" />
     <div class="form-group">
       <label>Título *</label>
       <input type="text" id="n-titulo" placeholder="Descreva a demanda" />
@@ -290,7 +292,7 @@
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-new')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveNewDemand()">Criar demanda</button>
+      <button class="btn btn-primary" id="btn-save-demand" onclick="saveNewDemand()">Criar demanda</button>
     </div>
   </div>
 </div>
@@ -1118,13 +1120,47 @@ async function updateStatus(id, colKey, horasRealizadas) {
 
 // ─── NOVA DEMANDA ────────────────────────────────────────────────
 function openNewModal() {
+  document.getElementById('n-id').value = '';
   document.getElementById('n-titulo').value = '';
   document.getElementById('n-desc').value = '';
   document.getElementById('n-inicio').value = '';
   document.getElementById('n-entrega').value = '';
+  resetStatusOptions();
   document.getElementById('n-status').value = 'planejado';
+  document.getElementById('modal-new-title').textContent = 'Nova Demanda';
+  document.getElementById('btn-save-demand').textContent = 'Criar demanda';
   // Popula Sistema / Módulo
   populateSistemaModulo('n', null);
+  document.getElementById('modal-new').style.display = 'flex';
+}
+
+function resetStatusOptions() {
+  document.getElementById('n-status').innerHTML = `
+    <option value="backlog">Backlog (aguardando planejamento)</option>
+    <option value="planejado">Planejado</option>
+    <option value="em_andamento">Em Andamento</option>`;
+}
+
+function openEditDemand(id) {
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  closeModal('modal-status');
+  document.getElementById('n-id').value = m.id;
+  document.getElementById('n-titulo').value = m.titulo || '';
+  document.getElementById('n-desc').value = m.descricao || '';
+  document.getElementById('n-inicio').value = m.inicio || '';
+  document.getElementById('n-entrega').value = m.entrega || '';
+  // status atual pode estar fora das opções padrão (deploy, concluído…) — inclui se necessário
+  resetStatusOptions();
+  const sk = getStatusKey(m);
+  const sel = document.getElementById('n-status');
+  if (!Array.from(sel.options).some(o => o.value === sk)) {
+    sel.innerHTML += `<option value="${sk}">${STATUS_LABELS[sk] || sk}</option>`;
+  }
+  sel.value = sk;
+  document.getElementById('modal-new-title').textContent = 'Editar Demanda';
+  document.getElementById('btn-save-demand').textContent = 'Salvar alterações';
+  populateSistemaModulo('n', m.tema_id);
   document.getElementById('modal-new').style.display = 'flex';
 }
 
@@ -1187,33 +1223,41 @@ function resolveTemaSelecao(prefix, fallbackTemaId) {
 }
 
 async function saveNewDemand() {
+  const editId   = document.getElementById('n-id').value;
+  const existing = editId ? state.melhorias.find(x => x.id === editId) : null;
   const titulo = document.getElementById('n-titulo').value.trim();
   const temasBefore = state.temas.length;
-  const temaId = resolveTemaSelecao('n', '');
+  const temaId = resolveTemaSelecao('n', existing?.tema_id || '');
   if (!titulo) { toast('Informe o título.','err'); return; }
   if (!temaId) { toast('Selecione o sistema.','err'); return; }
   const sp = document.getElementById('n-status').value;
-  const spToStatus = { backlog:'recebida', planejado:'estimada', em_andamento:'iniciada' };
-  const newM = {
-    id: uid(),
+  const spToStatus = { backlog:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', atrasado:'iniciada', concluido:'iniciada' };
+  const obj = {
+    ...(existing || {}),
+    id: editId || uid(),
     titulo,
     tema_id: temaId,
     descricao: document.getElementById('n-desc').value.trim(),
-    dev: currentDev,
+    dev: existing?.dev || currentDev,
     inicio: document.getElementById('n-inicio').value || '',
     entrega: document.getElementById('n-entrega').value || '',
-    status: spToStatus[sp] || 'recebida',
+    status: spToStatus[sp] || existing?.status || 'recebida',
     status_planejamento: sp,
-    estimativa: '',
-    motivo_negacao: '',
-    criado_em: new Date().toISOString(),
+    estimativa: existing?.estimativa || '',
+    motivo_negacao: existing?.motivo_negacao || '',
+    criado_em: existing?.criado_em || new Date().toISOString(),
   };
-  // Adiciona localmente
-  state.melhorias.push(newM);
+  // Aplica localmente
+  if (existing) {
+    const idx = state.melhorias.findIndex(x => x.id === editId);
+    state.melhorias[idx] = obj;
+  } else {
+    state.melhorias.push(obj);
+  }
   closeModal('modal-new');
   renderKanban();
   // Persiste (inclui temas se um novo sistema/módulo foi criado)
-  const patch = { [newM.id]: newM };
+  const patch = { [obj.id]: obj };
   await saveToGitHub(patch, state.temas.length !== temasBefore ? { temas: state.temas } : {});
 }
 
