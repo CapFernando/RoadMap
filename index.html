@@ -764,7 +764,43 @@ async function loadData() {
 }
 
 // Aplica dados novos na UI
-function applyData(data) {
+// Captura o que o usuário está lendo (temas abertos, gráfico de devs, rolagem)
+// para restaurar após um refresh automático — evita "minimizar" a leitura.
+function captureViewState() {
+  const openTemas = [...document.querySelectorAll('.tema-body.open')].map(el => el.id);
+  const devInner = document.getElementById('chart-devs-inner');
+  return {
+    openTemas,
+    devOpen: devInner ? devInner.style.display !== 'none' : false,
+    scrollY: window.scrollY,
+  };
+}
+function restoreViewState(s) {
+  if (!s) return;
+  s.openTemas.forEach(bodyId => {
+    const body = document.getElementById(bodyId);
+    if (!body) return;
+    body.classList.add('open');
+    const arrow = document.getElementById(bodyId.replace(/-body$/, '-arrow'));
+    if (arrow) {
+      arrow.classList.add('open');
+      const header = arrow.closest('[aria-expanded]');
+      if (header) header.setAttribute('aria-expanded', 'true');
+    }
+  });
+  if (s.devOpen) {
+    const inner  = document.getElementById('chart-devs-inner');
+    const legend = document.getElementById('leg-devs');
+    const arrow  = document.getElementById('dev-chart-arrow');
+    if (inner)  inner.style.display  = '';
+    if (legend) legend.style.display = '';
+    if (arrow)  arrow.style.transform = 'rotate(180deg)';
+  }
+  window.scrollTo(0, s.scrollY);
+}
+
+function applyData(data, opts = {}) {
+  const view = opts.preserveView ? captureViewState() : null;
   _pollTs    = data.atualizado_em || null;
   _temas     = data.temas     || [];
   _melhorias = data.melhorias || [];
@@ -779,6 +815,7 @@ function applyData(data) {
   if (el) el.textContent = `Atualizado em ${dt}`;
   buildFilterBar();
   renderConteudo();
+  restoreViewState(view);
 }
 
 // Toast simples para o dashboard
@@ -812,13 +849,13 @@ async function forceRefresh() {
     if (res.ok) {
       const json = await res.json();
       const data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
-      applyData(data);
+      applyData(data, { preserveView: true });
     } else if (res.status === 403 || res.status === 429) {
       // Rate limit atingido — tenta raw URL como fallback
       const rawRes = await fetch(RAW_URL + '?nocache=' + Date.now(), { cache: 'no-store' });
       if (rawRes.ok) {
         const data = await rawRes.json();
-        applyData(data);
+        applyData(data, { preserveView: true });
         dashToast('⚠️ Limite de API atingido. Exibindo cache — alterações recentes podem levar até 5 min para aparecer.', 'err');
       } else {
         dashToast('⚠️ Limite de requisições atingido. Aguarde alguns minutos e tente novamente.', 'err');
@@ -845,7 +882,7 @@ async function checkForUpdates() {
     const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) { _polling = false; return; }
     const data = await res.json();
-    if (_pollTs !== undefined && data.atualizado_em !== _pollTs) applyData(data);
+    if (_pollTs !== undefined && data.atualizado_em !== _pollTs) applyData(data, { preserveView: true });
   } catch(_) {}
   _polling = false;
 }
