@@ -407,6 +407,7 @@
         <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova melhoria</button>
       </div>
       <div class="status-filters" id="status-filters"></div>
+      <div class="status-filters" id="prazo-filters"></div>
       <div class="status-filters" id="tema-filters"></div>
       <div id="lista-melhorias"></div>
     </div>
@@ -905,6 +906,51 @@ function statusKey(m) {
 
 let _filtroStatus = null;
 let _filtroTema   = null;
+let _filtroPrazo  = null; // null|'vencidas'|'semana'|'mes'|'sem_data'
+
+// Demanda "em aberto" (relevante para prazos): exclui concluída/negada
+function isDemandaAberta(m) {
+  const sk = statusKey(m);
+  return sk !== 'concluido' && sk !== 'negada';
+}
+// Verifica se a demanda casa com o filtro de prazo selecionado
+function matchPrazo(m, filtro) {
+  if (!filtro) return true; // geral
+  if (filtro === 'sem_data') return !m.entrega;
+  if (!m.entrega || !isDemandaAberta(m)) return false;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const e = new Date(m.entrega + 'T00:00:00');
+  if (filtro === 'vencidas') return e < hoje;
+  if (e < hoje) return false; // já vencida não conta como "vai vencer"
+  if (filtro === 'semana') { const lim = new Date(hoje); lim.setDate(lim.getDate() + 7); return e <= lim; }
+  if (filtro === 'mes')    { const lim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0); return e <= lim; }
+  return true;
+}
+
+function setFiltroPrazo(p) {
+  _filtroPrazo = p;
+  renderPrazoFilters();
+  renderMelhorias();
+}
+
+function renderPrazoFilters() {
+  const el = document.getElementById('prazo-filters');
+  if (!el) return;
+  const buckets = [
+    { key: null,        label: 'Geral' },
+    { key: 'vencidas',  label: '🔴 Vencidas' },
+    { key: 'semana',    label: '🟠 Vencem na semana' },
+    { key: 'mes',       label: '🟡 Vencem no mês' },
+    { key: 'sem_data',  label: '⚪ Sem data' },
+  ];
+  el.innerHTML = buckets.map(b => {
+    const n = b.key === null
+      ? state.melhorias.length
+      : state.melhorias.filter(m => matchPrazo(m, b.key)).length;
+    const active = _filtroPrazo === b.key ? 'active' : '';
+    return `<button class="sf-btn all ${active}" onclick="setFiltroPrazo(${b.key ? `'${b.key}'` : 'null'})">${b.label} <strong>${n}</strong></button>`;
+  }).join('');
+}
 
 function setFiltroStatus(s) {
   _filtroStatus = s;
@@ -954,7 +1000,7 @@ function renderStatusFilters() {
   }).join('');
 }
 
-function renderAll() { renderTemas(); renderStatusFilters(); renderTemaFilters(); renderMelhorias(); }
+function renderAll() { renderTemas(); renderStatusFilters(); renderPrazoFilters(); renderTemaFilters(); renderMelhorias(); }
 
 function renderTemas() {
   const el = document.getElementById('lista-temas');
@@ -980,9 +1026,10 @@ function renderMelhorias() {
   const HIDDEN_BY_DEFAULT = ['concluido', 'negada'];
   const lista = state.melhorias.filter(m => {
     const sk = statusKey(m);
-    if (!_filtroStatus && HIDDEN_BY_DEFAULT.includes(sk)) return false;
+    if (!_filtroStatus && !_filtroPrazo && HIDDEN_BY_DEFAULT.includes(sk)) return false;
     return (!_filtroStatus || sk === _filtroStatus) &&
-           (!_filtroTema   || m.tema_id === _filtroTema);
+           (!_filtroTema   || m.tema_id === _filtroTema) &&
+           matchPrazo(m, _filtroPrazo);
   });
   if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
   const STATUS_ORDER = { concluida:-1, iniciada:0, estimada:1, regra:2, refinamento:3, recebida:4, negada:5 };
@@ -1017,7 +1064,18 @@ function renderMelhorias() {
       const badge = `<span class="badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
       let sub = '';
       if (m.dev) sub += m.dev;
-      if (m.entrega) sub += (sub ? ' · ' : '') + `Entrega: ${formatDate(m.entrega)}`;
+      if (m.entrega) {
+        let cor = '', tag = '';
+        if (isDemandaAberta(m)) {
+          const hoje = new Date(); hoje.setHours(0,0,0,0);
+          const e = new Date(m.entrega + 'T00:00:00');
+          const dias = Math.round((e - hoje) / 86400000);
+          if (dias < 0)       { cor = 'color:#F9A0A0;font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
+          else if (dias === 0){ cor = 'color:#FFB84D;font-weight:600'; tag = ' (vence hoje)'; }
+          else if (dias <= 7) { cor = 'color:#FFB84D;font-weight:600'; tag = ` (em ${dias}d)`; }
+        }
+        sub += (sub ? ' · ' : '') + `<span style="${cor}">Entrega: ${formatDate(m.entrega)}${tag}</span>`;
+      }
       // Dependência de outro card
       const parentM = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
       const parentBadge = parentM
