@@ -1033,11 +1033,11 @@ function renderMelhorias() {
   });
   if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
   const STATUS_ORDER = { concluida:-1, iniciada:0, estimada:1, regra:2, refinamento:3, recebida:4, negada:5 };
+  // Ordena por vencimento: quem tem data primeiro (vencidas → mais próximas), sem data por último
   const sorted = [...lista].sort((a,b) => {
-    const aTemInicio = !!a.inicio;
-    const bTemInicio = !!b.inicio;
-    if (aTemInicio !== bTemInicio) return aTemInicio ? -1 : 1;
-    if (aTemInicio && bTemInicio) return a.inicio.localeCompare(b.inicio);
+    const ae = !!a.entrega, be = !!b.entrega;
+    if (ae !== be) return ae ? -1 : 1;
+    if (ae && be) { const c = a.entrega.localeCompare(b.entrega); if (c !== 0) return c; }
     const so = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
     if (so !== 0) return so;
     return a.titulo.localeCompare(b.titulo);
@@ -1050,12 +1050,19 @@ function renderMelhorias() {
     if (!groups[key]) groups[key] = [];
     groups[key].push(m);
   });
+  // Urgência do tema = entrega mais próxima/vencida entre suas demandas em aberto
+  function grupoUrgencia(key) {
+    const comData = groups[key].filter(m => m.entrega && isDemandaAberta(m));
+    if (!comData.length) return Infinity;
+    return Math.min(...comData.map(m => new Date(m.entrega + 'T00:00:00').getTime()));
+  }
   const groupKeys = Object.keys(groups).sort((a, b) => {
+    if (a === '__sem_tema__') return 1;
+    if (b === '__sem_tema__') return -1;
+    const ua = grupoUrgencia(a), ub = grupoUrgencia(b);
+    if (ua !== ub) return ua - ub; // tema mais urgente primeiro
     const ia = temaOrder.indexOf(a), ib = temaOrder.indexOf(b);
-    if (ia === -1 && ib === -1) return 0;
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
+    return (ia === -1 ? 9999 : ia) - (ib === -1 ? 9999 : ib);
   });
   el.innerHTML = groupKeys.map(tKey => {
     const temaNome = tKey === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === tKey)?.nome || '—');
