@@ -1419,7 +1419,7 @@ function buildDevReportHTML() {
 let nmToken = localStorage.getItem('rm_token') || '';
 // URL do Cloudflare Worker (proxy de gravação). Enquanto vazio, o botão fica
 // restrito a quem tem token. Ao preencher, o botão fica público e grava via proxy.
-const NM_PROXY_URL = '';
+const NM_PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
 if (nmToken || NM_PROXY_URL) {
   const b = document.getElementById('btn-nova-melhoria');
   if (b) b.style.display = '';
