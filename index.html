@@ -346,8 +346,8 @@
           <label class="nm-f">Título da melhoria *
             <input type="text" id="nm-titulo" placeholder="Ex.: Automatizar fechamento de caixa">
           </label>
-          <label class="nm-f">Analista responsável
-            <select id="nm-dev"></select>
+          <label class="nm-f">Solicitante (quem pediu)
+            <input type="text" id="nm-solicitante" placeholder="Nome — ou 'necessidade da área'">
           </label>
           <label class="nm-f">Sistema *
             <select id="nm-sistema" onchange="nmOnSistema()"></select>
@@ -357,17 +357,16 @@
             <select id="nm-modulo" onchange="nmOnModulo()"></select>
             <input type="text" id="nm-modulo-novo" placeholder="Nome do novo módulo" style="display:none;margin-top:6px">
           </label>
-          <label class="nm-f">Solicitante (quem pediu)
-            <input type="text" id="nm-solicitante" placeholder="Nome — ou 'necessidade da área'">
-          </label>
           <label class="nm-f">Área do solicitante
-            <input type="text" id="nm-area" placeholder="Ex.: Tecnologia, Controladoria">
-          </label>
-          <label class="nm-f">Início previsto
-            <input type="date" id="nm-inicio">
-          </label>
-          <label class="nm-f">Entrega prevista
-            <input type="date" id="nm-entrega">
+            <select id="nm-area">
+              <option value="">—</option>
+              <option>Administrativo</option><option>Antifraude</option><option>Cadastro</option>
+              <option>Cobrança</option><option>Comercial</option><option>Controladoria</option>
+              <option>Credito</option><option>Financeiro</option><option>Formalização</option>
+              <option>Gestão</option><option>Jurídico</option><option>Marketing</option>
+              <option>Estruturadas</option><option>Plataforma Financeira</option><option>Rating</option>
+              <option>Reanalise</option><option>RH</option><option>RI</option><option>Tecnologia</option>
+            </select>
           </label>
         </div>
         <label class="nm-f">Objetivo (1 frase — pra que serve) *
@@ -388,14 +387,6 @@
           </div>
           <div id="nm-ganho-res" style="font-family:monospace;font-size:12px;font-weight:700;color:#9BC8F8;background:#0C3260;border-radius:6px;padding:8px 11px;margin-top:6px;">Preencha os dois campos acima</div>
         </label>
-        <div class="nm-grid2">
-          <label class="nm-f">Esforço restante estimado
-            <input type="text" id="nm-esforco" placeholder="Ex.: 20 dias">
-          </label>
-          <label class="nm-f">Dependências / bloqueios
-            <input type="text" id="nm-depend" placeholder="Ex.: unificar dash — está com João Vitor">
-          </label>
-        </div>
       </section>
 
       <!-- 2. Contexto -->
@@ -448,27 +439,9 @@
         <button type="button" class="nm-add" onclick="nmAddCA()">+ Adicionar critério</button>
       </section>
 
-      <!-- 6. Priorização -->
+      <!-- 6. Anexos -->
       <section class="nm-sec">
-        <div class="nm-sec-head"><span class="nm-num">06</span> Priorização (IP)</div>
-        <div class="nm-score"><span class="nm-score-lbl">Impacto estratégico (I)</span><input type="range" min="1" max="5" value="3" id="nm-scI" oninput="nmCalcIP()"><span class="nm-score-val" id="nm-valI">3</span></div>
-        <div class="nm-score"><span class="nm-score-lbl">Ganho de produtividade (G)</span><input type="range" min="1" max="5" value="3" id="nm-scG" oninput="nmCalcIP()"><span class="nm-score-val" id="nm-valG">3</span></div>
-        <div class="nm-score"><span class="nm-score-lbl">Urgência e dependências (U)</span><input type="range" min="1" max="5" value="3" id="nm-scU" oninput="nmCalcIP()"><span class="nm-score-val" id="nm-valU">3</span></div>
-        <div class="nm-score"><span class="nm-score-lbl">Esforço / complexidade (E)</span><input type="range" min="1" max="5" value="3" id="nm-scE" oninput="nmCalcIP()"><span class="nm-score-val" id="nm-valE">3</span></div>
-        <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
-          <span style="font-family:monospace;font-size:12px;color:#6E6A62;">IP = (I+G+U) ÷ E</span>
-          <span style="font-family:monospace;font-size:20px;font-weight:700;color:#ECEAE2;" id="nm-ipVal">—</span>
-          <span id="nm-ipClasse" style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;"></span>
-          <span style="font-size:12px;color:#6E6A62;">→ Prioridade: <strong id="nm-prio-auto" style="color:#ECEAE2;">—</strong></span>
-        </div>
-        <label class="nm-f" style="margin-top:8px">Notas
-          <textarea id="nm-notas" placeholder="Contexto da pontuação, riscos, combinados…"></textarea>
-        </label>
-      </section>
-
-      <!-- 7. Anexos -->
-      <section class="nm-sec">
-        <div class="nm-sec-head"><span class="nm-num">07</span> Anexos</div>
+        <div class="nm-sec-head"><span class="nm-num">06</span> Anexos</div>
         <label class="nm-f">Adicionar arquivo <small style="font-weight:400;color:#6E6A62;">(PDF, imagem ou documento — até 1,5 MB cada)</small>
           <input type="file" id="nm-file" multiple onchange="nmAddFiles(this.files)" style="padding:8px;background:#0E0E0D;">
         </label>
@@ -1608,21 +1581,16 @@ function nmOpenAnexo(melId, i) {
 // ── Abrir / fechar / salvar ──
 function openNovaMelhoria() {
   if (!nmToken) { dashToast('Sem token de acesso. Use o link de administrador.', 'err'); return; }
-  ['nm-titulo','nm-solicitante','nm-area','nm-inicio','nm-entrega','nm-objetivo','nm-impacto','nm-benef',
-   'nm-ganho-h','nm-ganho-p','nm-esforco','nm-depend','nm-asis','nm-dor','nm-nada',
-   'nm-escopo-in','nm-escopo-out','nm-premissas','nm-notas'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  ['nm-titulo','nm-solicitante','nm-area','nm-objetivo','nm-impacto','nm-benef',
+   'nm-ganho-h','nm-ganho-p','nm-asis','nm-dor','nm-nada',
+   'nm-escopo-in','nm-escopo-out','nm-premissas'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   document.getElementById('nm-ganho-res').textContent = 'Preencha os dois campos acima';
-  ['nm-scI','nm-scG','nm-scU','nm-scE'].forEach(id => document.getElementById(id).value = 3);
-  // dev select
-  const dv = document.getElementById('nm-dev');
-  dv.innerHTML = '<option value="">—</option>' + _devs.map(d => `<option value="${nmEsc(d)}">${nmEsc(d)}</option>`).join('');
   nmPopulateSistema();
   document.getElementById('nm-listRF').innerHTML = '';
   document.getElementById('nm-listRN').innerHTML = '';
   document.getElementById('nm-listCA').innerHTML = '';
   _nmRF = _nmRN = _nmCA = 0; nmAddRF(); nmAddRN(); nmAddCA();
   _nmAnexos = []; nmRenderAnexos();
-  nmCalcIP();
   document.getElementById('nm-overlay').style.display = 'block';
   document.body.style.overflow = 'hidden';
 }
@@ -1639,20 +1607,19 @@ async function saveNovaMelhoria() {
   if (!tema.id)  { dashToast('Selecione o sistema.', 'err'); return; }
   if (!objetivo) { dashToast('Descreva o objetivo.', 'err'); return; }
 
-  const ip = nmCalcIP();
-  const g = (id) => document.getElementById(id).value.trim();
+  const g = (id) => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
   const melId = nmUid();
   const nova = {
     id: melId,
     titulo,
     descricao: objetivo,
     tema_id: tema.id,
-    dev: g('nm-dev'),
+    dev: '',                          // definido pelo Admin/Gantt no planejamento
     solicitante: g('nm-solicitante'),
-    prioridade: ip.prio,
-    inicio: g('nm-inicio'),
-    entrega: g('nm-entrega'),
-    estimativa: g('nm-esforco'),
+    prioridade: '',                   // priorização definida no Admin ao planejar
+    inicio: '',
+    entrega: '',
+    estimativa: '',
     status: 'recebida',
     status_planejamento: 'backlog',   // entra sempre no backlog
     criado_em: new Date().toISOString(),
@@ -1662,13 +1629,11 @@ async function saveNovaMelhoria() {
       impacto: g('nm-impacto'),
       beneficiarios: g('nm-benef'),
       ganho: { horas_dia: g('nm-ganho-h'), pessoas: g('nm-ganho-p'), resumo: nmCalcGanho() },
-      dependencias: g('nm-depend'),
       contexto: { as_is: g('nm-asis'), dor: g('nm-dor'), nao_fazer: g('nm-nada') },
       requisitos_funcionais: nmCollectRows('nm-listRF', ['desc', 'prio']),
       regras_negocio: nmCollectRows('nm-listRN', ['regra', 'fonte']),
       escopo: { dentro: g('nm-escopo-in'), fora: g('nm-escopo-out'), premissas: g('nm-premissas') },
       criterios_aceite: nmCollectRows('nm-listCA', ['dado', 'quando', 'entao']),
-      priorizacao: { I: ip.I, G: ip.G, U: ip.U, E: ip.E, ip: +ip.ip.toFixed(2), notas: g('nm-notas') },
     },
   };
 
