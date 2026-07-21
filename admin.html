@@ -145,8 +145,11 @@
     .tab-content.active { display: block; }
 
     /* ── KANBAN ── */
-    .kb-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; align-items: flex-start; }
-    .kb-col { flex: 0 0 264px; background: var(--bg2, #161614); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 220px); }
+    /* usa a largura da tela (quebra o limite de 1000px do main) quando a aba está ativa */
+    #tab-kanban.active { width: calc(100vw - 48px); position: relative; left: 50%; transform: translateX(-50%); }
+    .kb-board { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; align-items: flex-start; }
+    /* colunas dividem o espaço disponível; só rolam na horizontal se a tela for estreita */
+    .kb-col { flex: 1 1 0; min-width: 138px; background: var(--bg2, #161614); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 210px); }
     .kb-col-head { padding: 10px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg2, #161614); border-radius: 10px 10px 0 0; }
     .kb-col-head .kb-count { font-size: 11px; font-weight: 600; background: var(--bg3, #252522); color: var(--text3); border-radius: 10px; padding: 1px 8px; }
     .kb-col-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
