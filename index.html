@@ -286,6 +286,7 @@
   </div>
   <div class="header-right" style="display:flex;align-items:center;gap:16px;">
     <span id="ultima-atualizacao" style="font-size:13px;color:var(--text3)">—</span>
+    <button id="btn-nova-melhoria" onclick="openNovaMelhoria()" style="display:none;font-size:13px;color:#fff;background:var(--blue,#3B8FE8);border:1px solid var(--blue,#3B8FE8);border-radius:var(--radius);padding:6px 14px;cursor:pointer;font-weight:600;">+ Nova Melhoria</button>
     <button id="btn-refresh" onclick="forceRefresh()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Forçar atualização dos dados" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">↻ Atualizar</button>
     <button onclick="openExportModal()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Exportar relatório" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⬇ Exportar</button>
     <a href="admin.html" style="font-size:13px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⚙ Admin</a>
@@ -299,6 +300,188 @@
 </main>
 
 <footer>Painel interno · Audax Capital · Produto &amp; Tecnologia</footer>
+
+<style>
+  #nm-overlay .nm-sec{border:1px solid #2E2E2B;border-radius:10px;padding:16px;display:grid;gap:12px;background:#131311;}
+  #nm-overlay .nm-sec-head{font-size:14px;font-weight:700;color:#ECEAE2;display:flex;align-items:center;gap:8px;}
+  #nm-overlay .nm-num{font-family:monospace;font-size:12px;font-weight:700;color:#3B8FE8;background:#0C3260;border-radius:5px;padding:2px 7px;}
+  #nm-overlay .nm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:640px){#nm-overlay .nm-grid2{grid-template-columns:1fr;}}
+  #nm-overlay .nm-f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:#C9C6BE;}
+  #nm-overlay input[type=text],#nm-overlay input[type=date],#nm-overlay input[type=number],
+  #nm-overlay textarea,#nm-overlay select{font-family:inherit;font-size:13.5px;color:#ECEAE2;background:#0E0E0D;
+    border:1px solid #2E2E2B;border-radius:7px;padding:8px 10px;width:100%;}
+  #nm-overlay textarea{min-height:58px;resize:vertical;}
+  #nm-overlay input:focus,#nm-overlay textarea:focus,#nm-overlay select:focus{outline:2px solid #3B8FE8;outline-offset:1px;border-color:#3B8FE8;}
+  #nm-overlay .nm-add{justify-self:start;border:1px dashed #3B8FE8;background:transparent;color:#3B8FE8;
+    font-weight:600;font-size:12.5px;padding:6px 12px;border-radius:7px;cursor:pointer;}
+  #nm-overlay .nm-add:hover{background:#0C3260;}
+  #nm-overlay .nm-row{display:grid;gap:8px;align-items:start;}
+  #nm-overlay .nm-row .nm-del{border:none;background:transparent;color:#E84444;font-size:16px;cursor:pointer;padding:4px;}
+  #nm-overlay .nm-score{display:grid;grid-template-columns:200px 1fr 36px;gap:12px;align-items:center;}
+  @media(max-width:640px){#nm-overlay .nm-score{grid-template-columns:1fr 36px;}#nm-overlay .nm-score-lbl{grid-column:1/-1;}}
+  #nm-overlay .nm-score-lbl{font-size:12.5px;font-weight:600;color:#C9C6BE;}
+  #nm-overlay input[type=range]{width:100%;accent-color:#3B8FE8;}
+  #nm-overlay .nm-score-val{font-family:monospace;font-weight:700;text-align:center;background:#0C3260;border-radius:6px;padding:4px 0;color:#9BC8F8;}
+  #nm-overlay .nm-anexo{display:flex;align-items:center;gap:10px;background:#0E0E0D;border:1px solid #2E2E2B;border-radius:7px;padding:8px 10px;font-size:12.5px;color:#C9C6BE;}
+  #nm-overlay .nm-anexo a{color:#9BC8F8;text-decoration:none;}
+  #nm-overlay .nm-anexo a:hover{text-decoration:underline;}
+</style>
+<!-- ─── MODAL: NOVA MELHORIA (Discovery) ─────────────────────────── -->
+<div id="nm-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9998;overflow-y:auto;padding:24px 16px;">
+  <div style="background:#161614;border:1px solid #2E2E2B;border-radius:12px;max-width:820px;margin:0 auto;">
+    <div style="position:sticky;top:0;background:#161614;display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid #2E2E2B;border-radius:12px 12px 0 0;z-index:2;">
+      <div>
+        <div style="font-size:17px;font-weight:700;color:#ECEAE2;">Nova Melhoria · Discovery</div>
+        <div style="font-size:12px;color:#6E6A62;margin-top:2px;">Entra no <strong style="color:#9BC8F8;">Backlog</strong> e reflete no Admin e no Gantt.</div>
+      </div>
+      <button onclick="closeNovaMelhoria()" style="font-size:13px;color:#6E6A62;background:none;border:1px solid #2E2E2B;border-radius:7px;padding:7px 14px;cursor:pointer;">✕ Fechar</button>
+    </div>
+    <div style="padding:22px;display:grid;gap:22px;" id="nm-body">
+
+      <!-- 1. Identificação -->
+      <section class="nm-sec">
+        <div class="nm-sec-head"><span class="nm-num">01</span> Identificação</div>
+        <div class="nm-grid2">
+          <label class="nm-f">Título da melhoria *
+            <input type="text" id="nm-titulo" placeholder="Ex.: Automatizar fechamento de caixa">
+          </label>
+          <label class="nm-f">Analista responsável
+            <select id="nm-dev"></select>
+          </label>
+          <label class="nm-f">Sistema *
+            <select id="nm-sistema" onchange="nmOnSistema()"></select>
+            <input type="text" id="nm-sistema-novo" placeholder="Nome do novo sistema" style="display:none;margin-top:6px">
+          </label>
+          <label class="nm-f">Módulo
+            <select id="nm-modulo" onchange="nmOnModulo()"></select>
+            <input type="text" id="nm-modulo-novo" placeholder="Nome do novo módulo" style="display:none;margin-top:6px">
+          </label>
+          <label class="nm-f">Solicitante (quem pediu)
+            <input type="text" id="nm-solicitante" placeholder="Nome — ou 'necessidade da área'">
+          </label>
+          <label class="nm-f">Área do solicitante
+            <input type="text" id="nm-area" placeholder="Ex.: Tecnologia, Controladoria">
+          </label>
+          <label class="nm-f">Início previsto
+            <input type="date" id="nm-inicio">
+          </label>
+          <label class="nm-f">Entrega prevista
+            <input type="date" id="nm-entrega">
+          </label>
+        </div>
+        <label class="nm-f">Objetivo (1 frase — pra que serve) *
+          <textarea id="nm-objetivo" placeholder="Comece com Acompanhar / Automatizar / Eliminar / Reduzir…"></textarea>
+        </label>
+        <div class="nm-grid2">
+          <label class="nm-f">Impacto no departamento
+            <textarea id="nm-impacto" placeholder="O que muda na operação"></textarea>
+          </label>
+          <label class="nm-f">Beneficiários
+            <textarea id="nm-benef" placeholder="Quem usa no dia a dia"></textarea>
+          </label>
+        </div>
+        <label class="nm-f">Ganho de produtividade esperado
+          <div class="nm-grid2" style="gap:8px">
+            <input type="number" id="nm-ganho-h" min="0" step="0.25" placeholder="Horas ganhas/dia por pessoa" oninput="nmCalcGanho()">
+            <input type="number" id="nm-ganho-p" min="1" step="1" placeholder="Pessoas envolvidas" oninput="nmCalcGanho()">
+          </div>
+          <div id="nm-ganho-res" style="font-family:monospace;font-size:12px;font-weight:700;color:#9BC8F8;background:#0C3260;border-radius:6px;padding:8px 11px;margin-top:6px;">Preencha os dois campos acima</div>
+        </label>
+        <div class="nm-grid2">
+          <label class="nm-f">Esforço restante estimado
+            <input type="text" id="nm-esforco" placeholder="Ex.: 20 dias">
+          </label>
+          <label class="nm-f">Dependências / bloqueios
+            <input type="text" id="nm-depend" placeholder="Ex.: unificar dash — está com João Vitor">
+          </label>
+        </div>
+      </section>
+
+      <!-- 2. Contexto -->
+      <section class="nm-sec">
+        <div class="nm-sec-head"><span class="nm-num">02</span> Contexto e problema</div>
+        <label class="nm-f">Como funciona hoje? (as-is)
+          <textarea id="nm-asis" placeholder="Planilhas, sistemas, etapas manuais"></textarea>
+        </label>
+        <div class="nm-grid2">
+          <label class="nm-f">Qual é a dor real?
+            <textarea id="nm-dor" placeholder="O que acontece de ruim quando falha"></textarea>
+          </label>
+          <label class="nm-f">E se não fizer nada?
+            <textarea id="nm-nada" placeholder="Impacto de não fazer"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <!-- 3. Requisitos e regras -->
+      <section class="nm-sec">
+        <div class="nm-sec-head"><span class="nm-num">03</span> Requisitos e regras</div>
+        <label class="nm-f" style="margin-bottom:-4px">Requisitos funcionais</label>
+        <div id="nm-listRF" style="display:grid;gap:8px"></div>
+        <button type="button" class="nm-add" onclick="nmAddRF()">+ Adicionar requisito</button>
+        <label class="nm-f" style="margin:8px 0 -4px">Regras de negócio</label>
+        <div id="nm-listRN" style="display:grid;gap:8px"></div>
+        <button type="button" class="nm-add" onclick="nmAddRN()">+ Adicionar regra</button>
+      </section>
+
+      <!-- 4. Escopo -->
+      <section class="nm-sec">
+        <div class="nm-sec-head"><span class="nm-num">04</span> Escopo</div>
+        <div class="nm-grid2">
+          <label class="nm-f">✅ Dentro do escopo (uma por linha)
+            <textarea id="nm-escopo-in" style="min-height:90px"></textarea>
+          </label>
+          <label class="nm-f">❌ Fora do escopo (uma por linha)
+            <textarea id="nm-escopo-out" style="min-height:90px"></textarea>
+          </label>
+        </div>
+        <label class="nm-f">Premissas assumidas
+          <textarea id="nm-premissas"></textarea>
+        </label>
+      </section>
+
+      <!-- 5. Critérios de aceite -->
+      <section class="nm-sec">
+        <div class="nm-sec-head"><span class="nm-num">05</span> Critérios de aceite</div>
+        <div id="nm-listCA" style="display:grid;gap:8px"></div>
+        <button type="button" class="nm-add" onclick="nmAddCA()">+ Adicionar critério</button>
+      </section>
+
+      <!-- 6. Priorização -->
+      <section class="nm-sec">
+        <div class="nm-sec-head"><span class="nm-num">06</span> Priorização (IP)</div>
+        <div class="nm-score"><span class="nm-score-lbl">Impacto estratégico (I)</span><input type="range" min="1" max="5" value="3" id="nm-scI" oninput="nmCalcIP()"><span class="nm-score-val" id="nm-valI">3</span></div>
+        <div class="nm-score"><span class="nm-score-lbl">Ganho de produtividade (G)</span><input type="range" min="1" max="5" value="3" id="nm-scG" oninput="nmCalcIP()"><span class="nm-score-val" id="nm-valG">3</span></div>
+        <div class="nm-score"><span class="nm-score-lbl">Urgência e dependências (U)</span><input type="range" min="1" max="5" value="3" id="nm-scU" oninput="nmCalcIP()"><span class="nm-score-val" id="nm-valU">3</span></div>
+        <div class="nm-score"><span class="nm-score-lbl">Esforço / complexidade (E)</span><input type="range" min="1" max="5" value="3" id="nm-scE" oninput="nmCalcIP()"><span class="nm-score-val" id="nm-valE">3</span></div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
+          <span style="font-family:monospace;font-size:12px;color:#6E6A62;">IP = (I+G+U) ÷ E</span>
+          <span style="font-family:monospace;font-size:20px;font-weight:700;color:#ECEAE2;" id="nm-ipVal">—</span>
+          <span id="nm-ipClasse" style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;"></span>
+          <span style="font-size:12px;color:#6E6A62;">→ Prioridade: <strong id="nm-prio-auto" style="color:#ECEAE2;">—</strong></span>
+        </div>
+        <label class="nm-f" style="margin-top:8px">Notas
+          <textarea id="nm-notas" placeholder="Contexto da pontuação, riscos, combinados…"></textarea>
+        </label>
+      </section>
+
+      <!-- 7. Anexos -->
+      <section class="nm-sec">
+        <div class="nm-sec-head"><span class="nm-num">07</span> Anexos</div>
+        <label class="nm-f">Adicionar arquivo <small style="font-weight:400;color:#6E6A62;">(PDF, imagem ou documento — até 1,5 MB cada)</small>
+          <input type="file" id="nm-file" multiple onchange="nmAddFiles(this.files)" style="padding:8px;background:#0E0E0D;">
+        </label>
+        <div id="nm-anexos" style="display:grid;gap:8px"></div>
+      </section>
+
+    </div>
+    <div style="position:sticky;bottom:0;background:#161614;display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid #2E2E2B;border-radius:0 0 12px 12px;">
+      <button onclick="closeNovaMelhoria()" style="font-size:13px;color:#A8A49A;background:none;border:1px solid #2E2E2B;border-radius:8px;padding:9px 18px;cursor:pointer;">Cancelar</button>
+      <button id="nm-save-btn" onclick="saveNovaMelhoria()" style="font-size:13px;color:#fff;background:#3B8FE8;border:none;border-radius:8px;padding:9px 20px;cursor:pointer;font-weight:700;">Criar no Backlog</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const GITHUB_USER = 'CapFernando';
@@ -360,6 +543,14 @@ function motivoHTML(m) {
   return `<div class="melhoria-negada-motivo"><strong>Motivo da negativa</strong>${m.motivo_negacao}</div>`;
 }
 
+function anexosHTML(m) {
+  if (!m.anexos || !m.anexos.length) return '';
+  const links = m.anexos.map((a, i) =>
+    `<a href="#" onclick="nmOpenAnexo('${m.id}',${i});return false;" style="color:var(--text3);text-decoration:none;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:2px 8px;">📎 ${a.nome}</a>`
+  ).join('');
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${links}</div>`;
+}
+
 function renderMelhoria(m) {
   return `
     <div class="melhoria">
@@ -370,6 +561,7 @@ function renderMelhoria(m) {
       ${m.descricao ? `<div class="melhoria-desc">${m.descricao}</div>` : ''}
       ${motivoHTML(m)}
       ${metaHTML(m)}
+      ${anexosHTML(m)}
     </div>`;
 }
 
@@ -1232,6 +1424,289 @@ function buildDevReportHTML() {
       capfernando.github.io/RoadMap
     </div>
   </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// NOVA MELHORIA (Discovery) — só aparece com token (não público até validar)
+// ═══════════════════════════════════════════════════════════════════════
+(function() {
+  const qp = new URLSearchParams(location.search);
+  const t  = qp.get('token');
+  if (t && (t.startsWith('ghp_') || t.startsWith('github_pat_'))) {
+    localStorage.setItem('rm_token', t);
+    history.replaceState(null, '', location.pathname);
+  }
+})();
+let nmToken = localStorage.getItem('rm_token') || '';
+if (nmToken) {
+  const b = document.getElementById('btn-nova-melhoria');
+  if (b) b.style.display = '';
+}
+
+function nmUid() { return 'm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function nmEsc(s) { return String(s == null ? '' : s).replace(/"/g, '&quot;'); }
+
+// ── Sistema / Módulo (tema = "Sistema - Módulo") ──
+function nmParseTema(nome) {
+  const i = (nome || '').indexOf(' - ');
+  return i < 0 ? { sistema: (nome || '').trim(), modulo: '' }
+               : { sistema: nome.slice(0, i).trim(), modulo: nome.slice(i + 3).trim() };
+}
+function nmSistemas() { return [...new Set(_temas.map(t => nmParseTema(t.nome).sistema).filter(Boolean))]; }
+function nmModulos(sis) {
+  return [...new Set(_temas.map(t => nmParseTema(t.nome))
+    .filter(p => p.sistema.toLowerCase() === (sis || '').toLowerCase() && p.modulo).map(p => p.modulo))];
+}
+function nmPopulateSistema() {
+  const sel = document.getElementById('nm-sistema');
+  sel.innerHTML = '<option value="">—</option>' +
+    nmSistemas().map(s => `<option value="${nmEsc(s)}">${nmEsc(s)}</option>`).join('') +
+    '<option value="__novo__">➕ Novo sistema…</option>';
+  document.getElementById('nm-sistema-novo').style.display = 'none';
+  nmPopulateModulos('');
+}
+function nmPopulateModulos(sis) {
+  const sel = document.getElementById('nm-modulo');
+  sel.innerHTML = '<option value="">—</option>' +
+    nmModulos(sis).map(m => `<option value="${nmEsc(m)}">${nmEsc(m)}</option>`).join('') +
+    '<option value="__novo__">➕ Novo módulo…</option>';
+  document.getElementById('nm-modulo-novo').style.display = 'none';
+}
+function nmOnSistema() {
+  const sel = document.getElementById('nm-sistema');
+  document.getElementById('nm-sistema-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
+  nmPopulateModulos(sel.value === '__novo__' ? '' : sel.value);
+}
+function nmOnModulo() {
+  const sel = document.getElementById('nm-modulo');
+  document.getElementById('nm-modulo-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
+}
+function nmResolveTema() {
+  const sisSel = document.getElementById('nm-sistema');
+  const sis = sisSel.value === '__novo__' ? document.getElementById('nm-sistema-novo').value.trim() : sisSel.value;
+  if (!sis) return { id: '', novos: [] };
+  const modSel = document.getElementById('nm-modulo');
+  const mod = modSel.value === '__novo__' ? document.getElementById('nm-modulo-novo').value.trim() : modSel.value;
+  const nome = mod ? `${sis} - ${mod}` : sis;
+  let t = _temas.find(x => (x.nome || '').toLowerCase() === nome.toLowerCase());
+  if (t) return { id: t.id, novos: [] };
+  const novo = { id: nmUid(), nome };
+  return { id: novo.id, novos: [novo] };
+}
+
+// ── Cálculos ──
+function nmCalcGanho() {
+  const h = parseFloat(document.getElementById('nm-ganho-h').value);
+  const p = parseInt(document.getElementById('nm-ganho-p').value);
+  const out = document.getElementById('nm-ganho-res');
+  if (!h || !p || h <= 0 || p <= 0) { out.textContent = 'Preencha os dois campos acima'; return ''; }
+  const mes = h * p * 22, fte = mes / 200;
+  const txt = `${mes.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h/mês (libera ${fte.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} FTE)`;
+  out.textContent = '≈ ' + txt + ` — ${h}h/dia × ${p} pessoa(s) × 22 dias`;
+  return txt;
+}
+function nmCalcIP() {
+  const I = +document.getElementById('nm-scI').value, G = +document.getElementById('nm-scG').value,
+        U = +document.getElementById('nm-scU').value, E = +document.getElementById('nm-scE').value;
+  document.getElementById('nm-valI').textContent = I;
+  document.getElementById('nm-valG').textContent = G;
+  document.getElementById('nm-valU').textContent = U;
+  document.getElementById('nm-valE').textContent = E;
+  const ip = (I + G + U) / E;
+  document.getElementById('nm-ipVal').textContent = ip.toFixed(2).replace('.', ',');
+  const badge = document.getElementById('nm-ipClasse');
+  const prioEl = document.getElementById('nm-prio-auto');
+  let prio;
+  if (ip >= 4)      { badge.textContent = '🟢 Prioritário'; badge.style.background = '#1E4208'; badge.style.color = '#B2E07A'; prio = 'alta'; }
+  else if (ip >= 2.5){ badge.textContent = '🟡 Avaliar';    badge.style.background = '#3D3600'; badge.style.color = '#FFE14D'; prio = 'media'; }
+  else              { badge.textContent = '🔴 Repensar';    badge.style.background = '#5C0A0A'; badge.style.color = '#F9A0A0'; prio = 'baixa'; }
+  prioEl.textContent = prio.charAt(0).toUpperCase() + prio.slice(1);
+  return { I, G, U, E, ip, prio };
+}
+
+// ── Listas dinâmicas ──
+let _nmRF = 0, _nmRN = 0, _nmCA = 0;
+function nmAddRF(desc = '', prio = 'Essencial') {
+  _nmRF++;
+  const row = document.createElement('div');
+  row.className = 'nm-row'; row.style.gridTemplateColumns = 'minmax(0,1fr) 130px 30px';
+  row.innerHTML = `<input type="text" data-k="desc" placeholder="RF · O sistema deve…" value="${nmEsc(desc)}">
+    <select data-k="prio"><option${prio==='Essencial'?' selected':''}>Essencial</option><option${prio==='Importante'?' selected':''}>Importante</option><option${prio==='Desejável'?' selected':''}>Desejável</option></select>
+    <button type="button" class="nm-del" onclick="this.parentElement.remove()">✕</button>`;
+  document.getElementById('nm-listRF').appendChild(row);
+}
+function nmAddRN(regra = '', fonte = '') {
+  _nmRN++;
+  const row = document.createElement('div');
+  row.className = 'nm-row'; row.style.gridTemplateColumns = 'minmax(0,1.3fr) minmax(0,1fr) 30px';
+  row.innerHTML = `<input type="text" data-k="regra" placeholder="RN · Regra + exceções" value="${nmEsc(regra)}">
+    <input type="text" data-k="fonte" placeholder="Fonte da verdade + dono" value="${nmEsc(fonte)}">
+    <button type="button" class="nm-del" onclick="this.parentElement.remove()">✕</button>`;
+  document.getElementById('nm-listRN').appendChild(row);
+}
+function nmAddCA() {
+  _nmCA++;
+  const row = document.createElement('div');
+  row.className = 'nm-row'; row.style.gridTemplateColumns = 'minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 30px';
+  row.innerHTML = `<input type="text" data-k="dado" placeholder="Dado que…">
+    <input type="text" data-k="quando" placeholder="Quando…">
+    <input type="text" data-k="entao" placeholder="Então…">
+    <button type="button" class="nm-del" onclick="this.parentElement.remove()">✕</button>`;
+  document.getElementById('nm-listCA').appendChild(row);
+}
+function nmCollectRows(listId, keys) {
+  return [...document.querySelectorAll('#' + listId + ' .nm-row')].map(r => {
+    const o = {};
+    keys.forEach(k => { const el = r.querySelector(`[data-k="${k}"]`); o[k] = el ? el.value.trim() : ''; });
+    return o;
+  }).filter(o => keys.some(k => o[k]));
+}
+
+// ── Anexos (base64) ──
+let _nmAnexos = [];
+const NM_MAX = 1.5 * 1024 * 1024;
+function nmAddFiles(files) {
+  [...files].forEach(f => {
+    if (f.size > NM_MAX) { dashToast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
+    const reader = new FileReader();
+    reader.onload = () => { _nmAnexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, dados: reader.result }); nmRenderAnexos(); };
+    reader.readAsDataURL(f);
+  });
+  document.getElementById('nm-file').value = '';
+}
+function nmRenderAnexos() {
+  const el = document.getElementById('nm-anexos');
+  el.innerHTML = _nmAnexos.map((a, i) => {
+    const kb = (a.tamanho / 1024).toFixed(0);
+    return `<div class="nm-anexo">
+      <span style="flex:1">📎 ${nmEsc(a.nome)} <span style="color:#6E6A62">(${kb} KB)</span></span>
+      <a href="#" onclick="nmPreview(${i});return false;">visualizar</a>
+      <button type="button" class="nm-del" style="color:#E84444;background:none;border:none;cursor:pointer;font-size:15px;" onclick="_nmAnexos.splice(${i},1);nmRenderAnexos();">✕</button>
+    </div>`;
+  }).join('');
+}
+function nmDataUrlToBlob(dataUrl) {
+  const [head, b64] = dataUrl.split(',');
+  const mime = (head.match(/:(.*?);/) || [])[1] || 'application/octet-stream';
+  const bin = atob(b64); const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+function nmPreview(i) {
+  const a = _nmAnexos[i]; if (!a) return;
+  const url = URL.createObjectURL(nmDataUrlToBlob(a.dados));
+  window.open(url, '_blank');
+}
+// Abrir anexo de uma melhoria já salva (usado no card do dashboard)
+function nmOpenAnexo(melId, i) {
+  const m = _melhorias.find(x => x.id === melId);
+  if (!m || !m.anexos || !m.anexos[i]) return;
+  const url = URL.createObjectURL(nmDataUrlToBlob(m.anexos[i].dados));
+  window.open(url, '_blank');
+}
+
+// ── Abrir / fechar / salvar ──
+function openNovaMelhoria() {
+  if (!nmToken) { dashToast('Sem token de acesso. Use o link de administrador.', 'err'); return; }
+  ['nm-titulo','nm-solicitante','nm-area','nm-inicio','nm-entrega','nm-objetivo','nm-impacto','nm-benef',
+   'nm-ganho-h','nm-ganho-p','nm-esforco','nm-depend','nm-asis','nm-dor','nm-nada',
+   'nm-escopo-in','nm-escopo-out','nm-premissas','nm-notas'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  document.getElementById('nm-ganho-res').textContent = 'Preencha os dois campos acima';
+  ['nm-scI','nm-scG','nm-scU','nm-scE'].forEach(id => document.getElementById(id).value = 3);
+  // dev select
+  const dv = document.getElementById('nm-dev');
+  dv.innerHTML = '<option value="">—</option>' + _devs.map(d => `<option value="${nmEsc(d)}">${nmEsc(d)}</option>`).join('');
+  nmPopulateSistema();
+  document.getElementById('nm-listRF').innerHTML = '';
+  document.getElementById('nm-listRN').innerHTML = '';
+  document.getElementById('nm-listCA').innerHTML = '';
+  _nmRF = _nmRN = _nmCA = 0; nmAddRF(); nmAddRN(); nmAddCA();
+  _nmAnexos = []; nmRenderAnexos();
+  nmCalcIP();
+  document.getElementById('nm-overlay').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+function closeNovaMelhoria() {
+  document.getElementById('nm-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function saveNovaMelhoria() {
+  const titulo = document.getElementById('nm-titulo').value.trim();
+  const objetivo = document.getElementById('nm-objetivo').value.trim();
+  if (!titulo)   { dashToast('Informe o título.', 'err'); return; }
+  const tema = nmResolveTema();
+  if (!tema.id)  { dashToast('Selecione o sistema.', 'err'); return; }
+  if (!objetivo) { dashToast('Descreva o objetivo.', 'err'); return; }
+
+  const ip = nmCalcIP();
+  const g = (id) => document.getElementById(id).value.trim();
+  const melId = nmUid();
+  const nova = {
+    id: melId,
+    titulo,
+    descricao: objetivo,
+    tema_id: tema.id,
+    dev: g('nm-dev'),
+    solicitante: g('nm-solicitante'),
+    prioridade: ip.prio,
+    inicio: g('nm-inicio'),
+    entrega: g('nm-entrega'),
+    estimativa: g('nm-esforco'),
+    status: 'recebida',
+    status_planejamento: 'backlog',   // entra sempre no backlog
+    criado_em: new Date().toISOString(),
+    anexos: _nmAnexos,
+    discovery: {
+      area_solicitante: g('nm-area'),
+      impacto: g('nm-impacto'),
+      beneficiarios: g('nm-benef'),
+      ganho: { horas_dia: g('nm-ganho-h'), pessoas: g('nm-ganho-p'), resumo: nmCalcGanho() },
+      dependencias: g('nm-depend'),
+      contexto: { as_is: g('nm-asis'), dor: g('nm-dor'), nao_fazer: g('nm-nada') },
+      requisitos_funcionais: nmCollectRows('nm-listRF', ['desc', 'prio']),
+      regras_negocio: nmCollectRows('nm-listRN', ['regra', 'fonte']),
+      escopo: { dentro: g('nm-escopo-in'), fora: g('nm-escopo-out'), premissas: g('nm-premissas') },
+      criterios_aceite: nmCollectRows('nm-listCA', ['dado', 'quando', 'entao']),
+      priorizacao: { I: ip.I, G: ip.G, U: ip.U, E: ip.E, ip: +ip.ip.toFixed(2), notas: g('nm-notas') },
+    },
+  };
+
+  const btn = document.getElementById('nm-save-btn');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  try {
+    // Busca SHA + dados atuais (merge-safe)
+    const shaRes = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
+      headers: { Authorization: `token ${nmToken}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!shaRes.ok) { const e = await shaRes.json(); throw new Error(e.message || ('HTTP ' + shaRes.status)); }
+    const shaJson = await shaRes.json();
+    const server = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g, '')))));
+
+    server.melhorias = server.melhorias || [];
+    server.temas = server.temas || [];
+    tema.novos.forEach(t => { if (!server.temas.find(x => x.id === t.id)) server.temas.push(t); });
+    server.melhorias.push(nova);
+    server.atualizado_em = new Date().toISOString();
+
+    const bytes = new TextEncoder().encode(JSON.stringify(server, null, 2));
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    const put = await fetch(API_URL, {
+      method: 'PUT',
+      headers: { Authorization: `token ${nmToken}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `feat: nova melhoria (discovery) — ${titulo}`, content: btoa(bin), sha: shaJson.sha })
+    });
+    if (!put.ok) { const e = await put.json(); throw new Error(e.message || 'Erro ao salvar'); }
+
+    closeNovaMelhoria();
+    dashToast('✅ Melhoria criada no Backlog. Já reflete no Admin e Gantt.', 'ok');
+    applyData(server, { preserveView: true });
+  } catch (e) {
+    dashToast('Erro ao salvar: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = 'Criar no Backlog';
 }
 </script>
 </body>
