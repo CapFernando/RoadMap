@@ -850,9 +850,11 @@ async function loadFromGitHub(silent) {
       feriados:       decoded.feriados        || [],
     };
     renderAll();
+    restoreLastTab();
   } catch (e) {
     if (!silent) toast(e.message, 'err');
     renderAll();
+    restoreLastTab();
   }
 }
 
@@ -1179,13 +1181,26 @@ function renderMelhorias() {
 }
 
 // ─── TABS ─────────────────────────────────────────────────────────
-function switchTab(name) {
+function switchTab(name, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  event.currentTarget.classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
+  const tabEl = el
+    || (typeof event !== 'undefined' && event && event.currentTarget) || null
+    || [...document.querySelectorAll('.tab')].find(t => (t.getAttribute('onclick') || '').includes(`'${name}'`));
+  if (tabEl && tabEl.classList) tabEl.classList.add('active');
+  else { const f = [...document.querySelectorAll('.tab')].find(t => (t.getAttribute('onclick') || '').includes(`'${name}'`)); if (f) f.classList.add('active'); }
+  const content = document.getElementById('tab-' + name);
+  if (content) content.classList.add('active');
   if (name === 'gerencial') renderGerencial();
   if (name === 'kanban') renderKanban();
+  try { localStorage.setItem('rm_admin_tab', name); } catch (_) {}
+}
+let _tabRestored = false;
+function restoreLastTab() {
+  if (_tabRestored) return;
+  _tabRestored = true;
+  const saved = localStorage.getItem('rm_admin_tab');
+  if (saved && saved !== 'melhorias' && document.getElementById('tab-' + saved)) switchTab(saved);
 }
 
 // ─── KANBAN ───────────────────────────────────────────────────────
