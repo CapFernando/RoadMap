@@ -144,6 +144,32 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
+    /* ── KANBAN ── */
+    .kb-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; align-items: flex-start; }
+    .kb-col { flex: 0 0 264px; background: var(--bg2, #161614); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 220px); }
+    .kb-col-head { padding: 10px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg2, #161614); border-radius: 10px 10px 0 0; }
+    .kb-col-head .kb-count { font-size: 11px; font-weight: 600; background: var(--bg3, #252522); color: var(--text3); border-radius: 10px; padding: 1px 8px; }
+    .kb-col-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+    .kb-card { background: var(--card, #1E1E1C); border: 1px solid var(--border); border-radius: 8px; padding: 10px 11px; cursor: pointer; transition: border-color .12s, transform .12s; user-select: none; }
+    .kb-card:hover { border-color: var(--border2, #3A3A36); transform: translateY(-1px); }
+    .kb-card-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; margin-bottom: 6px; }
+    .kb-card-meta { display: flex; flex-wrap: wrap; gap: 5px 10px; font-size: 11px; color: var(--text3); }
+    .kb-card-tema { font-size: 11px; color: var(--text3); margin-bottom: 5px; }
+    .kb-ip { font-family: monospace; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+    .kb-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+    .kb-anexo-tag { font-size: 10.5px; color: var(--text3); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+    .kb-col-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 14px 4px; opacity: .6; }
+    .gut-row { display: grid; grid-template-columns: 210px 1fr 34px; gap: 12px; align-items: center; font-size: 13px; color: var(--text2, #C9C6BE); }
+    .gut-row input[type=range] { width: 100%; accent-color: var(--blue, #3B8FE8); }
+    .gut-v { font-family: monospace; font-weight: 700; text-align: center; background: var(--bg3, #252522); border-radius: 6px; padding: 3px 0; color: var(--blue, #3B8FE8); }
+    @media(max-width:600px){ .gut-row { grid-template-columns: 1fr 34px; } .gut-row span:first-child { grid-column: 1/-1; } }
+    #m-discovery .disc-sec { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    #m-discovery .disc-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text3); margin-bottom: 8px; }
+    #m-discovery .disc-row { font-size: 13px; color: var(--text2, #C9C6BE); margin-bottom: 5px; line-height: 1.5; }
+    #m-discovery .disc-row b { color: var(--text); }
+    #m-discovery a.anexo { display: inline-block; color: #9BC8F8; text-decoration: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; font-size: 12px; margin: 3px 5px 0 0; }
+    #m-discovery a.anexo:hover { text-decoration: underline; }
+
     /* GERENCIAL */
     .ger-toolbar { display:flex; gap:16px; align-items:flex-end; margin-bottom:24px; flex-wrap:wrap; }
     .ger-filter-group { display:flex; flex-direction:column; gap:4px; }
@@ -394,6 +420,7 @@
   <main>
     <div class="tabs">
       <div class="tab active" onclick="switchTab('melhorias')">Melhorias</div>
+      <div class="tab" onclick="switchTab('kanban')">🗂 Kanban</div>
       <div class="tab" onclick="switchTab('temas')">Temas</div>
       <div class="tab" onclick="switchTab('gerencial')">📊 Gerencial</div>
       <div class="tab" onclick="switchTab('acesso')">🔗 Acesso Devs</div>
@@ -410,6 +437,16 @@
       <div class="status-filters" id="prazo-filters"></div>
       <div class="status-filters" id="tema-filters"></div>
       <div id="lista-melhorias"></div>
+    </div>
+
+    <!-- ABA KANBAN -->
+    <div class="tab-content" id="tab-kanban">
+      <div class="list-header">
+        <span class="list-title">Kanban</span>
+        <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova melhoria</button>
+      </div>
+      <div class="status-filters" id="kb-tema-filters"></div>
+      <div id="kb-board" class="kb-board"></div>
     </div>
 
     <!-- ABA TEMAS -->
@@ -635,6 +672,30 @@
         <textarea id="m-motivo" rows="3" placeholder="Explique o motivo pelo qual a melhoria foi negada…"></textarea>
       </div>
     </div>
+
+    <!-- Priorização GUT/IP — Backlog / Levantar Req. / Planejado -->
+    <div id="m-gut" style="display:none;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;background:var(--bg3,#161614);">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Priorização (matriz GUT/IP)</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Pontue de 1 a 5. Ordena o Planejado do maior para o menor.</div>
+      <div style="display:grid;gap:10px;">
+        <div class="gut-row"><span>Impacto estratégico (I)</span><input type="range" min="1" max="5" value="3" id="m-gI" oninput="mCalcGut()"><span class="gut-v" id="m-gIv">3</span></div>
+        <div class="gut-row"><span>Ganho de produtividade (G)</span><input type="range" min="1" max="5" value="3" id="m-gG" oninput="mCalcGut()"><span class="gut-v" id="m-gGv">3</span></div>
+        <div class="gut-row"><span>Urgência e dependências (U)</span><input type="range" min="1" max="5" value="3" id="m-gU" oninput="mCalcGut()"><span class="gut-v" id="m-gUv">3</span></div>
+        <div class="gut-row"><span>Esforço / complexidade (E)</span><input type="range" min="1" max="5" value="3" id="m-gE" oninput="mCalcGut()"><span class="gut-v" id="m-gEv">3</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
+        <span style="font-family:monospace;font-size:12px;color:var(--text3);">IP = (I+G+U) ÷ E</span>
+        <span style="font-family:monospace;font-size:20px;font-weight:700;" id="m-ipVal">—</span>
+        <span id="m-ipClasse" style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;"></span>
+        <span style="font-size:12px;color:var(--text3);">→ Prioridade: <strong id="m-prio-auto" style="color:var(--text);">—</strong></span>
+        <label style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:6px;margin-left:auto;cursor:pointer;">
+          <input type="checkbox" id="m-gut-aplica" checked> aplicar à prioridade
+        </label>
+      </div>
+    </div>
+
+    <!-- Discovery capturado no dash (somente leitura) + anexos -->
+    <div id="m-discovery" style="display:none;margin-bottom:16px;"></div>
 
     <!-- Vínculo de dependência (readonly) -->
     <div id="m-dep-info" style="display:none;margin-bottom:16px;"></div>
@@ -1000,7 +1061,10 @@ function renderStatusFilters() {
   }).join('');
 }
 
-function renderAll() { renderTemas(); renderStatusFilters(); renderPrazoFilters(); renderTemaFilters(); renderMelhorias(); }
+function renderAll() {
+  renderTemas(); renderStatusFilters(); renderPrazoFilters(); renderTemaFilters(); renderMelhorias();
+  if (document.getElementById('tab-kanban')?.classList.contains('active')) renderKanban();
+}
 
 function renderTemas() {
   const el = document.getElementById('lista-temas');
@@ -1121,6 +1185,163 @@ function switchTab(name) {
   event.currentTarget.classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'gerencial') renderGerencial();
+  if (name === 'kanban') renderKanban();
+}
+
+// ─── KANBAN ───────────────────────────────────────────────────────
+const KB_COLS = [
+  { key:'backlog',      label:'Backlog' },
+  { key:'levantar_req', label:'Levantar Requisitos' },
+  { key:'planejado',    label:'Planejado' },
+  { key:'em_andamento', label:'Em Andamento' },
+  { key:'deploy',       label:'Deploy' },
+  { key:'atrasado',     label:'Atrasado' },
+  { key:'concluido',    label:'Concluído' },
+  { key:'negada',       label:'Negada' },
+];
+let _kbTema = null;
+
+function getIP(m) {
+  const p = m.discovery && m.discovery.priorizacao;
+  return (p && typeof p.ip === 'number') ? p.ip : null;
+}
+function ipBadge(ip) {
+  if (ip == null) return '';
+  let bg, cor;
+  if (ip >= 4)       { bg = '#1E4208'; cor = '#B2E07A'; }
+  else if (ip >= 2.5){ bg = '#3D3600'; cor = '#FFE14D'; }
+  else               { bg = '#5C0A0A'; cor = '#F9A0A0'; }
+  return `<span class="kb-ip" style="background:${bg};color:${cor}">IP ${ip.toFixed(1).replace('.',',')}</span>`;
+}
+
+function renderKbTemaFilters() {
+  const el = document.getElementById('kb-tema-filters');
+  if (!el) return;
+  const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
+  el.innerHTML = [
+    `<button class="sf-btn all ${_kbTema === null ? 'active' : ''}" onclick="setKbTema(null)">Todos os temas <strong>${state.melhorias.length}</strong></button>`,
+    ...state.temas.map((t, i) => {
+      const cor = TEMA_CORES[i % TEMA_CORES.length];
+      const n = state.melhorias.filter(m => m.tema_id === t.id).length;
+      const active = _kbTema === t.id ? 'active' : '';
+      return `<button class="sf-btn ${active}" style="${active ? `background:${cor}22;color:${cor};border-color:${cor}55` : ''}" onclick="setKbTema('${t.id}')">${t.nome} <strong>${n}</strong></button>`;
+    })
+  ].join('');
+}
+function setKbTema(id) { _kbTema = id; renderKbTemaFilters(); renderKanban(); }
+
+function renderKanban() {
+  renderKbTemaFilters();
+  const board = document.getElementById('kb-board');
+  if (!board) return;
+  const base = state.melhorias.filter(m => !_kbTema || m.tema_id === _kbTema);
+
+  board.innerHTML = KB_COLS.map(col => {
+    let items = base.filter(m => statusKey(m) === col.key);
+    if (col.key === 'planejado') {
+      // maior prioridade (IP) primeiro; sem IP vai para o fim
+      items = items.sort((a, b) => {
+        const ia = getIP(a), ib = getIP(b);
+        if (ia == null && ib == null) return (a.entrega||'9999').localeCompare(b.entrega||'9999');
+        if (ia == null) return 1;
+        if (ib == null) return -1;
+        return ib - ia;
+      });
+    } else {
+      items = items.sort((a, b) => (a.entrega||'9999').localeCompare(b.entrega||'9999'));
+    }
+    const cards = items.map(m => {
+      const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
+      const meta = [];
+      if (m.dev) meta.push('👤 ' + m.dev);
+      if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
+      const nAnexos = (m.anexos || []).length;
+      const badges = [ipBadge(getIP(m))];
+      if (nAnexos) badges.push(`<span class="kb-anexo-tag">📎 ${nAnexos}</span>`);
+      return `<div class="kb-card" ondblclick="openModalMelhoria('${m.id}')" title="Duplo clique para editar">
+        <div class="kb-card-title">${esc(m.titulo)}</div>
+        ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
+        ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
+        ${badges.filter(Boolean).length ? `<div class="kb-badges">${badges.join('')}</div>` : ''}
+      </div>`;
+    }).join('');
+    return `<div class="kb-col">
+      <div class="kb-col-head"><span>${col.label}</span><span class="kb-count">${items.length}</span></div>
+      <div class="kb-col-body">${cards || '<div class="kb-col-empty">—</div>'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── PRIORIZAÇÃO GUT/IP (no modal) ────────────────────────────────
+function mCalcGut() {
+  const I = +document.getElementById('m-gI').value, G = +document.getElementById('m-gG').value,
+        U = +document.getElementById('m-gU').value, E = +document.getElementById('m-gE').value;
+  document.getElementById('m-gIv').textContent = I;
+  document.getElementById('m-gGv').textContent = G;
+  document.getElementById('m-gUv').textContent = U;
+  document.getElementById('m-gEv').textContent = E;
+  const ip = (I + G + U) / E;
+  document.getElementById('m-ipVal').textContent = ip.toFixed(2).replace('.', ',');
+  const badge = document.getElementById('m-ipClasse');
+  const prioEl = document.getElementById('m-prio-auto');
+  let prio;
+  if (ip >= 4)       { badge.textContent = '🟢 Prioritário'; badge.style.background = '#1E4208'; badge.style.color = '#B2E07A'; prio = 'alta'; }
+  else if (ip >= 2.5){ badge.textContent = '🟡 Avaliar';     badge.style.background = '#3D3600'; badge.style.color = '#FFE14D'; prio = 'media'; }
+  else               { badge.textContent = '🔴 Repensar';    badge.style.background = '#5C0A0A'; badge.style.color = '#F9A0A0'; prio = 'baixa'; }
+  prioEl.textContent = prio.charAt(0).toUpperCase() + prio.slice(1);
+  return { I, G, U, E, ip: +ip.toFixed(2), prio };
+}
+function mToggleGut() {
+  const s = document.getElementById('m-status').value;
+  const show = ['backlog','levantar_req','planejado'].includes(s);
+  document.getElementById('m-gut').style.display = show ? 'block' : 'none';
+}
+
+// ─── DISCOVERY (somente leitura) + ANEXOS ─────────────────────────
+function mDataUrlToBlob(dataUrl) {
+  const [head, b64] = dataUrl.split(',');
+  const mime = (head.match(/:(.*?);/) || [])[1] || 'application/octet-stream';
+  const bin = atob(b64); const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+function mViewAnexo(melId, i) {
+  const m = state.melhorias.find(x => x.id === melId);
+  if (!m || !m.anexos || !m.anexos[i]) return;
+  window.open(URL.createObjectURL(mDataUrlToBlob(m.anexos[i].dados)), '_blank');
+}
+function renderMDiscovery(m) {
+  const el = document.getElementById('m-discovery');
+  const d = m && m.discovery;
+  const anexos = (m && m.anexos) || [];
+  let html = '';
+  if (d) {
+    const rows = [];
+    if (d.tipo) rows.push(`<div class="disc-row"><b>Tipo:</b> ${d.tipo === 'ganho' ? 'Ganho de produtividade' : 'Correção/Ajuste'}</div>`);
+    if (d.area_solicitante) rows.push(`<div class="disc-row"><b>Área do solicitante:</b> ${esc(d.area_solicitante)}</div>`);
+    if (d.impacto) rows.push(`<div class="disc-row"><b>Impacto:</b> ${esc(d.impacto)}</div>`);
+    if (d.beneficiarios) rows.push(`<div class="disc-row"><b>Beneficiários:</b> ${esc(d.beneficiarios)}</div>`);
+    if (d.ganho && d.ganho.resumo) rows.push(`<div class="disc-row"><b>Ganho:</b> ${esc(d.ganho.resumo)}</div>`);
+    if (d.contexto) {
+      if (d.contexto.as_is) rows.push(`<div class="disc-row"><b>Como funciona hoje:</b> ${esc(d.contexto.as_is)}</div>`);
+      if (d.contexto.dor) rows.push(`<div class="disc-row"><b>Dor real:</b> ${esc(d.contexto.dor)}</div>`);
+      if (d.contexto.nao_fazer) rows.push(`<div class="disc-row"><b>Se não fizer:</b> ${esc(d.contexto.nao_fazer)}</div>`);
+    }
+    (d.requisitos_funcionais || []).forEach((r, i) => { if (r.desc) rows.push(`<div class="disc-row"><b>RF-${String(i+1).padStart(2,'0')}:</b> ${esc(r.desc)} <span style="color:var(--text3)">(${esc(r.prio||'')})</span></div>`); });
+    (d.regras_negocio || []).forEach((r, i) => { if (r.regra) rows.push(`<div class="disc-row"><b>RN-${String(i+1).padStart(2,'0')}:</b> ${esc(r.regra)}${r.fonte?` — <i>${esc(r.fonte)}</i>`:''}</div>`); });
+    if (d.escopo) {
+      if (d.escopo.dentro) rows.push(`<div class="disc-row"><b>Dentro do escopo:</b> ${esc(d.escopo.dentro)}</div>`);
+      if (d.escopo.fora) rows.push(`<div class="disc-row"><b>Fora do escopo:</b> ${esc(d.escopo.fora)}</div>`);
+      if (d.escopo.premissas) rows.push(`<div class="disc-row"><b>Premissas:</b> ${esc(d.escopo.premissas)}</div>`);
+    }
+    (d.criterios_aceite || []).forEach((c, i) => { if (c.dado||c.quando||c.entao) rows.push(`<div class="disc-row"><b>CA-${String(i+1).padStart(2,'0')}:</b> Dado ${esc(c.dado||'…')}, quando ${esc(c.quando||'…')}, então ${esc(c.entao||'…')}</div>`); });
+    if (rows.length) html += `<div class="disc-sec"><div class="disc-h">Discovery (preenchido no painel)</div>${rows.join('')}</div>`;
+  }
+  if (anexos.length) {
+    html += `<div class="disc-sec"><div class="disc-h">Anexos</div>${anexos.map((a, i) => `<a href="#" class="anexo" onclick="mViewAnexo('${m.id}',${i});return false;">📎 ${esc(a.nome)}</a>`).join('')}</div>`;
+  }
+  el.innerHTML = html;
+  el.style.display = html ? 'block' : 'none';
 }
 
 // ─── DEV SELECT ───────────────────────────────────────────────────
@@ -1517,6 +1738,19 @@ function openModalMelhoria(id) {
   populateSistemaModulo('m', m?.tema_id);
 
   document.getElementById('m-status').value = statusKey(m || {}) || 'backlog';
+
+  // Priorização GUT/IP: carrega valores salvos (ou 3 padrão)
+  const pr = (m && m.discovery && m.discovery.priorizacao) || {};
+  document.getElementById('m-gI').value = pr.I || 3;
+  document.getElementById('m-gG').value = pr.G || 3;
+  document.getElementById('m-gU').value = pr.U || 3;
+  document.getElementById('m-gE').value = pr.E || 3;
+  document.getElementById('m-gut-aplica').checked = true;
+  mCalcGut();
+
+  // Discovery + anexos
+  renderMDiscovery(m || {});
+
   onStatusChange();
 
   // Info de dependência
@@ -1554,6 +1788,7 @@ function openModalMelhoria(id) {
 function onStatusChange() {
   const s = document.getElementById('m-status').value;
   document.getElementById('field-negada').style.display = s === 'negada' ? 'block' : 'none';
+  mToggleGut();
 }
 
 function calcHorasPlanejadas(inicio, entrega) {
@@ -1657,6 +1892,15 @@ function saveMelhoria() {
   const id = document.getElementById('m-id').value;
   const existing = id ? (state.melhorias.find(x => x.id === id) || {}) : {};
 
+  // Priorização GUT/IP (Backlog / Levantar Req. / Planejado)
+  let discovery = existing.discovery || undefined;
+  let prioridade = document.getElementById('m-prioridade').value;
+  if (['backlog','levantar_req','planejado'].includes(sp)) {
+    const gut = mCalcGut();
+    discovery = { ...(existing.discovery || {}), priorizacao: { ...(existing.discovery && existing.discovery.priorizacao || {}), I: gut.I, G: gut.G, U: gut.U, E: gut.E, ip: gut.ip } };
+    if (document.getElementById('m-gut-aplica').checked) prioridade = gut.prio;
+  }
+
   const obj = {
     ...existing,
     id: id || uid(),
@@ -1667,7 +1911,8 @@ function saveMelhoria() {
     status_planejamento: sp,
     estimativa:          existing.estimativa || '',
     dev:                 getDevValue(),
-    prioridade:          document.getElementById('m-prioridade').value,
+    prioridade:          prioridade,
+    discovery:           discovery,
     solicitante:         document.getElementById('m-solicitante').value.trim(),
     data_solicitacao:    document.getElementById('m-data-solicitacao').value,
     inicio:              document.getElementById('m-inicio').value,
@@ -1699,6 +1944,7 @@ function deleteMelhoria(id) {
 
 // ─── HELPERS ──────────────────────────────────────────────────────
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function formatDate(s) {
   if (!s) return '';
   const [y,m,d] = s.split('-');
