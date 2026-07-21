@@ -1417,7 +1417,10 @@ function buildDevReportHTML() {
   }
 })();
 let nmToken = localStorage.getItem('rm_token') || '';
-if (nmToken) {
+// URL do Cloudflare Worker (proxy de gravação). Enquanto vazio, o botão fica
+// restrito a quem tem token. Ao preencher, o botão fica público e grava via proxy.
+const NM_PROXY_URL = '';
+if (nmToken || NM_PROXY_URL) {
   const b = document.getElementById('btn-nova-melhoria');
   if (b) b.style.display = '';
 }
@@ -1592,7 +1595,7 @@ function nmOpenAnexo(melId, i) {
 
 // ── Abrir / fechar / salvar ──
 function openNovaMelhoria() {
-  if (!nmToken) { dashToast('Sem token de acesso. Use o link de administrador.', 'err'); return; }
+  if (!nmToken && !NM_PROXY_URL) { dashToast('Sem token de acesso. Use o link de administrador.', 'err'); return; }
   ['nm-titulo','nm-solicitante','nm-area','nm-objetivo','nm-impacto','nm-benef',
    'nm-ganho-h','nm-ganho-p','nm-asis','nm-dor','nm-nada',
    'nm-escopo-in','nm-escopo-out','nm-premissas'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
@@ -1676,34 +1679,48 @@ async function saveNovaMelhoria() {
   const btn = document.getElementById('nm-save-btn');
   btn.disabled = true; btn.textContent = 'Salvando…';
   try {
-    // Busca SHA + dados atuais (merge-safe)
-    const shaRes = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: { Authorization: `token ${nmToken}`, Accept: 'application/vnd.github.v3+json' }
-    });
-    if (!shaRes.ok) { const e = await shaRes.json(); throw new Error(e.message || ('HTTP ' + shaRes.status)); }
-    const shaJson = await shaRes.json();
-    const server = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g, '')))));
+    if (NM_PROXY_URL) {
+      // Envio público via Cloudflare Worker — sem token no navegador
+      const res = await fetch(NM_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ melhoria: nova, novosTemas: tema.novos })
+      });
+      if (!res.ok) { let msg = 'HTTP ' + res.status; try { msg = (await res.json()).error || msg; } catch (_) {} throw new Error(msg); }
+      closeNovaMelhoria();
+      nmSucesso();
+      // recarrega em segundo plano (pode levar alguns segundos pela CDN)
+      setTimeout(() => { fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok && r.json()).then(d => d && applyData(d, { preserveView: true })).catch(() => {}); }, 2500);
+    } else {
+      // Fallback: gravação direta com token (admin)
+      const shaRes = await fetch(API_URL + '?t=' + Date.now(), {
+        cache: 'no-store',
+        headers: { Authorization: `token ${nmToken}`, Accept: 'application/vnd.github.v3+json' }
+      });
+      if (!shaRes.ok) { const e = await shaRes.json(); throw new Error(e.message || ('HTTP ' + shaRes.status)); }
+      const shaJson = await shaRes.json();
+      const server = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g, '')))));
 
-    server.melhorias = server.melhorias || [];
-    server.temas = server.temas || [];
-    tema.novos.forEach(t => { if (!server.temas.find(x => x.id === t.id)) server.temas.push(t); });
-    server.melhorias.push(nova);
-    server.atualizado_em = new Date().toISOString();
+      server.melhorias = server.melhorias || [];
+      server.temas = server.temas || [];
+      tema.novos.forEach(t => { if (!server.temas.find(x => x.id === t.id)) server.temas.push(t); });
+      server.melhorias.push(nova);
+      server.atualizado_em = new Date().toISOString();
 
-    const bytes = new TextEncoder().encode(JSON.stringify(server, null, 2));
-    let bin = '';
-    for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i + 8192));
-    const put = await fetch(API_URL, {
-      method: 'PUT',
-      headers: { Authorization: `token ${nmToken}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: `feat: nova melhoria (discovery) — ${titulo}`, content: btoa(bin), sha: shaJson.sha })
-    });
-    if (!put.ok) { const e = await put.json(); throw new Error(e.message || 'Erro ao salvar'); }
+      const bytes = new TextEncoder().encode(JSON.stringify(server, null, 2));
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      const put = await fetch(API_URL, {
+        method: 'PUT',
+        headers: { Authorization: `token ${nmToken}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `feat: nova melhoria (discovery) — ${titulo}`, content: btoa(bin), sha: shaJson.sha })
+      });
+      if (!put.ok) { const e = await put.json(); throw new Error(e.message || 'Erro ao salvar'); }
 
-    closeNovaMelhoria();
-    applyData(server, { preserveView: true });
-    nmSucesso();
+      closeNovaMelhoria();
+      applyData(server, { preserveView: true });
+      nmSucesso();
+    }
   } catch (e) {
     dashToast('Erro ao salvar: ' + e.message, 'err');
   }
