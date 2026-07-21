@@ -347,7 +347,7 @@
             <input type="text" id="nm-titulo" placeholder="Ex.: Automatizar fechamento de caixa">
           </label>
           <label class="nm-f">Solicitante (quem pediu)
-            <input type="text" id="nm-solicitante" placeholder="Nome — ou 'necessidade da área'">
+            <input type="text" id="nm-solicitante" placeholder="Nome do solicitante">
           </label>
           <label class="nm-f">Sistema *
             <select id="nm-sistema" onchange="nmOnSistema()"></select>
@@ -380,7 +380,13 @@
             <textarea id="nm-benef" placeholder="Quem usa no dia a dia"></textarea>
           </label>
         </div>
-        <label class="nm-f">Ganho de produtividade esperado
+        <label class="nm-f">Tipo da demanda
+          <select id="nm-tipo" onchange="nmOnTipo()">
+            <option value="ganho">Ganho de produtividade</option>
+            <option value="correcao">Correção/Ajuste</option>
+          </select>
+        </label>
+        <label class="nm-f" id="nm-ganho-wrap">Ganho de produtividade esperado
           <div class="nm-grid2" style="gap:8px">
             <input type="number" id="nm-ganho-h" min="0" step="0.25" placeholder="Horas ganhas/dia por pessoa" oninput="nmCalcGanho()">
             <input type="number" id="nm-ganho-p" min="1" step="1" placeholder="Pessoas envolvidas" oninput="nmCalcGanho()">
@@ -1467,6 +1473,12 @@ function nmResolveTema() {
   return { id: novo.id, novos: [novo] };
 }
 
+// ── Tipo da demanda ──
+function nmOnTipo() {
+  const tipo = document.getElementById('nm-tipo').value;
+  document.getElementById('nm-ganho-wrap').style.display = tipo === 'ganho' ? '' : 'none';
+}
+
 // ── Cálculos ──
 function nmCalcGanho() {
   const h = parseFloat(document.getElementById('nm-ganho-h').value);
@@ -1512,8 +1524,8 @@ function nmAddRN(regra = '', fonte = '') {
   _nmRN++;
   const row = document.createElement('div');
   row.className = 'nm-row'; row.style.gridTemplateColumns = 'minmax(0,1.3fr) minmax(0,1fr) 30px';
-  row.innerHTML = `<input type="text" data-k="regra" placeholder="RN · Regra + exceções" value="${nmEsc(regra)}">
-    <input type="text" data-k="fonte" placeholder="Fonte da verdade + dono" value="${nmEsc(fonte)}">
+  row.innerHTML = `<input type="text" data-k="regra" placeholder="O que o sistema deve fazer" value="${nmEsc(regra)}">
+    <input type="text" data-k="fonte" placeholder="A regra deve ..." value="${nmEsc(fonte)}">
     <button type="button" class="nm-del" onclick="this.parentElement.remove()">✕</button>`;
   document.getElementById('nm-listRN').appendChild(row);
 }
@@ -1585,6 +1597,7 @@ function openNovaMelhoria() {
    'nm-ganho-h','nm-ganho-p','nm-asis','nm-dor','nm-nada',
    'nm-escopo-in','nm-escopo-out','nm-premissas'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   document.getElementById('nm-ganho-res').textContent = 'Preencha os dois campos acima';
+  document.getElementById('nm-tipo').value = 'ganho'; nmOnTipo();
   nmPopulateSistema();
   document.getElementById('nm-listRF').innerHTML = '';
   document.getElementById('nm-listRN').innerHTML = '';
@@ -1597,6 +1610,26 @@ function openNovaMelhoria() {
 function closeNovaMelhoria() {
   document.getElementById('nm-overlay').style.display = 'none';
   document.body.style.overflow = '';
+}
+
+function nmSucesso() {
+  let ov = document.getElementById('nm-sucesso');
+  if (ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id = 'nm-sucesso';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.innerHTML = `
+    <div style="background:#161614;border:1px solid #2E2E2B;border-radius:14px;max-width:440px;width:100%;padding:32px 28px;text-align:center;">
+      <div style="width:64px;height:64px;border-radius:50%;background:#1E4208;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:32px;">✅</div>
+      <div style="font-size:19px;font-weight:700;color:#ECEAE2;margin-bottom:10px;">Sugestão registrada!</div>
+      <div style="font-size:14px;color:#A8A49A;line-height:1.6;margin-bottom:24px;">
+        Recebemos a sua sugestão de melhoria. A equipe de Produto &amp; Tecnologia vai analisá-la em até <strong style="color:#ECEAE2;">7 dias úteis</strong>.<br><br>
+        Acompanhe o andamento por aqui, no painel — ela já aparece no <strong style="color:#9BC8F8;">Backlog</strong>.
+      </div>
+      <button onclick="document.getElementById('nm-sucesso').remove()" style="font-size:14px;color:#fff;background:#3B8FE8;border:none;border-radius:9px;padding:11px 28px;cursor:pointer;font-weight:700;">Entendi</button>
+    </div>`;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
 }
 
 async function saveNovaMelhoria() {
@@ -1625,10 +1658,13 @@ async function saveNovaMelhoria() {
     criado_em: new Date().toISOString(),
     anexos: _nmAnexos,
     discovery: {
+      tipo: g('nm-tipo'),
       area_solicitante: g('nm-area'),
       impacto: g('nm-impacto'),
       beneficiarios: g('nm-benef'),
-      ganho: { horas_dia: g('nm-ganho-h'), pessoas: g('nm-ganho-p'), resumo: nmCalcGanho() },
+      ganho: g('nm-tipo') === 'ganho'
+        ? { horas_dia: g('nm-ganho-h'), pessoas: g('nm-ganho-p'), resumo: nmCalcGanho() }
+        : null,
       contexto: { as_is: g('nm-asis'), dor: g('nm-dor'), nao_fazer: g('nm-nada') },
       requisitos_funcionais: nmCollectRows('nm-listRF', ['desc', 'prio']),
       regras_negocio: nmCollectRows('nm-listRN', ['regra', 'fonte']),
@@ -1666,8 +1702,8 @@ async function saveNovaMelhoria() {
     if (!put.ok) { const e = await put.json(); throw new Error(e.message || 'Erro ao salvar'); }
 
     closeNovaMelhoria();
-    dashToast('✅ Melhoria criada no Backlog. Já reflete no Admin e Gantt.', 'ok');
     applyData(server, { preserveView: true });
+    nmSucesso();
   } catch (e) {
     dashToast('Erro ao salvar: ' + e.message, 'err');
   }
