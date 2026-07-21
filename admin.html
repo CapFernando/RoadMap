@@ -1272,6 +1272,7 @@ function renderKanban() {
       const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
       const meta = [];
       if (m.dev) meta.push('👤 ' + m.dev);
+      if (m.criado_em) meta.push('🗓 Criada: ' + formatDate((m.criado_em || '').slice(0, 10)));
       if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
       const nAnexos = (m.anexos || []).length;
       const badges = [ipBadge(getIP(m))];
