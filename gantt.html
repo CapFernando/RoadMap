@@ -1055,8 +1055,11 @@ function renderGantt() {
     return;
   }
 
-  // filter melhorias
-  const visible = state.melhorias.filter(m => !m.oculto && matchesFilters(m));
+  // filter melhorias — demandas negadas não entram no cronograma
+  const visible = state.melhorias.filter(m =>
+    !m.oculto && matchesFilters(m) &&
+    (m.status_planejamento || '') !== 'negada' && m.status !== 'negada'
+  );
 
   // linhas de dev: padrão mostra só quem tem demanda no mês selecionado;
   // "__all__" mostra todos; dev específico mostra apenas ele
