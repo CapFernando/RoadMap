@@ -827,7 +827,14 @@ function renderKanban() {
   const items = getFiltered();
 
   kanban.innerHTML = COLUMNS.map(col => {
-    const cards = items.filter(m => col.maps.includes(getStatusKey(m)));
+    const cards = items.filter(m => col.maps.includes(getStatusKey(m)))
+      .sort((a, b) => {
+        // ordena por prazo (entrega); sem data vai para o fim; empate por início
+        const ea = a.entrega || a.inicio || '9999-99-99';
+        const eb = b.entrega || b.inicio || '9999-99-99';
+        if (ea !== eb) return ea.localeCompare(eb);
+        return (a.inicio || '9999-99-99').localeCompare(b.inicio || '9999-99-99');
+      });
     const cardsHTML = cards.length
       ? cards.map(m => renderCard(m, col.key)).join('')
       : `<div class="empty-col">Nenhuma demanda</div>`;
