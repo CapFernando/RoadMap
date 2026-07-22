@@ -819,10 +819,11 @@ function doLogout() {
 initLoginScreen();
 
 let _adminPollActive = false;
+let _pendingEdits = false; // há edições locais não publicadas? protege contra o recarregamento automático
 async function adminCheckUpdates() {
   if (document.getElementById('admin-app').style.display === 'none') return;
   if (_adminPollActive || !fileSha) return;
-  if (_kbDirty) return; // não recarrega enquanto há mudança do Kanban pendente de salvar
+  if (_kbDirty || _pendingEdits) return; // não recarrega enquanto há mudança local pendente de salvar
   _adminPollActive = true;
   try {
     const res = await fetch(API_URL + '?t=' + Date.now(), {
@@ -837,6 +838,9 @@ async function adminCheckUpdates() {
   _adminPollActive = false;
 }
 setInterval(adminCheckUpdates, 30000);
+window.addEventListener('beforeunload', (e) => {
+  if (_pendingEdits || _kbDirty) { e.preventDefault(); e.returnValue = 'Há alterações não publicadas. Publique antes de sair para não perder.'; }
+});
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') adminCheckUpdates(); });
 
 // ─── GITHUB ───────────────────────────────────────────────────────
@@ -930,6 +934,7 @@ async function saveToGitHub(attempt = 1) {
     }
     const data = await res.json();
     fileSha = data.content.sha;
+    _pendingEdits = false; _kbDirty = false; // tudo publicado
     toast('✅ Publicado!', 'ok');
   } catch (e) {
     showSaving(false);
@@ -1821,6 +1826,7 @@ function saveTema() {
   } else {
     state.temas.push({ id: uid(), nome });
   }
+  _pendingEdits = true;
   closeModal('modal-tema');
   renderAll();
   toast('Tema salvo. Clique em "Publicar alterações" para ir ao ar.', 'ok');
@@ -1829,6 +1835,7 @@ function deleteTema(id) {
   if (!confirm('Excluir este tema? As melhorias vinculadas ficarão sem tema.')) return;
   _deletedIds.add(id);
   state.temas = state.temas.filter(t => t.id !== id);
+  _pendingEdits = true;
   renderAll();
   toast('Tema removido.', 'ok');
 }
@@ -2046,6 +2053,7 @@ function saveMelhoria() {
     state.melhorias.push(obj);
   }
 
+  _pendingEdits = true;
   closeModal('modal-melhoria');
   renderAll();
   toast('Melhoria salva. Clique em "Publicar alterações" para ir ao ar.', 'ok');
@@ -2055,6 +2063,7 @@ function deleteMelhoria(id) {
   if (!confirm('Excluir esta melhoria?')) return;
   _deletedIds.add(id);
   state.melhorias = state.melhorias.filter(m => m.id !== id);
+  _pendingEdits = true;
   renderAll();
   toast('Melhoria removida.', 'ok');
 }
