@@ -745,6 +745,11 @@ const GITHUB_USER   = 'CapFernando';
 const GITHUB_REPO   = 'RoadMap';
 const DATA_PATH     = 'data/melhorias.json';
 const API_URL       = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
+const RAW_URL       = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
+// Worker que guarda token + senha. Com ele, o Admin loga só com senha (sem token).
+const ADMIN_PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
+let _adminPw = sessionStorage.getItem('rm_admin_pw') || '';
+let _pollTs = null;
 
 // ─── STATE ────────────────────────────────────────────────────────
 let state = { temas: [], melhorias: [] };
@@ -765,18 +770,28 @@ const _deletedIds = new Set();
 
 let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
 
+function enterAdmin() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('admin-app').style.display = 'block';
+  loadFromGitHub();
+}
+
 function initLoginScreen() {
+  // Modo senha (via Worker): não pede token
+  if (ADMIN_PROXY_URL && !runtimeToken) {
+    const b = document.getElementById('btn-entrar');
+    b.disabled = false; b.style.opacity = ''; b.style.cursor = '';
+    if (_adminPw) enterAdmin(); // já validou nesta sessão
+    return;
+  }
+  // Modo token (legado)
   if (!runtimeToken) {
     document.getElementById('sem-token-aviso').style.display = 'block';
     document.getElementById('btn-entrar').disabled = true;
     document.getElementById('btn-entrar').style.opacity = '0.4';
     document.getElementById('btn-entrar').style.cursor = 'not-allowed';
   }
-  if (localStorage.getItem('rm_logged') === '1' && runtimeToken) {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('admin-app').style.display = 'block';
-    loadFromGitHub();
-  }
+  if (localStorage.getItem('rm_logged') === '1' && runtimeToken) enterAdmin();
 }
 
 function copyAccessLink() {
@@ -789,27 +804,51 @@ function copyAccessLink() {
   });
 }
 
-function doLogin() {
-  // Se não tem token, lê do campo e salva no localStorage
+async function doLogin() {
+  const v = document.getElementById('senha-input').value;
+  const errEl = document.getElementById('login-error');
+
+  // Modo senha (via Worker) — não pede token
+  if (ADMIN_PROXY_URL && !runtimeToken) {
+    if (!v) { errEl.textContent = 'Informe a senha.'; return; }
+    const b = document.getElementById('btn-entrar');
+    b.disabled = true; b.textContent = 'Entrando…';
+    try {
+      const res = await fetch(ADMIN_PROXY_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'auth', senha: v })
+      });
+      if (!res.ok) { errEl.textContent = 'Senha incorreta.'; document.getElementById('senha-input').value = ''; return; }
+      _adminPw = v; sessionStorage.setItem('rm_admin_pw', v);
+      errEl.textContent = '';
+      enterAdmin();
+    } catch (e) {
+      errEl.textContent = 'Falha de conexão. Tente novamente.';
+    } finally {
+      b.disabled = false; b.textContent = 'Entrar';
+    }
+    return;
+  }
+
+  // Modo token (legado)
   if (!runtimeToken) {
     const t = document.getElementById('token-input').value.trim();
-    if (!t) { document.getElementById('login-error').textContent = 'Informe o GitHub Token.'; return; }
+    if (!t) { errEl.textContent = 'Informe o GitHub Token.'; return; }
     runtimeToken = t;
     localStorage.setItem('rm_token', t);
   }
-  const v = document.getElementById('senha-input').value;
   if (v === SENHA) {
     localStorage.setItem('rm_logged', '1');
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('admin-app').style.display = 'block';
-    loadFromGitHub();
+    enterAdmin();
   } else {
-    document.getElementById('login-error').textContent = 'Senha incorreta.';
+    errEl.textContent = 'Senha incorreta.';
     document.getElementById('senha-input').value = '';
   }
 }
 function doLogout() {
   localStorage.removeItem('rm_logged');
+  sessionStorage.removeItem('rm_admin_pw');
+  _adminPw = '';
   document.getElementById('admin-app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('senha-input').value = '';
@@ -822,17 +861,21 @@ let _adminPollActive = false;
 let _pendingEdits = false; // há edições locais não publicadas? protege contra o recarregamento automático
 async function adminCheckUpdates() {
   if (document.getElementById('admin-app').style.display === 'none') return;
-  if (_adminPollActive || !fileSha) return;
+  if (_adminPollActive) return;
+  if (runtimeToken && !fileSha) return;
   if (_kbDirty || _pendingEdits) return; // não recarrega enquanto há mudança local pendente de salvar
   _adminPollActive = true;
   try {
-    const res = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
-    });
-    if (res.ok) {
-      const json = await res.json();
-      if (json.sha !== fileSha) await loadFromGitHub(true);
+    if (runtimeToken) {
+      const res = await fetch(API_URL + '?t=' + Date.now(), {
+        cache: 'no-store',
+        headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
+      });
+      if (res.ok) { const json = await res.json(); if (json.sha !== fileSha) await loadFromGitHub(true); }
+    } else {
+      // modo senha: compara atualizado_em via RAW (público, sem rate limit)
+      const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) { const d = await res.json(); if (_pollTs !== undefined && d.atualizado_em !== _pollTs) await loadFromGitHub(true); }
     }
   } catch(_) {}
   _adminPollActive = false;
@@ -846,15 +889,25 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ─── GITHUB ───────────────────────────────────────────────────────
 async function loadFromGitHub(silent) {
   try {
-    const res = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
-    });
-    if (res.status === 404) { renderAll(); return; }
-    if (!res.ok) throw new Error('Erro ao carregar dados do GitHub.');
-    const json = await res.json();
-    fileSha = json.sha;
-    const decoded = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
+    let decoded;
+    if (runtimeToken) {
+      const res = await fetch(API_URL + '?t=' + Date.now(), {
+        cache: 'no-store',
+        headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
+      });
+      if (res.status === 404) { renderAll(); return; }
+      if (!res.ok) throw new Error('Erro ao carregar dados do GitHub.');
+      const json = await res.json();
+      fileSha = json.sha;
+      decoded = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
+    } else {
+      // modo senha: leitura pública (repo público), sem token
+      const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error('Erro ao carregar dados.');
+      decoded = await res.json();
+      fileSha = null;
+    }
+    _pollTs = decoded.atualizado_em || null;
     state = {
       temas:          decoded.temas          || [],
       melhorias:      decoded.melhorias       || [],
@@ -870,7 +923,48 @@ async function loadFromGitHub(silent) {
   }
 }
 
+// Publicação em modo senha: merge-safe + grava via Worker (token fica no Worker)
+async function saveViaProxy() {
+  showSaving(true);
+  try {
+    // Lê o estado atual do servidor (público) e incorpora itens de terceiros
+    let server = {};
+    try { const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) server = await r.json(); } catch (_) {}
+    const localM = new Set(state.melhorias.map(m => m.id));
+    const localT = new Set(state.temas.map(t => t.id));
+    (server.temas || []).forEach(t => { if (!localT.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t); });
+    (server.melhorias || []).forEach(m => { if (!localM.has(m.id) && !_deletedIds.has(m.id)) state.melhorias.push(m); });
+    const devSet = new Set(state.desenvolvedores || []);
+    (server.desenvolvedores || []).forEach(d => devSet.add(d));
+    state.desenvolvedores = [...devSet];
+    const ferSet = new Set((state.feriados || []).map(f => f.data || f));
+    (server.feriados || []).forEach(f => ferSet.add(f.data || f));
+    state.feriados = [...ferSet].map(d => (typeof d === 'string' ? { data: d } : d));
+    state.atualizado_em = new Date().toISOString();
+
+    const res = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'publish', senha: _adminPw, data: state })
+    });
+    if (!res.ok) {
+      let msg = 'Falha ao publicar';
+      try { const e = await res.json(); msg = e.error === 'senha' ? 'Sessão expirada — saia e entre novamente.' : (e.error || msg); } catch (_) {}
+      throw new Error(msg);
+    }
+    _pollTs = state.atualizado_em;
+    _pendingEdits = false; _kbDirty = false;
+    const errEl = document.getElementById('save-error'); if (errEl) errEl.style.display = 'none';
+    toast('✅ Publicado!', 'ok');
+  } catch (e) {
+    const errEl = document.getElementById('save-error');
+    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — seus dados estão seguros, tente novamente.'; errEl.style.display = 'block'; }
+    toast('Erro ao publicar: ' + e.message, 'err');
+  }
+  showSaving(false);
+}
+
 async function saveToGitHub(attempt = 1) {
+  if (!runtimeToken && ADMIN_PROXY_URL) return saveViaProxy();
   showSaving(true);
   try {
     // Busca SHA mais recente para evitar conflito
