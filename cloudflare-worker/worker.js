@@ -66,6 +66,34 @@ export default {
       return json({ ok: true }, 200, headers);
     }
 
+    const devOk = (s) => s && env.DEV_SENHA && s === env.DEV_SENHA;
+
+    // ── Login do Dev (painel dev) ──
+    if (body.action === 'dev-auth') {
+      return devOk(body.senha) ? json({ ok: true }, 200, headers) : json({ error: 'senha' }, 401, headers);
+    }
+
+    // ── Atualização do Dev (patch em melhorias) ──
+    if (body.action === 'dev-update') {
+      if (!devOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+      const patch = body.patch || {};
+      if (JSON.stringify(body).length > 5 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
+      const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+      if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const file = await getRes.json();
+      const data = JSON.parse(fromB64(file.content));
+      data.melhorias = (data.melhorias || []).map(m => patch[m.id] ? { ...m, ...patch[m.id] } : m);
+      Object.keys(patch).forEach(id => { if (!data.melhorias.find(m => m.id === id)) data.melhorias.push(patch[id]); });
+      if (Array.isArray(body.temas)) data.temas = body.temas;
+      data.atualizado_em = new Date().toISOString();
+      const putRes = await gh('contents/' + FILE_PATH, {
+        method: 'PUT',
+        body: JSON.stringify({ message: 'chore: dev atualiza ' + new Date().toISOString(), content: toB64(JSON.stringify(data, null, 2)), sha: file.sha }),
+      });
+      if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
+      return json({ ok: true }, 200, headers);
+    }
+
     // ── Sugestão pública (dash) — só adiciona no Backlog ──
     const m = body.melhoria || {};
     if (!m.titulo || !String(m.titulo).trim()) return json({ error: 'Titulo obrigatorio' }, 400, headers);

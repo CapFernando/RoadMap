@@ -371,23 +371,27 @@ const DATA_PATH    = 'data/melhorias.json';
 const API_URL = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
 const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
 
-// Captura token da URL (?token= ou #token=) e autentica automaticamente se presente
+// Worker que guarda o token do GitHub. Com ele, o dev grava sem token na máquina.
+const ADMIN_PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
+let _devPw = sessionStorage.getItem('rm_dev_pw') || '';
+
+// Captura token da URL (?token= ou #token=) — só usado no modo legado (sem proxy)
 (function() {
   const qp = new URLSearchParams(location.search);
   const hp = new URLSearchParams(location.hash.slice(1));
   const t  = qp.get('token') || hp.get('token');
   if (t && (t.startsWith('ghp_') || t.startsWith('github_pat_'))) {
-    localStorage.setItem('rm_token', t);
-    // Link com token = credencial completa; pula etapa de senha
-    sessionStorage.setItem('rm_dev_authed', '1');
-    sessionStorage.setItem('rm_authed_via_link', '1');
-    // Remove token da barra de endereço para não expor em histórico
-    const clean = location.pathname;
-    history.replaceState(null, '', clean);
+    history.replaceState(null, '', location.pathname); // limpa a URL
+    if (!ADMIN_PROXY_URL) {
+      localStorage.setItem('rm_token', t);
+      sessionStorage.setItem('rm_dev_authed', '1');
+      sessionStorage.setItem('rm_authed_via_link', '1');
+    }
   }
 })();
 
-let runtimeToken = (typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '';
+// Modo proxy: ignora qualquer token — grava sempre pelo Worker
+let runtimeToken = ADMIN_PROXY_URL ? '' : ((typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '');
 
 // ─── STATE ───────────────────────────────────────────────────────
 let state = { temas:[], melhorias:[], desenvolvedores:[], feriados:[] };
@@ -480,6 +484,28 @@ function applyData(data) {
 }
 
 async function saveToGitHub(patch, opts = {}) {
+  // Modo proxy: grava pelo Worker (sem token na máquina)
+  if (ADMIN_PROXY_URL) {
+    showSaving(true);
+    try {
+      const bodyObj = { action: 'dev-update', senha: _devPw, patch };
+      if (opts.temas !== undefined) bodyObj.temas = opts.temas;
+      const res = await fetch(ADMIN_PROXY_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyObj)
+      });
+      if (!res.ok) {
+        let msg = 'Falha ao salvar';
+        try { const e = await res.json(); msg = e.error === 'senha' ? 'Sessão expirada — saia e entre novamente.' : (e.error || msg); } catch (_) {}
+        throw new Error(msg);
+      }
+      toast('✅ Salvo!','ok');
+      return true;
+    } catch(e) {
+      toast('Erro ao salvar: ' + e.message,'err');
+      return false;
+    } finally { showSaving(false); }
+  }
   if (!runtimeToken) { toast('Sem token de acesso. Solicite o link ao administrador.','err'); return false; }
   showSaving(true);
   try {
@@ -579,7 +605,8 @@ async function reloadDevList() {
 
 async function initApp() {
   // Se a sessão ainda não foi autenticada com senha, mostra step-senha
-  const authed = sessionStorage.getItem('rm_dev_authed');
+  // No modo proxy, exige a senha da sessão (_devPw) para poder gravar
+  const authed = sessionStorage.getItem('rm_dev_authed') && (!ADMIN_PROXY_URL || _devPw);
   if (!authed) {
     // step-senha já é o padrão (step-dev está oculto)
     document.getElementById('login-senha')?.focus();
@@ -628,20 +655,36 @@ function getDevList() {
   return [...new Set([...fromArr, ...fromMel])].sort();
 }
 
-function verificarSenha() {
+async function verificarSenha() {
   const val = document.getElementById('login-senha').value;
-  const correta = window.DEV_SENHA || window.ADMIN_SENHA || '';
-  if (!correta) {
-    // Se não houver senha configurada no config.js, passa direto
-    sessionStorage.setItem('rm_dev_authed', '1');
-    mostrarStepDev(); return;
+  const errEl = document.getElementById('login-error-senha');
+
+  // Modo proxy: valida a senha no Worker (sem token na máquina)
+  if (ADMIN_PROXY_URL) {
+    if (!val) { errEl.textContent = 'Informe a senha.'; return; }
+    try {
+      const res = await fetch(ADMIN_PROXY_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dev-auth', senha: val })
+      });
+      if (!res.ok) { errEl.textContent = 'Senha incorreta.'; document.getElementById('login-senha').value = ''; return; }
+      _devPw = val; sessionStorage.setItem('rm_dev_pw', val);
+      sessionStorage.setItem('rm_dev_authed', '1');
+      errEl.textContent = '';
+      mostrarStepDev();
+    } catch (e) { errEl.textContent = 'Falha de conexão. Tente novamente.'; }
+    return;
   }
+
+  // Modo legado (senha do config.js)
+  const correta = window.DEV_SENHA || window.ADMIN_SENHA || '';
+  if (!correta) { sessionStorage.setItem('rm_dev_authed', '1'); mostrarStepDev(); return; }
   if (val === correta) {
     sessionStorage.setItem('rm_dev_authed', '1');
-    document.getElementById('login-error-senha').textContent = '';
+    errEl.textContent = '';
     mostrarStepDev();
   } else {
-    document.getElementById('login-error-senha').textContent = 'Senha incorreta.';
+    errEl.textContent = 'Senha incorreta.';
     document.getElementById('login-senha').value = '';
     document.getElementById('login-senha').focus();
   }
