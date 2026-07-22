@@ -449,6 +449,7 @@
         <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova melhoria</button>
       </div>
       <div class="status-filters" id="kb-tema-filters"></div>
+      <div class="status-filters" id="kb-dev-filters"></div>
       <div id="kb-board" class="kb-board"></div>
     </div>
 
@@ -1218,6 +1219,22 @@ const KB_COLS = [
   { key:'negada',       label:'Negada' },
 ];
 let _kbTema = null;
+let _kbDev  = null;
+
+function kbSplitDevs(s) { return s ? String(s).split(/[\/,]/).map(x => x.trim()).filter(Boolean) : []; }
+
+// Status efetivo no Kanban: se a data de entrega já passou e a demanda está em
+// andamento (planejado / em andamento / deploy), cai automaticamente em "Atrasado".
+const KB_STATUS_ATRASO = ['planejado', 'em_andamento', 'deploy'];
+function kbEffectiveStatus(m) {
+  const sk = statusKey(m);
+  if (sk === 'atrasado') return 'atrasado';
+  if (m.entrega && KB_STATUS_ATRASO.includes(sk)) {
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    if (new Date(m.entrega + 'T00:00:00') < hoje) return 'atrasado';
+  }
+  return sk;
+}
 
 function getIP(m) {
   const p = m.discovery && m.discovery.priorizacao;
@@ -1248,14 +1265,37 @@ function renderKbTemaFilters() {
 }
 function setKbTema(id) { _kbTema = id; renderKbTemaFilters(); renderKanban(); }
 
+function renderKbDevFilters() {
+  const el = document.getElementById('kb-dev-filters');
+  if (!el) return;
+  const devs = [...new Set(state.melhorias.flatMap(m => kbSplitDevs(m.dev)))].sort((a, b) => a.localeCompare(b));
+  const semDev = state.melhorias.filter(m => !kbSplitDevs(m.dev).length).length;
+  el.innerHTML = [
+    `<button class="sf-btn all ${_kbDev === null ? 'active' : ''}" onclick="setKbDev(null)">Todos os devs <strong>${state.melhorias.length}</strong></button>`,
+    ...devs.map(d => {
+      const n = state.melhorias.filter(m => kbSplitDevs(m.dev).includes(d)).length;
+      const active = _kbDev === d ? 'active' : '';
+      return `<button class="sf-btn ${active}" onclick="setKbDev('${d.replace(/'/g, "\\'")}')">👤 ${d} <strong>${n}</strong></button>`;
+    }),
+    semDev ? `<button class="sf-btn ${_kbDev === '__sem__' ? 'active' : ''}" onclick="setKbDev('__sem__')">Sem dev <strong>${semDev}</strong></button>` : '',
+  ].join('');
+}
+function setKbDev(d) { _kbDev = d; renderKbDevFilters(); renderKanban(); }
+
 function renderKanban() {
   renderKbTemaFilters();
+  renderKbDevFilters();
   const board = document.getElementById('kb-board');
   if (!board) return;
-  const base = state.melhorias.filter(m => !_kbTema || m.tema_id === _kbTema);
+  const base = state.melhorias.filter(m => {
+    if (_kbTema && m.tema_id !== _kbTema) return false;
+    if (_kbDev === '__sem__') { if (kbSplitDevs(m.dev).length) return false; }
+    else if (_kbDev && !kbSplitDevs(m.dev).includes(_kbDev)) return false;
+    return true;
+  });
 
   board.innerHTML = KB_COLS.map(col => {
-    let items = base.filter(m => statusKey(m) === col.key);
+    let items = base.filter(m => kbEffectiveStatus(m) === col.key);
     if (col.key === 'planejado') {
       // maior prioridade (IP) primeiro; sem IP vai para o fim
       items = items.sort((a, b) => {
