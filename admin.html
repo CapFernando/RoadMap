@@ -162,6 +162,9 @@
     .kb-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
     .kb-anexo-tag { font-size: 10.5px; color: var(--text3); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
     .kb-col-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 14px 4px; opacity: .6; }
+    .kb-card.dragging { opacity: .4; }
+    .kb-col.drop-target { outline: 2px dashed var(--blue, #3B8FE8); outline-offset: -2px; background: rgba(59,143,232,.06); }
+    .kb-col.drop-target .kb-col-head { background: rgba(59,143,232,.10); }
     .gut-row { display: grid; grid-template-columns: 210px 1fr 34px; gap: 12px; align-items: center; font-size: 13px; color: var(--text2, #C9C6BE); }
     .gut-row input[type=range] { width: 100%; accent-color: var(--blue, #3B8FE8); }
     .gut-v { font-family: monospace; font-weight: 700; text-align: center; background: var(--bg3, #252522); border-radius: 6px; padding: 3px 0; color: var(--blue, #3B8FE8); }
@@ -1317,18 +1320,60 @@ function renderKanban() {
       const nAnexos = (m.anexos || []).length;
       const badges = [ipBadge(getIP(m))];
       if (nAnexos) badges.push(`<span class="kb-anexo-tag">📎 ${nAnexos}</span>`);
-      return `<div class="kb-card" ondblclick="openModalMelhoria('${m.id}')" title="Duplo clique para editar">
+      return `<div class="kb-card" draggable="true"
+        ondragstart="kbDragStart(event,'${m.id}')" ondragend="kbDragEnd(event)"
+        onmousedown="kbCardMouseDown(event,'${m.id}')"
+        title="Arraste para mover · duplo clique para editar">
         <div class="kb-card-title">${esc(m.titulo)}</div>
         ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
         ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
         ${badges.filter(Boolean).length ? `<div class="kb-badges">${badges.join('')}</div>` : ''}
       </div>`;
     }).join('');
-    return `<div class="kb-col">
+    return `<div class="kb-col" data-col="${col.key}" ondragover="kbDragOver(event)" ondragleave="kbDragLeave(event)" ondrop="kbDrop(event,'${col.key}')">
       <div class="kb-col-head"><span>${col.label}</span><span class="kb-count">${items.length}</span></div>
       <div class="kb-col-body">${cards || '<div class="kb-col-empty">—</div>'}</div>
     </div>`;
   }).join('');
+}
+
+// ─── DRAG & DROP do Kanban ────────────────────────────────────────
+let _kbDragId = null, _kbTap = { time: 0, id: null };
+function kbCardMouseDown(e, id) {
+  if (e.button !== 0) return; // só botão esquerdo
+  const now = Date.now();
+  if (_kbTap.id === id && now - _kbTap.time < 400) { _kbTap = { time: 0, id: null }; openModalMelhoria(id); }
+  else { _kbTap = { time: now, id }; }
+}
+function kbDragStart(e, id) {
+  _kbDragId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  const c = e.target.closest('.kb-card');
+  if (c) setTimeout(() => c.classList.add('dragging'), 0);
+}
+function kbDragEnd() {
+  document.querySelectorAll('.kb-card.dragging').forEach(c => c.classList.remove('dragging'));
+  document.querySelectorAll('.kb-col.drop-target').forEach(c => c.classList.remove('drop-target'));
+}
+function kbDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('drop-target'); }
+function kbDragLeave(e) { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drop-target'); }
+function kbDrop(e, colKey) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drop-target');
+  const id = _kbDragId; _kbDragId = null;
+  if (!id) return;
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  if (m.status_planejamento === colKey) { renderKanban(); return; }
+  m.status_planejamento = colKey;
+  m.status = SP_TO_STATUS[colKey] || m.status;
+  renderKanban();
+  // se caiu por regra de atraso mesmo indo para outra coluna, avisa
+  if (colKey !== 'atrasado' && kbEffectiveStatus(m) === 'atrasado') {
+    toast(`Movido, mas a entrega está vencida → aparece em Atrasado. Ajuste a data de entrega para reprogramar.`, 'err');
+  } else {
+    toast(`Movido para ${STATUS_LABELS[colKey] || colKey}. Clique em "Publicar alterações" para salvar.`, 'ok');
+  }
 }
 
 // ─── PRIORIZAÇÃO GUT/IP (no modal) ────────────────────────────────
