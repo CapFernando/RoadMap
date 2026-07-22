@@ -822,6 +822,7 @@ let _adminPollActive = false;
 async function adminCheckUpdates() {
   if (document.getElementById('admin-app').style.display === 'none') return;
   if (_adminPollActive || !fileSha) return;
+  if (_kbDirty) return; // não recarrega enquanto há mudança do Kanban pendente de salvar
   _adminPollActive = true;
   try {
     const res = await fetch(API_URL + '?t=' + Date.now(), {
@@ -1372,8 +1373,20 @@ function kbDrop(e, colKey) {
   if (colKey !== 'atrasado' && kbEffectiveStatus(m) === 'atrasado') {
     toast(`Movido, mas a entrega está vencida → aparece em Atrasado. Ajuste a data de entrega para reprogramar.`, 'err');
   } else {
-    toast(`Movido para ${STATUS_LABELS[colKey] || colKey}. Clique em "Publicar alterações" para salvar.`, 'ok');
+    toast(`Movido para ${STATUS_LABELS[colKey] || colKey} — salvando…`, 'ok');
   }
+  kbAutoSave(); // persiste imediatamente (não depende do botão Publicar)
+}
+
+// Salva a mudança do Kanban na hora, com pequeno debounce para agrupar arrastos seguidos
+let _kbDirty = false, _kbSaveTimer = null;
+function kbAutoSave() {
+  _kbDirty = true;
+  clearTimeout(_kbSaveTimer);
+  _kbSaveTimer = setTimeout(async () => {
+    await saveToGitHub();
+    _kbDirty = false;
+  }, 900);
 }
 
 // ─── PRIORIZAÇÃO GUT/IP (no modal) ────────────────────────────────
