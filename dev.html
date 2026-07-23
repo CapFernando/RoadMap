@@ -484,21 +484,26 @@ function applyData(data) {
 }
 
 async function saveToGitHub(patch, opts = {}) {
-  // Modo proxy: grava pelo Worker (sem token na máquina)
+  // Modo proxy: navegador monta o estado completo e o Worker só grava (leve, sem token)
   if (ADMIN_PROXY_URL) {
     showSaving(true);
     try {
-      const bodyObj = { action: 'dev-update', patch };
-      if (opts.temas !== undefined) bodyObj.temas = opts.temas;
+      // Lê o estado atual (fresco) e aplica o patch localmente
+      let server = {};
+      try { const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) server = await r.json(); } catch (_) {}
+      server.melhorias = (server.melhorias || []).map(m => patch[m.id] ? { ...m, ...patch[m.id] } : m);
+      Object.keys(patch).forEach(id => { if (!server.melhorias.find(m => m.id === id)) server.melhorias.push(patch[id]); });
+      if (opts.temas !== undefined) server.temas = opts.temas;
       const res = await fetch(ADMIN_PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyObj)
+        body: JSON.stringify({ action: 'dev-publish', data: server })
       });
       if (!res.ok) {
         let msg = 'Falha ao salvar';
-        try { const e = await res.json(); msg = e.error === 'senha' ? 'Sessão expirada — saia e entre novamente.' : (e.error || msg); } catch (_) {}
+        try { const e = await res.json(); msg = e.error || msg; } catch (_) {}
         throw new Error(msg);
       }
+      applyData(server);
       toast('✅ Salvo!','ok');
       return true;
     } catch(e) {

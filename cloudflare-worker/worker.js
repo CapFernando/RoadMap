@@ -70,7 +70,7 @@ export default {
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
-        body: JSON.stringify({ message: 'chore: admin publica ' + new Date().toISOString(), content: toB64(JSON.stringify(data, null, 2)), sha: file.sha }),
+        body: JSON.stringify({ message: 'chore: admin publica ' + new Date().toISOString(), content: toB64(JSON.stringify(data)), sha: file.sha }),
       });
       if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
       return json({ ok: true }, 200, headers);
@@ -83,21 +83,18 @@ export default {
       return devOk(body.senha) ? json({ ok: true }, 200, headers) : json({ error: 'senha' }, 401, headers);
     }
 
-    // ── Atualização do Dev (patch em melhorias) — sem senha ──
-    if (body.action === 'dev-update') {
-      const patch = body.patch || {};
-      if (JSON.stringify(body).length > 5 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
+    // ── Gravação do Dev (estado completo montado no navegador) — sem senha, leve ──
+    if (body.action === 'dev-publish') {
+      const data = body.data;
+      if (!data || !Array.isArray(data.melhorias)) return json({ error: 'dados invalidos' }, 400, headers);
+      if (JSON.stringify(data).length > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
       const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
       if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       const file = await getRes.json();
-      const data = JSON.parse(fromB64(file.content));
-      data.melhorias = (data.melhorias || []).map(m => patch[m.id] ? { ...m, ...patch[m.id] } : m);
-      Object.keys(patch).forEach(id => { if (!data.melhorias.find(m => m.id === id)) data.melhorias.push(patch[id]); });
-      if (Array.isArray(body.temas)) data.temas = body.temas;
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
-        body: JSON.stringify({ message: 'chore: dev atualiza ' + new Date().toISOString(), content: toB64(JSON.stringify(data, null, 2)), sha: file.sha }),
+        body: JSON.stringify({ message: 'chore: dev atualiza ' + new Date().toISOString(), content: toB64(JSON.stringify(data)), sha: file.sha }),
       });
       if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
       return json({ ok: true }, 200, headers);
@@ -141,7 +138,7 @@ export default {
 
     const putRes = await gh('contents/' + FILE_PATH, {
       method: 'PUT',
-      body: JSON.stringify({ message: 'feat: nova sugestao (publico) - ' + nova.titulo, content: toB64(JSON.stringify(data, null, 2)), sha: file.sha }),
+      body: JSON.stringify({ message: 'feat: nova sugestao (publico) - ' + nova.titulo, content: toB64(JSON.stringify(data)), sha: file.sha }),
     });
     if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
     return json({ ok: true, id: nova.id }, 200, headers);
