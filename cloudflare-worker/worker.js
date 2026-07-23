@@ -23,8 +23,18 @@ function corsHeaders() {
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }
-function toB64(str) { const b = new TextEncoder().encode(str); let s = ''; for (const x of b) s += String.fromCharCode(x); return btoa(s); }
-function fromB64(b64) { const bin = atob(b64.replace(/\n/g, '')); const arr = Uint8Array.from(bin, c => c.charCodeAt(0)); return new TextDecoder().decode(arr); }
+function toB64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = ''; const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  return btoa(bin);
+}
+function fromB64(b64) {
+  const bin = atob(b64.replace(/\n/g, ''));
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(arr);
+}
 function uid() { return 'm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function json(obj, status, headers) { return new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', ...headers } }); }
 
