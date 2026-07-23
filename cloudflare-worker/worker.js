@@ -73,9 +73,8 @@ export default {
       return devOk(body.senha) ? json({ ok: true }, 200, headers) : json({ error: 'senha' }, 401, headers);
     }
 
-    // ── Atualização do Dev (patch em melhorias) ──
+    // ── Atualização do Dev (patch em melhorias) — sem senha ──
     if (body.action === 'dev-update') {
-      if (!devOk(body.senha)) return json({ error: 'senha' }, 401, headers);
       const patch = body.patch || {};
       if (JSON.stringify(body).length > 5 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
       const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());

@@ -488,7 +488,7 @@ async function saveToGitHub(patch, opts = {}) {
   if (ADMIN_PROXY_URL) {
     showSaving(true);
     try {
-      const bodyObj = { action: 'dev-update', senha: _devPw, patch };
+      const bodyObj = { action: 'dev-update', patch };
       if (opts.temas !== undefined) bodyObj.temas = opts.temas;
       const res = await fetch(ADMIN_PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -604,19 +604,17 @@ async function reloadDevList() {
 }
 
 async function initApp() {
-  // Se a sessão ainda não foi autenticada com senha, mostra step-senha
-  // No modo proxy, exige a senha da sessão (_devPw) para poder gravar
-  const authed = sessionStorage.getItem('rm_dev_authed') && (!ADMIN_PROXY_URL || _devPw);
+  // Modo proxy: sem senha e sem token — abre direto na seleção de dev
+  const authed = ADMIN_PROXY_URL ? true : sessionStorage.getItem('rm_dev_authed');
   if (!authed) {
     // step-senha já é o padrão (step-dev está oculto)
     document.getElementById('login-senha')?.focus();
     return; // Não carrega devs ainda — espera a senha
   }
-  // Já autenticado nesta sessão → pula direto para step-dev
   document.getElementById('step-senha').style.display = 'none';
   document.getElementById('step-dev').style.display = 'block';
 
-  if (!runtimeToken) {
+  if (!runtimeToken && !ADMIN_PROXY_URL) {
     document.getElementById('login-aviso').style.display = 'block';
   }
 
