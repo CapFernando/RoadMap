@@ -1013,13 +1013,15 @@ async function forceRefresh() {
   const btn = document.getElementById('btn-refresh');
   if (btn) { btn.textContent = '↻ Atualizando…'; btn.disabled = true; }
   try {
+    // media type "raw": retorna o arquivo direto (até 100MB) e sempre fresco.
+    // Necessário porque o JSON passou de 1MB — a Contents API padrão devolve
+    // content vazio (encoding "none") acima desse limite, o que quebrava o parse.
     const res = await fetch(API_URL + '?t=' + Date.now(), {
       cache: 'no-store',
-      headers: { Accept: 'application/vnd.github.v3+json' }
+      headers: { Accept: 'application/vnd.github.raw' }
     });
     if (res.ok) {
-      const json = await res.json();
-      const data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
+      const data = await res.json();
       applyData(data, { preserveView: true });
     } else if (res.status === 403 || res.status === 429) {
       // Rate limit atingido — tenta raw URL como fallback
@@ -1699,7 +1701,14 @@ async function saveNovaMelhoria() {
       });
       if (!shaRes.ok) { const e = await shaRes.json(); throw new Error(e.message || ('HTTP ' + shaRes.status)); }
       const shaJson = await shaRes.json();
-      const server = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g, '')))));
+      // A metadata acima entrega o sha correto mesmo >1MB, mas content vem vazio
+      // (encoding "none"). Buscamos o conteúdo via media type "raw" (até 100MB).
+      const rawRes = await fetch(API_URL + '?raw=' + Date.now(), {
+        cache: 'no-store',
+        headers: { Authorization: `token ${nmToken}`, Accept: 'application/vnd.github.raw' }
+      });
+      if (!rawRes.ok) throw new Error('Falha ao ler dados atuais (HTTP ' + rawRes.status + ')');
+      const server = await rawRes.json();
 
       server.melhorias = server.melhorias || [];
       server.temas = server.temas || [];

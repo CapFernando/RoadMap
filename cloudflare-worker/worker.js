@@ -29,12 +29,6 @@ function toB64(str) {
   for (let i = 0; i < bytes.length; i += CHUNK) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
   return btoa(bin);
 }
-function fromB64(b64) {
-  const bin = atob(b64.replace(/\n/g, ''));
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new TextDecoder().decode(arr);
-}
 function uid() { return 'm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function json(obj, status, headers) { return new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', ...headers } }); }
 
@@ -105,10 +99,15 @@ export default {
     if (!m.titulo || !String(m.titulo).trim()) return json({ error: 'Titulo obrigatorio' }, 400, headers);
     if (JSON.stringify(body).length > 5 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
 
+    // sha via metadata (content vem vazio se >1MB); conteúdo via media type "raw".
+    // Ler o base64 da Contents API quebrava aqui (JSON.parse de string vazia) e
+    // era a causa do erro 1101 — o arquivo já passou de 1MB.
     const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
     if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
     const file = await getRes.json();
-    const data = JSON.parse(fromB64(file.content));
+    const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
+    if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+    const data = JSON.parse(await rawRes.text());
     data.melhorias = data.melhorias || [];
     data.temas = data.temas || [];
 

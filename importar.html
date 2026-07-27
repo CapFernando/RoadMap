@@ -763,6 +763,16 @@ function buildPreview() {
 }
 
 // ── IMPORT ────────────────────────────────────────────────────────────────────
+// Lê o JSON via media type "raw": a Contents API padrão devolve content vazio
+// (encoding "none") para arquivos >1MB — este JSON já passou desse limite.
+async function ghReadRaw(token) {
+  const headers = { Accept: 'application/vnd.github.raw' };
+  if (token) headers.Authorization = `token ${token}`;
+  const r = await fetch(API_URL + '?raw=' + Date.now(), { cache: 'no-store', headers });
+  if (!r.ok) throw new Error('Falha ao ler dados (HTTP ' + r.status + ')');
+  return r.json();
+}
+
 async function runImport() {
   const msgEl = document.getElementById('import-msg');
   const logEl = document.getElementById('log-box');
@@ -785,7 +795,7 @@ async function runImport() {
     if (!r.ok) throw new Error('HTTP '+r.status);
     const j = await r.json();
     fileSha = j.sha;
-    currentData = JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));
+    currentData = await ghReadRaw(runtimeToken);
     log(`✓ ${currentData.melhorias?.length||0} demanda(s) existentes`);
   } catch(e) { msgEl.innerHTML=`<div class="msg msg-err">Erro ao buscar dados: ${e.message}</div>`; return; }
 

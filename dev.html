@@ -448,6 +448,16 @@ const COLUMNS = [
 ];
 
 // ─── LOAD / SAVE ─────────────────────────────────────────────────
+// Lê o JSON via media type "raw": a Contents API padrão devolve content vazio
+// (encoding "none") para arquivos >1MB — este JSON já passou desse limite.
+async function ghReadRaw(token) {
+  const headers = { Accept: 'application/vnd.github.raw' };
+  if (token) headers.Authorization = `token ${token}`;
+  const r = await fetch(API_URL + '?raw=' + Date.now(), { cache: 'no-store', headers });
+  if (!r.ok) throw new Error('Falha ao ler dados (HTTP ' + r.status + ')');
+  return r.json();
+}
+
 async function loadData(useApi = false) {
   try {
     const url = useApi ? API_URL + '?t=' + Date.now() : RAW_URL + '?t=' + Date.now();
@@ -460,7 +470,7 @@ async function loadData(useApi = false) {
     if (useApi) {
       const json = await res.json();
       fileSha = json.sha;
-      data = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
+      data = await ghReadRaw(runtimeToken);
     } else {
       data = await res.json();
     }
@@ -522,7 +532,7 @@ async function saveToGitHub(patch, opts = {}) {
     if (!shaRes.ok) throw new Error('Falha ao obter SHA: ' + shaRes.status);
     const shaJson = await shaRes.json();
     fileSha = shaJson.sha;
-    const serverData = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g,'')))));
+    const serverData = await ghReadRaw(runtimeToken);
 
     // Merge: aplica patch sobre os dados do servidor
     const mergedMelhorias = serverData.melhorias.map(m => {
@@ -575,7 +585,7 @@ async function fetchFreshData() {
       if (res.ok) {
         const json = await res.json();
         fileSha = json.sha;
-        return JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
+        return await ghReadRaw(runtimeToken);
       }
     } catch(_) {}
   }
@@ -746,7 +756,7 @@ async function limparDadosTeste() {
     });
     if (!shaRes.ok) throw new Error('Falha ao obter SHA');
     const shaJson = await shaRes.json();
-    const serverData = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g,'')))));
+    const serverData = await ghReadRaw(runtimeToken);
     const merged = {
       ...serverData,
       melhorias: state.melhorias,

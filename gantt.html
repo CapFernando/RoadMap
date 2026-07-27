@@ -773,6 +773,16 @@ function debouncedSave() {
   _saveTimer = setTimeout(() => saveToGitHub(), 2000);
 }
 
+// Lê o JSON via media type "raw": a Contents API padrão devolve content vazio
+// (encoding "none") para arquivos >1MB — este JSON já passou desse limite.
+async function ghReadRaw(token) {
+  const headers = { Accept: 'application/vnd.github.raw' };
+  if (token) headers.Authorization = `token ${token}`;
+  const r = await fetch(API_URL + '?raw=' + Date.now(), { cache: 'no-store', headers });
+  if (!r.ok) throw new Error('Falha ao ler dados (HTTP ' + r.status + ')');
+  return r.json();
+}
+
 async function loadFromGitHub() {
   try {
     let decoded;
@@ -790,7 +800,7 @@ async function loadFromGitHub() {
       if (!res.ok) throw new Error('Erro ao carregar dados do GitHub.');
       const json = await res.json();
       fileSha = json.sha;
-      decoded = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
+      decoded = await ghReadRaw(runtimeToken);
     }
     state = {
       temas:         decoded.temas         || [],
@@ -833,22 +843,27 @@ async function saveToGitHub() {
     fileSha = shaJson.sha;
 
     // Merge: incorpora itens presentes no servidor mas ausentes localmente
-    // (adicionados pelo Admin enquanto esta aba estava aberta)
-    try {
-      const serverData = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g,'')))));
-      const localMelhoriaIds = new Set(state.melhorias.map(m => m.id));
-      const localTemaIds     = new Set(state.temas.map(t => t.id));
-      (serverData.temas     || []).forEach(t => { if (!localTemaIds.has(t.id)     && !_gDeletedIds.has(t.id)) state.temas.push(t); });
-      (serverData.melhorias || []).forEach(m => { if (!localMelhoriaIds.has(m.id) && !_gDeletedIds.has(m.id)) state.melhorias.push(m); });
-      // Merge de desenvolvedores: preserva devs do servidor, mas respeita remoções explícitas
-      const devSet = new Set(state.desenvolvedores.flatMap(d => splitDevs(d)));
-      (serverData.desenvolvedores || []).forEach(d =>
-        splitDevs(d).forEach(sd => { if (!_gDeletedDevs.has(sd.toLowerCase())) devSet.add(sd); })
-      );
-      state.desenvolvedores = [...devSet];
-      // Preserva feriados do servidor se o Gantt não os alterou localmente
-      if (!state.feriados || !state.feriados.length) state.feriados = serverData.feriados || [];
-    } catch (_) {}
+    // (adicionados pelo Admin enquanto esta aba estava aberta).
+    // A leitura NÃO fica em catch silencioso: se falhar, o save é abortado —
+    // nunca gravamos por cima de dados que não conseguimos ler (evita zerar o arquivo).
+    const serverData = await ghReadRaw(runtimeToken);
+    const localMelhoriaIds = new Set(state.melhorias.map(m => m.id));
+    const localTemaIds     = new Set(state.temas.map(t => t.id));
+    (serverData.temas     || []).forEach(t => { if (!localTemaIds.has(t.id)     && !_gDeletedIds.has(t.id)) state.temas.push(t); });
+    (serverData.melhorias || []).forEach(m => { if (!localMelhoriaIds.has(m.id) && !_gDeletedIds.has(m.id)) state.melhorias.push(m); });
+    // Merge de desenvolvedores: preserva devs do servidor, mas respeita remoções explícitas
+    const devSet = new Set(state.desenvolvedores.flatMap(d => splitDevs(d)));
+    (serverData.desenvolvedores || []).forEach(d =>
+      splitDevs(d).forEach(sd => { if (!_gDeletedDevs.has(sd.toLowerCase())) devSet.add(sd); })
+    );
+    state.desenvolvedores = [...devSet];
+    // Preserva feriados do servidor se o Gantt não os alterou localmente
+    if (!state.feriados || !state.feriados.length) state.feriados = serverData.feriados || [];
+
+    // Salvaguarda final: nunca grava estado vazio sobre um servidor que tem itens.
+    if ((serverData.melhorias || []).length > 0 && state.melhorias.length === 0) {
+      throw new Error('Gravação abortada por segurança: dados locais vazios. Recarregue a página.');
+    }
 
     // Garante que desenvolvedores nunca tenha entradas compostas ("Gabriel / Anthony")
     state.desenvolvedores = [...new Set(state.desenvolvedores.flatMap(d => splitDevs(d)))];

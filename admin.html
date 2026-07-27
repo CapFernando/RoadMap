@@ -887,6 +887,16 @@ window.addEventListener('beforeunload', (e) => {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') adminCheckUpdates(); });
 
 // ─── GITHUB ───────────────────────────────────────────────────────
+// Lê o JSON via media type "raw": a Contents API padrão devolve content vazio
+// (encoding "none") para arquivos >1MB — este JSON já passou desse limite.
+async function ghReadRaw(token) {
+  const headers = { Accept: 'application/vnd.github.raw' };
+  if (token) headers.Authorization = `token ${token}`;
+  const r = await fetch(API_URL + '?raw=' + Date.now(), { cache: 'no-store', headers });
+  if (!r.ok) throw new Error('Falha ao ler dados (HTTP ' + r.status + ')');
+  return r.json();
+}
+
 async function loadFromGitHub(silent) {
   try {
     let decoded;
@@ -899,7 +909,7 @@ async function loadFromGitHub(silent) {
       if (!res.ok) throw new Error('Erro ao carregar dados do GitHub.');
       const json = await res.json();
       fileSha = json.sha;
-      decoded = JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g, '')))));
+      decoded = await ghReadRaw(runtimeToken);
     } else {
       // modo senha: leitura pública (repo público), sem token
       const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
@@ -980,26 +990,31 @@ async function saveToGitHub(attempt = 1) {
     fileSha = shaJson.sha;
 
     // Merge: incorpora itens presentes no servidor mas ausentes localmente
-    // (adicionados por outro commit/restore enquanto esta aba estava aberta)
-    try {
-      const serverData = JSON.parse(decodeURIComponent(escape(atob(shaJson.content.replace(/\n/g, '')))));
-      const localMelhoriaIds = new Set(state.melhorias.map(m => m.id));
-      const localTemaIds     = new Set(state.temas.map(t => t.id));
-      (serverData.temas || []).forEach(t => {
-        if (!localTemaIds.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t);
-      });
-      (serverData.melhorias || []).forEach(m => {
-        if (!localMelhoriaIds.has(m.id) && !_deletedIds.has(m.id)) state.melhorias.push(m);
-      });
-      // Preserva devs e feriados cadastrados pelo Gantt — admin não os edita mas não deve apagá-los
-      const devSet = new Set(state.desenvolvedores);
-      (serverData.desenvolvedores || []).forEach(d => devSet.add(d));
-      state.desenvolvedores = [...devSet];
-      // Merge de feriados: union por data (admin nunca edita, apenas preserva o que o Gantt criou)
-      const feriadoSet = new Set((state.feriados || []).map(f => f.data || f));
-      (serverData.feriados || []).forEach(f => feriadoSet.add(f.data || f));
-      state.feriados = [...feriadoSet].map(d => (typeof d === 'string' ? { data: d } : d));
-    } catch (_) {}
+    // (adicionados por outro commit/restore enquanto esta aba estava aberta).
+    // A leitura NÃO fica em catch silencioso: se falhar, o save é abortado —
+    // nunca gravamos por cima de dados que não conseguimos ler (evita zerar o arquivo).
+    const serverData = await ghReadRaw(runtimeToken);
+    const localMelhoriaIds = new Set(state.melhorias.map(m => m.id));
+    const localTemaIds     = new Set(state.temas.map(t => t.id));
+    (serverData.temas || []).forEach(t => {
+      if (!localTemaIds.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t);
+    });
+    (serverData.melhorias || []).forEach(m => {
+      if (!localMelhoriaIds.has(m.id) && !_deletedIds.has(m.id)) state.melhorias.push(m);
+    });
+    // Preserva devs e feriados cadastrados pelo Gantt — admin não os edita mas não deve apagá-los
+    const devSet = new Set(state.desenvolvedores);
+    (serverData.desenvolvedores || []).forEach(d => devSet.add(d));
+    state.desenvolvedores = [...devSet];
+    // Merge de feriados: union por data (admin nunca edita, apenas preserva o que o Gantt criou)
+    const feriadoSet = new Set((state.feriados || []).map(f => f.data || f));
+    (serverData.feriados || []).forEach(f => feriadoSet.add(f.data || f));
+    state.feriados = [...feriadoSet].map(d => (typeof d === 'string' ? { data: d } : d));
+
+    // Salvaguarda final: nunca grava estado vazio sobre um servidor que tem itens.
+    if ((serverData.melhorias || []).length > 0 && state.melhorias.length === 0) {
+      throw new Error('Gravação abortada por segurança: dados locais vazios. Recarregue a página.');
+    }
 
     state.atualizado_em = new Date().toISOString();
     const bytes = new TextEncoder().encode(JSON.stringify(state, null, 2));

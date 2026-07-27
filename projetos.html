@@ -236,13 +236,13 @@ function formatDate(s) {
 // ── DATA ─────────────────────────────────────────────────────────
 async function loadData() {
   try {
-    const headers = runtimeToken
-      ? { Authorization:`token ${runtimeToken}`, Accept:'application/vnd.github.v3+json' }
-      : {};
+    // media type "raw": arquivo direto (até 100MB). A Contents API padrão devolve
+    // content vazio (encoding "none") acima de 1MB — este JSON já passou disso.
+    const headers = { Accept: 'application/vnd.github.raw' };
+    if (runtimeToken) headers.Authorization = `token ${runtimeToken}`;
     const res = await fetch(API_URL+'?t='+Date.now(), { cache:'no-store', headers });
     if (res.ok) {
-      const json = await res.json();
-      applyData(JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,''))))));
+      applyData(await res.json());
       return;
     }
   } catch(_){}
