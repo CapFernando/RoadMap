@@ -185,6 +185,13 @@
       color:var(--text); padding:8px 12px; font-size:14px; font-family:inherit; outline:none;
     }
     .ger-filter-group select:focus { border-color:var(--blue); }
+    /* Barra de filtros (Melhorias/Kanban): mesmo padrão da Gerencial, mais compacta */
+    .filter-bar { gap:12px; margin-bottom:18px; align-items:center; }
+    .filter-bar .ger-filter-group { gap:3px; }
+    .filter-bar select { padding:6px 10px; font-size:13px; max-width:230px; }
+    .filter-bar label { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text3); }
+    .filter-bar .fb-count { font-size:12px; color:var(--text3); margin-left:auto; white-space:nowrap; }
+
     .ger-summary { display:flex; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
     .ger-kpi {
       flex:1; min-width:140px; background:var(--bg2); border:1px solid var(--border);
@@ -439,9 +446,7 @@
         <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova melhoria</button>
       </div>
       <div class="status-filters" id="status-filters"></div>
-      <div class="status-filters" id="prazo-filters"></div>
-      <div class="status-filters" id="tema-filters"></div>
-      <div class="status-filters" id="dev-filters"></div>
+      <div class="ger-toolbar filter-bar" id="mel-toolbar"></div>
       <div id="lista-melhorias"></div>
     </div>
 
@@ -451,8 +456,7 @@
         <span class="list-title">Kanban</span>
         <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova melhoria</button>
       </div>
-      <div class="status-filters" id="kb-tema-filters"></div>
-      <div class="status-filters" id="kb-dev-filters"></div>
+      <div class="ger-toolbar filter-bar" id="kb-toolbar"></div>
       <div id="kb-board" class="kb-board"></div>
     </div>
 
@@ -1105,70 +1109,18 @@ function matchPrazo(m, filtro) {
   return true;
 }
 
-function setFiltroPrazo(p) {
-  _filtroPrazo = p;
-  renderPrazoFilters();
-  renderMelhorias();
-}
-
-function renderPrazoFilters() {
-  const el = document.getElementById('prazo-filters');
-  if (!el) return;
-  const buckets = [
-    { key: null,        label: 'Geral' },
-    { key: 'vencidas',  label: '🔴 Vencidas' },
-    { key: 'semana',    label: '🟠 Vencem na semana' },
-    { key: 'mes',       label: '🟡 Vencem no mês' },
-    { key: 'sem_data',  label: '⚪ Sem data' },
-  ];
-  el.innerHTML = buckets.map(b => {
-    const n = b.key === null
-      ? state.melhorias.length
-      : state.melhorias.filter(m => matchPrazo(m, b.key)).length;
-    const active = _filtroPrazo === b.key ? 'active' : '';
-    return `<button class="sf-btn all ${active}" onclick="setFiltroPrazo(${b.key ? `'${b.key}'` : 'null'})">${b.label} <strong>${n}</strong></button>`;
-  }).join('');
-}
-
-function setFiltroStatus(s) {
-  _filtroStatus = s;
-  renderStatusFilters();
-  renderMelhorias();
-}
-
-function setFiltroTema(id) {
-  _filtroTema = id;
-  renderTemaFilters();
-  renderMelhorias();
-}
-
-function renderTemaFilters() {
-  const el = document.getElementById('tema-filters');
-  if (!el || !state.temas.length) { if (el) el.innerHTML = ''; return; }
-  const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
-  el.innerHTML = [
-    `<button class="sf-btn all ${_filtroTema === null ? 'active' : ''}" onclick="setFiltroTema(null)">Todos os temas <strong>${state.melhorias.length}</strong></button>`,
-    ...state.temas.map((t, i) => {
-      const cor = TEMA_CORES[i % TEMA_CORES.length];
-      const n   = state.melhorias.filter(m => m.tema_id === t.id).length;
-      const active = _filtroTema === t.id ? 'active' : '';
-      return `<button class="sf-btn ${active}" style="${active ? `background:${cor}22;color:${cor};border-color:${cor}55` : ''}" onclick="setFiltroTema('${t.id}')">${t.nome} <strong>${n}</strong></button>`;
-    })
-  ].join('');
-}
-
-// ── FILTRO POR DEV ────────────────────────────────────────────────
+// ── BARRA DE FILTROS ──────────────────────────────────────────────
+// Rótulo + select, no padrão da aba Gerencial. Escala melhor que chips: a lista
+// de temas/devs cresce sem empurrar a página para baixo.
 const SEM_DEV = '__sem_dev__';
-// Guarda a lista renderizada para o onclick referenciar por índice — evita
-// quebrar o HTML com nomes que tenham apóstrofo, acento ou barra.
-let _devsFiltro = [];
 
-function setFiltroDev(d) {
-  _filtroDev = d;
-  renderDevFilters();
-  renderMelhorias();
-}
-function setFiltroDevIdx(i) { setFiltroDev(_devsFiltro[i]); }
+const PRAZO_BUCKETS = [
+  { key: '',         label: 'Geral' },
+  { key: 'vencidas', label: '🔴 Vencidas' },
+  { key: 'semana',   label: '🟠 Vencem na semana' },
+  { key: 'mes',      label: '🟡 Vencem no mês' },
+  { key: 'sem_data', label: '⚪ Sem data' },
+];
 
 // Une devs cadastrados e devs que aparecem nas demandas. O campo dev pode ser
 // composto ("Gabriel / Anthony"), por isso o split.
@@ -1186,25 +1138,84 @@ function matchDev(m, filtro) {
   return devs.includes(filtro);
 }
 
-function renderDevFilters() {
-  const el = document.getElementById('dev-filters');
-  if (!el) return;
-  _devsFiltro = devsDisponiveis();
-  const semDev = state.melhorias.filter(m => !kbSplitDevs(m.dev).length).length;
+// Monta um grupo rótulo+select. O handler recebe o valor por this.value, então
+// nome de dev com apóstrofo/barra não quebra o HTML.
+function fbGroup(label, valor, opcoes, handler) {
+  const opts = opcoes.map(o => {
+    const sel = String(o.key) === String(valor == null ? '' : valor) ? ' selected' : '';
+    const n   = o.n === undefined ? '' : ` (${o.n})`;
+    return `<option value="${esc(o.key)}"${sel}>${esc(o.label)}${n}</option>`;
+  }).join('');
+  return `<div class="ger-filter-group">
+    <label>${esc(label)}</label>
+    <select onchange="${handler}(this.value)">${opts}</select>
+  </div>`;
+}
 
-  const chips = [
-    `<button class="sf-btn all ${_filtroDev === null ? 'active' : ''}" onclick="setFiltroDev(null)">Todos os devs <strong>${state.melhorias.length}</strong></button>`,
-    ..._devsFiltro.map((d, i) => {
-      const n = state.melhorias.filter(m => kbSplitDevs(m.dev).includes(d)).length;
-      const active = _filtroDev === d ? 'active' : '';
-      return `<button class="sf-btn ${active}" onclick="setFiltroDevIdx(${i})">${esc(d)} <strong>${n}</strong></button>`;
-    })
+function opcoesTema() {
+  return [
+    { key: '', label: 'Todos', n: state.melhorias.length },
+    ...state.temas.map(t => ({
+      key: t.id, label: t.nome,
+      n: state.melhorias.filter(m => m.tema_id === t.id).length,
+    })),
   ];
-  if (semDev) {
-    const active = _filtroDev === SEM_DEV ? 'active' : '';
-    chips.push(`<button class="sf-btn ${active}" onclick="setFiltroDev('${SEM_DEV}')">⚪ Sem dev <strong>${semDev}</strong></button>`);
-  }
-  el.innerHTML = chips.join('');
+}
+function opcoesDev() {
+  const semDev = state.melhorias.filter(m => !kbSplitDevs(m.dev).length).length;
+  const lista = [
+    { key: '', label: 'Todos', n: state.melhorias.length },
+    ...devsDisponiveis().map(d => ({
+      key: d, label: d,
+      n: state.melhorias.filter(m => kbSplitDevs(m.dev).includes(d)).length,
+    })),
+  ];
+  if (semDev) lista.push({ key: SEM_DEV, label: '⚪ Sem dev', n: semDev });
+  return lista;
+}
+function opcoesPrazo() {
+  return PRAZO_BUCKETS.map(b => ({
+    key: b.key, label: b.label,
+    n: b.key ? state.melhorias.filter(m => matchPrazo(m, b.key)).length : state.melhorias.length,
+  }));
+}
+// O select usa string vazia para "todos"; o estado interno usa null
+function vazioNulo(v) { return v === '' ? null : v; }
+
+function botaoLimpar(handler, ativos) {
+  return `<div class="ger-filter-group">
+    <label>&nbsp;</label>
+    <button class="btn btn-secondary btn-sm" onclick="${handler}()"${ativos ? '' : ' disabled style="opacity:.35"'}>Limpar${ativos ? ` (${ativos})` : ''}</button>
+  </div>`;
+}
+
+// ── Filtros da aba Melhorias ──
+function setFiltroStatus(s) { _filtroStatus = vazioNulo(s); renderStatusFilters(); renderMelToolbar(); renderMelhorias(); }
+function setFiltroTema(v)   { _filtroTema   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
+function setFiltroDev(v)    { _filtroDev    = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
+function setFiltroPrazo(v)  { _filtroPrazo  = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
+function limparFiltrosMel() {
+  _filtroStatus = _filtroTema = _filtroDev = _filtroPrazo = null;
+  renderStatusFilters(); renderMelToolbar(); renderMelhorias();
+}
+
+function renderMelToolbar() {
+  const el = document.getElementById('mel-toolbar');
+  if (!el) return;
+  const ativos = [_filtroStatus, _filtroTema, _filtroDev, _filtroPrazo].filter(Boolean).length;
+  el.innerHTML =
+    fbGroup('Tema',  _filtroTema,  opcoesTema(),  'setFiltroTema') +
+    fbGroup('Dev',   _filtroDev,   opcoesDev(),   'setFiltroDev') +
+    fbGroup('Prazo', _filtroPrazo, opcoesPrazo(), 'setFiltroPrazo') +
+    botaoLimpar('limparFiltrosMel', ativos) +
+    `<span class="fb-count" id="mel-contagem"></span>`;
+}
+
+// Deixa explícito quantas demandas a lista está exibindo — concluídas e negadas
+// ficam escondidas por padrão, então o total dos filtros pode ser maior.
+function atualizaContagemMel(n) {
+  const c = document.getElementById('mel-contagem');
+  if (c) c.textContent = `Mostrando ${n} de ${state.melhorias.length}`;
 }
 
 function renderStatusFilters() {
@@ -1229,7 +1240,7 @@ function renderStatusFilters() {
 }
 
 function renderAll() {
-  renderTemas(); renderStatusFilters(); renderPrazoFilters(); renderTemaFilters(); renderDevFilters(); renderMelhorias();
+  renderTemas(); renderStatusFilters(); renderMelToolbar(); renderMelhorias();
   if (document.getElementById('tab-kanban')?.classList.contains('active')) renderKanban();
 }
 
@@ -1263,6 +1274,7 @@ function renderMelhorias() {
            matchPrazo(m, _filtroPrazo) &&
            matchDev(m, _filtroDev);
   });
+  atualizaContagemMel(lista.length);
   if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
   const STATUS_ORDER = { concluida:-1, iniciada:0, estimada:1, regra:2, refinamento:3, recebida:4, negada:5 };
   // Ordena por vencimento: quem tem data primeiro (vencidas → mais próximas), sem data por último
@@ -1381,8 +1393,9 @@ const KB_COLS = [
   { key:'concluido',    label:'Concluído' },
   { key:'negada',       label:'Negada' },
 ];
-let _kbTema = null;
-let _kbDev  = null;
+let _kbTema  = null;
+let _kbDev   = null;
+let _kbPrazo = null;
 
 function kbSplitDevs(s) { return s ? String(s).split(/[\/,]/).map(x => x.trim()).filter(Boolean) : []; }
 
@@ -1412,50 +1425,34 @@ function ipBadge(ip) {
   return `<span class="kb-ip" style="background:${bg};color:${cor}">IP ${ip.toFixed(1).replace('.',',')}</span>`;
 }
 
-function renderKbTemaFilters() {
-  const el = document.getElementById('kb-tema-filters');
-  if (!el) return;
-  const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
-  el.innerHTML = [
-    `<button class="sf-btn all ${_kbTema === null ? 'active' : ''}" onclick="setKbTema(null)">Todos os temas <strong>${state.melhorias.length}</strong></button>`,
-    ...state.temas.map((t, i) => {
-      const cor = TEMA_CORES[i % TEMA_CORES.length];
-      const n = state.melhorias.filter(m => m.tema_id === t.id).length;
-      const active = _kbTema === t.id ? 'active' : '';
-      return `<button class="sf-btn ${active}" style="${active ? `background:${cor}22;color:${cor};border-color:${cor}55` : ''}" onclick="setKbTema('${t.id}')">${t.nome} <strong>${n}</strong></button>`;
-    })
-  ].join('');
-}
-function setKbTema(id) { _kbTema = id; renderKbTemaFilters(); renderKanban(); }
+// ── Filtros do Kanban (mesma barra da aba Melhorias) ──
+// As colunas já representam o status, então aqui não há filtro de status.
+function setKbTema(v)  { _kbTema  = vazioNulo(v); renderKanban(); }
+function setKbDev(v)   { _kbDev   = vazioNulo(v); renderKanban(); }
+function setKbPrazo(v) { _kbPrazo = vazioNulo(v); renderKanban(); }
+function limparFiltrosKb() { _kbTema = _kbDev = _kbPrazo = null; renderKanban(); }
 
-function renderKbDevFilters() {
-  const el = document.getElementById('kb-dev-filters');
+function renderKbToolbar(exibidas) {
+  const el = document.getElementById('kb-toolbar');
   if (!el) return;
-  const devs = [...new Set(state.melhorias.flatMap(m => kbSplitDevs(m.dev)))].sort((a, b) => a.localeCompare(b));
-  const semDev = state.melhorias.filter(m => !kbSplitDevs(m.dev).length).length;
-  el.innerHTML = [
-    `<button class="sf-btn all ${_kbDev === null ? 'active' : ''}" onclick="setKbDev(null)">Todos os devs <strong>${state.melhorias.length}</strong></button>`,
-    ...devs.map(d => {
-      const n = state.melhorias.filter(m => kbSplitDevs(m.dev).includes(d)).length;
-      const active = _kbDev === d ? 'active' : '';
-      return `<button class="sf-btn ${active}" onclick="setKbDev('${d.replace(/'/g, "\\'")}')">👤 ${d} <strong>${n}</strong></button>`;
-    }),
-    semDev ? `<button class="sf-btn ${_kbDev === '__sem__' ? 'active' : ''}" onclick="setKbDev('__sem__')">Sem dev <strong>${semDev}</strong></button>` : '',
-  ].join('');
+  const ativos = [_kbTema, _kbDev, _kbPrazo].filter(Boolean).length;
+  el.innerHTML =
+    fbGroup('Tema',  _kbTema,  opcoesTema(),  'setKbTema') +
+    fbGroup('Dev',   _kbDev,   opcoesDev(),   'setKbDev') +
+    fbGroup('Prazo', _kbPrazo, opcoesPrazo(), 'setKbPrazo') +
+    botaoLimpar('limparFiltrosKb', ativos) +
+    `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}</span>`;
 }
-function setKbDev(d) { _kbDev = d; renderKbDevFilters(); renderKanban(); }
 
 function renderKanban() {
-  renderKbTemaFilters();
-  renderKbDevFilters();
   const board = document.getElementById('kb-board');
   if (!board) return;
-  const base = state.melhorias.filter(m => {
-    if (_kbTema && m.tema_id !== _kbTema) return false;
-    if (_kbDev === '__sem__') { if (kbSplitDevs(m.dev).length) return false; }
-    else if (_kbDev && !kbSplitDevs(m.dev).includes(_kbDev)) return false;
-    return true;
-  });
+  const base = state.melhorias.filter(m =>
+    (!_kbTema || m.tema_id === _kbTema) &&
+    matchDev(m, _kbDev) &&
+    matchPrazo(m, _kbPrazo)
+  );
+  renderKbToolbar(base.length);
 
   board.innerHTML = KB_COLS.map(col => {
     let items = base.filter(m => kbEffectiveStatus(m) === col.key);
