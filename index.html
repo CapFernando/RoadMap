@@ -125,6 +125,17 @@
     .filter-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .filter-row + .filter-row { border-top: 1px solid var(--border); padding-top: 10px; }
     .filter-bar span { font-size: 13px; color: var(--text3); margin-right: 4px; white-space: nowrap; }
+    /* Grupo rótulo + select: mantém a barra em uma linha só */
+    .fgroup { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .fgroup label { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); }
+    /* Largura fixa por tipo: sem isso o select cresce até a opção mais longa
+       (nome de tema comprido) e a barra quebra em duas linhas. */
+    .fgroup select { width: 100%; text-overflow: ellipsis; }
+    .fgroup.fg-ano  { width: 92px; }
+    .fgroup.fg-mes  { width: 116px; }
+    .fgroup.fg-dev  { width: 150px; }
+    .fgroup.fg-tema { width: 210px; }
+    .filter-bar .fcount { margin: 0 0 0 auto; font-size: 12px; color: var(--text3); }
     .filter-btn {
       padding: 6px 14px;
       border-radius: 20px;
@@ -657,14 +668,18 @@ function splitDevs(devStr) {
   return devStr.split(/[\/,]/).map(s => s.trim()).filter(Boolean);
 }
 
+// Período: usa data de início planejada; sem ela, criado_em (backlog sem data)
+function matchPeriodo(m) {
+  if (_ano === null && _mes === null) return true;
+  const ref = m.inicio ? new Date(m.inicio + 'T00:00:00') : new Date(m.criado_em);
+  if (_ano !== null && ref.getFullYear() !== _ano) return false;
+  if (_mes !== null && ref.getMonth() !== _mes) return false;
+  return true;
+}
+
 function filtradas() {
   return _melhorias.filter(m => {
-    if (_ano !== null || _mes !== null) {
-      // usa data de início planejada; sem ela usa criado_em (backlog sem data)
-      const ref = m.inicio ? new Date(m.inicio + 'T00:00:00') : new Date(m.criado_em);
-      if (_ano !== null && ref.getFullYear() !== _ano) return false;
-      if (_mes !== null && ref.getMonth() !== _mes) return false;
-    }
+    if (!matchPeriodo(m)) return false;
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     if (_statusFilter) return getStatusKey(m) === _statusFilter;
@@ -676,17 +691,17 @@ function filtradas() {
 function renderConteudo() {
   const mel = filtradas();
 
+  // Deixa explícito o tamanho do recorte: concluídas e negadas ficam escondidas
+  // por padrão, então o total dos filtros pode ser maior que a lista exibida.
+  const cnt = document.getElementById('f-count');
+  if (cnt) cnt.textContent = `Mostrando ${mel.length} de ${_melhorias.length}`;
+
   // conta por status unificado (usa mel sem filtro de status para mostrar totais reais)
-  const melSemStatus = _melhorias.filter(m => {
-    if (_ano !== null || _mes !== null) {
-      const ref = m.inicio ? new Date(m.inicio + 'T00:00:00') : new Date(m.criado_em);
-      if (_ano !== null && ref.getFullYear() !== _ano) return false;
-      if (_mes !== null && ref.getMonth() !== _mes) return false;
-    }
-    if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
-    if (_temaFilter && m.tema_id !== _temaFilter) return false;
-    return true;
-  });
+  const melSemStatus = _melhorias.filter(m =>
+    matchPeriodo(m) &&
+    (!_dev || splitDevs(m.dev).includes(_dev)) &&
+    (!_temaFilter || m.tema_id === _temaFilter)
+  );
   const counts = { total: melSemStatus.length };
   STATUS_CARDS.forEach(c => { if (c.key !== 'total') counts[c.key] = melSemStatus.filter(m => getStatusKey(m) === c.key).length; });
 
@@ -743,47 +758,52 @@ function renderConteudo() {
   try { buildDevChart(_temas, mel); } catch (_) {}
 }
 
+// Escapa para uso seguro em atributo HTML (nome de dev/tema pode ter " ou &)
+function fEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// Monta rótulo + select. O handler recebe o valor por this.value, então nome com
+// apóstrofo ou barra não quebra o HTML.
+function fGroup(label, opcoes, valorAtual, handler, disabled, cls) {
+  const opts = opcoes.map(o => {
+    const sel = String(o.key) === String(valorAtual == null ? '' : valorAtual) ? ' selected' : '';
+    const n   = o.n === undefined ? '' : ` (${o.n})`;
+    return `<option value="${fEsc(o.key)}"${sel}>${fEsc(o.label)}${n}</option>`;
+  }).join('');
+  return `<div class="fgroup ${cls || ''}">
+    <label>${fEsc(label)}</label>
+    <select class="filter-select" onchange="${handler}(this.value)"${disabled ? ' disabled' : ''}>${opts}</select>
+  </div>`;
+}
+
 function buildFilterBar() {
   const anos = [...new Set(_melhorias.map(m => new Date(m.criado_em).getFullYear()))].sort((a,b) => b - a);
   const devs = _devs.length ? _devs : [...new Set(_melhorias.flatMap(m => splitDevs(m.dev)))].sort();
+  // Contagens respeitam o período escolhido, para não divergir do que está na tela
+  const noPeriodo = _melhorias.filter(matchPeriodo);
 
-  const anoOpts = anos.map(a => `<option value="${a}" ${_ano===a?'selected':''}>${a}</option>`).join('');
-  const mesOpts = MESES.map((m,i) => `<option value="${i}" ${_mes===i?'selected':''}>${m}</option>`).join('');
-  const devChips = devs.map(d =>
-    `<button class="filter-btn ${_dev===d?'active':''}" onclick="setFiltroDev('${d.replace(/'/g,"\\'")}')">${d}</button>`
-  ).join('');
+  const optAno  = [{ key: '', label: '— Ano —' },  ...anos.map(a => ({ key: a, label: String(a) }))];
+  const optMes  = [{ key: '', label: '— Mês —' },  ...MESES.map((m, i) => ({ key: i, label: m }))];
+  const optDev  = [{ key: '', label: 'Todos', n: noPeriodo.length },
+    ...devs.map(d => ({ key: d, label: d, n: noPeriodo.filter(m => splitDevs(m.dev).includes(d)).length }))];
+  const optTema = [{ key: '', label: 'Todos', n: noPeriodo.length },
+    ..._temas.map(t => ({ key: t.id, label: t.nome, n: noPeriodo.filter(m => m.tema_id === t.id).length }))];
 
-  const temaChips = _temas.map((t, i) => {
-    const cor = TEMA_CORES[i % TEMA_CORES.length];
-    const ativo = _temaFilter === t.id;
-    return `<button class="filter-btn ${ativo?'active':''}" onclick="setFiltroTema('${t.id}')" style="${ativo?`background:${cor}20;border-color:${cor};color:${cor};`:''}">${t.nome}</button>`;
-  }).join('');
+  const ativos = [_ano, _mes, _dev, _temaFilter, _statusFilter].filter(v => v !== null && v !== undefined).length;
 
   document.getElementById('filter-bar').innerHTML = `
     <div class="filter-row">
-      <span>Período:</span>
-      <button class="filter-btn ${_ano===null && _mes===null ? 'active' : ''}" onclick="setFiltro(null,null)">Tudo</button>
-      <select class="filter-select" onchange="setFiltroAno(this.value)" ${anos.length===0?'disabled':''}>
-        <option value="">— Ano —</option>
-        ${anoOpts}
-      </select>
-      <select class="filter-select" onchange="setFiltroMes(this.value)">
-        <option value="">— Mês —</option>
-        ${mesOpts}
-      </select>
+      ${fGroup('Ano', optAno, _ano, 'setFiltroAno', anos.length === 0, 'fg-ano')}
+      ${fGroup('Mês', optMes, _mes, 'setFiltroMes', false, 'fg-mes')}
+      ${devs.length   ? fGroup('Dev',  optDev,  _dev,        'setFiltroDev',  false, 'fg-dev')  : ''}
+      ${_temas.length ? fGroup('Tema', optTema, _temaFilter, 'setFiltroTema', false, 'fg-tema') : ''}
+      <div class="fgroup">
+        <label>&nbsp;</label>
+        <button class="filter-btn" onclick="limparFiltros()"${ativos ? '' : ' disabled style="opacity:.35"'}>Limpar${ativos ? ` (${ativos})` : ''}</button>
+      </div>
+      <span class="fcount" id="f-count"></span>
     </div>
-    ${devs.length > 0 ? `
-    <div class="filter-row">
-      <span>Dev:</span>
-      <button class="filter-btn ${!_dev ? 'active' : ''}" onclick="setFiltroDev(null)">Todos</button>
-      ${devChips}
-    </div>` : ''}
-    ${_temas.length > 0 ? `
-    <div class="filter-row">
-      <span>Tema:</span>
-      <button class="filter-btn ${!_temaFilter ? 'active' : ''}" onclick="setFiltroTema(null)">Todos</button>
-      ${temaChips}
-    </div>` : ''}
   `;
 }
 
@@ -798,17 +818,19 @@ function toggleDevChart() {
   if (arrow) arrow.style.transform = open ? 'rotate(180deg)' : '';
 }
 
+// Vindo de um select, o valor escolhido é o estado — não alterna como o chip fazia
 function setFiltroTema(id) {
-  _temaFilter = (id === _temaFilter) ? null : id;
+  _temaFilter = id || null;
   buildFilterBar();
   renderConteudo();
 }
 
-function setFiltro(ano, mes) {
-  _ano = ano; _mes = mes;
+function limparFiltros() {
+  _ano = null; _mes = null; _dev = null; _temaFilter = null; _statusFilter = null;
   buildFilterBar();
   renderConteudo();
 }
+
 function setFiltroAno(val) {
   _ano = val ? parseInt(val) : null;
   buildFilterBar();
@@ -820,7 +842,7 @@ function setFiltroMes(val) {
   renderConteudo();
 }
 function setFiltroDev(dev) {
-  _dev = dev;
+  _dev = dev || null;
   buildFilterBar();
   renderConteudo();
 }
