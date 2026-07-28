@@ -498,11 +498,24 @@ async function saveToGitHub(patch, opts = {}) {
   if (ADMIN_PROXY_URL) {
     showSaving(true);
     try {
-      // Lê o estado atual (fresco) e aplica o patch localmente
-      let server = {};
-      try { const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) server = await r.json(); } catch (_) {}
-      server.melhorias = (server.melhorias || []).map(m => patch[m.id] ? { ...m, ...patch[m.id] } : m);
-      Object.keys(patch).forEach(id => { if (!server.melhorias.find(m => m.id === id)) server.melhorias.push(patch[id]); });
+      // Lê o estado atual (fresco) e aplica o patch localmente.
+      // A leitura NÃO fica em catch silencioso: se falhar, abortamos — antes,
+      // um erro aqui deixava server={} e publicava um arquivo quase vazio.
+      const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) throw new Error('Falha ao ler dados atuais (HTTP ' + r.status + ')');
+      const server = await r.json();
+      if (!Array.isArray(server.melhorias) || !server.melhorias.length) {
+        throw new Error('Gravação abortada por segurança: leitura do servidor veio vazia.');
+      }
+      server.melhorias = server.melhorias.map(m => patch[m.id] ? { ...m, ...patch[m.id] } : m);
+      // Só cria registro novo se o patch for uma melhoria completa. Patches são
+      // parciais (apenas campos alterados); empurrá-los criava itens sem
+      // id/titulo que quebravam a renderização da lista no Admin.
+      Object.keys(patch).forEach(id => {
+        if (server.melhorias.find(m => m.id === id)) return;
+        const p = patch[id];
+        if (p && p.id && typeof p.titulo === 'string' && p.titulo.trim()) server.melhorias.push(p);
+      });
       if (opts.temas !== undefined) server.temas = opts.temas;
       const res = await fetch(ADMIN_PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -539,11 +552,12 @@ async function saveToGitHub(patch, opts = {}) {
       const p = patch[m.id];
       return p ? { ...m, ...p } : m;
     });
-    // Adiciona novas (não existem no servidor)
+    // Adiciona novas (não existem no servidor) — só se for melhoria completa.
+    // Patches são parciais; empurrá-los criava itens sem id/titulo.
     Object.keys(patch).forEach(id => {
-      if (!serverData.melhorias.find(m => m.id === id)) {
-        mergedMelhorias.push(patch[id]);
-      }
+      if (serverData.melhorias.find(m => m.id === id)) return;
+      const p = patch[id];
+      if (p && p.id && typeof p.titulo === 'string' && p.titulo.trim()) mergedMelhorias.push(p);
     });
 
     const merged = {

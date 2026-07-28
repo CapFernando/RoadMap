@@ -1228,7 +1228,8 @@ function renderMelhorias() {
     if (ae && be) { const c = a.entrega.localeCompare(b.entrega); if (c !== 0) return c; }
     const so = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9);
     if (so !== 0) return so;
-    return a.titulo.localeCompare(b.titulo);
+    // Tolerante a registro sem titulo: um item corrompido não pode derrubar a lista toda
+    return (a.titulo || '').localeCompare(b.titulo || '');
   });
   // Group by tema
   const temaOrder = state.temas.map(t => t.id);
