@@ -1410,15 +1410,17 @@ function buildDevReportHTML() {
 // ═══════════════════════════════════════════════════════════════════════
 // NOVA MELHORIA (Discovery) — só aparece com token (não público até validar)
 // ═══════════════════════════════════════════════════════════════════════
+// Este é o painel PÚBLICO: antes, um link ?token=ghp_... gravava o token do
+// GitHub no navegador de qualquer visitante. A gravação hoje passa sempre pelo
+// Worker (NM_PROXY_URL), que guarda o token como secret — então em vez de
+// ingerir o token nós apagamos qualquer um que tenha sobrado.
 (function() {
-  const qp = new URLSearchParams(location.search);
-  const t  = qp.get('token');
-  if (t && (t.startsWith('ghp_') || t.startsWith('github_pat_'))) {
-    localStorage.setItem('rm_token', t);
+  try { localStorage.removeItem('rm_token'); } catch (_) {}
+  if (new URLSearchParams(location.search).get('token')) {
     history.replaceState(null, '', location.pathname);
   }
 })();
-let nmToken = localStorage.getItem('rm_token') || '';
+let nmToken = '';
 // URL do Cloudflare Worker (proxy de gravação). Enquanto vazio, o botão fica
 // restrito a quem tem token. Ao preencher, o botão fica público e grava via proxy.
 const NM_PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';

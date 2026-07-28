@@ -824,8 +824,8 @@ async function doLogin() {
   if (!runtimeToken) {
     const t = document.getElementById('token-input').value.trim();
     if (!t) { errEl.textContent = 'Informe o GitHub Token.'; return; }
+    // Só em memória: token nunca é persistido no navegador
     runtimeToken = t;
-    localStorage.setItem('rm_token', t);
   }
   // Exige SENHA não vazia: sem o fallback embutido, comparar com '' liberaria acesso
   if (SENHA && v === SENHA) {
