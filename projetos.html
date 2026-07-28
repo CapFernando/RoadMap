@@ -236,11 +236,19 @@ function formatDate(s) {
 // ── DATA ─────────────────────────────────────────────────────────
 async function loadData() {
   try {
-    // media type "raw": arquivo direto (até 100MB). A Contents API padrão devolve
-    // content vazio (encoding "none") acima de 1MB — este JSON já passou disso.
-    const headers = { Accept: 'application/vnd.github.raw' };
-    if (runtimeToken) headers.Authorization = `token ${runtimeToken}`;
-    const res = await fetch(API_URL+'?t='+Date.now(), { cache:'no-store', headers });
+    // Sem token: lê direto a URL pública (repo público) — evita gastar o limite
+    // de 60 req/h da API anônima, que retornaria 403 e cairia no fallback.
+    if (!runtimeToken) {
+      const res = await fetch(RAW_URL+'?t='+Date.now(), { cache:'no-store' });
+      if (res.ok) { applyData(await res.json()); return; }
+      throw new Error('HTTP ' + res.status);
+    }
+    // Com token: media type "raw" — a Contents API padrão devolve content vazio
+    // (encoding "none") acima de 1MB, e este JSON já passou disso.
+    const res = await fetch(API_URL+'?t='+Date.now(), {
+      cache:'no-store',
+      headers: { Accept: 'application/vnd.github.raw', Authorization: `token ${runtimeToken}` }
+    });
     if (res.ok) {
       applyData(await res.json());
       return;

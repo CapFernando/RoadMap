@@ -301,7 +301,24 @@ const GITHUB_REPO = 'RoadMap';
 const DATA_PATH   = 'data/melhorias.json';
 const API_URL     = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
 const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
-const runtimeToken = (typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '';
+// Worker guarda token + senha: a importação passa a exigir só a senha, sem token.
+const PROXY_URL   = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
+const runtimeToken = PROXY_URL ? '' : ((typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '');
+let _impPw = sessionStorage.getItem('rm_admin_pw') || '';
+
+// Pede a senha (uma vez por sessão) e valida no Worker.
+async function garantirSenha() {
+  if (_impPw) return true;
+  const v = prompt('Senha de acesso para publicar a importação:');
+  if (!v) return false;
+  const res = await fetch(PROXY_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'auth', senha: v })
+  });
+  if (!res.ok) return false;
+  _impPw = v; sessionStorage.setItem('rm_admin_pw', v);
+  return true;
+}
 
 // ── STATE ───────────────────────────────────────────────────────────────────
 let temas = [], devs = [], existingMelhorias = [];
@@ -785,17 +802,27 @@ async function runImport() {
 
   const rows = collectRows().filter(r=>r.titulo);
   if (!rows.length) { msgEl.innerHTML='<div class="msg msg-err">Nenhuma linha válida.</div>'; return; }
-  if (!runtimeToken) { msgEl.innerHTML='<div class="msg msg-err">Token GitHub não encontrado.</div>'; return; }
+  if (!runtimeToken && !PROXY_URL) { msgEl.innerHTML='<div class="msg msg-err">Token GitHub não encontrado.</div>'; return; }
+  if (!runtimeToken && !(await garantirSenha())) {
+    msgEl.innerHTML='<div class="msg msg-err">Senha não informada ou incorreta.</div>'; return;
+  }
 
   log('🔄 Buscando dados atuais do GitHub...'); pct(10);
 
   let currentData, fileSha;
   try {
-    const r = await fetch(API_URL+'?t='+Date.now(), { cache:'no-store', headers:{Authorization:`token ${runtimeToken}`,Accept:'application/vnd.github.v3+json'} });
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    const j = await r.json();
-    fileSha = j.sha;
-    currentData = await ghReadRaw(runtimeToken);
+    if (runtimeToken) {
+      const r = await fetch(API_URL+'?t='+Date.now(), { cache:'no-store', headers:{Authorization:`token ${runtimeToken}`,Accept:'application/vnd.github.v3+json'} });
+      if (!r.ok) throw new Error('HTTP '+r.status);
+      const j = await r.json();
+      fileSha = j.sha;
+      currentData = await ghReadRaw(runtimeToken);
+    } else {
+      // Modo senha: leitura pública (repo público); o Worker resolve o sha ao gravar
+      const r = await fetch(RAW_URL+'?t='+Date.now(), { cache:'no-store' });
+      if (!r.ok) throw new Error('HTTP '+r.status);
+      currentData = await r.json();
+    }
     log(`✓ ${currentData.melhorias?.length||0} demanda(s) existentes`);
   } catch(e) { msgEl.innerHTML=`<div class="msg msg-err">Erro ao buscar dados: ${e.message}</div>`; return; }
 
@@ -853,15 +880,32 @@ async function runImport() {
   log('📤 Enviando para o GitHub...');
 
   try {
-    const bytes = new TextEncoder().encode(JSON.stringify(currentData,null,2));
-    let binary='';
-    for (let i=0;i<bytes.length;i+=8192) binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
-    const res = await fetch(API_URL, {
-      method:'PUT',
-      headers:{Authorization:`token ${runtimeToken}`,Accept:'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body:JSON.stringify({message:`chore: importacao ${inserts} novas ${updates} atualizadas`,content:btoa(binary),sha:fileSha})
-    });
-    if (!res.ok) { const e=await res.json(); throw new Error(e.message||'Erro ao salvar'); }
+    // Salvaguarda: nunca publica um conjunto vazio por cima dos dados do servidor
+    if (!currentData.melhorias || !currentData.melhorias.length) {
+      throw new Error('Importação abortada por segurança: nenhuma demanda no resultado.');
+    }
+    if (!runtimeToken) {
+      // Modo senha: o Worker grava (token fica no servidor, nunca no navegador)
+      const res = await fetch(PROXY_URL, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ action:'publish', senha:_impPw, data:currentData })
+      });
+      if (!res.ok) {
+        let msg='HTTP '+res.status;
+        try { msg=(await res.json()).error||msg; } catch(_){}
+        throw new Error(msg==='senha' ? 'Senha incorreta ou sessão expirada.' : msg);
+      }
+    } else {
+      const bytes = new TextEncoder().encode(JSON.stringify(currentData,null,2));
+      let binary='';
+      for (let i=0;i<bytes.length;i+=8192) binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+      const res = await fetch(API_URL, {
+        method:'PUT',
+        headers:{Authorization:`token ${runtimeToken}`,Accept:'application/vnd.github.v3+json','Content-Type':'application/json'},
+        body:JSON.stringify({message:`chore: importacao ${inserts} novas ${updates} atualizadas`,content:btoa(binary),sha:fileSha})
+      });
+      if (!res.ok) { const e=await res.json(); throw new Error(e.message||'Erro ao salvar'); }
+    }
     pct(100);
     log(`✓ Concluído!`);
     msgEl.innerHTML=`<div class="msg msg-ok">✅ ${inserts} demanda(s) adicionada(s) · ${updates} atualizada(s) · ${skips} ignorada(s)</div>`;
