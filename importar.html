@@ -192,7 +192,7 @@
       <h2>📋 Colar do Excel</h2>
       <p>Copie as linhas da planilha (Ctrl+C) e cole aqui. A primeira linha deve ter o cabeçalho.</p>
       <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;font-family:monospace;color:var(--accent2);overflow-x:auto;white-space:nowrap">
-        titulo &nbsp;|&nbsp; descricao &nbsp;|&nbsp; tema &nbsp;|&nbsp; dev &nbsp;|&nbsp; status &nbsp;|&nbsp; inicio &nbsp;|&nbsp; entrega &nbsp;|&nbsp; horas_realizadas &nbsp;|&nbsp; solicitante &nbsp;|&nbsp; prioridade
+        titulo &nbsp;|&nbsp; descricao &nbsp;|&nbsp; tema &nbsp;|&nbsp; dev &nbsp;|&nbsp; status &nbsp;|&nbsp; tipo &nbsp;|&nbsp; inicio &nbsp;|&nbsp; entrega &nbsp;|&nbsp; horas_realizadas &nbsp;|&nbsp; solicitante &nbsp;|&nbsp; prioridade
       </div>
       <p style="font-size:12px;color:var(--text3)">Separador: <b style="color:var(--text2)">TAB</b> (padrão do Excel) ou <b style="color:var(--text2)">ponto e vírgula (;)</b></p>
       <textarea class="csv-area" id="csv-input" placeholder="Cole aqui o conteúdo copiado do Excel..."></textarea>
@@ -214,6 +214,7 @@
               <th class="col-w-sm">Tema</th>
               <th class="col-w-sm">Dev(s)</th>
               <th class="col-w-sm">Status</th>
+              <th class="col-w-sm">Tipo</th>
               <th class="col-w-date">Início</th>
               <th class="col-w-date">Entrega</th>
               <th class="col-w-num">H. Realizadas</th>
@@ -262,7 +263,7 @@
           <table>
             <thead>
               <tr>
-                <th>#</th><th>Título</th><th>Tema</th><th>Dev(s)</th><th>Status</th>
+                <th>#</th><th>Título</th><th>Tema</th><th>Dev(s)</th><th>Status</th><th>Tipo</th>
                 <th>Início</th><th>Entrega</th><th>H. Realizadas</th><th>Solicitante</th><th>Prioridade</th><th>Validade</th>
               </tr>
             </thead>
@@ -407,10 +408,20 @@ function resolveTema(name) {
 function statusLabel(v) { return STATUS_OPTS.find(s=>s.value===v)?.label || v || '—'; }
 
 function buildStatusSel(val) {
-  return `<select class="status-sel">${STATUS_OPTS.map(o=>`<option value="${o.value}"${val===o.value?' selected':''}>${o.label}</option>`).join('')}</select>`;
+  return `<select data-f="status" class="status-sel">${STATUS_OPTS.map(o=>`<option value="${o.value}"${val===o.value?' selected':''}>${o.label}</option>`).join('')}</select>`;
+}
+const TIPO_ALIAS = {
+  'sustentacao':'sustentacao','sustentação':'sustentacao','sustentacao ':'sustentacao',
+  'sust':'sustentacao','manutencao':'sustentacao','manutenção':'sustentacao','correcao':'sustentacao','correção':'sustentacao',
+  'evolucao':'evolucao','evolução':'evolucao','evol':'evolucao','melhoria':'evolucao','nova':'evolucao',
+};
+function normalizeTipo(s) { return TIPO_ALIAS[(s||'').trim().toLowerCase()] || ''; }
+function buildTipoSel(val) {
+  const opts = [['','—'],['sustentacao','🔧 Sustentação'],['evolucao','🚀 Evolução']];
+  return `<select data-f="tipo">${opts.map(([v,l])=>`<option value="${v}"${val===v?' selected':''}>${l}</option>`).join('')}</select>`;
 }
 function buildPrioSel(val) {
-  return `<select>${['','alta','media','baixa'].map(p=>`<option value="${p}"${val===p?' selected':''}>${p||'—'}</option>`).join('')}</select>`;
+  return `<select data-f="prioridade">${['','alta','media','baixa'].map(p=>`<option value="${p}"${val===p?' selected':''}>${p||'—'}</option>`).join('')}</select>`;
 }
 
 function buildTemaSel(val) {
@@ -419,7 +430,7 @@ function buildTemaSel(val) {
   let opts = `<option value=""${!v?' selected':''}>—</option>`;
   opts += temas.map(t => `<option value="${esc(t.nome)}"${v.toLowerCase()===t.nome.toLowerCase()?' selected':''}>${esc(t.nome)}</option>`).join('');
   if (v && !known) opts += `<option value="${esc(v)}" selected>${esc(v)} (novo)</option>`;
-  return `<select class="tema-sel">${opts}</select>`;
+  return `<select data-f="tema" class="tema-sel">${opts}</select>`;
 }
 
 // ── TABLE ────────────────────────────────────────────────────────────────────
@@ -429,16 +440,17 @@ function addRow(data={}) {
   tr.dataset.rid = uid();
   tr.innerHTML = `
     <td class="row-num"></td>
-    <td class="col-w-titulo"><input type="text" placeholder="Ex: Validação de regra de crédito" value="${esc(data.titulo||'')}"></td>
+    <td class="col-w-titulo"><input data-f="titulo" type="text" placeholder="Ex: Validação de regra de crédito" value="${esc(data.titulo||'')}"></td>
     <td class="col-w-sm">${buildTemaSel(data.tema||'')}</td>
-    <td class="col-w-sm"><input type="text" list="dev-list" placeholder="Ex: Gabriel / Ana" value="${esc(data.dev||'')}"></td>
+    <td class="col-w-sm"><input data-f="dev" type="text" list="dev-list" placeholder="Ex: Gabriel / Ana" value="${esc(data.dev||'')}"></td>
     <td class="col-w-sm">${buildStatusSel(data.status||'planejado')}</td>
-    <td class="col-w-date"><input type="date" value="${esc(data.inicio||'')}"></td>
-    <td class="col-w-date"><input type="date" value="${esc(data.entrega||'')}"></td>
-    <td class="col-w-num"><input type="number" min="0" step="0.5" placeholder="0" value="${data.horas_realizadas!=null&&data.horas_realizadas!==''?esc(data.horas_realizadas):''}"></td>
-    <td class="col-w-sm"><input type="text" placeholder="Nome" value="${esc(data.solicitante||'')}"></td>
+    <td class="col-w-sm">${buildTipoSel(data.tipo||'')}</td>
+    <td class="col-w-date"><input data-f="inicio" type="date" value="${esc(data.inicio||'')}"></td>
+    <td class="col-w-date"><input data-f="entrega" type="date" value="${esc(data.entrega||'')}"></td>
+    <td class="col-w-num"><input data-f="horas_realizadas" type="number" min="0" step="0.5" placeholder="0" value="${data.horas_realizadas!=null&&data.horas_realizadas!==''?esc(data.horas_realizadas):''}"></td>
+    <td class="col-w-sm"><input data-f="solicitante" type="text" placeholder="Nome" value="${esc(data.solicitante||'')}"></td>
     <td class="col-w-sm">${buildPrioSel(data.prioridade||'')}</td>
-    <td class="col-w-sm"><input type="text" placeholder="Observações" value="${esc(data.descricao||'')}"></td>
+    <td class="col-w-sm"><input data-f="descricao" type="text" placeholder="Observações" value="${esc(data.descricao||'')}"></td>
     <td class="td-act"><button class="btn-del" onclick="delRow(this)">×</button></td>`;
   tbody.appendChild(tr);
   reindexRows();
@@ -502,6 +514,7 @@ function parseCsv() {
     horas:fc(['horas','hrs','hours']),
     solicitante:fc(['solicitante','requester']),
     prioridade:fc(['prioridade','priority','prio']),
+    tipo:fc(['tipo','classificacao','classificação','tipo_issue','categoria']),
   };
   let added=0;
   for (let i=1;i<lines.length;i++) {
@@ -518,6 +531,7 @@ function parseCsv() {
       horas_realizadas: C.horas>=0 ? cols[C.horas] : '',
       solicitante:   C.solicitante>=0 ? cols[C.solicitante] : '',
       prioridade:    normalizePrio(C.prioridade>=0 ? cols[C.prioridade] : ''),
+      tipo:          normalizeTipo(C.tipo>=0 ? cols[C.tipo] : ''),
     });
     added++;
   }
@@ -532,20 +546,24 @@ function showCsvMsg(msg,type) {
 }
 
 // ── COLLECT ───────────────────────────────────────────────────────────────────
+// Lê por data-f, não por posição: antes, inserir uma coluna deslocava todos os
+// campos silenciosamente (título virava tema, e assim por diante).
 function collectRows() {
   return Array.from(document.querySelectorAll('#input-tbody tr')).map(tr => {
-    const inputs = tr.querySelectorAll('input, select, textarea');
+    const v = (nome) => tr.querySelector(`[data-f="${nome}"]`)?.value ?? '';
+    const horas = v('horas_realizadas');
     return {
-      titulo:           inputs[0]?.value?.trim()||'',
-      tema:             inputs[1]?.value?.trim()||'',
-      dev:              inputs[2]?.value?.trim()||'',
-      status:           inputs[3]?.value||'planejado',
-      inicio:           inputs[4]?.value||'',
-      entrega:          inputs[5]?.value||'',
-      horas_realizadas: inputs[6]?.value!==''? parseFloat(inputs[6]?.value) : null,
-      solicitante:      inputs[7]?.value?.trim()||'',
-      prioridade:       inputs[8]?.value||'',
-      descricao:        inputs[9]?.value?.trim()||'',
+      titulo:           v('titulo').trim(),
+      tema:             v('tema').trim(),
+      dev:              v('dev').trim(),
+      status:           v('status') || 'planejado',
+      tipo:             v('tipo'),
+      inicio:           v('inicio'),
+      entrega:          v('entrega'),
+      horas_realizadas: horas !== '' ? parseFloat(horas) : null,
+      solicitante:      v('solicitante').trim(),
+      prioridade:       v('prioridade'),
+      descricao:        v('descricao').trim(),
     };
   }).filter(r => r.titulo);
 }
@@ -763,6 +781,7 @@ function buildPreview() {
       <td>${esc(r.tema)||'—'}</td>
       <td>${esc(r.dev)||'—'}</td>
       <td><span class="badge-status s-${r.status}">${statusLabel(r.status)}</span></td>
+      <td>${r.tipo === 'sustentacao' ? '🔧 Sust.' : r.tipo === 'evolucao' ? '🚀 Evol.' : '—'}</td>
       <td>${r.inicio||'—'}</td><td>${r.entrega||'—'}</td>
       <td>${r.horas_realizadas!=null?r.horas_realizadas:'—'}</td>
       <td>${esc(r.solicitante)||'—'}</td>
@@ -855,7 +874,7 @@ async function runImport() {
       status_planejamento: r.status||'planejado',
       inicio: r.inicio||'', entrega: r.entrega||'',
       horas_realizadas: r.horas_realizadas!=null&&r.horas_realizadas!==''?Number(r.horas_realizadas):0,
-      solicitante: r.solicitante||'', prioridade: r.prioridade||'',
+      solicitante: r.solicitante||'', prioridade: r.prioridade||'', tipo: r.tipo||'',
       atualizado_em: now,
     };
 
@@ -918,11 +937,11 @@ async function runImport() {
 
 // ── CSV TEMPLATE ──────────────────────────────────────────────────────────────
 function downloadTemplate() {
-  const hdr = 'titulo;descricao;tema;dev;status;inicio;entrega;horas_realizadas;solicitante;prioridade';
+  const hdr = 'titulo;descricao;tema;dev;status;tipo;inicio;entrega;horas_realizadas;solicitante;prioridade';
   const ex  = [
-    'Validação de regra de crédito;Regra nova para score > 700;AxCred - Reanálise;Gabriel;concluido;2025-06-02;2025-06-13;40;Área de Crédito;alta',
-    'Dashboard de inadimplência;;Risco;Ana / João;em_andamento;2025-07-01;2025-07-15;;TI;media',
-    'Correção bug extrato;;;Maria;concluido;2025-06-10;2025-06-11;8;;baixa',
+    'Validação de regra de crédito;Regra nova para score > 700;AxCred - Reanálise;Gabriel;concluido;evolucao;2025-06-02;2025-06-13;40;Área de Crédito;alta',
+    'Dashboard de inadimplência;;Risco;Ana / João;em_andamento;evolucao;2025-07-01;2025-07-15;;TI;media',
+    'Correção bug extrato;;;Maria;concluido;sustentacao;2025-06-10;2025-06-11;8;;baixa',
   ];
   const blob = new Blob(['﻿'+[hdr,...ex].join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');

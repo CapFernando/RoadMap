@@ -415,7 +415,7 @@
     </div>
     <div class="header-right">
       <button class="btn btn-secondary btn-sm" onclick="openDevsModal()">👥 Gerenciar Devs</button>
-      <button class="btn btn-primary btn-sm" onclick="openModal()">+ Nova Tarefa</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal()">+ Nova issue</button>
       <button class="btn btn-secondary btn-sm" onclick="saveToGitHub()">💾 Salvar</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sair</button>
     </div>
@@ -424,6 +424,14 @@
   <div class="indicator-bar" id="indicator-bar"></div>
 
   <div class="filter-bar">
+    <label>Tipo</label>
+    <select id="f-tipo" onchange="applyFilters()">
+      <option value="">Todos</option>
+      <option value="sustentacao">🔧 Sustentação</option>
+      <option value="evolucao">🚀 Evolução</option>
+      <option value="__sem_tipo__">⚪ Sem tipo</option>
+    </select>
+    <div class="filter-divider"></div>
     <label>Tema</label>
     <select id="f-tema" onchange="applyFilters()"></select>
     <div class="filter-divider"></div>
@@ -501,6 +509,14 @@
           <option value="alta">Alta</option>
           <option value="media">Média</option>
           <option value="baixa">Baixa</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select id="e-tipo">
+          <option value="">— Selecione —</option>
+          <option value="sustentacao">🔧 Sustentação</option>
+          <option value="evolucao">🚀 Evolução</option>
         </select>
       </div>
     </div>
@@ -611,7 +627,7 @@ function splitDevs(str) {
   return str.split(/[\/,]/).map(s => s.trim()).filter(Boolean);
 }
 
-let filters  = { tema: '', dev: '', prio: '', sprint: '', indicator: '' };
+let filters  = { tipo: '', tema: '', dev: '', prio: '', sprint: '', indicator: '' };
 
 // ── HOLIDAYS ──────────────────────────────────────────────────────────────
 const NATIONAL_HOLIDAYS = new Set([
@@ -971,6 +987,7 @@ const DAY_ABBR    = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
 // ── FILTERS ───────────────────────────────────────────────────────────────
 function applyFilters() {
+  filters.tipo     = document.getElementById('f-tipo').value;
   filters.tema     = document.getElementById('f-tema').value;
   filters.dev      = document.getElementById('f-dev').value;
   filters.prio     = document.getElementById('f-prio').value;
@@ -982,6 +999,8 @@ function applyFilters() {
 // filtrava o mesmo campo e divergir dos chips zerava o resultado sem aviso.
 function matchesFilters(m) {
   if (m.oculto) return false;
+  if (filters.tipo === '__sem_tipo__') { if (m.tipo) return false; }
+  else if (filters.tipo && m.tipo !== filters.tipo)                 return false;
   if (filters.tema   && m.tema_id !== filters.tema)                 return false;
   if (filters.dev && filters.dev !== '__all__' && !splitDevs(m.dev).includes(filters.dev)) return false;
   if (filters.prio   && (m.prioridade||'') !== filters.prio)        return false;
@@ -991,7 +1010,8 @@ function matchesFilters(m) {
 }
 
 function limparFiltrosGantt() {
-  filters.tema = ''; filters.dev = ''; filters.prio = ''; filters.sprint = ''; filters.indicator = '';
+  filters.tipo = ''; filters.tema = ''; filters.dev = ''; filters.prio = ''; filters.sprint = ''; filters.indicator = '';
+  document.getElementById('f-tipo').value   = '';
   document.getElementById('f-tema').value   = '';
   document.getElementById('f-dev').value    = '';
   document.getElementById('f-prio').value   = '';
@@ -1009,7 +1029,7 @@ function atualizaContagemGantt() {
   const el = document.getElementById('f-contagem');
   if (el) el.textContent = `Mostrando ${n} de ${visiveis.length}`;
 
-  const ativos = [filters.tema, filters.prio, filters.sprint, filters.indicator].filter(Boolean).length
+  const ativos = [filters.tipo, filters.tema, filters.prio, filters.sprint, filters.indicator].filter(Boolean).length
                + (filters.dev && filters.dev !== '__all__' ? 1 : 0);
   const btn = document.getElementById('f-limpar');
   if (btn) {
@@ -1563,6 +1583,7 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-titulo').value    = m?.titulo || '';
   document.getElementById('e-descricao').value = m?.descricao || '';
   document.getElementById('e-prio').value      = m?.prioridade || '';
+  document.getElementById('e-tipo').value      = m?.tipo || '';
   document.getElementById('e-sprint').value    = m?.sprint || '';
   document.getElementById('e-status-plan').value = m?.status_planejamento || 'backlog';
   document.getElementById('e-inicio').value    = m?.inicio || prefillDate || '';
@@ -1674,6 +1695,8 @@ function saveTask() {
   const titulo = document.getElementById('e-titulo').value.trim();
   const temaId = resolveTemaSelecao('e', editingId ? (state.melhorias.find(x => x.id === editingId)||{}).tema_id : '');
   if (!titulo) { toast('Informe o título.', 'err'); return; }
+  const tipo = document.getElementById('e-tipo').value;
+  if (!tipo) { toast('Selecione o tipo: Sustentação ou Evolução.', 'err'); return; }
 
   const inicio = document.getElementById('e-inicio').value;
   const fim    = document.getElementById('e-fim').value;
@@ -1688,6 +1711,7 @@ function saveTask() {
     titulo,
     descricao:          document.getElementById('e-descricao').value.trim(),
     tema_id:            temaId,
+    tipo:               tipo,
     status:             spToStatus(sp),
     dev:                document.getElementById('e-dev').value,
     inicio:             inicio,

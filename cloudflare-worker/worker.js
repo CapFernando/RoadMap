@@ -119,10 +119,16 @@ export default {
       else { const novo = { id: t.id || uid(), nome: t.nome }; data.temas.push(novo); if (temaId === t.id) temaId = novo.id; }
     });
 
+    // tipo: aceita apenas os dois valores conhecidos; qualquer outra coisa entra
+    // vazia e o Admin classifica ao planejar (nao confiamos no cliente).
+    const TIPOS_VALIDOS = ['sustentacao', 'evolucao'];
+    const tipo = TIPOS_VALIDOS.includes(m.tipo) ? m.tipo : '';
+
     const nova = {
       titulo: String(m.titulo).trim(),
       descricao: m.descricao || '',
       tema_id: temaId,
+      tipo: tipo,
       solicitante: m.solicitante || '',
       discovery: m.discovery || undefined,
       anexos: Array.isArray(m.anexos) ? m.anexos : [],

@@ -209,6 +209,14 @@
       <option value="10">Novembro</option><option value="11">Dezembro</option>
     </select>
     <div class="filter-sep"></div>
+    <label>Tipo:</label>
+    <select id="f-tipo" onchange="renderKanban()">
+      <option value="">Todos</option>
+      <option value="sustentacao">🔧 Sustentação</option>
+      <option value="evolucao">🚀 Evolução</option>
+      <option value="__sem_tipo__">⚪ Sem tipo</option>
+    </select>
+    <div class="filter-sep"></div>
     <label>Tema:</label>
     <div id="tema-chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
   </div>
@@ -869,6 +877,9 @@ function getFiltered() {
   return state.melhorias.filter(m => {
     if (!splitDevs(m.dev).includes(currentDev)) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
+    const fTipo = document.getElementById('f-tipo')?.value || '';
+    if (fTipo === '__sem_tipo__') { if (m.tipo) return false; }
+    else if (fTipo && m.tipo !== fTipo) return false;
     const sk = getStatusKey(m);
     if (sk === 'negada') return false;
     // Filtro explícito por período
@@ -1022,6 +1033,7 @@ async function saveNewDep() {
   const newDep = {
     id: uid(), titulo, descricao: desc, dev,
     tema_id: parent.tema_id,
+    tipo: parent.tipo || '',   // dependência herda a classificação do card pai
     inicio: new Date().toISOString().slice(0,10),
     entrega,
     status: 'iniciada',

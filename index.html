@@ -131,6 +131,7 @@
     /* Largura fixa por tipo: sem isso o select cresce até a opção mais longa
        (nome de tema comprido) e a barra quebra em duas linhas. */
     .fgroup select { width: 100%; text-overflow: ellipsis; }
+    .fgroup.fg-tipo { width: 150px; }
     .fgroup.fg-ano  { width: 92px; }
     .fgroup.fg-mes  { width: 116px; }
     .fgroup.fg-dev  { width: 150px; }
@@ -297,7 +298,7 @@
   </div>
   <div class="header-right" style="display:flex;align-items:center;gap:16px;">
     <span id="ultima-atualizacao" style="font-size:13px;color:var(--text3)">—</span>
-    <button id="btn-nova-melhoria" onclick="openNovaMelhoria()" style="display:none;font-size:13px;color:#fff;background:var(--blue,#3B8FE8);border:1px solid var(--blue,#3B8FE8);border-radius:var(--radius);padding:6px 14px;cursor:pointer;font-weight:600;">+ Nova Melhoria</button>
+    <button id="btn-nova-melhoria" onclick="openNovaMelhoria()" style="display:none;font-size:13px;color:#fff;background:var(--blue,#3B8FE8);border:1px solid var(--blue,#3B8FE8);border-radius:var(--radius);padding:6px 14px;cursor:pointer;font-weight:600;">+ Nova issue</button>
     <button id="btn-refresh" onclick="forceRefresh()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Forçar atualização dos dados" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">↻ Atualizar</button>
     <button onclick="openExportModal()" style="font-size:13px;color:var(--text3);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Exportar relatório" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⬇ Exportar</button>
     <a href="admin.html" style="font-size:13px;color:var(--text3);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⚙ Admin</a>
@@ -367,6 +368,13 @@
           <label class="nm-f">Módulo
             <select id="nm-modulo" onchange="nmOnModulo()"></select>
             <input type="text" id="nm-modulo-novo" placeholder="Nome do novo módulo" style="display:none;margin-top:6px">
+          </label>
+          <label class="nm-f">Classificação
+            <select id="nm-tipo-issue">
+              <option value="">— Selecione —</option>
+              <option value="sustentacao">🔧 Sustentação</option>
+              <option value="evolucao">🚀 Evolução</option>
+            </select>
           </label>
           <label class="nm-f">Área do solicitante
             <select id="nm-area">
@@ -634,7 +642,7 @@ function buildCharts(temas, melhorias) {
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
 let _temas = [], _melhorias = [], _devs = [];
-let _ano = null, _mes = null, _dev = null, _statusFilter = null, _temaFilter = null;
+let _ano = null, _mes = null, _dev = null, _statusFilter = null, _temaFilter = null, _tipoFilter = null;
 
 // Deriva o status unificado de um item (alinhado com Admin e Gantt)
 function getStatusKey(m) {
@@ -668,6 +676,15 @@ function splitDevs(devStr) {
   return devStr.split(/[\/,]/).map(s => s.trim()).filter(Boolean);
 }
 
+// Demandas criadas antes do campo Tipo ficam como "Sem tipo" até serem classificadas
+const SEM_TIPO = '__sem_tipo__';
+const TIPO_LABELS = { sustentacao: '🔧 Sustentação', evolucao: '🚀 Evolução' };
+function matchTipo(m, filtro) {
+  if (!filtro) return true;
+  if (filtro === SEM_TIPO) return !m.tipo;
+  return m.tipo === filtro;
+}
+
 // Período: usa data de início planejada; sem ela, criado_em (backlog sem data)
 function matchPeriodo(m) {
   if (_ano === null && _mes === null) return true;
@@ -680,6 +697,7 @@ function matchPeriodo(m) {
 function filtradas() {
   return _melhorias.filter(m => {
     if (!matchPeriodo(m)) return false;
+    if (!matchTipo(m, _tipoFilter)) return false;
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     if (_statusFilter) return getStatusKey(m) === _statusFilter;
@@ -699,6 +717,7 @@ function renderConteudo() {
   // conta por status unificado (usa mel sem filtro de status para mostrar totais reais)
   const melSemStatus = _melhorias.filter(m =>
     matchPeriodo(m) &&
+    matchTipo(m, _tipoFilter) &&
     (!_dev || splitDevs(m.dev).includes(_dev)) &&
     (!_temaFilter || m.tema_id === _temaFilter)
   );
@@ -790,10 +809,16 @@ function buildFilterBar() {
   const optTema = [{ key: '', label: 'Todos', n: noPeriodo.length },
     ..._temas.map(t => ({ key: t.id, label: t.nome, n: noPeriodo.filter(m => m.tema_id === t.id).length }))];
 
-  const ativos = [_ano, _mes, _dev, _temaFilter, _statusFilter].filter(v => v !== null && v !== undefined).length;
+  const semTipo = noPeriodo.filter(m => !m.tipo).length;
+  const optTipo = [{ key: '', label: 'Todos', n: noPeriodo.length },
+    ...Object.keys(TIPO_LABELS).map(k => ({ key: k, label: TIPO_LABELS[k], n: noPeriodo.filter(m => m.tipo === k).length }))];
+  if (semTipo) optTipo.push({ key: SEM_TIPO, label: '⚪ Sem tipo', n: semTipo });
+
+  const ativos = [_ano, _mes, _dev, _temaFilter, _statusFilter, _tipoFilter].filter(v => v !== null && v !== undefined).length;
 
   document.getElementById('filter-bar').innerHTML = `
     <div class="filter-row">
+      ${fGroup('Tipo', optTipo, _tipoFilter, 'setFiltroTipoIssue', false, 'fg-tipo')}
       ${fGroup('Ano', optAno, _ano, 'setFiltroAno', anos.length === 0, 'fg-ano')}
       ${fGroup('Mês', optMes, _mes, 'setFiltroMes', false, 'fg-mes')}
       ${devs.length   ? fGroup('Dev',  optDev,  _dev,        'setFiltroDev',  false, 'fg-dev')  : ''}
@@ -825,8 +850,14 @@ function setFiltroTema(id) {
   renderConteudo();
 }
 
+function setFiltroTipoIssue(v) {
+  _tipoFilter = v || null;
+  buildFilterBar();
+  renderConteudo();
+}
+
 function limparFiltros() {
-  _ano = null; _mes = null; _dev = null; _temaFilter = null; _statusFilter = null;
+  _ano = null; _mes = null; _dev = null; _temaFilter = null; _statusFilter = null; _tipoFilter = null;
   buildFilterBar();
   renderConteudo();
 }
@@ -1627,6 +1658,7 @@ function openNovaMelhoria() {
    'nm-escopo-in','nm-escopo-out','nm-premissas'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   document.getElementById('nm-ganho-res').textContent = 'Preencha os dois campos acima';
   document.getElementById('nm-tipo').value = 'ganho'; nmOnTipo();
+  document.getElementById('nm-tipo-issue').value = '';
   nmPopulateSistema();
   document.getElementById('nm-listRF').innerHTML = '';
   document.getElementById('nm-listRN').innerHTML = '';
@@ -1683,6 +1715,7 @@ async function saveNovaMelhoria() {
     entrega: '',
     estimativa: '',
     status: 'recebida',
+    tipo: g('nm-tipo-issue'),         // opcional aqui: o Admin classifica ao planejar
     status_planejamento: 'backlog',   // entra sempre no backlog
     criado_em: new Date().toISOString(),
     anexos: _nmAnexos,
