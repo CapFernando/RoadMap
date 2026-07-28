@@ -594,7 +594,9 @@
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────
-const SENHA        = window.ADMIN_SENHA  || 'AudaxCapital123';
+// Sem senha embutida: a senha vive somente no secret ADMIN_SENHA do Worker.
+// O valor que ficava aqui era legível por qualquer visitante do site.
+const SENHA        = window.ADMIN_SENHA  || '';
 const GITHUB_TOKEN = window.GITHUB_TOKEN || '';
 const GITHUB_USER  = 'CapFernando';
 const GITHUB_REPO  = 'RoadMap';
@@ -748,7 +750,8 @@ async function doLogin() {
     runtimeToken = t;
     localStorage.setItem('rm_token', t);
   }
-  if (v === SENHA) {
+  // Exige SENHA não vazia: sem o fallback embutido, comparar com '' liberaria acesso
+  if (SENHA && v === SENHA) {
     localStorage.setItem('rm_logged', '1');
     entrarGantt();
   } else {

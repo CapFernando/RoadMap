@@ -415,7 +415,6 @@
       <button class="btn btn-secondary btn-sm" onclick="window.open('dev.html','_blank')">🗂 Painel Dev</button>
       <button class="btn btn-secondary btn-sm" onclick="window.open('index.html','_blank')">Ver painel público</button>
       <button class="btn btn-success btn-sm" onclick="saveToGitHub()">💾 Publicar alterações</button>
-      <button class="btn btn-secondary btn-sm" onclick="copyAccessLink()" title="Gera link de acesso para novas máquinas">🔗 Link de acesso</button>
       <button class="btn btn-secondary btn-sm" onclick="doLogout()">Sair</button>
     </div>
   </header>
@@ -739,7 +738,9 @@
 
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────
-const SENHA         = window.ADMIN_SENHA   || 'AudaxCapital123';
+// Sem senha embutida: a senha vive somente no secret ADMIN_SENHA do Worker.
+// O valor que ficava aqui era legível por qualquer visitante do site.
+const SENHA         = window.ADMIN_SENHA   || '';
 const GITHUB_TOKEN  = window.GITHUB_TOKEN  || '';
 const GITHUB_USER   = 'CapFernando';
 const GITHUB_REPO   = 'RoadMap';
@@ -757,18 +758,17 @@ let fileSha = null;
 const _deletedIds = new Set();
 
 // ─── LOGIN ────────────────────────────────────────────────────────
-// Tenta extrair token do fragmento da URL (#token=ghp_...) — link gerado por outro admin
+// Antes, um link #token=ghp_... gravava o token do GitHub no localStorage de cada
+// máquina. O acesso agora é por senha validada no Worker, então em vez de ingerir
+// o token nós apagamos qualquer um que tenha sobrado — nenhum painel o usa mais.
 (function() {
-  const hash = location.hash.slice(1);
-  const params = new URLSearchParams(hash);
-  const t = params.get('token');
-  if (t && (t.startsWith('ghp_') || t.startsWith('github_pat_'))) {
-    localStorage.setItem('rm_token', t);
-    history.replaceState(null, '', location.pathname + location.search); // limpa o hash da URL
-  }
+  try { localStorage.removeItem('rm_token'); } catch (_) {}
+  if (location.hash.includes('token=')) history.replaceState(null, '', location.pathname + location.search);
 })();
 
-let runtimeToken = GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
+// Com o Worker, nenhum painel usa token no navegador: a leitura é pública e a
+// gravação passa pelo Worker, que guarda o token como secret.
+let runtimeToken = ADMIN_PROXY_URL ? '' : (GITHUB_TOKEN || '');
 
 function enterAdmin() {
   document.getElementById('login-screen').style.display = 'none';
@@ -792,16 +792,6 @@ function initLoginScreen() {
     document.getElementById('btn-entrar').style.cursor = 'not-allowed';
   }
   if (localStorage.getItem('rm_logged') === '1' && runtimeToken) enterAdmin();
-}
-
-function copyAccessLink() {
-  if (!runtimeToken) { toast('Token não disponível nesta sessão.', 'err'); return; }
-  const url = `${location.origin}${location.pathname}#token=${runtimeToken}`;
-  navigator.clipboard.writeText(url).then(() => {
-    toast('🔗 Link copiado! Envie para o colega — o token será salvo automaticamente ao abrir.', 'ok');
-  }).catch(() => {
-    prompt('Copie o link abaixo:', url);
-  });
 }
 
 async function doLogin() {
@@ -837,7 +827,8 @@ async function doLogin() {
     runtimeToken = t;
     localStorage.setItem('rm_token', t);
   }
-  if (v === SENHA) {
+  // Exige SENHA não vazia: sem o fallback embutido, comparar com '' liberaria acesso
+  if (SENHA && v === SENHA) {
     localStorage.setItem('rm_logged', '1');
     enterAdmin();
   } else {
