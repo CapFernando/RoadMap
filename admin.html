@@ -441,6 +441,7 @@
       <div class="status-filters" id="status-filters"></div>
       <div class="status-filters" id="prazo-filters"></div>
       <div class="status-filters" id="tema-filters"></div>
+      <div class="status-filters" id="dev-filters"></div>
       <div id="lista-melhorias"></div>
     </div>
 
@@ -1083,6 +1084,7 @@ function statusKey(m) {
 let _filtroStatus = null;
 let _filtroTema   = null;
 let _filtroPrazo  = null; // null|'vencidas'|'semana'|'mes'|'sem_data'
+let _filtroDev    = null; // null|nome do dev|SEM_DEV
 
 // Demanda "em aberto" (relevante para prazos): exclui concluída/negada
 function isDemandaAberta(m) {
@@ -1155,6 +1157,56 @@ function renderTemaFilters() {
   ].join('');
 }
 
+// ── FILTRO POR DEV ────────────────────────────────────────────────
+const SEM_DEV = '__sem_dev__';
+// Guarda a lista renderizada para o onclick referenciar por índice — evita
+// quebrar o HTML com nomes que tenham apóstrofo, acento ou barra.
+let _devsFiltro = [];
+
+function setFiltroDev(d) {
+  _filtroDev = d;
+  renderDevFilters();
+  renderMelhorias();
+}
+function setFiltroDevIdx(i) { setFiltroDev(_devsFiltro[i]); }
+
+// Une devs cadastrados e devs que aparecem nas demandas. O campo dev pode ser
+// composto ("Gabriel / Anthony"), por isso o split.
+function devsDisponiveis() {
+  return [...new Set([
+    ...(state.desenvolvedores || []).flatMap(d => kbSplitDevs(d)),
+    ...state.melhorias.flatMap(m => kbSplitDevs(m.dev)),
+  ])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function matchDev(m, filtro) {
+  if (!filtro) return true;
+  const devs = kbSplitDevs(m.dev);
+  if (filtro === SEM_DEV) return !devs.length;
+  return devs.includes(filtro);
+}
+
+function renderDevFilters() {
+  const el = document.getElementById('dev-filters');
+  if (!el) return;
+  _devsFiltro = devsDisponiveis();
+  const semDev = state.melhorias.filter(m => !kbSplitDevs(m.dev).length).length;
+
+  const chips = [
+    `<button class="sf-btn all ${_filtroDev === null ? 'active' : ''}" onclick="setFiltroDev(null)">Todos os devs <strong>${state.melhorias.length}</strong></button>`,
+    ..._devsFiltro.map((d, i) => {
+      const n = state.melhorias.filter(m => kbSplitDevs(m.dev).includes(d)).length;
+      const active = _filtroDev === d ? 'active' : '';
+      return `<button class="sf-btn ${active}" onclick="setFiltroDevIdx(${i})">${esc(d)} <strong>${n}</strong></button>`;
+    })
+  ];
+  if (semDev) {
+    const active = _filtroDev === SEM_DEV ? 'active' : '';
+    chips.push(`<button class="sf-btn ${active}" onclick="setFiltroDev('${SEM_DEV}')">⚪ Sem dev <strong>${semDev}</strong></button>`);
+  }
+  el.innerHTML = chips.join('');
+}
+
 function renderStatusFilters() {
   const el = document.getElementById('status-filters');
   if (!el) return;
@@ -1177,7 +1229,7 @@ function renderStatusFilters() {
 }
 
 function renderAll() {
-  renderTemas(); renderStatusFilters(); renderPrazoFilters(); renderTemaFilters(); renderMelhorias();
+  renderTemas(); renderStatusFilters(); renderPrazoFilters(); renderTemaFilters(); renderDevFilters(); renderMelhorias();
   if (document.getElementById('tab-kanban')?.classList.contains('active')) renderKanban();
 }
 
@@ -1208,7 +1260,8 @@ function renderMelhorias() {
     if (!_filtroStatus && !_filtroPrazo && HIDDEN_BY_DEFAULT.includes(sk)) return false;
     return (!_filtroStatus || sk === _filtroStatus) &&
            (!_filtroTema   || m.tema_id === _filtroTema) &&
-           matchPrazo(m, _filtroPrazo);
+           matchPrazo(m, _filtroPrazo) &&
+           matchDev(m, _filtroDev);
   });
   if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
   const STATUS_ORDER = { concluida:-1, iniciada:0, estimada:1, regra:2, refinamento:3, recebida:4, negada:5 };
