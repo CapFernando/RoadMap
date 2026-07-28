@@ -142,6 +142,7 @@
     .filter-bar select:focus, .filter-bar input:focus { border-color: var(--blue); }
     .filter-bar select option { background: var(--bg3); }
     .filter-divider { width: 1px; height: 20px; background: var(--border); margin: 0 2px; }
+    .filter-count { font-size: 12px; color: var(--text3); margin-left: auto; white-space: nowrap; }
 
     /* ── MAIN LAYOUT ── */
     .main-layout {
@@ -440,17 +441,10 @@
     <label>Sprint</label>
     <input type="text" id="f-sprint" placeholder="ex: S1" oninput="applyFilters()" style="max-width:80px" />
     <div class="filter-divider"></div>
-    <label>Status</label>
-    <select id="f-status" onchange="applyFilters()">
-      <option value="">Todos</option>
-      <option value="backlog">Backlog</option>
-      <option value="levantar_req">Levantar Requisitos</option>
-      <option value="planejado">Planejado</option>
-      <option value="em_andamento">Em andamento</option>
-      <option value="deploy">Deploy</option>
-      <option value="concluido">Concluído</option>
-      <option value="atrasado">Atrasado</option>
-    </select>
+    <!-- Status fica só nos chips acima: um select aqui filtrava o mesmo campo e,
+         se as duas escolhas divergissem, o resultado era zero sem explicação. -->
+    <button id="f-limpar" class="btn btn-ghost btn-sm" onclick="limparFiltrosGantt()">Limpar</button>
+    <span id="f-contagem" class="filter-count"></span>
   </div>
 
   <div class="main-layout">
@@ -617,7 +611,7 @@ function splitDevs(str) {
   return str.split(/[\/,]/).map(s => s.trim()).filter(Boolean);
 }
 
-let filters  = { tema: '', dev: '', prio: '', sprint: '', status: '', indicator: '' };
+let filters  = { tema: '', dev: '', prio: '', sprint: '', indicator: '' };
 
 // ── HOLIDAYS ──────────────────────────────────────────────────────────────
 const NATIONAL_HOLIDAYS = new Set([
@@ -981,19 +975,48 @@ function applyFilters() {
   filters.dev      = document.getElementById('f-dev').value;
   filters.prio     = document.getElementById('f-prio').value;
   filters.sprint   = document.getElementById('f-sprint').value.trim().toLowerCase();
-  filters.status   = document.getElementById('f-status').value;
   renderGantt();
 }
 
+// O status vem só dos chips (filters.indicator). O select "Status" foi removido:
+// filtrava o mesmo campo e divergir dos chips zerava o resultado sem aviso.
 function matchesFilters(m) {
   if (m.oculto) return false;
   if (filters.tema   && m.tema_id !== filters.tema)                 return false;
   if (filters.dev && filters.dev !== '__all__' && !splitDevs(m.dev).includes(filters.dev)) return false;
   if (filters.prio   && (m.prioridade||'') !== filters.prio)        return false;
   if (filters.sprint && !(m.sprint||'').toLowerCase().includes(filters.sprint)) return false;
-  if (filters.status && (m.status_planejamento||'backlog') !== filters.status) return false;
   if (filters.indicator && (m.status_planejamento||'backlog') !== filters.indicator) return false;
   return true;
+}
+
+function limparFiltrosGantt() {
+  filters.tema = ''; filters.dev = ''; filters.prio = ''; filters.sprint = ''; filters.indicator = '';
+  document.getElementById('f-tema').value   = '';
+  document.getElementById('f-dev').value    = '';
+  document.getElementById('f-prio').value   = '';
+  document.getElementById('f-sprint').value = '';
+  renderIndicators();
+  renderGantt();
+  renderBacklog();
+}
+
+// Mostra o tamanho do recorte e quantos filtros estão ativos — sem isso, com o
+// select de dev em "Com demanda no mês" não dá para saber o que está filtrado.
+function atualizaContagemGantt() {
+  const visiveis = state.melhorias.filter(m => !m.oculto);
+  const n = visiveis.filter(matchesFilters).length;
+  const el = document.getElementById('f-contagem');
+  if (el) el.textContent = `Mostrando ${n} de ${visiveis.length}`;
+
+  const ativos = [filters.tema, filters.prio, filters.sprint, filters.indicator].filter(Boolean).length
+               + (filters.dev && filters.dev !== '__all__' ? 1 : 0);
+  const btn = document.getElementById('f-limpar');
+  if (btn) {
+    btn.textContent = ativos ? `Limpar (${ativos})` : 'Limpar';
+    btn.disabled = !ativos;
+    btn.style.opacity = ativos ? '' : '.35';
+  }
 }
 
 // ── RENDER ALL ────────────────────────────────────────────────────────────
@@ -1117,6 +1140,7 @@ function renderBacklog() {
 
 // ── GANTT ─────────────────────────────────────────────────────────────────
 function renderGantt() {
+  atualizaContagemGantt();
   document.getElementById('month-label').textContent = `${MONTH_NAMES[viewMonth]} ${viewYear}`;
 
   const workDays = getWorkingDaysOfMonth(viewYear, viewMonth);
