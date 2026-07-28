@@ -527,11 +527,13 @@ async function saveToGitHub(patch, opts = {}) {
       if (opts.temas !== undefined) server.temas = opts.temas;
       const res = await fetch(ADMIN_PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'dev-publish', data: server })
+        body: JSON.stringify({ action: 'dev-publish', senha: _devPw, data: server })
       });
       if (!res.ok) {
         let msg = 'Falha ao salvar';
         try { const e = await res.json(); msg = e.error || msg; } catch (_) {}
+        // 401 = senha invalida ou sessao expirada: orienta em vez de mostrar "senha"
+        if (res.status === 401) msg = 'Sessão expirada. Recarregue a página e informe a senha novamente.';
         throw new Error(msg);
       }
       applyData(server);
@@ -641,8 +643,9 @@ async function reloadDevList() {
 }
 
 async function initApp() {
-  // Modo proxy: sem senha e sem token — abre direto na seleção de dev
-  const authed = ADMIN_PROXY_URL ? true : sessionStorage.getItem('rm_dev_authed');
+  // Exige senha validada no Worker. Antes entrava direto, e a rota de gravacao
+  // tambem nao pedia senha — qualquer um com a URL sobrescrevia a base.
+  const authed = ADMIN_PROXY_URL ? !!_devPw : sessionStorage.getItem('rm_dev_authed');
   if (!authed) {
     // step-senha já é o padrão (step-dev está oculto)
     document.getElementById('login-senha')?.focus();

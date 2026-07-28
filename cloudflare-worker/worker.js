@@ -8,6 +8,7 @@
 // Ações (POST JSON):
 //   • { action:'auth', senha }            → valida a senha (login do Admin)
 //   • { action:'publish', senha, data }   → grava o estado completo (Admin)
+//   • { action:'dev-publish', senha, data } → grava o estado completo (Painel Dev)
 //   • { melhoria, novosTemas }            → sugestão pública (dash) — só adiciona no Backlog
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,20 @@ function corsHeaders() {
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }
+// Guardrail de gravacao: recusa payload vazio ou drasticamente menor que o
+// arquivo atual. Protege contra abuso e contra bug — nenhuma operacao normal
+// remove metade da base de uma vez. Usa file.size, que ja vem da metadata.
+function gravacaoSuspeita(data, tamanhoAtual) {
+  if (!Array.isArray(data.melhorias) || data.melhorias.length === 0) {
+    return 'Gravacao recusada: nenhuma melhoria no payload.';
+  }
+  const novo = JSON.stringify(data).length;
+  if (tamanhoAtual > 100000 && novo < tamanhoAtual * 0.5) {
+    return 'Gravacao recusada por seguranca: o conteudo enviado tem menos da metade do tamanho atual.';
+  }
+  return null;
+}
+
 function toB64(str) {
   const bytes = new TextEncoder().encode(str);
   let bin = ''; const CHUNK = 0x8000;
@@ -61,6 +76,8 @@ export default {
       const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
       if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       const file = await getRes.json();
+      const risco = gravacaoSuspeita(data, file.size || 0);
+      if (risco) return json({ error: risco }, 409, headers);
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -70,21 +87,30 @@ export default {
       return json({ ok: true }, 200, headers);
     }
 
-    const devOk = (s) => s && env.DEV_SENHA && s === env.DEV_SENHA;
+    // Aceita a senha do time (DEV_SENHA) ou a do admin (ADMIN_SENHA). Enquanto
+    // DEV_SENHA nao existir, a do admin resolve — assim exigir senha aqui nao
+    // derruba o painel no momento do redeploy.
+    const devOk = (s) => senhaOk(s) || !!(s && env.DEV_SENHA && s === env.DEV_SENHA);
 
     // ── Login do Dev (painel dev) ──
     if (body.action === 'dev-auth') {
       return devOk(body.senha) ? json({ ok: true }, 200, headers) : json({ error: 'senha' }, 401, headers);
     }
 
-    // ── Gravação do Dev (estado completo montado no navegador) — sem senha, leve ──
+    // ── Gravação do Dev (estado completo montado no navegador) ──
+    // ANTES esta rota nao pedia senha: qualquer um com a URL do Worker (que esta
+    // no HTML publico) podia sobrescrever toda a base com um curl. CORS nao
+    // protege, porque so vale para navegador.
     if (body.action === 'dev-publish') {
+      if (!devOk(body.senha)) return json({ error: 'senha' }, 401, headers);
       const data = body.data;
       if (!data || !Array.isArray(data.melhorias)) return json({ error: 'dados invalidos' }, 400, headers);
       if (JSON.stringify(data).length > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
       const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
       if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       const file = await getRes.json();
+      const risco = gravacaoSuspeita(data, file.size || 0);
+      if (risco) return json({ error: risco }, 409, headers);
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
