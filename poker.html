@@ -288,6 +288,13 @@ async function api(payload) {
     });
     let body = null;
     try { body = await res.json(); } catch (_) {}
+    // Worker desatualizado: sem as rotas de poker, a chamada escorrega para a
+    // rota de sugestão pública e volta "Titulo obrigatorio". Sem esta tradução,
+    // o erro parece ser da senha e manda o usuário para o caminho errado.
+    if (body && body.error === 'Titulo obrigatorio') {
+      return { ok: false, status: 501,
+               body: { error: 'O Worker está sem as rotas de Planning Poker. Refaça o Deploy do worker.js na Cloudflare.' } };
+    }
     return { ok: res.ok, status: res.status, body };
   } catch (e) {
     return { ok: false, status: 0, body: { error: 'Sem conexão com o servidor de votação. Verifique a internet e tente de novo.' } };
