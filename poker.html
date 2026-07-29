@@ -10,6 +10,7 @@
   <title>Planning Poker — RoadMap de Melhorias</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
+  <script src="qr.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -224,6 +225,7 @@
   <div class="card-modal">
     <h2>Convidar o time</h2>
     <p>Compartilhe o link ou o código da sala. Entra só com o nome, sem senha.</p>
+    <div id="conv-qr" style="text-align:center;margin-bottom:14px"></div>
     <div class="link-box" id="conv-link">—</div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <button class="btn btn-secondary btn-sm" onclick="copiarLink()">📋 Copiar link</button>
@@ -416,8 +418,20 @@ function sair() {
 // ─── CONVITE ──────────────────────────────────────────────────────
 function linkConvite() { return `${location.origin}${location.pathname}?s=${_codigo}`; }
 function abrirConvite() {
-  document.getElementById('conv-link').textContent = linkConvite();
+  const link = linkConvite();
+  document.getElementById('conv-link').textContent = link;
   document.getElementById('conv-codigo').textContent = _codigo;
+
+  // QR gerado localmente (qr.js): a URL da sala nao sai para servico de
+  // terceiro. Se o link nao couber na versao 4, esconde em vez de desenhar
+  // um codigo que nao escaneia — o codigo de 6 caracteres continua valendo.
+  const box = document.getElementById('conv-qr');
+  const svg = (window.QR && QR.qrSVG) ? QR.qrSVG(link, 190) : null;
+  box.innerHTML = svg
+    ? `<div style="display:inline-block;background:#fff;padding:10px;border-radius:12px;line-height:0">${svg}</div>
+       <div style="font-size:11px;color:var(--text3);margin-top:8px">Aponte a câmera do celular</div>`
+    : `<div style="font-size:12px;color:var(--text3)">Use o código abaixo para entrar.</div>`;
+
   abrir('ov-convite');
 }
 function copiarLink() {
@@ -590,7 +604,14 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   carregarFila();
   if (_codigo && _participante) { iniciar(); return; }      // já estava votando nesta sessão
   if (_codigo) {                                            // chegou pelo link
-    document.getElementById('ent-codigo').value = _codigo;
+    // Chegou pelo QR/link: a chave da sala vem na URL, entao o campo fica
+    // preenchido e somente leitura — a pessoa so digita o nome.
+    const campoCod = document.getElementById('ent-codigo');
+    campoCod.value = _codigo;
+    campoCod.readOnly = true;
+    campoCod.style.opacity = '.6';
+    document.getElementById('ent-desc').textContent =
+      `Sala ${_codigo} — digite seu nome para votar.`;
     document.getElementById('ent-nome').value = _nome || '';
     abrir('ov-entrada');
     setTimeout(() => document.getElementById('ent-nome').focus(), 60);
