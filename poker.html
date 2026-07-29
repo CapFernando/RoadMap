@@ -146,6 +146,7 @@
       <div class="pauta-meta" id="pauta-meta"></div>
     </div>
 
+    <div style="text-align:center;font-size:11px;color:var(--text3);margin-bottom:8px" id="presenca"></div>
     <div class="mesa" id="mesa"><span class="vazio-mesa">Aguardando participantes…</span></div>
 
     <div class="resultado" id="resultado" style="display:none">
@@ -433,12 +434,25 @@ async function entrar() {
   iniciar();
 }
 
-function sair() {
+async function sair() {
+  clearInterval(_timer);
+  await avisarSaida();
   sessionStorage.removeItem('pk_participante');
   sessionStorage.removeItem('pk_nome');
-  clearInterval(_timer);
   location.href = location.pathname;
 }
+
+// Avisa o servidor que estou saindo. keepalive permite que a requisicao termine
+// mesmo com a aba fechando — sem isso, quem fecha o navegador so desapareceria
+// da mesa quando a janela de presenca expirasse.
+function avisarSaida() {
+  if (!_participante || !_codigo) return Promise.resolve();
+  return fetch(PROXY_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+    body: JSON.stringify({ action: 'poker-sair', codigo: _codigo, participante: _participante })
+  }).catch(() => {});
+}
+window.addEventListener('pagehide', avisarSaida);
 
 // ─── CONVITE ──────────────────────────────────────────────────────
 function linkConvite() { return `${location.origin}${location.pathname}?s=${_codigo}`; }
@@ -557,12 +571,19 @@ function aplicar(est) {
       let cls = 'aguardando', txt = '?';
       if (est.revelado && p.valor != null) { cls = 'revelada'; txt = p.valor; }
       else if (p.votou) { cls = 'votou'; txt = '✓'; }
-      return `<div class="seat">
+      // Quem votou e caiu continua na mesa (o voto conta na media), mas aparece
+      // esmaecido com aviso — evita a media divergir de quem esta na tela.
+      const off = p.online === false;
+      return `<div class="seat" style="${off ? 'opacity:.45' : ''}" title="${off ? esc(p.nome) + ' — desconectado' : esc(p.nome)}">
         <div class="carta ${cls}">${esc(txt)}</div>
-        <div class="seat-nome" title="${esc(p.nome)}">${esc(p.nome)}</div>
+        <div class="seat-nome">${off ? '⚠ ' : ''}${esc(p.nome)}</div>
       </div>`;
     }).join('');
   }
+
+  const online = est.participantes.filter(p => p.online !== false).length;
+  document.getElementById('presenca').textContent = est.participantes.length
+    ? `${online} online · ${est.total_votos} voto(s)` : '';
 
   // resultado
   const box = document.getElementById('resultado');
@@ -594,7 +615,9 @@ function aplicar(est) {
 
 async function atualizar() {
   if (!_codigo) return;
-  const r = await api({ action: 'poker-estado', codigo: _codigo });
+  // Manda o participante junto: o proprio polling e o sinal de vida. Sem isso o
+  // servidor nao teria como saber que alguem fechou a aba.
+  const r = await api({ action: 'poker-estado', codigo: _codigo, participante: _participante || undefined });
   if (r.status === 404 || r.status === 410) {
     clearInterval(_timer);
     toast(r.status === 410 ? 'Sessão expirada.' : 'Sessão não encontrada.', 'err');

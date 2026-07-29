@@ -16,6 +16,7 @@
 //   • { action:'publish', senha, data }   → grava o estado completo (Admin)
 //   • { action:'dev-publish', senha, data } → grava o estado completo (Painel Dev)
 //   • { action:'poker-*', ... }           → planning poker (D1: binding POKER_DB)
+//        poker-estado leva `participante` como sinal de vida; poker-sair remove
 //   • { melhoria, novosTemas }            → sugestão pública (dash) — só adiciona no Backlog
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,10 @@ function json(obj, status, headers) { return new Response(JSON.stringify(obj), {
 // quem já votou, nunca o valor. Esconder no navegador não seria sigilo.
 // ═══════════════════════════════════════════════════════════════════════
 const POKER_TTL_H = 12;   // sessão expira em 12h
+// Janela de presenca: sem sinal de vida por este tempo, sai da mesa. O painel
+// faz polling a cada 1,5s, entao a margem cobre requisicao perdida ou tela
+// bloqueando por instantes, sem deixar fantasma na sala.
+const PRESENCA_S  = 30;
 
 async function pokerMigrar(db) {
   await db.batch([
@@ -98,8 +103,9 @@ async function pokerEstado(db, codigo) {
   if (!ses) return null;
   if (new Date(ses.expira_em) < new Date()) return { expirada: true };
 
+  const corte = new Date(Date.now() - PRESENCA_S * 1000).toISOString();
   const parts = (await db.prepare(
-    'SELECT id, nome FROM poker_participante WHERE codigo = ? ORDER BY visto_em').bind(codigo).all()).results || [];
+    'SELECT id, nome, visto_em FROM poker_participante WHERE codigo = ? ORDER BY visto_em').bind(codigo).all()).results || [];
   const votos = (await db.prepare(
     'SELECT participante, valor FROM poker_voto WHERE codigo = ? AND melhoria_id = ?')
     .bind(codigo, ses.melhoria_id || '').all()).results || [];
@@ -114,12 +120,18 @@ async function pokerEstado(db, codigo) {
 
   return {
     codigo, melhoria_id: ses.melhoria_id || '', revelado, cartas: POKER_CARTAS,
-    participantes: parts.map(p => ({
-      id: p.id, nome: p.nome,
-      votou: porPart[p.id] !== undefined,
-      // valor só sai depois de revelar
-      valor: revelado ? (porPart[p.id] ?? null) : null,
-    })),
+    // Mesa dinamica: mostra quem deu sinal de vida na janela de presenca OU quem
+    // ja votou nesta rodada. Manter o voto na mesa evita a media contar alguem
+    // que a tela nao mostra (celular que travou por alguns segundos, por ex.).
+    participantes: parts
+      .filter(p => p.visto_em > corte || porPart[p.id] !== undefined)
+      .map(p => ({
+        id: p.id, nome: p.nome,
+        votou: porPart[p.id] !== undefined,
+        online: p.visto_em > corte,
+        // valor só sai depois de revelar
+        valor: revelado ? (porPart[p.id] ?? null) : null,
+      })),
     media,
     total_votos: votos.length,
   };
@@ -196,7 +208,30 @@ export default {
         return json({ ok: true, participante: id, nome }, 200, headers);
       }
 
+      // Saida explicita (botao Sair ou aba fechando). Remove o participante e o
+      // voto dele na rodada: se saiu de proposito, nao deve entrar na media.
+      if (body.action === 'poker-sair') {
+        const pid = String(body.participante || '');
+        if (!pid) return json({ error: 'participante obrigatorio' }, 400, headers);
+        const ses = await db.prepare('SELECT melhoria_id FROM poker_sessao WHERE codigo = ?').bind(codigo).first();
+        await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ? AND participante = ?')
+          .bind(codigo, (ses && ses.melhoria_id) || '', pid).run();
+        await db.prepare('DELETE FROM poker_participante WHERE id = ? AND codigo = ?').bind(pid, codigo).run();
+        return json({ ok: true }, 200, headers);
+      }
+
       if (body.action === 'poker-estado') {
+        // O proprio polling serve de sinal de vida: quem para de chamar sai da
+        // mesa sozinho. Antes o participante era gravado na entrada e nunca mais
+        // saia, entao quem fechava a aba ficava na sala para sempre.
+        if (body.participante) {
+          await db.prepare('UPDATE poker_participante SET visto_em = ? WHERE id = ? AND codigo = ?')
+            .bind(iso, String(body.participante), codigo).run();
+        }
+        // faxina: registro sem sinal de vida ha muito tempo nao volta mais
+        const velho = new Date(agora.getTime() - 2 * 3600 * 1000).toISOString();
+        await db.prepare('DELETE FROM poker_participante WHERE codigo = ? AND visto_em < ?').bind(codigo, velho).run();
+
         const est = await pokerEstado(db, codigo);
         if (!est) return json({ error: 'Sessao nao encontrada' }, 404, headers);
         if (est.expirada) return json({ error: 'Sessao expirada' }, 410, headers);
