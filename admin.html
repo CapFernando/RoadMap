@@ -195,6 +195,11 @@
     .filter-bar select { padding:6px 10px; font-size:13px; max-width:230px; }
     .filter-bar label { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text3); }
     .filter-bar .fb-count { font-size:12px; color:var(--text3); margin-left:auto; white-space:nowrap; }
+    .filter-bar input[type="text"].fb-busca {
+      background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); padding:6px 10px; font-size:13px; font-family:inherit; outline:none; min-width:190px;
+    }
+    .filter-bar input[type="text"].fb-busca:focus { border-color:var(--blue); }
 
     .ger-summary { display:flex; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
     .ger-kpi {
@@ -1134,6 +1139,7 @@ let _filtroTema   = null;
 let _filtroPrazo  = null; // null|'vencidas'|'semana'|'mes'|'sem_data'
 let _filtroDev    = null; // null|nome do dev|SEM_DEV
 let _filtroTipo   = null; // null|'sustentacao'|'evolucao'|SEM_TIPO
+let _buscaMel     = '';   // texto livre: título, descrição, dev, solicitante
 
 // Demanda "em aberto" (relevante para prazos): exclui concluída/negada
 function isDemandaAberta(m) {
@@ -1190,6 +1196,40 @@ const PRAZO_BUCKETS = [
   { key: 'sem_data', label: '⚪ Sem data' },
 ];
 
+// ── HIGIENE DO KANBAN: concluído/negada de meses passados fica oculto por
+// padrão, senão a base só cresce e o quadro fica ilegível. Itens em aberto
+// (qualquer coluna que não seja Concluído/Negada) NUNCA são afetados por este
+// filtro — ele só esconde o que já foi resolvido, nunca trabalho ativo.
+const PERIODO_BUCKETS = [
+  { key: 'mes_atual', label: 'Este mês' },
+  { key: '3meses',    label: 'Últimos 3 meses' },
+  { key: 'tudo',      label: 'Todos os períodos' },
+];
+
+// Data de referência de uma demanda para fins de período: entrega (quando foi
+// tratada) > início > criação, na falta de algo melhor.
+function dataReferenciaKb(m) {
+  const d = m.entrega || m.inicio || m.criado_em;
+  if (!d) return null;
+  const iso = String(d).length === 10 ? d + 'T00:00:00' : d;
+  const dt = new Date(iso);
+  return isNaN(dt) ? null : dt;
+}
+
+function matchPeriodoConclusao(m, bucket) {
+  const sk = statusEfetivo(m);
+  if (sk !== 'concluido' && sk !== 'negada') return true;   // em aberto: sempre visível
+  if (bucket === 'tudo') return true;
+  const ref = dataReferenciaKb(m);
+  if (!ref) return false;   // concluído sem nenhuma data: só aparece em "Todos os períodos"
+  const agora = new Date();
+  if (bucket === '3meses') {
+    const limite = new Date(agora.getFullYear(), agora.getMonth() - 2, 1);
+    return ref >= limite;
+  }
+  return ref.getFullYear() === agora.getFullYear() && ref.getMonth() === agora.getMonth();  // 'mes_atual'
+}
+
 // Une devs cadastrados e devs que aparecem nas demandas. O campo dev pode ser
 // composto ("Gabriel / Anthony"), por isso o split.
 function devsDisponiveis() {
@@ -1204,6 +1244,18 @@ function matchDev(m, filtro) {
   const devs = kbSplitDevs(m.dev);
   if (filtro === SEM_DEV) return !devs.length;
   return devs.includes(filtro);
+}
+
+// Minúsculas + sem acento, para "reanalise" achar "Reanálise". Normaliza uma
+// vez por card por render — a lista tem no máximo algumas centenas de itens,
+// não precisa de índice.
+function normTexto(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+function matchBusca(m, termo) {
+  if (!termo) return true;
+  const alvo = normTexto([m.titulo, m.descricao, m.dev, m.solicitante].filter(Boolean).join(' '));
+  return alvo.includes(normTexto(termo));
 }
 
 // Monta um grupo rótulo+select. O handler recebe o valor por this.value, então
@@ -1247,13 +1299,50 @@ function opcoesPrazo() {
     n: b.key ? state.melhorias.filter(m => matchPrazo(m, b.key)).length : state.melhorias.length,
   }));
 }
+function opcoesPeriodo() {
+  return PERIODO_BUCKETS.map(b => ({
+    key: b.key, label: b.label,
+    n: state.melhorias.filter(m => matchPeriodoConclusao(m, b.key)).length,
+  }));
+}
 // O select usa string vazia para "todos"; o estado interno usa null
 function vazioNulo(v) { return v === '' ? null : v; }
+
+// As toolbars são reconstruídas via innerHTML a cada mudança de filtro. Isso é
+// inofensivo para os <select> (o valor novo já vem certo no HTML), mas para o
+// campo de busca destruiria o foco e a posição do cursor a cada tecla digitada.
+// Preserva os dois pelo id, através do innerHTML replace.
+function comFocoPreservado(containerId, fn) {
+  const el = document.getElementById(containerId);
+  const ativo = el && el.contains(document.activeElement) ? document.activeElement : null;
+  const focoId = ativo ? ativo.id : null;
+  const selStart = ativo && 'selectionStart' in ativo ? ativo.selectionStart : null;
+  const selEnd   = ativo && 'selectionEnd'   in ativo ? ativo.selectionEnd   : null;
+  fn();
+  if (focoId) {
+    const novo = document.getElementById(focoId);
+    if (novo) {
+      novo.focus();
+      if (selStart != null && novo.setSelectionRange) { try { novo.setSelectionRange(selStart, selEnd); } catch (_) {} }
+    }
+  }
+}
 
 function botaoLimpar(handler, ativos) {
   return `<div class="ger-filter-group">
     <label>&nbsp;</label>
-    <button class="btn btn-secondary btn-sm" onclick="${handler}()"${ativos ? '' : ' disabled style="opacity:.35"'}>Limpar${ativos ? ` (${ativos})` : ''}</button>
+    <button class="btn btn-secondary btn-sm" id="btn-${handler}" onclick="${handler}()"${ativos ? '' : ' disabled style="opacity:.35"'}>Limpar${ativos ? ` (${ativos})` : ''}</button>
+  </div>`;
+}
+
+// Campo de texto livre. Só existe UMA vez por toolbar (renderizado na montagem
+// inicial); ao digitar, o handler NÃO reconstrói esse HTML — senão o campo
+// perderia o foco e o cursor a cada tecla. Ver setBuscaMel/setBuscaKb.
+function fbBusca(id, valor, handler) {
+  return `<div class="ger-filter-group">
+    <label>Buscar</label>
+    <input type="text" class="fb-busca" id="${id}" value="${esc(valor || '')}"
+           placeholder="título, dev, solicitante…" oninput="${handler}(this.value)">
   </div>`;
 }
 
@@ -1263,20 +1352,26 @@ function setFiltroTema(v)   { _filtroTema   = vazioNulo(v); renderMelToolbar(); 
 function setFiltroDev(v)    { _filtroDev    = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroPrazo(v)  { _filtroPrazo  = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroTipo(v)   { _filtroTipo   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
+function setBuscaMel(v) {
+  _buscaMel = v || '';
+  comFocoPreservado('mel-toolbar', () => { renderMelToolbar(); renderMelhorias(); });
+}
 function limparFiltrosMel() {
   _filtroStatus = _filtroTema = _filtroDev = _filtroPrazo = _filtroTipo = null;
+  _buscaMel = '';
   renderStatusFilters(); renderMelToolbar(); renderMelhorias();
 }
 
 function renderMelToolbar() {
   const el = document.getElementById('mel-toolbar');
   if (!el) return;
-  const ativos = [_filtroStatus, _filtroTema, _filtroDev, _filtroPrazo, _filtroTipo].filter(Boolean).length;
+  const ativos = [_filtroStatus, _filtroTema, _filtroDev, _filtroPrazo, _filtroTipo, _buscaMel].filter(Boolean).length;
   el.innerHTML =
     fbGroup('Tipo',  _filtroTipo,  opcoesTipo(),  'setFiltroTipo') +
     fbGroup('Tema',  _filtroTema,  opcoesTema(),  'setFiltroTema') +
     fbGroup('Dev',   _filtroDev,   opcoesDev(),   'setFiltroDev') +
     fbGroup('Prazo', _filtroPrazo, opcoesPrazo(), 'setFiltroPrazo') +
+    fbBusca('mel-busca', _buscaMel, 'setBuscaMel') +
     botaoLimpar('limparFiltrosMel', ativos) +
     `<span class="fb-count" id="mel-contagem"></span>`;
 }
@@ -1338,12 +1433,16 @@ function renderMelhorias() {
   const HIDDEN_BY_DEFAULT = ['concluido', 'negada'];
   const lista = state.melhorias.filter(m => {
     const sk = statusEfetivo(m);
-    if (!_filtroStatus && !_filtroPrazo && HIDDEN_BY_DEFAULT.includes(sk)) return false;
+    // Busca ativa quebra o "esconde concluído/negada por padrão": se a pessoa
+    // digitou um termo, ela quer achar o item mesmo que já tenha sido feito ou
+    // negado — esconder silenciosamente derrotaria o propósito da busca.
+    if (!_filtroStatus && !_filtroPrazo && !_buscaMel && HIDDEN_BY_DEFAULT.includes(sk)) return false;
     return (!_filtroStatus || sk === _filtroStatus) &&
            (!_filtroTema   || m.tema_id === _filtroTema) &&
            matchPrazo(m, _filtroPrazo) &&
            matchDev(m, _filtroDev) &&
-           matchTipo(m, _filtroTipo);
+           matchTipo(m, _filtroTipo) &&
+           matchBusca(m, _buscaMel);
   });
   atualizaContagemMel(lista.length);
   if (!lista.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria com este status.</div>'; return; }
@@ -1476,6 +1575,8 @@ let _kbTema  = null;
 let _kbDev   = null;
 let _kbPrazo = null;
 let _kbTipo  = null;
+let _kbBusca = '';         // texto livre: título, descrição, dev, solicitante
+let _kbPeriodo = 'mes_atual'; // higiene: concluído/negada de outros meses fica oculto por padrão
 
 function kbSplitDevs(s) { return s ? String(s).split(/[\/,]/).map(x => x.trim()).filter(Boolean) : []; }
 
@@ -1515,17 +1616,30 @@ function setKbTema(v)  { _kbTema  = vazioNulo(v); renderKanban(); }
 function setKbDev(v)   { _kbDev   = vazioNulo(v); renderKanban(); }
 function setKbPrazo(v) { _kbPrazo = vazioNulo(v); renderKanban(); }
 function setKbTipo(v)  { _kbTipo  = vazioNulo(v); renderKanban(); }
-function limparFiltrosKb() { _kbTema = _kbDev = _kbPrazo = _kbTipo = null; renderKanban(); }
+function setBuscaKb(v) {
+  _kbBusca = v || '';
+  comFocoPreservado('kb-toolbar', () => renderKanban());
+}
+function setKbPeriodo(v) { _kbPeriodo = v || 'mes_atual'; renderKanban(); }
+function limparFiltrosKb() {
+  _kbTema = _kbDev = _kbPrazo = _kbTipo = null; _kbBusca = ''; _kbPeriodo = 'mes_atual';
+  renderKanban();
+}
 
 function renderKbToolbar(exibidas) {
   const el = document.getElementById('kb-toolbar');
   if (!el) return;
-  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo].filter(Boolean).length;
+  // 'mes_atual' é o padrão de higiene, não uma escolha explícita — só conta
+  // como filtro "ativo" quando alguém pede para ver mais (3 meses/tudo).
+  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbBusca,
+                  _kbPeriodo !== 'mes_atual' ? _kbPeriodo : null].filter(Boolean).length;
   el.innerHTML =
-    fbGroup('Tipo',  _kbTipo,  opcoesTipo(),  'setKbTipo') +
-    fbGroup('Tema',  _kbTema,  opcoesTema(),  'setKbTema') +
-    fbGroup('Dev',   _kbDev,   opcoesDev(),   'setKbDev') +
-    fbGroup('Prazo', _kbPrazo, opcoesPrazo(), 'setKbPrazo') +
+    fbGroup('Tipo',    _kbTipo,    opcoesTipo(),    'setKbTipo') +
+    fbGroup('Tema',    _kbTema,    opcoesTema(),    'setKbTema') +
+    fbGroup('Dev',     _kbDev,     opcoesDev(),     'setKbDev') +
+    fbGroup('Prazo',   _kbPrazo,   opcoesPrazo(),   'setKbPrazo') +
+    fbGroup('Concluídas', _kbPeriodo, opcoesPeriodo(), 'setKbPeriodo') +
+    fbBusca('kb-busca', _kbBusca, 'setBuscaKb') +
     botaoLimpar('limparFiltrosKb', ativos) +
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}</span>`;
 }
@@ -1537,7 +1651,9 @@ function renderKanban() {
     (!_kbTema || m.tema_id === _kbTema) &&
     matchDev(m, _kbDev) &&
     matchPrazo(m, _kbPrazo) &&
-    matchTipo(m, _kbTipo)
+    matchTipo(m, _kbTipo) &&
+    matchBusca(m, _kbBusca) &&
+    matchPeriodoConclusao(m, _kbPeriodo)
   );
   renderKbToolbar(base.length);
 
