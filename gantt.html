@@ -32,7 +32,7 @@
       --teal:    #2BBFA0;
       --radius:  10px;
       --day-w:   52px;
-      --dev-label: 200px;
+      --dev-label: 230px;
     }
 
     body {
@@ -251,6 +251,10 @@
     }
     .cap-bar-fill.over { background: var(--red); }
     .cap-text { font-size: 10px; color: var(--text3); white-space: nowrap; }
+    .cap-text.poker-pontos {
+      color: var(--text2); overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+    }
+    .cap-text.poker-pontos b { color: var(--text); }
 
     /* Day cells in dev row */
     .dev-timeline {
@@ -1242,6 +1246,52 @@ function renderBacklog() {
 }
 
 // ── GANTT ─────────────────────────────────────────────────────────────────
+// ── PONTOS DO PLANNING POKER POR SEMANA ────────────────────────────
+// "Semana" aqui é bloco de 5 dias úteis do mês em exibição (S1=dias úteis
+// 1-5, S2=6-10...), o mesmo recorte que já organiza as colunas do Gantt —
+// não é o campo de texto livre "Sprint" do card (esse é outro conceito,
+// preenchido à mão e hoje vazio na base). S5 só existe em meses com mais de
+// 20 dias úteis (a maioria tem entre 20 e 23).
+function semanasDoMes(workDays) {
+  const uteis = workDays.filter(d => !d.holiday);
+  const semanas = [];
+  for (let i = 0; i < uteis.length; i += 5) semanas.push(uteis.slice(i, i + 5));
+  return semanas;
+}
+
+// Localiza em qual semana (índice) uma data cai. Se a data for fim de semana/
+// feriado (fora da lista de dias úteis — ex.: entrega marcada num sábado),
+// usa a semana cujo intervalo [primeiro dia, último dia] contém a data.
+function semanaIndexFor(dataStr, semanas) {
+  if (!dataStr) return -1;
+  for (let i = 0; i < semanas.length; i++) {
+    if (semanas[i].some(d => d.str === dataStr)) return i;
+  }
+  for (let i = 0; i < semanas.length; i++) {
+    const dias = semanas[i];
+    if (dias.length && dataStr >= dias[0].str && dataStr <= dias[dias.length - 1].str) return i;
+  }
+  return -1;
+}
+
+// Soma poker_pontos por semana para os cards de um dev já visíveis no mês
+// (mesmo recorte da barra de capacidade: precisa ter início ou entrega).
+// Cards sem pontuação ainda (a maioria, enquanto o Planning Poker é recente)
+// somam 0 — não inflam nem quebram a conta.
+function pontosPokerPorSemana(devCards, semanas) {
+  const porSemana = new Array(semanas.length).fill(0);
+  let total = 0;
+  devCards.forEach(m => {
+    const pts = Number(m.poker_pontos) || 0;
+    if (!pts) return;
+    total += pts;
+    const ref = m.entrega || m.inicio;
+    const idx = semanaIndexFor(ref, semanas);
+    if (idx >= 0) porSemana[idx] += pts;
+  });
+  return { porSemana, total };
+}
+
 function renderGantt() {
   atualizaContagemGantt();
   document.getElementById('month-label').textContent = `${MONTH_NAMES[viewMonth]} ${viewYear}`;
@@ -1304,8 +1354,10 @@ function renderGantt() {
   html += `</div>`;
 
   // Dev rows
+  const semanas = semanasDoMes(workDays);
   devs.forEach(dev => {
     const devCards = visible.filter(m => splitDevs(m.dev).includes(dev) && (m.inicio || m.entrega));
+    const { porSemana, total: pontosTotal } = pontosPokerPorSemana(devCards, semanas);
 
     // capacity — conta apenas dias úteis do mês atual cobertos pelos cards
     const totalWD = workDays.filter(d => !d.holiday).length;
@@ -1362,6 +1414,7 @@ function renderGantt() {
         <span class="cap-text">${pct}%</span>
       </div>
       <span class="cap-text">${free} dia${free!==1?'s':''} livre${free!==1?'s':''} / ${totalWD}</span>
+      ${pontosTotal > 0 ? `<span class="cap-text poker-pontos" title="Pontos do Planning Poker por semana do mês">🃏 ${porSemana.map((p,i) => `S${i+1}:${p}`).join(' ')} · Tot <b>${pontosTotal}</b></span>` : ''}
     </div>`;
 
     // Timeline cells
