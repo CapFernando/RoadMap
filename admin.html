@@ -311,7 +311,7 @@
     .badge-levantar_req { background:#2A1A4E; color:#C9AEFF; }
     .badge-planejado    { background:#0C3260; color:#9BC8F8; }
     .badge-em_andamento{ background:#3D3600; color:#FFE14D; }
-    .badge-deploy      { background:#4A2800; color:#FFB84D; }
+    .badge-planning    { background:#0E3A3A; color:#7ED8D8; }
     .badge-concluido   { background:#063D30; color:#7EECD8; }
     .badge-atrasado    { background:#5C0A0A; color:#F9A0A0; }
     .badge-negada      { background:#5C0A0A; color:#F9A0A0; }
@@ -613,9 +613,9 @@
         <select id="m-status" onchange="onStatusChange()">
           <option value="backlog">Backlog</option>
           <option value="levantar_req">Levantar Requisitos</option>
+          <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em Andamento</option>
-          <option value="deploy">Deploy</option>
           <option value="concluido">Concluído</option>
           <option value="atrasado">Atrasado</option>
           <option value="negada">Negada</option>
@@ -1073,18 +1073,20 @@ async function saveToGitHub(attempt = 1) {
 const STATUS_LABELS = {
   backlog:      'Backlog',
   levantar_req: 'Levantar Requisitos',
+  planning:     'Planning',
   planejado:    'Planejado',
   em_andamento: 'Em Andamento',
-  deploy:       'Deploy',
   concluido:    'Concluído',
   atrasado:     'Atrasado',
   negada:       'Negada',
   // legado (itens antigos)
   recebida:'Backlog', refinamento:'Planejado', regra:'Planejado',
   estimada:'Planejado', iniciada:'Em Andamento', concluida:'Concluído',
+  deploy:'Concluído',   // etapa removida: itens remanescentes exibem como Concluído
 };
 function statusKey(m) {
-  const sp = m.status_planejamento;
+  // 'deploy' foi removido como etapa: qualquer remanescente conta como concluído
+  const sp = m.status_planejamento === 'deploy' ? 'concluido' : m.status_planejamento;
   if (sp && sp !== 'backlog') return sp;
   const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
                    estimada:'planejado', iniciada:'em_andamento', concluida:'concluido',
@@ -1263,15 +1265,15 @@ function renderStatusFilters() {
     { key: null,          label: 'Todos',        cls: 'all' },
     { key: 'backlog',      label: 'Backlog',              cls: 'backlog' },
     { key: 'levantar_req', label: 'Levantar Requisitos', cls: 'levantar_req' },
+    { key: 'planning',     label: 'Planning',             cls: 'planning' },
     { key: 'planejado',    label: 'Planejado',            cls: 'planejado' },
     { key: 'em_andamento',label: 'Em Andamento',  cls: 'em_andamento' },
-    { key: 'deploy',      label: 'Deploy',        cls: 'deploy' },
     { key: 'concluido',   label: 'Concluído',     cls: 'concluido' },
     { key: 'atrasado',    label: 'Atrasado',      cls: 'atrasado' },
     { key: 'negada',      label: 'Negada',        cls: 'negada' },
   ];
   el.innerHTML = todos.map(b => {
-    const n = b.key ? state.melhorias.filter(m => statusKey(m) === b.key).length : state.melhorias.length;
+    const n = b.key ? state.melhorias.filter(m => statusEfetivo(m) === b.key).length : state.melhorias.length;
     const active = _filtroStatus === b.key ? 'active' : '';
     return `<button class="sf-btn ${b.cls} ${active}" onclick="setFiltroStatus(${b.key ? `'${b.key}'` : 'null'})">${b.label} <strong>${n}</strong></button>`;
   }).join('');
@@ -1305,7 +1307,7 @@ function renderMelhorias() {
   if (!state.melhorias.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria cadastrada.</div>'; return; }
   const HIDDEN_BY_DEFAULT = ['concluido', 'negada'];
   const lista = state.melhorias.filter(m => {
-    const sk = statusKey(m);
+    const sk = statusEfetivo(m);
     if (!_filtroStatus && !_filtroPrazo && HIDDEN_BY_DEFAULT.includes(sk)) return false;
     return (!_filtroStatus || sk === _filtroStatus) &&
            (!_filtroTema   || m.tema_id === _filtroTema) &&
@@ -1351,7 +1353,7 @@ function renderMelhorias() {
   el.innerHTML = groupKeys.map(tKey => {
     const temaNome = tKey === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === tKey)?.nome || '—');
     const cards = groups[tKey].map(m => {
-      const sk = statusKey(m);
+      const sk = statusEfetivo(m);
       const badge = `<span class="badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
       // Tipo ao lado do status; quem ainda não tem fica sem badge (não inventa)
       const tipoBadge = m.tipo && TIPO_LABELS[m.tipo]
@@ -1429,9 +1431,9 @@ function restoreLastTab() {
 const KB_COLS = [
   { key:'backlog',      label:'Backlog' },
   { key:'levantar_req', label:'Levantar Requisitos' },
+  { key:'planning',     label:'Planning' },
   { key:'planejado',    label:'Planejado' },
   { key:'em_andamento', label:'Em Andamento' },
-  { key:'deploy',       label:'Deploy' },
   { key:'atrasado',     label:'Atrasado' },
   { key:'concluido',    label:'Concluído' },
   { key:'negada',       label:'Negada' },
@@ -1444,12 +1446,16 @@ let _kbTipo  = null;
 function kbSplitDevs(s) { return s ? String(s).split(/[\/,]/).map(x => x.trim()).filter(Boolean) : []; }
 
 // Status efetivo no Kanban: se a data de entrega já passou e a demanda está em
-// andamento (planejado / em andamento / deploy), cai automaticamente em "Atrasado".
-const KB_STATUS_ATRASO = ['planejado', 'em_andamento', 'deploy'];
-function kbEffectiveStatus(m) {
+// andamento (planning / planejado / em andamento), cai automaticamente em "Atrasado".
+// Estágios com trabalho comprometido: entrega vencida neles vira Atrasado.
+// Backlog fica fora (nada prometido) e concluido/negada nunca atrasam.
+const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
+// Status para EXIBIR e FILTRAR (deriva atrasado). Nunca use no formulário:
+// statusKey() é o valor armazenado, e gravar o efetivo apagaria o estágio real.
+function statusEfetivo(m) {
   const sk = statusKey(m);
   if (sk === 'atrasado') return 'atrasado';
-  if (m.entrega && KB_STATUS_ATRASO.includes(sk)) {
+  if (m.entrega && STATUS_ATRASO.includes(sk)) {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     if (new Date(m.entrega + 'T00:00:00') < hoje) return 'atrasado';
   }
@@ -1502,7 +1508,7 @@ function renderKanban() {
   renderKbToolbar(base.length);
 
   board.innerHTML = KB_COLS.map(col => {
-    let items = base.filter(m => kbEffectiveStatus(m) === col.key);
+    let items = base.filter(m => statusEfetivo(m) === col.key);
     if (col.key === 'planejado') {
       // maior prioridade (IP) primeiro; sem IP vai para o fim
       items = items.sort((a, b) => {
@@ -1573,7 +1579,7 @@ function kbDrop(e, colKey) {
   m.status = SP_TO_STATUS[colKey] || m.status;
   renderKanban();
   // se caiu por regra de atraso mesmo indo para outra coluna, avisa
-  if (colKey !== 'atrasado' && kbEffectiveStatus(m) === 'atrasado') {
+  if (colKey !== 'atrasado' && statusEfetivo(m) === 'atrasado') {
     toast(`Movido, mas a entrega está vencida → aparece em Atrasado. Ajuste a data de entrega para reprogramar.`, 'err');
   } else {
     toast(`Movido para ${STATUS_LABELS[colKey] || colKey} — salvando…`, 'ok');
@@ -1773,8 +1779,8 @@ function renderGerencial() {
   const ano = parseInt(document.getElementById('ger-ano').value);
 
   const STATUS_LABEL = {
-    backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
-    em_andamento:'Em Andamento', deploy:'Deploy', concluido:'Concluído',
+    backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado',
+    em_andamento:'Em Andamento', concluido:'Concluído',
     atrasado:'Atrasado', negada:'Negada'
   };
 
@@ -2140,7 +2146,7 @@ function atualizaHorasPlanejadas() {
 }
 
 // mapa sp → status legado (para compatibilidade com outros campos)
-const SP_TO_STATUS = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
+const SP_TO_STATUS = { backlog:'recebida', levantar_req:'recebida', planning:'estimada', planejado:'estimada', em_andamento:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
 
 // ── SISTEMA / MÓDULO (tema = "Sistema - Módulo") ──────────────────────────
 function parseTemaNome(nome) {

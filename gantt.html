@@ -127,7 +127,7 @@
     .ind-chip.levantar_req   { background:#2A1A4E; border-color:#5A3A9E; color:#C9AEFF; }
     .ind-chip.planejado      { background:#0C3260; border-color:#1a5080; color:#9BC8F8; }
     .ind-chip.em_andamento   { background:#3D3600; border-color:#726500; color:#FFE14D; }
-    .ind-chip.deploy         { background:#4A2800; border-color:#7A4800; color:#FFB84D; }
+    .ind-chip.planning       { background:#0E3A3A; border-color:#1A6060; color:#7ED8D8; }
     .ind-chip.concluido      { background:#1E4208; border-color:#306010; color:#B2E07A; }
     .ind-chip.atrasado       { background:#5C0A0A; border-color:#8C1010; color:#F9A0A0; }
     .ind-chip.active-filter { outline: 2px solid rgba(255,255,255,0.3); outline-offset: 1px; }
@@ -297,7 +297,7 @@
     .gcard-levantar_req { background:#2A1A4E; border-color:#5A3A9E; color:#C9AEFF; }
     .gcard-planejado    { background:#0C3260; border-color:#1a5080; color:#9BC8F8; }
     .gcard-em_andamento { background:#3D3600; border-color:#726500; color:#FFE14D; }
-    .gcard-deploy       { background:#4A2800; border-color:#7A4800; color:#FFB84D; }
+    .gcard-planning     { background:#0E3A3A; border-color:#1A6060; color:#7ED8D8; }
     .gcard-concluido    { background:#1E4208; border-color:#306010; color:#B2E07A; }
     .gcard-atrasado     { background:#5C0A0A; border-color:#8C1010; color:#F9A0A0; }
 
@@ -534,9 +534,9 @@
         <select id="e-status-plan">
           <option value="backlog">Backlog</option>
           <option value="levantar_req">Levantar Requisitos</option>
+          <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em andamento</option>
-          <option value="deploy">Deploy</option>
           <option value="concluido">Concluído</option>
           <option value="atrasado">Atrasado</option>
         </select>
@@ -1009,7 +1009,7 @@ function matchesFilters(m) {
   if (filters.dev && filters.dev !== '__all__' && !splitDevs(m.dev).includes(filters.dev)) return false;
   if (filters.prio   && (m.prioridade||'') !== filters.prio)        return false;
   if (filters.sprint && !(m.sprint||'').toLowerCase().includes(filters.sprint)) return false;
-  if (filters.indicator && (m.status_planejamento||'backlog') !== filters.indicator) return false;
+  if (filters.indicator && spEfetivo(m) !== filters.indicator) return false;
   return true;
 }
 
@@ -1067,14 +1067,32 @@ function renderFilters() {
 }
 
 // ── INDICATORS ────────────────────────────────────────────────────────────
+
+// Estágios com trabalho comprometido: entrega vencida neles conta como Atrasado.
+// Backlog fica fora (nada prometido) e concluido/negada nunca atrasam.
+const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
+
+// Status para EXIBIR e FILTRAR. NUNCA use ao gravar: o formulário e o drag
+// gravam status_planejamento cru; salvar o efetivo apagaria o estágio real.
+function spEfetivo(m) {
+  // 'deploy' foi removido como etapa: remanescentes contam como concluído
+  let sp = m.status_planejamento === 'deploy' ? 'concluido' : (m.status_planejamento || 'backlog');
+  if (sp === 'atrasado') return 'atrasado';
+  if (m.entrega && STATUS_ATRASO.includes(sp)) {
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    if (new Date(m.entrega + 'T00:00:00') < hoje) return 'atrasado';
+  }
+  return sp;
+}
+
 function renderIndicators() {
   const visible = state.melhorias.filter(m => !m.oculto);
-  const counts = { backlog:0, levantar_req:0, planejado:0, em_andamento:0, deploy:0, concluido:0, atrasado:0 };
+  const counts = { backlog:0, levantar_req:0, planning:0, planejado:0, em_andamento:0, concluido:0, atrasado:0 };
   visible.forEach(m => {
-    const sp = m.status_planejamento || 'backlog';
+    const sp = spEfetivo(m);
     if (counts[sp] !== undefined) counts[sp]++;
   });
-  const labels = { backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado', em_andamento:'Em andamento', deploy:'Deploy', concluido:'Concluído', atrasado:'Atrasado' };
+  const labels = { backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', concluido:'Concluído', atrasado:'Atrasado' };
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
   const todosChip = `<span class="ind-chip ${filters.indicator === '' ? 'planejado active-filter' : ''}" style="background:var(--bg3);border-color:var(--border2);color:var(--text2)" onclick="toggleIndicatorFilter('')">Todos <strong>${total}</strong></span>`;
   const chips = Object.keys(counts).map(k => {
@@ -1305,7 +1323,7 @@ function renderGantt() {
       ondragleave="onLayerDragLeave(event)"
       ondrop="onLayerDrop(event,'${esc(dev)}')">`;
     devCards.forEach(m => {
-      const sp = m.status_planejamento || 'backlog';
+      const sp = spEfetivo(m);
       const tema = state.temas.find(t => t.id === m.tema_id);
       const tColor = temaColorOf(m.tema_id);
       const dotCls = prioClass(m.prioridade);
@@ -1822,7 +1840,7 @@ async function removeDev(i) {
     _gDeletedDevs.add('teste');
   } else {
     // Dev normal: só bloqueia se tiver demandas ATIVAS (excluindo concluído/negada)
-    const STATUS_BLOQUEIO = ['backlog','levantar_req','planejado','em_andamento','deploy','atrasado'];
+    const STATUS_BLOQUEIO = ['backlog','levantar_req','planning','planejado','em_andamento','atrasado'];
     const demandasAtivas = (state.melhorias || []).filter(m =>
       (m.dev || '').split(/[\/,]/).map(d => d.trim()).includes(name) &&
       STATUS_BLOQUEIO.includes(m.status_planejamento || 'backlog')
@@ -1862,7 +1880,7 @@ function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 function closeIfOverlay(e, id) { if (e.target === e.currentTarget) closeModal(id); }
 
 function spToStatus(sp) {
-  const map = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
+  const map = { backlog:'recebida', levantar_req:'recebida', planning:'estimada', planejado:'estimada', em_andamento:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
   return map[sp] || 'recebida';
 }
 

@@ -104,7 +104,7 @@
     .badge-levantar_req { background:var(--purple-bg); color:var(--purple-tx); }
     .badge-planejado    { background:var(--blue-bg);   color:var(--blue-tx); }
     .badge-em_andamento { background:#3D3600;  color:#FFE14D; }
-    .badge-deploy       { background:var(--amber-bg);  color:var(--amber-tx); }
+    .badge-planning     { background:var(--amber-bg);  color:var(--amber-tx); }
     .badge-atrasado     { background:var(--red-bg);    color:var(--red-tx); }
     .badge-concluido    { background:var(--teal-bg);   color:var(--teal-tx); }
     .badge-negada       { background:var(--red-bg);    color:var(--red-tx); }
@@ -239,9 +239,9 @@
     <div class="form-group" id="ms-status-group">
       <label>Mover para</label>
       <select id="ms-status" onchange="onStatusModalChange()">
+        <option value="planning">Planning</option>
         <option value="planejado">Planejado</option>
         <option value="em_andamento">Em Andamento</option>
-        <option value="deploy">Deploy</option>
         <option value="atrasado">Atrasado</option>
         <option value="concluido">Concluído</option>
       </select>
@@ -433,7 +433,8 @@ function calcHorasPlanejadas(inicio, entrega) {
 }
 
 function getStatusKey(m) {
-  const sp = m.status_planejamento;
+  // 'deploy' foi removido como etapa: remanescentes contam como concluído
+  const sp = m.status_planejamento === 'deploy' ? 'concluido' : m.status_planejamento;
   if (sp && sp !== 'backlog') return sp;
   const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
                    estimada:'planejado', iniciada:'em_andamento', concluida:'concluido',
@@ -446,15 +447,32 @@ function getStatusKey(m) {
   return base;
 }
 
+// Estágios com trabalho comprometido: entrega vencida neles conta como Atrasado.
+// Backlog fica fora (nada prometido) e concluido/negada nunca atrasam.
+const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
+
+// Status para EXIBIR e FILTRAR. NUNCA use em formulário: getStatusKey() é o valor
+// armazenado, e gravar o efetivo apagaria o estágio real da demanda.
+function statusEfetivo(m) {
+  const sk = getStatusKey(m);
+  if (sk === 'atrasado') return 'atrasado';
+  if (m.entrega && STATUS_ATRASO.includes(sk)) {
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    if (new Date(m.entrega + 'T00:00:00') < hoje) return 'atrasado';
+  }
+  return sk;
+}
+
+
 const STATUS_LABELS = {
   backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
-  em_andamento:'Em Andamento', deploy:'Deploy', concluido:'Concluído', atrasado:'Atrasado', negada:'Negada'
+  planning:'Planning', em_andamento:'Em Andamento', concluido:'Concluído', atrasado:'Atrasado', negada:'Negada'
 };
 
 const COLUMNS = [
+  { key:'planning',     label:'Planning',     color:'#2BBFA0', maps:['planning'] },
   { key:'planejado',    label:'Planejado',    color:'#3B8FE8', maps:['backlog','levantar_req','planejado'] },
   { key:'em_andamento', label:'Em Andamento', color:'#5EA832', maps:['em_andamento'] },
-  { key:'deploy',       label:'Deploy',       color:'#E89C2F', maps:['deploy'] },
   { key:'atrasado',     label:'Atrasado',     color:'#E84444', maps:['atrasado'] },
   { key:'concluido',    label:'Concluído',    color:'#2BBFA0', maps:['concluido'] },
 ];
@@ -915,7 +933,7 @@ function renderKanban() {
   const items = getFiltered();
 
   kanban.innerHTML = COLUMNS.map(col => {
-    const cards = items.filter(m => col.maps.includes(getStatusKey(m)))
+    const cards = items.filter(m => col.maps.includes(statusEfetivo(m)))
       .sort((a, b) => {
         // ordena por prazo (entrega); sem data vai para o fim; empate por início
         const ea = a.entrega || a.inicio || '9999-99-99';
@@ -943,7 +961,7 @@ function renderKanban() {
 }
 
 function renderCard(m, colKey) {
-  const sk = getStatusKey(m);
+  const sk = statusEfetivo(m);
   const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
   const badge = `<span class="kcard-badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
   const meta = [];
@@ -1196,7 +1214,7 @@ async function updateStatus(id, colKey, horasRealizadas) {
   const stAnterior = m.status;
   const hrAnterior = m.horas_realizadas;
   const spToStatus = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada',
-                       em_andamento:'iniciada', deploy:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
+                       em_andamento:'iniciada', planning:'estimada', concluido:'iniciada', atrasado:'iniciada' };
   // Atualiza localmente (otimista)
   m.status_planejamento = colKey;
   m.status = spToStatus[colKey] || 'recebida';
@@ -1327,7 +1345,7 @@ async function saveNewDemand() {
   if (!titulo) { toast('Informe o título.','err'); return; }
   if (!temaId) { toast('Selecione o sistema.','err'); return; }
   const sp = document.getElementById('n-status').value;
-  const spToStatus = { backlog:'recebida', planejado:'estimada', em_andamento:'iniciada', deploy:'iniciada', atrasado:'iniciada', concluido:'iniciada' };
+  const spToStatus = { backlog:'recebida', planning:'estimada', planejado:'estimada', em_andamento:'iniciada', atrasado:'iniciada', concluido:'iniciada' };
   const obj = {
     ...(existing || {}),
     id: editId || uid(),

@@ -95,7 +95,7 @@
     .s-levantar_req { background:rgba(240,165,0,.15); color:#F0A500; }
     .s-planejado    { background:rgba(74,158,232,.15); color:#4A9EE8; }
     .s-em_andamento { background:rgba(62,201,142,.15); color:#3EC98E; }
-    .s-deploy       { background:rgba(100,200,150,.15); color:#5DCEAB; }
+    .s-planning     { background:rgba(126,216,216,.15); color:#7ED8D8; }
     .s-concluido    { background:rgba(62,201,142,.25); color:#3EC98E; }
     .s-atrasado     { background:rgba(232,93,93,.15); color:#E85D5D; }
     .s-negada       { background:rgba(150,150,150,.15); color:#888; }
@@ -333,9 +333,9 @@ let dedupDecisions = {};
 const STATUS_OPTS = [
   { value:'backlog',      label:'Backlog' },
   { value:'levantar_req', label:'Levantar Req.' },
+  { value:'planning',     label:'Planning' },
   { value:'planejado',    label:'Planejado' },
   { value:'em_andamento', label:'Em andamento' },
-  { value:'deploy',       label:'Deploy' },
   { value:'concluido',    label:'Concluído' },
   { value:'atrasado',     label:'Atrasado' },
   { value:'negada',       label:'Negada' },
@@ -345,7 +345,9 @@ const STATUS_ALIAS = {
   'backlog':'backlog','levantar req':'levantar_req','levantar_req':'levantar_req','levantamento':'levantar_req',
   'planejado':'planejado','estimado':'planejado','refinado':'planejado',
   'em andamento':'em_andamento','em_andamento':'em_andamento','andamento':'em_andamento','iniciado':'em_andamento','wip':'em_andamento',
-  'deploy':'deploy','homologacao':'deploy','homologação':'deploy','homolog':'deploy',
+  'planning':'planning','plan':'planning','planejamento':'planning',
+  // etapa Deploy foi removida: planilha antiga com esses termos entra como concluído
+  'deploy':'concluido','homologacao':'concluido','homologação':'concluido','homolog':'concluido',
   'concluido':'concluido','concluído':'concluido','finalizado':'concluido','entregue':'concluido','done':'concluido','ok':'concluido',
   'atrasado':'atrasado','atraso':'atrasado','delayed':'atrasado',
   'negada':'negada','negado':'negada','cancelado':'negada','cancelada':'negada',

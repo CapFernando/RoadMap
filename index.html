@@ -228,7 +228,7 @@
     .badge-levantar_req { background: #2A1A4E22;     color: #C9AEFF;          }
     .badge-planejado    { background: #0C326022;     color: #9BC8F8;          }
     .badge-concluida    { background: #1E420822;     color: #B2E07A;          }
-    .badge-deploy       { background: #4A280022;     color: #FFB84D;          }
+    .badge-planning     { background: #0E3A3A22;     color: #7ED8D8;          }
 
     .melhoria-desc {
       font-size: 15px;
@@ -497,9 +497,9 @@ const API_URL     = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/
 const STATUS_META = {
   backlog:      { label: 'Backlog',             cls: 'badge-recebida',     cor: '#3B8FE8' },
   levantar_req: { label: 'Levantar Requisitos', cls: 'badge-levantar_req', cor: '#9B6FE8' },
+  planning:     { label: 'Planning',            cls: 'badge-planning',     cor: '#2BBFA0' },
   planejado:    { label: 'Planejado',           cls: 'badge-planejado',    cor: '#E89C2F' },
   em_andamento: { label: 'Em Andamento',        cls: 'badge-iniciada',     cor: '#FFE14D' },
-  deploy:       { label: 'Deploy',              cls: 'badge-deploy',       cor: '#E89C2F' },
   atrasado:     { label: 'Atrasado',            cls: 'badge-negada',       cor: '#E84444' },
   concluido:    { label: 'Concluído',           cls: 'badge-concluida',    cor: '#2BBFA0' },
   negada:       { label: 'Negada',              cls: 'badge-negada',       cor: '#E84444' },
@@ -607,7 +607,7 @@ function buildCharts(temas, melhorias) {
   // por status
   const stLabels = Object.values(STATUS_META).map(s => s.label);
   const stKeys   = Object.keys(STATUS_META);
-  const stData   = stKeys.map(k => melhorias.filter(m => getStatusKey(m) === k).length);
+  const stData   = stKeys.map(k => melhorias.filter(m => statusEfetivo(m) === k).length);
   const stCores  = stKeys.map(k => STATUS_META[k].cor);
 
   const cfg = (labels, data, cores) => ({
@@ -650,7 +650,8 @@ let _ano = null, _mes = null, _dev = null, _statusFilter = null, _temaFilter = n
 
 // Deriva o status unificado de um item (alinhado com Admin e Gantt)
 function getStatusKey(m) {
-  const sp = m.status_planejamento;
+  // 'deploy' foi removido como etapa: remanescentes contam como concluído
+  const sp = m.status_planejamento === 'deploy' ? 'concluido' : m.status_planejamento;
   if (sp && sp !== 'backlog') return sp;
   const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
                    estimada:'planejado', iniciada:'em_andamento', concluida:'concluido',
@@ -663,13 +664,30 @@ function getStatusKey(m) {
   return base;
 }
 
+// Estágios com trabalho comprometido: entrega vencida neles conta como Atrasado.
+// Backlog fica fora (nada prometido) e concluido/negada nunca atrasam.
+const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
+
+// Status para EXIBIR e FILTRAR. NUNCA use em formulário: getStatusKey() é o valor
+// armazenado, e gravar o efetivo apagaria o estágio real da demanda.
+function statusEfetivo(m) {
+  const sk = getStatusKey(m);
+  if (sk === 'atrasado') return 'atrasado';
+  if (m.entrega && STATUS_ATRASO.includes(sk)) {
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    if (new Date(m.entrega + 'T00:00:00') < hoje) return 'atrasado';
+  }
+  return sk;
+}
+
+
 const STATUS_CARDS = [
   { key:'total',        label:'Total',              cor:'var(--blue)' },
   { key:'backlog',      label:'Backlog',             cor:'var(--blue)' },
   { key:'levantar_req', label:'Levantar Requisitos', cor:'#9B6FE8' },
+  { key:'planning',     label:'Planning',            cor:'#2BBFA0' },
   { key:'planejado',    label:'Planejado',           cor:'var(--blue)' },
   { key:'em_andamento', label:'Em Andamento',        cor:'#FFE14D' },
-  { key:'deploy',       label:'Deploy',              cor:'#E89C2F' },
   { key:'concluido',    label:'Concluído',           cor:'#2BBFA0' },
   { key:'atrasado',     label:'Atrasado',            cor:'var(--red)' },
   { key:'negada',       label:'Negada',              cor:'var(--red)' },
@@ -704,8 +722,8 @@ function filtradas() {
     if (!matchTipo(m, _tipoFilter)) return false;
     if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
-    if (_statusFilter) return getStatusKey(m) === _statusFilter;
-    if (['concluido','negada'].includes(getStatusKey(m))) return false;
+    if (_statusFilter) return statusEfetivo(m) === _statusFilter;
+    if (['concluido','negada'].includes(statusEfetivo(m))) return false;
     return true;
   });
 }
@@ -726,7 +744,7 @@ function renderConteudo() {
     (!_temaFilter || m.tema_id === _temaFilter)
   );
   const counts = { total: melSemStatus.length };
-  STATUS_CARDS.forEach(c => { if (c.key !== 'total') counts[c.key] = melSemStatus.filter(m => getStatusKey(m) === c.key).length; });
+  STATUS_CARDS.forEach(c => { if (c.key !== 'total') counts[c.key] = melSemStatus.filter(m => statusEfetivo(m) === c.key).length; });
 
   // monta cards: Total sempre aparece; os outros só se count > 0
   const cardsHTML = STATUS_CARDS
@@ -1129,9 +1147,9 @@ document.addEventListener('visibilitychange', () => {
 const STATUS_BADGE_PRINT = {
   backlog:      { label: 'Backlog',       bg: '#0C3260', color: '#9BC8F8' },
   levantar_req: { label: 'Levantar req.', bg: '#341A6E', color: '#C9AEFF' },
+  planning:     { label: 'Planning',      bg: '#0E3A3A', color: '#7ED8D8' },
   planejado:    { label: 'Planejado',     bg: '#5C3608', color: '#F9C97A' },
   em_andamento: { label: 'Em Andamento',  bg: '#3D3600', color: '#FFE14D' },
-  deploy:       { label: 'Deploy',        bg: '#4A2800', color: '#FFB84D' },
   concluido:    { label: 'Concluído',     bg: '#1E4208', color: '#B2E07A' },
   atrasado:     { label: 'Atrasado',      bg: '#5C0A0A', color: '#F9A0A0' },
   negada:       { label: 'Negada',        bg: '#5C0A0A', color: '#F9A0A0' },
@@ -1172,7 +1190,7 @@ function buildReportHTML() {
     const items = [...groups[tKey]].sort((a,b) => (a.inicio||'9999').localeCompare(b.inicio||'9999'));
 
     const cardsHTML = items.map(m => {
-      const sk = getStatusKey(m);
+      const sk = statusEfetivo(m);
       const bm = STATUS_BADGE_PRINT[sk] || STATUS_BADGE_PRINT.backlog;
       const badge = `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:${bm.bg};color:${bm.color};white-space:nowrap;">${bm.label}</span>`;
       const meta = [];
@@ -1213,7 +1231,7 @@ function buildReportHTML() {
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px;">
       ${Object.entries(STATUS_BADGE_PRINT).map(([k,v]) => {
-        const n = mel.filter(m => getStatusKey(m) === k).length;
+        const n = mel.filter(m => statusEfetivo(m) === k).length;
         if (!n) return '';
         return `<div style="background:#161614;border:1px solid #2E2E2B;border-radius:8px;padding:8px 14px;text-align:center;">
           <div style="font-size:18px;font-weight:700;color:#ECEAE2;">${n}</div>
@@ -1411,7 +1429,7 @@ function buildDevReportHTML() {
 
     const rows = items.map(m => {
       const tema = _temas.find(t => t.id === m.tema_id)?.nome || '—';
-      const sk = getStatusKey(m);
+      const sk = statusEfetivo(m);
       const bm = STATUS_BADGE_PRINT[sk] || STATUS_BADGE_PRINT.backlog;
       const entrega = m.entrega ? formatDate(m.entrega) : '<span style="color:#6E6A62;">Sem previsão</span>';
       const inicio  = m.inicio  ? formatDate(m.inicio)  : '—';
