@@ -39,14 +39,18 @@
 
   const mul = (a, b) => (a === 0 || b === 0) ? 0 : EXP[LOG[a] + LOG[b]];
 
-  // Polinômio gerador para `n` codewords de correção
+  // Polinômio gerador para `n` codewords de correção.
+  // Coeficientes do MAIOR para o menor grau — mesma convenção que correcao()
+  // usa na divisão. Invertido, os bytes de correção saem errados: a matriz fica
+  // estruturalmente perfeita e nenhum leitor aceita, porque a síndrome não zera.
+  // Conferido contra os geradores conhecidos: n=7 e n=10 da especificação.
   function gerador(n) {
     let g = [1];
     for (let i = 0; i < n; i++) {
       const novo = new Array(g.length + 1).fill(0);
       for (let j = 0; j < g.length; j++) {
-        novo[j]     ^= mul(g[j], EXP[i]);
-        novo[j + 1] ^= g[j];
+        novo[j]     ^= g[j];                  // desloca (multiplica por x)
+        novo[j + 1] ^= mul(g[j], EXP[i]);     // termo α^i
       }
       g = novo;
     }
