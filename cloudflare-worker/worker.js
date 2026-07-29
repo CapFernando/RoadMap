@@ -4,6 +4,11 @@
 // Guarda como SECRETS (nunca chegam ao navegador):
 //   • GH_TOKEN     → token do GitHub (grava no repositório)
 //   • ADMIN_SENHA  → senha do Admin (valida login e publicação)
+//   • VIEW_SENHA   → (opcional) senha de leitura; criar ATIVA a trava
+//   • VIEW_CHAVE   → (opcional) chave do Link de Visualização
+//
+// Variável opcional:
+//   • DATA_REPO    → repositório do JSON; ausente = 'RoadMap' (o atual)
 //
 // Ações (POST JSON):
 //   • { action:'dados' }                  → le o JSON fresco (sem cache de CDN)
@@ -15,7 +20,15 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 const REPO_OWNER = 'CapFernando';
-const REPO_NAME  = 'RoadMap';
+// Repositorio DO DADO. Fica separado do repositorio do site de proposito: o
+// GitHub Pages publica tudo que esta no repositorio do site, entao enquanto o
+// JSON morar la ele fica acessivel como arquivo estatico, mesmo com o
+// repositorio privado. Mover o dado para um repositorio privado proprio fecha
+// essa porta sem migrar hospedagem.
+//
+// Enquanto env.DATA_REPO nao existir, continua no repositorio atual — a virada
+// e configuracao, nao deploy.
+const REPO_NAME_PADRAO = 'RoadMap';
 const FILE_PATH  = 'data/melhorias.json';
 const ALLOWED_ORIGIN = 'https://capfernando.github.io';
 
@@ -121,11 +134,27 @@ export default {
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: 'JSON invalido' }, 400, headers); }
 
+    const REPO_NAME = env.DATA_REPO || REPO_NAME_PADRAO;
     const gh = (path, opts = {}) => fetch('https://api.github.com/repos/' + REPO_OWNER + '/' + REPO_NAME + '/' + path, {
       ...opts,
       headers: { Authorization: 'token ' + env.GH_TOKEN, Accept: 'application/vnd.github.v3+json', 'User-Agent': 'audax-roadmap-worker', ...(opts.headers || {}) },
     });
     const senhaOk = (s) => s && env.ADMIN_SENHA && s === env.ADMIN_SENHA;
+
+    // Leitura protegida por senha, com ativacao gradual: enquanto nem VIEW_SENHA
+    // nem VIEW_CHAVE existirem, a leitura segue aberta e nada muda para quem usa
+    // hoje. Criar um desses secrets liga a trava na hora, sem novo deploy.
+    //   • VIEW_SENHA  → senha de leitura (painel publico)
+    //   • VIEW_CHAVE  → chave usada no Link de Visualizacao (sem digitar senha)
+    // A senha do admin tambem serve, para quem edita nao precisar de duas.
+    const travaAtiva = () => !!(env.VIEW_SENHA || env.VIEW_CHAVE);
+    const leituraLiberada = (body) => {
+      if (!travaAtiva()) return true;
+      if (senhaOk(body.senha)) return true;
+      if (env.VIEW_SENHA && body.senha === env.VIEW_SENHA) return true;
+      if (env.VIEW_CHAVE && body.chave === env.VIEW_CHAVE) return true;
+      return false;
+    };
 
     // ── PLANNING POKER ──────────────────────────────────────────────
     if (typeof body.action === 'string' && body.action.startsWith('poker-')) {
@@ -255,6 +284,9 @@ export default {
     // podia perder alteracao recente de outra pessoa. Aqui a leitura vai pela
     // API autenticada, que nao passa por esse cache.
     if (body.action === 'dados') {
+      // 401 sinaliza ao painel que ele deve pedir a credencial. O cliente reage
+      // ao status, entao nao precisa saber se a trava esta ligada ou nao.
+      if (!leituraLiberada(body)) return json({ error: 'credencial' }, 401, headers);
       const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
       if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       return new Response(await rawRes.text(), {

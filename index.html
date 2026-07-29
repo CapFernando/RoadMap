@@ -976,21 +976,46 @@ function buildDevChart(temas, melhorias) {
 // Leitura fresca dos dados.
 // raw.githubusercontent.com serve com Cache-Control max-age=300 e IGNORA
 // cache-buster na query (X-Cache: HIT mesmo com ?t= aleatorio). Isso fazia o
-// painel exibir estado de ate 5 min atras — card "voltava" de coluna depois de
-// publicado — e, pior, a leitura feita ANTES de publicar podia nao ver
-// alteracao recente de outra pessoa e apaga-la. O Worker le pela API
-// autenticada, que nao passa por esse cache.
+// painel exibir estado de ate 5 min atras e, pior, a leitura feita ANTES de
+// publicar podia nao ver alteracao recente de outra pessoa e apaga-la. O Worker
+// le pela API autenticada, que nao passa por esse cache.
 //
-// permitirCache=true so para telas de leitura: em fluxo de gravacao, dado
-// velho e pior que erro, entao ali a falha estoura.
-async function lerDados(permitirCache) {
+// A credencial abaixo fica INERTE enquanto o Worker nao exigir: hoje ele
+// responde 200 sem nada. Quando a trava de leitura for ativada, ele passa a
+// responder 401 e o painel pede a senha — sem precisar de novo deploy do site.
+function credenciaisLeitura() {
+  const c = {};
+  const senha = sessionStorage.getItem('rm_admin_pw') || sessionStorage.getItem('rm_view_pw');
+  if (senha) c.senha = senha;
+  const chave = new URLSearchParams(location.search).get('k') || sessionStorage.getItem('rm_view_key');
+  if (chave) c.chave = chave;
+  return c;
+}
+
+async function pedirSenhaLeitura() {
+  const s = prompt('Esta consulta exige senha de acesso:');
+  if (!s) return false;
+  sessionStorage.setItem('rm_view_pw', s);
+  return true;
+}
+
+async function lerDados(permitirCache, jaTentou) {
   try {
     const r = await fetch(NM_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'dados' })
+      body: JSON.stringify(Object.assign({ action: 'dados' }, credenciaisLeitura()))
     });
     if (r.ok) return await r.json();
-  } catch (_) {}
+    if (r.status === 401) {
+      // Credencial invalida ou ausente: pede uma vez e repete. Nao cai no
+      // fallback publico, que deixaria de existir com o repositorio privado.
+      sessionStorage.removeItem('rm_view_pw');
+      if (!jaTentou && await pedirSenhaLeitura()) return lerDados(permitirCache, true);
+      throw new Error('Acesso nao autorizado. Informe a senha correta para consultar.');
+    }
+  } catch (e) {
+    if (e && /nao autorizado/i.test(e.message)) throw e;
+  }
   if (!permitirCache) throw new Error('Nao foi possivel ler os dados atualizados. Tente novamente.');
   const r2 = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
   if (!r2.ok) throw new Error('Falha ao ler dados (HTTP ' + r2.status + ')');
