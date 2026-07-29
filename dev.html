@@ -69,6 +69,7 @@
     .filter-chip:hover { border-color:var(--border2); color:var(--text); }
     .filter-chip.active { background:var(--blue-bg); border-color:var(--blue); color:var(--blue-tx); }
     .filter-sep { width:1px; height:20px; background:var(--border); }
+    .filter-count { font-size:12px; color:var(--text3); margin-left:auto; white-space:nowrap; }
 
     /* ── KANBAN ── */
     #kanban-wrap { overflow-x:auto; padding:20px 24px 40px; min-height:calc(100vh - 140px); }
@@ -222,7 +223,10 @@
     </select>
     <div class="filter-sep"></div>
     <label>Tema:</label>
-    <div id="tema-chips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+    <select id="f-tema" class="filter-select" onchange="setTema(this.value)"></select>
+    <div class="filter-sep"></div>
+    <button id="f-limpar" class="btn btn-secondary btn-sm" onclick="limparFiltrosDev()">Limpar</button>
+    <span id="f-contagem" class="filter-count"></span>
   </div>
 
   <div id="kanban-wrap">
@@ -519,7 +523,7 @@ function applyData(data) {
   const el = document.getElementById('ultima-atualizacao');
   if (el) el.textContent = `Atualizado em ${dt}`;
   buildAnoFilter();
-  buildTemaChips();
+  buildTemaSelect();
   renderKanban();
 }
 
@@ -774,7 +778,7 @@ function enterApp() {
   const banner = document.getElementById('banner-teste');
   if (banner) banner.style.display = isDevTeste(currentDev) ? 'flex' : 'none';
   buildAnoFilter();
-  buildTemaChips();
+  buildTemaSelect();
   renderKanban();
   if (runtimeToken) loadData(true);
   startPolling();
@@ -861,7 +865,7 @@ function switchDevInline(name) {
   localStorage.setItem('rm_dev_name', name);
   document.getElementById('dev-label').textContent = name;
   _temaFilter = null;
-  buildTemaChips();
+  buildTemaSelect();
   renderKanban();
 }
 
@@ -880,17 +884,44 @@ function buildAnoFilter() {
 }
 
 const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4'];
-function buildTemaChips() {
-  const wrap = document.getElementById('tema-chips');
-  if (!wrap) return;
-  wrap.innerHTML = `<button class="filter-chip ${!_temaFilter?'active':''}" onclick="setTema(null)">Todos</button>` +
-    state.temas.map((t,i) => {
-      const cor = TEMA_CORES[i % TEMA_CORES.length];
-      const ativo = _temaFilter === t.id;
-      return `<button class="filter-chip ${ativo?'active':''}" onclick="setTema('${t.id}')" style="${ativo?`background:${cor}20;border-color:${cor};color:${cor};`:''}">${t.nome}</button>`;
-    }).join('');
+// Select em vez de chips: com 26 temas os chips ocupavam 3 linhas da tela.
+// A contagem por tema considera só as demandas do dev atual.
+function buildTemaSelect() {
+  const sel = document.getElementById('f-tema');
+  if (!sel) return;
+  const doDev = state.melhorias.filter(m => splitDevs(m.dev).includes(currentDev));
+  const opts = [`<option value=""${!_temaFilter ? ' selected' : ''}>Todos (${doDev.length})</option>`];
+  state.temas.forEach(t => {
+    const n = doDev.filter(m => m.tema_id === t.id).length;
+    if (!n && _temaFilter !== t.id) return;   // omite tema sem nada deste dev
+    opts.push(`<option value="${escAttr(t.id)}"${_temaFilter === t.id ? ' selected' : ''}>${escAttr(t.nome)} (${n})</option>`);
+  });
+  sel.innerHTML = opts.join('');
 }
-function setTema(id) { _temaFilter = id; buildTemaChips(); renderKanban(); }
+function escAttr(x) { return String(x == null ? '' : x).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function setTema(id) { _temaFilter = id || null; buildTemaSelect(); renderKanban(); }
+
+function limparFiltrosDev() {
+  _temaFilter = null;
+  ['f-ano','f-mes','f-tipo','f-tema'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; });
+  buildTemaSelect();
+  renderKanban();
+}
+
+// Deixa explícito o recorte exibido e quantos filtros estão ativos
+function atualizaContagemDev() {
+  const doDev = state.melhorias.filter(m => splitDevs(m.dev).includes(currentDev));
+  const el = document.getElementById('f-contagem');
+  if (el) el.textContent = `Mostrando ${getFiltered().length} de ${doDev.length}`;
+  const ativos = ['f-ano','f-mes','f-tipo','f-tema'].filter(i => (document.getElementById(i)||{}).value).length;
+  const btn = document.getElementById('f-limpar');
+  if (btn) {
+    btn.textContent = ativos ? `Limpar (${ativos})` : 'Limpar';
+    btn.disabled = !ativos;
+    btn.style.opacity = ativos ? '' : '.35';
+  }
+}
 
 function getFiltered() {
   const ano = document.getElementById('f-ano')?.value || '';
@@ -931,6 +962,7 @@ function renderKanban() {
   const kanban = document.getElementById('kanban');
   if (!kanban) return;
   const items = getFiltered();
+  atualizaContagemDev();
 
   kanban.innerHTML = COLUMNS.map(col => {
     const cards = items.filter(m => col.maps.includes(statusEfetivo(m)))
@@ -1425,7 +1457,7 @@ async function saveTema() {
   }
   closeModal('modal-tema-form');
   renderTemasModal();
-  buildTemaChips();
+  buildTemaSelect();
   buildAnoFilter();
   const ok = await saveToGitHub({}, { temas: state.temas });
   if (!ok) toast('Erro ao salvar tema.', 'err');
@@ -1440,7 +1472,7 @@ async function deleteTema(id) {
   if (!confirm(msg)) return;
   state.temas = state.temas.filter(x => x.id !== id);
   renderTemasModal();
-  buildTemaChips();
+  buildTemaSelect();
   const ok = await saveToGitHub({}, { temas: state.temas });
   if (!ok) toast('Erro ao excluir tema.', 'err');
 }

@@ -648,6 +648,25 @@
       </div>
     </div>
 
+    <!-- Planning Poker: média vem da votação, pontos é o fibonacci acordado.
+         Ambos editáveis à mão — a votação sugere, o time decide. -->
+    <div class="form-row">
+      <div class="form-group">
+        <label>Média do Planning Poker</label>
+        <input type="number" id="m-poker-media" step="0.1" min="0" placeholder="ex: 4,4" oninput="sugereFibonacci()" />
+      </div>
+      <div class="form-group">
+        <label>Pontos (Fibonacci)</label>
+        <select id="m-poker-pontos">
+          <option value="">—</option>
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="5">5</option><option value="8">8</option><option value="13">13</option>
+          <option value="21">21</option><option value="34">34</option>
+        </select>
+        <div id="m-poker-hint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+      </div>
+    </div>
+
     <div class="form-row">
       <div class="form-group">
         <label>Solicitante</label>
@@ -1356,6 +1375,9 @@ function renderMelhorias() {
       const sk = statusEfetivo(m);
       const badge = `<span class="badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
       // Tipo ao lado do status; quem ainda não tem fica sem badge (não inventa)
+      const pokerBadge = m.poker_pontos != null
+        ? `<span title="Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:11px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 7px;">🃏 ${m.poker_pontos}</span>`
+        : '';
       const tipoBadge = m.tipo && TIPO_LABELS[m.tipo]
         ? `<span style="font-size:11px;background:var(--bg4);color:var(--text2);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;">${TIPO_LABELS[m.tipo]}</span>`
         : '';
@@ -1386,7 +1408,7 @@ function renderMelhorias() {
       return `<div class="card">
         <div class="card-info">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <div class="card-nome">${m.titulo}</div>${badge}${tipoBadge}${parentBadge}${depBadge}
+            <div class="card-nome">${m.titulo}</div>${badge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}
           </div>
           ${sub ? `<div class="card-sub">${sub}</div>` : ''}
           ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${m.descricao.substring(0,120)}${m.descricao.length>120?'…':''}</div>` : ''}
@@ -2055,6 +2077,9 @@ function openModalMelhoria(id) {
   populateDevSelect(m?.dev || '');
   document.getElementById('m-prioridade').value      = m?.prioridade       || '';
   document.getElementById('m-tipo').value            = m?.tipo            || '';
+  document.getElementById('m-poker-media').value      = m?.poker_media != null ? m.poker_media : '';
+  document.getElementById('m-poker-pontos').value     = m?.poker_pontos != null ? String(m.poker_pontos) : '';
+  document.getElementById('m-poker-hint').textContent = '';
   document.getElementById('m-solicitante').value     = m?.solicitante      || '';
   document.getElementById('m-data-solicitacao').value= m?.data_solicitacao || '';
   document.getElementById('m-inicio').value          = m?.inicio           || '';
@@ -2207,6 +2232,26 @@ function resolveTemaSelecao(prefix, fallbackTemaId) {
   return t.id;
 }
 
+const FIBONACCI = [1, 2, 3, 5, 8, 13, 21, 34];
+
+// Arredonda a média para o fibonacci mais próximo. Só SUGERE: se o campo de
+// pontos já foi preenchido à mão, não sobrescreve a decisão do time.
+function fibonacciMaisProximo(media) {
+  const n = parseFloat(media);
+  if (!isFinite(n) || n <= 0) return '';
+  return String(FIBONACCI.reduce((a, b) => Math.abs(b - n) < Math.abs(a - n) ? b : a));
+}
+
+function sugereFibonacci() {
+  const media = document.getElementById('m-poker-media').value;
+  const sel   = document.getElementById('m-poker-pontos');
+  const hint  = document.getElementById('m-poker-hint');
+  const sug   = fibonacciMaisProximo(media);
+  if (!sug) { hint.textContent = ''; return; }
+  if (!sel.value) sel.value = sug;
+  hint.textContent = sel.value === sug ? `sugerido pela média` : `média sugere ${sug}`;
+}
+
 function saveMelhoria() {
   const titulo = document.getElementById('m-titulo').value.trim();
   const temaId = resolveTemaSelecao('m', document.getElementById('m-id').value ? (state.melhorias.find(x => x.id === document.getElementById('m-id').value)||{}).tema_id : '');
@@ -2239,6 +2284,10 @@ function saveMelhoria() {
     descricao:           document.getElementById('m-descricao').value.trim(),
     tema_id:             temaId,
     tipo:                tipo,
+    poker_media:         document.getElementById('m-poker-media').value !== ''
+                           ? parseFloat(document.getElementById('m-poker-media').value) : null,
+    poker_pontos:        document.getElementById('m-poker-pontos').value !== ''
+                           ? parseInt(document.getElementById('m-poker-pontos').value) : null,
     status:              SP_TO_STATUS[sp] || 'recebida',
     status_planejamento: sp,
     estimativa:          existing.estimativa || '',
