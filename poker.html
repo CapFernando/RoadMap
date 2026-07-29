@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Fora de buscadores: noindex nao indexa, nofollow nao segue links,
+       noarchive impede copia em cache. Isso reduz descoberta, NAO e controle
+       de acesso: quem tem a URL continua lendo tudo. -->
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <title>Planning Poker — RoadMap de Melhorias</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="config.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0E0E0D; --bg2:#161614; --bg3:#1E1E1C; --bg4:#252522;
+      --border:#2E2E2B; --border2:#3A3A36;
+      --text:#ECEAE2; --text2:#A8A49A; --text3:#6E6A62;
+      --blue:#3B8FE8; --green:#5EA832; --amber:#E89C2F; --red:#E84444; --teal:#2BBFA0;
+      --radius:12px;
+    }
+    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; line-height:1.5; min-height:100vh; }
+
+    header {
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      padding:14px 24px; background:var(--bg2); border-bottom:1px solid var(--border);
+    }
+    .h-left { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    h1 { font-size:19px; font-weight:800; }
+    .h-right { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:var(--radius);
+           font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; border:none; transition:opacity .15s; }
+    .btn:hover:not(:disabled) { opacity:.85; }
+    .btn:disabled { opacity:.35; cursor:not-allowed; }
+    .btn-primary { background:var(--blue); color:#fff; }
+    .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
+    .btn-ghost { background:transparent; color:var(--text2); border:1px solid var(--border); }
+    .btn-green { background:var(--green); color:#fff; }
+    .btn-sm { padding:6px 11px; font-size:12px; }
+
+    .codigo-box { display:flex; align-items:center; gap:8px; background:var(--bg3); border:1px solid var(--border2);
+                  border-radius:10px; padding:6px 12px; }
+    .codigo { font-size:20px; font-weight:800; letter-spacing:.14em; color:var(--teal); font-variant-numeric:tabular-nums; }
+
+    /* ── LAYOUT ── */
+    .layout { display:grid; grid-template-columns:1fr 340px; gap:20px; padding:20px 24px 60px; align-items:start; }
+    @media (max-width:980px) { .layout { grid-template-columns:1fr; } }
+
+    /* ── MESA ── */
+    .mesa-wrap { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:24px; }
+    .pauta { text-align:center; margin-bottom:20px; }
+    .pauta-label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); }
+    .pauta-titulo { font-size:20px; font-weight:700; margin-top:4px; }
+    .pauta-meta { font-size:12px; color:var(--text2); margin-top:4px; }
+    .pauta-vazia { color:var(--text3); font-style:italic; }
+
+    .mesa { background:var(--bg3); border:1px solid var(--border2); border-radius:100px; padding:26px 30px;
+            display:flex; flex-wrap:wrap; gap:14px; justify-content:center; min-height:120px; align-items:center; }
+    .vazio-mesa { color:var(--text3); font-size:13px; }
+
+    .seat { display:flex; flex-direction:column; align-items:center; gap:6px; width:74px; }
+    .seat-nome { font-size:12px; font-weight:600; color:var(--text2); text-align:center; overflow:hidden;
+                 text-overflow:ellipsis; white-space:nowrap; max-width:74px; }
+    .carta { width:52px; height:74px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+             font-size:22px; font-weight:800; border:2px solid var(--border2); background:var(--bg4); color:var(--text3);
+             transition:all .2s; }
+    .carta.aguardando { border-style:dashed; }
+    .carta.votou { background:#123A52; border-color:#2A6E90; color:#123A52; }
+    .carta.revelada { background:var(--bg2); border-color:var(--teal); color:var(--teal); }
+
+    .resultado { margin-top:22px; text-align:center; }
+    .res-grid { display:inline-flex; gap:14px; flex-wrap:wrap; justify-content:center; }
+    .res-box { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:12px 20px; min-width:110px; }
+    .res-lbl { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text3); }
+    .res-val { font-size:26px; font-weight:800; margin-top:2px; }
+    .res-val.teal { color:var(--teal); }
+    .res-val.blue { color:var(--blue); }
+
+    /* ── VOTACAO ── */
+    .votacao { margin-top:24px; border-top:1px solid var(--border); padding-top:20px; }
+    .votacao-titulo { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); margin-bottom:12px; text-align:center; }
+    .cartas { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+    .carta-btn { width:58px; height:82px; border-radius:10px; background:var(--bg3); border:2px solid var(--border2);
+                 color:var(--text); font-size:22px; font-weight:800; font-family:inherit; cursor:pointer; transition:all .15s; }
+    .carta-btn:hover:not(:disabled) { transform:translateY(-4px); border-color:var(--blue); }
+    .carta-btn.sel { background:var(--blue); border-color:var(--blue); color:#fff; transform:translateY(-6px); }
+    .carta-btn:disabled { opacity:.3; cursor:not-allowed; }
+
+    /* ── FILA ── */
+    .fila { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:18px; }
+    .fila-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    .fila-titulo { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text2); }
+    .fila-count { font-size:12px; color:var(--text3); }
+    .fila-item { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:11px 13px;
+                 margin-bottom:8px; cursor:pointer; transition:border-color .15s; }
+    .fila-item:hover { border-color:var(--border2); }
+    .fila-item.ativa { border-color:var(--teal); background:#0E3A3A22; }
+    .fila-item-titulo { font-size:13px; font-weight:600; line-height:1.35; }
+    .fila-item-meta { font-size:11px; color:var(--text3); margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; }
+    .pill { font-size:10px; border-radius:4px; padding:1px 6px; background:var(--bg4); color:var(--text2); }
+    .pill.pontos { background:#123A52; color:#8AD5F0; }
+    .fila-vazia { color:var(--text3); font-size:13px; font-style:italic; padding:8px 0; }
+
+    /* ── ACESSO / MODAL ── */
+    .overlay { position:fixed; inset:0; background:#000000CC; display:none; align-items:center; justify-content:center; z-index:100; padding:20px; }
+    .overlay.open { display:flex; }
+    .card-modal { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:26px; max-width:420px; width:100%; }
+    .card-modal h2 { font-size:18px; margin-bottom:6px; }
+    .card-modal p { font-size:13px; color:var(--text2); margin-bottom:16px; }
+    .card-modal input { width:100%; background:var(--bg3); border:1px solid var(--border); border-radius:10px;
+                        color:var(--text); padding:11px 13px; font-size:15px; font-family:inherit; outline:none; margin-bottom:12px; }
+    .card-modal input:focus { border-color:var(--blue); }
+    .erro { color:#F9A0A0; font-size:13px; min-height:18px; margin-bottom:6px; }
+    .link-box { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 12px;
+                font-size:12px; color:var(--text2); word-break:break-all; margin-bottom:10px; }
+    #toast { position:fixed; bottom:22px; right:22px; z-index:200; padding:11px 18px; border-radius:10px;
+             font-size:13px; font-weight:500; opacity:0; transition:opacity .3s; pointer-events:none; max-width:380px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="h-left">
+    <a href="admin.html" class="btn btn-ghost btn-sm">← Admin</a>
+    <h1>🃏 Planning Poker</h1>
+    <div class="codigo-box" id="codigo-box" style="display:none">
+      <span style="font-size:11px;color:var(--text3);text-transform:uppercase">Sala</span>
+      <span class="codigo" id="codigo-txt">—</span>
+    </div>
+  </div>
+  <div class="h-right">
+    <span id="quem" style="font-size:12px;color:var(--text3)"></span>
+    <button class="btn btn-secondary btn-sm" id="btn-convite" onclick="abrirConvite()" style="display:none">🔗 Convidar</button>
+    <button class="btn btn-ghost btn-sm" onclick="sair()">Sair</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- MESA -->
+  <div class="mesa-wrap">
+    <div class="pauta">
+      <div class="pauta-label">Em votação</div>
+      <div class="pauta-titulo" id="pauta-titulo"><span class="pauta-vazia">Nenhuma demanda selecionada</span></div>
+      <div class="pauta-meta" id="pauta-meta"></div>
+    </div>
+
+    <div class="mesa" id="mesa"><span class="vazio-mesa">Aguardando participantes…</span></div>
+
+    <div class="resultado" id="resultado" style="display:none">
+      <div class="res-grid">
+        <div class="res-box"><div class="res-lbl">Média</div><div class="res-val teal" id="res-media">—</div></div>
+        <div class="res-box"><div class="res-lbl">Fibonacci</div><div class="res-val blue" id="res-fib">—</div></div>
+        <div class="res-box"><div class="res-lbl">Votos</div><div class="res-val" id="res-votos">—</div></div>
+      </div>
+      <div id="grava-box" style="display:none;margin-top:18px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Ajuste antes de gravar, se o time decidiu diferente:</div>
+        <div style="display:inline-flex;gap:10px;align-items:flex-end;flex-wrap:wrap;justify-content:center">
+          <label style="font-size:11px;color:var(--text3);display:flex;flex-direction:column;gap:4px">Média
+            <input type="number" step="0.1" min="0" id="in-media" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit">
+          </label>
+          <label style="font-size:11px;color:var(--text3);display:flex;flex-direction:column;gap:4px">Pontos
+            <select id="in-pontos" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit">
+              <option value="">—</option><option>1</option><option>2</option><option>3</option>
+              <option>5</option><option>8</option><option>13</option><option>21</option><option>34</option>
+            </select>
+          </label>
+          <button class="btn btn-green" onclick="gravarNoCard()" id="btn-gravar">💾 Gravar no card</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="votacao">
+      <div class="votacao-titulo" id="votacao-titulo">Escolha sua carta</div>
+      <div class="cartas" id="cartas"></div>
+      <div style="text-align:center;margin-top:18px;display:none" id="controles">
+        <button class="btn btn-primary" onclick="revelar()" id="btn-revelar">👁 Voto finalizado — revelar</button>
+        <button class="btn btn-secondary" onclick="revotar()" id="btn-revotar">↻ Votar de novo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FILA -->
+  <div class="fila">
+    <div class="fila-head">
+      <span class="fila-titulo">Fila — Planning</span>
+      <span class="fila-count" id="fila-count"></span>
+    </div>
+    <div id="fila-lista"><div class="fila-vazia">Carregando…</div></div>
+  </div>
+</div>
+
+<!-- ENTRADA -->
+<div class="overlay" id="ov-entrada">
+  <div class="card-modal">
+    <h2 id="ent-titulo">Entrar na sessão</h2>
+    <p id="ent-desc">Digite seu nome para participar da votação.</p>
+    <input type="text" id="ent-nome" placeholder="Seu nome" maxlength="40" onkeydown="if(event.key==='Enter')entrar()" />
+    <input type="text" id="ent-codigo" placeholder="Código da sala (ex: ABC234)" maxlength="6" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')entrar()" />
+    <div class="erro" id="ent-erro"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="entrar()">Entrar</button>
+    <div style="text-align:center;margin-top:14px">
+      <button class="btn btn-ghost btn-sm" onclick="abrirComoFacilitador()">Sou o facilitador</button>
+    </div>
+  </div>
+</div>
+
+<!-- FACILITADOR -->
+<div class="overlay" id="ov-facil">
+  <div class="card-modal">
+    <h2>Abrir sessão</h2>
+    <p>Informe a senha de acesso para conduzir a votação.</p>
+    <input type="password" id="fac-senha" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')abrirSessao()" />
+    <div class="erro" id="fac-erro"></div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="abrirSessao()">Abrir sessão</button>
+    <div style="text-align:center;margin-top:14px">
+      <button class="btn btn-ghost btn-sm" onclick="voltarEntrada()">Vou apenas votar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONVITE -->
+<div class="overlay" id="ov-convite">
+  <div class="card-modal">
+    <h2>Convidar o time</h2>
+    <p>Compartilhe o link ou o código da sala. Entra só com o nome, sem senha.</p>
+    <div class="link-box" id="conv-link">—</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn btn-secondary btn-sm" onclick="copiarLink()">📋 Copiar link</button>
+      <button class="btn btn-secondary btn-sm" onclick="copiarCodigo()">📋 Copiar código</button>
+    </div>
+    <div style="text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Código da sala</div>
+      <div class="codigo" style="font-size:34px" id="conv-codigo">—</div>
+    </div>
+    <button class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:14px" onclick="fechar('ov-convite')">Fechar</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────
+const PROXY_URL   = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
+const GITHUB_USER = 'CapFernando';
+const GITHUB_REPO = 'RoadMap';
+const DATA_PATH   = 'data/melhorias.json';
+const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
+const POLL_MS     = 1500;
+const FIBONACCI   = [1, 2, 3, 5, 8, 13, 21, 34];
+
+// ─── ESTADO LOCAL ─────────────────────────────────────────────────
+let _codigo      = (new URLSearchParams(location.search).get('s') || '').toUpperCase();
+let _participante = sessionStorage.getItem('pk_participante') || '';
+let _nome         = sessionStorage.getItem('pk_nome') || '';
+let _senha        = sessionStorage.getItem('rm_admin_pw') || '';   // compartilhada com Admin/Gantt
+let _facilitador  = false;
+let _estado       = null;
+let _melhorias    = [];
+let _temas        = [];
+let _meuVoto      = '';
+let _timer        = null;
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+let _toastTimer;
+function toast(msg, tipo = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = tipo === 'err' ? '#5C0A0A' : '#1E4208';
+  el.style.color      = tipo === 'err' ? '#F9A0A0' : '#B2E07A';
+  el.style.border     = `1px solid ${tipo === 'err' ? '#7A1A1A' : '#2E5A10'}`;
+  el.style.opacity = '1';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.style.opacity = '0', 4000);
+}
+
+function abrir(id) { document.getElementById(id).classList.add('open'); }
+function fechar(id) { document.getElementById(id).classList.remove('open'); }
+
+async function api(payload) {
+  // Falha de rede/CORS não pode estourar: sem isto, o usuário via a tela travar
+  // sem mensagem. Devolve status 0 para o chamador tratar como qualquer erro.
+  try {
+    const res = await fetch(PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    let body = null;
+    try { body = await res.json(); } catch (_) {}
+    return { ok: res.ok, status: res.status, body };
+  } catch (e) {
+    return { ok: false, status: 0, body: { error: 'Sem conexão com o servidor de votação. Verifique a internet e tente de novo.' } };
+  }
+}
+
+// ─── FILA (demandas em Planning) ──────────────────────────────────
+// Leitura pública, igual aos outros painéis. A fila é só a etapa Planning.
+async function carregarFila() {
+  try {
+    const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    _melhorias = d.melhorias || [];
+    _temas     = d.temas || [];
+    renderFila();
+  } catch (e) {
+    document.getElementById('fila-lista').innerHTML = `<div class="fila-vazia">Falha ao carregar a fila: ${esc(e.message)}</div>`;
+  }
+}
+
+function filaPlanning() {
+  return _melhorias.filter(m => (m.status_planejamento || '') === 'planning');
+}
+
+function nomeTema(id) { const t = _temas.find(x => x.id === id); return t ? t.nome : ''; }
+
+function renderFila() {
+  const lista = filaPlanning();
+  document.getElementById('fila-count').textContent = `${lista.length} demanda(s)`;
+  const el = document.getElementById('fila-lista');
+  if (!lista.length) {
+    el.innerHTML = `<div class="fila-vazia">Nenhuma demanda na etapa Planning. Mova cards para Planning no Admin ou no Planejamento.</div>`;
+    return;
+  }
+  const atual = _estado ? _estado.melhoria_id : '';
+  el.innerHTML = lista.map(m => {
+    const tipo = m.tipo === 'sustentacao' ? '🔧 Sustentação' : m.tipo === 'evolucao' ? '🚀 Evolução' : '⚪ Sem tipo';
+    const pts  = m.poker_pontos != null ? `<span class="pill pontos">🃏 ${m.poker_pontos}</span>` : '';
+    const acao = _facilitador ? `onclick="porEmPauta('${esc(m.id)}')"` : '';
+    return `<div class="fila-item ${m.id === atual ? 'ativa' : ''}" ${acao} title="${_facilitador ? 'Clique para votar esta demanda' : ''}">
+      <div class="fila-item-titulo">${esc(m.titulo || '(sem título)')}</div>
+      <div class="fila-item-meta">
+        <span class="pill">${tipo}</span>
+        ${m.dev ? `<span class="pill">${esc(m.dev)}</span>` : ''}
+        ${pts}
+      </div>
+      ${nomeTema(m.tema_id) ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">${esc(nomeTema(m.tema_id))}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ─── ENTRADA ──────────────────────────────────────────────────────
+function voltarEntrada() { fechar('ov-facil'); abrir('ov-entrada'); }
+function abrirComoFacilitador() { fechar('ov-entrada'); abrir('ov-facil'); }
+
+async function abrirSessao() {
+  const senha = document.getElementById('fac-senha').value;
+  const err = document.getElementById('fac-erro');
+  if (!senha) { err.textContent = 'Informe a senha.'; return; }
+  const r = await api({ action: 'poker-abrir', senha });
+  if (r.status === 401) { err.textContent = 'Senha incorreta.'; return; }
+  if (!r.ok) { err.textContent = (r.body && r.body.error) || 'Falha ao abrir a sessão.'; return; }
+  _senha = senha; sessionStorage.setItem('rm_admin_pw', senha);
+  _codigo = r.body.codigo;
+  _facilitador = true;
+  _nome = 'Facilitador';
+  err.textContent = '';
+  fechar('ov-facil');
+  iniciar();
+  abrirConvite();
+}
+
+async function entrar() {
+  const nome = document.getElementById('ent-nome').value.trim();
+  const cod  = (document.getElementById('ent-codigo').value || _codigo).toUpperCase().trim();
+  const err  = document.getElementById('ent-erro');
+  if (!nome) { err.textContent = 'Informe seu nome.'; return; }
+  if (!cod)  { err.textContent = 'Informe o código da sala.'; return; }
+  const r = await api({ action: 'poker-entrar', codigo: cod, nome });
+  if (!r.ok) { err.textContent = (r.body && r.body.error) || 'Não foi possível entrar.'; return; }
+  _codigo = cod; _participante = r.body.participante; _nome = r.body.nome;
+  sessionStorage.setItem('pk_participante', _participante);
+  sessionStorage.setItem('pk_nome', _nome);
+  err.textContent = '';
+  fechar('ov-entrada');
+  iniciar();
+}
+
+function sair() {
+  sessionStorage.removeItem('pk_participante');
+  sessionStorage.removeItem('pk_nome');
+  clearInterval(_timer);
+  location.href = location.pathname;
+}
+
+// ─── CONVITE ──────────────────────────────────────────────────────
+function linkConvite() { return `${location.origin}${location.pathname}?s=${_codigo}`; }
+function abrirConvite() {
+  document.getElementById('conv-link').textContent = linkConvite();
+  document.getElementById('conv-codigo').textContent = _codigo;
+  abrir('ov-convite');
+}
+function copiarLink() {
+  navigator.clipboard.writeText(linkConvite())
+    .then(() => toast('🔗 Link copiado.'))
+    .catch(() => prompt('Copie o link:', linkConvite()));
+}
+function copiarCodigo() {
+  navigator.clipboard.writeText(_codigo)
+    .then(() => toast('Código copiado.'))
+    .catch(() => prompt('Código:', _codigo));
+}
+
+// ─── VOTAÇÃO ──────────────────────────────────────────────────────
+function fibonacciMaisProximo(media) {
+  const n = parseFloat(media);
+  if (!isFinite(n) || n <= 0) return '';
+  return String(FIBONACCI.reduce((a, b) => Math.abs(b - n) < Math.abs(a - n) ? b : a));
+}
+
+async function votar(valor) {
+  if (!_participante) { toast('Entre com seu nome para votar.', 'err'); abrir('ov-entrada'); return; }
+  const r = await api({ action: 'poker-votar', codigo: _codigo, participante: _participante, valor });
+  if (!r.ok) { toast((r.body && r.body.error) || 'Não foi possível votar.', 'err'); return; }
+  _meuVoto = valor;
+  renderCartas();
+  await atualizar();
+}
+
+async function revelar() {
+  const r = await api({ action: 'poker-revelar', codigo: _codigo, senha: _senha });
+  if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao revelar.', 'err'); return; }
+  aplicar(r.body.estado);
+}
+
+async function revotar() {
+  const r = await api({ action: 'poker-revotar', codigo: _codigo, senha: _senha });
+  if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao reiniciar.', 'err'); return; }
+  _meuVoto = '';
+  aplicar(r.body.estado);
+}
+
+async function porEmPauta(id) {
+  if (!_facilitador) return;
+  const r = await api({ action: 'poker-demanda', codigo: _codigo, senha: _senha, melhoria_id: id });
+  if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao trocar a demanda.', 'err'); return; }
+  _meuVoto = '';
+  aplicar(r.body.estado);
+}
+
+async function gravarNoCard() {
+  const btn = document.getElementById('btn-gravar');
+  const media  = document.getElementById('in-media').value;
+  const pontos = document.getElementById('in-pontos').value;
+  if (!_estado || !_estado.melhoria_id) { toast('Nenhuma demanda em votação.', 'err'); return; }
+  btn.disabled = true; btn.textContent = 'Gravando…';
+  const r = await api({ action: 'poker-gravar', codigo: _codigo, senha: _senha,
+                        melhoria_id: _estado.melhoria_id, poker_media: media, poker_pontos: pontos });
+  btn.disabled = false; btn.textContent = '💾 Gravar no card';
+  if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao gravar.', 'err'); return; }
+  toast(`✅ Gravado: média ${String(r.body.poker_media).replace('.', ',')} · ${r.body.poker_pontos} pontos`);
+  await carregarFila();
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────
+function renderCartas() {
+  const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','13','21','34','?'];
+  const travado = !_estado || _estado.revelado || !_estado.melhoria_id || !_participante;
+  document.getElementById('cartas').innerHTML = cartas.map(c =>
+    `<button class="carta-btn ${_meuVoto === c ? 'sel' : ''}" ${travado ? 'disabled' : ''} onclick="votar('${esc(c)}')">${esc(c)}</button>`
+  ).join('');
+  const t = document.getElementById('votacao-titulo');
+  if (!_participante)                    t.textContent = 'Entre com seu nome para votar';
+  else if (!_estado || !_estado.melhoria_id) t.textContent = 'Aguardando o facilitador escolher a demanda';
+  else if (_estado.revelado)             t.textContent = 'Votação encerrada nesta rodada';
+  else                                   t.textContent = _meuVoto ? `Seu voto: ${_meuVoto} (pode trocar até revelar)` : 'Escolha sua carta';
+}
+
+function aplicar(est) {
+  if (!est) return;
+  _estado = est;
+
+  // pauta
+  const m = _melhorias.find(x => x.id === est.melhoria_id);
+  document.getElementById('pauta-titulo').innerHTML = m
+    ? esc(m.titulo || '(sem título)')
+    : '<span class="pauta-vazia">Nenhuma demanda selecionada</span>';
+  document.getElementById('pauta-meta').textContent = m
+    ? [nomeTema(m.tema_id), m.dev, m.tipo === 'sustentacao' ? 'Sustentação' : m.tipo === 'evolucao' ? 'Evolução' : ''].filter(Boolean).join(' · ')
+    : '';
+
+  // mesa
+  const mesa = document.getElementById('mesa');
+  if (!est.participantes.length) {
+    mesa.innerHTML = '<span class="vazio-mesa">Aguardando participantes…</span>';
+  } else {
+    mesa.innerHTML = est.participantes.map(p => {
+      let cls = 'aguardando', txt = '?';
+      if (est.revelado && p.valor != null) { cls = 'revelada'; txt = p.valor; }
+      else if (p.votou) { cls = 'votou'; txt = '✓'; }
+      return `<div class="seat">
+        <div class="carta ${cls}">${esc(txt)}</div>
+        <div class="seat-nome" title="${esc(p.nome)}">${esc(p.nome)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // resultado
+  const box = document.getElementById('resultado');
+  if (est.revelado) {
+    box.style.display = '';
+    const fib = est.media != null ? fibonacciMaisProximo(est.media) : '—';
+    document.getElementById('res-media').textContent = est.media != null ? String(est.media).replace('.', ',') : '—';
+    document.getElementById('res-fib').textContent   = fib || '—';
+    document.getElementById('res-votos').textContent = est.total_votos;
+    if (_facilitador) {
+      document.getElementById('grava-box').style.display = '';
+      // preenche só se o facilitador ainda não editou
+      const iM = document.getElementById('in-media'), iP = document.getElementById('in-pontos');
+      if (!iM.dataset.tocado) iM.value = est.media != null ? est.media : '';
+      if (!iP.dataset.tocado) iP.value = fib || '';
+    }
+  } else {
+    box.style.display = 'none';
+    const iM = document.getElementById('in-media'), iP = document.getElementById('in-pontos');
+    delete iM.dataset.tocado; delete iP.dataset.tocado;
+  }
+
+  document.getElementById('controles').style.display = _facilitador ? '' : 'none';
+  document.getElementById('btn-revelar').disabled = !est.melhoria_id || est.revelado || est.total_votos === 0;
+  document.getElementById('btn-revotar').disabled = !est.melhoria_id;
+  renderCartas();
+  renderFila();
+}
+
+async function atualizar() {
+  if (!_codigo) return;
+  const r = await api({ action: 'poker-estado', codigo: _codigo });
+  if (r.status === 404 || r.status === 410) {
+    clearInterval(_timer);
+    toast(r.status === 410 ? 'Sessão expirada.' : 'Sessão não encontrada.', 'err');
+    abrir('ov-entrada');
+    return;
+  }
+  if (r.ok && r.body && r.body.estado) aplicar(r.body.estado);
+}
+
+function iniciar() {
+  document.getElementById('codigo-box').style.display = '';
+  document.getElementById('codigo-txt').textContent = _codigo;
+  document.getElementById('quem').textContent = _facilitador ? 'Facilitador' : (_nome ? `Você: ${_nome}` : '');
+  document.getElementById('btn-convite').style.display = _facilitador ? '' : 'none';
+  carregarFila();
+  atualizar();
+  clearInterval(_timer);
+  _timer = setInterval(atualizar, POLL_MS);
+}
+
+// marca edição manual para o polling não sobrescrever o que o facilitador digitou
+['in-media', 'in-pontos'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input',  () => el.dataset.tocado = '1');
+  el.addEventListener('change', () => el.dataset.tocado = '1');
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') atualizar(); });
+
+// ─── BOOT ─────────────────────────────────────────────────────────
+(function boot() {
+  renderCartas();   // mostra as cartas (desabilitadas) antes de entrar na sala
+  carregarFila();
+  if (_codigo && _participante) { iniciar(); return; }      // já estava votando nesta sessão
+  if (_codigo) {                                            // chegou pelo link
+    document.getElementById('ent-codigo').value = _codigo;
+    document.getElementById('ent-nome').value = _nome || '';
+    abrir('ov-entrada');
+    setTimeout(() => document.getElementById('ent-nome').focus(), 60);
+    return;
+  }
+  abrir('ov-facil');                                        // sem código: provavelmente o facilitador
+  setTimeout(() => document.getElementById('fac-senha').focus(), 60);
+})();
+</script>
+</body>
+</html>
