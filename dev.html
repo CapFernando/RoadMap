@@ -420,6 +420,33 @@ let _pollTs = null;
 // ─── UTILS ───────────────────────────────────────────────────────
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
 function splitDevs(s) { return s ? s.split(/[\/,]/).map(x=>x.trim()).filter(Boolean) : []; }
+
+// ── ANEXOS (somente leitura) ────────────────────────────────────────
+// anexos[i].dados é um data URL (base64) gerado no upload; aqui só decodifica
+// para Blob e abre — não edita nem remove.
+function devEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function devDataUrlToBlob(dataUrl) {
+  const [meta, b64] = dataUrl.split(',');
+  const mime = (meta.match(/data:(.*?);base64/) || [])[1] || 'application/octet-stream';
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+function devViewAnexo(melId, i) {
+  const m = state.melhorias.find(x => x.id === melId);
+  if (!m || !m.anexos || !m.anexos[i]) return;
+  window.open(URL.createObjectURL(devDataUrlToBlob(m.anexos[i].dados)), '_blank');
+}
+function anexosHTMLDev(m) {
+  const anexos = (m && m.anexos) || [];
+  if (!anexos.length) return '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${
+    anexos.map((a, i) =>
+      `<a href="#" onclick="devViewAnexo('${devEsc(m.id)}',${i});return false;" style="display:inline-flex;align-items:center;gap:4px;color:#9BC8F8;text-decoration:none;border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-size:12px;">📎 ${devEsc(a.nome)}</a>`
+    ).join('')
+  }</div>`;
+}
 function formatDate(s) { if (!s) return ''; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
 
 function calcHorasPlanejadas(inicio, entrega) {
@@ -1242,6 +1269,7 @@ function openStatusModal(id, preselect) {
     ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
     ${m.entrega ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${m.descricao}</div>` : ''}
+    ${anexosHTMLDev(m)}
     ${depsInfoHTML}
   `;
   const sel = document.getElementById('ms-status');

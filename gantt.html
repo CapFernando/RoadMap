@@ -109,6 +109,8 @@
     .btn-secondary { background: var(--bg3);   color: var(--text); border: 1px solid var(--border); }
     .btn-ghost     { background: transparent;  color: var(--text2); border: 1px solid var(--border); }
     .btn-nav       { background: var(--bg4); color: var(--text); border: 1px solid var(--border2); padding: 5px 14px; font-size: 18px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+    .anexo-link    { display:inline-flex; align-items:center; gap:4px; color:#9BC8F8; text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:12px; }
+    .anexo-link:hover { text-decoration:underline; }
     .btn-nav:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
     .btn-sm { padding: 6px 11px; font-size: 12px; }
 
@@ -500,6 +502,10 @@
     <div class="form-group">
       <label>Descrição</label>
       <textarea id="e-descricao" rows="2" placeholder="Detalhes da melhoria…"></textarea>
+    </div>
+    <div class="form-group" id="e-anexos-group" style="display:none">
+      <label>Anexos</label>
+      <div id="e-anexos" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -1659,6 +1665,7 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-id').value        = m?.id || '';
   document.getElementById('e-titulo').value    = m?.titulo || '';
   document.getElementById('e-descricao').value = m?.descricao || '';
+  renderAnexosGantt(m);
   document.getElementById('e-prio').value      = m?.prioridade || '';
   document.getElementById('e-tipo').value      = m?.tipo || '';
   document.getElementById('e-sprint').value    = m?.sprint || '';
@@ -1929,6 +1936,33 @@ function fmtDate(s) {
 function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── ANEXOS (somente leitura) ────────────────────────────────────────
+// anexos[i].dados é um data URL (base64) gerado no upload; aqui só decodifica
+// para Blob e abre — não edita nem remove.
+function gDataUrlToBlob(dataUrl) {
+  const [meta, b64] = dataUrl.split(',');
+  const mime = (meta.match(/data:(.*?);base64/) || [])[1] || 'application/octet-stream';
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+function gViewAnexo(melId, i) {
+  const m = state.melhorias.find(x => x.id === melId);
+  if (!m || !m.anexos || !m.anexos[i]) return;
+  window.open(URL.createObjectURL(gDataUrlToBlob(m.anexos[i].dados)), '_blank');
+}
+function renderAnexosGantt(m) {
+  const grupo = document.getElementById('e-anexos-group');
+  const box = document.getElementById('e-anexos');
+  const anexos = (m && m.anexos) || [];
+  if (!anexos.length) { grupo.style.display = 'none'; box.innerHTML = ''; return; }
+  grupo.style.display = '';
+  box.innerHTML = anexos.map((a, i) =>
+    `<a href="#" class="anexo-link" onclick="gViewAnexo('${esc(m.id)}',${i});return false;">📎 ${esc(a.nome)}</a>`
+  ).join('');
 }
 
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }

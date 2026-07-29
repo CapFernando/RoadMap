@@ -822,6 +822,13 @@ initLoginScreen();
 
 let _adminPollActive = false;
 let _pendingEdits = false; // há edições locais não publicadas? protege contra o recarregamento automático
+// IDs de melhorias alteradas nesta sessão desde o último publish bem-sucedido.
+// O merge do publish usa este conjunto para decidir, item a item, se mantém a
+// versão local (eu editei) ou adota a do servidor (outra pessoa editou nesse
+// meio-tempo). Sem isso, o merge antigo mantinha TODO o `state` local e só
+// acrescentava itens ausentes — então qualquer aba com dados carregados antes
+// da edição de outra pessoa sobrescrevia essa edição ao publicar a própria.
+let _dirtyMelhoriaIds = new Set();
 async function adminCheckUpdates() {
   if (document.getElementById('admin-app').style.display === 'none') return;
   if (_adminPollActive) return;
@@ -944,16 +951,40 @@ async function loadFromGitHub(silent) {
 }
 
 // Publicação em modo senha: merge-safe + grava via Worker (token fica no Worker)
+// 3-way merge para publicar: ids em _dirtyMelhoriaIds mantêm a versão LOCAL
+// (a decisão feita nesta aba); ids não tocados nesta sessão adotam a versão do
+// SERVIDOR, que pode ter sido editada por outra aba/pessoa nesse meio-tempo;
+// itens que só existem localmente (criados agora, ainda não publicados) são
+// mantidos. Excluídos ficam fora em qualquer caso.
+//
+// Isso substitui o merge antigo, que mantinha TODO o `state` local e só
+// acrescentava itens ausentes do servidor — então qualquer aba com dados
+// carregados antes da edição de outra pessoa sobrescrevia essa edição ao
+// publicar a própria (foi o que causou cards "voltando" sozinhos no Kanban:
+// confirmado comparando dois commits de publish seguidos, 13s um do outro,
+// onde o segundo revertia o campo que o primeiro tinha acabado de gravar).
+function mesclaMelhorias(serverMelhorias) {
+  const localById = new Map(state.melhorias.map(m => [m.id, m]));
+  const vistos = new Set();
+  const merged = [];
+  (serverMelhorias || []).forEach(sm => {
+    if (_deletedIds.has(sm.id)) return;
+    vistos.add(sm.id);
+    merged.push(_dirtyMelhoriaIds.has(sm.id) && localById.has(sm.id) ? localById.get(sm.id) : sm);
+  });
+  state.melhorias.forEach(m => { if (!vistos.has(m.id) && !_deletedIds.has(m.id)) merged.push(m); });
+  return merged;
+}
+
 async function saveViaProxy() {
   showSaving(true);
   try {
     // Lê o estado atual do servidor (público) e incorpora itens de terceiros
     let server = {};
     server = await lerDados(false);   // gravacao: nunca com dado de cache
-    const localM = new Set(state.melhorias.map(m => m.id));
     const localT = new Set(state.temas.map(t => t.id));
     (server.temas || []).forEach(t => { if (!localT.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t); });
-    (server.melhorias || []).forEach(m => { if (!localM.has(m.id) && !_deletedIds.has(m.id)) state.melhorias.push(m); });
+    state.melhorias = mesclaMelhorias(server.melhorias);
     const devSet = new Set(state.desenvolvedores || []);
     (server.desenvolvedores || []).forEach(d => devSet.add(d));
     state.desenvolvedores = [...devSet];
@@ -972,7 +1003,7 @@ async function saveViaProxy() {
       throw new Error(msg);
     }
     _pollTs = state.atualizado_em;
-    _pendingEdits = false; _kbDirty = false;
+    _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear();
     const errEl = document.getElementById('save-error'); if (errEl) errEl.style.display = 'none';
     toast('✅ Publicado!', 'ok');
   } catch (e) {
@@ -1004,14 +1035,11 @@ async function saveToGitHub(attempt = 1) {
     // A leitura NÃO fica em catch silencioso: se falhar, o save é abortado —
     // nunca gravamos por cima de dados que não conseguimos ler (evita zerar o arquivo).
     const serverData = await ghReadRaw(runtimeToken);
-    const localMelhoriaIds = new Set(state.melhorias.map(m => m.id));
-    const localTemaIds     = new Set(state.temas.map(t => t.id));
+    const localTemaIds = new Set(state.temas.map(t => t.id));
     (serverData.temas || []).forEach(t => {
       if (!localTemaIds.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t);
     });
-    (serverData.melhorias || []).forEach(m => {
-      if (!localMelhoriaIds.has(m.id) && !_deletedIds.has(m.id)) state.melhorias.push(m);
-    });
+    state.melhorias = mesclaMelhorias(serverData.melhorias);   // 3-way merge — ver comentário acima
     // Preserva devs e feriados cadastrados pelo Gantt — admin não os edita mas não deve apagá-los
     const devSet = new Set(state.desenvolvedores);
     (serverData.desenvolvedores || []).forEach(d => devSet.add(d));
@@ -1053,7 +1081,7 @@ async function saveToGitHub(attempt = 1) {
     }
     const data = await res.json();
     fileSha = data.content.sha;
-    _pendingEdits = false; _kbDirty = false; // tudo publicado
+    _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); // tudo publicado
     toast('✅ Publicado!', 'ok');
   } catch (e) {
     showSaving(false);
@@ -1583,6 +1611,7 @@ function kbDrop(e, colKey) {
   if (m.status_planejamento === colKey) { renderKanban(); return; }
   m.status_planejamento = colKey;
   m.status = SP_TO_STATUS[colKey] || m.status;
+  _dirtyMelhoriaIds.add(m.id);
   renderKanban();
   // se caiu por regra de atraso mesmo indo para outra coluna, avisa
   if (colKey !== 'atrasado' && statusEfetivo(m) === 'atrasado') {
@@ -2270,6 +2299,7 @@ function saveMelhoria() {
   } else {
     state.melhorias.push(obj);
   }
+  _dirtyMelhoriaIds.add(obj.id);
 
   _pendingEdits = true;
   closeModal('modal-melhoria');
