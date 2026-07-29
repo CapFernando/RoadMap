@@ -168,6 +168,7 @@
             </select>
           </label>
           <button class="btn btn-green" onclick="gravarNoCard()" id="btn-gravar">💾 Gravar no card</button>
+          <button class="btn btn-secondary" onclick="proximaDemanda()" id="btn-proximo">→ Próxima demanda</button>
         </div>
       </div>
     </div>
@@ -378,6 +379,7 @@ function renderFila() {
   const el = document.getElementById('fila-lista');
   if (!lista.length) {
     el.innerHTML = `<div class="fila-vazia">Nenhuma demanda na etapa Planning. Mova cards para Planning no Admin ou no Planejamento.</div>`;
+    atualizaBotaoProximo();
     return;
   }
   const atual = _estado ? _estado.melhoria_id : '';
@@ -395,6 +397,7 @@ function renderFila() {
       ${nomeTema(m.tema_id) ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">${esc(nomeTema(m.tema_id))}</div>` : ''}
     </div>`;
   }).join('');
+  atualizaBotaoProximo();
 }
 
 // ─── ENTRADA ──────────────────────────────────────────────────────
@@ -519,6 +522,43 @@ async function porEmPauta(id) {
   if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao trocar a demanda.', 'err'); return; }
   _meuVoto = '';
   aplicar(r.body.estado);
+}
+
+// Acha a próxima demanda pela POSIÇÃO na fila, não pela "primeira que não é a
+// atual" — essa segunda regra oscila entre os dois primeiros itens e nunca
+// alcança o terceiro (current vira b, dnovo o primeiro-nao-atual volta a ser
+// a). undefined quando a atual é a última (ou não está mais na fila).
+function proximoDaFila() {
+  const fila = filaPlanning();
+  const atual = _estado ? _estado.melhoria_id : '';
+  const idx = fila.findIndex(m => m.id === atual);
+  return idx >= 0 ? fila[idx + 1] : fila[0];
+}
+
+// Avança para a próxima demanda da fila. Sem nenhuma sobrando, limpa a pauta
+// em vez de deixar o resultado anterior preso na tela — era o que acontecia:
+// gravar no card não tirava o item da votação, então o resultado da rodada
+// anterior continuava exibido até alguém clicar manualmente em outro item.
+async function proximaDemanda() {
+  const proximo = proximoDaFila();
+  if (proximo) {
+    await porEmPauta(proximo.id);
+  } else {
+    await porEmPauta('');
+    toast('Fila esgotada — pauta limpa.', 'ok');
+  }
+}
+
+// Mostra quantas demandas restam à frente da atual, para o facilitador saber
+// se "Próxima" vai avançar ou encerrar antes de clicar.
+function atualizaBotaoProximo() {
+  const btn = document.getElementById('btn-proximo');
+  if (!btn) return;
+  const fila = filaPlanning();
+  const atual = _estado ? _estado.melhoria_id : '';
+  const idx = fila.findIndex(m => m.id === atual);
+  const restantes = idx >= 0 ? fila.length - idx - 1 : fila.length;
+  btn.textContent = restantes > 0 ? `→ Próxima demanda (${restantes})` : '✔ Encerrar rodada';
 }
 
 async function gravarNoCard() {
