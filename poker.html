@@ -303,11 +303,33 @@ async function api(payload) {
 
 // ─── FILA (demandas em Planning) ──────────────────────────────────
 // Leitura pública, igual aos outros painéis. A fila é só a etapa Planning.
+// Leitura fresca dos dados.
+// raw.githubusercontent.com serve com Cache-Control max-age=300 e IGNORA
+// cache-buster na query (X-Cache: HIT mesmo com ?t= aleatorio). Isso fazia o
+// painel exibir estado de ate 5 min atras — card "voltava" de coluna depois de
+// publicado — e, pior, a leitura feita ANTES de publicar podia nao ver
+// alteracao recente de outra pessoa e apaga-la. O Worker le pela API
+// autenticada, que nao passa por esse cache.
+//
+// permitirCache=true so para telas de leitura: em fluxo de gravacao, dado
+// velho e pior que erro, entao ali a falha estoura.
+async function lerDados(permitirCache) {
+  try {
+    const r = await fetch(PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dados' })
+    });
+    if (r.ok) return await r.json();
+  } catch (_) {}
+  if (!permitirCache) throw new Error('Nao foi possivel ler os dados atualizados. Tente novamente.');
+  const r2 = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+  if (!r2.ok) throw new Error('Falha ao ler dados (HTTP ' + r2.status + ')');
+  return r2.json();
+}
+
 async function carregarFila() {
   try {
-    const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
+    const d = await lerDados(true);
     _melhorias = d.melhorias || [];
     _temas     = d.temas || [];
     renderFila();

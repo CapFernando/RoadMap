@@ -902,8 +902,8 @@ async function adminCheckUpdates() {
       if (res.ok) { const json = await res.json(); if (json.sha !== fileSha) await loadFromGitHub(true); }
     } else {
       // modo senha: compara atualizado_em via RAW (público, sem rate limit)
-      const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-      if (res.ok) { const d = await res.json(); if (_pollTs !== undefined && d.atualizado_em !== _pollTs) await loadFromGitHub(true); }
+      const d = await lerDados(true);
+      if (_pollTs !== undefined && d.atualizado_em !== _pollTs) await loadFromGitHub(true);
     }
   } catch(_) {}
   _adminPollActive = false;
@@ -917,6 +917,30 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ─── GITHUB ───────────────────────────────────────────────────────
 // Lê o JSON via media type "raw": a Contents API padrão devolve content vazio
 // (encoding "none") para arquivos >1MB — este JSON já passou desse limite.
+// Leitura fresca dos dados.
+// raw.githubusercontent.com serve com Cache-Control max-age=300 e IGNORA
+// cache-buster na query (X-Cache: HIT mesmo com ?t= aleatorio). Isso fazia o
+// painel exibir estado de ate 5 min atras — card "voltava" de coluna depois de
+// publicado — e, pior, a leitura feita ANTES de publicar podia nao ver
+// alteracao recente de outra pessoa e apaga-la. O Worker le pela API
+// autenticada, que nao passa por esse cache.
+//
+// permitirCache=true so para telas de leitura: em fluxo de gravacao, dado
+// velho e pior que erro, entao ali a falha estoura.
+async function lerDados(permitirCache) {
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dados' })
+    });
+    if (r.ok) return await r.json();
+  } catch (_) {}
+  if (!permitirCache) throw new Error('Nao foi possivel ler os dados atualizados. Tente novamente.');
+  const r2 = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+  if (!r2.ok) throw new Error('Falha ao ler dados (HTTP ' + r2.status + ')');
+  return r2.json();
+}
+
 async function ghReadRaw(token) {
   const headers = { Accept: 'application/vnd.github.raw' };
   if (token) headers.Authorization = `token ${token}`;
@@ -940,9 +964,7 @@ async function loadFromGitHub(silent) {
       decoded = await ghReadRaw(runtimeToken);
     } else {
       // modo senha: leitura pública (repo público), sem token
-      const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('Erro ao carregar dados.');
-      decoded = await res.json();
+      decoded = await lerDados(true);
       fileSha = null;
     }
     _pollTs = decoded.atualizado_em || null;
@@ -967,7 +989,7 @@ async function saveViaProxy() {
   try {
     // Lê o estado atual do servidor (público) e incorpora itens de terceiros
     let server = {};
-    try { const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) server = await r.json(); } catch (_) {}
+    server = await lerDados(false);   // gravacao: nunca com dado de cache
     const localM = new Set(state.melhorias.map(m => m.id));
     const localT = new Set(state.temas.map(t => t.id));
     (server.temas || []).forEach(t => { if (!localT.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t); });

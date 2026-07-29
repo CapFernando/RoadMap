@@ -190,6 +190,7 @@
 const REPO    = 'CapFernando/RoadMap';
 const FILE    = 'data/melhorias.json';
 const API_URL = `https://api.github.com/repos/${REPO}/contents/${FILE}`;
+const PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
 const RAW_URL = `https://raw.githubusercontent.com/${REPO}/main/${FILE}`;
 
 const COLORS = [
@@ -238,14 +239,36 @@ function formatDate(s) {
 }
 
 // ── DATA ─────────────────────────────────────────────────────────
+// Leitura fresca dos dados.
+// raw.githubusercontent.com serve com Cache-Control max-age=300 e IGNORA
+// cache-buster na query (X-Cache: HIT mesmo com ?t= aleatorio). Isso fazia o
+// painel exibir estado de ate 5 min atras — card "voltava" de coluna depois de
+// publicado — e, pior, a leitura feita ANTES de publicar podia nao ver
+// alteracao recente de outra pessoa e apaga-la. O Worker le pela API
+// autenticada, que nao passa por esse cache.
+//
+// permitirCache=true so para telas de leitura: em fluxo de gravacao, dado
+// velho e pior que erro, entao ali a falha estoura.
+async function lerDados(permitirCache) {
+  try {
+    const r = await fetch(PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dados' })
+    });
+    if (r.ok) return await r.json();
+  } catch (_) {}
+  if (!permitirCache) throw new Error('Nao foi possivel ler os dados atualizados. Tente novamente.');
+  const r2 = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+  if (!r2.ok) throw new Error('Falha ao ler dados (HTTP ' + r2.status + ')');
+  return r2.json();
+}
+
 async function loadData() {
   try {
     // Sem token: lê direto a URL pública (repo público) — evita gastar o limite
     // de 60 req/h da API anônima, que retornaria 403 e cairia no fallback.
     if (!runtimeToken) {
-      const res = await fetch(RAW_URL+'?t='+Date.now(), { cache:'no-store' });
-      if (res.ok) { applyData(await res.json()); return; }
-      throw new Error('HTTP ' + res.status);
+      applyData(await lerDados(true)); return;
     }
     // Com token: media type "raw" — a Contents API padrão devolve content vazio
     // (encoding "none") acima de 1MB, e este JSON já passou disso.
@@ -259,8 +282,7 @@ async function loadData() {
     }
   } catch(_){}
   try {
-    const res = await fetch(RAW_URL+'?t='+Date.now(), { cache:'no-store' });
-    applyData(await res.json());
+    applyData(await lerDados(true));
   } catch(e) { toast('Erro ao carregar dados: '+e.message,'err'); }
 }
 

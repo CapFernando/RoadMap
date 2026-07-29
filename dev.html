@@ -485,6 +485,30 @@ const COLUMNS = [
 // ─── LOAD / SAVE ─────────────────────────────────────────────────
 // Lê o JSON via media type "raw": a Contents API padrão devolve content vazio
 // (encoding "none") para arquivos >1MB — este JSON já passou desse limite.
+// Leitura fresca dos dados.
+// raw.githubusercontent.com serve com Cache-Control max-age=300 e IGNORA
+// cache-buster na query (X-Cache: HIT mesmo com ?t= aleatorio). Isso fazia o
+// painel exibir estado de ate 5 min atras — card "voltava" de coluna depois de
+// publicado — e, pior, a leitura feita ANTES de publicar podia nao ver
+// alteracao recente de outra pessoa e apaga-la. O Worker le pela API
+// autenticada, que nao passa por esse cache.
+//
+// permitirCache=true so para telas de leitura: em fluxo de gravacao, dado
+// velho e pior que erro, entao ali a falha estoura.
+async function lerDados(permitirCache) {
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dados' })
+    });
+    if (r.ok) return await r.json();
+  } catch (_) {}
+  if (!permitirCache) throw new Error('Nao foi possivel ler os dados atualizados. Tente novamente.');
+  const r2 = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+  if (!r2.ok) throw new Error('Falha ao ler dados (HTTP ' + r2.status + ')');
+  return r2.json();
+}
+
 async function ghReadRaw(token) {
   const headers = { Accept: 'application/vnd.github.raw' };
   if (token) headers.Authorization = `token ${token}`;
@@ -536,9 +560,7 @@ async function saveToGitHub(patch, opts = {}) {
       // Lê o estado atual (fresco) e aplica o patch localmente.
       // A leitura NÃO fica em catch silencioso: se falhar, abortamos — antes,
       // um erro aqui deixava server={} e publicava um arquivo quase vazio.
-      const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-      if (!r.ok) throw new Error('Falha ao ler dados atuais (HTTP ' + r.status + ')');
-      const server = await r.json();
+      const server = await lerDados(false);   // gravacao: nunca com dado de cache
       if (!Array.isArray(server.melhorias) || !server.melhorias.length) {
         throw new Error('Gravação abortada por segurança: leitura do servidor veio vazia.');
       }
@@ -641,9 +663,7 @@ async function fetchFreshData() {
     } catch(_) {}
   }
   // Fallback: raw URL (pode ter cache CDN de ~5 min)
-  const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-  if (res.ok) return res.json();
-  return null;
+  try { return await lerDados(true); } catch (_) { return null; }
 }
 
 async function reloadDevList() {
@@ -1487,9 +1507,7 @@ async function forceRefresh() {
 function startPolling() {
   setInterval(async () => {
     try {
-      const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache:'no-store' });
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await lerDados(true);
       if (data.atualizado_em !== _pollTs) applyData(data);
     } catch(_) {}
   }, 60000);

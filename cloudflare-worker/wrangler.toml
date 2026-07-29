@@ -1,0 +1,20 @@
+# Configuração de deploy do Worker.
+#
+# Existe por um motivo concreto: `wrangler deploy` publica exatamente o que este
+# arquivo declara. Sem o bloco [[d1_databases]] abaixo, o deploy REMOVERIA o
+# binding POKER_DB que foi criado pelo painel, e a votação pararia de funcionar.
+#
+# Os SECRETS (GH_TOKEN, ADMIN_SENHA, DEV_SENHA) NÃO entram aqui de propósito:
+# secrets são gerenciados à parte e sobrevivem ao deploy. Declará-los como [vars]
+# os transformaria em texto puro e sobrescreveria os que já existem.
+
+name = "roadmap-nova-melhoria"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Banco da votação do Planning Poker.
+# database_id é preenchido a partir de `wrangler d1 list` (é o UUID do banco).
+[[d1_databases]]
+binding = "POKER_DB"
+database_name = "roadmap_poker"
+database_id = "03dd80b0-ea64-4042-bc23-6e7ee438b7cc"

@@ -973,14 +973,36 @@ function buildDevChart(temas, melhorias) {
   });
 }
 
+// Leitura fresca dos dados.
+// raw.githubusercontent.com serve com Cache-Control max-age=300 e IGNORA
+// cache-buster na query (X-Cache: HIT mesmo com ?t= aleatorio). Isso fazia o
+// painel exibir estado de ate 5 min atras — card "voltava" de coluna depois de
+// publicado — e, pior, a leitura feita ANTES de publicar podia nao ver
+// alteracao recente de outra pessoa e apaga-la. O Worker le pela API
+// autenticada, que nao passa por esse cache.
+//
+// permitirCache=true so para telas de leitura: em fluxo de gravacao, dado
+// velho e pior que erro, entao ali a falha estoura.
+async function lerDados(permitirCache) {
+  try {
+    const r = await fetch(NM_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dados' })
+    });
+    if (r.ok) return await r.json();
+  } catch (_) {}
+  if (!permitirCache) throw new Error('Nao foi possivel ler os dados atualizados. Tente novamente.');
+  const r2 = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+  if (!r2.ok) throw new Error('Falha ao ler dados (HTTP ' + r2.status + ')');
+  return r2.json();
+}
+
 let _pollTs = null;
 
 async function loadData() {
   const app = document.getElementById('app');
   try {
-    const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) throw new Error('Não foi possível carregar os dados.');
-    const data = await res.json();
+    const data = await lerDados(true);
     _pollTs = data.atualizado_em || null;
 
     _temas     = data.temas     || [];
@@ -1088,32 +1110,15 @@ async function forceRefresh() {
   const btn = document.getElementById('btn-refresh');
   if (btn) { btn.textContent = '↻ Atualizando…'; btn.disabled = true; }
   try {
-    // media type "raw": retorna o arquivo direto (até 100MB) e sempre fresco.
-    // Necessário porque o JSON passou de 1MB — a Contents API padrão devolve
-    // content vazio (encoding "none") acima desse limite, o que quebrava o parse.
-    const res = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: { Accept: 'application/vnd.github.raw' }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      applyData(data, { preserveView: true });
-    } else if (res.status === 403 || res.status === 429) {
-      // Rate limit atingido — tenta raw URL como fallback
-      const rawRes = await fetch(RAW_URL + '?nocache=' + Date.now(), { cache: 'no-store' });
-      if (rawRes.ok) {
-        const data = await rawRes.json();
-        applyData(data, { preserveView: true });
-        dashToast('⚠️ Limite de API atingido. Exibindo cache — alterações recentes podem levar até 5 min para aparecer.', 'err');
-      } else {
-        dashToast('⚠️ Limite de requisições atingido. Aguarde alguns minutos e tente novamente.', 'err');
-      }
-    } else {
-      dashToast('⚠️ Erro ao atualizar (HTTP ' + res.status + '). Tente novamente.', 'err');
-    }
-  } catch(_) {
-    // Fallback silencioso em visibilitychange; notifica só quando o usuário clicou
-    if (btn && btn.disabled) dashToast('⚠️ Falha de conexão ao atualizar.', 'err');
+    // Leitura pelo Worker: sem o cache de 5 min da URL raw e sem o limite de
+    // 60 req/h da API anônima, que eram os dois motivos do tratamento anterior.
+    // permitirCache=false porque aqui o usuário clicou pedindo dado atual —
+    // devolver conteúdo velho seria pior que avisar da falha.
+    const data = await lerDados(false);
+    applyData(data, { preserveView: true });
+  } catch(e) {
+    // Silencioso em visibilitychange; avisa só quando o usuário clicou
+    if (btn && btn.disabled) dashToast('⚠️ ' + (e.message || 'Falha ao atualizar.'), 'err');
   }
   if (btn) { btn.textContent = '↻ Atualizar'; btn.disabled = false; }
 }
@@ -1127,9 +1132,7 @@ async function checkForUpdates() {
   if (_polling) return;
   _polling = true;
   try {
-    const res = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) { _polling = false; return; }
-    const data = await res.json();
+    const data = await lerDados(true);
     if (_pollTs !== undefined && data.atualizado_em !== _pollTs) applyData(data, { preserveView: true });
   } catch(_) {}
   _polling = false;
@@ -1771,7 +1774,7 @@ async function saveNovaMelhoria() {
       closeNovaMelhoria();
       nmSucesso();
       // recarrega em segundo plano (pode levar alguns segundos pela CDN)
-      setTimeout(() => { fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok && r.json()).then(d => d && applyData(d, { preserveView: true })).catch(() => {}); }, 2500);
+      setTimeout(() => { lerDados(true).then(d => d && applyData(d, { preserveView: true })).catch(() => {}); }, 1200);
     } else {
       // Fallback: gravação direta com token (admin)
       const shaRes = await fetch(API_URL + '?t=' + Date.now(), {

@@ -6,6 +6,7 @@
 //   • ADMIN_SENHA  → senha do Admin (valida login e publicação)
 //
 // Ações (POST JSON):
+//   • { action:'dados' }                  → le o JSON fresco (sem cache de CDN)
 //   • { action:'auth', senha }            → valida a senha (login do Admin)
 //   • { action:'publish', senha, data }   → grava o estado completo (Admin)
 //   • { action:'dev-publish', senha, data } → grava o estado completo (Painel Dev)
@@ -244,6 +245,22 @@ export default {
       }
 
       return json({ error: 'Acao de poker desconhecida' }, 400, headers);
+    }
+
+    // ── Leitura fresca dos dados ────────────────────────────────────
+    // raw.githubusercontent.com serve com Cache-Control max-age=300 e IGNORA
+    // cache-buster na query (comprovado: X-Cache HIT com ?t= aleatorio). Isso
+    // fazia os paineis lerem estado de ate 5 min atras — o card "voltava" de
+    // coluna depois de publicado, e pior: a leitura feita ANTES de publicar
+    // podia perder alteracao recente de outra pessoa. Aqui a leitura vai pela
+    // API autenticada, que nao passa por esse cache.
+    if (body.action === 'dados') {
+      const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      return new Response(await rawRes.text(), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
+      });
     }
 
     // ── Login do Admin ──

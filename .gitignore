@@ -3,3 +3,6 @@ config.js
 
 # Local Netlify folder
 .netlify
+
+# Estado local do Wrangler
+cloudflare-worker/.wrangler
