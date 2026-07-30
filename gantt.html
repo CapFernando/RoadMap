@@ -456,6 +456,12 @@
     </div>
   </header>
 
+  <div id="g-stale-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:#3D3600;color:#FFE14D;border-bottom:1px solid #6B5F00;padding:10px 24px;font-size:13px">
+    <span>🔄 Há alterações mais novas no servidor (feitas no Admin, no Painel Dev ou por outra pessoa). Esta tela mostra uma versão anterior.</span>
+    <button class="btn btn-secondary btn-sm" onclick="gRecarregarDoServidor()">Atualizar agora</button>
+    <button class="btn btn-secondary btn-sm" onclick="gAvisaDesatualizado(false)">Depois</button>
+  </div>
+
   <div class="indicator-bar" id="indicator-bar"></div>
 
   <div class="filter-bar">
@@ -900,22 +906,102 @@ window.addEventListener('resize', () => {
 
 // ── GITHUB ────────────────────────────────────────────────────────────────
 const _gDeletedIds  = new Set();
+// Retrato de cada melhoria como veio do servidor. Base do merge por campo: sem
+// isso o Gantt publicava sua versao local de TODOS os cards, revertendo o que
+// tinha sido mudado no Admin ou pelo Painel Dev.
+//
+// O que esta aba editou NAO e marcado a mao: o Gantt altera melhoria em uns dez
+// lugares (arrastar, redimensionar, criar, form, voltar ao backlog) e esquecer um
+// deles significaria perder dado silenciosamente. Em vez disso, comparamos com o
+// retrato na hora de publicar — quem difere do retrato foi editado aqui, por
+// definicao.
+let _gBase = new Map();
+function gRetratoBase() {
+  _gBase = new Map((state.melhorias || []).map(m => [m.id, JSON.stringify(m)]));
+}
+const gSemValor = (v) => v === undefined || v === null || v === ''
+                      || (Array.isArray(v) && v.length === 0);
+function gCamposAlterados(local, baseStr) {
+  if (!baseStr) return { ...local };
+  let base;
+  try { base = JSON.parse(baseStr); } catch (_) { return { ...local }; }
+  const patch = {};
+  Object.keys(local).forEach(k => {
+    if (JSON.stringify(local[k]) === JSON.stringify(base[k])) return;
+    if (gSemValor(local[k]) && gSemValor(base[k])) return;   // vazio->vazio nao apaga
+    patch[k] = local[k];
+  });
+  Object.keys(base).forEach(k => { if (!(k in local) && !gSemValor(base[k])) patch[k] = undefined; });
+  return patch;
+}
+// Aplica somente o que esta aba mudou, sobre a versao atual do servidor.
+function gMesclaMelhorias(serverMelhorias) {
+  const localById = new Map(state.melhorias.map(m => [m.id, m]));
+  const vistos = new Set();
+  const merged = [];
+  (serverMelhorias || []).forEach(sm => {
+    if (_gDeletedIds.has(sm.id)) return;
+    vistos.add(sm.id);
+    const local = localById.get(sm.id);
+    const baseStr = _gBase.get(sm.id);
+    // intocado nesta aba (igual ao retrato) -> adota a versao do servidor
+    if (!local || (baseStr && JSON.stringify(local) === baseStr)) { merged.push(sm); return; }
+    const patch = gCamposAlterados(local, baseStr);
+    if (!Object.keys(patch).length) { merged.push(sm); return; }
+    const obj = { ...sm };
+    Object.keys(patch).forEach(k => { if (patch[k] === undefined) delete obj[k]; else obj[k] = patch[k]; });
+    merged.push(obj);
+  });
+  state.melhorias.forEach(m => { if (!vistos.has(m.id) && !_gDeletedIds.has(m.id)) merged.push(m); });
+  return merged;
+}
+// Ha edicao local nao publicada? (usado para nao recarregar por cima)
+function gTemPendencia() {
+  return state.melhorias.some(m => {
+    const b = _gBase.get(m.id);
+    return !b || JSON.stringify(m) !== b;
+  }) || _gDeletedIds.size > 0;
+}
 const _gDeletedDevs = new Set(); // devs explicitamente removidos — nunca re-merge do servidor
 let   _saveTimer   = null;
 let   _ganttPollActive = false;
+// Avisa que o servidor avancou mas ha edicao local nao publicada aqui.
+function gAvisaDesatualizado(mostrar) {
+  const el = document.getElementById('g-stale-banner');
+  if (el) el.style.display = mostrar ? 'flex' : 'none';
+}
+async function gRecarregarDoServidor() {
+  if (gTemPendencia() &&
+      !confirm('Esta tela tem alteracoes ainda nao salvas. Atualizar vai descartar essas alteracoes e trazer a versao do servidor. Continuar?')) return;
+  _gDeletedIds.clear();
+  gAvisaDesatualizado(false);
+  await loadFromGitHub();
+  toast('Atualizado com a versao do servidor.', 'ok');
+}
+
+// No modo senha o fileSha fica nulo, e com o `!fileSha` esta funcao saia sempre:
+// o Gantt nunca se atualizava sozinho e uma aba aberta de manha seguia mostrando
+// (e publicando) o estado daquela hora. Agora compara atualizado_em, como o Admin.
+let _gPollTs = null;
 async function ganttCheckUpdates() {
   if (document.getElementById('gantt-app').style.display === 'none') return;
-  if (_ganttPollActive || _saveTimer || !fileSha) return;
+  if (_ganttPollActive || _saveTimer) return;
   _ganttPollActive = true;
   try {
-    const res = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
-    });
-    if (res.ok) {
-      const json = await res.json();
-      if (json.sha !== fileSha) await loadFromGitHub();
+    let novo = false;
+    if (runtimeToken) {
+      const res = await fetch(API_URL + '?t=' + Date.now(), {
+        cache: 'no-store',
+        headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
+      });
+      if (res.ok) { const json = await res.json(); novo = !!fileSha && json.sha !== fileSha; }
+    } else {
+      const d = await lerDados(true);
+      novo = _gPollTs !== null && d.atualizado_em !== _gPollTs;
     }
+    if (novo && gTemPendencia())  gAvisaDesatualizado(true);   // nunca por cima do que nao foi salvo
+    else if (novo)                await loadFromGitHub();
+    else                          gAvisaDesatualizado(false);
   } catch(_) {}
   _ganttPollActive = false;
 }
@@ -1035,6 +1121,9 @@ async function loadFromGitHub() {
         m.status = spToStatus('planejado');
       }
     });
+    gRetratoBase();   // base do merge por campo (depois da auto-promoção)
+    _gPollTs = decoded.atualizado_em || null;
+    _ausenciasTocadas = false;
     renderAll();
   } catch(e) {
     toast(e.message, 'err');
@@ -1042,7 +1131,7 @@ async function loadFromGitHub() {
   }
 }
 
-async function saveToGitHub() {
+async function saveToGitHub(tentativa = 1) {
   if (VIEWER_MODE) return;
   showSaving(true);
   try {
@@ -1063,10 +1152,11 @@ async function saveToGitHub() {
     // A leitura NÃO fica em catch silencioso: se falhar, o save é abortado —
     // nunca gravamos por cima de dados que não conseguimos ler (evita zerar o arquivo).
     const serverData = runtimeToken ? await ghReadRaw(runtimeToken) : await readPublic();
-    const localMelhoriaIds = new Set(state.melhorias.map(m => m.id));
-    const localTemaIds     = new Set(state.temas.map(t => t.id));
-    (serverData.temas     || []).forEach(t => { if (!localTemaIds.has(t.id)     && !_gDeletedIds.has(t.id)) state.temas.push(t); });
-    (serverData.melhorias || []).forEach(m => { if (!localMelhoriaIds.has(m.id) && !_gDeletedIds.has(m.id)) state.melhorias.push(m); });
+    const localTemaIds = new Set(state.temas.map(t => t.id));
+    (serverData.temas || []).forEach(t => { if (!localTemaIds.has(t.id) && !_gDeletedIds.has(t.id)) state.temas.push(t); });
+    // 3-way merge por campo (ver gMesclaMelhorias): so o que esta aba alterou
+    state.melhorias = gMesclaMelhorias(serverData.melhorias);
+    const baseVersao = serverData.atualizado_em || null;
     // Merge de desenvolvedores: preserva devs do servidor, mas respeita remoções explícitas
     const devSet = new Set(state.desenvolvedores.flatMap(d => splitDevs(d)));
     (serverData.desenvolvedores || []).forEach(d =>
@@ -1093,14 +1183,32 @@ async function saveToGitHub() {
     if (!runtimeToken) {
       const res = await fetch(PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'publish', senha: _ganttPw, data: state })
+        body: JSON.stringify({ action: 'publish', senha: _ganttPw, data: state, base: baseVersao })
       });
       if (!res.ok) {
+        let corpo = null;
+        try { corpo = await res.json(); } catch (_) {}
+        // Conflito: outra tela publicou entre a leitura e a gravação. O merge é
+        // por campo, então refazer sobre a versão nova reaplica só o que esta
+        // aba mudou — seguro e invisível. Uma tentativa extra basta.
+        if (res.status === 409 && corpo && corpo.error === 'conflito' && tentativa === 1) {
+          showSaving(false);
+          return saveToGitHub(2);
+        }
         let msg = 'HTTP ' + res.status;
-        try { msg = (await res.json()).error || msg; } catch (_) {}
-        if (res.status === 401) msg = 'Sessão expirada. Saia e entre novamente.';
+        if (corpo) {
+          msg = corpo.error === 'senha' || res.status === 401 ? 'Sessão expirada. Saia e entre novamente.'
+              : corpo.error === 'recarregue' ? (corpo.detail || 'Recarregue a página.')
+              : corpo.error === 'conflito'   ? 'Outra tela publicou ao mesmo tempo. Salve novamente.'
+              : (corpo.detail || corpo.error || msg);
+        }
         throw new Error(msg);
       }
+      gRetratoBase();               // publicado: o local passa a ser a base
+      _ausenciasTocadas = false;
+      _gDeletedIds.clear();
+      _gPollTs = state.atualizado_em || null;
+      gAvisaDesatualizado(false);
       toast('Salvo com sucesso!', 'ok');
       return;
     }

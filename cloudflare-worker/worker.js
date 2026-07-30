@@ -54,6 +54,29 @@ function gravacaoSuspeita(data, tamanhoAtual) {
   return null;
 }
 
+// Controle de concorrencia. O cliente informa em `base` o `atualizado_em` que ele
+// leu antes de editar. Se o arquivo no servidor ja avancou, a gravacao e recusada
+// com 409 e o cliente refaz o merge sobre a versao nova. Sem isto o ultimo a
+// gravar vencia em silencio, e era assim que movimentacoes desapareciam: uma aba
+// aberta minutos antes publicava seu estado antigo por cima do de todo mundo.
+//
+// `base` ausente tambem e recusado: pagina antiga em cache e justamente o caso
+// perigoso. O erro pede recarregar, em vez de deixar sobrescrever.
+async function conflito(gh, body, headers) {
+  const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+                          { headers: { Accept: 'application/vnd.github.raw' } });
+  if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+  let atual = null;
+  try { atual = JSON.parse(await rawRes.text()).atualizado_em || null; } catch (_) {}
+  if (!body.base) {
+    return json({ error: 'recarregue', detail: 'Esta aba esta desatualizada. Recarregue a pagina (F5) e refaca a acao.', atual }, 409, headers);
+  }
+  if (atual && body.base !== atual) {
+    return json({ error: 'conflito', detail: 'Outra tela publicou depois que esta carregou.', atual }, 409, headers);
+  }
+  return null;
+}
+
 function toB64(str) {
   const bytes = new TextEncoder().encode(str);
   let bin = ''; const CHUNK = 0x8000;
@@ -349,6 +372,8 @@ export default {
       const file = await getRes.json();
       const risco = gravacaoSuspeita(data, file.size || 0);
       if (risco) return json({ error: risco }, 409, headers);
+      const conf = await conflito(gh, body, headers);
+      if (conf) return conf;
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -382,6 +407,8 @@ export default {
       const file = await getRes.json();
       const risco = gravacaoSuspeita(data, file.size || 0);
       if (risco) return json({ error: risco }, 409, headers);
+      const confDev = await conflito(gh, body, headers);
+      if (confDev) return confDev;
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',

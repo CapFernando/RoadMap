@@ -1180,12 +1180,16 @@ function mesclaMelhorias(serverMelhorias) {
   return merged;
 }
 
-async function saveViaProxy() {
+async function saveViaProxy(tentativa = 1) {
   showSaving(true);
   try {
     // Lê o estado atual do servidor (público) e incorpora itens de terceiros
     let server = {};
     server = await lerDados(false);   // gravacao: nunca com dado de cache
+    // Versão sobre a qual este merge foi feito. Vai no payload: se o servidor
+    // avançar entre esta leitura e a gravação, ele recusa com 409 em vez de
+    // deixar a nossa versão sobrescrever a de outra tela.
+    const baseVersao = server.atualizado_em || null;
     const localT = new Set(state.temas.map(t => t.id));
     (server.temas || []).forEach(t => { if (!localT.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t); });
     state.melhorias = mesclaMelhorias(server.melhorias);
@@ -1203,11 +1207,26 @@ async function saveViaProxy() {
 
     const res = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'publish', senha: _adminPw, data: state })
+      body: JSON.stringify({ action: 'publish', senha: _adminPw, data: state, base: baseVersao })
     });
     if (!res.ok) {
+      let corpo = null;
+      try { corpo = await res.json(); } catch (_) {}
+      // Conflito: alguém publicou no meio do caminho. Como o merge é por campo,
+      // refazer sobre a versão nova é seguro e invisível — só as alterações
+      // desta tela são reaplicadas. Uma tentativa extra basta; insistir em
+      // loop esconderia um problema real.
+      if (res.status === 409 && corpo && corpo.error === 'conflito' && tentativa === 1) {
+        showSaving(false);
+        return saveViaProxy(2);
+      }
       let msg = 'Falha ao publicar';
-      try { const e = await res.json(); msg = e.error === 'senha' ? 'Sessão expirada — saia e entre novamente.' : (e.error || msg); } catch (_) {}
+      if (corpo) {
+        msg = corpo.error === 'senha'     ? 'Sessão expirada — saia e entre novamente.'
+            : corpo.error === 'recarregue' ? (corpo.detail || 'Recarregue a página.')
+            : corpo.error === 'conflito'   ? 'Outra tela publicou ao mesmo tempo. Tente publicar novamente.'
+            : (corpo.detail || corpo.error || msg);
+      }
       throw new Error(msg);
     }
     _pollTs = state.atualizado_em;

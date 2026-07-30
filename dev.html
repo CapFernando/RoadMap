@@ -707,13 +707,27 @@ async function saveToGitHub(patch, opts = {}) {
         if (p && p.id && typeof p.titulo === 'string' && p.titulo.trim()) server.melhorias.push(p);
       });
       if (opts.temas !== undefined) server.temas = opts.temas;
+      // Versao sobre a qual o patch foi aplicado (leitura fresca, logo acima)
+      const baseVersao = server.atualizado_em || null;
       const res = await fetch(ADMIN_PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'dev-publish', senha: _devPw, data: server })
+        body: JSON.stringify({ action: 'dev-publish', senha: _devPw, data: server, base: baseVersao })
       });
       if (!res.ok) {
+        let corpo = null;
+        try { corpo = await res.json(); } catch (_) {}
+        // Conflito: alguem gravou entre a leitura e o PUT. O patch e aplicado
+        // sobre a leitura fresca, entao repetir a operacao inteira e seguro.
+        if (res.status === 409 && corpo && corpo.error === 'conflito' && !opts._retry) {
+          showSaving(false);
+          return saveToGitHub(patch, { ...opts, _retry: true });
+        }
         let msg = 'Falha ao salvar';
-        try { const e = await res.json(); msg = e.error || msg; } catch (_) {}
+        if (corpo) {
+          msg = corpo.error === 'recarregue' ? (corpo.detail || 'Recarregue a pagina.')
+              : corpo.error === 'conflito'   ? 'Outra tela gravou ao mesmo tempo. Tente novamente.'
+              : (corpo.detail || corpo.error || msg);
+        }
         // 401 = senha invalida ou sessao expirada: orienta em vez de mostrar "senha"
         if (res.status === 401) msg = 'Sessão expirada. Recarregue a página e informe a senha novamente.';
         throw new Error(msg);
