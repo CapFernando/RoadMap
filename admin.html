@@ -2061,6 +2061,14 @@ function gerSemanaIndex(dataStr, semanas) {
 // Data que define a qual semana/mês os pontos de um card pertencem.
 function gerDataRefPontos(m) { return m.entrega || m.inicio || ''; }
 
+// Demandas pontuadas que ainda não foram agendadas. Sem data não há como dizer
+// a que mês/semana pertencem, então elas não entram na distribuição — mas também
+// não podem simplesmente desaparecer do relatório, senão pontuar no Planning
+// Poker antes de planejar dá a impressão de que a pontuação não foi gravada.
+function gerPontuadasSemData() {
+  return (state.melhorias || []).filter(m => Number(m.poker_pontos) > 0 && !gerDataRefPontos(m));
+}
+
 // Cards pontuados no Planning Poker cuja data de referência cai no mês/ano.
 function gerItensPontuados(ano, mes1) {
   return (state.melhorias || []).filter(m => {
@@ -2272,9 +2280,22 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
 
   const totalPts = itens.reduce((s, m) => s + Number(m.poker_pontos), 0);
 
+  // Aviso sobre pontuadas ainda sem data: elas não têm mês, então aparecem
+  // sempre, independente do período escolhido.
+  const semData = gerPontuadasSemData();
+  const semDataPts = semData.reduce((s, m) => s + Number(m.poker_pontos), 0);
+  const avisoSemData = semData.length ? `<div class="ger-empty-box" style="grid-column:1/-1;text-align:left;border-color:var(--amber,#E89C2F)">
+    <b style="color:var(--text)">⚠ ${semData.length} demanda${semData.length!==1?'s':''} pontuada${semData.length!==1?'s':''} sem data de início/entrega (${semDataPts} pt)</b><br>
+    Sem data não é possível dizer a que semana ou mês pertencem, então não entram
+    na distribuição acima. Preencha início/entrega no card para que passem a contar.
+    <div style="margin-top:10px">${semData.map(m =>
+      `<div style="color:var(--text2);margin-bottom:3px">• ${esc(m.titulo || '(sem título)')} — <b style="color:var(--text)">${m.poker_pontos} pt</b>${m.dev ? ' · ' + esc(m.dev) : ''}</div>`
+    ).join('')}</div>
+  </div>` : '';
+
   if (!itens.length) {
     elSum.innerHTML = '';
-    elCharts.innerHTML = `<div class="ger-empty-box" style="grid-column:1/-1">
+    elCharts.innerHTML = avisoSemData + `<div class="ger-empty-box" style="grid-column:1/-1">
       Nenhuma demanda pontuada com entrega neste período.<br>
       Os pontos aparecem aqui depois de votar no <b>Planning Poker</b> e usar <b>“Gravar no card”</b>.
     </div>`;
@@ -2365,6 +2386,7 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
     defs.push({ id:'chart-pts-sprint', title:'Pontos por Sprint (TOP)', data: porSprintOrd });
   }
   gerRenderPies('ger-pts-charts', defs, ' pt');
+  if (avisoSemData) elCharts.insertAdjacentHTML('beforeend', avisoSemData);
 
   // ── Matriz dev × semana ──
   const cols = semanas.map((_, i) => 'S' + (i+1));
