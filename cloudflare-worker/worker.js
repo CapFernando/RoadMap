@@ -207,7 +207,16 @@ export default {
         if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
         const viva = await db.prepare(
           'SELECT codigo FROM poker_sessao WHERE expira_em > ? ORDER BY criado_em DESC LIMIT 1').bind(iso).first();
-        if (viva && !body.nova) return json({ ok: true, codigo: viva.codigo }, 200, headers);
+        if (viva && !body.nova) {
+          // Reaproveita a sala, mas ZERA a rodada: abrir a sala e o inicio de uma
+          // reuniao, e a media/pontos da reuniao anterior apareciam preenchidos.
+          // Um refresh de pagina nao passa por aqui (vai direto no poker-estado
+          // com o codigo guardado), entao recarregar no meio de uma votacao nao
+          // perde a rodada em andamento.
+          await db.prepare("UPDATE poker_sessao SET melhoria_id = '', revelado = 0 WHERE codigo = ?").bind(viva.codigo).run();
+          await db.prepare('DELETE FROM poker_voto WHERE codigo = ?').bind(viva.codigo).run();
+          return json({ ok: true, codigo: viva.codigo }, 200, headers);
+        }
         const codigo = pokerCodigo();
         const expira = new Date(agora.getTime() + POKER_TTL_H * 3600 * 1000).toISOString();
         await db.prepare('INSERT INTO poker_sessao (codigo, melhoria_id, revelado, criado_em, expira_em) VALUES (?,?,0,?,?)')
@@ -257,6 +266,12 @@ export default {
         // faxina: registro sem sinal de vida ha muito tempo nao volta mais
         const velho = new Date(agora.getTime() - 2 * 3600 * 1000).toISOString();
         await db.prepare('DELETE FROM poker_participante WHERE codigo = ? AND visto_em < ?').bind(codigo, velho).run();
+        // O voto do participante removido ficava na base e seguia contando: a mesa
+        // aparecia vazia e o placar mostrava "5 votos" com media de gente que nao
+        // esta mais na sala. Voto sem participante e apagado junto.
+        await db.prepare(
+          'DELETE FROM poker_voto WHERE codigo = ? AND participante NOT IN (SELECT id FROM poker_participante WHERE codigo = ?)'
+        ).bind(codigo, codigo).run();
 
         const est = await pokerEstado(db, codigo);
         if (!est) return json({ error: 'Sessao nao encontrada' }, 404, headers);
@@ -292,6 +307,14 @@ export default {
         const mid = String(body.melhoria_id || '');
         await db.prepare('UPDATE poker_sessao SET melhoria_id = ?, revelado = 0 WHERE codigo = ?').bind(mid, codigo).run();
         await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ?').bind(codigo, mid).run();
+        return json({ ok: true, estado: await pokerEstado(db, codigo) }, 200, headers);
+      }
+
+      // Zera tudo: sai da pauta, esconde resultado e apaga os votos da sessao.
+      if (body.action === 'poker-zerar') {
+        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+        await db.prepare("UPDATE poker_sessao SET melhoria_id = '', revelado = 0 WHERE codigo = ?").bind(codigo).run();
+        await db.prepare('DELETE FROM poker_voto WHERE codigo = ?').bind(codigo).run();
         return json({ ok: true, estado: await pokerEstado(db, codigo) }, 200, headers);
       }
 

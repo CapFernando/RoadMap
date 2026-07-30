@@ -180,6 +180,7 @@
       <div style="text-align:center;margin-top:18px;display:none" id="controles">
         <button class="btn btn-primary" onclick="revelar()" id="btn-revelar">👁 Voto finalizado — revelar</button>
         <button class="btn btn-secondary" onclick="revotar()" id="btn-revotar">↻ Votar de novo</button>
+        <button class="btn btn-secondary" onclick="zerarValores()" id="btn-zerar" title="Sai da pauta, esconde o resultado e apaga os votos da sala">⌫ Zerar valores</button>
       </div>
     </div>
   </div>
@@ -523,6 +524,24 @@ async function revotar() {
   if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao reiniciar.', 'err'); return; }
   _meuVoto = '';
   aplicar(r.body.estado);
+}
+
+// Limpa a sala inteira: nenhuma demanda em pauta, resultado escondido e votos
+// apagados. Serve para comecar uma reuniao do zero sem esperar a sessao expirar.
+async function zerarValores() {
+  if (!_facilitador) return;
+  if (!confirm('Zerar a sala? Sai da pauta atual, esconde o resultado e apaga os votos desta sessão.')) return;
+  _mutSeq++;
+  const r = await api({ action: 'poker-zerar', codigo: _codigo, senha: _senha });
+  if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao zerar.', 'err'); return; }
+  _meuVoto = '';
+  // os campos de gravar sao preenchidos pela media; sem rodada, voltam a vazio
+  ['in-media','in-pontos'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; delete el.dataset.tocado; }
+  });
+  aplicar(r.body.estado);
+  toast('Sala zerada.', 'ok');
 }
 
 async function porEmPauta(id) {
