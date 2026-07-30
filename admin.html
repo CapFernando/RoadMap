@@ -876,6 +876,9 @@ let _pendingEdits = false; // há edições locais não publicadas? protege cont
 // acrescentava itens ausentes — então qualquer aba com dados carregados antes
 // da edição de outra pessoa sobrescrevia essa edição ao publicar a própria.
 let _dirtyMelhoriaIds = new Set();
+// Retrato de cada melhoria como veio do servidor. Base do merge por campo: sem
+// ele nao ha como distinguir "mudei este campo" de "meu objeto esta velho".
+let _baseMelhorias = new Map();
 async function adminCheckUpdates() {
   if (document.getElementById('admin-app').style.display === 'none') return;
   if (_adminPollActive) return;
@@ -987,7 +990,10 @@ async function loadFromGitHub(silent) {
       melhorias:      decoded.melhorias       || [],
       desenvolvedores: decoded.desenvolvedores || [],
       feriados:       decoded.feriados        || [],
+      ausencias:      decoded.ausencias       || [],
     };
+    retratoBase();          // base do merge por campo
+    _dirtyMelhoriaIds.clear();
     renderAll();
     restoreLastTab();
   } catch (e) {
@@ -1010,6 +1016,47 @@ async function loadFromGitHub(silent) {
 // publicar a própria (foi o que causou cards "voltando" sozinhos no Kanban:
 // confirmado comparando dois commits de publish seguidos, 13s um do outro,
 // onde o segundo revertia o campo que o primeiro tinha acabado de gravar).
+// Manter a versão local INTEIRA dos ids editados ainda perdia dados: "editado"
+// significa "mexi em algum campo aqui", e o objeto local vencia em TODOS os
+// campos — inclusive nos que esta aba nunca tocou e nem conhece. Foi o que apagou
+// a pontuação do Planning Poker: o poker-gravar escreve poker_pontos direto no
+// arquivo, por fora do Admin; uma aba aberta antes disso, ao arrastar o card no
+// Kanban (que marca o id como editado), republicava seu objeto antigo — sem os
+// pontos — e levava embora também tipo, solicitante e a descrição mais nova.
+// (Confirmado: o publish das 16:05 reverteu 2 dos 3 cards pontuados às 13:36.)
+//
+// Agora o merge é por CAMPO: guarda-se um retrato de cada melhoria como veio do
+// servidor (_baseMelhorias) e publica-se apenas a diferença local em cima da
+// versão atual do servidor. Um arraste no Kanban passa a alterar só o status.
+function retratoBase() {
+  _baseMelhorias = new Map((state.melhorias || []).map(m => [m.id, JSON.stringify(m)]));
+}
+
+// "Sem valor" nas suas várias formas. Um campo que estava vazio no retrato e
+// continua vazio localmente não é uma alteração — é ausência de informação.
+const semValor = (v) => v === undefined || v === null || v === '';
+
+// Campos que esta aba realmente mudou em relação ao retrato do servidor.
+function camposAlterados(local, baseStr) {
+  if (!baseStr) return { ...local };            // sem retrato: item novo, vai inteiro
+  let base;
+  try { base = JSON.parse(baseStr); } catch (_) { return { ...local }; }
+  const patch = {};
+  Object.keys(local).forEach(k => {
+    if (JSON.stringify(local[k]) === JSON.stringify(base[k])) return;
+    // vazio -> vazio nunca apaga o servidor. É o caso do formulário do Admin
+    // numa aba antiga: o campo de pontos abre em branco (o objeto local nem
+    // tinha a chave) e salvar gravava null em cima da pontuação do poker.
+    // Limpar de verdade continua valendo: aí o retrato TINHA valor.
+    if (semValor(local[k]) && semValor(base[k])) return;
+    patch[k] = local[k];
+  });
+  // Campo apagado de propósito nesta aba (existia no retrato COM valor e não
+  // existe mais localmente). Se o retrato já estava vazio, não há o que apagar.
+  Object.keys(base).forEach(k => { if (!(k in local) && !semValor(base[k])) patch[k] = undefined; });
+  return patch;
+}
+
 function mesclaMelhorias(serverMelhorias) {
   const localById = new Map(state.melhorias.map(m => [m.id, m]));
   const vistos = new Set();
@@ -1017,7 +1064,14 @@ function mesclaMelhorias(serverMelhorias) {
   (serverMelhorias || []).forEach(sm => {
     if (_deletedIds.has(sm.id)) return;
     vistos.add(sm.id);
-    merged.push(_dirtyMelhoriaIds.has(sm.id) && localById.has(sm.id) ? localById.get(sm.id) : sm);
+    const local = localById.get(sm.id);
+    if (!_dirtyMelhoriaIds.has(sm.id) || !local) { merged.push(sm); return; }
+    const patch = camposAlterados(local, _baseMelhorias.get(sm.id));
+    const obj = { ...sm };
+    Object.keys(patch).forEach(k => {
+      if (patch[k] === undefined) delete obj[k]; else obj[k] = patch[k];
+    });
+    merged.push(obj);
   });
   state.melhorias.forEach(m => { if (!vistos.has(m.id) && !_deletedIds.has(m.id)) merged.push(m); });
   return merged;
@@ -1054,7 +1108,7 @@ async function saveViaProxy() {
       throw new Error(msg);
     }
     _pollTs = state.atualizado_em;
-    _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear();
+    _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase();
     const errEl = document.getElementById('save-error'); if (errEl) errEl.style.display = 'none';
     toast('✅ Publicado!', 'ok');
   } catch (e) {
@@ -1134,7 +1188,7 @@ async function saveToGitHub(attempt = 1) {
     }
     const data = await res.json();
     fileSha = data.content.sha;
-    _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); // tudo publicado
+    _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase(); // tudo publicado
     toast('✅ Publicado!', 'ok');
   } catch (e) {
     showSaving(false);
