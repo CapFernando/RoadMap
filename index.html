@@ -1016,7 +1016,12 @@ async function forceRefresh() {
   if (btn) { btn.textContent = '↻ Atualizar'; btn.disabled = false; }
 }
 
-loadData();
+// A carga inicial fica no FIM do script, nao aqui. NM_PROXY_URL e declarado com
+// `const` mais abaixo: chamar loadData() neste ponto acessava a constante antes da
+// inicializacao, o que lanca ReferenceError. O erro era engolido no catch de
+// lerDados e a pagina caia no fallback da URL raw publica — ou seja, o painel
+// publico NUNCA usava o Worker no primeiro carregamento, buscava o JSON publico a
+// cada acesso. Ficou invisivel enquanto o arquivo era publico.
 
 // ── SYNC ──────────────────────────────────────────────────────────────
 // Polling em background usa raw URL (sem rate limit) — aceita até ~5min de delay de CDN
@@ -1576,6 +1581,9 @@ async function saveNovaMelhoria() {
   }
   btn.disabled = false; btn.textContent = 'Criar no Backlog';
 }
+
+// Carga inicial — aqui todas as constantes (NM_PROXY_URL) ja existem.
+loadData();
 </script>
 </body>
 </html>
