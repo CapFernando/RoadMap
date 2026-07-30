@@ -221,6 +221,13 @@
     .ger-section-hint { font-size:12px; font-weight:500; color:var(--text3); }
     .ger-section-sep { border-top:1px solid var(--border); margin:32px 0 20px; }
     /* Relatórios */
+    .rel-grupo { margin-bottom: 20px; }
+    .rel-grupo-head {
+      display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.08em; color:var(--text3);
+      padding:6px 0 5px; border-bottom:1px solid var(--border); margin-bottom:9px;
+    }
+    .rel-grupo-n { font-weight:600; background:var(--bg3); border-radius:10px; padding:1px 9px; letter-spacing:0; }
     .rel-card {
       background:var(--bg2); border:1px solid var(--border); border-radius:12px;
       padding:14px 16px; margin-bottom:10px;
@@ -545,6 +552,14 @@
 
       <div id="ger-summary" class="ger-summary"></div>
       <div id="ger-charts" class="ger-charts"></div>
+
+      <!-- Veio do painel público: alocação por pessoa não deve ficar num painel
+           aberto, mas é informação de gestão — o lugar dela é aqui. -->
+      <div class="ger-chart-box" id="ger-dev-box" style="margin-bottom:32px">
+        <div class="ger-chart-title">Demandas por desenvolvedor <span style="font-weight:400;color:var(--text3)">(empilhado por tema, no mês filtrado)</span></div>
+        <div id="ger-dev-wrap" style="position:relative"><canvas id="ger-chart-dev"></canvas></div>
+        <div class="ger-legend" id="ger-dev-leg"></div>
+      </div>
 
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
@@ -2416,6 +2431,9 @@ function renderGerencial() {
 
   gerRenderPies('ger-charts', chartDefs, 'h');
 
+  // ── Demandas por desenvolvedor (barra empilhada por tema) ────────
+  renderGerDevChart(items, splitDevsLocal);
+
   // ── Pontos do Planning Poker (mesmo filtro de período) ───────────
   renderGerPontos(ano, mes, temaMap, splitDevsLocal);
 
@@ -2609,6 +2627,77 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
   </tr>`;
 }
 
+// Barra horizontal empilhada: uma linha por dev, uma cor por tema. Saiu do
+// painel público (expunha a alocação de cada pessoa) e passou a viver aqui.
+function renderGerDevChart(items, splitDevs) {
+  const box = document.getElementById('ger-dev-box');
+  if (!box) return;
+  const devs = [...new Set(items.flatMap(m => splitDevs(m.dev)))]
+    .filter(d => d && d !== 'Sem dev').sort();
+  const leg = document.getElementById('ger-dev-leg');
+
+  if (!devs.length) {
+    document.getElementById('ger-dev-wrap').innerHTML = '<div class="ger-chart-empty">Sem demandas com dev no período</div>';
+    if (leg) leg.innerHTML = '';
+    return;
+  }
+  // canvas precisa ser recriado: gerDestroyCharts destruiu a instância anterior
+  document.getElementById('ger-dev-wrap').innerHTML = '<canvas id="ger-chart-dev"></canvas>';
+  document.getElementById('ger-dev-wrap').style.height = Math.max(160, devs.length * 42) + 'px';
+
+  const temas = state.temas || [];
+  const cont = (dev, temaId) => items.filter(m =>
+    splitDevs(m.dev).includes(dev) && (temaId === null ? !temas.find(t => t.id === m.tema_id) : m.tema_id === temaId)).length;
+
+  const datasets = temas.map((t, i) => ({
+    label: t.nome,
+    data: devs.map(d => cont(d, t.id)),
+    backgroundColor: GER_COLORS[i % GER_COLORS.length],
+    borderWidth: 0, borderRadius: 3,
+  })).filter(ds => ds.data.some(v => v > 0));
+
+  const semTema = devs.map(d => cont(d, null));
+  if (semTema.some(v => v > 0)) {
+    datasets.push({ label: 'Sem tema', data: semTema, backgroundColor: '#4A4A46', borderWidth: 0, borderRadius: 3 });
+  }
+
+  gerCharts['ger-chart-dev'] = new Chart(document.getElementById('ger-chart-dev'), {
+    type: 'bar',
+    data: { labels: devs, datasets },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, ticks: { color: '#6E6A62', stepSize: 1, precision: 0 },
+             grid: { color: '#2E2E2B' }, border: { color: '#2E2E2B' } },
+        y: { stacked: true, ticks: { color: '#A8A49A', font: { size: 13 } },
+             grid: { display: false }, border: { display: false } },
+      },
+      plugins: {
+        legend: { display: false },
+        datalabels: { display: false },
+        tooltip: {
+          backgroundColor: '#1E1E1C', titleColor: '#ECEAE2', bodyColor: '#A8A49A',
+          borderColor: '#2E2E2B', borderWidth: 1,
+          callbacks: { title: c => c[0].label,
+                       label: c => c.parsed.x > 0 ? ` ${c.dataset.label}: ${c.parsed.x}` : null },
+        },
+      },
+    },
+  });
+
+  if (leg) {
+    leg.innerHTML = datasets.map(ds => {
+      const total = ds.data.reduce((s, v) => s + v, 0);
+      return `<div class="ger-legend-item">
+        <span class="ger-legend-dot" style="background:${ds.backgroundColor}"></span>
+        <span class="ger-legend-name">${esc(ds.label)}</span>
+        <span class="ger-legend-val">${total}</span>
+        <span class="ger-legend-pct"></span>
+      </div>`;
+    }).join('');
+  }
+}
+
 // ─── RELATÓRIOS (comitê de produto) ───────────────────────────────
 // Semana = segunda a domingo. "Entregues na semana anterior" olha a data de
 // entrega dos concluídos; "em desenvolvimento nesta semana" são os itens em
@@ -2723,11 +2812,43 @@ function renderRelatorios() {
 
   const vazio = (txt) => `<div class="ger-empty-box">${txt}</div>`;
   document.getElementById('rel-entregues').innerHTML = entregues.length
-    ? entregues.map(m => relCardHTML(m, 'entregues')).join('')
+    ? relAgrupadoHTML(entregues, 'entregues')
     : vazio('Nenhuma demanda com entrega registrada na semana anterior.');
   document.getElementById('rel-andamento').innerHTML = andamento.length
-    ? andamento.map(m => relCardHTML(m, 'andamento')).join('')
+    ? relAgrupadoHTML(andamento, 'andamento')
     : vazio('Nenhuma demanda em andamento nesta semana.');
+}
+
+// Agrupa por tema, na mesma ordem do cadastro de temas (igual à lista de
+// Melhorias e ao painel público), com o total de cada tema no cabeçalho.
+function relAgrupaPorTema(lista) {
+  const ordem = (state.temas || []).map(t => t.id);
+  const grupos = new Map();
+  lista.forEach(m => {
+    const k = m.tema_id || '__sem__';
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(m);
+  });
+  return [...grupos.entries()].sort((a, b) => {
+    const ia = ordem.indexOf(a[0]), ib = ordem.indexOf(b[0]);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  }).map(([k, itens]) => ({
+    nome: k === '__sem__' ? 'Sem tema' : ((state.temas || []).find(t => t.id === k)?.nome || '—'),
+    itens
+  }));
+}
+
+function relAgrupadoHTML(lista, modo) {
+  return relAgrupaPorTema(lista).map(g => `<div class="rel-grupo">
+    <div class="rel-grupo-head">
+      <span>${esc(g.nome)}</span>
+      <span class="rel-grupo-n">${g.itens.length}</span>
+    </div>
+    ${g.itens.map(m => relCardHTML(m, modo)).join('')}
+  </div>`).join('');
 }
 
 // Texto corrido para colar na ata/apresentação do comitê.
@@ -2744,15 +2865,20 @@ function relTexto(secao) {
     linhas.push(`  O que foi implementado: ${impl || '(não informado pelo dev)'}`);
     return linhas.join('\n');
   };
+  // Mesma quebra por tema da tela, para a ata sair na ordem em que foi apresentada
+  const porTema = (lista, modo) => relAgrupaPorTema(lista)
+    .map(g => `[${g.nome}] — ${g.itens.length}\n` + g.itens.map(m => bloco(m, modo)).join('\n\n'))
+    .join('\n\n');
+
   const partes = [];
   if (secao !== 'andamento') {
     partes.push(`ENTREGUES NA SEMANA ANTERIOR (${formatDate(C)} a ${formatDate(D)}) — ${entregues.length}`);
-    partes.push(entregues.length ? entregues.map(m => bloco(m, 'entregues')).join('\n\n') : '(nenhuma)');
+    partes.push(entregues.length ? porTema(entregues, 'entregues') : '(nenhuma)');
   }
   if (secao !== 'entregues') {
     if (partes.length) partes.push('');
     partes.push(`EM DESENVOLVIMENTO NESTA SEMANA (${formatDate(A)} a ${formatDate(B)}) — ${andamento.length}`);
-    partes.push(andamento.length ? andamento.map(m => bloco(m, 'andamento')).join('\n\n') : '(nenhuma)');
+    partes.push(andamento.length ? porTema(andamento, 'andamento') : '(nenhuma)');
   }
   return partes.join('\n');
 }

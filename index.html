@@ -524,9 +524,11 @@ function badgeHTML(status, sp) {
   return `<span class="badge ${meta.cls}">${meta.label}</span>`;
 }
 
+// Painel público: só título, status e prazos. Nome de dev, texto da demanda,
+// motivo de negativa e anexos ficam fora — este painel é aberto e não deve
+// carregar detalhe interno nem expor quem trabalha em quê.
 function metaHTML(m) {
   const items = [];
-  if (m.dev)     items.push(`${svgIcon('user')} ${m.dev}`);
   if (m.inicio)  items.push(`${svgIcon('calendar')} Início: ${formatDate(m.inicio)}`);
   if (m.entrega) items.push(`${svgIcon('calendar')} Entrega: ${formatDate(m.entrega)}`);
   if (m.estimativa) items.push(`${svgIcon('clock')} Estimativa: ${m.estimativa}`);
@@ -540,18 +542,7 @@ function formatDate(s) {
   return `${d}/${mo}/${y}`;
 }
 
-function motivoHTML(m) {
-  if (m.status !== 'negada' || !m.motivo_negacao) return '';
-  return `<div class="melhoria-negada-motivo"><strong>Motivo da negativa</strong>${m.motivo_negacao}</div>`;
-}
 
-function anexosHTML(m) {
-  if (!m.anexos || !m.anexos.length) return '';
-  const links = m.anexos.map((a, i) =>
-    `<a href="#" onclick="nmOpenAnexo('${m.id}',${i});return false;" style="color:var(--text3);text-decoration:none;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:2px 8px;">📎 ${a.nome}</a>`
-  ).join('');
-  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${links}</div>`;
-}
 
 function renderMelhoria(m) {
   return `
@@ -560,10 +551,7 @@ function renderMelhoria(m) {
         <div class="melhoria-titulo">${m.titulo}</div>
         ${badgeHTML(m.status, m.status_planejamento)}
       </div>
-      ${m.descricao ? `<div class="melhoria-desc">${m.descricao}</div>` : ''}
-      ${motivoHTML(m)}
       ${metaHTML(m)}
-      ${anexosHTML(m)}
     </div>`;
 }
 
@@ -645,8 +633,8 @@ function buildCharts(temas, melhorias) {
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-let _temas = [], _melhorias = [], _devs = [];
-let _ano = null, _mes = null, _dev = null, _statusFilter = null, _temaFilter = null, _tipoFilter = null;
+let _temas = [], _melhorias = [];
+let _ano = null, _mes = null, _statusFilter = null, _temaFilter = null, _tipoFilter = null;
 
 // Deriva o status unificado de um item (alinhado com Admin e Gantt)
 function getStatusKey(m) {
@@ -720,7 +708,6 @@ function filtradas() {
   return _melhorias.filter(m => {
     if (!matchPeriodo(m)) return false;
     if (!matchTipo(m, _tipoFilter)) return false;
-    if (_dev && !splitDevs(m.dev).includes(_dev)) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     if (_statusFilter) return statusEfetivo(m) === _statusFilter;
     if (['concluido','negada'].includes(statusEfetivo(m))) return false;
@@ -740,7 +727,6 @@ function renderConteudo() {
   const melSemStatus = _melhorias.filter(m =>
     matchPeriodo(m) &&
     matchTipo(m, _tipoFilter) &&
-    (!_dev || splitDevs(m.dev).includes(_dev)) &&
     (!_temaFilter || m.tema_id === _temaFilter)
   );
   const counts = { total: melSemStatus.length };
@@ -778,15 +764,6 @@ function renderConteudo() {
       </div>
     </div>
 
-    <div class="chart-card" style="margin-bottom:32px;" id="chart-devs-card">
-      <h3 onclick="toggleDevChart()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;">
-        Por desenvolvedor
-        <span id="dev-chart-arrow" style="font-size:12px;color:var(--text3);transition:transform .2s;">▼</span>
-      </h3>
-      <div id="chart-devs-inner" style="display:none;position:relative;margin-top:12px;"><canvas id="chart-devs"></canvas></div>
-      <div class="chart-legend" id="leg-devs" style="display:none;margin-top:14px;"></div>
-    </div>
-
     <div class="section-title">Melhorias por tema · <span style="font-weight:400;color:var(--text3);font-size:14px">${label}</span></div>
     ${_temas.length === 0
       ? `<div class="empty">Nenhum tema cadastrado ainda.</div>`
@@ -796,7 +773,6 @@ function renderConteudo() {
   if (_temas.length > 0) {
     try { buildCharts(_temas, mel); } catch (_) {}
   }
-  try { buildDevChart(_temas, mel); } catch (_) {}
 }
 
 // Escapa para uso seguro em atributo HTML (nome de dev/tema pode ter " ou &)
@@ -820,14 +796,11 @@ function fGroup(label, opcoes, valorAtual, handler, disabled, cls) {
 
 function buildFilterBar() {
   const anos = [...new Set(_melhorias.map(m => new Date(m.criado_em).getFullYear()))].sort((a,b) => b - a);
-  const devs = _devs.length ? _devs : [...new Set(_melhorias.flatMap(m => splitDevs(m.dev)))].sort();
   // Contagens respeitam o período escolhido, para não divergir do que está na tela
   const noPeriodo = _melhorias.filter(matchPeriodo);
 
   const optAno  = [{ key: '', label: '— Ano —' },  ...anos.map(a => ({ key: a, label: String(a) }))];
   const optMes  = [{ key: '', label: '— Mês —' },  ...MESES.map((m, i) => ({ key: i, label: m }))];
-  const optDev  = [{ key: '', label: 'Todos', n: noPeriodo.length },
-    ...devs.map(d => ({ key: d, label: d, n: noPeriodo.filter(m => splitDevs(m.dev).includes(d)).length }))];
   const optTema = [{ key: '', label: 'Todos', n: noPeriodo.length },
     ..._temas.map(t => ({ key: t.id, label: t.nome, n: noPeriodo.filter(m => m.tema_id === t.id).length }))];
 
@@ -836,14 +809,13 @@ function buildFilterBar() {
     ...Object.keys(TIPO_LABELS).map(k => ({ key: k, label: TIPO_LABELS[k], n: noPeriodo.filter(m => m.tipo === k).length }))];
   if (semTipo) optTipo.push({ key: SEM_TIPO, label: '⚪ Sem tipo', n: semTipo });
 
-  const ativos = [_ano, _mes, _dev, _temaFilter, _statusFilter, _tipoFilter].filter(v => v !== null && v !== undefined).length;
+  const ativos = [_ano, _mes, _temaFilter, _statusFilter, _tipoFilter].filter(v => v !== null && v !== undefined).length;
 
   document.getElementById('filter-bar').innerHTML = `
     <div class="filter-row">
       ${fGroup('Tipo', optTipo, _tipoFilter, 'setFiltroTipoIssue', false, 'fg-tipo')}
       ${fGroup('Ano', optAno, _ano, 'setFiltroAno', anos.length === 0, 'fg-ano')}
       ${fGroup('Mês', optMes, _mes, 'setFiltroMes', false, 'fg-mes')}
-      ${devs.length   ? fGroup('Dev',  optDev,  _dev,        'setFiltroDev',  false, 'fg-dev')  : ''}
       ${_temas.length ? fGroup('Tema', optTema, _temaFilter, 'setFiltroTema', false, 'fg-tema') : ''}
       <div class="fgroup">
         <label>&nbsp;</label>
@@ -854,16 +826,6 @@ function buildFilterBar() {
   `;
 }
 
-function toggleDevChart() {
-  const inner  = document.getElementById('chart-devs-inner');
-  const legend = document.getElementById('leg-devs');
-  const arrow  = document.getElementById('dev-chart-arrow');
-  if (!inner) return;
-  const open = inner.style.display === 'none';
-  inner.style.display  = open ? '' : 'none';
-  legend.style.display = open ? '' : 'none';
-  if (arrow) arrow.style.transform = open ? 'rotate(180deg)' : '';
-}
 
 // Vindo de um select, o valor escolhido é o estado — não alterna como o chip fazia
 function setFiltroTema(id) {
@@ -879,7 +841,7 @@ function setFiltroTipoIssue(v) {
 }
 
 function limparFiltros() {
-  _ano = null; _mes = null; _dev = null; _temaFilter = null; _statusFilter = null; _tipoFilter = null;
+  _ano = null; _mes = null; _temaFilter = null; _statusFilter = null; _tipoFilter = null;
   buildFilterBar();
   renderConteudo();
 }
@@ -894,84 +856,11 @@ function setFiltroMes(val) {
   buildFilterBar();
   renderConteudo();
 }
-function setFiltroDev(dev) {
-  _dev = dev || null;
-  buildFilterBar();
-  renderConteudo();
-}
 function setFiltroStatus(key) {
   _statusFilter = (key === 'total' || key === _statusFilter) ? null : key;
   renderConteudo();
 }
 
-function buildDevChart(temas, melhorias) {
-  const card = document.getElementById('chart-devs-card');
-  const devs = [...new Set(melhorias.flatMap(m => splitDevs(m.dev)))].sort();
-  if (!devs.length) { if (card) card.style.display = 'none'; return; }
-  if (card) card.style.display = '';
-
-  const temaCores = temas.map((_, i) => TEMA_CORES[i % TEMA_CORES.length]);
-
-  const datasets = temas.map((t, i) => ({
-    label: t.nome,
-    data: devs.map(dev => melhorias.filter(m => splitDevs(m.dev).includes(dev) && m.tema_id === t.id).length),
-    backgroundColor: temaCores[i],
-    borderWidth: 0,
-    borderRadius: 3,
-  }));
-
-  const semTema = devs.map(dev =>
-    melhorias.filter(m => splitDevs(m.dev).includes(dev) && !temas.find(t => t.id === m.tema_id)).length
-  );
-  if (semTema.some(v => v > 0)) {
-    datasets.push({ label: 'Sem tema', data: semTema, backgroundColor: '#4A4A46', borderWidth: 0, borderRadius: 3 });
-  }
-
-  const inner = document.getElementById('chart-devs-inner');
-  inner.style.height = Math.max(160, devs.length * 44) + 'px';
-
-  new Chart(document.getElementById('chart-devs'), {
-    type: 'bar',
-    data: { labels: devs, datasets },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          stacked: true,
-          ticks: { color: '#6E6A62', stepSize: 1, precision: 0 },
-          grid: { color: '#2E2E2B' },
-          border: { color: '#2E2E2B' },
-        },
-        y: {
-          stacked: true,
-          ticks: { color: '#A8A49A', font: { size: 13 } },
-          grid: { display: false },
-          border: { display: false },
-        },
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1E1E1C', titleColor: '#ECEAE2', bodyColor: '#A8A49A',
-          borderColor: '#2E2E2B', borderWidth: 1,
-          callbacks: {
-            title: ctx => ctx[0].label,
-            label: ctx => ctx.parsed.x > 0 ? ` ${ctx.dataset.label}: ${ctx.parsed.x}` : null,
-          },
-        },
-      },
-    },
-  });
-
-  const leg = document.getElementById('leg-devs');
-  temas.forEach((t, i) => {
-    const total = devs.reduce((s, dev) => s + melhorias.filter(m => splitDevs(m.dev).includes(dev) && m.tema_id === t.id).length, 0);
-    if (!total) return;
-    leg.innerHTML += `<span class="leg"><span class="leg-sq" style="background:${temaCores[i]}"></span>${t.nome} <strong style="color:var(--text);margin-left:2px;">${total}</strong></span>`;
-  });
-}
 
 // Leitura fresca dos dados.
 // raw.githubusercontent.com serve com Cache-Control max-age=300 e IGNORA
@@ -1033,10 +922,6 @@ async function loadData() {
     _temas     = data.temas     || [];
     _melhorias = data.melhorias || [];
     // une devs do array raiz + devs extraídos das melhorias (garante que devs sem tarefa apareçam)
-    _devs = [...new Set([
-      ...(data.desenvolvedores || []).flatMap(d => splitDevs(d)),
-      ..._melhorias.flatMap(m => splitDevs(m.dev))
-    ])].sort();
 
     const dt = data.atualizado_em
       ? new Date(data.atualizado_em).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
@@ -1061,12 +946,7 @@ async function loadData() {
 // para restaurar após um refresh automático — evita "minimizar" a leitura.
 function captureViewState() {
   const openTemas = [...document.querySelectorAll('.tema-body.open')].map(el => el.id);
-  const devInner = document.getElementById('chart-devs-inner');
-  return {
-    openTemas,
-    devOpen: devInner ? devInner.style.display !== 'none' : false,
-    scrollY: window.scrollY,
-  };
+  return { openTemas, scrollY: window.scrollY };
 }
 function restoreViewState(s) {
   if (!s) return;
@@ -1081,14 +961,6 @@ function restoreViewState(s) {
       if (header) header.setAttribute('aria-expanded', 'true');
     }
   });
-  if (s.devOpen) {
-    const inner  = document.getElementById('chart-devs-inner');
-    const legend = document.getElementById('leg-devs');
-    const arrow  = document.getElementById('dev-chart-arrow');
-    if (inner)  inner.style.display  = '';
-    if (legend) legend.style.display = '';
-    if (arrow)  arrow.style.transform = 'rotate(180deg)';
-  }
   window.scrollTo(0, s.scrollY);
 }
 
@@ -1097,10 +969,6 @@ function applyData(data, opts = {}) {
   _pollTs    = data.atualizado_em || null;
   _temas     = data.temas     || [];
   _melhorias = data.melhorias || [];
-  _devs = [...new Set([
-    ...(data.desenvolvedores || []).flatMap(d => splitDevs(d)),
-    ..._melhorias.flatMap(m => splitDevs(m.dev))
-  ])].sort();
   const dt = data.atualizado_em
     ? new Date(data.atualizado_em).toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
     : '—';
@@ -1194,7 +1062,6 @@ function buildReportHTML() {
   if (_mes !== null && _ano !== null) filtroDesc = `${MESES_PT[_mes - 1]} de ${_ano}`;
   else if (_mes !== null) filtroDesc = MESES_PT[_mes - 1] + ' — todos os anos';
   else if (_ano !== null) filtroDesc = `Ano ${_ano}`;
-  if (_dev) filtroDesc += ` · ${_dev}`;
   if (_statusFilter) filtroDesc += ` · ${STATUS_BADGE_PRINT[_statusFilter]?.label || _statusFilter}`;
 
   // Agrupar por tema
@@ -1222,16 +1089,14 @@ function buildReportHTML() {
       const bm = STATUS_BADGE_PRINT[sk] || STATUS_BADGE_PRINT.backlog;
       const badge = `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:${bm.bg};color:${bm.color};white-space:nowrap;">${bm.label}</span>`;
       const meta = [];
-      if (m.dev)     meta.push(`👤 ${m.dev}`);
       if (m.inicio)  meta.push(`📅 Início: ${formatDate(m.inicio)}`);
       if (m.entrega) meta.push(`🏁 Entrega: ${formatDate(m.entrega)}`);
       if (m.estimativa) meta.push(`⏱ ${m.estimativa}`);
       return `<div style="background:#1E1E1C;border:1px solid #2E2E2B;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:${m.descricao||meta.length?'6px':'0'};">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:${meta.length?'6px':'0'};">
           <span style="font-size:13px;font-weight:600;color:#ECEAE2;line-height:1.4;">${m.titulo}</span>
           ${badge}
         </div>
-        ${m.descricao ? `<div style="font-size:12px;color:#A8A49A;margin-bottom:6px;line-height:1.5;">${m.descricao.substring(0,180)}${m.descricao.length>180?'…':''}</div>` : ''}
         ${meta.length ? `<div style="font-size:11px;color:#6E6A62;display:flex;flex-wrap:wrap;gap:10px;">${meta.map(i=>`<span>${i}</span>`).join('')}</div>` : ''}
       </div>`;
     }).join('');
@@ -1290,10 +1155,7 @@ function openExportModal() {
 
   panel.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid #2E2E2B;flex-wrap:wrap;gap:10px;">
-      <div style="display:flex;gap:6px;">
-        <button id="exp-tab-tema" onclick="switchExportTab('tema')" style="font-size:13px;font-weight:600;background:#3B8FE8;color:#fff;border:none;border-radius:7px;padding:6px 14px;cursor:pointer;">Por Tema</button>
-        <button id="exp-tab-dev"  onclick="switchExportTab('dev')"  style="font-size:13px;font-weight:600;background:#252522;color:#A8A49A;border:1px solid #2E2E2B;border-radius:7px;padding:6px 14px;cursor:pointer;">Por Desenvolvedor</button>
-      </div>
+      <div style="font-size:13px;font-weight:600;color:#A8A49A;">Relatório por tema</div>
       <div style="display:flex;gap:10px;align-items:center;">
         <button id="btn-dl-img" onclick="downloadExport('img')" style="font-size:13px;background:#3B8FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ Imagem</button>
         <button id="btn-dl-pdf" onclick="downloadExport('pdf')" style="font-size:13px;background:#9B6FE8;color:#fff;border:none;border-radius:7px;padding:7px 16px;cursor:pointer;font-weight:600;">⬇ PDF</button>
@@ -1386,129 +1248,8 @@ async function downloadExport(type) {
   if (btnPdf) { btnPdf.disabled = false; btnPdf.textContent = '⬇ PDF'; }
 }
 
-let _exportTab = 'tema';
 
-function switchExportTab(tab) {
-  _exportTab = tab;
-  const btnTema = document.getElementById('exp-tab-tema');
-  const btnDev  = document.getElementById('exp-tab-dev');
-  if (btnTema) {
-    btnTema.style.background = tab === 'tema' ? '#3B8FE8' : '#252522';
-    btnTema.style.color      = tab === 'tema' ? '#fff'    : '#A8A49A';
-    btnTema.style.border     = tab === 'tema' ? 'none'    : '1px solid #2E2E2B';
-  }
-  if (btnDev) {
-    btnDev.style.background = tab === 'dev' ? '#3B8FE8' : '#252522';
-    btnDev.style.color      = tab === 'dev' ? '#fff'    : '#A8A49A';
-    btnDev.style.border     = tab === 'dev' ? 'none'    : '1px solid #2E2E2B';
-  }
-  const wrap = document.getElementById('export-preview-wrap');
-  const panel = wrap && wrap.closest('[style*="max-width:880px"]');
-  if (!wrap) return;
-  wrap.innerHTML = tab === 'dev' ? buildDevReportHTML() : buildReportHTML();
-  requestAnimationFrame(() => {
-    const canvas = document.getElementById('export-canvas');
-    if (!canvas || !panel) return;
-    const available = panel.clientWidth - 40;
-    const natural = canvas.scrollWidth || 800;
-    const scale = Math.min(1, available / natural);
-    wrap.style.transform = `scale(${scale})`;
-    wrap.style.height = (canvas.scrollHeight * scale) + 'px';
-  });
-}
 
-function buildDevReportHTML() {
-  const mel = filtradas();
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
-
-  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  let filtroDesc = 'Todos os períodos';
-  if (_mes !== null && _ano !== null) filtroDesc = `${MESES_PT[_mes - 1]} de ${_ano}`;
-  else if (_mes !== null) filtroDesc = MESES_PT[_mes - 1] + ' — todos os anos';
-  else if (_ano !== null) filtroDesc = `Ano ${_ano}`;
-
-  // Expandir itens por dev (splitDevs)
-  const splitDevs = str => str ? str.split(/[\/,]/).map(s => s.trim()).filter(Boolean) : [];
-
-  const devMap = {};
-  mel.forEach(m => {
-    const devs = splitDevs(m.dev);
-    if (!devs.length) {
-      if (!devMap['—']) devMap['—'] = [];
-      devMap['—'].push(m);
-    } else {
-      devs.forEach(d => {
-        if (!devMap[d]) devMap[d] = [];
-        devMap[d].push(m);
-      });
-    }
-  });
-
-  const devKeys = Object.keys(devMap).sort((a, b) => a === '—' ? 1 : b === '—' ? -1 : a.localeCompare(b));
-
-  const devsHTML = devKeys.map(devName => {
-    const items = [...devMap[devName]].sort((a, b) => {
-      if (!a.entrega && !b.entrega) return 0;
-      if (!a.entrega) return 1;
-      if (!b.entrega) return -1;
-      return a.entrega.localeCompare(b.entrega);
-    });
-
-    const rows = items.map(m => {
-      const tema = _temas.find(t => t.id === m.tema_id)?.nome || '—';
-      const sk = statusEfetivo(m);
-      const bm = STATUS_BADGE_PRINT[sk] || STATUS_BADGE_PRINT.backlog;
-      const entrega = m.entrega ? formatDate(m.entrega) : '<span style="color:#6E6A62;">Sem previsão</span>';
-      const inicio  = m.inicio  ? formatDate(m.inicio)  : '—';
-      return `<tr>
-        <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:13px;color:#ECEAE2;font-weight:500;vertical-align:top;">${m.titulo}</td>
-        <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:12px;color:#A8A49A;white-space:nowrap;vertical-align:top;">${tema}</td>
-        <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:12px;color:#A8A49A;white-space:nowrap;vertical-align:top;">${inicio}</td>
-        <td style="padding:9px 12px;border-bottom:1px solid #252522;font-size:12px;white-space:nowrap;vertical-align:top;">${entrega}</td>
-        <td style="padding:9px 12px;border-bottom:1px solid #252522;vertical-align:top;">
-          <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:${bm.bg};color:${bm.color};white-space:nowrap;">${bm.label}</span>
-        </td>
-      </tr>`;
-    }).join('');
-
-    return `<div style="margin-bottom:28px;">
-      <div style="display:flex;align-items:center;gap:10px;padding-bottom:8px;border-bottom:2px solid #2E2E2B;margin-bottom:0;">
-        <span style="font-size:15px;font-weight:700;color:#ECEAE2;">👤 ${devName}</span>
-        <span style="font-size:12px;color:#6E6A62;">${items.length} ${items.length===1?'demanda':'demandas'}</span>
-      </div>
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:#161614;">
-            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;">Demanda</th>
-            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">Tema</th>
-            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">Início</th>
-            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;white-space:nowrap;">Entrega</th>
-            <th style="padding:7px 12px;text-align:left;font-size:11px;font-weight:600;color:#6E6A62;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #2E2E2B;">Status</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-  }).join('');
-
-  return `<div id="export-canvas" style="background:#0E0E0D;color:#ECEAE2;font-family:'Inter',sans-serif;padding:32px;min-width:800px;width:800px;">
-    <div style="border-bottom:1px solid #2E2E2B;padding-bottom:20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;">
-      <div>
-        <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">👤 Previsão por Desenvolvedor</div>
-        <div style="font-size:13px;color:#A8A49A;">Audax Capital · Produto &amp; Tecnologia</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-size:12px;color:#6E6A62;">${filtroDesc}</div>
-        <div style="font-size:11px;color:#6E6A62;margin-top:2px;">Gerado em ${dateStr}</div>
-      </div>
-    </div>
-    ${devsHTML}
-    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #2E2E2B;font-size:11px;color:#6E6A62;text-align:center;">
-      capfernando.github.io/RoadMap
-    </div>
-  </div>`;
-}
 
 // ═══════════════════════════════════════════════════════════════════════
 // NOVA MELHORIA (Discovery) — só aparece com token (não público até validar)
@@ -1690,13 +1431,6 @@ function nmDataUrlToBlob(dataUrl) {
 function nmPreview(i) {
   const a = _nmAnexos[i]; if (!a) return;
   const url = URL.createObjectURL(nmDataUrlToBlob(a.dados));
-  window.open(url, '_blank');
-}
-// Abrir anexo de uma melhoria já salva (usado no card do dashboard)
-function nmOpenAnexo(melId, i) {
-  const m = _melhorias.find(x => x.id === melId);
-  if (!m || !m.anexos || !m.anexos[i]) return;
-  const url = URL.createObjectURL(nmDataUrlToBlob(m.anexos[i].dados));
   window.open(url, '_blank');
 }
 
