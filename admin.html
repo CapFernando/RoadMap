@@ -358,7 +358,7 @@
       position: sticky; top: 0; margin-left: auto; margin-bottom: -30px; z-index: 5;
       width: 30px; height: 30px; border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      background: var(--bg2); border: none; color: var(--text2);
+      background: var(--bg3); border: 1px solid var(--border); color: var(--text2);
       font-size: 18px; line-height: 1; cursor: pointer;
     }
     .modal-close-btn:hover { background: var(--bg3); color: var(--text); }
@@ -1038,6 +1038,10 @@ async function saveViaProxy() {
     const ferSet = new Set((state.feriados || []).map(f => f.data || f));
     (server.feriados || []).forEach(f => ferSet.add(f.data || f));
     state.feriados = [...ferSet].map(d => (typeof d === 'string' ? { data: d } : d));
+    // Ausencias (ferias/atestado) sao cadastradas no Gantt. O Admin nunca as
+    // edita, mas monta o payload a partir do estado local — sem copiar do
+    // servidor, publicar pelo Admin apagaria todas.
+    state.ausencias = server.ausencias || state.ausencias || [];
     state.atualizado_em = new Date().toISOString();
 
     const res = await fetch(ADMIN_PROXY_URL, {
@@ -1095,6 +1099,8 @@ async function saveToGitHub(attempt = 1) {
     const feriadoSet = new Set((state.feriados || []).map(f => f.data || f));
     (serverData.feriados || []).forEach(f => feriadoSet.add(f.data || f));
     state.feriados = [...feriadoSet].map(d => (typeof d === 'string' ? { data: d } : d));
+    // Ausencias: idem — preserva o que o Gantt cadastrou.
+    state.ausencias = serverData.ausencias || state.ausencias || [];
 
     // Salvaguarda final: nunca grava estado vazio sobre um servidor que tem itens.
     if ((serverData.melhorias || []).length > 0 && state.melhorias.length === 0) {
@@ -2439,7 +2445,7 @@ function openModalTema(id) {
   sn.style.display = 'none'; sn.value = '';
   document.getElementById('t-modulo').value = parsed.modulo;
   document.getElementById('modal-tema-title').textContent = id ? 'Editar tema' : 'Novo tema';
-  document.getElementById('modal-tema').style.display = 'flex';
+  abrirModal('modal-tema');
 }
 function saveTema() {
   const sisSel = document.getElementById('t-sistema');
@@ -2540,7 +2546,7 @@ function openModalMelhoria(id) {
   depInfoEl.innerHTML = depHTML;
   depInfoEl.style.display = depHTML ? 'block' : 'none';
 
-  document.getElementById('modal-melhoria').style.display = 'flex';
+  abrirModal('modal-melhoria');
 }
 
 function onStatusChange() {
@@ -2739,7 +2745,31 @@ function formatDate(s) {
   const [y,m,d] = s.split('-');
   return `${d}/${m}/${y}`;
 }
+// Abre o modal SEMPRE no topo. O .modal tem overflow-y:auto e o scroll ficava
+// guardado de uma abertura para a outra: a partir do segundo card, o modal abria
+// rolado no meio do formulário, com o título (e o cabeçalho) fora da vista.
+function abrirModal(id) {
+  const ov = document.getElementById(id);
+  if (!ov) return;
+  ov.style.display = 'flex';
+  const cx = ov.querySelector('.modal');
+  if (cx) cx.scrollTop = 0;
+}
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+// Esc fecha o modal visível mais acima na pilha. Nenhum modal tinha isso, e é a
+// saída que todo mundo tenta antes de procurar o botão.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  // offsetParent e sempre null em position:fixed — nao serve para saber se esta
+  // visivel. Usa o display calculado.
+  const abertos = [...document.querySelectorAll('.modal-overlay')]
+    .filter(o => getComputedStyle(o).display !== 'none');
+  if (!abertos.length) return;
+  const topo = abertos.reduce((a, b) =>
+    (parseInt(getComputedStyle(b).zIndex) || 0) >= (parseInt(getComputedStyle(a).zIndex) || 0) ? b : a);
+  topo.style.display = 'none';
+});
 
 let toastTimer;
 function toast(msg, type = 'ok') {
