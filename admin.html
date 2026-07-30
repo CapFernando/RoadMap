@@ -214,6 +214,17 @@
     .ger-kpi-value.red { color:var(--red); }
     .ger-charts { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:32px; }
     @media(max-width:900px){ .ger-charts{ grid-template-columns:1fr; } }
+    .ger-section-title {
+      font-size:15px; font-weight:700; color:#ECEAE2; margin:8px 0 4px;
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    }
+    .ger-section-hint { font-size:12px; font-weight:500; color:var(--text3); }
+    .ger-section-sep { border-top:1px solid var(--border); margin:32px 0 20px; }
+    .ger-empty-box {
+      background:var(--bg2); border:1px solid var(--border); border-radius:14px;
+      padding:28px 22px; text-align:center; color:var(--text3); font-size:13px;
+      line-height:1.6; margin-bottom:32px;
+    }
     .ger-chart-box {
       background:var(--bg2); border:1px solid var(--border); border-radius:14px;
       padding:22px 20px; display:flex; flex-direction:column;
@@ -513,6 +524,25 @@
       <div id="ger-summary" class="ger-summary"></div>
       <div id="ger-charts" class="ger-charts"></div>
 
+      <div class="ger-section-sep"></div>
+      <div class="ger-section-title">
+        🃏 Pontos do Planning Poker
+        <span class="ger-section-hint">semana = bloco de 5 dias úteis; card contado pela data de entrega (ou início)</span>
+      </div>
+      <div id="ger-pts-summary" class="ger-summary"></div>
+      <div id="ger-pts-charts" class="ger-charts"></div>
+      <div class="ger-collapse-bar" onclick="toggleGerPtsTable()">
+        <span id="ger-pts-collapse-label">▶ Pontos por dev × semana</span>
+        <span id="ger-pts-badge" class="ger-count-badge"></span>
+      </div>
+      <div id="ger-pts-table-wrap" class="ger-table-wrap" style="display:none;margin-bottom:32px">
+        <table class="ger-table">
+          <thead id="ger-pts-thead"></thead>
+          <tbody id="ger-pts-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="ger-section-sep"></div>
       <div class="ger-collapse-bar" onclick="toggleGerTable()">
         <span id="ger-collapse-label">▶ Detalhamento de demandas</span>
         <span id="ger-count-badge" class="ger-count-badge"></span>
@@ -1881,10 +1911,147 @@ const GER_COLORS = [
 
 let gerCharts = {};
 let _gerTableOpen = false;
+let _gerPtsTableOpen = false;
 
 function gerDestroyCharts() {
   Object.values(gerCharts).forEach(c => { try { c.destroy(); } catch(_){} });
   gerCharts = {};
+}
+
+// Renderiza um conjunto de pizzas no padrão da aba (rosca + legenda ordenada
+// do maior para o menor). `sufixo` é a unidade exibida: 'h' para horas,
+// ' pt' para pontos do Planning Poker.
+function gerRenderPies(containerId, chartDefs, sufixo) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+
+  cont.innerHTML = chartDefs.map(c => {
+    const labels = Object.keys(c.data);
+    const vals   = labels.map(k => Math.round(c.data[k]));
+    const total  = vals.reduce((s,v)=>s+v,0)||1;
+    // legenda do maior p/ menor (TOP); c.ordenar === false mantém a ordem
+    // original — usado nas semanas, que fazem mais sentido em ordem cronológica
+    const idxs   = labels.map((_,i)=>i);
+    const order  = c.ordenar === false ? idxs : [...idxs].sort((a,b)=>vals[b]-vals[a]);
+    const legendHTML = order.map(i => {
+      const pct = Math.round(vals[i]/total*100);
+      return `<div class="ger-legend-item">
+        <span class="ger-legend-dot" style="background:${GER_COLORS[i%GER_COLORS.length]}"></span>
+        <span class="ger-legend-name">${labels[i]}</span>
+        <span class="ger-legend-val">${vals[i]}${sufixo}</span>
+        <span class="ger-legend-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+    return `<div class="ger-chart-box">
+      <div class="ger-chart-title">${c.title}</div>
+      ${!labels.length
+        ? '<div class="ger-chart-empty">Sem dados no período</div>'
+        : `<div class="ger-chart-canvas-wrap"><canvas id="${c.id}"></canvas></div>
+           <div class="ger-legend">${legendHTML}</div>`}
+    </div>`;
+  }).join('');
+
+  // Registra o plugin apenas uma vez
+  if (typeof ChartDataLabels !== 'undefined' && !Chart._dlRegistered) {
+    Chart.register(ChartDataLabels);
+    Chart._dlRegistered = true;
+  }
+
+  chartDefs.forEach(c => {
+    const labels = Object.keys(c.data);
+    if (!labels.length) return;
+    const vals   = labels.map(k => Math.round(c.data[k]));
+    const total  = vals.reduce((s,v) => s+v, 0);
+    // cicla a paleta: com mais de 10 fatias as cores repetem em vez de sumir
+    const colors = labels.map((_, i) => GER_COLORS[i % GER_COLORS.length]);
+    const ctx    = document.getElementById(c.id)?.getContext('2d');
+    if (!ctx) return;
+
+    gerCharts[c.id] = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data: vals,
+          backgroundColor: colors,
+          borderColor: '#161614',
+          borderWidth: 3,
+          hoverOffset: 8,
+        }]
+      },
+      options: {
+        responsive: true,
+        cutout: '50%',
+        layout: { padding: 8 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.raw}${sufixo} — ${Math.round(ctx.raw/total*100)}%`
+            }
+          },
+          datalabels: {
+            display: ctx => ctx.dataset.data[ctx.dataIndex] / total >= 0.12,
+            color: '#fff',
+            font: { size: 12, weight: '800', family: 'Inter' },
+            textShadowColor: 'rgba(0,0,0,.9)',
+            textShadowBlur: 6,
+            formatter: val => `${val}${sufixo}\n${Math.round(val/total*100)}%`,
+            textAlign: 'center',
+            anchor: 'center',
+            align: 'center',
+          }
+        }
+      }
+    });
+  });
+}
+
+// ─── PONTOS DO PLANNING POKER ─────────────────────────────────────
+// Semanas do mês = blocos de 5 dias úteis (S1, S2, …), excluindo fins de
+// semana e feriados cadastrados. Mesmo critério usado no Gantt, para que os
+// dois painéis mostrem o mesmo card na mesma semana.
+function gerSemanasDoMes(ano, mes1) {
+  const ferSet = new Set((state.feriados || []).map(f => f.data || f).filter(Boolean));
+  const uteis = [];
+  const totalDias = new Date(ano, mes1, 0).getDate();
+  for (let dia = 1; dia <= totalDias; dia++) {
+    const dt = new Date(ano, mes1 - 1, dia);
+    const dow = dt.getDay();
+    if (dow === 0 || dow === 6) continue;
+    const s = `${ano}-${String(mes1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+    if (ferSet.has(s)) continue;
+    uteis.push(s);
+  }
+  const semanas = [];
+  for (let i = 0; i < uteis.length; i += 5) semanas.push(uteis.slice(i, i + 5));
+  return semanas;
+}
+
+// Em qual semana a data cai. Se cair fora dos dias úteis (entrega num sábado
+// ou feriado), usa a semana cujo intervalo a contém.
+function gerSemanaIndex(dataStr, semanas) {
+  if (!dataStr) return -1;
+  for (let i = 0; i < semanas.length; i++) if (semanas[i].includes(dataStr)) return i;
+  for (let i = 0; i < semanas.length; i++) {
+    const w = semanas[i];
+    if (w.length && dataStr >= w[0] && dataStr <= w[w.length - 1]) return i;
+  }
+  return -1;
+}
+
+// Data que define a qual semana/mês os pontos de um card pertencem.
+function gerDataRefPontos(m) { return m.entrega || m.inicio || ''; }
+
+// Cards pontuados no Planning Poker cuja data de referência cai no mês/ano.
+function gerItensPontuados(ano, mes1) {
+  return (state.melhorias || []).filter(m => {
+    if (!(Number(m.poker_pontos) > 0)) return false;
+    const ref = gerDataRefPontos(m);
+    if (!ref) return false;
+    const d = new Date(ref + 'T00:00:00');
+    return !isNaN(d) && d.getFullYear() === ano && d.getMonth() + 1 === mes1;
+  });
 }
 
 function gerInitFilters() {
@@ -1908,6 +2075,13 @@ function toggleGerTable() {
   document.getElementById('ger-table-wrap').style.display = _gerTableOpen ? 'block' : 'none';
   const lbl = document.getElementById('ger-collapse-label');
   lbl.textContent = (_gerTableOpen ? '▼' : '▶') + ' Detalhamento de demandas';
+}
+
+function toggleGerPtsTable() {
+  _gerPtsTableOpen = !_gerPtsTableOpen;
+  document.getElementById('ger-pts-table-wrap').style.display = _gerPtsTableOpen ? 'block' : 'none';
+  const lbl = document.getElementById('ger-pts-collapse-label');
+  lbl.textContent = (_gerPtsTableOpen ? '▼' : '▶') + ' Pontos por dev × semana';
 }
 
 function renderGerencial() {
@@ -2030,83 +2204,10 @@ function renderGerencial() {
     { id:'chart-real-dev',  title:'H. Realizadas por Dev',   data: realPorDev  },
   ];
 
-  document.getElementById('ger-charts').innerHTML = chartDefs.map(c => {
-    const labels = Object.keys(c.data);
-    const vals   = labels.map(k => Math.round(c.data[k]));
-    const total  = vals.reduce((s,v)=>s+v,0)||1;
-    // ordenar do maior p/ menor para legenda HTML
-    const order  = [...labels.map((_,i)=>i)].sort((a,b)=>vals[b]-vals[a]);
-    const legendHTML = order.map(i => {
-      const pct = Math.round(vals[i]/total*100);
-      return `<div class="ger-legend-item">
-        <span class="ger-legend-dot" style="background:${GER_COLORS[i%GER_COLORS.length]}"></span>
-        <span class="ger-legend-name">${labels[i]}</span>
-        <span class="ger-legend-val">${vals[i]}h</span>
-        <span class="ger-legend-pct">${pct}%</span>
-      </div>`;
-    }).join('');
-    return `<div class="ger-chart-box">
-      <div class="ger-chart-title">${c.title}</div>
-      ${!labels.length
-        ? '<div class="ger-chart-empty">Sem dados no período</div>'
-        : `<div class="ger-chart-canvas-wrap"><canvas id="${c.id}"></canvas></div>
-           <div class="ger-legend">${legendHTML}</div>`}
-    </div>`;
-  }).join('');
+  gerRenderPies('ger-charts', chartDefs, 'h');
 
-  // Registra o plugin apenas uma vez
-  if (typeof ChartDataLabels !== 'undefined' && !Chart._dlRegistered) {
-    Chart.register(ChartDataLabels);
-    Chart._dlRegistered = true;
-  }
-
-  chartDefs.forEach(c => {
-    const labels = Object.keys(c.data);
-    if (!labels.length) return;
-    const vals   = labels.map(k => Math.round(c.data[k]));
-    const total  = vals.reduce((s,v) => s+v, 0);
-    const colors = GER_COLORS.slice(0, labels.length);
-    const ctx    = document.getElementById(c.id)?.getContext('2d');
-    if (!ctx) return;
-
-    gerCharts[c.id] = new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels,
-        datasets: [{
-          data: vals,
-          backgroundColor: colors,
-          borderColor: '#161614',
-          borderWidth: 3,
-          hoverOffset: 8,
-        }]
-      },
-      options: {
-        responsive: true,
-        cutout: '50%',
-        layout: { padding: 8 },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => ` ${ctx.raw}h — ${Math.round(ctx.raw/total*100)}%`
-            }
-          },
-          datalabels: {
-            display: ctx => ctx.dataset.data[ctx.dataIndex] / total >= 0.12,
-            color: '#fff',
-            font: { size: 12, weight: '800', family: 'Inter' },
-            textShadowColor: 'rgba(0,0,0,.9)',
-            textShadowBlur: 6,
-            formatter: val => `${val}h\n${Math.round(val/total*100)}%`,
-            textAlign: 'center',
-            anchor: 'center',
-            align: 'center',
-          }
-        }
-      }
-    });
-  });
+  // ── Pontos do Planning Poker (mesmo filtro de período) ───────────
+  renderGerPontos(ano, mes, temaMap, splitDevsLocal);
 
   // ── Tabela ───────────────────────────────────────────────────────
   document.getElementById('ger-count-badge').textContent = `${items.length} demandas`;
@@ -2136,6 +2237,152 @@ function renderGerencial() {
 
   document.getElementById('ger-tbody').innerHTML = rows ||
     `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px">Nenhuma demanda com início neste mês.</td></tr>`;
+}
+
+// Relatório de pontos do Planning Poker para o mês/ano selecionado.
+// Cards com múltiplos devs têm os pontos divididos entre eles (igual às horas),
+// para que a soma por dev feche com o total do mês.
+function renderGerPontos(ano, mes, temaMap, splitDevs) {
+  const semanas = gerSemanasDoMes(ano, mes);
+  const itens   = gerItensPontuados(ano, mes);
+
+  const elSum    = document.getElementById('ger-pts-summary');
+  const elCharts = document.getElementById('ger-pts-charts');
+  const elBadge  = document.getElementById('ger-pts-badge');
+  const elThead  = document.getElementById('ger-pts-thead');
+  const elTbody  = document.getElementById('ger-pts-tbody');
+
+  const totalPts = itens.reduce((s, m) => s + Number(m.poker_pontos), 0);
+
+  if (!itens.length) {
+    elSum.innerHTML = '';
+    elCharts.innerHTML = `<div class="ger-empty-box" style="grid-column:1/-1">
+      Nenhuma demanda pontuada com entrega neste período.<br>
+      Os pontos aparecem aqui depois de votar no <b>Planning Poker</b> e usar <b>“Gravar no card”</b>.
+    </div>`;
+    elBadge.textContent = '0 demandas';
+    elThead.innerHTML = '';
+    elTbody.innerHTML = `<tr><td style="text-align:center;color:var(--text3);padding:24px">Sem pontos no período.</td></tr>`;
+    return;
+  }
+
+  // ── Agrupamentos ──
+  const porSemana = {};
+  semanas.forEach((_, i) => { porSemana['S' + (i+1)] = 0; });
+  let foraDaSemana = 0;
+  itens.forEach(m => {
+    const idx = gerSemanaIndex(gerDataRefPontos(m), semanas);
+    if (idx >= 0) porSemana['S' + (idx+1)] += Number(m.poker_pontos);
+    else foraDaSemana += Number(m.poker_pontos);
+  });
+  if (foraDaSemana > 0) porSemana['Fora do mês'] = foraDaSemana;
+
+  const porDev = {};
+  itens.forEach(m => {
+    const devs = splitDevs(m.dev);
+    const val  = Number(m.poker_pontos) / devs.length;
+    devs.forEach(d => { porDev[d] = (porDev[d] || 0) + val; });
+  });
+  const porDevOrd = Object.fromEntries(Object.entries(porDev).sort((a,b) => b[1]-a[1]));
+
+  const porAssunto = {};
+  itens.forEach(m => {
+    const k = temaMap[m.tema_id] || 'Sem tema';
+    porAssunto[k] = (porAssunto[k] || 0) + Number(m.poker_pontos);
+  });
+  const porAssuntoOrd = Object.fromEntries(Object.entries(porAssunto).sort((a,b) => b[1]-a[1]));
+
+  // Sprint: só entra se alguém preencheu. Inclui "Sem sprint" para o total da
+  // pizza fechar com o total do mês, em vez de sumir com os cards sem sprint.
+  const comSprint = itens.filter(m => (m.sprint || '').trim());
+  const porSprint = {};
+  itens.forEach(m => {
+    const k = (m.sprint || '').trim() || 'Sem sprint';
+    porSprint[k] = (porSprint[k] || 0) + Number(m.poker_pontos);
+  });
+  const porSprintOrd = Object.fromEntries(Object.entries(porSprint).sort((a,b) => b[1]-a[1]));
+
+  // ── KPIs ──
+  const nDevs     = Object.keys(porDev).length;
+  const media     = (totalPts / itens.length).toFixed(1).replace('.', ',');
+  const semanasAt = Object.entries(porSemana).filter(([k,v]) => v > 0 && k !== 'Fora do mês').length;
+  const mediaSem  = semanasAt > 0 ? Math.round(totalPts / semanasAt) : 0;
+  const topDev    = Object.entries(porDevOrd)[0];
+  const topAss    = Object.entries(porAssuntoOrd)[0];
+
+  elSum.innerHTML = `
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">Pontos no mês</div>
+      <div class="ger-kpi-value blue">${totalPts}</div>
+    </div>
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">Demandas pontuadas</div>
+      <div class="ger-kpi-value blue">${itens.length}</div>
+      <span class="ger-kpi-delta delta-neu">média ${media} pt/demanda</span>
+    </div>
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">Média por semana</div>
+      <div class="ger-kpi-value green">${mediaSem}</div>
+      <span class="ger-kpi-delta delta-neu">${semanasAt} semana${semanasAt!==1?'s':''} com entrega</span>
+    </div>
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">TOP dev</div>
+      <div class="ger-kpi-value amber">${topDev ? Math.round(topDev[1]) : 0}</div>
+      <span class="ger-kpi-delta delta-neu">${topDev ? topDev[0] : '—'}</span>
+    </div>
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">TOP assunto</div>
+      <div class="ger-kpi-value amber">${topAss ? topAss[1] : 0}</div>
+      <span class="ger-kpi-delta delta-neu">${topAss ? topAss[0] : '—'}</span>
+    </div>
+  `;
+
+  // ── Pizzas (sprint só entra se houver sprint preenchida) ──
+  const defs = [
+    { id:'chart-pts-semana',  title:'Pontos por Semana',            data: porSemana, ordenar: false },
+    { id:'chart-pts-dev',     title:'Pontos por Dev (TOP)',         data: porDevOrd     },
+    { id:'chart-pts-assunto', title:'Pontos por Assunto (TOP)',     data: porAssuntoOrd },
+  ];
+  if (comSprint.length) {
+    defs.push({ id:'chart-pts-sprint', title:'Pontos por Sprint (TOP)', data: porSprintOrd });
+  }
+  gerRenderPies('ger-pts-charts', defs, ' pt');
+
+  // ── Matriz dev × semana ──
+  const cols = semanas.map((_, i) => 'S' + (i+1));
+  const matriz = {};
+  itens.forEach(m => {
+    const devs = splitDevs(m.dev);
+    const val  = Number(m.poker_pontos) / devs.length;
+    const idx  = gerSemanaIndex(gerDataRefPontos(m), semanas);
+    devs.forEach(d => {
+      if (!matriz[d]) matriz[d] = { total: 0, sem: new Array(semanas.length).fill(0) };
+      matriz[d].total += val;
+      if (idx >= 0) matriz[d].sem[idx] += val;
+    });
+  });
+  const linhas = Object.entries(matriz).sort((a,b) => b[1].total - a[1].total);
+
+  elBadge.textContent = `${itens.length} demanda${itens.length!==1?'s':''} · ${totalPts} pt`;
+  elThead.innerHTML = `<tr>
+    <th>Dev</th>
+    ${cols.map(c => `<th style="text-align:right">${c}</th>`).join('')}
+    <th style="text-align:right">Total</th>
+  </tr>`;
+
+  const fmt = v => v ? (Math.round(v * 10) / 10).toString().replace('.', ',') : '—';
+  elTbody.innerHTML = linhas.map(([dev, d]) => `<tr>
+    <td>${dev}</td>
+    ${d.sem.map(v => `<td style="text-align:right">${fmt(v)}</td>`).join('')}
+    <td style="text-align:right;font-weight:700">${fmt(d.total)}</td>
+  </tr>`).join('') + `<tr style="background:var(--bg3)">
+    <td style="font-weight:700">Total</td>
+    ${cols.map((_, i) => {
+      const soma = linhas.reduce((s, [,d]) => s + d.sem[i], 0);
+      return `<td style="text-align:right;font-weight:700">${fmt(soma)}</td>`;
+    }).join('')}
+    <td style="text-align:right;font-weight:700">${fmt(linhas.reduce((s,[,d]) => s + d.total, 0))}</td>
+  </tr>`;
 }
 
 // ─── MODAL TEMA ───────────────────────────────────────────────────
