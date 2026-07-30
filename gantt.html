@@ -1081,10 +1081,9 @@ async function loadFromGitHub() {
   try {
     let decoded;
     if (VIEWER_MODE) {
-      // leitura pública, sem token — arquivo servido pelo próprio site
-      const res = await fetch('data/melhorias.json?t=' + Date.now(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('Erro ao carregar dados.');
-      decoded = await res.json();
+      // O JSON deixou de ser servido pelo site (mora em repo privado): a leitura
+      // do modo visualizacao tambem passa pelo Worker.
+      decoded = await lerDados(true);
     } else if (!runtimeToken) {
       // Modo senha (via Worker): repo é público, então lemos sem token.
       // Sem sha aqui — a gravação é feita pelo Worker, que resolve o sha no servidor.

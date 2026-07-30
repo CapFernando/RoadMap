@@ -326,6 +326,22 @@ async function garantirSenha() {
   return true;
 }
 
+// Leitura pelo Worker. O JSON deixou de ser servido publicamente (mora em repo
+// privado), entao RAW_URL nao responde mais — a unica porta e o Worker.
+async function lerDadosImp() {
+  const cred = {};
+  const senha = _impPw || sessionStorage.getItem('rm_admin_pw') || sessionStorage.getItem('rm_view_pw');
+  if (senha) cred.senha = senha;
+  const chave = new URLSearchParams(location.search).get('k') || sessionStorage.getItem('rm_view_key');
+  if (chave) cred.chave = chave;
+  const r = await fetch(PROXY_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action: 'dados' }, cred))
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
 // ── STATE ───────────────────────────────────────────────────────────────────
 let temas = [], devs = [], existingMelhorias = [];
 // decisions[rowIndex] = 'new' | 'skip' | 'update:<existingId>'
@@ -378,9 +394,8 @@ function similarity(a, b) {
 // ── INIT ────────────────────────────────────────────────────────────────────
 (async function init() {
   try {
-    const r = await fetch(RAW_URL + '?t=' + Date.now(), { cache:'no-store' });
-    if (r.ok) {
-      const d = await r.json();
+    const d = await lerDadosImp();
+    if (d) {
       temas = d.temas || [];
       existingMelhorias = d.melhorias || [];
       devs = (d.desenvolvedores||[]).flatMap(v => v.split(/[\/,]/).map(s=>s.trim())).filter(Boolean);
@@ -844,10 +859,8 @@ async function runImport() {
       fileSha = j.sha;
       currentData = await ghReadRaw(runtimeToken);
     } else {
-      // Modo senha: leitura pública (repo público); o Worker resolve o sha ao gravar
-      const r = await fetch(RAW_URL+'?t='+Date.now(), { cache:'no-store' });
-      if (!r.ok) throw new Error('HTTP '+r.status);
-      currentData = await r.json();
+      // Modo senha: leitura pelo Worker (o JSON nao e mais publico)
+      currentData = await lerDadosImp();
     }
     log(`✓ ${currentData.melhorias?.length||0} demanda(s) existentes`);
   } catch(e) { msgEl.innerHTML=`<div class="msg msg-err">Erro ao buscar dados: ${e.message}</div>`; return; }
