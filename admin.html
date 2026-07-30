@@ -458,6 +458,11 @@
   <div id="save-error" style="display:none;background:#5C0A0A;color:#F9A0A0;border-bottom:1px solid #8C1010;padding:10px 24px;font-size:13px;cursor:pointer" onclick="this.style.display='none'">
     ⚠️ Erro ao publicar — clique aqui para fechar
   </div>
+  <div id="stale-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:#3D3600;color:#FFE14D;border-bottom:1px solid #6B5F00;padding:10px 24px;font-size:13px">
+    <span>🔄 Há alterações mais novas no servidor (feitas no Planejamento, no Painel Dev ou por outra pessoa). Esta tela está mostrando uma versão anterior.</span>
+    <button class="btn btn-secondary btn-sm" onclick="recarregarDoServidor()">Atualizar agora</button>
+    <button class="btn btn-secondary btn-sm" onclick="avisaDesatualizado(false)">Depois</button>
+  </div>
 
   <main>
     <div class="tabs">
@@ -879,24 +884,48 @@ let _dirtyMelhoriaIds = new Set();
 // Retrato de cada melhoria como veio do servidor. Base do merge por campo: sem
 // ele nao ha como distinguir "mudei este campo" de "meu objeto esta velho".
 let _baseMelhorias = new Map();
+// Havia mudança no servidor mas o recarregamento foi bloqueado por edição local.
+function avisaDesatualizado(mostrar) {
+  const el = document.getElementById('stale-banner');
+  if (el) el.style.display = mostrar ? 'flex' : 'none';
+}
+
+async function recarregarDoServidor() {
+  if ((_pendingEdits || _kbDirty) &&
+      !confirm('Você tem alterações ainda não publicadas nesta tela. Atualizar vai descartá-las e trazer a versão do servidor.\n\nContinuar?')) return;
+  _pendingEdits = false; _kbDirty = false;
+  _dirtyMelhoriaIds.clear();
+  avisaDesatualizado(false);
+  await loadFromGitHub(true);
+  toast('Atualizado com a versão do servidor.', 'ok');
+}
+
 async function adminCheckUpdates() {
   if (document.getElementById('admin-app').style.display === 'none') return;
   if (_adminPollActive) return;
   if (runtimeToken && !fileSha) return;
-  if (_kbDirty || _pendingEdits) return; // não recarrega enquanto há mudança local pendente de salvar
+  // Antes esta função saía aqui quando havia edição local pendente — e então
+  // parava de olhar o servidor SEM AVISAR. Quem movia cards no Planejamento não
+  // via nada mudar no Admin e parecia que a alteração não tinha sido gravada.
+  // Agora ela sempre checa: sem edição local, recarrega; com edição local,
+  // mostra o aviso e deixa a decisão de descartar para o usuário.
+  const bloqueado = _kbDirty || _pendingEdits;
   _adminPollActive = true;
   try {
+    let novo = false;
     if (runtimeToken) {
       const res = await fetch(API_URL + '?t=' + Date.now(), {
         cache: 'no-store',
         headers: { Authorization: `token ${runtimeToken}`, Accept: 'application/vnd.github.v3+json' }
       });
-      if (res.ok) { const json = await res.json(); if (json.sha !== fileSha) await loadFromGitHub(true); }
+      if (res.ok) { const json = await res.json(); novo = json.sha !== fileSha; }
     } else {
-      // modo senha: compara atualizado_em via RAW (público, sem rate limit)
       const d = await lerDados(true);
-      if (_pollTs !== undefined && d.atualizado_em !== _pollTs) await loadFromGitHub(true);
+      novo = _pollTs !== undefined && d.atualizado_em !== _pollTs;
     }
+    if (novo && bloqueado) avisaDesatualizado(true);
+    else if (novo)        await loadFromGitHub(true);
+    else                  avisaDesatualizado(false);
   } catch(_) {}
   _adminPollActive = false;
 }
