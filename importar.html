@@ -300,6 +300,7 @@
 </div><!-- /container -->
 
 <script>
+
 // ── CONFIG ──────────────────────────────────────────────────────────────────
 const GITHUB_USER = 'CapFernando';
 const GITHUB_REPO = 'RoadMap';
@@ -871,7 +872,7 @@ async function runImport() {
   rows.forEach((r, i) => {
     if (!r.titulo) return;
     const decision = dedupDecisions[i] || 'new';
-    if (decision==='skip') { skips++; log(`⊘ Linha ${i+1} pulada: "${r.titulo}"`); return; }
+    if (decision==='skip') { skips++; log(`⊘ Linha ${i+1} pulada: "${esc(r.titulo)}"`); return; }
 
     const temaId = r.tema ? tMap[r.tema.trim().toLowerCase()] || null : null;
     const payload = {
@@ -890,12 +891,12 @@ async function runImport() {
       if (idx>=0) {
         currentData.melhorias[idx] = { ...currentData.melhorias[idx], ...payload };
         updates++;
-        log(`↻ Atualizado: "${r.titulo}"`);
+        log(`↻ Atualizado: "${esc(r.titulo)}"`);
       }
     } else {
       currentData.melhorias.push({ id:uid(), criado_em:now, ...payload });
       inserts++;
-      log(`✚ Adicionado: "${r.titulo}"`);
+      log(`✚ Adicionado: "${esc(r.titulo)}"`);
     }
   });
 

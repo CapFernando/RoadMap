@@ -1167,11 +1167,11 @@ function renderCard(m, colKey) {
   const meta = [];
   if (m.inicio)  meta.push(`📅 ${formatDate(m.inicio)}`);
   if (m.entrega) meta.push(`🏁 ${formatDate(m.entrega)}`);
-  if (m.estimativa) meta.push(`⏱ ${m.estimativa}`);
+  if (m.estimativa) meta.push(`⏱ ${devEsc(m.estimativa)}`);
   // Parent info (este card é dependência de outro)
   const parent = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
   const parentInfo = parent
-    ? `<div class="kcard-parent-info">🔗 Dep. de: ${parent.titulo.substring(0,38)}${parent.titulo.length>38?'…':''}</div>`
+    ? `<div class="kcard-parent-info">🔗 Dep. de: ${devEsc(parent.titulo.substring(0,38))}${parent.titulo.length>38?'…':''}</div>`
     : '';
   return `
     <div class="kcard" draggable="true" id="card-${m.id}"
@@ -1179,10 +1179,10 @@ function renderCard(m, colKey) {
          ondragend="onDragEnd(event)"
          onclick="openStatusModal('${m.id}')">
       ${parentInfo}
-      <div class="kcard-title">${m.titulo}</div>
+      <div class="kcard-title">${devEsc(m.titulo)}</div>
       ${tema ? `<div class="kcard-tema">${tema}</div>` : ''}
       ${meta.length ? `<div class="kcard-meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>` : ''}
-      ${m.descricao ? `<div style="font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:6px;">${m.descricao.substring(0,90)}${m.descricao.length>90?'…':''}</div>` : ''}
+      ${m.descricao ? `<div style="font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:6px;">${devEsc(m.descricao.substring(0,90))}${m.descricao.length>90?'…':''}</div>` : ''}
       <div>${badge}</div>
       ${renderDepSection(m)}
     </div>`;
@@ -1214,7 +1214,7 @@ function renderDepSection(m) {
     const dt = d.entrega ? formatDate(d.entrega) : 'sem data';
     return `<div class="dep-row ${done?'dep-done':'dep-open'}">
       <span>${done?'✅':'⏳'}</span>
-      <span><strong>${d.titulo.substring(0,32)}${d.titulo.length>32?'…':''}</strong></span>
+      <span><strong>${devEsc(d.titulo.substring(0,32))}${d.titulo.length>32?'…':''}</strong></span>
       <span style="color:var(--text3)">· ${devName} · ${dt}</span>
       <span class="kcard-badge badge-${dsk}" style="font-size:10px;">${STATUS_LABELS[dsk]||dsk}</span>
     </div>`;
@@ -1351,8 +1351,8 @@ function openStatusModal(id, preselect) {
         const dsk = getStatusKey(d);
         return `<div style="font-size:12px;margin-bottom:4px;display:flex;gap:6px;align-items:center;">
           <span>${dsk==='concluido'?'✅':'⏳'}</span>
-          <span style="flex:1">${d.titulo}</span>
-          <span style="color:var(--text3)">${d.dev||'—'}</span>
+          <span style="flex:1">${devEsc(d.titulo)}</span>
+          <span style="color:var(--text3)">${devEsc(d.dev||'—')}</span>
           <span style="color:var(--text3)">${d.entrega?formatDate(d.entrega):''}</span>
           <span class="kcard-badge badge-${dsk}" style="font-size:10px;">${STATUS_LABELS[dsk]||dsk}</span>
         </div>`;
@@ -1361,10 +1361,10 @@ function openStatusModal(id, preselect) {
   document.getElementById('ms-info').innerHTML = `
     <div class="modal-info-row"><span>Tema:</span><strong>${tema}</strong></div>
     ${m.tipo ? `<div class="modal-info-row"><span>Classificação:</span><strong>${m.tipo === 'sustentacao' ? '🔧 Sustentação' : m.tipo === 'evolucao' ? '🚀 Evolução' : devEsc(m.tipo)}</strong></div>` : ''}
-    ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${m.dev}</strong></div>` : ''}
+    ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${devEsc(m.dev)}</strong></div>` : ''}
     ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
     ${m.entrega ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
-    ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${m.descricao}</div>` : ''}
+    ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${devEsc(m.descricao)}</div>` : ''}
     ${anexosHTMLDev(m)}
     ${discoveryHTMLDev(m)}
     ${depsInfoHTML}
@@ -1666,7 +1666,7 @@ function renderTemasModal() {
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
       <span style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0;"></span>
       <div style="flex:1;">
-        <div style="font-size:14px;font-weight:600;">${t.nome}</div>
+        <div style="font-size:14px;font-weight:600;">${devEsc(t.nome)}</div>
         <div style="font-size:12px;color:var(--text3);">${n} demanda${n!==1?'s':''}</div>
       </div>
       <button class="btn btn-secondary btn-sm" onclick="openTemaForm('${t.id}')">Editar</button>
@@ -1706,8 +1706,8 @@ async function deleteTema(id) {
   const t = state.temas.find(x => x.id === id);
   const n = state.melhorias.filter(m => m.tema_id === id).length;
   const msg = n > 0
-    ? `Excluir o tema "${t?.nome}"? As ${n} demanda(s) vinculadas ficarão sem tema.`
-    : `Excluir o tema "${t?.nome}"?`;
+    ? `Excluir o tema "${devEsc(t?.nome)}"? As ${n} demanda(s) vinculadas ficarão sem tema.`
+    : `Excluir o tema "${devEsc(t?.nome)}"?`;
   if (!confirm(msg)) return;
   state.temas = state.temas.filter(x => x.id !== id);
   renderTemasModal();

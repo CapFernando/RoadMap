@@ -531,7 +531,7 @@ function metaHTML(m) {
   const items = [];
   if (m.inicio)  items.push(`${svgIcon('calendar')} Início: ${formatDate(m.inicio)}`);
   if (m.entrega) items.push(`${svgIcon('calendar')} Entrega: ${formatDate(m.entrega)}`);
-  if (m.estimativa) items.push(`${svgIcon('clock')} Estimativa: ${m.estimativa}`);
+  if (m.estimativa) items.push(`${svgIcon('clock')} Estimativa: ${fEsc(m.estimativa)}`);
   if (!items.length) return '';
   return `<div class="melhoria-meta">${items.map(i => `<span class="meta-item">${i}</span>`).join('')}</div>`;
 }
@@ -548,7 +548,7 @@ function renderMelhoria(m) {
   return `
     <div class="melhoria">
       <div class="melhoria-top">
-        <div class="melhoria-titulo">${m.titulo}</div>
+        <div class="melhoria-titulo">${fEsc(m.titulo)}</div>
         ${badgeHTML(m.status, m.status_planejamento)}
       </div>
       ${metaHTML(m)}
@@ -566,7 +566,7 @@ function renderTema(tema, melhorias, idx) {
       <div class="tema-header" onclick="toggleTema('${id}')" aria-expanded="false" aria-controls="${id}-body">
         <div class="tema-header-left">
           <span style="width:12px;height:12px;border-radius:50%;background:${cor};flex-shrink:0;display:inline-block;"></span>
-          <span class="tema-nome">${tema.nome}</span>
+          <span class="tema-nome">${fEsc(tema.nome)}</span>
           <span class="tema-count">${count} ${count === 1 ? 'melhoria' : 'melhorias'}</span>
         </div>
         <span class="tema-arrow" id="${id}-arrow">${svgIcon('chevron')}</span>
@@ -621,7 +621,7 @@ function buildCharts(temas, melhorias) {
   const legTema = document.getElementById('leg-temas');
   temas.forEach((t, i) => {
     const n = temaData[i];
-    legTema.innerHTML += `<span class="leg"><span class="leg-sq" style="background:${temaCores[i]}"></span>${t.nome} <strong style="color:var(--text);margin-left:2px;">${n}</strong></span>`;
+    legTema.innerHTML += `<span class="leg"><span class="leg-sq" style="background:${temaCores[i]}"></span>${fEsc(t.nome)} <strong style="color:var(--text);margin-left:2px;">${n}</strong></span>`;
   });
 
   const legStatus = document.getElementById('leg-status');
@@ -1091,10 +1091,10 @@ function buildReportHTML() {
       const meta = [];
       if (m.inicio)  meta.push(`📅 Início: ${formatDate(m.inicio)}`);
       if (m.entrega) meta.push(`🏁 Entrega: ${formatDate(m.entrega)}`);
-      if (m.estimativa) meta.push(`⏱ ${m.estimativa}`);
+      if (m.estimativa) meta.push(`⏱ ${fEsc(m.estimativa)}`);
       return `<div style="background:#1E1E1C;border:1px solid #2E2E2B;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:${meta.length?'6px':'0'};">
-          <span style="font-size:13px;font-weight:600;color:#ECEAE2;line-height:1.4;">${m.titulo}</span>
+          <span style="font-size:13px;font-weight:600;color:#ECEAE2;line-height:1.4;">${fEsc(m.titulo)}</span>
           ${badge}
         </div>
         ${meta.length ? `<div style="font-size:11px;color:#6E6A62;display:flex;flex-wrap:wrap;gap:10px;">${meta.map(i=>`<span>${i}</span>`).join('')}</div>` : ''}
@@ -1104,7 +1104,7 @@ function buildReportHTML() {
     return `<div style="margin-bottom:24px;">
       <div style="display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid #2E2E2B;margin-bottom:10px;">
         <span style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0;display:inline-block;"></span>
-        <span style="font-size:13px;font-weight:700;color:#ECEAE2;text-transform:uppercase;letter-spacing:.05em;">${temaNome}</span>
+        <span style="font-size:13px;font-weight:700;color:#ECEAE2;text-transform:uppercase;letter-spacing:.05em;">${fEsc(temaNome)}</span>
         <span style="font-size:12px;color:#6E6A62;">${items.length} ${items.length===1?'item':'itens'}</span>
       </div>
       ${cardsHTML}

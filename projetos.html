@@ -190,6 +190,7 @@
 const REPO    = 'CapFernando/RoadMap';
 const FILE    = 'data/melhorias.json';
 const API_URL = `https://api.github.com/repos/${REPO}/contents/${FILE}`;
+function pEsc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
 const PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
 const RAW_URL = `https://raw.githubusercontent.com/${REPO}/main/${FILE}`;
 
@@ -402,8 +403,8 @@ function renderPage() {
         <div class="proj-item-header" onclick="toggleProj('${pid}')">
           <span class="proj-rank">${i+1}</span>
           <div class="proj-info">
-            <div class="proj-name" title="${m.titulo}">${m.titulo}</div>
-            <div class="proj-meta">${devs}</div>
+            <div class="proj-name" title="${pEsc(m.titulo)}">${pEsc(m.titulo)}</div>
+            <div class="proj-meta">${pEsc(devs)}</div>
           </div>
           <div class="proj-hours-summary">
             <div class="proj-hours-main" style="color:${cor}">${hReal}h</div>
@@ -460,7 +461,7 @@ function renderPage() {
       return `<div class="dev-row">
         <div class="dev-avatar" style="background:${bg};color:${fg}">${initials}</div>
         <div class="dev-content">
-          <div class="dev-name">${dev}</div>
+          <div class="dev-name">${pEsc(dev)}</div>
           <div class="dev-hours-row">
             <div class="dev-hours-item">
               <span class="dev-hours-val" style="color:#3B8FE8">${hPlanRnd}h</span>
@@ -486,7 +487,7 @@ function renderPage() {
         <div class="tema-header-left">
           <div class="tema-stripe" style="background:${cor}"></div>
           <div>
-            <div class="tema-name">${tema.nome}</div>
+            <div class="tema-name">${pEsc(tema.nome)}</div>
             <div class="tema-sub">${temaItems.length} demandas · ${concluidos.length} concluídas</div>
           </div>
         </div>

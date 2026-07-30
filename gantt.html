@@ -1319,7 +1319,7 @@ function renderFilters() {
   const ft = document.getElementById('f-tema');
   const fv = ft ? ft.value : '';
   ft.innerHTML = `<option value="">Todos temas</option>` +
-    state.temas.map(t => `<option value="${t.id}" ${fv===t.id?'selected':''}>${t.nome}</option>`).join('');
+    state.temas.map(t => `<option value="${t.id}" ${fv===t.id?'selected':''}>${esc(t.nome)}</option>`).join('');
 
   // dev
   const fd = document.getElementById('f-dev');
@@ -1723,7 +1723,7 @@ function showTooltip(e, id) {
     ${m.dev ? `<div class="tt-row"><b>Dev:</b> ${esc(m.dev)}</div>` : ''}
     ${m.solicitante ? `<div class="tt-row"><b>Solicitante:</b> ${esc(m.solicitante)}</div>` : ''}
     ${m.inicio ? `<div class="tt-row"><b>Período:</b> ${fmtDate(m.inicio)} → ${fmtDate(m.entrega||m.inicio)}</div>` : ''}
-    ${m.estimativa_horas ? `<div class="tt-row"><b>Estimativa:</b> ${m.estimativa_horas}h</div>` : ''}
+    ${m.estimativa_horas ? `<div class="tt-row"><b>Estimativa:</b> ${esc(m.estimativa_horas)}h</div>` : ''}
     ${m.sprint ? `<div class="tt-row"><b>Sprint:</b> ${esc(m.sprint)}</div>` : ''}
   `;
   positionTooltip(e, tt);
@@ -1956,7 +1956,7 @@ function openModal(id, prefillDev, prefillDate) {
         return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
           <span>${done?'✅':'⏳'}</span>
           <span style="flex:1">${esc(d.titulo)}</span>
-          <span style="color:var(--text3,#6E6A62)">${d.dev||'—'}</span>
+          <span style="color:var(--text3,#6E6A62)">${esc(d.dev||'—')}</span>
           <span style="color:var(--text3,#6E6A62)">${d.entrega||''}</span>
         </div>`;
       }).join('')}
@@ -2265,7 +2265,7 @@ async function removeDev(i) {
       STATUS_BLOQUEIO.includes(m.status_planejamento || 'backlog')
     );
     if (demandasAtivas.length > 0) {
-      const titulos = demandasAtivas.map(m => `• ${m.titulo || m.id}`).join('\n');
+      const titulos = demandasAtivas.map(m => `• ${esc(m.titulo || m.id)}`).join('\n');
       alert(`"${name}" está vinculado a ${demandasAtivas.length} demanda(s) ativa(s):\n\n${titulos}\n\nCorrija ou reatribua essas demandas antes de remover o dev.`);
       return;
     }

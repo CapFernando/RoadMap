@@ -77,6 +77,96 @@ async function conflito(gh, body, headers) {
   return null;
 }
 
+// Texto vindo de fora nao pode carregar marcacao. O formulario publico do dash
+// nao exige senha: qualquer pessoa na internet consegue gravar uma demanda, e o
+// titulo dela e renderizado nas telas internas. Com "<img src=x onerror=...>" no
+// titulo, o script rodava no navegador do Admin — onde a senha fica na
+// sessionStorage. Testado e confirmado antes desta correcao.
+//
+// A limpeza acontece AQUI, na entrada, alem do escape nas telas: assim uma tela
+// nova (ou uma que eu tenha deixado passar) nao reabre o buraco.
+function limpaTexto(v, max) {
+  if (v == null) return '';
+  // Remove so o que e tag de verdade (`<` seguido de letra, `/` ou `!`). Um `<`
+  // solto e conteudo legitimo — "custo < 100 e prazo > 30" nao pode perder texto.
+  // O escape nas telas cuida do caractere solto; aqui o alvo e a marcacao.
+  return String(v)
+    .replace(/<\/?[a-zA-Z!?][^>]*>?/g, '')
+    .trim()
+    .slice(0, max || 500);
+}
+// Aplica em profundidade: o discovery e um objeto com listas de textos livres.
+// Anexo do publico: nome limpo, tipo restrito e `dados` apenas como data: URL.
+// Sem isto o campo aceitava qualquer string — inclusive "javascript:..." que o
+// painel abriria em window.open ao clicar no anexo.
+function sanitizaAnexos(lista) {
+  if (!Array.isArray(lista)) return [];
+  return lista.slice(0, 10).map(a => {
+    if (!a || typeof a.dados !== 'string') return null;
+    if (!/^data:[a-zA-Z0-9.+/-]+;base64,[A-Za-z0-9+/=\s]*$/.test(a.dados)) return null;
+    if (a.dados.length > 3 * 1024 * 1024) return null;
+    return {
+      nome: limpaTexto(a.nome, 160) || 'anexo',
+      tipo: limpaTexto(a.tipo, 100),
+      tamanho: Number(a.tamanho) || 0,
+      dados: a.dados,
+    };
+  }).filter(Boolean);
+}
+
+function limpaProfundo(v, prof) {
+  if (prof > 6) return null;
+  if (typeof v === 'string') return limpaTexto(v, 4000);
+  if (Array.isArray(v)) return v.slice(0, 200).map(x => limpaProfundo(x, (prof || 0) + 1));
+  if (v && typeof v === 'object') {
+    const o = {};
+    Object.keys(v).slice(0, 60).forEach(k => { o[limpaTexto(k, 60)] = limpaProfundo(v[k], (prof || 0) + 1); });
+    return o;
+  }
+  if (typeof v === 'number' || typeof v === 'boolean' || v === null) return v;
+  return null;
+}
+
+// Limite de requisicoes por IP e por acao, em janela de 1 minuto (D1).
+// Alvo principal: forca bruta na senha do Admin. O login nao tinha nenhum freio —
+// era possivel testar senha sem limite, e a senha da acesso de gravacao a base
+// inteira. Tambem contem abuso do formulario publico, que grava sem autenticacao.
+//
+// Falha ABERTA de proposito: se o D1 estiver indisponivel, a requisicao passa. Um
+// banco fora do ar nao pode derrubar o sistema todo; o freio e defesa contra
+// abuso, nao o controle de acesso (esse e a senha).
+const LIMITES = {
+  'auth':           { max: 10,  janela: 60 },   // login: cobre erro de digitacao, mata brute force
+  'publish':        { max: 40,  janela: 60 },
+  'dev-publish':    { max: 40,  janela: 60 },
+  'poker-abrir':    { max: 10,  janela: 60 },
+  'poker-entrar':   { max: 20,  janela: 60 },
+  'poker-votar':    { max: 60,  janela: 60 },
+  'poker-gravar':   { max: 30,  janela: 60 },
+  'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
+  // poker-estado fica de fora: o painel faz polling a cada 1,5s (~40/min por pessoa)
+};
+
+async function limiteExcedido(env, ip, acao) {
+  const cfg = LIMITES[acao];
+  if (!cfg || !env.POKER_DB) return false;
+  try {
+    const db = env.POKER_DB;
+    await db.prepare('CREATE TABLE IF NOT EXISTS rate_limit (chave TEXT PRIMARY KEY, expira INTEGER NOT NULL, n INTEGER NOT NULL)').run();
+    const agora = Math.floor(Date.now() / 1000);
+    const bucket = Math.floor(agora / cfg.janela);
+    const chave = acao + '|' + ip + '|' + bucket;
+    await db.prepare('INSERT INTO rate_limit (chave, expira, n) VALUES (?,?,1) ON CONFLICT(chave) DO UPDATE SET n = n + 1')
+      .bind(chave, agora + cfg.janela * 2).run();
+    const row = await db.prepare('SELECT n FROM rate_limit WHERE chave = ?').bind(chave).first();
+    // faxina barata: 1 em ~50 requisicoes limpa o que expirou
+    if (Math.random() < 0.02) await db.prepare('DELETE FROM rate_limit WHERE expira < ?').bind(agora).run();
+    return !!row && row.n > cfg.max;
+  } catch (_) {
+    return false;
+  }
+}
+
 function toB64(str) {
   const bytes = new TextEncoder().encode(str);
   let bin = ''; const CHUNK = 0x8000;
@@ -171,6 +261,14 @@ export default {
 
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: 'JSON invalido' }, 400, headers); }
+
+    // Freio por IP antes de qualquer trabalho. `sugestao` cobre o formulario
+    // publico, que nao tem action propria.
+    const ip = request.headers.get('CF-Connecting-IP') || 'sem-ip';
+    const acaoLim = body.action || 'sugestao';
+    if (await limiteExcedido(env, ip, acaoLim)) {
+      return json({ error: 'muitas_tentativas', detail: 'Muitas requisicoes. Aguarde um minuto e tente de novo.' }, 429, headers);
+    }
 
     const REPO_NAME = env.DATA_REPO || REPO_NAME_PADRAO;
     const gh = (path, opts = {}) => fetch('https://api.github.com/repos/' + REPO_OWNER + '/' + REPO_NAME + '/' + path, {
@@ -286,6 +384,11 @@ export default {
         if (ses.revelado) return json({ error: 'Votacao encerrada nesta rodada' }, 409, headers);
         if (!ses.melhoria_id) return json({ error: 'Nenhuma demanda em votacao' }, 409, headers);
         if (!POKER_CARTAS.includes(String(body.valor))) return json({ error: 'Carta invalida' }, 400, headers);
+        // participante precisa existir NESTA sala: sem isto era possivel votar em
+        // nome de outra pessoa mandando o id dela.
+        const pOk = await db.prepare('SELECT id FROM poker_participante WHERE id = ? AND codigo = ?')
+          .bind(String(body.participante || ''), codigo).first();
+        if (!pOk) return json({ error: 'Participante nao esta na sala' }, 403, headers);
         const p = await db.prepare('SELECT id FROM poker_participante WHERE id = ? AND codigo = ?')
           .bind(String(body.participante || ''), codigo).first();
         if (!p) return json({ error: 'Participante nao reconhecido' }, 403, headers);
@@ -298,12 +401,20 @@ export default {
       if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
 
       if (body.action === 'poker-revelar') {
+        // Acao de facilitador: o painel sempre manda a senha, mas o servidor nao
+        // conferia. Sem isto, quem tivesse o codigo da sala revelava votos, trocava
+        // a pauta ou gravava pontuacao em qualquer demanda do arquivo.
+        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
         await db.prepare('UPDATE poker_sessao SET revelado = 1 WHERE codigo = ?').bind(codigo).run();
         return json({ ok: true, estado: await pokerEstado(db, codigo) }, 200, headers);
       }
 
       // Troca a demanda em votacao e zera a rodada
       if (body.action === 'poker-demanda') {
+        // Acao de facilitador: o painel sempre manda a senha, mas o servidor nao
+        // conferia. Sem isto, quem tivesse o codigo da sala revelava votos, trocava
+        // a pauta ou gravava pontuacao em qualquer demanda do arquivo.
+        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
         const mid = String(body.melhoria_id || '');
         await db.prepare('UPDATE poker_sessao SET melhoria_id = ?, revelado = 0 WHERE codigo = ?').bind(mid, codigo).run();
         await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ?').bind(codigo, mid).run();
@@ -319,6 +430,10 @@ export default {
       }
 
       if (body.action === 'poker-revotar') {
+        // Acao de facilitador: o painel sempre manda a senha, mas o servidor nao
+        // conferia. Sem isto, quem tivesse o codigo da sala revelava votos, trocava
+        // a pauta ou gravava pontuacao em qualquer demanda do arquivo.
+        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
         const ses = await db.prepare('SELECT melhoria_id FROM poker_sessao WHERE codigo = ?').bind(codigo).first();
         await db.prepare('UPDATE poker_sessao SET revelado = 0 WHERE codigo = ?').bind(codigo).run();
         await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ?')
@@ -329,6 +444,10 @@ export default {
       // Grava so os dois campos na demanda — nao recebe o estado inteiro, entao
       // uma tela desatualizada nao pode sobrescrever o resto da base.
       if (body.action === 'poker-gravar') {
+        // Acao de facilitador: o painel sempre manda a senha, mas o servidor nao
+        // conferia. Sem isto, quem tivesse o codigo da sala revelava votos, trocava
+        // a pauta ou gravava pontuacao em qualquer demanda do arquivo.
+        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
         const mid = String(body.melhoria_id || '');
         if (!mid) return json({ error: 'melhoria_id obrigatorio' }, 400, headers);
         const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
@@ -463,7 +582,8 @@ export default {
       if (!t || !t.nome) return;
       const existing = data.temas.find(x => (x.nome || '').toLowerCase() === t.nome.toLowerCase());
       if (existing) { if (temaId === t.id) temaId = existing.id; }
-      else { const novo = { id: t.id || uid(), nome: t.nome }; data.temas.push(novo); if (temaId === t.id) temaId = novo.id; }
+      else { const nome = limpaTexto(t.nome, 120); if (!nome) return;
+             const novo = { id: uid(), nome }; data.temas.push(novo); if (temaId === t.id) temaId = novo.id; }
     });
 
     // tipo: aceita apenas os dois valores conhecidos; qualquer outra coisa entra
@@ -471,20 +591,23 @@ export default {
     const TIPOS_VALIDOS = ['sustentacao', 'evolucao'];
     const tipo = TIPOS_VALIDOS.includes(m.tipo) ? m.tipo : '';
 
+    // Todo texto que vem de fora passa pela limpeza. Sem isto, titulo com
+    // "<img src=x onerror=...>" executava script no navegador do Admin.
     const nova = {
-      titulo: String(m.titulo).trim(),
-      descricao: m.descricao || '',
+      titulo: limpaTexto(m.titulo, 300),
+      descricao: limpaTexto(m.descricao, 4000),
       tema_id: temaId,
       tipo: tipo,
-      solicitante: m.solicitante || '',
-      discovery: m.discovery || undefined,
-      anexos: Array.isArray(m.anexos) ? m.anexos : [],
+      solicitante: limpaTexto(m.solicitante, 120),
+      discovery: m.discovery ? limpaProfundo(m.discovery, 0) : undefined,
+      anexos: sanitizaAnexos(m.anexos),
       id: uid(),
       status: 'recebida',
       status_planejamento: 'backlog',
       dev: '', prioridade: '', inicio: '', entrega: '', estimativa: '',
       criado_em: new Date().toISOString(),
     };
+    if (!nova.titulo) return json({ error: 'Titulo invalido' }, 400, headers);
     data.melhorias.push(nova);
     data.atualizado_em = new Date().toISOString();
 

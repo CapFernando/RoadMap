@@ -1643,7 +1643,7 @@ function renderTemas() {
     const n = state.melhorias.filter(m => m.tema_id === t.id).length;
     return `<div class="card">
       <div class="card-info">
-        <div class="card-nome">${t.nome}</div>
+        <div class="card-nome">${esc(t.nome)}</div>
         <div class="card-sub">${n} ${n===1?'melhoria':'melhorias'}</div>
       </div>
       <div class="card-actions">
@@ -1735,7 +1735,7 @@ function renderMelhorias() {
       // Dependência de outro card
       const parentM = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
       const parentBadge = parentM
-        ? `<span style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;">🔗 Dep. de: ${parentM.titulo.substring(0,30)}</span>`
+        ? `<span style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;">🔗 Dep. de: ${esc(parentM.titulo.substring(0,30))}</span>`
         : '';
       // Dependências abertas deste card
       const depCount = state.melhorias.filter(x => x.parent_id === m.id && statusKey(x) !== 'concluido').length;
@@ -1745,10 +1745,10 @@ function renderMelhorias() {
       return `<div class="card">
         <div class="card-info">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <div class="card-nome">${m.titulo}</div>${badge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}
+            <div class="card-nome">${esc(m.titulo)}</div>${badge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}
           </div>
           ${sub ? `<div class="card-sub">${sub}</div>` : ''}
-          ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${m.descricao.substring(0,120)}${m.descricao.length>120?'…':''}</div>` : ''}
+          ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${esc(m.descricao.substring(0,120))}${m.descricao.length>120?'…':''}</div>` : ''}
         </div>
         <div class="card-actions">
           <button class="btn btn-secondary btn-sm" onclick="openModalMelhoria('${m.id}')">Editar</button>
@@ -1757,7 +1757,7 @@ function renderMelhorias() {
       </div>`;
     }).join('');
     return `<div style="margin-bottom:18px;">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;">${temaNome} <span style="font-weight:400;opacity:.7;">(${groups[tKey].length})</span></div>
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;">${esc(temaNome)} <span style="font-weight:400;opacity:.7;">(${groups[tKey].length})</span></div>
       ${cards}
     </div>`;
   }).join('');
@@ -2479,9 +2479,9 @@ function renderGerencial() {
     const hrStr = isConcl ? (hrLog > 0 ? hrLog + 'h' : hrEf + 'h*') : '—';
     const spKey = m.status_planejamento || 'backlog';
     return `<tr>
-      <td title="${m.titulo}">${m.titulo.length > 40 ? m.titulo.slice(0,40)+'…' : m.titulo}</td>
+      <td title="${esc(m.titulo)}">${esc(m.titulo.length > 40 ? m.titulo.slice(0,40)+'…' : m.titulo)}</td>
       <td>${temaMap[m.tema_id] || '—'}</td>
-      <td>${m.dev || '—'}</td>
+      <td>${esc(m.dev || '—')}</td>
       <td>${formatDate(m.inicio)}</td>
       <td>${formatDate(m.entrega)}</td>
       <td>${hp ? hp + 'h' : '—'}</td>
@@ -2642,7 +2642,7 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
 
   const fmt = v => v ? (Math.round(v * 10) / 10).toString().replace('.', ',') : '—';
   elTbody.innerHTML = linhas.map(([dev, d]) => `<tr>
-    <td>${dev}</td>
+    <td>${esc(dev)}</td>
     ${d.sem.map(v => `<td style="text-align:right">${fmt(v)}</td>`).join('')}
     <td style="text-align:right;font-weight:700">${fmt(d.total)}</td>
   </tr>`).join('') + `<tr style="background:var(--bg3)">
@@ -3027,7 +3027,7 @@ function openModalMelhoria(id) {
   if (m?.parent_id) {
     const par = state.melhorias.find(x => x.id === m.parent_id);
     depHTML += `<div style="background:#341A6E33;border:1px solid #9B6FE855;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px;">
-      🔗 <strong>Dependência de:</strong> ${par ? par.titulo : '(card removido)'}
+      🔗 <strong>Dependência de:</strong> ${esc(par ? par.titulo : '(card removido)')}
     </div>`;
   }
   const childDeps = m ? state.melhorias.filter(x => x.parent_id === m.id) : [];
@@ -3039,8 +3039,8 @@ function openModalMelhoria(id) {
         const done = dsk === 'concluido';
         return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
           <span>${done?'✅':'⏳'}</span>
-          <span style="flex:1">${d.titulo}</span>
-          <span style="color:var(--text3);font-size:12px;">${d.dev||'—'}</span>
+          <span style="flex:1">${esc(d.titulo)}</span>
+          <span style="color:var(--text3);font-size:12px;">${esc(d.dev||'—')}</span>
           <span style="color:var(--text3);font-size:12px;">${d.entrega?formatDate(d.entrega):''}</span>
           <span class="badge badge-${dsk}" style="font-size:11px;">${STATUS_LABELS[dsk]||dsk}</span>
         </div>`;
