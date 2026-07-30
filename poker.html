@@ -152,7 +152,7 @@
     <div class="resultado" id="resultado" style="display:none">
       <div class="res-grid">
         <div class="res-box"><div class="res-lbl">Média</div><div class="res-val teal" id="res-media">—</div></div>
-        <div class="res-box"><div class="res-lbl">Fibonacci</div><div class="res-val blue" id="res-fib">—</div></div>
+        <div class="res-box"><div class="res-lbl">Carta sugerida</div><div class="res-val blue" id="res-fib">—</div></div>
         <div class="res-box"><div class="res-lbl">Votos</div><div class="res-val" id="res-votos">—</div></div>
       </div>
       <div id="grava-box" style="display:none;margin-top:18px">
@@ -165,6 +165,7 @@
             <select id="in-pontos" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit">
               <option value="">—</option><option>1</option><option>2</option><option>3</option>
               <option>5</option><option>8</option><option>13</option><option>21</option><option>34</option>
+              <option>55</option><option>89</option><option>100</option>
             </select>
           </label>
           <button class="btn btn-green" onclick="gravarNoCard()" id="btn-gravar">💾 Gravar no card</button>
@@ -251,7 +252,9 @@ const GITHUB_REPO = 'RoadMap';
 const DATA_PATH   = 'data/melhorias.json';
 const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
 const POLL_MS     = 1500;
-const FIBONACCI   = [1, 2, 3, 5, 8, 13, 21, 34];
+// Mesmo baralho do Worker (POKER_CARTAS, sem o '?'): usado para sugerir a carta
+// mais proxima da media.
+const FIBONACCI   = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 100];
 
 // ─── ESTADO LOCAL ─────────────────────────────────────────────────
 let _codigo      = (new URLSearchParams(location.search).get('s') || '').toUpperCase();
@@ -263,6 +266,9 @@ let _estado       = null;
 let _melhorias    = [];
 let _temas        = [];
 let _meuVoto      = '';
+// Cresce a cada ação que muda a rodada (votar, revelar, votar de novo, trocar a
+// pauta). Serve para descartar respostas de polling que saíram antes da ação.
+let _mutSeq       = 0;
 let _timer        = null;
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -496,6 +502,7 @@ function fibonacciMaisProximo(media) {
 
 async function votar(valor) {
   if (!_participante) { toast('Entre com seu nome para votar.', 'err'); abrir('ov-entrada'); return; }
+  _mutSeq++;
   const r = await api({ action: 'poker-votar', codigo: _codigo, participante: _participante, valor });
   if (!r.ok) { toast((r.body && r.body.error) || 'Não foi possível votar.', 'err'); return; }
   _meuVoto = valor;
@@ -504,12 +511,14 @@ async function votar(valor) {
 }
 
 async function revelar() {
+  _mutSeq++;
   const r = await api({ action: 'poker-revelar', codigo: _codigo, senha: _senha });
   if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao revelar.', 'err'); return; }
   aplicar(r.body.estado);
 }
 
 async function revotar() {
+  _mutSeq++;
   const r = await api({ action: 'poker-revotar', codigo: _codigo, senha: _senha });
   if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao reiniciar.', 'err'); return; }
   _meuVoto = '';
@@ -518,6 +527,7 @@ async function revotar() {
 
 async function porEmPauta(id) {
   if (!_facilitador) return;
+  _mutSeq++;
   const r = await api({ action: 'poker-demanda', codigo: _codigo, senha: _senha, melhoria_id: id });
   if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao trocar a demanda.', 'err'); return; }
   _meuVoto = '';
@@ -577,7 +587,7 @@ async function gravarNoCard() {
 
 // ─── RENDER ───────────────────────────────────────────────────────
 function renderCartas() {
-  const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','13','21','34','?'];
+  const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','13','21','34','55','89','100','?'];
   const travado = !_estado || _estado.revelado || !_estado.melhoria_id || !_participante;
   document.getElementById('cartas').innerHTML = cartas.map(c =>
     `<button class="carta-btn ${_meuVoto === c ? 'sel' : ''}" ${travado ? 'disabled' : ''} onclick="votar('${esc(c)}')">${esc(c)}</button>`
@@ -592,6 +602,14 @@ function renderCartas() {
 function aplicar(est) {
   if (!est) return;
   _estado = est;
+
+  // O voto guardado aqui é só um espelho — quem manda é o servidor. Quando o
+  // facilitador troca a pauta (ou clica em "Votar de novo"), o servidor apaga os
+  // votos da rodada, mas só a tela DELE limpava o _meuVoto; nos demais a carta
+  // anterior continuava marcada ("Seu voto: 8"), dando a impressão de que já
+  // havia voto e travando a nova votação. Aqui a seleção local cai junto.
+  const eu = _participante ? est.participantes.find(p => p.id === _participante) : null;
+  if (_meuVoto && !(eu && eu.votou)) _meuVoto = '';
 
   // pauta
   const m = _melhorias.find(x => x.id === est.melhoria_id);
@@ -655,6 +673,11 @@ function aplicar(est) {
 
 async function atualizar() {
   if (!_codigo) return;
+  // Snapshot do contador de ações: se eu votar (ou o facilitador mexer na
+  // rodada) enquanto este polling está no ar, a resposta que chega é anterior à
+  // ação e não deve ser aplicada — senão ela reverte a tela para o estado de
+  // antes, apagando a carta que acabei de escolher.
+  const seq = _mutSeq;
   // Manda o participante junto: o proprio polling e o sinal de vida. Sem isso o
   // servidor nao teria como saber que alguem fechou a aba.
   const r = await api({ action: 'poker-estado', codigo: _codigo, participante: _participante || undefined });
@@ -664,6 +687,7 @@ async function atualizar() {
     abrir('ov-entrada');
     return;
   }
+  if (seq !== _mutSeq) return;
   if (r.ok && r.body && r.body.estado) aplicar(r.body.estado);
 }
 

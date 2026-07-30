@@ -96,7 +96,10 @@ function pokerCodigo() {
   return c;
 }
 
-const POKER_CARTAS = ['1','2','3','5','8','13','21','34','?'];
+// Fibonacci ate 89 + 100 como carta de topo, para demandas grandes ("casa dos
+// 100"). Os valores antigos (21, 34) seguem existindo — trocar 21/34 por 20/40
+// como fazem alguns baralhos invalidaria pontuacoes ja gravadas.
+const POKER_CARTAS = ['1','2','3','5','8','13','21','34','55','89','100','?'];
 
 async function pokerEstado(db, codigo) {
   const ses = await db.prepare('SELECT * FROM poker_sessao WHERE codigo = ?').bind(codigo).first();

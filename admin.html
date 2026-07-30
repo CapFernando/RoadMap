@@ -175,7 +175,7 @@
     @media(max-width:600px){ .gut-row { grid-template-columns: 1fr 34px; } .gut-row span:first-child { grid-column: 1/-1; } }
     #m-discovery .disc-sec { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     #m-discovery .disc-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text3); margin-bottom: 8px; }
-    #m-discovery .disc-row { font-size: 13px; color: var(--text2, #C9C6BE); margin-bottom: 5px; line-height: 1.5; }
+    #m-discovery .disc-row { font-size: 13px; color: var(--text2, #C9C6BE); margin-bottom: 5px; line-height: 1.5; white-space: pre-wrap; }
     #m-discovery .disc-row b { color: var(--text); }
     #m-discovery a.anexo { display: inline-block; color: #9BC8F8; text-decoration: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; font-size: 12px; margin: 3px 5px 0 0; }
     #m-discovery a.anexo:hover { text-decoration: underline; }
@@ -637,12 +637,13 @@
         <input type="number" id="m-poker-media" step="0.1" min="0" placeholder="ex: 4,4" oninput="sugereFibonacci()" />
       </div>
       <div class="form-group">
-        <label>Pontos (Fibonacci)</label>
+        <label>Pontos (Planning Poker)</label>
         <select id="m-poker-pontos">
           <option value="">—</option>
           <option value="1">1</option><option value="2">2</option><option value="3">3</option>
           <option value="5">5</option><option value="8">8</option><option value="13">13</option>
           <option value="21">21</option><option value="34">34</option>
+          <option value="55">55</option><option value="89">89</option><option value="100">100</option>
         </select>
         <div id="m-poker-hint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
       </div>
@@ -1839,7 +1840,17 @@ function renderMDiscovery(m) {
     if (d.area_solicitante) rows.push(`<div class="disc-row"><b>Área do solicitante:</b> ${esc(d.area_solicitante)}</div>`);
     if (d.impacto) rows.push(`<div class="disc-row"><b>Impacto:</b> ${esc(d.impacto)}</div>`);
     if (d.beneficiarios) rows.push(`<div class="disc-row"><b>Beneficiários:</b> ${esc(d.beneficiarios)}</div>`);
-    if (d.ganho && d.ganho.resumo) rows.push(`<div class="disc-row"><b>Ganho:</b> ${esc(d.ganho.resumo)}</div>`);
+    if (d.ganho) {
+      // Mostra tambem as entradas brutas: o resumo calculado nao permite
+      // reconstruir horas/dia e pessoas, e sao esses numeros que sustentam o ganho.
+      const det = [];
+      if (d.ganho.horas_dia) det.push(`${esc(d.ganho.horas_dia)}h/dia por pessoa`);
+      if (d.ganho.pessoas)   det.push(`${esc(d.ganho.pessoas)} pessoa(s)`);
+      const txt = [d.ganho.resumo ? esc(d.ganho.resumo) : '',
+                   det.length ? `<span style="color:var(--text3)">(${det.join(' × ')})</span>` : '']
+                  .filter(Boolean).join(' ');
+      if (txt) rows.push(`<div class="disc-row"><b>Ganho:</b> ${txt}</div>`);
+    }
     if (d.contexto) {
       if (d.contexto.as_is) rows.push(`<div class="disc-row"><b>Como funciona hoje:</b> ${esc(d.contexto.as_is)}</div>`);
       if (d.contexto.dor) rows.push(`<div class="disc-row"><b>Dor real:</b> ${esc(d.contexto.dor)}</div>`);
@@ -1853,6 +1864,13 @@ function renderMDiscovery(m) {
       if (d.escopo.premissas) rows.push(`<div class="disc-row"><b>Premissas:</b> ${esc(d.escopo.premissas)}</div>`);
     }
     (d.criterios_aceite || []).forEach((c, i) => { if (c.dado||c.quando||c.entao) rows.push(`<div class="disc-row"><b>CA-${String(i+1).padStart(2,'0')}:</b> Dado ${esc(c.dado||'…')}, quando ${esc(c.quando||'…')}, então ${esc(c.entao||'…')}</div>`); });
+    // Data de envio pelo painel: o campo "Data da solicitação" fica vazio em
+    // itens vindos do dash (o formulario publico grava criado_em), entao sem
+    // isto nao havia como saber quando a demanda chegou.
+    if (m.criado_em) {
+      const dt = new Date(m.criado_em);
+      if (!isNaN(dt)) rows.push(`<div class="disc-row"><b>Enviado pelo painel em:</b> ${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</div>`);
+    }
     if (rows.length) html += `<div class="disc-sec"><div class="disc-h">Discovery (preenchido no painel)</div>${rows.join('')}</div>`;
   }
   if (anexos.length) {
@@ -2596,7 +2614,8 @@ function resolveTemaSelecao(prefix, fallbackTemaId) {
   return t.id;
 }
 
-const FIBONACCI = [1, 2, 3, 5, 8, 13, 21, 34];
+// Mesmo baralho do Planning Poker (POKER_CARTAS no Worker).
+const FIBONACCI = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 100];
 
 // Arredonda a média para o fibonacci mais próximo. Só SUGERE: se o campo de
 // pontos já foi preenchido à mão, não sobrescreve a decisão do time.

@@ -133,6 +133,10 @@
     .form-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
     .modal-info-row { display:flex; gap:8px; align-items:center; font-size:13px; color:var(--text2); margin-bottom:8px; }
     .modal-info-row strong { color:var(--text); }
+    .disc-sec { border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; }
+    .disc-h { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--text3); margin-bottom:8px; }
+    .disc-row { font-size:13px; color:var(--text2); margin-bottom:5px; line-height:1.5; white-space:pre-wrap; }
+    .disc-row b { color:var(--text); }
 
     /* ── TOAST ── */
     #toast { position:fixed; bottom:24px; right:24px; z-index:9000; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:500; max-width:360px; line-height:1.4; transition:opacity .3s; opacity:0; pointer-events:none; }
@@ -460,6 +464,57 @@ function anexosHTMLDev(m) {
     ).join('')
   }</div>`;
 }
+// Tudo o que o solicitante preencheu no painel público. Antes o dev abria o
+// card e via só tema, datas e descrição — requisitos, regras de negócio, escopo
+// e critérios de aceite ficavam invisíveis justamente para quem vai implementar.
+function discoveryHTMLDev(m) {
+  const d = m && m.discovery;
+  if (!d) return '';
+
+  const rows = [];
+  const row = (rot, val) => rows.push(`<div class="disc-row"><b>${rot}:</b> ${val}</div>`);
+  if (d.tipo) row('Tipo', d.tipo === 'ganho' ? 'Ganho de produtividade' : 'Correção/Ajuste');
+  if (d.area_solicitante) row('Área do solicitante', devEsc(d.area_solicitante));
+  if (m.solicitante) row('Solicitante', devEsc(m.solicitante));
+  if (d.impacto) row('Impacto', devEsc(d.impacto));
+  if (d.beneficiarios) row('Beneficiários', devEsc(d.beneficiarios));
+  if (d.ganho) {
+    const det = [];
+    if (d.ganho.horas_dia) det.push(`${devEsc(d.ganho.horas_dia)}h/dia por pessoa`);
+    if (d.ganho.pessoas)   det.push(`${devEsc(d.ganho.pessoas)} pessoa(s)`);
+    const txt = [d.ganho.resumo ? devEsc(d.ganho.resumo) : '',
+                 det.length ? `<span style="color:var(--text3)">(${det.join(' × ')})</span>` : '']
+                .filter(Boolean).join(' ');
+    if (txt) row('Ganho', txt);
+  }
+  if (d.contexto) {
+    if (d.contexto.as_is) row('Como funciona hoje', devEsc(d.contexto.as_is));
+    if (d.contexto.dor) row('Dor real', devEsc(d.contexto.dor));
+    if (d.contexto.nao_fazer) row('Se não fizer', devEsc(d.contexto.nao_fazer));
+  }
+  (d.requisitos_funcionais || []).forEach((r, i) => {
+    if (r.desc) row(`RF-${String(i+1).padStart(2,'0')}`, `${devEsc(r.desc)} <span style="color:var(--text3)">(${devEsc(r.prio||'')})</span>`);
+  });
+  (d.regras_negocio || []).forEach((r, i) => {
+    if (r.regra) row(`RN-${String(i+1).padStart(2,'0')}`, `${devEsc(r.regra)}${r.fonte?` — <i>${devEsc(r.fonte)}</i>`:''}`);
+  });
+  if (d.escopo) {
+    if (d.escopo.dentro) row('Dentro do escopo', devEsc(d.escopo.dentro));
+    if (d.escopo.fora) row('Fora do escopo', devEsc(d.escopo.fora));
+    if (d.escopo.premissas) row('Premissas', devEsc(d.escopo.premissas));
+  }
+  (d.criterios_aceite || []).forEach((c, i) => {
+    if (c.dado||c.quando||c.entao) row(`CA-${String(i+1).padStart(2,'0')}`,
+      `Dado ${devEsc(c.dado||'…')}, quando ${devEsc(c.quando||'…')}, então ${devEsc(c.entao||'…')}`);
+  });
+  if (m.criado_em) {
+    const dt = new Date(m.criado_em);
+    if (!isNaN(dt)) row('Enviado pelo painel em', `${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`);
+  }
+  if (!rows.length) return '';
+  return `<div class="disc-sec"><div class="disc-h">Discovery (preenchido no painel)</div>${rows.join('')}</div>`;
+}
+
 function formatDate(s) { if (!s) return ''; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
 
 function calcHorasPlanejadas(inicio, entrega) {
@@ -1278,11 +1333,13 @@ function openStatusModal(id, preselect) {
     </div>` : '';
   document.getElementById('ms-info').innerHTML = `
     <div class="modal-info-row"><span>Tema:</span><strong>${tema}</strong></div>
+    ${m.tipo ? `<div class="modal-info-row"><span>Classificação:</span><strong>${m.tipo === 'sustentacao' ? '🔧 Sustentação' : m.tipo === 'evolucao' ? '🚀 Evolução' : devEsc(m.tipo)}</strong></div>` : ''}
     ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${m.dev}</strong></div>` : ''}
     ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
     ${m.entrega ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${m.descricao}</div>` : ''}
     ${anexosHTMLDev(m)}
+    ${discoveryHTMLDev(m)}
     ${depsInfoHTML}
   `;
   const sel = document.getElementById('ms-status');
