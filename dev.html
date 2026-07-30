@@ -270,6 +270,19 @@
         <input type="number" id="ms-horas" min="0.5" step="0.5" placeholder="Ex: 16" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'" />
       </div>
       <div id="ms-horas-plan" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:6px;padding:8px 12px;margin-bottom:12px;"></div>
+      <div class="form-group">
+        <label>O que foi implementado *</label>
+        <textarea id="ms-implementacao" rows="4" placeholder="Descreva o que foi entregue — este texto vai para o relatório do comitê de produto."></textarea>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Usado no relatório de comitê. Escreva para quem não acompanhou o desenvolvimento.</div>
+      </div>
+    </div>
+
+    <!-- Anexos: incluir arquivo direto do card, para explicar melhor a demanda -->
+    <div class="form-group">
+      <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
+      <input type="file" id="ms-file" multiple onchange="msAddFiles(this.files)"
+             style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:inherit" />
+      <div id="ms-anexos-edit" style="display:grid;gap:6px;margin-top:8px"></div>
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="openEditDemand(document.getElementById('ms-id').value)" style="margin-right:auto">✏️ Editar demanda</button>
@@ -1345,8 +1358,56 @@ function openStatusModal(id, preselect) {
   const sel = document.getElementById('ms-status');
   sel.value = preselect || COLUMNS.find(c => c.maps.includes(sk))?.key || sk;
   document.getElementById('ms-horas').value = m.horas_realizadas || '';
+  document.getElementById('ms-implementacao').value = m.implementacao || '';
+  // Anexos editáveis: parte de uma cópia, para "Fechar" não deixar alteração solta
+  _msAnexos = JSON.parse(JSON.stringify(m.anexos || []));
+  _msAnexosMexidos = false;
+  msRenderAnexosEdit();
   onStatusModalChange();
   abrirModal('modal-status');
+}
+
+// ── ANEXOS NO CARD ────────────────────────────────────────────────
+let _msAnexos = [];
+let _msAnexosMexidos = false;
+const MS_MAX = 1.5 * 1024 * 1024;
+
+function msAddFiles(files) {
+  [...files].forEach(f => {
+    if (f.size > MS_MAX) { toast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      _msAnexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, dados: reader.result });
+      _msAnexosMexidos = true;
+      msRenderAnexosEdit();
+    };
+    reader.readAsDataURL(f);
+  });
+  document.getElementById('ms-file').value = '';
+}
+
+function msRemoveAnexo(i) {
+  _msAnexos.splice(i, 1);
+  _msAnexosMexidos = true;
+  msRenderAnexosEdit();
+}
+
+function msPreviewAnexo(i) {
+  const a = _msAnexos[i]; if (!a) return;
+  window.open(URL.createObjectURL(devDataUrlToBlob(a.dados)), '_blank');
+}
+
+function msRenderAnexosEdit() {
+  const el = document.getElementById('ms-anexos-edit');
+  if (!el) return;
+  el.innerHTML = _msAnexos.map((a, i) => {
+    const kb = a.tamanho ? ` <span style="color:var(--text3)">(${(a.tamanho/1024).toFixed(0)} KB)</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:5px 9px">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${devEsc(a.nome)}${kb}</span>
+      <a href="#" style="color:#9BC8F8;text-decoration:none" onclick="msPreviewAnexo(${i});return false;">ver</a>
+      <button type="button" style="color:var(--red);background:none;border:none;cursor:pointer;font-size:14px" onclick="msRemoveAnexo(${i})" title="Remover">✕</button>
+    </div>`;
+  }).join('');
 }
 
 function onStatusModalChange() {
@@ -1375,36 +1436,56 @@ async function saveStatus() {
   if (newColKey === 'concluido') {
     const horas = parseFloat(document.getElementById('ms-horas').value);
     if (!horas || horas <= 0) { toast('Informe as horas de desenvolvimento.', 'err'); return; }
+    // Exigido só na conclusão: é o texto que alimenta o relatório do comitê.
+    const impl = document.getElementById('ms-implementacao').value.trim();
+    if (!impl) {
+      toast('Descreva o que foi implementado — vai para o relatório do comitê.', 'err');
+      document.getElementById('ms-implementacao').focus();
+      return;
+    }
     closeModal('modal-status');
-    await updateStatus(id, newColKey, horas);
+    await updateStatus(id, newColKey, horas, impl);
   } else {
+    // Fora da conclusão o texto é opcional, mas se já existir não se perde
+    const impl = document.getElementById('ms-implementacao').value.trim();
     closeModal('modal-status');
-    await updateStatus(id, newColKey);
+    await updateStatus(id, newColKey, undefined, impl || undefined);
   }
 }
 
-async function updateStatus(id, colKey, horasRealizadas) {
+async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   const spAnterior = m.status_planejamento;
   const stAnterior = m.status;
   const hrAnterior = m.horas_realizadas;
+  const implAnterior = m.implementacao;
+  const anexosAnterior = m.anexos;
   const spToStatus = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada',
                        em_andamento:'iniciada', planning:'estimada', concluido:'iniciada', atrasado:'iniciada' };
   // Atualiza localmente (otimista)
   m.status_planejamento = colKey;
   m.status = spToStatus[colKey] || 'recebida';
   if (horasRealizadas !== undefined) m.horas_realizadas = horasRealizadas;
+  if (implementacao !== undefined) m.implementacao = implementacao;
+  if (_msAnexosMexidos) m.anexos = _msAnexos;
   renderKanban();
-  // Persiste — reverte se falhar
-  const patch = { [id]: { status_planejamento: colKey, status: m.status,
-                           horas_realizadas: m.horas_realizadas || 0 } };
-  const ok = await saveToGitHub(patch);
+  // Persiste — reverte se falhar. O patch leva SÓ os campos alterados: o
+  // dev-publish aplica sobre a versão fresca do servidor, então nada mais é tocado.
+  const campos = { status_planejamento: colKey, status: m.status,
+                   horas_realizadas: m.horas_realizadas || 0 };
+  if (implementacao !== undefined) campos.implementacao = implementacao;
+  if (_msAnexosMexidos) campos.anexos = _msAnexos;
+  const ok = await saveToGitHub({ [id]: campos });
   if (!ok) {
     m.status_planejamento = spAnterior;
     m.status = stAnterior;
     m.horas_realizadas = hrAnterior;
+    m.implementacao = implAnterior;
+    m.anexos = anexosAnterior;
     renderKanban();
+  } else {
+    _msAnexosMexidos = false;
   }
 }
 

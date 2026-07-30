@@ -220,6 +220,22 @@
     }
     .ger-section-hint { font-size:12px; font-weight:500; color:var(--text3); }
     .ger-section-sep { border-top:1px solid var(--border); margin:32px 0 20px; }
+    /* Relatórios */
+    .rel-card {
+      background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+      padding:14px 16px; margin-bottom:10px;
+    }
+    .rel-card-head { display:flex; align-items:flex-start; gap:10px; margin-bottom:6px; }
+    .rel-card-titulo { font-size:14px; font-weight:700; color:var(--text); flex:1; }
+    .rel-pts { font-size:11px; background:#123A52; color:#8AD5F0; border-radius:4px; padding:2px 7px; font-weight:700; white-space:nowrap; }
+    .rel-card-meta { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--text2); margin-bottom:8px; }
+    .rel-card-meta b { color:var(--text); }
+    .rel-atraso { color:var(--red); font-weight:600; }
+    .rel-impl {
+      font-size:13px; color:var(--text2); line-height:1.55; white-space:pre-wrap;
+      border-left:2px solid var(--border2); padding-left:10px;
+    }
+    .rel-impl-falta { color:var(--amber-tx,#FFE14D); border-left-color:var(--amber,#E89C2F); font-size:12px; }
     .ger-empty-box {
       background:var(--bg2); border:1px solid var(--border); border-radius:14px;
       padding:28px 22px; text-align:center; color:var(--text3); font-size:13px;
@@ -471,6 +487,7 @@
       <div class="tab" onclick="switchTab('temas')">Temas</div>
       <div class="tab" onclick="switchTab('gerencial')">📊 Gerencial</div>
       <a href="importar.html" class="tab" style="text-decoration:none">📥 Importar</a>
+      <div class="tab" onclick="switchTab('relatorios')">📋 Relatórios</div>
     </div>
 
     <!-- ABA MELHORIAS -->
@@ -564,6 +581,34 @@
           <tbody id="ger-tbody"></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- ABA RELATÓRIOS — apoio à reunião de comitê de produto -->
+    <div class="tab-content" id="tab-relatorios">
+      <div class="ger-toolbar">
+        <div class="ger-filter-group">
+          <label>Semana de referência</label>
+          <select id="rel-semana" onchange="renderRelatorios()"></select>
+        </div>
+        <button class="btn btn-secondary" onclick="renderRelatorios()">Atualizar</button>
+        <button class="btn btn-primary" onclick="copiarRelatorio()">📋 Copiar tudo</button>
+      </div>
+      <div id="rel-periodo-info" style="font-size:12px;color:var(--text3);margin:-12px 0 20px"></div>
+
+      <div class="ger-section-title">
+        ✅ Entregues na semana anterior
+        <span class="ger-section-hint" id="rel-ent-hint"></span>
+        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('entregues')" style="margin-left:auto">📋 Copiar</button>
+      </div>
+      <div id="rel-entregues"></div>
+
+      <div class="ger-section-sep"></div>
+      <div class="ger-section-title">
+        🚧 Em desenvolvimento nesta semana
+        <span class="ger-section-hint" id="rel-dev-hint"></span>
+        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('andamento')" style="margin-left:auto">📋 Copiar</button>
+      </div>
+      <div id="rel-andamento"></div>
     </div>
   </main>
 </div>
@@ -699,6 +744,16 @@
       <div id="field-negada" class="form-group" style="display:none">
         <label>Motivo da negativa *</label>
         <textarea id="m-motivo" rows="3" placeholder="Explique o motivo pelo qual a melhoria foi negada…"></textarea>
+      </div>
+      <div class="form-group">
+        <label>O que foi implementado</label>
+        <textarea id="m-implementacao" rows="3" placeholder="Preenchido pelo dev ao concluir. Alimenta o relatório do comitê de produto."></textarea>
+      </div>
+      <!-- Anexos: incluir arquivo direto do card, para facilitar a explicação -->
+      <div class="form-group">
+        <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
+        <input type="file" id="m-file" multiple onchange="mAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
+        <div id="m-anexos-edit" style="display:grid;gap:6px;margin-top:8px"></div>
       </div>
     </div>
 
@@ -1063,7 +1118,11 @@ function retratoBase() {
 
 // "Sem valor" nas suas várias formas. Um campo que estava vazio no retrato e
 // continua vazio localmente não é uma alteração — é ausência de informação.
-const semValor = (v) => v === undefined || v === null || v === '';
+// Lista vazia entra aqui: uma aba antiga cujo objeto nem tinha `anexos` grava
+// [] ao salvar o form, e isso apagaria anexos subidos pelo Painel Dev nesse
+// meio-tempo. Remover anexos de verdade continua valendo (aí o retrato tinha).
+const semValor = (v) => v === undefined || v === null || v === ''
+                     || (Array.isArray(v) && v.length === 0);
 
 // Campos que esta aba realmente mudou em relação ao retrato do servidor.
 function camposAlterados(local, baseStr) {
@@ -1679,6 +1738,7 @@ function switchTab(name, el) {
   const content = document.getElementById('tab-' + name);
   if (content) content.classList.add('active');
   if (name === 'gerencial') renderGerencial();
+  if (name === 'relatorios') renderRelatorios();
   if (name === 'kanban') renderKanban();
   try { localStorage.setItem('rm_admin_tab', name); } catch (_) {}
 }
@@ -1917,6 +1977,41 @@ function mViewAnexo(melId, i) {
   const m = state.melhorias.find(x => x.id === melId);
   if (!m || !m.anexos || !m.anexos[i]) return;
   window.open(URL.createObjectURL(mDataUrlToBlob(m.anexos[i].dados)), '_blank');
+}
+
+// ── ANEXOS EDITÁVEIS NO CARD ──────────────────────────────────────
+// Trabalha numa cópia: cancelar o modal não deve deixar anexo solto no estado.
+let _mAnexos = [];
+const M_MAX_ANEXO = 1.5 * 1024 * 1024;
+
+function mAddFiles(files) {
+  [...files].forEach(f => {
+    if (f.size > M_MAX_ANEXO) { toast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      _mAnexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, dados: reader.result });
+      mRenderAnexosEdit();
+    };
+    reader.readAsDataURL(f);
+  });
+  document.getElementById('m-file').value = '';
+}
+function mRemoveAnexoEdit(i) { _mAnexos.splice(i, 1); mRenderAnexosEdit(); }
+function mPreviewAnexoEdit(i) {
+  const a = _mAnexos[i]; if (!a) return;
+  window.open(URL.createObjectURL(mDataUrlToBlob(a.dados)), '_blank');
+}
+function mRenderAnexosEdit() {
+  const el = document.getElementById('m-anexos-edit');
+  if (!el) return;
+  el.innerHTML = _mAnexos.map((a, i) => {
+    const kb = a.tamanho ? ` <span style="color:var(--text3)">(${(a.tamanho/1024).toFixed(0)} KB)</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:5px 9px">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${esc(a.nome)}${kb}</span>
+      <a href="#" style="color:#9BC8F8;text-decoration:none" onclick="mPreviewAnexoEdit(${i});return false;">ver</a>
+      <button type="button" style="color:var(--red);background:none;border:none;cursor:pointer;font-size:14px" onclick="mRemoveAnexoEdit(${i})" title="Remover">✕</button>
+    </div>`;
+  }).join('');
 }
 function renderMDiscovery(m) {
   const el = document.getElementById('m-discovery');
@@ -2514,6 +2609,174 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
   </tr>`;
 }
 
+// ─── RELATÓRIOS (comitê de produto) ───────────────────────────────
+// Semana = segunda a domingo. "Entregues na semana anterior" olha a data de
+// entrega dos concluídos; "em desenvolvimento nesta semana" são os itens em
+// andamento (ou atrasados) cujo intervalo início–entrega cruza a semana atual.
+
+// Segunda-feira da semana que contém a data.
+function segundaDa(d) {
+  const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const dow = dt.getDay();                 // 0=dom
+  dt.setDate(dt.getDate() - (dow === 0 ? 6 : dow - 1));
+  return dt;
+}
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const maisDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+
+// Preenche o seletor com as últimas 12 semanas (a atual primeiro).
+function relInitSemanas() {
+  const sel = document.getElementById('rel-semana');
+  if (!sel || sel.options.length) return;
+  const base = segundaDa(new Date());
+  for (let i = 0; i < 12; i++) {
+    const ini = maisDias(base, -7 * i);
+    const fim = maisDias(ini, 6);
+    const o = document.createElement('option');
+    o.value = iso(ini);
+    o.textContent = (i === 0 ? 'Semana atual — ' : '') +
+      `${formatDate(iso(ini))} a ${formatDate(iso(fim))}`;
+    sel.appendChild(o);
+  }
+}
+
+function relDados() {
+  const sel = document.getElementById('rel-semana');
+  const iniAtual = sel && sel.value ? new Date(sel.value + 'T00:00:00') : segundaDa(new Date());
+  const fimAtual = maisDias(iniAtual, 6);
+  const iniAnt   = maisDias(iniAtual, -7);
+  const fimAnt   = maisDias(iniAtual, -1);
+  const A = iso(iniAtual), B = iso(fimAtual), C = iso(iniAnt), D = iso(fimAnt);
+
+  const visiveis = (state.melhorias || []).filter(m => !m.oculto && m.status !== 'negada'
+                                                    && (m.status_planejamento || '') !== 'negada');
+
+  // Entregues: concluído com entrega dentro da semana anterior. Sem data de
+  // entrega não há como afirmar quando saiu, então fica fora (e é sinalizado).
+  const entregues = visiveis.filter(m =>
+    (m.status_planejamento === 'concluido' || m.status === 'concluida') &&
+    m.entrega && m.entrega >= C && m.entrega <= D);
+
+  const semDataConcluidos = visiveis.filter(m =>
+    (m.status_planejamento === 'concluido' || m.status === 'concluida') && !m.entrega).length;
+
+  // Em desenvolvimento: sobreposição do intervalo do card com a semana atual.
+  const andamento = visiveis.filter(m => {
+    const sp = m.status_planejamento || '';
+    if (sp !== 'em_andamento' && statusEfetivo(m) !== 'atrasado') return false;
+    const ini = m.inicio || m.entrega, fim = m.entrega || m.inicio;
+    if (!ini || !fim) return sp === 'em_andamento';   // sem datas, mostra pelo status
+    return ini <= B && fim >= A;
+  });
+
+  const ordEnt = [...entregues].sort((a,b) => (a.entrega||'').localeCompare(b.entrega||''));
+  const ordAnd = [...andamento].sort((a,b) => (a.entrega||'9999').localeCompare(b.entrega||'9999'));
+  return { A, B, C, D, entregues: ordEnt, andamento: ordAnd, semDataConcluidos };
+}
+
+// "Sistema - Módulo" a partir do tema do card.
+function relSistemaModulo(m) {
+  const t = (state.temas || []).find(x => x.id === m.tema_id);
+  if (!t) return { sistema: '—', modulo: '', completo: '—' };
+  const p = parseTemaNome(t.nome);
+  return { sistema: p.sistema || t.nome, modulo: p.modulo,
+           completo: p.modulo ? `${p.sistema} - ${p.modulo}` : (p.sistema || t.nome) };
+}
+
+function relCardHTML(m, modo) {
+  const sm = relSistemaModulo(m);
+  const impl = (m.implementacao || '').trim();
+  const atrasado = statusEfetivo(m) === 'atrasado';
+  const prazo = m.entrega ? formatDate(m.entrega) : '—';
+  return `<div class="rel-card">
+    <div class="rel-card-head">
+      <span class="rel-card-titulo">${esc(m.titulo || '(sem título)')}</span>
+      ${m.poker_pontos != null ? `<span class="rel-pts" title="Pontos do Planning Poker">🃏 ${m.poker_pontos}</span>` : ''}
+    </div>
+    <div class="rel-card-meta">
+      <span><b>${esc(sm.completo)}</b></span>
+      ${m.dev ? `<span>👤 ${esc(m.dev)}</span>` : ''}
+      ${modo === 'andamento'
+        ? `<span class="${atrasado ? 'rel-atraso' : ''}">📅 Prazo: ${prazo}${atrasado ? ' (atrasado)' : ''}</span>`
+        : `<span>✅ Entrega: ${prazo}</span>`}
+    </div>
+    ${modo === 'entregues'
+      ? (impl
+          ? `<div class="rel-impl">${esc(impl)}</div>`
+          : `<div class="rel-impl rel-impl-falta">⚠ O dev ainda não descreveu o que foi implementado — pedir no Painel Dev ao concluir.</div>`)
+      : (impl ? `<div class="rel-impl">${esc(impl)}</div>` : '')}
+  </div>`;
+}
+
+function renderRelatorios() {
+  relInitSemanas();
+  const { A, B, C, D, entregues, andamento, semDataConcluidos } = relDados();
+
+  document.getElementById('rel-periodo-info').innerHTML =
+    `Semana de referência: <b>${formatDate(A)} a ${formatDate(B)}</b> · semana anterior: <b>${formatDate(C)} a ${formatDate(D)}</b>`;
+
+  document.getElementById('rel-ent-hint').textContent =
+    `${entregues.length} demanda${entregues.length!==1?'s':''} (${formatDate(C)} a ${formatDate(D)})` +
+    (semDataConcluidos ? ` · ${semDataConcluidos} concluída(s) sem data de entrega ficam fora` : '');
+  document.getElementById('rel-dev-hint').textContent =
+    `${andamento.length} demanda${andamento.length!==1?'s':''} (${formatDate(A)} a ${formatDate(B)})`;
+
+  const vazio = (txt) => `<div class="ger-empty-box">${txt}</div>`;
+  document.getElementById('rel-entregues').innerHTML = entregues.length
+    ? entregues.map(m => relCardHTML(m, 'entregues')).join('')
+    : vazio('Nenhuma demanda com entrega registrada na semana anterior.');
+  document.getElementById('rel-andamento').innerHTML = andamento.length
+    ? andamento.map(m => relCardHTML(m, 'andamento')).join('')
+    : vazio('Nenhuma demanda em andamento nesta semana.');
+}
+
+// Texto corrido para colar na ata/apresentação do comitê.
+function relTexto(secao) {
+  const { A, B, C, D, entregues, andamento } = relDados();
+  const bloco = (m, modo) => {
+    const sm = relSistemaModulo(m);
+    const linhas = [`• ${m.titulo || '(sem título)'}`, `  Sistema/Módulo: ${sm.completo}`];
+    if (m.dev) linhas.push(`  Dev: ${m.dev}`);
+    linhas.push(modo === 'entregues'
+      ? `  Entrega: ${m.entrega ? formatDate(m.entrega) : '—'}`
+      : `  Prazo: ${m.entrega ? formatDate(m.entrega) : '—'}${statusEfetivo(m) === 'atrasado' ? ' (atrasado)' : ''}`);
+    const impl = (m.implementacao || '').trim();
+    linhas.push(`  O que foi implementado: ${impl || '(não informado pelo dev)'}`);
+    return linhas.join('\n');
+  };
+  const partes = [];
+  if (secao !== 'andamento') {
+    partes.push(`ENTREGUES NA SEMANA ANTERIOR (${formatDate(C)} a ${formatDate(D)}) — ${entregues.length}`);
+    partes.push(entregues.length ? entregues.map(m => bloco(m, 'entregues')).join('\n\n') : '(nenhuma)');
+  }
+  if (secao !== 'entregues') {
+    if (partes.length) partes.push('');
+    partes.push(`EM DESENVOLVIMENTO NESTA SEMANA (${formatDate(A)} a ${formatDate(B)}) — ${andamento.length}`);
+    partes.push(andamento.length ? andamento.map(m => bloco(m, 'andamento')).join('\n\n') : '(nenhuma)');
+  }
+  return partes.join('\n');
+}
+
+async function copiarRelatorio(secao) {
+  const txt = relTexto(secao);
+  try {
+    await navigator.clipboard.writeText(txt);
+    toast('Relatório copiado — cole na ata do comitê.', 'ok');
+  } catch (_) {
+    // clipboard bloqueado (sem HTTPS ou permissão): cai para seleção manual
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.style.cssText = 'position:fixed;top:10%;left:50%;transform:translateX(-50%);width:min(700px,90vw);height:60vh;z-index:999;font-family:monospace;font-size:12px';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove();
+    toast(ok ? 'Relatório copiado.' : 'Não foi possível copiar automaticamente — copie do texto exibido.', ok ? 'ok' : 'err');
+    if (!ok) { const w = window.open('', '_blank'); if (w) { w.document.body.style.cssText='white-space:pre-wrap;font-family:monospace;padding:20px'; w.document.body.textContent = txt; } }
+  }
+}
+
 // ─── MODAL TEMA ───────────────────────────────────────────────────
 function openModalTema(id) {
   document.getElementById('t-id').value = id || '';
@@ -2578,7 +2841,11 @@ function openModalMelhoria(id) {
   document.getElementById('m-inicio').value          = m?.inicio           || '';
   document.getElementById('m-entrega').value         = m?.entrega          || '';
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
+  document.getElementById('m-implementacao').value   = m?.implementacao    || '';
   document.getElementById('m-horas-real').value      = m?.horas_realizadas != null ? m.horas_realizadas : '';
+  // anexos numa cópia, para cancelar não deixar alteração aplicada
+  _mAnexos = JSON.parse(JSON.stringify(m?.anexos || []));
+  mRenderAnexosEdit();
   atualizaHorasPlanejadas();
 
   // preenche Sistema / Módulo a partir do tema atual
@@ -2793,6 +3060,8 @@ function saveMelhoria() {
     inicio:              document.getElementById('m-inicio').value,
     entrega:             document.getElementById('m-entrega').value,
     motivo_negacao:      sp === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
+    implementacao:       document.getElementById('m-implementacao').value.trim(),
+    anexos:              _mAnexos,
     horas_realizadas:    parseFloat(document.getElementById('m-horas-real').value) || existing.horas_realizadas || 0,
     criado_em:           existing.criado_em || new Date().toISOString(),
   };
