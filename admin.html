@@ -979,7 +979,7 @@ async function adminCheckUpdates() {
   // via nada mudar no Admin e parecia que a alteração não tinha sido gravada.
   // Agora ela sempre checa: sem edição local, recarrega; com edição local,
   // mostra o aviso e deixa a decisão de descartar para o usuário.
-  const bloqueado = _kbDirty || _pendingEdits;
+  const bloqueado = _kbDirty || _pendingEdits || _dirtyMelhoriaIds.size > 0;
   _adminPollActive = true;
   try {
     let novo = false;
@@ -1001,7 +1001,7 @@ async function adminCheckUpdates() {
 }
 setInterval(adminCheckUpdates, 30000);
 window.addEventListener('beforeunload', (e) => {
-  if (_pendingEdits || _kbDirty) { e.preventDefault(); e.returnValue = 'Há alterações não publicadas. Publique antes de sair para não perder.'; }
+  if (_pendingEdits || _kbDirty || _dirtyMelhoriaIds.size > 0) { e.preventDefault(); e.returnValue = 'Há alterações não publicadas. Publique antes de sair para não perder.'; }
 });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') adminCheckUpdates(); });
 
@@ -1214,12 +1214,15 @@ async function saveViaProxy() {
     _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase();
     const errEl = document.getElementById('save-error'); if (errEl) errEl.style.display = 'none';
     toast('✅ Publicado!', 'ok');
+    showSaving(false);
+    return true;
   } catch (e) {
     const errEl = document.getElementById('save-error');
-    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — seus dados estão seguros, tente novamente.'; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — sua alteração segue nesta tela. Tente publicar de novo.'; errEl.style.display = 'block'; }
     toast('Erro ao publicar: ' + e.message, 'err');
   }
   showSaving(false);
+  return false;
 }
 
 async function saveToGitHub(attempt = 1) {
@@ -1950,8 +1953,14 @@ function kbAutoSave() {
   _kbDirty = true;
   clearTimeout(_kbSaveTimer);
   _kbSaveTimer = setTimeout(async () => {
-    await saveToGitHub();
+    const ok = await saveToGitHub();
+    // Antes o flag caia para false mesmo com falha (sessao expirada, rede). O
+    // arraste ficava so na tela e o proximo polling recarregava por cima,
+    // devolvendo o card para a coluna antiga sem avisar. Falhando, a alteracao
+    // continua marcada como pendente: o polling nao sobrescreve e o aviso de
+    // "nao publicado" continua valendo ao fechar a aba.
     _kbDirty = false;
+    if (ok === false) _pendingEdits = true;
   }, 900);
 }
 
