@@ -18,3 +18,10 @@ compatibility_date = "2025-01-01"
 binding = "POKER_DB"
 database_name = "roadmap_poker"
 database_id = "03dd80b0-ea64-4042-bc23-6e7ee438b7cc"
+
+# Repositorio DO DADO. O repo do site e publico (GitHub Pages) e servia
+# data/melhorias.json como arquivo estatico: qualquer pessoa com a URL lia a base
+# inteira, inclusive por raw.githubusercontent. Apontando para um repo PRIVADO, a
+# unica porta passa a ser este Worker (que autentica com GH_TOKEN).
+[vars]
+DATA_REPO = "RoadMap-dados"

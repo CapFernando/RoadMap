@@ -6,3 +6,9 @@ config.js
 
 # Estado local do Wrangler
 cloudflare-worker/.wrangler
+
+# O dado mora no repositorio PRIVADO RoadMap-dados. Este repo e publico (GitHub
+# Pages) e servia o JSON como arquivo estatico — a base inteira ficava legivel
+# por qualquer pessoa com a URL, inclusive por raw.githubusercontent.
+data/melhorias.json
+data/*.bak
