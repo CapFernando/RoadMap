@@ -252,7 +252,9 @@ async function turnstileOk(env, token, ip) {
 // argon2 nativos no runtime dos Workers; PBKDF2 com 150k iteracoes e o que da para
 // fazer bem com a Web Crypto disponivel.
 // ═══════════════════════════════════════════════════════════════════════
-const PBKDF2_ITER = 150000;
+// O runtime dos Workers recusa PBKDF2 acima de 100k iteracoes (a chamada joga
+// excecao, o que derrubava o login com 1101). 100k e o teto da plataforma.
+const PBKDF2_ITER = 100000;
 const SESSAO_H = 12;              // sessao vale 12h
 const PAPEIS = ['consulta', 'dev', 'admin'];
 const NIVEL = { consulta: 1, dev: 2, admin: 3 };
@@ -805,11 +807,13 @@ export default {
       if (!igualSeguro(hash, u.senha_hash)) return generico();
 
       const token = crypto.randomUUID() + '-' + crypto.randomUUID();
-      const expira = new Date(agora.getTime() + SESSAO_H * 3600 * 1000).toISOString();
+      // Marcacao de tempo local: `agora`/`iso` pertencem ao bloco do poker.
+      const nowIso = new Date().toISOString();
+      const expira = new Date(Date.now() + SESSAO_H * 3600 * 1000).toISOString();
       await env.POKER_DB.prepare('INSERT INTO sessao (token, usuario_id, expira_em, criado_em) VALUES (?,?,?,?)')
-        .bind(token, u.id, expira, iso).run();
-      await env.POKER_DB.prepare('UPDATE usuario SET ultimo_acesso = ? WHERE id = ?').bind(iso, u.id).run();
-      if (Math.random() < 0.1) await env.POKER_DB.prepare('DELETE FROM sessao WHERE expira_em < ?').bind(iso).run();
+        .bind(token, u.id, expira, nowIso).run();
+      await env.POKER_DB.prepare('UPDATE usuario SET ultimo_acesso = ? WHERE id = ?').bind(nowIso, u.id).run();
+      if (Math.random() < 0.1) await env.POKER_DB.prepare('DELETE FROM sessao WHERE expira_em < ?').bind(nowIso).run();
       return json({ ok: true, token, expira_em: expira,
                     usuario: { login: u.login, nome: u.nome, papel: u.papel } }, 200, headers);
     }
@@ -860,7 +864,8 @@ export default {
           try {
             await env.POKER_DB.prepare(
               'INSERT INTO usuario (id, login, nome, senha_hash, salt, papel, ativo, criado_em) VALUES (?,?,?,?,?,?,1,?)')
-              .bind('u-' + crypto.randomUUID().slice(0, 8), login, nome, hash, salt, papel, iso).run();
+              .bind('u-' + crypto.randomUUID().slice(0, 8), login, nome, hash, salt, papel,
+                    new Date().toISOString()).run();
           } catch (e) {
             return json({ error: 'existe', detail: 'Ja existe usuario com esse login.' }, 409, headers);
           }
