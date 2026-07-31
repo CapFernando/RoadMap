@@ -1,0 +1,101 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   TEMA CLARO
+   As 7 telas foram escritas em escuro, cada uma com seu proprio :root. Este
+   arquivo redefine SO os tokens de cor quando o documento esta marcado com
+   data-tema="claro". Cada pagina usa um subconjunto dos tokens; declarar todos
+   aqui e inofensivo — o que a pagina nao usa, ela ignora.
+
+   Ficam de fora, de proposito, os tokens que NAO sao cor:
+   --day-w (52px) e --dev-label (230px) no gantt, --radius e --radius-sm.
+   Sobrescrever esses aqui destruiria o layout da linha do tempo.
+   ───────────────────────────────────────────────────────────────────────── */
+:root[data-tema="claro"] {
+  /* superficies: do mais ao fundo para o mais acima */
+  --bg:       #F5F4F0;
+  --bg1:      #FFFFFF;
+  --bg2:      #FFFFFF;
+  --bg3:      #F0EEE8;
+  --bg4:      #E4E1D8;
+
+  --border:   #DBD7CD;
+  --border2:  #C4BFB2;
+
+  /* texto: 1A1917 sobre branco da ~16:1 de contraste */
+  --text:     #1A1917;
+  --text1:    #1A1917;
+  --text2:    #56534C;
+  --text3:    #615D56;   /* #817D74 dava 3.54:1 em texto pequeno; abaixo do minimo */
+
+  /* acentos escurecidos: os tons do tema escuro sao claros demais para
+     assentar sobre branco */
+  --blue:     #1B67C7;
+  --green:    #46861F;
+  --amber:    #8A5A06;   /* titulo de pendencia precisa de 4.5:1 sobre #F5F4F0 */
+  --red:      #CC3232;
+  --purple:   #7048D2;
+  --teal:     #0C9078;
+  --yellow:   #B98A00;
+  --accent:   #6A49B5;
+  --accent2:  #8360D8;
+
+  /* pares de chip: no escuro sao fundo escuro + texto claro; aqui invertem
+     para fundo tingido claro + texto escuro, mantendo a mesma familia de cor */
+  --blue-bg:   #DBE9FA;  --blue-tx:   #134A85;
+  --green-bg:  #DFF0D3;  --green-tx:  #2C5D13;
+  --amber-bg:  #FAE9C8;  --amber-tx:  #744903;
+  --red-bg:    #FADDDD;  --red-tx:    #8F1E1D;
+  --teal-bg:   #D1F1E8;  --teal-tx:   #096353;
+  --purple-bg: #E6DCFA;  --purple-tx: #45278C;
+}
+
+/* Faz o navegador desenhar barra de rolagem, cursor de texto e controles
+   nativos na variante certa. Sem isso, campos e scrollbars continuam escuros. */
+:root[data-tema="claro"] { color-scheme: light; }
+:root:not([data-tema="claro"]) { color-scheme: dark; }
+
+
+/* ── Chips de status com fundo translucido ───────────────────────────────
+   Estes chips pintam o fundo com alfa baixo (#1E420822, rgba(...,.15)), ou
+   seja: o fundo efetivo e o da PAGINA. No escuro isso da chip escuro com texto
+   claro; no claro o fundo vira claro e o texto claro desaparece — media de
+   1.3:1 a 1.6:1, ilegivel. Aqui cada um recebe o par opaco do tema claro.
+   Chips de fundo opaco escuro nao entram: eles seguem escuros e legiveis. */
+:root[data-tema="claro"] .s-levantar_req {
+  background: var(--amber-bg); color: var(--amber-tx);
+}
+:root[data-tema="claro"] .badge-planejado,
+:root[data-tema="claro"] .s-backlog {
+  background: var(--blue-bg); color: var(--blue-tx);
+}
+:root[data-tema="claro"] .badge-concluida,
+:root[data-tema="claro"] .s-concluido,
+:root[data-tema="claro"] .s-em_andamento {
+  background: var(--green-bg); color: var(--green-tx);
+}
+:root[data-tema="claro"] .badge-levantar_req {
+  background: var(--purple-bg); color: var(--purple-tx);
+}
+:root[data-tema="claro"] .badge-planning,
+:root[data-tema="claro"] .s-planning {
+  background: var(--teal-bg); color: var(--teal-tx);
+}
+
+/* ── Botao de alternancia ────────────────────────────────────────────────
+   Injetado por tema.js no cabecalho de cada pagina. */
+.tema-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex-shrink: 0;
+  background: var(--bg3, #1E1E1C);
+  border: 1px solid var(--border, #2E2E2B);
+  border-radius: 9px;
+  color: var(--text, #ECEAE2);
+  font-size: 16px; line-height: 1; cursor: pointer;
+  font-family: inherit;
+  /* NAO animar `color`: quando o valor vem de var(--text) e o token troca de
+     tema, a transicao fica presa no valor interpolado antigo — o botao ficava
+     com o texto do tema claro dentro do tema escuro (1.05:1). */
+  transition: border-color .15s;
+}
+.tema-btn:hover { border-color: var(--border2, #3A3A36); color: var(--text, #ECEAE2); }
+/* Quando nao existe cabecalho onde encaixar, o botao vira flutuante. */
+.tema-btn.solta { position: fixed; top: 14px; right: 14px; z-index: 9999; }
