@@ -345,6 +345,67 @@
     .card-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
 
     /* BADGE STATUS */
+    /* ── USUARIOS ──
+       Nao reaproveita .card: aquela classe e display:flex, feita para a linha de
+       melhoria (info + acoes). Usada como painel, ela empilhava titulo, texto e
+       formulario como COLUNAS lado a lado — o que quebrou a tela. */
+    .us-painel { background:var(--bg2); border:1px solid var(--border); border-radius:14px;
+      padding:22px 24px; margin-bottom:16px; }
+    .us-painel-topo { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:4px; }
+    .us-painel h3 { font-size:16px; font-weight:700; margin:0; }
+    .us-painel .us-hint { font-size:13px; color:var(--text2); line-height:1.55; margin:0 0 18px; max-width:70ch; }
+    .us-conta { font-size:12px; font-weight:700; background:var(--bg4); color:var(--text2);
+      border-radius:20px; padding:2px 10px; }
+
+    .us-form { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; align-items:end; }
+    .us-campo { display:flex; flex-direction:column; gap:6px; min-width:0; }
+    .us-campo label { font-size:12px; font-weight:600; color:var(--text2); letter-spacing:.02em; }
+    /* Altura fixa nos tres: input, select e botao tem metricas padrao diferentes
+       e ficavam desalinhados por 2px na mesma linha da grade. */
+    .us-campo input, .us-campo select { width:100%; box-sizing:border-box; margin:0; height:42px;
+      background:var(--bg3); border:1px solid var(--border); border-radius:9px; padding:0 12px;
+      color:var(--text); font-size:14px; font-family:'Inter',sans-serif; line-height:normal; }
+    .us-campo input:focus, .us-campo select:focus { outline:none; border-color:var(--blue); }
+    .us-campo input::placeholder { color:var(--text3); }
+    .us-form .btn { justify-content:center; height:42px; padding:0 18px; white-space:nowrap; }
+
+    .us-msg { font-size:13px; margin-top:14px; line-height:1.5; min-height:1px; }
+    .us-msg.erro { color:var(--red); }
+    .us-msg.ok   { color:var(--green); }
+
+    .us-tabela-wrap { overflow-x:auto; margin:0 -4px; }
+    .us-tabela { width:100%; border-collapse:separate; border-spacing:0 6px; font-size:14px; }
+    .us-tabela th { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase;
+      letter-spacing:.06em; text-align:left; padding:0 12px 6px; white-space:nowrap; }
+    .us-tabela td { background:var(--bg3); padding:13px 12px; vertical-align:middle; border-top:1px solid var(--border);
+      border-bottom:1px solid var(--border); }
+    .us-tabela td:first-child { border-left:1px solid var(--border); border-radius:10px 0 0 10px; }
+    .us-tabela td:last-child  { border-right:1px solid var(--border); border-radius:0 10px 10px 0; text-align:right; white-space:nowrap; }
+    .us-tabela tr.inativa td { opacity:.5; }
+    .us-nome { font-weight:600; color:var(--text); }
+    .us-sub  { font-size:12px; color:var(--text3); margin-top:3px; }
+    .us-sub-mail { font-size:12px; color:var(--text2); margin-top:3px; word-break:break-all; }
+    .us-tabela select { margin:0; background:var(--bg4); border:1px solid var(--border); border-radius:8px;
+      padding:7px 9px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; }
+    .us-acoes { display:inline-flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+
+    .us-tag { display:inline-block; font-size:11px; font-weight:700; border-radius:20px; padding:2px 9px; }
+    .us-tag-admin    { background:#341A6E; color:#C9AEFF; }
+    .us-tag-dev      { background:#0C3260; color:#9BC8F8; }
+    .us-tag-consulta { background:#252522; color:#A8A49A; }
+    .us-tag-off      { background:#3A1414; color:#F9A0A0; }
+
+    /* Pendencias precisam saltar aos olhos: sao acao a tomar, nao informacao.
+       Sem cor fixa: o #FFD166 que estava aqui dava 1.31:1 sobre fundo claro,
+       ilegivel no tema claro. --amber existe nos dois temas com contraste. */
+    .us-painel.pendencia { border-color:var(--amber); border-left-width:4px; }
+    .us-painel.pendencia h3 { color:var(--amber); }
+    .us-vazio { font-size:13px; color:var(--text3); margin:0; }
+
+    @media (max-width: 720px) {
+      .us-painel { padding:18px 16px; }
+      .us-form { grid-template-columns:1fr; }
+    }
     .badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
     .badge-backlog      { background:#1A2A3A; color:#6A9AC8; }
     .badge-levantar_req { background:#2A1A4E; color:#C9AEFF; }
@@ -442,6 +503,8 @@
     }
     #conditional-fields { }
   </style>
+  <link rel="stylesheet" href="tema.css">
+  <script src="tema.js"></script>
 </head>
 <body>
 
@@ -606,47 +669,82 @@
 
     <!-- ABA RELATÓRIOS — apoio à reunião de comitê de produto -->
     <div class="tab-content" id="tab-usuarios">
-      <div class="card">
-        <h3 style="margin:0 0 4px">Novo usuário</h3>
-        <p style="color:#8B92A0;font-size:13px;margin:0 0 14px;line-height:1.5">
-          Cada pessoa entra com o usuário e a senha dela. Você define a senha inicial e
-          entrega para a pessoa — ela pode pedir a troca depois.
-        </p>
-        <div style="display:grid;grid-template-columns:1fr 1fr 160px;gap:10px;align-items:end">
-          <div>
-            <label>Usuário (login)</label>
-            <input type="text" id="u-login" placeholder="ex: fernando.n" />
-          </div>
-          <div>
-            <label>Nome</label>
-            <input type="text" id="u-nome" placeholder="ex: Fernando Nascimento" />
-          </div>
-          <div>
-            <label>Permissão</label>
-            <select id="u-papel">
-              <option value="dev">Dev — painel dev</option>
-              <option value="admin">Admin — acesso total</option>
-              <option value="consulta">Consulta — só leitura</option>
-            </select>
-          </div>
+
+      <!-- Cadastros esperando liberacao -->
+      <div class="us-painel pendencia" id="us-box-pendentes" style="display:none">
+        <div class="us-painel-topo">
+          <h3>Cadastros aguardando liberação</h3>
+          <span class="us-conta" id="us-n-pendentes">0</span>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 160px;gap:10px;align-items:end;margin-top:10px">
-          <div>
-            <label>Senha inicial (mínimo 8 caracteres)</label>
-            <input type="text" id="u-senha" placeholder="senha que você vai entregar" />
-          </div>
-          <button class="btn" onclick="uCriar()" style="width:100%">Criar usuário</button>
-        </div>
-        <div id="u-msg" style="font-size:13px;margin-top:10px"></div>
+        <p class="us-hint">Estas pessoas se cadastraram pelo painel dev. Elas <strong>ainda não têm
+          acesso</strong> — escolha a permissão e libere, ou recuse se não reconhecer.</p>
+        <div id="us-pendentes"></div>
       </div>
 
-      <div class="card">
-        <h3 style="margin:0 0 4px">Pessoas com acesso</h3>
-        <p style="color:#8B92A0;font-size:13px;margin:0 0 14px;line-height:1.5">
-          <strong>Consulta</strong> só lê. <strong>Dev</strong> lê e atualiza as demandas dele no painel dev.
-          <strong>Admin</strong> faz tudo, inclusive gerenciar estas contas.
-        </p>
-        <div id="u-lista">Carregando…</div>
+      <!-- Pedidos de nova senha -->
+      <div class="us-painel pendencia" id="us-box-pedidos" style="display:none">
+        <div class="us-painel-topo">
+          <h3>Pedidos de nova senha</h3>
+          <span class="us-conta" id="us-n-pedidos">0</span>
+        </div>
+        <p class="us-hint">Quem esqueceu a senha pediu ajuda. Clique em <strong>Nova senha</strong>,
+          defina uma e entregue à pessoa — o pedido sai da lista automaticamente.</p>
+        <div id="us-pedidos"></div>
+      </div>
+
+      <!-- Pessoas com acesso -->
+      <div class="us-painel">
+        <div class="us-painel-topo">
+          <h3>Pessoas com acesso</h3>
+          <span class="us-conta" id="us-n-ativos">0</span>
+        </div>
+        <p class="us-hint"><strong>Consulta</strong> só lê. <strong>Dev</strong> lê e atualiza as
+          demandas dele no painel dev. <strong>Admin</strong> faz tudo, inclusive gerenciar estas contas.</p>
+        <div id="us-lista">Carregando…</div>
+      </div>
+
+      <!-- Devs que aparecem nos cards mas nao tem conta -->
+      <div class="us-painel" id="us-box-semconta" style="display:none">
+        <div class="us-painel-topo">
+          <h3>Nomes nos cards sem conta</h3>
+          <span class="us-conta" id="us-n-semconta">0</span>
+        </div>
+        <p class="us-hint">Aparecem como responsáveis nas demandas, mas ninguém se cadastrou com
+          esse nome. Enquanto houver nomes aqui, filtrar os cards só por quem tem conta esconderia
+          demandas. Crie a conta usando <strong>exatamente</strong> o mesmo nome.</p>
+        <div id="us-semconta"></div>
+      </div>
+
+      <!-- Criar manualmente -->
+      <div class="us-painel">
+        <div class="us-painel-topo"><h3>Criar conta manualmente</h3></div>
+        <p class="us-hint">Use quando a pessoa não vai se cadastrar sozinha. Você define a senha
+          inicial e entrega para ela. Para dev, escreva no <strong>Nome</strong> exatamente o nome que
+          aparece nas demandas — assim a pessoa cai direto no painel dela.</p>
+        <div class="us-form">
+          <div class="us-campo">
+            <label for="u-login">Usuário (login)</label>
+            <input type="text" id="u-login" placeholder="ex: fernando.n" autocomplete="off" />
+          </div>
+          <div class="us-campo">
+            <label for="u-nome">Nome</label>
+            <input type="text" id="u-nome" placeholder="ex: Fernando Nascimento" autocomplete="off" />
+          </div>
+          <div class="us-campo">
+            <label for="u-papel">Permissão</label>
+            <select id="u-papel">
+              <option value="dev">Dev</option>
+              <option value="admin">Admin</option>
+              <option value="consulta">Consulta</option>
+            </select>
+          </div>
+          <div class="us-campo">
+            <label for="u-senha">Senha inicial (mín. 8)</label>
+            <input type="text" id="u-senha" placeholder="senha que você vai entregar" autocomplete="off" />
+          </div>
+          <button class="btn btn-primary" onclick="uCriar()">Criar conta</button>
+        </div>
+        <div id="u-msg" class="us-msg"></div>
       </div>
     </div>
 
@@ -3403,6 +3501,15 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 // Antes o acesso era por senha compartilhada: ninguem sabia QUEM fez o que, e a
 // senha ia embora junto com quem saia da empresa. Aqui cada pessoa tem conta.
 const U_PAPEL_ROTULO = { consulta: 'Consulta', dev: 'Dev', admin: 'Admin' };
+const U_ERROS = {
+  sem_permissao: 'Só quem é admin pode gerenciar contas.',
+  existe: 'Já existe conta com esse usuário ou e-mail.',
+  nao_encontrado: 'Conta não encontrada.',
+  ultimo_admin: 'Este é o único admin ativo. Promova outra pessoa antes.',
+  nao_pendente: 'Esta conta já está em uso. Use Desativar.',
+  indisponivel: 'O banco de dados não está disponível.',
+  limite: 'Muitas tentativas em pouco tempo. Espere um minuto.'
+};
 
 async function uChamar(op, extra) {
   let res;
@@ -3416,13 +3523,7 @@ async function uChamar(op, extra) {
     throw new Error('Sem conexão com o servidor. Verifique a internet e tente de novo.');
   }
   const d = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(d.detail || {
-    sem_permissao: 'Só quem é admin pode gerenciar usuários.',
-    existe: 'Já existe usuário com esse login.',
-    nao_encontrado: 'Usuário não encontrado.',
-    ultimo_admin: 'Este é o único admin ativo. Promova outra pessoa antes.',
-    indisponivel: 'O banco de dados não está disponível.'
-  }[d.error] || 'Não foi possível concluir. Tente novamente.');
+  if (!res.ok) throw new Error(d.detail || U_ERROS[d.error] || 'Não foi possível concluir. Tente novamente.');
   return d;
 }
 
@@ -3430,49 +3531,138 @@ function uAviso(msg, erro) {
   const el = document.getElementById('u-msg');
   if (!el) return;
   el.textContent = msg || '';
-  el.style.color = erro ? '#F87171' : '#4ADE80';
+  el.className = 'us-msg' + (msg ? (erro ? ' erro' : ' ok') : '');
+}
+
+const uQuando = v => v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+const uTag = p => '<span class="us-tag us-tag-' + p + '">' + (U_PAPEL_ROTULO[p] || p) + '</span>';
+
+// Nomes de dev usados nas demandas. Um card pode trazer mais de uma pessoa
+// ("Ana e Bruno", "Ana / Bruno"), por isso a quebra antes de comparar.
+function uDevsDosCards() {
+  const partes = (state.melhorias || []).flatMap(m =>
+    String(m.dev || '').split(/\s*(?:,|\/|;|\se\s|&)\s*/i));
+  return [...new Set(partes.map(t => t.trim()).filter(Boolean))].sort();
+}
+
+function uLinhaAtiva(u) {
+  const l = esc(u.login);
+  const off = !u.ativo;
+  return '<tr' + (off ? ' class="inativa"' : '') + '>' +
+    '<td><div class="us-nome">' + esc(u.nome || u.login) + '</div>' +
+      '<div class="us-sub">' + l + '</div>' +
+      (u.email ? '<div class="us-sub-mail">' + esc(u.email) + '</div>' : '') + '</td>' +
+    '<td><select onchange="uPapel(\'' + l + '\', this.value)">' +
+      ['consulta', 'dev', 'admin'].map(p =>
+        '<option value="' + p + '"' + (u.papel === p ? ' selected' : '') + '>' + U_PAPEL_ROTULO[p] + '</option>'
+      ).join('') + '</select>' +
+      (off ? ' <span class="us-tag us-tag-off">desativado</span>' : '') + '</td>' +
+    '<td class="us-sub">' + (u.ultimo_acesso ? esc(uQuando(u.ultimo_acesso)) : 'nunca entrou') + '</td>' +
+    '<td><span class="us-acoes">' +
+      '<button class="btn btn-secondary btn-sm" onclick="uNovaSenha(\'' + l + '\')">Nova senha</button>' +
+      '<button class="btn ' + (off ? 'btn-success' : 'btn-danger') + ' btn-sm" onclick="uAtivo(\'' + l + '\', ' + (off ? 'true' : 'false') + ')">' +
+        (off ? 'Reativar' : 'Desativar') + '</button>' +
+    '</span></td></tr>';
+}
+
+function uTabela(cabecalhos, linhas) {
+  return '<div class="us-tabela-wrap"><table class="us-tabela"><thead><tr>' +
+    cabecalhos.map(c => '<th>' + c + '</th>').join('') +
+    '</tr></thead><tbody>' + linhas.join('') + '</tbody></table></div>';
+}
+
+function uLinhaPendente(u) {
+  const l = esc(u.login);
+  return '<tr>' +
+    '<td><div class="us-nome">' + esc(u.nome || u.login) + '</div>' +
+      '<div class="us-sub">' + l + '</div>' +
+      (u.email ? '<div class="us-sub-mail">' + esc(u.email) + '</div>' : '') + '</td>' +
+    '<td class="us-sub">' + esc(uQuando(u.criado_em)) + '</td>' +
+    '<td><span class="us-acoes">' +
+      '<select id="us-papel-' + l + '">' +
+        '<option value="dev">Dev</option><option value="consulta">Consulta</option>' +
+        '<option value="admin">Admin</option></select>' +
+      '<button class="btn btn-success btn-sm" onclick="uAprovar(\'' + l + '\')">Liberar</button>' +
+      '<button class="btn btn-danger btn-sm" onclick="uRecusar(\'' + l + '\')">Recusar</button>' +
+    '</span></td></tr>';
 }
 
 async function renderUsuarios() {
-  const box = document.getElementById('u-lista');
+  const box = document.getElementById('us-lista');
   if (!box) return;
-  box.textContent = 'Carregando…';
+  box.innerHTML = '<p class="us-vazio">Carregando…</p>';
+  let d;
   try {
-    const d = await uChamar('listar');
-    const us = d.usuarios || [];
-    if (!us.length) {
-      box.innerHTML = '<p style="color:#8B92A0;font-size:13px;margin:0">' +
-        'Nenhuma conta criada ainda. Enquanto isso, todos continuam entrando pelas senhas gerais.</p>';
-      return;
-    }
-    const linha = u => {
-      const inativo = !u.ativo;
-      const quando = u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString('pt-BR') : 'nunca entrou';
-      const l = esc(u.login);
-      return '<tr style="border-top:1px solid #2A2F3A' + (inativo ? ';opacity:.45' : '') + '">' +
-        '<td style="padding:10px 8px"><strong>' + esc(u.nome || u.login) + '</strong>' +
-          '<div style="color:#8B92A0;font-size:12px">' + l + (inativo ? ' · desativado' : '') + '</div></td>' +
-        '<td style="padding:10px 8px">' +
-          '<select onchange="uPapel(\'' + l + '\', this.value)" style="margin:0;padding:6px 8px">' +
-            ['consulta', 'dev', 'admin'].map(p =>
-              '<option value="' + p + '"' + (u.papel === p ? ' selected' : '') + '>' + U_PAPEL_ROTULO[p] + '</option>'
-            ).join('') +
-          '</select></td>' +
-        '<td style="padding:10px 8px;color:#8B92A0;font-size:12px">' + esc(quando) + '</td>' +
-        '<td style="padding:10px 8px;text-align:right;white-space:nowrap">' +
-          '<button class="btn btn-sm" onclick="uNovaSenha(\'' + l + '\')" style="margin-right:6px">Nova senha</button>' +
-          '<button class="btn btn-sm" onclick="uAtivo(\'' + l + '\', ' + (inativo ? 'true' : 'false') + ')">' +
-            (inativo ? 'Reativar' : 'Desativar') + '</button>' +
-        '</td></tr>';
-    };
-    box.innerHTML = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px">' +
-      '<thead><tr style="color:#8B92A0;font-size:12px;text-align:left">' +
-      '<th style="padding:0 8px 8px">Pessoa</th><th style="padding:0 8px 8px">Permissão</th>' +
-      '<th style="padding:0 8px 8px">Último acesso</th><th></th></tr></thead>' +
-      '<tbody>' + us.map(linha).join('') + '</tbody></table></div>';
+    d = await uChamar('listar');
   } catch (e) {
-    box.innerHTML = '<p style="color:#F87171;font-size:13px;margin:0">' + esc(e.message) + '</p>';
+    box.innerHTML = '<p class="us-msg erro" style="margin:0">' + esc(e.message) + '</p>';
+    return;
   }
+  const todos = d.usuarios || [];
+  const pendentes = todos.filter(u => u.pendente);
+  const ativos = todos.filter(u => !u.pendente);
+  const pedidos = d.pedidos || [];
+
+  // pendentes
+  const bp = document.getElementById('us-box-pendentes');
+  document.getElementById('us-n-pendentes').textContent = pendentes.length;
+  bp.style.display = pendentes.length ? 'block' : 'none';
+  if (pendentes.length) {
+    document.getElementById('us-pendentes').innerHTML =
+      uTabela(['Quem se cadastrou', 'Quando', ''], pendentes.map(uLinhaPendente));
+  }
+
+  // pedidos de senha
+  const bq = document.getElementById('us-box-pedidos');
+  document.getElementById('us-n-pedidos').textContent = pedidos.length;
+  bq.style.display = pedidos.length ? 'block' : 'none';
+  if (pedidos.length) {
+    document.getElementById('us-pedidos').innerHTML = uTabela(['Pessoa', 'Pediu em', ''],
+      pedidos.map(p => '<tr><td><div class="us-nome">' + esc(p.nome || p.login) + '</div>' +
+        '<div class="us-sub">' + esc(p.login) + '</div></td>' +
+        '<td class="us-sub">' + esc(uQuando(p.criado_em)) + '</td>' +
+        '<td><button class="btn btn-primary btn-sm" onclick="uNovaSenha(\'' + esc(p.login) + '\')">Nova senha</button></td></tr>'));
+  }
+
+  // pessoas com acesso
+  document.getElementById('us-n-ativos').textContent = ativos.filter(u => u.ativo).length;
+  box.innerHTML = ativos.length
+    ? uTabela(['Pessoa', 'Permissão', 'Último acesso', ''], ativos.map(uLinhaAtiva))
+    : '<p class="us-vazio">Nenhuma conta criada ainda. Enquanto isso, todos continuam entrando pelas senhas gerais.</p>';
+
+  // nomes nos cards sem conta — prepara o filtro futuro dos cards por conta
+  const comConta = new Set(todos.map(u => String(u.nome || '').trim().toLowerCase()).filter(Boolean));
+  const semConta = uDevsDosCards().filter(n => !comConta.has(n.toLowerCase()));
+  const bs = document.getElementById('us-box-semconta');
+  document.getElementById('us-n-semconta').textContent = semConta.length;
+  bs.style.display = semConta.length ? 'block' : 'none';
+  if (semConta.length) {
+    document.getElementById('us-semconta').innerHTML = uTabela(['Nome no card', 'Demandas', ''],
+      semConta.map(n => {
+        const qtd = (state.melhorias || []).filter(m =>
+          String(m.dev || '').toLowerCase().includes(n.toLowerCase())).length;
+        return '<tr><td><div class="us-nome">' + esc(n) + '</div></td>' +
+          '<td class="us-sub">' + qtd + '</td>' +
+          '<td><button class="btn btn-secondary btn-sm" onclick="uPreencher(' + JSON.stringify(n).replace(/"/g, '&quot;') + ')">Criar conta</button></td></tr>';
+      }));
+  }
+}
+
+// Joga o nome do card no formulario e sugere o login, para o admin nao digitar
+// o nome errado e quebrar o casamento com as demandas.
+function uPreencher(nome) {
+  document.getElementById('u-nome').value = nome;
+  // normTexto ja tira acento e caixa; reusar evita duas regras divergindo.
+  const partes = normTexto(nome).replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean);
+  if (partes.length) {
+    document.getElementById('u-login').value = partes.length > 1
+      ? partes[0] + '.' + partes[partes.length - 1][0]
+      : partes[0];
+  }
+  document.getElementById('u-papel').value = 'dev';
+  document.getElementById('u-senha').focus();
+  uAviso('Confirme os dados e defina a senha inicial de ' + nome + '.');
+  document.getElementById('u-login').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 async function uCriar() {
@@ -3481,18 +3671,35 @@ async function uCriar() {
   const papel = document.getElementById('u-papel').value;
   const senhaNova = document.getElementById('u-senha').value || '';
   if (!/^[a-z0-9._-]{3,24}$/.test(login)) {
-    uAviso('O usuário deve ter de 3 a 24 caracteres, só letras minúsculas, números, ponto, hífen ou _.', true);
+    uAviso('O usuário deve ter de 3 a 24 caracteres: minúsculas, números, ponto, hífen ou _.', true);
     return;
   }
+  if (!nome) { uAviso('Informe o nome da pessoa.', true); return; }
   if (senhaNova.length < 8) { uAviso('A senha inicial precisa de ao menos 8 caracteres.', true); return; }
   try {
     await uChamar('criar', { login, nome, papel, senhaNova });
-    uAviso('Conta de ' + (nome || login) + ' criada. Entregue o usuário "' + login + '" e a senha para a pessoa.');
-    document.getElementById('u-login').value = '';
-    document.getElementById('u-nome').value = '';
-    document.getElementById('u-senha').value = '';
+    uAviso('Conta de ' + nome + ' criada. Entregue o usuário "' + login + '" e a senha para a pessoa.');
+    ['u-login', 'u-nome', 'u-senha'].forEach(i => { document.getElementById(i).value = ''; });
     renderUsuarios();
   } catch (e) { uAviso(e.message, true); }
+}
+
+async function uAprovar(login) {
+  const sel = document.getElementById('us-papel-' + login);
+  try {
+    await uChamar('aprovar', { login, papel: sel ? sel.value : 'dev' });
+    uAviso('"' + login + '" liberado. A pessoa já pode entrar com a senha que ela escolheu.');
+  } catch (e) { uAviso(e.message, true); }
+  renderUsuarios();
+}
+
+async function uRecusar(login) {
+  if (!confirm('Recusar o cadastro de "' + login + '"? O cadastro é apagado e a pessoa pode tentar de novo.')) return;
+  try {
+    await uChamar('recusar', { login });
+    uAviso('Cadastro de "' + login + '" recusado.');
+  } catch (e) { uAviso(e.message, true); }
+  renderUsuarios();
 }
 
 async function uNovaSenha(login) {
