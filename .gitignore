@@ -13,3 +13,7 @@ cloudflare-worker/.wrangler
 # por qualquer pessoa com a URL, inclusive por raw.githubusercontent.
 data/melhorias.json
 data/*.bak
+
+# Rascunhos do ticket de suporte: citam o SHA exato do objeto orfao que ainda
+# guarda a base vazada. Num repo PUBLICO isso seria um mapa para o dado.
+resposta-ticket-github.md
