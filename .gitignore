@@ -1,5 +1,6 @@
 .env
 config.js
+config.js.*
 
 # Local Netlify folder
 .netlify
