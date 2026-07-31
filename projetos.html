@@ -201,7 +201,11 @@ const COLORS = [
 ];
 
 let state = { temas:[], melhorias:[], feriados:[] };
-const runtimeToken = window.GITHUB_TOKEN || localStorage.getItem('rm_token') || '';
+// Alinhado com as outras telas: com o Worker configurado, NUNCA usa token no
+// navegador. Esta era a unica tela que lia GITHUB_TOKEN sem checar o Worker — e
+// por isso o token classico do config.js seguia sendo usado a cada abertura local
+// (aparecia como "last used" no GitHub, com escopo repo e sem expiracao).
+const runtimeToken = PROXY_URL ? '' : (window.GITHUB_TOKEN || localStorage.getItem('rm_token') || '');
 
 function toast(msg, type='ok') {
   const el = document.getElementById('toast');
