@@ -134,6 +134,7 @@
     .ind-chip.planning       { background:#0E3A3A; border-color:#1A6060; color:#7ED8D8; }
     .ind-chip.concluido      { background:#1E4208; border-color:#306010; color:#B2E07A; }
     .ind-chip.atrasado       { background:#5C0A0A; border-color:#8C1010; color:#F9A0A0; }
+    .ind-chip.validacao      { background:#4A2800; border-color:#8A5000; color:#FFC470; }
     .ind-chip.active-filter { outline: 2px solid rgba(255,255,255,0.3); outline-offset: 1px; }
 
     /* ── FILTER BAR ── */
@@ -590,8 +591,8 @@
           <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em andamento</option>
+          <option value="validacao">Validação PM/PO</option>
           <option value="concluido">Concluído</option>
-          <option value="atrasado">Atrasado</option>
         </select>
       </div>
     </div>
@@ -1358,12 +1359,12 @@ function spEfetivo(m) {
 
 function renderIndicators() {
   const visible = state.melhorias.filter(m => !m.oculto);
-  const counts = { backlog:0, levantar_req:0, planning:0, planejado:0, em_andamento:0, concluido:0, atrasado:0 };
+  const counts = { backlog:0, levantar_req:0, planning:0, planejado:0, em_andamento:0, validacao:0, concluido:0, atrasado:0 };
   visible.forEach(m => {
     const sp = spEfetivo(m);
     if (counts[sp] !== undefined) counts[sp]++;
   });
-  const labels = { backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', concluido:'Concluído', atrasado:'Atrasado' };
+  const labels = { backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação', concluido:'Concluído', atrasado:'Atrasado' };
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
   const todosChip = `<span class="ind-chip ${filters.indicator === '' ? 'planejado active-filter' : ''}" style="background:var(--bg3);border-color:var(--border2);color:var(--text2)" onclick="toggleIndicatorFilter('')">Todos <strong>${total}</strong></span>`;
   const chips = Object.keys(counts).map(k => {
@@ -2281,7 +2282,7 @@ async function removeDev(i) {
     _gDeletedDevs.add('teste');
   } else {
     // Dev normal: só bloqueia se tiver demandas ATIVAS (excluindo concluído/negada)
-    const STATUS_BLOQUEIO = ['backlog','levantar_req','planning','planejado','em_andamento','atrasado'];
+    const STATUS_BLOQUEIO = ['backlog','levantar_req','planning','planejado','em_andamento','validacao','atrasado'];
     const demandasAtivas = (state.melhorias || []).filter(m =>
       (m.dev || '').split(/[\/,]/).map(d => d.trim()).includes(name) &&
       STATUS_BLOQUEIO.includes(m.status_planejamento || 'backlog')
@@ -2496,7 +2497,7 @@ document.addEventListener('keydown', e => {
 });
 
 function spToStatus(sp) {
-  const map = { backlog:'recebida', levantar_req:'recebida', planning:'estimada', planejado:'estimada', em_andamento:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
+  const map = { backlog:'recebida', levantar_req:'recebida', planning:'estimada', planejado:'estimada', em_andamento:'iniciada', validacao:'iniciada', concluido:'iniciada', atrasado:'iniciada' };
   return map[sp] || 'recebida';
 }
 
