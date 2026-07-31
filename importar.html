@@ -98,6 +98,7 @@
     .s-planning     { background:rgba(126,216,216,.15); color:#7ED8D8; }
     .s-concluido    { background:rgba(62,201,142,.25); color:#3EC98E; }
     .s-atrasado     { background:rgba(232,93,93,.15); color:#E85D5D; }
+    .s-validacao    { background:var(--amber-bg, rgba(240,165,0,.15)); color:var(--amber-tx, #F0A500); }
     .s-negada       { background:rgba(150,150,150,.15); color:#888; }
 
     .msg { padding:12px 16px; border-radius:8px; font-size:13px; margin-bottom:16px; }
@@ -356,6 +357,7 @@ const STATUS_OPTS = [
   { value:'planejado',    label:'Planejado' },
   { value:'em_andamento', label:'Em andamento' },
   { value:'concluido',    label:'Concluído' },
+  { value:'validacao',    label:'Validação PM/PO' },
   { value:'atrasado',     label:'Atrasado' },
   { value:'negada',       label:'Negada' },
 ];
@@ -369,6 +371,8 @@ const STATUS_ALIAS = {
   'deploy':'concluido','homologacao':'concluido','homologação':'concluido','homolog':'concluido',
   'concluido':'concluido','concluído':'concluido','finalizado':'concluido','entregue':'concluido','done':'concluido','ok':'concluido',
   'atrasado':'atrasado','atraso':'atrasado','delayed':'atrasado',
+  'validacao':'validacao','validação':'validacao','validacao pm/po':'validacao',
+  'em validacao':'validacao','em validação':'validacao','homologacao':'validacao',
   'negada':'negada','negado':'negada','cancelado':'negada','cancelada':'negada',
 };
 const PRIO_ALIAS = { 'alta':'alta','high':'alta','1':'alta','media':'media','média':'media','medium':'media','2':'media','baixa':'baixa','low':'baixa','3':'baixa' };
