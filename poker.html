@@ -363,14 +363,28 @@ async function lerDados(permitirCache, jaTentou) {
   return r2.json();
 }
 
+// A fila vem por `poker-fila`, autorizada pelo CODIGO DA SALA — nao pela senha de
+// leitura. Assim quem entra pelo QR nao precisa digitar senha nenhuma, e o que
+// trafega e so o que a tela mostra (titulo, dev, tipo, tema, pontos). Descricao,
+// discovery e anexos nao passam por aqui.
+//
+// Sem codigo ainda (facilitador antes de abrir a sala) nao ha o que carregar: a
+// fila fica vazia com um aviso, em vez de pedir senha.
 async function carregarFila() {
+  const el = document.getElementById('fila-lista');
+  if (!_codigo) {
+    _melhorias = []; _temas = [];
+    el.innerHTML = `<div class="fila-vazia">Entre na sala para ver a fila.</div>`;
+    return;
+  }
   try {
-    const d = await lerDados(true);
-    _melhorias = d.melhorias || [];
-    _temas     = d.temas || [];
+    const r = await api({ action: 'poker-fila', codigo: _codigo });
+    if (!r.ok) throw new Error((r.body && (r.body.detail || r.body.error)) || ('HTTP ' + r.status));
+    _melhorias = (r.body && r.body.melhorias) || [];
+    _temas     = (r.body && r.body.temas) || [];
     renderFila();
   } catch (e) {
-    document.getElementById('fila-lista').innerHTML = `<div class="fila-vazia">Falha ao carregar a fila: ${esc(e.message)}</div>`;
+    el.innerHTML = `<div class="fila-vazia">Falha ao carregar a fila: ${esc(e.message)}</div>`;
   }
 }
 
