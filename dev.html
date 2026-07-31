@@ -32,6 +32,18 @@
     .login-box { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:40px 36px; width:100%; max-width:400px; text-align:center; }
     .login-box h2 { font-size:22px; font-weight:700; margin-bottom:6px; }
     .login-box p  { font-size:14px; color:var(--text2); margin-bottom:24px; }
+    /* Nao havia estilo nenhum para os campos de login: ficavam com o tamanho
+       padrao do navegador, 19px de altura. Como esta e a porta de entrada diaria
+       da equipe, e agora sao dois campos, vale acertar. */
+    #step-senha input { width:100%; box-sizing:border-box; padding:13px 14px; margin-bottom:12px;
+      background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); font-size:15px; font-family:'Inter',sans-serif; }
+    #step-senha input:focus { outline:none; border-color:var(--blue); }
+    #step-senha input::placeholder { color:var(--text3); }
+    #step-senha > button { width:100%; padding:13px; background:var(--blue); color:#fff; border:none;
+      border-radius:var(--radius); font-size:15px; font-weight:700; cursor:pointer;
+      font-family:'Inter',sans-serif; }
+    #step-senha > button:hover { filter:brightness(1.1); }
     .dev-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-bottom:20px; }
     .dev-btn { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:12px 8px; cursor:pointer; font-size:14px; font-weight:500; color:var(--text2); transition:all .15s; }
     .dev-btn:hover { border-color:var(--blue); color:var(--blue); background:var(--blue-bg); }
@@ -166,9 +178,14 @@
 
     <!-- PASSO 1: Senha -->
     <div id="step-senha">
-      <p>Digite a senha para acessar o painel</p>
-      <input type="password" id="login-senha" placeholder="Senha de acesso"
-             onkeydown="if(event.key==='Enter') verificarSenha()" autocomplete="off" />
+      <p>Entre com seu usuário e senha</p>
+      <input type="text" id="login-usuario" placeholder="Seu usuário" autocomplete="username"
+             onkeydown="if(event.key==='Enter') document.getElementById('login-senha').focus()" />
+      <input type="password" id="login-senha" placeholder="Sua senha" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter') verificarSenha()" />
+      <div style="font-size:12px;color:var(--text3);margin:-2px 0 10px;line-height:1.5;text-align:left">
+        Sem usuário ainda? Deixe <em>Seu usuário</em> em branco e use a senha geral do painel.
+      </div>
       <button onclick="verificarSenha()">Entrar</button>
       <div class="login-error" id="login-error-senha"></div>
     </div>
@@ -421,6 +438,17 @@ const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}
 // Worker que guarda o token do GitHub. Com ele, o dev grava sem token na máquina.
 const ADMIN_PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
 let _devPw = sessionStorage.getItem('rm_dev_pw') || '';
+// Conta por pessoa. A senha compartilhada segue valendo enquanto as contas nao
+// estao todas criadas, entao os dois caminhos convivem.
+let _devToken = sessionStorage.getItem('rm_dev_token') || '';
+let _eu = null;
+try { _eu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) {}
+function credDev() {
+  const c = {};
+  if (_devToken) c.token = _devToken;
+  if (_devPw) c.senha = _devPw;
+  return c;
+}
 
 // Captura token da URL (?token= ou #token=) — só usado no modo legado (sem proxy)
 (function() {
@@ -632,8 +660,11 @@ const COLUMNS = [
 // responder 401 e o painel pede a senha — sem precisar de novo deploy do site.
 function credenciaisLeitura() {
   const c = {};
-  const senha = sessionStorage.getItem('rm_admin_pw') || sessionStorage.getItem('rm_view_pw');
+  const senha = sessionStorage.getItem('rm_admin_pw') || sessionStorage.getItem('rm_view_pw')
+              || sessionStorage.getItem('rm_dev_pw');
   if (senha) c.senha = senha;
+  const tk = sessionStorage.getItem('rm_dev_token') || sessionStorage.getItem('rm_admin_token');
+  if (tk) c.token = tk;
   const chave = new URLSearchParams(location.search).get('k') || sessionStorage.getItem('rm_view_key');
   if (chave) c.chave = chave;
   return c;
@@ -738,7 +769,7 @@ async function saveToGitHub(patch, opts = {}) {
       const baseVersao = server.atualizado_em || null;
       const res = await fetch(ADMIN_PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'dev-publish', senha: _devPw, data: server, base: baseVersao })
+        body: JSON.stringify(Object.assign({ action: 'dev-publish', data: server, base: baseVersao }, credDev()))
       });
       if (!res.ok) {
         let corpo = null;
@@ -866,7 +897,7 @@ async function reloadDevList() {
 async function initApp() {
   // Exige senha validada no Worker. Antes entrava direto, e a rota de gravacao
   // tambem nao pedia senha — qualquer um com a URL sobrescrevia a base.
-  const authed = ADMIN_PROXY_URL ? !!_devPw : sessionStorage.getItem('rm_dev_authed');
+  const authed = ADMIN_PROXY_URL ? (!!_devPw || !!_devToken) : sessionStorage.getItem('rm_dev_authed');
   if (!authed) {
     // step-senha já é o padrão (step-dev está oculto)
     document.getElementById('login-senha')?.focus();
@@ -918,10 +949,36 @@ async function verificarSenha() {
   const val = document.getElementById('login-senha').value;
   const errEl = document.getElementById('login-error-senha');
 
-  // Modo proxy: valida a senha no Worker (sem token na máquina)
+  // Modo proxy: valida no Worker (sem token do GitHub na máquina)
   if (ADMIN_PROXY_URL) {
-    if (!val) { errEl.textContent = 'Informe a senha.'; return; }
+    const login = (document.getElementById('login-usuario')?.value || '').trim();
+    if (!val) { errEl.textContent = login ? 'Informe sua senha.' : 'Informe a senha.'; return; }
     try {
+      // Com usuario preenchido: conta por pessoa. Sem usuario: senha compartilhada.
+      if (login) {
+        const res = await fetch(ADMIN_PROXY_URL, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login', login, senhaUsuario: val })
+        });
+        const dj = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          errEl.textContent = dj.detail || 'Usuário ou senha inválidos.';
+          document.getElementById('login-senha').value = '';
+          return;
+        }
+        if (dj.usuario && dj.usuario.papel === 'consulta') {
+          errEl.textContent = 'Sua conta é somente de consulta e não atualiza demandas.';
+          document.getElementById('login-senha').value = '';
+          return;
+        }
+        _devToken = dj.token; _eu = dj.usuario || null;
+        sessionStorage.setItem('rm_dev_token', _devToken);
+        sessionStorage.setItem('rm_dev_authed', '1');
+        try { sessionStorage.setItem('rm_eu', JSON.stringify(_eu)); } catch (_) {}
+        errEl.textContent = '';
+        mostrarStepDev();
+        return;
+      }
       const res = await fetch(ADMIN_PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'dev-auth', senha: val })
@@ -949,10 +1006,18 @@ async function verificarSenha() {
   }
 }
 
-function mostrarStepDev() {
+async function mostrarStepDev() {
   document.getElementById('step-senha').style.display = 'none';
   document.getElementById('step-dev').style.display = 'block';
-  reloadDevList();
+  await reloadDevList();
+  // Quem entrou por conta nao precisa se procurar na lista: se o nome da conta
+  // casa com um dev cadastrado, entra direto no painel dele. Espera a lista
+  // carregar de verdade — getDevList() so tem valor depois do reload.
+  if (_eu && _eu.nome) {
+    const alvo = _eu.nome.trim().toLowerCase();
+    const achou = getDevList().find(d => d.trim().toLowerCase() === alvo);
+    if (achou) selectDev(achou);
+  }
 }
 
 function selectDev(name) {
