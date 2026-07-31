@@ -887,12 +887,56 @@ function credenciaisLeitura() {
   return c;
 }
 
-async function pedirSenhaLeitura() {
-  const s = prompt('Esta consulta exige senha de acesso:');
-  if (!s) return false;
-  sessionStorage.setItem('rm_view_pw', s);
-  return true;
+// Antes isto era um prompt() do navegador — caixinha cinza, sem explicacao, e a
+// pessoa que so queria SUGERIR uma melhoria batia nela na primeira tela. Agora a
+// senha e pedida numa tela que explica o porque e deixa o caminho de sugestao
+// visivel, sem exigir credencial nenhuma.
+function telaDeAcesso(msgErro) {
+  const app = document.getElementById('app');
+  if (!app) return;
+  app.innerHTML = `
+    <div style="max-width:520px;margin:40px auto;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:32px 28px;text-align:center;">
+      <div style="font-size:40px;margin-bottom:12px;">🔒</div>
+      <div style="font-size:19px;font-weight:700;margin-bottom:8px;">Consulta restrita</div>
+      <div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:22px;">
+        Para <b>ver</b> o roadmap, informe a senha de acesso.<br>
+        Para <b>sugerir</b> uma melhoria, não precisa de senha — use o botão abaixo.
+      </div>
+      ${msgErro ? `<div style="font-size:13px;color:#F9A0A0;margin-bottom:14px;">${nmEsc(msgErro)}</div>` : ''}
+      <input type="password" id="gate-senha" placeholder="Senha de acesso" autocomplete="current-password"
+             style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 14px;font-size:15px;font-family:inherit;outline:none;margin-bottom:10px;"
+             onkeydown="if(event.key==='Enter')gateEntrar()">
+      <button onclick="gateEntrar()"
+              style="width:100%;background:#3B8FE8;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">
+        Entrar e consultar
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin:20px 0 16px;">
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+        <span style="font-size:12px;color:var(--text3);">ou</span>
+        <div style="flex:1;height:1px;background:var(--border);"></div>
+      </div>
+      <button onclick="openNovaMelhoria()"
+              style="width:100%;background:transparent;color:var(--text);border:1px solid var(--border2);border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">
+        💡 Sugerir uma melhoria
+      </button>
+      <div style="font-size:12px;color:var(--text3);margin-top:10px;">Sugerir não exige senha.</div>
+    </div>`;
+  setTimeout(() => { const i = document.getElementById('gate-senha'); if (i) i.focus(); }, 80);
 }
+
+async function gateEntrar() {
+  const el = document.getElementById('gate-senha');
+  const v = el ? el.value.trim() : '';
+  if (!v) { telaDeAcesso('Digite a senha para continuar.'); return; }
+  sessionStorage.setItem('rm_view_pw', v);
+  const app = document.getElementById('app');
+  if (app) app.innerHTML = '<div class="empty">Carregando…</div>';
+  await loadData();
+}
+
+// Mantida para compatibilidade com o fluxo interno de retry, mas agora sem
+// prompt(): quem nao tem credencial vai para a tela de acesso.
+async function pedirSenhaLeitura() { return false; }
 
 async function lerDados(permitirCache, jaTentou) {
   try {
@@ -943,7 +987,12 @@ async function loadData() {
     renderConteudo();
 
   } catch (e) {
-    app.innerHTML = `<div class="empty">${e.message}</div>`;
+    // 401/credencial -> tela de acesso; qualquer outra falha -> mensagem seca
+    if (/autorizad|credencial/i.test(e.message || '')) {
+      telaDeAcesso(sessionStorage.getItem('rm_view_pw') ? 'Senha incorreta. Tente novamente.' : '');
+    } else {
+      app.innerHTML = `<div class="empty">${nmEsc(e.message)}</div>`;
+    }
   }
 }
 
@@ -1298,6 +1347,20 @@ function nmModulos(sis) {
   return [...new Set(_temas.map(t => nmParseTema(t.nome))
     .filter(p => p.sistema.toLowerCase() === (sis || '').toLowerCase() && p.modulo).map(p => p.modulo))];
 }
+// Garante a lista de temas para o formulario funcionar SEM a senha de leitura.
+// Sugerir uma melhoria nao pode depender de credencial — quem tem a ideia desiste
+// antes de procurar senha. Esta rota devolve so id e nome do tema.
+async function nmGarantirTemas() {
+  if (_temas && _temas.length) return;
+  try {
+    const r = await fetch(NM_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'temas-publicos' })
+    });
+    if (r.ok) { const d = await r.json(); _temas = d.temas || []; }
+  } catch (_) {}
+}
+
 function nmPopulateSistema() {
   const sel = document.getElementById('nm-sistema');
   sel.innerHTML = '<option value="">—</option>' +
@@ -1461,6 +1524,7 @@ function openNovaMelhoria() {
   _nmRF = _nmRN = _nmCA = 0; nmAddRF(); nmAddRN(); nmAddCA();
   _nmAnexos = []; nmRenderAnexos();
   nmTurnstileReset();   // sessao nova, token novo
+  nmGarantirTemas().then(() => nmPopulateSistema());
   document.getElementById('nm-overlay').style.display = 'block';
   document.body.style.overflow = 'hidden';
 }
