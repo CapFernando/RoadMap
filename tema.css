@@ -16,6 +16,11 @@
   --bg2:      #FFFFFF;
   --bg3:      #F0EEE8;
   --bg4:      #E4E1D8;
+  /* Usado como var(--card, #1E1E1C) no Kanban do admin. O token nao existe no
+     :root daquela pagina, entao o fallback escuro valia NOS DOIS temas: no claro
+     o card ficava preto com texto preto. Definindo aqui, o claro passa a ter
+     superficie clara e o escuro segue usando o fallback, intocado. */
+  --card:     #F7F6F2;
 
   --border:   #DBD7CD;
   --border2:  #C4BFB2;
@@ -29,7 +34,7 @@
   /* acentos escurecidos: os tons do tema escuro sao claros demais para
      assentar sobre branco */
   --blue:     #1B67C7;
-  --green:    #46861F;
+  --green:    #3D7A18;   /* texto branco no botao primario: #46861F dava 4.48:1 */
   --amber:    #8A5A06;   /* titulo de pendencia precisa de 4.5:1 sobre #F5F4F0 */
   --red:      #CC3232;
   --purple:   #7048D2;
