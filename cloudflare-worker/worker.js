@@ -144,6 +144,12 @@ const LIMITES = {
   'poker-votar':    { max: 60,  janela: 60 },
   'poker-gravar':   { max: 30,  janela: 60 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
+  // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
+  // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
+  // porque `dados` devolve a base INTEIRA (1,7 MB): sem freio, um script coleta
+  // tudo em loop. Nao substitui a trava de leitura (VIEW_SENHA) — apenas encarece
+  // a coleta em massa enquanto ela nao estiver ligada.
+  'dados':          { max: 40,  janela: 60 },
   // poker-estado fica de fora: o painel faz polling a cada 1,5s (~40/min por pessoa)
 };
 
@@ -165,6 +171,31 @@ async function limiteExcedido(env, ip, acao) {
   } catch (_) {
     return false;
   }
+}
+
+// Mensagem para tentativa bloqueada. Vai SOMENTE em resposta que ja era negada
+// (429, 401, acao invalida): nao revela nada que o requisitante ainda nao
+// soubesse, entao provoca sem servir de pista. Cosmetico e dissuasorio — a
+// seguranca real esta na senha, na trava de leitura e nos limites por IP.
+const TROLL = [
+  'Parabens pela tentativa de hackear. Registrada.',
+  'Parabens pela tentativa de hackear. Boa sorte na proxima.',
+  'Parabens pela tentativa de hackear. Sua origem foi anotada.',
+];
+function troll(i) { return TROLL[i % TROLL.length]; }
+
+// Contador simples de tentativas por IP, para a mensagem citar o numero.
+async function contaTentativa(env, ip, acao) {
+  if (!env.POKER_DB) return 0;
+  try {
+    const db = env.POKER_DB;
+    await db.prepare('CREATE TABLE IF NOT EXISTS tentativas (chave TEXT PRIMARY KEY, n INTEGER NOT NULL, visto TEXT NOT NULL)').run();
+    const chave = ip + '|' + acao;
+    await db.prepare('INSERT INTO tentativas (chave, n, visto) VALUES (?,1,?) ON CONFLICT(chave) DO UPDATE SET n = n + 1, visto = ?')
+      .bind(chave, new Date().toISOString(), new Date().toISOString()).run();
+    const r = await db.prepare('SELECT n FROM tentativas WHERE chave = ?').bind(chave).first();
+    return (r && r.n) || 0;
+  } catch (_) { return 0; }
 }
 
 function toB64(str) {
@@ -267,7 +298,10 @@ export default {
     const ip = request.headers.get('CF-Connecting-IP') || 'sem-ip';
     const acaoLim = body.action || 'sugestao';
     if (await limiteExcedido(env, ip, acaoLim)) {
-      return json({ error: 'muitas_tentativas', detail: 'Muitas requisicoes. Aguarde um minuto e tente de novo.' }, 429, headers);
+      const n = await contaTentativa(env, ip, acaoLim);
+      return json({ error: 'muitas_tentativas',
+                    detail: 'Muitas requisicoes. Aguarde um minuto e tente de novo.',
+                    mensagem: troll(n) + ' Tentativa #' + n + ' desta origem.' }, 429, headers);
     }
 
     const REPO_NAME = env.DATA_REPO || REPO_NAME_PADRAO;
@@ -500,7 +534,11 @@ export default {
 
     // ── Login do Admin ──
     if (body.action === 'auth') {
-      return senhaOk(body.senha) ? json({ ok: true }, 200, headers) : json({ error: 'senha' }, 401, headers);
+      if (senhaOk(body.senha)) return json({ ok: true }, 200, headers);
+      // Senha errada: conta e provoca. O painel reage ao status 401, nao ao corpo,
+      // entao a mensagem extra nao muda o comportamento das telas.
+      const nAuth = await contaTentativa(env, ip, 'auth');
+      return json({ error: 'senha', mensagem: troll(nAuth) + ' Tentativa #' + nAuth + '.' }, 401, headers);
     }
 
     // ── Publicação do Admin (estado completo) ──
@@ -558,6 +596,15 @@ export default {
       });
       if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
       return json({ ok: true }, 200, headers);
+    }
+
+    // Acao presente mas desconhecida = sondagem. Antes caia no fluxo de sugestao
+    // publica e respondia "Titulo obrigatorio", o que ja era uma pista. Agora e
+    // recusada de forma explicita, e a superficie da API fica fechada ao que existe.
+    if (typeof body.action === 'string' && body.action.length) {
+      const nAcao = await contaTentativa(env, ip, 'acao-invalida');
+      return json({ error: 'acao_invalida',
+                    mensagem: troll(nAcao) + ' Tentativa #' + nAcao + ' desta origem.' }, 400, headers);
     }
 
     // ── Sugestão pública (dash) — só adiciona no Backlog ──
