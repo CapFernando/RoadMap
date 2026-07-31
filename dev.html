@@ -35,15 +35,26 @@
     /* Nao havia estilo nenhum para os campos de login: ficavam com o tamanho
        padrao do navegador, 19px de altura. Como esta e a porta de entrada diaria
        da equipe, e agora sao dois campos, vale acertar. */
-    #step-senha input { width:100%; box-sizing:border-box; padding:13px 14px; margin-bottom:12px;
+    #step-senha input, #step-cadastro input, #step-recuperar input {
+      width:100%; box-sizing:border-box; padding:13px 14px; margin-bottom:12px;
       background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
       color:var(--text); font-size:15px; font-family:'Inter',sans-serif; }
-    #step-senha input:focus { outline:none; border-color:var(--blue); }
-    #step-senha input::placeholder { color:var(--text3); }
-    #step-senha > button { width:100%; padding:13px; background:var(--blue); color:#fff; border:none;
+    #step-senha input:focus, #step-cadastro input:focus, #step-recuperar input:focus {
+      outline:none; border-color:var(--blue); }
+    #step-senha input::placeholder, #step-cadastro input::placeholder, #step-recuperar input::placeholder {
+      color:var(--text3); }
+    #step-senha > button, #step-cadastro > button, #step-recuperar > button {
+      width:100%; padding:13px; background:var(--blue); color:#fff; border:none;
       border-radius:var(--radius); font-size:15px; font-weight:700; cursor:pointer;
       font-family:'Inter',sans-serif; }
-    #step-senha > button:hover { filter:brightness(1.1); }
+    #step-senha > button:hover, #step-cadastro > button:hover, #step-recuperar > button:hover {
+      filter:brightness(1.1); }
+    /* Atalhos entre entrar / cadastrar / recuperar */
+    .login-links { display:flex; justify-content:space-between; gap:12px; margin-top:14px; flex-wrap:wrap; }
+    .login-link { background:none; border:none; color:var(--blue); font-size:13px; cursor:pointer;
+      font-family:'Inter',sans-serif; padding:0; text-decoration:underline; width:auto !important; }
+    .login-dica { font-size:12px; color:var(--text3); line-height:1.5; text-align:left; margin:-2px 0 12px; }
+    .login-ok { color:var(--green-tx); font-size:13px; line-height:1.5; margin-top:10px; text-align:left; }
     .dev-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-bottom:20px; }
     .dev-btn { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:12px 8px; cursor:pointer; font-size:14px; font-weight:500; color:var(--text2); transition:all .15s; }
     .dev-btn:hover { border-color:var(--blue); color:var(--blue); background:var(--blue-bg); }
@@ -168,6 +179,8 @@
     .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
   </style>
+  <link rel="stylesheet" href="tema.css">
+  <script src="tema.js"></script>
 </head>
 <body>
 
@@ -188,6 +201,43 @@
       </div>
       <button onclick="verificarSenha()">Entrar</button>
       <div class="login-error" id="login-error-senha"></div>
+      <div class="login-links">
+        <button class="login-link" onclick="mostrarCadastro()">Primeiro acesso? Cadastre-se</button>
+        <button class="login-link" onclick="mostrarRecuperar()">Esqueci minha senha</button>
+      </div>
+    </div>
+
+    <!-- PASSO 1b: autocadastro -->
+    <div id="step-cadastro" style="display:none">
+      <p>Crie seu acesso</p>
+      <input type="text" id="cad-nome" placeholder="Seu nome completo" autocomplete="name" />
+      <div class="login-dica">Use o mesmo nome que aparece nas suas demandas, para o painel já abrir no seu.</div>
+      <input type="text" id="cad-login" placeholder="Usuário (ex: joao.s)" autocomplete="username" />
+      <input type="email" id="cad-email" placeholder="seu.nome@audaxcapitalsa.com.br" autocomplete="email" />
+      <input type="password" id="cad-senha" placeholder="Senha (mínimo 8 caracteres)" autocomplete="new-password" />
+      <input type="password" id="cad-senha2" placeholder="Repita a senha" autocomplete="new-password"
+             onkeydown="if(event.key==='Enter') fazerCadastro()" />
+      <button onclick="fazerCadastro()">Cadastrar</button>
+      <div class="login-error" id="cad-erro"></div>
+      <div class="login-ok" id="cad-ok" style="display:none"></div>
+      <div class="login-links">
+        <button class="login-link" onclick="voltarLogin()">← Voltar para entrar</button>
+      </div>
+    </div>
+
+    <!-- PASSO 1c: recuperar senha -->
+    <div id="step-recuperar" style="display:none">
+      <p>Recuperar senha</p>
+      <div class="login-dica">Informe seu usuário ou e-mail corporativo. Um administrador vai gerar
+        uma senha nova e entregar a você.</div>
+      <input type="text" id="rec-quem" placeholder="Usuário ou e-mail"
+             onkeydown="if(event.key==='Enter') pedirRecuperacao()" />
+      <button onclick="pedirRecuperacao()">Pedir nova senha</button>
+      <div class="login-error" id="rec-erro"></div>
+      <div class="login-ok" id="rec-ok" style="display:none"></div>
+      <div class="login-links">
+        <button class="login-link" onclick="voltarLogin()">← Voltar para entrar</button>
+      </div>
     </div>
 
     <!-- PASSO 2: Seleção de dev (oculto até senha correta) -->
@@ -945,6 +995,98 @@ function getDevList() {
   return [...new Set([...fromArr, ...fromMel])].sort();
 }
 
+
+// ─── AUTOCADASTRO E RECUPERAÇÃO ───────────────────────────────────────
+// O cadastro NAO libera acesso sozinho: a conta nasce pendente e um admin
+// aprova. Sem isso, qualquer pessoa que abrisse esta URL criaria conta e leria
+// a base inteira.
+const EMAIL_DOMINIO = '@audaxcapitalsa.com.br';
+
+function mostrarPasso(qual) {
+  ['step-senha', 'step-cadastro', 'step-recuperar', 'step-dev'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (id === qual) ? 'block' : 'none';
+  });
+}
+function mostrarCadastro() { mostrarPasso('step-cadastro'); document.getElementById('cad-nome').focus(); }
+function mostrarRecuperar() { mostrarPasso('step-recuperar'); document.getElementById('rec-quem').focus(); }
+function voltarLogin() {
+  mostrarPasso('step-senha');
+  ['cad-erro', 'rec-erro'].forEach(i => { const e = document.getElementById(i); if (e) e.textContent = ''; });
+  ['cad-ok', 'rec-ok'].forEach(i => { const e = document.getElementById(i); if (e) e.style.display = 'none'; });
+  document.getElementById('login-usuario').focus();
+}
+
+async function fazerCadastro() {
+  const err = document.getElementById('cad-erro');
+  const okEl = document.getElementById('cad-ok');
+  const nome = (document.getElementById('cad-nome').value || '').trim();
+  const login = (document.getElementById('cad-login').value || '').trim().toLowerCase();
+  const email = (document.getElementById('cad-email').value || '').trim().toLowerCase();
+  const senha = document.getElementById('cad-senha').value || '';
+  const senha2 = document.getElementById('cad-senha2').value || '';
+  err.textContent = ''; okEl.style.display = 'none';
+
+  if (nome.length < 3) { err.textContent = 'Informe seu nome completo.'; return; }
+  if (!/^[a-z0-9._-]{3,24}$/.test(login)) {
+    err.textContent = 'O usuário deve ter de 3 a 24 caracteres: minúsculas, números, ponto, hífen ou _.'; return;
+  }
+  if (!email.endsWith(EMAIL_DOMINIO) || email.indexOf('@') < 1) {
+    err.textContent = 'Use seu e-mail corporativo, terminando em ' + EMAIL_DOMINIO + '.'; return;
+  }
+  if (senha.length < 8) { err.textContent = 'A senha precisa de ao menos 8 caracteres.'; return; }
+  if (senha !== senha2) { err.textContent = 'As duas senhas não são iguais.'; return; }
+
+  try {
+    const res = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cadastro', nome, login, email, senhaUsuario: senha })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      err.textContent = d.detail || (res.status === 429
+        ? 'Muitas tentativas em pouco tempo. Espere um minuto.'
+        : 'Não foi possível cadastrar. Tente novamente.');
+      return;
+    }
+    ['cad-nome', 'cad-login', 'cad-email', 'cad-senha', 'cad-senha2']
+      .forEach(i => { document.getElementById(i).value = ''; });
+    okEl.innerHTML = '✅ <strong>Cadastro enviado.</strong><br>Avise um administrador para liberar ' +
+      'seu acesso. Depois entre com o usuário <strong>' + login.replace(/[&<>"]/g, '') +
+      '</strong> e a senha que você acabou de escolher.';
+    okEl.style.display = 'block';
+  } catch (_) {
+    err.textContent = 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
+  }
+}
+
+async function pedirRecuperacao() {
+  const err = document.getElementById('rec-erro');
+  const okEl = document.getElementById('rec-ok');
+  const quem = (document.getElementById('rec-quem').value || '').trim().toLowerCase();
+  err.textContent = ''; okEl.style.display = 'none';
+  if (!quem) { err.textContent = 'Informe seu usuário ou e-mail.'; return; }
+  try {
+    const res = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'recuperar', login: quem })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      err.textContent = d.detail || (res.status === 429
+        ? 'Muitas tentativas em pouco tempo. Espere um minuto.'
+        : 'Não foi possível registrar o pedido. Tente novamente.');
+      return;
+    }
+    document.getElementById('rec-quem').value = '';
+    okEl.innerHTML = '✅ <strong>Pedido registrado.</strong><br>Um administrador vai gerar uma senha ' +
+      'nova e entregar a você.';
+    okEl.style.display = 'block';
+  } catch (_) {
+    err.textContent = 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
+  }
+}
+
 async function verificarSenha() {
   const val = document.getElementById('login-senha').value;
   const errEl = document.getElementById('login-error-senha');
@@ -962,7 +1104,11 @@ async function verificarSenha() {
         });
         const dj = await res.json().catch(() => ({}));
         if (!res.ok) {
-          errEl.textContent = dj.detail || 'Usuário ou senha inválidos.';
+          // Cadastro feito mas ainda nao liberado: a pessoa precisa saber que o
+          // problema nao e a senha dela, senao vai tentar de novo sem parar.
+          errEl.textContent = dj.detail || (res.status === 429
+            ? 'Muitas tentativas em pouco tempo. Espere um minuto.'
+            : 'Usuário ou senha inválidos.');
           document.getElementById('login-senha').value = '';
           return;
         }
@@ -1007,8 +1153,7 @@ async function verificarSenha() {
 }
 
 async function mostrarStepDev() {
-  document.getElementById('step-senha').style.display = 'none';
-  document.getElementById('step-dev').style.display = 'block';
+  mostrarPasso('step-dev');
   await reloadDevList();
   // Quem entrou por conta nao precisa se procurar na lista: se o nome da conta
   // casa com um dev cadastrado, entra direto no painel dele. Espera a lista
