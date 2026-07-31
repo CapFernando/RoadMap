@@ -270,6 +270,28 @@ async function colunaSeFaltar(db, tabela, coluna, tipo) {
   catch (_) { /* ja existe */ }
 }
 
+// O login deixou de ser digitado por quem se cadastra: pedir "usuario" travava
+// gente de verdade — "Joao.Lucas.A.C" tem maiuscula e ponto final e era recusado,
+// com uma mensagem que so repetia a regra. Agora ele sai do e-mail e existe so
+// por dentro; as pessoas entram com o e-mail, que elas ja sabem de cor.
+function loginDoEmail(email) {
+  const base = String(email).split('@')[0]
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9._-]/g, '.')
+    .replace(/\.{2,}/g, '.').replace(/^\.+|\.+$/g, '')
+    .slice(0, 20);
+  return base || 'usuario';
+}
+
+async function loginLivre(db, base) {
+  for (let i = 0; i < 50; i++) {
+    const tent = i === 0 ? base : base + (i + 1);
+    const j = await db.prepare('SELECT 1 FROM usuario WHERE login = ?').bind(tent).first();
+    if (!j) return tent;
+  }
+  return base + '-' + crypto.randomUUID().slice(0, 6);
+}
+
 async function contasMigrar(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS usuario (
@@ -815,13 +837,9 @@ export default {
     if (body.action === 'cadastro') {
       if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
       await contasMigrar(env.POKER_DB);
-      const login = String(body.login || '').trim().toLowerCase();
       const nome = limpaTexto(body.nome, 80);
       const email = String(body.email || '').trim().toLowerCase();
       const senhaU = String(body.senhaUsuario || '');
-      if (!/^[a-z0-9._-]{3,24}$/.test(login)) {
-        return json({ error: 'login', detail: 'O usuario deve ter de 3 a 24 caracteres: minusculas, numeros, ponto, hifen ou _.' }, 400, headers);
-      }
       if (nome.length < 3) return json({ error: 'nome', detail: 'Informe seu nome completo.' }, 400, headers);
       if (!email.endsWith(EMAIL_DOMINIO) || email.length <= EMAIL_DOMINIO.length ||
           !/^[a-z0-9._%+-]+@/.test(email)) {
@@ -829,6 +847,13 @@ export default {
       }
       if (senhaU.length < 8) return json({ error: 'senha_curta', detail: 'A senha precisa de ao menos 8 caracteres.' }, 400, headers);
 
+      // Se o e-mail ja tem conta, para aqui: senao geraria outro login e a pessoa
+      // acabaria com duas contas.
+      const jaTem = await env.POKER_DB.prepare('SELECT 1 FROM usuario WHERE email = ?').bind(email).first();
+      if (jaTem) {
+        return json({ error: 'existe', detail: 'Ja existe um cadastro com esse e-mail. Fale com o administrador.' }, 409, headers);
+      }
+      const login = await loginLivre(env.POKER_DB, loginDoEmail(email));
       const salt = hexDe(crypto.getRandomValues(new Uint8Array(16)));
       const hash = await derivaSenha(senhaU, salt);
       try {
@@ -870,8 +895,11 @@ export default {
       await contasMigrar(env.POKER_DB);
       const login = String(body.login || '').trim().toLowerCase();
       const senhaU = String(body.senhaUsuario || '');
-      if (!login || !senhaU) return json({ error: 'dados', detail: 'Informe usuario e senha.' }, 400, headers);
-      const u = await env.POKER_DB.prepare('SELECT * FROM usuario WHERE login = ?').bind(login).first();
+      if (!login || !senhaU) return json({ error: 'dados', detail: 'Informe e-mail e senha.' }, 400, headers);
+      // Entra pelo e-mail (o que a pessoa sabe) ou pelo login interno, que segue
+      // valendo para as contas criadas antes desta mudanca.
+      const u = await env.POKER_DB.prepare(
+        'SELECT * FROM usuario WHERE login = ? OR email = ?').bind(login, login).first();
       // Mesma resposta para usuario inexistente e senha errada: dizer qual dos
       // dois falhou permitiria descobrir quem tem conta.
       const generico = async () => {
@@ -964,10 +992,14 @@ export default {
       }
 
       if (op === 'criar' || op === 'senha') {
-        const login = String(body.login || '').trim().toLowerCase();
+        let login = String(body.login || '').trim().toLowerCase();
+        const emailC = String(body.email || '').trim().toLowerCase();
         const nova = String(body.senhaNova || '');
+        // Na criacao o login e opcional: sem ele, sai do e-mail. Em `senha` ele e
+        // a chave de quem vai trocar, entao continua vindo preenchido.
+        if (op === 'criar' && !login && emailC) login = await loginLivre(env.POKER_DB, loginDoEmail(emailC));
         if (!/^[a-z0-9._-]{3,24}$/.test(login)) {
-          return json({ error: 'login', detail: 'Use 3 a 24 caracteres: minusculas, numeros, ponto, hifen.' }, 400, headers);
+          return json({ error: 'login', detail: 'Informe o e-mail da pessoa.' }, 400, headers);
         }
         if (nova.length < 8) return json({ error: 'senha_curta', detail: 'A senha precisa de ao menos 8 caracteres.' }, 400, headers);
         const salt = hexDe(crypto.getRandomValues(new Uint8Array(16)));
@@ -978,15 +1010,17 @@ export default {
           const nome = limpaTexto(body.nome, 80) || login;
           try {
             await env.POKER_DB.prepare(
-              'INSERT INTO usuario (id, login, nome, senha_hash, salt, papel, ativo, criado_em) VALUES (?,?,?,?,?,?,1,?)')
-              .bind('u-' + crypto.randomUUID().slice(0, 8), login, nome, hash, salt, papel,
+              `INSERT INTO usuario (id, login, nome, email, senha_hash, salt, papel, ativo, criado_em)
+               VALUES (?,?,?,?,?,?,?,1,?)`)
+              .bind('u-' + crypto.randomUUID().slice(0, 8), login, nome, emailC || null, hash, salt, papel,
                     new Date().toISOString()).run();
           } catch (e) {
             return json({ error: 'existe', detail: 'Ja existe usuario com esse login.' }, 409, headers);
           }
-          return json({ ok: true }, 200, headers);
+          return json({ ok: true, login }, 200, headers);
         }
-        const uu = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(login).first();
+        const uu = await env.POKER_DB.prepare(
+          'SELECT id FROM usuario WHERE login = ? OR email = ?').bind(login, login).first();
         if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
         await env.POKER_DB.prepare('UPDATE usuario SET senha_hash = ?, salt = ? WHERE id = ?')
           .bind(hash, salt, uu.id).run();
