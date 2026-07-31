@@ -317,12 +317,17 @@ export default {
     //   • VIEW_SENHA  → senha de leitura (painel publico)
     //   • VIEW_CHAVE  → chave usada no Link de Visualizacao (sem digitar senha)
     // A senha do admin tambem serve, para quem edita nao precisar de duas.
-    const travaAtiva = () => !!(env.VIEW_SENHA || env.VIEW_CHAVE);
+    // Secret criado em branco (Enter sem digitar) chegava como string vazia e
+    // desligava a trava silenciosamente — o painel seguia aberto e nada avisava.
+    // Aqui o valor e normalizado: espaco em branco conta como ausente.
+    const vSenha = String(env.VIEW_SENHA || '').trim();
+    const vChave = String(env.VIEW_CHAVE || '').trim();
+    const travaAtiva = () => !!(vSenha || vChave);
     const leituraLiberada = (body) => {
       if (!travaAtiva()) return true;
       if (senhaOk(body.senha)) return true;
-      if (env.VIEW_SENHA && body.senha === env.VIEW_SENHA) return true;
-      if (env.VIEW_CHAVE && body.chave === env.VIEW_CHAVE) return true;
+      if (vSenha && String(body.senha || '').trim() === vSenha) return true;
+      if (vChave && String(body.chave || '').trim() === vChave) return true;
       return false;
     };
 
