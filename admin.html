@@ -453,7 +453,12 @@
     <div id="sem-token-aviso" style="display:none;background:#5C3608;color:#F9C97A;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px;line-height:1.5;">
       🔗 Primeiro acesso neste dispositivo.<br>Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de entrar.
     </div>
-    <input type="password" id="senha-input" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')doLogin()" />
+    <input type="text" id="usuario-input" placeholder="Seu usuário" autocomplete="username"
+           onkeydown="if(event.key==='Enter')document.getElementById('senha-input').focus()" />
+    <input type="password" id="senha-input" placeholder="Sua senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+    <div style="font-size:12px;color:#8B92A0;margin:-4px 0 10px;line-height:1.5">
+      Sem usuário ainda? Deixe o campo <em>Seu usuário</em> em branco e use a senha geral de admin.
+    </div>
     <div id="token-field" style="display:none;margin-top:0">
       <input type="password" id="token-input" placeholder="GitHub Token (ghp_…)" onkeydown="if(event.key==='Enter')doLogin()" style="letter-spacing:0" />
     </div>
@@ -495,6 +500,7 @@
       <div class="tab" onclick="switchTab('gerencial')">📊 Gerencial</div>
       <a href="importar.html" class="tab" style="text-decoration:none">📥 Importar</a>
       <div class="tab" onclick="switchTab('relatorios')">📋 Relatórios</div>
+      <div class="tab" onclick="switchTab('usuarios')">👥 Usuários</div>
     </div>
 
     <!-- ABA MELHORIAS -->
@@ -599,6 +605,51 @@
     </div>
 
     <!-- ABA RELATÓRIOS — apoio à reunião de comitê de produto -->
+    <div class="tab-content" id="tab-usuarios">
+      <div class="card">
+        <h3 style="margin:0 0 4px">Novo usuário</h3>
+        <p style="color:#8B92A0;font-size:13px;margin:0 0 14px;line-height:1.5">
+          Cada pessoa entra com o usuário e a senha dela. Você define a senha inicial e
+          entrega para a pessoa — ela pode pedir a troca depois.
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 160px;gap:10px;align-items:end">
+          <div>
+            <label>Usuário (login)</label>
+            <input type="text" id="u-login" placeholder="ex: fernando.n" />
+          </div>
+          <div>
+            <label>Nome</label>
+            <input type="text" id="u-nome" placeholder="ex: Fernando Nascimento" />
+          </div>
+          <div>
+            <label>Permissão</label>
+            <select id="u-papel">
+              <option value="dev">Dev — painel dev</option>
+              <option value="admin">Admin — acesso total</option>
+              <option value="consulta">Consulta — só leitura</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 160px;gap:10px;align-items:end;margin-top:10px">
+          <div>
+            <label>Senha inicial (mínimo 8 caracteres)</label>
+            <input type="text" id="u-senha" placeholder="senha que você vai entregar" />
+          </div>
+          <button class="btn" onclick="uCriar()" style="width:100%">Criar usuário</button>
+        </div>
+        <div id="u-msg" style="font-size:13px;margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 4px">Pessoas com acesso</h3>
+        <p style="color:#8B92A0;font-size:13px;margin:0 0 14px;line-height:1.5">
+          <strong>Consulta</strong> só lê. <strong>Dev</strong> lê e atualiza as demandas dele no painel dev.
+          <strong>Admin</strong> faz tudo, inclusive gerenciar estas contas.
+        </p>
+        <div id="u-lista">Carregando…</div>
+      </div>
+    </div>
+
     <div class="tab-content" id="tab-relatorios">
       <div class="ger-toolbar">
         <div class="ger-filter-group">
@@ -844,6 +895,18 @@ const RAW_URL       = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB
 // Worker que guarda token + senha. Com ele, o Admin loga só com senha (sem token).
 const ADMIN_PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
 let _adminPw = sessionStorage.getItem('rm_admin_pw') || '';
+// Conta por pessoa: token de sessao emitido pelo Worker. Durante a transicao a
+// senha compartilhada continua valendo, entao os dois convivem — quem tem conta
+// manda token, quem ainda nao tem manda senha.
+let _adminToken = sessionStorage.getItem('rm_admin_token') || '';
+let _eu = null; // { login, nome, papel } quando entrou por conta
+// Credencial para as rotas que exigem admin. Manda o que existir.
+function credAdmin() {
+  const c = {};
+  if (_adminToken) c.token = _adminToken;
+  if (_adminPw) c.senha = _adminPw;
+  return c;
+}
 let _pollTs = null;
 
 // ─── STATE ────────────────────────────────────────────────────────
@@ -875,7 +938,10 @@ function initLoginScreen() {
   if (ADMIN_PROXY_URL && !runtimeToken) {
     const b = document.getElementById('btn-entrar');
     b.disabled = false; b.style.opacity = ''; b.style.cursor = '';
-    if (_adminPw) enterAdmin(); // já validou nesta sessão
+    if (_adminPw || _adminToken) {
+      try { _eu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) {}
+      enterAdmin(); // já validou nesta sessão
+    }
     return;
   }
   // Modo token (legado)
@@ -894,10 +960,36 @@ async function doLogin() {
 
   // Modo senha (via Worker) — não pede token
   if (ADMIN_PROXY_URL && !runtimeToken) {
-    if (!v) { errEl.textContent = 'Informe a senha.'; return; }
+    const login = (document.getElementById('usuario-input')?.value || '').trim();
+    if (!v) { errEl.textContent = login ? 'Informe sua senha.' : 'Informe a senha.'; return; }
     const b = document.getElementById('btn-entrar');
     b.disabled = true; b.textContent = 'Entrando…';
     try {
+      // Com usuario preenchido: conta por pessoa. Sem usuario: senha compartilhada
+      // (caminho antigo, que segue valendo enquanto as contas nao estao todas criadas).
+      if (login) {
+        const res = await fetch(ADMIN_PROXY_URL, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login', login, senhaUsuario: v })
+        });
+        const dj = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          errEl.textContent = dj.detail || 'Usuário ou senha inválidos.';
+          document.getElementById('senha-input').value = '';
+          return;
+        }
+        if (dj.usuario && dj.usuario.papel !== 'admin') {
+          errEl.textContent = 'Sua conta é de ' + dj.usuario.papel + ' e não abre a área administrativa.';
+          document.getElementById('senha-input').value = '';
+          return;
+        }
+        _adminToken = dj.token; _eu = dj.usuario || null;
+        sessionStorage.setItem('rm_admin_token', _adminToken);
+        try { sessionStorage.setItem('rm_eu', JSON.stringify(_eu)); } catch (_) {}
+        errEl.textContent = '';
+        enterAdmin();
+        return;
+      }
       const res = await fetch(ADMIN_PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'auth', senha: v })
@@ -931,9 +1023,19 @@ async function doLogin() {
   }
 }
 function doLogout() {
+  // Encerra a sessao TAMBEM no servidor: apagar so o sessionStorage deixaria o
+  // token valido por 12h para quem o tivesse copiado.
+  if (_adminToken) {
+    fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'logout', token: _adminToken })
+    }).catch(() => {});
+  }
   localStorage.removeItem('rm_logged');
   sessionStorage.removeItem('rm_admin_pw');
-  _adminPw = '';
+  sessionStorage.removeItem('rm_admin_token');
+  sessionStorage.removeItem('rm_eu');
+  _adminPw = ''; _adminToken = ''; _eu = null;
   document.getElementById('admin-app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('senha-input').value = '';
@@ -1022,6 +1124,8 @@ function credenciaisLeitura() {
   const c = {};
   const senha = sessionStorage.getItem('rm_admin_pw') || sessionStorage.getItem('rm_view_pw');
   if (senha) c.senha = senha;
+  const tk = sessionStorage.getItem('rm_admin_token');
+  if (tk) c.token = tk;
   const chave = new URLSearchParams(location.search).get('k') || sessionStorage.getItem('rm_view_key');
   if (chave) c.chave = chave;
   return c;
@@ -1207,7 +1311,7 @@ async function saveViaProxy(tentativa = 1) {
 
     const res = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'publish', senha: _adminPw, data: state, base: baseVersao })
+      body: JSON.stringify(Object.assign({ action: 'publish', data: state, base: baseVersao }, credAdmin()))
     });
     if (!res.ok) {
       let corpo = null;
@@ -1776,6 +1880,7 @@ function switchTab(name, el) {
   if (content) content.classList.add('active');
   if (name === 'gerencial') renderGerencial();
   if (name === 'relatorios') renderRelatorios();
+  if (name === 'usuarios') renderUsuarios();
   if (name === 'kanban') renderKanban();
   try { localStorage.setItem('rm_admin_tab', name); } catch (_) {}
 }
@@ -2080,7 +2185,7 @@ function mAddFiles(files) {
     reader.onload = async () => {
       try {
         toast(`Enviando "${f.name}"…`, 'ok');
-        _mAnexos.push(await subirAnexo(f, reader.result, ADMIN_PROXY_URL, { senha: _adminPw || sessionStorage.getItem('rm_admin_pw') || '' }));
+        _mAnexos.push(await subirAnexo(f, reader.result, ADMIN_PROXY_URL, credAdmin()));
         mRenderAnexosEdit();
       } catch (e) { toast(`Falha ao anexar "${f.name}": ${e.message}`, 'err'); }
     };
@@ -3293,6 +3398,132 @@ function deleteMelhoria(id) {
 
 // ─── HELPERS ──────────────────────────────────────────────────────
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+// ─── USUÁRIOS ─────────────────────────────────────────────────────
+// Antes o acesso era por senha compartilhada: ninguem sabia QUEM fez o que, e a
+// senha ia embora junto com quem saia da empresa. Aqui cada pessoa tem conta.
+const U_PAPEL_ROTULO = { consulta: 'Consulta', dev: 'Dev', admin: 'Admin' };
+
+async function uChamar(op, extra) {
+  let res;
+  try {
+    res = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'usuarios', op }, credAdmin(), extra || {}))
+    });
+  } catch (_) {
+    // "Failed to fetch" nao diz nada a quem esta usando a tela
+    throw new Error('Sem conexão com o servidor. Verifique a internet e tente de novo.');
+  }
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(d.detail || {
+    sem_permissao: 'Só quem é admin pode gerenciar usuários.',
+    existe: 'Já existe usuário com esse login.',
+    nao_encontrado: 'Usuário não encontrado.',
+    ultimo_admin: 'Este é o único admin ativo. Promova outra pessoa antes.',
+    indisponivel: 'O banco de dados não está disponível.'
+  }[d.error] || 'Não foi possível concluir. Tente novamente.');
+  return d;
+}
+
+function uAviso(msg, erro) {
+  const el = document.getElementById('u-msg');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = erro ? '#F87171' : '#4ADE80';
+}
+
+async function renderUsuarios() {
+  const box = document.getElementById('u-lista');
+  if (!box) return;
+  box.textContent = 'Carregando…';
+  try {
+    const d = await uChamar('listar');
+    const us = d.usuarios || [];
+    if (!us.length) {
+      box.innerHTML = '<p style="color:#8B92A0;font-size:13px;margin:0">' +
+        'Nenhuma conta criada ainda. Enquanto isso, todos continuam entrando pelas senhas gerais.</p>';
+      return;
+    }
+    const linha = u => {
+      const inativo = !u.ativo;
+      const quando = u.ultimo_acesso ? new Date(u.ultimo_acesso).toLocaleString('pt-BR') : 'nunca entrou';
+      const l = esc(u.login);
+      return '<tr style="border-top:1px solid #2A2F3A' + (inativo ? ';opacity:.45' : '') + '">' +
+        '<td style="padding:10px 8px"><strong>' + esc(u.nome || u.login) + '</strong>' +
+          '<div style="color:#8B92A0;font-size:12px">' + l + (inativo ? ' · desativado' : '') + '</div></td>' +
+        '<td style="padding:10px 8px">' +
+          '<select onchange="uPapel(\'' + l + '\', this.value)" style="margin:0;padding:6px 8px">' +
+            ['consulta', 'dev', 'admin'].map(p =>
+              '<option value="' + p + '"' + (u.papel === p ? ' selected' : '') + '>' + U_PAPEL_ROTULO[p] + '</option>'
+            ).join('') +
+          '</select></td>' +
+        '<td style="padding:10px 8px;color:#8B92A0;font-size:12px">' + esc(quando) + '</td>' +
+        '<td style="padding:10px 8px;text-align:right;white-space:nowrap">' +
+          '<button class="btn btn-sm" onclick="uNovaSenha(\'' + l + '\')" style="margin-right:6px">Nova senha</button>' +
+          '<button class="btn btn-sm" onclick="uAtivo(\'' + l + '\', ' + (inativo ? 'true' : 'false') + ')">' +
+            (inativo ? 'Reativar' : 'Desativar') + '</button>' +
+        '</td></tr>';
+    };
+    box.innerHTML = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px">' +
+      '<thead><tr style="color:#8B92A0;font-size:12px;text-align:left">' +
+      '<th style="padding:0 8px 8px">Pessoa</th><th style="padding:0 8px 8px">Permissão</th>' +
+      '<th style="padding:0 8px 8px">Último acesso</th><th></th></tr></thead>' +
+      '<tbody>' + us.map(linha).join('') + '</tbody></table></div>';
+  } catch (e) {
+    box.innerHTML = '<p style="color:#F87171;font-size:13px;margin:0">' + esc(e.message) + '</p>';
+  }
+}
+
+async function uCriar() {
+  const login = (document.getElementById('u-login').value || '').trim().toLowerCase();
+  const nome = (document.getElementById('u-nome').value || '').trim();
+  const papel = document.getElementById('u-papel').value;
+  const senhaNova = document.getElementById('u-senha').value || '';
+  if (!/^[a-z0-9._-]{3,24}$/.test(login)) {
+    uAviso('O usuário deve ter de 3 a 24 caracteres, só letras minúsculas, números, ponto, hífen ou _.', true);
+    return;
+  }
+  if (senhaNova.length < 8) { uAviso('A senha inicial precisa de ao menos 8 caracteres.', true); return; }
+  try {
+    await uChamar('criar', { login, nome, papel, senhaNova });
+    uAviso('Conta de ' + (nome || login) + ' criada. Entregue o usuário "' + login + '" e a senha para a pessoa.');
+    document.getElementById('u-login').value = '';
+    document.getElementById('u-nome').value = '';
+    document.getElementById('u-senha').value = '';
+    renderUsuarios();
+  } catch (e) { uAviso(e.message, true); }
+}
+
+async function uNovaSenha(login) {
+  const nova = prompt('Nova senha para "' + login + '" (mínimo 8 caracteres).\n' +
+                      'A pessoa será desconectada e terá de entrar com esta senha:');
+  if (nova === null) return;
+  if (nova.length < 8) { uAviso('A senha precisa de ao menos 8 caracteres.', true); return; }
+  try {
+    await uChamar('senha', { login, senhaNova: nova });
+    uAviso('Senha de "' + login + '" trocada. Sessões abertas dessa pessoa foram encerradas.');
+    renderUsuarios();
+  } catch (e) { uAviso(e.message, true); }
+}
+
+async function uPapel(login, papel) {
+  try {
+    await uChamar('papel', { login, papel });
+    uAviso('Permissão de "' + login + '" agora é ' + U_PAPEL_ROTULO[papel] + '.');
+  } catch (e) { uAviso(e.message, true); }
+  renderUsuarios(); // recarrega para desfazer o select se o servidor recusou
+}
+
+async function uAtivo(login, ativo) {
+  if (!ativo && !confirm('Desativar "' + login + '"? A pessoa perde o acesso imediatamente.')) return;
+  try {
+    await uChamar('ativo', { login, ativo });
+    uAviso(ativo ? '"' + login + '" reativado.' : '"' + login + '" desativado e desconectado.');
+  } catch (e) { uAviso(e.message, true); }
+  renderUsuarios();
+}
+
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function formatDate(s) {
   if (!s) return '';
