@@ -2305,10 +2305,37 @@ function gDataUrlToBlob(dataUrl) {
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return new Blob([arr], { type: mime });
 }
-function gViewAnexo(melId, i) {
+
+// Abre anexo aceitando os DOIS formatos:
+//   { chave } -> arquivo no R2, baixado pelo Worker com a credencial da sessao
+//   { dados } -> base64 embutido (formato antigo, antes da migracao)
+// A compatibilidade e proposital: nenhum anexo existente deixa de abrir enquanto
+// a migracao nao termina.
+async function abrirAnexo(a, proxyUrl, cred) {
+  if (!a) return;
+  if (a.chave) {
+    const res = await fetch(proxyUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'anexo-baixar', chave: a.chave }, cred || {}))
+    });
+    if (!res.ok) { alert('Nao foi possivel abrir o anexo (HTTP ' + res.status + ').'); return; }
+    const blob = await res.blob();
+    window.open(URL.createObjectURL(blob), '_blank');
+    return;
+  }
+  if (a.dados) {
+    const [head, b64] = a.dados.split(',');
+    const mime = (head.match(/:(.*?);/) || [])[1] || 'application/octet-stream';
+    const bin = atob(b64); const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    window.open(URL.createObjectURL(new Blob([arr], { type: mime })), '_blank');
+  }
+}
+
+async function gViewAnexo(melId, i) {
   const m = state.melhorias.find(x => x.id === melId);
   if (!m || !m.anexos || !m.anexos[i]) return;
-  window.open(URL.createObjectURL(gDataUrlToBlob(m.anexos[i].dados)), '_blank');
+  await abrirAnexo(m.anexos[i], PROXY_URL, credenciaisLeitura());
 }
 // Bloco read-only com tudo o que o solicitante preencheu no painel público.
 // Antes isso só existia no Admin: quem abria o card aqui via título, tema, datas
@@ -2368,22 +2395,43 @@ function renderDiscoveryGantt(m) {
 let _gAnexos = [];
 const G_MAX_ANEXO = 1.5 * 1024 * 1024;
 
+
+// Envia o arquivo ao R2 pelo Worker e devolve a REFERENCIA. O binario nao entra
+// mais no JSON — era 93%% do peso da base, baixado por toda tela em cada leitura.
+async function subirAnexo(file, dataUrl, proxyUrl, cred) {
+  const res = await fetch(proxyUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({
+      action: 'anexo-subir', nome: file.name, dados: dataUrl
+    }, cred || {}))
+  });
+  if (!res.ok) {
+    let msg = 'HTTP ' + res.status;
+    try { const e = await res.json(); msg = e.detail || e.error || msg; } catch (_) {}
+    throw new Error(msg);
+  }
+  const j = await res.json();
+  return { nome: j.nome, tipo: j.tipo, tamanho: j.tamanho, chave: j.chave };
+}
+
 function gAddFiles(files) {
   [...files].forEach(f => {
     if (f.size > G_MAX_ANEXO) { toast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
     const reader = new FileReader();
-    reader.onload = () => {
-      _gAnexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, dados: reader.result });
-      renderAnexosGantt();
+    reader.onload = async () => {
+      try {
+        toast(`Enviando "${f.name}"…`, 'ok');
+        _gAnexos.push(await subirAnexo(f, reader.result, PROXY_URL, { senha: _ganttPw || sessionStorage.getItem('rm_admin_pw') || '' }));
+        renderAnexosGantt();
+      } catch (e) { toast(`Falha ao anexar "${f.name}": ${e.message}`, 'err'); }
     };
     reader.readAsDataURL(f);
   });
   document.getElementById('e-file').value = '';
 }
 function gRemoveAnexo(i) { _gAnexos.splice(i, 1); renderAnexosGantt(); }
-function gPreviewAnexo(i) {
-  const a = _gAnexos[i]; if (!a) return;
-  window.open(URL.createObjectURL(gDataUrlToBlob(a.dados)), '_blank');
+async function gPreviewAnexo(i) {
+  await abrirAnexo(_gAnexos[i], PROXY_URL, credenciaisLeitura());
 }
 
 // Sem argumento, redesenha a lista corrente; com melhoria, carrega a cópia dela.
