@@ -102,15 +102,25 @@ function limpaTexto(v, max) {
 function sanitizaAnexos(lista) {
   if (!Array.isArray(lista)) return [];
   return lista.slice(0, 10).map(a => {
-    if (!a || typeof a.dados !== 'string') return null;
-    if (!/^data:[a-zA-Z0-9.+/-]+;base64,[A-Za-z0-9+/=\s]*$/.test(a.dados)) return null;
-    if (a.dados.length > 3 * 1024 * 1024) return null;
-    return {
+    if (!a) return null;
+    const base = {
       nome: limpaTexto(a.nome, 160) || 'anexo',
       tipo: limpaTexto(a.tipo, 100),
       tamanho: Number(a.tamanho) || 0,
-      dados: a.dados,
     };
+    // Formato NOVO: referencia ao objeto no R2. So aceita chave no formato que a
+    // rota de upload gera — nada de caminho arbitrario vindo do cliente.
+    if (typeof a.chave === 'string' && /^a\/[a-z0-9-]+$/.test(a.chave)) {
+      return { ...base, chave: a.chave };
+    }
+    // Formato ANTIGO: base64 embutido. Continua aceito para nao quebrar anexo que
+    // ja existe, mas novo upload nao passa mais por aqui.
+    if (typeof a.dados === 'string'
+        && /^data:[a-zA-Z0-9.+/-]+;base64,[A-Za-z0-9+/=\s]*$/.test(a.dados)
+        && a.dados.length <= 3 * 1024 * 1024) {
+      return { ...base, dados: a.dados };
+    }
+    return null;
   }).filter(Boolean);
 }
 
@@ -145,6 +155,8 @@ const LIMITES = {
   'poker-gravar':   { max: 30,  janela: 60 },
   'poker-fila':     { max: 30,  janela: 60 },
   'temas-publicos': { max: 20,  janela: 60 },
+  'anexo-subir':    { max: 20,  janela: 60 },
+  'anexo-baixar':   { max: 60,  janela: 60 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
   // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
   // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
@@ -337,6 +349,11 @@ export default {
       headers: { Authorization: 'token ' + env.GH_TOKEN, Accept: 'application/vnd.github.v3+json', 'User-Agent': 'audax-roadmap-worker', ...(opts.headers || {}) },
     });
     const senhaOk = (s) => s && env.ADMIN_SENHA && s === env.ADMIN_SENHA;
+    // Definido AQUI, junto de senhaOk, e nao mais adiante: `const` nao existe antes
+    // da declaracao, e a rota de anexo (que usa devOk) roda antes do ponto onde
+    // isto estava. Chamar dali lancaria ReferenceError em tempo de execucao — o
+    // mesmo tipo de erro que fez o painel publico cair no fallback silencioso.
+    const devOk = (s) => senhaOk(s) || !!(s && env.DEV_SENHA && s === env.DEV_SENHA);
 
     // Leitura protegida por senha, com ativacao gradual: enquanto nem VIEW_SENHA
     // nem VIEW_CHAVE existirem, a leitura segue aberta e nada muda para quem usa
@@ -591,6 +608,60 @@ export default {
     // coluna depois de publicado, e pior: a leitura feita ANTES de publicar
     // podia perder alteracao recente de outra pessoa. Aqui a leitura vai pela
     // API autenticada, que nao passa por esse cache.
+    // ── ANEXOS (R2) ──────────────────────────────────────────────────────
+    // Antes o arquivo ia como base64 dentro do proprio JSON: 1,53 MB de um total
+    // de 1,64 MB, baixados a cada leitura da base por qualquer tela. Agora o
+    // binario vive no R2 e o JSON guarda so { nome, tipo, tamanho, chave }.
+    //
+    // Subir exige credencial de ESCRITA (admin ou dev) OU, no formulario publico,
+    // o captcha — mesmo criterio de quem pode criar demanda.
+    if (body.action === 'anexo-subir') {
+      if (!env.ANEXOS) return json({ error: 'armazenamento indisponivel' }, 503, headers);
+      const autorizado = senhaOk(body.senha) || devOk(body.senha);
+      if (!autorizado) {
+        const ts = await turnstileOk(env, body.turnstile, ip);
+        if (!ts.ok) {
+          const n = await contaTentativa(env, ip, 'anexo-subir');
+          return json({ error: 'captcha', detail: 'Verificacao necessaria para anexar arquivo.',
+                        mensagem: troll(n) + ' Tentativa #' + n + ' desta origem.' }, 403, headers);
+        }
+      }
+      const dados = String(body.dados || '');
+      const mt = dados.match(/^data:([a-zA-Z0-9.+\/-]+);base64,([A-Za-z0-9+\/=\s]*)$/);
+      if (!mt) return json({ error: 'formato invalido', detail: 'Envie o arquivo como data: URL base64.' }, 400, headers);
+      const tipo = mt[1];
+      let bin;
+      try { bin = Uint8Array.from(atob(mt[2].replace(/\s/g, '')), c => c.charCodeAt(0)); }
+      catch (_) { return json({ error: 'base64 invalido' }, 400, headers); }
+      if (bin.length > 2 * 1024 * 1024) return json({ error: 'arquivo grande', detail: 'Limite de 2 MB por arquivo.' }, 413, headers);
+
+      // chave opaca: o nome original nao entra no caminho (evita colisao e
+      // evita expor nome de arquivo em log de acesso)
+      const chave = 'a/' + Date.now().toString(36) + '-' + crypto.randomUUID();
+      await env.ANEXOS.put(chave, bin, { httpMetadata: { contentType: tipo } });
+      return json({ ok: true, chave, nome: limpaTexto(body.nome, 160) || 'anexo',
+                    tipo, tamanho: bin.length }, 200, headers);
+    }
+
+    // Baixar exige a MESMA autorizacao da leitura da base: quem nao pode ver o
+    // roadmap nao pode abrir anexo dele.
+    if (body.action === 'anexo-baixar') {
+      if (!env.ANEXOS) return json({ error: 'armazenamento indisponivel' }, 503, headers);
+      if (!leituraLiberada(body)) return json({ error: 'credencial' }, 401, headers);
+      const chave = String(body.chave || '');
+      if (!/^a\/[a-z0-9-]+$/.test(chave)) return json({ error: 'chave invalida' }, 400, headers);
+      const obj = await env.ANEXOS.get(chave);
+      if (!obj) return json({ error: 'anexo nao encontrado' }, 404, headers);
+      return new Response(obj.body, {
+        status: 200,
+        headers: {
+          'Content-Type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream',
+          'Cache-Control': 'private, no-store',
+          ...headers,
+        },
+      });
+    }
+
     // Lista de temas para o formulario publico, SEM senha de leitura.
     //
     // Sugerir uma melhoria nao pode exigir senha: quem tem uma ideia desiste antes
@@ -655,7 +726,6 @@ export default {
     // Aceita a senha do time (DEV_SENHA) ou a do admin (ADMIN_SENHA). Enquanto
     // DEV_SENHA nao existir, a do admin resolve — assim exigir senha aqui nao
     // derruba o painel no momento do redeploy.
-    const devOk = (s) => senhaOk(s) || !!(s && env.DEV_SENHA && s === env.DEV_SENHA);
 
     // ── Login do Dev (painel dev) ──
     if (body.action === 'dev-auth') {
