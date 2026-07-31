@@ -25,3 +25,11 @@ database_id = "03dd80b0-ea64-4042-bc23-6e7ee438b7cc"
 # unica porta passa a ser este Worker (que autentica com GH_TOKEN).
 [vars]
 DATA_REPO = "RoadMap-dados"
+
+# Anexos das demandas. Antes viviam como base64 dentro do proprio JSON e
+# representavam 1,53 MB de um arquivo de 1,64 MB — 93% do peso da base, baixado
+# inteiro em toda leitura. Aqui ficam fora do JSON, que passa a guardar so a
+# referencia.
+[[r2_buckets]]
+binding = "ANEXOS"
+bucket_name = "roadmap-anexos"
