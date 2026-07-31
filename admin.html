@@ -167,6 +167,43 @@
     .kb-anexo-tag { font-size: 10.5px; color: var(--text3); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
     .kb-col-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 14px 4px; opacity: .6; }
     .kb-card.dragging { opacity: .4; }
+    /* Abas dentro do card: os dados e a validacao da entrega sao duas conversas
+       diferentes. Misturadas no mesmo formulario, a segunda se perde. */
+    .mtabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin:0 0 20px; }
+    .mtab { padding:9px 16px; font-size:13px; font-weight:600; color:var(--text2);
+      background:none; border:none; border-bottom:2px solid transparent; cursor:pointer;
+      font-family:'Inter',sans-serif; display:inline-flex; align-items:center; gap:7px; }
+    .mtab:hover { color:var(--text); }
+    .mtab.ativa { color:var(--text); border-bottom-color:var(--blue); }
+    .mtab-sino { font-size:10.5px; font-weight:700; background:var(--amber);
+      color:#1A1917; border-radius:20px; padding:1px 7px; }
+    .ent-bloco { background:var(--bg3); border:1px solid var(--border); border-radius:10px;
+      padding:16px 18px; margin-bottom:14px; }
+    .ent-bloco h4 { margin:0 0 10px; font-size:13px; font-weight:700; color:var(--text2);
+      text-transform:uppercase; letter-spacing:.05em; }
+    .ent-impl { font-size:14px; line-height:1.6; color:var(--text); white-space:pre-wrap;
+      word-break:break-word; }
+    .ent-linha { display:flex; flex-wrap:wrap; gap:6px 22px; font-size:13px; color:var(--text2); }
+    .ent-linha strong { color:var(--text); font-weight:600; }
+    .ent-vazio { font-size:13px; color:var(--text3); line-height:1.6; margin:0; }
+    .ent-acoes { display:flex; gap:10px; flex-wrap:wrap; margin-top:4px; }
+    .ent-aviso { font-size:13px; line-height:1.6; border-radius:10px; padding:12px 14px;
+      margin-bottom:14px; }
+    .ent-aviso.espera { background:var(--amber-bg, #3A2A08); color:var(--amber-tx, #FFD79A); }
+    .ent-aviso.aprovada { background:var(--green-bg, #17300A); color:var(--green-tx, #B2E07A); }
+    .ent-aviso.rejeitada { background:var(--red-bg, #3A1414); color:var(--red-tx, #F9A0A0); }
+    /* Aviso no topo do admin: entregas esperando validacao. */
+    .val-banner { display:none; align-items:center; gap:12px; background:var(--amber-bg, #3A2A08);
+      color:var(--amber-tx, #FFD79A); border:1px solid var(--amber); border-radius:10px;
+      padding:11px 16px; font-size:14px; margin-bottom:16px; }
+    /* Atraso deixou de ser coluna: e condicao, e aparece no proprio card, sem
+       tirar a demanda da etapa em que ela esta. */
+    .kb-card.kb-atrasada { border-color: var(--red); border-left: 3px solid var(--red); }
+    .kb-atraso-tag { font-size: 10.5px; font-weight: 700; color: var(--red-tx, #F9A0A0);
+      background: var(--red-bg, #3A1414); border-radius: 4px; padding: 1px 6px;
+      display: inline-block; margin-bottom: 5px; }
+    /* Coluna de validacao: e onde a acao do PM/PO fica esperando. */
+    .kb-col[data-col="validacao"] .kb-col-head { color: var(--amber); }
     .kb-col.drop-target { outline: 2px dashed var(--blue, #3B8FE8); outline-offset: -2px; background: rgba(59,143,232,.06); }
     .kb-col.drop-target .kb-col-head { background: rgba(59,143,232,.10); }
     .gut-row { display: grid; grid-template-columns: 210px 1fr 34px; gap: 12px; align-items: center; font-size: 13px; color: var(--text2, #C9C6BE); }
@@ -414,6 +451,8 @@
     .badge-planning    { background:#0E3A3A; color:#7ED8D8; }
     .badge-concluido   { background:#063D30; color:#7EECD8; }
     .badge-atrasado    { background:#5C0A0A; color:#F9A0A0; }
+    .badge-validacao   { background:var(--amber-bg, #4A2800); color:var(--amber-tx, #FFC470); }
+    .sf-btn.validacao.active { background:var(--amber-bg, #4A2800); color:var(--amber-tx, #FFC470); border-color:var(--amber); }
     .badge-negada      { background:#5C0A0A; color:#F9A0A0; }
 
     /* MODAL */
@@ -567,6 +606,11 @@
     </div>
 
     <!-- ABA MELHORIAS -->
+    <div class="val-banner" id="val-banner">
+      <span id="val-banner-texto"></span>
+      <button class="btn btn-primary btn-sm" onclick="irParaValidacao()" style="margin-left:auto">Ver entregas</button>
+    </div>
+
     <div class="tab-content active" id="tab-melhorias">
       <div class="list-header">
         <span class="list-title">Melhorias cadastradas</span>
@@ -785,6 +829,19 @@
     <h2 id="modal-melhoria-title">Nova issue</h2>
     <input type="hidden" id="m-id" />
 
+    <div class="mtabs">
+      <button type="button" class="mtab ativa" id="mtab-dados" onclick="mAba('dados')">Dados</button>
+      <button type="button" class="mtab" id="mtab-entrega" onclick="mAba('entrega')">
+        Entrega <span class="mtab-sino" id="mtab-sino" style="display:none">1</span>
+      </button>
+    </div>
+
+    <!-- ABA ENTREGA: validacao do PM/PO -->
+    <div id="m-pane-entrega" style="display:none">
+      <div id="ent-conteudo"></div>
+    </div>
+
+    <div id="m-pane-dados">
     <div class="form-group">
       <label>Título *</label>
       <input type="text" id="m-titulo" placeholder="Nome curto da melhoria" />
@@ -812,8 +869,8 @@
           <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em Andamento</option>
+          <option value="validacao">Validação PM/PO</option>
           <option value="concluido">Concluído</option>
-          <option value="atrasado">Atrasado</option>
           <option value="negada">Negada</option>
         </select>
       </div>
@@ -949,7 +1006,9 @@
     <!-- Vínculo de dependência (readonly) -->
     <div id="m-dep-info" style="display:none;margin-bottom:16px;"></div>
 
-    <div class="form-actions">
+    </div><!-- /m-pane-dados -->
+
+    <div class="form-actions" id="m-acoes-dados">
       <button class="btn btn-secondary" onclick="closeModal('modal-melhoria')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveMelhoria()">Salvar</button>
     </div>
@@ -1541,6 +1600,7 @@ const STATUS_LABELS = {
   planning:     'Planning',
   planejado:    'Planejado',
   em_andamento: 'Em Andamento',
+  validacao:    'Validação PM/PO',
   concluido:    'Concluído',
   atrasado:     'Atrasado',
   negada:       'Negada',
@@ -1823,7 +1883,10 @@ function renderStatusFilters() {
     { key: 'planning',     label: 'Planning',             cls: 'planning' },
     { key: 'planejado',    label: 'Planejado',            cls: 'planejado' },
     { key: 'em_andamento',label: 'Em Andamento',  cls: 'em_andamento' },
+    { key: 'validacao',   label: 'Validação PM/PO', cls: 'validacao' },
     { key: 'concluido',   label: 'Concluído',     cls: 'concluido' },
+    // Atrasado segue como FILTRO: deixou de ser coluna no Kanban, mas continua
+    // sendo um recorte util. A contagem vem de statusEfetivo, que deriva.
     { key: 'atrasado',    label: 'Atrasado',      cls: 'atrasado' },
     { key: 'negada',      label: 'Negada',        cls: 'negada' },
   ];
@@ -1980,6 +2043,7 @@ function switchTab(name, el) {
   if (name === 'gerencial') renderGerencial();
   if (name === 'relatorios') renderRelatorios();
   if (name === 'usuarios') renderUsuarios();
+  renderValBanner();
   if (name === 'kanban') renderKanban();
   try { localStorage.setItem('rm_admin_tab', name); } catch (_) {}
 }
@@ -1993,13 +2057,17 @@ function restoreLastTab() {
 }
 
 // ─── KANBAN ───────────────────────────────────────────────────────
+// "Atrasado" saiu da esteira: atraso nao e etapa de trabalho, e uma condicao que
+// pode acontecer em qualquer etapa. Como coluna, ele ESCONDIA a etapa real — uma
+// demanda em andamento e vencida aparecia longe do time que a estava fazendo.
+// Agora o card fica na etapa dele e ganha marca vermelha.
 const KB_COLS = [
   { key:'backlog',      label:'Backlog' },
   { key:'levantar_req', label:'Levantar Requisitos' },
   { key:'planning',     label:'Planning' },
   { key:'planejado',    label:'Planejado' },
   { key:'em_andamento', label:'Em Andamento' },
-  { key:'atrasado',     label:'Atrasado' },
+  { key:'validacao',    label:'Validação PM/PO' },
   { key:'concluido',    label:'Concluído' },
   { key:'negada',       label:'Negada' },
 ];
@@ -2016,7 +2084,7 @@ function kbSplitDevs(s) { return s ? String(s).split(/[\/,]/).map(x => x.trim())
 // andamento (planning / planejado / em andamento), cai automaticamente em "Atrasado".
 // Estágios com trabalho comprometido: entrega vencida neles vira Atrasado.
 // Backlog fica fora (nada prometido) e concluido/negada nunca atrasam.
-const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
+const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento', 'validacao'];
 // Status para EXIBIR e FILTRAR (deriva atrasado). Nunca use no formulário:
 // statusKey() é o valor armazenado, e gravar o efetivo apagaria o estágio real.
 function statusEfetivo(m) {
@@ -2090,7 +2158,9 @@ function renderKanban() {
   renderKbToolbar(base.length);
 
   board.innerHTML = KB_COLS.map(col => {
-    let items = base.filter(m => statusEfetivo(m) === col.key);
+    // Coluna pela etapa GRAVADA. Antes era statusEfetivo, que derivava 'atrasado'
+    // e tirava o card da coluna real.
+    let items = base.filter(m => statusKey(m) === col.key);
     if (col.key === 'planejado') {
       // maior prioridade (IP) primeiro; sem IP vai para o fim
       items = items.sort((a, b) => {
@@ -2112,10 +2182,15 @@ function renderKanban() {
       const nAnexos = (m.anexos || []).length;
       const badges = [ipBadge(getIP(m))];
       if (nAnexos) badges.push(`<span class="kb-anexo-tag">📎 ${nAnexos}</span>`);
-      return `<div class="kb-card" draggable="true"
+      // Atraso agora e marca no card, nao coluna.
+      const atrasada = statusEfetivo(m) === 'atrasado';
+      const diasAtraso = atrasada && m.entrega
+        ? Math.floor((Date.now() - new Date(m.entrega + 'T00:00:00')) / 86400000) : 0;
+      return `<div class="kb-card${atrasada ? ' kb-atrasada' : ''}" draggable="true"
         ondragstart="kbDragStart(event,'${m.id}')" ondragend="kbDragEnd(event)"
         onmousedown="kbCardMouseDown(event,'${m.id}')"
-        title="Arraste para mover · duplo clique para editar">
+        title="${atrasada ? 'Entrega vencida · ' : ''}Arraste para mover · duplo clique para editar">
+        ${atrasada ? `<div class="kb-atraso-tag">⚠ Atrasada${diasAtraso > 0 ? ' · ' + diasAtraso + 'd' : ''}</div>` : ''}
         <div class="kb-card-title">${esc(m.titulo)}</div>
         ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
         ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
@@ -2598,7 +2673,7 @@ function renderGerencial() {
 
   const STATUS_LABEL = {
     backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado',
-    em_andamento:'Em Andamento', concluido:'Concluído',
+    em_andamento:'Em Andamento', validacao:'Validação PM/PO', concluido:'Concluído',
     atrasado:'Atrasado', negada:'Negada'
   };
 
@@ -3248,6 +3323,8 @@ function openModalMelhoria(id) {
   document.getElementById('m-entrega').value         = m?.entrega          || '';
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
+  mAba('dados');
+  renderEntrega(m || null);
   document.getElementById('m-horas-real').value      = m?.horas_realizadas != null ? m.horas_realizadas : '';
   // anexos numa cópia, para cancelar não deixar alteração aplicada
   _mAnexos = JSON.parse(JSON.stringify(m?.anexos || []));
@@ -3467,6 +3544,12 @@ function saveMelhoria() {
     entrega:             document.getElementById('m-entrega').value,
     motivo_negacao:      sp === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
     implementacao:       document.getElementById('m-implementacao').value.trim(),
+    // Campos da validacao nao tem campo no formulario: sem repassar, salvar pela
+    // aba Dados apagaria quem aprovou e o motivo da ultima devolucao.
+    validado_em:         existing.validado_em   || '',
+    validado_por:        existing.validado_por  || '',
+    validacao_obs:       existing.validacao_obs || '',
+    entregue_em:         existing.entregue_em   || '',
     anexos:              _mAnexos,
     horas_realizadas:    parseFloat(document.getElementById('m-horas-real').value) || existing.horas_realizadas || 0,
     criado_em:           existing.criado_em || new Date().toISOString(),
@@ -3735,6 +3818,171 @@ async function uAtivo(login, ativo) {
     uAviso(ativo ? '"' + login + '" reativado.' : '"' + login + '" desativado e desconectado.');
   } catch (e) { uAviso(e.message, true); }
   renderUsuarios();
+}
+
+
+// ─── VALIDAÇÃO PM/PO ──────────────────────────────────────────────
+// O dev nao fecha mais a demanda sozinho: ao terminar, ela vai para
+// "Validação PM/PO" e espera aqui. Sem esse degrau, "concluído" queria dizer
+// "o dev disse que acabou", e ninguem conferia o que foi entregue.
+
+function mAba(qual) {
+  const dados = qual === 'dados';
+  document.getElementById('m-pane-dados').style.display = dados ? 'block' : 'none';
+  document.getElementById('m-pane-entrega').style.display = dados ? 'none' : 'block';
+  const acoes = document.getElementById('m-acoes-dados');
+  if (acoes) acoes.style.display = dados ? '' : 'none';
+  document.getElementById('mtab-dados').classList.toggle('ativa', dados);
+  document.getElementById('mtab-entrega').classList.toggle('ativa', !dados);
+  document.querySelector('#modal-melhoria .modal').scrollTop = 0;
+}
+
+const valPendentes = () => (state.melhorias || []).filter(m => statusKey(m) === 'validacao');
+
+// Aviso no topo: sem isso a entrega ficaria esperando sem ninguem saber.
+function renderValBanner() {
+  const el = document.getElementById('val-banner');
+  if (!el) return;
+  const n = valPendentes().length;
+  el.style.display = n ? 'flex' : 'none';
+  if (n) {
+    document.getElementById('val-banner-texto').innerHTML = n === 1
+      ? '📋 <strong>1 entrega</strong> aguardando sua validação.'
+      : '📋 <strong>' + n + ' entregas</strong> aguardando sua validação.';
+  }
+}
+
+function irParaValidacao() {
+  switchTab('kanban');
+  const col = document.querySelector('.kb-col[data-col="validacao"]');
+  if (col) col.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+}
+
+function entregaHTML(m) {
+  const sk = statusKey(m);
+  const impl = String(m.implementacao || '').trim();
+  const dev = m.dev || '—';
+  const quando = v => v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+
+  if (sk !== 'validacao' && sk !== 'concluido') {
+    return '<p class="ent-vazio">Esta demanda ainda não foi entregue.<br>' +
+      'Quando o dev finalizar no painel dele, ela chega aqui como <strong>Validação PM/PO</strong> ' +
+      'com o texto do que foi implementado, e você aprova ou devolve.</p>';
+  }
+
+  let topo = '';
+  if (sk === 'validacao') {
+    topo = '<div class="ent-aviso espera">⏳ <strong>Aguardando sua validação.</strong> ' +
+      'Confira o que foi implementado e aprove, ou devolva ao dev explicando o que falta.' +
+      (m.entregue_em ? '<br>Entregue em ' + esc(quando(m.entregue_em)) : '') + '</div>';
+  } else if (m.validado_em) {
+    topo = '<div class="ent-aviso aprovada">✅ <strong>Entrega aprovada</strong>' +
+      (m.validado_por ? ' por ' + esc(m.validado_por) : '') +
+      ' em ' + esc(quando(m.validado_em)) + '.</div>';
+  }
+  if (m.validacao_obs) {
+    topo += '<div class="ent-aviso rejeitada"><strong>Última devolução:</strong> ' +
+      esc(m.validacao_obs) + '</div>';
+  }
+
+  const meta = ['<span>Dev: <strong>' + esc(dev) + '</strong></span>'];
+  if (m.horas_realizadas) meta.push('<span>Horas: <strong>' + esc(String(m.horas_realizadas)) + 'h</strong></span>');
+  if (m.entrega) meta.push('<span>Prazo: <strong>' + esc(formatDate(m.entrega)) + '</strong></span>');
+  if (m.sprint) meta.push('<span>Sprint: <strong>' + esc(m.sprint) + '</strong></span>');
+
+  const anexos = (m.anexos || []).length
+    ? '<div class="ent-bloco"><h4>Anexos</h4><div style="display:grid;gap:6px">' +
+        (m.anexos || []).map((a, i) =>
+          '<a href="#" class="anexo-link" onclick="abrirAnexoIdx(' + i + ');return false">📎 ' +
+          esc(a.nome || 'arquivo') + '</a>').join('') +
+      '</div></div>'
+    : '';
+
+  const acoes = sk === 'validacao'
+    ? '<div class="ent-acoes">' +
+        '<button class="btn btn-success" onclick="valAprovar()">✅ Aprovar entrega</button>' +
+        '<button class="btn btn-danger" onclick="valRejeitar()">↩ Devolver ao dev</button>' +
+      '</div>'
+    : '';
+
+  return topo +
+    '<div class="ent-bloco"><h4>O que foi implementado</h4>' +
+      (impl ? '<div class="ent-impl">' + esc(impl) + '</div>'
+            : '<p class="ent-vazio">O dev não descreveu a entrega. Devolva pedindo a descrição — ' +
+              'é esse texto que alimenta o relatório do comitê.</p>') +
+    '</div>' +
+    '<div class="ent-bloco"><h4>Dados da entrega</h4><div class="ent-linha">' + meta.join('') + '</div></div>' +
+    anexos + acoes;
+}
+
+function renderEntrega(m) {
+  const box = document.getElementById('ent-conteudo');
+  if (!box) return;
+  box.innerHTML = m ? entregaHTML(m) : '<p class="ent-vazio">Salve a demanda primeiro.</p>';
+  const sino = document.getElementById('mtab-sino');
+  const esperando = m && statusKey(m) === 'validacao';
+  if (sino) sino.style.display = esperando ? 'inline-block' : 'none';
+  if (sino && esperando) sino.textContent = '!';
+}
+
+function abrirAnexoIdx(i) {
+  const m = state.melhorias.find(x => x.id === document.getElementById('m-id').value);
+  const a = m && (m.anexos || [])[i];
+  if (a) abrirAnexo(a, ADMIN_PROXY_URL, credAdmin());
+}
+
+// Aprovar fecha a demanda. Rejeitar devolve para Em Andamento com o motivo — o
+// dev precisa saber o que faltou, senao entrega a mesma coisa de novo.
+async function valDecidir(aprovar, obs) {
+  const id = document.getElementById('m-id').value;
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  const agora = new Date().toISOString();
+  if (aprovar) {
+    m.status_planejamento = 'concluido';
+    m.status = 'concluida';
+    m.validado_em = agora;
+    m.validado_por = (_eu && (_eu.nome || _eu.login)) || 'admin';
+    m.validacao_obs = '';
+  } else {
+    m.status_planejamento = 'em_andamento';
+    m.status = 'iniciada';
+    m.validacao_obs = obs;
+    m.validado_em = '';
+    m.validado_por = '';
+  }
+  _dirtyMelhoriaIds.add(id);
+  _pendingEdits = true;
+  renderEntrega(m);
+  renderAll();
+  renderValBanner();
+  const okSalvo = await saveViaProxy();
+  if (okSalvo) {
+    toast(aprovar ? '✅ Entrega aprovada — demanda concluída.' : '↩ Devolvida ao dev.', 'ok');
+    _dirtyMelhoriaIds.delete(id);
+    _pendingEdits = false;
+    closeModal('modal-melhoria');
+  } else {
+    toast('Não foi possível salvar. A decisão continua pendente.', 'err');
+  }
+}
+
+function valAprovar() {
+  const m = state.melhorias.find(x => x.id === document.getElementById('m-id').value);
+  if (!m) return;
+  if (!String(m.implementacao || '').trim() &&
+      !confirm('O dev não descreveu o que foi implementado.\n\n' +
+               'Sem esse texto o relatório do comitê fica vazio para esta demanda. Aprovar mesmo assim?')) return;
+  if (!confirm('Aprovar a entrega de "' + (m.titulo || '') + '"?\n\nA demanda passa para Concluído.')) return;
+  valDecidir(true);
+}
+
+function valRejeitar() {
+  const obs = prompt('Por que está devolvendo? O dev vai ler isto:\n' +
+                     '(a demanda volta para Em Andamento)');
+  if (obs === null) return;
+  if (!obs.trim()) { toast('Explique o motivo da devolução.', 'err'); return; }
+  valDecidir(false, obs.trim());
 }
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
