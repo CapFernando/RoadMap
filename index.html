@@ -1475,11 +1475,27 @@ function nmCollectRows(listId, keys) {
 // ── Anexos (base64) ──
 let _nmAnexos = [];
 const NM_MAX = 1.5 * 1024 * 1024;
+// Sobe o arquivo para o R2 pelo Worker, autorizado pelo captcha (nao ha senha
+// aqui). O JSON guarda so a referencia — antes o base64 ia inteiro na base.
 function nmAddFiles(files) {
   [...files].forEach(f => {
     if (f.size > NM_MAX) { dashToast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
     const reader = new FileReader();
-    reader.onload = () => { _nmAnexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, dados: reader.result }); nmRenderAnexos(); };
+    reader.onload = async () => {
+      try {
+        dashToast(`Enviando "${f.name}"…`, 'ok');
+        const res = await fetch(NM_PROXY_URL, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'anexo-subir', nome: f.name, dados: reader.result,
+                                 turnstile: nmTurnstileToken() })
+        });
+        if (!res.ok) { let m='HTTP '+res.status; try{const e=await res.json(); m=e.detail||e.error||m;}catch(_){} throw new Error(m); }
+        const j = await res.json();
+        _nmAnexos.push({ nome: j.nome, tipo: j.tipo, tamanho: j.tamanho, chave: j.chave });
+        nmTurnstileReset();   // token e de uso unico
+        nmRenderAnexos();
+      } catch (e) { dashToast(`Falha ao anexar "${f.name}": ${e.message}`, 'err'); }
+    };
     reader.readAsDataURL(f);
   });
   document.getElementById('nm-file').value = '';
@@ -1502,10 +1518,16 @@ function nmDataUrlToBlob(dataUrl) {
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return new Blob([arr], { type: mime });
 }
-function nmPreview(i) {
+async function nmPreview(i) {
   const a = _nmAnexos[i]; if (!a) return;
-  const url = URL.createObjectURL(nmDataUrlToBlob(a.dados));
-  window.open(url, '_blank');
+  if (a.chave) {
+    const res = await fetch(NM_PROXY_URL, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(Object.assign({ action:'anexo-baixar', chave:a.chave }, credenciaisLeitura())) });
+    if (!res.ok) { dashToast('Nao foi possivel abrir o anexo.', 'err'); return; }
+    window.open(URL.createObjectURL(await res.blob()), '_blank');
+    return;
+  }
+  if (a.dados) window.open(URL.createObjectURL(nmDataUrlToBlob(a.dados)), '_blank');
 }
 
 // ── Abrir / fechar / salvar ──
