@@ -144,6 +144,7 @@ const LIMITES = {
   'poker-votar':    { max: 60,  janela: 60 },
   'poker-gravar':   { max: 30,  janela: 60 },
   'poker-fila':     { max: 30,  janela: 60 },
+  'temas-publicos': { max: 20,  janela: 60 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
   // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
   // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
@@ -590,6 +591,24 @@ export default {
     // coluna depois de publicado, e pior: a leitura feita ANTES de publicar
     // podia perder alteracao recente de outra pessoa. Aqui a leitura vai pela
     // API autenticada, que nao passa por esse cache.
+    // Lista de temas para o formulario publico, SEM senha de leitura.
+    //
+    // Sugerir uma melhoria nao pode exigir senha: quem tem uma ideia desiste antes
+    // de procurar credencial. Mas o formulario precisa da lista de sistemas para
+    // preencher o dropdown, e ela vinha de `dados`, que agora e travado.
+    //
+    // Aqui sai SO id e nome do tema. Nenhuma demanda, nenhuma descricao, nenhum
+    // nome de dev. O envio em si continua protegido pelo Turnstile e pelo limite
+    // por IP; consultar o painel continua exigindo a senha.
+    if (body.action === 'temas-publicos') {
+      const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+                              { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      let data;
+      try { data = JSON.parse(await rawRes.text()); } catch (_) { return json({ error: 'Falha ao ler dados' }, 502, headers); }
+      return json({ ok: true, temas: (data.temas || []).map(t => ({ id: t.id, nome: t.nome })) }, 200, headers);
+    }
+
     if (body.action === 'dados') {
       // 401 sinaliza ao painel que ele deve pedir a credencial. O cliente reage
       // ao status, entao nao precisa saber se a trava esta ligada ou nao.
