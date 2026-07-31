@@ -143,6 +143,7 @@ const LIMITES = {
   'poker-entrar':   { max: 20,  janela: 60 },
   'poker-votar':    { max: 60,  janela: 60 },
   'poker-gravar':   { max: 30,  janela: 60 },
+  'poker-fila':     { max: 30,  janela: 60 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
   // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
   // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
@@ -198,6 +199,31 @@ async function contaTentativa(env, ip, acao) {
   } catch (_) { return 0; }
 }
 
+// Verifica o token do Turnstile contra a Cloudflare. Ativacao gradual, como a
+// trava de leitura: enquanto TURNSTILE_SECRET nao existir (ou estiver em branco),
+// o envio continua funcionando como hoje. Criar o secret liga a exigencia na hora.
+//
+// O `trim` nao e decorativo: um secret gravado em branco no prompt do wrangler
+// chega como string vazia e desligaria a protecao em silencio.
+async function turnstileOk(env, token, ip) {
+  const secret = String(env.TURNSTILE_SECRET || '').trim();
+  if (!secret) return { ok: true, motivo: 'inativo' };
+  if (!token) return { ok: false, motivo: 'sem_token' };
+  try {
+    const fd = new FormData();
+    fd.append('secret', secret);
+    fd.append('response', token);
+    if (ip) fd.append('remoteip', ip);
+    const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: fd });
+    const j = await r.json();
+    return { ok: !!j.success, motivo: (j['error-codes'] || []).join(',') || 'recusado' };
+  } catch (e) {
+    // Falha de rede na verificacao: NAO libera. Este e o unico caminho de
+    // gravacao sem autenticacao — em caso de duvida, recusa.
+    return { ok: false, motivo: 'falha_verificacao' };
+  }
+}
+
 function toB64(str) {
   const bytes = new TextEncoder().encode(str);
   let bin = ''; const CHUNK = 0x8000;
@@ -213,7 +239,7 @@ function json(obj, status, headers) { return new Response(JSON.stringify(obj), {
 // O voto fica OCULTO no servidor: antes de revelar, o estado devolve apenas
 // quem já votou, nunca o valor. Esconder no navegador não seria sigilo.
 // ═══════════════════════════════════════════════════════════════════════
-const POKER_TTL_H = 12;   // sessão expira em 12h
+const POKER_TTL_H = 2;    // sessão expira em 2h — duração máxima de um planning
 // Janela de presenca: sem sinal de vida por este tempo, sai da mesa. O painel
 // faz polling a cada 1,5s, entao a margem cobre requisicao perdida ou tela
 // bloqueando por instantes, sem deixar fantasma na sala.
@@ -390,6 +416,45 @@ export default {
           .bind(codigo, (ses && ses.melhoria_id) || '', pid).run();
         await db.prepare('DELETE FROM poker_participante WHERE id = ? AND codigo = ?').bind(pid, codigo).run();
         return json({ ok: true }, 200, headers);
+      }
+
+      // Fila do planning para quem entra pelo QR, SEM senha de leitura.
+      //
+      // A alternativa seria embutir a senha de leitura no QR — mas o QR circula em
+      // print, mensagem e tela compartilhada, e a senha da acesso a base INTEIRA,
+      // para sempre. Aqui quem autoriza e o proprio codigo da sala: escopo minimo
+      // (so o que a tela do poker mostra) e prazo curto (a sessao morre em 2h).
+      //
+      // Devolve apenas id, titulo, dev, tipo, tema e pontuacao. Descricao,
+      // discovery, anexos e solicitante NAO saem por aqui.
+      if (body.action === 'poker-fila') {
+        const ses = await db.prepare('SELECT codigo, expira_em, melhoria_id FROM poker_sessao WHERE codigo = ?')
+          .bind(codigo).first();
+        if (!ses) return json({ error: 'Sessao nao encontrada' }, 404, headers);
+        if (new Date(ses.expira_em) < agora) return json({ error: 'Sessao expirada' }, 410, headers);
+
+        const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+                                { headers: { Accept: 'application/vnd.github.raw' } });
+        if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+        let data;
+        try { data = JSON.parse(await rawRes.text()); } catch (_) { return json({ error: 'Falha ao ler dados' }, 502, headers); }
+
+        const enxuta = (m) => ({
+          id: m.id, titulo: m.titulo || '', dev: m.dev || '', tipo: m.tipo || '',
+          tema_id: m.tema_id || '', poker_pontos: m.poker_pontos ?? null,
+          poker_media: m.poker_media ?? null, status_planejamento: m.status_planejamento || '',
+        });
+        const todas = data.melhorias || [];
+        const fila = todas.filter(m => (m.status_planejamento || '') === 'planning').map(enxuta);
+        // a demanda em pauta pode ter saido de Planning no meio da reuniao; sem ela
+        // o titulo do card em votacao apareceria vazio
+        if (ses.melhoria_id && !fila.some(m => m.id === ses.melhoria_id)) {
+          const emPauta = todas.find(m => m.id === ses.melhoria_id);
+          if (emPauta) fila.push(enxuta(emPauta));
+        }
+        return json({ ok: true,
+                      melhorias: fila,
+                      temas: (data.temas || []).map(t => ({ id: t.id, nome: t.nome })) }, 200, headers);
       }
 
       if (body.action === 'poker-estado') {
@@ -613,6 +678,17 @@ export default {
     }
 
     // ── Sugestão pública (dash) — só adiciona no Backlog ──
+    // Captcha antes de tudo: barra automacao sem gastar chamada ao GitHub.
+    const ts = await turnstileOk(env, body.turnstile, ip);
+    if (!ts.ok) {
+      const nTs = await contaTentativa(env, ip, 'captcha');
+      return json({ error: 'captcha',
+                    detail: ts.motivo === 'sem_token'
+                      ? 'Confirme que voce nao e um robo antes de enviar.'
+                      : 'Verificacao de seguranca nao passou. Recarregue a pagina e tente de novo.',
+                    mensagem: troll(nTs) + ' Tentativa #' + nTs + ' desta origem.' }, 403, headers);
+    }
+
     const m = body.melhoria || {};
     if (!m.titulo || !String(m.titulo).trim()) return json({ error: 'Titulo obrigatorio' }, 400, headers);
     if (JSON.stringify(body).length > 5 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
