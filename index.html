@@ -510,6 +510,7 @@ const STATUS_META = {
   planning:     { label: 'Planning',            cls: 'badge-planning',     cor: '#2BBFA0' },
   planejado:    { label: 'Planejado',           cls: 'badge-planejado',    cor: '#E89C2F' },
   em_andamento: { label: 'Em Andamento',        cls: 'badge-iniciada',     cor: '#FFE14D' },
+  validacao:    { label: 'Validação PM/PO',     cls: 'badge-em_andamento', cor: '#E89C2F' },
   atrasado:     { label: 'Atrasado',            cls: 'badge-negada',       cor: '#E84444' },
   concluido:    { label: 'Concluído',           cls: 'badge-concluida',    cor: '#2BBFA0' },
   negada:       { label: 'Negada',              cls: 'badge-negada',       cor: '#E84444' },
@@ -687,6 +688,7 @@ const STATUS_CARDS = [
   { key:'planejado',    label:'Planejado',           cor:'var(--blue)' },
   { key:'em_andamento', label:'Em Andamento',        cor:'#FFE14D' },
   { key:'concluido',    label:'Concluído',           cor:'#2BBFA0' },
+  { key:'validacao',    label:'Validação PM/PO',     cor:'var(--amber)' },
   { key:'atrasado',     label:'Atrasado',            cor:'var(--red)' },
   { key:'negada',       label:'Negada',              cor:'var(--red)' },
 ];
@@ -1111,6 +1113,7 @@ const STATUS_BADGE_PRINT = {
   planejado:    { label: 'Planejado',     bg: '#5C3608', color: '#F9C97A' },
   em_andamento: { label: 'Em Andamento',  bg: '#3D3600', color: '#FFE14D' },
   concluido:    { label: 'Concluído',     bg: '#1E4208', color: '#B2E07A' },
+  validacao:    { label: 'Validação PM/PO', bg: 'var(--amber-bg, #4A2800)', color: 'var(--amber-tx, #FFC470)' },
   atrasado:     { label: 'Atrasado',      bg: '#5C0A0A', color: '#F9A0A0' },
   negada:       { label: 'Negada',        bg: '#5C0A0A', color: '#F9A0A0' },
 };
