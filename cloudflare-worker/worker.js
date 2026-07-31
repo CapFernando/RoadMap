@@ -158,6 +158,8 @@ const LIMITES = {
   'anexo-subir':    { max: 20,  janela: 60 },
   'anexo-baixar':   { max: 60,  janela: 60 },
   'login':          { max: 10,  janela: 60 },   // mesmo freio da senha compartilhada
+  'cadastro':       { max: 5,   janela: 60 },   // criar conta e raro; 5/min corta script
+  'recuperar':      { max: 5,   janela: 60 },
   'usuarios':       { max: 40,  janela: 60 },
   'quem-sou':       { max: 60,  janela: 60 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
@@ -257,7 +259,16 @@ async function turnstileOk(env, token, ip) {
 const PBKDF2_ITER = 100000;
 const SESSAO_H = 12;              // sessao vale 12h
 const PAPEIS = ['consulta', 'dev', 'admin'];
+// So e-mail corporativo se cadastra. Qualquer endereco de fora e recusado.
+const EMAIL_DOMINIO = '@audaxcapitalsa.com.br';
 const NIVEL = { consulta: 1, dev: 2, admin: 3 };
+
+// ALTER TABLE tolerante: a tabela usuario ja existe em producao, e CREATE TABLE
+// IF NOT EXISTS nao acrescenta coluna. Se a coluna ja esta la, o erro e ignorado.
+async function colunaSeFaltar(db, tabela, coluna, tipo) {
+  try { await db.prepare('ALTER TABLE ' + tabela + ' ADD COLUMN ' + coluna + ' ' + tipo).run(); }
+  catch (_) { /* ja existe */ }
+}
 
 async function contasMigrar(db) {
   await db.batch([
@@ -265,11 +276,21 @@ async function contasMigrar(db) {
       id TEXT PRIMARY KEY, login TEXT NOT NULL UNIQUE, nome TEXT NOT NULL,
       senha_hash TEXT NOT NULL, salt TEXT NOT NULL, papel TEXT NOT NULL,
       ativo INTEGER NOT NULL DEFAULT 1, criado_em TEXT NOT NULL,
-      ultimo_acesso TEXT)`),
+      ultimo_acesso TEXT, email TEXT, pendente INTEGER NOT NULL DEFAULT 0)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS sessao (
       token TEXT PRIMARY KEY, usuario_id TEXT NOT NULL, expira_em TEXT NOT NULL,
       criado_em TEXT NOT NULL)`),
+    // Pedidos de nova senha. Sem servico de e-mail no Worker, o admin resolve
+    // pela tela — a fila e o que faz o pedido nao se perder.
+    db.prepare(`CREATE TABLE IF NOT EXISTS senha_pedido (
+      id TEXT PRIMARY KEY, usuario_id TEXT NOT NULL, criado_em TEXT NOT NULL,
+      atendido INTEGER NOT NULL DEFAULT 0)`),
   ]);
+  // A tabela usuario nasceu sem estas duas colunas e ja existe em producao.
+  await colunaSeFaltar(db, 'usuario', 'email', 'TEXT');
+  await colunaSeFaltar(db, 'usuario', 'pendente', 'INTEGER NOT NULL DEFAULT 0');
+  // E-mail unico, mas so entre quem tem e-mail (contas antigas ficam com NULL).
+  try { await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_email ON usuario(email) WHERE email IS NOT NULL').run(); } catch (_) {}
 }
 
 function hexDe(buf) {
@@ -788,6 +809,62 @@ export default {
     }
 
     // -- CONTAS: login, sessao e gestao ---------------------------------
+    // Autocadastro do time. Nao libera acesso sozinho: a conta nasce PENDENTE e
+    // um admin aprova. Sem isso, qualquer pessoa que abrisse a URL criaria conta
+    // e leria a base inteira.
+    if (body.action === 'cadastro') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      await contasMigrar(env.POKER_DB);
+      const login = String(body.login || '').trim().toLowerCase();
+      const nome = limpaTexto(body.nome, 80);
+      const email = String(body.email || '').trim().toLowerCase();
+      const senhaU = String(body.senhaUsuario || '');
+      if (!/^[a-z0-9._-]{3,24}$/.test(login)) {
+        return json({ error: 'login', detail: 'O usuario deve ter de 3 a 24 caracteres: minusculas, numeros, ponto, hifen ou _.' }, 400, headers);
+      }
+      if (nome.length < 3) return json({ error: 'nome', detail: 'Informe seu nome completo.' }, 400, headers);
+      if (!email.endsWith(EMAIL_DOMINIO) || email.length <= EMAIL_DOMINIO.length ||
+          !/^[a-z0-9._%+-]+@/.test(email)) {
+        return json({ error: 'email', detail: 'Use seu e-mail corporativo, terminando em ' + EMAIL_DOMINIO + '.' }, 400, headers);
+      }
+      if (senhaU.length < 8) return json({ error: 'senha_curta', detail: 'A senha precisa de ao menos 8 caracteres.' }, 400, headers);
+
+      const salt = hexDe(crypto.getRandomValues(new Uint8Array(16)));
+      const hash = await derivaSenha(senhaU, salt);
+      try {
+        await env.POKER_DB.prepare(
+          `INSERT INTO usuario (id, login, nome, email, senha_hash, salt, papel, ativo, pendente, criado_em)
+           VALUES (?,?,?,?,?,?,?,0,1,?)`)
+          .bind('u-' + crypto.randomUUID().slice(0, 8), login, nome, email, hash, salt, 'dev',
+                new Date().toISOString()).run();
+      } catch (e) {
+        // Nao revela se colidiu no login ou no e-mail: seria uma forma de
+        // descobrir quem ja tem conta.
+        return json({ error: 'existe', detail: 'Ja existe um cadastro com esse usuario ou e-mail. Fale com o administrador.' }, 409, headers);
+      }
+      return json({ ok: true, pendente: true,
+                    detail: 'Cadastro enviado. Um administrador precisa liberar seu acesso.' }, 200, headers);
+    }
+
+    // Pedido de recuperacao de senha. Nao ha envio de e-mail no Worker, entao o
+    // pedido entra numa fila que o admin ve no painel e resolve gerando nova senha.
+    if (body.action === 'recuperar') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      await contasMigrar(env.POKER_DB);
+      const quem = String(body.login || body.email || '').trim().toLowerCase();
+      if (!quem) return json({ error: 'dados', detail: 'Informe seu usuario ou e-mail.' }, 400, headers);
+      const u = await env.POKER_DB.prepare(
+        'SELECT id FROM usuario WHERE login = ? OR email = ?').bind(quem, quem).first();
+      if (u) {
+        await env.POKER_DB.prepare(
+          `INSERT INTO senha_pedido (id, usuario_id, criado_em, atendido) VALUES (?,?,?,0)`)
+          .bind('p-' + crypto.randomUUID().slice(0, 8), u.id, new Date().toISOString()).run();
+      }
+      // Resposta identica exista ou nao a conta: senao isto viraria um verificador
+      // de quem tem acesso ao sistema.
+      return json({ ok: true, detail: 'Pedido registrado. O administrador vai gerar uma nova senha e entregar a voce.' }, 200, headers);
+    }
+
     if (body.action === 'login') {
       if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
       await contasMigrar(env.POKER_DB);
@@ -802,7 +879,14 @@ export default {
         return json({ error: 'credencial', detail: 'Usuario ou senha invalidos.',
                       mensagem: troll(n) + ' Tentativa #' + n + '.' }, 401, headers);
       };
-      if (!u || !u.ativo) return generico();
+      if (!u) return generico();
+      // Conta recem-cadastrada esperando liberacao: dizer isso evita chamado de
+      // suporte e a pessoa acabou de se cadastrar, ja sabe que a conta existe.
+      if (u.pendente) {
+        return json({ error: 'pendente',
+                      detail: 'Seu cadastro ainda nao foi liberado por um administrador.' }, 403, headers);
+      }
+      if (!u.ativo) return generico();
       const hash = await derivaSenha(senhaU, u.salt);
       if (!igualSeguro(hash, u.senha_hash)) return generico();
 
@@ -844,8 +928,39 @@ export default {
 
       if (op === 'listar') {
         const r = await env.POKER_DB.prepare(
-          'SELECT id, login, nome, papel, ativo, criado_em, ultimo_acesso FROM usuario ORDER BY nome').all();
-        return json({ ok: true, usuarios: r.results || [] }, 200, headers);
+          `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso
+             FROM usuario ORDER BY pendente DESC, nome`).all();
+        // Pedidos de senha em aberto, para o admin resolver na mesma tela.
+        const p = await env.POKER_DB.prepare(
+          `SELECT p.id, p.criado_em, u.login, u.nome
+             FROM senha_pedido p JOIN usuario u ON u.id = p.usuario_id
+            WHERE p.atendido = 0 ORDER BY p.criado_em`).all();
+        return json({ ok: true, usuarios: r.results || [], pedidos: p.results || [] }, 200, headers);
+      }
+
+      // Libera um cadastro pendente, ja definindo a permissao.
+      if (op === 'aprovar') {
+        const login = String(body.login || '').trim().toLowerCase();
+        const papel = PAPEIS.includes(body.papel) ? body.papel : 'dev';
+        const uu = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(login).first();
+        if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
+        await env.POKER_DB.prepare('UPDATE usuario SET pendente = 0, ativo = 1, papel = ? WHERE id = ?')
+          .bind(papel, uu.id).run();
+        return json({ ok: true }, 200, headers);
+      }
+
+      // Recusa um cadastro pendente: apaga, para nao deixar login ocupado.
+      if (op === 'recusar') {
+        const login = String(body.login || '').trim().toLowerCase();
+        const uu = await env.POKER_DB.prepare(
+          'SELECT id, pendente FROM usuario WHERE login = ?').bind(login).first();
+        if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
+        // Trava de seguranca: recusar so vale para cadastro que nunca foi liberado.
+        // Em conta ativa, o caminho e desativar — que preserva o historico.
+        if (!uu.pendente) return json({ error: 'nao_pendente', detail: 'Esta conta ja esta em uso. Use Desativar.' }, 409, headers);
+        await env.POKER_DB.prepare('DELETE FROM senha_pedido WHERE usuario_id = ?').bind(uu.id).run();
+        await env.POKER_DB.prepare('DELETE FROM usuario WHERE id = ?').bind(uu.id).run();
+        return json({ ok: true }, 200, headers);
       }
 
       if (op === 'criar' || op === 'senha') {
@@ -877,6 +992,9 @@ export default {
           .bind(hash, salt, uu.id).run();
         // trocar senha encerra as sessoes abertas daquela pessoa
         await env.POKER_DB.prepare('DELETE FROM sessao WHERE usuario_id = ?').bind(uu.id).run();
+        // Resolve o pedido de recuperacao, se havia um em aberto.
+        await env.POKER_DB.prepare('UPDATE senha_pedido SET atendido = 1 WHERE usuario_id = ?')
+          .bind(uu.id).run();
         return json({ ok: true }, 200, headers);
       }
 
