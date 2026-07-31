@@ -157,6 +157,9 @@ const LIMITES = {
   'temas-publicos': { max: 20,  janela: 60 },
   'anexo-subir':    { max: 20,  janela: 60 },
   'anexo-baixar':   { max: 60,  janela: 60 },
+  'login':          { max: 10,  janela: 60 },   // mesmo freio da senha compartilhada
+  'usuarios':       { max: 40,  janela: 60 },
+  'quem-sou':       { max: 60,  janela: 60 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
   // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
   // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
@@ -235,6 +238,90 @@ async function turnstileOk(env, token, ip) {
     // gravacao sem autenticacao — em caso de duvida, recusa.
     return { ok: false, motivo: 'falha_verificacao' };
   }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// CONTAS POR PESSOA (D1)
+//
+// Hoje o acesso e por senha compartilhada — admin, dev e leitura. Isso significa
+// que ninguem sabe QUEM fez o que, e que a senha vai embora junto com quem sai da
+// empresa. Aqui cada pessoa tem conta, senha propria e papel.
+//
+// Senha nunca em texto puro: PBKDF2-SHA256 com salt por usuario. Nao ha bcrypt ou
+// argon2 nativos no runtime dos Workers; PBKDF2 com 150k iteracoes e o que da para
+// fazer bem com a Web Crypto disponivel.
+// ═══════════════════════════════════════════════════════════════════════
+const PBKDF2_ITER = 150000;
+const SESSAO_H = 12;              // sessao vale 12h
+const PAPEIS = ['consulta', 'dev', 'admin'];
+const NIVEL = { consulta: 1, dev: 2, admin: 3 };
+
+async function contasMigrar(db) {
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS usuario (
+      id TEXT PRIMARY KEY, login TEXT NOT NULL UNIQUE, nome TEXT NOT NULL,
+      senha_hash TEXT NOT NULL, salt TEXT NOT NULL, papel TEXT NOT NULL,
+      ativo INTEGER NOT NULL DEFAULT 1, criado_em TEXT NOT NULL,
+      ultimo_acesso TEXT)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS sessao (
+      token TEXT PRIMARY KEY, usuario_id TEXT NOT NULL, expira_em TEXT NOT NULL,
+      criado_em TEXT NOT NULL)`),
+  ]);
+}
+
+function hexDe(buf) {
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function derivaSenha(senha, saltHex) {
+  const enc = new TextEncoder();
+  const salt = Uint8Array.from(saltHex.match(/.{2}/g).map(h => parseInt(h, 16)));
+  const key = await crypto.subtle.importKey('raw', enc.encode(senha), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations: PBKDF2_ITER, hash: 'SHA-256' }, key, 256);
+  return hexDe(bits);
+}
+// Comparacao em tempo constante: comparar hash com === vaza informacao pelo tempo
+// de retorno. O custo e irrelevante e remove a duvida.
+function igualSeguro(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let dif = 0;
+  for (let i = 0; i < a.length; i++) dif |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return dif === 0;
+}
+
+// Resolve quem esta chamando. Devolve { papel, usuario } ou null.
+//
+// Aceita DOIS caminhos de proposito, durante a transicao:
+//   1. token de sessao (contas novas)
+//   2. senha compartilhada (admin/dev/leitura) — para nao trancar ninguem fora
+//      enquanto as contas nao existem. Sai depois que todos entrarem uma vez.
+async function identifica(env, body) {
+  const db = env.POKER_DB;
+  if (db && body.token) {
+    try {
+      await contasMigrar(db);
+      const r = await db.prepare(
+        `SELECT s.expira_em, u.id, u.login, u.nome, u.papel, u.ativo
+           FROM sessao s JOIN usuario u ON u.id = s.usuario_id
+          WHERE s.token = ?`).bind(String(body.token)).first();
+      if (r && r.ativo && new Date(r.expira_em) > new Date()) {
+        return { papel: r.papel, usuario: { id: r.id, login: r.login, nome: r.nome } };
+      }
+    } catch (_) {}
+  }
+  // legado: senha compartilhada
+  const s = body.senha;
+  if (s && env.ADMIN_SENHA && s === env.ADMIN_SENHA) return { papel: 'admin', usuario: null };
+  if (s && env.DEV_SENHA && s === env.DEV_SENHA) return { papel: 'dev', usuario: null };
+  const vS = String(env.VIEW_SENHA || '').trim();
+  if (vS && String(s || '').trim() === vS) return { papel: 'consulta', usuario: null };
+  const vC = String(env.VIEW_CHAVE || '').trim();
+  if (vC && String(body.chave || '').trim() === vC) return { papel: 'consulta', usuario: null };
+  return null;
+}
+function temNivel(ident, minimo) {
+  return !!ident && (NIVEL[ident.papel] || 0) >= (NIVEL[minimo] || 99);
 }
 
 function toB64(str) {
@@ -348,7 +435,18 @@ export default {
       ...opts,
       headers: { Authorization: 'token ' + env.GH_TOKEN, Accept: 'application/vnd.github.v3+json', 'User-Agent': 'audax-roadmap-worker', ...(opts.headers || {}) },
     });
+    // Papel de quem chama, resolvido UMA vez por requisicao. Vem do token de
+    // sessao (conta por pessoa) ou, durante a transicao, da senha compartilhada.
+    let _ident = null, _identFeita = false;
+    const papelAtual = async () => {
+      if (!_identFeita) { _identFeita = true; _ident = await identifica(env, body); }
+      return _ident ? _ident.papel : null;
+    };
+    // Mantem a assinatura antiga (sincrona) para nao reescrever cada rota: a versao
+    // sincrona cobre a senha compartilhada; a assincrona cobre token tambem.
     const senhaOk = (s) => s && env.ADMIN_SENHA && s === env.ADMIN_SENHA;
+    const ehAdmin = async () => (await papelAtual()) === 'admin';
+    const ehDev   = async () => { const p = await papelAtual(); return p === 'dev' || p === 'admin'; };
     // Definido AQUI, junto de senhaOk, e nao mais adiante: `const` nao existe antes
     // da declaracao, e a rota de anexo (que usa devOk) roda antes do ponto onde
     // isto estava. Chamar dali lancaria ReferenceError em tempo de execucao — o
@@ -367,6 +465,13 @@ export default {
     const vSenha = String(env.VIEW_SENHA || '').trim();
     const vChave = String(env.VIEW_CHAVE || '').trim();
     const travaAtiva = () => !!(vSenha || vChave);
+    // Aceita token de sessao (qualquer papel le) alem da senha compartilhada.
+    // A versao async e usada onde da; a sincrona segue para nao reescrever tudo.
+    const leituraLiberadaAsync = async (body) => {
+      if (!travaAtiva()) return true;
+      if (await papelAtual()) return true;
+      return leituraLiberada(body);
+    };
     const leituraLiberada = (body) => {
       if (!travaAtiva()) return true;
       if (senhaOk(body.senha)) return true;
@@ -647,7 +752,7 @@ export default {
     // roadmap nao pode abrir anexo dele.
     if (body.action === 'anexo-baixar') {
       if (!env.ANEXOS) return json({ error: 'armazenamento indisponivel' }, 503, headers);
-      if (!leituraLiberada(body)) return json({ error: 'credencial' }, 401, headers);
+      if (!(await leituraLiberadaAsync(body))) return json({ error: 'credencial' }, 401, headers);
       const chave = String(body.chave || '');
       if (!/^a\/[a-z0-9-]+$/.test(chave)) return json({ error: 'chave invalida' }, 400, headers);
       const obj = await env.ANEXOS.get(chave);
@@ -680,10 +785,129 @@ export default {
       return json({ ok: true, temas: (data.temas || []).map(t => ({ id: t.id, nome: t.nome })) }, 200, headers);
     }
 
+    // -- CONTAS: login, sessao e gestao ---------------------------------
+    if (body.action === 'login') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      await contasMigrar(env.POKER_DB);
+      const login = String(body.login || '').trim().toLowerCase();
+      const senhaU = String(body.senhaUsuario || '');
+      if (!login || !senhaU) return json({ error: 'dados', detail: 'Informe usuario e senha.' }, 400, headers);
+      const u = await env.POKER_DB.prepare('SELECT * FROM usuario WHERE login = ?').bind(login).first();
+      // Mesma resposta para usuario inexistente e senha errada: dizer qual dos
+      // dois falhou permitiria descobrir quem tem conta.
+      const generico = async () => {
+        const n = await contaTentativa(env, ip, 'login');
+        return json({ error: 'credencial', detail: 'Usuario ou senha invalidos.',
+                      mensagem: troll(n) + ' Tentativa #' + n + '.' }, 401, headers);
+      };
+      if (!u || !u.ativo) return generico();
+      const hash = await derivaSenha(senhaU, u.salt);
+      if (!igualSeguro(hash, u.senha_hash)) return generico();
+
+      const token = crypto.randomUUID() + '-' + crypto.randomUUID();
+      const expira = new Date(agora.getTime() + SESSAO_H * 3600 * 1000).toISOString();
+      await env.POKER_DB.prepare('INSERT INTO sessao (token, usuario_id, expira_em, criado_em) VALUES (?,?,?,?)')
+        .bind(token, u.id, expira, iso).run();
+      await env.POKER_DB.prepare('UPDATE usuario SET ultimo_acesso = ? WHERE id = ?').bind(iso, u.id).run();
+      if (Math.random() < 0.1) await env.POKER_DB.prepare('DELETE FROM sessao WHERE expira_em < ?').bind(iso).run();
+      return json({ ok: true, token, expira_em: expira,
+                    usuario: { login: u.login, nome: u.nome, papel: u.papel } }, 200, headers);
+    }
+
+    if (body.action === 'logout') {
+      if (env.POKER_DB && body.token) {
+        await contasMigrar(env.POKER_DB);
+        await env.POKER_DB.prepare('DELETE FROM sessao WHERE token = ?').bind(String(body.token)).run();
+      }
+      return json({ ok: true }, 200, headers);
+    }
+
+    // Quem sou eu — o painel usa para saber o papel e mostrar so o que cabe.
+    if (body.action === 'quem-sou') {
+      const ident = await identifica(env, body);
+      if (!ident) return json({ error: 'credencial' }, 401, headers);
+      return json({ ok: true, papel: ident.papel, usuario: ident.usuario,
+                    legado: !ident.usuario }, 200, headers);
+    }
+
+    // Gestao de usuarios — so admin.
+    if (body.action === 'usuarios') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      const identU = await identifica(env, body);
+      if (!temNivel(identU, 'admin')) return json({ error: 'sem_permissao' }, 403, headers);
+      await contasMigrar(env.POKER_DB);
+      const op = String(body.op || 'listar');
+
+      if (op === 'listar') {
+        const r = await env.POKER_DB.prepare(
+          'SELECT id, login, nome, papel, ativo, criado_em, ultimo_acesso FROM usuario ORDER BY nome').all();
+        return json({ ok: true, usuarios: r.results || [] }, 200, headers);
+      }
+
+      if (op === 'criar' || op === 'senha') {
+        const login = String(body.login || '').trim().toLowerCase();
+        const nova = String(body.senhaNova || '');
+        if (!/^[a-z0-9._-]{3,24}$/.test(login)) {
+          return json({ error: 'login', detail: 'Use 3 a 24 caracteres: minusculas, numeros, ponto, hifen.' }, 400, headers);
+        }
+        if (nova.length < 8) return json({ error: 'senha_curta', detail: 'A senha precisa de ao menos 8 caracteres.' }, 400, headers);
+        const salt = hexDe(crypto.getRandomValues(new Uint8Array(16)));
+        const hash = await derivaSenha(nova, salt);
+
+        if (op === 'criar') {
+          const papel = PAPEIS.includes(body.papel) ? body.papel : 'consulta';
+          const nome = limpaTexto(body.nome, 80) || login;
+          try {
+            await env.POKER_DB.prepare(
+              'INSERT INTO usuario (id, login, nome, senha_hash, salt, papel, ativo, criado_em) VALUES (?,?,?,?,?,?,1,?)')
+              .bind('u-' + crypto.randomUUID().slice(0, 8), login, nome, hash, salt, papel, iso).run();
+          } catch (e) {
+            return json({ error: 'existe', detail: 'Ja existe usuario com esse login.' }, 409, headers);
+          }
+          return json({ ok: true }, 200, headers);
+        }
+        const uu = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(login).first();
+        if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
+        await env.POKER_DB.prepare('UPDATE usuario SET senha_hash = ?, salt = ? WHERE id = ?')
+          .bind(hash, salt, uu.id).run();
+        // trocar senha encerra as sessoes abertas daquela pessoa
+        await env.POKER_DB.prepare('DELETE FROM sessao WHERE usuario_id = ?').bind(uu.id).run();
+        return json({ ok: true }, 200, headers);
+      }
+
+      if (op === 'papel' || op === 'ativo') {
+        const login = String(body.login || '').trim().toLowerCase();
+        const uu = await env.POKER_DB.prepare('SELECT id, papel FROM usuario WHERE login = ?').bind(login).first();
+        if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
+        const contaAdmins = async () => {
+          const c = await env.POKER_DB.prepare(
+            'SELECT COUNT(*) AS n FROM usuario WHERE papel = ? AND ativo = 1').bind('admin').first();
+          return (c && c.n) || 0;
+        };
+        if (op === 'papel') {
+          if (!PAPEIS.includes(body.papel)) return json({ error: 'papel_invalido' }, 400, headers);
+          // Nao deixa remover o ultimo admin: sem admin ninguem gerencia contas.
+          if (uu.papel === 'admin' && body.papel !== 'admin' && (await contaAdmins()) <= 1) {
+            return json({ error: 'ultimo_admin', detail: 'Este e o unico admin ativo. Promova outra pessoa antes.' }, 409, headers);
+          }
+          await env.POKER_DB.prepare('UPDATE usuario SET papel = ? WHERE id = ?').bind(body.papel, uu.id).run();
+        } else {
+          const ativo = body.ativo ? 1 : 0;
+          if (!ativo && uu.papel === 'admin' && (await contaAdmins()) <= 1) {
+            return json({ error: 'ultimo_admin', detail: 'Este e o unico admin ativo.' }, 409, headers);
+          }
+          await env.POKER_DB.prepare('UPDATE usuario SET ativo = ? WHERE id = ?').bind(ativo, uu.id).run();
+          if (!ativo) await env.POKER_DB.prepare('DELETE FROM sessao WHERE usuario_id = ?').bind(uu.id).run();
+        }
+        return json({ ok: true }, 200, headers);
+      }
+      return json({ error: 'op_invalida' }, 400, headers);
+    }
+
     if (body.action === 'dados') {
       // 401 sinaliza ao painel que ele deve pedir a credencial. O cliente reage
       // ao status, entao nao precisa saber se a trava esta ligada ou nao.
-      if (!leituraLiberada(body)) return json({ error: 'credencial' }, 401, headers);
+      if (!(await leituraLiberadaAsync(body))) return json({ error: 'credencial' }, 401, headers);
       const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
       if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       return new Response(await rawRes.text(), {
@@ -703,7 +927,8 @@ export default {
 
     // ── Publicação do Admin (estado completo) ──
     if (body.action === 'publish') {
-      if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+      // admin por conta (token) ou pela senha compartilhada, durante a transicao
+      if (!(await ehAdmin())) return json({ error: 'senha' }, 401, headers);
       const data = body.data;
       if (!data || !Array.isArray(data.melhorias)) return json({ error: 'dados invalidos' }, 400, headers);
       if (JSON.stringify(data).length > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
@@ -737,7 +962,7 @@ export default {
     // no HTML publico) podia sobrescrever toda a base com um curl. CORS nao
     // protege, porque so vale para navegador.
     if (body.action === 'dev-publish') {
-      if (!devOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+      if (!(await ehDev())) return json({ error: 'senha' }, 401, headers);
       const data = body.data;
       if (!data || !Array.isArray(data.melhorias)) return json({ error: 'dados invalidos' }, 400, headers);
       if (JSON.stringify(data).length > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
