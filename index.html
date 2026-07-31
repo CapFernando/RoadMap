@@ -10,6 +10,10 @@
   <title>RoadMap de Melhorias — Audax Capital</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Turnstile: captcha invisivel da Cloudflare no formulario publico. O envio de
+       demanda e a UNICA gravacao sem autenticacao do sistema — sem isto um script
+       cria demandas em massa (o limite de 6/min por IP apenas atrasa). -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -478,7 +482,9 @@
       </section>
 
     </div>
-    <div style="position:sticky;bottom:0;background:#161614;display:flex;justify-content:flex-end;gap:10px;padding:14px 22px;border-top:1px solid #2E2E2B;border-radius:0 0 12px 12px;">
+    <div style="position:sticky;bottom:0;background:#161614;display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid #2E2E2B;border-radius:0 0 12px 12px;flex-wrap:wrap;">
+      <div id="nm-turnstile" class="cf-turnstile" style="margin-right:auto"
+           data-sitekey="0x4AAAAAAEC5ptfvTvABWU7W" data-theme="dark"></div>
       <button onclick="closeNovaMelhoria()" style="font-size:13px;color:#A8A49A;background:none;border:1px solid #2E2E2B;border-radius:8px;padding:9px 18px;cursor:pointer;">Cancelar</button>
       <button id="nm-save-btn" onclick="saveNovaMelhoria()" style="font-size:13px;color:#fff;background:#3B8FE8;border:none;border-radius:8px;padding:9px 20px;cursor:pointer;font-weight:700;">Criar no Backlog</button>
     </div>
@@ -1454,15 +1460,27 @@ function openNovaMelhoria() {
   document.getElementById('nm-listCA').innerHTML = '';
   _nmRF = _nmRN = _nmCA = 0; nmAddRF(); nmAddRN(); nmAddCA();
   _nmAnexos = []; nmRenderAnexos();
+  nmTurnstileReset();   // sessao nova, token novo
   document.getElementById('nm-overlay').style.display = 'block';
   document.body.style.overflow = 'hidden';
 }
+// Token do captcha. Vazio quando o widget ainda nao resolveu — o Worker devolve
+// erro claro nesse caso. O token e de uso unico: apos enviar, o widget e resetado.
+function nmTurnstileToken() {
+  try { return (window.turnstile && turnstile.getResponse(document.getElementById('nm-turnstile'))) || ''; }
+  catch (_) { return ''; }
+}
+function nmTurnstileReset() {
+  try { if (window.turnstile) turnstile.reset(document.getElementById('nm-turnstile')); } catch (_) {}
+}
+
 function closeNovaMelhoria() {
   document.getElementById('nm-overlay').style.display = 'none';
   document.body.style.overflow = '';
 }
 
 function nmSucesso() {
+  nmTurnstileReset();   // token e de uso unico
   let ov = document.getElementById('nm-sucesso');
   if (ov) ov.remove();
   ov = document.createElement('div');
@@ -1532,7 +1550,7 @@ async function saveNovaMelhoria() {
       const res = await fetch(NM_PROXY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ melhoria: nova, novosTemas: tema.novos })
+        body: JSON.stringify({ melhoria: nova, novosTemas: tema.novos, turnstile: nmTurnstileToken() })
       });
       if (!res.ok) { let msg = 'HTTP ' + res.status; try { msg = (await res.json()).error || msg; } catch (_) {} throw new Error(msg); }
       closeNovaMelhoria();
