@@ -576,6 +576,11 @@
         <input type="text" id="e-sprint" placeholder="ex: S1" />
       </div>
       <div class="form-group">
+        <label>Pontos (Planning Poker)
+          <span id="e-poker-media" style="font-weight:400;opacity:.6"></span></label>
+        <input type="number" id="e-poker-pontos" min="0" step="1" placeholder="—" />
+      </div>
+      <div class="form-group">
         <label>Status Planejamento</label>
         <select id="e-status-plan">
           <option value="backlog">Backlog</option>
@@ -1930,6 +1935,10 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-prio').value      = m?.prioridade || '';
   document.getElementById('e-tipo').value      = m?.tipo || '';
   document.getElementById('e-sprint').value    = m?.sprint || '';
+  // Pontos: o gantt mostrava o valor no card da fila mas nao tinha onde digitar.
+  document.getElementById('e-poker-pontos').value = (m && m.poker_pontos != null) ? m.poker_pontos : '';
+  document.getElementById('e-poker-media').textContent =
+    (m && m.poker_media != null) ? '— média ' + String(m.poker_media).replace('.', ',') : '';
   document.getElementById('e-status-plan').value = m?.status_planejamento || 'backlog';
   document.getElementById('e-inicio').value    = m?.inicio || prefillDate || '';
   document.getElementById('e-fim').value       = m?.entrega || prefillDate || '';
@@ -2036,6 +2045,15 @@ function resolveTemaSelecao(prefix, fallbackTemaId) {
   return t.id;
 }
 
+// Campo vazio significa "sem pontos" de propósito — o valor foi apagado por quem
+// editou. Number('') seria 0, que contaria como pontuado na soma por semana.
+function pokerPontosDoForm(existing) {
+  const v = document.getElementById('e-poker-pontos').value.trim();
+  if (v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : (existing.poker_pontos ?? null);
+}
+
 function saveTask() {
   const titulo = document.getElementById('e-titulo').value.trim();
   const temaId = resolveTemaSelecao('e', editingId ? (state.melhorias.find(x => x.id === editingId)||{}).tema_id : '');
@@ -2066,6 +2084,7 @@ function saveTask() {
     solicitante:        document.getElementById('e-solicitante').value.trim(),
     data_solicitacao:   document.getElementById('e-data-solic').value,
     sprint:             document.getElementById('e-sprint').value.trim(),
+    poker_pontos:       pokerPontosDoForm(existing),
     estimativa_horas:   existing.estimativa_horas || 0,
     horas_realizadas:   parseFloat(document.getElementById('e-horas-real').value) || 0,
     anexos:             _gAnexos,
