@@ -137,6 +137,7 @@
     .badge-em_andamento { background:#3D3600;  color:#FFE14D; }
     .badge-planning     { background:var(--amber-bg);  color:var(--amber-tx); }
     .badge-atrasado     { background:var(--red-bg);    color:var(--red-tx); }
+    .badge-validacao    { background:var(--amber-bg);  color:var(--amber-tx); }
     .badge-concluido    { background:var(--teal-bg);   color:var(--teal-tx); }
     .badge-negada       { background:var(--red-bg);    color:var(--red-tx); }
 
@@ -337,8 +338,7 @@
         <option value="planning">Planning</option>
         <option value="planejado">Planejado</option>
         <option value="em_andamento">Em Andamento</option>
-        <option value="atrasado">Atrasado</option>
-        <option value="concluido">Concluído</option>
+        <option value="validacao">Entregar para validação</option>
       </select>
     </div>
     <div id="ms-horas-group" style="display:none">
@@ -349,7 +349,8 @@
       <div id="ms-horas-plan" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:6px;padding:8px 12px;margin-bottom:12px;"></div>
       <div class="form-group">
         <label>O que foi implementado *</label>
-        <textarea id="ms-implementacao" rows="4" placeholder="Descreva o que foi entregue — este texto vai para o relatório do comitê de produto."></textarea>
+        <div id="ms-devolucao" style="display:none;background:var(--red-bg);color:var(--red-tx);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.55;margin-bottom:10px"></div>
+        <textarea id="ms-implementacao" rows="4" placeholder="Descreva o que foi entregue — o PM/PO valida por este texto, que também vai para o relatório do comitê."></textarea>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Usado no relatório de comitê. Escreva para quem não acompanhou o desenvolvimento.</div>
       </div>
     </div>
@@ -694,14 +695,15 @@ function statusEfetivo(m) {
 
 const STATUS_LABELS = {
   backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
-  planning:'Planning', em_andamento:'Em Andamento', concluido:'Concluído', atrasado:'Atrasado', negada:'Negada'
+  planning:'Planning', em_andamento:'Em Andamento', validacao:'Em validação',
+  concluido:'Concluído', atrasado:'Atrasado', negada:'Negada'
 };
 
 const COLUMNS = [
   { key:'planning',     label:'Planning',     color:'#2BBFA0', maps:['planning'] },
   { key:'planejado',    label:'Planejado',    color:'#3B8FE8', maps:['backlog','levantar_req','planejado'] },
   { key:'em_andamento', label:'Em Andamento', color:'#5EA832', maps:['em_andamento'] },
-  { key:'atrasado',     label:'Atrasado',     color:'#E84444', maps:['atrasado'] },
+  { key:'validacao',    label:'Em validação',  color:'#E89C2F', maps:['validacao'] },
   { key:'concluido',    label:'Concluído',    color:'#2BBFA0', maps:['concluido'] },
 ];
 
@@ -1461,7 +1463,7 @@ function hasBlockingDep(id) {
 
 // Bloqueia avanço (deploy/concluido) se há dep aberta
 function checkDepBlock(id, targetColKey) {
-  if (['planejado','em_andamento','atrasado'].includes(targetColKey)) return false;
+  if (['planejado','em_andamento','atrasado','validacao'].includes(targetColKey)) return false;
   return hasBlockingDep(id);
 }
 
@@ -1635,6 +1637,13 @@ function openStatusModal(id, preselect) {
   sel.value = preselect || COLUMNS.find(c => c.maps.includes(sk))?.key || sk;
   document.getElementById('ms-horas').value = m.horas_realizadas || '';
   document.getElementById('ms-implementacao').value = m.implementacao || '';
+  // Devolucao do PM/PO: sem mostrar aqui, o dev reentrega a mesma coisa.
+  const devolucao = document.getElementById('ms-devolucao');
+  if (devolucao) {
+    const obs = String(m.validacao_obs || '').trim();
+    devolucao.style.display = obs ? 'block' : 'none';
+    if (obs) devolucao.innerHTML = '↩ <strong>Devolvida pelo PM/PO:</strong> ' + escAttr(obs);
+  }
   // Anexos editáveis: parte de uma cópia, para "Fechar" não deixar alteração solta
   _msAnexos = JSON.parse(JSON.stringify(m.anexos || []));
   _msAnexosMexidos = false;
@@ -1708,7 +1717,9 @@ function msRenderAnexosEdit() {
 }
 
 function onStatusModalChange() {
-  const isConcluido = document.getElementById('ms-status').value === 'concluido';
+  // A entrega e o momento de cobrar horas e descricao — nao mais a conclusao,
+  // que agora e decisao do PM/PO.
+  const isConcluido = document.getElementById('ms-status').value === 'validacao';
   document.getElementById('ms-horas-group').style.display = isConcluido ? 'block' : 'none';
   if (isConcluido) {
     const id = document.getElementById('ms-id').value;
@@ -1730,18 +1741,20 @@ async function saveStatus() {
     toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
     return;
   }
-  if (newColKey === 'concluido') {
+  if (newColKey === 'validacao') {
     const horas = parseFloat(document.getElementById('ms-horas').value);
     if (!horas || horas <= 0) { toast('Informe as horas de desenvolvimento.', 'err'); return; }
-    // Exigido só na conclusão: é o texto que alimenta o relatório do comitê.
+    // Exigido na entrega: e o texto que o PM/PO le para validar, e o mesmo que
+    // alimenta o relatorio do comite.
     const impl = document.getElementById('ms-implementacao').value.trim();
     if (!impl) {
-      toast('Descreva o que foi implementado — vai para o relatório do comitê.', 'err');
+      toast('Descreva o que foi implementado — o PM/PO valida por este texto.', 'err');
       document.getElementById('ms-implementacao').focus();
       return;
     }
     closeModal('modal-status');
     await updateStatus(id, newColKey, horas, impl);
+    toast('📋 Entregue para validação do PM/PO.', 'ok');
   } else {
     // Fora da conclusão o texto é opcional, mas se já existir não se perde
     const impl = document.getElementById('ms-implementacao').value.trim();
@@ -1759,7 +1772,8 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   const implAnterior = m.implementacao;
   const anexosAnterior = m.anexos;
   const spToStatus = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada',
-                       em_andamento:'iniciada', planning:'estimada', concluido:'iniciada', atrasado:'iniciada' };
+                       em_andamento:'iniciada', planning:'estimada', validacao:'iniciada',
+                       concluido:'iniciada', atrasado:'iniciada' };
   // Atualiza localmente (otimista)
   m.status_planejamento = colKey;
   m.status = spToStatus[colKey] || 'recebida';
@@ -1899,7 +1913,9 @@ async function saveNewDemand() {
   if (!titulo) { toast('Informe o título.','err'); return; }
   if (!temaId) { toast('Selecione o sistema.','err'); return; }
   const sp = document.getElementById('n-status').value;
-  const spToStatus = { backlog:'recebida', planning:'estimada', planejado:'estimada', em_andamento:'iniciada', atrasado:'iniciada', concluido:'iniciada' };
+  const spToStatus = { backlog:'recebida', planning:'estimada', planejado:'estimada',
+                       em_andamento:'iniciada', validacao:'iniciada', atrasado:'iniciada',
+                       concluido:'iniciada' };
   const obj = {
     ...(existing || {}),
     id: editId || uid(),
