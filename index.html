@@ -98,8 +98,10 @@
       user-select: none;
     }
     .sum-card:hover { border-color: var(--text3); }
-    .sum-card.active { border-color: var(--text); background: #1E1E1C; }
-    .sum-card.active .n { color: #fff; }
+    /* Fundo por token: com #1E1E1C fixo, o cartao ativo ficava preto no tema
+       claro enquanto o texto virava preto. O mesmo valia para o #fff do numero. */
+    .sum-card.active { border-color: var(--text); background: var(--bg4); }
+    .sum-card.active .n { color: var(--text); }
     .sum-card .n   { font-size: 30px; font-weight: 700; color: var(--text); line-height: 1; }
     .sum-card .lbl { font-size: 13px; color: var(--text2); margin-top: 6px; display: flex; align-items: center; gap: 6px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -296,8 +298,8 @@
       .melhoria-desc   { font-size: 14px; }
     }
   </style>
-  <link rel="stylesheet" href="tema.css">
-  <script src="tema.js"></script>
+  <link rel="stylesheet" href="tema.css?v=3e4b5d5d10">
+  <script src="tema.js?v=3b74bdc1d4"></script>
 </head>
 <body>
 
