@@ -20,6 +20,11 @@
     // mantem o CSS original de cada pagina valendo sem precisar de override.
     if (tema === 'claro') document.documentElement.setAttribute('data-tema', 'claro');
     else document.documentElement.removeAttribute('data-tema');
+    // Telas que calculam cor em JS (a paleta de temas do gantt, por exemplo)
+    // precisam redesenhar: o CSS troca sozinho, o que foi gerado em JS nao.
+    if (typeof window.onTemaMudou === 'function') {
+      try { window.onTemaMudou(tema); } catch (_) {}
+    }
     var b = document.querySelector('.tema-btn');
     if (b) {
       var claro = tema === 'claro';
