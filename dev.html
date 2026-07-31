@@ -54,6 +54,13 @@
     .login-link { background:none; border:none; color:var(--blue); font-size:13px; cursor:pointer;
       font-family:'Inter',sans-serif; padding:0; text-decoration:underline; width:auto !important; }
     .login-dica { font-size:12px; color:var(--text3); line-height:1.5; text-align:left; margin:-2px 0 12px; }
+    /* Ver a senha vale mais que repetir a senha: um campo a menos e o erro de
+       digitacao aparece na hora, em vez de virar "as senhas nao sao iguais". */
+    .login-mostrar { display:flex; align-items:center; gap:7px; font-size:13px; color:var(--text2);
+      margin:-4px 0 14px; cursor:pointer; }
+    .login-mostrar input { width:auto !important; margin:0 !important; }
+    /* Campo com problema fica marcado: a mensagem sozinha nao diz ONDE corrigir. */
+    #step-cadastro input.ruim, #step-recuperar input.ruim { border-color:var(--red); }
     .login-ok { color:var(--green-tx); font-size:13px; line-height:1.5; margin-top:10px; text-align:left; }
     .dev-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-bottom:20px; }
     .dev-btn { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:12px 8px; cursor:pointer; font-size:14px; font-weight:500; color:var(--text2); transition:all .15s; }
@@ -192,12 +199,12 @@
     <!-- PASSO 1: Senha -->
     <div id="step-senha">
       <p>Entre com seu usuário e senha</p>
-      <input type="text" id="login-usuario" placeholder="Seu usuário" autocomplete="username"
+      <input type="text" id="login-usuario" placeholder="Seu e-mail" autocomplete="username"
              onkeydown="if(event.key==='Enter') document.getElementById('login-senha').focus()" />
       <input type="password" id="login-senha" placeholder="Sua senha" autocomplete="current-password"
              onkeydown="if(event.key==='Enter') verificarSenha()" />
       <div style="font-size:12px;color:var(--text3);margin:-2px 0 10px;line-height:1.5;text-align:left">
-        Sem usuário ainda? Deixe <em>Seu usuário</em> em branco e use a senha geral do painel.
+        Ainda não tem acesso? Deixe o e-mail em branco e use a senha geral do painel.
       </div>
       <button onclick="verificarSenha()">Entrar</button>
       <div class="login-error" id="login-error-senha"></div>
@@ -210,13 +217,16 @@
     <!-- PASSO 1b: autocadastro -->
     <div id="step-cadastro" style="display:none">
       <p>Crie seu acesso</p>
-      <input type="text" id="cad-nome" placeholder="Seu nome completo" autocomplete="name" />
+      <input type="text" id="cad-nome" placeholder="Seu nome completo" autocomplete="name"
+             oninput="cadLimpaErro()" />
       <div class="login-dica">Use o mesmo nome que aparece nas suas demandas, para o painel já abrir no seu.</div>
-      <input type="text" id="cad-login" placeholder="Usuário (ex: joao.s)" autocomplete="username" />
-      <input type="email" id="cad-email" placeholder="seu.nome@audaxcapitalsa.com.br" autocomplete="email" />
-      <input type="password" id="cad-senha" placeholder="Senha (mínimo 8 caracteres)" autocomplete="new-password" />
-      <input type="password" id="cad-senha2" placeholder="Repita a senha" autocomplete="new-password"
-             onkeydown="if(event.key==='Enter') fazerCadastro()" />
+      <input type="email" id="cad-email" placeholder="Seu e-mail da Audax" autocomplete="email"
+             oninput="cadLimpaErro()" />
+      <input type="password" id="cad-senha" placeholder="Crie uma senha" autocomplete="new-password"
+             oninput="cadLimpaErro()" onkeydown="if(event.key==='Enter') fazerCadastro()" />
+      <label class="login-mostrar">
+        <input type="checkbox" onchange="cadMostrarSenha(this.checked)" /> Mostrar a senha
+      </label>
       <button onclick="fazerCadastro()">Cadastrar</button>
       <div class="login-error" id="cad-erro"></div>
       <div class="login-ok" id="cad-ok" style="display:none"></div>
@@ -228,9 +238,9 @@
     <!-- PASSO 1c: recuperar senha -->
     <div id="step-recuperar" style="display:none">
       <p>Recuperar senha</p>
-      <div class="login-dica">Informe seu usuário ou e-mail corporativo. Um administrador vai gerar
-        uma senha nova e entregar a você.</div>
-      <input type="text" id="rec-quem" placeholder="Usuário ou e-mail"
+      <div class="login-dica">Informe seu e-mail da Audax. Um administrador vai gerar uma senha
+        nova e entregar a você.</div>
+      <input type="email" id="rec-quem" placeholder="Seu e-mail"
              onkeydown="if(event.key==='Enter') pedirRecuperacao()" />
       <button onclick="pedirRecuperacao()">Pedir nova senha</button>
       <div class="login-error" id="rec-erro"></div>
@@ -1017,46 +1027,61 @@ function voltarLogin() {
   document.getElementById('login-usuario').focus();
 }
 
+function cadMostrarSenha(mostrar) {
+  document.getElementById('cad-senha').type = mostrar ? 'text' : 'password';
+}
+function cadLimpaErro() {
+  document.getElementById('cad-erro').textContent = '';
+  ['cad-nome', 'cad-email', 'cad-senha'].forEach(i => document.getElementById(i).classList.remove('ruim'));
+}
+// A mensagem sozinha nao ajuda: marca o campo, leva o cursor para ele e diz o
+// que fazer, nao a regra.
+function cadFalha(campoId, msg) {
+  const el = document.getElementById(campoId);
+  document.getElementById('cad-erro').textContent = msg;
+  el.classList.add('ruim');
+  el.focus();
+}
+
 async function fazerCadastro() {
-  const err = document.getElementById('cad-erro');
   const okEl = document.getElementById('cad-ok');
   const nome = (document.getElementById('cad-nome').value || '').trim();
-  const login = (document.getElementById('cad-login').value || '').trim().toLowerCase();
   const email = (document.getElementById('cad-email').value || '').trim().toLowerCase();
   const senha = document.getElementById('cad-senha').value || '';
-  const senha2 = document.getElementById('cad-senha2').value || '';
-  err.textContent = ''; okEl.style.display = 'none';
+  cadLimpaErro(); okEl.style.display = 'none';
 
-  if (nome.length < 3) { err.textContent = 'Informe seu nome completo.'; return; }
-  if (!/^[a-z0-9._-]{3,24}$/.test(login)) {
-    err.textContent = 'O usuário deve ter de 3 a 24 caracteres: minúsculas, números, ponto, hífen ou _.'; return;
-  }
+  if (nome.length < 3) { cadFalha('cad-nome', 'Escreva seu nome completo aqui.'); return; }
   if (!email.endsWith(EMAIL_DOMINIO) || email.indexOf('@') < 1) {
-    err.textContent = 'Use seu e-mail corporativo, terminando em ' + EMAIL_DOMINIO + '.'; return;
+    cadFalha('cad-email', 'Precisa ser seu e-mail da Audax, o que termina com ' + EMAIL_DOMINIO);
+    return;
   }
-  if (senha.length < 8) { err.textContent = 'A senha precisa de ao menos 8 caracteres.'; return; }
-  if (senha !== senha2) { err.textContent = 'As duas senhas não são iguais.'; return; }
+  if (senha.length < 8) {
+    cadFalha('cad-senha', 'Sua senha está curta: faltam ' + (8 - senha.length) +
+             ' caractere' + (8 - senha.length > 1 ? 's' : '') + ' para chegar a 8.');
+    return;
+  }
 
   try {
     const res = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'cadastro', nome, login, email, senhaUsuario: senha })
+      body: JSON.stringify({ action: 'cadastro', nome, email, senhaUsuario: senha })
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) {
-      err.textContent = d.detail || (res.status === 429
-        ? 'Muitas tentativas em pouco tempo. Espere um minuto.'
-        : 'Não foi possível cadastrar. Tente novamente.');
+      cadFalha(d.error === 'email' || d.error === 'existe' ? 'cad-email' : 'cad-senha',
+        d.detail || (res.status === 429
+          ? 'Muitas tentativas em pouco tempo. Espere um minuto e tente de novo.'
+          : 'Não foi possível cadastrar agora. Tente novamente.'));
       return;
     }
-    ['cad-nome', 'cad-login', 'cad-email', 'cad-senha', 'cad-senha2']
-      .forEach(i => { document.getElementById(i).value = ''; });
+    const emailMostrar = email.replace(/[&<>"]/g, '');
+    ['cad-nome', 'cad-email', 'cad-senha'].forEach(i => { document.getElementById(i).value = ''; });
     okEl.innerHTML = '✅ <strong>Cadastro enviado.</strong><br>Avise um administrador para liberar ' +
-      'seu acesso. Depois entre com o usuário <strong>' + login.replace(/[&<>"]/g, '') +
-      '</strong> e a senha que você acabou de escolher.';
+      'seu acesso. Depois entre com <strong>' + emailMostrar + '</strong> e a senha que você acabou ' +
+      'de escolher.';
     okEl.style.display = 'block';
   } catch (_) {
-    err.textContent = 'Sem conexão com o servidor. Verifique a internet e tente de novo.';
+    cadFalha('cad-email', 'Sem conexão com o servidor. Verifique a internet e tente de novo.');
   }
 }
 
