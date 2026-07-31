@@ -402,7 +402,7 @@ function renderPage() {
       const pctReal = Math.round(hReal/maxBar*100);
       const devs    = splitDevs(m.dev).join(', ') || '—';
       const spKey   = m.status_planejamento || 'backlog';
-      const statusLabel = {backlog:'Backlog',levantar_req:'Levantar Req.',planejado:'Planejado',em_andamento:'Em Andamento',deploy:'Deploy',concluido:'Concluído',atrasado:'Atrasado'}[spKey]||spKey;
+      const statusLabel = {backlog:'Backlog',levantar_req:'Levantar Req.',planejado:'Planejado',em_andamento:'Em Andamento',validacao:'Validação PM/PO',deploy:'Deploy',concluido:'Concluído',atrasado:'Atrasado'}[spKey]||spKey;
       const pid = `${tema.id}-${m.id}`;
 
       return `<div class="proj-item">
