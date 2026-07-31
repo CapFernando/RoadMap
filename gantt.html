@@ -109,7 +109,7 @@
     .btn-secondary { background: var(--bg3);   color: var(--text); border: 1px solid var(--border); }
     .btn-ghost     { background: transparent;  color: var(--text2); border: 1px solid var(--border); }
     .btn-nav       { background: var(--bg4); color: var(--text); border: 1px solid var(--border2); padding: 5px 14px; font-size: 18px; border-radius: 8px; font-weight: 700; cursor: pointer; }
-    .anexo-link    { display:inline-flex; align-items:center; gap:4px; color:#9BC8F8; text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:12px; }
+    .anexo-link    { display:inline-flex; align-items:center; gap:4px; color:var(--blue); text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:12px; }
     .anexo-link:hover { text-decoration:underline; }
     .btn-nav:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
     .btn-sm { padding: 6px 11px; font-size: 12px; }
@@ -125,7 +125,9 @@
       border: 1px solid; cursor: pointer; transition: opacity 0.15s; user-select: none;
     }
     .ind-chip:hover { opacity: 0.8; }
-    .ind-chip.backlog        { background:#252522; border-color:#3A3A36; color:#6E6A62; }
+    /* Era #252522 com texto #6E6A62: 2.2:1, ilegivel ja no tema escuro. Por token,
+       acompanha os dois temas com contraste. */
+    .ind-chip.backlog        { background:var(--bg4); border-color:var(--border2); color:var(--text2); }
     .ind-chip.levantar_req   { background:#2A1A4E; border-color:#5A3A9E; color:#C9AEFF; }
     .ind-chip.planejado      { background:#0C3260; border-color:#1a5080; color:#9BC8F8; }
     .ind-chip.em_andamento   { background:#3D3600; border-color:#726500; color:#FFE14D; }
@@ -415,8 +417,8 @@
     .delete-btn { background: var(--red); color: #fff; }
     .delete-btn:hover { opacity: 0.85; }
   </style>
-  <link rel="stylesheet" href="tema.css">
-  <script src="tema.js"></script>
+  <link rel="stylesheet" href="tema.css?v=3e4b5d5d10">
+  <script src="tema.js?v=3b74bdc1d4"></script>
 </head>
 <body>
 
@@ -2531,9 +2533,25 @@ function prioClass(p) {
 }
 
 const TEMA_PALETTE = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444','#E86A3B','#3BE8C4','#E8B43B','#8FE83B'];
+// A paleta foi escolhida para assentar sobre fundo escuro. Usada como TEXTO no
+// tema claro, as cores mais claras somem (o roxo dava 3.1:1). Escurecer mantem a
+// identidade de cada tema — mesmo matiz — com contraste suficiente.
+function escureceCor(hex, fator) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * (1 - fator));
+  const g = Math.round(((n >> 8) & 255) * (1 - fator));
+  const b = Math.round((n & 255) * (1 - fator));
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+// Redesenha ao trocar o tema: as cores por tema saem daqui, nao do CSS.
+window.onTemaMudou = function () {
+  try { if (typeof renderAll === 'function' && state && state.melhorias) renderAll(); } catch (_) {}
+};
 function temaColorOf(temaId) {
   const idx = state.temas.findIndex(t => t.id === temaId);
-  return TEMA_PALETTE[Math.max(0,idx) % TEMA_PALETTE.length];
+  const base = TEMA_PALETTE[Math.max(0, idx) % TEMA_PALETTE.length];
+  return document.documentElement.getAttribute('data-tema') === 'claro'
+    ? escureceCor(base, 0.42) : base;
 }
 
 let toastTimer;
