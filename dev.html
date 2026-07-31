@@ -463,10 +463,37 @@ function devDataUrlToBlob(dataUrl) {
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return new Blob([arr], { type: mime });
 }
-function devViewAnexo(melId, i) {
+
+// Abre anexo aceitando os DOIS formatos:
+//   { chave } -> arquivo no R2, baixado pelo Worker com a credencial da sessao
+//   { dados } -> base64 embutido (formato antigo, antes da migracao)
+// A compatibilidade e proposital: nenhum anexo existente deixa de abrir enquanto
+// a migracao nao termina.
+async function abrirAnexo(a, proxyUrl, cred) {
+  if (!a) return;
+  if (a.chave) {
+    const res = await fetch(proxyUrl, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'anexo-baixar', chave: a.chave }, cred || {}))
+    });
+    if (!res.ok) { alert('Nao foi possivel abrir o anexo (HTTP ' + res.status + ').'); return; }
+    const blob = await res.blob();
+    window.open(URL.createObjectURL(blob), '_blank');
+    return;
+  }
+  if (a.dados) {
+    const [head, b64] = a.dados.split(',');
+    const mime = (head.match(/:(.*?);/) || [])[1] || 'application/octet-stream';
+    const bin = atob(b64); const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    window.open(URL.createObjectURL(new Blob([arr], { type: mime })), '_blank');
+  }
+}
+
+async function devViewAnexo(melId, i) {
   const m = state.melhorias.find(x => x.id === melId);
   if (!m || !m.anexos || !m.anexos[i]) return;
-  window.open(URL.createObjectURL(devDataUrlToBlob(m.anexos[i].dados)), '_blank');
+  await abrirAnexo(m.anexos[i], ADMIN_PROXY_URL, credenciaisLeitura());
 }
 function anexosHTMLDev(m) {
   const anexos = (m && m.anexos) || [];
@@ -1386,14 +1413,36 @@ let _msAnexos = [];
 let _msAnexosMexidos = false;
 const MS_MAX = 1.5 * 1024 * 1024;
 
+
+// Envia o arquivo ao R2 pelo Worker e devolve a REFERENCIA. O binario nao entra
+// mais no JSON — era 93%% do peso da base, baixado por toda tela em cada leitura.
+async function subirAnexo(file, dataUrl, proxyUrl, cred) {
+  const res = await fetch(proxyUrl, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({
+      action: 'anexo-subir', nome: file.name, dados: dataUrl
+    }, cred || {}))
+  });
+  if (!res.ok) {
+    let msg = 'HTTP ' + res.status;
+    try { const e = await res.json(); msg = e.detail || e.error || msg; } catch (_) {}
+    throw new Error(msg);
+  }
+  const j = await res.json();
+  return { nome: j.nome, tipo: j.tipo, tamanho: j.tamanho, chave: j.chave };
+}
+
 function msAddFiles(files) {
   [...files].forEach(f => {
     if (f.size > MS_MAX) { toast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
     const reader = new FileReader();
-    reader.onload = () => {
-      _msAnexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, dados: reader.result });
-      _msAnexosMexidos = true;
-      msRenderAnexosEdit();
+    reader.onload = async () => {
+      try {
+        toast(`Enviando "${f.name}"…`, 'ok');
+        _msAnexos.push(await subirAnexo(f, reader.result, ADMIN_PROXY_URL, { senha: _devPw || sessionStorage.getItem('rm_admin_pw') || '' }));
+        _msAnexosMexidos = true;
+        msRenderAnexosEdit();
+      } catch (e) { toast(`Falha ao anexar "${f.name}": ${e.message}`, 'err'); }
     };
     reader.readAsDataURL(f);
   });
@@ -1406,9 +1455,8 @@ function msRemoveAnexo(i) {
   msRenderAnexosEdit();
 }
 
-function msPreviewAnexo(i) {
-  const a = _msAnexos[i]; if (!a) return;
-  window.open(URL.createObjectURL(devDataUrlToBlob(a.dados)), '_blank');
+async function msPreviewAnexo(i) {
+  await abrirAnexo(_msAnexos[i], ADMIN_PROXY_URL, credenciaisLeitura());
 }
 
 function msRenderAnexosEdit() {
