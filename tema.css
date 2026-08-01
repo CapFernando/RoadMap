@@ -119,6 +119,8 @@
 :root:not([data-tema="claro"]) #btn-nova-melhoria,
 :root:not([data-tema="claro"]) .btn-green { background: #2B72C4 !important; }
 :root:not([data-tema="claro"]) .btn-success { background: #3F7A1B !important; }
+:root:not([data-tema="claro"]) .btn-danger,
+:root:not([data-tema="claro"]) .delete-btn { background: #C42B2B !important; }
 
 /* ── Troca de tema sem animação ──────────────────────────────────────────
    Quando uma propriedade animada (color, background) tem valor vindo de var() e
