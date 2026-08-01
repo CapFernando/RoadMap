@@ -206,6 +206,20 @@
     .pj-busca { width:100%; box-sizing:border-box; }
     .pj-sugestao { max-height:210px; overflow-y:auto; display:grid; gap:6px; margin-top:8px; }
     /* marca no card do Kanban */
+    /* ── GRILL ── */
+    .grill-q { background:var(--bg3); border:1px solid var(--border); border-left:3px solid var(--border2);
+      border-radius:10px; padding:14px 16px; margin-bottom:12px; }
+    .grill-q.falta { border-left-color:var(--amber); }
+    .grill-q-topo { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+    .grill-n { font-family:ui-monospace,monospace; font-size:11px; font-weight:700; color:var(--text3); }
+    .grill-txt { font-size:14px; font-weight:600; color:var(--text); flex:1; min-width:200px; }
+    .grill-peso { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+      border-radius:20px; padding:2px 8px; }
+    .grill-peso.essencial { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
+    .grill-peso.importante{ background:var(--blue-bg,#0C3260);  color:var(--blue-tx,#9BC8F8); }
+    .grill-peso.bom       { background:var(--bg4); color:var(--text2); }
+    .grill-ajuda { font-size:12.5px; color:var(--text2); line-height:1.55; margin:6px 0 10px; }
+    .grill-resp { width:100%; box-sizing:border-box; margin:0; }
     .kb-mesc { font-size:10.5px; font-weight:700; color:var(--teal-tx,#7EECD8);
       background:var(--teal-bg,#063D30); border-radius:5px; padding:1px 6px; }
     .kb-proj { font-size:10.5px; font-weight:700; color:var(--purple-tx,#C9AEFF);
@@ -901,9 +915,22 @@
 
     <div class="mtabs">
       <button type="button" class="mtab ativa" id="mtab-dados" onclick="mAba('dados')">Dados</button>
+      <button type="button" class="mtab" id="mtab-grill" onclick="mAba('grill')">
+        Grill <span class="mtab-sino" id="mtab-grill-n" style="display:none">0</span>
+      </button>
       <button type="button" class="mtab" id="mtab-entrega" onclick="mAba('entrega')">
         Entrega <span class="mtab-sino" id="mtab-sino" style="display:none">1</span>
       </button>
+    </div>
+
+    <!-- ABA GRILL: as perguntas que a demanda precisa aguentar -->
+    <div id="m-pane-grill" style="display:none">
+      <div id="grill-topo"></div>
+      <div id="grill-corpo"></div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeModal('modal-melhoria')">Fechar</button>
+        <button class="btn btn-primary" onclick="grillSalvar()">Salvar respostas</button>
+      </div>
     </div>
 
     <!-- ABA ENTREGA: validacao do PM/PO -->
@@ -3573,6 +3600,14 @@ function openModalMelhoria(id) {
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
   mPopulaProjetos(m?.projeto_id || '');
   mescRenderBloco(m || null);
+  // Sino na aba Grill: mostra o que falta antes de a pessoa abrir.
+  const gn = document.getElementById('mtab-grill-n');
+  if (gn) {
+    const c = m ? grillContagem(m) : { essResp: 0, essTotal: 0 };
+    const falta = c.essTotal - c.essResp;
+    gn.style.display = (m && falta) ? 'inline-block' : 'none';
+    gn.textContent = falta;
+  }
   const cod = document.getElementById('m-codigo');
   cod.style.display = m?.codigo ? 'inline-block' : 'none';
   if (m?.codigo) cod.textContent = m.codigo;
@@ -3806,6 +3841,9 @@ function saveMelhoria() {
     validacao_obs:       existing.validacao_obs || '',
     entregue_em:         existing.entregue_em   || '',
     concluido_em:        existing.concluido_em  || '',
+    // O grill nao tem campo no formulario de Dados: sem repassar, salvar por la
+    // apagaria as respostas.
+    grill:               existing.grill || {},
     anexos:              _mAnexos,
     horas_realizadas:    parseFloat(document.getElementById('m-horas-real').value) || existing.horas_realizadas || 0,
     criado_em:           existing.criado_em || new Date().toISOString(),
@@ -4114,13 +4152,15 @@ function copiarCodigo() {
 }
 
 function mAba(qual) {
-  const dados = qual === 'dados';
-  document.getElementById('m-pane-dados').style.display = dados ? 'block' : 'none';
-  document.getElementById('m-pane-entrega').style.display = dados ? 'none' : 'block';
+  const abas = ['dados', 'grill', 'entrega'];
+  if (!abas.includes(qual)) qual = 'dados';
+  abas.forEach(a => {
+    document.getElementById('m-pane-' + a).style.display = (a === qual) ? 'block' : 'none';
+    document.getElementById('mtab-' + a).classList.toggle('ativa', a === qual);
+  });
   const acoes = document.getElementById('m-acoes-dados');
-  if (acoes) acoes.style.display = dados ? '' : 'none';
-  document.getElementById('mtab-dados').classList.toggle('ativa', dados);
-  document.getElementById('mtab-entrega').classList.toggle('ativa', !dados);
+  if (acoes) acoes.style.display = (qual === 'dados') ? '' : 'none';
+  if (qual === 'grill') grillRender();
   document.querySelector('#modal-melhoria .modal').scrollTop = 0;
 }
 
@@ -4755,6 +4795,110 @@ async function mescDesfazer(idFilha) {
     if (m) mescRenderBloco(m);
     renderAll();
   } else toast('Não foi possível separar.', 'err');
+}
+
+
+// ─── GRILL ────────────────────────────────────────────────────────
+// As perguntas que uma demanda precisa aguentar antes de virar trabalho. Servem
+// para dois fins, e o segundo importa tanto quanto o primeiro: dar clareza ao
+// que vai ser feito, e fazer desistir o que nao se sustenta. Demanda que nao
+// responde "o que muda se nao fizermos" costuma nao valer o mes de ninguem.
+//
+// A resposta fica gravada na demanda. Nao e burocracia: e o que se le em voz alta
+// no comite quando alguem pergunta por que isto esta na frente daquilo.
+const GRILL_PERGUNTAS = [
+  { id:'problema',   peso:'essencial', q:'Qual é o problema, em uma frase?',
+    ajuda:'Problema, não solução. "O relatório demora 2h" é problema; "fazer um botão" é solução.' },
+  { id:'hoje',       peso:'essencial', q:'Como isso é resolvido hoje?',
+    ajuda:'Se ninguém resolve hoje, talvez não seja um problema real. Se resolvem na planilha, quanto custa isso?' },
+  { id:'nada',       peso:'essencial', q:'O que acontece se não fizermos nada nos próximos 6 meses?',
+    ajuda:'Se a resposta for "nada de mais", a demanda acabou de se responder.' },
+  { id:'tamanho',    peso:'essencial', q:'Quantas pessoas usam e com que frequência?',
+    ajuda:'Número, não adjetivo. "3 pessoas, toda segunda" decide melhor que "o time todo, sempre".' },
+  { id:'ganho',      peso:'importante', q:'Quanto tempo ou dinheiro isso devolve por mês?',
+    ajuda:'Mesmo uma estimativa grosseira ordena a fila melhor que nenhuma.' },
+  { id:'onde',       peso:'importante', q:'Quais módulos, telas ou sistemas isso toca?',
+    ajuda:'É o que separa duas semanas de dois dias. Se ninguém sabe, o primeiro passo é descobrir.' },
+  { id:'alternativa',peso:'importante', q:'Dá para resolver sem desenvolvimento?',
+    ajuda:'Processo, configuração, treinamento. A entrega mais barata é a que não precisa de código.' },
+  { id:'sucesso',    peso:'importante', q:'Como saberemos que deu certo? Que número muda?',
+    ajuda:'Sem isso não há como validar a entrega depois — e a validação PM/PO fica no achismo.' },
+  { id:'fora',       peso:'bom',        q:'O que explicitamente NÃO está incluído?',
+    ajuda:'Dizer o que fica de fora evita a discussão de escopo no fim, quando custa caro.' },
+  { id:'quem',       peso:'bom',        q:'Quem valida que ficou pronto?',
+    ajuda:'Nome de pessoa. "A área" não valida nada.' },
+];
+
+const grillRespostas = m => (m && m.grill) || {};
+function grillContagem(m) {
+  const r = grillRespostas(m);
+  const resp = GRILL_PERGUNTAS.filter(p => String(r[p.id] || '').trim()).length;
+  const ess = GRILL_PERGUNTAS.filter(p => p.peso === 'essencial');
+  const essResp = ess.filter(p => String(r[p.id] || '').trim()).length;
+  return { resp, total: GRILL_PERGUNTAS.length, essResp, essTotal: ess.length };
+}
+
+function grillRender() {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id) || null;
+  const topo = document.getElementById('grill-topo');
+  const corpo = document.getElementById('grill-corpo');
+  if (!m) {
+    topo.innerHTML = '';
+    corpo.innerHTML = '<p class="pj-vazio">Salve a demanda primeiro.</p>';
+    return;
+  }
+  const c = grillContagem(m);
+  const faltaEssencial = c.essTotal - c.essResp;
+  topo.innerHTML =
+    '<div class="ent-aviso ' + (faltaEssencial ? 'espera' : 'aprovada') + '">' +
+      (faltaEssencial
+        ? '⚠ <strong>' + faltaEssencial +
+          (faltaEssencial > 1 ? ' perguntas essenciais' : ' pergunta essencial') + ' sem resposta.</strong> ' +
+          'Sem elas não dá para priorizar com honestidade.'
+        : '✅ <strong>As essenciais estão respondidas.</strong> Dá para levar ao comitê.') +
+      '<br>Respondidas: ' + c.resp + ' de ' + c.total + '.' +
+    '</div>' +
+    '<p class="us-hint">Perguntas para fazer <strong>a quem pediu</strong>. Servem tanto para ' +
+    'clarear o que será feito quanto para deixar cair o que não se sustenta — uma demanda que não ' +
+    'aguenta estas perguntas dificilmente merece o mês de alguém.</p>';
+
+  const r = grillRespostas(m);
+  corpo.innerHTML = GRILL_PERGUNTAS.map((p, i) => {
+    const val = String(r[p.id] || '');
+    const vazia = !val.trim();
+    return '<div class="grill-q' + (vazia && p.peso === 'essencial' ? ' falta' : '') + '">' +
+      '<div class="grill-q-topo">' +
+        '<span class="grill-n">' + String(i + 1).padStart(2, '0') + '</span>' +
+        '<span class="grill-txt">' + esc(p.q) + '</span>' +
+        '<span class="grill-peso ' + p.peso + '">' + p.peso + '</span>' +
+      '</div>' +
+      '<div class="grill-ajuda">' + esc(p.ajuda) + '</div>' +
+      '<textarea class="grill-resp" data-q="' + esc(p.id) + '" rows="2" ' +
+        'placeholder="Resposta de quem pediu…">' + esc(val) + '</textarea>' +
+    '</div>';
+  }).join('');
+}
+
+async function grillSalvar() {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) return;
+  const novo = {};
+  document.querySelectorAll('#grill-corpo .grill-resp').forEach(t => {
+    const v = t.value.trim();
+    if (v) novo[t.dataset.q] = v;
+  });
+  m.grill = novo;
+  _dirtyMelhoriaIds.add(id);
+  _pendingEdits = true;
+  const okSalvo = await saveViaProxy();
+  if (okSalvo) {
+    _dirtyMelhoriaIds.clear(); _pendingEdits = false;
+    const c = grillContagem(m);
+    toast('Grill salvo — ' + c.resp + ' de ' + c.total + ' respondidas.', 'ok');
+    grillRender(); renderAll();
+  } else toast('Não foi possível salvar as respostas.', 'err');
 }
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
