@@ -233,7 +233,7 @@
     }
     .day-cell-header.weekend  { display: none; }
     .day-cell-header.holiday  { color: var(--text3); background: rgba(255,60,60,0.05); }
-    .day-cell-header.today    { color: var(--blue); font-weight: 700; }
+    
     .day-cell-header .day-num { font-size: 14px; font-weight: 600; display: block; }
     .day-cell-header .day-name{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
 
@@ -270,6 +270,22 @@
     }
     .cap-text.ausencia-text { color: var(--teal, #2BBFA0); }
     .cap-text.conflito-text { color: var(--red); font-weight: 600; }
+    /* Resumo do mes: os numeros que se le em voz alta no comite. Sem isto, a
+       prestacao de contas vira contagem de cards na tela. */
+    .resumo-mes { display:flex; gap:10px; flex-wrap:wrap; margin:0 0 14px; }
+    .rm-bloco { background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+      padding:9px 14px; min-width:96px; }
+    .rm-num { font-size:20px; font-weight:700; color:var(--text); line-height:1.15; }
+    .rm-rot { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; }
+    .rm-bloco.alerta { border-color:var(--red); }
+    .rm-bloco.alerta .rm-num { color:var(--red); }
+    .rm-bloco.bom .rm-num { color:var(--green); }
+    /* Modo apresentacao: tira o que nao se le em reuniao e aumenta o resto. */
+    body.apresentando .filter-bar,
+    body.apresentando .backlog-sidebar { display:none !important; }
+    body.apresentando .rm-num { font-size:26px; }
+    body.apresentando .dev-label { font-size:15px; }
+    body.apresentando .gcard { font-size:13px; }
     .cap-text.poker-pontos {
       color: var(--text2); overflow: hidden; text-overflow: ellipsis; max-width: 100%;
     }
@@ -288,7 +304,11 @@
     .day-cell.holiday { background: rgba(255,60,60,0.03); cursor: not-allowed; }
     .day-cell.holiday:hover { background: rgba(255,60,60,0.05); }
     .day-cell.drop-over { background: rgba(59,143,232,0.18) !important; }
-    .day-cell.today-col { background: rgba(59,143,232,0.04); }
+    /* 4% de opacidade nao aparece em projetor. Na reuniao, "onde estamos hoje" e a
+       primeira pergunta que alguem faz olhando o mes inteiro. */
+    .day-cell.today-col { background: rgba(59,143,232,0.10); box-shadow: inset 2px 0 0 var(--blue); }
+    .day-cell-header.today { color: var(--blue); font-weight: 700;
+      background: rgba(59,143,232,0.14); box-shadow: inset 2px 0 0 var(--blue); border-radius: 4px 4px 0 0; }
 
     /* Cards on gantt */
     .gantt-cards-layer {
@@ -459,6 +479,8 @@
     <div class="header-right">
       <button class="btn btn-secondary btn-sm" onclick="openDevsModal()">👥 Gerenciar Devs</button>
       <button class="btn btn-secondary btn-sm" onclick="openAusenciasModal()">🌴 Ausências</button>
+      <button class="btn btn-secondary btn-sm" onclick="alternarApresentacao()" id="btn-apresentar"
+              title="Esconde filtros e fila para projetar na reunião">📽 Apresentar</button>
       <button class="btn btn-primary btn-sm" onclick="openModal()">+ Nova issue</button>
       <button class="btn btn-secondary btn-sm" onclick="saveToGitHub()">💾 Salvar</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sair</button>
@@ -471,6 +493,7 @@
     <button class="btn btn-secondary btn-sm" onclick="gAvisaDesatualizado(false)">Depois</button>
   </div>
 
+  <div id="resumo-mes" class="resumo-mes"></div>
   <div class="indicator-bar" id="indicator-bar"></div>
 
   <div class="filter-bar">
@@ -1510,6 +1533,7 @@ function pontosPokerPorSemana(devCards, semanas) {
 }
 
 function renderGantt() {
+  renderResumoMes();
   atualizaContagemGantt();
   document.getElementById('month-label').textContent = `${MONTH_NAMES[viewMonth]} ${viewYear}`;
 
@@ -2584,6 +2608,56 @@ function escureceCor(hex, fator) {
   const b = Math.round((n & 255) * (1 - fator));
   return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
 }
+
+// ─── RESUMO DO MÊS ────────────────────────────────────────────────
+// Os numeros que se le em voz alta no comite. Sem eles, prestar contas vira
+// contar card na tela — e ninguem confere se a conta fecha.
+function renderResumoMes() {
+  const el = document.getElementById('resumo-mes');
+  if (!el) return;
+  const ini = new Date(viewYear, viewMonth, 1);
+  const fim = new Date(viewYear, viewMonth + 1, 0);
+  // Data local, nao UTC: toISOString() puxa para tras quem esta a oeste de
+  // Greenwich e o dia 1 viraria o ultimo dia do mes anterior.
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+                   '-' + String(d.getDate()).padStart(2, '0');
+  const A = iso(ini), B = iso(fim);
+  const noMes = (state.melhorias || []).filter(m => {
+    if (m.oculto || m.mesclado_em) return false;
+    const ref = m.entrega || m.inicio;
+    return ref && ref >= A && ref <= B;
+  });
+  const concluidas = noMes.filter(m => m.status_planejamento === 'concluido');
+  const atrasadas = noMes.filter(m => spEfetivo(m) === 'atrasado');
+  const validando = noMes.filter(m => m.status_planejamento === 'validacao');
+  const pontos = noMes.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+  const pontosFeitos = concluidas.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+
+  const bloco = (num, rot, cls) =>
+    '<div class="rm-bloco ' + (cls || '') + '"><div class="rm-num">' + num +
+    '</div><div class="rm-rot">' + rot + '</div></div>';
+
+  el.innerHTML =
+    bloco(noMes.length, 'no mês') +
+    bloco(concluidas.length + '<span style="font-size:13px;color:var(--text3)">/' + noMes.length + '</span>',
+          'concluídas', concluidas.length && concluidas.length === noMes.length ? 'bom' : '') +
+    (atrasadas.length ? bloco(atrasadas.length, 'atrasadas', 'alerta') : '') +
+    (validando.length ? bloco(validando.length, 'p/ validar') : '') +
+    bloco(pontosFeitos + '<span style="font-size:13px;color:var(--text3)">/' + pontos + '</span>', 'pontos');
+}
+
+// Modo apresentacao: esconde filtros e fila, aumenta o texto. Projetor tem menos
+// resolucao util que o monitor, e a sala le de longe.
+function alternarApresentacao() {
+  const on = document.body.classList.toggle('apresentando');
+  const b = document.getElementById('btn-apresentar');
+  if (b) b.textContent = on ? '📽 Sair da apresentação' : '📽 Apresentar';
+  try { localStorage.setItem('rm_apresentando', on ? '1' : ''); } catch (_) {}
+}
+try { if (localStorage.getItem('rm_apresentando')) {
+  document.addEventListener('DOMContentLoaded', () => alternarApresentacao());
+} } catch (_) {}
+
 // Redesenha ao trocar o tema: as cores por tema saem daqui, nao do CSS.
 window.onTemaMudou = function () {
   try { if (typeof renderAll === 'function' && state && state.melhorias) renderAll(); } catch (_) {}
