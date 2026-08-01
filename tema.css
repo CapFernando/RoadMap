@@ -116,5 +116,16 @@
    vence qualquer folha de estilo por especificidade. */
 :root:not([data-tema="claro"]) .btn-primary,
 :root:not([data-tema="claro"]) #nm-save-btn,
+:root:not([data-tema="claro"]) #btn-nova-melhoria,
 :root:not([data-tema="claro"]) .btn-green { background: #2B72C4 !important; }
 :root:not([data-tema="claro"]) .btn-success { background: #3F7A1B !important; }
+
+/* ── Troca de tema sem animação ──────────────────────────────────────────
+   Quando uma propriedade animada (color, background) tem valor vindo de var() e
+   o token muda de tema, a transicao fica PRESA no valor interpolado antigo — o
+   elemento passa a exibir a cor do tema anterior, indefinidamente. Foi o que
+   fez o botao "↻ Atualizar" mostrar a cor clara dentro do tema escuro.
+   tema.js poe esta classe durante a troca e tira logo depois. */
+html.trocando-tema, html.trocando-tema *, html.trocando-tema *::before, html.trocando-tema *::after {
+  transition: none !important;
+}
