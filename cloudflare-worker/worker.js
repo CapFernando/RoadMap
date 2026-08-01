@@ -336,6 +336,111 @@ function atribuiCodigos(data) {
   return novos;
 }
 
+
+// ─── E-MAIL VIA MICROSOFT GRAPH ───────────────────────────────────
+// Mesmo app-only (client credentials) que o audax-bi-monitor ja usa, com os
+// mesmos nomes de variavel — da para reaproveitar o registro do Azure sem criar
+// outro. La e @azure/msal-node; aqui nao ha como usar biblioteca, entao o fluxo
+// e feito na mao: e um POST no endpoint de token e outro no sendMail.
+//
+// Liga sozinho quando os quatro segredos existem. Sem eles, tudo segue igual e
+// nada quebra — o alerta na tela nao depende disto.
+let _graphToken = null, _graphExp = 0;
+
+function emailConfigurado(env) {
+  return !!(String(env.GRAPH_TENANT_ID || '').trim() &&
+            String(env.GRAPH_CLIENT_ID || '').trim() &&
+            String(env.GRAPH_CLIENT_SECRET || '').trim() &&
+            String(env.MAIL_FROM || '').trim());
+}
+
+async function graphToken(env) {
+  if (_graphToken && Date.now() < _graphExp) return _graphToken;
+  const url = 'https://login.microsoftonline.com/' +
+              encodeURIComponent(String(env.GRAPH_TENANT_ID).trim()) + '/oauth2/v2.0/token';
+  const corpo = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: String(env.GRAPH_CLIENT_ID).trim(),
+    client_secret: String(env.GRAPH_CLIENT_SECRET).trim(),
+    scope: 'https://graph.microsoft.com/.default',
+  });
+  const r = await fetch(url, { method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: corpo });
+  if (!r.ok) throw new Error('Falha ao autenticar no Graph: ' + r.status);
+  const d = await r.json();
+  if (!d.access_token) throw new Error('Graph nao devolveu token');
+  _graphToken = d.access_token;
+  // Renova um minuto antes de vencer, para nao usar token na virada.
+  _graphExp = Date.now() + ((d.expires_in || 3600) - 60) * 1000;
+  return _graphToken;
+}
+
+async function enviaEmail(env, { para, assunto, html }) {
+  if (!emailConfigurado(env)) return { ok: false, motivo: 'nao_configurado' };
+  const destinos = (Array.isArray(para) ? para : String(para || '').split(/[;,]/))
+    .map(x => String(x).trim()).filter(Boolean);
+  if (!destinos.length) return { ok: false, motivo: 'sem_destinatario' };
+  const token = await graphToken(env);
+  const from = String(env.MAIL_FROM).trim();
+  const r = await fetch('https://graph.microsoft.com/v1.0/users/' +
+                        encodeURIComponent(from) + '/sendMail', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: {
+        subject: assunto,
+        body: { contentType: 'HTML', content: html },
+        toRecipients: destinos.map(e => ({ emailAddress: { address: e } })),
+      },
+      saveToSentItems: false,
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error('sendMail ' + r.status + ': ' + t.slice(0, 200));
+  }
+  return { ok: true, enviados: destinos.length };
+}
+
+// Monta o resumo do que precisa de atencao. Um e-mail por dia com tudo, e nao um
+// por evento: alerta que chega demais deixa de ser lido.
+function montaResumo(data, baseUrl) {
+  const ms = (data.melhorias || []).filter(m => m && !m.mesclado_em && !m.oculto);
+  const projs = data.projetos || [];
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const venceu = m => {
+    const sp = m.status_planejamento;
+    if (!m.entrega || ['concluido', 'negada', 'backlog'].includes(sp)) return false;
+    return new Date(m.entrega + 'T00:00:00') < hoje;
+  };
+  const atrasadas = ms.filter(venceu);
+  const validando = ms.filter(m => m.status_planejamento === 'validacao');
+  if (!atrasadas.length && !validando.length) return null;
+
+  const nomeProj = id => { const p = projs.find(x => x.id === id); return p ? (p.codigo || p.nome) : ''; };
+  const linha = m => '<li><b>' + (m.codigo || '') + '</b> ' + String(m.titulo || '') +
+    (m.dev ? ' — ' + m.dev : '') +
+    (m.entrega ? ' — prazo ' + m.entrega.split('-').reverse().join('/') : '') +
+    (m.projeto_id ? ' <i>(' + nomeProj(m.projeto_id) + ')</i>' : '') + '</li>';
+
+  let html = '<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1A1917">';
+  if (validando.length) {
+    html += '<p><b>' + validando.length + ' entrega(s) esperando sua validação:</b></p><ul>' +
+            validando.map(linha).join('') + '</ul>';
+  }
+  if (atrasadas.length) {
+    html += '<p style="color:#C0392B"><b>' + atrasadas.length + ' demanda(s) com prazo vencido:</b></p><ul>' +
+            atrasadas.map(linha).join('') + '</ul>';
+  }
+  html += '<p style="color:#888;font-size:12px">Resumo automático do RoadMap de Melhorias · ' +
+          new Date().toLocaleDateString('pt-BR') +
+          (baseUrl ? ' · <a href="' + baseUrl + '">abrir o painel</a>' : '') + '</p></div>';
+  return { assunto: 'RoadMap · ' + (validando.length ? validando.length + ' p/ validar' : '') +
+                    (validando.length && atrasadas.length ? ' · ' : '') +
+                    (atrasadas.length ? atrasadas.length + ' atrasada(s)' : ''),
+           html, atrasadas: atrasadas.length, validando: validando.length };
+}
+
 async function contasMigrar(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS usuario (
@@ -499,7 +604,41 @@ async function pokerEstado(db, codigo) {
   };
 }
 
+// Resumo diario. O horario vem do cron em wrangler.toml; o Worker so decide o
+// que entra no e-mail.
+async function resumoDiario(env) {
+  if (!emailConfigurado(env)) return { pulado: 'e-mail nao configurado' };
+  const para = String(env.MAIL_TO || '').trim();
+  if (!para) return { pulado: 'MAIL_TO nao definido' };
+  // Mesma chamada que o handler faz; aqui montada localmente porque o `gh` de la
+  // vive dentro do escopo da requisicao.
+  const REPO = env.DATA_REPO || REPO_NAME_PADRAO;
+  const res = await fetch('https://api.github.com/repos/' + REPO_OWNER + '/' + REPO +
+                          '/contents/' + FILE_PATH + '?raw=' + Date.now(), {
+    headers: { Authorization: 'token ' + env.GH_TOKEN, Accept: 'application/vnd.github.raw',
+               'User-Agent': 'audax-roadmap-worker' } });
+  if (!res.ok) return { erro: 'nao consegui ler a base' };
+  const data = await res.json();
+  const r = montaResumo(data, String(env.PAINEL_URL || '').trim());
+  if (!r) return { pulado: 'nada a relatar' };
+  await enviaEmail(env, { para, assunto: r.assunto, html: r.html });
+  return { enviado: true, atrasadas: r.atrasadas, validando: r.validando };
+}
+
 export default {
+  // Disparado pelo cron do wrangler.toml. Erro aqui nao pode derrubar nada: o
+  // resumo e um extra, o sistema funciona sem ele.
+  async scheduled(evento, env, ctx) {
+    ctx.waitUntil((async () => {
+      try {
+        const r = await resumoDiario(env);
+        console.log('resumo diario:', JSON.stringify(r));
+      } catch (e) {
+        console.log('resumo diario falhou:', String(e && e.message || e));
+      }
+    })());
+  },
+
   async fetch(request, env) {
     const headers = corsHeaders();
     if (request.method === 'OPTIONS') return new Response(null, { headers });
@@ -932,6 +1071,25 @@ export default {
       // Resposta identica exista ou nao a conta: senao isto viraria um verificador
       // de quem tem acesso ao sistema.
       return json({ ok: true, detail: 'Pedido registrado. O administrador vai gerar uma nova senha e entregar a voce.' }, 200, headers);
+    }
+
+    // Testa a configuracao de e-mail sem esperar o resumo diario.
+    if (body.action === 'email-teste') {
+      if (!(await ehAdmin())) return json({ error: 'sem_permissao' }, 403, headers);
+      if (!emailConfigurado(env)) {
+        return json({ error: 'nao_configurado',
+                      detail: 'Faltam os segredos GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET ou MAIL_FROM.' }, 503, headers);
+      }
+      const para = limpaTexto(body.para, 200) || String(env.MAIL_TO || '').trim();
+      if (!para) return json({ error: 'sem_destinatario', detail: 'Informe o e-mail de destino.' }, 400, headers);
+      try {
+        await enviaEmail(env, { para,
+          assunto: 'RoadMap · teste de envio',
+          html: '<p>Se você recebeu esta mensagem, o alerta por e-mail do RoadMap está funcionando.</p>' });
+        return json({ ok: true, para }, 200, headers);
+      } catch (e) {
+        return json({ error: 'falha_envio', detail: String(e.message || e).slice(0, 300) }, 502, headers);
+      }
     }
 
     if (body.action === 'login') {
