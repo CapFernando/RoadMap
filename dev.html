@@ -200,12 +200,13 @@
     <!-- PASSO 1: Senha -->
     <div id="step-senha">
       <p>Entre com seu usuário e senha</p>
-      <input type="text" id="login-usuario" placeholder="Seu e-mail" autocomplete="username"
+      <input type="text" id="login-usuario" placeholder="Usuário ou e-mail" autocomplete="username"
              onkeydown="if(event.key==='Enter') document.getElementById('login-senha').focus()" />
       <input type="password" id="login-senha" placeholder="Sua senha" autocomplete="current-password"
              onkeydown="if(event.key==='Enter') verificarSenha()" />
       <div style="font-size:12px;color:var(--text3);margin:-2px 0 10px;line-height:1.5;text-align:left">
-        Ainda não tem acesso? Deixe o e-mail em branco e use a senha geral do painel.
+        Serve o usuário ou o e-mail — o que você tiver.<br>
+        Ainda não tem acesso? Deixe em branco e use a senha geral do painel.
       </div>
       <button onclick="verificarSenha()">Entrar</button>
       <div class="login-error" id="login-error-senha"></div>
@@ -239,9 +240,9 @@
     <!-- PASSO 1c: recuperar senha -->
     <div id="step-recuperar" style="display:none">
       <p>Recuperar senha</p>
-      <div class="login-dica">Informe seu e-mail da Audax. Um administrador vai gerar uma senha
-        nova e entregar a você.</div>
-      <input type="email" id="rec-quem" placeholder="Seu e-mail"
+      <div class="login-dica">Informe seu usuário ou o e-mail da Audax. Um administrador vai gerar
+        uma senha nova e entregar a você.</div>
+      <input type="text" id="rec-quem" placeholder="Usuário ou e-mail"
              onkeydown="if(event.key==='Enter') pedirRecuperacao()" />
       <button onclick="pedirRecuperacao()">Pedir nova senha</button>
       <div class="login-error" id="rec-erro"></div>
@@ -1093,6 +1094,7 @@ async function pedirRecuperacao() {
   const quem = (document.getElementById('rec-quem').value || '').trim().toLowerCase();
   err.textContent = ''; okEl.style.display = 'none';
   if (!quem) { err.textContent = 'Informe seu usuário ou e-mail.'; return; }
+  
   try {
     const res = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
