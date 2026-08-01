@@ -356,6 +356,39 @@
     letter-spacing:.02em;vertical-align:middle;}
   .melhoria-desc{font-size:13px;line-height:1.55;color:var(--text2,#A8A49A);margin:6px 0 2px;
     white-space:pre-wrap;word-break:break-word;}
+  /* Guia de preenchimento. Formulario longo sem indicacao de progresso faz a
+     pessoa parar no meio sem saber quanto falta — e quem para no meio nao volta. */
+  #nm-guia{position:sticky;top:57px;z-index:2;background:var(--bg2,#161614);
+    border-bottom:1px solid var(--border,#2E2E2B);padding:12px 22px;}
+  #nm-overlay .nm-guia-linha{display:flex;align-items:center;gap:12px;}
+  #nm-overlay .nm-guia-barra{flex:1;height:6px;background:var(--bg4,#252522);border-radius:20px;overflow:hidden;}
+  #nm-overlay .nm-guia-barra i{display:block;height:100%;width:0;border-radius:20px;
+    background:var(--blue,#3B8FE8);transition:width .25s ease;}
+  #nm-overlay .nm-guia-barra i.pronto{background:var(--green,#5EA832);}
+  #nm-overlay .nm-guia-num{font-size:12px;font-weight:700;color:var(--text2,#A8A49A);white-space:nowrap;}
+  #nm-overlay .nm-guia-prox{font-size:12.5px;color:var(--text2,#A8A49A);margin-top:7px;line-height:1.5;}
+  #nm-overlay .nm-guia-prox b{color:var(--text,#ECEAE2);}
+  #nm-overlay .nm-ir{background:none;border:none;color:var(--blue,#3B8FE8);font-size:12.5px;
+    cursor:pointer;padding:0 0 0 4px;text-decoration:underline;font-family:inherit;}
+  /* Campo da vez: o olho precisa saber para onde ir sem ler tudo de novo. */
+  #nm-overlay .nm-f.alvo > input, #nm-overlay .nm-f.alvo > select,
+  #nm-overlay .nm-f.alvo > textarea { border-color:var(--blue,#3B8FE8);
+    box-shadow:0 0 0 3px rgba(59,143,232,.16); }
+  #nm-overlay .nm-vez{font-size:10.5px;font-weight:700;color:var(--blue-tx,#9BC8F8);
+    background:var(--blue-bg,#0C3260);border-radius:20px;padding:1px 8px;margin-left:6px;}
+  #nm-overlay .nm-ok{color:var(--green,#5EA832);font-weight:700;margin-left:6px;}
+  /* Dica: aparece ao passar o mouse ou ao focar pelo teclado. */
+  #nm-overlay .nm-dica{position:relative;display:inline-flex;align-items:center;justify-content:center;
+    width:15px;height:15px;border-radius:50%;border:1px solid var(--border2,#3A3A36);
+    color:var(--text2,#A8A49A);font-size:10px;font-weight:700;margin-left:6px;cursor:help;
+    font-style:normal;}
+  #nm-overlay .nm-dica:hover,#nm-overlay .nm-dica:focus{border-color:var(--blue,#3B8FE8);color:var(--blue,#3B8FE8);}
+  #nm-overlay .nm-dica::after{content:attr(data-dica);position:absolute;bottom:calc(100% + 8px);left:50%;
+    transform:translateX(-50%);background:var(--bg4,#252522);color:var(--text,#ECEAE2);
+    border:1px solid var(--border2,#3A3A36);border-radius:8px;padding:8px 11px;font-size:12px;
+    font-weight:400;line-height:1.5;width:250px;text-align:left;opacity:0;visibility:hidden;
+    transition:opacity .12s;pointer-events:none;z-index:5;white-space:normal;}
+  #nm-overlay .nm-dica:hover::after,#nm-overlay .nm-dica:focus::after{opacity:1;visibility:visible;}
   #nm-overlay .nm-opc{font-weight:400;font-size:11px;color:var(--text2,#A8A49A);
     border:1px solid var(--border,#2E2E2B);border-radius:20px;padding:0 7px;margin-left:6px;}
   #nm-overlay input:focus,#nm-overlay textarea:focus,#nm-overlay select:focus{outline:2px solid var(--blue,#3B8FE8);outline-offset:1px;border-color:var(--blue,#3B8FE8);}
@@ -386,6 +419,13 @@
         <div style="font-size:12px;color:var(--text2,#A8A49A);margin-top:2px;">Só os campos com <strong style="color:var(--red,#E84444)">*</strong> são obrigatórios. O resto o time de produto completa.</div>
       </div>
       <button onclick="closeNovaMelhoria()" style="font-size:13px;color:var(--text3,#6E6A62);background:none;border:1px solid var(--border,#2E2E2B);border-radius:7px;padding:7px 14px;cursor:pointer;">✕ Fechar</button>
+    </div>
+    <div id="nm-guia">
+      <div class="nm-guia-linha">
+        <div class="nm-guia-barra"><i id="nm-guia-fill"></i></div>
+        <span class="nm-guia-num" id="nm-guia-num">0 de 4</span>
+      </div>
+      <div class="nm-guia-prox" id="nm-guia-prox"></div>
     </div>
     <div style="padding:22px;display:grid;gap:22px;" id="nm-body">
 
@@ -1485,6 +1525,126 @@ document.addEventListener('change', function (e) {
   }
 }, true);
 
+
+// ─── GUIA DE PREENCHIMENTO ────────────────────────────────────────
+// Formulario longo sem indicacao de progresso faz a pessoa parar no meio sem
+// saber quanto falta — e quem para no meio nao volta depois. Aqui ela ve o
+// quanto ja fez, qual e o proximo campo e por que ele importa.
+const NM_OBRIGATORIOS = [
+  { id: 'nm-titulo',     nome: 'o resumo em uma linha' },
+  { id: 'nm-sistema',    nome: 'o sistema' },
+  { id: 'nm-tipo-issue', nome: 'se é problema ou melhoria' },
+  { id: 'nm-objetivo',   nome: 'para que serve' },
+];
+
+// Dicas por campo: o que uma boa resposta tem. Aparecem no ⓘ ao lado do rótulo.
+const NM_DICAS = {
+  'nm-titulo':     'Uma frase curta que alguém entenda sem contexto. Ex.: "Automatizar o fechamento de caixa".',
+  'nm-solicitante':'Quem pediu, se não foi você. Serve para o time voltar e tirar dúvidas.',
+  'nm-sistema':    'Onde o problema acontece. Se não achar na lista, escolha "novo" e escreva o nome.',
+  'nm-modulo':     'A parte do sistema, se você souber. Ajuda a estimar o tamanho.',
+  'nm-tipo-issue': 'Erro/Bug é o que já existia e parou de funcionar. Melhoria é algo novo ou melhor.',
+  'nm-area':       'Sua área. Serve para agrupar os pedidos por setor.',
+  'nm-objetivo':   'O resultado esperado, não a tela. "Eliminar a conferência manual" é melhor que "criar um botão".',
+  'nm-impacto':    'O que muda na sua rotina se isso existir. Quanto mais concreto, melhor prioriza.',
+  'nm-benef':      'Quem mais usa isso no dia a dia, além de você.',
+  'nm-asis':       'O caminho que você percorre hoje. Vale citar planilha, sistema, e-mail, o que for.',
+  'nm-dor':        'O que acontece de ruim quando falha. Retrabalho, erro com cliente, prazo perdido.',
+  'nm-nada':       'Se ninguém fizer nada, o que piora daqui a seis meses?',
+  'nm-ganho-h':    'Quanto tempo por dia cada pessoa perde com isso hoje. Estimativa serve.',
+  'nm-ganho-p':    'Quantas pessoas fazem esse trabalho.',
+};
+
+const nmPreenchido = id => {
+  const e = document.getElementById(id);
+  if (!e) return false;
+  if (id === 'nm-sistema') { const t = nmResolveTema && nmResolveTema(); return !!(t && t.id); }
+  return !!String(e.value || '').trim();
+};
+
+// Coloca o ⓘ ao lado de cada rótulo, uma vez só.
+function nmMontaDicas() {
+  Object.entries(NM_DICAS).forEach(([id, texto]) => {
+    const campo = document.getElementById(id);
+    const label = campo && campo.closest('.nm-f');
+    if (!label || label.querySelector('.nm-dica')) return;
+    const i = document.createElement('i');
+    i.className = 'nm-dica';
+    i.tabIndex = 0;                    // alcançável pelo teclado, não só pelo mouse
+    i.setAttribute('data-dica', texto);
+    i.setAttribute('aria-label', texto);
+    i.textContent = 'i';
+    const primeiro = label.firstChild;
+    if (primeiro && primeiro.nodeType === 3) primeiro.after(i);
+    else label.prepend(i);
+  });
+}
+
+function nmAtualizaGuia() {
+  const feitos = NM_OBRIGATORIOS.filter(o => nmPreenchido(o.id));
+  const falta = NM_OBRIGATORIOS.find(o => !nmPreenchido(o.id));
+  const pct = Math.round((feitos.length / NM_OBRIGATORIOS.length) * 100);
+  const fill = document.getElementById('nm-guia-fill');
+  if (fill) { fill.style.width = pct + '%'; fill.classList.toggle('pronto', !falta); }
+  const num = document.getElementById('nm-guia-num');
+  if (num) num.textContent = feitos.length + ' de ' + NM_OBRIGATORIOS.length;
+  const prox = document.getElementById('nm-guia-prox');
+  if (prox) {
+    prox.innerHTML = falta
+      ? 'Agora falta <b>' + falta.nome + '</b>.' +
+        '<button type="button" class="nm-ir" onclick="nmIrPara(\'' + falta.id + '\')">ir para o campo</button>'
+      : '✅ <b>Pronto para enviar.</b> Os campos opcionais ajudam a priorizar, mas você já pode mandar.';
+  }
+  // Marca o campo da vez e limpa o anterior.
+  document.querySelectorAll('#nm-overlay .nm-f.alvo').forEach(e => e.classList.remove('alvo'));
+  document.querySelectorAll('#nm-overlay .nm-vez, #nm-overlay .nm-ok').forEach(e => e.remove());
+  NM_OBRIGATORIOS.forEach(o => {
+    const campo = document.getElementById(o.id);
+    const label = campo && campo.closest('.nm-f');
+    if (!label) return;
+    if (nmPreenchido(o.id)) {
+      const ok = document.createElement('span');
+      ok.className = 'nm-ok'; ok.textContent = '✓';
+      label.firstChild && label.firstChild.nodeType === 3 ? label.firstChild.after(ok) : label.prepend(ok);
+    } else if (falta && o.id === falta.id) {
+      label.classList.add('alvo');
+      const vez = document.createElement('span');
+      vez.className = 'nm-vez'; vez.textContent = 'agora';
+      label.firstChild && label.firstChild.nodeType === 3 ? label.firstChild.after(vez) : label.prepend(vez);
+    }
+  });
+}
+
+function nmIrPara(id) {
+  const e = document.getElementById(id);
+  if (!e) return;
+  e.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => e.focus({ preventScroll: true }), 220);
+}
+
+// Enter avanca para o proximo campo, como Tab. Em textarea nao: ali Enter e
+// quebra de linha, e roubar isso irrita mais do que ajuda.
+function nmTeclado(e) {
+  if (e.key !== 'Enter') return;
+  const alvo = e.target;
+  if (!alvo.closest || !alvo.closest('#nm-overlay')) return;
+  if (alvo.tagName === 'TEXTAREA' || alvo.tagName === 'BUTTON') return;
+  if (alvo.type === 'file') return;
+  e.preventDefault();
+  const campos = [...document.querySelectorAll('#nm-overlay input, #nm-overlay select, #nm-overlay textarea')]
+    .filter(c => c.offsetParent !== null && !c.disabled);
+  const i = campos.indexOf(alvo);
+  if (i >= 0 && i < campos.length - 1) campos[i + 1].focus();
+}
+
+document.addEventListener('keydown', nmTeclado, true);
+document.addEventListener('input', e => {
+  if (e.target && e.target.closest && e.target.closest('#nm-overlay')) nmAtualizaGuia();
+}, true);
+document.addEventListener('change', e => {
+  if (e.target && e.target.closest && e.target.closest('#nm-overlay')) nmAtualizaGuia();
+}, true);
+
 function nmOnClassificacao() {
   const cls = document.getElementById('nm-tipo-issue').value;
   const tipo = document.getElementById('nm-tipo');
@@ -1621,6 +1781,8 @@ async function nmPreview(i) {
 
 // ── Abrir / fechar / salvar ──
 function openNovaMelhoria() {
+  // Guia e dicas montados a cada abertura: o formulario pode ter sido limpo.
+  setTimeout(() => { nmMontaDicas(); nmAtualizaGuia(); }, 60);
   if (!nmToken && !NM_PROXY_URL) { dashToast('Sem token de acesso. Use o link de administrador.', 'err'); return; }
   ['nm-titulo','nm-solicitante','nm-area','nm-objetivo','nm-impacto','nm-benef',
    'nm-ganho-h','nm-ganho-p','nm-asis','nm-dor','nm-nada',
