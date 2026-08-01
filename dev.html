@@ -1630,6 +1630,8 @@ function openStatusModal(id, preselect) {
     ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${devEsc(m.dev)}</strong></div>` : ''}
     ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
     ${m.entrega ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
+    ${m.debito_tecnico ? `<div class="modal-info-row"><span>Débito técnico:</span><strong>🧱 Sim</strong></div>` : ''}
+    ${m.concluido_em ? `<div class="modal-info-row"><span>Concluída em:</span><strong>${formatDate(m.concluido_em)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${devEsc(m.descricao)}</div>` : ''}
     ${anexosHTMLDev(m)}
     ${discoveryHTMLDev(m)}
@@ -1785,8 +1787,12 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   renderKanban();
   // Persiste — reverte se falhar. O patch leva SÓ os campos alterados: o
   // dev-publish aplica sobre a versão fresca do servidor, então nada mais é tocado.
+  // Marca quando saiu das maos do dev. A aba Entrega do admin mostra "esperando
+   // desde", e sem isto o campo ficava sempre vazio.
+  if (colKey === 'validacao' && !m.entregue_em) m.entregue_em = new Date().toISOString();
   const campos = { status_planejamento: colKey, status: m.status,
                    horas_realizadas: m.horas_realizadas || 0 };
+  if (m.entregue_em) campos.entregue_em = m.entregue_em;
   if (implementacao !== undefined) campos.implementacao = implementacao;
   if (_msAnexosMexidos) campos.anexos = _msAnexos;
   const ok = await saveToGitHub({ [id]: campos });
