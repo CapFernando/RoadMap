@@ -21,6 +21,9 @@
      o card ficava preto com texto preto. Definindo aqui, o claro passa a ter
      superficie clara e o escuro segue usando o fallback, intocado. */
   --card:     #F7F6F2;
+  /* Secao do formulario de nova solicitacao. No escuro ela e mais escura que o
+     modal; no claro tem de ser mais acinzentada que o branco, senao some. */
+  --nm-sec-bg: #F7F6F2;
 
   --border:   #DBD7CD;
   --border2:  #C4BFB2;
