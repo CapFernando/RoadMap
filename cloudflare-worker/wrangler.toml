@@ -33,3 +33,8 @@ DATA_REPO = "RoadMap-dados"
 [[r2_buckets]]
 binding = "ANEXOS"
 bucket_name = "roadmap-anexos"
+
+# Resumo diario por e-mail: 11:00 UTC = 08:00 em Brasilia, antes do time comecar.
+# So envia se GRAPH_* e MAIL_TO existirem; sem eles a execucao nao faz nada.
+[triggers]
+crons = ["0 11 * * 1-5"]
