@@ -241,6 +241,23 @@
     .grill-peso.bom       { background:var(--bg4); color:var(--text2); }
     .grill-ajuda { font-size:12.5px; color:var(--text2); line-height:1.55; margin:6px 0 10px; }
     .grill-resp { width:100%; box-sizing:border-box; margin:0; }
+    /* Bloco 1: resposta lida do formulario, com veredito de qualidade. */
+    .grill-lido { border-left:3px solid var(--border2); padding:10px 0 10px 12px; margin-bottom:10px; }
+    .grill-lido.vaga  { border-left-color:var(--amber); }
+    .grill-lido.vazia { border-left-color:var(--red); }
+    .grill-lido-topo { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:4px; }
+    .grill-lido-rot { font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.04em; }
+    .grill-sel { font-size:10.5px; font-weight:700; border-radius:20px; padding:1px 8px; }
+    .grill-sel.ok    { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
+    .grill-sel.vaga  { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
+    .grill-sel.vazia { background:var(--red-bg,#3A1414);   color:var(--red-tx,#F9A0A0); }
+    .grill-lido-txt { font-size:13.5px; line-height:1.55; color:var(--text); white-space:pre-wrap; word-break:break-word; }
+    .grill-lido-txt.vazio { color:var(--text3); font-style:italic; }
+    /* Bloco 2: a contradicao em si. */
+    .grill-contra { background:var(--amber-bg,#3A2A08); color:var(--amber-tx,#FFD79A);
+      border-left:3px solid var(--amber); border-radius:0 8px 8px 0; padding:11px 14px;
+      font-size:13.5px; line-height:1.6; }
+    .grill-contra b { color:var(--text); }
     .kb-mesc { font-size:10.5px; font-weight:700; color:var(--teal-tx,#7EECD8);
       background:var(--teal-bg,#063D30); border-radius:5px; padding:1px 6px; }
     .kb-proj { font-size:10.5px; font-weight:700; color:var(--purple-tx,#C9AEFF);
@@ -3646,10 +3663,11 @@ function openModalMelhoria(id) {
   // Sino na aba Grill: mostra o que falta antes de a pessoa abrir.
   const gn = document.getElementById('mtab-grill-n');
   if (gn) {
-    const c = m ? grillContagem(m) : { essResp: 0, essTotal: 0 };
-    const falta = c.essTotal - c.essResp;
-    gn.style.display = (m && falta) ? 'inline-block' : 'none';
-    gn.textContent = falta;
+    // O sino aponta CONTRADICOES, nao campo em branco: e o que precisa de
+    // conversa antes de a demanda entrar na fila.
+    const n = m ? grillContagem(m).alertas : 0;
+    gn.style.display = n ? 'inline-block' : 'none';
+    gn.textContent = n;
   }
   const cod = document.getElementById('m-codigo');
   cod.style.display = m?.codigo ? 'inline-block' : 'none';
@@ -4892,43 +4910,107 @@ async function mescDesfazer(idFilha) {
 
 
 // ─── GRILL ────────────────────────────────────────────────────────
-// As perguntas que uma demanda precisa aguentar antes de virar trabalho. Servem
-// para dois fins, e o segundo importa tanto quanto o primeiro: dar clareza ao
-// que vai ser feito, e fazer desistir o que nao se sustenta. Demanda que nao
-// responde "o que muda se nao fizermos" costuma nao valer o mes de ninguem.
+// A primeira versao repetia o formulario: cinco das dez perguntas ja estavam
+// respondidas na abertura da solicitacao. Isso e um segundo formulario, nao uma
+// sabatina.
 //
-// A resposta fica gravada na demanda. Nao e burocracia: e o que se le em voz alta
-// no comite quando alguem pergunta por que isto esta na frente daquilo.
-const GRILL_PERGUNTAS = [
-  { id:'problema',   peso:'essencial', q:'Qual é o problema, em uma frase?',
-    ajuda:'Problema, não solução. "O relatório demora 2h" é problema; "fazer um botão" é solução.' },
-  { id:'hoje',       peso:'essencial', q:'Como isso é resolvido hoje?',
-    ajuda:'Se ninguém resolve hoje, talvez não seja um problema real. Se resolvem na planilha, quanto custa isso?' },
-  { id:'nada',       peso:'essencial', q:'O que acontece se não fizermos nada nos próximos 6 meses?',
-    ajuda:'Se a resposta for "nada de mais", a demanda acabou de se responder.' },
-  { id:'tamanho',    peso:'essencial', q:'Quantas pessoas usam e com que frequência?',
-    ajuda:'Número, não adjetivo. "3 pessoas, toda segunda" decide melhor que "o time todo, sempre".' },
-  { id:'ganho',      peso:'importante', q:'Quanto tempo ou dinheiro isso devolve por mês?',
-    ajuda:'Mesmo uma estimativa grosseira ordena a fila melhor que nenhuma.' },
-  { id:'onde',       peso:'importante', q:'Quais módulos, telas ou sistemas isso toca?',
-    ajuda:'É o que separa duas semanas de dois dias. Se ninguém sabe, o primeiro passo é descobrir.' },
-  { id:'alternativa',peso:'importante', q:'Dá para resolver sem desenvolvimento?',
+// Grill e o que LE o que a pessoa escreveu e confronta. Tres blocos: o que ja
+// foi respondido (com veredito de qualidade), o que ninguem perguntou, e as
+// contradicoes entre campos — que e onde mora a pergunta que faz desistir.
+
+// Palavras que prometem sem medir. Sozinhas nao condenam; sem numero por perto,
+// sim: "agilizar o processo" nao diz de quanto para quanto.
+const GRILL_VAGAS = /\b(melhorar|otimizar|agilizar|facilitar|dinamizar|simplificar|aprimorar|mais r[aá]pido|mais f[aá]cil|mais [aá]gil|maior efici[eê]ncia)\b/i;
+const temNumero = t => /\d/.test(String(t || ''));
+const palavras  = t => String(t || '').trim().split(/\s+/).filter(Boolean).length;
+
+// Veredito de uma resposta: vazia, vaga ou respondida.
+function grillVeredito(texto, exigeNumero) {
+  const t = String(texto || '').trim();
+  if (!t) return { v: 'vazia', rot: 'em branco' };
+  if (palavras(t) < 4) return { v: 'vaga', rot: 'curta demais' };
+  if (exigeNumero && !temNumero(t)) return { v: 'vaga', rot: 'sem número' };
+  if (GRILL_VAGAS.test(t) && !temNumero(t)) return { v: 'vaga', rot: 'promete sem medir' };
+  return { v: 'ok', rot: 'respondida' };
+}
+
+const gD = m => (m && m.discovery) || {};
+const gCtx = m => gD(m).contexto || {};
+const gGanho = m => gD(m).ganho || {};
+const gEsc = m => gD(m).escopo || {};
+
+// O que o formulario ja coletou. Nada aqui e reperguntado.
+function grillJaRespondido(m) {
+  const d = gD(m), c = gCtx(m), g = gGanho(m), e = gEsc(m);
+  return [
+    { rot: 'Para que serve',            txt: m.descricao,      num: false },
+    { rot: 'Como é hoje',               txt: c.as_is,          num: false },
+    { rot: 'O que dá errado',           txt: c.dor,            num: false },
+    { rot: 'E se continuar assim',      txt: c.nao_fazer,      num: false },
+    { rot: 'O que muda no dia a dia',   txt: d.impacto,        num: false },
+    { rot: 'Quem mais vai usar',        txt: d.beneficiarios,  num: false },
+    { rot: 'Ganho estimado',            txt: g.resumo || (g.horas_dia ? g.horas_dia + 'h/dia × ' + (g.pessoas || '?') + ' pessoa(s)' : ''), num: true },
+    { rot: 'Fora do escopo',            txt: e.fora,           num: false },
+  ];
+}
+
+// As tres perguntas que NAO existem em lugar nenhum do formulario.
+const GRILL_LACUNAS = [
+  { id:'alternativa', q:'Dá para resolver sem desenvolvimento?',
     ajuda:'Processo, configuração, treinamento. A entrega mais barata é a que não precisa de código.' },
-  { id:'sucesso',    peso:'importante', q:'Como saberemos que deu certo? Que número muda?',
-    ajuda:'Sem isso não há como validar a entrega depois — e a validação PM/PO fica no achismo.' },
-  { id:'fora',       peso:'bom',        q:'O que explicitamente NÃO está incluído?',
-    ajuda:'Dizer o que fica de fora evita a discussão de escopo no fim, quando custa caro.' },
-  { id:'quem',       peso:'bom',        q:'Quem valida que ficou pronto?',
+  { id:'metrica',     q:'Que número muda quando isso ficar pronto?',
+    ajuda:'Sem um número, não há como validar a entrega depois — e a validação PM/PO vira achismo.' },
+  { id:'valida',      q:'Quem valida que ficou pronto?',
     ajuda:'Nome de pessoa. "A área" não valida nada.' },
 ];
 
+// Contradicoes entre campos. E o cruzamento que uma pessoa lendo campo a campo
+// nao faz, e que derruba demanda mal formulada.
+function grillContradicoes(m) {
+  const d = gD(m), c = gCtx(m), g = gGanho(m), e = gEsc(m);
+  const sk = statusKey(m);
+  const fora = [];
+
+  if (d.tipo === 'ganho' && !String(g.horas_dia || '').trim()) {
+    fora.push('Foi marcada como <b>ganho de produtividade</b>, mas ninguém disse quantas horas por dia se perde hoje. Sem esse número não dá para comparar com outras demandas.');
+  }
+  if (String(g.horas_dia || '').trim() && !String(g.pessoas || '').trim()) {
+    fora.push('Informou as horas por pessoa, mas não quantas pessoas. O ganho total ainda é desconhecido.');
+  }
+  if (/\b(tod[oa]s?|toda a [áa]rea|equipe inteira|geral)\b/i.test(String(d.impacto || '')) &&
+      palavras(d.beneficiarios) > 0 && palavras(d.beneficiarios) <= 3) {
+    fora.push('O impacto fala em <b>todos / a área toda</b>, mas os beneficiários listam pouca gente. Qual dos dois vale?');
+  }
+  if (['planning', 'planejado', 'em_andamento'].includes(sk) && !(d.criterios_aceite || []).length) {
+    fora.push('Está em <b>' + esc(STATUS_LABELS[sk] || sk) + '</b> sem nenhum critério de aceite. O dev vai desenvolver sem saber o que é "pronto", e a validação PM/PO não terá contra o que comparar.');
+  }
+  if (Number(m.poker_pontos) >= 21 && !String(e.fora || '').trim()) {
+    fora.push('Pontuada em <b>' + m.poker_pontos + '</b> e sem nada declarado fora do escopo. Demanda grande sem limite é onde o prazo estoura.');
+  }
+  if (!String(m.solicitante || '').trim()) {
+    fora.push('Sem solicitante. Quando surgir dúvida no meio do desenvolvimento, não há a quem perguntar.');
+  }
+  if (m.tipo === 'sustentacao' && !String(c.dor || '').trim()) {
+    fora.push('Classificada como <b>Erro/Bug</b> mas sem descrição do que dá errado. Não dá para reproduzir o problema.');
+  }
+  if (!String(c.as_is || '').trim() && d.tipo === 'ganho') {
+    fora.push('Promete ganho sem dizer como é feito hoje. Não há de onde medir a economia.');
+  }
+  if (m.entrega && !m.inicio && ['planejado', 'em_andamento'].includes(sk)) {
+    fora.push('Tem prazo de entrega mas não tem data de início. O gantt não consegue dimensionar o esforço.');
+  }
+  if (Number(m.poker_pontos) > 0 && !m.dev && sk !== 'backlog') {
+    fora.push('Já foi pontuada mas não tem dev responsável. Ponto sem dono não vira entrega.');
+  }
+  return fora;
+}
+
 const grillRespostas = m => (m && m.grill) || {};
+
 function grillContagem(m) {
   const r = grillRespostas(m);
-  const resp = GRILL_PERGUNTAS.filter(p => String(r[p.id] || '').trim()).length;
-  const ess = GRILL_PERGUNTAS.filter(p => p.peso === 'essencial');
-  const essResp = ess.filter(p => String(r[p.id] || '').trim()).length;
-  return { resp, total: GRILL_PERGUNTAS.length, essResp, essTotal: ess.length };
+  const respondidas = GRILL_LACUNAS.filter(p => String(r[p.id] || '').trim()).length;
+  return { respondidas, total: GRILL_LACUNAS.length, alertas: grillContradicoes(m).length };
 }
 
 function grillRender() {
@@ -4941,36 +5023,62 @@ function grillRender() {
     corpo.innerHTML = '<p class="pj-vazio">Salve a demanda primeiro.</p>';
     return;
   }
+  const contras = grillContradicoes(m);
+  const jaResp = grillJaRespondido(m);
+  const vagas = jaResp.filter(x => grillVeredito(x.txt, x.num).v !== 'ok').length;
   const c = grillContagem(m);
-  const faltaEssencial = c.essTotal - c.essResp;
-  topo.innerHTML =
-    '<div class="ent-aviso ' + (faltaEssencial ? 'espera' : 'aprovada') + '">' +
-      (faltaEssencial
-        ? '⚠ <strong>' + faltaEssencial +
-          (faltaEssencial > 1 ? ' perguntas essenciais' : ' pergunta essencial') + ' sem resposta.</strong> ' +
-          'Sem elas não dá para priorizar com honestidade.'
-        : '✅ <strong>As essenciais estão respondidas.</strong> Dá para levar ao comitê.') +
-      '<br>Respondidas: ' + c.resp + ' de ' + c.total + '.' +
-    '</div>' +
-    '<p class="us-hint">Perguntas para fazer <strong>a quem pediu</strong>. Servem tanto para ' +
-    'clarear o que será feito quanto para deixar cair o que não se sustenta — uma demanda que não ' +
-    'aguenta estas perguntas dificilmente merece o mês de alguém.</p>';
 
-  const r = grillRespostas(m);
-  corpo.innerHTML = GRILL_PERGUNTAS.map((p, i) => {
-    const val = String(r[p.id] || '');
-    const vazia = !val.trim();
-    return '<div class="grill-q' + (vazia && p.peso === 'essencial' ? ' falta' : '') + '">' +
-      '<div class="grill-q-topo">' +
-        '<span class="grill-n">' + String(i + 1).padStart(2, '0') + '</span>' +
-        '<span class="grill-txt">' + esc(p.q) + '</span>' +
-        '<span class="grill-peso ' + p.peso + '">' + p.peso + '</span>' +
-      '</div>' +
-      '<div class="grill-ajuda">' + esc(p.ajuda) + '</div>' +
-      '<textarea class="grill-resp" data-q="' + esc(p.id) + '" rows="2" ' +
-        'placeholder="Resposta de quem pediu…">' + esc(val) + '</textarea>' +
+  topo.innerHTML =
+    '<div class="ent-aviso ' + (contras.length ? 'espera' : 'aprovada') + '">' +
+      (contras.length
+        ? '⚠ <strong>' + contras.length + (contras.length > 1 ? ' pontos frágeis' : ' ponto frágil') +
+          ' nesta demanda.</strong> São perguntas para fazer a quem pediu — e algumas ela pode não conseguir responder.'
+        : '✅ <strong>Nenhuma contradição encontrada.</strong> A demanda se sustenta.') +
+      '<br>' + vagas + ' de ' + jaResp.length + ' respostas do formulário estão fracas · ' +
+      c.respondidas + ' de ' + c.total + ' lacunas preenchidas.' +
     '</div>';
-  }).join('');
+
+  // ── bloco 1: o que ja foi respondido ──
+  let html = '<div class="ent-bloco"><h4>O que já foi respondido</h4>' +
+    '<p class="us-hint" style="margin:0 0 12px">Veio do formulário de abertura. Não precisa redigitar — ' +
+    'o que interessa aqui é a <strong>qualidade</strong> de cada resposta.</p>';
+  jaResp.forEach(x => {
+    const v = grillVeredito(x.txt, x.num);
+    html += '<div class="grill-lido ' + v.v + '">' +
+      '<div class="grill-lido-topo"><span class="grill-lido-rot">' + esc(x.rot) + '</span>' +
+      '<span class="grill-sel ' + v.v + '">' + v.rot + '</span></div>' +
+      (String(x.txt || '').trim()
+        ? '<div class="grill-lido-txt">' + esc(x.txt) + '</div>'
+        : '<div class="grill-lido-txt vazio">— ninguém respondeu</div>') +
+    '</div>';
+  });
+  html += '</div>';
+
+  // ── bloco 2: contradicoes ──
+  if (contras.length) {
+    html += '<div class="ent-bloco"><h4>Perguntas que a demanda não responde</h4>' +
+      '<div style="display:grid;gap:10px">' +
+      contras.map(t => '<div class="grill-contra">' + t + '</div>').join('') +
+      '</div></div>';
+  }
+
+  // ── bloco 3: as lacunas reais ──
+  const r = grillRespostas(m);
+  html += '<div class="ent-bloco"><h4>O que ninguém perguntou ainda</h4>' +
+    '<p class="us-hint" style="margin:0 0 12px">Três perguntas que não existem no formulário de abertura ' +
+    'e costumam decidir se a demanda vale o mês de alguém.</p>' +
+    GRILL_LACUNAS.map((p, i) => {
+      const val = String(r[p.id] || '');
+      return '<div class="grill-q' + (val.trim() ? '' : ' falta') + '">' +
+        '<div class="grill-q-topo"><span class="grill-n">' + String(i + 1).padStart(2, '0') + '</span>' +
+        '<span class="grill-txt">' + esc(p.q) + '</span></div>' +
+        '<div class="grill-ajuda">' + esc(p.ajuda) + '</div>' +
+        '<textarea class="grill-resp" data-q="' + esc(p.id) + '" rows="2" ' +
+          'placeholder="Resposta de quem pediu…">' + esc(val) + '</textarea>' +
+      '</div>';
+    }).join('') + '</div>';
+
+  corpo.innerHTML = html;
 }
 
 async function grillSalvar() {
@@ -4988,8 +5096,7 @@ async function grillSalvar() {
   const okSalvo = await saveViaProxy();
   if (okSalvo) {
     _dirtyMelhoriaIds.clear(); _pendingEdits = false;
-    const c = grillContagem(m);
-    toast('Grill salvo — ' + c.resp + ' de ' + c.total + ' respondidas.', 'ok');
+    toast('Grill salvo.', 'ok');
     grillRender(); renderAll();
   } else toast('Não foi possível salvar as respostas.', 'err');
 }
