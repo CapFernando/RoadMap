@@ -165,6 +165,10 @@
     .kb-ip { font-family: monospace; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
     .kb-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
     .kb-anexo-tag { font-size: 10.5px; color: var(--text3); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+    /* Codigo da demanda: referencia curta para PR, review e deploy. */
+    .cod-tag { font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
+      color: var(--blue-tx, #9BC8F8); background: var(--blue-bg, #0C3260); border-radius: 4px;
+      padding: 1px 5px; margin-right: 6px; letter-spacing: .02em; }
     .kb-debito { font-size: 10.5px; font-weight: 700; background: var(--purple-bg, #341A6E);
       color: var(--purple-tx, #C9AEFF); border-radius: 5px; padding: 1px 6px; }
     .kb-col-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 14px 4px; opacity: .6; }
@@ -832,6 +836,10 @@
   <div class="modal">
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-melhoria')" aria-label="Fechar">✕</button>
     <h2 id="modal-melhoria-title">Nova issue</h2>
+    <button type="button" id="m-codigo" onclick="copiarCodigo()" title="Clique para copiar"
+            style="display:none;font-family:ui-monospace,monospace;font-size:12px;font-weight:700;
+                   color:var(--blue-tx,#9BC8F8);background:var(--blue-bg,#0C3260);border:none;
+                   border-radius:5px;padding:3px 9px;margin:-8px 0 14px;cursor:pointer"></button>
     <input type="hidden" id="m-id" />
 
     <div class="mtabs">
@@ -2215,7 +2223,7 @@ function renderKanban() {
         onmousedown="kbCardMouseDown(event,'${m.id}')"
         title="${atrasada ? 'Entrega vencida · ' : ''}Arraste para mover · duplo clique para editar">
         ${atrasada ? `<div class="kb-atraso-tag">⚠ Atrasada${diasAtraso > 0 ? ' · ' + diasAtraso + 'd' : ''}</div>` : ''}
-        <div class="kb-card-title">${esc(m.titulo)}</div>
+        <div class="kb-card-title">${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}${esc(m.titulo)}</div>
         ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
         ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
         ${badges.filter(Boolean).length ? `<div class="kb-badges">${badges.join('')}</div>` : ''}
@@ -3353,6 +3361,9 @@ function openModalMelhoria(id) {
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
+  const cod = document.getElementById('m-codigo');
+  cod.style.display = m?.codigo ? 'inline-block' : 'none';
+  if (m?.codigo) cod.textContent = m.codigo;
   mAba('dados');
   renderEntrega(m || null);
   document.getElementById('m-horas-real').value      = m?.horas_realizadas != null ? m.horas_realizadas : '';
@@ -3880,6 +3891,14 @@ async function uAtivo(login, ativo) {
 // O dev nao fecha mais a demanda sozinho: ao terminar, ela vai para
 // "Validação PM/PO" e espera aqui. Sem esse degrau, "concluído" queria dizer
 // "o dev disse que acabou", e ninguem conferia o que foi entregue.
+
+// O codigo e feito para ser colado num PR ou numa mensagem: um clique copia.
+function copiarCodigo() {
+  const t = document.getElementById('m-codigo').textContent;
+  navigator.clipboard.writeText(t)
+    .then(() => toast('📋 ' + t + ' copiado.', 'ok'))
+    .catch(() => toast('Não consegui copiar. Selecione o texto manualmente.', 'err'));
+}
 
 function mAba(qual) {
   const dados = qual === 'dados';
