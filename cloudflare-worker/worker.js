@@ -296,6 +296,22 @@ async function loginLivre(db, base) {
 // Worker e o unico ponto que serializa as gravacoes (controle de concorrencia por
 // `base`), entao dois cards criados ao mesmo tempo nao podem receber o mesmo
 // numero. No cliente, duas abas gerariam max+1 identico.
+// Projetos seguem a mesma regra dos cards: EP-### atribuido pelo Worker, pelo
+// mesmo motivo — so ele serializa gravacoes.
+function atribuiCodigosProjeto(data) {
+  if (!data || !Array.isArray(data.projetos)) return 0;
+  let maior = 0;
+  for (const p of data.projetos) {
+    const n = /^EP-(\d+)$/.exec(String(p && p.codigo || ''));
+    if (n) maior = Math.max(maior, parseInt(n[1], 10));
+  }
+  let novos = 0;
+  for (const p of data.projetos) {
+    if (p && !p.codigo) { maior += 1; p.codigo = 'EP-' + String(maior).padStart(3, '0'); novos += 1; }
+  }
+  return novos;
+}
+
 function atribuiCodigos(data) {
   if (!data || !Array.isArray(data.melhorias)) return 0;
   let maior = 0;
@@ -1144,13 +1160,21 @@ export default {
       const conf = await conflito(gh, body, headers);
       if (conf) return conf;
       atribuiCodigos(data);
+      atribuiCodigosProjeto(data);
+      // O codigo nasce aqui, entao o cliente nao tem como saber qual foi. Devolver
+      // o mapa evita uma releitura inteira da base so para descobrir o numero.
+      const codigosMel = {};
+      (data.melhorias || []).forEach(m => { if (m && m.id && m.codigo) codigosMel[m.id] = m.codigo; });
+      const codigosPrj = {};
+      (data.projetos || []).forEach(p => { if (p && p.id && p.codigo) codigosPrj[p.id] = p.codigo; });
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
         body: JSON.stringify({ message: 'chore: admin publica ' + new Date().toISOString(), content: toB64(JSON.stringify(data)), sha: file.sha }),
       });
       if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
-      return json({ ok: true }, 200, headers);
+      return json({ ok: true, codigos: codigosMel, codigos_projeto: codigosPrj,
+                    atualizado_em: data.atualizado_em }, 200, headers);
     }
 
     // Aceita a senha do time (DEV_SENHA) ou a do admin (ADMIN_SENHA). Enquanto
