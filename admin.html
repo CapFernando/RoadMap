@@ -140,8 +140,13 @@
        emoji, que muda de tamanho e de linha de base entre Windows e navegador. */
     .tabs {
       display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 24px;
-      overflow-x: auto; scrollbar-width: thin;
+      /* overflow-x liga o eixo Y junto e aparecia uma barra de rolagem vertical
+         de 1px de curso — inutil e feia. Y travado, e a barra do X fica oculta:
+         em telas estreitas ainda arrasta com o dedo ou com shift+scroll. */
+      overflow-x: auto; overflow-y: hidden;
+      scrollbar-width: none; -ms-overflow-style: none;
     }
+    .tabs::-webkit-scrollbar { display: none; }
     .tab {
       padding: 11px 16px;
       font-size: 14.5px;
