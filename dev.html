@@ -1625,6 +1625,7 @@ function openStatusModal(id, preselect) {
       }).join('')}
     </div>` : '';
   document.getElementById('ms-info').innerHTML = `
+    ${m.codigo ? `<div class="modal-info-row"><span>Código:</span><strong style="font-family:ui-monospace,monospace">${devEsc(m.codigo)}</strong></div>` : ''}
     <div class="modal-info-row"><span>Tema:</span><strong>${tema}</strong></div>
     ${m.tipo ? `<div class="modal-info-row"><span>Classificação:</span><strong>${m.tipo === 'sustentacao' ? '🔧 Sustentação' : m.tipo === 'evolucao' ? '🚀 Evolução' : devEsc(m.tipo)}</strong></div>` : ''}
     ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${devEsc(m.dev)}</strong></div>` : ''}
