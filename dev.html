@@ -54,6 +54,16 @@
     .login-link { background:none; border:none; color:var(--blue); font-size:13px; cursor:pointer;
       font-family:'Inter',sans-serif; padding:0; text-decoration:underline; width:auto !important; }
     /* O dev precisa ver o proprio atraso ao abrir, sem procurar coluna. */
+    /* O dev abre o painel e a primeira pergunta e "o que eu faco agora". Cinco
+       numeros respondem antes de ele varrer coluna. */
+    .meu-dia { display:none; gap:8px; flex-wrap:wrap; padding:12px 24px 0; }
+    .md-bloco { background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+      padding:8px 14px; min-width:86px; }
+    .md-num { font-size:19px; font-weight:700; color:var(--text); line-height:1.15; }
+    .md-rot { font-size:10.5px; color:var(--text3); text-transform:uppercase; letter-spacing:.05em; }
+    .md-bloco.foco { border-color:var(--blue); }
+    .md-bloco.foco .md-num { color:var(--blue); }
+    .md-bloco.espera .md-num { color:var(--amber); }
     .risco-dev { display:none; align-items:center; gap:10px; background:var(--red-bg);
       color:var(--red-tx); border-bottom:1px solid var(--red); padding:10px 24px;
       font-size:13.5px; line-height:1.5; }
@@ -279,6 +289,7 @@
     <button onclick="limparDadosTeste()" style="margin-left:auto;background:#6b2d2d;color:#F9A0A0;border:1px solid #a04040;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">🗑️ Apagar todos os dados de Teste</button>
   </div>
   <div class="risco-dev" id="risco-dev"></div>
+  <div class="meu-dia" id="meu-dia"></div>
   <header>
     <div class="header-left">
       <h1>🗂️ Meu Painel</h1>
@@ -691,6 +702,33 @@ const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
 // Demandas absorvidas por esta. O dev precisa do texto original de quem pediu:
 // e ali que costuma estar o detalhe que falta na descricao consolidada.
 // Aviso do proprio dev: so o que e dele, so o que ja venceu.
+// Contadores do proprio dev. Nao repete o atraso, que ja tem faixa vermelha
+// propria — repetir o mesmo alerta em dois lugares tira o peso dos dois.
+function renderMeuDia() {
+  const el = document.getElementById('meu-dia');
+  if (!el || !currentDev) return;
+  const minhas = (state.melhorias || []).filter(m =>
+    !m.mesclado_em && splitDevs(m.dev).includes(currentDev));
+  const por = k => minhas.filter(m => getStatusKey(m) === k).length;
+  const andamento = por('em_andamento');
+  const validando = por('validacao');
+  const planejado = por('planejado');
+  const hoje = new Date().toISOString().slice(0, 10);
+  const entregaHoje = minhas.filter(m => m.entrega === hoje &&
+    !['concluido', 'negada'].includes(getStatusKey(m))).length;
+  if (!minhas.length) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  const bloco = (n, rot, cls) => n
+    ? '<div class="md-bloco ' + (cls || '') + '"><div class="md-num">' + n +
+      '</div><div class="md-rot">' + rot + '</div></div>' : '';
+  el.innerHTML =
+    bloco(andamento, 'em andamento', 'foco') +
+    bloco(entregaHoje, 'vencem hoje', 'espera') +
+    bloco(validando, 'em validação', 'espera') +
+    bloco(planejado, 'planejadas') +
+    bloco(minhas.filter(m => getStatusKey(m) === 'concluido').length, 'concluídas');
+}
+
 function renderRiscoDev() {
   const el = document.getElementById('risco-dev');
   if (!el || !currentDev) return;
@@ -1431,6 +1469,7 @@ function getFiltered() {
 // ─── KANBAN ──────────────────────────────────────────────────────
 function renderKanban() {
   renderRiscoDev();
+  renderMeuDia();
   const kanban = document.getElementById('kanban');
   if (!kanban) return;
   const items = getFiltered();
