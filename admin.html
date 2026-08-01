@@ -444,6 +444,10 @@
     .sf-btn.negada.active      { background:#5C0A0A; color:#F9A0A0; border-color:#8C1010; }
 
     /* CARDS DE LISTA */
+    /* A frase de apoio substitui o titulo que repetia o nome da aba. Ela ocupa
+       o espaco a esquerda, entao o botao deixa de parecer solto, e ainda diz a
+       quem chega o que da para fazer na tela. */
+    .list-sub { font-size: 13px; color: var(--text2); line-height: 1.5; max-width: 68ch; }
     .list-header {
       display: flex;
       align-items: center;
@@ -633,7 +637,7 @@
     }
     #conditional-fields { }
   </style>
-  <link rel="stylesheet" href="tema.css?v=e204ce8ac4">
+  <link rel="stylesheet" href="tema.css?v=77b988fe82">
   <script src="tema.js?v=7df38474d4"></script>
 </head>
 <body>
@@ -711,7 +715,7 @@
 
     <div class="tab-content active" id="tab-melhorias">
       <div class="list-header">
-        <span class="list-title">Melhorias cadastradas</span>
+        <span class="list-sub">Todas as demandas, com filtro por tema, dev, prazo e texto livre.</span>
         <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova issue</button>
       </div>
       <div class="status-filters" id="status-filters"></div>
@@ -722,7 +726,7 @@
     <!-- ABA KANBAN -->
     <div class="tab-content" id="tab-kanban">
       <div class="list-header">
-        <span class="list-title">Kanban</span>
+        <span class="list-sub">Arraste o card para mudar de etapa. Duplo clique abre a demanda.</span>
         <button class="btn btn-primary" onclick="openModalMelhoria()">+ Nova issue</button>
       </div>
       <div class="ger-toolbar filter-bar" id="kb-toolbar"></div>
@@ -732,7 +736,7 @@
     <!-- ABA TEMAS -->
     <div class="tab-content" id="tab-temas">
       <div class="list-header">
-        <span class="list-title">Temas cadastrados</span>
+        <span class="list-sub">Sistemas e módulos usados para classificar as demandas.</span>
         <button class="btn btn-primary" onclick="openModalTema()">+ Novo tema</button>
       </div>
       <div id="lista-temas"></div>
@@ -2275,9 +2279,11 @@ function renderMelhorias() {
           const hoje = new Date(); hoje.setHours(0,0,0,0);
           const e = new Date(m.entrega + 'T00:00:00');
           const dias = Math.round((e - hoje) / 86400000);
-          if (dias < 0)       { cor = 'color:#F9A0A0;font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
-          else if (dias === 0){ cor = 'color:#FFB84D;font-weight:600'; tag = ' (vence hoje)'; }
-          else if (dias <= 7) { cor = 'color:#FFB84D;font-weight:600'; tag = ` (em ${dias}d)`; }
+          // Tokens, nao hex: #F9A0A0 e #FFB84D sao claros e davam 1.99:1 sobre
+          // fundo claro. Os pares -tx escurecem no tema claro.
+          if (dias < 0)       { cor = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
+          else if (dias === 0){ cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ' (vence hoje)'; }
+          else if (dias <= 7) { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ` (em ${dias}d)`; }
         }
         sub += (sub ? ' · ' : '') + `<span style="${cor}">Entrega: ${formatDate(m.entrega)}${tag}</span>`;
       }
