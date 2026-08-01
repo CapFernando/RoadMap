@@ -107,3 +107,14 @@
 .tema-btn:hover { border-color: var(--border2, #3A3A36); color: var(--text, #ECEAE2); }
 /* Quando nao existe cabecalho onde encaixar, o botao vira flutuante. */
 .tema-btn.solta { position: fixed; top: 14px; right: 14px; z-index: 9999; }
+
+/* ── Correção de contraste do tema escuro ────────────────────────────────
+   Branco sobre --blue #3B8FE8 da 3.34:1 — abaixo do minimo para texto. O azul
+   segue o mesmo para bordas e links, onde funciona; so o FUNDO de botao escurece.
+   No tema claro o --blue ja e #1B67C7 e o par passa folgado. */
+/* !important porque varios desses botoes tem style inline no HTML, e inline
+   vence qualquer folha de estilo por especificidade. */
+:root:not([data-tema="claro"]) .btn-primary,
+:root:not([data-tema="claro"]) #nm-save-btn,
+:root:not([data-tema="claro"]) .btn-green { background: #2B72C4 !important; }
+:root:not([data-tema="claro"]) .btn-success { background: #3F7A1B !important; }
