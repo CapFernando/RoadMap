@@ -584,6 +584,15 @@
         <input type="number" id="e-poker-pontos" min="0" step="1" placeholder="—" />
       </div>
       <div class="form-group">
+        <label>Classificação extra</label>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;
+                      background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
+                      padding:10px 12px;font-size:13px">
+          <input type="checkbox" id="e-debito" style="width:auto;margin:0" />
+          🧱 Débito técnico
+        </label>
+      </div>
+      <div class="form-group">
         <label>Status Planejamento</label>
         <select id="e-status-plan">
           <option value="backlog">Backlog</option>
@@ -1940,6 +1949,7 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-sprint').value    = m?.sprint || '';
   // Pontos: o gantt mostrava o valor no card da fila mas nao tinha onde digitar.
   document.getElementById('e-poker-pontos').value = (m && m.poker_pontos != null) ? m.poker_pontos : '';
+  document.getElementById('e-debito').checked = !!(m && m.debito_tecnico);
   document.getElementById('e-poker-media').textContent =
     (m && m.poker_media != null) ? '— média ' + String(m.poker_media).replace('.', ',') : '';
   document.getElementById('e-status-plan').value = m?.status_planejamento || 'backlog';
@@ -2088,6 +2098,7 @@ function saveTask() {
     data_solicitacao:   document.getElementById('e-data-solic').value,
     sprint:             document.getElementById('e-sprint').value.trim(),
     poker_pontos:       pokerPontosDoForm(existing),
+    debito_tecnico:     document.getElementById('e-debito').checked,
     estimativa_horas:   existing.estimativa_horas || 0,
     horas_realizadas:   parseFloat(document.getElementById('e-horas-real').value) || 0,
     anexos:             _gAnexos,
