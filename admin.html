@@ -165,6 +165,8 @@
     .kb-ip { font-family: monospace; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
     .kb-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
     .kb-anexo-tag { font-size: 10.5px; color: var(--text3); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+    .kb-debito { font-size: 10.5px; font-weight: 700; background: var(--purple-bg, #341A6E);
+      color: var(--purple-tx, #C9AEFF); border-radius: 5px; padding: 1px 6px; }
     .kb-col-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 14px 4px; opacity: .6; }
     .kb-card.dragging { opacity: .4; }
     /* Abas dentro do card: os dados e a validacao da entrega sao duas conversas
@@ -901,6 +903,15 @@
           <option value="sustentacao">🔧 Sustentação</option>
           <option value="evolucao">🚀 Evolução</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>Classificação extra</label>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;
+                      background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
+                      padding:11px 12px;font-size:14px">
+          <input type="checkbox" id="m-debito" style="width:auto;margin:0" />
+          🧱 Débito técnico
+        </label>
       </div>
     </div>
 
@@ -2164,18 +2175,27 @@ function renderKanban() {
     // Coluna pela etapa GRAVADA. Antes era statusEfetivo, que derivava 'atrasado'
     // e tirava o card da coluna real.
     let items = base.filter(m => statusKey(m) === col.key);
-    if (col.key === 'planejado') {
-      // maior prioridade (IP) primeiro; sem IP vai para o fim
-      items = items.sort((a, b) => {
-        const ia = getIP(a), ib = getIP(b);
-        if (ia == null && ib == null) return (a.entrega||'9999').localeCompare(b.entrega||'9999');
-        if (ia == null) return 1;
-        if (ib == null) return -1;
-        return ib - ia;
-      });
-    } else {
-      items = items.sort((a, b) => (a.entrega||'9999').localeCompare(b.entrega||'9999'));
-    }
+    // Vencidas primeiro, da mais antiga para a mais recente: o que ja passou do
+    // prazo e o que precisa de decisao hoje, independentemente da etapa. Depois
+    // vem a regra propria da etapa.
+    const vencida = m => statusEfetivo(m) === 'atrasado';
+    const porPrazo = (a, b) => (a.entrega || '9999-99-99').localeCompare(b.entrega || '9999-99-99');
+    const desempate = col.key === 'planejado'
+      ? (a, b) => {
+          // dentro do mesmo grupo, planejado segue por prioridade (IP)
+          const ia = getIP(a), ib = getIP(b);
+          if (ia == null && ib == null) return porPrazo(a, b);
+          if (ia == null) return 1;
+          if (ib == null) return -1;
+          return ib - ia;
+        }
+      : porPrazo;
+    items = items.sort((a, b) => {
+      const va = vencida(a), vb = vencida(b);
+      if (va !== vb) return va ? -1 : 1;      // vencida sobe
+      if (va && vb) return porPrazo(a, b);    // entre vencidas, a mais antiga primeiro
+      return desempate(a, b);
+    });
     const cards = items.map(m => {
       const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
       const meta = [];
@@ -2184,6 +2204,7 @@ function renderKanban() {
       if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
       const nAnexos = (m.anexos || []).length;
       const badges = [ipBadge(getIP(m))];
+      if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
       if (nAnexos) badges.push(`<span class="kb-anexo-tag">📎 ${nAnexos}</span>`);
       // Atraso agora e marca no card, nao coluna.
       const atrasada = statusEfetivo(m) === 'atrasado';
@@ -2616,7 +2637,8 @@ function gerSemanaIndex(dataStr, semanas) {
 }
 
 // Data que define a qual semana/mês os pontos de um card pertencem.
-function gerDataRefPontos(m) { return m.entrega || m.inicio || ''; }
+// Para pontuacao por semana/mes: a data que importa e quando a demanda saiu.
+function gerDataRefPontos(m) { return m.concluido_em || m.entrega || m.inicio || ''; }
 
 // Demandas pontuadas que ainda não foram agendadas. Sem data não há como dizer
 // a que mês/semana pertencem, então elas não entram na distribuição — mas também
@@ -3100,12 +3122,16 @@ function relDados() {
 
   // Entregues: concluído com entrega dentro da semana anterior. Sem data de
   // entrega não há como afirmar quando saiu, então fica fora (e é sinalizado).
+  // Data de saida: concluido_em (gravada na aprovacao do PM/PO) e a verdade.
+  // `entrega` e o prazo, e sobrava como aproximacao para as concluidas antigas,
+  // anteriores a validacao existir.
+  const dataSaida = m => m.concluido_em || m.entrega || '';
   const entregues = visiveis.filter(m =>
     (m.status_planejamento === 'concluido' || m.status === 'concluida') &&
-    m.entrega && m.entrega >= C && m.entrega <= D);
+    dataSaida(m) >= C && dataSaida(m) <= D && !!dataSaida(m));
 
   const semDataConcluidos = visiveis.filter(m =>
-    (m.status_planejamento === 'concluido' || m.status === 'concluida') && !m.entrega).length;
+    (m.status_planejamento === 'concluido' || m.status === 'concluida') && !dataSaida(m)).length;
 
   // Em desenvolvimento: sobreposição do intervalo do card com a semana atual.
   const andamento = visiveis.filter(m => {
@@ -3326,6 +3352,7 @@ function openModalMelhoria(id) {
   document.getElementById('m-entrega').value         = m?.entrega          || '';
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
+  document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
   mAba('dados');
   renderEntrega(m || null);
   document.getElementById('m-horas-real').value      = m?.horas_realizadas != null ? m.horas_realizadas : '';
@@ -3547,12 +3574,14 @@ function saveMelhoria() {
     entrega:             document.getElementById('m-entrega').value,
     motivo_negacao:      sp === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
     implementacao:       document.getElementById('m-implementacao').value.trim(),
+    debito_tecnico:      document.getElementById('m-debito').checked,
     // Campos da validacao nao tem campo no formulario: sem repassar, salvar pela
     // aba Dados apagaria quem aprovou e o motivo da ultima devolucao.
     validado_em:         existing.validado_em   || '',
     validado_por:        existing.validado_por  || '',
     validacao_obs:       existing.validacao_obs || '',
     entregue_em:         existing.entregue_em   || '',
+    concluido_em:        existing.concluido_em  || '',
     anexos:              _mAnexos,
     horas_realizadas:    parseFloat(document.getElementById('m-horas-real').value) || existing.horas_realizadas || 0,
     criado_em:           existing.criado_em || new Date().toISOString(),
@@ -3914,6 +3943,8 @@ function entregaHTML(m) {
   const meta = ['<span>Dev: <strong>' + esc(dev) + '</strong></span>'];
   if (m.horas_realizadas) meta.push('<span>Horas: <strong>' + esc(String(m.horas_realizadas)) + 'h</strong></span>');
   if (m.entrega) meta.push('<span>Prazo: <strong>' + esc(formatDate(m.entrega)) + '</strong></span>');
+  if (m.concluido_em) meta.push('<span>Concluída em: <strong>' + esc(formatDate(m.concluido_em)) + '</strong></span>');
+  if (m.debito_tecnico) meta.push('<span><strong>🧱 Débito técnico</strong></span>');
   if (m.sprint) meta.push('<span>Sprint: <strong>' + esc(m.sprint) + '</strong></span>');
 
   const anexos = (m.anexos || []).length
@@ -3967,12 +3998,17 @@ async function valDecidir(aprovar, obs) {
   if (aprovar) {
     m.status_planejamento = 'concluido';
     m.status = 'concluida';
+    // A conclusao passa a ter data propria, a da aprovacao. NAO sobrescrevo
+    // `entrega`: ela e o PRAZO, e apagar isso apagaria a informacao de que a
+    // demanda atrasou. Os relatorios preferem concluido_em quando existe.
+    m.concluido_em = agora.slice(0, 10);
     m.validado_em = agora;
     m.validado_por = (_eu && (_eu.nome || _eu.login)) || 'admin';
     m.validacao_obs = '';
   } else {
     m.status_planejamento = 'em_andamento';
     m.status = 'iniciada';
+    m.concluido_em = '';   // voltou a ser trabalho em curso
     m.validacao_obs = obs;
     m.validado_em = '';
     m.validado_por = '';
