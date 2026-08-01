@@ -608,7 +608,13 @@
       <div class="form-group">
         <label>Pontos (Planning Poker)
           <span id="e-poker-media" style="font-weight:400;opacity:.6"></span></label>
-        <input type="number" id="e-poker-pontos" min="0" step="1" placeholder="—" />
+        <select id="e-poker-pontos">
+          <option value="">—</option>
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="5">5</option><option value="8">8</option><option value="13">13</option>
+          <option value="21">21</option><option value="34">34</option>
+          <option value="55">55</option><option value="89">89</option><option value="100">100</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Classificação extra</label>
@@ -1978,7 +1984,16 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-tipo').value      = m?.tipo || '';
   document.getElementById('e-sprint').value    = m?.sprint || '';
   // Pontos: o gantt mostrava o valor no card da fila mas nao tinha onde digitar.
-  document.getElementById('e-poker-pontos').value = (m && m.poker_pontos != null) ? m.poker_pontos : '';
+  // Se a demanda tiver um valor antigo fora do baralho, acrescenta a opcao para
+  // ele nao sumir da tela ao abrir o card.
+  const selPts = document.getElementById('e-poker-pontos');
+  const valPts = (m && m.poker_pontos != null) ? String(m.poker_pontos) : '';
+  if (valPts && ![...selPts.options].some(o => o.value === valPts)) {
+    const extra = document.createElement('option');
+    extra.value = valPts; extra.textContent = valPts + ' (fora do baralho)';
+    selPts.appendChild(extra);
+  }
+  selPts.value = valPts;
   document.getElementById('e-debito').checked = !!(m && m.debito_tecnico);
   document.getElementById('e-poker-media').textContent =
     (m && m.poker_media != null) ? '— média ' + String(m.poker_media).replace('.', ',') : '';
@@ -2113,11 +2128,13 @@ function resolveTemaSelecao(prefix, fallbackTemaId) {
 
 // Campo vazio significa "sem pontos" de propósito — o valor foi apagado por quem
 // editou. Number('') seria 0, que contaria como pontuado na soma por semana.
+// Lista fechada: so o que o baralho do Planning Poker produz. Vazio significa
+// "sem pontos" de proposito, e nao zero — zero contaria como pontuado na soma.
 function pokerPontosDoForm(existing) {
-  const v = document.getElementById('e-poker-pontos').value.trim();
+  const v = document.getElementById('e-poker-pontos').value;
   if (v === '') return null;
   const n = Number(v);
-  return Number.isFinite(n) && n >= 0 ? n : (existing.poker_pontos ?? null);
+  return Number.isFinite(n) && n > 0 ? n : (existing.poker_pontos ?? null);
 }
 
 function saveTask() {
