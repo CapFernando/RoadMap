@@ -206,6 +206,8 @@
     .pj-busca { width:100%; box-sizing:border-box; }
     .pj-sugestao { max-height:210px; overflow-y:auto; display:grid; gap:6px; margin-top:8px; }
     /* marca no card do Kanban */
+    .kb-mesc { font-size:10.5px; font-weight:700; color:var(--teal-tx,#7EECD8);
+      background:var(--teal-bg,#063D30); border-radius:5px; padding:1px 6px; }
     .kb-proj { font-size:10.5px; font-weight:700; color:var(--purple-tx,#C9AEFF);
       background:var(--purple-bg,#341A6E); border-radius:5px; padding:1px 6px; }
     .cod-tag { font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
@@ -967,6 +969,11 @@
           <option value="evolucao">🚀 Evolução</option>
         </select>
       </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <div id="m-mescladas" style="display:none;margin-bottom:10px"></div>
+        <button type="button" class="btn btn-secondary btn-sm" id="m-btn-mesclar"
+                onclick="mescAbrirBusca()" style="display:none">🔗 Mesclar outra demanda nesta</button>
+      </div>
       <div class="form-group">
         <label>Projeto / Épico</label>
         <select id="m-projeto"><option value="">— Nenhum —</option></select>
@@ -1196,6 +1203,35 @@
         <div id="pj-demandas" style="display:grid;gap:8px"></div>
       </div>
     </div>
+  </div>
+</div>
+
+
+<!-- MODAL: MESCLAR DEMANDA -->
+<div id="modal-mesclar" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:620px">
+    <button type="button" class="modal-close-btn" onclick="closeModal('modal-mesclar')" aria-label="Fechar">✕</button>
+    <h2>Mesclar demanda</h2>
+    <input type="hidden" id="mesc-alvo" />
+    <p class="us-hint">Escolha a demanda que será <strong>absorvida</strong> por
+      <strong id="mesc-principal"></strong>. Ela sai do Kanban, do Gantt e do painel do dev —
+      mas não é apagada: os dados continuam acessíveis por dentro da principal, e dá para separar depois.</p>
+    <div class="form-group">
+      <label>Buscar por código ou título</label>
+      <input type="text" id="mesc-busca" oninput="mescBuscar()" placeholder="Ex.: RM-042 ou cobrança" autocomplete="off" />
+      <div id="mesc-sugestao" class="pj-sugestao"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DADOS DA DEMANDA MESCLADA -->
+<div id="modal-mesc-ver" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:620px">
+    <button type="button" class="modal-close-btn" onclick="closeModal('modal-mesc-ver')" aria-label="Fechar">✕</button>
+    <h2 id="mesc-ver-titulo">Demanda mesclada</h2>
+    <p class="us-hint">Estes são os dados originais de quem pediu. Servem para responder ao
+      solicitante e para não perder contexto na hora de desenvolver.</p>
+    <div id="mesc-ver-corpo"></div>
   </div>
 </div>
 
@@ -2113,6 +2149,7 @@ function renderMelhorias() {
   if (!state.melhorias.length) { el.innerHTML = '<div class="empty">Nenhuma melhoria cadastrada.</div>'; return; }
   const HIDDEN_BY_DEFAULT = ['concluido', 'negada'];
   const lista = state.melhorias.filter(m => {
+    if (ehMesclada(m)) return false;   // saiu do fluxo: vive dentro da principal
     const sk = statusEfetivo(m);
     // Busca ativa quebra o "esconde concluído/negada por padrão": se a pessoa
     // digitou um termo, ela quer achar o item mesmo que já tenha sido feito ou
@@ -2337,6 +2374,7 @@ function renderKanban() {
   const board = document.getElementById('kb-board');
   if (!board) return;
   const base = state.melhorias.filter(m =>
+    !ehMesclada(m) &&
     (!_kbTema || m.tema_id === _kbTema) &&
     matchDev(m, _kbDev) &&
     matchPrazo(m, _kbPrazo) &&
@@ -2379,6 +2417,8 @@ function renderKanban() {
       if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
       const nAnexos = (m.anexos || []).length;
       const badges = [ipBadge(getIP(m))];
+      const nMesc = mescladasDe(m.id).length;
+      if (nMesc) badges.push('<span class="kb-mesc" title="Absorveu ' + nMesc + ' demanda(s)">🔗 +' + nMesc + '</span>');
       const projDoCard = m.projeto_id ? pjPorId(m.projeto_id) : null;
       if (projDoCard) badges.push('<span class="kb-proj" title="' + esc(projDoCard.nome || '') + '">🗂 ' +
         esc(projDoCard.codigo || projDoCard.nome || '') + '</span>');
@@ -3532,6 +3572,7 @@ function openModalMelhoria(id) {
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
   mPopulaProjetos(m?.projeto_id || '');
+  mescRenderBloco(m || null);
   const cod = document.getElementById('m-codigo');
   cod.style.display = m?.codigo ? 'inline-block' : 'none';
   if (m?.codigo) cod.textContent = m.codigo;
@@ -4552,6 +4593,168 @@ function mPopulaProjetos(selecionado) {
     pjLista().map(p => '<option value="' + esc(p.id) + '"' + (p.id === selecionado ? ' selected' : '') + '>' +
       esc((p.codigo ? p.codigo + ' · ' : '') + (p.nome || '')) + '</option>').join('');
   sel.value = selecionado || '';
+}
+
+
+// ─── MESCLAGEM DE CARDS ───────────────────────────────────────────
+// Duas pessoas pedem a mesma coisa com palavras diferentes. Em vez de o dev
+// tratar dois cards, eles se juntam: um vira o principal e o outro sai do fluxo.
+//
+// O card mesclado NAO e apagado. Apagar perderia quem pediu, quando pediu, a
+// descricao original e os anexos — justamente o que se precisa quando alguem
+// pergunta "e o meu chamado?". Ele fica marcado com `mesclado_em` apontando para
+// o principal, sai das listas de trabalho e continua acessivel por dentro dele.
+const mescladaEm = m => String(m && m.mesclado_em || '');
+const ehMesclada = m => !!mescladaEm(m);
+const mescladasDe = id => (state.melhorias || []).filter(m => mescladaEm(m) === id);
+
+function mescRenderBloco(m) {
+  const filhas = m ? mescladasDe(m.id) : [];
+  const box = document.getElementById('m-mescladas');
+  const btn = document.getElementById('m-btn-mesclar');
+  if (!box) return;
+
+  // Este card e uma mesclada? Entao ele mostra de quem faz parte, e nada mais.
+  if (m && ehMesclada(m)) {
+    const pai = (state.melhorias || []).find(x => x.id === mescladaEm(m));
+    box.style.display = 'block';
+    box.innerHTML = '<div class="ent-aviso rejeitada">🔗 <strong>Esta demanda foi mesclada</strong>' +
+      (pai ? ' em <strong>' + esc(pai.codigo || '') + ' · ' + esc(pai.titulo) + '</strong>' : '') +
+      (m.mesclado_data ? '<br>Em ' + esc(new Date(m.mesclado_data).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' })) : '') +
+      (m.mesclado_por ? ' por ' + esc(m.mesclado_por) : '') +
+      '<br>Ela saiu do fluxo de trabalho, mas os dados continuam aqui.' +
+      '</div>' +
+      (pai ? '<button class="btn btn-secondary btn-sm" onclick="openModalMelhoria(' +
+             JSON.stringify(pai.id).replace(/"/g, '&quot;') + ')">Abrir a demanda principal</button> ' : '') +
+      '<button class="btn btn-secondary btn-sm" onclick="mescDesfazer(' +
+        JSON.stringify(m.id).replace(/"/g, '&quot;') + ')">Desfazer mesclagem</button>';
+    if (btn) btn.style.display = 'none';
+    return;
+  }
+
+  if (btn) btn.style.display = m ? 'inline-flex' : 'none';
+  if (!filhas.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div class="ent-bloco"><h4>Demandas mescladas nesta (' + filhas.length + ')</h4>' +
+    '<div style="display:grid;gap:8px">' +
+    filhas.map(f => '<div class="pj-item">' +
+      (f.codigo ? '<span class="cod-tag">' + esc(f.codigo) + '</span>' : '') +
+      '<div class="pj-item-nome">' + esc(f.titulo) +
+        '<div class="pj-item-sub">' + (f.solicitante ? 'Pedido por ' + esc(f.solicitante) : 'Sem solicitante') +
+        (f.criado_em ? ' · ' + esc(formatDate(String(f.criado_em).slice(0, 10))) : '') + '</div></div>' +
+      '<button class="btn btn-secondary btn-sm" onclick="mescVer(' + JSON.stringify(f.id).replace(/"/g, '&quot;') + ')">Ver dados</button>' +
+      '<button class="btn btn-secondary btn-sm" onclick="mescDesfazer(' + JSON.stringify(f.id).replace(/"/g, '&quot;') + ')">Separar</button>' +
+    '</div>').join('') + '</div></div>';
+}
+
+// Abre os dados da mesclada sem tira-la do estado de mesclada: e consulta.
+function mescVer(id) {
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) return;
+  const tema = (state.temas.find(t => t.id === m.tema_id) || {}).nome || '—';
+  const linhas = [
+    ['Código', m.codigo], ['Título', m.titulo], ['Tema', tema],
+    ['Solicitante', m.solicitante], ['Área', m.area],
+    ['Criada em', m.criado_em ? formatDate(String(m.criado_em).slice(0, 10)) : ''],
+    ['Descrição', m.descricao], ['Observação', m.observacao],
+  ].filter(l => String(l[1] || '').trim());
+  const anexos = (m.anexos || []).length
+    ? '<div class="ent-bloco"><h4>Anexos</h4><div style="display:grid;gap:6px">' +
+      (m.anexos || []).map((a, i) => '<a href="#" class="anexo-link" onclick="mescAnexo(' +
+        JSON.stringify(id).replace(/"/g, '&quot;') + ',' + i + ');return false">📎 ' +
+        esc(a.nome || 'arquivo') + '</a>').join('') + '</div></div>'
+    : '';
+  document.getElementById('mesc-ver-titulo').textContent =
+    (m.codigo ? m.codigo + ' · ' : '') + (m.titulo || '');
+  document.getElementById('mesc-ver-corpo').innerHTML =
+    '<div class="ent-bloco"><h4>Dados originais</h4>' +
+    linhas.map(l => '<div style="margin-bottom:8px"><div class="us-sub">' + esc(l[0]) + '</div>' +
+      '<div class="ent-impl">' + esc(l[1]) + '</div></div>').join('') + '</div>' + anexos;
+  abrirModal('modal-mesc-ver');
+}
+function mescAnexo(id, i) {
+  const m = (state.melhorias || []).find(x => x.id === id);
+  const a = m && (m.anexos || [])[i];
+  if (a) abrirAnexo(a, ADMIN_PROXY_URL, credAdmin());
+}
+
+function mescAbrirBusca() {
+  const id = document.getElementById('m-id').value;
+  if (!id) { toast('Salve a demanda antes de mesclar.', 'err'); return; }
+  document.getElementById('mesc-alvo').value = id;
+  document.getElementById('mesc-busca').value = '';
+  document.getElementById('mesc-sugestao').innerHTML = '';
+  const m = (state.melhorias || []).find(x => x.id === id);
+  document.getElementById('mesc-principal').textContent =
+    (m && m.codigo ? m.codigo + ' · ' : '') + (m ? m.titulo : '');
+  abrirModal('modal-mesclar');
+  setTimeout(() => document.getElementById('mesc-busca').focus(), 100);
+}
+
+function mescBuscar() {
+  const termo = normTexto(document.getElementById('mesc-busca').value.trim());
+  const alvo = document.getElementById('mesc-alvo').value;
+  const box = document.getElementById('mesc-sugestao');
+  if (termo.length < 2) { box.innerHTML = ''; return; }
+  const achados = (state.melhorias || [])
+    .filter(m => m.id !== alvo && !ehMesclada(m) && !mescladasDe(m.id).length)
+    .filter(m => normTexto(m.codigo || '').includes(termo) || normTexto(m.titulo || '').includes(termo))
+    .slice(0, 8);
+  box.innerHTML = achados.length
+    ? achados.map(m => '<div class="pj-item">' +
+        (m.codigo ? '<span class="cod-tag">' + esc(m.codigo) + '</span>' : '') +
+        '<div class="pj-item-nome">' + esc(m.titulo) +
+          '<div class="pj-item-sub">' + esc(STATUS_LABELS[statusKey(m)] || '') +
+          (m.dev ? ' · ' + esc(m.dev) : '') + '</div></div>' +
+        '<button class="btn btn-primary btn-sm" onclick="mescConfirmar(' +
+          JSON.stringify(m.id).replace(/"/g, '&quot;') + ')">Mesclar aqui</button></div>').join('')
+    : '<p class="pj-vazio">Nada encontrado. Demandas já mescladas, ou que já absorveram outras, não aparecem.</p>';
+}
+
+async function mescConfirmar(idFilha) {
+  const idPai = document.getElementById('mesc-alvo').value;
+  const pai = (state.melhorias || []).find(x => x.id === idPai);
+  const filha = (state.melhorias || []).find(x => x.id === idFilha);
+  if (!pai || !filha) return;
+  if (!confirm('Mesclar "' + filha.titulo + '" em "' + pai.titulo + '"?\n\n' +
+               '"' + filha.titulo + '" sai do Kanban, do Gantt e do painel do dev. ' +
+               'Ela NÃO é apagada: os dados continuam acessíveis por dentro da principal, ' +
+               'e você pode separar depois.')) return;
+  filha.mesclado_em = idPai;
+  filha.mesclado_data = new Date().toISOString();
+  filha.mesclado_por = (_eu && (_eu.nome || _eu.login)) || 'admin';
+  filha.oculto = true;   // reaproveita o filtro que o Gantt ja respeita
+  _dirtyMelhoriaIds.add(idFilha);
+  _pendingEdits = true;
+  closeModal('modal-mesclar');
+  const okSalvo = await saveViaProxy();
+  if (okSalvo) {
+    _dirtyMelhoriaIds.clear(); _pendingEdits = false;
+    toast('🔗 ' + (filha.codigo || '') + ' mesclada em ' + (pai.codigo || '') + '.', 'ok');
+    mescRenderBloco(pai); renderAll();
+  } else toast('Não foi possível salvar a mesclagem.', 'err');
+}
+
+async function mescDesfazer(idFilha) {
+  const filha = (state.melhorias || []).find(x => x.id === idFilha);
+  if (!filha) return;
+  if (!confirm('Separar "' + filha.titulo + '"?\n\nEla volta para o fluxo no estágio em que estava.')) return;
+  const idPai = mescladaEm(filha);
+  filha.mesclado_em = '';
+  filha.mesclado_data = '';
+  filha.mesclado_por = '';
+  filha.oculto = false;
+  _dirtyMelhoriaIds.add(idFilha);
+  _pendingEdits = true;
+  const okSalvo = await saveViaProxy();
+  if (okSalvo) {
+    _dirtyMelhoriaIds.clear(); _pendingEdits = false;
+    toast('Demanda separada e de volta ao fluxo.', 'ok');
+    const aberta = document.getElementById('m-id').value;
+    const m = (state.melhorias || []).find(x => x.id === aberta);
+    if (m) mescRenderBloco(m);
+    renderAll();
+  } else toast('Não foi possível separar.', 'err');
 }
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
