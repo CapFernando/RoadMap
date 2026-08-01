@@ -895,7 +895,7 @@ export default {
       await contasMigrar(env.POKER_DB);
       const login = String(body.login || '').trim().toLowerCase();
       const senhaU = String(body.senhaUsuario || '');
-      if (!login || !senhaU) return json({ error: 'dados', detail: 'Informe e-mail e senha.' }, 400, headers);
+      if (!login || !senhaU) return json({ error: 'dados', detail: 'Informe seu usuário (ou e-mail) e a senha.' }, 400, headers);
       // Entra pelo e-mail (o que a pessoa sabe) ou pelo login interno, que segue
       // valendo para as contas criadas antes desta mudanca.
       const u = await env.POKER_DB.prepare(
@@ -904,7 +904,7 @@ export default {
       // dois falhou permitiria descobrir quem tem conta.
       const generico = async () => {
         const n = await contaTentativa(env, ip, 'login');
-        return json({ error: 'credencial', detail: 'Usuario ou senha invalidos.',
+        return json({ error: 'credencial', detail: 'Usuário ou senha inválidos.',
                       mensagem: troll(n) + ' Tentativa #' + n + '.' }, 401, headers);
       };
       if (!u) return generico();
@@ -912,7 +912,7 @@ export default {
       // suporte e a pessoa acabou de se cadastrar, ja sabe que a conta existe.
       if (u.pendente) {
         return json({ error: 'pendente',
-                      detail: 'Seu cadastro ainda nao foi liberado por um administrador.' }, 403, headers);
+                      detail: 'Seu cadastro ainda não foi liberado por um administrador.' }, 403, headers);
       }
       if (!u.ativo) return generico();
       const hash = await derivaSenha(senhaU, u.salt);
@@ -1029,6 +1029,25 @@ export default {
         // Resolve o pedido de recuperacao, se havia um em aberto.
         await env.POKER_DB.prepare('UPDATE senha_pedido SET atendido = 1 WHERE usuario_id = ?')
           .bind(uu.id).run();
+        return json({ ok: true }, 200, headers);
+      }
+
+      // Contas criadas antes da coluna `email` existir ficaram sem e-mail e so
+      // entram pelo login. Isto permite completar o cadastro delas.
+      if (op === 'email') {
+        const login = String(body.login || '').trim().toLowerCase();
+        const novo = String(body.email || '').trim().toLowerCase();
+        if (novo && (!novo.endsWith(EMAIL_DOMINIO) || !/^[a-z0-9._%+-]+@/.test(novo))) {
+          return json({ error: 'email', detail: 'O e-mail precisa terminar em ' + EMAIL_DOMINIO + '.' }, 400, headers);
+        }
+        const uu = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(login).first();
+        if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
+        try {
+          await env.POKER_DB.prepare('UPDATE usuario SET email = ? WHERE id = ?')
+            .bind(novo || null, uu.id).run();
+        } catch (e) {
+          return json({ error: 'existe', detail: 'Outra conta já usa esse e-mail.' }, 409, headers);
+        }
         return json({ ok: true }, 200, headers);
       }
 
