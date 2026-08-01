@@ -260,6 +260,10 @@
     .val-banner { display:none; align-items:center; gap:12px; background:var(--amber-bg, #3A2A08);
       color:var(--amber-tx, #FFD79A); border:1px solid var(--amber); border-radius:10px;
       padding:11px 16px; font-size:14px; margin-bottom:16px; }
+    /* Vermelho e para prazo vencido: o que ja falhou, nao o que esta por vir.
+       Se tudo virasse vermelho, o vermelho pararia de significar alguma coisa. */
+    .val-banner.risco { background:var(--red-bg, #3A1414); color:var(--red-tx, #F9A0A0);
+      border-color:var(--red); }
     /* Atraso deixou de ser coluna: e condicao, e aparece no proprio card, sem
        tirar a demanda da etapa em que ela esta. */
     .kb-card.kb-atrasada { border-color: var(--red); border-left: 3px solid var(--red); }
@@ -674,6 +678,11 @@
     </div>
 
     <!-- ABA MELHORIAS -->
+    <div class="val-banner risco" id="risco-banner">
+      <span id="risco-banner-texto"></span>
+      <button class="btn btn-danger btn-sm" onclick="irParaAtrasadas()" style="margin-left:auto">Ver atrasadas</button>
+    </div>
+
     <div class="val-banner" id="val-banner">
       <span id="val-banner-texto"></span>
       <button class="btn btn-primary btn-sm" onclick="irParaValidacao()" style="margin-left:auto">Ver entregas</button>
@@ -2150,6 +2159,7 @@ function renderStatusFilters() {
 
 function renderAll() {
   renderTemas(); renderStatusFilters(); renderMelToolbar(); renderMelhorias();
+  renderRiscoBanner(); renderValBanner();
   if (document.getElementById('tab-kanban')?.classList.contains('active')) renderKanban();
 }
 
@@ -2297,6 +2307,7 @@ function switchTab(name, el) {
   if (name === 'usuarios') renderUsuarios();
   if (name === 'projetos') renderProjetos();
   renderValBanner();
+  renderRiscoBanner();
   if (name === 'kanban') renderKanban();
   try { localStorage.setItem('rm_admin_tab', name); } catch (_) {}
 }
@@ -4177,6 +4188,34 @@ function renderValBanner() {
       ? '📋 <strong>1 entrega</strong> aguardando sua validação.'
       : '📋 <strong>' + n + ' entregas</strong> aguardando sua validação.';
   }
+}
+
+// Prazo vencido: conta e destaca o que caiu dentro de projeto, porque atraso em
+// projeto costuma arrastar as outras demandas dele junto.
+function renderRiscoBanner() {
+  const el = document.getElementById('risco-banner');
+  if (!el) return;
+  const atrasadas = (state.melhorias || []).filter(m =>
+    !ehMesclada(m) && statusEfetivo(m) === 'atrasado');
+  el.style.display = atrasadas.length ? 'flex' : 'none';
+  if (!atrasadas.length) return;
+  const emProjeto = atrasadas.filter(m => m.projeto_id).length;
+  // A mais antiga diz o tamanho do problema melhor que o total.
+  const maisAntiga = atrasadas
+    .filter(m => m.entrega)
+    .sort((a, b) => a.entrega.localeCompare(b.entrega))[0];
+  const dias = maisAntiga
+    ? Math.floor((Date.now() - new Date(maisAntiga.entrega + 'T00:00:00')) / 86400000) : 0;
+  document.getElementById('risco-banner-texto').innerHTML =
+    '⚠ <strong>' + atrasadas.length + (atrasadas.length === 1 ? ' demanda' : ' demandas') +
+    ' com prazo vencido</strong>' +
+    (emProjeto ? ' · ' + emProjeto + ' em projeto' : '') +
+    (dias > 0 ? ' · a mais antiga há ' + dias + ' dia' + (dias > 1 ? 's' : '') : '');
+}
+
+function irParaAtrasadas() {
+  switchTab('melhorias');
+  if (typeof setFiltroStatus === 'function') setFiltroStatus('atrasado');
 }
 
 function irParaValidacao() {
