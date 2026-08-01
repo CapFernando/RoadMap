@@ -771,6 +771,8 @@ function matchPeriodo(m) {
 
 function filtradas() {
   return _melhorias.filter(m => {
+    // Mesclada saiu do fluxo: quem pediu acompanha pela demanda principal.
+    if (m.mesclado_em) return false;
     if (!matchPeriodo(m)) return false;
     if (!matchTipo(m, _tipoFilter)) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
