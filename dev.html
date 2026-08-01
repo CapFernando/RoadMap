@@ -683,6 +683,21 @@ const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
 
 // Status para EXIBIR e FILTRAR. NUNCA use em formulário: getStatusKey() é o valor
 // armazenado, e gravar o efetivo apagaria o estágio real da demanda.
+// Demandas absorvidas por esta. O dev precisa do texto original de quem pediu:
+// e ali que costuma estar o detalhe que falta na descricao consolidada.
+function mescladasDev(m) {
+  const filhas = (state.melhorias || []).filter(x => x.mesclado_em === m.id);
+  if (!filhas.length) return '';
+  return '<div style="background:var(--teal-bg);border-radius:8px;padding:10px 12px;margin:8px 0;font-size:12.5px;line-height:1.6">' +
+    '<strong style="color:var(--teal-tx)">🔗 Esta demanda absorveu ' + filhas.length + ' pedido' +
+    (filhas.length > 1 ? 's' : '') + ':</strong>' +
+    filhas.map(f => '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">' +
+      '<strong>' + escAttr(f.codigo || '') + '</strong> ' + escAttr(f.titulo || '') +
+      (f.solicitante ? ' <span style="color:var(--text3)">— ' + escAttr(f.solicitante) + '</span>' : '') +
+      (f.descricao ? '<div style="color:var(--text2);margin-top:3px">' + escAttr(f.descricao) + '</div>' : '') +
+      '</div>').join('') + '</div>';
+}
+
 function statusEfetivo(m) {
   const sk = getStatusKey(m);
   if (sk === 'atrasado') return 'atrasado';
@@ -1323,7 +1338,7 @@ const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444',
 function buildTemaSelect() {
   const sel = document.getElementById('f-tema');
   if (!sel) return;
-  const doDev = state.melhorias.filter(m => splitDevs(m.dev).includes(currentDev));
+  const doDev = state.melhorias.filter(m => !m.mesclado_em && splitDevs(m.dev).includes(currentDev));
   const opts = [`<option value=""${!_temaFilter ? ' selected' : ''}>Todos (${doDev.length})</option>`];
   state.temas.forEach(t => {
     const n = doDev.filter(m => m.tema_id === t.id).length;
@@ -1345,7 +1360,7 @@ function limparFiltrosDev() {
 
 // Deixa explícito o recorte exibido e quantos filtros estão ativos
 function atualizaContagemDev() {
-  const doDev = state.melhorias.filter(m => splitDevs(m.dev).includes(currentDev));
+  const doDev = state.melhorias.filter(m => !m.mesclado_em && splitDevs(m.dev).includes(currentDev));
   const el = document.getElementById('f-contagem');
   if (el) el.textContent = `Mostrando ${getFiltered().length} de ${doDev.length}`;
   const ativos = ['f-ano','f-mes','f-tipo','f-tema'].filter(i => (document.getElementById(i)||{}).value).length;
@@ -1365,6 +1380,8 @@ function getFiltered() {
   const curAno = now.getFullYear();
   const curMes = now.getMonth(); // 0-based
   return state.melhorias.filter(m => {
+    // Mesclada saiu do fluxo: o dev trata pela demanda principal.
+    if (m.mesclado_em) return false;
     if (!splitDevs(m.dev).includes(currentDev)) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     const fTipo = document.getElementById('f-tipo')?.value || '';
@@ -1632,6 +1649,7 @@ function openStatusModal(id, preselect) {
     ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
     ${m.entrega ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
     ${m.debito_tecnico ? `<div class="modal-info-row"><span>Débito técnico:</span><strong>🧱 Sim</strong></div>` : ''}
+    ${mescladasDev(m)}
     ${m.concluido_em ? `<div class="modal-info-row"><span>Concluída em:</span><strong>${formatDate(m.concluido_em)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${devEsc(m.descricao)}</div>` : ''}
     ${anexosHTMLDev(m)}
