@@ -134,17 +134,33 @@
     main { max-width: 1000px; margin: 0 auto; padding: 28px 20px; }
 
     /* TABS */
-    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+/* Regua de abas. Estava com emoji em umas e nao em outras — e o mesmo 🗂 em
+       Kanban e em Projetos, dois lugares diferentes com o mesmo simbolo. Texto
+       limpo e mais rapido de ler e nao depende de como cada sistema desenha o
+       emoji, que muda de tamanho e de linha de base entre Windows e navegador. */
+    .tabs {
+      display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 24px;
+      overflow-x: auto; scrollbar-width: thin;
+    }
     .tab {
-      padding: 10px 18px;
-      font-size: 15px;
+      padding: 11px 16px;
+      font-size: 14.5px;
       font-weight: 500;
       color: var(--text2);
       cursor: pointer;
       border-bottom: 2px solid transparent;
       margin-bottom: -1px;
+      white-space: nowrap;          /* "Projetos / Épicos" quebrava em duas linhas
+                                       e empurrava a regua inteira para baixo */
+      border-radius: 8px 8px 0 0;
+      transition: color .12s, background .12s;
+      flex-shrink: 0;
     }
-    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab:hover { color: var(--text); background: var(--bg2); }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+    .tab.active:hover { background: transparent; }
+    /* Importar abre outra pagina: separada do grupo, para nao parecer aba irma. */
+    .tab-externa { margin-left: auto; color: var(--text3); }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
@@ -668,13 +684,13 @@
   <main>
     <div class="tabs">
       <div class="tab active" onclick="switchTab('melhorias')">Melhorias</div>
-      <div class="tab" onclick="switchTab('kanban')">🗂 Kanban</div>
+      <div class="tab" onclick="switchTab('kanban')">Kanban</div>
       <div class="tab" onclick="switchTab('temas')">Temas</div>
-      <div class="tab" onclick="switchTab('projetos')">🗂 Projetos / Épicos</div>
-      <div class="tab" onclick="switchTab('gerencial')">📊 Gerencial</div>
-      <a href="importar.html" class="tab" style="text-decoration:none">📥 Importar</a>
-      <div class="tab" onclick="switchTab('relatorios')">📋 Relatórios</div>
-      <div class="tab" onclick="switchTab('usuarios')">👥 Usuários</div>
+      <div class="tab" onclick="switchTab('projetos')">Projetos</div>
+      <div class="tab" onclick="switchTab('gerencial')">Gerencial</div>
+      <div class="tab" onclick="switchTab('relatorios')">Relatórios</div>
+      <div class="tab" onclick="switchTab('usuarios')">Usuários</div>
+      <a href="importar.html" class="tab tab-externa" style="text-decoration:none">Importar ↗</a>
     </div>
 
     <!-- ABA MELHORIAS -->
