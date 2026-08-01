@@ -873,6 +873,21 @@
         <div id="us-semconta"></div>
       </div>
 
+      <div class="us-painel">
+        <div class="us-painel-topo"><h3>Alerta por e-mail</h3></div>
+        <p class="us-hint">Todo dia útil às 8h sai um resumo com as entregas aguardando validação e
+          as demandas com prazo vencido. Se não houver nada a relatar, nenhum e-mail é enviado.
+          Use o botão para conferir se o envio está funcionando.</p>
+        <div class="us-form">
+          <div class="us-campo">
+            <label for="mail-teste-para">Enviar teste para <span class="nm-opc">deixe vazio para usar o destinatário configurado</span></label>
+            <input type="email" id="mail-teste-para" placeholder="nome@audaxcapitalsa.com.br" autocomplete="off" />
+          </div>
+          <button class="btn btn-primary" onclick="testarEmail()">Enviar e-mail de teste</button>
+        </div>
+        <div id="mail-msg" class="us-msg"></div>
+      </div>
+
       <!-- Criar manualmente -->
       <div class="us-painel">
         <div class="us-painel-topo"><h3>Criar conta manualmente</h3></div>
@@ -3926,6 +3941,50 @@ const U_ERROS = {
   indisponivel: 'O banco de dados não está disponível.',
   limite: 'Muitas tentativas em pouco tempo. Espere um minuto.'
 };
+
+// Pedir para alguem colar comando no console do navegador e caminho errado — o
+// proprio Chrome bloqueia a colagem por seguranca. Um botao resolve, e serve
+// tambem para reconferir meses depois.
+async function testarEmail() {
+  const el = document.getElementById('mail-msg');
+  const para = (document.getElementById('mail-teste-para').value || '').trim();
+  el.className = 'us-msg';
+  el.textContent = 'Enviando…';
+  let res, d = {};
+  try {
+    res = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'email-teste', para }, credAdmin()))
+    });
+    d = await res.json().catch(() => ({}));
+  } catch (_) {
+    el.className = 'us-msg erro';
+    el.textContent = 'Sem conexão com o servidor.';
+    return;
+  }
+  if (res.ok) {
+    el.className = 'us-msg ok';
+    el.textContent = '✅ E-mail enviado para ' + (d.para || para) + '. Confira a caixa de entrada — pode cair no lixo eletrônico na primeira vez.';
+    return;
+  }
+  // Cada erro tem uma causa distinta e uma acao distinta; dizer qual poupa horas.
+  const mapa = {
+    nao_configurado: 'Faltam segredos no Worker. ' + (d.detail || ''),
+    sem_destinatario: 'Informe um e-mail de destino, ou configure o MAIL_TO.',
+    sem_permissao: 'Sua sessão não é de admin. Saia e entre novamente.',
+  };
+  let msg = mapa[d.error] || d.detail || 'Não foi possível enviar.';
+  const det = String(d.detail || '');
+  if (det.includes('403')) {
+    msg = 'O Azure recusou o envio (403). O app precisa da permissão Mail.Send com consentimento do administrador, ' +
+          'e o MAIL_FROM tem de ser uma caixa real e licenciada.';
+  } else if (det.includes('401') || det.includes('autenticar')) {
+    msg = 'O Azure recusou a credencial (401). Confira GRAPH_TENANT_ID, GRAPH_CLIENT_ID e GRAPH_CLIENT_SECRET — ' +
+          'é comum ter entrado com espaço ou aspas junto do valor.';
+  }
+  el.className = 'us-msg erro';
+  el.textContent = '⚠ ' + msg;
+}
 
 async function uChamar(op, extra) {
   let res;
