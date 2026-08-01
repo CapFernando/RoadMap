@@ -53,6 +53,10 @@
     .login-links { display:flex; justify-content:space-between; gap:12px; margin-top:14px; flex-wrap:wrap; }
     .login-link { background:none; border:none; color:var(--blue); font-size:13px; cursor:pointer;
       font-family:'Inter',sans-serif; padding:0; text-decoration:underline; width:auto !important; }
+    /* O dev precisa ver o proprio atraso ao abrir, sem procurar coluna. */
+    .risco-dev { display:none; align-items:center; gap:10px; background:var(--red-bg);
+      color:var(--red-tx); border-bottom:1px solid var(--red); padding:10px 24px;
+      font-size:13.5px; line-height:1.5; }
     .login-dica { font-size:12px; color:var(--text3); line-height:1.5; text-align:left; margin:-2px 0 12px; }
     /* Ver a senha vale mais que repetir a senha: um campo a menos e o erro de
        digitacao aparece na hora, em vez de virar "as senhas nao sao iguais". */
@@ -274,6 +278,7 @@
     <span>⚠️ <strong>Conta de teste detectada.</strong> Todos os dados abaixo são de demonstração.</span>
     <button onclick="limparDadosTeste()" style="margin-left:auto;background:#6b2d2d;color:#F9A0A0;border:1px solid #a04040;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">🗑️ Apagar todos os dados de Teste</button>
   </div>
+  <div class="risco-dev" id="risco-dev"></div>
   <header>
     <div class="header-left">
       <h1>🗂️ Meu Painel</h1>
@@ -685,6 +690,21 @@ const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
 // armazenado, e gravar o efetivo apagaria o estágio real da demanda.
 // Demandas absorvidas por esta. O dev precisa do texto original de quem pediu:
 // e ali que costuma estar o detalhe que falta na descricao consolidada.
+// Aviso do proprio dev: so o que e dele, so o que ja venceu.
+function renderRiscoDev() {
+  const el = document.getElementById('risco-dev');
+  if (!el || !currentDev) return;
+  const minhas = (state.melhorias || []).filter(m =>
+    !m.mesclado_em && splitDevs(m.dev).includes(currentDev) && statusEfetivo(m) === 'atrasado');
+  el.style.display = minhas.length ? 'flex' : 'none';
+  if (!minhas.length) return;
+  const nomes = minhas.slice(0, 3).map(m => (m.codigo ? m.codigo + ' ' : '') + (m.titulo || ''));
+  el.innerHTML = '⚠ <strong>' + minhas.length +
+    (minhas.length === 1 ? ' demanda sua está com o prazo vencido' : ' demandas suas estão com o prazo vencido') +
+    ':</strong> ' + escAttr(nomes.join(' · ')) +
+    (minhas.length > 3 ? ' e mais ' + (minhas.length - 3) : '');
+}
+
 function mescladasDev(m) {
   const filhas = (state.melhorias || []).filter(x => x.mesclado_em === m.id);
   if (!filhas.length) return '';
@@ -1410,6 +1430,7 @@ function getFiltered() {
 
 // ─── KANBAN ──────────────────────────────────────────────────────
 function renderKanban() {
+  renderRiscoDev();
   const kanban = document.getElementById('kanban');
   if (!kanban) return;
   const items = getFiltered();
