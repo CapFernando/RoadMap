@@ -1258,6 +1258,11 @@
         <input type="text" id="pj-busca" class="pj-busca" placeholder="Digite o código ou parte do título…"
                oninput="pjBuscar()" autocomplete="off" />
         <div id="pj-sugestao" class="pj-sugestao"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+          <span style="font-size:12.5px;color:var(--text3)">Não existe ainda?</span>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="pjNovaDemanda()">
+            + Criar demanda neste projeto</button>
+        </div>
       </div>
       <div class="form-group">
         <label>Demandas do projeto</label>
@@ -3871,7 +3876,8 @@ function saveMelhoria() {
     motivo_negacao:      sp === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
     implementacao:       document.getElementById('m-implementacao').value.trim(),
     debito_tecnico:      document.getElementById('m-debito').checked,
-    projeto_id:          document.getElementById('m-projeto').value,
+    // Quando o card nasce de dentro de um projeto, o vinculo ja vem selecionado.
+    projeto_id:          document.getElementById('m-projeto').value || _pjRetorno || '',
     // Campos da validacao nao tem campo no formulario: sem repassar, salvar pela
     // aba Dados apagaria quem aprovou e o motivo da ultima devolucao.
     validado_em:         existing.validado_em   || '',
@@ -3897,6 +3903,13 @@ function saveMelhoria() {
 
   _pendingEdits = true;
   closeModal('modal-melhoria');
+  // Veio de dentro de um projeto: devolve a pessoa para la, com a demanda ja
+  // listada. Sem isto ela ficaria sem saber se o vinculo pegou.
+  if (_pjRetorno) {
+    const voltarPara = _pjRetorno;
+    _pjRetorno = null;
+    setTimeout(() => { switchTab('projetos'); pjAbrir(voltarPara); pjAba('demandas'); }, 400);
+  }
   renderAll();
   toast('Melhoria salva. Clique em "Publicar alterações" para ir ao ar.', 'ok');
 }
@@ -4570,6 +4583,20 @@ function pjRenderDemandas() {
         '<button class="btn btn-secondary btn-sm" onclick="pjDesvincular(' + JSON.stringify(m.id).replace(/"/g, '&quot;') + ')">Desvincular</button>' +
       '</div>';
     }).join('');
+}
+
+// Abrir o card por fora e depois lembrar de vincular e passo a mais que se
+// esquece. Daqui, a demanda ja nasce dentro do projeto e a tela volta para ele.
+let _pjRetorno = null;
+function pjNovaDemanda() {
+  const id = document.getElementById('pj-id').value;
+  if (!id) { toast('Salve o projeto primeiro.', 'err'); return; }
+  _pjRetorno = id;
+  closeModal('modal-projeto');
+  openModalMelhoria();               // card em branco
+  mPopulaProjetos(id);               // ja apontando para este projeto
+  const p = pjPorId(id);
+  if (p) toast('Nova demanda em ' + (p.codigo || p.nome) + '.', 'ok');
 }
 
 function pjBuscar() {
