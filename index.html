@@ -345,6 +345,9 @@
   #nm-overlay .nm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   @media(max-width:640px){#nm-overlay .nm-grid2{grid-template-columns:1fr;}}
   #nm-overlay .nm-f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--text2,#C9C6BE);}
+  /* .nm-f e uma COLUNA: qualquer coisa solta dentro dele vira uma faixa de
+     largura total. Rotulo, selos e o ⓘ moram nesta linha, nunca soltos. */
+  #nm-overlay .nm-rot-linha{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   #nm-overlay input[type=text],#nm-overlay input[type=date],#nm-overlay input[type=number],
   #nm-overlay textarea,#nm-overlay select{font-family:inherit;font-size:13.5px;color:var(--text,#ECEAE2);background:var(--bg,#0E0E0D);
     border:1px solid #2E2E2B;border-radius:7px;padding:8px 10px;width:100%;}
@@ -358,8 +361,10 @@
     white-space:pre-wrap;word-break:break-word;}
   /* Guia de preenchimento. Formulario longo sem indicacao de progresso faz a
      pessoa parar no meio sem saber quanto falta — e quem para no meio nao volta. */
-  #nm-guia{position:sticky;top:57px;z-index:2;background:var(--bg2,#161614);
-    border-bottom:1px solid var(--border,#2E2E2B);padding:12px 22px;}
+  /* Sem sticky: o cabecalho do modal ja e sticky e os dois se sobrepunham,
+     cortando o texto de apoio. O guia fica logo abaixo, no fluxo. */
+  #nm-guia{background:var(--bg2,#161614);border-bottom:1px solid var(--border,#2E2E2B);
+    padding:12px 22px;}
   #nm-overlay .nm-guia-linha{display:flex;align-items:center;gap:12px;}
   #nm-overlay .nm-guia-barra{flex:1;height:6px;background:var(--bg4,#252522);border-radius:20px;overflow:hidden;}
   #nm-overlay .nm-guia-barra i{display:block;height:100%;width:0;border-radius:20px;
@@ -1563,6 +1568,20 @@ const nmPreenchido = id => {
 };
 
 // Coloca o ⓘ ao lado de cada rótulo, uma vez só.
+// Garante a linha do rotulo: move o texto solto do label para dentro de um span
+// em flex-row. Sem isto, selo e icone viram faixas empilhadas.
+function nmLinhaRotulo(label) {
+  let linha = label.querySelector(':scope > .nm-rot-linha');
+  if (linha) return linha;
+  linha = document.createElement('span');
+  linha.className = 'nm-rot-linha';
+  // pega tudo que vier antes do primeiro campo (texto do rotulo e o selo opcional)
+  const campo = label.querySelector('input, select, textarea');
+  while (label.firstChild && label.firstChild !== campo) linha.appendChild(label.firstChild);
+  label.prepend(linha);
+  return linha;
+}
+
 function nmMontaDicas() {
   Object.entries(NM_DICAS).forEach(([id, texto]) => {
     const campo = document.getElementById(id);
@@ -1574,13 +1593,14 @@ function nmMontaDicas() {
     i.setAttribute('data-dica', texto);
     i.setAttribute('aria-label', texto);
     i.textContent = 'i';
-    const primeiro = label.firstChild;
-    if (primeiro && primeiro.nodeType === 3) primeiro.after(i);
-    else label.prepend(i);
+    nmLinhaRotulo(label).appendChild(i);
   });
 }
 
 function nmAtualizaGuia() {
+  // Normaliza TODOS os rotulos uma vez: o selo "opcional" do HTML tambem estava
+  // solto dentro da coluna e virava faixa.
+  document.querySelectorAll('#nm-overlay .nm-f').forEach(nmLinhaRotulo);
   const feitos = NM_OBRIGATORIOS.filter(o => nmPreenchido(o.id));
   const falta = NM_OBRIGATORIOS.find(o => !nmPreenchido(o.id));
   const pct = Math.round((feitos.length / NM_OBRIGATORIOS.length) * 100);
@@ -1605,12 +1625,12 @@ function nmAtualizaGuia() {
     if (nmPreenchido(o.id)) {
       const ok = document.createElement('span');
       ok.className = 'nm-ok'; ok.textContent = '✓';
-      label.firstChild && label.firstChild.nodeType === 3 ? label.firstChild.after(ok) : label.prepend(ok);
+      nmLinhaRotulo(label).appendChild(ok);
     } else if (falta && o.id === falta.id) {
       label.classList.add('alvo');
       const vez = document.createElement('span');
       vez.className = 'nm-vez'; vez.textContent = 'agora';
-      label.firstChild && label.firstChild.nodeType === 3 ? label.firstChild.after(vez) : label.prepend(vez);
+      nmLinhaRotulo(label).appendChild(vez);
     }
   });
 }
