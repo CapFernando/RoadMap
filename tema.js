@@ -16,6 +16,16 @@
   }
 
   function aplicar(tema) {
+    // Desliga as transicoes durante a troca. Sem isto, qualquer elemento que
+    // anime `color` ou `background` vindo de var() congela no valor do tema
+    // anterior e nunca chega ao novo.
+    var raiz = document.documentElement;
+    raiz.classList.add('trocando-tema');
+    // Dois quadros: um para o navegador aplicar a classe, outro para pintar com
+    // as cores novas antes de as transicoes voltarem.
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { raiz.classList.remove('trocando-tema'); });
+    });
     // data-tema so aparece no claro; o escuro e a ausencia da marca, o que
     // mantem o CSS original de cada pagina valendo sem precisar de override.
     if (tema === 'claro') document.documentElement.setAttribute('data-tema', 'claro');
