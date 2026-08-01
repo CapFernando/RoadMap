@@ -292,6 +292,34 @@ async function loginLivre(db, base) {
   return base + '-' + crypto.randomUUID().slice(0, 6);
 }
 
+// Codigo RM-### por demanda. Atribuido AQUI e nao no navegador de proposito: o
+// Worker e o unico ponto que serializa as gravacoes (controle de concorrencia por
+// `base`), entao dois cards criados ao mesmo tempo nao podem receber o mesmo
+// numero. No cliente, duas abas gerariam max+1 identico.
+function atribuiCodigos(data) {
+  if (!data || !Array.isArray(data.melhorias)) return 0;
+  let maior = 0;
+  for (const m of data.melhorias) {
+    const n = /^RM-(\d+)$/.exec(String(m && m.codigo || ''));
+    if (n) maior = Math.max(maior, parseInt(n[1], 10));
+  }
+  let novos = 0;
+  const vistos = new Set(data.melhorias.map(m => m && m.codigo).filter(Boolean));
+  for (const m of data.melhorias) {
+    if (!m) continue;
+    const atual = String(m.codigo || '');
+    // Sem codigo, ou com um codigo que outra demanda ja usa (importacao, copia)
+    const duplicado = atual && data.melhorias.filter(x => x && x.codigo === atual).length > 1;
+    if (!atual || (duplicado && vistos.has(atual) && m !== data.melhorias.find(x => x && x.codigo === atual))) {
+      maior += 1;
+      m.codigo = 'RM-' + String(maior).padStart(3, '0');
+      vistos.add(m.codigo);
+      novos += 1;
+    }
+  }
+  return novos;
+}
+
 async function contasMigrar(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS usuario (
@@ -1115,6 +1143,7 @@ export default {
       if (risco) return json({ error: risco }, 409, headers);
       const conf = await conflito(gh, body, headers);
       if (conf) return conf;
+      atribuiCodigos(data);
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -1149,6 +1178,7 @@ export default {
       if (risco) return json({ error: risco }, 409, headers);
       const confDev = await conflito(gh, body, headers);
       if (confDev) return confDev;
+      atribuiCodigos(data);
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
