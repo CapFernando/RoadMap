@@ -646,6 +646,23 @@ function formatDate(s) {
 
 
 
+
+// Ordem das demandas dentro de cada tema. Por data de inicio, o que esta em
+// andamento se mistura com o que ainda nao comecou — e quem abre o dash quer
+// ver primeiro o que esta acontecendo agora. Etapa manda; a data desempata.
+const DASH_ORDEM = ['em_andamento', 'validacao', 'planejado', 'planning',
+                    'levantar_req', 'backlog', 'concluido', 'negada'];
+function ordemDash(m) {
+  const i = DASH_ORDEM.indexOf(getStatusKey(m));
+  return i < 0 ? DASH_ORDEM.length : i;
+}
+function compararDash(a, b) {
+  const oa = ordemDash(a), ob = ordemDash(b);
+  if (oa !== ob) return oa - ob;
+  // Dentro da mesma etapa: prazo mais proximo primeiro; sem prazo vai para o fim.
+  return (a.entrega || '9999-99-99').localeCompare(b.entrega || '9999-99-99');
+}
+
 function renderMelhoria(m) {
   // A descricao voltou: quando ela foi retirada, a base era um JSON publico que
   // qualquer um baixava. Hoje a leitura exige credencial, entao esconder o texto
@@ -681,7 +698,7 @@ function renderTema(tema, melhorias, idx) {
         <span class="tema-arrow" id="${id}-arrow">${svgIcon('chevron')}</span>
       </div>
       <div class="tema-body" id="${id}-body">
-        ${[...items].sort((a,b) => (a.inicio||'9999').localeCompare(b.inicio||'9999')).map(renderMelhoria).join('')}
+        ${[...items].sort(compararDash).map(renderMelhoria).join('')}
       </div>
     </div>`;
 }
@@ -1249,7 +1266,7 @@ function buildReportHTML() {
   const temasHTML = groupKeys.map((tKey, gi) => {
     const temaNome = tKey === '__' ? 'Sem tema' : (_temas.find(t => t.id === tKey)?.nome || '—');
     const cor = TEMA_CORES[gi % TEMA_CORES.length];
-    const items = [...groups[tKey]].sort((a,b) => (a.inicio||'9999').localeCompare(b.inicio||'9999'));
+    const items = [...groups[tKey]].sort(compararDash);
 
     const cardsHTML = items.map(m => {
       const sk = statusEfetivo(m);
