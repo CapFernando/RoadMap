@@ -422,6 +422,8 @@
     .us-nome { font-weight:600; color:var(--text); }
     .us-sub  { font-size:12px; color:var(--text3); margin-top:3px; }
     .us-sub-mail { font-size:12px; color:var(--text2); margin-top:3px; word-break:break-all; }
+    .us-link { background:none; border:none; color:var(--blue); font-size:12px; cursor:pointer;
+      padding:0; text-decoration:underline; font-family:'Inter',sans-serif; }
     .us-tabela select { margin:0; background:var(--bg4); border:1px solid var(--border); border-radius:8px;
       padding:7px 9px; color:var(--text); font-size:13px; font-family:'Inter',sans-serif; }
     .us-acoes { display:inline-flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
@@ -555,11 +557,12 @@
     <div id="sem-token-aviso" style="display:none;background:#5C3608;color:#F9C97A;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px;line-height:1.5;">
       🔗 Primeiro acesso neste dispositivo.<br>Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de entrar.
     </div>
-    <input type="text" id="usuario-input" placeholder="Seu e-mail" autocomplete="username"
+    <input type="text" id="usuario-input" placeholder="Usuário ou e-mail" autocomplete="username"
            onkeydown="if(event.key==='Enter')document.getElementById('senha-input').focus()" />
     <input type="password" id="senha-input" placeholder="Sua senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
     <div style="font-size:12px;color:#8B92A0;margin:-4px 0 10px;line-height:1.5">
-      Ainda não tem conta? Deixe o e-mail em branco e use a senha geral de admin.
+      Serve o usuário ou o e-mail — o que você tiver.<br>
+      Ainda não tem conta? Deixe em branco e use a senha geral de admin.
     </div>
     <div id="token-field" style="display:none;margin-top:0">
       <input type="password" id="token-input" placeholder="GitHub Token (ghp_…)" onkeydown="if(event.key==='Enter')doLogin()" style="letter-spacing:0" />
@@ -3635,7 +3638,11 @@ function uLinhaAtiva(u) {
   return '<tr' + (off ? ' class="inativa"' : '') + '>' +
     '<td><div class="us-nome">' + esc(u.nome || u.login) + '</div>' +
       '<div class="us-sub">' + l + '</div>' +
-      (u.email ? '<div class="us-sub-mail">' + esc(u.email) + '</div>' : '') + '</td>' +
+      '<div class="us-sub-mail">' +
+        (u.email
+          ? esc(u.email) + ' <button class="us-link" onclick="uEmail(\'' + l + '\')">alterar</button>'
+          : '<button class="us-link" onclick="uEmail(\'' + l + '\')">+ definir e-mail</button>') +
+      '</div></td>' +
     '<td><select onchange="uPapel(\'' + l + '\', this.value)">' +
       ['consulta', 'dev', 'admin'].map(p =>
         '<option value="' + p + '"' + (u.papel === p ? ' selected' : '') + '>' + U_PAPEL_ROTULO[p] + '</option>'
@@ -3801,6 +3808,25 @@ async function uNovaSenha(login) {
     uAviso('Senha de "' + login + '" trocada. Sessões abertas dessa pessoa foram encerradas.');
     renderUsuarios();
   } catch (e) { uAviso(e.message, true); }
+}
+
+// Quem foi criado antes da coluna de e-mail existir so entra pelo usuario.
+// Preencher aqui libera o login por e-mail para essa pessoa.
+async function uEmail(login) {
+  const novo = prompt('E-mail da Audax para "' + login + '":\n' +
+                      '(deixe vazio para remover)');
+  if (novo === null) return;
+  const e = novo.trim().toLowerCase();
+  if (e && !e.endsWith('@audaxcapitalsa.com.br')) {
+    uAviso('O e-mail precisa terminar com @audaxcapitalsa.com.br', true);
+    return;
+  }
+  try {
+    await uChamar('email', { login, email: e });
+    uAviso(e ? '"' + login + '" agora entra também pelo e-mail ' + e + '.'
+             : 'E-mail de "' + login + '" removido.');
+  } catch (err) { uAviso(err.message, true); }
+  renderUsuarios();
 }
 
 async function uPapel(login, papel) {
