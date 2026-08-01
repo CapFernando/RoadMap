@@ -350,6 +350,12 @@
     border:1px solid #2E2E2B;border-radius:7px;padding:8px 10px;width:100%;}
   #nm-overlay textarea{min-height:58px;resize:vertical;}
   #nm-overlay .nm-obrig{color:var(--red,#E84444);font-weight:700;}
+  /* Codigo da demanda: a referencia curta usada em PR, review e deploy. */
+  .mel-cod{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;color:var(--blue-tx,#9BC8F8);
+    background:var(--blue-bg,#0C3260);border-radius:5px;padding:1px 6px;margin-right:8px;
+    letter-spacing:.02em;vertical-align:middle;}
+  .melhoria-desc{font-size:13px;line-height:1.55;color:var(--text2,#A8A49A);margin:6px 0 2px;
+    white-space:pre-wrap;word-break:break-word;}
   #nm-overlay .nm-opc{font-weight:400;font-size:11px;color:var(--text2,#A8A49A);
     border:1px solid var(--border,#2E2E2B);border-radius:20px;padding:0 7px;margin-left:6px;}
   #nm-overlay input:focus,#nm-overlay textarea:focus,#nm-overlay select:focus{outline:2px solid var(--blue,#3B8FE8);outline-offset:1px;border-color:var(--blue,#3B8FE8);}
@@ -596,12 +602,19 @@ function formatDate(s) {
 
 
 function renderMelhoria(m) {
+  // A descricao voltou: quando ela foi retirada, a base era um JSON publico que
+  // qualquer um baixava. Hoje a leitura exige credencial, entao esconder o texto
+  // so atrapalhava quem tem acesso legitimo, sem proteger nada.
+  const desc = String(m.descricao || '').trim();
   return `
     <div class="melhoria">
       <div class="melhoria-top">
-        <div class="melhoria-titulo">${fEsc(m.titulo)}</div>
+        <div class="melhoria-titulo">
+          ${m.codigo ? `<span class="mel-cod">${fEsc(m.codigo)}</span>` : ''}${fEsc(m.titulo)}
+        </div>
         ${badgeHTML(m.status, m.status_planejamento)}
       </div>
+      ${desc ? `<div class="melhoria-desc">${fEsc(desc)}</div>` : ''}
       ${metaHTML(m)}
     </div>`;
 }
