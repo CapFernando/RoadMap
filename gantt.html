@@ -452,7 +452,14 @@
   <div class="login-box">
     <h2>📅 Planejamento</h2>
     <p>RoadMap de Melhorias · Audax Capital</p>
-    <input type="password" id="senha-input" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')doLogin()" />
+    <input type="text" id="usuario-input" placeholder="Usuário ou e-mail" autocomplete="username"
+           onkeydown="if(event.key==='Enter')document.getElementById('senha-input').focus()" />
+    <input type="password" id="senha-input" placeholder="Sua senha" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter')doLogin()" />
+    <div style="font-size:12px;color:var(--text3);margin:-4px 0 12px;line-height:1.5;text-align:left">
+      Serve o usuário ou o e-mail — o que você tiver.<br>
+      Ainda não tem conta? Deixe em branco e use a senha geral.
+    </div>
     <div id="token-field" style="display:none">
       <input type="password" id="token-input" placeholder="GitHub Token (ghp_…)" onkeydown="if(event.key==='Enter')doLogin()" style="letter-spacing:0" />
       <p style="font-size:12px;color:var(--text3);text-align:left;margin:-8px 0 14px;line-height:1.5">Necessário apenas na primeira vez neste navegador.</p>
@@ -763,6 +770,17 @@ const RAW_URL      = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_
 // Worker guarda token + senha: o login passa a ser só senha, sem token no navegador.
 const PROXY_URL    = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
 let _ganttPw = sessionStorage.getItem('rm_admin_pw') || '';
+// Conta por pessoa: o gantt tinha ficado de fora da conversao e ainda exigia a
+// senha compartilhada. Token e senha convivem durante a transicao.
+let _ganttToken = sessionStorage.getItem('rm_admin_token') || '';
+let _gEu = null;
+try { _gEu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) {}
+function credGantt() {
+  const c = {};
+  if (_ganttToken) c.token = _ganttToken;
+  if (_ganttPw) c.senha = _ganttPw;
+  return c;
+}
 
 // ── STATE ─────────────────────────────────────────────────────────────────
 let state    = { temas: [], melhorias: [], desenvolvedores: [], feriados: [], ausencias: [] };
@@ -883,7 +901,7 @@ function initLoginScreen() {
   // Modo token (legado, só sem Worker): pede o token na primeira vez
   if (!PROXY_URL && !runtimeToken) document.getElementById('token-field').style.display = 'block';
   // auto-bypass: se já validou a senha nesta sessão, entra direto
-  if (PROXY_URL ? !!_ganttPw : (localStorage.getItem('rm_logged') === '1' && runtimeToken)) {
+  if (PROXY_URL ? (!!_ganttPw || !!_ganttToken) : (localStorage.getItem('rm_logged') === '1' && runtimeToken)) {
     entrarGantt();
   }
 }
@@ -902,8 +920,35 @@ async function doLogin() {
 
   // Modo senha (via Worker) — não pede token
   if (PROXY_URL) {
-    if (!v) { errEl.textContent = 'Informe a senha.'; return; }
+    const login = (document.getElementById('usuario-input')?.value || '').trim();
+    if (!v) { errEl.textContent = login ? 'Informe sua senha.' : 'Informe a senha.'; return; }
     try {
+      // Com usuario: conta por pessoa. Sem usuario: senha compartilhada, que
+      // segue valendo enquanto as contas nao estao todas criadas.
+      if (login) {
+        const res = await fetch(PROXY_URL, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login', login, senhaUsuario: v })
+        });
+        const dj = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          errEl.textContent = dj.detail || 'Usuário ou senha inválidos.';
+          document.getElementById('senha-input').value = '';
+          return;
+        }
+        // O planejamento altera datas de todo mundo: consulta nao entra.
+        if (dj.usuario && dj.usuario.papel === 'consulta') {
+          errEl.textContent = 'Sua conta é somente de consulta e não altera o planejamento.';
+          document.getElementById('senha-input').value = '';
+          return;
+        }
+        _ganttToken = dj.token; _gEu = dj.usuario || null;
+        sessionStorage.setItem('rm_admin_token', _ganttToken);
+        try { sessionStorage.setItem('rm_eu', JSON.stringify(_gEu)); } catch (_) {}
+        errEl.textContent = '';
+        entrarGantt();
+        return;
+      }
       const res = await fetch(PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'auth', senha: v })
@@ -942,7 +987,14 @@ function doLogout() {
   if (!GITHUB_TOKEN) { runtimeToken = ''; }
   localStorage.removeItem('rm_logged');
   sessionStorage.removeItem('rm_admin_pw');
-  _ganttPw = '';
+  if (_ganttToken) {
+    // Encerra no servidor: limpar so o navegador deixaria o token valido 12h.
+    fetch(PROXY_URL, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'logout', token:_ganttToken }) }).catch(() => {});
+  }
+  sessionStorage.removeItem('rm_admin_token');
+  sessionStorage.removeItem('rm_eu');
+  _ganttPw = ''; _ganttToken = ''; _gEu = null;
   document.getElementById('gantt-app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('senha-input').value = '';
@@ -1079,6 +1131,9 @@ function debouncedSave() {
 // responde 200 sem nada. Quando a trava de leitura for ativada, ele passa a
 // responder 401 e o painel pede a senha — sem precisar de novo deploy do site.
 function credenciaisLeitura() {
+  // Token de sessao primeiro: quem entrou pela propria conta nao tem senha.
+  const _tk = sessionStorage.getItem('rm_admin_token');
+  if (_tk) return { token: _tk };
   const c = {};
   const senha = sessionStorage.getItem('rm_admin_pw') || sessionStorage.getItem('rm_view_pw');
   if (senha) c.senha = senha;
@@ -1235,7 +1290,7 @@ async function saveToGitHub(tentativa = 1) {
     if (!runtimeToken) {
       const res = await fetch(PROXY_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'publish', senha: _ganttPw, data: state, base: baseVersao })
+        body: JSON.stringify(Object.assign({ action: 'publish', data: state, base: baseVersao }, credGantt()))
       });
       if (!res.ok) {
         let corpo = null;
@@ -2137,6 +2192,11 @@ function pokerPontosDoForm(existing) {
   return Number.isFinite(n) && n > 0 ? n : (existing.poker_pontos ?? null);
 }
 
+// Etapa com trabalho comprometido exige responsavel: sem dev a demanda nao
+// aparece em painel de dev nenhum e vence sem dono.
+const ETAPAS_COM_DEV = ['planejado', 'em_andamento', 'validacao'];
+function exigeDev(sp) { return ETAPAS_COM_DEV.includes(sp); }
+
 function saveTask() {
   const titulo = document.getElementById('e-titulo').value.trim();
   const temaId = resolveTemaSelecao('e', editingId ? (state.melhorias.find(x => x.id === editingId)||{}).tema_id : '');
@@ -2149,6 +2209,13 @@ function saveTask() {
   if (inicio && fim && fim < inicio) { toast('Data fim deve ser >= data início.', 'err'); return; }
 
   const sp = document.getElementById('e-status-plan').value;
+  const devSel = document.getElementById('e-dev').value.trim();
+  if (exigeDev(sp) && !devSel) {
+    const rot = { planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação PM/PO' }[sp] || sp;
+    toast('Escolha o desenvolvedor: ' + rot + ' exige responsável.', 'err');
+    document.getElementById('e-dev').focus();
+    return;
+  }
 
   const existing = editingId ? (state.melhorias.find(x => x.id === editingId) || {}) : {};
   const obj = {
