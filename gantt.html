@@ -338,7 +338,9 @@
     .gantt-card .card-desc { display: none; }
 
     /* status_planejamento colors */
-    .gcard-backlog      { background:#252522; border-color:#3A3A36; color:#6E6A62; }
+    /* Mesmo caso do .ind-chip.backlog: #6E6A62 sobre #252522 da 2.2:1, e no tema
+       claro a barra ficava escura com texto escuro. Por token. */
+    .gcard-backlog      { background:var(--bg4); border-color:var(--border2); color:var(--text2); }
     .gcard-levantar_req { background:#2A1A4E; border-color:#5A3A9E; color:#C9AEFF; }
     .gcard-planejado    { background:#0C3260; border-color:#1a5080; color:#9BC8F8; }
     .gcard-em_andamento { background:#3D3600; border-color:#726500; color:#FFE14D; }
@@ -393,6 +395,12 @@
     }
     .modal-close-btn:hover { background: var(--bg3); color: var(--text); }
     .form-group { margin-bottom: 14px; }
+    /* Caixa de pausa no modal. Tokens, nao cor cravada: com #252522 o tema
+       claro ficava com caixa escura e texto claro sobre fundo branco. */
+    .g-pausa-box { background:var(--bg3,#1E1E1C); border:1px solid var(--border,#2E2E2B);
+      border-radius:6px; padding:10px 12px; font-size:12.5px; line-height:1.65;
+      color:var(--text2,#A8A49B); }
+    .g-pausa-box strong { color:var(--text,#ECEAE2); }
     .form-group label { display: block; font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 5px; }
     .form-group input,
     .form-group select,
@@ -655,6 +663,12 @@
         <input type="date" id="e-fim" oninput="atualizaHorasPlanGantt()" />
       </div>
     </div>
+    <!-- Logo abaixo das datas de proposito: e a data fim que a pausa esconde e
+         depois empurra. Longe delas, ninguem liga uma coisa a outra. -->
+    <div class="form-group" id="e-pausa-grupo">
+      <label>Pausa</label>
+      <div id="e-pausa-info"></div>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>Horas realizadas</label>
@@ -675,7 +689,6 @@
         <input type="date" id="e-data-solic" />
       </div>
     </div>
-    <div id="e-pausa-info" style="margin-bottom:8px"></div>
     <div id="e-mesc-info" style="display:none;margin-bottom:8px"></div>
     <div id="e-dep-info" style="display:none"></div>
     <div class="form-group">
@@ -2260,25 +2273,27 @@ function aplicarRetomada(m) {
 function gPausaRender(m) {
   const box = document.getElementById('e-pausa-info');
   if (!box) return;
-  if (!m || ['concluido','negada'].includes(m.status_planejamento) && !estaPausado(m)) {
-    box.style.display='none'; box.innerHTML=''; return;
-  }
+  // Esconde o grupo inteiro, nao so a caixa: rotulo "Pausa" sozinho parece campo
+  // quebrado. Concluida e negada nao se pausam — nao ha prazo correndo.
+  const grupo = document.getElementById('e-pausa-grupo');
+  const mostrar = !!m && (estaPausado(m) || !['concluido','negada'].includes(m.status_planejamento));
+  if (grupo) grupo.style.display = mostrar ? '' : 'none';
+  if (!mostrar) { box.innerHTML = ''; return; }
   box.style.display='block';
   if (estaPausado(m)) {
     const d = diasPausadoAgora(m);
-    box.innerHTML = '<div style="background:#252522;border:1px solid #3A3A36;border-radius:6px;' +
-      'padding:9px 12px;font-size:12px;line-height:1.6;color:var(--text2)">' +
-      '⏸ <strong style="color:var(--text)">Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
+    box.innerHTML = '<div class="g-pausa-box">' +
+      '⏸ <strong>Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
       ' · desde ' + esc(fmtDate(m.pausado_em)) +
       '<br><strong>Motivo:</strong> ' + esc(m.pausa_motivo || '—') +
       '<br>Entrega oculta; será empurrada em ' + d + (d===1?' dia':' dias') + ' ao retomar.' +
-      '<div style="margin-top:8px"><button type="button" class="btn btn-sm" ' +
+      '<div style="margin-top:9px"><button type="button" class="btn btn-sm" ' +
       'style="background:var(--green);color:#fff;border:none" onclick="gPausaRetomar()">▶ Retomar</button></div></div>';
   } else {
-    box.innerHTML = '<div style="background:#252522;border:1px solid #3A3A36;border-radius:6px;' +
-      'padding:9px 12px;font-size:12px;color:var(--text2)">' +
-      'Travada por algo fora do time? Pause para o prazo não correr.' +
-      '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm" ' +
+    box.innerHTML = '<div class="g-pausa-box">' +
+      'Travada por algo fora do time — resposta de terceiro, licença, decisão de ' +
+      'outra área? Pause: a data fim fica oculta e volta empurrada pelos dias parados.' +
+      '<div style="margin-top:9px"><button type="button" class="btn btn-secondary btn-sm" ' +
       'onclick="gPausaIniciar()">⏸ Pausar demanda</button></div></div>';
   }
 }
