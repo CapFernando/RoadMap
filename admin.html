@@ -1808,6 +1808,11 @@ async function saveViaProxy(tentativa = 1) {
           const m = state.melhorias.find(x => x.id === id);
           if (m && !m.codigo) m.codigo = cod;
         });
+        // O Worker devolve para 'backlog' quem estava em etapa com trabalho sem
+        // responsavel. Silenciar isso deixaria a pessoa achando que salvou.
+        if ((resp.sem_dev || []).length) {
+          toast('⚠ Sem desenvolvedor, voltou para Backlog: ' + resp.sem_dev.join(', '), 'err');
+        }
         Object.entries(resp.codigos_projeto || {}).forEach(([id, cod]) => {
           const p = (state.projetos || []).find(x => x.id === id);
           if (p && !p.codigo) p.codigo = cod;
@@ -2601,6 +2606,16 @@ function kbDrop(e, colKey) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   if (m.status_planejamento === colKey) { renderKanban(); return; }
+  // Arrastar e o caminho mais rapido de mover card — e o mais facil de esquecer
+  // o responsavel. Barra aqui, abre o card e leva ao campo.
+  if (exigeDev(colKey) && !String(m.dev || '').trim()) {
+    toast('"' + (m.codigo || m.titulo) + '" precisa de desenvolvedor para ir a ' +
+          (STATUS_LABELS[colKey] || colKey) + '.', 'err');
+    renderKanban();
+    openModalMelhoria(id);
+    setTimeout(() => { document.getElementById('m-status').value = colKey; onStatusChange(); document.getElementById('m-dev').focus(); }, 320);
+    return;
+  }
   m.status_planejamento = colKey;
   m.status = SP_TO_STATUS[colKey] || m.status;
   _dirtyMelhoriaIds.add(m.id);
@@ -3992,6 +4007,12 @@ function sugereFibonacci() {
   hint.textContent = sel.value === sug ? `sugerido pela média` : `média sugere ${sug}`;
 }
 
+// Etapa com trabalho comprometido exige responsavel. Sem dev, ninguem cobra
+// prazo, a demanda nao aparece em painel de dev nenhum e vence sem dono — que e
+// o modo mais silencioso de uma demanda morrer.
+const ETAPAS_COM_DEV = ['planejado', 'em_andamento', 'validacao'];
+function exigeDev(sp) { return ETAPAS_COM_DEV.includes(sp); }
+
 function saveMelhoria() {
   const titulo = document.getElementById('m-titulo').value.trim();
   const temaId = resolveTemaSelecao('m', document.getElementById('m-id').value ? (state.melhorias.find(x => x.id === document.getElementById('m-id').value)||{}).tema_id : '');
@@ -3999,6 +4020,12 @@ function saveMelhoria() {
   const tipo   = document.getElementById('m-tipo').value;
   if (!titulo) { toast('Informe o título.', 'err'); return; }
   if (!tipo) { toast('Selecione o tipo: Sustentação ou Evolução.', 'err'); return; }
+  const devSel = document.getElementById('m-dev').value.trim();
+  if (exigeDev(sp) && !devSel) {
+    toast('Escolha o desenvolvedor: ' + (STATUS_LABELS[sp] || sp) + ' exige responsável.', 'err');
+    document.getElementById('m-dev').focus();
+    return;
+  }
   // sistema obrigatório apenas para novas demandas; existentes sem tema permanecem como estão
   if (!temaId && !document.getElementById('m-id').value) { toast('Selecione o sistema.', 'err'); return; }
   if (sp === 'negada' && !document.getElementById('m-motivo').value.trim()) {
