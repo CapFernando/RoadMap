@@ -214,6 +214,19 @@
     .pj-status.em_andamento{ background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
     .pj-status.pausado     { background:var(--bg4);              color:var(--text2); }
     .pj-status.concluido   { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
+    /* Aprovacao de projeto proposto por dev. */
+    .pj-aprov { font-size:11px; font-weight:700; border-radius:20px; padding:2px 9px; white-space:nowrap; }
+    .pj-aprov.pend { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
+    .pj-aprov.rec  { background:var(--red-bg,#4A1D1D);   color:var(--red-tx,#F9A0A0); }
+    .pj-proposta { font-size:12px; line-height:1.6; color:var(--text3); margin:6px 0 2px; }
+    .pj-aprov-box { border-radius:10px; padding:13px 15px; font-size:13px; line-height:1.7; }
+    .pj-aprov-box strong { font-weight:700; }
+    .pj-aprov-box.pend { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
+    .pj-aprov-box.rec  { background:var(--red-bg,#4A1D1D);   color:var(--red-tx,#F9A0A0); }
+    .pj-aprov-box.ok   { background:var(--green-bg,#1E4208); color:var(--green-tx,#A8E081); }
+    .pj-aprov-acoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:11px; }
+    .pj-card.pj-pendente { border-color:var(--amber); }
+    .pj-card.pj-recusado { opacity:.6; }
     .pj-vazio { font-size:13px; color:var(--text3); line-height:1.6; margin:0; }
     /* alerta: o que o projeto precisa que alguem olhe */
     .pj-alerta { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700;
@@ -1260,6 +1273,9 @@
                    color:var(--purple-tx,#C9AEFF);background:var(--purple-bg,#341A6E);border:none;
                    border-radius:5px;padding:3px 9px;margin:-8px 0 14px;cursor:pointer"></button>
     <input type="hidden" id="pj-id" />
+    <!-- Decisao do PM/PO sobre proposta de dev. Fica ANTES das abas: e a
+         primeira coisa a resolver ao abrir, nao um detalhe no meio do form. -->
+    <div id="pj-aprov-bloco" style="display:none;margin:0 0 16px"></div>
 
     <div class="mtabs">
       <button type="button" class="mtab ativa" id="pjtab-dados" onclick="pjAba('dados')">Dados</button>
@@ -4761,6 +4777,12 @@ const PJ_STATUS = { planejado:'Planejado', em_andamento:'Em andamento',
 let _pjAnexos = [];
 let _pjAnexosMexidos = false;
 
+// Projeto sem o campo conta como aprovado: os que ja existem foram criados pelo
+// PM/PO no proprio Admin, e criar ali JA e a aprovacao. Sem isto, todos eles
+// apareceriam como pendentes na primeira leitura.
+const pjAprovado  = p => String((p && p.aprovacao) || 'aprovado') === 'aprovado';
+const pjPendente  = p => String(p && p.aprovacao) === 'pendente';
+const pjRecusado  = p => String(p && p.aprovacao) === 'recusado';
 const pjLista = () => state.projetos || [];
 const pjPorId = id => pjLista().find(p => p.id === id) || null;
 const pjDemandas = id => (state.melhorias || []).filter(m => m.projeto_id === id);
@@ -4775,6 +4797,95 @@ function pjResumo(p) {
   return { total: ms.length, feitas, atrasadas, validando, pct, demandas: ms };
 }
 
+
+// ─── APROVAÇÃO DE PROJETO ─────────────────────────────────────────
+// O dev propõe pela rota projeto-novo; a validação é sua. Enquanto pendente, o
+// projeto não aceita demanda — o Worker solta qualquer vínculo que apareça, para
+// que uma proposta recusada não deixe card pendurado nela.
+function pjAprovRender(p) {
+  const box = document.getElementById('pj-aprov-bloco');
+  if (!box) return;
+  if (!p || pjAprovado(p)) {
+    // Aprovado por criação no Admin não precisa de aviso: é o caso normal.
+    if (p && pjAprovado(p) && p.origem === 'dev' && p.aprovado_por) {
+      box.style.display = 'block';
+      box.innerHTML = '<div class="pj-aprov-box ok">✓ <strong>Aprovado</strong> por ' +
+        esc(p.aprovado_por) + (p.aprovado_em ? ' em ' + esc(formatDate(p.aprovado_em)) : '') +
+        '. Proposto por ' + esc(p.solicitado_por || '—') + '.</div>';
+      return;
+    }
+    box.style.display = 'none'; box.innerHTML = ''; return;
+  }
+  box.style.display = 'block';
+  if (pjRecusado(p)) {
+    box.innerHTML = '<div class="pj-aprov-box rec">✕ <strong>Recusado</strong>' +
+      (p.aprovado_por ? ' por ' + esc(p.aprovado_por) : '') + '.' +
+      (p.recusa_motivo ? '<br><strong>Motivo:</strong> ' + esc(p.recusa_motivo) : '') +
+      '<br>Não aceita demandas. Se mudou de ideia, aprove abaixo.' +
+      '<div class="pj-aprov-acoes"><button type="button" class="btn btn-success btn-sm" ' +
+      'onclick="pjAprovar()">✓ Aprovar agora</button></div></div>';
+    return;
+  }
+  // pendente
+  const nome = esc(p.solicitado_por || '—');
+  box.innerHTML = '<div class="pj-aprov-box pend">⏳ <strong>Aguardando sua validação</strong>' +
+    '<br>Proposto por ' + nome + (p.criado_em ? ' em ' + esc(formatDate(p.criado_em)) : '') + '.' +
+    (p.justificativa ? '<br><strong>Justificativa:</strong> ' + esc(p.justificativa) : '') +
+    '<br>Enquanto não decidir, ninguém pode vincular demandas a ele.' +
+    '<div class="pj-aprov-acoes">' +
+      '<button type="button" class="btn btn-success btn-sm" onclick="pjAprovar()">✓ Aprovar projeto</button>' +
+      '<button type="button" class="btn btn-danger btn-sm" onclick="pjRecusar()">✕ Recusar</button>' +
+    '</div></div>';
+}
+
+async function pjAprovar() {
+  const id = document.getElementById('pj-id').value;
+  const p = pjPorId(id);
+  if (!p) return;
+  p.aprovacao = 'aprovado';
+  p.aprovado_em = new Date().toISOString();
+  p.aprovado_por = (_eu && (_eu.nome || _eu.login)) || 'admin';
+  p.recusa_motivo = '';
+  await pjAprovSalvar(p, 'Projeto aprovado. Já aceita demandas.');
+}
+
+async function pjRecusar() {
+  const id = document.getElementById('pj-id').value;
+  const p = pjPorId(id);
+  if (!p) return;
+  const n = pjDemandas(id).length;
+  const motivo = prompt('Por que este projeto está sendo recusado?' + String.fromCharCode(10) +
+    '(o dev que propôs vai ler — sem motivo ele não sabe o que ajustar)');
+  if (motivo === null) return;
+  if (!motivo.trim()) { toast('O motivo da recusa é obrigatório.', 'err'); return; }
+  p.aprovacao = 'recusado';
+  p.recusa_motivo = motivo.trim();
+  p.aprovado_em = new Date().toISOString();
+  p.aprovado_por = (_eu && (_eu.nome || _eu.login)) || 'admin';
+  // Solta as demandas aqui também, para a tela não ficar mostrando vínculo que o
+  // Worker já vai desfazer na gravação.
+  pjDemandas(id).forEach(m => { m.projeto_id = ''; _dirtyMelhoriaIds.add(m.id); });
+  await pjAprovSalvar(p, 'Projeto recusado.' + (n ? ' ' + n + ' demanda(s) foram desvinculadas.' : ''));
+}
+
+async function pjAprovSalvar(p, msg) {
+  p.atualizado_em = new Date().toISOString();
+  _pendingEdits = true;
+  const okSalvo = await saveViaProxy();
+  if (okSalvo) {
+    _dirtyMelhoriaIds.clear(); _pendingEdits = false;
+    // O EP-### nasce na aprovação: relê para mostrar já preenchido.
+    const doServidor = pjPorId(p.id);
+    if (doServidor && doServidor.codigo) {
+      const cod = document.getElementById('pj-modal-cod');
+      cod.textContent = doServidor.codigo; cod.style.display = 'inline-block';
+    }
+    toast(msg, 'ok');
+    pjAprovRender(doServidor || p);
+    renderProjetos(); renderAll(); pjRenderDemandas();
+  } else toast('Não foi possível salvar. A decisão continua pendente.', 'err');
+}
+
 function pjCardHTML(p) {
   const r = pjResumo(p);
   const st = PJ_STATUS[p.status] ? p.status : 'planejado';
@@ -4783,12 +4894,20 @@ function pjCardHTML(p) {
   if (r.atrasadas) alertas.push('<span class="pj-alerta">⚠ ' + r.atrasadas + ' atrasada' + (r.atrasadas > 1 ? 's' : '') + '</span>');
   if (r.validando) alertas.push('<span class="pj-alerta">📋 ' + r.validando + ' p/ validar</span>');
   if (!alertas.length && r.total) alertas.push('<span class="pj-alerta ok">✓ em dia</span>');
-  return '<div class="pj-card" onclick="pjAbrir(' + JSON.stringify(p.id).replace(/"/g, '&quot;') + ')">' +
+  const cls = 'pj-card' + (pjPendente(p) ? ' pj-pendente' : '') + (pjRecusado(p) ? ' pj-recusado' : '');
+  return '<div class="' + cls + '" onclick="pjAbrir(' + JSON.stringify(p.id).replace(/"/g, '&quot;') + ')">' +
     '<div class="pj-card-topo">' +
       (p.codigo ? '<span class="pj-cod">' + esc(p.codigo) + '</span>' : '') +
       '<span class="pj-nome">' + esc(p.nome || '(sem nome)') + '</span>' +
-      '<span class="pj-status ' + st + '">' + PJ_STATUS[st] + '</span>' +
+      (pjAprovado(p)
+        ? '<span class="pj-status ' + st + '">' + PJ_STATUS[st] + '</span>'
+        : '<span class="pj-aprov ' + (pjPendente(p) ? 'pend' : 'rec') + '">' +
+          (pjPendente(p) ? '⏳ Aguardando você' : '✕ Recusado') + '</span>') +
     '</div>' +
+    (pjPendente(p)
+      ? '<div class="pj-proposta">Proposto por <strong>' + esc(p.solicitado_por || '—') +
+        '</strong>. Não aceita demandas até ser aprovado.</div>'
+      : '') +
     (p.descricao ? '<div class="pj-desc">' + esc(p.descricao) + '</div>' : '') +
     '<div class="pj-barra"><i style="width:' + r.pct + '%"></i></div>' +
     '<div class="pj-rodape">' +
@@ -4813,6 +4932,11 @@ function renderProjetos() {
   }
   // Quem precisa de atencao primeiro: atrasadas no topo, depois maior progresso.
   const ordenados = [...ps].sort((a, b) => {
+    // Proposta pendente no topo: e decisao esperando por voce, e enquanto nao
+    // decide, o dev que propos nao pode trabalhar nela.
+    if (pjPendente(a) !== pjPendente(b)) return pjPendente(a) ? -1 : 1;
+    // Recusado por ultimo: e historico, nao trabalho.
+    if (pjRecusado(a) !== pjRecusado(b)) return pjRecusado(a) ? 1 : -1;
     const ra = pjResumo(a), rb = pjResumo(b);
     if ((rb.atrasadas > 0) !== (ra.atrasadas > 0)) return rb.atrasadas > 0 ? 1 : -1;
     if (rb.atrasadas !== ra.atrasadas) return rb.atrasadas - ra.atrasadas;
@@ -4839,6 +4963,7 @@ function pjAbrir(id) {
   const cod = document.getElementById('pj-modal-cod');
   cod.style.display = p && p.codigo ? 'inline-block' : 'none';
   if (p && p.codigo) cod.textContent = p.codigo;
+  pjAprovRender(p);
   document.getElementById('pj-nome').value = p ? (p.nome || '') : '';
   document.getElementById('pj-desc').value = p ? (p.descricao || '') : '';
   document.getElementById('pj-status').value = (p && PJ_STATUS[p.status]) ? p.status : 'planejado';
@@ -4978,6 +5103,13 @@ function pjVincular(melId) {
   const id = document.getElementById('pj-id').value;
   const m = (state.melhorias || []).find(x => x.id === melId);
   if (!m || !id) return;
+  const alvo = pjPorId(id);
+  if (alvo && !pjAprovado(alvo)) {
+    toast(pjPendente(alvo)
+      ? 'Aprove o projeto antes de vincular demandas a ele.'
+      : 'Projeto recusado não aceita demandas.', 'err');
+    return;
+  }
   const anterior = m.projeto_id ? pjPorId(m.projeto_id) : null;
   if (anterior && !confirm('"' + m.titulo + '" está em ' + (anterior.codigo || anterior.nome) +
                            '.\n\nMover para este projeto?')) return;
@@ -5025,8 +5157,13 @@ async function pjSalvar() {
   let p = id ? pjPorId(id) : null;
   if (p) Object.assign(p, campos);
   else {
+    // Criado aqui pelo PM/PO: criar no Admin JA e a aprovacao. Proposta de dev
+    // entra por outra porta (rota projeto-novo) e nasce pendente.
     p = Object.assign({ id: 'prj-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
-                        codigo: '', criado_em: agora }, campos);
+                        codigo: '', criado_em: agora, origem: 'admin',
+                        aprovacao: 'aprovado', aprovado_em: agora,
+                        aprovado_por: (_eu && (_eu.nome || _eu.login)) || 'admin',
+                        solicitado_por: '', recusa_motivo: '' }, campos);
     state.projetos.push(p);
     document.getElementById('pj-id').value = p.id;
   }

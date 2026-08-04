@@ -163,6 +163,7 @@ const LIMITES = {
   'usuarios':       { max: 40,  janela: 60 },
   'quem-sou':       { max: 60,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
+  'projeto-novo':   { max: 10,  janela: 60 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
   // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
   // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
@@ -307,10 +308,49 @@ function atribuiCodigosProjeto(data) {
     if (n) maior = Math.max(maior, parseInt(n[1], 10));
   }
   let novos = 0;
+  // Vazio E repetido. Dois projetos chegaram a nascer com EP-001 porque a lista
+  // foi zerada entre as duas criacoes: sem olhar repetido, o Worker preservava a
+  // duplicata para sempre, e dois projetos com o mesmo codigo nao se distinguem
+  // em nenhum relatorio.
+  const usados = new Set();
   for (const p of data.projetos) {
-    if (p && !p.codigo) { maior += 1; p.codigo = 'EP-' + String(maior).padStart(3, '0'); novos += 1; }
+    if (!p) continue;
+    const cod = String(p.codigo || '');
+    // Proposta pendente nao queima numero: se for recusada, o EP ficaria com um
+    // buraco que ninguem sabe explicar depois. O codigo nasce na aprovacao.
+    if (!projetoAprovado(p)) { p.codigo = ''; continue; }
+    if (cod && !usados.has(cod)) { usados.add(cod); continue; }
+    maior += 1;
+    p.codigo = 'EP-' + String(maior).padStart(3, '0');
+    usados.add(p.codigo);
+    novos += 1;
   }
   return novos;
+}
+
+// Projeto sem o campo conta como aprovado: os que existem hoje foram criados
+// pelo proprio PM/PO no Admin, e criar ali JA e a aprovacao. Sem esta regra,
+// todos eles virariam pendentes na primeira leitura.
+function projetoAprovado(p) {
+  return String((p && p.aprovacao) || 'aprovado') === 'aprovado';
+}
+
+// Demanda nao pode pertencer a projeto que nao existe ou que ainda nao foi
+// aprovado. Vale no Worker porque o vinculo se faz em duas telas por caminhos
+// diferentes, e uma proposta recusada nao pode deixar demanda pendurada nela.
+// Nao rejeita a gravacao: solta o vinculo e informa, como corrigeSemDev.
+function corrigeProjetoInvalido(data) {
+  if (!data || !Array.isArray(data.melhorias)) return [];
+  const validos = new Set((data.projetos || []).filter(projetoAprovado).map(p => p.id));
+  const soltas = [];
+  for (const m of data.melhorias) {
+    if (!m || !m.projeto_id) continue;
+    if (!validos.has(m.projeto_id)) {
+      soltas.push({ id: m.id, codigo: m.codigo || '', titulo: m.titulo || '' });
+      m.projeto_id = '';
+    }
+  }
+  return soltas;
 }
 
 // Etapa com trabalho comprometido exige responsavel. Validado tambem AQUI porque
@@ -973,6 +1013,79 @@ export default {
     //
     // O `dev` NAO vem do corpo: sai de quem esta autenticado. Se viesse do corpo,
     // qualquer dev poderia lancar demanda no nome de outro.
+    // Proposta de projeto pelo dev. Nasce PENDENTE: quem valida e o PM/PO, e ate
+    // a aprovacao nao se pode pendurar demanda nela (corrigeProjetoInvalido).
+    // Admin tambem pode usar, e nesse caso ja nasce aprovado — criar no Admin e
+    // a aprovacao, nao faria sentido o PM/PO aprovar a si mesmo.
+    if (body.action === 'projeto-novo') {
+      const ident = await identifica(env, body);
+      if (!ident || !['dev', 'admin'].includes(ident.papel)) {
+        return json({ error: 'sem_permissao',
+                      detail: 'Informe token de sessao ou a senha de dev.' }, 403, headers);
+      }
+      const nome = limpaTexto(body.nome, 160);
+      if (nome.length < 3) {
+        return json({ error: 'nome', detail: 'Informe o nome do projeto.' }, 400, headers);
+      }
+      const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+      if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const file = await getRes.json();
+      const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const atual = JSON.parse(await rawRes.text());
+      atual.projetos = atual.projetos || [];
+
+      // Nome repetido cria dois projetos que ninguem distingue no relatorio.
+      const norm = t => String(t || '').trim().toLowerCase();
+      const igual = atual.projetos.find(p => norm(p.nome) === norm(nome));
+      if (igual) {
+        return json({ error: 'duplicado',
+                      detail: 'Ja existe um projeto chamado "' + (igual.nome || '') + '"' +
+                              (igual.codigo ? ' (' + igual.codigo + ')' : '') + '.' }, 409, headers);
+      }
+      const quem = (ident.usuario && ident.usuario.nome) || limpaTexto(body.dev, 80);
+      if (!quem) {
+        return json({ error: 'dev',
+                      detail: 'Sem conta identificada, informe "dev" com o seu nome.' }, 400, headers);
+      }
+      const ehAdm = ident.papel === 'admin';
+      const agora = new Date().toISOString();
+      const novo = {
+        id: 'prj-' + Date.now().toString(36) + '-' + crypto.randomUUID().slice(0, 6),
+        codigo: '',
+        nome,
+        descricao: limpaTexto(body.descricao, 4000),
+        justificativa: limpaTexto(body.justificativa, 2000),
+        status: 'planejado',
+        responsavel: limpaTexto(body.responsavel, 80) || quem,
+        inicio: '', fim: '', anexos: [],
+        origem: ehAdm ? 'admin' : 'dev',
+        solicitado_por: quem,
+        aprovacao: ehAdm ? 'aprovado' : 'pendente',
+        aprovado_em: ehAdm ? agora : '',
+        aprovado_por: ehAdm ? quem : '',
+        recusa_motivo: '',
+        criado_em: agora,
+        atualizado_em: agora,
+      };
+      atual.projetos.push(novo);
+      atribuiCodigosProjeto(atual);
+      atual.atualizado_em = agora;
+      const put = await gh('contents/' + FILE_PATH, {
+        method: 'PUT',
+        body: JSON.stringify({ message: 'chore: projeto proposto por ' + quem,
+                               content: toB64(JSON.stringify(atual)), sha: file.sha }),
+      });
+      if (!put.ok) {
+        const t = await put.text();
+        return json({ error: 'Falha ao salvar', detail: t.slice(0, 200) }, 502, headers);
+      }
+      const salvo = atual.projetos.find(p => p.id === novo.id);
+      return json({ ok: true, id: salvo.id, codigo: salvo.codigo || '',
+                    aprovacao: salvo.aprovacao, nome: salvo.nome }, 200, headers);
+    }
+
     if (body.action === 'demanda-nova') {
       const ident = await identifica(env, body);
       if (!ident || !['dev', 'admin'].includes(ident.papel)) {
@@ -1283,6 +1396,7 @@ export default {
       atribuiCodigos(data);
       atribuiCodigosProjeto(data);
       const semDev = corrigeSemDev(data);
+      const soltas = corrigeProjetoInvalido(data);
       // O codigo nasce aqui, entao o cliente nao tem como saber qual foi. Devolver
       // o mapa evita uma releitura inteira da base so para descobrir o numero.
       const codigosMel = {};
@@ -1296,7 +1410,8 @@ export default {
       });
       if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
       return json({ ok: true, codigos: codigosMel, codigos_projeto: codigosPrj,
-                    sem_dev: semDev, atualizado_em: data.atualizado_em }, 200, headers);
+                    sem_dev: semDev, sem_projeto: soltas,
+                    atualizado_em: data.atualizado_em }, 200, headers);
     }
 
     // Aceita a senha do time (DEV_SENHA) ou a do admin (ADMIN_SENHA). Enquanto
@@ -1325,6 +1440,7 @@ export default {
       const confDev = await conflito(gh, body, headers);
       if (confDev) return confDev;
       atribuiCodigos(data);
+      corrigeProjetoInvalido(data);
       data.atualizado_em = new Date().toISOString();
       const putRes = await gh('contents/' + FILE_PATH, {
         method: 'PUT',

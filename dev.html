@@ -83,6 +83,32 @@
       cursor:pointer; font-family:'Inter',sans-serif; white-space:nowrap; border-radius:8px 8px 0 0; }
     .dv-tab:hover { color:var(--text); background:var(--bg2); }
     .dv-tab.ativa { color:var(--blue); border-bottom-color:var(--blue); font-weight:600; background:none; }
+    /* Projetos no painel do dev. */
+    .dp-topo { display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+      margin:0 24px 18px; flex-wrap:wrap; }
+    .dp-titulo { font-size:17px; font-weight:600; color:var(--text); margin:0 0 4px; }
+    .dp-lede { font-size:13.5px; line-height:1.6; color:var(--text2); margin:0; max-width:620px; }
+    .dp-nota { font-size:13px; line-height:1.65; color:var(--text3); margin:0 0 18px; }
+    .dp-vazio { font-size:13.5px; line-height:1.7; color:var(--text3); margin:0 24px; }
+    #dp-lista { display:grid; gap:10px; margin:0 24px 40px;
+      grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); }
+    .dp-card { background:var(--bg2); border:1px solid var(--border); border-radius:11px;
+      padding:14px 16px; }
+    .dp-card.pend { border-color:var(--amber); }
+    .dp-card.rec  { opacity:.62; }
+    .dp-card-topo { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+    .dp-cod { font-family:ui-monospace,Consolas,monospace; font-size:11px; font-weight:700;
+      color:var(--purple-tx,#C9AEFF); background:var(--purple-bg,#341A6E);
+      border-radius:5px; padding:2px 7px; }
+    .dp-nome { font-size:14.5px; font-weight:600; color:var(--text); }
+    .dp-cont { margin-left:auto; font-size:12px; color:var(--text3); white-space:nowrap; }
+    .dp-desc { font-size:13px; line-height:1.6; color:var(--text2); margin-top:7px; }
+    .dp-faixa { font-size:12.5px; line-height:1.6; border-radius:8px; padding:8px 11px; margin-top:10px; }
+    .dp-faixa.pend { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
+    .dp-faixa.rec  { background:var(--red-bg,#4A1D1D);   color:var(--red-tx,#F9A0A0); }
+    .dp-rod { font-size:12px; color:var(--text3); margin-top:9px; }
+    .dp-erro { font-size:13px; line-height:1.6; color:var(--red-tx,#F9A0A0);
+      background:var(--red-bg,#4A1D1D); border-radius:8px; padding:10px 12px; margin-bottom:14px; }
     /* Documentacao do endpoint. Texto tecnico, mas para quem esta com pressa:
        dois blocos copiaveis primeiro, referencia depois. */
     .ep-doc { max-width:840px; margin:0 24px 40px; }
@@ -451,7 +477,48 @@
   <div class="dv-tabs">
     <button class="dv-tab ativa" id="dv-tab-kanban" onclick="devAba('kanban')">Kanban</button>
     <button class="dv-tab" id="dv-tab-gantt" onclick="devAba('gantt')">Cronograma</button>
+    <button class="dv-tab" id="dv-tab-projetos" onclick="devAba('projetos')">Projetos</button>
     <button class="dv-tab" id="dv-tab-api" onclick="devAba('api')">Endpoint</button>
+  </div>
+
+  <!-- Projetos: o dev propoe, o PM/PO valida. Enquanto pendente a proposta nao
+       aceita demanda — o Worker solta qualquer vinculo que apareca. -->
+  <div id="projetos-wrap" style="display:none">
+    <div class="dp-topo">
+      <div>
+        <h2 class="dp-titulo">Projetos</h2>
+        <p class="dp-lede">Agrupe demandas que entregam o mesmo resultado. Você propõe,
+          o PM/PO valida — depois disso pode vincular suas demandas.</p>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="dpNovo()">+ Propor projeto</button>
+    </div>
+    <div id="dp-lista"></div>
+  </div>
+
+  <div id="modal-projeto-dev" class="modal-overlay" style="display:none">
+    <div class="modal" style="max-width:560px">
+      <button type="button" class="modal-close-btn" onclick="closeModal('modal-projeto-dev')" aria-label="Fechar">✕</button>
+      <h2>Propor projeto</h2>
+      <p class="dp-nota">Vai para a fila de validação do PM/PO. Você recebe a resposta
+        aqui mesmo, com o motivo em caso de recusa.</p>
+      <div class="form-group">
+        <label>Nome do projeto *</label>
+        <input type="text" id="dp-nome" placeholder="Ex.: Reformulação do fluxo de cobrança" />
+      </div>
+      <div class="form-group">
+        <label>O que o projeto entrega</label>
+        <textarea id="dp-desc" rows="3" placeholder="Em uma frase, qual o resultado no fim"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Por que agora</label>
+        <textarea id="dp-just" rows="3" placeholder="O que dói hoje, e o que acontece se ficar como está"></textarea>
+      </div>
+      <div id="dp-erro" class="dp-erro" style="display:none"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-projeto-dev')">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="dp-btn" onclick="dpSalvar()">Enviar para validação</button>
+      </div>
+    </div>
   </div>
 
   <!-- Abertura por HTTP. O formulario "+ Nova demanda" resolve o caso manual;
@@ -532,6 +599,13 @@
     <div id="ms-info"></div>
     <div id="ms-pausa" style="margin-bottom:12px"></div>
     <div id="ms-trava" style="display:none;background:var(--amber-bg);color:var(--amber-tx);border-radius:8px;padding:11px 13px;font-size:13px;line-height:1.6;margin-bottom:12px"></div>
+    <!-- So projetos aprovados entram na lista: pendente e recusado nao aceitam
+         demanda, e o Worker solta o vinculo na gravacao. Oferecer aqui faria a
+         pessoa vincular e depois ver o vinculo desaparecer sozinho. -->
+    <div class="form-group" id="ms-projeto-group">
+      <label>Projeto <small style="font-weight:400;color:var(--text3)">(opcional)</small></label>
+      <select id="ms-projeto"></select>
+    </div>
     <div class="form-group" id="ms-status-group">
       <label>Mover para</label>
       <select id="ms-status" onchange="onStatusModalChange()">
@@ -744,7 +818,7 @@ function credDev() {
 let runtimeToken = ADMIN_PROXY_URL ? '' : ((typeof GITHUB_TOKEN !== 'undefined' ? GITHUB_TOKEN : '') || localStorage.getItem('rm_token') || '');
 
 // ─── STATE ───────────────────────────────────────────────────────
-let state = { temas:[], melhorias:[], desenvolvedores:[], feriados:[] };
+let state = { temas:[], melhorias:[], desenvolvedores:[], feriados:[], projetos:[] };
 let fileSha = '';
 let currentDev = localStorage.getItem('rm_dev_name') || '';
 let _temaFilter = null;
@@ -1001,19 +1075,134 @@ async function epCopiar(btn) {
   }
 }
 
+
+// ─── PROJETOS NO PAINEL DO DEV ────────────────────────────────────
+// O dev propõe; a validação é do PM/PO. Enquanto pendente a proposta não aceita
+// demanda, e o Worker solta qualquer vínculo que apareça — então a tela nem
+// oferece a opção, para a pessoa não tentar e depois ver o vínculo desaparecer.
+//
+// Projeto sem o campo `aprovacao` conta como aprovado: os que já existem foram
+// criados pelo PM/PO no Admin, e criar ali já é a aprovação.
+const dpAprovado = p => String((p && p.aprovacao) || 'aprovado') === 'aprovado';
+const dpPendente = p => String(p && p.aprovacao) === 'pendente';
+const dpRecusado = p => String(p && p.aprovacao) === 'recusado';
+const dpLista = () => state.projetos || [];
+const dpPorId = id => dpLista().find(p => p.id === id) || null;
+// Projetos aprovados, para o seletor no card. Recusado e pendente ficam fora.
+const dpVinculaveis = () => dpLista().filter(dpAprovado);
+
+function renderProjetosDev() {
+  const box = document.getElementById('dp-lista');
+  if (!box) return;
+  const ps = dpLista();
+  if (!ps.length) {
+    box.innerHTML = '<p class="dp-vazio">Nenhum projeto ainda. Proponha um para agrupar ' +
+      'demandas que entregam o mesmo resultado.</p>';
+    return;
+  }
+  // Suas propostas primeiro: é o que você está esperando resposta.
+  const meu = p => String(p.solicitado_por || '').toLowerCase() === String(currentDev || '').toLowerCase();
+  const ord = [...ps].sort((a, b) => {
+    if (meu(a) !== meu(b)) return meu(a) ? -1 : 1;
+    if (dpPendente(a) !== dpPendente(b)) return dpPendente(a) ? -1 : 1;
+    if (dpRecusado(a) !== dpRecusado(b)) return dpRecusado(a) ? 1 : -1;
+    return String(b.criado_em || '').localeCompare(String(a.criado_em || ''));
+  });
+  box.innerHTML = ord.map(p => {
+    const minhas = (state.melhorias || []).filter(m => m.projeto_id === p.id);
+    const feitas = minhas.filter(m => getStatusKey(m) === 'concluido').length;
+    const sel = dpAprovado(p)
+      ? '<span class="dp-cont">' + feitas + '/' + minhas.length + ' concluídas</span>'
+      : '';
+    let faixa = '';
+    if (dpPendente(p)) {
+      faixa = '<div class="dp-faixa pend">⏳ Aguardando validação do PM/PO' +
+        (meu(p) ? ' — sua proposta' : '') + '. Ainda não aceita demandas.</div>';
+    } else if (dpRecusado(p)) {
+      faixa = '<div class="dp-faixa rec">✕ Recusado' +
+        (p.recusa_motivo ? ': ' + escAttr(p.recusa_motivo) : '') + '</div>';
+    }
+    const cls = 'dp-card' + (dpPendente(p) ? ' pend' : '') + (dpRecusado(p) ? ' rec' : '');
+    return '<div class="' + cls + '">' +
+      '<div class="dp-card-topo">' +
+        (p.codigo ? '<span class="dp-cod">' + escAttr(p.codigo) + '</span>' : '') +
+        '<span class="dp-nome">' + escAttr(p.nome || '(sem nome)') + '</span>' + sel +
+      '</div>' +
+      (p.descricao ? '<div class="dp-desc">' + escAttr(p.descricao) + '</div>' : '') +
+      faixa +
+      '<div class="dp-rod">Proposto por ' + escAttr(p.solicitado_por || p.responsavel || '—') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function dpNovo() {
+  ['dp-nome', 'dp-desc', 'dp-just'].forEach(id => { document.getElementById(id).value = ''; });
+  const e = document.getElementById('dp-erro');
+  e.style.display = 'none'; e.textContent = '';
+  abrirModal('modal-projeto-dev');
+  setTimeout(() => document.getElementById('dp-nome').focus(), 60);
+}
+
+async function dpSalvar() {
+  const nome = document.getElementById('dp-nome').value.trim();
+  const erro = document.getElementById('dp-erro');
+  const mostra = txt => {
+    erro.textContent = txt; erro.style.display = 'block';
+  };
+  if (nome.length < 3) {
+    mostra('Dê um nome ao projeto — pelo menos 3 letras.');
+    document.getElementById('dp-nome').focus();
+    return;
+  }
+  const btn = document.getElementById('dp-btn');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    const res = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({
+        action: 'projeto-novo',
+        nome,
+        descricao: document.getElementById('dp-desc').value.trim(),
+        justificativa: document.getElementById('dp-just').value.trim(),
+        dev: currentDev || '',
+      }, credDev()))
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // A mensagem do servidor diz qual campo e o que fazer; genérica não ajuda.
+      mostra(j.detail || (res.status === 429
+        ? 'Muitas tentativas em pouco tempo. Espere um minuto.'
+        : 'Não foi possível enviar a proposta.'));
+      return;
+    }
+    closeModal('modal-projeto-dev');
+    toast('Proposta enviada. O PM/PO vai validar.', 'ok');
+    // Relê para a proposta já aparecer na lista com o estado que o servidor gravou.
+    await loadData();
+    renderProjetosDev();
+  } catch (e) {
+    mostra('Falha de rede. Tente de novo.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enviar para validação';
+  }
+}
+
 function devAba(qual) {
-  const kanban = !['gantt', 'api'].includes(qual);
+  const kanban = !['gantt', 'api', 'projetos'].includes(qual);
   document.getElementById('kanban-wrap').style.display = kanban ? '' : 'none';
   document.getElementById('gantt-wrap').style.display = qual === 'gantt' ? 'block' : 'none';
   document.getElementById('api-wrap').style.display = qual === 'api' ? 'block' : 'none';
+  document.getElementById('projetos-wrap').style.display = qual === 'projetos' ? 'block' : 'none';
   document.getElementById('dv-tab-kanban').classList.toggle('ativa', kanban);
   document.getElementById('dv-tab-gantt').classList.toggle('ativa', qual === 'gantt');
   document.getElementById('dv-tab-api').classList.toggle('ativa', qual === 'api');
+  document.getElementById('dv-tab-projetos').classList.toggle('ativa', qual === 'projetos');
   // A barra de filtros pertence ao Kanban; nas outras abas ela nao filtra nada.
   const fb = document.querySelector('.filter-bar');
   if (fb) fb.style.display = kanban ? '' : 'none';
   if (qual === 'gantt') renderDevGantt();
   if (qual === 'api') renderEndpointDoc();
+  if (qual === 'projetos') renderProjetosDev();
   try { localStorage.setItem('rm_dev_aba', qual); } catch (_) {}
 }
 
@@ -1406,6 +1595,7 @@ async function loadData(useApi = false) {
 function applyData(data) {
   _pollTs = data.atualizado_em || null;
   state.temas         = data.temas         || [];
+  state.projetos      = data.projetos      || [];
   state.melhorias     = data.melhorias     || [];
   state.desenvolvedores = data.desenvolvedores || [];
   state.feriados      = data.feriados      || [];
@@ -1553,6 +1743,7 @@ async function reloadDevList() {
     const data = await fetchFreshData();
     if (data) {
       state.temas = data.temas || [];
+      state.projetos = data.projetos || [];
       state.melhorias = data.melhorias || [];
       state.desenvolvedores = data.desenvolvedores || [];
       state.feriados = data.feriados || [];
@@ -1589,6 +1780,7 @@ async function initApp() {
     const data = await fetchFreshData();
     if (data) {
       state.temas = data.temas || [];
+      state.projetos = data.projetos || [];
       state.melhorias = data.melhorias || [];
       state.desenvolvedores = data.desenvolvedores || [];
       state.feriados = data.feriados || [];
@@ -2267,6 +2459,7 @@ function openStatusModal(id, preselect) {
   // Em validacao PM/PO a demanda sai das maos do dev: ele nao pode puxar de
   // volta nem reentregar enquanto o PM/PO analisa. Concluir tambem nunca foi
   // opcao dele — quem fecha e quem valida.
+  msProjetoRender(m);
   const emValidacao = getStatusKey(m) === 'validacao';
   const jaConcluida = getStatusKey(m) === 'concluido';
   const grupo = document.getElementById('ms-status-group');
@@ -2280,6 +2473,9 @@ function openStatusModal(id, preselect) {
       : '🔒 <strong>Concluída e validada.</strong> Não há mais o que alterar por aqui.';
   }
   if (grupo) grupo.style.display = (emValidacao || jaConcluida) ? 'none' : '';
+  // Com o PM/PO, nem o vinculo de projeto se mexe: a demanda esta congelada.
+  const gProj = document.getElementById('ms-projeto-group');
+  if (gProj) gProj.style.display = (emValidacao || jaConcluida) ? 'none' : '';
   const btnSalvar = document.getElementById('btn-save-status');
   if (btnSalvar) btnSalvar.style.display = (emValidacao || jaConcluida) ? 'none' : '';
 
@@ -2398,6 +2594,34 @@ function onStatusModalChange() {
   }
 }
 
+
+// Seletor de projeto no card do dev. Guarda se mexeu, porque updateStatus monta
+// o patch por campo e um vinculo alterado tem de entrar nele.
+let _msProjetoMexido = false;
+function msProjetoRender(m) {
+  const sel = document.getElementById('ms-projeto');
+  if (!sel) return;
+  _msProjetoMexido = false;
+  const atualId = (m && m.projeto_id) || '';
+  const aprovados = dpVinculaveis();
+  // Se a demanda aponta para um projeto que perdeu a aprovação, a opção aparece
+  // marcada para a pessoa entender por que o vínculo vai cair, em vez de o
+  // seletor voltar para "nenhum" sem explicação.
+  const orfao = atualId && !aprovados.some(p => p.id === atualId) ? dpPorId(atualId) : null;
+  let html = '<option value="">— sem projeto —</option>';
+  html += aprovados.map(p =>
+    '<option value="' + escAttr(p.id) + '"' + (p.id === atualId ? ' selected' : '') + '>' +
+    escAttr((p.codigo ? p.codigo + ' · ' : '') + (p.nome || '(sem nome)')) + '</option>').join('');
+  if (orfao) {
+    html += '<option value="' + escAttr(orfao.id) + '" selected>' +
+      escAttr((orfao.nome || 'projeto') + ' — não aprovado') + '</option>';
+  }
+  sel.innerHTML = html;
+  if (!aprovados.length && !orfao) {
+    sel.innerHTML = '<option value="">nenhum projeto aprovado ainda</option>';
+  }
+}
+
 async function saveStatus() {
   const id = document.getElementById('ms-id').value;
   const atual = state.melhorias.find(x => x.id === id);
@@ -2407,6 +2631,20 @@ async function saveStatus() {
     return;
   }
   const newColKey = document.getElementById('ms-status').value;
+  // Vinculo de projeto: gravado junto, para nao exigir dois salvamentos.
+  const selProj = document.getElementById('ms-projeto');
+  if (atual && selProj) {
+    const novo = selProj.value || '';
+    if (novo !== (atual.projeto_id || '')) {
+      const alvo = novo ? dpPorId(novo) : null;
+      if (novo && (!alvo || !dpAprovado(alvo))) {
+        toast('Este projeto ainda não foi aprovado pelo PM/PO.', 'err');
+        return;
+      }
+      atual.projeto_id = novo;
+      _msProjetoMexido = true;
+    }
+  }
   // Bloqueio por dependência
   if (checkDepBlock(id, newColKey)) {
     const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
@@ -2442,6 +2680,7 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   const stAnterior = m.status;
   const hrAnterior = m.horas_realizadas;
   const implAnterior = m.implementacao;
+  const projAnterior = m.projeto_id;
   const anexosAnterior = m.anexos;
   const spToStatus = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada',
                        em_andamento:'iniciada', planning:'estimada', validacao:'iniciada',
@@ -2463,6 +2702,9 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   if (m.entregue_em) campos.entregue_em = m.entregue_em;
   if (implementacao !== undefined) campos.implementacao = implementacao;
   if (_msAnexosMexidos) campos.anexos = _msAnexos;
+  // Vinculo de projeto entra no patch so se mexeu: mandar sempre sobrescreveria
+  // um vinculo feito no Admin entre a leitura desta tela e a gravacao.
+  if (_msProjetoMexido) campos.projeto_id = m.projeto_id || '';
   const ok = await saveToGitHub({ [id]: campos });
   if (!ok) {
     m.status_planejamento = spAnterior;
@@ -2470,9 +2712,11 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
     m.horas_realizadas = hrAnterior;
     m.implementacao = implAnterior;
     m.anexos = anexosAnterior;
+    m.projeto_id = projAnterior;
     renderKanban();
   } else {
     _msAnexosMexidos = false;
+    _msProjetoMexido = false;
   }
 }
 
