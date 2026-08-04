@@ -312,6 +312,26 @@ function atribuiCodigosProjeto(data) {
   return novos;
 }
 
+// Etapa com trabalho comprometido exige responsavel. Validado tambem AQUI porque
+// as telas podem mudar e o arrastar de card tem varios caminhos; o Worker e o
+// unico ponto por onde toda gravacao passa.
+// Nao rejeita a gravacao inteira por causa disso: seria travar o trabalho de todo
+// mundo por um card. Devolve a etapa para 'backlog' e informa quais mexeu, para a
+// tela avisar.
+function corrigeSemDev(data) {
+  const ETAPAS = ['planejado', 'em_andamento', 'validacao'];
+  const ajustados = [];
+  for (const m of (data.melhorias || [])) {
+    if (!m || m.mesclado_em) continue;
+    if (ETAPAS.includes(m.status_planejamento) && !String(m.dev || '').trim()) {
+      m.status_planejamento = 'backlog';
+      m.status = 'recebida';
+      ajustados.push(m.codigo || m.id);
+    }
+  }
+  return ajustados;
+}
+
 function atribuiCodigos(data) {
   if (!data || !Array.isArray(data.melhorias)) return 0;
   let maior = 0;
@@ -1173,6 +1193,7 @@ export default {
       if (conf) return conf;
       atribuiCodigos(data);
       atribuiCodigosProjeto(data);
+      const semDev = corrigeSemDev(data);
       // O codigo nasce aqui, entao o cliente nao tem como saber qual foi. Devolver
       // o mapa evita uma releitura inteira da base so para descobrir o numero.
       const codigosMel = {};
@@ -1186,7 +1207,7 @@ export default {
       });
       if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
       return json({ ok: true, codigos: codigosMel, codigos_projeto: codigosPrj,
-                    atualizado_em: data.atualizado_em }, 200, headers);
+                    sem_dev: semDev, atualizado_em: data.atualizado_em }, 200, headers);
     }
 
     // Aceita a senha do time (DEV_SENHA) ou a do admin (ADMIN_SENHA). Enquanto
