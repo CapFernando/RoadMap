@@ -573,7 +573,7 @@
     </div>
     <div class="form-group">
       <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
-      <input type="file" id="e-file" multiple onchange="gAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" id="e-file" multiple onchange="gAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
       <div id="e-anexos" style="display:grid;gap:6px;margin-top:8px"></div>
     </div>
     <div id="e-discovery" style="display:none"></div>
@@ -2519,8 +2519,22 @@ async function subirAnexo(file, dataUrl, proxyUrl, cred) {
   return { nome: j.nome, tipo: j.tipo, tamanho: j.tamanho, chave: j.chave };
 }
 
+// Anexo: so PDF, JPEG e PNG. O Worker tambem barra — esta checagem existe para
+// avisar ANTES de subir o arquivo, e nao depois de esperar o envio.
+// Anexos antigos de outros tipos continuam guardados e abrindo normalmente; a
+// regra vale para o que entra de agora em diante.
+const ANEXO_TIPOS_OK = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+const ANEXO_EXT_OK = /\.(pdf|jpe?g|png)$/i;
+function anexoPermitido(arq) {
+  const t = String(arq.type || '').toLowerCase();
+  // Alguns navegadores mandam type vazio; a extensao decide nesse caso.
+  return t ? ANEXO_TIPOS_OK.includes(t) : ANEXO_EXT_OK.test(arq.name || '');
+}
+const ANEXO_RECUSA = arq => '"' + (arq.name || 'arquivo') +
+  '" não foi anexado: só aceitamos PDF, JPEG e PNG.';
 function gAddFiles(files) {
   [...files].forEach(f => {
+    if (!anexoPermitido(f)) { toast(ANEXO_RECUSA(f), 'err'); return; }
     if (f.size > G_MAX_ANEXO) { toast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
     const reader = new FileReader();
     reader.onload = async () => {
