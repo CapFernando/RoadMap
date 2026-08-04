@@ -371,6 +371,27 @@
     }
     .ger-section-hint { font-size:12px; font-weight:500; color:var(--text3); }
     .ger-section-sep { border-top:1px solid var(--border); margin:32px 0 20px; }
+    /* Entradas do mes: total, quebra por tema e por classificacao. */
+    .ent-tab { width:100%; border-collapse:separate; border-spacing:0 6px; font-size:14px; }
+    .ent-tab th { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase;
+      letter-spacing:.06em; text-align:left; padding:0 12px 6px; white-space:nowrap; }
+    .ent-tab th.num, .ent-tab td.num { text-align:right; }
+    .ent-tab td { background:var(--bg3); padding:11px 12px; border-top:1px solid var(--border);
+      border-bottom:1px solid var(--border); }
+    .ent-tab td:first-child { border-left:1px solid var(--border); border-radius:9px 0 0 9px; }
+    .ent-tab td:last-child  { border-right:1px solid var(--border); border-radius:0 9px 9px 0; }
+    .ent-tab tr.total td { background:var(--bg4); font-weight:700; }
+    .ent-tema { font-weight:600; color:var(--text); }
+    .ent-barra { height:6px; background:var(--bg4); border-radius:20px; overflow:hidden;
+      margin-top:5px; display:flex; }
+    .ent-barra i { display:block; height:100%; }
+    .ent-barra i.sust { background:var(--amber); }
+    .ent-barra i.evo  { background:var(--blue); }
+    .ent-pin { font-size:11px; font-weight:700; border-radius:20px; padding:1px 8px; white-space:nowrap; }
+    .ent-pin.sust { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
+    .ent-pin.evo  { background:var(--blue-bg,#0C3260);  color:var(--blue-tx,#9BC8F8); }
+    .ent-pin.sem  { background:var(--bg4); color:var(--text2); }
+    .ent-vazio { font-size:13px; color:var(--text3); line-height:1.6; margin:0; }
     /* Relatórios */
     .rel-grupo { margin-bottom: 20px; }
     .rel-grupo-head {
@@ -815,6 +836,14 @@
 
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
+        Entradas do mês
+        <span class="ger-section-hint">demandas abertas no mês filtrado, pela data de criação</span>
+      </div>
+      <div id="ent-resumo" class="ger-summary"></div>
+      <div id="ent-quebra"></div>
+
+      <div class="ger-section-sep"></div>
+      <div class="ger-section-title">
         🃏 Pontos do Planning Poker
         <span class="ger-section-hint">semana = bloco de 5 dias úteis; card contado pela data de entrega (ou início)</span>
       </div>
@@ -1148,7 +1177,7 @@
       <!-- Anexos: incluir arquivo direto do card, para facilitar a explicação -->
       <div class="form-group">
         <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
-        <input type="file" id="m-file" multiple onchange="mAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" id="m-file" multiple onchange="mAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
         <div id="m-anexos-edit" style="display:grid;gap:6px;margin-top:8px"></div>
       </div>
     </div>
@@ -1266,7 +1295,7 @@
       </div>
       <div class="form-group">
         <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
-        <input type="file" id="pj-file" multiple onchange="pjAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" id="pj-file" multiple onchange="pjAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
         <div id="pj-anexos" style="display:grid;gap:6px;margin-top:8px"></div>
       </div>
       <div class="form-actions">
@@ -2692,8 +2721,22 @@ async function subirAnexo(file, dataUrl, proxyUrl, cred) {
   return { nome: j.nome, tipo: j.tipo, tamanho: j.tamanho, chave: j.chave };
 }
 
+// Anexo: so PDF, JPEG e PNG. O Worker tambem barra — esta checagem existe para
+// avisar ANTES de subir o arquivo, e nao depois de esperar o envio.
+// Anexos antigos de outros tipos continuam guardados e abrindo normalmente; a
+// regra vale para o que entra de agora em diante.
+const ANEXO_TIPOS_OK = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+const ANEXO_EXT_OK = /\.(pdf|jpe?g|png)$/i;
+function anexoPermitido(arq) {
+  const t = String(arq.type || '').toLowerCase();
+  // Alguns navegadores mandam type vazio; a extensao decide nesse caso.
+  return t ? ANEXO_TIPOS_OK.includes(t) : ANEXO_EXT_OK.test(arq.name || '');
+}
+const ANEXO_RECUSA = arq => '"' + (arq.name || 'arquivo') +
+  '" não foi anexado: só aceitamos PDF, JPEG e PNG.';
 function mAddFiles(files) {
   [...files].forEach(f => {
+    if (!anexoPermitido(f)) { toast(ANEXO_RECUSA(f), 'err'); return; }
     if (f.size > M_MAX_ANEXO) { toast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
     const reader = new FileReader();
     reader.onload = async () => {
@@ -3005,12 +3048,105 @@ function toggleGerPtsTable() {
   lbl.textContent = (_gerPtsTableOpen ? '▼' : '▶') + ' Pontos por dev × semana';
 }
 
+
+// ─── ENTRADAS DO MÊS ──────────────────────────────────────────────
+// Quanto o time recebeu de demanda nova no mes, e de onde vem. Diferente do
+// resto do Gerencial, que olha o que SAI: aqui interessa a torneira de entrada.
+// Se entra mais do que sai, o backlog cresce e nenhum grafico de conclusao
+// mostra isso.
+//
+// A data usada e `criado_em` — quando a solicitacao foi aberta. Nao `entrega`
+// nem `inicio`, que sao decisao de planejamento e nao dizem quando chegou.
+function renderGerEntradas(ano, mes) {
+  const resumo = document.getElementById('ent-resumo');
+  const quebra = document.getElementById('ent-quebra');
+  if (!resumo || !quebra) return;
+
+  const mm = String(mes).padStart(2, '0');
+  const prefixo = ano + '-' + mm;
+  const doMes = (state.melhorias || []).filter(m => {
+    if (m.mesclado_em) return false;   // absorvida por outra: nao e entrada propria
+    return String(m.criado_em || '').slice(0, 7) === prefixo;
+  });
+
+  const tipoDe = m => m.tipo === 'sustentacao' ? 'sust' : (m.tipo === 'evolucao' ? 'evo' : 'sem');
+  const nSust = doMes.filter(m => tipoDe(m) === 'sust').length;
+  const nEvo  = doMes.filter(m => tipoDe(m) === 'evo').length;
+  const nSem  = doMes.filter(m => tipoDe(m) === 'sem').length;
+
+  // Comparacao com o mes anterior: numero solto nao diz se e muito ou pouco.
+  const antMes = mes === 1 ? 12 : mes - 1;
+  const antAno = mes === 1 ? ano - 1 : ano;
+  const prefAnt = antAno + '-' + String(antMes).padStart(2, '0');
+  const nAnt = (state.melhorias || []).filter(m => !m.mesclado_em &&
+    String(m.criado_em || '').slice(0, 7) === prefAnt).length;
+  const delta = doMes.length - nAnt;
+
+  const kpi = (valor, rotulo, extra) =>
+    '<div class="ger-kpi"><div class="ger-kpi-label">' + rotulo + '</div>' +
+    '<div class="ger-kpi-value">' + valor + '</div>' +
+    (extra ? '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">' + extra + '</div>' : '') +
+    '</div>';
+
+  resumo.innerHTML =
+    kpi(doMes.length, 'Entraram no mês',
+        nAnt || doMes.length
+          ? (delta === 0 ? 'igual ao mês anterior'
+             : (delta > 0 ? '+' : '') + delta + ' vs. mês anterior (' + nAnt + ')')
+          : '') +
+    kpi(nSust, 'Sustentação (Erro/Bug)', doMes.length ? Math.round(nSust / doMes.length * 100) + '% do mês' : '') +
+    kpi(nEvo,  'Evolução (Melhoria)',    doMes.length ? Math.round(nEvo  / doMes.length * 100) + '% do mês' : '') +
+    (nSem ? kpi(nSem, 'Sem classificação', 'precisam ser classificadas') : '');
+
+  if (!doMes.length) {
+    quebra.innerHTML = '<p class="ent-vazio">Nenhuma demanda foi aberta neste mês.</p>';
+    return;
+  }
+
+  // quebra por tema, ordenada por volume
+  const porTema = {};
+  doMes.forEach(m => {
+    const k = m.tema_id ?? '__sem__';
+    porTema[k] = porTema[k] || { total: 0, sust: 0, evo: 0, sem: 0 };
+    porTema[k].total++;
+    porTema[k][tipoDe(m)]++;
+  });
+  const nomeTema = k => k === '__sem__' ? '(sem tema)'
+    : ((state.temas.find(t => String(t.id) === String(k)) || {}).nome || '(tema removido)');
+  const linhas = Object.entries(porTema).sort((a, b) => b[1].total - a[1].total);
+
+  quebra.innerHTML = '<div class="us-tabela-wrap"><table class="ent-tab">' +
+    '<thead><tr><th>Tema</th><th class="num">Total</th>' +
+    '<th class="num">Sustentação</th><th class="num">Evolução</th><th class="num">Sem tipo</th>' +
+    '<th style="width:130px">Proporção</th></tr></thead><tbody>' +
+    linhas.map(([k, v]) => {
+      const pS = Math.round(v.sust / v.total * 100);
+      const pE = Math.round(v.evo / v.total * 100);
+      return '<tr><td><span class="ent-tema">' + esc(nomeTema(k)) + '</span></td>' +
+        '<td class="num"><strong>' + v.total + '</strong></td>' +
+        '<td class="num">' + (v.sust ? '<span class="ent-pin sust">' + v.sust + '</span>' : '—') + '</td>' +
+        '<td class="num">' + (v.evo  ? '<span class="ent-pin evo">'  + v.evo  + '</span>' : '—') + '</td>' +
+        '<td class="num">' + (v.sem  ? '<span class="ent-pin sem">'  + v.sem  + '</span>' : '—') + '</td>' +
+        '<td><div class="ent-barra" title="' + pS + '% sustentação · ' + pE + '% evolução">' +
+          '<i class="sust" style="width:' + pS + '%"></i><i class="evo" style="width:' + pE + '%"></i>' +
+        '</div></td></tr>';
+    }).join('') +
+    '<tr class="total"><td>Total do mês</td>' +
+    '<td class="num">' + doMes.length + '</td>' +
+    '<td class="num">' + (nSust || '—') + '</td>' +
+    '<td class="num">' + (nEvo || '—') + '</td>' +
+    '<td class="num">' + (nSem || '—') + '</td><td></td></tr>' +
+    '</tbody></table></div>';
+}
+
 function renderGerencial() {
   gerInitFilters();
   gerDestroyCharts();
 
   const mes = parseInt(document.getElementById('ger-mes').value);
   const ano = parseInt(document.getElementById('ger-ano').value);
+
+  renderGerEntradas(ano, mes);
 
   const STATUS_LABEL = {
     backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado',
@@ -4544,6 +4680,7 @@ function pjCopiarCodigo() {
 
 async function pjAddFiles(files) {
   for (const f of files) {
+    if (!anexoPermitido(f)) { toast(ANEXO_RECUSA(f), 'err'); continue; }
     if (f.size > 1.5 * 1024 * 1024) { toast('"' + f.name + '" passa de 1,5 MB.', 'err'); continue; }
     await new Promise(res => {
       const reader = new FileReader();
