@@ -988,10 +988,18 @@ export default {
         return json({ error: 'tipo',
                       detail: 'Informe tipo: "sustentacao" (Erro/Bug) ou "evolucao" (Melhoria).' }, 400, headers);
       }
+      // Duas chamadas de proposito, como nas outras rotas de escrita: a primeira
+      // traz o `sha` que o PUT exige, a segunda traz o conteudo em UTF-8.
+      // NAO usar atob(file.content): atob devolve os bytes como Latin-1, entao
+      // cada caractere acentuado vira dois na memoria e a gravacao assa isso no
+      // arquivo. Custou 1864 acentos corrompidos em 04/08/2026.
       const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
       if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       const file = await getRes.json();
-      const atual = JSON.parse(atob(file.content.replace(/\s/g, '')));
+      const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const atual = JSON.parse(await rawRes.text());
 
       // O tema tem de existir: aceitar texto livre criaria tema duplicado a cada
       // chamada e sujaria a classificacao para todo mundo.
