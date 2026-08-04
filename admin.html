@@ -258,6 +258,14 @@
       border-left:3px solid var(--amber); border-radius:0 8px 8px 0; padding:11px 14px;
       font-size:13.5px; line-height:1.6; }
     .grill-contra b { color:var(--text); }
+    .kb-pausa { font-size:10.5px; font-weight:700; color:var(--text2);
+      background:var(--bg4); border:1px solid var(--border2); border-radius:5px; padding:1px 6px; }
+    .kb-card.kb-prazo-pausada { border-left:3px solid var(--border2); opacity:.86; }
+    /* Bloco da pausa dentro do card. */
+    .pausa-box { background:var(--bg4); border:1px solid var(--border2); border-radius:10px;
+      padding:12px 14px; font-size:13px; line-height:1.6; color:var(--text2); }
+    .pausa-box strong { color:var(--text); }
+    .pausa-acoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
     .kb-mesc { font-size:10.5px; font-weight:700; color:var(--teal-tx,#7EECD8);
       background:var(--teal-bg,#063D30); border-radius:5px; padding:1px 6px; }
     .kb-proj { font-size:10.5px; font-weight:700; color:var(--purple-tx,#C9AEFF);
@@ -1085,6 +1093,7 @@
         </select>
       </div>
       <div class="form-group" style="grid-column:1/-1">
+        <div id="m-pausa" style="display:none;margin-bottom:10px"></div>
         <div id="m-mescladas" style="display:none;margin-bottom:10px"></div>
         <button type="button" class="btn btn-secondary btn-sm" id="m-btn-mesclar"
                 onclick="mescAbrirBusca()" style="display:none">🔗 Mesclar outra demanda nesta</button>
@@ -2345,7 +2354,8 @@ function renderMelhorias() {
           const dias = Math.round((e - hoje) / 86400000);
           // Tokens, nao hex: #F9A0A0 e #FFB84D sao claros e davam 1.99:1 sobre
           // fundo claro. Os pares -tx escurecem no tema claro.
-          if (dias < 0)       { cor = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
+          if (estaPausado(m)) { cor = 'color:var(--text3)'; tag = ' (pausada)'; }
+          else if (dias < 0)  { cor = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
           else if (dias === 0){ cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ' (vence hoje)'; }
           else if (dias <= 7) { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ` (em ${dias}d)`; }
         }
@@ -2444,6 +2454,8 @@ const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento', 'validacao'];
 // statusKey() é o valor armazenado, e gravar o efetivo apagaria o estágio real.
 function statusEfetivo(m) {
   const sk = statusKey(m);
+  // Pausada nao atrasa: o prazo esta suspenso, nao estourado.
+  if (typeof estaPausado === 'function' && estaPausado(m)) return sk;
   if (sk === 'atrasado') return 'atrasado';
   if (m.entrega && STATUS_ATRASO.includes(sk)) {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
@@ -2546,6 +2558,8 @@ function renderKanban() {
       if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
       const nAnexos = (m.anexos || []).length;
       const badges = [ipBadge(getIP(m))];
+      if (estaPausado(m)) badges.push('<span class="kb-pausa" title="' +
+        esc(m.pausa_motivo || '') + '">⏸ Pausada · ' + diasPausadoAgora(m) + 'd</span>');
       const nMesc = mescladasDe(m.id).length;
       if (nMesc) badges.push('<span class="kb-mesc" title="Absorveu ' + nMesc + ' demanda(s)">🔗 +' + nMesc + '</span>');
       const projDoCard = m.projeto_id ? pjPorId(m.projeto_id) : null;
@@ -3822,6 +3836,7 @@ function openModalMelhoria(id) {
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
   mPopulaProjetos(m?.projeto_id || '');
   mescRenderBloco(m || null);
+  pausaRenderBloco(m || null);
   // Sino na aba Grill: mostra o que falta antes de a pessoa abrir.
   const gn = document.getElementById('mtab-grill-n');
   if (gn) {
@@ -4013,6 +4028,128 @@ function sugereFibonacci() {
 const ETAPAS_COM_DEV = ['planejado', 'em_andamento', 'validacao'];
 function exigeDev(sp) { return ETAPAS_COM_DEV.includes(sp); }
 
+
+// ─── PAUSA DE DEMANDA ─────────────────────────────────────────────
+// Demanda travada por dependencia externa — resposta de terceiro, licenca,
+// decisao de outra area — nao pode contar prazo. Sem pausa, ela aparece vermelha
+// todos os dias por um motivo que o time nao controla, e o vermelho perde o
+// sentido para as que dependem de nos.
+//
+// Enquanto pausada: a data de entrega FICA GUARDADA mas nao e exibida, e a
+// demanda nao conta como atrasada.
+// Ao retomar: os dias parados sao somados a entrega. Uma demanda parada 9 dias
+// entrega 9 dias depois — e o que acontece na vida real.
+const estaPausado = m => !!(m && String(m.pausado_em || '').trim());
+
+function _isoHoje() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+         '-' + String(d.getDate()).padStart(2, '0');
+}
+function _somaDias(iso, n) {
+  const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+  const x = new Date(a, m - 1, d + n);
+  return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') +
+         '-' + String(x.getDate()).padStart(2, '0');
+}
+function _difDias(de, ate) {
+  const p = s2 => { const [a, m, d] = String(s2).slice(0, 10).split('-').map(Number); return new Date(a, m - 1, d); };
+  return Math.max(0, Math.round((p(ate) - p(de)) / 86400000));
+}
+// Dias parados ate hoje na pausa corrente.
+const diasPausadoAgora = m => estaPausado(m) ? _difDias(m.pausado_em, _isoHoje()) : 0;
+
+// Aplica a pausa. Motivo e obrigatorio: sem ele, dias depois ninguem lembra por
+// que a demanda parou, e o prazo empurrado nao se justifica no comite.
+function aplicarPausa(m, motivo, quem) {
+  m.pausado_em = _isoHoje();
+  m.pausa_motivo = String(motivo || '').trim();
+  m.pausa_por = quem || '';
+  return m;
+}
+// Retoma e empurra a entrega pelos dias parados.
+function aplicarRetomada(m) {
+  const dias = diasPausadoAgora(m);
+  if (m.entrega && dias > 0) m.entrega = _somaDias(m.entrega, dias);
+  m.pausa_dias = (Number(m.pausa_dias) || 0) + dias;
+  m.pausa_historico = (m.pausa_historico || []).concat([{
+    de: m.pausado_em, ate: _isoHoje(), dias, motivo: m.pausa_motivo || '' }]);
+  m.pausado_em = '';
+  m.pausa_motivo = '';
+  m.pausa_por = '';
+  return dias;
+}
+
+
+// Bloco de pausa no card do admin: estado, motivo e as acoes.
+function pausaRenderBloco(m) {
+  const box = document.getElementById('m-pausa');
+  if (!box) return;
+  if (!m) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const sk = statusKey(m);
+  // Concluida ou negada nao se pausa: nao ha prazo correndo.
+  if (['concluido', 'negada'].includes(sk) && !estaPausado(m)) {
+    box.style.display = 'none'; return;
+  }
+  box.style.display = 'block';
+  if (estaPausado(m)) {
+    const d = diasPausadoAgora(m);
+    box.innerHTML = '<div class="pausa-box">⏸ <strong>Pausada há ' + d +
+      (d === 1 ? ' dia' : ' dias') + '</strong>, desde ' + esc(formatDate(m.pausado_em)) +
+      (m.pausa_por ? ' por ' + esc(m.pausa_por) : '') + '.' +
+      '<br><strong>Motivo:</strong> ' + esc(m.pausa_motivo || '—') +
+      '<br>A data de entrega está oculta e será empurrada em ' + d +
+      (d === 1 ? ' dia' : ' dias') + ' ao retomar.' +
+      '<div class="pausa-acoes"><button type="button" class="btn btn-success btn-sm" onclick="pausaRetomar()">▶ Retomar</button></div>' +
+      '</div>';
+  } else {
+    const jaParou = Number(m.pausa_dias) || 0;
+    box.innerHTML = '<div class="pausa-box">' +
+      (jaParou ? 'Já ficou <strong>' + jaParou + (jaParou === 1 ? ' dia' : ' dias') + '</strong> pausada no total.<br>' : '') +
+      'Travada por algo fora do time? Pause para o prazo não correr.' +
+      '<div class="pausa-acoes"><button type="button" class="btn btn-secondary btn-sm" onclick="pausaIniciar()">⏸ Pausar demanda</button></div>' +
+      '</div>';
+  }
+}
+
+async function pausaIniciar() {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) { toast('Salve a demanda antes de pausar.', 'err'); return; }
+  const motivo = prompt('Por que esta demanda está sendo pausada?\n' +
+    '(obrigatório — é o que justifica o prazo empurrado depois)');
+  if (motivo === null) return;
+  if (!motivo.trim()) { toast('O motivo da pausa é obrigatório.', 'err'); return; }
+  aplicarPausa(m, motivo, (_eu && (_eu.nome || _eu.login)) || 'admin');
+  await pausaSalvar(m, '⏸ Demanda pausada.');
+}
+
+async function pausaRetomar() {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) return;
+  const d = diasPausadoAgora(m);
+  const nova = m.entrega ? _somaDias(m.entrega, d) : null;
+  if (!confirm('Retomar "' + (m.titulo || '') + '"?\n\n' +
+      'Ficou ' + d + (d === 1 ? ' dia' : ' dias') + ' pausada.' +
+      (nova ? '\nA entrega passa de ' + formatDate(m.entrega) + ' para ' + formatDate(nova) + '.' : ''))) return;
+  const dias = aplicarRetomada(m);
+  await pausaSalvar(m, '▶ Retomada. Entrega empurrada em ' + dias + (dias === 1 ? ' dia' : ' dias') + '.');
+}
+
+async function pausaSalvar(m, msg) {
+  _dirtyMelhoriaIds.add(m.id);
+  _pendingEdits = true;
+  const okSalvo = await saveViaProxy();
+  if (okSalvo) {
+    _dirtyMelhoriaIds.clear(); _pendingEdits = false;
+    toast(msg, 'ok');
+    pausaRenderBloco(m);
+    document.getElementById('m-entrega') && (document.getElementById('m-entrega').value = m.entrega || '');
+    renderAll();
+  } else toast('Não foi possível salvar. A alteração continua pendente.', 'err');
+}
+
 function saveMelhoria() {
   const titulo = document.getElementById('m-titulo').value.trim();
   const temaId = resolveTemaSelecao('m', document.getElementById('m-id').value ? (state.melhorias.find(x => x.id === document.getElementById('m-id').value)||{}).tema_id : '');
@@ -4080,6 +4217,12 @@ function saveMelhoria() {
     // O grill nao tem campo no formulario de Dados: sem repassar, salvar por la
     // apagaria as respostas.
     grill:               existing.grill || {},
+    // Pausa nao tem campo no formulario: sem repassar, salvar apagaria a pausa.
+    pausado_em:          existing.pausado_em     || '',
+    pausa_motivo:        existing.pausa_motivo   || '',
+    pausa_por:           existing.pausa_por      || '',
+    pausa_dias:          existing.pausa_dias     || 0,
+    pausa_historico:     existing.pausa_historico || [],
     anexos:              _mAnexos,
     horas_realizadas:    parseFloat(document.getElementById('m-horas-real').value) || existing.horas_realizadas || 0,
     criado_em:           existing.criado_em || new Date().toISOString(),
@@ -5294,6 +5437,7 @@ function maisUmDia(iso) {
 }
 function prazoNivel(m) {
   const sk = statusKey(m);
+  if (estaPausado(m)) return 'pausada';
   if (sk === 'concluido') return 'feito';
   if (sk === 'negada' || !m.entrega) return 'ok';
   const hoje = hojeISO();
