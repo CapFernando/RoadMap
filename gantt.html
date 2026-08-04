@@ -542,7 +542,7 @@
           <span title="Demandas em Planning que já saíram do Planning Poker com pontuação">🃏 Planning pontuado</span>
           <span id="backlog-count" style="font-size:11px;background:var(--bg4);padding:2px 7px;border-radius:10px;">0</span>
         </div>
-        <input class="backlog-search" id="backlog-search" type="text" placeholder="Buscar por nome, tema ou dev…" oninput="renderBacklog()" />
+        <input class="backlog-search" id="backlog-search" type="text" placeholder="Buscar por código, nome, tema ou dev…" oninput="renderBacklog()" />
       </div>
       <div class="backlog-list" id="backlog-list"></div>
     </div>
@@ -1515,9 +1515,11 @@ function renderBacklog() {
   const q = (document.getElementById('backlog-search')?.value || '').toLowerCase().trim();
   const filtered = q ? sorted.filter(m => {
     const tema = state.temas.find(t => t.id === m.tema_id);
+    const cod = String(m.codigo || '').toLowerCase();
     return (m.titulo || '').toLowerCase().includes(q)
         || (tema?.nome || '').toLowerCase().includes(q)
-        || (m.dev || '').toLowerCase().includes(q);
+        || (m.dev || '').toLowerCase().includes(q)
+        || cod.includes(q) || cod.replace(/-/g, '').includes(q);
   }) : sorted;
 
   document.getElementById('backlog-count').textContent = sorted.length;

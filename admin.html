@@ -2102,7 +2102,11 @@ function normTexto(s) {
 }
 function matchBusca(m, termo) {
   if (!termo) return true;
-  const alvo = normTexto([m.titulo, m.descricao, m.dev, m.solicitante].filter(Boolean).join(' '));
+  // O codigo entra em duas formas: com e sem hifen. Quem le "AX-179" no card
+  // digita tanto "AX-179" quanto "AX179" ou so "179".
+  const cod = String(m.codigo || '');
+  const alvo = normTexto([m.titulo, m.descricao, m.dev, m.solicitante,
+                          cod, cod.replace(/-/g, '')].filter(Boolean).join(' '));
   return alvo.includes(normTexto(termo));
 }
 
@@ -2190,7 +2194,7 @@ function fbBusca(id, valor, handler) {
   return `<div class="ger-filter-group">
     <label>Buscar</label>
     <input type="text" class="fb-busca" id="${id}" value="${esc(valor || '')}"
-           placeholder="título, dev, solicitante…" oninput="${handler}(this.value)">
+           placeholder="AX-179, título, dev, solicitante…" oninput="${handler}(this.value)">
   </div>`;
 }
 
