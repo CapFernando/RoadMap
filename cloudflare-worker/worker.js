@@ -162,6 +162,7 @@ const LIMITES = {
   'recuperar':      { max: 5,   janela: 60 },
   'usuarios':       { max: 40,  janela: 60 },
   'quem-sou':       { max: 60,  janela: 60 },
+  'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
   // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
   // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
@@ -964,6 +965,86 @@ export default {
       // Resposta identica exista ou nao a conta: senao isto viraria um verificador
       // de quem tem acesso ao sistema.
       return json({ ok: true, detail: 'Pedido registrado. O administrador vai gerar uma nova senha e entregar a voce.' }, 200, headers);
+    }
+
+    // Abertura de demanda pelo proprio dev, por HTTP. Serve para o bug que chega
+    // direto para ele e para automacao — alerta de monitoramento, script, o que for.
+    // Exige credencial de dev: nao e rota publica.
+    //
+    // O `dev` NAO vem do corpo: sai de quem esta autenticado. Se viesse do corpo,
+    // qualquer dev poderia lancar demanda no nome de outro.
+    if (body.action === 'demanda-nova') {
+      const ident = await identifica(env, body);
+      if (!ident || !['dev', 'admin'].includes(ident.papel)) {
+        return json({ error: 'sem_permissao',
+                      detail: 'Informe token de sessao ou a senha de dev.' }, 403, headers);
+      }
+      const titulo = limpaTexto(body.titulo, 200);
+      if (titulo.length < 3) {
+        return json({ error: 'titulo', detail: 'Informe o titulo da demanda.' }, 400, headers);
+      }
+      const tipo = ['sustentacao', 'evolucao'].includes(body.tipo) ? body.tipo : '';
+      if (!tipo) {
+        return json({ error: 'tipo',
+                      detail: 'Informe tipo: "sustentacao" (Erro/Bug) ou "evolucao" (Melhoria).' }, 400, headers);
+      }
+      const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+      if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const file = await getRes.json();
+      const atual = JSON.parse(atob(file.content.replace(/\s/g, '')));
+
+      // O tema tem de existir: aceitar texto livre criaria tema duplicado a cada
+      // chamada e sujaria a classificacao para todo mundo.
+      const temaId = body.tema_id;
+      const tema = (atual.temas || []).find(t => String(t.id) === String(temaId));
+      if (!tema) {
+        return json({ error: 'tema',
+                      detail: 'tema_id invalido. Consulte a lista em temas-publicos.' }, 400, headers);
+      }
+      // Quem abre e o dono. Conta legada (senha compartilhada) precisa dizer quem e.
+      const devNome = (ident.usuario && ident.usuario.nome) || limpaTexto(body.dev, 80);
+      if (!devNome) {
+        return json({ error: 'dev',
+                      detail: 'Sem conta identificada, informe "dev" com o seu nome.' }, 400, headers);
+      }
+      const sp = ['backlog', 'planejado', 'em_andamento'].includes(body.status_planejamento)
+        ? body.status_planejamento : 'em_andamento';
+      const agora = new Date().toISOString();
+      const nova = {
+        id: 'ep-' + Date.now().toString(36) + '-' + crypto.randomUUID().slice(0, 6),
+        codigo: '',                       // atribuido abaixo, como em qualquer gravacao
+        titulo,
+        descricao: limpaTexto(body.descricao, 4000),
+        tema_id: tema.id,
+        tipo,
+        dev: devNome,
+        solicitante: limpaTexto(body.solicitante, 80) || devNome,
+        origem: 'endpoint',
+        status_planejamento: sp,
+        status: sp === 'backlog' ? 'recebida' : (sp === 'planejado' ? 'estimada' : 'iniciada'),
+        inicio: /^\d{4}-\d{2}-\d{2}$/.test(String(body.inicio || '')) ? body.inicio : '',
+        entrega: /^\d{4}-\d{2}-\d{2}$/.test(String(body.entrega || '')) ? body.entrega : '',
+        prioridade: '', estimativa: '', horas_realizadas: 0,
+        anexos: [], oculto: false,
+        criado_em: agora,
+      };
+      atual.melhorias = atual.melhorias || [];
+      atual.melhorias.push(nova);
+      atribuiCodigos(atual);
+      corrigeSemDev(atual);
+      atual.atualizado_em = agora;
+      const put = await gh('contents/' + FILE_PATH, {
+        method: 'PUT',
+        body: JSON.stringify({ message: 'chore: demanda aberta por ' + devNome + ' (endpoint)',
+                               content: toB64(JSON.stringify(atual)), sha: file.sha }),
+      });
+      if (!put.ok) {
+        const t = await put.text();
+        return json({ error: 'Falha ao salvar', detail: t.slice(0, 200) }, 502, headers);
+      }
+      const salva = atual.melhorias.find(m => m.id === nova.id);
+      return json({ ok: true, codigo: salva.codigo, id: salva.id,
+                    status_planejamento: salva.status_planejamento, dev: salva.dev }, 200, headers);
     }
 
     if (body.action === 'login') {

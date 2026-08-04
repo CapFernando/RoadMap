@@ -83,6 +83,38 @@
       cursor:pointer; font-family:'Inter',sans-serif; white-space:nowrap; border-radius:8px 8px 0 0; }
     .dv-tab:hover { color:var(--text); background:var(--bg2); }
     .dv-tab.ativa { color:var(--blue); border-bottom-color:var(--blue); font-weight:600; background:none; }
+    /* Documentacao do endpoint. Texto tecnico, mas para quem esta com pressa:
+       dois blocos copiaveis primeiro, referencia depois. */
+    .ep-doc { max-width:840px; margin:0 24px 40px; }
+    .ep-lede { font-size:14.5px; line-height:1.7; color:var(--text2); margin:0 0 26px; }
+    .ep-passo { margin-bottom:28px; }
+    .ep-passo h3 { display:flex; align-items:center; gap:9px; font-size:15px; font-weight:600;
+      color:var(--text); margin:0 0 9px; }
+    .ep-num { display:inline-flex; align-items:center; justify-content:center; width:21px; height:21px;
+      border-radius:50%; background:var(--blue); color:#fff; font-size:12px; font-weight:700; }
+    .ep-nota { font-size:13px; line-height:1.65; color:var(--text3); margin:9px 0 0; }
+    .ep-cod { position:relative; }
+    .ep-cod pre { background:var(--bg3); border:1px solid var(--border); border-radius:10px;
+      padding:14px 92px 14px 15px; margin:0; font-size:12.5px; line-height:1.65; color:var(--text);
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      overflow-x:auto; white-space:pre; }
+    .ep-copiar { position:absolute; top:9px; right:9px; background:var(--bg4);
+      border:1px solid var(--border2); border-radius:7px; color:var(--text2);
+      font-size:11.5px; font-weight:600; padding:5px 11px; cursor:pointer; font-family:inherit; }
+    .ep-copiar:hover { color:var(--text); }
+    .ep-tab { width:100%; border-collapse:collapse; font-size:13.5px; }
+    .ep-tab td { padding:9px 12px 9px 0; border-bottom:1px solid var(--border);
+      color:var(--text2); vertical-align:top; line-height:1.55; }
+    .ep-tab td:first-child { width:170px; }
+    .ep-ob { width:96px; font-size:11.5px; font-weight:700; color:var(--amber); text-transform:uppercase; }
+    .ep-doc code { background:var(--bg4); border-radius:5px; padding:1px 5px; font-size:12.5px;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    .ep-temas { display:flex; flex-wrap:wrap; gap:7px; }
+    .ep-temas span { font-size:12.5px; background:var(--bg3); border:1px solid var(--border);
+      border-radius:7px; padding:5px 10px; color:var(--text2); }
+    .ep-temas b { color:var(--blue); font-family:ui-monospace,Consolas,monospace; }
+    .ep-aviso { font-size:13px; line-height:1.7; color:var(--amber-tx,#FFC470);
+      background:var(--amber-bg,#4A2800); border-radius:10px; padding:13px 15px; margin:30px 0 0; }
 
     /* Cronograma do dev. Uma linha por demanda — nao por pessoa, porque aqui
        so existe uma pessoa. */
@@ -419,6 +451,52 @@
   <div class="dv-tabs">
     <button class="dv-tab ativa" id="dv-tab-kanban" onclick="devAba('kanban')">Kanban</button>
     <button class="dv-tab" id="dv-tab-gantt" onclick="devAba('gantt')">Cronograma</button>
+    <button class="dv-tab" id="dv-tab-api" onclick="devAba('api')">Endpoint</button>
+  </div>
+
+  <!-- Abertura por HTTP. O formulario "+ Nova demanda" resolve o caso manual;
+       isto serve para automacao: alerta de monitoramento, script, integracao. -->
+  <div id="api-wrap" style="display:none">
+    <div class="ep-doc">
+      <p class="ep-lede">Abra demandas por HTTP, sem passar pela tela. Serve para
+        automa&ccedil;&atilde;o &mdash; alerta de monitoramento, script, integra&ccedil;&atilde;o com outra
+        ferramenta. Para abrir na m&atilde;o, use <strong>+ Nova demanda</strong> no topo: d&aacute; no mesmo.</p>
+
+      <div class="ep-passo">
+        <h3><span class="ep-num">1</span> Pegue um token com a sua conta</h3>
+        <p class="ep-nota">O token vale 12 horas. Use a <strong>sua</strong> senha do painel &mdash;
+          a demanda entra no seu nome, no seu funil.</p>
+        <div class="ep-cod"><button class="ep-copiar" onclick="epCopiar(this)">Copiar</button><pre id="ep-c1"></pre></div>
+      </div>
+
+      <div class="ep-passo">
+        <h3><span class="ep-num">2</span> Abra a demanda</h3>
+        <div class="ep-cod"><button class="ep-copiar" onclick="epCopiar(this)">Copiar</button><pre id="ep-c2"></pre></div>
+        <p class="ep-nota">Resposta: <code>{"ok":true,"codigo":"AX-042","status_planejamento":"em_andamento"}</code></p>
+      </div>
+
+      <div class="ep-passo">
+        <h3>Campos</h3>
+        <table class="ep-tab"><tbody>
+          <tr><td><code>titulo</code></td><td class="ep-ob">obrigat&oacute;rio</td><td>texto curto, m&iacute;nimo 3 letras</td></tr>
+          <tr><td><code>tipo</code></td><td class="ep-ob">obrigat&oacute;rio</td><td><code>sustentacao</code> (Erro/Bug) ou <code>evolucao</code> (Melhoria)</td></tr>
+          <tr><td><code>tema_id</code></td><td class="ep-ob">obrigat&oacute;rio</td><td>n&uacute;mero da lista abaixo</td></tr>
+          <tr><td><code>descricao</code></td><td>opcional</td><td>o que aconteceu, como reproduzir</td></tr>
+          <tr><td><code>status_planejamento</code></td><td>opcional</td><td><code>em_andamento</code> (padr&atilde;o), <code>planejado</code> ou <code>backlog</code></td></tr>
+          <tr><td><code>entrega</code></td><td>opcional</td><td><code>AAAA-MM-DD</code></td></tr>
+          <tr><td><code>solicitante</code></td><td>opcional</td><td>quem pediu; em branco fica voc&ecirc;</td></tr>
+        </tbody></table>
+      </div>
+
+      <div class="ep-passo">
+        <h3>Temas</h3>
+        <div id="ep-temas" class="ep-temas"></div>
+      </div>
+
+      <p class="ep-aviso">&#9888;&#65039; A conclus&atilde;o continua passando pela
+        <strong>valida&ccedil;&atilde;o do PM/PO</strong>, igual a qualquer demanda. Voc&ecirc; marca a
+        entrega; quem fecha &eacute; o PM/PO. N&atilde;o deixe senha em script versionado no Git.</p>
+    </div>
   </div>
 
   <div id="kanban-wrap">
@@ -453,6 +531,7 @@
     <input type="hidden" id="ms-id" />
     <div id="ms-info"></div>
     <div id="ms-pausa" style="margin-bottom:12px"></div>
+    <div id="ms-trava" style="display:none;background:var(--amber-bg);color:var(--amber-tx);border-radius:8px;padding:11px 13px;font-size:13px;line-height:1.6;margin-bottom:12px"></div>
     <div class="form-group" id="ms-status-group">
       <label>Mover para</label>
       <select id="ms-status" onchange="onStatusModalChange()">
@@ -486,7 +565,7 @@
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="openEditDemand(document.getElementById('ms-id').value)" style="margin-right:auto">✏️ Editar demanda</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-status')">Fechar</button>
-      <button class="btn btn-primary" onclick="saveStatus()">Salvar status</button>
+      <button class="btn btn-primary" id="btn-save-status" onclick="saveStatus()">Salvar status</button>
     </div>
   </div>
 </div>
@@ -523,6 +602,20 @@
       <div class="form-group">
         <label>Entrega prevista</label>
         <input type="date" id="n-entrega" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>É problema ou melhoria? *</label>
+        <select id="n-tipo">
+          <option value="">— Selecione —</option>
+          <option value="sustentacao">🔧 Sustentação (Erro/Bug)</option>
+          <option value="evolucao">🚀 Evolução (Melhoria)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Quem pediu <small style="font-weight:400;color:var(--text3)">— vazio = você</small></label>
+        <input type="text" id="n-solicitante" placeholder="Nome de quem reportou" />
       </div>
     </div>
     <div class="form-group">
@@ -846,16 +939,80 @@ const PRAZO_ROTULO = { feito:'concluída', vencida:'vencida', hoje:'vence hoje',
 let _dgMes = new Date().getMonth();
 let _dgAno = new Date().getFullYear();
 
+
+// ─── DOC DO ENDPOINT ──────────────────
+// Os exemplos saem prontos com o login de quem esta na tela e um tema_id que
+// existe de verdade. Doc com placeholder generico obriga a pessoa a montar a
+// chamada na mao — e ai ela erra o tema_id e desiste.
+//
+// A senha NUNCA entra no exemplo: fica o marcador para a pessoa preencher.
+function renderEndpointDoc() {
+  const url = ADMIN_PROXY_URL;
+  const login = (_eu && _eu.login) || 'seu.usuario';
+  const temas = (state.temas || []).slice().sort((a, b) =>
+    String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
+  const temaEx = temas.length ? temas[0].id : 1;
+  const A = String.fromCharCode(92) + String.fromCharCode(10);   // continuacao de linha no shell
+
+  const c1 = document.getElementById('ep-c1');
+  if (c1) c1.textContent =
+    'curl -s ' + url + ' ' + A +
+    '  -H "Content-Type: application/json" ' + A +
+    '  -d \'{"action":"login","login":"' + login + '","senhaUsuario":"SUA_SENHA"}\'' +
+    String.fromCharCode(10) +
+    '# resposta: {"ok":true,"token":"...","usuario":{...}}';
+
+  const c2 = document.getElementById('ep-c2');
+  if (c2) c2.textContent =
+    'curl -s ' + url + ' ' + A +
+    '  -H "Content-Type: application/json" ' + A +
+    '  -d \'{' + String.fromCharCode(10) +
+    '    "action": "demanda-nova",' + String.fromCharCode(10) +
+    '    "token": "TOKEN_DO_PASSO_1",' + String.fromCharCode(10) +
+    '    "titulo": "Erro ao gerar boleto de cliente sem CNPJ",' + String.fromCharCode(10) +
+    '    "tipo": "sustentacao",' + String.fromCharCode(10) +
+    '    "tema_id": ' + temaEx + ',' + String.fromCharCode(10) +
+    '    "descricao": "Reproduz em homologacao com cliente PF.",' + String.fromCharCode(10) +
+    '    "status_planejamento": "em_andamento"' + String.fromCharCode(10) +
+    '  }\'';
+
+  const box = document.getElementById('ep-temas');
+  if (box) {
+    box.innerHTML = temas.length
+      ? temas.map(t => '<span><b>' + t.id + '</b> · ' + escAttr(t.nome || '') + '</span>').join('')
+      : '<span>Carregando…</span>';
+  }
+}
+
+async function epCopiar(btn) {
+  const pre = btn.parentElement.querySelector('pre');
+  if (!pre) return;
+  try {
+    await navigator.clipboard.writeText(pre.textContent);
+    const antes = btn.textContent;
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => { btn.textContent = antes; }, 1600);
+  } catch (_) {
+    // clipboard bloqueado (http, permissao): seleciona para o Ctrl+C manual
+    const r = document.createRange(); r.selectNodeContents(pre);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    btn.textContent = 'Ctrl+C';
+  }
+}
+
 function devAba(qual) {
-  const kanban = qual !== 'gantt';
+  const kanban = !['gantt', 'api'].includes(qual);
   document.getElementById('kanban-wrap').style.display = kanban ? '' : 'none';
-  document.getElementById('gantt-wrap').style.display = kanban ? 'none' : 'block';
+  document.getElementById('gantt-wrap').style.display = qual === 'gantt' ? 'block' : 'none';
+  document.getElementById('api-wrap').style.display = qual === 'api' ? 'block' : 'none';
   document.getElementById('dv-tab-kanban').classList.toggle('ativa', kanban);
-  document.getElementById('dv-tab-gantt').classList.toggle('ativa', !kanban);
-  // A barra de filtros pertence ao Kanban; no cronograma ela nao filtra nada.
+  document.getElementById('dv-tab-gantt').classList.toggle('ativa', qual === 'gantt');
+  document.getElementById('dv-tab-api').classList.toggle('ativa', qual === 'api');
+  // A barra de filtros pertence ao Kanban; nas outras abas ela nao filtra nada.
   const fb = document.querySelector('.filter-bar');
   if (fb) fb.style.display = kanban ? '' : 'none';
-  if (!kanban) renderDevGantt();
+  if (qual === 'gantt') renderDevGantt();
+  if (qual === 'api') renderEndpointDoc();
   try { localStorage.setItem('rm_dev_aba', qual); } catch (_) {}
 }
 
@@ -2106,6 +2263,25 @@ function openStatusModal(id, preselect) {
     ${discoveryHTMLDev(m)}
     ${depsInfoHTML}
   `;
+  // Em validacao PM/PO a demanda sai das maos do dev: ele nao pode puxar de
+  // volta nem reentregar enquanto o PM/PO analisa. Concluir tambem nunca foi
+  // opcao dele — quem fecha e quem valida.
+  const emValidacao = getStatusKey(m) === 'validacao';
+  const jaConcluida = getStatusKey(m) === 'concluido';
+  const grupo = document.getElementById('ms-status-group');
+  const trava = document.getElementById('ms-trava');
+  if (trava) {
+    trava.style.display = (emValidacao || jaConcluida) ? 'block' : 'none';
+    trava.innerHTML = emValidacao
+      ? '🔒 <strong>Aguardando validação do PM/PO.</strong> Enquanto ele analisa, a demanda ' +
+        'não pode ser alterada aqui. Se algo estiver errado, fale com o PM/PO — se ele devolver, ' +
+        'ela volta para Em Andamento com o motivo.'
+      : '🔒 <strong>Concluída e validada.</strong> Não há mais o que alterar por aqui.';
+  }
+  if (grupo) grupo.style.display = (emValidacao || jaConcluida) ? 'none' : '';
+  const btnSalvar = document.getElementById('btn-save-status');
+  if (btnSalvar) btnSalvar.style.display = (emValidacao || jaConcluida) ? 'none' : '';
+
   const sel = document.getElementById('ms-status');
   // Mesmo motivo: com a derivada o select vinha vazio para demanda vencida.
   sel.value = preselect || COLUMNS.find(c => c.maps.includes(getStatusKey(m)))?.key || getStatusKey(m);
@@ -2223,6 +2399,12 @@ function onStatusModalChange() {
 
 async function saveStatus() {
   const id = document.getElementById('ms-id').value;
+  const atual = state.melhorias.find(x => x.id === id);
+  // Segunda barreira: esconder o controle nao basta se alguem chamar a funcao.
+  if (atual && ['validacao', 'concluido'].includes(getStatusKey(atual))) {
+    toast('Esta demanda está com o PM/PO e não pode ser alterada aqui.', 'err');
+    return;
+  }
   const newColKey = document.getElementById('ms-status').value;
   // Bloqueio por dependência
   if (checkDepBlock(id, newColKey)) {
@@ -2300,6 +2482,8 @@ function openNewModal() {
   document.getElementById('n-desc').value = '';
   document.getElementById('n-inicio').value = '';
   document.getElementById('n-entrega').value = '';
+  document.getElementById('n-tipo').value = '';
+  document.getElementById('n-solicitante').value = '';
   resetStatusOptions();
   document.getElementById('n-status').value = 'planejado';
   document.getElementById('modal-new-title').textContent = 'Nova Demanda';
@@ -2405,6 +2589,11 @@ async function saveNewDemand() {
   const temaId = resolveTemaSelecao('n', existing?.tema_id || '');
   if (!titulo) { toast('Informe o título.','err'); return; }
   if (!temaId) { toast('Selecione o sistema.','err'); return; }
+  // O tipo alimenta o relatorio de entradas e a sabatina. Sem ele a demanda
+  // aparece como "sem classificacao" e ninguem sabe se foi bug ou melhoria.
+  const tipoSel = document.getElementById('n-tipo').value;
+  if (!tipoSel) { toast('Diga se é problema (Erro/Bug) ou melhoria.','err');
+                  document.getElementById('n-tipo').focus(); return; }
   const sp = document.getElementById('n-status').value;
   const spToStatus = { backlog:'recebida', planning:'estimada', planejado:'estimada',
                        em_andamento:'iniciada', validacao:'iniciada', atrasado:'iniciada',
@@ -2416,6 +2605,12 @@ async function saveNewDemand() {
     tema_id: temaId,
     descricao: document.getElementById('n-desc').value.trim(),
     dev: existing?.dev || currentDev,
+    tipo: existing?.tipo || tipoSel,
+    // Vazio significa "eu mesmo": e o caso do bug que chega direto para o dev.
+    solicitante: document.getElementById('n-solicitante').value.trim() || existing?.solicitante || currentDev,
+    // Marca que nasceu no painel do dev e nao passou por planejamento. O PM/PO
+    // precisa distinguir o que ele priorizou do que entrou por fora.
+    origem: existing?.origem || 'dev',
     inicio: document.getElementById('n-inicio').value || '',
     entrega: document.getElementById('n-entrega').value || '',
     status: spToStatus[sp] || existing?.status || 'recebida',
