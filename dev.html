@@ -452,6 +452,7 @@
     <h2 id="ms-title">Detalhes da Demanda</h2>
     <input type="hidden" id="ms-id" />
     <div id="ms-info"></div>
+    <div id="ms-pausa" style="margin-bottom:12px"></div>
     <div class="form-group" id="ms-status-group">
       <label>Mover para</label>
       <select id="ms-status" onchange="onStatusModalChange()">
@@ -827,6 +828,7 @@ function maisUmDia(iso) {
 }
 function prazoNivel(m) {
   const sk = getStatusKey(m);
+  if (estaPausado(m)) return 'pausada';
   if (sk === 'concluido') return 'feito';
   if (sk === 'negada' || !m.entrega) return 'ok';
   const hoje = hojeISO();
@@ -939,6 +941,115 @@ function renderDevGantt() {
   corpo.innerHTML = '<div class="dg-rolo"><div class="dg-grade">' + cab + linhas + '</div></div>';
 }
 
+// ─── PAUSA DE DEMANDA ─────────────────────────────────────────────
+// Demanda travada por dependencia externa — resposta de terceiro, licenca,
+// decisao de outra area — nao pode contar prazo. Sem pausa, ela aparece vermelha
+// todos os dias por um motivo que o time nao controla, e o vermelho perde o
+// sentido para as que dependem de nos.
+//
+// Enquanto pausada: a data de entrega FICA GUARDADA mas nao e exibida, e a
+// demanda nao conta como atrasada.
+// Ao retomar: os dias parados sao somados a entrega. Uma demanda parada 9 dias
+// entrega 9 dias depois — e o que acontece na vida real.
+const estaPausado = m => !!(m && String(m.pausado_em || '').trim());
+
+function _isoHoje() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+         '-' + String(d.getDate()).padStart(2, '0');
+}
+function _somaDias(iso, n) {
+  const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+  const x = new Date(a, m - 1, d + n);
+  return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') +
+         '-' + String(x.getDate()).padStart(2, '0');
+}
+function _difDias(de, ate) {
+  const p = s2 => { const [a, m, d] = String(s2).slice(0, 10).split('-').map(Number); return new Date(a, m - 1, d); };
+  return Math.max(0, Math.round((p(ate) - p(de)) / 86400000));
+}
+// Dias parados ate hoje na pausa corrente.
+const diasPausadoAgora = m => estaPausado(m) ? _difDias(m.pausado_em, _isoHoje()) : 0;
+
+// Aplica a pausa. Motivo e obrigatorio: sem ele, dias depois ninguem lembra por
+// que a demanda parou, e o prazo empurrado nao se justifica no comite.
+function aplicarPausa(m, motivo, quem) {
+  m.pausado_em = _isoHoje();
+  m.pausa_motivo = String(motivo || '').trim();
+  m.pausa_por = quem || '';
+  return m;
+}
+// Retoma e empurra a entrega pelos dias parados.
+function aplicarRetomada(m) {
+  const dias = diasPausadoAgora(m);
+  if (m.entrega && dias > 0) m.entrega = _somaDias(m.entrega, dias);
+  m.pausa_dias = (Number(m.pausa_dias) || 0) + dias;
+  m.pausa_historico = (m.pausa_historico || []).concat([{
+    de: m.pausado_em, ate: _isoHoje(), dias, motivo: m.pausa_motivo || '' }]);
+  m.pausado_em = '';
+  m.pausa_motivo = '';
+  m.pausa_por = '';
+  return dias;
+}
+
+// Pausa no painel do dev: quem esta com a demanda na mao e quem primeiro sabe que
+// ela travou. Pausar aqui evita a demanda ficar vermelha por algo que o dev nao
+// controla — e o prazo empurrado fica registrado com motivo.
+function devPausaRender(m) {
+  const box = document.getElementById('ms-pausa');
+  if (!box) return;
+  const sk = getStatusKey(m);
+  if (['concluido','negada'].includes(sk) && !estaPausado(m)) { box.style.display='none'; return; }
+  box.style.display='block';
+  if (estaPausado(m)) {
+    const d = diasPausadoAgora(m);
+    box.innerHTML = '<div style="background:var(--bg4);border:1px solid var(--border2);border-radius:8px;' +
+      'padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--text2)">' +
+      '⏸ <strong style="color:var(--text)">Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
+      '<br><strong>Motivo:</strong> ' + escAttr(m.pausa_motivo || '—') +
+      '<br>Entrega oculta; será empurrada em ' + d + (d===1?' dia':' dias') + ' ao retomar.' +
+      '<div style="margin-top:8px"><button type="button" class="btn btn-sm" ' +
+      'style="background:var(--green);color:#fff;border:none" onclick="devPausaRetomar()">▶ Retomar</button></div></div>';
+  } else {
+    box.innerHTML = '<div style="background:var(--bg4);border:1px solid var(--border2);border-radius:8px;' +
+      'padding:10px 12px;font-size:12.5px;color:var(--text2)">' +
+      'Travou por algo fora do seu alcance? Pause para o prazo não correr.' +
+      '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm" ' +
+      'onclick="devPausaIniciar()">⏸ Pausar</button></div></div>';
+  }
+}
+
+async function devPausaIniciar() {
+  const id = document.getElementById('ms-id').value;
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  const motivo = prompt('Por que esta demanda está sendo pausada?' + String.fromCharCode(10) + '(obrigatório)');
+  if (motivo === null) return;
+  if (!motivo.trim()) { toast('O motivo da pausa é obrigatório.', 'err'); return; }
+  aplicarPausa(m, motivo, currentDev || 'dev');
+  devPausaRender(m);
+  const ok2 = await saveToGitHub({ [id]: { pausado_em:m.pausado_em, pausa_motivo:m.pausa_motivo,
+    pausa_por:m.pausa_por } });
+  toast(ok2 ? '⏸ Demanda pausada.' : 'Não foi possível salvar.', ok2 ? 'ok' : 'err');
+  renderKanban();
+}
+
+async function devPausaRetomar() {
+  const id = document.getElementById('ms-id').value;
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  const d = diasPausadoAgora(m);
+  const nova = m.entrega ? _somaDias(m.entrega, d) : null;
+  if (!confirm('Retomar?' + String.fromCharCode(10) + String.fromCharCode(10) + 'Ficou ' + d + (d===1?' dia':' dias') + ' pausada.' +
+    (nova ? String.fromCharCode(10) + 'Entrega passa de ' + formatDate(m.entrega) + ' para ' + formatDate(nova) + '.' : ''))) return;
+  const dias = aplicarRetomada(m);
+  devPausaRender(m);
+  const ok2 = await saveToGitHub({ [id]: { pausado_em:'', pausa_motivo:'', pausa_por:'',
+    entrega:m.entrega || '', pausa_dias:m.pausa_dias, pausa_historico:m.pausa_historico } });
+  toast(ok2 ? '▶ Retomada. Entrega +' + dias + (dias===1?' dia':' dias') + '.' : 'Não foi possível salvar.', ok2 ? 'ok' : 'err');
+  renderKanban();
+}
+
 function renderMeuDia() {
   const el = document.getElementById('meu-dia');
   if (!el || !currentDev) return;
@@ -1028,6 +1139,7 @@ function mescladasDev(m) {
 function statusEfetivo(m) {
   const sk = getStatusKey(m);
   if (sk === 'atrasado') return 'atrasado';
+  if (estaPausado(m)) return sk;   // pausada nao atrasa
   if (m.entrega && STATUS_ATRASO.includes(sk)) {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     if (new Date(m.entrega + 'T00:00:00') < hoje) return 'atrasado';
@@ -1984,7 +2096,8 @@ function openStatusModal(id, preselect) {
     ${m.tipo ? `<div class="modal-info-row"><span>Classificação:</span><strong>${m.tipo === 'sustentacao' ? '🔧 Sustentação' : m.tipo === 'evolucao' ? '🚀 Evolução' : devEsc(m.tipo)}</strong></div>` : ''}
     ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${devEsc(m.dev)}</strong></div>` : ''}
     ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
-    ${m.entrega ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
+    ${m.entrega && !estaPausado(m) ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
+    ${estaPausado(m) ? `<div class="modal-info-row"><span>Entrega:</span><strong style="color:var(--text3)">oculta enquanto pausada</strong></div>` : ''}
     ${m.debito_tecnico ? `<div class="modal-info-row"><span>Débito técnico:</span><strong>🧱 Sim</strong></div>` : ''}
     ${mescladasDev(m)}
     ${m.concluido_em ? `<div class="modal-info-row"><span>Concluída em:</span><strong>${formatDate(m.concluido_em)}</strong></div>` : ''}
@@ -1999,6 +2112,7 @@ function openStatusModal(id, preselect) {
   document.getElementById('ms-horas').value = m.horas_realizadas || '';
   document.getElementById('ms-implementacao').value = m.implementacao || '';
   // Devolucao do PM/PO: sem mostrar aqui, o dev reentrega a mesma coisa.
+  devPausaRender(m);
   const devolucao = document.getElementById('ms-devolucao');
   if (devolucao) {
     const obs = String(m.validacao_obs || '').trim();
