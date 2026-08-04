@@ -675,6 +675,7 @@
         <input type="date" id="e-data-solic" />
       </div>
     </div>
+    <div id="e-pausa-info" style="margin-bottom:8px"></div>
     <div id="e-mesc-info" style="display:none;margin-bottom:8px"></div>
     <div id="e-dep-info" style="display:none"></div>
     <div class="form-group">
@@ -1447,6 +1448,8 @@ const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
 function spEfetivo(m) {
   // 'deploy' foi removido como etapa: remanescentes contam como concluído
   let sp = m.status_planejamento === 'deploy' ? 'concluido' : (m.status_planejamento || 'backlog');
+  // Pausada nao atrasa: prazo suspenso, nao estourado.
+  if (estaPausado(m)) return sp;
   if (sp === 'atrasado') return 'atrasado';
   if (m.entrega && STATUS_ATRASO.includes(sp)) {
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
@@ -2061,6 +2064,8 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-obs').value       = m?.observacao || '';
   atualizaHorasPlanGantt();
 
+  gPausaRender(m || null);
+
   // Mesclagem: no planejamento importa saber que este card carrega mais de um
   // pedido — muda o tamanho do que se esta estimando.
   const mescEl = document.getElementById('e-mesc-info');
@@ -2197,6 +2202,109 @@ function pokerPontosDoForm(existing) {
 const ETAPAS_COM_DEV = ['planejado', 'em_andamento', 'validacao'];
 function exigeDev(sp) { return ETAPAS_COM_DEV.includes(sp); }
 
+// ─── PAUSA DE DEMANDA ─────────────────────────────────────────────
+// Demanda travada por dependencia externa — resposta de terceiro, licenca,
+// decisao de outra area — nao pode contar prazo. Sem pausa, ela aparece vermelha
+// todos os dias por um motivo que o time nao controla, e o vermelho perde o
+// sentido para as que dependem de nos.
+//
+// Enquanto pausada: a data de entrega FICA GUARDADA mas nao e exibida, e a
+// demanda nao conta como atrasada.
+// Ao retomar: os dias parados sao somados a entrega. Uma demanda parada 9 dias
+// entrega 9 dias depois — e o que acontece na vida real.
+const estaPausado = m => !!(m && String(m.pausado_em || '').trim());
+
+function _isoHoje() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+         '-' + String(d.getDate()).padStart(2, '0');
+}
+function _somaDias(iso, n) {
+  const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+  const x = new Date(a, m - 1, d + n);
+  return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') +
+         '-' + String(x.getDate()).padStart(2, '0');
+}
+function _difDias(de, ate) {
+  const p = s2 => { const [a, m, d] = String(s2).slice(0, 10).split('-').map(Number); return new Date(a, m - 1, d); };
+  return Math.max(0, Math.round((p(ate) - p(de)) / 86400000));
+}
+// Dias parados ate hoje na pausa corrente.
+const diasPausadoAgora = m => estaPausado(m) ? _difDias(m.pausado_em, _isoHoje()) : 0;
+
+// Aplica a pausa. Motivo e obrigatorio: sem ele, dias depois ninguem lembra por
+// que a demanda parou, e o prazo empurrado nao se justifica no comite.
+function aplicarPausa(m, motivo, quem) {
+  m.pausado_em = _isoHoje();
+  m.pausa_motivo = String(motivo || '').trim();
+  m.pausa_por = quem || '';
+  return m;
+}
+// Retoma e empurra a entrega pelos dias parados.
+function aplicarRetomada(m) {
+  const dias = diasPausadoAgora(m);
+  if (m.entrega && dias > 0) m.entrega = _somaDias(m.entrega, dias);
+  m.pausa_dias = (Number(m.pausa_dias) || 0) + dias;
+  m.pausa_historico = (m.pausa_historico || []).concat([{
+    de: m.pausado_em, ate: _isoHoje(), dias, motivo: m.pausa_motivo || '' }]);
+  m.pausado_em = '';
+  m.pausa_motivo = '';
+  m.pausa_por = '';
+  return dias;
+}
+
+
+// Pausa no planejamento: e aqui que o PM/PO decide segurar uma demanda travada.
+function gPausaRender(m) {
+  const box = document.getElementById('e-pausa-info');
+  if (!box) return;
+  if (!m || ['concluido','negada'].includes(m.status_planejamento) && !estaPausado(m)) {
+    box.style.display='none'; box.innerHTML=''; return;
+  }
+  box.style.display='block';
+  if (estaPausado(m)) {
+    const d = diasPausadoAgora(m);
+    box.innerHTML = '<div style="background:#252522;border:1px solid #3A3A36;border-radius:6px;' +
+      'padding:9px 12px;font-size:12px;line-height:1.6;color:var(--text2)">' +
+      '⏸ <strong style="color:var(--text)">Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
+      ' · desde ' + esc(fmtDate(m.pausado_em)) +
+      '<br><strong>Motivo:</strong> ' + esc(m.pausa_motivo || '—') +
+      '<br>Entrega oculta; será empurrada em ' + d + (d===1?' dia':' dias') + ' ao retomar.' +
+      '<div style="margin-top:8px"><button type="button" class="btn btn-sm" ' +
+      'style="background:var(--green);color:#fff;border:none" onclick="gPausaRetomar()">▶ Retomar</button></div></div>';
+  } else {
+    box.innerHTML = '<div style="background:#252522;border:1px solid #3A3A36;border-radius:6px;' +
+      'padding:9px 12px;font-size:12px;color:var(--text2)">' +
+      'Travada por algo fora do time? Pause para o prazo não correr.' +
+      '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm" ' +
+      'onclick="gPausaIniciar()">⏸ Pausar demanda</button></div></div>';
+  }
+}
+
+async function gPausaIniciar() {
+  const m = state.melhorias.find(x => x.id === editingId);
+  if (!m) { toast('Salve a tarefa antes de pausar.', 'err'); return; }
+  const motivo = prompt('Por que esta demanda está sendo pausada?' + String.fromCharCode(10) + '(obrigatório)');
+  if (motivo === null) return;
+  if (!motivo.trim()) { toast('O motivo da pausa é obrigatório.', 'err'); return; }
+  aplicarPausa(m, motivo, (_gEu && (_gEu.nome || _gEu.login)) || 'planejamento');
+  gPausaRender(m); renderAll(); await saveToGitHub();
+  toast('⏸ Demanda pausada.', 'ok');
+}
+
+async function gPausaRetomar() {
+  const m = state.melhorias.find(x => x.id === editingId);
+  if (!m) return;
+  const d = diasPausadoAgora(m);
+  const nova = m.entrega ? _somaDias(m.entrega, d) : null;
+  if (!confirm('Retomar?' + String.fromCharCode(10) + String.fromCharCode(10) + 'Ficou ' + d + (d===1?' dia':' dias') + ' pausada.' +
+    (nova ? String.fromCharCode(10) + 'Entrega passa de ' + fmtDate(m.entrega) + ' para ' + fmtDate(nova) + '.' : ''))) return;
+  const dias = aplicarRetomada(m);
+  document.getElementById('e-fim').value = m.entrega || '';
+  gPausaRender(m); renderAll(); await saveToGitHub();
+  toast('▶ Retomada. Entrega empurrada em ' + dias + (dias===1?' dia':' dias') + '.', 'ok');
+}
+
 function saveTask() {
   const titulo = document.getElementById('e-titulo').value.trim();
   const temaId = resolveTemaSelecao('e', editingId ? (state.melhorias.find(x => x.id === editingId)||{}).tema_id : '');
@@ -2235,6 +2343,12 @@ function saveTask() {
     data_solicitacao:   document.getElementById('e-data-solic').value,
     sprint:             document.getElementById('e-sprint').value.trim(),
     poker_pontos:       pokerPontosDoForm(existing),
+    // Pausa nao tem campo aqui: sem repassar, salvar pelo gantt apagaria a pausa.
+    pausado_em:         existing.pausado_em      || '',
+    pausa_motivo:       existing.pausa_motivo    || '',
+    pausa_por:          existing.pausa_por       || '',
+    pausa_dias:         existing.pausa_dias      || 0,
+    pausa_historico:    existing.pausa_historico || [],
     debito_tecnico:     document.getElementById('e-debito').checked,
     estimativa_horas:   existing.estimativa_horas || 0,
     horas_realizadas:   parseFloat(document.getElementById('e-horas-real').value) || 0,
