@@ -812,7 +812,10 @@ export default {
     // o captcha — mesmo criterio de quem pode criar demanda.
     if (body.action === 'anexo-subir') {
       if (!env.ANEXOS) return json({ error: 'armazenamento indisponivel' }, 503, headers);
-      const autorizado = senhaOk(body.senha) || devOk(body.senha);
+      // ehDev() cobre conta por pessoa (token) E as senhas compartilhadas. Antes
+      // olhava so a senha crua: quem entrou pela propria conta nao tinha senha no
+      // corpo, caia no captcha e nao conseguia anexar.
+      const autorizado = (await ehDev()) || senhaOk(body.senha) || devOk(body.senha);
       if (!autorizado) {
         const ts = await turnstileOk(env, body.turnstile, ip);
         if (!ts.ok) {
@@ -825,6 +828,14 @@ export default {
       const mt = dados.match(/^data:([a-zA-Z0-9.+\/-]+);base64,([A-Za-z0-9+\/=\s]*)$/);
       if (!mt) return json({ error: 'formato invalido', detail: 'Envie o arquivo como data: URL base64.' }, 400, headers);
       const tipo = mt[1];
+      // Lista fechada de tipos. A trava real e aqui: validar so no navegador se
+      // contorna com uma requisicao direta. Anexos antigos de outros tipos
+      // continuam guardados e acessiveis — a regra vale para o que ENTRA.
+      const TIPOS_OK = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      if (!TIPOS_OK.includes(String(tipo).toLowerCase())) {
+        return json({ error: 'tipo_nao_permitido',
+                      detail: 'Só é possível anexar PDF, JPEG ou PNG.' }, 415, headers);
+      }
       let bin;
       try { bin = Uint8Array.from(atob(mt[2].replace(/\s/g, '')), c => c.charCodeAt(0)); }
       catch (_) { return json({ error: 'base64 invalido' }, 400, headers); }
