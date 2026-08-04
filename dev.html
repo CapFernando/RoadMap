@@ -480,7 +480,7 @@
         <table class="ep-tab"><tbody>
           <tr><td><code>titulo</code></td><td class="ep-ob">obrigat&oacute;rio</td><td>texto curto, m&iacute;nimo 3 letras</td></tr>
           <tr><td><code>tipo</code></td><td class="ep-ob">obrigat&oacute;rio</td><td><code>sustentacao</code> (Erro/Bug) ou <code>evolucao</code> (Melhoria)</td></tr>
-          <tr><td><code>tema_id</code></td><td class="ep-ob">obrigat&oacute;rio</td><td>n&uacute;mero da lista abaixo</td></tr>
+          <tr><td><code>tema_id</code></td><td class="ep-ob">obrigat&oacute;rio</td><td>o c&oacute;digo entre aspas, da lista abaixo</td></tr>
           <tr><td><code>descricao</code></td><td>opcional</td><td>o que aconteceu, como reproduzir</td></tr>
           <tr><td><code>status_planejamento</code></td><td>opcional</td><td><code>em_andamento</code> (padr&atilde;o), <code>planejado</code> ou <code>backlog</code></td></tr>
           <tr><td><code>entrega</code></td><td>opcional</td><td><code>AAAA-MM-DD</code></td></tr>
@@ -971,7 +971,7 @@ function renderEndpointDoc() {
     '    "token": "TOKEN_DO_PASSO_1",' + String.fromCharCode(10) +
     '    "titulo": "Erro ao gerar boleto de cliente sem CNPJ",' + String.fromCharCode(10) +
     '    "tipo": "sustentacao",' + String.fromCharCode(10) +
-    '    "tema_id": ' + temaEx + ',' + String.fromCharCode(10) +
+    '    "tema_id": ' + JSON.stringify(temaEx) + ',' + String.fromCharCode(10) +
     '    "descricao": "Reproduz em homologacao com cliente PF.",' + String.fromCharCode(10) +
     '    "status_planejamento": "em_andamento"' + String.fromCharCode(10) +
     '  }\'';
@@ -979,7 +979,8 @@ function renderEndpointDoc() {
   const box = document.getElementById('ep-temas');
   if (box) {
     box.innerHTML = temas.length
-      ? temas.map(t => '<span><b>' + t.id + '</b> · ' + escAttr(t.nome || '') + '</span>').join('')
+      ? temas.map(t => '<span><b>' + escAttr(JSON.stringify(t.id)) + '</b> · ' +
+          escAttr(t.nome || '') + '</span>').join('')
       : '<span>Carregando…</span>';
   }
 }
