@@ -305,6 +305,14 @@
     /* Atraso deixou de ser coluna: e condicao, e aparece no proprio card, sem
        tirar a demanda da etapa em que ela esta. */
     .kb-card.kb-atrasada { border-color: var(--red); border-left: 3px solid var(--red); }
+    /* Prazo: amarelo um dia antes, vermelho no dia. A borda e o que o olho pega
+       varrendo a coluna; a etiqueta confirma. */
+    .kb-card.kb-prazo-amanha { border-left: 3px solid var(--amber); }
+    .kb-card.kb-prazo-hoje   { border-left: 3px solid var(--red); }
+    .kb-prazo-tag { font-size: 10.5px; font-weight: 700; border-radius: 4px; padding: 1px 6px;
+      display: inline-block; margin-bottom: 5px; }
+    .kb-prazo-tag.amanha { background: var(--amber-bg, #4A2800); color: var(--amber-tx, #FFC470); }
+    .kb-prazo-tag.hoje   { background: var(--red-bg, #3A1414);   color: var(--red-tx, #F9A0A0); }
     .kb-atraso-tag { font-size: 10.5px; font-weight: 700; color: var(--red-tx, #F9A0A0);
       background: var(--red-bg, #3A1414); border-radius: 4px; padding: 1px 6px;
       display: inline-block; margin-bottom: 5px; }
@@ -2512,14 +2520,17 @@ function renderKanban() {
       if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
       if (nAnexos) badges.push(`<span class="kb-anexo-tag">📎 ${nAnexos}</span>`);
       // Atraso agora e marca no card, nao coluna.
+      const nivelPrazo = prazoNivel(m);
       const atrasada = statusEfetivo(m) === 'atrasado';
       const diasAtraso = atrasada && m.entrega
         ? Math.floor((Date.now() - new Date(m.entrega + 'T00:00:00')) / 86400000) : 0;
-      return `<div class="kb-card${atrasada ? ' kb-atrasada' : ''}" draggable="true"
+      return `<div class="kb-card${atrasada ? ' kb-atrasada' : ''} kb-prazo-${nivelPrazo}" draggable="true"
         ondragstart="kbDragStart(event,'${m.id}')" ondragend="kbDragEnd(event)"
         onmousedown="kbCardMouseDown(event,'${m.id}')"
         title="${atrasada ? 'Entrega vencida · ' : ''}Arraste para mover · duplo clique para editar">
         ${atrasada ? `<div class="kb-atraso-tag">⚠ Atrasada${diasAtraso > 0 ? ' · ' + diasAtraso + 'd' : ''}</div>` : ''}
+        ${nivelPrazo === 'hoje' ? '<div class="kb-prazo-tag hoje">⚠ Vence hoje</div>' : ''}
+        ${nivelPrazo === 'amanha' ? '<div class="kb-prazo-tag amanha">⏰ Vence amanhã</div>' : ''}
         <div class="kb-card-title">${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}${esc(m.titulo)}</div>
         ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
         ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
@@ -5099,6 +5110,33 @@ async function grillSalvar() {
     toast('Grill salvo.', 'ok');
     grillRender(); renderAll();
   } else toast('Não foi possível salvar as respostas.', 'err');
+}
+
+
+// ─── ALERTA POR PRAZO ─────────────────────────────────────────────
+// Um dia antes de vencer fica amarelo; no dia do vencimento, vermelho.
+// Comparacao por STRING (AAAA-MM-DD) e nao por Date: fuso e horario produzem
+// erro de um dia, e um dia aqui e a diferenca entre amarelo e vermelho.
+function hojeISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+         '-' + String(d.getDate()).padStart(2, '0');
+}
+function maisUmDia(iso) {
+  const [a, m, d] = iso.split('-').map(Number);
+  const x = new Date(a, m - 1, d + 1);
+  return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') +
+         '-' + String(x.getDate()).padStart(2, '0');
+}
+function prazoNivel(m) {
+  const sk = statusKey(m);
+  if (sk === 'concluido') return 'feito';
+  if (sk === 'negada' || !m.entrega) return 'ok';
+  const hoje = hojeISO();
+  if (m.entrega < hoje) return 'vencida';
+  if (m.entrega === hoje) return 'hoje';
+  if (m.entrega === maisUmDia(hoje)) return 'amanha';
+  return 'ok';
 }
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
