@@ -1298,6 +1298,21 @@ async function saveToGitHub(tentativa = 1) {
     // Garante que desenvolvedores nunca tenha entradas compostas ("Gabriel / Anthony")
     state.desenvolvedores = [...new Set(state.desenvolvedores.flatMap(d => splitDevs(d)))];
 
+    // ─── Campos de outras telas ────────────────────────────────────
+    // O Worker grava o objeto que recebe, inteiro. Toda chave que existe no
+    // servidor e nao existe neste `state` DESAPARECE do arquivo.
+    // Foi o que aconteceu com `projetos`: esta tela nao tem essa chave, entao
+    // cada gravacao no planejamento apagava os projetos criados no Admin — dois
+    // projetos sumiram assim, e em outra maquina nao aparecia nenhum.
+    // Lista do que ESTA tela e dona; o resto passa do servidor sem ser tocado.
+    // Negativa de proposito: chave nova criada em outra tela fica preservada
+    // sem ninguem precisar lembrar de vir aqui.
+    const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'feriados',
+                         'ausencias', 'atualizado_em'];
+    Object.keys(serverData || {}).forEach(k => {
+      if (!MEUS_CAMPOS.includes(k)) state[k] = serverData[k];
+    });
+
     state.atualizado_em = new Date().toISOString();
 
     // Modo senha: o Worker grava (token fica no servidor, nunca no navegador)

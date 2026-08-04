@@ -1800,6 +1800,17 @@ async function saveViaProxy(tentativa = 1) {
     (server.projetos || []).forEach(p => {
       if (!localP.has(p.id) && !_deletedIds.has(p.id)) state.projetos.push(p);
     });
+    // ─── Campos de outras telas ────────────────────────────────────
+    // Mesma trava do Gantt: o Worker grava o objeto inteiro, entao chave que
+    // existe no servidor e nao existe neste `state` desaparece do arquivo.
+    // Os campos acima ja sao mesclados um a um; esta lista pega o que vier
+    // depois, criado por outra tela, sem depender de alguem lembrar disto aqui.
+    const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'feriados',
+                         'ausencias', 'projetos', 'atualizado_em'];
+    Object.keys(server || {}).forEach(k => {
+      if (!MEUS_CAMPOS.includes(k)) state[k] = server[k];
+    });
+
     state.atualizado_em = new Date().toISOString();
 
     const res = await fetch(ADMIN_PROXY_URL, {
