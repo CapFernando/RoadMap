@@ -523,7 +523,7 @@
         <label class="nm-f">Print, planilha ou documento que ajude a explicar <span class="nm-opc">opcional</span>
           <small style="font-weight:400;color:var(--text2,#A8A49A);display:block;margin-top:2px">
             Um print da tela costuma explicar melhor que texto. Até 1,5 MB cada.</small>
-          <input type="file" id="nm-file" multiple onchange="nmAddFiles(this.files)" style="padding:8px;background:var(--bg,#0E0E0D);">
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" id="nm-file" multiple onchange="nmAddFiles(this.files)" style="padding:8px;background:var(--bg,#0E0E0D);">
         </label>
         <div id="nm-anexos" style="display:grid;gap:8px"></div>
       </section>
@@ -1763,8 +1763,22 @@ let _nmAnexos = [];
 const NM_MAX = 1.5 * 1024 * 1024;
 // Sobe o arquivo para o R2 pelo Worker, autorizado pelo captcha (nao ha senha
 // aqui). O JSON guarda so a referencia — antes o base64 ia inteiro na base.
+// Anexo: so PDF, JPEG e PNG. O Worker tambem barra — esta checagem existe para
+// avisar ANTES de subir o arquivo, e nao depois de esperar o envio.
+// Anexos antigos de outros tipos continuam guardados e abrindo normalmente; a
+// regra vale para o que entra de agora em diante.
+const ANEXO_TIPOS_OK = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+const ANEXO_EXT_OK = /\.(pdf|jpe?g|png)$/i;
+function anexoPermitido(arq) {
+  const t = String(arq.type || '').toLowerCase();
+  // Alguns navegadores mandam type vazio; a extensao decide nesse caso.
+  return t ? ANEXO_TIPOS_OK.includes(t) : ANEXO_EXT_OK.test(arq.name || '');
+}
+const ANEXO_RECUSA = arq => '"' + (arq.name || 'arquivo') +
+  '" não foi anexado: só aceitamos PDF, JPEG e PNG.';
 function nmAddFiles(files) {
   [...files].forEach(f => {
+    if (!anexoPermitido(f)) { dashToast(ANEXO_RECUSA(f), 'err'); return; }
     if (f.size > NM_MAX) { dashToast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
     const reader = new FileReader();
     reader.onload = async () => {
