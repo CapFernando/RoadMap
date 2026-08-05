@@ -2488,6 +2488,29 @@ async function gPausaRetomar() {
   toast('▶ Retomada. Entrega empurrada em ' + dias + (dias===1?' dia':' dias') + '.', 'ok');
 }
 
+
+// ─── DATA DE CONCLUSÃO ────────────────────────────────────────────
+// `concluido_em` e a data que o consolidado de produtividade do dev usa, e era
+// gravada SO pelo botao Aprovar da aba Entrega. Quem levava a demanda a Concluido
+// pelo funil — pelo seletor de etapa ou arrastando o card — deixava o campo
+// vazio, e a entrega nao contava para ninguem. Era brecha do fluxo, nao decisao.
+//
+// Agora qualquer caminho que chegue a Concluido estampa a data, e qualquer
+// caminho que SAIA dela limpa: demanda reaberta nao pode continuar contando como
+// entregue. A marca de retroativo tambem sai, porque a data volta a ser real.
+function marcaConclusao(m, etapaNova) {
+  if (!m) return;
+  const hoje = new Date();
+  const hojeISO = hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0') +
+    '-' + String(hoje.getDate()).padStart(2, '0');
+  if (etapaNova === 'concluido') {
+    if (!String(m.concluido_em || '').trim()) m.concluido_em = hojeISO;
+  } else if (String(m.concluido_em || '').trim()) {
+    m.concluido_em = '';
+    delete m.concluido_retroativo;
+  }
+}
+
 function saveTask() {
   const titulo = document.getElementById('e-titulo').value.trim();
   const temaId = resolveTemaSelecao('e', editingId ? (state.melhorias.find(x => x.id === editingId)||{}).tema_id : '');
@@ -2526,6 +2549,8 @@ function saveTask() {
     data_solicitacao:   document.getElementById('e-data-solic').value,
     sprint:             document.getElementById('e-sprint').value.trim(),
     poker_pontos:       pokerPontosDoForm(existing),
+    concluido_em:       existing.concluido_em || '',
+    concluido_retroativo: existing.concluido_retroativo || undefined,
     // Pausa nao tem campo aqui: sem repassar, salvar pelo gantt apagaria a pausa.
     pausado_em:         existing.pausado_em      || '',
     pausa_motivo:       existing.pausa_motivo    || '',
@@ -2541,6 +2566,8 @@ function saveTask() {
     oculto:             existing.oculto || false,
     ordem:              existing.ordem  ?? state.melhorias.length,
   };
+  // Mesma regra do Admin: a etapa escolhida aqui tambem leva a Concluido.
+  marcaConclusao(obj, sp);
 
   if (editingId) {
     const idx = state.melhorias.findIndex(x => x.id === editingId);

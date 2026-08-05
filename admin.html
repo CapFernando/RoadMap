@@ -2693,6 +2693,29 @@ function kbDragEnd() {
 }
 function kbDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('drop-target'); }
 function kbDragLeave(e) { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drop-target'); }
+
+// ─── DATA DE CONCLUSÃO ────────────────────────────────────────────
+// `concluido_em` e a data que o consolidado de produtividade do dev usa, e era
+// gravada SO pelo botao Aprovar da aba Entrega. Quem levava a demanda a Concluido
+// pelo funil — pelo seletor de etapa ou arrastando o card — deixava o campo
+// vazio, e a entrega nao contava para ninguem. Era brecha do fluxo, nao decisao.
+//
+// Agora qualquer caminho que chegue a Concluido estampa a data, e qualquer
+// caminho que SAIA dela limpa: demanda reaberta nao pode continuar contando como
+// entregue. A marca de retroativo tambem sai, porque a data volta a ser real.
+function marcaConclusao(m, etapaNova) {
+  if (!m) return;
+  const hoje = new Date();
+  const hojeISO = hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0') +
+    '-' + String(hoje.getDate()).padStart(2, '0');
+  if (etapaNova === 'concluido') {
+    if (!String(m.concluido_em || '').trim()) m.concluido_em = hojeISO;
+  } else if (String(m.concluido_em || '').trim()) {
+    m.concluido_em = '';
+    delete m.concluido_retroativo;
+  }
+}
+
 function kbDrop(e, colKey) {
   e.preventDefault();
   e.currentTarget.classList.remove('drop-target');
@@ -2713,6 +2736,7 @@ function kbDrop(e, colKey) {
   }
   m.status_planejamento = colKey;
   m.status = SP_TO_STATUS[colKey] || m.status;
+  marcaConclusao(m, colKey);
   _dirtyMelhoriaIds.add(m.id);
   renderKanban();
   // se caiu por regra de atraso mesmo indo para outra coluna, avisa
@@ -4380,7 +4404,9 @@ function saveMelhoria() {
     validado_por:        existing.validado_por  || '',
     validacao_obs:       existing.validacao_obs || '',
     entregue_em:         existing.entregue_em   || '',
+    // Estampada mais abaixo por marcaConclusao, que decide pela etapa escolhida.
     concluido_em:        existing.concluido_em  || '',
+    concluido_retroativo: existing.concluido_retroativo || undefined,
     // O grill nao tem campo no formulario de Dados: sem repassar, salvar por la
     // apagaria as respostas.
     grill:               existing.grill || {},
@@ -4394,6 +4420,10 @@ function saveMelhoria() {
     horas_realizadas:    parseFloat(document.getElementById('m-horas-real').value) || existing.horas_realizadas || 0,
     criado_em:           existing.criado_em || new Date().toISOString(),
   };
+  // Depois de montar o objeto: a etapa escolhida no formulario decide se a data de
+  // conclusao entra ou sai. Salvar pela aba Dados e o outro caminho que levava a
+  // Concluido sem gravar a data.
+  marcaConclusao(obj, sp);
 
   if (id) {
     const idx = state.melhorias.findIndex(x => x.id === id);
