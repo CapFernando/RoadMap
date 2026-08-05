@@ -272,6 +272,29 @@
     .cap-text.conflito-text { color: var(--red); font-weight: 600; }
     /* Resumo do mes: os numeros que se le em voz alta no comite. Sem isto, a
        prestacao de contas vira contagem de cards na tela. */
+    /* Faixa de pausadas. Cinza e nao ambar: pausada nao pede acao hoje, so nao
+       pode ser esquecida. Ambar aqui competiria com os avisos de prazo. */
+    .g-pausadas { background:var(--bg3); border:1px solid var(--border2);
+      border-left:3px solid var(--text3); border-radius:9px;
+      padding:11px 14px; margin:0 0 14px; }
+    .g-pausadas-topo { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      font-size:13px; font-weight:600; color:var(--text); margin-bottom:9px; }
+    .g-pausadas-topo small { font-weight:400; color:var(--text3); }
+    .g-pausadas-lista { display:flex; flex-direction:column; gap:6px; }
+    .g-pausada-item { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;
+      background:var(--bg2); border:1px solid var(--border); border-radius:7px;
+      padding:7px 10px; font-size:12.5px; cursor:pointer; text-align:left;
+      width:100%; font-family:inherit; color:var(--text2); }
+    .g-pausada-item:hover { border-color:var(--blue); }
+    .g-pausada-item .gp-cod { font-family:ui-monospace,Consolas,monospace; font-size:11px;
+      font-weight:700; color:var(--purple-tx,#C9AEFF); background:var(--purple-bg,#341A6E);
+      border-radius:4px; padding:1px 6px; flex-shrink:0; }
+    .g-pausada-item .gp-tit { font-weight:600; color:var(--text); }
+    .g-pausada-item .gp-dias { font-weight:700; color:var(--text); white-space:nowrap; }
+    .g-pausada-item .gp-motivo { color:var(--text3); flex:1; min-width:140px;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .g-pausada-item .gp-fora { font-size:11px; font-weight:700; color:var(--amber-tx,#FFC470);
+      background:var(--amber-bg,#4A2800); border-radius:4px; padding:1px 6px; white-space:nowrap; }
     .resumo-mes { display:flex; gap:10px; flex-wrap:wrap; margin:0 0 14px; }
     .rm-bloco { background:var(--bg2); border:1px solid var(--border); border-radius:10px;
       padding:9px 14px; min-width:96px; }
@@ -533,6 +556,12 @@
     <button class="btn btn-secondary btn-sm" onclick="gRecarregarDoServidor()">Atualizar agora</button>
     <button class="btn btn-secondary btn-sm" onclick="gAvisaDesatualizado(false)">Depois</button>
   </div>
+
+  <!-- Pausadas ficam FORA da logica do mes de proposito. Pausar congela a data de
+       entrega, entao a demanda fica presa no mes em que parou e desaparece do
+       planejamento justamente enquanto esta parada. Esta faixa e o unico lugar
+       onde ela reaparece sem que alguem lembre de voltar o mes. -->
+  <div id="g-pausadas" class="g-pausadas" style="display:none"></div>
 
   <div id="resumo-mes" class="resumo-mes"></div>
   <div class="indicator-bar" id="indicator-bar"></div>
@@ -1655,6 +1684,7 @@ function pontosPokerPorSemana(devCards, semanas) {
 
 function renderGantt() {
   renderResumoMes();
+  renderPausadas();
   atualizaContagemGantt();
   document.getElementById('month-label').textContent = `${MONTH_NAMES[viewMonth]} ${viewYear}`;
 
@@ -2886,6 +2916,58 @@ function escureceCor(hex, fator) {
 // ─── RESUMO DO MÊS ────────────────────────────────────────────────
 // Os numeros que se le em voz alta no comite. Sem eles, prestar contas vira
 // contar card na tela — e ninguem confere se a conta fecha.
+
+// ─── FAIXA DE PAUSADAS ────────────────────────────────────────────
+// Roda sobre TODAS as demandas, nao sobre as do mes. Uma demanda pausada tem a
+// entrega congelada na data em que parou: se o mes virou, a barra dela ficou
+// atras e ninguem que olha o mes corrente sabe que ela existe. Foi o caso da
+// AX-084 — pausada com entrega em 31/07, invisivel em agosto.
+//
+// Marca quais NAO tem barra no mes exibido, porque para essas a faixa e a unica
+// forma de chegar ao card.
+function renderPausadas() {
+  const box = document.getElementById('g-pausadas');
+  if (!box) return;
+  const ps = (state.melhorias || []).filter(estaPausado);
+  if (!ps.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+
+  // Mesma janela que a linha do tempo usa para decidir o que desenhar.
+  const ini = new Date(viewYear, viewMonth, 1);
+  const fim = new Date(viewYear, viewMonth + 1, 0);
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getDate()).padStart(2, '0');
+  const noMes = m => {
+    const a = m.inicio || m.entrega;
+    const b = m.entrega || m.inicio;
+    if (!a || !b) return false;
+    return !(b < iso(ini) || a > iso(fim));
+  };
+
+  const total = ps.length;
+  const fora = ps.filter(m => !noMes(m)).length;
+  const ord = [...ps].sort((a, b) =>
+    String(a.pausado_em || '').localeCompare(String(b.pausado_em || '')));
+
+  box.innerHTML = '<div class="g-pausadas-topo">⏸ ' + total +
+    (total === 1 ? ' demanda pausada' : ' demandas pausadas') +
+    (fora ? '<small>· ' + fora + ' sem barra neste mês, a entrega ficou congelada onde parou</small>' : '') +
+    '</div><div class="g-pausadas-lista">' +
+    ord.map(m => {
+      const d = diasPausadoAgora(m);
+      return '<button type="button" class="g-pausada-item" onclick="openModal(' +
+        JSON.stringify(m.id).replace(/"/g, '&quot;') + ')">' +
+        (m.codigo ? '<span class="gp-cod">' + esc(m.codigo) + '</span>' : '') +
+        '<span class="gp-tit">' + esc(m.titulo || '(sem título)') + '</span>' +
+        '<span class="gp-dias">' + d + (d === 1 ? ' dia' : ' dias') + '</span>' +
+        (m.dev ? '<span>· ' + esc(m.dev) + '</span>' : '<span>· sem responsável</span>') +
+        (noMes(m) ? '' : '<span class="gp-fora">fora deste mês</span>') +
+        (m.pausa_motivo ? '<span class="gp-motivo" title="' + esc(m.pausa_motivo) + '">' +
+          esc(m.pausa_motivo) + '</span>' : '') +
+      '</button>';
+    }).join('') + '</div>';
+}
+
 function renderResumoMes() {
   const el = document.getElementById('resumo-mes');
   if (!el) return;
