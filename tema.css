@@ -54,6 +54,13 @@
   --red-bg:    #FADDDD;  --red-tx:    #8F1E1D;
   --teal-bg:   #D1F1E8;  --teal-tx:   #096353;
   --purple-bg: #E6DCFA;  --purple-tx: #45278C;
+  /* Podio. Os tons escuros do ouro/prata/bronze ficam ilegiveis sobre branco;
+     par invertido, com o ouro guardando mais saturacao que os outros dois para a
+     diferenca entre primeiro e segundo continuar visivel no tema claro tambem.
+     Contraste medido: ouro 6,7:1 | prata 7,3:1 | bronze 7,2:1. */
+  --ouro-bg:   #FBEFC8;  --ouro-bd:   #C79A17;  --ouro-tx:   #6B4E00;
+  --prata-bg:  #EDEEF0;  --prata-bd:  #B9BCC2;  --prata-tx:  #4A4D53;
+  --bronze-bg: #F6E3D2;  --bronze-bd: #C08F63;  --bronze-tx: #6B3F1C;
   /* Pausado. O par escuro (#45142F/#F5A8CE) inverte para fundo tingido claro
      + texto escuro; #85116E sobre #FBDDF3 da 6.4:1. */
   --rose:      #A81C8C;

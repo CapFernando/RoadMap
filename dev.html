@@ -16,6 +16,11 @@
     :root {
       --bg:     #0E0E0D; --bg2: #161614; --bg3: #1E1E1C; --bg4: #252522;
       --border: #2E2E2B; --border2: #3A3A36;
+      /* Podio. Cada lugar tem cor e peso proprios: os emojis 🥇 e 🥈 sao quase
+         iguais no tamanho de um chip, entao a diferenca nao pode depender deles. */
+      --ouro-bg:   #3D2F08; --ouro-bd:   #9C7A14; --ouro-tx:   #F7D774;
+      --prata-bg:  #2B2D31; --prata-bd:  #52565D; --prata-tx:  #DBDEE4;
+      --bronze-bg: #33241A; --bronze-bd: #7A5537; --bronze-tx: #E3B389;
       /* Pausado. Magenta para nao se confundir com o vermelho de atrasado. */
       --rose:    #D948B8;
       --rose-bg: #48123F;
@@ -118,10 +123,28 @@
       padding:2px 10px 2px 7px; white-space:nowrap; color:var(--text2); font-size:12px; }
     .prod-medalha b { color:var(--text); font-weight:600; }
     .prod-medalha .prod-num { color:var(--text3); font-size:11px; }
-    /* O seu lugar no podio fica marcado: sem isso a pessoa procura o proprio nome
-       entre os tres a cada vez. */
-    .prod-medalha.eu { border-color:var(--blue); background:var(--blue-bg,#0C3260); }
-    .prod-medalha.eu b, .prod-medalha.eu .prod-num { color:var(--blue-tx,#9BC8F8); }
+    /* Primeiro lugar maior e em ouro cheio; os outros dois recuam em tamanho e em
+       saturacao. So o emoji nao diferenciava: 🥇 e 🥈 tem quase o mesmo desenho
+       nesse tamanho, e a distincao morria. */
+    .prod-medalha.p1 { font-size:13.5px; padding:4px 13px 4px 9px; font-weight:600;
+      background:var(--ouro-bg,#3D2F08); border-color:var(--ouro-bd,#9C7A14);
+      color:var(--ouro-tx,#F7D774); }
+    .prod-medalha.p1 b { color:var(--ouro-tx,#F7D774); font-weight:700; }
+    .prod-medalha.p1 .prod-num { color:var(--ouro-tx,#F7D774); opacity:.82; font-size:12px; }
+    .prod-medalha.p1 .prod-med { font-size:15px; }
+    .prod-medalha.p2 { font-size:12px;
+      background:var(--prata-bg,#2B2D31); border-color:var(--prata-bd,#52565D);
+      color:var(--prata-tx,#DBDEE4); }
+    .prod-medalha.p2 b { color:var(--prata-tx,#DBDEE4); }
+    .prod-medalha.p2 .prod-num { color:var(--prata-tx,#DBDEE4); opacity:.72; }
+    .prod-medalha.p3 { font-size:11.5px; padding:2px 9px 2px 6px;
+      background:var(--bronze-bg,#33241A); border-color:var(--bronze-bd,#7A5537);
+      color:var(--bronze-tx,#E3B389); }
+    .prod-medalha.p3 b { color:var(--bronze-tx,#E3B389); font-weight:600; }
+    .prod-medalha.p3 .prod-num { color:var(--bronze-tx,#E3B389); opacity:.7; }
+    /* O seu lugar fica marcado por um anel, nao trocando o preenchimento: pintar
+       de azul apagaria a cor do lugar, que e a informacao principal. */
+    .prod-medalha.eu { box-shadow:0 0 0 2px var(--blue); }
     .prod-fora { color:var(--text2); white-space:nowrap; }
     .prod-fora b { color:var(--text); }
     .prod-vazio { color:var(--text3); }
@@ -186,6 +209,12 @@
     .ep-temas span { font-size:12.5px; background:var(--bg3); border:1px solid var(--border);
       border-radius:7px; padding:5px 10px; color:var(--text2); }
     .ep-temas b { color:var(--blue); font-family:ui-monospace,Consolas,monospace; }
+    /* Catalogo de funcoes: acao, o que faz, e o comando pronto. */
+    .ep-fn { margin-bottom:16px; }
+    .ep-fn-topo { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; margin-bottom:7px; }
+    .ep-fn-topo span { font-size:13px; line-height:1.6; color:var(--text2); flex:1; min-width:240px; }
+    .ep-fn-acao { background:var(--purple-bg,#341A6E); color:var(--purple-tx,#C9AEFF);
+      font-size:12px; font-weight:700; padding:2px 8px; border-radius:5px; white-space:nowrap; }
     .ep-aviso { font-size:13px; line-height:1.7; color:var(--amber-tx,#FFC470);
       background:var(--amber-bg,#4A2800); border-radius:10px; padding:13px 15px; margin:30px 0 0; }
 
@@ -405,7 +434,7 @@
     .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
   </style>
-  <link rel="stylesheet" href="tema.css?v=b58da297b9">
+  <link rel="stylesheet" href="tema.css?v=0181ca80ed">
   <script src="tema.js?v=7df38474d4"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
@@ -626,7 +655,15 @@
       </div>
 
       <div class="ep-passo">
-        <h3>Campos</h3>
+        <h3>Demais funções</h3>
+        <p class="ep-nota">Todas usam o mesmo <code>token</code> do passo 1. Identificam a
+          demanda por <code>codigo</code> (aceita <code>AX-42</code>, <code>ax42</code>) ou por
+          <code>id</code>.</p>
+        <div id="ep-funcoes"></div>
+      </div>
+
+      <div class="ep-passo">
+        <h3>Campos de "demanda-nova"</h3>
         <table class="ep-tab"><tbody>
           <tr><td><code>titulo</code></td><td class="ep-ob">obrigat&oacute;rio</td><td>texto curto, m&iacute;nimo 3 letras</td></tr>
           <tr><td><code>tipo</code></td><td class="ep-ob">obrigat&oacute;rio</td><td><code>sustentacao</code> (Erro/Bug) ou <code>evolucao</code> (Melhoria)</td></tr>
@@ -643,9 +680,12 @@
         <div id="ep-temas" class="ep-temas"></div>
       </div>
 
-      <p class="ep-aviso">&#9888;&#65039; A conclus&atilde;o continua passando pela
-        <strong>valida&ccedil;&atilde;o do PM/PO</strong>, igual a qualquer demanda. Voc&ecirc; marca a
-        entrega; quem fecha &eacute; o PM/PO. N&atilde;o deixe senha em script versionado no Git.</p>
+      <p class="ep-aviso">&#9888;&#65039; <strong>Nada aqui conclui demanda.</strong> O m&aacute;ximo
+        que a API faz &eacute; entregar para valida&ccedil;&atilde;o — quem fecha &eacute; o PM/PO, na tela dele.
+        <code>etapa</code> vai at&eacute; <code>em_andamento</code>, e enquanto a demanda estiver
+        aguardando valida&ccedil;&atilde;o ela fica congelada: qualquer altera&ccedil;&atilde;o responde
+        <code>409 em_validacao</code>. Voc&ecirc; s&oacute; altera as <strong>suas</strong> demandas.
+        N&atilde;o deixe senha nem token em script versionado no Git.</p>
     </div>
   </div>
 
@@ -1114,6 +1154,62 @@ let _dgAno = new Date().getFullYear();
 // chamada na mao — e ai ela erra o tema_id e desiste.
 //
 // A senha NUNCA entra no exemplo: fica o marcador para a pessoa preencher.
+
+// Catalogo das funcoes da API, montado em JS para o exemplo sair com a URL real
+// e o codigo de uma demanda que existe de verdade — doc com placeholder generico
+// obriga a pessoa a montar a chamada na mao, e ai ela erra e desiste.
+function epFuncoesHTML() {
+  const url = ADMIN_PROXY_URL;
+  // Uma demanda real do dev, para o exemplo ser copiavel sem edicao.
+  const minha = (state.melhorias || []).find(m =>
+    splitDevs(m.dev).includes(currentDev) && !['concluido', 'validacao'].includes(getStatusKey(m)));
+  const cod = (minha && minha.codigo) || 'AX-042';
+  const FUNCOES = [
+    {
+      acao: 'demandas-minhas',
+      o_que: 'Lista as suas demandas. Opcional: <code>etapa</code> (uma ou várias separadas por vírgula) e <code>pausadas: false</code>.',
+      corpo: '{"action":"demandas-minhas","token":"TOKEN","etapa":"em_andamento,planejado"}',
+    },
+    {
+      acao: 'demanda-consultar',
+      o_que: 'Lê uma demanda: título, etapa, tema, prazo, pontos, e os campos derivados <code>aguardando_validacao</code> e <code>concluida</code>.',
+      corpo: '{"action":"demanda-consultar","token":"TOKEN","codigo":"' + cod + '"}',
+    },
+    {
+      acao: 'demanda-atualizar',
+      o_que: 'Grava o que é seu: <code>implementacao</code>, <code>descricao</code>, <code>observacao</code>, <code>link_externo</code>, <code>horas_realizadas</code>, <code>projeto_id</code> (só projeto aprovado) e <code>etapa</code> até <code>em_andamento</code>.',
+      corpo: '{"action":"demanda-atualizar","token":"TOKEN","codigo":"' + cod +
+        '","link_externo":"https://github.com/org/repo/pull/42","horas_realizadas":6}',
+    },
+    {
+      acao: 'demanda-entregar',
+      o_que: 'Manda para a validação do PM/PO. Exige o texto do que foi implementado e as horas — é por esse texto que o PM/PO valida, e as horas alimentam o relatório do comitê.',
+      corpo: '{"action":"demanda-entregar","token":"TOKEN","codigo":"' + cod +
+        '","implementacao":"O que foi feito","horas_realizadas":6}',
+    },
+    {
+      acao: 'projeto-novo',
+      o_que: 'Propõe um projeto. Nasce <b>pendente</b>: não aceita demanda até o PM/PO aprovar.',
+      corpo: '{"action":"projeto-novo","token":"TOKEN","nome":"Nome do projeto","justificativa":"Por que agora"}',
+    },
+    {
+      acao: 'temas-publicos',
+      o_que: 'Lista os temas com os respectivos <code>tema_id</code>, para não precisar deixar o código fixo no script.',
+      corpo: '{"action":"temas-publicos"}',
+    },
+  ];
+  return FUNCOES.map(fn =>
+    '<div class="ep-fn">' +
+      '<div class="ep-fn-topo"><code class="ep-fn-acao">' + fn.acao + '</code>' +
+        '<span>' + fn.o_que + '</span></div>' +
+      '<div class="ep-cod"><button class="ep-copiar" onclick="epCopiar(this)">Copiar</button>' +
+        '<pre>curl -s ' + url + ' \\' + String.fromCharCode(10) +
+        '  -H "Content-Type: application/json" \\' + String.fromCharCode(10) +
+        "  -d '" + fn.corpo + "'</pre></div>" +
+    '</div>'
+  ).join('');
+}
+
 function renderEndpointDoc() {
   const url = ADMIN_PROXY_URL;
   const login = (_eu && _eu.login) || 'seu.usuario';
@@ -1143,6 +1239,9 @@ function renderEndpointDoc() {
     '    "descricao": "Reproduz em homologacao com cliente PF.",' + String.fromCharCode(10) +
     '    "status_planejamento": "em_andamento"' + String.fromCharCode(10) +
     '  }\'';
+
+  const fnBox = document.getElementById('ep-funcoes');
+  if (fnBox) fnBox.innerHTML = epFuncoesHTML();
 
   const box = document.getElementById('ep-temas');
   if (box) {
@@ -1567,17 +1666,22 @@ function prodIntervalo(qual) {
 // inflaria a soma do time.
 function prodAgrega(de, ate) {
   const porDev = new Map();
-  let semData = 0;
-  let retro = 0;      // entregas com data presumida pelo prazo, nao aprovadas
+  // "Sem data" e contado apenas para QUEM ESTA OLHANDO. O painel e individual, e
+  // avisar sobre entrega de outra pessoa nao dava a ninguem nada para fazer —
+  // antes somava as concluidas de todo o time.
+  let semDataMinhas = 0;
   (state.melhorias || []).forEach(m => {
     if (m.mesclado_em) return;
     if (getStatusKey(m) !== 'concluido') return;
     const quando = String(m.concluido_em || '').slice(0, 10);
-    if (!quando) { semData++; return; }
+    if (!quando) {
+      if (splitDevs(m.dev).some(n => n && currentDev &&
+          n.toLowerCase() === String(currentDev).toLowerCase())) semDataMinhas++;
+      return;
+    }
     if (quando < de || quando > ate) return;
     const devs = splitDevs(m.dev).filter(Boolean);
     if (!devs.length) return;
-    if (m.concluido_retroativo) retro++;
     const pts = (Number(m.poker_pontos) || 0) / devs.length;
     devs.forEach(nome => {
       const a = porDev.get(nome) || { nome, issues: 0, pontos: 0 };
@@ -1593,7 +1697,7 @@ function prodAgrega(de, ate) {
     b.pontos - a.pontos || b.issues - a.issues ||
     String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
   const totalPts = rank.reduce((t, r) => t + r.pontos, 0);
-  return { rank, semData, retro, totalPts };
+  return { rank, semDataMinhas, totalPts };
 }
 
 const prodNum = n => Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10).replace('.', ',');
@@ -1608,7 +1712,7 @@ function renderProdutividade() {
   const sel = document.getElementById('prod-periodo');
   const qual = PROD_PERIODOS.includes(sel && sel.value) ? sel.value : 'semana';
   const { de, ate, rot } = prodIntervalo(qual);
-  const { rank, semData, retro, totalPts } = prodAgrega(de, ate);
+  const { rank, semDataMinhas, totalPts } = prodAgrega(de, ate);
   // Periodo em que NADA foi pontuado no poker: mostrar "0 pt" em todo mundo
   // parece defeito e desmotiva. A faixa passa a falar so de issues, e diz que a
   // pontuacao nao foi usada — a metrica existe, o dado nao.
@@ -1627,31 +1731,31 @@ function renderProdutividade() {
 
   // Aviso de dado que falta, no mesmo espirito do relatorio: numero pequeno com
   // explicacao e melhor que numero grande sem base.
+  // Aviso em portugues do dia a dia, dizendo O QUE FAZER. A versao anterior falava
+  // "2 com data presumida · 7 sem data": termos que eu inventei, que nao diziam de
+  // quem eram as entregas nem o que fazer com elas.
   const av = document.getElementById('prod-aviso');
   const partes = [];
   const dicas = [];
+  if (semDataMinhas) {
+    partes.push(semDataMinhas === 1
+      ? '1 entrega sua está fora desta conta'
+      : semDataMinhas + ' entregas suas estão fora desta conta');
+    dicas.push((semDataMinhas === 1 ? 'Uma demanda sua foi concluída' :
+                semDataMinhas + ' demandas suas foram concluídas') +
+               ' sem data registrada, então não pertence' + (semDataMinhas === 1 ? '' : 'm') +
+               ' a nenhuma semana nem mês. Peça ao PM/PO para informar a data de entrega ' +
+               (semDataMinhas === 1 ? 'dela' : 'delas') + ' — aí passa' +
+               (semDataMinhas === 1 ? '' : 'm') + ' a contar aqui.');
+  }
   if (!temPontos && rank.length) {
-    partes.push('sem pontuação no poker');
-    dicas.push('Nenhuma entrega deste período tem pontos do Planning Poker, então o ' +
-               'ranking usa a quantidade de issues.');
-  }
-  // Entrega com data presumida pelo prazo (anterior a esteira de validacao) conta,
-  // mas fica dito: e diferente de entrega que alguem conferiu e aprovou.
-  if (retro) {
-    partes.push(retro + ' com data presumida');
-    dicas.push(retro + ' entrega' + (retro !== 1 ? 's' : '') + ' deste período ' +
-               (retro !== 1 ? 'são' : 'é') + ' anterior' + (retro !== 1 ? 'es' : '') +
-               ' à etapa de validação: a data usada é a de entrega registrada, não a de ' +
-               'uma aprovação do PM/PO.');
-  }
-  if (semData) {
-    partes.push(semData + ' sem data');
-    dicas.push(semData + ' concluída' + (semData !== 1 ? 's' : '') +
-               ' não tem data nem de aprovação nem de entrega, então ' +
-               (semData !== 1 ? 'ficam' : 'fica') + ' fora de qualquer período.');
+    partes.push('nenhuma entrega pontuada');
+    dicas.push('Nenhuma entrega deste período recebeu pontos no Planning Poker, ' +
+               'então a ordem do pódio segue a quantidade de issues.');
   }
   av.innerHTML = partes.length ? '⚠ ' + partes.join(' · ') : '';
-  av.title = dicas.join(' ');
+  // Uma frase por assunto: o texto corrido de antes era longo e nao se lia.
+  av.title = dicas.join(String.fromCharCode(10) + String.fromCharCode(10));
 
   const MEDALHAS = ['🥇', '🥈', '🥉'];
   const podio = document.getElementById('prod-podio');
@@ -1660,8 +1764,11 @@ function renderProdutividade() {
     return;
   }
   let html = rank.slice(0, 3).map((r, i) =>
-    '<span class="prod-medalha' + (r.nome === currentDev ? ' eu' : '') + '">' +
-    MEDALHAS[i] + ' <b>' + escAttr(r.nome) + '</b> ' +
+    '<span class="prod-medalha p' + (i + 1) + (r.nome === currentDev ? ' eu' : '') + '"' +
+    ' title="' + ['1º lugar', '2º lugar', '3º lugar'][i] + ' · ' + r.issues +
+    ' issue' + (r.issues !== 1 ? 's' : '') +
+    (temPontos ? ' · ' + prodNum(r.pontos) + ' pontos' : '') + '">' +
+    '<span class="prod-med">' + MEDALHAS[i] + '</span> <b>' + escAttr(r.nome) + '</b> ' +
     '<span class="prod-num">' + r.issues + (temPontos ? ' · ' + prodNum(r.pontos) + ' pt' : '') +
     '</span></span>'
   ).join('');

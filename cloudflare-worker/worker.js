@@ -164,6 +164,10 @@ const LIMITES = {
   'quem-sou':       { max: 60,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
   'projeto-novo':   { max: 10,  janela: 60 },
+  'demandas-minhas':   { max: 60, janela: 60 },
+  'demanda-consultar': { max: 60, janela: 60 },
+  'demanda-atualizar': { max: 30, janela: 60 },
+  'demanda-entregar':  { max: 20, janela: 60 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
   // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
   // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
@@ -194,16 +198,14 @@ async function limiteExcedido(env, ip, acao) {
   }
 }
 
-// Mensagem para tentativa bloqueada. Vai SOMENTE em resposta que ja era negada
-// (429, 401, acao invalida): nao revela nada que o requisitante ainda nao
-// soubesse, entao provoca sem servir de pista. Cosmetico e dissuasorio — a
-// seguranca real esta na senha, na trava de leitura e nos limites por IP.
-const TROLL = [
-  'Parabens pela tentativa de hackear. Registrada.',
-  'Parabens pela tentativa de hackear. Boa sorte na proxima.',
-  'Parabens pela tentativa de hackear. Sua origem foi anotada.',
-];
-function troll(i) { return TROLL[i % TROLL.length]; }
+// A mensagem de deboche ("parabens pela tentativa de hackear") foi REMOVIDA.
+// A ideia era dissuadir quem sondasse o Worker de fora, mas quem mais viu foi
+// gente do time: uma falha de credencial ao anexar imagem cai na mesma resposta,
+// e a pessoa levou uma acusacao de invasao tentando fazer o trabalho dela.
+// Provocar quem esta de fora nao vale ofender quem esta de dentro — a seguranca
+// real sempre esteve na senha, na trava de leitura e nos limites por IP, nao no
+// texto. As tentativas continuam sendo contadas em `tentativas` para
+// acompanhamento; o que saiu foi so o texto devolvido ao cliente.
 
 // Contador simples de tentativas por IP, para a mensagem citar o numero.
 async function contaTentativa(env, ip, acao) {
@@ -575,10 +577,9 @@ export default {
     const ip = request.headers.get('CF-Connecting-IP') || 'sem-ip';
     const acaoLim = body.action || 'sugestao';
     if (await limiteExcedido(env, ip, acaoLim)) {
-      const n = await contaTentativa(env, ip, acaoLim);
+      await contaTentativa(env, ip, acaoLim);
       return json({ error: 'muitas_tentativas',
-                    detail: 'Muitas requisicoes. Aguarde um minuto e tente de novo.',
-                    mensagem: troll(n) + ' Tentativa #' + n + ' desta origem.' }, 429, headers);
+                    detail: 'Muitas requisicoes. Aguarde um minuto e tente de novo.' }, 429, headers);
     }
 
     const REPO_NAME = env.DATA_REPO || REPO_NAME_PADRAO;
@@ -881,8 +882,7 @@ export default {
         const ts = await turnstileOk(env, body.turnstile, ip);
         if (!ts.ok) {
           const n = await contaTentativa(env, ip, 'anexo-subir');
-          return json({ error: 'captcha', detail: 'Verificacao necessaria para anexar arquivo.',
-                        mensagem: troll(n) + ' Tentativa #' + n + ' desta origem.' }, 403, headers);
+          return json({ error: 'captcha', detail: 'Verificacao necessaria para anexar arquivo.' }, 403, headers);
         }
       }
       const dados = String(body.dados || '');
@@ -1017,6 +1017,252 @@ export default {
     // a aprovacao nao se pode pendurar demanda nela (corrigeProjetoInvalido).
     // Admin tambem pode usar, e nesse caso ja nasce aprovado — criar no Admin e
     // a aprovacao, nao faria sentido o PM/PO aprovar a si mesmo.
+
+    // ═══════════════════════════════════════════════════════════════════
+    // API DO DEV
+    // Serve automacao: a skill do dev cria a milestone, marca as tarefas no git,
+    // pega o codigo AX da demanda e amarra tudo na issue principal.
+    //
+    // REGRA QUE NAO SE NEGOCIA: nada aqui conclui demanda. O maximo que um dev
+    // faz e entregar para validacao; quem fecha e o PM/PO, na tela dele. Por isso
+    // `status_planejamento` NAO esta na lista de campos aceitos por
+    // demanda-atualizar — se estivesse, bastaria mandar "concluido" e a etapa de
+    // validacao deixaria de existir para quem usa a API.
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Subconjunto util de uma demanda. Nao devolve o objeto cru: campos internos
+    // mudam de forma sem aviso, e quem automatiza acabaria dependendo deles.
+    const devVisao = (m, temas) => ({
+      id: m.id,
+      codigo: m.codigo || '',
+      titulo: m.titulo || '',
+      descricao: m.descricao || '',
+      etapa: m.status_planejamento || 'backlog',
+      tipo: m.tipo || '',
+      tema_id: m.tema_id || '',
+      tema: ((temas || []).find(t => String(t.id) === String(m.tema_id)) || {}).nome || '',
+      dev: m.dev || '',
+      solicitante: m.solicitante || '',
+      inicio: m.inicio || '',
+      entrega: m.entrega || '',
+      pontos: m.poker_pontos == null ? null : m.poker_pontos,
+      horas_realizadas: m.horas_realizadas || 0,
+      implementacao: m.implementacao || '',
+      link_externo: m.link_externo || '',
+      projeto_id: m.projeto_id || '',
+      pausado: !!String(m.pausado_em || '').trim(),
+      pausa_motivo: m.pausa_motivo || '',
+      entregue_em: m.entregue_em || '',
+      concluido_em: m.concluido_em || '',
+      criado_em: m.criado_em || '',
+      // Estado derivado, para a automacao nao ter de reimplementar a regra:
+      aguardando_validacao: (m.status_planejamento || '') === 'validacao',
+      concluida: (m.status_planejamento || '') === 'concluido',
+    });
+
+    const ETAPAS_DEV = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento'];
+
+    if (['demandas-minhas', 'demanda-consultar', 'demanda-atualizar', 'demanda-entregar']
+        .includes(body.action)) {
+      const ident = await identifica(env, body);
+      if (!ident || !['dev', 'admin'].includes(ident.papel)) {
+        return json({ error: 'sem_permissao',
+                      detail: 'Informe token de sessao ou a senha de dev.' }, 403, headers);
+      }
+      const ehAdm = ident.papel === 'admin';
+      const eu = (ident.usuario && ident.usuario.nome) || limpaTexto(body.dev, 80);
+
+      const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const base = JSON.parse(await rawRes.text());
+      const temas = base.temas || [];
+      const todas = (base.melhorias || []).filter(m => m && !m.mesclado_em && !m.oculto);
+      // Um campo com "Ana / Bruno" e uma demanda de dois: comparar a string inteira
+      // deixaria os dois de fora da propria lista.
+      const meuDono = m => String(m.dev || '').split('/').map(x => x.trim())
+        .some(n => n && eu && n.toLowerCase() === String(eu).toLowerCase());
+
+      if (body.action === 'demandas-minhas') {
+        if (!eu) {
+          return json({ error: 'dev',
+                        detail: 'Sem conta identificada, informe "dev" com o seu nome.' }, 400, headers);
+        }
+        let lista = todas.filter(meuDono);
+        const etapa = String(body.etapa || '').trim();
+        if (etapa) {
+          const pedidas = etapa.split(',').map(x => x.trim()).filter(Boolean);
+          lista = lista.filter(m => pedidas.includes(m.status_planejamento || 'backlog'));
+        }
+        if (body.pausadas === false) lista = lista.filter(m => !String(m.pausado_em || '').trim());
+        lista.sort((a, b) => String(a.entrega || '9999').localeCompare(String(b.entrega || '9999')));
+        return json({ ok: true, dev: eu, total: lista.length,
+                      demandas: lista.map(m => devVisao(m, temas)) }, 200, headers);
+      }
+
+      // Consulta por codigo (AX-###) ou por id. O codigo e o que a pessoa tem em
+      // maos, vindo do card ou do commit.
+      const acha = () => {
+        const cod = String(body.codigo || '').trim().toUpperCase().replace(/\s+/g, '');
+        const id = String(body.id || '').trim();
+        if (id) return todas.find(m => m.id === id);
+        if (!cod) return null;
+        const norm = c => String(c || '').toUpperCase().replace(/-/g, '');
+        return todas.find(m => norm(m.codigo) === norm(cod));
+      };
+
+      if (body.action === 'demanda-consultar') {
+        const m = acha();
+        if (!m) {
+          return json({ error: 'nao_encontrada',
+                        detail: 'Informe "codigo" (ex.: AX-042) ou "id" de uma demanda existente.' }, 404, headers);
+        }
+        return json({ ok: true, demanda: devVisao(m, temas) }, 200, headers);
+      }
+
+      // ── daqui para baixo, escreve ──────────────────────────────────────
+      const alvo = acha();
+      if (!alvo) {
+        return json({ error: 'nao_encontrada',
+                      detail: 'Informe "codigo" (ex.: AX-042) ou "id" de uma demanda existente.' }, 404, headers);
+      }
+      if (!ehAdm && !meuDono(alvo)) {
+        return json({ error: 'nao_sua',
+                      detail: 'Esta demanda esta com ' + (alvo.dev || 'outra pessoa') +
+                              '. Pela API voce altera apenas as suas.' }, 403, headers);
+      }
+      // Mesma trava da tela: com o PM/PO, a demanda esta congelada.
+      const etapaAtual = alvo.status_planejamento || 'backlog';
+      if (['validacao', 'concluido'].includes(etapaAtual)) {
+        return json({ error: 'em_validacao',
+                      detail: etapaAtual === 'validacao'
+                        ? 'Demanda aguardando validacao do PM/PO: nao pode ser alterada. Se algo esta errado, fale com o PM/PO para devolver.'
+                        : 'Demanda concluida: nao pode ser alterada pela API.' }, 409, headers);
+      }
+
+      // Releitura para pegar o sha e gravar sobre a versao corrente.
+      const metaRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+      if (!metaRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const file = await metaRes.json();
+      const raw2 = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!raw2.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const atual = JSON.parse(await raw2.text());
+      const m = (atual.melhorias || []).find(x => x.id === alvo.id);
+      if (!m) return json({ error: 'nao_encontrada' }, 404, headers);
+
+      const mudou = [];
+      let msg = '';
+
+      if (body.action === 'demanda-atualizar') {
+        // Lista fechada, de proposito. Etapa, prazo, dev e pontos ficam FORA: sao
+        // decisao de planejamento, e abrir isso pela API tiraria do PM/PO o
+        // controle do funil sem ninguem perceber.
+        if (typeof body.implementacao === 'string') {
+          m.implementacao = limpaTexto(body.implementacao, 4000); mudou.push('implementacao');
+        }
+        if (typeof body.descricao === 'string') {
+          m.descricao = limpaTexto(body.descricao, 4000); mudou.push('descricao');
+        }
+        if (typeof body.observacao === 'string') {
+          m.observacao = limpaTexto(body.observacao, 2000); mudou.push('observacao');
+        }
+        if (typeof body.link_externo === 'string') {
+          const u = limpaTexto(body.link_externo, 500);
+          if (u && !/^https?:\/\//i.test(u)) {
+            return json({ error: 'link_externo',
+                          detail: 'O link deve comecar com http:// ou https://.' }, 400, headers);
+          }
+          m.link_externo = u; mudou.push('link_externo');
+        }
+        if (body.horas_realizadas !== undefined) {
+          const h = Number(body.horas_realizadas);
+          if (!Number.isFinite(h) || h < 0) {
+            return json({ error: 'horas_realizadas',
+                          detail: 'Informe um numero de horas maior ou igual a zero.' }, 400, headers);
+          }
+          m.horas_realizadas = h; mudou.push('horas_realizadas');
+        }
+        if (typeof body.etapa === 'string' && body.etapa.trim()) {
+          const e = body.etapa.trim();
+          if (!ETAPAS_DEV.includes(e)) {
+            return json({ error: 'etapa',
+                          detail: 'Pela API a etapa vai ate "em_andamento". Para entregar use ' +
+                                  'demanda-entregar; concluir e do PM/PO.',
+                          aceitas: ETAPAS_DEV }, 400, headers);
+          }
+          m.status_planejamento = e; mudou.push('etapa');
+        }
+        if (typeof body.projeto_id === 'string') {
+          const pid = body.projeto_id.trim();
+          if (pid) {
+            const p = (atual.projetos || []).find(x => x.id === pid);
+            if (!p) return json({ error: 'projeto_id', detail: 'Projeto nao encontrado.' }, 400, headers);
+            if (!projetoAprovado(p)) {
+              return json({ error: 'projeto_nao_aprovado',
+                            detail: 'O projeto "' + (p.nome || '') + '" ainda nao foi aprovado pelo PM/PO.' }, 409, headers);
+            }
+          }
+          m.projeto_id = pid; mudou.push('projeto_id');
+        }
+        if (!mudou.length) {
+          return json({ error: 'nada_a_mudar',
+                        detail: 'Informe ao menos um campo: implementacao, descricao, observacao, ' +
+                                'link_externo, horas_realizadas, etapa ou projeto_id.' }, 400, headers);
+        }
+        msg = 'chore: ' + (m.codigo || m.id) + ' atualizada por ' + (eu || 'api') +
+              ' (' + mudou.join(', ') + ')';
+      }
+
+      if (body.action === 'demanda-entregar') {
+        // Mesmas exigencias da tela, e nao por simetria: sem o texto o PM/PO nao
+        // tem o que validar, e sem horas o relatorio do comitê sai furado.
+        const impl = limpaTexto(body.implementacao, 4000) || String(m.implementacao || '').trim();
+        if (!impl) {
+          return json({ error: 'implementacao',
+                        detail: 'Descreva o que foi implementado: e o texto que o PM/PO le para validar.' }, 400, headers);
+        }
+        const h = body.horas_realizadas !== undefined
+          ? Number(body.horas_realizadas) : Number(m.horas_realizadas);
+        if (!Number.isFinite(h) || h <= 0) {
+          return json({ error: 'horas_realizadas',
+                        detail: 'Informe as horas de desenvolvimento (maior que zero).' }, 400, headers);
+        }
+        if (typeof body.link_externo === 'string' && body.link_externo.trim()) {
+          const u = limpaTexto(body.link_externo, 500);
+          if (!/^https?:\/\//i.test(u)) {
+            return json({ error: 'link_externo',
+                          detail: 'O link deve comecar com http:// ou https://.' }, 400, headers);
+          }
+          m.link_externo = u;
+        }
+        m.implementacao = impl;
+        m.horas_realizadas = h;
+        m.status_planejamento = 'validacao';
+        m.status = 'iniciada';
+        if (!m.entregue_em) m.entregue_em = new Date().toISOString();
+        // NAO grava concluido_em: quem entrega nao conclui. A data nasce na
+        // aprovacao do PM/PO.
+        mudou.push('entregue para validacao');
+        msg = 'chore: ' + (m.codigo || m.id) + ' entregue para validacao por ' + (eu || 'api');
+      }
+
+      atribuiCodigos(atual);
+      corrigeProjetoInvalido(atual);
+      atual.atualizado_em = new Date().toISOString();
+      const put = await gh('contents/' + FILE_PATH, {
+        method: 'PUT',
+        body: JSON.stringify({ message: msg, content: toB64(JSON.stringify(atual)), sha: file.sha }),
+      });
+      if (!put.ok) {
+        const t = await put.text();
+        return json({ error: 'Falha ao salvar', detail: t.slice(0, 200) }, 502, headers);
+      }
+      return json({ ok: true, alterado: mudou,
+                    demanda: devVisao((atual.melhorias || []).find(x => x.id === alvo.id) || m,
+                                      atual.temas || []) }, 200, headers);
+    }
+
     if (body.action === 'projeto-novo') {
       const ident = await identifica(env, body);
       if (!ident || !['dev', 'admin'].includes(ident.papel)) {
@@ -1182,8 +1428,7 @@ export default {
       // dois falhou permitiria descobrir quem tem conta.
       const generico = async () => {
         const n = await contaTentativa(env, ip, 'login');
-        return json({ error: 'credencial', detail: 'Usuário ou senha inválidos.',
-                      mensagem: troll(n) + ' Tentativa #' + n + '.' }, 401, headers);
+        return json({ error: 'credencial', detail: 'Usuário ou senha inválidos.' }, 401, headers);
       };
       if (!u) return generico();
       // Conta recem-cadastrada esperando liberacao: dizer isso evita chamado de
@@ -1376,7 +1621,7 @@ export default {
       // Senha errada: conta e provoca. O painel reage ao status 401, nao ao corpo,
       // entao a mensagem extra nao muda o comportamento das telas.
       const nAuth = await contaTentativa(env, ip, 'auth');
-      return json({ error: 'senha', mensagem: troll(nAuth) + ' Tentativa #' + nAuth + '.' }, 401, headers);
+      return json({ error: 'senha' }, 401, headers);
     }
 
     // ── Publicação do Admin (estado completo) ──
@@ -1455,8 +1700,7 @@ export default {
     // recusada de forma explicita, e a superficie da API fica fechada ao que existe.
     if (typeof body.action === 'string' && body.action.length) {
       const nAcao = await contaTentativa(env, ip, 'acao-invalida');
-      return json({ error: 'acao_invalida',
-                    mensagem: troll(nAcao) + ' Tentativa #' + nAcao + ' desta origem.' }, 400, headers);
+      return json({ error: 'acao_invalida' }, 400, headers);
     }
 
     // ── Sugestão pública (dash) — só adiciona no Backlog ──
@@ -1467,8 +1711,7 @@ export default {
       return json({ error: 'captcha',
                     detail: ts.motivo === 'sem_token'
                       ? 'Confirme que voce nao e um robo antes de enviar.'
-                      : 'Verificacao de seguranca nao passou. Recarregue a pagina e tente de novo.',
-                    mensagem: troll(nTs) + ' Tentativa #' + nTs + ' desta origem.' }, 403, headers);
+                      : 'Verificacao de seguranca nao passou. Recarregue a pagina e tente de novo.' }, 403, headers);
     }
 
     const m = body.melhoria || {};
