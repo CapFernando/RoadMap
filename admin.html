@@ -421,6 +421,12 @@
     }
     .ger-section-hint { font-size:12px; font-weight:500; color:var(--text3); }
     .ger-section-sep { border-top:1px solid var(--border); margin:32px 0 20px; }
+    /* Periodo dentro do titulo da secao: e a informacao que faltava para o
+       relatorio nao parecer contraditorio. */
+    .rel-per { font-size:12px; font-weight:600; color:var(--blue-tx,#9BC8F8);
+      background:var(--blue-bg,#0C3260); border-radius:5px; padding:2px 8px;
+      margin-left:8px; letter-spacing:0; text-transform:none; white-space:nowrap; }
+    .rel-falta { color:var(--amber-tx,#FFC470); cursor:help; }
     /* Entradas do mes: total, quebra por tema e por classificacao. */
     .ent-tab { width:100%; border-collapse:separate; border-spacing:0 6px; font-size:14px; }
     .ent-tab th { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase;
@@ -1014,7 +1020,7 @@
     <div class="tab-content" id="tab-relatorios">
       <div class="ger-toolbar">
         <div class="ger-filter-group">
-          <label>Semana de referência</label>
+          <label>Reunião da semana de</label>
           <select id="rel-semana" onchange="renderRelatorios()"></select>
         </div>
         <button class="btn btn-secondary" onclick="renderRelatorios()">Atualizar</button>
@@ -1023,7 +1029,7 @@
       <div id="rel-periodo-info" style="font-size:12px;color:var(--text3);margin:-12px 0 20px"></div>
 
       <div class="ger-section-title">
-        ✅ Entregues na semana anterior
+        <span id="rel-ent-titulo">✅ Entregues</span>
         <span class="ger-section-hint" id="rel-ent-hint"></span>
         <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('entregues')" style="margin-left:auto">📋 Copiar</button>
       </div>
@@ -1031,7 +1037,7 @@
 
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
-        🚧 Em desenvolvimento nesta semana
+        <span id="rel-dev-titulo">🚧 Em desenvolvimento</span>
         <span class="ger-section-hint" id="rel-dev-hint"></span>
         <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('andamento')" style="margin-left:auto">📋 Copiar</button>
       </div>
@@ -3659,8 +3665,11 @@ function relInitSemanas() {
     const fim = maisDias(ini, 6);
     const o = document.createElement('option');
     o.value = iso(ini);
-    o.textContent = (i === 0 ? 'Semana atual — ' : '') +
-      `${formatDate(iso(ini))} a ${formatDate(iso(fim))}`;
+    // "Semana atual" dava a entender que os dados eram desta semana, e a
+    // primeira secao mostra a semana PASSADA de proposito. O rotulo passa a
+    // nomear a reuniao, nao o periodo dos dados.
+    o.textContent = `${formatDate(iso(ini))} a ${formatDate(iso(fim))}` +
+      (i === 0 ? ' (esta semana)' : i === 1 ? ' (semana passada)' : '');
     sel.appendChild(o);
   }
 }
@@ -3741,22 +3750,41 @@ function renderRelatorios() {
   relInitSemanas();
   const { A, B, C, D, entregues, andamento, semDataConcluidos } = relDados();
 
+  // O relatorio existe para a reuniao da semana escolhida. Nela se reporta o que
+  // FOI ENTREGUE na semana que passou — a semana corrente ainda nao acabou, nao
+  // ha o que fechar — e o que esta EM DESENVOLVIMENTO agora. Isso estava correto,
+  // mas o rotulo "Semana atual" no seletor fazia parecer erro: lia-se "semana
+  // atual" e a primeira secao mostrava outro periodo. Agora cada secao carrega o
+  // proprio periodo no titulo, e esta linha diz a regra por extenso.
   document.getElementById('rel-periodo-info').innerHTML =
-    `Semana de referência: <b>${formatDate(A)} a ${formatDate(B)}</b> · semana anterior: <b>${formatDate(C)} a ${formatDate(D)}</b>`;
+    `Para a reunião de <b>${formatDate(A)} a ${formatDate(B)}</b>: mostra o que foi ` +
+    `<b>entregue</b> na semana que passou (${formatDate(C)} a ${formatDate(D)}) e o que está ` +
+    `<b>em desenvolvimento</b> nesta semana (${formatDate(A)} a ${formatDate(B)}).`;
 
-  document.getElementById('rel-ent-hint').textContent =
-    `${entregues.length} demanda${entregues.length!==1?'s':''} (${formatDate(C)} a ${formatDate(D)})` +
-    (semDataConcluidos ? ` · ${semDataConcluidos} concluída(s) sem data de entrega ficam fora` : '');
+  document.getElementById('rel-ent-titulo').innerHTML =
+    `✅ Entregues <span class="rel-per">${formatDate(C)} a ${formatDate(D)}</span>`;
+  document.getElementById('rel-dev-titulo').innerHTML =
+    `🚧 Em desenvolvimento <span class="rel-per">${formatDate(A)} a ${formatDate(B)}</span>`;
+
+  document.getElementById('rel-ent-hint').innerHTML =
+    `${entregues.length} demanda${entregues.length!==1?'s':''}` +
+    // Fica separado do total, e nomeando o que fazer: e falta de dado, nao um
+    // subtotal. Antes vinha na mesma frase e parecia parte da contagem.
+    (semDataConcluidos
+      ? ` · <span class="rel-falta" title="Sem data de conclusão não há como afirmar em que semana saiu. `
+        + `Aprove a entrega pela aba Entrega para a data ser gravada.">⚠ ${semDataConcluidos} concluída${semDataConcluidos!==1?'s':''} sem data ` +
+        `${semDataConcluidos!==1?'ficam':'fica'} fora</span>`
+      : '');
   document.getElementById('rel-dev-hint').textContent =
-    `${andamento.length} demanda${andamento.length!==1?'s':''} (${formatDate(A)} a ${formatDate(B)})`;
+    `${andamento.length} demanda${andamento.length!==1?'s':''}`;
 
   const vazio = (txt) => `<div class="ger-empty-box">${txt}</div>`;
   document.getElementById('rel-entregues').innerHTML = entregues.length
     ? relAgrupadoHTML(entregues, 'entregues')
-    : vazio('Nenhuma demanda com entrega registrada na semana anterior.');
+    : vazio(`Nenhuma entrega registrada entre ${formatDate(C)} e ${formatDate(D)}.`);
   document.getElementById('rel-andamento').innerHTML = andamento.length
     ? relAgrupadoHTML(andamento, 'andamento')
-    : vazio('Nenhuma demanda em andamento nesta semana.');
+    : vazio(`Nenhuma demanda em desenvolvimento entre ${formatDate(A)} e ${formatDate(B)}.`);
 }
 
 // Agrupa por tema, na mesma ordem do cadastro de temas (igual à lista de
@@ -3811,13 +3839,19 @@ function relTexto(secao) {
     .join('\n\n');
 
   const partes = [];
+  // Cabecalho na ata: o texto vai para o comitê fora desta tela, e "NESTA SEMANA"
+  // sem dizer QUAL semana obriga quem le a adivinhar a data da reuniao.
+  if (!secao) {
+    partes.push(`REUNIÃO DE ${formatDate(A)} A ${formatDate(B)}`);
+    partes.push('');
+  }
   if (secao !== 'andamento') {
-    partes.push(`ENTREGUES NA SEMANA ANTERIOR (${formatDate(C)} a ${formatDate(D)}) — ${entregues.length}`);
+    partes.push(`ENTREGUES — ${formatDate(C)} a ${formatDate(D)} (semana anterior) — ${entregues.length}`);
     partes.push(entregues.length ? porTema(entregues, 'entregues') : '(nenhuma)');
   }
   if (secao !== 'entregues') {
     if (partes.length) partes.push('');
-    partes.push(`EM DESENVOLVIMENTO NESTA SEMANA (${formatDate(A)} a ${formatDate(B)}) — ${andamento.length}`);
+    partes.push(`EM DESENVOLVIMENTO — ${formatDate(A)} a ${formatDate(B)} (semana da reunião) — ${andamento.length}`);
     partes.push(andamento.length ? porTema(andamento, 'andamento') : '(nenhuma)');
   }
   return partes.join('\n');
