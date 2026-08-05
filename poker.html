@@ -82,11 +82,34 @@
     .votacao { margin-top:24px; border-top:1px solid var(--border); padding-top:20px; }
     .votacao-titulo { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); margin-bottom:12px; text-align:center; }
     .cartas { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
-    .carta-btn { width:58px; height:82px; border-radius:10px; background:var(--bg3); border:2px solid var(--border2);
-                 color:var(--text); font-size:22px; font-weight:800; font-family:inherit; cursor:pointer; transition:all .15s; }
+    /* Cartas um pouco menores para o detalhe da demanda caber sem rolagem: a mesa
+       ocupava a tela inteira e sobrava espaco nenhum para ler o que se vota. */
+    .carta-btn { width:50px; height:70px; border-radius:10px; background:var(--bg3); border:2px solid var(--border2);
+                 color:var(--text); font-size:19px; font-weight:800; font-family:inherit; cursor:pointer; transition:all .15s; }
     .carta-btn:hover:not(:disabled) { transform:translateY(-4px); border-color:var(--blue); }
     .carta-btn.sel { background:var(--blue); border-color:var(--blue); color:#fff; transform:translateY(-6px); }
     .carta-btn:disabled { opacity:.3; cursor:not-allowed; }
+
+    /* ── DETALHE DA DEMANDA EM PAUTA ── */
+    .pauta-det { margin-top:14px; text-align:left; border-top:1px solid var(--border);
+      padding-top:14px; display:grid; gap:10px; }
+    .pd-linha { display:flex; gap:8px; flex-wrap:wrap; align-items:baseline;
+      font-size:12.5px; color:var(--text2); }
+    .pd-rot { font-size:10.5px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.06em; color:var(--text3); min-width:78px; }
+    .pd-desc { font-size:13px; line-height:1.65; color:var(--text);
+      background:var(--bg3); border:1px solid var(--border); border-radius:9px;
+      padding:11px 13px; white-space:pre-wrap; max-height:200px; overflow:auto; }
+    .pd-vazio { color:var(--text3); font-style:italic; }
+    .pd-anexos { display:flex; gap:7px; flex-wrap:wrap; }
+    .pd-anexo { display:inline-flex; align-items:center; gap:6px; font-size:12px;
+      background:var(--bg3); border:1px solid var(--border2); border-radius:7px;
+      padding:5px 10px; color:var(--blue); cursor:pointer; font-family:inherit; }
+    .pd-anexo:hover { border-color:var(--blue); }
+    .pd-anexo.morto { color:var(--text3); cursor:default; }
+    .pd-anexo small { color:var(--text3); }
+    .pd-disc { display:grid; gap:6px; font-size:12.5px; line-height:1.6; color:var(--text2); }
+    .pd-disc b { color:var(--text2); font-weight:600; }
 
     /* ── FILA ── */
     .fila { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:18px; }
@@ -148,6 +171,9 @@
       <div class="pauta-label">Em votação</div>
       <div class="pauta-titulo" id="pauta-titulo"><span class="pauta-vazia">Nenhuma demanda selecionada</span></div>
       <div class="pauta-meta" id="pauta-meta"></div>
+      <!-- Detalhe da demanda em pauta. Existe para nao precisar do Admin aberto ao
+           lado: discutir estimativa olhando outra tela e como o contexto se perde. -->
+      <div class="pauta-det" id="pauta-det" style="display:none"></div>
     </div>
 
     <div style="text-align:center;font-size:11px;color:var(--text3);margin-bottom:8px" id="presenca"></div>
@@ -630,7 +656,31 @@ function proximoDaFila() {
 // em vez de deixar o resultado anterior preso na tela — era o que acontecia:
 // gravar no card não tirava o item da votação, então o resultado da rodada
 // anterior continuava exibido até alguém clicar manualmente em outro item.
+// Guarda de qual pauta ja teve o resultado gravado no card. Sem isto, avancar a
+// fila depois de revelar levava o resultado embora: os votos ficam na sala (que
+// expira) e nada chega a demanda. E a perda mais facil de acontecer, porque
+// "Proxima demanda" fica ao lado de "Gravar no card".
+let _gravadoDe = '';
+
 async function proximaDemanda() {
+  const atual = _estado && _estado.melhoria_id;
+  const revelado = _estado && _estado.revelado;
+  if (atual && revelado && _gravadoDe !== atual) {
+    const m = filaPlanning().find(x => x.id === atual);
+    const nome = (m && (m.codigo || m.titulo)) || 'esta demanda';
+    const media = document.getElementById('in-media').value;
+    const pontos = document.getElementById('in-pontos').value;
+    const querGravar = confirm(
+      'A votação de ' + nome + ' foi revelada e ainda NÃO foi gravada no card.' +
+      String.fromCharCode(10) + String.fromCharCode(10) +
+      'OK grava agora (média ' + (media || '—') + ' · ' + (pontos || '—') + ' pontos) ' +
+      'e avança.' + String.fromCharCode(10) +
+      'Cancelar avança sem gravar, e o resultado desta rodada se perde.');
+    if (querGravar) {
+      const gravou = await gravarNoCard();
+      if (!gravou) return;   // falhou: fica onde esta, com o resultado na tela
+    }
+  }
   const proximo = proximoDaFila();
   if (proximo) {
     await porEmPauta(proximo.id);
@@ -661,12 +711,87 @@ async function gravarNoCard() {
   const r = await api({ action: 'poker-gravar', codigo: _codigo, senha: _senha,
                         melhoria_id: _estado.melhoria_id, poker_media: media, poker_pontos: pontos });
   btn.disabled = false; btn.textContent = '💾 Gravar no card';
-  if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao gravar.', 'err'); return; }
-  toast(`✅ Gravado: média ${String(r.body.poker_media).replace('.', ',')} · ${r.body.poker_pontos} pontos`);
+  if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao gravar.', 'err'); return false; }
+  // Marca a pauta como gravada para o aviso de "Proxima demanda" saber.
+  _gravadoDe = _estado.melhoria_id;
+  toast(`✅ Gravado no card: média ${String(r.body.poker_media).replace('.', ',')} · ${r.body.poker_pontos} pontos`);
   await carregarFila();
+  return true;
 }
 
 // ─── RENDER ───────────────────────────────────────────────────────
+
+// Detalhe da demanda em pauta. O facilitador conduzia com o Admin aberto do lado
+// porque aqui so aparecia o titulo — e quem vota sem ler o pedido chuta.
+function renderDetalhe(m) {
+  const box = document.getElementById('pauta-det');
+  if (!box) return;
+  if (!m) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'grid';
+  const linha = (rot, val) =>
+    val ? '<div class="pd-linha"><span class="pd-rot">' + rot + '</span><span>' +
+          esc(val) + '</span></div>' : '';
+
+  const anexos = (m.anexos || []);
+  const anexosHTML = anexos.length
+    ? '<div class="pd-linha"><span class="pd-rot">Anexos</span><span class="pd-anexos">' +
+      anexos.map((a, i) => a.inline
+        ? '<span class="pd-anexo morto" title="Anexo antigo, guardado dentro do arquivo: abra pelo Admin">📎 ' +
+          esc(a.nome) + ' <small>(abra pelo Admin)</small></span>'
+        : '<button type="button" class="pd-anexo" onclick="abrirAnexoPauta(' + i + ')">📎 ' +
+          esc(a.nome) + (a.tamanho ? ' <small>(' + Math.round(a.tamanho / 1024) + ' KB)</small>' : '') +
+          '</button>').join('') +
+      '</span></div>'
+    : '';
+
+  const d = m.discovery;
+  const disc = d && (d.objetivo || d.impacto || d.beneficiados)
+    ? '<div class="pd-disc">' +
+      (d.objetivo ? '<div><b>Objetivo:</b> ' + esc(d.objetivo) + '</div>' : '') +
+      (d.impacto ? '<div><b>Impacto hoje:</b> ' + esc(d.impacto) + '</div>' : '') +
+      (d.beneficiados ? '<div><b>Quem ganha:</b> ' + esc(d.beneficiados) + '</div>' : '') +
+      '</div>'
+    : '';
+
+  box.innerHTML =
+    linha('Tema', nomeTema(m.tema_id)) +
+    linha('Solicitante', m.solicitante) +
+    linha('Responsável', m.dev) +
+    linha('Prazo', m.entrega ? m.entrega.split('-').reverse().join('/') : '') +
+    (m.descricao
+      ? '<div class="pd-desc">' + esc(m.descricao) + '</div>'
+      : '<div class="pd-linha pd-vazio">Sem descrição — vale perguntar ao solicitante antes de estimar.</div>') +
+    disc +
+    anexosHTML;
+}
+
+// Abre o anexo da demanda em pauta. Usa a credencial de quem esta conduzindo; o
+// participante que entrou so com o nome nao tem credencial e receberia 401, entao
+// para ele o botao nem aparece (renderDetalhe so desenha para o facilitador).
+async function abrirAnexoPauta(i) {
+  const m = filaPlanning().find(x => x.id === (_estado && _estado.melhoria_id)) ||
+            (_melhorias || []).find(x => x.id === (_estado && _estado.melhoria_id));
+  const a = m && (m.anexos || [])[i];
+  if (!a || !a.chave) { toast('Anexo sem referência para abrir.', 'err'); return; }
+  try {
+    const res = await fetch(PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'anexo-baixar', chave: a.chave },
+        _token ? { token: _token } : {}, _senha ? { senha: _senha } : {}))
+    });
+    if (!res.ok) {
+      toast(res.status === 401 || res.status === 403
+        ? 'Sem permissão para abrir anexo. Entre como facilitador.'
+        : 'Não foi possível abrir o anexo (HTTP ' + res.status + ').', 'err');
+      return;
+    }
+    const blob = await res.blob();
+    window.open(URL.createObjectURL(blob), '_blank');
+  } catch (_) {
+    toast('Falha de rede ao abrir o anexo.', 'err');
+  }
+}
+
 function renderCartas() {
   const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','13','21','34','55','89','100','?'];
   const travado = !_estado || _estado.revelado || !_estado.melhoria_id || !_participante;
@@ -698,8 +823,12 @@ function aplicar(est) {
     ? esc(m.titulo || '(sem título)')
     : '<span class="pauta-vazia">Nenhuma demanda selecionada</span>';
   document.getElementById('pauta-meta').textContent = m
-    ? [nomeTema(m.tema_id), m.dev, m.tipo === 'sustentacao' ? 'Sustentação' : m.tipo === 'evolucao' ? 'Evolução' : ''].filter(Boolean).join(' · ')
+    ? [m.codigo, nomeTema(m.tema_id), m.dev, m.tipo === 'sustentacao' ? 'Sustentação' : m.tipo === 'evolucao' ? 'Evolução' : ''].filter(Boolean).join(' · ')
     : '';
+  // O detalhe completo vale para todos: quem vota tambem precisa ler o pedido. Os
+  // botoes de anexo, porem, exigem credencial — participante que entrou so com o
+  // nome nao tem, e receberia 401. Para ele o detalhe vem sem os anexos.
+  renderDetalhe(m ? (_facilitador ? m : Object.assign({}, m, { anexos: [] })) : null);
 
   // mesa
   const mesa = document.getElementById('mesa');

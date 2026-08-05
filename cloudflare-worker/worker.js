@@ -389,6 +389,26 @@ function registraHistorico(recebido, servidor, quem, origem) {
   return n;
 }
 
+
+
+// ─── EXIGENCIA DE PAPEL ───────────────────────────────────────────────
+// Quatro rotas repetiam este trecho: chamar identifica, conferir o papel na mao e
+// montar a resposta 403. E exatamente a regra que quebrou tres vezes nesta sessao
+// — anexo, planejamento e planning poker —, sempre porque uma copia foi corrigida
+// e as outras nao.
+//
+// Devolve { ident } quando passa, ou { recusa } com a resposta pronta. Quem chama
+// nao decide mais o texto nem o status: um lugar erra ou acerta para todos.
+async function exigePapel(env, body, papeis, headers) {
+  const ident = await identifica(env, body);
+  if (!ident || !papeis.includes(ident.papel)) {
+    return { recusa: json({ error: 'sem_permissao',
+      detail: 'Informe token de sessao ou a senha de ' +
+              (papeis.includes('dev') ? 'dev' : 'admin') + '.' }, 403, headers) };
+  }
+  return { ident };
+}
+
 function atribuiCodigosProjeto(data) {
   if (!data || !Array.isArray(data.projetos)) return 0;
   let maior = 0;
@@ -812,10 +832,32 @@ export default {
         let data;
         try { data = JSON.parse(await rawRes.text()); } catch (_) { return json({ error: 'Falha ao ler dados' }, 502, headers); }
 
+        // Leva o que se discute numa planning, nao so o titulo: sem descricao,
+        // solicitante e anexos, o facilitador precisava do Admin aberto ao lado — e
+        // votar olhando outra tela e como o time perde o contexto.
+        //
+        // `anexos` vai SEM o base64 (campo `dados`): um anexo inline de 1,5 MB por
+        // demanda multiplicaria o tamanho desta resposta, que e pedida a cada
+        // atualizacao da fila. Vai a referencia; o conteudo sai pelo anexo-baixar.
         const enxuta = (m) => ({
           id: m.id, titulo: m.titulo || '', dev: m.dev || '', tipo: m.tipo || '',
           tema_id: m.tema_id || '', poker_pontos: m.poker_pontos ?? null,
           poker_media: m.poker_media ?? null, status_planejamento: m.status_planejamento || '',
+          codigo: m.codigo || '', descricao: m.descricao || '',
+          solicitante: m.solicitante || '', entrega: m.entrega || '',
+          criado_em: m.criado_em || '', debito_tecnico: !!m.debito_tecnico,
+          anexos: (m.anexos || []).map(a => ({
+            nome: a.nome || 'arquivo', chave: a.chave || '',
+            tipo: a.tipo || '', tamanho: a.tamanho || 0,
+            // Anexo antigo guardado como base64 dentro do JSON nao tem chave: nao da
+            // para baixar por referencia, e dizer isso e melhor que um link morto.
+            inline: !a.chave && !!a.dados,
+          })),
+          discovery: m.discovery && typeof m.discovery === 'object' ? {
+            objetivo: String(m.discovery.objetivo || '').slice(0, 600),
+            impacto: String(m.discovery.impacto || '').slice(0, 600),
+            beneficiados: String(m.discovery.beneficiados || '').slice(0, 300),
+          } : null,
         });
         const todas = data.melhorias || [];
         const fila = todas.filter(m => (m.status_planejamento || '') === 'planning').map(enxuta);
@@ -943,8 +985,15 @@ export default {
         const pontos = body.poker_pontos === null || body.poker_pontos === '' ? null : parseInt(body.poker_pontos);
         if (media !== null && !isFinite(media)) return json({ error: 'media invalida' }, 400, headers);
         if (pontos !== null && !isFinite(pontos)) return json({ error: 'pontos invalidos' }, 400, headers);
+        // Retrato antes de mexer: a pontuacao alimenta o ranking do dev e o
+        // relatorio do comitê, entao trocar um valor gravado nao pode ser invisivel.
+        // Era a unica porta de gravacao que ficava fora do historico.
+        const antesPoker = JSON.parse(JSON.stringify(alvo));
         alvo.poker_media = media;
         alvo.poker_pontos = pontos;
+        registraHistorico(data, { melhorias: [antesPoker] },
+                          (_ident && _ident.usuario && _ident.usuario.nome) || 'facilitador',
+                          'planning poker');
         data.atualizado_em = iso;
         const risco = gravacaoSuspeita(data, file.size || 0);
         if (risco) return json({ error: risco }, 409, headers);
@@ -1166,11 +1215,9 @@ export default {
 
     if (['demandas-minhas', 'demanda-consultar', 'demanda-atualizar', 'demanda-entregar']
         .includes(body.action)) {
-      const ident = await identifica(env, body);
-      if (!ident || !['dev', 'admin'].includes(ident.papel)) {
-        return json({ error: 'sem_permissao',
-                      detail: 'Informe token de sessao ou a senha de dev.' }, 403, headers);
-      }
+      const perm = await exigePapel(env, body, ['dev', 'admin'], headers);
+      if (perm.recusa) return perm.recusa;
+      const ident = perm.ident;
       const ehAdm = ident.papel === 'admin';
       const eu = (ident.usuario && ident.usuario.nome) || limpaTexto(body.dev, 80);
 
@@ -1384,11 +1431,9 @@ export default {
     }
 
     if (body.action === 'projeto-novo') {
-      const ident = await identifica(env, body);
-      if (!ident || !['dev', 'admin'].includes(ident.papel)) {
-        return json({ error: 'sem_permissao',
-                      detail: 'Informe token de sessao ou a senha de dev.' }, 403, headers);
-      }
+      const perm = await exigePapel(env, body, ['dev', 'admin'], headers);
+      if (perm.recusa) return perm.recusa;
+      const ident = perm.ident;
       const nome = limpaTexto(body.nome, 160);
       if (nome.length < 3) {
         return json({ error: 'nome', detail: 'Informe o nome do projeto.' }, 400, headers);
@@ -1453,11 +1498,9 @@ export default {
     }
 
     if (body.action === 'demanda-nova') {
-      const ident = await identifica(env, body);
-      if (!ident || !['dev', 'admin'].includes(ident.papel)) {
-        return json({ error: 'sem_permissao',
-                      detail: 'Informe token de sessao ou a senha de dev.' }, 403, headers);
-      }
+      const perm = await exigePapel(env, body, ['dev', 'admin'], headers);
+      if (perm.recusa) return perm.recusa;
+      const ident = perm.ident;
       const titulo = limpaTexto(body.titulo, 200);
       if (titulo.length < 3) {
         return json({ error: 'titulo', detail: 'Informe o titulo da demanda.' }, 400, headers);
@@ -1592,8 +1635,12 @@ export default {
     // Gestao de usuarios — so admin.
     if (body.action === 'usuarios') {
       if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
-      const identU = await identifica(env, body);
-      if (!temNivel(identU, 'admin')) return json({ error: 'sem_permissao' }, 403, headers);
+      // Mesmo ponto das outras rotas. temNivel compara por hierarquia (NIVEL) e
+      // aqui o minimo era admin, que e o topo — o efeito e identico, e passar pelo
+      // exigePapel faz a recusa trazer a instrucao em vez de sair seca.
+      const permU = await exigePapel(env, body, ['admin'], headers);
+      if (permU.recusa) return permU.recusa;
+      const identU = permU.ident;
       await contasMigrar(env.POKER_DB);
       const op = String(body.op || 'listar');
 
