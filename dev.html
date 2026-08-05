@@ -107,7 +107,32 @@
     .kcard-cod { font-family:ui-monospace,monospace; font-size:10px; font-weight:700;
       color:var(--blue-tx); background:var(--blue-bg); border-radius:4px; padding:1px 5px;
       margin-right:5px; }
-    .dv-tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); margin:0 24px 18px; }
+    .dv-tabs { display:flex; gap:2px; border-bottom:1px solid var(--border); margin:0 24px 18px;
+      align-items:center; flex-wrap:wrap; }
+    /* Produtividade na sobra da barra de abas. Uma linha, sem titulo: o rotulo
+       "Minha produtividade" gastaria espaco para dizer o que os icones ja dizem. */
+    .prod { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      margin-left:auto; padding:0 0 6px; font-size:12.5px; }
+    .prod-sel { background:var(--bg3); border:1px solid var(--border); border-radius:7px;
+      color:var(--text); font-size:12px; padding:3px 8px; font-family:inherit; }
+    .prod-meus { display:flex; gap:11px; align-items:center; white-space:nowrap; }
+    .prod-meus b { color:var(--text); font-size:14.5px; font-weight:700; }
+    .prod-meus span { color:var(--text2); }
+    .prod-aviso { color:var(--amber-tx,#FFC470); cursor:help; font-size:11.5px; }
+    .prod-podio { display:flex; gap:6px; align-items:center; flex-wrap:wrap;
+      padding-left:10px; border-left:1px solid var(--border); }
+    .prod-medalha { display:inline-flex; align-items:center; gap:5px;
+      background:var(--bg2); border:1px solid var(--border); border-radius:20px;
+      padding:2px 10px 2px 7px; white-space:nowrap; color:var(--text2); font-size:12px; }
+    .prod-medalha b { color:var(--text); font-weight:600; }
+    .prod-medalha .prod-num { color:var(--text3); font-size:11px; }
+    /* O seu lugar no podio fica marcado: sem isso a pessoa procura o proprio nome
+       entre os tres a cada vez. */
+    .prod-medalha.eu { border-color:var(--blue); background:var(--blue-bg,#0C3260); }
+    .prod-medalha.eu b, .prod-medalha.eu .prod-num { color:var(--blue-tx,#9BC8F8); }
+    .prod-fora { color:var(--text2); white-space:nowrap; }
+    .prod-fora b { color:var(--text); }
+    .prod-vazio { color:var(--text3); }
     .dv-tab { padding:11px 16px; font-size:14.5px; font-weight:500; color:var(--text2);
       background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px;
       cursor:pointer; font-family:'Inter',sans-serif; white-space:nowrap; border-radius:8px 8px 0 0; }
@@ -529,6 +554,21 @@
     <button class="dv-tab" id="dv-tab-gantt" onclick="devAba('gantt')">Cronograma</button>
     <button class="dv-tab" id="dv-tab-projetos" onclick="devAba('projetos')">Projetos</button>
     <button class="dv-tab" id="dv-tab-api" onclick="devAba('api')">Endpoint</button>
+
+    <!-- Produtividade encaixada na barra de abas, a direita: aquele espaco ja
+         existe e estava vazio, entao o consolidado nao gasta uma linha propria.
+         Em tela estreita o flex-wrap joga para a linha de baixo sozinho. -->
+    <div class="prod" id="prod" style="display:none">
+      <select id="prod-periodo" class="prod-sel" onchange="renderProdutividade()"
+              title="Período do consolidado">
+        <option value="semana">Esta semana</option>
+        <option value="mes">Mês atual</option>
+        <option value="mes_ant">Mês anterior</option>
+      </select>
+      <span class="prod-meus" id="prod-meus"></span>
+      <span class="prod-aviso" id="prod-aviso"></span>
+      <span class="prod-podio" id="prod-podio"></span>
+    </div>
   </div>
 
   <!-- Projetos: o dev propoe, o PM/PO valida. Enquanto pendente a proposta nao
@@ -1494,6 +1534,128 @@ async function devPausaRetomar() {
   renderKanban();
 }
 
+
+// ─── PRODUTIVIDADE DO DEV ─────────────────────────────────────────
+// Conta o que foi ENTREGUE, e entregue significa aprovado pelo PM/PO: a data que
+// vale e `concluido_em`, gravada no momento da aprovacao. Uma demanda que o dev
+// mandou para validacao ainda nao conta — se contasse, o numero subiria antes de
+// alguem conferir a entrega, e o indicador perderia o sentido.
+//
+// Demanda concluida SEM `concluido_em` (as anteriores a esta esteira) nao entra.
+// Em vez de somar por aproximacao usando o prazo, a faixa diz quantas ficaram de
+// fora — numero inflado seria pior que numero pequeno.
+const PROD_PERIODOS = ['semana', 'mes', 'mes_ant'];
+
+function prodIntervalo(qual) {
+  const hoje = new Date();
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getDate()).padStart(2, '0');
+  if (qual === 'mes') {
+    const a = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const b = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    return { de: iso(a), ate: iso(b), rot: 'no mês' };
+  }
+  if (qual === 'mes_ant') {
+    const a = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const b = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    return { de: iso(a), ate: iso(b), rot: 'no mês anterior' };
+  }
+  // Semana de segunda a domingo, como no relatorio do comitê — dois lugares com
+  // semanas diferentes gerariam numeros que nao fecham entre si.
+  const d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  const fim = new Date(d);
+  fim.setDate(fim.getDate() + 6);
+  return { de: iso(d), ate: iso(fim), rot: 'na semana' };
+}
+
+// Agrega por dev no intervalo. Demanda com mais de um responsavel conta uma issue
+// para cada, e os pontos sao divididos: contar o total inteiro para os dois
+// inflaria a soma do time.
+function prodAgrega(de, ate) {
+  const porDev = new Map();
+  let semData = 0;
+  (state.melhorias || []).forEach(m => {
+    if (m.mesclado_em) return;
+    if (getStatusKey(m) !== 'concluido') return;
+    const quando = String(m.concluido_em || '').slice(0, 10);
+    if (!quando) { semData++; return; }
+    if (quando < de || quando > ate) return;
+    const devs = splitDevs(m.dev).filter(Boolean);
+    if (!devs.length) return;
+    const pts = (Number(m.poker_pontos) || 0) / devs.length;
+    devs.forEach(nome => {
+      const a = porDev.get(nome) || { nome, issues: 0, pontos: 0 };
+      a.issues += 1;
+      a.pontos += pts;
+      porDev.set(nome, a);
+    });
+  });
+  // Ordena por PONTOS: contagem de issues sozinha premiaria quem pega muitas
+  // tarefas pequenas. Empate desempata por issues, e depois por nome, para a
+  // ordem nao trocar sozinha entre dois desenhos.
+  const rank = [...porDev.values()].sort((a, b) =>
+    b.pontos - a.pontos || b.issues - a.issues ||
+    String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+  return { rank, semData };
+}
+
+const prodNum = n => Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10).replace('.', ',');
+
+function renderProdutividade() {
+  const box = document.getElementById('prod');
+  if (!box) return;
+  if (!currentDev) { box.style.display = 'none'; return; }
+  // flex, nao block: a classe .prod e flex e um display:block inline venceria a
+  // folha de estilo, empilhando tudo em coluna dentro da barra de abas.
+  box.style.display = 'flex';
+  const sel = document.getElementById('prod-periodo');
+  const qual = PROD_PERIODOS.includes(sel && sel.value) ? sel.value : 'semana';
+  const { de, ate, rot } = prodIntervalo(qual);
+  const { rank, semData } = prodAgrega(de, ate);
+
+  const eu = rank.find(r => r.nome === currentDev);
+  const pos = eu ? rank.indexOf(eu) + 1 : 0;
+
+  document.getElementById('prod-meus').innerHTML = eu
+    ? '<span>✅ <b>' + eu.issues + '</b> issue' + (eu.issues !== 1 ? 's' : '') + '</span>' +
+      '<span>🃏 <b>' + prodNum(eu.pontos) + '</b> ponto' + (eu.pontos !== 1 ? 's' : '') + '</span>' +
+      '<span class="prod-vazio">' + rot + '</span>'
+    : '<span class="prod-vazio">Nenhuma entrega aprovada ' + rot + '.</span>';
+
+  // Aviso de dado que falta, no mesmo espirito do relatorio: numero pequeno com
+  // explicacao e melhor que numero grande sem base.
+  const av = document.getElementById('prod-aviso');
+  av.innerHTML = semData
+    ? '⚠ ' + semData + ' concluída' + (semData !== 1 ? 's' : '') + ' sem aprovação registrada'
+    : '';
+  av.title = semData
+    ? 'Só conta como entregue depois que o PM/PO aprova — é a aprovação que grava a data. ' +
+      'Demandas concluídas antes desta etapa não têm essa data e ficam fora da contagem.'
+    : '';
+
+  const MEDALHAS = ['🥇', '🥈', '🥉'];
+  const podio = document.getElementById('prod-podio');
+  if (!rank.length) {
+    podio.innerHTML = '<span class="prod-vazio">Sem entregas aprovadas neste período — o pódio aparece quando houver.</span>';
+    return;
+  }
+  let html = rank.slice(0, 3).map((r, i) =>
+    '<span class="prod-medalha' + (r.nome === currentDev ? ' eu' : '') + '">' +
+    MEDALHAS[i] + ' <b>' + escAttr(r.nome) + '</b> ' +
+    '<span class="prod-num">' + r.issues + ' · ' + prodNum(r.pontos) + ' pt</span></span>'
+  ).join('');
+  // Fora do podio: aparece SO a sua posicao. Listar do 4o em diante exporia o
+  // numero de cada um sem que ninguem tenha pedido.
+  if (pos > 3) {
+    html += '<span class="prod-fora">· você em <b>' + pos + 'º</b> de ' + rank.length + '</span>';
+  } else if (!eu) {
+    html += '<span class="prod-fora">· você ainda não tem entrega aprovada neste período</span>';
+  }
+  podio.innerHTML = html;
+}
+
 function renderMeuDia() {
   const el = document.getElementById('meu-dia');
   if (!el || !currentDev) return;
@@ -2298,6 +2460,7 @@ function getFiltered() {
 function renderKanban() {
   renderRiscoDev();
   renderMeuDia();
+  renderProdutividade();
   // A barra de risco e o resumo do dia aparecem e desaparecem conforme o
   // conteudo, empurrando o quadro para cima e para baixo. Remedir aqui e o que
   // mantem a rolagem propria do quadro correta em vez de sobrar ou faltar altura.
