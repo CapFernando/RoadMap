@@ -280,6 +280,10 @@
     .card.card-pausada { opacity:.78; }
     /* Magenta: 'Atrasado' e vermelho, e um rose vizinho do vermelho se confunde
        com ele num selo deste tamanho. Magenta nao colide com nada em uso. */
+    .poker-aplicar { background:var(--blue-bg,#0C3260); color:var(--blue-tx,#9BC8F8);
+      border:1px solid var(--blue); border-radius:5px; padding:2px 8px;
+      font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; }
+    .poker-aplicar:hover { filter:brightness(1.15); }
     .kb-pausa { font-size:10.5px; font-weight:700; color:var(--rose-tx,#F2A0DA);
       background:var(--rose-bg,#48123F); border:1px solid var(--rose-bd,#93257F);
       border-radius:5px; padding:1px 6px; }
@@ -1145,7 +1149,7 @@
       </div>
       <div class="form-group">
         <label>Pontos (Planning Poker)</label>
-        <select id="m-poker-pontos">
+        <select id="m-poker-pontos" onchange="pokerMarcaManual()">
           <option value="">—</option>
           <option value="1">1</option><option value="2">2</option><option value="3">3</option>
           <option value="5">5</option><option value="8">8</option><option value="13">13</option>
@@ -3871,8 +3875,16 @@ function openModalMelhoria(id) {
   document.getElementById('m-prioridade').value      = m?.prioridade       || '';
   document.getElementById('m-tipo').value            = m?.tipo            || '';
   document.getElementById('m-poker-media').value      = m?.poker_media != null ? m.poker_media : '';
-  document.getElementById('m-poker-pontos').value     = m?.poker_pontos != null ? String(m.poker_pontos) : '';
-  document.getElementById('m-poker-hint').textContent = '';
+  // Abrir outro card zera a marca: "escolhi na mao" vale para o card que estava
+  // aberto, nao para o proximo.
+  _pokerNaMao = false;
+  const selPk = document.getElementById('m-poker-pontos');
+  pokerLimpaExtras(selPk);
+  // Valor fora do baralho (importado, ou de um deck antigo) precisa da opcao,
+  // senao o select abre vazio e o save grava null — a pontuacao se perde sozinha.
+  if (m?.poker_pontos != null) pokerGarantOpcao(selPk, m.poker_pontos);
+  selPk.value = m?.poker_pontos != null ? String(m.poker_pontos) : '';
+  document.getElementById('m-poker-hint').innerHTML = '';
   document.getElementById('m-solicitante').value     = m?.solicitante      || '';
   document.getElementById('m-data-solicitacao').value= m?.data_solicitacao || '';
   document.getElementById('m-inicio').value          = m?.inicio           || '';
@@ -4058,14 +4070,60 @@ function fibonacciMaisProximo(media) {
   return String(FIBONACCI.reduce((a, b) => Math.abs(b - n) < Math.abs(a - n) ? b : a));
 }
 
+// A media digitada passa a MANDAR nos pontos, a menos que alguem tenha escolhido
+// a carta na mao neste card. Antes era `if (!sel.value)`: uma demanda que ja
+// tinha pontos nunca era repontuada — lancava-se a media nova, o campo continuava
+// com o valor da rodada anterior, e o unico aviso era um texto cinza. Quem
+// repontuava salvava achando que tinha trocado, e ficava o numero velho.
+//
+// Quando a escolha foi manual nao sobrescrevemos, mas a divergencia deixa de ser
+// texto e vira botao: um clique aplica. Aviso que nao da nada para fazer nao e
+// aviso, e decoracao.
+let _pokerNaMao = false;
+function pokerMarcaManual() {
+  _pokerNaMao = true;
+  sugereFibonacci();
+}
+function pokerAplicaSugestao() {
+  const sug = fibonacciMaisProximo(document.getElementById('m-poker-media').value);
+  if (!sug) return;
+  const sel = document.getElementById('m-poker-pontos');
+  pokerGarantOpcao(sel, sug);
+  sel.value = sug;
+  _pokerNaMao = false;
+  sugereFibonacci();
+}
+// Valor que nao existe entre as opcoes faz o select ficar em selectedIndex -1:
+// a tela mostra vazio e o save seguinte gravaria null, apagando a pontuacao.
+function pokerGarantOpcao(sel, valor) {
+  const v = String(valor);
+  if (!v || [...sel.options].some(o => o.value === v)) return;
+  const extra = document.createElement('option');
+  extra.value = v; extra.textContent = v + ' (fora do baralho)';
+  extra.dataset.extra = '1';
+  sel.appendChild(extra);
+}
+function pokerLimpaExtras(sel) {
+  [...sel.options].filter(o => o.dataset.extra === '1').forEach(o => o.remove());
+}
+
 function sugereFibonacci() {
   const media = document.getElementById('m-poker-media').value;
   const sel   = document.getElementById('m-poker-pontos');
   const hint  = document.getElementById('m-poker-hint');
   const sug   = fibonacciMaisProximo(media);
   if (!sug) { hint.textContent = ''; return; }
-  if (!sel.value) sel.value = sug;
-  hint.textContent = sel.value === sug ? `sugerido pela média` : `média sugere ${sug}`;
+  if (!_pokerNaMao) {
+    pokerGarantOpcao(sel, sug);
+    sel.value = sug;
+  }
+  if (sel.value === String(sug)) {
+    hint.innerHTML = 'sugerido pela média';
+  } else {
+    hint.innerHTML = 'você escolheu <b>' + esc(sel.value || '—') + '</b>; a média sugere <b>' +
+      esc(String(sug)) + '</b> · <button type="button" class="poker-aplicar" ' +
+      'onclick="pokerAplicaSugestao()">aplicar ' + esc(String(sug)) + '</button>';
+  }
 }
 
 // Etapa com trabalho comprometido exige responsavel. Sem dev, ninguem cobra

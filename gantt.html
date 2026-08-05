@@ -2157,9 +2157,14 @@ function openModal(id, prefillDev, prefillDate) {
   // ele nao sumir da tela ao abrir o card.
   const selPts = document.getElementById('e-poker-pontos');
   const valPts = (m && m.poker_pontos != null) ? String(m.poker_pontos) : '';
+  // Tira as opcoes extras que ficaram de outro card. Antes so acrescentava: abrir
+  // varios cards com valor fora do baralho ia empilhando os valores dos outros na
+  // lista, e dava para escolher por engano a pontuacao de outra demanda.
+  [...selPts.options].filter(o => o.dataset.extra === '1').forEach(o => o.remove());
   if (valPts && ![...selPts.options].some(o => o.value === valPts)) {
     const extra = document.createElement('option');
     extra.value = valPts; extra.textContent = valPts + ' (fora do baralho)';
+    extra.dataset.extra = '1';
     selPts.appendChild(extra);
   }
   selPts.value = valPts;
