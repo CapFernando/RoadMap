@@ -108,8 +108,12 @@
     .pd-anexo:hover { border-color:var(--blue); }
     .pd-anexo.morto { color:var(--text3); cursor:default; }
     .pd-anexo small { color:var(--text3); }
-    .pd-disc { display:grid; gap:6px; font-size:12.5px; line-height:1.6; color:var(--text2); }
-    .pd-disc b { color:var(--text2); font-weight:600; }
+    .pd-disc { display:grid; gap:5px; font-size:12.5px; line-height:1.6; color:var(--text2);
+      background:var(--bg3); border:1px solid var(--border); border-radius:9px;
+      padding:11px 13px; max-height:260px; overflow:auto; }
+    .pd-disc b { color:var(--text); font-weight:600; }
+    .pd-disc-h { font-size:10.5px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.06em; color:var(--blue); margin-bottom:3px; }
 
     /* ── FILA ── */
     .fila { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:18px; }
@@ -723,6 +727,72 @@ async function gravarNoCard() {
 
 // Detalhe da demanda em pauta. O facilitador conduzia com o Admin aberto do lado
 // porque aqui so aparecia o titulo — e quem vota sem ler o pedido chuta.
+
+// Discovery na mesa de votacao. As perguntas do dash sao exatamente o que se
+// discute para estimar — "como funciona hoje", "dor real", requisitos e criterios
+// de aceite. Sem elas o time vota pelo titulo.
+//
+// Os rotulos e a ordem sao os MESMOS do card no Admin, de proposito: quem conduz
+// a reuniao le a mesma coisa nos dois lugares. Se um dia mudar la, muda aqui —
+// e o teste de invariantes avisa se as duas listas divergirem.
+function discoveryHTML(m) {
+  const d = m && m.discovery;
+  if (!d || typeof d !== 'object') return '';
+  const linhas = [];
+  const por = (rot, val) => { if (val) linhas.push('<div><b>' + rot + ':</b> ' + esc(val) + '</div>'); };
+
+  if (d.tipo) por('Tipo', d.tipo === 'ganho' ? 'Ganho de produtividade' : 'Correção/Ajuste');
+  por('Área do solicitante', d.area_solicitante);
+  por('Impacto', d.impacto);
+  por('Beneficiários', d.beneficiarios);
+  if (d.ganho) {
+    const det = [];
+    if (d.ganho.horas_dia) det.push(d.ganho.horas_dia + 'h/dia por pessoa');
+    if (d.ganho.pessoas) det.push(d.ganho.pessoas + ' pessoa(s)');
+    const txt = [d.ganho.resumo || '', det.length ? '(' + det.join(' × ') + ')' : '']
+      .filter(Boolean).join(' ');
+    por('Ganho', txt);
+  }
+  if (d.contexto) {
+    por('Como funciona hoje', d.contexto.as_is);
+    por('Dor real', d.contexto.dor);
+    por('Se não fizer', d.contexto.nao_fazer);
+  }
+  (d.requisitos_funcionais || []).forEach((r, i) => {
+    if (!r || !r.desc) return;
+    por('RF-' + String(i + 1).padStart(2, '0'),
+        r.desc + (r.prio ? ' (' + r.prio + ')' : ''));
+  });
+  (d.regras_negocio || []).forEach((r, i) => {
+    if (!r || !r.regra) return;
+    por('RN-' + String(i + 1).padStart(2, '0'),
+        r.regra + (r.fonte ? ' — ' + r.fonte : ''));
+  });
+  if (d.escopo) {
+    por('Dentro do escopo', d.escopo.dentro);
+    por('Fora do escopo', d.escopo.fora);
+    por('Premissas', d.escopo.premissas);
+  }
+  (d.criterios_aceite || []).forEach((c, i) => {
+    if (!c || !(c.dado || c.quando || c.entao)) return;
+    por('CA-' + String(i + 1).padStart(2, '0'),
+        'Dado ' + (c.dado || '…') + ', quando ' + (c.quando || '…') +
+        ', então ' + (c.entao || '…'));
+  });
+  // Quando chegou pelo painel: item vindo do dash nao tem "data da solicitacao",
+  // e sem isto nao da para saber se o pedido e de ontem ou de dois meses atras.
+  if (m.criado_em) {
+    const dt = new Date(m.criado_em);
+    if (!isNaN(dt)) {
+      por('Enviado pelo painel em', dt.toLocaleDateString('pt-BR') + ' ' +
+          dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    }
+  }
+  if (!linhas.length) return '';
+  return '<div class="pd-disc"><div class="pd-disc-h">Discovery — preenchido por quem pediu</div>' +
+         linhas.join('') + '</div>';
+}
+
 function renderDetalhe(m) {
   const box = document.getElementById('pauta-det');
   if (!box) return;
@@ -744,14 +814,7 @@ function renderDetalhe(m) {
       '</span></div>'
     : '';
 
-  const d = m.discovery;
-  const disc = d && (d.objetivo || d.impacto || d.beneficiados)
-    ? '<div class="pd-disc">' +
-      (d.objetivo ? '<div><b>Objetivo:</b> ' + esc(d.objetivo) + '</div>' : '') +
-      (d.impacto ? '<div><b>Impacto hoje:</b> ' + esc(d.impacto) + '</div>' : '') +
-      (d.beneficiados ? '<div><b>Quem ganha:</b> ' + esc(d.beneficiados) + '</div>' : '') +
-      '</div>'
-    : '';
+  const disc = discoveryHTML(m);
 
   box.innerHTML =
     linha('Tema', nomeTema(m.tema_id)) +

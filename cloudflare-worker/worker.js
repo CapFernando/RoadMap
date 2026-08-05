@@ -853,11 +853,17 @@ export default {
             // para baixar por referencia, e dizer isso e melhor que um link morto.
             inline: !a.chave && !!a.dados,
           })),
-          discovery: m.discovery && typeof m.discovery === 'object' ? {
-            objetivo: String(m.discovery.objetivo || '').slice(0, 600),
-            impacto: String(m.discovery.impacto || '').slice(0, 600),
-            beneficiados: String(m.discovery.beneficiados || '').slice(0, 300),
-          } : null,
+          // O discovery vai INTEIRO. A primeira versao recortava tres campos que eu
+          // supus (objetivo/impacto/beneficiados) e dois nem existem: o formulario
+          // do dash grava `beneficiarios`, e `contexto`, `escopo`, `regras_negocio`,
+          // `requisitos_funcionais` e `criterios_aceite` sao objetos e listas, nao
+          // texto. Recortar de novo repetiria o erro de supor a forma do dado.
+          //
+          // O teto e no JSON inteiro: um discovery bem preenchido tem ~1,5 KB, e o
+          // limite existe para um caso extremo nao inflar uma resposta que e pedida
+          // a cada atualizacao da fila.
+          discovery: (m.discovery && typeof m.discovery === 'object' &&
+                      JSON.stringify(m.discovery).length < 8000) ? m.discovery : null,
         });
         const todas = data.melhorias || [];
         const fila = todas.filter(m => (m.status_planejamento || '') === 'planning').map(enxuta);

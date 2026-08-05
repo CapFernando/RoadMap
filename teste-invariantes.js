@@ -192,6 +192,36 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV], ['i
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Discovery: os campos sao os que o dash grava, nao os que alguem supoe');
+
+// Eu escrevi o painel do poker recortando tres campos que INVENTEI (objetivo,
+// impacto, beneficiados) — e dois nao existem: o dash grava `beneficiarios`, e
+// contexto/escopo/regras_negocio sao objetos, nao texto. Aqui se garante que as
+// duas telas leem os MESMOS campos do dado real.
+const CAMPOS_DISCOVERY = ['tipo', 'area_solicitante', 'impacto', 'beneficiarios',
+  'ganho', 'contexto', 'requisitos_funcionais', 'regras_negocio', 'escopo',
+  'criterios_aceite'];
+const rendAdmin = corpo(ADMIN, 'function renderMDiscovery(');
+const rendPoker = corpo(POKER, 'function discoveryHTML(');
+for (const campo of CAMPOS_DISCOVERY) {
+  ok(!!rendAdmin && rendAdmin.includes('d.' + campo),
+     'admin le discovery.' + campo);
+  ok(!!rendPoker && rendPoker.includes('d.' + campo),
+     'poker le discovery.' + campo);
+}
+// Campo inventado nao pode voltar.
+for (const falso of ['d.beneficiados', 'd.objetivo']) {
+  ok(!rendPoker.includes(falso), 'poker nao le ' + falso + ' (campo que nao existe)');
+}
+// A fila nao pode recortar o discovery: recortar foi o que escondeu os campos.
+const enxuta = W.slice(W.indexOf('const enxuta = (m) =>'), W.indexOf('const todas = data.melhorias'));
+ok(/discovery: \(m\.discovery && typeof m\.discovery === 'object'/.test(enxuta) &&
+   !/discovery: \{/.test(enxuta),
+   'a fila do poker manda o discovery inteiro, sem recortar campo');
+ok(!/dados:/.test(enxuta) && /anexos: \(m\.anexos \|\| \[\]\)\.map/.test(enxuta),
+   'a fila manda a referencia do anexo, nunca o base64');
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Cache: arquivo compartilhado sempre versionado por hash');
 
 for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
