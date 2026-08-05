@@ -2558,6 +2558,8 @@ function saveTask() {
     pausa_por:          existing.pausa_por       || '',
     pausa_dias:         existing.pausa_dias      || 0,
     pausa_historico:    existing.pausa_historico || [],
+    // Idem: o Worker repoe, mas a copia local tem de continuar coerente.
+    historico:          existing.historico || [],
     debito_tecnico:     document.getElementById('e-debito').checked,
     estimativa_horas:   existing.estimativa_horas || 0,
     horas_realizadas:   parseFloat(document.getElementById('e-horas-real').value) || 0,

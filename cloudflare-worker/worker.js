@@ -302,6 +302,93 @@ async function loginLivre(db, base) {
 // numero. No cliente, duas abas gerariam max+1 identico.
 // Projetos seguem a mesma regra dos cards: EP-### atribuido pelo Worker, pelo
 // mesmo motivo — so ele serializa gravacoes.
+
+// ─── HISTORICO DE ALTERACOES ──────────────────────────────────────────
+// Registrado AQUI, no Worker, e nao nas telas: e o unico ponto por onde toda
+// gravacao passa. Nas telas seria opcional — bastaria uma rota nova, ou uma tela
+// esquecida, para o registro ter buraco justamente onde alguem quisesse esconder
+// algo.
+//
+// Existe por uma consequencia concreta: o dev passou a poder corrigir o texto da
+// entrega enquanto o PM/PO analisa. Isso e necessario (o PM/PO pede detalhe), mas
+// abre a porta para o texto mudar depois de lido. O historico nao impede — ele
+// deixa rastro, que e o que resolve na pratica.
+const HIST_CAMPOS = {
+  status_planejamento: 'etapa',
+  implementacao:       'o que foi implementado',
+  horas_realizadas:    'horas',
+  entrega:             'entrega',
+  inicio:              'inicio',
+  dev:                 'responsavel',
+  poker_pontos:        'pontos',
+  projeto_id:          'projeto',
+  titulo:              'titulo',
+  pausado_em:          'pausa',
+  concluido_em:        'data de conclusao',
+};
+// Guarda por demanda. Sem teto, um card antigo acumularia centenas de entradas e
+// o arquivo (164 KB hoje) cresceria sem controle — ele e lido inteiro em toda
+// abertura de tela.
+const HIST_MAX = 25;
+const HIST_TEXTO = 180;   // texto longo entra cortado; o tamanho fica registrado
+
+function histValor(v) {
+  if (v === undefined || v === null) return '';
+  if (Array.isArray(v)) return v.length + ' item(ns)';
+  const t = String(v);
+  return t.length > HIST_TEXTO ? t.slice(0, HIST_TEXTO) + '…' : t;
+}
+
+// Compara o que chegou com o que esta gravado e anexa as diferencas. `quem` sai
+// da conta autenticada; sem conta, fica o papel, que ja diz de onde veio.
+function registraHistorico(recebido, servidor, quem, origem) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return 0;
+  const antigas = new Map((((servidor || {}).melhorias) || []).map(m => [m.id, m]));
+  const agora = new Date().toISOString();
+  let n = 0;
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antigas.get(m.id);
+    if (!velha) continue;                 // demanda nova nao tem o que comparar
+    const mudancas = [];
+    for (const campo of Object.keys(HIST_CAMPOS)) {
+      const de = velha[campo], para = m[campo];
+      // vazio -> vazio nao e mudanca; zero E valor.
+      const vazio = v => v === undefined || v === null || v === '' ||
+                         (Array.isArray(v) && v.length === 0);
+      if (vazio(de) && vazio(para)) continue;
+      if (JSON.stringify(de) === JSON.stringify(para)) continue;
+      mudancas.push({ campo, rotulo: HIST_CAMPOS[campo],
+                      de: histValor(de), para: histValor(para),
+                      // O tamanho denuncia texto cortado, para ninguem achar que
+                      // a descricao inteira era aquilo.
+                      de_tam: typeof de === 'string' ? de.length : undefined,
+                      para_tam: typeof para === 'string' ? para.length : undefined });
+    }
+    // A base e SEMPRE o historico gravado no servidor, nunca o que veio no corpo.
+    // Duas razoes:
+    // 1) As telas montam a demanda por lista fechada de campos. `historico` nao
+    //    estava nessas listas, entao salvar pela aba Dados chegava aqui sem ele e
+    //    apagaria tudo — a mesma armadilha que ja aconteceu com pausa e grill.
+    // 2) Se a base fosse o corpo, bastaria enviar `historico: []` para limpar o
+    //    proprio rastro. Um registro que o auditado pode apagar nao serve.
+    const anterior = Array.isArray(velha.historico) ? velha.historico : [];
+    if (!mudancas.length) {
+      // Nada mudou nesta demanda, mas devolve o historico ao objeto para o caso
+      // de o cliente nao te-lo enviado.
+      if (anterior.length) m.historico = anterior;
+      continue;
+    }
+    const anexosAntes = ((velha.anexos || []).length), anexosDepois = ((m.anexos || []).length);
+    const entrada = { em: agora, quem: quem || '(sem conta)', origem: origem || '',
+                      mudancas };
+    if (anexosAntes !== anexosDepois) entrada.anexos = anexosAntes + ' -> ' + anexosDepois;
+    m.historico = anterior.concat([entrada]).slice(-HIST_MAX);
+    n += mudancas.length;
+  }
+  return n;
+}
+
 function atribuiCodigosProjeto(data) {
   if (!data || !Array.isArray(data.projetos)) return 0;
   let maior = 0;
@@ -1264,6 +1351,7 @@ export default {
         msg = 'chore: ' + (m.codigo || m.id) + ' entregue para validacao por ' + (eu || 'api');
       }
 
+      registraHistorico(atual, base, eu || ident.papel, 'api');
       atribuiCodigos(atual);
       corrigeProjetoInvalido(atual);
       atual.atualizado_em = new Date().toISOString();
@@ -1655,6 +1743,11 @@ export default {
       if (risco) return json({ error: risco }, 409, headers);
       const conf = await conflito(gh, body, headers);
       if (conf) return conf;
+      // Antes de mexer em nada: compara com o que esta gravado.
+      const antesPub = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      registraHistorico(data, antesPub, (_ident && _ident.usuario && _ident.usuario.nome) ||
+                        (await papelAtual()) || '', 'painel');
       atribuiCodigos(data);
       atribuiCodigosProjeto(data);
       const semDev = corrigeSemDev(data);
@@ -1701,6 +1794,10 @@ export default {
       if (risco) return json({ error: risco }, 409, headers);
       const confDev = await conflito(gh, body, headers);
       if (confDev) return confDev;
+      const antesDev = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
+                        (await papelAtual()) || '', 'painel dev');
       atribuiCodigos(data);
       corrigeProjetoInvalido(data);
       data.atualizado_em = new Date().toISOString();

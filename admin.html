@@ -280,6 +280,29 @@
     .card.card-pausada { opacity:.78; }
     /* Magenta: 'Atrasado' e vermelho, e um rose vizinho do vermelho se confunde
        com ele num selo deste tamanho. Magenta nao colide com nada em uso. */
+    /* Historico do card: leitura de auditoria, densa e sem enfeite. */
+    .hist-topo { font-size:12px; color:var(--text3); margin:0 0 14px; }
+    .hist-vazio { font-size:13.5px; line-height:1.7; color:var(--text3); margin:0; }
+    .hist-item { border-left:2px solid var(--border2); padding:0 0 0 12px; margin-bottom:16px; }
+    .hist-cab { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; margin-bottom:6px;
+      font-size:13px; color:var(--text); }
+    .hist-quando { font-size:11.5px; color:var(--text3); }
+    .hist-origem { font-size:10.5px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.05em; color:var(--text3); background:var(--bg4);
+      border-radius:4px; padding:1px 6px; }
+    .hist-linha { display:grid; grid-template-columns:130px 1fr 18px 1fr; gap:8px;
+      align-items:baseline; font-size:12.5px; line-height:1.55; padding:3px 0;
+      border-top:1px solid var(--border); }
+    .hist-campo { color:var(--text3); }
+    .hist-de { color:var(--text3); text-decoration:line-through;
+      text-decoration-color:var(--border2); word-break:break-word; }
+    .hist-para { color:var(--text); word-break:break-word; }
+    .hist-seta { color:var(--text3); text-align:center; }
+    .hist-linha i { font-style:normal; color:var(--text3); font-size:11px; }
+    @media (max-width:640px) {
+      .hist-linha { grid-template-columns:1fr; }
+      .hist-seta { display:none; }
+    }
     /* Barra de decisao da entrega, acima das abas do card. */
     .val-barra { align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
       background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470);
@@ -1066,6 +1089,10 @@
       <button type="button" class="mtab" id="mtab-entrega" onclick="mAba('entrega')">
         Entrega <span class="mtab-sino" id="mtab-sino" style="display:none">1</span>
       </button>
+      <!-- Só para papel admin. Fica escondida para todo o resto, inclusive se um
+           dia outro perfil abrir esta tela. -->
+      <button type="button" class="mtab" id="mtab-hist" style="display:none"
+              onclick="mAba('hist')">Histórico</button>
     </div>
 
     <!-- Decisao de entrega ACIMA das abas: fica visivel em qualquer aba, para a
@@ -1085,6 +1112,11 @@
     <!-- ABA ENTREGA: validacao do PM/PO -->
     <div id="m-pane-entrega" style="display:none">
       <div id="ent-conteudo"></div>
+    </div>
+
+    <!-- ABA HISTORICO: quem mudou o que, e quando. Registrado pelo Worker. -->
+    <div id="m-pane-hist" style="display:none">
+      <div id="hist-conteudo"></div>
     </div>
 
     <div id="m-pane-dados">
@@ -3999,6 +4031,13 @@ function openModalMelhoria(id) {
   // Demanda esperando validacao abre direto na aba Entrega: e a unica coisa a
    // fazer com ela. Abrir em Dados obrigava a procurar, e o caminho que a pessoa
    // achava era o seletor de etapa — decidir a entrega mexendo no funil na mao.
+  // A aba so aparece para papel admin. Sem sistema de contas (senha
+   // compartilhada), papelAtual e admin de todo jeito — esta tela ja e do PM/PO.
+  const abaH = document.getElementById('mtab-hist');
+  if (abaH) {
+    const souAdmin = !_eu || String(_eu.papel || 'admin') === 'admin';
+    abaH.style.display = (souAdmin && m) ? '' : 'none';
+  }
   mAba(m && statusKey(m) === 'validacao' ? 'entrega' : 'dados');
   renderEntrega(m || null);
   valBarraRender(m || null);
@@ -4422,6 +4461,9 @@ function saveMelhoria() {
     pausa_por:           existing.pausa_por      || '',
     pausa_dias:          existing.pausa_dias     || 0,
     pausa_historico:     existing.pausa_historico || [],
+    // O Worker e o dono do historico e o repoe se faltar, mas repassar aqui evita
+    // que a copia na tela fique sem ele entre o save e a proxima leitura.
+    historico:           existing.historico || [],
     anexos:              _mAnexos,
     horas_realizadas:    parseFloat(document.getElementById('m-horas-real').value) || existing.horas_realizadas || 0,
     criado_em:           existing.criado_em || new Date().toISOString(),
@@ -4784,8 +4826,52 @@ async function valDecidirNoCard(ev, id, acao) {
   }
 }
 
+
+// ─── HISTORICO DO CARD ────────────────────────────────────────────
+// Lista o que o Worker registrou: quem mudou, quando, de que para que. Serve
+// para uma pergunta concreta — o dev pode corrigir o texto da entrega enquanto
+// o PM/PO analisa, e isso e necessario; aqui se ve se mudou depois de lido.
+function histRender() {
+  const box = document.getElementById('hist-conteudo');
+  if (!box) return;
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  const h = (m && Array.isArray(m.historico)) ? m.historico : [];
+  if (!h.length) {
+    box.innerHTML = '<p class="hist-vazio">Nenhuma alteração registrada nesta demanda.<br>' +
+      'O registro começou agora: mudanças anteriores a hoje não foram gravadas.</p>';
+    return;
+  }
+  // Mais recente primeiro: a pergunta e quase sempre "o que mudou por ultimo".
+  const ord = [...h].reverse();
+  const quando = iso => { const d = new Date(iso); return isNaN(d) ? String(iso || '') :
+    d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric',
+                               hour: '2-digit', minute: '2-digit' }); };
+  box.innerHTML = '<p class="hist-topo">' + h.length +
+    (h.length === 1 ? ' alteração registrada' : ' alterações registradas') +
+    '. Guarda as ' + 25 + ' últimas de cada demanda.</p>' +
+    ord.map(e =>
+      '<div class="hist-item">' +
+        '<div class="hist-cab"><strong>' + esc(e.quem || '(sem conta)') + '</strong>' +
+          '<span class="hist-quando">' + esc(quando(e.em)) + '</span>' +
+          (e.origem ? '<span class="hist-origem">' + esc(e.origem) + '</span>' : '') +
+        '</div>' +
+        (e.mudancas || []).map(c =>
+          '<div class="hist-linha"><span class="hist-campo">' + esc(c.rotulo || c.campo) + '</span>' +
+          '<span class="hist-de">' + (c.de === '' ? '(vazio)' : esc(c.de)) +
+            (c.de_tam > 180 ? ' <i>(' + c.de_tam + ' caracteres)</i>' : '') + '</span>' +
+          '<span class="hist-seta">→</span>' +
+          '<span class="hist-para">' + (c.para === '' ? '(vazio)' : esc(c.para)) +
+            (c.para_tam > 180 ? ' <i>(' + c.para_tam + ' caracteres)</i>' : '') + '</span></div>'
+        ).join('') +
+        (e.anexos ? '<div class="hist-linha"><span class="hist-campo">anexos</span>' +
+          '<span class="hist-de">' + esc(e.anexos) + '</span></div>' : '') +
+      '</div>'
+    ).join('');
+}
+
 function mAba(qual) {
-  const abas = ['dados', 'grill', 'entrega'];
+  const abas = ['dados', 'grill', 'entrega', 'hist'];
   if (!abas.includes(qual)) qual = 'dados';
   abas.forEach(a => {
     document.getElementById('m-pane-' + a).style.display = (a === qual) ? 'block' : 'none';
@@ -4794,6 +4880,7 @@ function mAba(qual) {
   const acoes = document.getElementById('m-acoes-dados');
   if (acoes) acoes.style.display = (qual === 'dados') ? '' : 'none';
   if (qual === 'grill') grillRender();
+  if (qual === 'hist') histRender();
   document.querySelector('#modal-melhoria .modal').scrollTop = 0;
 }
 
