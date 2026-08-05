@@ -288,10 +288,25 @@
     .filter-count { font-size:12px; color:var(--text3); margin-left:auto; white-space:nowrap; }
 
     /* ── KANBAN ── */
-    #kanban-wrap { overflow-x:auto; padding:20px 24px 40px; min-height:calc(100vh - 140px); }
-    #kanban { display:flex; gap:14px; min-width:max-content; align-items:stretch; }
-    .col { width:290px; flex-shrink:0; min-height:calc(100vh - 200px); display:flex; flex-direction:column; }
-    .col-header { display:flex; align-items:center; gap:8px; padding:0 4px 10px; border-bottom:2px solid var(--col-color); margin-bottom:10px; }
+    /* O cabecalho de cada etapa fica fixo enquanto os cards rolam.
+       Para `sticky` funcionar, o elemento precisa de um contexto de rolagem que
+       de fato ROLE. Este wrap ja era contexto de rolagem — `overflow-x:auto`
+       forca o overflow-y a auto — mas nunca rolava: ele crescia com o conteudo e
+       quem rolava era a pagina, entao o sticky nao tinha para onde se mover e o
+       cabecalho subia junto com os cards.
+       A altura e definida em JS (ajustaAlturaKanban) a partir da posicao real do
+       wrap na tela: a barra de filtros muda de altura quando quebra em duas
+       linhas, e um valor cravado em calc() erraria em telas estreitas. */
+    #kanban-wrap { overflow:auto; padding:20px 24px 40px; }
+    #kanban { display:flex; gap:14px; min-width:max-content; align-items:stretch; min-height:100%; }
+    .col { width:290px; flex-shrink:0; display:flex; flex-direction:column; }
+    .col-header { display:flex; align-items:center; gap:8px; padding:6px 4px 10px;
+      border-bottom:2px solid var(--col-color); margin-bottom:10px;
+      /* -20px anula o padding-top do wrap, senao sobra uma faixa por onde os
+         cards passariam visiveis acima do cabecalho. */
+      position:sticky; top:-20px; z-index:3;
+      /* Fundo opaco obrigatorio: sem ele os cards aparecem por baixo do texto. */
+      background:var(--bg); }
     .col-header-dot { width:10px; height:10px; border-radius:50%; background:var(--col-color); flex-shrink:0; }
     .col-header-label { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text2); }
     .col-header-count { font-size:12px; font-weight:600; background:var(--bg3); color:var(--text3); border-radius:10px; padding:1px 8px; }
@@ -1234,6 +1249,21 @@ async function dpSalvar() {
   }
 }
 
+
+// Altura do quadro medida na tela, nao cravada em calc(): acima dele ficam o
+// cabecalho, as abas, o resumo do dia e a barra de filtros — e a barra de
+// filtros quebra em duas linhas em tela estreita. Um valor fixo erraria, e o erro
+// aparece como quadro sem rolagem propria (cabecalho volta a subir) ou com
+// rolagem dupla.
+function ajustaAlturaKanban() {
+  const wrap = document.getElementById('kanban-wrap');
+  if (!wrap || wrap.style.display === 'none') return;
+  const topo = wrap.getBoundingClientRect().top;
+  // 12px de folga para nao encostar na borda inferior da janela.
+  const altura = Math.max(320, window.innerHeight - topo - 12);
+  wrap.style.height = altura + 'px';
+}
+
 function devAba(qual) {
   const kanban = !['gantt', 'api', 'projetos'].includes(qual);
   document.getElementById('kanban-wrap').style.display = kanban ? '' : 'none';
@@ -1247,6 +1277,7 @@ function devAba(qual) {
   // A barra de filtros pertence ao Kanban; nas outras abas ela nao filtra nada.
   const fb = document.querySelector('.filter-bar');
   if (fb) fb.style.display = kanban ? '' : 'none';
+  if (kanban) ajustaAlturaKanban();
   if (qual === 'gantt') renderDevGantt();
   if (qual === 'api') renderEndpointDoc();
   if (qual === 'projetos') renderProjetosDev();
@@ -2267,6 +2298,10 @@ function getFiltered() {
 function renderKanban() {
   renderRiscoDev();
   renderMeuDia();
+  // A barra de risco e o resumo do dia aparecem e desaparecem conforme o
+  // conteudo, empurrando o quadro para cima e para baixo. Remedir aqui e o que
+  // mantem a rolagem propria do quadro correta em vez de sobrar ou faltar altura.
+  ajustaAlturaKanban();
   // O cronograma le o mesmo state; redesenha junto para os dois nunca divergirem.
   if (document.getElementById('gantt-wrap')?.style.display === 'block') renderDevGantt();
   const kanban = document.getElementById('kanban');
@@ -3156,6 +3191,15 @@ function showSaving(on) {
 
 // ─── INIT ────────────────────────────────────────────────────────
 initApp();
+
+// Janela redimensionada, barra de filtros quebrando linha, zoom do navegador:
+// tudo muda a altura disponivel. requestAnimationFrame para nao remedir a cada
+// pixel do arrasto da borda da janela.
+let _ajusteKb = null;
+window.addEventListener('resize', () => {
+  if (_ajusteKb) cancelAnimationFrame(_ajusteKb);
+  _ajusteKb = requestAnimationFrame(() => { _ajusteKb = null; ajustaAlturaKanban(); });
+});
 </script>
 </body>
 </html>
