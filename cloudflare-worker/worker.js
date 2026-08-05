@@ -874,8 +874,12 @@ export default {
         return json({ ok: true }, 200, headers);
       }
 
-      // Daqui pra baixo e o facilitador: exige senha
-      if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+      // Daqui pra baixo e o facilitador. Esta porteira roda ANTES da conferencia de
+      // cada rota, entao ela e que decide de verdade: enquanto olhava so
+      // `senhaOk`, quem entrou pela propria conta abria a sala (rota anterior a
+      // esta linha) e era recusado em TUDO depois — por em pauta, revelar, gravar.
+      // Ficava impossivel conduzir a votacao.
+      if (!(await facilitadorOk())) return recusaFacilitador();
 
       if (body.action === 'poker-revelar') {
         // Acao de facilitador: o painel sempre manda a senha, mas o servidor nao
