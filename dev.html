@@ -761,6 +761,11 @@
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="openEditDemand(document.getElementById('ms-id').value)" style="margin-right:auto">✏️ Editar demanda</button>
+      <!-- Aparece quando a demanda esta com o PM/PO: nao muda etapa, so grava o
+           texto e as horas. Sem ele, quem escrevia a descricao durante a validacao
+           nao tinha como salvar e perdia o que digitou ao fechar o card. -->
+      <button class="btn btn-primary" id="btn-save-entrega" style="display:none"
+              onclick="salvarEntrega()">Salvar texto da entrega</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-status')">Fechar</button>
       <button class="btn btn-primary" id="btn-save-status" onclick="saveStatus()">Salvar status</button>
     </div>
@@ -2857,10 +2862,14 @@ function openStatusModal(id, preselect) {
   const trava = document.getElementById('ms-trava');
   if (trava) {
     trava.style.display = (emValidacao || jaConcluida) ? 'block' : 'none';
+    // O que a trava impede e MOVER a demanda, nao corrigir a propria entrega.
+    // Antes o texto dizia "nao pode ser alterada" e o botao de salvar desaparecia:
+    // quem escrevia a descricao durante a validacao perdia tudo ao fechar o card.
     trava.innerHTML = emValidacao
-      ? '🔒 <strong>Aguardando validação do PM/PO.</strong> Enquanto ele analisa, a demanda ' +
-        'não pode ser alterada aqui. Se algo estiver errado, fale com o PM/PO — se ele devolver, ' +
-        'ela volta para Em Andamento com o motivo.'
+      ? '🔒 <strong>Aguardando validação do PM/PO.</strong> Você ainda pode corrigir as horas ' +
+        'e o texto do que foi implementado — use <strong>Salvar texto da entrega</strong>. ' +
+        'O que não muda aqui é a etapa: quem conclui é o PM/PO. Se algo estiver errado no ' +
+        'escopo, fale com ele — se devolver, a demanda volta para Em Andamento com o motivo.'
       : '🔒 <strong>Concluída e validada.</strong> Não há mais o que alterar por aqui.';
   }
   if (grupo) grupo.style.display = (emValidacao || jaConcluida) ? 'none' : '';
@@ -2869,6 +2878,9 @@ function openStatusModal(id, preselect) {
   if (gProj) gProj.style.display = (emValidacao || jaConcluida) ? 'none' : '';
   const btnSalvar = document.getElementById('btn-save-status');
   if (btnSalvar) btnSalvar.style.display = (emValidacao || jaConcluida) ? 'none' : '';
+  // Em validacao troca de botao; concluida nao tem mais o que gravar.
+  const btnEntrega = document.getElementById('btn-save-entrega');
+  if (btnEntrega) btnEntrega.style.display = emValidacao ? '' : 'none';
 
   const sel = document.getElementById('ms-status');
   // Mesmo motivo: com a derivada o select vinha vazio para demanda vencida.
@@ -3017,6 +3029,55 @@ function msProjetoRender(m) {
   sel.innerHTML = html;
   if (!aprovados.length && !orfao) {
     sel.innerHTML = '<option value="">nenhum projeto aprovado ainda</option>';
+  }
+}
+
+
+// Grava a entrega SEM mexer na etapa. Existe porque "o dev nao conclui" nao pode
+// significar "o dev nao corrige o proprio texto": o PM/PO le justamente esse
+// texto para validar, e pedir mais detalhe e o caso mais comum. Antes o botao de
+// salvar simplesmente desaparecia na validacao, e quem tinha escrito perdia tudo
+// ao fechar o card.
+//
+// O que NAO entra aqui: status_planejamento. A etapa e do PM/PO, e essa e a
+// unica coisa que a trava precisa impedir.
+async function salvarEntrega() {
+  const id = document.getElementById('ms-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) return;
+  if (getStatusKey(m) === 'concluido') {
+    toast('Demanda concluída e validada: não há mais o que alterar.', 'err');
+    return;
+  }
+  const horas = parseFloat(document.getElementById('ms-horas').value);
+  if (!horas || horas <= 0) {
+    toast('Informe as horas de desenvolvimento.', 'err');
+    document.getElementById('ms-horas').focus();
+    return;
+  }
+  const impl = document.getElementById('ms-implementacao').value.trim();
+  if (!impl) {
+    toast('Descreva o que foi implementado — o PM/PO valida por este texto.', 'err');
+    document.getElementById('ms-implementacao').focus();
+    return;
+  }
+  const antesH = m.horas_realizadas, antesI = m.implementacao, antesA = m.anexos;
+  m.horas_realizadas = horas;
+  m.implementacao = impl;
+  if (_msAnexosMexidos) m.anexos = _msAnexos;
+  const campos = { horas_realizadas: horas, implementacao: impl };
+  if (_msAnexosMexidos) campos.anexos = _msAnexos;
+  const okSalvo = await saveToGitHub({ [id]: campos });
+  if (okSalvo) {
+    _msAnexosMexidos = false;
+    closeModal('modal-status');
+    toast('Texto da entrega salvo. A demanda segue com o PM/PO.', 'ok');
+    renderKanban();
+  } else {
+    m.horas_realizadas = antesH;
+    m.implementacao = antesI;
+    m.anexos = antesA;
+    toast('Não foi possível salvar. Copie o texto antes de fechar, por segurança.', 'err');
   }
 }
 

@@ -1131,13 +1131,30 @@ export default {
                       detail: 'Esta demanda esta com ' + (alvo.dev || 'outra pessoa') +
                               '. Pela API voce altera apenas as suas.' }, 403, headers);
       }
-      // Mesma trava da tela: com o PM/PO, a demanda esta congelada.
+      // Mesma regra da tela do dev, que e mais estreita do que "congelada":
+      // em validacao ele NAO move a demanda nem troca o projeto, mas corrigir a
+      // propria descricao e as horas segue liberado — pedir mais detalhe no texto
+      // e justamente o caso mais comum enquanto o PM/PO analisa. Se a API
+      // recusasse, ela contradiria a tela, e quem automatiza receberia erro no que
+      // a interface aceita. Concluida continua fechada para tudo.
       const etapaAtual = alvo.status_planejamento || 'backlog';
-      if (['validacao', 'concluido'].includes(etapaAtual)) {
+      if (etapaAtual === 'concluido') {
+        return json({ error: 'concluida',
+                      detail: 'Demanda concluida e validada: nao pode ser alterada pela API.' }, 409, headers);
+      }
+      const emValidacao = etapaAtual === 'validacao';
+      if (emValidacao && body.action === 'demanda-entregar') {
         return json({ error: 'em_validacao',
-                      detail: etapaAtual === 'validacao'
-                        ? 'Demanda aguardando validacao do PM/PO: nao pode ser alterada. Se algo esta errado, fale com o PM/PO para devolver.'
-                        : 'Demanda concluida: nao pode ser alterada pela API.' }, 409, headers);
+                      detail: 'Demanda ja esta aguardando validacao do PM/PO.' }, 409, headers);
+      }
+      if (emValidacao && (typeof body.etapa === 'string' && body.etapa.trim())) {
+        return json({ error: 'em_validacao',
+                      detail: 'Demanda com o PM/PO: a etapa nao muda por aqui. Corrija o texto e as ' +
+                              'horas se precisar; para mudar de etapa, peca ao PM/PO para devolver.' }, 409, headers);
+      }
+      if (emValidacao && typeof body.projeto_id === 'string') {
+        return json({ error: 'em_validacao',
+                      detail: 'Demanda com o PM/PO: o vinculo de projeto nao muda por aqui.' }, 409, headers);
       }
 
       // Releitura para pegar o sha e gravar sobre a versao corrente.
