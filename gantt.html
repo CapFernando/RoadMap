@@ -337,10 +337,36 @@
     .gantt-card .card-tema-row { display: flex; align-items: center; overflow: hidden; }
     .gantt-card .card-desc { display: none; }
 
+    /* Pausada: hachura diagonal sobre a cor da etapa. A barra ja usa cor para
+       dizer a etapa — outra cor competiria com essa leitura; textura nao compete.
+       O ::after cobre a barra inteira, entao o padrao acompanha qualquer largura. */
+    .gantt-card.gcard-pausada { opacity: .72; }
+    .gantt-card.gcard-pausada::after {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: repeating-linear-gradient(135deg,
+        transparent 0 5px, rgba(0,0,0,.28) 5px 10px);
+    }
+    .gantt-card .card-pausa {
+      font-size: 10px; font-weight: 700; flex-shrink: 0; z-index: 1;
+      background: rgba(0,0,0,.42); border-radius: 4px; padding: 1px 5px;
+      white-space: nowrap;
+    }
+
     /* status_planejamento colors */
     /* Mesmo caso do .ind-chip.backlog: #6E6A62 sobre #252522 da 2.2:1, e no tema
        claro a barra ficava escura com texto escuro. Por token. */
     .gcard-backlog      { background:var(--bg4); border-color:var(--border2); color:var(--text2); }
+    /* Card da lista de backlog: mesma hachura da barra, para a leitura ser a
+       mesma nos dois lugares. */
+    .gcard-backlog.pausado, .backlog-card.pausado { position:relative; opacity:.75; }
+    .backlog-card.pausado::after {
+      content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
+      background: repeating-linear-gradient(135deg,
+        transparent 0 5px, rgba(0,0,0,.18) 5px 10px);
+    }
+    .bl-pausa { font-size:10px; font-weight:700; color:var(--text2);
+      background:var(--bg4); border:1px solid var(--border2); border-radius:4px;
+      padding:1px 5px; white-space:nowrap; position:relative; z-index:1; }
     .gcard-levantar_req { background:#2A1A4E; border-color:#5A3A9E; color:#C9AEFF; }
     .gcard-planejado    { background:#0C3260; border-color:#1a5080; color:#9BC8F8; }
     .gcard-em_andamento { background:#3D3600; border-color:#726500; color:#FFE14D; }
@@ -1562,7 +1588,7 @@ function renderBacklog() {
     const tema = state.temas.find(t => t.id === m.tema_id);
     const temaColor = temaColorOf(m.tema_id);
     const dotCls = prioClass(m.prioridade);
-    return `<div class="backlog-card"
+    return `<div class="backlog-card${estaPausado(m) ? ' pausado' : ''}"
       draggable="true"
       data-id="${m.id}"
       ondragstart="onBacklogDragStart(event,'${m.id}')"
@@ -1570,6 +1596,7 @@ function renderBacklog() {
       <div class="backlog-card-title">${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}${esc(m.titulo)}</div>
       ${m.descricao ? `<div class="backlog-card-desc">${esc(m.descricao)}</div>` : ''}
       <div class="backlog-card-meta">
+        ${estaPausado(m) ? `<span class="bl-pausa" title="Pausada${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${diasPausadoAgora(m)}d</span>` : ''}
         <span title="Pontos do Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:10px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 6px;font-weight:700">🃏 ${m.poker_pontos}</span>
         ${tema ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${temaColor}22;color:${temaColor};font-weight:600">${esc(tema.nome)}</span>` : ''}
         ${m.dev ? `<span style="font-size:10px;color:var(--text3)">${esc(m.dev)}</span>` : ''}
@@ -1804,7 +1831,9 @@ function renderGantt() {
       const width = (eIdx - sIdx + 1) * dayW - 4;
 
       const cardH = tema ? 54 : 36;
-      html += `<div class="gantt-card gcard-${sp}"
+      const pausada = estaPausado(m);
+      const dPausa = pausada ? diasPausadoAgora(m) : 0;
+      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
         draggable="true"
@@ -1818,6 +1847,7 @@ function renderGantt() {
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
           ${state.melhorias.some(x => x.parent_id === m.id && x.status_planejamento !== 'concluido') ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;">⏳</span>` : ''}
+          ${pausada ? `<span class="card-pausa" title="Pausada há ${dPausa} dia(s)${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${dPausa}d</span>` : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>
         ${tema ? `<div class="card-tema-row"><span class="tema-badge" style="background:${tColor}25;color:${tColor};border-color:${tColor}55">${esc(tema.nome)}</span></div>` : ''}

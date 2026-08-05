@@ -74,6 +74,28 @@
       padding:1px 7px; margin-bottom:5px; }
     .kcard-prazo.amanha { background:var(--amber-bg); color:var(--amber-tx); }
     .kcard-prazo.hoje   { background:var(--red-bg);   color:var(--red-tx); }
+    /* Pausada em cinza: nao e urgencia, e o contrario — o prazo esta suspenso.
+       Vermelho ou ambar aqui pediria uma acao que nao existe. */
+    .kcard-prazo.pausada { background:var(--bg4); color:var(--text2);
+      border:1px solid var(--border2); }
+    /* Area de anexo da nova demanda. A dica de colar fica DENTRO da area para
+       quem nunca colou descobrir que da. */
+    .an-cola { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+      background:var(--bg3); border:1px dashed var(--border2); border-radius:8px;
+      padding:10px 12px; outline:none; }
+    .an-cola:focus-within { border-color:var(--blue); border-style:solid; }
+    .an-cola input[type="file"] { flex:1; min-width:180px; font-size:13px; color:var(--text2); }
+    .an-cola-dica { font-size:12px; color:var(--text3); }
+    .an-cola kbd { font-family:ui-monospace,Consolas,monospace; font-size:11px;
+      background:var(--bg4); border:1px solid var(--border2); border-radius:4px; padding:1px 5px; }
+    .an-item { display:flex; align-items:center; gap:8px; background:var(--bg3);
+      border:1px solid var(--border); border-radius:7px; padding:7px 10px; font-size:13px; }
+    .an-nome { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; color:var(--text2); }
+    .an-x { background:none; border:none; color:var(--text3); cursor:pointer;
+      font-size:13px; padding:2px 4px; font-family:inherit; }
+    .an-x:hover { color:var(--red); }
+    .kcard.prazo-pausada { opacity:.82; }
     .kcard-cod { font-family:ui-monospace,monospace; font-size:10px; font-weight:700;
       color:var(--blue-tx); background:var(--blue-bg); border-radius:4px; padding:1px 5px;
       margin-right:5px; }
@@ -667,6 +689,18 @@
     <div class="form-group">
       <label>Descrição</label>
       <textarea id="n-desc" placeholder="Detalhes, contexto, requisitos…"></textarea>
+    </div>
+    <!-- Print do erro vale mais que paragrafo de descricao. Aceita colar com
+         Ctrl+V direto, que e como se tira print de verdade — obrigar a salvar o
+         arquivo antes e o passo em que a pessoa desiste de anexar. -->
+    <div class="form-group">
+      <label>Imagens e PDF <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada · PDF, JPEG, PNG)</small></label>
+      <div id="n-cola" class="an-cola" tabindex="0" onpaste="nColar(event)">
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+               id="n-file" multiple onchange="nAddFiles(this.files)" />
+        <span class="an-cola-dica">ou tire um print e cole aqui com <kbd>Ctrl</kbd>+<kbd>V</kbd></span>
+      </div>
+      <div id="n-anexos" style="display:grid;gap:6px;margin-top:8px"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group">
@@ -2260,7 +2294,8 @@ function renderCard(m, colKey) {
          ondragend="onDragEnd(event)"
          onclick="openStatusModal('${m.id}')">
       ${parentInfo}
-      ${['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
+      ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
+      ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
       <div class="kcard-title">${m.codigo ? `<span class="kcard-cod">${devEsc(m.codigo)}</span>` : ''}${devEsc(m.titulo)}</div>
       ${tema ? `<div class="kcard-tema">${tema}</div>` : ''}
       ${meta.length ? `<div class="kcard-meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>` : ''}
@@ -2729,6 +2764,9 @@ function openNewModal() {
   document.getElementById('n-entrega').value = '';
   document.getElementById('n-tipo').value = '';
   document.getElementById('n-solicitante').value = '';
+  _nAnexos = [];
+  document.getElementById('n-file').value = '';
+  nRenderAnexos();
   resetStatusOptions();
   document.getElementById('n-status').value = 'planejado';
   document.getElementById('modal-new-title').textContent = 'Nova Demanda';
@@ -2749,6 +2787,11 @@ function openEditDemand(id) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   closeModal('modal-status');
+  // Zera so os NOVOS: os que ja estao na demanda vem de existing.anexos ao salvar.
+  _nAnexos = [];
+  const inp = document.getElementById('n-file');
+  if (inp) inp.value = '';
+  nRenderAnexos();
   document.getElementById('n-id').value = m.id;
   document.getElementById('n-titulo').value = m.titulo || '';
   document.getElementById('n-desc').value = m.descricao || '';
@@ -2826,6 +2869,66 @@ function resolveTemaSelecao(prefix, fallbackTemaId) {
   return t.id;
 }
 
+
+// ─── ANEXOS DA NOVA DEMANDA ───────────────────────────────────────
+// Mesma regra do resto: PDF, JPEG e PNG, 1,5 MB. A checagem daqui existe para
+// avisar ANTES de subir; o Worker barra de novo, porque tela pode ser burlada.
+let _nAnexos = [];
+
+function nAddFiles(files) {
+  [...files].forEach(f => {
+    if (!anexoPermitido(f)) { toast(ANEXO_RECUSA(f), 'err'); return; }
+    if (f.size > MS_MAX) { toast('"' + f.name + '" excede 1,5 MB e não foi anexado.', 'err'); return; }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        toast('Enviando "' + f.name + '"…', 'ok');
+        _nAnexos.push(await subirAnexo(f, reader.result, ADMIN_PROXY_URL,
+          { senha: _devPw || sessionStorage.getItem('rm_admin_pw') || '' }));
+        nRenderAnexos();
+      } catch (e) { toast('Falha ao anexar "' + f.name + '": ' + e.message, 'err'); }
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+// Print colado nao tem nome de arquivo: o navegador entrega "image.png" para
+// todos. Sem renomear, tres prints viram tres "image.png" e ninguem sabe qual e
+// qual na hora de abrir.
+function nColar(ev) {
+  const itens = (ev.clipboardData && ev.clipboardData.items) || [];
+  const imgs = [];
+  for (const it of itens) {
+    if (it.kind !== 'file') continue;
+    const arq = it.getAsFile();
+    if (arq) imgs.push(arq);
+  }
+  if (!imgs.length) return;
+  ev.preventDefault();
+  const base = _nAnexos.length;
+  const renomeados = imgs.map((arq, i) => {
+    const ext = (String(arq.type || '').split('/')[1] || 'png').replace('jpeg', 'jpg');
+    return new File([arq], 'print-' + (base + i + 1) + '.' + ext, { type: arq.type });
+  });
+  nAddFiles(renomeados);
+}
+
+function nRenderAnexos() {
+  const box = document.getElementById('n-anexos');
+  if (!box) return;
+  if (!_nAnexos.length) { box.innerHTML = ''; return; }
+  box.innerHTML = _nAnexos.map((a, i) =>
+    '<div class="an-item"><span class="an-nome">' +
+    (String(a.tipo || '').startsWith('image/') ? '🖼 ' : '📄 ') + devEsc(a.nome || 'arquivo') +
+    '</span><button type="button" class="an-x" onclick="nRemoveAnexo(' + i +
+    ')" title="Remover">✕</button></div>').join('');
+}
+
+function nRemoveAnexo(i) {
+  _nAnexos.splice(i, 1);
+  nRenderAnexos();
+}
+
 async function saveNewDemand() {
   const editId   = document.getElementById('n-id').value;
   const existing = editId ? state.melhorias.find(x => x.id === editId) : null;
@@ -2856,6 +2959,9 @@ async function saveNewDemand() {
     // Marca que nasceu no painel do dev e nao passou por planejamento. O PM/PO
     // precisa distinguir o que ele priorizou do que entrou por fora.
     origem: existing?.origem || 'dev',
+    // Anexos: em edicao, os que ja estavam ficam e os novos entram. Substituir a
+    // lista apagaria print anexado antes por outra pessoa.
+    anexos: (existing?.anexos || []).concat(_nAnexos),
     inicio: document.getElementById('n-inicio').value || '',
     entrega: document.getElementById('n-entrega').value || '',
     status: spToStatus[sp] || existing?.status || 'recebida',
