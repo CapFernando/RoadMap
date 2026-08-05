@@ -290,6 +290,15 @@
       font-size:13px; font-weight:600; color:var(--rose-tx,#F2A0DA); margin-bottom:9px; }
     .g-pausadas-topo small { font-weight:400; color:var(--text3); }
     .g-pausadas-lista { display:flex; flex-direction:column; gap:6px; }
+    /* Realce ao chegar pelo botao da mensagem de vazio. */
+    @keyframes gPausadasPisca {
+      0%, 100% { box-shadow:0 0 0 0 rgba(217,72,184,0); }
+      30%, 70% { box-shadow:0 0 0 4px rgba(217,72,184,.45); }
+    }
+    .g-pausadas-realce { animation:gPausadasPisca 1.2s ease-in-out 2; }
+    .empty-gantt p { margin:0 0 10px; line-height:1.7; }
+    .empty-gantt p:last-child { margin-bottom:0; }
+    .empty-gantt .btn { vertical-align:baseline; margin:0 2px; }
     .g-pausada-item { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;
       background:var(--bg2); border:1px solid var(--border); border-radius:7px;
       padding:7px 10px; font-size:12.5px; cursor:pointer; text-align:left;
@@ -1703,6 +1712,62 @@ function pontosPokerPorSemana(devCards, semanas) {
   return { porSemana, total };
 }
 
+
+// A linha do tempo desenha barra por data. Demanda pausada tem a entrega
+// congelada onde parou — e as que nunca foram planejadas nao tem data nenhuma —
+// entao o filtro "Pausado" quase sempre resulta em tela vazia. Dizer "selecione
+// Todos devs" ali e mandar a pessoa para o lugar errado: o problema nao e o dev.
+function gMensagemVazio() {
+  if (filters.indicator !== '__pausado__') {
+    return '<p>Nenhuma demanda lançada neste mês. Selecione "Todos devs" no filtro ' +
+           'para ver todos os desenvolvedores.</p>';
+  }
+  const ps = (state.melhorias || []).filter(estaPausado);
+  if (!ps.length) return '<p>Nenhuma demanda pausada.</p>';
+  const semData = ps.filter(m => !m.inicio && !m.entrega);
+  // Meses onde as pausadas com data de fato aparecem, para oferecer o atalho.
+  const meses = [...new Set(ps.filter(m => m.inicio || m.entrega)
+    .map(m => String(m.entrega || m.inicio).slice(0, 7)))].sort();
+  const nomeMes = ym => {
+    const [a, mm] = ym.split('-');
+    return MONTH_NAMES[Number(mm) - 1] + ' ' + a;
+  };
+  return '<p><strong>' + ps.length + (ps.length === 1 ? ' demanda pausada' : ' demandas pausadas') +
+    '</strong>, e nenhuma tem barra em ' + MONTH_NAMES[viewMonth] + ' ' + viewYear + '.</p>' +
+    '<p>Pausar congela a data de entrega: a demanda fica no mês em que parou, ' +
+    'e a linha do tempo desenha por data.' +
+    (semData.length ? ' ' + semData.length + (semData.length === 1
+      ? ' delas nunca foi planejada, então não tem data nenhuma.'
+      : ' delas nunca foram planejadas, então não têm data nenhuma.') : '') + '</p>' +
+    '<p>Todas estão na <button type="button" class="btn btn-secondary btn-sm" ' +
+    'onclick="gIrParaFaixaPausadas()">faixa de pausadas</button>, no topo desta tela — ' +
+    'clique numa para abrir o card.</p>' +
+    (meses.length ? '<p>Ou vá para o mês onde elas estão: ' + meses.map(ym =>
+      '<button type="button" class="btn btn-secondary btn-sm" onclick="gIrParaMes(' +
+      JSON.stringify(ym).replace(/"/g, '&quot;') + ')">' + nomeMes(ym) + '</button>'
+    ).join(' ') + '</p>' : '');
+}
+
+// Rola ate a faixa e pisca a borda: a faixa fica acima do resumo do mes, fora da
+// area visivel em tela pequena, e mandar "olhe no topo" sem levar la nao resolve.
+function gIrParaFaixaPausadas() {
+  const el = document.getElementById('g-pausadas');
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('g-pausadas-realce');
+  void el.offsetWidth;   // reinicia a animacao se ja estava aplicada
+  el.classList.add('g-pausadas-realce');
+  setTimeout(() => el.classList.remove('g-pausadas-realce'), 2400);
+}
+
+function gIrParaMes(ym) {
+  const [a, mm] = String(ym).split('-').map(Number);
+  if (!a || !mm) return;
+  viewYear = a;
+  viewMonth = mm - 1;
+  renderAll();
+}
+
 function renderGantt() {
   renderResumoMes();
   renderPausadas();
@@ -1745,7 +1810,7 @@ function renderGantt() {
       return s && s <= mEnd && e >= mStart;
     }));
     if (!devs.length) {
-      table.innerHTML = '<div class="empty-gantt"><p>Nenhuma demanda lançada neste mês. Selecione "Todos devs" no filtro para ver todos os desenvolvedores.</p></div>';
+      table.innerHTML = '<div class="empty-gantt">' + gMensagemVazio() + '</div>';
       return;
     }
   }
