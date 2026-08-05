@@ -3955,7 +3955,7 @@ function openModalTema(id) {
   document.getElementById('modal-tema-title').textContent = id ? 'Editar tema' : 'Novo tema';
   abrirModal('modal-tema');
 }
-function saveTema() {
+async function saveTema() {
   const sisSel = document.getElementById('t-sistema');
   const sis = sisSel.value === '__novo__' ? document.getElementById('t-sistema-novo').value.trim() : sisSel.value;
   if (!sis) { toast('Selecione o sistema.', 'err'); return; }
@@ -3973,15 +3973,15 @@ function saveTema() {
   _pendingEdits = true;
   closeModal('modal-tema');
   renderAll();
-  toast('Tema salvo. Clique em "Publicar alterações" para ir ao ar.', 'ok');
+  await mPersistir('Tema salvo e publicado.');
 }
-function deleteTema(id) {
+async function deleteTema(id) {
   if (!confirm('Excluir este tema? As melhorias vinculadas ficarão sem tema.')) return;
   _deletedIds.add(id);
   state.temas = state.temas.filter(t => t.id !== id);
   _pendingEdits = true;
   renderAll();
-  toast('Tema removido.', 'ok');
+  await mPersistir('Tema removido.');
 }
 
 // ─── MODAL MELHORIA ───────────────────────────────────────────────
@@ -4386,7 +4386,7 @@ async function pausaSalvar(m, msg) {
   } else toast('Não foi possível salvar. A alteração continua pendente.', 'err');
 }
 
-function saveMelhoria() {
+async function saveMelhoria() {
   const titulo = document.getElementById('m-titulo').value.trim();
   const temaId = resolveTemaSelecao('m', document.getElementById('m-id').value ? (state.melhorias.find(x => x.id === document.getElementById('m-id').value)||{}).tema_id : '');
   const sp     = document.getElementById('m-status').value; // agora é o status_planejamento
@@ -4491,16 +4491,48 @@ function saveMelhoria() {
     setTimeout(() => { switchTab('projetos'); pjAbrir(voltarPara); pjAba('demandas'); }, 400);
   }
   renderAll();
-  toast('Melhoria salva. Clique em "Publicar alterações" para ir ao ar.', 'ok');
+  // Grava agora. Antes dizia "salva" e esperava um segundo clique em "Publicar
+  // alteracoes": quem fechava a tela achando que tinha salvo perdia a demanda, e
+  // ela nunca aparecia no funil do dev.
+  await mPersistir('Demanda salva e publicada.');
 }
 
-function deleteMelhoria(id) {
+
+// Grava no servidor e conta a verdade sobre o resultado.
+//
+// Existe porque a tela tinha DOIS comportamentos: vincular demanda a projeto,
+// aprovar entrega, pausar e salvar projeto gravavam na hora, enquanto salvar
+// card, excluir card, salvar tema e excluir tema so mexiam na memoria do
+// navegador — e ainda avisavam "salva". Uma demanda criada dentro de um projeto
+// ficou so no navegador por causa disso e nunca chegou ao funil do dev.
+//
+// Duas maneiras de salvar na mesma tela e uma delas mentindo no aviso e pior que
+// qualquer das duas isolada: a pessoa aprende que "salvar" salva, e um dia perde
+// trabalho na acao que era a excecao.
+async function mPersistir(msgOk) {
+  const okSalvo = await saveViaProxy();
+  if (okSalvo) {
+    _pendingEdits = false;
+    _dirtyMelhoriaIds.clear();
+    toast(msgOk, 'ok');
+    renderAll();
+    return true;
+  }
+  // Continua pendente de proposito: o botao "Publicar alteracoes" ainda resolve,
+  // e o aviso diz isso em vez de deixar a pessoa achando que gravou.
+  _pendingEdits = true;
+  toast('NÃO foi salvo no servidor. A alteração está aqui na tela — clique em "Publicar alterações" para tentar de novo.', 'err');
+  return false;
+}
+
+async function deleteMelhoria(id) {
   if (!confirm('Excluir esta melhoria?')) return;
   _deletedIds.add(id);
   state.melhorias = state.melhorias.filter(m => m.id !== id);
   _pendingEdits = true;
   renderAll();
-  toast('Melhoria removida.', 'ok');
+  // "Removida" so pode ser dito depois de o servidor confirmar.
+  await mPersistir('Demanda removida.');
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────
