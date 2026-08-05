@@ -280,6 +280,21 @@
     .card.card-pausada { opacity:.78; }
     /* Magenta: 'Atrasado' e vermelho, e um rose vizinho do vermelho se confunde
        com ele num selo deste tamanho. Magenta nao colide com nada em uso. */
+    /* Barra de decisao da entrega, acima das abas do card. */
+    .val-barra { align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470);
+      border-radius:10px; padding:11px 14px; margin:0 0 16px; font-size:13px; line-height:1.6; }
+    .val-barra-acoes { display:flex; gap:8px; flex-wrap:wrap; }
+    /* Atalho no card do Kanban: decidir sem abrir o card. */
+    .kb-val { display:flex; gap:6px; margin-top:8px; }
+    .kb-val button { flex:1; font-size:11px; font-weight:700; border-radius:6px;
+      padding:5px 4px; cursor:pointer; font-family:inherit; border:1px solid transparent;
+      white-space:nowrap; }
+    .kb-val-ok { background:var(--green-bg,#1E4208); color:var(--green-tx,#A8E081);
+      border-color:var(--green) !important; }
+    .kb-val-no { background:var(--red-bg,#4A1D1D); color:var(--red-tx,#F9A0A0);
+      border-color:var(--red) !important; }
+    .kb-val button:hover { filter:brightness(1.18); }
     .poker-aplicar { background:var(--blue-bg,#0C3260); color:var(--blue-tx,#9BC8F8);
       border:1px solid var(--blue); border-radius:5px; padding:2px 8px;
       font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; }
@@ -1045,6 +1060,10 @@
         Entrega <span class="mtab-sino" id="mtab-sino" style="display:none">1</span>
       </button>
     </div>
+
+    <!-- Decisao de entrega ACIMA das abas: fica visivel em qualquer aba, para a
+         resposta nao depender de a pessoa estar na aba certa. -->
+    <div id="m-val-barra" class="val-barra" style="display:none"></div>
 
     <!-- ABA GRILL: as perguntas que a demanda precisa aguentar -->
     <div id="m-pane-grill" style="display:none">
@@ -2633,6 +2652,12 @@ function renderKanban() {
         ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
         ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
         ${badges.filter(Boolean).length ? `<div class="kb-badges">${badges.join('')}</div>` : ''}
+        ${statusKey(m) === 'validacao' ? `<div class="kb-val">
+          <button type="button" class="kb-val-ok" onclick="valDecidirNoCard(event,'${m.id}','aprovar')"
+            title="Aprovar a entrega e concluir">✅ Aprovar</button>
+          <button type="button" class="kb-val-no" onclick="valDecidirNoCard(event,'${m.id}','devolver')"
+            title="Devolver ao dev com o motivo">↩ Devolver</button>
+        </div>` : ''}
       </div>`;
     }).join('');
     return `<div class="kb-col" data-col="${col.key}" ondragover="kbDragOver(event)" ondragleave="kbDragLeave(event)" ondrop="kbDrop(event,'${col.key}')">
@@ -3907,8 +3932,12 @@ function openModalMelhoria(id) {
   const cod = document.getElementById('m-codigo');
   cod.style.display = m?.codigo ? 'inline-block' : 'none';
   if (m?.codigo) cod.textContent = m.codigo;
-  mAba('dados');
+  // Demanda esperando validacao abre direto na aba Entrega: e a unica coisa a
+   // fazer com ela. Abrir em Dados obrigava a procurar, e o caminho que a pessoa
+   // achava era o seletor de etapa — decidir a entrega mexendo no funil na mao.
+  mAba(m && statusKey(m) === 'validacao' ? 'entrega' : 'dados');
   renderEntrega(m || null);
+  valBarraRender(m || null);
   document.getElementById('m-horas-real').value      = m?.horas_realizadas != null ? m.horas_realizadas : '';
   // anexos numa cópia, para cancelar não deixar alteração aplicada
   _mAnexos = JSON.parse(JSON.stringify(m?.anexos || []));
@@ -4639,6 +4668,50 @@ function copiarCodigo() {
   navigator.clipboard.writeText(t)
     .then(() => toast('📋 ' + t + ' copiado.', 'ok'))
     .catch(() => toast('Não consegui copiar. Selecione o texto manualmente.', 'err'));
+}
+
+
+// ─── DECISÃO DE ENTREGA ───────────────────────────────────────────
+// Aprovar ou devolver tem de estar onde a pessoa olha: no card do Kanban e no
+// topo do modal, em qualquer aba. Antes so existia dentro da aba Entrega, e o
+// caminho que se achava primeiro era o seletor de etapa — ou seja, decidir a
+// entrega mexendo no funil na mao, que e justamente o que a etapa de validacao
+// existe para evitar.
+function valBarraRender(m) {
+  const box = document.getElementById('m-val-barra');
+  if (!box) return;
+  if (!m || statusKey(m) !== 'validacao') {
+    box.style.display = 'none'; box.innerHTML = ''; return;
+  }
+  box.style.display = 'flex';
+  box.innerHTML = '<span class="val-barra-txt">⏳ <strong>Aguardando sua validação</strong>' +
+    (m.entregue_em ? ' · entregue em ' + esc(formatDate(m.entregue_em)) : '') + '</span>' +
+    '<span class="val-barra-acoes">' +
+      '<button type="button" class="btn btn-success btn-sm" onclick="valAprovar()">✅ Aprovar entrega</button>' +
+      '<button type="button" class="btn btn-danger btn-sm" onclick="valRejeitar()">↩ Devolver ao dev</button>' +
+    '</span>';
+}
+
+// Atalho do Kanban: decide sem abrir o card. Reaproveita valAprovar/valRejeitar,
+// que sao as funcoes que gravam — duas implementacoes da mesma regra divergiriam.
+// NAO se chama valDecidir: esse nome ja e da funcao que grava a decisao, e
+// declarar outra com o mesmo nome a substituiria, quebrando toda a aprovacao.
+async function valDecidirNoCard(ev, id, acao) {
+  ev.stopPropagation();   // senao o clique tambem seleciona/arrasta o card
+  ev.preventDefault();
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) return;
+  const campo = document.getElementById('m-id');
+  const anterior = campo ? campo.value : null;
+  // As funcoes de gravacao leem o id do formulario. Aponta para este card,
+  // executa, e devolve o valor — se um card estava aberto, ele nao pode mudar.
+  if (campo) campo.value = id;
+  try {
+    if (acao === 'aprovar') await valAprovar();
+    else await valRejeitar();
+  } finally {
+    if (campo && anterior !== null) campo.value = anterior;
+  }
 }
 
 function mAba(qual) {
