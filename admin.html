@@ -2841,6 +2841,11 @@ const M_MAX_ANEXO = 1.5 * 1024 * 1024;
 // Envia o arquivo ao R2 pelo Worker e devolve a REFERENCIA. O binario nao entra
 // mais no JSON — era 93%% do peso da base, baixado por toda tela em cada leitura.
 async function subirAnexo(file, dataUrl, proxyUrl, cred) {
+  // Sem token nem senha o Worker responde captcha ("Verificacao necessaria"),
+  // mensagem que nao diz o que fazer. Barra antes e manda recarregar a sessao.
+  if (!cred || (!cred.token && !cred.senha)) {
+    throw new Error('sua sessão expirou — recarregue a página (F5) e entre de novo');
+  }
   const res = await fetch(proxyUrl, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(Object.assign({
