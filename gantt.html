@@ -21,6 +21,11 @@
       --bg4:     #252522;
       --border:  #2E2E2B;
       --border2: #3A3A36;
+      /* Pausado. Magenta para nao se confundir com o vermelho de atrasado. */
+      --rose:    #D948B8;
+      --rose-bg: #48123F;
+      --rose-bd: #93257F;
+      --rose-tx: #F2A0DA;
       --text:    #ECEAE2;
       --text2:   #A8A49A;
       --text3:   #8A857B;
@@ -135,6 +140,10 @@
     .ind-chip.concluido      { background:#1E4208; border-color:#306010; color:#B2E07A; }
     .ind-chip.atrasado       { background:#5C0A0A; border-color:#8C1010; color:#F9A0A0; }
     .ind-chip.validacao      { background:#4A2800; border-color:#8A5000; color:#FFC470; }
+    /* Magenta e nao rose avermelhado: 'Atrasado' e vermelho, e num chip deste
+       tamanho um rose vizinho do vermelho se confunde com ele a um metro da tela.
+       Magenta tambem nao colide com o purpura de 'Levantar Req.' (#C9AEFF). */
+    .ind-chip.pausado        { background:#48123F; border-color:#93257F; color:#F2A0DA; }
     /* Codigo da demanda: referencia curta para PR, review e deploy. */
     .cod-tag{font-family:ui-monospace,monospace;font-size:10px;font-weight:700;
       color:var(--blue-tx,#9BC8F8);background:var(--blue-bg,#0C3260);border-radius:4px;
@@ -274,11 +283,11 @@
        prestacao de contas vira contagem de cards na tela. */
     /* Faixa de pausadas. Cinza e nao ambar: pausada nao pede acao hoje, so nao
        pode ser esquecida. Ambar aqui competiria com os avisos de prazo. */
-    .g-pausadas { background:var(--bg3); border:1px solid var(--border2);
-      border-left:3px solid var(--text3); border-radius:9px;
+    .g-pausadas { background:var(--bg3); border:1px solid var(--rose-bd,#93257F);
+      border-left:3px solid var(--rose,#D948B8); border-radius:9px;
       padding:11px 14px; margin:0 0 14px; }
     .g-pausadas-topo { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-      font-size:13px; font-weight:600; color:var(--text); margin-bottom:9px; }
+      font-size:13px; font-weight:600; color:var(--rose-tx,#F2A0DA); margin-bottom:9px; }
     .g-pausadas-topo small { font-weight:400; color:var(--text3); }
     .g-pausadas-lista { display:flex; flex-direction:column; gap:6px; }
     .g-pausada-item { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;
@@ -290,7 +299,8 @@
       font-weight:700; color:var(--purple-tx,#C9AEFF); background:var(--purple-bg,#341A6E);
       border-radius:4px; padding:1px 6px; flex-shrink:0; }
     .g-pausada-item .gp-tit { font-weight:600; color:var(--text); }
-    .g-pausada-item .gp-dias { font-weight:700; color:var(--text); white-space:nowrap; }
+    .g-pausada-item .gp-dias { font-weight:700; color:var(--rose-tx,#F2A0DA);
+      background:var(--rose-bg,#48123F); border-radius:4px; padding:1px 6px; white-space:nowrap; }
     .g-pausada-item .gp-motivo { color:var(--text3); flex:1; min-width:140px;
       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .g-pausada-item .gp-fora { font-size:11px; font-weight:700; color:var(--amber-tx,#FFC470);
@@ -371,8 +381,9 @@
     }
     .gantt-card .card-pausa {
       font-size: 10px; font-weight: 700; flex-shrink: 0; z-index: 1;
-      background: rgba(0,0,0,.42); border-radius: 4px; padding: 1px 5px;
-      white-space: nowrap;
+      background: var(--rose-bg,#48123F); color: var(--rose-tx,#F2A0DA);
+      border: 1px solid var(--rose-bd,#93257F);
+      border-radius: 4px; padding: 0 5px; white-space: nowrap;
     }
 
     /* status_planejamento colors */
@@ -499,7 +510,7 @@
     .delete-btn { background: var(--red); color: #fff; }
     .delete-btn:hover { opacity: 0.85; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=77b988fe82">
+  <link rel="stylesheet" href="tema.css?v=b58da297b9">
   <script src="tema.js?v=7df38474d4"></script>
 </head>
 <body>
@@ -1463,7 +1474,9 @@ function matchesFilters(m) {
   if (filters.dev && filters.dev !== '__all__' && !splitDevs(m.dev).includes(filters.dev)) return false;
   if (filters.prio   && (m.prioridade||'') !== filters.prio)        return false;
   if (filters.sprint && !(m.sprint||'').toLowerCase().includes(filters.sprint)) return false;
-  if (filters.indicator && spEfetivo(m) !== filters.indicator) return false;
+  // Pausado e estado paralelo a etapa, nao um valor dela — daí o caso proprio.
+  if (filters.indicator === '__pausado__') { if (!estaPausado(m)) return false; }
+  else if (filters.indicator && spEfetivo(m) !== filters.indicator) return false;
   return true;
 }
 
@@ -1550,12 +1563,20 @@ function renderIndicators() {
   });
   const labels = { backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação', concluido:'Concluído', atrasado:'Atrasado' };
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
+  // Pausadas contam por fora: uma pausada continua na etapa dela, entao somar
+  // aqui faria o total passar do numero de demandas.
+  const nPausadas = visible.filter(estaPausado).length;
   const todosChip = `<span class="ind-chip ${filters.indicator === '' ? 'planejado active-filter' : ''}" style="background:var(--bg3);border-color:var(--border2);color:var(--text2)" onclick="toggleIndicatorFilter('')">Todos <strong>${total}</strong></span>`;
   const chips = Object.keys(counts).map(k => {
     const active = filters.indicator === k ? 'active-filter' : '';
     return `<span class="ind-chip ${k} ${active}" onclick="toggleIndicatorFilter('${k}')">${labels[k]} <strong>${counts[k]}</strong></span>`;
   }).join('');
-  document.getElementById('indicator-bar').innerHTML = todosChip + chips;
+  const chipPausado = nPausadas
+    ? `<span class="ind-chip pausado ${filters.indicator === '__pausado__' ? 'active-filter' : ''}" ` +
+      `title="Prazo suspenso. A entrega fica oculta e volta empurrada pelos dias parados." ` +
+      `onclick="toggleIndicatorFilter('__pausado__')">⏸ Pausado <strong>${nPausadas}</strong></span>`
+    : '';
+  document.getElementById('indicator-bar').innerHTML = todosChip + chips + chipPausado;
 }
 
 function toggleIndicatorFilter(k) {

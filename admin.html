@@ -23,6 +23,11 @@
       --bg4:      #252522;
       --border:   #2E2E2B;
       --border2:  #3A3A36;
+      /* Pausado. Magenta para nao se confundir com o vermelho de atrasado. */
+      --rose:    #D948B8;
+      --rose-bg: #48123F;
+      --rose-bd: #93257F;
+      --rose-tx: #F2A0DA;
       --text:     #ECEAE2;
       --text2:    #A8A49A;
       --text3:    #8A857B;
@@ -273,9 +278,12 @@
     .grill-contra b { color:var(--text); }
     /* Pausada esmaece: o prazo esta suspenso, ela nao esta pedindo acao hoje. */
     .card.card-pausada { opacity:.78; }
-    .kb-pausa { font-size:10.5px; font-weight:700; color:var(--text2);
-      background:var(--bg4); border:1px solid var(--border2); border-radius:5px; padding:1px 6px; }
-    .kb-card.kb-prazo-pausada { border-left:3px solid var(--border2); opacity:.86; }
+    /* Magenta: 'Atrasado' e vermelho, e um rose vizinho do vermelho se confunde
+       com ele num selo deste tamanho. Magenta nao colide com nada em uso. */
+    .kb-pausa { font-size:10.5px; font-weight:700; color:var(--rose-tx,#F2A0DA);
+      background:var(--rose-bg,#48123F); border:1px solid var(--rose-bd,#93257F);
+      border-radius:5px; padding:1px 6px; }
+    .kb-card.kb-prazo-pausada { border-left:3px solid var(--rose,#D948B8); opacity:.86; }
     /* Bloco da pausa dentro do card. */
     .pausa-box { background:var(--bg4); border:1px solid var(--border2); border-radius:10px;
       padding:12px 14px; font-size:13px; line-height:1.6; color:var(--text2); }
@@ -706,7 +714,7 @@
     }
     #conditional-fields { }
   </style>
-  <link rel="stylesheet" href="tema.css?v=77b988fe82">
+  <link rel="stylesheet" href="tema.css?v=b58da297b9">
   <script src="tema.js?v=7df38474d4"></script>
 </head>
 <body>

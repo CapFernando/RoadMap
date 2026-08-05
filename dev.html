@@ -16,6 +16,11 @@
     :root {
       --bg:     #0E0E0D; --bg2: #161614; --bg3: #1E1E1C; --bg4: #252522;
       --border: #2E2E2B; --border2: #3A3A36;
+      /* Pausado. Magenta para nao se confundir com o vermelho de atrasado. */
+      --rose:    #D948B8;
+      --rose-bg: #48123F;
+      --rose-bd: #93257F;
+      --rose-tx: #F2A0DA;
       --text:   #ECEAE2; --text2: #A8A49A; --text3: #8A857B;
       --blue:   #3B8FE8; --blue-bg: #0C3260; --blue-tx: #9BC8F8;
       --green:  #5EA832; --green-bg:#1E4208; --green-tx:#B2E07A;
@@ -76,8 +81,11 @@
     .kcard-prazo.hoje   { background:var(--red-bg);   color:var(--red-tx); }
     /* Pausada em cinza: nao e urgencia, e o contrario — o prazo esta suspenso.
        Vermelho ou ambar aqui pediria uma acao que nao existe. */
-    .kcard-prazo.pausada { background:var(--bg4); color:var(--text2);
-      border:1px solid var(--border2); }
+    /* Magenta, nao cinza: em cinza a faixa se perdia no card e era justamente a
+       queixa. Nao vermelho nem ambar, que sao os avisos de prazo — pausada e o
+       oposto de urgencia. */
+    .kcard-prazo.pausada { background:var(--rose-bg,#48123F); color:var(--rose-tx,#F2A0DA);
+      border:1px solid var(--rose-bd,#93257F); }
     /* Area de anexo da nova demanda. A dica de colar fica DENTRO da area para
        quem nunca colou descobrir que da. */
     .an-cola { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
@@ -95,7 +103,7 @@
     .an-x { background:none; border:none; color:var(--text3); cursor:pointer;
       font-size:13px; padding:2px 4px; font-family:inherit; }
     .an-x:hover { color:var(--red); }
-    .kcard.prazo-pausada { opacity:.82; }
+    .kcard.prazo-pausada { opacity:.86; border-left:3px solid var(--rose,#D948B8); }
     .kcard-cod { font-family:ui-monospace,monospace; font-size:10px; font-weight:700;
       color:var(--blue-tx); background:var(--blue-bg); border-radius:4px; padding:1px 5px;
       margin-right:5px; }
@@ -360,7 +368,7 @@
     .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
   </style>
-  <link rel="stylesheet" href="tema.css?v=77b988fe82">
+  <link rel="stylesheet" href="tema.css?v=b58da297b9">
   <script src="tema.js?v=7df38474d4"></script>
 </head>
 <body>

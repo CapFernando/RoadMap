@@ -54,6 +54,12 @@
   --red-bg:    #FADDDD;  --red-tx:    #8F1E1D;
   --teal-bg:   #D1F1E8;  --teal-tx:   #096353;
   --purple-bg: #E6DCFA;  --purple-tx: #45278C;
+  /* Pausado. O par escuro (#45142F/#F5A8CE) inverte para fundo tingido claro
+     + texto escuro; #85116E sobre #FBDDF3 da 6.4:1. */
+  --rose:      #A81C8C;
+  --rose-bg:   #FBDDF3;
+  --rose-bd:   #E9A2DC;
+  --rose-tx:   #85116E;
 }
 
 /* Faz o navegador desenhar barra de rolagem, cursor de texto e controles
