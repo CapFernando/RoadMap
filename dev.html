@@ -1576,6 +1576,7 @@ function prodIntervalo(qual) {
 function prodAgrega(de, ate) {
   const porDev = new Map();
   let semData = 0;
+  let retro = 0;      // entregas com data presumida pelo prazo, nao aprovadas
   (state.melhorias || []).forEach(m => {
     if (m.mesclado_em) return;
     if (getStatusKey(m) !== 'concluido') return;
@@ -1584,6 +1585,7 @@ function prodAgrega(de, ate) {
     if (quando < de || quando > ate) return;
     const devs = splitDevs(m.dev).filter(Boolean);
     if (!devs.length) return;
+    if (m.concluido_retroativo) retro++;
     const pts = (Number(m.poker_pontos) || 0) / devs.length;
     devs.forEach(nome => {
       const a = porDev.get(nome) || { nome, issues: 0, pontos: 0 };
@@ -1598,7 +1600,8 @@ function prodAgrega(de, ate) {
   const rank = [...porDev.values()].sort((a, b) =>
     b.pontos - a.pontos || b.issues - a.issues ||
     String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
-  return { rank, semData };
+  const totalPts = rank.reduce((t, r) => t + r.pontos, 0);
+  return { rank, semData, retro, totalPts };
 }
 
 const prodNum = n => Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10).replace('.', ',');
@@ -1613,27 +1616,50 @@ function renderProdutividade() {
   const sel = document.getElementById('prod-periodo');
   const qual = PROD_PERIODOS.includes(sel && sel.value) ? sel.value : 'semana';
   const { de, ate, rot } = prodIntervalo(qual);
-  const { rank, semData } = prodAgrega(de, ate);
+  const { rank, semData, retro, totalPts } = prodAgrega(de, ate);
+  // Periodo em que NADA foi pontuado no poker: mostrar "0 pt" em todo mundo
+  // parece defeito e desmotiva. A faixa passa a falar so de issues, e diz que a
+  // pontuacao nao foi usada — a metrica existe, o dado nao.
+  const temPontos = totalPts > 0;
 
   const eu = rank.find(r => r.nome === currentDev);
   const pos = eu ? rank.indexOf(eu) + 1 : 0;
 
   document.getElementById('prod-meus').innerHTML = eu
     ? '<span>✅ <b>' + eu.issues + '</b> issue' + (eu.issues !== 1 ? 's' : '') + '</span>' +
-      '<span>🃏 <b>' + prodNum(eu.pontos) + '</b> ponto' + (eu.pontos !== 1 ? 's' : '') + '</span>' +
+      (temPontos
+        ? '<span>🃏 <b>' + prodNum(eu.pontos) + '</b> ponto' + (eu.pontos !== 1 ? 's' : '') + '</span>'
+        : '') +
       '<span class="prod-vazio">' + rot + '</span>'
-    : '<span class="prod-vazio">Nenhuma entrega aprovada ' + rot + '.</span>';
+    : '<span class="prod-vazio">Nenhuma entrega ' + rot + '.</span>';
 
   // Aviso de dado que falta, no mesmo espirito do relatorio: numero pequeno com
   // explicacao e melhor que numero grande sem base.
   const av = document.getElementById('prod-aviso');
-  av.innerHTML = semData
-    ? '⚠ ' + semData + ' concluída' + (semData !== 1 ? 's' : '') + ' sem aprovação registrada'
-    : '';
-  av.title = semData
-    ? 'Só conta como entregue depois que o PM/PO aprova — é a aprovação que grava a data. ' +
-      'Demandas concluídas antes desta etapa não têm essa data e ficam fora da contagem.'
-    : '';
+  const partes = [];
+  const dicas = [];
+  if (!temPontos && rank.length) {
+    partes.push('sem pontuação no poker');
+    dicas.push('Nenhuma entrega deste período tem pontos do Planning Poker, então o ' +
+               'ranking usa a quantidade de issues.');
+  }
+  // Entrega com data presumida pelo prazo (anterior a esteira de validacao) conta,
+  // mas fica dito: e diferente de entrega que alguem conferiu e aprovou.
+  if (retro) {
+    partes.push(retro + ' com data presumida');
+    dicas.push(retro + ' entrega' + (retro !== 1 ? 's' : '') + ' deste período ' +
+               (retro !== 1 ? 'são' : 'é') + ' anterior' + (retro !== 1 ? 'es' : '') +
+               ' à etapa de validação: a data usada é a de entrega registrada, não a de ' +
+               'uma aprovação do PM/PO.');
+  }
+  if (semData) {
+    partes.push(semData + ' sem data');
+    dicas.push(semData + ' concluída' + (semData !== 1 ? 's' : '') +
+               ' não tem data nem de aprovação nem de entrega, então ' +
+               (semData !== 1 ? 'ficam' : 'fica') + ' fora de qualquer período.');
+  }
+  av.innerHTML = partes.length ? '⚠ ' + partes.join(' · ') : '';
+  av.title = dicas.join(' ');
 
   const MEDALHAS = ['🥇', '🥈', '🥉'];
   const podio = document.getElementById('prod-podio');
@@ -1644,7 +1670,8 @@ function renderProdutividade() {
   let html = rank.slice(0, 3).map((r, i) =>
     '<span class="prod-medalha' + (r.nome === currentDev ? ' eu' : '') + '">' +
     MEDALHAS[i] + ' <b>' + escAttr(r.nome) + '</b> ' +
-    '<span class="prod-num">' + r.issues + ' · ' + prodNum(r.pontos) + ' pt</span></span>'
+    '<span class="prod-num">' + r.issues + (temPontos ? ' · ' + prodNum(r.pontos) + ' pt' : '') +
+    '</span></span>'
   ).join('');
   // Fora do podio: aparece SO a sua posicao. Listar do 4o em diante exporia o
   // numero de cada um sem que ninguem tenha pedido.
