@@ -88,14 +88,6 @@
       border:1px solid var(--rose-bd,#93257F); }
     /* Area de anexo da nova demanda. A dica de colar fica DENTRO da area para
        quem nunca colou descobrir que da. */
-    .an-cola { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-      background:var(--bg3); border:1px dashed var(--border2); border-radius:8px;
-      padding:10px 12px; outline:none; }
-    .an-cola:focus-within { border-color:var(--blue); border-style:solid; }
-    .an-cola input[type="file"] { flex:1; min-width:180px; font-size:13px; color:var(--text2); }
-    .an-cola-dica { font-size:12px; color:var(--text3); }
-    .an-cola kbd { font-family:ui-monospace,Consolas,monospace; font-size:11px;
-      background:var(--bg4); border:1px solid var(--border2); border-radius:4px; padding:1px 5px; }
     .an-item { display:flex; align-items:center; gap:8px; background:var(--bg3);
       border:1px solid var(--border); border-radius:7px; padding:7px 10px; font-size:13px; }
     .an-nome { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
@@ -415,6 +407,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=b58da297b9">
   <script src="tema.js?v=7df38474d4"></script>
+  <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
 
@@ -758,16 +751,15 @@
       <label>Descrição</label>
       <textarea id="n-desc" placeholder="Detalhes, contexto, requisitos…"></textarea>
     </div>
-    <!-- Print do erro vale mais que paragrafo de descricao. Aceita colar com
-         Ctrl+V direto, que e como se tira print de verdade — obrigar a salvar o
-         arquivo antes e o passo em que a pessoa desiste de anexar. -->
+    <!-- Print do erro vale mais que paragrafo de descricao. A zona de anexo
+         (anexo-cola.js) aceita colar com Ctrl+V, que e como se tira print de
+         verdade — obrigar a salvar o arquivo antes e o passo em que a pessoa
+         desiste de anexar. Este campo tinha uma zona propria, anterior ao modulo;
+         duas mecanicas no mesmo campo anexariam o arquivo duas vezes. -->
     <div class="form-group">
       <label>Imagens e PDF <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada · PDF, JPEG, PNG)</small></label>
-      <div id="n-cola" class="an-cola" tabindex="0" onpaste="nColar(event)">
-        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-               id="n-file" multiple onchange="nAddFiles(this.files)" />
-        <span class="an-cola-dica">ou tire um print e cole aqui com <kbd>Ctrl</kbd>+<kbd>V</kbd></span>
-      </div>
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+             id="n-file" multiple onchange="nAddFiles(this.files)" />
       <div id="n-anexos" style="display:grid;gap:6px;margin-top:8px"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -3149,26 +3141,6 @@ function nAddFiles(files) {
   });
 }
 
-// Print colado nao tem nome de arquivo: o navegador entrega "image.png" para
-// todos. Sem renomear, tres prints viram tres "image.png" e ninguem sabe qual e
-// qual na hora de abrir.
-function nColar(ev) {
-  const itens = (ev.clipboardData && ev.clipboardData.items) || [];
-  const imgs = [];
-  for (const it of itens) {
-    if (it.kind !== 'file') continue;
-    const arq = it.getAsFile();
-    if (arq) imgs.push(arq);
-  }
-  if (!imgs.length) return;
-  ev.preventDefault();
-  const base = _nAnexos.length;
-  const renomeados = imgs.map((arq, i) => {
-    const ext = (String(arq.type || '').split('/')[1] || 'png').replace('jpeg', 'jpg');
-    return new File([arq], 'print-' + (base + i + 1) + '.' + ext, { type: arq.type });
-  });
-  nAddFiles(renomeados);
-}
 
 function nRenderAnexos() {
   const box = document.getElementById('n-anexos');
@@ -3389,6 +3361,16 @@ let _ajusteKb = null;
 window.addEventListener('resize', () => {
   if (_ajusteKb) cancelAnimationFrame(_ajusteKb);
   _ajusteKb = requestAnimationFrame(() => { _ajusteKb = null; ajustaAlturaKanban(); });
+});
+
+// Zona de anexo (anexo-cola.js): um clique foca para colar com Ctrl+V, dois
+// cliques abrem o seletor de arquivos do computador. O handler e o mesmo que o
+// onchange chamava — a zona muda o gesto, nao o que acontece com o arquivo.
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof ligaZonaAnexo === 'function' && typeof msAddFiles === 'function')
+    ligaZonaAnexo('ms-file', msAddFiles);
+  if (typeof ligaZonaAnexo === 'function' && typeof nAddFiles === 'function')
+    ligaZonaAnexo('n-file', nAddFiles);
 });
 </script>
 </body>

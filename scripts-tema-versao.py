@@ -25,16 +25,23 @@ def hash_de(caminho):
 
 
 def main():
+    # anexo-cola.js entra aqui pelo mesmo motivo dos outros dois: e servido do
+    # cache do navegador, e uma correcao nele sem hash novo nunca chega a quem
+    # ja abriu o site.
     vcss, vjs = hash_de('tema.css'), hash_de('tema.js')
+    vanx = hash_de('anexo-cola.js')
     mudou = []
     for f in PAGINAS:
         s = io.open(f, encoding='utf-8').read()
         n = re.sub(r'href="tema\.css(\?v=[^"]*)?"', 'href="tema.css?v=%s"' % vcss, s)
         n = re.sub(r'src="tema\.js(\?v=[^"]*)?"', 'src="tema.js?v=%s"' % vjs, n)
+        n = re.sub(r'src="anexo-cola\.js(\?v=[^"]*)?"',
+                   'src="anexo-cola.js?v=%s"' % vanx, n)
         if n != s:
             io.open(f, 'w', encoding='utf-8', newline='').write(n)
             mudou.append(f)
-    sys.stdout.write('tema.css=%s  tema.js=%s\n' % (vcss, vjs))
+    sys.stdout.write('tema.css=%s  tema.js=%s  anexo-cola.js=%s\n'
+                     % (vcss, vjs, vanx))
     sys.stdout.write('paginas atualizadas: %s\n'
                      % (', '.join(mudou) if mudou else 'nenhuma (ja estavam certas)'))
 
