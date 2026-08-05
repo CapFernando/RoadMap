@@ -727,9 +727,20 @@ export default {
       const agora = new Date();
       const iso = agora.toISOString();
 
+      // Acao de facilitador: quem conduz a votacao. Aceita conta propria (token)
+      // OU a senha compartilhada, exatamente como o Admin e o Gantt. Antes olhava
+      // so `senhaOk`, isto e, so a senha compartilhada: quem entrou pela propria
+      // conta nao conseguia abrir a sala nem revelar votos. Mesma lacuna que o
+      // Gantt e o anexo tiveram, pelo mesmo motivo — a regra estava escrita em
+      // cada rota em vez de vir de um lugar so.
+      const facilitadorOk = async () => (await ehAdmin()) || senhaOk(body.senha);
+      const recusaFacilitador = () => json({ error: 'senha',
+        detail: 'Ação do facilitador: entre com a sua conta de PM/PO ou informe a senha de acesso.' },
+        401, headers);
+
       // Abre (ou reaproveita) a sessao — so o facilitador, com senha
       if (body.action === 'poker-abrir') {
-        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+        if (!(await facilitadorOk())) return recusaFacilitador();
         const viva = await db.prepare(
           'SELECT codigo FROM poker_sessao WHERE expira_em > ? ORDER BY criado_em DESC LIMIT 1').bind(iso).first();
         if (viva && !body.nova) {
@@ -870,7 +881,7 @@ export default {
         // Acao de facilitador: o painel sempre manda a senha, mas o servidor nao
         // conferia. Sem isto, quem tivesse o codigo da sala revelava votos, trocava
         // a pauta ou gravava pontuacao em qualquer demanda do arquivo.
-        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+        if (!(await facilitadorOk())) return recusaFacilitador();
         await db.prepare('UPDATE poker_sessao SET revelado = 1 WHERE codigo = ?').bind(codigo).run();
         return json({ ok: true, estado: await pokerEstado(db, codigo) }, 200, headers);
       }
@@ -880,7 +891,7 @@ export default {
         // Acao de facilitador: o painel sempre manda a senha, mas o servidor nao
         // conferia. Sem isto, quem tivesse o codigo da sala revelava votos, trocava
         // a pauta ou gravava pontuacao em qualquer demanda do arquivo.
-        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+        if (!(await facilitadorOk())) return recusaFacilitador();
         const mid = String(body.melhoria_id || '');
         await db.prepare('UPDATE poker_sessao SET melhoria_id = ?, revelado = 0 WHERE codigo = ?').bind(mid, codigo).run();
         await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ?').bind(codigo, mid).run();
@@ -889,7 +900,7 @@ export default {
 
       // Zera tudo: sai da pauta, esconde resultado e apaga os votos da sessao.
       if (body.action === 'poker-zerar') {
-        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+        if (!(await facilitadorOk())) return recusaFacilitador();
         await db.prepare("UPDATE poker_sessao SET melhoria_id = '', revelado = 0 WHERE codigo = ?").bind(codigo).run();
         await db.prepare('DELETE FROM poker_voto WHERE codigo = ?').bind(codigo).run();
         return json({ ok: true, estado: await pokerEstado(db, codigo) }, 200, headers);
@@ -899,7 +910,7 @@ export default {
         // Acao de facilitador: o painel sempre manda a senha, mas o servidor nao
         // conferia. Sem isto, quem tivesse o codigo da sala revelava votos, trocava
         // a pauta ou gravava pontuacao em qualquer demanda do arquivo.
-        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+        if (!(await facilitadorOk())) return recusaFacilitador();
         const ses = await db.prepare('SELECT melhoria_id FROM poker_sessao WHERE codigo = ?').bind(codigo).first();
         await db.prepare('UPDATE poker_sessao SET revelado = 0 WHERE codigo = ?').bind(codigo).run();
         await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ?')
@@ -913,7 +924,7 @@ export default {
         // Acao de facilitador: o painel sempre manda a senha, mas o servidor nao
         // conferia. Sem isto, quem tivesse o codigo da sala revelava votos, trocava
         // a pauta ou gravava pontuacao em qualquer demanda do arquivo.
-        if (!senhaOk(body.senha)) return json({ error: 'senha' }, 401, headers);
+        if (!(await facilitadorOk())) return recusaFacilitador();
         const mid = String(body.melhoria_id || '');
         if (!mid) return json({ error: 'melhoria_id obrigatorio' }, 400, headers);
         const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());

@@ -112,6 +112,8 @@
     .card-modal input { width:100%; background:var(--bg3); border:1px solid var(--border); border-radius:10px;
                         color:var(--text); padding:11px 13px; font-size:15px; font-family:inherit; outline:none; margin-bottom:12px; }
     .card-modal input:focus { border-color:var(--blue); }
+    .fac-dica { font-size:12px; line-height:1.6; color:var(--text3);
+      margin:-4px 0 12px; }
     .erro { color:var(--red-tx, #F9A0A0); font-size:13px; min-height:18px; margin-bottom:6px; }
     .link-box { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 12px;
                 font-size:12px; color:var(--text2); word-break:break-all; margin-bottom:10px; }
@@ -216,8 +218,13 @@
 <div class="overlay" id="ov-facil">
   <div class="card-modal">
     <h2>Abrir sessão</h2>
-    <p>Informe a senha de acesso para conduzir a votação.</p>
-    <input type="password" id="fac-senha" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')abrirSessao()" />
+    <p>Entre com a sua conta de PM/PO, a mesma do Admin e do Planejamento.</p>
+    <input type="text" id="fac-usuario" placeholder="Usuário (ou e-mail)" autocomplete="username"
+           onkeydown="if(event.key==='Enter')document.getElementById('fac-senha').focus()" />
+    <input type="password" id="fac-senha" placeholder="Senha" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter')abrirSessao()" />
+    <p class="fac-dica">Sem conta ainda? Deixe o usuário em branco e informe a senha
+      de acesso compartilhada.</p>
     <div class="erro" id="fac-erro"></div>
     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="abrirSessao()">Abrir sessão</button>
     <div style="text-align:center;margin-top:14px">
@@ -264,6 +271,10 @@ let _codigo      = (new URLSearchParams(location.search).get('s') || '').toUpper
 let _participante = sessionStorage.getItem('pk_participante') || '';
 let _nome         = sessionStorage.getItem('pk_nome') || '';
 let _senha        = sessionStorage.getItem('rm_admin_pw') || '';   // compartilhada com Admin/Gantt
+// Token da conta, mesma sessao do Admin. Vai em toda chamada de facilitador: sem
+// ele, quem entrou pela conta seria recusado nas acoes seguintes (revelar, gravar)
+// mesmo tendo aberto a sala.
+let _token        = sessionStorage.getItem('rm_admin_token') || '';
 let _facilitador  = false;
 let _estado       = null;
 let _melhorias    = [];
@@ -292,6 +303,12 @@ function abrir(id) { document.getElementById(id).classList.add('open'); }
 function fechar(id) { document.getElementById(id).classList.remove('open'); }
 
 async function api(payload) {
+  // Anexa a credencial da conta, se houver, sem sobrescrever o que a chamada
+  // mandou de proposito. Sem isto, quem entrou pela conta abriria a sala e seria
+  // recusado nas acoes seguintes (revelar, gravar).
+  if (_token && !payload.token && payload.action !== 'login') {
+    payload = { ...payload, token: _token };
+  }
   // Falha de rede/CORS não pode estourar: sem isto, o usuário via a tela travar
   // sem mensagem. Devolve status 0 para o chamador tratar como qualquer erro.
   try {
@@ -427,14 +444,43 @@ function renderFila() {
 function voltarEntrada() { fechar('ov-facil'); abrir('ov-entrada'); }
 function abrirComoFacilitador() { fechar('ov-entrada'); abrir('ov-facil'); }
 
+// Mesmo acesso do Admin e do Planejamento: conta propria (usuario + senha) com a
+// senha compartilhada como alternativa enquanto nem todos tem conta. Antes esta
+// tela aceitava SO a senha compartilhada, e quem tinha conta propria nao entrava.
 async function abrirSessao() {
+  const usuario = document.getElementById('fac-usuario').value.trim();
   const senha = document.getElementById('fac-senha').value;
   const err = document.getElementById('fac-erro');
   if (!senha) { err.textContent = 'Informe a senha.'; return; }
-  const r = await api({ action: 'poker-abrir', senha });
-  if (r.status === 401) { err.textContent = 'Senha incorreta.'; return; }
+
+  if (usuario) {
+    const rl = await api({ action: 'login', login: usuario, senhaUsuario: senha });
+    if (!rl.ok) {
+      err.textContent = (rl.body && rl.body.detail) || 'Usuário ou senha inválidos.';
+      document.getElementById('fac-senha').value = '';
+      return;
+    }
+    // Conduzir a votacao grava pontuacao nas demandas: consulta e dev nao entram.
+    const papel = rl.body && rl.body.usuario && rl.body.usuario.papel;
+    if (papel && papel !== 'admin') {
+      err.textContent = 'Sua conta é de ' + papel + ' e não conduz a votação. ' +
+                        'Entre como participante em "Vou apenas votar".';
+      document.getElementById('fac-senha').value = '';
+      return;
+    }
+    _token = rl.body.token;
+    sessionStorage.setItem('rm_admin_token', _token);
+    _senha = '';
+  }
+
+  const r = await api({ action: 'poker-abrir', senha: usuario ? '' : senha });
+  if (r.status === 401) {
+    err.textContent = (r.body && r.body.detail) ||
+      (usuario ? 'Sua conta não tem permissão para conduzir a votação.' : 'Senha incorreta.');
+    return;
+  }
   if (!r.ok) { err.textContent = (r.body && r.body.error) || 'Falha ao abrir a sessão.'; return; }
-  _senha = senha; sessionStorage.setItem('rm_admin_pw', senha);
+  if (!usuario) { _senha = senha; sessionStorage.setItem('rm_admin_pw', senha); }
   _codigo = r.body.codigo;
   _facilitador = true;
   _nome = 'Facilitador';
