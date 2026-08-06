@@ -513,6 +513,33 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
      dup.length ? dup.join(', ') : nomes.length + ' funcoes');
 }
 
+// =====================================================================
+// Escape que o JavaScript nao tem. \U (maiusculo) nao existe: o backslash e
+// descartado em silencio e o literal "U0001F947" vai para a tela. Veio de patch
+// escrito em Python, onde \U0001F947 E um escape valido — a mesma sequencia
+// significa coisas diferentes nas duas linguagens, e nada acusa: sem erro de
+// sintaxe, sem aviso, o texto so sai errado.
+for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
+                           ['index', INDEX], ['poker', POKER], ['modelo', MODELO]]) {
+  const achados = src.match(/\\\\U[0-9A-Fa-f]{4,8}/g) || [];
+  ok(achados.length === 0, nome + ' nao usa escape \\U, que o JS nao entende',
+     achados.slice(0, 3).join(' '));
+}
+
+// A regra de "nao passou pelo Planning Poker" existe em TRES telas. Se divergir, a
+// mesma demanda aparece marcada numa e limpa na outra, e ninguem sabe qual vale.
+// Nao consolidei em arquivo compartilhado por serem 4 linhas; a invariante paga o
+// preco de manter as copias honestas.
+{
+  const nrm = t => String(t || '').replace(/\s+/g, ' ').trim();
+  const g = nrm(corpo(GANTT, 'function semPontuacao('));
+  const a = nrm(corpo(ADMIN, 'function semPontuacao('));
+  const d = nrm(corpo(DEV, 'function semPontuacao('));
+  ok(!!g && !!a && !!d, 'as tres telas tem a regra do sem pontuacao');
+  ok(g === a && a === d, 'a regra e identica nas tres telas (admin, gantt, dev)');
+  ok(/card-sempt/.test(GANTT), 'a linha do tempo marca a demanda sem pontuacao');
+}
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

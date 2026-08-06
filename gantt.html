@@ -415,6 +415,10 @@
       background: repeating-linear-gradient(135deg,
         transparent 0 5px, rgba(0,0,0,.28) 5px 10px);
     }
+    /* Ambar, nao vermelho: vermelho ja significa atrasado nesta tela, e reusar o
+       tom faria "sem estimativa" ser lido como "vencida". */
+    .card-sempt { font-size:10px; margin-right:3px; flex-shrink:0; cursor:help;
+      filter:saturate(.85); }
     .gantt-card .card-pausa {
       font-size: 10px; font-weight: 700; flex-shrink: 0; z-index: 1;
       background: var(--rose-bg,#48123F); color: var(--rose-tx,#F2A0DA);
@@ -1573,6 +1577,20 @@ function renderFilters() {
 
 // ── INDICATORS ────────────────────────────────────────────────────────────
 
+// Demanda comprometida que nunca passou pelo Planning Poker. A MESMA regra do
+// Admin e do painel Dev, palavra por palavra: se divergir, a mesma demanda aparece
+// marcada numa tela e limpa na outra, e ninguem sabe qual acreditar.
+//
+// Aqui pesa mais que nas outras duas: e nesta tela que se escolhe a data. Pedir
+// prazo para uma demanda que ninguem dimensionou e exatamente como nasce a data
+// que nao se cumpre.
+const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+function semPontuacao(m) {
+  if (!m || m.mesclado_em) return false;
+  if (!ETAPAS_COMPROMETIDAS.includes(m.status_planejamento || '')) return false;
+  return !(Number(m.poker_pontos) > 0);
+}
+
 // Estágios com trabalho comprometido: entrega vencida neles conta como Atrasado.
 // Backlog fica fora (nada prometido) e concluido/negada nunca atrasam.
 const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
@@ -1993,6 +2011,7 @@ function renderGantt() {
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
           ${state.melhorias.some(x => x.parent_id === m.id && x.status_planejamento !== 'concluido') ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;">⏳</span>` : ''}
           ${pausada ? `<span class="card-pausa" title="Pausada há ${dPausa} dia(s)${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${dPausa}d</span>` : ''}
+          ${semPontuacao(m) ? `<span class="card-sempt" title="Sem pontos do Planning Poker: a data foi combinada sem ninguém estimar o tamanho.">🃏</span>` : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>
         ${tema ? `<div class="card-tema-row"><span class="tema-badge" style="background:${tColor}25;color:${tColor};border-color:${tColor}55">${esc(tema.nome)}</span></div>` : ''}
@@ -3213,13 +3232,15 @@ function renderRankingMes(concluidas) {
   if (!el) return;
   const { rank, semDev, ptsPoker, ptsTotal } = rankDoMes(concluidas);
   if (!rank.length) {
-    el.innerHTML = '<span class="rk-tit">\U0001F3C6 Ranking do mes</span>' +
+    el.innerHTML = '<span class="rk-tit">🏆 Ranking do mês</span>' +
       '<span class="rk-vazio">' +
       (semDev ? semDev + ' concluída(s) sem responsável — o ranking não tem como atribuir.'
               : 'nenhuma conclusão neste mês ainda.') + '</span>';
     return;
   }
-  const MED = ['\U0001F947', '\U0001F948', '\U0001F949'];
+  // Emoji literal, nao escape: `\U` (maiusculo) nao existe em JavaScript — o
+  // backslash e descartado e a medalha virava o texto "U0001F947" na tela.
+  const MED = ['🥇', '🥈', '🥉'];
   const chips = rank.slice(0, 3).map((r, i) =>
     '<button type="button" class="prod-medalha p' + (i + 1) + '" ' +
     'onclick="rkFiltraDev(' + JSON.stringify(r.nome).replace(/"/g, '&quot;') + ')" ' +
@@ -3256,7 +3277,7 @@ function renderRankingMes(concluidas) {
       'Planning Poker; o resto é estimativa por duração, que dá mais ponto para quem ' +
       'levou mais tempo.">≈ ' + pc + '% votado</span>';
   }
-  el.innerHTML = '<span class="rk-tit">\U0001F3C6 Ranking do mês</span>' +
+  el.innerHTML = '<span class="rk-tit">🏆 Ranking do mês</span>' +
                  '<span class="rk-lista">' + chips + '</span>' + mais + aviso + origem;
 }
 
