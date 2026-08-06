@@ -337,6 +337,10 @@
       overflow-x:auto; scrollbar-width:thin; }
     .rk-mais { font-size:11px; color:var(--text3); white-space:nowrap; cursor:help; }
     .rk-vazio { font-size:12px; color:var(--text3); }
+    /* Origem do ponto. Ambar, nao vermelho: nao e erro, e uma ressalva de leitura. */
+    .rk-estim { font-size:10.5px; color:var(--amber-tx,#FFC470); white-space:nowrap;
+      cursor:help; border:1px solid var(--amber-bd,#7A5A17); border-radius:20px;
+      padding:2px 8px; background:var(--amber-bg,#2E2408); }
     body.apresentando .rk-tit { font-size:12px; }
     .rm-bloco { background:var(--bg2); border:1px solid var(--border); border-radius:10px;
       padding:9px 14px; min-width:96px; }
@@ -3160,13 +3164,23 @@ function renderPausadas() {
 // soma do ranking passaria do total do mes e ninguem confiaria mais nele.
 // Mesma regra do painel do dev, de proposito: as duas telas sao comparadas
 // lado a lado nas reunioes.
+// Ponto votado no poker tem `poker_media`; ponto que entrou por estimativa de
+// duracao nao tem. E a distincao importa: ponto por duracao PREMIA DEMORA — na
+// escala usada, duas semanas valem 55 e o mesmo dia vale 3. Um ranking desses,
+// sem aviso, troca "quem entregou mais valor" por "quem levou mais tempo".
+const pontuadoNoPoker = m => m && m.poker_media != null && m.poker_media !== '';
+
 function rankDoMes(concluidas) {
   const porDev = new Map();
   let semDev = 0;
+  let ptsPoker = 0, ptsTotal = 0;
   (concluidas || []).forEach(m => {
     const devs = splitDevs(m.dev).filter(Boolean);
     if (!devs.length) { semDev += 1; return; }
     const pts = (Number(m.poker_pontos) || 0) / devs.length;
+    // Soma por demanda (nao por dev) para a proporcao nao dobrar em demanda de dois.
+    ptsTotal += Number(m.poker_pontos) || 0;
+    if (pontuadoNoPoker(m)) ptsPoker += Number(m.poker_pontos) || 0;
     devs.forEach(nome => {
       const a = porDev.get(nome) || { nome, issues: 0, pontos: 0 };
       a.issues += 1;
@@ -3177,7 +3191,7 @@ function rankDoMes(concluidas) {
   const rank = [...porDev.values()].sort((a, b) =>
     b.pontos - a.pontos || b.issues - a.issues ||
     String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
-  return { rank, semDev };
+  return { rank, semDev, ptsPoker, ptsTotal };
 }
 
 // Primeiro nome, para o chip nao estourar a faixa com nome completo.
@@ -3194,7 +3208,7 @@ function rkNum(n) {
 function renderRankingMes(concluidas) {
   const el = document.getElementById('ranking-mes');
   if (!el) return;
-  const { rank, semDev } = rankDoMes(concluidas);
+  const { rank, semDev, ptsPoker, ptsTotal } = rankDoMes(concluidas);
   if (!rank.length) {
     el.innerHTML = '<span class="rk-tit">\U0001F3C6 Ranking do mes</span>' +
       '<span class="rk-vazio">' +
@@ -3225,8 +3239,22 @@ function renderRankingMes(concluidas) {
       'responsável preenchido: elas contam no card ao lado, mas não têm a quem atribuir.">' +
       '⚠ ' + semDev + '</span>'
     : '';
+  // De onde vem o ponto. Sem isto o pódio parece medir valor entregue quando pode
+  // estar medindo tempo gasto — e quem olha não tem como saber.
+  let origem = '';
+  if (ptsTotal > 0 && ptsPoker === 0) {
+    origem = '<span class="rk-estim" title="Nenhuma demanda concluída neste mês passou ' +
+      'pelo Planning Poker: os pontos vieram de estimativa por duração, que dá mais ' +
+      'ponto para quem levou mais tempo. O pódio ordena por esses pontos.">' +
+      '≈ estimado</span>';
+  } else if (ptsTotal > 0 && ptsPoker < ptsTotal) {
+    const pc = Math.round(100 * ptsPoker / ptsTotal);
+    origem = '<span class="rk-estim" title="' + pc + '% dos pontos do mês vieram do ' +
+      'Planning Poker; o resto é estimativa por duração, que dá mais ponto para quem ' +
+      'levou mais tempo.">≈ ' + pc + '% votado</span>';
+  }
   el.innerHTML = '<span class="rk-tit">\U0001F3C6 Ranking do mês</span>' +
-                 '<span class="rk-lista">' + chips + '</span>' + mais + aviso;
+                 '<span class="rk-lista">' + chips + '</span>' + mais + aviso + origem;
 }
 
 // O chip filtra a linha do tempo pelo dev — clicar no nome e o gesto que a pessoa
