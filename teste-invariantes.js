@@ -227,6 +227,38 @@ const negar = W.slice(W.indexOf("body.action === 'poker-negar'"),
 ok(/SP_PARA_STATUS\.negada/.test(negar), 'poker-negar tira o status do mapa, nao a mao');
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Prazo: atraso derivado no servidor, e no fuso do Brasil');
+
+// Nada na API falava de prazo. 15 demandas ativas estavam vencidas e invisiveis
+// para quem consome pela API — prazo vencido que ninguem ve e como a demanda morre
+// sem ninguem cobrar.
+const atraso = corpo(W, 'function diasDeAtraso(');
+ok(!!atraso, 'existe diasDeAtraso, um lugar so');
+// O FUSO: o Worker roda em UTC e o Brasil e UTC-3. Com a data do servidor, das 21h
+// a meia-noite "hoje" ja seria amanha e uma demanda que vence HOJE apareceria
+// vencida tres horas antes de o dia acabar para quem olha a tela.
+ok(/timeZone: 'America\/Sao_Paulo'/.test(W), 'a data de hoje sai no fuso de Sao Paulo');
+ok(!/atrasada:[^,]*new Date\(\)\.toISOString/.test(W),
+   'o derivado nao usa a data crua do servidor');
+// Comparacao por string ISO. `new Date('2026-08-06')` e meia-noite UTC, e converter
+// para local muda o dia: ja custou off-by-one aqui.
+ok(!!atraso && !/new Date\(entrega/.test(atraso),
+   'a comparacao de datas e por string ISO, nunca por objeto Date');
+// Pausada tem o prazo suspenso por dependencia externa. Contar como atraso faria o
+// vermelho perder sentido para as que dependem do time — e a regra que as telas ja
+// aplicam, e o derivado nao pode discordar delas.
+ok(!!atraso && /pausado_em/.test(atraso), 'demanda pausada nao conta como atrasada');
+ok(!!atraso && /'concluido'/.test(atraso) && /'negada'/.test(atraso),
+   'concluida e negada nao contam como atrasadas');
+ok(!!atraso && /\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$/.test(atraso),
+   'sem data de entrega valida nao ha atraso (e nao quebra)');
+// O derivado tem de chegar em quem consome, senao a regra fica escrita e sem uso.
+ok(/atrasada: diasDeAtraso\(/.test(W) && /dias_atraso: diasDeAtraso\(/.test(W),
+   'a visao da API entrega atrasada e dias_atraso');
+ok(/body\.atrasadas === true/.test(W),
+   'demandas-minhas filtra por atrasadas sem o cliente recalcular a regra');
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Sessao: quem perde a credencial tem caminho de volta');
 
 // O painel do dev decidia "esta logado" pelo sessionStorage, que nao expira junto

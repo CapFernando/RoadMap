@@ -1187,12 +1187,16 @@ function epFuncoesHTML() {
   const FUNCOES = [
     {
       acao: 'demandas-minhas',
-      o_que: 'Lista as suas demandas. Opcional: <code>etapa</code> (uma ou várias separadas por vírgula) e <code>pausadas: false</code>.',
-      corpo: '{"action":"demandas-minhas","token":"TOKEN","etapa":"em_andamento,planejado"}',
+      o_que: 'Lista as suas demandas. Opcional: <code>etapa</code> (uma ou várias separadas por vírgula), ' +
+             '<code>pausadas: false</code> e <code>atrasadas: true</code> (só as de prazo vencido).',
+      corpo: '{"action":"demandas-minhas","token":"TOKEN","atrasadas":true}',
     },
     {
       acao: 'demanda-consultar',
-      o_que: 'Lê uma demanda: título, etapa, tema, prazo, pontos, e os campos derivados <code>aguardando_validacao</code> e <code>concluida</code>.',
+      o_que: 'Lê uma demanda: título, etapa, tema, prazo, pontos, e os campos derivados ' +
+             '<code>aguardando_validacao</code>, <code>concluida</code>, <code>atrasada</code> e ' +
+             '<code>dias_atraso</code>. Demanda pausada nunca vem como atrasada: o prazo está ' +
+             'suspenso por dependência externa.',
       corpo: '{"action":"demanda-consultar","token":"TOKEN","codigo":"' + cod + '"}',
     },
     {

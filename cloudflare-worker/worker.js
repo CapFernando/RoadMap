@@ -452,6 +452,48 @@ function normalizaEstados(data) {
   return n;
 }
 
+
+// ─── ATRASO, DERIVADO NO SERVIDOR ─────────────────────────────────────
+// A API entregava `aguardando_validacao` e `concluida` como derivados, mas nada
+// sobre prazo — e prazo vencido invisivel e o que faz a demanda morrer sem
+// ninguem cobrar. Hoje sao 15 ativas vencidas na base.
+//
+// Regra: tem data de entrega, a data ja passou, a etapa nao e concluido nem
+// negada, e a demanda NAO esta pausada. Pausada nao atrasa: o prazo esta suspenso
+// por dependencia externa, e contar como atraso faria o vermelho perder o sentido
+// para as que dependem do time — e a mesma regra que as telas ja aplicam.
+//
+// O FUSO importa aqui, e e o tipo de detalhe que passa despercebido: o Worker roda
+// em UTC e o Brasil e UTC-3. Usando a data do servidor, das 21h a meia-noite
+// "hoje" ja seria amanha, e uma demanda que vence HOJE apareceria vencida tres
+// horas antes de o dia acabar para quem esta olhando a tela.
+function hojeBR() {
+  try {
+    // en-CA da o formato AAAA-MM-DD, que compara como string sem converter nada.
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  } catch (_) {
+    // Runtime sem base de fusos: aproxima subtraindo 3h do UTC. Pior que o Intl,
+    // melhor que errar o dia inteiro.
+    return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+  }
+}
+
+// Comparacao por STRING ISO, nunca por objeto Date: `new Date('2026-08-06')` e
+// meia-noite UTC, e converter para local muda o dia. Ja custou off-by-one aqui.
+function diasDeAtraso(m, hoje) {
+  const entrega = String((m && m.entrega) || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entrega)) return 0;
+  const etapa = String((m && m.status_planejamento) || '');
+  if (etapa === 'concluido' || etapa === 'negada') return 0;
+  if (String((m && m.pausado_em) || '').trim()) return 0;
+  if (entrega >= hoje) return 0;
+  const dia = t => {
+    const [a, b, c] = t.split('-').map(Number);
+    return Date.UTC(a, b - 1, c);
+  };
+  return Math.round((dia(hoje) - dia(entrega)) / 86400000);
+}
+
 function atribuiCodigosProjeto(data) {
   if (!data || !Array.isArray(data.projetos)) return 0;
   let maior = 0;
@@ -1382,6 +1424,11 @@ export default {
       // Estado derivado, para a automacao nao ter de reimplementar a regra:
       aguardando_validacao: (m.status_planejamento || '') === 'validacao',
       concluida: (m.status_planejamento || '') === 'concluido',
+      // Prazo: `atrasada` e `dias_atraso` saem daqui prontos. Sem isto quem
+      // automatiza teria de reimplementar a regra — inclusive a parte de pausada
+      // nao atrasar, que ninguem adivinha de fora.
+      atrasada: diasDeAtraso(m, hojeBR()) > 0,
+      dias_atraso: diasDeAtraso(m, hojeBR()),
     });
 
     const ETAPAS_DEV = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento'];
@@ -1443,6 +1490,13 @@ export default {
           lista = lista.filter(m => pedidas.includes(m.status_planejamento || 'backlog'));
         }
         if (body.pausadas === false) lista = lista.filter(m => !String(m.pausado_em || '').trim());
+        // Filtro de atraso: e a pergunta mais comum de quem automatiza ("o que eu
+        // preciso resolver hoje"), e sem ele a resposta exigiria puxar tudo e
+        // recalcular fora.
+        if (body.atrasadas === true) {
+          const hj = hojeBR();
+          lista = lista.filter(m => diasDeAtraso(m, hj) > 0);
+        }
         lista.sort((a, b) => String(a.entrega || '9999').localeCompare(String(b.entrega || '9999')));
         return json({ ok: true, dev: eu, total: lista.length,
                       demandas: lista.map(m => devVisao(m, temas)) }, 200, headers);
