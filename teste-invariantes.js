@@ -738,6 +738,18 @@ for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT], ['p
   ok(botoes.length === 0, nome + ' navega por <a href>, nao por window.open', botoes.join(' '));
 }
 
+// O card do Kanban do Admin mostra os pontos: e o numero que decide o que entra na
+// sprint review, e sem ele a escolha exige abrir demanda por demanda.
+ok(/class="kb-pts/.test(ADMIN), 'o card do Kanban mostra os pontos do poker');
+ok(/\.kb-pts \{/.test(ADMIN), 'e tem estilo proprio');
+// Ponto votado e ponto estimado por duracao NAO podem parecer iguais: duracao
+// premia demora. Na base de hoje sao 9 votados contra 120 estimados.
+ok(/kb-pts.*estimado/.test(ADMIN) || /' estimado'/.test(ADMIN),
+   'ponto estimado por duracao e marcado de forma diferente do votado');
+ok(/poker_media != null/.test(ADMIN),
+   'a distincao usa poker_media, que so existe onde houve votacao');
+ok(/class="kb-sempt/.test(ADMIN), 'e a marcacao de quem nao passou pelo poker segue no card');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

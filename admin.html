@@ -326,6 +326,14 @@
       border:1px solid var(--blue); border-radius:5px; padding:2px 8px;
       font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; }
     .poker-aplicar:hover { filter:brightness(1.15); }
+    /* Pontos do poker. Teal para nao competir com o ambar do "sem pontos" nem com
+       o vermelho de atrasada: e informacao, nao alerta. O sufixo ≈ e a borda
+       tracejada marcam o ponto que veio de estimativa de duracao e nao de votacao
+       — ponto por duracao premia demora, e ler os dois como iguais engana. */
+    .kb-pts { font-size:10.5px; font-weight:700; color:var(--teal-tx,#7ED8D8);
+      background:var(--teal-bg,#0E3A3A); border:1px solid #1A6060;
+      border-radius:5px; padding:1px 6px; }
+    .kb-pts.estimado { border-style:dashed; opacity:.85; }
     .kb-sempt { font-size:10.5px; font-weight:700; color:var(--amber-tx,#FFC470);
       background:var(--amber-bg,#4A2800); border:1px solid var(--amber);
       border-radius:5px; padding:1px 6px; }
@@ -2726,6 +2734,19 @@ function renderKanban() {
       if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
       const nAnexos = (m.anexos || []).length;
       const badges = [ipBadge(getIP(m))];
+      // Pontos primeiro: e o numero que decide o que entra na sprint review, e
+      // lendo a coluna de cima para baixo ele precisa estar sempre no mesmo lugar.
+      // `poker_media` so existe onde houve votacao — sem ela o ponto veio de
+      // estimativa por duracao, e o title diz isso em vez de fingir que e igual.
+      const ptsCard = Number(m.poker_pontos) || 0;
+      if (ptsCard > 0) {
+        const votado = m.poker_media != null && m.poker_media !== '';
+        badges.push('<span class="kb-pts' + (votado ? '' : ' estimado') + '" title="' +
+          (votado
+            ? 'Pontuada no Planning Poker (média ' + esc(String(m.poker_media)) + ').'
+            : 'Pontos por estimativa de duração — esta demanda não passou pelo Planning Poker.') +
+          '">🃏 ' + ptsCard + ' pts' + (votado ? '' : ' ≈') + '</span>');
+      }
       if (semPontuacao(m)) badges.push('<span class="kb-sempt" title="' +
         'Comprometida com data sem ter passado pelo Planning Poker: a estimativa ' +
         'nao existe. Pontue na reuniao ou pelo card.">🃏 sem pontos</span>');
