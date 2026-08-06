@@ -2068,6 +2068,21 @@ export default {
         return json({ ok: true }, 200, headers);
       }
 
+      // Corrige o nome da pessoa. Nao havia caminho para isto, e o nome nao e
+      // cosmetico: aparece no historico do card, na mensagem de commit e na
+      // heuristica de posse de quem nao declarou nome nas demandas.
+      if (op === 'nome') {
+        const login = String(body.login || '').trim().toLowerCase();
+        const novo = limpaTexto(body.nome, 80).trim();
+        if (novo.length < 3) {
+          return json({ error: 'nome', detail: 'Informe o nome completo da pessoa.' }, 400, headers);
+        }
+        const uu = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(login).first();
+        if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
+        await env.POKER_DB.prepare('UPDATE usuario SET nome = ? WHERE id = ?').bind(novo, uu.id).run();
+        return json({ ok: true, nome: novo }, 200, headers);
+      }
+
       // Define o nome que a conta usa nas demandas. Vazio limpa e volta a heuristica.
       if (op === 'nome-demandas') {
         const login = String(body.login || '').trim().toLowerCase();

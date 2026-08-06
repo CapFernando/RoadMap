@@ -4727,7 +4727,8 @@ function uLinhaAtiva(u) {
   const l = esc(u.login);
   const off = !u.ativo;
   return '<tr' + (off ? ' class="inativa"' : '') + '>' +
-    '<td><div class="us-nome">' + esc(u.nome || u.login) + '</div>' +
+    '<td><div class="us-nome">' + esc(u.nome || u.login) +
+        ' <button class="us-link" onclick="uNome(\'' + l + '\')">renomear</button></div>' +
       '<div class="us-sub">' + l + '</div>' +
       '<div class="us-sub-mail">' +
         (u.email
@@ -4797,6 +4798,20 @@ function uCelulaNomeDemandas(u) {
   return sel + nota;
 }
 
+// Corrige erro de digitacao no cadastro. O nome vai para o historico do card e
+// para a mensagem de commit, entao errado ele contamina a trilha de auditoria.
+async function uNome(login) {
+  const atual = (state._usuarios || []).find(u => u.login === login);
+  const novo = prompt('Nome completo de ' + login + ':', (atual && atual.nome) || '');
+  if (novo === null) return;
+  if (novo.trim().length < 3) { uAviso('Informe o nome completo.', true); return; }
+  try {
+    await uChamar('nome', { login, nome: novo.trim() });
+    uAviso('Nome corrigido.');
+    renderUsuarios();
+  } catch (e) { uAviso(e.message, true); }
+}
+
 async function uNomeDemandas(login, valor) {
   try {
     await uChamar('nome-demandas', { login, nome_demandas: valor });
@@ -4850,6 +4865,9 @@ async function renderUsuarios() {
     return;
   }
   const todos = d.usuarios || [];
+  // Guarda a lista: uNome() precisa do nome atual para o prompt vir preenchido, e
+  // reler tudo do servidor so para isso seria uma chamada a mais por clique.
+  state._usuarios = todos;
   const pendentes = todos.filter(u => u.pendente);
   const ativos = todos.filter(u => !u.pendente);
   const pedidos = d.pedidos || [];
