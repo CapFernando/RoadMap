@@ -415,7 +415,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
-<script src="links-github.js?v=28d5e3cedb"></script>
+<script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -741,9 +741,15 @@
          responde no Teams. Basta o numero: quem tem a issue aberta na frente
          sabe o numero, nao a URL. -->
     <div class="form-group">
-      <label>Referência no GitHub <small style="font-weight:400;color:var(--text3)">— só o número basta</small></label>
+      <label>Referência no GitHub <small style="font-weight:400;color:var(--text3)">— escolha o repositório e use só o número, ou cole o link completo</small></label>
+      <!-- O repositorio vem ANTES dos numeros porque e ele que da sentido a eles.
+           A lista se completa sozinha com os repositorios que a base ja usa: uma
+           lista fixa apodreceria no primeiro repositorio novo, e o sintoma seria
+           exatamente o que o Joao reportou — numero de axcaixa virando link de
+           axcred, gravado e clicavel. -->
+      <select id="ms-link-repo" class="gh-repo-sel" style="margin-bottom:6px" title="Repositorio do codigo. Necessario para usar so o numero."></select>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
-        <input type="text" id="ms-link-issue" placeholder="Issue: 683" title="Issue no GitHub. Digite só o número." />
+        <input type="text" id="ms-link-issue" placeholder="Issue: 683" title="Issue no GitHub. Só o número, com o repositório escolhido — ou cole o link completo." />
         <input type="text" id="ms-link-pr" placeholder="PR: 712" title="Pull request. Mais de um: 712, 715" />
         <input type="text" id="ms-link-milestone" placeholder="Milestone: 4" title="Milestone no GitHub. Digite só o número." />
       </div>
@@ -1196,11 +1202,14 @@ function epFuncoesHTML() {
              '<code>observacao</code>, <code>horas_realizadas</code>, <code>projeto_id</code> ' +
              '(só projeto aprovado) e <code>etapa</code> até <code>em_andamento</code>. ' +
              'Referência no GitHub: <code>link_issue</code>, <code>link_pr</code> e ' +
-             '<code>link_milestone</code> — aceitam só o número (<code>"link_pr":"712"</code> ' +
-             'vira a URL do repositório AXCRED-DJANGO). <code>link_pr</code> aceita vários ' +
-             'separados por espaço.',
+             '<code>link_milestone</code>. Aceitam o endereço completo, ou só o número ' +
+             'desde que você informe <code>link_repo</code> (ex.: ' +
+             '<code>"link_repo":"audaxcapitalsa/axcaixa","link_pr":"712"</code>). Sem ' +
+             '<code>link_repo</code> o número é recusado — a API não adivinha o ' +
+             'repositório, senão um 712 de axcaixa gravaria link de axcred. ' +
+             '<code>link_pr</code> aceita vários separados por espaço.',
       corpo: '{"action":"demanda-atualizar","token":"TOKEN","codigo":"' + cod +
-        '","link_pr":"712","link_issue":"683","horas_realizadas":6}',
+        '","link_repo":"audaxcapitalsa/AXCRED-DJANGO","link_pr":"712","link_issue":"683","horas_realizadas":6}',
     },
     {
       acao: 'demanda-entregar',
@@ -2992,7 +3001,7 @@ function openStatusModal(id, preselect) {
   sel.value = preselect || COLUMNS.find(c => c.maps.includes(getStatusKey(m)))?.key || getStatusKey(m);
   document.getElementById('ms-horas').value = m.horas_realizadas || '';
   document.getElementById('ms-implementacao').value = m.implementacao || '';
-  if (window.ghLinkPreenche) ghLinkPreenche('ms', m);
+  if (window.ghLinkPreenche) ghLinkPreenche('ms', m, state.melhorias);
   // Chips clicaveis abaixo dos campos: depois de gravar, o valor no input e uma
   // URL longa e truncada; o chip mostra "#683" e abre no GitHub.
   const chipsEl = document.getElementById('ms-link-chips');

@@ -583,34 +583,74 @@ try {
 } catch (e) { GH = null; }
 ok(!!GH && typeof GH.ghLinkNormaliza === 'function', 'o modulo carrega');
 if (GH) {
-  const B = 'https://github.com/' + GH.GH_REPO + '/';
-  // O numero solo e a razao de ser do campo: quem esta com a issue aberta tem
-  // "683" na cabeca, nao a URL.
-  ok(GH.ghLinkNormaliza('issue', '683') === B + 'issues/683', 'numero solo vira URL de issue');
-  ok(GH.ghLinkNormaliza('issue', '#683') === B + 'issues/683', 'com # tambem');
-  ok(GH.ghLinkErro('issue', '683') === '',
-     'a validacao aceita o numero solo (validar o texto cru recusava justamente ele)');
+  const R1 = 'audaxcapitalsa/AXCRED-DJANGO';
+  const R2 = 'audaxcapitalsa/axcaixa';
+  const B1 = 'https://github.com/' + R1 + '/';
+  const B2 = 'https://github.com/' + R2 + '/';
+
+  // ── O DEFEITO QUE ISTO IMPEDE DE VOLTAR ──────────────────────────────
+  // A primeira versao tinha UM repositorio embutido, e o numero solo expandia
+  // para ele. Existem axcaixa, PDF_CADASTRO, Workos_ia e outros: um "683" de
+  // axcaixa virava link de axcred, gravado, clicavel e apontando para o lugar
+  // errado. Reportado pelo Joao Vitor no mesmo dia. Erro silencioso e o pior
+  // tipo, e a unica cura e nao adivinhar.
+  ok(GH.ghLinkNormaliza('issue', '683') === '683',
+     'numero solo SEM repositorio nao e expandido (nao inventa repo)',
+     GH.ghLinkNormaliza('issue', '683'));
+  ok(GH.ghLinkErro('issue', '683') !== '',
+     'e a validacao recusa, pedindo o repositorio ou o link');
+  ok(/repositório/i.test(GH.ghLinkErro('issue', '683')),
+     'a mensagem diz que falta o repositorio', GH.ghLinkErro('issue', '683'));
+  // Com o repositorio escolhido, o numero solo funciona — e a ergonomia que o
+  // campo existe para ter: quem esta com a issue aberta tem "683" na cabeca.
+  ok(GH.ghLinkNormaliza('issue', '683', R1) === B1 + 'issues/683',
+     'numero solo COM repositorio vira URL');
+  ok(GH.ghLinkNormaliza('issue', '683', R2) === B2 + 'issues/683',
+     'o MESMO numero em outro repositorio da outro link');
+  ok(GH.ghLinkErro('issue', '683', R1) === '', 'com repositorio, o numero e valido');
+  ok(GH.ghLinkNormaliza('issue', '#683', R1) === B1 + 'issues/683', 'com # tambem');
   // Dois PRs numa demanda e rotina; sem isto o segundo iria para a observacao.
-  ok(GH.ghLinkNormaliza('pr', '712, 715') === B + 'pull/712 ' + B + 'pull/715',
+  ok(GH.ghLinkNormaliza('pr', '712, 715', R1) === B1 + 'pull/712 ' + B1 + 'pull/715',
      'PR aceita mais de um numero');
-  // Repo padrao e atalho, nao cerca.
+  // URL completa vale sempre, de qualquer repositorio, sem escolher nada.
   const fora = 'https://github.com/outra/org/issues/9';
-  ok(GH.ghLinkNormaliza('issue', fora) === fora, 'URL de outro repositorio passa intacta');
+  ok(GH.ghLinkNormaliza('issue', fora) === fora, 'URL completa passa intacta, sem repositorio');
+  ok(GH.ghLinkErro('issue', fora) === '', 'e e valida');
   ok(GH.ghLinkErro('issue', 'https://jira.audax/AX-1') === '',
      'link de outra ferramenta nao e cobrado de forma');
   // O engano mais comum: colar a issue no campo do PR.
-  ok(GH.ghLinkErro('pr', B + 'issues/683') !== '', 'issue colada no campo do PR e apontada');
+  ok(GH.ghLinkErro('pr', B1 + 'issues/683') !== '', 'issue colada no campo do PR e apontada');
   ok(GH.ghLinkErro('issue', 'abc') !== '', 'texto solto e recusado');
-  // Rotulo curto: a URL inteira ocupa a largura do card e nao diz mais nada.
-  ok(GH.ghLinkRotulo('issue', B + 'issues/683') === '#683', 'rotulo curto da issue');
-  const chips = GH.ghLinkChips({ link_issue: B + 'issues/683', link_pr: B + 'pull/712 ' + B + 'pull/715' });
+  // O campo tem de continuar LEGIVEL: no primeiro print os tres apareciam como
+  // "https://github.co..." truncado, sem distinguir issue de PR.
+  ok(GH.ghLinkCurto('issue', B1 + 'issues/683') === '683',
+     'o campo exibe o numero, nao a URL');
+  ok(GH.ghLinkCurto('issue', 'https://jira.audax/AX-1') === 'https://jira.audax/AX-1',
+     'link de fora aparece inteiro, porque ai a URL e a informacao');
+  ok(GH.ghLinkRotulo('issue', B1 + 'issues/683') === '#683', 'rotulo curto do chip');
+  // A lista de repositorios se completa com o uso: lista fixa apodrece no
+  // primeiro repositorio novo, que foi como o defeito apareceu.
+  const repos = GH.ghLinkRepos([{ link_issue: 'https://github.com/audaxcapitalsa/NOVO_REPO/issues/1' }]);
+  ok(repos.indexOf('audaxcapitalsa/NOVO_REPO') >= 0,
+     'repositorio visto na base entra na lista automaticamente');
+  ok(repos.indexOf(R2) >= 0, 'a semente inclui axcaixa');
+  // Com varios repositorios em jogo, "#683" sozinho nao diz de onde e.
+  const chips = GH.ghLinkChips({ link_issue: B2 + 'issues/683', link_pr: B1 + 'pull/712 ' + B1 + 'pull/715' });
   ok(chips.includes('#683') && chips.includes('PR #712') && chips.includes('PR #715'),
      'os chips mostram os tres, inclusive dois PRs');
+  ok(chips.includes(R2), 'o chip diz de qual repositorio e (no title)');
   ok(/rel="noopener noreferrer"/.test(chips),
      'link externo abre sem dar window.opener para a pagina de destino');
   ok(!GH.ghLinkChips({ link_issue: 'https://x/">   <img onerror=1>' }).includes('<img'),
      'URL com HTML e escapada');
   ok(GH.ghLinkChips({}) === '', 'demanda sem referencia nao renderiza nada');
+}
+// O seletor de repositorio tem de EXISTIR nas tres telas, senao o numero solo
+// nunca e aceito e a ergonomia se perde.
+for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV]]) {
+  ok(/id="[a-z]+-link-repo"/.test(src), nome + ' tem o seletor de repositorio');
+  ok(/ghLinkPreenche\('[a-z]+', m, state\.melhorias\)/.test(src),
+     nome + ' alimenta a lista de repositorios com a base');
 }
 
 let erroW = null;

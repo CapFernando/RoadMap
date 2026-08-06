@@ -547,23 +547,36 @@ function entrandoEmConcluidoSemHoras(recebido, servidor) {
 // automacao que ja o use.
 const LINKS_GH = ['link_issue', 'link_pr', 'link_milestone'];
 
-// Aceita o NUMERO SOLO e expande. Quem automatiza tem o numero da issue vindo do
-// proprio GitHub; exigir a URL montada seria trabalho de string do lado errado.
+// Aceita o NUMERO SOLO, mas SO com o repositorio informado em `link_repo`. Quem
+// automatiza tem o numero vindo do proprio GitHub, e exigir a URL montada seria
+// trabalho de string do lado errado — mas expandir com um repositorio padrao era
+// pior: existem axcaixa, PDF_CADASTRO, Workos_ia e outros, e um "683" de axcaixa
+// virava link de axcred, gravado e clicavel apontando para o lugar errado.
+// Reportado no mesmo dia em que subiu. Erro silencioso e o pior tipo.
+//
 // `link_pr` aceita varios separados por espaco: demanda quebrada em dois PRs e
 // rotina, e sem isso o segundo iria para a observacao.
-const GH_REPO_PADRAO = 'audaxcapitalsa/AXCRED-DJANGO';
 const GH_CAMINHO = { link_issue: 'issues', link_pr: 'pull', link_milestone: 'milestone' };
+// owner/repo, ou vazio. Recusa qualquer coisa que nao tenha essa forma: aceitar
+// texto livre aqui montaria URL invalida com cara de valida.
+function ghRepoValido(t) {
+  const s = String(t || '').trim().replace(/^\/+|\/+$/g, '');
+  return /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(s) ? s : '';
+}
 
-function linkGhNormaliza(campo, valor) {
+function linkGhNormaliza(campo, valor, repo) {
+  const r = ghRepoValido(repo);
   const um = (v) => {
     const t = String(v || '').trim();
     if (!t) return '';
     if (/^https?:\/\//i.test(t)) return t;
     const n = t.replace(/^#/, '').trim();
-    if (/^\d+$/.test(n)) {
-      return 'https://github.com/' + GH_REPO_PADRAO + '/' + GH_CAMINHO[campo] + '/' + n;
+    // Sem repositorio o numero fica como esta e a validacao recusa. Expandir com
+    // um padrao e exatamente o defeito que isto corrige.
+    if (/^\d+$/.test(n) && r) {
+      return 'https://github.com/' + r + '/' + GH_CAMINHO[campo] + '/' + n;
     }
-    return t;  // nao e numero nem URL: a validacao recusa mostrando o que veio
+    return t;
   };
   const bruto = String(valor || '').trim();
   if (!bruto) return '';
@@ -572,13 +585,18 @@ function linkGhNormaliza(campo, valor) {
 }
 
 // Devolve o texto do erro, ou '' se esta valido.
-function linkGhErro(campo, valor) {
-  const v = linkGhNormaliza(campo, valor);
+function linkGhErro(campo, valor, repo) {
+  const v = linkGhNormaliza(campo, valor, repo);
   if (!v) return '';
   const partes = campo === 'link_pr' ? v.split(/\s+/).filter(Boolean) : [v];
   for (const u of partes) {
     if (!/^https?:\/\//i.test(u)) {
-      return 'Em ' + campo + ', use o numero (ex.: 683) ou o endereco completo comecando com http.';
+      if (/^#?\d+$/.test(u)) {
+        return 'Para usar so o numero em ' + campo + ', informe tambem "link_repo" ' +
+               '(ex.: "audaxcapitalsa/axcaixa"). Ou mande o endereco completo.';
+      }
+      return 'Em ' + campo + ', use o numero (com "link_repo") ou o endereco completo ' +
+             'comecando com http.';
     }
   }
   return '';
@@ -592,14 +610,21 @@ function aplicaLinksGh(m, body, mudou) {
   // issue valida e PR invalido deixava a issue gravada no objeto e devolvia erro:
   // hoje a rota descarta o objeto e nao ha dano, mas e armadilha pronta para
   // quem reusar esta funcao antes de um save.
+  // `link_repo` NAO e gravado na demanda: o repositorio ja esta dentro da URL, e
+  // guardar de novo criaria duas fontes que podem discordar.
+  const repo = body.link_repo;
+  if (typeof body.link_repo === 'string' && body.link_repo.trim() && !ghRepoValido(repo)) {
+    return { campo: 'link_repo',
+             detail: 'Use a forma "organizacao/repositorio", ex.: "audaxcapitalsa/axcaixa".' };
+  }
   for (const campo of LINKS_GH) {
     if (typeof body[campo] !== 'string') continue;
-    const err = linkGhErro(campo, body[campo]);
+    const err = linkGhErro(campo, body[campo], repo);
     if (err) return { campo, detail: err };
   }
   for (const campo of LINKS_GH) {
     if (typeof body[campo] !== 'string') continue;
-    m[campo] = limpaTexto(linkGhNormaliza(campo, body[campo]), 600);
+    m[campo] = limpaTexto(linkGhNormaliza(campo, body[campo], repo), 600);
     if (mudou) mudou.push(campo);
   }
   return null;

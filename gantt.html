@@ -553,7 +553,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
-<script src="links-github.js?v=28d5e3cedb"></script>
+<script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -809,9 +809,15 @@
          responde no Teams. Basta o numero: quem tem a issue aberta na frente
          sabe o numero, nao a URL. -->
     <div class="form-group">
-      <label>Referência no GitHub <small style="font-weight:400;color:var(--text3)">— só o número basta</small></label>
+      <label>Referência no GitHub <small style="font-weight:400;color:var(--text3)">— escolha o repositório e use só o número, ou cole o link completo</small></label>
+      <!-- O repositorio vem ANTES dos numeros porque e ele que da sentido a eles.
+           A lista se completa sozinha com os repositorios que a base ja usa: uma
+           lista fixa apodreceria no primeiro repositorio novo, e o sintoma seria
+           exatamente o que o Joao reportou — numero de axcaixa virando link de
+           axcred, gravado e clicavel. -->
+      <select id="e-link-repo" class="gh-repo-sel" style="margin-bottom:6px" title="Repositorio do codigo. Necessario para usar so o numero."></select>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
-        <input type="text" id="e-link-issue" placeholder="Issue: 683" title="Issue no GitHub. Digite só o número." />
+        <input type="text" id="e-link-issue" placeholder="Issue: 683" title="Issue no GitHub. Só o número, com o repositório escolhido — ou cole o link completo." />
         <input type="text" id="e-link-pr" placeholder="PR: 712" title="Pull request. Mais de um: 712, 715" />
         <input type="text" id="e-link-milestone" placeholder="Milestone: 4" title="Milestone no GitHub. Digite só o número." />
       </div>
@@ -2291,7 +2297,7 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-titulo').value    = m?.titulo || '';
   document.getElementById('e-descricao').value = m?.descricao || '';
   if (window.ligaModeloDescricao) ligaModeloDescricao('e-descricao', { auto: !m });
-  if (window.ghLinkPreenche) ghLinkPreenche('e', m);
+  if (window.ghLinkPreenche) ghLinkPreenche('e', m, state.melhorias);
   const eChips = document.getElementById('e-link-chips');
   if (eChips && window.ghLinkChips) eChips.innerHTML = ghLinkChips(m || {});
   renderAnexosGantt(m);
