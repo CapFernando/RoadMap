@@ -192,6 +192,23 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV], ['i
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Sessao: quem perde a credencial tem caminho de volta');
+
+// O painel do dev decidia "esta logado" pelo sessionStorage, que nao expira junto
+// com a sessao do Worker (12h). Resultado: tela abria, a pessoa trabalhava, toda
+// gravacao falhava — e nao havia botao de sair, so "trocar de dev", que mantem a
+// credencial. Ficava presa ate limpar o navegador na mao.
+ok(/onclick="sairDev\(\)"/.test(DEV), 'o painel do dev tem botao de sair');
+const bootDev = corpo(DEV, 'async function initApp()');
+ok(!!bootDev && /await sessaoDevValida\(\)/.test(bootDev),
+   'o boot pergunta ao servidor se a credencial ainda vale');
+ok(!!bootDev && /limpaCredenciaisDev\(\)/.test(bootDev),
+   'e limpa a credencial vencida em vez de abrir o painel');
+const subir = corpo(DEV, 'async function subirAnexo(');
+ok(!!subir && !/recarregue a página \(F5\)/.test(subir),
+   'nenhuma mensagem manda recarregar para resolver sessao (o token fica no storage)');
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Discovery: os campos sao os que o dash grava, nao os que alguem supoe');
 
 // Eu escrevi o painel do poker recortando tres campos que INVENTEI (objetivo,

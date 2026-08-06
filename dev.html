@@ -538,6 +538,10 @@
       <button class="btn btn-primary btn-sm" onclick="openNewModal()">+ Nova demanda</button>
       <button class="btn btn-secondary btn-sm" onclick="window.open('poker.html','_blank')">🃏 Planning Poker</button>
       <button class="btn btn-secondary btn-sm" onclick="forceRefresh()">↻ Atualizar</button>
+      <!-- Nao existia botao de sair. Com a credencial vencida, o painel continuava
+           aberto (o "esta logado" saia do sessionStorage, nao do servidor) e toda
+           gravacao falhava, sem caminho de volta a nao ser limpar o navegador. -->
+      <button class="btn btn-ghost btn-sm" onclick="sairDev()" title="Encerra a sessão e volta para o login">Sair</button>
     </div>
   </header>
 
@@ -2150,6 +2154,62 @@ async function reloadDevList() {
   ).join('');
 }
 
+
+// ─── SESSAO DO DEV ────────────────────────────────────────────────
+// O painel decidia "esta logado" olhando o sessionStorage, nunca o servidor. Com
+// o token vencido (a sessao vale 12h e a aba costuma ficar aberta), o resultado
+// era o pior possivel: a tela abria normal, o dev trabalhava, e toda gravacao
+// falhava — sem botao de sair, porque nao havia. `trocarDev` so troca o nome e
+// mantem a credencial, de proposito.
+//
+// Pior ainda: a mensagem de erro que eu tinha escrito mandava recarregar com F5,
+// e recarregar NAO resolve — o token vencido continua no sessionStorage. A pessoa
+// seguia a instrucao e caia no mesmo lugar.
+function limpaCredenciaisDev() {
+  _devPw = ''; _devToken = ''; _eu = null;
+  ['rm_dev_pw', 'rm_dev_token', 'rm_dev_authed', 'rm_eu'].forEach(k => {
+    try { sessionStorage.removeItem(k); } catch (_) {}
+  });
+}
+
+// Sair de verdade: limpa a credencial e volta para a senha. O nome escolhido fica
+// (localStorage) para nao ter de reescolher na proxima entrada.
+function sairDev() {
+  limpaCredenciaisDev();
+  document.getElementById('dev-app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('step-dev').style.display = 'none';
+  document.getElementById('step-senha').style.display = 'block';
+  const err = document.getElementById('login-error');
+  if (err) err.textContent = '';
+  const campo = document.getElementById('login-senha');
+  if (campo) { campo.value = ''; setTimeout(() => campo.focus(), 60); }
+}
+
+// Pergunta ao servidor se a credencial ainda vale. E a unica forma de saber: o
+// sessionStorage nao expira junto com a sessao do Worker.
+async function sessaoDevValida() {
+  const cred = credDev();
+  if (!cred.token && !cred.senha) return false;
+  try {
+    const res = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'quem-sou' }, cred))
+    });
+    if (!res.ok) return false;
+    const j = await res.json().catch(() => ({}));
+    if (j && j.usuario) {
+      _eu = j.usuario;
+      try { sessionStorage.setItem('rm_eu', JSON.stringify(_eu)); } catch (_) {}
+    }
+    return true;
+  } catch (_) {
+    // Falha de rede nao e sessao invalida: derrubar a pessoa aqui seria pior que
+    // deixar seguir e falhar na gravacao, que ja avisa e nao perde o que ela fez.
+    return true;
+  }
+}
+
 async function initApp() {
   // Exige senha validada no Worker. Antes entrava direto, e a rota de gravacao
   // tambem nao pedia senha — qualquer um com a URL sobrescrevia a base.
@@ -2158,6 +2218,18 @@ async function initApp() {
     // step-senha já é o padrão (step-dev está oculto)
     document.getElementById('login-senha')?.focus();
     return; // Não carrega devs ainda — espera a senha
+  }
+  // Ter credencial guardada nao significa que ela vale: a do Worker expira em 12h
+  // e o sessionStorage nao expira junto. Sem esta conferencia, a pessoa entrava,
+  // trabalhava e descobria na hora de salvar.
+  if (ADMIN_PROXY_URL && !(await sessaoDevValida())) {
+    limpaCredenciaisDev();
+    const err = document.getElementById('login-error');
+    if (err) err.textContent = 'Sua sessão expirou. Entre de novo para continuar.';
+    document.getElementById('step-senha').style.display = 'block';
+    document.getElementById('step-dev').style.display = 'none';
+    document.getElementById('login-senha')?.focus();
+    return;
   }
   document.getElementById('step-senha').style.display = 'none';
   document.getElementById('step-dev').style.display = 'block';
@@ -2483,7 +2555,11 @@ function buildDevDropdown() {
     const isCur = d === currentDev;
     return `<div class="dev-dropdown-item${isCur?' active':''}" onclick="switchDevInline('${d}')">${isCur ? '✓ ' : ''}${d}</div>`;
   }).join('');
-  dd.innerHTML = items + `<div class="dev-dropdown-sep"></div><div class="dev-dropdown-item" onclick="trocarDev()">🔄 Tela de seleção</div>`;
+  // "Tela de selecao" troca de nome mantendo a credencial; "Sair" encerra a
+  // sessao. Sao coisas diferentes e antes so a primeira existia.
+  dd.innerHTML = items + `<div class="dev-dropdown-sep"></div>` +
+    `<div class="dev-dropdown-item" onclick="trocarDev()">🔄 Trocar de dev (mantém a sessão)</div>` +
+    `<div class="dev-dropdown-item" onclick="sairDev()">🚪 Sair da conta</div>`;
 }
 
 function switchDevInline(name) {
@@ -2913,9 +2989,13 @@ const MS_MAX = 1.5 * 1024 * 1024;
 // mais no JSON — era 93%% do peso da base, baixado por toda tela em cada leitura.
 async function subirAnexo(file, dataUrl, proxyUrl, cred) {
   // Sem token nem senha o Worker responde captcha ("Verificacao necessaria"),
-  // mensagem que nao diz o que fazer. Barra antes e manda recarregar a sessao.
+  // mensagem que nao diz o que fazer.
+  //
+  // A instrucao anterior — "recarregue com F5" — estava ERRADA: a credencial mora
+  // no sessionStorage e sobrevive ao recarregamento, entao seguir o conselho
+  // devolvia a pessoa ao mesmo estado. O caminho e sair e entrar.
   if (!cred || (!cred.token && !cred.senha)) {
-    throw new Error('sua sessão expirou — recarregue a página (F5) e entre de novo');
+    throw new Error('sua sessão expirou — clique em "Sair" no topo e entre de novo');
   }
   const res = await fetch(proxyUrl, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
