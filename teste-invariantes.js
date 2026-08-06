@@ -469,6 +469,13 @@ for (const campo of CAMPOS_DISCOVERY) {
 for (const falso of ['d.beneficiados', 'd.objetivo']) {
   ok(!rendPoker.includes(falso), 'poker nao le ' + falso + ' (campo que nao existe)');
 }
+// O inverso tambem: campo que o dash passou a gravar e ninguem exibe e dado morto.
+// Foi assim que os inventados sobreviveram — escritos de um lado, lidos de nenhum.
+for (const novo of ['local_implementacao', 'documentos_afetados']) {
+  ok(INDEX.includes(novo), 'o dash grava discovery.' + novo);
+  ok(ADMIN.includes('d.' + novo), 'admin exibe discovery.' + novo);
+  ok(POKER.includes('d.' + novo), 'poker exibe discovery.' + novo);
+}
 // A fila nao pode recortar o discovery: recortar foi o que escondeu os campos.
 const enxuta = W.slice(W.indexOf('const enxuta = (m) =>'), W.indexOf('const todas = data.melhorias'));
 ok(/discovery: \(m\.discovery && typeof m\.discovery === 'object'/.test(enxuta) &&

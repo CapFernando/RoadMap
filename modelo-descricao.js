@@ -109,13 +109,28 @@
     return corpo.join(' ').trim();
   }
 
+  function temSecao(texto, idx) {
+    return norm(texto).indexOf(norm(SECOES[idx].titulo)) >= 0;
+  }
+
   // Quais seções continuam sem conteúdo. Vazio = pode salvar.
+  //
   // MÍNIMO deliberado de 3 caracteres: "-", ".", "x" não é especificação, e
   // aceitar isso transformaria a cobrança em ritual de contornar o campo.
+  //
+  // Cobra a seção que ESTÁ no texto e está vazia, não as seis sempre. O modelo
+  // recém-inserido tem as seis, então o caso central — inserir e salvar sem
+  // escrever nada — continua recusado. A diferença aparece na demanda que vem do
+  // dash: ela chega com as seções que a área de negócio soube responder, e sem
+  // "Regra de negócio" e "Critérios de aceite", que são trabalho de produto. Se a
+  // cobrança fosse pelas seis, o PM/PO não conseguiria nem trocar o sistema do
+  // card antes de escrever a especificação inteira — e triagem trancada não
+  // melhora especificação nenhuma, só empurra todo mundo de volta ao texto livre.
   function pendencias(texto) {
     if (!usaModelo(texto)) return [];
     var falta = [];
     for (var i = 0; i < SECOES.length; i++) {
+      if (!temSecao(texto, i)) continue;
       if (conteudoDaSecao(texto, i).length < 3) falta.push(SECOES[i].rotulo);
     }
     return falta;

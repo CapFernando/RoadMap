@@ -353,6 +353,12 @@
   #nm-overlay textarea,#nm-overlay select{font-family:inherit;font-size:13.5px;color:var(--text,#ECEAE2);background:var(--bg,#0E0E0D);
     border:1px solid #2E2E2B;border-radius:7px;padding:8px 10px;width:100%;}
   #nm-overlay textarea{min-height:58px;resize:vertical;}
+  /* Caixas em linha, quebrando quando nao cabe: em coluna elas tomariam meia tela
+     para cinco palavras. */
+  .nm-docs{display:flex;flex-wrap:wrap;gap:6px 16px;margin:2px 0 8px;}
+  .nm-docs label{display:flex;align-items:center;gap:6px;font-weight:400;
+    font-size:13px;color:var(--text2,#A8A49A);cursor:pointer;white-space:nowrap;}
+  .nm-docs input{width:15px;height:15px;accent-color:var(--blue,#3B8FE8);cursor:pointer;}
   #nm-overlay .nm-obrig{color:var(--red,#E84444);font-weight:700;}
   /* Codigo da demanda: a referencia curta usada em PR, review e deploy. */
   .mel-cod{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;color:var(--blue-tx,#9BC8F8);
@@ -475,6 +481,14 @@
         <label class="nm-f">Para que serve? *
           <textarea id="nm-objetivo" placeholder="Ex.: Eliminar a conferência manual das planilhas no fim do dia"></textarea>
         </label>
+        <!-- O caminho na tela e a pergunta mais concreta do formulario e a que mais
+             economiza ida e volta: sem ela, quem desenvolve abre um chamado so para
+             perguntar "onde?". Fica logo abaixo do objetivo, ainda na primeira
+             secao, porque quem acabou de descrever o problema tem a tela na cabeca. -->
+        <label class="nm-f">Onde fica isso no sistema? <span class="nm-opc">opcional</span>
+          <input type="text" id="nm-local" maxlength="200"
+                 placeholder="Ex.: Operações &gt; Dashboard &gt; Cadastro &gt; Aba Garantias">
+        </label>
         <div class="nm-grid2">
           <label class="nm-f">O que muda no seu dia a dia <span class="nm-opc">opcional</span>
             <textarea id="nm-impacto" placeholder="Ex.: deixo de conferir 40 linhas à mão toda tarde"></textarea>
@@ -515,6 +529,20 @@
             <textarea id="nm-nada" placeholder="Ex.: vai piorar quando a carteira crescer"></textarea>
           </label>
         </div>
+        <!-- Documento gerado pelo sistema e o impacto que passa despercebido: a tela
+             muda, o PDF continua igual, e o erro aparece na frente do cliente. Quem
+             usa sabe responder isto, ao contrario de regra de negocio. -->
+        <label class="nm-f">Isso muda algum documento ou relatório? <span class="nm-opc">opcional</span>
+          <div id="nm-docs" class="nm-docs">
+            <label><input type="checkbox" value="PDF"> PDF</label>
+            <label><input type="checkbox" value="Capa da operação"> Capa da operação</label>
+            <label><input type="checkbox" value="Contrato"> Contrato</label>
+            <label><input type="checkbox" value="Relatórios"> Relatórios</label>
+            <label><input type="checkbox" value="Exportações (Excel/CSV)"> Exportações (Excel/CSV)</label>
+          </div>
+          <input type="text" id="nm-docs-obs" maxlength="300"
+                 placeholder="Se marcou algum, o que muda nele?">
+        </label>
       </section>
 
       <!-- Anexos sobe: mandar um print e a coisa mais facil e mais util que a
@@ -1513,14 +1541,16 @@ function nmOnModulo() {
 function nmResolveTema() {
   const sisSel = document.getElementById('nm-sistema');
   const sis = sisSel.value === '__novo__' ? document.getElementById('nm-sistema-novo').value.trim() : sisSel.value;
-  if (!sis) return { id: '', novos: [] };
+  if (!sis) return { id: '', novos: [], nome: '' };
   const modSel = document.getElementById('nm-modulo');
   const mod = modSel.value === '__novo__' ? document.getElementById('nm-modulo-novo').value.trim() : modSel.value;
   const nome = mod ? `${sis} - ${mod}` : sis;
   let t = _temas.find(x => (x.nome || '').toLowerCase() === nome.toLowerCase());
-  if (t) return { id: t.id, novos: [] };
+  // `nome` sai junto: a descricao no formato do modelo abre com o ambiente, e
+  // remontar o nome fora daqui seria a mesma regra em dois lugares.
+  if (t) return { id: t.id, novos: [], nome: t.nome || nome };
   const novo = { id: nmUid(), nome };
-  return { id: novo.id, novos: [novo] };
+  return { id: novo.id, novos: [novo], nome };
 }
 
 // ── Tipo da demanda ──
@@ -1912,6 +1942,44 @@ function nmFalha(campoId, msg) {
   dashToast(msg, 'err');
 }
 
+
+// ─── A DESCRICAO CHEGA NO FORMATO DO MODELO ───────────────────────────
+// A area de negocio nao ve nem preenche o modelo: ela responde perguntas. Isto
+// traduz as respostas para as secoes que o Admin, o Planejamento e o painel Dev
+// usam, para a demanda ja nascer no padrao.
+//
+// So emite a secao que TEM resposta. "Regra de negocio" e "Criterios de aceite"
+// ficam de fora de proposito: sao trabalho de produto, e emiti-las vazias
+// bloquearia o PM/PO de salvar o card antes de escrever a especificacao inteira —
+// nem para trocar o sistema. Quando ele clicar em "Usar modelo", elas aparecem e
+// passam a ser cobradas.
+function nmDescricaoNoModelo(g) {
+  const sistema = (nmResolveTema().nome || '').trim();
+  const local = g('nm-local');
+  const marcados = [...document.querySelectorAll('#nm-docs input:checked')].map(c => c.value);
+  const obsDoc = g('nm-docs-obs');
+  // Duas respostas, duas linhas: juntar com espaco criava frase sem sentido
+  // ("deixo de conferir 40 linhas a mao eu e as duas da conferencia").
+  const impacto = [
+    g('nm-impacto') ? 'No dia a dia: ' + g('nm-impacto') : '',
+    g('nm-benef') ? 'Quem mais usa: ' + g('nm-benef') : '',
+  ].filter(Boolean).join('\n');
+  const L = [];
+  if (sistema) L.push(sistema, '');
+  L.push('1. OBJETIVO DA ALTERAÇÃO', g('nm-objetivo'), '');
+  if (local) L.push('2. LOCAL DA IMPLEMENTAÇÃO', local, '');
+  if (impacto) L.push('4. IMPACTOS NA APLICAÇÃO', impacto, '');
+  if (marcados.length || obsDoc) {
+    L.push('5. IMPACTOS EM DOCUMENTOS E RELATÓRIOS',
+           marcados.length ? marcados.map(x => '[x] ' + x).join('   ') : 'nenhum');
+    if (obsDoc) L.push(obsDoc);
+    L.push('');
+  }
+  // Uma secao so nao e reconhecida como modelo (evita falso positivo), entao com
+  // apenas o objetivo a descricao sai como texto livre — que e o que ela e.
+  return L.join('\n').trim();
+}
+
 async function saveNovaMelhoria() {
   const titulo = document.getElementById('nm-titulo').value.trim();
   const objetivo = document.getElementById('nm-objetivo').value.trim();
@@ -1929,7 +1997,7 @@ async function saveNovaMelhoria() {
   const nova = {
     id: melId,
     titulo,
-    descricao: objetivo,
+    descricao: nmDescricaoNoModelo(g),
     tema_id: tema.id,
     dev: '',                          // definido pelo Admin/Gantt no planejamento
     solicitante: g('nm-solicitante'),
@@ -1945,6 +2013,11 @@ async function saveNovaMelhoria() {
     discovery: {
       tipo: g('nm-tipo'),
       area_solicitante: g('nm-area'),
+      // Tambem no discovery, e nao so no texto da descricao: campo estruturado da
+      // para filtrar e relatar, texto dentro de um paragrafo nao.
+      local_implementacao: g('nm-local'),
+      documentos_afetados: [...document.querySelectorAll('#nm-docs input:checked')].map(c => c.value),
+      documentos_obs: g('nm-docs-obs'),
       impacto: g('nm-impacto'),
       beneficiarios: g('nm-benef'),
       ganho: g('nm-tipo') === 'ganho'

@@ -774,6 +774,11 @@ function discoveryHTML(m) {
 
   if (d.tipo) por('Tipo', d.tipo === 'ganho' ? 'Ganho de produtividade' : 'Correção/Ajuste');
   por('Área do solicitante', d.area_solicitante);
+  por('Local da implementação', d.local_implementacao);
+  if (Array.isArray(d.documentos_afetados) && d.documentos_afetados.length) {
+    por('Documentos afetados', d.documentos_afetados.join(', ') +
+        (d.documentos_obs ? ' — ' + d.documentos_obs : ''));
+  }
   por('Impacto', d.impacto);
   por('Beneficiários', d.beneficiarios);
   if (d.ganho) {

@@ -778,7 +778,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="modelo-descricao.js?v=48d5b616f7"></script>
+<script src="modelo-descricao.js?v=6f5abaec90"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -3001,6 +3001,11 @@ function renderMDiscovery(m) {
     const rows = [];
     if (d.tipo) rows.push(`<div class="disc-row"><b>Tipo:</b> ${d.tipo === 'ganho' ? 'Ganho de produtividade' : 'Correção/Ajuste'}</div>`);
     if (d.area_solicitante) rows.push(`<div class="disc-row"><b>Área do solicitante:</b> ${esc(d.area_solicitante)}</div>`);
+    if (d.local_implementacao) rows.push(`<div class="disc-row"><b>Local da implementação:</b> ${esc(d.local_implementacao)}</div>`);
+    if (Array.isArray(d.documentos_afetados) && d.documentos_afetados.length) {
+      rows.push(`<div class="disc-row"><b>Documentos afetados:</b> ${esc(d.documentos_afetados.join(', '))}` +
+                (d.documentos_obs ? ` — ${esc(d.documentos_obs)}` : '') + `</div>`);
+    }
     if (d.impacto) rows.push(`<div class="disc-row"><b>Impacto:</b> ${esc(d.impacto)}</div>`);
     if (d.beneficiarios) rows.push(`<div class="disc-row"><b>Beneficiários:</b> ${esc(d.beneficiarios)}</div>`);
     if (d.ganho) {
