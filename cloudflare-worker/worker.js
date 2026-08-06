@@ -264,10 +264,14 @@ async function turnstileOk(env, token, ip) {
 // excecao, o que derrubava o login com 1101). 100k e o teto da plataforma.
 const PBKDF2_ITER = 100000;
 const SESSAO_H = 12;              // sessao vale 12h
-const PAPEIS = ['consulta', 'dev', 'admin'];
+// analista = Analista de Requisitos. Conduz o Planning Poker, edita e nega
+// demandas. Fica ACIMA de dev na hierarquia (herda o que o dev faz) e ABAIXO de
+// admin: publicar o estado inteiro, gerir contas e fechar projeto seguem
+// exclusivos do PM/PO, e todo `temNivel(x, 'admin')` continua recusando analista.
+const PAPEIS = ['consulta', 'dev', 'analista', 'admin'];
 // So e-mail corporativo se cadastra. Qualquer endereco de fora e recusado.
 const EMAIL_DOMINIO = '@audaxcapitalsa.com.br';
-const NIVEL = { consulta: 1, dev: 2, admin: 3 };
+const NIVEL = { consulta: 1, dev: 2, analista: 3, admin: 4 };
 
 // ALTER TABLE tolerante: a tabela usuario ja existe em producao, e CREATE TABLE
 // IF NOT EXISTS nao acrescenta coluna. Se a coluna ja esta la, o erro e ignorado.
@@ -409,6 +413,43 @@ async function exigePapel(env, body, papeis, headers) {
               (papeis.includes('dev') ? 'dev' : 'admin') + '.' }, 403, headers) };
   }
   return { ident };
+}
+
+
+// ─── UMA FONTE DE VERDADE PARA A ETAPA ────────────────────────────────
+// A base tinha DUAS maquinas de estado: `status_planejamento` (backlog, planning,
+// planejado, em_andamento, validacao, concluido, negada) e o legado `status`
+// (recebida, estimada, iniciada, concluida, negada). Elas divergiam em 91 dos 201
+// registros — na maioria concluida ainda marcada como "iniciada", campo abandonado.
+//
+// Havia um caso pior, e esse corrompia decisao: AX-021 e AX-023 estavam negadas
+// APENAS no campo legado, com status_planejamento vazio. A API derivava backlog
+// para elas, ou seja, demanda recusada contada como fila de entrada.
+//
+// Agora `status_planejamento` e a fonte e `status` e SEMPRE derivado dela, em todas
+// as portas de gravacao. O campo continua existindo porque 5 telas o leem; remover
+// exigiria varrer todas, e nao se troca um problema de dado por um de tela no mesmo
+// passo. Mas ele nao pode mais contradizer a etapa: quem grava nao escolhe o valor.
+const SP_PARA_STATUS = {
+  backlog: 'recebida', levantar_req: 'recebida', planning: 'estimada',
+  planejado: 'estimada', em_andamento: 'iniciada', validacao: 'iniciada',
+  concluido: 'concluida', negada: 'negada',
+};
+
+// Alinha `status` a etapa em todas as demandas do payload. Devolve quantas ajustou.
+// Etapa desconhecida ou vazia NAO e adivinhada: preencher por chute foi como as
+// duas negadas acabaram invisiveis.
+function normalizaEstados(data) {
+  if (!data || !Array.isArray(data.melhorias)) return 0;
+  let n = 0;
+  for (const m of data.melhorias) {
+    if (!m) continue;
+    const sp = String(m.status_planejamento || '').trim();
+    const esperado = SP_PARA_STATUS[sp];
+    if (!esperado) continue;
+    if (m.status !== esperado) { m.status = esperado; n += 1; }
+  }
+  return n;
 }
 
 function atribuiCodigosProjeto(data) {
@@ -716,7 +757,10 @@ export default {
     // sincrona cobre a senha compartilhada; a assincrona cobre token tambem.
     const senhaOk = (s) => s && env.ADMIN_SENHA && s === env.ADMIN_SENHA;
     const ehAdmin = async () => (await papelAtual()) === 'admin';
-    const ehDev   = async () => { const p = await papelAtual(); return p === 'dev' || p === 'admin'; };
+    // analista entra aqui porque anexa arquivo e edita demanda: sao acoes de dev e
+    // ele esta acima de dev. Sem isto, complementar uma demanda na reuniao com um
+    // print seria recusado.
+    const ehDev   = async () => ['dev', 'analista', 'admin'].includes(await papelAtual());
     // Definido AQUI, junto de senhaOk, e nao mais adiante: `const` nao existe antes
     // da declaracao, e a rota de anexo (que usa devOk) roda antes do ponto onde
     // isto estava. Chamar dali lancaria ReferenceError em tempo de execucao — o
@@ -764,7 +808,10 @@ export default {
       // conta nao conseguia abrir a sala nem revelar votos. Mesma lacuna que o
       // Gantt e o anexo tiveram, pelo mesmo motivo — a regra estava escrita em
       // cada rota em vez de vir de um lugar so.
-      const facilitadorOk = async () => (await ehAdmin()) || senhaOk(body.senha);
+      // Conduzir a votacao (abrir sala, revelar, gravar pontos, complementar, negar)
+      // e do PM/PO E do Analista de Requisitos. Dev e consulta seguem so votando.
+      const facilitadorOk = async () =>
+        ['admin', 'analista'].includes(await papelAtual()) || senhaOk(body.senha);
       const recusaFacilitador = () => json({ error: 'senha',
         detail: 'Ação do facilitador: entre com a sua conta de PM/PO ou informe a senha de acesso.' },
         401, headers);
@@ -1107,7 +1154,8 @@ export default {
         const antesN = JSON.parse(JSON.stringify(alvoN));
         const quemN = (_ident && _ident.usuario && _ident.usuario.nome) || 'facilitador';
         alvoN.status_planejamento = 'negada';
-        alvoN.status = 'negada';
+        // Pelo mapa, nao a mao: assim uma mudanca no mapa alcanca esta rota tambem.
+        alvoN.status = SP_PARA_STATUS.negada;
         alvoN.motivo_negacao = motivo;
         alvoN.negada_em = iso;
         alvoN.negada_por = quemN;
@@ -1564,6 +1612,7 @@ export default {
         msg = 'chore: ' + (m.codigo || m.id) + ' entregue para validacao por ' + (eu || 'api');
       }
 
+      normalizaEstados(atual);
       registraHistorico(atual, base, eu || ident.papel, 'api');
       atribuiCodigos(atual);
       corrigeProjetoInvalido(atual);
@@ -1961,6 +2010,7 @@ export default {
         { headers: { Accept: 'application/vnd.github.raw' } })).text());
       registraHistorico(data, antesPub, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel');
+      normalizaEstados(data);
       atribuiCodigos(data);
       atribuiCodigosProjeto(data);
       const semDev = corrigeSemDev(data);
@@ -2017,6 +2067,7 @@ export default {
       data.projetos = antesDev.projetos || [];
       registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel dev');
+      normalizaEstados(data);
       atribuiCodigos(data);
       corrigeProjetoInvalido(data);
       data.atualizado_em = new Date().toISOString();

@@ -1044,6 +1044,7 @@
             <label for="u-papel">Permissão</label>
             <select id="u-papel">
               <option value="dev">Dev</option>
+              <option value="analista">Analista de Requisitos</option>
               <option value="admin">Admin</option>
               <option value="consulta">Consulta</option>
             </select>
@@ -4701,7 +4702,9 @@ function uLinhaPendente(u) {
     '<td class="us-sub">' + esc(uQuando(u.criado_em)) + '</td>' +
     '<td><span class="us-acoes">' +
       '<select id="us-papel-' + l + '">' +
-        '<option value="dev">Dev</option><option value="consulta">Consulta</option>' +
+        '<option value="dev">Dev</option>' +
+        '<option value="analista">Analista de Requisitos</option>' +
+        '<option value="consulta">Consulta</option>' +
         '<option value="admin">Admin</option></select>' +
       '<button class="btn btn-success btn-sm" onclick="uAprovar(\'' + l + '\')">Liberar</button>' +
       '<button class="btn btn-danger btn-sm" onclick="uRecusar(\'' + l + '\')">Recusar</button>' +

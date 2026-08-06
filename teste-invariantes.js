@@ -192,6 +192,26 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV], ['i
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Estado: uma fonte de verdade');
+
+// A base tinha DUAS maquinas de estado. Divergiam em 91 dos 201 registros, e duas
+// demandas negadas apenas no campo legado apareciam como fila de entrada — a API
+// derivava backlog de um status_planejamento vazio. Contagem por etapa errava.
+ok(/const SP_PARA_STATUS = \{/.test(W), 'existe UM mapa etapa -> status legado');
+const norm = corpo(W, 'function normalizaEstados(');
+ok(!!norm, 'existe normalizaEstados');
+ok(!!norm && /if \(!esperado\) continue;/.test(norm),
+   'etapa vazia ou desconhecida NAO e adivinhada (foi assim que as negadas sumiram)');
+// Toda porta de gravacao alinha o legado antes de gravar.
+ok((W.match(/normalizaEstados\(/g) || []).length >= 4,
+   'as tres portas de gravacao alinham o status (publish, dev-publish, api)',
+   (W.match(/normalizaEstados\(/g) || []).length + ' chamada(s) + a definicao');
+// Ninguem mais escreve 'negada' no campo legado a mao.
+const negar = W.slice(W.indexOf("body.action === 'poker-negar'"),
+                      W.indexOf("body.action === 'poker-negar'") + 2200);
+ok(/SP_PARA_STATUS\.negada/.test(negar), 'poker-negar tira o status do mapa, nao a mao');
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Sessao: quem perde a credencial tem caminho de volta');
 
 // O painel do dev decidia "esta logado" pelo sessionStorage, que nao expira junto

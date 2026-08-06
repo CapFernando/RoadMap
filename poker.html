@@ -520,9 +520,10 @@ async function abrirSessao() {
       document.getElementById('fac-senha').value = '';
       return;
     }
-    // Conduzir a votacao grava pontuacao nas demandas: consulta e dev nao entram.
+    // Conduzir a votacao grava pontuacao nas demandas: PM/PO e Analista de
+    // Requisitos conduzem; dev e consulta seguem apenas votando.
     const papel = rl.body && rl.body.usuario && rl.body.usuario.papel;
-    if (papel && papel !== 'admin') {
+    if (papel && !['admin', 'analista'].includes(papel)) {
       err.textContent = 'Sua conta é de ' + papel + ' e não conduz a votação. ' +
                         'Entre como participante em "Vou apenas votar".';
       document.getElementById('fac-senha').value = '';
