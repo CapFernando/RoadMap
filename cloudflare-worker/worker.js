@@ -1859,7 +1859,20 @@ export default {
       // Libera um cadastro pendente, ja definindo a permissao.
       if (op === 'aprovar') {
         const login = String(body.login || '').trim().toLowerCase();
-        const papel = PAPEIS.includes(body.papel) ? body.papel : 'dev';
+        // Papel EXPLICITO, sem padrao. Antes caia em 'dev' quando o corpo nao
+        // mandava o campo — e 'dev' GRAVA. A mesma rota de criar conta usava
+        // 'consulta' como padrao: dois padroes para a mesma decisao, e o inseguro
+        // ficou no caminho mais usado, que e liberar um cadastro pendente.
+        //
+        // Padrao seguro seria 'consulta', mas exigir e melhor que adivinhar: liberar
+        // alguem como somente-leitura sem querer gera um "nao consigo salvar" no dia
+        // seguinte. Quem aprova diz o papel.
+        if (!PAPEIS.includes(body.papel)) {
+          return json({ error: 'papel_obrigatorio',
+                        detail: 'Escolha o papel ao liberar o cadastro: ' + PAPEIS.join(', ') + '.' },
+                      400, headers);
+        }
+        const papel = body.papel;
         const uu = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(login).first();
         if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
         await env.POKER_DB.prepare('UPDATE usuario SET pendente = 0, ativo = 1, papel = ? WHERE id = ?')

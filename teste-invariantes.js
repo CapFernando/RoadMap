@@ -192,6 +192,21 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV], ['i
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Papel: nunca concedido por omissao');
+
+// Liberar um cadastro pendente caia em 'dev' quando o corpo nao mandava o papel —
+// e 'dev' GRAVA. A rota de criar conta usava 'consulta' no mesmo lugar: dois
+// padroes para a mesma decisao, com o inseguro no caminho mais usado.
+ok(!/PAPEIS\.includes\(body\.papel\) \? body\.papel : 'dev'/.test(W),
+   'nenhuma rota concede dev por omissao');
+ok(/PAPEIS\.includes\(body\.papel\) \? body\.papel : 'consulta'/.test(W),
+   'criar conta segue no menor privilegio');
+ok(/error: 'papel_obrigatorio'/.test(W), 'aprovar exige papel explicito');
+// A tela tambem inventava 'dev' quando nao achava o select.
+ok(!/papel: sel \? sel\.value : 'dev'/.test(ADMIN), 'a tela nao inventa papel');
+ok(/— escolha o papel —/.test(ADMIN), 'o seletor de papel nasce sem escolha feita');
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Estado: uma fonte de verdade');
 
 // A base tinha DUAS maquinas de estado. Divergiam em 91 dos 201 registros, e duas

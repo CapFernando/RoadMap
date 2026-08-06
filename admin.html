@@ -4702,6 +4702,10 @@ function uLinhaPendente(u) {
     '<td class="us-sub">' + esc(uQuando(u.criado_em)) + '</td>' +
     '<td><span class="us-acoes">' +
       '<select id="us-papel-' + l + '">' +
+        // Placeholder primeiro, sem valor: com "Dev" pre-selecionado, liberar sem
+        // tocar no campo concedia permissao de GRAVAR por inercia. Menor privilegio
+        // aqui nao e escolher o menor papel, e nao escolher nenhum por padrao.
+        '<option value="">— escolha o papel —</option>' +
         '<option value="dev">Dev</option>' +
         '<option value="analista">Analista de Requisitos</option>' +
         '<option value="consulta">Consulta</option>' +
@@ -4813,10 +4817,22 @@ async function uCriar() {
   } catch (e) { uAviso(e.message, true); }
 }
 
+// Os papeis validos, do lado da tela. Espelha PAPEIS do Worker — o servidor e quem
+// decide, isto so evita mandar valor que ele vai recusar.
+const PAPEIS_CONTA = ['consulta', 'dev', 'analista', 'admin'];
+
 async function uAprovar(login) {
   const sel = document.getElementById('us-papel-' + login);
+  // Sem inventar papel: a tela tambem caia em 'dev' quando o select nao era
+  // encontrado, o que concedia permissao de gravar por um id de elemento errado.
+  // Sem valor, o servidor recusa e diz o que falta — melhor que liberar por chute.
+  const papel = sel && PAPEIS_CONTA.includes(sel.value) ? sel.value : '';
+  if (!papel) {
+    uAviso('Escolha o papel antes de liberar "' + login + '".', true);
+    return;
+  }
   try {
-    await uChamar('aprovar', { login, papel: sel ? sel.value : 'dev' });
+    await uChamar('aprovar', { login, papel });
     uAviso('"' + login + '" liberado. A pessoa já pode entrar com a senha que ela escolheu.');
   } catch (e) { uAviso(e.message, true); }
   renderUsuarios();
