@@ -115,6 +115,10 @@
     .header-right { display: flex; gap: 10px; flex-wrap: wrap; }
 
     /* BUTTONS */
+    /* .btn nasceu para <button>, que nao tem sublinhado. Como agora ele veste
+       tambem os <a> de navegacao, o reset entra aqui — senao o link aparece
+       sublinhado dentro do botao. */
+    .btn { text-decoration: none; }
     .btn {
       display: inline-flex;
       align-items: center;
@@ -778,7 +782,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="senha.js?v=a7688efbad"></script>
+<script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -804,6 +808,7 @@
       <input type="password" id="token-input" placeholder="GitHub Token (ghp_…)" onkeydown="if(event.key==='Enter')doLogin()" style="letter-spacing:0" />
     </div>
     <button onclick="doLogin()" id="btn-entrar">Entrar</button>
+    <button type="button" class="login-esqueci" onclick="abrirRecuperarSenha()">Esqueci minha senha</button>
     <div class="login-error" id="login-error"></div>
   </div>
 </div>
@@ -816,10 +821,13 @@
       <p>Audax Capital · Produto &amp; Tecnologia</p>
     </div>
     <div class="header-right">
-      <button class="btn btn-secondary btn-sm" onclick="window.location.href='gantt.html'">📅 Planejamento</button>
-      <button class="btn btn-secondary btn-sm" onclick="window.open('poker.html','_blank')">🃏 Planning Poker</button>
-      <button class="btn btn-secondary btn-sm" onclick="window.open('dev.html','_blank')">🗂 Painel Dev</button>
-      <button class="btn btn-secondary btn-sm" onclick="window.open('index.html','_blank')">Ver painel público</button>
+      <!-- Links, nao botoes: com <button onclick="window.open"> o meio-clique e o
+           Ctrl+clique nao abrem em nova aba, e quem trabalha com varias telas
+           abertas perde o gesto que usa mais. As outras telas ja usavam <a>. -->
+      <a href="gantt.html" class="btn btn-secondary btn-sm">📅 Planejamento</a>
+      <a href="poker.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">🃏 Planning Poker</a>
+      <a href="dev.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">🗂 Painel Dev</a>
+      <a href="index.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">Ver painel público</a>
       <button class="btn btn-success btn-sm" onclick="saveToGitHub()">💾 Publicar alterações</button>
       <button class="btn btn-secondary btn-sm" onclick="abrirTrocaSenha()" title="Alterar a senha da sua conta">Minha senha</button>
       <button class="btn btn-secondary btn-sm" onclick="doLogout()">Sair</button>

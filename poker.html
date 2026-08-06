@@ -151,7 +151,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="senha.js?v=a7688efbad"></script>
+<script src="senha.js?v=005f049189"></script>
 </head>
 <body>
 
@@ -247,6 +247,7 @@
     <input type="text" id="ent-codigo" placeholder="Código da sala (ex: ABC234)" maxlength="6" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')entrar()" />
     <div class="erro" id="ent-erro"></div>
     <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="entrar()">Entrar</button>
+    <button type="button" class="login-esqueci" onclick="abrirRecuperarSenha()">Esqueci minha senha</button>
     <div style="text-align:center;margin-top:14px">
       <button class="btn btn-ghost btn-sm" onclick="abrirComoFacilitador()">Sou o facilitador</button>
     </div>

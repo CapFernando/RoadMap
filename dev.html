@@ -293,7 +293,8 @@
     .dev-dropdown-item.active { color:var(--blue-tx); font-weight:600; }
     .dev-dropdown-sep { border-top:1px solid var(--border); margin:4px 0; }
     .header-right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .btn { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; }
+    /* text-decoration:none porque .btn agora veste tambem <a> de navegacao. */
+    .btn { text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; font-family:'Inter',sans-serif; cursor:pointer; border:none; transition:opacity .15s; }
     .btn:hover { opacity:.85; }
     .btn-primary   { background:var(--blue);  color:#fff; }
     .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
@@ -414,7 +415,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="senha.js?v=a7688efbad"></script>
+<script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -517,7 +518,8 @@
     <div class="header-right">
       <span id="ultima-atualizacao" style="font-size:12px;color:var(--text3);">—</span>
       <button class="btn btn-primary btn-sm" onclick="openNewModal()">+ Nova demanda</button>
-      <button class="btn btn-secondary btn-sm" onclick="window.open('poker.html','_blank')">🃏 Planning Poker</button>
+      <!-- Link, nao botao: ver o comentario equivalente no admin.html. -->
+      <a href="poker.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">🃏 Planning Poker</a>
       <button class="btn btn-secondary btn-sm" onclick="forceRefresh()">↻ Atualizar</button>
       <!-- Nao existia botao de sair. Com a credencial vencida, o painel continuava
            aberto (o "esta logado" saia do sessionStorage, nao do servidor) e toda
@@ -2332,7 +2334,15 @@ function mostrarPasso(qual) {
   });
 }
 function mostrarCadastro() { mostrarPasso('step-cadastro'); document.getElementById('cad-nome').focus(); }
-function mostrarRecuperar() { mostrarPasso('step-recuperar'); document.getElementById('rec-quem').focus(); }
+// Antes isto abria o passo que registrava um pedido para o admin resolver. Agora
+// vai para a recuperacao automatica: informa o e-mail e define a senha na hora.
+// A fila antiga nao morreu — o modal a oferece quando a conta e de admin, que e o
+// unico caso que o fluxo automatico recusa.
+function mostrarRecuperar() {
+  if (window.abrirRecuperarSenha) { abrirRecuperarSenha(); return; }
+  mostrarPasso('step-recuperar');
+  document.getElementById('rec-quem').focus();
+}
 function voltarLogin() {
   mostrarPasso('step-senha');
   ['cad-erro', 'rec-erro'].forEach(i => { const e = document.getElementById(i); if (e) e.textContent = ''; });

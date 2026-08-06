@@ -695,6 +695,49 @@ ok(/senhaAtual/.test(SN) && /senhaNova/.test(SN), 'a tela manda senha atual e no
 ok(!/localStorage/.test(SN),
    'a senha nunca toca localStorage (que sobrevive ao fechar o navegador)');
 
+// ═══════════════════════════════════════════════════════════════════════
+sec('Recuperacao de senha: automatica, e visivel');
+
+const rotaRec = W.slice(W.indexOf("body.action === 'senha-recuperar'"),
+                        W.indexOf("body.action === 'senha-redefinir'"));
+const rotaRed = W.slice(W.indexOf("body.action === 'senha-redefinir'"),
+                        W.indexOf("// ── Trocar a PROPRIA senha"));
+ok(!!rotaRec && !!rotaRed, 'existem as duas rotas (pedir e redefinir)');
+// O e-mail e a UNICA prova, e por isso as tres guardas abaixo nao sao opcionais.
+ok(/EMAIL_DOMINIO/.test(rotaRec), 'so aceita e-mail do dominio da casa');
+// Redefinir a senha de um admin so com o e-mail entregaria a ferramenta inteira.
+ok(/u\.papel === 'admin'/.test(rotaRec), 'conta de ADMIN nao se redefine por aqui');
+// Sem limite por conta, trocar de rede vira caminho para insistir na mesma pessoa.
+ok(/COUNT\(\*\) AS n FROM senha_reset WHERE usuario_id/.test(rotaRec),
+   'ha limite POR CONTA, alem do limite por IP');
+ok(/'senha-recuperar':\s*\{ max:/.test(W), 'a rota tem limite por IP declarado');
+// Uso unico e prazo: sem isso a janela vira chave permanente.
+ok(/r\.usado_em/.test(rotaRed), 'o token e de uso unico');
+ok(/new Date\(r\.expira_em\) <= new Date\(\)/.test(rotaRed), 'o token expira');
+ok(/const RESET_MIN = \d+;/.test(W), 'a janela tem tempo declarado em um lugar so');
+// A trilha e a unica forma de um abuso aparecer, ja que a liberacao e automatica.
+ok(/CREATE TABLE IF NOT EXISTS senha_reset/.test(W), 'a redefinicao fica gravada');
+ok(/FROM senha_reset s JOIN usuario u/.test(W), 'o admin ve as redefinicoes na tela');
+ok(/senha_redefinida_em/.test(W), 'o proximo login avisa a pessoa');
+ok(/DELETE FROM sessao WHERE usuario_id = \?/.test(rotaRed),
+   'redefinir encerra as sessoes abertas');
+// A tela: e-mail obrigatorio e cronometro visivel, que foi o pedido.
+const SNR = lerTela('senha.js');
+ok(/action: 'senha-recuperar'/.test(SNR) && /action: 'senha-redefinir'/.test(SNR),
+   'a tela usa as duas rotas');
+ok(/audaxcapitalsa\.com\.br/.test(SNR), 'a tela cobra o dominio antes de ir ao servidor');
+ok(/setInterval\(tique, 1000\)/.test(SNR), 'o cronometro corre na tela');
+ok(/tempo esgotado/.test(SNR), 'o fim do tempo e explicito, e nao um erro seco');
+for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV], ['poker', POKER]]) {
+  ok(/abrirRecuperarSenha\(\)/.test(src), nome + ' oferece recuperar senha no login');
+}
+// Navegacao por LINK: com <button onclick=window.open> o meio-clique e o
+// Ctrl+clique nao abrem em nova aba, e este time trabalha com varias telas.
+for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT], ['poker', POKER]]) {
+  const botoes = (src.match(/onclick="window\.open\('(?:poker|dev|index|gantt|admin|projetos)\.html/g) || []);
+  ok(botoes.length === 0, nome + ' navega por <a href>, nao por window.open', botoes.join(' '));
+}
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

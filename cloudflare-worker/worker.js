@@ -173,6 +173,9 @@ const LIMITES = {
   // Trocar senha exige a senha atual: sem limite, o campo viraria oraculo para
   // adivinhar a senha de quem deixou a sessao aberta.
   'senha-alterar':     { max: 10, janela: 300 },
+  // Recuperacao e liberada automaticamente pelo e-mail: sem limite, da para varrer
+  // a lista de enderecos da empresa e redefinir senha de quem estiver na lista.
+  'senha-recuperar':   { max: 5,  janela: 900 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
   // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
   // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
@@ -274,6 +277,10 @@ const SESSAO_H = 12;              // sessao vale 12h
 const PAPEIS = ['consulta', 'dev', 'analista', 'admin'];
 // So e-mail corporativo se cadastra. Qualquer endereco de fora e recusado.
 const EMAIL_DOMINIO = '@audaxcapitalsa.com.br';
+// Janela para redefinir depois de pedir. Curta de proposito: e o unico limite de
+// tempo entre o pedido e a senha nova. Cinco minutos dao folga para escolher uma
+// senha decente sem deixar a porta aberta.
+const RESET_MIN = 5;
 const NIVEL = { consulta: 1, dev: 2, analista: 3, admin: 4 };
 
 // ALTER TABLE tolerante: a tabela usuario ja existe em producao, e CREATE TABLE
@@ -756,6 +763,14 @@ async function contasMigrar(db) {
   // de um nome separado por `/` ou `,`: a mesma pessoa aparece grafada de formas
   // diferentes em bases que ninguem padronizou.
   await colunaSeFaltar(db, 'usuario', 'nome_demandas', 'TEXT');
+  // Redefinicoes de senha feitas pela propria pessoa. A linha NAO e apagada
+  // depois de usada: ela e a trilha que torna o abuso visivel, e sem trilha a
+  // liberacao automatica seria invisivel por definicao.
+  await db.prepare(`CREATE TABLE IF NOT EXISTS senha_reset (
+    token TEXT PRIMARY KEY, usuario_id TEXT NOT NULL, expira_em TEXT NOT NULL,
+    criado_em TEXT NOT NULL, ip TEXT, usado_em TEXT)`).run();
+  // Data da ultima redefinicao propria, para o proximo login avisar a pessoa.
+  await colunaSeFaltar(db, 'usuario', 'reset_em', 'TEXT');
   // E-mail unico, mas so entre quem tem e-mail (contas antigas ficam com NULL).
   try { await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_email ON usuario(email) WHERE email IS NOT NULL').run(); } catch (_) {}
 }
@@ -2039,8 +2054,117 @@ export default {
         .bind(token, u.id, expira, nowIso).run();
       await env.POKER_DB.prepare('UPDATE usuario SET ultimo_acesso = ? WHERE id = ?').bind(nowIso, u.id).run();
       if (Math.random() < 0.1) await env.POKER_DB.prepare('DELETE FROM sessao WHERE expira_em < ?').bind(nowIso).run();
-      return json({ ok: true, token, expira_em: expira,
+      // Avisa se a senha foi redefinida pelo fluxo automatico. Se nao foi a
+      // propria pessoa, e aqui que ela descobre — no mesmo dia, e nao nunca.
+      const avisoReset = u.reset_em && (Date.now() - new Date(u.reset_em).getTime()) < 30 * 86400 * 1000
+        ? u.reset_em : '';
+      return json({ ok: true, token, expira_em: expira, senha_redefinida_em: avisoReset,
                     usuario: { login: u.login, nome: u.nome, papel: u.papel } }, 200, headers);
+    }
+
+    // ── Recuperar senha: pedir ──────────────────────────────────────
+    // Liberacao AUTOMATICA pelo e-mail, como pedido. O e-mail e obrigatorio e e a
+    // unica prova; ver o comentario da tabela senha_reset para o risco disso e
+    // para o porque das tres guardas.
+    if (body.action === 'senha-recuperar') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      await contasMigrar(env.POKER_DB);
+      const email = String(body.email || '').trim().toLowerCase();
+      if (!email.endsWith(EMAIL_DOMINIO) || !/^[a-z0-9._%+-]+@/.test(email)) {
+        return json({ error: 'email',
+                      detail: 'Informe seu e-mail corporativo, terminando em ' + EMAIL_DOMINIO + '.' },
+                    400, headers);
+      }
+      await contaTentativa(env, ip, 'senha-recuperar');
+      const u = await env.POKER_DB.prepare(
+        'SELECT id, nome, login, papel, ativo, pendente FROM usuario WHERE email = ?')
+        .bind(email).first();
+      // Dizer que o e-mail nao existe e deliberado: foi pedido que o retorno
+      // VALIDE o e-mail, e num time de 10 pessoas com enderecos publicos esconder
+      // isso nao protegeria nada e só geraria chamado de "nao acontece nada".
+      if (!u) {
+        return json({ error: 'nao_encontrado',
+                      detail: 'Nao ha conta com esse e-mail. Confira o endereco ou fale com o administrador.' },
+                    404, headers);
+      }
+      if (u.pendente) {
+        return json({ error: 'pendente',
+                      detail: 'Seu cadastro ainda nao foi liberado por um administrador.' }, 403, headers);
+      }
+      if (!u.ativo) {
+        return json({ error: 'inativa',
+                      detail: 'Esta conta esta desativada. Fale com o administrador.' }, 403, headers);
+      }
+      // ADMIN NAO. Redefinir a senha de um admin com apenas o e-mail seria
+      // entregar a ferramenta inteira — contas, papeis e base — a quem souber um
+      // endereco. Sao tres admins; um recupera pelo outro.
+      if (u.papel === 'admin') {
+        return json({ error: 'admin',
+                      detail: 'Contas de administrador nao se redefinem por aqui, por seguranca. ' +
+                              'Peca a outro administrador para gerar sua nova senha.' }, 403, headers);
+      }
+      // Limite POR CONTA, alem do limite por IP: trocar de rede nao pode virar
+      // caminho para insistir na mesma pessoa.
+      const desde = new Date(Date.now() - 3600 * 1000).toISOString();
+      const recentes = await env.POKER_DB.prepare(
+        'SELECT COUNT(*) AS n FROM senha_reset WHERE usuario_id = ? AND criado_em > ?')
+        .bind(u.id, desde).first();
+      if (((recentes && recentes.n) || 0) >= 3) {
+        return json({ error: 'limite',
+                      detail: 'Muitos pedidos para esta conta na ultima hora. Espere ou fale com o administrador.' },
+                    429, headers);
+      }
+      const tk = crypto.randomUUID() + '-' + crypto.randomUUID();
+      const agoraIso = new Date().toISOString();
+      const exp = new Date(Date.now() + RESET_MIN * 60 * 1000).toISOString();
+      await env.POKER_DB.prepare(
+        'INSERT INTO senha_reset (token, usuario_id, expira_em, criado_em, ip) VALUES (?,?,?,?,?)')
+        .bind(tk, u.id, exp, agoraIso, String(ip || '')).run();
+      // Faxina barata das janelas vencidas, para a tabela nao crescer sem limite.
+      await env.POKER_DB.prepare('DELETE FROM senha_reset WHERE expira_em < ? AND usado_em IS NULL')
+        .bind(new Date(Date.now() - 7 * 86400 * 1000).toISOString()).run();
+      return json({ ok: true, token: tk, expira_em: exp, minutos: RESET_MIN,
+                    nome: u.nome }, 200, headers);
+    }
+
+    // ── Recuperar senha: definir a nova ─────────────────────────────────
+    if (body.action === 'senha-redefinir') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      await contasMigrar(env.POKER_DB);
+      const tk = String(body.token || '');
+      const nova = String(body.senhaNova || '');
+      if (nova.length < 8) {
+        return json({ error: 'senha_curta',
+                      detail: 'A nova senha precisa de ao menos 8 caracteres.' }, 400, headers);
+      }
+      const r = await env.POKER_DB.prepare(
+        'SELECT token, usuario_id, expira_em, usado_em FROM senha_reset WHERE token = ?')
+        .bind(tk).first();
+      if (!r) return json({ error: 'invalido', detail: 'Pedido nao encontrado. Comece de novo.' }, 404, headers);
+      // Uso unico: sem isso a janela viraria uma chave permanente para a conta.
+      if (r.usado_em) {
+        return json({ error: 'usado', detail: 'Este pedido ja foi usado. Comece de novo.' }, 409, headers);
+      }
+      if (new Date(r.expira_em) <= new Date()) {
+        return json({ error: 'expirado',
+                      detail: 'O tempo para redefinir terminou. Peca de novo.' }, 410, headers);
+      }
+      const agoraIso = new Date().toISOString();
+      const salt = hexDe(crypto.getRandomValues(new Uint8Array(16)));
+      const hash = await derivaSenha(nova, salt);
+      await env.POKER_DB.prepare(
+        'UPDATE usuario SET senha_hash = ?, salt = ?, reset_em = ? WHERE id = ?')
+        .bind(hash, salt, agoraIso, r.usuario_id).run();
+      await env.POKER_DB.prepare('UPDATE senha_reset SET usado_em = ? WHERE token = ?')
+        .bind(agoraIso, tk).run();
+      // Encerra tudo que estava aberto: se a redefinicao nao foi a dona da conta,
+      // quem estava dentro sai; se foi ela, ela entra de novo com a senha nova.
+      await env.POKER_DB.prepare('DELETE FROM sessao WHERE usuario_id = ?').bind(r.usuario_id).run();
+      await env.POKER_DB.prepare('UPDATE senha_pedido SET atendido = 1 WHERE usuario_id = ?')
+        .bind(r.usuario_id).run();
+      // NAO devolve sessao: entrar com a senha nova prova que ela ficou como a
+      // pessoa quis, e um erro de digitacao aparece agora e nao amanha.
+      return json({ ok: true }, 200, headers);
     }
 
     // ── Trocar a PROPRIA senha ──────────────────────────────────────
@@ -2134,14 +2258,22 @@ export default {
       if (op === 'listar') {
         const r = await env.POKER_DB.prepare(
           `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso,
-                  nome_demandas
+                  nome_demandas, reset_em
              FROM usuario ORDER BY pendente DESC, nome`).all();
         // Pedidos de senha em aberto, para o admin resolver na mesma tela.
         const p = await env.POKER_DB.prepare(
           `SELECT p.id, p.criado_em, u.login, u.nome
              FROM senha_pedido p JOIN usuario u ON u.id = p.usuario_id
             WHERE p.atendido = 0 ORDER BY p.criado_em`).all();
-        return json({ ok: true, usuarios: r.results || [], pedidos: p.results || [] }, 200, headers);
+        // Redefinicoes proprias dos ultimos 30 dias. A liberacao e automatica, entao
+        // esta lista e o unico lugar onde um abuso apareceria.
+        const resets = await env.POKER_DB.prepare(
+          `SELECT s.criado_em, s.usado_em, s.ip, u.login, u.nome
+             FROM senha_reset s JOIN usuario u ON u.id = s.usuario_id
+            WHERE s.criado_em > ? ORDER BY s.criado_em DESC LIMIT 40`)
+          .bind(new Date(Date.now() - 30 * 86400 * 1000).toISOString()).all();
+        return json({ ok: true, usuarios: r.results || [], pedidos: p.results || [],
+                      resets: resets.results || [] }, 200, headers);
       }
 
       // Libera um cadastro pendente, ja definindo a permissao.
