@@ -164,6 +164,8 @@ const LIMITES = {
   'quem-sou':       { max: 60,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
   'projeto-novo':   { max: 10,  janela: 60 },
+  'poker-editar':      { max: 30, janela: 60 },
+  'poker-negar':       { max: 20, janela: 60 },
   'demandas-minhas':   { max: 60, janela: 60 },
   'demanda-consultar': { max: 60, janela: 60 },
   'demanda-atualizar': { max: 30, janela: 60 },
@@ -591,7 +593,16 @@ function toB64(str) {
   return btoa(bin);
 }
 function uid() { return 'm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
-function json(obj, status, headers) { return new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', ...headers } }); }
+// charset=utf-8 NAO e decorativo: sem ele o cliente escolhe como decodificar, e
+// quem assume latin-1 le "JoÃ£o Vitor" e "AxCred - OperaÃ§Ãµes". O JSON.stringify
+// aqui produz UTF-8 correto; o problema estava so na declaracao. Reportado por
+// quem consumia a API por script.
+function json(obj, status, headers) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...headers },
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // PLANNING POKER (D1: binding POKER_DB)
@@ -1012,6 +1023,114 @@ export default {
         return json({ ok: true, poker_media: media, poker_pontos: pontos }, 200, headers);
       }
 
+      // ── Complementar a demanda durante a reuniao ──────────────────────
+      // O que aparece na planning e o que falta na demanda: "onde exatamente",
+      // "qual tela", um print do erro. Sem isto o facilitador anotava fora e
+      // transcrevia depois — quando transcrevia.
+      //
+      // ACRESCENTA, nao substitui: a descricao original e do solicitante, e
+      // sobrescrever o pedido de alguem numa reuniao onde ele pode nem estar seria
+      // apagar contexto. O texto novo entra datado no fim.
+      if (body.action === 'poker-editar') {
+        if (!(await facilitadorOk())) return recusaFacilitador();
+        const mid = String(body.melhoria_id || '');
+        if (!mid) return json({ error: 'melhoria_id obrigatorio' }, 400, headers);
+        const add = limpaTexto(body.complemento, 4000);
+        const novosAnexos = sanitizaAnexos(body.anexos_add || []);
+        if (!add && !novosAnexos.length) {
+          return json({ error: 'nada_a_mudar',
+                        detail: 'Escreva o complemento ou anexe um arquivo.' }, 400, headers);
+        }
+        const metaE = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+        if (!metaE.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+        const fileE = await metaE.json();
+        const rawE = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+          { headers: { Accept: 'application/vnd.github.raw' } });
+        if (!rawE.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+        const dataE = JSON.parse(await rawE.text());
+        const alvoE = (dataE.melhorias || []).find(x => x.id === mid);
+        if (!alvoE) return json({ error: 'Demanda nao encontrada' }, 404, headers);
+        const antesE = JSON.parse(JSON.stringify(alvoE));
+        const quemE = (_ident && _ident.usuario && _ident.usuario.nome) || 'facilitador';
+        if (add) {
+          const dia = new Date().toISOString().slice(0, 10).split('-').reverse().join('/');
+          const cabeca = '--- Planning ' + dia + ' (' + quemE + ') ---';
+          alvoE.descricao = [String(alvoE.descricao || '').trim(), cabeca, add]
+            .filter(Boolean).join('\n\n');
+        }
+        if (novosAnexos.length) {
+          alvoE.anexos = (alvoE.anexos || []).concat(novosAnexos);
+        }
+        registraHistorico(dataE, { melhorias: [antesE] }, quemE, 'planning poker');
+        dataE.atualizado_em = iso;
+        const riscoE = gravacaoSuspeita(dataE, fileE.size || 0);
+        if (riscoE) return json({ error: riscoE }, 409, headers);
+        const putE = await gh('contents/' + FILE_PATH, {
+          method: 'PUT',
+          body: JSON.stringify({ message: 'chore: planning complementa ' + (alvoE.codigo || mid),
+                                 content: toB64(JSON.stringify(dataE)), sha: fileE.sha }),
+        });
+        if (!putE.ok) { const e = await putE.text(); return json({ error: 'Falha ao salvar', detail: e.slice(0, 200) }, 502, headers); }
+        return json({ ok: true, descricao: alvoE.descricao,
+                      anexos: (alvoE.anexos || []).length }, 200, headers);
+      }
+
+      // ── Negar a demanda na propria reuniao ────────────────────────────
+      // A planning e onde se descobre que a demanda nao se sustenta. Obrigar a sair
+      // daqui, abrir o Admin e negar la e o passo em que a decisao se perde: a
+      // demanda volta para a fila e o time reestima na semana seguinte.
+      //
+      // Motivo obrigatorio: sem ele, quem pediu nao sabe o que aconteceu, e a mesma
+      // ideia volta igual em um mes.
+      if (body.action === 'poker-negar') {
+        if (!(await facilitadorOk())) return recusaFacilitador();
+        const mid = String(body.melhoria_id || '');
+        if (!mid) return json({ error: 'melhoria_id obrigatorio' }, 400, headers);
+        const motivo = limpaTexto(body.motivo, 2000);
+        if (!motivo) {
+          return json({ error: 'motivo',
+                        detail: 'Explique por que a demanda foi negada: quem pediu vai ler.' }, 400, headers);
+        }
+        const metaN = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+        if (!metaN.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+        const fileN = await metaN.json();
+        const rawN = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+          { headers: { Accept: 'application/vnd.github.raw' } });
+        if (!rawN.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+        const dataN = JSON.parse(await rawN.text());
+        const alvoN = (dataN.melhorias || []).find(x => x.id === mid);
+        if (!alvoN) return json({ error: 'Demanda nao encontrada' }, 404, headers);
+        if ((alvoN.status_planejamento || '') === 'concluido') {
+          return json({ error: 'concluida',
+                        detail: 'Demanda concluida nao se nega.' }, 409, headers);
+        }
+        const antesN = JSON.parse(JSON.stringify(alvoN));
+        const quemN = (_ident && _ident.usuario && _ident.usuario.nome) || 'facilitador';
+        alvoN.status_planejamento = 'negada';
+        alvoN.status = 'negada';
+        alvoN.motivo_negacao = motivo;
+        alvoN.negada_em = iso;
+        alvoN.negada_por = quemN;
+        // Sai da pauta: manter negada em votacao deixaria a sala num estado sem
+        // sentido, e o proximo revelar gravaria pontos numa demanda recusada.
+        await db.prepare("UPDATE poker_sessao SET melhoria_id = '', revelado = 0 WHERE codigo = ?")
+          .bind(codigo).run();
+        await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ?')
+          .bind(codigo, mid).run();
+        registraHistorico(dataN, { melhorias: [antesN] }, quemN, 'planning poker');
+        dataN.atualizado_em = iso;
+        const riscoN = gravacaoSuspeita(dataN, fileN.size || 0);
+        if (riscoN) return json({ error: riscoN }, 409, headers);
+        const putN = await gh('contents/' + FILE_PATH, {
+          method: 'PUT',
+          body: JSON.stringify({ message: 'chore: planning nega ' + (alvoN.codigo || mid),
+                                 content: toB64(JSON.stringify(dataN)), sha: fileN.sha }),
+        });
+        if (!putN.ok) { const e = await putN.text(); return json({ error: 'Falha ao salvar', detail: e.slice(0, 200) }, 502, headers); }
+        return json({ ok: true, codigo: alvoN.codigo || '',
+                      estado: await pokerEstado(db, codigo) }, 200, headers);
+      }
+
       return json({ error: 'Acao de poker desconhecida' }, 400, headers);
     }
 
@@ -1235,8 +1354,34 @@ export default {
       const todas = (base.melhorias || []).filter(m => m && !m.mesclado_em && !m.oculto);
       // Um campo com "Ana / Bruno" e uma demanda de dois: comparar a string inteira
       // deixaria os dois de fora da propria lista.
+      // Posse da demanda. O campo `dev` e texto livre digitado no planejamento, e o
+      // nome da CONTA e o nome completo: "Joao Vitor Batista de Siqueira" na conta
+      // contra "Joao Vitor" na demanda. Comparar texto exato reprovava o dono da
+      // propria demanda — reportado por quem tentou usar a API e recebeu
+      // "nao_sua" em todas as suas.
+      //
+      // A comparacao normaliza (acento, caixa, espaco repetido) e aceita que um
+      // nome seja o COMECO do outro, desde que com dois nomes ou mais. Dois nomes
+      // e o limite deliberado: "Joao" sozinho casaria com qualquer Joao da equipe,
+      // e isto decide quem pode gravar.
+      //
+      // Ainda ha um risco residual: duas contas que comecem com os mesmos dois
+      // nomes se reconheceriam na mesma demanda. Resolver de vez pede um campo
+      // explicito na conta ("nome usado nas demandas"); enquanto isso, isto
+      // desbloqueia sem afrouxar para nome unico.
+      const normNome = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .toLowerCase().replace(/\s+/g, ' ').trim();
+      const mesmaPessoa = (a, b) => {
+        const x = normNome(a), y = normNome(b);
+        if (!x || !y) return false;
+        if (x === y) return true;
+        const curto = x.length <= y.length ? x : y;
+        const longo = x.length <= y.length ? y : x;
+        if (curto.split(' ').length < 2) return false;
+        return longo === curto || longo.startsWith(curto + ' ');
+      };
       const meuDono = m => String(m.dev || '').split('/').map(x => x.trim())
-        .some(n => n && eu && n.toLowerCase() === String(eu).toLowerCase());
+        .some(n => mesmaPessoa(n, eu));
 
       if (body.action === 'demandas-minhas') {
         if (!eu) {
