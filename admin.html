@@ -778,6 +778,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="modelo-descricao.js?v=48d5b616f7"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -4100,6 +4101,10 @@ function openModalMelhoria(id) {
   document.getElementById('m-id').value        = m?.id        || '';
   document.getElementById('m-titulo').value    = m?.titulo    || '';
   document.getElementById('m-descricao').value = m?.descricao || '';
+  // O modelo entra sozinho em issue NOVA (campo vazio, nada a perder) e fica
+  // disponivel por botao nas existentes. Em demanda antiga com texto livre nao se
+  // mexe: sao mais de 200 na base, e sobrescrever seria o pior defeito possivel.
+  if (window.ligaModeloDescricao) ligaModeloDescricao('m-descricao', { auto: !m });
   document.getElementById('m-estimativa').value      = m?.estimativa       || '';
   populateDevSelect(m?.dev || '');
   document.getElementById('m-prioridade').value      = m?.prioridade       || '';
@@ -4502,6 +4507,9 @@ async function saveMelhoria() {
   const tipo   = document.getElementById('m-tipo').value;
   if (!titulo) { toast('Informe o título.', 'err'); return; }
   if (!tipo) { toast('Selecione o tipo: Sustentação ou Evolução.', 'err'); return; }
+  // Modelo com seção em branco nao salva: era o pedido — "nao permitir salvar se o
+  // texto nao foi alterado". Só cobra de quem usou o modelo; texto livre passa.
+  if (window.validaModeloDescricao && !validaModeloDescricao('m-descricao', toast)) return;
   const devSel = document.getElementById('m-dev').value.trim();
   if (exigeDev(sp) && !devSel) {
     toast('Escolha o desenvolvedor: ' + (STATUS_LABELS[sp] || sp) + ' exige responsável.', 'err');

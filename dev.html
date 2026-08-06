@@ -414,6 +414,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="modelo-descricao.js?v=48d5b616f7"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -3312,6 +3313,9 @@ function openNewModal() {
   document.getElementById('n-id').value = '';
   document.getElementById('n-titulo').value = '';
   document.getElementById('n-desc').value = '';
+  // Demanda aberta pelo dev e a que mais precisa do padrao: e a que nasce sem
+  // passar pelo levantamento de requisitos de ninguem.
+  if (window.ligaModeloDescricao) ligaModeloDescricao('n-desc', { auto: true });
   document.getElementById('n-inicio').value = '';
   document.getElementById('n-entrega').value = '';
   document.getElementById('n-tipo').value = '';
@@ -3351,6 +3355,7 @@ function openEditDemand(id) {
   document.getElementById('n-id').value = m.id;
   document.getElementById('n-titulo').value = m.titulo || '';
   document.getElementById('n-desc').value = m.descricao || '';
+  if (window.ligaModeloDescricao) ligaModeloDescricao('n-desc', {});
   document.getElementById('n-inicio').value = m.inicio || '';
   document.getElementById('n-entrega').value = m.entrega || '';
   // status atual pode estar fora das opções padrão (deploy, concluído…) — inclui se necessário
@@ -3477,6 +3482,7 @@ async function saveNewDemand() {
   const tipoSel = document.getElementById('n-tipo').value;
   if (!tipoSel) { toast('Diga se é problema (Erro/Bug) ou melhoria.','err');
                   document.getElementById('n-tipo').focus(); return; }
+  if (window.validaModeloDescricao && !validaModeloDescricao('n-desc', toast)) return;
   const sp = document.getElementById('n-status').value;
   const spToStatus = { backlog:'recebida', planning:'estimada', planejado:'estimada',
                        em_andamento:'iniciada', validacao:'iniciada', atrasado:'iniciada',

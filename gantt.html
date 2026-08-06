@@ -548,6 +548,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="modelo-descricao.js?v=48d5b616f7"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -2256,6 +2257,7 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-id').value        = m?.id || '';
   document.getElementById('e-titulo').value    = m?.titulo || '';
   document.getElementById('e-descricao').value = m?.descricao || '';
+  if (window.ligaModeloDescricao) ligaModeloDescricao('e-descricao', { auto: !m });
   renderAnexosGantt(m);
   renderDiscoveryGantt(m);
   document.getElementById('e-prio').value      = m?.prioridade || '';
@@ -2615,6 +2617,7 @@ function saveTask() {
     oculto:             existing.oculto || false,
     ordem:              existing.ordem  ?? state.melhorias.length,
   };
+  if (window.validaModeloDescricao && !validaModeloDescricao('e-descricao', toast)) return;
   // Mesma trava do Admin: concluir exige custo registrado, e o servidor recusa de
   // todo jeito — checar aqui e para a pessoa saber onde digitar.
   if (sp === 'concluido' && String(existing.status_planejamento || '') !== 'concluido' &&

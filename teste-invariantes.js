@@ -355,6 +355,82 @@ ok(!/\['consulta', 'dev', 'admin'\]/.test(ADMIN),
    'nenhuma lista de papel na tela esquece o analista');
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Modelo de descricao: um arquivo, tres telas, e cobranca de verdade');
+
+const MODELO = lerTela('modelo-descricao.js');
+// Um arquivo so. Tres copias do modelo divergiriam na primeira mexida, e o padrao
+// que ele existe para criar deixaria de existir.
+for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV]]) {
+  ok(/modelo-descricao\.js\?v=/.test(src), nome + ' carrega o modelo compartilhado');
+  ok(!/OBJETIVO DA ALTERA/.test(src), nome + ' nao tem copia do texto do modelo');
+  ok(/validaModeloDescricao\(/.test(src), nome + ' valida antes de gravar');
+  ok(/ligaModeloDescricao\(/.test(src), nome + ' liga o botao no campo de descricao');
+}
+// A cobranca: linha de orientacao nao conta como conteudo. Sem isto, inserir o
+// modelo e salvar passaria — e o pedido foi exatamente nao aceitar isso.
+// Aqui a invariante EXECUTA o modulo em vez de procurar o regex no fonte: as duas
+// primeiras versoes desta checagem passaram por engano porque o meu proprio regex
+// estava escapado errado. Comportamento nao tem como passar por engano.
+let MD = null;
+try {
+  const salvoW = global.window, salvoD = global.document;
+  global.window = {};
+  global.document = {
+    createElement: () => ({ textContent: '', style: {}, set onclick(v) {},
+                            appendChild() {}, insertBefore() {},
+                            classList: { add() {}, remove() {} } }),
+    head: { appendChild() {} },
+    getElementById: () => null,
+  };
+  require('./modelo-descricao.js');
+  MD = global.window;
+  global.window = salvoW; global.document = salvoD;
+} catch (e) { MD = null; }
+ok(!!MD && typeof MD.modeloDescricaoPendencias === 'function',
+   'o modulo do modelo carrega e expoe a validacao');
+if (MD) {
+  const M = MD.MODELO_DESCRICAO;
+  // O caso central: inserir o modelo e salvar sem escrever nada e RECUSADO.
+  ok(MD.modeloDescricaoPendencias(M).length === 6,
+     'modelo intacto: as 6 secoes contam como em branco',
+     MD.modeloDescricaoPendencias(M).length + ' pendencia(s)');
+  // Apagar as orientacoes tambem nao vale por preenchimento.
+  const semGuia = M.split('\n').filter(l => !/^\s*>/.test(l)).join('\n');
+  ok(MD.modeloDescricaoPendencias(semGuia).length === 6,
+     'apagar as orientacoes sem escrever nada segue recusado');
+  // Caixa em branco e modelo intacto; caixa marcada e resposta.
+  ok(MD.modeloDescricaoPendencias(M.replace('[ ] PDF', '[x] PDF'))
+       .indexOf('Impactos em documentos e relatórios') < 0,
+     'marcar [x] preenche a secao de documentos');
+  ok(MD.modeloDescricaoPendencias(M).indexOf('Impactos em documentos e relatórios') >= 0,
+     'caixa em branco NAO preenche a secao');
+  // Contornar com um caractere nao passa.
+  ok(MD.modeloDescricaoPendencias(M.replace('1. OBJETIVO DA ALTERAÇÃO',
+       '1. OBJETIVO DA ALTERAÇÃO' + String.fromCharCode(10) + 'x'))
+       .indexOf('Objetivo da alteração') >= 0,
+     'um caractere solto nao conta como especificacao');
+  // Nenhum bloqueio retroativo: 200+ demandas em texto livre seguem salvando.
+  ok(MD.modeloDescricaoPendencias(
+       'Ambientes de Cadastro e Reanalise - trazer a somatoria em tela.').length === 0,
+     'texto livre de demanda antiga continua salvando');
+  ok(!MD.modeloDescricaoUsa('Preciso mudar a regra de negocio do rating'),
+     'mencionar uma secao de passagem nao vira cobranca');
+}
+// Minimo de caracteres: "x" nao e especificacao, e aceitar viraria ritual.
+ok(/length < 3/.test(MODELO), 'um caractere solto nao passa por especificacao');
+// Cobra apenas quem usou o modelo: 200+ demandas antigas em texto livre nao podem
+// parar de salvar por causa de uma padronizacao nova.
+const usa = corpo(MODELO, 'function usaModelo(');
+ok(!!usa && /achou >= 2/.test(usa),
+   'texto livre sem os titulos NAO e cobrado (nada de bloqueio retroativo)');
+// Nunca sobrescrever texto digitado sem confirmar: e o pior defeito que esta
+// ferramenta ja teve, e ja aconteceu.
+const ins = corpo(MODELO, 'function inserir(');
+ok(!!ins && /window\.confirm/.test(ins), 'inserir o modelo nunca apaga texto sem confirmar');
+// A mensagem tem de dizer O QUE falta, nao so que falta.
+ok(/falta\.join\(', '\)/.test(MODELO), 'a recusa nomeia as secoes que faltam');
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Sessao: quem perde a credencial tem caminho de volta');
 
 // O painel do dev decidia "esta logado" pelo sessionStorage, que nao expira junto
@@ -406,7 +482,7 @@ sec('Cache: arquivo compartilhado sempre versionado por hash');
 
 for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
                            ['index', INDEX], ['poker', POKER]]) {
-  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js)"/g) || [])
+  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js|modelo-descricao\.js)"/g) || [])
     .concat(src.match(/href="tema\.css"/g) || []);
   ok(semHash.length === 0, nome + ' nao referencia arquivo compartilhado sem ?v=',
      semHash.join(' '));
