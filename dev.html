@@ -823,6 +823,9 @@
         <input type="date" id="n-entrega" />
       </div>
     </div>
+    <!-- Explica o cadeado. Campo desabilitado sem motivo vira chamado. -->
+    <div id="n-datas-nota" style="display:none;font-size:12px;color:var(--amber-tx,#FFC470);
+         background:var(--amber-bg,#2E2408);border-radius:6px;padding:7px 10px;margin:-4px 0 12px"></div>
     <div class="form-row">
       <!-- Projeto: so os aprovados. Escolher um manda a demanda para o Backlog, que
            e a esteira certa — ela precisa passar pelo planning antes de ter data. -->
@@ -3370,6 +3373,29 @@ function nProjetoMudou() {
   }
 }
 
+// Datas de demanda ja comprometida sao do PM/PO. Aqui elas ficam visiveis (a
+// pessoa precisa saber o prazo) mas nao editaveis, com o motivo do lado — campo
+// desabilitado sem explicacao vira chamado.
+const ETAPAS_DATA_TRAVADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+
+function travaDatasNoCard(m) {
+  const trava = !!m && ETAPAS_DATA_TRAVADA.includes(m.status_planejamento || '');
+  ['n-inicio', 'n-entrega'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = trava;
+    el.title = trava ? 'A partir de Planejado, a data e definida no Planejamento (PM/PO).' : '';
+    el.style.opacity = trava ? '.6' : '';
+  });
+  const nota = document.getElementById('n-datas-nota');
+  if (nota) {
+    nota.style.display = trava ? 'block' : 'none';
+    nota.textContent = trava
+      ? '🔒 Datas definidas no Planejamento a partir de Planejado. Precisa mudar? Fale com o PM/PO.'
+      : '';
+  }
+}
+
 function openNewModal() {
   document.getElementById('n-id').value = '';
   document.getElementById('n-titulo').value = '';
@@ -3379,6 +3405,7 @@ function openNewModal() {
   if (window.ligaModeloDescricao) ligaModeloDescricao('n-desc', { auto: true });
   document.getElementById('n-inicio').value = '';
   document.getElementById('n-entrega').value = '';
+  travaDatasNoCard(null);   // demanda nova: datas liberadas
   document.getElementById('n-tipo').value = '';
   document.getElementById('n-solicitante').value = '';
   _nAnexos = [];
@@ -3419,6 +3446,10 @@ function openEditDemand(id) {
   if (window.ligaModeloDescricao) ligaModeloDescricao('n-desc', {});
   document.getElementById('n-inicio').value = m.inicio || '';
   document.getElementById('n-entrega').value = m.entrega || '';
+  // A partir de Planejado a data e compromisso do PM/PO: esta no gantt, na conta
+  // de atrasadas e na conversa com a area. O servidor reverte de todo jeito; travar
+  // aqui e para a pessoa nao digitar algo que vai ser desfeito sem ela ver.
+  travaDatasNoCard(m);
   // status atual pode estar fora das opções padrão (deploy, concluído…) — inclui se necessário
   resetStatusOptions();
   const sk = getStatusKey(m);

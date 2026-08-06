@@ -750,6 +750,33 @@ ok(/poker_media != null/.test(ADMIN),
    'a distincao usa poker_media, que so existe onde houve votacao');
 ok(/class="kb-sempt/.test(ADMIN), 'e a marcacao de quem nao passou pelo poker segue no card');
 
+// ═══════════════════════════════════════════════════════════════════════
+sec('Prazo comprometido e do PM/PO');
+
+// A partir de Planejado a data virou compromisso: esta no gantt, na conta de
+// atrasadas e na conversa com a area. A API ja recusava prazo, mas o painel do dev
+// monta o estado inteiro no navegador e o `dev-publish` gravava o que recebia —
+// esconder o campo na tela nao fecharia nada.
+const travaD = corpo(W, 'function travaDatasComprometidas(');
+ok(!!travaD, 'existe a trava de datas, um lugar so');
+ok(/const ETAPAS_DATA_TRAVADA = \[/.test(W), 'as etapas travadas ficam declaradas');
+ok(!!travaD && /if \(!velha\) continue;/.test(travaD),
+   'demanda nova nao e travada (ali nada foi prometido)');
+ok(!!travaD && /'entrega', 'inicio'/.test(travaD), 'trava as duas datas');
+ok(!!travaD && /m\[campo\] = velha\[campo\]/.test(travaD),
+   'a versao do SERVIDOR vence, como ja acontece com projeto');
+ok(/travaDatasComprometidas\(data, antesDev\)/.test(W), 'dev-publish aplica a trava');
+// Nao derruba a gravacao inteira: o dev costuma estar salvando outra coisa (horas,
+// texto, anexo), e perder tudo por um campo que ele talvez nem tocou seria punir
+// pelo erro errado.
+ok(/datas_revertidas/.test(W), 'a resposta diz o que foi revertido, em vez de recusar em silencio');
+// A tela avisa antes, para a pessoa nao digitar algo que sera desfeito.
+ok(/travaDatasNoCard\(/.test(DEV), 'o painel dev trava os campos no card');
+ok(/n-datas-nota/.test(DEV), 'e explica o motivo do cadeado');
+// O caminho do admin continua aberto: a trava e sobre QUEM muda, nao sobre mudar.
+ok(!/travaDatasComprometidas\(data, antesPub\)/.test(W),
+   'o publish do admin NAO e travado (o prazo e dele)');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

@@ -522,6 +522,43 @@ function diasDeAtraso(m, hoje) {
 // Trava na TRANSICAO, nao no estado: quem ja esta concluido com zero hora segue
 // gravavel. Travar por estado engessaria a base historica e faria qualquer save do
 // admin falhar por causa de um registro de junho.
+// ─── DATA COMPROMETIDA E DO PM/PO ─────────────────────────────────────
+// A partir de Planejado a data virou compromisso: ela esta no gantt, na contagem
+// de atrasadas e na conversa com a area. Deixar o dev mover isso pelo painel
+// desfaz o planejamento sem ninguem ver.
+//
+// A API ja recusava prazo (a lista de campos aceitos em `demanda-atualizar` e
+// fechada). O furo era o `dev-publish`, que recebe o estado inteiro montado no
+// navegador e grava o que recebe. Mesmo desenho ja usado para projeto: a versao do
+// SERVIDOR sempre vence.
+//
+// Demanda que ainda nao existe no servidor, ou que esta em backlog / levantar_req
+// / planning, segue editavel: ali nada foi prometido, e e onde o dev de fato
+// precisa registrar uma previsao.
+const ETAPAS_DATA_TRAVADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+
+function travaDatasComprometidas(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const revertidas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    if (!velha) continue;
+    if (!ETAPAS_DATA_TRAVADA.includes(String(velha.status_planejamento || ''))) continue;
+    for (const campo of ['entrega', 'inicio']) {
+      const nova = String(m[campo] || '');
+      const orig = String(velha[campo] || '');
+      if (nova !== orig) {
+        m[campo] = velha[campo];
+        revertidas.push((m.codigo || m.id) + '.' + campo);
+      }
+    }
+  }
+  return revertidas;
+}
+
 function faltaHoras(m) {
   const h = Number(m && m.horas_realizadas);
   return !Number.isFinite(h) || h <= 0;
@@ -2544,6 +2581,11 @@ export default {
       // montado a mao para mudar o status de um projeto. A lista do servidor
       // sempre vence.
       data.projetos = antesDev.projetos || [];
+      // Datas de demanda ja comprometida voltam ao valor do servidor. Nao recusa a
+      // gravacao inteira: o dev costuma estar salvando OUTRA coisa (horas, texto,
+      // anexo) e derrubar tudo por causa de um campo que ele talvez nem tenha
+      // tocado seria perder o trabalho dele por um erro que nao e dele.
+      const datasRevertidas = travaDatasComprometidas(data, antesDev);
       // Nada entra em Concluido sem custo registrado. A recusa vem ANTES de
       // registraHistorico: gravar historico de uma publicacao que sera recusada
       // sujaria a trilha com um evento que nao aconteceu.
@@ -2567,7 +2609,9 @@ export default {
         body: JSON.stringify({ message: 'chore: dev atualiza ' + new Date().toISOString(), content: toB64(JSON.stringify(data)), sha: file.sha }),
       });
       if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
-      return json({ ok: true }, 200, headers);
+      // Diz o que foi revertido: gravar diferente do que a tela mandou e recusar em
+      // silencio, e a pessoa so descobriria no proximo F5.
+      return json({ ok: true, datas_revertidas: datasRevertidas }, 200, headers);
     }
 
     // Acao presente mas desconhecida = sondagem. Antes caia no fluxo de sugestao
