@@ -33,6 +33,7 @@ const GANTT = lerTela('gantt.html');
 const DEV = lerTela('dev.html');
 const INDEX = lerTela('index.html');
 const POKER = lerTela('poker.html');
+const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
 function corpo(src, assinatura) {
@@ -257,6 +258,64 @@ ok(/atrasada: diasDeAtraso\(/.test(W) && /dias_atraso: diasDeAtraso\(/.test(W),
    'a visao da API entrega atrasada e dias_atraso');
 ok(/body\.atrasadas === true/.test(W),
    'demandas-minhas filtra por atrasadas sem o cliente recalcular a regra');
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('Custo: nada chega a Concluido sem hora registrada');
+
+// A hora realizada e a unica medida de custo da base. A entrega do dev ja exigia
+// horas; quem CONCLUI e o PM/PO, e nenhum caminho dele cobrava nada — 54 das 95
+// concluidas ficaram com zero (so 2 tinham entregue_em: nao passaram pela entrega).
+const semH = corpo(W, 'function entrandoEmConcluidoSemHoras(');
+ok(!!semH, 'existe a trava de horas, um lugar so');
+// Trava na TRANSICAO, nao no estado: travar por estado engessaria a base historica
+// e faria qualquer save do admin falhar por causa de um registro de junho.
+ok(!!semH && /if \(!velha\) continue;/.test(semH),
+   'demanda que o servidor nao conhece passa (e o import de historico)');
+ok(!!semH && /=== 'concluido'\) continue;/.test(semH),
+   'quem JA estava concluido sem hora segue gravavel');
+// As duas portas de gravacao completa.
+ok((W.match(/entrandoEmConcluidoSemHoras\(/g) || []).length >= 3,
+   'publish e dev-publish aplicam a trava',
+   (W.match(/entrandoEmConcluidoSemHoras\(/g) || []).length + ' ocorrencia(s)');
+// A recusa vem ANTES do historico: gravar trilha de uma publicacao recusada
+// deixaria no card um evento que nao aconteceu.
+for (const [rot, ancora] of [['publish', 'antesPub'], ['dev-publish', 'antesDev']]) {
+  const i = W.indexOf('const semHoras' + (ancora === 'antesPub' ? 'Pub' : 'Dev'));
+  const j = W.indexOf('registraHistorico(data, ' + ancora);
+  ok(i > 0 && j > 0 && i < j, rot + ': a recusa por horas vem antes de registrar historico');
+}
+// As telas barram antes, para a recusa do servidor nao chegar como erro seco.
+ok(/function pedeHoras\(/.test(ADMIN) && /pedeHoras\(m, colKey\)/.test(ADMIN),
+   'admin: arrastar para Concluido cobra as horas antes de gravar');
+ok((ADMIN.match(/Informe as horas de desenvolvimento/g) || []).length >= 1 &&
+   /aprovar && !\(Number\(m\.horas_realizadas\) > 0\)/.test(ADMIN),
+   'admin: aprovar a entrega tambem cobra as horas');
+ok(/e-horas-real'\)\.value \|\|\s*\n?\s*existing\.horas_realizadas/.test(GANTT) ||
+   /existing\.horas_realizadas \|\| 0/.test(GANTT),
+   'gantt: campo de horas vazio NAO zera a hora que o dev registrou');
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('Podio: um chip, duas telas');
+
+// O chip de colocacao aparece no painel Dev e no ranking do Planejamento. Duas
+// copias de CSS divergiriam na primeira mexida, e as duas telas sao comparadas
+// lado a lado na reuniao.
+ok(/\.prod-medalha \{/.test(TEMA), 'o chip do podio esta em tema.css');
+for (const [nome, src] of [['dev', DEV], ['gantt', GANTT]]) {
+  ok(!/\.prod-medalha \{/.test(src), nome + ' nao redeclara o chip do podio');
+  ok(/--ouro-bg:/.test(src) && /--prata-bg:/.test(src) && /--bronze-bg:/.test(src),
+     nome + ' declara os tokens do podio no seu :root escuro');
+}
+// O tema claro tem de ter o par, senao o chip fica ilegivel sobre branco.
+ok(/:root\[data-tema="claro"\][\s\S]*--ouro-bg:/.test(TEMA),
+   'o tema claro tem o par de cores do podio');
+// O ranking soma PONTOS e divide demanda de dois devs: sem dividir, a soma do
+// ranking passaria do total do mes e o numero perderia credibilidade.
+const rk = corpo(GANTT, 'function rankDoMes(');
+ok(!!rk && /\/ devs\.length/.test(rk),
+   'demanda de dois devs divide os pontos, para o ranking fechar com o card ao lado');
+ok(!!rk && /b\.pontos - a\.pontos/.test(rk),
+   'o ranking ordena por pontos, nao por contagem de issues');
 
 // ═══════════════════════════════════════════════════════════════════════
 sec('Sessao: quem perde a credencial tem caminho de volta');

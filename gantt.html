@@ -21,6 +21,11 @@
       --bg4:     #252522;
       --border:  #2E2E2B;
       --border2: #3A3A36;
+      /* Podio do ranking do mes. O chip esta em tema.css; aqui ficam so as cores
+         do tema escuro, que sao proprias da pagina. */
+      --ouro-bg:   #3D2F08; --ouro-bd:   #9C7A14; --ouro-tx:   #F7D774;
+      --prata-bg:  #2B2D31; --prata-bd:  #52565D; --prata-tx:  #DBDEE4;
+      --bronze-bg: #33241A; --bronze-bd: #7A5537; --bronze-tx: #E3B389;
       /* Pausado. Magenta para nao se confundir com o vermelho de atrasado. */
       --rose:    #D948B8;
       --rose-bg: #48123F;
@@ -320,6 +325,19 @@
     .g-pausada-item .gp-fora { font-size:11px; font-weight:700; color:var(--amber-tx,#FFC470);
       background:var(--amber-bg,#4A2800); border-radius:4px; padding:1px 6px; white-space:nowrap; }
     .resumo-mes { display:flex; gap:10px; flex-wrap:wrap; margin:0 0 14px; }
+    /* O ranking ocupa a sobra da faixa, a direita dos KPIs. `flex:1` com
+       `min-width` impede que ele empurre os numeros para a linha de baixo em tela
+       estreita: quando nao cabe, ele desce inteiro. */
+    .rk { flex:1 1 340px; min-width:0; display:flex; align-items:center; gap:8px;
+      padding:6px 12px; background:var(--bg2); border:1px solid var(--border);
+      border-radius:10px; overflow:hidden; }
+    .rk-tit { font-size:10.5px; color:var(--text3); text-transform:uppercase;
+      letter-spacing:.05em; white-space:nowrap; }
+    .rk-lista { display:flex; align-items:center; gap:6px; min-width:0;
+      overflow-x:auto; scrollbar-width:thin; }
+    .rk-mais { font-size:11px; color:var(--text3); white-space:nowrap; cursor:help; }
+    .rk-vazio { font-size:12px; color:var(--text3); }
+    body.apresentando .rk-tit { font-size:12px; }
     .rm-bloco { background:var(--bg2); border:1px solid var(--border); border-radius:10px;
       padding:9px 14px; min-width:96px; }
     .rm-num { font-size:20px; font-weight:700; color:var(--text); line-height:1.15; }
@@ -524,7 +542,7 @@
     .delete-btn { background: var(--red); color: #fff; }
     .delete-btn:hover { opacity: 0.85; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=0181ca80ed">
+  <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
@@ -2583,13 +2601,26 @@ function saveTask() {
     historico:          existing.historico || [],
     debito_tecnico:     document.getElementById('e-debito').checked,
     estimativa_horas:   existing.estimativa_horas || 0,
-    horas_realizadas:   parseFloat(document.getElementById('e-horas-real').value) || 0,
+    // `|| 0` sozinho zerava a hora que o dev tinha registrado quando o campo
+    // chegava vazio. Cai no valor que ja estava gravado, como o Admin ja fazia.
+    horas_realizadas:   parseFloat(document.getElementById('e-horas-real').value) ||
+                        existing.horas_realizadas || 0,
     anexos:             _gAnexos,
     status_planejamento: sp,
     observacao:         document.getElementById('e-obs').value.trim(),
     oculto:             existing.oculto || false,
     ordem:              existing.ordem  ?? state.melhorias.length,
   };
+  // Mesma trava do Admin: concluir exige custo registrado, e o servidor recusa de
+  // todo jeito — checar aqui e para a pessoa saber onde digitar.
+  if (sp === 'concluido' && String(existing.status_planejamento || '') !== 'concluido' &&
+      !(Number(obj.horas_realizadas) > 0)) {
+    toast('Informe as horas de desenvolvimento para concluir — e a unica medida de ' +
+          'custo da base.', 'err');
+    const h = document.getElementById('e-horas-real');
+    if (h) { h.focus(); h.select(); }
+    return;
+  }
   // Mesma regra do Admin: a etapa escolhida aqui tambem leva a Concluido.
   marcaConclusao(obj, sp);
 
@@ -3116,6 +3147,97 @@ function renderPausadas() {
     }).join('') + '</div>';
 }
 
+
+// ─── RANKING DO MES ───────────────────────────────────────────────────
+// Ocupa a sobra da faixa de resumo. A base e EXATAMENTE o conjunto do card
+// "concluidas" ao lado: as mesmas 11 de "11/69" distribuidas por dev. Usar
+// `concluido_em` daria um numero mais puro de "entregue neste mes", mas nao
+// fecharia com o card vizinho — e faixa que nao fecha com ela mesma vira
+// discussao sobre a ferramenta em vez de sobre a entrega.
+//
+// Pontos, nao contagem de issues: contar issues premiaria quem pega muitas
+// tarefas pequenas. Demanda de dois devs DIVIDE os pontos entre eles, senao a
+// soma do ranking passaria do total do mes e ninguem confiaria mais nele.
+// Mesma regra do painel do dev, de proposito: as duas telas sao comparadas
+// lado a lado nas reunioes.
+function rankDoMes(concluidas) {
+  const porDev = new Map();
+  let semDev = 0;
+  (concluidas || []).forEach(m => {
+    const devs = splitDevs(m.dev).filter(Boolean);
+    if (!devs.length) { semDev += 1; return; }
+    const pts = (Number(m.poker_pontos) || 0) / devs.length;
+    devs.forEach(nome => {
+      const a = porDev.get(nome) || { nome, issues: 0, pontos: 0 };
+      a.issues += 1;
+      a.pontos += pts;
+      porDev.set(nome, a);
+    });
+  });
+  const rank = [...porDev.values()].sort((a, b) =>
+    b.pontos - a.pontos || b.issues - a.issues ||
+    String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+  return { rank, semDev };
+}
+
+// Primeiro nome, para o chip nao estourar a faixa com nome completo.
+function rkCurto(nome) {
+  const p = String(nome || '').trim().split(/\s+/);
+  return p.length > 1 && p[0].length <= 4 ? p[0] + ' ' + p[1] : (p[0] || '?');
+}
+
+function rkNum(n) {
+  // Meio ponto aparece (demanda dividida), ponto redondo nao ganha ",0".
+  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
+}
+
+function renderRankingMes(concluidas) {
+  const el = document.getElementById('ranking-mes');
+  if (!el) return;
+  const { rank, semDev } = rankDoMes(concluidas);
+  if (!rank.length) {
+    el.innerHTML = '<span class="rk-tit">\U0001F3C6 Ranking do mes</span>' +
+      '<span class="rk-vazio">' +
+      (semDev ? semDev + ' concluída(s) sem responsável — o ranking não tem como atribuir.'
+              : 'nenhuma conclusão neste mês ainda.') + '</span>';
+    return;
+  }
+  const MED = ['\U0001F947', '\U0001F948', '\U0001F949'];
+  const chips = rank.slice(0, 3).map((r, i) =>
+    '<button type="button" class="prod-medalha p' + (i + 1) + '" ' +
+    'onclick="rkFiltraDev(' + JSON.stringify(r.nome).replace(/"/g, '&quot;') + ')" ' +
+    'title="' + esc(r.nome) + ' — ' + rkNum(r.pontos) + ' pontos em ' + r.issues +
+    ' demanda(s) concluída(s). Clique para filtrar a linha do tempo.">' +
+    '<span class="prod-med">' + MED[i] + '</span>' +
+    '<b>' + esc(rkCurto(r.nome)) + '</b>' +
+    '<span class="prod-num">' + rkNum(r.pontos) + ' pts · ' + r.issues + '</span>' +
+    '</button>').join('');
+  // Quem ficou fora do podio nao vira chip: a faixa tem de caber em uma linha.
+  // O numero fica visivel e o resto no title, em ordem.
+  const resto = rank.slice(3);
+  const mais = resto.length
+    ? '<span class="rk-mais" title="' +
+      esc(resto.map(r => r.nome + ' — ' + rkNum(r.pontos) + ' pts · ' + r.issues).join('\n')) +
+      '">+' + resto.length + '</span>'
+    : '';
+  const aviso = semDev
+    ? '<span class="rk-mais" title="' + semDev + ' demanda(s) concluída(s) neste mês sem ' +
+      'responsável preenchido: elas contam no card ao lado, mas não têm a quem atribuir.">' +
+      '⚠ ' + semDev + '</span>'
+    : '';
+  el.innerHTML = '<span class="rk-tit">\U0001F3C6 Ranking do mês</span>' +
+                 '<span class="rk-lista">' + chips + '</span>' + mais + aviso;
+}
+
+// O chip filtra a linha do tempo pelo dev — clicar no nome e o gesto que a pessoa
+// tenta primeiro. Segundo clique no mesmo dev volta para a visao do mes.
+function rkFiltraDev(nome) {
+  const fd = document.getElementById('f-dev');
+  if (!fd) return;
+  fd.value = fd.value === nome ? '' : nome;
+  applyFilters();
+}
+
 function renderResumoMes() {
   const el = document.getElementById('resumo-mes');
   if (!el) return;
@@ -3147,7 +3269,10 @@ function renderResumoMes() {
           'concluídas', concluidas.length && concluidas.length === noMes.length ? 'bom' : '') +
     (atrasadas.length ? bloco(atrasadas.length, 'atrasadas', 'alerta') : '') +
     (validando.length ? bloco(validando.length, 'p/ validar') : '') +
-    bloco(pontosFeitos + '<span style="font-size:13px;color:var(--text3)">/' + pontos + '</span>', 'pontos');
+    bloco(pontosFeitos + '<span style="font-size:13px;color:var(--text3)">/' + pontos + '</span>', 'pontos') +
+    '<div id="ranking-mes" class="rk"></div>';
+  // Depois do innerHTML: o elemento do ranking nasce aqui dentro.
+  renderRankingMes(concluidas);
 }
 
 // Modo apresentacao: esconde filtros e fila, aumenta o texto. Projetor tem menos

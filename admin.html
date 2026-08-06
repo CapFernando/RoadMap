@@ -771,7 +771,7 @@
     }
     #conditional-fields { }
   </style>
-  <link rel="stylesheet" href="tema.css?v=0181ca80ed">
+  <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
@@ -2757,6 +2757,32 @@ function kbDragLeave(e) { if (!e.currentTarget.contains(e.relatedTarget)) e.curr
 // Agora qualquer caminho que chegue a Concluido estampa a data, e qualquer
 // caminho que SAIA dela limpa: demanda reaberta nao pode continuar contando como
 // entregue. A marca de retroativo tambem sai, porque a data volta a ser real.
+// Concluir sem hora registrada era o furo do fluxo: a entrega do dev ja exigia
+// horas, mas a conclusao — que e do PM/PO — nao cobrava nada, e 54 das 95
+// concluidas ficaram com zero. O servidor recusa, e esta funcao existe para a
+// recusa nao chegar como erro seco: barra o gesto, abre o card e leva ao campo.
+function faltaHorasPara(m, etapaNova) {
+  if (etapaNova !== 'concluido') return false;
+  if (String((m || {}).status_planejamento || '') === 'concluido') return false;  // ja estava
+  const h = Number((m || {}).horas_realizadas);
+  return !Number.isFinite(h) || h <= 0;
+}
+
+function pedeHoras(m, etapaNova) {
+  if (!faltaHorasPara(m, etapaNova)) return false;
+  toast('"' + (m.codigo || m.titulo) + '" precisa das horas de desenvolvimento para ' +
+        'concluir — e a unica medida de custo da base.', 'err');
+  renderKanban();
+  openModalMelhoria(m.id);
+  setTimeout(() => {
+    const s = document.getElementById('m-status');
+    if (s) { s.value = 'concluido'; onStatusChange(); }
+    const h = document.getElementById('m-horas-real');
+    if (h) { h.focus(); h.select(); }
+  }, 320);
+  return true;
+}
+
 function marcaConclusao(m, etapaNova) {
   if (!m) return;
   const hoje = new Date();
@@ -2788,6 +2814,7 @@ function kbDrop(e, colKey) {
     setTimeout(() => { document.getElementById('m-status').value = colKey; onStatusChange(); document.getElementById('m-dev').focus(); }, 320);
     return;
   }
+  if (pedeHoras(m, colKey)) return;
   m.status_planejamento = colKey;
   m.status = SP_TO_STATUS[colKey] || m.status;
   marcaConclusao(m, colKey);
@@ -4548,6 +4575,17 @@ async function saveMelhoria() {
   // Depois de montar o objeto: a etapa escolhida no formulario decide se a data de
   // conclusao entra ou sai. Salvar pela aba Dados e o outro caminho que levava a
   // Concluido sem gravar a data.
+  // Concluir pela aba Dados e o caminho mais silencioso de todos: nao ha gesto de
+   // arrastar, so um select. Checa contra o objeto NOVO, com as horas que a pessoa
+   // acabou de digitar — checar `existing` recusaria justamente quem preencheu.
+  if (sp === 'concluido' && String(existing.status_planejamento || '') !== 'concluido' &&
+      !(Number(obj.horas_realizadas) > 0)) {
+    toast('Informe as horas de desenvolvimento para concluir — e a unica medida de ' +
+          'custo da base.', 'err');
+    const h = document.getElementById('m-horas-real');
+    if (h) { h.focus(); h.select(); }
+    return;
+  }
   marcaConclusao(obj, sp);
 
   if (id) {
@@ -5142,6 +5180,13 @@ async function valDecidir(aprovar, obs) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   const agora = new Date().toISOString();
+  if (aprovar && !(Number(m.horas_realizadas) > 0)) {
+    // Card que veio pela entrega do dev sempre tem horas — a entrega exige. Este
+    // caso e o do card posto em validacao a mao, que aprovado gravaria zero.
+    toast('Esta entrega esta sem horas de desenvolvimento. Preencha o campo Horas ' +
+          'na aba Dados antes de aprovar.', 'err');
+    return;
+  }
   if (aprovar) {
     m.status_planejamento = 'concluido';
     m.status = 'concluida';

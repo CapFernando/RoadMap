@@ -144,3 +144,44 @@
 html.trocando-tema, html.trocando-tema *, html.trocando-tema *::before, html.trocando-tema *::after {
   transition: none !important;
 }
+
+/* ── PODIO: o chip de colocacao ──────────────────────────────────────────
+   Usado no painel Dev (produtividade individual) e no Planejamento (ranking do
+   mes). Vive aqui porque e o MESMO componente nas duas telas: duas copias
+   divergiriam na primeira mexida, e o time compara as duas telas lado a lado.
+
+   Diferente do resto deste arquivo, este bloco NAO e do tema claro — ele vale nos
+   dois. As cores vem de tokens (--ouro-*, --prata-*, --bronze-*) que cada pagina
+   declara no seu :root escuro, e que a secao :root[data-tema="claro"] acima
+   substitui pelo par claro.
+
+   O primeiro lugar e maior e em ouro cheio; os outros dois recuam em tamanho e em
+   saturacao. So o emoji nao diferenciava: no tamanho de um chip a medalha de ouro
+   e a de prata tem quase o mesmo desenho, e a distincao morria — foi reportado. */
+.prod-medalha { display:inline-flex; align-items:center; gap:5px;
+  background:var(--bg2); border:1px solid var(--border); border-radius:20px;
+  padding:2px 10px 2px 7px; white-space:nowrap; color:var(--text2); font-size:12px; }
+.prod-medalha b { color:var(--text); font-weight:600; }
+.prod-medalha .prod-num { color:var(--text3); font-size:11px; }
+.prod-medalha.p1 { font-size:13.5px; padding:4px 13px 4px 9px; font-weight:600;
+  background:var(--ouro-bg,#3D2F08); border-color:var(--ouro-bd,#9C7A14);
+  color:var(--ouro-tx,#F7D774); }
+.prod-medalha.p1 b { color:var(--ouro-tx,#F7D774); font-weight:700; }
+.prod-medalha.p1 .prod-num { color:var(--ouro-tx,#F7D774); opacity:.82; font-size:12px; }
+.prod-medalha.p1 .prod-med { font-size:15px; }
+.prod-medalha.p2 { font-size:12px;
+  background:var(--prata-bg,#2B2D31); border-color:var(--prata-bd,#52565D);
+  color:var(--prata-tx,#DBDEE4); }
+.prod-medalha.p2 b { color:var(--prata-tx,#DBDEE4); }
+.prod-medalha.p2 .prod-num { color:var(--prata-tx,#DBDEE4); opacity:.72; }
+.prod-medalha.p3 { font-size:11.5px; padding:2px 9px 2px 6px;
+  background:var(--bronze-bg,#33241A); border-color:var(--bronze-bd,#7A5537);
+  color:var(--bronze-tx,#E3B389); }
+.prod-medalha.p3 b { color:var(--bronze-tx,#E3B389); font-weight:600; }
+.prod-medalha.p3 .prod-num { color:var(--bronze-tx,#E3B389); opacity:.7; }
+/* O seu lugar fica marcado por um anel, nao trocando o preenchimento: pintar de
+   azul apagaria a cor do lugar, que e a informacao principal. */
+.prod-medalha.eu { box-shadow:0 0 0 2px var(--blue); }
+/* Clicavel no Planejamento: o chip filtra a linha do tempo pelo dev. */
+button.prod-medalha { cursor:pointer; font-family:inherit; }
+button.prod-medalha:hover { filter:brightness(1.14); }

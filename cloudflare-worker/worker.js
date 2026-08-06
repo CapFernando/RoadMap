@@ -494,6 +494,41 @@ function diasDeAtraso(m, hoje) {
   return Math.round((dia(hoje) - dia(entrega)) / 86400000);
 }
 
+
+// ─── CUSTO OBRIGATORIO PARA CONCLUIR ──────────────────────────────────
+// A hora realizada e a UNICA medida de custo que a base tem: nao ha apontamento,
+// nao ha planilha ao lado. Sem ela o relatorio do comite mostra entrega sem preco,
+// e a conta de quanto custou o trimestre nao fecha.
+//
+// A entrega do dev (`demanda-entregar` e o painel) ja exigia horas. O furo estava
+// do outro lado: quem CONCLUI e o PM/PO, e nenhum caminho dele cobrava nada.
+//
+// Trava na TRANSICAO, nao no estado: quem ja esta concluido com zero hora segue
+// gravavel. Travar por estado engessaria a base historica e faria qualquer save do
+// admin falhar por causa de um registro de junho.
+function faltaHoras(m) {
+  const h = Number(m && m.horas_realizadas);
+  return !Number.isFinite(h) || h <= 0;
+}
+
+// Devolve os codigos que estao ENTRANDO em concluido sem hora nenhuma.
+function entrandoEmConcluidoSemHoras(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || String(m.status_planejamento || '') !== 'concluido') continue;
+    const velha = antes.get(m.id);
+    // Demanda que o servidor nao conhece e import de historico ou cadastro do
+    // proprio PM/PO — a autoridade que decide. Nao e o furo do fluxo.
+    if (!velha) continue;
+    if (String(velha.status_planejamento || '') === 'concluido') continue;  // ja estava
+    if (faltaHoras(m)) presos.push(m.codigo || m.id);
+  }
+  return presos;
+}
+
 function atribuiCodigosProjeto(data) {
   if (!data || !Array.isArray(data.projetos)) return 0;
   let maior = 0;
@@ -2075,6 +2110,18 @@ export default {
       // Antes de mexer em nada: compara com o que esta gravado.
       const antesPub = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
         { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      // Nada entra em Concluido sem custo registrado. A recusa vem ANTES de
+      // registraHistorico: gravar historico de uma publicacao que sera recusada
+      // sujaria a trilha com um evento que nao aconteceu.
+      const semHorasPub = entrandoEmConcluidoSemHoras(data, antesPub);
+      if (semHorasPub.length) {
+        return json({ error: 'horas_obrigatorias',
+                      codigos: semHorasPub,
+                      detail: 'Informe as horas de desenvolvimento antes de concluir: ' +
+                              semHorasPub.join(', ') + '. A hora e a unica medida de ' +
+                              'custo da base — sem ela a entrega entra no relatorio sem preco.' },
+                    400, headers);
+      }
       registraHistorico(data, antesPub, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel');
       normalizaEstados(data);
@@ -2132,6 +2179,18 @@ export default {
       // montado a mao para mudar o status de um projeto. A lista do servidor
       // sempre vence.
       data.projetos = antesDev.projetos || [];
+      // Nada entra em Concluido sem custo registrado. A recusa vem ANTES de
+      // registraHistorico: gravar historico de uma publicacao que sera recusada
+      // sujaria a trilha com um evento que nao aconteceu.
+      const semHorasDev = entrandoEmConcluidoSemHoras(data, antesDev);
+      if (semHorasDev.length) {
+        return json({ error: 'horas_obrigatorias',
+                      codigos: semHorasDev,
+                      detail: 'Informe as horas de desenvolvimento antes de concluir: ' +
+                              semHorasDev.join(', ') + '. A hora e a unica medida de ' +
+                              'custo da base — sem ela a entrega entra no relatorio sem preco.' },
+                    400, headers);
+      }
       registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel dev');
       normalizaEstados(data);
