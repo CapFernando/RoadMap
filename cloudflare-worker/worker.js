@@ -2009,6 +2009,12 @@ export default {
       if (confDev) return confDev;
       const antesDev = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
         { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      // PROJETO NAO E EDITAVEL PELO DEV. Fechar, renomear ou reabrir projeto e do
+      // PM/PO — e o painel do dev nem tem tela para isso. Mas esta rota recebe o
+      // estado inteiro e grava o que recebe: sem esta linha, bastaria um corpo
+      // montado a mao para mudar o status de um projeto. A lista do servidor
+      // sempre vence.
+      data.projetos = antesDev.projetos || [];
       registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel dev');
       atribuiCodigos(data);

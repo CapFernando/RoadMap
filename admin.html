@@ -322,6 +322,9 @@
       border:1px solid var(--blue); border-radius:5px; padding:2px 8px;
       font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; }
     .poker-aplicar:hover { filter:brightness(1.15); }
+    .kb-sempt { font-size:10.5px; font-weight:700; color:var(--amber-tx,#FFC470);
+      background:var(--amber-bg,#4A2800); border:1px solid var(--amber);
+      border-radius:5px; padding:1px 6px; }
     .kb-pausa { font-size:10.5px; font-weight:700; color:var(--rose-tx,#F2A0DA);
       background:var(--rose-bg,#48123F); border:1px solid var(--rose-bd,#93257F);
       border-radius:5px; padding:1px 6px; }
@@ -360,6 +363,12 @@
       word-break:break-word; }
     .ent-linha { display:flex; flex-wrap:wrap; gap:6px 22px; font-size:13px; color:var(--text2); }
     .ent-linha strong { color:var(--text); font-weight:600; }
+    /* Codigo clicavel: leva direto ao card, que e onde se pontua. */
+    .sp-chip { font-family:ui-monospace,Consolas,monospace; font-size:11px;
+      font-weight:700; color:var(--amber-tx,#FFC470); background:var(--amber-bg,#4A2800);
+      border:1px solid var(--amber); border-radius:5px; padding:2px 7px;
+      margin:0 4px 4px 0; cursor:pointer; }
+    .sp-chip:hover { filter:brightness(1.2); }
     .ent-vazio { font-size:13px; color:var(--text3); line-height:1.6; margin:0; }
     .ent-acoes { display:flex; gap:10px; flex-wrap:wrap; margin-top:4px; }
     .ent-aviso { font-size:13px; line-height:1.6; border-radius:10px; padding:12px 14px;
@@ -913,6 +922,14 @@
         <div id="ger-dev-wrap" style="position:relative"><canvas id="ger-chart-dev"></canvas></div>
         <div class="ger-legend" id="ger-dev-leg"></div>
       </div>
+
+      <div class="ger-section-sep"></div>
+      <div class="ger-section-title">
+        🃏 Comprometidas sem pontuação
+        <span class="ger-section-hint">de Planejado em diante, sem pontos do Planning Poker</span>
+      </div>
+      <div id="sp-resumo" class="ger-summary"></div>
+      <div id="sp-lista"></div>
 
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
@@ -2666,6 +2683,9 @@ function renderKanban() {
       if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
       const nAnexos = (m.anexos || []).length;
       const badges = [ipBadge(getIP(m))];
+      if (semPontuacao(m)) badges.push('<span class="kb-sempt" title="' +
+        'Comprometida com data sem ter passado pelo Planning Poker: a estimativa ' +
+        'nao existe. Pontue na reuniao ou pelo card.">🃏 sem pontos</span>');
       if (estaPausado(m)) badges.push('<span class="kb-pausa" title="' +
         esc(m.pausa_motivo || '') + '">⏸ Pausada · ' + diasPausadoAgora(m) + 'd</span>');
       const nMesc = mescladasDe(m.id).length;
@@ -3229,6 +3249,61 @@ function toggleGerPtsTable() {
 //
 // A data usada e `criado_em` — quando a solicitacao foi aberta. Nao `entrega`
 // nem `inicio`, que sao decisao de planejamento e nao dizem quando chegou.
+
+// ─── RELATÓRIO: COMPROMETIDAS SEM PONTUAÇÃO ───────────────────────
+// Nao filtra por mes de proposito. A pergunta aqui nao e "quanto entrou em
+// agosto", e "o que esta na esteira agora com data combinada e sem estimativa" —
+// uma demanda de junho ainda em andamento sem pontos continua sendo o problema.
+function renderGerSemPontos() {
+  const resumo = document.getElementById('sp-resumo');
+  const lista = document.getElementById('sp-lista');
+  if (!resumo || !lista) return;
+  const todas = (state.melhorias || []).filter(m => !m.oculto);
+  const comprometidas = todas.filter(m => !m.mesclado_em &&
+    ETAPAS_COMPROMETIDAS.includes(m.status_planejamento || ''));
+  const sem = comprometidas.filter(semPontuacao);
+  const pct = comprometidas.length
+    ? Math.round(sem.length / comprometidas.length * 100) : 0;
+
+  const kpi = (v, rot, extra) =>
+    '<div class="ger-kpi"><div class="ger-kpi-label">' + rot + '</div>' +
+    '<div class="ger-kpi-value">' + v + '</div>' +
+    (extra ? '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">' + extra + '</div>' : '') +
+    '</div>';
+
+  resumo.innerHTML =
+    kpi(sem.length, 'Sem pontuação', pct + '% das comprometidas') +
+    kpi(comprometidas.length, 'Comprometidas', 'de Planejado em diante') +
+    kpi(comprometidas.length - sem.length, 'Com pontuação', 'base para a data');
+
+  if (!sem.length) {
+    lista.innerHTML = '<p class="ent-vazio">Todas as demandas comprometidas estão pontuadas.</p>';
+    return;
+  }
+
+  // Por dev: e a conversa que se tem depois. Ordena por volume.
+  const porDev = {};
+  sem.forEach(m => {
+    const k = String(m.dev || '').trim() || '(sem responsável)';
+    (porDev[k] = porDev[k] || []).push(m);
+  });
+  const ordem = Object.entries(porDev).sort((a, b) => b[1].length - a[1].length);
+
+  lista.innerHTML = '<div class="us-tabela-wrap"><table class="ent-tab">' +
+    '<thead><tr><th>Responsável</th><th class="num">Sem pontos</th>' +
+    '<th>Demandas</th></tr></thead><tbody>' +
+    ordem.map(([dev, ms]) =>
+      '<tr><td><span class="ent-tema">' + esc(dev) + '</span></td>' +
+      '<td class="num"><strong>' + ms.length + '</strong></td>' +
+      '<td>' + ms.map(m =>
+        '<button type="button" class="sp-chip" onclick="openModalMelhoria(' +
+        JSON.stringify(m.id).replace(/"/g, '&quot;') + ')" title="' +
+        esc(m.titulo || '') + ' · ' + esc(STATUS_LABELS[statusKey(m)] || '') + '">' +
+        esc(m.codigo || '(sem código)') + '</button>').join('') +
+      '</td></tr>').join('') +
+    '</tbody></table></div>';
+}
+
 function renderGerEntradas(ano, mes) {
   const resumo = document.getElementById('ent-resumo');
   const quebra = document.getElementById('ent-quebra');
@@ -3318,6 +3393,7 @@ function renderGerencial() {
   const mes = parseInt(document.getElementById('ger-mes').value);
   const ano = parseInt(document.getElementById('ger-ano').value);
 
+  renderGerSemPontos();
   renderGerEntradas(ano, mes);
 
   const STATUS_LABEL = {
@@ -5219,6 +5295,22 @@ async function pjAprovSalvar(p, msg) {
     pjAprovRender(doServidor || p);
     renderProjetos(); renderAll(); pjRenderDemandas();
   } else toast('Não foi possível salvar. A decisão continua pendente.', 'err');
+}
+
+
+// ─── DEMANDA SEM PONTUAÇÃO ────────────────────────────────────────
+// Da etapa Planejado em diante a demanda ja esta comprometida com uma data. Sem
+// pontos do Planning Poker nao ha base para essa data: ninguem estimou o tamanho.
+// A marca existe para isso aparecer no card, em vez de sair no relatorio do mes
+// como capacidade que nunca foi medida.
+//
+// Backlog, Levantar Requisitos e Planning ficam de fora de proposito: nessas
+// etapas a demanda ainda nao foi estimada porque ainda nao chegou a hora.
+const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+function semPontuacao(m) {
+  if (!m || m.mesclado_em) return false;
+  if (!ETAPAS_COMPROMETIDAS.includes(m.status_planejamento || '')) return false;
+  return !(Number(m.poker_pontos) > 0);
 }
 
 function pjCardHTML(p) {

@@ -89,6 +89,8 @@
     /* Magenta, nao cinza: em cinza a faixa se perdia no card e era justamente a
        queixa. Nao vermelho nem ambar, que sao os avisos de prazo — pausada e o
        oposto de urgencia. */
+    .kcard-prazo.sempt { background:var(--amber-bg); color:var(--amber-tx);
+      border:1px solid var(--amber); }
     .kcard-prazo.pausada { background:var(--rose-bg,#48123F); color:var(--rose-tx,#F2A0DA);
       border:1px solid var(--rose-bd,#93257F); }
     /* Area de anexo da nova demanda. A dica de colar fica DENTRO da area para
@@ -822,6 +824,15 @@
       </div>
     </div>
     <div class="form-row">
+      <!-- Projeto: so os aprovados. Escolher um manda a demanda para o Backlog, que
+           e a esteira certa — ela precisa passar pelo planning antes de ter data. -->
+      <div class="form-group">
+        <label>Projeto <small style="font-weight:400;color:var(--text3)">(opcional)</small></label>
+        <select id="n-projeto" onchange="nProjetoMudou()"></select>
+        <div id="n-projeto-aviso" style="display:none;font-size:12px;line-height:1.6;
+           color:var(--amber-tx,#FFC470);background:var(--amber-bg,#4A2800);
+           border-radius:8px;padding:9px 11px;margin-top:7px"></div>
+    </div>
       <div class="form-group">
         <label>É problema ou melhoria? *</label>
         <select id="n-tipo">
@@ -1710,6 +1721,22 @@ function prodAgrega(de, ate) {
 }
 
 const prodNum = n => Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10).replace('.', ',');
+
+
+// ─── DEMANDA SEM PONTUAÇÃO ────────────────────────────────────────
+// Da etapa Planejado em diante a demanda ja esta comprometida com uma data. Sem
+// pontos do Planning Poker nao ha base para essa data: ninguem estimou o tamanho.
+// A marca existe para isso aparecer no card, em vez de sair no relatorio do mes
+// como capacidade que nunca foi medida.
+//
+// Backlog, Levantar Requisitos e Planning ficam de fora de proposito: nessas
+// etapas a demanda ainda nao foi estimada porque ainda nao chegou a hora.
+const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+function semPontuacao(m) {
+  if (!m || m.mesclado_em) return false;
+  if (!ETAPAS_COMPROMETIDAS.includes(m.status_planejamento || '')) return false;
+  return !(Number(m.poker_pontos) > 0);
+}
 
 function renderProdutividade() {
   const box = document.getElementById('prod');
@@ -2733,6 +2760,7 @@ function renderCard(m, colKey) {
       ${parentInfo}
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
+      ${semPontuacao(m) ? `<div class="kcard-prazo sempt" title="Sem pontos do Planning Poker: a data foi combinada sem estimativa de tamanho.">🃏 sem pontuação</div>` : ''}
       <div class="kcard-title">${m.codigo ? `<span class="kcard-cod">${devEsc(m.codigo)}</span>` : ''}${devEsc(m.titulo)}</div>
       ${tema ? `<div class="kcard-tema">${tema}</div>` : ''}
       ${meta.length ? `<div class="kcard-meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>` : ''}
@@ -3260,6 +3288,46 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
 }
 
 // ─── NOVA DEMANDA ────────────────────────────────────────────────
+
+// Projeto na abertura de demanda pelo dev. So projetos APROVADOS entram na lista:
+// proposta pendente nao aceita vinculo, e o Worker solta o que aparecer.
+//
+// Escolher projeto forca Backlog. E a esteira certa: a demanda de um projeto
+// precisa passar pelo planning para ser dimensionada junto das outras do mesmo
+// projeto — abrir direto em andamento pularia a estimativa e a data sairia do
+// nada. Depois do planning ela aparece na aba Projetos, ja pontuada.
+function nPopulaProjetos() {
+  const sel = document.getElementById('n-projeto');
+  if (!sel) return;
+  const aprovados = dpVinculaveis();
+  sel.innerHTML = '<option value="">— sem projeto —</option>' +
+    aprovados.map(p => '<option value="' + escAttr(p.id) + '">' +
+      escAttr((p.codigo ? p.codigo + ' · ' : '') + (p.nome || '(sem nome)')) +
+      '</option>').join('');
+  if (!aprovados.length) {
+    sel.innerHTML = '<option value="">nenhum projeto aprovado ainda</option>';
+  }
+  nProjetoMudou();
+}
+
+function nProjetoMudou() {
+  const sel = document.getElementById('n-projeto');
+  const aviso = document.getElementById('n-projeto-aviso');
+  const etapa = document.getElementById('n-status');
+  if (!sel || !aviso) return;
+  const temProjeto = !!sel.value;
+  if (temProjeto) {
+    if (etapa) { etapa.value = 'backlog'; etapa.disabled = true; }
+    aviso.style.display = 'block';
+    aviso.innerHTML = 'Demanda de projeto entra no <strong>Backlog</strong> e é ' +
+      'dimensionada no planning junto das outras do mesmo projeto. Depois disso ela ' +
+      'aparece na aba Projetos com a pontuação.';
+  } else {
+    if (etapa) etapa.disabled = false;
+    aviso.style.display = 'none';
+  }
+}
+
 function openNewModal() {
   document.getElementById('n-id').value = '';
   document.getElementById('n-titulo').value = '';
@@ -3273,6 +3341,10 @@ function openNewModal() {
   nRenderAnexos();
   resetStatusOptions();
   document.getElementById('n-status').value = 'planejado';
+  // Projeto: lista os aprovados e reabilita a etapa, caso a abertura anterior a
+  // tenha travado em Backlog por ter projeto escolhido.
+  document.getElementById('n-projeto').value = '';
+  nPopulaProjetos();
   document.getElementById('modal-new-title').textContent = 'Nova Demanda';
   document.getElementById('btn-save-demand').textContent = 'Criar demanda';
   // Popula Sistema / Módulo
@@ -3442,6 +3514,9 @@ async function saveNewDemand() {
     // Marca que nasceu no painel do dev e nao passou por planejamento. O PM/PO
     // precisa distinguir o que ele priorizou do que entrou por fora.
     origem: existing?.origem || 'dev',
+    // Vinculo de projeto. O Worker confere que o projeto existe e esta aprovado, e
+    // solta o vinculo se nao estiver — a tela nao e a ultima palavra nisso.
+    projeto_id: document.getElementById('n-projeto').value || existing?.projeto_id || '',
     // Anexos: em edicao, os que ja estavam ficam e os novos entram. Substituir a
     // lista apagaria print anexado antes por outra pessoa.
     anexos: (existing?.anexos || []).concat(_nAnexos),
