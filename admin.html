@@ -649,6 +649,11 @@
     .us-nome { font-weight:600; color:var(--text); }
     .us-sub  { font-size:12px; color:var(--text3); margin-top:3px; }
     .us-sub-mail { font-size:12px; color:var(--text2); margin-top:3px; word-break:break-all; }
+    .us-nomedem { font-size:12px; max-width:210px; }
+    /* Conta de dev que nao alcanca demanda nenhuma: e a pessoa que abre a API e
+       recebe lista vazia sem entender por que. Vermelho porque e defeito de
+       configuracao, nao ressalva de leitura. */
+    .us-sub.us-alerta { color:var(--red); }
     .us-link { background:none; border:none; color:var(--blue); font-size:12px; cursor:pointer;
       padding:0; text-decoration:underline; font-family:'Inter',sans-serif; }
     .us-tabela select { margin:0; background:var(--bg4); border:1px solid var(--border); border-radius:8px;
@@ -4656,7 +4661,11 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 // ─── USUÁRIOS ─────────────────────────────────────────────────────
 // Antes o acesso era por senha compartilhada: ninguem sabia QUEM fez o que, e a
 // senha ia embora junto com quem saia da empresa. Aqui cada pessoa tem conta.
-const U_PAPEL_ROTULO = { consulta: 'Consulta', dev: 'Dev', admin: 'Admin' };
+// Faltava analista: a conta de analista aparecia com o select sem nenhuma opcao
+// correspondente, e o navegador mostrava a primeira — "Consulta". A tela mentia
+// sobre a permissao de quem conduz o planning.
+const U_PAPEL_ROTULO = { consulta: 'Consulta', dev: 'Dev',
+                         analista: 'Analista de Requisitos', admin: 'Admin' };
 const U_ERROS = {
   sem_permissao: 'Só quem é admin pode gerenciar contas.',
   existe: 'Já existe conta com esse usuário ou e-mail.',
@@ -4713,16 +4722,79 @@ function uLinhaAtiva(u) {
           : '<button class="us-link" onclick="uEmail(\'' + l + '\')">+ definir e-mail</button>') +
       '</div></td>' +
     '<td><select onchange="uPapel(\'' + l + '\', this.value)">' +
-      ['consulta', 'dev', 'admin'].map(p =>
+      PAPEIS_CONTA.map(p =>
         '<option value="' + p + '"' + (u.papel === p ? ' selected' : '') + '>' + U_PAPEL_ROTULO[p] + '</option>'
       ).join('') + '</select>' +
       (off ? ' <span class="us-tag us-tag-off">desativado</span>' : '') + '</td>' +
+    '<td>' + uCelulaNomeDemandas(u) + '</td>' +
     '<td class="us-sub">' + (u.ultimo_acesso ? esc(uQuando(u.ultimo_acesso)) : 'nunca entrou') + '</td>' +
     '<td><span class="us-acoes">' +
       '<button class="btn btn-secondary btn-sm" onclick="uNovaSenha(\'' + l + '\')">Nova senha</button>' +
       '<button class="btn ' + (off ? 'btn-success' : 'btn-danger') + ' btn-sm" onclick="uAtivo(\'' + l + '\', ' + (off ? 'true' : 'false') + ')">' +
         (off ? 'Reativar' : 'Desativar') + '</button>' +
     '</span></td></tr>';
+}
+
+
+// Quantas demandas o nome declarado alcanca. E o unico numero que responde
+// "funcionou?": conta com nome errado mostra 0 e a pessoa ve na hora, em vez de
+// descobrir dias depois que a API nao devolve nada para ela.
+function uQtdPorNome(nome) {
+  const alvo = normTexto(nome);
+  if (!alvo) return 0;
+  return (state.melhorias || []).filter(m => !m.mesclado_em && !m.oculto &&
+    String(m.dev || '').split('/').some(n => normTexto(n.trim()) === alvo)).length;
+}
+
+// A conta declara qual nome usa nas demandas. Sem isto a posse era adivinhada, e
+// 7 das 9 contas nao reconheciam NENHUMA demanda — para essas pessoas a API nao
+// existia. O seletor lista os nomes que EXISTEM na base: deixar digitar livre
+// repetiria exatamente o erro que criou o problema.
+function uCelulaNomeDemandas(u) {
+  const l = esc(u.login);
+  const atual = String(u.nome_demandas || '').trim();
+  const nomes = uDevsDosCards();
+  // Um nome declarado que nao existe mais na base continua aparecendo, senao o
+  // seletor o descartaria em silencio e o admin acharia que nunca foi salvo.
+  const declarados = atual.split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+  declarados.forEach(d => { if (!nomes.some(n => normTexto(n) === normTexto(d))) nomes.push(d + ' (fora da base)'); });
+  const sel = '<select class="us-nomedem" onchange="uNomeDemandas(\'' + l + '\', this.value)">' +
+    '<option value="">— pelo nome da conta —</option>' +
+    nomes.map(n => {
+      const puro = n.replace(' (fora da base)', '');
+      const q = uQtdPorNome(puro);
+      // esc() desta pagina ja escapa & < > e a aspas dupla: serve para atributo.
+      // `escAttr` existe no painel dev, nao aqui — chamar aqui quebraria a tela na
+      // renderizacao, que nenhuma checagem de sintaxe pega.
+      return '<option value="' + esc(puro) + '"' +
+        (declarados.some(d => normTexto(d) === normTexto(puro)) ? ' selected' : '') + '>' +
+        esc(puro + '  (' + q + ')') + '</option>';
+    }).join('') + '</select>';
+  // O aviso importa mais que o campo: conta de dev sem nenhuma demanda alcancavel
+  // e uma pessoa que abre a API e recebe lista vazia sem entender por que.
+  const alcance = declarados.length
+    ? declarados.reduce((t, d) => t + uQtdPorNome(d), 0)
+    : uQtdPorNome(u.nome);
+  const nota = alcance
+    ? '<div class="us-sub">' + alcance + ' demanda' + (alcance > 1 ? 's' : '') +
+      (declarados.length ? '' : ' pelo nome da conta') + '</div>'
+    : (['dev', 'analista'].includes(u.papel)
+        ? '<div class="us-sub us-alerta">nenhuma demanda casa — a API devolve vazio</div>'
+        : '<div class="us-sub">—</div>');
+  return sel + nota;
+}
+
+async function uNomeDemandas(login, valor) {
+  try {
+    await uChamar('nome-demandas', { login, nome_demandas: valor });
+    uAviso(valor
+      ? 'Pronto: as demandas de "' + valor + '" passam a ser desta conta.'
+      : 'Voltou a casar pelo nome da conta.');
+    renderUsuarios();
+  } catch (e) {
+    uAviso(e.message, true);
+    renderUsuarios();
+  }
 }
 
 function uTabela(cabecalhos, linhas) {
@@ -4793,7 +4865,8 @@ async function renderUsuarios() {
   // pessoas com acesso
   document.getElementById('us-n-ativos').textContent = ativos.filter(u => u.ativo).length;
   box.innerHTML = ativos.length
-    ? uTabela(['Pessoa', 'Permissão', 'Último acesso', ''], ativos.map(uLinhaAtiva))
+    ? uTabela(['Pessoa', 'Permissão', 'Nome nas demandas', 'Último acesso', ''],
+              ativos.map(uLinhaAtiva))
     : '<p class="us-vazio">Nenhuma conta criada ainda. Enquanto isso, todos continuam entrando pelas senhas gerais.</p>';
 
   // nomes nos cards sem conta — prepara o filtro futuro dos cards por conta

@@ -318,6 +318,43 @@ ok(!!rk && /b\.pontos - a\.pontos/.test(rk),
    'o ranking ordena por pontos, nao por contagem de issues');
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Posse da demanda: declarada, nao adivinhada');
+
+// A heuristica de prefixo resolveu o caso do nome completo ("Joao Vitor Batista de
+// Siqueira" contra "Joao Vitor") mas exige dois nomes: "Gabriel" sozinho nunca
+// casaria com "Gabriel Rodrigues", e afrouxar para um nome faria "Joao" casar com
+// qualquer Joao da equipe. Medido: 7 das 9 contas nao reconheciam NENHUMA demanda.
+ok(/'usuario', 'nome_demandas'/.test(W), 'a conta tem o campo do nome usado nas demandas');
+ok(/u\.nome_demandas/.test(W), 'identifica traz o campo junto da sessao');
+ok(/nome_demandas[\s\S]{0,400}?normNome\(n\) === normNome\(a\)/.test(W),
+   'com o campo preenchido a comparacao e EXATA, nao por prefixo');
+// A heuristica continua para quem nao declarou: ninguem fica pior do que estava.
+const dono = corpo(W, 'const meuDono = m => {');
+ok(!!dono && /mesmaPessoa\(n, eu\)/.test(dono),
+   'sem o campo, cai na heuristica antiga (ninguem perde acesso)');
+// Quem escolhe a carteira e o admin. Se o dev pudesse declarar, escolheria de quem
+// sao as demandas — e a posse deixaria de significar algo.
+const opND = W.slice(W.indexOf("op === 'nome-demandas'"), W.indexOf("op === 'nome-demandas'") + 1400);
+ok(W.indexOf("op === 'nome-demandas'") > W.indexOf("exigePapel(env, body, ['admin'], headers)"),
+   'declarar o nome e acao de admin');
+ok(/muitos_nomes/.test(opND), 'ha limite de nomes por conta');
+// "total: 0" sem diagnostico foi a duvida que gerou o chamado do dev.
+ok(/nomes_procurados:/.test(W) && /criterio:/.test(W),
+   'a resposta diz por qual nome procurou, para 0 ter diagnostico');
+// A tela: escolher da lista que existe, nao digitar.
+ok(/function uCelulaNomeDemandas\(/.test(ADMIN), 'admin tem a celula do nome nas demandas');
+ok(/uDevsDosCards\(\)/.test(corpo(ADMIN, 'function uCelulaNomeDemandas(') || ''),
+   'o seletor oferece os nomes que EXISTEM na base, sem digitacao livre');
+ok(/us-alerta/.test(ADMIN), 'conta de dev que nao alcanca nada aparece marcada');
+// escAttr existe no painel dev e NAO no admin: chamar la quebraria na renderizacao,
+// e nenhuma checagem de sintaxe pega isso.
+ok(!/escAttr\(/.test(ADMIN), 'admin nao chama escAttr, que so existe no painel dev');
+// O papel analista tinha de estar em TODA lista de papel da tela de contas.
+ok(/analista: 'Analista de Requisitos'/.test(ADMIN), 'a tela tem rotulo para analista');
+ok(!/\['consulta', 'dev', 'admin'\]/.test(ADMIN),
+   'nenhuma lista de papel na tela esquece o analista');
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Sessao: quem perde a credencial tem caminho de volta');
 
 // O painel do dev decidia "esta logado" pelo sessionStorage, que nao expira junto

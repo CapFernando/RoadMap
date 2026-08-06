@@ -646,6 +646,12 @@ async function contasMigrar(db) {
   // A tabela usuario nasceu sem estas duas colunas e ja existe em producao.
   await colunaSeFaltar(db, 'usuario', 'email', 'TEXT');
   await colunaSeFaltar(db, 'usuario', 'pendente', 'INTEGER NOT NULL DEFAULT 0');
+  // Nome que a pessoa usa NAS DEMANDAS. O campo `dev` da demanda e texto livre
+  // ("Gabriel"), o nome da conta e completo ("Gabriel Rodrigues"), e casar por
+  // heuristica deixava 7 das 9 contas sem reconhecer nenhuma demanda. Aceita mais
+  // de um nome separado por `/` ou `,`: a mesma pessoa aparece grafada de formas
+  // diferentes em bases que ninguem padronizou.
+  await colunaSeFaltar(db, 'usuario', 'nome_demandas', 'TEXT');
   // E-mail unico, mas so entre quem tem e-mail (contas antigas ficam com NULL).
   try { await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_email ON usuario(email) WHERE email IS NOT NULL').run(); } catch (_) {}
 }
@@ -682,11 +688,12 @@ async function identifica(env, body) {
     try {
       await contasMigrar(db);
       const r = await db.prepare(
-        `SELECT s.expira_em, u.id, u.login, u.nome, u.papel, u.ativo
+        `SELECT s.expira_em, u.id, u.login, u.nome, u.papel, u.ativo, u.nome_demandas
            FROM sessao s JOIN usuario u ON u.id = s.usuario_id
           WHERE s.token = ?`).bind(String(body.token)).first();
       if (r && r.ativo && new Date(r.expira_em) > new Date()) {
-        return { papel: r.papel, usuario: { id: r.id, login: r.login, nome: r.nome } };
+        return { papel: r.papel, usuario: { id: r.id, login: r.login, nome: r.nome,
+                                           nome_demandas: r.nome_demandas || '' } };
       }
     } catch (_) {}
   }
@@ -1510,8 +1517,20 @@ export default {
         if (curto.split(' ').length < 2) return false;
         return longo === curto || longo.startsWith(curto + ' ');
       };
-      const meuDono = m => String(m.dev || '').split('/').map(x => x.trim())
-        .some(n => mesmaPessoa(n, eu));
+      // Nomes que ESTA conta reconhece como seus. Quando a conta declara o nome
+      // usado nas demandas, a comparacao passa a ser EXATA (normalizada por acento e
+      // caixa): declarado e declarado, nao ha o que inferir. Sem o campo, cai na
+      // heuristica de prefixo — que resolveu o caso do nome completo mas nao alcanca
+      // apelido de um nome so, e por isso o campo existe.
+      const declarados = String((ident.usuario && ident.usuario.nome_demandas) || '')
+        .split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+      const meuDono = m => {
+        const naDemanda = String(m.dev || '').split('/').map(x => x.trim()).filter(Boolean);
+        if (declarados.length) {
+          return naDemanda.some(n => declarados.some(a => normNome(n) === normNome(a)));
+        }
+        return naDemanda.some(n => mesmaPessoa(n, eu));
+      };
 
       if (body.action === 'demandas-minhas') {
         if (!eu) {
@@ -1534,6 +1553,11 @@ export default {
         }
         lista.sort((a, b) => String(a.entrega || '9999').localeCompare(String(b.entrega || '9999')));
         return json({ ok: true, dev: eu, total: lista.length,
+                      // Por qual nome a busca foi feita. Sem isto "total: 0" nao
+                      // distingue "nao tenho demanda" de "meu nome nao casou" — foi
+                      // essa duvida que gerou o chamado do dev.
+                      nomes_procurados: declarados.length ? declarados : [eu],
+                      criterio: declarados.length ? 'nome declarado na conta' : 'nome da conta',
                       demandas: lista.map(m => devVisao(m, temas)) }, 200, headers);
       }
 
@@ -1935,7 +1959,8 @@ export default {
 
       if (op === 'listar') {
         const r = await env.POKER_DB.prepare(
-          `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso
+          `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso,
+                  nome_demandas
              FROM usuario ORDER BY pendente DESC, nome`).all();
         // Pedidos de senha em aberto, para o admin resolver na mesma tela.
         const p = await env.POKER_DB.prepare(
@@ -2041,6 +2066,25 @@ export default {
           return json({ error: 'existe', detail: 'Outra conta já usa esse e-mail.' }, 409, headers);
         }
         return json({ ok: true }, 200, headers);
+      }
+
+      // Define o nome que a conta usa nas demandas. Vazio limpa e volta a heuristica.
+      if (op === 'nome-demandas') {
+        const login = String(body.login || '').trim().toLowerCase();
+        const uu = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(login).first();
+        if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
+        // Guarda normalizado no separador, nao no texto: o acento e a caixa
+        // pertencem ao nome como ele esta na demanda, e a comparacao ja normaliza.
+        const nomes = String(body.nome_demandas || '').split(/[\/,;]/)
+          .map(x => limpaTexto(x, 80).trim()).filter(Boolean);
+        if (nomes.length > 5) {
+          return json({ error: 'muitos_nomes',
+                        detail: 'No maximo 5 nomes. Se precisa de mais, o campo `dev` das ' +
+                                'demandas esta grafado de formas demais e vale padronizar.' }, 400, headers);
+        }
+        await env.POKER_DB.prepare('UPDATE usuario SET nome_demandas = ? WHERE id = ?')
+          .bind(nomes.join(' / ') || null, uu.id).run();
+        return json({ ok: true, nome_demandas: nomes.join(' / ') }, 200, headers);
       }
 
       if (op === 'papel' || op === 'ativo') {
