@@ -489,7 +489,7 @@ sec('Cache: arquivo compartilhado sempre versionado por hash');
 
 for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
                            ['index', INDEX], ['poker', POKER]]) {
-  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js|modelo-descricao\.js)"/g) || [])
+  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js|modelo-descricao\.js|links-github\.js)"/g) || [])
     .concat(src.match(/href="tema\.css"/g) || []);
   ok(semHash.length === 0, nome + ' nao referencia arquivo compartilhado sem ?v=',
      semHash.join(' '));
@@ -538,6 +538,79 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
   ok(!!g && !!a && !!d, 'as tres telas tem a regra do sem pontuacao');
   ok(g === a && a === d, 'a regra e identica nas tres telas (admin, gantt, dev)');
   ok(/card-sempt/.test(GANTT), 'a linha do tempo marca a demanda sem pontuacao');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('Referencia ao GitHub: issue, PR e milestone');
+
+// Antes era UM campo `link_externo`, preenchido em ZERO das 201 demandas. Duas
+// razoes: um slot para tres coisas nao serve para nenhuma, e ele nunca existiu em
+// tela alguma — so a API o aceitava. Um campo que nao tem onde ser digitado nao e
+// campo, e nenhum teste pegava isso porque a API respondia certo.
+const LINKS = lerTela('links-github.js');
+for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV]]) {
+  ok(/links-github\.js\?v=/.test(src), nome + ' carrega o modulo compartilhado');
+  ok(/id="[a-z]+-link-issue"/.test(src), nome + ' TEM o campo de issue em tela');
+  ok(/id="[a-z]+-link-pr"/.test(src), nome + ' TEM o campo de PR em tela');
+  ok(/id="[a-z]+-link-milestone"/.test(src), nome + ' TEM o campo de milestone em tela');
+  ok(/ghLinkPreenche\(/.test(src), nome + ' preenche os campos ao abrir');
+}
+// Gravar: admin, gantt e as DUAS portas do dev (salvarEntrega e updateStatus).
+// O patch do dev leva so os campos listados, entao esquecer uma porta faria o
+// numero digitado desaparecer ao arrastar o card.
+ok((ADMIN.match(/ghLinkColeta\(/g) || []).length >= 1, 'admin grava os links');
+ok((GANTT.match(/ghLinkColeta\(/g) || []).length >= 1, 'gantt grava os links');
+ok((DEV.match(/ghLinkColeta\(/g) || []).length >= 2,
+   'dev grava os links nas DUAS portas de saida do card',
+   (DEV.match(/ghLinkColeta\(/g) || []).length + ' chamada(s)');
+// O servidor tambem, senao a automacao do dev nao consegue gravar.
+for (const campo of ['link_issue', 'link_pr', 'link_milestone']) {
+  ok(W.includes(campo), 'o worker conhece ' + campo);
+  ok(new RegExp(campo + ":\\s*m\\." + campo).test(W), 'a API devolve ' + campo);
+  ok(new RegExp("  " + campo + ":").test(W) || W.includes(campo + ":          "),
+     campo + ' entra no historico do card');
+}
+// Comportamento, executando o modulo de verdade.
+let GH = null;
+try {
+  const sw = global.window, sd = global.document;
+  global.window = {};
+  global.document = { createElement: () => ({ textContent: '', appendChild() {} }),
+                      head: { appendChild() {} }, getElementById: () => null };
+  require('./links-github.js');
+  GH = global.window;
+  global.window = sw; global.document = sd;
+} catch (e) { GH = null; }
+ok(!!GH && typeof GH.ghLinkNormaliza === 'function', 'o modulo carrega');
+if (GH) {
+  const B = 'https://github.com/' + GH.GH_REPO + '/';
+  // O numero solo e a razao de ser do campo: quem esta com a issue aberta tem
+  // "683" na cabeca, nao a URL.
+  ok(GH.ghLinkNormaliza('issue', '683') === B + 'issues/683', 'numero solo vira URL de issue');
+  ok(GH.ghLinkNormaliza('issue', '#683') === B + 'issues/683', 'com # tambem');
+  ok(GH.ghLinkErro('issue', '683') === '',
+     'a validacao aceita o numero solo (validar o texto cru recusava justamente ele)');
+  // Dois PRs numa demanda e rotina; sem isto o segundo iria para a observacao.
+  ok(GH.ghLinkNormaliza('pr', '712, 715') === B + 'pull/712 ' + B + 'pull/715',
+     'PR aceita mais de um numero');
+  // Repo padrao e atalho, nao cerca.
+  const fora = 'https://github.com/outra/org/issues/9';
+  ok(GH.ghLinkNormaliza('issue', fora) === fora, 'URL de outro repositorio passa intacta');
+  ok(GH.ghLinkErro('issue', 'https://jira.audax/AX-1') === '',
+     'link de outra ferramenta nao e cobrado de forma');
+  // O engano mais comum: colar a issue no campo do PR.
+  ok(GH.ghLinkErro('pr', B + 'issues/683') !== '', 'issue colada no campo do PR e apontada');
+  ok(GH.ghLinkErro('issue', 'abc') !== '', 'texto solto e recusado');
+  // Rotulo curto: a URL inteira ocupa a largura do card e nao diz mais nada.
+  ok(GH.ghLinkRotulo('issue', B + 'issues/683') === '#683', 'rotulo curto da issue');
+  const chips = GH.ghLinkChips({ link_issue: B + 'issues/683', link_pr: B + 'pull/712 ' + B + 'pull/715' });
+  ok(chips.includes('#683') && chips.includes('PR #712') && chips.includes('PR #715'),
+     'os chips mostram os tres, inclusive dois PRs');
+  ok(/rel="noopener noreferrer"/.test(chips),
+     'link externo abre sem dar window.opener para a pagina de destino');
+  ok(!GH.ghLinkChips({ link_issue: 'https://x/">   <img onerror=1>' }).includes('<img'),
+     'URL com HTML e escapada');
+  ok(GH.ghLinkChips({}) === '', 'demanda sem referencia nao renderiza nada');
 }
 
 let erroW = null;

@@ -553,6 +553,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
+<script src="links-github.js?v=28d5e3cedb"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -802,6 +803,19 @@
     <div class="form-group">
       <label>Observação</label>
       <textarea id="e-obs" rows="2" placeholder="Notas internas…"></textarea>
+    </div>
+    <!-- Referencia ao codigo. E o que permite ir do card para o commit e
+         voltar; sem isso "o que exatamente foi entregue nesta demanda" se
+         responde no Teams. Basta o numero: quem tem a issue aberta na frente
+         sabe o numero, nao a URL. -->
+    <div class="form-group">
+      <label>Referência no GitHub <small style="font-weight:400;color:var(--text3)">— só o número basta</small></label>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+        <input type="text" id="e-link-issue" placeholder="Issue: 683" title="Issue no GitHub. Digite só o número." />
+        <input type="text" id="e-link-pr" placeholder="PR: 712" title="Pull request. Mais de um: 712, 715" />
+        <input type="text" id="e-link-milestone" placeholder="Milestone: 4" title="Milestone no GitHub. Digite só o número." />
+      </div>
+      <div id="e-link-chips" style="margin-top:7px"></div>
     </div>
     <div class="form-actions-left">
       <div style="display:flex;gap:8px">
@@ -2277,6 +2291,9 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-titulo').value    = m?.titulo || '';
   document.getElementById('e-descricao').value = m?.descricao || '';
   if (window.ligaModeloDescricao) ligaModeloDescricao('e-descricao', { auto: !m });
+  if (window.ghLinkPreenche) ghLinkPreenche('e', m);
+  const eChips = document.getElementById('e-link-chips');
+  if (eChips && window.ghLinkChips) eChips.innerHTML = ghLinkChips(m || {});
   renderAnexosGantt(m);
   renderDiscoveryGantt(m);
   document.getElementById('e-prio').value      = m?.prioridade || '';
@@ -2630,6 +2647,7 @@ function saveTask() {
     // chegava vazio. Cai no valor que ja estava gravado, como o Admin ja fazia.
     horas_realizadas:   parseFloat(document.getElementById('e-horas-real').value) ||
                         existing.horas_realizadas || 0,
+    ...ghLinks,
     anexos:             _gAnexos,
     status_planejamento: sp,
     observacao:         document.getElementById('e-obs').value.trim(),
@@ -2637,6 +2655,8 @@ function saveTask() {
     ordem:              existing.ordem  ?? state.melhorias.length,
   };
   if (window.validaModeloDescricao && !validaModeloDescricao('e-descricao', toast)) return;
+  const ghLinks = window.ghLinkColeta ? ghLinkColeta('e', toast) : {};
+  if (ghLinks === null) return;
   // Mesma trava do Admin: concluir exige custo registrado, e o servidor recusa de
   // todo jeito — checar aqui e para a pessoa saber onde digitar.
   if (sp === 'concluido' && String(existing.status_planejamento || '') !== 'concluido' &&

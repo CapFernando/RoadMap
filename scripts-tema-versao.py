@@ -31,6 +31,7 @@ def main():
     vcss, vjs = hash_de('tema.css'), hash_de('tema.js')
     vanx = hash_de('anexo-cola.js')
     vmod = hash_de('modelo-descricao.js')
+    vlnk = hash_de('links-github.js')
     mudou = []
     for f in PAGINAS:
         s = io.open(f, encoding='utf-8').read()
@@ -40,11 +41,13 @@ def main():
                    'src="anexo-cola.js?v=%s"' % vanx, n)
         n = re.sub(r'src="modelo-descricao\.js(\?v=[^"]*)?"',
                    'src="modelo-descricao.js?v=%s"' % vmod, n)
+        n = re.sub(r'src="links-github\.js(\?v=[^"]*)?"',
+                   'src="links-github.js?v=%s"' % vlnk, n)
         if n != s:
             io.open(f, 'w', encoding='utf-8', newline='').write(n)
             mudou.append(f)
-    sys.stdout.write('tema.css=%s  tema.js=%s  anexo-cola.js=%s  modelo=%s\n'
-                     % (vcss, vjs, vanx, vmod))
+    sys.stdout.write('tema.css=%s  tema.js=%s  anexo-cola=%s  modelo=%s  links-gh=%s\n'
+                     % (vcss, vjs, vanx, vmod, vlnk))
     sys.stdout.write('paginas atualizadas: %s\n'
                      % (', '.join(mudou) if mudou else 'nenhuma (ja estavam certas)'))
 

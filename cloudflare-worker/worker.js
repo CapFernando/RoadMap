@@ -331,6 +331,12 @@ const HIST_CAMPOS = {
   titulo:              'titulo',
   pausado_em:          'pausa',
   concluido_em:        'data de conclusao',
+  // Referencia ao codigo entra no historico: "quando esta demanda passou a
+  // apontar para o PR 712" e pergunta de auditoria, e trocar o link de uma
+  // entrega ja validada e exatamente o que ninguem deveria fazer em silencio.
+  link_issue:          'issue',
+  link_pr:             'PR',
+  link_milestone:      'milestone',
 };
 // Guarda por demanda. Sem teto, um card antigo acumularia centenas de entradas e
 // o arquivo (164 KB hoje) cresceria sem controle — ele e lido inteiro em toda
@@ -527,6 +533,76 @@ function entrandoEmConcluidoSemHoras(recebido, servidor) {
     if (faltaHoras(m)) presos.push(m.codigo || m.id);
   }
   return presos;
+}
+
+
+// ─── REFERENCIA AO GITHUB ──────────────────────────────────────────────
+// Antes havia UM campo `link_externo` para "o link da demanda", e ele estava
+// preenchido em ZERO das 201 demandas. Duas razoes: um slot para tres coisas
+// diferentes nao serve para nenhuma, e — a parte que faltava notar — ele nunca
+// existiu em tela alguma; so a API o aceitava.
+//
+// Agora sao tres, e cada um sabe o que e. E o que permite ir do card para o
+// codigo e voltar. `link_externo` continua aceito e devolvido, para nao quebrar
+// automacao que ja o use.
+const LINKS_GH = ['link_issue', 'link_pr', 'link_milestone'];
+
+// Aceita o NUMERO SOLO e expande. Quem automatiza tem o numero da issue vindo do
+// proprio GitHub; exigir a URL montada seria trabalho de string do lado errado.
+// `link_pr` aceita varios separados por espaco: demanda quebrada em dois PRs e
+// rotina, e sem isso o segundo iria para a observacao.
+const GH_REPO_PADRAO = 'audaxcapitalsa/AXCRED-DJANGO';
+const GH_CAMINHO = { link_issue: 'issues', link_pr: 'pull', link_milestone: 'milestone' };
+
+function linkGhNormaliza(campo, valor) {
+  const um = (v) => {
+    const t = String(v || '').trim();
+    if (!t) return '';
+    if (/^https?:\/\//i.test(t)) return t;
+    const n = t.replace(/^#/, '').trim();
+    if (/^\d+$/.test(n)) {
+      return 'https://github.com/' + GH_REPO_PADRAO + '/' + GH_CAMINHO[campo] + '/' + n;
+    }
+    return t;  // nao e numero nem URL: a validacao recusa mostrando o que veio
+  };
+  const bruto = String(valor || '').trim();
+  if (!bruto) return '';
+  if (campo !== 'link_pr') return um(bruto);
+  return bruto.split(/[\s,;]+/).filter(Boolean).map(um).join(' ');
+}
+
+// Devolve o texto do erro, ou '' se esta valido.
+function linkGhErro(campo, valor) {
+  const v = linkGhNormaliza(campo, valor);
+  if (!v) return '';
+  const partes = campo === 'link_pr' ? v.split(/\s+/).filter(Boolean) : [v];
+  for (const u of partes) {
+    if (!/^https?:\/\//i.test(u)) {
+      return 'Em ' + campo + ', use o numero (ex.: 683) ou o endereco completo comecando com http.';
+    }
+  }
+  return '';
+}
+
+// Aplica os tres sobre a demanda. Devolve o texto do erro (e nao aplica nada) ou
+// null. Uma funcao para as duas rotas: a validacao de `link_externo` estava
+// escrita duas vezes e ja divergia — uma checava vazio antes, a outra nao.
+function aplicaLinksGh(m, body, mudou) {
+  // Valida TODOS antes de aplicar QUALQUER um. Numa passada so, um corpo com
+  // issue valida e PR invalido deixava a issue gravada no objeto e devolvia erro:
+  // hoje a rota descarta o objeto e nao ha dano, mas e armadilha pronta para
+  // quem reusar esta funcao antes de um save.
+  for (const campo of LINKS_GH) {
+    if (typeof body[campo] !== 'string') continue;
+    const err = linkGhErro(campo, body[campo]);
+    if (err) return { campo, detail: err };
+  }
+  for (const campo of LINKS_GH) {
+    if (typeof body[campo] !== 'string') continue;
+    m[campo] = limpaTexto(linkGhNormaliza(campo, body[campo]), 600);
+    if (mudou) mudou.push(campo);
+  }
+  return null;
 }
 
 function atribuiCodigosProjeto(data) {
@@ -1456,7 +1532,12 @@ export default {
       pontos: m.poker_pontos == null ? null : m.poker_pontos,
       horas_realizadas: m.horas_realizadas || 0,
       implementacao: m.implementacao || '',
+      // `link_externo` fica por compatibilidade: nenhuma demanda o usa, mas
+      // automacao antiga pode ler o campo.
       link_externo: m.link_externo || '',
+      link_issue: m.link_issue || '',
+      link_pr: m.link_pr || '',
+      link_milestone: m.link_milestone || '',
       projeto_id: m.projeto_id || '',
       pausado: !!String(m.pausado_em || '').trim(),
       pausa_motivo: m.pausa_motivo || '',
@@ -1653,6 +1734,8 @@ export default {
           }
           m.link_externo = u; mudou.push('link_externo');
         }
+        const errLink = aplicaLinksGh(m, body, mudou);
+        if (errLink) return json({ error: errLink.campo, detail: errLink.detail }, 400, headers);
         if (body.horas_realizadas !== undefined) {
           const h = Number(body.horas_realizadas);
           if (!Number.isFinite(h) || h < 0) {
@@ -1686,7 +1769,8 @@ export default {
         if (!mudou.length) {
           return json({ error: 'nada_a_mudar',
                         detail: 'Informe ao menos um campo: implementacao, descricao, observacao, ' +
-                                'link_externo, horas_realizadas, etapa ou projeto_id.' }, 400, headers);
+                                'link_issue, link_pr, link_milestone, horas_realizadas, ' +
+                                'etapa ou projeto_id.' }, 400, headers);
         }
         msg = 'chore: ' + (m.codigo || m.id) + ' atualizada por ' + (eu || 'api') +
               ' (' + mudou.join(', ') + ')';
@@ -1714,6 +1798,8 @@ export default {
           }
           m.link_externo = u;
         }
+        const errLinkE = aplicaLinksGh(m, body, null);
+        if (errLinkE) return json({ error: errLinkE.campo, detail: errLinkE.detail }, 400, headers);
         m.implementacao = impl;
         m.horas_realizadas = h;
         m.status_planejamento = 'validacao';

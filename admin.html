@@ -779,6 +779,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
+<script src="links-github.js?v=28d5e3cedb"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -1291,6 +1292,19 @@
       <div class="form-group">
         <label>O que foi implementado</label>
         <textarea id="m-implementacao" rows="3" placeholder="Preenchido pelo dev ao concluir. Alimenta o relatório do comitê de produto."></textarea>
+      </div>
+      <!-- Referencia ao codigo. E o que permite ir do card para o commit e
+           voltar; sem isso "o que exatamente foi entregue nesta demanda" se
+           responde no Teams. Basta o numero: quem tem a issue aberta na frente
+           sabe o numero, nao a URL. -->
+      <div class="form-group">
+        <label>Referência no GitHub <small style="font-weight:400;color:var(--text3)">— só o número basta</small></label>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+          <input type="text" id="m-link-issue" placeholder="Issue: 683" title="Issue no GitHub. Digite só o número." />
+          <input type="text" id="m-link-pr" placeholder="PR: 712" title="Pull request. Mais de um: 712, 715" />
+          <input type="text" id="m-link-milestone" placeholder="Milestone: 4" title="Milestone no GitHub. Digite só o número." />
+        </div>
+        <div id="m-link-chips" style="margin-top:7px"></div>
       </div>
       <!-- Anexos: incluir arquivo direto do card, para facilitar a explicação -->
       <div class="form-group">
@@ -4110,6 +4124,9 @@ function openModalMelhoria(id) {
   // disponivel por botao nas existentes. Em demanda antiga com texto livre nao se
   // mexe: sao mais de 200 na base, e sobrescrever seria o pior defeito possivel.
   if (window.ligaModeloDescricao) ligaModeloDescricao('m-descricao', { auto: !m });
+  if (window.ghLinkPreenche) ghLinkPreenche('m', m);
+  const mChips = document.getElementById('m-link-chips');
+  if (mChips && window.ghLinkChips) mChips.innerHTML = ghLinkChips(m || {});
   document.getElementById('m-estimativa').value      = m?.estimativa       || '';
   populateDevSelect(m?.dev || '');
   document.getElementById('m-prioridade').value      = m?.prioridade       || '';
@@ -4515,6 +4532,10 @@ async function saveMelhoria() {
   // Modelo com seção em branco nao salva: era o pedido — "nao permitir salvar se o
   // texto nao foi alterado". Só cobra de quem usou o modelo; texto livre passa.
   if (window.validaModeloDescricao && !validaModeloDescricao('m-descricao', toast)) return;
+  // Coleta ja normaliza ("683" -> URL) e recusa engano de campo (issue colada no
+  // campo do PR). null = ja avisou e focou; a tela so precisa parar.
+  const ghLinks = window.ghLinkColeta ? ghLinkColeta('m', toast) : {};
+  if (ghLinks === null) return;
   const devSel = document.getElementById('m-dev').value.trim();
   if (exigeDev(sp) && !devSel) {
     toast('Escolha o desenvolvedor: ' + (STATUS_LABELS[sp] || sp) + ' exige responsável.', 'err');
@@ -4588,6 +4609,7 @@ async function saveMelhoria() {
     historico:           existing.historico || [],
     anexos:              _mAnexos,
     horas_realizadas:    parseFloat(document.getElementById('m-horas-real').value) || existing.horas_realizadas || 0,
+    ...ghLinks,
     criado_em:           existing.criado_em || new Date().toISOString(),
   };
   // Depois de montar o objeto: a etapa escolhida no formulario decide se a data de

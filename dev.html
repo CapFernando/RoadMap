@@ -415,6 +415,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
+<script src="links-github.js?v=28d5e3cedb"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -735,6 +736,19 @@
       </div>
     </div>
 
+    <!-- Referencia ao codigo. E o que permite ir do card para o commit e
+         voltar; sem isso "o que exatamente foi entregue nesta demanda" se
+         responde no Teams. Basta o numero: quem tem a issue aberta na frente
+         sabe o numero, nao a URL. -->
+    <div class="form-group">
+      <label>Referência no GitHub <small style="font-weight:400;color:var(--text3)">— só o número basta</small></label>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+        <input type="text" id="ms-link-issue" placeholder="Issue: 683" title="Issue no GitHub. Digite só o número." />
+        <input type="text" id="ms-link-pr" placeholder="PR: 712" title="Pull request. Mais de um: 712, 715" />
+        <input type="text" id="ms-link-milestone" placeholder="Milestone: 4" title="Milestone no GitHub. Digite só o número." />
+      </div>
+      <div id="ms-link-chips" style="margin-top:7px"></div>
+    </div>
     <!-- Anexos: incluir arquivo direto do card, para explicar melhor a demanda -->
     <div class="form-group">
       <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
@@ -1178,9 +1192,15 @@ function epFuncoesHTML() {
     },
     {
       acao: 'demanda-atualizar',
-      o_que: 'Grava o que é seu: <code>implementacao</code>, <code>descricao</code>, <code>observacao</code>, <code>link_externo</code>, <code>horas_realizadas</code>, <code>projeto_id</code> (só projeto aprovado) e <code>etapa</code> até <code>em_andamento</code>.',
+      o_que: 'Grava o que é seu: <code>implementacao</code>, <code>descricao</code>, ' +
+             '<code>observacao</code>, <code>horas_realizadas</code>, <code>projeto_id</code> ' +
+             '(só projeto aprovado) e <code>etapa</code> até <code>em_andamento</code>. ' +
+             'Referência no GitHub: <code>link_issue</code>, <code>link_pr</code> e ' +
+             '<code>link_milestone</code> — aceitam só o número (<code>"link_pr":"712"</code> ' +
+             'vira a URL do repositório AXCRED-DJANGO). <code>link_pr</code> aceita vários ' +
+             'separados por espaço.',
       corpo: '{"action":"demanda-atualizar","token":"TOKEN","codigo":"' + cod +
-        '","link_externo":"https://github.com/org/repo/pull/42","horas_realizadas":6}',
+        '","link_pr":"712","link_issue":"683","horas_realizadas":6}',
     },
     {
       acao: 'demanda-entregar',
@@ -2972,6 +2992,11 @@ function openStatusModal(id, preselect) {
   sel.value = preselect || COLUMNS.find(c => c.maps.includes(getStatusKey(m)))?.key || getStatusKey(m);
   document.getElementById('ms-horas').value = m.horas_realizadas || '';
   document.getElementById('ms-implementacao').value = m.implementacao || '';
+  if (window.ghLinkPreenche) ghLinkPreenche('ms', m);
+  // Chips clicaveis abaixo dos campos: depois de gravar, o valor no input e uma
+  // URL longa e truncada; o chip mostra "#683" e abre no GitHub.
+  const chipsEl = document.getElementById('ms-link-chips');
+  if (chipsEl && window.ghLinkChips) chipsEl.innerHTML = ghLinkChips(m);
   // Devolucao do PM/PO: sem mostrar aqui, o dev reentrega a mesma coisa.
   devPausaRender(m);
   const devolucao = document.getElementById('ms-devolucao');
@@ -3150,11 +3175,15 @@ async function salvarEntrega() {
     document.getElementById('ms-implementacao').focus();
     return;
   }
+  // Referencia ao GitHub: normaliza "712" para a URL e recusa engano de campo.
+  const ghLinks = window.ghLinkColeta ? ghLinkColeta('ms', toast) : {};
+  if (ghLinks === null) return;
   const antesH = m.horas_realizadas, antesI = m.implementacao, antesA = m.anexos;
   m.horas_realizadas = horas;
   m.implementacao = impl;
+  Object.assign(m, ghLinks);
   if (_msAnexosMexidos) m.anexos = _msAnexos;
-  const campos = { horas_realizadas: horas, implementacao: impl };
+  const campos = Object.assign({ horas_realizadas: horas, implementacao: impl }, ghLinks);
   if (_msAnexosMexidos) campos.anexos = _msAnexos;
   const okSalvo = await saveToGitHub({ [id]: campos });
   if (okSalvo) {
@@ -3245,8 +3274,13 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   // Marca quando saiu das maos do dev. A aba Entrega do admin mostra "esperando
    // desde", e sem isto o campo ficava sempre vazio.
   if (colKey === 'validacao' && !m.entregue_em) m.entregue_em = new Date().toISOString();
-  const campos = { status_planejamento: colKey, status: m.status,
-                   horas_realizadas: m.horas_realizadas || 0 };
+  // Os links tambem aqui: mover para Validacao e o gesto em que o dev acabou de
+   // abrir o PR, e o patch leva SO o que esta listado — sem isto o numero digitado
+   // no card sumiria ao arrastar.
+  const ghLinks = window.ghLinkColeta ? (ghLinkColeta('ms', toast) || {}) : {};
+  Object.assign(m, ghLinks);
+  const campos = Object.assign({ status_planejamento: colKey, status: m.status,
+                   horas_realizadas: m.horas_realizadas || 0 }, ghLinks);
   if (m.entregue_em) campos.entregue_em = m.entregue_em;
   if (implementacao !== undefined) campos.implementacao = implementacao;
   if (_msAnexosMexidos) campos.anexos = _msAnexos;
