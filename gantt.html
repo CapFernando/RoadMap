@@ -2088,8 +2088,7 @@ function onDayDrop(e) {
     m.dev = targetDev;
     m.inicio = targetDate;
     m.entrega = targetDate;
-    m.status_planejamento = m.status_planejamento === 'backlog' ? 'planejado' : m.status_planejamento;
-    m.status = spToStatus(m.status_planejamento);
+    promoveAoAgendar(m);
   } else if (dragData.type === 'card') {
     // preserve duration
     if (m.inicio && m.entrega) {
@@ -2137,6 +2136,24 @@ function onLayerDragLeave(e) {
   document.querySelectorAll('.day-cell.drop-over').forEach(c => c.classList.remove('drop-over'));
 }
 
+// Soltar uma demanda na linha do tempo E o ato de planejar: dali em diante ela tem
+// dev e data. Entao a etapa nao pode continuar em Planning nem em Levantar
+// Requisitos — vai no minimo para Planejado.
+//
+// A regra antes era `=== 'backlog' ? 'planejado'`, escrita igual em dois handlers
+// de drop: promovia so o backlog, e a demanda pontuada no Planning Poker
+// continuava aparecendo em Planning depois de agendada, o que fazia a fila do
+// poker mostrar de novo o que ja tinha sido estimado.
+const ETAPAS_ANTES_DE_PLANEJADO = ['backlog', 'levantar_req', 'planning'];
+function promoveAoAgendar(m) {
+  if (!m) return false;
+  const atual = m.status_planejamento || 'backlog';
+  if (!ETAPAS_ANTES_DE_PLANEJADO.includes(atual)) return false;
+  m.status_planejamento = 'planejado';
+  m.status = spToStatus('planejado');
+  return true;
+}
+
 function onLayerDrop(e, dev) {
   if (VIEWER_MODE) return;
   e.preventDefault();
@@ -2151,8 +2168,7 @@ function onLayerDrop(e, dev) {
   const targetDate = d.str;
   if (dragData.type === 'backlog') {
     m.dev = dev; m.inicio = targetDate; m.entrega = targetDate;
-    m.status_planejamento = m.status_planejamento === 'backlog' ? 'planejado' : m.status_planejamento;
-    m.status = spToStatus(m.status_planejamento);
+    promoveAoAgendar(m);
   } else if (dragData.type === 'card') {
     if (m.inicio && m.entrega) {
       const dur = Math.round((new Date(m.entrega+'T12:00:00') - new Date(m.inicio+'T12:00:00')) / 86400000);
