@@ -552,6 +552,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="senha.js?v=a7688efbad"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -601,6 +602,7 @@
               title="Esconde filtros e fila para projetar na reunião">📽 Apresentar</button>
       <button class="btn btn-primary btn-sm" onclick="openModal()">+ Nova issue</button>
       <button class="btn btn-secondary btn-sm" onclick="saveToGitHub()">💾 Salvar</button>
+      <button class="btn btn-ghost btn-sm" onclick="abrirTrocaSenha()" title="Alterar a senha da sua conta">Minha senha</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sair</button>
     </div>
   </header>
@@ -915,6 +917,12 @@ let _ganttPw = sessionStorage.getItem('rm_admin_pw') || '';
 // Conta por pessoa: o gantt tinha ficado de fora da conversao e ainda exigia a
 // senha compartilhada. Token e senha convivem durante a transicao.
 let _ganttToken = sessionStorage.getItem('rm_admin_token') || '';
+// A troca de senha encerra as sessoes e devolve um token novo. Sem ouvir isto, a
+// tela continuaria usando o token antigo (que o servidor acabou de invalidar) e a
+// proxima gravacao falharia com "sessao expirada" — logo depois de trocar a senha,
+// que e o pior momento para parecer que quebrou.
+window.addEventListener('rm-token-novo', (e) => { _ganttToken = e.detail || _ganttToken; });
+
 let _gEu = null;
 try { _gEu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) {}
 function credGantt() {

@@ -414,6 +414,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="senha.js?v=a7688efbad"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -941,6 +942,12 @@ let _devPw = sessionStorage.getItem('rm_dev_pw') || '';
 // Conta por pessoa. A senha compartilhada segue valendo enquanto as contas nao
 // estao todas criadas, entao os dois caminhos convivem.
 let _devToken = sessionStorage.getItem('rm_dev_token') || '';
+// A troca de senha encerra as sessoes e devolve um token novo. Sem ouvir isto, a
+// tela continuaria usando o token antigo (que o servidor acabou de invalidar) e a
+// proxima gravacao falharia com "sessao expirada" — logo depois de trocar a senha,
+// que e o pior momento para parecer que quebrou.
+window.addEventListener('rm-token-novo', (e) => { _devToken = e.detail || _devToken; });
+
 let _eu = null;
 try { _eu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) {}
 function credDev() {
@@ -2596,6 +2603,7 @@ function buildDevDropdown() {
   // sessao. Sao coisas diferentes e antes so a primeira existia.
   dd.innerHTML = items + `<div class="dev-dropdown-sep"></div>` +
     `<div class="dev-dropdown-item" onclick="trocarDev()">🔄 Trocar de dev (mantém a sessão)</div>` +
+    `<div class="dev-dropdown-item" onclick="abrirTrocaSenha()">🔑 Minha senha</div>` +
     `<div class="dev-dropdown-item" onclick="sairDev()">🚪 Sair da conta</div>`;
 }
 

@@ -170,6 +170,9 @@ const LIMITES = {
   'demanda-consultar': { max: 60, janela: 60 },
   'demanda-atualizar': { max: 30, janela: 60 },
   'demanda-entregar':  { max: 20, janela: 60 },
+  // Trocar senha exige a senha atual: sem limite, o campo viraria oraculo para
+  // adivinhar a senha de quem deixou a sessao aberta.
+  'senha-alterar':     { max: 10, janela: 300 },
   'sugestao':       { max: 6,   janela: 60 },   // formulario publico do dash
   // Leitura da base. Os paineis fazem polling folgado (index 60s, admin/gantt
   // 30s), entao ~4/min por pessoa cobre uso normal com sobra. O limite existe
@@ -2038,6 +2041,66 @@ export default {
       if (Math.random() < 0.1) await env.POKER_DB.prepare('DELETE FROM sessao WHERE expira_em < ?').bind(nowIso).run();
       return json({ ok: true, token, expira_em: expira,
                     usuario: { login: u.login, nome: u.nome, papel: u.papel } }, 200, headers);
+    }
+
+    // ── Trocar a PROPRIA senha ──────────────────────────────────────
+    // Antes so o admin trocava senha, pela aba Usuarios. Isso obrigava a senha
+    // nova a trafegar por Teams ate chegar em quem ia usar, e senha definida por
+    // terceiro tende a nunca ser trocada — fica a padrao que todo mundo conhece.
+    //
+    // EXIGE CONTA (token de sessao). Quem entrou pela senha compartilhada nao tem
+    // senha individual: aceitar aqui trocaria a senha de qual pessoa?
+    if (body.action === 'senha-alterar') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      await contasMigrar(env.POKER_DB);
+      const ident = await identifica(env, body);
+      if (!ident || !ident.usuario) {
+        return json({ error: 'sem_conta',
+                      detail: 'Entre com sua conta para trocar a senha. A senha compartilhada ' +
+                              'do time nao e individual e nao pode ser alterada aqui.' }, 403, headers);
+      }
+      const atual = String(body.senhaAtual || '');
+      const nova = String(body.senhaNova || '');
+      if (nova.length < 8) {
+        return json({ error: 'senha_curta',
+                      detail: 'A nova senha precisa de ao menos 8 caracteres.' }, 400, headers);
+      }
+      if (nova === atual) {
+        return json({ error: 'igual',
+                      detail: 'A nova senha e igual a atual.' }, 400, headers);
+      }
+      const u = await env.POKER_DB.prepare(
+        'SELECT id, senha_hash, salt FROM usuario WHERE id = ?').bind(ident.usuario.id).first();
+      if (!u) return json({ error: 'nao_encontrado' }, 404, headers);
+      // Confere a senha ATUAL. Sem isso, um token vazado trocaria a senha e
+      // trancaria a pessoa fora da propria conta.
+      const hAtual = await derivaSenha(atual, u.salt);
+      if (!igualSeguro(hAtual, u.senha_hash)) {
+        // Conta a tentativa: sem limite, o campo "senha atual" seria um oraculo
+        // para adivinhar a senha de quem deixou a sessao aberta.
+        await contaTentativa(env, ip, 'senha-alterar');
+        return json({ error: 'credencial',
+                      detail: 'Senha atual incorreta.' }, 401, headers);
+      }
+      const saltN = hexDe(crypto.getRandomValues(new Uint8Array(16)));
+      const hashN = await derivaSenha(nova, saltN);
+      await env.POKER_DB.prepare('UPDATE usuario SET senha_hash = ?, salt = ? WHERE id = ?')
+        .bind(hashN, saltN, u.id).run();
+      // Encerra TODAS as sessoes da pessoa e devolve uma nova: trocar senha e o
+      // gesto de quem suspeita de acesso indevido, e manter as outras sessoes de
+      // pe esvaziaria o sentido. Devolver token novo evita expulsar quem trocou.
+      await env.POKER_DB.prepare('DELETE FROM sessao WHERE usuario_id = ?').bind(u.id).run();
+      const tk = crypto.randomUUID() + '-' + crypto.randomUUID();
+      const agoraIso = new Date().toISOString();
+      const exp = new Date(Date.now() + SESSAO_H * 3600 * 1000).toISOString();
+      await env.POKER_DB.prepare(
+        'INSERT INTO sessao (token, usuario_id, expira_em, criado_em) VALUES (?,?,?,?)')
+        .bind(tk, u.id, exp, agoraIso).run();
+      // Resolve pedido de recuperacao em aberto: a pessoa se resolveu sozinha, e
+      // deixar na fila faria o admin trocar a senha que ela acabou de definir.
+      await env.POKER_DB.prepare('UPDATE senha_pedido SET atendido = 1 WHERE usuario_id = ?')
+        .bind(u.id).run();
+      return json({ ok: true, token: tk, expira_em: exp }, 200, headers);
     }
 
     if (body.action === 'logout') {

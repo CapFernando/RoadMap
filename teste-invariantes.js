@@ -78,9 +78,14 @@ ok(/const facilitadorOk = async/.test(blocoPoker),
    'o poker tem um unico ponto de decisao (facilitadorOk)');
 
 // Exigir papel passa por exigePapel. identifica direto so e aceito onde a
-// semantica e outra: dentro do proprio helper e no quem-sou, que REPORTA o papel.
+// semantica e OUTRA, e sao tres casos:
+//   1. dentro do proprio helper exigePapel;
+//   2. quem-sou, que REPORTA o papel em vez de exigir um;
+//   3. senha-alterar, que precisa de "tem conta propria" e nao de papel — trocar
+//      a senha e de qualquer papel, e quem entrou pela senha compartilhada nao tem
+//      senha individual para trocar. exigePapel responderia a pergunta errada.
 const diretos = (W.match(/const ident\w* = await identifica\(env, body\);/g) || []).length;
-ok(diretos <= 2, 'identifica chamado direto apenas onde a semantica difere',
+ok(diretos <= 3, 'identifica chamado direto apenas onde a semantica difere',
    diretos + ' ocorrencia(s) (helper + quem-sou)');
 ok((W.match(/exigePapel\(env, body/g) || []).length >= 4,
    'as rotas que exigem papel usam exigePapel');
@@ -489,7 +494,7 @@ sec('Cache: arquivo compartilhado sempre versionado por hash');
 
 for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
                            ['index', INDEX], ['poker', POKER]]) {
-  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js|modelo-descricao\.js|links-github\.js)"/g) || [])
+  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js|modelo-descricao\.js|links-github\.js|senha\.js)"/g) || [])
     .concat(src.match(/href="tema\.css"/g) || []);
   ok(semHash.length === 0, nome + ' nao referencia arquivo compartilhado sem ?v=',
      semHash.join(' '));
@@ -652,6 +657,43 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV]]) {
   ok(/ghLinkPreenche\('[a-z]+', m, state\.melhorias\)/.test(src),
      nome + ' alimenta a lista de repositorios com a base');
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('Troca da propria senha');
+
+const rotaSenha = W.slice(W.indexOf("body.action === 'senha-alterar'"),
+                          W.indexOf("body.action === 'logout'"));
+ok(!!rotaSenha && rotaSenha.length > 100, 'existe a rota senha-alterar');
+// Sem conta propria nao ha senha individual para trocar. Aceitar a senha
+// compartilhada aqui trocaria a senha de QUAL pessoa?
+ok(/!ident \|\| !ident\.usuario/.test(rotaSenha),
+   'exige conta propria: senha compartilhada nao troca senha');
+// Sem conferir a senha atual, um token vazado trancaria a pessoa fora da conta.
+ok(/igualSeguro\(hAtual, u\.senha_hash\)/.test(rotaSenha),
+   'confere a senha ATUAL antes de trocar');
+// Sem limite, o campo "senha atual" e um oraculo para adivinhar a senha de quem
+// deixou a sessao aberta.
+ok(/contaTentativa\(env, ip, 'senha-alterar'\)/.test(rotaSenha),
+   'tentativa errada conta para o limite por IP');
+ok(/'senha-alterar':\s*\{ max:/.test(W), 'a rota tem limite declarado');
+// Trocar senha e o gesto de quem suspeita de acesso indevido: manter as outras
+// sessoes de pe esvaziaria o sentido. E devolver token novo evita expulsar quem
+// acabou de trocar.
+ok(/DELETE FROM sessao WHERE usuario_id = \?/.test(rotaSenha),
+   'encerra as outras sessoes da pessoa');
+ok(/INSERT INTO sessao/.test(rotaSenha) && /token: tk/.test(rotaSenha),
+   'devolve token novo, para nao expulsar quem trocou');
+// A tela precisa ADOTAR o token novo, senao a proxima gravacao falha com "sessao
+// expirada" logo depois de trocar a senha — o pior momento para parecer quebrado.
+for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV], ['poker', POKER]]) {
+  ok(/senha\.js\?v=/.test(src), nome + ' carrega o modulo de senha');
+  ok(/abrirTrocaSenha\(\)/.test(src), nome + ' oferece a troca de senha');
+  ok(/rm-token-novo/.test(src), nome + ' adota o token novo depois da troca');
+}
+const SN = lerTela('senha.js');
+ok(/senhaAtual/.test(SN) && /senhaNova/.test(SN), 'a tela manda senha atual e nova');
+ok(!/localStorage/.test(SN),
+   'a senha nunca toca localStorage (que sobrevive ao fechar o navegador)');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

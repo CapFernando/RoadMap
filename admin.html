@@ -778,6 +778,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="senha.js?v=a7688efbad"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -820,6 +821,7 @@
       <button class="btn btn-secondary btn-sm" onclick="window.open('dev.html','_blank')">🗂 Painel Dev</button>
       <button class="btn btn-secondary btn-sm" onclick="window.open('index.html','_blank')">Ver painel público</button>
       <button class="btn btn-success btn-sm" onclick="saveToGitHub()">💾 Publicar alterações</button>
+      <button class="btn btn-secondary btn-sm" onclick="abrirTrocaSenha()" title="Alterar a senha da sua conta">Minha senha</button>
       <button class="btn btn-secondary btn-sm" onclick="doLogout()">Sair</button>
     </div>
   </header>
@@ -1516,6 +1518,12 @@ let _adminPw = sessionStorage.getItem('rm_admin_pw') || '';
 // senha compartilhada continua valendo, entao os dois convivem — quem tem conta
 // manda token, quem ainda nao tem manda senha.
 let _adminToken = sessionStorage.getItem('rm_admin_token') || '';
+// A troca de senha encerra as sessoes e devolve um token novo. Sem ouvir isto, a
+// tela continuaria usando o token antigo (que o servidor acabou de invalidar) e a
+// proxima gravacao falharia com "sessao expirada" — logo depois de trocar a senha,
+// que e o pior momento para parecer que quebrou.
+window.addEventListener('rm-token-novo', (e) => { _adminToken = e.detail || _adminToken; });
+
 let _eu = null; // { login, nome, papel } quando entrou por conta
 // Credencial para as rotas que exigem admin. Manda o que existir.
 function credAdmin() {
