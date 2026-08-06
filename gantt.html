@@ -267,6 +267,11 @@
     }
     .cap-bar-fill.over { background: var(--red); }
     .cap-text { font-size: 10px; color: var(--text3); white-space: nowrap; }
+    /* Os pontos por semana quebram linha em vez de serem cortados: com a pontuacao
+       retroativa os numeros passaram de 2 para 3 digitos e o total ("Tot 5...")
+       ficava fora da coluna de 230px, que e a informacao que mais interessa. */
+    .cap-text.poker-pontos { white-space: normal; line-height: 1.45; display: block; }
+    .cap-text.poker-pontos b { color: var(--text2); }
     /* Dia de ausência: faixa listrada na cor do tipo, atrás dos cards. Fica
        legível sem competir com a barra da demanda. */
     .day-cell.ausente {
@@ -1902,7 +1907,7 @@ function renderGantt() {
       <span class="cap-text">${free} dia${free!==1?'s':''} livre${free!==1?'s':''} / ${disponivel}</span>
       ${ausentes.size ? `<span class="cap-text ausencia-text" title="Dias úteis de ausência neste mês (fora do total disponível)">🌴 ${ausentes.size} dia${ausentes.size!==1?'s':''} ausente</span>` : ''}
       ${conflitos ? `<span class="cap-text conflito-text" title="Há demanda planejada em dia de ausência — considere realocar">⚠ ${conflitos} dia${conflitos!==1?'s':''} em conflito</span>` : ''}
-      ${pontosTotal > 0 ? `<span class="cap-text poker-pontos" title="Pontos do Planning Poker por semana do mês">🃏 ${porSemana.map((p,i) => `S${i+1}:${p}`).join(' ')} · Tot <b>${pontosTotal}</b></span>` : ''}
+      ${pontosTotal > 0 ? `<span class="cap-text poker-pontos" title="Pontos do Planning Poker: total do mês e distribuição por semana">🃏 <b>${pontosTotal}</b> pt · ${porSemana.map((p,i) => `S${i+1}:${p}`).join(' ')}</span>` : ''}
     </div>`;
 
     // Timeline cells
