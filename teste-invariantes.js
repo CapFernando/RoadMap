@@ -494,7 +494,7 @@ sec('Cache: arquivo compartilhado sempre versionado por hash');
 
 for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
                            ['index', INDEX], ['poker', POKER]]) {
-  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js|modelo-descricao\.js|links-github\.js|senha\.js)"/g) || [])
+  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js|modelo-descricao\.js|links-github\.js|senha\.js|dialogo\.js)"/g) || [])
     .concat(src.match(/href="tema\.css"/g) || []);
   ok(semHash.length === 0, nome + ' nao referencia arquivo compartilhado sem ?v=',
      semHash.join(' '));
@@ -776,6 +776,43 @@ ok(/n-datas-nota/.test(DEV), 'e explica o motivo do cadeado');
 // O caminho do admin continua aberto: a trava e sobre QUEM muda, nao sobre mudar.
 ok(!/travaDatasComprometidas\(data, antesPub\)/.test(W),
    'o publish do admin NAO e travado (o prazo e dele)');
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('Dialogos: da pagina, nao do navegador');
+
+const DLG = lerTela('dialogo.js');
+// prompt() nativo tem um modo de falha SILENCIOSO: depois do segundo dialogo
+// seguido, o Chrome oferece "impedir que esta pagina crie caixas de dialogo
+// adicionais", e a partir dai TODO prompt() devolve null sem avisar. O motivo da
+// pausa voltaria vazio e a gravacao seguiria adiante. Nao ha como detectar.
+for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
+                           ['poker', POKER]]) {
+  ok(/dialogo\.js\?v=/.test(src), nome + ' carrega o modulo de dialogo');
+  const prompts = (src.match(/=\s*prompt\(/g) || []).length;
+  ok(prompts === 0, nome + ' nao usa prompt() para pedir texto', prompts + ' restante(s)');
+}
+// Texto que a outra pessoa vai ler (motivo, parecer) precisa de paragrafo: numa
+// linha so o autor escreve menos, e era esse o texto que decidia a devolucao.
+ok(/multilinha: true/.test(ADMIN) && /multilinha: true/.test(POKER),
+   'motivo e parecer usam campo de varias linhas');
+// Enter no textarea e quebra de linha, nao envio: roubar isso estragaria
+// justamente o texto longo que o dialogo existe para permitir.
+ok(/!o\.multilinha \|\| e\.ctrlKey/.test(DLG),
+   'Enter nao envia no campo de paragrafo (Ctrl+Enter envia)');
+// Senha de terceiro em campo de senha: o prompt() mostrava em texto limpo.
+ok(/senha: true/.test(ADMIN), 'a senha definida pelo admin nao aparece na tela');
+// O contrato e o mesmo do prompt (string ou null), para a conversao nao mudar a
+// logica de cada chamador.
+ok(/fecha\(null\)/.test(DLG), 'cancelar devolve null, como o prompt fazia');
+
+// A senha de LEITURA so e pedida em link de consulta. Nas telas com formulario de
+// login, um dialogo do navegador por cima dele pedia uma senha DIFERENTE da que o
+// formulario pede — a pessoa ficava sem saber qual das duas era a sua.
+for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
+                           ['poker', POKER]]) {
+  ok(/const veioDeLink = !!new URLSearchParams\(location\.search\)\.get\('k'\)/.test(src),
+     nome + ' so pede senha de leitura em link de consulta (?k=)');
+}
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

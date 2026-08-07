@@ -790,6 +790,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="dialogo.js?v=e9a64beca1"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
@@ -1773,7 +1774,15 @@ function credenciaisLeitura() {
 }
 
 async function pedirSenhaLeitura() {
-  const s = prompt('Esta consulta exige senha de acesso:');
+  // Dialogo da pagina, nao prompt(): o do navegador some se a pessoa marcar
+  // "impedir que esta pagina crie caixas de dialogo adicionais", e ai o link de
+  // consulta pararia de funcionar sem nenhuma mensagem.
+  const s = window.pedirTexto
+    ? await pedirTexto({ titulo: 'Link de consulta',
+                         texto: 'Este link exige a senha de visualizacao. ' +
+                                'Se voce tem conta, feche e entre pelo formulario.',
+                         senha: true, obrigatorio: true, ok: 'Abrir' })
+    : prompt('Esta consulta exige senha de acesso:');
   if (!s) return false;
   sessionStorage.setItem('rm_view_pw', s);
   return true;
@@ -1790,7 +1799,13 @@ async function lerDados(permitirCache, jaTentou) {
       // Credencial invalida ou ausente: pede uma vez e repete. Nao cai no
       // fallback publico, que deixaria de existir com o repositorio privado.
       sessionStorage.removeItem('rm_view_pw');
-      if (!jaTentou && await pedirSenhaLeitura()) return lerDados(permitirCache, true);
+      // So pede a senha de leitura para quem chegou por LINK DE CONSULTA (?k=).
+      // Nesta tela ha formulario de login logo abaixo: um prompt do navegador por
+      // cima dele pedia uma senha DIFERENTE da que o formulario pede, e a pessoa
+      // ficava sem saber qual das duas era a sua. 401 sem credencial aqui
+      // significa "ainda nao entrou" — a resposta certa e a tela de login.
+      const veioDeLink = !!new URLSearchParams(location.search).get('k');
+      if (veioDeLink && !jaTentou && await pedirSenhaLeitura()) return lerDados(permitirCache, true);
       throw new Error('Acesso nao autorizado. Informe a senha correta para consultar.');
     }
   } catch (e) {
@@ -4531,8 +4546,12 @@ async function pausaIniciar() {
   const id = document.getElementById('m-id').value;
   const m = (state.melhorias || []).find(x => x.id === id);
   if (!m) { toast('Salve a demanda antes de pausar.', 'err'); return; }
-  const motivo = prompt('Por que esta demanda está sendo pausada?\n' +
-    '(obrigatório — é o que justifica o prazo empurrado depois)');
+  const motivo = await await pedirTexto({
+    titulo: 'Pausar demanda',
+    texto: 'O prazo para de correr enquanto ela estiver pausada, e os dias parados ' +
+           'sao somados a entrega ao retomar. O motivo justifica isso depois.',
+    multilinha: true, obrigatorio: true, ok: 'Pausar',
+    placeholder: 'Ex.: aguardando retorno do banco sobre o layout do arquivo' });
   if (motivo === null) return;
   if (!motivo.trim()) { toast('O motivo da pausa é obrigatório.', 'err'); return; }
   aplicarPausa(m, motivo, (_eu && (_eu.nome || _eu.login)) || 'admin');
@@ -4867,7 +4886,11 @@ function uCelulaNomeDemandas(u) {
 // para a mensagem de commit, entao errado ele contamina a trilha de auditoria.
 async function uNome(login) {
   const atual = (state._usuarios || []).find(u => u.login === login);
-  const novo = prompt('Nome completo de ' + login + ':', (atual && atual.nome) || '');
+  const novo = await pedirTexto({
+    titulo: 'Renomear conta',
+    texto: 'O nome aparece no historico do card e na mensagem de commit. ' +
+           'Errado, ele contamina a trilha de auditoria.',
+    valor: (atual && atual.nome) || '', minimo: 3, ok: 'Salvar' });
   if (novo === null) return;
   if (novo.trim().length < 3) { uAviso('Informe o nome completo.', true); return; }
   try {
@@ -5055,8 +5078,13 @@ async function uRecusar(login) {
 }
 
 async function uNovaSenha(login) {
-  const nova = prompt('Nova senha para "' + login + '" (mínimo 8 caracteres).\n' +
-                      'A pessoa será desconectada e terá de entrar com esta senha:');
+  // Campo de senha, nao de texto: o prompt() mostrava a senha em texto limpo na
+  // tela, e quem esta ao lado leria.
+  const nova = await pedirTexto({
+    titulo: 'Nova senha para ' + login,
+    texto: 'A pessoa sera desconectada e tera de entrar com esta senha. ' +
+           'Ela pode trocar depois em "Minha senha".',
+    senha: true, minimo: 8, ok: 'Trocar senha', perigo: true });
   if (nova === null) return;
   if (nova.length < 8) { uAviso('A senha precisa de ao menos 8 caracteres.', true); return; }
   try {
@@ -5069,8 +5097,10 @@ async function uNovaSenha(login) {
 // Quem foi criado antes da coluna de e-mail existir so entra pelo usuario.
 // Preencher aqui libera o login por e-mail para essa pessoa.
 async function uEmail(login) {
-  const novo = prompt('E-mail da Audax para "' + login + '":\n' +
-                      '(deixe vazio para remover)');
+  const novo = await pedirTexto({
+    titulo: 'E-mail de ' + login,
+    texto: 'E por ele que a pessoa entra e recupera a senha. Deixe vazio para remover.',
+    placeholder: 'nome.sobrenome@audaxcapitalsa.com.br', ok: 'Salvar' });
   if (novo === null) return;
   const e = novo.trim().toLowerCase();
   if (e && !e.endsWith('@audaxcapitalsa.com.br')) {
@@ -5400,9 +5430,13 @@ function valAprovar() {
   valDecidir(true);
 }
 
-function valRejeitar() {
-  const obs = prompt('Por que está devolvendo? O dev vai ler isto:\n' +
-                     '(a demanda volta para Em Andamento)');
+async function valRejeitar() {
+  const obs = await pedirTexto({
+    titulo: 'Devolver ao dev',
+    texto: 'A demanda volta para Em Andamento. Este texto e o que o dev vai ler — ' +
+           'sem ele, a proxima entrega vem igual.',
+    multilinha: true, obrigatorio: true, ok: 'Devolver', perigo: true,
+    placeholder: 'Ex.: o calculo do saldo nao considera estorno; refazer com o caso do print' });
   if (obs === null) return;
   if (!obs.trim()) { toast('Explique o motivo da devolução.', 'err'); return; }
   valDecidir(false, obs.trim());
@@ -5498,8 +5532,10 @@ async function pjRecusar() {
   const p = pjPorId(id);
   if (!p) return;
   const n = pjDemandas(id).length;
-  const motivo = prompt('Por que este projeto está sendo recusado?' + String.fromCharCode(10) +
-    '(o dev que propôs vai ler — sem motivo ele não sabe o que ajustar)');
+  const motivo = await pedirTexto({
+    titulo: 'Recusar projeto',
+    texto: 'O dev que propos vai ler. Sem motivo ele nao sabe o que ajustar.',
+    multilinha: true, obrigatorio: true, ok: 'Recusar', perigo: true });
   if (motivo === null) return;
   if (!motivo.trim()) { toast('O motivo da recusa é obrigatório.', 'err'); return; }
   p.aprovacao = 'recusado';

@@ -552,6 +552,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="dialogo.js?v=e9a64beca1"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
@@ -1294,7 +1295,15 @@ function credenciaisLeitura() {
 }
 
 async function pedirSenhaLeitura() {
-  const s = prompt('Esta consulta exige senha de acesso:');
+  // Dialogo da pagina, nao prompt(): o do navegador some se a pessoa marcar
+  // "impedir que esta pagina crie caixas de dialogo adicionais", e ai o link de
+  // consulta pararia de funcionar sem nenhuma mensagem.
+  const s = window.pedirTexto
+    ? await pedirTexto({ titulo: 'Link de consulta',
+                         texto: 'Este link exige a senha de visualizacao. ' +
+                                'Se voce tem conta, feche e entre pelo formulario.',
+                         senha: true, obrigatorio: true, ok: 'Abrir' })
+    : prompt('Esta consulta exige senha de acesso:');
   if (!s) return false;
   sessionStorage.setItem('rm_view_pw', s);
   return true;
@@ -1311,7 +1320,13 @@ async function lerDados(permitirCache, jaTentou) {
       // Credencial invalida ou ausente: pede uma vez e repete. Nao cai no
       // fallback publico, que deixaria de existir com o repositorio privado.
       sessionStorage.removeItem('rm_view_pw');
-      if (!jaTentou && await pedirSenhaLeitura()) return lerDados(permitirCache, true);
+      // So pede a senha de leitura para quem chegou por LINK DE CONSULTA (?k=).
+      // Nesta tela ha formulario de login logo abaixo: um prompt do navegador por
+      // cima dele pedia uma senha DIFERENTE da que o formulario pede, e a pessoa
+      // ficava sem saber qual das duas era a sua. 401 sem credencial aqui
+      // significa "ainda nao entrou" — a resposta certa e a tela de login.
+      const veioDeLink = !!new URLSearchParams(location.search).get('k');
+      if (veioDeLink && !jaTentou && await pedirSenhaLeitura()) return lerDados(permitirCache, true);
       throw new Error('Acesso nao autorizado. Informe a senha correta para consultar.');
     }
   } catch (e) {
@@ -2564,7 +2579,12 @@ function gPausaRender(m) {
 async function gPausaIniciar() {
   const m = state.melhorias.find(x => x.id === editingId);
   if (!m) { toast('Salve a tarefa antes de pausar.', 'err'); return; }
-  const motivo = prompt('Por que esta demanda está sendo pausada?' + String.fromCharCode(10) + '(obrigatório)');
+  const motivo = await await pedirTexto({
+    titulo: 'Pausar demanda',
+    texto: 'O prazo para de correr enquanto ela estiver pausada, e os dias parados ' +
+           'sao somados a entrega ao retomar. O motivo justifica isso depois.',
+    multilinha: true, obrigatorio: true, ok: 'Pausar',
+    placeholder: 'Ex.: aguardando retorno do banco sobre o layout do arquivo' });
   if (motivo === null) return;
   if (!motivo.trim()) { toast('O motivo da pausa é obrigatório.', 'err'); return; }
   aplicarPausa(m, motivo, (_gEu && (_gEu.nome || _gEu.login)) || 'planejamento');
