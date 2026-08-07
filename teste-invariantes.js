@@ -896,6 +896,60 @@ ok(/entrega_incompleta/.test(W), 'e a recusa tem nome proprio, para a tela expli
 ok(!/entrandoEmValidacaoSemEntrega\(data, antesPub\)/.test(W),
    'o publish do admin nao e travado (a decisao e do PM/PO)');
 
+// ═══════════════════════════════════════════════════════════════════════
+sec('Gravacao: variavel declarada antes de usada');
+
+// O Salvar do Planejamento parou de funcionar e NADA acusou: `...ghLinks` estava
+// dentro do objeto e `const ghLinks` era declarado depois. Isso nao e erro de
+// sintaxe — o arquivo carrega, a tela abre — mas lanca ReferenceError no clique
+// (zona morta temporal), e o handler morre em silencio. Do lado de fora: "clico
+// em Salvar e nao acontece nada".
+//
+// A checagem de sintaxe nao pega. Esta pega.
+function corpoDeFuncao(src, assinatura) {
+  const i = src.indexOf(assinatura);
+  if (i < 0) return '';
+  let d = 0;
+  for (let k = src.indexOf('{', i); k < src.length; k++) {
+    if (src[k] === '{') d++;
+    else if (src[k] === '}') { d--; if (!d) return src.slice(i, k + 1); }
+  }
+  return '';
+}
+
+for (const [nome, src, ass] of [
+  ['admin.saveMelhoria', ADMIN, 'async function saveMelhoria('],
+  ['gantt.saveTask', GANTT, 'function saveTask('],
+  ['dev.saveNewDemand', DEV, 'async function saveNewDemand('],
+  ['dev.salvarEntrega', DEV, 'async function salvarEntrega('],
+  ['dev.updateStatus', DEV, 'async function updateStatus('],
+]) {
+  // Some comentarios E literais de texto. O comentario que explica o conserto cita
+  // a propria variavel, e `getElementById('m-id')` contem "id" dentro de uma
+  // string — as duas coisas acusavam variavel que nao existe. O que sobra e codigo.
+  const corpoF = corpoDeFuncao(src, ass)
+    .replace(/^\s*\/\/.*$/gm, '')
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``')
+    // `...` vira espaco: spread e USO da variavel, e o lookbehind abaixo ignora
+    // ponto para nao confundir `obj.campo` com variavel. Sem isto, `...ghLinks`
+    // — a forma exata do defeito que motivou esta checagem — passava batido.
+    .replace(/\.\.\./g, ' ');
+  ok(!!corpoF, nome + ' existe');
+  if (!corpoF) continue;
+  const decls = [...corpoF.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=/g)];
+  let problemas = [];
+  for (const d of decls) {
+    const varN = d[1];
+    // Primeira aparicao da variavel no corpo, seja como for.
+    const uso = new RegExp('(?<![\\w$.])' + varN + '(?![\\w$])').exec(corpoF);
+    if (uso && uso.index < d.index) problemas.push(varN);
+  }
+  ok(problemas.length === 0, nome + ': toda const e declarada antes de usada',
+     problemas.join(', '));
+}
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

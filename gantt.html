@@ -2656,6 +2656,14 @@ function saveTask() {
     return;
   }
 
+  // Validacao ANTES de montar o objeto — e antes de `...ghLinks` ser usado nele.
+  // Estava depois: `ghLinks` era lido no objeto e declarado 350 linhas adiante, o
+  // que em JavaScript nao e erro de sintaxe (o arquivo carrega, a tela abre) mas
+  // lanca ReferenceError no clique. O Salvar morria em silencio.
+  if (window.validaModeloDescricao && !validaModeloDescricao('e-descricao', toast)) return;
+  const ghLinks = window.ghLinkColeta ? ghLinkColeta('e', toast) : {};
+  if (ghLinks === null) return;
+
   const existing = editingId ? (state.melhorias.find(x => x.id === editingId) || {}) : {};
   const obj = {
     ...existing,  // preserva campos não editados pelo Gantt (estimativa, motivo_negacao, etc.)
@@ -2697,9 +2705,6 @@ function saveTask() {
     oculto:             existing.oculto || false,
     ordem:              existing.ordem  ?? state.melhorias.length,
   };
-  if (window.validaModeloDescricao && !validaModeloDescricao('e-descricao', toast)) return;
-  const ghLinks = window.ghLinkColeta ? ghLinkColeta('e', toast) : {};
-  if (ghLinks === null) return;
   // Mesma trava do Admin: concluir exige custo registrado, e o servidor recusa de
   // todo jeito — checar aqui e para a pessoa saber onde digitar.
   if (sp === 'concluido' && String(existing.status_planejamento || '') !== 'concluido' &&
