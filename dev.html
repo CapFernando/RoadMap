@@ -2073,6 +2073,9 @@ function applyData(data) {
   buildAnoFilter();
   buildTemaSelect();
   renderKanban();
+  // Abre o card que veio no endereco. So DEPOIS dos dados: antes disso
+  // `state.melhorias` esta vazio e o codigo nao acharia nada.
+  rotaAbrirDaURL();
 }
 
 async function saveToGitHub(patch, opts = {}) {
@@ -2984,6 +2987,48 @@ function onDrop(e, colKey) {
 const ETAPAS_EXIGEM_ENTREGA = ['validacao', 'concluido'];
 
 // ─── STATUS MODAL ────────────────────────────────────────────────
+
+// ─── O CODIGO DA DEMANDA NA BARRA DE ENDERECOS ────────────────────
+// Card aberto vira .../dev.html#AX-127. Serve para mandar o link no Teams, voltar
+// no card depois de um F5, e deixar uma aba fixa numa demanda.
+//
+// Mesmo desenho do Admin — `replaceState` para o Voltar do navegador continuar
+// saindo da pagina, e `location.search` preservado para nao derrubar o `?k=`.
+function rotaEscreve(codigo) {
+  try {
+    const base = location.pathname + location.search;
+    history.replaceState(null, '', codigo ? base + '#' + codigo : base);
+  } catch (_) { /* navegador sem history API: a tela funciona igual */ }
+}
+
+// So codigo no formato AX-123 vira busca. `#token=...` ja circula nestas telas, e
+// sem o formato fechado qualquer lixo no endereco viraria varredura na base.
+function rotaDemanda() {
+  const h = String(location.hash || '').replace(/^#/, '').trim().toUpperCase();
+  if (!/^[A-Z]{2,4}-?\d{1,6}$/.test(h)) return null;
+  const norm = c => String(c || '').toUpperCase().replace(/-/g, '');
+  return (state.melhorias || []).find(m => norm(m.codigo) === norm(h)) || null;
+}
+
+// Abre o card do endereco. Aceita demanda de OUTRO dev: os dados ja estao todos
+// na tela, e recusar deixaria quem recebeu o link com uma pagina que nao explica
+// por que nao abriu. O proprio card mostra de quem e.
+function rotaAbrirDaURL() {
+  const m = rotaDemanda();
+  if (!m) return false;
+  openStatusModal(m.id);
+  return true;
+}
+
+window.addEventListener('hashchange', () => {
+  const box = document.getElementById('modal-status');
+  const visivel = box && getComputedStyle(box).display !== 'none';
+  const alvo = rotaDemanda();
+  if (alvo) {
+    if (!visivel || document.getElementById('ms-id').value !== alvo.id) rotaAbrirDaURL();
+  } else if (visivel) closeModal('modal-status');
+});
+
 function openStatusModal(id, preselect) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
@@ -3075,6 +3120,9 @@ function openStatusModal(id, preselect) {
   _msAnexosMexidos = false;
   msRenderAnexosEdit();
   onStatusModalChange();
+  // O codigo vai para o endereco. Demanda sem codigo (recem-criada, o codigo
+  // nasce no servidor) deixa a URL limpa.
+  rotaEscreve(m.codigo || '');
   abrirModal('modal-status');
 }
 
@@ -3793,7 +3841,11 @@ function abrirModal(id) {
   const cx = ov.querySelector('.modal');
   if (cx) cx.scrollTop = 0;
 }
-function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+  // Fechou: o endereco volta ao normal, senao um F5 reabriria o card fechado.
+  if (id === 'modal-status') rotaEscreve('');
+}
 
 // Esc fecha o modal visível mais acima na pilha.
 document.addEventListener('keydown', e => {

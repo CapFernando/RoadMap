@@ -955,6 +955,21 @@ sec('Rota: o codigo da demanda no endereco');
 
 // Card aberto vira .../admin.html#AX-127: da para mandar o link no Teams, voltar
 // no card depois de um F5 e deixar uma aba fixa numa demanda durante a reuniao.
+// As duas telas com card: Admin e painel Dev. Uma copia por tela, e a invariante
+// existe para elas nao divergirem — a regra que divergisse aqui seria a de qual
+// hash conta como codigo.
+for (const [nome, src] of [['admin', ADMIN], ['dev', DEV]]) {
+  ok(/function rotaEscreve\(/.test(src), nome + ': existe rotaEscreve');
+  ok(/function rotaDemanda\(/.test(src), nome + ': existe rotaDemanda');
+  ok(/rotaAbrirDaURL\(\)/.test(src), nome + ': abre o card do endereco ao carregar');
+  ok(/history\.replaceState/.test(src) && !/history\.pushState/.test(src),
+     nome + ': usa replaceState (o Voltar continua saindo da pagina)');
+  ok(/const base = location\.pathname \+ location\.search;/.test(src),
+     nome + ': preserva o ?k= do link de consulta');
+  ok(src.includes('[A-Z]{2,4}-?'),
+     nome + ': so codigo no formato AX-123 conta como rota');
+  ok(/rotaEscreve\(''\)/.test(src), nome + ': fechar o card limpa o endereco');
+}
 ok(/function rotaEscreve\(/.test(ADMIN), 'existe rotaEscreve');
 ok(/function rotaDemanda\(/.test(ADMIN), 'existe rotaDemanda');
 ok(/rotaAbrirDaURL\(\)/.test(ADMIN), 'o card do endereco e aberto ao carregar');
