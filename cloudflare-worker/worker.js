@@ -930,7 +930,12 @@ async function pokerEstado(db, codigo) {
 
   const corte = new Date(Date.now() - PRESENCA_S * 1000).toISOString();
   const parts = (await db.prepare(
-    'SELECT id, nome, visto_em FROM poker_participante WHERE codigo = ? ORDER BY visto_em').bind(codigo).all()).results || [];
+    // ORDEM POR NOME, nao por `visto_em`. `visto_em` e a hora do ultimo sinal de
+    // vida e muda a cada batida do polling de cada pessoa — a mesa embaralhava
+    // sozinha a cada segundo e meio, sem nada ter acontecido, e a carta que voce
+    // estava olhando pulava de lugar. Nome e estavel e ainda ajuda a achar alguem.
+    'SELECT id, nome, visto_em FROM poker_participante WHERE codigo = ? ' +
+    'ORDER BY nome COLLATE NOCASE, id').bind(codigo).all()).results || [];
   const votos = (await db.prepare(
     'SELECT participante, valor FROM poker_voto WHERE codigo = ? AND melhoria_id = ?')
     .bind(codigo, ses.melhoria_id || '').all()).results || [];
@@ -1295,6 +1300,28 @@ export default {
         const antesPoker = JSON.parse(JSON.stringify(alvo));
         alvo.poker_media = media;
         alvo.poker_pontos = pontos;
+        // QUEM VOTOU O QUE. Antes so a media sobrevivia a reuniao, e a media
+        // esconde justamente o que interessa: um 3 e um 34 na mesma demanda dizem
+        // que as duas pessoas entenderam coisas diferentes — e quem votou baixo
+        // costuma ser quem ja fez algo parecido. Isso decide para quem vai a
+        // demanda, e evaporava junto com a sessao.
+        //
+        // Guarda o NOME (nao o id do participante): o id so existe enquanto a
+        // sala existe, e o card e lido meses depois.
+        if (env.POKER_DB && body.codigo) {
+          try {
+            const vs = (await env.POKER_DB.prepare(
+              `SELECT p.nome AS nome, v.valor AS valor
+                 FROM poker_voto v JOIN poker_participante p ON p.id = v.participante
+                WHERE v.codigo = ? AND v.melhoria_id = ?
+                ORDER BY p.nome COLLATE NOCASE`)
+              .bind(String(body.codigo), mid).all()).results || [];
+            if (vs.length) {
+              alvo.poker_votos = vs.map(v => ({ nome: v.nome, voto: String(v.valor) }));
+              alvo.poker_votado_em = iso;
+            }
+          } catch (_) { /* votacao sem sala: grava so media e pontos */ }
+        }
         registraHistorico(data, { melhorias: [antesPoker] },
                           (_ident && _ident.usuario && _ident.usuario.nome) || 'facilitador',
                           'planning poker');
@@ -1307,7 +1334,8 @@ export default {
                                  content: toB64(JSON.stringify(data)), sha: file.sha }),
         });
         if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
-        return json({ ok: true, poker_media: media, poker_pontos: pontos }, 200, headers);
+        return json({ ok: true, poker_media: media, poker_pontos: pontos,
+                      votos: (alvo.poker_votos || []).length }, 200, headers);
       }
 
       // ── Complementar a demanda durante a reuniao ──────────────────────

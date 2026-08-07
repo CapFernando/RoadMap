@@ -837,6 +837,37 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
      nome + ' so pede senha de leitura em link de consulta (?k=)');
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+sec('Planning poker: rolagem, ordem e votos');
+
+// A rolagem subia sozinha porque `renderDetalhe` reescrevia o innerHTML a cada
+// batida do polling (1,5 s), e refazer o DOM zera a posicao de rolagem. Quem
+// tentava ler a pre-analise abaixo da dobra era empurrado para cima sem parar.
+ok(/function assinaturaDetalhe\(/.test(POKER), 'o detalhe tem assinatura de conteudo');
+ok(/if \(assin === _detAssin && box\.innerHTML\) return;/.test(POKER),
+   'o detalhe so redesenha quando o conteudo muda (senao a rolagem volta ao topo)');
+ok(/_mesaAssin/.test(POKER), 'a mesa tambem so redesenha quando muda');
+// As cartas trocavam de lugar porque a ordem vinha por `visto_em`, que muda a
+// cada batida do polling de cada pessoa.
+ok(!/ORDER BY visto_em/.test(W), 'a mesa NAO e ordenada por visto_em (embaralhava sozinha)');
+ok(/ORDER BY nome COLLATE NOCASE, id/.test(W), 'a mesa tem ordem estavel, por nome');
+// Os votos individuais sobrevivem a reuniao: a media esconde o que decide o dono
+// da demanda (3 contra 34 sao leituras diferentes da mesma coisa).
+ok(/alvo\.poker_votos = vs\.map/.test(W), 'gravar a nota registra quem votou o que');
+ok(/p\.nome AS nome/.test(W), 'guarda o NOME, nao o id do participante (que morre com a sala)');
+ok(/function votosRender\(/.test(ADMIN), 'o admin tem a aba de votos');
+ok(/poker_votos/.test(ADMIN), 'a aba le poker_votos');
+ok(/vt-min/.test(ADMIN) && /vt-max/.test(ADMIN), 'os extremos sao marcados');
+
+// Anexo que falha NAO pode derrubar a entrega: o texto e as horas sao o que o
+// PM/PO valida, e perder tudo por causa de um print seria punir pelo erro errado.
+ok(/_msEnviando/.test(DEV), 'o painel dev conta os envios de anexo em curso');
+ok((DEV.match(/await msAguardaAnexos\(\)/g) || []).length >= 2,
+   'salvar e mover esperam o envio do anexo terminar',
+   (DEV.match(/await msAguardaAnexos\(\)/g) || []).length + ' ponto(s)');
+ok(DEV.includes('O texto e as horas seguem'),
+   'a falha do anexo diz que o resto segue gravavel');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

@@ -662,6 +662,19 @@
     .us-sub  { font-size:12px; color:var(--text3); margin-top:3px; }
     .us-sub-mail { font-size:12px; color:var(--text2); margin-top:3px; word-break:break-all; }
     .us-nomedem { font-size:12px; max-width:210px; }
+    .vt-resumo { display:flex; gap:14px; flex-wrap:wrap; align-items:center;
+      font-size:12.5px; color:var(--text2); margin-bottom:4px; }
+    .vt-resumo b { color:var(--text); }
+    .vt-alerta { color:var(--amber-tx,#FFC470); }
+    .vt-tabela td.vt-voto { font-size:15px; font-weight:700; text-align:right;
+      font-variant-numeric:tabular-nums; width:80px; }
+    /* Extremos marcados so quando houve divergencia. Verde no menor e ambar no
+       maior: nao e erro, e leitura diferente — e o menor costuma ser quem ja fez
+       algo parecido. */
+    .vt-tabela tr.vt-min td.vt-voto { color:var(--green,#3EC98E); }
+    .vt-tabela tr.vt-max td.vt-voto { color:var(--amber-tx,#FFC470); }
+    .vt-tag { font-size:10px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.04em; color:var(--text3); margin-left:6px; }
     /* Conta de dev que nao alcanca demanda nenhuma: e a pessoa que abre a API e
        recebe lista vazia sem entender por que. Vermelho porque e defeito de
        configuracao, nao ressalva de leitura. */
@@ -1135,6 +1148,12 @@
       </button>
       <!-- Só para papel admin. Fica escondida para todo o resto, inclusive se um
            dia outro perfil abrir esta tela. -->
+      <!-- Aparece so quando ha votacao gravada: aba vazia so ocupa espaco e faz a
+           pessoa clicar para descobrir que nao tem nada. -->
+      <button type="button" class="mtab" id="mtab-votos" style="display:none"
+              onclick="mAba('votos')">Votos</button>
+      <!-- Só para papel admin. Fica escondida para todo o resto, inclusive se um
+           dia outro perfil abrir esta tela. -->
       <button type="button" class="mtab" id="mtab-hist" style="display:none"
               onclick="mAba('hist')">Histórico</button>
     </div>
@@ -1156,6 +1175,11 @@
     <!-- ABA ENTREGA: validacao do PM/PO -->
     <div id="m-pane-entrega" style="display:none">
       <div id="ent-conteudo"></div>
+    </div>
+
+    <!-- ABA VOTOS: quem votou o que no Planning Poker. -->
+    <div id="m-pane-votos" style="display:none">
+      <div id="votos-conteudo"></div>
     </div>
 
     <!-- ABA HISTORICO: quem mudou o que, e quando. Registrado pelo Worker. -->
@@ -4238,6 +4262,13 @@ function openModalMelhoria(id) {
     const souAdmin = !_eu || String(_eu.papel || 'admin') === 'admin';
     abaH.style.display = (souAdmin && m) ? '' : 'none';
   }
+  // A aba de votos so existe quando ha votacao gravada.
+  const abaV = document.getElementById('mtab-votos');
+  if (abaV) {
+    const nv = (m && Array.isArray(m.poker_votos)) ? m.poker_votos.length : 0;
+    abaV.style.display = nv ? '' : 'none';
+    abaV.textContent = 'Votos (' + nv + ')';
+  }
   mAba(m && statusKey(m) === 'validacao' ? 'entrega' : 'dados');
   renderEntrega(m || null);
   valBarraRender(m || null);
@@ -5204,6 +5235,61 @@ async function valDecidirNoCard(ev, id, acao) {
 }
 
 
+
+// ─── VOTOS DO PLANNING POKER ──────────────────────────────────────
+// A media que fica no card responde "que tamanho tem"; esta aba responde "quem
+// achou o que". As duas perguntas sao diferentes, e a segunda e a que decide o
+// responsavel: quem votou BAIXO em geral e quem ja fez algo parecido.
+//
+// Discordancia alta tambem e sinal por si so — 3 contra 34 quase sempre significa
+// que uma das duas pessoas entendeu outra demanda, e vale reabrir a conversa antes
+// de comprometer data.
+function votosRender() {
+  const box = document.getElementById('votos-conteudo');
+  if (!box) return;
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  const vs = (m && Array.isArray(m.poker_votos)) ? m.poker_votos : [];
+  if (!vs.length) {
+    box.innerHTML = '<p class="us-vazio">Esta demanda ainda não foi votada no Planning Poker, ' +
+      'ou foi votada antes de o registro de votos existir.</p>';
+    return;
+  }
+  const num = v => { const n = parseFloat(String(v.voto).replace(',', '.')); return isFinite(n) ? n : null; };
+  const nums = vs.map(num).filter(n => n !== null);
+  const min = nums.length ? Math.min(...nums) : null;
+  const max = nums.length ? Math.max(...nums) : null;
+  // Espalhamento: com um voto so, ou todos iguais, nao ha o que destacar.
+  const espalhou = min !== null && max !== null && max > min;
+
+  const linhas = vs.map(v => {
+    const n = num(v);
+    // Marca so os EXTREMOS, e so quando houve divergencia. Pintar todo mundo
+    // tiraria o sentido da marca.
+    const cls = !espalhou || n === null ? ''
+      : (n === min ? ' vt-min' : (n === max ? ' vt-max' : ''));
+    const marca = !espalhou || n === null ? ''
+      : (n === min ? ' <span class="vt-tag">menor</span>'
+                   : (n === max ? ' <span class="vt-tag">maior</span>' : ''));
+    return '<tr class="' + cls.trim() + '"><td>' + esc(v.nome) + marca + '</td>' +
+           '<td class="vt-voto">' + esc(String(v.voto)) + '</td></tr>';
+  }).join('');
+
+  const quando = m.poker_votado_em
+    ? '<div class="us-sub">Votado em ' + esc(uQuando(m.poker_votado_em)) + '</div>' : '';
+  const resumo = '<div class="vt-resumo">' +
+    (m.poker_media != null ? '<span>Média <b>' + esc(String(m.poker_media).replace('.', ',')) + '</b></span>' : '') +
+    (m.poker_pontos != null ? '<span>Gravado <b>' + esc(String(m.poker_pontos)) + ' pts</b></span>' : '') +
+    '<span>' + vs.length + ' voto(s)</span>' +
+    (espalhou ? '<span class="vt-alerta">⚠ de ' + min + ' a ' + max +
+                ' — leituras diferentes da mesma demanda</span>' : '') +
+    '</div>';
+
+  box.innerHTML = resumo + quando +
+    '<div class="us-tabela-wrap"><table class="us-tabela vt-tabela"><thead><tr>' +
+    '<th>Quem votou</th><th>Voto</th></tr></thead><tbody>' + linhas + '</tbody></table></div>';
+}
+
 // ─── HISTORICO DO CARD ────────────────────────────────────────────
 // Lista o que o Worker registrou: quem mudou, quando, de que para que. Serve
 // para uma pergunta concreta — o dev pode corrigir o texto da entrega enquanto
@@ -5248,7 +5334,7 @@ function histRender() {
 }
 
 function mAba(qual) {
-  const abas = ['dados', 'grill', 'entrega', 'hist'];
+  const abas = ['dados', 'grill', 'entrega', 'votos', 'hist'];
   if (!abas.includes(qual)) qual = 'dados';
   abas.forEach(a => {
     document.getElementById('m-pane-' + a).style.display = (a === qual) ? 'block' : 'none';
@@ -5257,6 +5343,7 @@ function mAba(qual) {
   const acoes = document.getElementById('m-acoes-dados');
   if (acoes) acoes.style.display = (qual === 'dados') ? '' : 'none';
   if (qual === 'grill') grillRender();
+  if (qual === 'votos') votosRender();
   if (qual === 'hist') histRender();
   document.querySelector('#modal-melhoria .modal').scrollTop = 0;
 }

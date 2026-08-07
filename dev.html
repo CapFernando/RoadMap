@@ -3115,11 +3115,18 @@ function anexoPermitido(arq) {
 }
 const ANEXO_RECUSA = arq => '"' + (arq.name || 'arquivo') +
   '" não foi anexado: só aceitamos PDF, JPEG e PNG.';
+// Quantos envios estao no ar. Sem isto, quem escolhia um arquivo e clicava em
+// salvar em seguida gravava ANTES de o envio terminar: o anexo nao entrava, e a
+// tela nao dizia nada — parecia que o anexo "sumiu". O contador deixa o salvar
+// esperar em vez de gravar pela metade.
+let _msEnviando = 0;
+
 function msAddFiles(files) {
   [...files].forEach(f => {
     if (!anexoPermitido(f)) { toast(ANEXO_RECUSA(f), 'err'); return; }
     if (f.size > MS_MAX) { toast(`"${f.name}" excede 1,5 MB e não foi anexado.`, 'err'); return; }
     const reader = new FileReader();
+    _msEnviando++;
     reader.onload = async () => {
       try {
         toast(`Enviando "${f.name}"…`, 'ok');
@@ -3128,11 +3135,36 @@ function msAddFiles(files) {
         _msAnexos.push(await subirAnexo(f, reader.result, ADMIN_PROXY_URL, credDev()));
         _msAnexosMexidos = true;
         msRenderAnexosEdit();
-      } catch (e) { toast(`Falha ao anexar "${f.name}": ${e.message}`, 'err'); }
+      } catch (e) {
+        // A falha do anexo NAO pode derrubar a entrega. O texto e as horas sao o
+        // que o PM/PO valida; perder tudo porque um print nao subiu seria punir
+        // pelo erro errado. A mensagem diz o que fazer com o anexo, e o resto
+        // segue gravavel.
+        toast(`Anexo "${f.name}" não subiu: ${e.message}. O texto e as horas seguem ` +
+              `salvos normalmente — tente o anexo de novo depois.`, 'err');
+      } finally { _msEnviando--; }
+    };
+    reader.onerror = () => {
+      _msEnviando--;
+      toast(`Não consegui ler "${f.name}" do disco.`, 'err');
     };
     reader.readAsDataURL(f);
   });
   document.getElementById('ms-file').value = '';
+}
+
+// Espera os envios em curso. Devolve false se a pessoa desistir de esperar.
+async function msAguardaAnexos() {
+  if (_msEnviando <= 0) return true;
+  toast('Aguardando o envio do anexo terminar…', 'ok');
+  for (let i = 0; i < 60 && _msEnviando > 0; i++) {
+    await new Promise(r => setTimeout(r, 500));
+  }
+  if (_msEnviando > 0) {
+    toast('O envio do anexo está demorando. Remova o anexo e salve, ou tente de novo.', 'err');
+    return false;
+  }
+  return true;
 }
 
 function msRemoveAnexo(i) {
@@ -3231,6 +3263,9 @@ async function salvarEntrega() {
     document.getElementById('ms-implementacao').focus();
     return;
   }
+  // Espera o anexo terminar de subir: gravar no meio deixa o anexo de fora sem
+  // ninguem perceber.
+  if (!(await msAguardaAnexos())) return;
   // Referencia ao GitHub: normaliza "712" para a URL e recusa engano de campo.
   const ghLinks = window.ghLinkColeta ? ghLinkColeta('ms', toast) : {};
   if (ghLinks === null) return;
@@ -3330,6 +3365,9 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   // Marca quando saiu das maos do dev. A aba Entrega do admin mostra "esperando
    // desde", e sem isto o campo ficava sempre vazio.
   if (colKey === 'validacao' && !m.entregue_em) m.entregue_em = new Date().toISOString();
+  // Espera o anexo terminar: mover para Validacao com o envio no ar deixaria o
+  // print de fora justamente na entrega.
+  if (!(await msAguardaAnexos())) return;
   // Os links tambem aqui: mover para Validacao e o gesto em que o dev acabou de
    // abrir o PR, e o patch leva SO o que esta listado — sem isto o numero digitado
    // no card sumiria ao arrastar.

@@ -969,9 +969,33 @@ async function negarDemanda() {
   await carregarFila();
 }
 
+// Assinatura do que o detalhe mostra. Redesenhar `innerHTML` destroi e recria o
+// DOM, e a posicao de rolagem volta ao topo junto: com o polling de 1,5 s, quem
+// tentava ler a pre-analise abaixo da dobra era empurrado para cima a cada
+// segundo e meio. Comparando a assinatura, o redesenho so acontece quando ha o
+// que redesenhar.
+let _detAssin = null;
+let _mesaAssin = null;
+function assinaturaDetalhe(m) {
+  if (!m) return 'vazio';
+  try {
+    return JSON.stringify([m.id, m.titulo, m.descricao, m.solicitante, m.dev, m.entrega,
+                           m.tema_id, m.debito_tecnico, m.criado_em,
+                           (m.anexos || []).map(a => a.nome + ':' + (a.tamanho || 0)),
+                           m.discovery]);
+  } catch (_) {
+    // Se o discovery tiver algo que nao serializa, redesenha sempre: melhor a
+    // rolagem pular do que a tela congelar num conteudo velho.
+    return String(Math.random());
+  }
+}
+
 function renderDetalhe(m) {
   const box = document.getElementById('pauta-det');
   if (!box) return;
+  const assin = assinaturaDetalhe(m);
+  if (assin === _detAssin && box.innerHTML) return;   // nada mudou: nao mexe na rolagem
+  _detAssin = assin;
   if (!m) { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = 'grid';
   const linha = (rot, val) =>
@@ -1074,7 +1098,13 @@ function aplicar(est) {
   if (acoes) acoes.style.display = (_facilitador && m) ? 'flex' : 'none';
 
   // mesa
+  // A mesa tambem so muda quando muda. Redesenhar a cada 1,5 s tirava o tooltip
+  // de quem estava com o mouse em cima de uma carta.
   const mesa = document.getElementById('mesa');
+  const assinMesa = JSON.stringify([est.revelado,
+    est.participantes.map(p => [p.nome, p.votou, p.online, est.revelado ? p.valor : null])]);
+  if (assinMesa === _mesaAssin && mesa.innerHTML) { /* nada a fazer */ } else {
+  _mesaAssin = assinMesa;
   if (!est.participantes.length) {
     mesa.innerHTML = '<span class="vazio-mesa">Aguardando participantes…</span>';
   } else {
@@ -1092,6 +1122,7 @@ function aplicar(est) {
     }).join('');
   }
 
+  }
   const online = est.participantes.filter(p => p.online !== false).length;
   document.getElementById('presenca').textContent = est.participantes.length
     ? `${online} online · ${est.total_votos} voto(s)` : '';
