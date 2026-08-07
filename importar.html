@@ -148,6 +148,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="dialogo.js?v=c9a9c2c4fd"></script>
 </head>
 <body>
 
@@ -318,7 +319,11 @@ let _impPw = sessionStorage.getItem('rm_admin_pw') || '';
 // Pede a senha (uma vez por sessão) e valida no Worker.
 async function garantirSenha() {
   if (_impPw) return true;
-  const v = prompt('Senha de acesso para publicar a importação:');
+  const v = window.pedirTexto
+    ? await pedirTexto({ titulo: 'Publicar importacao',
+                         texto: 'Informe a senha de acesso para gravar estas linhas na base.',
+                         senha: true, obrigatorio: true, ok: 'Publicar' })
+    : prompt('Senha de acesso para publicar a importação:');
   if (!v) return false;
   const res = await fetch(PROXY_URL, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -485,8 +490,10 @@ function addRow(data={}) {
 }
 
 function delRow(btn) { btn.closest('tr').remove(); reindexRows(); }
-function clearRows() {
-  if (!confirm('Limpar todas as linhas?')) return;
+async function clearRows() {
+  if (!(await confirmar({ titulo: 'Limpar tudo',
+      texto: 'Todas as linhas desta tela sao descartadas. Nada foi gravado ainda.',
+      ok: 'Limpar', perigo: true }))) return;
   document.getElementById('input-tbody').innerHTML = '';
   addRow(); addRow(); addRow(); reindexRows();
 }
@@ -622,9 +629,10 @@ function goStep(n) {
 // ── DEDUP CHECK ────────────────────────────────────────────────────────────────
 const SIM_THRESHOLD = 0.35; // 35% Jaccard triggers review
 
-function startDedupCheck() {
+async function startDedupCheck() {
   const rows = collectRows();
-  if (!rows.length) { alert('Adicione pelo menos uma linha com título antes de continuar.'); return; }
+  if (!rows.length) { await avisar('Nenhuma linha',
+      'Adicione ao menos uma linha com titulo antes de continuar.'); return; }
 
   dedupDecisions = {};
   const suspects = [];

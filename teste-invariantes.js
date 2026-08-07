@@ -785,12 +785,35 @@ const DLG = lerTela('dialogo.js');
 // seguido, o Chrome oferece "impedir que esta pagina crie caixas de dialogo
 // adicionais", e a partir dai TODO prompt() devolve null sem avisar. O motivo da
 // pausa voltaria vazio e a gravacao seguiria adiante. Nao ha como detectar.
-for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
-                           ['poker', POKER]]) {
+const TELAS_DLG = [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV], ['poker', POKER],
+                  ['projetos', lerTela('projetos.html')], ['index', INDEX],
+                  ['importar', lerTela('importar.html')]];
+for (const [nome, src] of TELAS_DLG) {
   ok(/dialogo\.js\?v=/.test(src), nome + ' carrega o modulo de dialogo');
-  const prompts = (src.match(/=\s*prompt\(/g) || []).length;
-  ok(prompts === 0, nome + ' nao usa prompt() para pedir texto', prompts + ' restante(s)');
+  // Comentario nao e codigo: o proprio comentario que EXPLICA por que o confirm()
+  // saiu cita "confirm()" e reprovava a checagem. Tira os comentarios primeiro.
+  const semComent = src.replace(/^\s*\/\/.*$/gm, '');
+  // confirm() e alert() ZERO: nenhum tem excecao legitima.
+  const conf = (semComent.match(/(?<![A-Za-z_.])confirm\s*\(/g) || []).length;
+  ok(conf === 0, nome + ' nao usa confirm() do navegador', conf + ' restante(s)');
+  const al = (semComent.match(/(?<![A-Za-z_.])alert\s*\(/g) || []).length;
+  ok(al === 0, nome + ' nao usa alert() do navegador', al + ' restante(s)');
+  // prompt() so sobrevive como FALLBACK explicito (window.pedirTexto ? ... : prompt),
+  // para o dia em que o modulo compartilhado nao carregar. Qualquer outro uso volta
+  // a ser uma caixa que o navegador pode desligar.
+  const prompts = (semComent.match(/(?<![A-Za-z_.])prompt\s*\(/g) || []).length;
+  const fallbacks = (semComent.match(/:\s*prompt\s*\(/g) || []).length;
+  ok(prompts === fallbacks,
+     nome + ' so usa prompt() como fallback de carga do modulo',
+     prompts + ' uso(s), ' + fallbacks + ' fallback(s)');
 }
+// Clicar fora e Esc CANCELAM. O gesto ambiguo tem de cair no lado que nao apaga.
+ok(/if \(e\.target === ov\) fecha\(false\)/.test(DLG),
+   'clicar fora do confirmar CANCELA, nunca confirma');
+// Acao destrutiva com foco no Cancelar: Enter apressado nao pode apagar.
+ok(/o\.perigo \? '#dlg-nao' : '#dlg-sim'/.test(DLG),
+   'em acao destrutiva o foco nasce no Cancelar');
+ok(/dlg-b\.perigo/.test(DLG), 'acao destrutiva tem botao vermelho');
 // Texto que a outra pessoa vai ler (motivo, parecer) precisa de paragrafo: numa
 // linha so o autor escreve menos, e era esse o texto que decidia a devolucao.
 ok(/multilinha: true/.test(ADMIN) && /multilinha: true/.test(POKER),

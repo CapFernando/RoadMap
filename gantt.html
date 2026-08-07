@@ -552,7 +552,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="dialogo.js?v=e9a64beca1"></script>
+<script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
@@ -1036,7 +1036,9 @@ function copiarLinkVisualizacao() {
   const link = location.origin + location.pathname + '?view=' + VIEW_KEY + (chave ? '&k=' + encodeURIComponent(chave) : '');
   navigator.clipboard.writeText(link)
     .then(() => toast('Link de visualização copiado!', 'ok'))
-    .catch(() => prompt('Copie o link:', link));
+    // Fallback de quando a area de transferencia e negada pelo navegador. O
+    // dialogo mostra o link selecionavel, e nao depende de prompt().
+    .catch(() => pedirTexto({ titulo: 'Copie o link', valor: link, ok: 'Fechar' }));
 }
 
 function initLoginScreen() {
@@ -1229,7 +1231,10 @@ function gAvisaDesatualizado(mostrar) {
 }
 async function gRecarregarDoServidor() {
   if (gTemPendencia() &&
-      !confirm('Esta tela tem alteracoes ainda nao salvas. Atualizar vai descartar essas alteracoes e trazer a versao do servidor. Continuar?')) return;
+      !(await confirmar({ titulo: 'Descartar o que nao foi salvo?',
+          texto: 'Esta tela tem alteracoes ainda nao salvas. Atualizar traz a versao do ' +
+                 'servidor e o que voce mudou aqui se perde.',
+          ok: 'Descartar e atualizar', cancelar: 'Voltar', perigo: true }))) return;
   _gDeletedIds.clear();
   gAvisaDesatualizado(false);
   await loadFromGitHub();
@@ -2597,8 +2602,11 @@ async function gPausaRetomar() {
   if (!m) return;
   const d = diasPausadoAgora(m);
   const nova = m.entrega ? _somaDias(m.entrega, d) : null;
-  if (!confirm('Retomar?' + String.fromCharCode(10) + String.fromCharCode(10) + 'Ficou ' + d + (d===1?' dia':' dias') + ' pausada.' +
-    (nova ? String.fromCharCode(10) + 'Entrega passa de ' + fmtDate(m.entrega) + ' para ' + fmtDate(nova) + '.' : ''))) return;
+  if (!(await confirmar({ titulo: 'Retomar demanda',
+      texto: 'Ficou ' + d + (d === 1 ? ' dia' : ' dias') + ' pausada.' +
+             (nova ? String.fromCharCode(10) + 'A entrega passa de ' + fmtDate(m.entrega) +
+                     ' para ' + fmtDate(nova) + '.' : ''),
+      ok: 'Retomar' }))) return;
   const dias = aplicarRetomada(m);
   document.getElementById('e-fim').value = m.entrega || '';
   gPausaRender(m); renderAll(); await saveToGitHub();
@@ -2730,9 +2738,10 @@ function returnToBacklog() {
   saveToGitHub();
 }
 
-function deleteCurrent() {
+async function deleteCurrent() {
   if (!editingId) return;
-  if (!confirm('Excluir esta tarefa?')) return;
+  if (!(await confirmar({ titulo: 'Excluir demanda',
+      texto: 'Nao ha como desfazer.', ok: 'Excluir', perigo: true }))) return;
   _gDeletedIds.add(editingId);
   state.melhorias = state.melhorias.filter(m => m.id !== editingId);
   closeModal('modal-main');
@@ -2881,8 +2890,12 @@ async function removeDev(i) {
     const msg = qtd > 0
       ? `Remover "${name}" e apagar ${qtd} demanda(s) vinculada(s)?`
       : `Remover "${name}"?`;
-    if (!confirm(msg)) return;
-    if (qtd > 0 && !confirm('Confirmar exclusão permanente das demandas de Teste?')) return;
+    if (!(await confirmar({ titulo: 'Remover dev de teste', texto: msg,
+        ok: 'Remover', perigo: true }))) return;
+    if (qtd > 0 && !(await confirmar({ titulo: 'Confirmar exclusao permanente',
+        texto: 'As ' + qtd + ' demanda(s) do dev Teste serao apagadas em todas as telas. ' +
+               'Nao ha como desfazer.',
+        ok: 'Apagar tudo', perigo: true }))) return;
     state.melhorias = (state.melhorias || []).filter(m =>
       !(m.dev || '').split(/[\/,]/).map(d => d.trim().toLowerCase()).includes('teste')
     );
@@ -2897,10 +2910,16 @@ async function removeDev(i) {
     );
     if (demandasAtivas.length > 0) {
       const titulos = demandasAtivas.map(m => `• ${esc(m.titulo || m.id)}`).join('\n');
-      alert(`"${name}" está vinculado a ${demandasAtivas.length} demanda(s) ativa(s):\n\n${titulos}\n\nCorrija ou reatribua essas demandas antes de remover o dev.`);
+      await avisar('Nao da para remover "' + name + '"',
+        'Ele esta em ' + demandasAtivas.length + ' demanda(s) ativa(s):' +
+        String.fromCharCode(10) + String.fromCharCode(10) + titulos +
+        String.fromCharCode(10) + String.fromCharCode(10) +
+        'Reatribua essas demandas antes de remover o dev.');
       return;
     }
-    if (!confirm(`Remover "${name}"?`)) return;
+    if (!(await confirmar({ titulo: 'Remover dev',
+        texto: '"' + name + '" sai da lista. As demandas concluidas dele nao sao afetadas.',
+        ok: 'Remover', perigo: true }))) return;
     state.desenvolvedores.splice(i, 1);
     _gDeletedDevs.add(name.toLowerCase());
   }
@@ -2950,7 +2969,8 @@ async function abrirAnexo(a, proxyUrl, cred) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'anexo-baixar', chave: a.chave }, cred || {}))
     });
-    if (!res.ok) { alert('Nao foi possivel abrir o anexo (HTTP ' + res.status + ').'); return; }
+    if (!res.ok) { await avisar('Nao foi possivel abrir o anexo',
+                              'O servidor respondeu HTTP ' + res.status + '.'); return; }
     const blob = await res.blob();
     window.open(URL.createObjectURL(blob), '_blank');
     return;

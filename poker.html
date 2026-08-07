@@ -151,7 +151,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="dialogo.js?v=e9a64beca1"></script>
+<script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="senha.js?v=005f049189"></script>
 </head>
 <body>
@@ -633,12 +633,12 @@ function abrirConvite() {
 function copiarLink() {
   navigator.clipboard.writeText(linkConvite())
     .then(() => toast('🔗 Link copiado.'))
-    .catch(() => prompt('Copie o link:', linkConvite()));
+    .catch(() => pedirTexto({ titulo: 'Copie o link', valor: linkConvite(), ok: 'Fechar' }));
 }
 function copiarCodigo() {
   navigator.clipboard.writeText(_codigo)
     .then(() => toast('Código copiado.'))
-    .catch(() => prompt('Código:', _codigo));
+    .catch(() => pedirTexto({ titulo: 'Codigo da sala', valor: _codigo, ok: 'Fechar' }));
 }
 
 // ─── VOTAÇÃO ──────────────────────────────────────────────────────
@@ -677,7 +677,9 @@ async function revotar() {
 // apagados. Serve para comecar uma reuniao do zero sem esperar a sessao expirar.
 async function zerarValores() {
   if (!_facilitador) return;
-  if (!confirm('Zerar a sala? Sai da pauta atual, esconde o resultado e apaga os votos desta sessão.')) return;
+  if (!(await confirmar({ titulo: 'Zerar a sala',
+      texto: 'Sai da pauta atual, esconde o resultado e apaga os votos desta sessao.',
+      ok: 'Zerar', perigo: true }))) return;
   _mutSeq++;
   const r = await api({ action: 'poker-zerar', codigo: _codigo, senha: _senha });
   if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao zerar.', 'err'); return; }
@@ -729,12 +731,15 @@ async function proximaDemanda() {
     const nome = (m && (m.codigo || m.titulo)) || 'esta demanda';
     const media = document.getElementById('in-media').value;
     const pontos = document.getElementById('in-pontos').value;
-    const querGravar = confirm(
-      'A votação de ' + nome + ' foi revelada e ainda NÃO foi gravada no card.' +
-      String.fromCharCode(10) + String.fromCharCode(10) +
-      'OK grava agora (média ' + (media || '—') + ' · ' + (pontos || '—') + ' pontos) ' +
-      'e avança.' + String.fromCharCode(10) +
-      'Cancelar avança sem gravar, e o resultado desta rodada se perde.');
+    // Os dois caminhos ficam nomeados nos botoes. No confirm() nativo eram "OK" e
+    // "Cancelar", e "Cancelar" AVANCAVA perdendo o resultado — o rotulo dizia o
+    // contrario do que a acao fazia.
+    const querGravar = await confirmar({
+      titulo: 'Gravar o resultado antes de avancar?',
+      texto: 'A votacao de ' + nome + ' foi revelada e ainda NAO foi gravada no card ' +
+             '(media ' + (media || '—') + ' · ' + (pontos || '—') + ' pontos). ' +
+             'Se avancar sem gravar, o resultado desta rodada se perde.',
+      ok: 'Gravar e avancar', cancelar: 'Avancar sem gravar' });
     if (querGravar) {
       const gravou = await gravarNoCard();
       if (!gravou) return;   // falhou: fica onde esta, com o resultado na tela

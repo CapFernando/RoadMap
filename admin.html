@@ -790,7 +790,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="dialogo.js?v=e9a64beca1"></script>
+<script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
@@ -1706,7 +1706,10 @@ function avisaDesatualizado(mostrar) {
 
 async function recarregarDoServidor() {
   if ((_pendingEdits || _kbDirty) &&
-      !confirm('Você tem alterações ainda não publicadas nesta tela. Atualizar vai descartá-las e trazer a versão do servidor.\n\nContinuar?')) return;
+      !(await confirmar({ titulo: 'Descartar o que nao foi publicado?',
+          texto: 'Esta tela tem alteracoes que ainda nao foram publicadas. Atualizar traz a ' +
+                 'versao do servidor e o que voce mudou aqui se perde.',
+          ok: 'Descartar e atualizar', cancelar: 'Voltar', perigo: true }))) return;
   _pendingEdits = false; _kbDirty = false;
   _dirtyMelhoriaIds.clear();
   avisaDesatualizado(false);
@@ -2970,7 +2973,8 @@ async function abrirAnexo(a, proxyUrl, cred) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'anexo-baixar', chave: a.chave }, cred || {}))
     });
-    if (!res.ok) { alert('Nao foi possivel abrir o anexo (HTTP ' + res.status + ').'); return; }
+    if (!res.ok) { await avisar('Nao foi possivel abrir o anexo',
+                              'O servidor respondeu HTTP ' + res.status + '.'); return; }
     const blob = await res.blob();
     window.open(URL.createObjectURL(blob), '_blank');
     return;
@@ -4163,7 +4167,9 @@ async function saveTema() {
   await mPersistir('Tema salvo e publicado.');
 }
 async function deleteTema(id) {
-  if (!confirm('Excluir este tema? As melhorias vinculadas ficarão sem tema.')) return;
+  if (!(await confirmar({ titulo: 'Excluir tema',
+      texto: 'As demandas vinculadas ficam sem tema. Nao ha como desfazer.',
+      ok: 'Excluir', perigo: true }))) return;
   _deletedIds.add(id);
   state.temas = state.temas.filter(t => t.id !== id);
   _pendingEdits = true;
@@ -4564,9 +4570,11 @@ async function pausaRetomar() {
   if (!m) return;
   const d = diasPausadoAgora(m);
   const nova = m.entrega ? _somaDias(m.entrega, d) : null;
-  if (!confirm('Retomar "' + (m.titulo || '') + '"?\n\n' +
-      'Ficou ' + d + (d === 1 ? ' dia' : ' dias') + ' pausada.' +
-      (nova ? '\nA entrega passa de ' + formatDate(m.entrega) + ' para ' + formatDate(nova) + '.' : ''))) return;
+  if (!(await confirmar({ titulo: 'Retomar demanda',
+      texto: 'Ficou ' + d + (d === 1 ? ' dia' : ' dias') + ' pausada.' +
+             (nova ? String.fromCharCode(10) + 'A entrega passa de ' + formatDate(m.entrega) +
+                     ' para ' + formatDate(nova) + '.' : ''),
+      ok: 'Retomar' }))) return;
   const dias = aplicarRetomada(m);
   await pausaSalvar(m, '▶ Retomada. Entrega empurrada em ' + dias + (dias === 1 ? ' dia' : ' dias') + '.');
 }
@@ -4743,7 +4751,8 @@ async function mPersistir(msgOk) {
 }
 
 async function deleteMelhoria(id) {
-  if (!confirm('Excluir esta melhoria?')) return;
+  if (!(await confirmar({ titulo: 'Excluir demanda',
+      texto: 'Nao ha como desfazer.', ok: 'Excluir', perigo: true }))) return;
   _deletedIds.add(id);
   state.melhorias = state.melhorias.filter(m => m.id !== id);
   _pendingEdits = true;
@@ -5069,7 +5078,9 @@ async function uAprovar(login) {
 }
 
 async function uRecusar(login) {
-  if (!confirm('Recusar o cadastro de "' + login + '"? O cadastro é apagado e a pessoa pode tentar de novo.')) return;
+  if (!(await confirmar({ titulo: 'Recusar cadastro',
+      texto: 'O cadastro de "' + login + '" e apagado. A pessoa pode se cadastrar de novo.',
+      ok: 'Recusar', perigo: true }))) return;
   try {
     await uChamar('recusar', { login });
     uAviso('Cadastro de "' + login + '" recusado.');
@@ -5124,7 +5135,9 @@ async function uPapel(login, papel) {
 }
 
 async function uAtivo(login, ativo) {
-  if (!ativo && !confirm('Desativar "' + login + '"? A pessoa perde o acesso imediatamente.')) return;
+  if (!ativo && !(await confirmar({ titulo: 'Desativar conta',
+      texto: '"' + login + '" perde o acesso imediatamente. O historico e preservado.',
+      ok: 'Desativar', perigo: true }))) return;
   try {
     await uChamar('ativo', { login, ativo });
     uAviso(ativo ? '"' + login + '" reativado.' : '"' + login + '" desativado e desconectado.');
@@ -5420,13 +5433,16 @@ async function valDecidir(aprovar, obs) {
   }
 }
 
-function valAprovar() {
+async function valAprovar() {
   const m = state.melhorias.find(x => x.id === document.getElementById('m-id').value);
   if (!m) return;
   if (!String(m.implementacao || '').trim() &&
-      !confirm('O dev não descreveu o que foi implementado.\n\n' +
-               'Sem esse texto o relatório do comitê fica vazio para esta demanda. Aprovar mesmo assim?')) return;
-  if (!confirm('Aprovar a entrega de "' + (m.titulo || '') + '"?\n\nA demanda passa para Concluído.')) return;
+      !(await confirmar({ titulo: 'Aprovar sem descricao?',
+          texto: 'O dev nao descreveu o que foi implementado. Sem esse texto o relatorio ' +
+                 'do comite fica vazio para esta demanda.',
+          ok: 'Aprovar mesmo assim', perigo: true }))) return;
+  if (!(await confirmar({ titulo: 'Aprovar entrega',
+      texto: '"' + (m.titulo || '') + '" passa para Concluido.', ok: 'Aprovar' }))) return;
   valDecidir(true);
 }
 
@@ -5795,7 +5811,7 @@ function pjBuscar() {
   }).join('');
 }
 
-function pjVincular(melId) {
+async function pjVincular(melId) {
   const id = document.getElementById('pj-id').value;
   const m = (state.melhorias || []).find(x => x.id === melId);
   if (!m || !id) return;
@@ -5807,8 +5823,9 @@ function pjVincular(melId) {
     return;
   }
   const anterior = m.projeto_id ? pjPorId(m.projeto_id) : null;
-  if (anterior && !confirm('"' + m.titulo + '" está em ' + (anterior.codigo || anterior.nome) +
-                           '.\n\nMover para este projeto?')) return;
+  if (anterior && !(await confirmar({ titulo: 'Mover de projeto',
+      texto: '"' + m.titulo + '" esta em ' + (anterior.codigo || anterior.nome) + '.',
+      ok: 'Mover' }))) return;
   m.projeto_id = id;
   _dirtyMelhoriaIds.add(melId);
   _pendingEdits = true;
@@ -5885,9 +5902,11 @@ async function pjExcluir() {
   const p = pjPorId(id);
   if (!p) return;
   const n = pjDemandas(id).length;
-  if (!confirm('Excluir o projeto "' + p.nome + '"?\n\n' +
-               (n ? 'As ' + n + ' demandas vinculadas NÃO são apagadas — apenas deixam de pertencer a ele.'
-                  : 'Ele não tem demandas vinculadas.'))) return;
+  if (!(await confirmar({ titulo: 'Excluir projeto',
+      texto: '"' + p.nome + '". ' +
+             (n ? 'As ' + n + ' demandas vinculadas NAO sao apagadas — apenas deixam de pertencer a ele.'
+                : 'Ele nao tem demandas vinculadas.'),
+      ok: 'Excluir', perigo: true }))) return;
   // Solta as demandas antes: card apontando para projeto inexistente vira lixo.
   pjDemandas(id).forEach(m => { m.projeto_id = ''; _dirtyMelhoriaIds.add(m.id); });
   state.projetos = (state.projetos || []).filter(x => x.id !== id);
@@ -6033,10 +6052,11 @@ async function mescConfirmar(idFilha) {
   const pai = (state.melhorias || []).find(x => x.id === idPai);
   const filha = (state.melhorias || []).find(x => x.id === idFilha);
   if (!pai || !filha) return;
-  if (!confirm('Mesclar "' + filha.titulo + '" em "' + pai.titulo + '"?\n\n' +
-               '"' + filha.titulo + '" sai do Kanban, do Gantt e do painel do dev. ' +
-               'Ela NÃO é apagada: os dados continuam acessíveis por dentro da principal, ' +
-               'e você pode separar depois.')) return;
+  if (!(await confirmar({ titulo: 'Mesclar demandas',
+      texto: '"' + filha.titulo + '" entra em "' + pai.titulo + '" e sai do Kanban, do ' +
+             'Gantt e do painel do dev. Ela NAO e apagada: os dados seguem acessiveis por ' +
+             'dentro da principal, e da para separar depois.',
+      ok: 'Mesclar' }))) return;
   filha.mesclado_em = idPai;
   filha.mesclado_data = new Date().toISOString();
   filha.mesclado_por = (_eu && (_eu.nome || _eu.login)) || 'admin';
@@ -6055,7 +6075,9 @@ async function mescConfirmar(idFilha) {
 async function mescDesfazer(idFilha) {
   const filha = (state.melhorias || []).find(x => x.id === idFilha);
   if (!filha) return;
-  if (!confirm('Separar "' + filha.titulo + '"?\n\nEla volta para o fluxo no estágio em que estava.')) return;
+  if (!(await confirmar({ titulo: 'Separar demanda',
+      texto: '"' + filha.titulo + '" volta para o fluxo no estagio em que estava.',
+      ok: 'Separar' }))) return;
   const idPai = mescladaEm(filha);
   filha.mesclado_em = '';
   filha.mesclado_data = '';

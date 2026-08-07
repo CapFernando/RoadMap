@@ -300,6 +300,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="dialogo.js?v=c9a9c2c4fd"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
 <body>
@@ -1352,9 +1353,10 @@ function buildReportHTML() {
   </div>`;
 }
 
-function openExportModal() {
+async function openExportModal() {
   const mel = filtradas();
-  if (!mel.length) { alert('Nenhuma melhoria visível para exportar.'); return; }
+  if (!mel.length) { await avisar('Nada para exportar',
+      'Nenhuma melhoria visivel com os filtros atuais.'); return; }
 
   let overlay = document.getElementById('export-overlay');
   if (overlay) overlay.remove();
@@ -1454,7 +1456,7 @@ async function downloadExport(type) {
       pdf.save(`roadmap-audax-${stamp}.pdf`);
     }
   } catch(e) {
-    alert('Erro ao gerar exportação. Tente novamente.');
+    await avisar('Erro ao gerar a exportacao', 'Tente novamente.');
   }
 
   if (btnImg) { btnImg.disabled = false; btnImg.textContent = '⬇ Imagem'; }

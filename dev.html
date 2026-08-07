@@ -415,7 +415,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="dialogo.js?v=e9a64beca1"></script>
+<script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
@@ -1017,7 +1017,8 @@ async function abrirAnexo(a, proxyUrl, cred) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'anexo-baixar', chave: a.chave }, cred || {}))
     });
-    if (!res.ok) { alert('Nao foi possivel abrir o anexo (HTTP ' + res.status + ').'); return; }
+    if (!res.ok) { await avisar('Nao foi possivel abrir o anexo',
+                              'O servidor respondeu HTTP ' + res.status + '.'); return; }
     const blob = await res.blob();
     window.open(URL.createObjectURL(blob), '_blank');
     return;
@@ -1663,8 +1664,11 @@ async function devPausaRetomar() {
   if (!m) return;
   const d = diasPausadoAgora(m);
   const nova = m.entrega ? _somaDias(m.entrega, d) : null;
-  if (!confirm('Retomar?' + String.fromCharCode(10) + String.fromCharCode(10) + 'Ficou ' + d + (d===1?' dia':' dias') + ' pausada.' +
-    (nova ? String.fromCharCode(10) + 'Entrega passa de ' + formatDate(m.entrega) + ' para ' + formatDate(nova) + '.' : ''))) return;
+  if (!(await confirmar({ titulo: 'Retomar demanda',
+      texto: 'Ficou ' + d + (d === 1 ? ' dia' : ' dias') + ' pausada.' +
+             (nova ? String.fromCharCode(10) + 'A entrega passa de ' + formatDate(m.entrega) +
+                     ' para ' + formatDate(nova) + '.' : ''),
+      ok: 'Retomar' }))) return;
   const dias = aplicarRetomada(m);
   devPausaRender(m);
   const ok2 = await saveToGitHub({ [id]: { pausado_em:'', pausa_motivo:'', pausa_por:'',
@@ -2566,8 +2570,10 @@ async function limparDadosTeste() {
   const total = state.melhorias.filter(m =>
     splitDevs(m.dev).some(d => d.toLowerCase() === 'teste') || isDevTeste(m.dev)
   ).length;
-  if (!confirm(`⚠️ Isso vai excluir PERMANENTEMENTE ${total} demanda(s) do dev "Teste" em todas as páginas.\n\nConfirmar?`)) return;
-  if (!confirm('Tem certeza? A ação não pode ser desfeita.')) return;
+  if (!(await confirmar({ titulo: 'Excluir demandas de teste',
+      texto: total + ' demanda(s) do dev "Teste" serao apagadas em TODAS as telas. ' +
+             'Nao ha como desfazer.',
+      ok: 'Apagar tudo', perigo: true }))) return;
 
   // Remove todas as melhorias cujo dev (ou um dos devs) seja "Teste"
   state.melhorias = state.melhorias.filter(m =>
@@ -3702,7 +3708,8 @@ async function deleteTema(id) {
   const msg = n > 0
     ? `Excluir o tema "${devEsc(t?.nome)}"? As ${n} demanda(s) vinculadas ficarão sem tema.`
     : `Excluir o tema "${devEsc(t?.nome)}"?`;
-  if (!confirm(msg)) return;
+  if (!(await confirmar({ titulo: 'Excluir tema', texto: msg,
+      ok: 'Excluir', perigo: true }))) return;
   state.temas = state.temas.filter(x => x.id !== id);
   renderTemasModal();
   buildTemaSelect();

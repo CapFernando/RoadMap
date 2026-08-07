@@ -132,6 +132,49 @@
     });
   };
 
+
+  /* Substitui confirm(). o = { titulo, texto, ok, cancelar, perigo }.
+     Devolve Promise<boolean> — mesmo contrato do confirm(), para a conversao dos
+     chamadores nao mudar a logica de nenhum deles.
+
+     O `perigo` pinta o botao de vermelho. Vale a pena: excluir demanda, apagar
+     projeto e descartar alteracao nao publicada estavam com a mesma cara de
+     "salvar", e o dedo aprende a clicar no botao da direita sem ler. */
+  window.confirmar = function (o) {
+    o = o || {};
+    return new Promise(function (resolve) {
+      var ov = document.createElement('div');
+      ov.className = 'dlg-ov';
+      ov.innerHTML =
+        '<div class="dlg-box" role="dialog" aria-modal="true">' +
+          '<h3>' + esc(o.titulo || 'Confirmar') + '</h3>' +
+          (o.texto ? '<div class="dlg-sub">' + esc(o.texto) + '</div>' : '') +
+          '<div class="dlg-acoes">' +
+            '<button type="button" class="dlg-b sec" id="dlg-nao">' +
+              esc(o.cancelar || 'Cancelar') + '</button>' +
+            '<button type="button" class="dlg-b ' + (o.perigo ? 'perigo' : 'pri') + '" id="dlg-sim">' +
+              esc(o.ok || 'Confirmar') + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(ov);
+      var fecha = function (r) { ov.remove(); resolve(r); };
+      ov.querySelector('#dlg-sim').onclick = function () { fecha(true); };
+      ov.querySelector('#dlg-nao').onclick = function () { fecha(false); };
+      // Clicar fora e Esc CANCELAM. Nunca confirmam: o gesto ambiguo tem de cair
+      // no lado que nao apaga nada.
+      ov.addEventListener('click', function (e) { if (e.target === ov) fecha(false); });
+      ov.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); fecha(false); }
+        if (e.key === 'Enter') { e.preventDefault(); fecha(true); }
+      });
+      // Foco no CANCELAR quando a acao e destrutiva: Enter apressado nao pode
+      // apagar. Nas demais, foco no confirmar, que e o caminho esperado.
+      setTimeout(function () {
+        ov.querySelector(o.perigo ? '#dlg-nao' : '#dlg-sim').focus();
+      }, 10);
+    });
+  };
+
   // Substitui alert(). Promise<void>, para o chamador poder esperar.
   window.avisar = function (titulo, texto) {
     return new Promise(function (resolve) {
