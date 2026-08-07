@@ -2966,13 +2966,22 @@ function onDrop(e, colKey) {
       toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
       return;
     }
-    if (colKey === 'concluido') {
-      openStatusModal(id, colKey); // requer horas
+    // ENTREGAR EXIGE HORAS E TEXTO, e o arraste nao pode ser a porta dos fundos.
+    // Este teste era so por 'concluido'; quando o fluxo mudou e o dev passou a
+    // ENTREGAR para Validacao em vez de concluir, 'validacao' caiu no else e
+    // gravava apenas a etapa. O dev via na tela as horas que digitou — e que nunca
+    // foram enviadas — e o PM/PO abria o card com o campo vazio. (AX-179.)
+    if (ETAPAS_EXIGEM_ENTREGA.includes(colKey)) {
+      openStatusModal(id, colKey); // pede horas e o que foi implementado
     } else {
       updateStatus(id, colKey);
     }
   }, 0);
 }
+
+// Etapas em que a demanda sai das maos do dev: as duas exigem horas e o texto da
+// entrega, porque e o que o PM/PO le para validar e o que alimenta o relatorio.
+const ETAPAS_EXIGEM_ENTREGA = ['validacao', 'concluido'];
 
 // ─── STATUS MODAL ────────────────────────────────────────────────
 function openStatusModal(id, preselect) {

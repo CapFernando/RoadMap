@@ -559,6 +559,34 @@ function travaDatasComprometidas(recebido, servidor) {
   return revertidas;
 }
 
+// ─── ENTREGAR EXIGE HORAS E TEXTO ─────────────────────────────────────
+// Colocar em Validacao e dizer "acabei, valide". Sem horas e sem o texto do que
+// foi feito, o PM/PO nao tem o que validar e o relatorio do comite sai vazio.
+//
+// A tela ja pede as duas coisas, mas a tela nao pode ser a unica trava: foi
+// exatamente um caminho de tela — o arraste no Kanban, que testava 'concluido' e
+// esqueceu 'validacao' — que deixou a AX-179 chegar em Validacao com zero hora e
+// sem texto. Qualquer outro caminho futuro repetiria o furo em silencio.
+//
+// Vale so para o `dev-publish`. O PM/PO mover um card para Validacao pelo Admin
+// e decisao dele, e ele e quem cobra o resto.
+function entrandoEmValidacaoSemEntrega(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || String(m.status_planejamento || '') !== 'validacao') continue;
+    const velha = antes.get(m.id);
+    if (!velha) continue;                                        // demanda nova
+    if (String(velha.status_planejamento || '') === 'validacao') continue;  // ja estava
+    const h = Number(m.horas_realizadas);
+    const t = String(m.implementacao || '').trim();
+    if (!Number.isFinite(h) || h <= 0 || !t) presos.push(m.codigo || m.id);
+  }
+  return presos;
+}
+
 function faltaHoras(m) {
   const h = Number(m && m.horas_realizadas);
   return !Number.isFinite(h) || h <= 0;
@@ -2614,6 +2642,19 @@ export default {
       // anexo) e derrubar tudo por causa de um campo que ele talvez nem tenha
       // tocado seria perder o trabalho dele por um erro que nao e dele.
       const datasRevertidas = travaDatasComprometidas(data, antesDev);
+      // Entregar sem horas e sem texto e recusado. Aqui a gravacao PARA, ao
+      // contrario da trava de datas: la o campo volta ao valor do servidor e o
+      // resto segue; aqui nao ha valor anterior para restaurar — a demanda estaria
+      // entrando num estado que nao se sustenta, e deixar passar e o que produziu
+      // a AX-179.
+      const semEntrega = entrandoEmValidacaoSemEntrega(data, antesDev);
+      if (semEntrega.length) {
+        return json({ error: 'entrega_incompleta',
+                      codigos: semEntrega,
+                      detail: 'Para entregar (' + semEntrega.join(', ') + ') informe as horas ' +
+                              'de desenvolvimento e o que foi implementado. E o que o PM/PO le ' +
+                              'para validar.' }, 400, headers);
+      }
       // Nada entra em Concluido sem custo registrado. A recusa vem ANTES de
       // registraHistorico: gravar historico de uma publicacao que sera recusada
       // sujaria a trilha com um evento que nao aconteceu.

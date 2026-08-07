@@ -868,6 +868,34 @@ ok((DEV.match(/await msAguardaAnexos\(\)/g) || []).length >= 2,
 ok(DEV.includes('O texto e as horas seguem'),
    'a falha do anexo diz que o resto segue gravavel');
 
+// ═══════════════════════════════════════════════════════════════════════
+sec('Entregar exige horas e texto — por todos os caminhos');
+
+// A AX-179 chegou em Validacao com zero hora e sem texto. O historico dela mostra
+// que o painel dev gravou APENAS a etapa: o drop do Kanban testava por 'concluido'
+// e, quando o fluxo mudou para o dev ENTREGAR em vez de concluir, 'validacao' caiu
+// no caminho que nao pede nada. O dev via na tela as horas que digitou — e que
+// nunca foram enviadas — e o PM/PO abria o card vazio.
+ok(/const ETAPAS_EXIGEM_ENTREGA = \['validacao', 'concluido'\]/.test(DEV),
+   'as etapas que exigem entrega estao numa lista, nao espalhadas');
+ok(/ETAPAS_EXIGEM_ENTREGA\.includes\(colKey\)/.test(DEV),
+   'o ARRASTE tambem pede horas e texto (era o furo)');
+ok(!DEV.includes("if (colKey === 'concluido') {"),
+   'o teste por "concluido" sozinho nao voltou');
+// A tela nao pode ser a unica trava: foi um caminho de tela que criou o problema.
+const semEnt = corpo(W, 'function entrandoEmValidacaoSemEntrega(');
+ok(!!semEnt, 'o servidor tem a trava de entrega incompleta');
+ok(!!semEnt && /if \(!velha\) continue;/.test(semEnt), 'demanda nova nao e travada');
+ok(!!semEnt && /=== 'validacao'\) continue;/.test(semEnt), 'quem JA estava em validacao passa');
+ok(!!semEnt && /String\(m\.implementacao \|\| ''\)\.trim\(\)/.test(semEnt),
+   'cobra o texto, e nao so as horas');
+ok(/entrandoEmValidacaoSemEntrega\(data, antesDev\)/.test(W), 'dev-publish aplica a trava');
+ok(/entrega_incompleta/.test(W), 'e a recusa tem nome proprio, para a tela explicar');
+// O publish do admin NAO e travado: o PM/PO mover um card para Validacao e
+// decisao dele, e e ele quem cobra o resto.
+ok(!/entrandoEmValidacaoSemEntrega\(data, antesPub\)/.test(W),
+   'o publish do admin nao e travado (a decisao e do PM/PO)');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
