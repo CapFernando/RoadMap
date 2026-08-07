@@ -950,6 +950,38 @@ for (const [nome, src, ass] of [
      problemas.join(', '));
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+sec('Rota: o codigo da demanda no endereco');
+
+// Card aberto vira .../admin.html#AX-127: da para mandar o link no Teams, voltar
+// no card depois de um F5 e deixar uma aba fixa numa demanda durante a reuniao.
+ok(/function rotaEscreve\(/.test(ADMIN), 'existe rotaEscreve');
+ok(/function rotaDemanda\(/.test(ADMIN), 'existe rotaDemanda');
+ok(/rotaAbrirDaURL\(\)/.test(ADMIN), 'o card do endereco e aberto ao carregar');
+// `replaceState` e nao `pushState`: o card nao pode virar entrada de historico,
+// senao o Voltar do navegador passaria a fechar o modal em vez de sair da pagina.
+ok(/history\.replaceState\(null, '', codigo \? base \+ '#' \+ codigo : base\)/.test(ADMIN),
+   'usa replaceState, para o Voltar continuar saindo da pagina');
+ok(!/history\.pushState/.test(ADMIN), 'nao usa pushState');
+// `location.search` preservado: sem isso o `?k=` do link de consulta cairia e
+// quem abriu por ele perderia o acesso ao recarregar.
+ok(/const base = location\.pathname \+ location\.search;/.test(ADMIN),
+   'preserva o ?k= do link de consulta');
+// Fechou o card, endereco limpo: senao um F5 reabriria o que a pessoa fechou.
+ok(/if \(id === 'modal-melhoria'\) rotaEscreve\(''\)/.test(ADMIN),
+   'fechar o card limpa o endereco');
+// O hash tem de ser validado: `#token=...` ja circula nesta tela e nao pode virar
+// busca de demanda.
+const rotaD = corpo(ADMIN, 'function rotaDemanda(');
+ok(!!rotaD && /\[A-Z\]\{2,4\}-\?\\d\{1,6\}/.test(rotaD),
+   'so codigo no formato AX-123 e aceito no hash');
+ok(!!rotaD && /replace\(\/-\/g, ''\)/.test(rotaD),
+   'aceita com e sem hifen, porque o codigo circula das duas formas');
+// Shift+clique copia o LINK; clique simples copia o codigo. Sao usos diferentes:
+// "AX-127" vai no commit, o link vai no Teams.
+ok(/shiftKey \|\| ev\.altKey/.test(ADMIN), 'Shift+clique no codigo copia o link do card');
+ok(/copiarCodigo\(event\)/.test(ADMIN), 'o handler recebe o evento (sem ele nao ha Shift)');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

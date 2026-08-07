@@ -1132,7 +1132,7 @@
   <div class="modal">
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-melhoria')" aria-label="Fechar">✕</button>
     <h2 id="modal-melhoria-title">Nova issue</h2>
-    <button type="button" id="m-codigo" onclick="copiarCodigo()" title="Clique para copiar"
+    <button type="button" id="m-codigo" onclick="copiarCodigo(event)" title="Clique para copiar o código · Shift+clique copia o link deste card"
             style="display:none;font-family:ui-monospace,monospace;font-size:12px;font-weight:700;
                    color:var(--blue-tx,#9BC8F8);background:var(--blue-bg,#0C3260);border:none;
                    border-radius:5px;padding:3px 9px;margin:-8px 0 14px;cursor:pointer"></button>
@@ -1883,6 +1883,9 @@ async function loadFromGitHub(silent) {
     _dirtyMelhoriaIds.clear();
     renderAll();
     restoreLastTab();
+    // Abre o card que veio no endereco. So DEPOIS de os dados carregarem: antes
+    // disso `state.melhorias` esta vazio e o codigo nao acharia nada.
+    rotaAbrirDaURL();
   } catch (e) {
     if (!silent) toast(e.message, 'err');
     renderAll();
@@ -4202,6 +4205,48 @@ async function deleteTema(id) {
 }
 
 // ─── MODAL MELHORIA ───────────────────────────────────────────────
+
+// ─── O CODIGO DA DEMANDA NA BARRA DE ENDERECOS ────────────────────
+// Card aberto vira .../admin.html#AX-127. Da para mandar o link no Teams e a
+// pessoa cai no card, voltar nele depois de um F5, e deixar uma aba fixa numa
+// demanda durante a reuniao.
+//
+// `replaceState` e nao `pushState`: assim o card nao vira entrada de historico e
+// o Voltar do navegador continua saindo da pagina, que e o que se espera dele.
+// `location.search` e preservado — sem isso o `?k=` do link de consulta cairia
+// junto e quem abriu por ele perderia o acesso ao recarregar.
+function rotaEscreve(codigo) {
+  try {
+    const base = location.pathname + location.search;
+    history.replaceState(null, '', codigo ? base + '#' + codigo : base);
+  } catch (_) { /* navegador sem history API: a tela funciona igual */ }
+}
+
+// Aceita AX-127, ax127 e #AX-127 — o codigo circula nas tres formas.
+function rotaDemanda() {
+  const h = String(location.hash || '').replace(/^#/, '').trim().toUpperCase();
+  if (!/^[A-Z]{2,4}-?\d{1,6}$/.test(h)) return null;
+  const norm = c => String(c || '').toUpperCase().replace(/-/g, '');
+  return (state.melhorias || []).find(m => norm(m.codigo) === norm(h)) || null;
+}
+
+// Abre o card que veio na URL. Chamado depois de carregar os dados e a cada
+// mudanca do hash (alguem edita o endereco ou clica num link interno).
+function rotaAbrirDaURL() {
+  const m = rotaDemanda();
+  if (!m) return false;
+  openModalMelhoria(m.id);
+  return true;
+}
+
+window.addEventListener('hashchange', () => {
+  const aberto = document.getElementById('modal-melhoria');
+  const visivel = aberto && getComputedStyle(aberto).display !== 'none';
+  const alvo = rotaDemanda();
+  if (alvo) { if (!visivel || document.getElementById('m-id').value !== alvo.id) rotaAbrirDaURL(); }
+  else if (visivel) closeModal('modal-melhoria');
+});
+
 function openModalMelhoria(id) {
   const m = id ? state.melhorias.find(x => x.id === id) : null;
   document.getElementById('modal-melhoria-title').textContent = m ? 'Editar issue' : 'Nova issue';
@@ -4269,6 +4314,9 @@ function openModalMelhoria(id) {
     abaV.style.display = nv ? '' : 'none';
     abaV.textContent = 'Votos (' + nv + ')';
   }
+  // O codigo vai para a barra de enderecos. Demanda nova ainda nao tem codigo:
+  // ele nasce no servidor, entao ai a URL fica limpa.
+  rotaEscreve(m && m.codigo ? m.codigo : '');
   mAba(m && statusKey(m) === 'validacao' ? 'entrega' : 'dados');
   renderEntrega(m || null);
   valBarraRender(m || null);
@@ -5182,12 +5230,27 @@ async function uAtivo(login, ativo) {
 // "Validação PM/PO" e espera aqui. Sem esse degrau, "concluído" queria dizer
 // "o dev disse que acabou", e ninguem conferia o que foi entregue.
 
-// O codigo e feito para ser colado num PR ou numa mensagem: um clique copia.
-function copiarCodigo() {
+// O codigo e feito para ser colado num PR ou numa mensagem: um clique copia o
+// codigo, com Shift o LINK que abre este card.
+//
+// Duas coisas diferentes e uteis em momentos diferentes: "AX-127" e o que se
+// escreve num commit; o link e o que se manda no Teams para a pessoa cair no card.
+async function copiarCodigo(ev) {
   const t = document.getElementById('m-codigo').textContent;
-  navigator.clipboard.writeText(t)
-    .then(() => toast('📋 ' + t + ' copiado.', 'ok'))
-    .catch(() => toast('Não consegui copiar. Selecione o texto manualmente.', 'err'));
+  const comLink = ev && (ev.shiftKey || ev.altKey);
+  const txt = comLink
+    ? location.origin + location.pathname + location.search + '#' + t
+    : t;
+  try {
+    await navigator.clipboard.writeText(txt);
+    toast('📋 ' + (comLink ? 'link do card copiado' : t + ' copiado') + '.', 'ok');
+  } catch (_) {
+    // Sem area de transferencia (contexto nao seguro, permissao negada): mostra o
+    // texto selecionavel em vez de so dizer que nao deu.
+    if (window.pedirTexto) await pedirTexto({ titulo: comLink ? 'Link do card' : 'Codigo',
+                                              valor: txt, ok: 'Fechar' });
+    else toast('Não consegui copiar. Selecione o texto manualmente.', 'err');
+  }
 }
 
 
@@ -6420,7 +6483,12 @@ function abrirModal(id) {
   const cx = ov.querySelector('.modal');
   if (cx) cx.scrollTop = 0;
 }
-function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+  // Fechou o card: o endereco volta ao normal, senao um F5 reabriria o card que a
+  // pessoa acabou de fechar.
+  if (id === 'modal-melhoria') rotaEscreve('');
+}
 
 // Esc fecha o modal visível mais acima na pilha. Nenhum modal tinha isso, e é a
 // saída que todo mundo tenta antes de procurar o botão.
