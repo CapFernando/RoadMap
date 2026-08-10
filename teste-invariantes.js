@@ -997,6 +997,27 @@ ok(!!rotaD && /replace\(\/-\/g, ''\)/.test(rotaD),
 ok(/shiftKey \|\| ev\.altKey/.test(ADMIN), 'Shift+clique no codigo copia o link do card');
 ok(/copiarCodigo\(event\)/.test(ADMIN), 'o handler recebe o evento (sem ele nao ha Shift)');
 
+// ═══════════════════════════════════════════════════════════════════════
+sec('Aprovacao: a tela nao afirma o que nao gravou');
+
+// A AX-206 mostrava "Entrega aprovada por Fernando Nascimento em 10/08, 10:43" e
+// no servidor seguia em validacao, com validado_por e validado_em VAZIOS. Nao
+// houve gravacao naquele minuto. `valDecidir` escrevia os campos no objeto local
+// antes de salvar e nao desfazia quando o salvamento falhava — e o carimbo verde
+// vence o aviso de erro, porque parece dado e nao parece recado.
+const vd = corpo(ADMIN, 'async function valDecidir(');
+ok(!!vd, 'existe valDecidir');
+ok(!!vd && /const antes = \{/.test(vd), 'guarda um retrato antes de decidir');
+ok(!!vd && /Object\.assign\(m, antes\)/.test(vd),
+   'desfaz a decisao quando a gravacao falha');
+ok(!!vd && /A aprovação NÃO foi gravada/.test(vd),
+   'a mensagem diz que NAO gravou, em vez de "continua pendente"');
+// O que a mensagem NAO pode dizer: que ficou pendente. Pendente e o
+// comportamento certo para campo editado — ali o texto na tela e o que a pessoa
+// digitou. Aqui a tela inventava nome e hora de uma aprovacao inexistente.
+ok(!!vd && !/A decisão continua pendente/.test(vd),
+   'a mensagem antiga, que sugeria que estava so pendente, saiu');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

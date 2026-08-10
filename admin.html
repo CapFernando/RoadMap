@@ -5549,6 +5549,14 @@ async function valDecidir(aprovar, obs) {
           'na aba Dados antes de aprovar.', 'err');
     return;
   }
+  // Retrato ANTES de mexer. Se a gravacao falhar, tudo volta: a tela nao pode
+  // continuar exibindo "aprovada por Fulano as 10:43" de uma aprovacao que o
+  // servidor nunca recebeu. Aconteceu na AX-206.
+  const antes = {
+    status_planejamento: m.status_planejamento, status: m.status,
+    concluido_em: m.concluido_em, validado_em: m.validado_em,
+    validado_por: m.validado_por, validacao_obs: m.validacao_obs,
+  };
   if (aprovar) {
     m.status_planejamento = 'concluido';
     m.status = 'concluida';
@@ -5579,7 +5587,17 @@ async function valDecidir(aprovar, obs) {
     _pendingEdits = false;
     closeModal('modal-melhoria');
   } else {
-    toast('Não foi possível salvar. A decisão continua pendente.', 'err');
+    // DESFAZ. O carimbo verde no card e uma afirmacao com nome e hora; mante-lo
+    // depois de a gravacao falhar e a tela mentindo. Diferente de um campo
+    // editado, que continua pendente de proposito — ali o texto na tela e o que a
+    // pessoa digitou, e "Publicar alteracoes" ainda resolve.
+    Object.assign(m, antes);
+    _dirtyMelhoriaIds.delete(id);
+    renderEntrega(m);
+    renderAll();
+    renderValBanner();
+    toast('A aprovação NÃO foi gravada: a demanda continua em Validação. ' +
+          'Tente de novo — se persistir, alguém pode estar salvando ao mesmo tempo.', 'err');
   }
 }
 
