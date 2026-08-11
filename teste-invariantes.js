@@ -494,7 +494,7 @@ sec('Cache: arquivo compartilhado sempre versionado por hash');
 
 for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
                            ['index', INDEX], ['poker', POKER]]) {
-  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js|modelo-descricao\.js|links-github\.js|senha\.js|dialogo\.js)"/g) || [])
+  const semHash = (src.match(/src="(tema\.js|anexo-cola\.js|modelo-descricao\.js|links-github\.js|senha\.js|dialogo\.js|apresentacao\.js)"/g) || [])
     .concat(src.match(/href="tema\.css"/g) || []);
   ok(semHash.length === 0, nome + ' nao referencia arquivo compartilhado sem ?v=',
      semHash.join(' '));
@@ -1105,6 +1105,38 @@ ok(/<div id="pz-resumo" class="ger-summary"><\/div>\s*<div class="ger-bandeja-co
 ok(/rm_ger_/.test(ADMIN), 'cada secao lembra o proprio estado');
 ok(/gerBandejasAplicaTodas\(\)/.test(ADMIN),
    'o estado e reaplicado depois de renderizar (o conteudo e reescrito a cada Atualizar)');
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('Apresentacao executiva: narrativa, e nao despejo de numeros');
+
+const AP = lerTela('apresentacao.js');
+ok(/apresentacao\.js\?v=/.test(ADMIN), 'o admin carrega o modulo versionado');
+ok(/function apresGerar\(/.test(ADMIN), 'existe a montagem no admin');
+ok(/function montaDeck\(/.test(AP), 'existe o gerador do deck');
+// Fundo escuro e texto claro foi o pedido, e vale para TODO slide: um slide claro
+// no meio cega a sala no telao.
+ok(/fundo:\s*'0E0E0D'/.test(AP) && /texto:\s*'F2F0E9'/.test(AP), 'paleta escura declarada');
+ok(/s\.background = \{ color: C\.fundo \}/.test(AP), 'todo slide nasce com o fundo escuro');
+// "As imagens estejam perfeitas": o canvas da tela segue o zoom e a resolucao de
+// quem exportou; num telao isso vira imagem borrada, e numero certo em imagem
+// borrada perde a discussao antes de comecar.
+const gp = corpo(AP, 'function graficoEmPng(');
+ok(!!gp && /larguraPx \|\| 1600/.test(gp), 'o grafico e redesenhado em 1600px, nao copiado da tela');
+ok(!!gp && /animation: false/.test(gp), 'sem animacao (senao o PNG sai no meio dela)');
+ok(!!gp && /catch \(_\) \{[\s\S]{0,60}return null/.test(gp),
+   'grafico que falha nao derruba o deck inteiro');
+// A biblioteca so entra quando alguem vai usar.
+ok(/function carregaLib\(/.test(AP), 'a biblioteca e carregada sob demanda');
+ok(!/<script[^>]*pptxgen/.test(ADMIN), 'a biblioteca NAO entra no carregamento da pagina');
+// Narrativa: a ordem e a da conversa, e a frase final e escrita por gente.
+ok(/d\.mensagem/.test(AP), 'ha um slide para a frase de quem apresenta');
+ok(/destaques/.test(AP) && /ap-dest/.test(ADMIN),
+   'os destaques sao ESCOLHIDOS, nao deduzidos por metrica');
+// O deck nao pode contradizer a tela: usa a MESMA classificacao de prazo.
+ok(/prazoClassifica\(m\)/.test(corpo(ADMIN, 'async function apresGerar(') || ''),
+   'o deck reusa a classificacao de prazo da tela, sem recalcular por fora');
+// Emoji em slide de diretoria vira quadrado se a fonte do projetor nao tiver.
+ok(!/addText\('👤/.test(AP), 'sem emoji nos campos do slide');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

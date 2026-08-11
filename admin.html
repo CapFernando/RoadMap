@@ -468,6 +468,18 @@
     /* Numeros a direita e tabulares: coluna de numero so se compara de relance
        quando os digitos alinham. */
     .pz-num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .ap-dica { font-size:12.5px; color:var(--text3); line-height:1.55; margin:0 0 12px; }
+    .ap-periodo { font-size:14px; color:var(--text); background:var(--bg3);
+      border:1px solid var(--border); border-radius:8px; padding:9px 12px; margin-bottom:14px; }
+    .ap-checks { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:7px; }
+    .ap-checks label, .ap-lista label { display:flex; align-items:flex-start; gap:8px;
+      font-size:13px; color:var(--text2); cursor:pointer; line-height:1.4; }
+    .ap-checks input, .ap-lista input { margin-top:2px; accent-color:var(--blue); flex-shrink:0; }
+    /* Altura limitada: a lista de concluidas do mes pode ter 40 itens, e um modal
+       que cresce sem fim esconde o botao de gerar. */
+    .ap-lista { max-height:230px; overflow-y:auto; display:flex; flex-direction:column;
+      gap:6px; border:1px solid var(--border); border-radius:8px; padding:10px; }
+    .ap-lista .ap-cod { font-size:11px; color:var(--blue-tx,#9BC8F8); font-weight:700; }
     /* Bandeja: o titulo vira gatilho de largura inteira e a seta gira. O RESUMO
        (ger-summary) fica FORA do que recolhe — e a resposta da secao. */
     .ger-bandeja > .ger-section-title { width:100%; background:none; border:none;
@@ -818,6 +830,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
+<script src="apresentacao.js?v=bd84d836fa"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
@@ -945,6 +958,41 @@
     </div>
 
     <div class="tab-content" id="tab-gerencial">
+    <!-- Montagem da apresentacao. Fica dentro da aba porque o mes filtrado ali e
+         o mes do deck: dois seletores de periodo divergiriam no pior momento. -->
+    <div id="modal-apres" class="modal-overlay" style="display:none">
+      <div class="modal" style="max-width:720px">
+        <button type="button" class="modal-close-btn" onclick="closeModal('modal-apres')" aria-label="Fechar">✕</button>
+        <h2>📊 Apresentação executiva</h2>
+        <p class="ap-dica">Gera um <strong>.pptx</strong> de fundo escuro, um número por slide,
+          na ordem de uma conversa: o que entregamos, o que valeu a pena, onde escapou e o que vem.
+          O período é o do filtro da aba.</p>
+        <div id="ap-periodo" class="ap-periodo"></div>
+
+        <div class="form-group">
+          <label>Slides que entram</label>
+          <div id="ap-secoes" class="ap-checks"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Destaques <small style="font-weight:400;color:var(--text3)">— cada um vira um slide próprio</small></label>
+          <p class="ap-dica" style="margin:-2px 0 8px">Marque as entregas que merecem ser contadas.
+            A que destravou a operação vale mais slide que a maior em pontos.</p>
+          <div id="ap-destaques" class="ap-lista"></div>
+        </div>
+
+        <div class="form-group">
+          <label>A frase que fecha <small style="font-weight:400;color:var(--text3)">— opcional, vai no último slide</small></label>
+          <textarea id="ap-mensagem" rows="2"
+            placeholder="Ex.: entregamos o dobro de julho e reduzimos o retrabalho de cadastro pela metade."></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="closeModal('modal-apres')">Cancelar</button>
+          <button class="btn btn-primary" id="ap-btn" onclick="apresGerar()">Gerar apresentação</button>
+        </div>
+      </div>
+    </div>
       <div class="ger-toolbar">
         <div class="ger-filter-group">
           <label>Mês</label>
@@ -963,6 +1011,8 @@
         </div>
         <button class="btn btn-primary" onclick="renderGerencial()">Atualizar</button>
         <a href="projetos.html" class="btn btn-secondary" target="_blank">📁 Projetos por Tema</a>
+        <button class="btn btn-secondary" onclick="apresAbrir()"
+                title="Monta um .pptx executivo com o que você escolher">📊 Apresentação</button>
       </div>
 
       <div id="ger-summary" class="ger-summary"></div>
@@ -3608,6 +3658,179 @@ function gerBandejaAplica(chave) {
 function gerBandejasAplicaTodas() {
   document.querySelectorAll('[data-bandeja]').forEach(s =>
     gerBandejaAplica(s.getAttribute('data-bandeja')));
+}
+
+
+// ─── APRESENTACAO EXECUTIVA ───────────────────────────────────────
+// Junta os dados do mes filtrado e entrega ao gerador (apresentacao.js). O que
+// entra e escolhido aqui: as secoes e, principalmente, QUAIS ENTREGAS ganham
+// slide proprio — a de 3 pontos que destravou a operacao vale mais que a de 34
+// que ninguem viu, e nenhuma metrica sabe disso.
+const AP_SECOES = [
+  { k: 'entregas', rot: 'Quanto foi entregue', pad: true },
+  { k: 'prazo',    rot: 'No prazo x com atraso', pad: true },
+  { k: 'grafico',  rot: 'Gráfico por desenvolvedor', pad: true },
+  { k: 'riscos',   rot: 'O que está travado', pad: true },
+  { k: 'proximo',  rot: 'O que vem no próximo mês', pad: true },
+];
+
+function apresMesAno() {
+  const mes = parseInt(document.getElementById('ger-mes').value);
+  const ano = parseInt(document.getElementById('ger-ano').value);
+  return { mes, ano, iso: String(ano) + '-' + String(mes).padStart(2, '0') };
+}
+
+// Concluidas NO MES pela data de conclusao — o mesmo recorte do bloco de prazo.
+// Usar a data de inicio responderia outra pergunta e os dois numeros do deck
+// discordariam entre si.
+function apresConcluidasDoMes() {
+  const { iso } = apresMesAno();
+  return (state.melhorias || []).filter(m =>
+    !m.mesclado_em && !m.oculto &&
+    (m.status_planejamento || '') === 'concluido' &&
+    String(m.concluido_em || '').slice(0, 7) === iso);
+}
+
+function apresAbrir() {
+  const { mes, ano } = apresMesAno();
+  const cx = document.getElementById('ap-secoes');
+  cx.innerHTML = AP_SECOES.map(s =>
+    '<label><input type="checkbox" id="ap-s-' + s.k + '"' + (s.pad ? ' checked' : '') +
+    '> ' + esc(s.rot) + '</label>').join('');
+
+  document.getElementById('ap-periodo').innerHTML =
+    '📅 <strong>' + esc(apresentacaoMesNome(mes - 1)) + ' de ' + ano + '</strong>' +
+    ' <span style="color:var(--text3)">· mude no filtro da aba para trocar o período</span>';
+
+  // Candidatas a destaque: as concluidas do mes, maiores em pontos primeiro —
+  // ordem que ajuda a escolher, sem decidir por quem apresenta.
+  const cand = apresConcluidasDoMes()
+    .sort((a, b) => (Number(b.poker_pontos) || 0) - (Number(a.poker_pontos) || 0));
+  const lista = document.getElementById('ap-destaques');
+  lista.innerHTML = cand.length
+    ? cand.map(m =>
+        '<label><input type="checkbox" class="ap-dest" value="' + esc(m.id) + '"> ' +
+        '<span><span class="ap-cod">' + esc(m.codigo || '') + '</span> ' + esc(m.titulo || '') +
+        (m.poker_pontos ? ' <span style="color:var(--text3)">· ' + esc(String(m.poker_pontos)) +
+          ' pts</span>' : '') +
+        (m.dev ? ' <span style="color:var(--text3)">· ' + esc(m.dev) + '</span>' : '') +
+        '</span></label>').join('')
+    : '<p class="ent-vazio" style="margin:0">Nenhuma demanda concluída neste mês.</p>';
+
+  abrirModal('modal-apres');
+}
+
+async function apresGerar() {
+  const btn = document.getElementById('ap-btn');
+  const { mes, ano, iso } = apresMesAno();
+  btn.disabled = true;
+  btn.textContent = 'Montando…';
+  try {
+    const secoes = {};
+    AP_SECOES.forEach(s => {
+      secoes[s.k] = !!(document.getElementById('ap-s-' + s.k) || {}).checked;
+    });
+
+    const conc = apresConcluidasDoMes();
+    const pontos = conc.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+
+    // Prazo: reusa a MESMA classificacao do bloco da tela. Duas contas para o
+    // mesmo numero e a forma mais rapida de o deck contradizer o painel.
+    const cl = new Map(conc.map(m => [m.id, prazoClassifica(m)]));
+    const noPrazo = conc.filter(m => (cl.get(m.id) || {}).tipo === 'no_prazo');
+    const atras = conc.filter(m => (cl.get(m.id) || {}).tipo === 'atraso');
+    const naoMed = conc.filter(m => ['retroativa', 'sem_prazo', 'sem_conclusao']
+      .includes((cl.get(m.id) || {}).tipo));
+    const medidas = noPrazo.length + atras.length;
+    const diasMedio = atras.length
+      ? Math.round(atras.reduce((t, m) => t + cl.get(m.id).dias, 0) / atras.length) : 0;
+
+    const destaques = [...document.querySelectorAll('.ap-dest:checked')].map(c => {
+      const m = (state.melhorias || []).find(x => x.id === c.value) || {};
+      const tema = (state.temas || []).find(t => String(t.id) === String(m.tema_id));
+      return {
+        codigo: m.codigo || '', titulo: m.titulo || '',
+        // O texto do slide e o que o dev escreveu na entrega: e a descricao do
+        // que mudou, escrita por quem fez. Cai na descricao se nao houver.
+        texto: String(m.implementacao || m.descricao || '').slice(0, 600),
+        dev: m.dev || '', tema: tema ? tema.nome : '',
+        pontos: m.poker_pontos || null,
+      };
+    });
+
+    const pausadas = (state.melhorias || [])
+      .filter(m => !m.mesclado_em && !m.oculto && String(m.pausado_em || '').trim())
+      .map(m => ({
+        titulo: (m.codigo ? m.codigo + ' · ' : '') + (m.titulo || ''),
+        dias: Math.max(0, Math.floor((Date.now() - new Date(m.pausado_em)) / 86400000)),
+        motivo: String(m.pausa_motivo || '—').slice(0, 90),
+      }))
+      .sort((a, b) => b.dias - a.dias);
+
+    // O que vem: comprometido com data no mes seguinte.
+    const prox = new Date(ano, mes, 1);
+    const isoProx = prox.getFullYear() + '-' + String(prox.getMonth() + 1).padStart(2, '0');
+    const proximos = (state.melhorias || [])
+      .filter(m => !m.mesclado_em && !m.oculto &&
+        ['planejado', 'em_andamento'].includes(m.status_planejamento || '') &&
+        String(m.entrega || '').slice(0, 7) === isoProx)
+      .sort((a, b) => String(a.entrega).localeCompare(String(b.entrega)))
+      .map(m => ({
+        titulo: (m.codigo ? m.codigo + ' · ' : '') + (m.titulo || ''),
+        dev: m.dev || '—', entrega: formatDate(m.entrega),
+      }));
+
+    // Os graficos viram PNG de 1600px. Se um deles falhar, o deck sai sem ele —
+    // melhor um slide a menos do que a exportacao inteira travar na hora da
+    // reuniao.
+    const imagens = [];
+    if (secoes.grafico) {
+      const png = apresentacaoGraficoPng('ger-chart-dev', 1600);
+      if (png) imagens.push({ titulo: 'Entregas por desenvolvedor',
+                              sub: 'no mês filtrado, empilhado por tema', png });
+    }
+
+    const periodo = apresentacaoMesNome(mes - 1).replace(/^./, c => c.toUpperCase()) + ' de ' + ano;
+    const pptx = await apresentacaoMontaDeck({
+      titulo: 'Roadmap de Melhorias',
+      periodo,
+      subtitulo: 'Audax Capital · Tecnologia',
+      secoes,
+      kpi: {
+        concluidas: conc.length, pontos,
+        notaEntregas: medidas
+          ? medidas + ' delas com data de conclusão registrada no fluxo.'
+          : '',
+      },
+      prazo: {
+        pct: medidas ? Math.round(noPrazo.length / medidas * 100) : 0,
+        noPrazo: noPrazo.length, medidas, naoMedidas: naoMed.length, diasMedio,
+        atrasadas: atras
+          .sort((a, b) => cl.get(b.id).dias - cl.get(a.id).dias)
+          .map(m => ({
+            titulo: (m.codigo ? m.codigo + ' · ' : '') + String(m.titulo || '').slice(0, 60),
+            dev: m.dev || '—',
+            datas: formatDate(m.entrega) + ' → ' + formatDate(m.concluido_em),
+            dias: cl.get(m.id).dias,
+          })),
+      },
+      destaques,
+      imagens,
+      riscos: { pausadas, semPonto: 0 },
+      proximo: { itens: proximos, sub: proximos.length ? 'com data no mês seguinte' : '' },
+      mensagem: String(document.getElementById('ap-mensagem').value || '').trim(),
+    });
+
+    const nome = 'roadmap-' + String(ano) + '-' + String(mes).padStart(2, '0') + '.pptx';
+    await pptx.writeFile({ fileName: nome });
+    toast('📊 ' + nome + ' gerado.', 'ok');
+    closeModal('modal-apres');
+  } catch (e) {
+    toast('Não consegui gerar: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Gerar apresentação';
+  }
 }
 
 function renderGerSemPontos() {
