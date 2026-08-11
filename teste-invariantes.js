@@ -1018,6 +1018,36 @@ ok(!!vd && /A aprovação NÃO foi gravada/.test(vd),
 ok(!!vd && !/A decisão continua pendente/.test(vd),
    'a mensagem antiga, que sugeria que estava so pendente, saiu');
 
+// ═══════════════════════════════════════════════════════════════════════
+sec('Bandeja das pausadas: recolhe sem esconder a contagem');
+
+// A faixa listava TODAS as pausadas, uma por linha: sete linhas fixas no topo,
+// que nao mudam de um dia para o outro, antes de qualquer coisa util.
+ok(/g-pausadas\.aberta|g-pausadas:not\(\.aberta\)/.test(GANTT),
+   'a bandeja tem estado aberto/fechado no CSS');
+ok(/function gPausadasAlterna\(/.test(GANTT), 'existe o alternador');
+// A CONTAGEM nao pode ser escondida junto: "6 demandas pausadas" e a informacao
+// que precisa estar na tela todo dia; a lista e que nao.
+const rp = corpo(GANTT, 'function renderPausadas(');
+ok(!!rp && /demandas pausadas/.test(rp) && /g-pausadas-topo/.test(rp),
+   'o titulo com a contagem fica fora da parte que recolhe');
+// Lembra a escolha: sem memoria, ou quem usa clica todo dia, ou quem nao usa ve
+// sempre. Um dos dois perde.
+ok(/rm_pausadas_aberta/.test(GANTT), 'lembra se ficou aberta ou fechada');
+// O atalho da mensagem de vazio manda a pessoa para a faixa: se ela chegar
+// fechada, a viagem foi inutil.
+const ir = corpo(GANTT, 'function gIrParaFaixaPausadas(');
+ok(!!ir && /gPausadasAlterna\(\)/.test(ir),
+   'o atalho abre a bandeja antes de rolar ate ela');
+// O alvo de clique e a faixa inteira, nao um triangulo de 10px.
+  ok(GANTT.includes('width:100%; background:none; border:none; padding:0; cursor:pointer;'),
+     'o gatilho ocupa a largura toda (o alvo de clique e a faixa, nao um triangulo)');
+// As faixas de PRAZO VENCIDO ficam abertas de proposito: elas pedem acao hoje, ao
+// contrario da lista de pausadas, que so nao pode ser esquecida. Recolher alerta
+// e o caminho para ninguem mais ver alerta.
+ok(!/risco-banner[\s\S]{0,200}aberta/.test(ADMIN),
+   'o aviso de prazo vencido do admin NAO virou bandeja');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

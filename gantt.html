@@ -296,8 +296,19 @@
     .g-pausadas { background:var(--bg3); border:1px solid var(--rose-bd,#93257F);
       border-left:3px solid var(--rose,#D948B8); border-radius:9px;
       padding:11px 14px; margin:0 0 14px; }
+    /* O topo virou o gatilho da bandeja: e um botao de largura inteira, para o
+       alvo de clique ser a faixa toda e nao um triangulo de 10px. */
     .g-pausadas-topo { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-      font-size:13px; font-weight:600; color:var(--rose-tx,#F2A0DA); margin-bottom:9px; }
+      font-size:13px; font-weight:600; color:var(--rose-tx,#F2A0DA);
+      width:100%; background:none; border:none; padding:0; cursor:pointer;
+      font-family:inherit; text-align:left; }
+    .g-pausadas-topo:hover { color:var(--rose,#D948B8); }
+    /* A seta gira para dizer o estado sem precisar de texto. */
+    .g-pausadas-seta { display:inline-block; transition:transform .15s;
+      font-size:11px; opacity:.8; }
+    .g-pausadas.aberta .g-pausadas-seta { transform:rotate(90deg); }
+    .g-pausadas.aberta .g-pausadas-topo { margin-bottom:9px; }
+    .g-pausadas:not(.aberta) .g-pausadas-lista { display:none; }
     .g-pausadas-topo small { font-weight:400; color:var(--text3); }
     .g-pausadas-lista { display:flex; flex-direction:column; gap:6px; }
     /* Realce ao chegar pelo botao da mensagem de vazio. */
@@ -1847,6 +1858,9 @@ function gMensagemVazio() {
 // Rola ate a faixa e pisca a borda: a faixa fica acima do resumo do mes, fora da
 // area visivel em tela pequena, e mandar "olhe no topo" sem levar la nao resolve.
 function gIrParaFaixaPausadas() {
+  // Abre antes de rolar: mandar a pessoa para uma caixa fechada e pior do que nao
+  // mandar — ela chega, ve o titulo e nao entende o que era para ver.
+  if (!_pausadasAberta) gPausadasAlterna();
   const el = document.getElementById('g-pausadas');
   if (!el) return;
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3210,6 +3224,18 @@ function escureceCor(hex, fator) {
 //
 // Marca quais NAO tem barra no mes exibido, porque para essas a faixa e a unica
 // forma de chegar ao card.
+// Nasce recolhida e lembra a escolha: quem trabalha com pausadas todo dia nao
+// quer clicar sempre, e quem nunca olha nao quer ver. Sem memoria, um dos dois
+// perde toda vez.
+let _pausadasAberta = false;
+try { _pausadasAberta = localStorage.getItem('rm_pausadas_aberta') === '1'; } catch (_) {}
+
+function gPausadasAlterna() {
+  _pausadasAberta = !_pausadasAberta;
+  try { localStorage.setItem('rm_pausadas_aberta', _pausadasAberta ? '1' : ''); } catch (_) {}
+  renderPausadas();
+}
+
 function renderPausadas() {
   const box = document.getElementById('g-pausadas');
   if (!box) return;
@@ -3234,10 +3260,17 @@ function renderPausadas() {
   const ord = [...ps].sort((a, b) =>
     String(a.pausado_em || '').localeCompare(String(b.pausado_em || '')));
 
-  box.innerHTML = '<div class="g-pausadas-topo">⏸ ' + total +
+  // Bandeja: o titulo fica sempre visivel (a CONTAGEM e o que precisa estar na
+  // tela todo dia), e a lista abre com um clique. Sao 6 linhas fixas que nao mudam
+  // de um dia para o outro ocupando o topo da tela.
+  box.classList.toggle('aberta', _pausadasAberta);
+  box.innerHTML = '<button type="button" class="g-pausadas-topo" onclick="gPausadasAlterna()" ' +
+    'aria-expanded="' + (_pausadasAberta ? 'true' : 'false') + '">' +
+    '<span class="g-pausadas-seta">▶</span>⏸ ' + total +
     (total === 1 ? ' demanda pausada' : ' demandas pausadas') +
     (fora ? '<small>· ' + fora + ' sem barra neste mês, a entrega ficou congelada onde parou</small>' : '') +
-    '</div><div class="g-pausadas-lista">' +
+    '<small style="margin-left:auto">' + (_pausadasAberta ? 'recolher' : 'ver a lista') + '</small>' +
+    '</button><div class="g-pausadas-lista">' +
     ord.map(m => {
       const d = diasPausadoAgora(m);
       return '<button type="button" class="g-pausada-item" onclick="openModal(' +
