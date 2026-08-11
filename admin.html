@@ -830,7 +830,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
-<script src="apresentacao.js?v=bd84d836fa"></script>
+<script src="apresentacao.js?v=309709d572"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=6f5abaec90"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
@@ -3669,10 +3669,79 @@ function gerBandejasAplicaTodas() {
 const AP_SECOES = [
   { k: 'entregas', rot: 'Quanto foi entregue', pad: true },
   { k: 'prazo',    rot: 'No prazo x com atraso', pad: true },
+  { k: 'time',     rot: 'O time (agregado)', pad: true },
+  { k: 'areas',    rot: 'Onde atuamos (top 3)', pad: true },
   { k: 'grafico',  rot: 'Gráfico por desenvolvedor', pad: true },
   { k: 'riscos',   rot: 'O que está travado', pad: true },
   { k: 'proximo',  rot: 'O que vem no próximo mês', pad: true },
 ];
+
+
+// Time e areas para o deck. Tudo agregado: nenhum slide por pessoa, porque em
+// reuniao de diretoria o detalhe individual desloca a conversa de "o que a area
+// entregou" para "o que fulano fez".
+function apresTimeEAreas(conc, cl) {
+  const devsDe = m => {
+    const n = String(m.dev || '').split('/').map(x => x.trim()).filter(Boolean);
+    return n.length ? n : [];
+  };
+  const acc = {};
+  const soma = (nome, campo, v) => {
+    acc[nome] = acc[nome] || { nome, entregas: 0, pontos: 0, atrasos: 0 };
+    acc[nome][campo] += (v == null ? 1 : v);
+  };
+  conc.forEach(m => {
+    const tipo = (cl.get(m.id) || {}).tipo;
+    devsDe(m).forEach(n => {
+      soma(n, 'entregas');
+      // Pontos DIVIDIDOS entre os responsaveis: sem dividir, a soma do ranking
+      // passaria do total do mes e o numero perderia credibilidade na hora que
+      // alguem conferisse.
+      soma(n, 'pontos', (Number(m.poker_pontos) || 0) / devsDe(m).length);
+      if (tipo === 'atraso') soma(n, 'atrasos');
+    });
+  });
+  const lista = Object.values(acc);
+  const topo = (campo) => lista
+    .filter(d => d[campo] > 0)
+    .sort((a, b) => b[campo] - a[campo] || String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
+    .slice(0, 4)
+    .map(d => ({ nome: d.nome, valor: campo === 'pontos' ? Math.round(d[campo]) : d[campo] }));
+
+  // Areas = temas. E o vocabulario que a diretoria usa ("AXCred - Reanálise"),
+  // nao o nome interno da demanda.
+  const porTema = {};
+  conc.forEach(m => {
+    const t = (state.temas || []).find(x => String(x.id) === String(m.tema_id));
+    const nome = t ? t.nome : '(sem sistema)';
+    porTema[nome] = porTema[nome] || { nome, entregas: 0, pontos: 0 };
+    porTema[nome].entregas++;
+    porTema[nome].pontos += Number(m.poker_pontos) || 0;
+  });
+  const areas = Object.values(porTema)
+    .sort((a, b) => b.entregas - a.entregas || b.pontos - a.pontos);
+
+  // As frentes do atraso: onde ele se concentrou, com nome. "Concentrou-se em duas
+  // frentes" sem dizer quais nao sustenta a pergunta seguinte — e ela vem.
+  const atrasoTema = {};
+  conc.forEach(m => {
+    const c = cl.get(m.id) || {};
+    if (c.tipo !== 'atraso') return;
+    const t = (state.temas || []).find(x => String(x.id) === String(m.tema_id));
+    const nome = t ? t.nome : '(sem sistema)';
+    atrasoTema[nome] = atrasoTema[nome] || { nome, qtd: 0, soma: 0 };
+    atrasoTema[nome].qtd++;
+    atrasoTema[nome].soma += c.dias || 0;
+  });
+  const frentes = Object.values(atrasoTema)
+    .sort((a, b) => b.qtd - a.qtd || b.soma - a.soma)
+    .map(f => ({ nome: f.nome, qtd: f.qtd, dias: Math.round(f.soma / f.qtd) }));
+
+  return {
+    time: { entregas: topo('entregas'), pontos: topo('pontos'), atrasos: topo('atrasos') },
+    areas, frentes,
+  };
+}
 
 function apresMesAno() {
   const mes = parseInt(document.getElementById('ger-mes').value);
@@ -3745,6 +3814,8 @@ async function apresGerar() {
     const diasMedio = atras.length
       ? Math.round(atras.reduce((t, m) => t + cl.get(m.id).dias, 0) / atras.length) : 0;
 
+    const ta = apresTimeEAreas(conc, cl);
+
     const destaques = [...document.querySelectorAll('.ap-dest:checked')].map(c => {
       const m = (state.melhorias || []).find(x => x.id === c.value) || {};
       const tema = (state.temas || []).find(t => String(t.id) === String(m.tema_id));
@@ -3814,6 +3885,9 @@ async function apresGerar() {
             dias: cl.get(m.id).dias,
           })),
       },
+      time: ta.time,
+      areas: ta.areas,
+      frentesAtraso: ta.frentes,
       destaques,
       imagens,
       riscos: { pausadas, semPonto: 0 },

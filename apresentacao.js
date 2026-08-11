@@ -180,23 +180,98 @@
     return s;
   }
 
-  // Tabela enxuta. Máximo de linhas de propósito: passou disso, o slide virou
-  // anexo e ninguém lê no projetor.
-  function tabela(pptx, s, cabec, linhas, y) {
+  // Corta o texto no tamanho que cabe em DUAS linhas da coluna. Sem isso um
+  // titulo longo quebra em tres e empurra a tabela para fora do slide — foi o que
+  // aconteceu no primeiro deck de verdade, e o corte na borda e visto pela plateia
+  // antes do numero.
+  function corta(t, n) {
+    var s = String(t == null ? '' : t).trim();
+    return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
+  }
+
+  // Tabela enxuta. O teto de linhas nao e estetica: o slide tem 5,63" de altura,
+  // a tabela comeca em 1,6" e cada linha come ~0,42" — passou de 6, corta na
+  // borda. Quando sobra fila, uma linha diz quantas ficaram de fora, porque
+  // tabela truncada em silencio faz a diretoria achar que aquilo e tudo.
+  var TAB_MAX = 6;
+  function tabela(pptx, s, cabec, linhas, opts) {
+    opts = opts || {};
+    var vis = linhas.slice(0, opts.max || TAB_MAX);
     var corpo = [cabec.map(function (t) {
-      return { text: t, options: { bold: true, color: C.fraco, fontSize: 12 } };
+      return { text: t, options: { bold: true, color: C.fraco, fontSize: 11 } };
     })];
-    linhas.forEach(function (l) {
+    vis.forEach(function (l) {
       corpo.push(l.map(function (c) {
         var o = (c && typeof c === 'object') ? c : { text: String(c) };
         return { text: o.text, options: Object.assign(
-          { color: C.texto, fontSize: 13 }, o.options || {}) };
+          { color: C.texto, fontSize: 12 }, o.options || {}) };
       }));
     });
     s.addTable(corpo, {
-      x: 0.7, y: y || 1.6, w: 8.6, border: { type: 'solid', color: '2E2E2B', pt: 1 },
+      x: 0.7, y: opts.y || 1.6, w: 8.6, colW: opts.colW,
+      rowH: 0.32, valign: 'middle',
+      border: { type: 'solid', color: '2E2E2B', pt: 1 },
       fill: { color: C.fundo2 }, autoPage: false,
     });
+    var sobra = linhas.length - vis.length;
+    if (sobra > 0) {
+      s.addText('… e mais ' + sobra + (opts.rotuloSobra || ' na planilha do mês'), {
+        x: 0.7, y: (opts.y || 1.6) + 0.36 * (vis.length + 1) + 0.08, w: 8.6, h: 0.3,
+        fontSize: 11, color: C.fraco });
+    }
+  }
+
+
+  // O time em agregado. Tres perguntas, tres colunas — e NENHUM slide por pessoa:
+  // em reuniao de diretoria, detalhe individual desloca a conversa de "o que a
+  // area entregou" para "o que fulano fez", e nao e essa a pauta.
+  function slideTime(pptx, t, pagina, periodo) {
+    var s = slideTitulo(pptx, 'O time', 'no período', pagina);
+    var col = [
+      { x: 0.7,  tit: 'Mais entregas',  cor: C.verde,    lista: t.entregas },
+      { x: 3.65, tit: 'Mais pontos',    cor: C.azul,     lista: t.pontos },
+      { x: 6.6,  tit: 'Mais atrasos',   cor: C.vermelho, lista: t.atrasos },
+    ];
+    col.forEach(function (c) {
+      s.addText(c.tit, { x: c.x, y: 1.6, w: 2.7, h: 0.3, fontSize: 12, color: c.cor, bold: true });
+      if (!c.lista.length) {
+        s.addText('—', { x: c.x, y: 2.0, w: 2.7, h: 0.3, fontSize: 14, color: C.fraco });
+        return;
+      }
+      c.lista.slice(0, 4).forEach(function (it, i) {
+        var y = 2.0 + i * 0.62;
+        s.addText(String(it.valor), {
+          x: c.x, y: y, w: 0.9, h: 0.45, fontSize: 22, bold: true, color: c.cor });
+        s.addText(corta(it.nome, 18), {
+          x: c.x + 0.85, y: y + 0.08, w: 1.9, h: 0.35, fontSize: 12, color: C.texto });
+      });
+    });
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
+  // Onde o time atuou. Barra proporcional em vez de so numero: com tres linhas, a
+  // barra diz em um olhar se foi concentrado ou distribuido — que e a pergunta que
+  // a diretoria faz depois do numero.
+  function slideAreas(pptx, areas, pagina, periodo) {
+    var s = slideTitulo(pptx, 'Onde atuamos', 'principais frentes do período', pagina);
+    var max = Math.max.apply(null, areas.map(function (a) { return a.entregas; }).concat([1]));
+    areas.slice(0, 3).forEach(function (a, i) {
+      var y = 1.7 + i * 1.05;
+      s.addText(corta(a.nome, 46), { x: 0.7, y: y, w: 6.2, h: 0.35, fontSize: 17, color: C.texto });
+      s.addText(a.entregas + (a.entregas === 1 ? ' entrega' : ' entregas') +
+                (a.pontos ? '   ·   ' + a.pontos + ' pontos' : ''), {
+        x: 0.7, y: y + 0.36, w: 6.2, h: 0.3, fontSize: 12, color: C.fraco });
+      // A barra e a leitura de relance; o numero grande a direita ancora.
+      s.addShape(pptx.ShapeType.rect, {
+        x: 0.7, y: y + 0.72, w: 6.2 * (a.entregas / max), h: 0.12,
+        fill: { color: i === 0 ? C.azul : i === 1 ? C.verde : C.roxo } });
+      s.addText(String(a.entregas), {
+        x: 7.4, y: y - 0.05, w: 1.9, h: 0.7, fontSize: 34, bold: true,
+        color: i === 0 ? C.azul : i === 1 ? C.verde : C.roxo, align: 'right' });
+    });
+    rodape(s, periodo, pagina);
+    return s;
   }
 
   /* ── O deck ─────────────────────────────────────────────────────────────
@@ -237,14 +312,18 @@
           d.prazo.atrasadas.length + ' entregas, atraso médio de ' + d.prazo.diasMedio +
           (d.prazo.diasMedio === 1 ? ' dia' : ' dias'), ++p);
         tabela(pptx, s, ['Demanda', 'Responsável', 'Prazo → conclusão', 'Atraso'],
-          d.prazo.atrasadas.slice(0, 8).map(function (a) {
-            return [a.titulo, a.dev, a.datas,
+          d.prazo.atrasadas.map(function (a) {
+            return [corta(a.titulo, 44), a.dev, a.datas,
                     { text: '+' + a.dias + 'd', options: { color: C.vermelho, bold: true } }];
-          }));
+          }), { colW: [3.9, 1.6, 2.1, 1.0], rotuloSobra: ' entregas com atraso' });
       }
     }
 
-    // 3. Os destaques — escolhidos por quem apresenta.
+    // 3. O time e as frentes: agregado, antes do detalhe.
+    if (d.secoes.time && d.time) slideTime(pptx, d.time, ++p, d.periodo);
+    if (d.secoes.areas && (d.areas || []).length) slideAreas(pptx, d.areas, ++p, d.periodo);
+
+    // 4. Os destaques — escolhidos por quem apresenta.
     (d.destaques || []).forEach(function (m) {
       var s = slideBase(pptx);
       s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.verde } });
@@ -276,9 +355,11 @@
       var sr = slideTitulo(pptx, 'O que está travado', 'depende de decisão fora do time', ++p);
       if (d.riscos.pausadas.length) {
         tabela(pptx, sr, ['Demanda', 'Parada há', 'Motivo'],
-          d.riscos.pausadas.slice(0, 7).map(function (x) {
-            return [x.titulo, { text: x.dias + 'd', options: { color: C.ambar } }, x.motivo];
-          }));
+          d.riscos.pausadas.map(function (x) {
+            return [corta(x.titulo, 40),
+                    { text: x.dias + 'd', options: { color: C.ambar } },
+                    corta(x.motivo, 46)];
+          }), { colW: [3.6, 1.0, 4.0], rotuloSobra: ' pausadas' });
       } else {
         sr.addText('Nenhuma demanda pausada.', { x: 0.7, y: 1.7, w: 8.6, h: 0.4,
                                                  fontSize: 15, color: C.fraco });
@@ -290,9 +371,9 @@
       var sp = slideTitulo(pptx, 'O que vem', d.proximo.sub || '', ++p);
       if (d.proximo.itens.length) {
         tabela(pptx, sp, ['Demanda', 'Responsável', 'Entrega'],
-          d.proximo.itens.slice(0, 8).map(function (x) {
-            return [x.titulo, x.dev, x.entrega];
-          }));
+          d.proximo.itens.map(function (x) {
+            return [corta(x.titulo, 48), x.dev, x.entrega];
+          }), { colW: [5.0, 2.2, 1.4], rotuloSobra: ' no próximo mês' });
       } else {
         sp.addText('Nada planejado para o próximo período ainda.',
           { x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
@@ -301,11 +382,26 @@
 
     // 7. A mensagem de quem apresenta. Fica por último porque é a frase que a
     //    sala leva embora, e ela é escrita por uma pessoa — não calculada.
-    if (d.mensagem) {
+    if (d.mensagem || (d.frentesAtraso || []).length) {
       var sm = slideBase(pptx);
       sm.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.azul } });
-      sm.addText(d.mensagem, { x: 0.9, y: 1.6, w: 8.4, h: 2.4, fontSize: 24,
-                               color: C.texto, lineSpacingMultiple: 1.35 });
+      if (d.mensagem) {
+        sm.addText(d.mensagem, { x: 0.9, y: 1.3, w: 8.4, h: 1.7, fontSize: 24,
+                                 color: C.texto, lineSpacingMultiple: 1.35 });
+      }
+      // AS FRENTES, com nome. "Concentrou-se em duas frentes" sem dizer quais e
+      // uma frase que nao sustenta a pergunta seguinte — e a pergunta vem.
+      if ((d.frentesAtraso || []).length) {
+        sm.addText('O atraso concentrou-se em:', {
+          x: 0.9, y: 3.15, w: 8.4, h: 0.3, fontSize: 13, color: C.fraco });
+        d.frentesAtraso.slice(0, 3).forEach(function (f, i) {
+          sm.addText(corta(f.nome, 40), {
+            x: 0.9 + i * 2.85, y: 3.5, w: 2.7, h: 0.35, fontSize: 14, color: C.texto });
+          sm.addText(f.qtd + (f.qtd === 1 ? ' entrega' : ' entregas') +
+                     (f.dias ? '  ·  ' + f.dias + 'd em média' : ''), {
+            x: 0.9 + i * 2.85, y: 3.85, w: 2.7, h: 0.3, fontSize: 12, color: C.vermelho });
+        });
+      }
       rodape(sm, d.periodo, ++p);
     }
 
