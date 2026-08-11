@@ -1144,6 +1144,59 @@ ok(/prazoClassifica\(m\)/.test(corpo(ADMIN, 'async function apresGerar(') || '')
 // Emoji em slide de diretoria vira quadrado se a fonte do projetor nao tiver.
 ok(!/addText\('👤/.test(AP), 'sem emoji nos campos do slide');
 
+
+sec('Apresentacao: caixinha ao lado do nome, barra nitida, promessa que confere');
+
+// A regra generica de formulario esticava o checkbox na largura da coluna e
+// jogava o rotulo para a linha de baixo, com a marca centralizada sobre ele.
+// Ninguem conseguia dizer a qual item a marca pertencia.
+ok(/\.form-group input\[type="checkbox"\][\s\S]{0,220}?width:auto/.test(ADMIN),
+   'checkbox de formulario nao herda width:100% (fica ao lado do rotulo)');
+ok(/\.form-group input\[type="checkbox"\][\s\S]{0,220}?padding:0/.test(ADMIN),
+   'checkbox de formulario nao herda o padding de campo de texto');
+
+// A lista de destaques ja era so do mes; sem a data na linha, isso nao se prova.
+ok(/class="ap-dest"[\s\S]{0,1500}?encerrada ' \+ esc\(formatDate\(m\.concluido_em\)\)/.test(ADMIN),
+   'cada linha da lista de destaques mostra a data de conclusao');
+ok(/function apresConcluidasDoMes[\s\S]{0,400}?String\(m\.concluido_em \|\| ''\)\.slice\(0, 7\) === iso/.test(ADMIN),
+   'a lista de destaques e recortada pelo mes de conclusao');
+
+// Prometer no slide algo que ja foi entregue queima o slide inteiro. O corte e do
+// momento da geracao, e a base e relida para que "agora" seja agora.
+ok(/const proximos[\s\S]{0,500}?!String\(m\.concluido_em \|\| ''\)\.trim\(\)/.test(ADMIN),
+   'o que vem exclui o que ja tem data de conclusao');
+ok(/const proximos[\s\S]{0,500}?\['planejado', 'em_andamento'\]/.test(ADMIN),
+   'o que vem exclui validacao (ja entregue, so falta o aceite)');
+ok(/apresGerar[\s\S]{0,1200}?await loadFromGitHub\(true\)/.test(ADMIN),
+   'a base e relida antes de montar o deck');
+ok(/apresGerar[\s\S]{0,1200}?_pendingEdits \|\| _kbDirty[\s\S]{0,200}?if \(!pendente\)/.test(ADMIN),
+   'a releitura NAO descarta edicao local pendente');
+ok(/ainda em aberto em ' \+[\s\S]{0,80}?toLocaleDateString\('pt-BR'\)/.test(ADMIN),
+   'o slide diz a data do corte');
+
+// O grafico da tela empilha por tema: 28 cores e barras de poucos pixels viram
+// uma faixa ilegivel no projetor. O deck desenha a barra, em vetor e numa cor so.
+ok(/function slideBarras/.test(AP), 'existe o slide de barras desenhadas');
+ok(!/d\.secoes\.grafico && d\.imagens\.length/.test(AP),
+   'entregas por dev nao e mais foto do grafico da tela');
+ok(/d\.secoes\.grafico && \(d\.porDev \|\| \[\]\)\.length/.test(AP),
+   'entregas por dev vem dos dados, nao de um PNG');
+ok(!/apresentacaoGraficoPng\('ger-chart-dev'/.test(ADMIN),
+   'o admin nao fotografa mais o grafico empilhado da tela');
+ok(/slideBarras[\s\S]{0,2500}?cfg\.cor \|\| C\.azul/.test(AP),
+   'a barra tem UMA cor (a cor nao carrega informacao aqui)');
+ok(/var alt = Math\.min\(0\.42, AREA \/ itens\.length\)/.test(AP),
+   'a altura da linha se ajusta a quantidade (nao estoura o slide)');
+
+// Solicitante em branco viraria a maior barra do ranking em varios meses, e diria
+// so que o campo nao e preenchido.
+ok(/d\.secoes\.solicit && d\.solicitantes/.test(AP), 'existe o slide de quem pediu');
+ok(/if \(!q\) \{ semSolic\+\+; return; \}/.test(ADMIN),
+   'sem solicitante nao vira fatia do ranking');
+ok(/sem solicitante registrado/.test(AP),
+   'o slide diz quantas ficaram fora do ranking (senao a soma nao bate)');
+ok(/k: 'solicit'/.test(ADMIN), 'a secao de solicitantes pode ser desmarcada');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

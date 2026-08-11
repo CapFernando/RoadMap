@@ -485,7 +485,13 @@
     .ap-checks { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:7px; }
     .ap-checks label, .ap-lista label { display:flex; align-items:flex-start; gap:8px;
       font-size:13px; color:var(--text2); cursor:pointer; line-height:1.4; }
-    .ap-checks input, .ap-lista input { margin-top:2px; accent-color:var(--blue); flex-shrink:0; }
+    /* A regra generica `.form-group input { width:100%; padding:11px 14px }` vale
+       tambem para checkbox — e um checkbox esticado na largura da coluna empurra
+       o rotulo para a linha de baixo, com a marca centralizada sobre ele. Fica
+       impossivel dizer a qual item a marca pertence. Desfeito para checkbox e
+       radio em QUALQUER form-group, e nao so aqui: o defeito e da regra generica. */
+    .form-group input[type="checkbox"], .form-group input[type="radio"] {
+      width:auto; padding:0; margin:2px 0 0; flex:0 0 auto; accent-color:var(--blue); }
     /* Altura limitada: a lista de concluidas do mes pode ter 40 itens, e um modal
        que cresce sem fim esconde o botao de gerar. */
     .ap-lista { max-height:230px; overflow-y:auto; display:flex; flex-direction:column;
@@ -841,7 +847,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
-<script src="apresentacao.js?v=309709d572"></script>
+<script src="apresentacao.js?v=19b094a0ee"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
@@ -3688,7 +3694,8 @@ const AP_SECOES = [
   { k: 'prazo',    rot: 'No prazo x com atraso', pad: true },
   { k: 'time',     rot: 'O time (agregado)', pad: true },
   { k: 'areas',    rot: 'Onde atuamos (top 3)', pad: true },
-  { k: 'grafico',  rot: 'Gráfico por desenvolvedor', pad: true },
+  { k: 'solicit',  rot: 'Quem mais pediu (top 5)', pad: true },
+  { k: 'grafico',  rot: 'Entregas por desenvolvedor', pad: true },
   { k: 'riscos',   rot: 'O que está travado', pad: true },
   { k: 'proximo',  rot: 'O que vem no próximo mês', pad: true },
 ];
@@ -3754,9 +3761,33 @@ function apresTimeEAreas(conc, cl) {
     .sort((a, b) => b.qtd - a.qtd || b.soma - a.soma)
     .map(f => ({ nome: f.nome, qtd: f.qtd, dias: Math.round(f.soma / f.qtd) }));
 
+  // A lista COMPLETA de devs, para o slide de barras. `topo('entregas')` para em
+  // 4 porque o slide do time compara tres colunas lado a lado; o slide de barras
+  // e outro assunto e mostra o time inteiro.
+  const porDev = lista
+    .filter(d => d.entregas > 0)
+    .map(d => ({ nome: d.nome, valor: d.entregas }))
+    .sort((a, b) => b.valor - a.valor ||
+      String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+
+  // Quem pediu. Sem solicitante NAO vira uma fatia "(vazio)" no ranking: seria a
+  // maior de todas em varios meses e diria apenas que o campo nao e preenchido.
+  // Vira uma nota abaixo do ranking, que e o que ela realmente e.
+  const porSolic = {};
+  let semSolic = 0;
+  conc.forEach(m => {
+    const q = String(m.solicitante || '').trim();
+    if (!q) { semSolic++; return; }
+    porSolic[q] = (porSolic[q] || 0) + 1;
+  });
+  const solicitantes = Object.keys(porSolic)
+    .map(k => ({ nome: k, valor: porSolic[k] }))
+    .sort((a, b) => b.valor - a.valor ||
+      String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+
   return {
     time: { entregas: topo('entregas'), pontos: topo('pontos'), atrasos: topo('atrasos') },
-    areas, frentes,
+    areas, frentes, porDev, solicitantes, semSolic,
   };
 }
 
@@ -3805,6 +3836,10 @@ function apresAbrir() {
         (m.poker_pontos ? ' <span style="color:var(--text3)">· ' + esc(String(m.poker_pontos)) +
           ' pts</span>' : '') +
         (m.dev ? ' <span style="color:var(--text3)">· ' + esc(m.dev) + '</span>' : '') +
+        // A data de conclusao aparece em cada linha de proposito: a lista JA e so
+        // do mes filtrado, mas isso e invisivel — e uma lista de 69 itens que nao
+        // mostra a data nao consegue provar o proprio recorte para quem confere.
+        ' <span style="color:var(--text3)">· encerrada ' + esc(formatDate(m.concluido_em)) + '</span>' +
         '</span></label>').join('')
     : '<p class="ent-vazio" style="margin:0">Nenhuma demanda concluída neste mês.</p>';
 
@@ -3817,6 +3852,16 @@ async function apresGerar() {
   btn.disabled = true;
   btn.textContent = 'Montando…';
   try {
+    // Rele a base ANTES de montar. "O que vem" precisa da situacao de agora, e a
+    // tela pode estar aberta desde a manha. Nao rele quando ha edicao local
+    // pendente: recarregar descartaria o que a pessoa ainda nao publicou, e
+    // perder trabalho para melhorar um slide e uma troca ruim.
+    const pendente = _pendingEdits || _kbDirty || _dirtyMelhoriaIds.size > 0;
+    if (!pendente) {
+      btn.textContent = 'Atualizando…';
+      try { await loadFromGitHub(true); } catch (_) { /* segue com o que tem */ }
+    }
+
     const secoes = {};
     AP_SECOES.forEach(s => {
       secoes[s.k] = !!(document.getElementById('ap-s-' + s.k) || {}).checked;
@@ -3860,12 +3905,23 @@ async function apresGerar() {
       }))
       .sort((a, b) => b.dias - a.dias);
 
-    // O que vem: comprometido com data no mes seguinte.
+    // O que vem: comprometido com data no mes seguinte E AINDA EM ABERTO AGORA.
+    //
+    // O recorte e do MOMENTO DA GERACAO, nao do fim do mes apresentado. Se a
+    // reuniao acontece no dia 15 e tres dessas ja foram entregues entre o dia 1 e
+    // o 15, prometer as tres como "o que vem" queima a credibilidade do slide
+    // seguinte inteiro. Por isso a base foi relida acima e por isso `validacao`
+    // tambem sai: a demanda ja foi entregue pelo dev, so falta o aceite.
+    //
+    // `concluido_em` entra na condicao junto com o status porque registro
+    // importado pode ter data de conclusao sem o status ter acompanhado, e nesse
+    // caso a data e a informacao mais confiavel das duas.
     const prox = new Date(ano, mes, 1);
     const isoProx = prox.getFullYear() + '-' + String(prox.getMonth() + 1).padStart(2, '0');
     const proximos = (state.melhorias || [])
       .filter(m => !m.mesclado_em && !m.oculto &&
         ['planejado', 'em_andamento'].includes(m.status_planejamento || '') &&
+        !String(m.concluido_em || '').trim() &&
         String(m.entrega || '').slice(0, 7) === isoProx)
       .sort((a, b) => String(a.entrega).localeCompare(String(b.entrega)))
       .map(m => ({
@@ -3876,12 +3932,12 @@ async function apresGerar() {
     // Os graficos viram PNG de 1600px. Se um deles falhar, o deck sai sem ele —
     // melhor um slide a menos do que a exportacao inteira travar na hora da
     // reuniao.
+    // As barras por desenvolvedor sao DESENHADAS no slide, nao fotografadas da
+    // tela. O grafico da tela empilha por tema: 28 cores, legenda de tres linhas e
+    // barras de 4px que no projetor viram uma faixa colorida ilegivel. Empilhar
+    // responde "quem trabalhou em que", pergunta de dentro do time; a diretoria
+    // pergunta "quem entregou quanto", e isso e uma barra so, de uma cor so.
     const imagens = [];
-    if (secoes.grafico) {
-      const png = apresentacaoGraficoPng('ger-chart-dev', 1600);
-      if (png) imagens.push({ titulo: 'Entregas por desenvolvedor',
-                              sub: 'no mês filtrado, empilhado por tema', png });
-    }
 
     const periodo = apresentacaoMesNome(mes - 1).replace(/^./, c => c.toUpperCase()) + ' de ' + ano;
     const pptx = await apresentacaoMontaDeck({
@@ -3910,10 +3966,18 @@ async function apresGerar() {
       time: ta.time,
       areas: ta.areas,
       frentesAtraso: ta.frentes,
+      porDev: ta.porDev,
+      solicitantes: { itens: ta.solicitantes, sem: ta.semSolic, total: conc.length },
       destaques,
       imagens,
       riscos: { pausadas, semPonto: 0 },
-      proximo: { itens: proximos, sub: proximos.length ? 'com data no mês seguinte' : '' },
+      proximo: {
+        itens: proximos,
+        // A data do corte vai NO SLIDE. Sem ela, a lista parece uma promessa feita
+        // no fim do mes passado, e quem cobra depois cobra pela data errada.
+        sub: 'com data no mês seguinte e ainda em aberto em ' +
+             new Date().toLocaleDateString('pt-BR'),
+      },
       mensagem: String(document.getElementById('ap-mensagem').value || '').trim(),
     });
 

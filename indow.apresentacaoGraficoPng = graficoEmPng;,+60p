@@ -274,72 +274,6 @@
     return s;
   }
 
-
-  // Ranking em barras DESENHADAS no slide — retangulos do PowerPoint, nao imagem.
-  //
-  // A primeira versao fotografava o grafico da tela. Ele empilha por tema: 28
-  // cores, legenda ocupando tres linhas do slide e barras de poucos pixels. No
-  // projetor virou uma faixa colorida que nao se le, e cor demais num slide
-  // executivo nao decora — gera pergunta ("o que e o laranja?") no meio da
-  // apresentacao.
-  //
-  // Vetor em vez de PNG: fica nitido em qualquer projetor e em qualquer zoom, nao
-  // depende do tamanho do canvas na tela de quem exportou, e sobrevive ao PDF.
-  // Uma cor so, ordenado do maior para o menor, numero na ponta. A comparacao e
-  // o assunto; a cor nao carrega informacao nenhuma aqui.
-  function slideBarras(pptx, cfg, pagina, periodo) {
-    var s = slideTitulo(pptx, cfg.titulo, cfg.sub || '', pagina);
-    var itens = (cfg.itens || []).slice(0, cfg.max || 12);
-    if (!itens.length) {
-      s.addText(cfg.vazio || 'Sem dados no período.',
-        { x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
-      rodape(s, periodo, pagina);
-      return s;
-    }
-    // A altura da linha se ajusta a quantidade: 3,25" de area util. Fixa em 0,42"
-    // com dez pessoas, a ultima barra cai fora do slide — foi assim que a tabela
-    // do primeiro deck estourou.
-    var TOPO = 1.62, AREA = 3.25;
-    var alt = Math.min(0.42, AREA / itens.length);
-    var max = itens.reduce(function (m, i) { return Math.max(m, i.valor); }, 0) || 1;
-    // 5,88" e a largura que faz o numero terminar em 9,5" — a mesma margem
-    // direita das tabelas e dos titulos. Bordas diferentes entre slides do mesmo
-    // deck sao percebidas como desalinhamento mesmo por quem nao sabe dizer o que
-    // mudou.
-    var LARG = 5.88, X_NOME = 0.7, X_BARRA = 2.75;
-
-    itens.forEach(function (it, i) {
-      var y = TOPO + i * alt;
-      var h = Math.min(0.2, alt * 0.5);
-      s.addText(corta(it.nome, 26), {
-        x: X_NOME, y: y, w: 1.95, h: alt, fontSize: 12, color: C.texto,
-        align: 'right', valign: 'middle' });
-      // Trilho: sem ele, uma barra curta ao lado de uma longa parece erro de
-      // desenho em vez de diferenca de volume.
-      s.addShape(pptx.ShapeType.rect, {
-        x: X_BARRA, y: y + (alt - h) / 2, w: LARG, h: h,
-        fill: { color: C.fundo2 } });
-      s.addShape(pptx.ShapeType.rect, {
-        x: X_BARRA, y: y + (alt - h) / 2, w: Math.max(0.06, LARG * (it.valor / max)), h: h,
-        fill: { color: cfg.cor || C.azul } });
-      s.addText(String(it.valor), {
-        x: X_BARRA + LARG + 0.12, y: y, w: 0.75, h: alt,
-        fontSize: 13, bold: true, color: cfg.cor || C.azul, valign: 'middle' });
-    });
-
-    var sobra = (cfg.itens || []).length - itens.length;
-    var notas = [];
-    if (sobra > 0) notas.push('… e mais ' + sobra + (cfg.rotuloSobra || ''));
-    if (cfg.nota) notas.push(cfg.nota);
-    if (notas.length) {
-      s.addText(notas.join('   ·   '), {
-        x: 0.7, y: TOPO + itens.length * alt + 0.12, w: 8.6, h: 0.3,
-        fontSize: 11, color: C.fraco });
-    }
-    rodape(s, periodo, pagina);
-    return s;
-  }
-
   /* ── O deck ─────────────────────────────────────────────────────────────
      A ordem é a da conversa, não a da tela: o que entregamos, o que valeu a
      pena, onde falhamos e por quê, o que vem. */
@@ -407,37 +341,13 @@
       rodape(s, 'Destaque · ' + d.periodo, ++p);
     });
 
-    // 5. Quem pediu. O time e uma leitura; a area cliente e outra, e e a que diz
-    //    para onde a capacidade foi de fato.
-    if (d.secoes.solicit && d.solicitantes) {
-      slideBarras(pptx, {
-        titulo: 'Quem mais pediu', sub: 'demandas concluídas no período, por solicitante',
-        itens: d.solicitantes.itens, max: 5, cor: C.roxo,
-        rotuloSobra: ' solicitantes',
-        // A nota existe porque o ranking some com quem nao tem solicitante. Sem
-        // dizer quantas ficaram de fora, a soma das barras nao bate com o total
-        // do primeiro slide — e alguem soma.
-        nota: d.solicitantes.sem
-          ? d.solicitantes.sem + ' de ' + d.solicitantes.total + ' sem solicitante registrado'
-          : '',
-        vazio: 'Nenhuma entrega do período tem solicitante registrado.',
-      }, ++p, d.periodo);
+    // 4. Distribuição por pessoa — aqui o gráfico vale mais que a tabela.
+    if (d.secoes.grafico && d.imagens.length) {
+      d.imagens.forEach(function (img) {
+        var s = slideTitulo(pptx, img.titulo, img.sub || '', ++p);
+        s.addImage({ data: img.png, x: 0.7, y: 1.5, w: 8.6, h: 3.4 });
+      });
     }
-
-    // 6. Distribuição por pessoa.
-    if (d.secoes.grafico && (d.porDev || []).length) {
-      slideBarras(pptx, {
-        titulo: 'Entregas por desenvolvedor', sub: 'demandas concluídas no período',
-        itens: d.porDev, cor: C.verde, rotuloSobra: ' pessoas',
-      }, ++p, d.periodo);
-    }
-
-    // As imagens seguem suportadas para quem quiser mandar um grafico pronto,
-    // mas nenhum slide do deck depende delas hoje.
-    (d.imagens || []).forEach(function (img) {
-      var si = slideTitulo(pptx, img.titulo, img.sub || '', ++p);
-      si.addImage({ data: img.png, x: 0.7, y: 1.5, w: 8.6, h: 3.4 });
-    });
 
     // 5. O que trava: pausadas e sem estimativa. É a parte que a diretoria pode
     //    destravar — e a única razão de ela estar no deck.
