@@ -742,7 +742,11 @@
     <div class="form-row">
       <div class="form-group">
         <label>Sprint</label>
-        <input type="text" id="e-sprint" placeholder="ex: S1" />
+        <!-- Somente leitura: sai das datas. Editavel, voltaria a divergir — e o
+             pedido foi nao precisar preencher. -->
+        <input type="text" id="e-sprint" readonly
+               title="Calculada pelas datas: bloco de 5 dias úteis do mês (S1 = úteis 1-5)."
+               placeholder="sai da data de início" style="opacity:.75;cursor:default" />
       </div>
       <div class="form-group">
         <label>Pontos (Planning Poker)
@@ -780,11 +784,11 @@
     <div class="form-row">
       <div class="form-group">
         <label>Data início</label>
-        <input type="date" id="e-inicio" oninput="atualizaHorasPlanGantt()" />
+        <input type="date" id="e-inicio" oninput="atualizaHorasPlanGantt(); atualizaSprintCampo()" />
       </div>
       <div class="form-group">
         <label>Data fim</label>
-        <input type="date" id="e-fim" oninput="atualizaHorasPlanGantt()" />
+        <input type="date" id="e-fim" oninput="atualizaHorasPlanGantt(); atualizaSprintCampo()" />
       </div>
     </div>
     <!-- Logo abaixo das datas de proposito: e a data fim que a pausa esconde e
@@ -1772,6 +1776,53 @@ function renderBacklog() {
   }).join('');
 }
 
+
+// ─── SPRINT: S1-08-2026, derivada e nao digitada ──────────────────
+// Formato: S<n>-<MM>-<AAAA>. O <n> vem do bloco de 5 DIAS UTEIS dentro do mes —
+// a MESMA divisao que esta tela ja usa para somar os pontos por semana (S1 =
+// uteis 1-5, S2 = 6-10...). Inventar aqui uma segunda definicao de "semana"
+// faria o rotulo do card discordar do grafico de pontos logo acima dele.
+//
+// Feriado nao conta como dia util, entao um mes com feriado desloca as sprints.
+// Isso e proposital: a capacidade do time desloca junto.
+//
+// Antes o campo era texto livre, e com 11 preenchimentos a mao ja havia duas
+// grafias na base ('S1-08-2026' e 'S1-08-26') — duas linhas para a mesma sprint
+// em qualquer relatorio.
+function sprintDeData(dataStr) {
+  const s = String(dataStr || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '';
+  const [ano, mes] = s.split('-').map(Number);
+  const uteis = getWorkingDaysOfMonth(ano, mes - 1).filter(d => !d.holiday);
+  let idx = uteis.findIndex(d => d.str === s);
+  if (idx < 0) {
+    // Data em fim de semana ou feriado (entrega marcada num sabado, por exemplo):
+    // cai na sprint do proximo dia util; se nao houver, na do ultimo.
+    const prox = uteis.findIndex(d => d.str > s);
+    idx = prox >= 0 ? prox : uteis.length - 1;
+  }
+  if (idx < 0) return '';
+  return 'S' + (Math.floor(idx / 5) + 1) + '-' + String(mes).padStart(2, '0') + '-' + ano;
+}
+
+// A sprint de uma demanda: pelo INICIO, porque a sprint responde "quando isto vai
+// ser feito". Sem inicio, cai na entrega — melhor uma sprint aproximada do que
+// campo vazio no relatorio.
+// Espelha o campo enquanto a pessoa mexe nas datas, sem esperar o salvamento:
+// ver a sprint mudar e o que ensina a regra sem precisar de texto explicando.
+function atualizaSprintCampo() {
+  const el = document.getElementById('e-sprint');
+  if (!el) return;
+  const ini = (document.getElementById('e-inicio') || {}).value || '';
+  const fim = (document.getElementById('e-fim') || {}).value || '';
+  el.value = sprintDeData(ini) || sprintDeData(fim) || '';
+}
+
+function sprintDaDemanda(m) {
+  if (!m) return '';
+  return sprintDeData(m.inicio) || sprintDeData(m.entrega) || '';
+}
+
 // ── GANTT ─────────────────────────────────────────────────────────────────
 // ── PONTOS DO PLANNING POKER POR SEMANA ────────────────────────────
 // "Semana" aqui é bloco de 5 dias úteis do mês em exibição (S1=dias úteis
@@ -2339,6 +2390,9 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-id').value        = m?.id || '';
   document.getElementById('e-titulo').value    = m?.titulo || '';
   document.getElementById('e-descricao').value = m?.descricao || '';
+  // A sprint aparece ja calculada; se as datas mudarem no formulario, o
+  // `oninput` abaixo recalcula sem esperar o salvamento.
+  document.getElementById('e-sprint').value = sprintDaDemanda(m) || '';
   if (window.ligaModeloDescricao) ligaModeloDescricao('e-descricao', { auto: !m });
   if (window.ghLinkPreenche) ghLinkPreenche('e', m, state.melhorias);
   const eChips = document.getElementById('e-link-chips');
@@ -2694,7 +2748,9 @@ function saveTask() {
     prioridade:         document.getElementById('e-prio').value,
     solicitante:        document.getElementById('e-solicitante').value.trim(),
     data_solicitacao:   document.getElementById('e-data-solic').value,
-    sprint:             document.getElementById('e-sprint').value.trim(),
+    // Derivada das datas, nao lida do campo: o campo e so espelho. Assim uma
+    // demanda que muda de data muda de sprint junto, sem ninguem lembrar disso.
+    sprint:             sprintDeData(inicio) || sprintDeData(fim) || '',
     poker_pontos:       pokerPontosDoForm(existing),
     concluido_em:       existing.concluido_em || '',
     concluido_retroativo: existing.concluido_retroativo || undefined,

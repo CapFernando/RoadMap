@@ -465,6 +465,20 @@
     }
     .ger-section-hint { font-size:12px; font-weight:500; color:var(--text3); }
     .ger-section-sep { border-top:1px solid var(--border); margin:32px 0 20px; }
+    /* Numeros a direita e tabulares: coluna de numero so se compara de relance
+       quando os digitos alinham. */
+    .pz-num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    /* Bandeja: o titulo vira gatilho de largura inteira e a seta gira. O RESUMO
+       (ger-summary) fica FORA do que recolhe — e a resposta da secao. */
+    .ger-bandeja > .ger-section-title { width:100%; background:none; border:none;
+      padding:0; cursor:pointer; font-family:inherit; text-align:left; }
+    .ger-bandeja > .ger-section-title:hover { color:var(--text); }
+    .ger-bandeja-seta { display:inline-block; font-size:11px; opacity:.8;
+      transition:transform .15s; margin-right:6px; }
+    .ger-bandeja.aberta .ger-bandeja-seta { transform:rotate(90deg); }
+    .ger-bandeja-acao { font-size:12px; font-weight:400; color:var(--text3);
+      margin-left:auto; }
+    .ger-bandeja:not(.aberta) .ger-bandeja-corpo { display:none; }
     /* Periodo dentro do titulo da secao: e a informacao que faltava para o
        relatorio nao parecer contraditorio. */
     .rel-per { font-size:12px; font-weight:600; color:var(--blue-tx,#9BC8F8);
@@ -963,12 +977,28 @@
       </div>
 
       <div class="ger-section-sep"></div>
-      <div class="ger-section-title">
-        🃏 Comprometidas sem pontuação
-        <span class="ger-section-hint">de Planejado em diante, sem pontos do Planning Poker</span>
-      </div>
-      <div id="sp-resumo" class="ger-summary"></div>
-      <div id="sp-lista"></div>
+      <section class="ger-bandeja" data-bandeja="sempontos">
+        <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('sempontos')" aria-expanded="true">
+          <span><span class="ger-bandeja-seta">▶</span>🃏 Comprometidas sem pontuação</span>
+          <span class="ger-section-hint">de Planejado em diante, sem pontos do Planning Poker</span>
+          <span class="ger-bandeja-acao">recolher</span>
+        </button>
+        <!-- O resumo fica FORA do corpo que recolhe: e a resposta da secao. -->
+        <div id="sp-resumo" class="ger-summary"></div>
+        <div class="ger-bandeja-corpo"><div id="sp-lista"></div></div>
+      </section>
+
+      <div class="ger-section-sep"></div>
+      <section class="ger-bandeja" data-bandeja="prazo">
+        <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('prazo')" aria-expanded="true">
+          <span><span class="ger-bandeja-seta">▶</span>⏱ Entregas no prazo</span>
+          <span class="ger-section-hint">concluídas no mês filtrado, pela data de conclusão</span>
+          <span class="ger-bandeja-acao">recolher</span>
+        </button>
+        <!-- O resumo fica FORA do corpo que recolhe: e a resposta da secao. -->
+        <div id="pz-resumo" class="ger-summary"></div>
+        <div class="ger-bandeja-corpo"><div id="pz-lista"></div></div>
+      </section>
 
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
@@ -3396,6 +3426,190 @@ function toggleGerPtsTable() {
 // Nao filtra por mes de proposito. A pergunta aqui nao e "quanto entrou em
 // agosto", e "o que esta na esteira agora com data combinada e sem estimativa" —
 // uma demanda de junho ainda em andamento sem pontos continua sendo o problema.
+
+// ─── ENTREGAS NO PRAZO ────────────────────────────────────────────
+// Fechamento do mes: o que saiu no prazo e o que saiu com atraso, no geral e por
+// dev. A conta e data de conclusao contra prazo — mas ela SO VALE para conclusao
+// registrada quando aconteceu.
+//
+// 75 das 126 concluidas sao retroativas: a data de conclusao foi preenchida com a
+// data de entrega quando a base foi organizada. Para essas, "no prazo" e verdade
+// por construcao, nao por pontualidade — e sem separar, o relatorio diria
+// "julho: 100% no prazo, 69 de 69". Numero bonito, falso, e que viraria meta.
+//
+// O marcador e `concluido_retroativo`, NAO a coincidencia das duas datas:
+// entregar exatamente no dia do prazo e comum e legitimo (14 das 44 medidas sao
+// assim), e usar a coincidencia como filtro puniria quem entregou no dia.
+function prazoClassifica(m) {
+  if (!m || m.mesclado_em || m.oculto) return null;
+  if ((m.status_planejamento || '') !== 'concluido') return null;
+  if (m.concluido_retroativo) return { tipo: 'retroativa' };
+  const ce = String(m.concluido_em || '').slice(0, 10);
+  const pz = String(m.entrega || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ce)) return { tipo: 'sem_conclusao' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(pz)) return { tipo: 'sem_prazo' };
+  // Comparacao por STRING ISO, nunca por objeto Date: converter para local muda o
+  // dia e ja custou off-by-one aqui.
+  if (ce <= pz) return { tipo: 'no_prazo', dias: 0 };
+  const dia = t => { const [a, b, c] = t.split('-').map(Number); return Date.UTC(a, b - 1, c); };
+  return { tipo: 'atraso', dias: Math.round((dia(ce) - dia(pz)) / 86400000) };
+}
+
+function renderGerPrazo(ano, mes) {
+  const resumo = document.getElementById('pz-resumo');
+  const lista = document.getElementById('pz-lista');
+  if (!resumo || !lista) return;
+
+  // Mes pela data de CONCLUSAO: e o mes em que a entrega aconteceu. Usar a data
+  // de inicio (como os outros blocos) responderia outra pergunta — "do que
+  // comecou em agosto, quanto saiu no prazo" — e nao a do fechamento.
+  const alvo = String(ano) + '-' + String(mes).padStart(2, '0');
+  const doMes = (state.melhorias || []).filter(m => {
+    const c = prazoClassifica(m);
+    if (!c) return false;
+    // Retroativa sem data de conclusao nao tem mes: entra no balde de nao medidas
+    // do periodo selecionado apenas se a data existir.
+    return String(m.concluido_em || '').slice(0, 7) === alvo;
+  });
+
+  const cls = new Map(doMes.map(m => [m.id, prazoClassifica(m)]));
+  const noPrazo = doMes.filter(m => cls.get(m.id).tipo === 'no_prazo');
+  const atraso  = doMes.filter(m => cls.get(m.id).tipo === 'atraso');
+  const naoMedido = doMes.filter(m => ['retroativa', 'sem_prazo', 'sem_conclusao']
+    .includes(cls.get(m.id).tipo));
+  const medidas = noPrazo.length + atraso.length;
+  const pct = medidas ? Math.round(noPrazo.length / medidas * 100) : null;
+  const diasMedio = atraso.length
+    ? Math.round(atraso.reduce((t, m) => t + cls.get(m.id).dias, 0) / atraso.length) : 0;
+
+  const kpi = (v, rot, extra, cor) =>
+    '<div class="ger-kpi"><div class="ger-kpi-label">' + rot + '</div>' +
+    '<div class="ger-kpi-value"' + (cor ? ' style="color:' + cor + '"' : '') + '>' + v + '</div>' +
+    (extra ? '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">' + extra + '</div>' : '') +
+    '</div>';
+
+  resumo.innerHTML =
+    kpi(pct === null ? '—' : pct + '%', 'No prazo',
+        medidas ? noPrazo.length + ' de ' + medidas + ' medidas' : 'nada medível no mês',
+        pct === null ? '' : (pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)')) +
+    kpi(atraso.length, 'Com atraso',
+        atraso.length ? 'média de ' + diasMedio + (diasMedio === 1 ? ' dia' : ' dias') : '—',
+        atraso.length ? 'var(--red)' : '') +
+    kpi(medidas, 'Medidas', 'com conclusão registrada') +
+    kpi(naoMedido.length, 'Não medidas',
+        naoMedido.length ? 'data preenchida depois — não dá para julgar' : '—');
+
+  if (!doMes.length) {
+    lista.innerHTML = '<p class="ent-vazio">Nenhuma demanda concluída neste mês.</p>';
+    return;
+  }
+  if (!medidas) {
+    lista.innerHTML = '<p class="ent-vazio">As ' + naoMedido.length + ' conclusões deste mês ' +
+      'foram registradas retroativamente: a data de conclusão recebeu a data de entrega quando ' +
+      'a base foi organizada.<br>Nesse caso "no prazo" seria verdade por construção, não por ' +
+      'pontualidade — por isso o mês não entra na conta.</p>';
+    return;
+  }
+
+  // Por dev. E a conversa que se tem no fechamento, e a razao de o bloco existir.
+  const porDev = {};
+  const somaDev = (nome, chave, dias) => {
+    porDev[nome] = porDev[nome] || { nome, prazo: 0, atraso: 0, dias: 0 };
+    porDev[nome][chave]++;
+    if (dias) porDev[nome].dias += dias;
+  };
+  noPrazo.forEach(m => splitDevsLocalPrazo(m).forEach(n => somaDev(n, 'prazo')));
+  atraso.forEach(m => splitDevsLocalPrazo(m).forEach(n => somaDev(n, 'atraso', cls.get(m.id).dias)));
+
+  const linhas = Object.values(porDev)
+    .sort((a, b) => (b.prazo + b.atraso) - (a.prazo + a.atraso) ||
+                    String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
+    .map(d => {
+      const tot = d.prazo + d.atraso;
+      const p = Math.round(d.prazo / tot * 100);
+      const cor = p >= 80 ? 'var(--green)' : p >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)';
+      return '<tr><td><div class="us-nome">' + esc(d.nome) + '</div></td>' +
+        '<td class="pz-num">' + d.prazo + '</td>' +
+        '<td class="pz-num">' + (d.atraso || '—') + '</td>' +
+        '<td class="pz-num">' + (d.atraso ? Math.round(d.dias / d.atraso) + 'd' : '—') + '</td>' +
+        '<td class="pz-num" style="color:' + cor + ';font-weight:700">' + p + '%</td></tr>';
+    }).join('');
+
+  // As atrasadas, nominalmente: o percentual diz o tamanho, a lista diz o que
+  // aconteceu — e e nela que se descobre se foi uma demanda ou um padrao.
+  const detalhe = atraso.length
+    ? '<div class="ger-section-title" style="margin-top:22px;font-size:13px">' +
+      '<span>As ' + atraso.length + ' com atraso</span>' +
+      '<span class="ger-section-hint">prazo → conclusão</span></div>' +
+      '<div class="us-tabela-wrap"><table class="us-tabela"><tbody>' +
+      atraso.sort((a, b) => cls.get(b.id).dias - cls.get(a.id).dias).map(m =>
+        '<tr><td><span class="cod-tag">' + esc(m.codigo || '') + '</span> ' +
+        esc(m.titulo || '') + '</td>' +
+        '<td class="us-sub" style="white-space:nowrap">' + esc(m.dev || '—') + '</td>' +
+        '<td class="pz-num" style="white-space:nowrap">' + esc(formatDate(m.entrega)) +
+        ' → ' + esc(formatDate(m.concluido_em)) + '</td>' +
+        '<td class="pz-num" style="color:var(--red);font-weight:700;white-space:nowrap">+' +
+        cls.get(m.id).dias + 'd</td></tr>').join('') +
+      '</tbody></table></div>'
+    : '';
+
+  const aviso = naoMedido.length
+    ? '<p class="ent-vazio" style="margin-top:14px">' + naoMedido.length +
+      ' conclusão(ões) deste mês não entram na conta: a data foi preenchida ' +
+      'retroativamente, então "no prazo" seria verdade por construção.</p>'
+    : '';
+
+  lista.innerHTML =
+    '<div class="us-tabela-wrap"><table class="us-tabela"><thead><tr>' +
+    '<th>Desenvolvedor</th><th class="pz-num">No prazo</th><th class="pz-num">Atraso</th>' +
+    '<th class="pz-num">Média</th><th class="pz-num">%</th></tr></thead><tbody>' +
+    linhas + '</tbody></table></div>' + detalhe + aviso;
+}
+
+// Demanda de dois devs conta para os dois: aqui nao ha o que dividir — ou a
+// entrega saiu no prazo para ambos, ou atrasou para ambos.
+function splitDevsLocalPrazo(m) {
+  const n = String(m.dev || '').split('/').map(x => x.trim()).filter(Boolean);
+  return n.length ? n : ['(sem responsável)'];
+}
+
+
+// ─── BANDEJAS DA ABA GERENCIAL ────────────────────────────────────
+// Mesma regra da faixa de pausadas do Planejamento, e ela e o que separa bandeja
+// de simplesmente esconder: o RESUMO fica visivel, a LISTA recolhe.
+//
+// Numa tela de fechamento os KPIs sao a resposta ("55% no prazo, 20 com atraso");
+// a lista e o detalhe de quem vai investigar. Recolher o numero junto trocaria
+// poluicao por cegueira.
+//
+// Cada secao lembra o proprio estado: quem fecha o mes olhando atraso deixa
+// aquela aberta e as outras fechadas, e nao repete o gesto no mes seguinte.
+function gerBandejaEstado(chave) {
+  try { return localStorage.getItem('rm_ger_' + chave) !== '0'; } catch (_) { return true; }
+}
+
+function gerBandejaAlterna(chave) {
+  const aberta = !gerBandejaEstado(chave);
+  try { localStorage.setItem('rm_ger_' + chave, aberta ? '1' : '0'); } catch (_) {}
+  gerBandejaAplica(chave);
+}
+
+function gerBandejaAplica(chave) {
+  const sec = document.querySelector('[data-bandeja="' + chave + '"]');
+  if (!sec) return;
+  const aberta = gerBandejaEstado(chave);
+  sec.classList.toggle('aberta', aberta);
+  const b = sec.querySelector('.ger-bandeja-acao');
+  if (b) b.textContent = aberta ? 'recolher' : 'ver detalhe';
+  const t = sec.querySelector('.ger-section-title');
+  if (t) t.setAttribute('aria-expanded', aberta ? 'true' : 'false');
+}
+
+function gerBandejasAplicaTodas() {
+  document.querySelectorAll('[data-bandeja]').forEach(s =>
+    gerBandejaAplica(s.getAttribute('data-bandeja')));
+}
+
 function renderGerSemPontos() {
   const resumo = document.getElementById('sp-resumo');
   const lista = document.getElementById('sp-lista');
@@ -3536,6 +3750,10 @@ function renderGerencial() {
   const ano = parseInt(document.getElementById('ger-ano').value);
 
   renderGerSemPontos();
+  renderGerPrazo(ano, mes);
+  // Depois de renderizar: o conteudo e reescrito a cada Atualizar, e o estado das
+  // bandejas vive no wrapper, que nao e reescrito.
+  gerBandejasAplicaTodas();
   renderGerEntradas(ano, mes);
 
   const STATUS_LABEL = {

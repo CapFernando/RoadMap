@@ -1048,6 +1048,64 @@ ok(!!ir && /gPausadasAlterna\(\)/.test(ir),
 ok(!/risco-banner[\s\S]{0,200}aberta/.test(ADMIN),
    'o aviso de prazo vencido do admin NAO virou bandeja');
 
+// ═══════════════════════════════════════════════════════════════════════
+sec('Fechamento: entregue no prazo x com atraso');
+
+// A conta e data de conclusao contra prazo. Ela SO VALE para conclusao registrada
+// quando aconteceu: 75 das 126 concluidas sao retroativas — a data de conclusao
+// recebeu a data de entrega quando a base foi organizada. Para essas, "no prazo" e
+// verdade por construcao. Sem separar, o relatorio diria "julho: 100% no prazo,
+// 69 de 69" — numero bonito, falso, e que viraria meta.
+const pc = corpo(ADMIN, 'function prazoClassifica(');
+ok(!!pc, 'existe a classificacao de prazo, um lugar so');
+ok(!!pc && /m\.concluido_retroativo/.test(pc),
+   'retroativa NAO entra na conta (senao 100% no prazo por construcao)');
+// O marcador e o campo, nao a coincidencia das datas: entregar no dia do prazo e
+// comum e legitimo (14 das 44 medidas sao assim), e usar a coincidencia como
+// filtro puniria justamente quem entregou no dia.
+ok(!!pc && !/concluido_em.*===.*entrega/.test(pc),
+   'nao usa "data igual" como sinal de retroativa');
+ok(!!pc && !/new Date\(ce\)/.test(pc),
+   'compara datas por string ISO, nunca por objeto Date');
+ok(/function renderGerPrazo\(/.test(ADMIN), 'existe o bloco do fechamento');
+ok(/renderGerPrazo\(ano, mes\)/.test(ADMIN), 'o bloco segue o filtro de mes da aba');
+ok(/id="pz-resumo"/.test(ADMIN) && /id="pz-lista"/.test(ADMIN),
+   'a secao existe no HTML, no padrao das outras');
+ok(/Nao medidas|Não medidas/.test(ADMIN),
+   'o KPI de nao medidas aparece, em vez de sumir com o que nao da para julgar');
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('Sprint: S1-08-2026, derivada e nao digitada');
+
+const sp = corpo(GANTT, 'function sprintDeData(');
+ok(!!sp, 'existe a derivacao da sprint');
+// A regra e a que a tela JA usa para somar pontos por semana. Uma segunda
+// definicao faria o rotulo do card discordar do grafico logo acima dele.
+ok(!!sp && /getWorkingDaysOfMonth/.test(sp), 'usa os DIAS UTEIS do mes, como o resto da tela');
+ok(!!sp && /!d\.holiday/.test(sp), 'feriado nao conta como dia util');
+ok(!!sp && /Math\.floor\(idx \/ 5\)/.test(sp), 'bloco de 5 dias uteis: S1 = uteis 1-5');
+ok(/sprint:\s*sprintDeData\(inicio\)/.test(GANTT),
+   'ao salvar, a sprint sai da DATA e nao do campo digitado');
+ok(/id="e-sprint" readonly/.test(GANTT), 'o campo e somente leitura');
+ok(/function atualizaSprintCampo\(/.test(GANTT),
+   'o campo se atualiza enquanto a data muda, antes de salvar');
+
+// ═══════════════════════════════════════════════════════════════════════
+sec('Bandejas na aba Gerencial');
+
+ok(/function gerBandejaAlterna\(/.test(ADMIN), 'existe o motor das bandejas');
+ok((ADMIN.match(/data-bandeja="/g) || []).length >= 2,
+   'ha ao menos duas secoes em bandeja',
+   (ADMIN.match(/data-bandeja="/g) || []).length + ' ocorrencia(s)');
+// A regra que separa bandeja de esconder: o RESUMO fica fora do que recolhe.
+ok(/ger-bandeja:not\(\.aberta\) \.ger-bandeja-corpo \{ display:none/.test(ADMIN),
+   'so o CORPO recolhe');
+ok(/<div id="pz-resumo" class="ger-summary"><\/div>\s*<div class="ger-bandeja-corpo">/.test(ADMIN),
+   'o resumo fica FORA do corpo que recolhe (e a resposta da secao)');
+ok(/rm_ger_/.test(ADMIN), 'cada secao lembra o proprio estado');
+ok(/gerBandejasAplicaTodas\(\)/.test(ADMIN),
+   'o estado e reaplicado depois de renderizar (o conteudo e reescrito a cada Atualizar)');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
