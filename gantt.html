@@ -565,7 +565,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="modelo-descricao.js?v=6f5abaec90"></script>
+<script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
@@ -2728,7 +2728,7 @@ function saveTask() {
   // Estava depois: `ghLinks` era lido no objeto e declarado 350 linhas adiante, o
   // que em JavaScript nao e erro de sintaxe (o arquivo carrega, a tela abre) mas
   // lanca ReferenceError no clique. O Salvar morria em silencio.
-  if (window.validaModeloDescricao && !validaModeloDescricao('e-descricao', toast)) return;
+  // O modelo nao bloqueia: ver o comentario equivalente no admin.html.
   const ghLinks = window.ghLinkColeta ? ghLinkColeta('e', toast) : {};
   if (ghLinks === null) return;
 

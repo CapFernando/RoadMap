@@ -417,7 +417,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="modelo-descricao.js?v=6f5abaec90"></script>
+<script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
@@ -3695,7 +3695,9 @@ async function saveNewDemand() {
   const tipoSel = document.getElementById('n-tipo').value;
   if (!tipoSel) { toast('Diga se é problema (Erro/Bug) ou melhoria.','err');
                   document.getElementById('n-tipo').focus(); return; }
-  if (window.validaModeloDescricao && !validaModeloDescricao('n-desc', toast)) return;
+  // O modelo nao bloqueia: ver o comentario equivalente no admin.html. Aqui pesa
+  // mais ainda — quem abre a demanda pelo painel dev costuma estar no meio de outra
+  // coisa, e travar o registro faz a demanda nao ser aberta.
   const sp = document.getElementById('n-status').value;
   const spToStatus = { backlog:'recebida', planning:'estimada', planejado:'estimada',
                        em_andamento:'iniciada', validacao:'iniciada', atrasado:'iniciada',

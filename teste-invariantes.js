@@ -360,7 +360,7 @@ ok(!/\['consulta', 'dev', 'admin'\]/.test(ADMIN),
    'nenhuma lista de papel na tela esquece o analista');
 
 // ═══════════════════════════════════════════════════════════════════════
-sec('Modelo de descricao: um arquivo, tres telas, e cobranca de verdade');
+sec('Modelo de descricao: um arquivo, tres telas, e aviso que nao trava');
 
 const MODELO = lerTela('modelo-descricao.js');
 // Um arquivo so. Tres copias do modelo divergiriam na primeira mexida, e o padrao
@@ -368,7 +368,11 @@ const MODELO = lerTela('modelo-descricao.js');
 for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV]]) {
   ok(/modelo-descricao\.js\?v=/.test(src), nome + ' carrega o modelo compartilhado');
   ok(!/OBJETIVO DA ALTERA/.test(src), nome + ' nao tem copia do texto do modelo');
-  ok(/validaModeloDescricao\(/.test(src), nome + ' valida antes de gravar');
+  // O modelo NAO bloqueia mais: bloqueava e atrapalhou (seis secoes antes de
+  // gravar qualquer coisa). Esta invariante inverteu de proposito — se o bloqueio
+  // voltar, ela falha.
+  ok(!/!validaModeloDescricao\(/.test(src),
+     nome + ' NAO bloqueia o salvamento pelo texto (so campo obrigatorio bloqueia)');
   ok(/ligaModeloDescricao\(/.test(src), nome + ' liga o botao no campo de descricao');
 }
 // A cobranca: linha de orientacao nao conta como conteudo. Sem isto, inserir o
@@ -402,7 +406,7 @@ if (MD) {
   // Apagar as orientacoes tambem nao vale por preenchimento.
   const semGuia = M.split('\n').filter(l => !/^\s*>/.test(l)).join('\n');
   ok(MD.modeloDescricaoPendencias(semGuia).length === 6,
-     'apagar as orientacoes sem escrever nada segue recusado');
+     'apagar as orientacoes sem escrever nada segue contando como em branco');
   // Caixa em branco e modelo intacto; caixa marcada e resposta.
   ok(MD.modeloDescricaoPendencias(M.replace('[ ] PDF', '[x] PDF'))
        .indexOf('Impactos em documentos e relatórios') < 0,
@@ -417,7 +421,7 @@ if (MD) {
   // Nenhum bloqueio retroativo: 200+ demandas em texto livre seguem salvando.
   ok(MD.modeloDescricaoPendencias(
        'Ambientes de Cadastro e Reanalise - trazer a somatoria em tela.').length === 0,
-     'texto livre de demanda antiga continua salvando');
+     'texto livre de demanda antiga nao recebe aviso nenhum');
   ok(!MD.modeloDescricaoUsa('Preciso mudar a regra de negocio do rating'),
      'mencionar uma secao de passagem nao vira cobranca');
 }
@@ -433,7 +437,9 @@ ok(!!usa && /achou >= 2/.test(usa),
 const ins = corpo(MODELO, 'function inserir(');
 ok(!!ins && /window\.confirm/.test(ins), 'inserir o modelo nunca apaga texto sem confirmar');
 // A mensagem tem de dizer O QUE falta, nao so que falta.
-ok(/falta\.join\(', '\)/.test(MODELO), 'a recusa nomeia as secoes que faltam');
+ok(/falta\.join\(', '\)/.test(MODELO), 'o aviso nomeia as secoes que faltam');
+// O aviso ao vivo continua: ele informa. O que saiu foi o bloqueio.
+ok(/de 6 seções em branco/.test(MODELO), 'o aviso ao vivo continua contando as secoes');
 
 // ═══════════════════════════════════════════════════════════════════════
 sec('Sessao: quem perde a credencial tem caminho de volta');

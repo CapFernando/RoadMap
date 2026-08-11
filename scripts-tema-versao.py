@@ -21,7 +21,12 @@ PAGINAS = ['index.html', 'admin.html', 'dev.html', 'gantt.html',
 
 
 def hash_de(caminho):
-    return hashlib.md5(io.open(caminho, 'rb').read()).hexdigest()[:10]
+    # `with` de proposito: sem fechar, o handle fica pendurado e no Windows a
+    # gravacao do MESMO arquivo logo depois morre com "[Errno 22] Invalid
+    # argument". Aconteceu — o script abortou no meio, deixando parte das
+    # paginas com hash novo e parte com o antigo.
+    with io.open(caminho, 'rb') as fh:
+        return hashlib.md5(fh.read()).hexdigest()[:10]
 
 
 def main():
@@ -37,7 +42,8 @@ def main():
     vapr = hash_de('apresentacao.js')
     mudou = []
     for f in PAGINAS:
-        s = io.open(f, encoding='utf-8').read()
+        with io.open(f, encoding='utf-8') as fh:
+            s = fh.read()
         n = re.sub(r'href="tema\.css(\?v=[^"]*)?"', 'href="tema.css?v=%s"' % vcss, s)
         n = re.sub(r'src="tema\.js(\?v=[^"]*)?"', 'src="tema.js?v=%s"' % vjs, n)
         n = re.sub(r'src="anexo-cola\.js(\?v=[^"]*)?"',
@@ -53,7 +59,8 @@ def main():
         n = re.sub(r'src="apresentacao\.js(\?v=[^"]*)?"',
                    'src="apresentacao.js?v=%s"' % vapr, n)
         if n != s:
-            io.open(f, 'w', encoding='utf-8', newline='').write(n)
+            with io.open(f, 'w', encoding='utf-8', newline='') as fh:
+                fh.write(n)
             mudou.append(f)
     sys.stdout.write('tema.css=%s  tema.js=%s  anexo-cola=%s  modelo=%s  links-gh=%s  senha=%s  dialogo=%s  apres=%s\n'
                      % (vcss, vjs, vanx, vmod, vlnk, vsen, vdlg, vapr))

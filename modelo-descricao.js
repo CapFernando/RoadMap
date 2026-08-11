@@ -9,16 +9,25 @@
    MESMO modelo. Três cópias divergiriam na primeira mexida, e aí o padrão que
    este arquivo existe para criar deixaria de existir.
 
-   COMO A COBRANÇA FUNCIONA, e por que assim:
+   ELE NÃO BLOQUEIA MAIS O SALVAMENTO. Bloqueava — foi pedido assim — e na prática
+   atrapalhou: abrir uma task exigia preencher seis seções antes de gravar
+   qualquer coisa, inclusive quando a pessoa só queria registrar a demanda e
+   detalhar depois. Registro que trava é demanda que não é aberta.
+
+   O que ficou: o botão que insere o modelo e o aviso ao vivo dizendo quantas
+   seções estão em branco. Informa em vez de impedir. `validaModeloDescricao`
+   segue exportada para quem quiser cobrar em algum fluxo específico, mas nenhuma
+   tela a usa para travar.
+
+   COMO A CONTAGEM FUNCIONA, e por que assim:
 
    As linhas de orientação começam com "> ". Elas NÃO contam como conteúdo. Ou
-   seja: inserir o modelo e salvar sem escrever nada é recusado, seção por seção,
-   com o nome do que falta. Era o pedido — "não permitir salvar se o texto não foi
-   alterado" — e é o único jeito de o modelo virar padrão em vez de decoração.
+   seja: modelo inserido e não preenchido aparece no aviso como seis seções em
+   branco, nomeadas uma por uma — quem lê sabe exatamente o que falta escrever.
 
-   Só cobra de quem USA o modelo. Demanda antiga com texto livre continua
-   salvando: são mais de 200 na base, e transformar uma padronização em bloqueio
-   retroativo pararia o time no meio do dia por causa de card de junho.
+   Só olha para quem USA o modelo. Demanda antiga com texto livre não recebe aviso
+   nenhum: são mais de 200 na base, e apontar pendência em card de junho só
+   ensinaria o time a ignorar o aviso.
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   'use strict';

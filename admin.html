@@ -187,7 +187,10 @@
     .kb-col-head { padding: 10px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg2, #161614); border-radius: 10px 10px 0 0; }
     .kb-col-head .kb-count { font-size: 11px; font-weight: 600; background: var(--bg3, #252522); color: var(--text3); border-radius: 10px; padding: 1px 8px; }
     .kb-col-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
-    .kb-card { background: var(--card, #1E1E1C); border: 1px solid var(--border); border-radius: 8px; padding: 10px 11px; cursor: pointer; transition: border-color .12s, transform .12s; user-select: none; }
+    /* position:relative para a estrela poder ancorar no canto sem entrar no fluxo
+       do titulo — dentro dele, ela mudaria a altura de todos os cards.
+       padding-right maior para o titulo nao passar por baixo dela. */
+    .kb-card { position: relative; background: var(--card, #1E1E1C); border: 1px solid var(--border); border-radius: 8px; padding: 10px 26px 10px 11px; cursor: pointer; transition: border-color .12s, transform .12s; user-select: none; }
     .kb-card:hover { border-color: var(--border2, #3A3A36); transform: translateY(-1px); }
     .kb-card-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; margin-bottom: 6px; }
     .kb-card-meta { display: flex; flex-wrap: wrap; gap: 5px 10px; font-size: 11px; color: var(--text3); }
@@ -468,6 +471,14 @@
     /* Numeros a direita e tabulares: coluna de numero so se compara de relance
        quando os digitos alinham. */
     .pz-num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+    /* A estrela fica no canto do card, fora do fluxo do titulo: dentro dele
+       empurraria o texto e mudaria a altura de todos os cards do Kanban. */
+    .kb-estrela { position:absolute; top:5px; right:6px; background:none; border:none;
+      font-size:15px; line-height:1; cursor:pointer; color:var(--text3); padding:2px;
+      opacity:.35; transition:opacity .12s,color .12s; }
+    .kb-card:hover .kb-estrela { opacity:.8; }
+    .kb-estrela.on { color:var(--amber-tx,#FFC470); opacity:1; }
+    .kb-estrela:hover { opacity:1; color:var(--amber-tx,#FFC470); }
     .ap-dica { font-size:12.5px; color:var(--text3); line-height:1.55; margin:0 0 12px; }
     .ap-periodo { font-size:14px; color:var(--text); background:var(--bg3);
       border:1px solid var(--border); border-radius:8px; padding:9px 12px; margin-bottom:14px; }
@@ -832,7 +843,7 @@
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="apresentacao.js?v=309709d572"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="modelo-descricao.js?v=6f5abaec90"></script>
+<script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 </head>
@@ -1216,6 +1227,9 @@
             style="display:none;font-family:ui-monospace,monospace;font-size:12px;font-weight:700;
                    color:var(--blue-tx,#9BC8F8);background:var(--blue-bg,#0C3260);border:none;
                    border-radius:5px;padding:3px 9px;margin:-8px 0 14px;cursor:pointer"></button>
+    <button type="button" id="m-estrela" onclick="destaqueAlterna(event, document.getElementById('m-id').value)"
+            style="display:none;background:none;border:none;font-size:19px;cursor:pointer;
+                   margin:-8px 0 14px 6px;line-height:1;vertical-align:middle"></button>
     <input type="hidden" id="m-id" />
 
     <div class="mtabs">
@@ -2896,6 +2910,9 @@ function renderKanban() {
         ${atrasada ? `<div class="kb-atraso-tag">⚠ Atrasada${diasAtraso > 0 ? ' · ' + diasAtraso + 'd' : ''}</div>` : ''}
         ${nivelPrazo === 'hoje' ? '<div class="kb-prazo-tag hoje">⚠ Vence hoje</div>' : ''}
         ${nivelPrazo === 'amanha' ? '<div class="kb-prazo-tag amanha">⏰ Vence amanhã</div>' : ''}
+        <button type="button" class="kb-estrela${m.destaque ? ' on' : ''}"
+          onclick="destaqueAlterna(event,'${m.id}')"
+          title="${m.destaque ? 'É destaque — sai na apresentação. Clique para desmarcar.' : 'Marcar como destaque da apresentação'}">${m.destaque ? '★' : '☆'}</button>
         <div class="kb-card-title">${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}${esc(m.titulo)}</div>
         ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
         ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
@@ -3773,13 +3790,18 @@ function apresAbrir() {
 
   // Candidatas a destaque: as concluidas do mes, maiores em pontos primeiro —
   // ordem que ajuda a escolher, sem decidir por quem apresenta.
-  const cand = apresConcluidasDoMes()
-    .sort((a, b) => (Number(b.poker_pontos) || 0) - (Number(a.poker_pontos) || 0));
+  // Estreladas PRIMEIRO e ja marcadas: quem marcou no card durante o mes nao
+  // deveria ter de reencontrar as mesmas demandas numa lista de 46 no fim.
+  const cand = apresConcluidasDoMes().sort((a, b) =>
+    (b.destaque ? 1 : 0) - (a.destaque ? 1 : 0) ||
+    (Number(b.poker_pontos) || 0) - (Number(a.poker_pontos) || 0));
   const lista = document.getElementById('ap-destaques');
   lista.innerHTML = cand.length
     ? cand.map(m =>
-        '<label><input type="checkbox" class="ap-dest" value="' + esc(m.id) + '"> ' +
-        '<span><span class="ap-cod">' + esc(m.codigo || '') + '</span> ' + esc(m.titulo || '') +
+        '<label><input type="checkbox" class="ap-dest" value="' + esc(m.id) + '"' +
+        (m.destaque ? ' checked' : '') + '> ' +
+        '<span>' + (m.destaque ? '<span style="color:var(--amber-tx,#FFC470)">★</span> ' : '') +
+        '<span class="ap-cod">' + esc(m.codigo || '') + '</span> ' + esc(m.titulo || '') +
         (m.poker_pontos ? ' <span style="color:var(--text3)">· ' + esc(String(m.poker_pontos)) +
           ' pts</span>' : '') +
         (m.dev ? ' <span style="color:var(--text3)">· ' + esc(m.dev) + '</span>' : '') +
@@ -3905,6 +3927,54 @@ async function apresGerar() {
     btn.disabled = false;
     btn.textContent = 'Gerar apresentação';
   }
+}
+
+
+// ─── DESTAQUE DA APRESENTACAO ─────────────────────────────────────
+// A estrela vive no card, e nao na hora de exportar. Marcar no fim do mes obriga a
+// lembrar qual entrega valeu a pena entre 46 — e a que destravou a operacao foi
+// entregue no dia 4 e some no meio das outras. Marcada na hora, com a memoria
+// fresca, ela chega inteira na reuniao.
+//
+// Vale para qualquer etapa: uma demanda ainda em andamento pode ja ser o destaque
+// do mes que vem, e travar a marca ate a conclusao perderia o momento em que a
+// pessoa lembra.
+async function destaqueAlterna(ev, id) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) return;
+  const antes = !!m.destaque;
+  m.destaque = !antes;
+  _dirtyMelhoriaIds.add(id);
+  _pendingEdits = true;
+  renderAll();
+  destaqueRenderNoCard(m);
+  const okSalvo = await saveViaProxy();
+  if (!okSalvo) {
+    // Desfaz: estrela que aparece marcada sem ter gravado faz a demanda faltar no
+    // deck justamente por parecer que estava lá.
+    m.destaque = antes;
+    _dirtyMelhoriaIds.delete(id);
+    renderAll();
+    destaqueRenderNoCard(m);
+    toast('Não consegui salvar a marcação de destaque.', 'err');
+    return;
+  }
+  _dirtyMelhoriaIds.delete(id);
+  _pendingEdits = false;
+  toast(m.destaque ? '★ Marcada como destaque da apresentação.' : '☆ Destaque removido.', 'ok');
+}
+
+function destaqueRenderNoCard(m) {
+  const b = document.getElementById('m-estrela');
+  if (!b) return;
+  if (!m || !m.id) { b.style.display = 'none'; return; }
+  b.style.display = 'inline-block';
+  b.textContent = m.destaque ? '★' : '☆';
+  b.style.color = m.destaque ? 'var(--amber-tx,#FFC470)' : 'var(--text3)';
+  b.title = m.destaque
+    ? 'É destaque — sai na apresentação. Clique para desmarcar.'
+    : 'Marcar como destaque da apresentação';
 }
 
 function renderGerSemPontos() {
@@ -4831,6 +4901,7 @@ function openModalMelhoria(id) {
   }
   // O codigo vai para a barra de enderecos. Demanda nova ainda nao tem codigo:
   // ele nasce no servidor, entao ai a URL fica limpa.
+  destaqueRenderNoCard(m);
   rotaEscreve(m && m.codigo ? m.codigo : '');
   mAba(m && statusKey(m) === 'validacao' ? 'entrega' : 'dados');
   renderEntrega(m || null);
@@ -5193,9 +5264,11 @@ async function saveMelhoria() {
   const tipo   = document.getElementById('m-tipo').value;
   if (!titulo) { toast('Informe o título.', 'err'); return; }
   if (!tipo) { toast('Selecione o tipo: Sustentação ou Evolução.', 'err'); return; }
-  // Modelo com seção em branco nao salva: era o pedido — "nao permitir salvar se o
-  // texto nao foi alterado". Só cobra de quem usou o modelo; texto livre passa.
-  if (window.validaModeloDescricao && !validaModeloDescricao('m-descricao', toast)) return;
+  // O modelo NAO bloqueia a gravacao. Ele bloqueava, e atrapalhou: abrir uma task
+  // exigia preencher seis secoes antes de gravar qualquer coisa, inclusive quando a
+  // pessoa so queria registrar a demanda e detalhar depois. Bloqueio aqui e so para
+  // campo obrigatorio (titulo, tipo, sistema, responsavel) — texto nao trava.
+  // O aviso ao vivo abaixo do campo continua contando as secoes em branco.
   // Coleta ja normaliza ("683" -> URL) e recusa engano de campo (issue colada no
   // campo do PR). null = ja avisou e focou; a tela so precisa parar.
   const ghLinks = window.ghLinkColeta ? ghLinkColeta('m', toast) : {};
