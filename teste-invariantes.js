@@ -1362,6 +1362,100 @@ try {
 } catch (_) { _limpaOk = false; }
 ok(_limpaOk, 'a lista de contas sai e o resto do arquivo fica intacto', _sobrou.join(','));
 
+
+sec('Mes de compromisso: carimbo que a demanda carrega, e nao coluna');
+
+// O mes NAO pode virar etapa: a demanda sairia dele ao virar trabalho, que e
+// exatamente o que a tela do mes existe para mostrar.
+ok(!/KB_COLS[\s\S]{0,600}?key:\s*'mes'/.test(ADMIN),
+   'mes NAO virou coluna do Kanban');
+ok(!/ETAPAS[\s\S]{0,300}?'mes'/.test(WC), 'mes NAO virou etapa no Worker');
+
+// A trilha e append-only e vive no servidor. Se a tela pudesse escrever, uma aba
+// desatualizada apagaria o passado — e o passado e o unico lugar onde o
+// transbordo mora.
+ok(/function carimbaMeses/.test(WC), 'o Worker mantem a trilha');
+ok(/m\.meses = guardada\.concat\(/.test(WC), 'a trilha ACRESCENTA, nunca substitui');
+ok(/const guardada = mesTrilha\(antes\.get\(m\.id\) \|\| \{\}\)/.test(WC),
+   'a trilha vem do SERVIDOR, nao do corpo do pedido (tela nao forja passado)');
+ok((WC.match(/carimbaMeses\(data, antes\w+/g) || []).length === 2,
+   'as duas rotas de gravacao carimbam');
+ok(/carimbaMeses\(data, antesDev, false\)/.test(WC),
+   'o painel dev NAO reescreve o mes (o que ele manda e eco do que carregou)');
+ok(/carimbaMeses\(data, antesPub, true\)/.test(WC), 'o admin troca o mes');
+
+// `em` e o que separa compromisso de soma no dia 20. Sem ele a taxa de
+// cumprimento sobe sozinha quando entra trabalho no fim do mes.
+ok(/pedido > hoje\.slice\(0, 7\) \? pedido \+ '-01' : hoje/.test(WC),
+   'mes futuro entra como compromisso do dia 1, e nao do dia do clique');
+ok(/function mesDesdeOInicio/.test(ADMIN), 'a tela separa comprometido de somado depois');
+// Carimbar demanda ja concluida encheria julho e junho de compromisso que ninguem
+// assumiu (84 demandas, na conta feita antes de decidir isso), e o fechamento
+// desses meses viraria ficcao retroativa.
+ok(/MES_ETAPAS = \['planejado', 'em_andamento', 'validacao'\]/.test(WC),
+   'concluida e negada NAO ganham mes automatico (nao se inventa compromisso passado)');
+ok(/mesEntrouEm\(m\) <= alvo \+ '-01'/.test(ADMIN), 'o corte e o dia 1 do mes');
+
+// A rolagem do fechamento tem de gravar dia 1 do destino, senao fechar agosto no
+// dia 3 de setembro transforma as roladas em "entrou no meio de setembro".
+ok(/body\.action === 'mes-fechar'/.test(WC), 'existe a acao de fechar o mes');
+ok(/mes: mesPara, em: mesPara \+ '-01'/.test(WC),
+   'o que rola entra como compromisso do mes inteiro seguinte');
+ok(/\['concluido', 'negada'\]\.includes\(String\(m\.status_planejamento[\s\S]{0,400}?mesAtual\(m\) !== mesDe/.test(WC) ||
+   /mesAtual\(m\) !== mesDe[\s\S]{0,200}?ABERTAS\(m\)/.test(WC),
+   'concluida e negada NAO rolam (o mes precisa continuar dizendo o que entregou)');
+ok(/exigePapel\(env, body, 'admin', headers\)[\s\S]{0,400}?mes-fechar/.test(WC) ||
+   /mes-fechar'\)[\s\S]{0,200}?exigePapel\(env, body, 'admin'/.test(WC),
+   'fechar o mes exige admin');
+
+// Sem objeto Date, pela mesma razao de todas as datas daqui.
+ok(/function mesSoma\(iso, n\)/.test(WC) && !/new Date\([\s\S]{0,120}?mesSoma/.test(WC),
+   'a soma de meses nao usa objeto Date');
+
+// A tela do mes e uma VISAO, e mostra a etapa real do card.
+ok(/function renderMes/.test(ADMIN), 'existe a tela do mes');
+ok(/switchTab\('mes'\)/.test(ADMIN), 'existe a aba');
+ok(/function etapaRotulo/.test(ADMIN), 'o card do mes mostra a etapa real');
+ok(/porSprint/.test(ADMIN), 'o mes e quebrado por sprint');
+ok(/\(sem sprint\)/.test(ADMIN), 'demanda sem sprint tem grupo proprio, e nao some');
+ok(/function renderGerCumprimento/.test(ADMIN), 'o fechamento por dev existe no Gerencial');
+ok(/mesRolos\(b\) - mesRolos\(a\)/.test(ADMIN),
+   'as que mais rolaram aparecem primeiro (adiada e diferente de atrasada)');
+
+// Comportamento: roda carimbaMeses de verdade.
+let _mesOk = false, _mesPorque = '';
+try {
+  const corpo = (n) => {
+    const i = W.indexOf('function ' + n);
+    let c = 0;
+    for (let k = W.indexOf('{', i); k < W.length; k++) {
+      if (W[k] === '{') c++;
+      else if (W[k] === '}') { c--; if (!c) return W.slice(i, k + 1); }
+    }
+    return '';
+  };
+  const M = new Function("const hojeBR=()=>'2026-08-12';" +
+    "const MES_ETAPAS=['planejado','em_andamento','validacao','concluido'];" +
+    ['mesValido', 'mesTrilha', 'mesAtual', 'mesSoma', 'carimbaMeses'].map(corpo).join('\n') +
+    '\nreturn { mesAtual, mesTrilha, carimbaMeses, mesSoma };')();
+  const guard = { melhorias: [{ id: 'x', meses: [{ mes: '2026-07', em: '2026-07-01' }] }] };
+  const a = { melhorias: [{ id: 'x', status_planejamento: 'em_andamento', mes_alvo: '2026-08' }] };
+  M.carimbaMeses(a, guard, true);
+  const rolou = M.mesTrilha(a.melhorias[0]).length === 2 &&
+                M.mesTrilha(a.melhorias[0])[0].mes === '2026-07';
+  const b = { melhorias: [{ id: 'x', status_planejamento: 'em_andamento', mes_alvo: '1999-01',
+                            meses: [{ mes: '1999-01', em: '1999-01-01' }] }] };
+  M.carimbaMeses(b, guard, false);
+  const semEco = M.mesAtual(b.melhorias[0]) === '2026-07';
+  const c = { melhorias: [{ id: 'novo', status_planejamento: 'backlog' }] };
+  M.carimbaMeses(c, { melhorias: [] }, true);
+  const backlogLimpo = M.mesAtual(c.melhorias[0]) === '';
+  const viraAno = M.mesSoma('2026-12', 1) === '2027-01';
+  _mesOk = rolou && semEco && backlogLimpo && viraAno;
+  _mesPorque = 'rolou=' + rolou + ' semEco=' + semEco + ' backlog=' + backlogLimpo + ' ano=' + viraAno;
+} catch (e) { _mesPorque = e.message; }
+ok(_mesOk, 'a trilha se comporta: rola, ignora eco, poupa backlog, vira o ano', _mesPorque);
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

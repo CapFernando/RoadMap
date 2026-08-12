@@ -329,6 +329,113 @@ async function loginLivre(db, base) {
 // entrega enquanto o PM/PO analisa. Isso e necessario (o PM/PO pede detalhe), mas
 // abre a porta para o texto mudar depois de lido. O historico nao impede — ele
 // deixa rastro, que e o que resolve na pratica.
+/* ── MES DE COMPROMISSO ────────────────────────────────────────────────────
+   Ver o comentario grande no topo do bloco de datas: o mes e periodo, nao etapa.
+   Aqui vive a trilha, e ela e a UNICA verdade sobre em que mes a demanda esta.  */
+
+// Etapas a partir das quais a demanda esta comprometida com um mes. Antes de
+// `planejado` ela ainda esta sendo entendida, e carimbar mes ali encheria o
+// fechamento de trabalho que ninguem prometeu.
+// Concluida e negada NAO entram no carimbo automatico. Elas ja terminaram: dar
+// mes a elas agora encheria julho e junho de "compromisso" que ninguem assumiu —
+// 84 demandas, na conta que fiz antes de decidir isso — e o fechamento desses
+// meses viraria ficcao retroativa. Quem quiser alocar uma concluida faz no card,
+// a mao, e ai e decisao de alguem.
+//
+// Consequencia assumida: o cumprimento so passa a valer de agora em diante. O mes
+// corrente comeca sem "comprometido no inicio", porque de fato nao houve.
+const MES_ETAPAS = ['planejado', 'em_andamento', 'validacao'];
+
+function mesValido(v) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(v || ''));
+}
+
+// Le a trilha do jeito que ela estiver: registro antigo nao tem nenhuma, e
+// registro vindo de tela desatualizada pode trazer lixo.
+function mesTrilha(m) {
+  const t = (m && Array.isArray(m.meses)) ? m.meses : [];
+  return t.filter(x => x && mesValido(x.mes))
+    .map(x => ({ mes: String(x.mes), em: /^\d{4}-\d{2}-\d{2}$/.test(String(x.em || ''))
+                                        ? String(x.em) : String(x.mes) + '-01' }));
+}
+
+function mesAtual(m) {
+  const t = mesTrilha(m);
+  return t.length ? t[t.length - 1].mes : '';
+}
+
+// Soma meses sem objeto Date: mesma razao de todas as contas de data aqui — o
+// fuso muda o dia e ja custou off-by-one nesta base.
+function mesSoma(iso, n) {
+  const a = parseInt(String(iso).slice(0, 4), 10);
+  const b = parseInt(String(iso).slice(5, 7), 10);
+  const t = (a * 12 + (b - 1)) + n;
+  return String(Math.floor(t / 12)) + '-' + String((t % 12) + 1).padStart(2, '0');
+}
+
+// Carimba e mantem a trilha. Roda em TODA gravacao, e o servidor e o unico lugar
+// onde ela e escrita: a tela manda a intencao (`mes_alvo`), aqui virou historia.
+//
+// Nunca reescreve o passado — so acrescenta. Uma demanda que rolou de julho para
+// agosto guarda os dois, e e isso que permite responder "o que julho prometeu e
+// nao entregou" depois de julho ter acabado.
+// `aceitaPedido` diz se o `mes_alvo` que veio no corpo vale. Do painel dev NAO
+// vale: aquela tela nao tem campo de mes, entao o que ela manda e eco do que ela
+// carregou — possivelmente antes de alguem trocar o mes aqui. Um eco desses
+// reescreveria a decisao de quem coordena, e ainda por cima acrescentaria uma
+// rolagem falsa na trilha. O carimbo AUTOMATICO continua valendo dos dois lados:
+// dev que move o card para Planejado deve mesmo carimbar o mes.
+function carimbaMeses(recebido, servidor, aceitaPedido) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map((((servidor || {}).melhorias) || []).map(m => [m.id, m]));
+  const hoje = hojeBR();
+  const mudou = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const guardada = mesTrilha(antes.get(m.id) || {});
+    const atualGuardado = guardada.length ? guardada[guardada.length - 1].mes : '';
+
+    // A tela pede um mes por `mes_alvo`. Vazio = nao pediu nada (nao e "apague").
+    // Apagar exige `mes_alvo === null`, explicito, para um clique perdido em 200
+    // demandas nao limpar a trilha de todas.
+    let pedido = (aceitaPedido !== false && mesValido(m.mes_alvo)) ? String(m.mes_alvo) : '';
+    if (aceitaPedido !== false && m.mes_alvo === null) {
+      m.meses = [];
+      m.mes_alvo = '';
+      if (atualGuardado) mudou.push({ id: m.id, codigo: m.codigo || '', de: atualGuardado, para: '' });
+      continue;
+    }
+
+    // Carimbo automatico: entrou em Planejado ou adiante e nao tem mes nenhum.
+    // O mes vem da data de entrega quando ela existe — e a promessa que ja foi
+    // feita — e do mes corrente quando nao existe.
+    if (!pedido && !guardada.length && MES_ETAPAS.includes(String(m.status_planejamento || ''))) {
+      const pelaEntrega = String(m.entrega || '').slice(0, 7);
+      pedido = mesValido(pelaEntrega) ? pelaEntrega : hoje.slice(0, 7);
+    }
+
+    if (!pedido) {
+      m.meses = guardada;
+      m.mes_alvo = atualGuardado;
+      continue;
+    }
+    if (pedido === atualGuardado) {
+      m.meses = guardada;
+      m.mes_alvo = atualGuardado;
+      continue;
+    }
+
+    // `em` = quando o compromisso foi assumido. Para mes FUTURO vale o dia 1
+    // dele: alocar em 20/08 uma demanda para setembro e compromisso do mes
+    // inteiro de setembro, e nao "entrou no meio de setembro".
+    const em = pedido > hoje.slice(0, 7) ? pedido + '-01' : hoje;
+    m.meses = guardada.concat([{ mes: pedido, em }]);
+    m.mes_alvo = pedido;
+    mudou.push({ id: m.id, codigo: m.codigo || '', de: atualGuardado, para: pedido });
+  }
+  return mudou;
+}
+
 const HIST_CAMPOS = {
   status_planejamento: 'etapa',
   implementacao:       'o que foi implementado',
@@ -337,6 +444,10 @@ const HIST_CAMPOS = {
   inicio:              'inicio',
   dev:                 'responsavel',
   poker_pontos:        'pontos',
+  // O mes entra no historico porque rolar demanda de mes e a decisao que o
+  // fechamento cobra depois. Sem registro, "essa ja rolou tres vezes" nao tem
+  // como ser dito.
+  mes_alvo:            'mes',
   projeto_id:          'projeto',
   titulo:              'titulo',
   pausado_em:          'pausa',
@@ -2203,6 +2314,80 @@ export default {
       return json({ ok: true, nome_demandas: nomes.join(' / ') }, 200, headers);
     }
 
+// ── Fechar o mes: rola para o mes seguinte o que ficou em aberto ──
+    //
+    // Uma acao propria, e nao um publish comum, por tres razoes:
+    //
+    //   1. Ela mexe em dezenas de demandas de uma vez. Pela tela, seriam dezenas
+    //      de edicoes e um publish gigante, com todo o risco de concorrencia que
+    //      isso traz.
+    //   2. O `em` das roladas e o DIA 1 do mes destino, e nao a data em que o
+    //      botao foi clicado. Fechar agosto no dia 3 de setembro nao transforma
+    //      as roladas em "entrou no meio de setembro" — elas sao compromisso de
+    //      setembro inteiro. E um caso que a gravacao normal nao sabe distinguir.
+    //   3. Rolar e decisao de quem coordena. Exige admin.
+    //
+    // O que NAO rola: concluida e negada. Elas ficaram no mes em que estavam, e e
+    // isso que permite ao fechamento de agosto continuar dizendo, em dezembro, o
+    // que agosto prometeu e o que agosto entregou.
+    if (body.action === 'mes-fechar') {
+      const negaMes = await exigePapel(env, body, 'admin', headers);
+      if (negaMes) return negaMes;
+      const mesDe = String(body.mes || '');
+      if (!mesValido(mesDe)) return json({ error: 'mes_invalido' }, 400, headers);
+      const mesPara = mesValido(body.para) ? String(body.para) : mesSoma(mesDe, 1);
+      if (mesPara <= mesDe) {
+        return json({ error: 'mes_destino',
+                      detail: 'O mes destino tem de ser depois do que esta sendo fechado.' },
+                    400, headers);
+      }
+
+      // Leitura RAW, e nao base64 decodificado aqui: `atob` quebra acento, e isso
+      // ja corrompeu titulo de demanda nesta base uma vez. O sha vem da chamada
+      // normal, que e o que o PUT exige.
+      const getM = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+      if (!getM.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const fileM = await getM.json();
+      const rawM = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+                            { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawM.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const textoM = await rawM.text();
+      const dataM = JSON.parse(textoM);
+      const confM = await conflito(gh, body, headers);
+      if (confM) return confM;
+
+      const ABERTAS = m => !['concluido', 'negada'].includes(String(m.status_planejamento || ''));
+      const roladas = [];
+      for (const m of (dataM.melhorias || [])) {
+        if (!m || m.mesclado_em || m.oculto) continue;
+        if (mesAtual(m) !== mesDe) continue;
+        if (!ABERTAS(m)) continue;
+        m.meses = mesTrilha(m).concat([{ mes: mesPara, em: mesPara + '-01' }]);
+        m.mes_alvo = mesPara;
+        roladas.push({ id: m.id, codigo: m.codigo || '', titulo: m.titulo || '',
+                       dev: m.dev || '', rolos: m.meses.length - 1 });
+      }
+
+      // Nada a rolar tambem e resposta: o mes fechou limpo, e dizer isso e melhor
+      // do que gravar por gravar.
+      if (!roladas.length) {
+        return json({ ok: true, roladas: [], mes: mesDe, para: mesPara }, 200, headers);
+      }
+
+      const quemM = (await papelAtual()) || 'admin';
+      registraHistorico(dataM, JSON.parse(textoM), quemM, 'fechamento do mes');
+      dataM.atualizado_em = new Date().toISOString();
+      const putM = await gh('contents/' + FILE_PATH, {
+        method: 'PUT',
+        body: JSON.stringify({ message: 'chore: fecha ' + mesDe + ' e rola ' + roladas.length +
+                                        ' para ' + mesPara,
+                               content: toB64(JSON.stringify(dataM)), sha: fileM.sha }),
+      });
+      if (!putM.ok) { const e = await putM.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
+      return json({ ok: true, roladas, mes: mesDe, para: mesPara,
+                    atualizado_em: dataM.atualizado_em }, 200, headers);
+    }
+
     // ── Recuperar senha: pedir ──────────────────────────────────────
     // Liberacao AUTOMATICA pelo e-mail, como pedido. O e-mail e obrigatorio e e a
     // unica prova; ver o comentario da tabela senha_reset para o risco disso e
@@ -2628,6 +2813,10 @@ export default {
                               'custo da base — sem ela a entrega entra no relatorio sem preco.' },
                     400, headers);
       }
+      // ANTES do historico, de proposito: assim o carimbo automatico do mes
+      // tambem vira linha no card. Depois dele, so a marcacao manual apareceria,
+      // e a automatica seria um dado que muda sozinho sem deixar rastro.
+      carimbaMeses(data, antesPub, true);
       registraHistorico(data, antesPub, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel');
       const espelhos = limpaEspelhos(data);
@@ -2720,6 +2909,10 @@ export default {
                               'custo da base — sem ela a entrega entra no relatorio sem preco.' },
                     400, headers);
       }
+      // ANTES do historico, de proposito: assim o carimbo automatico do mes
+      // tambem vira linha no card. Depois dele, so a marcacao manual apareceria,
+      // e a automatica seria um dado que muda sozinho sem deixar rastro.
+      carimbaMeses(data, antesDev, false);
       registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel dev');
       const espelhos = limpaEspelhos(data);

@@ -914,6 +914,7 @@
       <div class="tab" onclick="switchTab('kanban')">Kanban</div>
       <div class="tab" onclick="switchTab('temas')">Temas</div>
       <div class="tab" onclick="switchTab('projetos')">Projetos</div>
+      <div class="tab" onclick="switchTab('mes')">Mês</div>
       <div class="tab" onclick="switchTab('gerencial')">Gerencial</div>
       <div class="tab" onclick="switchTab('relatorios')">Relatórios</div>
       <div class="tab" onclick="switchTab('usuarios')">Usuários</div>
@@ -961,6 +962,27 @@
     </div>
 
     <!-- ABA ACESSO DEVS -->
+<!-- ABA MES ─────────────────────────────────────────────────────────
+         O mes NAO e coluna do Kanban. Etapa e posicao no fluxo; mes e periodo de
+         compromisso, e a demanda esta nos dois ao mesmo tempo. Como coluna, ela
+         sairia do mes no instante em que virasse trabalho — perdendo exatamente o
+         que esta tela existe para mostrar: tudo que sera tratado no mes, esteja
+         onde estiver.
+
+         Por isso aqui e uma VISAO. O card mostra a etapa real como cor, e as
+         sprints organizam o mes por dentro. -->
+    <div class="tab-content" id="tab-mes">
+      <div class="ger-filtros">
+        <label>Mês</label>
+        <select id="mes-mes" onchange="renderMes()"></select>
+        <select id="mes-ano" onchange="renderMes()"></select>
+        <button class="btn btn-secondary btn-sm" onclick="mesFecharAbrir()"
+                style="margin-left:auto">📦 Fechar o mês</button>
+      </div>
+      <div id="mes-resumo" class="ger-summary"></div>
+      <div id="mes-corpo"></div>
+    </div>
+
     <!-- ABA GERENCIAL -->
     <div class="tab-content" id="tab-projetos">
       <div class="pj-topo">
@@ -1053,6 +1075,17 @@
         <!-- O resumo fica FORA do corpo que recolhe: e a resposta da secao. -->
         <div id="sp-resumo" class="ger-summary"></div>
         <div class="ger-bandeja-corpo"><div id="sp-lista"></div></div>
+      </section>
+
+      <div class="ger-section-sep"></div>
+      <section class="ger-bandeja" data-bandeja="cumpri">
+        <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('cumpri')" aria-expanded="true">
+          <span><span class="ger-bandeja-seta">▶</span>📦 Cumprimento do mês</span>
+          <span class="ger-section-hint">o que o mês prometeu, o que entregou e o que transbordou</span>
+          <span class="ger-bandeja-acao">recolher</span>
+        </button>
+        <div id="cp-resumo" class="ger-summary"></div>
+        <div class="ger-bandeja-corpo"><div id="cp-lista"></div></div>
       </section>
 
       <div class="ger-section-sep"></div>
@@ -1237,6 +1270,9 @@
             style="display:none;background:none;border:none;font-size:19px;cursor:pointer;
                    margin:-8px 0 14px 6px;line-height:1;vertical-align:middle"></button>
     <input type="hidden" id="m-id" />
+    <!-- O mes fica ao lado da etapa porque as duas juntas sao a leitura completa:
+         "em andamento, comprometida com agosto". Separadas, cada uma conta metade. -->
+    <input type="hidden" id="m-mes" />
 
     <div class="mtabs">
       <button type="button" class="mtab ativa" id="mtab-dados" onclick="mAba('dados')">Dados</button>
@@ -1406,6 +1442,16 @@
       <div class="form-group">
         <label>Data de entrega prevista</label>
         <input type="date" id="m-entrega" oninput="atualizaHorasPlanejadas()" />
+      </div>
+      <!-- O mes de compromisso fica AO LADO da entrega de proposito: a entrega e a
+           data prometida, o mes e o ciclo em que a demanda foi combinada. Elas
+           andam juntas mas nao sao a mesma coisa — a data escorrega, o mes de
+           origem nao — e ver as duas lado a lado e o que torna essa diferenca
+           obvia para quem preenche. -->
+      <div class="form-group">
+        <label>Mês de compromisso</label>
+        <select id="m-mes-alvo"></select>
+        <div id="m-mes-trilha" class="us-hint" style="margin-top:5px"></div>
       </div>
     </div>
 
@@ -2726,6 +2772,7 @@ function switchTab(name, el) {
   else { const f = [...document.querySelectorAll('.tab')].find(t => (t.getAttribute('onclick') || '').includes(`'${name}'`)); if (f) f.classList.add('active'); }
   const content = document.getElementById('tab-' + name);
   if (content) content.classList.add('active');
+  if (name === 'mes') renderMes();
   if (name === 'gerencial') renderGerencial();
   if (name === 'relatorios') renderRelatorios();
   if (name === 'usuarios') renderUsuarios();
@@ -3530,6 +3577,364 @@ function prazoClassifica(m) {
   return { tipo: 'atraso', dias: Math.round((dia(ce) - dia(pz)) / 86400000) };
 }
 
+/* ─── MÊS DE COMPROMISSO ───────────────────────────────────────────
+   O mês não é etapa. Etapa é posição no fluxo — backlog, planning, em andamento;
+   mês é o período com que a demanda está comprometida. Ela está nos dois ao mesmo
+   tempo, e por isso o mês é um CARIMBO que ela carrega, não uma coluna de onde ela
+   sai quando o trabalho começa.
+
+   A verdade é a trilha `meses` — [{ mes, em }], append-only, escrita só no Worker.
+   Aqui só se lê e se deriva. Guardar o mês num campo solto que a tela sobrescreve
+   apagaria o transbordo: é o que acontece hoje com a data de entrega, alterada em
+   21 demandas (uma delas 5 vezes), movendo a demanda de mês em silêncio a cada vez.
+
+   `em` responde a pergunta que decide se a métrica presta: a demanda foi
+   comprometida no começo do mês ou entrou no dia 20? Sem separar, a taxa de
+   cumprimento sobe sozinha quando entra trabalho no fim do mês.               */
+function mesTrilhaDe(m) {
+  const t = (m && Array.isArray(m.meses)) ? m.meses : [];
+  return t.filter(x => x && /^\d{4}-(0[1-9]|1[0-2])$/.test(String(x.mes)));
+}
+function mesDe(m) { const t = mesTrilhaDe(m); return t.length ? t[t.length - 1].mes : ''; }
+function mesEntrouEm(m) {
+  const t = mesTrilhaDe(m);
+  if (!t.length) return '';
+  const u = t[t.length - 1];
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(u.em || '')) ? String(u.em) : String(u.mes) + '-01';
+}
+function mesRolos(m) { return Math.max(0, mesTrilhaDe(m).length - 1); }
+
+// Comprometida DESDE O COMEÇO do mês, e não somada depois. O dia 1 é o corte: a
+// rolagem do fechamento grava exatamente `mes + '-01'`, então o que rolou de
+// julho conta como compromisso de agosto inteiro — que é a verdade.
+function mesDesdeOInicio(m, alvo) {
+  return mesEntrouEm(m) <= alvo + '-01';
+}
+
+const MES_NOMES = ['janeiro','fevereiro','março','abril','maio','junho','julho',
+                   'agosto','setembro','outubro','novembro','dezembro'];
+
+// O select do mes. Doze opcoes em torno do mes corrente: alocar para tres meses a
+// frente e planejamento legitimo, e alocar para tras acontece ao corrigir um
+// registro antigo. Mais que isso vira lista de rolagem infinita sem uso real.
+function mesPreencheCampo(m) {
+  const sel = document.getElementById('m-mes-alvo');
+  const tr = document.getElementById('m-mes-trilha');
+  if (!sel) return;
+  const atual = mesDe(m || {});
+  const h = new Date();
+  const base = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0');
+  const meses = [];
+  for (let i = -6; i <= 5; i++) meses.push(mesSomaLocal(base, i));
+  // O mes ja gravado entra na lista mesmo fora da janela: sem isso, abrir um card
+  // antigo e salvar mudaria o mes dele sem ninguem pedir.
+  if (atual && !meses.includes(atual)) meses.push(atual);
+  meses.sort();
+  sel.innerHTML = '<option value="">— sem mês —</option>' +
+    meses.map(x => '<option value="' + x + '"' + (x === atual ? ' selected' : '') + '>' +
+      MES_NOMES[parseInt(x.slice(5), 10) - 1] + ' de ' + x.slice(0, 4) + '</option>').join('');
+
+  if (!tr) return;
+  const t = mesTrilhaDe(m || {});
+  if (t.length <= 1) {
+    tr.textContent = atual
+      ? 'Entrou neste mês em ' + formatDate(mesEntrouEm(m))
+      : 'O mês é carimbado quando a demanda entra em Planejado.';
+    return;
+  }
+  // A trilha inteira, porque "essa ja rolou tres vezes" e a informacao que o
+  // fechamento produz e que nenhum quadro mostra.
+  tr.innerHTML = '<span style="color:var(--red);font-weight:700">⟳ ' + (t.length - 1) +
+    (t.length - 1 === 1 ? ' rolagem' : ' rolagens') + '</span> · ' +
+    t.map(x => esc(MES_NOMES[parseInt(x.mes.slice(5), 10) - 1].slice(0, 3) + '/' + x.mes.slice(2, 4)))
+      .join(' → ');
+}
+
+function mesAlvoSelecionado() {
+  const mm = document.getElementById('mes-mes'), aa = document.getElementById('mes-ano');
+  if (!mm || !aa || !mm.value) {
+    const h = new Date();
+    return h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0');
+  }
+  return aa.value + '-' + String(mm.value).padStart(2, '0');
+}
+
+function mesBuildFiltro() {
+  const mm = document.getElementById('mes-mes'), aa = document.getElementById('mes-ano');
+  if (!mm || mm.options.length) return;
+  const h = new Date();
+  mm.innerHTML = MES_NOMES.map((n, i) =>
+    '<option value="' + (i + 1) + '"' + (i === h.getMonth() ? ' selected' : '') + '>' +
+    n.charAt(0).toUpperCase() + n.slice(1) + '</option>').join('');
+  const anos = new Set([h.getFullYear()]);
+  (state.melhorias || []).forEach(m => {
+    mesTrilhaDe(m).forEach(x => anos.add(parseInt(x.mes.slice(0, 4), 10)));
+  });
+  aa.innerHTML = [...anos].sort().map(a =>
+    '<option value="' + a + '"' + (a === h.getFullYear() ? ' selected' : '') + '>' + a + '</option>').join('');
+}
+
+// As demandas do mês: as que estão nele AGORA, mais as que passaram por ele e
+// saíram. As que saíram são o transbordo, e some-lo da tela seria fechar o mês
+// escondendo justamente o que ele não cumpriu.
+function mesDoPeriodo(alvo) {
+  return (state.melhorias || []).filter(m =>
+    !m.mesclado_em && !m.oculto && mesTrilhaDe(m).some(x => x.mes === alvo));
+}
+
+// Classifica cada demanda dentro do fechamento do mês. Uma pergunta por vez:
+//   entregue     — concluída, e concluída DENTRO do mês
+//   transbordou  — esteve no mês, não foi entregue nele
+//   em curso     — o mês ainda está correndo e ela segue aberta
+function mesClassifica(m, alvo, mesCorrente) {
+  const conc = (m.status_planejamento || '') === 'concluido';
+  const cm = String(m.concluido_em || '').slice(0, 7);
+  if (conc && cm && cm <= alvo) return 'entregue';
+  if ((m.status_planejamento || '') === 'negada') return 'negada';
+  // Fechado: o que não saiu no mês transbordou, tenha rolado ou não.
+  if (alvo < mesCorrente) return 'transbordou';
+  return 'em_curso';
+}
+
+function renderMes() {
+  const corpo = document.getElementById('mes-corpo');
+  const resumo = document.getElementById('mes-resumo');
+  if (!corpo || !resumo) return;
+  mesBuildFiltro();
+  const alvo = mesAlvoSelecionado();
+  const h = new Date();
+  const mesCorrente = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0');
+  const itens = mesDoPeriodo(alvo);
+
+  const cls = new Map(itens.map(m => [m.id, mesClassifica(m, alvo, mesCorrente)]));
+  const inicio = itens.filter(m => mesDesdeOInicio(m, alvo));
+  const meio = itens.filter(m => !mesDesdeOInicio(m, alvo));
+  const entregues = itens.filter(m => cls.get(m.id) === 'entregue');
+  const fora = itens.filter(m => ['transbordou', 'em_curso'].includes(cls.get(m.id)));
+  const base = inicio.length;
+  const pct = base ? Math.round(inicio.filter(m => cls.get(m.id) === 'entregue').length / base * 100) : null;
+
+  const kpi = (v, rot, extra, cor) =>
+    '<div class="ger-kpi"><div class="ger-kpi-label">' + rot + '</div>' +
+    '<div class="ger-kpi-value"' + (cor ? ' style="color:' + cor + '"' : '') + '>' + v + '</div>' +
+    (extra ? '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">' + extra + '</div>' : '') +
+    '</div>';
+
+  resumo.innerHTML =
+    kpi(inicio.length, 'Comprometidas', 'desde o início do mês') +
+    kpi(meio.length, 'Entraram depois', meio.length ? 'somadas ao longo do mês' : '—',
+        meio.length ? 'var(--amber-tx,#FFC470)' : '') +
+    kpi(entregues.length, 'Entregues', 'concluídas dentro do mês', entregues.length ? 'var(--green)' : '') +
+    kpi(pct === null ? '—' : pct + '%', 'Cumprimento',
+        base ? 'do que foi comprometido no início' : 'nada comprometido no início',
+        pct === null ? '' : (pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)'));
+
+  if (!itens.length) {
+    corpo.innerHTML = '<p class="ent-vazio">Nenhuma demanda alocada em ' +
+      esc(MES_NOMES[parseInt(alvo.slice(5), 10) - 1]) + ' de ' + esc(alvo.slice(0, 4)) + '.<br>' +
+      'A demanda ganha o mês ao entrar em Planejado, e você pode trocá-lo no card.</p>';
+    return;
+  }
+
+  // Por sprint: é a quebra que o mês pede por dentro. Sem sprint fica um grupo
+  // próprio, e não escondido — demanda no mês sem semana definida é justamente a
+  // que ninguém está olhando.
+  const porSprint = {};
+  itens.forEach(m => {
+    const s = String(m.sprint || '').trim() || '(sem sprint)';
+    (porSprint[s] = porSprint[s] || []).push(m);
+  });
+  const ordem = Object.keys(porSprint).sort((a, b) => {
+    if (a === '(sem sprint)') return 1;
+    if (b === '(sem sprint)') return -1;
+    return a.localeCompare(b, 'pt-BR');
+  });
+
+  const COR = { entregue: 'var(--green)', transbordou: 'var(--red)',
+                em_curso: 'var(--blue)', negada: 'var(--text3)' };
+  const ROT = { entregue: 'entregue', transbordou: 'transbordou',
+                em_curso: 'em curso', negada: 'negada' };
+
+  corpo.innerHTML = ordem.map(s => {
+    const lista = porSprint[s].sort((a, b) =>
+      String(a.codigo || '').localeCompare(String(b.codigo || ''), 'pt-BR'));
+    const ent = lista.filter(m => cls.get(m.id) === 'entregue').length;
+    return '<div class="ger-section-title" style="margin-top:18px;font-size:13px">' +
+      '<span>' + esc(s) + '</span>' +
+      '<span class="ger-section-hint">' + ent + ' de ' + lista.length + ' entregues</span></div>' +
+      '<div class="us-tabela-wrap"><table class="us-tabela"><tbody>' +
+      lista.map(m => {
+        const c = cls.get(m.id);
+        const rolos = mesRolos(m);
+        return '<tr onclick="abrirDemandaPorId(\'' + esc(m.id) + '\')" style="cursor:pointer">' +
+          '<td><span class="cod-tag">' + esc(m.codigo || '') + '</span> ' + esc(m.titulo || '') +
+          (rolos ? ' <span title="já rolou de mês ' + rolos + 'x" ' +
+                   'style="color:var(--red);font-weight:700;font-size:11px">⟳' + rolos + '</span>' : '') +
+          '</td>' +
+          '<td class="us-sub" style="white-space:nowrap">' + esc(m.dev || '—') + '</td>' +
+          '<td class="us-sub" style="white-space:nowrap">' + esc(etapaRotulo(m)) + '</td>' +
+          '<td class="pz-num" style="color:' + COR[c] + ';white-space:nowrap">' + ROT[c] + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }).join('');
+}
+
+// O rótulo da etapa REAL. É o que faz esta tela conviver com o Kanban em vez de
+// competir com ele: aqui se vê o mês, lá se vê o fluxo, e o card é o mesmo.
+function etapaRotulo(m) {
+  const k = statusEfetivo(m);
+  const col = KB_COLS.find(c => c.key === k);
+  return col ? col.label : (k || '—');
+}
+
+function abrirDemandaPorId(id) {
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (m) openModalMelhoria(m.id);
+}
+
+// ─── FECHAR O MÊS ─────────────────────────────────────────────────
+// Rola para o mês seguinte o que ficou em aberto. É uma ação do servidor, e não
+// uma edição em massa pela tela: são dezenas de demandas de uma vez, e o `em` das
+// roladas tem de ser o dia 1 do mês destino — fechar agosto no dia 3 de setembro
+// não transforma as roladas em "entrou no meio de setembro".
+async function mesFecharAbrir() {
+  const alvo = mesAlvoSelecionado();
+  const itens = mesDoPeriodo(alvo).filter(m =>
+    mesDe(m) === alvo && !['concluido', 'negada'].includes(m.status_planejamento || ''));
+  const prox = mesSomaLocal(alvo, 1);
+  if (!itens.length) {
+    toast('Nada a rolar: nenhuma demanda de ' + alvo + ' ficou em aberto.', 'ok');
+    return;
+  }
+  const nomes = itens.slice(0, 8).map(m => (m.codigo || '') + ' · ' + (m.titulo || '')).join('\n');
+  if (!(await confirmar({
+      titulo: 'Fechar ' + alvo + ' e rolar o que ficou?',
+      texto: itens.length + ' demanda(s) em aberto passam para ' + prox + ':\n\n' + nomes +
+             (itens.length > 8 ? '\n… e mais ' + (itens.length - 8) : '') +
+             '\n\nO mês de origem continua registrado em cada uma — é assim que ' +
+             alvo + ' segue mostrando o que prometeu e não entregou.',
+      ok: 'Fechar e rolar' }))) return;
+
+  showSaving(true);
+  try {
+    const res = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'mes-fechar', mes: alvo, para: prox,
+                                           base: state.atualizado_em }, credAdmin())),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) { toast('Não consegui fechar: ' + (j.detail || j.error || res.status), 'err'); return; }
+    toast('📦 ' + (j.roladas || []).length + ' demanda(s) roladas para ' + prox + '.', 'ok');
+    await loadFromGitHub(true);
+    renderMes();
+  } catch (e) {
+    toast('Falha ao fechar o mês: ' + e.message, 'err');
+  } finally { showSaving(false); }
+}
+
+// Mesma conta do Worker, sem objeto Date pela mesma razão: o fuso muda o dia.
+function mesSomaLocal(iso, n) {
+  const a = parseInt(String(iso).slice(0, 4), 10);
+  const b = parseInt(String(iso).slice(5, 7), 10);
+  const t = (a * 12 + (b - 1)) + n;
+  return String(Math.floor(t / 12)) + '-' + String((t % 12) + 1).padStart(2, '0');
+}
+
+// ─── CUMPRIMENTO DO MÊS (aba Gerencial) ───────────────────────────
+// O mesmo fechamento, por dev. É a conversa que se tem no fim do mês, e o número
+// que falta hoje: "combinamos 30, entregamos 22, e 8 foram para setembro".
+function renderGerCumprimento(ano, mes) {
+  const resumo = document.getElementById('cp-resumo');
+  const lista = document.getElementById('cp-lista');
+  if (!resumo || !lista) return;
+  const alvo = String(ano) + '-' + String(mes).padStart(2, '0');
+  const h = new Date();
+  const mesCorrente = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0');
+  const itens = mesDoPeriodo(alvo);
+  const cls = new Map(itens.map(m => [m.id, mesClassifica(m, alvo, mesCorrente)]));
+  const inicio = itens.filter(m => mesDesdeOInicio(m, alvo));
+  const meio = itens.filter(m => !mesDesdeOInicio(m, alvo));
+  const transb = itens.filter(m => ['transbordou', 'em_curso'].includes(cls.get(m.id)));
+  const entrInicio = inicio.filter(m => cls.get(m.id) === 'entregue').length;
+  const pct = inicio.length ? Math.round(entrInicio / inicio.length * 100) : null;
+
+  const kpi = (v, rot, extra, cor) =>
+    '<div class="ger-kpi"><div class="ger-kpi-label">' + rot + '</div>' +
+    '<div class="ger-kpi-value"' + (cor ? ' style="color:' + cor + '"' : '') + '>' + v + '</div>' +
+    (extra ? '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">' + extra + '</div>' : '') +
+    '</div>';
+
+  resumo.innerHTML =
+    kpi(pct === null ? '—' : pct + '%', 'Cumprimento',
+        inicio.length ? entrInicio + ' de ' + inicio.length + ' comprometidas' : 'nada comprometido no início',
+        pct === null ? '' : (pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)')) +
+    kpi(meio.length, 'Entraram no meio', meio.length ? 'fora do combinado no dia 1' : '—',
+        meio.length ? 'var(--amber-tx,#FFC470)' : '') +
+    kpi(transb.length, 'Transbordou', transb.length ? 'seguiu para o mês seguinte' : 'nada ficou',
+        transb.length ? 'var(--red)' : 'var(--green)') +
+    kpi(itens.length, 'No mês', 'total que passou por ele');
+
+  if (!itens.length) {
+    lista.innerHTML = '<p class="ent-vazio">Nenhuma demanda foi alocada a este mês.<br>' +
+      'O carimbo nasce quando a demanda entra em Planejado — meses anteriores à ' +
+      'criação deste bloco não têm histórico de alocação.</p>';
+    return;
+  }
+
+  const porDev = {};
+  const soma = (nome, chave) => {
+    porDev[nome] = porDev[nome] || { nome, comp: 0, entregue: 0, transb: 0, meio: 0 };
+    porDev[nome][chave]++;
+  };
+  itens.forEach(m => {
+    const devs = splitDevsLocalPrazo(m);
+    const c = cls.get(m.id);
+    devs.forEach(n => {
+      if (mesDesdeOInicio(m, alvo)) soma(n, 'comp'); else soma(n, 'meio');
+      if (c === 'entregue') soma(n, 'entregue');
+      if (c === 'transbordou' || c === 'em_curso') soma(n, 'transb');
+    });
+  });
+
+  const linhas = Object.values(porDev)
+    .sort((a, b) => (b.comp + b.meio) - (a.comp + a.meio) ||
+                    String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
+    .map(d => {
+      const p = d.comp ? Math.round(d.entregue / (d.comp + d.meio) * 100) : null;
+      const cor = p === null ? '' : (p >= 80 ? 'var(--green)' : p >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)');
+      return '<tr><td><div class="us-nome">' + esc(d.nome) + '</div></td>' +
+        '<td class="pz-num">' + d.comp + '</td>' +
+        '<td class="pz-num">' + (d.meio || '—') + '</td>' +
+        '<td class="pz-num">' + d.entregue + '</td>' +
+        '<td class="pz-num">' + (d.transb || '—') + '</td>' +
+        '<td class="pz-num" style="color:' + cor + ';font-weight:700">' +
+        (p === null ? '—' : p + '%') + '</td></tr>';
+    }).join('');
+
+  // As que transbordaram, nominalmente, com o contador de rolos. Uma demanda no
+  // terceiro rolo é a informação mais útil que este fechamento produz: ela não
+  // está atrasada, está sendo adiada — e são coisas diferentes.
+  const detalhe = transb.length
+    ? '<div class="ger-section-title" style="margin-top:22px;font-size:13px">' +
+      '<span>As ' + transb.length + ' que não saíram</span>' +
+      '<span class="ger-section-hint">⟳ = quantas vezes já rolou de mês</span></div>' +
+      '<div class="us-tabela-wrap"><table class="us-tabela"><tbody>' +
+      transb.sort((a, b) => mesRolos(b) - mesRolos(a)).map(m =>
+        '<tr><td><span class="cod-tag">' + esc(m.codigo || '') + '</span> ' + esc(m.titulo || '') + '</td>' +
+        '<td class="us-sub" style="white-space:nowrap">' + esc(m.dev || '—') + '</td>' +
+        '<td class="us-sub" style="white-space:nowrap">' + esc(etapaRotulo(m)) + '</td>' +
+        '<td class="pz-num" style="white-space:nowrap;color:' +
+        (mesRolos(m) >= 2 ? 'var(--red)' : 'var(--text3)') + '">⟳ ' + mesRolos(m) + '</td></tr>').join('') +
+      '</tbody></table></div>'
+    : '';
+
+  lista.innerHTML =
+    '<div class="us-tabela-wrap"><table class="us-tabela">' +
+    '<thead><tr><th>Desenvolvedor</th><th class="pz-num">Comprometidas</th>' +
+    '<th class="pz-num">Entraram depois</th><th class="pz-num">Entregues</th>' +
+    '<th class="pz-num">Não saíram</th><th class="pz-num">%</th></tr></thead>' +
+    '<tbody>' + linhas + '</tbody></table></div>' + detalhe;
+}
+
 function renderGerPrazo(ano, mes) {
   const resumo = document.getElementById('pz-resumo');
   const lista = document.getElementById('pz-lista');
@@ -4183,6 +4588,9 @@ function renderGerencial() {
   const ano = parseInt(document.getElementById('ger-ano').value);
 
   renderGerSemPontos();
+  // O cumprimento vem ANTES do prazo porque responde primeiro: o mes entregou o
+  // que prometeu? "No prazo" e a pergunta seguinte, sobre o que saiu.
+  renderGerCumprimento(ano, mes);
   renderGerPrazo(ano, mes);
   // Depois de renderizar: o conteudo e reescrito a cada Atualizar, e o estado das
   // bandejas vive no wrapper, que nao e reescrito.
@@ -4930,6 +5338,7 @@ function openModalMelhoria(id) {
   document.getElementById('m-data-solicitacao').value= m?.data_solicitacao || '';
   document.getElementById('m-inicio').value          = m?.inicio           || '';
   document.getElementById('m-entrega').value         = m?.entrega          || '';
+  mesPreencheCampo(m);
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
@@ -5384,6 +5793,11 @@ async function saveMelhoria() {
     data_solicitacao:    document.getElementById('m-data-solicitacao').value,
     inicio:              document.getElementById('m-inicio').value,
     entrega:             document.getElementById('m-entrega').value,
+    // Manda a INTENCAO. Quem escreve a trilha (`meses`) e o Worker: se a tela
+    // escrevesse, bastaria uma aba desatualizada para apagar o passado de uma
+    // demanda — e o passado e o unico lugar onde o transbordo mora.
+    mes_alvo:            document.getElementById('m-mes-alvo').value,
+    meses:               existing.meses || [],
     motivo_negacao:      sp === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
     implementacao:       document.getElementById('m-implementacao').value.trim(),
     debito_tecnico:      document.getElementById('m-debito').checked,
