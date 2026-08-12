@@ -1818,6 +1818,8 @@ let _pendingEdits = false; // há edições locais não publicadas? protege cont
 // meio-tempo). Sem isso, o merge antigo mantinha TODO o `state` local e só
 // acrescentava itens ausentes — então qualquer aba com dados carregados antes
 // da edição de outra pessoa sobrescrevia essa edição ao publicar a própria.
+// A lista de contas vive AQUI, fora do `state`, porque `state` e publicado.
+let _usuariosCache = [];
 let _dirtyMelhoriaIds = new Set();
 // Retrato de cada melhoria como veio do servidor. Base do merge por campo: sem
 // ele nao ha como distinguir "mudei este campo" de "meu objeto esta velho".
@@ -5625,7 +5627,7 @@ function uCelulaNomeDemandas(u) {
 // Corrige erro de digitacao no cadastro. O nome vai para o historico do card e
 // para a mensagem de commit, entao errado ele contamina a trilha de auditoria.
 async function uNome(login) {
-  const atual = (state._usuarios || []).find(u => u.login === login);
+  const atual = (_usuariosCache || []).find(u => u.login === login);
   const novo = await pedirTexto({
     titulo: 'Renomear conta',
     texto: 'O nome aparece no historico do card e na mensagem de commit. ' +
@@ -5693,9 +5695,11 @@ async function renderUsuarios() {
     return;
   }
   const todos = d.usuarios || [];
-  // Guarda a lista: uNome() precisa do nome atual para o prompt vir preenchido, e
-  // reler tudo do servidor so para isso seria uma chamada a mais por clique.
-  state._usuarios = todos;
+  // FORA do `state`, e nao dentro. `state` e o corpo do publish, e o publish
+   // grava o objeto que recebe: enquanto isto morava em `state._usuarios`, a
+   // tabela de contas do time era gravada dentro do arquivo de DEMANDAS — que o
+   // painel dev, o Planejamento e o painel de consulta baixam inteiro.
+  _usuariosCache = todos;
   const pendentes = todos.filter(u => u.pendente);
   const ativos = todos.filter(u => !u.pendente);
   const pedidos = d.pedidos || [];

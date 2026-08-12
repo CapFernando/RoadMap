@@ -1316,6 +1316,52 @@ ok(/const soEu = !!_eu && \(_eu\.papel === 'dev'\)/.test(DEV),
 ok(/soEu \? \[\] : \(state\.desenvolvedores \|\| \[\]\)/.test(DEV),
    'a lista de outros devs some para quem e dev');
 
+
+sec('A tabela de contas nao viaja dentro do arquivo de demandas');
+
+// A aba Usuarios guardava a lista em `state._usuarios` para nao reler o servidor a
+// cada clique. Mas `state` E o corpo do publish, e o publish grava o objeto que
+// recebe: login, e-mail, papel, ultimo acesso e data de redefinicao de TODAS as
+// contas foram parar em data/melhorias.json — arquivo que o painel dev, o
+// Planejamento e o painel de consulta baixam inteiro.
+ok(!/state\._usuarios\s*=/.test(ADMIN),
+   'a aba Usuarios NAO guarda a lista dentro do state (state e publicado)');
+ok(/let _usuariosCache = \[\]/.test(ADMIN), 'a lista de contas vive fora do state');
+// Sem comentario: o comentario que EXPLICA o defeito nao pode contar como o defeito.
+ok(!/state\._usuarios/.test(semComentario(ADMIN)),
+   'ninguem mais le a lista de dentro do state');
+
+// A guarda de verdade e no servidor: aba aberta desde ontem continua mandando o
+// espelho antigo, e uma unica publicacao dessas devolve tudo para o arquivo.
+ok(/function limpaEspelhos/.test(WC), 'o Worker descarta chaves de espelho');
+ok(/const fora = Object\.keys\(data\)\.filter\(k => k\.charAt\(0\) === '_'\)/.test(WC),
+   'a regra e o prefixo _, e nao uma lista de nomes que alguem tem de manter');
+ok((WC.match(/const espelhos = limpaEspelhos\(data\);/g) || []).length === 2,
+   'as DUAS rotas de gravacao limpam (publish e dev-publish)');
+ok((WC.match(/espelhos_descartados/g) || []).length >= 2,
+   'o descarte aparece na resposta, para nao ser silencioso');
+
+// Comportamento: a funcao roda de verdade, com um espelho de conta dentro.
+let _limpaOk = false, _sobrou = [];
+try {
+  const i = W.indexOf('function limpaEspelhos');
+  let c = 0, fim = 0;
+  for (let k = W.indexOf('{', i); k < W.length; k++) {
+    if (W[k] === '{') c++;
+    else if (W[k] === '}') { c--; if (!c) { fim = k + 1; break; } }
+  }
+  const limpa = new Function(W.slice(i, fim) + '\nreturn limpaEspelhos;')();
+  const d = { temas: [1], melhorias: [{ id: 'a' }], desenvolvedores: ['Eloi'],
+              atualizado_em: 'x', _usuarios: [{ login: 'x', email: 'x@y' }] };
+  const fora = limpa(d);
+  _sobrou = Object.keys(d);
+  _limpaOk = fora.includes('_usuarios') && !('_usuarios' in d) &&
+             d.temas.length === 1 && d.melhorias.length === 1 &&
+             d.desenvolvedores[0] === 'Eloi' && d.atualizado_em === 'x' &&
+             JSON.stringify(limpa(null)) === '[]';
+} catch (_) { _limpaOk = false; }
+ok(_limpaOk, 'a lista de contas sai e o resto do arquivo fica intacto', _sobrou.join(','));
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

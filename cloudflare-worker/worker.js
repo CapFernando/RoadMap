@@ -363,6 +363,23 @@ function histValor(v) {
 
 // Compara o que chegou com o que esta gravado e anexa as diferencas. `quem` sai
 // da conta autenticada; sem conta, fica o papel, que ja diz de onde veio.
+// Chaves de espelho: dados que uma tela guardou em memoria e mandou de volta sem
+// querer. Nenhuma pertence ao arquivo de demandas.
+//
+// A guarda e no servidor de proposito. Corrigir so a tela nao resolve: aba aberta
+// desde ontem continua mandando o espelho antigo, e uma unica publicacao dessas
+// devolve a tabela de contas para dentro do arquivo. Aqui e o unico ponto por onde
+// toda gravacao passa.
+//
+// A regra e o prefixo `_`, e nao uma lista de nomes: o proximo espelho vai ter
+// outro nome, e ninguem vai lembrar de vir ate aqui.
+function limpaEspelhos(data) {
+  if (!data || typeof data !== 'object') return [];
+  const fora = Object.keys(data).filter(k => k.charAt(0) === '_');
+  fora.forEach(k => { delete data[k]; });
+  return fora;
+}
+
 function registraHistorico(recebido, servidor, quem, origem) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return 0;
   const antigas = new Map((((servidor || {}).melhorias) || []).map(m => [m.id, m]));
@@ -2613,6 +2630,7 @@ export default {
       }
       registraHistorico(data, antesPub, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel');
+      const espelhos = limpaEspelhos(data);
       normalizaEstados(data);
       atribuiCodigos(data);
       atribuiCodigosProjeto(data);
@@ -2630,8 +2648,12 @@ export default {
         body: JSON.stringify({ message: 'chore: admin publica ' + new Date().toISOString(), content: toB64(JSON.stringify(data)), sha: file.sha }),
       });
       if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
+      // `espelhos_descartados` vai na resposta para o descarte nao ser silencioso:
+      // se uma tela voltar a mandar espelho, aparece aqui em vez de virar um dado
+      // que ninguem sabe explicar de onde veio.
       return json({ ok: true, codigos: codigosMel, codigos_projeto: codigosPrj,
                     sem_dev: semDev, sem_projeto: soltas,
+                    espelhos_descartados: espelhos,
                     atualizado_em: data.atualizado_em }, 200, headers);
     }
 
@@ -2700,6 +2722,7 @@ export default {
       }
       registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel dev');
+      const espelhos = limpaEspelhos(data);
       normalizaEstados(data);
       atribuiCodigos(data);
       corrigeProjetoInvalido(data);
@@ -2711,7 +2734,8 @@ export default {
       if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
       // Diz o que foi revertido: gravar diferente do que a tela mandou e recusar em
       // silencio, e a pessoa so descobriria no proximo F5.
-      return json({ ok: true, datas_revertidas: datasRevertidas }, 200, headers);
+      return json({ ok: true, datas_revertidas: datasRevertidas,
+                    espelhos_descartados: espelhos }, 200, headers);
     }
 
     // Acao presente mas desconhecida = sondagem. Antes caia no fluxo de sugestao
