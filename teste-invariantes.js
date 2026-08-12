@@ -1270,6 +1270,11 @@ if (_ident) {
 // tela de login.
 ok(/if \(!_eu\) \{[\s\S]{0,200}?mostrarPasso\('step-dev'\)/.test(DEV),
    'a grade de nomes so aparece sem conta');
+// Sem conta, o localStorage e a unica memoria que existe. Perdi este trecho ao
+// reescrever a entrada, e quem nao tem conta passou a escolher o nome toda vez —
+// exatamente o oposto do que a mudanca queria.
+ok(/if \(!_eu\) \{[\s\S]{0,700}?if \(currentDev && getDevList\(\)\.includes\(currentDev\)\) selectDev\(currentDev\)/.test(DEV),
+   'sem conta, a escolha do nome e lembrada na entrada seguinte');
 ok(/const meu = resolveMeuDev\(\);[\s\S]{0,400}?selectDev\(meu\);/.test(DEV),
    'com conta e nome resolvido, entra direto');
 ok(/function pedirVinculo/.test(DEV), 'existe a tela de vincular uma vez');

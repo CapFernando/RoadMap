@@ -2597,6 +2597,11 @@ async function entrarComoEu() {
   if (!_eu) {
     mostrarPasso('step-dev');
     await reloadDevList();
+    // E LEMBRA a escolha. Quando reescrevi esta entrada, este trecho ficou de fora
+    // e quem entra pela senha compartilhada passou a escolher o nome em TODA
+    // entrada — piorando a jornada de quem justamente nao tem conta, que era o
+    // oposto do pedido. Sem conta, o localStorage e a unica memoria que existe.
+    if (currentDev && getDevList().includes(currentDev)) selectDev(currentDev);
     return;
   }
 
