@@ -483,7 +483,24 @@
       </div>
     </div>
 
-    <!-- PASSO 2: Seleção de dev (oculto até senha correta) -->
+    <!-- PASSO 2b: vinculo. So aparece quando a conta existe e o nome dela nao
+         casa com nenhuma demanda. Perguntar UMA vez e guardar no perfil e o que
+         evita a grade de vinte botoes em toda entrada. -->
+    <div id="step-vinculo" style="display:none">
+      <p>Falta ligar sua conta às suas demandas</p>
+      <div class="login-dica" id="vin-explica"></div>
+      <select id="vin-nome" style="width:100%"></select>
+      <button onclick="vincularNome()">Continuar</button>
+      <div class="login-error" id="vin-erro"></div>
+      <div class="login-links">
+        <button class="login-link" onclick="vincularDepois()">Ainda não tenho demandas — entrar assim mesmo</button>
+        <button class="login-link" onclick="sairDev()">← Sair</button>
+      </div>
+    </div>
+
+    <!-- PASSO 2: grade de nomes. SO para a senha compartilhada, que nao
+         identifica ninguem — ali a pergunta e a unica forma de saber. Quem entra
+         com conta nunca ve esta tela. -->
     <div id="step-dev" style="display:none">
       <p>Selecione seu nome</p>
       <div id="login-aviso" class="login-aviso">
@@ -2308,40 +2325,15 @@ async function initApp() {
     return;
   }
   document.getElementById('step-senha').style.display = 'none';
-  document.getElementById('step-dev').style.display = 'block';
 
   if (!runtimeToken && !ADMIN_PROXY_URL) {
     document.getElementById('login-aviso').style.display = 'block';
   }
 
-  try {
-    const data = await fetchFreshData();
-    if (data) {
-      state.temas = data.temas || [];
-      state.projetos = data.projetos || [];
-      state.melhorias = data.melhorias || [];
-      state.desenvolvedores = data.desenvolvedores || [];
-      state.feriados = data.feriados || [];
-      _pollTs = data.atualizado_em || null;
-    }
-  } catch(_) {}
-
-  const devs = getDevList();
-  const grid = document.getElementById('dev-grid');
-
-  if (!devs.length) {
-    grid.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:10px;">Nenhum desenvolvedor encontrado.</div>';
-    return;
-  }
-
-  grid.innerHTML = devs.map(d =>
-    `<button class="dev-btn" onclick="selectDev('${d.replace(/'/g,"\\'")}')">👤 ${d}</button>`
-  ).join('');
-
-  // Auto-login se já tem nome salvo
-  if (currentDev && devs.includes(currentDev)) {
-    enterApp();
-  }
+  // Sessao ja aberta segue o MESMO caminho de quem acabou de digitar a senha.
+  // Eram dois caminhos antes, e o segundo nao tinha a deducao pela conta: quem
+  // recarregava a pagina via a grade que nao tinha visto ao entrar.
+  await entrarComoEu();
 }
 
 function getDevList() {
@@ -2358,7 +2350,7 @@ function getDevList() {
 const EMAIL_DOMINIO = '@audaxcapitalsa.com.br';
 
 function mostrarPasso(qual) {
-  ['step-senha', 'step-cadastro', 'step-recuperar', 'step-dev'].forEach(id => {
+  ['step-senha', 'step-cadastro', 'step-recuperar', 'step-dev', 'step-vinculo'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = (id === qual) ? 'block' : 'none';
   });
@@ -2531,22 +2523,127 @@ async function verificarSenha() {
   }
 }
 
-async function mostrarStepDev() {
-  mostrarPasso('step-dev');
-  await reloadDevList();
-  // Quem entrou por conta nao precisa se procurar na lista: se o nome da conta
-  // casa com um dev cadastrado, entra direto no painel dele. Espera a lista
-  // carregar de verdade — getDevList() so tem valor depois do reload.
-  if (_eu && _eu.nome) {
-    const alvo = _eu.nome.trim().toLowerCase();
-    const achou = getDevList().find(d => d.trim().toLowerCase() === alvo);
-    if (achou) selectDev(achou);
-  }
+// ─── QUEM SOU EU ──────────────────────────────────────────────────
+// Entrar e escolher o proprio nome numa grade sao a MESMA pergunta feita duas
+// vezes. Quem digitou usuario e senha ja se identificou; o painel so precisa
+// ligar essa identidade ao nome grafado no campo `dev` das demandas.
+//
+// A comparacao ignora acento e caixa porque a base tem as duas grafias da mesma
+// pessoa ("Jhonantan", "JHONANTAN") — e um vinculo que falha por causa de um
+// acento devolve a pessoa para a grade sem ela entender por que.
+function normNome(s) {
+  return String(s == null ? '' : s)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
 }
+
+// O nome declarado no perfil manda; o nome da conta e so o palpite. Quem tem
+// "Jhonantan / Jhonatan" declarado casa com as duas grafias sem depender de a
+// base estar limpa.
+function meusNomesDeclarados() {
+  if (!_eu) return [];
+  const dec = String(_eu.nome_demandas || '').split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+  return dec.length ? dec : (_eu.nome ? [_eu.nome] : []);
+}
+
+// Devolve o nome COMO ESTA NA BASE (a grafia da demanda), nao o do perfil: e ele
+// que os filtros do painel comparam.
+function resolveMeuDev() {
+  const meus = meusNomesDeclarados().map(normNome);
+  if (!meus.length) return '';
+  return getDevList().find(d => meus.includes(normNome(d))) || '';
+}
+
+// A entrada, depois da senha. Um caminho so, com tres saidas — e a grade nao e
+// nenhuma delas quando ha conta.
+async function entrarComoEu() {
+  // Sem conta = senha compartilhada. Nao ha identidade para deduzir, entao a
+  // grade e legitima: e a unica forma de o painel saber de quem e a tela.
+  if (!_eu) {
+    mostrarPasso('step-dev');
+    await reloadDevList();
+    return;
+  }
+
+  mostrarPasso('step-dev');
+  document.getElementById('dev-grid').innerHTML =
+    '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:20px">Abrindo seu painel…</div>';
+  await reloadDevList();
+
+  const meu = resolveMeuDev();
+  if (meu) { selectDev(meu); return; }
+
+  // A conta existe e o nome nao casou. Pergunta UMA vez e guarda no perfil —
+  // voltar para a grade a cada entrada seria transformar um dado que da para
+  // salvar numa pergunta diaria.
+  pedirVinculo();
+}
+
+function pedirVinculo() {
+  mostrarPasso('step-vinculo');
+  const nome = (_eu && _eu.nome) || '';
+  document.getElementById('vin-explica').innerHTML =
+    'Você entrou como <strong>' + devEsc(nome) + '</strong>, e nenhuma demanda está ' +
+    'nesse nome. Escolha como seu nome aparece nas demandas: guardamos no seu ' +
+    'perfil e esta tela não aparece de novo.';
+  const sel = document.getElementById('vin-nome');
+  const devs = getDevList();
+  sel.innerHTML = '<option value="">— escolha —</option>' +
+    devs.map(d => '<option value="' + devEsc(d) + '">' + devEsc(d) + '</option>').join('');
+  // Palpite por palavras em comum, e SO quando ha um vencedor unico. Chutar pelo
+  // primeiro nome erraria feio nesta base: "Joao Vitor Batista de Siqueira" cairia
+  // em "Joao David", porque os dois comecam com Joao. Empate nao pre-seleciona
+  // nada — vincular a pessoa errada mostraria a ela a fila de outro, e um palpite
+  // pre-marcado e aceito sem ler.
+  const meus = new Set(normNome(nome).split(' ').filter(Boolean));
+  let melhor = '', placar = 0, empate = false;
+  devs.forEach(d => {
+    const n = normNome(d).split(' ').filter(Boolean).reduce((c, p) => c + (meus.has(p) ? 1 : 0), 0);
+    if (n > placar) { placar = n; melhor = d; empate = false; }
+    else if (n === placar && n > 0) empate = true;
+  });
+  if (melhor && placar > 0 && !empate) sel.value = melhor;
+  document.getElementById('vin-erro').textContent = '';
+}
+
+async function vincularNome() {
+  const sel = document.getElementById('vin-nome');
+  const err = document.getElementById('vin-erro');
+  const nome = String(sel.value || '').trim();
+  if (!nome) { err.textContent = 'Escolha um nome da lista.'; return; }
+  err.textContent = '';
+  // Grava no perfil ANTES de entrar. Se a gravacao falhar, a pessoa entra do
+  // mesmo jeito: o vinculo e conveniencia, e barrar o trabalho por causa dele
+  // seria trocar um incomodo por um bloqueio.
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'meu-nome-demandas', nome_demandas: nome },
+                                         credDev())),
+    });
+    if (r.ok) { _eu.nome_demandas = nome;
+                try { sessionStorage.setItem('rm_eu', JSON.stringify(_eu)); } catch (_) {} }
+  } catch (_) { /* entra assim mesmo */ }
+  selectDev(nome);
+}
+
+// Conta nova, sem demanda nenhuma ainda. Entra com o nome da conta: as demandas
+// que ela criar hoje nascem nesse nome, e no dia seguinte o vinculo resolve
+// sozinho.
+function vincularDepois() {
+  selectDev((_eu && _eu.nome) || '');
+}
+
+// Nome antigo, mantido porque o fluxo da senha chama por ele em tres lugares.
+async function mostrarStepDev() { return entrarComoEu(); }
 
 function selectDev(name) {
   currentDev = name;
-  localStorage.setItem('rm_dev_name', name);
+  // O nome fica guardado so para a senha compartilhada, que nao tem conta de
+  // onde deduzir. Com conta, a conta manda: um nome escolhido semana passada
+  // sobrevivendo a um vinculo corrigido hoje e um bug dificil de enxergar.
+  if (_eu) { try { localStorage.removeItem('rm_dev_name'); } catch (_) {} }
+  else localStorage.setItem('rm_dev_name', name);
   enterApp();
 }
 
@@ -2636,11 +2733,22 @@ function toggleDevDropdown(e) {
 
 function buildDevDropdown() {
   const dd = document.getElementById('dev-dropdown');
-  const devs = state.desenvolvedores || [];
+  // Quem entra com conta de dev ve o proprio painel e mais nada. A lista com o
+  // nome de todos, aberta no cabecalho, era um passeio pela fila alheia — e o
+  // pedido foi explicito: os dados de um nao podem vazar para outro. Analista e
+  // admin continuam trocando, porque acompanhar o time e o trabalho deles.
+  const soEu = !!_eu && (_eu.papel === 'dev');
+  const devs = soEu ? [] : (state.desenvolvedores || []);
   const items = devs.map(d => {
     const isCur = d === currentDev;
     return `<div class="dev-dropdown-item${isCur?' active':''}" onclick="switchDevInline('${d}')">${isCur ? '✓ ' : ''}${d}</div>`;
   }).join('');
+  if (soEu) {
+    dd.innerHTML =
+      `<div class="dev-dropdown-item" onclick="abrirTrocaSenha()">🔑 Minha senha</div>` +
+      `<div class="dev-dropdown-item" onclick="sairDev()">🚪 Sair da conta</div>`;
+    return;
+  }
   // "Tela de selecao" troca de nome mantendo a credencial; "Sair" encerra a
   // sessao. Sao coisas diferentes e antes so a primeira existia.
   dd.innerHTML = items + `<div class="dev-dropdown-sep"></div>` +

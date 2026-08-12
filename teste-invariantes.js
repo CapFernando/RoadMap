@@ -84,8 +84,11 @@ ok(/const facilitadorOk = async/.test(blocoPoker),
 //   3. senha-alterar, que precisa de "tem conta propria" e nao de papel — trocar
 //      a senha e de qualquer papel, e quem entrou pela senha compartilhada nao tem
 //      senha individual para trocar. exigePapel responderia a pergunta errada.
+//   4. meu-nome-demandas, pela mesma razao da 3: a pergunta e "tem conta e qual e
+//      o id dela", porque a escrita e na PROPRIA conta. Papel nao decide nada aqui
+//      — o que decide e de quem e a sessao.
 const diretos = (W.match(/const ident\w* = await identifica\(env, body\);/g) || []).length;
-ok(diretos <= 3, 'identifica chamado direto apenas onde a semantica difere',
+ok(diretos <= 4, 'identifica chamado direto apenas onde a semantica difere',
    diretos + ' ocorrencia(s) (helper + quem-sou)');
 ok((W.match(/exigePapel\(env, body/g) || []).length >= 4,
    'as rotas que exigem papel usam exigePapel');
@@ -1196,6 +1199,85 @@ ok(/if \(!q\) \{ semSolic\+\+; return; \}/.test(ADMIN),
 ok(/sem solicitante registrado/.test(AP),
    'o slide diz quantas ficaram fora do ranking (senao a soma nao bate)');
 ok(/k: 'solicit'/.test(ADMIN), 'a secao de solicitantes pode ser desmarcada');
+
+
+sec('Jornada do dev: entrar ja diz quem eu sou');
+
+// Estas rodam a FUNCAO, nao um regex sobre o fonte: o vinculo errado nao aparece
+// no texto do arquivo, aparece no resultado da comparacao.
+const _devJs = [...DEV.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+const _corpoDe = (nome) => {
+  const i = _devJs.indexOf('function ' + nome);
+  if (i < 0) return '';
+  let n = 0;
+  for (let k = _devJs.indexOf('{', i); k < _devJs.length; k++) {
+    if (_devJs[k] === '{') n++;
+    else if (_devJs[k] === '}') { n--; if (!n) return _devJs.slice(i, k + 1); }
+  }
+  return '';
+};
+let _ident = null;
+try {
+  _ident = new Function(
+    ['normNome', 'meusNomesDeclarados', 'resolveMeuDev'].map(_corpoDe).join('\n') +
+    '\nreturn { normNome, meusNomesDeclarados, resolveMeuDev };')();
+} catch (e) { _ident = null; }
+ok(!!_ident, 'as funcoes da identidade carregam');
+
+if (_ident) {
+  const DEVS = ['Cairo', 'Crisley', 'Dan Weine', 'Eloi', 'Emilly Viana', 'Flávio',
+                'Gabriel', 'Jhonantan', 'João David', 'João Lucas', 'João Vitor',
+                'João Vitor Batista de Siqueira', 'Marina', 'Maury', 'Murillo'];
+  global.getDevList = () => DEVS;
+  let _euAtual = null;
+  Object.defineProperty(global, '_eu', { get: () => _euAtual, configurable: true });
+  const comoEu = (u) => { _euAtual = u; return _ident.resolveMeuDev(); };
+
+  ok(comoEu({ nome: 'Emilly Viana', papel: 'dev' }) === 'Emilly Viana',
+     'conta cujo nome bate com a demanda entra direto (sem grade)');
+  ok(comoEu({ nome: 'Gabriel Souza', papel: 'dev', nome_demandas: 'Gabriel' }) === 'Gabriel',
+     'o nome declarado no perfil manda sobre o nome da conta');
+  ok(comoEu({ nome: 'FLAVIO', papel: 'dev' }) === 'Flávio',
+     'acento e caixa nao quebram o vinculo');
+  ok(comoEu({ nome: 'Jhonatan', papel: 'dev', nome_demandas: 'Jhonantan / Jhonatan' }) === 'Jhonantan',
+     'duas grafias declaradas casam com a que esta na base');
+  ok(comoEu({ nome: 'Fernanda Ribeiro', papel: 'dev' }) === '',
+     'sem demanda no nome, NAO vincula no chute (mostraria a fila de outro)');
+  ok(comoEu(null) === '',
+     'senha compartilhada nao deduz ninguem — ali a grade e a unica saida');
+}
+
+// A grade so existe para a senha compartilhada. Com conta, perguntar de novo e
+// pedir duas vezes a mesma informacao — e expor a lista de quem trabalha aqui na
+// tela de login.
+ok(/if \(!_eu\) \{[\s\S]{0,200}?mostrarPasso\('step-dev'\)/.test(DEV),
+   'a grade de nomes so aparece sem conta');
+ok(/const meu = resolveMeuDev\(\);[\s\S]{0,80}?if \(meu\) \{ selectDev\(meu\); return; \}/.test(DEV),
+   'com conta e nome resolvido, entra direto');
+ok(/function pedirVinculo/.test(DEV), 'existe a tela de vincular uma vez');
+ok(/action: 'meu-nome-demandas'/.test(DEV), 'o vinculo e gravado no perfil');
+ok(/step-vinculo/.test(DEV) && /'step-dev', 'step-vinculo'/.test(DEV),
+   'o passo do vinculo entra no rodizio de telas');
+
+// O palpite pre-selecionado nao pode ser aplicado sozinho, e empate nao palpita:
+// vincular a pessoa errada mostra a ela a fila de outro.
+ok(/if \(melhor && placar > 0 && !empate\) sel\.value = melhor;/.test(DEV),
+   'empate no palpite nao pre-seleciona ninguem');
+ok(!/vincularNome\(\)[\s\S]{0,300}?setTimeout/.test(DEV),
+   'o palpite nunca e aplicado sozinho');
+
+// O servidor: o vinculo proprio escreve so na propria conta.
+ok(/body\.action === 'meu-nome-demandas'/.test(WC), 'o Worker aceita o vinculo proprio');
+ok(/meu-nome-demandas'\)[\s\S]{0,900}?UPDATE usuario SET nome_demandas = \? WHERE id = \?'\)[\s\S]{0,120}?ident\.usuario\.id/.test(WC),
+   'o vinculo proprio escreve pelo id DA SESSAO, nunca pelo login do corpo');
+ok(/usuario: \{ login: u\.login, nome: u\.nome, papel: u\.papel,[\s\S]{0,120}?nome_demandas/.test(WC),
+   'o login devolve nome_demandas (sem ele o painel nao se vincula)');
+
+// A fila de um dev nao e passeio publico no cabecalho.
+ok(/const soEu = !!_eu && \(_eu\.papel === 'dev'\)/.test(DEV),
+   'dev com conta nao lista os outros no seletor do cabecalho');
+ok(/soEu \? \[\] : \(state\.desenvolvedores \|\| \[\]\)/.test(DEV),
+   'a lista de outros devs some para quem e dev');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

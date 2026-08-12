@@ -2151,8 +2151,39 @@ export default {
       // propria pessoa, e aqui que ela descobre — no mesmo dia, e nao nunca.
       const avisoReset = u.reset_em && (Date.now() - new Date(u.reset_em).getTime()) < 30 * 86400 * 1000
         ? u.reset_em : '';
+      // `nome_demandas` vai no retorno porque e ele que liga a conta ao nome
+      // grafado nas demandas. Sem ele aqui, o painel nao consegue se vincular
+      // sozinho e precisa pedir para a pessoa se procurar numa lista de vinte
+      // botoes — que e exatamente o que este campo existe para evitar.
       return json({ ok: true, token, expira_em: expira, senha_redefinida_em: avisoReset,
-                    usuario: { login: u.login, nome: u.nome, papel: u.papel } }, 200, headers);
+                    usuario: { login: u.login, nome: u.nome, papel: u.papel,
+                               nome_demandas: u.nome_demandas || '' } }, 200, headers);
+    }
+
+    // ── Meu vinculo: o nome que EU uso nas demandas ─────────────────
+    // Existe a versao de admin (`usuarios` / op `nome-demandas`). Esta e a da
+    // propria pessoa, e e o que torna a jornada automatica: quando o painel nao
+    // acha as demandas dela, ela aponta o nome uma vez e nunca mais e perguntada.
+    //
+    // So escreve na PROPRIA conta — o id vem da sessao, nunca do corpo do pedido.
+    // Com login no corpo, qualquer dev renomearia o vinculo de qualquer outro e
+    // passaria a enxergar as demandas dele.
+    if (body.action === 'meu-nome-demandas') {
+      if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
+      const ident = await identifica(env, body);
+      if (!ident || !ident.usuario || !ident.usuario.id) {
+        return json({ error: 'sem_conta',
+                      detail: 'Este ajuste é da conta. Entre com usuário e senha.' }, 401, headers);
+      }
+      const nomes = String(body.nome_demandas || '').split(/[\/,;]/)
+        .map(x => limpaTexto(x, 80).trim()).filter(Boolean);
+      if (nomes.length > 5) {
+        return json({ error: 'muitos_nomes',
+                      detail: 'No maximo 5 nomes.' }, 400, headers);
+      }
+      await env.POKER_DB.prepare('UPDATE usuario SET nome_demandas = ? WHERE id = ?')
+        .bind(nomes.join(' / ') || null, ident.usuario.id).run();
+      return json({ ok: true, nome_demandas: nomes.join(' / ') }, 200, headers);
     }
 
     // ── Recuperar senha: pedir ──────────────────────────────────────
