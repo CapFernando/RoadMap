@@ -302,6 +302,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
+<script src="catalogo.js?v=1895f8de66"></script>
 </head>
 <body>
 
@@ -452,13 +453,9 @@
           <label class="nm-f">Solicitante (quem pediu) <span class="nm-opc">opcional</span>
             <input type="text" id="nm-solicitante" placeholder="Nome do solicitante">
           </label>
-          <label class="nm-f">Sistema *
-            <select id="nm-sistema" onchange="nmOnSistema()"></select>
-            <input type="text" id="nm-sistema-novo" placeholder="Nome do novo sistema" style="display:none;margin-top:6px">
-          </label>
-          <label class="nm-f">Módulo <span class="nm-opc">opcional</span>
-            <select id="nm-modulo" onchange="nmOnModulo()"></select>
-            <input type="text" id="nm-modulo-novo" placeholder="Nome do novo módulo" style="display:none;margin-top:6px">
+          <label class="nm-f">Sistema / módulo *
+            <select id="nm-tema" onchange="catalogoMostraNovo('nm')"></select>
+            <input type="text" id="nm-tema-novo" placeholder="Ex.: NovoSistema - Módulo" style="display:none;margin-top:6px">
           </label>
           <label class="nm-f">É um problema ou uma melhoria? *
             <select id="nm-tipo-issue" onchange="nmOnClassificacao()">
@@ -867,7 +864,7 @@ function filtradas() {
     if (m.mesclado_em) return false;
     if (!matchPeriodo(m)) return false;
     if (!matchTipo(m, _tipoFilter)) return false;
-    if (_temaFilter && m.tema_id !== _temaFilter) return false;
+    if (_temaFilter && !catalogoCasa(m.tema_id, _temaFilter, _temas)) return false;
     if (_statusFilter) return statusEfetivo(m) === _statusFilter;
     if (['concluido','negada'].includes(statusEfetivo(m))) return false;
     return true;
@@ -886,7 +883,7 @@ function renderConteudo() {
   const melSemStatus = _melhorias.filter(m =>
     matchPeriodo(m) &&
     matchTipo(m, _tipoFilter) &&
-    (!_temaFilter || m.tema_id === _temaFilter)
+    (!_temaFilter || catalogoCasa(m.tema_id, _temaFilter, _temas))
   );
   const counts = { total: melSemStatus.length };
   STATUS_CARDS.forEach(c => { if (c.key !== 'total') counts[c.key] = melSemStatus.filter(m => statusEfetivo(m) === c.key).length; });
@@ -1497,11 +1494,6 @@ function nmParseTema(nome) {
   return i < 0 ? { sistema: (nome || '').trim(), modulo: '' }
                : { sistema: nome.slice(0, i).trim(), modulo: nome.slice(i + 3).trim() };
 }
-function nmSistemas() { return [...new Set(_temas.map(t => nmParseTema(t.nome).sistema).filter(Boolean))]; }
-function nmModulos(sis) {
-  return [...new Set(_temas.map(t => nmParseTema(t.nome))
-    .filter(p => p.sistema.toLowerCase() === (sis || '').toLowerCase() && p.modulo).map(p => p.modulo))];
-}
 // Garante a lista de temas para o formulario funcionar SEM a senha de leitura.
 // Sugerir uma melhoria nao pode depender de credencial — quem tem a ideia desiste
 // antes de procurar senha. Esta rota devolve so id e nome do tema.
@@ -1516,43 +1508,26 @@ async function nmGarantirTemas() {
   } catch (_) {}
 }
 
+// ─── SISTEMA / MÓDULO ─────────────────────────────────────────────────
+// Mesma regra das outras telas, vinda de catalogo.js. Aqui ela pesa mais: quem
+// abre demanda por esta página é a área de negócio, e era daqui que saía boa
+// parte dos 42 temas — cada pessoa escrevendo o nome do sistema do seu jeito.
 function nmPopulateSistema() {
-  const sel = document.getElementById('nm-sistema');
-  sel.innerHTML = '<option value="">—</option>' +
-    nmSistemas().map(s => `<option value="${nmEsc(s)}">${nmEsc(s)}</option>`).join('') +
-    '<option value="__novo__">➕ Novo sistema…</option>';
-  document.getElementById('nm-sistema-novo').style.display = 'none';
-  nmPopulateModulos('');
-}
-function nmPopulateModulos(sis) {
-  const sel = document.getElementById('nm-modulo');
-  sel.innerHTML = '<option value="">—</option>' +
-    nmModulos(sis).map(m => `<option value="${nmEsc(m)}">${nmEsc(m)}</option>`).join('') +
-    '<option value="__novo__">➕ Novo módulo…</option>';
-  document.getElementById('nm-modulo-novo').style.display = 'none';
-}
-function nmOnSistema() {
-  const sel = document.getElementById('nm-sistema');
-  document.getElementById('nm-sistema-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
-  nmPopulateModulos(sel.value === '__novo__' ? '' : sel.value);
-}
-function nmOnModulo() {
-  const sel = document.getElementById('nm-modulo');
-  document.getElementById('nm-modulo-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
+  catalogoLigaCampo('nm', _temas || [], '');
 }
 function nmResolveTema() {
-  const sisSel = document.getElementById('nm-sistema');
-  const sis = sisSel.value === '__novo__' ? document.getElementById('nm-sistema-novo').value.trim() : sisSel.value;
-  if (!sis) return { id: '', novos: [], nome: '' };
-  const modSel = document.getElementById('nm-modulo');
-  const mod = modSel.value === '__novo__' ? document.getElementById('nm-modulo-novo').value.trim() : modSel.value;
-  const nome = mod ? `${sis} - ${mod}` : sis;
-  let t = _temas.find(x => (x.nome || '').toLowerCase() === nome.toLowerCase());
+  const novos = [];
+  const id = catalogoResolve('nm', _temas || [], '', function (nome) {
+    const novo = { id: nmUid(), nome };
+    novos.push(novo);
+    return novo.id;
+  });
+  if (!id) return { id: '', novos: [], nome: '' };
+  const t = (_temas || []).find(x => String(x.id) === String(id)) ||
+            novos.find(x => String(x.id) === String(id));
   // `nome` sai junto: a descricao no formato do modelo abre com o ambiente, e
   // remontar o nome fora daqui seria a mesma regra em dois lugares.
-  if (t) return { id: t.id, novos: [], nome: t.nome || nome };
-  const novo = { id: nmUid(), nome };
-  return { id: novo.id, novos: [novo], nome };
+  return { id, novos, nome: (t && t.nome) || '' };
 }
 
 // ── Tipo da demanda ──
@@ -1587,7 +1562,7 @@ document.addEventListener('change', function (e) {
 // quanto ja fez, qual e o proximo campo e por que ele importa.
 const NM_OBRIGATORIOS = [
   { id: 'nm-titulo',     nome: 'o resumo em uma linha' },
-  { id: 'nm-sistema',    nome: 'o sistema' },
+  { id: 'nm-tema',       nome: 'o sistema' },
   { id: 'nm-tipo-issue', nome: 'se é problema ou melhoria' },
   { id: 'nm-objetivo',   nome: 'para que serve' },
 ];
@@ -1596,8 +1571,8 @@ const NM_OBRIGATORIOS = [
 const NM_DICAS = {
   'nm-titulo':     'Uma frase curta que alguém entenda sem contexto. Ex.: "Automatizar o fechamento de caixa".',
   'nm-solicitante':'Quem pediu, se não foi você. Serve para o time voltar e tirar dúvidas.',
-  'nm-sistema':    'Onde o problema acontece. Se não achar na lista, escolha "novo" e escreva o nome.',
-  'nm-modulo':     'A parte do sistema, se você souber. Ajuda a estimar o tamanho.',
+  'nm-tema':       'Onde o problema acontece. A lista já vem com os módulos; ' +
+                   'se não achar o seu, escolha "+ outro" e escreva.',
   'nm-tipo-issue': 'Erro/Bug é o que já existia e parou de funcionar. Melhoria é algo novo ou melhor.',
   'nm-area':       'Sua área. Serve para agrupar os pedidos por setor.',
   'nm-objetivo':   'O resultado esperado, não a tela. "Eliminar a conferência manual" é melhor que "criar um botão".',
@@ -1613,7 +1588,7 @@ const NM_DICAS = {
 const nmPreenchido = id => {
   const e = document.getElementById(id);
   if (!e) return false;
-  if (id === 'nm-sistema') { const t = nmResolveTema && nmResolveTema(); return !!(t && t.id); }
+  if (id === 'nm-tema') { const t = nmResolveTema && nmResolveTema(); return !!(t && t.id); }
   return !!String(e.value || '').trim();
 };
 
@@ -1988,7 +1963,7 @@ async function saveNovaMelhoria() {
   nmLimpaErros();
   if (!titulo)   { nmFalha('nm-titulo', 'Escreva em uma linha o que você precisa.'); return; }
   const tema = nmResolveTema();
-  if (!tema.id)  { nmFalha('nm-sistema', 'Escolha o sistema onde isso acontece.'); return; }
+  if (!tema.id)  { nmFalha('nm-tema', 'Escolha o sistema onde isso acontece.'); return; }
   if (!document.getElementById('nm-tipo-issue').value) {
     nmFalha('nm-tipo-issue', 'Diga se é um problema (Erro/Bug) ou uma melhoria.'); return;
   }

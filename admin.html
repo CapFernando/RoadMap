@@ -849,6 +849,7 @@
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="apresentacao.js?v=19b094a0ee"></script>
 <script src="senha.js?v=005f049189"></script>
+<script src="catalogo.js?v=1895f8de66"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -1334,14 +1335,10 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Sistema *</label>
-        <select id="m-sistema" onchange="onSistemaChange('m')"></select>
-        <input type="text" id="m-sistema-novo" placeholder="Nome do novo sistema" style="display:none;margin-top:6px">
-      </div>
-      <div class="form-group">
-        <label>Módulo</label>
-        <select id="m-modulo" onchange="onModuloChange('m')"></select>
-        <input type="text" id="m-modulo-novo" placeholder="Nome do novo módulo" style="display:none;margin-top:6px">
+        <label>Sistema / módulo *</label>
+        <select id="m-tema" onchange="catalogoMostraNovo('m')"></select>
+        <input type="text" id="m-tema-novo" placeholder="Ex.: NovoSistema - Módulo"
+               style="display:none;margin-top:6px">
       </div>
       <div class="form-group">
         <label>Status *</label>
@@ -1551,14 +1548,13 @@
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-tema')" aria-label="Fechar">✕</button>
     <h2 id="modal-tema-title">Novo tema</h2>
     <input type="hidden" id="t-id" />
+    <!-- Um campo so: o nome E o caminho. "AXCred - Cadastro - Análise de Crédito
+         - Reanálise" e um tema de quarto nivel, e um par Sistema+Módulo nao
+         consegue expressar isso sem virar quatro campos. -->
     <div class="form-group">
-      <label>Sistema *</label>
-      <select id="t-sistema" onchange="document.getElementById('t-sistema-novo').style.display=this.value==='__novo__'?'block':'none'"></select>
-      <input type="text" id="t-sistema-novo" placeholder="Nome do novo sistema" style="display:none;margin-top:6px" />
-    </div>
-    <div class="form-group">
-      <label>Módulo</label>
-      <input type="text" id="t-modulo" placeholder="Ex: Reanálise (opcional)" />
+      <label>Caminho completo *</label>
+      <input type="text" id="t-nome" placeholder="Ex.: AXCred - Cadastro - Análise de Crédito - Reanálise" />
+      <div class="us-hint" id="t-previa" style="margin-top:6px"></div>
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-tema')">Cancelar</button>
@@ -2655,7 +2651,7 @@ function renderMelhorias() {
     // negado — esconder silenciosamente derrotaria o propósito da busca.
     if (!_filtroStatus && !_filtroPrazo && !_buscaMel && HIDDEN_BY_DEFAULT.includes(sk)) return false;
     return (!_filtroStatus || sk === _filtroStatus) &&
-           (!_filtroTema   || m.tema_id === _filtroTema) &&
+           (!_filtroTema   || catalogoCasa(m.tema_id, _filtroTema, state.temas)) &&
            matchPrazo(m, _filtroPrazo) &&
            matchDev(m, _filtroDev) &&
            matchTipo(m, _filtroTipo) &&
@@ -5219,25 +5215,31 @@ async function copiarRelatorio(secao) {
 // ─── MODAL TEMA ───────────────────────────────────────────────────
 function openModalTema(id) {
   document.getElementById('t-id').value = id || '';
-  const parsed = id ? parseTemaNome(state.temas.find(t=>t.id===id)?.nome || '') : { sistema:'', modulo:'' };
-  const sisSel = document.getElementById('t-sistema');
-  const sistemas = temaSistemas();
-  if (parsed.sistema && !sistemas.some(s => s.toLowerCase() === parsed.sistema.toLowerCase())) sistemas.push(parsed.sistema);
-  sisSel.innerHTML = '<option value="">—</option>' +
-    sistemas.map(s => `<option value="${s}"${s.toLowerCase()===parsed.sistema.toLowerCase()?' selected':''}>${s}</option>`).join('') +
-    '<option value="__novo__">➕ Novo sistema…</option>';
-  const sn = document.getElementById('t-sistema-novo');
-  sn.style.display = 'none'; sn.value = '';
-  document.getElementById('t-modulo').value = parsed.modulo;
+  const atual = id ? (state.temas.find(t => t.id === id) || {}).nome || '' : '';
+  const campo = document.getElementById('t-nome');
+  campo.value = atual;
+  campo.oninput = temaPrevia;
+  temaPrevia();
   document.getElementById('modal-tema-title').textContent = id ? 'Editar tema' : 'Novo tema';
   abrirModal('modal-tema');
 }
+// A previa mostra a arvore que o texto digitado vai virar. Sem ela, a diferenca
+// entre "AXCred-Cadastro" e "AXCred - Cadastro" (que muda tudo: um vira sistema
+// solto, o outro vira modulo) so aparece depois de salvar.
+function temaPrevia() {
+  const el = document.getElementById('t-previa');
+  const v = String((document.getElementById('t-nome') || {}).value || '').trim();
+  if (!el) return;
+  if (!v) { el.textContent = 'Separe os níveis com " - " (espaço, hífen, espaço).'; return; }
+  const p = v.split(' - ').map(x => x.trim()).filter(Boolean);
+  el.innerHTML = p.map((x, i) => (i ? '<span style="color:var(--text3)"> › </span>' : '') +
+    (i === 0 ? '<strong>' + esc(x) + '</strong>' : esc(x))).join('') +
+    (p.length === 1 ? ' <span style="color:var(--text3)">(sistema, sem módulo)</span>' : '');
+}
+
 async function saveTema() {
-  const sisSel = document.getElementById('t-sistema');
-  const sis = sisSel.value === '__novo__' ? document.getElementById('t-sistema-novo').value.trim() : sisSel.value;
-  if (!sis) { toast('Selecione o sistema.', 'err'); return; }
-  const mod = document.getElementById('t-modulo').value.trim();
-  const nome = mod ? `${sis} - ${mod}` : sis;
+  const nome = String(document.getElementById('t-nome').value || '').trim();
+  if (!nome) { toast('Escreva o caminho do tema.', 'err'); return; }
   const id = document.getElementById('t-id').value;
   const dup = state.temas.find(t => (t.nome||'').toLowerCase() === nome.toLowerCase() && t.id !== id);
   if (dup) { toast('Já existe um tema com esse Sistema/Módulo.', 'err'); return; }
@@ -5473,64 +5475,29 @@ function atualizaHorasPlanejadas() {
 const SP_TO_STATUS = { backlog:'recebida', levantar_req:'recebida', planning:'estimada', planejado:'estimada', em_andamento:'iniciada', concluido:'iniciada', atrasado:'iniciada', negada:'negada' };
 
 // ── SISTEMA / MÓDULO (tema = "Sistema - Módulo") ──────────────────────────
+// ─── SISTEMA / MÓDULO ─────────────────────────────────────────────────
+// A regra vive em catalogo.js, e não aqui. Ela morava em QUATRO cópias — Admin,
+// Planejamento, painel Dev e painel público, cada um com o seu par de selects —
+// e é exatamente por isso que a lista divergiu entre as telas. Restaram estas
+// pontes, que só dizem quem cria o tema quando ele não existe: o gerador de id é
+// de cada tela.
+function populateSistemaModulo(prefix, temaId) {
+  catalogoLigaCampo(prefix, state.temas || [], temaId || '');
+}
+function resolveTemaSelecao(prefix, fallbackTemaId) {
+  return catalogoResolve(prefix, state.temas || [], fallbackTemaId || '', function (nome) {
+    const novo = { id: uid(), nome };
+    state.temas.push(novo);
+    return novo.id;
+  });
+}
+
 function parseTemaNome(nome) {
   const i = (nome||'').indexOf(' - ');
   return i < 0 ? { sistema:(nome||'').trim(), modulo:'' }
                : { sistema:nome.slice(0,i).trim(), modulo:nome.slice(i+3).trim() };
 }
-function temaSistemas() {
-  return [...new Set(state.temas.map(t => parseTemaNome(t.nome).sistema).filter(Boolean))];
-}
-function temaModulos(sis) {
-  return [...new Set(state.temas.map(t => parseTemaNome(t.nome))
-    .filter(p => p.sistema.toLowerCase() === (sis||'').toLowerCase() && p.modulo)
-    .map(p => p.modulo))];
-}
-function populateSistemaModulo(prefix, temaId) {
-  const cur    = temaId ? state.temas.find(t => t.id === temaId) : null;
-  const parsed = cur ? parseTemaNome(cur.nome) : { sistema:'', modulo:'' };
-  const sisSel = document.getElementById(prefix+'-sistema');
-  const sistemas = temaSistemas();
-  if (parsed.sistema && !sistemas.some(s => s.toLowerCase() === parsed.sistema.toLowerCase())) sistemas.push(parsed.sistema);
-  sisSel.innerHTML = '<option value="">—</option>' +
-    sistemas.map(s => `<option value="${s}"${s.toLowerCase()===parsed.sistema.toLowerCase()?' selected':''}>${s}</option>`).join('') +
-    '<option value="__novo__">➕ Novo sistema…</option>';
-  const sn = document.getElementById(prefix+'-sistema-novo');
-  sn.style.display = 'none'; sn.value = '';
-  populateModulos(prefix, parsed.sistema, parsed.modulo);
-}
-function populateModulos(prefix, sistema, selMod) {
-  const modSel = document.getElementById(prefix+'-modulo');
-  const mods = temaModulos(sistema);
-  if (selMod && !mods.some(m => m.toLowerCase() === selMod.toLowerCase())) mods.push(selMod);
-  modSel.innerHTML = '<option value="">—</option>' +
-    mods.map(m => `<option value="${m}"${selMod && m.toLowerCase()===selMod.toLowerCase()?' selected':''}>${m}</option>`).join('') +
-    '<option value="__novo__">➕ Novo módulo…</option>';
-  const mn = document.getElementById(prefix+'-modulo-novo');
-  mn.style.display = 'none'; mn.value = '';
-}
-function onSistemaChange(prefix) {
-  const sel = document.getElementById(prefix+'-sistema');
-  document.getElementById(prefix+'-sistema-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
-  populateModulos(prefix, sel.value === '__novo__' ? '' : sel.value, '');
-}
-function onModuloChange(prefix) {
-  const sel = document.getElementById(prefix+'-modulo');
-  document.getElementById(prefix+'-modulo-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
-}
 // Resolve a seleção em um tema_id; cria o tema se não existir. Vazio → mantém o atual.
-function resolveTemaSelecao(prefix, fallbackTemaId) {
-  const sisSel = document.getElementById(prefix+'-sistema');
-  const sis = sisSel.value === '__novo__' ? document.getElementById(prefix+'-sistema-novo').value.trim() : sisSel.value;
-  if (!sis) return fallbackTemaId || '';
-  const modSel = document.getElementById(prefix+'-modulo');
-  const mod = modSel.value === '__novo__' ? document.getElementById(prefix+'-modulo-novo').value.trim() : modSel.value;
-  const nome = mod ? `${sis} - ${mod}` : sis;
-  let t = state.temas.find(x => (x.nome||'').toLowerCase() === nome.toLowerCase());
-  if (!t) { t = { id: uid(), nome }; state.temas.push(t); }
-  return t.id;
-}
-
 // Mesmo baralho do Planning Poker (POKER_CARTAS no Worker).
 const FIBONACCI = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 100];
 

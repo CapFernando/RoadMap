@@ -1456,6 +1456,63 @@ try {
 } catch (e) { _mesPorque = e.message; }
 ok(_mesOk, 'a trilha se comporta: rola, ignora eco, poupa backlog, vira o ano', _mesPorque);
 
+
+sec('Catalogo de sistemas: uma lista, e nao uma por tela');
+
+const CAT = lerTela('catalogo.js');
+['admin.html', 'dev.html', 'gantt.html', 'index.html', 'poker.html',
+ 'projetos.html', 'importar.html'].forEach(f => {
+  ok(/src="catalogo\.js\?v=/.test(lerTela(f)), f + ' carrega o catalogo versionado');
+});
+
+// A regra morava em QUATRO copias, uma por tela, e foi por isso que a lista
+// divergiu entre elas. Se voltar a existir copia, esta invariante cai.
+['admin.html', 'dev.html', 'gantt.html'].forEach(f => {
+  const src = semComentario(lerTela(f));
+  ok(!/function populateModulos/.test(src), f + ' nao tem copia de populateModulos');
+  ok(!/function onSistemaChange/.test(src), f + ' nao tem copia de onSistemaChange');
+  ok(!/function temaSistemas/.test(src), f + ' nao tem copia de temaSistemas');
+});
+ok(!/function nmPopulateModulos/.test(semComentario(INDEX)),
+   'o painel publico tambem usa o catalogo');
+
+// Um select, e nao dois. Com quatro niveis, dois selects viram quatro campos.
+['admin.html', 'dev.html', 'gantt.html', 'index.html'].forEach(f => {
+  const src = lerTela(f);
+  ok(!/id="[a-z]{1,2}-sistema"/.test(src), f + ' nao tem mais o select de sistema separado');
+  ok(!/id="[a-z]{1,2}-modulo"/.test(src), f + ' nao tem mais o select de modulo separado');
+  ok(/-tema" onchange="catalogoMostraNovo/.test(src), f + ' usa o select unico do catalogo');
+});
+
+// Roll-up: com quatro niveis, filtrar por id exato obriga a filtrar folha por
+// folha, e "quanto o Cadastro consumiu no mes" fica sem resposta.
+ok(/catalogoCasa\(m\.tema_id, filters\.tema/.test(GANTT), 'o gantt filtra com roll-up');
+ok(/catalogoCasa\(m\.tema_id, _filtroTema/.test(ADMIN), 'o admin filtra com roll-up');
+ok(/catalogoCasa\(m\.tema_id, _temaFilter/.test(INDEX), 'o painel publico filtra com roll-up');
+ok(/catalogoCasa\(m\.tema_id, t\.id/.test(DEV), 'a contagem do dev conta a subarvore');
+
+// Comportamento do catalogo, rodando de verdade.
+let _catOk = false, _catPorque = '';
+try {
+  const g = {};
+  new Function('window', CAT)(g);
+  const temas = [{ id: 'a', nome: 'AXCred' }, { id: 'b', nome: 'AXCred - Cadastro' },
+                 { id: 'd', nome: 'AXCred - Cadastro - Análise de Crédito - Reanálise' },
+                 { id: 'e', nome: 'AXCred - Cobrança' }, { id: 'f', nome: 'BI - Reports' }];
+  const rollUp = g.catalogoCasa('d', 'b', temas) && g.catalogoCasa('d', 'a', temas);
+  const naoVaza = !g.catalogoCasa('e', 'b', temas) && !g.catalogoCasa('f', 'a', temas);
+  const semFiltro = g.catalogoCasa('e', '', temas);
+  const cam = g.catalogoCaminhos();
+  const temTudo = ['AXCred - Painel', 'AXCred - Negócio - LDR', 'AXCred - Operações - Simulador',
+                   'AXCred - Cadastro - Análise de Crédito - Cadastro Rápido',
+                   'AXCred - SCR', 'AXCred - Rating'].every(x => cam.indexOf(x) >= 0);
+  const html = g.catalogoOpcoesHTML(temas, 'd', {});
+  const agrupa = (html.match(/optgroup/g) || []).length === 4 && html.indexOf('selected') > 0;
+  _catOk = rollUp && naoVaza && semFiltro && temTudo && agrupa;
+  _catPorque = 'rollUp=' + rollUp + ' naoVaza=' + naoVaza + ' arvore=' + temTudo + ' agrupa=' + agrupa;
+} catch (e) { _catPorque = e.message; }
+ok(_catOk, 'o catalogo se comporta: agrupa, indenta e faz roll-up sem vazar', _catPorque);
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

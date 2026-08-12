@@ -417,6 +417,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="senha.js?v=005f049189"></script>
+<script src="catalogo.js?v=1895f8de66"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -807,14 +808,10 @@
       <input type="text" id="n-titulo" placeholder="Descreva a demanda" />
     </div>
     <div class="form-group">
-      <label>Sistema *</label>
-      <select id="n-sistema" onchange="onSistemaChange('n')"></select>
-      <input type="text" id="n-sistema-novo" placeholder="Nome do novo sistema" style="display:none;margin-top:6px">
-    </div>
-    <div class="form-group">
-      <label>Módulo</label>
-      <select id="n-modulo" onchange="onModuloChange('n')"></select>
-      <input type="text" id="n-modulo-novo" placeholder="Nome do novo módulo" style="display:none;margin-top:6px">
+      <label>Sistema / módulo *</label>
+      <select id="n-tema" onchange="catalogoMostraNovo('n')"></select>
+      <input type="text" id="n-tema-novo" placeholder="Ex.: NovoSistema - Módulo"
+             style="display:none;margin-top:6px">
     </div>
     <div class="form-group">
       <label>Descrição</label>
@@ -2880,13 +2877,18 @@ function buildTemaSelect() {
   const sel = document.getElementById('f-tema');
   if (!sel) return;
   const doDev = state.melhorias.filter(m => !m.mesclado_em && splitDevs(m.dev).includes(currentDev));
-  const opts = [`<option value=""${!_temaFilter ? ' selected' : ''}>Todos (${doDev.length})</option>`];
-  state.temas.forEach(t => {
-    const n = doDev.filter(m => m.tema_id === t.id).length;
-    if (!n && _temaFilter !== t.id) return;   // omite tema sem nada deste dev
-    opts.push(`<option value="${escAttr(t.id)}"${_temaFilter === t.id ? ' selected' : ''}>${escAttr(t.nome)} (${n})</option>`);
+  // A contagem e por SUBARVORE: escolher "Cadastro" traz Reanalise junto, entao o
+  // numero ao lado de Cadastro tem de incluir os filhos. Contar so o proprio no
+  // mostraria "(0)" ao lado de um filtro que devolve 36 demandas.
+  const conta = {};
+  const visiveis = (state.temas || []).filter(t => {
+    const n = doDev.filter(m => catalogoCasa(m.tema_id, t.id, state.temas)).length;
+    conta[t.id] = n;
+    return n > 0 || _temaFilter === t.id;    // tema sem nada deste dev nao polui a lista
   });
-  sel.innerHTML = opts.join('');
+  sel.innerHTML = '<option value="">Todos (' + doDev.length + ')</option>' +
+    catalogoOpcoesHTML(visiveis, _temaFilter || '', { vazio: false, contagem: conta });
+  sel.value = _temaFilter || '';
 }
 function escAttr(x) { return String(x == null ? '' : x).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -3785,64 +3787,28 @@ function openEditDemand(id) {
 }
 
 // ── SISTEMA / MÓDULO (tema = "Sistema - Módulo") ──────────────────────────
+// ─── SISTEMA / MÓDULO ─────────────────────────────────────────────────
+// A regra vive em catalogo.js, e não aqui. Ela morava em QUATRO cópias — Admin,
+// Planejamento, painel Dev e painel público, cada um com o seu par de selects —
+// e é exatamente por isso que a lista divergiu entre as telas. Restaram estas
+// pontes, que só dizem quem cria o tema quando ele não existe: o gerador de id é
+// de cada tela.
+function populateSistemaModulo(prefix, temaId) {
+  catalogoLigaCampo(prefix, state.temas || [], temaId || '');
+}
+function resolveTemaSelecao(prefix, fallbackTemaId) {
+  return catalogoResolve(prefix, state.temas || [], fallbackTemaId || '', function (nome) {
+    const novo = { id: uid(), nome };
+    state.temas.push(novo);
+    return novo.id;
+  });
+}
+
 function parseTemaNome(nome) {
   const i = (nome||'').indexOf(' - ');
   return i < 0 ? { sistema:(nome||'').trim(), modulo:'' }
                : { sistema:nome.slice(0,i).trim(), modulo:nome.slice(i+3).trim() };
 }
-function temaSistemas() {
-  return [...new Set(state.temas.map(t => parseTemaNome(t.nome).sistema).filter(Boolean))];
-}
-function temaModulos(sis) {
-  return [...new Set(state.temas.map(t => parseTemaNome(t.nome))
-    .filter(p => p.sistema.toLowerCase() === (sis||'').toLowerCase() && p.modulo)
-    .map(p => p.modulo))];
-}
-function populateSistemaModulo(prefix, temaId) {
-  const cur    = temaId ? state.temas.find(t => t.id === temaId) : null;
-  const parsed = cur ? parseTemaNome(cur.nome) : { sistema:'', modulo:'' };
-  const sisSel = document.getElementById(prefix+'-sistema');
-  const sistemas = temaSistemas();
-  if (parsed.sistema && !sistemas.some(s => s.toLowerCase() === parsed.sistema.toLowerCase())) sistemas.push(parsed.sistema);
-  sisSel.innerHTML = '<option value="">—</option>' +
-    sistemas.map(s => `<option value="${s}"${s.toLowerCase()===parsed.sistema.toLowerCase()?' selected':''}>${s}</option>`).join('') +
-    '<option value="__novo__">➕ Novo sistema…</option>';
-  const sn = document.getElementById(prefix+'-sistema-novo');
-  sn.style.display = 'none'; sn.value = '';
-  populateModulos(prefix, parsed.sistema, parsed.modulo);
-}
-function populateModulos(prefix, sistema, selMod) {
-  const modSel = document.getElementById(prefix+'-modulo');
-  const mods = temaModulos(sistema);
-  if (selMod && !mods.some(m => m.toLowerCase() === selMod.toLowerCase())) mods.push(selMod);
-  modSel.innerHTML = '<option value="">—</option>' +
-    mods.map(m => `<option value="${m}"${selMod && m.toLowerCase()===selMod.toLowerCase()?' selected':''}>${m}</option>`).join('') +
-    '<option value="__novo__">➕ Novo módulo…</option>';
-  const mn = document.getElementById(prefix+'-modulo-novo');
-  mn.style.display = 'none'; mn.value = '';
-}
-function onSistemaChange(prefix) {
-  const sel = document.getElementById(prefix+'-sistema');
-  document.getElementById(prefix+'-sistema-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
-  populateModulos(prefix, sel.value === '__novo__' ? '' : sel.value, '');
-}
-function onModuloChange(prefix) {
-  const sel = document.getElementById(prefix+'-modulo');
-  document.getElementById(prefix+'-modulo-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
-}
-function resolveTemaSelecao(prefix, fallbackTemaId) {
-  const sisSel = document.getElementById(prefix+'-sistema');
-  const sis = sisSel.value === '__novo__' ? document.getElementById(prefix+'-sistema-novo').value.trim() : sisSel.value;
-  if (!sis) return fallbackTemaId || '';
-  const modSel = document.getElementById(prefix+'-modulo');
-  const mod = modSel.value === '__novo__' ? document.getElementById(prefix+'-modulo-novo').value.trim() : modSel.value;
-  const nome = mod ? `${sis} - ${mod}` : sis;
-  let t = state.temas.find(x => (x.nome||'').toLowerCase() === nome.toLowerCase());
-  if (!t) { t = { id: uid(), nome }; state.temas.push(t); }
-  return t.id;
-}
-
-
 // ─── ANEXOS DA NOVA DEMANDA ───────────────────────────────────────
 // Mesma regra do resto: PDF, JPEG e PNG, 1,5 MB. A checagem daqui existe para
 // avisar ANTES de subir; o Worker barra de novo, porque tela pode ser burlada.

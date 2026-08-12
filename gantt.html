@@ -565,6 +565,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="senha.js?v=005f049189"></script>
+<script src="catalogo.js?v=1895f8de66"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -696,14 +697,10 @@
         <input type="text" id="e-titulo" placeholder="Nome da tarefa" />
       </div>
       <div class="form-group">
-        <label>Sistema *</label>
-        <select id="e-sistema" onchange="onSistemaChange('e')"></select>
-        <input type="text" id="e-sistema-novo" placeholder="Nome do novo sistema" style="display:none;margin-top:6px">
-      </div>
-      <div class="form-group">
-        <label>Módulo</label>
-        <select id="e-modulo" onchange="onModuloChange('e')"></select>
-        <input type="text" id="e-modulo-novo" placeholder="Nome do novo módulo" style="display:none;margin-top:6px">
+        <label>Sistema / módulo *</label>
+        <select id="e-tema" onchange="catalogoMostraNovo('e')"></select>
+        <input type="text" id="e-tema-novo" placeholder="Ex.: NovoSistema - Módulo"
+               style="display:none;margin-top:6px">
       </div>
     </div>
     <div class="form-group">
@@ -1576,7 +1573,9 @@ function matchesFilters(m) {
   if (m.oculto) return false;
   if (filters.tipo === '__sem_tipo__') { if (m.tipo) return false; }
   else if (filters.tipo && m.tipo !== filters.tipo)                 return false;
-  if (filters.tema   && m.tema_id !== filters.tema)                 return false;
+  // Roll-up: filtrar por "AXCred - Cadastro" tem de trazer os submodulos dele.
+  // Com quatro niveis, comparar so o id obriga a filtrar folha por folha.
+  if (filters.tema   && !catalogoCasa(m.tema_id, filters.tema, state.temas)) return false;
   if (filters.dev && filters.dev !== '__all__' && !splitDevs(m.dev).includes(filters.dev)) return false;
   if (filters.prio   && (m.prioridade||'') !== filters.prio)        return false;
   if (filters.sprint && !(m.sprint||'').toLowerCase().includes(filters.sprint)) return false;
@@ -1628,8 +1627,7 @@ function renderFilters() {
   // tema
   const ft = document.getElementById('f-tema');
   const fv = ft ? ft.value : '';
-  ft.innerHTML = `<option value="">Todos temas</option>` +
-    state.temas.map(t => `<option value="${t.id}" ${fv===t.id?'selected':''}>${esc(t.nome)}</option>`).join('');
+  catalogoLigaFiltro(ft, state.temas || [], fv, 'Todos os sistemas');
 
   // dev
   const fd = document.getElementById('f-dev');
@@ -2495,63 +2493,28 @@ function openModal(id, prefillDev, prefillDate) {
 }
 
 // ── SISTEMA / MÓDULO (tema = "Sistema - Módulo") ──────────────────────────
+// ─── SISTEMA / MÓDULO ─────────────────────────────────────────────────
+// A regra vive em catalogo.js, e não aqui. Ela morava em QUATRO cópias — Admin,
+// Planejamento, painel Dev e painel público, cada um com o seu par de selects —
+// e é exatamente por isso que a lista divergiu entre as telas. Restaram estas
+// pontes, que só dizem quem cria o tema quando ele não existe: o gerador de id é
+// de cada tela.
+function populateSistemaModulo(prefix, temaId) {
+  catalogoLigaCampo(prefix, state.temas || [], temaId || '');
+}
+function resolveTemaSelecao(prefix, fallbackTemaId) {
+  return catalogoResolve(prefix, state.temas || [], fallbackTemaId || '', function (nome) {
+    const novo = { id: uid(), nome };
+    state.temas.push(novo);
+    return novo.id;
+  });
+}
+
 function parseTemaNome(nome) {
   const i = (nome||'').indexOf(' - ');
   return i < 0 ? { sistema:(nome||'').trim(), modulo:'' }
                : { sistema:nome.slice(0,i).trim(), modulo:nome.slice(i+3).trim() };
 }
-function temaSistemas() {
-  return [...new Set(state.temas.map(t => parseTemaNome(t.nome).sistema).filter(Boolean))];
-}
-function temaModulos(sis) {
-  return [...new Set(state.temas.map(t => parseTemaNome(t.nome))
-    .filter(p => p.sistema.toLowerCase() === (sis||'').toLowerCase() && p.modulo)
-    .map(p => p.modulo))];
-}
-function populateSistemaModulo(prefix, temaId) {
-  const cur    = temaId ? state.temas.find(t => t.id === temaId) : null;
-  const parsed = cur ? parseTemaNome(cur.nome) : { sistema:'', modulo:'' };
-  const sisSel = document.getElementById(prefix+'-sistema');
-  const sistemas = temaSistemas();
-  if (parsed.sistema && !sistemas.some(s => s.toLowerCase() === parsed.sistema.toLowerCase())) sistemas.push(parsed.sistema);
-  sisSel.innerHTML = '<option value="">—</option>' +
-    sistemas.map(s => `<option value="${esc(s)}"${s.toLowerCase()===parsed.sistema.toLowerCase()?' selected':''}>${esc(s)}</option>`).join('') +
-    '<option value="__novo__">➕ Novo sistema…</option>';
-  const sn = document.getElementById(prefix+'-sistema-novo');
-  sn.style.display = 'none'; sn.value = '';
-  populateModulos(prefix, parsed.sistema, parsed.modulo);
-}
-function populateModulos(prefix, sistema, selMod) {
-  const modSel = document.getElementById(prefix+'-modulo');
-  const mods = temaModulos(sistema);
-  if (selMod && !mods.some(m => m.toLowerCase() === selMod.toLowerCase())) mods.push(selMod);
-  modSel.innerHTML = '<option value="">—</option>' +
-    mods.map(m => `<option value="${esc(m)}"${selMod && m.toLowerCase()===selMod.toLowerCase()?' selected':''}>${esc(m)}</option>`).join('') +
-    '<option value="__novo__">➕ Novo módulo…</option>';
-  const mn = document.getElementById(prefix+'-modulo-novo');
-  mn.style.display = 'none'; mn.value = '';
-}
-function onSistemaChange(prefix) {
-  const sel = document.getElementById(prefix+'-sistema');
-  document.getElementById(prefix+'-sistema-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
-  populateModulos(prefix, sel.value === '__novo__' ? '' : sel.value, '');
-}
-function onModuloChange(prefix) {
-  const sel = document.getElementById(prefix+'-modulo');
-  document.getElementById(prefix+'-modulo-novo').style.display = sel.value === '__novo__' ? 'block' : 'none';
-}
-function resolveTemaSelecao(prefix, fallbackTemaId) {
-  const sisSel = document.getElementById(prefix+'-sistema');
-  const sis = sisSel.value === '__novo__' ? document.getElementById(prefix+'-sistema-novo').value.trim() : sisSel.value;
-  if (!sis) return fallbackTemaId || '';
-  const modSel = document.getElementById(prefix+'-modulo');
-  const mod = modSel.value === '__novo__' ? document.getElementById(prefix+'-modulo-novo').value.trim() : modSel.value;
-  const nome = mod ? `${sis} - ${mod}` : sis;
-  let t = state.temas.find(x => (x.nome||'').toLowerCase() === nome.toLowerCase());
-  if (!t) { t = { id: uid(), nome }; state.temas.push(t); }
-  return t.id;
-}
-
 // Campo vazio significa "sem pontos" de propósito — o valor foi apagado por quem
 // editou. Number('') seria 0, que contaria como pontuado na soma por semana.
 // Lista fechada: so o que o baralho do Planning Poker produz. Vazio significa

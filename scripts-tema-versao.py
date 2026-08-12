@@ -40,6 +40,7 @@ def main():
     vsen = hash_de('senha.js')
     vdlg = hash_de('dialogo.js')
     vapr = hash_de('apresentacao.js')
+    vcat = hash_de('catalogo.js')
     mudou = []
     for f in PAGINAS:
         with io.open(f, encoding='utf-8') as fh:
@@ -58,12 +59,14 @@ def main():
                    'src="dialogo.js?v=%s"' % vdlg, n)
         n = re.sub(r'src="apresentacao\.js(\?v=[^"]*)?"',
                    'src="apresentacao.js?v=%s"' % vapr, n)
+        n = re.sub(r'src="catalogo\.js(\?v=[^"]*)?"',
+                   'src="catalogo.js?v=%s"' % vcat, n)
         if n != s:
             with io.open(f, 'w', encoding='utf-8', newline='') as fh:
                 fh.write(n)
             mudou.append(f)
-    sys.stdout.write('tema.css=%s  tema.js=%s  anexo-cola=%s  modelo=%s  links-gh=%s  senha=%s  dialogo=%s  apres=%s\n'
-                     % (vcss, vjs, vanx, vmod, vlnk, vsen, vdlg, vapr))
+    sys.stdout.write('tema.css=%s  tema.js=%s  anexo-cola=%s  modelo=%s  links-gh=%s  senha=%s  dialogo=%s  apres=%s  catalogo=%s\n'
+                     % (vcss, vjs, vanx, vmod, vlnk, vsen, vdlg, vapr, vcat))
     sys.stdout.write('paginas atualizadas: %s\n'
                      % (', '.join(mudou) if mudou else 'nenhuma (ja estavam certas)'))
 
