@@ -1506,10 +1506,15 @@ try {
   const temTudo = ['AXCred - Painel', 'AXCred - Negócio - LDR', 'AXCred - Operações - Simulador',
                    'AXCred - Cadastro - Análise de Crédito - Cadastro Rápido',
                    'AXCred - SCR', 'AXCred - Rating'].every(x => cam.indexOf(x) >= 0);
+  // Infraestrutura e plataforma, e nao produto: pendurada no AXCred, fazia o
+  // filtro do AXCred contar trabalho que nao e dele. Rating fica DENTRO — estar
+  // por construir nao muda onde ele mora.
+  const foraDoAx = cam.indexOf('AXCred - Infraestrutura') < 0;
   const html = g.catalogoOpcoesHTML(temas, 'd', {});
   const agrupa = (html.match(/optgroup/g) || []).length === 4 && html.indexOf('selected') > 0;
-  _catOk = rollUp && naoVaza && semFiltro && temTudo && agrupa;
-  _catPorque = 'rollUp=' + rollUp + ' naoVaza=' + naoVaza + ' arvore=' + temTudo + ' agrupa=' + agrupa;
+  _catOk = rollUp && naoVaza && semFiltro && temTudo && agrupa && foraDoAx;
+  _catPorque = 'rollUp=' + rollUp + ' naoVaza=' + naoVaza + ' arvore=' + temTudo +
+               ' agrupa=' + agrupa + ' infraFora=' + foraDoAx;
 } catch (e) { _catPorque = e.message; }
 ok(_catOk, 'o catalogo se comporta: agrupa, indenta e faz roll-up sem vazar', _catPorque);
 

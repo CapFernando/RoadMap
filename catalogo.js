@@ -52,17 +52,24 @@
     'Antifraude',
     'Cobrança',
     'Ferramentas',
-    // Fora da lista original, decididos caso a caso: Infraestrutura é plataforma
-    // (monitoramento de travamento e de banco) e Rating é um ambiente novo que
-    // ainda vai ser construído — a demanda que o cria já nasce apontando para ele.
-    'Infraestrutura',
+    // Rating e modulo do AXCred como qualquer outro. Que ele ainda esteja por
+    // construir nao muda onde ele mora: a demanda que o cria ja nasce apontando
+    // para o lugar definitivo, e no dia em que existir nao ha nada para migrar.
     'Rating',
   ];
 
   // Sistemas sem árvore declarada. Ficam listados para fixar a ORDEM e a grafia;
   // os módulos deles continuam vindo dos dados. Não declarar módulo aqui é
   // deliberado: eles nascem e morrem rápido, e uma lista fixa ficaria errada.
-  var OUTROS = ['BI', 'RPA', 'IA e vibecode', 'AX Leader', 'Ax Caixa', 'Ax Despesas',
+  //
+  // Infraestrutura vem primeiro, logo depois do AXCred, porque é onde quem
+  // procura vai olhar. Ela fica FORA da árvore do AXCred de propósito: é
+  // plataforma, e não produto — monitoramento de travamento e de banco não é uma
+  // parte do AXCred, é o chão em que ele roda. E ela atende mais coisa que o
+  // AXCred, então pendurá-la ali faria o filtro do AXCred contar trabalho que não
+  // é dele.
+  var OUTROS = ['Infraestrutura',
+                'BI', 'RPA', 'IA e vibecode', 'AX Leader', 'Ax Caixa', 'Ax Despesas',
                 'WorksOS RH', 'Fidc News', 'RH FOLHA (monday)', 'Jurídico',
                 'Databricks', 'N8N', 'Bitrix', 'Sistema PDD', 'Novo Ambiente'];
 
