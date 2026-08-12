@@ -1491,6 +1491,12 @@ ok(/catalogoCasa\(m\.tema_id, _filtroTema/.test(ADMIN), 'o admin filtra com roll
 ok(/catalogoCasa\(m\.tema_id, _temaFilter/.test(INDEX), 'o painel publico filtra com roll-up');
 ok(/catalogoCasa\(m\.tema_id, t\.id/.test(DEV), 'a contagem do dev conta a subarvore');
 
+// No slide, o caminho inteiro nao cabe: "AXCred - Cadastro - Análise de Crédito -
+// Reanálise" tem 49 caracteres e o corte e em 46. A plateia via "…Rean…" e ninguem
+// sabia de que modulo se tratava.
+ok((ADMIN.match(/catalogoCurto\(t\.nome\)/g) || []).length >= 2,
+   'o deck usa o nome curto nas areas e nas frentes do atraso');
+
 // Comportamento do catalogo, rodando de verdade.
 let _catOk = false, _catPorque = '';
 try {

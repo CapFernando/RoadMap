@@ -4137,10 +4137,14 @@ function apresTimeEAreas(conc, cl) {
 
   // Areas = temas. E o vocabulario que a diretoria usa ("AXCred - Reanálise"),
   // nao o nome interno da demanda.
+  // Nome CURTO no deck: "AXCred › Reanálise" no lugar de "AXCred - Cadastro -
+  // Análise de Crédito - Reanálise". O caminho inteiro tem 49 caracteres e o
+  // slide corta em 46 — a plateia via "…Rean…" e ninguém sabia de que módulo se
+  // tratava. O caminho completo continua no card; no slide cabe o que identifica.
   const porTema = {};
   conc.forEach(m => {
     const t = (state.temas || []).find(x => String(x.id) === String(m.tema_id));
-    const nome = t ? t.nome : '(sem sistema)';
+    const nome = t ? (window.catalogoCurto ? catalogoCurto(t.nome) : t.nome) : '(sem sistema)';
     porTema[nome] = porTema[nome] || { nome, entregas: 0, pontos: 0 };
     porTema[nome].entregas++;
     porTema[nome].pontos += Number(m.poker_pontos) || 0;
@@ -4155,7 +4159,7 @@ function apresTimeEAreas(conc, cl) {
     const c = cl.get(m.id) || {};
     if (c.tipo !== 'atraso') return;
     const t = (state.temas || []).find(x => String(x.id) === String(m.tema_id));
-    const nome = t ? t.nome : '(sem sistema)';
+    const nome = t ? (window.catalogoCurto ? catalogoCurto(t.nome) : t.nome) : '(sem sistema)';
     atrasoTema[nome] = atrasoTema[nome] || { nome, qtd: 0, soma: 0 };
     atrasoTema[nome].qtd++;
     atrasoTema[nome].soma += c.dias || 0;
