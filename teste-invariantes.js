@@ -1227,7 +1227,7 @@ ok(!!_ident, 'as funcoes da identidade carregam');
 if (_ident) {
   const DEVS = ['Cairo', 'Crisley', 'Dan Weine', 'Eloi', 'Emilly Viana', 'Flávio',
                 'Gabriel', 'Jhonantan', 'João David', 'João Lucas', 'João Vitor',
-                'João Vitor Batista de Siqueira', 'Marina', 'Maury', 'Murillo'];
+                'João Vitor Batista de Siqueira', 'Leite', 'Marina', 'Maury', 'Murillo'];
   global.getDevList = () => DEVS;
   let _euAtual = null;
   Object.defineProperty(global, '_eu', { get: () => _euAtual, configurable: true });
@@ -1243,6 +1243,24 @@ if (_ident) {
      'duas grafias declaradas casam com a que esta na base');
   ok(comoEu({ nome: 'Fernanda Ribeiro', papel: 'dev' }) === '',
      'sem demanda no nome, NAO vincula no chute (mostraria a fila de outro)');
+
+  // O pedido: o vinculo acontece no LOGIN, sem lista. Quase todo nome no campo
+  // `dev` desta base e o primeiro nome, entao casar por partes resolve a maioria.
+  ok(comoEu({ nome: 'Emilly Souza', papel: 'dev' }) === 'Emilly Viana',
+     'sobrenome diferente nao impede: primeiro nome unico vincula no login');
+  ok(comoEu({ nome: 'Gabriel Rodrigues', papel: 'dev' }) === 'Gabriel',
+     'conta com sobrenome casa com a demanda que tem so o primeiro nome');
+  ok(comoEu({ nome: 'João Lucas Pereira', papel: 'dev' }) === 'João Lucas',
+     'duas palavras em comum vencem uma (Joao Lucas, e nao Joao Vitor)');
+
+  // Empate real NAO escolhe. Nesta base sao os Joao: Vitor, Lucas e David. Um
+  // chute aqui abriria a fila de um dev para outro — em silencio.
+  ok(comoEu({ nome: 'João Paulo Ramos', papel: 'dev' }) === '',
+     'empate entre os Joao cai na tela de vinculo, sem chutar');
+  ok(comoEu({ nome: 'Gabriel Leite', papel: 'dev' }) === '',
+     'nome que casa com DOIS devs diferentes nao e resolvido no chute');
+  ok(comoEu({ nome: 'João V', papel: 'dev' }) === '',
+     'inicial de uma letra nao conta como palavra em comum (senao casaria com Vitor)');
   ok(comoEu(null) === '',
      'senha compartilhada nao deduz ninguem — ali a grade e a unica saida');
 }
@@ -1252,9 +1270,17 @@ if (_ident) {
 // tela de login.
 ok(/if \(!_eu\) \{[\s\S]{0,200}?mostrarPasso\('step-dev'\)/.test(DEV),
    'a grade de nomes so aparece sem conta');
-ok(/const meu = resolveMeuDev\(\);[\s\S]{0,80}?if \(meu\) \{ selectDev\(meu\); return; \}/.test(DEV),
+ok(/const meu = resolveMeuDev\(\);[\s\S]{0,400}?selectDev\(meu\);/.test(DEV),
    'com conta e nome resolvido, entra direto');
 ok(/function pedirVinculo/.test(DEV), 'existe a tela de vincular uma vez');
+// Automatismo sem saida e pior que a pergunta que ele substituiu: se o vinculo
+// deduzido errar, a pessoa precisa de um caminho de volta que nao passe pelo admin.
+ok(/function corrigirVinculo/.test(DEV), 'da para dizer "nao sao as minhas demandas"');
+ok(/Não são as minhas demandas/.test(DEV), 'a correcao aparece no cabecalho');
+ok(/if \(_vinculoInferido\) gravaMeuVinculo\(meu\)/.test(DEV),
+   'o vinculo deduzido e gravado no perfil (na proxima entrada e igualdade)');
+ok(/Painel aberto no nome/.test(DEV),
+   'o vinculo deduzido e dito em voz alta, nao em silencio');
 ok(/action: 'meu-nome-demandas'/.test(DEV), 'o vinculo e gravado no perfil');
 ok(/step-vinculo/.test(DEV) && /'step-dev', 'step-vinculo'/.test(DEV),
    'o passo do vinculo entra no rodizio de telas');

@@ -2548,10 +2548,45 @@ function meusNomesDeclarados() {
 
 // Devolve o nome COMO ESTA NA BASE (a grafia da demanda), nao o do perfil: e ele
 // que os filtros do painel comparam.
+//
+// DUAS PASSADAS, nesta ordem:
+//
+//   1. igualdade. "Emilly Viana" na conta e "Emilly Viana" na demanda.
+//
+//   2. partes do nome, e SO com vencedor unico. "Emilly Souza" casa com "Emilly
+//      Viana" porque `Emilly` e a unica candidata; "Gabriel Souza" casa com
+//      "Gabriel". E o que faz o vinculo acontecer no login em vez de virar
+//      pergunta: quase todo nome de demanda nesta base e o primeiro nome.
+//
+// Empate NAO escolhe. Nesta base o unico empate real e "Joao": ha Joao Vitor,
+// Joao Lucas e Joao David, e uma conta que diga apenas "Joao <outro sobrenome>"
+// nao tem resposta certa. Chutar ali mostraria a fila de um dev para outro — o
+// mesmo erro, mas silencioso, que a lista pelo menos deixava visivel.
+let _vinculoInferido = false;
+
 function resolveMeuDev() {
-  const meus = meusNomesDeclarados().map(normNome);
+  const meus = meusNomesDeclarados();
   if (!meus.length) return '';
-  return getDevList().find(d => meus.includes(normNome(d))) || '';
+  const devs = getDevList();
+  const alvo = meus.map(normNome);
+
+  _vinculoInferido = false;
+  const exato = devs.find(d => alvo.includes(normNome(d)));
+  if (exato) return exato;
+
+  // Pontua por palavras em comum. Palavra de uma letra fora: inicial de nome do
+  // meio ("Joao V. Siqueira") casaria com qualquer coisa.
+  const partes = new Set();
+  alvo.forEach(n => n.split(' ').forEach(p => { if (p.length > 1) partes.add(p); }));
+  let melhor = '', placar = 0, empate = false;
+  devs.forEach(d => {
+    const p = normNome(d).split(' ').filter(x => x.length > 1)
+      .reduce((c, x) => c + (partes.has(x) ? 1 : 0), 0);
+    if (p > placar) { placar = p; melhor = d; empate = false; }
+    else if (p === placar && p > 0) empate = true;
+  });
+  if (melhor && placar > 0 && !empate) { _vinculoInferido = true; return melhor; }
+  return '';
 }
 
 // A entrada, depois da senha. Um caminho so, com tres saidas — e a grade nao e
@@ -2571,7 +2606,20 @@ async function entrarComoEu() {
   await reloadDevList();
 
   const meu = resolveMeuDev();
-  if (meu) { selectDev(meu); return; }
+  if (meu) {
+    // Vinculo deduzido e gravado no perfil: na proxima entrada ele e igualdade, e
+    // para de depender de a base continuar grafada do mesmo jeito.
+    if (_vinculoInferido) gravaMeuVinculo(meu);
+    selectDev(meu);
+    // Dito em voz alta, e nao em silencio. Se o palpite estiver errado, a pessoa
+    // ve o aviso e tem o caminho de correcao no mesmo lugar — sem isso, ela
+    // trabalharia na fila de outro sem nunca saber por que.
+    if (_vinculoInferido) {
+      setTimeout(() => toast('Painel aberto no nome "' + meu + '". Não são suas demandas? ' +
+                             'Corrija no seu nome, no topo.', 'ok'), 700);
+    }
+    return;
+  }
 
   // A conta existe e o nome nao casou. Pergunta UMA vez e guarda no perfil —
   // voltar para a grade a cada entrada seria transformar um dado que da para
@@ -2582,10 +2630,13 @@ async function entrarComoEu() {
 function pedirVinculo() {
   mostrarPasso('step-vinculo');
   const nome = (_eu && _eu.nome) || '';
+  // Esta tela e o ULTIMO recurso: chega aqui quem nao tem demanda nenhuma ainda,
+  // ou quem tem um nome que empata com o de outra pessoa (nesta base, os Joao).
   document.getElementById('vin-explica').innerHTML =
-    'Você entrou como <strong>' + devEsc(nome) + '</strong>, e nenhuma demanda está ' +
-    'nesse nome. Escolha como seu nome aparece nas demandas: guardamos no seu ' +
-    'perfil e esta tela não aparece de novo.';
+    'Você entrou como <strong>' + devEsc(nome) + '</strong>. Não consegui dizer com ' +
+    'certeza quais demandas são suas — ou não há nenhuma nesse nome, ou o nome ' +
+    'coincide com o de outra pessoa. Escolha como seu nome aparece nas demandas: ' +
+    'guardamos no seu perfil e esta tela não volta.';
   const sel = document.getElementById('vin-nome');
   const devs = getDevList();
   sel.innerHTML = '<option value="">— escolha —</option>' +
@@ -2606,24 +2657,29 @@ function pedirVinculo() {
   document.getElementById('vin-erro').textContent = '';
 }
 
-async function vincularNome() {
-  const sel = document.getElementById('vin-nome');
-  const err = document.getElementById('vin-erro');
-  const nome = String(sel.value || '').trim();
-  if (!nome) { err.textContent = 'Escolha um nome da lista.'; return; }
-  err.textContent = '';
-  // Grava no perfil ANTES de entrar. Se a gravacao falhar, a pessoa entra do
-  // mesmo jeito: o vinculo e conveniencia, e barrar o trabalho por causa dele
-  // seria trocar um incomodo por um bloqueio.
+// Grava sem travar nada: o vinculo e conveniencia, e o painel abre igual se a
+// gravacao falhar.
+async function gravaMeuVinculo(nome) {
   try {
     const r = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'meu-nome-demandas', nome_demandas: nome },
                                          credDev())),
     });
-    if (r.ok) { _eu.nome_demandas = nome;
-                try { sessionStorage.setItem('rm_eu', JSON.stringify(_eu)); } catch (_) {} }
-  } catch (_) { /* entra assim mesmo */ }
+    if (r.ok && _eu) {
+      _eu.nome_demandas = nome;
+      try { sessionStorage.setItem('rm_eu', JSON.stringify(_eu)); } catch (_) {}
+    }
+  } catch (_) { /* segue */ }
+}
+
+async function vincularNome() {
+  const sel = document.getElementById('vin-nome');
+  const err = document.getElementById('vin-erro');
+  const nome = String(sel.value || '').trim();
+  if (!nome) { err.textContent = 'Escolha um nome da lista.'; return; }
+  err.textContent = '';
+  await gravaMeuVinculo(nome);
   selectDev(nome);
 }
 
@@ -2723,6 +2779,15 @@ function trocarDev() {
   document.getElementById('login-error').textContent = '';
 }
 
+// Volta para a tela de vinculo mantendo a sessao. Nao e "trocar de dev": e
+// dizer que o palpite errou.
+function corrigirVinculo() {
+  document.getElementById('dev-dropdown')?.classList.remove('open');
+  document.getElementById('dev-app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  pedirVinculo();
+}
+
 function toggleDevDropdown(e) {
   e.stopPropagation();
   const dd = document.getElementById('dev-dropdown');
@@ -2744,7 +2809,12 @@ function buildDevDropdown() {
     return `<div class="dev-dropdown-item${isCur?' active':''}" onclick="switchDevInline('${d}')">${isCur ? '✓ ' : ''}${d}</div>`;
   }).join('');
   if (soEu) {
+    // "Nao sao as minhas demandas" e a valvula de escape do vinculo automatico.
+    // Sem ela, um palpite errado nao teria correcao a nao ser abrir chamado com o
+    // admin — e um automatismo sem saida e pior que a pergunta que ele substituiu.
     dd.innerHTML =
+      `<div class="dev-dropdown-item" onclick="corrigirVinculo()">👤 Não são as minhas demandas</div>` +
+      `<div class="dev-dropdown-sep"></div>` +
       `<div class="dev-dropdown-item" onclick="abrirTrocaSenha()">🔑 Minha senha</div>` +
       `<div class="dev-dropdown-item" onclick="sairDev()">🚪 Sair da conta</div>`;
     return;
