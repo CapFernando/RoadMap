@@ -1524,6 +1524,29 @@ try {
 } catch (e) { _catPorque = e.message; }
 ok(_catOk, 'o catalogo se comporta: agrupa, indenta e faz roll-up sem vazar', _catPorque);
 
+
+sec('Ranking do mes: conta o que foi ENTREGUE no mes');
+
+// Ele pegava as demandas do mes pela DATA DE ENTREGA PREVISTA. Com isso, quem
+// entregava com atraso contava no mes do PRAZO (que ja fechou) e quem nao tinha
+// data de entrega nao contava em mes nenhum. Medido na base real: Murillo
+// entregou 12 em agosto e o ranking via 4 — 3 com prazo de julho e 5 sem data.
+ok(/const entregues = \(state\.melhorias \|\| \[\]\)/.test(GANTT),
+   'existe o recorte por data de conclusao');
+ok(/entregues[\s\S]{0,400}?String\(m\.concluido_em \|\| ''\)\.slice\(0, 10\) >= A/.test(GANTT),
+   'o recorte usa concluido_em, e nao entrega');
+ok(/renderRankingMes\(entregues\)/.test(GANTT), 'o ranking recebe as entregues');
+ok(!/renderRankingMes\(concluidas\)/.test(GANTT),
+   'o ranking NAO usa mais o recorte por data de entrega');
+// Comparacao por STRING ISO, como todo o resto das datas daqui.
+ok(!/new Date\([^)]*concluido_em/.test(GANTT), 'sem objeto Date na comparacao');
+
+// A faixa mostra os dois numeros lado a lado ("concluídas 43/92" e um podio
+// somando 56): sem dizer que sao perguntas diferentes, o maior parece erro.
+ok(/const RK_TITULO/.test(GANTT), 'o titulo do ranking e um so lugar');
+ok(/entregue no mês/.test(GANTT), 'o titulo diz o criterio na tela');
+ok(/pela data de conclusão/.test(GANTT), 'o title explica por que os numeros diferem');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

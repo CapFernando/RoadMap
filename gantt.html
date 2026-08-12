@@ -3324,11 +3324,11 @@ function renderPausadas() {
 // sem aviso, troca "quem entregou mais valor" por "quem levou mais tempo".
 const pontuadoNoPoker = m => m && m.poker_media != null && m.poker_media !== '';
 
-function rankDoMes(concluidas) {
+function rankDoMes(entregues) {
   const porDev = new Map();
   let semDev = 0;
   let ptsPoker = 0, ptsTotal = 0;
-  (concluidas || []).forEach(m => {
+  (entregues || []).forEach(m => {
     const devs = splitDevs(m.dev).filter(Boolean);
     if (!devs.length) { semDev += 1; return; }
     const pts = (Number(m.poker_pontos) || 0) / devs.length;
@@ -3359,12 +3359,23 @@ function rkNum(n) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
 }
 
-function renderRankingMes(concluidas) {
+// O titulo carrega o criterio. A faixa mostra, lado a lado, "concluídas 26/43"
+// (do que estava agendado) e um pódio somando 56 entregas — sem dizer que sao
+// contagens de perguntas diferentes, o numero maior parece erro do menor.
+const RK_TITULO = '<span class="rk-tit" title="Conta o que foi CONCLUÍDO dentro do mês, ' +
+  'pela data de conclusão. Os outros números da faixa contam o que estava agendado ' +
+  'para o mês, pela data de entrega prevista — por isso podem não bater.">' +
+  '🏆 Ranking do mês <span style="opacity:.6;font-weight:400">· entregue no mês</span></span>';
+
+// O parametro sao as ENTREGUES no mes (por data de conclusao), e nao as
+// "concluidas do mes" por data de entrega — que era como este bloco pensava
+// antes e o motivo de quem entregou com atraso sumir do podio.
+function renderRankingMes(entregues) {
   const el = document.getElementById('ranking-mes');
   if (!el) return;
-  const { rank, semDev, ptsPoker, ptsTotal } = rankDoMes(concluidas);
+  const { rank, semDev, ptsPoker, ptsTotal } = rankDoMes(entregues);
   if (!rank.length) {
-    el.innerHTML = '<span class="rk-tit">🏆 Ranking do mês</span>' +
+    el.innerHTML = RK_TITULO +
       '<span class="rk-vazio">' +
       (semDev ? semDev + ' concluída(s) sem responsável — o ranking não tem como atribuir.'
               : 'nenhuma conclusão neste mês ainda.') + '</span>';
@@ -3409,7 +3420,7 @@ function renderRankingMes(concluidas) {
       'Planning Poker; o resto é estimativa por duração, que dá mais ponto para quem ' +
       'levou mais tempo.">≈ ' + pc + '% votado</span>';
   }
-  el.innerHTML = '<span class="rk-tit">🏆 Ranking do mês</span>' +
+  el.innerHTML = RK_TITULO +
                  '<span class="rk-lista">' + chips + '</span>' + mais + aviso + origem;
 }
 
@@ -3438,6 +3449,20 @@ function renderResumoMes() {
     return ref && ref >= A && ref <= B;
   });
   const concluidas = noMes.filter(m => m.status_planejamento === 'concluido');
+  // ENTREGUES no mes: pela data de CONCLUSAO, e nao pela de entrega prevista.
+  // Sao coisas diferentes e a diferenca e grande. `concluidas` responde "do que
+  // estava agendado para este mes, quanto saiu" — e o numerador da barra ao lado.
+  // `entregues` responde "o que saiu neste mes", que e a pergunta do ranking.
+  //
+  // Pela data de entrega, quem entrega com atraso conta no mes do PRAZO, que ja
+  // fechou, e quem nao tem data de entrega nao conta em mes nenhum. Medido na
+  // base: Murillo entregou 12 em agosto e o ranking via 4 — 3 tinham prazo de
+  // julho e 5 estavam sem data.
+  const entregues = (state.melhorias || []).filter(m =>
+    !m.oculto && !m.mesclado_em &&
+    m.status_planejamento === 'concluido' &&
+    String(m.concluido_em || '').slice(0, 10) >= A &&
+    String(m.concluido_em || '').slice(0, 10) <= B);
   const atrasadas = noMes.filter(m => spEfetivo(m) === 'atrasado');
   const validando = noMes.filter(m => m.status_planejamento === 'validacao');
   const pontos = noMes.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
@@ -3456,7 +3481,7 @@ function renderResumoMes() {
     bloco(pontosFeitos + '<span style="font-size:13px;color:var(--text3)">/' + pontos + '</span>', 'pontos') +
     '<div id="ranking-mes" class="rk"></div>';
   // Depois do innerHTML: o elemento do ranking nasce aqui dentro.
-  renderRankingMes(concluidas);
+  renderRankingMes(entregues);
 }
 
 // Modo apresentacao: esconde filtros e fila, aumenta o texto. Projetor tem menos
