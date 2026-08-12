@@ -502,7 +502,7 @@
          identifica ninguem — ali a pergunta e a unica forma de saber. Quem entra
          com conta nunca ve esta tela. -->
     <div id="step-dev" style="display:none">
-      <p>Selecione seu nome</p>
+      <p id="dev-titulo">Selecione seu nome</p>
       <div id="login-aviso" class="login-aviso">
         🔗 Primeiro acesso neste dispositivo. Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de continuar.
       </div>
@@ -2621,9 +2621,25 @@ async function entrarComoEu() {
     return;
   }
 
-  // A conta existe e o nome nao casou. Pergunta UMA vez e guarda no perfil —
-  // voltar para a grade a cada entrada seria transformar um dado que da para
-  // salvar numa pergunta diaria.
+  // Nao casou. A partir daqui o caminho depende do PAPEL, porque a pergunta e
+  // outra para cada um:
+  //
+  //   dev  — "quais demandas sao minhas?" Pergunta UMA vez e guarda no perfil.
+  //          Voltar para a grade a cada entrada seria transformar um dado que da
+  //          para salvar numa pergunta diaria.
+  //
+  //   admin/analista — "de quem eu quero ver a fila?" Acompanhar o time e o
+  //          trabalho deles, e quem coordena costuma nao ter demanda no proprio
+  //          nome. Mandar essa pessoa para a tela de vinculo seria pedir que ela
+  //          se declare dona de uma fila que nao e dela.
+  if (_eu.papel === 'admin' || _eu.papel === 'analista') {
+    mostrarPasso('step-dev');
+    const t = document.getElementById('dev-titulo');
+    if (t) t.innerHTML = 'Abrir o painel de <span style="color:var(--text3)">— você ' +
+                         'coordena, escolha de quem quer ver a fila</span>';
+    await reloadDevList();
+    return;
+  }
   pedirVinculo();
 }
 

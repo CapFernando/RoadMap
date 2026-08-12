@@ -1276,6 +1276,12 @@ ok(/function pedirVinculo/.test(DEV), 'existe a tela de vincular uma vez');
 // Automatismo sem saida e pior que a pergunta que ele substituiu: se o vinculo
 // deduzido errar, a pessoa precisa de um caminho de volta que nao passe pelo admin.
 ok(/function corrigirVinculo/.test(DEV), 'da para dizer "nao sao as minhas demandas"');
+// Quem coordena costuma nao ter demanda no proprio nome. Mandar essa pessoa para a
+// tela de vinculo seria pedir que ela se declare dona de uma fila que nao e dela.
+ok(/_eu\.papel === 'admin' \|\| _eu\.papel === 'analista'/.test(DEV),
+   'admin e analista sem demanda escolhem a fila, nao vinculam');
+ok(/Abrir o painel de/.test(DEV),
+   'para quem coordena a tela diz "abrir o painel de", nao "selecione seu nome"');
 ok(/Não são as minhas demandas/.test(DEV), 'a correcao aparece no cabecalho');
 ok(/if \(_vinculoInferido\) gravaMeuVinculo\(meu\)/.test(DEV),
    'o vinculo deduzido e gravado no perfil (na proxima entrada e igualdade)');
