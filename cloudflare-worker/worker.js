@@ -294,6 +294,33 @@ async function colunaSeFaltar(db, tabela, coluna, tipo) {
 // gente de verdade — "Joao.Lucas.A.C" tem maiuscula e ponto final e era recusado,
 // com uma mensagem que so repetia a regra. Agora ele sai do e-mail e existe so
 // por dentro; as pessoas entram com o e-mail, que elas ja sabem de cor.
+// O NOME DAS DEMANDAS, derivado do e-mail corporativo.
+//
+// `joao.lucas@audaxcapitalsa.com.br` vira "Joao Lucas". O e-mail e a fonte certa
+// porque e a unica coisa do cadastro que a empresa padroniza: o nome digitado
+// vem como a pessoa quis escrever naquele dia, com ou sem sobrenome, com ou sem
+// acento.
+//
+// So as DUAS primeiras partes. `maria.silva.santos` vira "Maria Silva": nome e
+// sobrenome e o formato que o campo `dev` das demandas usa, e o terceiro pedaco
+// so alonga o rotulo em toda tela onde ele aparece.
+//
+// A capitalizacao respeita o acento do que a pessoa digitou quando da: se o nome
+// do cadastro contem a mesma palavra, vale a versao dele — assim "joao" vira
+// "João" em vez de "Joao".
+function nomeDemandasDoEmail(email, nomeDigitado) {
+  const partes = String(email || '').split('@')[0]
+    .split(/[._-]+/).filter(Boolean).slice(0, 2);
+  if (!partes.length) return '';
+  const semAcento = t => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const doNome = String(nomeDigitado || '').split(/\s+/).filter(Boolean);
+  return partes.map(p => {
+    const igual = doNome.find(x => semAcento(x) === semAcento(p));
+    if (igual) return igual.charAt(0).toUpperCase() + igual.slice(1);
+    return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+  }).join(' ');
+}
+
 function loginDoEmail(email) {
   const base = String(email).split('@')[0]
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -1773,11 +1800,15 @@ export default {
       const salt = hexDe(crypto.getRandomValues(new Uint8Array(16)));
       const hash = await derivaSenha(senhaU, salt);
       try {
+        // `nome_demandas` ja sai preenchido do cadastro. Sem isso a conta nova
+        // chegava no painel sem vinculo, e o resolvedor tentava adivinhar por
+        // semelhanca — foi assim que um dev novo abriu a fila do Joao Lucas.
         await env.POKER_DB.prepare(
-          `INSERT INTO usuario (id, login, nome, email, senha_hash, salt, papel, ativo, pendente, criado_em)
-           VALUES (?,?,?,?,?,?,?,0,1,?)`)
+          `INSERT INTO usuario (id, login, nome, email, senha_hash, salt, papel, ativo, pendente,
+                                criado_em, nome_demandas)
+           VALUES (?,?,?,?,?,?,?,0,1,?,?)`)
           .bind('u-' + crypto.randomUUID().slice(0, 8), login, nome, email, hash, salt, 'dev',
-                new Date().toISOString()).run();
+                new Date().toISOString(), nomeDemandasDoEmail(email, nome) || null).run();
       } catch (e) {
         // Nao revela se colidiu no login ou no e-mail: seria uma forma de
         // descobrir quem ja tem conta.
@@ -2670,11 +2701,27 @@ export default {
                       400, headers);
         }
         const papel = body.papel;
-        const uu = await env.POKER_DB.prepare('SELECT id FROM usuario WHERE login = ?').bind(login).first();
+        const uu = await env.POKER_DB.prepare(
+          'SELECT id, nome, email, nome_demandas FROM usuario WHERE login = ?').bind(login).first();
         if (!uu) return json({ error: 'nao_encontrado' }, 404, headers);
+        // Conta cadastrada ANTES da derivacao automatica nao tem o campo. Aqui e o
+        // ultimo momento em que da para preencher sem incomodar ninguem: a pessoa
+        // ainda nao entrou.
+        let nomeDem = String(uu.nome_demandas || '').trim();
+        if (!nomeDem) {
+          nomeDem = nomeDemandasDoEmail(uu.email, uu.nome);
+          if (nomeDem) {
+            await env.POKER_DB.prepare('UPDATE usuario SET nome_demandas = ? WHERE id = ?')
+              .bind(nomeDem, uu.id).run();
+          }
+        }
         await env.POKER_DB.prepare('UPDATE usuario SET pendente = 0, ativo = 1, papel = ? WHERE id = ?')
           .bind(papel, uu.id).run();
-        return json({ ok: true }, 200, headers);
+        // O nome volta para a tela: e com ele que o Admin acrescenta a pessoa na
+        // lista de devs. Sem estar na lista, ninguem consegue atribuir demanda a
+        // ela — e o vinculo automatico ficaria apontando para um nome que nao
+        // existe em demanda nenhuma.
+        return json({ ok: true, nome_demandas: nomeDem, papel }, 200, headers);
       }
 
       // Recusa um cadastro pendente: apaga, para nao deixar login ocupado.

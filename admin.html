@@ -6670,8 +6670,28 @@ async function uAprovar(login) {
     return;
   }
   try {
-    await uChamar('aprovar', { login, papel });
-    uAviso('"' + login + '" liberado. A pessoa já pode entrar com a senha que ela escolheu.');
+    const r = await uChamar('aprovar', { login, papel });
+    const nomeDem = r && r.nome_demandas ? String(r.nome_demandas) : '';
+    let extra = '';
+    // A lista de devs vive no arquivo de dados, e nao no banco de contas. Sem a
+    // pessoa nela, ninguem consegue atribuir demanda a ela pelo Planejamento — e
+    // o vinculo automatico apontaria para um nome que nao existe em demanda
+    // nenhuma. Entao liberar o acesso e colocar na lista sao um gesto so.
+    if (nomeDem && papel === 'dev') {
+      const ja = (state.desenvolvedores || []).some(d =>
+        String(d).trim().toLowerCase() === nomeDem.toLowerCase());
+      if (!ja) {
+        state.desenvolvedores = [...(state.desenvolvedores || []), nomeDem]
+          .sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
+        const okPub = await saveViaProxy();
+        extra = okPub
+          ? ' Adicionada à lista de devs como "' + nomeDem + '".'
+          : ' ATENÇÃO: não consegui incluir "' + nomeDem + '" na lista de devs — inclua no Planejamento.';
+      } else {
+        extra = ' Já está na lista de devs como "' + nomeDem + '".';
+      }
+    }
+    uAviso('"' + login + '" liberado. A pessoa já pode entrar com a senha que ela escolheu.' + extra);
   } catch (e) { uAviso(e.message, true); }
   renderUsuarios();
 }

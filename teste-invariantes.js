@@ -1244,23 +1244,24 @@ if (_ident) {
   ok(comoEu({ nome: 'Fernanda Ribeiro', papel: 'dev' }) === '',
      'sem demanda no nome, NAO vincula no chute (mostraria a fila de outro)');
 
-  // O pedido: o vinculo acontece no LOGIN, sem lista. Quase todo nome no campo
-  // `dev` desta base e o primeiro nome, entao casar por partes resolve a maioria.
-  ok(comoEu({ nome: 'Emilly Souza', papel: 'dev' }) === 'Emilly Viana',
-     'sobrenome diferente nao impede: primeiro nome unico vincula no login');
-  ok(comoEu({ nome: 'Gabriel Rodrigues', papel: 'dev' }) === 'Gabriel',
-     'conta com sobrenome casa com a demanda que tem so o primeiro nome');
-  ok(comoEu({ nome: 'João Lucas Pereira', papel: 'dev' }) === 'João Lucas',
-     'duas palavras em comum vencem uma (Joao Lucas, e nao Joao Vitor)');
-
-  // Empate real NAO escolhe. Nesta base sao os Joao: Vitor, Lucas e David. Um
-  // chute aqui abriria a fila de um dev para outro — em silencio.
-  ok(comoEu({ nome: 'João Paulo Ramos', papel: 'dev' }) === '',
-     'empate entre os Joao cai na tela de vinculo, sem chutar');
-  ok(comoEu({ nome: 'Gabriel Leite', papel: 'dev' }) === '',
-     'nome que casa com DOIS devs diferentes nao e resolvido no chute');
-  ok(comoEu({ nome: 'João V', papel: 'dev' }) === '',
-     'inicial de uma letra nao conta como palavra em comum (senao casaria com Vitor)');
+  // O PALPITE POR SEMELHANCA MORREU, e as invariantes inverteram junto.
+  //
+  // Ele casava por palavras em comum quando a igualdade falhava, e serviu enquanto
+  // as contas antigas nao tinham `nome_demandas` declarado. Cobrou o preco na
+  // primeira conta nova: um dev recem-cadastrado casou com "Joao Lucas" e abriu o
+  // painel na fila de outra pessoa.
+  //
+  // Hoje o cadastro deriva o nome do e-mail, entao conta nova ja chega declarada
+  // e o palpite so teria a oferecer a chance de errar a pessoa. Se ele voltar,
+  // estas caem.
+  ok(comoEu({ nome: 'João Lucas Pereira', papel: 'dev' }) === '',
+     'nome PARECIDO com o de outro dev NAO vincula (era como se abria a fila alheia)');
+  ok(comoEu({ nome: 'Gabriel Rodrigues', papel: 'dev' }) === '',
+     'sobrenome diferente nao casa por semelhanca');
+  ok(comoEu({ nome: 'Emilly Souza', papel: 'dev' }) === '',
+     'primeiro nome em comum nao basta');
+  ok(comoEu({ nome: 'Gabriel Rodrigues', papel: 'dev', nome_demandas: 'Gabriel' }) === 'Gabriel',
+     'com o nome declarado, o vinculo continua imediato');
   ok(comoEu(null) === '',
      'senha compartilhada nao deduz ninguem — ali a grade e a unica saida');
 }
@@ -1822,6 +1823,52 @@ try {
              ' crono=' + naoCortou + ' seis=' + semOutros1;
 } catch (e) { _tPorque = e.message; }
 ok(_tOk, 'o TOP 5 se comporta: corta, soma certo, abre, e poupa o cronologico', _tPorque);
+
+
+sec('Cadastro: o nome nas demandas nasce do e-mail');
+
+// Um dev novo se cadastrou, `nome_demandas` ficou vazio, e o palpite do painel
+// casou com "Joao Lucas" — outra pessoa. Ele abriu o painel na fila de outro.
+ok(/function nomeDemandasDoEmail/.test(WC), 'existe a derivacao pelo e-mail');
+ok(/INSERT INTO usuario[\s\S]{0,400}?nome_demandas/.test(WC),
+   'o cadastro ja grava o nome das demandas');
+ok(/nomeDemandasDoEmail\(email, nome\)/.test(WC), 'derivado do e-mail no cadastro');
+ok(/slice\(0, 2\)/.test(WC), 'so nome e sobrenome (o terceiro pedaco so alonga o rotulo)');
+
+// Conta cadastrada antes da derivacao nao tem o campo: a aprovacao e o ultimo
+// momento de preencher sem incomodar ninguem, porque a pessoa ainda nao entrou.
+ok(/if \(!nomeDem\) \{[\s\S]{0,300}?nomeDemandasDoEmail\(uu\.email, uu\.nome\)/.test(WC),
+   'a aprovacao preenche o que faltar');
+ok(/return json\(\{ ok: true, nome_demandas: nomeDem/.test(WC),
+   'a aprovacao devolve o nome para a tela');
+
+// Sem estar na lista de devs, ninguem consegue atribuir demanda a pessoa — e o
+// vinculo apontaria para um nome que nao existe em demanda nenhuma.
+ok(/state\.desenvolvedores = \[\.\.\.\(state\.desenvolvedores \|\| \[\]\), nomeDem\]/.test(ADMIN),
+   'aprovar um dev o coloca na lista de devs');
+ok(/não consegui incluir/.test(ADMIN),
+   'se a inclusao falhar, o admin e avisado (nao fica um dev fantasma)');
+
+// Comportamento da derivacao.
+let _dOk = false, _dPorque = '';
+try {
+  const i = WC.indexOf('function nomeDemandasDoEmail(');
+  let c = 0, corpo = '';
+  for (let k = WC.indexOf('{', WC.indexOf(')', i)); k < WC.length; k++) {
+    if (WC[k] === '{') c++;
+    else if (WC[k] === '}') { c--; if (!c) { corpo = WC.slice(i, k + 1); break; } }
+  }
+  const F = new Function(corpo + '\nreturn nomeDemandasDoEmail;')();
+  const simples = F('joao.lucas@audaxcapitalsa.com.br', '') === 'Joao Lucas';
+  const comAcento = F('joao.lucas@x.com', 'João Lucas Pereira') === 'João Lucas';
+  const duasPartes = F('maria.silva.santos@x.com', '') === 'Maria Silva';
+  const umaParte = F('murillo@x.com', '') === 'Murillo';
+  const vazio = F('', 'Fulano') === '';
+  _dOk = simples && comAcento && duasPartes && umaParte && vazio;
+  _dPorque = 'simples=' + simples + ' acento=' + comAcento + ' duas=' + duasPartes +
+             ' uma=' + umaParte + ' vazio=' + vazio;
+} catch (e) { _dPorque = e.message; }
+ok(_dOk, 'a derivacao se comporta: duas partes, acento do cadastro, sem chute', _dPorque);
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

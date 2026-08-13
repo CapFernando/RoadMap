@@ -2550,40 +2550,27 @@ function meusNomesDeclarados() {
 //
 //   1. igualdade. "Emilly Viana" na conta e "Emilly Viana" na demanda.
 //
-//   2. partes do nome, e SO com vencedor unico. "Emilly Souza" casa com "Emilly
-//      Viana" porque `Emilly` e a unica candidata; "Gabriel Souza" casa com
-//      "Gabriel". E o que faz o vinculo acontecer no login em vez de virar
-//      pergunta: quase todo nome de demanda nesta base e o primeiro nome.
+//   2. NADA. Nao ha passo dois.
 //
-// Empate NAO escolhe. Nesta base o unico empate real e "Joao": ha Joao Vitor,
-// Joao Lucas e Joao David, e uma conta que diga apenas "Joao <outro sobrenome>"
-// nao tem resposta certa. Chutar ali mostraria a fila de um dev para outro — o
-// mesmo erro, mas silencioso, que a lista pelo menos deixava visivel.
+// Havia: o painel casava por palavras em comum quando a igualdade falhava. Serviu
+// enquanto as contas antigas nao tinham o campo declarado — e cobrou o preco na
+// primeira conta nova. Um dev recem-cadastrado, sem `nome_demandas`, casou por
+// semelhanca com "Joao Lucas" e abriu o painel na fila de outra pessoa.
+//
+// Mostrar a fila de outro e o pior erro que este painel pode cometer, e o palpite
+// nao tinha mais nada a oferecer em troca: hoje o cadastro ja deriva o nome das
+// demandas do e-mail, entao conta nova chega declarada. As antigas tambem estao,
+// todas. O que sobra para o palpite e so a chance de errar a pessoa.
+//
+// Ou o nome declarado bate, ou a pessoa escolhe uma vez e fica guardado.
 let _vinculoInferido = false;
 
 function resolveMeuDev() {
   const meus = meusNomesDeclarados();
   if (!meus.length) return '';
-  const devs = getDevList();
   const alvo = meus.map(normNome);
-
   _vinculoInferido = false;
-  const exato = devs.find(d => alvo.includes(normNome(d)));
-  if (exato) return exato;
-
-  // Pontua por palavras em comum. Palavra de uma letra fora: inicial de nome do
-  // meio ("Joao V. Siqueira") casaria com qualquer coisa.
-  const partes = new Set();
-  alvo.forEach(n => n.split(' ').forEach(p => { if (p.length > 1) partes.add(p); }));
-  let melhor = '', placar = 0, empate = false;
-  devs.forEach(d => {
-    const p = normNome(d).split(' ').filter(x => x.length > 1)
-      .reduce((c, x) => c + (partes.has(x) ? 1 : 0), 0);
-    if (p > placar) { placar = p; melhor = d; empate = false; }
-    else if (p === placar && p > 0) empate = true;
-  });
-  if (melhor && placar > 0 && !empate) { _vinculoInferido = true; return melhor; }
-  return '';
+  return getDevList().find(d => alvo.includes(normNome(d))) || '';
 }
 
 // A entrada, depois da senha. Um caminho so, com tres saidas — e a grade nao e
