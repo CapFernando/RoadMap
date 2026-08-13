@@ -95,6 +95,24 @@
     .carta-btn.sel { background:var(--blue); border-color:var(--blue); color:#fff; transform:translateY(-6px); }
     .carta-btn:disabled { opacity:.3; cursor:not-allowed; }
 
+    /* ── REFERENCIA DA CARTA ── */
+    .referencia { margin-top:14px; }
+    .ref-linha { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 14px;
+                 font-size:12px; color:var(--text3); }
+    .ref-rot { text-transform:uppercase; letter-spacing:.06em; font-size:10.5px; }
+    .ref-item b { color:var(--text2); font-weight:800; margin-right:3px; }
+    .ref-btn { background:none; border:none; color:var(--blue); font-family:inherit; font-size:12px;
+               cursor:pointer; padding:0 2px; text-decoration:underline; }
+    .ref-tab { margin:12px auto 0; border-collapse:collapse; font-size:12.5px; }
+    .ref-tab th { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text3);
+                  font-weight:600; padding:4px 12px; text-align:left; }
+    .ref-tab td { padding:4px 12px; border-top:1px solid var(--border); color:var(--text2); }
+    .ref-fraca td { color:var(--text3); }
+    .ref-tag { font-size:10px; color:var(--text3); border:1px solid var(--border2); border-radius:999px;
+               padding:1px 6px; margin-left:4px; }
+    .ref-nota { max-width:520px; margin:8px auto 0; font-size:11.5px; color:var(--text3); line-height:1.5;
+                text-align:center; }
+
     /* ── DETALHE DA DEMANDA EM PAUTA ── */
     .pauta-det { margin-top:14px; text-align:left; border-top:1px solid var(--border);
       padding-top:14px; display:grid; gap:10px; }
@@ -227,6 +245,9 @@
     <div class="votacao">
       <div class="votacao-titulo" id="votacao-titulo">Escolha sua carta</div>
       <div class="cartas" id="cartas"></div>
+    <!-- Referencia logo abaixo do baralho: em outra tela ela nao seria consultada
+         no segundo em que a pessoa escolhe a carta. -->
+    <div class="referencia" id="referencia"></div>
       <div style="text-align:center;margin-top:18px;display:none" id="controles">
         <button class="btn btn-primary" onclick="revelar()" id="btn-revelar">👁 Voto finalizado — revelar</button>
         <button class="btn btn-secondary" onclick="revotar()" id="btn-revotar">↻ Votar de novo</button>
@@ -354,6 +375,10 @@ window.addEventListener('rm-token-novo', (e) => { _token = e.detail || _token; }
 let _facilitador  = false;
 let _estado       = null;
 let _melhorias    = [];
+// Quanto cada carta costuma custar de prazo. Vem pronta do servidor junto com a
+// fila e se refaz a cada rodada — nao ha tabela para ninguem manter.
+let _referencia   = null;
+let _refAberta    = false;
 let _temas        = [];
 let _meuVoto      = '';
 // Cresce a cada ação que muda a rodada (votar, revelar, votar de novo, trocar a
@@ -491,7 +516,9 @@ async function carregarFila() {
     if (!r.ok) throw new Error((r.body && (r.body.detail || r.body.error)) || ('HTTP ' + r.status));
     _melhorias = (r.body && r.body.melhorias) || [];
     _temas     = (r.body && r.body.temas) || [];
+    _referencia = (r.body && r.body.referencia) || null;
     renderFila();
+    renderReferencia();
   } catch (e) {
     el.innerHTML = `<div class="fila-vazia">Falha ao carregar a fila: ${esc(e.message)}</div>`;
   }
@@ -1085,12 +1112,66 @@ async function abrirAnexoPauta(i) {
   }
 }
 
+/* ─── A REFERENCIA DA CARTA ────────────────────────────────────────
+   Fica logo abaixo do baralho, onde se vota — referencia em outra tela nao e
+   consultada no segundo em que a pessoa escolhe a carta.
+
+   Na faixa vao so as cartas com historico firme (7 entregas ou mais). O resto
+   abre em "ver todas": mostrar 2 pts com dois casos ao lado de 3 pts com trinta e
+   sete daria a mesma cara de regra a coisas muito diferentes.                  */
+function refDias(d) {
+  if (d === null || d === undefined) return '—';
+  return d === 1 ? '1 dia' : (String(d).replace('.', ',') + ' dias');
+}
+
+function renderReferencia() {
+  const box = document.getElementById('referencia');
+  if (!box) return;
+  const ref = _referencia;
+  if (!ref || !ref.linhas || !ref.linhas.length) { box.innerHTML = ''; return; }
+  const firmes = ref.linhas.filter(l => l.n >= 7);
+  const resumo = (firmes.length ? firmes : ref.linhas).map(l =>
+    `<span class="ref-item"><b>${esc(rotuloCarta(l.carta))}</b> ${esc(refDias(l.dias))}</span>`).join('');
+  const tabela = !_refAberta ? '' : `
+    <table class="ref-tab">
+      <thead><tr><th>Carta</th><th>Prazo típico</th><th>Entregas</th><th>Horas</th></tr></thead>
+      <tbody>${ref.linhas.map(l => `<tr${l.n < 7 ? ' class="ref-fraca"' : ''}>
+        <td><b>${esc(rotuloCarta(l.carta))}</b></td>
+        <td>${esc(refDias(l.dias))}</td>
+        <td>${l.n}${l.n < 7 ? ' <span class="ref-tag">poucos casos</span>' : ''}</td>
+        <td>${l.horas != null ? esc(String(l.horas).replace('.', ',')) + ' h' : '—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div class="ref-nota">Dias úteis entre o início e a entrega, pela mediana — uma demanda
+      que ficou parada por dependência externa não arrasta a carta inteira. Base de
+      ${ref.total} entrega(s) já concluída(s), refeita a cada rodada.</div>`;
+  box.innerHTML =
+    `<div class="ref-linha">
+       <span class="ref-rot">Costuma levar</span>${resumo}
+       <button type="button" class="ref-btn" onclick="refAlterna()">${_refAberta ? 'ocultar' : 'ver todas'}</button>
+     </div>${tabela}`;
+}
+
+function refAlterna() { _refAberta = !_refAberta; renderReferencia(); }
+
+// Texto do hover de UMA carta. Carta sem historico diz isso, em vez de ficar muda:
+// silencio ali se le como "esta carta nao tem referencia", que e outra coisa.
+function refDaCarta(c) {
+  const l = ((_referencia && _referencia.linhas) || []).find(x => x.carta === String(c));
+  if (!l) return 'Sem entrega concluída com esta carta ainda.';
+  return 'Costuma levar ' + refDias(l.dias) + ' — ' + l.n + ' entrega(s) concluída(s)' +
+         (l.n < 7 ? ', ainda poucos casos' : '') + '.';
+}
+
 function renderCartas() {
   const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','13','21','34','55','89','100','?'];
   const travado = !_estado || _estado.revelado || !_estado.melhoria_id || !_participante;
   document.getElementById('cartas').innerHTML = cartas.map(c =>
     // O `onclick` manda o VALOR ('13'); o botao mostra o rotulo ('12+1').
-    `<button class="carta-btn ${_meuVoto === c ? 'sel' : ''}" ${travado ? 'disabled' : ''} onclick="votar('${esc(c)}')">${rotuloCartaHTML(c)}</button>`
+    // O `title` responde a mesma pergunta com o mouse na carta, sem tirar o olho
+    // dela — a faixa abaixo serve para a leitura de conjunto.
+    `<button class="carta-btn ${_meuVoto === c ? 'sel' : ''}" ${travado ? 'disabled' : ''}
+       title="${esc(refDaCarta(c))}" onclick="votar('${esc(c)}')">${rotuloCartaHTML(c)}</button>`
   ).join('');
   const t = document.getElementById('votacao-titulo');
   if (!_participante)                    t.textContent = 'Entre com seu nome para votar';

@@ -1279,6 +1279,73 @@ function pokerCodigo() {
 // como fazem alguns baralhos invalidaria pontuacoes ja gravadas.
 const POKER_CARTAS = ['1','2','3','5','8','13','21','34','55','89','100','?'];
 
+// Quantos dias UTEIS existem entre duas datas, contando as duas pontas. Feriado
+// cadastrado nao conta. Datas em texto ISO e aritmetica em UTC: `new Date(iso)` no
+// fuso local puxa o dia para tras em -03 e uma entrega no mesmo dia viraria zero.
+function diasUteis(de, ate, feriados) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(de || '')) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(String(ate || ''))) return null;
+  if (ate < de) return null;
+  let n = 0;
+  let t = Date.parse(de + 'T00:00:00Z');
+  const fim = Date.parse(ate + 'T00:00:00Z');
+  // Trava de sanidade: data digitada errada (2206 no lugar de 2026) nao pode
+  // virar um laco de 60 mil voltas a cada leitura da fila.
+  if (!isFinite(t) || !isFinite(fim) || fim - t > 400 * 86400000) return null;
+  while (t <= fim) {
+    const dia = new Date(t);
+    const iso = dia.toISOString().slice(0, 10);
+    const s = dia.getUTCDay();
+    if (s !== 0 && s !== 6 && !feriados.has(iso)) n++;
+    t += 86400000;
+  }
+  return n;
+}
+
+// REFERENCIA DA CARTA: quanto cada carta custou de PRAZO no historico.
+//
+// Prazo, e nao horas, porque foi o que os dados sustentaram: pontos x dias uteis
+// deu correlacao 0,89 em 109 entregas, contra 0,48 de pontos x horas — e metade
+// das horas registradas e "1" ou "2", numero redondo digitado no fim. A escada dos
+// dias ainda se repete entre devs diferentes, o que a torna referencia e nao media
+// curiosa.
+//
+// Roda na mesma leitura que ja monta a fila: nenhuma chamada nova, e o numero se
+// refaz sozinho a cada rodada. Nao existe tabela para alguem manter.
+function pokerReferencia(data) {
+  const feriados = new Set(data.feriados || []);
+  const porCarta = new Map();
+  for (const m of (data.melhorias || [])) {
+    if (!m || m.oculto || m.mesclado_em) continue;
+    if (String(m.status_planejamento || '') !== 'concluido') continue;
+    const pts = m.poker_pontos;
+    if (pts === null || pts === undefined || pts === '') continue;
+    const carta = String(pts);
+    if (!POKER_CARTAS.includes(carta)) continue;
+    const dias = diasUteis(m.inicio, m.entrega || m.concluido_em, feriados);
+    if (dias === null) continue;
+    if (!porCarta.has(carta)) porCarta.set(carta, { dias: [], horas: [] });
+    const alvo = porCarta.get(carta);
+    alvo.dias.push(dias);
+    const h = Number(m.horas_realizadas);
+    if (isFinite(h) && h > 0) alvo.horas.push(h);
+  }
+  // MEDIANA, e nao media: uma demanda parada duas semanas por dependencia externa
+  // nao pode arrastar a referencia da carta inteira.
+  const mediana = v => {
+    if (!v.length) return null;
+    const o = v.slice().sort((a, b) => a - b);
+    const i = Math.floor(o.length / 2);
+    return o.length % 2 ? o[i] : Math.round(((o[i - 1] + o[i]) / 2) * 10) / 10;
+  };
+  const linhas = [];
+  for (const [carta, v] of porCarta) {
+    linhas.push({ carta, n: v.dias.length, dias: mediana(v.dias), horas: mediana(v.horas) });
+  }
+  linhas.sort((a, b) => Number(a.carta) - Number(b.carta));
+  return { linhas, total: linhas.reduce((s, l) => s + l.n, 0) };
+}
+
 async function pokerEstado(db, codigo) {
   const ses = await db.prepare('SELECT * FROM poker_sessao WHERE codigo = ?').bind(codigo).first();
   if (!ses) return null;
@@ -1534,6 +1601,9 @@ export default {
         }
         return json({ ok: true,
                       melhorias: fila,
+                      // Vai junto porque este e o unico ponto que ja le o arquivo
+                      // inteiro nesta tela: calcular aqui nao custa chamada nenhuma.
+                      referencia: pokerReferencia(data),
                       temas: (data.temas || []).map(t => ({ id: t.id, nome: t.nome })) }, 200, headers);
       }
 

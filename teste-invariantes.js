@@ -2115,6 +2115,25 @@ ok(/document\.getElementById\('in-pontos'\)[\s\S]{0,200}?iP\.value = fib \|\| ''
    /if \(!iP\.dataset\.tocado\) iP\.value = fib \|\| '';/.test(POKER),
    'o campo de pontos recebe o numero, e nao o rotulo');
 
+sec('A referencia da carta se refaz sozinha');
+
+// Ela existe porque o levantamento mostrou que a carta preve PRAZO, e nao horas:
+// pontos x dias uteis deu 0,89 em 109 entregas, contra 0,48 de pontos x horas.
+ok(/function pokerReferencia\(data\)/.test(W), 'o servidor calcula a referencia');
+ok(/referencia: pokerReferencia\(data\)/.test(W),
+   'e ela sai junto com a fila — sem chamada nova, e refeita a cada rodada');
+// Media deixaria uma demanda parada por dependencia externa arrastar a carta.
+ok(/const mediana = v => \{/.test(W) && /linhas\.push\(\{ carta, n: v\.dias\.length, dias: mediana/.test(W),
+   'pela mediana, e nao pela media');
+ok(/fim - t > 400 \* 86400000\) return null;/.test(W),
+   'data digitada errada nao vira laco infinito na leitura da fila');
+ok(/Date\.parse\(de \+ 'T00:00:00Z'\)/.test(W),
+   'a conta de dias e em UTC (no fuso local, entrega no mesmo dia daria zero)');
+ok(/l\.n < 7/.test(POKER),
+   'carta com pouco caso e marcada, em vez de passar por regra');
+ok(/id="referencia"><\/div>/.test(POKER) && POKER.indexOf('id="cartas"') < POKER.indexOf('id="referencia"'),
+   'a referencia fica logo abaixo do baralho, onde se vota');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
