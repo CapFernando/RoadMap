@@ -1624,6 +1624,69 @@ try {
 } catch (e) { _pmPorque = e.message; }
 ok(_pmOk, 'o calculo do PM/PO se comporta com historico de verdade', _pmPorque);
 
+
+sec('Rosca: fatia fina nao pode virar so borda');
+
+// `borderWidth: 3` na cor do fundo desenha o separador entre as fatias. Numa
+// fatia mais fina que a borda dos dois lados sobra SO borda: o arco inteiro fica
+// preto, e a cor de verdade so aparece no hover, quando o hoverOffset destaca a
+// fatia. Foi exatamente o defeito relatado.
+ok(/function gerFatias/.test(ADMIN), 'legenda e rosca saem do mesmo calculo');
+ok(/const bordas = vals\.map/.test(ADMIN) === false, 'a borda nao e mais calculada em dois lugares');
+ok(/bordas: itens\.map\(x => \(total > 0 && x\.valor \/ total < 0\.03\) \? 0 : 3\)/.test(ADMIN),
+   'fatia fina recebe borda ZERO');
+ok(/borderWidth: bordas/.test(ADMIN), 'a rosca usa a borda por fatia');
+ok(/\.filter\(p => p\.v > 0\)/.test(ADMIN),
+   'fatia de valor zero sai fora (nao desenha arco, mas ganhava borda)');
+
+// O titulo diz "(TOP)" e nao cortava nada: entrava fatia de 1 ponto em 1.100.
+ok(/const LIMIAR = 0\.02/.test(ADMIN), 'existe o corte da cauda');
+ok(/miudos\.length >= 2/.test(ADMIN),
+   'agrupar UMA fatia so nao vale (o rotulo "Outros" ocupa o mesmo espaco do nome)');
+ok(/afterBody/.test(ADMIN), 'o tooltip de "Outros" lista o que entrou nele');
+ok(/'#6E6A62'/.test(ADMIN), '"Outros" tem cor propria, fora da paleta');
+
+// Comportamento: roda gerFatias de verdade.
+let _fOk = false, _fPorque = '';
+try {
+  const corpo = (n) => {
+    const i = ADMIN.indexOf('function ' + n + '(');
+    let c = 0;
+    for (let k = ADMIN.indexOf('{', ADMIN.indexOf(')', i)); k < ADMIN.length; k++) {
+      if (ADMIN[k] === '{') c++;
+      else if (ADMIN[k] === '}') { c--; if (!c) return ADMIN.slice(i, k + 1); }
+    }
+    return '';
+  };
+  const G = new Function('GER_COLORS', corpo('gerFatias') + '\nreturn gerFatias;')(
+    ['#3B8FE8', '#5EA832', '#E89C2F', '#9B6FE8', '#2BBFA0', '#E84444']);
+  // caso real: uma cauda de tres fatias minusculas e uma semana zerada
+  const r = G({ A: 500, B: 300, C: 200, D: 8, E: 5, F: 3, S5: 0 }, ' pt');
+  const semZero = !r.itens.some(x => x.valor === 0);
+  const agrupou = r.itens.some(x => /^Outros \(3\)/.test(x.label));
+  const semPreta = r.itens.every((x, i) => x.valor / r.total >= 0.03 || r.bordas[i] === 0);
+  const detalhe = r.detalhe.length === 3 && /D: 8 pt/.test(r.detalhe[0]);
+  const cinza = r.itens[r.itens.length - 1].cor === '#6E6A62';
+  // uma fatia miuda sozinha NAO vira "Outros"
+  const r2 = G({ A: 500, B: 5 }, ' pt');
+  const soUma = !r2.agrupa && r2.itens.length === 2 && r2.bordas[1] === 0;
+  _fOk = semZero && agrupou && semPreta && detalhe && cinza && soUma;
+  _fPorque = 'semZero=' + semZero + ' agrupou=' + agrupou + ' semPreta=' + semPreta +
+             ' detalhe=' + detalhe + ' cinza=' + cinza + ' soUma=' + soUma;
+} catch (e) { _fPorque = e.message; }
+ok(_fOk, 'gerFatias se comporta: sem zero, sem fatia so-borda, cauda agrupada', _fPorque);
+
+// ── De Planejado em diante, toda demanda tem dono ──
+// `corrigeSemDev` rebaixa para backlog quem esta em planejado/em_andamento/
+// validacao sem dev. Concluido nao pode ser rebaixado — a demanda foi entregue,
+// e devolver ao backlog seria apagar a entrega para consertar um campo.
+ok(/function entrandoEmConcluidoSemDev/.test(WC), 'concluir sem responsavel e recusado');
+ok((WC.match(/entrandoEmConcluidoSemDev\(data, antes/g) || []).length === 2,
+   'a guarda vale nas duas rotas de gravacao');
+ok(/sem_responsavel/.test(WC), 'a recusa tem motivo proprio');
+ok(/if \(String\(velha\.status_planejamento \|\| ''\) === 'concluido'\) continue;[\s\S]{0,200}?String\(m\.dev \|\| ''\)\.trim\(\)/.test(WC),
+   'demanda que JA estava concluida sem dev nao trava a gravacao de hoje');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

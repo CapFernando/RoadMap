@@ -3387,24 +3387,72 @@ function gerDestroyCharts() {
 // Renderiza um conjunto de pizzas no padrão da aba (rosca + legenda ordenada
 // do maior para o menor). `sufixo` é a unidade exibida: 'h' para horas,
 // ' pt' para pontos do Planning Poker.
+// AS FATIAS DE UMA ROSCA, decididas em um lugar so.
+//
+// Antes a legenda saia de um laco e a rosca de outro, cada um recalculando a cor
+// pelo indice. Funcionava por coincidencia, enquanto os dois percorriam a mesma
+// lista crua — e divergiu no instante em que a rosca passou a agrupar.
+//
+// O agrupamento existe por dois motivos que sao o mesmo defeito visto de dois
+// angulos:
+//   - o titulo diz "(TOP)" desde sempre e nao cortava nada: entrava tudo,
+//     inclusive fatia de 1 ponto em 1.100 (0,09%);
+//   - fatia mais fina que o separador de 3px vira SO separador, e o separador e
+//     da cor do fundo: o arco aparecia preto, e so mostrava a cor no hover.
+function gerFatias(dados, sufixo, ordenar) {
+  // Fatia de valor ZERO sai fora. Ela nao desenha arco nenhum, mas ganhava os 3px
+  // de borda na cor do fundo — virava um fio preto no meio da rosca. Era o caso
+  // da semana S5 na rosca de semanas, que existe no calendario e nao teve ponto
+  // nenhum. Semana vazia nao e uma fatia; e a ausencia de uma.
+  const brutos = Object.keys(dados).map(l => ({ l, v: Math.round(dados[l]) }))
+    .filter(p => p.v > 0);
+  const totalBruto = brutos.reduce((s, p) => s + p.v, 0);
+  const LIMIAR = 0.02;
+  const grande = p => totalBruto > 0 && p.v / totalBruto >= LIMIAR;
+  const miudos = brutos.filter(p => !grande(p));
+  // Agrupar UMA fatia so esconderia um nome sem ganhar espaco: o rotulo "Outros"
+  // ocupa o mesmo que o nome verdadeiro.
+  const agrupa = miudos.length >= 2;
+  const usados = agrupa ? brutos.filter(grande) : brutos;
+
+  const ordenados = ordenar === false ? usados
+    : usados.slice().sort((a, b) => b.v - a.v);
+  const soma = miudos.reduce((s, p) => s + p.v, 0);
+
+  const itens = ordenados.map((p, i) => ({
+    label: p.l, valor: p.v, cor: GER_COLORS[i % GER_COLORS.length],
+  }));
+  // "Outros" em cinza, fora da paleta, e sempre por ultimo: ele nao e um assunto,
+  // e o resto deles.
+  if (agrupa) itens.push({ label: 'Outros (' + miudos.length + ')', valor: soma, cor: '#6E6A62' });
+
+  const total = itens.reduce((s, x) => s + x.valor, 0);
+  return {
+    itens, total: total || 1, agrupa,
+    // Fatia pequena nao ganha borda: sem borda nao ha o que sobrepor o arco.
+    bordas: itens.map(x => (total > 0 && x.valor / total < 0.03) ? 0 : 3),
+    detalhe: miudos.slice().sort((a, b) => b.v - a.v)
+      .map(p => p.l + ': ' + p.v + (sufixo || '')),
+  };
+}
+
 function gerRenderPies(containerId, chartDefs, sufixo) {
   const cont = document.getElementById(containerId);
   if (!cont) return;
 
   cont.innerHTML = chartDefs.map(c => {
     const labels = Object.keys(c.data);
-    const vals   = labels.map(k => Math.round(c.data[k]));
-    const total  = vals.reduce((s,v)=>s+v,0)||1;
-    // legenda do maior p/ menor (TOP); c.ordenar === false mantém a ordem
-    // original — usado nas semanas, que fazem mais sentido em ordem cronológica
-    const idxs   = labels.map((_,i)=>i);
-    const order  = c.ordenar === false ? idxs : [...idxs].sort((a,b)=>vals[b]-vals[a]);
-    const legendHTML = order.map(i => {
-      const pct = Math.round(vals[i]/total*100);
-      return `<div class="ger-legend-item">
-        <span class="ger-legend-dot" style="background:${GER_COLORS[i%GER_COLORS.length]}"></span>
-        <span class="ger-legend-name">${labels[i]}</span>
-        <span class="ger-legend-val">${vals[i]}${sufixo}</span>
+    // MESMO calculo da rosca: a legenda tem de listar as fatias que existem no
+    // desenho, e nao as do dado cru — senao ela mostra dez pontinhos coloridos ao
+    // lado de uma rosca de seis fatias.
+    const f = gerFatias(c.data, sufixo, c.ordenar);
+    const legendHTML = f.itens.map(x => {
+      const pct = Math.round(x.valor / f.total * 100);
+      return `<div class="ger-legend-item"${x.label.indexOf('Outros (') === 0
+          ? ` title="${esc(f.detalhe.join(' · '))}"` : ''}>
+        <span class="ger-legend-dot" style="background:${x.cor}"></span>
+        <span class="ger-legend-name">${esc(x.label)}</span>
+        <span class="ger-legend-val">${x.valor}${sufixo}</span>
         <span class="ger-legend-pct">${pct}%</span>
       </div>`;
     }).join('');
@@ -3424,12 +3472,15 @@ function gerRenderPies(containerId, chartDefs, sufixo) {
   }
 
   chartDefs.forEach(c => {
-    const labels = Object.keys(c.data);
-    if (!labels.length) return;
-    const vals   = labels.map(k => Math.round(c.data[k]));
-    const total  = vals.reduce((s,v) => s+v, 0);
-    // cicla a paleta: com mais de 10 fatias as cores repetem em vez de sumir
-    const colors = labels.map((_, i) => GER_COLORS[i % GER_COLORS.length]);
+    if (!Object.keys(c.data).length) return;
+    const f = gerFatias(c.data, sufixo, c.ordenar);
+    const labels = f.itens.map(x => x.label);
+    const vals = f.itens.map(x => x.valor);
+    const colors = f.itens.map(x => x.cor);
+    const bordas = f.bordas;
+    const total = f.total;
+    const agrupa = f.agrupa;
+    const detalheMiudos = f.detalhe;
     const ctx    = document.getElementById(c.id)?.getContext('2d');
     if (!ctx) return;
 
@@ -3441,7 +3492,7 @@ function gerRenderPies(containerId, chartDefs, sufixo) {
           data: vals,
           backgroundColor: colors,
           borderColor: '#161614',
-          borderWidth: 3,
+          borderWidth: bordas,
           hoverOffset: 8,
         }]
       },
@@ -3453,7 +3504,11 @@ function gerRenderPies(containerId, chartDefs, sufixo) {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: ctx => ` ${ctx.raw}${sufixo} — ${Math.round(ctx.raw/total*100)}%`
+              label: ctx => ` ${ctx.raw}${sufixo} — ${Math.round(ctx.raw/total*100)}%`,
+              // O que entrou em "Outros" aparece aqui. Agrupar sem poder abrir
+              // seria esconder dado, e nao resumir.
+              afterBody: ctx => (agrupa && ctx[0] && /^Outros \(/.test(ctx[0].label))
+                ? detalheMiudos : undefined,
             }
           },
           datalabels: {

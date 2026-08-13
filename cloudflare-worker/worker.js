@@ -739,6 +739,32 @@ function entrandoEmConcluidoSemHoras(recebido, servidor) {
 }
 
 
+// Entrar em CONCLUIDO sem responsavel. `corrigeSemDev` cobre planejado,
+// em_andamento e validacao rebaixando para backlog — mas concluido nao pode ser
+// rebaixado: a demanda foi entregue, e devolver ela para o backlog seria apagar
+// a entrega para consertar um campo. Entao aqui a saida e a mesma das horas:
+// recusar a transicao, e deixar quem esta na tela preencher.
+//
+// Sem esta guarda sobra o que sobrou na base: AX-079, concluida sem dev desde a
+// carga inicial, invisivel em todo relatorio por pessoa.
+function entrandoEmConcluidoSemDev(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || String(m.status_planejamento || '') !== 'concluido') continue;
+    const velha = antes.get(m.id);
+    // Igual a guarda das horas: registro que o servidor nao conhece e import ou
+    // cadastro do proprio PM/PO, e nao o furo do fluxo.
+    if (!velha) continue;
+    if (String(velha.status_planejamento || '') === 'concluido') continue;
+    if (!String(m.dev || '').trim()) presos.push(m.codigo || m.id);
+  }
+  return presos;
+}
+
+
 // ─── REFERENCIA AO GITHUB ──────────────────────────────────────────────
 // Antes havia UM campo `link_externo` para "o link da demanda", e ele estava
 // preenchido em ZERO das 201 demandas. Duas razoes: um slot para tres coisas
@@ -2805,6 +2831,14 @@ export default {
       // registraHistorico: gravar historico de uma publicacao que sera recusada
       // sujaria a trilha com um evento que nao aconteceu.
       const semHorasPub = entrandoEmConcluidoSemHoras(data, antesPub);
+      const semDevPub = entrandoEmConcluidoSemDev(data, antesPub);
+      if (semDevPub.length) {
+        return json({ error: 'sem_responsavel',
+                      detail: 'Sem responsável para concluir: ' + semDevPub.join(', ') +
+                              '. De Planejado em diante toda demanda tem dono — sem ele a '  +
+                              'entrega não entra em nenhum relatório por pessoa.' },
+                    400, headers);
+      }
       if (semHorasPub.length) {
         return json({ error: 'horas_obrigatorias',
                       codigos: semHorasPub,
@@ -2901,6 +2935,14 @@ export default {
       // registraHistorico: gravar historico de uma publicacao que sera recusada
       // sujaria a trilha com um evento que nao aconteceu.
       const semHorasDev = entrandoEmConcluidoSemHoras(data, antesDev);
+      const semDevDev = entrandoEmConcluidoSemDev(data, antesDev);
+      if (semDevDev.length) {
+        return json({ error: 'sem_responsavel',
+                      detail: 'Sem responsável para concluir: ' + semDevDev.join(', ') +
+                              '. De Planejado em diante toda demanda tem dono — sem ele a '  +
+                              'entrega não entra em nenhum relatório por pessoa.' },
+                    400, headers);
+      }
       if (semHorasDev.length) {
         return json({ error: 'horas_obrigatorias',
                       codigos: semHorasDev,
