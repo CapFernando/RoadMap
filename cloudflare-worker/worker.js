@@ -1935,28 +1935,27 @@ export default {
       // desbloqueia sem afrouxar para nome unico.
       const normNome = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
         .toLowerCase().replace(/\s+/g, ' ').trim();
-      const mesmaPessoa = (a, b) => {
-        const x = normNome(a), y = normNome(b);
-        if (!x || !y) return false;
-        if (x === y) return true;
-        const curto = x.length <= y.length ? x : y;
-        const longo = x.length <= y.length ? y : x;
-        if (curto.split(' ').length < 2) return false;
-        return longo === curto || longo.startsWith(curto + ' ');
-      };
+      // A heuristica de prefixo que morava aqui foi removida. Ela comparava o nome
+      // da conta com o nome na demanda e aceitava um ser prefixo do outro — um
+      // caminho por onde a fila de uma pessoa chega na mao de outra. Hoje o nome
+      // usado nas demandas sai do e-mail no cadastro, entao ha sempre algo EXATO
+      // para comparar, e nao ha mais o que inferir.
       // Nomes que ESTA conta reconhece como seus. Quando a conta declara o nome
       // usado nas demandas, a comparacao passa a ser EXATA (normalizada por acento e
       // caixa): declarado e declarado, nao ha o que inferir. Sem o campo, cai na
       // heuristica de prefixo — que resolveu o caso do nome completo mas nao alcanca
       // apelido de um nome so, e por isso o campo existe.
+      // Sem o campo declarado, vale o nome derivado do E-MAIL — nunca uma
+      // semelhanca com o nome de outra pessoa. Conta antiga que ainda nao tenha o
+      // campo cai no proprio nome da conta, sempre por igualdade.
       const declarados = String((ident.usuario && ident.usuario.nome_demandas) || '')
         .split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+      const derivado = declarados.length ? [] :
+        [nomeDemandasDoEmail((ident.usuario && ident.usuario.email) || '', eu), eu].filter(Boolean);
+      const aceitos = declarados.length ? declarados : derivado;
       const meuDono = m => {
         const naDemanda = String(m.dev || '').split('/').map(x => x.trim()).filter(Boolean);
-        if (declarados.length) {
-          return naDemanda.some(n => declarados.some(a => normNome(n) === normNome(a)));
-        }
-        return naDemanda.some(n => mesmaPessoa(n, eu));
+        return naDemanda.some(n => aceitos.some(a => normNome(n) === normNome(a)));
       };
 
       if (body.action === 'demandas-minhas') {
@@ -2664,6 +2663,10 @@ export default {
       const op = String(body.op || 'listar');
 
       if (op === 'listar') {
+        // `email` ja vem na consulta: e dele que sai a sugestao de nome para as
+        // demandas, montada abaixo. O seletor do Admin so conhece nomes que ja
+        // aparecem em alguma demanda — para um dev novo, que por definicao nao tem
+        // nenhuma, nao havia nada certo para escolher.
         const r = await env.POKER_DB.prepare(
           `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso,
                   nome_demandas, reset_em
@@ -2680,7 +2683,14 @@ export default {
              FROM senha_reset s JOIN usuario u ON u.id = s.usuario_id
             WHERE s.criado_em > ? ORDER BY s.criado_em DESC LIMIT 40`)
           .bind(new Date(Date.now() - 30 * 86400 * 1000).toISOString()).all();
-        return json({ ok: true, usuarios: r.results || [], pedidos: p.results || [],
+        // `nome_sugerido` vai junto de cada conta: e o nome derivado do e-mail, e
+        // e o que o Admin oferece quando a pessoa ainda nao tem demanda nenhuma.
+        // Derivar aqui, e nao na tela, mantem UMA implementacao da regra — a
+        // mesma que o cadastro usa.
+        const comSugestao = (r.results || []).map(u => Object.assign({}, u, {
+          nome_sugerido: nomeDemandasDoEmail(u.email, u.nome),
+        }));
+        return json({ ok: true, usuarios: comSugestao, pedidos: p.results || [],
                       resets: resets.results || [] }, 200, headers);
       }
 

@@ -6462,10 +6462,22 @@ function uCelulaNomeDemandas(u) {
   // seletor o descartaria em silencio e o admin acharia que nunca foi salvo.
   const declarados = atual.split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
   declarados.forEach(d => { if (!nomes.some(n => normTexto(n) === normTexto(d))) nomes.push(d + ' (fora da base)'); });
+  // O NOME DERIVADO DO E-MAIL entra na lista mesmo sem nenhuma demanda.
+  //
+  // Sem ele, o seletor de um dev novo so oferecia nomes de OUTRAS pessoas: nao
+  // havia nada certo para escolher, so o que escolher errado. Foi assim que
+  // "lucas.santos" acabou apontando para "João Lucas".
+  //
+  // Escolher esse nome CRIA a pessoa na lista de devs — quando nao tem, criar e
+  // melhor do que adivinhar.
+  const sugerido = String(u.nome_sugerido || '').trim();
+  if (sugerido && !nomes.some(n => normTexto(n) === normTexto(sugerido))) {
+    nomes.push(sugerido + ' (criar — do e-mail)');
+  }
   const sel = '<select class="us-nomedem" onchange="uNomeDemandas(\'' + l + '\', this.value)">' +
     '<option value="">— pelo nome da conta —</option>' +
     nomes.map(n => {
-      const puro = n.replace(' (fora da base)', '');
+      const puro = n.replace(' (fora da base)', '').replace(' (criar — do e-mail)', '');
       const q = uQtdPorNome(puro);
       // esc() desta pagina ja escapa & < > e a aspas dupla: serve para atributo.
       // `escAttr` existe no painel dev, nao aqui — chamar aqui quebraria a tela na
@@ -6509,9 +6521,22 @@ async function uNome(login) {
 async function uNomeDemandas(login, valor) {
   try {
     await uChamar('nome-demandas', { login, nome_demandas: valor });
-    uAviso(valor
+    // Nome que ainda nao existe em demanda nenhuma entra na LISTA DE DEVS. Sem
+    // isso, o vinculo apontaria para um nome que ninguem consegue atribuir no
+    // Planejamento, e a conta continuaria sem demanda alcancavel — que e o
+    // problema que este campo existe para resolver.
+    let extra = '';
+    if (valor && !(state.desenvolvedores || []).some(d =>
+          String(d).trim().toLowerCase() === valor.toLowerCase())) {
+      state.desenvolvedores = [...(state.desenvolvedores || []), valor]
+        .sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
+      extra = (await saveViaProxy())
+        ? ' "' + valor + '" foi criado na lista de devs.'
+        : ' ATENÇÃO: não consegui criar "' + valor + '" na lista de devs.';
+    }
+    uAviso((valor
       ? 'Pronto: as demandas de "' + valor + '" passam a ser desta conta.'
-      : 'Voltou a casar pelo nome da conta.');
+      : 'Voltou a casar pelo nome da conta.') + extra);
     renderUsuarios();
   } catch (e) {
     uAviso(e.message, true);

@@ -334,12 +334,16 @@ sec('Posse da demanda: declarada, nao adivinhada');
 // qualquer Joao da equipe. Medido: 7 das 9 contas nao reconheciam NENHUMA demanda.
 ok(/'usuario', 'nome_demandas'/.test(W), 'a conta tem o campo do nome usado nas demandas');
 ok(/u\.nome_demandas/.test(W), 'identifica traz o campo junto da sessao');
-ok(/nome_demandas[\s\S]{0,400}?normNome\(n\) === normNome\(a\)/.test(W),
+ok(/nome_demandas[\s\S]{0,600}?normNome\(n\) === normNome\(a\)/.test(W),
    'com o campo preenchido a comparacao e EXATA, nao por prefixo');
-// A heuristica continua para quem nao declarou: ninguem fica pior do que estava.
+// A HEURISTICA MORREU, e esta invariante inverteu junto. Ela existia para quem
+// nao tinha o campo declarado, e o argumento era "ninguem fica pior do que
+// estava" — o que valia enquanto so havia contas antigas. Na primeira conta nova
+// ela mostrou a fila de outra pessoa: "lucas.santos" caiu em "Joao Lucas".
+// Hoje o nome sai do e-mail no cadastro, entao ha sempre algo exato para comparar.
 const dono = corpo(W, 'const meuDono = m => {');
-ok(!!dono && /mesmaPessoa\(n, eu\)/.test(dono),
-   'sem o campo, cai na heuristica antiga (ninguem perde acesso)');
+ok(!!dono && !/mesmaPessoa\(n, eu\)/.test(dono),
+   'sem o campo, NAO ha heuristica: vale o nome derivado do e-mail, por igualdade');
 // Quem escolhe a carteira e o admin. Se o dev pudesse declarar, escolheria de quem
 // sao as demandas — e a posse deixaria de significar algo.
 const opND = W.slice(W.indexOf("op === 'nome-demandas'"), W.indexOf("op === 'nome-demandas'") + 1400);
@@ -1869,6 +1873,66 @@ try {
              ' uma=' + umaParte + ' vazio=' + vazio;
 } catch (e) { _dPorque = e.message; }
 ok(_dOk, 'a derivacao se comporta: duas partes, acento do cadastro, sem chute', _dPorque);
+
+
+sec('Quando nao tem, cria — nao adivinha');
+
+// "lucas.santos" se cadastrou e ficou com "Joao Lucas" no perfil. Nao foi o
+// cadastro: foi o palpite antigo do painel, que casava por semelhanca e GRAVAVA o
+// resultado. Sobravam mais dois adivinhadores depois dele.
+
+// 1. A API. Sem o campo declarado, ela casava por PREFIXO entre o nome da conta e
+//    o nome na demanda — um caminho por onde a fila de uma pessoa chega na mao de
+//    outra.
+ok(!/const mesmaPessoa = \(a, b\) =>/.test(WC),
+   'a heuristica de prefixo saiu da API');
+ok(/const derivado = declarados\.length \? \[\] :/.test(WC),
+   'sem campo declarado, vale o nome derivado do e-mail');
+ok(/naDemanda\.some\(n => aceitos\.some\(a => normNome\(n\) === normNome\(a\)\)\)/.test(WC),
+   'a comparacao e sempre por IGUALDADE');
+
+// 2. O seletor do Admin so listava nomes que ja existiam em alguma demanda. Para
+//    um dev novo — que por definicao nao tem nenhuma — nao havia nada certo para
+//    escolher, so o que escolher errado.
+ok(/nome_sugerido: nomeDemandasDoEmail\(u\.email, u\.nome\)/.test(WC),
+   'a lista de contas devolve o nome sugerido pelo e-mail');
+ok(/criar — do e-mail/.test(ADMIN), 'o seletor oferece CRIAR o nome que falta');
+ok(/state\.desenvolvedores = \[\.\.\.\(state\.desenvolvedores \|\| \[\]\), valor\]/.test(ADMIN),
+   'escolher o nome novo o cria na lista de devs');
+
+// Comportamento: o caso exato que aconteceu.
+let _cOk = false, _cPorque = '';
+try {
+  const i = WC.indexOf('function nomeDemandasDoEmail(');
+  let c = 0, corpo = '';
+  for (let k = WC.indexOf('{', WC.indexOf(')', i)); k < WC.length; k++) {
+    if (WC[k] === '{') c++;
+    else if (WC[k] === '}') { c--; if (!c) { corpo = WC.slice(i, k + 1); break; } }
+  }
+  const der = new Function(corpo + '\nreturn nomeDemandasDoEmail;')();
+  const norm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+  const dono = (u) => {
+    const decl = String(u.nome_demandas || '').split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+    const deriv = decl.length ? [] : [der(u.email || '', u.nome), u.nome].filter(Boolean);
+    const aceitos = decl.length ? decl : deriv;
+    return m => String(m.dev || '').split('/').map(x => x.trim()).filter(Boolean)
+      .some(n => aceitos.some(a => norm(n) === norm(a)));
+  };
+  const lucas = dono({ nome: 'lucas de oliveira santos',
+                       email: 'lucas.santos@audaxcapitalsa.com.br', nome_demandas: '' });
+  const naoVaza = !lucas({ dev: 'João Lucas' }) && !lucas({ dev: 'João Vitor' });
+  const pegaAsSuas = lucas({ dev: 'Lucas Santos' });
+  const antigo = dono({ nome: 'Gabriel Rodrigues', email: 'gabriel.fernandes@x.com',
+                        nome_demandas: 'Gabriel' });
+  const declaradoVale = antigo({ dev: 'Gabriel' }) && !antigo({ dev: 'Gabriel Leite' });
+  const semCampo = dono({ nome: 'Murillo', email: 'murillo.jesus@x.com', nome_demandas: '' });
+  const contaAntiga = semCampo({ dev: 'Murillo' });
+  _cOk = naoVaza && pegaAsSuas && declaradoVale && contaAntiga;
+  _cPorque = 'naoVaza=' + naoVaza + ' proprias=' + pegaAsSuas +
+             ' declarado=' + declaradoVale + ' antiga=' + contaAntiga;
+} catch (e) { _cPorque = e.message; }
+ok(_cOk, 'a fila de um dev NAO chega na mao de outro pela API', _cPorque);
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
