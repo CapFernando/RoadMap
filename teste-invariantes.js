@@ -2003,6 +2003,38 @@ ok(!/const alcance = declarados\.length/.test(ADMIN),
 ok(/por ' \+ porQual\.map\(esc\)\.join\(' e '\)/.test(ADMIN),
    'a nota diz POR QUAL nome as demandas casaram');
 
+
+sec('Lista de devs: o servidor converge sozinho');
+
+// Uma publicacao do Admin de uma aba aberta ANTES da padronizacao trouxe os oito
+// nomes antigos de volta — a mesclagem de devs e uniao pura. A lista foi de 16
+// para 27 e "Crisley" passou a conviver com "Crisley Almeida"; quem abriu o painel
+// por "Crisley" viu zero demandas.
+//
+// Corrigir a mao nao resolveria: a proxima aba antiga traz tudo de novo. E pedir
+// para todos recarregarem e uma explicacao que ninguem deveria dar.
+ok(/async function limpaDevs/.test(WC), 'o Worker limpa a lista em toda gravacao');
+ok((WC.match(/await limpaDevs\(env, data\)/g) || []).length === 2,
+   'nas duas rotas de gravacao');
+ok(/temDemanda\(n\) \|\| canonicos\.has\(norm\(n\)\) \|\| declaradosVivos\.has\(norm\(n\)\)/.test(WC),
+   'fica quem tem demanda, quem e canonico de conta ativa, ou quem tem vinculo vivo');
+
+// Sair do time e DECISAO, e nao estado dedutivel: Marina tambem so tem trabalho
+// concluido e continua no time; Cairo saiu. Nada nos dados distingue os dois.
+ok(/data\.devs_removidos/.test(WC), 'a saida do time fica registrada');
+ok(/!removidos\.has\(norm\(n\)\) \|\| temAberta\(n\)/.test(WC),
+   'e um removido volta sozinho se receber demanda ABERTA');
+ok(/state\.devs_removidos = \[\.\.\.new Set\(\[\.\.\.\(state\.devs_removidos \|\| \[\]\), name\]\)\]/.test(GANTT),
+   'remover pela tela grava a decisao');
+ok(/'devs_removidos'/.test(GANTT), 'a decisao nao e sobrescrita no conflito');
+
+// O vinculo obsoleto tambem se resolve sozinho: campo que nao casa com demanda
+// nenhuma e apagado, e a conta volta a valer pelo e-mail.
+ok(/UPDATE usuario SET nome_demandas = NULL WHERE id = \?/.test(WC),
+   'vinculo que nao casa com nada e apagado');
+ok(/const uteis = decl\.filter\(temDemanda\)/.test(WC),
+   'so e apagado quando REALMENTE nao casa (o "Leite" sobrevive)');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

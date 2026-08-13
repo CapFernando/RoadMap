@@ -501,6 +501,80 @@ function histValor(v) {
 
 // Compara o que chegou com o que esta gravado e anexa as diferencas. `quem` sai
 // da conta autenticada; sem conta, fica o papel, que ja diz de onde veio.
+// Nomes que aparecem no campo `dev` das demandas, com e sem filtro de etapa.
+function devsDasDemandas(data, soAbertas) {
+  const fora = new Set();
+  for (const m of (data.melhorias || [])) {
+    if (!m || m.oculto || m.mesclado_em) continue;
+    if (soAbertas && ['concluido', 'negada'].includes(String(m.status_planejamento || ''))) continue;
+    String(m.dev || '').split(/[\/,]/).forEach(n => {
+      const t = n.trim();
+      if (t) fora.add(t);
+    });
+  }
+  return fora;
+}
+
+// Limpa a lista de devs e os vinculos obsoletos. Roda em TODA gravacao, porque o
+// problema aparece justamente quando uma aba antiga publica: a mesclagem de devs
+// e uniao, entao a lista velha volta inteira e passa a conviver com a nova.
+//
+// Corrigir a mao nao resolveria — a proxima aba antiga traz tudo de novo — e pedir
+// para todos recarregarem a tela e uma explicacao que ninguem deveria dar.
+async function limpaDevs(env, data) {
+  if (!data || !Array.isArray(data.desenvolvedores)) return [];
+  if (!Array.isArray(data.devs_removidos)) data.devs_removidos = [];
+  const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+
+  const emDemanda = devsDasDemandas(data, false);
+  const emAberto = devsDasDemandas(data, true);
+  const temDemanda = n => [...emDemanda].some(x => norm(x) === norm(n));
+  const temAberta = n => [...emAberto].some(x => norm(x) === norm(n));
+
+  // As contas dizem quem EXISTE; as demandas dizem quem esta trabalhando.
+  const canonicos = new Set();
+  const declaradosVivos = new Set();
+  if (env.POKER_DB) {
+    try {
+      await contasMigrar(env.POKER_DB);
+      const r = await env.POKER_DB.prepare(
+        'SELECT id, nome, email, nome_demandas FROM usuario WHERE ativo = 1 AND pendente = 0').all();
+      for (const u of (r.results || [])) {
+        const can = nomeDemandasDoEmail(u.email, u.nome);
+        if (can) canonicos.add(norm(can));
+        // Declarado so continua valendo enquanto casar com alguma demanda. E o
+        // caso do "Leite". Quando para de casar, o campo e obsoleto: apaga, e a
+        // conta volta a valer pelo e-mail sem ninguem precisar mexer.
+        const decl = String(u.nome_demandas || '').split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+        const uteis = decl.filter(temDemanda);
+        uteis.forEach(x => declaradosVivos.add(norm(x)));
+        if (decl.length && !uteis.length) {
+          try {
+            await env.POKER_DB.prepare('UPDATE usuario SET nome_demandas = NULL WHERE id = ?')
+              .bind(u.id).run();
+          } catch (_) {}
+        }
+      }
+    } catch (_) { /* sem banco, so a regra das demandas vale */ }
+  }
+
+  // QUEM SAIU DO TIME e uma DECISAO, e nao um estado dedutivel dos dados. Cairo e
+  // Marina tambem so tem trabalho concluido, e continuam no time; Joao Carvalho
+  // saiu. Nada no arquivo distingue os dois casos — so a decisao de quem coordena.
+  //
+  // Por isso ela fica gravada em `devs_removidos`, e nao inferida. Um nome
+  // removido volta sozinho se receber demanda ABERTA: a decisao vale enquanto
+  // ninguem contrariar na pratica.
+  const removidos = new Set((data.devs_removidos || []).map(norm));
+  const fica = n => (temDemanda(n) || canonicos.has(norm(n)) || declaradosVivos.has(norm(n))) &&
+                    (!removidos.has(norm(n)) || temAberta(n));
+  const antes = data.desenvolvedores.slice();
+  data.desenvolvedores = antes.filter(fica);
+  return antes.filter(n => !fica(n));
+}
+
+
 // Chaves de espelho: dados que uma tela guardou em memoria e mandou de volta sem
 // querer. Nenhuma pertence ao arquivo de demandas.
 //
@@ -2937,6 +3011,7 @@ export default {
       // ANTES do historico, de proposito: assim o carimbo automatico do mes
       // tambem vira linha no card. Depois dele, so a marcacao manual apareceria,
       // e a automatica seria um dado que muda sozinho sem deixar rastro.
+      const devsForaPub = await limpaDevs(env, data);
       carimbaMeses(data, antesPub, true);
       registraHistorico(data, antesPub, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel');
@@ -2964,6 +3039,9 @@ export default {
       return json({ ok: true, codigos: codigosMel, codigos_projeto: codigosPrj,
                     sem_dev: semDev, sem_projeto: soltas,
                     espelhos_descartados: espelhos,
+                    // Diz o que saiu: limpeza silenciosa vira "sumiu um dev da
+                    // lista e ninguem sabe por que".
+                    devs_removidos: devsForaPub,
                     atualizado_em: data.atualizado_em }, 200, headers);
     }
 
@@ -3041,6 +3119,7 @@ export default {
       // ANTES do historico, de proposito: assim o carimbo automatico do mes
       // tambem vira linha no card. Depois dele, so a marcacao manual apareceria,
       // e a automatica seria um dado que muda sozinho sem deixar rastro.
+      const devsForaDev = await limpaDevs(env, data);
       carimbaMeses(data, antesDev, false);
       registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel dev');
@@ -3057,7 +3136,8 @@ export default {
       // Diz o que foi revertido: gravar diferente do que a tela mandou e recusar em
       // silencio, e a pessoa so descobriria no proximo F5.
       return json({ ok: true, datas_revertidas: datasRevertidas,
-                    espelhos_descartados: espelhos }, 200, headers);
+                    espelhos_descartados: espelhos,
+                    devs_removidos: devsForaDev }, 200, headers);
     }
 
     // Acao presente mas desconhecida = sondagem. Antes caia no fluxo de sugestao

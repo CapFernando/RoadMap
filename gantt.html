@@ -1495,7 +1495,8 @@ async function saveToGitHub(tentativa = 1) {
     // `devs_perfil` entra na lista: sem ele, um conflito de gravacao traria a
     // versao do servidor por cima e a marcacao que a pessoa acabou de fazer
     // sumiria — do jeito mais confuso possivel, logo depois de um "salvo".
-    const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'devs_perfil', 'feriados',
+    const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'devs_perfil',
+                         'devs_removidos', 'feriados',
                          'ausencias', 'atualizado_em'];
     Object.keys(serverData || {}).forEach(k => {
       if (!MEUS_CAMPOS.includes(k)) state[k] = serverData[k];
@@ -3070,6 +3071,14 @@ async function removeDev(i) {
         ok: 'Remover', perigo: true }))) return;
     state.desenvolvedores.splice(i, 1);
     _gDeletedDevs.add(name.toLowerCase());
+    // A remocao vira DECISAO GRAVADA, e nao so um estado desta aba. Sem isso ela
+    // durava ate a proxima carga: a lista se remonta unindo o que veio do
+    // servidor, e o nome voltava — foi o que aconteceu quando uma aba antiga
+    // publicou e trouxe de volta oito nomes ja padronizados.
+    //
+    // Quem saiu do time nao e dedutivel dos dados: Cairo e Marina tambem so tinham
+    // trabalho concluido e continuavam no time. So a decisao distingue.
+    state.devs_removidos = [...new Set([...(state.devs_removidos || []), name])];
   }
 
   renderDevsList();
