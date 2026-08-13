@@ -2025,6 +2025,62 @@ ok((ADMIN.match(/devs_perfil = Object\.assign\(\{\}/g) || []).length === 2,
 ok(/const desenvolve = \['dev', 'analista'\]\.includes/.test(ADMIN),
    'so quem desenvolve entra na lista de devs ao escolher o nome');
 
+sec('A tela tem de CARREGAR o que ela grava');
+
+// A marcacao estava no arquivo e a tela desenhava tudo apagado. `state` e montado
+// a partir de uma lista fixa de chaves, e `devs_perfil` nao estava nela: a cada
+// carga o mapa nascia vazio, todos os botoes desenhavam "nao marcado", e quem
+// marcava recarregava e via o proprio trabalho sumido.
+//
+// Pior: o que a tela nao carrega, ela apaga ao publicar. `devs_removidos` saia
+// ausente do envio e o servidor gravava lista vazia — seis nomes de quem saiu do
+// time viraram zero numa unica publicacao.
+// O bloco da CARGA e o que le `decoded` — as outras atribuicoes a `state` no
+// arquivo sao a declaracao inicial e nao dizem nada sobre o que vem do servidor.
+const blocoCarga = src =>
+  (src.match(/state = \{[\s\S]*?\n\s*\};/g) || []).find(b => b.includes('decoded.')) || '';
+
+[['Admin', ADMIN], ['Gantt', GANTT]].forEach(([tela, src]) => {
+  const carga = blocoCarga(src);
+  ok(/devs_perfil:\s*decoded\.devs_perfil/.test(carga),
+     tela + ' carrega devs_perfil no state (sem isso a marcacao nao aparece)');
+  ok(/devs_removidos:\s*decoded\.devs_removidos/.test(carga),
+     tela + ' carrega devs_removidos (sem isso publicar zera a lista)');
+});
+
+// Toda chave que a tela declara como sua PRECISA ser carregada por ela: "minha" no
+// envio + ausente na carga = apaga o que estava no servidor, que foi exatamente o
+// que aconteceu com devs_removidos.
+[['Admin', ADMIN], ['Gantt', GANTT]].forEach(([tela, src]) => {
+  const meus = (src.match(/const MEUS_CAMPOS = \[([\s\S]*?)\];/) || [, ''])[1]
+    .match(/'([^']+)'/g).map(s => s.replace(/'/g, ''))
+    .filter(k => k !== 'atualizado_em');
+  const carga = blocoCarga(src);
+  const fora = meus.filter(k => !new RegExp('\\b' + k + ':').test(carga));
+  ok(!fora.length, tela + ': tudo que ele declara como seu tambem e carregado',
+     fora.length ? 'fora da carga: ' + fora.join(', ') : '');
+});
+
+sec('O servidor nao apaga chave que ninguem mandou apagar');
+
+// Cada tela monta o envio a partir de uma lista fixa; quem nao esta nela chega
+// ausente, e o arquivo e gravado com o objeto recebido — entao "ausente" virava
+// "apagado". A regra e ausencia, e nao lista de nomes: vazio ENVIADO continua
+// valendo, e chave criada amanha por outra tela ja fica protegida.
+ok(/function preservaChaves\(data, antes\)/.test(W),
+   'o Worker preserva chave que nao veio no envio');
+ok(/if \(data\[k\] === undefined\) \{ data\[k\] = antes\[k\]/.test(W),
+   'e o criterio e AUSENCIA — esvaziar de proposito continua funcionando');
+ok(/if \(k\.charAt\(0\) === '_'\) continue;/.test(W),
+   'espelho `_` nao volta pela porta dos fundos');
+['Pub', 'Dev'].forEach(v => {
+  const i = W.indexOf('const voltaram' + v + ' = preservaChaves');
+  const j = W.indexOf('const devsFora' + v + ' = await limpaDevs');
+  ok(i > 0 && j > 0 && i < j,
+     'no ' + (v === 'Pub' ? 'publish' : 'dev-publish') +
+     ', preservaChaves roda ANTES de limpaDevs (que le devs_removidos)');
+});
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

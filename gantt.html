@@ -1405,6 +1405,11 @@ async function loadFromGitHub() {
       temas:         decoded.temas         || [],
       melhorias:     decoded.melhorias      || [],
       desenvolvedores: decoded.desenvolvedores || [],
+      // Sem `devs_perfil` aqui, a ordenacao por DEV-AXCred deste quadro nunca
+      // teve efeito: ela le este campo, que nascia vazio a cada carga. E sem
+      // `devs_removidos`, publicar daqui zerava a lista de quem saiu do time.
+      devs_perfil:   decoded.devs_perfil   || {},
+      devs_removidos: decoded.devs_removidos || [],
       feriados:      decoded.feriados       || [],
       ausencias:     decoded.ausencias      || [],
     };

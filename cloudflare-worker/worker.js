@@ -515,6 +515,28 @@ function devsDasDemandas(data, soAbertas) {
   return fora;
 }
 
+// Chave que existe no arquivo e NAO veio no envio nao e apagada.
+//
+// Cada tela monta o que envia a partir de uma lista fixa de campos. Quem nao esta
+// nessa lista chega ausente aqui — e o arquivo e gravado com o objeto recebido,
+// entao "ausente" virava "apagado". Nao foi hipotese: `devs_removidos` tinha seis
+// nomes e virou lista vazia na primeira publicacao de uma tela que nao carregava
+// essa chave.
+//
+// A regra e ausencia, e nao lista de nomes: valor vazio ENVIADO continua valendo
+// (esvaziar de proposito tem de funcionar), e chave criada amanha por outra tela
+// fica protegida sem ninguem precisar voltar aqui.
+function preservaChaves(data, antes) {
+  if (!data || typeof data !== 'object' || !antes || typeof antes !== 'object') return [];
+  const voltaram = [];
+  for (const k of Object.keys(antes)) {
+    if (k.charAt(0) === '_') continue;          // espelho: limpaEspelhos cuida
+    if (data[k] === undefined) { data[k] = antes[k]; voltaram.push(k); }
+  }
+  return voltaram;
+}
+
+
 // Limpa a lista de devs e os vinculos obsoletos. Roda em TODA gravacao, porque o
 // problema aparece justamente quando uma aba antiga publica: a mesclagem de devs
 // e uniao, entao a lista velha volta inteira e passa a conviver com a nova.
@@ -3037,6 +3059,9 @@ export default {
       // ANTES do historico, de proposito: assim o carimbo automatico do mes
       // tambem vira linha no card. Depois dele, so a marcacao manual apareceria,
       // e a automatica seria um dado que muda sozinho sem deixar rastro.
+      // ANTES de limpaDevs, que LE `devs_removidos`: se a chave nao voltou
+      // primeiro, a limpeza decide sem saber quem ja tinha saido do time.
+      const voltaramPub = preservaChaves(data, antesPub);
       const devsForaPub = await limpaDevs(env, data);
       carimbaMeses(data, antesPub, true);
       registraHistorico(data, antesPub, (_ident && _ident.usuario && _ident.usuario.nome) ||
@@ -3068,6 +3093,10 @@ export default {
                     // Diz o que saiu: limpeza silenciosa vira "sumiu um dev da
                     // lista e ninguem sabe por que".
                     devs_removidos: devsForaPub,
+                    // Diz quais chaves a tela nao mandou e o servidor segurou.
+                    // Silencio aqui seria uma tela publicando incompleta todo dia
+                    // sem ninguem ficar sabendo.
+                    chaves_preservadas: voltaramPub,
                     atualizado_em: data.atualizado_em }, 200, headers);
     }
 
@@ -3145,6 +3174,9 @@ export default {
       // ANTES do historico, de proposito: assim o carimbo automatico do mes
       // tambem vira linha no card. Depois dele, so a marcacao manual apareceria,
       // e a automatica seria um dado que muda sozinho sem deixar rastro.
+      // ANTES de limpaDevs, que LE `devs_removidos`: se a chave nao voltou
+      // primeiro, a limpeza decide sem saber quem ja tinha saido do time.
+      const voltaramDev = preservaChaves(data, antesDev);
       const devsForaDev = await limpaDevs(env, data);
       carimbaMeses(data, antesDev, false);
       registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
@@ -3163,7 +3195,8 @@ export default {
       // silencio, e a pessoa so descobriria no proximo F5.
       return json({ ok: true, datas_revertidas: datasRevertidas,
                     espelhos_descartados: espelhos,
-                    devs_removidos: devsForaDev }, 200, headers);
+                    devs_removidos: devsForaDev,
+                    chaves_preservadas: voltaramDev }, 200, headers);
     }
 
     // Acao presente mas desconhecida = sondagem. Antes caia no fluxo de sugestao

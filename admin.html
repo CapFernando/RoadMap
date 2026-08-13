@@ -2089,6 +2089,17 @@ async function loadFromGitHub(silent) {
       temas:          decoded.temas          || [],
       melhorias:      decoded.melhorias       || [],
       desenvolvedores: decoded.desenvolvedores || [],
+      // CARREGAR estas duas nao e detalhe: e o que faz a marcacao aparecer.
+      // Sem elas aqui, `state.devs_perfil` nascia vazio a cada carga e TODOS os
+      // botoes DEV-AXCred desenhavam "nao marcado" — mesmo com a marcacao
+      // gravada no arquivo. Quem marcava via acender, recarregava, via apagado, e
+      // marcava de novo.
+      //
+      // E o que a tela nao carrega, ela apaga: `devs_removidos` saia ausente do
+      // envio e o servidor gravava lista vazia por cima dos nomes de quem saiu do
+      // time.
+      devs_perfil:    decoded.devs_perfil    || {},
+      devs_removidos: decoded.devs_removidos || [],
       feriados:       decoded.feriados        || [],
       ausencias:      decoded.ausencias       || [],
       projetos:       decoded.projetos        || [],
