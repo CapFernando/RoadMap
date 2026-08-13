@@ -1969,6 +1969,25 @@ ok(/'desenvolvedores', 'devs_perfil'/.test(GANTT),
 ok(!/'devs_perfil'/.test(ADMIN),
    'o admin nao reivindica o campo (ele so preserva o que vem do servidor)');
 
+
+sec('Lista de devs: remover uma pessoa tem de funcionar');
+
+// A lista se reconstruia a cada carga unindo os nomes achados em TODAS as
+// demandas. Bastava ter uma entrega concluida no historico para o nome voltar na
+// proxima carga — remover quem saiu do time era impossivel.
+ok(/const ABERTA = m => !\['concluido', 'negada'\]\.includes/.test(GANTT),
+   'a uniao so olha demanda em aberto');
+ok(/state\.melhorias\.filter\(ABERTA\)\.map\(m => m\.dev\)/.test(GANTT),
+   'quem so tem trabalho concluido nao volta para a lista');
+
+// E o outro lado: sem isto, abrir uma entrega antiga de quem saiu deixaria o
+// seletor sem opcao marcada, e salvar apagaria o responsavel dela — que e
+// justamente o registro de quem fez.
+ok(/opcoes\.push\(d \+ ' \(inativo\)'\)/.test(GANTT),
+   'o dev fora da lista continua selecionavel no card dele');
+ok(/d\.replace\(' \(inativo\)', ''\)/.test(GANTT),
+   'e o valor gravado e o nome limpo, sem o rotulo');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

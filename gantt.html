@@ -1403,10 +1403,20 @@ async function loadFromGitHub() {
       feriados:      decoded.feriados       || [],
       ausencias:     decoded.ausencias      || [],
     };
-    // normaliza devs: sempre une lista salva + devs das melhorias (captura devs adicionados via admin)
+    // Une a lista salva com os devs das demandas EM ABERTO — e nao de todas.
+    //
+    // A uniao existe para capturar quem foi atribuido por outra tela sem estar na
+    // lista. Mas pegando TODAS as demandas ela tambem ressuscitava quem ja saiu do
+    // time: bastava ter uma entrega concluida no historico para o nome voltar a
+    // lista na proxima carga, e remover virava impossivel.
+    //
+    // Quadro de planejamento e sobre quem PODE receber trabalho. Quem so tem
+    // trabalho concluido nao precisa de linha — e se receber algo novo, a demanda
+    // estara aberta e o nome volta sozinho.
+    const ABERTA = m => !['concluido', 'negada'].includes(String(m.status_planejamento || ''));
     const rawDevs = [
       ...state.desenvolvedores,
-      ...state.melhorias.map(m => m.dev).filter(Boolean)
+      ...state.melhorias.filter(ABERTA).map(m => m.dev).filter(Boolean)
     ];
     state.desenvolvedores = [...new Set(rawDevs.flatMap(d => splitDevs(d)))];
 
@@ -2398,8 +2408,17 @@ function openModal(id, prefillDev, prefillDate) {
   // fill dev select
   const ed = document.getElementById('e-dev');
   const devToSelect = m?.dev || prefillDev || '';
+  // O dev ATUAL da demanda entra na lista mesmo que nao esteja mais entre os
+  // ativos. Sem isso, abrir uma entrega antiga de quem saiu do time deixaria o
+  // seletor sem nenhuma opcao marcada — e salvar apagaria o responsavel dela, que
+  // e justamente o registro de quem fez.
+  const opcoes = [...state.desenvolvedores];
+  splitDevs(devToSelect).forEach(d => { if (d && !opcoes.includes(d)) opcoes.push(d + ' (inativo)'); });
   ed.innerHTML = `<option value="">—</option>` +
-    state.desenvolvedores.map(d => `<option value="${d}" ${devToSelect===d?'selected':''}>${esc(d)}</option>`).join('');
+    opcoes.map(d => {
+      const puro = d.replace(' (inativo)', '');
+      return `<option value="${esc(puro)}" ${devToSelect===puro?'selected':''}>${esc(d)}</option>`;
+    }).join('');
 
   document.getElementById('e-id').value        = m?.id || '';
   document.getElementById('e-titulo').value    = m?.titulo || '';
