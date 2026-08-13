@@ -1805,9 +1805,79 @@ const _deletedIds = new Set();
 // gravação passa pelo Worker, que guarda o token como secret.
 let runtimeToken = ADMIN_PROXY_URL ? '' : (GITHUB_TOKEN || '');
 
+/* ─── A SESSAO CAI SOZINHA, E A TELA TEM DE PERCEBER ───────────────
+   A sessao vale 12h. Quando vencia com a aba aberta, a pagina seguia mostrando
+   tudo como se nada tivesse acontecido — e so na hora de gravar aparecia um erro
+   pedindo para "sair e entrar de novo". A instrucao estava certa, mas o trabalho
+   era do usuario: clicar em Sair para a tela descobrir o que o servidor ja tinha
+   dito. E, entre o vencimento e a gravacao, tudo que ele mexeu parecia valer.
+
+   Qualquer 401 agora derruba a sessao na hora e traz a tela de entrada.
+
+   A interceptacao e no `fetch`, e nao chamada a chamada: sao dezenas de chamadas
+   por pagina, e a proxima a ser escrita esqueceria de tratar isso — foi assim que
+   este caso nasceu.                                                            */
+let _sessaoCaiu = false;
+let _refazerAoVoltar = null;
+
+// Derruba a sessao e pede a entrada de novo. NAO avisa o servidor: o token ja nao
+// vale, e a chamada de logout voltaria 401 — reentrando aqui.
+function sessaoExpirou() {
+  if (_sessaoCaiu) return;          // varias chamadas em paralelo, um aviso so
+  _sessaoCaiu = true;
+  _adminPw = ''; _adminToken = ''; _eu = null;
+  ['rm_admin_pw', 'rm_admin_token', 'rm_eu'].forEach(k => {
+    try { sessionStorage.removeItem(k); } catch (_) {}
+  });
+  try { localStorage.removeItem('rm_logged'); } catch (_) {}
+  document.getElementById('admin-app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  const err = document.getElementById('login-error');
+  if (err) err.textContent = 'Sua sessão expirou (ela vale 12 horas). Entre de novo — ' +
+                             'o que está na tela não se perdeu.';
+  const campo = document.getElementById('senha-input');
+  if (campo) { campo.value = ''; campo.focus(); }
+}
+
+// 401 de LOGIN e senha errada, e nao sessao vencida — estas acoes ficam de fora.
+const _ACOES_SEM_SESSAO = ['login', 'auth', 'cadastrar', 'esqueci', 'redefinir', 'reset'];
+(function () {
+  const nativo = window.fetch;
+  window.fetch = async function (recurso, opcoes) {
+    const res = await nativo.apply(this, arguments);
+    try {
+      if (res.status !== 401 || !ADMIN_PROXY_URL) return res;
+      const url = typeof recurso === 'string' ? recurso : (recurso && recurso.url) || '';
+      if (url.indexOf(ADMIN_PROXY_URL) !== 0) return res;
+      let acao = '';
+      try { acao = (JSON.parse((opcoes && opcoes.body) || '{}') || {}).action || ''; } catch (_) {}
+      if (_ACOES_SEM_SESSAO.includes(acao)) return res;
+      // O corpo so pode ser lido UMA vez, e quem chamou ainda precisa dele: le
+      // aqui e devolve uma resposta nova com o mesmo conteudo.
+      const texto = await res.text();
+      let erro = '';
+      try { erro = (JSON.parse(texto) || {}).error || ''; } catch (_) {}
+      if (['senha', 'credencial', 'token', 'sessao'].includes(erro)) sessaoExpirou();
+      return new Response(texto, { status: res.status, statusText: res.statusText,
+                                   headers: res.headers });
+    } catch (_) { return res; }
+  };
+})();
+
 function enterAdmin() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('admin-app').style.display = 'block';
+  // Voltando de uma sessao vencida: NAO recarrega. A tela ja tem o trabalho da
+  // pessoa, e recarregar traria a versao do servidor por cima — que e justamente
+  // a que nao tem o que ela acabou de fazer. A faixa de "nao publicado" e o
+  // rascunho local seguem valendo; basta publicar.
+  if (_sessaoCaiu) {
+    _sessaoCaiu = false;
+    bannerPendentes();
+    toast('Bem-vindo de volta. O que estava na tela continua aqui — ' +
+          'clique em "Publicar alterações".', 'ok');
+    return;
+  }
   loadFromGitHub();
 }
 
@@ -7161,6 +7231,9 @@ function votosRender() {
       'ou foi votada antes de o registro de votos existir.</p>';
     return;
   }
+  // A mesa chama a carta 13 de "12+1"; aqui tem de ser o mesmo nome, senao o
+  // historico parece de outra votacao. O valor lido para a conta continua 13.
+  const rotuloVoto = v => (String(v) === '13' ? '12+1' : String(v));
   const num = v => { const n = parseFloat(String(v.voto).replace(',', '.')); return isFinite(n) ? n : null; };
   const nums = vs.map(num).filter(n => n !== null);
   const min = nums.length ? Math.min(...nums) : null;
@@ -7178,7 +7251,7 @@ function votosRender() {
       : (n === min ? ' <span class="vt-tag">menor</span>'
                    : (n === max ? ' <span class="vt-tag">maior</span>' : ''));
     return '<tr class="' + cls.trim() + '"><td>' + esc(v.nome) + marca + '</td>' +
-           '<td class="vt-voto">' + esc(String(v.voto)) + '</td></tr>';
+           '<td class="vt-voto">' + esc(rotuloVoto(v.voto)) + '</td></tr>';
   }).join('');
 
   const quando = m.poker_votado_em

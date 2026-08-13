@@ -2081,6 +2081,40 @@ ok(/if \(k\.charAt\(0\) === '_'\) continue;/.test(W),
      ', preservaChaves roda ANTES de limpaDevs (que le devs_removidos)');
 });
 
+sec('Sessao vencida derruba a tela, e nao o usuario');
+
+// A sessao vale 12h. Vencendo com a aba aberta, a pagina continuava mostrando tudo
+// como se nada tivesse acontecido, e so na hora de gravar mandava "sair e entrar
+// de novo" — o usuario fazendo na mao o que a tela ja sabia. Entre o vencimento e
+// a gravacao, tudo que ele mexeu parecia valer.
+[['Admin', ADMIN], ['Gantt', GANTT], ['Dev', DEV]].forEach(([tela, src]) => {
+  ok(/function sessaoExpirou\(\)/.test(src), tela + ' derruba a sessao ao receber 401');
+  ok(/const nativo = window\.fetch;/.test(src),
+     tela + ': a interceptacao e no fetch, e nao chamada a chamada');
+  ok(/_ACOES_SEM_SESSAO\.includes\(acao\)\) return res;/.test(src),
+     tela + ': 401 de login e senha errada, e nao sessao vencida');
+  // O corpo so pode ser lido uma vez — quem chamou ainda precisa dele.
+  ok(/return new Response\(texto, \{ status: res\.status/.test(src),
+     tela + ': devolve o corpo que consumiu');
+  // Recarregar ao voltar traria a versao do servidor por cima do que ficou na tela.
+  ok(/if \(_sessaoCaiu\) \{\s*\n\s*_sessaoCaiu = false;/.test(src),
+     tela + ': voltar da expiracao nao recarrega por cima do trabalho');
+});
+
+sec('A carta 12+1 e um rotulo, e nao um valor');
+
+// Trocar o VALOR seria o caminho curto e errado: parseFloat('12+1') devolve 12, e a
+// media da rodada sairia menor sem ninguem perceber.
+ok(/POKER_CARTAS = \['1','2','3','5','8','13'/.test(W),
+   'o baralho do servidor continua com o valor 13');
+ok(/FIBONACCI\s*=\s*\[1, 2, 3, 5, 8, 13/.test(POKER),
+   'e a sugestao continua calculando em cima de 13');
+ok(/rotuloCartaHTML\(c\)\}<\/button>/.test(POKER) && /votar\('\$\{esc\(c\)\}'\)/.test(POKER),
+   'a carta mostra o rotulo e envia o valor');
+ok(/document\.getElementById\('in-pontos'\)[\s\S]{0,200}?iP\.value = fib \|\| '';/.test(POKER) ||
+   /if \(!iP\.dataset\.tocado\) iP\.value = fib \|\| '';/.test(POKER),
+   'o campo de pontos recebe o numero, e nao o rotulo');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

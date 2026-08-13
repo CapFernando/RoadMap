@@ -66,6 +66,11 @@
     .carta { width:52px; height:74px; border-radius:9px; display:flex; align-items:center; justify-content:center;
              font-size:22px; font-weight:800; border:2px solid var(--border2); background:var(--bg4); color:var(--text3);
              transition:all .2s; }
+    /* O "+1" da carta 12+1: menor e levantado, como em baralho. Em `em` para
+       servir as tres medidas de carta (baralho, mesa e resultado) com uma regra
+       so — e para o "12" continuar do tamanho dos numeros vizinhos, que e o que
+       mantem a mesa legivel projetada. */
+    .carta-mais { font-size:.58em; vertical-align:.32em; letter-spacing:0; margin-left:1px; }
     .carta.aguardando { border-style:dashed; }
     .carta.votou { background:#123A52; border-color:#2A6E90; color:#123A52; }
     .carta.revelada { background:var(--bg2); border-color:var(--teal); color:var(--teal); }
@@ -643,6 +648,30 @@ function copiarCodigo() {
 }
 
 // ─── VOTAÇÃO ──────────────────────────────────────────────────────
+/* ─── O ROTULO DA CARTA, QUE NAO E O VALOR DELA ────────────────────
+   A carta 13 se chama "12+1" na mesa. So o rotulo muda: o valor continua 13 em
+   tudo que e conta — media da rodada, pontos gravados na demanda, historico de
+   votos, somatorio por dev, relatorio.
+
+   Trocar o VALOR seria o caminho curto e errado: `parseFloat('12+1')` devolve 12,
+   e a media da rodada sairia menor sem ninguem perceber.                       */
+const ROTULO_CARTA = { '13': '12+1' };
+function rotuloCarta(v) {
+  const s = String(v == null ? '' : v);
+  return ROTULO_CARTA[s] || s;
+}
+
+// Na carta, o "+1" vai menor e levantado — o "12" fica do tamanho dos outros
+// numeros. Encolher os quatro caracteres por igual para caber tirava justamente o
+// que essa tela precisa ter: ela e projetada numa reuniao e lida de longe.
+//
+// O tamanho e em `em`, entao serve as tres medidas de carta que existem (baralho,
+// mesa e o resultado) sem uma regra para cada.
+function rotuloCartaHTML(v) {
+  const s = String(v == null ? '' : v);
+  return s === '13' ? '12<span class="carta-mais">+1</span>' : esc(s);
+}
+
 function fibonacciMaisProximo(media) {
   const n = parseFloat(media);
   if (!isFinite(n) || n <= 0) return '';
@@ -1060,13 +1089,14 @@ function renderCartas() {
   const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','13','21','34','55','89','100','?'];
   const travado = !_estado || _estado.revelado || !_estado.melhoria_id || !_participante;
   document.getElementById('cartas').innerHTML = cartas.map(c =>
-    `<button class="carta-btn ${_meuVoto === c ? 'sel' : ''}" ${travado ? 'disabled' : ''} onclick="votar('${esc(c)}')">${esc(c)}</button>`
+    // O `onclick` manda o VALOR ('13'); o botao mostra o rotulo ('12+1').
+    `<button class="carta-btn ${_meuVoto === c ? 'sel' : ''}" ${travado ? 'disabled' : ''} onclick="votar('${esc(c)}')">${rotuloCartaHTML(c)}</button>`
   ).join('');
   const t = document.getElementById('votacao-titulo');
   if (!_participante)                    t.textContent = 'Entre com seu nome para votar';
   else if (!_estado || !_estado.melhoria_id) t.textContent = 'Aguardando o facilitador escolher a demanda';
   else if (_estado.revelado)             t.textContent = 'Votação encerrada nesta rodada';
-  else                                   t.textContent = _meuVoto ? `Seu voto: ${_meuVoto} (pode trocar até revelar)` : 'Escolha sua carta';
+  else                                   t.textContent = _meuVoto ? `Seu voto: ${rotuloCarta(_meuVoto)} (pode trocar até revelar)` : 'Escolha sua carta';
 }
 
 function aplicar(est) {
@@ -1110,14 +1140,16 @@ function aplicar(est) {
     mesa.innerHTML = '<span class="vazio-mesa">Aguardando participantes…</span>';
   } else {
     mesa.innerHTML = est.participantes.map(p => {
+      // `txt` ja vai como HTML: os dois ramos abaixo sao literais nossos, e o
+      // terceiro passa pelo rotulo, que escapa o que nao conhece.
       let cls = 'aguardando', txt = '?';
-      if (est.revelado && p.valor != null) { cls = 'revelada'; txt = p.valor; }
+      if (est.revelado && p.valor != null) { cls = 'revelada'; txt = rotuloCartaHTML(p.valor); }
       else if (p.votou) { cls = 'votou'; txt = '✓'; }
       // Quem votou e caiu continua na mesa (o voto conta na media), mas aparece
       // esmaecido com aviso — evita a media divergir de quem esta na tela.
       const off = p.online === false;
       return `<div class="seat" style="${off ? 'opacity:.45' : ''}" title="${off ? esc(p.nome) + ' — desconectado' : esc(p.nome)}">
-        <div class="carta ${cls}">${esc(txt)}</div>
+        <div class="carta ${cls}">${txt}</div>
         <div class="seat-nome">${off ? '⚠ ' : ''}${esc(p.nome)}</div>
       </div>`;
     }).join('');
@@ -1134,7 +1166,8 @@ function aplicar(est) {
     box.style.display = '';
     const fib = est.media != null ? fibonacciMaisProximo(est.media) : '—';
     document.getElementById('res-media').textContent = est.media != null ? String(est.media).replace('.', ',') : '—';
-    document.getElementById('res-fib').textContent   = fib || '—';
+    // `fib` segue NUMERICO: ele tambem alimenta o campo de pontos logo abaixo.
+    document.getElementById('res-fib').innerHTML     = fib ? rotuloCartaHTML(fib) : '—';
     document.getElementById('res-votos').textContent = est.total_votos;
     if (_facilitador) {
       document.getElementById('grava-box').style.display = '';
