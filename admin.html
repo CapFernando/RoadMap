@@ -498,7 +498,6 @@
     .pm-aba.ativa { background:var(--blue); border-color:var(--blue); color:#0E0E0D; font-weight:600; }
     .pm-etapa { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:7px; }
     .pm-nota { font-size:11.5px; color:var(--text3); line-height:1.55; margin-top:12px; }
-    .us-perfil-cel { display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-width:230px; }
     /* Botao com NOME, e nao estrela solta: "★" pedia explicacao, "DEV-AXCred" nao. */
     .us-axcred { background:var(--bg3); border:1px solid var(--border); border-radius:999px;
       cursor:pointer; font-size:11.5px; font-weight:700; letter-spacing:.02em; padding:5px 11px;
@@ -506,7 +505,6 @@
     .us-axcred:hover { color:var(--text); border-color:var(--amber-tx,#FFC470); }
     .us-axcred.on { color:#0E0E0D; background:var(--amber-tx,#FFC470);
       border-color:var(--amber-tx,#FFC470); }
-    .us-perfil-sel { width:auto; min-width:96px; padding:5px 8px; font-size:12.5px; }
     .ap-dica { font-size:12.5px; color:var(--text3); line-height:1.55; margin:0 0 12px; }
     .ap-periodo { font-size:14px; color:var(--text); background:var(--bg3);
       border:1px solid var(--border); border-radius:8px; padding:9px 12px; margin-bottom:14px; }
@@ -6565,7 +6563,9 @@ function uDevsDosCards() {
    Os dados moram em `devs_perfil`, no arquivo de dados, indexados pelo NOME USADO
    NAS DEMANDAS — que é o mesmo nome que o gantt desenha. A conta é a porta de
    entrada; o nome é a chave.                                                  */
-const U_PERFIS = ['', 'Fullstack', 'Backend', 'Frontend', 'Dados', 'VibeCode', 'QA', 'Infra'];
+// A lista de stacks foi retirada por ora: o pedido era um marcador so, e um
+// seletor a mais na linha era ruido sem uso. O campo `perfil` continua aceito no
+// dado, para quem quiser voltar a preencher.
 
 // UM MARCADOR, E NAO UMA LISTA DE FRENTES. A lista tinha 19 opcoes e forcava
 // escolher uma — e dev atua em varias frentes ao mesmo tempo, entao marcar
@@ -6593,19 +6593,48 @@ function uPerfilDe(nome) {
   return p && typeof p === 'object' ? p : {};
 }
 
+// O botao muda NA HORA, e a gravacao acontece atras.
+//
+// Antes isto chamava `renderUsuarios()`, que RELÊ a lista de contas do servidor
+// antes de redesenhar: o retorno visual dependia de uma ida e volta de rede, e ate
+// ela voltar o botao continuava igual — quem clicava nao sabia se tinha pego.
+//
+// Se a gravacao falhar, o botao VOLTA ao estado anterior. Marcado na tela e nao
+// gravado no servidor e pior do que nao ter marcado: na proxima abertura some, e
+// ninguem entende por que.
 async function uSetPerfil(nome, campo, valor) {
-  if (!nome) { uAviso('Sem nome nas demandas, não há a quem atribuir o perfil.', true); return; }
+  if (!nome) { uAviso('Sem nome nas demandas, não há a quem marcar.', true); return; }
   state.devs_perfil = state.devs_perfil || {};
-  const atual = Object.assign({}, state.devs_perfil[nome] || {});
+  const antes = Object.assign({}, state.devs_perfil[nome] || {});
+  const atual = Object.assign({}, antes);
   if (valor === '' || valor === false) delete atual[campo];
   else atual[campo] = valor;
   if (Object.keys(atual).length) state.devs_perfil[nome] = atual;
   else delete state.devs_perfil[nome];
-  renderUsuarios();
+  uPintaAxcred(nome);
   const okSalvo = await saveViaProxy();
-  uAviso(okSalvo
-    ? 'Perfil de "' + nome + '" atualizado.'
-    : 'NÃO consegui salvar o perfil de "' + nome + '".', !okSalvo);
+  if (!okSalvo) {
+    if (Object.keys(antes).length) state.devs_perfil[nome] = antes;
+    else delete state.devs_perfil[nome];
+    uPintaAxcred(nome);
+    uAviso('NÃO consegui salvar a marcação de "' + nome + '". Nada foi alterado.', true);
+    return;
+  }
+  uAviso(valor ? '"' + nome + '" marcado como DEV-AXCred — aparece primeiro no Planejamento.'
+               : 'Marcação de DEV-AXCred removida de "' + nome + '".');
+}
+
+// Repinta o botao daquela pessoa sem redesenhar a tabela inteira: redesenhar
+// perderia a posicao da rolagem e piscaria a lista a cada clique.
+function uPintaAxcred(nome) {
+  const on = !!uPerfilDe(nome).axcred;
+  document.querySelectorAll('.us-axcred').forEach(b => {
+    if (b.dataset.dev !== nome) return;
+    b.classList.toggle('on', on);
+    b.textContent = (on ? '✓ ' : '+ ') + 'DEV-AXCred';
+    b.title = on ? 'É do AXCred — aparece primeiro no Planejamento. Clique para desmarcar.'
+                 : 'Marcar como DEV-AXCred: passa a aparecer primeiro no Planejamento';
+  });
 }
 
 function uCelulaPerfil(u) {
@@ -6613,16 +6642,16 @@ function uCelulaPerfil(u) {
   if (!nome) return '<td class="us-sub">—</td>';
   const p = uPerfilDe(nome);
   const j = JSON.stringify(nome).replace(/"/g, '&quot;');
+  // `data-dev` e o que permite repintar SO este botao depois do clique, sem
+  // redesenhar a tabela — e o `onclick` le o estado na hora de clicar, e nao o
+  // congelado na renderizacao, senao o segundo clique repetiria o primeiro.
   const marca = '<button type="button" class="us-axcred' + (p.axcred ? ' on' : '') + '"' +
-    ' title="' + (p.axcred ? 'É do AXCred — aparece primeiro no Planejamento. Clique para tirar.'
+    ' data-dev="' + esc(nome) + '"' +
+    ' title="' + (p.axcred ? 'É do AXCred — aparece primeiro no Planejamento. Clique para desmarcar.'
                            : 'Marcar como DEV-AXCred: passa a aparecer primeiro no Planejamento') + '"' +
-    ' onclick="uSetPerfil(' + j + ', \'axcred\', ' + (p.axcred ? 'false' : 'true') + ')">' +
-    (p.axcred ? '★ DEV-AXCred' : '☆ DEV-AXCred') + '</button>';
-  const sel = (campo, lista, atual) =>
-    '<select class="us-perfil-sel" onchange="uSetPerfil(' + j + ', \'' + campo + '\', this.value)">' +
-    lista.map(x => '<option value="' + esc(x) + '"' + (String(atual || '') === x ? ' selected' : '') +
-      '>' + esc(x || '— stack —') + '</option>').join('') + '</select>';
-  return '<td><div class="us-perfil-cel">' + marca + sel('perfil', U_PERFIS, p.perfil) + '</div></td>';
+    ' onclick="uSetPerfil(' + j + ', \'axcred\', !uPerfilDe(' + j + ').axcred)">' +
+    (p.axcred ? '✓ DEV-AXCred' : '+ DEV-AXCred') + '</button>';
+  return '<td>' + marca + '</td>';
 }
 
 function uLinhaAtiva(u) {
@@ -6644,7 +6673,12 @@ function uLinhaAtiva(u) {
       (off ? ' <span class="us-tag us-tag-off">desativado</span>' : '') + '</td>' +
     '<td>' + uCelulaNomeDemandas(u) + '</td>' +
     uCelulaPerfil(u) +
-    '<td class="us-sub">' + (u.ultimo_acesso ? esc(uQuando(u.ultimo_acesso)) : 'nunca entrou') + '</td>' +
+    // "nunca entrou" era lido como "nao usa a ferramenta", e nao e isso: a pessoa
+    // pode estar trabalhando o dia inteiro pela SENHA GERAL, que nao identifica
+    // ninguem. A coluna fala da conta, e o texto passa a dizer isso.
+    '<td class="us-sub">' + (u.ultimo_acesso ? esc(uQuando(u.ultimo_acesso))
+      : '<span class="us-alerta">nunca entrou com a conta</span>' +
+        '<div class="us-sub" style="margin-top:2px">provavelmente usa a senha geral</div>') + '</td>' +
     '<td><span class="us-acoes">' +
       '<button class="btn btn-secondary btn-sm" onclick="uNovaSenha(\'' + l + '\')">Nova senha</button>' +
       '<button class="btn ' + (off ? 'btn-success' : 'btn-danger') + ' btn-sm" onclick="uAtivo(\'' + l + '\', ' + (off ? 'true' : 'false') + ')">' +
@@ -6836,7 +6870,7 @@ async function renderUsuarios() {
   // pessoas com acesso
   document.getElementById('us-n-ativos').textContent = ativos.filter(u => u.ativo).length;
   box.innerHTML = ativos.length
-    ? uTabela(['Pessoa', 'Permissão', 'Nome nas demandas', 'AXCred / Stack', 'Último acesso', ''],
+    ? uTabela(['Pessoa', 'Permissão', 'Nome nas demandas', 'AXCred', 'Último acesso', ''],
               ativos.map(uLinhaAtiva))
     : '<p class="us-vazio">Nenhuma conta criada ainda. Enquanto isso, todos continuam entrando pelas senhas gerais.</p>';
 

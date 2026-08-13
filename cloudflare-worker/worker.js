@@ -1160,11 +1160,29 @@ async function identifica(env, body) {
     try {
       await contasMigrar(db);
       const r = await db.prepare(
-        `SELECT s.expira_em, u.id, u.login, u.nome, u.papel, u.ativo, u.nome_demandas
+        `SELECT s.expira_em, u.id, u.login, u.nome, u.email, u.papel, u.ativo,
+                u.nome_demandas, u.ultimo_acesso
            FROM sessao s JOIN usuario u ON u.id = s.usuario_id
           WHERE s.token = ?`).bind(String(body.token)).first();
       if (r && r.ativo && new Date(r.expira_em) > new Date()) {
+        // "Ultimo acesso" era gravado SO no login. A sessao vale 12h e a aba fica
+        // aberta o dia inteiro: quem entrou de manha e trabalhou ate a noite
+        // aparecia com o horario da manha, e quem deixou a aba aberta de ontem
+        // aparecia como se nao tivesse voltado. A coluna media login, e nao uso.
+        //
+        // Agora qualquer chamada autenticada atualiza — no maximo uma vez a cada
+        // 10 minutos, senao seria uma gravacao no banco por requisicao, incluindo
+        // o polling de cada tela aberta.
+        const agoraMs = Date.now();
+        const antesMs = r.ultimo_acesso ? Date.parse(r.ultimo_acesso) : 0;
+        if (!antesMs || agoraMs - antesMs > 10 * 60 * 1000) {
+          try {
+            await db.prepare('UPDATE usuario SET ultimo_acesso = ? WHERE id = ?')
+              .bind(new Date(agoraMs).toISOString(), r.id).run();
+          } catch (_) {}
+        }
         return { papel: r.papel, usuario: { id: r.id, login: r.login, nome: r.nome,
+                                           email: r.email || '',
                                            nome_demandas: r.nome_demandas || '' } };
       }
     } catch (_) {}

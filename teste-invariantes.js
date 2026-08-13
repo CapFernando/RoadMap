@@ -1940,156 +1940,70 @@ try {
 ok(_cOk, 'a fila de um dev NAO chega na mao de outro pela API', _cPorque);
 
 
-sec('Perfil do dev: a stack, e a ordem do quadro');
+sec('Ordem do quadro: quem esta marcado vem primeiro');
 
-// O time nao e homogeneo — fullstack, backend, dados, VibeCode. Acompanhar todos
-// na mesma lista e na mesma ordem esconde a diferenca que o acompanhamento existe
-// para ver.
-ok(/const G_PERFIS = \[/.test(GANTT), 'existe a lista de stacks');
-ok(/vibecode/.test(GANTT) && /dados/.test(GANTT) && /fullstack/.test(GANTT),
-   'as stacks citadas estao la');
+// A lista de stacks saiu por ora (o pedido era um marcador so), e as invariantes
+// que a defendiam sairam junto. O que fica e a ordem, que e o que o marcador
+// existe para produzir.
 ok(/function gOrdenaDevs/.test(GANTT), 'existe a ordem do quadro');
 ok(/let devs = state\.desenvolvedores\.length[\s\S]{0,120}?gOrdenaDevs/.test(GANTT),
    'o gantt desenha nessa ordem');
+ok(/localeCompare\(String\(b\), 'pt-BR'\)/.test(GANTT.slice(GANTT.indexOf('function gOrdenaDevs'))),
+   'dentro do grupo, ordem alfabetica (tirar a marca nao embaralha o quadro)');
 ok(/function gSetPerfil/.test(GANTT), 'da para marcar pela tela');
-ok(/'perfil', this\.value/.test(GANTT), 'a stack e um campo proprio');
 
 // Sem isto, um conflito de gravacao traria a versao do servidor por cima e a
 // marcacao recem-feita sumiria logo depois de um "salvo". No Admin a protecao e
 // outra — fusao por chave —, porque as DUAS telas editam o mesmo mapa.
 ok(/'desenvolvedores', 'devs_perfil'/.test(GANTT),
    'devs_perfil e campo do gantt (nao e sobrescrito no conflito)');
+ok((ADMIN.match(/devs_perfil = Object\.assign\(\{\}/g) || []).length === 2,
+   'e funde por CHAVE nas mesclagens do Admin');
 
 
-sec('Lista de devs: remover uma pessoa tem de funcionar');
+sec('DEV-AXCred: uma flag so, com retorno imediato');
 
-// A lista se reconstruia a cada carga unindo os nomes achados em TODAS as
-// demandas. Bastava ter uma entrega concluida no historico para o nome voltar na
-// proxima carga — remover quem saiu do time era impossivel.
-ok(/const ABERTA = m => !\['concluido', 'negada'\]\.includes/.test(GANTT),
-   'a uniao so olha demanda em aberto');
-ok(/state\.melhorias\.filter\(ABERTA\)\.map\(m => m\.dev\)/.test(GANTT),
-   'quem so tem trabalho concluido nao volta para a lista');
-
-// E o outro lado: sem isto, abrir uma entrega antiga de quem saiu deixaria o
-// seletor sem opcao marcada, e salvar apagaria o responsavel dela — que e
-// justamente o registro de quem fez.
-ok(/opcoes\.push\(d \+ ' \(inativo\)'\)/.test(GANTT),
-   'o dev fora da lista continua selecionavel no card dele');
-ok(/d\.replace\(' \(inativo\)', ''\)/.test(GANTT),
-   'e o valor gravado e o nome limpo, sem o rotulo');
-
-
-sec('Aba Usuarios: o alcance conta o que a API aceita');
-
-// A tela dizia "nenhuma demanda casa — a API devolve vazio", em vermelho, para
-// contas com 17, 34 e 38 demandas. O campo guardava o nome antigo ("Crisley") e
-// as demandas ja usavam o novo ("Crisley Almeida"), que a API resolve pelo
-// e-mail — mas a tela so contava o declarado. O alarme era da tela, nao do acesso.
-ok(/const aceitos = \[\.\.\.new Set\(\[\.\.\.declarados, sugerido, u\.nome\]/.test(ADMIN),
-   'a tela conta os TRES nomes que a API aceita');
-ok(/const alcance = aceitos\.reduce/.test(ADMIN), 'e o alcance sai desse conjunto');
-ok(!/const alcance = declarados\.length/.test(ADMIN),
-   'a contagem so pelo declarado saiu (era ela que dava o alarme falso)');
-ok(/por ' \+ porQual\.map\(esc\)\.join\(' e '\)/.test(ADMIN),
-   'a nota diz POR QUAL nome as demandas casaram');
-
-
-sec('Lista de devs: o servidor converge sozinho');
-
-// Uma publicacao do Admin de uma aba aberta ANTES da padronizacao trouxe os oito
-// nomes antigos de volta — a mesclagem de devs e uniao pura. A lista foi de 16
-// para 27 e "Crisley" passou a conviver com "Crisley Almeida"; quem abriu o painel
-// por "Crisley" viu zero demandas.
-//
-// Corrigir a mao nao resolveria: a proxima aba antiga traz tudo de novo. E pedir
-// para todos recarregarem e uma explicacao que ninguem deveria dar.
-ok(/async function limpaDevs/.test(WC), 'o Worker limpa a lista em toda gravacao');
-ok((WC.match(/await limpaDevs\(env, data\)/g) || []).length === 2,
-   'nas duas rotas de gravacao');
-ok(/temDemanda\(n\) \|\| canonicos\.has\(norm\(n\)\) \|\| declaradosVivos\.has\(norm\(n\)\)/.test(WC),
-   'fica quem tem demanda, quem e canonico de conta ativa, ou quem tem vinculo vivo');
-
-// Sair do time e DECISAO, e nao estado dedutivel: Marina tambem so tem trabalho
-// concluido e continua no time; Cairo saiu. Nada nos dados distingue os dois.
-ok(/data\.devs_removidos/.test(WC), 'a saida do time fica registrada');
-ok(/!removidos\.has\(norm\(n\)\) \|\| temAberta\(n\)/.test(WC),
-   'e um removido volta sozinho se receber demanda ABERTA');
-ok(/state\.devs_removidos = \[\.\.\.new Set\(\[\.\.\.\(state\.devs_removidos \|\| \[\]\), name\]\)\]/.test(GANTT),
-   'remover pela tela grava a decisao');
-ok(/'devs_removidos'/.test(GANTT), 'a decisao nao e sobrescrita no conflito');
-
-// O vinculo obsoleto tambem se resolve sozinho: campo que nao casa com demanda
-// nenhuma e apagado, e a conta volta a valer pelo e-mail.
-ok(/UPDATE usuario SET nome_demandas = NULL WHERE id = \?/.test(WC),
-   'vinculo que nao casa com nada e apagado');
-ok(/const uteis = decl\.filter\(temDemanda\)/.test(WC),
-   'so e apagado quando REALMENTE nao casa (o "Leite" sobrevive)');
-
-
-sec('Trabalho nao publicado nao morre com a aba');
-
-// Uma demanda registrada e nao encontrada no dia seguinte. A numeracao provou que
-// ela nunca chegou ao servidor: o codigo AX-NNN nasce NA GRAVACAO, e a sequencia
-// so tinha os dois buracos ja explicados. A gravacao falhou, o aviso era um toast
-// de 3,5 segundos, e a demanda ficou existindo so na memoria da aba.
-ok(/const RASCUNHO_KEY = 'rm_admin_rascunho'/.test(ADMIN), 'existe o rascunho local');
-ok(/function rascunhoSalvar/.test(ADMIN) && /function rascunhoRestaurar/.test(ADMIN),
-   'ele grava e restaura');
-ok(/rascunhoSalvar\(\);[\s\S]{0,120}?const okSalvo = await saveViaProxy\(\)/.test(ADMIN),
-   'guarda ANTES de tentar gravar (a aba pode morrer no meio)');
-ok(/_pendingEdits = true;[\s\S]{0,300}?rascunhoSalvar\(\);[\s\S]{0,20}?closeModal\('modal-melhoria'\)/.test(ADMIN),
-   'e tambem ao editar, antes de fechar o modal');
-ok(/rascunhoRestaurar\(\);\s*\n\s*renderAll\(\);/.test(ADMIN),
-   'restaura ANTES do primeiro desenho (senao a lista pisca sem a demanda)');
-ok(/rascunhoLimpar\(\);[\s\S]{0,200}?toast\(msgOk/.test(ADMIN),
-   'e o rascunho some quando publica de verdade');
-
-// Aviso que some em 3,5s nao protege trabalho.
-ok(/id="pend-banner"/.test(ADMIN), 'existe a faixa de nao publicado');
-ok(/function bannerPendentes/.test(ADMIN), 'ela liga e desliga sozinha');
-ok(/publicarPendentes\(\)/.test(ADMIN), 'e tem o botao de publicar ali mesmo');
-
-// O salto de rolagem foi o que escondeu o aviso: a tela subia e o toast vermelho
-// aparecia e sumia fora do campo de visao.
-ok(/const y = window\.scrollY;[\s\S]{0,400}?window\.scrollTo\(\{ top: y \}\)/.test(ADMIN),
-   'redesenhar a lista nao leva a pagina para o topo');
-
-
-sec('Marcacao do dev: DEV-AXCred, e nao uma lista de frentes');
-
-// Houve uma lista de 19 frentes aqui, tirada do catalogo. Ela FORCAVA escolher
-// uma, e dev atua em varias ao mesmo tempo — marcar "AXCred" apagava o resto e a
-// informacao ficava errada de qualquer jeito. Virou um marcador so, com nome.
+// A lista de 19 frentes FORCAVA escolher uma, e dev atua em varias ao mesmo tempo.
+// A de stacks saiu junto, por ora: o pedido era um marcador so.
 ok(!/function uFrentes/.test(ADMIN) && !/function gFrentes/.test(GANTT),
    'a lista de frentes saiu das duas telas');
-ok(/DEV-AXCred/.test(ADMIN), 'o marcador tem NOME na aba Usuarios');
-ok(/class="us-axcred/.test(ADMIN) && /class="g-axcred/.test(GANTT),
-   'e existe nas duas telas');
-ok(/'AXCred \/ Stack'/.test(ADMIN), 'a coluna diz o que e');
+ok(!/const U_PERFIS/.test(ADMIN) && !/const G_PERFIS/.test(GANTT),
+   'a lista de stacks saiu das duas telas');
+ok(/DEV-AXCred/.test(ADMIN) && /DEV-AXCred/.test(GANTT), 'sobrou a flag, com NOME');
+ok(/'AXCred', 'Último acesso'/.test(ADMIN), 'a coluna se chama AXCred');
 
-// Ele substituiu a estrela generica de "foco": mesmo marcador, sem dizer o
-// motivo. Marcador com nome nao precisa ser explicado a ninguem.
-ok(/gPerfilDe\(a\)\.axcred \? 0 : 1/.test(GANTT), 'a ordem do quadro usa o marcador');
-ok(!/\.foco \? 0 : 1/.test(GANTT), 'a ordem por "foco" saiu');
-ok(/localeCompare\(String\(b\), 'pt-BR'\)/.test(GANTT.slice(GANTT.indexOf('function gOrdenaDevs'))),
-   'dentro do grupo, ordem alfabetica (tirar a marca nao embaralha o quadro)');
+// Clicar tem de mostrar que pegou. Antes isto chamava `renderUsuarios()`, que RELÊ
+// a lista de contas do servidor: o retorno visual dependia de uma ida e volta de
+// rede, e ate ela voltar o botao continuava igual.
+ok(/function uPintaAxcred/.test(ADMIN), 'o botao e repintado na hora');
+ok(/uPintaAxcred\(nome\);\s*\n\s*const okSalvo = await saveViaProxy/.test(ADMIN),
+   'e ANTES de esperar a gravacao');
+ok(!/renderUsuarios\(\);\s*\n\s*const okSalvo/.test(ADMIN),
+   'sem depender do re-render que rele o servidor');
+ok(/data-dev="/.test(ADMIN), 'repinta so aquele botao (nao redesenha a tabela)');
 
-// A stack fica: responde outra pergunta e nao competia com nada.
-ok(/const U_PERFIS/.test(ADMIN) && /const G_PERFIS/.test(GANTT), 'a stack continua nas duas telas');
+// O estado e lido NO CLIQUE, e nao congelado na renderizacao — senao o segundo
+// clique repetiria o primeiro e nunca desmarcaria.
+ok(/!uPerfilDe\(/.test(ADMIN), 'o Admin le o estado no clique');
+ok(/!gPerfilDe\(/.test(GANTT), 'o Planejamento tambem');
 
-// A chave e o nome usado nas DEMANDAS: a conta pode se chamar "Crisley Matheus" e
-// o quadro mostrar "Crisley Almeida". Sem isso, marcar no Admin nao apareceria no
-// Planejamento.
-ok(/function uNomeDeDev/.test(ADMIN), 'a marcacao e indexada pelo nome das demandas');
-ok((ADMIN.match(/devs_perfil = Object\.assign\(\{\}/g) || []).length === 2,
-   'devs_perfil funde por CHAVE nas mesclagens do Admin');
+// Marcado na tela e nao gravado no servidor e pior que nao ter marcado: na
+// proxima abertura some, e ninguem entende por que.
+ok(/Nada foi alterado/.test(ADMIN) && /Nada foi alterado/.test(GANTT),
+   'falha na gravacao VOLTA o botao, nas duas telas');
 
-// A tela cabia em 1000px antes de ter seis colunas: o nome quebrava em duas
-// linhas, o e-mail partia no meio e os botoes de acao ficavam cortados na borda —
-// com margem sobrando dos dois lados.
-ok(/main \{ max-width: min\(1560px, 100%\)/.test(ADMIN),
-   'a tela usa a largura disponivel, sem cortar conteudo');
+// A ordem do quadro continua saindo da flag.
+ok(/gPerfilDe\(a\)\.axcred \? 0 : 1/.test(GANTT), 'a ordem do quadro usa a flag');
+ok(/function gPerfilDe/.test(GANTT), 'e a leitura do mapa existe');
+
+// "Ultimo acesso" era gravado SO no login. A sessao vale 12h e a aba fica aberta o
+// dia inteiro: quem trabalhou o dia todo aparecia com o horario da manha, e quem
+// entrou pela senha geral aparecia como "nunca entrou" — lido como "nao usa".
+ok(/const agoraMs = Date\.now\(\);/.test(WC), 'o acesso e carimbado em qualquer chamada autenticada');
+ok(/agoraMs - antesMs > 10 \* 60 \* 1000/.test(WC),
+   'no maximo a cada 10 min (senao seria uma gravacao por requisicao)');
+ok(/nunca entrou com a conta/.test(ADMIN), 'e a tela diz que a coluna fala da CONTA');
+ok(/usa a senha geral/.test(ADMIN), 'e aponta a causa provavel');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

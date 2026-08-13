@@ -2081,10 +2081,9 @@ function renderGantt() {
     // Label
     // A etiqueta do perfil vai NO NOME, e a estrela antes dele: e o unico lugar
     // onde os dois cabem sem competir com a barra de capacidade logo abaixo.
-    const _pf = gPerfilDe(dev), _rot = gPerfilRot(_pf.perfil);
+    const _pf = gPerfilDe(dev);
     html += `<div class="dev-label">
-      <div class="dev-name">${_pf.axcred ? '<span class="dev-perfil" style="color:var(--amber-tx,#FFC470);border-color:var(--amber-tx,#FFC470)" title="DEV-AXCred — aparece primeiro">AXCred</span> ' : ''}${esc(dev)}${
-        _rot ? ` <span class="dev-perfil" style="color:${_rot.cor};border-color:${_rot.cor}" title="Stack">${_rot.rot}</span>` : ''}</div>
+      <div class="dev-name">${_pf.axcred ? '<span class="dev-perfil" style="color:var(--amber-tx,#FFC470);border-color:var(--amber-tx,#FFC470)" title="DEV-AXCred — aparece primeiro">AXCred</span> ' : ''}${esc(dev)}</div>
       <div class="cap-bar-wrap">
         <div class="cap-bar-track"><div class="cap-bar-fill ${over?'over':''}" style="width:${Math.min(pct,100)}%"></div></div>
         <span class="cap-text">${pct}%</span>
@@ -2944,24 +2943,13 @@ function removeAusencia(id) {
    Vive em `devs_perfil`, chave própria no arquivo de dados — a lista
    `desenvolvedores` continua sendo só nomes, e nenhuma tela que a lê precisou
    mudar. */
-const G_PERFIS = [
-  { k: '',          rot: '—',         cor: 'var(--text3)' },
-  { k: 'fullstack', rot: 'Fullstack', cor: 'var(--blue)' },
-  { k: 'backend',   rot: 'Backend',   cor: '#2BBFA0' },
-  { k: 'frontend',  rot: 'Frontend',  cor: '#9B6FE8' },
-  { k: 'dados',     rot: 'Dados',     cor: '#E89C2F' },
-  { k: 'vibecode',  rot: 'VibeCode',  cor: '#E84494' },
-  { k: 'qa',        rot: 'QA',        cor: '#A8E83B' },
-  { k: 'infra',     rot: 'Infra',     cor: '#4AB0E8' },
-];
+// A lista de stacks (Fullstack, Dados, VibeCode) foi retirada por ora: o pedido
+// era um marcador so, e um seletor a mais na linha era ruido sem uso. O campo
+// `perfil` continua aceito no dado, para quem quiser voltar a preencher.
 
 function gPerfilDe(dev) {
   const p = (state.devs_perfil || {})[dev];
   return p && typeof p === 'object' ? p : {};
-}
-function gPerfilRot(k) {
-  const p = G_PERFIS.find(x => x.k === k);
-  return p && p.k ? p : null;
 }
 
 // Ordem das linhas: DEV-AXCred primeiro, o resto depois, cada grupo em ordem
@@ -2977,15 +2965,24 @@ function gOrdenaDevs(devs) {
 
 async function gSetPerfil(dev, campo, valor) {
   state.devs_perfil = state.devs_perfil || {};
-  const atual = Object.assign({}, state.devs_perfil[dev] || {});
+  const antes = Object.assign({}, state.devs_perfil[dev] || {});
+  const atual = Object.assign({}, antes);
   if (valor === '' || valor === false) delete atual[campo];
   else atual[campo] = valor;
   if (Object.keys(atual).length) state.devs_perfil[dev] = atual;
   else delete state.devs_perfil[dev];
   renderDevsList();
   const okSalvo = await saveToGitHub();
-  if (!okSalvo) toast('Não consegui salvar o perfil de ' + dev + '.', 'err');
-  else { applyFilters(); }
+  if (!okSalvo) {
+    // VOLTA ao estado anterior. Marcado na tela e nao gravado no servidor e pior
+    // do que nao ter marcado: na proxima abertura some, e ninguem entende por que.
+    if (Object.keys(antes).length) state.devs_perfil[dev] = antes;
+    else delete state.devs_perfil[dev];
+    renderDevsList();
+    toast('NÃO consegui salvar a marcação de ' + dev + '. Nada foi alterado.', 'err');
+    return;
+  }
+  applyFilters();
 }
 
 function openDevsModal() {
@@ -3008,13 +3005,9 @@ function renderDevsList() {
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
       <button type="button" class="g-axcred${p.axcred ? ' on' : ''}"
         title="${p.axcred ? 'É do AXCred — aparece primeiro no quadro. Clique para tirar.' : 'Marcar como DEV-AXCred: passa a aparecer primeiro no quadro'}"
-        onclick="gSetPerfil(${JSON.stringify(d).replace(/"/g, '&quot;')}, 'axcred', ${p.axcred ? 'false' : 'true'})"
-        >${p.axcred ? '★' : '☆'} AXCred</button>
+        onclick="gSetPerfil(${JSON.stringify(d).replace(/"/g, '&quot;')}, 'axcred', !gPerfilDe(${JSON.stringify(d).replace(/"/g, '&quot;')}).axcred)"
+        >${p.axcred ? '✓' : '+'} DEV-AXCred</button>
       <span style="font-size:14px;font-weight:500;flex:1">${esc(d)}</span>
-      <select onchange="gSetPerfil(${JSON.stringify(d).replace(/"/g, '&quot;')}, 'perfil', this.value)"
-              title="Stack" style="width:auto;padding:5px 8px;font-size:12.5px">
-        ${G_PERFIS.map(x => `<option value="${x.k}"${(p.perfil || '') === x.k ? ' selected' : ''}>${x.rot}</option>`).join('')}
-      </select>
       <button class="btn btn-ghost btn-sm" onclick="removeDev(${i})" style="color:var(--red);border-color:var(--red)">Remover</button>
     </div>`;
   }).join('');
