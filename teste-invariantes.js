@@ -1547,6 +1547,83 @@ ok(/const RK_TITULO/.test(GANTT), 'o titulo do ranking e um so lugar');
 ok(/entregue no mês/.test(GANTT), 'o titulo diz o criterio na tela');
 ok(/pela data de conclusão/.test(GANTT), 'o title explica por que os numeros diferem');
 
+
+sec('Trabalho do PM/PO: os quatro funis, e o que o historico alcanca');
+
+ok(/data-bandeja="pm"/.test(ADMIN), 'existe a bandeja do PM/PO');
+ok(/function pmFluxo/.test(ADMIN), 'existe o calculo');
+ok(/renderGerPM\(ano, mes\)/.test(ADMIN), 'o Gerencial chama o bloco');
+ok(/k: 'backlog'[\s\S]{0,400}?k: 'levantar_req'[\s\S]{0,200}?k: 'planning'[\s\S]{0,200}?k: 'validacao'/.test(ADMIN),
+   'os quatro funis do PM/PO estao declarados na ordem da esteira');
+
+// As tres leituras que foram pedidas: por funil, por semana e por sistema.
+ok(/function pmTabelaFunil/.test(ADMIN), 'leitura por funil');
+ok(/function pmTabelaSemana/.test(ADMIN), 'leitura por semana');
+ok(/function pmTabelaSistema/.test(ADMIN), 'leitura por sistema/modulo');
+ok(/function pmSemanas/.test(ADMIN), 'a quebra semanal e derivada, nao digitada');
+
+// A jornada completa: da chegada ate sair das maos do PM/PO.
+ok(/t\.para === 'planejado'/.test(ADMIN), 'a jornada termina ao despachar para Planejado');
+ok(/criado_em/.test(ADMIN) && /jornada\.push/.test(ADMIN),
+   'a jornada comeca na criacao (a unica ponta que sempre existiu)');
+
+// HONESTIDADE DO DADO. O historico so existe a partir de 05/08/2026: mes anterior
+// mostra zero movimento por falta de REGISTRO, e um zero calado se le como "o
+// PM/PO nao fez nada".
+ok(/semRegistro: B < '2026-08-05'/.test(ADMIN), 'o bloco sabe ate onde o historico alcanca');
+ok(/falta de registro, não falta de trabalho/.test(ADMIN), 'e diz isso na tela');
+ok(/medidos: tempos\.length, semEntrada/.test(ADMIN),
+   'separa o que deu para medir do que nao deu');
+ok(/Medido em/.test(ADMIN), 'a tela mostra o tamanho da amostra do tempo medio');
+
+// Duracao em horas: a validacao vira no mesmo dia e "0d" se le como defeito.
+ok(/function pmHoras/.test(ADMIN), 'a duracao e medida em horas');
+ok(/function pmDur/.test(ADMIN), 'e formatada em min/h/d conforme o tamanho');
+ok(!/pmDias\(/.test(ADMIN), 'a versao em dias inteiros saiu (perdia a hora do registro)');
+
+// Comportamento: roda o calculo com um historico de mentira.
+let _pmOk = false, _pmPorque = '';
+try {
+  const corpo = (n) => {
+    const i = ADMIN.indexOf('function ' + n + '(');
+    if (i < 0) return '';
+    let c = 0;
+    for (let k = ADMIN.indexOf('{', ADMIN.indexOf(')', i)); k < ADMIN.length; k++) {
+      if (ADMIN[k] === '{') c++;
+      else if (ADMIN[k] === '}') { c--; if (!c) return ADMIN.slice(i, k + 1); }
+    }
+    return '';
+  };
+  const P = new Function('state',
+    ['pmTransicoes', 'pmEntradaEm', 'pmHoras', 'pmDur', 'pmSemanas', 'pmFluxo'].map(corpo).join('\n') +
+    "\nconst PM_FUNIS = [{k:'backlog'},{k:'levantar_req'},{k:'planning'},{k:'validacao'}];" +
+    '\nreturn { pmFluxo, pmDur, pmSemanas };');
+  const st = { temas: [], melhorias: [
+    { id: 'a', codigo: 'AX-1', criado_em: '2026-08-03T10:00:00.000Z', status_planejamento: 'planejado',
+      historico: [{ em: '2026-08-06T14:00:00.000Z', quem: 'PM',
+                    mudancas: [{ campo: 'status_planejamento', de: 'backlog', para: 'planning' }] },
+                  { em: '2026-08-07T10:00:00.000Z', quem: 'PM',
+                    mudancas: [{ campo: 'status_planejamento', de: 'planning', para: 'planejado' }] }] },
+    { id: 'b', codigo: 'AX-2', criado_em: '2026-07-20T10:00:00.000Z', status_planejamento: 'validacao',
+      historico: [{ em: '2026-08-10T09:00:00.000Z', quem: 'PM',
+                    mudancas: [{ campo: 'status_planejamento', de: 'em_andamento', para: 'validacao' }] }] },
+  ] };
+  const M = P(st);
+  const f = M.pmFluxo(2026, 8);
+  const rec = f.recebidas.length === 1;                       // so a criada em agosto
+  const planning = f.funis.find(x => x.k === 'planning');
+  const saiuPlanning = planning.saiu === 1 && planning.medidos === 1;
+  const jornada = f.jornadaN === 1 && f.mediana > 24 * 3 && f.mediana < 24 * 5;  // 03 -> 07 de agosto
+  const val = f.funis.find(x => x.k === 'validacao');
+  const wip = val.parado === 1;                               // AX-2 esta parada la
+  const semanas = M.pmSemanas(2026, 8).length === 5;
+  const horas = M.pmDur(4) === '4h' && M.pmDur(48) === '2d' && M.pmDur(0.5) === '30min';
+  _pmOk = rec && saiuPlanning && jornada && wip && semanas && horas;
+  _pmPorque = 'rec=' + rec + ' planning=' + saiuPlanning + ' jornada=' + jornada +
+              ' wip=' + wip + ' semanas=' + semanas + ' dur=' + horas;
+} catch (e) { _pmPorque = e.message; }
+ok(_pmOk, 'o calculo do PM/PO se comporta com historico de verdade', _pmPorque);
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

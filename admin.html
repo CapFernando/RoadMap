@@ -479,6 +479,17 @@
     .kb-card:hover .kb-estrela { opacity:.8; }
     .kb-estrela.on { color:var(--amber-tx,#FFC470); opacity:1; }
     .kb-estrela:hover { opacity:1; color:var(--amber-tx,#FFC470); }
+    /* As tres leituras do mesmo periodo. Abas, e nao tres blocos empilhados: sao
+       recortes da MESMA conta, e empilhados fariam a pessoa rolar procurando qual
+       deles responde a pergunta dela. */
+    .pm-abas { display:flex; gap:6px; margin:2px 0 14px; flex-wrap:wrap; }
+    .pm-aba { background:var(--bg3); border:1px solid var(--border); color:var(--text2);
+      border-radius:999px; padding:5px 13px; font-size:12.5px; cursor:pointer;
+      font-family:inherit; transition:background .12s,color .12s,border-color .12s; }
+    .pm-aba:hover { color:var(--text); }
+    .pm-aba.ativa { background:var(--blue); border-color:var(--blue); color:#0E0E0D; font-weight:600; }
+    .pm-etapa { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:7px; }
+    .pm-nota { font-size:11.5px; color:var(--text3); line-height:1.55; margin-top:12px; }
     .ap-dica { font-size:12.5px; color:var(--text3); line-height:1.55; margin:0 0 12px; }
     .ap-periodo { font-size:14px; color:var(--text); background:var(--bg3);
       border:1px solid var(--border); border-radius:8px; padding:9px 12px; margin-bottom:14px; }
@@ -1076,6 +1087,24 @@
         <!-- O resumo fica FORA do corpo que recolhe: e a resposta da secao. -->
         <div id="sp-resumo" class="ger-summary"></div>
         <div class="ger-bandeja-corpo"><div id="sp-lista"></div></div>
+      </section>
+
+      <div class="ger-section-sep"></div>
+      <section class="ger-bandeja" data-bandeja="pm">
+        <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('pm')" aria-expanded="true">
+          <span><span class="ger-bandeja-seta">▶</span>🧭 Trabalho do PM/PO</span>
+          <span class="ger-section-hint">o que passou por Backlog, Requisitos, Planning e Validação</span>
+          <span class="ger-bandeja-acao">recolher</span>
+        </button>
+        <div id="pm-resumo" class="ger-summary"></div>
+        <div class="ger-bandeja-corpo">
+          <div class="pm-abas">
+            <button type="button" class="pm-aba ativa" data-pm="funil" onclick="pmAba('funil')">Por funil</button>
+            <button type="button" class="pm-aba" data-pm="semana" onclick="pmAba('semana')">Por semana</button>
+            <button type="button" class="pm-aba" data-pm="sistema" onclick="pmAba('sistema')">Por sistema</button>
+          </div>
+          <div id="pm-lista"></div>
+        </div>
       </section>
 
       <div class="ger-section-sep"></div>
@@ -3838,6 +3867,305 @@ function mesSomaLocal(iso, n) {
 // ─── CUMPRIMENTO DO MÊS (aba Gerencial) ───────────────────────────
 // O mesmo fechamento, por dev. É a conversa que se tem no fim do mês, e o número
 // que falta hoje: "combinamos 30, entregamos 22, e 8 foram para setembro".
+/* ─── TRABALHO DO PM/PO ────────────────────────────────────────────
+   A atuação do PM/PO acontece em quatro funis: Backlog (receber), Levantar
+   Requisitos, Planning e Validação. O que o Gerencial media até aqui era o
+   trabalho de quem DESENVOLVE — entregas, prazo, pontos. O trabalho de quem
+   recebe, especifica, prioriza e aprova não aparecia em número nenhum.
+
+   A FONTE É O HISTÓRICO, e ela tem limite. Só existe transição registrada a
+   partir de 05/08/2026, quando o histórico passou a ser gravado; antes disso o
+   card mudava de etapa sem deixar rastro. Um mês anterior a essa data mostra
+   zero movimento — e isso não é falta de trabalho, é falta de registro. O bloco
+   diz isso na tela, porque um zero silencioso vira "o PM/PO não fez nada".
+
+   RECEPÇÃO é a exceção: ela vem de `criado_em`, que sempre existiu. Por isso o
+   número de demandas recebidas é confiável para qualquer mês, e é o único que é.
+
+   TEMPO NO FUNIL só é calculado quando as DUAS pontas são conhecidas. Demanda
+   que entrou em Planning em julho e saiu em agosto tem saída registrada e
+   entrada não — conta na saída e fica fora da média, com o "medido em N de M"
+   ao lado. Sem isso, a média mediria o pedaço visível e chamaria de tempo total. */
+
+const PM_FUNIS = [
+  { k: 'backlog',      rot: 'Backlog (recepção)', curto: 'Backlog',   cor: 'var(--text3)' },
+  { k: 'levantar_req', rot: 'Levantar Requisitos', curto: 'Requisitos', cor: 'var(--blue)' },
+  { k: 'planning',     rot: 'Planning',            curto: 'Planning',  cor: 'var(--roxo,#C9AEFF)' },
+  { k: 'validacao',    rot: 'Validação PM/PO',     curto: 'Validação', cor: 'var(--amber-tx,#FFC470)' },
+];
+
+let _pmAba = 'funil';
+
+// Todas as transições de etapa da base, achatadas e ordenadas por demanda. É a
+// matéria-prima de tudo aqui.
+function pmTransicoes() {
+  const fora = [];
+  (state.melhorias || []).forEach(m => {
+    if (m.oculto || m.mesclado_em) return;
+    (m.historico || []).forEach(e => {
+      (e.mudancas || []).forEach(mu => {
+        if (mu.campo !== 'status_planejamento') return;
+        const dia = String(e.em || '').slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return;
+        // `dia` para recortar o periodo (comparacao de string ISO, como todo o
+        // resto daqui) e `em` inteiro para medir duracao sem perder a hora.
+        fora.push({ id: m.id, codigo: m.codigo || '', tema_id: m.tema_id,
+                    dia, em: String(e.em || ''),
+                    de: String(mu.de || ''), para: String(mu.para || ''),
+                    quem: e.quem || '' });
+      });
+    });
+  });
+  return fora.sort((a, b) => a.dia.localeCompare(b.dia));
+}
+
+// Quando esta demanda entrou neste funil, olhando para trás a partir de `antes`.
+// Vazio = não dá para saber (a entrada é anterior ao histórico).
+function pmEntradaEm(trans, id, funil, antes) {
+  let achou = '';
+  trans.forEach(t => {
+    if (t.id === id && t.para === funil && t.dia <= antes) achou = t.em || t.dia;
+  });
+  return achou;
+}
+
+// Em HORAS, e nao em dias. A validacao costuma virar no mesmo dia — 49 das 54 de
+// agosto — e em dias isso vira "0d", que se le como defeito. A hora existe no
+// historico (`em` e ISO completo); era eu que estava jogando fora ao cortar em 10
+// caracteres.
+function pmHoras(a, b) {
+  if (!a || !b) return null;
+  const t1 = Date.parse(a), t2 = Date.parse(b);
+  if (isNaN(t1) || isNaN(t2)) return null;
+  return Math.max(0, (t2 - t1) / 3600000);
+}
+
+// Duracao legivel: hora enquanto for menos de um dia, dia depois disso. "18h" diz
+// mais que "1d" para quem despacha no mesmo turno.
+function pmDur(h) {
+  if (h === null || h === undefined) return '—';
+  if (h < 24) return (h < 1 ? Math.round(h * 60) + 'min' : Math.round(h) + 'h');
+  return Math.round(h / 24) + 'd';
+}
+
+// Semanas do mês em blocos de 7 dias a partir do dia 1. Não é semana do
+// calendário de propósito: blocos fixos comparam mês com mês sem depender de o
+// dia 1 cair numa quarta, e o rótulo diz o intervalo para não haver dúvida.
+function pmSemanas(ano, mes) {
+  const ultimo = new Date(ano, mes, 0).getDate();
+  const fora = [];
+  for (let d = 1; d <= ultimo; d += 7) {
+    const fim = Math.min(d + 6, ultimo);
+    fora.push({ ini: d, fim,
+                rot: String(d).padStart(2, '0') + '–' + String(fim).padStart(2, '0') });
+  }
+  return fora;
+}
+
+function pmFluxo(ano, mes) {
+  const alvo = String(ano) + '-' + String(mes).padStart(2, '0');
+  const A = alvo + '-01';
+  const B = alvo + '-' + String(new Date(ano, mes, 0).getDate()).padStart(2, '0');
+  const trans = pmTransicoes();
+  const noMes = trans.filter(t => t.dia >= A && t.dia <= B);
+  const vivas = (state.melhorias || []).filter(m => !m.oculto && !m.mesclado_em);
+
+  // Recepção: `criado_em`, que sempre existiu. É o único número confiável antes
+  // de o histórico passar a ser gravado.
+  const recebidas = vivas.filter(m => String(m.criado_em || '').slice(0, 10) >= A &&
+                                      String(m.criado_em || '').slice(0, 10) <= B);
+
+  const funis = PM_FUNIS.map(f => {
+    const entrou = noMes.filter(t => t.para === f.k);
+    const saiu = noMes.filter(t => t.de === f.k);
+    const parado = vivas.filter(m => (m.status_planejamento || '') === f.k);
+    // Backlog recebe as novas: nascer no backlog é entrar nele. Deduplicado por
+    // demanda, senão a que nasceu e voltou contaria duas vezes.
+    const ids = new Set(entrou.map(t => t.id));
+    const entradas = f.k === 'backlog'
+      ? entrou.length + recebidas.filter(m => !ids.has(m.id)).length
+      : entrou.length;
+
+    const tempos = [];
+    let semEntrada = 0;
+    saiu.forEach(t => {
+      const ini = f.k === 'backlog'
+        ? (pmEntradaEm(trans, t.id, f.k, t.dia) ||
+           String((vivas.find(m => m.id === t.id) || {}).criado_em || ''))
+        : pmEntradaEm(trans, t.id, f.k, t.dia);
+      const dd = pmHoras(ini, t.em || t.dia);
+      if (dd === null) semEntrada++; else tempos.push(dd);
+    });
+    const media = tempos.length
+      ? tempos.reduce((a, b) => a + b, 0) / tempos.length : null;
+
+    return { ...f, entradas, saiu: saiu.length, parado: parado.length,
+             media, medidos: tempos.length, semEntrada,
+             paradas: parado, transEntrou: entrou, transSaiu: saiu };
+  });
+
+  // A jornada inteira: da chegada até sair das mãos do PM/PO (entrar em
+  // Planejado). É o número que responde "quanto tempo um pedido leva para virar
+  // demanda pronta para desenvolver" — e é medível para todas, porque a ponta
+  // inicial é `criado_em`.
+  const despachadas = noMes.filter(t => t.para === 'planejado');
+  const jornada = [];
+  despachadas.forEach(t => {
+    const m = vivas.find(x => x.id === t.id);
+    const dd = pmHoras(String((m || {}).criado_em || ''), t.em || t.dia);
+    if (dd !== null) jornada.push(dd);
+  });
+  jornada.sort((a, b) => a - b);
+  const mediana = jornada.length ? jornada[Math.floor(jornada.length / 2)] : null;
+
+  // Quem moveu: nem todo movimento nesses funis é do PM/PO, e misturar faria o
+  // bloco medir o time inteiro com o nome de uma pessoa.
+  const porQuem = {};
+  noMes.filter(t => PM_FUNIS.some(f => f.k === t.de || f.k === t.para))
+       .forEach(t => { const q = t.quem || '(sem registro)'; porQuem[q] = (porQuem[q] || 0) + 1; });
+
+  return { alvo, A, B, trans, noMes, vivas, recebidas, funis, despachadas: despachadas.length,
+           mediana, jornadaN: jornada.length,
+           quem: Object.keys(porQuem).map(k => ({ nome: k, n: porQuem[k] }))
+                   .sort((a, b) => b.n - a.n),
+           // O histórico começou em 05/08/2026. Antes disso o card mudava de etapa
+           // sem deixar rastro, e um mês anterior mostra zero movimento por falta
+           // de registro — não por falta de trabalho.
+           semRegistro: B < '2026-08-05' };
+}
+
+function pmAba(qual) {
+  _pmAba = qual;
+  document.querySelectorAll('.pm-aba').forEach(b =>
+    b.classList.toggle('ativa', b.dataset.pm === qual));
+  const mes = parseInt(document.getElementById('ger-mes').value);
+  const ano = parseInt(document.getElementById('ger-ano').value);
+  renderGerPM(ano, mes);
+}
+
+function renderGerPM(ano, mes) {
+  const resumo = document.getElementById('pm-resumo');
+  const lista = document.getElementById('pm-lista');
+  if (!resumo || !lista) return;
+  const f = pmFluxo(ano, mes);
+
+  const kpi = (v, rot, extra, cor) =>
+    '<div class="ger-kpi"><div class="ger-kpi-label">' + rot + '</div>' +
+    '<div class="ger-kpi-value"' + (cor ? ' style="color:' + cor + '"' : '') + '>' + v + '</div>' +
+    (extra ? '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">' + extra + '</div>' : '') +
+    '</div>';
+
+  const val = f.funis.find(x => x.k === 'validacao');
+  resumo.innerHTML =
+    kpi(f.recebidas.length, 'Recebidas', 'demandas que chegaram no mês') +
+    kpi(f.despachadas, 'Despachadas', 'saíram do Planning para Planejado',
+        f.despachadas ? 'var(--green)' : '') +
+    kpi(val ? val.saiu : 0, 'Validações', 'entregas julgadas no mês',
+        val && val.saiu ? 'var(--amber-tx,#FFC470)' : '') +
+    kpi(pmDur(f.mediana), 'Jornada',
+        f.jornadaN ? 'mediana da chegada ao despacho (' + f.jornadaN + ')' : 'nada despachado no mês');
+
+  const nota = f.semRegistro
+    ? '<p class="ent-vazio">O histórico de etapas só passou a ser gravado em <strong>05/08/2026</strong>. ' +
+      'Antes disso o card mudava de funil sem deixar rastro, então este mês aparece sem movimento — ' +
+      'é falta de registro, não falta de trabalho.<br>O número de <strong>recebidas</strong> acima ' +
+      'continua valendo: ele vem da data de criação, que sempre existiu.</p>'
+    : '';
+
+  if (_pmAba === 'funil') lista.innerHTML = nota + pmTabelaFunil(f);
+  else if (_pmAba === 'semana') lista.innerHTML = nota + pmTabelaSemana(f, ano, mes);
+  else lista.innerHTML = nota + pmTabelaSistema(f);
+}
+
+function pmTabelaFunil(f) {
+  const linhas = f.funis.map(x =>
+    '<tr><td><span class="pm-etapa" style="background:' + x.cor + '"></span>' + esc(x.rot) + '</td>' +
+    '<td class="pz-num">' + (x.entradas || '—') + '</td>' +
+    '<td class="pz-num">' + (x.saiu || '—') + '</td>' +
+    '<td class="pz-num">' + (x.parado || '—') + '</td>' +
+    '<td class="pz-num">' + pmDur(x.media) + '</td>' +
+    '<td class="us-sub" style="white-space:nowrap">' +
+    (x.medidos ? x.medidos + ' de ' + (x.medidos + x.semEntrada) : (x.saiu ? '0 de ' + x.saiu : '—')) +
+    '</td></tr>').join('');
+
+  const quem = f.quem.length
+    ? '<p class="pm-nota"><strong>Quem moveu:</strong> ' +
+      f.quem.slice(0, 5).map(q => esc(q.nome) + ' (' + q.n + ')').join(' · ') +
+      (f.quem.length > 5 ? ' · e mais ' + (f.quem.length - 5) : '') + '</p>'
+    : '';
+
+  return '<div class="us-tabela-wrap"><table class="us-tabela">' +
+    '<thead><tr><th>Funil</th><th class="pz-num">Entraram</th><th class="pz-num">Saíram</th>' +
+    '<th class="pz-num">Parado hoje</th><th class="pz-num">Tempo médio</th>' +
+    '<th>Medido em</th></tr></thead><tbody>' + linhas + '</tbody></table></div>' + quem +
+    '<p class="pm-nota">"Tempo médio" só conta quem tem as duas pontas registradas. ' +
+    'Demanda que entrou no funil antes de 05/08 tem saída conhecida e entrada não: ' +
+    'ela conta em "Saíram" e fica fora da média — a coluna "Medido em" diz quantas entraram na conta.</p>';
+}
+
+function pmTabelaSemana(f, ano, mes) {
+  const sem = pmSemanas(ano, mes);
+  const dia = s => parseInt(String(s).slice(8, 10), 10);
+  const linhas = sem.map(s => {
+    const dentro = t => { const d = dia(t.dia); return d >= s.ini && d <= s.fim; };
+    const rec = f.recebidas.filter(m => {
+      const d = dia(String(m.criado_em || '').slice(0, 10));
+      return d >= s.ini && d <= s.fim;
+    }).length;
+    const cel = f.funis.map(x => {
+      const n = f.noMes.filter(t => t.de === x.k && dentro(t)).length;
+      return '<td class="pz-num">' + (n || '—') + '</td>';
+    }).join('');
+    const desp = f.noMes.filter(t => t.para === 'planejado' && dentro(t)).length;
+    return '<tr><td>' + esc(s.rot) + '</td><td class="pz-num">' + (rec || '—') + '</td>' + cel +
+           '<td class="pz-num" style="font-weight:700">' + (desp || '—') + '</td></tr>';
+  }).join('');
+  return '<div class="us-tabela-wrap"><table class="us-tabela">' +
+    '<thead><tr><th>Semana</th><th class="pz-num">Recebidas</th>' +
+    f.funis.map(x => '<th class="pz-num">Saiu de ' + esc(x.curto) + '</th>').join('') +
+    '<th class="pz-num">Despachadas</th></tr></thead><tbody>' + linhas + '</tbody></table></div>' +
+    '<p class="pm-nota">Blocos de 7 dias a partir do dia 1, e não semanas do calendário: ' +
+    'assim a comparação entre meses não depende de o dia 1 cair numa quarta.</p>';
+}
+
+function pmTabelaSistema(f) {
+  const nome = id => {
+    const t = (state.temas || []).find(x => String(x.id) === String(id));
+    return t ? (window.catalogoCurto ? catalogoCurto(t.nome) : t.nome) : '(sem sistema)';
+  };
+  const acc = {};
+  const soma = (id, chave) => {
+    const n = nome(id);
+    acc[n] = acc[n] || { nome: n, rec: 0, mov: 0, desp: 0 };
+    acc[n][chave]++;
+  };
+  f.recebidas.forEach(m => soma(m.tema_id, 'rec'));
+  f.noMes.forEach(t => {
+    if (PM_FUNIS.some(x => x.k === t.de || x.k === t.para)) soma(t.tema_id, 'mov');
+    if (t.para === 'planejado') soma(t.tema_id, 'desp');
+  });
+  const lista = Object.values(acc)
+    .sort((a, b) => (b.rec + b.mov) - (a.rec + a.mov) ||
+                    String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+  if (!lista.length) {
+    return '<p class="ent-vazio">Nada passou pelos funis do PM/PO neste mês.</p>';
+  }
+  const vis = lista.slice(0, 10);
+  const linhas = vis.map(x =>
+    '<tr><td>' + esc(x.nome) + '</td>' +
+    '<td class="pz-num">' + (x.rec || '—') + '</td>' +
+    '<td class="pz-num">' + (x.mov || '—') + '</td>' +
+    '<td class="pz-num" style="font-weight:700">' + (x.desp || '—') + '</td></tr>').join('');
+  const sobra = lista.length - vis.length;
+  return '<div class="us-tabela-wrap"><table class="us-tabela">' +
+    '<thead><tr><th>Sistema / módulo</th><th class="pz-num">Recebidas</th>' +
+    '<th class="pz-num">Movimentos</th><th class="pz-num">Despachadas</th></tr></thead>' +
+    '<tbody>' + linhas + '</tbody></table></div>' +
+    (sobra > 0 ? '<p class="pm-nota">… e mais ' + sobra + ' sistema(s) com menos volume.</p>' : '') +
+    '<p class="pm-nota">"Movimentos" conta cada passagem pelos quatro funis — uma demanda que ' +
+    'entrou em Planning e saiu para Planejado conta duas vezes, porque foram dois atos.</p>';
+}
+
 function renderGerCumprimento(ano, mes) {
   const resumo = document.getElementById('cp-resumo');
   const lista = document.getElementById('cp-lista');
@@ -4590,6 +4918,7 @@ function renderGerencial() {
   renderGerSemPontos();
   // O cumprimento vem ANTES do prazo porque responde primeiro: o mes entregou o
   // que prometeu? "No prazo" e a pergunta seguinte, sobre o que saiu.
+  renderGerPM(ano, mes);
   renderGerCumprimento(ano, mes);
   renderGerPrazo(ano, mes);
   // Depois de renderizar: o conteudo e reescrito a cada Atualizar, e o estado das
