@@ -1886,8 +1886,13 @@ sec('Quando nao tem, cria — nao adivinha');
 //    outra.
 ok(!/const mesmaPessoa = \(a, b\) =>/.test(WC),
    'a heuristica de prefixo saiu da API');
-ok(/const derivado = declarados\.length \? \[\] :/.test(WC),
-   'sem campo declarado, vale o nome derivado do e-mail');
+// Os tres nomes aceitos SOMAM em vez de competir: derivado do e-mail, declarado
+// no perfil e nome da conta. Somar elimina a janela da virada — entre trocar o
+// nome nas demandas e trocar o cadastro, ninguem fica sem ver a propria fila.
+ok(/const aceitos = \[\.\.\.declarados, doEmail, eu\]\.filter\(Boolean\)/.test(WC),
+   'o derivado do e-mail e o declarado convivem, sem janela na virada');
+ok(/const doEmail = nomeDemandasDoEmail\(/.test(WC),
+   'o nome do e-mail e sempre um dos aceitos');
 ok(/naDemanda\.some\(n => aceitos\.some\(a => normNome\(n\) === normNome\(a\)\)\)/.test(WC),
    'a comparacao e sempre por IGUALDADE');
 
@@ -1933,6 +1938,36 @@ try {
              ' declarado=' + declaradoVale + ' antiga=' + contaAntiga;
 } catch (e) { _cPorque = e.message; }
 ok(_cOk, 'a fila de um dev NAO chega na mao de outro pela API', _cPorque);
+
+
+sec('Perfil do dev: quem faz o que, e quem esta em foco');
+
+// O time nao e homogeneo — fullstack, backend, dados, VibeCode. Acompanhar todos
+// na mesma lista e na mesma ordem esconde a diferenca que o acompanhamento existe
+// para ver.
+ok(/const G_PERFIS = \[/.test(GANTT), 'existe a lista de perfis');
+ok(/vibecode/.test(GANTT) && /dados/.test(GANTT) && /fullstack/.test(GANTT),
+   'os perfis citados estao la');
+ok(/function gOrdenaDevs/.test(GANTT), 'existe a ordem por foco');
+ok(/gPerfilDe\(a\)\.foco \? 0 : 1/.test(GANTT), 'em foco vem primeiro');
+ok(/localeCompare\(String\(b\), 'pt-BR'\)/.test(GANTT.slice(GANTT.indexOf('function gOrdenaDevs'))),
+   'dentro do grupo, ordem alfabetica (tirar do foco nao embaralha o quadro)');
+ok(/let devs = state\.desenvolvedores\.length[\s\S]{0,120}?gOrdenaDevs/.test(GANTT),
+   'o gantt desenha nessa ordem');
+ok(/function gSetPerfil/.test(GANTT), 'da para marcar pela tela');
+
+// Perfil e foco sao INDEPENDENTES: a prioridade muda de semana, e se ela fosse
+// propriedade do perfil, mudar de foco exigiria reclassificar as pessoas.
+ok(/'foco', \$\{p\.foco \? 'false' : 'true'\}/.test(GANTT) &&
+   /'perfil', this\.value/.test(GANTT),
+   'foco e perfil sao campos separados');
+
+// Sem isto, um conflito de gravacao traria a versao do servidor por cima e a
+// marcacao recem-feita sumiria logo depois de um "salvo".
+ok(/'desenvolvedores', 'devs_perfil'/.test(GANTT),
+   'devs_perfil e campo do gantt (nao e sobrescrito no conflito)');
+ok(!/'devs_perfil'/.test(ADMIN),
+   'o admin nao reivindica o campo (ele so preserva o que vem do servidor)');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

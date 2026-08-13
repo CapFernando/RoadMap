@@ -262,6 +262,12 @@
       justify-content: center; gap: 4px; position: sticky; left: 0; z-index: 10;
       background: var(--bg2);
     }
+    /* A etiqueta e discreta de proposito: ela informa QUEM e a pessoa, e nao
+       compete com a barra de capacidade, que e o dado que muda todo dia. */
+    .dev-perfil { font-size:9.5px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.04em; border:1px solid; border-radius:4px; padding:1px 4px;
+      vertical-align:middle; opacity:.85; }
+    .dev-foco { color:var(--amber-tx,#FFC470); font-size:12px; }
     .dev-name { font-size: 13px; font-weight: 600; color: var(--text); }
     .cap-bar-wrap { display: flex; align-items: center; gap: 6px; }
     .cap-bar-track {
@@ -1476,7 +1482,10 @@ async function saveToGitHub(tentativa = 1) {
     // Lista do que ESTA tela e dona; o resto passa do servidor sem ser tocado.
     // Negativa de proposito: chave nova criada em outra tela fica preservada
     // sem ninguem precisar lembrar de vir aqui.
-    const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'feriados',
+    // `devs_perfil` entra na lista: sem ele, um conflito de gravacao traria a
+    // versao do servidor por cima e a marcacao que a pessoa acabou de fazer
+    // sumiria — do jeito mais confuso possivel, logo depois de um "salvo".
+    const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'devs_perfil', 'feriados',
                          'ausencias', 'atualizado_em'];
     Object.keys(serverData || {}).forEach(k => {
       if (!MEUS_CAMPOS.includes(k)) state[k] = serverData[k];
@@ -1943,7 +1952,10 @@ function renderGantt() {
   const dayW = workDays.length > 0 ? Math.max(44, Math.floor(available / workDays.length)) : 52;
   document.documentElement.style.setProperty('--day-w', dayW + 'px');
 
-  let devs = state.desenvolvedores.length ? state.desenvolvedores : ['(sem dev)'];
+  // Em foco no topo. E a razao de o perfil existir: acompanhar de perto quem
+  // esta na frente da prioridade da semana sem ter de procurar no meio da lista.
+  let devs = state.desenvolvedores.length
+    ? gOrdenaDevs(state.desenvolvedores) : ['(sem dev)'];
   const table = document.getElementById('gantt-table');
 
   if (!devs.length) {
@@ -2051,8 +2063,12 @@ function renderGantt() {
     html += `<div class="dev-row" style="min-height:${rowH}px" data-dev="${esc(dev)}">`;
 
     // Label
+    // A etiqueta do perfil vai NO NOME, e a estrela antes dele: e o unico lugar
+    // onde os dois cabem sem competir com a barra de capacidade logo abaixo.
+    const _pf = gPerfilDe(dev), _rot = gPerfilRot(_pf.perfil);
     html += `<div class="dev-label">
-      <div class="dev-name">${esc(dev)}</div>
+      <div class="dev-name">${_pf.foco ? '<span class="dev-foco" title="Em foco">★</span> ' : ''}${esc(dev)}${
+        _rot ? ` <span class="dev-perfil" style="color:${_rot.cor};border-color:${_rot.cor}">${_rot.rot}</span>` : ''}</div>
       <div class="cap-bar-wrap">
         <div class="cap-bar-track"><div class="cap-bar-fill ${over?'over':''}" style="width:${Math.min(pct,100)}%"></div></div>
         <span class="cap-text">${pct}%</span>
@@ -2884,6 +2900,68 @@ function removeAusencia(id) {
 }
 
 // ── DEVS MODAL ────────────────────────────────────────────────────────────
+/* ─── PERFIL DO DEV ────────────────────────────────────────────────
+   O time não é homogêneo: tem fullstack, backend, dados, VibeCode. Acompanhar
+   todos na mesma lista, na mesma ordem, esconde justamente a diferença que o
+   acompanhamento existe para ver.
+
+   Duas coisas por dev, e elas são independentes de propósito:
+
+     PERFIL  — o que a pessoa faz. Serve para ler o quadro, e aparece como
+               etiqueta ao lado do nome.
+     ⭐ FOCO — quem você quer em cima. Sobe para o topo do gantt.
+
+   Separadas porque a pergunta muda de semana: hoje o foco é AXCred, mês que vem
+   pode ser dados. Se o foco fosse uma propriedade do perfil, mudar de prioridade
+   exigiria reclassificar as pessoas.
+
+   Vive em `devs_perfil`, chave própria no arquivo de dados — a lista
+   `desenvolvedores` continua sendo só nomes, e nenhuma tela que a lê precisou
+   mudar. */
+const G_PERFIS = [
+  { k: '',          rot: '—',         cor: 'var(--text3)' },
+  { k: 'fullstack', rot: 'Fullstack', cor: 'var(--blue)' },
+  { k: 'backend',   rot: 'Backend',   cor: '#2BBFA0' },
+  { k: 'frontend',  rot: 'Frontend',  cor: '#9B6FE8' },
+  { k: 'dados',     rot: 'Dados',     cor: '#E89C2F' },
+  { k: 'vibecode',  rot: 'VibeCode',  cor: '#E84494' },
+  { k: 'qa',        rot: 'QA',        cor: '#A8E83B' },
+  { k: 'infra',     rot: 'Infra',     cor: '#4AB0E8' },
+];
+
+function gPerfilDe(dev) {
+  const p = (state.devs_perfil || {})[dev];
+  return p && typeof p === 'object' ? p : {};
+}
+function gPerfilRot(k) {
+  const p = G_PERFIS.find(x => x.k === k);
+  return p && p.k ? p : null;
+}
+
+// Ordem das linhas: em foco primeiro, o resto depois, cada grupo em ordem
+// alfabética. Sem o alfabético dentro do grupo, tirar alguém do foco embaralharia
+// o quadro inteiro — e quem olha todo dia decora a posição.
+function gOrdenaDevs(devs) {
+  return devs.slice().sort((a, b) => {
+    const fa = gPerfilDe(a).foco ? 0 : 1, fb = gPerfilDe(b).foco ? 0 : 1;
+    if (fa !== fb) return fa - fb;
+    return String(a).localeCompare(String(b), 'pt-BR');
+  });
+}
+
+async function gSetPerfil(dev, campo, valor) {
+  state.devs_perfil = state.devs_perfil || {};
+  const atual = Object.assign({}, state.devs_perfil[dev] || {});
+  if (valor === '' || valor === false) delete atual[campo];
+  else atual[campo] = valor;
+  if (Object.keys(atual).length) state.devs_perfil[dev] = atual;
+  else delete state.devs_perfil[dev];
+  renderDevsList();
+  const okSalvo = await saveToGitHub();
+  if (!okSalvo) toast('Não consegui salvar o perfil de ' + dev + '.', 'err');
+  else { applyFilters(); }
+}
+
 function openDevsModal() {
   renderDevsList();
   abrirModal('modal-devs');
@@ -2895,12 +2973,25 @@ function renderDevsList() {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">Nenhum dev cadastrado.</div>';
     return;
   }
-  el.innerHTML = state.desenvolvedores.map((d,i) =>
-    `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
-      <span style="font-size:14px;font-weight:500">${esc(d)}</span>
+  // Em foco primeiro tambem AQUI: a lista do modal e o quadro tem de contar a
+  // mesma historia, senao marcar alguem e nao ver mudanca nenhuma parece falha.
+  const ordenados = gOrdenaDevs(state.desenvolvedores);
+  el.innerHTML = ordenados.map(d => {
+    const p = gPerfilDe(d);
+    const i = state.desenvolvedores.indexOf(d);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">
+      <button type="button" title="${p.foco ? 'Em foco — aparece no topo do gantt. Clique para tirar.' : 'Colocar em foco (vai para o topo do gantt)'}"
+        onclick="gSetPerfil(${JSON.stringify(d).replace(/"/g, '&quot;')}, 'foco', ${p.foco ? 'false' : 'true'})"
+        style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:2px;
+               color:${p.foco ? 'var(--amber-tx,#FFC470)' : 'var(--text3)'}">${p.foco ? '★' : '☆'}</button>
+      <span style="font-size:14px;font-weight:500;flex:1">${esc(d)}</span>
+      <select onchange="gSetPerfil(${JSON.stringify(d).replace(/"/g, '&quot;')}, 'perfil', this.value)"
+              style="width:auto;padding:5px 8px;font-size:12.5px">
+        ${G_PERFIS.map(x => `<option value="${x.k}"${(p.perfil || '') === x.k ? ' selected' : ''}>${x.rot}</option>`).join('')}
+      </select>
       <button class="btn btn-ghost btn-sm" onclick="removeDev(${i})" style="color:var(--red);border-color:var(--red)">Remover</button>
-    </div>`
-  ).join('');
+    </div>`;
+  }).join('');
 }
 
 async function addDev() {
