@@ -1687,6 +1687,73 @@ ok(/sem_responsavel/.test(WC), 'a recusa tem motivo proprio');
 ok(/if \(String\(velha\.status_planejamento \|\| ''\) === 'concluido'\) continue;[\s\S]{0,200}?String\(m\.dev \|\| ''\)\.trim\(\)/.test(WC),
    'demanda que JA estava concluida sem dev nao trava a gravacao de hoje');
 
+
+sec('Sem responsavel: aviso nomeado, e nao linha anonima');
+
+// Uma linha chamada "Sem dev" numa tabela POR DEV se le como defeito do
+// relatorio — e foi lida assim. Ela e uma demanda pontuada que ainda nao tem
+// dono, quase sempre por estar no Backlog, onde nao deve ter mesmo.
+ok(/function splitDevsLocal\(s\) \{[\s\S]{0,120}?if \(!s\) return \[\];/.test(ADMIN),
+   'sem responsavel nao vira linha na tabela por dev');
+ok(!/return \['Sem dev'\]/.test(ADMIN), 'o rotulo "Sem dev" saiu do agrupamento');
+ok(/avisoSemDono/.test(ADMIN), 'existe o aviso das pontuadas sem responsavel');
+ok(/pontuada\$\{semDono\.length!==1\?'s':''\} sem responsável/.test(ADMIN),
+   'o aviso diz quantas e quantos pontos');
+ok(/semDono\.map\([\s\S]{0,300}?m\.codigo/.test(ADMIN),
+   'o aviso NOMEIA cada uma pelo codigo (nomeada da para agir)');
+ok((ADMIN.match(/avisoSemDono/g) || []).length >= 3,
+   'o aviso aparece com dados e tambem no periodo vazio');
+
+// ── Etapa vazia deixa de ser invisivel ──
+// Duas demandas estavam com `status_planejamento` em branco: nao entram em coluna
+// nenhuma do Kanban e escapam de toda regra ancorada na etapa — inclusive a que
+// exige responsavel e a que carimba o mes.
+ok(/const STATUS_PARA_SP/.test(WC), 'existe a volta de status para etapa');
+ok(/recebida: 'backlog'/.test(WC) && /estimada: 'planning'/.test(WC) &&
+   /iniciada: 'em_andamento'/.test(WC),
+   'quando duas etapas compartilham o status, vale a MENOS avancada');
+ok(/if \(!sp\) \{[\s\S]{0,220}?STATUS_PARA_SP\[String\(m\.status/.test(WC),
+   'etapa vazia e preenchida a partir do status');
+
+// Comportamento: nunca inventa progresso, e nao ressuscita terminal.
+let _nOk = false, _nPorque = '';
+try {
+  const bl = (p) => {
+    const i = WC.indexOf(p);
+    let c = 0;
+    for (let k = WC.indexOf('{', i); k < WC.length; k++) {
+      if (WC[k] === '{') c++;
+      else if (WC[k] === '}') { c--; if (!c) return WC.slice(i, k + 1) + ';'; }
+    }
+    return '';
+  };
+  const fnBody = (n) => {
+    const i = WC.indexOf('function ' + n + '(');
+    let c = 0;
+    for (let k = WC.indexOf('{', WC.indexOf(')', i)); k < WC.length; k++) {
+      if (WC[k] === '{') c++;
+      else if (WC[k] === '}') { c--; if (!c) return WC.slice(i, k + 1); }
+    }
+    return '';
+  };
+  const N = new Function(bl('const SP_PARA_STATUS =') + bl('const STATUS_PARA_SP =') +
+                         fnBody('normalizaEstados') + '\nreturn normalizaEstados;')();
+  const d = { melhorias: [
+    { codigo: 'a', status: 'recebida',  status_planejamento: '' },
+    { codigo: 'b', status: 'negada',    status_planejamento: '' },
+    { codigo: 'c', status: 'concluida', status_planejamento: '' },
+    { codigo: 'd', status: 'iniciada',  status_planejamento: '' },
+    { codigo: 'e', status: '',          status_planejamento: '' },
+    { codigo: 'f', status: 'recebida',  status_planejamento: 'levantar_req' },
+  ] };
+  N(d);
+  const p = c => d.melhorias.find(m => m.codigo === c).status_planejamento;
+  _nOk = p('a') === 'backlog' && p('b') === 'negada' && p('c') === 'concluido' &&
+         p('d') === 'em_andamento' && p('e') === '' && p('f') === 'levantar_req';
+  _nPorque = d.melhorias.map(m => m.codigo + '=' + (m.status_planejamento || '(vazia)')).join(' ');
+} catch (e) { _nPorque = e.message; }
+ok(_nOk, 'a etapa deduzida nunca inventa progresso e nao mexe em quem ja tinha', _nPorque);
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

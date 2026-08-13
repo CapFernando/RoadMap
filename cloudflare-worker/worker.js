@@ -580,15 +580,40 @@ const SP_PARA_STATUS = {
   concluido: 'concluida', negada: 'negada',
 };
 
+// Volta do `status` para a etapa, escolhendo sempre a MENOS AVANCADA quando duas
+// etapas compartilham o mesmo status. Sentido unico: assim o preenchimento nunca
+// inventa progresso — no maximo subestima, e quem olha o quadro corrige.
+//
+// Foi o cuidado que faltou na vez em que adivinhar deixou duas negadas
+// invisiveis: ali o chute promovia a demanda para um estado que ela nao tinha.
+// `negada` e `concluida` sao mao unica de verdade (uma etapa cada), entao nao ha
+// o que escolher.
+const STATUS_PARA_SP = {
+  recebida: 'backlog',       // ou levantar_req — backlog e o menos avancado
+  estimada: 'planning',      // ou planejado
+  iniciada: 'em_andamento',  // ou validacao
+  concluida: 'concluido',
+  negada: 'negada',
+};
+
 // Alinha `status` a etapa em todas as demandas do payload. Devolve quantas ajustou.
-// Etapa desconhecida ou vazia NAO e adivinhada: preencher por chute foi como as
-// duas negadas acabaram invisiveis.
+//
+// E preenche a ETAPA VAZIA. Duas demandas na base estavam com
+// `status_planejamento` em branco (AX-127 e AX-211): elas nao entram em coluna
+// nenhuma do Kanban, escapam de toda regra ancorada na etapa — inclusive a que
+// exige responsavel e a que carimba o mes — e nao aparecem em relatorio por
+// etapa. Ficar invisivel e pior que ficar na coluna errada: na coluna errada
+// alguem ve e move.
 function normalizaEstados(data) {
   if (!data || !Array.isArray(data.melhorias)) return 0;
   let n = 0;
   for (const m of data.melhorias) {
     if (!m) continue;
-    const sp = String(m.status_planejamento || '').trim();
+    let sp = String(m.status_planejamento || '').trim();
+    if (!sp) {
+      const deduzida = STATUS_PARA_SP[String(m.status || '').trim()];
+      if (deduzida) { m.status_planejamento = deduzida; sp = deduzida; n += 1; }
+    }
     const esperado = SP_PARA_STATUS[sp];
     if (!esperado) continue;
     if (m.status !== esperado) { m.status = esperado; n += 1; }

@@ -5067,8 +5067,16 @@ function renderGerencial() {
     return Object.fromEntries(Object.entries(map).sort((a,b) => b[1]-a[1]));
   }
 
+  // Sem responsavel NAO vira uma linha "Sem dev" na tabela por dev. Uma linha com
+  // esse nome parece defeito do relatorio — e foi lida como defeito — quando na
+  // verdade e uma demanda pontuada que ainda nao tem dono, quase sempre por estar
+  // no Backlog, onde nao deve ter mesmo.
+  //
+  // Ela nao some: vira um aviso NOMEADO logo acima, com codigo e pontos, igual ao
+  // que ja existe para as pontuadas sem data. Nomeada, da para agir; como linha
+  // anonima, so da para desconfiar.
   function splitDevsLocal(s) {
-    if (!s) return ['Sem dev'];
+    if (!s) return [];
     return s.split(/[\/,]/).map(d => d.trim()).filter(Boolean);
   }
   function groupByDevs(arr, valFn) {
@@ -5151,6 +5159,20 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
   // sempre, independente do período escolhido.
   const semData = gerPontuadasSemData();
   const semDataPts = semData.reduce((s, m) => s + Number(m.poker_pontos), 0);
+
+  // Pontuadas do periodo que ainda nao tem dono. Mesmo tratamento das sem data:
+  // aviso nomeado, e nao linha anonima na tabela por dev.
+  const semDono = itens.filter(m => !String(m.dev || '').trim());
+  const semDonoPts = semDono.reduce((s, m) => s + Number(m.poker_pontos), 0);
+  const avisoSemDono = semDono.length ? `<div class="ger-empty-box" style="grid-column:1/-1;text-align:left;border-color:var(--amber,#E89C2F)">
+    <b style="color:var(--text)">⚠ ${semDono.length} demanda${semDono.length!==1?'s':''} pontuada${semDono.length!==1?'s':''} sem responsável (${semDonoPts} pt)</b><br>
+    Elas contam nos totais do período, mas não aparecem na tabela por dev — não há
+    a quem atribuir. De <b>Planejado</b> em diante isso não acontece: o servidor
+    devolve para o Backlog quem chegar lá sem dono.
+    <div style="margin-top:10px">${semDono.map(m =>
+      `<div style="color:var(--text2);margin-bottom:3px">• <span class="cod-tag">${esc(m.codigo || '')}</span> ${esc(m.titulo || '(sem título)')} — <b style="color:var(--text)">${m.poker_pontos} pt</b> · ${esc(etapaRotulo(m))}</div>`
+    ).join('')}</div>
+  </div>` : '';
   const avisoSemData = semData.length ? `<div class="ger-empty-box" style="grid-column:1/-1;text-align:left;border-color:var(--amber,#E89C2F)">
     <b style="color:var(--text)">⚠ ${semData.length} demanda${semData.length!==1?'s':''} pontuada${semData.length!==1?'s':''} sem data de início/entrega (${semDataPts} pt)</b><br>
     Sem data não é possível dizer a que semana ou mês pertencem, então não entram
@@ -5162,7 +5184,7 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
 
   if (!itens.length) {
     elSum.innerHTML = '';
-    elCharts.innerHTML = avisoSemData + `<div class="ger-empty-box" style="grid-column:1/-1">
+    elCharts.innerHTML = avisoSemData + avisoSemDono + `<div class="ger-empty-box" style="grid-column:1/-1">
       Nenhuma demanda pontuada com entrega neste período.<br>
       Os pontos aparecem aqui depois de votar no <b>Planning Poker</b> e usar <b>“Gravar no card”</b>.
     </div>`;
@@ -5254,6 +5276,7 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
   }
   gerRenderPies('ger-pts-charts', defs, ' pt');
   if (avisoSemData) elCharts.insertAdjacentHTML('beforeend', avisoSemData);
+  if (avisoSemDono) elCharts.insertAdjacentHTML('beforeend', avisoSemDono);
 
   // ── Matriz dev × semana ──
   const cols = semanas.map((_, i) => 'S' + (i+1));
