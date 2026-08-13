@@ -1940,34 +1940,25 @@ try {
 ok(_cOk, 'a fila de um dev NAO chega na mao de outro pela API', _cPorque);
 
 
-sec('Perfil do dev: quem faz o que, e quem esta em foco');
+sec('Perfil do dev: a stack, e a ordem do quadro');
 
 // O time nao e homogeneo — fullstack, backend, dados, VibeCode. Acompanhar todos
 // na mesma lista e na mesma ordem esconde a diferenca que o acompanhamento existe
 // para ver.
-ok(/const G_PERFIS = \[/.test(GANTT), 'existe a lista de perfis');
+ok(/const G_PERFIS = \[/.test(GANTT), 'existe a lista de stacks');
 ok(/vibecode/.test(GANTT) && /dados/.test(GANTT) && /fullstack/.test(GANTT),
-   'os perfis citados estao la');
-ok(/function gOrdenaDevs/.test(GANTT), 'existe a ordem por foco');
-ok(/gPerfilDe\(a\)\.foco \? 0 : 1/.test(GANTT), 'em foco vem primeiro');
-ok(/localeCompare\(String\(b\), 'pt-BR'\)/.test(GANTT.slice(GANTT.indexOf('function gOrdenaDevs'))),
-   'dentro do grupo, ordem alfabetica (tirar do foco nao embaralha o quadro)');
+   'as stacks citadas estao la');
+ok(/function gOrdenaDevs/.test(GANTT), 'existe a ordem do quadro');
 ok(/let devs = state\.desenvolvedores\.length[\s\S]{0,120}?gOrdenaDevs/.test(GANTT),
    'o gantt desenha nessa ordem');
 ok(/function gSetPerfil/.test(GANTT), 'da para marcar pela tela');
-
-// Perfil e foco sao INDEPENDENTES: a prioridade muda de semana, e se ela fosse
-// propriedade do perfil, mudar de foco exigiria reclassificar as pessoas.
-ok(/'foco', \$\{p\.foco \? 'false' : 'true'\}/.test(GANTT) &&
-   /'perfil', this\.value/.test(GANTT),
-   'foco e perfil sao campos separados');
+ok(/'perfil', this\.value/.test(GANTT), 'a stack e um campo proprio');
 
 // Sem isto, um conflito de gravacao traria a versao do servidor por cima e a
-// marcacao recem-feita sumiria logo depois de um "salvo".
+// marcacao recem-feita sumiria logo depois de um "salvo". No Admin a protecao e
+// outra — fusao por chave —, porque as DUAS telas editam o mesmo mapa.
 ok(/'desenvolvedores', 'devs_perfil'/.test(GANTT),
    'devs_perfil e campo do gantt (nao e sobrescrito no conflito)');
-ok(!/'devs_perfil'/.test(ADMIN),
-   'o admin nao reivindica o campo (ele so preserva o que vem do servidor)');
 
 
 sec('Lista de devs: remover uma pessoa tem de funcionar');
@@ -2065,36 +2056,40 @@ ok(/const y = window\.scrollY;[\s\S]{0,400}?window\.scrollTo\(\{ top: y \}\)/.te
    'redesenhar a lista nao leva a pagina para o topo');
 
 
-sec('Marcacao do dev: frente, stack e foco, onde as pessoas sao gerenciadas');
+sec('Marcacao do dev: DEV-AXCred, e nao uma lista de frentes');
 
-// Eu tinha posto a marcacao no modal do Planejamento, e a pergunta veio: "onde
-// faco?". Quem administra pessoas esta na aba Usuarios — atributo de pessoa mora
-// com as pessoas. Agora esta nas DUAS telas, com o mesmo dado.
-ok(/function uCelulaPerfil/.test(ADMIN), 'a marcacao existe na aba Usuarios');
-ok(/'Frente \/ Stack'/.test(ADMIN), 'e tem coluna propria na tabela');
-ok(/function uSetPerfil/.test(ADMIN), 'da para marcar por la');
-ok(/function gSetPerfil/.test(GANTT), 'e continua no Planejamento');
+// Houve uma lista de 19 frentes aqui, tirada do catalogo. Ela FORCAVA escolher
+// uma, e dev atua em varias ao mesmo tempo — marcar "AXCred" apagava o resto e a
+// informacao ficava errada de qualquer jeito. Virou um marcador so, com nome.
+ok(!/function uFrentes/.test(ADMIN) && !/function gFrentes/.test(GANTT),
+   'a lista de frentes saiu das duas telas');
+ok(/DEV-AXCred/.test(ADMIN), 'o marcador tem NOME na aba Usuarios');
+ok(/class="us-axcred/.test(ADMIN) && /class="g-axcred/.test(GANTT),
+   'e existe nas duas telas');
+ok(/'AXCred \/ Stack'/.test(ADMIN), 'a coluna diz o que e');
 
-// Tres dimensoes, tres campos: num campo so, marcar "AXCred" apagaria "e
-// Fullstack", e "quantos fullstack tenho no AXCred" ficaria sem resposta.
-ok(/sel\('frente'/.test(ADMIN) && /sel\('perfil'/.test(ADMIN) &&
-   /p\.foco \? 'false' : 'true'/.test(ADMIN),
-   'frente, stack e foco sao campos separados');
-ok(/function uFrentes/.test(ADMIN) && /function gFrentes/.test(GANTT),
-   'as duas telas montam a lista de frentes');
-ok(/catalogoSistema\(t\.nome\)/.test(ADMIN) && /catalogoSistema\(t\.nome\)/.test(GANTT),
-   'a frente sai do CATALOGO, e nao de uma lista digitada em cada tela');
+// Ele substituiu a estrela generica de "foco": mesmo marcador, sem dizer o
+// motivo. Marcador com nome nao precisa ser explicado a ninguem.
+ok(/gPerfilDe\(a\)\.axcred \? 0 : 1/.test(GANTT), 'a ordem do quadro usa o marcador');
+ok(!/\.foco \? 0 : 1/.test(GANTT), 'a ordem por "foco" saiu');
+ok(/localeCompare\(String\(b\), 'pt-BR'\)/.test(GANTT.slice(GANTT.indexOf('function gOrdenaDevs'))),
+   'dentro do grupo, ordem alfabetica (tirar a marca nao embaralha o quadro)');
+
+// A stack fica: responde outra pergunta e nao competia com nada.
+ok(/const U_PERFIS/.test(ADMIN) && /const G_PERFIS/.test(GANTT), 'a stack continua nas duas telas');
 
 // A chave e o nome usado nas DEMANDAS: a conta pode se chamar "Crisley Matheus" e
 // o quadro mostrar "Crisley Almeida". Sem isso, marcar no Admin nao apareceria no
 // Planejamento.
 ok(/function uNomeDeDev/.test(ADMIN), 'a marcacao e indexada pelo nome das demandas');
-ok(/nome_sugerido/.test(ADMIN), 'e o nome derivado do e-mail entra na busca');
-
-// O Planejamento tambem edita esse mapa: trocar o objeto inteiro faria a marcacao
-// de quem publicou primeiro sumir sem aviso.
 ok((ADMIN.match(/devs_perfil = Object\.assign\(\{\}/g) || []).length === 2,
-   'devs_perfil funde por CHAVE nas duas mesclagens do Admin');
+   'devs_perfil funde por CHAVE nas mesclagens do Admin');
+
+// A tela cabia em 1000px antes de ter seis colunas: o nome quebrava em duas
+// linhas, o e-mail partia no meio e os botoes de acao ficavam cortados na borda —
+// com margem sobrando dos dois lados.
+ok(/main \{ max-width: min\(1560px, 100%\)/.test(ADMIN),
+   'a tela usa a largura disponivel, sem cortar conteudo');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

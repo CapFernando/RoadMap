@@ -546,10 +546,18 @@ async function limpaDevs(env, data) {
         // Declarado so continua valendo enquanto casar com alguma demanda. E o
         // caso do "Leite". Quando para de casar, o campo e obsoleto: apaga, e a
         // conta volta a valer pelo e-mail sem ninguem precisar mexer.
+        //
+        // MAS: declarado IGUAL ao derivado do e-mail nao e obsoleto — e a mesma
+        // coisa dita duas vezes. Apagar ali seria desfazer uma escolha deliberada
+        // e fazer a tela mostrar "— pelo nome da conta —" logo depois de a pessoa
+        // ter digitado o nome, parecendo que nao salvou. E o caso de quem
+        // coordena: "Fernando Nascimento" nao casa com demanda nenhuma porque ele
+        // nao desenvolve, e nem por isso a escolha dele esta errada.
         const decl = String(u.nome_demandas || '').split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
         const uteis = decl.filter(temDemanda);
         uteis.forEach(x => declaradosVivos.add(norm(x)));
-        if (decl.length && !uteis.length) {
+        const igualAoDerivado = can && decl.length === 1 && norm(decl[0]) === norm(can);
+        if (decl.length && !uteis.length && !igualAoDerivado) {
           try {
             await env.POKER_DB.prepare('UPDATE usuario SET nome_demandas = NULL WHERE id = ?')
               .bind(u.id).run();

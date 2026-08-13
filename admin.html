@@ -140,7 +140,15 @@
     .btn-sm { padding: 6px 12px; font-size: 13px; }
 
     /* MAIN */
-    main { max-width: 1000px; margin: 0 auto; padding: 28px 20px; }
+    /* 1000px era estreito para o que esta tela virou: a aba Usuarios tem seis
+       colunas, e o resultado era o nome da pessoa quebrando em duas linhas, o
+       e-mail partido no meio e os botoes de acao cortados na borda — com margem
+       sobrando dos dois lados. Conteudo escondido por falta de largura e pior que
+       tela larga.
+
+       `min()` e nao um numero fixo: em monitor pequeno ela usa o que houver, sem
+       criar rolagem horizontal. */
+    main { max-width: min(1560px, 100%); margin: 0 auto; padding: 28px 24px; }
 
     /* TABS */
 /* Regua de abas. Estava com emoji em umas e nao em outras — e o mesmo 🗂 em
@@ -490,11 +498,14 @@
     .pm-aba.ativa { background:var(--blue); border-color:var(--blue); color:#0E0E0D; font-weight:600; }
     .pm-etapa { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:7px; }
     .pm-nota { font-size:11.5px; color:var(--text3); line-height:1.55; margin-top:12px; }
-    .us-perfil-cel { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-    .us-estrela { background:none; border:none; cursor:pointer; font-size:16px; line-height:1;
-      padding:2px; color:var(--text3); transition:color .12s; }
-    .us-estrela:hover { color:var(--amber-tx,#FFC470); }
-    .us-estrela.on { color:var(--amber-tx,#FFC470); }
+    .us-perfil-cel { display:flex; align-items:center; gap:6px; flex-wrap:wrap; min-width:230px; }
+    /* Botao com NOME, e nao estrela solta: "★" pedia explicacao, "DEV-AXCred" nao. */
+    .us-axcred { background:var(--bg3); border:1px solid var(--border); border-radius:999px;
+      cursor:pointer; font-size:11.5px; font-weight:700; letter-spacing:.02em; padding:5px 11px;
+      color:var(--text3); font-family:inherit; white-space:nowrap; transition:all .12s; }
+    .us-axcred:hover { color:var(--text); border-color:var(--amber-tx,#FFC470); }
+    .us-axcred.on { color:#0E0E0D; background:var(--amber-tx,#FFC470);
+      border-color:var(--amber-tx,#FFC470); }
     .us-perfil-sel { width:auto; min-width:96px; padding:5px 8px; font-size:12.5px; }
     .ap-dica { font-size:12.5px; color:var(--text3); line-height:1.55; margin:0 0 12px; }
     .ap-periodo { font-size:14px; color:var(--text); background:var(--bg3);
@@ -6556,16 +6567,14 @@ function uDevsDosCards() {
    entrada; o nome é a chave.                                                  */
 const U_PERFIS = ['', 'Fullstack', 'Backend', 'Frontend', 'Dados', 'VibeCode', 'QA', 'Infra'];
 
-// As frentes saem do CATÁLOGO — os sistemas que existem de verdade. Uma lista
-// digitada aqui divergiria do catálogo na primeira mexida.
-function uFrentes() {
-  const sis = new Set();
-  (state.temas || []).forEach(t => {
-    const s = window.catalogoSistema ? catalogoSistema(t.nome) : String(t.nome).split(' - ')[0];
-    if (s) sis.add(s);
-  });
-  return ['', ...[...sis].sort((a, b) => a.localeCompare(b, 'pt-BR'))];
-}
+// UM MARCADOR, E NAO UMA LISTA DE FRENTES. A lista tinha 19 opcoes e forcava
+// escolher uma — e dev atua em varias frentes ao mesmo tempo, entao marcar
+// "AXCred" apagava o resto e a informacao ficava errada de qualquer jeito.
+//
+// `DEV-AXCred` responde o que estava sendo pedido: quem e do AXCred aparece
+// primeiro no quadro. Ele tambem substitui a estrela generica que havia aqui, que era
+// o mesmo marcador sem dizer o motivo — e marcador com nome nao precisa ser
+// explicado a ninguem. Outras frentes entram quando fizerem falta.
 
 // O nome pelo qual esta conta aparece nas demandas. É a chave do perfil, porque é
 // o que o gantt desenha — a conta pode se chamar "Crisley Matheus" e o quadro
@@ -6604,18 +6613,16 @@ function uCelulaPerfil(u) {
   if (!nome) return '<td class="us-sub">—</td>';
   const p = uPerfilDe(nome);
   const j = JSON.stringify(nome).replace(/"/g, '&quot;');
-  const estrela = '<button type="button" class="us-estrela' + (p.foco ? ' on' : '') + '"' +
-    ' title="' + (p.foco ? 'Em foco — aparece no topo do Planejamento. Clique para tirar.'
-                         : 'Colocar em foco: sobe para o topo do Planejamento') + '"' +
-    ' onclick="uSetPerfil(' + j + ', \'foco\', ' + (p.foco ? 'false' : 'true') + ')">' +
-    (p.foco ? '★' : '☆') + '</button>';
+  const marca = '<button type="button" class="us-axcred' + (p.axcred ? ' on' : '') + '"' +
+    ' title="' + (p.axcred ? 'É do AXCred — aparece primeiro no Planejamento. Clique para tirar.'
+                           : 'Marcar como DEV-AXCred: passa a aparecer primeiro no Planejamento') + '"' +
+    ' onclick="uSetPerfil(' + j + ', \'axcred\', ' + (p.axcred ? 'false' : 'true') + ')">' +
+    (p.axcred ? '★ DEV-AXCred' : '☆ DEV-AXCred') + '</button>';
   const sel = (campo, lista, atual) =>
     '<select class="us-perfil-sel" onchange="uSetPerfil(' + j + ', \'' + campo + '\', this.value)">' +
     lista.map(x => '<option value="' + esc(x) + '"' + (String(atual || '') === x ? ' selected' : '') +
-      '>' + esc(x || '—') + '</option>').join('') + '</select>';
-  return '<td><div class="us-perfil-cel">' + estrela +
-    sel('frente', uFrentes(), p.frente) + sel('perfil', U_PERFIS, p.perfil) +
-    '</div><div class="us-sub">frente · stack</div></td>';
+      '>' + esc(x || '— stack —') + '</option>').join('') + '</select>';
+  return '<td><div class="us-perfil-cel">' + marca + sel('perfil', U_PERFIS, p.perfil) + '</div></td>';
 }
 
 function uLinhaAtiva(u) {
@@ -6829,7 +6836,7 @@ async function renderUsuarios() {
   // pessoas com acesso
   document.getElementById('us-n-ativos').textContent = ativos.filter(u => u.ativo).length;
   box.innerHTML = ativos.length
-    ? uTabela(['Pessoa', 'Permissão', 'Nome nas demandas', 'Frente / Stack', 'Último acesso', ''],
+    ? uTabela(['Pessoa', 'Permissão', 'Nome nas demandas', 'AXCred / Stack', 'Último acesso', ''],
               ativos.map(uLinhaAtiva))
     : '<p class="us-vazio">Nenhuma conta criada ainda. Enquanto isso, todos continuam entrando pelas senhas gerais.</p>';
 
