@@ -1945,14 +1945,19 @@ export default {
       // caixa): declarado e declarado, nao ha o que inferir. Sem o campo, cai na
       // heuristica de prefixo — que resolveu o caso do nome completo mas nao alcanca
       // apelido de um nome so, e por isso o campo existe.
-      // Sem o campo declarado, vale o nome derivado do E-MAIL — nunca uma
-      // semelhanca com o nome de outra pessoa. Conta antiga que ainda nao tenha o
-      // campo cai no proprio nome da conta, sempre por igualdade.
+      // O NOME PADRAO E O DO E-MAIL: `nome.sobrenome` vira "Nome Sobrenome", e e
+      // ele que passa a valer em toda a base. O campo "nome nas demandas" deixa de
+      // ser necessario — vira EXCECAO, para o caso em que a pessoa e conhecida por
+      // outro nome (o "Leite" e o unico hoje).
+      //
+      // Os tres convivem, todos por IGUALDADE: derivado do e-mail, declarado, e o
+      // nome da conta. Somar em vez de escolher elimina a janela da virada — entre
+      // trocar o nome nas demandas e trocar o cadastro, ninguem fica sem ver a
+      // propria fila. E nenhum deles infere nada: ou o nome bate, ou nao bate.
       const declarados = String((ident.usuario && ident.usuario.nome_demandas) || '')
         .split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
-      const derivado = declarados.length ? [] :
-        [nomeDemandasDoEmail((ident.usuario && ident.usuario.email) || '', eu), eu].filter(Boolean);
-      const aceitos = declarados.length ? declarados : derivado;
+      const doEmail = nomeDemandasDoEmail((ident.usuario && ident.usuario.email) || '', eu);
+      const aceitos = [...declarados, doEmail, eu].filter(Boolean);
       const meuDono = m => {
         const naDemanda = String(m.dev || '').split('/').map(x => x.trim()).filter(Boolean);
         return naDemanda.some(n => aceitos.some(a => normNome(n) === normNome(a)));
