@@ -932,6 +932,14 @@
   <div id="save-error" style="display:none;background:#5C0A0A;color:#F9A0A0;border-bottom:1px solid #8C1010;padding:10px 24px;font-size:13px;cursor:pointer" onclick="this.style.display='none'">
     ⚠️ Erro ao publicar — clique aqui para fechar
   </div>
+  <!-- Faixa de NAO PUBLICADO. Existe porque o aviso de falha era um toast de 3,5
+       segundos: quem olhava para o lado nao via, fechava a aba e perdia o card —
+       ele so existia na memoria da pagina. -->
+  <div id="pend-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:#3D1A1A;color:#F9A0A0;border-bottom:1px solid #6B2D2D;padding:10px 24px;font-size:13px">
+    <span id="pend-texto">⚠️ Há alterações que ainda NÃO foram publicadas.</span>
+    <button class="btn btn-primary btn-sm" onclick="publicarPendentes()">Publicar agora</button>
+    <span style="color:#C98080;font-size:12px">Elas estão guardadas neste navegador e voltam se você reabrir a tela.</span>
+  </div>
   <div id="stale-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:#3D3600;color:#FFE14D;border-bottom:1px solid #6B5F00;padding:10px 24px;font-size:13px">
     <span>🔄 Há alterações mais novas no servidor (feitas no Planejamento, no Painel Dev ou por outra pessoa). Esta tela está mostrando uma versão anterior.</span>
     <button class="btn btn-secondary btn-sm" onclick="recarregarDoServidor()">Atualizar agora</button>
@@ -2072,6 +2080,10 @@ async function loadFromGitHub(silent) {
     };
     retratoBase();          // base do merge por campo
     _dirtyMelhoriaIds.clear();
+    // O que ficou por publicar volta para a tela ANTES do primeiro desenho: se
+    // voltasse depois, a pessoa veria a lista sem a demanda dela por um instante
+    // e concluiria de novo que tinha perdido.
+    rascunhoRestaurar();
     renderAll();
     restoreLastTab();
     // Abre o card que veio no endereco. So DEPOIS de os dados carregarem: antes
@@ -2663,9 +2675,16 @@ function renderStatusFilters() {
 }
 
 function renderAll() {
+  // A ROLAGEM FICA ONDE ESTAVA. Redesenhar a lista inteira fazia a pagina saltar
+  // para o topo, e foi esse salto que escondeu o aviso de falha de gravacao: a
+  // pessoa salvava, a tela subia, o toast vermelho aparecia e sumia em 3,5
+  // segundos fora do campo de visao — e a demanda ficava so na memoria da aba.
+  const y = window.scrollY;
   renderTemas(); renderStatusFilters(); renderMelToolbar(); renderMelhorias();
   renderRiscoBanner(); renderValBanner();
   if (document.getElementById('tab-kanban')?.classList.contains('active')) renderKanban();
+  bannerPendentes();
+  if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: y });
 }
 
 function renderTemas() {
@@ -6304,6 +6323,9 @@ async function saveMelhoria() {
   _dirtyMelhoriaIds.add(obj.id);
 
   _pendingEdits = true;
+  // Guarda no navegador ANTES de fechar o modal. Se algo falhar do fechamento em
+  // diante — inclusive a aba morrer — o que foi digitado ja esta salvo aqui.
+  rascunhoSalvar();
   closeModal('modal-melhoria');
   // Veio de dentro de um projeto: devolve a pessoa para la, com a demanda ja
   // listada. Sem isto ela ficaria sem saber se o vinculo pegou.
@@ -6331,19 +6353,107 @@ async function saveMelhoria() {
 // Duas maneiras de salvar na mesma tela e uma delas mentindo no aviso e pior que
 // qualquer das duas isolada: a pessoa aprende que "salvar" salva, e um dia perde
 // trabalho na acao que era a excecao.
+/* ─── RASCUNHO LOCAL ───────────────────────────────────────────────
+   Uma demanda registrada e nao encontrada no dia seguinte. A numeração provou
+   que ela nunca chegou ao servidor: o código AX-NNN nasce NA GRAVAÇÃO, e a
+   sequência não tinha buraco além dos dois já explicados.
+
+   O que houve: a gravação falhou, o aviso era um toast de 3,5 segundos, e a
+   demanda ficou existindo só na memória da aba. Fechou a aba, acabou.
+
+   Aviso que some não protege trabalho. Cópia protege. Então o que não foi
+   publicado fica no navegador e volta quando a tela reabre.                  */
+const RASCUNHO_KEY = 'rm_admin_rascunho';
+
+function rascunhoSalvar() {
+  try {
+    const ids = [..._dirtyMelhoriaIds];
+    if (!ids.length) { localStorage.removeItem(RASCUNHO_KEY); return; }
+    const itens = (state.melhorias || []).filter(m => ids.includes(m.id));
+    if (!itens.length) { localStorage.removeItem(RASCUNHO_KEY); return; }
+    localStorage.setItem(RASCUNHO_KEY, JSON.stringify({
+      em: new Date().toISOString(), itens,
+    }));
+  } catch (_) { /* sem localStorage, seguimos sem a rede de seguranca */ }
+}
+
+function rascunhoLer() {
+  try {
+    const cru = localStorage.getItem(RASCUNHO_KEY);
+    if (!cru) return null;
+    const d = JSON.parse(cru);
+    return (d && Array.isArray(d.itens) && d.itens.length) ? d : null;
+  } catch (_) { return null; }
+}
+
+function rascunhoLimpar() {
+  try { localStorage.removeItem(RASCUNHO_KEY); } catch (_) {}
+}
+
+// Na abertura da tela: o que ficou no rascunho e ainda NAO esta no servidor volta
+// para a tela, marcado como pendente. Compara pelo conteudo, e nao so pelo id:
+// uma demanda publicada com sucesso e depois editada de novo tem o mesmo id.
+function rascunhoRestaurar() {
+  const d = rascunhoLer();
+  if (!d) return;
+  const noServidor = new Map((state.melhorias || []).map(m => [m.id, JSON.stringify(m)]));
+  const faltando = d.itens.filter(m => noServidor.get(m.id) !== JSON.stringify(m));
+  if (!faltando.length) { rascunhoLimpar(); return; }
+  faltando.forEach(m => {
+    const i = (state.melhorias || []).findIndex(x => x.id === m.id);
+    if (i >= 0) state.melhorias[i] = m; else state.melhorias.push(m);
+    _dirtyMelhoriaIds.add(m.id);
+  });
+  _pendingEdits = true;
+  const quando = new Date(d.em).toLocaleString('pt-BR');
+  const cods = faltando.map(m => m.codigo || '(sem código)').join(', ');
+  toast(faltando.length + ' alteração(ões) de ' + quando + ' não tinham sido publicadas ' +
+        '(' + cods + '). Estão de volta na tela.', 'err');
+  renderAll();
+  bannerPendentes();
+}
+
+// A faixa fica enquanto houver pendencia. Some sozinha quando publica.
+function bannerPendentes() {
+  const el = document.getElementById('pend-banner');
+  if (!el) return;
+  const n = _dirtyMelhoriaIds.size;
+  const ha = _pendingEdits || _kbDirty || n > 0;
+  el.style.display = ha ? 'flex' : 'none';
+  const t = document.getElementById('pend-texto');
+  if (t) {
+    t.textContent = n
+      ? '⚠️ ' + n + ' demanda(s) ainda NÃO publicadas no servidor.'
+      : '⚠️ Há alterações que ainda NÃO foram publicadas.';
+  }
+}
+
+async function publicarPendentes() {
+  await mPersistir('Alterações publicadas.');
+  bannerPendentes();
+}
+
 async function mPersistir(msgOk) {
+  // Guarda ANTES de tentar: se a gravacao falhar — ou se a aba morrer no meio —
+  // o que estava para ser salvo ja esta no navegador.
+  rascunhoSalvar();
   const okSalvo = await saveViaProxy();
   if (okSalvo) {
     _pendingEdits = false;
     _dirtyMelhoriaIds.clear();
+    rascunhoLimpar();
     toast(msgOk, 'ok');
     renderAll();
+    bannerPendentes();
     return true;
   }
   // Continua pendente de proposito: o botao "Publicar alteracoes" ainda resolve,
   // e o aviso diz isso em vez de deixar a pessoa achando que gravou.
   _pendingEdits = true;
-  toast('NÃO foi salvo no servidor. A alteração está aqui na tela — clique em "Publicar alterações" para tentar de novo.', 'err');
+  rascunhoSalvar();
+  bannerPendentes();
+  toast('NÃO foi salvo no servidor. A alteração está guardada neste navegador — ' +
+        'use "Publicar agora" na faixa vermelha do topo.', 'err');
   return false;
 }
 

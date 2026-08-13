@@ -2035,6 +2035,35 @@ ok(/UPDATE usuario SET nome_demandas = NULL WHERE id = \?/.test(WC),
 ok(/const uteis = decl\.filter\(temDemanda\)/.test(WC),
    'so e apagado quando REALMENTE nao casa (o "Leite" sobrevive)');
 
+
+sec('Trabalho nao publicado nao morre com a aba');
+
+// Uma demanda registrada e nao encontrada no dia seguinte. A numeracao provou que
+// ela nunca chegou ao servidor: o codigo AX-NNN nasce NA GRAVACAO, e a sequencia
+// so tinha os dois buracos ja explicados. A gravacao falhou, o aviso era um toast
+// de 3,5 segundos, e a demanda ficou existindo so na memoria da aba.
+ok(/const RASCUNHO_KEY = 'rm_admin_rascunho'/.test(ADMIN), 'existe o rascunho local');
+ok(/function rascunhoSalvar/.test(ADMIN) && /function rascunhoRestaurar/.test(ADMIN),
+   'ele grava e restaura');
+ok(/rascunhoSalvar\(\);[\s\S]{0,120}?const okSalvo = await saveViaProxy\(\)/.test(ADMIN),
+   'guarda ANTES de tentar gravar (a aba pode morrer no meio)');
+ok(/_pendingEdits = true;[\s\S]{0,300}?rascunhoSalvar\(\);[\s\S]{0,20}?closeModal\('modal-melhoria'\)/.test(ADMIN),
+   'e tambem ao editar, antes de fechar o modal');
+ok(/rascunhoRestaurar\(\);\s*\n\s*renderAll\(\);/.test(ADMIN),
+   'restaura ANTES do primeiro desenho (senao a lista pisca sem a demanda)');
+ok(/rascunhoLimpar\(\);[\s\S]{0,200}?toast\(msgOk/.test(ADMIN),
+   'e o rascunho some quando publica de verdade');
+
+// Aviso que some em 3,5s nao protege trabalho.
+ok(/id="pend-banner"/.test(ADMIN), 'existe a faixa de nao publicado');
+ok(/function bannerPendentes/.test(ADMIN), 'ela liga e desliga sozinha');
+ok(/publicarPendentes\(\)/.test(ADMIN), 'e tem o botao de publicar ali mesmo');
+
+// O salto de rolagem foi o que escondeu o aviso: a tela subia e o toast vermelho
+// aparecia e sumia fora do campo de visao.
+ok(/const y = window\.scrollY;[\s\S]{0,400}?window\.scrollTo\(\{ top: y \}\)/.test(ADMIN),
+   'redesenhar a lista nao leva a pagina para o topo');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
