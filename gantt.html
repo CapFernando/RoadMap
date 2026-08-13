@@ -2079,7 +2079,8 @@ function renderGantt() {
     const _pf = gPerfilDe(dev), _rot = gPerfilRot(_pf.perfil);
     html += `<div class="dev-label">
       <div class="dev-name">${_pf.foco ? '<span class="dev-foco" title="Em foco">★</span> ' : ''}${esc(dev)}${
-        _rot ? ` <span class="dev-perfil" style="color:${_rot.cor};border-color:${_rot.cor}">${_rot.rot}</span>` : ''}</div>
+        _pf.frente ? ` <span class="dev-perfil" style="color:var(--amber-tx,#FFC470);border-color:var(--amber-tx,#FFC470)" title="Frente">${esc(_pf.frente)}</span>` : ''}${
+        _rot ? ` <span class="dev-perfil" style="color:${_rot.cor};border-color:${_rot.cor}" title="Stack">${_rot.rot}</span>` : ''}</div>
       <div class="cap-bar-wrap">
         <div class="cap-bar-track"><div class="cap-bar-fill ${over?'over':''}" style="width:${Math.min(pct,100)}%"></div></div>
         <span class="cap-text">${pct}%</span>
@@ -2949,6 +2950,18 @@ const G_PERFIS = [
   { k: 'infra',     rot: 'Infra',     cor: '#4AB0E8' },
 ];
 
+// As frentes saem do CATALOGO — os sistemas que existem de verdade. Mesma regra
+// da aba Usuarios: uma lista digitada nas duas telas divergiria na primeira
+// mexida.
+function gFrentes() {
+  const sis = new Set();
+  (state.temas || []).forEach(t => {
+    const s = window.catalogoSistema ? catalogoSistema(t.nome) : String(t.nome).split(' - ')[0];
+    if (s) sis.add(s);
+  });
+  return ['', ...[...sis].sort((a, b) => a.localeCompare(b, 'pt-BR'))];
+}
+
 function gPerfilDe(dev) {
   const p = (state.devs_perfil || {})[dev];
   return p && typeof p === 'object' ? p : {};
@@ -3005,8 +3018,12 @@ function renderDevsList() {
         style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:2px;
                color:${p.foco ? 'var(--amber-tx,#FFC470)' : 'var(--text3)'}">${p.foco ? '★' : '☆'}</button>
       <span style="font-size:14px;font-weight:500;flex:1">${esc(d)}</span>
+      <select onchange="gSetPerfil(${JSON.stringify(d).replace(/"/g, '&quot;')}, 'frente', this.value)"
+              title="Frente de produto" style="width:auto;padding:5px 8px;font-size:12.5px">
+        ${gFrentes().map(x => `<option value="${esc(x)}"${(p.frente || '') === x ? ' selected' : ''}>${esc(x || '— frente —')}</option>`).join('')}
+      </select>
       <select onchange="gSetPerfil(${JSON.stringify(d).replace(/"/g, '&quot;')}, 'perfil', this.value)"
-              style="width:auto;padding:5px 8px;font-size:12.5px">
+              title="Stack" style="width:auto;padding:5px 8px;font-size:12.5px">
         ${G_PERFIS.map(x => `<option value="${x.k}"${(p.perfil || '') === x.k ? ' selected' : ''}>${x.rot}</option>`).join('')}
       </select>
       <button class="btn btn-ghost btn-sm" onclick="removeDev(${i})" style="color:var(--red);border-color:var(--red)">Remover</button>

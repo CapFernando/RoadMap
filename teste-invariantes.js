@@ -2064,6 +2064,38 @@ ok(/publicarPendentes\(\)/.test(ADMIN), 'e tem o botao de publicar ali mesmo');
 ok(/const y = window\.scrollY;[\s\S]{0,400}?window\.scrollTo\(\{ top: y \}\)/.test(ADMIN),
    'redesenhar a lista nao leva a pagina para o topo');
 
+
+sec('Marcacao do dev: frente, stack e foco, onde as pessoas sao gerenciadas');
+
+// Eu tinha posto a marcacao no modal do Planejamento, e a pergunta veio: "onde
+// faco?". Quem administra pessoas esta na aba Usuarios — atributo de pessoa mora
+// com as pessoas. Agora esta nas DUAS telas, com o mesmo dado.
+ok(/function uCelulaPerfil/.test(ADMIN), 'a marcacao existe na aba Usuarios');
+ok(/'Frente \/ Stack'/.test(ADMIN), 'e tem coluna propria na tabela');
+ok(/function uSetPerfil/.test(ADMIN), 'da para marcar por la');
+ok(/function gSetPerfil/.test(GANTT), 'e continua no Planejamento');
+
+// Tres dimensoes, tres campos: num campo so, marcar "AXCred" apagaria "e
+// Fullstack", e "quantos fullstack tenho no AXCred" ficaria sem resposta.
+ok(/sel\('frente'/.test(ADMIN) && /sel\('perfil'/.test(ADMIN) &&
+   /p\.foco \? 'false' : 'true'/.test(ADMIN),
+   'frente, stack e foco sao campos separados');
+ok(/function uFrentes/.test(ADMIN) && /function gFrentes/.test(GANTT),
+   'as duas telas montam a lista de frentes');
+ok(/catalogoSistema\(t\.nome\)/.test(ADMIN) && /catalogoSistema\(t\.nome\)/.test(GANTT),
+   'a frente sai do CATALOGO, e nao de uma lista digitada em cada tela');
+
+// A chave e o nome usado nas DEMANDAS: a conta pode se chamar "Crisley Matheus" e
+// o quadro mostrar "Crisley Almeida". Sem isso, marcar no Admin nao apareceria no
+// Planejamento.
+ok(/function uNomeDeDev/.test(ADMIN), 'a marcacao e indexada pelo nome das demandas');
+ok(/nome_sugerido/.test(ADMIN), 'e o nome derivado do e-mail entra na busca');
+
+// O Planejamento tambem edita esse mapa: trocar o objeto inteiro faria a marcacao
+// de quem publicou primeiro sumir sem aviso.
+ok((ADMIN.match(/devs_perfil = Object\.assign\(\{\}/g) || []).length === 2,
+   'devs_perfil funde por CHAVE nas duas mesclagens do Admin');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

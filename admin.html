@@ -490,6 +490,12 @@
     .pm-aba.ativa { background:var(--blue); border-color:var(--blue); color:#0E0E0D; font-weight:600; }
     .pm-etapa { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:7px; }
     .pm-nota { font-size:11.5px; color:var(--text3); line-height:1.55; margin-top:12px; }
+    .us-perfil-cel { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    .us-estrela { background:none; border:none; cursor:pointer; font-size:16px; line-height:1;
+      padding:2px; color:var(--text3); transition:color .12s; }
+    .us-estrela:hover { color:var(--amber-tx,#FFC470); }
+    .us-estrela.on { color:var(--amber-tx,#FFC470); }
+    .us-perfil-sel { width:auto; min-width:96px; padding:5px 8px; font-size:12.5px; }
     .ap-dica { font-size:12.5px; color:var(--text3); line-height:1.55; margin:0 0 12px; }
     .ap-periodo { font-size:14px; color:var(--text); background:var(--bg3);
       border:1px solid var(--border); border-radius:8px; padding:9px 12px; margin-bottom:14px; }
@@ -2187,6 +2193,10 @@ async function saveViaProxy(tentativa = 1) {
     const localT = new Set(state.temas.map(t => t.id));
     (server.temas || []).forEach(t => { if (!localT.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t); });
     state.melhorias = mesclaMelhorias(server.melhorias);
+    // `devs_perfil` funde por CHAVE, e nao por substituicao: o Planejamento tambem
+    // edita esse mapa, e trocar o objeto inteiro faria a marcacao de quem publicou
+    // primeiro sumir sem aviso. Local vence no proprio nome; o resto vem do servidor.
+    state.devs_perfil = Object.assign({}, (server.devs_perfil || {}), (state.devs_perfil || {}));
     const devSet = new Set(state.desenvolvedores || []);
     (server.desenvolvedores || []).forEach(d => devSet.add(d));
     state.desenvolvedores = [...devSet];
@@ -2305,6 +2315,10 @@ async function saveToGitHub(attempt = 1) {
     });
     state.melhorias = mesclaMelhorias(serverData.melhorias);   // 3-way merge — ver comentário acima
     // Preserva devs e feriados cadastrados pelo Gantt — admin não os edita mas não deve apagá-los
+    // `devs_perfil` funde por CHAVE, e nao por substituicao: o Planejamento tambem
+    // edita esse mapa, e trocar o objeto inteiro faria a marcacao de quem publicou
+    // primeiro sumir sem aviso. Local vence no proprio nome; o resto vem do servidor.
+    state.devs_perfil = Object.assign({}, (serverData.devs_perfil || {}), (state.devs_perfil || {}));
     const devSet = new Set(state.desenvolvedores);
     (serverData.desenvolvedores || []).forEach(d => devSet.add(d));
     state.desenvolvedores = [...devSet];
@@ -6523,6 +6537,87 @@ function uDevsDosCards() {
   return [...new Set(partes.map(t => t.trim()).filter(Boolean))].sort();
 }
 
+/* ─── PERFIL, FRENTE E FOCO DO DEV ─────────────────────────────────
+   Vive aqui, na aba onde as pessoas são gerenciadas, e não no modal do
+   cronograma — foi lá que eu tinha colocado, e foi aqui que veio a pergunta
+   "onde faço?". Atributo de pessoa mora com as pessoas.
+
+   Três dimensões, três campos, porque respondem perguntas diferentes:
+
+     PERFIL — a stack (Fullstack, Dados, VibeCode). Muda raramente.
+     FRENTE — o produto (AXCred, BI, RPA). Muda quando a pessoa troca de time.
+     ★ FOCO — atenção agora. Muda toda semana, e é o que sobe no gantt.
+
+   Num campo só, marcar "AXCred" apagaria "é Fullstack", e "quantos fullstack
+   tenho no AXCred" ficaria sem resposta.
+
+   Os dados moram em `devs_perfil`, no arquivo de dados, indexados pelo NOME USADO
+   NAS DEMANDAS — que é o mesmo nome que o gantt desenha. A conta é a porta de
+   entrada; o nome é a chave.                                                  */
+const U_PERFIS = ['', 'Fullstack', 'Backend', 'Frontend', 'Dados', 'VibeCode', 'QA', 'Infra'];
+
+// As frentes saem do CATÁLOGO — os sistemas que existem de verdade. Uma lista
+// digitada aqui divergiria do catálogo na primeira mexida.
+function uFrentes() {
+  const sis = new Set();
+  (state.temas || []).forEach(t => {
+    const s = window.catalogoSistema ? catalogoSistema(t.nome) : String(t.nome).split(' - ')[0];
+    if (s) sis.add(s);
+  });
+  return ['', ...[...sis].sort((a, b) => a.localeCompare(b, 'pt-BR'))];
+}
+
+// O nome pelo qual esta conta aparece nas demandas. É a chave do perfil, porque é
+// o que o gantt desenha — a conta pode se chamar "Crisley Matheus" e o quadro
+// mostrar "Crisley Almeida".
+function uNomeDeDev(u) {
+  const decl = String(u.nome_demandas || '').split(/[\/,;]/).map(x => x.trim()).filter(Boolean);
+  const cand = [...decl, String(u.nome_sugerido || '').trim(), String(u.nome || '').trim()]
+    .filter(Boolean);
+  const nomes = uDevsDosCards();
+  const achado = cand.find(c => nomes.some(n => normTexto(n) === normTexto(c)));
+  return achado || cand[0] || '';
+}
+
+function uPerfilDe(nome) {
+  const p = (state.devs_perfil || {})[nome];
+  return p && typeof p === 'object' ? p : {};
+}
+
+async function uSetPerfil(nome, campo, valor) {
+  if (!nome) { uAviso('Sem nome nas demandas, não há a quem atribuir o perfil.', true); return; }
+  state.devs_perfil = state.devs_perfil || {};
+  const atual = Object.assign({}, state.devs_perfil[nome] || {});
+  if (valor === '' || valor === false) delete atual[campo];
+  else atual[campo] = valor;
+  if (Object.keys(atual).length) state.devs_perfil[nome] = atual;
+  else delete state.devs_perfil[nome];
+  renderUsuarios();
+  const okSalvo = await saveViaProxy();
+  uAviso(okSalvo
+    ? 'Perfil de "' + nome + '" atualizado.'
+    : 'NÃO consegui salvar o perfil de "' + nome + '".', !okSalvo);
+}
+
+function uCelulaPerfil(u) {
+  const nome = uNomeDeDev(u);
+  if (!nome) return '<td class="us-sub">—</td>';
+  const p = uPerfilDe(nome);
+  const j = JSON.stringify(nome).replace(/"/g, '&quot;');
+  const estrela = '<button type="button" class="us-estrela' + (p.foco ? ' on' : '') + '"' +
+    ' title="' + (p.foco ? 'Em foco — aparece no topo do Planejamento. Clique para tirar.'
+                         : 'Colocar em foco: sobe para o topo do Planejamento') + '"' +
+    ' onclick="uSetPerfil(' + j + ', \'foco\', ' + (p.foco ? 'false' : 'true') + ')">' +
+    (p.foco ? '★' : '☆') + '</button>';
+  const sel = (campo, lista, atual) =>
+    '<select class="us-perfil-sel" onchange="uSetPerfil(' + j + ', \'' + campo + '\', this.value)">' +
+    lista.map(x => '<option value="' + esc(x) + '"' + (String(atual || '') === x ? ' selected' : '') +
+      '>' + esc(x || '—') + '</option>').join('') + '</select>';
+  return '<td><div class="us-perfil-cel">' + estrela +
+    sel('frente', uFrentes(), p.frente) + sel('perfil', U_PERFIS, p.perfil) +
+    '</div><div class="us-sub">frente · stack</div></td>';
+}
+
 function uLinhaAtiva(u) {
   const l = esc(u.login);
   const off = !u.ativo;
@@ -6541,6 +6636,7 @@ function uLinhaAtiva(u) {
       ).join('') + '</select>' +
       (off ? ' <span class="us-tag us-tag-off">desativado</span>' : '') + '</td>' +
     '<td>' + uCelulaNomeDemandas(u) + '</td>' +
+    uCelulaPerfil(u) +
     '<td class="us-sub">' + (u.ultimo_acesso ? esc(uQuando(u.ultimo_acesso)) : 'nunca entrou') + '</td>' +
     '<td><span class="us-acoes">' +
       '<button class="btn btn-secondary btn-sm" onclick="uNovaSenha(\'' + l + '\')">Nova senha</button>' +
@@ -6733,7 +6829,7 @@ async function renderUsuarios() {
   // pessoas com acesso
   document.getElementById('us-n-ativos').textContent = ativos.filter(u => u.ativo).length;
   box.innerHTML = ativos.length
-    ? uTabela(['Pessoa', 'Permissão', 'Nome nas demandas', 'Último acesso', ''],
+    ? uTabela(['Pessoa', 'Permissão', 'Nome nas demandas', 'Frente / Stack', 'Último acesso', ''],
               ativos.map(uLinhaAtiva))
     : '<p class="us-vazio">Nenhuma conta criada ainda. Enquanto isso, todos continuam entrando pelas senhas gerais.</p>';
 
