@@ -1640,9 +1640,10 @@ ok(/\.filter\(p => p\.v > 0\)/.test(ADMIN),
    'fatia de valor zero sai fora (nao desenha arco, mas ganhava borda)');
 
 // O titulo diz "(TOP)" e nao cortava nada: entrava fatia de 1 ponto em 1.100.
-ok(/const LIMIAR = 0\.02/.test(ADMIN), 'existe o corte da cauda');
-ok(/miudos\.length >= 2/.test(ADMIN),
-   'agrupar UMA fatia so nao vale (o rotulo "Outros" ocupa o mesmo espaco do nome)');
+// A regra virou TOP 5 (ver a secao "Rosca: redonda, TOP 5 e total no miolo"), e o
+// corte por percentual saiu junto — duas regras de corte no mesmo lugar seria uma
+// para alguem descobrir do jeito ruim.
+ok(!/const LIMIAR = 0\.02/.test(ADMIN), 'o corte por percentual saiu (virou TOP 5)');
 ok(/afterBody/.test(ADMIN), 'o tooltip de "Outros" lista o que entrou nele');
 ok(/'#6E6A62'/.test(ADMIN), '"Outros" tem cor propria, fora da paleta');
 
@@ -1660,15 +1661,15 @@ try {
   };
   const G = new Function('GER_COLORS', corpo('gerFatias') + '\nreturn gerFatias;')(
     ['#3B8FE8', '#5EA832', '#E89C2F', '#9B6FE8', '#2BBFA0', '#E84444']);
-  // caso real: uma cauda de tres fatias minusculas e uma semana zerada
-  const r = G({ A: 500, B: 300, C: 200, D: 8, E: 5, F: 3, S5: 0 }, ' pt');
+  // caso real: oito fatias, uma delas minuscula, e uma semana zerada
+  const r = G({ A: 500, B: 300, C: 200, D: 100, E: 50, F: 8, G: 5, H: 3, S5: 0 }, ' pt', true, false);
   const semZero = !r.itens.some(x => x.valor === 0);
   const agrupou = r.itens.some(x => /^Outros \(3\)/.test(x.label));
   const semPreta = r.itens.every((x, i) => x.valor / r.total >= 0.03 || r.bordas[i] === 0);
-  const detalhe = r.detalhe.length === 3 && /D: 8 pt/.test(r.detalhe[0]);
+  const detalhe = r.detalhe.length === 3 && /F: 8 pt/.test(r.detalhe[0]);
   const cinza = r.itens[r.itens.length - 1].cor === '#6E6A62';
-  // uma fatia miuda sozinha NAO vira "Outros"
-  const r2 = G({ A: 500, B: 5 }, ' pt');
+  // com poucas fatias nao ha o que agrupar, e a miuda so perde a borda
+  const r2 = G({ A: 500, B: 5 }, ' pt', true, false);
   const soUma = !r2.agrupa && r2.itens.length === 2 && r2.bordas[1] === 0;
   _fOk = semZero && agrupou && semPreta && detalhe && cinza && soUma;
   _fPorque = 'semZero=' + semZero + ' agrupou=' + agrupou + ' semPreta=' + semPreta +
@@ -1753,6 +1754,74 @@ try {
   _nPorque = d.melhorias.map(m => m.codigo + '=' + (m.status_planejamento || '(vazia)')).join(' ');
 } catch (e) { _nPorque = e.message; }
 ok(_nOk, 'a etapa deduzida nunca inventa progresso e nao mexe em quem ja tinha', _nPorque);
+
+
+sec('Rosca: redonda, TOP 5 e total no miolo');
+
+// O QUE DEIXAVA OVAL: `canvas { width:220px !important; height:220px !important }`.
+// O Chart.js dimensiona o BITMAP pelo container e pelo devicePixelRatio; forcar o
+// tamanho de EXIBICAO por CSS estica esse bitmap, e o circulo sai achatado.
+ok(!/ger-chart-canvas-wrap canvas \{[^}]*width:220px !important/.test(ADMIN),
+   'o canvas NAO leva tamanho por CSS (quem dimensiona e o Chart.js)');
+ok(/\.ger-chart-canvas-wrap \{ width:200px; height:200px/.test(ADMIN),
+   'o container e quadrado');
+ok(/maintainAspectRatio: false/.test(ADMIN.slice(ADMIN.indexOf('gerRenderPies'))),
+   'a rosca preenche o container quadrado');
+
+// O visual pedido: anel fino com o total no meio.
+ok(/cutout: '72%'/.test(ADMIN), 'anel fino');
+ok(/ger-rosca-centro/.test(ADMIN), 'o total vai no miolo');
+ok(/>Total<\/span>/.test(ADMIN) || /<span>Total<\/span>/.test(ADMIN), 'o miolo diz o que e o numero');
+
+// TOP 5, com o resto a um clique.
+ok(/const TOP = 5/.test(ADMIN), 'o corte e o TOP 5');
+ok(/function gerPieTodos/.test(ADMIN), 'da para abrir a lista inteira');
+ok(/_gerPieTodos\[id\] = !_gerPieTodos\[id\]/.test(ADMIN), 'o estado e por grafico');
+ok(/ger-mostrar-todos/.test(ADMIN), 'o botao existe na tela');
+ok(/mostrar só o top 5/.test(ADMIN), 'e volta a fechar');
+
+// Ordem cronologica nao entra no TOP: cortar a semana 4 porque rendeu menos
+// destruiria a leitura da sequencia, que e o proprio ponto daquele grafico.
+ok(/const cortaTop = ordenar !== false && !todos/.test(ADMIN),
+   'a rosca cronologica (semanas) nao e cortada por tamanho');
+
+// Rede para a rosca criada com o painel escondido: sem caixa ela nasce 0x0, e o
+// ResizeObserver do Chart.js nao acorda quando o display:none sai. O CSS antigo
+// mascarava isso — e era ele que achatava o circulo.
+ok(/gerCharts\[id\]\.resize\(\)/.test(ADMIN),
+   'ao voltar para a aba, rosca sem area e redimensionada');
+
+// Comportamento do TOP 5.
+let _tOk = false, _tPorque = '';
+try {
+  const corpo = (n) => {
+    const i = ADMIN.indexOf('function ' + n + '(');
+    let c = 0;
+    for (let k = ADMIN.indexOf('{', ADMIN.indexOf(')', i)); k < ADMIN.length; k++) {
+      if (ADMIN[k] === '{') c++;
+      else if (ADMIN[k] === '}') { c--; if (!c) return ADMIN.slice(i, k + 1); }
+    }
+    return '';
+  };
+  const G = new Function('GER_COLORS', corpo('gerFatias') + '\nreturn gerFatias;')(
+    ['#1', '#2', '#3', '#4', '#5', '#6']);
+  const dados = { a: 100, b: 90, c: 80, d: 70, e: 60, f: 50, g: 40, h: 30 };
+  const top = G(dados, ' pt', true, false);
+  const cortou = top.itens.length === 6 && /^Outros \(3\)/.test(top.itens[5].label);
+  const somaBate = top.total === 520;
+  const todos = G(dados, ' pt', true, true);
+  const abriu = todos.itens.length === 8 && !todos.agrupa;
+  // cronologico nao corta
+  const crono = G({ S1: 100, S2: 5, S3: 90, S4: 80, S5: 70, S6: 60, S7: 50 }, ' pt', false, false);
+  const naoCortou = crono.itens.length === 7 && !crono.agrupa;
+  // seis itens exatos nao viram "5 + Outros(1)"
+  const seis = G({ a: 6, b: 5, c: 4, d: 3, e: 2, f: 1 }, ' pt', true, false);
+  const semOutros1 = seis.itens.length === 6 && !seis.agrupa;
+  _tOk = cortou && somaBate && abriu && naoCortou && semOutros1;
+  _tPorque = 'top=' + cortou + ' soma=' + somaBate + ' abriu=' + abriu +
+             ' crono=' + naoCortou + ' seis=' + semOutros1;
+} catch (e) { _tPorque = e.message; }
+ok(_tOk, 'o TOP 5 se comporta: corta, soma certo, abre, e poupa o cronologico', _tPorque);
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

@@ -579,8 +579,26 @@
       padding:22px 20px; display:flex; flex-direction:column;
     }
     .ger-chart-title { font-size:14px; font-weight:700; color:var(--text); margin-bottom:16px; }
-    .ger-chart-canvas-wrap { width:220px; height:220px; align-self:center; flex-shrink:0; }
-    .ger-chart-canvas-wrap canvas { width:220px !important; height:220px !important; }
+    /* O QUE DEIXAVA A ROSCA OVAL: `canvas { width:220px !important; height:220px
+       !important }`. O Chart.js dimensiona o BITMAP do canvas pelo container e
+       pelo devicePixelRatio; forcar o tamanho de EXIBICAO por CSS estica esse
+       bitmap. Quando as duas medidas nao batem — e nao batiam — o circulo sai
+       achatado de um lado.
+
+       Agora o quadrado e do container e o canvas nao leva CSS de tamanho: quem
+       decide e o Chart.js, com `maintainAspectRatio:false` preenchendo um
+       container que ja e quadrado. */
+    .ger-chart-canvas-wrap { width:200px; height:200px; align-self:center;
+      flex-shrink:0; position:relative; }
+    .ger-rosca-centro { position:absolute; inset:0; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; pointer-events:none; }
+    .ger-rosca-centro b { font-size:26px; font-weight:800; color:var(--text); line-height:1.1; }
+    .ger-rosca-centro span { font-size:11px; color:var(--text3); letter-spacing:.04em;
+      text-transform:uppercase; margin-bottom:2px; }
+    .ger-mostrar-todos { background:none; border:none; color:var(--blue);
+      font-size:12px; cursor:pointer; font-family:inherit; padding:8px 0 0;
+      text-decoration:underline; }
+    .ger-mostrar-todos:hover { color:var(--text); }
     .ger-chart-empty { font-size:13px; color:var(--text3); padding:40px 0; text-align:center; }
     .ger-legend { margin-top:16px; width:100%; border-top:1px solid var(--border); padding-top:14px; }
     .ger-legend-item {
@@ -2798,7 +2816,22 @@ function switchTab(name, el) {
   const content = document.getElementById('tab-' + name);
   if (content) content.classList.add('active');
   if (name === 'mes') renderMes();
-  if (name === 'gerencial') renderGerencial();
+  if (name === 'gerencial') {
+    renderGerencial();
+    // Rede para a rosca criada com o painel ESCONDIDO: sem caixa, ela nasce 0x0,
+    // e o ResizeObserver do Chart.js nao acorda quando o `display:none` sai.
+    // Antes isso passava despercebido porque o CSS forcava 220x220 no canvas — e
+    // era esse forcar que achatava o circulo. Aqui a visibilidade e conhecida:
+    // se alguma ficou sem area, ela e redimensionada.
+    setTimeout(() => {
+      Object.keys(gerCharts).forEach(id => {
+        const cv = document.getElementById(id);
+        if (cv && cv.getBoundingClientRect().width === 0 && gerCharts[id]) {
+          try { gerCharts[id].resize(); } catch (_) {}
+        }
+      });
+    }, 60);
+  }
   if (name === 'relatorios') renderRelatorios();
   if (name === 'usuarios') renderUsuarios();
   if (name === 'projetos') renderProjetos();
@@ -3399,7 +3432,10 @@ function gerDestroyCharts() {
 //     inclusive fatia de 1 ponto em 1.100 (0,09%);
 //   - fatia mais fina que o separador de 3px vira SO separador, e o separador e
 //     da cor do fundo: o arco aparecia preto, e so mostrava a cor no hover.
-function gerFatias(dados, sufixo, ordenar) {
+// Quais roscas estao com a lista inteira aberta. Vazio = todas no TOP 5.
+let _gerPieTodos = {};
+
+function gerFatias(dados, sufixo, ordenar, todos) {
   // Fatia de valor ZERO sai fora. Ela nao desenha arco nenhum, mas ganhava os 3px
   // de borda na cor do fundo — virava um fio preto no meio da rosca. Era o caso
   // da semana S5 na rosca de semanas, que existe no calendario e nao teve ponto
@@ -3407,13 +3443,22 @@ function gerFatias(dados, sufixo, ordenar) {
   const brutos = Object.keys(dados).map(l => ({ l, v: Math.round(dados[l]) }))
     .filter(p => p.v > 0);
   const totalBruto = brutos.reduce((s, p) => s + p.v, 0);
-  const LIMIAR = 0.02;
-  const grande = p => totalBruto > 0 && p.v / totalBruto >= LIMIAR;
-  const miudos = brutos.filter(p => !grande(p));
-  // Agrupar UMA fatia so esconderia um nome sem ganhar espaco: o rotulo "Outros"
-  // ocupa o mesmo que o nome verdadeiro.
-  const agrupa = miudos.length >= 2;
-  const usados = agrupa ? brutos.filter(grande) : brutos;
+
+  // TOP 5, e o resto recolhido. Seis fatias e o que uma rosca de 200px comporta
+  // sem os rotulos se atropelarem — acima disso ela vira um mosaico que nao se
+  // le. O resto nao some: vira "Outros (N)", com a lista no hover, e o botao
+  // abaixo da legenda abre a lista inteira quando a pergunta for outra.
+  //
+  // Ordem cronologica (`ordenar === false`, o caso das semanas) nao entra no
+  // TOP: cortar a semana 4 porque ela rendeu menos destruiria a leitura da
+  // sequencia, que e o proprio ponto daquele grafico.
+  const TOP = 5;
+  const porTamanho = brutos.slice().sort((a, b) => b.v - a.v);
+  const cortaTop = ordenar !== false && !todos && porTamanho.length > TOP + 1;
+  const dentro = new Set((cortaTop ? porTamanho.slice(0, TOP) : porTamanho).map(p => p.l));
+  const miudos = cortaTop ? porTamanho.slice(TOP) : [];
+  const agrupa = miudos.length > 0;
+  const usados = brutos.filter(p => dentro.has(p.l));
 
   const ordenados = ordenar === false ? usados
     : usados.slice().sort((a, b) => b.v - a.v);
@@ -3429,11 +3474,20 @@ function gerFatias(dados, sufixo, ordenar) {
   const total = itens.reduce((s, x) => s + x.valor, 0);
   return {
     itens, total: total || 1, agrupa,
+    // Quantas ficaram de fora, para o botao dizer o tamanho do que esta escondido.
+    escondidas: miudos.length,
     // Fatia pequena nao ganha borda: sem borda nao ha o que sobrepor o arco.
     bordas: itens.map(x => (total > 0 && x.valor / total < 0.03) ? 0 : 3),
     detalhe: miudos.slice().sort((a, b) => b.v - a.v)
       .map(p => p.l + ': ' + p.v + (sufixo || '')),
   };
+}
+
+// Abre ou fecha a lista inteira de uma rosca. Guardado por grafico: abrir a de
+// assuntos nao tem por que abrir a de devs junto.
+function gerPieTodos(id) {
+  _gerPieTodos[id] = !_gerPieTodos[id];
+  renderGerencial();
 }
 
 function gerRenderPies(containerId, chartDefs, sufixo) {
@@ -3445,7 +3499,7 @@ function gerRenderPies(containerId, chartDefs, sufixo) {
     // MESMO calculo da rosca: a legenda tem de listar as fatias que existem no
     // desenho, e nao as do dado cru — senao ela mostra dez pontinhos coloridos ao
     // lado de uma rosca de seis fatias.
-    const f = gerFatias(c.data, sufixo, c.ordenar);
+    const f = gerFatias(c.data, sufixo, c.ordenar, _gerPieTodos[c.id]);
     const legendHTML = f.itens.map(x => {
       const pct = Math.round(x.valor / f.total * 100);
       return `<div class="ger-legend-item"${x.label.indexOf('Outros (') === 0
@@ -3456,12 +3510,20 @@ function gerRenderPies(containerId, chartDefs, sufixo) {
         <span class="ger-legend-pct">${pct}%</span>
       </div>`;
     }).join('');
+    // O TOTAL vai no miolo. A rosca ja e um vazio no meio; sem ele a pessoa soma
+    // as fatias de cabeca para saber o tamanho do periodo.
+    const centro = `<div class="ger-rosca-centro">
+      <span>Total</span><b>${f.total}${sufixo}</b></div>`;
+    const botao = (f.escondidas > 0 || _gerPieTodos[c.id])
+      ? `<button type="button" class="ger-mostrar-todos" onclick="gerPieTodos('${c.id}')">${
+          _gerPieTodos[c.id] ? 'mostrar só o top 5' : 'mostrar todos (' + (f.escondidas + 5) + ')'}</button>`
+      : '';
     return `<div class="ger-chart-box">
       <div class="ger-chart-title">${c.title}</div>
       ${!labels.length
         ? '<div class="ger-chart-empty">Sem dados no período</div>'
-        : `<div class="ger-chart-canvas-wrap"><canvas id="${c.id}"></canvas></div>
-           <div class="ger-legend">${legendHTML}</div>`}
+        : `<div class="ger-chart-canvas-wrap"><canvas id="${c.id}"></canvas>${centro}</div>
+           <div class="ger-legend">${legendHTML}</div>${botao}`}
     </div>`;
   }).join('');
 
@@ -3473,7 +3535,7 @@ function gerRenderPies(containerId, chartDefs, sufixo) {
 
   chartDefs.forEach(c => {
     if (!Object.keys(c.data).length) return;
-    const f = gerFatias(c.data, sufixo, c.ordenar);
+    const f = gerFatias(c.data, sufixo, c.ordenar, _gerPieTodos[c.id]);
     const labels = f.itens.map(x => x.label);
     const vals = f.itens.map(x => x.valor);
     const colors = f.itens.map(x => x.cor);
@@ -3497,9 +3559,16 @@ function gerRenderPies(containerId, chartDefs, sufixo) {
         }]
       },
       options: {
+        // `maintainAspectRatio: false` com container QUADRADO: o Chart.js preenche
+        // os 200x200 e o circulo sai redondo. Antes o CSS forcava o tamanho de
+        // exibicao do canvas por cima do bitmap, e era isso que achatava a rosca.
         responsive: true,
-        cutout: '50%',
-        layout: { padding: 8 },
+        maintainAspectRatio: false,
+        // Anel fino: o miolo passou de 50% para 72% para caber o total no centro e
+        // para a rosca parar de competir com a legenda, que e quem carrega os
+        // numeros.
+        cutout: '72%',
+        layout: { padding: 4 },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -3512,7 +3581,10 @@ function gerRenderPies(containerId, chartDefs, sufixo) {
             }
           },
           datalabels: {
-            display: ctx => ctx.dataset.data[ctx.dataIndex] / total >= 0.12,
+            // Rotulo em cima da fatia so a partir de 15%: abaixo disso ele nao cabe
+            // no anel fino e sai por cima do vizinho. O valor de cada fatia esta na
+            // legenda, que e onde da para ler sem esbarrar em nada.
+            display: ctx => ctx.dataset.data[ctx.dataIndex] / total >= 0.15,
             color: '#fff',
             font: { size: 12, weight: '800', family: 'Inter' },
             textShadowColor: 'rgba(0,0,0,.9)',
