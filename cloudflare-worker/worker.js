@@ -1338,9 +1338,14 @@ function pokerReferencia(data) {
     const i = Math.floor(o.length / 2);
     return o.length % 2 ? o[i] : Math.round(((o[i - 1] + o[i]) / 2) * 10) / 10;
   };
+  // `n` e `nHoras` sao contagens DIFERENTES de proposito: toda concluida com data
+  // entra na de dias, e so as que tiveram hora preenchida entram na de horas. Uma
+  // contagem so faria a carta parecer mais firme do que e no numero que a tela
+  // esta mostrando.
   const linhas = [];
   for (const [carta, v] of porCarta) {
-    linhas.push({ carta, n: v.dias.length, dias: mediana(v.dias), horas: mediana(v.horas) });
+    linhas.push({ carta, n: v.dias.length, dias: mediana(v.dias),
+                  nHoras: v.horas.length, horas: mediana(v.horas) });
   }
   linhas.sort((a, b) => Number(a.carta) - Number(b.carta));
   return { linhas, total: linhas.reduce((s, l) => s + l.n, 0) };

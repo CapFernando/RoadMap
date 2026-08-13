@@ -2129,8 +2129,12 @@ ok(/fim - t > 400 \* 86400000\) return null;/.test(W),
    'data digitada errada nao vira laco infinito na leitura da fila');
 ok(/Date\.parse\(de \+ 'T00:00:00Z'\)/.test(W),
    'a conta de dias e em UTC (no fuso local, entrega no mesmo dia daria zero)');
-ok(/l\.n < 7/.test(POKER),
+ok(/function refFirme\(l\) \{ return \(l\.nHoras \|\| 0\) >= 7; \}/.test(POKER),
    'carta com pouco caso e marcada, em vez de passar por regra');
+// A hora tem menos base que o dia (64 registros contra 110 entregas com data).
+// Uma contagem so faria a carta parecer mais firme do que e no numero exibido.
+ok(/nHoras: v\.horas\.length/.test(W),
+   'a contagem de horas e separada da contagem de dias');
 ok(/id="referencia"><\/div>/.test(POKER) && POKER.indexOf('id="cartas"') < POKER.indexOf('id="referencia"'),
    'a referencia fica logo abaixo do baralho, onde se vota');
 
