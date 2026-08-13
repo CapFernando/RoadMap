@@ -2005,6 +2005,26 @@ ok(/agoraMs - antesMs > 10 \* 60 \* 1000/.test(WC),
 ok(/nunca entrou com a conta/.test(ADMIN), 'e a tela diz que a coluna fala da CONTA');
 ok(/usa a senha geral/.test(ADMIN), 'e aponta a causa provavel');
 
+
+sec('A marcacao nao pode ser apagada antes de sair da tela');
+
+// A flag DEV-AXCred "nao ficava salva": marcava varias, e ao desativar alguem
+// todas voltavam desmarcadas. O motivo nao era a gravacao — era que ela NUNCA
+// chegava a ser enviada. A fusao de `devs_perfil` acontecia algumas linhas acima,
+// e logo depois o laco generico dos "campos de outras telas" sobrescrevia o mapa
+// com a versao do servidor, que ainda nao tinha a marca.
+ok(/'desenvolvedores', 'devs_perfil',\s*\n?\s*'devs_removidos'/.test(ADMIN),
+   'devs_perfil e devs_removidos estao em MEUS_CAMPOS do Admin');
+ok(/if \(!MEUS_CAMPOS\.includes\(k\)\) state\[k\] = server\[k\]/.test(ADMIN),
+   'o laco generico continua existindo (ele protege chave de outra tela)');
+// A fusao por chave tem de continuar: as DUAS telas editam o mesmo mapa.
+ok((ADMIN.match(/devs_perfil = Object\.assign\(\{\}/g) || []).length === 2,
+   'e a fusao por chave nao foi substituida pela lista');
+
+// Quem coordena precisa do vinculo, mas nao de uma linha no quadro de alocacao.
+ok(/const desenvolve = \['dev', 'analista'\]\.includes/.test(ADMIN),
+   'so quem desenvolve entra na lista de devs ao escolher o nome');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

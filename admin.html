@@ -2228,7 +2228,14 @@ async function saveViaProxy(tentativa = 1) {
     // existe no servidor e nao existe neste `state` desaparece do arquivo.
     // Os campos acima ja sao mesclados um a um; esta lista pega o que vier
     // depois, criado por outra tela, sem depender de alguem lembrar disto aqui.
-    const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'feriados',
+    //
+    // `devs_perfil` E `devs_removidos` PRECISAM estar nesta lista. Sem eles, o
+    // laco abaixo sobrescrevia com a versao do servidor a fusao feita algumas
+    // linhas acima — e a marcacao recem-feita era apagada ANTES de ser enviada.
+    // Era por isso que a flag DEV-AXCred "nao ficava salva": ela nunca chegava a
+    // sair da tela.
+    const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'devs_perfil',
+                         'devs_removidos', 'feriados',
                          'ausencias', 'projetos', 'atualizado_em'];
     Object.keys(server || {}).forEach(k => {
       if (!MEUS_CAMPOS.includes(k)) state[k] = server[k];
@@ -6778,8 +6785,15 @@ async function uNomeDemandas(login, valor) {
     // isso, o vinculo apontaria para um nome que ninguem consegue atribuir no
     // Planejamento, e a conta continuaria sem demanda alcancavel — que e o
     // problema que este campo existe para resolver.
+    //
+    // SO PARA QUEM DESENVOLVE. Quem coordena tambem precisa do vinculo (para ver
+    // as proprias demandas, se tiver), mas nao precisa de uma linha no quadro de
+    // alocacao — e foi assim que "Fernando Nascimento" acabou virando dev na
+    // lista, so por ter escolhido o proprio nome no campo.
+    const conta = (_usuariosCache || []).find(u => u.login === login) || {};
+    const desenvolve = ['dev', 'analista'].includes(String(conta.papel || ''));
     let extra = '';
-    if (valor && !(state.desenvolvedores || []).some(d =>
+    if (desenvolve && valor && !(state.desenvolvedores || []).some(d =>
           String(d).trim().toLowerCase() === valor.toLowerCase())) {
       state.desenvolvedores = [...(state.desenvolvedores || []), valor]
         .sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
