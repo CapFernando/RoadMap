@@ -1988,6 +1988,21 @@ ok(/opcoes\.push\(d \+ ' \(inativo\)'\)/.test(GANTT),
 ok(/d\.replace\(' \(inativo\)', ''\)/.test(GANTT),
    'e o valor gravado e o nome limpo, sem o rotulo');
 
+
+sec('Aba Usuarios: o alcance conta o que a API aceita');
+
+// A tela dizia "nenhuma demanda casa — a API devolve vazio", em vermelho, para
+// contas com 17, 34 e 38 demandas. O campo guardava o nome antigo ("Crisley") e
+// as demandas ja usavam o novo ("Crisley Almeida"), que a API resolve pelo
+// e-mail — mas a tela so contava o declarado. O alarme era da tela, nao do acesso.
+ok(/const aceitos = \[\.\.\.new Set\(\[\.\.\.declarados, sugerido, u\.nome\]/.test(ADMIN),
+   'a tela conta os TRES nomes que a API aceita');
+ok(/const alcance = aceitos\.reduce/.test(ADMIN), 'e o alcance sai desse conjunto');
+ok(!/const alcance = declarados\.length/.test(ADMIN),
+   'a contagem so pelo declarado saiu (era ela que dava o alarme falso)');
+ok(/por ' \+ porQual\.map\(esc\)\.join\(' e '\)/.test(ADMIN),
+   'a nota diz POR QUAL nome as demandas casaram');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

@@ -6486,14 +6486,20 @@ function uCelulaNomeDemandas(u) {
         (declarados.some(d => normTexto(d) === normTexto(puro)) ? ' selected' : '') + '>' +
         esc(puro + '  (' + q + ')') + '</option>';
     }).join('') + '</select>';
-  // O aviso importa mais que o campo: conta de dev sem nenhuma demanda alcancavel
-  // e uma pessoa que abre a API e recebe lista vazia sem entender por que.
-  const alcance = declarados.length
-    ? declarados.reduce((t, d) => t + uQtdPorNome(d), 0)
-    : uQtdPorNome(u.nome);
+  // O ALCANCE TEM DE CONTAR O MESMO QUE A API ACEITA, e ela aceita tres nomes:
+  // o declarado, o derivado do e-mail e o nome da conta. Contando so o declarado,
+  // esta tela dizia "nenhuma demanda casa — a API devolve vazio" em vermelho para
+  // quem tinha 17, 34, 38 demandas: o campo guardava o nome antigo ("Crisley") e
+  // as demandas ja usavam o novo ("Crisley Almeida"), que a API resolve pelo
+  // e-mail. O alarme era da tela, e nao do acesso.
+  const aceitos = [...new Set([...declarados, sugerido, u.nome].filter(Boolean))];
+  const alcance = aceitos.reduce((t, d) => t + uQtdPorNome(d), 0);
+  // De onde vieram: sem isso, ver "17 demandas" com o campo dizendo "Crisley"
+  // deixa a duvida de qual nome esta valendo.
+  const porQual = aceitos.filter(d => uQtdPorNome(d) > 0);
   const nota = alcance
     ? '<div class="us-sub">' + alcance + ' demanda' + (alcance > 1 ? 's' : '') +
-      (declarados.length ? '' : ' pelo nome da conta') + '</div>'
+      (porQual.length ? ' · por ' + porQual.map(esc).join(' e ') : '') + '</div>'
     : (['dev', 'analista'].includes(u.papel)
         ? '<div class="us-sub us-alerta">nenhuma demanda casa — a API devolve vazio</div>'
         : '<div class="us-sub">—</div>');
