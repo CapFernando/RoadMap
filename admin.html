@@ -896,7 +896,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="capa-tecnologia.js"></script>
-<script src="apresentacao.js?v=d0ec478d94"></script>
+<script src="apresentacao.js?v=c264c1a825"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4765,9 +4765,11 @@ function apresTimeEAreas(conc, cl) {
   // A lista COMPLETA de devs, para o slide de barras. `topo('entregas')` para em
   // 4 porque o slide do time compara tres colunas lado a lado; o slide de barras
   // e outro assunto e mostra o time inteiro.
+  // O ponto vai junto da entrega: doze entregas de um e dezoito de outro nao
+  // dizem quem carregou mais peso, e o ponto diz.
   const porDev = lista
     .filter(d => d.entregas > 0)
-    .map(d => ({ nome: d.nome, valor: d.entregas }))
+    .map(d => ({ nome: d.nome, valor: d.entregas, extra: Math.round(d.pontos) }))
     .sort((a, b) => b.valor - a.valor ||
       String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
 
@@ -4884,9 +4886,19 @@ async function apresGerar() {
     const semPrazoComb = conc.filter(m => ['sem_prazo', 'sem_conclusao']
       .includes((cl.get(m.id) || {}).tipo)).length;
     const lancadaDepois = conc.filter(m => (cl.get(m.id) || {}).tipo === 'retroativa').length;
-    const medidas = noPrazo.length + atras.length;
-    const diasMedio = atras.length
-      ? Math.round(atras.reduce((t, m) => t + cl.get(m.id).dias, 0) / atras.length) : 0;
+    /* ATRASO HERDADO NAO E ATRASO DESTE MES.
+       Das 33 entregas com atraso em agosto, oito tinham prazo combinado para
+       JULHO: ja chegaram atrasadas. Cobrar isso de agosto e cobrar duas vezes a
+       mesma demora — e some do mes em que o prazo estourou.
+
+       Elas nao saem do deck: a entrega aconteceu, e quem pergunta "e aquela de
+       julho?" merece ver a resposta. Saem so do PERCENTUAL, e ganham faixa
+       propria com o nome do que sao.                                          */
+    const atrasoHerdado = atras.filter(m => String(m.entrega || '').slice(0, 7) < iso);
+    const atrasoDoMes = atras.filter(m => String(m.entrega || '').slice(0, 7) >= iso);
+    const medidas = noPrazo.length + atrasoDoMes.length;
+    const diasMedio = atrasoDoMes.length
+      ? Math.round(atrasoDoMes.reduce((t, m) => t + cl.get(m.id).dias, 0) / atrasoDoMes.length) : 0;
 
     // DEMANDA x CAPACIDADE: o que chegou contra o que saiu.
     //
@@ -5139,7 +5151,10 @@ async function apresGerar() {
         pct: medidas ? Math.round(noPrazo.length / medidas * 100) : 0,
         noPrazo: noPrazo.length, medidas, naoMedidas: naoMed.length, diasMedio,
         semPrazoComb, lancadaDepois,
-        atrasadas: atras
+        // O mes anterior tem nome: "atrasadas desde julho" diz de onde vem.
+        herdadas: atrasoHerdado.length,
+        mesAnterior: apresentacaoMesNome((mes + 10) % 12),
+        atrasadas: atrasoDoMes
           .sort((a, b) => cl.get(b.id).dias - cl.get(a.id).dias)
           .map(m => ({
             titulo: (m.codigo ? m.codigo + ' · ' : '') + String(m.titulo || '').slice(0, 60),

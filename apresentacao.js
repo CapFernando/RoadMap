@@ -460,8 +460,17 @@
         x: X_BARRA, y: y + (alt - h) / 2, w: Math.max(0.06, LARG * (it.valor / max)), h: h,
         fill: { color: cfg.cor || C.azul } });
       s.addText(String(it.valor), {
-        x: X_BARRA + LARG + 0.12, y: y, w: 0.75, h: alt,
+        x: X_BARRA + LARG + 0.12, y: y, w: 0.45, h: alt,
         fontSize: 13, bold: true, color: cfg.cor || C.azul, valign: 'middle' });
+      // O valor de apoio (os pontos, no slide por dev): entrega e volume, ponto e
+      // peso, e um sem o outro deixa a leitura pela metade.
+      if (it.extra != null && cfg.rotuloExtra) {
+        // Ate 9,95": a barra termina em 8,63", o numero ocupa ate 9,2", e o resto
+        // e o que sobra ate a margem. Com 1" de caixa, "97 pts" saia do slide.
+        s.addText(it.extra + ' ' + cfg.rotuloExtra, {
+          x: X_BARRA + LARG + 0.58, y: y, w: 0.77, h: alt,
+          fontSize: 10.5, color: C.fraco, valign: 'middle' });
+      }
     });
 
     var sobra = (cfg.itens || []).length - itens.length;
@@ -516,26 +525,29 @@
 
     // De que são as entradas. "Quantas" é a primeira pergunta; "do que" é a
     // segunda, e ela separa construir de manter de pé o que já existe.
+    // UMA LINHA PARA CADA, dentro da largura da coluna. A primeira versao punha os
+    // tres numa caixa mais larga que a coluna: a segunda linha da quebra das
+    // entradas passava por cima da quebra das saidas.
+    var lista = function (partes, x, cor) {
+      partes.forEach(function (txt, i) {
+        s.addText(txt, { x: x, y: 2.58 + i * 0.24, w: larg + 0.3, h: 0.24,
+                         fontSize: 11, color: cor });
+      });
+    };
     var t = f.porTipo;
     if (t) {
       var partes = [];
       if (t.evolucao) partes.push(t.evolucao + ' evolução');
       if (t.sustentacao) partes.push(t.sustentacao + ' sustentação');
       if (t.sem) partes.push(t.sem + ' sem classificar');
-      if (partes.length) {
-        s.addText(partes.join('  ·  '), {
-          x: 0.7 + passo, y: 2.6, w: larg + 0.9, h: 0.35, fontSize: 11.5, color: C.azul });
-      }
+      lista(partes, 0.7 + passo, C.azul);
     }
     // A recusa tambem sai da fila, mas nao e entrega. Dizer os dois numeros evita
     // a leitura de que tudo que saiu foi entregue.
     var saiu = [];
     if (f.saiuEntregue) saiu.push(f.saiuEntregue + ' entregues');
     if (f.saiuNegada) saiu.push(f.saiuNegada + (f.saiuNegada === 1 ? ' recusada' : ' recusadas'));
-    if (saiu.length) {
-      s.addText(saiu.join('  ·  '), {
-        x: 0.7 + 2 * passo, y: 2.6, w: larg + 0.9, h: 0.35, fontSize: 11.5, color: C.verde });
-    }
+    lista(saiu, 0.7 + 2 * passo, C.verde);
 
     // A frase que a sala leva. Sem ela, os quatro números ficam por conta de quem
     // estiver somando de cabeça.
@@ -580,6 +592,10 @@
     var faixas = [
       { rot: 'No prazo', val: z.noPrazo, cor: C.verde },
       { rot: 'Com atraso', val: z.atrasadas ? z.atrasadas.length : 0, cor: C.vermelho },
+      // O atraso herdado tem faixa e cor propria: ele aconteceu no mes passado, e
+      // some da conta deste — mas a entrega e desta, e some do deck seria pior.
+      { rot: 'Atrasadas desde ' + (z.mesAnterior || 'o mês anterior'),
+        val: z.herdadas || 0, cor: C.ambar },
       { rot: 'Sem prazo combinado', val: z.semPrazoComb || 0, cor: C.fraco },
       { rot: 'Data lançada depois', val: z.lancadaDepois || 0, cor: C.fraco },
     ].filter(function (x) { return x.val > 0; });
@@ -590,8 +606,10 @@
       s.addShape(pptx.ShapeType.rect, { x: x0, y: 1.15, w: w, h: 0.42, fill: { color: x.cor } });
       x0 += w;
     });
+    // Cinco faixas em 0,42" cada: a ultima termina em 3,83" e a frase de baixo
+    // comeca em 3,95". Com 0,48" elas se encostavam.
     faixas.forEach(function (x, i) {
-      var y = 1.82 + i * 0.55;
+      var y = 1.75 + i * 0.42;
       s.addShape(pptx.ShapeType.rect, { x: 5.3, y: y + 0.06, w: 0.16, h: 0.16, fill: { color: x.cor } });
       s.addText(String(x.val), { x: 5.6, y: y - 0.03, w: 0.7, h: 0.4, fontSize: 20, bold: true, color: x.cor });
       s.addText(x.rot, { x: 6.35, y: y + 0.04, w: 3.0, h: 0.35, fontSize: 13, color: C.fraco });
@@ -606,7 +624,10 @@
       var razoes = [];
       if (z.semPrazoComb) razoes.push(z.semPrazoComb + ' saíram sem prazo combinado, e não há com o que comparar');
       if (z.lancadaDepois) razoes.push(z.lancadaDepois + ' tiveram a conclusão lançada depois, quando "no prazo" seria verdade por construção');
-      s.addText(z.naoMedidas + ' conclusões ficam fora da conta: ' + razoes.join('; ') + '.', {
+      if (z.herdadas) razoes.push(z.herdadas + ' já chegaram atrasadas de ' +
+        (z.mesAnterior || 'meses anteriores') + ', e o atraso é de lá');
+      s.addText((z.naoMedidas + (z.herdadas || 0)) + ' conclusões ficam fora da conta: ' +
+                razoes.join('; ') + '.', {
         x: 0.7, y: 4.4, w: 8.6, h: 0.6, fontSize: 12, color: C.fraco, lineSpacingMultiple: 1.3 });
     }
     rodape(s, d.periodo, pagina);
@@ -676,7 +697,7 @@
     if (d.secoes.grafico && (d.porDev || []).length) {
       slideBarras(pptx, {
         titulo: 'Entregas por desenvolvedor', sub: 'demandas concluídas no período',
-        itens: d.porDev, cor: C.verde, rotuloSobra: ' pessoas',
+        itens: d.porDev, cor: C.verde, rotuloSobra: ' pessoas', rotuloExtra: 'pts',
       }, ++p, d.periodo);
     }
 

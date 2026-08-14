@@ -2296,6 +2296,27 @@ ok(!/function slideFluxo/.test(APRES),
 ok(/slideTime\(pptx, d\.time, \+\+p, d\.periodo, d\.ausencias, d\.capacidade\)/.test(APRES),
    'e a capacidade foi para o slide do time, onde se fala de gente');
 
+sec('O atraso do mes passado nao e atraso deste');
+
+// A suspeita estava certa: das 33 entregas com atraso em agosto, OITO tinham prazo
+// combinado para julho. Cobrar isso de agosto e cobrar duas vezes a mesma demora —
+// e some do mes em que o prazo estourou.
+ok(/const atrasoHerdado = atras\.filter\(m => String\(m\.entrega \|\| ''\)\.slice\(0, 7\) < iso\);/.test(ADMIN),
+   'o atraso com prazo de mes anterior e separado');
+ok(/const medidas = noPrazo\.length \+ atrasoDoMes\.length;/.test(ADMIN),
+   'e fica fora do percentual do mes');
+// Sair do deck seria pior: a entrega aconteceu, e quem pergunta "e aquela de
+// julho?" merece ver a resposta.
+ok(/rot: 'Atrasadas desde ' \+ \(z\.mesAnterior/.test(APRES),
+   'mas continua no slide, com faixa e nome proprios');
+ok(/mesAnterior: apresentacaoMesNome\(\(mes \+ 10\) % 12\)/.test(ADMIN),
+   'com o mes anterior escrito por extenso');
+// Doze entregas de um dev e dezoito de outro nao dizem quem carregou mais peso.
+ok(/valor: d\.entregas, extra: Math\.round\(d\.pontos\)/.test(ADMIN),
+   'as entregas por dev levam os pontos junto');
+ok(/rotuloExtra: 'pts'/.test(APRES) && /if \(it\.extra != null && cfg\.rotuloExtra\)/.test(APRES),
+   'e a barra desenha o apoio ao lado do numero');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
