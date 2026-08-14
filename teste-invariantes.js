@@ -2199,13 +2199,21 @@ sec('A capa nao pode depender de uma fonte instalada');
 // "TECNOLOGIA" quebrou em duas linhas por cima do "RELATÓRIO DE": pedi Montserrat,
 // a maquina que abriu nao tem, e o PowerPoint trocou por um tipo mais largo.
 ok(/wrap: false/.test(APRES), 'o titulo da capa nunca quebra linha');
-ok(/fontSize: 62, bold: true/.test(APRES),
-   'e o corpo cabe com folga ate no tipo mais largo');
+// `wrap: false` sai correto no arquivo (o `wrap="none"` esta no XML) e MESMO ASSIM
+// o PowerPoint quebrou. Entao o tamanho passa a sair de conta, e nao de escolha:
+// largura da caixa dividida pelo numero de letras, com a largura media da fonte
+// declarada. Cabe por construcao, e nao por promessa de renderizador.
+ok(/var corpo = Math\.min\(62, Math\.floor\(LARG \/ \(0\.88 \* Math\.max\(titulo\.length, 1\)\) \* 72\)\);/.test(APRES),
+   'o corpo do titulo e calculado pela largura disponivel');
+ok(/fontFace: 'Arial Black'/.test(APRES),
+   'com uma fonte que existe em qualquer maquina — a conta so vale se a fonte for a declarada');
 ok(/margin: 0/.test(APRES),
    'sem o respiro interno, que empurrava o texto para baixo da posicao medida');
 // Os selos vinham com retangulo preto: a transparencia mora num SMask separado.
-ok(/RECORTADOS DA PÁGINA RENDERIZADA/.test(CAPA),
-   'os selos vem recortados da pagina, e nao extraidos como objeto');
+// Recortar da pagina resolvia o retangulo preto, mas o fundo do recorte so QUASE
+// combina com o do slide — e o "quase" vira um retangulo visivel.
+ok(/COM A TRANSPARÊNCIA APLICADA/.test(CAPA),
+   'os selos saem com o alfa do SMask aplicado, e nao com fundo junto');
 ok(/selosPos: \{ x: 8\.58/.test(CAPA) && /logoPos:  \{ x: 8\.13/.test(CAPA),
    'com a proporcao medida na pagina — o quadrado esticava os selos');
 

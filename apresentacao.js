@@ -163,23 +163,33 @@
     if (cap.selos) s.addImage(Object.assign({ data: cap.selos }, pSelos));
     if (cap.logo)  s.addImage(Object.assign({ data: cap.logo }, pLogo));
 
-    // `wrap: false` e o que impede a capa de quebrar. A primeira versao pedia
-    // Montserrat a 78pt; a maquina que abriu o arquivo nao tem a fonte, o
-    // PowerPoint trocou por uma mais larga, e "TECNOLOGIA" partiu em duas linhas
-    // por cima do "RELATÓRIO DE". Uma capa que depende de uma fonte instalada nao
-    // e uma capa: agora o texto nunca quebra, e 62pt cabe com folga ate no tipo
-    // mais largo. `margin: 0` tira o respiro que o PowerPoint poe dentro da caixa
-    // e que deslocava o texto para baixo da posicao medida.
+    // O TAMANHO DO TÍTULO É CALCULADO, e não escolhido.
+    //
+    // Duas tentativas falharam antes desta. A primeira pediu Montserrat a 78pt: a
+    // máquina que abriu não tem a fonte, o PowerPoint trocou por uma mais larga, e
+    // "TECNOLOGIA" partiu em duas linhas por cima do "RELATÓRIO DE". A segunda
+    // manteve o tamanho e confiou no `wrap: false` — que sai correto no arquivo
+    // (conferi o `wrap="none"` no XML) e mesmo assim quebrou na tela.
+    //
+    // Então o tamanho passa a sair de conta: largura da caixa dividida pelo número
+    // de letras, com a fonte declarada e a largura média que ELA tem. Arial Black
+    // está em qualquer Windows, é pesada como a original, e sua maiúscula ocupa
+    // ~0,88 do corpo. Com isso o título cabe em uma linha por construção, e não
+    // por promessa de renderizador.
     var verde = cap.verde || '00FD54';
-    var tipo = { fontFace: 'Montserrat', margin: 0, wrap: false, valign: 'top' };
+    var tipo = { fontFace: 'Arial Black', margin: 0, wrap: false, valign: 'top' };
+    var titulo = (cfg.tituloCapa || 'TECNOLOGIA').toUpperCase();
+    var LARG = 6.6;                       // da margem esquerda do texto até a borda
+    var corpo = Math.min(62, Math.floor(LARG / (0.88 * Math.max(titulo.length, 1)) * 72));
+
     s.addText((cfg.rotuloCapa || 'RELATÓRIO DE').toUpperCase(), Object.assign({
-      x: 3.35, y: 1.88, w: 6.4, h: 0.3, fontSize: 20, bold: true,
+      x: 3.35, y: 1.88, w: 6.4, h: 0.3, fontSize: 18, bold: true,
       color: verde, charSpacing: 1 }, tipo));
-    s.addText((cfg.tituloCapa || 'TECNOLOGIA').toUpperCase(), Object.assign({
-      x: 3.3, y: 2.22, w: 6.6, h: 1.0, fontSize: 62, bold: true,
+    s.addText(titulo, Object.assign({
+      x: 3.3, y: 2.2, w: LARG, h: 1.0, fontSize: corpo, bold: true,
       color: 'FFFFFF' }, tipo));
     s.addText(String(cfg.periodo || '').toUpperCase(), Object.assign({
-      x: 3.35, y: 3.38, w: 6.4, h: 0.35, fontSize: 20, bold: true,
+      x: 3.35, y: 3.3, w: 6.4, h: 0.35, fontSize: 18, bold: true,
       color: verde, charSpacing: 1 }, tipo));
     return s;
   }
