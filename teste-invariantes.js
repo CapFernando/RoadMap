@@ -2194,6 +2194,36 @@ ok(/function slidePrazo\(pptx, d, pagina\)/.test(APRES) && /Sem medição/.test(
 ok(/return nasceu && nasceu <= fimMes && \(!fechou \|\| fechou > fimMes\);/.test(ADMIN),
    'o backlog e o do fim do mes apresentado');
 
+sec('A capa nao pode depender de uma fonte instalada');
+
+// "TECNOLOGIA" quebrou em duas linhas por cima do "RELATÓRIO DE": pedi Montserrat,
+// a maquina que abriu nao tem, e o PowerPoint trocou por um tipo mais largo.
+ok(/wrap: false/.test(APRES), 'o titulo da capa nunca quebra linha');
+ok(/fontSize: 62, bold: true/.test(APRES),
+   'e o corpo cabe com folga ate no tipo mais largo');
+ok(/margin: 0/.test(APRES),
+   'sem o respiro interno, que empurrava o texto para baixo da posicao medida');
+// Os selos vinham com retangulo preto: a transparencia mora num SMask separado.
+ok(/RECORTADOS DA PÁGINA RENDERIZADA/.test(CAPA),
+   'os selos vem recortados da pagina, e nao extraidos como objeto');
+ok(/selosPos: \{ x: 8\.58/.test(CAPA) && /logoPos:  \{ x: 8\.13/.test(CAPA),
+   'com a proporcao medida na pagina — o quadrado esticava os selos');
+
+sec('O slide do time diz quem esteve fora');
+
+// Sem isso o slide convida a leitura errada: quem tirou ferias entrega menos e
+// aparece embaixo da lista como se tivesse rendido menos.
+ok(/function slideTime\(pptx, t, pagina, periodo, ausencias\)/.test(APRES),
+   'o slide do time recebe as ausencias');
+ok(/Fora no período/.test(APRES), 'e mostra quem esteve fora');
+ok(/slideTime\(pptx, d\.time, \+\+p, d\.periodo, d\.ausencias\)/.test(APRES),
+   'o deck passa as ausencias adiante');
+// Ferias que atravessam o mes pesam so os dias que caem no periodo apresentado.
+ok(/const de = String\(a\.inicio \|\| ''\) > iso \+ '-01'/.test(ADMIN),
+   'a contagem recorta a ausencia no mes apresentado');
+ok(/if \(w !== 0 && w !== 6/.test(ADMIN) || /dow !== 0 && dow !== 6 && !ferAus\.has/.test(ADMIN),
+   'e conta dias uteis, sem fim de semana nem feriado');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

@@ -896,7 +896,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="capa-tecnologia.js"></script>
-<script src="apresentacao.js?v=5dfb12bfc0"></script>
+<script src="apresentacao.js?v=d3c84937dd"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4919,6 +4919,29 @@ async function apresGerar() {
       return nasceu && nasceu <= fimMes && (!fechou || fechou > fimMes);
     }).length;
 
+    // AUSENCIAS DO PERIODO, cruzadas com o cadastro do Planejamento. Conta dias
+    // UTEIS dentro do mes apresentado — ferias que comecam dia 28 e terminam em
+    // 5 do mes seguinte pesam so os dias que caem aqui. Feriado cadastrado nao
+    // conta: ele ja nao era dia de trabalho para ninguem.
+    const ferAus = new Set((state.feriados || []).map(f => f.data || f).filter(Boolean));
+    const AUS_ROTULO = { ferias: 'férias', folga: 'folga', licenca: 'licença',
+                         atestado: 'atestado', outro: '' };
+    const ausencias = (state.ausencias || []).map(a => {
+      const de = String(a.inicio || '') > iso + '-01' ? String(a.inicio || '') : iso + '-01';
+      const ate = String(a.fim || a.inicio || '') < fimMes ? String(a.fim || a.inicio || '') : fimMes;
+      if (!de || !ate || ate < de) return null;
+      let dias = 0;
+      const dt = new Date(de + 'T00:00:00'), fim = new Date(ate + 'T00:00:00');
+      let guarda = 0;
+      while (dt <= fim && guarda++ < 400) {
+        const dow = dt.getDay();
+        const isoDia = dt.toISOString().slice(0, 10);
+        if (dow !== 0 && dow !== 6 && !ferAus.has(isoDia)) dias++;
+        dt.setDate(dt.getDate() + 1);
+      }
+      return dias ? { nome: a.dev || '—', dias, tipo: AUS_ROTULO[a.tipo] || '' } : null;
+    }).filter(Boolean).sort((x, y) => y.dias - x.dias);
+
     const ta = apresTimeEAreas(conc, cl);
 
     const destaques = [...document.querySelectorAll('.ap-dest:checked')].map(c => {
@@ -5004,6 +5027,7 @@ async function apresGerar() {
       fluxo: { recebidas: recebidasMes, entregues: conc.length, abertas: abertasHoje,
                tocadas, backlog: backlogVirada },
       time: ta.time,
+      ausencias,
       areas: ta.areas,
       frentesAtraso: ta.frentes,
       porDev: ta.porDev,

@@ -157,20 +157,30 @@
     // que deck feio.
     if (!cap || !cap.fundo) return slideCapaSimples(pptx, cfg);
 
+    var pSelos = cap.selosPos || { x: 8.58, y: 0.40, w: 0.94, h: 0.48 };
+    var pLogo  = cap.logoPos  || { x: 8.13, y: 4.83, w: 1.41, h: 0.52 };
     s.addImage({ data: cap.fundo, x: 0, y: 0, w: 10, h: 5.63 });
-    if (cap.selos) s.addImage({ data: cap.selos, x: 8.58, y: 0.17, w: 0.96, h: 0.96 });
-    if (cap.logo)  s.addImage({ data: cap.logo,  x: 8.14, y: 4.83, w: 1.41, h: 0.52 });
+    if (cap.selos) s.addImage(Object.assign({ data: cap.selos }, pSelos));
+    if (cap.logo)  s.addImage(Object.assign({ data: cap.logo }, pLogo));
 
+    // `wrap: false` e o que impede a capa de quebrar. A primeira versao pedia
+    // Montserrat a 78pt; a maquina que abriu o arquivo nao tem a fonte, o
+    // PowerPoint trocou por uma mais larga, e "TECNOLOGIA" partiu em duas linhas
+    // por cima do "RELATÓRIO DE". Uma capa que depende de uma fonte instalada nao
+    // e uma capa: agora o texto nunca quebra, e 62pt cabe com folga ate no tipo
+    // mais largo. `margin: 0` tira o respiro que o PowerPoint poe dentro da caixa
+    // e que deslocava o texto para baixo da posicao medida.
     var verde = cap.verde || '00FD54';
-    s.addText((cfg.rotuloCapa || 'RELATÓRIO DE').toUpperCase(), {
-      x: 3.35, y: 1.92, w: 6.2, h: 0.35, fontSize: 20, bold: true,
-      color: verde, fontFace: 'Montserrat', charSpacing: 1 });
-    s.addText((cfg.tituloCapa || 'TECNOLOGIA').toUpperCase(), {
-      x: 3.3, y: 2.2, w: 6.5, h: 1.15, fontSize: 78, bold: true,
-      color: 'FFFFFF', fontFace: 'Montserrat' });
-    s.addText(String(cfg.periodo || '').toUpperCase(), {
-      x: 3.35, y: 3.35, w: 6.2, h: 0.4, fontSize: 20, bold: true,
-      color: verde, fontFace: 'Montserrat', charSpacing: 1 });
+    var tipo = { fontFace: 'Montserrat', margin: 0, wrap: false, valign: 'top' };
+    s.addText((cfg.rotuloCapa || 'RELATÓRIO DE').toUpperCase(), Object.assign({
+      x: 3.35, y: 1.88, w: 6.4, h: 0.3, fontSize: 20, bold: true,
+      color: verde, charSpacing: 1 }, tipo));
+    s.addText((cfg.tituloCapa || 'TECNOLOGIA').toUpperCase(), Object.assign({
+      x: 3.3, y: 2.22, w: 6.6, h: 1.0, fontSize: 62, bold: true,
+      color: 'FFFFFF' }, tipo));
+    s.addText(String(cfg.periodo || '').toUpperCase(), Object.assign({
+      x: 3.35, y: 3.38, w: 6.4, h: 0.35, fontSize: 20, bold: true,
+      color: verde, charSpacing: 1 }, tipo));
     return s;
   }
 
@@ -295,7 +305,7 @@
   // O time em agregado. Tres perguntas, tres colunas — e NENHUM slide por pessoa:
   // em reuniao de diretoria, detalhe individual desloca a conversa de "o que a
   // area entregou" para "o que fulano fez", e nao e essa a pauta.
-  function slideTime(pptx, t, pagina, periodo) {
+  function slideTime(pptx, t, pagina, periodo, ausencias) {
     var s = slideTitulo(pptx, 'O time', 'no período', pagina);
     var col = [
       { x: 0.7,  tit: 'Mais entregas',  cor: C.verde,    lista: t.entregas },
@@ -316,6 +326,22 @@
           x: c.x + 0.85, y: y + 0.08, w: 1.9, h: 0.35, fontSize: 12, color: C.texto });
       });
     });
+    // QUEM ESTEVE FORA. Sem esta linha o slide convida a leitura errada: quem
+    // tirou uma semana de ferias entrega menos e aparece embaixo da lista como se
+    // tivesse rendido menos. As ausencias ja estao cadastradas no Planejamento —
+    // so faltava cruza-las aqui.
+    //
+    // Uma linha, e nao um numero ao lado de cada nome: sao tres colunas que ja tem
+    // numero, e um quarto ali vira ruido.
+    if ((ausencias || []).length) {
+      s.addText('Fora no período', { x: 0.7, y: 4.15, w: 8.6, h: 0.3,
+                                     fontSize: 13, color: C.fraco });
+      s.addText(ausencias.slice(0, 6).map(function (a) {
+        return a.nome + ' (' + a.dias + (a.dias === 1 ? ' dia' : ' dias') +
+               (a.tipo ? ', ' + a.tipo : '') + ')';
+      }).join('   ·   '), { x: 0.7, y: 4.45, w: 8.6, h: 0.5, fontSize: 14,
+                            color: C.ambar, lineSpacingMultiple: 1.25 });
+    }
     rodape(s, periodo, pagina);
     return s;
   }
@@ -551,7 +577,7 @@
     }
 
     // 4. O time e as frentes: agregado, antes do detalhe.
-    if (d.secoes.time && d.time) slideTime(pptx, d.time, ++p, d.periodo);
+    if (d.secoes.time && d.time) slideTime(pptx, d.time, ++p, d.periodo, d.ausencias);
     if (d.secoes.areas && (d.areas || []).length) slideAreas(pptx, d.areas, ++p, d.periodo);
 
     // 5. Quem pediu. O time e uma leitura; a area cliente e outra, e e a que diz
