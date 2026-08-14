@@ -34,6 +34,7 @@ const DEV = lerTela('dev.html');
 const INDEX = lerTela('index.html');
 const POKER = lerTela('poker.html');
 const APRES = fs.readFileSync('apresentacao.js', 'utf8');
+const CAPA = fs.readFileSync('capa-tecnologia.js', 'utf8');
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -2166,6 +2167,32 @@ ok(/function slideFluxo\(pptx, f, pagina, periodo\)/.test(APRES),
    'o deck tem o slide de demanda x capacidade');
 ok(/fluxo: \{ recebidas: recebidasMes, entregues: conc\.length/.test(ADMIN),
    'e ele recebe recebidas e entregues do mesmo periodo');
+
+sec('A capa e a da casa, e o mes conta a historia inteira');
+
+// O deck abria com faixa azul e texto — generico, nada parecido com a capa que a
+// apresentacao mensal ja usa. As posicoes vem da capa original, convertidas de
+// ponto para polegada (pagina 960x540pt, slide 10x5,63").
+ok(/window\.CAPA_TECNOLOGIA = \{/.test(CAPA), 'os elementos da capa existem');
+ok(/fundo: 'data:image\/jpeg;base64/.test(CAPA) && /selos: 'data:image\/png;base64/.test(CAPA) &&
+   /logo: 'data:image\/png;base64/.test(CAPA), 'e vao embutidos, sem depender de rede');
+ok(/if \(!cap \|\| !cap\.fundo\) return slideCapaSimples/.test(APRES),
+   'sem as imagens, a capa antiga entra — deck que nao abre e pior que deck feio');
+ok(/function slideCapaSimples/.test(APRES), 'e o plano B continua existindo');
+ok(ADMIN.indexOf('capa-tecnologia.js') < ADMIN.indexOf('apresentacao.js'),
+   'a capa carrega antes de quem a usa');
+
+// Numero sozinho mostra resultado sem esforco: nao diz quanta demanda chegou, o
+// que o time pegou, nem o que ficou de pe para o mes seguinte.
+ok(/function slideMes\(pptx, d, pagina\)/.test(APRES), 'o slide do mes e um funil, e nao um numero');
+ok(/Entraram no mês/.test(APRES) && /Trabalhadas no mês/.test(APRES) &&
+   /Em aberto ao virar o mês/.test(APRES), 'com entrantes, tratadas e o que ficou');
+ok(/function slidePrazo\(pptx, d, pagina\)/.test(APRES) && /Sem medição/.test(APRES),
+   'e o prazo mostra a conta, inclusive a fatia que nao da para medir');
+// O backlog da virada e do FIM DO MES, e nao de hoje: numero de hoje contaria o
+// que entrou depois da reuniao.
+ok(/return nasceu && nasceu <= fimMes && \(!fechou \|\| fechou > fimMes\);/.test(ADMIN),
+   'o backlog e o do fim do mes apresentado');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

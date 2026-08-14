@@ -895,7 +895,8 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
-<script src="apresentacao.js?v=38ce9769c6"></script>
+<script src="capa-tecnologia.js"></script>
+<script src="apresentacao.js?v=5dfb12bfc0"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4900,6 +4901,24 @@ async function apresGerar() {
       !['concluido', 'negada'].includes(m.status_planejamento || '') &&
       !String(m.concluido_em || '').trim()).length;
 
+    // TRABALHADAS: a demanda que o time pegou no mes, tenha ela saido ou nao —
+    // comecou dentro do mes ou foi concluida dentro dele. Sem este numero, o
+    // slide conta o que saiu e cala o que esta em curso, que e a maior parte do
+    // esforco de um mes com projeto grande dentro.
+    const dentro = (v) => v && v >= iso + '-01' && v <= fimMes;
+    const tocadas = vivasFluxo.filter(m =>
+      dentro(String(m.inicio || '').slice(0, 10)) ||
+      dentro(String(m.concluido_em || '').slice(0, 10))).length;
+
+    // BACKLOG NA VIRADA: o que ja existia no fim do mes e ainda nao tinha sido
+    // concluido. E o numero que responde "e o que sobrou?" — a pergunta que vem
+    // depois de qualquer bom resultado.
+    const backlogVirada = vivasFluxo.filter(m => {
+      const nasceu = String(m.criado_em || '').slice(0, 10);
+      const fechou = String(m.concluido_em || '').slice(0, 10);
+      return nasceu && nasceu <= fimMes && (!fechou || fechou > fimMes);
+    }).length;
+
     const ta = apresTimeEAreas(conc, cl);
 
     const destaques = [...document.querySelectorAll('.ap-dest:checked')].map(c => {
@@ -4982,7 +5001,8 @@ async function apresGerar() {
             dias: cl.get(m.id).dias,
           })),
       },
-      fluxo: { recebidas: recebidasMes, entregues: conc.length, abertas: abertasHoje },
+      fluxo: { recebidas: recebidasMes, entregues: conc.length, abertas: abertasHoje,
+               tocadas, backlog: backlogVirada },
       time: ta.time,
       areas: ta.areas,
       frentesAtraso: ta.frentes,

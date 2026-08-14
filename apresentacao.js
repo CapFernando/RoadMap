@@ -141,7 +141,41 @@
                                   color: C.fraco, align: 'right' });
   }
 
+  // A CAPA DA CASA. O deck abria com uma faixa azul e texto — generico, e nada
+  // parecido com a capa que a apresentacao mensal ja usa. Esta e a mesma: leao,
+  // textura, "RELATORIO DE" em verde, o titulo em branco e o mes embaixo.
+  //
+  // As posicoes vem da capa original, convertidas de pontos para polegadas: a
+  // pagina tem 960x540pt e o slide 10x5,63" — divisor 96. Nao chutei nenhuma.
+  //
+  // O tipo e Montserrat, o da apresentacao. Se a maquina que projeta nao tiver,
+  // o PowerPoint troca sozinho por um parecido e a capa continua de pe.
   function slideCapa(pptx, cfg) {
+    var s = slideBase(pptx);
+    var cap = window.CAPA_TECNOLOGIA;
+    // Sem as imagens, a capa antiga. Deck que nao abre na hora da reuniao e pior
+    // que deck feio.
+    if (!cap || !cap.fundo) return slideCapaSimples(pptx, cfg);
+
+    s.addImage({ data: cap.fundo, x: 0, y: 0, w: 10, h: 5.63 });
+    if (cap.selos) s.addImage({ data: cap.selos, x: 8.58, y: 0.17, w: 0.96, h: 0.96 });
+    if (cap.logo)  s.addImage({ data: cap.logo,  x: 8.14, y: 4.83, w: 1.41, h: 0.52 });
+
+    var verde = cap.verde || '00FD54';
+    s.addText((cfg.rotuloCapa || 'RELATÓRIO DE').toUpperCase(), {
+      x: 3.35, y: 1.92, w: 6.2, h: 0.35, fontSize: 20, bold: true,
+      color: verde, fontFace: 'Montserrat', charSpacing: 1 });
+    s.addText((cfg.tituloCapa || 'TECNOLOGIA').toUpperCase(), {
+      x: 3.3, y: 2.2, w: 6.5, h: 1.15, fontSize: 78, bold: true,
+      color: 'FFFFFF', fontFace: 'Montserrat' });
+    s.addText(String(cfg.periodo || '').toUpperCase(), {
+      x: 3.35, y: 3.35, w: 6.2, h: 0.4, fontSize: 20, bold: true,
+      color: verde, fontFace: 'Montserrat', charSpacing: 1 });
+    return s;
+  }
+
+  // A capa antiga, guardada como plano B.
+  function slideCapaSimples(pptx, cfg) {
     var s = slideBase(pptx);
     s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.azul } });
     s.addText(cfg.titulo || 'Roadmap de Melhorias', {
@@ -376,6 +410,108 @@
     return s;
   }
 
+// O MÊS EM QUATRO NÚMEROS, e não em um.
+  //
+  // Este slide era só "69 entregas concluídas". Número sozinho mostra resultado
+  // sem esforço: não diz quanta demanda chegou no mesmo período, quanta coisa o
+  // time pegou, nem o que ficou de pé para o mês seguinte. Quem apresenta ficava
+  // com a parte difícil da conversa na memória.
+  //
+  // O destaque continua sendo o que saiu — é a entrega que se apresenta. Os
+  // outros três ficam ao lado, do tamanho de apoio, na ordem em que a demanda
+  // anda: chegou, foi tocada, saiu, ficou.
+  function slideMes(pptx, d, pagina) {
+    var s = slideBase(pptx);
+    var f = d.fluxo || {};
+    var k = d.kpi || {};
+
+    s.addText('Entregas concluídas', { x: 0.7, y: 0.62, w: 8.6, h: 0.4, fontSize: 16, color: C.fraco });
+    s.addText(String(k.concluidas), {
+      x: 0.7, y: 1.0, w: 4.2, h: 1.5, fontSize: 92, bold: true, color: C.verde });
+    if (k.pontos) {
+      s.addText(k.pontos + ' pontos de complexidade', {
+        x: 0.72, y: 2.45, w: 4.2, h: 0.35, fontSize: 15, color: C.texto });
+    }
+
+    // A coluna da direita é o caminho da demanda, na ordem em que ela anda.
+    var etapas = [
+      { rot: 'Entraram no mês', val: f.recebidas, cor: C.azul },
+      { rot: 'Trabalhadas no mês', val: f.tocadas, cor: C.texto },
+      { rot: 'Em aberto ao virar o mês', val: f.backlog, cor: C.ambar },
+    ].filter(function (e) { return e.val != null; });
+    etapas.forEach(function (e, i) {
+      var y = 1.05 + i * 0.95;
+      s.addShape(pptx.ShapeType.rect, { x: 5.3, y: y, w: 0.06, h: 0.72, fill: { color: e.cor } });
+      s.addText(String(e.val), { x: 5.55, y: y - 0.04, w: 1.4, h: 0.6, fontSize: 40, bold: true, color: e.cor });
+      s.addText(e.rot, { x: 6.95, y: y + 0.14, w: 2.6, h: 0.4, fontSize: 13, color: C.fraco });
+    });
+
+    // A frase que a sala leva: a fila cresceu ou diminuiu. Sem ela, os quatro
+    // números ficam por conta de quem estiver somando de cabeça.
+    if (f.recebidas != null) {
+      var saldo = f.recebidas - k.concluidas;
+      var texto = saldo > 0
+        ? 'Entrou mais do que saiu: a fila cresceu ' + saldo + (saldo === 1 ? ' demanda' : ' demandas') + ' no mês.'
+        : (saldo < 0
+            ? 'Saiu mais do que entrou: a fila diminuiu ' + Math.abs(saldo) +
+              (saldo === -1 ? ' demanda' : ' demandas') + ' no mês.'
+            : 'Entrou e saiu o mesmo tanto: a fila ficou do mesmo tamanho.');
+      s.addText(texto, { x: 0.7, y: 3.95, w: 8.6, h: 0.4, fontSize: 16,
+                         color: saldo > 0 ? C.ambar : C.verde });
+    }
+    if (k.notaEntregas) {
+      s.addText(k.notaEntregas, { x: 0.7, y: 4.4, w: 8.6, h: 0.5, fontSize: 12,
+                                  color: C.fraco, lineSpacingMultiple: 1.3 });
+    }
+    rodape(s, d.periodo, pagina);
+    return s;
+  }
+
+  // O PRAZO COM A CONTA À VISTA. Era um percentual sozinho, e percentual sozinho
+  // a sala tem de acreditar. A barra mostra de onde ele sai — inclusive a fatia
+  // que não dá para medir, que some quando só o número aparece.
+  function slidePrazo(pptx, d, pagina) {
+    var z = d.prazo;
+    var s = slideBase(pptx);
+    var cor = z.pct >= 80 ? C.verde : z.pct >= 50 ? C.ambar : C.vermelho;
+    s.addText('Entregues no prazo', { x: 0.7, y: 0.62, w: 8.6, h: 0.4, fontSize: 16, color: C.fraco });
+    s.addText(z.pct + '%', { x: 0.7, y: 1.0, w: 4.2, h: 1.5, fontSize: 92, bold: true, color: cor });
+    s.addText(z.noPrazo + ' de ' + z.medidas + ' entregas medidas', {
+      x: 0.72, y: 2.45, w: 4.2, h: 0.35, fontSize: 15, color: C.texto });
+
+    var faixas = [
+      { rot: 'No prazo', val: z.noPrazo, cor: C.verde },
+      { rot: 'Com atraso', val: z.atrasadas ? z.atrasadas.length : 0, cor: C.vermelho },
+      { rot: 'Sem medição', val: z.naoMedidas || 0, cor: C.fraco },
+    ].filter(function (x) { return x.val > 0; });
+    var total = faixas.reduce(function (t, x) { return t + x.val; }, 0) || 1;
+    var x0 = 5.3, larg = 4.0;
+    faixas.forEach(function (x, i) {
+      var w = larg * x.val / total;
+      s.addShape(pptx.ShapeType.rect, { x: x0, y: 1.15, w: w, h: 0.42, fill: { color: x.cor } });
+      x0 += w;
+    });
+    faixas.forEach(function (x, i) {
+      var y = 1.85 + i * 0.62;
+      s.addShape(pptx.ShapeType.rect, { x: 5.3, y: y + 0.06, w: 0.16, h: 0.16, fill: { color: x.cor } });
+      s.addText(String(x.val), { x: 5.6, y: y - 0.03, w: 0.7, h: 0.4, fontSize: 20, bold: true, color: x.cor });
+      s.addText(x.rot, { x: 6.35, y: y + 0.04, w: 3.0, h: 0.35, fontSize: 13, color: C.fraco });
+    });
+
+    if (z.diasMedio) {
+      s.addText('Quando atrasa, atrasa ' + z.diasMedio + (z.diasMedio === 1 ? ' dia' : ' dias') +
+                ' em média.', { x: 0.7, y: 3.95, w: 8.6, h: 0.4, fontSize: 16, color: C.texto });
+    }
+    // A ressalva fica: sem ela, "78% no prazo" parece valer para tudo que saiu.
+    if (z.naoMedidas) {
+      s.addText(z.naoMedidas + ' conclusões não entram na conta: a data foi registrada ' +
+                'retroativamente, então "no prazo" seria verdade por construção.', {
+        x: 0.7, y: 4.4, w: 8.6, h: 0.5, fontSize: 12, color: C.fraco, lineSpacingMultiple: 1.3 });
+    }
+    rodape(s, d.periodo, pagina);
+    return s;
+  }
+
   /* ── O deck ─────────────────────────────────────────────────────────────
      A ordem é a da conversa, não a da tela: o que entregamos, o que valeu a
      pena, onde falhamos e por quê, o que vem. */
@@ -389,25 +525,12 @@
     var p = 0;
     slideCapa(pptx, d);
 
-    // 1. O mês em um número: quanto saiu.
-    if (d.secoes.entregas) {
-      slideNumero(pptx, {
-        rotulo: 'Entregas concluídas', valor: d.kpi.concluidas,
-        apoio: d.kpi.pontos ? d.kpi.pontos + ' pontos de complexidade entregues' : '',
-        nota: d.kpi.notaEntregas || '', cor: C.verde, rodape: d.periodo }, ++p);
-    }
+    // 1. O mês inteiro: o que entrou, o que foi tocado, o que saiu, o que ficou.
+    if (d.secoes.entregas) slideMes(pptx, d, ++p);
 
     // 2. Prazo: a pergunta que a diretoria faz.
     if (d.secoes.prazo && d.prazo.medidas) {
-      slideNumero(pptx, {
-        rotulo: 'Entregues no prazo', valor: d.prazo.pct + '%',
-        apoio: d.prazo.noPrazo + ' de ' + d.prazo.medidas + ' entregas medidas',
-        nota: d.prazo.naoMedidas
-          ? d.prazo.naoMedidas + ' conclusões não entram na conta: a data foi ' +
-            'registrada retroativamente, então "no prazo" seria verdade por construção.'
-          : '',
-        cor: d.prazo.pct >= 80 ? C.verde : d.prazo.pct >= 50 ? C.ambar : C.vermelho,
-        rodape: d.periodo }, ++p);
+      slidePrazo(pptx, d, ++p);
 
       if (d.prazo.atrasadas.length) {
         var s = slideTitulo(pptx, 'Onde escapou do prazo',
