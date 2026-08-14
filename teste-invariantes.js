@@ -2163,10 +2163,14 @@ const iVem  = APRES.indexOf("var sp = slideTitulo(pptx, 'O que vem'");
 const iBarr = APRES.indexOf("titulo: 'Entregas por desenvolvedor'");
 ok(iDest > iBarr && iVem > iDest,
    'os destaques vem depois dos graficos, e "o que vem" depois deles');
-ok(/function slideFluxo\(pptx, f, pagina, periodo\)/.test(APRES),
-   'o deck tem o slide de demanda x capacidade');
-ok(/fluxo: \{ recebidas: recebidasMes, entregues: conc\.length/.test(ADMIN),
-   'e ele recebe recebidas e entregues do mesmo periodo');
+ok(/function slideFluxo\(pptx, f, pagina, periodo, cap\)/.test(APRES),
+   'o deck tem o slide de demanda x capacidade, com a capacidade de quem trabalhou');
+ok(/fluxo: \{ recebidas: entradas\.length, entregues: conc\.length/.test(ADMIN),
+   'e ele recebe entradas e entregues do mesmo periodo');
+// Sem o tamanho do time e os dias que ele tinha, "entrou mais do que saiu" vira
+// cobranca sem regua.
+ok(/pessoa atuou' : ' pessoas atuaram'/.test(APRES) && /dias de ausência/.test(APRES),
+   'com quantas pessoas atuaram, os dias uteis e os dias de ausencia');
 
 sec('A capa e a da casa, e o mes conta a historia inteira');
 
@@ -2185,14 +2189,23 @@ ok(ADMIN.indexOf('capa-tecnologia.js') < ADMIN.indexOf('apresentacao.js'),
 // Numero sozinho mostra resultado sem esforco: nao diz quanta demanda chegou, o
 // que o time pegou, nem o que ficou de pe para o mes seguinte.
 ok(/function slideMes\(pptx, d, pagina\)/.test(APRES), 'o slide do mes e um funil, e nao um numero');
-ok(/Entraram no mês/.test(APRES) && /Trabalhadas no mês/.test(APRES) &&
-   /Em aberto ao virar o mês/.test(APRES), 'com entrantes, tratadas e o que ficou');
+ok(/Backlog no dia 1/.test(APRES) && /Entraram/.test(APRES) &&
+   /Saíram da fila/.test(APRES) && /Em aberto/.test(APRES),
+   'na ordem em que a demanda anda: backlog, entradas, saidas, o que ficou');
+// "Quantas" e a primeira pergunta; "do que" e a segunda, e separa construir de
+// manter de pe o que ja existe.
+ok(/' evolução'/.test(APRES) && /' sustentação'/.test(APRES),
+   'e as entradas dizem se sao evolucao ou sustentacao');
+// "Sem medicao" parecia falha do relatorio — a demanda TEM data. O que falta e o
+// prazo combinado.
+ok(/rot: 'Sem prazo combinado'/.test(APRES) && /rot: 'Data lançada depois'/.test(APRES),
+   'e o slide do prazo diz a razao de nao medir, em vez de um balde so');
 ok(/function slidePrazo\(pptx, d, pagina\)/.test(APRES) && /Sem medição/.test(APRES),
    'e o prazo mostra a conta, inclusive a fatia que nao da para medir');
 // O backlog da virada e do FIM DO MES, e nao de hoje: numero de hoje contaria o
 // que entrou depois da reuniao.
-ok(/return nasceu && nasceu <= fimMes && \(!fechou \|\| fechou > fimMes\);/.test(ADMIN),
-   'o backlog e o do fim do mes apresentado');
+ok(/const vespera = vesp\.toISOString\(\)\.slice\(0, 10\);/.test(ADMIN),
+   'o backlog do inicio e o da vespera do dia 1');
 
 sec('A capa nao pode depender de uma fonte instalada');
 
@@ -2231,6 +2244,32 @@ ok(/const de = String\(a\.inicio \|\| ''\) > iso \+ '-01'/.test(ADMIN),
    'a contagem recorta a ausencia no mes apresentado');
 ok(/if \(w !== 0 && w !== 6/.test(ADMIN) || /dow !== 0 && dow !== 6 && !ferAus\.has/.test(ADMIN),
    'e conta dias uteis, sem fim de semana nem feriado');
+
+sec('A conta da fila fecha, e o corte tem data');
+
+// Slide de conta que nao fecha e pior que nenhum: alguem soma na sala. Em junho
+// dava 0 + 50 - 4 = 46 com backlog final de 32 — catorze demandas sumiam.
+ok(/const filaEntrada = m => diaDe\(m\.criado_em\);/.test(ADMIN),
+   'a fila tem uma data de entrada');
+ok(/if \(c\) return c < e \? e : c;/.test(ADMIN),
+   'e a saida nunca e anterior a entrada (demanda concluida antes de ser cadastrada)');
+ok(/return FECHADO\.includes\(m\.status_planejamento \|\| ''\) \? e : '';/.test(ADMIN),
+   'fechada sem data nenhuma sai no dia em que entrou, em vez de ficar aberta para sempre');
+ok(/const backlogFim = vivasFluxo\.filter\(m => abertaEm\(m, corte\)\)\.length;/.test(ADMIN),
+   'o backlog do fim usa a mesma regra do inicio');
+ok(/saiuEntregue/.test(ADMIN) && /saiuNegada/.test(ADMIN),
+   'a recusa sai da fila sem virar entrega');
+// "Em aberto ao virar o mes" era ambiguo, e com o mes em curso virar o mes ainda
+// nem aconteceu.
+ok(/const corte = mesEmCurso \? hojeISO : fimMes;/.test(ADMIN),
+   'o corte e hoje no mes em curso, e o ultimo dia no mes fechado');
+ok(/f\.emCurso \? 'Em aberto hoje' : 'Em aberto no fim do mês'/.test(APRES),
+   'e o slide diz qual dos dois esta mostrando');
+ok(/f\.emCurso \? 'Posição de ' : 'Fechamento em '/.test(APRES),
+   'com a data do corte escrita');
+// Duas telas do mesmo deck nao podem discordar sobre a mesma palavra.
+ok(/var entregou = f\.saiuEntregue != null \? f\.saiuEntregue : f\.entregues;/.test(APRES),
+   'os dois slides contam "entregues" do mesmo jeito');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

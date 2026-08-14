@@ -896,7 +896,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="capa-tecnologia.js"></script>
-<script src="apresentacao.js?v=5fdb8847b4"></script>
+<script src="apresentacao.js?v=5df5154f7b"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4878,6 +4878,12 @@ async function apresGerar() {
     const atras = conc.filter(m => (cl.get(m.id) || {}).tipo === 'atraso');
     const naoMed = conc.filter(m => ['retroativa', 'sem_prazo', 'sem_conclusao']
       .includes((cl.get(m.id) || {}).tipo));
+    // "Sem medicao" e um balde que parece falha do relatorio. Sao duas razoes
+    // diferentes, e as duas tem nome: a demanda nao tinha prazo combinado, ou a
+    // conclusao foi lancada depois — e ai "no prazo" seria verdade por construcao.
+    const semPrazoComb = conc.filter(m => ['sem_prazo', 'sem_conclusao']
+      .includes((cl.get(m.id) || {}).tipo)).length;
+    const lancadaDepois = conc.filter(m => (cl.get(m.id) || {}).tipo === 'retroativa').length;
     const medidas = noPrazo.length + atras.length;
     const diasMedio = atras.length
       ? Math.round(atras.reduce((t, m) => t + cl.get(m.id).dias, 0) / atras.length) : 0;
@@ -4893,13 +4899,72 @@ async function apresGerar() {
     const fimMes = ano + '-' + String(mes).padStart(2, '0') + '-' +
                    String(new Date(ano, mes, 0).getDate()).padStart(2, '0');
     const vivasFluxo = (state.melhorias || []).filter(m => !m.oculto && !m.mesclado_em);
-    const recebidasMes = vivasFluxo.filter(m => {
-      const c = String(m.criado_em || '').slice(0, 10);
-      return c >= iso + '-01' && c <= fimMes;
-    }).length;
+    // (as entradas do periodo sao contadas mais abaixo, ja pela regra da fila)
     const abertasHoje = vivasFluxo.filter(m =>
       !['concluido', 'negada'].includes(m.status_planejamento || '') &&
       !String(m.concluido_em || '').trim()).length;
+
+    // O CORTE DO PERIODO. Com o mes em curso, "ao virar o mes" ainda nao
+    // aconteceu: o numero seria uma previsao disfarcada de fato. Entao o corte e
+    // hoje enquanto o mes corre, e o ultimo dia quando ele ja fechou — e o slide
+    // diz qual dos dois esta usando.
+    const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const mesEmCurso = hojeISO >= iso + '-01' && hojeISO <= fimMes;
+    const corte = mesEmCurso ? hojeISO : fimMes;
+
+    /* A FILA, E A CONTA QUE PRECISA FECHAR.
+       Slide de conta que nao fecha e pior que nenhum: alguem soma na sala. Tres
+       coisas do dado real quebravam a conta, e as tres estao tratadas aqui.
+
+       ENTRADA e a data de cadastro. SAIDA e a conclusao ou a recusa — nunca
+       anterior a entrada, porque demanda concluida antes de ser cadastrada
+       (backfill, e AX-175 e um caso vivo) saia de um mes em que nunca entrou.
+
+       FECHADA SEM DATA NENHUMA sai no dia em que entrou: sao seis concluidas sem
+       data e quinze recusadas sem `negada_em`, e pela regra de data elas ficavam
+       abertas para sempre — o backlog crescia sozinho.                          */
+    const diaDe = v => String(v || '').slice(0, 10);
+    const FECHADO = ['concluido', 'negada'];
+    const filaEntrada = m => diaDe(m.criado_em);
+    const filaSaida = m => {
+      const e = filaEntrada(m);
+      const c = diaDe(m.concluido_em); if (c) return c < e ? e : c;
+      const n = diaDe(m.negada_em);    if (n) return n < e ? e : n;
+      return FECHADO.includes(m.status_planejamento || '') ? e : '';
+    };
+    const abertaEm = (m, dia) => {
+      const e = filaEntrada(m);
+      if (!e || e > dia) return false;
+      const s = filaSaida(m);
+      return !s || s > dia;
+    };
+
+    const vesp = new Date(iso + '-01T00:00:00');
+    vesp.setDate(vesp.getDate() - 1);
+    const vespera = vesp.toISOString().slice(0, 10);
+    const backlogInicio = vivasFluxo.filter(m => abertaEm(m, vespera)).length;
+
+    // AS ENTRADAS DIZEM DO QUE SAO. Evolucao e sustentacao respondem coisas
+    // diferentes: uma e construir, a outra e manter de pe o que ja existe.
+    const entradas = vivasFluxo.filter(m => {
+      const c = filaEntrada(m);
+      return c >= iso + '-01' && c <= corte;
+    });
+
+    // SAIDAS: a entrega e a recusa saem as duas da fila, e so a entrega e entrega.
+    const saidas = vivasFluxo.filter(m => {
+      const s = filaSaida(m);
+      return s && s >= iso + '-01' && s <= corte;
+    });
+    const saiuEntregue = saidas.filter(m => m.status_planejamento === 'concluido').length;
+    const saiuNegada = saidas.filter(m => m.status_planejamento === 'negada').length;
+    const porTipo = { evolucao: 0, sustentacao: 0, sem: 0 };
+    entradas.forEach(m => {
+      const t = String(m.tipo || '');
+      if (t === 'evolucao') porTipo.evolucao++;
+      else if (t === 'sustentacao') porTipo.sustentacao++;
+      else porTipo.sem++;
+    });
 
     // TRABALHADAS: a demanda que o time pegou no mes, tenha ela saido ou nao —
     // comecou dentro do mes ou foi concluida dentro dele. Sem este numero, o
@@ -4910,14 +4975,33 @@ async function apresGerar() {
       dentro(String(m.inicio || '').slice(0, 10)) ||
       dentro(String(m.concluido_em || '').slice(0, 10))).length;
 
-    // BACKLOG NA VIRADA: o que ja existia no fim do mes e ainda nao tinha sido
-    // concluido. E o numero que responde "e o que sobrou?" — a pergunta que vem
-    // depois de qualquer bom resultado.
-    const backlogVirada = vivasFluxo.filter(m => {
-      const nasceu = String(m.criado_em || '').slice(0, 10);
-      const fechou = String(m.concluido_em || '').slice(0, 10);
-      return nasceu && nasceu <= fimMes && (!fechou || fechou > fimMes);
-    }).length;
+    // BACKLOG NO FIM: o que sobrou aberto no corte. E a pergunta que vem depois
+    // de qualquer bom resultado — "e o que ficou?". Pela mesma regra do inicio,
+    // entao backlogInicio + entradas - saidas = backlogFim, sempre.
+    const backlogFim = vivasFluxo.filter(m => abertaEm(m, corte)).length;
+
+    // CAPACIDADE DE QUEM TRABALHOU: quantas pessoas atuaram, quantos dias uteis
+    // elas tinham no periodo e quanto sobrou depois das ausencias. Sem isso,
+    // "entrou mais do que saiu" nao tem contra o que ser lido.
+    const devsAtuaram = new Set();
+    vivasFluxo.forEach(m => {
+      const tocou = dentro(String(m.inicio || '').slice(0, 10)) ||
+                    dentro(String(m.concluido_em || '').slice(0, 10));
+      if (!tocou) return;
+      String(m.dev || '').split(/[\/,]/).map(x => x.trim()).filter(Boolean)
+        .forEach(dv => devsAtuaram.add(dv));
+    });
+    const ferCap = new Set((state.feriados || []).map(f => f.data || f).filter(Boolean));
+    let uteisNoMes = 0;
+    (() => {
+      const dt = new Date(iso + '-01T00:00:00'), fim = new Date(corte + 'T00:00:00');
+      let g = 0;
+      while (dt <= fim && g++ < 400) {
+        const w = dt.getDay();
+        if (w !== 0 && w !== 6 && !ferCap.has(dt.toISOString().slice(0, 10))) uteisNoMes++;
+        dt.setDate(dt.getDate() + 1);
+      }
+    })();
 
     // AUSENCIAS DO PERIODO, cruzadas com o cadastro do Planejamento. Conta dias
     // UTEIS dentro do mes apresentado — ferias que comecam dia 28 e terminam em
@@ -5015,6 +5099,7 @@ async function apresGerar() {
       prazo: {
         pct: medidas ? Math.round(noPrazo.length / medidas * 100) : 0,
         noPrazo: noPrazo.length, medidas, naoMedidas: naoMed.length, diasMedio,
+        semPrazoComb, lancadaDepois,
         atrasadas: atras
           .sort((a, b) => cl.get(b.id).dias - cl.get(a.id).dias)
           .map(m => ({
@@ -5024,10 +5109,18 @@ async function apresGerar() {
             dias: cl.get(m.id).dias,
           })),
       },
-      fluxo: { recebidas: recebidasMes, entregues: conc.length, abertas: abertasHoje,
-               tocadas, backlog: backlogVirada },
+      fluxo: { recebidas: entradas.length, entregues: conc.length, abertas: abertasHoje,
+               tocadas, backlogInicio, backlogFim, porTipo,
+               saidas: saidas.length, saiuEntregue, saiuNegada,
+               emCurso: mesEmCurso, corte: formatDate(corte) },
       time: ta.time,
       ausencias,
+      capacidade: {
+        devs: devsAtuaram.size,
+        uteis: uteisNoMes,
+        // Dias de ausencia ja recortados no periodo, somados de todo o time.
+        fora: ausencias.reduce((s, a) => s + a.dias, 0),
+      },
       areas: ta.areas,
       frentesAtraso: ta.frentes,
       porDev: ta.porDev,

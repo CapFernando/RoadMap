@@ -232,12 +232,15 @@
   // Nao vira grafico de propósito. Sao dois valores; barra, linha ou pizza para
   // dois valores e enfeite, e enfeite rouba o segundo em que a pessoa le a
   // diferenca.
-  function slideFluxo(pptx, f, pagina, periodo) {
+  function slideFluxo(pptx, f, pagina, periodo, cap) {
     var s = slideTitulo(pptx, 'Demanda × capacidade', 'o que chegou e o que saiu no período', pagina);
-    var saldo = f.recebidas - f.entregues;
+    var saldo = f.recebidas - (f.saidas != null ? f.saidas : f.entregues);
+    // `saiuEntregue` e a MESMA contagem do slide do mes. Sem isso, dois slides do
+    // mesmo deck mostrariam numeros diferentes para a mesma palavra.
+    var entregou = f.saiuEntregue != null ? f.saiuEntregue : f.entregues;
     var col = [
       { rot: 'Chegaram', val: f.recebidas, cor: C.azul },
-      { rot: 'Entregamos', val: f.entregues, cor: C.verde },
+      { rot: 'Entregamos', val: entregou, cor: C.verde },
       { rot: saldo > 0 ? 'A fila cresceu' : (saldo < 0 ? 'A fila diminuiu' : 'A fila ficou igual'),
         val: (saldo > 0 ? '+' : '') + saldo,
         cor: saldo > 0 ? C.vermelho : (saldo < 0 ? C.verde : C.fraco) },
@@ -249,15 +252,23 @@
     });
     if (f.abertas) {
       s.addText(f.abertas + ' demandas em aberto hoje, somando todos os meses.', {
-        x: 0.7, y: 3.75, w: 8.6, h: 0.4, fontSize: 15, color: C.texto });
+        x: 0.7, y: 3.6, w: 8.6, h: 0.4, fontSize: 15, color: C.texto });
+    }
+    // QUEM TINHA DE DAR CONTA DISSO. "Entrou mais do que saiu" sozinho não tem
+    // contra o que ser lido: sem o tamanho do time e os dias que ele tinha, a
+    // frase vira cobrança sem régua.
+    if (cap && cap.devs) {
+      s.addText(cap.devs + (cap.devs === 1 ? ' pessoa atuou' : ' pessoas atuaram') +
+                ' no período   ·   ' + cap.uteis + ' dias úteis' +
+                (cap.fora ? '   ·   \u2212' + cap.fora + ' dias de ausência' : ''),
+        { x: 0.7, y: 4.05, w: 8.6, h: 0.35, fontSize: 14, color: C.azul });
     }
     // A ressalva existe porque alguem soma: "chegaram" conta pela data de
     // cadastro, e demanda registrada semanas depois de ter sido pedida cai no mes
     // do registro. E o unico campo que vale para qualquer mes, mas nao e a data do
     // pedido.
-    s.addText('“Chegaram” conta pela data de cadastro da demanda. ' +
-              'As duas contas são do mesmo período, mas a fila em aberto é de hoje.', {
-      x: 0.7, y: 4.25, w: 8.6, h: 0.6, fontSize: 12, color: C.fraco, lineSpacingMultiple: 1.3 });
+    s.addText('“Chegaram” conta pela data de cadastro da demanda.', {
+      x: 0.7, y: 4.45, w: 8.6, h: 0.4, fontSize: 12, color: C.fraco });
     rodape(s, periodo, pagina);
     return s;
   }
@@ -329,7 +340,7 @@
         return;
       }
       c.lista.slice(0, 4).forEach(function (it, i) {
-        var y = 2.0 + i * 0.62;
+        var y = 1.95 + i * 0.58;
         s.addText(String(it.valor), {
           x: c.x, y: y, w: 0.9, h: 0.45, fontSize: 22, bold: true, color: c.cor });
         s.addText(corta(it.nome, 18), {
@@ -344,13 +355,13 @@
     // Uma linha, e nao um numero ao lado de cada nome: sao tres colunas que ja tem
     // numero, e um quarto ali vira ruido.
     if ((ausencias || []).length) {
-      s.addText('Fora no período', { x: 0.7, y: 4.15, w: 8.6, h: 0.3,
+      s.addText('Fora no período', { x: 0.7, y: 4.4, w: 8.6, h: 0.3,
                                      fontSize: 13, color: C.fraco });
       s.addText(ausencias.slice(0, 6).map(function (a) {
         return a.nome + ' (' + a.dias + (a.dias === 1 ? ' dia' : ' dias') +
                (a.tipo ? ', ' + a.tipo : '') + ')';
-      }).join('   ·   '), { x: 0.7, y: 4.45, w: 8.6, h: 0.5, fontSize: 14,
-                            color: C.ambar, lineSpacingMultiple: 1.25 });
+      }).join('   ·   '), { x: 0.7, y: 4.68, w: 8.6, h: 0.35, fontSize: 13,
+                            color: C.ambar });
     }
     rodape(s, periodo, pagina);
     return s;
@@ -446,58 +457,85 @@
     return s;
   }
 
-// O MÊS EM QUATRO NÚMEROS, e não em um.
+  // A HISTÓRIA DO MÊS, na ordem em que ela acontece: o backlog que já existia, o
+  // que entrou, o que saiu, e o que sobrou. Com os sinais entre os números, para
+  // a sala acompanhar a conta em vez de receber quatro valores soltos.
   //
-  // Este slide era só "69 entregas concluídas". Número sozinho mostra resultado
-  // sem esforço: não diz quanta demanda chegou no mesmo período, quanta coisa o
-  // time pegou, nem o que ficou de pé para o mês seguinte. Quem apresenta ficava
-  // com a parte difícil da conversa na memória.
+  // Este slide já foi "69 entregas concluídas" e nada mais. Número sozinho mostra
+  // resultado sem esforço: não diz de onde o mês partiu, quanta demanda chegou,
+  // nem o que ficou de pé para o mês seguinte.
   //
-  // O destaque continua sendo o que saiu — é a entrega que se apresenta. Os
-  // outros três ficam ao lado, do tamanho de apoio, na ordem em que a demanda
-  // anda: chegou, foi tocada, saiu, ficou.
+  // O ÚLTIMO BLOCO É DATADO de propósito. "Em aberto ao virar o mês" era ambíguo —
+  // vinha do mês anterior, ou ia para o próximo? E com o mês em curso, virar o mês
+  // ainda não aconteceu. Agora ele diz o dia a que se refere.
   function slideMes(pptx, d, pagina) {
-    var s = slideBase(pptx);
+    var s = slideTitulo(pptx, 'O mês', 'backlog, entradas e saídas', pagina);
     var f = d.fluxo || {};
     var k = d.kpi || {};
 
-    s.addText('Entregas concluídas', { x: 0.7, y: 0.62, w: 8.6, h: 0.4, fontSize: 16, color: C.fraco });
-    s.addText(String(k.concluidas), {
-      x: 0.7, y: 1.0, w: 4.2, h: 1.5, fontSize: 92, bold: true, color: C.verde });
-    if (k.pontos) {
-      s.addText(k.pontos + ' pontos de complexidade', {
-        x: 0.72, y: 2.45, w: 4.2, h: 0.35, fontSize: 15, color: C.texto });
-    }
+    var passos = [
+      { rot: 'Backlog no dia 1', val: f.backlogInicio, cor: C.fraco, sinal: '' },
+      { rot: 'Entraram', val: f.recebidas, cor: C.azul, sinal: '+' },
+      { rot: 'Saíram da fila', val: f.saidas, cor: C.verde, sinal: '−' },
+      { rot: f.emCurso ? 'Em aberto hoje' : 'Em aberto no fim do mês',
+        val: f.backlogFim, cor: C.ambar, sinal: '=' },
+    ].filter(function (x) { return x.val != null; });
 
-    // A coluna da direita é o caminho da demanda, na ordem em que ela anda.
-    var etapas = [
-      { rot: 'Entraram no mês', val: f.recebidas, cor: C.azul },
-      { rot: 'Trabalhadas no mês', val: f.tocadas, cor: C.texto },
-      { rot: 'Em aberto ao virar o mês', val: f.backlog, cor: C.ambar },
-    ].filter(function (e) { return e.val != null; });
-    etapas.forEach(function (e, i) {
-      var y = 1.05 + i * 0.95;
-      s.addShape(pptx.ShapeType.rect, { x: 5.3, y: y, w: 0.06, h: 0.72, fill: { color: e.cor } });
-      s.addText(String(e.val), { x: 5.55, y: y - 0.04, w: 1.4, h: 0.6, fontSize: 40, bold: true, color: e.cor });
-      s.addText(e.rot, { x: 6.95, y: y + 0.14, w: 2.6, h: 0.4, fontSize: 13, color: C.fraco });
+    var larg = 2.0, vao = 0.35;
+    var passo = larg + vao + 0.05;
+    passos.forEach(function (e, i) {
+      var x = 0.7 + i * passo;
+      if (e.sinal) {
+        s.addText(e.sinal, { x: x - vao - 0.05, y: 1.75, w: 0.4, h: 0.5,
+                             fontSize: 26, color: C.fraco, align: 'center' });
+      }
+      s.addText(e.rot, { x: x, y: 1.5, w: larg, h: 0.3, fontSize: 12, color: C.fraco });
+      s.addText(String(e.val), { x: x, y: 1.78, w: larg, h: 0.75,
+                                 fontSize: 42, bold: true, color: e.cor });
     });
 
-    // A frase que a sala leva: a fila cresceu ou diminuiu. Sem ela, os quatro
-    // números ficam por conta de quem estiver somando de cabeça.
-    if (f.recebidas != null) {
-      var saldo = f.recebidas - k.concluidas;
-      var texto = saldo > 0
-        ? 'Entrou mais do que saiu: a fila cresceu ' + saldo + (saldo === 1 ? ' demanda' : ' demandas') + ' no mês.'
+    // De que são as entradas. "Quantas" é a primeira pergunta; "do que" é a
+    // segunda, e ela separa construir de manter de pé o que já existe.
+    var t = f.porTipo;
+    if (t) {
+      var partes = [];
+      if (t.evolucao) partes.push(t.evolucao + ' evolução');
+      if (t.sustentacao) partes.push(t.sustentacao + ' sustentação');
+      if (t.sem) partes.push(t.sem + ' sem classificar');
+      if (partes.length) {
+        s.addText(partes.join('  ·  '), {
+          x: 0.7 + passo, y: 2.6, w: larg + 0.9, h: 0.35, fontSize: 11.5, color: C.azul });
+      }
+    }
+    // A recusa tambem sai da fila, mas nao e entrega. Dizer os dois numeros evita
+    // a leitura de que tudo que saiu foi entregue.
+    var saiu = [];
+    if (f.saiuEntregue) saiu.push(f.saiuEntregue + ' entregues');
+    if (f.saiuNegada) saiu.push(f.saiuNegada + (f.saiuNegada === 1 ? ' recusada' : ' recusadas'));
+    if (saiu.length) {
+      s.addText(saiu.join('  ·  '), {
+        x: 0.7 + 2 * passo, y: 2.6, w: larg + 0.9, h: 0.35, fontSize: 11.5, color: C.verde });
+    }
+
+    // A frase que a sala leva. Sem ela, os quatro números ficam por conta de quem
+    // estiver somando de cabeça.
+    if (f.recebidas != null && f.saidas != null) {
+      var saldo = f.recebidas - f.saidas;
+      s.addText(saldo > 0
+        ? 'Entrou mais do que saiu: a fila cresceu ' + saldo + (saldo === 1 ? ' demanda' : ' demandas') + '.'
         : (saldo < 0
             ? 'Saiu mais do que entrou: a fila diminuiu ' + Math.abs(saldo) +
-              (saldo === -1 ? ' demanda' : ' demandas') + ' no mês.'
-            : 'Entrou e saiu o mesmo tanto: a fila ficou do mesmo tamanho.');
-      s.addText(texto, { x: 0.7, y: 3.95, w: 8.6, h: 0.4, fontSize: 16,
-                         color: saldo > 0 ? C.ambar : C.verde });
+              (saldo === -1 ? ' demanda' : ' demandas') + '.'
+            : 'Entrou e saiu o mesmo tanto: a fila ficou do mesmo tamanho.'),
+        { x: 0.7, y: 3.65, w: 8.6, h: 0.4, fontSize: 17, color: saldo > 0 ? C.ambar : C.verde });
     }
-    if (k.notaEntregas) {
-      s.addText(k.notaEntregas, { x: 0.7, y: 4.4, w: 8.6, h: 0.5, fontSize: 12,
-                                  color: C.fraco, lineSpacingMultiple: 1.3 });
+    // Diz a que dia o último bloco se refere. Sem a data, "em aberto hoje" numa
+    // reunião do dia 20 vira uma pergunta no meio da apresentação.
+    if (f.corte) {
+      s.addText((f.emCurso ? 'Posição de ' : 'Fechamento em ') + f.corte +
+                (f.tocadas ? '   ·   ' + f.tocadas + ' demandas foram trabalhadas no período' : '') +
+                (k.pontos ? '   ·   ' + k.pontos + ' pontos entregues' : ''), {
+        x: 0.7, y: 4.15, w: 8.6, h: 0.35, fontSize: 12, color: C.fraco });
     }
     rodape(s, d.periodo, pagina);
     return s;
@@ -515,10 +553,15 @@
     s.addText(z.noPrazo + ' de ' + z.medidas + ' entregas medidas', {
       x: 0.72, y: 2.45, w: 4.2, h: 0.35, fontSize: 15, color: C.texto });
 
+    // "Sem medição" era um balde só, e parecia falha do relatório — a demanda TEM
+    // data. O que falta é o PRAZO COMBINADO: sem ele não há com o que comparar a
+    // conclusão. E quando a conclusão foi lançada depois, "no prazo" seria verdade
+    // por construção. Duas razões, dois nomes.
     var faixas = [
       { rot: 'No prazo', val: z.noPrazo, cor: C.verde },
       { rot: 'Com atraso', val: z.atrasadas ? z.atrasadas.length : 0, cor: C.vermelho },
-      { rot: 'Sem medição', val: z.naoMedidas || 0, cor: C.fraco },
+      { rot: 'Sem prazo combinado', val: z.semPrazoComb || 0, cor: C.fraco },
+      { rot: 'Data lançada depois', val: z.lancadaDepois || 0, cor: C.fraco },
     ].filter(function (x) { return x.val > 0; });
     var total = faixas.reduce(function (t, x) { return t + x.val; }, 0) || 1;
     var x0 = 5.3, larg = 4.0;
@@ -528,7 +571,7 @@
       x0 += w;
     });
     faixas.forEach(function (x, i) {
-      var y = 1.85 + i * 0.62;
+      var y = 1.82 + i * 0.55;
       s.addShape(pptx.ShapeType.rect, { x: 5.3, y: y + 0.06, w: 0.16, h: 0.16, fill: { color: x.cor } });
       s.addText(String(x.val), { x: 5.6, y: y - 0.03, w: 0.7, h: 0.4, fontSize: 20, bold: true, color: x.cor });
       s.addText(x.rot, { x: 6.35, y: y + 0.04, w: 3.0, h: 0.35, fontSize: 13, color: C.fraco });
@@ -540,9 +583,11 @@
     }
     // A ressalva fica: sem ela, "78% no prazo" parece valer para tudo que saiu.
     if (z.naoMedidas) {
-      s.addText(z.naoMedidas + ' conclusões não entram na conta: a data foi registrada ' +
-                'retroativamente, então "no prazo" seria verdade por construção.', {
-        x: 0.7, y: 4.4, w: 8.6, h: 0.5, fontSize: 12, color: C.fraco, lineSpacingMultiple: 1.3 });
+      var razoes = [];
+      if (z.semPrazoComb) razoes.push(z.semPrazoComb + ' saíram sem prazo combinado, e não há com o que comparar');
+      if (z.lancadaDepois) razoes.push(z.lancadaDepois + ' tiveram a conclusão lançada depois, quando "no prazo" seria verdade por construção');
+      s.addText(z.naoMedidas + ' conclusões ficam fora da conta: ' + razoes.join('; ') + '.', {
+        x: 0.7, y: 4.4, w: 8.6, h: 0.6, fontSize: 12, color: C.fraco, lineSpacingMultiple: 1.3 });
     }
     rodape(s, d.periodo, pagina);
     return s;
@@ -583,7 +628,7 @@
     // 3. Chegou x saiu. Vem logo depois do volume porque e a pergunta seguinte:
     //    entregamos 69, mas a fila cresceu ou diminuiu?
     if (d.secoes.fluxo && d.fluxo && (d.fluxo.recebidas || d.fluxo.entregues)) {
-      slideFluxo(pptx, d.fluxo, ++p, d.periodo);
+      slideFluxo(pptx, d.fluxo, ++p, d.periodo, d.capacidade);
     }
 
     // 4. O time e as frentes: agregado, antes do detalhe.
