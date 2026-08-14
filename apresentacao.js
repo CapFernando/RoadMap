@@ -172,6 +172,42 @@
     return s;
   }
 
+  // DEMANDA x CAPACIDADE. Dois numeros lado a lado e a diferenca entre eles —
+  // que e a unica coisa que a sala precisa levar daqui: a fila cresceu ou nao.
+  //
+  // Nao vira grafico de propósito. Sao dois valores; barra, linha ou pizza para
+  // dois valores e enfeite, e enfeite rouba o segundo em que a pessoa le a
+  // diferenca.
+  function slideFluxo(pptx, f, pagina, periodo) {
+    var s = slideTitulo(pptx, 'Demanda × capacidade', 'o que chegou e o que saiu no período', pagina);
+    var saldo = f.recebidas - f.entregues;
+    var col = [
+      { rot: 'Chegaram', val: f.recebidas, cor: C.azul },
+      { rot: 'Entregamos', val: f.entregues, cor: C.verde },
+      { rot: saldo > 0 ? 'A fila cresceu' : (saldo < 0 ? 'A fila diminuiu' : 'A fila ficou igual'),
+        val: (saldo > 0 ? '+' : '') + saldo,
+        cor: saldo > 0 ? C.vermelho : (saldo < 0 ? C.verde : C.fraco) },
+    ];
+    col.forEach(function (c, i) {
+      var x = 0.7 + i * 3.0;
+      s.addText(c.rot, { x: x, y: 1.75, w: 2.8, h: 0.35, fontSize: 14, color: C.fraco });
+      s.addText(String(c.val), { x: x, y: 2.1, w: 2.8, h: 1.25, fontSize: 66, bold: true, color: c.cor });
+    });
+    if (f.abertas) {
+      s.addText(f.abertas + ' demandas em aberto hoje, somando todos os meses.', {
+        x: 0.7, y: 3.75, w: 8.6, h: 0.4, fontSize: 15, color: C.texto });
+    }
+    // A ressalva existe porque alguem soma: "chegaram" conta pela data de
+    // cadastro, e demanda registrada semanas depois de ter sido pedida cai no mes
+    // do registro. E o unico campo que vale para qualquer mes, mas nao e a data do
+    // pedido.
+    s.addText('“Chegaram” conta pela data de cadastro da demanda. ' +
+              'As duas contas são do mesmo período, mas a fila em aberto é de hoje.', {
+      x: 0.7, y: 4.25, w: 8.6, h: 0.6, fontSize: 12, color: C.fraco, lineSpacingMultiple: 1.3 });
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
   function slideTitulo(pptx, titulo, sub, pagina) {
     var s = slideBase(pptx);
     s.addText(titulo, { x: 0.7, y: 0.55, w: 8.6, h: 0.5, fontSize: 24, bold: true, color: C.texto });
@@ -385,27 +421,15 @@
       }
     }
 
-    // 3. O time e as frentes: agregado, antes do detalhe.
+    // 3. Chegou x saiu. Vem logo depois do volume porque e a pergunta seguinte:
+    //    entregamos 69, mas a fila cresceu ou diminuiu?
+    if (d.secoes.fluxo && d.fluxo && (d.fluxo.recebidas || d.fluxo.entregues)) {
+      slideFluxo(pptx, d.fluxo, ++p, d.periodo);
+    }
+
+    // 4. O time e as frentes: agregado, antes do detalhe.
     if (d.secoes.time && d.time) slideTime(pptx, d.time, ++p, d.periodo);
     if (d.secoes.areas && (d.areas || []).length) slideAreas(pptx, d.areas, ++p, d.periodo);
-
-    // 4. Os destaques — escolhidos por quem apresenta.
-    (d.destaques || []).forEach(function (m) {
-      var s = slideBase(pptx);
-      s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.verde } });
-      s.addText(m.codigo || '', { x: 0.7, y: 0.6, w: 8.6, h: 0.35, fontSize: 13, color: C.verde, bold: true });
-      s.addText(m.titulo || '', { x: 0.7, y: 1.0, w: 8.6, h: 0.9, fontSize: 28, bold: true, color: C.texto });
-      if (m.texto) {
-        s.addText(m.texto, { x: 0.7, y: 2.1, w: 8.6, h: 2.2, fontSize: 15,
-                             color: C.texto, lineSpacingMultiple: 1.35 });
-      }
-      // Sem emoji aqui: se a maquina que projeta nao tiver o glifo, ele vira
-      // quadrado — e quadrado no slide da diretoria custa mais que o icone vale.
-      var meta = [m.dev || '', m.tema || '',
-                  m.pontos ? m.pontos + ' pontos' : ''].filter(Boolean).join('   ·   ');
-      if (meta) s.addText(meta, { x: 0.7, y: 4.4, w: 8.6, h: 0.35, fontSize: 12, color: C.fraco });
-      rodape(s, 'Destaque · ' + d.periodo, ++p);
-    });
 
     // 5. Quem pediu. O time e uma leitura; a area cliente e outra, e e a que diz
     //    para onde a capacidade foi de fato.
@@ -424,7 +448,7 @@
       }, ++p, d.periodo);
     }
 
-    // 6. Distribuição por pessoa.
+    // 5b. Distribuição por pessoa.
     if (d.secoes.grafico && (d.porDev || []).length) {
       slideBarras(pptx, {
         titulo: 'Entregas por desenvolvedor', sub: 'demandas concluídas no período',
@@ -439,7 +463,7 @@
       si.addImage({ data: img.png, x: 0.7, y: 1.5, w: 8.6, h: 3.4 });
     });
 
-    // 5. O que trava: pausadas e sem estimativa. É a parte que a diretoria pode
+    // 6. O que trava: pausadas e sem estimativa. É a parte que a diretoria pode
     //    destravar — e a única razão de ela estar no deck.
     if (d.secoes.riscos && (d.riscos.pausadas.length || d.riscos.semPonto)) {
       var sr = slideTitulo(pptx, 'O que está travado', 'depende de decisão fora do time', ++p);
@@ -456,7 +480,27 @@
       }
     }
 
-    // 6. O que vem. Terminar em compromisso, não em número.
+    // 7. OS DESTAQUES, no fim. Eles saiam no meio do deck, antes dos graficos —
+    //    mas quem apresenta usa as ultimas paginas para as entregas que importam,
+    //    e slide de encerramento no meio e slide que a sala nao leva embora.
+    (d.destaques || []).forEach(function (m) {
+      var s = slideBase(pptx);
+      s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.verde } });
+      s.addText(m.codigo || '', { x: 0.7, y: 0.6, w: 8.6, h: 0.35, fontSize: 13, color: C.verde, bold: true });
+      s.addText(m.titulo || '', { x: 0.7, y: 1.0, w: 8.6, h: 0.9, fontSize: 28, bold: true, color: C.texto });
+      if (m.texto) {
+        s.addText(m.texto, { x: 0.7, y: 2.1, w: 8.6, h: 2.2, fontSize: 15,
+                             color: C.texto, lineSpacingMultiple: 1.35 });
+      }
+      // Sem emoji aqui: se a maquina que projeta nao tiver o glifo, ele vira
+      // quadrado — e quadrado no slide da diretoria custa mais que o icone vale.
+      var meta = [m.dev || '', m.tema || '',
+                  m.pontos ? m.pontos + ' pontos' : ''].filter(Boolean).join('   ·   ');
+      if (meta) s.addText(meta, { x: 0.7, y: 4.4, w: 8.6, h: 0.35, fontSize: 12, color: C.fraco });
+      rodape(s, 'Destaque · ' + d.periodo, ++p);
+    });
+
+    // 8. O que vem. Terminar em compromisso, não em número.
     if (d.secoes.proximo) {
       var sp = slideTitulo(pptx, 'O que vem', d.proximo.sub || '', ++p);
       if (d.proximo.itens.length) {
@@ -470,7 +514,7 @@
       }
     }
 
-    // 7. A mensagem de quem apresenta. Fica por último porque é a frase que a
+    // 9. A mensagem de quem apresenta. Fica por último porque é a frase que a
     //    sala leva embora, e ela é escrita por uma pessoa — não calculada.
     if (d.mensagem || (d.frentesAtraso || []).length) {
       var sm = slideBase(pptx);

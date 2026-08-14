@@ -462,6 +462,10 @@
       flex:1; min-width:140px; background:var(--bg2); border:1px solid var(--border);
       border-radius:var(--radius); padding:16px 18px;
     }
+    .ger-legenda { font-size:12px; color:var(--text3); line-height:1.6; margin:10px 2px 0; }
+    .ger-kpi-tag { font-size:9.5px; text-transform:none; letter-spacing:0; color:var(--text3);
+      border:1px solid var(--border2); border-radius:999px; padding:1px 5px; margin-left:4px;
+      cursor:help; }
     .ger-kpi-label { font-size:12px; color:var(--text2); margin-bottom:4px; }
     .ger-kpi-value { font-size:28px; font-weight:700; }
     .ger-kpi-value.blue { color:var(--blue); }
@@ -891,7 +895,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
-<script src="apresentacao.js?v=19b094a0ee"></script>
+<script src="apresentacao.js?v=38ce9769c6"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -1214,6 +1218,9 @@
           <tbody id="ger-tbody"></tbody>
         </table>
       </div>
+      <!-- Diz de onde vem a hora. Numero aproximado sem aviso e lido como medicao,
+           e foi assim que "1554h" chegou a um slide de diretoria. -->
+      <p class="ger-legenda" id="ger-legenda"></p>
     </div>
 
     <!-- ABA RELATÓRIOS — apoio à reunião de comitê de produto -->
@@ -4680,6 +4687,7 @@ function gerBandejasAplicaTodas() {
 const AP_SECOES = [
   { k: 'entregas', rot: 'Quanto foi entregue', pad: true },
   { k: 'prazo',    rot: 'No prazo x com atraso', pad: true },
+  { k: 'fluxo',    rot: 'Demanda × capacidade', pad: true },
   { k: 'time',     rot: 'O time (agregado)', pad: true },
   { k: 'areas',    rot: 'Onde atuamos (top 3)', pad: true },
   { k: 'solicit',  rot: 'Quem mais pediu (top 5)', pad: true },
@@ -4873,6 +4881,25 @@ async function apresGerar() {
     const diasMedio = atras.length
       ? Math.round(atras.reduce((t, m) => t + cl.get(m.id).dias, 0) / atras.length) : 0;
 
+    // DEMANDA x CAPACIDADE: o que chegou contra o que saiu.
+    //
+    // `criado_em` e a fonte das recebidas — o mesmo campo do bloco de PM/PO, e
+    // pelo mesmo motivo: e o unico que sempre existiu, entao o numero vale para
+    // qualquer mes, inclusive os anteriores ao historico passar a ser gravado.
+    //
+    // "Em aberto hoje" e do MOMENTO DA GERACAO, e nao do fim do mes: e o numero
+    // que a diretoria usa para decidir prioridade na semana da reuniao.
+    const fimMes = ano + '-' + String(mes).padStart(2, '0') + '-' +
+                   String(new Date(ano, mes, 0).getDate()).padStart(2, '0');
+    const vivasFluxo = (state.melhorias || []).filter(m => !m.oculto && !m.mesclado_em);
+    const recebidasMes = vivasFluxo.filter(m => {
+      const c = String(m.criado_em || '').slice(0, 10);
+      return c >= iso + '-01' && c <= fimMes;
+    }).length;
+    const abertasHoje = vivasFluxo.filter(m =>
+      !['concluido', 'negada'].includes(m.status_planejamento || '') &&
+      !String(m.concluido_em || '').trim()).length;
+
     const ta = apresTimeEAreas(conc, cl);
 
     const destaques = [...document.querySelectorAll('.ap-dest:checked')].map(c => {
@@ -4955,6 +4982,7 @@ async function apresGerar() {
             dias: cl.get(m.id).dias,
           })),
       },
+      fluxo: { recebidas: recebidasMes, entregues: conc.length, abertas: abertasHoje },
       time: ta.time,
       areas: ta.areas,
       frentesAtraso: ta.frentes,
@@ -5165,6 +5193,67 @@ function renderGerEntradas(ano, mes) {
     '</tbody></table></div>';
 }
 
+/* ─── RATEIO DA CAPACIDADE ─────────────────────────────────────────
+   Quantas horas do mês foram para cada demanda, aproximando pelo TEMPO QUE O DEV
+   FICOU COM ELA.
+
+   O que havia antes contava, por demanda, dias úteis × 8h — e somava. Duas
+   demandas do mesmo dev no mesmo dia viravam 16h naquele dia; três, 24h. Em julho
+   deu 1554h onde o time tinha digitado 377h, com pessoas aparecendo com 192h num
+   dia só.
+
+   Aqui o dia é a unidade e ele não estica: o dia útil de uma pessoa vale 8h, e
+   essas 8h são divididas entre as demandas que ela tinha em mãos naquele dia. A
+   soma de um dev num dia nunca passa de 8h, porque o dia não passa.
+
+   Só entram os dias DENTRO do mês exibido — demanda que atravessa o mês entra com
+   a parte dela. E demanda sem dev fica fora: sem dono, não há dia de ninguém para
+   dividir.                                                                     */
+const HORAS_DIA = 8;
+
+function rateiaHoras(lista, janela, de, ate) {
+  const ferSet = new Set((state.feriados || []).map(f => f.data || f).filter(Boolean));
+  // dia -> dev -> [ids]. O rateio só é possível depois de saber TODAS as demandas
+  // daquele dev naquele dia: por isso duas passagens, e não uma.
+  const agenda = new Map();
+  const trechos = [];
+
+  lista.forEach(m => {
+    const j = janela(m) || {};
+    if (!j.de || !j.ate) return;
+    const ini = j.de > de ? j.de : de;
+    const fim = j.ate < ate ? j.ate : ate;
+    if (fim < ini) return;
+    // Mesma quebra usada no resto da tela: "A / B" sao duas pessoas, e o dia de
+    // cada uma e dividido separadamente.
+    const devs = String(m.dev || '').split(/[\/,]/).map(x => x.trim()).filter(Boolean);
+    if (!devs.length) return;
+    const d = new Date(ini + 'T00:00:00');
+    const end = new Date(fim + 'T00:00:00');
+    let guarda = 0;
+    while (d <= end && guarda++ < 400) {
+      const dow = d.getDay();
+      const iso = d.toISOString().slice(0, 10);
+      if (dow !== 0 && dow !== 6 && !ferSet.has(iso)) {
+        devs.forEach(dv => {
+          const chave = iso + '|' + dv;
+          if (!agenda.has(chave)) agenda.set(chave, []);
+          agenda.get(chave).push(m.id);
+          trechos.push({ id: m.id, chave });
+        });
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  });
+
+  const horas = new Map();
+  trechos.forEach(t => {
+    const quantas = agenda.get(t.chave).length;      // demandas do dev naquele dia
+    horas.set(t.id, (horas.get(t.id) || 0) + HORAS_DIA / quantas);
+  });
+  return horas;
+}
+
 function renderGerencial() {
   gerInitFilters();
   gerDestroyCharts();
@@ -5190,11 +5279,6 @@ function renderGerencial() {
   };
 
   // Horas efetivas: usa realizadas se lançado, senão usa planejadas como fallback
-  function getHorasEfetivas(m) {
-    if (m.horas_realizadas > 0) return m.horas_realizadas;
-    return calcHorasPlanejadas(m.inicio, m.entrega) || 0;
-  }
-
   function filterMonth(mVal, aVal) {
     return (state.melhorias || []).filter(m => {
       if (!m.inicio) return false;
@@ -5212,10 +5296,29 @@ function renderGerencial() {
   const prevItems = filterMonth(pmMes, pmAno);
   const prevConc  = prevItems.filter(m => m.status_planejamento === 'concluido' || m.status === 'concluida');
 
-  const totalPlan     = items.reduce((s, m) => s + (calcHorasPlanejadas(m.inicio, m.entrega) || 0), 0);
-  const totalReal     = concluidos.reduce((s, m) => s + getHorasEfetivas(m), 0);
-  const prevTotalPlan = prevItems.reduce((s, m) => s + (calcHorasPlanejadas(m.inicio, m.entrega) || 0), 0);
-  const prevTotalReal = prevConc.reduce((s, m) => s + getHorasEfetivas(m), 0);
+  // Janela PLANEJADA (o que foi prometido) e janela REALIZADA (o que aconteceu).
+  // As duas passam pelo mesmo rateio, entao "planejado x realizado" compara duas
+  // contas do mesmo tamanho — antes eram duas contas diferentes com o mesmo nome.
+  const janPlan = m => ({ de: m.inicio, ate: m.entrega });
+  const janReal = m => ({ de: m.inicio, ate: m.concluido_em || m.entrega });
+  const limites = (mm, aa) => ({
+    de: aa + '-' + String(mm).padStart(2, '0') + '-01',
+    ate: aa + '-' + String(mm).padStart(2, '0') + '-' +
+         String(new Date(aa, mm, 0).getDate()).padStart(2, '0'),
+  });
+  const lim = limites(mes, ano), limPrev = limites(pmMes, pmAno);
+  const hPlan = rateiaHoras(items, janPlan, lim.de, lim.ate);
+  const hReal = rateiaHoras(concluidos, janReal, lim.de, lim.ate);
+  const somaH = mapa => Math.round([...mapa.values()].reduce((s, v) => s + v, 0));
+
+  const totalPlan     = somaH(hPlan);
+  const totalReal     = somaH(hReal);
+  const prevTotalPlan = somaH(rateiaHoras(prevItems, janPlan, limPrev.de, limPrev.ate));
+  const prevTotalReal = somaH(rateiaHoras(prevConc, janReal, limPrev.de, limPrev.ate));
+  // A hora DIGITADA nao se mistura com a rateada: ela e o unico numero medido, e
+  // some se for somada dentro de uma aproximacao.
+  const horasDigitadas = Math.round(concluidos.reduce((s, m) => s + (Number(m.horas_realizadas) || 0), 0));
+  const quantasDigitaram = concluidos.filter(m => Number(m.horas_realizadas) > 0).length;
   const efic          = totalPlan > 0 ? Math.round((totalReal / totalPlan) * 100) : 0;
   const eficClass     = efic >= 90 ? 'green' : efic >= 70 ? 'amber' : 'red';
 
@@ -5240,9 +5343,14 @@ function renderGerencial() {
       ${deltaBadge(totalPlan, prevTotalPlan)}
     </div>
     <div class="ger-kpi">
-      <div class="ger-kpi-label">H. Realizadas</div>
+      <div class="ger-kpi-label">H. Realizadas <span class="ger-kpi-tag" title="O dia útil de cada dev vale 8h e é dividido entre as demandas que ele tinha em mãos naquele dia. Só contam os dias dentro do mês.">aprox.</span></div>
       <div class="ger-kpi-value green">${totalReal}h</div>
       ${deltaBadge(totalReal, prevTotalReal)}
+    </div>
+    <div class="ger-kpi">
+      <div class="ger-kpi-label">H. Registradas</div>
+      <div class="ger-kpi-value">${horasDigitadas}h</div>
+      <span class="ger-kpi-delta delta-neu">${quantasDigitaram} de ${concluidos.length} demandas</span>
     </div>
     <div class="ger-kpi">
       <div class="ger-kpi-label">Concluídas</div>
@@ -5291,10 +5399,10 @@ function renderGerencial() {
     return Object.fromEntries(Object.entries(map).sort((a,b) => b[1]-a[1]));
   }
 
-  const planPorTema = groupBy(items,     m => temaMap[m.tema_id], m => calcHorasPlanejadas(m.inicio, m.entrega) || 0);
-  const realPorTema = groupBy(concluidos,m => temaMap[m.tema_id], m => getHorasEfetivas(m));
-  const planPorDev  = groupByDevs(items,      m => calcHorasPlanejadas(m.inicio, m.entrega) || 0);
-  const realPorDev  = groupByDevs(concluidos, m => getHorasEfetivas(m));
+  const planPorTema = groupBy(items,      m => temaMap[m.tema_id], m => hPlan.get(m.id) || 0);
+  const realPorTema = groupBy(concluidos, m => temaMap[m.tema_id], m => hReal.get(m.id) || 0);
+  const planPorDev  = groupByDevs(items,      m => hPlan.get(m.id) || 0);
+  const realPorDev  = groupByDevs(concluidos, m => hReal.get(m.id) || 0);
 
   // ── Gráficos ─────────────────────────────────────────────────────
   const chartDefs = [
@@ -5316,13 +5424,23 @@ function renderGerencial() {
   document.getElementById('ger-count-badge').textContent = `${items.length} demandas`;
 
   const rows = items.map(m => {
-    const hp    = calcHorasPlanejadas(m.inicio, m.entrega) || 0;
+    // Mesma conta dos KPIs e dos graficos: o dia do dev rateado entre as demandas
+    // dele. Uma segunda conta aqui embaixo faria a linha contradizer o topo da
+    // propria tela.
+    const hp    = Math.round(hPlan.get(m.id) || 0);
     const hrLog = m.horas_realizadas || 0;
-    const hrEf  = getHorasEfetivas(m);
+    const hrEf  = Math.round(hReal.get(m.id) || 0);
     const isConcl = m.status_planejamento === 'concluido' || m.status === 'concluida';
-    const desvio  = isConcl ? hrEf - hp : null;
+    // O desvio compara com o que a linha MOSTRA na coluna ao lado. Ele saia do
+    // rateio mesmo quando a coluna exibia a hora digitada — e a linha ficava
+    // "17h planejadas, 2h realizadas, +24h de desvio", tres numeros que nao fecham
+    // entre si na mesma linha.
+    const hrMostrada = hrLog > 0 ? hrLog : hrEf;
+    const desvio  = isConcl ? Math.round(hrMostrada - hp) : null;
     const desvioClass = desvio === null ? 'desvio-zero' : desvio > 0 ? 'desvio-pos' : desvio < 0 ? 'desvio-neg' : 'desvio-zero';
     const desvioStr   = desvio === null ? '—' : desvio === 0 ? '0h' : (desvio > 0 ? '+' : '') + desvio + 'h';
+    // O asterisco marca o que e aproximacao. Sem ele, hora rateada e hora digitada
+    // ficam com a mesma cara na tabela — e so uma das duas alguem mediu.
     const hrStr = isConcl ? (hrLog > 0 ? hrLog + 'h' : hrEf + 'h*') : '—';
     const spKey = m.status_planejamento || 'backlog';
     return `<tr>
@@ -5337,6 +5455,14 @@ function renderGerencial() {
       <td><span class="badge badge-${spKey}" style="font-size:11px">${STATUS_LABEL[spKey] || spKey}</span></td>
     </tr>`;
   }).join('');
+
+  const legenda = document.getElementById('ger-legenda');
+  if (legenda) {
+    legenda.innerHTML = 'Horas <strong>rateadas</strong>: o dia útil de cada dev vale 8h e é ' +
+      'dividido entre as demandas que ele tinha em mãos naquele dia — só os dias dentro do mês. ' +
+      'O <strong>*</strong> marca a linha em que ninguém registrou horas, então o valor é essa ' +
+      'aproximação. Sem <strong>*</strong>, é a hora que o dev digitou na entrega.';
+  }
 
   document.getElementById('ger-tbody').innerHTML = rows ||
     `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px">Nenhuma demanda com início neste mês.</td></tr>`;

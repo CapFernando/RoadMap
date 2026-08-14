@@ -33,6 +33,7 @@ const GANTT = lerTela('gantt.html');
 const DEV = lerTela('dev.html');
 const INDEX = lerTela('index.html');
 const POKER = lerTela('poker.html');
+const APRES = fs.readFileSync('apresentacao.js', 'utf8');
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -2137,6 +2138,34 @@ ok(/nHoras: v\.horas\.length/.test(W),
    'a contagem de horas e separada da contagem de dias');
 ok(/id="referencia"><\/div>/.test(POKER) && POKER.indexOf('id="cartas"') < POKER.indexOf('id="referencia"'),
    'a referencia fica logo abaixo do baralho, onde se vota');
+
+sec('A hora nao pode ser inventada, e o deck termina no fim');
+
+// A tela contava, por demanda, dias uteis x 8h e somava: duas demandas do mesmo
+// dev no mesmo dia viravam 16h naquele dia. Em julho deu 1554h onde o time tinha
+// digitado 377h, com gente aparecendo com 192h num dia so.
+ok(!/function getHorasEfetivas/.test(ADMIN),
+   'a conta que multiplicava a janela por 8h saiu de cena');
+ok(/function rateiaHoras\(lista, janela, de, ate\)/.test(ADMIN),
+   'o dia do dev e rateado entre as demandas dele');
+ok(/horas\.set\(t\.id, \(horas\.get\(t\.id\) \|\| 0\) \+ HORAS_DIA \/ quantas\)/.test(ADMIN),
+   'e a divisao e pelo numero de demandas daquele dev naquele dia');
+// Sem as duas passagens nao da para dividir: a primeira descobre quantas sao.
+ok(/const agenda = new Map\(\);/.test(ADMIN) && /const trechos = \[\];/.test(ADMIN),
+   'monta a agenda antes de dividir');
+ok(/const horasDigitadas = Math\.round/.test(ADMIN) && /H\. Registradas/.test(ADMIN),
+   'a hora digitada aparece separada, e nao somada dentro da aproximacao');
+
+// O fecho: destaques e "o que vem" sao as ultimas paginas de quem apresenta.
+const iDest = APRES.indexOf('OS DESTAQUES, no fim');
+const iVem  = APRES.indexOf("var sp = slideTitulo(pptx, 'O que vem'");
+const iBarr = APRES.indexOf("titulo: 'Entregas por desenvolvedor'");
+ok(iDest > iBarr && iVem > iDest,
+   'os destaques vem depois dos graficos, e "o que vem" depois deles');
+ok(/function slideFluxo\(pptx, f, pagina, periodo\)/.test(APRES),
+   'o deck tem o slide de demanda x capacidade');
+ok(/fluxo: \{ recebidas: recebidasMes, entregues: conc\.length/.test(ADMIN),
+   'e ele recebe recebidas e entregues do mesmo periodo');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
