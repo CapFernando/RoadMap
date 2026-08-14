@@ -896,7 +896,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="capa-tecnologia.js"></script>
-<script src="apresentacao.js?v=5df5154f7b"></script>
+<script src="apresentacao.js?v=d0ec478d94"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4688,7 +4688,7 @@ function gerBandejasAplicaTodas() {
 const AP_SECOES = [
   { k: 'entregas', rot: 'Quanto foi entregue', pad: true },
   { k: 'prazo',    rot: 'No prazo x com atraso', pad: true },
-  { k: 'fluxo',    rot: 'Demanda × capacidade', pad: true },
+  { k: 'projetos', rot: 'Projetos em aberto', pad: true },
   { k: 'time',     rot: 'O time (agregado)', pad: true },
   { k: 'areas',    rot: 'Onde atuamos (top 3)', pad: true },
   { k: 'solicit',  rot: 'Quem mais pediu (top 5)', pad: true },
@@ -4900,9 +4900,8 @@ async function apresGerar() {
                    String(new Date(ano, mes, 0).getDate()).padStart(2, '0');
     const vivasFluxo = (state.melhorias || []).filter(m => !m.oculto && !m.mesclado_em);
     // (as entradas do periodo sao contadas mais abaixo, ja pela regra da fila)
-    const abertasHoje = vivasFluxo.filter(m =>
-      !['concluido', 'negada'].includes(m.status_planejamento || '') &&
-      !String(m.concluido_em || '').trim()).length;
+    // (a fila em aberto "hoje" saiu: ela olhava para fora do periodo, e o slide do
+    //  mes ja diz o que ficou aberto NO CORTE do mes apresentado)
 
     // O CORTE DO PERIODO. Com o mes em curso, "ao virar o mes" ainda nao
     // aconteceu: o numero seria uma previsao disfarcada de fato. Entao o corte e
@@ -5026,6 +5025,37 @@ async function apresGerar() {
       return dias ? { nome: a.dev || '—', dias, tipo: AUS_ROTULO[a.tipo] || '' } : null;
     }).filter(Boolean).sort((x, y) => y.dias - x.dias);
 
+    /* PROJETOS EM ABERTO, e o que andou neles DENTRO do periodo.
+       Projeto aberto aparece sempre — inclusive o que nao teve tarefa nenhuma no
+       mes, dito com todas as letras. Omitir o parado seria esconder justamente o
+       que merece pergunta na reuniao.
+
+       "Andou no mes" e a tarefa que foi concluida no periodo ou que estava em
+       andamento nele. Nada de outro mes entra: e o mesmo corte do resto do deck. */
+    const PRJ_ABERTO = ['planejado', 'em_andamento', 'pausado', ''];
+    const projetos = (state.projetos || [])
+      .filter(p => p && !p.oculto && PRJ_ABERTO.includes(String(p.status || '')))
+      .map(p => {
+        const itens = (state.melhorias || []).filter(m =>
+          !m.oculto && !m.mesclado_em && String(m.projeto_id || '') === String(p.id));
+        const feitas = itens.filter(m =>
+          String(m.concluido_em || '').slice(0, 7) === iso &&
+          (m.status_planejamento || '') === 'concluido').length;
+        // Em andamento NO PERIODO: comecou ate o corte e nao tinha saido ate la.
+        const andando = itens.filter(m => {
+          const ini = String(m.inicio || '').slice(0, 10);
+          const fim = String(m.concluido_em || '').slice(0, 10);
+          return ini && ini <= corte && (!fim || fim > corte) &&
+                 !['negada'].includes(m.status_planejamento || '');
+        }).length;
+        return {
+          nome: (p.codigo ? p.codigo + ' · ' : '') + (p.nome || '(sem nome)'),
+          resp: p.responsavel || '', feitas, andando, total: itens.length,
+        };
+      })
+      .sort((a, b) => (b.feitas + b.andando) - (a.feitas + a.andando) ||
+                      a.nome.localeCompare(b.nome, 'pt-BR'));
+
     const ta = apresTimeEAreas(conc, cl);
 
     const destaques = [...document.querySelectorAll('.ap-dest:checked')].map(c => {
@@ -5041,11 +5071,20 @@ async function apresGerar() {
       };
     });
 
+    // PAUSADAS DENTRO DO PERIODO. Antes entrava toda demanda pausada da base, com
+    // os dias contados ate hoje: uma pausada em maio aparecia no relatorio de
+    // agosto com 90 dias, dado de outro mes num deck que nao pode ter nenhum.
+    // Agora so entra a que ja estava pausada no corte, e a contagem para nele.
+    const diaMs = t => Date.parse(String(t).slice(0, 10) + 'T00:00:00Z');
     const pausadas = (state.melhorias || [])
-      .filter(m => !m.mesclado_em && !m.oculto && String(m.pausado_em || '').trim())
+      .filter(m => !m.mesclado_em && !m.oculto)
+      .filter(m => {
+        const p = String(m.pausado_em || '').slice(0, 10);
+        return p && p <= corte;
+      })
       .map(m => ({
         titulo: (m.codigo ? m.codigo + ' · ' : '') + (m.titulo || ''),
-        dias: Math.max(0, Math.floor((Date.now() - new Date(m.pausado_em)) / 86400000)),
+        dias: Math.max(0, Math.round((diaMs(corte) - diaMs(m.pausado_em)) / 86400000)),
         motivo: String(m.pausa_motivo || '—').slice(0, 90),
       }))
       .sort((a, b) => b.dias - a.dias);
@@ -5109,11 +5148,12 @@ async function apresGerar() {
             dias: cl.get(m.id).dias,
           })),
       },
-      fluxo: { recebidas: entradas.length, entregues: conc.length, abertas: abertasHoje,
+      fluxo: { recebidas: entradas.length, entregues: conc.length,
                tocadas, backlogInicio, backlogFim, porTipo,
                saidas: saidas.length, saiuEntregue, saiuNegada,
                emCurso: mesEmCurso, corte: formatDate(corte) },
       time: ta.time,
+      projetos,
       ausencias,
       capacidade: {
         devs: devsAtuaram.size,

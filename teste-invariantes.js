@@ -2163,8 +2163,6 @@ const iVem  = APRES.indexOf("var sp = slideTitulo(pptx, 'O que vem'");
 const iBarr = APRES.indexOf("titulo: 'Entregas por desenvolvedor'");
 ok(iDest > iBarr && iVem > iDest,
    'os destaques vem depois dos graficos, e "o que vem" depois deles');
-ok(/function slideFluxo\(pptx, f, pagina, periodo, cap\)/.test(APRES),
-   'o deck tem o slide de demanda x capacidade, com a capacidade de quem trabalhou');
 ok(/fluxo: \{ recebidas: entradas\.length, entregues: conc\.length/.test(ADMIN),
    'e ele recebe entradas e entregues do mesmo periodo');
 // Sem o tamanho do time e os dias que ele tinha, "entrou mais do que saiu" vira
@@ -2234,11 +2232,9 @@ sec('O slide do time diz quem esteve fora');
 
 // Sem isso o slide convida a leitura errada: quem tirou ferias entrega menos e
 // aparece embaixo da lista como se tivesse rendido menos.
-ok(/function slideTime\(pptx, t, pagina, periodo, ausencias\)/.test(APRES),
-   'o slide do time recebe as ausencias');
+ok(/function slideTime\(pptx, t, pagina, periodo, ausencias, cap\)/.test(APRES),
+   'o slide do time recebe as ausencias e a capacidade de quem trabalhou');
 ok(/Fora no período/.test(APRES), 'e mostra quem esteve fora');
-ok(/slideTime\(pptx, d\.time, \+\+p, d\.periodo, d\.ausencias\)/.test(APRES),
-   'o deck passa as ausencias adiante');
 // Ferias que atravessam o mes pesam so os dias que caem no periodo apresentado.
 ok(/const de = String\(a\.inicio \|\| ''\) > iso \+ '-01'/.test(ADMIN),
    'a contagem recorta a ausencia no mes apresentado');
@@ -2267,9 +2263,38 @@ ok(/f\.emCurso \? 'Em aberto hoje' : 'Em aberto no fim do mês'/.test(APRES),
    'e o slide diz qual dos dois esta mostrando');
 ok(/f\.emCurso \? 'Posição de ' : 'Fechamento em '/.test(APRES),
    'com a data do corte escrita');
-// Duas telas do mesmo deck nao podem discordar sobre a mesma palavra.
-ok(/var entregou = f\.saiuEntregue != null \? f\.saiuEntregue : f\.entregues;/.test(APRES),
-   'os dois slides contam "entregues" do mesmo jeito');
+
+sec('Nada de outro mes entra no deck');
+
+// "Nao posso trazer nenhum dado de outro mes conforme filtros." Um slide estava
+// fora: o que esta travado listava toda demanda pausada da base, com os dias
+// contados ate hoje — uma pausada em maio aparecia no relatorio de agosto com 90
+// dias.
+ok(/const p = String\(m\.pausado_em \|\| ''\)\.slice\(0, 10\);[\s\S]{0,40}?return p && p <= corte;/.test(ADMIN),
+   'as pausadas sao as que ja estavam pausadas no corte do periodo');
+ok(/Math\.round\(\(diaMs\(corte\) - diaMs\(m\.pausado_em\)\) \/ 86400000\)/.test(ADMIN),
+   'e a contagem de dias para no corte, e nao em hoje');
+ok(!/abertas: abertasHoje/.test(ADMIN),
+   'a fila "em aberto hoje" saiu do deck: olhava para fora do periodo');
+
+sec('Os projetos em aberto aparecem, inclusive os parados');
+
+// Projeto aberto ha tres meses sem uma unica tarefa nao e ausencia de noticia: e a
+// noticia. Omitir o parado seria esconder o que merece pergunta na reuniao.
+ok(/function slideProjetos\(pptx, lista, pagina, periodo\)/.test(APRES),
+   'o deck tem o slide de projetos');
+ok(/'sem task no mês'/.test(APRES),
+   'e o projeto sem movimento e dito com todas as letras');
+ok(/const PRJ_ABERTO = \['planejado', 'em_andamento', 'pausado', ''\];/.test(ADMIN),
+   'so entram os projetos em aberto');
+ok(/String\(m\.concluido_em \|\| ''\)\.slice\(0, 7\) === iso &&/.test(ADMIN),
+   'as tarefas concluidas do projeto sao as do periodo');
+// O slide de demanda x capacidade repetia o slide do mes depois que ele passou a
+// contar backlog, entradas e saidas.
+ok(!/function slideFluxo/.test(APRES),
+   'o slide que repetia o do mes saiu');
+ok(/slideTime\(pptx, d\.time, \+\+p, d\.periodo, d\.ausencias, d\.capacidade\)/.test(APRES),
+   'e a capacidade foi para o slide do time, onde se fala de gente');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

@@ -226,49 +226,59 @@
     return s;
   }
 
-  // DEMANDA x CAPACIDADE. Dois numeros lado a lado e a diferenca entre eles —
-  // que e a unica coisa que a sala precisa levar daqui: a fila cresceu ou nao.
+  // PROJETOS EM ABERTO, e o que andou neles no período.
   //
-  // Nao vira grafico de propósito. Sao dois valores; barra, linha ou pizza para
-  // dois valores e enfeite, e enfeite rouba o segundo em que a pessoa le a
-  // diferenca.
-  function slideFluxo(pptx, f, pagina, periodo, cap) {
-    var s = slideTitulo(pptx, 'Demanda × capacidade', 'o que chegou e o que saiu no período', pagina);
-    var saldo = f.recebidas - (f.saidas != null ? f.saidas : f.entregues);
-    // `saiuEntregue` e a MESMA contagem do slide do mes. Sem isso, dois slides do
-    // mesmo deck mostrariam numeros diferentes para a mesma palavra.
-    var entregou = f.saiuEntregue != null ? f.saiuEntregue : f.entregues;
-    var col = [
-      { rot: 'Chegaram', val: f.recebidas, cor: C.azul },
-      { rot: 'Entregamos', val: entregou, cor: C.verde },
-      { rot: saldo > 0 ? 'A fila cresceu' : (saldo < 0 ? 'A fila diminuiu' : 'A fila ficou igual'),
-        val: (saldo > 0 ? '+' : '') + saldo,
-        cor: saldo > 0 ? C.vermelho : (saldo < 0 ? C.verde : C.fraco) },
-    ];
-    col.forEach(function (c, i) {
-      var x = 0.7 + i * 3.0;
-      s.addText(c.rot, { x: x, y: 1.75, w: 2.8, h: 0.35, fontSize: 14, color: C.fraco });
-      s.addText(String(c.val), { x: x, y: 2.1, w: 2.8, h: 1.25, fontSize: 66, bold: true, color: c.cor });
+  // Projeto aberto aparece SEMPRE — inclusive o que não teve tarefa nenhuma no
+  // mês, dito com todas as letras. Omitir o parado seria esconder justamente o que
+  // merece pergunta na reunião: um projeto aberto há três meses sem uma única
+  // tarefa não é ausência de notícia, é a notícia.
+  //
+  // Duas colunas de número por projeto: o que foi concluído no mês e o que ficou
+  // em andamento. As duas contas param no corte do período, como o resto do deck.
+  function slideProjetos(pptx, lista, pagina, periodo) {
+    var s = slideTitulo(pptx, 'Projetos', 'o que andou no período', pagina);
+    if (!lista.length) {
+      s.addText('Nenhum projeto em aberto no período.', {
+        x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
+      rodape(s, periodo, pagina);
+      return s;
+    }
+    // Cinco linhas e a linha do "e mais": com ALT de 0,72 a ultima caia em cima do
+    // rodape. O slide tem 5,63" e o rodape mora em 5,05".
+    var TOPO = 1.55, ALT = 0.66;
+    var vis = lista.slice(0, 5);
+    vis.forEach(function (p, i) {
+      var y = TOPO + i * ALT;
+      var parado = !p.feitas && !p.andando;
+      s.addShape(pptx.ShapeType.rect, { x: 0.7, y: y, w: 0.06, h: 0.5,
+                                        fill: { color: parado ? C.ambar : C.verde } });
+      s.addText(corta(p.nome, 52), { x: 0.95, y: y - 0.02, w: 5.6, h: 0.35,
+                                     fontSize: 15, color: C.texto });
+      if (p.resp) {
+        s.addText(corta(p.resp, 40), { x: 0.95, y: y + 0.28, w: 5.6, h: 0.28,
+                                       fontSize: 11.5, color: C.fraco });
+      }
+      if (parado) {
+        // Dito com todas as letras, e não com um zero que se lê como "não sei".
+        s.addText('sem task no mês', { x: 6.7, y: y + 0.08, w: 2.9, h: 0.35,
+                                       fontSize: 13, color: C.ambar });
+        return;
+      }
+      var cols = [
+        { v: p.feitas, rot: 'concluídas', cor: C.verde, x: 6.7 },
+        { v: p.andando, rot: 'em andamento', cor: C.azul, x: 8.1 },
+      ];
+      cols.forEach(function (c) {
+        s.addText(String(c.v), { x: c.x, y: y - 0.04, w: 0.7, h: 0.4,
+                                 fontSize: 20, bold: true, color: c.cor });
+        s.addText(c.rot, { x: c.x, y: y + 0.32, w: 1.4, h: 0.25, fontSize: 10.5, color: C.fraco });
+      });
     });
-    if (f.abertas) {
-      s.addText(f.abertas + ' demandas em aberto hoje, somando todos os meses.', {
-        x: 0.7, y: 3.6, w: 8.6, h: 0.4, fontSize: 15, color: C.texto });
+    var sobra = lista.length - vis.length;
+    if (sobra > 0) {
+      s.addText('… e mais ' + sobra + (sobra === 1 ? ' projeto em aberto' : ' projetos em aberto'), {
+        x: 0.7, y: TOPO + vis.length * ALT + 0.02, w: 8.6, h: 0.3, fontSize: 11.5, color: C.fraco });
     }
-    // QUEM TINHA DE DAR CONTA DISSO. "Entrou mais do que saiu" sozinho não tem
-    // contra o que ser lido: sem o tamanho do time e os dias que ele tinha, a
-    // frase vira cobrança sem régua.
-    if (cap && cap.devs) {
-      s.addText(cap.devs + (cap.devs === 1 ? ' pessoa atuou' : ' pessoas atuaram') +
-                ' no período   ·   ' + cap.uteis + ' dias úteis' +
-                (cap.fora ? '   ·   \u2212' + cap.fora + ' dias de ausência' : ''),
-        { x: 0.7, y: 4.05, w: 8.6, h: 0.35, fontSize: 14, color: C.azul });
-    }
-    // A ressalva existe porque alguem soma: "chegaram" conta pela data de
-    // cadastro, e demanda registrada semanas depois de ter sido pedida cai no mes
-    // do registro. E o unico campo que vale para qualquer mes, mas nao e a data do
-    // pedido.
-    s.addText('“Chegaram” conta pela data de cadastro da demanda.', {
-      x: 0.7, y: 4.45, w: 8.6, h: 0.4, fontSize: 12, color: C.fraco });
     rodape(s, periodo, pagina);
     return s;
   }
@@ -326,7 +336,7 @@
   // O time em agregado. Tres perguntas, tres colunas — e NENHUM slide por pessoa:
   // em reuniao de diretoria, detalhe individual desloca a conversa de "o que a
   // area entregou" para "o que fulano fez", e nao e essa a pauta.
-  function slideTime(pptx, t, pagina, periodo, ausencias) {
+  function slideTime(pptx, t, pagina, periodo, ausencias, cap) {
     var s = slideTitulo(pptx, 'O time', 'no período', pagina);
     var col = [
       { x: 0.7,  tit: 'Mais entregas',  cor: C.verde,    lista: t.entregas },
@@ -340,13 +350,23 @@
         return;
       }
       c.lista.slice(0, 4).forEach(function (it, i) {
-        var y = 1.95 + i * 0.58;
+        var y = 1.9 + i * 0.55;
         s.addText(String(it.valor), {
           x: c.x, y: y, w: 0.9, h: 0.45, fontSize: 22, bold: true, color: c.cor });
         s.addText(corta(it.nome, 18), {
           x: c.x + 0.85, y: y + 0.08, w: 1.9, h: 0.35, fontSize: 12, color: C.texto });
       });
     });
+    // O TAMANHO DO TIME E OS DIAS QUE ELE TINHA. Vinha do slide de demanda x
+    // capacidade, que saiu por repetir o slide do mês; aqui a informação fica onde
+    // se fala de gente, que é o lugar dela.
+    if (cap && cap.devs) {
+      s.addText(cap.devs + (cap.devs === 1 ? ' pessoa atuou' : ' pessoas atuaram') +
+                ' no período   ·   ' + cap.uteis + ' dias úteis' +
+                (cap.fora ? '   ·   −' + cap.fora + ' dias de ausência' : ''),
+        { x: 0.7, y: 4.15, w: 8.6, h: 0.3, fontSize: 13, color: C.azul });
+    }
+
     // QUEM ESTEVE FORA. Sem esta linha o slide convida a leitura errada: quem
     // tirou uma semana de ferias entrega menos e aparece embaixo da lista como se
     // tivesse rendido menos. As ausencias ja estao cadastradas no Planejamento —
@@ -355,12 +375,12 @@
     // Uma linha, e nao um numero ao lado de cada nome: sao tres colunas que ja tem
     // numero, e um quarto ali vira ruido.
     if ((ausencias || []).length) {
-      s.addText('Fora no período', { x: 0.7, y: 4.4, w: 8.6, h: 0.3,
+      s.addText('Fora no período', { x: 0.7, y: 4.5, w: 8.6, h: 0.3,
                                      fontSize: 13, color: C.fraco });
       s.addText(ausencias.slice(0, 6).map(function (a) {
         return a.nome + ' (' + a.dias + (a.dias === 1 ? ' dia' : ' dias') +
                (a.tipo ? ', ' + a.tipo : '') + ')';
-      }).join('   ·   '), { x: 0.7, y: 4.68, w: 8.6, h: 0.35, fontSize: 13,
+      }).join('   ·   '), { x: 0.7, y: 4.78, w: 8.6, h: 0.32, fontSize: 13,
                             color: C.ambar });
     }
     rodape(s, periodo, pagina);
@@ -625,14 +645,14 @@
       }
     }
 
-    // 3. Chegou x saiu. Vem logo depois do volume porque e a pergunta seguinte:
-    //    entregamos 69, mas a fila cresceu ou diminuiu?
-    if (d.secoes.fluxo && d.fluxo && (d.fluxo.recebidas || d.fluxo.entregues)) {
-      slideFluxo(pptx, d.fluxo, ++p, d.periodo, d.capacidade);
+    // 3. Os projetos. Depois do mês porque o mês é o todo e o projeto é o recorte
+    //    — e antes do time, porque projeto é o que a diretoria acompanha por nome.
+    if (d.secoes.projetos && (d.projetos || []).length) {
+      slideProjetos(pptx, d.projetos, ++p, d.periodo);
     }
 
     // 4. O time e as frentes: agregado, antes do detalhe.
-    if (d.secoes.time && d.time) slideTime(pptx, d.time, ++p, d.periodo, d.ausencias);
+    if (d.secoes.time && d.time) slideTime(pptx, d.time, ++p, d.periodo, d.ausencias, d.capacidade);
     if (d.secoes.areas && (d.areas || []).length) slideAreas(pptx, d.areas, ++p, d.periodo);
 
     // 5. Quem pediu. O time e uma leitura; a area cliente e outra, e e a que diz
