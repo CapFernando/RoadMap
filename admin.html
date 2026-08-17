@@ -896,7 +896,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=c9a9c2c4fd"></script>
 <script src="capa-tecnologia.js"></script>
-<script src="apresentacao.js?v=c264c1a825"></script>
+<script src="apresentacao.js?v=8297d9a05a"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4691,14 +4691,20 @@ function gerBandejasAplicaTodas() {
 // entra e escolhido aqui: as secoes e, principalmente, QUAIS ENTREGAS ganham
 // slide proprio — a de 3 pontos que destravou a operacao vale mais que a de 34
 // que ninguem viu, e nenhuma metrica sabe disso.
+// O rotulo tem de dizer o que o slide MOSTRA. O primeiro deixou de ser "quanto
+// foi entregue" quando passou a contar a historia do mes — e quem escolhia o que
+// entra no deck escolhia as cegas.
 const AP_SECOES = [
-  { k: 'entregas', rot: 'Quanto foi entregue', pad: true },
+  { k: 'entregas', rot: 'O mês: backlog, o que entrou e o que saiu', pad: true },
   { k: 'prazo',    rot: 'No prazo x com atraso', pad: true },
+  { k: 'rapidas',  rot: 'Entregas rápidas (até 2 dias)', pad: true },
+  { k: 'evolucao', rot: 'Evolução dos últimos 6 meses', pad: true },
   { k: 'projetos', rot: 'Projetos em aberto', pad: true },
-  { k: 'time',     rot: 'O time (agregado)', pad: true },
+  { k: 'time',     rot: 'O time (agregado) e quem esteve fora', pad: true },
   { k: 'areas',    rot: 'Onde atuamos (top 3)', pad: true },
   { k: 'solicit',  rot: 'Quem mais pediu (top 5)', pad: true },
-  { k: 'grafico',  rot: 'Entregas por desenvolvedor', pad: true },
+  { k: 'grafico',  rot: 'Entregas e pontos por desenvolvedor', pad: true },
+  { k: 'ganttdev', rot: 'O mês dos 3 primeiros devs (linha do tempo)', pad: true },
   { k: 'riscos',   rot: 'O que está travado', pad: true },
   { k: 'proximo',  rot: 'O que vem no próximo mês', pad: true },
 ];
@@ -5074,7 +5080,182 @@ async function apresGerar() {
       .sort((a, b) => (b.feitas + b.andando) - (a.feitas + a.andando) ||
                       a.nome.localeCompare(b.nome, 'pt-BR'));
 
+    /* A QUEBRA POR TIPO, em cada numero da historia.
+       O consolidado dizia quanto entrou e quanto saiu; nao dizia de que era.
+       Evolucao e construir; sustentacao e manter de pe o que ja existe — e a
+       proporcao entre as duas e o que explica um mes com muita entrega e pouca
+       novidade, ou o contrario.                                                */
+    const quebraTipo = (lista) => {
+      const q = { evolucao: 0, sustentacao: 0, sem: 0 };
+      lista.forEach(m => {
+        const t = String(m.tipo || '');
+        if (t === 'evolucao') q.evolucao++;
+        else if (t === 'sustentacao') q.sustentacao++;
+        else q.sem++;
+      });
+      return q;
+    };
+    const abertasNaVespera = vivasFluxo.filter(m => abertaEm(m, vespera));
+    const abertasNoCorte = vivasFluxo.filter(m => abertaEm(m, corte));
+    const quebra = {
+      backlogInicio: quebraTipo(abertasNaVespera),
+      recebidas: quebraTipo(entradas),
+      saidas: quebraTipo(saidas),
+      backlogFim: quebraTipo(abertasNoCorte),
+    };
+
+    /* ENTREGAS RAPIDAS: entrou e saiu em ate dois dias.
+       E o melhor argumento de eficiencia que estes dados tem, e estava invisivel.
+       Conta dias corridos entre o cadastro e a conclusao — dia util aqui seria
+       piorar a noticia por tecnicalidade: a demanda que entrou sabado e saiu
+       segunda levou dois dias para quem pediu.
+
+       Cada linha leva o que a sala pergunta em seguida: quantos dias, se e
+       sustentacao ou evolucao, em que modulo e de quem foi.                     */
+    const diasCorridos = (de, ate) => {
+      const a = Date.parse(String(de).slice(0, 10) + 'T00:00:00Z');
+      const b = Date.parse(String(ate).slice(0, 10) + 'T00:00:00Z');
+      if (!isFinite(a) || !isFinite(b) || b < a) return null;
+      return Math.round((b - a) / 86400000);
+    };
+    const TIPO_ROT = { evolucao: 'Evolução', sustentacao: 'Sustentação' };
+    const rapidasDe = (lista) => lista.map(m => {
+      const dias = diasCorridos(m.criado_em, m.concluido_em);
+      return dias === null || dias > 2 ? null : { m, dias };
+    }).filter(Boolean);
+    const rapidasLista = rapidasDe(conc)
+      .sort((a, b) => a.dias - b.dias ||
+                      String(a.m.codigo || '').localeCompare(String(b.m.codigo || '')))
+      .map(({ m, dias }) => {
+        const t = (state.temas || []).find(x => String(x.id) === String(m.tema_id));
+        return {
+          codigo: m.codigo || '', titulo: m.titulo || '', dias,
+          tipo: TIPO_ROT[String(m.tipo || '')] || '',
+          tema: t ? (window.catalogoCurto ? catalogoCurto(t.nome) : t.nome) : '',
+          dev: m.dev || '',
+        };
+      });
+
+    /* O MES ANTERIOR, para o comparativo.
+       Numero sozinho nao diz se o mes foi bom: 74 saidas e muito ou pouco? A
+       variacao responde — e vem das MESMAS regras do mes atual, so mudando a
+       janela, porque duas contas diferentes com o mesmo nome e o jeito mais rapido
+       de o deck se contradizer.
+
+       O mes anterior e sempre FECHADO (o corte e o ultimo dia dele), mesmo quando o
+       mes apresentado esta em curso. Comparar 14 dias de agosto com 31 de julho
+       seria dizer que caiu tudo — entao o slide avisa quando a comparacao e
+       parcial.                                                                 */
+    let pmMes = mes - 1, pmAno = ano;
+    if (pmMes === 0) { pmMes = 12; pmAno--; }
+    const isoAnt = pmAno + '-' + String(pmMes).padStart(2, '0');
+    const fimAnt = isoAnt + '-' + String(new Date(pmAno, pmMes, 0).getDate()).padStart(2, '0');
+
+    const concAnt = (state.melhorias || []).filter(m =>
+      !m.mesclado_em && !m.oculto && (m.status_planejamento || '') === 'concluido' &&
+      String(m.concluido_em || '').slice(0, 7) === isoAnt);
+    const clAnt = new Map(concAnt.map(m => [m.id, prazoClassifica(m)]));
+    const noPrazoAnt = concAnt.filter(m => (clAnt.get(m.id) || {}).tipo === 'no_prazo').length;
+    const atrasAntMes = concAnt.filter(m => (clAnt.get(m.id) || {}).tipo === 'atraso' &&
+      String(m.entrega || '').slice(0, 7) >= isoAnt).length;
+    const medidasAnt = noPrazoAnt + atrasAntMes;
+
+    const filaAnt = (de, ate) => {
+      const backIni = vivasFluxo.filter(m => abertaEm(m, de)).length;
+      const entrou = vivasFluxo.filter(m => {
+        const c = filaEntrada(m); return c >= isoAnt + '-01' && c <= ate;
+      }).length;
+      const saiu = vivasFluxo.filter(m => {
+        const x = filaSaida(m); return x && x >= isoAnt + '-01' && x <= ate;
+      }).length;
+      return { backIni, entrou, saiu, backFim: vivasFluxo.filter(m => abertaEm(m, ate)).length };
+    };
+    const vAnt = new Date(isoAnt + '-01T00:00:00');
+    vAnt.setDate(vAnt.getDate() - 1);
+    const fAnt = filaAnt(vAnt.toISOString().slice(0, 10), fimAnt);
+
+    const anterior = {
+      nome: apresentacaoMesNome(pmMes - 1),
+      backlogInicio: fAnt.backIni, recebidas: fAnt.entrou, saidas: fAnt.saiu,
+      backlogFim: fAnt.backFim,
+      concluidas: concAnt.length,
+      pontos: concAnt.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0),
+      rapidas: rapidasDe(concAnt).length,
+      pct: medidasAnt ? Math.round(noPrazoAnt / medidasAnt * 100) : null,
+      // Mes em curso comparado com mes fechado engana: o slide diz que e parcial.
+      parcial: mesEmCurso,
+    };
+
+    /* EVOLUCAO DOS ULTIMOS SEIS MESES. Um mes sozinho nao mostra tendencia, e
+       tendencia e o que vem depois do numero na conversa.
+
+       Usa as MESMAS regras do slide do mes — a fila para entradas e saidas,
+       `prazoClassifica` para o percentual — porque duas contas com o mesmo nome sao
+       o caminho curto para o deck se contradizer. O mes apresentado entra mesmo em
+       curso, marcado como parcial: sem ele a serie terminaria no mes passado.    */
+    const evolucao = [];
+    for (let k = 5; k >= 0; k--) {
+      const dt = new Date(ano, mes - 1 - k, 1);
+      const iM = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+      const fimM = iM + '-' + String(new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate()).padStart(2, '0');
+      const corteM = (hojeISO >= iM + '-01' && hojeISO <= fimM) ? hojeISO : fimM;
+      const vespM = new Date(iM + '-01T00:00:00');
+      vespM.setDate(vespM.getDate() - 1);
+      const cM = (state.melhorias || []).filter(m =>
+        !m.oculto && !m.mesclado_em && (m.status_planejamento || '') === 'concluido' &&
+        String(m.concluido_em || '').slice(0, 7) === iM);
+      const clM = new Map(cM.map(m => [m.id, prazoClassifica(m)]));
+      const okM = cM.filter(m => (clM.get(m.id) || {}).tipo === 'no_prazo').length;
+      const atrM = cM.filter(m => (clM.get(m.id) || {}).tipo === 'atraso' &&
+        String(m.entrega || '').slice(0, 7) >= iM).length;
+      evolucao.push({
+        rot: apresentacaoMesNome(dt.getMonth()).slice(0, 3),
+        entraram: vivasFluxo.filter(m => {
+          const c = filaEntrada(m); return c >= iM + '-01' && c <= corteM;
+        }).length,
+        sairam: vivasFluxo.filter(m => {
+          const x = filaSaida(m); return x && x >= iM + '-01' && x <= corteM;
+        }).length,
+        backlog: vivasFluxo.filter(m => abertaEm(m, corteM)).length,
+        pct: (okM + atrM) ? Math.round(okM / (okM + atrM) * 100) : null,
+        parcial: corteM !== fimM,
+      });
+    }
+
     const ta = apresTimeEAreas(conc, cl);
+
+    /* O MES DE CADA UM DOS TRES PRIMEIROS DEVS, em linha do tempo.
+       E a visao que o quadro do Planejamento da e o deck nao dava: o que a pessoa
+       pegou, quando, e por quanto tempo cada coisa ficou com ela.
+
+       Tres, e nao o time inteiro: com dez nomes o slide vira lista, e a conversa
+       sai de "o que o time entregou" para "por que o fulano aparece embaixo".
+
+       Fica DEPOIS de `ta` porque depende de `ta.porDev` — antes seria erro na hora
+       de gerar, silencioso ate o clique.                                        */
+    const diasDoMes = new Date(ano, mes, 0).getDate();
+    const ganttDev = (ta.porDev || []).slice(0, 3).map(dv => {
+      const minhas = conc.filter(m =>
+        String(m.dev || '').split(/[\/,]/).map(x => x.trim()).includes(dv.nome));
+      const barras = minhas.map(m => {
+        // A barra e recortada no mes: demanda que comecou em julho comeca no dia 1
+        // aqui, senao ela sairia para fora da area do slide.
+        const ini = String(m.inicio || '').slice(0, 10);
+        const fim = String(m.concluido_em || m.entrega || '').slice(0, 10);
+        const d1 = (ini && ini >= iso + '-01' && ini <= fimMes) ? Number(ini.slice(8, 10)) : 1;
+        const d2 = (fim && fim >= iso + '-01' && fim <= fimMes) ? Number(fim.slice(8, 10)) : diasDoMes;
+        const t = (state.temas || []).find(x => String(x.id) === String(m.tema_id));
+        return {
+          titulo: (m.codigo ? m.codigo + ' · ' : '') + (m.titulo || ''),
+          de: Math.max(1, Math.min(d1, d2)), ate: Math.min(diasDoMes, Math.max(d1, d2)),
+          tipo: TIPO_ROT[String(m.tipo || '')] || '',
+          tema: t ? (window.catalogoCurto ? catalogoCurto(t.nome) : t.nome) : '',
+          pontos: Number(m.poker_pontos) || 0,
+        };
+      }).sort((a, b) => a.de - b.de || a.ate - b.ate);
+      return { nome: dv.nome, entregas: minhas.length, pontos: dv.extra || 0,
+               dias: diasDoMes, barras };
+    });
 
     const destaques = [...document.querySelectorAll('.ap-dest:checked')].map(c => {
       const m = (state.melhorias || []).find(x => x.id === c.value) || {};
@@ -5169,6 +5350,15 @@ async function apresGerar() {
             dias: cl.get(m.id).dias,
           })),
       },
+      anterior,
+      // Mes sem nada em nenhuma das tres contas nao entra na serie: a base comeca
+      // em junho, e tres colunas zeradas antes dela fariam a leitura comecar num
+      // "estavamos parados" que nunca aconteceu.
+      evolucao: evolucao.slice(Math.max(0, evolucao.findIndex(
+        x => x.entraram || x.sairam || x.backlog))),
+      ganttDev,
+      rapidas: { itens: rapidasLista, total: conc.length },
+      quebra,
       fluxo: { recebidas: entradas.length, entregues: conc.length,
                tocadas, backlogInicio, backlogFim, porTipo,
                saidas: saidas.length, saiuEntregue, saiuNegada,

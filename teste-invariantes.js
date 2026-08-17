@@ -2323,6 +2323,44 @@ ok(/valor: d\.entregas, extra: Math\.round\(d\.pontos\)/.test(ADMIN),
 ok(/rotuloExtra: 'pts'/.test(APRES) && /if \(it\.extra != null && cfg\.rotuloExtra\)/.test(APRES),
    'e a barra desenha o apoio ao lado do numero');
 
+sec('A historia do mes tem quebra, comparativo e tendencia');
+
+// O consolidado dizia quanto entrou e quanto saiu; nao dizia de que era.
+ok(/backlogInicio: quebraTipo\(abertasNaVespera\)/.test(ADMIN) &&
+   /saidas: quebraTipo\(saidas\)/.test(ADMIN),
+   'cada numero da historia tem a quebra evolucao x sustentacao');
+// A COR SEGUE A MELHORA, E NAO O SINAL: em metade destes numeros crescer e ruim, e
+// pintar "+14 no backlog" de verde faria o slide mentir para a sala.
+ok(/var melhor = bomSubir \? dif > 0 : dif < 0;/.test(APRES),
+   'a cor da variacao segue a melhora, e nao o sinal');
+ok(/chave: 'backlogInicio', bomSubir: false/.test(APRES) &&
+   /chave: 'saidas', bomSubir: true/.test(APRES),
+   'e cada numero diz para que lado e a melhora');
+// Comparar 14 dias de agosto com 31 de julho diria que tudo caiu.
+ok(/parcial: mesEmCurso/.test(ADMIN) && /comparação parcial/.test(APRES),
+   'a comparacao com mes em curso avisa que e parcial');
+
+sec('A eficiencia do time aparece: entregas rapidas e tendencia');
+
+// Demanda que entrou e saiu em ate dois dias e o melhor argumento de eficiencia que
+// estes dados tem, e estava invisivel: 29 de 77 em agosto contra 11 de 69 em julho.
+ok(/function slideRapidas\(pptx, r, pagina, periodo, anterior\)/.test(APRES),
+   'o deck tem o slide de entregas rapidas');
+ok(/dias === null \|\| dias > 2 \? null/.test(ADMIN),
+   'com o corte em dois dias corridos entre o cadastro e a conclusao');
+ok(/it\.tipo, it\.tema/.test(APRES) && /corta\(it\.dev, 20\)/.test(APRES),
+   'e cada linha diz o tipo, o modulo e o dev');
+// Um mes sozinho nao mostra tendencia.
+ok(/function slideEvolucao\(pptx, serie, pagina, periodo\)/.test(APRES),
+   'o deck tem a evolucao mes a mes');
+ok(/evolucao: evolucao\.slice\(Math\.max\(0, evolucao\.findIndex/.test(ADMIN),
+   'e a serie comeca no primeiro mes com movimento, sem colunas zeradas antes');
+// A visao que o quadro do Planejamento da e o deck nao dava.
+ok(/function slideGanttDev\(pptx, dv, pagina, periodo\)/.test(APRES),
+   'os tres primeiros devs tem o mes em linha do tempo');
+ok(/\(ta\.porDev \|\| \[\]\)\.slice\(0, 3\)/.test(ADMIN),
+   'tres, e nao o time inteiro — com dez nomes o slide vira lista');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

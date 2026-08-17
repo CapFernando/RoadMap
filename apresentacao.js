@@ -486,28 +486,59 @@
     return s;
   }
 
-  // A HISTÓRIA DO MÊS, na ordem em que ela acontece: o backlog que já existia, o
-  // que entrou, o que saiu, e o que sobrou. Com os sinais entre os números, para
-  // a sala acompanhar a conta em vez de receber quatro valores soltos.
-  //
-  // Este slide já foi "69 entregas concluídas" e nada mais. Número sozinho mostra
-  // resultado sem esforço: não diz de onde o mês partiu, quanta demanda chegou,
-  // nem o que ficou de pé para o mês seguinte.
-  //
-  // O ÚLTIMO BLOCO É DATADO de propósito. "Em aberto ao virar o mês" era ambíguo —
-  // vinha do mês anterior, ou ia para o próximo? E com o mês em curso, virar o mês
-  // ainda não aconteceu. Agora ele diz o dia a que se refere.
+  /* A VARIAÇÃO CONTRA O MÊS ANTERIOR.
+
+     A COR SEGUE A MELHORA, E NÃO O SINAL. Em metade dos números deste deck crescer
+     é ruim: backlog que sobe não é boa notícia, fila que cresce também não. Pintar
+     "+14 no backlog" de verde faria o slide mentir para a sala. Então cada número
+     diz para que lado é a melhora, e o que muda é só a cor — o sinal continua ali.
+
+     Sem base anterior nada é desenhado: um "—" naquele lugar é lido como zero.   */
+  function variacao(atual, antes, bomSubir) {
+    if (antes == null || atual == null) return null;
+    var dif = atual - antes;
+    var melhor = bomSubir ? dif > 0 : dif < 0;
+    return { dif: dif, cor: dif === 0 ? C.fraco : (melhor ? C.verde : C.vermelho) };
+  }
+
+  function desenhaVariacao(s, v, x, y, w, refNome, sufixo) {
+    if (!v) return;
+    var txt = v.dif === 0
+      ? '= igual a ' + refNome
+      : (v.dif > 0 ? '▲ +' : '▼ ') + Math.abs(v.dif) + (sufixo || '') + ' vs ' + refNome;
+    s.addText(txt, { x: x, y: y, w: w, h: 0.24, fontSize: 10, color: v.cor });
+  }
+
+  /* A HISTÓRIA DO MÊS: o backlog que já existia, o que entrou, o que saiu e o que
+     sobrou — nessa ordem, com os sinais entre os números, para a sala acompanhar a
+     conta em vez de receber quatro valores soltos.
+
+     Cada número leva DUAS leituras a mais: a variação contra o mês anterior e a
+     quebra entre evolução e sustentação. Quantidade sem essa quebra não distingue
+     um mês de construir de um mês de manter de pé o que existe.
+
+     O ÚLTIMO BLOCO É DATADO de propósito. "Em aberto ao virar o mês" era ambíguo —
+     vinha do mês anterior, ou ia para o próximo? E com o mês em curso, virar o mês
+     ainda não aconteceu.                                                         */
   function slideMes(pptx, d, pagina) {
     var s = slideTitulo(pptx, 'O mês', 'backlog, entradas e saídas', pagina);
     var f = d.fluxo || {};
     var k = d.kpi || {};
+    var a = d.anterior;
+    var q = d.quebra || {};
 
+    // `bomSubir`: sair mais é bom, sobrar mais não é. Backlog é estoque, e estoque
+    // que cresce não é ganho.
     var passos = [
-      { rot: 'Backlog no dia 1', val: f.backlogInicio, cor: C.fraco, sinal: '' },
-      { rot: 'Entraram', val: f.recebidas, cor: C.azul, sinal: '+' },
-      { rot: 'Saíram da fila', val: f.saidas, cor: C.verde, sinal: '−' },
+      { rot: 'Backlog no dia 1', val: f.backlogInicio, cor: C.fraco, sinal: '',
+        chave: 'backlogInicio', bomSubir: false },
+      { rot: 'Entraram', val: f.recebidas, cor: C.azul, sinal: '+',
+        chave: 'recebidas', bomSubir: true },
+      { rot: 'Saíram da fila', val: f.saidas, cor: C.verde, sinal: '−',
+        chave: 'saidas', bomSubir: true },
       { rot: f.emCurso ? 'Em aberto hoje' : 'Em aberto no fim do mês',
-        val: f.backlogFim, cor: C.ambar, sinal: '=' },
+        val: f.backlogFim, cor: C.ambar, sinal: '=',
+        chave: 'backlogFim', bomSubir: false },
     ].filter(function (x) { return x.val != null; });
 
     var larg = 2.0, vao = 0.35;
@@ -515,39 +546,30 @@
     passos.forEach(function (e, i) {
       var x = 0.7 + i * passo;
       if (e.sinal) {
-        s.addText(e.sinal, { x: x - vao - 0.05, y: 1.75, w: 0.4, h: 0.5,
+        s.addText(e.sinal, { x: x - vao - 0.05, y: 1.62, w: 0.4, h: 0.5,
                              fontSize: 26, color: C.fraco, align: 'center' });
       }
-      s.addText(e.rot, { x: x, y: 1.5, w: larg, h: 0.3, fontSize: 12, color: C.fraco });
-      s.addText(String(e.val), { x: x, y: 1.78, w: larg, h: 0.75,
-                                 fontSize: 42, bold: true, color: e.cor });
+      s.addText(e.rot, { x: x, y: 1.4, w: larg, h: 0.28, fontSize: 12, color: C.fraco });
+      s.addText(String(e.val), { x: x, y: 1.64, w: larg, h: 0.7,
+                                 fontSize: 40, bold: true, color: e.cor });
+      // A caixa nao pode passar da margem: na ultima coluna, `larg + 0.3` estourava
+      // a borda direita do slide.
+      var cx = Math.min(larg + 0.3, 9.9 - x);
+      if (a) desenhaVariacao(s, variacao(e.val, a[e.chave], e.bomSubir), x, 2.34, cx, a.nome);
+      // A quebra por tipo, uma linha por item e dentro da largura da coluna: numa
+      // caixa mais larga, a segunda linha de uma coluna passa por cima da vizinha.
+      var qq = q[e.chave];
+      if (qq) {
+        var partes = [];
+        if (qq.evolucao) partes.push(qq.evolucao + ' evolução');
+        if (qq.sustentacao) partes.push(qq.sustentacao + ' sustentação');
+        if (qq.sem) partes.push(qq.sem + ' sem classificar');
+        partes.forEach(function (txt, j) {
+          s.addText(txt, { x: x, y: 2.64 + j * 0.23, w: cx, h: 0.23,
+                           fontSize: 10.5, color: j === 2 ? C.fraco : C.texto });
+        });
+      }
     });
-
-    // De que são as entradas. "Quantas" é a primeira pergunta; "do que" é a
-    // segunda, e ela separa construir de manter de pé o que já existe.
-    // UMA LINHA PARA CADA, dentro da largura da coluna. A primeira versao punha os
-    // tres numa caixa mais larga que a coluna: a segunda linha da quebra das
-    // entradas passava por cima da quebra das saidas.
-    var lista = function (partes, x, cor) {
-      partes.forEach(function (txt, i) {
-        s.addText(txt, { x: x, y: 2.58 + i * 0.24, w: larg + 0.3, h: 0.24,
-                         fontSize: 11, color: cor });
-      });
-    };
-    var t = f.porTipo;
-    if (t) {
-      var partes = [];
-      if (t.evolucao) partes.push(t.evolucao + ' evolução');
-      if (t.sustentacao) partes.push(t.sustentacao + ' sustentação');
-      if (t.sem) partes.push(t.sem + ' sem classificar');
-      lista(partes, 0.7 + passo, C.azul);
-    }
-    // A recusa tambem sai da fila, mas nao e entrega. Dizer os dois numeros evita
-    // a leitura de que tudo que saiu foi entregue.
-    var saiu = [];
-    if (f.saiuEntregue) saiu.push(f.saiuEntregue + ' entregues');
-    if (f.saiuNegada) saiu.push(f.saiuNegada + (f.saiuNegada === 1 ? ' recusada' : ' recusadas'));
-    lista(saiu, 0.7 + 2 * passo, C.verde);
 
     // A frase que a sala leva. Sem ela, os quatro números ficam por conta de quem
     // estiver somando de cabeça.
@@ -559,17 +581,177 @@
             ? 'Saiu mais do que entrou: a fila diminuiu ' + Math.abs(saldo) +
               (saldo === -1 ? ' demanda' : ' demandas') + '.'
             : 'Entrou e saiu o mesmo tanto: a fila ficou do mesmo tamanho.'),
-        { x: 0.7, y: 3.65, w: 8.6, h: 0.4, fontSize: 17, color: saldo > 0 ? C.ambar : C.verde });
+        { x: 0.7, y: 3.62, w: 8.6, h: 0.36, fontSize: 16, color: saldo > 0 ? C.ambar : C.verde });
     }
-    // Diz a que dia o último bloco se refere. Sem a data, "em aberto hoje" numa
-    // reunião do dia 20 vira uma pergunta no meio da apresentação.
+    var saiu = [];
+    if (f.saiuEntregue) saiu.push(f.saiuEntregue + ' entregues');
+    if (f.saiuNegada) saiu.push(f.saiuNegada + (f.saiuNegada === 1 ? ' recusada' : ' recusadas'));
+    if (k.pontos) saiu.push(k.pontos + ' pontos');
+    if (saiu.length) {
+      s.addText('Das saídas: ' + saiu.join('  ·  '), {
+        x: 0.7, y: 4.02, w: 8.6, h: 0.3, fontSize: 12, color: C.fraco });
+    }
     if (f.corte) {
       s.addText((f.emCurso ? 'Posição de ' : 'Fechamento em ') + f.corte +
-                (f.tocadas ? '   ·   ' + f.tocadas + ' demandas foram trabalhadas no período' : '') +
-                (k.pontos ? '   ·   ' + k.pontos + ' pontos entregues' : ''), {
-        x: 0.7, y: 4.15, w: 8.6, h: 0.35, fontSize: 12, color: C.fraco });
+                (f.tocadas ? '   ·   ' + f.tocadas + ' demandas trabalhadas no período' : '') +
+                (a && a.parcial ? '   ·   comparação parcial: ' + a.nome + ' está completo' : ''), {
+        x: 0.7, y: 4.36, w: 8.6, h: 0.3, fontSize: 11, color: C.fraco });
     }
     rodape(s, d.periodo, pagina);
+    return s;
+  }
+
+  /* ENTREGAS RÁPIDAS: entrou e saiu em até dois dias.
+
+     É o melhor argumento de eficiência que estes dados têm, e estava invisível no
+     deck. Cada linha leva o que a sala pergunta em seguida: quantos dias, se é
+     sustentação ou evolução, em que módulo e de quem foi.                        */
+  function slideRapidas(pptx, r, pagina, periodo, anterior) {
+    var s = slideTitulo(pptx, 'Entregas rápidas', 'entraram e saíram em até dois dias', pagina);
+    var itens = r.itens || [];
+    if (!itens.length) {
+      s.addText('Nenhuma entrega do período fechou em até dois dias.', {
+        x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
+      rodape(s, periodo, pagina);
+      return s;
+    }
+    var pct = r.total ? Math.round(itens.length / r.total * 100) : 0;
+    s.addText(String(itens.length), { x: 0.7, y: 1.35, w: 1.5, h: 0.9,
+                                      fontSize: 46, bold: true, color: C.verde });
+    s.addText('de ' + r.total + ' entregas do mês  ·  ' + pct + '%', {
+      x: 2.2, y: 1.62, w: 3.4, h: 0.4, fontSize: 14, color: C.texto });
+    if (anterior && anterior.rapidas != null) {
+      desenhaVariacao(s, variacao(itens.length, anterior.rapidas, true),
+                      2.2, 2.0, 3.4, anterior.nome);
+    }
+
+    var TOPO = 2.45, ALT = 0.4;
+    var vis = itens.slice(0, 6);
+    vis.forEach(function (it, i) {
+      var y = TOPO + i * ALT;
+      s.addText(it.dias === 0 ? 'no dia' : it.dias + (it.dias === 1 ? ' dia' : ' dias'), {
+        x: 0.7, y: y, w: 0.85, h: 0.3, fontSize: 11.5, bold: true, color: C.verde });
+      s.addText(corta(it.titulo, 46), { x: 1.6, y: y, w: 4.0, h: 0.3,
+                                        fontSize: 12, color: C.texto });
+      s.addText([it.tipo, it.tema].filter(Boolean).join(' · '), {
+        x: 5.65, y: y, w: 2.6, h: 0.3, fontSize: 10.5, color: C.fraco });
+      s.addText(corta(it.dev, 20), { x: 8.3, y: y, w: 1.4, h: 0.3,
+                                     fontSize: 10.5, color: C.azul });
+    });
+    var sobra = itens.length - vis.length;
+    if (sobra > 0) {
+      s.addText('… e mais ' + sobra + (sobra === 1 ? ' entrega em até dois dias' : ' entregas em até dois dias'), {
+        x: 0.7, y: TOPO + vis.length * ALT + 0.04, w: 8.6, h: 0.3,
+        fontSize: 11, color: C.fraco });
+    }
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
+  /* EVOLUÇÃO DOS ÚLTIMOS SEIS MESES, em barras desenhadas no slide.
+
+     Um mês sozinho não mostra tendência, e tendência é o que vem depois do número
+     na conversa. Duas barras por mês — entrou e saiu — e o "no prazo" embaixo, como
+     texto: uma terceira barra em escala diferente (percentual junto de contagem)
+     seria comparar coisas que não se comparam.
+
+     Mês em curso leva reticências no rótulo: sem isso a última coluna sempre parece
+     uma queda.                                                                   */
+  function slideEvolucao(pptx, serie, pagina, periodo) {
+    var s = slideTitulo(pptx, 'Evolução', 'entradas, saídas e prazo mês a mês', pagina);
+    var vis = (serie || []).filter(function (x) { return x; });
+    if (!vis.length) { rodape(s, periodo, pagina); return s; }
+
+    var X0 = 0.9, LARG = 8.4, BASE = 3.62, ALTO = 1.85;
+    var col = LARG / vis.length;
+    var max = vis.reduce(function (m, x) {
+      return Math.max(m, x.entraram || 0, x.sairam || 0);
+    }, 1);
+    var barra = Math.min(0.5, col * 0.3);
+
+    vis.forEach(function (x, i) {
+      var cx = X0 + i * col + (col - barra * 2 - 0.08) / 2;
+      [{ v: x.entraram, cor: C.azul, dx: 0 },
+       { v: x.sairam, cor: C.verde, dx: barra + 0.08 }].forEach(function (b) {
+        var h = Math.max(0.04, ALTO * (b.v / max));
+        s.addShape(pptx.ShapeType.rect, { x: cx + b.dx, y: BASE - h, w: barra, h: h,
+                                          fill: { color: b.cor } });
+        s.addText(String(b.v), { x: cx + b.dx - 0.12, y: BASE - h - 0.28, w: barra + 0.24, h: 0.26,
+                                 fontSize: 10, color: b.cor, align: 'center' });
+      });
+      s.addText(x.rot + (x.parcial ? '…' : ''), {
+        x: X0 + i * col, y: BASE + 0.06, w: col, h: 0.28,
+        fontSize: 12, color: x.parcial ? C.texto : C.fraco, align: 'center' });
+      s.addText(x.pct == null ? '—' : x.pct + '%', {
+        x: X0 + i * col, y: BASE + 0.36, w: col, h: 0.26,
+        fontSize: 11, color: x.pct == null ? C.fraco : (x.pct >= 80 ? C.verde : x.pct >= 50 ? C.ambar : C.vermelho),
+        align: 'center' });
+      s.addText(String(x.backlog), {
+        x: X0 + i * col, y: BASE + 0.64, w: col, h: 0.26,
+        fontSize: 11, color: C.fraco, align: 'center' });
+    });
+
+    // A legenda diz o que e cada linha; sem ela, tres numeros embaixo da barra
+    // viram adivinhacao.
+    [{ t: 'entraram', cor: C.azul }, { t: 'saíram', cor: C.verde }].forEach(function (l, i) {
+      s.addShape(pptx.ShapeType.rect, { x: 0.9 + i * 1.4, y: 1.5, w: 0.14, h: 0.14,
+                                        fill: { color: l.cor } });
+      s.addText(l.t, { x: 1.1 + i * 1.4, y: 1.42, w: 1.2, h: 0.28, fontSize: 11, color: C.fraco });
+    });
+    s.addText('abaixo de cada mês: % no prazo e backlog no fim do mês', {
+      x: 4.0, y: 1.42, w: 5.3, h: 0.28, fontSize: 11, color: C.fraco, align: 'right' });
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
+  /* O MÊS DE UM DEV, em linha do tempo — o mesmo desenho do quadro do Planejamento.
+
+     Slide por pessoa, e só para os três primeiros: é a visão de o que ela pegou,
+     quando, e por quanto tempo cada coisa ficou com ela. Com dez nomes viraria
+     lista, e a conversa sairia de "o que o time entregou" para "por que o fulano
+     aparece embaixo".                                                            */
+  function slideGanttDev(pptx, dv, pagina, periodo) {
+    var s = slideTitulo(pptx, dv.nome,
+      dv.entregas + (dv.entregas === 1 ? ' entrega' : ' entregas') +
+      (dv.pontos ? '  ·  ' + dv.pontos + ' pontos' : '') + '  ·  no período', pagina);
+    var X0 = 3.5, LARG = 6.1, TOPO = 1.75, ALT = 0.42;
+    var dias = dv.dias || 31;
+
+    // A régua de dias: sem ela a barra não diz quando, só quanto.
+    [1, 5, 10, 15, 20, 25, dias].forEach(function (d) {
+      var x = X0 + LARG * (d - 1) / Math.max(1, dias - 1);
+      s.addText(String(d), { x: x - 0.15, y: 1.44, w: 0.3, h: 0.24,
+                             fontSize: 9, color: C.fraco, align: 'center' });
+    });
+
+    var vis = (dv.barras || []).slice(0, 7);
+    vis.forEach(function (b, i) {
+      var y = TOPO + i * ALT;
+      s.addText(corta(b.titulo, 34), { x: 0.7, y: y, w: 2.7, h: 0.3,
+                                       fontSize: 10.5, color: C.texto });
+      s.addShape(pptx.ShapeType.rect, { x: X0, y: y + 0.1, w: LARG, h: 0.14,
+                                        fill: { color: C.fundo2 } });
+      var x1 = X0 + LARG * (b.de - 1) / Math.max(1, dias - 1);
+      var x2 = X0 + LARG * (b.ate - 1) / Math.max(1, dias - 1);
+      s.addShape(pptx.ShapeType.rect, {
+        x: x1, y: y + 0.06, w: Math.max(0.09, x2 - x1), h: 0.22,
+        fill: { color: b.tipo === 'Sustentação' ? C.ambar : C.verde } });
+      var meta = [b.tema, b.pontos ? b.pontos + ' pt' : ''].filter(Boolean).join(' · ');
+      if (meta) s.addText(corta(meta, 30), { x: 0.7, y: y + 0.2, w: 2.7, h: 0.22,
+                                             fontSize: 8.5, color: C.fraco });
+    });
+    var sobra = (dv.barras || []).length - vis.length;
+    if (sobra > 0) {
+      s.addText('… e mais ' + sobra + (sobra === 1 ? ' entrega' : ' entregas') + ' no mês', {
+        x: 0.7, y: TOPO + vis.length * ALT + 0.04, w: 8.6, h: 0.28,
+        fontSize: 11, color: C.fraco });
+    }
+    [{ t: 'evolução', cor: C.verde }, { t: 'sustentação', cor: C.ambar }].forEach(function (l, i) {
+      s.addShape(pptx.ShapeType.rect, { x: 3.5 + i * 1.5, y: 4.92, w: 0.14, h: 0.14,
+                                        fill: { color: l.cor } });
+      s.addText(l.t, { x: 3.7 + i * 1.5, y: 4.85, w: 1.3, h: 0.26, fontSize: 10, color: C.fraco });
+    });
+    rodape(s, periodo, pagina);
     return s;
   }
 
@@ -584,6 +766,12 @@
     s.addText(z.pct + '%', { x: 0.7, y: 1.0, w: 4.2, h: 1.5, fontSize: 92, bold: true, color: cor });
     s.addText(z.noPrazo + ' de ' + z.medidas + ' entregas medidas', {
       x: 0.72, y: 2.45, w: 4.2, h: 0.35, fontSize: 15, color: C.texto });
+    // O percentual e o numero que mais pede comparacao: 55% sozinho nao diz se
+    // melhorou.
+    if (d.anterior && d.anterior.pct != null) {
+      desenhaVariacao(s, variacao(z.pct, d.anterior.pct, true), 0.72, 2.85, 4.2,
+                      d.anterior.nome + ' (' + d.anterior.pct + '%)', ' pontos');
+    }
 
     // "Sem medição" era um balde só, e parecia falha do relatório — a demanda TEM
     // data. O que falta é o PRAZO COMBINADO: sem ele não há com o que comparar a
@@ -666,6 +854,17 @@
       }
     }
 
+    // 2b. As entregas rápidas: o argumento de eficiência do time, logo depois da
+    //     conversa de prazo, que é onde ele responde.
+    if (d.secoes.rapidas && d.rapidas && (d.rapidas.itens || []).length) {
+      slideRapidas(pptx, d.rapidas, ++p, d.periodo, d.anterior);
+    }
+
+    // 2c. A evolução: um mês sozinho não mostra tendência.
+    if (d.secoes.evolucao && (d.evolucao || []).length) {
+      slideEvolucao(pptx, d.evolucao, ++p, d.periodo);
+    }
+
     // 3. Os projetos. Depois do mês porque o mês é o todo e o projeto é o recorte
     //    — e antes do time, porque projeto é o que a diretoria acompanha por nome.
     if (d.secoes.projetos && (d.projetos || []).length) {
@@ -699,6 +898,13 @@
         titulo: 'Entregas por desenvolvedor', sub: 'demandas concluídas no período',
         itens: d.porDev, cor: C.verde, rotuloSobra: ' pessoas', rotuloExtra: 'pts',
       }, ++p, d.periodo);
+    }
+
+    // 5c. O mês de cada um dos três primeiros devs, em linha do tempo.
+    if (d.secoes.ganttdev) {
+      (d.ganttDev || []).forEach(function (dv) {
+        if ((dv.barras || []).length) slideGanttDev(pptx, dv, ++p, d.periodo);
+      });
     }
 
     // As imagens seguem suportadas para quem quiser mandar um grafico pronto,
