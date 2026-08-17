@@ -574,7 +574,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="dialogo.js?v=c9a9c2c4fd"></script>
+<script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -2615,6 +2615,9 @@ function openModal(id, prefillDev, prefillDate) {
   }
 
   abrirModal('modal-main');
+  // A guarda entra DEPOIS de os campos estarem preenchidos: ligada antes, o retrato
+  // sairia do formulario vazio e qualquer card pareceria alterado.
+  if (window.guardaLiga) guardaLiga('modal-main', saveTask);
   setTimeout(() => document.getElementById('e-titulo').focus(), 50);
 }
 
@@ -2884,6 +2887,9 @@ function saveTask() {
     state.melhorias.push(obj);
   }
 
+  // Decidiu (gravar, devolver ao backlog ou excluir): a guarda sai de cena, senao o
+  // fechamento perguntaria se a pessoa quer salvar o que ela acabou de decidir.
+  if (window.guardaDesliga) guardaDesliga('modal-main');
   closeModal('modal-main');
   renderAll();
   saveToGitHub();
@@ -2897,6 +2903,9 @@ function returnToBacklog() {
   m.entrega             = '';
   m.dev                 = '';
   m.status_planejamento = 'backlog';
+  // Decidiu (gravar, devolver ao backlog ou excluir): a guarda sai de cena, senao o
+  // fechamento perguntaria se a pessoa quer salvar o que ela acabou de decidir.
+  if (window.guardaDesliga) guardaDesliga('modal-main');
   closeModal('modal-main');
   renderAll();
   saveToGitHub();
@@ -2908,6 +2917,9 @@ async function deleteCurrent() {
       texto: 'Nao ha como desfazer.', ok: 'Excluir', perigo: true }))) return;
   _gDeletedIds.add(editingId);
   state.melhorias = state.melhorias.filter(m => m.id !== editingId);
+  // Decidiu (gravar, devolver ao backlog ou excluir): a guarda sai de cena, senao o
+  // fechamento perguntaria se a pessoa quer salvar o que ela acabou de decidir.
+  if (window.guardaDesliga) guardaDesliga('modal-main');
   closeModal('modal-main');
   renderAll();
   saveToGitHub();
@@ -3371,7 +3383,14 @@ function abrirModal(id) {
   const cx = ov.querySelector('.modal');
   if (cx) cx.scrollTop = 0;
 }
-function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+// Fechar um card com alteracao nao gravada PARA e pergunta. Duas tasks foram
+// perdidas por este caminho: o card fechava calado no X, no Esc e no clique fora.
+async function closeModal(id) {
+  if (window.guardaPodeFechar && !(await guardaPodeFechar(id))) return false;
+  document.getElementById(id).style.display = 'none';
+  if (window.guardaDesliga) guardaDesliga(id);
+  return true;
+}
 
 // Esc fecha o modal visível mais acima na pilha.
 document.addEventListener('keydown', e => {
@@ -3383,6 +3402,10 @@ document.addEventListener('keydown', e => {
   if (!abertos.length) return;
   const topo = abertos.reduce((a, b) =>
     (parseInt(getComputedStyle(b).zIndex) || 0) >= (parseInt(getComputedStyle(a).zIndex) || 0) ? b : a);
+  // O Esc era a saida mais silenciosa de todas: escondia o modal direto, sem passar
+  // por nenhuma verificacao. Agora ele fecha pelo mesmo caminho do X — e para na
+  // guarda quando ha alteracao nao gravada.
+  if (topo.id && window.guardaMexeu && guardaMexeu(topo.id)) { closeModal(topo.id); return; }
   topo.style.display = 'none';
 });
 

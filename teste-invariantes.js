@@ -2389,6 +2389,35 @@ ok(/atribuiCodigos\(data\);/.test(rotaPublica.slice(0, 600)),
 ok(/return json\(\{ ok: true, id: nova\.id, codigo: nova\.codigo \}/.test(W),
    'e o codigo volta para quem abriu a demanda');
 
+sec('Card com alteracao nao gravada nao fecha calado');
+
+// Duas tasks foram perdidas pelo mesmo caminho: o card fechava sem dizer nada no X,
+// no Esc e no clique fora, e o que estava digitado morria ali.
+const DIALOGO = fs.readFileSync('dialogo.js', 'utf8');
+ok(/window\.escolher3 = function/.test(DIALOGO),
+   'existe o dialogo de tres respostas');
+ok(/id="dlg-fica"/.test(DIALOGO) && /id="dlg-alt"/.test(DIALOGO) && /id="dlg-ok"/.test(DIALOGO),
+   'com salvar, descartar e continuar editando');
+// O gesto ambiguo tem de cair no lado que nao apaga nada.
+ok(/if \(e\.target === ov\) fecha\(''\);/.test(DIALOGO) &&
+   /if \(e\.key === 'Escape'\) \{ e\.preventDefault\(\); fecha\(''\); \}/.test(DIALOGO),
+   'e Esc e clique fora escolhem "continuar editando"');
+// O retrato sai dos campos, e nao de uma lista de nomes: lista esquece o campo novo.
+ok(/el\.querySelectorAll\('input, select, textarea'\)/.test(DIALOGO),
+   'o retrato do card sai dos proprios campos do formulario');
+// Salvar que para numa validacao nao pode fechar o card: era a perda de novo.
+ok(/if \(aberto && okSalvo !== true\) return false;/.test(DIALOGO),
+   'gravacao que para numa validacao mantem o card aberto');
+
+[['Admin', ADMIN], ['Gantt', GANTT], ['Dev', DEV]].forEach(([tela, src]) => {
+  ok(/async function closeModal\(id\) \{[\s\S]{0,200}?guardaPodeFechar\(id\)/.test(src),
+     tela + ': fechar o card passa pela guarda');
+  ok(/if \(topo\.id && window\.guardaMexeu && guardaMexeu\(topo\.id\)\) \{ closeModal\(topo\.id\); return; \}/.test(src),
+     tela + ': e o Esc tambem — era a saida mais silenciosa de todas');
+  ok(/guardaLiga\('modal-/.test(src), tela + ': a guarda e ligada ao abrir o card');
+  ok(/guardaDesliga\('modal-/.test(src), tela + ': e desligada depois de gravar');
+});
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

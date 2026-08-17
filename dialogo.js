@@ -175,6 +175,106 @@
     });
   };
 
+  /* TRES RESPOSTAS, e nao duas.
+     "Salvar antes de fechar?" com Sim/Nao empurra a perda para o Nao — e Nao e o
+     botao que a pessoa aperta no automatico. Com tres, descartar tem de ser dito
+     com o dedo, e o gesto ambiguo (Esc, clique fora) cai em "continuar editando",
+     que e o unico que nao apaga nada.
+
+     Devolve 'ok' (o principal), 'alt' (o do meio) ou '' (ficou onde estava).      */
+  window.escolher3 = function (o) {
+    o = o || {};
+    return new Promise(function (resolve) {
+      var ov = document.createElement('div');
+      ov.className = 'dlg-ov';
+      ov.innerHTML =
+        '<div class="dlg-box" role="dialog" aria-modal="true">' +
+          '<h3>' + esc(o.titulo || 'Confirmar') + '</h3>' +
+          (o.texto ? '<div class="dlg-sub">' + esc(o.texto) + '</div>' : '') +
+          '<div class="dlg-acoes">' +
+            '<button type="button" class="dlg-b sec" id="dlg-fica">' +
+              esc(o.fica || 'Continuar editando') + '</button>' +
+            '<button type="button" class="dlg-b perigo" id="dlg-alt">' +
+              esc(o.alt || 'Descartar') + '</button>' +
+            '<button type="button" class="dlg-b pri" id="dlg-ok">' +
+              esc(o.ok || 'Salvar') + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(ov);
+      var fecha = function (r) { ov.remove(); resolve(r); };
+      ov.querySelector('#dlg-ok').onclick = function () { fecha('ok'); };
+      ov.querySelector('#dlg-alt').onclick = function () { fecha('alt'); };
+      ov.querySelector('#dlg-fica').onclick = function () { fecha(''); };
+      ov.addEventListener('click', function (e) { if (e.target === ov) fecha(''); });
+      ov.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); fecha(''); }
+        if (e.key === 'Enter') { e.preventDefault(); fecha('ok'); }
+      });
+      setTimeout(function () { ov.querySelector('#dlg-ok').focus(); }, 10);
+    });
+  };
+
+  /* A GUARDA DO CARD ABERTO.
+     Duas tasks foram perdidas pelo mesmo motivo: o card fecha calado. Clicou no X,
+     apertou Esc ou clicou fora, e o que foi digitado morreu ali.
+
+     O retrato sai dos PROPRIOS CAMPOS do formulario, e nao de uma lista de nomes:
+     lista escrita a mao esquece o campo novo, e o campo esquecido e justamente o
+     que fecha sem avisar.                                                        */
+  var guardas = {};
+
+  function retrato(modalId) {
+    var el = document.getElementById(modalId);
+    if (!el) return '';
+    return [].map.call(el.querySelectorAll('input, select, textarea'), function (c) {
+      if (c.type === 'file') return '';          // arquivo nao se compara por valor
+      if (c.type === 'checkbox' || c.type === 'radio') return (c.name || c.id) + '=' + c.checked;
+      return (c.name || c.id) + '=' + c.value;
+    }).join('');
+  }
+
+  // Liga a guarda: chame ao ABRIR o card, depois de preencher os campos.
+  window.guardaLiga = function (modalId, salvar) {
+    guardas[modalId] = { base: retrato(modalId), salvar: salvar };
+  };
+  // Desliga: chame depois de gravar com sucesso, ou quando o card ja nao esta aberto.
+  window.guardaDesliga = function (modalId) { delete guardas[modalId]; };
+  // Reatualiza o retrato (gravou e continua no card).
+  window.guardaSincroniza = function (modalId) {
+    if (guardas[modalId]) guardas[modalId].base = retrato(modalId);
+  };
+  window.guardaMexeu = function (modalId) {
+    var g = guardas[modalId];
+    return !!g && retrato(modalId) !== g.base;
+  };
+
+  // Devolve true se pode fechar. Pergunta so quando ha o que perder.
+  window.guardaPodeFechar = async function (modalId) {
+    var g = guardas[modalId];
+    if (!g || !window.guardaMexeu(modalId)) return true;
+    var r = await window.escolher3({
+      titulo: 'Você mexeu neste card e não gravou.',
+      texto: 'Salvar agora, descartar o que você digitou, ou voltar para o card?',
+      ok: 'Salvar', alt: 'Descartar', fica: 'Continuar editando',
+    });
+    if (r === 'ok') {
+      var okSalvo = true;
+      try { okSalvo = await g.salvar(); } catch (e) { okSalvo = false; }
+      if (okSalvo === false) return false;
+      // A GRAVACAO QUE DA CERTO FECHA O CARD SOZINHA — as tres telas fazem isso.
+      // Se o card continua aberto, a gravacao parou numa validacao (falta titulo,
+      // tipo, horas...) e a maioria dessas funcoes nao devolve nada. Fechar aqui
+      // jogaria fora justamente o que se quer proteger, entao o card fica.
+      var el = document.getElementById(modalId);
+      var aberto = el && getComputedStyle(el).display !== 'none';
+      if (aberto && okSalvo !== true) return false;
+      window.guardaDesliga(modalId);
+      return true;
+    }
+    if (r === 'alt') { window.guardaDesliga(modalId); return true; }
+    return false;
+  };
+
   // Substitui alert(). Promise<void>, para o chamador poder esperar.
   window.avisar = function (titulo, texto) {
     return new Promise(function (resolve) {

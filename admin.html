@@ -894,7 +894,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="dialogo.js?v=c9a9c2c4fd"></script>
+<script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js"></script>
 <script src="apresentacao.js?v=8297d9a05a"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -6565,6 +6565,9 @@ function openModalMelhoria(id) {
   depInfoEl.style.display = depHTML ? 'block' : 'none';
 
   abrirModal('modal-melhoria');
+  // A guarda entra DEPOIS de os campos estarem preenchidos: ligada antes, o retrato
+  // sairia do formulario vazio e qualquer card pareceria alterado.
+  if (window.guardaLiga) guardaLiga('modal-melhoria', saveMelhoria);
 }
 
 function onStatusChange() {
@@ -6951,6 +6954,9 @@ async function saveMelhoria() {
   // Guarda no navegador ANTES de fechar o modal. Se algo falhar do fechamento em
   // diante — inclusive a aba morrer — o que foi digitado ja esta salvo aqui.
   rascunhoSalvar();
+  // Gravou: a guarda sai de cena, senao o fechamento logo abaixo perguntaria de
+  // novo se a pessoa quer salvar o que ela acabou de salvar.
+  if (window.guardaDesliga) guardaDesliga('modal-melhoria');
   closeModal('modal-melhoria');
   // Veio de dentro de um projeto: devolve a pessoa para la, com a demanda ja
   // listada. Sem isto ela ficaria sem saber se o vinculo pegou.
@@ -8015,6 +8021,7 @@ async function valDecidir(aprovar, obs) {
     toast(aprovar ? '✅ Entrega aprovada — demanda concluída.' : '↩ Devolvida ao dev.', 'ok');
     _dirtyMelhoriaIds.delete(id);
     _pendingEdits = false;
+    if (window.guardaDesliga) guardaDesliga('modal-melhoria');
     closeModal('modal-melhoria');
   } else {
     // DESFAZ. O carimbo verde no card e uma afirmacao com nome e hora; mante-lo
@@ -8931,11 +8938,16 @@ function abrirModal(id) {
   const cx = ov.querySelector('.modal');
   if (cx) cx.scrollTop = 0;
 }
-function closeModal(id) {
+// Fechar um card com alteracao nao gravada PARA e pergunta. Duas tasks foram
+// perdidas por este caminho: o card fechava calado no X, no Esc e no clique fora.
+async function closeModal(id) {
+  if (window.guardaPodeFechar && !(await guardaPodeFechar(id))) return false;
   document.getElementById(id).style.display = 'none';
+  if (window.guardaDesliga) guardaDesliga(id);
   // Fechou o card: o endereco volta ao normal, senao um F5 reabriria o card que a
   // pessoa acabou de fechar.
   if (id === 'modal-melhoria') rotaEscreve('');
+  return true;
 }
 
 // Esc fecha o modal visível mais acima na pilha. Nenhum modal tinha isso, e é a
@@ -8949,6 +8961,10 @@ document.addEventListener('keydown', e => {
   if (!abertos.length) return;
   const topo = abertos.reduce((a, b) =>
     (parseInt(getComputedStyle(b).zIndex) || 0) >= (parseInt(getComputedStyle(a).zIndex) || 0) ? b : a);
+  // O Esc era a saida mais silenciosa de todas: escondia o modal direto, sem passar
+  // por nenhuma verificacao. Agora ele fecha pelo mesmo caminho do X — e para na
+  // guarda quando ha alteracao nao gravada.
+  if (topo.id && window.guardaMexeu && guardaMexeu(topo.id)) { closeModal(topo.id); return; }
   topo.style.display = 'none';
 });
 

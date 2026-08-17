@@ -415,7 +415,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="dialogo.js?v=c9a9c2c4fd"></script>
+<script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -3821,6 +3821,9 @@ function openNewModal() {
   // Popula Sistema / Módulo
   populateSistemaModulo('n', null);
   abrirModal('modal-new');
+  // Vale para a demanda nova tambem: fechar sem gravar perde o texto que foi
+  // escrito, e foi assim que uma task se perdeu.
+  if (window.guardaLiga) guardaLiga('modal-new', saveNewDemand);
 }
 
 function resetStatusOptions() {
@@ -3869,6 +3872,9 @@ function openEditDemand(id) {
   document.getElementById('btn-save-demand').textContent = 'Salvar alterações';
   populateSistemaModulo('n', m.tema_id);
   abrirModal('modal-new');
+  // Depois de preencher: ligada antes, o retrato sairia do formulario vazio e
+  // qualquer card pareceria alterado.
+  if (window.guardaLiga) guardaLiga('modal-new', saveNewDemand);
 }
 
 // ── SISTEMA / MÓDULO (tema = "Sistema - Módulo") ──────────────────────────
@@ -3986,6 +3992,7 @@ async function saveNewDemand() {
   } else {
     state.melhorias.push(obj);
   }
+  if (window.guardaDesliga) guardaDesliga('modal-new');
   closeModal('modal-new');
   renderKanban();
   // Persiste (inclui temas se um novo sistema/módulo foi criado)
@@ -4093,10 +4100,15 @@ function abrirModal(id) {
   const cx = ov.querySelector('.modal');
   if (cx) cx.scrollTop = 0;
 }
-function closeModal(id) {
+// Fechar um card com alteracao nao gravada PARA e pergunta. Duas tasks foram
+// perdidas por este caminho: o card fechava calado no X, no Esc e no clique fora.
+async function closeModal(id) {
+  if (window.guardaPodeFechar && !(await guardaPodeFechar(id))) return false;
   document.getElementById(id).style.display = 'none';
+  if (window.guardaDesliga) guardaDesliga(id);
   // Fechou: o endereco volta ao normal, senao um F5 reabriria o card fechado.
   if (id === 'modal-status') rotaEscreve('');
+  return true;
 }
 
 // Esc fecha o modal visível mais acima na pilha.
@@ -4109,6 +4121,10 @@ document.addEventListener('keydown', e => {
   if (!abertos.length) return;
   const topo = abertos.reduce((a, b) =>
     (parseInt(getComputedStyle(b).zIndex) || 0) >= (parseInt(getComputedStyle(a).zIndex) || 0) ? b : a);
+  // O Esc era a saida mais silenciosa de todas: escondia o modal direto, sem passar
+  // por nenhuma verificacao. Agora ele fecha pelo mesmo caminho do X — e para na
+  // guarda quando ha alteracao nao gravada.
+  if (topo.id && window.guardaMexeu && guardaMexeu(topo.id)) { closeModal(topo.id); return; }
   topo.style.display = 'none';
 });
 
