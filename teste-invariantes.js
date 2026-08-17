@@ -2098,9 +2098,15 @@ sec('Sessao vencida derruba a tela, e nao o usuario');
   // O corpo so pode ser lido uma vez — quem chamou ainda precisa dele.
   ok(/return new Response\(texto, \{ status: res\.status/.test(src),
      tela + ': devolve o corpo que consumiu');
-  // Recarregar ao voltar traria a versao do servidor por cima do que ficou na tela.
-  ok(/if \(_sessaoCaiu\) \{\s*\n\s*_sessaoCaiu = false;/.test(src),
-     tela + ': voltar da expiracao nao recarrega por cima do trabalho');
+  // Recarregar ao voltar traria a versao do servidor por cima do que ficou na
+  // tela. Mas o atalho so pode valer com a tela JA MONTADA: sem essa condicao,
+  // uma sessao que vence ANTES da montagem fazia a entrada pular o mes corrente,
+  // os listeners e a carga dos dados — e o Planejamento abriu vazio, com
+  // "undefined undefined" no lugar do mes.
+  ok(/if \(_sessaoCaiu && _telaMontada\) \{/.test(src),
+     tela + ': o atalho da expiracao exige a tela montada');
+  ok(/let _telaMontada = false;/.test(src) && /_telaMontada = true;/.test(src),
+     tela + ': e a montagem se marca no fim dela');
 });
 
 sec('A carta 12+1 e um rotulo, e nao um valor');

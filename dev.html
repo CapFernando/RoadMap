@@ -2726,6 +2726,10 @@ function isDevTeste(name) {
    este caso nasceu.                                                            */
 let _sessaoCaiu = false;
 let _refazerAoVoltar = null;
+// A tela ja montou? O atalho de "voltei da expiracao, nao recarrega" so pode valer
+// depois disso. Sem este sinalizador, uma sessao que vence ANTES da montagem fazia
+// a entrada pular o mes corrente, os listeners e a carga — e a tela abria vazia.
+let _telaMontada = false;
 
 // Derruba a sessao e pede a entrada de novo. NAO avisa o servidor: o token ja nao
 // vale, e a chamada de logout voltaria 401 — reentrando aqui.
@@ -2781,12 +2785,13 @@ function enterApp() {
   // Voltando de uma sessao vencida: refaz a gravacao que falhou, se havia uma.
   // O resto da tela ja esta montado — redesenhar aqui apagaria o que a pessoa
   // mexeu depois do vencimento.
-  if (_sessaoCaiu) {
+  if (_sessaoCaiu && _telaMontada) {
     _sessaoCaiu = false;
     const refazer = _refazerAoVoltar; _refazerAoVoltar = null;
     if (refazer) refazer();
     return;
   }
+  _sessaoCaiu = false;
   document.getElementById('dev-label').textContent = currentDev;
   // Exibe banner e botão de limpeza apenas para "Teste"
   const banner = document.getElementById('banner-teste');
@@ -2796,6 +2801,7 @@ function enterApp() {
   renderKanban();
   if (runtimeToken) loadData(true);
   startPolling();
+  _telaMontada = true;
 }
 
 async function limparDadosTeste() {

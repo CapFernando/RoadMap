@@ -1096,6 +1096,10 @@ function initLoginScreen() {
    este caso nasceu.                                                            */
 let _sessaoCaiu = false;
 let _refazerAoVoltar = null;
+// A tela ja montou? O atalho de "voltei da expiracao, nao recarrega" so pode valer
+// depois disso. Sem este sinalizador, uma sessao que vence ANTES da montagem fazia
+// a entrada pular o mes corrente, os listeners e a carga — e a tela abria vazia.
+let _telaMontada = false;
 
 // Derruba a sessao e pede a entrada de novo. NAO avisa o servidor: o token ja nao
 // vale, e a chamada de logout voltaria 401 — reentrando aqui.
@@ -1149,18 +1153,20 @@ function entrarGantt() {
   // Voltando de uma sessao vencida: a tela ja esta montada e com o trabalho da
   // pessoa. Recarregar aqui jogaria fora exatamente o que a fez entrar de novo —
   // entao so refazemos a gravacao que tinha falhado.
-  if (_sessaoCaiu) {
+  if (_sessaoCaiu && _telaMontada) {
     _sessaoCaiu = false;
     const refazer = _refazerAoVoltar; _refazerAoVoltar = null;
     if (refazer) refazer();
     else toast('Bem-vindo de volta. Nada se perdeu.', 'ok');
     return;
   }
+  _sessaoCaiu = false;
   const now = new Date();
   viewYear = now.getFullYear();
   viewMonth = now.getMonth();
   setupGanttCardListener();
   loadFromGitHub();
+  _telaMontada = true;
 }
 async function doLogin() {
   const v = document.getElementById('senha-input').value;
