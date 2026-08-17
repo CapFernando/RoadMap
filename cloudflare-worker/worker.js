@@ -3341,6 +3341,12 @@ export default {
     };
     if (!nova.titulo) return json({ error: 'Titulo invalido' }, 400, headers);
     data.melhorias.push(nova);
+    // O CODIGO NASCE AQUI TAMBEM. Esta era a unica rota de escrita que nao chamava
+    // `atribuiCodigos`, e por isso a demanda aberta pelo formulario publico ficava
+    // sem numero — apareceu no Kanban como card anonimo, e so ganhava codigo se
+    // alguem publicasse pelo Admin depois. Sem codigo ela nao tem como ser citada
+    // no Teams, no PR, nem na reuniao.
+    atribuiCodigos(data);
     data.atualizado_em = new Date().toISOString();
 
     const putRes = await gh('contents/' + FILE_PATH, {
@@ -3348,6 +3354,7 @@ export default {
       body: JSON.stringify({ message: 'feat: nova sugestao (publico) - ' + nova.titulo, content: toB64(JSON.stringify(data)), sha: file.sha }),
     });
     if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
-    return json({ ok: true, id: nova.id }, 200, headers);
+    // Devolve o codigo: quem abriu precisa saber o numero para acompanhar.
+    return json({ ok: true, id: nova.id, codigo: nova.codigo }, 200, headers);
   },
 };

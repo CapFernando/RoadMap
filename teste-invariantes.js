@@ -2361,6 +2361,34 @@ ok(/function slideGanttDev\(pptx, dv, pagina, periodo\)/.test(APRES),
 ok(/\(ta\.porDev \|\| \[\]\)\.slice\(0, 3\)/.test(ADMIN),
    'tres, e nao o time inteiro — com dez nomes o slide vira lista');
 
+sec('Vincular a um projeto nao empurra a demanda para tras');
+
+// AX-195 saiu de Levantar Requisitos e voltou ao Backlog as 16:52 de 17/08, na mesma
+// gravacao em que ganhou o vinculo com o EP-003. Quem vinculou nao pediu isso: a
+// funcao forcava a etapa para Backlog sempre que um projeto era escolhido, sem
+// distinguir criacao de edicao — e deixava o campo desabilitado, sem como corrigir.
+ok(/const editando = !!\(document\.getElementById\('n-id'\) \|\| \{\}\)\.value;/.test(DEV),
+   'a funcao do projeto sabe se e criacao ou edicao');
+ok(/if \(etapa && !editando\) \{ etapa\.value = 'backlog'; etapa\.disabled = true; \}/.test(DEV),
+   'e so a demanda NOVA vai para o backlog ao ganhar projeto');
+ok(/A demanda fica na etapa em que está/.test(DEV),
+   'em edicao, o aviso diz que a etapa nao se move');
+// Campo vazio em demanda vinculada faz quem olha concluir que o vinculo nao existe.
+ok(/selPrj\.value = m\.projeto_id \|\| '';/.test(DEV),
+   'a edicao mostra o projeto que o card ja tem');
+
+sec('Toda demanda nasce com codigo');
+
+// A rota do formulario publico era a UNICA escrita que nao chamava atribuiCodigos: a
+// demanda entrava no Kanban como card anonimo, e so ganhava numero se alguem
+// publicasse pelo Admin depois. Sem codigo ela nao e citavel no Teams, no PR nem na
+// reuniao.
+const rotaPublica = W.slice(W.indexOf("data.melhorias.push(nova)"));
+ok(/atribuiCodigos\(data\);/.test(rotaPublica.slice(0, 600)),
+   'a sugestao publica recebe codigo antes de gravar');
+ok(/return json\(\{ ok: true, id: nova\.id, codigo: nova\.codigo \}/.test(W),
+   'e o codigo volta para quem abriu a demanda');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

@@ -3748,12 +3748,24 @@ function nProjetoMudou() {
   const etapa = document.getElementById('n-status');
   if (!sel || !aviso) return;
   const temProjeto = !!sel.value;
+  // EDICAO NAO MEXE NA ETAPA. Esta funcao forcava Backlog sempre que um projeto era
+  // escolhido — regra certa para demanda NOVA (demanda de projeto e dimensionada no
+  // planning junto das outras), e errada para demanda que ja esta andando.
+  //
+  // Foi o que tirou AX-195 de Levantar Requisitos as 16:52 de 17/08: quem vinculou
+  // ao EP-003 nao pediu para voltar ao Backlog, e o campo ficava desabilitado, sem
+  // como corrigir na mesma tela. A demanda "sumiu" da coluna onde estava.
+  const editando = !!(document.getElementById('n-id') || {}).value;
   if (temProjeto) {
-    if (etapa) { etapa.value = 'backlog'; etapa.disabled = true; }
+    if (etapa && !editando) { etapa.value = 'backlog'; etapa.disabled = true; }
+    if (etapa && editando) etapa.disabled = false;
     aviso.style.display = 'block';
-    aviso.innerHTML = 'Demanda de projeto entra no <strong>Backlog</strong> e é ' +
-      'dimensionada no planning junto das outras do mesmo projeto. Depois disso ela ' +
-      'aparece na aba Projetos com a pontuação.';
+    aviso.innerHTML = editando
+      ? 'A demanda fica na etapa em que está — o vínculo com o projeto não a move. ' +
+        'Ela passa a aparecer na aba Projetos com a pontuação.'
+      : 'Demanda de projeto entra no <strong>Backlog</strong> e é ' +
+        'dimensionada no planning junto das outras do mesmo projeto. Depois disso ela ' +
+        'aparece na aba Projetos com a pontuação.';
   } else {
     if (etapa) etapa.disabled = false;
     aviso.style.display = 'none';
@@ -3845,6 +3857,14 @@ function openEditDemand(id) {
     sel.innerHTML += `<option value="${sk}">${STATUS_LABELS[sk] || sk}</option>`;
   }
   sel.value = sk;
+  // O projeto do card, e a lista para trocar. Sem isto o campo abria vazio mesmo em
+  // demanda vinculada, e quem olhasse concluiria que o vinculo nao existe.
+  nPopulaProjetos();
+  const selPrj = document.getElementById('n-projeto');
+  if (selPrj) {
+    selPrj.value = m.projeto_id || '';
+    nProjetoMudou();
+  }
   document.getElementById('modal-new-title').textContent = 'Editar Demanda';
   document.getElementById('btn-save-demand').textContent = 'Salvar alterações';
   populateSistemaModulo('n', m.tema_id);
