@@ -509,6 +509,10 @@
     .us-axcred:hover { color:var(--text); border-color:var(--amber-tx,#FFC470); }
     .us-axcred.on { color:#0E0E0D; background:var(--amber-tx,#FFC470);
       border-color:var(--amber-tx,#FFC470); }
+    /* A frente cabe em uma linha: nome de pipeline e comprido ("Dados &
+       Inteligencia") e sem largura minima a coluna espremia o texto ate uma
+       palavra por linha. */
+    .us-pipeline { min-width:150px; font-size:12px; }
     .ap-dica { font-size:12.5px; color:var(--text3); line-height:1.55; margin:0 0 12px; }
     .ap-periodo { font-size:14px; color:var(--text); background:var(--bg3);
       border:1px solid var(--border); border-radius:8px; padding:9px 12px; margin-bottom:14px; }
@@ -896,7 +900,8 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js"></script>
-<script src="apresentacao.js?v=8297d9a05a"></script>
+<script src="pipelines.js?v=7198f99c86"></script>
+<script src="apresentacao.js?v=0269ce9077"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4696,6 +4701,7 @@ function gerBandejasAplicaTodas() {
 // entra no deck escolhia as cegas.
 const AP_SECOES = [
   { k: 'entregas', rot: 'O mês: backlog, o que entrou e o que saiu', pad: true },
+  { k: 'pipelines', rot: 'Frentes de trabalho (planejado × realizado)', pad: true },
   { k: 'prazo',    rot: 'No prazo x com atraso', pad: true },
   { k: 'rapidas',  rot: 'Entregas rápidas (até 2 dias)', pad: true },
   { k: 'evolucao', rot: 'Evolução dos últimos 6 meses', pad: true },
@@ -4803,6 +4809,116 @@ function apresTimeEAreas(conc, cl) {
   return {
     time: { entregas: topo('entregas'), pontos: topo('pontos'), atrasos: topo('atrasos') },
     areas, frentes, porDev, solicitantes, semSolic,
+  };
+}
+
+/* AS FRENTES DE TRABALHO — o eixo do painel que a diretoria aprovou.
+
+   PLANEJADO x REALIZADO x %EXEC, que é como aquele painel fala. Cada um vem de
+   um lugar diferente, e a diferença importa:
+
+   • REALIZADO são as horas que o dev DIGITOU ao concluir. É medida, não conta.
+   • PLANEJADO vem da janela do planejamento — cada dia planejado vale 8h —, e
+     passa pelo MESMO RATEIO das horas realizadas. Somar dias × 8h por demanda,
+     sem ratear, dava 528h planejadas para uma pessoa num mês de 184h: as janelas
+     se sobrepõem e cada demanda reservava o dia inteiro. Rateado, o dia de uma
+     pessoa vale 8h e é dividido entre o que ela tinha em mãos — o planejado do
+     time passa a caber na capacidade do time, que é o que o número promete.
+
+   A COBERTURA DE HORAS VAI JUNTO. Julho tem 39% das entregas com horas lançadas
+   e agosto 96%: sem essa nota, o %EXEC de julho parece um time que trabalhou de
+   menos, quando o que houve foi hora não lançada. Número de execução sem a
+   cobertura ao lado é número que engana a própria sala.                        */
+function apresPipelines(conc, de, ate) {
+  const api = window.PIPELINES;
+  if (!api) return null;
+  const perfis = state.devs_perfil || {};
+
+  // A janela do PLANEJAMENTO (início → entrega prevista), e não a da execução:
+  // é o compromisso que foi assumido, e é contra ele que o realizado se compara.
+  const planejado = rateiaHoras(conc, m => ({
+    de: String(m.inicio || '').slice(0, 10),
+    ate: String(m.entrega || '').slice(0, 10),
+  }), de, ate);
+  // A aproximação para quem não lançou hora — a MESMA que a aba Gerencial usa,
+  // via `horasReaisDe`. Dois números com o mesmo nome saindo de contas diferentes
+  // é o defeito que este deck já teve uma vez.
+  const rateadoReal = rateiaHoras(conc, m => ({
+    de: String(m.inicio || '').slice(0, 10),
+    ate: String(m.concluido_em || m.entrega || '').slice(0, 10),
+  }), de, ate);
+
+  const acc = {};
+  const põe = (nome, campo, v) => {
+    acc[nome] = acc[nome] || { nome, cor: api.cor(nome), entregas: 0, pontos: 0,
+                               plan: 0, real: 0, evolucao: 0, sustentacao: 0, devs: new Set() };
+    if (campo) acc[nome][campo] += v;
+  };
+  let semHoras = 0;
+  let semJanela = 0;
+
+  conc.forEach(m => {
+    const devs = api.devsDaDemanda(m);
+    const real = horasReaisDe(m, rateadoReal);
+    const hReal = real.h;
+    const hPlan = planejado.get(m.id) || 0;
+    if (!real.medida) semHoras++;
+    if (!hPlan) semJanela++;
+    // Sem dev não há frente: a demanda conta no total do mês (os outros slides já
+    // a contam) e fica fora da divisão por frente, em vez de virar uma frente
+    // "(vazio)" que ninguém sabe ler.
+    const alvos = devs.length ? devs : [null];
+    alvos.forEach(n => {
+      // Rateado entre os responsáveis pelo mesmo motivo dos pontos: sem dividir,
+      // a soma das frentes passa do total do mês e o slide perde credibilidade na
+      // primeira vez que alguém conferir.
+      const q = alvos.length;
+      const nome = n ? (api.doDev(n, perfis) || api.NAO_CLASSIFICADO) : api.NAO_CLASSIFICADO;
+      põe(nome, 'entregas', 1 / q);
+      põe(nome, 'pontos', (Number(m.poker_pontos) || 0) / q);
+      põe(nome, 'plan', hPlan / q);
+      põe(nome, 'real', hReal / q);
+      if (m.tipo === 'evolucao') põe(nome, 'evolucao', 1 / q);
+      else if (m.tipo === 'sustentacao') põe(nome, 'sustentacao', 1 / q);
+      if (n) acc[nome].devs.add(n);
+    });
+  });
+
+  // Ordem FIXA, a mesma do painel aprovado — e não por volume. Frente que sobe e
+  // desce de posição a cada mês obriga a sala a reler a legenda todo mês; com a
+  // ordem fixa, a comparação com o deck anterior é direta.
+  const ordem = api.nomes.concat([api.NAO_CLASSIFICADO]);
+  const itens = ordem
+    .filter(n => acc[n])
+    .map(n => {
+      const a = acc[n];
+      return {
+        nome: a.nome, cor: a.cor,
+        entregas: Math.round(a.entregas), pontos: Math.round(a.pontos),
+        plan: Math.round(a.plan), real: Math.round(a.real),
+        pct: a.plan > 0 ? Math.round(a.real / a.plan * 100) : null,
+        evolucao: Math.round(a.evolucao), sustentacao: Math.round(a.sustentacao),
+        devs: a.devs.size,
+      };
+    });
+
+  const soma = c => itens.reduce((s, i) => s + i[c], 0);
+  const totPlan = soma('plan'), totReal = soma('real');
+  return {
+    itens,
+    total: {
+      entregas: soma('entregas'), pontos: soma('pontos'),
+      plan: totPlan, real: totReal,
+      pct: totPlan > 0 ? Math.round(totReal / totPlan * 100) : null,
+    },
+    cobertura: {
+      comHoras: conc.length - semHoras, total: conc.length,
+      pct: conc.length ? Math.round((conc.length - semHoras) / conc.length * 100) : 0,
+      semJanela,
+    },
+    // As frentes que ficaram de fora por decisão, para o slide poder dizer isso em
+    // vez de deixar a plateia procurar o que sumiu.
+    foraDoDeck: api.foraDoDeck,
   };
 }
 
@@ -5223,6 +5339,10 @@ async function apresGerar() {
     }
 
     const ta = apresTimeEAreas(conc, cl);
+    // As frentes usam a MESMA lista `conc` e o MESMO recorte de datas do resto do
+    // deck: um slide que some fora do filtro é justamente o que não pode existir
+    // aqui — foi assim que "o que está travado" vazou dado de outro mês.
+    const pipelines = apresPipelines(conc, iso + '-01', fimMes);
 
     /* O MES DE CADA UM DOS TRES PRIMEIROS DEVS, em linha do tempo.
        E a visao que o quadro do Planejamento da e o deck nao dava: o que a pessoa
@@ -5357,6 +5477,7 @@ async function apresGerar() {
       evolucao: evolucao.slice(Math.max(0, evolucao.findIndex(
         x => x.entraram || x.sairam || x.backlog))),
       ganttDev,
+      pipelines,
       rapidas: { itens: rapidasLista, total: conc.length },
       quebra,
       fluxo: { recebidas: entradas.length, entregues: conc.length,
@@ -5642,6 +5763,26 @@ function rateiaHoras(lista, janela, de, ate) {
   return horas;
 }
 
+/* A HORA REALIZADA DE UMA DEMANDA — uma regra só, para a tela inteira.
+
+   PREFERE O QUE FOI MEDIDO. A hora digitada na conclusão é medida; o rateio é
+   aproximação pelo tempo que o dev ficou com a demanda. Onde há medida, ela vale.
+
+   Isto vivia em três lugares com respostas diferentes: a TABELA já preferia a
+   digitada, o KPI do topo usava só o rateio, e o deck usava só a digitada. O
+   efeito era a "Eficiência" dar 100% todo mês — ela comparava o rateio da janela
+   planejada contra o rateio da janela realizada, que são quase a mesma janela, e
+   o resultado não podia dar outra coisa. Com a hora medida, os mesmos meses dão
+   11% e 108%: aí o número informa.
+
+   `medida` diz de onde veio, para a tela poder marcar a aproximação com o
+   asterisco em vez de exibir os dois com a mesma cara.                          */
+function horasReaisDe(m, rateado) {
+  const digitada = Number(String((m || {}).horas_realizadas ?? '').replace(',', '.'));
+  if (Number.isFinite(digitada) && digitada > 0) return { h: digitada, medida: true };
+  return { h: (rateado && rateado.get(m.id)) || 0, medida: false };
+}
+
 function renderGerencial() {
   gerInitFilters();
   gerDestroyCharts();
@@ -5700,15 +5841,24 @@ function renderGerencial() {
   const somaH = mapa => Math.round([...mapa.values()].reduce((s, v) => s + v, 0));
 
   const totalPlan     = somaH(hPlan);
-  const totalReal     = somaH(hReal);
+  // O REALIZADO usa a mesma regra da tabela abaixo e do deck: hora medida quando
+  // existe, rateio como aproximacao quando nao. O topo somava so o rateio, e por
+  // isso discordava da propria tabela — e a Eficiencia dava ~100% todo mes.
+  const somaReal = (lista, rat) =>
+    Math.round(lista.reduce((s, m) => s + horasReaisDe(m, rat).h, 0));
+  const totalReal     = somaReal(concluidos, hReal);
   const prevTotalPlan = somaH(rateiaHoras(prevItems, janPlan, limPrev.de, limPrev.ate));
-  const prevTotalReal = somaH(rateiaHoras(prevConc, janReal, limPrev.de, limPrev.ate));
-  // A hora DIGITADA nao se mistura com a rateada: ela e o unico numero medido, e
-  // some se for somada dentro de uma aproximacao.
+  const prevTotalReal = somaReal(prevConc, rateiaHoras(prevConc, janReal, limPrev.de, limPrev.ate));
+  // A COBERTURA ANDA JUNTO DO NUMERO. Julho tem 39% das entregas com hora lançada
+  // e agosto 96%: sem isso ao lado, o mes de baixa cobertura parece um time que
+  // trabalhou de menos, quando o que houve foi hora nao lançada.
   const horasDigitadas = Math.round(concluidos.reduce((s, m) => s + (Number(m.horas_realizadas) || 0), 0));
   const quantasDigitaram = concluidos.filter(m => Number(m.horas_realizadas) > 0).length;
   const efic          = totalPlan > 0 ? Math.round((totalReal / totalPlan) * 100) : 0;
-  const eficClass     = efic >= 90 ? 'green' : efic >= 70 ? 'amber' : 'red';
+  // Perto do planejado e verde; MUITO acima tambem e alerta, e nao acerto: 160%
+  // do planejado significa que a estimativa nao vale, e verde ali esconde isso.
+  const eficClass     = (efic >= 85 && efic <= 115) ? 'green'
+                      : (efic >= 60 && efic <= 140) ? 'amber' : 'red';
 
   function deltaBadge(curr, prev) {
     if (!prev && !curr) return '';
@@ -5731,14 +5881,14 @@ function renderGerencial() {
       ${deltaBadge(totalPlan, prevTotalPlan)}
     </div>
     <div class="ger-kpi">
-      <div class="ger-kpi-label">H. Realizadas <span class="ger-kpi-tag" title="O dia útil de cada dev vale 8h e é dividido entre as demandas que ele tinha em mãos naquele dia. Só contam os dias dentro do mês.">aprox.</span></div>
+      <div class="ger-kpi-label">H. Realizadas <span class="ger-kpi-tag" title="A hora lançada na conclusão. Onde ela não foi lançada, entra a aproximação: o dia útil do dev vale 8h e é dividido entre as demandas que ele tinha em mãos naquele dia.">medida</span></div>
       <div class="ger-kpi-value green">${totalReal}h</div>
       ${deltaBadge(totalReal, prevTotalReal)}
     </div>
     <div class="ger-kpi">
-      <div class="ger-kpi-label">H. Registradas</div>
+      <div class="ger-kpi-label">Horas lançadas</div>
       <div class="ger-kpi-value">${horasDigitadas}h</div>
-      <span class="ger-kpi-delta delta-neu">${quantasDigitaram} de ${concluidos.length} demandas</span>
+      <span class="ger-kpi-delta ${quantasDigitaram === concluidos.length ? 'delta-up' : 'delta-neu'}">${quantasDigitaram} de ${concluidos.length} concluídas${concluidos.length ? ' · ' + Math.round(quantasDigitaram / concluidos.length * 100) + '%' : ''}</span>
     </div>
     <div class="ger-kpi">
       <div class="ger-kpi-label">Concluídas</div>
@@ -5787,10 +5937,14 @@ function renderGerencial() {
     return Object.fromEntries(Object.entries(map).sort((a,b) => b[1]-a[1]));
   }
 
+  // Os graficos leem a MESMA regra dos KPIs e da tabela: hora medida quando
+  // existe, rateio quando nao. Uma segunda conta aqui faria o grafico contradizer
+  // o numero que esta logo acima dele, na mesma tela.
+  const realDe = m => horasReaisDe(m, hReal).h;
   const planPorTema = groupBy(items,      m => temaMap[m.tema_id], m => hPlan.get(m.id) || 0);
-  const realPorTema = groupBy(concluidos, m => temaMap[m.tema_id], m => hReal.get(m.id) || 0);
+  const realPorTema = groupBy(concluidos, m => temaMap[m.tema_id], realDe);
   const planPorDev  = groupByDevs(items,      m => hPlan.get(m.id) || 0);
-  const realPorDev  = groupByDevs(concluidos, m => hReal.get(m.id) || 0);
+  const realPorDev  = groupByDevs(concluidos, realDe);
 
   // ── Gráficos ─────────────────────────────────────────────────────
   const chartDefs = [
@@ -5816,14 +5970,15 @@ function renderGerencial() {
     // dele. Uma segunda conta aqui embaixo faria a linha contradizer o topo da
     // propria tela.
     const hp    = Math.round(hPlan.get(m.id) || 0);
-    const hrLog = m.horas_realizadas || 0;
-    const hrEf  = Math.round(hReal.get(m.id) || 0);
+    const real  = horasReaisDe(m, hReal);
+    const hrLog = real.medida ? real.h : 0;
+    const hrEf  = Math.round(real.h);
     const isConcl = m.status_planejamento === 'concluido' || m.status === 'concluida';
     // O desvio compara com o que a linha MOSTRA na coluna ao lado. Ele saia do
     // rateio mesmo quando a coluna exibia a hora digitada — e a linha ficava
     // "17h planejadas, 2h realizadas, +24h de desvio", tres numeros que nao fecham
     // entre si na mesma linha.
-    const hrMostrada = hrLog > 0 ? hrLog : hrEf;
+    const hrMostrada = real.h;
     const desvio  = isConcl ? Math.round(hrMostrada - hp) : null;
     const desvioClass = desvio === null ? 'desvio-zero' : desvio > 0 ? 'desvio-pos' : desvio < 0 ? 'desvio-neg' : 'desvio-zero';
     const desvioStr   = desvio === null ? '—' : desvio === 0 ? '0h' : (desvio > 0 ? '+' : '') + desvio + 'h';
@@ -7262,6 +7417,38 @@ function uCelulaPerfil(u) {
   return '<td>' + marca + '</td>';
 }
 
+/* A FRENTE DA PESSOA — o eixo que o deck usa para agrupar.
+
+   O seletor lista SÓ as frentes que entram no deck. Digitar livre repetiria o
+   erro que criou os 42 temas com quatro grafias de AxCred; e uma frente que o
+   deck ignora (Suporte, Bitrix) só existiria para virar número que não aparece.
+
+   "— definir —" não é o mesmo que uma frente vazia por acaso: quem está sem
+   frente aparece no deck como "Não classificado", visível, e não sumido. Sumir
+   seria pior — foi assim que 48h de agosto quase saíram da conta sem ninguém
+   notar.                                                                       */
+function uCelulaPipeline(u) {
+  const nome = uNomeDeDev(u);
+  if (!nome) return '<td class="us-sub">—</td>';
+  const api = window.PIPELINES;
+  if (!api) return '<td class="us-sub">—</td>';
+  const j = JSON.stringify(nome).replace(/"/g, '&quot;');
+  const cadastrado = api.canonica((uPerfilDe(nome) || {}).pipeline);
+  // A semente aparece como "(por padrão)" em vez de vir selecionada em silêncio:
+  // quem abre a tela precisa distinguir o que ALGUÉM marcou do que o sistema
+  // deduziu — senão a dedução vira decisão sem que ninguém tenha decidido.
+  const semente = api.doDev(nome, {});
+  const opcoes = ['<option value=""' + (cadastrado ? '' : ' selected') + '>' +
+      (semente ? '(por padrão) ' + esc(semente) : '— definir —') + '</option>']
+    .concat(api.nomes.map(n =>
+      '<option value="' + esc(n) + '"' + (cadastrado === n ? ' selected' : '') + '>' +
+      esc(n) + '</option>'));
+  return '<td><select class="us-pipeline" data-dev="' + esc(nome) + '"' +
+    ' title="Frente usada para agrupar as entregas no relatório da diretoria"' +
+    ' onchange="uSetPerfil(' + j + ', \'pipeline\', this.value)">' +
+    opcoes.join('') + '</select></td>';
+}
+
 function uLinhaAtiva(u) {
   const l = esc(u.login);
   const off = !u.ativo;
@@ -7281,6 +7468,7 @@ function uLinhaAtiva(u) {
       (off ? ' <span class="us-tag us-tag-off">desativado</span>' : '') + '</td>' +
     '<td>' + uCelulaNomeDemandas(u) + '</td>' +
     uCelulaPerfil(u) +
+    uCelulaPipeline(u) +
     // "nunca entrou" era lido como "nao usa a ferramenta", e nao e isso: a pessoa
     // pode estar trabalhando o dia inteiro pela SENHA GERAL, que nao identifica
     // ninguem. A coluna fala da conta, e o texto passa a dizer isso.
@@ -7485,7 +7673,7 @@ async function renderUsuarios() {
   // pessoas com acesso
   document.getElementById('us-n-ativos').textContent = ativos.filter(u => u.ativo).length;
   box.innerHTML = ativos.length
-    ? uTabela(['Pessoa', 'Permissão', 'Nome nas demandas', 'AXCred', 'Último acesso', ''],
+    ? uTabela(['Pessoa', 'Permissão', 'Nome nas demandas', 'AXCred', 'Frente', 'Último acesso', ''],
               ativos.map(uLinhaAtiva))
     : '<p class="us-vazio">Nenhuma conta criada ainda. Enquanto isso, todos continuam entrando pelas senhas gerais.</p>';
 

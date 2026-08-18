@@ -35,6 +35,7 @@ const INDEX = lerTela('index.html');
 const POKER = lerTela('poker.html');
 const APRES = fs.readFileSync('apresentacao.js', 'utf8');
 const CAPA = fs.readFileSync('capa-tecnologia.js', 'utf8');
+const PIPE = fs.readFileSync('pipelines.js', 'utf8');
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -1972,7 +1973,10 @@ ok(!/function uFrentes/.test(ADMIN) && !/function gFrentes/.test(GANTT),
 ok(!/const U_PERFIS/.test(ADMIN) && !/const G_PERFIS/.test(GANTT),
    'a lista de stacks saiu das duas telas');
 ok(/DEV-AXCred/.test(ADMIN) && /DEV-AXCred/.test(GANTT), 'sobrou a flag, com NOME');
-ok(/'AXCred', 'Último acesso'/.test(ADMIN), 'a coluna se chama AXCred');
+// A coluna tem NOME, e nao um rotulo generico: "Perfil" nao dizia o que era.
+// A de Frente entrou ao lado dela, e nao no lugar dela.
+ok(/'AXCred', 'Frente', 'Último acesso'/.test(ADMIN),
+   'a coluna se chama AXCred, e a Frente entrou ao lado');
 
 // Clicar tem de mostrar que pegou. Antes isto chamava `renderUsuarios()`, que RELÊ
 // a lista de contas do servidor: o retorno visual dependia de uma ida e volta de
@@ -2160,8 +2164,30 @@ ok(/horas\.set\(t\.id, \(horas\.get\(t\.id\) \|\| 0\) \+ HORAS_DIA \/ quantas\)/
 // Sem as duas passagens nao da para dividir: a primeira descobre quantas sao.
 ok(/const agenda = new Map\(\);/.test(ADMIN) && /const trechos = \[\];/.test(ADMIN),
    'monta a agenda antes de dividir');
-ok(/const horasDigitadas = Math\.round/.test(ADMIN) && /H\. Registradas/.test(ADMIN),
-   'a hora digitada aparece separada, e nao somada dentro da aproximacao');
+/* A HORA MEDIDA CONTINUA VISIVEL SOZINHA — regra reescrita, e nao afrouxada.
+
+   Ela exigia que a hora digitada NUNCA entrasse na mesma soma da aproximacao. O
+   efeito colateral disso era a "Eficiencia" comparar rateio contra rateio da
+   mesma janela e dar ~100% todo mes: um numero que ocupava espaco e nao dizia
+   nada. Hoje o total prefere a hora MEDIDA e completa com a aproximacao, que e o
+   que a tabela ja fazia linha a linha desde sempre.
+
+   O que a regra original protegia continua protegido, e agora de forma mais
+   forte: alem do total medido aparecer sozinho num KPI proprio, a COBERTURA tem
+   de aparecer junto dele. Sem a cobertura, um mes com 39% de lancamento parece
+   um time que trabalhou de menos — e e ai que o numero passa a mentir.        */
+ok(/const horasDigitadas = Math\.round/.test(ADMIN),
+   'a hora medida continua somada sozinha, num numero proprio');
+ok(/Horas lançadas/.test(ADMIN),
+   'e aparece na tela com nome que diz o que ela e');
+(() => {
+  const i = ADMIN.indexOf('Horas lançadas');
+  ok(i > 0 && /de \$\{concluidos\.length\} concluídas/.test(ADMIN.slice(i, i + 420)) &&
+     /Math\.round\(quantasDigitaram \/ concluidos\.length \* 100\)/.test(ADMIN.slice(i, i + 420)),
+     'com a COBERTURA ao lado — quantas de quantas, e em %');
+})();
+ok(/hrLog > 0 \? hrLog \+ 'h' : hrEf \+ 'h\*'/.test(ADMIN),
+   'e a linha aproximada continua marcada com asterisco na tabela');
 
 // O fecho: destaques e "o que vem" sao as ultimas paginas de quem apresenta.
 const iDest = APRES.indexOf('OS DESTAQUES, no fim');
@@ -2418,9 +2444,139 @@ ok(/if \(aberto && okSalvo !== true\) return false;/.test(DIALOGO),
   ok(/guardaDesliga\('modal-/.test(src), tela + ': e desligada depois de gravar');
 });
 
+/* ─── AS FRENTES DE TRABALHO (pipelines) ─────────────────────────────────
+   O eixo do painel que a diretoria aprovou. Cada regra aqui existe porque a
+   alternativa produz um numero errado num slide de diretoria — o lugar onde
+   errar custa mais caro nesta ferramenta.                                    */
+sec('As frentes de trabalho sao uma regra so');
+
+// A regra vive em pipelines.js e em lugar nenhum mais. Duas listas de frentes em
+// dois arquivos e o mesmo defeito dos 42 temas com quatro grafias de AxCred.
+ok(/window\.PIPELINES|raiz\.PIPELINES/.test(PIPE),
+   'pipelines.js publica a regra num objeto so');
+ok(/<script src="pipelines\.js/.test(ADMIN),
+   'o admin carrega pipelines.js');
+ok(!/const PIPELINES\s*=\s*\[/.test(semComentario(ADMIN)),
+   'o admin NAO redeclara a lista de frentes');
+ok(!/const PIPELINES\s*=\s*\[/.test(semComentario(APRES)),
+   'o gerador do deck NAO redeclara a lista de frentes');
+
+// Suporte, Bitrix e Analise de requisitos ficam FORA por decisao. Sem trava,
+// alguem "conserta" a ausencia delas e o slide ganha tres cartoes zerados.
+['Suporte', 'Bitrix 24', 'Analise de requisitos'].forEach((f) => {
+  ok(new RegExp("'" + f + "'").test(PIPE.slice(PIPE.indexOf('FORA_DO_DECK'), PIPE.indexOf('FORA_DO_DECK') + 200)),
+     'fica fora do deck por decisao: ' + f);
+});
+ok(/function canonica[\s\S]{0,200}VALIDOS\[norm\(nome\)\] \|\| ''/.test(PIPE),
+   'frente que nao entra no deck resolve para vazio, e nao para si mesma');
+
+// O CADASTRO VENCE A SEMENTE. Marcar alguem na tela e o deck ignorar e o mesmo
+// defeito que fez as marcacoes de DEV-AXCred sumirem, so que silencioso.
+ok(/doCadastro[\s\S]{0,200}if \(doCadastro\) return doCadastro;[\s\S]{0,120}PORNOME/.test(PIPE),
+   'o cadastro vence a semente, e nao o contrario');
+ok(/uSetPerfil\([^)]*\\'pipeline\\'/.test(ADMIN),
+   'a tela de contas grava a frente em devs_perfil');
+ok(/'devs_perfil'/.test(ADMIN.slice(ADMIN.indexOf('MEUS_CAMPOS'), ADMIN.indexOf('MEUS_CAMPOS') + 300)),
+   'devs_perfil continua na lista que a tela grava — a frente mora nele');
+
+// Quem esta sem frente APARECE. Sumir e pior: em agosto sao 48h que sairiam da
+// conta sem ninguem notar.
+ok(/NAO_CLASSIFICADO/.test(PIPE) && /NAO_CLASSIFICADO/.test(ADMIN),
+   'quem esta sem frente vira "Nao classificado", e nao desaparece');
+
+sec('O planejado do deck cabe na capacidade do time');
+
+// PLANEJADO = janela do planejamento, RATEADA. Sem ratear, uma pessoa aparecia
+// com 528h planejadas num mes de 184h porque as janelas se sobrepoem.
+ok(/const planejado = rateiaHoras\(conc, m => \(\{[\s\S]{0,140}m\.entrega/.test(ADMIN),
+   'o planejado sai da janela do planejamento (inicio -> entrega)');
+ok(/rateiaHoras/.test(ADMIN.slice(ADMIN.indexOf('function apresPipelines'),
+                                  ADMIN.indexOf('function apresPipelines') + 1200)),
+   'e passa pelo RATEIO — dia de uma pessoa nao estica alem de 8h');
+ok(/HORAS_DIA \/ quantas/.test(ADMIN),
+   'o dia util e dividido entre as demandas daquele dia');
+
+// UMA regra de hora realizada para a tela inteira. Eram tres respostas
+// diferentes: a tabela preferia a digitada, o KPI usava so o rateio, e a
+// "Eficiencia" dava ~100% todo mes por comparar rateio contra rateio.
+ok(/function horasReaisDe\(m, rateado\)/.test(ADMIN),
+   'existe UMA funcao de hora realizada');
+ok(/if \(Number\.isFinite\(digitada\) && digitada > 0\) return \{ h: digitada, medida: true \}/.test(ADMIN),
+   'ela prefere a hora MEDIDA quando existe');
+['const totalReal', 'realPorTema', 'realPorDev'].forEach((alvo) => {
+  const i = ADMIN.indexOf(alvo);
+  ok(i > 0 && /horasReaisDe|somaReal|realDe/.test(ADMIN.slice(i, i + 220)),
+     'usa a mesma regra de hora realizada: ' + alvo);
+});
+ok(/const real = horasReaisDe\(m, rateadoReal\)/.test(ADMIN),
+   'e o deck usa a MESMA regra que a tela');
+
+// A cobertura anda junto do numero: julho tem 39% das entregas com hora lancada,
+// e sem a nota o slide acusa o time de nao ter trabalhado.
+ok(/cobertura:\s*\{[\s\S]{0,200}comHoras/.test(ADMIN),
+   'o deck leva a cobertura de horas junto');
+ok(/Horas lançadas em/.test(APRES),
+   'e o slide imprime essa cobertura');
+ok(/cada dia útil vale 8h/.test(APRES),
+   'o slide diz de onde saiu o planejado');
+
+sec('O slide das frentes cabe no slide');
+
+// O deck tem 5,63" de altura e o rodape comeca em 5,05". Com cartoes de 1,12" a
+// segunda linha terminava em 4,85" e passava POR CIMA da nota de cobertura.
+(() => {
+  const corpo = APRES.slice(APRES.indexOf('function slidePipelines'),
+                            APRES.indexOf('function slidePipelines') + 4200);
+  const m = corpo.match(/var COLS = (\d+), LARG = ([\d.]+), ALT = ([\d.]+), VAO_X = ([\d.]+), VAO_Y = ([\d.]+);[\s\S]{0,60}var Y0 = ([\d.]+);/);
+  ok(!!m, 'as medidas do cartao estao declaradas juntas');
+  if (m) {
+    const [, cols, larg, alt, vx, vy, y0] = m.map(Number);
+    const linhas = Math.ceil(6 / cols);
+    const fimCartoes = y0 + linhas * alt + (linhas - 1) * vy;
+    ok(fimCartoes <= 4.58,
+       'com 6 frentes os cartoes terminam antes das notas', fimCartoes.toFixed(2) + '"');
+    ok(0.7 + (cols - 1) * (larg + vx) + larg <= 9.5,
+       'a ultima coluna nao passa da margem direita');
+  }
+  // O nome nao pode encostar no percentual: eram 0,07" de sobreposicao.
+  const nome = corpo.match(/corta\(it\.nome, \d+\), \{\s*x: x \+ ([\d.]+), y: y \+ [\d.]+, w: LARG - ([\d.]+)/);
+  const pct = corpo.match(/x: x \+ LARG - ([\d.]+), y: y \+ [\d.]+, w: [\d.]+, h: [\d.]+,\s*fontSize: 12/);
+  ok(!!nome && !!pct, 'nome e percentual do cartao estao posicionados');
+  if (nome && pct) {
+    const fimNome = Number(nome[1]) + (2.7 - Number(nome[2]));
+    const iniPct = 2.7 - Number(pct[1]);
+    ok(fimNome <= iniPct,
+       'a caixa do nome para antes do percentual',
+       fimNome.toFixed(2) + '" <= ' + iniPct.toFixed(2) + '"');
+  }
+})();
+
+// O RODAPE SAI UMA VEZ SO. `slideTitulo` desenhava um, e quase todo slide
+// desenhava outro por cima — o numero da pagina saia duplicado e engordava.
+ok(!/function slideTitulo\(pptx, titulo, sub, pagina\) \{[\s\S]{0,400}?rodape\(s, '', pagina\)/.test(APRES),
+   'slideTitulo nao desenha mais o rodape');
+(() => {
+  // Todo slide que usa slideTitulo tem de desenhar o rodape uma vez.
+  const blocos = APRES.split(/\n  function /).slice(1)
+    .filter((f) => /slideTitulo\(/.test(f) && !/^slideTitulo/.test(f));
+  const semRodape = blocos.filter((f) => !/rodape\(/.test(f))
+    .map((f) => f.slice(0, f.indexOf('(')));
+  ok(!semRodape.length, 'todo slide com titulo desenha o proprio rodape',
+     semRodape.join(', '));
+})();
+
+// O SLIDE RESPEITA O FILTRO DE DATA. E a regra que ja foi violada uma vez, por
+// "o que esta travado", e custou dado de outro mes num deck fechado.
+ok(/apresPipelines\(conc, iso \+ '-01', fimMes\)/.test(ADMIN),
+   'as frentes usam a mesma lista e o mesmo recorte do resto do deck');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
+
+let erroP = null;
+try { new Function(PIPE); } catch (e) { erroP = e.message; }
+ok(!erroP, 'pipelines.js sem erro de sintaxe', erroP || '');
 
 console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
 process.exit(falhas ? 1 : 0);

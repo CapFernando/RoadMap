@@ -41,6 +41,11 @@ def main():
     vdlg = hash_de('dialogo.js')
     vapr = hash_de('apresentacao.js')
     vcat = hash_de('catalogo.js')
+    # pipelines.js entra aqui pelo mesmo motivo dos outros: ele carrega a lista
+    # de frentes que o deck usa para agrupar. Uma frente corrigida sem hash novo
+    # nao chegaria a quem ja abriu o admin, e o deck sairia com o agrupamento
+    # antigo sem ninguem perceber.
+    vpip = hash_de('pipelines.js')
     mudou = []
     for f in PAGINAS:
         with io.open(f, encoding='utf-8') as fh:
@@ -61,6 +66,8 @@ def main():
                    'src="apresentacao.js?v=%s"' % vapr, n)
         n = re.sub(r'src="catalogo\.js(\?v=[^"]*)?"',
                    'src="catalogo.js?v=%s"' % vcat, n)
+        n = re.sub(r'src="pipelines\.js(\?v=[^"]*)?"',
+                   'src="pipelines.js?v=%s"' % vpip, n)
         if n != s:
             with io.open(f, 'w', encoding='utf-8', newline='') as fh:
                 fh.write(n)

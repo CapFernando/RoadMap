@@ -283,11 +283,18 @@
     return s;
   }
 
+  /* O TÍTULO NÃO DESENHA O RODAPÉ.
+     Ele desenhava, e quase todo slide chamava `rodape()` de novo no fim para pôr
+     o mês — resultado: o NÚMERO DA PÁGINA saía duas vezes, um exatamente em cima
+     do outro. No PowerPoint isso não some, engorda: o dígito fica mais denso que
+     o dos slides que não repetiam, e ninguém sabia dizer por quê.
+
+     Agora quem monta o slide desenha o rodapé uma vez, com o mês que ele conhece.
+     `rodapeVazio` serve aos poucos slides que não têm mês a exibir.             */
   function slideTitulo(pptx, titulo, sub, pagina) {
     var s = slideBase(pptx);
     s.addText(titulo, { x: 0.7, y: 0.55, w: 8.6, h: 0.5, fontSize: 24, bold: true, color: C.texto });
     if (sub) s.addText(sub, { x: 0.7, y: 1.05, w: 8.6, h: 0.35, fontSize: 13, color: C.fraco });
-    rodape(s, '', pagina);
     return s;
   }
 
@@ -481,6 +488,136 @@
       s.addText(notas.join('   ·   '), {
         x: 0.7, y: TOPO + itens.length * alt + 0.12, w: 8.6, h: 0.3,
         fontSize: 11, color: C.fraco });
+    }
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
+  /* AS FRENTES DE TRABALHO — planejado × realizado, no formato do painel que a
+     diretoria já aprovou: três números no topo e um cartão por frente.
+
+     O FORMATO É DELIBERADAMENTE O DAQUELE PAINEL. Quem já leu aquele quadro não
+     precisa reaprender a ler este slide, e a cor de cada frente é a mesma de lá.
+
+     A COR DO PERCENTUAL SEGUE A DISTÂNCIA DO PLANEJADO, para os dois lados. 160%
+     não é "melhor" que 100%: significa que a estimativa não valeu, e pintar isso
+     de verde esconderia exatamente o que a sala precisa discutir.
+
+     A COBERTURA DE HORAS VAI NO RODAPÉ, sempre. Um mês com 39% das entregas sem
+     hora lançada mostra execução baixa por falta de lançamento, e não por falta
+     de trabalho — sem a nota, o slide acusa o time de algo que não aconteceu.  */
+  function corPercentual(pct) {
+    if (pct == null) return C.fraco;
+    if (pct >= 85 && pct <= 115) return C.verde;
+    if (pct >= 60 && pct <= 140) return C.ambar;
+    return C.vermelho;
+  }
+
+  function slidePipelines(pptx, pl, pagina, periodo) {
+    var s = slideTitulo(pptx, 'Frentes de trabalho',
+      'horas planejadas × realizadas no período', pagina);
+    var itens = (pl.itens || []).filter(function (i) {
+      // Frente sem nada no mês não vira cartão zerado: "0h / 0h / 0%" num slide
+      // executivo só gera a pergunta "e por que isso está zerado?" no meio da
+      // apresentação.
+      return i.entregas > 0 || i.plan > 0 || i.real > 0;
+    });
+    if (!itens.length) {
+      s.addText('Sem entregas com frente definida no período.',
+        { x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
+      rodape(s, periodo, pagina);
+      return s;
+    }
+
+    // ── Os três números do mês, na mesma ordem do painel aprovado ──────────
+    var t = pl.total || {};
+    var kpis = [
+      { rot: 'PLANEJADO', val: t.plan + 'h', cor: C.azul },
+      { rot: 'REALIZADO', val: t.real + 'h', cor: C.verde },
+      { rot: 'EXECUÇÃO', val: t.pct == null ? '—' : t.pct + '%', cor: corPercentual(t.pct) },
+    ];
+    kpis.forEach(function (k, i) {
+      var x = 0.7 + i * 2.95;
+      s.addShape(pptx.ShapeType.roundRect, {
+        x: x, y: 1.40, w: 2.7, h: 0.76, rectRadius: 0.06,
+        fill: { color: C.fundo2 }, line: { color: C.fundo2 } });
+      s.addText(k.rot, { x: x + 0.16, y: 1.45, w: 2.4, h: 0.22,
+                         fontSize: 9.5, color: C.fraco, charSpacing: 1 });
+      s.addText(k.val, { x: x + 0.16, y: 1.65, w: 2.4, h: 0.46,
+                         fontSize: 25, bold: true, color: k.cor });
+    });
+
+    /* ── Um cartão por frente ───────────────────────────────────────────────
+       Três por linha: com quatro, "Dados & Inteligência" não cabe em uma linha e
+       o cartão fica com o título quebrado no meio.
+
+       AS MEDIDAS SÃO CONTADAS, e não escolhidas: o slide tem 5,63" e o rodapé
+       ocupa a partir de 5,05". Com duas linhas de cartões de 1,12" e vão de
+       0,17", a segunda linha terminava em 4,85" e passava POR CIMA da nota de
+       cobertura em 4,72". Aqui a última linha fecha em 4,52" e as duas notas
+       cabem antes do rodapé.                                                  */
+    var COLS = 3, LARG = 2.7, ALT = 1.04, VAO_X = 0.25, VAO_Y = 0.12;
+    var Y0 = 2.32;
+    itens.slice(0, 6).forEach(function (it, i) {
+      var col = i % COLS, lin = Math.floor(i / COLS);
+      var x = 0.7 + col * (LARG + VAO_X);
+      var y = Y0 + lin * (ALT + VAO_Y);
+
+      s.addShape(pptx.ShapeType.roundRect, {
+        x: x, y: y, w: LARG, h: ALT, rectRadius: 0.06,
+        fill: { color: C.fundo2 }, line: { color: C.fundo2 } });
+      // A faixa da cor da frente no topo do cartão — é ela que liga este slide ao
+      // painel que a sala já conhece.
+      s.addShape(pptx.ShapeType.rect, {
+        x: x, y: y, w: LARG, h: 0.05, fill: { color: it.cor } });
+
+      // A caixa do nome PARA antes de onde o percentual começa. Com `LARG - 0.85`
+      // ela terminava em x+1,99" e o percentual abria em x+1,92": 0,07" de
+      // sobreposição, o bastante para "Dados & Inteligência" encostar no número.
+      s.addText(corta(it.nome, 21), {
+        x: x + 0.14, y: y + 0.10, w: LARG - 0.98, h: 0.24,
+        fontSize: 11, bold: true, color: C.texto });
+      s.addText(it.pct == null ? '—' : it.pct + '%', {
+        x: x + LARG - 0.78, y: y + 0.10, w: 0.66, h: 0.24,
+        fontSize: 12, bold: true, color: corPercentual(it.pct), align: 'right' });
+
+      s.addText(it.plan + 'h', { x: x + 0.14, y: y + 0.34, w: 1.1, h: 0.32,
+                                 fontSize: 16, bold: true, color: C.azul });
+      s.addText(it.real + 'h', { x: x + 1.30, y: y + 0.34, w: 1.1, h: 0.32,
+                                 fontSize: 16, bold: true, color: C.verde });
+      s.addText('planejado', { x: x + 0.14, y: y + 0.64, w: 1.1, h: 0.18,
+                               fontSize: 8, color: C.fraco });
+      s.addText('realizado', { x: x + 1.30, y: y + 0.64, w: 1.1, h: 0.18,
+                               fontSize: 8, color: C.fraco });
+
+      // A composição da frente: quantidade, e a quebra que distingue construir de
+      // manter de pé. Sem ela, dez entregas de sustentação e dez de evolução
+      // aparecem como o mesmo mês.
+      var comp = [it.entregas + (it.entregas === 1 ? ' entrega' : ' entregas')];
+      if (it.evolucao) comp.push(it.evolucao + ' evol.');
+      if (it.sustentacao) comp.push(it.sustentacao + ' sust.');
+      s.addText(comp.join('  ·  '), {
+        x: x + 0.14, y: y + 0.82, w: LARG - 0.28, h: 0.18,
+        fontSize: 8.5, color: C.fraco });
+    });
+
+    // ── O rodapé que impede a leitura errada ───────────────────────────────
+    var cob = pl.cobertura || {};
+    var notas = [];
+    if (cob.total) {
+      notas.push('Horas lançadas em ' + cob.comHoras + ' de ' + cob.total +
+                 ' entregas (' + cob.pct + '%)' +
+                 (cob.pct < 90 ? ' — o restante entra por aproximação' : ''));
+    }
+    // Planejado = dia útil da pessoa dividido entre o que ela tinha em mãos. A
+    // frase existe porque a primeira pergunta da sala sobre este slide é sempre
+    // "de onde saiu o planejado?".
+    notas.push('Planejado: cada dia útil vale 8h, divididas entre as demandas do dia');
+    s.addText(notas.join('   ·   '), {
+      x: 0.7, y: 4.58, w: 8.6, h: 0.2, fontSize: 8.5, color: C.fraco });
+    if ((pl.foraDoDeck || []).length) {
+      s.addText('Fora do recorte: ' + pl.foraDoDeck.join(', '), {
+        x: 0.7, y: 4.78, w: 8.6, h: 0.2, fontSize: 8.5, color: C.fraco });
     }
     rodape(s, periodo, pagina);
     return s;
@@ -838,6 +975,11 @@
     // 1. O mês inteiro: o que entrou, o que foi tocado, o que saiu, o que ficou.
     if (d.secoes.entregas) slideMes(pptx, d, ++p);
 
+    // 1b. As frentes, logo depois do panorama: é o corte que a diretoria já lê no
+    // painel aprovado, e ele responde "onde a capacidade foi parar" antes de o
+    // deck entrar em prazo e em detalhe.
+    if (d.secoes.pipelines && d.pipelines) slidePipelines(pptx, d.pipelines, ++p, d.periodo);
+
     // 2. Prazo: a pergunta que a diretoria faz.
     if (d.secoes.prazo && d.prazo.medidas) {
       slidePrazo(pptx, d, ++p);
@@ -851,6 +993,7 @@
             return [corta(a.titulo, 44), a.dev, a.datas,
                     { text: '+' + a.dias + 'd', options: { color: C.vermelho, bold: true } }];
           }), { colW: [3.9, 1.6, 2.1, 1.0], rotuloSobra: ' entregas com atraso' });
+        rodape(s, d.periodo, p);
       }
     }
 
@@ -912,6 +1055,7 @@
     (d.imagens || []).forEach(function (img) {
       var si = slideTitulo(pptx, img.titulo, img.sub || '', ++p);
       si.addImage({ data: img.png, x: 0.7, y: 1.5, w: 8.6, h: 3.4 });
+      rodape(si, d.periodo, p);
     });
 
     // 6. O que trava: pausadas e sem estimativa. É a parte que a diretoria pode
@@ -929,6 +1073,7 @@
         sr.addText('Nenhuma demanda pausada.', { x: 0.7, y: 1.7, w: 8.6, h: 0.4,
                                                  fontSize: 15, color: C.fraco });
       }
+      rodape(sr, d.periodo, p);
     }
 
     // 7. OS DESTAQUES, no fim. Eles saiam no meio do deck, antes dos graficos —
@@ -963,6 +1108,7 @@
         sp.addText('Nada planejado para o próximo período ainda.',
           { x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
       }
+      rodape(sp, d.periodo, p);
     }
 
     // 9. A mensagem de quem apresenta. Fica por último porque é a frase que a
