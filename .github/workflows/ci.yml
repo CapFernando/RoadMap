@@ -1,0 +1,41 @@
+name: CI
+
+# Este repositório não tem empacotador nem dependências — é HTML/JS servido direto
+# pelo GitHub Pages e um Worker do Cloudflare. O gate aqui é o mesmo que já rodava
+# manualmente antes de publicar: `node teste-invariantes.js`, agora obrigatório em
+# todo push e PR, e não só quando alguém lembra de rodar.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  invariantes:
+    name: Invariantes do projeto
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # ~700 regras nascidas de defeitos reais em produção (marcação sumindo,
+      # sessão vencida, código duplicado, card fechando sem gravar...). Falhar
+      # aqui é mais barato que descobrir na reunião.
+      - run: node teste-invariantes.js
+
+  worker-sintaxe:
+    name: Sintaxe do Cloudflare Worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Checagem estática, sem publicar nada: `wrangler deploy` de verdade fica
+      # para o dia em que o token da Cloudflare entrar como secret do repositório
+      # — decisão do Fernando, não deste workflow.
+      - run: node --check cloudflare-worker/worker.js
