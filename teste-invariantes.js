@@ -2605,6 +2605,38 @@ ok(/Horas lançadas em/.test(APRES),
 ok(/cada dia útil vale 8h/.test(APRES),
    'o slide diz de onde saiu o planejado');
 
+/* `rectRadius` SO EM roundRect — foi isso que deixou o slide de projetos VAZIO.
+
+   Passado junto com `ellipse`, o PptxGenJS escreve <a:gd name="adj"> dentro de um
+   <a:prstGeom prst="ellipse">, que nao tem parametro de ajuste. O XML fica
+   invalido e o PowerPoint descarta a forma E o conteudo do cartao junto: o slide
+   abria com o cabecalho certo, "7 projetos em aberto" no canto, e os cartoes em
+   branco. O XML "passava" na minha conferencia porque eu media posicao e texto,
+   e nao a validade da geometria.                                                */
+(() => {
+  const trechos = APRES.split('addShape(');
+  const ruins = trechos.filter((t) => {
+    const cab = t.slice(0, 260);
+    return /ShapeType\.ellipse/.test(cab) && /rectRadius/.test(cab) &&
+           !/if \(i >= 3\) medalha\.rectRadius/.test(cab);
+  });
+  ok(!ruins.length, 'nenhuma elipse recebe rectRadius — XML que o PowerPoint recusa');
+  ok(/if \(i >= 3\) medalha\.rectRadius = 0\.04;/.test(APRES),
+     'a medalha so ganha raio quando e o retangulo arredondado');
+})();
+
+/* CADA COR FAZ UM PAPEL SO POR SLIDE.
+   No slide do time o ambar era sustentacao na barra E ausencia no texto: o olho
+   achava o amarelo do grafico, procurava o amarelo do texto e ligava
+   "sustentacao" a "Gabriel Fernandes, ferias" — duas coisas sem relacao. */
+(() => {
+  const corpo = APRES.slice(APRES.indexOf('function slideTime'),
+                            APRES.indexOf('function slideAreas'));
+  const ambar = (corpo.match(/C\.ambar/g) || []).length;
+  ok(ambar <= 1, 'no slide do time o ambar aparece uma vez so', ambar + ' usos');
+  ok(/color: C\.roxo \}\);/.test(corpo), 'e a ausencia usa cor propria');
+})();
+
 /* A HORA REALIZADA E RECORTADA NO MES, como o planejado ja era.
 
    A hora e lancada DE UMA VEZ na conclusao e vale pela demanda inteira. Quando a

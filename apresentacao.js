@@ -291,11 +291,17 @@
       cartao(pptx, s, 0.5, y, 9.0, 0.62);
 
       // A posicao: circulo de medalha nos tres primeiros, quadrado nos demais.
+      /* `rectRadius` SO VAI NO roundRect. Passado junto com `ellipse`, o
+         PptxGenJS escrevia <a:gd name="adj"> dentro de um <a:prstGeom
+         prst="ellipse">, que nao tem parametro de ajuste — XML invalido, e o
+         PowerPoint descartava a forma E o resto do cartao junto: o slide saia
+         com o cabecalho certo e os cartoes vazios. */
       var cor = MEDALHA[i] || C.fraco;
-      s.addShape(i < 3 ? pptx.ShapeType.ellipse : pptx.ShapeType.roundRect, {
-        x: 0.63, y: y + 0.17, w: 0.28, h: 0.28, rectRadius: 0.04,
-        fill: { color: i < 3 ? cor : C.fundo3 },
-        line: { color: i < 3 ? cor : C.borda, width: 0.75 } });
+      var medalha = { x: 0.63, y: y + 0.17, w: 0.28, h: 0.28,
+                      fill: { color: i < 3 ? cor : C.fundo3 },
+                      line: { color: i < 3 ? cor : C.borda, width: 0.75 } };
+      if (i >= 3) medalha.rectRadius = 0.04;
+      s.addShape(i < 3 ? pptx.ShapeType.ellipse : pptx.ShapeType.roundRect, medalha);
       s.addText(String(i + 1), {
         x: 0.63, y: y + 0.19, w: 0.28, h: 0.24, fontSize: 9, bold: true,
         color: i < 3 ? C.fundo : C.fraco, align: 'center' });
@@ -505,8 +511,13 @@
       s.addText(ausencias.slice(0, 6).map(function (a) {
         return a.nome + ' (' + a.dias + (a.dias === 1 ? ' dia' : ' dias') +
                (a.tipo ? ', ' + a.tipo : '') + ')';
+      /* NAO EM AMBAR. O ambar e a cor de SUSTENTACAO na barra logo acima, no
+         mesmo slide: o olho encontra o amarelo do grafico, procura o amarelo do
+         texto e liga "sustentacao" a "Gabriel Fernandes, ferias" — duas coisas
+         sem relacao nenhuma. Cor repetida no mesmo slide e leitura errada, e nao
+         economia de paleta. */
       }).join('   ·   '), { x: 0.7, y: 4.78, w: 8.6, h: 0.32, fontSize: 13,
-                            color: C.ambar });
+                            color: C.roxo });
     }
     rodape(s, periodo, pagina);
     return s;
