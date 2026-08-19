@@ -91,6 +91,12 @@
        oposto de urgencia. */
     .kcard-prazo.sempt { background:var(--amber-bg); color:var(--amber-tx);
       border:1px solid var(--amber); }
+    /* Barra de subtarefas: fina e discreta. Ela informa de relance e nao pode
+       competir com o titulo do card, que e o que a pessoa procura primeiro. */
+    .kcard-sub { display:flex; align-items:center; gap:6px; margin:6px 0 2px; }
+    .kcard-sub-trilho { flex:1; height:4px; background:var(--bg3); border-radius:3px; overflow:hidden; }
+    .kcard-sub-barra { height:100%; background:var(--green,#3EC98E); border-radius:3px; transition:width .2s; }
+    .kcard-sub-num { font-size:10.5px; color:var(--text3); font-variant-numeric:tabular-nums; }
     .kcard-prazo.pausada { background:var(--rose-bg,#48123F); color:var(--rose-tx,#F2A0DA);
       border:1px solid var(--rose-bd,#93257F); }
     /* Area de anexo da nova demanda. A dica de colar fica DENTRO da area para
@@ -735,6 +741,18 @@
     <div class="form-group" id="ms-projeto-group">
       <label>Projeto <small style="font-weight:400;color:var(--text3)">(opcional)</small></label>
       <select id="ms-projeto"></select>
+    </div>
+    <!-- SUBTAREFAS: o pedido veio do proprio time. Uma demanda de tres semanas
+         fica "em andamento" do inicio ao fim, e quem pergunta como ela esta ouve
+         a mesma resposta todo dia. Quebrada em passos, o progresso e um numero
+         que sai sozinho: feitas / total. -->
+    <div class="form-group" id="ms-sub-group">
+      <label>Subtarefas <small style="font-weight:400;color:var(--text3)">(opcional)</small>
+        <span id="ms-sub-progresso" style="float:right;font-weight:600"></span>
+      </label>
+      <div id="ms-sub-lista"></div>
+      <button type="button" id="ms-sub-add" class="btn btn-secondary btn-sm"
+              style="margin-top:6px" onclick="msSubAdiciona()">+ subtarefa</button>
     </div>
     <div class="form-group" id="ms-status-group">
       <label>Mover para</label>
@@ -3068,6 +3086,17 @@ function renderCard(m, colKey) {
   const sk = getStatusKey(m);
   const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
   const badge = `<span class="kcard-badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
+  /* O PROGRESSO NO PROPRIO CARD. Sem isso a subtarefa so existe para quem abre a
+     demanda, e a pergunta "como esta a AX-096?" continua sem resposta no quadro —
+     que e onde ela e feita. Barra fina e o numero: a barra se le de relance, o
+     numero responde "quanto falta". */
+  const subs = msSubsDe(m);
+  const prog = msSubProgresso(subs);
+  const progressoHTML = prog.total ? `
+    <div class="kcard-sub" title="${prog.feitas} de ${prog.total} ${prog.total === 1 ? 'subtarefa concluída' : 'subtarefas concluídas'}">
+      <div class="kcard-sub-trilho"><div class="kcard-sub-barra" style="width:${prog.pct}%"></div></div>
+      <span class="kcard-sub-num">${prog.feitas}/${prog.total}</span>
+    </div>` : '';
   const meta = [];
   if (m.inicio)  meta.push(`📅 ${formatDate(m.inicio)}`);
   if (m.entrega) meta.push(`🏁 ${formatDate(m.entrega)}`);
@@ -3086,6 +3115,7 @@ function renderCard(m, colKey) {
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
       ${semPontuacao(m) ? `<div class="kcard-prazo sempt" title="Sem pontos do Planning Poker: a data foi combinada sem estimativa de tamanho.">🃏 sem pontuação</div>` : ''}
+      ${progressoHTML}
       <div class="kcard-title">${m.codigo ? `<span class="kcard-cod">${devEsc(m.codigo)}</span>` : ''}${devEsc(m.titulo)}</div>
       ${tema ? `<div class="kcard-tema">${tema}</div>` : ''}
       ${meta.length ? `<div class="kcard-meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>` : ''}
@@ -3301,6 +3331,7 @@ function openStatusModal(id, preselect) {
   const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '—';
   document.getElementById('ms-id').value = id;
   document.getElementById('ms-title').textContent = m.titulo;
+  msSubRender(m);
   const deps = getDeps(m.id);
   const depsInfoHTML = deps.length ? `
     <div style="background:var(--bg3);border-radius:6px;padding:10px 12px;margin-bottom:12px;">
@@ -3557,6 +3588,130 @@ function msProjetoRender(m) {
 }
 
 
+/* ─── SUBTAREFAS ───────────────────────────────────────────────────────────
+   O passo a passo de uma demanda, marcado por quem a esta fazendo.
+
+   O DADO E UMA LISTA SIMPLES: { titulo, data, feita }. Nao virou demanda-filha de
+   proposito — subtarefa nao tem dono, nao tem prazo cobrado, nao entra em
+   relatorio de entrega e nao pode aparecer no Kanban como se fosse trabalho
+   separado. Ela existe para responder "quanto ja andou", e so.
+
+   `_msSubs` e a copia em edicao: o patch da gravacao so leva o campo se ele foi
+   mexido, pelo mesmo motivo do vinculo de projeto — mandar sempre sobrescreveria
+   o que outra tela gravou entre a leitura e o salvamento.                      */
+let _msSubs = [];
+let _msSubsMexido = false;
+
+function msSubsDe(m) {
+  const l = (m && Array.isArray(m.subtarefas)) ? m.subtarefas : [];
+  return l.filter(Boolean).map(x => ({
+    titulo: String(x.titulo || '').slice(0, 140),
+    data: String(x.data || '').slice(0, 10),
+    feita: !!x.feita,
+  }));
+}
+
+function msSubProgresso(subs) {
+  const total = subs.length;
+  const feitas = subs.filter(x => x.feita).length;
+  return { total, feitas, pct: total ? Math.round(feitas / total * 100) : null };
+}
+
+function msSubRender(m) {
+  const cx = document.getElementById('ms-sub-lista');
+  if (!cx) return;
+  if (m) { _msSubs = msSubsDe(m); _msSubsMexido = false; }
+  const p = msSubProgresso(_msSubs);
+  const alvo = document.getElementById('ms-sub-progresso');
+  if (alvo) {
+    alvo.textContent = p.total ? p.feitas + ' de ' + p.total + '  ·  ' + p.pct + '%' : '';
+    alvo.style.color = p.pct === 100 ? 'var(--green-tx, #3EC98E)' : 'var(--text3)';
+  }
+  if (!_msSubs.length) {
+    cx.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">' +
+      'Nenhuma subtarefa. Quebre a demanda em passos para acompanhar o quanto já andou.</div>';
+    return;
+  }
+  cx.innerHTML = _msSubs.map((x, i) =>
+    '<div style="display:flex;gap:7px;align-items:center;margin-bottom:5px">' +
+      '<input type="checkbox" ' + (x.feita ? 'checked' : '') +
+        ' onchange="msSubMarca(' + i + ', this.checked)"' +
+        ' title="' + (x.feita ? 'Feita' : 'Em andamento') + '"' +
+        ' style="width:16px;height:16px;flex:0 0 auto;cursor:pointer" />' +
+      '<input type="text" value="' + escAttr(x.titulo) + '" placeholder="O que é este passo"' +
+        ' oninput="msSubTexto(' + i + ', this.value)" maxlength="140"' +
+        ' style="flex:1;min-width:0;padding:6px 9px;background:var(--bg3);border:1px solid var(--border);' +
+        'border-radius:6px;color:var(--text);font-size:13px;font-family:inherit;outline:none' +
+        (x.feita ? ';text-decoration:line-through;color:var(--text3)' : '') + '" />' +
+      '<input type="date" value="' + escAttr(x.data) + '" title="Data prevista ou de conclusão"' +
+        ' onchange="msSubData(' + i + ', this.value)"' +
+        ' style="flex:0 0 138px;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);' +
+        'border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;outline:none" />' +
+      '<button type="button" onclick="msSubRemove(' + i + ')" title="Remover esta subtarefa"' +
+        ' style="flex:0 0 auto;background:none;border:none;color:var(--text3);cursor:pointer;' +
+        'font-size:16px;line-height:1;padding:4px 6px">×</button>' +
+    '</div>').join('');
+}
+
+function msSubAdiciona() {
+  _msSubs.push({ titulo: '', data: '', feita: false });
+  _msSubsMexido = true;
+  msSubRender(null);
+  // O foco vai para o campo novo: sem isso a pessoa clica em "+ subtarefa" e
+  // precisa clicar de novo para escrever.
+  const campos = document.querySelectorAll('#ms-sub-lista input[type=text]');
+  const ultimo = campos[campos.length - 1];
+  if (ultimo) ultimo.focus();
+}
+
+function msSubMarca(i, valor) {
+  if (!_msSubs[i]) return;
+  _msSubs[i].feita = !!valor;
+  // Marcar como feita carimba a data quando ela esta vazia: e a informacao que
+  // o time quer depois ("quando isso ficou pronto?") e ninguem preenche a mao.
+  if (valor && !_msSubs[i].data) _msSubs[i].data = hojeISOdev();
+  _msSubsMexido = true;
+  msSubRender(null);
+}
+
+function msSubTexto(i, valor) {
+  if (!_msSubs[i]) return;
+  _msSubs[i].titulo = String(valor || '').slice(0, 140);
+  _msSubsMexido = true;
+  // Sem redesenhar: o campo esta sendo digitado, e redesenhar perderia o cursor.
+  const p = msSubProgresso(_msSubs);
+  const alvo = document.getElementById('ms-sub-progresso');
+  if (alvo) alvo.textContent = p.total ? p.feitas + ' de ' + p.total + '  ·  ' + p.pct + '%' : '';
+}
+
+function msSubData(i, valor) {
+  if (!_msSubs[i]) return;
+  _msSubs[i].data = String(valor || '').slice(0, 10);
+  _msSubsMexido = true;
+}
+
+function msSubRemove(i) {
+  _msSubs.splice(i, 1);
+  _msSubsMexido = true;
+  msSubRender(null);
+}
+
+/** O que vai para a gravacao: sem as vazias, e no maximo 30.
+ *  Linha sem texto e linha que alguem abriu e nao usou — gravar isso encheria o
+ *  card de passos em branco que ninguem sabe o que eram. */
+function msSubParaGravar() {
+  return _msSubs
+    .filter(x => String(x.titulo || '').trim())
+    .slice(0, 30)
+    .map(x => ({ titulo: x.titulo.trim(), data: x.data || '', feita: !!x.feita }));
+}
+
+function hojeISOdev() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getDate()).padStart(2, '0');
+}
+
 // Grava a entrega SEM mexer na etapa. Existe porque "o dev nao conclui" nao pode
 // significar "o dev nao corrige o proprio texto": o PM/PO le justamente esse
 // texto para validar, e pedir mais detalhe e o caso mais comum. Antes o botao de
@@ -3598,6 +3753,7 @@ async function salvarEntrega() {
   if (_msAnexosMexidos) m.anexos = _msAnexos;
   const campos = Object.assign({ horas_realizadas: horas, implementacao: impl }, ghLinks);
   if (_msAnexosMexidos) campos.anexos = _msAnexos;
+  if (_msSubsMexido) campos.subtarefas = msSubParaGravar();
   const okSalvo = await saveToGitHub({ [id]: campos });
   if (okSalvo) {
     _msAnexosMexidos = false;
@@ -3719,6 +3875,12 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   // Vinculo de projeto entra no patch so se mexeu: mandar sempre sobrescreveria
   // um vinculo feito no Admin entre a leitura desta tela e a gravacao.
   if (_msProjetoMexido) campos.projeto_id = m.projeto_id || '';
+  // Subtarefa entra so se mexeu, pelo mesmo motivo do vinculo de projeto: mandar
+  // sempre sobrescreveria o que outra tela gravou entre a leitura e o salvamento.
+  if (_msSubsMexido) {
+    campos.subtarefas = msSubParaGravar();
+    m.subtarefas = campos.subtarefas;
+  }
   const ok = await saveToGitHub({ [id]: campos });
   if (!ok) {
     m.status_planejamento = spAnterior;

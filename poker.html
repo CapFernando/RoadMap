@@ -127,6 +127,26 @@
       background:var(--bg3); border:1px solid var(--border); border-radius:9px;
       padding:11px 13px; white-space:pre-wrap; max-height:200px; overflow:auto; }
     .pd-vazio { color:var(--text3); font-style:italic; }
+    /* O REQUISITO ocupa a largura da pauta e tem altura limitada: ele informa,
+       mas nao pode empurrar o baralho para fora da tela — vota-se logo abaixo. */
+    .pd-req { grid-column:1/-1; margin-top:2px; }
+    .pd-req-cab { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    /* NAO centraliza por flex: com `overflow:auto`, o item centralizado que passa
+       da altura da caixa e cortado nas DUAS pontas e a rolagem nao alcanca o que
+       ficou acima — um print de requisito com 456px numa caixa de 340 perdia o
+       titulo e o ultimo item. Alinhado ao topo, a rolagem chega em tudo. */
+    .pd-req-quadro { border:1px solid var(--border); border-radius:8px; background:var(--bg3);
+      min-height:60px; max-height:340px; overflow:auto; text-align:center; padding:4px; }
+    .pd-req-img { max-width:100%; display:block; margin:0 auto; cursor:zoom-in; }
+    .pd-req-msg { font-size:12px; color:var(--text3); padding:18px 12px; text-align:center; }
+    /* A lupa fica POR CIMA da sala, e nao no lugar dela: a votacao continua atras. */
+    .req-lupa { position:fixed; inset:0; z-index:9000; background:rgba(4,8,18,.92);
+      display:flex; align-items:center; justify-content:center; padding:44px 24px 24px;
+      cursor:zoom-out; }
+    .req-lupa img { max-width:100%; max-height:100%; object-fit:contain; cursor:default;
+      border-radius:6px; box-shadow:0 12px 48px rgba(0,0,0,.6); }
+    .req-lupa-dica { position:absolute; top:14px; left:0; right:0; text-align:center;
+      font-size:12px; color:var(--text3); }
     .pd-anexos { display:flex; gap:7px; flex-wrap:wrap; }
     .pd-anexo { display:inline-flex; align-items:center; gap:6px; font-size:12px;
       background:var(--bg3); border:1px solid var(--border2); border-radius:7px;
@@ -1063,9 +1083,20 @@ function renderDetalhe(m) {
           esc(val) + '</span></div>' : '';
 
   const anexos = (m.anexos || []);
-  const anexosHTML = anexos.length
+
+  /* O REQUISITO, SEPARADO DOS DEMAIS ANEXOS.
+     A imagem chamada AX-###.PNG e o requisito da demanda, e num Planning ela e a
+     coisa que se le antes de escolher a carta. Como anexo comum ela era um botao
+     igual aos outros, e botao nao se clica no meio de uma votacao de dois
+     minutos — vota-se com o que esta na tela. Aqui ela ESTA na tela. */
+  const iReq = anexos.findIndex(a => ehRequisito(a, m));
+  const requisitoHTML = iReq >= 0 ? montaRequisito(anexos[iReq], iReq) : '';
+
+  // Os outros anexos seguem como estavam: lista de botoes.
+  const outros = anexos.map((a, i) => ({ a, i })).filter(x => x.i !== iReq);
+  const anexosHTML = outros.length
     ? '<div class="pd-linha"><span class="pd-rot">Anexos</span><span class="pd-anexos">' +
-      anexos.map((a, i) => a.inline
+      outros.map(({ a, i }) => a.inline
         ? '<span class="pd-anexo morto" title="Anexo antigo, guardado dentro do arquivo: abra pelo Admin">📎 ' +
           esc(a.nome) + ' <small>(abra pelo Admin)</small></span>'
         : '<button type="button" class="pd-anexo" onclick="abrirAnexoPauta(' + i + ')">📎 ' +
@@ -1084,8 +1115,129 @@ function renderDetalhe(m) {
     (m.descricao
       ? '<div class="pd-desc">' + esc(m.descricao) + '</div>'
       : '<div class="pd-linha pd-vazio">Sem descrição — vale perguntar ao solicitante antes de estimar.</div>') +
+    requisitoHTML +
     disc +
     anexosHTML;
+
+  // A imagem so e buscada DEPOIS de o HTML existir: ela entra por credencial e
+  // por rede, e nao da para embutir na string.
+  _reqUrl = '';
+  if (iReq >= 0) carregaRequisito(anexos[iReq]);
+}
+
+/* ─── A IMAGEM DE REQUISITO ────────────────────────────────────────────────
+
+   O NOME E O CONTRATO: AX-218.PNG e o requisito da AX-218. Foi a convencao que o
+   time adotou, e ela e o unico jeito de distinguir "o requisito" de "um print que
+   alguem anexou" sem inventar um campo novo em toda a base.
+
+   Aceita o codigo da propria demanda e tambem AX-### solto: o anexo pode ter sido
+   subido antes de a demanda receber o codigo, e recusar por isso deixaria a
+   imagem escondida sem que ninguem entendesse o motivo.                        */
+function ehRequisito(a, m) {
+  if (!a || a.inline || !a.chave) return false;   // inline nao tem como baixar
+  const nome = String(a.nome || '');
+  if (!/\.(png|jpe?g|webp|gif)$/i.test(nome)) return false;
+  const cod = String((m || {}).codigo || '').trim().toUpperCase();
+  const doNome = (nome.match(/^\s*(AX-\d+)/i) || [])[1];
+  if (!doNome) return false;
+  return !cod || doNome.toUpperCase() === cod;
+}
+
+function montaRequisito(a, i) {
+  return '<div class="pd-req">' +
+    '<div class="pd-req-cab">' +
+      '<span class="pd-rot">Requisito</span>' +
+      '<button type="button" class="pd-anexo" onclick="ampliaRequisito()" ' +
+        'title="Ver maior, sem sair da sala">⤢ ' + esc(a.nome) + '</button>' +
+    '</div>' +
+    '<div class="pd-req-quadro" id="pd-req-quadro">' +
+      '<div class="pd-req-msg">carregando o requisito…</div>' +
+    '</div></div>';
+}
+
+/* A imagem vem pela MESMA rota do anexo, que exige credencial de leitura — o
+   requisito nao pode ser mais publico que o roadmap de onde ele saiu.
+
+   O cache por chave existe porque a pauta se redesenha a cada troca de estado:
+   sem ele, a mesma imagem seria baixada de novo a cada redesenho, e o Planning
+   inteiro passaria a puxar o mesmo arquivo em loop.                            */
+const _reqCache = new Map();
+let _reqUrl = '';
+
+/* AMPLIAR SEM SAIR DA SALA.
+   A primeira versao abria o print em outra aba, e isso tira a pessoa da votacao:
+   ela perde a mesa, o cronometro e a propria carta, e volta perguntando "em que
+   pe estamos?". A lupa fica por cima da sala e sai com um clique ou com Esc. */
+function ampliaRequisito() {
+  if (!_reqUrl) { toast('O requisito ainda está carregando.'); return; }
+  fechaRequisito();
+  const cx = document.createElement('div');
+  cx.className = 'req-lupa';
+  cx.id = 'req-lupa';
+  cx.innerHTML = '<div class="req-lupa-dica">clique fora ou Esc para voltar à sala</div>';
+  const img = document.createElement('img');
+  img.src = _reqUrl;
+  img.alt = 'Requisito ampliado';
+  // A imagem nao fecha ao ser clicada: quem quer ler um print arrasta e amplia
+  // nele, e fechar no clique transformaria a leitura em briga com a tela.
+  img.onclick = (e) => e.stopPropagation();
+  cx.appendChild(img);
+  cx.onclick = fechaRequisito;
+  document.body.appendChild(cx);
+  document.body.style.overflow = 'hidden';
+  document.addEventListener('keydown', escFechaRequisito);
+}
+
+function fechaRequisito() {
+  const v = document.getElementById('req-lupa');
+  if (v) v.remove();
+  document.body.style.overflow = '';
+  document.removeEventListener('keydown', escFechaRequisito);
+}
+
+function escFechaRequisito(e) { if (e.key === 'Escape') fechaRequisito(); }
+
+async function carregaRequisito(a) {
+  const quadro = document.getElementById('pd-req-quadro');
+  if (!quadro || !a || !a.chave) return;
+  const mostra = (url) => {
+    if (!quadro.isConnected) return;   // a pauta virou enquanto a imagem vinha
+    quadro.innerHTML = '';
+    const img = document.createElement('img');
+    img.className = 'pd-req-img';
+    img.alt = 'Requisito ' + (a.nome || '');
+    img.src = url;
+    // Clicar amplia SEM SAIR DA SALA: abrir noutra aba tira a pessoa da votacao,
+    // e quem sai perde a mesa, o cronometro e a propria carta.
+    img.title = 'Clique para ver maior';
+    img.onclick = ampliaRequisito;
+    quadro.appendChild(img);
+    _reqUrl = url;
+  };
+  if (_reqCache.has(a.chave)) { mostra(_reqCache.get(a.chave)); return; }
+  const recado = (t) => { if (quadro.isConnected) quadro.innerHTML =
+    '<div class="pd-req-msg">' + esc(t) + '</div>'; };
+  try {
+    const res = await fetch(PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'anexo-baixar', chave: a.chave },
+        _token ? { token: _token } : {}, _senha ? { senha: _senha } : {}))
+    });
+    if (!res.ok) {
+      // O recado diz O QUE FAZER. "Erro 401" faria a pessoa chamar o facilitador
+      // no meio da votacao para descobrir a mesma coisa.
+      recado(res.status === 401 || res.status === 403
+        ? 'Entre com sua conta para ver o requisito.'
+        : 'Não foi possível carregar o requisito (HTTP ' + res.status + ').');
+      return;
+    }
+    const url = URL.createObjectURL(await res.blob());
+    _reqCache.set(a.chave, url);
+    mostra(url);
+  } catch (_) {
+    recado('Falha de rede ao carregar o requisito.');
+  }
 }
 
 // Abre o anexo da demanda em pauta. Usa a credencial de quem esta conduzindo; o
@@ -1224,10 +1376,14 @@ function aplicar(est) {
   document.getElementById('pauta-meta').textContent = m
     ? [m.codigo, nomeTema(m.tema_id), m.dev, m.tipo === 'sustentacao' ? 'Sustentação' : m.tipo === 'evolucao' ? 'Evolução' : ''].filter(Boolean).join(' · ')
     : '';
-  // O detalhe completo vale para todos: quem vota tambem precisa ler o pedido. Os
-  // botoes de anexo, porem, exigem credencial — participante que entrou so com o
-  // nome nao tem, e receberia 401. Para ele o detalhe vem sem os anexos.
-  renderDetalhe(m ? (_facilitador ? m : Object.assign({}, m, { anexos: [] })) : null);
+  /* O detalhe completo vale para todos: quem vota tambem precisa ler o pedido.
+     Os anexos exigem credencial de leitura — quem entrou so com o nome receberia
+     401 —, mas a condicao e TER CREDENCIAL, e nao conduzir a reuniao. O
+     requisito e escrito para o dev, e o dev vota; enquanto isso dependia de ser
+     facilitador, a unica pessoa que via o requisito era justamente a que nao ia
+     implementar. */
+  const temCredencial = !!(_token || _senha);
+  renderDetalhe(m ? (temCredencial ? m : Object.assign({}, m, { anexos: [] })) : null);
   // Complementar e negar sao acoes de quem conduz, e so fazem sentido com uma
   // demanda em pauta.
   const acoes = document.getElementById('pauta-acoes');

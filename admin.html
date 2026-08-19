@@ -206,6 +206,10 @@
     .kb-ip { font-family: monospace; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
     .kb-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
     .kb-anexo-tag { font-size: 10.5px; color: var(--text3); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
+    /* Progresso das subtarefas: mesmo peso dos outros marcadores do card — ele
+       informa, e nao disputa a atencao com o titulo. */
+    .kb-sub { font-size: 10.5px; color: var(--text3); border: 1px solid var(--border);
+      border-radius: 5px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
     /* Codigo da demanda: referencia curta para PR, review e deploy. */
     /* ── PROJETOS / ÉPICOS ── */
     .pj-topo { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
@@ -3163,6 +3167,18 @@ function renderKanban() {
         esc(projDoCard.codigo || projDoCard.nome || '') + '</span>');
       if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
       if (nAnexos) badges.push(`<span class="kb-anexo-tag">📎 ${nAnexos}</span>`);
+      /* O PROGRESSO DAS SUBTAREFAS, para quem acompanha e nao executa.
+         O dev quebra a demanda em passos no painel dele; sem trazer isso para ca,
+         o PM/PO continua com "em andamento" como unica resposta a pergunta "como
+         esta?" — que e a pergunta que ele faz todo dia. */
+      const subs = (Array.isArray(m.subtarefas) ? m.subtarefas : []).filter(Boolean);
+      if (subs.length) {
+        const feitas = subs.filter(x => x && x.feita).length;
+        const pct = Math.round(feitas / subs.length * 100);
+        badges.push('<span class="kb-sub" title="' + feitas + ' de ' + subs.length +
+          (subs.length === 1 ? ' subtarefa concluída' : ' subtarefas concluídas') +
+          '">◐ ' + feitas + '/' + subs.length + ' · ' + pct + '%</span>');
+      }
       // Atraso agora e marca no card, nao coluna.
       const nivelPrazo = prazoNivel(m);
       const atrasada = statusEfetivo(m) === 'atrasado';

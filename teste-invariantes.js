@@ -2977,6 +2977,129 @@ ok(/function atrasouNaEntrega\(m\)/.test(PRZ),
      'e o que ainda esta na esteira do dev continua marcado');
 })();
 
+/* ─── SUBTAREFAS: o passo a passo dentro da demanda ──────────────────────
+   Pedido do time (Joao Vitor): uma demanda de tres semanas fica "em andamento"
+   do inicio ao fim, e quem pergunta como ela esta ouve a mesma resposta todo
+   dia. As invariantes daqui protegem as duas coisas que fazem o campo servir
+   para alguma coisa: o progresso ser um numero que se le sem abrir a demanda,
+   e a gravacao nao passar por cima do que outra tela escreveu.               */
+sec('Subtarefas');
+
+// As funcoes puras, tiradas da tela e RODADAS. Regra conferida so por regex
+// passa a existir no comentario, e nao no comportamento.
+(function () {
+  const fonte = ['msSubsDe', 'msSubProgresso', 'msSubParaGravar']
+    .map(n => corpo(DEV, 'function ' + n + '('))
+    .filter(Boolean);
+  ok(fonte.length === 3, 'as tres funcoes puras da subtarefa existem em dev.html');
+  if (fonte.length !== 3) return;
+  const F = new Function('_msSubs', fonte.join('\n') +
+    '\nreturn { msSubsDe, msSubProgresso, msSubParaGravar };');
+
+  const S = F([]);
+  ok(S.msSubProgresso([]).pct === null,
+     'demanda sem subtarefa nao tem percentual — e nao 0%',
+     '0% diria "nada feito"; o certo e "nao se aplica"');
+  ok(S.msSubProgresso([{ feita: true }, { feita: false }, { feita: false }]).pct === 33,
+     'o percentual e feitas dividido por total');
+  ok(S.msSubProgresso([{ feita: true }, { feita: true }]).pct === 100,
+     'todas feitas fecha em 100%');
+
+  // Lixo no campo nao pode derrubar o card: a base e um JSON que quatro telas
+  // escrevem, e o card renderiza antes de qualquer validacao.
+  ok(S.msSubsDe({ subtarefas: [null, { titulo: 'a' }, undefined] }).length === 1,
+     'entrada suja na lista nao quebra a leitura');
+  ok(S.msSubsDe({}).length === 0 && S.msSubsDe(null).length === 0,
+     'demanda sem o campo devolve lista vazia');
+  ok(S.msSubsDe({ subtarefas: [{ titulo: 'x'.repeat(400) }] })[0].titulo.length === 140,
+     'titulo tem teto: subtarefa e passo, e nao descricao da demanda');
+
+  // A gravacao: linha em branco e linha que alguem abriu e nao usou.
+  const G = F([{ titulo: ' passo ', data: '', feita: true },
+               { titulo: '   ', data: '2026-08-19', feita: false }]);
+  const grav = G.msSubParaGravar();
+  ok(grav.length === 1 && grav[0].titulo === 'passo',
+     'subtarefa sem texto nao vai para a base');
+  const M = F(Array.from({ length: 60 }, (_, i) => ({ titulo: 'p' + i, data: '', feita: false })));
+  ok(M.msSubParaGravar().length === 30,
+     'a lista tem teto de 30 — demanda que precisa de mais que isso sao duas demandas');
+})();
+
+/* O CAMPO SO SOBE SE FOI MEXIDO. Mandar sempre sobrescreveria o que outra tela
+   gravou entre a leitura e o salvamento — o mesmo defeito que fez as marcacoes
+   de projeto "sumirem", so que silencioso. */
+ok((DEV.match(/campos\.subtarefas = msSubParaGravar\(\)/g) || []).length ===
+   (DEV.match(/if \(_msSubsMexido\)/g) || []).length,
+   'toda gravacao de subtarefa passa pela trava de "foi mexido"');
+
+/* O PROGRESSO APARECE NO CARD DAS DUAS TELAS. Se ele so existisse dentro do
+   modal, "quanto ja andou?" continuaria exigindo abrir demanda por demanda —
+   que e exatamente o que o campo veio resolver. */
+ok(/kcard-sub-barra/.test(DEV) && /msSubProgresso\(subs\)/.test(DEV),
+   'o card do dev mostra o progresso sem precisar abrir a demanda');
+ok(/kb-sub/.test(ADMIN) && /m\.subtarefas/.test(ADMIN),
+   'o card do admin tambem — quem acompanha nao entra no painel do dev');
+
+/* ─── O REQUISITO NA PAUTA DO PLANNING ───────────────────────────────────
+   Convencao do time: o anexo AX-###.PNG e o requisito daquela demanda. Num
+   Planning ele e o que se le ANTES de escolher a carta, e por isso aparece na
+   propria pauta em vez de virar mais um botao de anexo.                       */
+sec('Requisito no Planning Poker');
+
+(function () {
+  const fonte = corpo(POKER, 'function ehRequisito(');
+  ok(!!fonte, 'a regra do nome do requisito existe em poker.html');
+  if (!fonte) return;
+  const eh = new Function(fonte + '\nreturn ehRequisito;')();
+  const anexo = (nome, extra) => Object.assign({ nome, chave: 'a/x' }, extra || {});
+
+  ok(eh(anexo('AX-218.PNG'), { codigo: 'AX-218' }) === true,
+     'AX-218.PNG e o requisito da AX-218');
+  ok(eh(anexo('ax-218.png'), { codigo: 'AX-218' }) === true,
+     'caixa do nome nao separa: o anexo sobe como o Windows salvou');
+  ok(eh(anexo('AX-218.jpg'), { codigo: 'AX-218' }) === true &&
+     eh(anexo('AX-218.webp'), { codigo: 'AX-218' }) === true,
+     'jpg e webp tambem — a convencao e o nome, e nao a extensao');
+
+  /* AS RECUSAS SAO O QUE IMPORTA: mostrar o print errado em tamanho grande no
+     meio da votacao e pior que nao mostrar nada, porque ninguem confere. */
+  ok(eh(anexo('AX-219.PNG'), { codigo: 'AX-218' }) === false,
+     'o requisito de OUTRA demanda nao entra na pauta desta');
+  ok(eh(anexo('print da tela.png'), { codigo: 'AX-218' }) === false,
+     'print anexado sem a convencao continua sendo anexo comum');
+  ok(eh(anexo('AX-218.pdf'), { codigo: 'AX-218' }) === false,
+     'pdf nao vira imagem na pauta — o quadro so sabe desenhar imagem');
+  ok(eh(anexo('AX-218.PNG', { inline: true }), { codigo: 'AX-218' }) === false &&
+     eh({ nome: 'AX-218.PNG' }, { codigo: 'AX-218' }) === false,
+     'anexo antigo, sem chave, nao promete uma imagem que nao da para baixar');
+})();
+
+/* AMPLIAR NAO PODE TIRAR NINGUEM DA SALA. Abrir noutra aba faz a pessoa perder a
+   mesa, o cronometro e a propria carta — o pedido foi explicitamente "ver na tela
+   do planning para nao sair da sala". */
+ok(/\.req-lupa \{ position:fixed/.test(POKER) &&
+   !/window\.open/.test(corpo(POKER, 'function ampliaRequisito(') || 'window.open') &&
+   !/window\.open/.test(corpo(POKER, 'async function carregaRequisito(') || 'window.open'),
+   'o requisito amplia por cima da sala, e nao em outra aba');
+
+/* A IMAGEM NAO PODE SOBREVIVER A TROCA DE PAUTA. Sem zerar, clicar em ampliar no
+   segundo seguinte a troca mostra o requisito da demanda ANTERIOR — e o erro e
+   silencioso, porque uma imagem aparece. */
+ok(/_reqUrl = '';\s*\n\s*if \(iReq >= 0\) carregaRequisito/.test(POKER),
+   'trocar a demanda em pauta zera a imagem corrente');
+
+// O download acontece uma vez por anexo: a pauta se redesenha a cada mudanca de
+// estado, e sem cache o Planning inteiro puxaria o mesmo arquivo em loop.
+ok(/_reqCache\.has\(a\.chave\)/.test(POKER) && /_reqCache\.set\(a\.chave/.test(POKER),
+   'o requisito e baixado uma vez, e nao a cada redesenho');
+
+/* O ANEXO CHEGA A QUEM TEM CREDENCIAL, e nao a quem conduz. O requisito e escrito
+   PARA O DEV, e o dev vota — enquanto isso dependia de ser facilitador, a unica
+   pessoa que via o requisito era justamente a que nao ia implementar. */
+ok(/const temCredencial = !!\(_token \|\| _senha\);/.test(POKER) &&
+   /renderDetalhe\(m \? \(temCredencial \?/.test(POKER),
+   'ver o requisito depende de ter credencial, e nao de ser facilitador');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
