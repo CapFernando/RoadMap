@@ -2791,6 +2791,20 @@ ok(/etapa === 'validacao' && \/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(entregue\
 ok(/atrasada: diasDeAtraso\(m, hojeBR\(\)\) > 0/.test(WC),
    'e `atrasada` da API sai da mesma conta');
 
+/* "ESTA ATRASADA AGORA" E "ATRASOU NA ENTREGA" SAO PERGUNTAS DIFERENTES.
+
+   Eu as juntei numa funcao so ao unificar a regra, e o efeito apareceu no painel
+   do dev: "4 demandas suas estao com o prazo vencido" com as QUATRO ja
+   concluidas. Quem entregou ontem com um dia de atraso abria o painel hoje e via
+   cobranca de coisa que ja fez.
+
+   O atraso vale enquanto a demanda esta na esteira do dev. Depois da entrega ele
+   vira historico: continua no relatorio do mes, e sai do painel de pendencia.   */
+ok(/function estaAtrasada\(m, etapa, hoje\) \{\s*if \(!ETAPAS_QUE_CORREM\.includes\(etapa\)\) return false;/.test(PRZ),
+   'estaAtrasada responde so pela esteira do dev');
+ok(/function atrasouNaEntrega\(m\)/.test(PRZ),
+   'e existe uma funcao propria para "entregou com atraso"');
+
 // A REGRA RODA DE VERDADE, e nao so existe no arquivo.
 (() => {
   let P = null;
@@ -2824,6 +2838,22 @@ ok(/atrasada: diasDeAtraso\(m, hojeBR\(\)\) > 0/.test(WC),
   ok(P.diasDeAtraso({ entrega: '2026-07-31', entregue_em: '2026-08-01T02:00:00Z' },
                     'validacao', HOJE) === 1,
      'a virada do mes conta um dia, e nao zero nem dois');
+
+  /* O CASO DO PAINEL DO DEV: AX-157, entregue um dia depois do prazo e ja
+     concluida. Ela NAO e pendencia dele — mas o relatorio do mes continua
+     contando o dia de atraso que houve. */
+  const entregue = { entrega: '2026-08-14', entregue_em: '2026-08-15T10:00:00Z',
+                     concluido_em: '2026-08-17' };
+  ok(P.estaAtrasada(entregue, 'concluido', HOJE) === false,
+     'concluida nao aparece como pendencia atrasada no painel');
+  ok(P.estaAtrasada(entregue, 'validacao', HOJE) === false,
+     'nem a que esta esperando validacao — o dev ja entregou');
+  ok(P.atrasouNaEntrega(entregue) === true &&
+     P.diasDeAtraso(entregue, 'concluido', HOJE) === 1,
+     'mas o relatorio continua sabendo que ela atrasou um dia');
+  // O que AINDA esta com o dev continua cobrado.
+  ok(P.estaAtrasada({ entrega: '2026-08-14' }, 'em_andamento', HOJE) === true,
+     'e o que ainda esta na esteira do dev continua marcado');
 })();
 
 let erroW = null;

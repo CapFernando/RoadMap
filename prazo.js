@@ -99,10 +99,33 @@
     return Math.round((d(ref) - d(pz)) / 86400000);
   }
 
-  /** Atrasada, sim ou nao — o que o badge e o filtro perguntam. */
+  /** ESTA ATRASADA AGORA? — o que o badge, o filtro e o alerta perguntam.
+   *
+   *  SO ENQUANTO A DEMANDA ESTA NA ESTEIRA DO DEV. Depois que ele entrega, o
+   *  atraso vira historico: aconteceu, entra no relatorio do mes, e para de ser
+   *  pendencia dele.
+   *
+   *  Sao DUAS PERGUNTAS DIFERENTES, e eu as tinha juntado numa funcao so — o
+   *  efeito foi o painel do dev anunciando "4 demandas suas estao com o prazo
+   *  vencido" com as quatro JA CONCLUIDAS. Quem entregou ontem com um dia de
+   *  atraso abria o painel hoje e via cobranca de coisa que ja fez.
+   *
+   *  Quanto a demanda atrasou, mesmo depois de entregue, e `diasDeAtraso`. */
   function estaAtrasada(m, etapa, hoje) {
+    if (!ETAPAS_QUE_CORREM.includes(etapa)) return false;
     var dias = diasDeAtraso(m, etapa, hoje);
     return dias != null && dias > 0;
+  }
+
+  /** ENTREGOU COM ATRASO? — a pergunta do relatorio, e nao a do painel.
+   *
+   *  Vale depois da entrega: e o que permite o deck dizer "26 entregas sairam
+   *  com atraso" sem que o dev veja essas mesmas 26 como pendencia aberta. */
+  function atrasouNaEntrega(m) {
+    var pz = iso((m || {}).entrega);
+    var fim = fimDoDev(m);
+    if (!ehData(pz) || !ehData(fim)) return false;
+    return fim > pz;
   }
 
   /** O dia de hoje em ISO, no fuso de quem esta olhando. Uma funcao so para as
@@ -120,6 +143,7 @@
     fimDoDev: fimDoDev,
     diasDeAtraso: diasDeAtraso,
     estaAtrasada: estaAtrasada,
+    atrasouNaEntrega: atrasouNaEntrega,
     hojeISO: hojeISO,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = raiz.PRAZO;
