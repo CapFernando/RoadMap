@@ -902,7 +902,7 @@
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js"></script>
 <script src="pipelines.js?v=9a1128f973"></script>
-<script src="apresentacao.js?v=b4f3930769"></script>
+<script src="apresentacao.js?v=fde5b35071"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -5041,19 +5041,37 @@ async function apresGerar() {
     const semPrazoComb = conc.filter(m => ['sem_prazo', 'sem_conclusao']
       .includes((cl.get(m.id) || {}).tipo)).length;
     const lancadaDepois = conc.filter(m => (cl.get(m.id) || {}).tipo === 'retroativa').length;
-    /* ATRASO HERDADO NAO E ATRASO DESTE MES.
-       Das 33 entregas com atraso em agosto, oito tinham prazo combinado para
-       JULHO: ja chegaram atrasadas. Cobrar isso de agosto e cobrar duas vezes a
-       mesma demora — e some do mes em que o prazo estourou.
+    /* O PRAZO E DO MES EM QUE FOI PROMETIDO, e nao do mes em que a entrega saiu.
 
-       Elas nao saem do deck: a entrega aconteceu, e quem pergunta "e aquela de
-       julho?" merece ver a resposta. Saem so do PERCENTUAL, e ganham faixa
-       propria com o nome do que sao.                                          */
-    const atrasoHerdado = atras.filter(m => String(m.entrega || '').slice(0, 7) < iso);
-    const atrasoDoMes = atras.filter(m => String(m.entrega || '').slice(0, 7) >= iso);
-    const medidas = noPrazo.length + atrasoDoMes.length;
-    const diasMedio = atrasoDoMes.length
-      ? Math.round(atrasoDoMes.reduce((t, m) => t + cl.get(m.id).dias, 0) / atrasoDoMes.length) : 0;
+       O bloco de prazo olhava as demandas CONCLUIDAS no mes. Isso abria um buraco:
+       oito demandas prometidas para julho foram entregues em agosto e sumiam dos
+       DOIS meses — em julho porque o filtro e por conclusao, e em agosto porque o
+       percentual (com razao) nao cobra de agosto um prazo de julho. Julho fechava
+       mostrando ZERO entregas medidas, com oito atrasos que ninguem via.
+
+       Agora quem manda e a DATA COMBINADA: a demanda pertence ao mes do prazo
+       dela, tenha saido quando tiver saido. Puxar julho mostra as oito, com os
+       13 dias medios de atraso que elas tiveram.
+
+       O RESTO DO DECK CONTINUA POR CONCLUSAO, e e proposital: "o que entregamos
+       em agosto" e outra pergunta, e a resposta dela e o que saiu no mes.       */
+    const prometidas = (state.melhorias || []).filter(m =>
+      !m.mesclado_em && !m.oculto && String(m.entrega || '').slice(0, 7) === iso);
+    const prometidasConcluidas = prometidas.filter(m =>
+      (m.status_planejamento || '') === 'concluido');
+    const clPz = new Map(prometidasConcluidas.map(m => [m.id, prazoClassifica(m)]));
+    const noPrazoPz = prometidasConcluidas.filter(m => (clPz.get(m.id) || {}).tipo === 'no_prazo');
+    const atrasPz = prometidasConcluidas.filter(m => (clPz.get(m.id) || {}).tipo === 'atraso');
+    // Prometida para o mes e AINDA EM ABERTO: nao entra no percentual (nao ha
+    // entrega para medir), mas e dito no slide — some daqui seria esconder o
+    // compromisso que nao foi cumprido.
+    const prometidasEmAberto = prometidas.filter(m =>
+      !['concluido', 'negada'].includes(m.status_planejamento || ''));
+    const semMedirPz = prometidasConcluidas.filter(m =>
+      ['retroativa', 'sem_prazo', 'sem_conclusao'].includes((clPz.get(m.id) || {}).tipo));
+    const medidas = noPrazoPz.length + atrasPz.length;
+    const diasMedio = atrasPz.length
+      ? Math.round(atrasPz.reduce((t, m) => t + clPz.get(m.id).dias, 0) / atrasPz.length) : 0;
 
     // DEMANDA x CAPACIDADE: o que chegou contra o que saiu.
     //
@@ -5511,19 +5529,27 @@ async function apresGerar() {
           : '',
       },
       prazo: {
-        pct: medidas ? Math.round(noPrazo.length / medidas * 100) : 0,
-        noPrazo: noPrazo.length, medidas, naoMedidas: naoMed.length, diasMedio,
-        semPrazoComb, lancadaDepois,
-        // O mes anterior tem nome: "atrasadas desde julho" diz de onde vem.
-        herdadas: atrasoHerdado.length,
+        pct: medidas ? Math.round(noPrazoPz.length / medidas * 100) : 0,
+        noPrazo: noPrazoPz.length, medidas, diasMedio,
+        naoMedidas: semMedirPz.length,
+        semPrazoComb: semMedirPz.filter(m =>
+          ['sem_prazo', 'sem_conclusao'].includes((clPz.get(m.id) || {}).tipo)).length,
+        lancadaDepois: semMedirPz.filter(m => (clPz.get(m.id) || {}).tipo === 'retroativa').length,
+        // Prometidas para o mes que ainda nao sairam: nao ha entrega para medir,
+        // mas o compromisso existe e o slide diz isso.
+        emAberto: prometidasEmAberto.length,
+        prometidas: prometidas.length,
         mesAnterior: apresentacaoMesNome((mes + 10) % 12),
-        atrasadas: atrasoDoMes
-          .sort((a, b) => cl.get(b.id).dias - cl.get(a.id).dias)
+        atrasadas: atrasPz
+          .sort((a, b) => clPz.get(b.id).dias - clPz.get(a.id).dias)
           .map(m => ({
             titulo: (m.codigo ? m.codigo + ' · ' : '') + String(m.titulo || '').slice(0, 60),
             dev: m.dev || '—',
-            datas: formatDate(m.entrega) + ' → ' + formatDate(m.concluido_em),
-            dias: cl.get(m.id).dias,
+            // A data que encerra o prazo e a da ENTREGA DO DEV, e e ela que a
+            // tabela mostra — o mesmo criterio da conta ao lado.
+            datas: formatDate(m.entrega) + ' → ' +
+                   formatDate((window.PRAZO ? PRAZO.fimDoDev(m) : m.concluido_em)),
+            dias: clPz.get(m.id).dias,
           })),
       },
       anterior,

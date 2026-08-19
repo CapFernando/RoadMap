@@ -2284,8 +2284,14 @@ sec('O slide do time diz quem esteve fora');
 
 // Sem isso o slide convida a leitura errada: quem tirou ferias entrega menos e
 // aparece embaixo da lista como se tivesse rendido menos.
-ok(/function slideTime\(pptx, t, pagina, periodo, ausencias, cap\)/.test(APRES),
+ok(/function slideTime\(pptx, t, pagina, periodo, ausencias, cap, quebra\)/.test(APRES),
    'o slide do time recebe as ausencias e a capacidade de quem trabalhou');
+// CONSTRUIR OU MANTER DE PE: vinte entregas de evolucao e vinte de sustentacao
+// sao o mesmo numero e dois meses completamente diferentes.
+ok(/O QUE FOI ENTREGUE/.test(APRES) && /quebra\.sustentacao/.test(APRES),
+   'e mostra a quebra entre evolucao e sustentacao');
+ok(/\(d\.quebra \|\| \{\}\)\.saidas/.test(APRES),
+   'com a quebra das SAIDAS — o que o time entregou, e nao o que entrou na fila');
 ok(/Fora no período/.test(APRES), 'e mostra quem esteve fora');
 // Ferias que atravessam o mes pesam so os dias que caem no periodo apresentado.
 ok(/const de = String\(a\.inicio \|\| ''\) > iso \+ '-01'/.test(ADMIN),
@@ -2346,22 +2352,40 @@ ok(/String\(m\.concluido_em \|\| ''\)\.slice\(0, 7\) === iso &&/.test(ADMIN),
 // contar backlog, entradas e saidas.
 ok(!/function slideFluxo/.test(APRES),
    'o slide que repetia o do mes saiu');
-ok(/slideTime\(pptx, d\.time, \+\+p, d\.periodo, d\.ausencias, d\.capacidade\)/.test(APRES),
+ok(/slideTime\(pptx, d\.time, \+\+p, d\.periodo, d\.ausencias, d\.capacidade,/.test(APRES),
    'e a capacidade foi para o slide do time, onde se fala de gente');
 
 sec('O atraso do mes passado nao e atraso deste');
 
-// A suspeita estava certa: das 33 entregas com atraso em agosto, OITO tinham prazo
-// combinado para julho. Cobrar isso de agosto e cobrar duas vezes a mesma demora —
-// e some do mes em que o prazo estourou.
-ok(/const atrasoHerdado = atras\.filter\(m => String\(m\.entrega \|\| ''\)\.slice\(0, 7\) < iso\);/.test(ADMIN),
-   'o atraso com prazo de mes anterior e separado');
-ok(/const medidas = noPrazo\.length \+ atrasoDoMes\.length;/.test(ADMIN),
-   'e fica fora do percentual do mes');
-// Sair do deck seria pior: a entrega aconteceu, e quem pergunta "e aquela de
-// julho?" merece ver a resposta.
-ok(/rot: 'Atrasadas desde ' \+ \(z\.mesAnterior/.test(APRES),
-   'mas continua no slide, com faixa e nome proprios');
+/* A DEMANDA CONTA NO MES DO PRAZO DELA, e nao no mes em que a entrega saiu.
+
+   A regra antiga separava o "atraso herdado" mas media as CONCLUIDAS no mes, e
+   isso abria um buraco: oito demandas prometidas para julho sairam em agosto e
+   sumiam dos DOIS meses — de julho porque o filtro era por conclusao, de agosto
+   porque o percentual (com razao) nao cobra de agosto um prazo de julho. Julho
+   fechava com ZERO entregas medidas e oito atrasos que ninguem via.            */
+ok(/const prometidas = \(state\.melhorias \|\| \[\]\)\.filter\(m =>[\s\S]{0,160}String\(m\.entrega \|\| ''\)\.slice\(0, 7\) === iso\)/.test(ADMIN),
+   'o bloco de prazo parte do que foi PROMETIDO para o mes');
+ok(!/const atrasoHerdado/.test(ADMIN) && !/herdadas:/.test(ADMIN),
+   'e nao existe mais "atraso herdado": cada demanda conta no mes dela');
+ok(/const medidas = noPrazoPz\.length \+ atrasPz\.length;/.test(ADMIN),
+   'o percentual sai das prometidas para o mes que ja foram entregues');
+// Prometida e ainda em aberto nao entra no percentual (nao ha entrega para medir),
+// mas e dita no slide: some daqui seria esconder o compromisso nao cumprido.
+ok(/const prometidasEmAberto = prometidas\.filter/.test(ADMIN) && /emAberto: prometidasEmAberto\.length/.test(ADMIN),
+   'o que foi prometido e ainda nao saiu aparece no slide');
+ok(/Ainda em aberto/.test(APRES), 'com faixa propria, e nao somado ao atraso');
+// A sala precisa saber QUE RECORTE esta vendo, senao soma as entregas do mes e
+// conclui que um dos dois slides esta errado.
+ok(/Conta o que foi prometido para o mês/.test(APRES),
+   'e o slide diz qual e o recorte');
+ok(/pct: medidas \? Math\.round\(noPrazoPz\.length \/ medidas \* 100\) : 0/.test(ADMIN),
+   'e fica fora do percentual do mes quem nao foi prometido para ele');
+/* A entrega de quem tinha prazo em outro mes NAO some do deck: ela aparece nos
+   slides de entrega do mes em que saiu (frentes, evolucao, time). O que muda e
+   so ONDE o PRAZO dela e cobrado — no mes em que foi combinada. */
+ok(/aparece no relatório daquele mês/.test(APRES),
+   'e o slide diz onde a entrega de outro mes vai ser cobrada');
 ok(/mesAnterior: apresentacaoMesNome\(\(mes \+ 10\) % 12\)/.test(ADMIN),
    'com o mes anterior escrito por extenso');
 // Doze entregas de um dev e dezoito de outro nao dizem quem carregou mais peso.
@@ -2552,7 +2576,7 @@ sec('O slide das frentes cabe no slide');
    layout que quebra — entao a soma vira invariante.                            */
 (() => {
   const corpo = APRES.slice(APRES.indexOf('function slidePipelines'),
-                            APRES.indexOf('function slidePipelines') + 6000);
+                            APRES.indexOf('function slidePipelines') + 9000);
   const m = corpo.match(/var CW = ([\d.]+), CH = ([\d.]+), CVX = ([\d.]+), CVY = ([\d.]+);/);
   ok(!!m, 'as medidas do cartao de frente estao declaradas juntas');
   const y0 = corpo.match(/var y = ([\d.]+) \+ lin \* \(CH \+ CVY\);/);
@@ -2572,14 +2596,14 @@ sec('O slide das frentes cabe no slide');
     ok(5.05 + (cw + cvx) + cw <= 9.55,
        'a segunda coluna de cartoes nao passa da margem direita');
     // E o conteudo cabe DENTRO do cartao: nome, numeros e a linha de entregas.
-    const ult = corpo.match(/y: y \+ ([\d.]+), w: CW - [\d.]+, h: ([\d.]+), fontSize: 7,/);
+    const ult = corpo.match(/y: y \+ ([\d.]+), w: CW - [\d.]+, h: ([\d.]+), fontSize: 7\.5,/);
     ok(!!ult && Number(ult[1]) + Number(ult[2]) <= ch,
        'a ultima linha de texto cabe dentro do cartao',
        ult ? (Number(ult[1]) + Number(ult[2])).toFixed(2) + '" <= ' + ch.toFixed(2) + '"' : '');
   }
   // O nome da frente nao pode encostar no percentual: eram 0,07" de invasao.
   const nome = corpo.match(/corta\(it\.nome, \d+\), \{\s*x: x \+ ([\d.]+), y: y \+ [\d.]+, w: CW - ([\d.]+)/);
-  const pct = corpo.match(/x: x \+ CW - ([\d.]+), y: y \+ [\d.]+, w: ([\d.]+), h: [\d.]+, fontSize: 9,/);
+  const pct = corpo.match(/x: x \+ CW - ([\d.]+), y: y \+ [\d.]+, w: ([\d.]+), h: [\d.]+, fontSize: 10\.5,/);
   ok(!!nome && !!pct, 'nome e percentual do cartao estao posicionados');
   if (nome && pct && m) {
     const cw = Number(m[1]);

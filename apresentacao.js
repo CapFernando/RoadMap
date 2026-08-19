@@ -402,8 +402,45 @@
   // O time em agregado. Tres perguntas, tres colunas — e NENHUM slide por pessoa:
   // em reuniao de diretoria, detalhe individual desloca a conversa de "o que a
   // area entregou" para "o que fulano fez", e nao e essa a pauta.
-  function slideTime(pptx, t, pagina, periodo, ausencias, cap) {
-    var s = slideTitulo(pptx, 'O time', 'no período', pagina);
+  function slideTime(pptx, t, pagina, periodo, ausencias, cap, quebra) {
+    /* Titulo proprio, e nao `slideTitulo`: a caixa dele tem 8,6" de largura e
+       cobriria a quebra de sustentacao x evolucao, que vive no canto direito. */
+    var s = slideBase(pptx);
+    s.addText('O time', { x: 0.7, y: 0.55, w: 4.6, h: 0.5,
+                          fontSize: 24, bold: true, color: C.texto });
+    s.addText('no período', { x: 0.7, y: 1.05, w: 4.6, h: 0.35,
+                              fontSize: 13, color: C.fraco });
+
+    /* CONSTRUIR OU MANTER DE PE — a quebra do que o time entregou.
+
+       Vinte entregas de evolucao e vinte de sustentacao sao o mesmo numero e
+       dois meses completamente diferentes: um construiu, o outro segurou o que
+       ja existia. O slide falava de gente e nao dizia em que o esforco foi.
+
+       Fica no espaco vazio a direita do subtitulo, e nao numa faixa nova: as
+       tres colunas abaixo ja ocupam a altura util, e empurra-las para baixo
+       jogaria a ultima linha em cima da nota de capacidade. */
+    if (quebra && (quebra.evolucao || quebra.sustentacao)) {
+      var totQ = (quebra.evolucao || 0) + (quebra.sustentacao || 0) + (quebra.sem || 0);
+      s.addText('O QUE FOI ENTREGUE', { x: 5.5, y: 0.62, w: 3.8, h: 0.2,
+        fontSize: 8, bold: true, color: C.fraco, charSpacing: 1.2 });
+      var xq = 5.5, LQ = 3.8;
+      [{ v: quebra.evolucao || 0, cor: C.verde },
+       { v: quebra.sustentacao || 0, cor: C.ambar },
+       { v: quebra.sem || 0, cor: C.fundo3 }].forEach(function (q) {
+        if (!q.v) return;
+        var w = LQ * q.v / (totQ || 1);
+        s.addShape(pptx.ShapeType.rect, { x: xq, y: 0.86, w: w, h: 0.16,
+                                          fill: { color: q.cor }, line: { width: 0 } });
+        xq += w;
+      });
+      var legQ = [];
+      if (quebra.evolucao) legQ.push(quebra.evolucao + ' evolução');
+      if (quebra.sustentacao) legQ.push(quebra.sustentacao + ' sustentação');
+      if (quebra.sem) legQ.push(quebra.sem + ' sem classificar');
+      s.addText(legQ.join('   ·   '), { x: 5.5, y: 1.06, w: 3.8, h: 0.22,
+                                        fontSize: 9, color: C.fraco });
+    }
     var col = [
       { x: 0.7,  tit: 'Mais entregas',  cor: C.verde,    lista: t.entregas },
       { x: 3.65, tit: 'Mais pontos',    cor: C.azul,     lista: t.pontos },
@@ -417,10 +454,12 @@
       }
       c.lista.slice(0, 4).forEach(function (it, i) {
         var y = 1.9 + i * 0.55;
+        // A caixa do numero termina em +0,88" e o nome abre em +0,95": com o nome
+        // em +0,85" os dois se encostavam, e "210" em corpo 22 tocava a inicial.
         s.addText(String(it.valor), {
-          x: c.x, y: y, w: 0.9, h: 0.45, fontSize: 22, bold: true, color: c.cor });
-        s.addText(corta(it.nome, 18), {
-          x: c.x + 0.85, y: y + 0.08, w: 1.9, h: 0.35, fontSize: 12, color: C.texto });
+          x: c.x, y: y, w: 0.88, h: 0.45, fontSize: 22, bold: true, color: c.cor });
+        s.addText(corta(it.nome, 17), {
+          x: c.x + 0.95, y: y + 0.08, w: 1.8, h: 0.35, fontSize: 12, color: C.texto });
       });
     });
     // O TAMANHO DO TIME E OS DIAS QUE ELE TINHA. Vinha do slide de demanda x
@@ -598,13 +637,14 @@
      planejado"). */
   function cartaoKpi(pptx, s, cfg) {
     cartao(pptx, s, cfg.x, cfg.y, cfg.w, cfg.h);
-    s.addText(cfg.rot, { x: cfg.x + 0.14, y: cfg.y + 0.10, w: cfg.w - 0.28, h: 0.2,
-                         fontSize: 8, bold: true, color: cfg.cor || C.azul, charSpacing: 1.2 });
-    s.addText(String(cfg.val), { x: cfg.x + 0.13, y: cfg.y + 0.27, w: cfg.w - 0.26, h: 0.48,
-                                 fontSize: cfg.corpo || 27, bold: true, color: C.texto });
+    s.addText(cfg.rot, { x: cfg.x + 0.14, y: cfg.y + 0.11, w: cfg.w - 0.28, h: 0.21,
+                         fontSize: 9, bold: true, color: cfg.cor || C.azul, charSpacing: 1.2 });
+    s.addText(String(cfg.val), { x: cfg.x + 0.13, y: cfg.y + 0.31, w: cfg.w - 0.26, h: 0.52,
+                                 fontSize: cfg.corpo || 30, bold: true, color: C.texto,
+                                 wrap: false });
     if (cfg.nota) {
-      s.addText(cfg.nota, { x: cfg.x + 0.14, y: cfg.y + 0.74, w: cfg.w - 0.28, h: 0.19,
-                            fontSize: 7.5, color: C.fraco });
+      s.addText(cfg.nota, { x: cfg.x + 0.14, y: cfg.y + 0.83, w: cfg.w - 0.28, h: 0.19,
+                            fontSize: 8, color: C.fraco });
     }
   }
 
@@ -618,14 +658,11 @@
     s.addChart(pptx.ChartType.doughnut,
       [{ name: 'exec', labels: ['feito', 'resto'], values: [feito, 100 - feito] }], {
         x: x, y: y, w: lado, h: lado,
-        holeSize: 70, showLegend: false, showValue: false, showTitle: false,
+        holeSize: 62, showLegend: false, showValue: false, showTitle: false,
         chartColors: [cor, C.fundo3],
-        dataBorder: { pt: 0, color: C.fundo },
-        plotArea: { fill: { color: C.fundo } },
+        dataBorder: { pt: 0, color: C.fundo2 },
+        plotArea: { fill: { color: C.fundo2 } },
       });
-    s.addText(pct == null ? '—' : pct + '%', {
-      x: x, y: y + lado / 2 - 0.19, w: lado, h: 0.38,
-      fontSize: 15, bold: true, color: cor, align: 'center' });
   }
 
   /* A BARRA PAREADA de planejado x realizado.
@@ -648,7 +685,7 @@
     itens.forEach(function (it, i) {
       var y = cfg.y + i * cfg.alt;
       s.addText(corta(it.nome, 18), {
-        x: x, y: y, w: LARG_NOME, h: 0.3, fontSize: 8.5, color: C.texto,
+        x: x, y: y, w: LARG_NOME, h: 0.32, fontSize: 9.5, color: C.texto,
         align: 'right', valign: 'middle' });
       [{ v: it.plan, cor: C.fundo3, dy: 0.045 },
        { v: it.real, cor: it.cor, dy: 0.155 }].forEach(function (b) {
@@ -657,13 +694,13 @@
           fill: { color: b.cor }, line: { width: 0 } });
       });
       s.addText(it.plan + 'h / ' + it.real + 'h', {
-        x: xBarra + wBarra + 0.06, y: y, w: 0.58, h: 0.3,
-        fontSize: 7.5, color: C.fraco, valign: 'middle' });
+        x: xBarra + wBarra + 0.06, y: y, w: 0.62, h: 0.32,
+        fontSize: 8, color: C.fraco, valign: 'middle', wrap: false });
     });
     // A legenda explica as duas barras UMA vez, e nao em cada linha.
     s.addText('planejado (claro)   ·   realizado (na cor da frente)', {
       x: xBarra, y: cfg.y + itens.length * cfg.alt + 0.02, w: wBarra + 0.6, h: 0.2,
-      fontSize: 7, color: C.fraco });
+      fontSize: 7.5, color: C.fraco });
   }
 
   /* AS FRENTES DE TRABALHO — o slide no formato do painel aprovado.
@@ -718,26 +755,42 @@
       { rot: 'REALIZADO', val: t.real + 'h', cor: C.verde,
         nota: t.pct == null ? '' : t.pct + '% do planejado' },
     ];
-    var LK = 1.92, VK = 0.16;
+    /* Quatro cartoes de 1,72" + o de execucao de 1,60", com vao de 0,12":
+       4 x 1,72 + 1,60 + 4 x 0,12 = 8,96", de 0,5" a 9,46" — dentro da margem.
+       Com 1,80/1,66/0,14 a conta dava 9,92" e o cartao de execucao saia do slide. */
+    var LK = 1.72, VK = 0.12;
     kpis.forEach(function (k, i) {
-      cartaoKpi(pptx, s, { x: 0.5 + i * (LK + VK), y: 1.16, w: LK, h: 0.98,
+      cartaoKpi(pptx, s, { x: 0.5 + i * (LK + VK), y: 1.14, w: LK, h: 1.06,
                            rot: k.rot, val: k.val, cor: k.cor, nota: k.nota });
     });
-    cartao(pptx, s, 8.82, 1.16, 0.68, 0.98);
-    anelExecucao(pptx, s, 8.80, 1.11, 0.72, t.pct);
+
+    /* O CARTAO DE EXECUCAO: anel a esquerda, numero e legenda a direita.
+       O anel era desenhado sozinho num cartao estreito e o percentual saia POR
+       CIMA do proprio circulo — ilegivel, e sem dizer o que media. Agora o numero
+       tem lugar proprio, e embaixo dele a frase que responde "percentual de que?". */
+    var XE = 0.5 + 4 * (LK + VK);
+    cartao(pptx, s, XE, 1.14, 1.60, 1.06);
+    anelExecucao(pptx, s, XE + 0.06, 1.26, 0.82, t.pct);
+    s.addText(t.pct == null ? '—' : t.pct + '%', {
+      x: XE + 0.86, y: 1.32, w: 0.68, h: 0.36,
+      fontSize: 18, bold: true, color: corPercentual(t.pct), wrap: false });
+    s.addText('EXECUÇÃO', { x: XE + 0.86, y: 1.68, w: 0.68, h: 0.17,
+                            fontSize: 6.5, bold: true, color: C.fraco, charSpacing: 0.6 });
+    s.addText('realizado ÷ planejado', { x: XE + 0.05, y: 1.93, w: 1.50, h: 0.17,
+                                         fontSize: 6.5, color: C.fraco, align: 'center' });
 
     // -- Esquerda: planejado x realizado por frente ----------------------------
     s.addText('HORAS POR FRENTE', {
-      x: 0.5, y: 2.30, w: 4.3, h: 0.2, fontSize: 8, bold: true,
+      x: 0.5, y: 2.22, w: 4.3, h: 0.2, fontSize: 8.5, bold: true,
       color: C.fraco, charSpacing: 1.2 });
-    barrasFrente(pptx, s, { itens: itens, x: 0.5, y: 2.56, w: 4.35, alt: 0.30 });
+    barrasFrente(pptx, s, { itens: itens, x: 0.5, y: 2.48, w: 4.35, alt: 0.34 });
 
     // -- Direita: um cartao por frente, como o "pipelines detalhados" ----------
     s.addText('FRENTES DETALHADAS', {
-      x: 5.05, y: 2.30, w: 2.45, h: 0.2, fontSize: 8, bold: true,
+      x: 5.05, y: 2.22, w: 2.45, h: 0.2, fontSize: 8.5, bold: true,
       color: C.fraco, charSpacing: 1.2 });
     s.addText(itens.length + (itens.length === 1 ? ' frente' : ' frentes'), {
-      x: 7.6, y: 2.30, w: 1.9, h: 0.2, fontSize: 8, color: C.fraco, align: 'right' });
+      x: 7.6, y: 2.22, w: 1.9, h: 0.2, fontSize: 8.5, color: C.fraco, align: 'right' });
 
     /* Duas colunas de cartoes, com as medidas CONTADAS e nao escolhidas.
 
@@ -746,24 +799,27 @@
        isso fechava em 4,72" e a ultima linha passava POR CIMA da nota de cobertura
        — errei a conta na primeira versao, e foi a prova do PPTX que mostrou.
        Com 0,62 e 0,08 fecha em 4,58", antes das notas. */
-    var CW = 2.16, CH = 0.62, CVX = 0.13, CVY = 0.08;
+    var CW = 2.16, CH = 0.66, CVX = 0.13, CVY = 0.07;
     itens.slice(0, 6).forEach(function (it, i) {
       var col = i % 2, lin = Math.floor(i / 2);
       var x = 5.05 + col * (CW + CVX);
-      var y = 2.56 + lin * (CH + CVY);
+      var y = 2.48 + lin * (CH + CVY);
       cartao(pptx, s, x, y, CW, CH, { faixa: it.cor });
-      s.addText(corta(it.nome, 16), {
-        x: x + 0.11, y: y + 0.09, w: CW - 0.72, h: 0.19, fontSize: 8.5, bold: true,
+      /* O PERCENTUAL EM UMA LINHA. A caixa tinha 0,47" e "154%" em corpo 9 nao
+         cabia: o PowerPoint quebrava em "154" e "%" em linhas separadas. Com 0,72"
+         e `wrap:false` ele nao quebra mais, e o nome encolhe na mesma medida. */
+      s.addText(corta(it.nome, 13), {
+        x: x + 0.11, y: y + 0.07, w: CW - 1.00, h: 0.21, fontSize: 9.5, bold: true,
         color: C.texto });
       s.addText(it.pct == null ? '—' : it.pct + '%', {
-        x: x + CW - 0.58, y: y + 0.09, w: 0.47, h: 0.19, fontSize: 9, bold: true,
-        color: corPercentual(it.pct), align: 'right' });
-      s.addText(it.plan + 'h', { x: x + 0.11, y: y + 0.27, w: 0.62, h: 0.21,
-                                 fontSize: 11, bold: true, color: C.azul });
-      s.addText(it.real + 'h', { x: x + 0.76, y: y + 0.27, w: 0.62, h: 0.21,
-                                 fontSize: 11, bold: true, color: C.verde });
+        x: x + CW - 0.83, y: y + 0.07, w: 0.72, h: 0.21, fontSize: 10.5, bold: true,
+        color: corPercentual(it.pct), align: 'right', wrap: false });
+      s.addText(it.plan + 'h', { x: x + 0.11, y: y + 0.27, w: 0.7, h: 0.23,
+                                 fontSize: 12.5, bold: true, color: C.azul, wrap: false });
+      s.addText(it.real + 'h', { x: x + 0.84, y: y + 0.27, w: 0.7, h: 0.23,
+                                 fontSize: 12.5, bold: true, color: C.verde, wrap: false });
       s.addText(it.entregas + (it.entregas === 1 ? ' entrega' : ' entregas'), {
-        x: x + 0.11, y: y + 0.45, w: CW - 0.22, h: 0.15, fontSize: 7, color: C.fraco });
+        x: x + 0.11, y: y + 0.49, w: CW - 0.22, h: 0.16, fontSize: 7.5, color: C.fraco });
     });
 
     // -- O rodape que impede a leitura errada ----------------------------------
@@ -779,10 +835,10 @@
     // "de onde saiu o planejado?".
     notas.push('Planejado: cada dia útil vale 8h, divididas entre as demandas do dia');
     s.addText(notas.join('   ·   '), {
-      x: 0.5, y: 4.62, w: 9.0, h: 0.2, fontSize: 7.5, color: C.fraco });
+      x: 0.5, y: 4.62, w: 9.0, h: 0.2, fontSize: 8, color: C.fraco });
     if ((pl.foraDoDeck || []).length) {
       s.addText('Fora do recorte: ' + pl.foraDoDeck.join(', '), {
-        x: 0.5, y: 4.80, w: 9.0, h: 0.2, fontSize: 7.5, color: C.fraco });
+        x: 0.5, y: 4.80, w: 9.0, h: 0.2, fontSize: 8, color: C.fraco });
     }
     rodape(s, periodo, pagina);
     return s;
@@ -927,7 +983,10 @@
                       2.2, 2.0, 3.4, anterior.nome);
     }
 
-    var TOPO = 2.45, ALT = 0.4;
+    /* Seis linhas de 0,38" a partir de 2,42" terminam em 4,62", e a linha do
+       "e mais" ocupa 4,66"-4,94" — antes do rodape em 5,05". Com 0,40" a partir
+       de 2,45" ela ia a 5,19" e escrevia por cima dele. */
+    var TOPO = 2.42, ALT = 0.38;
     var vis = itens.slice(0, 6);
     vis.forEach(function (it, i) {
       var y = TOPO + i * ALT;
@@ -964,7 +1023,11 @@
     var vis = (serie || []).filter(function (x) { return x; });
     if (!vis.length) { rodape(s, periodo, pagina); return s; }
 
-    var X0 = 0.9, LARG = 8.4, BASE = 3.62, ALTO = 1.85;
+    /* ALTO 1,55 e nao 1,85: o valor impresso no topo da barra fica em
+       BASE - ALTO - 0,28, e com 1,85 isso dava 1,49" — dentro da legenda do
+       cabecalho, que ocupa de 1,42" a 1,70". A barra mais alta do mes escrevia
+       o proprio numero por cima de "entraram / sairam". */
+    var X0 = 0.9, LARG = 8.4, BASE = 3.62, ALTO = 1.55;
     var col = LARG / vis.length;
     var max = vis.reduce(function (m, x) {
       return Math.max(m, x.entraram || 0, x.sairam || 0);
@@ -1026,10 +1089,15 @@
                              fontSize: 9, color: C.fraco, align: 'center' });
     });
 
-    var vis = (dv.barras || []).slice(0, 7);
+    /* SEIS barras, e nao sete: a linha do "e mais" fica em TOPO + n x ALT, e com
+       sete ela caia em 4,73"-5,01" — por cima da legenda de evolucao/sustentacao,
+       que mora em 4,85". Com seis ela fecha em 4,59". */
+    var vis = (dv.barras || []).slice(0, 6);
     vis.forEach(function (b, i) {
       var y = TOPO + i * ALT;
-      s.addText(corta(b.titulo, 34), { x: 0.7, y: y, w: 2.7, h: 0.3,
+      // h 0,19 e nao 0,30: a linha de tema/pontos abre em y+0,19, e com 0,30 o
+      // titulo escrevia por cima dela em todas as barras.
+      s.addText(corta(b.titulo, 34), { x: 0.7, y: y, w: 2.7, h: 0.19,
                                        fontSize: 10.5, color: C.texto });
       s.addShape(pptx.ShapeType.rect, { x: X0, y: y + 0.1, w: LARG, h: 0.14,
                                         fill: { color: C.fundo2 } });
@@ -1039,7 +1107,7 @@
         x: x1, y: y + 0.06, w: Math.max(0.09, x2 - x1), h: 0.22,
         fill: { color: b.tipo === 'Sustentação' ? C.ambar : C.verde } });
       var meta = [b.tema, b.pontos ? b.pontos + ' pt' : ''].filter(Boolean).join(' · ');
-      if (meta) s.addText(corta(meta, 30), { x: 0.7, y: y + 0.2, w: 2.7, h: 0.22,
+      if (meta) s.addText(corta(meta, 30), { x: 0.7, y: y + 0.19, w: 2.7, h: 0.19,
                                              fontSize: 8.5, color: C.fraco });
     });
     var sobra = (dv.barras || []).length - vis.length;
@@ -1066,8 +1134,11 @@
     var cor = z.pct >= 80 ? C.verde : z.pct >= 50 ? C.ambar : C.vermelho;
     s.addText('Entregues no prazo', { x: 0.7, y: 0.62, w: 8.6, h: 0.4, fontSize: 16, color: C.fraco });
     s.addText(z.pct + '%', { x: 0.7, y: 1.0, w: 4.2, h: 1.5, fontSize: 92, bold: true, color: cor });
-    s.addText(z.noPrazo + ' de ' + z.medidas + ' entregas medidas', {
-      x: 0.72, y: 2.45, w: 4.2, h: 0.35, fontSize: 15, color: C.texto });
+    /* A frase diz DE QUE e o percentual: sao as demandas prometidas PARA o mes,
+       e nao as que sairam nele. Sem isso, "63%" convida a leitura errada — a de
+       que o time entregou 63% do que fez, quando o numero fala do combinado. */
+    s.addText(z.noPrazo + ' de ' + z.medidas + ' entregas prometidas para o mês', {
+      x: 0.72, y: 2.45, w: 4.4, h: 0.35, fontSize: 14, color: C.texto });
     // O percentual e o numero que mais pede comparacao: 55% sozinho nao diz se
     // melhorou.
     if (d.anterior && d.anterior.pct != null) {
@@ -1082,10 +1153,10 @@
     var faixas = [
       { rot: 'No prazo', val: z.noPrazo, cor: C.verde },
       { rot: 'Com atraso', val: z.atrasadas ? z.atrasadas.length : 0, cor: C.vermelho },
-      // O atraso herdado tem faixa e cor propria: ele aconteceu no mes passado, e
-      // some da conta deste — mas a entrega e desta, e some do deck seria pior.
-      { rot: 'Atrasadas desde ' + (z.mesAnterior || 'o mês anterior'),
-        val: z.herdadas || 0, cor: C.ambar },
+      /* PROMETIDA E AINDA NAO ENTREGUE. Nao entra no percentual (nao ha entrega
+         para medir), mas e parte do compromisso do mes: some daqui e o slide
+         mostraria so o que saiu, como se o resto nao tivesse sido prometido. */
+      { rot: 'Ainda em aberto', val: z.emAberto || 0, cor: C.ambar },
       { rot: 'Sem prazo combinado', val: z.semPrazoComb || 0, cor: C.fraco },
       { rot: 'Data lançada depois', val: z.lancadaDepois || 0, cor: C.fraco },
     ].filter(function (x) { return x.val > 0; });
@@ -1109,16 +1180,21 @@
       s.addText('Quando atrasa, atrasa ' + z.diasMedio + (z.diasMedio === 1 ? ' dia' : ' dias') +
                 ' em média.', { x: 0.7, y: 3.95, w: 8.6, h: 0.4, fontSize: 16, color: C.texto });
     }
+    /* O RECORTE, dito no slide. A demanda conta no mes do PRAZO dela, e nao no da
+       entrega: prometida para julho e entregue em agosto e atraso DE JULHO. Sem
+       esta linha, quem soma as entregas do mes nao fecha com este slide e conclui
+       que um dos dois esta errado. */
+    s.addText('Conta o que foi prometido para o mês — quem tinha prazo em outro mês ' +
+              'aparece no relatório daquele mês.', {
+      x: 0.7, y: 4.36, w: 8.6, h: 0.22, fontSize: 10, color: C.fraco });
     // A ressalva fica: sem ela, "78% no prazo" parece valer para tudo que saiu.
     if (z.naoMedidas) {
       var razoes = [];
       if (z.semPrazoComb) razoes.push(z.semPrazoComb + ' saíram sem prazo combinado, e não há com o que comparar');
       if (z.lancadaDepois) razoes.push(z.lancadaDepois + ' tiveram a conclusão lançada depois, quando "no prazo" seria verdade por construção');
-      if (z.herdadas) razoes.push(z.herdadas + ' já chegaram atrasadas de ' +
-        (z.mesAnterior || 'meses anteriores') + ', e o atraso é de lá');
-      s.addText((z.naoMedidas + (z.herdadas || 0)) + ' conclusões ficam fora da conta: ' +
+      s.addText(z.naoMedidas + ' conclusões ficam fora da conta: ' +
                 razoes.join('; ') + '.', {
-        x: 0.7, y: 4.4, w: 8.6, h: 0.6, fontSize: 12, color: C.fraco, lineSpacingMultiple: 1.3 });
+        x: 0.7, y: 4.60, w: 8.6, h: 0.44, fontSize: 11, color: C.fraco, lineSpacingMultiple: 1.2 });
     }
     rodape(s, d.periodo, pagina);
     return s;
@@ -1180,7 +1256,12 @@
     }
 
     // 4. O time e as frentes: agregado, antes do detalhe.
-    if (d.secoes.time && d.time) slideTime(pptx, d.time, ++p, d.periodo, d.ausencias, d.capacidade);
+    if (d.secoes.time && d.time) {
+      // A quebra das SAIDAS, e nao das entradas: o slide fala do que o time
+      // entregou, e o que entrou na fila e assunto do slide do mes.
+      slideTime(pptx, d.time, ++p, d.periodo, d.ausencias, d.capacidade,
+                (d.quebra || {}).saidas);
+    }
     if (d.secoes.areas && (d.areas || []).length) slideAreas(pptx, d.areas, ++p, d.periodo);
 
     // 5. Quem pediu. O time e uma leitura; a area cliente e outra, e e a que diz
