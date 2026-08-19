@@ -3887,24 +3887,27 @@ function toggleGerPtsTable() {
 
 // ─── ENTREGAS NO PRAZO ────────────────────────────────────────────
 // Fechamento do mes: o que saiu no prazo e o que saiu com atraso, no geral e por
-// dev. A conta e data de conclusao contra prazo — mas ela SO VALE para conclusao
-// registrada quando aconteceu.
+// dev. A conta e data de conclusao contra prazo.
 //
-// 75 das 126 concluidas sao retroativas: a data de conclusao foi preenchida com a
-// data de entrega quando a base foi organizada. Para essas, "no prazo" e verdade
-// por construcao, nao por pontualidade — e sem separar, o relatorio diria
-// "julho: 100% no prazo, 69 de 69". Numero bonito, falso, e que viraria meta.
+// A CONCLUSAO LANCADA DEPOIS TAMBEM E JULGADA — decisao do Fernando, e uma
+// mudanca de leitura, nao de conta. Ela tem prazo combinado e tem data de
+// entrega; a pergunta que se faz dela e a mesma que se faz de qualquer outra:
+// cumpriu ou nao cumpriu. Antes ela caia num balde a parte, e um balde chamado
+// "Data lancada depois" no slide levanta uma questao de processo no meio de uma
+// conversa de entrega.
 //
-// O marcador e `concluido_retroativo`, NAO a coincidencia das duas datas:
-// entregar exatamente no dia do prazo e comum e legitimo (14 das 44 medidas sao
-// assim), e usar a coincidencia como filtro puniria quem entregou no dia.
+// O QUE ISSO CUSTA, REGISTRADO PARA QUEM VIER DEPOIS: 75 conclusoes foram
+// lancadas quando a base foi organizada, e a data de conclusao foi preenchida
+// com a data de entrega. Julgadas, elas dao "julho: 99% no prazo" — verdade por
+// construcao, e nao por pontualidade. O marcador `concluido_retroativo`
+// continua gravado em cada uma; o que mudou e que ele nao tira mais a demanda da
+// conta. Se um dia o numero de um mes antigo parecer bom demais, e por aqui.
 /* O PRAZO E MEDIDO ATE A ENTREGA DO DEV, e nao ate a validacao do PM/PO.
    A regra vive em prazo.js — ver o porque la, com os numeros. Aqui fica so a
-   classificacao que o relatorio usa (retroativa, sem prazo, no prazo, atraso). */
+   classificacao que o relatorio usa (sem prazo, sem conclusao, no prazo, atraso). */
 function prazoClassifica(m) {
   if (!m || m.mesclado_em || m.oculto) return null;
   if ((m.status_planejamento || '') !== 'concluido') return null;
-  if (m.concluido_retroativo) return { tipo: 'retroativa' };
   // A data que encerra a conta: `entregue_em` quando a demanda passou pela
   // validacao, `concluido_em` quando foi concluida direto.
   const fim = window.PRAZO ? PRAZO.fimDoDev(m) : String(m.concluido_em || '').slice(0, 10);
@@ -4585,7 +4588,7 @@ function renderGerPrazo(ano, mes) {
   const doMes = (state.melhorias || []).filter(m => {
     const c = prazoClassifica(m);
     if (!c) return false;
-    // Retroativa sem data de conclusao nao tem mes: entra no balde de nao medidas
+    // Sem data de conclusao nao ha mes: a demanda entra no balde de nao medidas
     // do periodo selecionado apenas se a data existir.
     return String(m.concluido_em || '').slice(0, 7) === alvo;
   });
@@ -4593,7 +4596,7 @@ function renderGerPrazo(ano, mes) {
   const cls = new Map(doMes.map(m => [m.id, prazoClassifica(m)]));
   const noPrazo = doMes.filter(m => cls.get(m.id).tipo === 'no_prazo');
   const atraso  = doMes.filter(m => cls.get(m.id).tipo === 'atraso');
-  const naoMedido = doMes.filter(m => ['retroativa', 'sem_prazo', 'sem_conclusao']
+  const naoMedido = doMes.filter(m => ['sem_prazo', 'sem_conclusao']
     .includes(cls.get(m.id).tipo));
   const medidas = noPrazo.length + atraso.length;
   const pct = medidas ? Math.round(noPrazo.length / medidas * 100) : null;
@@ -4615,7 +4618,7 @@ function renderGerPrazo(ano, mes) {
         atraso.length ? 'var(--red)' : '') +
     kpi(medidas, 'Medidas', 'com conclusão registrada') +
     kpi(naoMedido.length, 'Não medidas',
-        naoMedido.length ? 'data preenchida depois — não dá para julgar' : '—');
+        naoMedido.length ? 'sem prazo combinado — não há com o que comparar' : '—');
 
   if (!doMes.length) {
     lista.innerHTML = '<p class="ent-vazio">Nenhuma demanda concluída neste mês.</p>';
@@ -4623,9 +4626,8 @@ function renderGerPrazo(ano, mes) {
   }
   if (!medidas) {
     lista.innerHTML = '<p class="ent-vazio">As ' + naoMedido.length + ' conclusões deste mês ' +
-      'foram registradas retroativamente: a data de conclusão recebeu a data de entrega quando ' +
-      'a base foi organizada.<br>Nesse caso "no prazo" seria verdade por construção, não por ' +
-      'pontualidade — por isso o mês não entra na conta.</p>';
+      'saíram sem prazo combinado: não há data prometida com a qual comparar a entrega, ' +
+      'e por isso o mês não entra na conta.</p>';
     return;
   }
 
@@ -4673,8 +4675,8 @@ function renderGerPrazo(ano, mes) {
 
   const aviso = naoMedido.length
     ? '<p class="ent-vazio" style="margin-top:14px">' + naoMedido.length +
-      ' conclusão(ões) deste mês não entram na conta: a data foi preenchida ' +
-      'retroativamente, então "no prazo" seria verdade por construção.</p>'
+      ' conclusão(ões) deste mês não entram na conta: saíram sem prazo combinado, ' +
+      'e não há com o que comparar a entrega.</p>'
     : '';
 
   lista.innerHTML =
@@ -5062,14 +5064,13 @@ async function apresGerar() {
     const cl = new Map(conc.map(m => [m.id, prazoClassifica(m)]));
     const noPrazo = conc.filter(m => (cl.get(m.id) || {}).tipo === 'no_prazo');
     const atras = conc.filter(m => (cl.get(m.id) || {}).tipo === 'atraso');
-    const naoMed = conc.filter(m => ['retroativa', 'sem_prazo', 'sem_conclusao']
+    const naoMed = conc.filter(m => ['sem_prazo', 'sem_conclusao']
       .includes((cl.get(m.id) || {}).tipo));
     // "Sem medicao" e um balde que parece falha do relatorio. Sao duas razoes
     // diferentes, e as duas tem nome: a demanda nao tinha prazo combinado, ou a
     // conclusao foi lancada depois — e ai "no prazo" seria verdade por construcao.
     const semPrazoComb = conc.filter(m => ['sem_prazo', 'sem_conclusao']
       .includes((cl.get(m.id) || {}).tipo)).length;
-    const lancadaDepois = conc.filter(m => (cl.get(m.id) || {}).tipo === 'retroativa').length;
     /* O PRAZO E DO MES EM QUE FOI PROMETIDO, e nao do mes em que a entrega saiu.
 
        O bloco de prazo olhava as demandas CONCLUIDAS no mes. Isso abria um buraco:
@@ -5097,7 +5098,7 @@ async function apresGerar() {
     const prometidasEmAberto = prometidas.filter(m =>
       !['concluido', 'negada'].includes(m.status_planejamento || ''));
     const semMedirPz = prometidasConcluidas.filter(m =>
-      ['retroativa', 'sem_prazo', 'sem_conclusao'].includes((clPz.get(m.id) || {}).tipo));
+      ['sem_prazo', 'sem_conclusao'].includes((clPz.get(m.id) || {}).tipo));
     const medidas = noPrazoPz.length + atrasPz.length;
     const diasMedio = atrasPz.length
       ? Math.round(atrasPz.reduce((t, m) => t + clPz.get(m.id).dias, 0) / atrasPz.length) : 0;
@@ -5563,7 +5564,6 @@ async function apresGerar() {
         naoMedidas: semMedirPz.length,
         semPrazoComb: semMedirPz.filter(m =>
           ['sem_prazo', 'sem_conclusao'].includes((clPz.get(m.id) || {}).tipo)).length,
-        lancadaDepois: semMedirPz.filter(m => (clPz.get(m.id) || {}).tipo === 'retroativa').length,
         // Prometidas para o mes que ainda nao sairam: nao ha entrega para medir,
         // mas o compromisso existe e o slide diz isso.
         emAberto: prometidasEmAberto.length,

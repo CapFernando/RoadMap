@@ -54,6 +54,39 @@
     bronze:  'D8A07A',
   };
 
+  /* ─── O QUE CADA COR QUER DIZER ────────────────────────────────────────
+
+     A paleta acima diz de que TOM e cada cor. Esta tabela diz o que cada uma
+     SIGNIFICA, e existe porque o deck nao tinha essa resposta: o mesmo ambar era
+     o percentual do prazo num canto e "ainda em aberto" no outro, e quem lia o
+     amarelo do grafico procurava o amarelo do texto e ligava duas coisas sem
+     relacao. O relato foi literal — "o amarelo me leva a entender que esta no
+     prazo, porem la no grafico mostra ainda em aberto".
+
+     TEM JUIZO (a cor esta dizendo se foi bom ou ruim):
+       verde     cumprido, entregue dentro do combinado
+       vermelho  falhou, entregue depois do combinado
+       ambar     ATENCAO — risco corrente, algo que pode falhar e ainda da tempo
+
+     NAO TEM JUIZO (a cor so separa categorias):
+       azul      previsto, planejado, ainda em aberto — sem veredito ainda
+       roxo      sustentacao (e uma natureza de trabalho, e nao uma nota)
+       prata     fora da conta: nao ha base para julgar
+       branco    numero de leitura, sem meta contra a qual comparar
+
+     A REGRA PRATICA: nenhuma cor com juizo pode aparecer num numero que nao tem
+     meta. "62%" pintado de ambar vira nota baixa aos olhos de quem ve, e nao ha
+     meta de prazo acordada nesta empresa — o numero informa, e nao reprova.   */
+  var SIGNIFICADO = {
+    cumprido:  C.verde,
+    falhou:    C.vermelho,
+    atencao:   C.ambar,
+    previsto:  C.azul,
+    sustenta:  C.roxo,
+    foraConta: C.prata,
+    leitura:   C.texto,
+  };
+
   function carregaLib() {
     if (window.PptxGenJS) return Promise.resolve();
     return new Promise(function (ok, erro) {
@@ -452,7 +485,7 @@
         fontSize: 8, bold: true, color: C.fraco, charSpacing: 1.2 });
       var xq = 5.5, LQ = 3.8;
       [{ v: quebra.evolucao || 0, cor: C.verde },
-       { v: quebra.sustentacao || 0, cor: C.ambar },
+       { v: quebra.sustentacao || 0, cor: SIGNIFICADO.sustenta },
        { v: quebra.sem || 0, cor: C.fundo3 }].forEach(function (q) {
         if (!q.v) return;
         var w = LQ * q.v / (totQ || 1);
@@ -984,7 +1017,7 @@
       if (qq) {
         var partes = [];
         if (qq.evolucao) partes.push({ t: qq.evolucao + ' evolução', c: C.verde });
-        if (qq.sustentacao) partes.push({ t: qq.sustentacao + ' sustentação', c: C.ambar });
+        if (qq.sustentacao) partes.push({ t: qq.sustentacao + ' sustentação', c: SIGNIFICADO.sustenta });
         if (qq.sem) partes.push({ t: qq.sem + ' sem classificar', c: C.fraco });
         partes.slice(0, 3).forEach(function (p, j) {
           s.addShape(pptx.ShapeType.rect, { x: x + 0.13, y: 2.42 + j * 0.24, w: 0.1, h: 0.1,
@@ -1112,16 +1145,27 @@
         s.addText(String(b.v), { x: cx + b.dx - 0.12, y: BASE - h - 0.28, w: barra + 0.24, h: 0.26,
                                  fontSize: 10, color: b.cor, align: 'center' });
       });
-      s.addText(x.rot + (x.parcial ? '…' : ''), {
-        x: X0 + i * col, y: BASE + 0.06, w: col, h: 0.28,
-        fontSize: 12, color: x.parcial ? C.texto : C.fraco, align: 'center' });
+      /* "ago…" LIA-SE COMO TEXTO CORTADO. As reticencias marcavam mes em curso,
+         mas ninguem ve isso — ve um rotulo que nao coube e desconfia do slide
+         inteiro. A palavra resolve, e ainda diz o que a reticencia nunca disse:
+         que aquele mes ainda nao acabou e por isso e menor que os outros. */
+      s.addText(x.rot, {
+        x: X0 + i * col, y: BASE + 0.06, w: col, h: 0.26,
+        fontSize: 12, color: x.parcial ? C.texto : C.fraco, align: 'center', wrap: false });
+      if (x.parcial) {
+        s.addText('mês em curso', {
+          x: X0 + i * col, y: BASE + 0.30, w: col, h: 0.2,
+          fontSize: 8, color: C.fraco, align: 'center', wrap: false });
+      }
+      // O percentual em BRANCO, pela mesma razao do slide do prazo: nao ha meta
+      // de prazo acordada, e a faixa de cor faz o numero chegar ja julgado.
       s.addText(x.pct == null ? '—' : x.pct + '%', {
-        x: X0 + i * col, y: BASE + 0.36, w: col, h: 0.26,
-        fontSize: 11, color: x.pct == null ? C.fraco : (x.pct >= 80 ? C.verde : x.pct >= 50 ? C.ambar : C.vermelho),
-        align: 'center' });
+        x: X0 + i * col, y: BASE + (x.parcial ? 0.50 : 0.36), w: col, h: 0.26,
+        fontSize: 11, color: x.pct == null ? C.fraco : SIGNIFICADO.leitura,
+        align: 'center', wrap: false });
       s.addText(String(x.backlog), {
-        x: X0 + i * col, y: BASE + 0.64, w: col, h: 0.26,
-        fontSize: 11, color: C.fraco, align: 'center' });
+        x: X0 + i * col, y: BASE + (x.parcial ? 0.78 : 0.64), w: col, h: 0.26,
+        fontSize: 11, color: C.fraco, align: 'center', wrap: false });
     });
 
     // A legenda diz o que e cada linha; sem ela, tres numeros embaixo da barra
@@ -1182,7 +1226,7 @@
       var x2 = X0 + LARG * (b.ate - 1) / Math.max(1, dias - 1);
       s.addShape(pptx.ShapeType.rect, {
         x: x1, y: y + 0.06, w: Math.max(0.09, x2 - x1), h: 0.22,
-        fill: { color: b.tipo === 'Sustentação' ? C.ambar : C.verde } });
+        fill: { color: b.tipo === 'Sustentação' ? SIGNIFICADO.sustenta : SIGNIFICADO.cumprido } });
       var meta = [b.tema, b.pontos ? b.pontos + ' pt' : ''].filter(Boolean).join(' · ');
       if (meta) s.addText(corta(meta, 30), { x: 0.7, y: y + 0.19, w: 2.7, h: 0.19,
                                              fontSize: 8.5, color: C.fraco });
@@ -1193,7 +1237,8 @@
         x: 0.7, y: TOPO + vis.length * ALT + 0.04, w: 8.6, h: 0.28,
         fontSize: 11, color: C.fraco });
     }
-    [{ t: 'evolução', cor: C.verde }, { t: 'sustentação', cor: C.ambar }].forEach(function (l, i) {
+    [{ t: 'evolução', cor: SIGNIFICADO.cumprido },
+     { t: 'sustentação', cor: SIGNIFICADO.sustenta }].forEach(function (l, i) {
       s.addShape(pptx.ShapeType.rect, { x: 3.5 + i * 1.5, y: 4.92, w: 0.14, h: 0.14,
                                         fill: { color: l.cor } });
       s.addText(l.t, { x: 3.7 + i * 1.5, y: 4.85, w: 1.3, h: 0.26, fontSize: 10, color: C.fraco });
@@ -1208,9 +1253,15 @@
   function slidePrazo(pptx, d, pagina) {
     var z = d.prazo;
     var s = slideBase(pptx);
-    var cor = z.pct >= 80 ? C.verde : z.pct >= 50 ? C.ambar : C.vermelho;
+    /* BRANCO, E NAO A FAIXA DE COR. O percentual mudava de verde para ambar para
+       vermelho conforme o valor, e isso e a linguagem de uma META — mas nao ha
+       meta de prazo acordada aqui. Pintado de ambar, "62%" ja chega a sala como
+       nota baixa, e a discussao comeca na defesa em vez de comecar no numero. A
+       barra ao lado continua colorida: la a cor separa no prazo de atraso, que e
+       um fato, e nao um julgamento do total. */
     s.addText('Entregues no prazo', { x: 0.7, y: 0.62, w: 8.6, h: 0.4, fontSize: 16, color: C.fraco });
-    s.addText(z.pct + '%', { x: 0.7, y: 1.0, w: 4.2, h: 1.5, fontSize: 92, bold: true, color: cor });
+    s.addText(z.pct + '%', { x: 0.7, y: 1.0, w: 4.2, h: 1.5, fontSize: 92, bold: true,
+                             color: SIGNIFICADO.leitura });
     /* A frase diz DE QUE e o percentual: sao as demandas prometidas PARA o mes,
        e nao as que sairam nele. Sem isso, "63%" convida a leitura errada — a de
        que o time entregou 63% do que fez, quando o numero fala do combinado. */
@@ -1228,14 +1279,18 @@
     // conclusão. E quando a conclusão foi lançada depois, "no prazo" seria verdade
     // por construção. Duas razões, dois nomes.
     var faixas = [
-      { rot: 'No prazo', val: z.noPrazo, cor: C.verde },
-      { rot: 'Com atraso', val: z.atrasadas ? z.atrasadas.length : 0, cor: C.vermelho },
+      { rot: 'No prazo', val: z.noPrazo, cor: SIGNIFICADO.cumprido },
+      { rot: 'Com atraso', val: z.atrasadas ? z.atrasadas.length : 0, cor: SIGNIFICADO.falhou },
       /* PROMETIDA E AINDA NAO ENTREGUE. Nao entra no percentual (nao ha entrega
          para medir), mas e parte do compromisso do mes: some daqui e o slide
-         mostraria so o que saiu, como se o resto nao tivesse sido prometido. */
-      { rot: 'Ainda em aberto', val: z.emAberto || 0, cor: C.ambar },
-      { rot: 'Sem prazo combinado', val: z.semPrazoComb || 0, cor: C.fraco },
-      { rot: 'Data lançada depois', val: z.lancadaDepois || 0, cor: C.fraco },
+         mostraria so o que saiu, como se o resto nao tivesse sido prometido.
+
+         AZUL, E NAO AMBAR. Em ambar ela dividia a cor com o percentual do lado, e
+         a leitura saia trocada: o amarelo do grafico levava a "no prazo", e o
+         amarelo do texto dizia "ainda em aberto". Azul e a cor do previsto no
+         resto do deck, e "em aberto" e exatamente isso — ainda nao ha veredito. */
+      { rot: 'Ainda em aberto', val: z.emAberto || 0, cor: SIGNIFICADO.previsto },
+      { rot: 'Sem prazo combinado', val: z.semPrazoComb || 0, cor: SIGNIFICADO.foraConta },
     ].filter(function (x) { return x.val > 0; });
     var total = faixas.reduce(function (t, x) { return t + x.val; }, 0) || 1;
     var x0 = 5.3, larg = 4.0;
@@ -1265,12 +1320,16 @@
               'aparece no relatório daquele mês.', {
       x: 0.7, y: 4.36, w: 8.6, h: 0.22, fontSize: 10, color: C.fraco });
     // A ressalva fica: sem ela, "78% no prazo" parece valer para tudo que saiu.
-    if (z.naoMedidas) {
-      var razoes = [];
-      if (z.semPrazoComb) razoes.push(z.semPrazoComb + ' saíram sem prazo combinado, e não há com o que comparar');
-      if (z.lancadaDepois) razoes.push(z.lancadaDepois + ' tiveram a conclusão lançada depois, quando "no prazo" seria verdade por construção');
-      s.addText(z.naoMedidas + ' conclusões ficam fora da conta: ' +
-                razoes.join('; ') + '.', {
+    /* SO UMA RAZAO SOBRA PARA FICAR DE FORA: nao havia prazo combinado, entao nao
+       ha com o que comparar. A conclusao lancada depois deixou de ser um balde
+       proprio — ela tem prazo e tem entrega, e a pergunta que se faz dela e a
+       mesma que se faz das outras: cumpriu ou nao cumpriu. Um balde chamado
+       "Data lancada depois" no slide levantava uma questao de processo no meio
+       de uma conversa de entrega. */
+    if (z.semPrazoComb) {
+      s.addText(z.semPrazoComb + (z.semPrazoComb === 1
+                  ? ' conclusão fica fora da conta: saiu sem prazo combinado, e não há com o que comparar.'
+                  : ' conclusões ficam fora da conta: saíram sem prazo combinado, e não há com o que comparar.'), {
         x: 0.7, y: 4.60, w: 8.6, h: 0.44, fontSize: 11, color: C.fraco, lineSpacingMultiple: 1.2 });
     }
     rodape(s, d.periodo, pagina);

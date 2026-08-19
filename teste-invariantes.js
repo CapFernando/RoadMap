@@ -1068,15 +1068,22 @@ ok(!/risco-banner[\s\S]{0,200}aberta/.test(ADMIN),
 // ═══════════════════════════════════════════════════════════════════════
 sec('Fechamento: entregue no prazo x com atraso');
 
-// A conta e data de conclusao contra prazo. Ela SO VALE para conclusao registrada
-// quando aconteceu: 75 das 126 concluidas sao retroativas — a data de conclusao
-// recebeu a data de entrega quando a base foi organizada. Para essas, "no prazo" e
-// verdade por construcao. Sem separar, o relatorio diria "julho: 100% no prazo,
-// 69 de 69" — numero bonito, falso, e que viraria meta.
+/* A CONCLUSAO LANCADA DEPOIS E JULGADA COMO QUALQUER OUTRA — decisao do
+   Fernando, tomada com o numero na mao. Ela tem prazo combinado e tem data de
+   entrega; a pergunta que se faz dela e a mesma: cumpriu ou nao cumpriu.
+
+   O QUE ISSO CUSTA, PARA NAO SE PERDER: 75 conclusoes foram lancadas quando a
+   base foi organizada, e a data de conclusao recebeu a data de entrega. Julgadas,
+   julho da 99% e junho da 100% — verdade por construcao, e nao por pontualidade.
+   O campo `concluido_retroativo` continua gravado em cada demanda; o que mudou e
+   que ele nao tira mais ninguem da conta. Se um mes antigo parecer bom demais, e
+   por aqui. */
 const pc = corpo(ADMIN, 'function prazoClassifica(');
 ok(!!pc, 'existe a classificacao de prazo, um lugar so');
-ok(!!pc && /m\.concluido_retroativo/.test(pc),
-   'retroativa NAO entra na conta (senao 100% no prazo por construcao)');
+ok(!!pc && !/m\.concluido_retroativo/.test(pc),
+   'a conclusao lancada depois e julgada, e nao posta num balde a parte');
+ok(!/lancadaDepois/.test(ADMIN) && !/lancadaDepois/.test(APRES),
+   'o balde "Data lancada depois" nao existe mais em tela nenhuma');
 // O marcador e o campo, nao a coincidencia das datas: entregar no dia do prazo e
 // comum e legitimo (14 das 44 medidas sao assim), e usar a coincidencia como
 // filtro puniria justamente quem entregou no dia.
@@ -2284,12 +2291,8 @@ ok(/BACKLOG NO DIA 1/.test(APRES) && /'ENTRARAM'/.test(APRES) &&
    'na ordem em que a demanda anda: backlog, entradas, saidas, o que ficou');
 // "Quantas" e a primeira pergunta; "do que" e a segunda, e separa construir de
 // manter de pe o que ja existe.
-ok(/' evolução'/.test(APRES) && /' sustentação'/.test(APRES),
-   'e as entradas dizem se sao evolucao ou sustentacao');
-// "Sem medicao" parecia falha do relatorio — a demanda TEM data. O que falta e o
-// prazo combinado.
-ok(/rot: 'Sem prazo combinado'/.test(APRES) && /rot: 'Data lançada depois'/.test(APRES),
-   'e o slide do prazo diz a razao de nao medir, em vez de um balde so');
+ok(/Sem prazo combinado/.test(APRES) && !/Data lançada depois/.test(APRES),
+   'o slide do prazo tem uma unica razao para ficar fora da conta: sem prazo combinado');
 ok(/function slidePrazo\(pptx, d, pagina\)/.test(APRES) && /Sem medição/.test(APRES),
    'e o prazo mostra a conta, inclusive a fatia que nao da para medir');
 // O backlog da virada e do FIM DO MES, e nao de hoje: numero de hoje contaria o
@@ -3224,6 +3227,57 @@ ok(!/_ranking\.devs[^;]{0,80}\.slice\(/.test(POKER),
 // O aviso da semana parcial e do painel, e nao deste comentario.
 ok(/uteisCorridos \+ ' de ' \+/.test(POKER) && /ainda está correndo/.test(POKER),
    'o painel avisa por escrito que a semana atual esta pela metade');
+
+/* ─── UM SIGNIFICADO POR COR ─────────────────────────────────────────────
+   Relato literal de quem apresenta: "o amarelo me leva a entender que esta no
+   prazo, porem la no grafico mostra ainda em aberto". O mesmo ambar era o
+   percentual do prazo de um lado e "ainda em aberto" do outro, e o olho liga as
+   duas coisas antes de a pessoa terminar de ler o slide.                      */
+sec('Padrao de cores do deck');
+
+ok(/var SIGNIFICADO = \{/.test(APRES),
+   'o deck declara o que cada cor quer dizer, e nao so de que tom ela e');
+
+/* O PERCENTUAL DO PRAZO E BRANCO. Verde/ambar/vermelho conforme o valor e a
+   linguagem de uma META, e nao ha meta de prazo acordada aqui: pintado de ambar,
+   "62%" ja chega a sala como nota baixa e a conversa comeca na defesa. */
+(() => {
+  const sl = corpo(APRES, 'function slidePrazo(');
+  ok(!!sl, 'existe o slide do prazo');
+  if (!sl) return;
+  ok(!/var cor = z\.pct >= 80/.test(sl),
+     'o percentual do prazo nao muda de cor conforme o valor');
+  ok(/z\.pct \+ '%'[\s\S]{0,220}SIGNIFICADO\.leitura/.test(sl),
+     'ele sai em branco, que e a cor de numero sem meta');
+  /* AMBAR NAO APARECE NESTE SLIDE. Era a cor do percentual E de "ainda em
+     aberto"; agora "em aberto" e azul, que e a cor do previsto no resto do deck
+     — e "em aberto" e exatamente isso, ainda sem veredito. */
+  ok(!/C\.ambar/.test(sl), 'o ambar nao aparece no slide do prazo');
+  ok(/'Ainda em aberto', val: z\.emAberto \|\| 0, cor: SIGNIFICADO\.previsto/.test(sl),
+     '"ainda em aberto" usa a cor do previsto, e nao a do alerta');
+})();
+
+/* SUSTENTACAO E UMA NATUREZA DE TRABALHO, E NAO UMA NOTA. Em ambar ela chegava
+   como "atencao" ao lado de evolucao em verde, e manter o que existe e trabalho
+   normal — nao e um problema a ser resolvido. */
+ok(!/b\.tipo === 'Sustentação' \? C\.ambar/.test(APRES),
+   'sustentacao nao e pintada com a cor de alerta');
+ok(/SIGNIFICADO\.sustenta/.test(APRES),
+   'ela tem cor propria, de categoria e nao de juizo');
+
+/* "ago…" LIA-SE COMO TEXTO CORTADO. As reticencias marcavam mes em curso, mas
+   ninguem ve isso — ve um rotulo que nao coube, e passa a desconfiar do slide. */
+(() => {
+  const sl = corpo(APRES, 'function slideEvolucao(');
+  ok(!!sl, 'existe o slide de evolucao');
+  if (!sl) return;
+  ok(!/x\.rot \+ \(x\.parcial \? '…' : ''\)/.test(sl),
+     'o mes em curso nao e marcado com reticencia atras do nome');
+  ok(/'mês em curso'/.test(sl),
+     'ele e dito por escrito, que e o que a reticencia nunca disse');
+  ok(!/x\.pct >= 80 \? C\.verde/.test(sl),
+     'o percentual mes a mes tambem nao muda de cor conforme o valor');
+})();
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

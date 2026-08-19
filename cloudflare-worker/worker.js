@@ -1392,6 +1392,26 @@ function somaDias(diaISO, n) {
   return d.toISOString().slice(0, 10);
 }
 
+/* O NOME QUE VAI NA DEMANDA.
+
+   A conta tem o nome civil ("Joao Vitor Batista de Siqueira") e a base tem o
+   nome pelo qual o time chama a pessoa ("Joao Siqueira"). A leitura ja
+   conciliava os dois — `nome_demandas` existe para isso e `meuDono` aceita
+   varios —, mas a ESCRITA carimbava o nome da conta: toda demanda aberta pelo
+   painel nascia com um nome que nenhuma outra tela usava, e a pessoa aparecia
+   duas vezes em relatorio, em grafico e no ranking do Planning.
+
+   O primeiro nome declarado e o canonico: `nome_demandas` aceita varios porque a
+   base tem grafias antigas para conciliar na leitura, mas escrever exige
+   escolher um. Sem declaracao nenhuma, o nome da conta segue valendo — que e o
+   que sempre valeu.                                                            */
+function nomeNaDemanda(ident) {
+  const u = (ident && ident.usuario) || {};
+  const declarado = String(u.nome_demandas || '').split(/[\/,;]/)
+    .map(x => x.trim()).filter(Boolean)[0];
+  return declarado || String(u.nome || '').trim();
+}
+
 function pokerRanking(data, agora) {
   const hoje = diaLocalBR(agora.toISOString());
   const iniAtual = segundaDaSemana(hoje);
@@ -2275,7 +2295,7 @@ export default {
       if (perm.recusa) return perm.recusa;
       const ident = perm.ident;
       const ehAdm = ident.papel === 'admin';
-      const eu = (ident.usuario && ident.usuario.nome) || limpaTexto(body.dev, 80);
+      const eu = nomeNaDemanda(ident) || limpaTexto(body.dev, 80);
 
       const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
         { headers: { Accept: 'application/vnd.github.raw' } });
@@ -2650,8 +2670,12 @@ export default {
         return json({ error: 'tema',
                       detail: 'tema_id invalido. Consulte a lista em temas-publicos.' }, 400, headers);
       }
-      // Quem abre e o dono. Conta legada (senha compartilhada) precisa dizer quem e.
-      const devNome = (ident.usuario && ident.usuario.nome) || limpaTexto(body.dev, 80);
+      /* Quem abre e o dono. Conta legada (senha compartilhada) precisa dizer quem e.
+
+         O nome vem de `nomeNaDemanda`, e nao direto da conta: a conta guarda o
+         nome civil e a base guarda o nome do time. Carimbar o civil fazia a
+         mesma pessoa aparecer duas vezes em todo relatorio. */
+      const devNome = nomeNaDemanda(ident) || limpaTexto(body.dev, 80);
       if (!devNome) {
         return json({ error: 'dev',
                       detail: 'Sem conta identificada, informe "dev" com o seu nome.' }, 400, headers);
