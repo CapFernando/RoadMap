@@ -901,8 +901,8 @@
 <script src="prazo.js?v=cc25242e11"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js"></script>
-<script src="pipelines.js?v=7198f99c86"></script>
-<script src="apresentacao.js?v=0269ce9077"></script>
+<script src="pipelines.js?v=9a1128f973"></script>
+<script src="apresentacao.js?v=b4f3930769"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -3166,8 +3166,14 @@ function renderKanban() {
       // Atraso agora e marca no card, nao coluna.
       const nivelPrazo = prazoNivel(m);
       const atrasada = statusEfetivo(m) === 'atrasado';
-      const diasAtraso = atrasada && m.entrega
-        ? Math.floor((Date.now() - new Date(m.entrega + 'T00:00:00')) / 86400000) : 0;
+      /* OS DIAS SAEM DA MESMA REGRA DO BADGE, e nao de uma conta propria.
+         Isto contava `Date.now()` menos a entrega — sempre ate HOJE. O badge ja
+         respeitava a entrega do dev, mas o numero ao lado dele nao: AX-157, com
+         prazo em 14/08 e entregue em 15/08, mostrava "Atrasada · 5d" no dia 19
+         porque a conta seguia correndo enquanto a demanda esperava validacao.
+         Era a mesma regra em dois lugares dando duas respostas no MESMO card. */
+      const diasAtraso = window.PRAZO
+        ? (PRAZO.diasDeAtraso(m, statusKey(m), PRAZO.hojeISO()) || 0) : 0;
       return `<div class="kb-card${atrasada ? ' kb-atrasada' : ''} kb-prazo-${nivelPrazo}" draggable="true"
         ondragstart="kbDragStart(event,'${m.id}')" ondragend="kbDragEnd(event)"
         onmousedown="kbCardMouseDown(event,'${m.id}')"
@@ -4920,8 +4926,13 @@ function apresPipelines(conc, de, ate) {
 
   const soma = c => itens.reduce((s, i) => s + i[c], 0);
   const totPlan = soma('plan'), totReal = soma('real');
+  // Pessoas DISTINTAS no periodo, e nao a soma por frente: quem atua em duas
+  // frentes seria contado duas vezes, e o numero passaria do tamanho do time.
+  const pessoas = new Set();
+  conc.forEach(m => api.devsDaDemanda(m).forEach(n => pessoas.add(n)));
   return {
     itens,
+    devs: pessoas.size,
     total: {
       entregas: soma('entregas'), pontos: soma('pontos'),
       plan: totPlan, real: totReal,
@@ -5189,6 +5200,19 @@ async function apresGerar() {
        "Andou no mes" e a tarefa que foi concluida no periodo ou que estava em
        andamento nele. Nada de outro mes entra: e o mesmo corte do resto do deck. */
     const PRJ_ABERTO = ['planejado', 'em_andamento', 'pausado', ''];
+    /* HORAS POR PROJETO, pelos MESMOS rateios do resto do deck.
+       O ranking do painel mostra planejado x realizado x execucao por projeto, e
+       uma segunda conta aqui faria a linha do projeto discordar do cartao da
+       frente no slide anterior — dois numeros com o mesmo nome e origens
+       diferentes e o defeito que este deck ja teve uma vez. */
+    const prjPlan = rateiaHoras(conc, m => ({
+      de: String(m.inicio || '').slice(0, 10),
+      ate: String(m.entrega || '').slice(0, 10),
+    }), iso + '-01', fimMes);
+    const prjRatReal = rateiaHoras(conc, m => ({
+      de: String(m.inicio || '').slice(0, 10),
+      ate: String(m.concluido_em || m.entrega || '').slice(0, 10),
+    }), iso + '-01', fimMes);
     const projetos = (state.projetos || [])
       .filter(p => p && !p.oculto && PRJ_ABERTO.includes(String(p.status || '')))
       .map(p => {
@@ -5204,12 +5228,28 @@ async function apresGerar() {
           return ini && ini <= corte && (!fim || fim > corte) &&
                  !['negada'].includes(m.status_planejamento || '');
         }).length;
+        // Somente as CONCLUIDAS NO MES entram nas horas: e o mesmo recorte das
+        // frentes, e o unico em que planejado e realizado existem os dois.
+        const doMes = itens.filter(m =>
+          String(m.concluido_em || '').slice(0, 7) === iso &&
+          (m.status_planejamento || '') === 'concluido');
+        let hPlan = 0, hReal = 0;
+        doMes.forEach(m => {
+          hPlan += prjPlan.get(m.id) || 0;
+          hReal += horasReaisDe(m, prjRatReal).h;
+        });
         return {
           nome: (p.codigo ? p.codigo + ' · ' : '') + (p.nome || '(sem nome)'),
           resp: p.responsavel || '', feitas, andando, total: itens.length,
+          plan: Math.round(hPlan), real: Math.round(hReal),
+          pct: hPlan > 0 ? Math.round(hReal / hPlan * 100) : null,
         };
       })
-      .sort((a, b) => (b.feitas + b.andando) - (a.feitas + a.andando) ||
+      // Ordenado por HORAS, e nao por contagem de tarefas: e o que o subtitulo do
+      // slide promete ("ranqueados por horas planejadas + executadas"), e projeto
+      // grande com poucas tarefas ficava no fim do ranking pela conta antiga.
+      .sort((a, b) => (b.plan + b.real) - (a.plan + a.real) ||
+                      (b.feitas + b.andando) - (a.feitas + a.andando) ||
                       a.nome.localeCompare(b.nome, 'pt-BR'));
 
     /* A QUEBRA POR TIPO, em cada numero da historia.
@@ -8080,8 +8120,9 @@ function renderRiscoBanner() {
   const maisAntiga = atrasadas
     .filter(m => m.entrega)
     .sort((a, b) => a.entrega.localeCompare(b.entrega))[0];
-  const dias = maisAntiga
-    ? Math.floor((Date.now() - new Date(maisAntiga.entrega + 'T00:00:00')) / 86400000) : 0;
+  // Mesma regra do card e do relatorio: o atraso de quem ja entregou nao cresce.
+  const dias = maisAntiga && window.PRAZO
+    ? (PRAZO.diasDeAtraso(maisAntiga, statusKey(maisAntiga), PRAZO.hojeISO()) || 0) : 0;
   document.getElementById('risco-banner-texto').innerHTML =
     '⚠ <strong>' + atrasadas.length + (atrasadas.length === 1 ? ' demanda' : ' demandas') +
     ' com prazo vencido</strong>' +

@@ -43,7 +43,10 @@
      que serviu de referência as três estavam zeradas (0 tasks, 0h), e pipeline
      vazia num slide executivo gera a pergunta "e por que isso é zero?" no meio
      da apresentação, que é justamente o que o deck não deve provocar. */
-  var FORA_DO_DECK = ['Suporte', 'Bitrix 24', 'Analise de requisitos'];
+  // Com acento: o nome no painel de origem vem sem, mas aqui ele vai para um slide
+  // de diretoria — "Analise" sem acento num slide é erro que a plateia lê antes do
+  // número.
+  var FORA_DO_DECK = ['Suporte', 'Bitrix 24', 'Análise de requisitos'];
 
   /* A SEMENTE: o nome como ele aparece nas demandas DESTA ferramenta.
 

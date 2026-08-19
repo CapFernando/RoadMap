@@ -1132,7 +1132,26 @@ ok(/function apresGerar\(/.test(ADMIN), 'existe a montagem no admin');
 ok(/function montaDeck\(/.test(AP), 'existe o gerador do deck');
 // Fundo escuro e texto claro foi o pedido, e vale para TODO slide: um slide claro
 // no meio cega a sala no telao.
-ok(/fundo:\s*'0E0E0D'/.test(AP) && /texto:\s*'F2F0E9'/.test(AP), 'paleta escura declarada');
+/* Fundo ESCURO e texto CLARO — a regra continua; o tom mudou.
+   Era um preto neutro; virou o azul-quase-preto do painel de sprints que a
+   diretoria aprovou, para o deck e o painel se lerem como a mesma coisa. O que a
+   regra protege e o contraste: um slide claro no meio cega a sala no telao. */
+(() => {
+  const f = AP.match(/fundo:\s*'([0-9A-Fa-f]{6})'/);
+  const t = AP.match(/texto:\s*'([0-9A-Fa-f]{6})'/);
+  ok(!!f && !!t, 'paleta declarada com fundo e texto');
+  if (f && t) {
+    const lum = (h) => {
+      const v = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+        .map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+      return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+    };
+    const contraste = (lum(t[1]) + 0.05) / (lum(f[1]) + 0.05);
+    ok(lum(f[1]) < 0.05, 'o fundo do deck e escuro', '#' + f[1]);
+    ok(contraste >= 7, 'e o texto tem contraste de sobra sobre ele',
+       contraste.toFixed(1) + ':1');
+  }
+})();
 ok(/s\.background = \{ color: C\.fundo \}/.test(AP), 'todo slide nasce com o fundo escuro');
 // "As imagens estejam perfeitas": o canvas da tela segue o zoom e a resolucao de
 // quem exportou; num telao isso vira imagem borrada, e numero certo em imagem
@@ -2316,7 +2335,8 @@ sec('Os projetos em aberto aparecem, inclusive os parados');
 // noticia. Omitir o parado seria esconder o que merece pergunta na reuniao.
 ok(/function slideProjetos\(pptx, lista, pagina, periodo\)/.test(APRES),
    'o deck tem o slide de projetos');
-ok(/'sem task no mês'/.test(APRES),
+// Dito com todas as letras, e nao com um zero que se le como "nao sei".
+ok(/'sem tarefa no mês'/.test(APRES),
    'e o projeto sem movimento e dito com todas as letras');
 ok(/const PRJ_ABERTO = \['planejado', 'em_andamento', 'pausado', ''\];/.test(ADMIN),
    'so entram os projetos em aberto');
@@ -2464,7 +2484,7 @@ ok(!/const PIPELINES\s*=\s*\[/.test(semComentario(APRES)),
 
 // Suporte, Bitrix e Analise de requisitos ficam FORA por decisao. Sem trava,
 // alguem "conserta" a ausencia delas e o slide ganha tres cartoes zerados.
-['Suporte', 'Bitrix 24', 'Analise de requisitos'].forEach((f) => {
+['Suporte', 'Bitrix 24', 'Análise de requisitos'].forEach((f) => {
   ok(new RegExp("'" + f + "'").test(PIPE.slice(PIPE.indexOf('FORA_DO_DECK'), PIPE.indexOf('FORA_DO_DECK') + 200)),
      'fica fora do deck por decisao: ' + f);
 });
@@ -2523,33 +2543,81 @@ ok(/cada dia útil vale 8h/.test(APRES),
 
 sec('O slide das frentes cabe no slide');
 
-// O deck tem 5,63" de altura e o rodape comeca em 5,05". Com cartoes de 1,12" a
-// segunda linha terminava em 4,85" e passava POR CIMA da nota de cobertura.
+/* AS MEDIDAS DO CARTAO SAO CONTADAS, e a conta e conferida aqui.
+
+   Eu errei essa conta DUAS vezes, e as duas apareceram no PPTX gerado, nao no
+   codigo: primeiro com cartoes de 1,12" (a segunda linha terminava em 4,85" e
+   passava por cima da nota de cobertura), depois com 0,66" e tres linhas (fechava
+   em 4,72", mesma colisao). Layout que depende de eu somar certo de cabeca e
+   layout que quebra — entao a soma vira invariante.                            */
 (() => {
   const corpo = APRES.slice(APRES.indexOf('function slidePipelines'),
-                            APRES.indexOf('function slidePipelines') + 4200);
-  const m = corpo.match(/var COLS = (\d+), LARG = ([\d.]+), ALT = ([\d.]+), VAO_X = ([\d.]+), VAO_Y = ([\d.]+);[\s\S]{0,60}var Y0 = ([\d.]+);/);
-  ok(!!m, 'as medidas do cartao estao declaradas juntas');
-  if (m) {
-    const [, cols, larg, alt, vx, vy, y0] = m.map(Number);
-    const linhas = Math.ceil(6 / cols);
-    const fimCartoes = y0 + linhas * alt + (linhas - 1) * vy;
-    ok(fimCartoes <= 4.58,
-       'com 6 frentes os cartoes terminam antes das notas', fimCartoes.toFixed(2) + '"');
-    ok(0.7 + (cols - 1) * (larg + vx) + larg <= 9.5,
-       'a ultima coluna nao passa da margem direita');
+                            APRES.indexOf('function slidePipelines') + 6000);
+  const m = corpo.match(/var CW = ([\d.]+), CH = ([\d.]+), CVX = ([\d.]+), CVY = ([\d.]+);/);
+  ok(!!m, 'as medidas do cartao de frente estao declaradas juntas');
+  const y0 = corpo.match(/var y = ([\d.]+) \+ lin \* \(CH \+ CVY\);/);
+  ok(!!y0, 'e a linha do cartao sai de uma origem declarada');
+  // A nota de cobertura e o piso: os cartoes tem de terminar antes dela.
+  const nota = corpo.match(/notas\.join\('   ·   '\), \{\s*x: [\d.]+, y: ([\d.]+),/);
+  ok(!!nota, 'a nota de cobertura tem posicao declarada');
+  if (m && y0 && nota) {
+    const [, cw, ch, cvx, cvy] = m.map(Number);
+    const topo = Number(y0[1]), pisoNota = Number(nota[1]);
+    // Seis frentes (as cinco + "nao classificado") em duas colunas = tres linhas.
+    const linhas = Math.ceil(6 / 2);
+    const fim = topo + linhas * ch + (linhas - 1) * cvy;
+    ok(fim <= pisoNota,
+       'com 6 frentes os cartoes terminam antes da nota de cobertura',
+       fim.toFixed(2) + '" <= ' + pisoNota.toFixed(2) + '"');
+    ok(5.05 + (cw + cvx) + cw <= 9.55,
+       'a segunda coluna de cartoes nao passa da margem direita');
+    // E o conteudo cabe DENTRO do cartao: nome, numeros e a linha de entregas.
+    const ult = corpo.match(/y: y \+ ([\d.]+), w: CW - [\d.]+, h: ([\d.]+), fontSize: 7,/);
+    ok(!!ult && Number(ult[1]) + Number(ult[2]) <= ch,
+       'a ultima linha de texto cabe dentro do cartao',
+       ult ? (Number(ult[1]) + Number(ult[2])).toFixed(2) + '" <= ' + ch.toFixed(2) + '"' : '');
   }
-  // O nome nao pode encostar no percentual: eram 0,07" de sobreposicao.
-  const nome = corpo.match(/corta\(it\.nome, \d+\), \{\s*x: x \+ ([\d.]+), y: y \+ [\d.]+, w: LARG - ([\d.]+)/);
-  const pct = corpo.match(/x: x \+ LARG - ([\d.]+), y: y \+ [\d.]+, w: [\d.]+, h: [\d.]+,\s*fontSize: 12/);
+  // O nome da frente nao pode encostar no percentual: eram 0,07" de invasao.
+  const nome = corpo.match(/corta\(it\.nome, \d+\), \{\s*x: x \+ ([\d.]+), y: y \+ [\d.]+, w: CW - ([\d.]+)/);
+  const pct = corpo.match(/x: x \+ CW - ([\d.]+), y: y \+ [\d.]+, w: ([\d.]+), h: [\d.]+, fontSize: 9,/);
   ok(!!nome && !!pct, 'nome e percentual do cartao estao posicionados');
-  if (nome && pct) {
-    const fimNome = Number(nome[1]) + (2.7 - Number(nome[2]));
-    const iniPct = 2.7 - Number(pct[1]);
-    ok(fimNome <= iniPct,
-       'a caixa do nome para antes do percentual',
+  if (nome && pct && m) {
+    const cw = Number(m[1]);
+    const fimNome = Number(nome[1]) + (cw - Number(nome[2]));
+    const iniPct = cw - Number(pct[1]);
+    ok(fimNome <= iniPct, 'a caixa do nome para antes do percentual',
        fimNome.toFixed(2) + '" <= ' + iniPct.toFixed(2) + '"');
   }
+  /* O TITULO PARA ANTES DO PERIODO, que fica no canto direito do cabecalho.
+     Na primeira versao o titulo tinha 6,4" de caixa a partir de 0,5" e o periodo
+     abria em 6,6": 0,30" de invasao, que a prova do PPTX pegou. */
+  [[/addText\('FRENTES DE TRABALHO', \{\s*x: ([\d.]+), y: [\d.]+, w: ([\d.]+),/, 'FRENTES DE TRABALHO'],
+   [/addText\('PRINCIPAIS PROJETOS', \{\s*x: ([\d.]+), y: [\d.]+, w: ([\d.]+),/, 'PRINCIPAIS PROJETOS']]
+    .forEach(([re, tit]) => {
+      const t = APRES.match(re);
+      ok(!!t, 'o titulo "' + tit + '" tem caixa declarada');
+      if (t) {
+        ok(Number(t[1]) + Number(t[2]) <= 6.5,
+           'e ele para antes do periodo, no canto direito: ' + tit,
+           (Number(t[1]) + Number(t[2])).toFixed(2) + '" <= 6,50"');
+      }
+    });
+})();
+
+/* O DECK INTEIRO USA A PALETA DO PAINEL APROVADO.
+   Era um preto neutro; virou o azul-quase-preto daquele quadro. Nenhum slide
+   escreve cor na mao — e essa regra que faz a troca valer no deck todo em vez de
+   nos slides que alguem lembrou de atualizar. */
+ok(/fundo:\s*'070B16'/.test(APRES), 'o fundo do deck e o azul do painel');
+ok(/borda:\s*'223052'/.test(APRES), 'e existe a cor de borda dos cartoes');
+(() => {
+  // Cor escrita direto no slide, fora do objeto C: cada uma dessas e um lugar que
+  // a proxima troca de paleta vai esquecer.
+  const corpo = APRES.slice(APRES.indexOf('function slideBase'));
+  const cruas = (corpo.match(/color: '[0-9A-Fa-f]{6}'/g) || [])
+    .filter((c) => !/'(FFFFFF|000000)'/.test(c));
+  ok(!cruas.length, 'nenhum slide escreve cor hexadecimal na mao',
+     cruas.slice(0, 3).join(', '));
 })();
 
 // O RODAPE SAI UMA VEZ SO. `slideTitulo` desenhava um, e quase todo slide
@@ -2591,6 +2659,32 @@ sec('O atraso e do dev, e para quando ele entrega');
 ok(!/new Date\(m\.entrega \+ 'T00:00:00'\) < hoje/.test(
      [ADMIN, GANTT, DEV, INDEX].join('\n')),
    'nenhuma tela compara a entrega com hoje por conta propria');
+
+/* O NUMERO DE DIAS SAI DA MESMA REGRA DO BADGE.
+   Esta era a SEXTA copia da conta, e escapou da primeira varredura porque nao
+   usava STATUS_ATRASO nem prazoClassifica — calculava no proprio card:
+   `Date.now() - new Date(m.entrega)`. O efeito era a mesma regra dando duas
+   respostas no MESMO card: o badge respeitava a entrega do dev e o numero ao lado
+   dele nao. AX-157, entregue UM dia depois do prazo, mostrava "Atrasada · 5d"
+   cinco dias depois, porque a conta seguia correndo na fila da validacao.        */
+ok(!/Date\.now\(\) - new Date\(m\.entrega/.test(ADMIN) &&
+   !/Date\.now\(\) - new Date\(maisAntiga\.entrega/.test(ADMIN),
+   'o card e o banner nao contam mais os dias por conta propria');
+ok(/const diasAtraso = window\.PRAZO[\s\S]{0,120}PRAZO\.diasDeAtraso\(m, statusKey\(m\)/.test(ADMIN),
+   'os dias do card saem de PRAZO.diasDeAtraso');
+ok(/PRAZO\.diasDeAtraso\(maisAntiga, statusKey\(maisAntiga\)/.test(ADMIN),
+   'e os do banner de risco tambem');
+(() => {
+  // Varredura: nenhuma tela pode subtrair a entrega de "agora" para achar atraso.
+  const suspeitas = [];
+  [['admin.html', ADMIN], ['gantt.html', GANTT], ['dev.html', DEV], ['index.html', INDEX]]
+    .forEach(([nome, src]) => {
+      const s = semComentario(src);
+      if (/Date\.now\(\)[^;]{0,60}\.entrega/.test(s)) suspeitas.push(nome);
+    });
+  ok(!suspeitas.length, 'nenhuma tela deriva atraso de Date.now() menos a entrega',
+     suspeitas.join(', '));
+})();
 
 // A ETAPA DE VALIDACAO FICA FORA das que correm: e ali que o dev ja saiu de cena.
 ok(/ETAPAS_QUE_CORREM = \['planning', 'planejado', 'em_andamento'\]/.test(PRZ),

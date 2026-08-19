@@ -29,19 +29,29 @@
 
   var CDN = 'https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js';
 
-  // Paleta do slide. Fundo quase preto e texto quase branco: o pedido foi
-  // "fundo escuro, dados muito claros". Os acentos são os mesmos da ferramenta,
-  // para quem viu a tela reconhecer o gráfico no slide.
+  /* Paleta do slide — a MESMA do painel de sprints que a diretoria aprovou.
+     Era um preto neutro; virou o azul-quase-preto daquele quadro, com os mesmos
+     acentos. Quem leu o painel reconhece o deck sem reaprender a ler nada, e é
+     essa continuidade que o deck estava perdendo.
+
+     Trocar os VALORES e manter os nomes muda o deck inteiro de uma vez: nenhum
+     slide fica com a paleta antiga por esquecimento, porque nenhum slide escreve
+     cor na mão. */
   var C = {
-    fundo:   '0E0E0D',
-    fundo2:  '161614',
-    texto:   'F2F0E9',
-    fraco:   '9A968C',
-    azul:    '3B8FE8',
-    verde:   '3EC98E',
-    vermelho:'E5484D',
-    ambar:   'FFC470',
-    roxo:    'C9AEFF',
+    fundo:   '070B16',   // o azul-quase-preto do painel
+    fundo2:  '0E1428',   // superfície dos cartões
+    fundo3:  '141C36',   // trilho de barra / cartão inativo
+    borda:   '223052',   // a borda fina que separa cartão de fundo
+    texto:   'FFFFFF',
+    fraco:   '8792AD',
+    azul:    '60A5FA',
+    verde:   '4ADE80',
+    vermelho:'F87171',
+    ambar:   'FBBF24',
+    roxo:    'A78BFA',
+    ouro:    'FCD34D',   // 1º lugar do ranking
+    prata:   'CBD5E1',
+    bronze:  'D8A07A',
   };
 
   function carregaLib() {
@@ -235,62 +245,109 @@
   //
   // Duas colunas de número por projeto: o que foi concluído no mês e o que ficou
   // em andamento. As duas contas param no corte do período, como o resto do deck.
+  /* PRINCIPAIS PROJETOS — o ranking do painel aprovado.
+
+     Cada linha traz o que a sala pergunta em seguida: quem conduz, quantas tarefas
+     andaram, em que pe esta, e planejado x realizado x execucao. Sem os tres
+     numeros a linha diz "o projeto andou" e nao diz se andou o que fora combinado.
+
+     A MEDALHA E POSICAO, E NAO NOTA. Ouro no primeiro nao significa "melhor
+     projeto" — significa o que consumiu mais capacidade, que e o que o painel
+     ordena. O subtitulo diz isso com todas as letras, porque um podio sem criterio
+     escrito e lido como julgamento.
+
+     PROJETO SEM TAREFA NO MES APARECE, dito com todas as letras em vez de com um
+     zero — omitir o parado esconderia justamente o que merece pergunta.        */
   function slideProjetos(pptx, lista, pagina, periodo) {
-    var s = slideTitulo(pptx, 'Projetos', 'o que andou no período', pagina);
+    var s = slideBase(pptx);
+    s.addText('PRINCIPAIS PROJETOS', {
+      x: 0.5, y: 0.28, w: 5.9, h: 0.42, fontSize: 21, bold: true, color: C.texto,
+      charSpacing: 0.5 });
+    s.addText('ranqueados por horas planejadas + executadas no período', {
+      x: 0.5, y: 0.70, w: 5.9, h: 0.24, fontSize: 10, color: C.fraco });
+    s.addText(periodo, {
+      x: 6.6, y: 0.30, w: 2.9, h: 0.26, fontSize: 11, bold: true, color: C.texto,
+      align: 'right' });
+    s.addText(lista.length + (lista.length === 1 ? ' projeto em aberto' : ' projetos em aberto'), {
+      x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
+    s.addShape(pptx.ShapeType.rect, {
+      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { width: 0 } });
+
     if (!lista.length) {
       s.addText('Nenhum projeto em aberto no período.', {
-        x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
+        x: 0.5, y: 1.7, w: 9.0, h: 0.4, fontSize: 15, color: C.fraco });
       rodape(s, periodo, pagina);
       return s;
     }
-    // Cinco linhas e a linha do "e mais": com ALT de 0,72 a ultima caia em cima do
-    // rodape. O slide tem 5,63" e o rodape mora em 5,05".
-    var TOPO = 1.55, ALT = 0.66;
+
+    /* Cinco linhas de 0,70" a partir de 1,20" fecham em 4,70", e a linha do "e
+       mais" cabe em 4,74" — antes do rodape em 5,05". Com seis linhas a ultima
+       caia sobre ele. */
+    var TOPO = 1.20, ALT = 0.70;
+    var MEDALHA = [C.ouro, C.prata, C.bronze];
     var vis = lista.slice(0, 5);
     vis.forEach(function (p, i) {
       var y = TOPO + i * ALT;
+      cartao(pptx, s, 0.5, y, 9.0, 0.62);
+
+      // A posicao: circulo de medalha nos tres primeiros, quadrado nos demais.
+      var cor = MEDALHA[i] || C.fraco;
+      s.addShape(i < 3 ? pptx.ShapeType.ellipse : pptx.ShapeType.roundRect, {
+        x: 0.63, y: y + 0.17, w: 0.28, h: 0.28, rectRadius: 0.04,
+        fill: { color: i < 3 ? cor : C.fundo3 },
+        line: { color: i < 3 ? cor : C.borda, width: 0.75 } });
+      s.addText(String(i + 1), {
+        x: 0.63, y: y + 0.19, w: 0.28, h: 0.24, fontSize: 9, bold: true,
+        color: i < 3 ? C.fundo : C.fraco, align: 'center' });
+
+      s.addText(corta(p.nome, 52), {
+        x: 1.00, y: y + 0.08, w: 5.5, h: 0.24, fontSize: 11, bold: true, color: C.texto });
+
+      // A linha de contexto: quem conduz, quantas tarefas, em que pe.
+      var meta = [];
+      if (p.resp) meta.push(corta(p.resp, 34));
+      var tarefas = (p.feitas || 0) + (p.andando || 0);
+      if (tarefas) meta.push(tarefas + (tarefas === 1 ? ' tarefa' : ' tarefas'));
+      if (p.feitas) meta.push(p.feitas + ' concluída' + (p.feitas === 1 ? '' : 's'));
+      if (p.andando) meta.push(p.andando + ' em andamento');
+      s.addText(meta.join('   ·   '), {
+        x: 1.00, y: y + 0.33, w: 5.5, h: 0.2, fontSize: 8, color: C.fraco });
+
       var parado = !p.feitas && !p.andando;
-      s.addShape(pptx.ShapeType.rect, { x: 0.7, y: y, w: 0.06, h: 0.5,
-                                        fill: { color: parado ? C.ambar : C.verde } });
-      s.addText(corta(p.nome, 52), { x: 0.95, y: y - 0.02, w: 5.6, h: 0.35,
-                                     fontSize: 15, color: C.texto });
-      if (p.resp) {
-        s.addText(corta(p.resp, 40), { x: 0.95, y: y + 0.28, w: 5.6, h: 0.28,
-                                       fontSize: 11.5, color: C.fraco });
-      }
       if (parado) {
-        // Dito com todas as letras, e não com um zero que se lê como "não sei".
-        s.addText('sem task no mês', { x: 6.7, y: y + 0.08, w: 2.9, h: 0.35,
-                                       fontSize: 13, color: C.ambar });
+        // Dito com todas as letras, e nao com um zero que se le como "nao sei".
+        s.addText('sem tarefa no mês', {
+          x: 6.55, y: y + 0.19, w: 2.8, h: 0.24, fontSize: 10, bold: true,
+          color: C.ambar, align: 'right' });
         return;
       }
       var cols = [
-        { v: p.feitas, rot: 'concluídas', cor: C.verde, x: 6.7 },
-        { v: p.andando, rot: 'em andamento', cor: C.azul, x: 8.1 },
+        { v: (p.plan || 0) + 'h', rot: 'PLAN', cor: C.azul,  x: 6.55 },
+        { v: (p.real || 0) + 'h', rot: 'REAL', cor: C.verde, x: 7.50 },
+        { v: p.pct == null ? '—' : p.pct + '%', rot: 'EXEC',
+          cor: corPercentual(p.pct), x: 8.45 },
       ];
       cols.forEach(function (c) {
-        s.addText(String(c.v), { x: c.x, y: y - 0.04, w: 0.7, h: 0.4,
-                                 fontSize: 20, bold: true, color: c.cor });
-        s.addText(c.rot, { x: c.x, y: y + 0.32, w: 1.4, h: 0.25, fontSize: 10.5, color: C.fraco });
+        s.addText(String(c.v), { x: c.x, y: y + 0.09, w: 0.9, h: 0.26,
+                                 fontSize: 13, bold: true, color: c.cor, align: 'right' });
+        s.addText(c.rot, { x: c.x, y: y + 0.36, w: 0.9, h: 0.18,
+                           fontSize: 7, color: C.fraco, align: 'right', charSpacing: 0.8 });
       });
     });
+
     var sobra = lista.length - vis.length;
+    var nota = [];
     if (sobra > 0) {
-      s.addText('… e mais ' + sobra + (sobra === 1 ? ' projeto em aberto' : ' projetos em aberto'), {
-        x: 0.7, y: TOPO + vis.length * ALT + 0.02, w: 8.6, h: 0.3, fontSize: 11.5, color: C.fraco });
+      nota.push('e mais ' + sobra + (sobra === 1 ? ' projeto em aberto' : ' projetos em aberto'));
     }
+    nota.push('Planejado: cada dia útil vale 8h, divididas entre as demandas do dia');
+    s.addText(nota.join('   ·   '), {
+      x: 0.5, y: TOPO + vis.length * ALT + 0.04, w: 9.0, h: 0.2,
+      fontSize: 7.5, color: C.fraco });
     rodape(s, periodo, pagina);
     return s;
   }
 
-  /* O TÍTULO NÃO DESENHA O RODAPÉ.
-     Ele desenhava, e quase todo slide chamava `rodape()` de novo no fim para pôr
-     o mês — resultado: o NÚMERO DA PÁGINA saía duas vezes, um exatamente em cima
-     do outro. No PowerPoint isso não some, engorda: o dígito fica mais denso que
-     o dos slides que não repetiam, e ninguém sabia dizer por quê.
-
-     Agora quem monta o slide desenha o rodapé uma vez, com o mês que ele conhece.
-     `rodapeVazio` serve aos poucos slides que não têm mês a exibir.             */
   function slideTitulo(pptx, titulo, sub, pagina) {
     var s = slideBase(pptx);
     s.addText(titulo, { x: 0.7, y: 0.55, w: 8.6, h: 0.5, fontSize: 24, bold: true, color: C.texto });
@@ -328,7 +385,9 @@
     s.addTable(corpo, {
       x: 0.7, y: opts.y || 1.6, w: 8.6, colW: opts.colW,
       rowH: 0.32, valign: 'middle',
-      border: { type: 'solid', color: '2E2E2B', pt: 1 },
+      // A borda vem da paleta, e nao escrita a mao: era um cinza-esverdeado da
+      // paleta antiga e ficava fora de tom no fundo azul do painel.
+      border: { type: 'solid', color: C.borda, pt: 1 },
       fill: { color: C.fundo2 }, autoPage: false,
     });
     var sobra = linhas.length - vis.length;
@@ -513,95 +572,201 @@
     return C.vermelho;
   }
 
+  /* -- Pecas do painel de sprints -------------------------------------------
+     O painel aprovado tem uma gramatica propria, e ela se repete em toda secao:
+     cartao com borda fina, rotulo miudo em maiusculas na cor do assunto, numero
+     em corpo grande, e uma legenda pequena embaixo. Estas funcoes sao essa
+     gramatica — sem elas, cada slide reinventava o cartao e o deck saia
+     desalinhado de um slide para o outro.                                     */
+  function cartao(pptx, s, x, y, w, h, opts) {
+    opts = opts || {};
+    s.addShape(pptx.ShapeType.roundRect, {
+      x: x, y: y, w: w, h: h, rectRadius: 0.05,
+      fill: { color: opts.fundo || C.fundo2 },
+      line: { color: opts.borda || C.borda, width: 0.75 },
+    });
+    // A faixa de cor no topo — e ela que liga o cartao a frente que ele mostra.
+    if (opts.faixa) {
+      s.addShape(pptx.ShapeType.rect, {
+        x: x, y: y, w: w, h: 0.045, fill: { color: opts.faixa }, line: { width: 0 } });
+    }
+  }
+
+  /* O CARTAO DE NUMERO do painel: rotulo miudo colorido, numero grande, nota.
+     O numero e o que a sala le de longe; o rotulo diz do que ele e; a nota
+     responde a pergunta seguinte antes de ela ser feita ("2286h — 96% do
+     planejado"). */
+  function cartaoKpi(pptx, s, cfg) {
+    cartao(pptx, s, cfg.x, cfg.y, cfg.w, cfg.h);
+    s.addText(cfg.rot, { x: cfg.x + 0.14, y: cfg.y + 0.10, w: cfg.w - 0.28, h: 0.2,
+                         fontSize: 8, bold: true, color: cfg.cor || C.azul, charSpacing: 1.2 });
+    s.addText(String(cfg.val), { x: cfg.x + 0.13, y: cfg.y + 0.27, w: cfg.w - 0.26, h: 0.48,
+                                 fontSize: cfg.corpo || 27, bold: true, color: C.texto });
+    if (cfg.nota) {
+      s.addText(cfg.nota, { x: cfg.x + 0.14, y: cfg.y + 0.74, w: cfg.w - 0.28, h: 0.19,
+                            fontSize: 7.5, color: C.fraco });
+    }
+  }
+
+  /* O ANEL DE EXECUCAO — o "96%" que o painel poe no canto.
+     Grafico de rosca de verdade (nao desenho): fica nitido em qualquer projetor e
+     continua editavel no PowerPoint. Acima de 100% o anel fecha inteiro em vez de
+     virar fatia negativa, que e o que uma rosca faria com o resto abaixo de zero. */
+  function anelExecucao(pptx, s, x, y, lado, pct) {
+    var cor = corPercentual(pct);
+    var feito = pct == null ? 0 : Math.max(0, Math.min(100, pct));
+    s.addChart(pptx.ChartType.doughnut,
+      [{ name: 'exec', labels: ['feito', 'resto'], values: [feito, 100 - feito] }], {
+        x: x, y: y, w: lado, h: lado,
+        holeSize: 70, showLegend: false, showValue: false, showTitle: false,
+        chartColors: [cor, C.fundo3],
+        dataBorder: { pt: 0, color: C.fundo },
+        plotArea: { fill: { color: C.fundo } },
+      });
+    s.addText(pct == null ? '—' : pct + '%', {
+      x: x, y: y + lado / 2 - 0.19, w: lado, h: 0.38,
+      fontSize: 15, bold: true, color: cor, align: 'center' });
+  }
+
+  /* A BARRA PAREADA de planejado x realizado.
+
+     O painel usa uma rosca para "horas por pipeline", e a rosca responde outra
+     pergunta: que fatia cada frente representa. A pergunta DESTE slide e planejado
+     contra realizado por frente — comparacao pareada, que em rosca nao se le. Duas
+     barras finas na mesma escala mostram as duas de uma vez, e o transbordo de
+     quem passou do planejado aparece como barra mais longa em vez de estourar o
+     desenho.
+
+     A cor da frente fica na barra do realizado e o planejado vai em cinza-azulado:
+     com as duas coloridas, a comparacao virava adivinhacao de tom. */
+  function barrasFrente(pptx, s, cfg) {
+    var itens = cfg.itens, x = cfg.x, w = cfg.w;
+    var max = itens.reduce(function (mx, i) { return Math.max(mx, i.plan, i.real); }, 1);
+    var LARG_NOME = 1.32, VAO = 0.1;
+    var xBarra = x + LARG_NOME + VAO;
+    var wBarra = w - LARG_NOME - VAO - 0.62;
+    itens.forEach(function (it, i) {
+      var y = cfg.y + i * cfg.alt;
+      s.addText(corta(it.nome, 18), {
+        x: x, y: y, w: LARG_NOME, h: 0.3, fontSize: 8.5, color: C.texto,
+        align: 'right', valign: 'middle' });
+      [{ v: it.plan, cor: C.fundo3, dy: 0.045 },
+       { v: it.real, cor: it.cor, dy: 0.155 }].forEach(function (b) {
+        s.addShape(pptx.ShapeType.rect, {
+          x: xBarra, y: y + b.dy, w: Math.max(0.02, wBarra * (b.v / max)), h: 0.09,
+          fill: { color: b.cor }, line: { width: 0 } });
+      });
+      s.addText(it.plan + 'h / ' + it.real + 'h', {
+        x: xBarra + wBarra + 0.06, y: y, w: 0.58, h: 0.3,
+        fontSize: 7.5, color: C.fraco, valign: 'middle' });
+    });
+    // A legenda explica as duas barras UMA vez, e nao em cada linha.
+    s.addText('planejado (claro)   ·   realizado (na cor da frente)', {
+      x: xBarra, y: cfg.y + itens.length * cfg.alt + 0.02, w: wBarra + 0.6, h: 0.2,
+      fontSize: 7, color: C.fraco });
+  }
+
+  /* AS FRENTES DE TRABALHO — o slide no formato do painel aprovado.
+
+     A COR DO PERCENTUAL SEGUE A DISTANCIA DO PLANEJADO, para os dois lados. 160%
+     nao e "melhor" que 100%: significa que a estimativa nao valeu, e pintar isso
+     de verde esconderia exatamente o que a sala precisa discutir.
+
+     A COBERTURA DE HORAS VAI NO RODAPE, sempre. Um mes com 39% das entregas sem
+     hora lancada mostra execucao baixa por falta de lancamento, e nao por falta
+     de trabalho — sem a nota, o slide acusa o time de algo que nao aconteceu.  */
   function slidePipelines(pptx, pl, pagina, periodo) {
-    var s = slideTitulo(pptx, 'Frentes de trabalho',
-      'horas planejadas × realizadas no período', pagina);
+    var s = slideBase(pptx);
     var itens = (pl.itens || []).filter(function (i) {
-      // Frente sem nada no mês não vira cartão zerado: "0h / 0h / 0%" num slide
-      // executivo só gera a pergunta "e por que isso está zerado?" no meio da
-      // apresentação.
+      // Frente sem nada no mes nao vira cartao zerado: "0h / 0h / 0%" num slide
+      // executivo so gera a pergunta "e por que isso esta zerado?" no meio da
+      // apresentacao.
       return i.entregas > 0 || i.plan > 0 || i.real > 0;
     });
+
+    // -- Cabecalho, como o do painel: titulo, subtitulo e o periodo a direita --
+    s.addText('FRENTES DE TRABALHO', {
+      x: 0.5, y: 0.28, w: 5.9, h: 0.42, fontSize: 21, bold: true, color: C.texto,
+      charSpacing: 0.5 });
+    s.addText('visão geral da execução', {
+      x: 0.5, y: 0.70, w: 5.9, h: 0.24, fontSize: 10, color: C.fraco });
+    s.addText(periodo, {
+      x: 6.6, y: 0.30, w: 2.9, h: 0.26, fontSize: 11, bold: true, color: C.texto,
+      align: 'right' });
+    if (pl.recorte) {
+      s.addText(pl.recorte, {
+        x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
+    }
+    s.addShape(pptx.ShapeType.rect, {
+      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { width: 0 } });
+
     if (!itens.length) {
       s.addText('Sem entregas com frente definida no período.',
-        { x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
+        { x: 0.5, y: 1.7, w: 9.0, h: 0.4, fontSize: 15, color: C.fraco });
       rodape(s, periodo, pagina);
       return s;
     }
 
-    // ── Os três números do mês, na mesma ordem do painel aprovado ──────────
+    // -- A faixa de numeros do mes, com o anel de execucao no canto ------------
     var t = pl.total || {};
     var kpis = [
-      { rot: 'PLANEJADO', val: t.plan + 'h', cor: C.azul },
-      { rot: 'REALIZADO', val: t.real + 'h', cor: C.verde },
-      { rot: 'EXECUÇÃO', val: t.pct == null ? '—' : t.pct + '%', cor: corPercentual(t.pct) },
+      { rot: 'FRENTES',   val: itens.length, cor: C.roxo,
+        nota: (pl.devs || 0) + (pl.devs === 1 ? ' pessoa' : ' pessoas') },
+      { rot: 'ENTREGAS',  val: t.entregas, cor: C.azul,
+        nota: t.pontos ? t.pontos + ' pontos' : '' },
+      { rot: 'PLANEJADO', val: t.plan + 'h', cor: C.azul, nota: 'no período' },
+      { rot: 'REALIZADO', val: t.real + 'h', cor: C.verde,
+        nota: t.pct == null ? '' : t.pct + '% do planejado' },
     ];
+    var LK = 1.92, VK = 0.16;
     kpis.forEach(function (k, i) {
-      var x = 0.7 + i * 2.95;
-      s.addShape(pptx.ShapeType.roundRect, {
-        x: x, y: 1.40, w: 2.7, h: 0.76, rectRadius: 0.06,
-        fill: { color: C.fundo2 }, line: { color: C.fundo2 } });
-      s.addText(k.rot, { x: x + 0.16, y: 1.45, w: 2.4, h: 0.22,
-                         fontSize: 9.5, color: C.fraco, charSpacing: 1 });
-      s.addText(k.val, { x: x + 0.16, y: 1.65, w: 2.4, h: 0.46,
-                         fontSize: 25, bold: true, color: k.cor });
+      cartaoKpi(pptx, s, { x: 0.5 + i * (LK + VK), y: 1.16, w: LK, h: 0.98,
+                           rot: k.rot, val: k.val, cor: k.cor, nota: k.nota });
     });
+    cartao(pptx, s, 8.82, 1.16, 0.68, 0.98);
+    anelExecucao(pptx, s, 8.80, 1.11, 0.72, t.pct);
 
-    /* ── Um cartão por frente ───────────────────────────────────────────────
-       Três por linha: com quatro, "Dados & Inteligência" não cabe em uma linha e
-       o cartão fica com o título quebrado no meio.
+    // -- Esquerda: planejado x realizado por frente ----------------------------
+    s.addText('HORAS POR FRENTE', {
+      x: 0.5, y: 2.30, w: 4.3, h: 0.2, fontSize: 8, bold: true,
+      color: C.fraco, charSpacing: 1.2 });
+    barrasFrente(pptx, s, { itens: itens, x: 0.5, y: 2.56, w: 4.35, alt: 0.30 });
 
-       AS MEDIDAS SÃO CONTADAS, e não escolhidas: o slide tem 5,63" e o rodapé
-       ocupa a partir de 5,05". Com duas linhas de cartões de 1,12" e vão de
-       0,17", a segunda linha terminava em 4,85" e passava POR CIMA da nota de
-       cobertura em 4,72". Aqui a última linha fecha em 4,52" e as duas notas
-       cabem antes do rodapé.                                                  */
-    var COLS = 3, LARG = 2.7, ALT = 1.04, VAO_X = 0.25, VAO_Y = 0.12;
-    var Y0 = 2.32;
+    // -- Direita: um cartao por frente, como o "pipelines detalhados" ----------
+    s.addText('FRENTES DETALHADAS', {
+      x: 5.05, y: 2.30, w: 2.45, h: 0.2, fontSize: 8, bold: true,
+      color: C.fraco, charSpacing: 1.2 });
+    s.addText(itens.length + (itens.length === 1 ? ' frente' : ' frentes'), {
+      x: 7.6, y: 2.30, w: 1.9, h: 0.2, fontSize: 8, color: C.fraco, align: 'right' });
+
+    /* Duas colunas de cartoes, com as medidas CONTADAS e nao escolhidas.
+
+       O slide tem 5,63", o rodape mora em 5,05" e as notas em 4,62". Com 6 frentes
+       sao TRES linhas: 3 x CH + 2 x CVY a partir de 2,56". Com CH 0,66 e CVY 0,09
+       isso fechava em 4,72" e a ultima linha passava POR CIMA da nota de cobertura
+       — errei a conta na primeira versao, e foi a prova do PPTX que mostrou.
+       Com 0,62 e 0,08 fecha em 4,58", antes das notas. */
+    var CW = 2.16, CH = 0.62, CVX = 0.13, CVY = 0.08;
     itens.slice(0, 6).forEach(function (it, i) {
-      var col = i % COLS, lin = Math.floor(i / COLS);
-      var x = 0.7 + col * (LARG + VAO_X);
-      var y = Y0 + lin * (ALT + VAO_Y);
-
-      s.addShape(pptx.ShapeType.roundRect, {
-        x: x, y: y, w: LARG, h: ALT, rectRadius: 0.06,
-        fill: { color: C.fundo2 }, line: { color: C.fundo2 } });
-      // A faixa da cor da frente no topo do cartão — é ela que liga este slide ao
-      // painel que a sala já conhece.
-      s.addShape(pptx.ShapeType.rect, {
-        x: x, y: y, w: LARG, h: 0.05, fill: { color: it.cor } });
-
-      // A caixa do nome PARA antes de onde o percentual começa. Com `LARG - 0.85`
-      // ela terminava em x+1,99" e o percentual abria em x+1,92": 0,07" de
-      // sobreposição, o bastante para "Dados & Inteligência" encostar no número.
-      s.addText(corta(it.nome, 21), {
-        x: x + 0.14, y: y + 0.10, w: LARG - 0.98, h: 0.24,
-        fontSize: 11, bold: true, color: C.texto });
+      var col = i % 2, lin = Math.floor(i / 2);
+      var x = 5.05 + col * (CW + CVX);
+      var y = 2.56 + lin * (CH + CVY);
+      cartao(pptx, s, x, y, CW, CH, { faixa: it.cor });
+      s.addText(corta(it.nome, 16), {
+        x: x + 0.11, y: y + 0.09, w: CW - 0.72, h: 0.19, fontSize: 8.5, bold: true,
+        color: C.texto });
       s.addText(it.pct == null ? '—' : it.pct + '%', {
-        x: x + LARG - 0.78, y: y + 0.10, w: 0.66, h: 0.24,
-        fontSize: 12, bold: true, color: corPercentual(it.pct), align: 'right' });
-
-      s.addText(it.plan + 'h', { x: x + 0.14, y: y + 0.34, w: 1.1, h: 0.32,
-                                 fontSize: 16, bold: true, color: C.azul });
-      s.addText(it.real + 'h', { x: x + 1.30, y: y + 0.34, w: 1.1, h: 0.32,
-                                 fontSize: 16, bold: true, color: C.verde });
-      s.addText('planejado', { x: x + 0.14, y: y + 0.64, w: 1.1, h: 0.18,
-                               fontSize: 8, color: C.fraco });
-      s.addText('realizado', { x: x + 1.30, y: y + 0.64, w: 1.1, h: 0.18,
-                               fontSize: 8, color: C.fraco });
-
-      // A composição da frente: quantidade, e a quebra que distingue construir de
-      // manter de pé. Sem ela, dez entregas de sustentação e dez de evolução
-      // aparecem como o mesmo mês.
-      var comp = [it.entregas + (it.entregas === 1 ? ' entrega' : ' entregas')];
-      if (it.evolucao) comp.push(it.evolucao + ' evol.');
-      if (it.sustentacao) comp.push(it.sustentacao + ' sust.');
-      s.addText(comp.join('  ·  '), {
-        x: x + 0.14, y: y + 0.82, w: LARG - 0.28, h: 0.18,
-        fontSize: 8.5, color: C.fraco });
+        x: x + CW - 0.58, y: y + 0.09, w: 0.47, h: 0.19, fontSize: 9, bold: true,
+        color: corPercentual(it.pct), align: 'right' });
+      s.addText(it.plan + 'h', { x: x + 0.11, y: y + 0.27, w: 0.62, h: 0.21,
+                                 fontSize: 11, bold: true, color: C.azul });
+      s.addText(it.real + 'h', { x: x + 0.76, y: y + 0.27, w: 0.62, h: 0.21,
+                                 fontSize: 11, bold: true, color: C.verde });
+      s.addText(it.entregas + (it.entregas === 1 ? ' entrega' : ' entregas'), {
+        x: x + 0.11, y: y + 0.45, w: CW - 0.22, h: 0.15, fontSize: 7, color: C.fraco });
     });
 
-    // ── O rodapé que impede a leitura errada ───────────────────────────────
+    // -- O rodape que impede a leitura errada ----------------------------------
     var cob = pl.cobertura || {};
     var notas = [];
     if (cob.total) {
@@ -609,15 +774,15 @@
                  ' entregas (' + cob.pct + '%)' +
                  (cob.pct < 90 ? ' — o restante entra por aproximação' : ''));
     }
-    // Planejado = dia útil da pessoa dividido entre o que ela tinha em mãos. A
-    // frase existe porque a primeira pergunta da sala sobre este slide é sempre
+    // Planejado = dia util da pessoa dividido entre o que ela tinha em maos. A
+    // frase existe porque a primeira pergunta da sala sobre este slide e sempre
     // "de onde saiu o planejado?".
     notas.push('Planejado: cada dia útil vale 8h, divididas entre as demandas do dia');
     s.addText(notas.join('   ·   '), {
-      x: 0.7, y: 4.58, w: 8.6, h: 0.2, fontSize: 8.5, color: C.fraco });
+      x: 0.5, y: 4.62, w: 9.0, h: 0.2, fontSize: 7.5, color: C.fraco });
     if ((pl.foraDoDeck || []).length) {
       s.addText('Fora do recorte: ' + pl.foraDoDeck.join(', '), {
-        x: 0.7, y: 4.78, w: 8.6, h: 0.2, fontSize: 8.5, color: C.fraco });
+        x: 0.5, y: 4.80, w: 9.0, h: 0.2, fontSize: 7.5, color: C.fraco });
     }
     rodape(s, periodo, pagina);
     return s;
