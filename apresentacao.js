@@ -879,58 +879,87 @@
      vinha do mês anterior, ou ia para o próximo? E com o mês em curso, virar o mês
      ainda não aconteceu.                                                         */
   function slideMes(pptx, d, pagina) {
-    var s = slideTitulo(pptx, 'O mês', 'backlog, entradas e saídas', pagina);
+    var s = slideBase(pptx);
     var f = d.fluxo || {};
     var k = d.kpi || {};
     var a = d.anterior;
     var q = d.quebra || {};
 
-    // `bomSubir`: sair mais é bom, sobrar mais não é. Backlog é estoque, e estoque
-    // que cresce não é ganho.
+    // -- Cabecalho, no mesmo padrao das outras secoes do painel --------------
+    s.addText('O MÊS', {
+      x: 0.5, y: 0.28, w: 5.9, h: 0.42, fontSize: 21, bold: true, color: C.texto,
+      charSpacing: 0.5 });
+    s.addText('backlog, o que entrou e o que saiu', {
+      x: 0.5, y: 0.70, w: 5.9, h: 0.24, fontSize: 10, color: C.fraco });
+    s.addText(d.periodo, {
+      x: 6.6, y: 0.30, w: 2.9, h: 0.26, fontSize: 11, bold: true, color: C.texto,
+      align: 'right' });
+    if (f.corte) {
+      s.addText((f.emCurso ? 'posição de ' : 'fechamento em ') + f.corte, {
+        x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
+    }
+    s.addShape(pptx.ShapeType.rect, {
+      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { width: 0 } });
+
+    /* A CONTA DO MES, em quatro cartoes com os sinais entre eles.
+
+       `bomSubir`: sair mais e bom, sobrar mais nao e. Backlog e estoque, e estoque
+       que cresce nao e ganho — por isso a cor segue a MELHORA, e nao o sinal.  */
     var passos = [
-      { rot: 'Backlog no dia 1', val: f.backlogInicio, cor: C.fraco, sinal: '',
+      { rot: 'BACKLOG NO DIA 1', val: f.backlogInicio, cor: C.fraco, sinal: '',
         chave: 'backlogInicio', bomSubir: false },
-      { rot: 'Entraram', val: f.recebidas, cor: C.azul, sinal: '+',
+      { rot: 'ENTRARAM', val: f.recebidas, cor: C.azul, sinal: '+',
         chave: 'recebidas', bomSubir: true },
-      { rot: 'Saíram da fila', val: f.saidas, cor: C.verde, sinal: '−',
+      { rot: 'SAÍRAM DA FILA', val: f.saidas, cor: C.verde, sinal: '−',
         chave: 'saidas', bomSubir: true },
-      { rot: f.emCurso ? 'Em aberto hoje' : 'Em aberto no fim do mês',
+      { rot: f.emCurso ? 'EM ABERTO HOJE' : 'EM ABERTO NO FIM',
         val: f.backlogFim, cor: C.ambar, sinal: '=',
         chave: 'backlogFim', bomSubir: false },
     ].filter(function (x) { return x.val != null; });
 
-    var larg = 2.0, vao = 0.35;
-    var passo = larg + vao + 0.05;
+    /* Quatro cartoes de 2,04" com 0,32" de vao: 4 x 2,04 + 3 x 0,32 = 9,12",
+       de 0,5" a 9,62"... nao cabe. Com 1,98" e 0,3": 7,92 + 0,9 = 8,82", de 0,5"
+       a 9,32". O vao maior existe para o sinal (+, −, =) morar nele. */
+    var LC = 1.98, VC = 0.30;
     passos.forEach(function (e, i) {
-      var x = 0.7 + i * passo;
+      var x = 0.5 + i * (LC + VC);
       if (e.sinal) {
-        s.addText(e.sinal, { x: x - vao - 0.05, y: 1.62, w: 0.4, h: 0.5,
-                             fontSize: 26, color: C.fraco, align: 'center' });
+        s.addText(e.sinal, { x: x - VC - 0.02, y: 1.58, w: VC + 0.04, h: 0.4,
+                             fontSize: 22, color: C.fraco, align: 'center' });
       }
-      s.addText(e.rot, { x: x, y: 1.4, w: larg, h: 0.28, fontSize: 12, color: C.fraco });
-      s.addText(String(e.val), { x: x, y: 1.64, w: larg, h: 0.7,
-                                 fontSize: 40, bold: true, color: e.cor });
-      // A caixa nao pode passar da margem: na ultima coluna, `larg + 0.3` estourava
-      // a borda direita do slide.
-      var cx = Math.min(larg + 0.3, 9.9 - x);
-      if (a) desenhaVariacao(s, variacao(e.val, a[e.chave], e.bomSubir), x, 2.34, cx, a.nome);
-      // A quebra por tipo, uma linha por item e dentro da largura da coluna: numa
-      // caixa mais larga, a segunda linha de uma coluna passa por cima da vizinha.
+      cartao(pptx, s, x, 1.16, LC, 2.30);
+      s.addText(e.rot, { x: x + 0.13, y: 1.26, w: LC - 0.26, h: 0.2,
+                         fontSize: 8, bold: true, color: e.cor, charSpacing: 1 });
+      s.addText(String(e.val), { x: x + 0.12, y: 1.46, w: LC - 0.24, h: 0.62,
+                                 fontSize: 36, bold: true, color: e.cor, wrap: false });
+      // A variacao contra o mes anterior: 114 sozinho nao diz se cresceu.
+      if (a) {
+        var v = variacao(e.val, a[e.chave], e.bomSubir);
+        if (v) {
+          s.addText((v.dif === 0 ? '= igual a ' : (v.dif > 0 ? '▲ +' : '▼ ') +
+                     (v.dif === 0 ? '' : Math.abs(v.dif) + ' vs ')) + a.nome, {
+            x: x + 0.13, y: 2.10, w: LC - 0.26, h: 0.2, fontSize: 8, color: v.cor });
+        }
+      }
+      /* A QUEBRA POR TIPO, dentro do cartao. Quantidade sem ela nao distingue um
+         mes de construir de um mes de manter de pe o que ja existe. */
       var qq = q[e.chave];
       if (qq) {
         var partes = [];
-        if (qq.evolucao) partes.push(qq.evolucao + ' evolução');
-        if (qq.sustentacao) partes.push(qq.sustentacao + ' sustentação');
-        if (qq.sem) partes.push(qq.sem + ' sem classificar');
-        partes.forEach(function (txt, j) {
-          s.addText(txt, { x: x, y: 2.64 + j * 0.23, w: cx, h: 0.23,
-                           fontSize: 10.5, color: j === 2 ? C.fraco : C.texto });
+        if (qq.evolucao) partes.push({ t: qq.evolucao + ' evolução', c: C.verde });
+        if (qq.sustentacao) partes.push({ t: qq.sustentacao + ' sustentação', c: C.ambar });
+        if (qq.sem) partes.push({ t: qq.sem + ' sem classificar', c: C.fraco });
+        partes.slice(0, 3).forEach(function (p, j) {
+          s.addShape(pptx.ShapeType.rect, { x: x + 0.13, y: 2.42 + j * 0.24, w: 0.1, h: 0.1,
+                                            fill: { color: p.c }, line: { width: 0 } });
+          s.addText(p.t, { x: x + 0.28, y: 2.36 + j * 0.24, w: LC - 0.4, h: 0.22,
+                           fontSize: 8.5, color: C.fraco });
         });
       }
     });
 
-    // A frase que a sala leva. Sem ela, os quatro números ficam por conta de quem
-    // estiver somando de cabeça.
+    // -- A frase que a sala leva ---------------------------------------------
+    // Sem ela, os quatro numeros ficam por conta de quem estiver somando de cabeca.
     if (f.recebidas != null && f.saidas != null) {
       var saldo = f.recebidas - f.saidas;
       s.addText(saldo > 0
@@ -939,21 +968,23 @@
             ? 'Saiu mais do que entrou: a fila diminuiu ' + Math.abs(saldo) +
               (saldo === -1 ? ' demanda' : ' demandas') + '.'
             : 'Entrou e saiu o mesmo tanto: a fila ficou do mesmo tamanho.'),
-        { x: 0.7, y: 3.62, w: 8.6, h: 0.36, fontSize: 16, color: saldo > 0 ? C.ambar : C.verde });
+        { x: 0.5, y: 3.66, w: 9.0, h: 0.4, fontSize: 17, bold: true,
+          color: saldo > 0 ? C.ambar : C.verde });
     }
     var saiu = [];
     if (f.saiuEntregue) saiu.push(f.saiuEntregue + ' entregues');
     if (f.saiuNegada) saiu.push(f.saiuNegada + (f.saiuNegada === 1 ? ' recusada' : ' recusadas'));
     if (k.pontos) saiu.push(k.pontos + ' pontos');
     if (saiu.length) {
-      s.addText('Das saídas: ' + saiu.join('  ·  '), {
-        x: 0.7, y: 4.02, w: 8.6, h: 0.3, fontSize: 12, color: C.fraco });
+      s.addText('Das saídas: ' + saiu.join('   ·   '), {
+        x: 0.5, y: 4.12, w: 9.0, h: 0.28, fontSize: 11.5, color: C.fraco });
     }
-    if (f.corte) {
-      s.addText((f.emCurso ? 'Posição de ' : 'Fechamento em ') + f.corte +
-                (f.tocadas ? '   ·   ' + f.tocadas + ' demandas trabalhadas no período' : '') +
-                (a && a.parcial ? '   ·   comparação parcial: ' + a.nome + ' está completo' : ''), {
-        x: 0.7, y: 4.36, w: 8.6, h: 0.3, fontSize: 11, color: C.fraco });
+    var rodapeNotas = [];
+    if (f.tocadas) rodapeNotas.push(f.tocadas + ' demandas trabalhadas no período');
+    if (a && a.parcial) rodapeNotas.push('comparação parcial: ' + a.nome + ' está completo');
+    if (rodapeNotas.length) {
+      s.addText(rodapeNotas.join('   ·   '), {
+        x: 0.5, y: 4.42, w: 9.0, h: 0.24, fontSize: 9.5, color: C.fraco });
     }
     rodape(s, d.periodo, pagina);
     return s;
@@ -1213,15 +1244,27 @@
     var p = 0;
     slideCapa(pptx, d);
 
-    // 1. O mês inteiro: o que entrou, o que foi tocado, o que saiu, o que ficou.
+    /* ─── ATO 1 · ONDE ESTAMOS ────────────────────────────────────────────
+       O panorama do mês e, logo em seguida, o mesmo mês dentro da série. Um
+       número sozinho não diz se é bom: "114 entraram" só ganha sentido ao lado
+       dos 110 de julho e dos 50 de junho. A evolução vinha DEPOIS de prazo e de
+       entregas rápidas, e a sala passava três slides sem saber se o mês foi
+       típico ou fora da curva.                                                */
     if (d.secoes.entregas) slideMes(pptx, d, ++p);
 
-    // 1b. As frentes, logo depois do panorama: é o corte que a diretoria já lê no
-    // painel aprovado, e ele responde "onde a capacidade foi parar" antes de o
-    // deck entrar em prazo e em detalhe.
+    if (d.secoes.evolucao && (d.evolucao || []).length) {
+      slideEvolucao(pptx, d.evolucao, ++p, d.periodo);
+    }
+
+    /* ─── ATO 2 · ONDE A CAPACIDADE FOI ───────────────────────────────────
+       O corte que a diretoria já lê no painel aprovado. Responde "em que o mês
+       foi gasto" antes de o deck cobrar prazo — porque cobrar prazo sem mostrar
+       no que o time esteve é cobrar no escuro.                               */
     if (d.secoes.pipelines && d.pipelines) slidePipelines(pptx, d.pipelines, ++p, d.periodo);
 
-    // 2. Prazo: a pergunta que a diretoria faz.
+    /* ─── ATO 3 · CUMPRIMOS O COMBINADO? ─────────────────────────────────
+       A pergunta que a diretoria faz. Vem depois de "onde a capacidade foi", e
+       fecha com as entregas rápidas — que é onde o time responde.            */
     if (d.secoes.prazo && d.prazo.medidas) {
       slidePrazo(pptx, d, ++p);
 
@@ -1238,33 +1281,22 @@
       }
     }
 
-    // 2b. As entregas rápidas: o argumento de eficiência do time, logo depois da
-    //     conversa de prazo, que é onde ele responde.
+    // As entregas rápidas fecham o ato: e o contraponto ao slide de atraso — o
+    // mesmo time que escapou do prazo em algumas entregou outras em dois dias.
     if (d.secoes.rapidas && d.rapidas && (d.rapidas.itens || []).length) {
       slideRapidas(pptx, d.rapidas, ++p, d.periodo, d.anterior);
     }
 
-    // 2c. A evolução: um mês sozinho não mostra tendência.
-    if (d.secoes.evolucao && (d.evolucao || []).length) {
-      slideEvolucao(pptx, d.evolucao, ++p, d.periodo);
-    }
-
-    // 3. Os projetos. Depois do mês porque o mês é o todo e o projeto é o recorte
-    //    — e antes do time, porque projeto é o que a diretoria acompanha por nome.
+    /* ─── ATO 4 · EM QUE TRABALHAMOS ──────────────────────────────────────
+       Projeto, área e quem pediu são a mesma pergunta em três recortes: onde o
+       esforço foi aplicado. Ficavam separados — "onde atuamos" estava no meio do
+       bloco de pessoas, e a sala trocava de assunto duas vezes sem precisar.  */
     if (d.secoes.projetos && (d.projetos || []).length) {
       slideProjetos(pptx, d.projetos, ++p, d.periodo);
     }
-
-    // 4. O time e as frentes: agregado, antes do detalhe.
-    if (d.secoes.time && d.time) {
-      // A quebra das SAIDAS, e nao das entradas: o slide fala do que o time
-      // entregou, e o que entrou na fila e assunto do slide do mes.
-      slideTime(pptx, d.time, ++p, d.periodo, d.ausencias, d.capacidade,
-                (d.quebra || {}).saidas);
-    }
     if (d.secoes.areas && (d.areas || []).length) slideAreas(pptx, d.areas, ++p, d.periodo);
 
-    // 5. Quem pediu. O time e uma leitura; a area cliente e outra, e e a que diz
+    // Quem pediu fecha o ato: o time e uma leitura; a area cliente e outra, e e a que diz
     //    para onde a capacidade foi de fato.
     if (d.secoes.solicit && d.solicitantes) {
       slideBarras(pptx, {
@@ -1281,7 +1313,17 @@
       }, ++p, d.periodo);
     }
 
-    // 5b. Distribuição por pessoa.
+    /* ─── ATO 5 · QUEM FEZ ────────────────────────────────────────────────
+       O agregado primeiro, o detalhe depois: o time inteiro, a distribuição por
+       pessoa e, no fim, a linha do tempo dos três primeiros. Este bloco estava
+       partido ao meio por "onde atuamos" e "quem pediu".                      */
+    if (d.secoes.time && d.time) {
+      // A quebra das SAIDAS, e nao das entradas: o slide fala do que o time
+      // entregou, e o que entrou na fila e assunto do slide do mes.
+      slideTime(pptx, d.time, ++p, d.periodo, d.ausencias, d.capacidade,
+                (d.quebra || {}).saidas);
+    }
+
     if (d.secoes.grafico && (d.porDev || []).length) {
       slideBarras(pptx, {
         titulo: 'Entregas por desenvolvedor', sub: 'demandas concluídas no período',
@@ -1289,7 +1331,7 @@
       }, ++p, d.periodo);
     }
 
-    // 5c. O mês de cada um dos três primeiros devs, em linha do tempo.
+    // O mês de cada um dos três primeiros devs, em linha do tempo.
     if (d.secoes.ganttdev) {
       (d.ganttDev || []).forEach(function (dv) {
         if ((dv.barras || []).length) slideGanttDev(pptx, dv, ++p, d.periodo);
@@ -1304,8 +1346,9 @@
       rodape(si, d.periodo, p);
     });
 
-    // 6. O que trava: pausadas e sem estimativa. É a parte que a diretoria pode
-    //    destravar — e a única razão de ela estar no deck.
+    /* ─── ATO 6 · O QUE DEPENDE DE DECISÃO ───────────────────────────────
+       A única parte do deck que pede ação de quem está na sala. Vem depois de
+       tudo que explica o mês, e antes do fecho.                              */
     if (d.secoes.riscos && (d.riscos.pausadas.length || d.riscos.semPonto)) {
       var sr = slideTitulo(pptx, 'O que está travado', 'depende de decisão fora do time', ++p);
       if (d.riscos.pausadas.length) {
@@ -1322,9 +1365,11 @@
       rodape(sr, d.periodo, p);
     }
 
-    // 7. OS DESTAQUES, no fim. Eles saiam no meio do deck, antes dos graficos —
-    //    mas quem apresenta usa as ultimas paginas para as entregas que importam,
-    //    e slide de encerramento no meio e slide que a sala nao leva embora.
+    /* ─── ATO 7 · O FECHO ─────────────────────────────────────────────────
+       Os destaques, o que vem e a frase de quem apresenta. Eles saiam no meio do
+       deck, antes dos graficos — mas quem apresenta usa as ultimas paginas para
+       as entregas que importam, e slide de encerramento no meio e slide que a
+       sala nao leva embora.                                                   */
     (d.destaques || []).forEach(function (m) {
       var s = slideBase(pptx);
       s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.verde } });

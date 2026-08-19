@@ -2209,8 +2209,48 @@ ok(/Horas lançadas/.test(ADMIN),
 ok(/hrLog > 0 \? hrLog \+ 'h' : hrEf \+ 'h\*'/.test(ADMIN),
    'e a linha aproximada continua marcada com asterisco na tabela');
 
+/* A ORDEM DO DECK CONTA UMA HISTORIA, e ela esta travada aqui.
+
+   O deck e lido de cima a baixo numa reuniao, e a ordem e o argumento: onde
+   estamos, onde a capacidade foi, se cumprimos o combinado, em que trabalhamos,
+   quem fez, o que depende de decisao, e o fecho.
+
+   A evolucao vinha DEPOIS de prazo e de entregas rapidas: a sala passava tres
+   slides sem saber se 114 entradas era muito ou pouco. E o bloco de pessoas
+   estava partido ao meio por "onde atuamos" e "quem pediu", que sao produto —
+   dois trocas de assunto que ninguem pediu.                                   */
+(() => {
+  const atos = ['ATO 1 · ONDE ESTAMOS', 'ATO 2 · ONDE A CAPACIDADE FOI',
+                'ATO 3 · CUMPRIMOS O COMBINADO?', 'ATO 4 · EM QUE TRABALHAMOS',
+                'ATO 5 · QUEM FEZ', 'ATO 6 · O QUE DEPENDE DE DECISÃO',
+                'ATO 7 · O FECHO'];
+  const pos = atos.map((a) => APRES.indexOf(a));
+  ok(pos.every((p) => p > 0), 'os sete atos do deck estao marcados no gerador',
+     atos.filter((a, i) => pos[i] < 0).join(', '));
+  ok(pos.every((p, i) => i === 0 || p > pos[i - 1]),
+     'e vem na ordem em que a historia e contada');
+  // Cada slide dentro do ato certo: o indice dele tem de cair entre dois atos.
+  const dentroDe = (marca, ato) => {
+    const i = APRES.indexOf(marca);
+    const ini = pos[ato - 1], fim = ato < 7 ? pos[ato] : APRES.length;
+    return i > ini && i < fim;
+  };
+  ok(dentroDe('slideEvolucao(pptx, d.evolucao', 1),
+     'a evolucao fica no ato 1: o mes so tem sentido dentro da serie');
+  ok(dentroDe('slidePipelines(pptx, d.pipelines', 2),
+     'as frentes ficam no ato 2, antes de o deck cobrar prazo');
+  ok(dentroDe('slideRapidas(pptx, d.rapidas', 3),
+     'as entregas rapidas fecham o ato do prazo, que e onde elas respondem');
+  ok(dentroDe('slideProjetos(pptx, d.projetos', 4) && dentroDe('slideAreas(pptx, d.areas', 4),
+     'projeto e area ficam juntos no ato 4: sao o mesmo assunto');
+  // A marca do gantt precisa ser a CHAMADA, e nao a definicao: `slideGanttDev(pptx, dv`
+  // casa com as duas, e a definicao mora la em cima, antes de qualquer ato.
+  ok(dentroDe('slideTime(pptx, d.time', 5) && dentroDe('slideGanttDev(pptx, dv, ++p', 5),
+     'e o bloco de pessoas fica inteiro no ato 5, sem corte no meio');
+})();
+
 // O fecho: destaques e "o que vem" sao as ultimas paginas de quem apresenta.
-const iDest = APRES.indexOf('OS DESTAQUES, no fim');
+const iDest = APRES.indexOf('ATO 7 · O FECHO');
 const iVem  = APRES.indexOf("var sp = slideTitulo(pptx, 'O que vem'");
 const iBarr = APRES.indexOf("titulo: 'Entregas por desenvolvedor'");
 ok(iDest > iBarr && iVem > iDest,
@@ -2239,8 +2279,8 @@ ok(ADMIN.indexOf('capa-tecnologia.js') < ADMIN.indexOf('apresentacao.js'),
 // Numero sozinho mostra resultado sem esforco: nao diz quanta demanda chegou, o
 // que o time pegou, nem o que ficou de pe para o mes seguinte.
 ok(/function slideMes\(pptx, d, pagina\)/.test(APRES), 'o slide do mes e um funil, e nao um numero');
-ok(/Backlog no dia 1/.test(APRES) && /Entraram/.test(APRES) &&
-   /Saíram da fila/.test(APRES) && /Em aberto/.test(APRES),
+ok(/BACKLOG NO DIA 1/.test(APRES) && /'ENTRARAM'/.test(APRES) &&
+   /SAÍRAM DA FILA/.test(APRES) && /EM ABERTO/.test(APRES),
    'na ordem em que a demanda anda: backlog, entradas, saidas, o que ficou');
 // "Quantas" e a primeira pergunta; "do que" e a segunda, e separa construir de
 // manter de pe o que ja existe.
@@ -2317,9 +2357,9 @@ ok(/saiuEntregue/.test(ADMIN) && /saiuNegada/.test(ADMIN),
 // nem aconteceu.
 ok(/const corte = mesEmCurso \? hojeISO : fimMes;/.test(ADMIN),
    'o corte e hoje no mes em curso, e o ultimo dia no mes fechado');
-ok(/f\.emCurso \? 'Em aberto hoje' : 'Em aberto no fim do mês'/.test(APRES),
+ok(/f\.emCurso \? 'EM ABERTO HOJE' : 'EM ABERTO NO FIM'/.test(APRES),
    'e o slide diz qual dos dois esta mostrando');
-ok(/f\.emCurso \? 'Posição de ' : 'Fechamento em '/.test(APRES),
+ok(/f\.emCurso \? 'posição de ' : 'fechamento em '/.test(APRES),
    'com a data do corte escrita');
 
 sec('Nada de outro mes entra no deck');
