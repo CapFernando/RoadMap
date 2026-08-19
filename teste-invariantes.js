@@ -36,6 +36,7 @@ const POKER = lerTela('poker.html');
 const APRES = fs.readFileSync('apresentacao.js', 'utf8');
 const CAPA = fs.readFileSync('capa-tecnologia.js', 'utf8');
 const PIPE = fs.readFileSync('pipelines.js', 'utf8');
+const PRZ = fs.readFileSync('prazo.js', 'utf8');
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -2570,9 +2571,105 @@ ok(!/function slideTitulo\(pptx, titulo, sub, pagina\) \{[\s\S]{0,400}?rodape\(s
 ok(/apresPipelines\(conc, iso \+ '-01', fimMes\)/.test(ADMIN),
    'as frentes usam a mesma lista e o mesmo recorte do resto do deck');
 
+/* ─── O ATRASO PARA QUANDO O DEV ENTREGA ─────────────────────────────────
+   AX-165 tinha prazo em 07/08, o dev entregou em 03/08 e a validacao saiu em
+   12/08: o relatorio cobrava 5 dias de atraso de uma entrega adiantada. Eram 10
+   demandas e 20 dias cobrados de quem cumpriu o combinado.                    */
+sec('O atraso e do dev, e para quando ele entrega');
+
+// UMA regra, e nao uma por tela: `STATUS_ATRASO` era declarada em quatro telas e
+// SO o admin incluia 'validacao' — a mesma demanda aparecia atrasada no painel do
+// PM e no prazo no quadro do dev.
+['admin.html', 'gantt.html', 'dev.html', 'index.html'].forEach((f) => {
+  const src = lerTela(f);
+  ok(/<script src="prazo\.js/.test(src), f + ' carrega prazo.js');
+  ok(!/const STATUS_ATRASO\s*=/.test(semComentario(src)),
+     f + ' NAO declara mais a propria lista de etapas que atrasam');
+  ok(/PRAZO\.estaAtrasada\(m, /.test(src),
+     f + ' decide o atraso pela regra compartilhada');
+});
+ok(!/new Date\(m\.entrega \+ 'T00:00:00'\) < hoje/.test(
+     [ADMIN, GANTT, DEV, INDEX].join('\n')),
+   'nenhuma tela compara a entrega com hoje por conta propria');
+
+// A ETAPA DE VALIDACAO FICA FORA das que correm: e ali que o dev ja saiu de cena.
+ok(/ETAPAS_QUE_CORREM = \['planning', 'planejado', 'em_andamento'\]/.test(PRZ),
+   'validacao NAO esta entre as etapas em que o atraso corre');
+ok(/ETAPAS_APOS_O_DEV = \['validacao', 'concluido'\]/.test(PRZ),
+   'validacao e conclusao medem pela entrega do dev, e nao por hoje');
+
+// `entregue_em` e gravado ao ENTRAR em validacao — e por isso ele responde
+// "quando o dev terminou" sem depender de o PM ter validado.
+ok(/colKey === 'validacao' && !m\.entregue_em/.test(DEV),
+   'entregue_em e gravado no instante em que a demanda entra em validacao');
+ok(/if \(!m\.entregue_em\) m\.entregue_em = new Date\(\)\.toISOString\(\)/.test(WC),
+   'e o servidor grava tambem, para o caminho que nao passa pela tela');
+ok(/function fimDoDev\(m\)[\s\S]{0,400}entregue_em[\s\S]{0,200}concluido_em/.test(PRZ),
+   'o fim do trabalho do dev e entregue_em, com concluido_em como reserva');
+
+// O ATRASO CONGELA, NAO DESAPARECE. Zerar quem entregou atrasado seria trocar um
+// erro por outro: AX-069 entregou 5 dias depois e continua mostrando 5.
+ok(/ETAPAS_APOS_O_DEV\.includes\(etapa\)\) \{[\s\S]{0,200}ref = fimDoDev\(m\)/.test(PRZ),
+   'depois da entrega o atraso e medido pela entrega — logo, para de crescer');
+
+// O relatorio e o deck usam a MESMA regra: numero do slide que discorda do badge
+// da tela e a origem de "mas na tela nao estava atrasado".
+ok(/PRAZO\.fimDoDev\(m\)/.test(ADMIN) && /PRAZO\.diasDeAtraso\(m, 'concluido'/.test(ADMIN),
+   'a classificacao de prazo do relatorio usa a regra compartilhada');
+ok(!/const ce = String\(m\.concluido_em \|\| ''\)\.slice\(0, 10\);[\s\S]{0,300}dia\(ce\) - dia\(pz\)/
+     .test(ADMIN),
+   'e nao sobrou a conta antiga (conclusao contra prazo) no relatorio');
+
+// Fuso: a diferenca e feita por UTC a partir das partes da data. `new Date` no
+// fuso local devolve o dia anterior em UTC-3, e um dia aqui muda o veredito.
+ok(/Date\.UTC\(\+p\[0\], \+p\[1\] - 1, \+p\[2\]\)/.test(PRZ),
+   'a diferenca de dias e calculada em UTC, sem passar pelo fuso local');
+// Pausada continua sem atrasar.
+ok(/if \(m\.pausado_em && !ETAPAS_APOS_O_DEV\.includes\(etapa\)\) return null/.test(PRZ),
+   'pausada nao atrasa: o prazo esta suspenso, nao estourado');
+
+// A REGRA RODA DE VERDADE, e nao so existe no arquivo.
+(() => {
+  let P = null;
+  try { P = require('./prazo.js'); } catch (e) { /* reportado abaixo */ }
+  ok(!!P, 'prazo.js carrega como modulo');
+  if (!P) return;
+  const HOJE = '2026-08-20';
+  // AX-165: entregou 4 dias antes do prazo, validacao saiu depois.
+  ok(P.diasDeAtraso({ entrega: '2026-08-07', entregue_em: '2026-08-03T10:00:00Z',
+                      concluido_em: '2026-08-12' }, 'concluido', HOJE) === 0,
+     'entrega adiantada com validacao atrasada NAO conta atraso');
+  // AX-088: entregou exatamente no dia combinado.
+  ok(P.diasDeAtraso({ entrega: '2026-08-14', entregue_em: '2026-08-14T18:00:00Z',
+                      concluido_em: '2026-08-17' }, 'concluido', HOJE) === 0,
+     'entrega no dia do prazo NAO conta atraso');
+  // AX-069: entregou 5 dias depois — e continua 5 daqui a quatro meses.
+  ok(P.diasDeAtraso({ entrega: '2026-08-13', entregue_em: '2026-08-18T09:00:00Z' },
+                    'validacao', HOJE) === 5 &&
+     P.diasDeAtraso({ entrega: '2026-08-13', entregue_em: '2026-08-18T09:00:00Z' },
+                    'validacao', '2026-12-31') === 5,
+     'atraso de quem entregou tarde CONGELA na data da entrega');
+  // Em andamento o atraso continua correndo: nada foi entregue ainda.
+  ok(P.diasDeAtraso({ entrega: '2026-08-14' }, 'em_andamento', HOJE) === 6,
+     'em andamento, o atraso corre contra hoje');
+  ok(P.diasDeAtraso({ entrega: '2026-01-01' }, 'backlog', HOJE) === null,
+     'backlog nao atrasa: nada foi prometido');
+  ok(P.diasDeAtraso({ entrega: '2026-08-01', pausado_em: '2026-08-05' },
+                    'em_andamento', HOJE) === null,
+     'pausada em andamento nao atrasa');
+  // Off-by-one de fuso, nas duas direcoes.
+  ok(P.diasDeAtraso({ entrega: '2026-07-31', entregue_em: '2026-08-01T02:00:00Z' },
+                    'validacao', HOJE) === 1,
+     'a virada do mes conta um dia, e nao zero nem dois');
+})();
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
+
+let erroPz = null;
+try { new Function(PRZ); } catch (e) { erroPz = e.message; }
+ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
 
 let erroP = null;
 try { new Function(PIPE); } catch (e) { erroP = e.message; }

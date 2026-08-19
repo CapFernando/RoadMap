@@ -574,6 +574,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="prazo.js?v=cc25242e11"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
@@ -1766,7 +1767,8 @@ function semPontuacao(m) {
 
 // Estágios com trabalho comprometido: entrega vencida neles conta como Atrasado.
 // Backlog fica fora (nada prometido) e concluido/negada nunca atrasam.
-const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento'];
+// A regra de atraso vive em prazo.js — uma copia por tela nao fica alinhada, e
+// estas quatro ja discordavam entre si sobre a etapa de validacao.
 
 // Status para EXIBIR e FILTRAR. NUNCA use ao gravar: o formulário e o drag
 // gravam status_planejamento cru; salvar o efetivo apagaria o estágio real.
@@ -1776,10 +1778,9 @@ function spEfetivo(m) {
   // Pausada nao atrasa: prazo suspenso, nao estourado.
   if (estaPausado(m)) return sp;
   if (sp === 'atrasado') return 'atrasado';
-  if (m.entrega && STATUS_ATRASO.includes(sp)) {
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    if (new Date(m.entrega + 'T00:00:00') < hoje) return 'atrasado';
-  }
+  // O atraso para quando o dev entrega: o tempo de validacao do PM/PO nao e
+  // atraso de desenvolvimento.
+  if (window.PRAZO && PRAZO.estaAtrasada(m, sp, PRAZO.hojeISO())) return 'atrasado';
   return sp;
 }
 

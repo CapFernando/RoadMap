@@ -898,6 +898,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="prazo.js?v=cc25242e11"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js"></script>
 <script src="pipelines.js?v=7198f99c86"></script>
@@ -3026,7 +3027,10 @@ function kbSplitDevs(s) { return s ? String(s).split(/[\/,]/).map(x => x.trim())
 // andamento (planning / planejado / em andamento), cai automaticamente em "Atrasado".
 // Estágios com trabalho comprometido: entrega vencida neles vira Atrasado.
 // Backlog fica fora (nada prometido) e concluido/negada nunca atrasam.
-const STATUS_ATRASO = ['planning', 'planejado', 'em_andamento', 'validacao'];
+// A REGRA DE ATRASO VIVE EM prazo.js. Ela estava declarada aqui, no gantt, no dev
+// e no index — e as quatro copias JA DISCORDAVAM: so esta incluia 'validacao', e
+// por isso a mesma demanda aparecia atrasada no painel do PM e no prazo no quadro
+// do dev. Quatro copias de uma regra de negocio nao ficam alinhadas.
 // Status para EXIBIR e FILTRAR (deriva atrasado). Nunca use no formulário:
 // statusKey() é o valor armazenado, e gravar o efetivo apagaria o estágio real.
 function statusEfetivo(m) {
@@ -3034,10 +3038,9 @@ function statusEfetivo(m) {
   // Pausada nao atrasa: o prazo esta suspenso, nao estourado.
   if (typeof estaPausado === 'function' && estaPausado(m)) return sk;
   if (sk === 'atrasado') return 'atrasado';
-  if (m.entrega && STATUS_ATRASO.includes(sk)) {
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    if (new Date(m.entrega + 'T00:00:00') < hoje) return 'atrasado';
-  }
+  // Em validacao, o atraso e o do DEV e ja esta congelado na data da entrega:
+  // quem entregou no prazo nao aparece atrasado por causa do tempo de validacao.
+  if (window.PRAZO && PRAZO.estaAtrasada(m, sk, PRAZO.hojeISO())) return 'atrasado';
   return sk;
 }
 
@@ -3863,19 +3866,22 @@ function toggleGerPtsTable() {
 // O marcador e `concluido_retroativo`, NAO a coincidencia das duas datas:
 // entregar exatamente no dia do prazo e comum e legitimo (14 das 44 medidas sao
 // assim), e usar a coincidencia como filtro puniria quem entregou no dia.
+/* O PRAZO E MEDIDO ATE A ENTREGA DO DEV, e nao ate a validacao do PM/PO.
+   A regra vive em prazo.js — ver o porque la, com os numeros. Aqui fica so a
+   classificacao que o relatorio usa (retroativa, sem prazo, no prazo, atraso). */
 function prazoClassifica(m) {
   if (!m || m.mesclado_em || m.oculto) return null;
   if ((m.status_planejamento || '') !== 'concluido') return null;
   if (m.concluido_retroativo) return { tipo: 'retroativa' };
-  const ce = String(m.concluido_em || '').slice(0, 10);
+  // A data que encerra a conta: `entregue_em` quando a demanda passou pela
+  // validacao, `concluido_em` quando foi concluida direto.
+  const fim = window.PRAZO ? PRAZO.fimDoDev(m) : String(m.concluido_em || '').slice(0, 10);
   const pz = String(m.entrega || '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ce)) return { tipo: 'sem_conclusao' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fim)) return { tipo: 'sem_conclusao' };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(pz)) return { tipo: 'sem_prazo' };
-  // Comparacao por STRING ISO, nunca por objeto Date: converter para local muda o
-  // dia e ja custou off-by-one aqui.
-  if (ce <= pz) return { tipo: 'no_prazo', dias: 0 };
-  const dia = t => { const [a, b, c] = t.split('-').map(Number); return Date.UTC(a, b - 1, c); };
-  return { tipo: 'atraso', dias: Math.round((dia(ce) - dia(pz)) / 86400000) };
+  const dias = window.PRAZO ? PRAZO.diasDeAtraso(m, 'concluido', null) : null;
+  if (!dias) return { tipo: 'no_prazo', dias: 0 };
+  return { tipo: 'atraso', dias: dias };
 }
 
 /* ─── MÊS DE COMPROMISSO ───────────────────────────────────────────

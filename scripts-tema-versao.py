@@ -46,6 +46,11 @@ def main():
     # nao chegaria a quem ja abriu o admin, e o deck sairia com o agrupamento
     # antigo sem ninguem perceber.
     vpip = hash_de('pipelines.js')
+    # prazo.js carrega a regra de quando o atraso comeca e quando ele PARA. Uma
+    # correcao nela sem hash novo deixaria metade das telas contando atraso pela
+    # regra antiga — que e exatamente o defeito que juntar a regra num arquivo so
+    # veio resolver.
+    vprz = hash_de('prazo.js')
     mudou = []
     for f in PAGINAS:
         with io.open(f, encoding='utf-8') as fh:
@@ -68,6 +73,8 @@ def main():
                    'src="catalogo.js?v=%s"' % vcat, n)
         n = re.sub(r'src="pipelines\.js(\?v=[^"]*)?"',
                    'src="pipelines.js?v=%s"' % vpip, n)
+        n = re.sub(r'src="prazo\.js(\?v=[^"]*)?"',
+                   'src="prazo.js?v=%s"' % vprz, n)
         if n != s:
             with io.open(f, 'w', encoding='utf-8', newline='') as fh:
                 fh.write(n)
