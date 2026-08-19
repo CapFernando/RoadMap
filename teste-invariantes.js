@@ -3100,6 +3100,131 @@ ok(/const temCredencial = !!\(_token \|\| _senha\);/.test(POKER) &&
    /renderDetalhe\(m \? \(temCredencial \?/.test(POKER),
    'ver o requisito depende de ter credencial, e nao de ser facilitador');
 
+/* ─── RANKING DE ENTREGAS DA SEMANA ──────────────────────────────────────
+   Aparece na sala do Planning para uma conversa que so acontece com o time
+   junto. Numa tela de cobranca, um numero errado nao e um bug de tela: e uma
+   pergunta injusta feita a uma pessoa na frente dos colegas, e ela nao tem como
+   contestar no momento. Por isso as invariantes daqui sao as do DADO.        */
+sec('Ranking de entregas (Planning)');
+
+(function () {
+  const fonte = ['function diaLocalBR(', 'function segundaDaSemana(',
+                 'function somaDias(', 'function pokerRanking(']
+    .map(a => corpo(W, a));
+  ok(fonte.every(Boolean), 'as funcoes do ranking existem no worker');
+  if (!fonte.every(Boolean)) return;
+  const R = new Function('const FUSO_BR_MS = 3 * 3600 * 1000;\n' + fonte.join('\n') +
+    '\nreturn { diaLocalBR, segundaDaSemana, pokerRanking };')();
+
+  /* FUSO. `entregue_em` e gravado com toISOString(), que e UTC. Uma entrega numa
+     sexta as 21h vira sabado em UTC e cairia na SEMANA SEGUINTE — a pessoa seria
+     cobrada por uma entrega que fez, no dia em que fez. */
+  ok(R.diaLocalBR('2026-08-22T00:30:00Z') === '2026-08-21',
+     'sexta as 21h30 continua sendo sexta, e nao sabado em UTC');
+  ok(R.diaLocalBR('2026-08-17T02:00:00Z') === '2026-08-16',
+     'domingo as 23h nao vira segunda da semana seguinte');
+  ok(R.diaLocalBR('2026-08-19') === '2026-08-19',
+     'data pura ja e local e passa intacta');
+  ok(R.diaLocalBR('') === '' && R.diaLocalBR('nao e data') === '',
+     'carimbo vazio ou torto nao vira uma data qualquer');
+
+  // A semana e segunda a domingo, que e como o time fala dela.
+  ok(R.segundaDaSemana('2026-08-19') === '2026-08-17' &&
+     R.segundaDaSemana('2026-08-23') === '2026-08-17' &&
+     R.segundaDaSemana('2026-08-24') === '2026-08-24',
+     'a semana comeca na segunda e o domingo ainda e dela');
+
+  const AGORA = new Date('2026-08-19T14:00:00Z');    // quarta
+  const roda = (melhorias, feriados) =>
+    R.pokerRanking({ melhorias, feriados: feriados || [] }, AGORA);
+  const acha = (r, nome) => r.devs.find(d => d.nome === nome);
+
+  /* A DATA DA ENTREGA E A DO DEV. Contar pela conclusao da esteira jogaria para
+     a semana seguinte tudo que ficou parado em validacao, e o dev responderia
+     por uma espera que nao e dele — a mesma regra que ja vale para o atraso. */
+  let r = roda([
+    { id: 1, dev: 'Ana', status_planejamento: 'validacao',
+      entregue_em: '2026-08-18T12:00:00Z', concluido_em: '2026-08-25' },
+  ]);
+  ok(acha(r, 'Ana').atual.entregas === 1,
+     'entregue nesta semana conta nesta semana, mesmo esperando validacao');
+
+  r = roda([
+    { id: 1, dev: 'Ana', status_planejamento: 'concluido', concluido_em: '2026-08-12' },
+  ]);
+  ok(acha(r, 'Ana').anterior.entregas === 1,
+     'sem entregue_em, a conclusao serve de reserva');
+
+  // Em andamento nao e entrega. Contar aqui inflaria a semana de quem so comecou.
+  r = roda([{ id: 1, dev: 'Ana', status_planejamento: 'em_andamento',
+              entregue_em: '2026-08-18T12:00:00Z' }]);
+  ok(acha(r, 'Ana').atual.entregas === 0 && acha(r, 'Ana').emMaos === 1,
+     'demanda em andamento aparece como "em maos", e nunca como entrega');
+
+  // O campo aceita "Fulano / Beltrano" desde sempre, e as duas pessoas contam.
+  r = roda([{ id: 1, dev: 'Ana / Bruno', status_planejamento: 'concluido',
+              entregue_em: '2026-08-18', poker_pontos: 8 }]);
+  ok(acha(r, 'Ana').atual.entregas === 1 && acha(r, 'Bruno').atual.entregas === 1,
+     'demanda em dupla conta para os dois');
+
+  // Oculta e mesclada nao existem para nenhum relatorio desta base.
+  r = roda([
+    { id: 1, dev: 'Ana', status_planejamento: 'concluido', entregue_em: '2026-08-18', oculto: true },
+    { id: 2, dev: 'Ana', status_planejamento: 'concluido', entregue_em: '2026-08-18', mesclado_em: 'x' },
+  ]);
+  ok(!acha(r, 'Ana'), 'demanda oculta ou mesclada nao entra no ranking');
+
+  /* OS PONTOS VAO JUNTO. Contar demandas sozinho pune quem pegou a grande: tres
+     ajustes de meia hora somam 3 e uma entrega de 13 pontos soma 1. */
+  r = roda([{ id: 1, dev: 'Ana', status_planejamento: 'concluido',
+              entregue_em: '2026-08-18', poker_pontos: 13 }]);
+  ok(acha(r, 'Ana').atual.pontos === 13,
+     'os pontos da entrega somam junto da contagem');
+
+  /* QUEM NAO ENTREGOU CONTINUA NA LISTA. Sao exatamente as pessoas de quem se
+     quer perguntar — uma lista que so mostra quem entregou responde a pergunta
+     contraria a que foi feita. */
+  r = roda([
+    { id: 1, dev: 'Ana',   status_planejamento: 'concluido', entregue_em: '2026-08-18' },
+    { id: 2, dev: 'Bruno', status_planejamento: 'em_andamento' },
+  ]);
+  ok(acha(r, 'Bruno') && acha(r, 'Bruno').atual.entregas === 0,
+     'quem esta com demanda na mao e nao entregou aparece com zero');
+  ok(r.devs[r.devs.length - 1].nome === 'Bruno',
+     'e aparece no fim da lista, que e onde a conversa comeca');
+
+  /* CONTA PARADA NAO E AUSENCIA DA SEMANA. Sem o corte, ex-integrantes e contas
+     desativadas enchem a lista de zeros permanentes e ela deixa de ser lida. */
+  r = roda([{ id: 1, dev: 'Antigo', status_planejamento: 'concluido',
+              entregue_em: '2026-01-10' }]);
+  ok(!acha(r, 'Antigo'),
+     'quem nao entrega ha oito semanas e nao tem demanda na mao sai da lista');
+
+  /* A SEMANA CORRENTE E PARCIAL, E O NUMERO TEM DE DIZER ISSO. Numa quarta a
+     semana atual teve 3 dias uteis e a anterior teve 5: sem o aviso, todo mundo
+     aparece em queda toda segunda e terca. */
+  r = roda([]);
+  ok(r.semanas.atual.uteisCorridos === 3 && r.semanas.atual.uteisTotal === 5,
+     'na quarta-feira a semana atual soma 3 dias uteis de 5');
+  r = roda([], ['2026-08-18']);
+  ok(r.semanas.atual.uteisCorridos === 2,
+     'feriado no meio da semana nao conta como dia util corrido');
+})();
+
+// O ranking sai junto da fila, autorizado pelo CODIGO DA SALA: quem entrou pelo
+// QR ve sem senha, e o que trafega e agregado — nome e contagem, nunca a demanda.
+ok(/ranking: pokerRanking\(data, agora\),/.test(W),
+   'o ranking sai na resposta de poker-fila, que ja le a base inteira');
+
+/* A LISTA NA TELA NAO E CORTADA. Um top-N no painel esconderia justamente quem
+   se quer perguntar — o oposto do que a tela existe para fazer. */
+ok(!/_ranking\.devs[^;]{0,80}\.slice\(/.test(POKER),
+   'o painel mostra todos os devs, sem top-N');
+
+// O aviso da semana parcial e do painel, e nao deste comentario.
+ok(/uteisCorridos \+ ' de ' \+/.test(POKER) && /ainda está correndo/.test(POKER),
+   'o painel avisa por escrito que a semana atual esta pela metade');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

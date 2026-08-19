@@ -30,6 +30,54 @@
     h1 { font-size:19px; font-weight:800; }
     .h-right { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 
+    /* ─── RANKING DA SEMANA ─────────────────────────────────────────────
+       A faixa e ESTREITA de proposito: ela divide o cabecalho com o titulo, os
+       botoes e o tema, e crescer aqui empurraria tudo para uma segunda linha.
+       Os nomes que nao couberem rolam na horizontal, e o painel completo esta a
+       um clique — a lista inteira e o que responde "quem entregou menos", e ela
+       nunca cabe num cabecalho. */
+    .rk-faixa { display:flex; align-items:center; gap:9px; min-width:0; flex:1 1 200px;
+      max-width:640px; padding:5px 10px; border:1px solid var(--border); border-radius:9px;
+      background:var(--bg3); cursor:pointer; transition:border-color .15s; }
+    .rk-faixa:hover { border-color:var(--blue); }
+    .rk-tit { font-size:9.5px; font-weight:800; letter-spacing:.09em; color:var(--text3);
+      flex:0 0 auto; }
+    .rk-chips { display:flex; gap:5px; overflow-x:auto; scrollbar-width:none; min-width:0; }
+    .rk-chips::-webkit-scrollbar { display:none; }
+    .rk-mais { flex:0 0 auto; font-size:10.5px; font-weight:700; color:var(--text3); }
+    .rk-chip { display:inline-flex; align-items:baseline; gap:4px; flex:0 0 auto;
+      padding:2px 7px; border-radius:6px; background:var(--bg2); border:1px solid var(--border);
+      font-size:11px; white-space:nowrap; }
+    .rk-chip b { font-size:12px; font-variant-numeric:tabular-nums; }
+    .rk-chip .d { font-size:9.5px; }
+    .rk-sobe { color:var(--green,#3EC98E); }
+    .rk-cai  { color:var(--red-tx,#F9A0A0); }
+    .rk-igual{ color:var(--text3); }
+    .rk-zero { opacity:.72; }
+
+    .rk-lupa { position:fixed; inset:0; z-index:9100; background:rgba(4,8,18,.9);
+      display:flex; align-items:center; justify-content:center; padding:26px; }
+    .rk-caixa { background:var(--bg2); border:1px solid var(--border); border-radius:14px;
+      width:min(760px,100%); max-height:100%; display:flex; flex-direction:column;
+      box-shadow:0 18px 60px rgba(0,0,0,.55); }
+    .rk-cab { display:flex; align-items:flex-start; justify-content:space-between; gap:14px;
+      padding:16px 20px 12px; border-bottom:1px solid var(--border); }
+    .rk-caixa-tit { font-size:16px; font-weight:800; }
+    .rk-periodo { font-size:11.5px; color:var(--text3); margin-top:3px; }
+    .rk-corpo { overflow:auto; padding:6px 8px 10px; }
+    .rk-nota { font-size:11px; color:var(--text3); padding:10px 20px 14px;
+      border-top:1px solid var(--border); line-height:1.5; }
+    table.rk-tab { width:100%; border-collapse:collapse; font-size:12.5px; }
+    table.rk-tab th { text-align:right; font-size:10px; font-weight:700; color:var(--text3);
+      letter-spacing:.05em; text-transform:uppercase; padding:8px 10px; white-space:nowrap; }
+    table.rk-tab th:nth-child(1), table.rk-tab th:nth-child(2) { text-align:left; }
+    table.rk-tab td { padding:7px 10px; border-top:1px solid var(--border); text-align:right;
+      font-variant-numeric:tabular-nums; white-space:nowrap; }
+    table.rk-tab td:nth-child(1) { text-align:left; color:var(--text3); width:30px; }
+    table.rk-tab td:nth-child(2) { text-align:left; font-weight:600; white-space:normal; }
+    table.rk-tab tr.rk-parado td { color:var(--text3); }
+    .rk-pts { font-size:10.5px; color:var(--text3); }
+
     .btn { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:var(--radius);
            font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; border:none; transition:opacity .15s; }
     .btn:hover:not(:disabled) { opacity:.85; }
@@ -218,7 +266,31 @@
     <button class="btn btn-ghost btn-sm" onclick="abrirTrocaSenha()" title="Alterar a senha da sua conta">Minha senha</button>
     <button class="btn btn-ghost btn-sm" onclick="sair()">Sair</button>
   </div>
+  <!-- RANKING DA SEMANA: fica na sala porque e aqui que o time inteiro esta
+       junto. Num relatorio enviado depois, ninguem pergunta nada a ninguem. -->
+  <div class="rk-faixa" id="rk-faixa" style="display:none"
+       onclick="abrirRanking()" title="Clique para ver as duas semanas inteiras">
+    <span class="rk-tit">ENTREGAS</span>
+    <div class="rk-chips" id="rk-chips"></div>
+    <span class="rk-mais" id="rk-mais"></span>
+  </div>
 </header>
+
+<!-- O painel completo abre POR CIMA da sala, como a lupa do requisito: quem sai
+     da aba perde a mesa, o cronometro e a propria carta. -->
+<div class="rk-lupa" id="rk-lupa" style="display:none" onclick="fecharRanking(event)">
+  <div class="rk-caixa" onclick="event.stopPropagation()">
+    <div class="rk-cab">
+      <div>
+        <div class="rk-caixa-tit">Entregas por dev</div>
+        <div class="rk-periodo" id="rk-periodo"></div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="fecharRanking()">Fechar</button>
+    </div>
+    <div class="rk-corpo" id="rk-corpo"></div>
+    <div class="rk-nota" id="rk-nota"></div>
+  </div>
+</div>
 
 <div class="layout">
   <!-- MESA -->
@@ -530,7 +602,8 @@ async function lerDados(permitirCache, jaTentou) {
 async function carregarFila() {
   const el = document.getElementById('fila-lista');
   if (!_codigo) {
-    _melhorias = []; _temas = [];
+    _melhorias = []; _temas = []; _ranking = null;
+    renderRanking();
     el.innerHTML = `<div class="fila-vazia">Entre na sala para ver a fila.</div>`;
     return;
   }
@@ -540,12 +613,139 @@ async function carregarFila() {
     _melhorias = (r.body && r.body.melhorias) || [];
     _temas     = (r.body && r.body.temas) || [];
     _referencia = (r.body && r.body.referencia) || null;
+    _ranking    = (r.body && r.body.ranking) || null;
     renderFila();
     renderReferencia();
+    renderRanking();
   } catch (e) {
     el.innerHTML = `<div class="fila-vazia">Falha ao carregar a fila: ${esc(e.message)}</div>`;
   }
 }
+
+/* ─── RANKING DE ENTREGAS DA SEMANA ──────────────────────────────────────
+
+   Vem pronto do Worker, junto da fila: e o unico ponto que ja le a base inteira
+   nesta tela. Aqui so se desenha.
+
+   O QUE ELE E: quem entregou o que na semana anterior e na que esta correndo.
+   Serve a uma conversa que so acontece com o time junto — e por isso mora na
+   sala, e nao num relatorio.
+
+   O QUE ELE NAO E: uma nota. A contagem de demandas nao mede tamanho, e por isso
+   os pontos vao ao lado dela — tres ajustes de meia hora somam 3, e uma entrega
+   de 13 pontos soma 1. Quem so olhar a primeira coluna vai cobrar a pessoa
+   errada, e a tela diz isso por escrito no rodape do painel.                  */
+let _ranking = null;
+
+// Primeiro nome, que e como o time se chama. Quando dois compartilham o primeiro
+// nome — ha dois "Joao" na base — entra a inicial do sobrenome, senao o chip
+// aponta para a pessoa errada, que e o pior defeito possivel numa tela de
+// cobranca.
+function rkNomeCurto(nome, todos) {
+  const p = String(nome || '').trim().split(/\s+/);
+  const primeiro = p[0] || nome;
+  const repetido = todos.filter(o =>
+    String(o.nome || '').trim().split(/\s+/)[0] === primeiro).length > 1;
+  return (repetido && p[1]) ? primeiro + ' ' + p[1][0] + '.' : primeiro;
+}
+
+function rkDelta(d) {
+  const v = d.atual.entregas - d.anterior.entregas;
+  if (v > 0) return { cls: 'rk-sobe', txt: '▲' + v };
+  if (v < 0) return { cls: 'rk-cai',  txt: '▼' + Math.abs(v) };
+  return { cls: 'rk-igual', txt: '=' };
+}
+
+function renderRanking() {
+  const faixa = document.getElementById('rk-faixa');
+  if (!faixa) return;
+  const devs = (_ranking && _ranking.devs) || [];
+  if (!devs.length) { faixa.style.display = 'none'; return; }
+  faixa.style.display = 'flex';
+  document.getElementById('rk-chips').innerHTML = devs.map(d => {
+    const dl = rkDelta(d);
+    return '<span class="rk-chip' + (d.atual.entregas ? '' : ' rk-zero') + '" title="' +
+      esc(d.nome) + ' — ' + d.atual.entregas + ' nesta semana, ' + d.anterior.entregas +
+      ' na anterior">' + esc(rkNomeCurto(d.nome, devs)) +
+      ' <b>' + d.atual.entregas + '</b>' +
+      '<span class="d ' + dl.cls + '">' + dl.txt + '</span></span>';
+  }).join('');
+  // Quantos ficaram fora da vista. A barra de rolagem esta escondida — ela
+  // roubaria altura de um cabecalho ja apertado —, entao sem este numero a
+  // faixa parece a lista inteira, e a lista inteira e o que interessa.
+  const cx = document.getElementById('rk-chips');
+  const mais = document.getElementById('rk-mais');
+  if (mais) {
+    // Medido AGORA, e nao num requestAnimationFrame: quadro nao e agendado em aba
+    // oculta, e a sala fica em segundo plano o tempo todo — o numero congelaria
+    // no que era verdade da ultima vez que alguem olhou. `offsetWidth` logo apos
+    // o innerHTML ja forca o calculo do layout e responde certo.
+    // Medido pela POSICAO NA TELA, e nao por offsetLeft: offsetLeft conta a
+    // partir do offsetParent, que aqui e o cabecalho e nao a propria faixa — a
+    // conta dava "+16 escondidos" com os 16 a vista.
+    const lim = cx.getBoundingClientRect().right;
+    const escondidos = [...cx.children].filter(c =>
+      c.getBoundingClientRect().right > lim + 1).length;
+    mais.textContent = escondidos ? '+' + escondidos + ' ▸' : '▸';
+  }
+}
+
+const rkData = (iso) => String(iso || '').split('-').reverse().join('/').slice(0, 5);
+
+function abrirRanking() {
+  if (!_ranking) { toast('Ranking ainda não carregou.'); return; }
+  const sem = _ranking.semanas;
+  const devs = _ranking.devs || [];
+  document.getElementById('rk-periodo').textContent =
+    'Semana anterior ' + rkData(sem.anterior.de) + '–' + rkData(sem.anterior.ate) +
+    '   ·   esta semana ' + rkData(sem.atual.de) + '–' + rkData(sem.atual.ate);
+
+  const corpo = devs.map((d, i) => {
+    const dl = rkDelta(d);
+    return '<tr' + (d.atual.entregas ? '' : ' class="rk-parado"') + '>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + esc(d.nome) + '</td>' +
+      '<td>' + d.anterior.entregas + ' <span class="rk-pts">(' + d.anterior.pontos + ' pts)</span></td>' +
+      '<td>' + d.atual.entregas + ' <span class="rk-pts">(' + d.atual.pontos + ' pts)</span></td>' +
+      '<td class="' + dl.cls + '">' + dl.txt + '</td>' +
+      '<td>' + d.emMaos + '</td></tr>';
+  }).join('');
+
+  document.getElementById('rk-corpo').innerHTML =
+    '<table class="rk-tab"><thead><tr>' +
+      '<th></th><th>Dev</th><th>Semana anterior</th><th>Esta semana</th>' +
+      '<th>Var.</th><th>Em mãos</th>' +
+    '</tr></thead><tbody>' + corpo + '</tbody></table>';
+
+  /* O AVISO NAO E DECORACAO. Numa quarta-feira a semana atual teve 3 dias uteis
+     e a anterior teve 5: sem dizer isso, todo mundo aparece "caindo" toda
+     segunda e terca, e a pergunta que nasce daí tem resposta obvia e nao culpa
+     ninguem — gasta a reuniao e a confianca na propria tela. */
+  const a = _ranking.semanas.atual;
+  const parcial = a.uteisCorridos < a.uteisTotal;
+  document.getElementById('rk-nota').innerHTML =
+    (parcial
+      ? '<b>A semana atual ainda está correndo:</b> ' + a.uteisCorridos + ' de ' +
+        a.uteisTotal + ' dias úteis. Comparar a coluna cheia com a parcial faz todo mundo parecer em queda. '
+      : '') +
+    'A entrega conta pela data em que <b>o dev entregou</b>, e não pela conclusão da esteira — ' +
+    'espera em validação não é atraso dele. ' +
+    'E a contagem de demandas não mede tamanho: os pontos ao lado existem para isso — ' +
+    'três ajustes rápidos somam 3, uma entrega de 13 pontos soma 1.';
+
+  document.getElementById('rk-lupa').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  document.addEventListener('keydown', rkEsc);
+}
+
+function fecharRanking(e) {
+  if (e && e.target && e.target.id !== 'rk-lupa' && e.type === 'click' && e.currentTarget !== e.target) return;
+  document.getElementById('rk-lupa').style.display = 'none';
+  document.body.style.overflow = '';
+  document.removeEventListener('keydown', rkEsc);
+}
+
+function rkEsc(e) { if (e.key === 'Escape') fecharRanking(); }
 
 function filaPlanning() {
   return _melhorias.filter(m => (m.status_planejamento || '') === 'planning');

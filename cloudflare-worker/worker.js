@@ -1341,6 +1341,145 @@ function diasUteis(de, ate, feriados) {
 //
 // Roda na mesma leitura que ja monta a fila: nenhuma chamada nova, e o numero se
 // refaz sozinho a cada rodada. Nao existe tabela para alguem manter.
+/* ─── RANKING DE ENTREGAS DA SEMANA ──────────────────────────────────────
+
+   Serve a uma conversa de Planning: quem entregou o que na semana que passou e
+   na que esta correndo. Aparece na sala porque e la que o time inteiro esta
+   junto — num relatorio enviado depois, ninguem pergunta nada a ninguem.
+
+   A DATA DA ENTREGA E A DO DEV, e nao a da conclusao da esteira: `entregue_em`
+   primeiro, `concluido_em` como reserva. E a mesma regra do atraso (ver
+   prazo.js) — o momento em que o dev tirou a demanda da mao dele. Contar pela
+   conclusao jogaria para a semana seguinte tudo que ficou parado em validacao,
+   e o dev responderia por uma espera que nao e dele.
+
+   FUSO DE SAO PAULO, EXPLICITO. `entregue_em` e gravado com `toISOString()`, que
+   e UTC: uma entrega numa sexta as 21h vira sabado em UTC e cairia na semana
+   seguinte. Numa tela de cobranca isso e um erro que a pessoa nao tem como
+   contestar — ela entregou na sexta. O Brasil nao tem mais horario de verao
+   desde 2019, entao -3h fixo esta certo.
+
+   PONTOS JUNTO DA CONTAGEM. Contar demandas sozinho pune quem pegou a grande:
+   tres ajustes de meia hora viram "3" e uma entrega de 13 pontos vira "1". Os
+   dois numeros saem lado a lado para a conversa comecar inteira.               */
+const FUSO_BR_MS = 3 * 3600 * 1000;
+
+// A data local (Sao Paulo) de um carimbo qualquer: aceita "2026-08-19" e
+// "2026-08-19T02:00:00Z", e devolve sempre "AAAA-MM-DD".
+function diaLocalBR(carimbo) {
+  const t = String(carimbo || '').trim();
+  if (!t) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;    // data pura ja e local
+  const d = new Date(t);
+  if (isNaN(d.getTime())) return '';
+  return new Date(d.getTime() - FUSO_BR_MS).toISOString().slice(0, 10);
+}
+
+// A segunda-feira da semana de uma data. Segunda a domingo, que e como o time
+// fala de semana — "o que voce entregou nesta semana" comeca na segunda.
+function segundaDaSemana(diaISO) {
+  const [a, b, c] = String(diaISO).split('-').map(Number);
+  const d = new Date(Date.UTC(a, b - 1, c));
+  const dow = d.getUTCDay();                       // 0 = domingo
+  d.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+  return d.toISOString().slice(0, 10);
+}
+
+function somaDias(diaISO, n) {
+  const [a, b, c] = String(diaISO).split('-').map(Number);
+  const d = new Date(Date.UTC(a, b - 1, c));
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function pokerRanking(data, agora) {
+  const hoje = diaLocalBR(agora.toISOString());
+  const iniAtual = segundaDaSemana(hoje);
+  const fimAtual = somaDias(iniAtual, 6);
+  const iniAnterior = somaDias(iniAtual, -7);
+  const fimAnterior = somaDias(iniAtual, -1);
+  // O corte do elenco: oito semanas. Quem nao entregou nada nesse periodo e nao
+  // tem demanda na mao nao e ausencia da semana — e conta parada, e uma fila de
+  // zeros permanentes so faz a lista deixar de ser lida.
+  const corteElenco = somaDias(iniAtual, -56);
+
+  const dev = new Map();
+  const pega = (nome) => {
+    if (!dev.has(nome)) dev.set(nome, {
+      nome,
+      atual: { entregas: 0, pontos: 0 },
+      anterior: { entregas: 0, pontos: 0 },
+      emMaos: 0,
+    });
+    return dev.get(nome);
+  };
+
+  for (const m of (data.melhorias || [])) {
+    if (!m || m.oculto || m.mesclado_em) continue;
+    // O campo aceita "Fulano / Beltrano" desde sempre, e as duas pessoas contam.
+    const nomes = String(m.dev || '').split('/').map(x => x.trim()).filter(Boolean);
+    if (!nomes.length) continue;
+
+    const etapa = String(m.status_planejamento || '');
+    const emMaos = etapa === 'planejado' || etapa === 'em_andamento';
+    const dia = diaLocalBR(m.entregue_em || m.concluido_em || '');
+    const contaEntrega = !!dia && (etapa === 'validacao' || etapa === 'concluido');
+    const pts = Number(m.poker_pontos);
+    const pontos = Number.isFinite(pts) ? pts : 0;
+
+    if (!emMaos && !(contaEntrega && dia >= corteElenco)) continue;
+
+    for (const nome of nomes) {
+      const d = pega(nome);
+      if (emMaos) d.emMaos += 1;
+      if (!contaEntrega) continue;
+      if (dia >= iniAtual && dia <= fimAtual) {
+        d.atual.entregas += 1; d.atual.pontos += pontos;
+      } else if (dia >= iniAnterior && dia <= fimAnterior) {
+        d.anterior.entregas += 1; d.anterior.pontos += pontos;
+      }
+    }
+  }
+
+  /* A ORDEM E DECRESCENTE, e o desempate e por pontos. Quem esta no fim da lista
+     e o assunto da conversa — e por isso a lista vai INTEIRA, com os zeros. Uma
+     lista cortada no top 5 esconde exatamente quem se quer perguntar. */
+  const devs = [...dev.values()].sort((x, y) =>
+    y.atual.entregas - x.atual.entregas ||
+    y.atual.pontos - x.atual.pontos ||
+    y.anterior.entregas - x.anterior.entregas ||
+    x.nome.localeCompare(y.nome));
+
+  /* A SEMANA CORRENTE ESTA PELA METADE, E A TELA TEM DE DIZER ISSO.
+     Numa quarta-feira a semana atual teve 3 dias e a anterior teve 5. Sem o
+     aviso, todo mundo aparece "caindo" toda segunda e terca, e a pergunta que
+     nasce disso ("por que voce entregou menos?") tem resposta obvia e culpa
+     ninguem — o que gasta a reuniao e a confianca na propria tela. */
+  const fer = new Set(data.feriados || []);
+  const uteis = (de, ate) => {
+    let n = 0, d = de;
+    for (let g = 0; g < 15 && d <= ate; g++) {
+      const [a, b, c] = d.split('-').map(Number);
+      const dow = new Date(Date.UTC(a, b - 1, c)).getUTCDay();
+      if (dow !== 0 && dow !== 6 && !fer.has(d)) n++;
+      d = somaDias(d, 1);
+    }
+    return n;
+  };
+
+  return {
+    semanas: {
+      atual: { de: iniAtual, ate: fimAtual,
+               uteisCorridos: uteis(iniAtual, hoje < fimAtual ? hoje : fimAtual),
+               uteisTotal: uteis(iniAtual, fimAtual) },
+      anterior: { de: iniAnterior, ate: fimAnterior,
+                  uteisCorridos: uteis(iniAnterior, fimAnterior),
+                  uteisTotal: uteis(iniAnterior, fimAnterior) },
+    },
+    devs,
+  };
+}
+
 function pokerReferencia(data) {
   const feriados = new Set(data.feriados || []);
   const porCarta = new Map();
@@ -1638,6 +1777,8 @@ export default {
                       // Vai junto porque este e o unico ponto que ja le o arquivo
                       // inteiro nesta tela: calcular aqui nao custa chamada nenhuma.
                       referencia: pokerReferencia(data),
+                      // Mesmo motivo da referencia: o arquivo ja esta lido aqui.
+                      ranking: pokerRanking(data, agora),
                       temas: (data.temas || []).map(t => ({ id: t.id, nome: t.nome })) }, 200, headers);
       }
 
