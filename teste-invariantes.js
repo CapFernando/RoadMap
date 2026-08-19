@@ -2600,9 +2600,22 @@ ok(/ETAPAS_APOS_O_DEV = \['validacao', 'concluido'\]/.test(PRZ),
 
 // `entregue_em` e gravado ao ENTRAR em validacao — e por isso ele responde
 // "quando o dev terminou" sem depender de o PM ter validado.
-ok(/colKey === 'validacao' && !m\.entregue_em/.test(DEV),
+ok(/if \(colKey === 'validacao'\) \{\s*m\.entregue_em = new Date\(\)\.toISOString\(\);/.test(DEV),
    'entregue_em e gravado no instante em que a demanda entra em validacao');
-ok(/if \(!m\.entregue_em\) m\.entregue_em = new Date\(\)\.toISOString\(\)/.test(WC),
+/* REPROVADA CONTA A ULTIMA ENTREGA. AX-165: entregue 03/08 (prazo 07/08),
+   reprovada 06/08, entregue de novo 11/08 — atraso de 4 dias, e nao zero. Guardar
+   a primeira data faria uma demanda REPROVADA aparecer no prazo no relatorio. */
+ok(!/colKey === 'validacao' && !m\.entregue_em/.test(DEV),
+   'e entregar DE NOVO depois de reprovada sobrescreve a data');
+ok(/m\.entregue_em = new Date\(\)\.toISOString\(\);/.test(
+     WC.slice(WC.indexOf("m.status_planejamento = 'validacao'"),
+              WC.indexOf("m.status_planejamento = 'validacao'") + 400)) &&
+   !/if \(!m\.entregue_em\) m\.entregue_em = new Date/.test(WC),
+   'a rota de entrega da API tambem sobrescreve, e nao so na primeira vez');
+// Mas CONCLUIR nao e entregar: quem conclui e o PM/PO, e a data do dev fica.
+ok(/colKey === 'concluido' && !m\.entregue_em/.test(DEV),
+   'concluir so preenche a data quando ela nao existe — validar nao vira entrega');
+ok(/m\.entregue_em = new Date\(\)\.toISOString\(\)/.test(WC),
    'e o servidor grava tambem, para o caminho que nao passa pela tela');
 ok(/function fimDoDev\(m\)[\s\S]{0,400}entregue_em[\s\S]{0,200}concluido_em/.test(PRZ),
    'o fim do trabalho do dev e entregue_em, com concluido_em como reserva');
@@ -2627,6 +2640,38 @@ ok(/Date\.UTC\(\+p\[0\], \+p\[1\] - 1, \+p\[2\]\)/.test(PRZ),
 // Pausada continua sem atrasar.
 ok(/if \(m\.pausado_em && !ETAPAS_APOS_O_DEV\.includes\(etapa\)\) return null/.test(PRZ),
    'pausada nao atrasa: o prazo esta suspenso, nao estourado');
+
+/* CONCLUIR DIRETO, SEM PASSAR PELA VALIDACAO, TAMBEM ENCERRA O PRAZO DO DEV —
+   e a data fica GRAVADA, nao deduzida.
+
+   `fimDoDev` ja caia em `concluido_em` quando faltava `entregue_em`, e o numero
+   era o mesmo. O furo era outro: essa demanda, reaberta e mandada para validacao
+   depois, receberia `entregue_em` com a data DAQUELE dia — e o atraso do dev
+   pioraria retroativamente por causa de um passo do PM/PO.                      */
+ok(/if \(!String\(m\.entregue_em \|\| ''\)\.trim\(\)\) m\.entregue_em = m\.concluido_em;/.test(ADMIN),
+   'concluir pelo admin grava a data de entrega do dev');
+ok(/else if \(colKey === 'concluido' && !m\.entregue_em\)/.test(DEV),
+   'e concluir arrastando no painel do dev tambem grava');
+ok(/sp === 'concluido' && !String\(m\.entregue_em \|\| ''\)\.trim\(\)/.test(WC),
+   'o SERVIDOR garante a data em toda conclusao, qualquer que seja a rota');
+(() => {
+  // A garantia do servidor mora em normalizaEstados, que roda em TODO caminho de
+  // escrita — numa funcao chamada de um caminho so, a outra rota ficaria de fora.
+  const i = WC.indexOf('function normalizaEstados');
+  const corpo = WC.slice(i, WC.indexOf('\n}', i));
+  ok(/entregue_em/.test(corpo),
+     'e essa garantia esta em normalizaEstados, que roda em toda escrita');
+  ok((WC.match(/normalizaEstados\(/g) || []).length >= 4,
+     'normalizaEstados e chamado em todas as rotas de escrita');
+})();
+
+// A API tambem congela o atraso: ela contava contra HOJE e o numero crescia todo
+// dia para quem ja tinha entregado.
+ok(/etapa === 'validacao' && \/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(entregue\)/.test(WC) ||
+   /const ref = \(etapa === 'validacao'/.test(WC),
+   'a API mede o atraso pela entrega quando a demanda esta em validacao');
+ok(/atrasada: diasDeAtraso\(m, hojeBR\(\)\) > 0/.test(WC),
+   'e `atrasada` da API sai da mesma conta');
 
 // A REGRA RODA DE VERDADE, e nao so existe no arquivo.
 (() => {

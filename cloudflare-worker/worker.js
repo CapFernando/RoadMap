@@ -745,6 +745,24 @@ function normalizaEstados(data) {
       const deduzida = STATUS_PARA_SP[String(m.status || '').trim()];
       if (deduzida) { m.status_planejamento = deduzida; sp = deduzida; n += 1; }
     }
+    /* TODA CONCLUSAO TEM DATA DE ENTREGA DO DEV.
+
+       O prazo do dev termina quando ele entrega. Quem passa pela validacao ganha
+       `entregue_em` no caminho; quem e concluido DIRETO de "em andamento" nao
+       ganhava nada, e a conta caia em `concluido_em` por deducao.
+
+       O numero era o mesmo — o furo era outro: essa demanda, se fosse reaberta e
+       mandada para validacao depois, receberia `entregue_em` com a data DAQUELE
+       dia, e o atraso do dev pioraria retroativamente por causa de um passo do
+       PM/PO. Gravando aqui, no servidor, a primeira entrega fica registrada
+       qualquer que seja a tela ou a rota que concluiu.
+
+       `concluido_em` e a melhor informacao que existe nesse caso: a conclusao E o
+       fim do trabalho de quem fez. */
+    if (sp === 'concluido' && !String(m.entregue_em || '').trim()) {
+      const ce = String(m.concluido_em || '').slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(ce)) { m.entregue_em = ce; n += 1; }
+    }
     const esperado = SP_PARA_STATUS[sp];
     if (!esperado) continue;
     if (m.status !== esperado) { m.status = esperado; n += 1; }
@@ -780,18 +798,29 @@ function hojeBR() {
 
 // Comparacao por STRING ISO, nunca por objeto Date: `new Date('2026-08-06')` e
 // meia-noite UTC, e converter para local muda o dia. Ja custou off-by-one aqui.
+//
+// O ATRASO E DO DEV, E PARA QUANDO ELE ENTREGA. Em validacao a demanda esta na mao
+// do PM/PO, e o tempo que ela passa ali nao e atraso de desenvolvimento — a API
+// contava contra HOJE e o numero crescia todo dia para quem ja tinha entregado.
+// A mesma regra que as telas aplicam (ver prazo.js); aqui ela e repetida porque o
+// Worker nao carrega os scripts do site, e nao por escolha.
 function diasDeAtraso(m, hoje) {
   const entrega = String((m && m.entrega) || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(entrega)) return 0;
   const etapa = String((m && m.status_planejamento) || '');
   if (etapa === 'concluido' || etapa === 'negada') return 0;
   if (String((m && m.pausado_em) || '').trim()) return 0;
-  if (entrega >= hoje) return 0;
+  // Depois de entregue, a referencia e a data da ENTREGA, e nao o dia de hoje:
+  // e o que faz o atraso de quem entregou tarde congelar em vez de crescer.
+  const entregue = String((m && m.entregue_em) || '').slice(0, 10);
+  const ref = (etapa === 'validacao' && /^\d{4}-\d{2}-\d{2}$/.test(entregue))
+    ? entregue : hoje;
+  if (entrega >= ref) return 0;
   const dia = t => {
     const [a, b, c] = t.split('-').map(Number);
     return Date.UTC(a, b - 1, c);
   };
-  return Math.round((dia(hoje) - dia(entrega)) / 86400000);
+  return Math.round((dia(ref) - dia(entrega)) / 86400000);
 }
 
 
@@ -2351,7 +2380,10 @@ export default {
         m.horas_realizadas = h;
         m.status_planejamento = 'validacao';
         m.status = 'iniciada';
-        if (!m.entregue_em) m.entregue_em = new Date().toISOString();
+        // SEMPRE atualiza, e nao so na primeira vez: se a validacao reprovou e o
+        // dev entregou de novo, e a ENTREGA QUE PASSOU que encerra o prazo. Manter
+        // a data da primeira ida faria uma demanda reprovada aparecer no prazo.
+        m.entregue_em = new Date().toISOString();
         // NAO grava concluido_em: quem entrega nao conclui. A data nasce na
         // aprovacao do PM/PO.
         mudou.push('entregue para validacao');

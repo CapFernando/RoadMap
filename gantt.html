@@ -2791,6 +2791,16 @@ function marcaConclusao(m, etapaNova) {
     '-' + String(hoje.getDate()).padStart(2, '0');
   if (etapaNova === 'concluido') {
     if (!String(m.concluido_em || '').trim()) m.concluido_em = hojeISO;
+    /* CONCLUIR SEM PASSAR PELA VALIDACAO tambem encerra o prazo do dev, e a data
+       fica GRAVADA em vez de deduzida.
+
+       `fimDoDev` ja caia em `concluido_em` quando `entregue_em` faltava, e o
+       numero era o mesmo. O que muda e o furo: sem gravar, uma demanda concluida
+       direto que depois fosse reaberta e movida para validacao receberia
+       `entregue_em` com a data DAQUELE dia — e o atraso do dev pioraria
+       retroativamente por causa de um passo do PM/PO. Gravando agora, a primeira
+       entrega fica registrada e nada a sobrescreve. */
+    if (!String(m.entregue_em || '').trim()) m.entregue_em = m.concluido_em;
   } else if (String(m.concluido_em || '').trim()) {
     m.concluido_em = '';
     delete m.concluido_retroativo;

@@ -3686,7 +3686,23 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   // dev-publish aplica sobre a versão fresca do servidor, então nada mais é tocado.
   // Marca quando saiu das maos do dev. A aba Entrega do admin mostra "esperando
    // desde", e sem isto o campo ficava sempre vazio.
-  if (colKey === 'validacao' && !m.entregue_em) m.entregue_em = new Date().toISOString();
+  /* A DATA DA ENTREGA — a que encerra o prazo do dev.
+
+     REPROVADA E ENTREGUE DE NOVO SOBRESCREVE A DATA. Se a validacao reprovou, o
+     trabalho nao estava pronto na primeira ida, e o prazo se encerra na entrega
+     que passou. AX-165 e o caso: entregue em 03/08 (prazo 07/08), reprovada em
+     06/08, entregue de novo em 11/08 — o atraso e de 4 dias, e nao zero. Manter a
+     primeira data faria a demanda reprovada aparecer no prazo, e alguem teria de
+     explicar isso em reuniao.
+
+     Concluir DIRETO, sem passar por Validacao, tambem encerra o prazo — e ai a
+     data e gravada e nao deduzida, senao uma reabertura posterior a sobrescreveria
+     com um dia mais tarde. */
+  if (colKey === 'validacao') {
+    m.entregue_em = new Date().toISOString();
+  } else if (colKey === 'concluido' && !m.entregue_em) {
+    m.entregue_em = new Date().toISOString();
+  }
   // Espera o anexo terminar: mover para Validacao com o envio no ar deixaria o
   // print de fora justamente na entrega.
   if (!(await msAguardaAnexos())) return;
