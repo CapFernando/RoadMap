@@ -74,6 +74,12 @@
     'Crisley Almeida': 'IA & Vibe coding',
     'Eloi': 'IA & Vibe coding',
     'Flávio': 'IA & Vibe coding',
+    /* 'João Carvalho': as duas demandas dele são AX Leader (compressor de áudio,
+       editor de documento), e o AX Leader é frente de Vibe Code — decisão do
+       Fernando. A conta vai ser desativada, mas as entregas ficam: "Não
+       classificado" num slide de diretoria é pior que a frente certa, porque
+       convida a pergunta "e o que é isso?" sem ter resposta. */
+    'João Carvalho': 'IA & Vibe coding',
     // Dados & Inteligência
     'Jhonatan Soares': 'Dados & Inteligência',
     // Power BI
@@ -82,7 +88,6 @@
     // Automação & RPA
     'Leite': 'Automação & RPA',
     // Sem frente de propósito:
-    //   'João Carvalho' — conta a desativar, não vale fixar frente.
     //   'Josias' — a única demanda dele é Bitrix, que fica fora do deck.
   };
 

@@ -901,8 +901,8 @@
 <script src="prazo.js?v=1fa74f8f6d"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js"></script>
-<script src="pipelines.js?v=9a1128f973"></script>
-<script src="apresentacao.js?v=527f018689"></script>
+<script src="pipelines.js?v=a122233200"></script>
+<script src="apresentacao.js?v=0eb656bcf0"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4794,13 +4794,23 @@ function apresTimeEAreas(conc, cl) {
     if (c.tipo !== 'atraso') return;
     const t = (state.temas || []).find(x => String(x.id) === String(m.tema_id));
     const nome = t ? (window.catalogoCurto ? catalogoCurto(t.nome) : t.nome) : '(sem sistema)';
-    atrasoTema[nome] = atrasoTema[nome] || { nome, qtd: 0, soma: 0 };
+    atrasoTema[nome] = atrasoTema[nome] || { nome, qtd: 0, soma: 0, devs: {} };
     atrasoTema[nome].qtd++;
     atrasoTema[nome].soma += c.dias || 0;
+    devsDe(m).forEach(dv => {
+      atrasoTema[nome].devs[dv] = (atrasoTema[nome].devs[dv] || 0) + 1;
+    });
   });
   const frentes = Object.values(atrasoTema)
     .sort((a, b) => b.qtd - a.qtd || b.soma - a.soma)
-    .map(f => ({ nome: f.nome, qtd: f.qtd, dias: Math.round(f.soma / f.qtd) }));
+    .map(f => ({
+      nome: f.nome, qtd: f.qtd, dias: Math.round(f.soma / f.qtd),
+      // QUEM, e nao so onde. "Antifraude, 9 entregas, 5d" convida a pergunta
+      // "com quem?" — e ela vem no meio da reuniao, com a resposta na mao de
+      // quem apresenta e nao no slide.
+      devs: Object.entries(f.devs).sort((a, b) => b[1] - a[1]).slice(0, 3)
+        .map(([nome, n]) => nome + ' (' + n + ')'),
+    }));
 
   // A lista COMPLETA de devs, para o slide de barras. `topo('entregas')` para em
   // 4 porque o slide do time compara tres colunas lado a lado; o slide de barras
@@ -4882,7 +4892,10 @@ function apresPipelines(conc, de, ate) {
   conc.forEach(m => {
     const devs = api.devsDaDemanda(m);
     const real = horasReaisDe(m, rateadoReal);
-    const hReal = real.h;
+    // A FATIA DESTE MES, e nao a hora inteira da demanda: o planejado ja e
+    // recortado no mes, e comparar hora cheia com planejado recortado inflava a
+    // execucao de todo mes que recebeu demanda vinda do anterior.
+    const hReal = horasDoMes(m, de, ate, rateadoReal);
     const hPlan = planejado.get(m.id) || 0;
     if (!real.medida) semHoras++;
     if (!hPlan) semJanela++;
@@ -5254,7 +5267,7 @@ async function apresGerar() {
         let hPlan = 0, hReal = 0;
         doMes.forEach(m => {
           hPlan += prjPlan.get(m.id) || 0;
-          hReal += horasReaisDe(m, prjRatReal).h;
+          hReal += horasDoMes(m, iso + '-01', fimMes, prjRatReal);
         });
         return {
           nome: (p.codigo ? p.codigo + ' · ' : '') + (p.nome || '(sem nome)'),
@@ -5863,6 +5876,44 @@ function horasReaisDe(m, rateado) {
   const digitada = Number(String((m || {}).horas_realizadas ?? '').replace(',', '.'));
   if (Number.isFinite(digitada) && digitada > 0) return { h: digitada, medida: true };
   return { h: (rateado && rateado.get(m.id)) || 0, medida: false };
+}
+
+/** A PARTE DA HORA MEDIDA QUE PERTENCE A ESTE MES.
+
+    A hora e lancada DE UMA VEZ na conclusao, e vale pela demanda inteira. Quando
+    a demanda atravessa o mes, essa hora inteira caia no mes em que ela terminou —
+    enquanto o planejado ja era recortado no mes. Comparar os dois assim inflava a
+    execucao: AX-096 ("Projeto Bonus") tem janela de 06/07 a 10/08 e 140,5h
+    lancadas; agosto recebia as 140,5h contra 40h de planejado, e sozinha ela
+    empurrava o mes de 89% para 113%.
+
+    Aqui a hora e distribuida pelos dias UTEIS da janela de trabalho, e o mes fica
+    com a fatia dele. Nao e a hora exata de cada dia — ninguem aponta hora por dia
+    nesta base —, e por isso a nota do slide chama isso de aproximacao.           */
+function horasDoMes(m, deISO, ateISO, rateado) {
+  const r = horasReaisDe(m, rateado);
+  if (!r.h) return 0;
+  const ini = String((m || {}).inicio || '').slice(0, 10);
+  const fim = String((m || {}).concluido_em || (m || {}).entrega || '').slice(0, 10);
+  const ehData = t => /^\d{4}-\d{2}-\d{2}$/.test(t);
+  // Sem janela nao ha o que repartir: a hora fica no mes em que a demanda saiu.
+  if (!ehData(ini) || !ehData(fim) || fim < ini) return r.h;
+  const fer = new Set((state.feriados || []).map(f => f.data || f).filter(Boolean));
+  const uteis = (a, b) => {
+    if (b < a) return 0;
+    let n = 0, g = 0;
+    const dt = new Date(a + 'T00:00:00Z'), e = new Date(b + 'T00:00:00Z');
+    while (dt <= e && g++ < 800) {
+      const w = dt.getUTCDay();
+      if (w !== 0 && w !== 6 && !fer.has(dt.toISOString().slice(0, 10))) n++;
+      dt.setUTCDate(dt.getUTCDate() + 1);
+    }
+    return n;
+  };
+  const total = uteis(ini, fim);
+  if (!total) return r.h;
+  const dentro = uteis(ini > deISO ? ini : deISO, fim < ateISO ? fim : ateISO);
+  return r.h * dentro / total;
 }
 
 function renderGerencial() {

@@ -364,6 +364,26 @@
     return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
   }
 
+  /* TEXTO DE CARD PARA TEXTO DE SLIDE.
+
+     O que o dev escreve na entrega e markdown: titulos com `#`, negrito com
+     `**`, listas com `-`. Isso ia CRU para o slide do destaque, e a diretoria via
+     "## Por que a mudanca" projetado na parede.
+
+     Tira a marcacao e junta as linhas: o slide tem uma caixa, e nao um documento
+     — paragrafo em branco no meio vira buraco que empurra o resto para fora. */
+  function textoLimpo(t, max) {
+    var s = String(t == null ? '' : t)
+      .replace(/^#{1,6}\s*/gm, '')          // titulos de markdown
+      .replace(/\*\*([^*]+)\*\*/g, '$1')     // negrito
+      .replace(/[*_`>]/g, '')                // enfase, codigo, citacao
+      .replace(/^\s*[-+]\s+/gm, '· ')       // marcadores de lista
+      .replace(/\r/g, '')
+      .split('\n').map(function (l) { return l.trim(); }).filter(Boolean)
+      .join('  ');
+    return corta(s, max || 520);
+  }
+
   // Tabela enxuta. O teto de linhas nao e estetica: o slide tem 5,63" de altura,
   // a tabela comeca em 1,6" e cada linha come ~0,42" — passou de 6, corta na
   // borda. Quando sobra fila, uma linha diz quantas ficaram de fora, porque
@@ -679,14 +699,16 @@
   function barrasFrente(pptx, s, cfg) {
     var itens = cfg.itens, x = cfg.x, w = cfg.w;
     var max = itens.reduce(function (mx, i) { return Math.max(mx, i.plan, i.real); }, 1);
-    var LARG_NOME = 1.32, VAO = 0.1;
+    // 1,55" comporta "Dados & Inteligência" (o maior nome) em corpo 9 sem corte;
+    // com 1,32" ele saia como "Dados & Inteligên…" e a barra ficava sem dono.
+    var LARG_NOME = 1.55, VAO = 0.1;
     var xBarra = x + LARG_NOME + VAO;
     var wBarra = w - LARG_NOME - VAO - 0.62;
     itens.forEach(function (it, i) {
       var y = cfg.y + i * cfg.alt;
-      s.addText(corta(it.nome, 18), {
-        x: x, y: y, w: LARG_NOME, h: 0.32, fontSize: 9.5, color: C.texto,
-        align: 'right', valign: 'middle' });
+      s.addText(it.nome, {
+        x: x, y: y, w: LARG_NOME, h: 0.32, fontSize: 9, color: C.texto,
+        align: 'right', valign: 'middle', wrap: false });
       [{ v: it.plan, cor: C.fundo3, dy: 0.045 },
        { v: it.real, cor: it.cor, dy: 0.155 }].forEach(function (b) {
         s.addShape(pptx.ShapeType.rect, {
@@ -808,16 +830,20 @@
       /* O PERCENTUAL EM UMA LINHA. A caixa tinha 0,47" e "154%" em corpo 9 nao
          cabia: o PowerPoint quebrava em "154" e "%" em linhas separadas. Com 0,72"
          e `wrap:false` ele nao quebra mais, e o nome encolhe na mesma medida. */
-      s.addText(corta(it.nome, 13), {
-        x: x + 0.11, y: y + 0.07, w: CW - 1.00, h: 0.21, fontSize: 9.5, bold: true,
-        color: C.texto });
+      /* O NOME INTEIRO, e nao "IA & Vibe co…". O maior deles tem 20 caracteres
+         ("Dados & Inteligência") e cabe na largura toda do cartao — o que nao
+         cabia era nome E percentual na mesma linha. O percentual desceu para a
+         linha dos numeros, onde sobrava espaco. */
+      s.addText(it.nome, {
+        x: x + 0.11, y: y + 0.07, w: CW - 0.22, h: 0.2, fontSize: 9, bold: true,
+        color: C.texto, wrap: false });
+      s.addText(it.plan + 'h', { x: x + 0.11, y: y + 0.27, w: 0.62, h: 0.23,
+                                 fontSize: 12, bold: true, color: C.azul, wrap: false });
+      s.addText(it.real + 'h', { x: x + 0.76, y: y + 0.27, w: 0.62, h: 0.23,
+                                 fontSize: 12, bold: true, color: C.verde, wrap: false });
       s.addText(it.pct == null ? '—' : it.pct + '%', {
-        x: x + CW - 0.83, y: y + 0.07, w: 0.72, h: 0.21, fontSize: 10.5, bold: true,
+        x: x + CW - 0.72, y: y + 0.27, w: 0.61, h: 0.23, fontSize: 11.5, bold: true,
         color: corPercentual(it.pct), align: 'right', wrap: false });
-      s.addText(it.plan + 'h', { x: x + 0.11, y: y + 0.27, w: 0.7, h: 0.23,
-                                 fontSize: 12.5, bold: true, color: C.azul, wrap: false });
-      s.addText(it.real + 'h', { x: x + 0.84, y: y + 0.27, w: 0.7, h: 0.23,
-                                 fontSize: 12.5, bold: true, color: C.verde, wrap: false });
       s.addText(it.entregas + (it.entregas === 1 ? ' entrega' : ' entregas'), {
         x: x + 0.11, y: y + 0.49, w: CW - 0.22, h: 0.16, fontSize: 7.5, color: C.fraco });
     });
@@ -1113,11 +1139,20 @@
     var X0 = 3.5, LARG = 6.1, TOPO = 1.75, ALT = 0.42;
     var dias = dv.dias || 31;
 
-    // A régua de dias: sem ela a barra não diz quando, só quanto.
+    /* A REGUA DE DIAS: sem ela a barra nao diz quando, so quanto.
+
+       `wrap:false` e caixa de 0,4": com 0,3" o "10" nao cabia e o PowerPoint
+       quebrava em "1" e "0" em duas linhas — a regua inteira saia ilegivel a
+       partir do dia 10. E o rotulo diz o que os numeros sao: sem ele, sete
+       numeros soltos no topo do slide pedem explicacao no meio da reuniao. */
+    // Termina em X0-0,30" e o primeiro dia abre em X0-0,20": com 0,9" a partir de
+    // X0-0,95" o rotulo encostava no "1".
+    s.addText('dia do mês', { x: X0 - 1.10, y: 1.44, w: 0.80, h: 0.24,
+                              fontSize: 8, color: C.fraco, align: 'right' });
     [1, 5, 10, 15, 20, 25, dias].forEach(function (d) {
       var x = X0 + LARG * (d - 1) / Math.max(1, dias - 1);
-      s.addText(String(d), { x: x - 0.15, y: 1.44, w: 0.3, h: 0.24,
-                             fontSize: 9, color: C.fraco, align: 'center' });
+      s.addText(String(d), { x: x - 0.2, y: 1.44, w: 0.4, h: 0.24,
+                             fontSize: 9, color: C.fraco, align: 'center', wrap: false });
     });
 
     /* SEIS barras, e nao sete: a linha do "e mais" fica em TOPO + n x ALT, e com
@@ -1373,17 +1408,28 @@
     (d.destaques || []).forEach(function (m) {
       var s = slideBase(pptx);
       s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.verde } });
-      s.addText(m.codigo || '', { x: 0.7, y: 0.6, w: 8.6, h: 0.35, fontSize: 13, color: C.verde, bold: true });
-      s.addText(m.titulo || '', { x: 0.7, y: 1.0, w: 8.6, h: 0.9, fontSize: 28, bold: true, color: C.texto });
+      s.addText(m.codigo || '', { x: 0.7, y: 0.52, w: 8.6, h: 0.3, fontSize: 13, color: C.verde, bold: true });
+      s.addText(corta(m.titulo || '', 52), {
+        x: 0.7, y: 0.84, w: 8.6, h: 0.6, fontSize: 26, bold: true, color: C.texto, wrap: false });
       if (m.texto) {
-        s.addText(m.texto, { x: 0.7, y: 2.1, w: 8.6, h: 2.2, fontSize: 15,
-                             color: C.texto, lineSpacingMultiple: 1.35 });
+        /* O TEXTO VEM DO CARD, EM MARKDOWN, e ia cru para o slide: "# Saida de
+           Risco", "## Por que a mudanca", "**Operacoes**". Fora o markdown a
+           vista, o texto inteiro nao cabia e escrevia por cima do titulo, dos
+           metadados e do rodape — o slide virava tres camadas de letra.
+
+           `textoLimpo` tira a marcacao e corta no que a caixa comporta. O corte
+           e explicito: melhor uma reticencia do que meia frase escondida atras
+           de outra. */
+        s.addText(textoLimpo(m.texto, 520), {
+          x: 0.7, y: 1.52, w: 8.6, h: 2.6, fontSize: 14,
+          color: C.texto, lineSpacingMultiple: 1.3, valign: 'top' });
       }
       // Sem emoji aqui: se a maquina que projeta nao tiver o glifo, ele vira
       // quadrado — e quadrado no slide da diretoria custa mais que o icone vale.
       var meta = [m.dev || '', m.tema || '',
                   m.pontos ? m.pontos + ' pontos' : ''].filter(Boolean).join('   ·   ');
-      if (meta) s.addText(meta, { x: 0.7, y: 4.4, w: 8.6, h: 0.35, fontSize: 12, color: C.fraco });
+      if (meta) s.addText(meta, { x: 0.7, y: 4.32, w: 8.6, h: 0.3, fontSize: 12,
+                                  color: C.fraco, wrap: false });
       rodape(s, 'Destaque · ' + d.periodo, ++p);
     });
 
@@ -1418,10 +1464,17 @@
           x: 0.9, y: 3.15, w: 8.4, h: 0.3, fontSize: 13, color: C.fraco });
         d.frentesAtraso.slice(0, 3).forEach(function (f, i) {
           sm.addText(corta(f.nome, 40), {
-            x: 0.9 + i * 2.85, y: 3.5, w: 2.7, h: 0.35, fontSize: 14, color: C.texto });
+            x: 0.9 + i * 2.85, y: 3.48, w: 2.7, h: 0.28, fontSize: 14, color: C.texto });
           sm.addText(f.qtd + (f.qtd === 1 ? ' entrega' : ' entregas') +
                      (f.dias ? '  ·  ' + f.dias + 'd em média' : ''), {
-            x: 0.9 + i * 2.85, y: 3.85, w: 2.7, h: 0.3, fontSize: 12, color: C.vermelho });
+            x: 0.9 + i * 2.85, y: 3.78, w: 2.7, h: 0.26, fontSize: 12, color: C.vermelho });
+          /* QUEM entregou com atraso. Sem o nome, "Antifraude, 9 entregas" deixa
+             a pergunta seguinte na mao de quem apresenta, no meio da reuniao —
+             e a resposta esta no dado, so nao estava no slide. */
+          if ((f.devs || []).length) {
+            sm.addText(corta(f.devs.join(', '), 44), {
+              x: 0.9 + i * 2.85, y: 4.06, w: 2.7, h: 0.24, fontSize: 9.5, color: C.fraco });
+          }
         });
       }
       rodape(sm, d.periodo, ++p);

@@ -2605,6 +2605,47 @@ ok(/Horas lançadas em/.test(APRES),
 ok(/cada dia útil vale 8h/.test(APRES),
    'o slide diz de onde saiu o planejado');
 
+/* A HORA REALIZADA E RECORTADA NO MES, como o planejado ja era.
+
+   A hora e lancada DE UMA VEZ na conclusao e vale pela demanda inteira. Quando a
+   demanda atravessa o mes, essa hora inteira caia no mes em que ela terminou —
+   contra um planejado que ja vinha recortado. AX-096 tem janela de 06/07 a 10/08
+   e 140,5h lancadas: agosto recebia as 140,5h contra 40h de planejado, e sozinha
+   ela empurrava o mes de 93% para 118%. "Entregamos 18% a mais do que
+   planejamos" e uma frase que nao se sustenta numa reuniao — e nao era verdade. */
+ok(/function horasDoMes\(m, deISO, ateISO, rateado\)/.test(ADMIN),
+   'existe a funcao que recorta a hora medida no mes');
+ok(/const hReal = horasDoMes\(m, de, ate, rateadoReal\);/.test(ADMIN),
+   'e o slide de frentes usa ela, e nao a hora cheia da demanda');
+ok(/hReal \+= horasDoMes\(m, iso \+ '-01', fimMes, prjRatReal\);/.test(ADMIN),
+   'o ranking de projetos tambem');
+ok(/return r\.h \* dentro \/ total;/.test(ADMIN),
+   'o recorte e proporcional aos dias uteis da janela de trabalho');
+ok(/if \(!ehData\(ini\) \|\| !ehData\(fim\) \|\| fim < ini\) return r\.h;/.test(ADMIN),
+   'e demanda sem janela fica inteira no mes em que saiu, sem inventar rateio');
+
+/* "NAO CLASSIFICADO" NAO E PALAVRA DE SLIDE EXECUTIVO.
+   Ela convida a pergunta "e o que e isso?" sem ter resposta. A saida nao e
+   esconder: e mapear a pessoa para a frente certa — AX Leader e Vibe Code. */
+ok(/'João Carvalho': 'IA & Vibe coding'/.test(PIPE),
+   'quem estava sem frente foi mapeado, e nao escondido');
+
+// QUEM, e nao so onde: "Antifraude, 9 entregas" deixa a pergunta seguinte na mao
+// de quem apresenta, no meio da reuniao.
+ok(/devs: Object\.entries\(f\.devs\)/.test(ADMIN) && /f\.devs\.join\(', '\)/.test(APRES),
+   'as frentes de atraso levam o responsavel');
+
+/* O TEXTO DO DESTAQUE VEM DO CARD, EM MARKDOWN. Ia cru para o slide — "## Por que
+   a mudanca" projetado na parede — e transbordava por cima do titulo e do rodape. */
+ok(/function textoLimpo\(t, max\)/.test(APRES), 'existe a limpeza de markdown');
+ok(/textoLimpo\(m\.texto, \d+\)/.test(APRES), 'e o destaque passa por ela');
+
+// A REGUA DE DIAS DO GANTT: "10" saia como "1" e "0" em duas linhas.
+ok(/fontSize: 9, color: C\.fraco, align: 'center', wrap: false/.test(APRES),
+   'a regua de dias nao quebra o numero em duas linhas');
+ok(/addText\('dia do mês'/.test(APRES),
+   'e diz o que os numeros dela sao');
+
 sec('O slide das frentes cabe no slide');
 
 /* AS MEDIDAS DO CARTAO SAO CONTADAS, e a conta e conferida aqui.
@@ -2641,16 +2682,24 @@ sec('O slide das frentes cabe no slide');
        'a ultima linha de texto cabe dentro do cartao',
        ult ? (Number(ult[1]) + Number(ult[2])).toFixed(2) + '" <= ' + ch.toFixed(2) + '"' : '');
   }
-  // O nome da frente nao pode encostar no percentual: eram 0,07" de invasao.
-  const nome = corpo.match(/corta\(it\.nome, \d+\), \{\s*x: x \+ ([\d.]+), y: y \+ [\d.]+, w: CW - ([\d.]+)/);
-  const pct = corpo.match(/x: x \+ CW - ([\d.]+), y: y \+ [\d.]+, w: ([\d.]+), h: [\d.]+, fontSize: 10\.5,/);
-  ok(!!nome && !!pct, 'nome e percentual do cartao estao posicionados');
-  if (nome && pct && m) {
+  /* O NOME DA FRENTE SAI INTEIRO, e nao "IA & Vibe co…".
+     Ele dividia a linha com o percentual e sobrava caixa para 13 caracteres — os
+     nomes tem ate 20 ("Dados & Inteligência"). O percentual desceu para a linha
+     dos numeros, e o nome ficou com a largura toda do cartao. */
+  ok(/s\.addText\(it\.nome, \{\s*x: x \+ [\d.]+, y: y \+ [\d.]+, w: CW - 0\.22,/.test(corpo),
+     'o nome da frente ocupa a largura do cartao, sem corte');
+  ok(!/corta\(it\.nome/.test(corpo),
+     'e nao passa por `corta`: nome truncado nao diz qual frente e');
+  // Na linha dos numeros, o percentual comeca depois de onde o realizado termina.
+  const real = corpo.match(/it\.real \+ 'h', \{ x: x \+ ([\d.]+), y: y \+ [\d.]+, w: ([\d.]+)/);
+  const pct = corpo.match(/x: x \+ CW - ([\d.]+), y: y \+ [\d.]+, w: [\d.]+, h: [\d.]+, fontSize: 11\.5,/);
+  ok(!!real && !!pct, 'realizado e percentual do cartao estao posicionados');
+  if (real && pct && m) {
     const cw = Number(m[1]);
-    const fimNome = Number(nome[1]) + (cw - Number(nome[2]));
+    const fimReal = Number(real[1]) + Number(real[2]);
     const iniPct = cw - Number(pct[1]);
-    ok(fimNome <= iniPct, 'a caixa do nome para antes do percentual',
-       fimNome.toFixed(2) + '" <= ' + iniPct.toFixed(2) + '"');
+    ok(fimReal <= iniPct, 'o realizado para antes do percentual',
+       fimReal.toFixed(2) + '" <= ' + iniPct.toFixed(2) + '"');
   }
   /* O TITULO PARA ANTES DO PERIODO, que fica no canto direito do cabecalho.
      Na primeira versao o titulo tinha 6,4" de caixa a partir de 0,5" e o periodo
