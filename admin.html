@@ -4744,7 +4744,7 @@ const AP_SECOES = [
   { k: 'pipelines', rot: 'Frentes de trabalho (planejado × realizado)', pad: true },
   { k: 'prazo',    rot: 'No prazo x com atraso', pad: true },
   { k: 'rapidas',  rot: 'Entregas rápidas (até 2 dias)', pad: true },
-  { k: 'evolucao', rot: 'Evolução dos últimos 6 meses', pad: true },
+  { k: 'evolucao', rot: 'Evolução: mês atual x anterior', pad: true },
   { k: 'projetos', rot: 'Projetos em aberto', pad: true },
   { k: 'pontos',   rot: 'Pontos entregues (semana, dev, assunto, sprint)', pad: true },
   { k: 'time',     rot: 'O time (agregado) e quem esteve fora', pad: true },
@@ -5415,7 +5415,12 @@ async function apresGerar() {
        o caminho curto para o deck se contradizer. O mes apresentado entra mesmo em
        curso, marcado como parcial: sem ele a serie terminaria no mes passado.    */
     const evolucao = [];
-    for (let k = 5; k >= 0; k--) {
+    /* DOIS MESES: o atual e o imediatamente anterior — regra do Fernando, a mesma
+       que vale para todo comparativo do deck. Eram seis, e os quatro primeiros
+       saiam zerados porque a ferramenta comecou a ser usada em junho: quatro pares
+       de barras em zero num slide de diretoria nao dizem "nao havia dado", dizem
+       "nao entregamos nada". */
+    for (let k = 1; k >= 0; k--) {
       const dt = new Date(ano, mes - 1 - k, 1);
       const iM = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
       const fimM = iM + '-' + String(new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate()).padStart(2, '0');
@@ -5598,7 +5603,15 @@ async function apresGerar() {
          Chamar `gerCortesDePontos` em vez de repetir a soma aqui e o que impede o
          deck e a tela de discordarem — foi assim que a "eficiencia" deu 100% todo
          mes: duas contas com o mesmo nome e janelas diferentes. */
-      pontos: gerCortesDePontos(ano, mes, temaMapDoDeck, window.PIPELINES.devsDaDemanda),
+      /* `splitDevs` RECEBE A STRING do campo, e nao a demanda.
+         Eu passei `PIPELINES.devsDaDemanda` aqui, que recebe a DEMANDA e le
+         `m.dev` dentro: com uma string na entrada ela devolvia lista vazia,
+         `devs.length` dava zero, e a divisao por zero deixava o corte por
+         desenvolvedor inteiro vazio — o slide saiu com "sem dados no mes" tendo
+         1544 pontos ao lado. Duas funcoes com nome parecido e assinatura
+         diferente; o tipo nao avisa em JavaScript, e o slide avisou. */
+      pontos: gerCortesDePontos(ano, mes, temaMapDoDeck,
+                                (txt) => window.PIPELINES.devsDaDemanda({ dev: txt })),
       rapidas: { itens: rapidasLista, total: conc.length },
       quebra,
       fluxo: { recebidas: entradas.length, entregues: conc.length,
@@ -6204,11 +6217,18 @@ function gerCortesDePontos(ano, mes, temaMap, splitDevs) {
   if (foraDaSemana > 0) porSemana['Fora do mês'] = foraDaSemana;
 
   const porDev = {};
+  let semDono = 0;
   itens.forEach(m => {
     const devs = splitDevs(m.dev);
+    /* SEM DEV, OS PONTOS VAO PARA UM BALDE NOMEADO, e nao para uma divisao por
+       zero. `devs.length === 0` dava `Infinity`/`NaN` e apagava o corte inteiro em
+       silencio — foi assim que o slide saiu "sem dados no mes" com 1544 pontos
+       ao lado. Agora, se o corte vier vazio, e porque nao ha dono mesmo. */
+    if (!devs.length) { semDono += Number(m.poker_pontos); return; }
     const val = Number(m.poker_pontos) / devs.length;
     devs.forEach(d => { porDev[d] = (porDev[d] || 0) + val; });
   });
+  if (semDono > 0) porDev['Sem responsável'] = semDono;
 
   const porAssunto = {};
   itens.forEach(m => {

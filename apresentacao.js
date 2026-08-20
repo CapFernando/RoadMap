@@ -376,7 +376,7 @@
       var cols = [
         { v: (p.plan || 0) + 'h', rot: 'PLAN', cor: C.azul,  x: 6.55 },
         { v: (p.real || 0) + 'h', rot: 'REAL', cor: C.verde, x: 7.50 },
-        { v: p.pct == null ? '—' : p.pct + '%', rot: 'EXEC',
+        { v: rotuloExecucao(p.pct, p.plan, p.real), rot: 'EXEC',
           cor: corPercentual(p.pct), x: 8.45 },
       ];
       cols.forEach(function (c) {
@@ -827,6 +827,28 @@
     return pct == null ? C.fraco : SIGNIFICADO.leitura;
   }
 
+  /* EXECUCAO ACIMA DE 100% NAO E EXIBIDA COMO PERCENTUAL — decisao do Fernando.
+
+     "127%" numa linha chamada EXEC nao se le como informacao, se le como erro: a
+     primeira reacao de quem ve e "entao a conta esta errada", e a segunda e "como
+     alguem faz 127% de um plano?". As duas gastam a reuniao com o instrumento em
+     vez do trabalho.
+
+     E NAO E TRAVAR EM 100%, que seria mentir por arredondamento — a hora existiu.
+     Acima do plano o slide diz A DIFERENCA EM HORA, que e a informacao de
+     verdade: "+19h" responde "quanto veio fora do plano", e essa e a pergunta que
+     o 127% estava tentando fazer. Abaixo de 100 o percentual continua, porque ali
+     ele responde "quanto do plano andou".                                       */
+  function rotuloExecucao(pct, plan, real) {
+    if (pct == null) return '—';
+    if (pct <= 100) return pct + '%';
+    var extra = (Number(real) || 0) - (Number(plan) || 0);
+    // Sem as horas em mao (o cartao pode ter so o percentual), o texto diz que
+    // passou do plano sem inventar um numero.
+    if (!(extra > 0)) return 'acima do plano';
+    return '+' + Math.round(extra) + 'h';
+  }
+
   /* -- Pecas do painel de sprints -------------------------------------------
      O painel aprovado tem uma gramatica propria, e ela se repete em toda secao:
      cartao com borda fina, rotulo miudo em maiusculas na cor do assunto, numero
@@ -971,7 +993,9 @@
         nota: t.pontos ? t.pontos + ' pontos' : '' },
       { rot: 'PLANEJADO', val: t.plan + 'h', cor: C.azul, nota: 'no período' },
       { rot: 'REALIZADO', val: t.real + 'h', cor: C.verde,
-        nota: t.pct == null ? '' : t.pct + '% do planejado' },
+        nota: t.pct == null ? ''
+          : (t.pct <= 100 ? t.pct + '% do planejado'
+                          : rotuloExecucao(t.pct, t.plan, t.real) + ' além do planejado') },
     ];
     /* Quatro cartoes de 1,72" + o de execucao de 1,60", com vao de 0,12":
        4 x 1,72 + 1,60 + 4 x 0,12 = 8,96", de 0,5" a 9,46" — dentro da margem.
@@ -989,7 +1013,7 @@
     var XE = 0.5 + 4 * (LK + VK);
     cartao(pptx, s, XE, 1.14, 1.60, 1.06);
     anelExecucao(pptx, s, XE + 0.06, 1.26, 0.82, t.pct);
-    s.addText(t.pct == null ? '—' : t.pct + '%', {
+    s.addText(rotuloExecucao(t.pct, t.plan, t.real), {
       x: XE + 0.86, y: 1.32, w: 0.68, h: 0.36,
       fontSize: 18, bold: true, color: corPercentual(t.pct), wrap: false });
     s.addText('EXECUÇÃO', { x: XE + 0.86, y: 1.68, w: 0.68, h: 0.17,
@@ -1037,7 +1061,7 @@
                                  fontSize: 12, bold: true, color: C.azul, wrap: false });
       s.addText(it.real + 'h', { x: x + 0.76, y: y + 0.27, w: 0.62, h: 0.23,
                                  fontSize: 12, bold: true, color: C.verde, wrap: false });
-      s.addText(it.pct == null ? '—' : it.pct + '%', {
+      s.addText(rotuloExecucao(it.pct, it.plan, it.real), {
         x: x + CW - 0.72, y: y + 0.27, w: 0.61, h: 0.23, fontSize: 11.5, bold: true,
         color: corPercentual(it.pct), align: 'right', wrap: false });
       s.addText(it.entregas + (it.entregas === 1 ? ' entrega' : ' entregas'), {

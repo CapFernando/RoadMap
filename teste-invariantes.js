@@ -3523,6 +3523,77 @@ ok((ADMIN.match(/gerCortesDePontos\(/g) || []).length >= 3,
      'e a soma das barras continua fechando com o total');
 })();
 
+/* ─── NADA ACIMA DE 100% ─────────────────────────────────────────────────
+   "127%" numa linha chamada EXEC nao se le como informacao, se le como erro: a
+   primeira reacao de quem ve e "a conta esta errada", e a segunda e "como alguem
+   faz 127% de um plano?". As duas gastam a reuniao com o instrumento em vez do
+   trabalho. E travar em 100% seria mentir por arredondamento — a hora existiu. */
+sec('Execucao acima do plano');
+
+(() => {
+  const c = corpo(APRES, 'function rotuloExecucao(');
+  ok(!!c, 'existe uma regra unica para o rotulo de execucao');
+  if (!c) return;
+  const f = new Function(c + '; return rotuloExecucao;')();
+  ok(f(null, 0, 0) === '—', 'sem dado sai travessao, e nao 0%');
+  ok(f(0, 10, 0) === '0%' && f(62, 100, 62) === '62%' && f(100, 71, 71) === '100%',
+     'ate 100 o percentual continua — ali ele responde "quanto do plano andou"');
+  ok(f(127, 71, 90) === '+19h',
+     'acima de 100 sai a diferenca em HORA, que e a informacao de verdade');
+  ok(f(300, 10, 30) === '+20h', 'e vale para qualquer excesso');
+  ok(f(127, null, null) === 'acima do plano',
+     'sem as horas em mao, diz que passou do plano sem inventar numero');
+  ok(f(127, 90, 71) === 'acima do plano',
+     'e dado incoerente tambem nao vira numero');
+  // Nenhum percentual maior que 100 sobra no rotulo, para qualquer entrada.
+  const ruins = [];
+  for (let p = 0; p <= 400; p += 7) {
+    const r = f(p, 100, p);
+    const n = Number(String(r).replace('%', ''));
+    if (String(r).endsWith('%') && n > 100) ruins.push(p);
+  }
+  ok(!ruins.length, 'nenhum valor de 0 a 400 produz um percentual acima de 100',
+     ruins.length ? ruins.join(',') : '58 valores testados');
+})();
+
+/* TODO ROTULO DE EXECUCAO PASSA PELA REGRA. Sao quatro pontos: o cartao do
+   projeto, o anel do slide de frentes, o cartao de cada frente e a nota do total.
+
+   O PERCENTUAL DA EVOLUCAO NAO ENTRA AQUI, e nao e esquecimento: ele e "% no
+   prazo" — `noPrazo / (noPrazo + atraso)` —, uma razao que nao passa de 100 por
+   construcao. Passar ele por `rotuloExecucao` seria proteger contra um caso que
+   a aritmetica ja impede, e ainda faria o slide falar de hora onde nao ha hora. */
+ok((APRES.match(/rotuloExecucao\(/g) || []).length >= 5,
+   'os quatro rotulos de execucao do deck passam pela regra',
+   (APRES.match(/rotuloExecucao\(/g) || []).length + ' usos, com a definicao');
+ok(/'% no prazo'|% no prazo/.test(APRES) || /x\.pct/.test(APRES),
+   'e o percentual da evolucao segue direto: e razao no prazo, limitada a 100');
+
+/* ─── DOIS MESES NA EVOLUCAO ─────────────────────────────────────────────
+   Eram seis, e os quatro primeiros saiam zerados porque a ferramenta comecou a
+   ser usada em junho: quatro pares de barras em zero num slide de diretoria nao
+   dizem "nao havia dado", dizem "nao entregamos nada". */
+ok(/for \(let k = 1; k >= 0; k--\) \{/.test(ADMIN),
+   'a evolucao compara o mes atual com o anterior, e mais nenhum');
+
+/* ─── O CORTE POR DEV NAO PODE DIVIDIR POR ZERO ──────────────────────────
+   `devsDaDemanda` recebe a DEMANDA e le `m.dev` dentro; `splitDevs` recebe a
+   STRING. Passei a primeira onde ia a segunda: a lista vinha vazia,
+   `devs.length` dava zero, e a divisao apagava o corte inteiro EM SILENCIO — o
+   slide saiu "sem dados no mes" com 1544 pontos ao lado. */
+(() => {
+  const c = corpo(ADMIN, 'function gerCortesDePontos(');
+  ok(!!c, 'existe o corpo dos cortes de pontos');
+  if (!c) return;
+  ok(/if \(!devs\.length\)/.test(c),
+     'demanda sem dono vai para um balde nomeado, e nao para uma divisao por zero');
+  ok(/porDev\['Sem responsável'\]/.test(c),
+     'e o balde tem nome — corte vazio passa a significar "nao ha dono mesmo"');
+})();
+// A chamada do deck adapta a assinatura, em vez de passar a funcao errada.
+ok(/\(txt\) => window\.PIPELINES\.devsDaDemanda\(\{ dev: txt \}\)/.test(ADMIN),
+   'o deck adapta devsDaDemanda para a assinatura de splitDevs');
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
