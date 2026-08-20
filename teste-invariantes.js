@@ -2246,10 +2246,13 @@ ok(/hrLog > 0 \? hrLog \+ 'h' : hrEf \+ 'h\*'/.test(ADMIN),
      'a evolucao fica no ato 1: o mes so tem sentido dentro da serie');
   ok(dentroDe('slidePipelines(pptx, d.pipelines', 2),
      'as frentes ficam no ato 2, antes de o deck cobrar prazo');
-  ok(dentroDe('slideRapidas(pptx, d.rapidas', 3),
-     'as entregas rapidas fecham o ato do prazo, que e onde elas respondem');
-  ok(dentroDe('slideProjetos(pptx, d.projetos', 4) && dentroDe('slideAreas(pptx, d.areas', 4),
-     'projeto e area ficam juntos no ato 4: sao o mesmo assunto');
+  /* O PROJETO SUBIU PARA JUNTO DAS FRENTES — pedido do Fernando. A frente diz EM QUE
+   o mes foi gasto e o projeto diz PARA QUE: uma pergunta puxa a outra, e separa-las
+   por cinco slides obrigava a sala a lembrar do numero anterior. */
+ok(/slidePipelines\(pptx[\s\S]{0,600}slideProjetos\(pptx/.test(APRES),
+   'os projetos vem logo depois das frentes de trabalho');
+ok((APRES.match(/slideProjetos\(pptx, d\.projetos/g) || []).length === 1,
+   'e o slide de projetos e gerado uma vez so — mover nao pode virar duplicar');
   // A marca do gantt precisa ser a CHAMADA, e nao a definicao: `slideGanttDev(pptx, dv`
   // casa com as duas, e a definicao mora la em cima, antes de qualquer ato.
   ok(dentroDe('slideTime(pptx, d.time', 5) && dentroDe('slideGanttDev(pptx, dv, ++p', 5),
@@ -2637,7 +2640,10 @@ ok(/cada dia útil vale 8h/.test(APRES),
                             APRES.indexOf('function slideAreas'));
   const ambar = (corpo.match(/C\.ambar/g) || []).length;
   ok(ambar <= 1, 'no slide do time o ambar aparece uma vez so', ambar + ' usos');
-  ok(/color: C\.roxo \}\);/.test(corpo), 'e a ausencia usa cor propria');
+  /* A AUSENCIA E AMBAR, que no padrao quer dizer ATENCAO — e e o que ela e:
+     capacidade que o mes nao teve, e a resposta para "por que entregou menos". */
+  ok(/color: SIGNIFICADO\.atencao \}\);/.test(corpo),
+     'a ausencia usa a cor de atencao, e nao a mesma do grafico ao lado');
 })();
 
 /* A HORA REALIZADA E RECORTADA NO MES, como o planejado ja era.
@@ -3262,8 +3268,8 @@ ok(/var SIGNIFICADO = \{/.test(APRES),
    normal — nao e um problema a ser resolvido. */
 ok(!/b\.tipo === 'Sustentação' \? C\.ambar/.test(APRES),
    'sustentacao nao e pintada com a cor de alerta');
-ok(/SIGNIFICADO\.sustenta/.test(APRES),
-   'ela tem cor propria, de categoria e nao de juizo');
+ok(/SIGNIFICADO\.categoria2/.test(APRES),
+   'ela usa o neutro secundario: nem "bom" nem "atencao", so outra categoria');
 
 /* "ago…" LIA-SE COMO TEXTO CORTADO. As reticencias marcavam mes em curso, mas
    ninguem ve isso — ve um rotulo que nao coube, e passa a desconfiar do slide. */
@@ -3343,6 +3349,130 @@ ok(/id="ms-horas"/.test(DEV) && /Horas de desenvolvimento/.test(DEV),
    'o campo de horas continua sendo pedido na entrega');
 ok(/horas_realizadas/.test(ADMIN),
    'e o relatorio continua usando a hora para custo');
+
+/* ─── CINCO CORES, UM SIGNIFICADO CADA ───────────────────────────────────
+   Regra do Fernando, depois de olhar o deck e nao achar padrao nenhum:
+
+     VERDE     esta bom      VERMELHO  esta ruim
+     AMBAR     atencao       AZUL      neutro
+     BRANCO    neutro (numero de leitura, sem meta)
+
+   Prata entra como neutro SECUNDARIO, para duas categorias se distinguirem sem
+   que nenhuma seja melhor que a outra.                                        */
+sec('O padrao de cores do deck');
+
+/* O ROXO SAIU INTEIRO. Ele fazia papel de "outra categoria" em quatro slides sem
+   significar a mesma coisa em nenhum: sustentacao num, ausencia noutro, a terceira
+   area no terceiro, o KPI de frentes no quarto. Cor sem significado fixo e pior
+   que cor nenhuma, porque quem le procura o sentido e acha um errado. */
+ok(!/C\.roxo/.test(APRES), 'o roxo nao existe mais no deck');
+
+/* NENHUMA COR ESCRITA A MAO. Todo tom sai de `C` ou de `SIGNIFICADO`: hexadecimal
+   solto no meio do slide e o jeito de a paleta voltar a divergir sem ninguem ver. */
+ok(!/color: ['"][0-9A-Fa-f]{6}['"]/.test(APRES),
+   'nenhum hexadecimal escrito a mao no deck');
+
+/* `line: { width: 0 }` NAO APAGA O CONTORNO. O PptxGenJS emite a cor PADRAO dele
+   (#333333) quando a linha nao tem cor — uma cor que nao esta na paleta e que
+   ninguem escolheu, achada auditando o XML gerado. `type: 'none'` apaga. */
+ok(!/line: \{ width: 0 \}/.test(APRES),
+   'contorno se apaga com type:none, e nao com width:0 (que deixa o #333333 padrao)');
+
+/* VERDE MARCA O RESULTADO DESEJADO, e nao "numero alto". Um ranking de pessoas em
+   verde diz que todo mundo esta bom, o que nao informa nada — e comparacao de
+   magnitude pede cor neutra, com o nome ao lado da barra fazendo a identidade. */
+ok(/itens: d\.porDev, cor: SIGNIFICADO\.neutro/.test(APRES),
+   'o ranking por desenvolvedor usa cor neutra, e nao a de "bom"');
+
+/* NENHUMA COR COM JUIZO NUM NUMERO SEM META. Era a violacao mais repetida: o
+   percentual do prazo e o da execucao mudavam de verde para ambar para vermelho
+   conforme o valor, como se 100% fosse alvo acordado. Nao e — uma frente que
+   planejou 40h e realizou 60h nao "falhou", ela recebeu trabalho fora do plano. */
+(() => {
+  const cp = corpo(APRES, 'function corPercentual(');
+  ok(!!cp, 'existe a cor do percentual, num lugar so');
+  if (!cp) return;
+  ok(!/C\.verde|C\.ambar|C\.vermelho/.test(cp),
+     'a execucao nao muda de cor conforme o valor — ela nao tem meta');
+  const f = new Function('C', 'SIGNIFICADO', cp + '; return corPercentual;')(
+    { fraco: 'FRACO' }, { leitura: 'BRANCO' });
+  ok(f(null) === 'FRACO' && f(11) === 'BRANCO' && f(100) === 'BRANCO' && f(300) === 'BRANCO',
+     'qualquer percentual sai neutro, e so "sem dado" sai apagado');
+})();
+
+/* OURO, PRATA E BRONZE FICAM SO NO PODIO. Ali eles nao sao juizo: sao primeiro,
+   segundo e terceiro, convencao que se le sem legenda. Fora do podio, seriam uma
+   sexta e setima cores sem significado declarado. */
+ok((APRES.match(/C\.ouro/g) || []).length === 1 &&
+   /MEDALHA = \[C\.ouro, C\.prata, C\.bronze\]/.test(APRES),
+   'o ouro aparece uma vez so, e e no podio do ranking');
+
+/* ─── OS CORTES DE PONTOS NO DECK ────────────────────────────────────────
+   Os mesmos quatro recortes do painel gerencial, que faltavam no deck.       */
+sec('Pontos entregues no deck');
+
+/* A CONTA E UMA SO, e o painel e o deck chamam a mesma funcao. Duas copias da
+   mesma soma e o defeito que mais aparece nesta base: foi assim que a "eficiencia"
+   deu 100% todo mes (duas contas com o mesmo nome, janelas diferentes) e que o
+   atraso viveu em quatro versoes divergentes. */
+ok(/function gerCortesDePontos\(/.test(ADMIN),
+   'os cortes de pontos vivem numa funcao propria');
+ok((ADMIN.match(/gerCortesDePontos\(/g) || []).length >= 3,
+   'e ela e chamada pelo painel E pelo deck, em vez de a soma ser repetida');
+
+(() => {
+  const c = corpo(ADMIN, 'function gerCortesDePontos(');
+  ok(!!c, 'existe o corpo da funcao');
+  if (!c) return;
+  /* DEMANDA DE DUPLA DIVIDE O PONTO. Contar inteiro para cada um faz a soma por
+     dev estourar o total do mes — e a primeira coisa que se faz num slide de
+     diretoria e somar as fatias. */
+  ok(/Number\(m\.poker_pontos\) \/ devs\.length/.test(c),
+     'demanda de dupla divide o ponto entre os dois');
+  /* "FORA DO MES" E "SEM SPRINT" ENTRAM como categoria propria: sem elas a soma
+     das fatias nao fecha com o total. */
+  ok(/'Fora do mês'/.test(c) && /'Sem sprint'/.test(c),
+     'as sobras entram nomeadas, em vez de sumirem da conta');
+})();
+
+/* BARRA HORIZONTAL, E NAO A ROSCA DO PAINEL. Unica coisa que muda de forma, e a
+   razao e a distancia: projetada, uma rosca de seis fatias com rotulo "AXCred -
+   Cadastro - Analise de Credito - Reanalise" nao se le do fundo da sala. */
+(() => {
+  const p = corpo(APRES, 'function painelPontos(');
+  ok(!!p, 'existe o painel de pontos do deck');
+  if (!p) return;
+  /* UMA COR SO nas barras: numa barra a identidade vem do ROTULO, e pintar seis
+     barras de seis cores inventa um significado que nao existe. */
+  ok(!/C\.verde|C\.vermelho|C\.ambar/.test(p),
+     'as barras de pontos usam so a cor neutra — a identidade vem do rotulo');
+  ok(/SIGNIFICADO\.neutro/.test(p), 'e essa cor e a neutra do padrao');
+  /* AS LARGURAS SOMAM O PAINEL. A conta esta no comentario do codigo e aqui:
+     1,52 + 0,08 + 1,55 + 0,10 + 0,52 + 0,45 = 4,22" num painel de 4,25". */
+  const n = (r) => { const m = p.match(r); return m ? Number(m[1]) : NaN; };
+  const soma = n(/W_NOME = ([\d.]+)/) + 0.08 + n(/W_TRILHO = ([\d.]+)/) + 0.10 +
+               n(/W_VAL = ([\d.]+)/) + n(/W_PCT = ([\d.]+)/);
+  ok(soma <= 4.25 + 0.001,
+     'as colunas do painel caberiam na largura dele', soma.toFixed(2) + '" de 4,25"');
+})();
+
+// A cauda dobra em "Outros", nomeada: some com ela e a soma dos percentuais da
+// 79% na frente da diretoria.
+(() => {
+  const t = corpo(APRES, 'function topoComOutros(');
+  ok(!!t, 'existe o dobrador da cauda');
+  if (!t) return;
+  const f = new Function(t + '; return topoComOutros;')();
+  const seis = { a: 10, b: 9, c: 8, d: 7, e: 6, f: 5, g: 4 };
+  const r = f(seis, 5);
+  ok(r.length === 6 && r[5].nome === 'Outros (2)' && r[5].valor === 9,
+     'a cauda vira uma linha "Outros (N)" com a soma dela');
+  ok(f({ a: 1, b: 2 }, 5).length === 2, 'lista curta passa inteira, sem "Outros"');
+  ok(f({ a: 1, b: 0 }, 5).length === 1, 'categoria zerada nao vira barra invisivel');
+  const total = Object.values(seis).reduce((x, y) => x + y, 0);
+  ok(r.reduce((x, y) => x + y.valor, 0) === total,
+     'e a soma das barras continua fechando com o total');
+})();
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

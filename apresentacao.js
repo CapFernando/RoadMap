@@ -63,26 +63,39 @@
      relacao. O relato foi literal — "o amarelo me leva a entender que esta no
      prazo, porem la no grafico mostra ainda em aberto".
 
-     TEM JUIZO (a cor esta dizendo se foi bom ou ruim):
-       verde     cumprido, entregue dentro do combinado
-       vermelho  falhou, entregue depois do combinado
-       ambar     ATENCAO — risco corrente, algo que pode falhar e ainda da tempo
+     A REGRA E DO FERNANDO, e sao cinco cores:
 
-     NAO TEM JUIZO (a cor so separa categorias):
-       azul      previsto, planejado, ainda em aberto — sem veredito ainda
-       roxo      sustentacao (e uma natureza de trabalho, e nao uma nota)
-       prata     fora da conta: nao ha base para julgar
-       branco    numero de leitura, sem meta contra a qual comparar
+       VERDE      o resultado desejado aconteceu — entregue, saiu da fila, no
+                  prazo. NAO e "numero alto": um ranking de pessoas em verde diz
+                  que todo mundo esta bom, o que nao informa nada
+       VERMELHO   esta ruim — atraso, falha, prazo estourado
+       AMBAR      ATENCAO — risco corrente: parada, fila crescendo, sem tarefa.
+                  Algo que pode dar errado e ainda da tempo de agir
+       AZUL       NEUTRO — categoria, contagem, previsto. Nao julga nada
+       BRANCO     NEUTRO — numero de leitura, sem meta contra a qual comparar
 
-     A REGRA PRATICA: nenhuma cor com juizo pode aparecer num numero que nao tem
-     meta. "62%" pintado de ambar vira nota baixa aos olhos de quem ve, e nao ha
-     meta de prazo acordada nesta empresa — o numero informa, e nao reprova.   */
+     Prata entra como neutro SECUNDARIO: quando duas categorias precisam se
+     distinguir na mesma barra e nenhuma das duas e melhor que a outra.
+
+     A REGRA PRATICA QUE MAIS SE VIOLAVA: nenhuma cor com juizo pode aparecer num
+     numero que nao tem meta. "62%" pintado de ambar vira nota baixa aos olhos de
+     quem ve, e nao ha meta de prazo acordada nesta empresa — o numero informa, e
+     nao reprova. O mesmo valia para a execucao (planejado x realizado): ela
+     mudava de verde para ambar para vermelho conforme o valor, como se 100%
+     fosse o alvo.
+
+     O QUE SAIU: o roxo, que fazia papel de "outra categoria" em quatro slides
+     diferentes sem significar a mesma coisa em nenhum deles. Ouro, prata e
+     bronze ficam SO no podio do ranking — ali eles nao sao juizo, sao a
+     convencao de primeiro, segundo e terceiro, que todo mundo le sem legenda. */
   var SIGNIFICADO = {
     cumprido:  C.verde,
     falhou:    C.vermelho,
     atencao:   C.ambar,
+    neutro:    C.azul,
     previsto:  C.azul,
-    sustenta:  C.roxo,
+    categoria2: C.prata,
+    sustenta:  C.prata,
     foraConta: C.prata,
     leitura:   C.texto,
   };
@@ -230,7 +243,7 @@
       color: verde, charSpacing: 1 }, tipo));
     s.addText(titulo, Object.assign({
       x: 3.3, y: 2.2, w: LARG, h: 1.0, fontSize: corpo, bold: true,
-      color: 'FFFFFF' }, tipo));
+      color: C.texto }, tipo));
     s.addText(String(cfg.periodo || '').toUpperCase(), Object.assign({
       x: 3.35, y: 3.3, w: 6.4, h: 0.35, fontSize: 18, bold: true,
       color: verde, charSpacing: 1 }, tipo));
@@ -304,7 +317,7 @@
     s.addText(lista.length + (lista.length === 1 ? ' projeto em aberto' : ' projetos em aberto'), {
       x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
     s.addShape(pptx.ShapeType.rect, {
-      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { width: 0 } });
+      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { type: 'none' } });
 
     if (!lista.length) {
       s.addText('Nenhum projeto em aberto no período.', {
@@ -357,7 +370,7 @@
         // Dito com todas as letras, e nao com um zero que se le como "nao sei".
         s.addText('sem tarefa no mês', {
           x: 6.55, y: y + 0.19, w: 2.8, h: 0.24, fontSize: 10, bold: true,
-          color: C.ambar, align: 'right' });
+          color: SIGNIFICADO.atencao, align: 'right' });
         return;
       }
       var cols = [
@@ -485,12 +498,12 @@
         fontSize: 8, bold: true, color: C.fraco, charSpacing: 1.2 });
       var xq = 5.5, LQ = 3.8;
       [{ v: quebra.evolucao || 0, cor: C.verde },
-       { v: quebra.sustentacao || 0, cor: SIGNIFICADO.sustenta },
+       { v: quebra.sustentacao || 0, cor: SIGNIFICADO.categoria2 },
        { v: quebra.sem || 0, cor: C.fundo3 }].forEach(function (q) {
         if (!q.v) return;
         var w = LQ * q.v / (totQ || 1);
         s.addShape(pptx.ShapeType.rect, { x: xq, y: 0.86, w: w, h: 0.16,
-                                          fill: { color: q.cor }, line: { width: 0 } });
+                                          fill: { color: q.cor }, line: { type: 'none' } });
         xq += w;
       });
       var legQ = [];
@@ -549,8 +562,10 @@
          texto e liga "sustentacao" a "Gabriel Fernandes, ferias" — duas coisas
          sem relacao nenhuma. Cor repetida no mesmo slide e leitura errada, e nao
          economia de paleta. */
+      /* AMBAR: ausencia e atencao de verdade — e capacidade que o mes nao teve, e
+         a pergunta "por que entregou menos" tem resposta aqui. */
       }).join('   ·   '), { x: 0.7, y: 4.78, w: 8.6, h: 0.32, fontSize: 13,
-                            color: C.roxo });
+                            color: SIGNIFICADO.atencao });
     }
     rodape(s, periodo, pagina);
     return s;
@@ -571,10 +586,13 @@
       // A barra e a leitura de relance; o numero grande a direita ancora.
       s.addShape(pptx.ShapeType.rect, {
         x: 0.7, y: y + 0.72, w: 6.2 * (a.entregas / max), h: 0.12,
-        fill: { color: i === 0 ? C.azul : i === 1 ? C.verde : C.roxo } });
+        /* UMA COR SO. Azul, verde e roxo por POSICAO na lista nao significavam
+           nada: a segunda area nao e "boa" nem a terceira "outra coisa" — a ordem
+           ja diz quem e maior, e a cor ficava livre para inventar sentido. */
+        fill: { color: SIGNIFICADO.neutro } });
       s.addText(String(a.entregas), {
         x: 7.4, y: y - 0.05, w: 1.9, h: 0.7, fontSize: 34, bold: true,
-        color: i === 0 ? C.azul : i === 1 ? C.verde : C.roxo, align: 'right' });
+        color: SIGNIFICADO.neutro, align: 'right' });
     });
     rodape(s, periodo, pagina);
     return s;
@@ -593,6 +611,125 @@
   // depende do tamanho do canvas na tela de quem exportou, e sobrevive ao PDF.
   // Uma cor so, ordenado do maior para o menor, numero na ponta. A comparacao e
   // o assunto; a cor nao carrega informacao nenhuma aqui.
+  /* ─── OS CORTES DE PONTOS ────────────────────────────────────────────────
+     Os mesmos quatro recortes do painel gerencial — por semana, por dev, por
+     assunto e por sprint —, que o Fernando sentiu falta no deck.
+
+     BARRA HORIZONTAL, E NAO A ROSCA DO PAINEL. Essa e a unica coisa que muda de
+     forma, e o motivo e a distancia de leitura: na tela a rosca funciona porque a
+     legenda esta ao lado e a pessoa esta a cinquenta centimetros. Projetada, uma
+     rosca de seis fatias com rotulo "AXCred - Cadastro - Analise de Credito -
+     Reanalise" nao se le do fundo da sala — o nome nao cabe na fatia, e comparar
+     dois arcos parecidos e mais dificil que comparar dois comprimentos. A barra
+     responde a MESMA pergunta ("qual a fatia de cada um") com o rotulo na
+     horizontal e o percentual ao lado do valor.
+
+     UMA COR SO, e nao seis. Numa barra a identidade vem do ROTULO, e nao da cor —
+     cada barra tem o nome do lado. Pintar seis barras de seis cores inventa um
+     significado que nao existe (por que Emilly e roxa?) e ainda quebra a leitura
+     de quem nao distingue as duas mais parecidas. Azul, que e a cor neutra do
+     padrao.
+
+     O TOTAL VAI NO CABECALHO DE CADA PAINEL, porque o percentual sem o
+     denominador convida a soma de cabeca no meio da apresentacao.               */
+  function painelPontos(s, pptx, cfg) {
+    var x0 = cfg.x, y0 = cfg.y, LARG = cfg.w;
+    s.addText(cfg.titulo, { x: x0, y: y0, w: LARG, h: 0.24, fontSize: 12,
+                            bold: true, color: C.texto, wrap: false });
+    s.addText(cfg.total + ' pontos', {
+      x: x0, y: y0 + 0.23, w: LARG, h: 0.2, fontSize: 9, color: C.fraco, wrap: false });
+
+    var itens = cfg.itens || [];
+    if (!itens.length) {
+      s.addText('sem dados no mês', { x: x0, y: y0 + 0.6, w: LARG, h: 0.24,
+                                      fontSize: 10, color: C.fraco });
+      return;
+    }
+    var max = itens.reduce(function (m, i) { return Math.max(m, i.valor); }, 0) || 1;
+    /* AS LARGURAS SOMAM A LARGURA DO PAINEL, e a conta esta a vista para nao
+       transbordar: nome 1,52 + vao 0,08 + trilho 1,55 + vao 0,10 + valor 0,52 +
+       percentual 0,45 = 4,22". Com o painel em 4,25" sobra 0,03". */
+    var W_NOME = 1.52, W_TRILHO = 1.55, W_VAL = 0.52, W_PCT = 0.45;
+    var xTrilho = x0 + W_NOME + 0.08;
+    var xVal = xTrilho + W_TRILHO + 0.10;
+    var xPct = xVal + W_VAL;
+
+    var TOPO = y0 + 0.52, ALT = 0.335;
+    itens.forEach(function (it, i) {
+      var y = TOPO + i * ALT;
+      var pct = Math.round(it.valor / cfg.total * 100);
+      // 22 caracteres e o que cabe em 1,52" a 9,5pt. Cortar com reticencia e
+      // melhor que deixar o PowerPoint quebrar o nome em duas linhas e empurrar a
+      // barra de baixo.
+      s.addText(corta(it.nome, 22), {
+        x: x0, y: y, w: W_NOME, h: ALT, fontSize: 9.5, color: C.texto,
+        align: 'right', valign: 'middle', wrap: false });
+      s.addShape(pptx.ShapeType.rect, {
+        x: xTrilho, y: y + 0.115, w: W_TRILHO, h: 0.11, fill: { color: C.fundo3 } });
+      s.addShape(pptx.ShapeType.rect, {
+        x: xTrilho, y: y + 0.115, w: Math.max(0.04, W_TRILHO * (it.valor / max)),
+        h: 0.11, fill: { color: SIGNIFICADO.neutro } });
+      s.addText(String(Math.round(it.valor)), {
+        x: xVal, y: y, w: W_VAL, h: ALT, fontSize: 10.5, bold: true,
+        color: SIGNIFICADO.neutro, valign: 'middle', align: 'right', wrap: false });
+      s.addText(pct + '%', {
+        x: xPct, y: y, w: W_PCT, h: ALT, fontSize: 9, color: C.fraco,
+        valign: 'middle', align: 'right', wrap: false });
+    });
+  }
+
+  /** Um objeto {nome: valor} vira lista, com a cauda dobrada em "Outros".
+   *  O teto e cinco mais a cauda: seis linhas cabem no painel, e a sexta linha
+   *  chamada "Outros (8)" diz que ha mais — some com ela e a soma dos percentuais
+   *  da 79% na frente da diretoria. */
+  function topoComOutros(obj, teto) {
+    var pares = Object.keys(obj || {}).map(function (k) { return { nome: k, valor: obj[k] }; })
+      .filter(function (x) { return x.valor > 0; });
+    if (pares.length <= teto) return pares;
+    var topo = pares.slice(0, teto);
+    var resto = pares.slice(teto);
+    var soma = resto.reduce(function (t, x) { return t + x.valor; }, 0);
+    topo.push({ nome: 'Outros (' + resto.length + ')', valor: soma });
+    return topo;
+  }
+
+  function slidePontos(pptx, pt, pagina, periodo) {
+    var s = slideTitulo(pptx, 'Pontos entregues',
+                        'a mesma distribuição do painel gerencial', pagina);
+    /* DOIS PAINEIS POR SLIDE, e nao quatro. Com quatro, cada um fica com 2,1" de
+       altura para caber titulo, total e seis linhas — e o nome do assunto cai a
+       cinco caracteres. Dois por slide dao 4,25" de largura cada, que e onde o
+       nome do tema ainda se le. */
+    painelPontos(s, pptx, { x: 0.62, y: 1.55, w: 4.25, titulo: 'Por semana',
+                            total: pt.total, itens: topoComOutros(pt.porSemana, 5) });
+    painelPontos(s, pptx, { x: 5.13, y: 1.55, w: 4.25, titulo: 'Por desenvolvedor',
+                            total: pt.total, itens: topoComOutros(pt.porDev, 5) });
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
+  function slidePontos2(pptx, pt, pagina, periodo) {
+    var s = slideTitulo(pptx, 'Pontos entregues',
+                        'por assunto e por sprint', pagina);
+    painelPontos(s, pptx, { x: 0.62, y: 1.55, w: 4.25, titulo: 'Por assunto',
+                            total: pt.total, itens: topoComOutros(pt.porAssunto, 5) });
+    if (pt.temSprint) {
+      painelPontos(s, pptx, { x: 5.13, y: 1.55, w: 4.25, titulo: 'Por sprint',
+                              total: pt.total, itens: topoComOutros(pt.porSprint, 5) });
+    } else {
+      /* SEM SPRINT PREENCHIDA, o painel diz isso em vez de mostrar uma barra so
+         chamada "Sem sprint" ocupando 100% — que e verdade e nao informa nada. */
+      s.addText('Por sprint', { x: 5.13, y: 1.55, w: 4.25, h: 0.24, fontSize: 12,
+                                bold: true, color: C.texto });
+      s.addText('A sprint não foi preenchida nas demandas deste mês, então não há ' +
+                'como distribuir os pontos por sprint.', {
+        x: 5.13, y: 1.85, w: 4.25, h: 0.6, fontSize: 10, color: C.fraco,
+        lineSpacingMultiple: 1.3 });
+    }
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
   function slideBarras(pptx, cfg, pagina, periodo) {
     var s = slideTitulo(pptx, cfg.titulo, cfg.sub || '', pagina);
     var itens = (cfg.itens || []).slice(0, cfg.max || 12);
@@ -668,11 +805,13 @@
      A COBERTURA DE HORAS VAI NO RODAPÉ, sempre. Um mês com 39% das entregas sem
      hora lançada mostra execução baixa por falta de lançamento, e não por falta
      de trabalho — sem a nota, o slide acusa o time de algo que não aconteceu.  */
+  /* BRANCO, SEMPRE. Ele mudava de verde para ambar para vermelho conforme o
+     valor, e isso e a linguagem de uma META — mas 100% de execucao nao e alvo
+     acordado de ninguem: uma frente que planejou 40h e realizou 60h nao "falhou",
+     ela recebeu trabalho que nao estava no plano. Pintado de vermelho, o numero
+     acusa o time de algo que nao aconteceu. */
   function corPercentual(pct) {
-    if (pct == null) return C.fraco;
-    if (pct >= 85 && pct <= 115) return C.verde;
-    if (pct >= 60 && pct <= 140) return C.ambar;
-    return C.vermelho;
+    return pct == null ? C.fraco : SIGNIFICADO.leitura;
   }
 
   /* -- Pecas do painel de sprints -------------------------------------------
@@ -691,7 +830,7 @@
     // A faixa de cor no topo — e ela que liga o cartao a frente que ele mostra.
     if (opts.faixa) {
       s.addShape(pptx.ShapeType.rect, {
-        x: x, y: y, w: w, h: 0.045, fill: { color: opts.faixa }, line: { width: 0 } });
+        x: x, y: y, w: w, h: 0.045, fill: { color: opts.faixa }, line: { type: 'none' } });
     }
   }
 
@@ -757,7 +896,7 @@
        { v: it.real, cor: it.cor, dy: 0.155 }].forEach(function (b) {
         s.addShape(pptx.ShapeType.rect, {
           x: xBarra, y: y + b.dy, w: Math.max(0.02, wBarra * (b.v / max)), h: 0.09,
-          fill: { color: b.cor }, line: { width: 0 } });
+          fill: { color: b.cor }, line: { type: 'none' } });
       });
       s.addText(it.plan + 'h / ' + it.real + 'h', {
         x: xBarra + wBarra + 0.06, y: y, w: 0.62, h: 0.32,
@@ -801,7 +940,7 @@
         x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
     }
     s.addShape(pptx.ShapeType.rect, {
-      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { width: 0 } });
+      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { type: 'none' } });
 
     if (!itens.length) {
       s.addText('Sem entregas com frente definida no período.',
@@ -813,7 +952,7 @@
     // -- A faixa de numeros do mes, com o anel de execucao no canto ------------
     var t = pl.total || {};
     var kpis = [
-      { rot: 'FRENTES',   val: itens.length, cor: C.roxo,
+      { rot: 'FRENTES',   val: itens.length, cor: SIGNIFICADO.neutro,
         nota: (pl.devs || 0) + (pl.devs === 1 ? ' pessoa' : ' pessoas') },
       { rot: 'ENTREGAS',  val: t.entregas, cor: C.azul,
         nota: t.pontos ? t.pontos + ' pontos' : '' },
@@ -969,7 +1108,7 @@
         x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
     }
     s.addShape(pptx.ShapeType.rect, {
-      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { width: 0 } });
+      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { type: 'none' } });
 
     /* A CONTA DO MES, em quatro cartoes com os sinais entre eles.
 
@@ -982,8 +1121,12 @@
         chave: 'recebidas', bomSubir: true },
       { rot: 'SAÍRAM DA FILA', val: f.saidas, cor: C.verde, sinal: '−',
         chave: 'saidas', bomSubir: true },
+      /* AZUL, E NAO AMBAR. Este numero e um SALDO — quantas demandas ficaram na
+         fila —, e saldo e fato, nao alerta. Em ambar ele chegava a sala como
+         problema antes de alguem ler se cresceu ou diminuiu. Quem julga isso e a
+         frase abaixo do grafico, que fica em ambar quando a fila cresceu. */
       { rot: f.emCurso ? 'EM ABERTO HOJE' : 'EM ABERTO NO FIM',
-        val: f.backlogFim, cor: C.ambar, sinal: '=',
+        val: f.backlogFim, cor: SIGNIFICADO.neutro, sinal: '=',
         chave: 'backlogFim', bomSubir: false },
     ].filter(function (x) { return x.val != null; });
 
@@ -1017,11 +1160,11 @@
       if (qq) {
         var partes = [];
         if (qq.evolucao) partes.push({ t: qq.evolucao + ' evolução', c: C.verde });
-        if (qq.sustentacao) partes.push({ t: qq.sustentacao + ' sustentação', c: SIGNIFICADO.sustenta });
+        if (qq.sustentacao) partes.push({ t: qq.sustentacao + ' sustentação', c: SIGNIFICADO.categoria2 });
         if (qq.sem) partes.push({ t: qq.sem + ' sem classificar', c: C.fraco });
         partes.slice(0, 3).forEach(function (p, j) {
           s.addShape(pptx.ShapeType.rect, { x: x + 0.13, y: 2.42 + j * 0.24, w: 0.1, h: 0.1,
-                                            fill: { color: p.c }, line: { width: 0 } });
+                                            fill: { color: p.c }, line: { type: 'none' } });
           s.addText(p.t, { x: x + 0.28, y: 2.36 + j * 0.24, w: LC - 0.4, h: 0.22,
                            fontSize: 8.5, color: C.fraco });
         });
@@ -1039,7 +1182,7 @@
               (saldo === -1 ? ' demanda' : ' demandas') + '.'
             : 'Entrou e saiu o mesmo tanto: a fila ficou do mesmo tamanho.'),
         { x: 0.5, y: 3.66, w: 9.0, h: 0.4, fontSize: 17, bold: true,
-          color: saldo > 0 ? C.ambar : C.verde });
+          color: saldo > 0 ? SIGNIFICADO.atencao : SIGNIFICADO.cumprido });
     }
     var saiu = [];
     if (f.saiuEntregue) saiu.push(f.saiuEntregue + ' entregues');
@@ -1226,7 +1369,11 @@
       var x2 = X0 + LARG * (b.ate - 1) / Math.max(1, dias - 1);
       s.addShape(pptx.ShapeType.rect, {
         x: x1, y: y + 0.06, w: Math.max(0.09, x2 - x1), h: 0.22,
-        fill: { color: b.tipo === 'Sustentação' ? SIGNIFICADO.sustenta : SIGNIFICADO.cumprido } });
+        /* DUAS CATEGORIAS NEUTRAS. Evolucao nao e "bom" e sustentacao nao e
+           "atencao": manter de pe o que existe e trabalho normal. Azul e prata
+           distinguem sem julgar — em verde e ambar, o slide dizia que metade do
+           mes foi problema. */
+        fill: { color: b.tipo === 'Sustentação' ? SIGNIFICADO.categoria2 : SIGNIFICADO.neutro } });
       var meta = [b.tema, b.pontos ? b.pontos + ' pt' : ''].filter(Boolean).join(' · ');
       if (meta) s.addText(corta(meta, 30), { x: 0.7, y: y + 0.19, w: 2.7, h: 0.19,
                                              fontSize: 8.5, color: C.fraco });
@@ -1237,8 +1384,8 @@
         x: 0.7, y: TOPO + vis.length * ALT + 0.04, w: 8.6, h: 0.28,
         fontSize: 11, color: C.fraco });
     }
-    [{ t: 'evolução', cor: SIGNIFICADO.cumprido },
-     { t: 'sustentação', cor: SIGNIFICADO.sustenta }].forEach(function (l, i) {
+    [{ t: 'evolução', cor: SIGNIFICADO.neutro },
+     { t: 'sustentação', cor: SIGNIFICADO.categoria2 }].forEach(function (l, i) {
       s.addShape(pptx.ShapeType.rect, { x: 3.5 + i * 1.5, y: 4.92, w: 0.14, h: 0.14,
                                         fill: { color: l.cor } });
       s.addText(l.t, { x: 3.7 + i * 1.5, y: 4.85, w: 1.3, h: 0.26, fontSize: 10, color: C.fraco });
@@ -1367,6 +1514,23 @@
        no que o time esteve é cobrar no escuro.                               */
     if (d.secoes.pipelines && d.pipelines) slidePipelines(pptx, d.pipelines, ++p, d.periodo);
 
+    /* OS PROJETOS VÊM LOGO DEPOIS DAS FRENTES — pedido do Fernando, e a ordem tem
+       lógica: a frente diz EM QUE o mês foi gasto, o projeto diz PARA QUÊ. Uma
+       pergunta puxa a outra, e separá-las por cinco slides obrigava a sala a
+       lembrar do número anterior. */
+    if (d.secoes.projetos && (d.projetos || []).length) {
+      slideProjetos(pptx, d.projetos, ++p, d.periodo);
+    }
+
+    /* OS PONTOS FECHAM O ATO DA CAPACIDADE. Frente, projeto e ponto respondem a
+       mesma pergunta em escalas diferentes: em que frente, para que projeto, e com
+       quanto peso. O ponto vem por ultimo porque e a medida mais fina — e a que
+       so faz sentido depois de a sala saber onde o mes foi gasto. */
+    if (d.secoes.pontos && d.pontos && d.pontos.total > 0) {
+      slidePontos(pptx, d.pontos, ++p, d.periodo);
+      slidePontos2(pptx, d.pontos, ++p, d.periodo);
+    }
+
     /* ─── ATO 3 · CUMPRIMOS O COMBINADO? ─────────────────────────────────
        A pergunta que a diretoria faz. Vem depois de "onde a capacidade foi", e
        fecha com as entregas rápidas — que é onde o time responde.            */
@@ -1393,12 +1557,10 @@
     }
 
     /* ─── ATO 4 · EM QUE TRABALHAMOS ──────────────────────────────────────
-       Projeto, área e quem pediu são a mesma pergunta em três recortes: onde o
-       esforço foi aplicado. Ficavam separados — "onde atuamos" estava no meio do
-       bloco de pessoas, e a sala trocava de assunto duas vezes sem precisar.  */
-    if (d.secoes.projetos && (d.projetos || []).length) {
-      slideProjetos(pptx, d.projetos, ++p, d.periodo);
-    }
+       Área e quem pediu são a mesma pergunta em dois recortes: onde o esforço foi
+       aplicado. O PROJETO SAIU DAQUI e subiu para junto das frentes — a frente diz
+       em que o mês foi gasto e o projeto diz para quê, e as duas perguntas se
+       puxam.                                                                   */
     if (d.secoes.areas && (d.areas || []).length) slideAreas(pptx, d.areas, ++p, d.periodo);
 
     // Quem pediu fecha o ato: o time e uma leitura; a area cliente e outra, e e a que diz
@@ -1406,7 +1568,7 @@
     if (d.secoes.solicit && d.solicitantes) {
       slideBarras(pptx, {
         titulo: 'Quem mais pediu', sub: 'demandas concluídas no período, por solicitante',
-        itens: d.solicitantes.itens, max: 5, cor: C.roxo,
+        itens: d.solicitantes.itens, max: 5, cor: SIGNIFICADO.neutro,
         rotuloSobra: ' solicitantes',
         // A nota existe porque o ranking some com quem nao tem solicitante. Sem
         // dizer quantas ficaram de fora, a soma das barras nao bate com o total
@@ -1432,7 +1594,7 @@
     if (d.secoes.grafico && (d.porDev || []).length) {
       slideBarras(pptx, {
         titulo: 'Entregas por desenvolvedor', sub: 'demandas concluídas no período',
-        itens: d.porDev, cor: C.verde, rotuloSobra: ' pessoas', rotuloExtra: 'pts',
+        itens: d.porDev, cor: SIGNIFICADO.neutro, rotuloSobra: ' pessoas', rotuloExtra: 'pts',
       }, ++p, d.periodo);
     }
 
@@ -1460,7 +1622,7 @@
         tabela(pptx, sr, ['Demanda', 'Parada há', 'Motivo'],
           d.riscos.pausadas.map(function (x) {
             return [corta(x.titulo, 40),
-                    { text: x.dias + 'd', options: { color: C.ambar } },
+                    { text: x.dias + 'd', options: { color: SIGNIFICADO.atencao } },
                     corta(x.motivo, 46)];
           }), { colW: [3.6, 1.0, 4.0], rotuloSobra: ' pausadas' });
       } else {

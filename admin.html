@@ -4746,6 +4746,7 @@ const AP_SECOES = [
   { k: 'rapidas',  rot: 'Entregas rápidas (até 2 dias)', pad: true },
   { k: 'evolucao', rot: 'Evolução dos últimos 6 meses', pad: true },
   { k: 'projetos', rot: 'Projetos em aberto', pad: true },
+  { k: 'pontos',   rot: 'Pontos entregues (semana, dev, assunto, sprint)', pad: true },
   { k: 'time',     rot: 'O time (agregado) e quem esteve fora', pad: true },
   { k: 'areas',    rot: 'Onde atuamos (top 3)', pad: true },
   { k: 'solicit',  rot: 'Quem mais pediu (top 5)', pad: true },
@@ -5547,6 +5548,10 @@ async function apresGerar() {
     const imagens = [];
 
     const periodo = apresentacaoMesNome(mes - 1).replace(/^./, c => c.toUpperCase()) + ' de ' + ano;
+    // id -> nome do tema, para o corte de pontos por assunto. Montado aqui porque
+    // o deck e a unica coisa nesta funcao que precisa dele.
+    const temaMapDoDeck = {};
+    (state.temas || []).forEach(t => { temaMapDoDeck[t.id] = t.nome; });
     const pptx = await apresentacaoMontaDeck({
       titulo: 'Roadmap de Melhorias',
       periodo,
@@ -5589,6 +5594,11 @@ async function apresGerar() {
         x => x.entraram || x.sairam || x.backlog))),
       ganttDev,
       pipelines,
+      /* OS CORTES DE PONTOS, da MESMA funcao que o painel gerencial usa.
+         Chamar `gerCortesDePontos` em vez de repetir a soma aqui e o que impede o
+         deck e a tela de discordarem — foi assim que a "eficiencia" deu 100% todo
+         mes: duas contas com o mesmo nome e janelas diferentes. */
+      pontos: gerCortesDePontos(ano, mes, temaMapDoDeck, window.PIPELINES.devsDaDemanda),
       rapidas: { itens: rapidasLista, total: conc.length },
       quebra,
       fluxo: { recebidas: entradas.length, entregues: conc.length,
@@ -6163,6 +6173,67 @@ function renderGerencial() {
 // Relatório de pontos do Planning Poker para o mês/ano selecionado.
 // Cards com múltiplos devs têm os pontos divididos entre eles (igual às horas),
 // para que a soma por dev feche com o total do mês.
+/** OS QUATRO CORTES DE PONTOS DO MES: por semana, por dev, por assunto e por
+ *  sprint.
+ *
+ *  Extraida de `renderGerPontos` porque o DECK passou a mostrar os mesmos cortes.
+ *  Duas copias da mesma soma e o defeito que mais aparece nesta base: foi assim
+ *  que a "eficiencia" deu 100% todo mes (duas contas com o mesmo nome, janelas
+ *  diferentes) e que o atraso viveu em quatro versoes divergentes. Aqui a conta e
+ *  uma, e quem discorda dela discorda em todas as telas ao mesmo tempo.
+ *
+ *  A DIVISAO POR DEV E FRACIONADA (`/ devs.length`): demanda de dupla nao pode
+ *  contar o ponto inteiro para cada um, senao a soma por dev estoura o total do
+ *  mes e alguem soma.
+ *
+ *  "Fora do mes" e "Sem sprint" ENTRAM como categoria propria, e nao somem: sem
+ *  elas a soma das fatias nao fecha com o total, e a primeira coisa que se faz
+ *  num slide de diretoria e somar.                                            */
+function gerCortesDePontos(ano, mes, temaMap, splitDevs) {
+  const semanas = gerSemanasDoMes(ano, mes);
+  const itens = gerItensPontuados(ano, mes);
+
+  const porSemana = {};
+  semanas.forEach((_, i) => { porSemana['S' + (i + 1)] = 0; });
+  let foraDaSemana = 0;
+  itens.forEach(m => {
+    const idx = gerSemanaIndex(gerDataRefPontos(m), semanas);
+    if (idx >= 0) porSemana['S' + (idx + 1)] += Number(m.poker_pontos);
+    else foraDaSemana += Number(m.poker_pontos);
+  });
+  if (foraDaSemana > 0) porSemana['Fora do mês'] = foraDaSemana;
+
+  const porDev = {};
+  itens.forEach(m => {
+    const devs = splitDevs(m.dev);
+    const val = Number(m.poker_pontos) / devs.length;
+    devs.forEach(d => { porDev[d] = (porDev[d] || 0) + val; });
+  });
+
+  const porAssunto = {};
+  itens.forEach(m => {
+    const k = temaMap[m.tema_id] || 'Sem tema';
+    porAssunto[k] = (porAssunto[k] || 0) + Number(m.poker_pontos);
+  });
+
+  const porSprint = {};
+  itens.forEach(m => {
+    const k = (m.sprint || '').trim() || 'Sem sprint';
+    porSprint[k] = (porSprint[k] || 0) + Number(m.poker_pontos);
+  });
+
+  const ordena = o => Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]));
+  return {
+    itens, semanas,
+    total: itens.reduce((t, m) => t + Number(m.poker_pontos), 0),
+    temSprint: itens.some(m => (m.sprint || '').trim()),
+    porSemana,
+    porDev: ordena(porDev),
+    porAssunto: ordena(porAssunto),
+    porSprint: ordena(porSprint),
+  };
+}
+
 function renderGerPontos(ano, mes, temaMap, splitDevs) {
   const semanas = gerSemanasDoMes(ano, mes);
   const itens   = gerItensPontuados(ano, mes);
@@ -6214,41 +6285,14 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
     return;
   }
 
-  // ── Agrupamentos ──
-  const porSemana = {};
-  semanas.forEach((_, i) => { porSemana['S' + (i+1)] = 0; });
-  let foraDaSemana = 0;
-  itens.forEach(m => {
-    const idx = gerSemanaIndex(gerDataRefPontos(m), semanas);
-    if (idx >= 0) porSemana['S' + (idx+1)] += Number(m.poker_pontos);
-    else foraDaSemana += Number(m.poker_pontos);
-  });
-  if (foraDaSemana > 0) porSemana['Fora do mês'] = foraDaSemana;
-
-  const porDev = {};
-  itens.forEach(m => {
-    const devs = splitDevs(m.dev);
-    const val  = Number(m.poker_pontos) / devs.length;
-    devs.forEach(d => { porDev[d] = (porDev[d] || 0) + val; });
-  });
-  const porDevOrd = Object.fromEntries(Object.entries(porDev).sort((a,b) => b[1]-a[1]));
-
-  const porAssunto = {};
-  itens.forEach(m => {
-    const k = temaMap[m.tema_id] || 'Sem tema';
-    porAssunto[k] = (porAssunto[k] || 0) + Number(m.poker_pontos);
-  });
-  const porAssuntoOrd = Object.fromEntries(Object.entries(porAssunto).sort((a,b) => b[1]-a[1]));
-
-  // Sprint: só entra se alguém preencheu. Inclui "Sem sprint" para o total da
-  // pizza fechar com o total do mês, em vez de sumir com os cards sem sprint.
-  const comSprint = itens.filter(m => (m.sprint || '').trim());
-  const porSprint = {};
-  itens.forEach(m => {
-    const k = (m.sprint || '').trim() || 'Sem sprint';
-    porSprint[k] = (porSprint[k] || 0) + Number(m.poker_pontos);
-  });
-  const porSprintOrd = Object.fromEntries(Object.entries(porSprint).sort((a,b) => b[1]-a[1]));
+  // ── Agrupamentos: a MESMA conta que o deck usa (ver `gerCortesDePontos`) ──
+  const cortes = gerCortesDePontos(ano, mes, temaMap, splitDevs);
+  const porSemana = cortes.porSemana;
+  const porDev = cortes.porDev;
+  const porDevOrd = cortes.porDev;
+  const porAssuntoOrd = cortes.porAssunto;
+  const porSprintOrd = cortes.porSprint;
+  const comSprint = cortes.temSprint ? cortes.itens : [];
 
   // ── KPIs ──
   const nDevs     = Object.keys(porDev).length;
