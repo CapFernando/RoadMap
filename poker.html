@@ -1471,51 +1471,64 @@ async function abrirAnexoPauta(i) {
    Fica logo abaixo do baralho, onde se vota — referencia em outra tela nao e
    consultada no segundo em que a pessoa escolhe a carta.
 
-   O numero em destaque e a HORA de desenvolvimento, que foi o pedido. O prazo em
-   dias fica na tabela, como segunda leitura.
+   O NUMERO E O PRAZO EM DIAS UTEIS. A hora de desenvolvimento estava aqui e
+   SAIU — decisao do Fernando, depois de o time apontar ("horas desreguladas",
+   Joao Vitor). O motivo, com os numeros, porque isto vai parecer uma coluna que
+   alguem esqueceu de trazer:
 
-   E a hora tem MENOS base que o dia: 64 concluidas tem o campo preenchido, contra
-   110 com data. So 3, 5 e 21 chegam a sete casos. Por isso a faixa mostra todas as
-   cartas que tem alguma hora, e marca com "~" a que ainda esta apoiada em poucos
-   casos — esconder as demais deixaria o baralho quase todo mudo, e mostrar sem
-   marca daria a todas o mesmo peso.                                            */
-function refHoras(h) {
-  if (h === null || h === undefined) return '—';
-  return String(h).replace('.', ',') + ' h';
-}
+   A hora nao acompanhava a carta. A carta 34 mostrava 5 h a partir de DOIS
+   registros: 2 h (Murillo) e 8 h (Maury) — e a mediana por PESSOA divergia seis
+   vezes, 2 h para tres devs e 8-12 h para outros tres. O mesmo campo respondia a
+   duas perguntas: uns lancavam tempo de teclado, outros o esforco da demanda
+   inteira. A dispersao dentro de uma carta ficou maior que a diferenca entre
+   cartas — a faixa da carta 8 (1-6 h) cabia inteira dentro da carta 5 (1-18 h).
+   E o campo tinha 62% de preenchimento, voluntario.
 
+   Nenhuma escolha de mediana, media ou recorte conserta isso: o problema esta
+   antes da conta, na falta de uma definicao do que o campo significa. Enquanto
+   a hora estava a vista, quem olhava "34 = 5 h" ao lado de "21 = 12 h" concluia
+   que a tabela estava quebrada — e passava a desconfiar das outras colunas
+   tambem.
+
+   O PRAZO NAO TEM ESSE DEFEITO e por um motivo so: ninguem o digita. Ele sai de
+   `inicio` -> `entrega`, datas que o fluxo grava, com base cheia, e sai
+   monotonico (1, 1, 2, 2, 2,5, 4, 5, 6, 12 dias).
+
+   A hora continua sendo COLETADA na entrega e continua nos relatorios de custo.
+   O que ela nao faz mais e servir de referencia para votar. Para voltar, precisa
+   antes de uma definicao escrita no proprio campo e de uma base refeita sob ela.  */
 function refDias(d) {
   if (d === null || d === undefined) return '—';
   return d === 1 ? '1 dia' : (String(d).replace('.', ',') + ' dias');
 }
 
 // Poucos casos: o numero existe, mas ainda nao e regra. Sete e o corte — abaixo
-// disso um unico registro mal preenchido move a mediana da carta.
-function refFirme(l) { return (l.nHoras || 0) >= 7; }
+// disso uma unica demanda que descarrilou move a mediana da carta. Agora conta
+// ENTREGAS COM DATA (`n`), e nao as que tiveram hora preenchida.
+function refFirme(l) { return (l.n || 0) >= 7; }
 
 function renderReferencia() {
   const box = document.getElementById('referencia');
   if (!box) return;
   const ref = _referencia;
   if (!ref || !ref.linhas || !ref.linhas.length) { box.innerHTML = ''; return; }
-  const comHora = ref.linhas.filter(l => l.horas != null);
-  const resumo = comHora.map(l =>
+  const comDia = ref.linhas.filter(l => l.dias != null);
+  const resumo = comDia.map(l =>
     `<span class="ref-item${refFirme(l) ? '' : ' ref-item-fraca'}"><b>${esc(rotuloCarta(l.carta))}</b> ${
-      refFirme(l) ? '' : '~'}${esc(refHoras(l.horas))}</span>`).join('');
+      refFirme(l) ? '' : '~'}${esc(refDias(l.dias))}</span>`).join('');
   const tabela = !_refAberta ? '' : `
     <table class="ref-tab">
-      <thead><tr><th>Carta</th><th>Horas típicas</th><th>Registros</th><th>Prazo</th></tr></thead>
+      <thead><tr><th>Carta</th><th>Prazo típico</th><th>Entregas</th></tr></thead>
       <tbody>${ref.linhas.map(l => `<tr${refFirme(l) ? '' : ' class="ref-fraca"'}>
         <td><b>${esc(rotuloCarta(l.carta))}</b></td>
-        <td>${esc(refHoras(l.horas))}</td>
-        <td>${l.nHoras || 0}${refFirme(l) ? '' : ' <span class="ref-tag">poucos casos</span>'}</td>
         <td>${esc(refDias(l.dias))}</td>
+        <td>${l.n || 0}${refFirme(l) ? '' : ' <span class="ref-tag">poucos casos</span>'}</td>
       </tr>`).join('')}</tbody>
     </table>
-    <div class="ref-nota">Horas de desenvolvimento registradas na entrega, pela mediana —
-      uma demanda que descarrilou não arrasta a carta inteira. O prazo é em dias úteis, do
-      início à entrega, e tem base maior (${ref.total} entregas) porque a hora nem sempre é
-      preenchida. Tudo refeito a cada rodada.</div>`;
+    <div class="ref-nota">Dias úteis do início à entrega, pela mediana — uma demanda que
+      descarrilou não arrasta a carta inteira. Base de ${ref.total} entregas, refeita a cada
+      rodada. As horas saíram desta referência: o campo é preenchido com critérios diferentes
+      por pessoa, e a hora não acompanhava a carta.</div>`;
   box.innerHTML =
     `<div class="ref-linha">
        <span class="ref-rot">Costuma levar</span>${resumo}
@@ -1530,13 +1543,17 @@ function refAlterna() { _refAberta = !_refAberta; renderReferencia(); }
 function refDaCarta(c) {
   const l = ((_referencia && _referencia.linhas) || []).find(x => x.carta === String(c));
   if (!l) return 'Sem entrega concluída com esta carta ainda.';
-  if (l.horas == null) {
-    return 'Ninguém registrou horas nesta carta ainda. Pelo prazo, costuma levar ' +
-           refDias(l.dias) + ' (' + l.n + ' entregas).';
+  if (l.dias == null) {
+    return 'Esta carta ainda não tem entrega com data de início e de entrega — ' +
+           'não há prazo típico para mostrar.';
   }
-  return 'Costuma levar ' + refHoras(l.horas) + ' de desenvolvimento — ' +
-         l.nHoras + ' registro(s)' + (refFirme(l) ? '' : ', ainda poucos casos') +
-         '. Prazo: ' + refDias(l.dias) + ' (' + l.n + ' entregas).';
+  // "1 dia uteis" — `refDias` ja traz a palavra no singular ou no plural, e
+  // grudar " uteis" depois quebrava a concordancia justamente na carta com mais
+  // base (a 3, com 39 entregas), que e a que mais gente passa o mouse.
+  const uteis = l.dias === 1 ? '1 dia útil' : refDias(l.dias) + ' úteis';
+  return 'Costuma levar ' + uteis + ', do início à entrega — ' +
+         l.n + (l.n === 1 ? ' entrega' : ' entregas') +
+         (refFirme(l) ? '' : ', ainda poucos casos') + '.';
 }
 
 function renderCartas() {

@@ -2168,8 +2168,8 @@ ok(/fim - t > 400 \* 86400000\) return null;/.test(W),
    'data digitada errada nao vira laco infinito na leitura da fila');
 ok(/Date\.parse\(de \+ 'T00:00:00Z'\)/.test(W),
    'a conta de dias e em UTC (no fuso local, entrega no mesmo dia daria zero)');
-ok(/function refFirme\(l\) \{ return \(l\.nHoras \|\| 0\) >= 7; \}/.test(POKER),
-   'carta com pouco caso e marcada, em vez de passar por regra');
+// O corte de "poucos casos" e conferido na secao "Referencia da carta", onde ele
+// passou a contar entregas com data em vez de quem preencheu hora.
 // A hora tem menos base que o dia (64 registros contra 110 entregas com data).
 // Uma contagem so faria a carta parecer mais firme do que e no numero exibido.
 ok(/nHoras: v\.horas\.length/.test(W),
@@ -3278,6 +3278,71 @@ ok(/SIGNIFICADO\.sustenta/.test(APRES),
   ok(!/x\.pct >= 80 \? C\.verde/.test(sl),
      'o percentual mes a mes tambem nao muda de cor conforme o valor');
 })();
+
+/* ─── A REFERENCIA DA CARTA E O PRAZO, E NAO A HORA ──────────────────────
+
+   A hora de desenvolvimento saiu desta referencia. Decisao do Fernando, depois
+   de o time apontar ("horas desreguladas", Joao Vitor), e com os numeros na mao:
+
+     - a carta 34 mostrava 5 h a partir de DOIS registros, 2 h (Murillo) e 8 h
+       (Maury) — a mediana de uma discordancia, e nao do trabalho;
+     - a mediana por PESSOA divergia seis vezes: 2 h para tres devs, 8-12 h para
+       outros tres. O mesmo campo respondia a duas perguntas diferentes;
+     - a dispersao dentro de uma carta ficou maior que a diferenca entre cartas —
+       a faixa da carta 8 (1-6 h) cabia inteira dentro da carta 5 (1-18 h);
+     - 62% de preenchimento, voluntario e autosselecionado.
+
+   O prazo em dias nao tem esse defeito por um motivo so: NINGUEM O DIGITA. Sai
+   de `inicio` -> `entrega`, com base cheia, e sai monotonico.
+
+   Para a hora voltar a referencia, precisa antes de uma definicao escrita no
+   proprio campo e de uma base refeita sob ela. Estas invariantes existem para
+   que ela nao volte por engano — o buraco na tabela parece coluna esquecida.  */
+sec('Referencia da carta (Planning)');
+
+ok(!/refHoras/.test(POKER),
+   'a tela nao formata mais hora na referencia');
+ok(!/Horas típicas/.test(POKER),
+   'a coluna de horas tipicas nao existe mais na tabela');
+ok(/<th>Prazo típico<\/th>/.test(POKER),
+   'o prazo em dias e a coluna principal');
+
+/* O CORTE DE "POUCOS CASOS" MUDOU DE BASE. Ele contava `nHoras`, que era a
+   contagem de quem preencheu hora; agora conta `n`, as entregas com data — que e
+   a base do numero que a tela realmente mostra. Contar uma coisa e mostrar outra
+   fazia a carta parecer mais firme (ou mais fraca) do que e. */
+(() => {
+  const rf = corpo(POKER, 'function refFirme(');
+  ok(!!rf, 'existe o corte de poucos casos');
+  if (!rf) return;
+  ok(/l\.n \|\| 0/.test(rf) && !/nHoras/.test(rf),
+     'o corte conta as entregas com data, e nao quem preencheu hora');
+  const f = new Function(rf + '; return refFirme;')();
+  ok(f({ n: 7 }) === true && f({ n: 6 }) === false && f({}) === false,
+     'sete entregas e o corte, e carta sem base nenhuma nao passa por firme');
+})();
+
+/* O DESAPARECIMENTO E EXPLICADO NA PROPRIA TELA. O time viu a coluna de horas e
+   foi ele que apontou o defeito: sumir sem uma palavra faz a pessoa procurar o
+   que quebrou, ou pedir a coluna de volta. */
+ok(/As horas saíram desta referência/.test(POKER),
+   'a nota da tabela diz que a hora saiu, e por que');
+
+// "1 dia uteis": `refDias` ja traz a palavra no singular, e grudar " uteis"
+// depois quebrava a concordancia na carta com MAIS base (a 3, com 39 entregas).
+(() => {
+  const rc = corpo(POKER, 'function refDaCarta(');
+  ok(!!rc && /l\.dias === 1 \? '1 dia útil'/.test(rc),
+     'o texto de uma carta so concorda no singular e no plural');
+})();
+
+/* A HORA CONTINUA SENDO COLETADA. Ela saiu da referencia de votacao, e nao da
+   base: e a unica medida de custo que existe, e o relatorio do comite depende
+   dela. Tirar o campo junto seria trocar um numero ruim por nenhum. */
+ok(/id="ms-horas"/.test(DEV) && /Horas de desenvolvimento/.test(DEV),
+   'o campo de horas continua sendo pedido na entrega');
+ok(/horas_realizadas/.test(ADMIN),
+   'e o relatorio continua usando a hora para custo');
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
