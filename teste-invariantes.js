@@ -3447,13 +3447,62 @@ ok((ADMIN.match(/gerCortesDePontos\(/g) || []).length >= 3,
   ok(!/C\.verde|C\.vermelho|C\.ambar/.test(p),
      'as barras de pontos usam so a cor neutra — a identidade vem do rotulo');
   ok(/SIGNIFICADO\.neutro/.test(p), 'e essa cor e a neutra do padrao');
-  /* AS LARGURAS SOMAM O PAINEL. A conta esta no comentario do codigo e aqui:
-     1,52 + 0,08 + 1,55 + 0,10 + 0,52 + 0,45 = 4,22" num painel de 4,25". */
-  const n = (r) => { const m = p.match(r); return m ? Number(m[1]) : NaN; };
-  const soma = n(/W_NOME = ([\d.]+)/) + 0.08 + n(/W_TRILHO = ([\d.]+)/) + 0.10 +
-               n(/W_VAL = ([\d.]+)/) + n(/W_PCT = ([\d.]+)/);
-  ok(soma <= 4.25 + 0.001,
-     'as colunas do painel caberiam na largura dele', soma.toFixed(2) + '" de 4,25"');
+  /* O PAINEL E RODADO DE VERDADE, e o que ele desenha e medido.
+     A versao anterior lia as constantes do codigo por regex, e parou de valer no
+     dia em que a largura do trilho passou a ser CALCULADA — a invariante deu NaN
+     em vez de falhar por um motivo. Rodar a funcao com um dublê de slide mede o
+     que importa: nada que ela desenha sai do painel.
+
+     Os dois tamanhos entram: o estreito (4,25", dois por slide) e o de largura
+     inteira (8,76", um por slide). Sao os dois que existem, e a conta e a mesma. */
+  const fonte = corpo(APRES, 'function corta(') + ';' + corpo(APRES, 'function painelPontos(');
+  ok(!!corpo(APRES, 'function painelPontos('), 'existe o painel de pontos');
+  if (corpo(APRES, 'function painelPontos(')) {
+    const painel = new Function('C', 'SIGNIFICADO', fonte + '; return painelPontos;')(
+      { texto: 'T', fraco: 'F', fundo3: 'B' }, { neutro: 'N' });
+
+    [{ w: 4.25, nome: undefined }, { w: 8.76, nome: 3.9 }].forEach((caso) => {
+      const desenhado = [];
+      const slideFalso = {
+        addText: (t, o) => desenhado.push({ tipo: 'texto', t: String(t), ...o }),
+        addShape: (_, o) => desenhado.push({ tipo: 'forma', ...o }),
+      };
+      painel(slideFalso, { ShapeType: { rect: 'rect' } }, {
+        x: 0.62, y: 1.55, w: caso.w, titulo: 'Teste', total: 100,
+        ...(caso.nome ? { larguraNome: caso.nome } : {}),
+        itens: [{ nome: 'AXCred - Cadastro - Analise de Credito - Reanalise', valor: 60 },
+                { nome: 'Curto', valor: 40 }],
+      });
+      const limite = 0.62 + caso.w + 0.001;
+      const vazam = desenhado.filter((d) => d.x + d.w > limite);
+      ok(!vazam.length,
+         'no painel de ' + caso.w + '" nada vaza para fora dele',
+         vazam.length ? vazam.map((v) => (v.t || v.tipo) + ' ate ' + (v.x + v.w).toFixed(2)).join('; ')
+                      : desenhado.length + ' elementos');
+      // E o trilho tem largura POSITIVA: com o nome largo demais ele viraria
+      // negativo, e uma barra de largura negativa nao aparece no slide.
+      const trilhos = desenhado.filter((d) => d.tipo === 'forma' && d.fill && d.fill.color === 'B');
+      ok(trilhos.length === 2 && trilhos.every((t) => t.w > 0.2),
+         'o trilho da barra sobra com largura util');
+    });
+
+    // O NOME ACOMPANHA A LARGURA. Fixo em 22 caracteres, o painel largo cortava um
+    // nome que caberia quase inteiro nele.
+    const nomes = (w, larg) => {
+      const d = [];
+      painel({ addText: (t, o) => d.push({ t: String(t), ...o }), addShape: () => {} },
+             { ShapeType: { rect: 'rect' } },
+             { x: 0.62, y: 1.55, w: w, titulo: 'T', total: 100,
+               ...(larg ? { larguraNome: larg } : {}),
+               itens: [{ nome: 'AXCred - Cadastro - Analise de Credito - Reanalise', valor: 100 }] });
+      return d.map((x) => x.t).find((t) => t.indexOf('AXCred') === 0) || '';
+    };
+    const estreito = nomes(4.25);
+    const largo = nomes(8.76, 3.9);
+    ok(largo.length > estreito.length,
+       'o painel largo mostra mais do nome do assunto que o estreito',
+       estreito.length + ' -> ' + largo.length + ' caracteres');
+  }
 })();
 
 // A cauda dobra em "Outros", nomeada: some com ela e a soma dos percentuais da

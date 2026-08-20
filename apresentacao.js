@@ -646,10 +646,14 @@
       return;
     }
     var max = itens.reduce(function (m, i) { return Math.max(m, i.valor); }, 0) || 1;
-    /* AS LARGURAS SOMAM A LARGURA DO PAINEL, e a conta esta a vista para nao
-       transbordar: nome 1,52 + vao 0,08 + trilho 1,55 + vao 0,10 + valor 0,52 +
-       percentual 0,45 = 4,22". Com o painel em 4,25" sobra 0,03". */
-    var W_NOME = 1.52, W_TRILHO = 1.55, W_VAL = 0.52, W_PCT = 0.45;
+    /* AS LARGURAS SOMAM A LARGURA DO PAINEL, e a conta e FEITA, nao estimada: o
+       nome e o trilho dividem o que sobra depois do valor, do percentual e dos dois
+       vaos. Assim o painel estreito (4,25") e o de largura inteira (8,76") usam a
+       mesma funcao sem que nenhum transborde — e o teste soma isso e falha se a
+       conta parar de fechar. */
+    var W_VAL = 0.52, W_PCT = 0.45, VAO = 0.08 + 0.10;
+    var W_NOME = cfg.larguraNome || 1.52;
+    var W_TRILHO = LARG - W_NOME - W_VAL - W_PCT - VAO;
     var xTrilho = x0 + W_NOME + 0.08;
     var xVal = xTrilho + W_TRILHO + 0.10;
     var xPct = xVal + W_VAL;
@@ -658,10 +662,12 @@
     itens.forEach(function (it, i) {
       var y = TOPO + i * ALT;
       var pct = Math.round(it.valor / cfg.total * 100);
-      // 22 caracteres e o que cabe em 1,52" a 9,5pt. Cortar com reticencia e
-      // melhor que deixar o PowerPoint quebrar o nome em duas linhas e empurrar a
-      // barra de baixo.
-      s.addText(corta(it.nome, 22), {
+      /* O CORTE ACOMPANHA A LARGURA: ~14,5 caracteres por polegada a 9,5pt. Fixar
+         em 22 cortava "AXCred - Cadastro - Analise de Credito - Reanalise" ao meio
+         mesmo num painel de 3,9", onde ele caberia quase inteiro. Cortar com
+         reticencia continua sendo melhor que deixar o PowerPoint quebrar em duas
+         linhas e empurrar a barra de baixo. */
+      s.addText(corta(it.nome, Math.floor(W_NOME * 14.5)), {
         x: x0, y: y, w: W_NOME, h: ALT, fontSize: 9.5, color: C.texto,
         align: 'right', valign: 'middle', wrap: false });
       s.addShape(pptx.ShapeType.rect, {
@@ -708,24 +714,31 @@
     return s;
   }
 
+  /* POR ASSUNTO, NA LARGURA TODA — e sem o painel de sprint.
+
+     O CORTE POR SPRINT SAIU, decisão do Fernando, e o motivo está no dado: 248 das
+     278 demandas não têm sprint preenchida, então "Sem sprint" ocupava 78% do
+     gráfico. Uma barra que diz "78% não classificado" é verdade e não informa
+     nada — e num slide de diretoria ela puxa uma conversa sobre o processo de
+     cadastro no meio da conversa sobre entrega.
+
+     PARA TRAZER DE VOLTA quando o campo virar hábito: `pt.porSprint` continua
+     chegando aqui pronto (a conta é a mesma de `gerCortesDePontos`), então basta
+     voltar a este arquivo um painel em `x: 5.13` com `pt.porSprint` — e reduzir o
+     teto do assunto de 8 para 5, que é o que caberia ao lado.
+
+     A LARGURA INTEIRA NÃO É SOBRA APROVEITADA: é o corte que mais precisava dela.
+     "AXCred - Cadastro - Análise de Crédito - Reanálise" tem 48 caracteres e vinha
+     cortado em 22 no painel estreito — o nome do tema é o que diz PARA QUÊ o mês
+     foi gasto, e cortado ao meio ele deixa de dizer. */
   function slidePontos2(pptx, pt, pagina, periodo) {
     var s = slideTitulo(pptx, 'Pontos entregues',
-                        'por assunto e por sprint', pagina);
-    painelPontos(s, pptx, { x: 0.62, y: 1.55, w: 4.25, titulo: 'Por assunto',
-                            total: pt.total, itens: topoComOutros(pt.porAssunto, 5) });
-    if (pt.temSprint) {
-      painelPontos(s, pptx, { x: 5.13, y: 1.55, w: 4.25, titulo: 'Por sprint',
-                              total: pt.total, itens: topoComOutros(pt.porSprint, 5) });
-    } else {
-      /* SEM SPRINT PREENCHIDA, o painel diz isso em vez de mostrar uma barra so
-         chamada "Sem sprint" ocupando 100% — que e verdade e nao informa nada. */
-      s.addText('Por sprint', { x: 5.13, y: 1.55, w: 4.25, h: 0.24, fontSize: 12,
-                                bold: true, color: C.texto });
-      s.addText('A sprint não foi preenchida nas demandas deste mês, então não há ' +
-                'como distribuir os pontos por sprint.', {
-        x: 5.13, y: 1.85, w: 4.25, h: 0.6, fontSize: 10, color: C.fraco,
-        lineSpacingMultiple: 1.3 });
-    }
+                        'por assunto — para que o mês foi gasto', pagina);
+    painelPontos(s, pptx, {
+      x: 0.62, y: 1.55, w: 8.76, larguraNome: 3.9, titulo: 'Por assunto',
+      // Oito linhas em vez de cinco: com a largura toda cabem, e a cauda em
+      // "Outros" some com nomes que a sala reconhece.
+      total: pt.total, itens: topoComOutros(pt.porAssunto, 8) });
     rodape(s, periodo, pagina);
     return s;
   }
