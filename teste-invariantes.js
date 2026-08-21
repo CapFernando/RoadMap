@@ -4065,6 +4065,51 @@ ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
      'o alerta traz o numero da task, e nao so a contagem');
 })();
 
+/* ─── O SELO DE CACHE DE CADA SCRIPT ────────────────────────────────────
+   Todo `<script src="algo.js?v=XXXX">` desta base carrega o md5 do arquivo,
+   truncado em 10. O selo NAO E ENFEITE: e a chave de cache. O GitHub Pages serve
+   os `.js` com cache de navegador, entao mudar o arquivo sem mudar o selo faz o
+   navegador continuar usando o que ja tem — o arquivo novo esta no ar e ninguem o
+   recebe.
+
+   ISSO ACONTECEU. Num unico dia, `prazo.js` ganhou o conserto da pausa e
+   `apresentacao.js` ganhou o padrao de cores, os slides de pontos e a regra de nao
+   mostrar percentual acima de 100 — e os dois seguiram com o selo antigo em quatro
+   telas. Quem tinha o arquivo em cache continuaria vendo a versao de ontem, SEM
+   ERRO NENHUM na tela indicando isso. Foi a pergunta do Fernando ("as mudancas do
+   Gantt subiram?") que levou a olhar.
+
+   Nao ha build nesta base: os selos sao mantidos a mao, e e por isso que passam.
+   Esta invariante e o que fecha a lacuna — ela recalcula todos e falha nomeando o
+   arquivo, a tela e os dois valores.                                            */
+sec('Selo de cache dos scripts');
+
+(() => {
+  const crypto = require('crypto');
+  const telas = ['admin.html', 'dev.html', 'gantt.html', 'index.html', 'poker.html',
+                 'importar.html', 'projetos.html'];
+  const selo = (arq) =>
+    crypto.createHash('md5').update(fs.readFileSync(arq)).digest('hex').slice(0, 10);
+
+  const errados = [];
+  let conferidos = 0;
+  telas.forEach((tela) => {
+    if (!fs.existsSync(tela)) return;
+    const s = fs.readFileSync(tela, 'utf8');
+    [...s.matchAll(/src="([a-z0-9-]+\.js)\?v=([a-z0-9]+)"/g)].forEach(([, arq, v]) => {
+      if (!fs.existsSync(arq)) { errados.push(tela + ' inclui ' + arq + ', que nao existe'); return; }
+      conferidos++;
+      const certo = selo(arq);
+      if (certo !== v) errados.push(tela + ': ' + arq + ' esta com ' + v + ' e deveria ser ' + certo);
+    });
+  });
+
+  ok(conferidos > 0, 'as telas versionam os scripts com selo de cache', conferidos + ' inclusoes');
+  ok(!errados.length,
+     'e todo selo bate com o md5 do arquivo — script mudado sem selo novo nao chega a quem tem cache',
+     errados.length ? errados.join(' ; ') : conferidos + ' selos conferidos');
+})();
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
