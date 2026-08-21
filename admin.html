@@ -7263,8 +7263,17 @@ function pausaRenderBloco(m) {
       (d === 1 ? ' dia' : ' dias') + '</strong>, desde ' + esc(formatDate(m.pausado_em)) +
       (m.pausa_por ? ' por ' + esc(m.pausa_por) : '') + '.' +
       '<br><strong>Motivo:</strong> ' + esc(m.pausa_motivo || '—') +
-      '<br>A data de entrega está oculta e será empurrada em ' + d +
-      (d === 1 ? ' dia' : ' dias') + ' ao retomar.' +
+      /* A DATA ANDA COM OS DIAS PARADOS, e fica à vista. Esconder a entrega
+         durante a pausa deixava quem planeja sem saber quando ela volta — e o
+         card do dev mostrava a data ORIGINAL, já vencida, ao lado da palavra
+         "pausada". Foi assim que a queixa chegou: "o prazo continua sendo
+         contabilizado". Agora o desconto é derivado (ver prazo.js) e acontece
+         mesmo que ninguém clique em Retomar. */
+      (m.entrega
+        ? '<br><strong>Prazo:</strong> ' + esc(formatDate(PRAZO.prazoEfetivo(m, _isoHoje()))) +
+          ' <span style="color:var(--text3)">(combinado ' + esc(formatDate(m.entrega)) +
+          ', esticado nos ' + d + (d === 1 ? ' dia' : ' dias') + ' de pausa)</span>'
+        : '<br>Sem prazo combinado.') +
       '<div class="pausa-acoes"><button type="button" class="btn btn-success btn-sm" onclick="pausaRetomar()">▶ Retomar</button></div>' +
       '</div>';
   } else {

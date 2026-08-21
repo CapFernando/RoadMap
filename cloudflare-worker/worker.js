@@ -839,9 +839,46 @@ function hojeBR() {
 // contava contra HOJE e o numero crescia todo dia para quem ja tinha entregado.
 // A mesma regra que as telas aplicam (ver prazo.js); aqui ela e repetida porque o
 // Worker nao carrega os scripts do site, e nao por escolha.
+const dia = t => {
+  const [a, b, c] = String(t).split('-').map(Number);
+  return Date.UTC(a, b - 1, c);
+};
+
+/* O PRAZO QUE VALE — o combinado, esticado pelos dias em que a demanda esteve
+   parada por algo fora do alcance de quem faz.
+
+   ISTO EXISTE PORQUE A EXTENSAO DEPENDIA DE UM CLIQUE. As telas empurram a
+   `entrega` quando alguem clica "Retomar", e so ali: uma demanda pausada e
+   concluida SEM esse clique nunca tinha a data empurrada, e os dias parados eram
+   cobrados como atraso. Medido na base, nas seis pausadas com prazo: AX-199
+   apareceria com 9 dias de atraso, sendo os 9 de pausa; AX-163 com 10, sendo 9.
+
+   `pausa_dias` NAO entra: os dias ja retomados JA ESTAO dentro da `entrega`
+   (quem retoma empurra a data e acumula os dias na mesma acao), e somar de novo
+   daria o dobro de folga. O que falta e a pausa que ainda esta correndo.
+
+   A mesma regra que as telas aplicam (ver prazo.js); aqui ela e repetida porque o
+   Worker nao carrega os scripts do site, e nao por escolha. */
+function prazoEfetivo(m, ref) {
+  const pz = String((m && m.entrega) || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(pz)) return '';
+  const p = String((m && m.pausado_em) || '').slice(0, 10);
+  const r = String(ref || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p) || !/^\d{4}-\d{2}-\d{2}$/.test(r) || r <= p) return pz;
+  const extra = Math.round((dia(r) - dia(p)) / 86400000);
+  const d = new Date(dia(pz));
+  d.setUTCDate(d.getUTCDate() + extra);
+  return d.toISOString().slice(0, 10);
+}
+
+// Comparacao por STRING ISO, nunca por objeto Date: `new Date('2026-08-06')` e
+// meia-noite UTC, e converter para local muda o dia. Ja custou off-by-one aqui.
+//
+// O ATRASO E DO DEV, E PARA QUANDO ELE ENTREGA. Em validacao a demanda esta na mao
+// do PM/PO, e o tempo que ela passa ali nao e atraso de desenvolvimento — a API
+// contava contra HOJE e o numero crescia todo dia para quem ja tinha entregado.
 function diasDeAtraso(m, hoje) {
-  const entrega = String((m && m.entrega) || '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(entrega)) return 0;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String((m && m.entrega) || '').slice(0, 10))) return 0;
   const etapa = String((m && m.status_planejamento) || '');
   if (etapa === 'concluido' || etapa === 'negada') return 0;
   if (String((m && m.pausado_em) || '').trim()) return 0;
@@ -850,11 +887,9 @@ function diasDeAtraso(m, hoje) {
   const entregue = String((m && m.entregue_em) || '').slice(0, 10);
   const ref = (etapa === 'validacao' && /^\d{4}-\d{2}-\d{2}$/.test(entregue))
     ? entregue : hoje;
-  if (entrega >= ref) return 0;
-  const dia = t => {
-    const [a, b, c] = t.split('-').map(Number);
-    return Date.UTC(a, b - 1, c);
-  };
+  // O prazo EFETIVO: o combinado mais os dias parados ate `ref`.
+  const entrega = prazoEfetivo(m, ref);
+  if (!entrega || entrega >= ref) return 0;
   return Math.round((dia(ref) - dia(entrega)) / 86400000);
 }
 

@@ -2782,7 +2782,13 @@ function gPausaRender(m) {
       '⏸ <strong>Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
       ' · desde ' + esc(fmtDate(m.pausado_em)) +
       '<br><strong>Motivo:</strong> ' + esc(m.pausa_motivo || '—') +
-      '<br>Entrega oculta; será empurrada em ' + d + (d===1?' dia':' dias') + ' ao retomar.' +
+      // A data anda com os dias parados, e fica a vista: esconder a entrega
+      // durante a pausa deixava quem planeja sem saber quando ela volta.
+      (m.entrega
+        ? '<br><strong>Prazo:</strong> ' + formatDateBR(PRAZO.prazoEfetivo(m, _isoHoje())) +
+          ' <span style="color:var(--text3)">(combinado ' + formatDateBR(m.entrega) +
+          ', esticado nos ' + d + (d === 1 ? ' dia' : ' dias') + ' de pausa)</span>'
+        : '<br>Sem prazo combinado.') +
       '<div style="margin-top:9px"><button type="button" class="btn btn-sm" ' +
       'style="background:var(--green);color:#fff;border:none" onclick="gPausaRetomar()">▶ Retomar</button></div></div>';
   } else {

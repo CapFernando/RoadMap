@@ -3813,6 +3813,112 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      'o pct cru para em 100, e o rotulo diz a diferenca');
 })();
 
+/* ─── A PAUSA ESTICA O PRAZO, E SEM DEPENDER DE UM CLIQUE ────────────────
+   Queixa dos devs: "quando pausam demanda por dependencia de outra, o prazo
+   continua sendo contabilizado".
+
+   ERAM DOIS DEFEITOS. O primeiro: a extensao acontecia SO no clique de "Retomar"
+   — uma demanda pausada e concluida sem esse clique tinha os dias parados
+   cobrados como atraso. Medido na base, nas seis pausadas com prazo: AX-199
+   apareceria com 9 dias de atraso, sendo os 9 de pausa; AX-163 com 10, sendo 9;
+   AX-084 com 20, sendo 16.
+
+   O segundo: a entrega ficava ESCONDIDA durante a pausa, e o card mostrava a data
+   original. Quem pausou em 11/08 uma demanda com prazo 30/07 via, no proprio
+   card, a palavra "pausada" ao lado de uma data que ja tinha passado.           */
+sec('A pausa estica o prazo');
+
+const PZ = require('./prazo.js');
+
+ok(typeof PZ.prazoEfetivo === 'function' && typeof PZ.diasPausados === 'function',
+   'o prazo efetivo e os dias parados sao funcoes da regra unica');
+
+// Sem pausa, o prazo efetivo E o combinado — nenhuma folga aparece do nada.
+ok(PZ.prazoEfetivo({ entrega: '2026-07-30' }, '2026-08-20') === '2026-07-30',
+   'sem pausa, o prazo nao se move');
+ok(PZ.prazoEfetivo({ entrega: '2026-07-30', pausado_em: '2026-08-11' }, '2026-08-20') === '2026-08-08',
+   'nove dias parada esticam o prazo em nove dias');
+ok(PZ.prazoEfetivo({ entrega: '2026-08-31', pausado_em: '2026-08-20' }, '2026-08-20') === '2026-08-31',
+   'pausada hoje ainda nao rendeu dia nenhum');
+ok(PZ.prazoEfetivo({}, '2026-08-20') === '' &&
+   PZ.prazoEfetivo({ entrega: 'x' }, '2026-08-20') === '',
+   'sem prazo combinado nao ha prazo efetivo');
+// Referencia ANTES da pausa nao anda para tras.
+ok(PZ.prazoEfetivo({ entrega: '2026-08-10', pausado_em: '2026-08-15' }, '2026-08-12') === '2026-08-10',
+   'referencia anterior a pausa nao encurta o prazo');
+
+/* O CASO QUE MOTIVOU: concluida sem alguem clicar "Retomar". */
+const conc = (entrega, pausado_em, fim) => ({
+  entrega, pausado_em, status_planejamento: 'concluido', entregue_em: fim });
+ok(PZ.diasDeAtraso(conc('2026-08-11', '2026-08-11', '2026-08-20'), 'concluido', '2026-08-20') === 0,
+   'AX-199: pausada no dia do prazo e concluida 9 dias depois nao atrasa');
+ok(PZ.diasDeAtraso(conc('2026-08-10', '2026-08-11', '2026-08-20'), 'concluido', '2026-08-20') === 1,
+   'AX-163: 10 dias viram 1 — os 9 de pausa saem da conta');
+ok(PZ.atrasouNaEntrega(conc('2026-08-11', '2026-08-11', '2026-08-20')) === false,
+   'e o relatorio concorda: nao atrasou');
+
+/* O QUE A PAUSA NAO FAZ: apagar o atraso ANTERIOR a ela. Das seis pausadas com
+   prazo, CINCO ja estavam atrasadas no dia do clique — AX-123 estava 12 dias.
+   Esticar devolve os dias PARADOS, e nao os que passaram antes: pausar depois do
+   prazo estourar nao desfaz o estouro. */
+ok(PZ.diasDeAtraso(conc('2026-07-30', '2026-08-11', '2026-08-20'), 'concluido', '2026-08-20') === 12,
+   'AX-123: 21 dias viram 12 — os 9 de pausa saem, os 12 anteriores ficam');
+
+/* NAO HA CONTAGEM DUPLA DEPOIS DE RETOMAR. Quem retoma empurra a `entrega` E
+   acumula `pausa_dias` na mesma acao, entao os dias ja retomados estao DENTRO da
+   data: somar `pausa_dias` aqui daria o dobro de folga. E por isso que
+   `prazoEfetivo` le so a pausa CORRENTE. */
+ok(PZ.diasDeAtraso({ entrega: '2026-08-20', pausa_dias: 9, pausado_em: '',
+                     status_planejamento: 'concluido', entregue_em: '2026-08-20' },
+                   'concluido', '2026-08-20') === 0,
+   'depois de retomar, os dias ja estao na data e nao contam de novo');
+(() => {
+  const c = corpo(PRZ, 'function prazoEfetivo(');
+  ok(!!c && !/pausa_dias/.test(c),
+     'e `prazoEfetivo` nao le `pausa_dias` — seria a contagem dupla');
+})();
+
+/* PAUSADA CONTINUA SEM ATRASO ENQUANTO ESTA PARADA. O prazo esta suspenso, nao
+   estourado — e esta parte ja funcionava; a invariante existe para nao se perder
+   junto com a mudanca. */
+ok(PZ.diasDeAtraso({ entrega: '2026-07-30', pausado_em: '2026-08-11',
+                     status_planejamento: 'em_andamento' }, 'em_andamento', '2026-08-20') === null,
+   'pausada em andamento nao mostra atraso nenhum');
+
+/* O WORKER TEM A MESMA REGRA. Ele nao carrega os scripts do site, entao a conta e
+   repetida la — e duas copias que divergem sao o defeito original desta base (a
+   regra de atraso viveu em quatro versoes). A invariante roda as DUAS e compara. */
+(() => {
+  const c = corpo(W, 'function prazoEfetivo(');
+  ok(!!c, 'o worker tem o prazo efetivo');
+  if (!c) return;
+  const diaFn = W.slice(W.indexOf('const dia = t =>'), W.indexOf('};', W.indexOf('const dia = t =>')) + 2);
+  const pe = new Function(diaFn + c + '; return prazoEfetivo;')();
+  const casos = [
+    [{ entrega: '2026-07-30' }, '2026-08-20'],
+    [{ entrega: '2026-07-30', pausado_em: '2026-08-11' }, '2026-08-20'],
+    [{ entrega: '2026-08-11', pausado_em: '2026-08-11' }, '2026-08-20'],
+    [{ entrega: '2026-08-31', pausado_em: '2026-08-20' }, '2026-08-20'],
+    [{ entrega: '2026-08-10', pausado_em: '2026-08-15' }, '2026-08-12'],
+    [{}, '2026-08-20'],
+  ];
+  const difere = casos.filter(([m, r]) => pe(m, r) !== PZ.prazoEfetivo(m, r));
+  ok(!difere.length, 'e ele devolve o MESMO prazo efetivo que as telas',
+     difere.length ? difere.map(([m, r]) => JSON.stringify(m) + ' worker=' + pe(m, r) +
+                                ' telas=' + PZ.prazoEfetivo(m, r)).join(' ; ')
+                   : casos.length + ' casos iguais');
+  ok(!/pausa_dias/.test(c), 'e tambem nao le pausa_dias');
+})();
+
+/* A DATA FICA A VISTA NAS TRES TELAS. Escondida, ela deixava quem planeja sem
+   saber quando a demanda volta — e o card mostrava a original, ja vencida. */
+[['admin.html', ADMIN], ['gantt.html', GANTT], ['dev.html', DEV]].forEach(([nome, tela]) => {
+  ok(/PRAZO\.prazoEfetivo\(m, _isoHoje\(\)\)/.test(tela),
+     nome + ' mostra o prazo esticado durante a pausa');
+  ok(!/Entrega oculta|entrega está oculta/.test(tela),
+     nome + ' nao esconde mais a entrega');
+});
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

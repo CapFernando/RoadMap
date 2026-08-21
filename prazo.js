@@ -61,6 +61,64 @@
     return ehData(c) ? c : '';
   }
 
+  /** DIAS JA PARADOS NA PAUSA CORRENTE, ate `ref`.
+   *
+   *  `pausa_dias` NAO entra aqui, e a razao e evitar contar duas vezes: quando
+   *  alguem clica "Retomar", `aplicarRetomada` empurra a `entrega` E acumula os
+   *  dias em `pausa_dias`. Os dias ja retomados, portanto, JA ESTAO dentro da
+   *  data — somar `pausa_dias` de novo daria o dobro de folga.
+   *
+   *  O que falta e a pausa que ainda esta correndo, e e ela que esta aqui.
+   *
+   *  Dias de CALENDARIO, e nao uteis: e a mesma unidade que `aplicarRetomada` usa
+   *  para empurrar a data, e duas unidades para a mesma coisa fariam o prazo
+   *  derivado divergir do prazo gravado.                                       */
+  function diasPausados(m, ref) {
+    var p = iso((m || {}).pausado_em);
+    var r = iso(ref);
+    if (!ehData(p) || !ehData(r) || r <= p) return 0;
+    var d = function (t) {
+      var q = t.split('-');
+      return Date.UTC(+q[0], +q[1] - 1, +q[2]);
+    };
+    return Math.round((d(r) - d(p)) / 86400000);
+  }
+
+  /** O PRAZO QUE VALE — o combinado, esticado pelos dias em que a demanda esteve
+   *  parada por algo fora do alcance de quem faz.
+   *
+   *  ISTO EXISTE PORQUE A EXTENSAO DEPENDIA DE UM CLIQUE. `aplicarRetomada`
+   *  empurrava a data ao retomar, e so ali: uma demanda pausada e concluida SEM
+   *  alguem clicar "Retomar" nunca tinha a data empurrada, e o relatorio cobrava
+   *  os dias parados como atraso. Medido na base, nas seis pausadas com prazo:
+   *  AX-084 apareceria com 20 dias de atraso, dos quais 16 foram de pausa; AX-123
+   *  com 21, dos quais 9; AX-199 com 9, sendo TODOS os 9 de pausa.
+   *
+   *  Derivado, o desconto acontece de qualquer forma — pelo clique ou sem ele.
+   *
+   *  E O DEV PASSA A VER A DATA ANDAR. Antes a entrega ficava escondida durante a
+   *  pausa ("Entrega oculta"), e o card mostrava a data original: quem pausou em
+   *  11/08 uma demanda com prazo 30/07 olhava o proprio card e via uma data que
+   *  ja passou. Dizia "pausada" e mostrava um prazo estourado — e foi assim que a
+   *  queixa chegou: "o prazo continua sendo contabilizado".
+   *
+   *  O QUE ISTO NAO FAZ, e e importante: nao apaga o atraso que houve ANTES da
+   *  pausa. Das seis pausadas com prazo, CINCO ja estavam atrasadas no dia em que
+   *  foram pausadas — AX-123 estava 12 dias. Esticar a data pelos dias parados
+   *  devolve os dias parados, e nao os anteriores: pausar depois do prazo estourar
+   *  nao desfaz o estouro. Para isso a pausa precisaria comecar no dia em que a
+   *  dependencia travou, e nao no dia do clique.                               */
+  function prazoEfetivo(m, ref) {
+    var pz = iso((m || {}).entrega);
+    if (!ehData(pz)) return '';
+    var extra = diasPausados(m, ref);
+    if (!extra) return pz;
+    var q = pz.split('-');
+    var d = new Date(Date.UTC(+q[0], +q[1] - 1, +q[2]));
+    d.setUTCDate(d.getUTCDate() + extra);
+    return d.toISOString().slice(0, 10);
+  }
+
   /** DIAS DE ATRASO, ou null quando nao ha o que medir.
    *
    *  `etapa` vem de quem chama: cada tela resolve a etapa do seu jeito
@@ -72,8 +130,7 @@
    *  do dia. */
   function diasDeAtraso(m, etapa, hoje) {
     if (!m || m.mesclado_em || m.oculto) return null;
-    var pz = iso(m.entrega);
-    if (!ehData(pz)) return null;
+    if (!ehData(iso(m.entrega))) return null;
     // Pausada nao atrasa: o prazo esta suspenso, nao estourado.
     if (m.pausado_em && !ETAPAS_APOS_O_DEV.includes(etapa)) return null;
 
@@ -88,6 +145,11 @@
     } else {
       return null;   // backlog, levantar_req, negada: nada prometido ou nada a medir
     }
+    /* O PRAZO E O EFETIVO, esticado pelos dias parados ate `ref`.
+       A demanda concluida sem alguem clicar "Retomar" tinha os dias de pausa
+       cobrados como atraso: AX-199 apareceria com 9 dias, sendo os 9 de pausa. */
+    var pz = prazoEfetivo(m, ref);
+    if (!ehData(pz)) return null;
     if (ref <= pz) return 0;
     // Diferenca por UTC a partir das partes da data: `new Date('2026-08-01')` no
     // fuso local devolve o dia anterior em UTC-3, e um dia aqui e a diferenca
@@ -122,9 +184,13 @@
    *  Vale depois da entrega: e o que permite o deck dizer "26 entregas sairam
    *  com atraso" sem que o dev veja essas mesmas 26 como pendencia aberta. */
   function atrasouNaEntrega(m) {
-    var pz = iso((m || {}).entrega);
     var fim = fimDoDev(m);
-    if (!ehData(pz) || !ehData(fim)) return false;
+    if (!ehData(fim)) return false;
+    // O MESMO PRAZO EFETIVO da conta de dias. Comparar contra a data crua aqui
+    // faria o relatorio dizer "atrasou" para uma demanda que `diasDeAtraso`
+    // devolve zero — duas respostas para a mesma pergunta, no mesmo relatorio.
+    var pz = prazoEfetivo(m, fim);
+    if (!ehData(pz)) return false;
     return fim > pz;
   }
 
@@ -141,6 +207,8 @@
     ETAPAS_QUE_CORREM: ETAPAS_QUE_CORREM,
     ETAPAS_APOS_O_DEV: ETAPAS_APOS_O_DEV,
     fimDoDev: fimDoDev,
+    diasPausados: diasPausados,
+    prazoEfetivo: prazoEfetivo,
     diasDeAtraso: diasDeAtraso,
     estaAtrasada: estaAtrasada,
     atrasouNaEntrega: atrasouNaEntrega,

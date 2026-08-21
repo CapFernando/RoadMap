@@ -1664,7 +1664,15 @@ function devPausaRender(m) {
       'padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--text2)">' +
       '⏸ <strong style="color:var(--text)">Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
       '<br><strong>Motivo:</strong> ' + escAttr(m.pausa_motivo || '—') +
-      '<br>Entrega oculta; será empurrada em ' + d + (d===1?' dia':' dias') + ' ao retomar.' +
+      /* A DATA ANDA, E A PESSOA VE. Antes a entrega ficava ESCONDIDA durante a
+         pausa e o card mostrava a data original: quem pausou em 11/08 uma demanda
+         com prazo 30/07 olhava o proprio card e via uma data que ja passou. Dizia
+         "pausada" e mostrava prazo estourado — foi assim que a queixa chegou. */
+      (m.entrega
+        ? '<br><strong>Prazo:</strong> ' + formatDate(PRAZO.prazoEfetivo(m, _isoHoje())) +
+          ' <span style="color:var(--text3)">(combinado ' + formatDate(m.entrega) +
+          ', esticado nos ' + d + (d === 1 ? ' dia' : ' dias') + ' de pausa)</span>'
+        : '<br>Sem prazo combinado.') +
       '<div style="margin-top:8px"><button type="button" class="btn btn-sm" ' +
       'style="background:var(--green);color:#fff;border:none" onclick="devPausaRetomar()">▶ Retomar</button></div></div>';
   } else {
