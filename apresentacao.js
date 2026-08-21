@@ -699,6 +699,200 @@
     return topo;
   }
 
+  /* ─── PLANEJADO × ENTREGUE, EM PONTOS ────────────────────────────────────
+     A pergunta que o Fernando faz no fechamento: "quanto eu joguei para cada um e
+     quanto saiu". Já existia hora planejada × realizada e contagem de demandas
+     prometidas × entregues, e nenhuma das duas mede TAMANHO — três ajustes de
+     meia hora somam 3 demandas, uma entrega de 13 pontos soma 1.
+
+     A CONTA VEM DE `capacidade.js`, a mesma do Gantt, do painel do dev e do
+     admin. O deck é a quarta tela a fazer esta leitura, e é onde a divergência
+     seria mais cara: um número diferente do painel, projetado para a diretoria.
+
+     DUAS LEITURAS NO MESMO SLIDE, e cada uma responde o que a outra não:
+       por DEV     — quem recebeu quanto e quanto fechou
+       por SPRINT  — em que semana o mês aconteceu
+
+     A COR SEGUE O PADRÃO, com a assimetria que o Gantt já tem: verde quando o
+     resultado desejado aconteceu (bateu o plano), azul no previsto, e o resto
+     NEUTRO. Não pinto dev de vermelho num slide de diretoria — abaixo do plano é
+     um fato que os números já dizem, e a cor ali transformaria leitura em
+     acusação diante de quem não estava na conversa. No Gantt, que é ferramenta de
+     trabalho do próprio time, o vermelho existe e faz sentido.                 */
+  function slideCapacidade(pptx, cap, pagina, periodo) {
+    var s = slideTitulo(pptx, 'Planejado × entregue',
+                        'em pontos — o tamanho do que foi combinado e do que saiu', pagina);
+
+    /* A FAIXA DE TOTAIS. O `rotulo` de capacidade.js já resolve o "nada acima de
+       100%": passando do plano, ele diz a diferença em pontos. */
+    var leitura = (window.CAPACIDADE && window.CAPACIDADE.rotulo)
+      ? window.CAPACIDADE.rotulo(cap.plan, cap.entregue)
+      : (cap.plan ? Math.min(100, Math.round(cap.entregue / cap.plan * 100)) + '%' : '—');
+    var tot = [
+      { rot: 'PLANEJADO', val: cap.plan + ' pt', cor: SIGNIFICADO.previsto,
+        nota: 'pelo prazo combinado' },
+      { rot: 'ENTREGUE', val: cap.entregue + ' pt', cor: SIGNIFICADO.cumprido,
+        nota: 'pela entrega do dev' },
+      { rot: 'LEITURA', val: leitura, cor: SIGNIFICADO.leitura,
+        nota: cap.plan ? 'do que foi combinado' : 'sem plano para comparar' },
+    ];
+    tot.forEach(function (k, i) {
+      // Argumentos POSICIONAIS: `cartao` e `(pptx, s, x, y, w, h, opts)`. Passar um
+      // objeto no lugar do `x` desenhava o cartao em NaN e o PowerPoint descartava
+      // a forma — o mesmo tipo de falha silenciosa do `rectRadius` na elipse.
+      cartao(pptx, s, 0.62 + i * 2.16, 1.42, 2.0, 0.86,
+             { faixa: i === 0 ? SIGNIFICADO.previsto
+                    : i === 1 ? SIGNIFICADO.cumprido : C.borda });
+      /* O X ACOMPANHA O CARTAO. Eu tinha deixado `x: 0.74` fixo nos tres textos
+         enquanto o cartao andava `i * 2.16`: os tres rotulos, os tres numeros e as
+         tres notas ficavam empilhados no primeiro cartao, e os outros dois saiam
+         vazios. A medicao do XML pegou — "PLANEJADO" sobreposto a "ENTREGUE". */
+      var xc = 0.74 + i * 2.16;
+      s.addText(k.rot, { x: xc, y: 1.50, w: 1.8, h: 0.2, fontSize: 8, bold: true,
+                         color: C.fraco, charSpacing: 0.6, wrap: false });
+      s.addText(k.val, { x: xc, y: 1.70, w: 1.8, h: 0.34, fontSize: 20, bold: true,
+                         color: k.cor, wrap: false });
+      s.addText(k.nota, { x: xc, y: 2.04, w: 1.8, h: 0.18, fontSize: 7.5,
+                          color: C.fraco, wrap: false });
+    });
+
+    /* AS DUAS BARRAS NA MESMA ESCALA, uma sobre a outra: o entregue se lê contra o
+       plano da própria pessoa, e a escala compartilhada permite comparar pessoas.
+       Escala por linha faria 20 pontos parecerem 200. */
+    /* SEIS LINHAS. A conta de altura, de baixo para cima:
+         rodape          5,05
+         nota            4,72 a 5,02
+         sprint          4,20 a 4,64  (rotulo 0,18 + linha 0,24)
+         sobra da lista  3,90 a 4,08
+         lista           2,44 a 3,88  (6 x 0,24)
+       Oito linhas de 0,26 (a primeira versao) levavam a lista a 4,54 e o bloco de
+       sprint a 5,70: tres "em curso" sairam do slide. Sete de 0,24 encostavam no
+       bloco de sprint por 0,02" — abaixo do limiar com que eu media o XML, e a
+       invariante pegou. Seis deixa folga de verdade, e a linha de sobra diz quem
+       ficou de fora. */
+    var linhas = (cap.devs || []).slice(0, 6);
+    var maior = linhas.reduce(function (m, x) {
+      return Math.max(m, x.plan, x.entregue);
+    }, 1);
+    var Y0 = 2.44, ALT = 0.24;
+    var X_NOME = 0.62, W_NOME = 1.62, X_BARRA = 2.32, W_BARRA = 3.9;
+    var X_PLAN = 6.34, X_FEITO = 7.02, X_LEIT = 7.74;
+
+    /* Y0 - 0,18 e nao - 0,24: a nota dos cartoes de total termina em 2,22", e com
+       - 0,24 este cabecalho comecava em 2,20 — encostavam por 0,02". */
+    s.addText('POR DESENVOLVEDOR', { x: X_NOME, y: Y0 - 0.18, w: 3.0, h: 0.18,
+                                     fontSize: 8, bold: true, color: C.fraco, charSpacing: 0.6 });
+    ['plan', 'entregue', 'leitura'].forEach(function (r, i) {
+      s.addText(r === 'plan' ? 'PLAN' : r === 'entregue' ? 'FEITO' : 'LEITURA', {
+        x: [X_PLAN, X_FEITO, X_LEIT][i], y: Y0 - 0.18, w: i === 2 ? 1.6 : 0.64, h: 0.18,
+        fontSize: 7.5, bold: true, color: C.fraco, align: i === 2 ? 'left' : 'right', wrap: false });
+    });
+
+    linhas.forEach(function (d, i) {
+      var y = Y0 + i * ALT;
+      s.addText(corta(d.nome, 22), {
+        x: X_NOME, y: y, w: W_NOME, h: ALT, fontSize: 9, color: C.texto,
+        valign: 'middle', wrap: false });
+      // Trilho, plano e feito. O plano ocupa a faixa e fica atrás; o feito é mais
+      // fino e vem na frente — a leitura é "quanto do plano se encheu".
+      s.addShape(pptx.ShapeType.rect, { x: X_BARRA, y: y + 0.09, w: W_BARRA, h: 0.09,
+                                        fill: { color: C.fundo3 }, line: { type: 'none' } });
+      if (d.plan) {
+        s.addShape(pptx.ShapeType.rect, {
+          x: X_BARRA, y: y + 0.09, w: Math.max(0.03, W_BARRA * (d.plan / maior)), h: 0.09,
+          fill: { color: SIGNIFICADO.previsto }, line: { type: 'none' } });
+      }
+      if (d.entregue) {
+        // Verde quando o resultado desejado aconteceu; neutro quando ficou abaixo.
+        var bateu = d.plan && d.entregue >= d.plan;
+        s.addShape(pptx.ShapeType.rect, {
+          x: X_BARRA, y: y + 0.115, w: Math.max(0.03, W_BARRA * (d.entregue / maior)), h: 0.04,
+          fill: { color: bateu ? SIGNIFICADO.cumprido : SIGNIFICADO.categoria2 },
+          line: { type: 'none' } });
+      }
+      s.addText(String(d.plan), { x: X_PLAN, y: y, w: 0.64, h: ALT, fontSize: 9,
+                                  color: C.fraco, align: 'right', valign: 'middle', wrap: false });
+      s.addText(String(d.entregue), {
+        x: X_FEITO, y: y, w: 0.64, h: ALT, fontSize: 9, bold: true,
+        color: (d.plan && d.entregue >= d.plan) ? SIGNIFICADO.cumprido : C.texto,
+        align: 'right', valign: 'middle', wrap: false });
+      var lt = (window.CAPACIDADE && window.CAPACIDADE.rotulo)
+        ? window.CAPACIDADE.rotulo(d.plan, d.entregue) : '';
+      s.addText(lt, { x: X_LEIT, y: y, w: 1.6, h: ALT, fontSize: 9, color: C.fraco,
+                      valign: 'middle', wrap: false });
+    });
+    /* A SOBRA E DITA. Sem isso a soma das linhas nao fecha com o total do cartao,
+       e a primeira coisa que alguem faz num slide de numeros e somar a coluna. */
+    var sobra = (cap.devs || []).length - linhas.length;
+    if (sobra > 0) {
+      s.addText('e mais ' + sobra + (sobra === 1 ? ' pessoa' : ' pessoas') +
+                ' com menos pontos no periodo', {
+        x: X_NOME, y: Y0 + linhas.length * ALT + 0.02, w: 5.4, h: 0.18,
+        fontSize: 7.5, color: C.fraco, wrap: false });
+    }
+
+    /* O RITMO DO MÊS, por sprint. Aqui é o TOTAL do time, e não uma célula por
+       pessoa: dez devs × cinco sprints são cinquenta números, e cinquenta números
+       num slide projetado não são lidos, são olhados. */
+    /* O RITMO DO MES EM UMA LINHA, e nao numa pilha de quatro por sprint.
+       A pilha (rotulo, plano, feito, "em curso") custava 0,98" de altura e jogava
+       os tres ultimos "em curso" para fora do slide. Em linha, "S1 293→431" diz a
+       mesma coisa em 0,26" — e a seta e o que faz o par ser lido junto.
+
+       AQUI O PAR FICA JUNTO de proposito, ao contrario do quadro do Gantt, onde as
+       duas reguas foram separadas. A diferenca e a quantidade: no Gantt sao cinco
+       pares por PESSOA e a comparacao e vertical entre linhas; aqui e uma linha so,
+       do time, e separar em duas gastaria altura que o slide nao tem. */
+    var sp = (cap.sprints || []);
+    if (sp.length) {
+      var yS = 4.20;
+      s.addText('POR SPRINT — O TIME  (planejado → entregue)', {
+        x: 0.62, y: yS, w: 4.6, h: 0.18, fontSize: 8, bold: true, color: C.fraco,
+        charSpacing: 0.6, wrap: false });
+      var W_COL = Math.min(1.75, 8.76 / sp.length);
+      sp.forEach(function (w, i) {
+        var x = 0.62 + i * W_COL;
+        var fechou = !!cap.hoje && w.ate < cap.hoje;
+        var forte = (window.CAPACIDADE && window.CAPACIDADE.sprintForte)
+          ? window.CAPACIDADE.sprintForte(w.plan, w.entregue)
+          : (!!w.plan && w.entregue >= w.plan);
+        s.addText([
+          { text: 'S' + (i + 1) + ' ', options: { color: C.fraco } },
+          { text: String(w.plan), options: { color: SIGNIFICADO.previsto, bold: true } },
+          { text: ' → ', options: { color: C.fraco } },
+          { text: String(w.entregue), options: {
+            bold: true,
+            color: forte ? SIGNIFICADO.cumprido : (fechou ? C.fraco : SIGNIFICADO.leitura) } },
+          { text: fechou ? '' : ' ·', options: { color: C.fraco } },
+        ], { x: x, y: yS + 0.20, w: W_COL - 0.06, h: 0.24, fontSize: 11.5,
+             valign: 'middle', wrap: false });
+      });
+      // O ponto ao lado da sprint em curso e explicado uma vez, e nao por sprint.
+      if (sp.some(function (w) { return !cap.hoje || w.ate >= cap.hoje; })) {
+        s.addText('·  sprint ainda em curso', { x: 6.0, y: yS, w: 3.38, h: 0.18,
+                                                fontSize: 7.5, color: C.fraco,
+                                                align: 'right', wrap: false });
+      }
+    }
+
+    /* AS RESSALVAS. Sem elas o slide parece completo e não é: demanda alocada sem
+       pontuação faz o planejado da pessoa parecer menor, e a conclusão errada
+       seria "sobra capacidade". */
+    var notas = ['O planejado conta pela data do prazo combinado; o entregue, pela data em que ' +
+                 'o dev entregou — espera em validação não é dele.'];
+    if (cap.semPontuar) {
+      notas.push(cap.semPontuar + (cap.semPontuar === 1
+        ? ' demanda alocada sem pontuação: o planejado de quem a recebeu está menor do que é.'
+        : ' demandas alocadas sem pontuação: o planejado de quem as recebeu está menor do que é.'));
+    }
+    /* 4,72" com 0,3" de altura termina em 5,02" — logo acima do rodape, que fica
+       em 5,05". Em 5,02 a nota escrevia POR CIMA dele. */
+    s.addText(notas.join('  '), { x: 0.62, y: 4.72, w: 8.76, h: 0.3, fontSize: 8,
+                                  color: C.fraco, lineSpacingMultiple: 1.15 });
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
   function slidePontos(pptx, pt, pagina, periodo) {
     var s = slideTitulo(pptx, 'Pontos entregues',
                         'a mesma distribuição do painel gerencial', pagina);
@@ -1563,6 +1757,12 @@
        mesma pergunta em escalas diferentes: em que frente, para que projeto, e com
        quanto peso. O ponto vem por ultimo porque e a medida mais fina — e a que
        so faz sentido depois de a sala saber onde o mes foi gasto. */
+    /* O CRUZAMENTO VEM ANTES DA DISTRIBUICAO. "Prometi 1724 e sairam 849" e a
+       pergunta que se faz primeiro; "onde os 849 foram gastos" e a seguinte. Na
+       ordem inversa, a sala ve a distribuicao sem saber se o mes foi bom. */
+    if (d.secoes.capacidade && d.capacidade && (d.capacidade.devs || []).length) {
+      slideCapacidade(pptx, d.capacidade, ++p, d.periodo);
+    }
     if (d.secoes.pontos && d.pontos && d.pontos.total > 0) {
       slidePontos(pptx, d.pontos, ++p, d.periodo);
       slidePontos2(pptx, d.pontos, ++p, d.periodo);

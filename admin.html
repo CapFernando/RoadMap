@@ -940,7 +940,7 @@
 <script src="capa-tecnologia.js"></script>
 <script src="pipelines.js?v=a122233200"></script>
 <script src="capacidade.js?v=3769a13468"></script>
-<script src="apresentacao.js?v=d515e21d96"></script>
+<script src="apresentacao.js?v=ad41818bbd"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4785,6 +4785,7 @@ const AP_SECOES = [
   { k: 'evolucao', rot: 'Evolução: mês atual x anterior', pad: true },
   { k: 'projetos', rot: 'Projetos em aberto', pad: true },
   { k: 'pontos',   rot: 'Pontos entregues (semana, dev, assunto, sprint)', pad: true },
+  { k: 'capacidade', rot: 'Planejado × entregue em pontos, por dev', pad: true },
   { k: 'time',     rot: 'O time (agregado) e quem esteve fora', pad: true },
   { k: 'areas',    rot: 'Onde atuamos (top 3)', pad: true },
   { k: 'solicit',  rot: 'Quem mais pediu (top 5)', pad: true },
@@ -5650,6 +5651,38 @@ async function apresGerar() {
          diferente; o tipo nao avisa em JavaScript, e o slide avisou. */
       pontos: gerCortesDePontos(ano, mes, temaMapDoDeck,
                                 (txt) => window.PIPELINES.devsDaDemanda({ dev: txt })),
+      /* PLANEJADO x ENTREGUE EM PONTOS, da MESMA `capacidade.js` que o Gantt e o
+         painel do dev usam. O deck e a quarta tela a fazer esta leitura, e a
+         quarta copia de uma conta e o caminho conhecido para duas telas
+         discordarem — foi assim que o painel do dev e o Gantt divergiram sobre a
+         mesma entrega (um contava por `concluido_em`, o outro por `entregue_em`).
+
+         Vai por DEV e por SPRINT: o por-dev responde "quem" e o por-sprint
+         responde "quando", e nenhuma das duas responde a do outro. */
+      capacidade: (() => {
+        const CAPI = window.CAPACIDADE;
+        const vivasCap = (state.melhorias || []).filter(m => m && !m.oculto && !m.mesclado_em);
+        const semanasCap = gerSemanasDoMes(ano, mes);
+        const faixas = semanasCap
+          .filter(w => w.length)
+          .map(w => ({ de: w[0], ate: w[w.length - 1] }));
+        const porDevCap = CAPI.porDev(vivasCap, iso + '-01', fimMes)
+          .filter(x => x.plan || x.entregue || x.semPontuar);
+        return {
+          devs: porDevCap,
+          sprints: CAPI.porFaixa(vivasCap, faixas),
+          // O limite da semana forte viaja junto: o slide nao pode ter uma copia
+          // dele, senao a regra do deck e a da tela divergem no dia em que alguem
+          // mudar o numero.
+          limiteForte: CAPI.PONTOS_SPRINT_FORTE,
+          plan: porDevCap.reduce((t, x) => t + x.plan, 0),
+          entregue: porDevCap.reduce((t, x) => t + x.entregue, 0),
+          semPontuar: porDevCap.reduce((t, x) => t + x.semPontuar, 0),
+          // A ultima sprint FECHADA. O slide nao julga a que esta correndo, pelo
+          // mesmo motivo do Gantt: ela teve menos dias que as outras.
+          hoje: PRAZO.hojeISO(),
+        };
+      })(),
       rapidas: { itens: rapidasLista, total: conc.length },
       quebra,
       fluxo: { recebidas: entradas.length, entregues: conc.length,

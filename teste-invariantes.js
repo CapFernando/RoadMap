@@ -4128,6 +4128,68 @@ sec('Selo de cache dos scripts');
      errados.length ? errados.join(' ; ') : conferidos + ' selos conferidos');
 })();
 
+/* ─── PLANEJADO x ENTREGUE NO DECK ───────────────────────────────────────
+   A leitura que o Fernando pediu para levar ao gerencial. O deck e a QUARTA tela
+   a fazer esta conta (Gantt, painel do dev, admin e ele), e e onde a divergencia
+   seria mais cara: um numero diferente do painel, projetado para a diretoria.  */
+sec('Planejado x entregue no deck');
+
+ok(/function slideCapacidade\(/.test(APRES), 'existe o slide de capacidade');
+ok(/capacidade: \(\(\) => \{/.test(ADMIN) && /CAPI\.porDev\(vivasCap/.test(ADMIN),
+   'e os dados dele saem de capacidade.js, e nao de uma conta propria do deck');
+ok(/CAPI\.porFaixa\(vivasCap, faixas\)/.test(ADMIN),
+   'inclusive o ritmo por sprint');
+/* O LIMITE DA SEMANA FORTE VIAJA JUNTO. Uma copia dele no slide faria a regra do
+   deck divergir da tela no dia em que alguem mudar de 100 para 80. */
+ok(/limiteForte: CAPI\.PONTOS_SPRINT_FORTE/.test(ADMIN),
+   'o limite da semana forte vem da regra, e nao repetido no slide');
+
+(() => {
+  const sl = corpo(APRES, 'function slideCapacidade(');
+  ok(!!sl, 'existe o corpo do slide');
+  if (!sl) return;
+  /* NADA ACIMA DE 100%: o `rotulo` de capacidade.js ja resolve, e o slide o usa em
+     vez de dividir na mao. */
+  ok(/window\.CAPACIDADE\.rotulo/.test(sl),
+     'a leitura do percentual passa pelo rotulo compartilhado');
+  ok(!/Math\.round\(cap\.entregue \/ cap\.plan \* 100\) \+ '%'/.test(sl) ||
+     /Math\.min\(100/.test(sl),
+     'e a reserva, se usada, tambem para em 100');
+  /* NENHUM DEV PINTADO DE VERMELHO. Abaixo do plano e um fato que os numeros ja
+     dizem; a cor ali, num slide de diretoria, transforma leitura em acusacao
+     diante de quem nao estava na conversa. No Gantt — ferramenta do proprio time —
+     o vermelho existe e faz sentido. */
+  ok(!/SIGNIFICADO\.falhou/.test(sl) && !/C\.vermelho/.test(sl),
+     'nenhum desenvolvedor e pintado de vermelho no deck');
+  /* A SOBRA DA LISTA E DITA. Sem isso a soma das linhas nao fecha com o total do
+     cartao, e a primeira coisa que alguem faz num slide de numeros e somar. */
+  ok(/e mais ' \+ sobra/.test(sl), 'a lista diz quantas pessoas ficaram de fora');
+  /* A CONTA DE ALTURA, e nao a estimativa. Rodape em 5,05; nota em 4,72; sprint em
+     4,30; a lista tem de terminar antes disso. A primeira versao tinha oito linhas
+     de 0,26 e tres "em curso" sairam do slide — medido no XML gerado. */
+  const nL = Number((sl.match(/slice\(0, (\d+)\)/) || [])[1]);
+  const alt = Number((sl.match(/ALT = ([\d.]+)/) || [])[1]);
+  const y0 = Number((sl.match(/Y0 = ([\d.]+)/) || [])[1]);
+  ok(Number.isFinite(nL) && Number.isFinite(alt) && Number.isFinite(y0),
+     'as medidas da lista sao legiveis no codigo');
+  /* A CONTA E LIDA DO CODIGO, e nao repetida aqui: o `yS` do bloco de sprint sai
+     do proprio arquivo, entao mover o bloco nao deixa a invariante mentindo. */
+  const yS = Number((sl.match(/var yS = ([\d.]+);/) || [])[1]);
+  ok(Number.isFinite(yS), 'a posicao do bloco de sprint e legivel no codigo');
+  if (Number.isFinite(nL) && Number.isFinite(yS)) {
+    const fim = y0 + nL * alt + 0.2;   // +0.2 da linha de sobra
+    ok(fim <= yS + 0.001,
+       'a lista de devs termina antes do bloco de sprint',
+       fim.toFixed(2) + '" contra ' + yS.toFixed(2) + '"');
+    // E o bloco de sprint termina antes da nota: rotulo 0,18 + linha 0,24.
+    ok(yS + 0.44 <= 4.72 + 0.001,
+       'e o bloco de sprint termina antes da nota',
+       (yS + 0.44).toFixed(2) + '" contra 4,72"');
+  }
+  ok(/y: 4\.72, w: 8\.76, h: 0\.3/.test(sl),
+     'e a nota termina em 5,02 — logo acima do rodape, que fica em 5,05');
+})();
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
