@@ -2296,10 +2296,21 @@ function renderGantt() {
           const fimSem = diasSem.length ? diasSem[diasSem.length - 1].str : '';
           const fechou = !!fimSem && fimSem < todayStr;
           const p = porSemana[i] || 0;
-          const cls = !fechou || !p ? 'cq-neutro' : (f >= p ? 'cq-bateu' : 'cq-abaixo');
-          const rot = !fechou ? 'sprint ainda em curso ou por vir'
+          /* BATER A META JA E VERDE, MESMO NA SPRINT EM CURSO — e a assimetria e
+             de proposito. O vermelho espera a sprint fechar porque falta tempo
+             que ainda pode ser usado: pintar de vermelho na quarta acusa a pessoa
+             de algo que o calendario ainda nao permitiu. O verde nao precisa
+             esperar nada, porque mais tempo so pode SOMAR: quem ja entregou o que
+             foi combinado nao vai desentregar na quinta.
+
+             Sem planejado continua branco nos dois casos: entregar 20 pontos onde
+             nada foi prometido nao e "superou a meta", e uma meta que nao existia. */
+          const bateu = !!p && f >= p;
+          const cls = bateu ? 'cq-bateu' : (fechou && p ? 'cq-abaixo' : 'cq-neutro');
+          const rot = bateu ? 'bateu o planejado' + (fechou ? '' : ' (sprint ainda em curso)')
             : !p ? 'nada planejado nesta sprint'
-            : f >= p ? 'bateu o planejado' : 'abaixo do planejado';
+            : !fechou ? 'sprint ainda em curso — ainda da tempo'
+            : 'abaixo do planejado';
           return `<span class="cq-v ${cls}" title="${rot}">${f || 0}</span>`;
         }).join('')}
       </div>` : ''}
