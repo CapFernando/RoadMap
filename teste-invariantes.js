@@ -4039,6 +4039,20 @@ ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
   ok(!/\.cap-sem \{[^}]*min-width/.test(GANTT) && !/cap-regua/.test(GANTT),
      'as reguas em linha, que estouravam, nao existem mais');
 
+  /* AS TRES CORES DO EXECUTADO. Verde bateu, vermelho ficou abaixo, branco ainda
+     nao aconteceu — e o "ainda nao aconteceu" e a parte que importa: julgar a
+     sprint EM CURSO e o mesmo defeito do ranking do Planning, onde numa quarta a
+     semana teve tres dias uteis contra cinco da anterior. O vermelho ali acusaria
+     a pessoa de algo que o calendario ainda nao permitiu. */
+  ok(/cq-bateu/.test(GANTT) && /cq-abaixo/.test(GANTT) && /cq-neutro/.test(GANTT),
+     'o executado tem as tres cores do padrao');
+  ok(/const fechou = !!fimSem && fimSem < todayStr;/.test(GANTT),
+     'e a cor so e aplicada na sprint que JA FECHOU');
+  ok(/!fechou \|\| !p \? 'cq-neutro'/.test(GANTT),
+     'sprint em curso OU sem plano fica neutra — sem plano nao ha o que superar');
+  ok(/f >= p \? 'cq-bateu' : 'cq-abaixo'/.test(GANTT),
+     'bateu ou passou e verde; abaixo e vermelho');
+
   // O numero da task aparece no alerta: contagem sem nome nao da o que fazer.
   ok(/rolou\.alerta\.map\(r => `\$\{esc\(r\.codigo\)\} \(\+\$\{r\.sprints\}\)`\)/.test(GANTT),
      'o alerta traz o numero da task, e nao so a contagem');

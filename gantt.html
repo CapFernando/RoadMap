@@ -308,8 +308,17 @@
     .cq-r { color: var(--text3); font-size: 9.5px; text-transform: uppercase;
       letter-spacing: .04em; }
     .cq-v { color: var(--text2); }
-    /* Verde no executado, pelo padrao: verde e "o resultado desejado aconteceu". */
-    .cq-feito { color: var(--green-tx, #3EC98E); }
+    /* AS TRES CORES DO EXECUTADO, no padrao do deck:
+         verde    bateu ou passou o planejado — o resultado desejado aconteceu
+         vermelho abaixo do planejado, na sprint que JA FECHOU
+         branco   ainda nao aconteceu (sprint em curso ou por vir), ou nao havia
+                  plano naquela sprint contra o qual comparar
+       Julgar a sprint em curso seria o mesmo defeito do ranking do Planning: numa
+       quarta ela teve tres dias uteis contra cinco da anterior, e o vermelho
+       acusaria a pessoa de algo que o calendario ainda nao permitiu. */
+    .cq-bateu  { color: var(--green-tx, #3EC98E); }
+    .cq-abaixo { color: var(--red-tx, #F9A0A0); }
+    .cq-neutro { color: var(--text); }
     .cap-pct { color: var(--text3); }
     /* ROLOU DE SPRINT: neutro na contagem, atencao no nome. A contagem e fato; o
        nome e o que pede acao. */
@@ -2271,7 +2280,28 @@ function renderGantt() {
       ${(pontosTotal > 0 || totalFeito > 0) ? `<div class="cap-quadro" title="Pontos por sprint: planejado pela data do prazo combinado, executado pela data em que o dev entregou.">
         <span class="cq-c"></span>${semanas.map((_, i) => `<span class="cq-h">S${i+1}</span>`).join('')}
         <span class="cq-r">Plan.</span>${porSemana.map(p => `<span class="cq-v">${p}</span>`).join('')}
-        <span class="cq-r">Exec.</span>${feitoSemana.map(f => `<span class="cq-v cq-feito">${f || 0}</span>`).join('')}
+        <span class="cq-r">Exec.</span>${feitoSemana.map((f, i) => {
+          /* A COR DIZ O VEREDITO, e so onde ha veredito.
+
+             Sprint que JA FECHOU: abaixo do planejado e vermelho, bateu ou passou
+             e verde. Sprint CORRENTE OU FUTURA fica branca — "ainda nao
+             aconteceu". Julgar a semana em curso e o mesmo defeito do ranking:
+             numa quarta-feira ela teve tres dias contra cinco da anterior, e
+             pintar de vermelho por isso acusa a pessoa de algo que o calendario
+             ainda nao permitiu.
+
+             Sem planejado na sprint tambem fica branco: entregar 20 pontos onde
+             nada foi prometido nao e "superou a meta", e uma meta que nao existia. */
+          const diasSem = semanas[i] || [];
+          const fimSem = diasSem.length ? diasSem[diasSem.length - 1].str : '';
+          const fechou = !!fimSem && fimSem < todayStr;
+          const p = porSemana[i] || 0;
+          const cls = !fechou || !p ? 'cq-neutro' : (f >= p ? 'cq-bateu' : 'cq-abaixo');
+          const rot = !fechou ? 'sprint ainda em curso ou por vir'
+            : !p ? 'nada planejado nesta sprint'
+            : f >= p ? 'bateu o planejado' : 'abaixo do planejado';
+          return `<span class="cq-v ${cls}" title="${rot}">${f || 0}</span>`;
+        }).join('')}
       </div>` : ''}
       ${semPontuar ? `<span class="cap-text sem-pontuar-text" title="Demandas alocadas a esta pessoa sem pontuação no Planning Poker: o planejado dela está menor do que é. Pontue para o cruzamento fechar.">◐ ${semPontuar} sem pontuar</span>` : ''}
       ${/* ROLAGEM DE SPRINT. Quantas demandas desta pessoa foram empurradas de uma
