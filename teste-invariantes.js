@@ -4202,15 +4202,21 @@ ok(/id="rel-escala"/.test(ADMIN) && /function relJanela\(\)/.test(ADMIN),
 ok(/el && el\.value === 'semana' \? 'semana' : 'mes'/.test(ADMIN),
    'o mes e o padrao — fechamento e a conversa da diretoria');
 
-/* NO MES, ENTREGA E DESENVOLVIMENTO SAO O MESMO PERIODO. Na semana nao: a reuniao
-   reporta o que saiu na semana que PASSOU. Usar a janela anterior no mes faria o
-   fechamento de agosto listar as entregas de julho. */
+/* UMA JANELA SO, EM QUALQUER ESCALA: A QUE FOI FILTRADA.
+   Havia duas. Na semana, "Entregues" olhava a semana ANTERIOR a escolhida — a
+   reuniao da semana que comeca reporta o que saiu na que acabou, porque a corrente
+   ainda nao fechou. Defensavel como raciocinio, indefensavel na tela: com 17/08 a
+   23/08 no filtro, "Como o time andou" dizia 149 pt entregues e "Entregues"
+   listava 36 demandas de 10/08 a 16/08 logo abaixo — dois blocos discordando sobre
+   a mesma pergunta, cada um certo pela sua propria regra. */
 (() => {
   const c = corpo(ADMIN, 'function relDados(');
   ok(!!c, 'existe relDados');
   if (!c) return;
-  ok(/const C = j\.escala === 'semana' \? j\.deAnt : j\.de;/.test(c),
-     'no mes a janela de entrega e a do proprio mes');
+  ok(/const C = j\.de, D = j\.ate;/.test(c),
+     'a janela de entrega e a filtrada, e nao a anterior');
+  ok(!/deAnt|ateAnt/.test(c),
+     'e relDados nao conhece mais a janela anterior — ela e so da comparacao');
   ok(/const visiveis = relVivas\(\);/.test(c),
      'e o filtro de sistema entra numa so vez, valendo para as duas listas');
   /* A DATA DE SAIDA E A DA ENTREGA DO DEV. Era `concluido_em` aqui e `entregue_em`

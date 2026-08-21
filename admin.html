@@ -7087,27 +7087,25 @@ function relOQueVem() {
 
 function relDados() {
   const j = relJanela();
-  /* AS DUAS JANELAS, e o que cada uma significa em cada escala:
-       A a B  o periodo ESCOLHIDO — e onde o "em desenvolvimento" e medido
-       C a D  onde as ENTREGAS sao contadas
-
-     NA SEMANA elas sao diferentes de proposito: a reuniao da semana que comeca
-     reporta o que saiu na semana que PASSOU (a corrente ainda nao acabou) e o que
-     esta em curso NESTA. Era assim antes e continua.
-
-     NO MES sao a MESMA: o fechamento de agosto mostra o que saiu em agosto. Usar a
-     janela anterior aqui faria o relatorio de agosto listar as entregas de julho —
-     o oposto do que "fechamento do mes" quer dizer. */
   const A = j.de, B = j.ate;
-  const C = j.escala === 'semana' ? j.deAnt : j.de;
-  const D = j.escala === 'semana' ? j.ateAnt : j.ate;
+  /* UMA JANELA SO: A MESMA QUE FOI FILTRADA.
+     Aqui havia duas. Na escala de semana, "Entregues" olhava a semana ANTERIOR ao
+     periodo escolhido — o raciocinio era que a reuniao da semana que comeca reporta
+     o que saiu na semana que acabou, porque a corrente ainda nao fechou.
+     O raciocinio era defensavel e o resultado, indefensavel: com 17/08 a 23/08 no
+     filtro, "Como o time andou" dizia 149 pt entregues na semana escolhida e
+     "Entregues" listava 36 demandas de 10/08 a 16/08 logo abaixo. Dois blocos
+     discordando sobre a mesma pergunta na mesma tela, cada um certo pela sua
+     propria regra. Nao ha nota de rodape que salve isso.
+     Quem quer a semana fechada seleciona a semana fechada — o seletor oferece. */
+  const C = j.de, D = j.ate;
 
   // O FILTRO DE SISTEMA ENTRA AQUI, e por isso vale para as duas listas de baixo
   // sem que cada uma precise aplicar de novo.
   const visiveis = relVivas();
 
-  // Entregues: concluído com entrega dentro da semana anterior. Sem data de
-  // entrega não há como afirmar quando saiu, então fica fora (e é sinalizado).
+  // Entregues: saiu dentro do periodo FILTRADO. Sem data de entrega não há como
+  // afirmar quando saiu, então fica fora (e é sinalizado).
   // Data de saida: concluido_em (gravada na aprovacao do PM/PO) e a verdade.
   // `entrega` e o prazo, e sobrava como aproximacao para as concluidas antigas,
   // anteriores a validacao existir.
@@ -7227,26 +7225,18 @@ function renderRelatorios() {
   relRenderTemas(janela);
   relRenderOQueVem();
 
-  // O relatorio existe para a reuniao da semana escolhida. Nela se reporta o que
-  // FOI ENTREGUE na semana que passou — a semana corrente ainda nao acabou, nao
-  // ha o que fechar — e o que esta EM DESENVOLVIMENTO agora. Isso estava correto,
-  // mas o rotulo "Semana atual" no seletor fazia parecer erro: lia-se "semana
-  // atual" e a primeira secao mostrava outro periodo. Agora cada secao carrega o
-  // proprio periodo no titulo, e esta linha diz a regra por extenso.
-  /* A LINHA DE CONTEXTO DIZ A REGRA POR EXTENSO, e ela muda com a escala. No
-     mes, entrega e desenvolvimento sao o mesmo periodo; na semana, nao — e sem
-     dizer isso o leitor ve duas datas diferentes e conclui que ha erro. */
+  /* A LINHA DE CONTEXTO DIZ O PERIODO, UM SO. Ela precisava explicar por que as
+     datas dos blocos eram diferentes; agora nao sao, e ela apenas nomeia o periodo
+     e com o que ele e comparado. */
   const sisNome = relTemaFiltroNome();
   const filtroTxt = sisNome
     ? ` Filtrado por <b>${esc(sisNome)}</b> — todos os blocos abaixo consideram só este sistema.`
     : '';
   document.getElementById('rel-periodo-info').innerHTML = (janela.escala === 'mes'
     ? `Fechamento de <b>${janela.rot}</b>, comparado com <b>${janela.rotAnt}</b>. ` +
-      `As entregas e o desenvolvimento são do próprio mês.`
-    : `Para a reunião de <b>${formatDate(A)} a ${formatDate(B)}</b>: mostra o que foi ` +
-      `<b>entregue</b> na semana que passou (${formatDate(C)} a ${formatDate(D)}) e o que está ` +
-      `<b>em desenvolvimento</b> nesta semana (${formatDate(A)} a ${formatDate(B)}). ` +
-      `A comparação é com a ${janela.rotAnt}.`) + filtroTxt;
+      `Todos os blocos abaixo são deste mês.`
+    : `Semana de <b>${formatDate(A)} a ${formatDate(B)}</b>, comparada com a ` +
+      `${janela.rotAnt}. Todos os blocos abaixo são desta semana.`) + filtroTxt;
 
   document.getElementById('rel-ent-titulo').innerHTML =
     `✅ Entregues <span class="rel-per">${formatDate(C)} a ${formatDate(D)}</span>`;
@@ -7268,7 +7258,7 @@ function renderRelatorios() {
   const vazio = (txt) => `<div class="ger-empty-box">${txt}</div>`;
   document.getElementById('rel-entregues').innerHTML = entregues.length
     ? relAgrupadoHTML(entregues, 'entregues')
-    : vazio(`Nenhuma entrega registrada entre ${formatDate(C)} e ${formatDate(D)}.`);
+    : vazio(`Nenhuma entrega registrada entre ${formatDate(A)} e ${formatDate(B)}.`);
   document.getElementById('rel-andamento').innerHTML = andamento.length
     ? relAgrupadoHTML(andamento, 'andamento')
     : vazio(`Nenhuma demanda em desenvolvimento entre ${formatDate(A)} e ${formatDate(B)}.`);
@@ -7612,12 +7602,10 @@ function relTexto(secao) {
     }
     partes.push('');
   }
-  const rotEnt = janela.escala === 'mes'
-    ? janela.rot
-    : formatDate(C) + ' a ' + formatDate(D) + ' (semana anterior)';
-  const rotDev = janela.escala === 'mes'
-    ? janela.rot
-    : formatDate(A) + ' a ' + formatDate(B) + ' (semana da reunião)';
+  // Um periodo, e os dois blocos o nomeiam igual.
+  const rotEnt = janela.escala === 'mes' ? janela.rot
+                                         : formatDate(A) + ' a ' + formatDate(B);
+  const rotDev = rotEnt;
   if (secao !== 'andamento' && secao !== 'vem') {
     partes.push('ENTREGUES — ' + rotEnt + ' — ' + entregues.length);
     partes.push(entregues.length ? porTema(entregues, 'entregues') : '(nenhuma)');
