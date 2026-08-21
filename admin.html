@@ -636,6 +636,14 @@
     .rel-grupo { margin-bottom: 20px; }
     /* O CABECALHO E UM BOTAO. Largura toda para o alvo do clique ser a linha
        inteira — mirar um texto de 12px e trabalho, e a linha nao. */
+    /* A data de saida do card, e o julgamento do prazo ao lado dela. */
+    .rel-no-prazo { color:var(--green); font-weight:600; }
+    .rel-sp, .rel-sem-data { color:var(--text3); }
+    .rel-sem-data b { color:var(--yellow); font-weight:600; }
+    /* Sistema com entrega mas sem pontuacao: presente na lista, e sem barra que
+       finja medida. */
+    .rel-tema-sempt .rel-tema-nome { color:var(--text3); }
+    .rel-tema-nota { font-size:11px; color:var(--text3); margin-top:3px; }
     .rel-grupo-head {
       display:flex; align-items:center; gap:8px; width:100%; font-size:12px;
       font-weight:700; text-transform:uppercase; letter-spacing:.08em;
@@ -7142,11 +7150,55 @@ function relSistemaModulo(m) {
            completo: p.modulo ? `${p.sistema} - ${p.modulo}` : (p.sistema || t.nome) };
 }
 
+/** A DATA DE SAIDA DO CARD, com o julgamento do prazo ao lado.
+ *
+ *  O card dizia "✅ Entrega: 07/08" para uma demanda listada na semana de 10 a
+ *  16/08 — porque `m.entrega` e o PRAZO COMBINADO, e a lista e filtrada pela data
+ *  em que a demanda de fato SAIU (`diaDaEntrega`: `entregue_em`, ou `concluido_em`
+ *  nas antigas). Dois campos diferentes sob o mesmo rotulo: o cabecalho prometia
+ *  uma janela e os cards mostravam datas de fora dela. Pior sem prazo cadastrado —
+ *  a AX-231 saiu em 12/08 e o card escrevia "Entrega: —".
+ *
+ *  TODA A CONTA DE PRAZO VEM DE `prazo.js`, e nenhuma linha dela e reescrita aqui:
+ *  o prazo efetivo (esticado pelos dias de pausa) e o atraso congelado na entrega
+ *  do dev sao as mesmas funcoes que o Gantt, o Painel Dev e o deck usam. Recalcular
+ *  aqui e como a ferramenta ja errou antes — quatro telas com quatro respostas para
+ *  a mesma pergunta. */
+function relSaidaHTML(m) {
+  const saiu = window.CAPACIDADE.diaDaEntrega(m);
+  if (!saiu) {
+    return '<span class="rel-sem-data" title="Sem data de entrega registrada: a demanda fica ' +
+           'fora de qualquer fechamento por período.">✅ Entregue: <b>sem data</b></span>';
+  }
+  const dia = formatDate(saiu);
+  // Sem prazo cadastrado nao ha combinado para comparar — e dizer isso e melhor
+  // que deixar a linha sem marca, que se confunde com "cumpriu".
+  if (!m.entrega) {
+    return '<span>✅ Entregue: ' + dia + ' <span class="rel-sp" ' +
+           'title="Sem prazo cadastrado — não há combinado para comparar.">sem prazo</span></span>';
+  }
+  const atraso = window.PRAZO ? PRAZO.diasDeAtraso(m, statusKey(m), PRAZO.hojeISO()) : null;
+  const pz = window.PRAZO ? PRAZO.prazoEfetivo(m, saiu) : m.entrega;
+  if (atraso === null) {
+    return '<span>✅ Entregue: ' + dia + ' <span class="rel-sp">prazo ' + formatDate(pz) + '</span></span>';
+  }
+  if (atraso <= 0) {
+    return '<span>✅ Entregue: ' + dia + ' <span class="rel-no-prazo" title="Prazo era ' +
+           formatDate(pz) + '.">no prazo</span></span>';
+  }
+  return '<span>✅ Entregue: ' + dia + ' <span class="rel-atraso">' + atraso +
+         (atraso === 1 ? ' dia' : ' dias') + ' após o prazo (' + formatDate(pz) + ')</span></span>';
+}
+
 function relCardHTML(m, modo) {
   const sm = relSistemaModulo(m);
   const impl = (m.implementacao || '').trim();
   const atrasado = statusEfetivo(m) === 'atrasado';
-  const prazo = m.entrega ? formatDate(m.entrega) : '—';
+  /* O PRAZO EM DESENVOLVIMENTO E O EFETIVO, com os dias de pausa somados — o
+     mesmo numero que o Painel Dev mostra ao dev. Sem isso a mesma demanda pausada
+     aparece com prazos diferentes em duas telas, e quem cobra usa o errado. */
+  const pzEf = (window.PRAZO && m.entrega) ? PRAZO.prazoEfetivo(m, PRAZO.hojeISO()) : m.entrega;
+  const prazo = pzEf ? formatDate(pzEf) : '—';
   return `<div class="rel-card">
     <div class="rel-card-head">
       <span class="rel-card-titulo">${esc(m.titulo || '(sem título)')}</span>
@@ -7157,7 +7209,7 @@ function relCardHTML(m, modo) {
       ${m.dev ? `<span>👤 ${esc(m.dev)}</span>` : ''}
       ${modo === 'andamento'
         ? `<span class="${atrasado ? 'rel-atraso' : ''}">📅 Prazo: ${prazo}${atrasado ? ' (atrasado)' : ''}</span>`
-        : `<span>✅ Entrega: ${prazo}</span>`}
+        : relSaidaHTML(m)}
     </div>
     ${modo === 'entregues'
       ? (impl
@@ -7320,24 +7372,30 @@ function relRenderTemas(j) {
     return;
   }
   const maior = t.itens[0].pts || 1;
-  // Oito linhas e a cauda dobrada: com quinze sistemas a lista vira rolagem, e
-  // "Outros (7)" diz que ha mais sem esconder que ha.
-  const topo = t.itens.slice(0, 8);
-  const resto = t.itens.slice(8);
-  const linhas = topo.concat(resto.length
-    ? [{ nome: 'Outros (' + resto.length + ')',
-         pts: resto.reduce((x, y) => x + y.pts, 0),
-         qtd: resto.reduce((x, y) => x + y.qtd, 0) }]
-    : []);
-  box.innerHTML = linhas.map(x =>
-    '<div class="rel-tema-linha">' +
+  /* TODO SISTEMA APARECE COM NOME. Antes a lista cortava em oito e dobrava a cauda
+     em "Outros (12)" — e "Outros" numa reuniao de diretoria e uma pergunta, nao uma
+     resposta. O sistema e de preenchimento obrigatorio na demanda: sempre existe um
+     nome para mostrar, e esconde-lo atras de um rotulo generico so transfere a
+     pergunta para quem apresenta. Sao 20 linhas em agosto, e o bloco rola. */
+  box.innerHTML = t.itens.map(x => {
+    /* ZERO PONTO NAO E POUCO TRABALHO — E ENTREGA SEM PONTUAR. Uma barra de 2% ao
+       lado de "0 pt" seria lida como um sistema que quase nao recebeu esforco,
+       quando o que houve foi entrega que ninguem estimou. A linha diz isso, e o tom
+       apagado a separa das que tem medida. */
+    const semPt = !x.pts;
+    return '<div class="rel-tema-linha' + (semPt ? ' rel-tema-sempt' : '') + '">' +
       '<div><div class="rel-tema-nome" title="' + esc(x.nome) + '">' + esc(x.nome) + '</div>' +
-        '<div class="rel-tema-barra"><div class="rel-tema-fill" style="width:' +
-          Math.max(2, Math.round(x.pts / maior * 100)) + '%"></div></div></div>' +
-      '<div class="rel-tema-num">' + x.pts + ' pt</div>' +
-      '<div class="rel-tema-pct">' + (t.total ? Math.round(x.pts / t.total * 100) : 0) + '%</div>' +
-      '<div class="rel-tema-qtd">' + x.qtd + (x.qtd === 1 ? ' dem.' : ' dem.') + '</div>' +
-    '</div>').join('');
+        (semPt
+          ? '<div class="rel-tema-nota">' + x.qtd + (x.qtd === 1 ? ' entrega' : ' entregas') +
+            ' sem pontuação</div>'
+          : '<div class="rel-tema-barra"><div class="rel-tema-fill" style="width:' +
+            Math.max(2, Math.round(x.pts / maior * 100)) + '%"></div></div>') +
+      '</div>' +
+      '<div class="rel-tema-num">' + (semPt ? '—' : x.pts + ' pt') + '</div>' +
+      '<div class="rel-tema-pct">' + (semPt || !t.total ? '' : Math.round(x.pts / t.total * 100) + '%') + '</div>' +
+      '<div class="rel-tema-qtd">' + x.qtd + ' dem.</div>' +
+    '</div>';
+  }).join('');
 }
 
 /** O QUE VEM — em Planning e pontuado sem prazo. */

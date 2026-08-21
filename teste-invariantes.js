@@ -4277,6 +4277,80 @@ ok(/delta: relDeltaHTML\(r\.agora\.entregue, r\.antes\.entregue, true\)/.test(AD
      'e leva os tres blocos novos');
 })();
 
+/* A DATA QUE O CARD MOSTRA E A DA SAIDA, e nao o prazo.
+   O card escrevia "Entrega: 07/08" para uma demanda listada na semana de 10 a
+   16/08: `m.entrega` e o PRAZO, e a lista filtra por `diaDaEntrega`. Dois campos
+   sob o mesmo rotulo, e o cabecalho parecia mentir sobre a janela. Esta invariante
+   RODA `relSaidaHTML` contra os dois casos que apareceram na tela. */
+(() => {
+  const c = corpo(ADMIN, 'function relSaidaHTML(');
+  ok(!!c, 'existe a data de saida do card');
+  if (!c) return;
+
+  // A conta de prazo tem de vir de prazo.js — recalcular aqui e como a ferramenta
+  // ja errou antes, com quatro telas dando quatro respostas.
+  ok(/PRAZO\.diasDeAtraso\(/.test(c) && /PRAZO\.prazoEfetivo\(/.test(c),
+     'e ela usa as funcoes de prazo.js, sem refazer a conta');
+  ok(!/86400000|Date\.UTC/.test(c),
+     'sem aritmetica de data propria — isso e de prazo.js');
+  ok(/CAPACIDADE\.diaDaEntrega\(/.test(c),
+     'e a data vem de diaDaEntrega, a mesma que filtra a janela');
+
+  const formatDate = iso => {
+    const p = String(iso || '').slice(0, 10).split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : '—';
+  };
+  let F;
+  try {
+    F = new Function('esc', 'formatDate', 'statusKey', 'window',
+      c + '\n; return relSaidaHTML;'
+    )(t => String(t == null ? '' : t), formatDate, m => m.status_planejamento || '', globalThis);
+  } catch (e) { ok(false, 'relSaidaHTML roda isolada', e.message); return; }
+
+  const texto = h => String(h).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+
+  // AX-154 de verdade: prazo 07/08, entregue 11/08.
+  const t154 = texto(F({ entrega: '2026-08-07', entregue_em: '2026-08-11T13:00:00.000Z',
+                         status_planejamento: 'concluido' }));
+  ok(/11\/08\/2026/.test(t154) && !/Entregue: 07\/08/.test(t154),
+     'o card diz o dia em que a demanda saiu, e nao o prazo', t154);
+  ok(/4 dias? após o prazo/.test(t154),
+     'e diz de quanto foi o atraso, com o prazo entre parenteses', t154);
+
+  // AX-231 de verdade: sem prazo, entregue 12/08. Antes escrevia "Entrega: —".
+  const t231 = texto(F({ entregue_em: '2026-08-12T14:01:39.060Z',
+                         status_planejamento: 'concluido' }));
+  ok(/12\/08\/2026/.test(t231), 'demanda sem prazo mostra a data em que saiu', t231);
+  ok(/sem prazo/.test(t231),
+     'e avisa que nao havia combinado — deixar sem marca se confunde com "cumpriu"', t231);
+
+  // No prazo tem de ser dito, e nao apenas nao-dito.
+  const tok = texto(F({ entrega: '2026-08-14', entregue_em: '2026-08-13T10:00:00.000Z',
+                        status_planejamento: 'concluido' }));
+  ok(/13\/08\/2026/.test(tok) && /no prazo/.test(tok), 'quem cumpriu aparece como cumpriu', tok);
+
+  // Sem data de saida a demanda esta fora de qualquer fechamento, e a linha diz.
+  const tsem = texto(F({ entrega: '2026-08-14', status_planejamento: 'concluido' }));
+  ok(/sem data/.test(tsem), 'sem data de saida a linha diz que a demanda fica fora', tsem);
+})();
+
+/* NENHUM SISTEMA VIRA "OUTROS". A lista cortava em oito e dobrava a cauda em
+   "Outros (12)" — numa reuniao de diretoria isso e uma pergunta, nao uma resposta,
+   e o sistema e campo obrigatorio na demanda: sempre ha nome para mostrar. */
+(() => {
+  const c = corpo(ADMIN, 'function relRenderTemas(');
+  ok(!!c, 'existe o bloco de onde a capacidade foi');
+  if (!c) return;
+  /* Mede a CONSTRUCAO, e nao a palavra: a versao anterior desta invariante casava
+     com o proprio comentario que explica a correcao, e acusava o codigo corrigido. */
+  ok(!/nome:\s*'Outros/.test(c) && !/'Outros \(' \+/.test(c),
+     'e nenhum sistema e dobrado num item sintetico "Outros (n)"');
+  ok(!/\.slice\(8\)/.test(c), 'sem cauda separada para dobrar');
+  ok(!/\.slice\(0,\s*8\)/.test(c), 'sem corte em oito — a lista mostra todos');
+  ok(/rel-tema-sempt/.test(c),
+     'e sistema com entrega sem pontuacao nao ganha barra: zero ponto nao e pouco trabalho');
+})();
+
 /* A BANDEJA DE CADA SISTEMA RECOLHE — e esta invariante EXECUTA o codigo da tela,
    em vez de procurar palavras nele. Um regex por "aria-expanded" passaria com o
    estado guardado no DOM, que era justamente o defeito a evitar: o relatorio
