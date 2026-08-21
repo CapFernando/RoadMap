@@ -735,6 +735,13 @@ const STATUS_PARA_SP = {
 // exige responsavel e a que carimba o mes — e nao aparecem em relatorio por
 // etapa. Ficar invisivel e pior que ficar na coluna errada: na coluna errada
 // alguem ve e move.
+/* Etapas em que a demanda JA FOI ALOCADA a alguem — e daqui em diante que o ponto
+   conta como planejado. Backlog e Planning nao: ali ainda se discute se a demanda
+   entra, e contar como plano infla o compromisso com o que pode nem ser feito.
+   A mesma lista vive em capacidade.js, para as telas; aqui ela e repetida porque o
+   Worker nao carrega os scripts do site, e nao por escolha. */
+const ETAPAS_ALOCADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+
 function normalizaEstados(data) {
   if (!data || !Array.isArray(data.melhorias)) return 0;
   let n = 0;
@@ -762,6 +769,34 @@ function normalizaEstados(data) {
     if (sp === 'concluido' && !String(m.entregue_em || '').trim()) {
       const ce = String(m.concluido_em || '').slice(0, 10);
       if (/^\d{4}-\d{2}-\d{2}$/.test(ce)) { m.entregue_em = ce; n += 1; }
+    }
+
+    /* OS PONTOS PROMETIDOS FICAM CONGELADOS NA ALOCACAO.
+
+       A REPONTUACAO ACONTECE: na base, AX-088 foi de 34 para 55, AX-180 de 55
+       para 34 e AX-200 de 2 para 8, todas pelo painel. Ler `poker_pontos` no
+       fechamento do mes faria a repontuacao REESCREVER O PASSADO — voce prometeu
+       34 ao dev, corrigiu para 55 depois de ver o tamanho real, e o relatorio
+       passaria a dizer que voce havia prometido 55 desde o inicio. O cruzamento
+       planejado x entregue deixaria de medir compromisso e passaria a medir a
+       ultima edicao.
+
+       CARIMBADO AQUI, NO SERVIDOR, e nao na tela: a demanda entra em Planejado
+       pelo Gantt, pelo admin e pela API, e a terceira tela e sempre a que
+       esquece. Mesmo motivo do `entregue_em` acima.
+
+       PONTUACAO RETROATIVA NAO ENTRA. As 77 demandas pontuadas depois de
+       concluidas (`poker_retroativo`) nunca tiveram plano: carimba-las faria o
+       planejado do mes passado aparecer perfeito por construcao — o mesmo
+       defeito que a conclusao retroativa causava no prazo.
+
+       E O CAMPO SO NASCE UMA VEZ. `!m.pontos_planejados` e a trava: sem ela, cada
+       gravacao reescreveria o carimbo com o tamanho corrente, e o congelamento
+       nao existiria. */
+    if (ETAPAS_ALOCADA.includes(sp) && !m.poker_retroativo &&
+        !(Number(m.pontos_planejados) > 0)) {
+      const pt = Number(m.poker_pontos);
+      if (Number.isFinite(pt) && pt > 0) { m.pontos_planejados = pt; n += 1; }
     }
     const esperado = SP_PARA_STATUS[sp];
     if (!esperado) continue;

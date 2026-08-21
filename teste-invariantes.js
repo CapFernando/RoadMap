@@ -37,6 +37,7 @@ const APRES = fs.readFileSync('apresentacao.js', 'utf8');
 const CAPA = fs.readFileSync('capa-tecnologia.js', 'utf8');
 const PIPE = fs.readFileSync('pipelines.js', 'utf8');
 const PRZ = fs.readFileSync('prazo.js', 'utf8');
+const CAPJS = fs.readFileSync('capacidade.js', 'utf8');
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -1772,8 +1773,11 @@ try {
     }
     return '';
   };
+  // `ETAPAS_ALOCADA` entra junto: `normalizaEstados` passou a carimbar os pontos
+  // planejados, e sem a constante a funcao lanca em vez de falhar por um motivo.
   const N = new Function(bl('const SP_PARA_STATUS =') + bl('const STATUS_PARA_SP =') +
-                         fnBody('normalizaEstados') + '\nreturn normalizaEstados;')();
+                         bl('const ETAPAS_ALOCADA =') +
+                         fnBody('normalizaEstados') + '; return normalizaEstados;')();
   const d = { melhorias: [
     { codigo: 'a', status: 'recebida',  status_planejamento: '' },
     { codigo: 'b', status: 'negada',    status_planejamento: '' },
@@ -3593,6 +3597,221 @@ ok(/for \(let k = 1; k >= 0; k--\) \{/.test(ADMIN),
 // A chamada do deck adapta a assinatura, em vez de passar a funcao errada.
 ok(/\(txt\) => window\.PIPELINES\.devsDaDemanda\(\{ dev: txt \}\)/.test(ADMIN),
    'o deck adapta devsDaDemanda para a assinatura de splitDevs');
+
+/* ─── CAPACIDADE EM PONTOS: planejado x entregue ─────────────────────────
+   A pergunta que a ferramenta nao respondia: "quanto eu joguei para essa pessoa e
+   quanto ela fez". Havia hora planejada x realizada e contagem de demandas
+   prometidas x entregues, e nenhuma das duas mede TAMANHO — um dev fecha 50
+   pontos por semana, outro fecha 100.                                          */
+sec('Capacidade em pontos (planejado x entregue)');
+
+let erroCap = null;
+try { new Function(CAPJS); } catch (e) { erroCap = e.message; }
+ok(!erroCap, 'capacidade.js sem erro de sintaxe', erroCap || '');
+
+const CAP = require('./capacidade.js');
+const dm = (x) => Object.assign({ status_planejamento: 'planejado', dev: 'Ana' }, x);
+
+/* O PLANEJADO E CONGELADO NA ALOCACAO, e nao lido no fechamento.
+   A REPONTUACAO ACONTECE: na base, AX-088 foi de 34 para 55, AX-180 de 55 para 34
+   e AX-200 de 2 para 8, todas pelo painel. Ler `poker_pontos` no fim do mes faria
+   a repontuacao REESCREVER O PASSADO — voce prometeu 34, corrigiu para 55 depois
+   de ver o tamanho real, e o relatorio diria que voce prometeu 55 desde o inicio.
+   O cruzamento pararia de medir compromisso e passaria a medir a ultima edicao. */
+ok(CAP.planejados(dm({ pontos_planejados: 34, poker_pontos: 55 })) === 34,
+   'o planejado usa o carimbo, e nao o tamanho corrente repontuado');
+ok(CAP.entregues(dm({ status_planejamento: 'concluido', pontos_planejados: 34, poker_pontos: 55 })) === 55,
+   'e o ENTREGUE usa o tamanho corrente: a demanda era maior, e o trabalho foi maior');
+// Sem carimbo (base antiga), o tamanho corrente e a melhor informacao que existe —
+// e o servidor carimba na proxima gravacao, entao a lacuna se fecha sozinha.
+ok(CAP.planejados(dm({ poker_pontos: 8 })) === 8,
+   'sem carimbo, o tamanho corrente serve de reserva');
+
+/* PONTUACAO RETROATIVA NAO E PLANEJAMENTO. 77 das 165 pontuadas receberam pontos
+   DEPOIS de concluidas: conta-las faria o planejado do mes passado aparecer
+   perfeito por construcao — o mesmo defeito que a conclusao retroativa causava. */
+ok(CAP.planejados(dm({ status_planejamento: 'concluido', poker_pontos: 13,
+                       poker_retroativo: true })) === 0,
+   'pontuada so depois de concluir nao entra como planejado');
+ok(CAP.entregues(dm({ status_planejamento: 'concluido', poker_pontos: 13,
+                      poker_retroativo: true })) === 13,
+   'mas continua contando como entregue: o trabalho existiu');
+
+/* BACKLOG E PLANNING NAO SAO PLANO. Ali ainda se discute se a demanda entra, e
+   contar como compromisso infla o plano com o que pode nem ser feito. */
+['backlog', 'levantar_req', 'planning'].forEach((e) => {
+  ok(CAP.planejados(dm({ status_planejamento: e, poker_pontos: 8 })) === 0,
+     'etapa "' + e + '" nao conta como planejado');
+});
+['planejado', 'em_andamento', 'validacao', 'concluido'].forEach((e) => {
+  ok(CAP.planejados(dm({ status_planejamento: e, poker_pontos: 8 })) === 8,
+     'etapa "' + e + '" conta como planejado');
+});
+
+/* O ENTREGUE COMECA NA ENTREGA DO DEV, e nao na aprovacao do PM/PO — a mesma
+   regra do prazo (prazo.js) e do ranking da semana. */
+ok(CAP.entregues(dm({ status_planejamento: 'validacao', poker_pontos: 8 })) === 8,
+   'demanda com o PM/PO ja conta como entregue: o dev fez');
+ok(CAP.entregues(dm({ status_planejamento: 'em_andamento', poker_pontos: 8 })) === 0,
+   'e em andamento nao conta — ainda esta na mao dele');
+
+// A data que ancora cada lado. Usar a mesma para os dois faria o entregue cair
+// sempre na semana do plano, e o cruzamento nao mediria nada.
+ok(CAP.diaDoPlano({ entrega: '2026-08-20' }) === '2026-08-20',
+   'o planejado ancora no PRAZO combinado');
+ok(CAP.diaDaEntrega({ entregue_em: '2026-08-18T12:00:00Z', concluido_em: '2026-08-25' }) === '2026-08-18',
+   'o entregue ancora na entrega do DEV, e nao na conclusao da esteira');
+ok(CAP.diaDaEntrega({ concluido_em: '2026-08-25' }) === '2026-08-25',
+   'sem entregue_em, a conclusao serve de reserva');
+ok(CAP.diaDoPlano({ entrega: 'nao e data' }) === '' && CAP.diaDoPlano({}) === '',
+   'data torta nao vira um dia qualquer');
+
+/* ALOCADA SEM PONTUAR NAO SOMA ZERO EM SILENCIO. 27 demandas estao em
+   Planejado/Em andamento sem pontuacao — nove sem prazo nenhum. Somar zero faz o
+   planejado da pessoa parecer menor, e a conclusao errada e "sobra capacidade". */
+ok(CAP.semPontuacao(dm({})) === true,
+   'alocada sem pontuacao e contada a parte');
+ok(CAP.semPontuacao(dm({ poker_pontos: 5 })) === false &&
+   CAP.semPontuacao(dm({ status_planejamento: 'backlog' })) === false,
+   'e nem pontuada nem em backlog contam nesse aviso');
+
+(() => {
+  const lista = [
+    // Ana: prometido 21, entregou 13 (a de 8 ainda esta na mao dela)
+    { dev: 'Ana', status_planejamento: 'concluido', pontos_planejados: 13, poker_pontos: 13,
+      entrega: '2026-08-10', entregue_em: '2026-08-12' },
+    { dev: 'Ana', status_planejamento: 'em_andamento', pontos_planejados: 8, poker_pontos: 8,
+      entrega: '2026-08-20' },
+    // Dupla: 8 pontos divididos entre os dois
+    { dev: 'Ana / Bruno', status_planejamento: 'concluido', pontos_planejados: 8, poker_pontos: 8,
+      entrega: '2026-08-15', entregue_em: '2026-08-15' },
+    // Fora da janela: nao entra em nenhum dos lados
+    { dev: 'Ana', status_planejamento: 'concluido', pontos_planejados: 100, poker_pontos: 100,
+      entrega: '2026-07-10', entregue_em: '2026-07-11' },
+    // Sem dono: nao entra em ranking nenhum
+    { dev: '', status_planejamento: 'concluido', poker_pontos: 55, entrega: '2026-08-10' },
+    // Alocada sem pontuar
+    { dev: 'Bruno', status_planejamento: 'planejado', entrega: '2026-08-18' },
+  ];
+  const r = CAP.porDev(lista, '2026-08-01', '2026-08-31');
+  const ana = r.find((x) => x.nome === 'Ana');
+  const bruno = r.find((x) => x.nome === 'Bruno');
+  ok(ana.plan === 25 && ana.entregue === 17,
+     'Ana: 13 + 8 + metade de 8 planejados, 13 + metade de 8 entregues',
+     ana.plan + ' / ' + ana.entregue);
+  /* O PONTO E DIVIDIDO NA DUPLA. Contar inteiro para cada um faz a soma por dev
+     estourar o total, e a primeira coisa que se faz numa tabela e somar a coluna. */
+  ok(bruno.plan === 4 && bruno.entregue === 4, 'Bruno leva a metade da demanda em dupla');
+  ok(bruno.semPontuar === 1, 'e a alocada sem pontuar aparece na linha dele');
+  ok(!r.some((x) => x.nome === ''), 'demanda sem dono nao cria linha vazia');
+  ok(ana.plan < 100, 'demanda de outro mes nao entra na janela');
+  /* O PERCENTUAL SO EXISTE COM PLANO: sem denominador, "entregou 40" nao tem
+     referencia, e um 0% ali seria inventar uma. */
+  const soEntrega = CAP.porDev(
+    [{ dev: 'Cara', status_planejamento: 'concluido', poker_pontos: 8,
+       poker_retroativo: true, entregue_em: '2026-08-12' }],
+    '2026-08-01', '2026-08-31')[0];
+  ok(soEntrega.plan === 0 && soEntrega.entregue === 8 && soEntrega.pct === null,
+     'entrega sem plano tem percentual nulo, e nao 0% nem 100%');
+})();
+
+/* O CARIMBO E DO SERVIDOR, e nao da tela: a demanda entra em Planejado pelo
+   Gantt, pelo admin e pela API, e a terceira tela e sempre a que esquece. */
+(() => {
+  const bl = (dec) => {
+    const i = W.indexOf(dec);
+    if (i < 0) return '';
+    const fim = W.indexOf(';', i);
+    return W.slice(i, fim + 1) + '\n';
+  };
+  const i = W.indexOf('function normalizaEstados(');
+  ok(i > 0, 'existe normalizaEstados no worker');
+  if (i < 0) return;
+  let d = 0, fim = -1;
+  for (let k = W.indexOf('{', i); k < W.length; k++) {
+    if (W[k] === '{') d++;
+    else if (W[k] === '}') { d--; if (!d) { fim = k + 1; break; } }
+  }
+  const N = new Function(bl('const SP_PARA_STATUS =') + bl('const STATUS_PARA_SP =') +
+                         bl('const ETAPAS_ALOCADA =') + W.slice(i, fim) +
+                         '; return normalizaEstados;')();
+
+  const base = { melhorias: [
+    { codigo: 'novo', status_planejamento: 'em_andamento', poker_pontos: 8 },
+    { codigo: 'jaTem', status_planejamento: 'concluido', poker_pontos: 55, pontos_planejados: 34 },
+    { codigo: 'retro', status_planejamento: 'concluido', poker_pontos: 13, poker_retroativo: true },
+    { codigo: 'backlog', status_planejamento: 'backlog', poker_pontos: 21 },
+    { codigo: 'semPt', status_planejamento: 'planejado' },
+  ] };
+  N(base);
+  const g = (c) => base.melhorias.find((m) => m.codigo === c);
+  ok(g('novo').pontos_planejados === 8, 'alocada sem carimbo recebe o carimbo');
+  /* A TRAVA DO CARIMBO. Sem `!m.pontos_planejados`, cada gravacao reescreveria o
+     valor com o tamanho corrente e o congelamento nao existiria — era o defeito
+     que a feature inteira existe para evitar. */
+  ok(g('jaTem').pontos_planejados === 34,
+     'e quem ja tinha carimbo NAO e reescrito, mesmo com o tamanho mudado');
+  ok(g('retro').pontos_planejados === undefined,
+     'pontuada depois de concluir nao ganha carimbo de plano');
+  ok(g('backlog').pontos_planejados === undefined,
+     'backlog nao ganha carimbo: ali ainda se discute se a demanda entra');
+  ok(g('semPt').pontos_planejados === undefined,
+     'sem pontuacao nao ha o que carimbar');
+})();
+
+/* AS TRES TELAS USAM A MESMA REGRA. Quinta copia de conta nesta base e o caminho
+   conhecido para duas telas discordarem do mesmo numero — e o painel do dev
+   discordava do Gantt justamente assim: um contava por `concluido_em`, o outro
+   por `entregue_em`. */
+['admin.html', 'gantt.html', 'dev.html'].forEach((f) => {
+  const tela = f === 'admin.html' ? ADMIN : f === 'gantt.html' ? GANTT : DEV;
+  ok(/capacidade\.js/.test(tela), f + ' carrega capacidade.js');
+  ok(/CAPACIDADE/.test(tela), f + ' usa a regra compartilhada');
+});
+ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,200}a\.pontos \+= pts/.test(DEV),
+   'o painel do dev nao soma pontos por conta propria');
+
+/* O GANTT FILTRA AS DUAS PONTAS PELA JANELA DO MES.
+   `devCards` traz o que APARECE no mes (tem inicio ou entrega nele), e somar o
+   entregue de todos eles contava a demanda planejada para agosto e entregue em
+   setembro como se tivesse saido em agosto. O Gantt dizia 110% onde o admin dizia
+   47% — duas telas, o mesmo numero, respostas diferentes. */
+(() => {
+  const c = corpo(GANTT, 'function pontosPokerPorSemana(');
+  ok(!!c, 'existe a conta de pontos por semana do Gantt');
+  if (!c) return;
+  ok(/function pontosPokerPorSemana\(devCards, semanas, de, ate\)/.test(c),
+     'ela recebe a janela do mes, e nao so os cards');
+  ok(/dentro\(CAP\.diaDoPlano\(m\) \|\| m\.inicio\)/.test(c) &&
+     /dentro\(CAP\.diaDaEntrega\(m\)\)/.test(c),
+     'e filtra o planejado E o entregue por ela');
+})();
+
+/* NADA ACIMA DE 100% TAMBEM AQUI. "178%" numa linha de capacidade se le como erro,
+   e travar em 100 seria mentir — os pontos existiram. Acima do plano sai a
+   diferenca em pontos, que responde "quanto saiu alem do combinado". Acontece de
+   forma legitima: o dev fecha em agosto o que foi planejado para julho. */
+(() => {
+  const r = CAP.rotulo;
+  ok(r(0, 0) === '—', 'sem plano e sem entrega, travessao');
+  ok(r(100, 62) === '62%' && r(100, 100) === '100%', 'ate 100 e percentual');
+  ok(r(108, 192) === '+84 pt' && r(198, 218) === '+20 pt',
+     'acima do plano sai a diferenca em pontos');
+  ok(r(0, 40) === '+40 pt', 'entrega sem plano tambem sai em pontos');
+  let ruins = [];
+  for (let p = 1; p <= 200; p += 3) for (let e = 0; e <= 400; e += 17) {
+    const t = r(p, e);
+    if (t.endsWith('%') && Number(t.slice(0, -1)) > 100) ruins.push(p + '/' + e);
+  }
+  ok(!ruins.length, 'nenhum par plano/entrega produz percentual acima de 100',
+     ruins.length ? ruins.slice(0, 5).join(' ') : 'varrido 1..200 x 0..400');
+  // E o `pct` cru tambem para em 100, para quem o imprimir direto.
+  const so = CAP.porDev([{ dev: 'X', status_planejamento: 'concluido',
+    pontos_planejados: 10, poker_pontos: 100, entrega: '2026-08-10',
+    entregue_em: '2026-08-11' }], '2026-08-01', '2026-08-31')[0];
+  ok(so.pct === 100 && so.rotulo === '+90 pt',
+     'o pct cru para em 100, e o rotulo diz a diferenca');
+})();
 
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }

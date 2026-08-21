@@ -131,6 +131,11 @@
        continuam no :root desta pagina — tema.css so carrega o par do tema claro. */
     .prod-fora { color:var(--text2); white-space:nowrap; }
     .prod-fora b { color:var(--text); }
+    /* Verde no ENTREGUE, pelo mesmo padrao do deck: verde e "o resultado
+       desejado aconteceu", e aqui aconteceu. Ambar no que falta pontuar, porque e
+       atencao e nao erro — da para pontuar depois. */
+    .prod-feito { color: var(--green-tx, #3EC98E); }
+    .prod-sem-pontuar { color: var(--amber-tx, #FFC470); }
     .prod-vazio { color:var(--text3); }
     .dv-tab { padding:11px 16px; font-size:14.5px; font-weight:500; color:var(--text2);
       background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px;
@@ -422,6 +427,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=1fa74f8f6d"></script>
+<script src="capacidade.js?v=1"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
@@ -1745,41 +1751,50 @@ function prodIntervalo(qual) {
   return { de: iso(d), ate: iso(fim), rot: 'na semana' };
 }
 
-// Agrega por dev no intervalo. Demanda com mais de um responsavel conta uma issue
-// para cada, e os pontos sao divididos: contar o total inteiro para os dois
-// inflaria a soma do time.
+/* AGREGA POR DEV NO INTERVALO — planejado E entregue.
+ *
+ * A CONTA SAI DE `capacidade.js`, a mesma que o Gantt e o admin usam. Esta funcao
+ * tinha a dela: somava `poker_pontos` das concluidas por `concluido_em`. Duas
+ * diferencas silenciosas contra o Gantt saiam disso:
+ *
+ *   1. a DATA. Aqui era `concluido_em` (a aprovacao do PM/PO), la e `entregue_em`
+ *      (a entrega do dev). A demanda entregue numa sexta e aprovada na terca
+ *      contava em semanas diferentes nas duas telas, e a mesma pessoa via dois
+ *      numeros para a mesma entrega;
+ *   2. a ETAPA. Aqui so `concluido` contava, entao o que estava com o PM/PO
+ *      aparecia como se o dev nao tivesse feito — e ele fez.
+ *
+ * O PLANEJADO E NOVO e e o outro lado da pergunta: "quanto me foi alocado".
+ * Sozinho, o entregue nao diz se a semana foi boa — 40 pontos e muito ou pouco
+ * depende de quantos foram prometidos.
+ */
 function prodAgrega(de, ate) {
-  const porDev = new Map();
-  // "Sem data" e contado apenas para QUEM ESTA OLHANDO. O painel e individual, e
-  // avisar sobre entrega de outra pessoa nao dava a ninguem nada para fazer —
-  // antes somava as concluidas de todo o time.
+  const CAP = window.CAPACIDADE;
+  const vivas = (state.melhorias || []).filter(m => m && !m.mesclado_em);
+  const cap = CAP.porDev(vivas, de, ate);
+
+  /* "Sem data" continua contado APENAS PARA QUEM ESTA OLHANDO: o painel e
+     individual, e avisar sobre entrega de outra pessoa nao da a ninguem nada
+     para fazer. Concluida sem data nenhuma nao tem mes — ela nao entra em
+     intervalo nenhum, e por isso o aviso existe. */
   let semDataMinhas = 0;
-  (state.melhorias || []).forEach(m => {
-    if (m.mesclado_em) return;
+  vivas.forEach(m => {
     if (getStatusKey(m) !== 'concluido') return;
-    const quando = String(m.concluido_em || '').slice(0, 10);
-    if (!quando) {
-      if (splitDevs(m.dev).some(n => n && currentDev &&
-          n.toLowerCase() === String(currentDev).toLowerCase())) semDataMinhas++;
-      return;
-    }
-    if (quando < de || quando > ate) return;
-    const devs = splitDevs(m.dev).filter(Boolean);
-    if (!devs.length) return;
-    const pts = (Number(m.poker_pontos) || 0) / devs.length;
-    devs.forEach(nome => {
-      const a = porDev.get(nome) || { nome, issues: 0, pontos: 0 };
-      a.issues += 1;
-      a.pontos += pts;
-      porDev.set(nome, a);
-    });
+    if (CAP.diaDaEntrega(m)) return;
+    if (splitDevs(m.dev).some(n => n && currentDev &&
+        n.toLowerCase() === String(currentDev).toLowerCase())) semDataMinhas++;
   });
-  // Ordena por PONTOS: contagem de issues sozinha premiaria quem pega muitas
-  // tarefas pequenas. Empate desempata por issues, e depois por nome, para a
-  // ordem nao trocar sozinha entre dois desenhos.
-  const rank = [...porDev.values()].sort((a, b) =>
-    b.pontos - a.pontos || b.issues - a.issues ||
-    String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+
+  /* Ordena por PONTOS ENTREGUES: contagem de issues sozinha premiaria quem pega
+     muitas tarefas pequenas. Empate desempata por issues e depois por nome, para
+     a ordem nao trocar sozinha entre dois desenhos. `capacidade.js` ja devolve
+     ordenado por PLANEJADO — o que interessa ao Gantt —, e aqui a pergunta e
+     outra: quem entregou mais. */
+  const rank = cap.map(x => ({
+    nome: x.nome, issues: x.qtdEntregue, pontos: x.entregue,
+    plan: x.plan, semPontuar: x.semPontuar, pct: x.pct,
+  })).sort((a, b) => b.pontos - a.pontos || b.issues - a.issues ||
+                     String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
   const totalPts = rank.reduce((t, r) => t + r.pontos, 0);
   return { rank, semDataMinhas, totalPts };
 }
@@ -1821,10 +1836,20 @@ function renderProdutividade() {
   const eu = rank.find(r => r.nome === currentDev);
   const pos = eu ? rank.indexOf(eu) + 1 : 0;
 
+  /* OS DOIS LADOS NA MINHA LINHA: quanto me foi alocado e quanto eu fechei.
+     O percentual so aparece com plano — sem denominador, "40 pontos" nao diz se
+     a semana foi boa, e um 0% ali seria inventar uma referencia que nao existe. */
   document.getElementById('prod-meus').innerHTML = eu
     ? '<span>✅ <b>' + eu.issues + '</b> issue' + (eu.issues !== 1 ? 's' : '') + '</span>' +
-      (temPontos
-        ? '<span>🃏 <b>' + prodNum(eu.pontos) + '</b> ponto' + (eu.pontos !== 1 ? 's' : '') + '</span>'
+      (temPontos || eu.plan
+        ? '<span title="Planejado: pontos das demandas com prazo neste período. Entregue: pontos que você tirou da mão, contados na data em que entregou — não na da aprovação.">🃏 <b>' +
+          prodNum(eu.plan) + '</b> pt planejados · <b class="prod-feito">' +
+          prodNum(eu.pontos) + '</b> entregues' +
+          (eu.pct != null ? ' (' + eu.pct + '%)' : '') + '</span>'
+        : '') +
+      (eu.semPontuar
+        ? '<span class="prod-sem-pontuar" title="Demandas alocadas a você sem pontuação no Planning Poker: enquanto elas não forem pontuadas, o seu planejado aparece menor do que é.">◐ ' +
+          eu.semPontuar + ' sem pontuar</span>'
         : '') +
       '<span class="prod-vazio">' + rot + '</span>'
     : '<span class="prod-vazio">Nenhuma entrega ' + rot + '.</span>';
@@ -1869,7 +1894,11 @@ function renderProdutividade() {
     ' issue' + (r.issues !== 1 ? 's' : '') +
     (temPontos ? ' · ' + prodNum(r.pontos) + ' pontos' : '') + '">' +
     '<span class="prod-med">' + MEDALHAS[i] + '</span> <b>' + escAttr(r.nome) + '</b> ' +
-    '<span class="prod-num">' + r.issues + (temPontos ? ' · ' + prodNum(r.pontos) + ' pt' : '') +
+    '<span class="prod-num">' + r.issues +
+      (temPontos ? ' · ' + prodNum(r.pontos) + ' pt' +
+        // O planejado ao lado, entre parenteses: sem ele a coluna de pontos
+        // premia quem recebeu mais, e nao quem fechou mais do que recebeu.
+        (r.plan ? ' / ' + prodNum(r.plan) : '') : '') +
     '</span></span>'
   ).join('');
   // Fora do podio: aparece SO a sua posicao. Listar do 4o em diante exporia o

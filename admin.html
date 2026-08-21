@@ -596,6 +596,39 @@
       border-left:2px solid var(--border2); padding-left:10px;
     }
     .rel-impl-falta { color:var(--amber-tx,#FFE14D); border-left-color:var(--amber,#E89C2F); font-size:12px; }
+    /* ─── PLANEJADO x ENTREGUE ────────────────────────────────────────
+       Duas barras na MESMA escala, uma sobre a outra: o entregue se le contra o
+       planejado da propria pessoa, e a escala compartilhada permite comparar
+       pessoas. Escala por linha faria 20 pontos parecerem 200. */
+    .ger-cap-cab { display:flex; align-items:baseline; justify-content:space-between;
+      gap:16px; flex-wrap:wrap; margin-bottom:10px; }
+    .ger-cap-sub { color:var(--text3); font-size:12px; font-weight:400; }
+    .ger-cap-tot { font-size:13px; color:var(--text2); font-variant-numeric:tabular-nums; }
+    .ger-cap-feito { color:var(--green-tx,#3EC98E); }
+    .ger-cap-lista { display:grid; gap:5px; }
+    .ger-cap-linha { display:grid;
+      grid-template-columns:150px 1fr 48px 48px 46px 40px; align-items:center; gap:10px; }
+    .ger-cap-nome { font-size:13px; color:var(--text); overflow:hidden;
+      text-overflow:ellipsis; white-space:nowrap; }
+    .ger-cap-barras { position:relative; height:14px; background:var(--bg3);
+      border-radius:4px; overflow:hidden; }
+    .ger-cap-b { position:absolute; left:0; border-radius:4px; }
+    /* A do plano ocupa a faixa inteira e fica atras; a do entregue e mais fina e
+       vem na frente — a leitura e "quanto do plano se encheu". */
+    .ger-cap-b-plan { top:0; height:14px; background:var(--blue,#4C9AFF); opacity:.32; }
+    .ger-cap-b-feito { top:3px; height:8px; background:var(--green,#3EC98E); }
+    .ger-cap-num { font-size:13px; text-align:right; font-variant-numeric:tabular-nums;
+      color:var(--text2); }
+    .ger-cap-pct { font-size:12px; text-align:right; color:var(--text3);
+      font-variant-numeric:tabular-nums; }
+    .ger-cap-alerta { font-size:11px; color:var(--amber-tx,#FFC470); text-align:right; }
+    .ger-cap-nota { font-size:11.5px; color:var(--text3); line-height:1.55; margin-top:10px; }
+    @media (max-width: 720px) {
+      /* Em tela estreita a barra sai e sobram os numeros: eles respondem a
+         pergunta, e uma barra de 30px nao responde nada. */
+      .ger-cap-linha { grid-template-columns:1fr 44px 44px 42px 34px; }
+      .ger-cap-barras { display:none; }
+    }
     .ger-empty-box {
       background:var(--bg2); border:1px solid var(--border); border-radius:14px;
       padding:28px 22px; text-align:center; color:var(--text3); font-size:13px;
@@ -906,6 +939,7 @@
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js"></script>
 <script src="pipelines.js?v=a122233200"></script>
+<script src="capacidade.js?v=1"></script>
 <script src="apresentacao.js?v=142f375d81"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
@@ -1200,6 +1234,10 @@
         <span class="ger-section-hint">semana = bloco de 5 dias úteis; card contado pela data de entrega (ou início)</span>
       </div>
       <div id="ger-pts-summary" class="ger-summary"></div>
+      <!-- PLANEJADO x ENTREGUE em pontos. Vem ANTES das pizzas porque e a
+           pergunta que se faz primeiro: "o que eu joguei e o que saiu". As pizzas
+           respondem a seguinte — onde os pontos que sairam foram gastos. -->
+      <div id="ger-cap-wrap" style="margin-bottom:28px"></div>
       <div id="ger-pts-charts" class="ger-charts"></div>
       <div class="ger-collapse-bar" onclick="toggleGerPtsTable()">
         <span id="ger-pts-collapse-label">▶ Pontos por dev × semana</span>
@@ -6254,6 +6292,86 @@ function gerCortesDePontos(ano, mes, temaMap, splitDevs) {
   };
 }
 
+/** PLANEJADO x ENTREGUE, EM PONTOS, POR DEV.
+ *
+ *  A pergunta que a ferramenta nao respondia: "quanto eu joguei para essa pessoa e
+ *  quanto ela fez". Havia hora planejada x realizada e contagem de demandas
+ *  prometidas x entregues, e nenhuma das duas mede TAMANHO — tres ajustes de meia
+ *  hora somam 3 demandas, uma entrega de 13 pontos soma 1. Um dev fecha 50 pontos
+ *  por semana, outro fecha 100.
+ *
+ *  A CONTA VEM DE `capacidade.js`, a mesma que o Gantt e o painel do dev usam.
+ *  As decisoes que mudam o numero estao documentadas la: o planejado e congelado
+ *  na alocacao (a repontuacao acontece e reescreveria o passado), o planejado
+ *  ancora no PRAZO e o entregue na ENTREGA DO DEV, e pontuacao retroativa nao
+ *  conta como plano.
+ *
+ *  O QUE FALTA PONTUAR APARECE. Demanda alocada sem pontos faz o planejado da
+ *  pessoa parecer menor do que e, e a conclusao errada seria "sobra capacidade".
+ *  O numero que falta e o proprio recado.                                      */
+function renderGerCapacidade(ano, mes) {
+  const box = document.getElementById('ger-cap-wrap');
+  if (!box) return;
+  const CAP = window.CAPACIDADE;
+  const iso = ano + '-' + String(mes).padStart(2, '0');
+  const de = iso + '-01';
+  const ate = iso + '-' + String(new Date(ano, mes, 0).getDate()).padStart(2, '0');
+
+  const vivas = (state.melhorias || []).filter(m => m && !m.oculto && !m.mesclado_em);
+  const linhas = CAP.porDev(vivas, de, ate).filter(r => r.plan || r.entregue || r.semPontuar);
+
+  if (!linhas.length) {
+    box.innerHTML = '<div class="ger-empty-box">Nenhuma demanda pontuada com prazo ou ' +
+      'entrega neste mês.</div>';
+    return;
+  }
+
+  const tPlan = linhas.reduce((t, r) => t + r.plan, 0);
+  const tFeito = linhas.reduce((t, r) => t + r.entregue, 0);
+  const tSem = linhas.reduce((t, r) => t + r.semPontuar, 0);
+  const tPct = tPlan > 0 ? Math.round(tFeito / tPlan * 100) : null;
+  const maior = Math.max(...linhas.map(r => Math.max(r.plan, r.entregue)), 1);
+
+  box.innerHTML =
+    '<div class="ger-cap-cab">' +
+      '<div><b>Planejado × entregue</b> <span class="ger-cap-sub">em pontos, por desenvolvedor</span></div>' +
+      '<div class="ger-cap-tot">' + tPlan + ' pt planejados  ·  ' +
+        '<b class="ger-cap-feito">' + tFeito + ' entregues</b>' +
+        (tPct != null ? '  ·  ' + tPct + '%' : '') + '</div>' +
+    '</div>' +
+    '<div class="ger-cap-lista">' +
+    linhas.map(r =>
+      '<div class="ger-cap-linha">' +
+        '<span class="ger-cap-nome">' + esc(r.nome) + '</span>' +
+        /* DUAS BARRAS NA MESMA ESCALA, uma sobre a outra: o entregue e SEMPRE
+           lido contra o planejado da propria pessoa. Escala por linha faria a
+           barra de quem fez 20 pontos parecer igual a de quem fez 200. */
+        '<span class="ger-cap-barras">' +
+          '<span class="ger-cap-b ger-cap-b-plan" style="width:' +
+            (r.plan / maior * 100) + '%"></span>' +
+          '<span class="ger-cap-b ger-cap-b-feito" style="width:' +
+            (r.entregue / maior * 100) + '%"></span>' +
+        '</span>' +
+        '<span class="ger-cap-num">' + r.plan + '</span>' +
+        '<span class="ger-cap-num ger-cap-feito">' + r.entregue + '</span>' +
+        '<span class="ger-cap-pct">' + (r.pct == null ? '—' : r.pct + '%') + '</span>' +
+        (r.semPontuar
+          ? '<span class="ger-cap-alerta" title="Demandas alocadas sem pontuação: o planejado desta pessoa está menor do que é.">◐ ' +
+            r.semPontuar + '</span>'
+          : '<span class="ger-cap-alerta"></span>') +
+      '</div>').join('') +
+    '</div>' +
+    (tSem
+      ? '<div class="ger-cap-nota">◐ <b>' + tSem + ' demanda' + (tSem !== 1 ? 's' : '') +
+        ' alocada' + (tSem !== 1 ? 's' : '') + ' sem pontuação</b> neste mês. Enquanto não ' +
+        'forem pontuadas no Planning Poker, o planejado de quem as recebeu aparece menor do ' +
+        'que é — e a leitura errada seria "sobra capacidade".</div>'
+      : '') +
+    '<div class="ger-cap-nota">O <b>planejado</b> conta na data do prazo combinado; o ' +
+      '<b>entregue</b> conta na data em que o dev entregou, e não na da aprovação do PM/PO. ' +
+      'Pontuação lançada depois da conclusão não entra como planejado — ali não houve plano.</div>';
+}
+
 function renderGerPontos(ano, mes, temaMap, splitDevs) {
   const semanas = gerSemanasDoMes(ano, mes);
   const itens   = gerItensPontuados(ano, mes);
@@ -6294,6 +6412,10 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
   </div>` : '';
 
   if (!itens.length) {
+    /* O CRUZAMENTO E DESENHADO MESMO SEM ENTREGA PONTUADA. Ele nao depende de
+       entrega: mes com 400 pontos alocados e nenhum entregue e exatamente o caso
+       que mais precisa aparecer, e a saida antecipada daqui o escondia. */
+    renderGerCapacidade(ano, mes);
     elSum.innerHTML = '';
     elCharts.innerHTML = avisoSemData + avisoSemDono + `<div class="ger-empty-box" style="grid-column:1/-1">
       Nenhuma demanda pontuada com entrega neste período.<br>
@@ -6304,6 +6426,8 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
     elTbody.innerHTML = `<tr><td style="text-align:center;color:var(--text3);padding:24px">Sem pontos no período.</td></tr>`;
     return;
   }
+
+  renderGerCapacidade(ano, mes);
 
   // ── Agrupamentos: a MESMA conta que o deck usa (ver `gerCortesDePontos`) ──
   const cortes = gerCortesDePontos(ano, mes, temaMap, splitDevs);

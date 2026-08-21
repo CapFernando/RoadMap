@@ -282,6 +282,12 @@
       height: 100%; border-radius: 2px; background: var(--green); transition: width 0.3s;
     }
     .cap-bar-fill.over { background: var(--red); }
+    /* O ENTREGUE em verde: no padrao do deck, verde e "o resultado desejado
+       aconteceu". Aqui ele aconteceu — a demanda saiu da mao do dev. */
+    .cap-feito { color: var(--green-tx, #3EC98E); }
+    /* ALOCADA SEM PONTUAR e ATENCAO, e nao erro: da para pontuar depois, e
+       enquanto nao pontuar o planejado da pessoa aparece menor do que e. */
+    .sem-pontuar-text { color: var(--amber-tx, #FFC470); }
     .cap-text { font-size: 10px; color: var(--text3); white-space: nowrap; }
     /* Os pontos por semana quebram linha em vez de serem cortados: com a pontuacao
        retroativa os numeros passaram de 2 para 3 digitos e o total ("Tot 5...")
@@ -575,6 +581,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=1fa74f8f6d"></script>
+<script src="capacidade.js?v=1"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
@@ -1962,22 +1969,55 @@ function semanaIndexFor(dataStr, semanas) {
   return -1;
 }
 
-// Soma poker_pontos por semana para os cards de um dev já visíveis no mês
-// (mesmo recorte da barra de capacidade: precisa ter início ou entrega).
-// Cards sem pontuação ainda (a maioria, enquanto o Planning Poker é recente)
-// somam 0 — não inflam nem quebram a conta.
-function pontosPokerPorSemana(devCards, semanas) {
-  const porSemana = new Array(semanas.length).fill(0);
-  let total = 0;
+/* PONTOS POR SEMANA, NOS DOIS LADOS: o que foi prometido e o que saiu.
+ *
+ * Antes isto somava `poker_pontos` de um lado só, e o número respondia "quanto de
+ * tamanho está alocado nesta semana" — metade da pergunta. A outra metade é
+ * "quanto disso o dev fechou", e é o cruzamento das duas que diz se o mês foi bem
+ * planejado: um dev fecha 50 pontos por semana, outro fecha 100.
+ *
+ * AS DUAS ÂNCORAS SÃO DIFERENTES, DE PROPÓSITO (ver capacidade.js):
+ *   - o PLANEJADO conta na semana do PRAZO combinado — é quando você prometeu;
+ *   - o ENTREGUE conta na semana em que O DEV ENTREGOU (`entregue_em`), e não na
+ *     da aprovação do PM/PO: espera em validação não é trabalho do dev.
+ * Usar a mesma data para os dois faria o entregue aparecer sempre na semana do
+ * plano, e o cruzamento não mediria nada.
+ *
+ * A REGRA VIVE EM `capacidade.js` — a mesma que o painel do dev e o admin usam.
+ * Quinta cópia de conta nesta base é o caminho conhecido para duas telas
+ * discordarem sobre o mesmo número.
+ */
+function pontosPokerPorSemana(devCards, semanas, de, ate) {
+  const CAP = window.CAPACIDADE;
+  /* AS DUAS PONTAS SAO FILTRADAS PELA JANELA DO MES.
+     `devCards` traz o que APARECE no mes (tem inicio ou entrega nele), e somar o
+     entregue de todos eles contava a demanda planejada para agosto e entregue em
+     setembro como se tivesse saido em agosto. O Gantt dizia 110% onde o admin
+     dizia 47% — duas telas, o mesmo numero, respostas diferentes. */
+  const dentro = (d) => !!d && d >= de && d <= ate;
+  const plan = new Array(semanas.length).fill(0);
+  const feito = new Array(semanas.length).fill(0);
+  let total = 0, totalFeito = 0, semPontuar = 0;
+
   devCards.forEach(m => {
-    const pts = Number(m.poker_pontos) || 0;
-    if (!pts) return;
-    total += pts;
-    const ref = m.entrega || m.inicio;
-    const idx = semanaIndexFor(ref, semanas);
-    if (idx >= 0) porSemana[idx] += pts;
+    const p = CAP.planejados(m);
+    const e = CAP.entregues(m);
+    if (CAP.semPontuacao(m)) semPontuar += 1;
+    if (p && dentro(CAP.diaDoPlano(m) || m.inicio)) {
+      total += p;
+      // Sem prazo, o `inicio` serve de reserva: a demanda ESTÁ na tela do mês
+      // (o filtro exige uma das duas datas), e deixá-la fora da distribuição
+      // faria a soma das semanas não fechar com o total ao lado.
+      const i = semanaIndexFor(CAP.diaDoPlano(m) || m.inicio, semanas);
+      if (i >= 0) plan[i] += p;
+    }
+    if (e && dentro(CAP.diaDaEntrega(m))) {
+      totalFeito += e;
+      const i = semanaIndexFor(CAP.diaDaEntrega(m), semanas);
+      if (i >= 0) feito[i] += e;
+    }
   });
-  return { porSemana, total };
+  return { porSemana: plan, total, feito, totalFeito, semPontuar };
 }
 
 
@@ -2109,7 +2149,10 @@ function renderGantt() {
   const semanas = semanasDoMes(workDays);
   devs.forEach(dev => {
     const devCards = visible.filter(m => splitDevs(m.dev).includes(dev) && (m.inicio || m.entrega));
-    const { porSemana, total: pontosTotal } = pontosPokerPorSemana(devCards, semanas);
+    const mesDe = workDays.length ? workDays[0].str : '';
+    const mesAte = workDays.length ? workDays[workDays.length - 1].str : '';
+    const { porSemana, total: pontosTotal, feito: feitoSemana,
+            totalFeito, semPontuar } = pontosPokerPorSemana(devCards, semanas, mesDe, mesAte);
 
     // capacity — conta apenas dias úteis do mês atual cobertos pelos cards
     const totalWD = workDays.filter(d => !d.holiday).length;
@@ -2178,7 +2221,16 @@ function renderGantt() {
       <span class="cap-text">${free} dia${free!==1?'s':''} livre${free!==1?'s':''} / ${disponivel}</span>
       ${ausentes.size ? `<span class="cap-text ausencia-text" title="Dias úteis de ausência neste mês (fora do total disponível)">🌴 ${ausentes.size} dia${ausentes.size!==1?'s':''} ausente</span>` : ''}
       ${conflitos ? `<span class="cap-text conflito-text" title="Há demanda planejada em dia de ausência — considere realocar">⚠ ${conflitos} dia${conflitos!==1?'s':''} em conflito</span>` : ''}
-      ${pontosTotal > 0 ? `<span class="cap-text poker-pontos" title="Pontos do Planning Poker: total do mês e distribuição por semana">🃏 <b>${pontosTotal}</b> pt · ${porSemana.map((p,i) => `S${i+1}:${p}`).join(' ')}</span>` : ''}
+      ${(pontosTotal > 0 || totalFeito > 0) ? `<span class="cap-text poker-pontos" title="Pontos: planejado (prazo combinado) x entregue (data em que o dev entregou), por semana">🃏 <b>${pontosTotal}</b> pt planejados${
+        totalFeito > 0 ? ` · <b class="cap-feito">${totalFeito}</b> entregues (${
+          window.CAPACIDADE.rotulo(pontosTotal, totalFeito)})` : ''
+      } · ${porSemana.map((p, i) => {
+        const f = feitoSemana[i] || 0;
+        // "S1:57→40" em vez de dois blocos separados: a semana e o par dela ficam
+        // juntos, e o olho compara sem ter de casar duas listas de cinco numeros.
+        return `S${i+1}:${p}${f ? '→' + f : ''}`;
+      }).join(' ')}</span>` : ''}
+      ${semPontuar ? `<span class="cap-text sem-pontuar-text" title="Demandas alocadas a esta pessoa sem pontuação no Planning Poker: o planejado dela está menor do que é. Pontue para o cruzamento fechar.">◐ ${semPontuar} sem pontuar</span>` : ''}
     </div>`;
 
     // Timeline cells
