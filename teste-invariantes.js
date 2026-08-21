@@ -3502,6 +3502,37 @@ ok((ADMIN.match(/gerCortesDePontos\(/g) || []).length >= 3,
          'o trilho da barra sobra com largura util');
     });
 
+    /* A LINHA ENCOLHE PARA CABER, e o painel AVISA quando nem encolhendo cabe.
+       A altura era fixa em 0,335", e por isso o painel comportava seis linhas — foi
+       essa limitacao que forcou a cauda a virar "Outros (9)" com 810 pontos e nove
+       pessoas sem nome. Agora treze assuntos numa coluna cabem com a linha
+       apertada, e quando nem isso basta a funcao devolve `false` para quem chamou
+       dividir em colunas, em vez de escrever por cima do rodape. */
+    const rodar = (n) => {
+      const d = [];
+      const r = painel({ addText: (t, o) => d.push({ t: String(t), ...o }),
+                         addShape: (_, o) => d.push({ forma: 1, ...o }) },
+                       { ShapeType: { rect: 'rect' } },
+                       { x: 0.62, y: 1.55, w: 8.76, titulo: 'T', total: 100,
+                         itens: Array.from({ length: n }, (_, i) => ({ nome: 'i' + i, valor: n - i })) });
+      const fundo = d.reduce((mx, x) => Math.max(mx, x.y + (x.h || 0)), 0);
+      return { cabeu: r, fundo: fundo, linhas: d.filter((x) => /^i\d+$/.test(x.t || '')).length };
+    };
+    [6, 10, 13].forEach((n) => {
+      const r = rodar(n);
+      ok(r.cabeu === true && r.linhas === n && r.fundo <= 4.96,
+         n + ' linhas cabem numa coluna sem passar de 4,95"',
+         'cabeu=' + r.cabeu + ' linhas=' + r.linhas + ' fundo=' + r.fundo.toFixed(2));
+    });
+    // E 30 numa coluna nao cabem: o painel diz isso em vez de desenhar por cima.
+    ok(rodar(30).cabeu === false,
+       'e trinta numa coluna nao cabem — o painel devolve false em vez de invadir o rodape',
+       'cabeu=' + rodar(30).cabeu);
+    // Seis linhas nao ficam apertadas por causa das treze: a altura e um teto, nao fixa.
+    ok(Math.abs(rodar(6).fundo - (2.07 + 6 * 0.335)) < 0.02,
+       'com seis linhas a altura fica cheia (0,335"), e nao encolhida a esmo',
+       rodar(6).fundo.toFixed(3));
+
     // O NOME ACOMPANHA A LARGURA. Fixo em 22 caracteres, o painel largo cortava um
     // nome que caberia quase inteiro nele.
     const nomes = (w, larg) => {
@@ -3521,22 +3552,163 @@ ok((ADMIN.match(/gerCortesDePontos\(/g) || []).length >= 3,
   }
 })();
 
-// A cauda dobra em "Outros", nomeada: some com ela e a soma dos percentuais da
-// 79% na frente da diretoria.
+/* A GRADE DE TOPICOS CASA COM O QUE O GERADOR PRODUZ.
+   A lista havia descolado em tres direcoes: prometia "sprint" num painel que saiu
+   do deck, escondia que "No prazo x com atraso" gera dois slides, e omitia capa,
+   destaques e mensagem final — que saem sempre. Quinze caixas para vinte e um
+   slides, e quem conferia procurava o erro na grade. */
+sec('A grade de topicos do deck');
 (() => {
-  const t = corpo(APRES, 'function topoComOutros(');
-  ok(!!t, 'existe o dobrador da cauda');
+  const bloco = ADMIN.slice(ADMIN.indexOf('const AP_SECOES = ['));
+  const fim = bloco.indexOf('];');
+  ok(fim > 0, 'existe a grade de topicos');
+  if (fim < 0) return;
+  let SEC;
+  try { SEC = eval('(' + bloco.slice(bloco.indexOf('['), fim + 1) + ')'); }
+  catch (e) { ok(false, 'a grade avalia', e.message); return; }
+
+  /* TODA CHAVE DA GRADE E CONSULTADA PELO GERADOR, e vice-versa. Uma caixa sem
+     `d.secoes.<k>` no apresentacao.js e uma caixa que nao faz nada; um
+     `d.secoes.<k>` sem caixa e um slide que ninguem consegue tirar. */
+    const doGerador = new Set();
+  const re = /d\.secoes\.([a-zA-Z]+)/g;
+  let m;
+  while ((m = re.exec(APRES)) !== null) doGerador.add(m[1]);
+  const daGrade = new Set(SEC.map(x => x.k));
+  const soNaGrade = [...daGrade].filter(k => !doGerador.has(k));
+  const soNoGerador = [...doGerador].filter(k => !daGrade.has(k));
+  ok(!soNaGrade.length, 'nenhuma caixa da grade e ignorada pelo gerador', soNaGrade.join(', '));
+  ok(!soNoGerador.length, 'e nenhum slide do gerador fica sem caixa', soNoGerador.join(', '));
+
+  /* O ROTULO NAO PROMETE O QUE NAO EXISTE. O painel de sprint saiu do deck, e o
+     rotulo seguiu dizendo "(semana, dev, assunto, sprint)". */
+  const pontos = SEC.find(x => x.k === 'pontos');
+  ok(!!pontos && !/sprint/i.test(pontos.rot),
+     'o topico de pontos nao promete o painel de sprint, que saiu do deck',
+     pontos ? pontos.rot : '');
+  ok(!SEC.some(x => /sprint/i.test(x.rot)), 'e nenhum outro topico promete sprint');
+
+  /* A CONTAGEM DE SLIDES E DECLARADA, e bate com o gerador. `pontos` chama tres
+     funcoes de slide; `prazo` desenha o painel e mais a tabela das atrasadas. */
+  ok(SEC.every(x => Number.isInteger(x.n) && x.n >= 1),
+     'toda caixa declara quantos slides produz');
+  const corpoGer = corpo(APRES, 'async function montaDeck(') ||
+                   corpo(APRES, 'function montaDeck(') || APRES;
+  const trecho = (k) => {
+    const i = corpoGer.indexOf('d.secoes.' + k);
+    return i < 0 ? '' : corpoGer.slice(i, i + 420);
+  };
+  const chamadas = (t) => (t.match(/slide[A-Z]\w*\(pptx/g) || []).length +
+                          (t.match(/slideTitulo\(pptx/g) || []).length;
+  ok(pontos.n === 3 && chamadas(trecho('pontos')) === 3,
+     'pontos declara 3 slides e o gerador chama 3',
+     pontos.n + ' vs ' + chamadas(trecho('pontos')));
+  const prazo = SEC.find(x => x.k === 'prazo');
+  ok(prazo && prazo.n === 2, 'prazo declara 2 — o painel e a tabela das atrasadas',
+     prazo ? String(prazo.n) : '');
+  ok(!!prazo.nota && /atrasada/i.test(prazo.nota),
+     'e diz que o segundo so sai se houver atraso', prazo.nota || '');
+
+  /* O QUE ENTRA SEM CAIXA esta escrito. Capa, destaques e mensagem final saem no
+     arquivo e nao tem caixa — e nao ter caixa e correto, porque nao sao opcionais. */
+  ok(/const AP_SEMPRE = /.test(ADMIN), 'existe a nota do que entra sempre');
+  const nota = (ADMIN.match(/const AP_SEMPRE = ([\s\S]*?);\n/) || [])[1] || '';
+  ok(/capa/i.test(nota) && /destaque/i.test(nota) && /mensagem/i.test(nota),
+     'e ela nomeia capa, destaques e mensagem final');
+  ok(/AP_SEMPRE/.test(corpo(ADMIN, 'function apresAbrir(') || ''),
+     'e a tela mostra essa nota, em vez de ela viver so no codigo');
+
+  // A contagem aparece ao lado do rotulo quando vale mais de um slide.
+  const abrir = corpo(ADMIN, 'function apresAbrir(');
+  ok(/s\.n \|\| 1\) > 1/.test(abrir) && /slides</.test(abrir),
+     'a tela diz quantos slides a caixa produz quando e mais de um');
+})();
+
+/* "PONTOS ENTREGUES" CONTA SO O QUE FOI ENTREGUE.
+   A data era `concluido_em || entrega || inicio`, e as duas reservas eram o
+   defeito: sem conclusao a demanda entrava pelo PRAZO. Em agosto o slide exibia
+   2502 pontos, dos quais 1295 (52%) de 46 demandas em Planejado, Em andamento e
+   backlog. Mais da metade de um slide chamado "entregues" nao era entrega. */
+(() => {
+  const c = corpo(ADMIN, 'function gerDataRefPontos(');
+  ok(!!c, 'existe a data de referencia dos pontos');
+  if (!c) return;
+  ok(/CAPACIDADE\.diaDaEntrega/.test(c),
+     'e ela e a mesma ancora do Gantt, do Painel Dev e dos Relatorios');
+  ok(!/m\.entrega/.test(c) && !/m\.inicio/.test(c),
+     'o prazo e o inicio nao servem mais de reserva — nenhum dos dois e entrega');
+
+  const it = corpo(ADMIN, 'function gerItensPontuados(');
+  ok(!!it && /\['validacao', 'concluido'\]\.includes/.test(it),
+     'e o corte do mes exige que a demanda tenha saido, nao so que tenha data');
+  ok(/m\.oculto \|\| m\.mesclado_em/.test(it),
+     'demanda aposentada ou mesclada fica fora do corte');
+
+  /* E A OUTRA PERGUNTA GANHOU A PROPRIA FUNCAO. "Pontuada e nunca agendada" precisa
+     de prazo/inicio; com a ancora de entrega ela listaria toda demanda em curso. */
+  const sd = corpo(ADMIN, 'function gerPontuadasSemData(');
+  ok(!!corpo(ADMIN, 'function gerTemDataDePlano('), 'existe a pergunta de data de PLANO');
+  ok(!!sd && /gerTemDataDePlano/.test(sd),
+     'e "pontuada sem data" usa ela, e nao a de entrega');
+  const plano = corpo(ADMIN, 'function gerTemDataDePlano(');
+  ok(/entrega/.test(plano) && /inicio/.test(plano),
+     'data de plano e prazo ou inicio', '');
+})();
+
+/* NENHUM PONTO CAI NUM BALDE CHAMADO "OUTROS".
+   Havia `topoComOutros`, que cortava em cinco e dobrava a cauda. No corte por
+   desenvolvedor de agosto isso produziu "Outros (9)" com 810 pontos: 32% do mes, a
+   MAIOR barra do slide, e nove pessoas sem nome dentro dela. Num slide de diretoria
+   esse balde nao resume — ele gera a pergunta "quem sao os nove?", que e exatamente
+   a pergunta que o slide existia para responder. */
+(() => {
+  ok(!corpo(APRES, 'function topoComOutros('),
+     'o dobrador da cauda nao existe mais');
+  ok(!/'Outros \(' \+/.test(APRES) && !/nome: 'Outros/.test(APRES),
+     'e nenhum item sintetico "Outros (N)" e construido no deck');
+
+  const t = corpo(APRES, 'function itensDoCorte(');
+  ok(!!t, 'existe o conversor do corte em lista');
   if (!t) return;
-  const f = new Function(t + '; return topoComOutros;')();
-  const seis = { a: 10, b: 9, c: 8, d: 7, e: 6, f: 5, g: 4 };
-  const r = f(seis, 5);
-  ok(r.length === 6 && r[5].nome === 'Outros (2)' && r[5].valor === 9,
-     'a cauda vira uma linha "Outros (N)" com a soma dela');
-  ok(f({ a: 1, b: 2 }, 5).length === 2, 'lista curta passa inteira, sem "Outros"');
-  ok(f({ a: 1, b: 0 }, 5).length === 1, 'categoria zerada nao vira barra invisivel');
-  const total = Object.values(seis).reduce((x, y) => x + y, 0);
-  ok(r.reduce((x, y) => x + y.valor, 0) === total,
-     'e a soma das barras continua fechando com o total');
+  const f = new Function(t + '; return itensDoCorte;')();
+  /* OS VALORES NAO ESTAO EM ORDEM DECRESCENTE, de proposito: com dados ja
+     ordenados, um `sort` indevido dentro da funcao seria um no-op e a invariante
+     passaria. Sao as semanas de agosto de verdade, cuja curva sobe e desce. */
+  const sete = { S1: 442, S2: 511, S3: 844, S4: 558, S5: 113, S6: 21,
+                 'Fora do mês': 34 };
+  const r = f(sete);
+  ok(r.length === 7, 'sete categorias viram sete linhas, e nao cinco mais um balde',
+     r.length + ' linhas');
+  ok(r.every(x => x.nome !== 'Outros' && x.nome.indexOf('Outros (') !== 0),
+     'e nenhuma delas se chama "Outros"');
+  ok(f({ a: 1, b: 0 }).length === 1, 'categoria zerada nao vira barra invisivel');
+  ok(r.reduce((x, y) => x + y.valor, 0) === Object.values(sete).reduce((x, y) => x + y, 0),
+     'a soma das barras fecha com o total');
+  /* A ORDEM NAO E REORDENADA AQUI. Por semana ela e CRONOLOGICA, e ordenar por valor
+     destruiria a leitura de ritmo: S3, com 844 pontos, iria para o topo e a sala
+     perderia a curva do mes. O corte por dev e por assunto ja chega ordenado de
+     `gerCortesDePontos`, entao reordenar aqui nao ajuda ninguem e quebra a semana. */
+  ok(r.map(x => x.nome).join('|') === 'S1|S2|S3|S4|S5|S6|Fora do mês',
+     'e a ordem de quem montou o corte e preservada — a semana fica cronologica',
+     r.map(x => x.nome).join('|'));
+
+  // O DIVISOR EM COLUNAS: a primeira leva o excedente, para a segunda nunca ficar
+  // mais longa que a primeira (duas colunas desiguais leem como lista cortada).
+  const ec = corpo(APRES, 'function emColunas(');
+  ok(!!ec, 'existe o divisor em colunas');
+  if (ec) {
+    const g = new Function(ec + '; return emColunas;')();
+    const q = (n, c) => g(Array.from({ length: n }, (_, i) => ({ nome: 's' + i, valor: 1 })), c)
+      .map(x => x.length);
+    ok(JSON.stringify(q(14, 2)) === '[7,7]', '14 em 2 colunas da 7 e 7', JSON.stringify(q(14, 2)));
+    ok(JSON.stringify(q(15, 2)) === '[8,7]', '15 em 2 colunas da 8 e 7', JSON.stringify(q(15, 2)));
+    ok(JSON.stringify(q(25, 2)) === '[13,12]', '25 em 2 colunas da 13 e 12', JSON.stringify(q(25, 2)));
+    ok(JSON.stringify(q(3, 2)) === '[2,1]', '3 em 2 colunas da 2 e 1', JSON.stringify(q(3, 2)));
+    // Coluna vazia nao vira painel: com 2 itens em 3 colunas a terceira sobraria.
+    ok(q(2, 3).length === 2 && q(2, 3).every(x => x > 0),
+       'coluna vazia e descartada em vez de virar painel em branco', JSON.stringify(q(2, 3)));
+    ok(g([], 2).length === 0, 'lista vazia nao produz coluna');
+  }
 })();
 
 /* ─── NADA ACIMA DE 100% ─────────────────────────────────────────────────

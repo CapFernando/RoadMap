@@ -1027,7 +1027,7 @@
 <script src="capa-tecnologia.js"></script>
 <script src="pipelines.js?v=a122233200"></script>
 <script src="capacidade.js?v=3769a13468"></script>
-<script src="apresentacao.js?v=ad41818bbd"></script>
+<script src="apresentacao.js?v=e58707c595"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -3993,20 +3993,53 @@ function gerSemanaIndex(dataStr, semanas) {
 
 // Data que define a qual semana/mês os pontos de um card pertencem.
 // Para pontuacao por semana/mes: a data que importa e quando a demanda saiu.
-function gerDataRefPontos(m) { return m.concluido_em || m.entrega || m.inicio || ''; }
+/** A DATA DE UM PONTO ENTREGUE E A DA ENTREGA. Nada mais serve.
+ *
+ *  Isto era `concluido_em || entrega || inicio`. As duas reservas eram o defeito: na
+ *  falta da conclusao a demanda entrava pelo PRAZO, e o slide chamado "Pontos
+ *  entregues" passava a contar o que ainda nao saiu. Em agosto foram 2502 pontos
+ *  exibidos, dos quais 1295 — 52% — de 46 demandas em Planejado, Em andamento e
+ *  backlog. Mais da metade de um slide de diretoria chamado "entregues" nao era
+ *  entrega, e o subtitulo dele prometia "a mesma distribuicao do painel gerencial"
+ *  enquanto o painel media outra coisa.
+ *
+ *  `CAPACIDADE.diaDaEntrega` e a mesma ancora do Gantt, do Painel Dev e dos
+ *  Relatorios: `entregue_em` (quando o dev entregou) e, nas antigas que nunca
+ *  passaram por validacao, `concluido_em`. Terceira vez hoje que duas telas
+ *  respondiam a mesma pergunta com datas diferentes. */
+function gerDataRefPontos(m) {
+  return (window.CAPACIDADE ? window.CAPACIDADE.diaDaEntrega(m) : '') ||
+         (['validacao', 'concluido'].includes((m || {}).status_planejamento || '')
+           ? String((m || {}).concluido_em || '').slice(0, 10) : '');
+}
+
+/** Ha data de PLANO — prazo ou inicio? E outra pergunta, e por isso outra funcao.
+ *  `gerPontuadasSemData` procura "pontuada e nunca agendada"; com a ancora de
+ *  entrega ela passaria a listar toda demanda em curso como "sem data". */
+function gerTemDataDePlano(m) {
+  return !!(String((m || {}).entrega || '').trim() || String((m || {}).inicio || '').trim());
+}
 
 // Demandas pontuadas que ainda não foram agendadas. Sem data não há como dizer
 // a que mês/semana pertencem, então elas não entram na distribuição — mas também
 // não podem simplesmente desaparecer do relatório, senão pontuar no Planning
 // Poker antes de planejar dá a impressão de que a pontuação não foi gravada.
 function gerPontuadasSemData() {
-  return (state.melhorias || []).filter(m => Number(m.poker_pontos) > 0 && !gerDataRefPontos(m));
+  // Pontuada, sem prazo e sem entrega: nao pertence a mes nenhum, e e o que a
+  // pergunta "o que ja tem tamanho e falta planejar" procura.
+  return (state.melhorias || []).filter(m => Number(m.poker_pontos) > 0 &&
+    !gerTemDataDePlano(m) && !gerDataRefPontos(m));
 }
 
 // Cards pontuados no Planning Poker cuja data de referência cai no mês/ano.
 function gerItensPontuados(ano, mes1) {
   return (state.melhorias || []).filter(m => {
     if (!(Number(m.poker_pontos) > 0)) return false;
+    if (m.oculto || m.mesclado_em) return false;
+    // Entregue, e nao apenas com data: a etapa e a confirmacao de que a data
+    // significa entrega. Sem isto, uma demanda reaberta com `entregue_em` antigo
+    // seguiria contando como entrega do mes.
+    if (!['validacao', 'concluido'].includes(m.status_planejamento || '')) return false;
     const ref = gerDataRefPontos(m);
     if (!ref) return false;
     const d = new Date(ref + 'T00:00:00');
@@ -4913,23 +4946,53 @@ function gerBandejasAplicaTodas() {
 // O rotulo tem de dizer o que o slide MOSTRA. O primeiro deixou de ser "quanto
 // foi entregue" quando passou a contar a historia do mes — e quem escolhia o que
 // entra no deck escolhia as cegas.
+/* OS TOPICOS DIZEM O QUE O DECK GERA, e nao o que ele gerava.
+ *
+ * A lista havia descolado da realidade em tres direcoes ao mesmo tempo:
+ *
+ *   PROMETIA O QUE NAO EXISTE. "Pontos entregues (semana, dev, assunto, sprint)"
+ *   — o painel de sprint saiu do deck quando 248 de 278 demandas nao tinham sprint
+ *   preenchida e "Sem sprint" ocupava 78% do grafico. O rotulo continuou prometendo.
+ *
+ *   ESCONDIA SLIDE. "No prazo x com atraso" gera DOIS slides quando ha atraso: o
+ *   painel e a tabela "Onde escapou do prazo". Quem desmarcava esperando tirar um
+ *   slide tirava dois. O mesmo vale para pontos (tres) e para o dos devs (um por
+ *   pessoa, ate tres).
+ *
+ *   OMITIA SLIDE QUE SEMPRE ENTRA. Capa, destaques e a mensagem final saem no
+ *   arquivo sem nenhuma linha aqui. Nao ha caixa para eles — sao sempre — e por
+ *   isso eles ficam FORA da grade, numa nota, em vez de virarem caixa que nao
+ *   desmarca nada.
+ *
+ * `n` e quantos slides a caixa produz quando ha dado para todos. A tela mostra esse
+ * numero ao lado do rotulo: uma caixa que vale tres slides e uma decisao diferente
+ * de uma que vale um. */
 const AP_SECOES = [
-  { k: 'entregas', rot: 'O mês: backlog, o que entrou e o que saiu', pad: true },
-  { k: 'pipelines', rot: 'Frentes de trabalho (planejado × realizado)', pad: true },
-  { k: 'prazo',    rot: 'No prazo x com atraso', pad: true },
-  { k: 'rapidas',  rot: 'Entregas rápidas (até 2 dias)', pad: true },
-  { k: 'evolucao', rot: 'Evolução: mês atual x anterior', pad: true },
-  { k: 'projetos', rot: 'Projetos em aberto', pad: true },
-  { k: 'pontos',   rot: 'Pontos entregues (semana, dev, assunto, sprint)', pad: true },
-  { k: 'capacidade', rot: 'Planejado × entregue em pontos, por dev', pad: true },
-  { k: 'time',     rot: 'O time (agregado) e quem esteve fora', pad: true },
-  { k: 'areas',    rot: 'Onde atuamos (top 3)', pad: true },
-  { k: 'solicit',  rot: 'Quem mais pediu (top 5)', pad: true },
-  { k: 'grafico',  rot: 'Entregas e pontos por desenvolvedor', pad: true },
-  { k: 'ganttdev', rot: 'O mês dos 3 primeiros devs (linha do tempo)', pad: true },
-  { k: 'riscos',   rot: 'O que está travado', pad: true },
-  { k: 'proximo',  rot: 'O que vem no próximo mês', pad: true },
+  { k: 'entregas', rot: 'O mês: backlog, o que entrou e o que saiu', n: 1, pad: true },
+  { k: 'evolucao', rot: 'Evolução: este mês e o anterior', n: 1, pad: true },
+  { k: 'pipelines', rot: 'Frentes de trabalho: horas planejadas × realizadas', n: 1, pad: true },
+  { k: 'projetos', rot: 'Projetos em aberto', n: 1, pad: true },
+  { k: 'capacidade', rot: 'Planejado × entregue em pontos, por dev', n: 1, pad: true },
+  { k: 'pontos',   rot: 'Pontos entregues: por semana, por dev e por sistema',
+    n: 3, nota: 'três slides, um por corte', pad: true },
+  { k: 'prazo',    rot: 'No prazo × com atraso',
+    n: 2, nota: 'o segundo slide lista as atrasadas, e só sai se houver', pad: true },
+  { k: 'rapidas',  rot: 'Entregas rápidas (até 2 dias)', n: 1, pad: true },
+  { k: 'areas',    rot: 'Onde atuamos (as 3 maiores frentes)', n: 1, pad: true },
+  { k: 'solicit',  rot: 'Quem mais pediu (top 5)', n: 1, pad: true },
+  { k: 'time',     rot: 'O time (agregado) e quem esteve fora', n: 1, pad: true },
+  { k: 'grafico',  rot: 'Entregas por desenvolvedor (com os pontos ao lado)', n: 1, pad: true },
+  { k: 'ganttdev', rot: 'A linha do tempo dos 3 primeiros devs',
+    n: 3, nota: 'um slide por pessoa', pad: true },
+  { k: 'riscos',   rot: 'O que está travado (demandas pausadas)', n: 1, pad: true },
+  { k: 'proximo',  rot: 'O que vem no próximo mês', n: 1, pad: true },
 ];
+
+/* O QUE ENTRA SEM CAIXA. Nao ter caixa e o correto — nenhum deles e opcional —,
+   mas nao estar escrito em lugar nenhum fazia a soma da grade nao bater com o
+   arquivo, e quem conferia procurava o erro na grade. */
+const AP_SEMPRE = 'Além da grade, sempre entram: a capa, um slide por destaque ' +
+  'marcado com ⭐ e o slide final com a sua mensagem.';
 
 
 // Time e areas para o deck. Tudo agregado: nenhum slide por pessoa, porque em
@@ -5176,9 +5239,22 @@ function apresConcluidasDoMes() {
 function apresAbrir() {
   const { mes, ano } = apresMesAno();
   const cx = document.getElementById('ap-secoes');
+  /* A CONTAGEM DE SLIDES AO LADO DO ROTULO. Uma caixa que vale tres slides e uma
+     decisao diferente de uma que vale um, e antes as quinze pareciam valer quinze —
+     o arquivo saia com vinte e um e ninguem sabia de onde vinham os outros seis. */
   cx.innerHTML = AP_SECOES.map(s =>
-    '<label><input type="checkbox" id="ap-s-' + s.k + '"' + (s.pad ? ' checked' : '') +
-    '> ' + esc(s.rot) + '</label>').join('');
+    '<label' + (s.nota ? ' title="' + esc(s.nota) + '"' : '') + '>' +
+    '<input type="checkbox" id="ap-s-' + s.k + '"' + (s.pad ? ' checked' : '') + '> ' +
+    '<span>' + esc(s.rot) +
+    ((s.n || 1) > 1
+      ? ' <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">· ' +
+        s.n + ' slides</span>'
+      : '') +
+    (s.nota ? '<span style="display:block;color:var(--text3);font-size:11px;' +
+              'margin-top:2px">' + esc(s.nota) + '</span>' : '') +
+    '</span></label>').join('') +
+    '<div style="grid-column:1/-1;color:var(--text3);font-size:11.5px;margin-top:8px;' +
+    'padding-top:8px;border-top:1px solid var(--border)">' + esc(AP_SEMPRE) + '</div>';
 
   document.getElementById('ap-periodo').innerHTML =
     '📅 <strong>' + esc(apresentacaoMesNome(mes - 1)) + ' de ' + ano + '</strong>' +
@@ -6437,9 +6513,16 @@ function gerCortesDePontos(ano, mes, temaMap, splitDevs) {
   });
   if (semDono > 0) porDev['Sem responsável'] = semDono;
 
+  /* O ASSUNTO E A RAIZ DO SISTEMA, a mesma que o relatorio usa.
+     Com o nome completo, "AXCred - Cadastro", "AXCred - Cadastro - Analise de
+     Credito" e "... - Reanalise" competiam como tres assuntos na mesma lista: o
+     sistema aparecia menor do que e e tres vezes. E, pior, o deck e o relatorio
+     respondiam "onde a capacidade foi" com cortes diferentes — duas telas
+     discordando sobre a mesma pergunta, que e o defeito que esta ferramenta ja
+     produziu duas vezes hoje. `relRaizNome` e a mesma funcao das duas pontas. */
   const porAssunto = {};
   itens.forEach(m => {
-    const k = temaMap[m.tema_id] || 'Sem tema';
+    const k = m.tema_id ? relRaizNome(temaMap[m.tema_id]) : 'Sem tema';
     porAssunto[k] = (porAssunto[k] || 0) + Number(m.poker_pontos);
   });
 

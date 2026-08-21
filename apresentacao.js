@@ -632,18 +632,24 @@
 
      O TOTAL VAI NO CABECALHO DE CADA PAINEL, porque o percentual sem o
      denominador convida a soma de cabeca no meio da apresentacao.               */
+  /** Um painel de barras horizontais. Devolve false quando a lista nao cabe nem
+   *  com a linha no minimo legivel — sinal para quem chamou dividir em colunas. */
   function painelPontos(s, pptx, cfg) {
     var x0 = cfg.x, y0 = cfg.y, LARG = cfg.w;
-    s.addText(cfg.titulo, { x: x0, y: y0, w: LARG, h: 0.24, fontSize: 12,
-                            bold: true, color: C.texto, wrap: false });
-    s.addText(cfg.total + ' pontos', {
-      x: x0, y: y0 + 0.23, w: LARG, h: 0.2, fontSize: 9, color: C.fraco, wrap: false });
+    // A SEGUNDA COLUNA NAO REPETE TITULO E TOTAL. Repetir "Por desenvolvedor ·
+    // 2502 pontos" duas vezes no mesmo slide faz parecer que sao duas medidas.
+    if (!cfg.semCabecalho) {
+      s.addText(cfg.titulo, { x: x0, y: y0, w: LARG, h: 0.24, fontSize: 12,
+                              bold: true, color: C.texto, wrap: false });
+      s.addText(cfg.total + ' pontos', {
+        x: x0, y: y0 + 0.23, w: LARG, h: 0.2, fontSize: 9, color: C.fraco, wrap: false });
+    }
 
     var itens = cfg.itens || [];
     if (!itens.length) {
       s.addText('sem dados no mês', { x: x0, y: y0 + 0.6, w: LARG, h: 0.24,
                                       fontSize: 10, color: C.fraco });
-      return;
+      return true;
     }
     var max = itens.reduce(function (m, i) { return Math.max(m, i.valor); }, 0) || 1;
     /* AS LARGURAS SOMAM A LARGURA DO PAINEL, e a conta e FEITA, nao estimada: o
@@ -658,7 +664,21 @@
     var xVal = xTrilho + W_TRILHO + 0.10;
     var xPct = xVal + W_VAL;
 
-    var TOPO = y0 + 0.52, ALT = 0.335;
+    /* A ALTURA DA LINHA SE AJUSTA AO NUMERO DE LINHAS.
+       Era fixa em 0,335", e por isso o painel so comportava seis — o que forcava a
+       cauda a virar "Outros". Com quatorze desenvolvedores, "Outros (9)" somava 810
+       pontos: 32% do mes, a MAIOR barra do slide, e nove pessoas sem nome dentro
+       dela. Um balde maior que o primeiro colocado nao e um resumo, e uma pergunta.
+
+       O rodape fica em 5,05": a banda util termina em 4,95, e a linha encolhe ate
+       caber nela. O piso de 0,20" e onde o texto de 9,5pt ainda respira; abaixo
+       disso o painel devolve `false` e quem chamou divide em colunas, em vez de
+       empilhar letra sobre letra. */
+    var FUNDO = cfg.fundo || 4.95;
+    var TOPO = y0 + (cfg.semCabecalho ? 0.52 : 0.52);
+    var ALT_MAX = 0.335, ALT_MIN = 0.20;
+    var ALT = Math.min(ALT_MAX, (FUNDO - TOPO) / itens.length);
+    if (ALT < ALT_MIN) return false;
     itens.forEach(function (it, i) {
       var y = TOPO + i * ALT;
       var pct = Math.round(it.valor / cfg.total * 100);
@@ -682,21 +702,74 @@
         x: xPct, y: y, w: W_PCT, h: ALT, fontSize: 9, color: C.fraco,
         valign: 'middle', align: 'right', wrap: false });
     });
+    return true;
   }
 
-  /** Um objeto {nome: valor} vira lista, com a cauda dobrada em "Outros".
-   *  O teto e cinco mais a cauda: seis linhas cabem no painel, e a sexta linha
-   *  chamada "Outros (8)" diz que ha mais — some com ela e a soma dos percentuais
-   *  da 79% na frente da diretoria. */
-  function topoComOutros(obj, teto) {
-    var pares = Object.keys(obj || {}).map(function (k) { return { nome: k, valor: obj[k] }; })
+  /** Um objeto {nome: valor} vira lista. TODOS os nomes, e nenhum balde.
+   *
+   *  Aqui havia `topoComOutros`, que cortava em cinco e dobrava a cauda em
+   *  "Outros (N)". No corte por desenvolvedor de agosto isso produziu "Outros (9)"
+   *  com 810 pontos — 32% do mes, a maior barra do slide, e nove pessoas sem nome
+   *  dentro dela. Num slide de diretoria esse balde nao resume nada: ele gera a
+   *  pergunta "quem sao os nove?", que e exatamente a pergunta que o slide existia
+   *  para responder.
+   *
+   *  A ordem vem de quem monta o corte: por semana ela e CRONOLOGICA (S1, S2, ...,
+   *  Fora do mes) e ordenar por valor ali destruiria a leitura de ritmo; nos outros
+   *  cortes ela ja chega ordenada por pontos. Por isso esta funcao nao reordena. */
+  function itensDoCorte(obj) {
+    return Object.keys(obj || {}).map(function (k) { return { nome: k, valor: obj[k] }; })
       .filter(function (x) { return x.valor > 0; });
-    if (pares.length <= teto) return pares;
-    var topo = pares.slice(0, teto);
-    var resto = pares.slice(teto);
-    var soma = resto.reduce(function (t, x) { return t + x.valor; }, 0);
-    topo.push({ nome: 'Outros (' + resto.length + ')', valor: soma });
-    return topo;
+  }
+
+  /** Divide a lista em N colunas, mantendo a ordem na leitura de cima para baixo e
+   *  da esquerda para a direita — a primeira coluna leva o excedente, para a
+   *  segunda nunca ficar mais longa que a primeira. */
+  function emColunas(itens, n) {
+    var porCol = Math.ceil(itens.length / n);
+    var cols = [];
+    for (var i = 0; i < n; i++) cols.push(itens.slice(i * porCol, (i + 1) * porCol));
+    return cols.filter(function (c) { return c.length; });
+  }
+
+  /** Um corte inteiro num slide, em quantas colunas forem necessarias.
+   *
+   *  Uma coluna enquanto a lista cabe com a linha cheia (0,335"); duas quando nao
+   *  cabe. Vinte e cinco assuntos em duas colunas de treze cabem com a linha em
+   *  0,29" — apertada e legivel. E `painelPontos` devolve false se nem isso couber,
+   *  o que faz esta funcao subir para tres colunas em vez de desenhar por cima do
+   *  rodape. */
+  function slideDeCorte(pptx, cfg) {
+    var s = slideTitulo(pptx, 'Pontos entregues', cfg.sub, cfg.pagina);
+    var itens = cfg.itens;
+    var X0 = 0.62, LARG_TOTAL = 8.76, VAO = 0.26;
+    for (var n = 1; n <= 3; n++) {
+      var cols = emColunas(itens, n);
+      var w = (LARG_TOTAL - VAO * (cols.length - 1)) / cols.length;
+      // Cabe com a linha cheia numa coluna? Entao nao divide.
+      var altura = (4.95 - (1.55 + 0.52)) / cols[0].length;
+      if (n < 3 && altura < 0.20) continue;
+      var todasCouberam = true;
+      // Desenha num rascunho antes de comprometer o slide: um painel que devolve
+      // false ja teria escrito metade das linhas.
+      var rascunho = { addText: function () {}, addShape: function () {} };
+      cols.forEach(function (col) {
+        if (!painelPontos(rascunho, pptx, { x: X0, y: 1.55, w: w, titulo: cfg.titulo,
+                                            total: cfg.total, itens: col,
+                                            larguraNome: cfg.larguraNome })) {
+          todasCouberam = false;
+        }
+      });
+      if (!todasCouberam && n < 3) continue;
+      cols.forEach(function (col, i) {
+        painelPontos(s, pptx, {
+          x: X0 + i * (w + VAO), y: 1.55, w: w, titulo: cfg.titulo, total: cfg.total,
+          itens: col, larguraNome: cfg.larguraNome, semCabecalho: i > 0 });
+      });
+      break;
+    }
+    rodape(s, cfg.periodo, cfg.pagina);
+    return s;
   }
 
   /* ─── PLANEJADO × ENTREGUE, EM PONTOS ────────────────────────────────────
@@ -893,19 +966,24 @@
     return s;
   }
 
+  /* UM CORTE POR SLIDE, e todos os nomes dentro dele.
+     Eram dois cortes por slide, em paineis de 4,25" que comportavam seis linhas —
+     e era isso que obrigava a cauda a virar "Outros". Com o slide inteiro para um
+     corte, os quatorze desenvolvedores de agosto entram nomeados em duas colunas,
+     e o corte por semana ganha barras largas o bastante para se comparar de longe
+     (era ali que S3 com 844 pontos e S6 com 34 disputavam 4,25"). */
   function slidePontos(pptx, pt, pagina, periodo) {
-    var s = slideTitulo(pptx, 'Pontos entregues',
-                        'a mesma distribuição do painel gerencial', pagina);
-    /* DOIS PAINEIS POR SLIDE, e nao quatro. Com quatro, cada um fica com 2,1" de
-       altura para caber titulo, total e seis linhas — e o nome do assunto cai a
-       cinco caracteres. Dois por slide dao 4,25" de largura cada, que e onde o
-       nome do tema ainda se le. */
-    painelPontos(s, pptx, { x: 0.62, y: 1.55, w: 4.25, titulo: 'Por semana',
-                            total: pt.total, itens: topoComOutros(pt.porSemana, 5) });
-    painelPontos(s, pptx, { x: 5.13, y: 1.55, w: 4.25, titulo: 'Por desenvolvedor',
-                            total: pt.total, itens: topoComOutros(pt.porDev, 5) });
-    rodape(s, periodo, pagina);
-    return s;
+    return slideDeCorte(pptx, {
+      pagina: pagina, periodo: periodo, titulo: 'Por semana',
+      sub: 'o ritmo do mês, semana a semana',
+      total: pt.total, itens: itensDoCorte(pt.porSemana), larguraNome: 1.2 });
+  }
+
+  function slidePontosDev(pptx, pt, pagina, periodo) {
+    return slideDeCorte(pptx, {
+      pagina: pagina, periodo: periodo, titulo: 'Por desenvolvedor',
+      sub: 'a mesma distribuição do painel gerencial',
+      total: pt.total, itens: itensDoCorte(pt.porDev), larguraNome: 1.52 });
   }
 
   /* POR ASSUNTO, NA LARGURA TODA — e sem o painel de sprint.
@@ -926,15 +1004,13 @@
      cortado em 22 no painel estreito — o nome do tema é o que diz PARA QUÊ o mês
      foi gasto, e cortado ao meio ele deixa de dizer. */
   function slidePontos2(pptx, pt, pagina, periodo) {
-    var s = slideTitulo(pptx, 'Pontos entregues',
-                        'por assunto — para que o mês foi gasto', pagina);
-    painelPontos(s, pptx, {
-      x: 0.62, y: 1.55, w: 8.76, larguraNome: 3.9, titulo: 'Por assunto',
-      // Oito linhas em vez de cinco: com a largura toda cabem, e a cauda em
-      // "Outros" some com nomes que a sala reconhece.
-      total: pt.total, itens: topoComOutros(pt.porAssunto, 8) });
-    rodape(s, periodo, pagina);
-    return s;
+    return slideDeCorte(pptx, {
+      pagina: pagina, periodo: periodo, titulo: 'Por assunto',
+      sub: 'para que o mês foi gasto',
+      // O nome do sistema e o texto mais longo do deck, e e ele que diz PARA QUE o
+      // mes foi gasto: com duas colunas ele fica com 2,2" — "AXCred - Cadastro"
+      // inteiro, e a raiz e justamente o que o relatorio agrupa.
+      total: pt.total, itens: itensDoCorte(pt.porAssunto), larguraNome: 2.2 });
   }
 
   function slideBarras(pptx, cfg, pagina, periodo) {
@@ -1764,8 +1840,9 @@
       slideCapacidade(pptx, d.capacidade, ++p, d.periodo);
     }
     if (d.secoes.pontos && d.pontos && d.pontos.total > 0) {
-      slidePontos(pptx, d.pontos, ++p, d.periodo);
-      slidePontos2(pptx, d.pontos, ++p, d.periodo);
+      slidePontos(pptx, d.pontos, ++p, d.periodo);       // por semana
+      slidePontosDev(pptx, d.pontos, ++p, d.periodo);    // por desenvolvedor
+      slidePontos2(pptx, d.pontos, ++p, d.periodo);      // por assunto
     }
 
     /* ─── ATO 3 · CUMPRIMOS O COMBINADO? ─────────────────────────────────
