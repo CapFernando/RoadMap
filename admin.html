@@ -574,6 +574,65 @@
     .ent-pin.sem  { background:var(--bg4); color:var(--text2); }
     .ent-vazio { font-size:13px; color:var(--text3); line-height:1.6; margin:0; }
     /* Relatórios */
+    /* ─── A VISAO DE DIRETORIA ────────────────────────────────────────
+       A ordem visual segue a ordem da conversa: como andou, onde foi, o que saiu,
+       o que esta em curso, o que vem. Cada bloco responde uma pergunta e passa a
+       proxima adiante. */
+    .rel-nota { font-size:11.5px; color:var(--text3); line-height:1.55; margin-bottom:4px; }
+    .rel-nota b { color:var(--text2); }
+
+    /* A COMPARACAO COM O PERIODO ANTERIOR mora no proprio cartao: numero sozinho
+       nao diz se melhorou, e obrigar a pessoa a lembrar do mes passado e o que faz
+       a reuniao virar consulta ao histórico. */
+    .rel-delta { font-size:11px; font-weight:600; margin-top:3px; display:block; }
+    .rel-delta.sobe { color:var(--green-tx,#3EC98E); }
+    .rel-delta.cai  { color:var(--red-tx,#F9A0A0); }
+    .rel-delta.igual{ color:var(--text3); }
+
+    /* ONDE A CAPACIDADE FOI: barra horizontal, uma cor.
+       Numa barra a identidade vem do ROTULO — o nome do sistema esta do lado —, e
+       pintar dez sistemas de dez cores inventa um significado que nao existe. */
+    .rel-tema-linha { display:grid; grid-template-columns:1fr 62px 52px 46px;
+      align-items:center; gap:10px; padding:5px 0; border-top:1px solid var(--border); }
+    .rel-tema-linha:first-child { border-top:none; }
+    .rel-tema-nome { font-size:13px; color:var(--text); overflow:hidden;
+      text-overflow:ellipsis; white-space:nowrap; }
+    .rel-tema-barra { height:6px; background:var(--bg3); border-radius:3px; overflow:hidden;
+      margin-top:4px; }
+    .rel-tema-fill { height:100%; background:var(--blue,#4C9AFF); border-radius:3px; }
+    .rel-tema-num { font-size:13px; text-align:right; color:var(--text2);
+      font-variant-numeric:tabular-nums; }
+    .rel-tema-pct { font-size:11.5px; text-align:right; color:var(--text3);
+      font-variant-numeric:tabular-nums; }
+    .rel-tema-qtd { font-size:11px; text-align:right; color:var(--text3); }
+
+    /* O QUE VEM: dois grupos, cada um com o proprio recado. */
+    .rel-vem-grupo { margin-bottom:18px; }
+    .rel-vem-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+      margin-bottom:6px; }
+    .rel-vem-tit { font-size:13.5px; font-weight:700; color:var(--text); }
+    .rel-vem-tot { font-size:12px; color:var(--text3); font-variant-numeric:tabular-nums; }
+    .rel-vem-por { font-size:11.5px; color:var(--text3); line-height:1.5;
+      margin:0 0 8px; max-width:78ch; }
+    .rel-vem-item { display:grid; grid-template-columns:74px 1fr 150px 58px;
+      align-items:center; gap:10px; padding:5px 0; border-top:1px solid var(--border);
+      font-size:12.5px; }
+    .rel-vem-item:first-of-type { border-top:none; }
+    .rel-vem-cod { color:var(--text3); font-variant-numeric:tabular-nums; }
+    .rel-vem-tt { color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rel-vem-tema { color:var(--text3); font-size:11.5px; overflow:hidden;
+      text-overflow:ellipsis; white-space:nowrap; }
+    .rel-vem-pt { text-align:right; color:var(--text2); font-variant-numeric:tabular-nums; }
+    .rel-vem-sem { color:var(--amber-tx,#FFC470); }
+    @media (max-width: 820px) {
+      /* Em tela estreita o tema sai e sobram codigo, titulo e pontos: e o que
+         responde a pergunta. */
+      .rel-vem-item { grid-template-columns:70px 1fr 52px; }
+      .rel-vem-tema { display:none; }
+      .rel-tema-linha { grid-template-columns:1fr 56px 44px; }
+      .rel-tema-qtd { display:none; }
+    }
+
     .rel-grupo { margin-bottom: 20px; }
     .rel-grupo-head {
       display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700;
@@ -1356,16 +1415,53 @@
     </div>
 
     <div class="tab-content" id="tab-relatorios">
+      <!-- A BARRA: escala, periodo e sistema.
+           A ESCALA VEM PRIMEIRO porque ela muda o significado de tudo abaixo — e a
+           pergunta "de que periodo estamos falando" antes de "de que assunto". Mes
+           e o padrao: e a conversa com a diretoria e e o que casa com o deck. -->
       <div class="ger-toolbar">
         <div class="ger-filter-group">
+          <label>Escala</label>
+          <select id="rel-escala" onchange="relTrocaEscala()">
+            <option value="mes">Mês (fechamento)</option>
+            <option value="semana">Semana (reunião)</option>
+          </select>
+        </div>
+        <div class="ger-filter-group" id="rel-grupo-mes">
+          <label>Mês</label>
+          <select id="rel-mes" onchange="renderRelatorios()"></select>
+        </div>
+        <div class="ger-filter-group" id="rel-grupo-semana" style="display:none">
           <label>Reunião da semana de</label>
           <select id="rel-semana" onchange="renderRelatorios()"></select>
+        </div>
+        <div class="ger-filter-group">
+          <label>Sistema</label>
+          <select id="rel-sistema" onchange="renderRelatorios()"></select>
         </div>
         <button class="btn btn-secondary" onclick="renderRelatorios()">Atualizar</button>
         <button class="btn btn-primary" onclick="copiarRelatorio()">📋 Copiar tudo</button>
       </div>
-      <div id="rel-periodo-info" style="font-size:12px;color:var(--text3);margin:-12px 0 20px"></div>
+      <div id="rel-periodo-info" style="font-size:12px;color:var(--text3);margin:-12px 0 18px"></div>
 
+      <!-- COMO O TIME ANDOU. Vem antes da lista de entregas de proposito: a
+           diretoria pergunta "o mes foi bom?" antes de "o que saiu?", e uma lista
+           de trinta cards sem esse resumo obriga a pessoa a somar de cabeca. -->
+      <div class="ger-section-title">
+        <span>📊 Como o time andou</span>
+        <span class="ger-section-hint" id="rel-andou-hint"></span>
+      </div>
+      <div id="rel-andou" class="ger-summary" style="margin-bottom:10px"></div>
+      <div id="rel-andou-nota" class="rel-nota"></div>
+
+      <div class="ger-section-sep"></div>
+      <div class="ger-section-title">
+        <span>🎯 Onde a capacidade foi</span>
+        <span class="ger-section-hint" id="rel-temas-hint"></span>
+      </div>
+      <div id="rel-temas"></div>
+
+      <div class="ger-section-sep"></div>
       <div class="ger-section-title">
         <span id="rel-ent-titulo">✅ Entregues</span>
         <span class="ger-section-hint" id="rel-ent-hint"></span>
@@ -1380,6 +1476,18 @@
         <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('andamento')" style="margin-left:auto">📋 Copiar</button>
       </div>
       <div id="rel-andamento"></div>
+
+      <!-- O QUE VEM. Dois grupos, e a diferenca entre eles e o que importa:
+           em PLANNING o tamanho ainda nao existe (vai ser estimado na reuniao);
+           PONTUADO SEM PRAZO ja tem tamanho e falta so agendar. Um e pergunta
+           para o time, o outro e decisao de quem planeja. -->
+      <div class="ger-section-sep"></div>
+      <div class="ger-section-title">
+        <span>🔭 O que vem</span>
+        <span class="ger-section-hint" id="rel-vem-hint"></span>
+        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('vem')" style="margin-left:auto">📋 Copiar</button>
+      </div>
+      <div id="rel-vem"></div>
     </div>
   </main>
 </div>
@@ -6661,29 +6769,289 @@ function relInitSemanas() {
   }
 }
 
-function relDados() {
-  const sel = document.getElementById('rel-semana');
-  const iniAtual = sel && sel.value ? new Date(sel.value + 'T00:00:00') : segundaDa(new Date());
-  const fimAtual = maisDias(iniAtual, 6);
-  const iniAnt   = maisDias(iniAtual, -7);
-  const fimAnt   = maisDias(iniAtual, -1);
-  const A = iso(iniAtual), B = iso(fimAtual), C = iso(iniAnt), D = iso(fimAnt);
+/* ═══ A VISÃO DE DIRETORIA NO RELATÓRIOS ═════════════════════════════════
+   Pedido do Fernando: "uma visão de como o meu time andou, o que foi planejado, o
+   que foi entregue, temas relevantes, dia de entrega" — e o funil do que vem.
 
-  const visiveis = (state.melhorias || []).filter(m => !m.oculto && m.status !== 'negada'
-                                                    && (m.status_planejamento || '') !== 'negada');
+   DUAS ESCALAS, e a escolha muda o significado de tudo abaixo:
+     MÊS     o fechamento, que é a conversa com a diretoria e casa com o deck
+     SEMANA  a reunião, quando é preciso prestar conta de sete dias
+   Em ambas a comparação é com o período IMEDIATAMENTE ANTERIOR — mês com mês,
+   semana com semana. É a mesma regra que vale no deck e no Gantt, e ela existe
+   porque número sozinho não diz se melhorou.
+
+   O FILTRO DE SISTEMA atravessa todos os blocos. Ele responde "o que foi entregue
+   para Cobrança?", que é a pergunta que a área cliente faz — e sem ele a resposta
+   exigia ler trinta cards procurando um nome.                                  */
+
+/** A escala escolhida. `mes` é o padrão: fechamento é a conversa da diretoria. */
+function relEscala() {
+  const el = document.getElementById('rel-escala');
+  return el && el.value === 'semana' ? 'semana' : 'mes';
+}
+
+/** O tema (sistema) filtrado, ou '' para todos. */
+function relTemaFiltro() {
+  const el = document.getElementById('rel-sistema');
+  return el ? String(el.value || '') : '';
+}
+
+/** A JANELA E A ANTERIOR, na escala escolhida.
+ *
+ *  `rot` e `rotAnt` são os rótulos que a tela mostra — nomeados aqui para as duas
+ *  escalas não terem duas formas de escrever a mesma coisa. */
+function relJanela() {
+  if (relEscala() === 'semana') {
+    const sel = document.getElementById('rel-semana');
+    const ini = sel && sel.value ? new Date(sel.value + 'T00:00:00') : segundaDa(new Date());
+    const de = iso(ini), ate = iso(maisDias(ini, 6));
+    const deAnt = iso(maisDias(ini, -7)), ateAnt = iso(maisDias(ini, -1));
+    return { escala: 'semana', de, ate, deAnt, ateAnt,
+             rot: formatDate(de) + ' a ' + formatDate(ate),
+             rotAnt: 'semana anterior (' + formatDate(deAnt) + ' a ' + formatDate(ateAnt) + ')',
+             curto: 'semana' };
+  }
+  const sel = document.getElementById('rel-mes');
+  const ym = (sel && sel.value) || new Date().toISOString().slice(0, 7);
+  const [an, mn] = ym.split('-').map(Number);
+  const ult = (a, m) => new Date(a, m, 0).getDate();
+  const de = ym + '-01';
+  const ate = ym + '-' + String(ult(an, mn)).padStart(2, '0');
+  let pa = an, pm = mn - 1;
+  if (pm === 0) { pm = 12; pa--; }
+  const ymAnt = pa + '-' + String(pm).padStart(2, '0');
+  return { escala: 'mes', de, ate,
+           deAnt: ymAnt + '-01',
+           ateAnt: ymAnt + '-' + String(ult(pa, pm)).padStart(2, '0'),
+           rot: apresentacaoMesNome(mn - 1) + ' de ' + an,
+           rotAnt: apresentacaoMesNome(pm - 1) + ' de ' + pa,
+           curto: 'mês' };
+}
+
+/** Monta os dois seletores e o de sistema. Idempotente: chamada a cada render. */
+function relInitControles() {
+  const mes = document.getElementById('rel-mes');
+  if (mes && !mes.options.length) {
+    // Doze meses para trás e um para frente: o mês seguinte existe porque o
+    // planejamento acontece antes de o mês começar.
+    const hoje = new Date();
+    const opts = [];
+    for (let k = -1; k <= 12; k++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - k, 1);
+      const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      opts.push('<option value="' + ym + '">' +
+        apresentacaoMesNome(d.getMonth()) + ' de ' + d.getFullYear() + '</option>');
+    }
+    mes.innerHTML = opts.join('');
+    mes.value = hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0');
+  }
+  const sis = document.getElementById('rel-sistema');
+  if (sis) {
+    /* A LISTA SÓ TRAZ SISTEMA QUE TEM DEMANDA. O cadastro tem 64 temas e um
+       dropdown de 64 linhas obriga a pessoa a procurar; com os que têm demanda,
+       ela escolhe. E o total ao lado do nome já responde "vale filtrar?". */
+    const cont = new Map();
+    (state.melhorias || []).forEach(m => {
+      if (!m || m.oculto || m.mesclado_em) return;
+      const k = m.tema_id || '';
+      if (!k) return;
+      cont.set(k, (cont.get(k) || 0) + 1);
+    });
+    const itens = (state.temas || [])
+      .filter(t => cont.has(t.id))
+      .map(t => ({ id: t.id, nome: t.nome || '—', n: cont.get(t.id) }))
+      .sort((a, b) => b.n - a.n || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+    const anterior = sis.value;
+    sis.innerHTML = '<option value="">Todos os sistemas</option>' +
+      itens.map(t => '<option value="' + esc(t.id) + '">' + esc(t.nome) +
+                     '  (' + t.n + ')</option>').join('');
+    // Preserva a escolha entre renders: perder o filtro a cada atualização faria
+    // a pessoa refiltrar toda vez que os dados chegassem do servidor.
+    if (anterior && itens.some(t => t.id === anterior)) sis.value = anterior;
+  }
+}
+
+function relTrocaEscala() {
+  const ehSemana = relEscala() === 'semana';
+  const gm = document.getElementById('rel-grupo-mes');
+  const gs = document.getElementById('rel-grupo-semana');
+  if (gm) gm.style.display = ehSemana ? 'none' : '';
+  if (gs) gs.style.display = ehSemana ? '' : 'none';
+  renderRelatorios();
+}
+
+/** As demandas vivas, já com o filtro de sistema aplicado. */
+function relVivas() {
+  const tema = relTemaFiltro();
+  return (state.melhorias || []).filter(m =>
+    m && !m.oculto && !m.mesclado_em &&
+    (m.status_planejamento || '') !== 'negada' && m.status !== 'negada' &&
+    (!tema || m.tema_id === tema));
+}
+
+/** COMO O TIME ANDOU — planejado × entregue em pontos, e a comparação.
+ *
+ *  A conta vem de `capacidade.js`, a mesma do Gantt, do painel do dev e do deck.
+ *  Quinta tela a fazer esta leitura, e nenhuma delas recalcula. */
+function relComoAndou(j) {
+  const CAPI = window.CAPACIDADE;
+  const vivas = relVivas();
+  const soma = (de, ate) => {
+    const linhas = CAPI.porDev(vivas, de, ate);
+    /* QUANTO DO ENTREGUE VEIO DE DEMANDA QUE NUNCA FOI PLANEJADA.
+       Julho e o caso: 105 pontos de plano contra 1137 entregues. Nao foi o time
+       superando o combinado — foi a base sendo organizada, com 77 demandas
+       pontuadas DEPOIS de concluidas (`poker_retroativo`), para as quais plano
+       nunca existiu. Sem medir isso, a tela compara agosto com um mes cujo
+       planejamento nao foi registrado, e a variacao vira ficcao. */
+    let semPlano = 0;
+    vivas.forEach(m => {
+      const d = CAPI.diaDaEntrega(m);
+      if (!d || d < de || d > ate) return;
+      const e = CAPI.entregues(m);
+      if (e && !CAPI.planejados(m)) semPlano += e;
+    });
+    const entregue = linhas.reduce((t, x) => t + x.entregue, 0);
+    return {
+      plan: linhas.reduce((t, x) => t + x.plan, 0),
+      entregue: entregue,
+      semPlano: semPlano,
+      // Comparavel quando a maior parte do que saiu tinha plano registrado. Metade
+      // e o corte: abaixo dela, o numero fala mais do cadastro que do trabalho.
+      comparavel: entregue > 0 ? (semPlano / entregue) < 0.5 : false,
+      semPontuar: linhas.reduce((t, x) => t + x.semPontuar, 0),
+      devs: linhas.filter(x => x.plan || x.entregue).length,
+    };
+  };
+  const agora = soma(j.de, j.ate);
+  const antes = soma(j.deAnt, j.ateAnt);
+  // Entregas no período, pela data em que o DEV entregou — a mesma âncora do
+  // ranking e do prazo. Contar pela aprovação do PM/PO jogaria para o período
+  // seguinte tudo que ficou esperando validação.
+  const entregas = vivas.filter(m => {
+    const d = CAPI.diaDaEntrega(m);
+    return d && d >= j.de && d <= j.ate && CAPI.entregues(m) >= 0 &&
+           ['validacao', 'concluido'].includes(m.status_planejamento || '');
+  }).length;
+  const entregasAnt = vivas.filter(m => {
+    const d = CAPI.diaDaEntrega(m);
+    return d && d >= j.deAnt && d <= j.ateAnt &&
+           ['validacao', 'concluido'].includes(m.status_planejamento || '');
+  }).length;
+  return { agora, antes, entregas, entregasAnt };
+}
+
+/** A variação, escrita. `bomSubir` diz de que lado está o verde — entregar mais é
+ *  bom, e planejar mais não é nem bom nem ruim. */
+function relDeltaHTML(atual, ant, bomSubir) {
+  const d = atual - ant;
+  if (!ant && !atual) return '';
+  if (d === 0) return '<span class="rel-delta igual">= igual ao período anterior</span>';
+  const cls = bomSubir == null ? 'igual' : ((d > 0) === bomSubir ? 'sobe' : 'cai');
+  return '<span class="rel-delta ' + cls + '">' + (d > 0 ? '▲ +' : '▼ ') +
+         Math.abs(d) + ' vs. anterior (' + ant + ')</span>';
+}
+
+/** ONDE A CAPACIDADE FOI — pontos entregues por sistema, no período.
+ *
+ *  POR PONTOS, e não por contagem: contar demandas dá o mesmo peso a um ajuste de
+ *  meia hora e a uma entrega de 13 pontos, e a pergunta aqui é para onde a
+ *  capacidade foi. A contagem aparece ao lado, como segunda leitura. */
+function relTemas(j) {
+  const CAPI = window.CAPACIDADE;
+  const vivas = relVivas();
+  const porTema = new Map();
+  vivas.forEach(m => {
+    const d = CAPI.diaDaEntrega(m);
+    if (!d || d < j.de || d > j.ate) return;
+    const pts = CAPI.entregues(m);
+    const k = m.tema_id || '__sem__';
+    const a = porTema.get(k) || { pts: 0, qtd: 0 };
+    a.pts += pts; a.qtd += 1;
+    porTema.set(k, a);
+  });
+  const nome = k => k === '__sem__' ? 'Sem sistema'
+    : (((state.temas || []).find(t => t.id === k) || {}).nome || '—');
+  const itens = [...porTema.entries()]
+    .map(([k, v]) => ({ nome: nome(k), pts: v.pts, qtd: v.qtd }))
+    .sort((a, b) => b.pts - a.pts || b.qtd - a.qtd);
+  return { itens, total: itens.reduce((t, x) => t + x.pts, 0),
+           qtd: itens.reduce((t, x) => t + x.qtd, 0) };
+}
+
+/** O QUE VEM — dois grupos, e a diferença entre eles é a ação.
+ *
+ *  EM PLANNING: o tamanho ainda não existe. A ação é estimar, na reunião.
+ *  PONTUADO SEM PRAZO: o tamanho existe e falta agendar. A ação é de quem planeja.
+ *
+ *  NÃO PROJETO DATA para nenhum dos dois. Num relatório de diretoria, projeção é
+ *  lida como compromisso — e o compromisso é do time, não meu. */
+function relOQueVem() {
+  const CAPI = window.CAPACIDADE;
+  const vivas = relVivas();
+  const tema = m => (((state.temas || []).find(t => t.id === m.tema_id) || {}).nome || '—');
+  const monta = m => ({
+    codigo: m.codigo || '', titulo: m.titulo || '(sem título)', tema: tema(m),
+    pts: Number(m.poker_pontos) || 0, dev: m.dev || '', prazo: m.entrega || '',
+  });
+  const planning = vivas
+    .filter(m => (m.status_planejamento || '') === 'planning')
+    .map(monta)
+    .sort((a, b) => (b.pts - a.pts) || String(a.codigo).localeCompare(String(b.codigo)));
+  /* PONTUADO SEM PRAZO: tem tamanho e não tem data. Fica de fora de todo
+     fechamento mensal — não pertence a mês nenhum —, e é justamente o que a
+     pergunta "o que vai entrar" procura. */
+  const semPrazo = vivas
+    .filter(m => ['backlog', 'levantar_req', 'planejado'].includes(m.status_planejamento || '') &&
+                 Number(m.poker_pontos) > 0 && !CAPI.diaDoPlano(m))
+    .map(monta)
+    .sort((a, b) => (b.pts - a.pts) || String(a.codigo).localeCompare(String(b.codigo)));
+  return { planning, semPrazo,
+           ptsPlanning: planning.reduce((t, x) => t + x.pts, 0),
+           ptsSemPrazo: semPrazo.reduce((t, x) => t + x.pts, 0) };
+}
+
+function relDados() {
+  const j = relJanela();
+  /* AS DUAS JANELAS, e o que cada uma significa em cada escala:
+       A a B  o periodo ESCOLHIDO — e onde o "em desenvolvimento" e medido
+       C a D  onde as ENTREGAS sao contadas
+
+     NA SEMANA elas sao diferentes de proposito: a reuniao da semana que comeca
+     reporta o que saiu na semana que PASSOU (a corrente ainda nao acabou) e o que
+     esta em curso NESTA. Era assim antes e continua.
+
+     NO MES sao a MESMA: o fechamento de agosto mostra o que saiu em agosto. Usar a
+     janela anterior aqui faria o relatorio de agosto listar as entregas de julho —
+     o oposto do que "fechamento do mes" quer dizer. */
+  const A = j.de, B = j.ate;
+  const C = j.escala === 'semana' ? j.deAnt : j.de;
+  const D = j.escala === 'semana' ? j.ateAnt : j.ate;
+
+  // O FILTRO DE SISTEMA ENTRA AQUI, e por isso vale para as duas listas de baixo
+  // sem que cada uma precise aplicar de novo.
+  const visiveis = relVivas();
 
   // Entregues: concluído com entrega dentro da semana anterior. Sem data de
   // entrega não há como afirmar quando saiu, então fica fora (e é sinalizado).
   // Data de saida: concluido_em (gravada na aprovacao do PM/PO) e a verdade.
   // `entrega` e o prazo, e sobrava como aproximacao para as concluidas antigas,
   // anteriores a validacao existir.
-  const dataSaida = m => m.concluido_em || m.entrega || '';
+  /* A DATA DE SAIDA E A DA ENTREGA DO DEV, e nao a da aprovacao.
+     `capacidade.js` e `prazo.js` ja usavam essa ancora; aqui ainda era
+     `concluido_em`, e a mesma entrega caia em semanas diferentes no relatorio e no
+     Gantt. A reserva (`concluido_em`, depois `entrega`) fica para as concluidas
+     antigas, anteriores a validacao existir. */
+  const dataSaida = m => window.CAPACIDADE.diaDaEntrega(m) || m.entrega || '';
   const entregues = visiveis.filter(m =>
-    (m.status_planejamento === 'concluido' || m.status === 'concluida') &&
-    dataSaida(m) >= C && dataSaida(m) <= D && !!dataSaida(m));
+    ['validacao', 'concluido'].includes(m.status_planejamento || '') ||
+    m.status === 'concluida'
+      ? (dataSaida(m) >= C && dataSaida(m) <= D && !!dataSaida(m))
+      : false);
 
   const semDataConcluidos = visiveis.filter(m =>
     (m.status_planejamento === 'concluido' || m.status === 'concluida') && !dataSaida(m)).length;
+  const janela = j;
 
   // Em desenvolvimento: sobreposição do intervalo do card com a semana atual.
   const andamento = visiveis.filter(m => {
@@ -6696,7 +7064,7 @@ function relDados() {
 
   const ordEnt = [...entregues].sort((a,b) => (a.entrega||'').localeCompare(b.entrega||''));
   const ordAnd = [...andamento].sort((a,b) => (a.entrega||'9999').localeCompare(b.entrega||'9999'));
-  return { A, B, C, D, entregues: ordEnt, andamento: ordAnd, semDataConcluidos };
+  return { A, B, C, D, janela, entregues: ordEnt, andamento: ordAnd, semDataConcluidos };
 }
 
 // "Sistema - Módulo" a partir do tema do card.
@@ -6735,7 +7103,11 @@ function relCardHTML(m, modo) {
 
 function renderRelatorios() {
   relInitSemanas();
-  const { A, B, C, D, entregues, andamento, semDataConcluidos } = relDados();
+  relInitControles();
+  const { A, B, C, D, janela, entregues, andamento, semDataConcluidos } = relDados();
+  relRenderAndou(janela);
+  relRenderTemas(janela);
+  relRenderOQueVem();
 
   // O relatorio existe para a reuniao da semana escolhida. Nela se reporta o que
   // FOI ENTREGUE na semana que passou — a semana corrente ainda nao acabou, nao
@@ -6743,10 +7115,22 @@ function renderRelatorios() {
   // mas o rotulo "Semana atual" no seletor fazia parecer erro: lia-se "semana
   // atual" e a primeira secao mostrava outro periodo. Agora cada secao carrega o
   // proprio periodo no titulo, e esta linha diz a regra por extenso.
-  document.getElementById('rel-periodo-info').innerHTML =
-    `Para a reunião de <b>${formatDate(A)} a ${formatDate(B)}</b>: mostra o que foi ` +
-    `<b>entregue</b> na semana que passou (${formatDate(C)} a ${formatDate(D)}) e o que está ` +
-    `<b>em desenvolvimento</b> nesta semana (${formatDate(A)} a ${formatDate(B)}).`;
+  /* A LINHA DE CONTEXTO DIZ A REGRA POR EXTENSO, e ela muda com a escala. No
+     mes, entrega e desenvolvimento sao o mesmo periodo; na semana, nao — e sem
+     dizer isso o leitor ve duas datas diferentes e conclui que ha erro. */
+  const sisNome = relTemaFiltro()
+    ? (((state.temas || []).find(t => t.id === relTemaFiltro()) || {}).nome || '')
+    : '';
+  const filtroTxt = sisNome
+    ? ` Filtrado por <b>${esc(sisNome)}</b> — todos os blocos abaixo consideram só este sistema.`
+    : '';
+  document.getElementById('rel-periodo-info').innerHTML = (janela.escala === 'mes'
+    ? `Fechamento de <b>${janela.rot}</b>, comparado com <b>${janela.rotAnt}</b>. ` +
+      `As entregas e o desenvolvimento são do próprio mês.`
+    : `Para a reunião de <b>${formatDate(A)} a ${formatDate(B)}</b>: mostra o que foi ` +
+      `<b>entregue</b> na semana que passou (${formatDate(C)} a ${formatDate(D)}) e o que está ` +
+      `<b>em desenvolvimento</b> nesta semana (${formatDate(A)} a ${formatDate(B)}). ` +
+      `A comparação é com a ${janela.rotAnt}.`) + filtroTxt;
 
   document.getElementById('rel-ent-titulo').innerHTML =
     `✅ Entregues <span class="rel-per">${formatDate(C)} a ${formatDate(D)}</span>`;
@@ -6772,6 +7156,171 @@ function renderRelatorios() {
   document.getElementById('rel-andamento').innerHTML = andamento.length
     ? relAgrupadoHTML(andamento, 'andamento')
     : vazio(`Nenhuma demanda em desenvolvimento entre ${formatDate(A)} e ${formatDate(B)}.`);
+}
+
+/** COMO O TIME ANDOU — os cartões, com a comparação dentro de cada um. */
+function relRenderAndou(j) {
+  const box = document.getElementById('rel-andou');
+  const nota = document.getElementById('rel-andou-nota');
+  const hint = document.getElementById('rel-andou-hint');
+  if (!box) return;
+  const r = relComoAndou(j);
+  const CAPI = window.CAPACIDADE;
+  if (hint) hint.textContent = j.rot + '  ·  vs. ' + j.rotAnt;
+
+  const leitura = CAPI.rotulo(r.agora.plan, r.agora.entregue);
+  /* A COMPARAÇÃO SÓ APARECE QUANDO ELA VALE. Se no período anterior a maior parte
+     do que saiu não tinha plano registrado — julho tem 1032 dos 1137 pontos assim
+     —, a variação de pontos compara agosto com um mês cujo planejamento não foi
+     capturado. Em vez de um "▲ +1619" que ninguém pode defender numa reunião, a
+     tela diz que não há base. */
+  const semBase = !r.antes.comparavel;
+  const semBaseTxt = '<span class="rel-delta igual" title="No período anterior, ' +
+    r.antes.semPlano + ' dos ' + r.antes.entregue + ' pontos entregues vieram de demandas ' +
+    'sem plano registrado — a maioria foi pontuada depois de concluída.">sem base para ' +
+    'comparar</span>';
+  const cmp = (atual, ant, bomSubir) => semBase ? semBaseTxt : relDeltaHTML(atual, ant, bomSubir);
+
+  const cartoes = [
+    { lab: 'Planejado', val: r.agora.plan + ' pt', cls: 'blue',
+      /* Planejar mais nao e nem bom nem ruim — e o compromisso assumido. Por isso
+         `bomSubir` e nulo aqui: a variacao sai neutra. */
+      delta: cmp(r.agora.plan, r.antes.plan, null),
+      tag: 'pelo prazo combinado' },
+    { lab: 'Entregue', val: r.agora.entregue + ' pt', cls: 'green',
+      /* A CONTAGEM DE ENTREGA COMPARA SEMPRE: ela nao depende de plano nenhum, e
+         quantos pontos sairam e um fato mesmo num mes sem planejamento registrado. */
+      delta: relDeltaHTML(r.agora.entregue, r.antes.entregue, true),
+      tag: 'pela entrega do dev' },
+    { lab: 'Leitura', val: leitura, cls: '',
+      /* A LEITURA ANTERIOR APARECE COMO ELA É — em percentual ou em pontos, o que
+         `rotulo` devolver. A versão anterior suprimia quando a unidade não casava
+         e escrevia "sem base para comparar": o texto estava errado sobre o MOTIVO.
+         Havia base; o que mudou foi a unidade, porque o período anterior passou do
+         plano. Suprimir com o motivo errado é pior que comparar — quem lê conclui
+         que falta dado quando não falta.
+
+         "Sem base" fica reservado ao caso em que ele é verdade: o período anterior
+         entregou sem plano registrado. */
+      delta: semBase ? semBaseTxt
+        : (r.antes.plan || r.antes.entregue)
+          ? '<span class="rel-delta igual">era ' +
+            CAPI.rotulo(r.antes.plan, r.antes.entregue) + ' no período anterior</span>'
+          : '',
+      tag: 'do que foi combinado' },
+    { lab: 'Entregas', val: String(r.entregas), cls: 'blue',
+      delta: relDeltaHTML(r.entregas, r.entregasAnt, true),
+      tag: 'demandas que saíram da mão do dev' },
+    { lab: 'Pessoas', val: String(r.agora.devs), cls: '',
+      delta: '', tag: 'com plano ou entrega no período' },
+  ];
+  box.innerHTML = cartoes.map(k =>
+    '<div class="ger-kpi">' +
+      '<div class="ger-kpi-label">' + k.lab + '</div>' +
+      '<div class="ger-kpi-value ' + k.cls + '">' + esc(k.val) + '</div>' +
+      k.delta +
+      '<span class="ger-kpi-delta delta-neu">' + k.tag + '</span>' +
+    '</div>').join('');
+
+  /* AS RESSALVAS, e elas nao sao decoracao: demanda alocada sem pontuacao faz o
+     planejado parecer menor, e a leitura errada seria "sobra capacidade". */
+  const partes = ['O <b>planejado</b> conta na data do prazo combinado; o <b>entregue</b>, ' +
+    'na data em que o dev entregou — espera na validação do PM/PO não é atraso dele.'];
+  if (r.agora.semPontuar) {
+    partes.push('<b>' + r.agora.semPontuar + ' demanda' + (r.agora.semPontuar !== 1 ? 's' : '') +
+      ' alocada' + (r.agora.semPontuar !== 1 ? 's' : '') + ' sem pontuação</b> neste período: ' +
+      'o planejado de quem as recebeu está menor do que é.');
+  }
+  if (!r.antes.comparavel && r.antes.entregue) {
+    partes.push('A comparação de <b>pontos</b> com ' + esc(j.rotAnt) + ' está suprimida: ' +
+      r.antes.semPlano + ' dos ' + r.antes.entregue + ' pontos de lá vieram de demandas ' +
+      '<b>sem plano registrado</b> — a maioria foi pontuada depois de concluída, quando a ' +
+      'base foi organizada. A contagem de entregas continua comparável.');
+  }
+  if (nota) nota.innerHTML = partes.join(' ');
+}
+
+/** ONDE A CAPACIDADE FOI — barra por sistema, em pontos entregues. */
+function relRenderTemas(j) {
+  const box = document.getElementById('rel-temas');
+  const hint = document.getElementById('rel-temas-hint');
+  if (!box) return;
+  const t = relTemas(j);
+  if (hint) {
+    hint.textContent = t.itens.length
+      ? t.total + ' pontos em ' + t.itens.length + (t.itens.length === 1 ? ' sistema' : ' sistemas')
+      : '';
+  }
+  if (!t.itens.length) {
+    box.innerHTML = '<div class="ger-empty-box">Nenhuma entrega pontuada em ' + esc(j.rot) + '.</div>';
+    return;
+  }
+  const maior = t.itens[0].pts || 1;
+  // Oito linhas e a cauda dobrada: com quinze sistemas a lista vira rolagem, e
+  // "Outros (7)" diz que ha mais sem esconder que ha.
+  const topo = t.itens.slice(0, 8);
+  const resto = t.itens.slice(8);
+  const linhas = topo.concat(resto.length
+    ? [{ nome: 'Outros (' + resto.length + ')',
+         pts: resto.reduce((x, y) => x + y.pts, 0),
+         qtd: resto.reduce((x, y) => x + y.qtd, 0) }]
+    : []);
+  box.innerHTML = linhas.map(x =>
+    '<div class="rel-tema-linha">' +
+      '<div><div class="rel-tema-nome" title="' + esc(x.nome) + '">' + esc(x.nome) + '</div>' +
+        '<div class="rel-tema-barra"><div class="rel-tema-fill" style="width:' +
+          Math.max(2, Math.round(x.pts / maior * 100)) + '%"></div></div></div>' +
+      '<div class="rel-tema-num">' + x.pts + ' pt</div>' +
+      '<div class="rel-tema-pct">' + (t.total ? Math.round(x.pts / t.total * 100) : 0) + '%</div>' +
+      '<div class="rel-tema-qtd">' + x.qtd + (x.qtd === 1 ? ' dem.' : ' dem.') + '</div>' +
+    '</div>').join('');
+}
+
+/** O QUE VEM — em Planning e pontuado sem prazo. */
+function relRenderOQueVem() {
+  const box = document.getElementById('rel-vem');
+  const hint = document.getElementById('rel-vem-hint');
+  if (!box) return;
+  const v = relOQueVem();
+  const n = v.planning.length + v.semPrazo.length;
+  if (hint) hint.textContent = n ? n + (n === 1 ? ' demanda' : ' demandas') : '';
+  if (!n) {
+    box.innerHTML = '<div class="ger-empty-box">Nada em Planning nem pontuado aguardando ' +
+      'planejamento' + (relTemaFiltro() ? ' neste sistema' : '') + '.</div>';
+    return;
+  }
+  const lista = (itens) => itens.map(x =>
+    '<div class="rel-vem-item">' +
+      '<div class="rel-vem-cod">' + esc(x.codigo || '—') + '</div>' +
+      '<div class="rel-vem-tt" title="' + esc(x.titulo) + '">' + esc(x.titulo) + '</div>' +
+      '<div class="rel-vem-tema" title="' + esc(x.tema) + '">' + esc(x.tema) + '</div>' +
+      '<div class="rel-vem-pt">' + (x.pts ? x.pts + ' pt' :
+        '<span class="rel-vem-sem">—</span>') + '</div>' +
+    '</div>').join('');
+
+  const grupos = [];
+  if (v.planning.length) {
+    grupos.push('<div class="rel-vem-grupo">' +
+      '<div class="rel-vem-head"><span class="rel-vem-tit">Em Planning</span>' +
+        '<span class="rel-vem-tot">' + v.planning.length +
+        (v.planning.length === 1 ? ' demanda' : ' demandas') +
+        (v.ptsPlanning ? '  ·  ' + v.ptsPlanning + ' pt já estimados' : '') + '</span></div>' +
+      '<p class="rel-vem-por">Vão ser estimadas no Planning Poker. O que ainda não tem ' +
+        'pontuação aparece com “—”: o tamanho é a próxima decisão, e não um dado que falta.</p>' +
+      lista(v.planning) + '</div>');
+  }
+  if (v.semPrazo.length) {
+    grupos.push('<div class="rel-vem-grupo">' +
+      '<div class="rel-vem-head"><span class="rel-vem-tit">Pontuadas, falta planejar</span>' +
+        '<span class="rel-vem-tot">' + v.semPrazo.length +
+        (v.semPrazo.length === 1 ? ' demanda' : ' demandas') +
+        '  ·  ' + v.ptsSemPrazo + ' pt</span></div>' +
+      '<p class="rel-vem-por">O tamanho já é conhecido e falta a data. Enquanto não ' +
+        'tiverem prazo, elas não entram em fechamento nenhum — não pertencem a mês ' +
+        'algum. Arraste no Planejamento para agendar.</p>' +
+      lista(v.semPrazo) + '</div>');
+  }
+  box.innerHTML = grupos.join('');
 }
 
 // Agrupa por tema, na mesma ordem do cadastro de temas (igual à lista de
@@ -6808,7 +7357,7 @@ function relAgrupadoHTML(lista, modo) {
 
 // Texto corrido para colar na ata/apresentação do comitê.
 function relTexto(secao) {
-  const { A, B, C, D, entregues, andamento } = relDados();
+  const { A, B, C, D, janela, entregues, andamento } = relDados();
   const bloco = (m, modo) => {
     const sm = relSistemaModulo(m);
     const linhas = [`• ${m.titulo || '(sem título)'}`, `  Sistema/Módulo: ${sm.completo}`];
@@ -6826,20 +7375,85 @@ function relTexto(secao) {
     .join('\n\n');
 
   const partes = [];
-  // Cabecalho na ata: o texto vai para o comitê fora desta tela, e "NESTA SEMANA"
-  // sem dizer QUAL semana obriga quem le a adivinhar a data da reuniao.
+  /* CABECALHO NA ATA: o texto vai para o comite fora desta tela, e "NESTA SEMANA"
+     sem dizer QUAL semana obriga quem le a adivinhar a data da reuniao.
+
+     E ELE DIZ A ESCALA. Um fechamento mensal colado numa ata com o titulo
+     "REUNIAO DE 17/08 A 23/08" seria lido como semanal, e os numeros de um mes
+     inteiro pareceriam de sete dias. */
   if (!secao) {
-    partes.push(`REUNIÃO DE ${formatDate(A)} A ${formatDate(B)}`);
+    partes.push(janela.escala === 'mes'
+      ? 'FECHAMENTO DE ' + String(janela.rot).toUpperCase()
+      : 'REUNIÃO DE ' + formatDate(A) + ' A ' + formatDate(B));
+    const sisNome = relTemaFiltro()
+      ? (((state.temas || []).find(t => t.id === relTemaFiltro()) || {}).nome || '')
+      : '';
+    if (sisNome) partes.push('Sistema: ' + sisNome);
+    // COMO O TIME ANDOU vai no topo da ata, pela mesma razao que vai no topo da
+    // tela: quem le pergunta "foi bom?" antes de "o que saiu?".
+    const r = relComoAndou(janela);
+    const CAPI = window.CAPACIDADE;
+    partes.push('');
+    partes.push('COMO O TIME ANDOU — ' + janela.rot + ' (vs. ' + janela.rotAnt + ')');
+    partes.push('  Planejado: ' + r.agora.plan + ' pt   (anterior: ' + r.antes.plan + ')');
+    partes.push('  Entregue:  ' + r.agora.entregue + ' pt   (anterior: ' + r.antes.entregue + ')');
+    partes.push('  Leitura:   ' + CAPI.rotulo(r.agora.plan, r.agora.entregue) +
+                '   (anterior: ' + CAPI.rotulo(r.antes.plan, r.antes.entregue) + ')');
+    partes.push('  Entregas:  ' + r.entregas + '   (anterior: ' + r.entregasAnt + ')');
+    if (r.agora.semPontuar) {
+      partes.push('  ! ' + r.agora.semPontuar + ' demanda(s) alocada(s) sem pontuacao: o ' +
+                  'planejado de quem as recebeu esta menor do que e.');
+    }
+    if (!r.antes.comparavel && r.antes.entregue) {
+      partes.push('  ! Comparacao de pontos com o periodo anterior suprimida: ' +
+                  r.antes.semPlano + ' dos ' + r.antes.entregue + ' pontos de la vieram de ' +
+                  'demandas sem plano registrado.');
+    }
+    const t = relTemas(janela);
+    if (t.itens.length) {
+      partes.push('');
+      partes.push('ONDE A CAPACIDADE FOI — ' + t.total + ' pt');
+      t.itens.slice(0, 8).forEach(x => partes.push('  ' + String(x.pts).padStart(4) + ' pt  ' +
+        (t.total ? String(Math.round(x.pts / t.total * 100)).padStart(3) + '%' : '   ') +
+        '  ' + x.nome));
+    }
     partes.push('');
   }
-  if (secao !== 'andamento') {
-    partes.push(`ENTREGUES — ${formatDate(C)} a ${formatDate(D)} (semana anterior) — ${entregues.length}`);
+  const rotEnt = janela.escala === 'mes'
+    ? janela.rot
+    : formatDate(C) + ' a ' + formatDate(D) + ' (semana anterior)';
+  const rotDev = janela.escala === 'mes'
+    ? janela.rot
+    : formatDate(A) + ' a ' + formatDate(B) + ' (semana da reunião)';
+  if (secao !== 'andamento' && secao !== 'vem') {
+    partes.push('ENTREGUES — ' + rotEnt + ' — ' + entregues.length);
     partes.push(entregues.length ? porTema(entregues, 'entregues') : '(nenhuma)');
   }
-  if (secao !== 'entregues') {
+  if (secao !== 'entregues' && secao !== 'vem') {
     if (partes.length) partes.push('');
-    partes.push(`EM DESENVOLVIMENTO — ${formatDate(A)} a ${formatDate(B)} (semana da reunião) — ${andamento.length}`);
+    partes.push('EM DESENVOLVIMENTO — ' + rotDev + ' — ' + andamento.length);
     partes.push(andamento.length ? porTema(andamento, 'andamento') : '(nenhuma)');
+  }
+  /* O QUE VEM entra na ata sem periodo, e isso e proposital: ele nao pertence a
+     mes nem a semana — e o funil no momento em que a ata foi tirada. */
+  if (!secao || secao === 'vem') {
+    const v = relOQueVem();
+    if (v.planning.length || v.semPrazo.length) {
+      if (partes.length) partes.push('');
+      partes.push('O QUE VEM (na data desta ata)');
+      if (v.planning.length) {
+        partes.push('  Em Planning — ' + v.planning.length +
+          (v.ptsPlanning ? ' (' + v.ptsPlanning + ' pt ja estimados)' : ''));
+        v.planning.forEach(x => partes.push('    ' + (x.codigo || '—').padEnd(9) +
+          (x.pts ? String(x.pts).padStart(3) + ' pt  ' : '  —    ') + x.titulo));
+      }
+      if (v.semPrazo.length) {
+        partes.push('  Pontuadas, falta planejar — ' + v.semPrazo.length +
+          ' (' + v.ptsSemPrazo + ' pt)');
+        v.semPrazo.forEach(x => partes.push('    ' + (x.codigo || '—').padEnd(9) +
+          String(x.pts).padStart(3) + ' pt  ' + x.titulo));
+      }
+    }
   }
   return partes.join('\n');
 }

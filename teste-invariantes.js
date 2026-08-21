@@ -4190,6 +4190,93 @@ ok(/limiteForte: CAPI\.PONTOS_SPRINT_FORTE/.test(ADMIN),
      'e a nota termina em 5,02 — logo acima do rodape, que fica em 5,05');
 })();
 
+/* ─── A VISAO DE DIRETORIA NO RELATORIOS ─────────────────────────────────
+   Pedido do Fernando: "como o meu time andou, o que foi planejado, o que foi
+   entregue, temas relevantes, dia de entrega" — mais o funil do que vem, e um
+   filtro por sistema para prestar conta por area.                             */
+sec('Relatorios: a visao de diretoria');
+
+// DUAS ESCALAS: mes (fechamento, o padrao) e semana (reuniao).
+ok(/id="rel-escala"/.test(ADMIN) && /function relJanela\(\)/.test(ADMIN),
+   'existe a escala e a janela que ela define');
+ok(/el && el\.value === 'semana' \? 'semana' : 'mes'/.test(ADMIN),
+   'o mes e o padrao — fechamento e a conversa da diretoria');
+
+/* NO MES, ENTREGA E DESENVOLVIMENTO SAO O MESMO PERIODO. Na semana nao: a reuniao
+   reporta o que saiu na semana que PASSOU. Usar a janela anterior no mes faria o
+   fechamento de agosto listar as entregas de julho. */
+(() => {
+  const c = corpo(ADMIN, 'function relDados(');
+  ok(!!c, 'existe relDados');
+  if (!c) return;
+  ok(/const C = j\.escala === 'semana' \? j\.deAnt : j\.de;/.test(c),
+     'no mes a janela de entrega e a do proprio mes');
+  ok(/const visiveis = relVivas\(\);/.test(c),
+     'e o filtro de sistema entra numa so vez, valendo para as duas listas');
+  /* A DATA DE SAIDA E A DA ENTREGA DO DEV. Era `concluido_em` aqui e `entregue_em`
+     no Gantt: a mesma entrega caia em semanas diferentes nas duas telas. */
+  ok(/window\.CAPACIDADE\.diaDaEntrega\(m\)/.test(c),
+     'a data de saida e a entrega do dev, como no resto da ferramenta');
+})();
+
+/* A COMPARACAO SUPRIMIDA QUANDO NAO HA BASE.
+   Julho tem 105 pontos de plano contra 1137 entregues — e nao foi o time superando
+   o combinado: 77 demandas foram pontuadas DEPOIS de concluidas, quando a base foi
+   organizada, e para elas plano nunca existiu. Um "▲ +1619" ali e um numero que
+   ninguem pode defender numa reuniao. */
+(() => {
+  const c = corpo(ADMIN, 'function relComoAndou(');
+  ok(!!c, 'existe o bloco "como o time andou"');
+  if (!c) return;
+  ok(/semPlano/.test(c) && /comparavel/.test(c),
+     'ele mede quanto do entregue veio de demanda sem plano');
+  ok(/\(semPlano \/ entregue\) < 0\.5/.test(c),
+     'e metade e o corte: abaixo dela o numero fala do cadastro, e nao do trabalho');
+})();
+ok(/sem base para comparar/.test(ADMIN),
+   'a tela diz quando nao ha base, em vez de mostrar uma variacao indefensavel');
+/* MAS A CONTAGEM DE ENTREGAS COMPARA SEMPRE: ela nao depende de plano nenhum. */
+ok(/delta: relDeltaHTML\(r\.agora\.entregue, r\.antes\.entregue, true\)/.test(ADMIN),
+   'o entregue em pontos continua comparavel — e fato, com ou sem plano');
+
+/* ONDE A CAPACIDADE FOI: por PONTOS, e nao por contagem. Contar demandas da o
+   mesmo peso a um ajuste de meia hora e a uma entrega de 13 pontos. */
+(() => {
+  const c = corpo(ADMIN, 'function relTemas(');
+  ok(!!c, 'existe o bloco por sistema');
+  if (!c) return;
+  ok(/CAPI\.entregues\(m\)/.test(c), 'ele soma pontos entregues, e nao demandas');
+  ok(/b\.pts - a\.pts/.test(c), 'e ordena por ponto');
+})();
+
+/* O QUE VEM: dois grupos, e a diferenca entre eles e a ACAO.
+   Em Planning o tamanho nao existe (estimar); pontuado sem prazo tem tamanho e
+   falta data (agendar). */
+(() => {
+  const c = corpo(ADMIN, 'function relOQueVem(');
+  ok(!!c, 'existe o bloco do que vem');
+  if (!c) return;
+  ok(/=== 'planning'/.test(c), 'um grupo e o que esta em Planning');
+  ok(/Number\(m\.poker_pontos\) > 0 && !CAPI\.diaDoPlano\(m\)/.test(c),
+     'e o outro e o pontuado SEM prazo — tem tamanho e falta data');
+  /* NAO PROJETA DATA. Num relatorio de diretoria, projecao e lida como
+     compromisso — e o compromisso e do time, nao da ferramenta. */
+  ok(!/prazoPrevisto|dataPrevista|projet/i.test(c),
+     'e nenhuma data e projetada para elas');
+})();
+
+// A ata copiada carrega os blocos novos e diz a ESCALA — um fechamento mensal com
+// titulo "REUNIAO DE 17/08 A 23/08" seria lido como semanal.
+(() => {
+  const c = corpo(ADMIN, 'function relTexto(');
+  ok(!!c, 'existe o texto da ata');
+  if (!c) return;
+  ok(/'FECHAMENTO DE '/.test(c) && /'REUNIÃO DE '/.test(c),
+     'a ata diz a escala no titulo');
+  ok(/COMO O TIME ANDOU/.test(c) && /ONDE A CAPACIDADE FOI/.test(c) && /O QUE VEM/.test(c),
+     'e leva os tres blocos novos');
+})();
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
