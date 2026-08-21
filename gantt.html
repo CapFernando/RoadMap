@@ -618,7 +618,7 @@
   <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=592092724e"></script>
-<script src="capacidade.js?v=75b47bda2c"></script>
+<script src="capacidade.js?v=3769a13468"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=59b54a07ca"></script>
@@ -2296,18 +2296,27 @@ function renderGantt() {
           const fimSem = diasSem.length ? diasSem[diasSem.length - 1].str : '';
           const fechou = !!fimSem && fimSem < todayStr;
           const p = porSemana[i] || 0;
-          /* BATER A META JA E VERDE, MESMO NA SPRINT EM CURSO — e a assimetria e
-             de proposito. O vermelho espera a sprint fechar porque falta tempo
-             que ainda pode ser usado: pintar de vermelho na quarta acusa a pessoa
-             de algo que o calendario ainda nao permitiu. O verde nao precisa
-             esperar nada, porque mais tempo so pode SOMAR: quem ja entregou o que
-             foi combinado nao vai desentregar na quinta.
+          /* VERDE POR UM DOS DOIS CAMINHOS (ver `sprintForte` em capacidade.js):
+             bateu o planejado, OU fez cem pontos em valor absoluto.
 
-             Sem planejado continua branco nos dois casos: entregar 20 pontos onde
-             nada foi prometido nao e "superou a meta", e uma meta que nao existia. */
-          const bateu = !!p && f >= p;
-          const cls = bateu ? 'cq-bateu' : (fechou && p ? 'cq-abaixo' : 'cq-neutro');
-          const rot = bateu ? 'bateu o planejado' + (fechou ? '' : ' (sprint ainda em curso)')
+             O segundo caminho existe porque o plano estava punindo quem entregou
+             mais: duas pessoas fecham 104 pontos na mesma semana, e a que tinha
+             plano de 90 aparecia verde enquanto a de plano 119 aparecia vermelha.
+             A cor dizia mais sobre quem planejou do que sobre quem fez.
+
+             E A ASSIMETRIA CONTINUA: o vermelho espera a sprint FECHAR, porque
+             falta tempo que ainda pode ser usado — pintar de vermelho na quarta
+             acusa a pessoa de algo que o calendario ainda nao permitiu. O verde
+             nao espera nada, porque mais tempo so pode somar.
+
+             Sem plano e sem volume fica branco: entregar 20 pontos onde nada foi
+             prometido nao e "superou a meta", e uma meta que nao existia. */
+          const forte = window.CAPACIDADE.sprintForte(p, f);
+          const porVolume = forte && !(p && f >= p);
+          const cls = forte ? 'cq-bateu' : (fechou && p ? 'cq-abaixo' : 'cq-neutro');
+          const rot = forte
+            ? (porVolume ? f + ' pontos na sprint — semana forte' : 'bateu o planejado') +
+              (fechou ? '' : ' (sprint ainda em curso)')
             : !p ? 'nada planejado nesta sprint'
             : !fechou ? 'sprint ainda em curso — ainda da tempo'
             : 'abaixo do planejado';

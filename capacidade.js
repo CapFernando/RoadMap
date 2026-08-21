@@ -184,6 +184,31 @@
              dias: liquido, pausados: pausados, mudancas: evs.length };
   }
 
+  /** SPRINT FORTE EM VALOR ABSOLUTO.
+   *
+   *  Cem pontos numa sprint é uma semana boa por si, e não em relação a nada: o
+   *  Fernando descreveu a régua do time com essas palavras — "tem dev que faz 50
+   *  pontos por semana e outros fazem 100". Entregar 104 contra um plano de 119 não
+   *  é uma semana ruim; é uma semana forte contra um plano ambicioso.
+   *
+   *  SEM ISSO, O PLANO PUNIA QUEM ENTREGOU MAIS. Duas pessoas fecham 104 pontos na
+   *  mesma semana; a que tinha plano de 90 aparecia verde e a de plano 119
+   *  aparecia vermelha — a cor dizia mais sobre quem planejou do que sobre quem
+   *  fez. O percentual continua na leitura ao lado, e é lá que a diferença contra
+   *  o plano aparece.
+   *
+   *  Vale mesmo na sprint em curso, pela mesma assimetria do resto: cem pontos
+   *  entregues é fato consumado, e mais tempo só pode somar.                    */
+  var PONTOS_SPRINT_FORTE = 100;
+
+  /** A sprint foi bem? Verde por UM dos dois caminhos — bateu o plano, ou fez
+   *  cem pontos. Devolve false quando não há nem plano nem volume que sustente. */
+  function sprintForte(plan, entregue) {
+    var p = num(plan), e = num(entregue);
+    if (e >= PONTOS_SPRINT_FORTE) return true;
+    return !!p && e >= p;
+  }
+
   /** Acima DE QUANTAS sprints o pulo pede atenção nominal.
    *  Duas é tolerância de replanejamento; da terceira em diante a demanda está
    *  sendo empurrada, e empurrar sem dizer o nome dela é como ela some de vista. */
@@ -304,6 +329,8 @@
 
   raiz.CAPACIDADE = {
     rotulo: rotulo,
+    PONTOS_SPRINT_FORTE: PONTOS_SPRINT_FORTE,
+    sprintForte: sprintForte,
     SPRINTS_PARA_ALERTA: SPRINTS_PARA_ALERTA,
     rolagemDeSprint: rolagemDeSprint,
     rolagens: rolagens,

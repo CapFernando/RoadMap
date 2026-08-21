@@ -4055,10 +4055,28 @@ ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
      na quarta nao vai desentregar na quinta. Ja o vermelho na sprint em curso
      acusaria a pessoa de algo que o calendario ainda nao permitiu, que e o mesmo
      defeito do ranking do Planning. */
-  ok(/const bateu = !!p && f >= p;/.test(GANTT),
-     'bater o planejado nao depende de a sprint ter fechado');
-  ok(/bateu \? 'cq-bateu' : \(fechou && p \? 'cq-abaixo' : 'cq-neutro'\)/.test(GANTT),
+  ok(/const forte = window\.CAPACIDADE\.sprintForte\(p, f\);/.test(GANTT),
+     'o veredito da sprint sai da regra compartilhada');
+  ok(/forte \? 'cq-bateu' : \(fechou && p \? 'cq-abaixo' : 'cq-neutro'\)/.test(GANTT),
      'e o vermelho SO na sprint fechada com plano; o resto fica neutro');
+
+  /* VERDE POR UM DOS DOIS CAMINHOS. O segundo — cem pontos em valor absoluto —
+     existe porque o plano estava punindo quem entregou mais: duas pessoas fecham
+     104 pontos na mesma semana, e a de plano 90 aparecia verde enquanto a de plano
+     119 aparecia vermelha. A cor dizia mais sobre quem planejou do que sobre quem
+     fez. Quem apontou foi o Fernando, com o caso na tela. */
+  ok(CAP.PONTOS_SPRINT_FORTE === 100, 'cem pontos e o limite da semana forte');
+  const sf = CAP.sprintForte;
+  ok(sf(119, 104) === true, 'o caso que o Fernando mostrou: 104 contra 119 e verde');
+  ok(sf(500, 100) === true && sf(500, 99) === false,
+     'o limite e absoluto: cem entra, noventa e nove nao');
+  ok(sf(46, 62) === true && sf(2, 2) === true,
+     'e superar ou bater o plano continua verde, em qualquer volume');
+  ok(sf(60, 36) === false && sf(127, 63) === false,
+     'abaixo do plano e abaixo de cem nao e verde');
+  ok(sf(0, 40) === false,
+     'sem plano e sem volume nao ha o que celebrar — nao existia meta');
+  ok(sf(0, 100) === true, 'mas cem pontos sem plano nenhum ainda e semana forte');
 
   // O numero da task aparece no alerta: contagem sem nome nao da o que fazer.
   ok(/rolou\.alerta\.map\(r => `\$\{esc\(r\.codigo\)\} \(\+\$\{r\.sprints\}\)`\)/.test(GANTT),
