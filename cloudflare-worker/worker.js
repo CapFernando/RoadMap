@@ -740,6 +740,11 @@ const STATUS_PARA_SP = {
    entra, e contar como plano infla o compromisso com o que pode nem ser feito.
    A mesma lista vive em capacidade.js, para as telas; aqui ela e repetida porque o
    Worker nao carrega os scripts do site, e nao por escolha. */
+/* O PISO DE PONTUACAO. Demanda alocada sem tamanho nao entra em nenhuma conta de
+   planejado x entregue, e era assim que 904 pontos ficaram invisiveis. Tres e a
+   carta que o time usa para o que sai em ate duas horas. */
+const PONTOS_PADRAO = 3;
+
 const ETAPAS_ALOCADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
 
 function normalizaEstados(data) {
@@ -793,6 +798,44 @@ function normalizaEstados(data) {
        E O CAMPO SO NASCE UMA VEZ. `!m.pontos_planejados` e a trava: sem ela, cada
        gravacao reescreveria o carimbo com o tamanho corrente, e o congelamento
        nao existiria. */
+    /* DEMANDA QUE CHEGA A PLANEJADO SEM PONTO RECEBE 3.
+
+       Decisao do PM/PO, depois de uma varredura que pontuou 52 demandas alocadas
+       sem pontuacao — 904 pontos que estavam invisiveis no cruzamento planejado x
+       entregue. O buraco nao era de calculo: era de cadastro, e se repetia toda
+       semana. O padrao fecha o buraco na hora em que ele se abre.
+
+       TRES, PORQUE E O PISO DO BARALHO PARA TRABALHO REAL. E a carta que o time
+       usa para o que sai em ate duas horas — a mediana das 29 demandas nessa faixa.
+
+       SO A PARTIR DE PLANEJADO. Backlog, levantar_req e planning ficam de fora de
+       proposito: e na reuniao de Planning que o tamanho e decidido, e carimbar 3
+       antes dela tiraria da mesa justamente o que ela existe para fazer. Ideia que
+       nao foi planejada nao precisa de tamanho.
+
+       O VALOR NAO SE FIXA. `poker_pontos` continua editavel: a reuniao pode dizer
+       13, e o carimbo de `pontos_planejados` logo abaixo congela o que estiver
+       valendo quando a demanda for alocada. O padrao preenche um vazio, nao decide
+       nada.
+
+       O QUE ISSO CUSTA, dito por escrito porque nao esta em lugar nenhum na base:
+       gravado sem marca, um 3 do padrao fica indistinguivel de um 3 que o time
+       votou. A varredura acima usou a distincao entre "o time disse" e "ninguem
+       disse" para calibrar as escadas; a proxima nao vai ter como. Foi decisao
+       consciente do PM/PO (opcao "3 fixo", contra a alternativa de marcar e pedir
+       confirmacao no Planning), e a alternativa segue barata de fazer: um campo
+       `poker_padrao` aqui e um sinal na tela. */
+    /* DEMANDA APOSENTADA NAO RECEBE NADA. `oculto` e `mesclado_em` sao as duas
+       formas de retirar uma demanda de circulacao, e todo o resto da ferramenta
+       (`prazo.js`, `capacidade.js`, cada tela) as ignora pelo mesmo par. A AX-270,
+       criada por engano num teste de API e ocultada, ganharia 3 pontos aqui — sem
+       efeito em relatorio nenhum, porque ela ja esta fora de todos, mas carimbar o
+       que foi aposentado e como a base junta lixo que ninguem sabe explicar depois. */
+    if (ETAPAS_ALOCADA.includes(sp) && !(Number(m.poker_pontos) > 0) &&
+        !m.oculto && !m.mesclado_em) {
+      m.poker_pontos = PONTOS_PADRAO;
+      n += 1;
+    }
     if (ETAPAS_ALOCADA.includes(sp) && !m.poker_retroativo &&
         !(Number(m.pontos_planejados) > 0)) {
       const pt = Number(m.poker_pontos);

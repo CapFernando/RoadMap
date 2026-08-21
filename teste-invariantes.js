@@ -1755,12 +1755,23 @@ ok(/if \(!sp\) \{[\s\S]{0,220}?STATUS_PARA_SP\[String\(m\.status/.test(WC),
 // Comportamento: nunca inventa progresso, e nao ressuscita terminal.
 let _nOk = false, _nPorque = '';
 try {
+  /* Recorta UMA declaracao, do `const` ate o `;` que a fecha.
+     A versao anterior casava do inicio ate a chave `}` correspondente a primeira
+     `{` encontrada depois — o que funcionava por acidente para um objeto literal e
+     capturava codigo alheio para qualquer outra coisa. `const ETAPAS_ALOCADA = [...]`
+     nao tem chave, e vinha arrastando a funcao seguinte junto; quando `PONTOS_PADRAO`
+     nasceu logo acima dela, as duas se sobrepuseram e o teste morreu com
+     "ETAPAS_ALOCADA has already been declared" — falha de recorte, nao de codigo.
+     Agora a profundidade de {[( e contada, e o `;` no nivel zero encerra. */
   const bl = (p) => {
     const i = WC.indexOf(p);
-    let c = 0;
-    for (let k = WC.indexOf('{', i); k < WC.length; k++) {
-      if (WC[k] === '{') c++;
-      else if (WC[k] === '}') { c--; if (!c) return WC.slice(i, k + 1) + ';'; }
+    if (i < 0) return '';
+    let d = 0;
+    for (let k = WC.indexOf('=', i); k < WC.length; k++) {
+      const ch = WC[k];
+      if (ch === '{' || ch === '[' || ch === '(') d++;
+      else if (ch === '}' || ch === ']' || ch === ')') d--;
+      else if (ch === ';' && d === 0) return WC.slice(i, k + 1) + '\n';
     }
     return '';
   };
@@ -1773,10 +1784,11 @@ try {
     }
     return '';
   };
-  // `ETAPAS_ALOCADA` entra junto: `normalizaEstados` passou a carimbar os pontos
-  // planejados, e sem a constante a funcao lanca em vez de falhar por um motivo.
+  // `ETAPAS_ALOCADA` e `PONTOS_PADRAO` entram junto: `normalizaEstados` carimba os
+  // pontos planejados e aplica o piso de pontuacao, e sem as constantes a funcao
+  // lanca em vez de falhar por um motivo.
   const N = new Function(bl('const SP_PARA_STATUS =') + bl('const STATUS_PARA_SP =') +
-                         bl('const ETAPAS_ALOCADA =') +
+                         bl('const ETAPAS_ALOCADA =') + bl('const PONTOS_PADRAO =') +
                          fnBody('normalizaEstados') + '; return normalizaEstados;')();
   const d = { melhorias: [
     { codigo: 'a', status: 'recebida',  status_planejamento: '' },
@@ -3733,8 +3745,8 @@ ok(CAP.semPontuacao(dm({ poker_pontos: 5 })) === false &&
     else if (W[k] === '}') { d--; if (!d) { fim = k + 1; break; } }
   }
   const N = new Function(bl('const SP_PARA_STATUS =') + bl('const STATUS_PARA_SP =') +
-                         bl('const ETAPAS_ALOCADA =') + W.slice(i, fim) +
-                         '; return normalizaEstados;')();
+                         bl('const ETAPAS_ALOCADA =') + bl('const PONTOS_PADRAO =') +
+                         W.slice(i, fim) + '; return normalizaEstados;')();
 
   const base = { melhorias: [
     { codigo: 'novo', status_planejamento: 'em_andamento', poker_pontos: 8 },
@@ -3755,8 +3767,11 @@ ok(CAP.semPontuacao(dm({ poker_pontos: 5 })) === false &&
      'pontuada depois de concluir nao ganha carimbo de plano');
   ok(g('backlog').pontos_planejados === undefined,
      'backlog nao ganha carimbo: ali ainda se discute se a demanda entra');
-  ok(g('semPt').pontos_planejados === undefined,
-     'sem pontuacao nao ha o que carimbar');
+  /* "SEM PONTUACAO NAO HA O QUE CARIMBAR" DEIXOU DE EXISTIR: com o piso de 3, uma
+     demanda alocada nunca chega sem tamanho — e por isso ela sai daqui com ponto E
+     carimbo. Era esse o buraco de 904 pontos. */
+  ok(g('semPt').poker_pontos === 3 && g('semPt').pontos_planejados === 3,
+     'alocada sem tamanho recebe o piso e o carimbo junto');
 })();
 
 /* AS TRES TELAS USAM A MESMA REGRA. Quinta copia de conta nesta base e o caminho
@@ -4455,6 +4470,81 @@ ok(/delta: relDeltaHTML\(r\.agora\.entregue, r\.antes\.entregue, true\)/.test(AD
      'e o argumento avalia sem erro, mesmo com apostrofo no nome do sistema');
   ok(!!chaves && chaves.indexOf("entregues|AXCred - O'Brien") >= 0,
      'com a chave EXATA que o estado usa — escapar errado recolheria o grupo errado');
+})();
+
+/* O PISO DE PONTUACAO: demanda que chega a Planejado sem tamanho recebe 3.
+   Havia 52 demandas alocadas sem pontuacao — 904 pontos invisiveis no cruzamento
+   planejado x entregue. O buraco nao era de calculo, era de cadastro, e se repetia
+   toda semana. Esta invariante EXECUTA `normalizaEstados`. */
+sec('O piso de pontuacao');
+(() => {
+  const konst = (nome) => {
+    const m = W.match(new RegExp('const ' + nome + ' = ([\\s\\S]*?);\\n'));
+    // Entre parenteses: `eval('{a:1}')` le a chave como bloco, e nao como objeto.
+    return m ? eval('(' + m[1] + ')') : null;
+  };
+  const piso = konst('PONTOS_PADRAO');
+  ok(piso === 3, 'o piso e 3 — a carta que o time usa para o que sai em duas horas', String(piso));
+  const c = corpo(W, 'function normalizaEstados(');
+  ok(!!c, 'existe o normalizador');
+  if (!c || piso !== 3) return;
+  let N;
+  try {
+    N = new Function('ETAPAS_ALOCADA', 'PONTOS_PADRAO', 'STATUS_PARA_SP', 'SP_PARA_STATUS',
+      c + '\n; return normalizaEstados;'
+    )(konst('ETAPAS_ALOCADA'), piso, konst('STATUS_PARA_SP'), konst('SP_PARA_STATUS'));
+  } catch (e) { ok(false, 'o normalizador roda isolado', e.message); return; }
+
+  const passa = (m) => { N({ melhorias: [{ id: 'x', ...m }] }); return arguments; };
+  const pt = (m) => { const d = { melhorias: [{ id: 'x', ...m }] }; N(d); return d.melhorias[0]; };
+
+  /* SO A PARTIR DE PLANEJADO. E na reuniao de Planning que o tamanho e decidido, e
+     carimbar 3 antes dela tiraria da mesa justamente o que ela existe para fazer —
+     o PM/PO foi explicito: "o que esta em planning para tras nao tem pontos e nao
+     deve ter mesmo". */
+  ['backlog', 'levantar_req', 'planning'].forEach(sp => {
+    ok(!(Number(pt({ status_planejamento: sp }).poker_pontos) > 0),
+       sp + ' fica sem ponto — o tamanho e decidido no Planning');
+  });
+  ['planejado', 'em_andamento', 'validacao', 'concluido'].forEach(sp => {
+    ok(pt({ status_planejamento: sp }).poker_pontos === 3, sp + ' sem ponto recebe o piso');
+  });
+
+  /* O QUE JA TEM PONTO NAO E TOCADO. Foi condicao explicita do PM/PO: "nao quero
+     que mude o que ja temos pontuado". */
+  const baralho = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 100];
+  ok(baralho.every(v => pt({ status_planejamento: 'concluido', poker_pontos: v }).poker_pontos === v),
+     'nenhuma das onze cartas do baralho e sobrescrita');
+  ok(pt({ status_planejamento: 'planejado', poker_pontos: '13' }).poker_pontos === '13',
+     'e ponto gravado como texto ("13") tambem sobrevive — a tela grava assim em alguns caminhos');
+  // Zero e ausencia de tamanho, e nao tamanho zero.
+  ok(pt({ status_planejamento: 'planejado', poker_pontos: 0 }).poker_pontos === 3,
+     'zero conta como sem ponto e recebe o piso');
+
+  /* DEMANDA APOSENTADA NAO RECEBE NADA. `oculto` e `mesclado_em` sao as duas formas
+     de retirar uma demanda de circulacao, e o resto da ferramenta as ignora pelo
+     mesmo par. Sem esta guarda a AX-270 — criada por engano num teste de API e
+     ocultada — ganhava 3 pontos. */
+  ok(!(Number(pt({ status_planejamento: 'concluido', oculto: true }).poker_pontos) > 0),
+     'demanda oculta nao recebe o piso');
+  ok(!(Number(pt({ status_planejamento: 'concluido', mesclado_em: '2026-08-01' }).poker_pontos) > 0),
+     'e demanda mesclada tambem nao');
+
+  /* O CARIMBO DO PLANEJADO segue as suas proprias regras, e o piso nao as afrouxa:
+     retroativa recebe ponto e NAO recebe carimbo (ela nunca teve plano), e o
+     carimbo nasce uma vez so. */
+  const retro = pt({ status_planejamento: 'concluido', poker_retroativo: true });
+  ok(retro.poker_pontos === 3 && !(Number(retro.pontos_planejados) > 0),
+     'retroativa recebe o ponto mas nao o carimbo de planejado — ela nunca teve plano');
+  {
+    const m = { id: 'x', status_planejamento: 'planejado' };
+    N({ melhorias: [m] });
+    ok(m.pontos_planejados === 3, 'o carimbo nasce com o piso quando o piso e o valor');
+    m.poker_pontos = 55;
+    N({ melhorias: [m] });
+    ok(m.pontos_planejados === 3,
+       'e repontuar depois nao reescreve o carimbo — o plano era 3 na alocacao');
+  }
 })();
 
 /* A ETAPA QUE O DEV MOVE SAO DUAS, e a trava do servidor RODA aqui.
