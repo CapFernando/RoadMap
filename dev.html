@@ -349,6 +349,10 @@
     .col-cards { display:flex; flex-direction:column; gap:8px; min-height:80px; flex:1; }
     .col-drop-hint { border:2px dashed var(--border); border-radius:8px; height:80px; display:none; align-items:center; justify-content:center; font-size:12px; color:var(--text3); }
     .col.drag-over .col-drop-hint { display:flex; }
+    /* Coluna que o dev nao move: aparece recusada durante o arraste, em vez de
+       acender como as outras e recusar depois do gesto. */
+    .col.drag-block { opacity:.45; }
+    .col.drag-block .col-header-label::after { content:' 🔒'; }
 
     /* ── CARD ── */
     .kcard {
@@ -762,9 +766,13 @@
     </div>
     <div class="form-group" id="ms-status-group">
       <label>Mover para</label>
+      <!-- SO AS DUAS ETAPAS QUE SAO DO DEV. Planning e Planejado saem daqui:
+           decidir que uma demanda vai para a mesa de Planning, ou que ela esta
+           planejada com data, e do PM/PO. Um card que volta para a fila do
+           Planning sozinho muda a pauta de terca sem ninguem ter decidido isso —
+           foi o que aconteceu com a AX-150. A terceira acao de fluxo do dev,
+           pausar, esta no proprio card (nao e etapa, sao os dias parados). -->
       <select id="ms-status" onchange="onStatusModalChange()">
-        <option value="planning">Planning</option>
-        <option value="planejado">Planejado</option>
         <option value="em_andamento">Em Andamento</option>
         <option value="validacao">Entregar para validação</option>
       </select>
@@ -3262,30 +3270,41 @@ function onDragStart(e, id) {
 
 function onDragEnd(e) {
   document.querySelectorAll('.kcard').forEach(c => c.classList.remove('dragging'));
-  document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
+  document.querySelectorAll('.col').forEach(c => {
+    c.classList.remove('drag-over'); c.classList.remove('drag-block');
+  });
   document.getElementById('kanban')?.classList.remove('dragging-active');
 }
 
 function onDragOver(e, colKey) {
   e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  // Só atualiza visual se mudou de coluna — evita re-paint desnecessário
+  /* A COLUNA PROIBIDA MOSTRA QUE E PROIBIDA ANTES DO SOLTA. Deixar ela acender
+     igual as outras e convidar o gesto para depois recusar com um toast — o dev
+     descobre a regra errando. Com o cursor de "nao permitido" ele descobre antes. */
+  const podeSoltar = ETAPAS_DO_DEV.includes(colKey);
+  e.dataTransfer.dropEffect = podeSoltar ? 'move' : 'none';
   const col = document.getElementById('col-'+colKey);
-  if (col && !col.classList.contains('drag-over')) {
-    document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
-    col.classList.add('drag-over');
+  if (col && !col.classList.contains(podeSoltar ? 'drag-over' : 'drag-block')) {
+    document.querySelectorAll('.col').forEach(c => {
+      c.classList.remove('drag-over'); c.classList.remove('drag-block');
+    });
+    col.classList.add(podeSoltar ? 'drag-over' : 'drag-block');
   }
 }
 
 function onDragLeave(e, colKey) {
   // Só remove o highlight se o cursor saiu para FORA da coluna (não para um filho)
   if (!e.currentTarget.contains(e.relatedTarget)) {
-    document.getElementById('col-'+colKey)?.classList.remove('drag-over');
+    const col = document.getElementById('col-'+colKey);
+    col?.classList.remove('drag-over');
+    col?.classList.remove('drag-block');
   }
 }
 function onDrop(e, colKey) {
   e.preventDefault();
-  document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
+  document.querySelectorAll('.col').forEach(c => {
+    c.classList.remove('drag-over'); c.classList.remove('drag-block');
+  });
   if (!dragId) return;
   const id = dragId;
   dragId = null;
@@ -3294,6 +3313,15 @@ function onDrop(e, colKey) {
   const curSk = getStatusKey(m);
   const col = COLUMNS.find(c => c.key === colKey);
   if (!col || col.maps.includes(curSk)) return; // mesma coluna
+  /* O ARRASTE OBEDECE A MESMA REGRA DO SELECT. Antes ele era a porta dos fundos:
+     as opcoes da lista nao incluiam Planning, e soltar o card na coluna Planning
+     funcionava. Pior no caso de Concluido, que nao existe como opcao — a lista
+     ficava com valor vazio e a demanda era gravada SEM etapa nenhuma, sumindo de
+     todas as colunas. Aconteceu tres vezes: AX-096, AX-127 e AX-211. */
+  if (!ETAPAS_DO_DEV.includes(colKey)) {
+    toast('🔒 ' + (COLUNAS_BLOQUEADAS_MSG[colKey] || 'Esta coluna não é movida pelo Painel Dev.'), 'err');
+    return;
+  }
   // Difere para depois que dragend completar — evita re-render durante drag ativo
   setTimeout(() => {
     if (checkDepBlock(id, colKey)) {
@@ -3317,6 +3345,66 @@ function onDrop(e, colKey) {
 // Etapas em que a demanda sai das maos do dev: as duas exigem horas e o texto da
 // entrega, porque e o que o PM/PO le para validar e o que alimenta o relatorio.
 const ETAPAS_EXIGEM_ENTREGA = ['validacao', 'concluido'];
+
+/* AS ETAPAS QUE O DEV MOVE. Duas, e a mesma lista que o Worker aplica.
+ *
+ * Comecar (Em Andamento) e entregar para validacao. Pausar e a terceira acao de
+ * fluxo dele, e nao esta aqui porque nao e etapa — sao campos (`pausado_em`,
+ * `pausa_dias`) que suspendem o prazo sem tirar a demanda da coluna.
+ *
+ * O QUE FICA DE FORA E POR QUE:
+ *   planning, planejado, backlog, levantar_req  decisao de planejamento — do PM/PO
+ *   concluido                                   quem fecha e quem valida
+ *
+ * A tela obedecer nao basta: foi um caminho de tela (o arraste no Kanban, que
+ * testava 'concluido' e esquecia 'validacao') que deixou a AX-179 chegar em
+ * Validacao sem horas. O `dev-publish` reverte no servidor o que passar daqui. */
+const ETAPAS_DO_DEV = ['em_andamento', 'validacao'];
+/** O SELECT DE ETAPA DO CARD — e o "manter onde esta".
+ *
+ *  Com a lista reduzida a Em Andamento e Validacao, uma demanda em Planejado nao
+ *  tem opcao que a represente. Sem uma opcao neutra o select cairia na primeira
+ *  (Em Andamento), e um dev que abriu o card so para corrigir um texto moveria a
+ *  demanda ao clicar em Salvar. Antes isso nao acontecia porque 'planejado' era uma
+ *  das opcoes e salvar regravava o mesmo valor.
+ *
+ *  O valor da opcao neutra e VAZIO de proposito: `saveStatus` le vazio como "nao
+ *  mexe na etapa" e regrava a etapa crua da demanda.
+ *
+ *  Funcao separada para poder ser EXECUTADA por uma invariante. A versao anterior
+ *  vivia dentro de `openStatusModal`, que toca meia tela de DOM: a unica verificacao
+ *  possivel era procurar palavras no codigo — e trocar `data-manter` por um erro de
+ *  digitacao passava calado, porque a palavra certa seguia noutra linha.
+ */
+function msSelectEtapa(sel, m, preselect) {
+  if (!sel) return;
+  /* E UM VALOR QUE NAO EXISTE NA LISTA ESVAZIA O SELECT. `sel.value = 'concluido'`
+     sem `<option>` correspondente deixa `sel.value === ''`, e `saveStatus` mandava
+     essa string vazia para `updateStatus`: a demanda perdia a etapa e desaparecia de
+     todas as colunas. Aconteceu com AX-096, AX-127 e AX-211. Por isso o valor e
+     conferido contra as opcoes de verdade antes de ser atribuido. */
+  const atualKey = COLUMNS.find(c => c.maps.includes(getStatusKey(m)))?.key || getStatusKey(m);
+  const antiga = sel.querySelector('option[data-manter]');
+  if (antiga) antiga.remove();
+  if (!ETAPAS_DO_DEV.includes(atualKey)) {
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = 'Manter em ' + (STATUS_LABELS[atualKey] || atualKey);
+    o.setAttribute('data-manter', '1');
+    sel.insertBefore(o, sel.firstChild);
+  }
+  const opcoes = [...sel.options].map(o => o.value);
+  const desejado = [preselect, atualKey].find(v => v && opcoes.includes(v));
+  // Sem opcao que sirva, fica em "manter" — nunca numa etapa que a pessoa nao pediu.
+  sel.value = desejado !== undefined ? desejado : (opcoes.includes('') ? '' : opcoes[0]);
+  return sel.value;
+}
+
+const COLUNAS_BLOQUEADAS_MSG = {
+  planning: 'Quem leva uma demanda para o Planning é o PM/PO — é ele que monta a pauta da reunião.',
+  planejado: 'Planejar (definir data e sprint) é do PM/PO. Se a demanda não é sua para agora, fale com ele.',
+  concluido: 'Quem conclui é o PM/PO, ao validar. Entregue para validação e ele fecha.',
+};
 
 // ─── STATUS MODAL ────────────────────────────────────────────────
 
@@ -3430,9 +3518,7 @@ function openStatusModal(id, preselect) {
   const btnEntrega = document.getElementById('btn-save-entrega');
   if (btnEntrega) btnEntrega.style.display = emValidacao ? '' : 'none';
 
-  const sel = document.getElementById('ms-status');
-  // Mesmo motivo: com a derivada o select vinha vazio para demanda vencida.
-  sel.value = preselect || COLUMNS.find(c => c.maps.includes(getStatusKey(m)))?.key || getStatusKey(m);
+  msSelectEtapa(document.getElementById('ms-status'), m, preselect);
   document.getElementById('ms-horas').value = m.horas_realizadas || '';
   document.getElementById('ms-implementacao').value = m.implementacao || '';
   if (window.ghLinkPreenche) ghLinkPreenche('ms', m, state.melhorias);
@@ -3813,7 +3899,21 @@ async function saveStatus() {
     toast('Esta demanda está com o PM/PO e não pode ser alterada aqui.', 'err');
     return;
   }
-  const newColKey = document.getElementById('ms-status').value;
+  const escolhido = document.getElementById('ms-status').value;
+  /* Vazio e a opcao "manter em X": a etapa nao muda, e o que se grava e o resto
+     (texto, horas, anexo, vinculo de projeto). Usa `status_planejamento` CRU e nao
+     `getStatusKey`, que deriva 'atrasado' e 'em_andamento' a partir das datas —
+     gravar a derivada transformaria uma leitura de tela em fato na base. */
+  const newColKey = escolhido || String(atual?.status_planejamento || '');
+  /* Terceira barreira, e nao redundancia: o select pode ser mexido pelo console,
+     e um `<option>` acrescentado por engano num refactor futuro passaria calado.
+     Aqui a etapa que sai da tela e conferida contra a mesma lista de sempre — e a
+     escolha vazia passa porque ela justamente nao move nada. */
+  if (escolhido && !ETAPAS_DO_DEV.includes(escolhido)) {
+    toast('🔒 ' + (COLUNAS_BLOQUEADAS_MSG[escolhido] ||
+          'Esta etapa não é movida pelo Painel Dev.'), 'err');
+    return;
+  }
   // Vinculo de projeto: gravado junto, para nao exigir dois salvamentos.
   const selProj = document.getElementById('ms-projeto');
   if (atual && selProj) {

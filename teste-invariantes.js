@@ -4451,6 +4451,234 @@ ok(/delta: relDeltaHTML\(r\.agora\.entregue, r\.antes\.entregue, true\)/.test(AD
      'com a chave EXATA que o estado usa — escapar errado recolheria o grupo errado');
 })();
 
+/* A ETAPA QUE O DEV MOVE SAO DUAS, e a trava do servidor RODA aqui.
+   Murillo levou a AX-150 de levantar_req para planning, dali para planejado e de
+   volta para planning — tres movimentos do planejamento, feitos pelo painel do
+   dev. Um card que reaparece na fila do Planning sozinho muda a pauta de terca sem
+   ninguem ter decidido isso. */
+sec('A etapa que o dev pode mover');
+(() => {
+  const mLista = W.match(/const ETAPAS_QUE_O_DEV_MOVE = (\[[^\]]*\]);/);
+  ok(!!mLista, 'o worker declara as etapas que o dev move');
+  const mTela = DEV.match(/const ETAPAS_DO_DEV = (\[[^\]]*\]);/);
+  ok(!!mTela, 'e a tela declara a mesma coisa');
+  if (!mLista || !mTela) return;
+  let srv, tela;
+  try { srv = eval(mLista[1]); tela = eval(mTela[1]); } catch (e) { ok(false, 'as listas avaliam', e.message); return; }
+  ok(JSON.stringify(srv) === JSON.stringify(['em_andamento', 'validacao']),
+     'e sao Em Andamento e Validacao — comecar e entregar', JSON.stringify(srv));
+  /* AS DUAS LISTAS TEM DE SER IGUAIS. Divergentes, a tela oferece o que o servidor
+     reverte (o dev clica e nada acontece, sem explicacao) ou o servidor aceita o
+     que a tela esconde (a trava existe no papel). */
+  ok(JSON.stringify(srv) === JSON.stringify(tela),
+     'e a tela e o servidor concordam', JSON.stringify(tela));
+
+  const c = corpo(W, 'function travaEtapaDoDev(');
+  ok(!!c, 'existe a trava no servidor');
+  if (!c) return;
+  let trava;
+  try {
+    trava = new Function('ETAPAS_QUE_O_DEV_MOVE', c + '\n; return travaEtapaDoDev;')(srv);
+  } catch (e) { ok(false, 'a trava roda isolada', e.message); return; }
+
+  const caso = (de, para, extra) => {
+    const servidor = { melhorias: [{ id: 'x', codigo: 'AX-150', status_planejamento: de, status: 'estimada' }] };
+    const recebido = { melhorias: [{ id: 'x', codigo: 'AX-150', status_planejamento: para,
+                                     status: 'iniciada', ...(extra || {}) }] };
+    return { rev: trava(recebido, servidor), fim: recebido.melhorias[0] };
+  };
+
+  // Os tres movimentos reais da AX-150.
+  [['levantar_req', 'planning'], ['planning', 'planejado'], ['planejado', 'planning']]
+    .forEach(([de, para]) => {
+      const r = caso(de, para);
+      ok(r.rev.length === 1 && r.fim.status_planejamento === de,
+         de + ' -> ' + para + ' volta ao valor do servidor');
+    });
+  /* O `status` ACOMPANHA a etapa revertida. Sem isso sobra demanda com status
+     'iniciada' parada em Planning, e todo relatorio que cruza os dois campos passa
+     a discordar de si mesmo. */
+  ok(caso('planejado', 'planning').fim.status === 'estimada',
+     'e o `status` volta junto — os dois campos nao se separam');
+
+  // A etapa VAZIA: o defeito que atingiu AX-096, AX-127 e AX-211 na base.
+  ok(caso('em_andamento', '').fim.status_planejamento === 'em_andamento',
+     'gravar etapa vazia e revertido — a demanda nao desaparece das colunas');
+
+  // O que nao pode ser quebrado: os 118 movimentos legitimos da base.
+  ok(caso('planejado', 'em_andamento').rev.length === 0, 'comecar passa (42x na base)');
+  ok(caso('em_andamento', 'validacao').rev.length === 0, 'entregar passa (55x na base)');
+  ok(caso('planejado', 'validacao').rev.length === 0, 'entregar direto do plano passa (21x na base)');
+  // Demanda nova (o dev abre demanda pelo painel) nao tem transicao a policiar.
+  {
+    const recebido = { melhorias: [{ id: 'novo', status_planejamento: 'backlog' }] };
+    ok(trava(recebido, { melhorias: [] }).length === 0 &&
+       recebido.melhorias[0].status_planejamento === 'backlog',
+       'demanda que o servidor nao conhece passa intacta');
+  }
+  // Pausar e CAMPO, nao etapa: a trava nao pode tocar nisso.
+  {
+    const r = caso('em_andamento', 'em_andamento', { pausado_em: '2026-08-21' });
+    ok(r.rev.length === 0 && r.fim.pausado_em === '2026-08-21', 'pausar passa — pausa nao e etapa');
+  }
+  // Salvar texto com a demanda parada em Planning nao pode ser recusado.
+  {
+    const r = caso('planning', 'planning', { implementacao: 'texto novo' });
+    ok(r.rev.length === 0 && r.fim.implementacao === 'texto novo',
+       'salvar texto sem mexer na etapa passa, mesmo em Planning');
+  }
+
+  /* SO PARA O PAPEL `dev`. analista e admin entram pela mesma rota (`ehDev` aceita
+     os tres) e para eles mover para Planning e trabalho legitimo. */
+  ok(/\(await papelAtual\(\)\) === 'dev'\s*\n?\s*\? travaEtapaDoDev/.test(W) ||
+     /papelAtual\(\)\) === 'dev'[\s\S]{0,80}travaEtapaDoDev/.test(W),
+     'e a trava vale so para o papel dev — analista e admin decidem planejamento');
+  ok(/etapas_revertidas/.test(W),
+     'e a resposta diz o que foi revertido: reverter calado seria descoberto no F5');
+})();
+
+/* A TELA OBEDECE A MESMA REGRA EM TODOS OS CAMINHOS. Foi um caminho de tela — o
+   arraste no Kanban — que deixou a AX-179 chegar em Validacao sem horas. */
+(() => {
+  // A lista da tela, relida aqui: `tela` do bloco acima nao atravessa o escopo.
+  const tela = eval((DEV.match(/const ETAPAS_DO_DEV = (\[[^\]]*\]);/) || [, "[]"])[1]);
+  const sel = DEV.slice(DEV.indexOf('<select id="ms-status"'),
+                        DEV.indexOf('</select>', DEV.indexOf('<select id="ms-status"')));
+  const vals = [...sel.matchAll(/value="([^"]*)"/g)].map(m => m[1]);
+  ok(JSON.stringify(vals) === JSON.stringify(['em_andamento', 'validacao']),
+     'o select do card oferece so as duas etapas do dev', JSON.stringify(vals));
+
+  const salvar = corpo(DEV, 'async function saveStatus(');
+  ok(/ETAPAS_DO_DEV\.includes\(escolhido\)/.test(salvar),
+     'e saveStatus confere a etapa, para o console nao ser a proxima porta');
+  ok(/escolhido \|\| String\(atual\?\.status_planejamento/.test(salvar),
+     'e "manter" grava a etapa CRUA, nao a derivada de getStatusKey');
+
+  /* O ARRASTE E EXECUTADO, e nao lido. A versao anterior desta invariante procurava
+     `ETAPAS_DO_DEV.includes(colKey)` no texto de `onDrop` — e passava com o teste
+     desativado por um `false &&` na frente. Verificado por sabotagem. */
+  const drop = corpo(DEV, 'function onDrop(');
+  const COLUMNS = [
+    { key: 'planning', maps: ['planning'] },
+    { key: 'planejado', maps: ['backlog', 'levantar_req', 'planejado'] },
+    { key: 'em_andamento', maps: ['em_andamento'] },
+    { key: 'validacao', maps: ['validacao'] },
+    { key: 'concluido', maps: ['concluido'] },
+  ];
+  const solta = (etapaAtual, coluna) => {
+    const feito = { moveu: null, modal: null, recusou: null };
+    const tarefas = [];
+    const amb = {
+      dragId: 'x',
+      ETAPAS_DO_DEV: tela,
+      COLUNAS_BLOQUEADAS_MSG: {},
+      ETAPAS_EXIGEM_ENTREGA: ['validacao', 'concluido'],
+      COLUMNS,
+      state: { melhorias: [{ id: 'x', codigo: 'AX-150', status_planejamento: etapaAtual }] },
+      getStatusKey: (m) => m.status_planejamento,
+      getDeps: () => [],
+      checkDepBlock: () => false,
+      toast: (t) => { feito.recusou = String(t); },
+      openStatusModal: (id, k) => { feito.modal = k; },
+      updateStatus: (id, k) => { feito.moveu = k; },
+      setTimeout: (fn) => tarefas.push(fn),
+      document: { querySelectorAll: () => [], getElementById: () => null },
+    };
+    const nomes = Object.keys(amb);
+    // `dragId` e reatribuido dentro de onDrop, entao entra como `let`, e nao como
+    // parametro (parametro tambem funcionaria, mas o retorno precisa ler o valor).
+    const fn = new Function(...nomes.filter(n => n !== 'dragId'),
+      'let dragId = "x";\n' + drop + '\n; return onDrop;'
+    )(...nomes.filter(n => n !== 'dragId').map(n => amb[n]));
+    fn({ preventDefault() {} }, coluna);
+    tarefas.forEach(t => t());
+    return feito;
+  };
+
+  // As tres colunas que o dev nao move: nada acontece, e ele e avisado.
+  ['planning', 'planejado', 'concluido'].forEach(col => {
+    const r = solta('em_andamento', col);
+    ok(r.moveu === null && r.modal === null && !!r.recusou,
+       'soltar o card em ' + col + ' nao move nada, e avisa por que',
+       r.moveu || r.modal || r.recusou || '');
+  });
+  // E as duas que ele move seguem movendo.
+  {
+    const r = solta('planejado', 'em_andamento');
+    ok(r.moveu === 'em_andamento' && !r.recusou, 'soltar em Em Andamento move');
+    const e = solta('em_andamento', 'validacao');
+    ok(e.modal === 'validacao' && !e.recusou,
+       'e soltar em Validacao abre o pedido de horas e texto');
+  }
+
+  const over = corpo(DEV, 'function onDragOver(');
+  ok(/dropEffect = podeSoltar/.test(over),
+     'a coluna proibida recusa o cursor durante o arraste, e nao depois do gesto');
+
+  /* "MANTER ONDE ESTA" TAMBEM E EXECUTADO. A versao anterior procurava a palavra
+     `data-manter` no texto de `openStatusModal` — e trocar o atributo por um erro de
+     digitacao passava calado, porque a palavra certa seguia noutra linha. Foi para
+     isto que `msSelectEtapa` saiu de dentro do modal. */
+  const cSel = corpo(DEV, 'function msSelectEtapa(');
+  ok(!!cSel, 'a montagem do select de etapa e uma funcao propria, executavel');
+  if (cSel) {
+    let doc;
+    const selDouble = () => {
+      const ops = [{ value: 'em_andamento' }, { value: 'validacao' }];
+      return {
+        options: ops, value: '', get firstChild() { return ops[0]; },
+        querySelector: (q) => ops.find(o => o._manter) || null,
+        insertBefore: (o) => { ops.unshift(o); doc._dono = ops; },
+      };
+    };
+    // O dobro do <option> precisa de `remove()`: e por ele que reabrir o card nao
+    // acumula duas opcoes neutras, e sem isso o dobro esconderia a chamada real.
+    doc = {
+      _dono: null,
+      createElement: () => {
+        const o = { value: '', textContent: '',
+                    setAttribute: (k) => { if (k === 'data-manter') o._manter = true; },
+                    remove: () => { const l = doc._dono; if (!l) return;
+                                    const i = l.indexOf(o); if (i >= 0) l.splice(i, 1); } };
+        return o;
+      },
+    };
+    let F;
+    try {
+      F = new Function('COLUMNS', 'ETAPAS_DO_DEV', 'STATUS_LABELS', 'getStatusKey', 'document',
+        cSel + '\n; return msSelectEtapa;'
+      )(COLUMNS, tela, { planejado: 'Planejado', planning: 'Planning' },
+        m => m.status_planejamento, doc);
+    } catch (e) { ok(false, 'msSelectEtapa roda isolada', e.message); }
+    if (F) {
+      // Demanda em Planejado: sem "manter", salvar um texto a moveria para Em Andamento.
+      const s1 = selDouble();
+      const v1 = F(s1, { status_planejamento: 'planejado' });
+      ok(v1 === '', 'demanda em Planejado abre o card em "manter", e nao em Em Andamento', String(v1));
+      ok(s1.options[0]._manter === true && /Manter em Planejado/.test(s1.options[0].textContent),
+         'e a opcao neutra existe e diz onde a demanda fica', s1.options[0].textContent);
+      // Demanda em Andamento: nada de opcao neutra, e o select mostra onde ela esta.
+      const s2 = selDouble();
+      const v2 = F(s2, { status_planejamento: 'em_andamento' });
+      ok(v2 === 'em_andamento' && s2.options.length === 2,
+         'demanda em Em Andamento abre nela mesma, sem opcao neutra', String(v2));
+      /* Um `preselect` que nao existe na lista NAO PODE ESVAZIAR O SELECT: era assim
+         que a etapa vazia era gravada, e a demanda desaparecia de todas as colunas
+         (AX-096, AX-127, AX-211). */
+      const s3 = selDouble();
+      const v3 = F(s3, { status_planejamento: 'em_andamento' }, 'concluido');
+      ok(v3 === 'em_andamento',
+         'preselect inexistente ("concluido") nao esvazia o select', String(v3));
+      // E chamar duas vezes nao acumula duas opcoes neutras.
+      const s4 = selDouble();
+      F(s4, { status_planejamento: 'planejado' });
+      F(s4, { status_planejamento: 'planejado' });
+      ok(s4.options.filter(o => o._manter).length === 1,
+         'reabrir o card nao acumula opcoes "manter"');
+    }
+  }
+})();
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

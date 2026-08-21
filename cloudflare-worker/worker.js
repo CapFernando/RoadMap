@@ -942,6 +942,57 @@ function travaDatasComprometidas(recebido, servidor) {
   return revertidas;
 }
 
+// ─── A ETAPA QUE O DEV PODE MOVER ─────────────────────────────────────
+// O painel do dev tem tres acoes de fluxo: comecar (Em Andamento), entregar para
+// validacao do PM/PO, e pausar. Pausar nao e etapa — sao campos (`pausado_em`,
+// `pausa_dias`) —, entao sobram DOIS destinos de etapa para o dev.
+//
+// O que existia era uma lista de opcoes na tela e nada aqui. Murillo levou a
+// AX-150 de `levantar_req` para `planning`, de `planning` para `planejado` e de
+// `planejado` de volta para `planning` — tres movimentos que sao do planejamento,
+// nao do desenvolvimento. Quem decide se uma demanda vai para a mesa de Planning
+// e quem conduz a reuniao; um card que reaparece na fila do Planning sozinho muda
+// a pauta de terca sem ninguem ter decidido isso.
+//
+// A TELA NAO PODE SER A UNICA TRAVA — foi um caminho de tela (o arraste no Kanban)
+// que deixou a AX-179 chegar em Validacao sem horas. Aqui a regra vale para
+// qualquer corpo que chegue nesta rota.
+//
+// REVERTE, NAO RECUSA — mesmo desenho da trava de datas. O `dev-publish` recebe o
+// estado inteiro montado no navegador, e o dev costuma estar salvando OUTRA coisa
+// (horas, texto da entrega, anexo). Derrubar a gravacao toda por causa de um campo
+// que ele talvez nem tenha tocado perderia o trabalho dele por um erro que nao e
+// dele. A etapa volta ao valor do servidor e o resto segue.
+//
+// VALE SO PARA O PAPEL `dev`. `analista` e `admin` tambem entram por esta rota
+// (`ehDev` aceita os tres) e para eles mover para Planning e trabalho legitimo —
+// o analista faz descoberta, e o admin e a autoridade que decide.
+const ETAPAS_QUE_O_DEV_MOVE = ['em_andamento', 'validacao'];
+
+function travaEtapaDoDev(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const revertidas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    // Demanda que o servidor nao conhece e cadastro novo — nao ha transicao para
+    // policiar, e o dev abre demanda pelo painel.
+    if (!velha) continue;
+    const nova = String(m.status_planejamento || '');
+    const orig = String(velha.status_planejamento || '');
+    if (nova === orig) continue;
+    if (ETAPAS_QUE_O_DEV_MOVE.includes(nova)) continue;
+    m.status_planejamento = velha.status_planejamento;
+    // O `status` acompanha a etapa: deixar um sem o outro cria demanda "concluida"
+    // em Planejado, e todo relatorio que cruza os dois passa a discordar de si.
+    if (velha.status !== undefined) m.status = velha.status;
+    revertidas.push((m.codigo || m.id) + ': ' + (orig || '(vazio)') + ' -> ' + (nova || '(vazio)'));
+  }
+  return revertidas;
+}
+
 // ─── ENTREGAR EXIGE HORAS E TEXTO ─────────────────────────────────────
 // Colocar em Validacao e dizer "acabei, valide". Sem horas e sem o texto do que
 // foi feito, o PM/PO nao tem o que validar e o relatorio do comite sai vazio.
@@ -3480,6 +3531,10 @@ export default {
       // anexo) e derrubar tudo por causa de um campo que ele talvez nem tenha
       // tocado seria perder o trabalho dele por um erro que nao e dele.
       const datasRevertidas = travaDatasComprometidas(data, antesDev);
+      /* A etapa tambem volta, e pelo mesmo motivo. So para o papel `dev`: analista
+         e admin entram por esta rota e para eles mover para Planning e trabalho. */
+      const etapasRevertidas = (await papelAtual()) === 'dev'
+        ? travaEtapaDoDev(data, antesDev) : [];
       // Entregar sem horas e sem texto e recusado. Aqui a gravacao PARA, ao
       // contrario da trava de datas: la o campo volta ao valor do servidor e o
       // resto segue; aqui nao ha valor anterior para restaurar — a demanda estaria
@@ -3536,6 +3591,7 @@ export default {
       // Diz o que foi revertido: gravar diferente do que a tela mandou e recusar em
       // silencio, e a pessoa so descobriria no proximo F5.
       return json({ ok: true, datas_revertidas: datasRevertidas,
+                    etapas_revertidas: etapasRevertidas,
                     espelhos_descartados: espelhos,
                     devs_removidos: devsForaDev,
                     chaves_preservadas: voltaramDev }, 200, headers);
