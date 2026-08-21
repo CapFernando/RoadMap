@@ -3919,6 +3919,121 @@ ok(PZ.diasDeAtraso({ entrega: '2026-07-30', pausado_em: '2026-08-11',
      nome + ' nao esconde mais a entrega');
 });
 
+/* ─── ROLAGEM DE SPRINT ──────────────────────────────────────────────────
+   Quantas demandas foram empurradas de uma sprint para outra, e o NOME das que
+   passaram de duas.
+
+   O DADO VEM DO `historico`, e nao do campo `sprint`: ha ZERO eventos de mudanca
+   de `sprint` em toda a base — o campo nunca e editado por tela nenhuma —, e ler
+   dali daria zero para sempre. O que muda e a `entrega`: 69 mudancas em 39
+   demandas. Como as sprints sao as semanas do mes, uma entrega que anda de semana
+   E a demanda mudando de sprint.                                               */
+sec('Rolagem de sprint');
+
+(() => {
+  const r = CAP.rolagemDeSprint;
+  const hist = (pares) => ({
+    codigo: 'AX-T', entrega: pares[pares.length - 1][1],
+    historico: pares.map(([de, para], i) => ({
+      em: '2026-08-0' + (i + 1) + 'T10:00:00Z',
+      mudancas: [{ campo: 'entrega', de: de, para: para }],
+    })),
+  });
+
+  ok(r(hist([['2026-08-03', '2026-08-10']])).sprints === 1,
+     'sete dias de avanco e uma sprint');
+  ok(r(hist([['2026-08-03', '2026-08-26']])).sprints === 3,
+     'vinte e tres dias sao tres sprints');
+  ok(r(hist([['2026-08-10', '2026-08-14']])) === null,
+     'quatro dias nao chegam a uma sprint — remarcar dentro da semana nao e pulo');
+
+  /* PRIMEIRO PLANEJAMENTO NAO E PULO. Mudanca de "" para uma data e a demanda
+     ganhando prazo, e nao sendo empurrada: ela nao tinha de onde sair. */
+  ok(r(hist([['', '2026-08-26']])) === null,
+     'ganhar o primeiro prazo nao conta como rolagem');
+  ok(r(hist([['', '2026-08-03'], ['2026-08-03', '2026-08-26']])).sprints === 3,
+     'e o pulo depois do primeiro prazo conta, medido do primeiro');
+
+  /* MEDE O AVANCO LIQUIDO, e nao a soma dos pulos. AX-001 foi de 21/08 para
+     15/01/2027 e voltou para 21/08 no minuto seguinte — correcao de digitacao. Se
+     somasse os pulos, ela seria a demanda mais rolada da base. */
+  ok(r(hist([['2026-08-21', '2027-01-15'], ['2027-01-15', '2026-08-21']])) === null,
+     'ida e volta no mesmo prazo nao conta (a correcao de digitacao da AX-001)');
+  ok(r(hist([['2026-08-03', '2026-08-31'], ['2026-08-31', '2026-08-10']])).sprints === 1,
+     'e o que interessa e onde a demanda terminou, nao por onde passou');
+
+  /* DESCONTA A PAUSA. Retomar empurra a `entrega` pelos dias parados, e isso e
+     extensao acordada com motivo registrado — nao e a demanda sendo adiada. Sem o
+     desconto, toda pausa longa viraria alerta justamente onde ja ha explicacao. */
+  const comPausa = Object.assign(hist([['2026-08-16', '2026-08-30']]),
+                                 { pausa_historico: [{ dias: 14 }] });
+  ok(r(comPausa) === null, 'catorze dias de avanco com catorze de pausa nao e rolagem');
+  const meiaPausa = Object.assign(hist([['2026-08-16', '2026-08-30']]),
+                                  { pausa_historico: [{ dias: 7 }] });
+  ok(r(meiaPausa).sprints === 1, 'e a metade que nao foi pausa continua contando');
+  (() => {
+    const c = corpo(CAPJS, 'function rolagemDeSprint(');
+    ok(!!c && /pausa_historico/.test(c),
+       'a funcao le o historico de pausa para descontar');
+  })();
+
+  // Demanda sem historico, sem prazo, ou oculta: nao ha o que medir.
+  ok(r({ codigo: 'x', entrega: '2026-08-10' }) === null, 'sem historico, sem rolagem');
+  ok(r(Object.assign(hist([['2026-08-03', '2026-08-26']]), { entrega: '' })) === null,
+     'sem prazo atual nao da para medir onde ela terminou');
+  ok(r(Object.assign(hist([['2026-08-03', '2026-08-26']]), { oculto: true })) === null,
+     'demanda oculta nao entra');
+})();
+
+/* O CORTE DO ALERTA: duas sprints e tolerancia de replanejamento; da terceira em
+   diante a demanda esta sendo adiada, e adiar sem dizer o nome dela e como ela
+   sai de vista. */
+ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
+(() => {
+  const mk = (cod, dias) => ({
+    codigo: cod, entrega: '2026-09-30',
+    historico: [{ em: '2026-08-01T10:00:00Z', mudancas: [{ campo: 'entrega',
+      de: (() => { const d = new Date(Date.UTC(2026, 8, 30)); d.setUTCDate(d.getUTCDate() - dias);
+                   return d.toISOString().slice(0, 10); })(), para: '2026-09-30' }] }],
+  });
+  const r = CAP.rolagens([mk('AX-A', 7), mk('AX-B', 14), mk('AX-C', 21), mk('AX-D', 3)]);
+  ok(r.total === 3, 'tres rolaram (a de tres dias nao chega a uma sprint)');
+  ok(r.alerta.map((x) => x.codigo).join(',') === 'AX-C',
+     'e so a de tres sprints pede atencao nominal');
+  ok(r.todas[0].codigo === 'AX-C', 'a lista sai da maior para a menor');
+})();
+
+/* ─── AS TRES LINHAS DO GANTT ────────────────────────────────────────────
+   A versao anterior punha tudo numa linha, com "S1:57→36 S2:65→47": o par dentro
+   de cada semana obrigava o olho a ler duas coisas por bloco, e a comparacao que
+   interessa ("planejei 100 na S2 e sai 47") ficava dentro de um token.          */
+(() => {
+  ok(/🃏 <b>\$\{pontosTotal\}<\/b> pt planejados/.test(GANTT),
+     'a primeira linha e o cruzamento: planejado x entregue');
+  ok(/cap-rot">Planejado<\/span>/.test(GANTT) && /cap-rot">Executado<\/span>/.test(GANTT),
+     'e ha uma regua para o planejado e outra para o executado');
+  ok(!/S\$\{i\+1\}:\$\{p\}\$\{f \? '→' \+ f : ''\}/.test(GANTT),
+     'os dois numeros nao voltam para dentro do mesmo bloco de semana');
+  ok(/◐ \$\{semPontuar\} sem pontuar/.test(GANTT),
+     'as tarefas sem pontuacao continuam a vista');
+
+  /* O ALINHAMENTO E POR GRID, e nao por largura adivinhada. `min-width: 52px` era
+     um palpite: "S2:1270" passaria dele e desalinharia a linha inteira — e o
+     defeito so apareceria no mes em que alguem planejasse mil pontos numa semana.
+     Com o mesmo `grid-template-columns` nas duas reguas, as colunas coincidem
+     qualquer que seja o numero de digitos. */
+  ok(/\.cap-text\.cap-regua \{ display: grid;/.test(GANTT),
+     'as reguas sao grid');
+  ok(/grid-template-columns: 5\.2em 3\.4em repeat\(5, 1fr\);/.test(GANTT),
+     'com um template unico, que e o que faz S2 cair sobre S2');
+  ok(!/\.cap-sem \{[^}]*min-width/.test(GANTT),
+     'e sem largura minima adivinhada por bloco');
+
+  // O numero da task aparece no alerta: contagem sem nome nao da o que fazer.
+  ok(/rolou\.alerta\.map\(r => `\$\{esc\(r\.codigo\)\} \(\+\$\{r\.sprints\}\)`\)/.test(GANTT),
+     'o alerta traz o numero da task, e nao so a contagem');
+})();
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

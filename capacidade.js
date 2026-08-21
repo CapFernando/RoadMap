@@ -126,6 +126,79 @@
       .filter(Boolean);
   }
 
+  /** QUANTAS SPRINTS A DEMANDA ROLOU — ou null, quando ela nunca foi remarcada.
+   *
+   *  O DADO VEM DO `historico`, e não do campo `sprint`: ele nunca é editado por
+   *  tela nenhuma (zero eventos de mudança de `sprint` na base), então ler dali
+   *  daria zero sempre. O que muda de verdade é a `entrega` — 69 mudanças em 39
+   *  demandas —, e como as sprints são as semanas do mês, uma entrega que anda de
+   *  semana É a demanda mudando de sprint.
+   *
+   *  MEDE O AVANÇO LÍQUIDO, do primeiro prazo que existiu até o atual, e não a
+   *  soma dos pulos. AX-001 foi de 21/08 para 15/01/2027 e voltou para 21/08 no
+   *  minuto seguinte — foi correção de digitação, e somar os pulos a contaria como
+   *  a demanda mais rolada da base. O que interessa é onde ela terminou.
+   *
+   *  E DESCONTA OS DIAS DE PAUSA. Retomar empurra a `entrega` pelos dias parados,
+   *  e essa é uma extensão acordada com motivo registrado — não é a demanda sendo
+   *  jogada para a frente. Sem o desconto, toda pausa longa apareceria como pulo
+   *  de sprint, e o alerta viraria ruído justamente onde já há explicação.
+   *
+   *  Semana de sete dias, e não índice de semana do mês: S4-08 → S1-09 é UMA
+   *  sprint, e contar por índice daria "menos três".                            */
+  function rolagemDeSprint(m) {
+    if (!viva(m)) return null;
+    var atual = String((m || {}).entrega || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(atual)) return null;
+
+    var evs = [];
+    (Array.isArray(m.historico) ? m.historico : []).forEach(function (e) {
+      (e && e.mudancas ? e.mudancas : []).forEach(function (c) {
+        if (c && c.campo === 'entrega') {
+          evs.push({ de: String(c.de || '').slice(0, 10), em: String(e.em || '') });
+        }
+      });
+    });
+    if (!evs.length) return null;
+    evs.sort(function (a, b) { return a.em.localeCompare(b.em); });
+
+    // O primeiro prazo QUE EXISTIU. Mudança de "" para uma data é o primeiro
+    // planejamento, e não um pulo: a demanda não tinha de onde sair.
+    var origem = null;
+    for (var i = 0; i < evs.length; i++) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(evs[i].de)) { origem = evs[i].de; break; }
+    }
+    if (!origem) return null;
+
+    var d = function (t) {
+      var p = t.split('-');
+      return Date.UTC(+p[0], +p[1] - 1, +p[2]);
+    };
+    var bruto = Math.round((d(atual) - d(origem)) / 86400000);
+    var pausados = (Array.isArray(m.pausa_historico) ? m.pausa_historico : [])
+      .reduce(function (t, p) { return t + (Number(p && p.dias) || 0); }, 0);
+    var liquido = bruto - pausados;
+    var sprints = Math.floor(liquido / 7);
+    if (sprints < 1) return null;
+    return { codigo: m.codigo || m.id, sprints: sprints, de: origem, para: atual,
+             dias: liquido, pausados: pausados, mudancas: evs.length };
+  }
+
+  /** Acima DE QUANTAS sprints o pulo pede atenção nominal.
+   *  Duas é tolerância de replanejamento; da terceira em diante a demanda está
+   *  sendo empurrada, e empurrar sem dizer o nome dela é como ela some de vista. */
+  var SPRINTS_PARA_ALERTA = 2;
+
+  /** As rolagens de uma lista, já separadas entre "houve" e "pede atenção". */
+  function rolagens(lista) {
+    var todas = (lista || []).map(rolagemDeSprint).filter(Boolean);
+    return {
+      total: todas.length,
+      todas: todas.sort(function (a, b) { return b.sprints - a.sprints; }),
+      alerta: todas.filter(function (r) { return r.sprints > SPRINTS_PARA_ALERTA; }),
+    };
+  }
+
   /** CAPACIDADE POR DEV numa janela [de, ate] (datas ISO, inclusive).
    *
    *  Devolve, por pessoa: pontos planejados, pontos entregues, quantas demandas
@@ -231,6 +304,9 @@
 
   raiz.CAPACIDADE = {
     rotulo: rotulo,
+    SPRINTS_PARA_ALERTA: SPRINTS_PARA_ALERTA,
+    rolagemDeSprint: rolagemDeSprint,
+    rolagens: rolagens,
     ETAPAS_ALOCADA: ETAPAS_ALOCADA,
     ETAPAS_ENTREGUE: ETAPAS_ENTREGUE,
     planejados: planejados,

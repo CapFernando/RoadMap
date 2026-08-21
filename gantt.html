@@ -288,6 +288,30 @@
     /* ALOCADA SEM PONTUAR e ATENCAO, e nao erro: da para pontuar depois, e
        enquanto nao pontuar o planejado da pessoa aparece menor do que e. */
     .sem-pontuar-text { color: var(--amber-tx, #FFC470); }
+    /* AS DUAS REGUAS SAO UM GRID COM O MESMO TEMPLATE, e e isso que as alinha:
+       S2 do planejado cai exatamente sobre S2 do executado porque as duas linhas
+       tem as MESMAS colunas, e nao porque cada bloco recebeu uma largura minima
+       adivinhada. A primeira versao usava `min-width: 52px`, que e um palpite:
+       "S2:1270" passaria dos 52px e desalinharia a linha inteira, e o defeito so
+       apareceria no mes em que alguem planejasse mil pontos numa semana.
+
+       `1fr` por sprint divide o que sobra em partes iguais — a regua acompanha a
+       largura da etiqueta sem numero magico nenhum. */
+    .cap-text.cap-regua { display: grid;
+      grid-template-columns: 5.2em 3.4em repeat(5, 1fr);
+      align-items: baseline; column-gap: 2px; white-space: nowrap;
+      font-variant-numeric: tabular-nums; color: var(--text3); }
+    .cap-text.cap-regua b { color: var(--text2); }
+    .cap-regua-feito b { color: var(--green-tx, #3EC98E); }
+    .cap-rot { overflow: hidden; text-overflow: ellipsis; }
+    .cap-tot { text-align: right; }
+    .cap-sem { text-align: right; }
+    .cap-pct { color: var(--text3); }
+    /* ROLOU DE SPRINT: neutro na contagem, atencao no nome. A contagem e fato; o
+       nome e o que pede acao. */
+    .cap-rolou { color: var(--text3); }
+    .cap-rolou-alerta { color: var(--amber-tx, #FFC470); display: block; white-space: normal;
+      line-height: 1.4; }
     .cap-text { font-size: 10px; color: var(--text3); white-space: nowrap; }
     /* Os pontos por semana quebram linha em vez de serem cortados: com a pontuacao
        retroativa os numeros passaram de 2 para 3 digitos e o total ("Tot 5...")
@@ -2153,6 +2177,7 @@ function renderGantt() {
     const mesAte = workDays.length ? workDays[workDays.length - 1].str : '';
     const { porSemana, total: pontosTotal, feito: feitoSemana,
             totalFeito, semPontuar } = pontosPokerPorSemana(devCards, semanas, mesDe, mesAte);
+    const rolou = window.CAPACIDADE.rolagens(devCards);
 
     // capacity — conta apenas dias úteis do mês atual cobertos pelos cards
     const totalWD = workDays.filter(d => !d.holiday).length;
@@ -2221,16 +2246,28 @@ function renderGantt() {
       <span class="cap-text">${free} dia${free!==1?'s':''} livre${free!==1?'s':''} / ${disponivel}</span>
       ${ausentes.size ? `<span class="cap-text ausencia-text" title="Dias úteis de ausência neste mês (fora do total disponível)">🌴 ${ausentes.size} dia${ausentes.size!==1?'s':''} ausente</span>` : ''}
       ${conflitos ? `<span class="cap-text conflito-text" title="Há demanda planejada em dia de ausência — considere realocar">⚠ ${conflitos} dia${conflitos!==1?'s':''} em conflito</span>` : ''}
-      ${(pontosTotal > 0 || totalFeito > 0) ? `<span class="cap-text poker-pontos" title="Pontos: planejado (prazo combinado) x entregue (data em que o dev entregou), por semana">🃏 <b>${pontosTotal}</b> pt planejados${
-        totalFeito > 0 ? ` · <b class="cap-feito">${totalFeito}</b> entregues (${
-          window.CAPACIDADE.rotulo(pontosTotal, totalFeito)})` : ''
-      } · ${porSemana.map((p, i) => {
-        const f = feitoSemana[i] || 0;
-        // "S1:57→40" em vez de dois blocos separados: a semana e o par dela ficam
-        // juntos, e o olho compara sem ter de casar duas listas de cinco numeros.
-        return `S${i+1}:${p}${f ? '→' + f : ''}`;
-      }).join(' ')}</span>` : ''}
+      ${/* TRES LINHAS, E NAO UMA.
+             A versao anterior punha tudo numa linha so, com "S1:57→36 S2:65→47":
+             o par de numeros dentro de cada semana obrigava o olho a ler duas
+             coisas em cada bloco, e a comparacao que interessa — "planejei 100 na
+             S2 e sai 47" — ficava dentro de um token. Separado em duas reguas
+             alinhadas, cada linha se le de uma vez e a comparacao e vertical, que
+             e a direcao em que o olho compara sem esforco. */''}
+      ${(pontosTotal > 0 || totalFeito > 0) ? `<span class="cap-text poker-pontos" title="Pontos planejados (pela data do prazo combinado) contra entregues (pela data em que o dev entregou).">🃏 <b>${pontosTotal}</b> pt planejados · <b class="cap-feito">${totalFeito}</b> entregues <span class="cap-pct">(${window.CAPACIDADE.rotulo(pontosTotal, totalFeito)})</span></span>` : ''}
+      ${pontosTotal > 0 ? `<span class="cap-text cap-regua" title="Planejado por sprint: soma dos pontos das demandas com prazo naquela semana."><span class="cap-rot">Planejado</span><span class="cap-tot"><b>${pontosTotal}</b> pt</span>${
+        porSemana.map((p, i) => `<span class="cap-sem">S${i+1}:<b>${p}</b></span>`).join('')
+      }</span>` : ''}
+      ${totalFeito > 0 ? `<span class="cap-text cap-regua cap-regua-feito" title="Executado por sprint: soma dos pontos entregues naquela semana, pela data em que o dev entregou."><span class="cap-rot">Executado</span><span class="cap-tot"><b>${totalFeito}</b> pt</span>${
+        feitoSemana.map((f, i) => `<span class="cap-sem">S${i+1}:<b>${f || 0}</b></span>`).join('')
+      }</span>` : ''}
       ${semPontuar ? `<span class="cap-text sem-pontuar-text" title="Demandas alocadas a esta pessoa sem pontuação no Planning Poker: o planejado dela está menor do que é. Pontue para o cruzamento fechar.">◐ ${semPontuar} sem pontuar</span>` : ''}
+      ${/* ROLAGEM DE SPRINT. Quantas demandas desta pessoa foram empurradas de uma
+             semana para outra, e o NOME das que passaram de duas. Contagem sem nome
+             nao da o que fazer — o numero da task e o que permite abrir e perguntar. */''}
+      ${rolou.total ? `<span class="cap-text cap-rolou" title="Demandas remarcadas de uma sprint para outra (avanço líquido do prazo, descontados os dias de pausa).">⤼ ${rolou.total} ${rolou.total === 1 ? 'rolou de sprint' : 'rolaram de sprint'}</span>` : ''}
+      ${rolou.alerta.length ? `<span class="cap-text cap-rolou-alerta" title="Empurradas mais de ${window.CAPACIDADE.SPRINTS_PARA_ALERTA} sprints. Duas é tolerância de replanejamento; da terceira em diante a demanda está sendo adiada.">⚠ ${
+        rolou.alerta.map(r => `${esc(r.codigo)} (+${r.sprints})`).join(', ')
+      }</span>` : ''}
     </div>`;
 
     // Timeline cells
