@@ -4010,24 +4010,34 @@ ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
 (() => {
   ok(/🃏 <b>\$\{pontosTotal\}<\/b> pt planejados/.test(GANTT),
      'a primeira linha e o cruzamento: planejado x entregue');
-  ok(/cap-rot">Planejado<\/span>/.test(GANTT) && /cap-rot">Executado<\/span>/.test(GANTT),
-     'e ha uma regua para o planejado e outra para o executado');
+  ok(/cq-r">Plan\.<\/span>/.test(GANTT) && /cq-r">Exec\.<\/span>/.test(GANTT),
+     'e ha uma linha para o planejado e outra para o executado');
   ok(!/S\$\{i\+1\}:\$\{p\}\$\{f \? '→' \+ f : ''\}/.test(GANTT),
      'os dois numeros nao voltam para dentro do mesmo bloco de semana');
   ok(/◐ \$\{semPontuar\} sem pontuar/.test(GANTT),
      'as tarefas sem pontuacao continuam a vista');
 
-  /* O ALINHAMENTO E POR GRID, e nao por largura adivinhada. `min-width: 52px` era
-     um palpite: "S2:1270" passaria dele e desalinharia a linha inteira — e o
-     defeito so apareceria no mes em que alguem planejasse mil pontos numa semana.
-     Com o mesmo `grid-template-columns` nas duas reguas, as colunas coincidem
-     qualquer que seja o numero de digitos. */
-  ok(/\.cap-text\.cap-regua \{ display: grid;/.test(GANTT),
-     'as reguas sao grid');
-  ok(/grid-template-columns: 5\.2em 3\.4em repeat\(5, 1fr\);/.test(GANTT),
-     'com um template unico, que e o que faz S2 cair sobre S2');
-  ok(!/\.cap-sem \{[^}]*min-width/.test(GANTT),
-     'e sem largura minima adivinhada por bloco');
+  /* UM QUADRO, E ELE CABE NA COLUNA. A coluna do dev tem 230px (206 uteis). A
+     versao em linha punha rotulo + total + cinco sprints juntos e pedia ~210px:
+     estourava, e o Fernando viu estourar. Com as sprints no CABECALHO, o rotulo
+     cai para tres caracteres e cada sprint fica com ~34px — cabe "1270".
+
+     E O ALINHAMENTO E POR GRID, nao por largura adivinhada: as tres linhas dividem
+     o mesmo template, entao S2 do planejado cai sobre S2 do executado qualquer que
+     seja o numero de digitos. A versao com `min-width: 52px` era um palpite que
+     quebraria no primeiro numero de quatro digitos. */
+  ok(/\.cap-quadro \{/.test(GANTT), 'o planejado x executado e um quadro');
+  const tpl = GANTT.match(/grid-template-columns: ([\d.]+)em repeat\(5, 1fr\)/);
+  ok(!!tpl, 'com um template unico de seis colunas');
+  if (tpl) {
+    // 10,5px de fonte no quadro; 230px de coluna menos 24 de padding.
+    const rotulo = parseFloat(tpl[1]) * 10.5;
+    const porSprint = (206 - rotulo - 5) / 5;
+    ok(porSprint >= 28, 'e sobra largura por sprint para caber quatro digitos',
+       porSprint.toFixed(0) + 'px por sprint');
+  }
+  ok(!/\.cap-sem \{[^}]*min-width/.test(GANTT) && !/cap-regua/.test(GANTT),
+     'as reguas em linha, que estouravam, nao existem mais');
 
   // O numero da task aparece no alerta: contagem sem nome nao da o que fazer.
   ok(/rolou\.alerta\.map\(r => `\$\{esc\(r\.codigo\)\} \(\+\$\{r\.sprints\}\)`\)/.test(GANTT),

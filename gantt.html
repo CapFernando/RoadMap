@@ -288,24 +288,28 @@
     /* ALOCADA SEM PONTUAR e ATENCAO, e nao erro: da para pontuar depois, e
        enquanto nao pontuar o planejado da pessoa aparece menor do que e. */
     .sem-pontuar-text { color: var(--amber-tx, #FFC470); }
-    /* AS DUAS REGUAS SAO UM GRID COM O MESMO TEMPLATE, e e isso que as alinha:
-       S2 do planejado cai exatamente sobre S2 do executado porque as duas linhas
-       tem as MESMAS colunas, e nao porque cada bloco recebeu uma largura minima
-       adivinhada. A primeira versao usava `min-width: 52px`, que e um palpite:
-       "S2:1270" passaria dos 52px e desalinharia a linha inteira, e o defeito so
-       apareceria no mes em que alguem planejasse mil pontos numa semana.
+    /* O QUADRO DE PONTOS POR SPRINT.
+       Um grid de seis colunas e tres linhas: o rotulo e S1..S5 no cabecalho,
+       depois "Plan." e "Exec.". As tres linhas dividem o MESMO grid, e e isso que
+       alinha S2 do planejado sobre S2 do executado — sem largura adivinhada.
 
-       `1fr` por sprint divide o que sobra em partes iguais — a regua acompanha a
-       largura da etiqueta sem numero magico nenhum. */
-    .cap-text.cap-regua { display: grid;
-      grid-template-columns: 5.2em 3.4em repeat(5, 1fr);
-      align-items: baseline; column-gap: 2px; white-space: nowrap;
-      font-variant-numeric: tabular-nums; color: var(--text3); }
-    .cap-text.cap-regua b { color: var(--text2); }
-    .cap-regua-feito b { color: var(--green-tx, #3EC98E); }
-    .cap-rot { overflow: hidden; text-overflow: ellipsis; }
-    .cap-tot { text-align: right; }
-    .cap-sem { text-align: right; }
+       A versao anterior punha rotulo + total + cinco sprints numa linha so, e
+       estourava: a coluna do dev tem 230px (206 uteis) e a conta pedia ~210. Com
+       as sprints no cabecalho a coluna do rotulo cai para tres caracteres. */
+    .cap-quadro {
+      display: grid; grid-template-columns: 2.9em repeat(5, 1fr);
+      column-gap: 1px; row-gap: 1px; width: 100%;
+      font-size: 10.5px; font-variant-numeric: tabular-nums; line-height: 1.5;
+    }
+    .cq-h, .cq-v { text-align: right; }
+    /* O cabecalho e a legenda das colunas: recuado de proposito, para o olho
+       descer direto para os numeros. */
+    .cq-h { color: var(--text3); font-size: 9.5px; letter-spacing: .02em; }
+    .cq-r { color: var(--text3); font-size: 9.5px; text-transform: uppercase;
+      letter-spacing: .04em; }
+    .cq-v { color: var(--text2); }
+    /* Verde no executado, pelo padrao: verde e "o resultado desejado aconteceu". */
+    .cq-feito { color: var(--green-tx, #3EC98E); }
     .cap-pct { color: var(--text3); }
     /* ROLOU DE SPRINT: neutro na contagem, atencao no nome. A contagem e fato; o
        nome e o que pede acao. */
@@ -2254,12 +2258,21 @@ function renderGantt() {
              alinhadas, cada linha se le de uma vez e a comparacao e vertical, que
              e a direcao em que o olho compara sem esforco. */''}
       ${(pontosTotal > 0 || totalFeito > 0) ? `<span class="cap-text poker-pontos" title="Pontos planejados (pela data do prazo combinado) contra entregues (pela data em que o dev entregou).">🃏 <b>${pontosTotal}</b> pt planejados · <b class="cap-feito">${totalFeito}</b> entregues <span class="cap-pct">(${window.CAPACIDADE.rotulo(pontosTotal, totalFeito)})</span></span>` : ''}
-      ${pontosTotal > 0 ? `<span class="cap-text cap-regua" title="Planejado por sprint: soma dos pontos das demandas com prazo naquela semana."><span class="cap-rot">Planejado</span><span class="cap-tot"><b>${pontosTotal}</b> pt</span>${
-        porSemana.map((p, i) => `<span class="cap-sem">S${i+1}:<b>${p}</b></span>`).join('')
-      }</span>` : ''}
-      ${totalFeito > 0 ? `<span class="cap-text cap-regua cap-regua-feito" title="Executado por sprint: soma dos pontos entregues naquela semana, pela data em que o dev entregou."><span class="cap-rot">Executado</span><span class="cap-tot"><b>${totalFeito}</b> pt</span>${
-        feitoSemana.map((f, i) => `<span class="cap-sem">S${i+1}:<b>${f || 0}</b></span>`).join('')
-      }</span>` : ''}
+      ${/* UM QUADRO, e nao duas reguas em linha.
+             As duas reguas anteriores punham rotulo + total + cinco sprints na
+             MESMA linha, e a coluna do dev tem 230px (206 uteis): a conta pedia
+             ~210px e a linha estourava. Com as sprints no CABECALHO, a coluna do
+             rotulo encolhe para tres caracteres e cada sprint ganha ~32px.
+
+             E o quadro alinha por construcao: as tres linhas dividem o mesmo grid,
+             entao S2 do planejado cai sobre S2 do executado sem largura nenhuma
+             adivinhada — foi o que a versao com `min-width: 52px` tentava fazer e
+             quebraria no primeiro numero de quatro digitos. */''}
+      ${(pontosTotal > 0 || totalFeito > 0) ? `<div class="cap-quadro" title="Pontos por sprint: planejado pela data do prazo combinado, executado pela data em que o dev entregou.">
+        <span class="cq-c"></span>${semanas.map((_, i) => `<span class="cq-h">S${i+1}</span>`).join('')}
+        <span class="cq-r">Plan.</span>${porSemana.map(p => `<span class="cq-v">${p}</span>`).join('')}
+        <span class="cq-r">Exec.</span>${feitoSemana.map(f => `<span class="cq-v cq-feito">${f || 0}</span>`).join('')}
+      </div>` : ''}
       ${semPontuar ? `<span class="cap-text sem-pontuar-text" title="Demandas alocadas a esta pessoa sem pontuação no Planning Poker: o planejado dela está menor do que é. Pontue para o cruzamento fechar.">◐ ${semPontuar} sem pontuar</span>` : ''}
       ${/* ROLAGEM DE SPRINT. Quantas demandas desta pessoa foram empurradas de uma
              semana para outra, e o NOME das que passaram de duas. Contagem sem nome
