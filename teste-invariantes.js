@@ -4277,6 +4277,106 @@ ok(/delta: relDeltaHTML\(r\.agora\.entregue, r\.antes\.entregue, true\)/.test(AD
      'e leva os tres blocos novos');
 })();
 
+/* A BANDEJA DE CADA SISTEMA RECOLHE — e esta invariante EXECUTA o codigo da tela,
+   em vez de procurar palavras nele. Um regex por "aria-expanded" passaria com o
+   estado guardado no DOM, que era justamente o defeito a evitar: o relatorio
+   redesenha no polling de 30 s, e a bandeja reabriria sozinha no meio da leitura. */
+(() => {
+  const nomes = ['relRaizNome', 'relRaizDe', 'relAgrupaPorTema', 'relRecolher',
+                 'relRecolherTodos', 'relAgrupadoHTML'];
+  const fontes = nomes.map(n => corpo(ADMIN, 'function ' + n + '('));
+  const faltando = nomes.filter((n, i) => !fontes[i]);
+  ok(!faltando.length, 'existe o recolhimento por sistema', faltando.join(', '));
+  if (faltando.length) return;
+
+  const esc = t => String(t == null ? '' : t)
+    .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const _relRecolhidos = new Set();
+  const temas = [
+    { id: 1, nome: 'AXCred - Cadastro' },
+    { id: 2, nome: 'AXCred - Cadastro - Analise de Credito - Reanalise' },
+    { id: 3, nome: 'AXCred - Cobranca' },
+    { id: 4, nome: "AXCred - O'Brien" },   // apostrofo: quebra onclick mal escapado
+  ];
+  const dem = (codigo, tema_id, pontos) => ({ codigo, tema_id, poker_pontos: pontos });
+  const _d = {
+    entregues: [dem('AX-001', 1, 8), dem('AX-002', 2, 13), dem('AX-003', 2, 5),
+                dem('AX-004', 3, 21), dem('AX-005', 4, 3)],
+    andamento: [dem('AX-100', 1, 2)],
+  };
+  const blocos = { 'rel-entregues': { innerHTML: '' }, 'rel-andamento': { innerHTML: '' } };
+  let caiuNoRender = false;
+
+  let M;
+  try {
+    M = new Function('esc', '_relRecolhidos', 'state', 'relCardHTML', 'relDados',
+                     'renderRelatorios', 'document',
+      fontes.join('\n\n') + '\n; return { relAgrupadoHTML, relRecolher, relRecolherTodos, relAgrupaPorTema };'
+    )(esc, _relRecolhidos, { temas }, (m, modo) => '<CARD ' + m.codigo + '>',
+      () => _d, () => { caiuNoRender = true; },
+      { getElementById: id => blocos[id] || null });
+  } catch (e) { ok(false, 'o recolhimento roda isolado', e.message); return; }
+
+  const conta = (h, re) => (h.match(re) || []).length;
+
+  // AS RAIZES SE JUNTAM: Cadastro absorve a Reanalise, e nao viram tres cabecalhos.
+  const g = M.relAgrupaPorTema(_d.entregues);
+  ok(g.length === 3 && g[0].nome === 'AXCred - Cadastro' && g[0].itens.length === 3,
+     'os sistemas se juntam pela raiz, e o maior vem primeiro',
+     g.map(x => x.nome + '=' + x.itens.length).join(', '));
+
+  // Tudo aberto na primeira vez: quem abre a aba ve o conteudo, e nao um indice.
+  let h = M.relAgrupadoHTML(_d.entregues, 'entregues');
+  ok(conta(h, /aria-expanded="true"/g) === 3 && conta(h, /<CARD /g) === 5,
+     'no primeiro render tudo esta aberto');
+  ok(conta(h, /<button type="button" class="rel-grupo-head"/g) === 3 &&
+     !/<div class="rel-grupo-head"/.test(h),
+     'o cabecalho e <button>, e nao <div> com clique — teclado e leitor de tela dependem disso');
+  ok(/26 pt/.test(h), 'o cabecalho soma os pontos do grupo — recolhido, e o que sobra dele');
+
+  // UM CLIQUE RECOLHE SO AQUELE, e o mesmo sistema no outro bloco fica como estava.
+  M.relRecolher('entregues|AXCred - Cadastro');
+  h = blocos['rel-entregues'].innerHTML;
+  ok(!caiuNoRender, 'recolher nao redesenha a aba toda — a rolagem nao salta');
+  ok(conta(h, /aria-expanded="false"/g) === 1 && conta(h, /<CARD /g) === 2,
+     'um clique recolhe so o grupo clicado');
+  ok(/26 pt/.test(h), 'recolhido, o cabecalho ainda diz quantos pontos ha dentro');
+  ok(!/aria-expanded="false"/.test(M.relAgrupadoHTML(_d.andamento, 'andamento')),
+     'e o mesmo sistema no outro bloco continua aberto');
+
+  /* O ESTADO SOBREVIVE AO RE-RENDER. E o ponto da invariante: o bloco e redesenhado
+     no polling, e guardar "esta aberto" no DOM faria tudo reabrir sozinho. */
+  ok(conta(M.relAgrupadoHTML(_d.entregues, 'entregues'), /aria-expanded="false"/g) === 1,
+     'e o recolhido segue recolhido no render seguinte');
+  M.relRecolher('entregues|AXCred - Cadastro');
+  ok(conta(blocos['rel-entregues'].innerHTML, /<CARD /g) === 5, 'clicar de novo reabre');
+
+  // Recolher/abrir todos: com quinze sistemas, quinze cliques nao servem.
+  M.relRecolherTodos('entregues', true);
+  h = blocos['rel-entregues'].innerHTML;
+  ok(conta(h, /aria-expanded="false"/g) === 3 && !/<CARD /.test(h) && /Abrir todos/.test(h),
+     'recolher todos fecha os tres e a barra passa a oferecer abrir');
+  M.relRecolherTodos('entregues', false);
+  ok(conta(blocos['rel-entregues'].innerHTML, /<CARD /g) === 5, 'e abrir todos devolve tudo');
+
+  /* O NOME DO SISTEMA VAI PARA DENTRO DE UM onclick, e `esc` nao escapa apostrofo.
+     "AXCred - O'Brien" fecharia a string e o clique morreria com erro de sintaxe —
+     invisivel, porque o console de quem usa a ferramenta ninguem le. Aqui o
+     argumento e AVALIADO como o navegador faria. */
+  h = M.relAgrupadoHTML(_d.entregues, 'entregues');
+  const re = new RegExp('onclick="relRecolher\\((\'(?:[^\'\\\\]|\\\\.)*\')\\)"', 'g');
+  const args = [];
+  let mt;
+  while ((mt = re.exec(h)) !== null) args.push(mt[1]);
+  ok(args.length === 3, 'cada cabecalho tem um onclick bem formado', 'achei ' + args.length);
+  let chaves = [];
+  try { chaves = args.map(a => eval(a)); } catch (e) { chaves = null; }
+  ok(!!chaves && chaves.every(k => typeof k === 'string' && k.indexOf('entregues|') === 0),
+     'e o argumento avalia sem erro, mesmo com apostrofo no nome do sistema');
+  ok(!!chaves && chaves.indexOf("entregues|AXCred - O'Brien") >= 0,
+     'com a chave EXATA que o estado usa — escapar errado recolheria o grupo errado');
+})();
+
 let erroW = null;
 try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
 ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');

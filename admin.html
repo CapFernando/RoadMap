@@ -634,11 +634,31 @@
     }
 
     .rel-grupo { margin-bottom: 20px; }
+    /* O CABECALHO E UM BOTAO. Largura toda para o alvo do clique ser a linha
+       inteira — mirar um texto de 12px e trabalho, e a linha nao. */
     .rel-grupo-head {
-      display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700;
-      text-transform:uppercase; letter-spacing:.08em; color:var(--text3);
-      padding:6px 0 5px; border-bottom:1px solid var(--border); margin-bottom:9px;
+      display:flex; align-items:center; gap:8px; width:100%; font-size:12px;
+      font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+      color:var(--text3); background:none; border:none; text-align:left;
+      padding:7px 0 6px; border-bottom:1px solid var(--border); margin-bottom:9px;
+      cursor:pointer; font-family:inherit; transition:color .15s, border-color .15s;
     }
+    .rel-grupo-head:hover { color:var(--text); border-bottom-color:var(--text3); }
+    /* O foco de teclado tem de ser VISIVEL: sem isso o botao existe para o leitor
+       de tela e desaparece para quem navega com Tab. */
+    .rel-grupo-head:focus-visible { outline:2px solid var(--blue,#4C9AFF);
+      outline-offset:2px; border-radius:3px; }
+    .rel-grupo-seta { flex:0 0 auto; font-size:10px; letter-spacing:0; }
+    .rel-grupo-nome { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; }
+    /* Os pontos do grupo: recolhido, e a unica informacao que sobra dele. */
+    .rel-grupo-pt { font-weight:600; letter-spacing:0; color:var(--text3);
+      font-variant-numeric:tabular-nums; }
+    .rel-todos { display:flex; justify-content:flex-end; margin-bottom:6px; }
+    .rel-todos-btn { background:none; border:1px solid var(--border); border-radius:6px;
+      color:var(--text3); font-size:11.5px; padding:3px 10px; cursor:pointer;
+      font-family:inherit; transition:color .15s, border-color .15s; }
+    .rel-todos-btn:hover { color:var(--text); border-color:var(--text3); }
     .rel-grupo-n { font-weight:600; background:var(--bg3); border-radius:10px; padding:1px 9px; letter-spacing:0; }
     .rel-card {
       background:var(--bg2); border:1px solid var(--border); border-radius:12px;
@@ -6784,16 +6804,56 @@ function relInitSemanas() {
    para Cobrança?", que é a pergunta que a área cliente faz — e sem ele a resposta
    exigia ler trinta cards procurando um nome.                                  */
 
+/** A RAIZ DO SISTEMA — os dois primeiros níveis do nome do tema.
+ *
+ *  O cadastro nomeia por hierarquia: "AXCred - Cadastro", "AXCred - Cadastro -
+ *  Análise de Crédito - Reanálise", "AXCred - Cadastro - Análise de Crédito -
+ *  Análise". São o MESMO sistema visto em três profundidades, e no relatório
+ *  apareciam como três linhas concorrendo entre si — o Cadastro parecia menor do
+ *  que é, e a mesma área aparecia duas vezes na lista dos maiores.
+ *
+ *  DOIS NÍVEIS, e não um. "AXCred" sozinho juntaria Cadastro, Cobrança, Operações
+ *  e Antifraude num único balde de 90% do mês — a pergunta "para onde a capacidade
+ *  foi" deixaria de ter resposta. Dois níveis é o corte onde o nome ainda diz uma
+ *  área de negócio: quem recebe o relatório reconhece "AXCred - Cobrança" como um
+ *  interlocutor, e "AXCred - Cobrança - Régua - Notificação" como um detalhe dele.
+ *
+ *  Tema de um nível só ("IA e vibecode") fica como está: não há o que agrupar.
+ */
+function relRaizNome(nome) {
+  const partes = String(nome || '').split(' - ').map(x => x.trim()).filter(Boolean);
+  if (!partes.length) return '—';
+  return partes.slice(0, 2).join(' - ');
+}
+
+/** A raiz do tema de uma demanda. */
+function relRaizDe(m) {
+  const t = (state.temas || []).find(x => x.id === (m || {}).tema_id);
+  return t ? relRaizNome(t.nome) : 'Sem sistema';
+}
+
 /** A escala escolhida. `mes` é o padrão: fechamento é a conversa da diretoria. */
 function relEscala() {
   const el = document.getElementById('rel-escala');
   return el && el.value === 'semana' ? 'semana' : 'mes';
 }
 
-/** O tema (sistema) filtrado, ou '' para todos. */
+/** O sistema filtrado, ou '' para todos.
+ *
+ *  O VALOR É A RAIZ, e não um `tema_id`. Filtrar por id pegaria só a folha exata:
+ *  escolher "AXCred - Cadastro" deixaria de fora "AXCred - Cadastro - Análise de
+ *  Crédito - Reanálise", que é o mesmo sistema — e a área cliente que pediu o
+ *  relatório de Cadastro receberia metade das entregas dela. */
 function relTemaFiltro() {
   const el = document.getElementById('rel-sistema');
   return el ? String(el.value || '') : '';
+}
+
+/** O nome do sistema filtrado. Como o valor JÁ É o nome da raiz, ele serve
+ *  direto — e é isso que faz a linha de contexto e a ata dizerem a mesma coisa
+ *  que o dropdown mostra. */
+function relTemaFiltroNome() {
+  return relTemaFiltro();
 }
 
 /** A JANELA E A ANTERIOR, na escala escolhida.
@@ -6847,27 +6907,27 @@ function relInitControles() {
   }
   const sis = document.getElementById('rel-sistema');
   if (sis) {
-    /* A LISTA SÓ TRAZ SISTEMA QUE TEM DEMANDA. O cadastro tem 64 temas e um
-       dropdown de 64 linhas obriga a pessoa a procurar; com os que têm demanda,
-       ela escolhe. E o total ao lado do nome já responde "vale filtrar?". */
+    /* A LISTA TRAZ RAÍZES, e só as que têm demanda.
+       Por `tema_id`, o dropdown tinha 48 linhas com "AXCred - Cadastro" três vezes
+       em profundidades diferentes — a pessoa escolhia uma e recebia um terço das
+       entregas do Cadastro. Por raiz, cada sistema aparece uma vez, e a contagem
+       ao lado já responde "vale filtrar?". */
     const cont = new Map();
     (state.melhorias || []).forEach(m => {
-      if (!m || m.oculto || m.mesclado_em) return;
-      const k = m.tema_id || '';
-      if (!k) return;
+      if (!m || m.oculto || m.mesclado_em || !m.tema_id) return;
+      const k = relRaizDe(m);
       cont.set(k, (cont.get(k) || 0) + 1);
     });
-    const itens = (state.temas || [])
-      .filter(t => cont.has(t.id))
-      .map(t => ({ id: t.id, nome: t.nome || '—', n: cont.get(t.id) }))
+    const itens = [...cont.entries()]
+      .map(([nome, n]) => ({ nome, n }))
       .sort((a, b) => b.n - a.n || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
     const anterior = sis.value;
     sis.innerHTML = '<option value="">Todos os sistemas</option>' +
-      itens.map(t => '<option value="' + esc(t.id) + '">' + esc(t.nome) +
+      itens.map(t => '<option value="' + esc(t.nome) + '">' + esc(t.nome) +
                      '  (' + t.n + ')</option>').join('');
     // Preserva a escolha entre renders: perder o filtro a cada atualização faria
     // a pessoa refiltrar toda vez que os dados chegassem do servidor.
-    if (anterior && itens.some(t => t.id === anterior)) sis.value = anterior;
+    if (anterior && itens.some(t => t.nome === anterior)) sis.value = anterior;
   }
 }
 
@@ -6882,11 +6942,13 @@ function relTrocaEscala() {
 
 /** As demandas vivas, já com o filtro de sistema aplicado. */
 function relVivas() {
-  const tema = relTemaFiltro();
+  const raiz = relTemaFiltro();
   return (state.melhorias || []).filter(m =>
     m && !m.oculto && !m.mesclado_em &&
     (m.status_planejamento || '') !== 'negada' && m.status !== 'negada' &&
-    (!tema || m.tema_id === tema));
+    // A comparação é pela RAIZ: escolher "AXCred - Cadastro" traz também as
+    // demandas de "AXCred - Cadastro - Análise de Crédito - Reanálise".
+    (!raiz || relRaizDe(m) === raiz));
 }
 
 /** COMO O TIME ANDOU — planejado × entregue em pontos, e a comparação.
@@ -6960,20 +7022,21 @@ function relDeltaHTML(atual, ant, bomSubir) {
 function relTemas(j) {
   const CAPI = window.CAPACIDADE;
   const vivas = relVivas();
+  /* AGRUPADO PELA RAIZ. Antes eram três linhas para o Cadastro — ele, a Reanálise
+     e a Análise —, cada uma competindo com as outras na lista dos maiores: o
+     sistema aparecia menor do que é e duas vezes na mesma lista. */
   const porTema = new Map();
   vivas.forEach(m => {
     const d = CAPI.diaDaEntrega(m);
     if (!d || d < j.de || d > j.ate) return;
     const pts = CAPI.entregues(m);
-    const k = m.tema_id || '__sem__';
+    const k = m.tema_id ? relRaizDe(m) : 'Sem sistema';
     const a = porTema.get(k) || { pts: 0, qtd: 0 };
     a.pts += pts; a.qtd += 1;
     porTema.set(k, a);
   });
-  const nome = k => k === '__sem__' ? 'Sem sistema'
-    : (((state.temas || []).find(t => t.id === k) || {}).nome || '—');
   const itens = [...porTema.entries()]
-    .map(([k, v]) => ({ nome: nome(k), pts: v.pts, qtd: v.qtd }))
+    .map(([nome, v]) => ({ nome, pts: v.pts, qtd: v.qtd }))
     .sort((a, b) => b.pts - a.pts || b.qtd - a.qtd);
   return { itens, total: itens.reduce((t, x) => t + x.pts, 0),
            qtd: itens.reduce((t, x) => t + x.qtd, 0) };
@@ -6989,7 +7052,10 @@ function relTemas(j) {
 function relOQueVem() {
   const CAPI = window.CAPACIDADE;
   const vivas = relVivas();
-  const tema = m => (((state.temas || []).find(t => t.id === m.tema_id) || {}).nome || '—');
+  // A RAIZ na coluna, e não o nome completo: "AXCred - Cadastro - Análise de
+  // Crédito - Reanálise" não cabe em 150px e vira reticência — a raiz cabe e é o
+  // que a pessoa usa para reconhecer a área.
+  const tema = m => (m.tema_id ? relRaizDe(m) : '—');
   const monta = m => ({
     codigo: m.codigo || '', titulo: m.titulo || '(sem título)', tema: tema(m),
     pts: Number(m.poker_pontos) || 0, dev: m.dev || '', prazo: m.entrega || '',
@@ -7118,9 +7184,7 @@ function renderRelatorios() {
   /* A LINHA DE CONTEXTO DIZ A REGRA POR EXTENSO, e ela muda com a escala. No
      mes, entrega e desenvolvimento sao o mesmo periodo; na semana, nao — e sem
      dizer isso o leitor ve duas datas diferentes e conclui que ha erro. */
-  const sisNome = relTemaFiltro()
-    ? (((state.temas || []).find(t => t.id === relTemaFiltro()) || {}).nome || '')
-    : '';
+  const sisNome = relTemaFiltroNome();
   const filtroTxt = sisNome
     ? ` Filtrado por <b>${esc(sisNome)}</b> — todos os blocos abaixo consideram só este sistema.`
     : '';
@@ -7325,34 +7389,107 @@ function relRenderOQueVem() {
 
 // Agrupa por tema, na mesma ordem do cadastro de temas (igual à lista de
 // Melhorias e ao painel público), com o total de cada tema no cabeçalho.
+/** AGRUPA PELA RAIZ DO SISTEMA, e não pelo tema exato.
+ *
+ *  O cabeçalho de grupo passa a dizer "AXCred - Cadastro" uma vez, com as
+ *  entregas da Reanálise e da Análise dentro. O NOME COMPLETO CONTINUA EM CADA
+ *  CARD (`relSistemaModulo`), então o detalhe não se perde — o que muda é que a
+ *  lista para de repetir o mesmo sistema em três cabeçalhos.
+ *
+ *  A ordem é por VOLUME, e não pela ordem do cadastro: agrupado, o cadastro deixa
+ *  de definir uma ordem útil (a raiz não existe como registro), e quem lê um
+ *  relatório procura primeiro o maior. */
 function relAgrupaPorTema(lista) {
-  const ordem = (state.temas || []).map(t => t.id);
   const grupos = new Map();
   lista.forEach(m => {
-    const k = m.tema_id || '__sem__';
+    const k = m.tema_id ? relRaizDe(m) : 'Sem tema';
     if (!grupos.has(k)) grupos.set(k, []);
     grupos.get(k).push(m);
   });
-  return [...grupos.entries()].sort((a, b) => {
-    const ia = ordem.indexOf(a[0]), ib = ordem.indexOf(b[0]);
-    if (ia === -1 && ib === -1) return 0;
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
-  }).map(([k, itens]) => ({
-    nome: k === '__sem__' ? 'Sem tema' : ((state.temas || []).find(t => t.id === k)?.nome || '—'),
-    itens
-  }));
+  return [...grupos.entries()]
+    .map(([nome, itens]) => ({ nome, itens }))
+    .sort((a, b) => b.itens.length - a.itens.length ||
+                    String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+}
+
+/* A BANDEJA DE CADA SISTEMA RECOLHE, e o estado sobrevive ao render.
+ *
+ * O relatório de agosto tem 100 entregas: agrupado por sistema, é uma coluna de
+ * cem cards que a pessoa rola procurando um. Recolher deixa a lista de sistemas
+ * à vista e abre só o que interessa — e é o que permite apresentar o relatório
+ * abrindo um bloco por vez em vez de rolar durante a reunião.
+ *
+ * O ESTADO VIVE FORA DO HTML (`_relRecolhidos`). O bloco é redesenhado a cada
+ * `renderRelatorios()` — que roda no polling de 30 s —, e guardar "está aberto"
+ * no DOM faria tudo reabrir sozinho no meio da leitura. A chave é `modo + nome`
+ * porque o mesmo sistema aparece em Entregues e em Em desenvolvimento, e recolher
+ * um não deve recolher o outro.
+ *
+ * O CABEÇALHO É UM `<button>` de verdade, e não um `<div onclick>`: assim ele
+ * recebe foco pelo teclado, responde a Enter e a Espaço sem código, e o
+ * `aria-expanded` anuncia o estado para o leitor de tela. Um div com clique é
+ * invisível para quem navega por teclado.
+ */
+const _relRecolhidos = new Set();
+
+function relRecolher(chave) {
+  if (_relRecolhidos.has(chave)) _relRecolhidos.delete(chave);
+  else _relRecolhidos.add(chave);
+  // Redesenha só o necessário: o bloco inteiro, e não a aba toda — renderizar a
+  // aba faria a rolagem saltar para o topo a cada clique.
+  const modo = chave.split('|')[0];
+  const alvo = document.getElementById(modo === 'entregues' ? 'rel-entregues' : 'rel-andamento');
+  if (!alvo) { renderRelatorios(); return; }
+  const { entregues, andamento } = relDados();
+  const lista = modo === 'entregues' ? entregues : andamento;
+  alvo.innerHTML = relAgrupadoHTML(lista, modo);
+}
+
+/** Recolhe ou abre TODOS os sistemas de um bloco. Com quinze sistemas, clicar em
+ *  quinze cabeçalhos para chegar num é pior que não ter recolhimento. */
+function relRecolherTodos(modo, recolher) {
+  const { entregues, andamento } = relDados();
+  const lista = modo === 'entregues' ? entregues : andamento;
+  relAgrupaPorTema(lista).forEach(g => {
+    const chave = modo + '|' + g.nome;
+    if (recolher) _relRecolhidos.add(chave);
+    else _relRecolhidos.delete(chave);
+  });
+  const alvo = document.getElementById(modo === 'entregues' ? 'rel-entregues' : 'rel-andamento');
+  if (alvo) alvo.innerHTML = relAgrupadoHTML(lista, modo);
 }
 
 function relAgrupadoHTML(lista, modo) {
-  return relAgrupaPorTema(lista).map(g => `<div class="rel-grupo">
-    <div class="rel-grupo-head">
-      <span>${esc(g.nome)}</span>
+  const grupos = relAgrupaPorTema(lista);
+  if (!grupos.length) return '';
+  const algumAberto = grupos.some(g => !_relRecolhidos.has(modo + '|' + g.nome));
+  const barra = grupos.length > 1
+    ? `<div class="rel-todos">
+         <button type="button" class="rel-todos-btn"
+                 onclick="relRecolherTodos('${esc(modo)}', ${algumAberto ? 'true' : 'false'})">
+           ${algumAberto ? '▾ Recolher todos' : '▸ Abrir todos'}
+         </button>
+       </div>`
+    : '';
+  return barra + grupos.map(g => {
+    const chave = modo + '|' + g.nome;
+    const aberto = !_relRecolhidos.has(chave);
+    // A contagem de pontos no cabeçalho: recolhido, ele é a única informação que
+    // sobra do grupo — e "quantos pontos saíram para Cobrança" é o que se pergunta
+    // sem abrir.
+    const pts = g.itens.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+    return `<div class="rel-grupo">
+    <button type="button" class="rel-grupo-head" aria-expanded="${aberto}"
+            onclick="relRecolher('${esc(chave).replace(/'/g, "\\'")}')"
+            title="${aberto ? 'Recolher' : 'Abrir'} ${esc(g.nome)}">
+      <span class="rel-grupo-seta">${aberto ? '▾' : '▸'}</span>
+      <span class="rel-grupo-nome">${esc(g.nome)}</span>
       <span class="rel-grupo-n">${g.itens.length}</span>
-    </div>
-    ${g.itens.map(m => relCardHTML(m, modo)).join('')}
-  </div>`).join('');
+      ${pts ? `<span class="rel-grupo-pt">${pts} pt</span>` : ''}
+    </button>
+    ${aberto ? g.itens.map(m => relCardHTML(m, modo)).join('') : ''}
+  </div>`;
+  }).join('');
 }
 
 // Texto corrido para colar na ata/apresentação do comitê.
@@ -7385,9 +7522,7 @@ function relTexto(secao) {
     partes.push(janela.escala === 'mes'
       ? 'FECHAMENTO DE ' + String(janela.rot).toUpperCase()
       : 'REUNIÃO DE ' + formatDate(A) + ' A ' + formatDate(B));
-    const sisNome = relTemaFiltro()
-      ? (((state.temas || []).find(t => t.id === relTemaFiltro()) || {}).nome || '')
-      : '';
+    const sisNome = relTemaFiltroNome();
     if (sisNome) partes.push('Sistema: ' + sisNome);
     // COMO O TIME ANDOU vai no topo da ata, pela mesma razao que vai no topo da
     // tela: quem le pergunta "foi bom?" antes de "o que saiu?".
