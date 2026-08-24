@@ -34,7 +34,35 @@ from datetime import datetime, timedelta, timezone
 
 # ── Onde as coisas ficam ─────────────────────────────────────────────────────
 VAULT = os.environ.get('OBSIDIAN_VAULT') or r'C:\Users\AUDAX-FERNANDON\Documents\Obsidian Vault'
-PASTA = os.path.join(VAULT, 'Audax Capital', 'Registros TI', 'Entregas')
+# A PASTA E DESCOBERTA, e nao fixa. Voce renomeou "Entregas" para
+# "Entregas - RoadMap" e o script, apontando para o nome velho, recriaria a pasta
+# antiga e escreveria as 114 notas de novo — duas copias de tudo, e a metade que
+# voce lesse seria a errada. Agora ele procura a pasta que TEM as notas (pelo
+# marcador que so ele escreve) antes de cair no nome padrao.
+def _achaPasta(base):
+    raiz = os.path.join(base, 'Audax Capital', 'Registros TI')
+    padrao = os.path.join(raiz, 'Entregas - RoadMap')
+    if not os.path.isdir(raiz):
+        return padrao
+    candidatas = []
+    for nome in os.listdir(raiz):
+        d = os.path.join(raiz, nome)
+        if not os.path.isdir(d):
+            continue
+        for f in os.listdir(d)[:40]:
+            if not f.endswith('.md'):
+                continue
+            try:
+                if 'roadmap:fim' in io.open(os.path.join(d, f), encoding='utf-8').read(4000):
+                    candidatas.append((len([x for x in os.listdir(d) if x.endswith('.md')]), d))
+                    break
+            except OSError:
+                pass
+    # A que tem mais notas nossas vence: uma pasta velha esvaziada nao rouba o lugar.
+    return max(candidatas)[1] if candidatas else padrao
+
+
+PASTA = _achaPasta(VAULT)
 ESTADO = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.estado-obsidian.json')
 REPO = 'CapFernando/RoadMap-dados'
 ARQ = 'data/melhorias.json'
