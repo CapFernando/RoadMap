@@ -313,7 +313,7 @@
 <script src="prazo.js?v=592092724e"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
-<script src="catalogo.js?v=ff4d2dc0b6"></script>
+<script src="catalogo.js?v=cdc461dcbd"></script>
 </head>
 <body>
 
@@ -1028,8 +1028,15 @@ function fEsc(s) {
  * filtro limpa e o campo diz por quê, em vez de devolver uma tela vazia sem
  * explicação. */
 function fBusca(label, opcoes, valorAtual, handler, cls, idLista) {
-  const opts = opcoes.map(o =>
-    `<option value="${fEsc(o.nome)}">${fEsc(o.nome)} (${o.n})</option>`).join('');
+  /* NUM <datalist>, O `value` JA E O ROTULO — e nao um par rotulo/valor como num
+     <select>. Preenchendo os dois, o Chrome desenha as DUAS coisas e cada sugestao
+     aparece duas vezes na lista: "AXCred - Cobrança" e "AXCred - Cobrança (28)",
+     uma embaixo da outra, quarenta e uma vezes.
+
+     Entao so o `value`, e sem a contagem: ela e o que forcava o texto a divergir do
+     valor. O total continua no placeholder, e depois de escolher o contador da
+     barra diz quantas ficaram no recorte — que e onde a informacao serve. */
+  const opts = opcoes.map(o => `<option value="${fEsc(o.nome)}"></option>`).join('');
   const total = opcoes.reduce((t, o) => t + o.n, 0);
   return `<div class="fgroup ${cls || ''}">
     <label>${fEsc(label)}</label>

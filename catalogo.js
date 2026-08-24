@@ -253,9 +253,29 @@
    *  esta ferramenta ja produziu esse defeito com `STATUS_ATRASO` e com a data de
    *  entrega.
    */
+  /* AS FAMILIAS QUE SE DESDOBRAM NUM SEGUNDO NIVEL.
+   *
+   * A raiz e UM segmento por padrao: "BI - Atualização", "BI - Reports" e "BI -
+   * Conexão ao Monday" sao BI, e "WorksOS RH - Bônus", "- PDI" e "- Cultura
+   * Organizacional" sao WorksOS RH. Quem pergunta "quanto foi para o BI" quer um
+   * numero, e nao quatro linhas de uma demanda cada.
+   *
+   * AXCred e a excecao porque ela sozinha tem 200 das 287 demandas: um balde
+   * "AXCred" seria 70% da lista e a pergunta "para onde a capacidade foi" ficaria
+   * sem resposta — Cadastro, Cobranca, Operacoes e Antifraude precisam se ver.
+   *
+   * LISTA EXPLICITA, e nao um limite automatico por volume: um corte que se move
+   * sozinho faria o filtro mudar de forma no meio do mes, e quem usa a tela todo
+   * dia precisa que ela seja a mesma amanha. Familia nova que cresca demais entra
+   * aqui a mao — e o dia de fazer isso e visivel, porque o balde aparece grande.
+   */
+  var DESDOBRA = ['AXCred'];
+
   function raiz(nome) {
     var p = partes(nome);
-    return p.length ? p.slice(0, 2).join(SEP) : '';
+    if (!p.length) return '';
+    var abre = DESDOBRA.some(function (f) { return norm(f) === norm(p[0]); });
+    return abre ? p.slice(0, 2).join(SEP) : p[0];
   }
 
   /** A demanda pertence a esta raiz? Recebe o nome do tema, nao o id — o filtro do

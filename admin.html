@@ -1029,7 +1029,7 @@
 <script src="capacidade.js?v=3769a13468"></script>
 <script src="apresentacao.js?v=e58707c595"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="catalogo.js?v=ff4d2dc0b6"></script>
+<script src="catalogo.js?v=cdc461dcbd"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -6911,11 +6911,23 @@ function relInitSemanas() {
  *
  *  Tema de um nível só ("IA e vibecode") fica como está: não há o que agrupar.
  */
+/* A RAIZ VEM DO CATALOGO, e nao daqui.
+ *
+ * Esta funcao tinha a propria regra — dois segmentos, sempre. O painel passou a
+ * agrupar BI e WorksOS RH num segmento so, e com duas regras vivas as telas
+ * responderiam "onde a capacidade foi" de formas diferentes: o dash diria "BI: 8" e
+ * o relatorio diria "BI: 5, BI - Atualização: 1, BI - Reports: 1, BI - Conexão ao
+ * Monday: 1". E o terceiro lugar — o deck — seguiria uma delas por sorteio.
+ *
+ * Foi exatamente esse defeito, em tres formas diferentes, que apareceu hoje: o
+ * prazo com quatro implementacoes, a data de entrega com duas, e o assunto do deck
+ * contra o do relatorio. Agora ha uma regra, em `catalogo.js`, que todas as telas
+ * carregam.
+ */
 function relRaizNome(nome) {
-  const partes = String(nome || '').split(' - ').map(x => x.trim()).filter(Boolean);
-  if (!partes.length) return '—';
-  return partes.slice(0, 2).join(' - ');
+  return (window.catalogoRaiz ? window.catalogoRaiz(nome) : String(nome || '')) || '—';
 }
+
 
 /** A raiz do tema de uma demanda. */
 function relRaizDe(m) {

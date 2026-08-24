@@ -25,7 +25,15 @@ const sec = (t) => console.log('\n== ' + t + ' ==');
 const W = fs.readFileSync('cloudflare-worker/worker.js', 'utf8');
 // Sem comentarios: as regras abaixo procuram CODIGO. Comentario explicando um
 // defeito antigo ("nao usar atob") nao pode contar como o defeito.
-const semComentario = (t) => t.replace(/^\s*\/\/.*$/gm, '');
+/** Tira comentarios antes de medir o codigo.
+ *
+ *  Tirava so as linhas `//`. Um bloco `/* ... *\/` passava inteiro, e uma invariante
+ *  que procura `<select>` casava com o comentario que EXPLICA por que o `<select>`
+ *  saiu — acusando justamente o codigo corrigido. Tres vezes nesta sessao: com
+ *  "Outros", com o apostrofo do onclick, e com o campo de busca do painel. */
+const semComentario = (t) => String(t || '')
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/^\s*\/\/.*$/gm, ' ');
 const WC = semComentario(W);
 const lerTela = (f) => fs.readFileSync(f, 'utf8');
 const ADMIN = lerTela('admin.html');
@@ -1528,6 +1536,20 @@ ok(/catalogoCasa\(m\.tema_id, _filtroTema/.test(ADMIN), 'o admin filtra com roll
    O dropdown tinha 65 linhas: "AXCred - Operações", "- Dashboard", "- Nova
    Operação", "- Regras de Alçada" e "- Simulador" eram cinco sistemas com 39, 1, 2,
    1 e 0 demandas, e nenhum dos cinco respondia "quanto foi para Operações". */
+/* UMA REGRA SO, EM catalogo.js. `relRaizNome` no admin tinha a propria — dois
+   segmentos, sempre — e com o painel colapsando BI num segmento as telas
+   responderiam "onde a capacidade foi" de formas diferentes: o dash diria "BI: 8" e
+   o relatorio "BI: 5, BI - Atualização: 1, BI - Reports: 1, ...". Foi esse defeito,
+   em tres formas, que apareceu nesta sessao: o prazo com quatro implementacoes, a
+   data de entrega com duas, e o assunto do deck contra o do relatorio. */
+(() => {
+  const c = corpo(ADMIN, 'function relRaizNome(');
+  ok(!!c, 'existe a raiz do relatorio');
+  if (!c) return;
+  ok(/catalogoRaiz/.test(c), 'e ela delega ao catalogo, em vez de ter regra propria');
+  ok(!/slice\(0, 2\)/.test(c) && !/split\(' - '\)/.test(c),
+     'sem nenhuma copia da regra dentro dela');
+})();
 ok(/temaCasaRaiz\(m\)/.test(INDEX), 'o painel publico filtra pela raiz do sistema');
 ok(/catalogoNaRaiz/.test(INDEX), 'e usa a raiz do catalogo, e nao uma copia local');
 /* NENHUM RESTO DO FILTRO POR ID. Conferido por sabotagem: trocar so a primeira
@@ -1547,11 +1569,42 @@ ok((INDEX.match(/temaCasaRaiz\(m\)/g) || []).length >= 2,
   if (!c) return;
   ok(/<input class="filter-select filter-busca"/.test(c),
      'e ele e um <input> digitavel');
-  ok(!/<select/.test(c), 'sem nenhum <select> escondido dentro dele');
+  /* SEM COMENTARIO: a versao anterior casava com a palavra `<select>` DENTRO do
+     comentario que explica por que ele saiu, e acusava o codigo corrigido. Terceira
+     vez hoje que uma invariante mede o texto da explicacao em vez do codigo. */
+  ok(!/<select/.test(semComentario(c)), 'sem nenhum <select> escondido dentro dele');
   ok(/list="\$\{idLista\}"/.test(c) && /<datalist id="\$\{idLista\}">/.test(c),
      'ligado a um <datalist> pelo mesmo id — e o que faz sugerir enquanto digita');
   ok(/onchange="\$\{handler\}\(this\.value\)"/.test(c),
      'e o que foi digitado vai para o handler');
+
+  /* O <option> DO DATALIST NAO TEM TEXTO INTERNO.
+     Num <datalist> o `value` JA E o rotulo — nao e um par rotulo/valor como num
+     <select>. Preenchendo os dois, o Chrome desenha as DUAS coisas e cada sugestao
+     aparece duas vezes: "AXCred - Cobrança" e "AXCred - Cobrança (28)", uma embaixo
+     da outra, vinte e sete vezes. Foi o que o Fernando viu: "a lista esta vindo
+     redundando, titulo e nome tudo igual".
+     RODA a funcao: o defeito estava numa interpolacao, e nao numa palavra. */
+  let F;
+  try { F = new Function('fEsc', c + '; return fBusca;')((x) => String(x == null ? '' : x)); }
+  catch (e) { ok(false, 'fBusca roda isolada', e.message); return; }
+  const h = F('Sistema', [{ nome: 'AXCred - Cobrança', n: 28 },
+                          { nome: 'BI', n: 8 }], null, 'setFiltroTema', 'fg-tema', 'dl-tema');
+  const dl = h.slice(h.indexOf('<datalist'), h.indexOf('</datalist>'));
+  // `[^<]` e nao `.`: com `.` o lazy atravessa a fronteira entre options e acusa
+  // texto onde nao ha.
+  const comTexto = [...dl.matchAll(/<option value="[^"]*">([^<]+)<\/option>/g)];
+  ok(!comTexto.length,
+     'nenhum <option> tem texto interno — e o que fazia cada sugestao aparecer duas vezes',
+     comTexto.slice(0, 2).map((m) => JSON.stringify(m[1])).join(' | '));
+  const vals = [...dl.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1]);
+  ok(vals.length === 2 && vals[0] === 'AXCred - Cobrança' && vals[1] === 'BI',
+     'e o nome vai no `value`, que e o que o campo recebe ao escolher', vals.join(' | '));
+  /* A CONTAGEM FICA FORA DO ROTULO. Ela era o que forcava o texto a divergir do
+     valor: "(28)" no rotulo e nao no value. O total segue no placeholder, e depois
+     de escolher o contador da barra diz quantas ficaram. */
+  ok(!/\(28\)/.test(dl), 'a contagem por sistema nao volta para dentro do option');
+  ok(/placeholder="Todos \(36\)/.test(h), 'e o total aparece no placeholder', h.match(/placeholder="[^"]*"/));
 })();
 
 /* setFiltroTema RESOLVE o texto. Conferido por sabotagem: guardar o texto cru
@@ -1620,10 +1673,32 @@ ok((INDEX.match(/temaCasaRaiz\(m\)/g) || []).length >= 2,
   const R = janela.catalogoRaiz, N = janela.catalogoNaRaiz;
   ok(typeof R === 'function' && typeof N === 'function', 'o catalogo publica raiz e naRaiz');
   if (typeof R !== 'function') return;
+  /* A RAIZ E UM SEGMENTO, com AXCred como excecao.
+     "BI - Atualização", "BI - Reports" e "BI - Conexão ao Monday" sao BI; "WorksOS
+     RH - Bônus", "- PDI" e "- Cultura Organizacional" sao WorksOS RH. Quem pergunta
+     "quanto foi para o BI" quer um numero, e nao quatro linhas de uma demanda cada.
+     AXCred abre em dois porque ela sozinha tem 200 das 299 demandas: um balde
+     "AXCred" seria 70% da lista, e "para onde a capacidade foi" ficaria sem
+     resposta. */
   ok(R('AXCred - Operações - Dashboard') === 'AXCred - Operações',
-     'a raiz sao os dois primeiros segmentos', R('AXCred - Operações - Dashboard'));
+     'AXCred desdobra em dois segmentos', R('AXCred - Operações - Dashboard'));
   ok(R('AXCred - Cadastro - Análise de Crédito - Reanálise') === 'AXCred - Cadastro',
-     'e quatro niveis colapsam em dois', R('AXCred - Cadastro - Análise de Crédito - Reanálise'));
+     'e quatro niveis dela colapsam em dois', R('AXCred - Cadastro - Análise de Crédito - Reanálise'));
+  [['BI - Atualização', 'BI'], ['BI - Reports', 'BI'], ['BI', 'BI'],
+   ['WorksOS RH - Bônus', 'WorksOS RH'], ['WorksOS RH - PDI', 'WorksOS RH'],
+   ['Ax Caixa - QITECH', 'Ax Caixa'], ['AX Leader - Editor Doc', 'AX Leader'],
+   ['Ax Despesas - Saldo diário', 'Ax Despesas'],
+   ['RPA - Operações', 'RPA']].forEach(([n, esp]) => {
+    ok(R(n) === esp, 'fora da AXCred a raiz e o primeiro segmento: ' + n + ' -> ' + esp, R(n));
+  });
+  /* A EXCECAO E UMA LISTA EXPLICITA, e nao um limite automatico por volume: um
+     corte que se move sozinho faria o filtro mudar de forma no meio do mes, e quem
+     usa a tela todo dia precisa que ela seja a mesma amanha. */
+  ok(/var DESDOBRA = \['AXCred'\];/.test(CAT),
+     'e a excecao esta declarada numa lista, e nao deduzida por volume');
+  // A excecao ignora acento e caixa: "axcred" digitado no cadastro nao vira familia nova.
+  ok(R('axcred - cobranca - X') === 'axcred - cobranca',
+     'e a excecao vale mesmo com a caixa trocada no cadastro', R('axcred - cobranca - X'));
   /* DOIS SEGMENTOS, E NAO UM: "AXCred" sozinho juntaria Cadastro, Cobranca,
      Operacoes e Antifraude num balde de 90%, que e o mesmo que nao agrupar. */
   ok(R('AXCred - Cobrança') !== R('AXCred - Operações'),
@@ -4721,14 +4796,21 @@ ok(/delta: relDeltaHTML\(r\.agora\.entregue, r\.antes\.entregue, true\)/.test(AD
   const blocos = { 'rel-entregues': { innerHTML: '' }, 'rel-andamento': { innerHTML: '' } };
   let caiuNoRender = false;
 
+  /* O CATALOGO DE VERDADE entra no ambiente: `relRaizNome` passou a delegar a
+     `catalogoRaiz`, e sem ele a funcao lanca em vez de agrupar. Entra o arquivo, e
+     nao um dublê — esta invariante existe justamente para provar que o agrupamento
+     do relatorio e o MESMO do painel e do deck. */
+  const janelaCat = {};
+  new Function('window', CAT)(janelaCat);
+
   let M;
   try {
     M = new Function('esc', '_relRecolhidos', 'state', 'relCardHTML', 'relDados',
-                     'renderRelatorios', 'document',
+                     'renderRelatorios', 'document', 'window',
       fontes.join('\n\n') + '\n; return { relAgrupadoHTML, relRecolher, relRecolherTodos, relAgrupaPorTema };'
     )(esc, _relRecolhidos, { temas }, (m, modo) => '<CARD ' + m.codigo + '>',
       () => _d, () => { caiuNoRender = true; },
-      { getElementById: id => blocos[id] || null });
+      { getElementById: id => blocos[id] || null }, janelaCat);
   } catch (e) { ok(false, 'o recolhimento roda isolado', e.message); return; }
 
   const conta = (h, re) => (h.match(re) || []).length;
