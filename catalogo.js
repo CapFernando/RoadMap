@@ -237,6 +237,34 @@
     if (valor) el.value = String(valor);
   }
 
+  /** A RAIZ DO SISTEMA: os dois primeiros segmentos do nome.
+   *
+   *  "AXCred - Operações", "AXCred - Operações - Dashboard" e "AXCred - Operações -
+   *  Nova Operação" sao o mesmo sistema para quem pergunta "quanto foi para
+   *  Operações". Separados, o sistema aparece menor do que e e cinco vezes na mesma
+   *  lista — e nenhuma das cinco responde a pergunta.
+   *
+   *  DOIS SEGMENTOS, E NAO UM. "AXCred" sozinho juntaria Cadastro, Cobranca,
+   *  Operacoes e Antifraude num balde de 90%, que e o mesmo que nao agrupar: a
+   *  pergunta "para onde a capacidade foi" deixaria de ter resposta.
+   *
+   *  Mora aqui porque a mesma regra vive nos Relatorios, no deck e no painel. Ela
+   *  ja nasceu tres vezes; a quarta copia seria a que divergiria em silencio, e
+   *  esta ferramenta ja produziu esse defeito com `STATUS_ATRASO` e com a data de
+   *  entrega.
+   */
+  function raiz(nome) {
+    var p = partes(nome);
+    return p.length ? p.slice(0, 2).join(SEP) : '';
+  }
+
+  /** A demanda pertence a esta raiz? Recebe o nome do tema, nao o id — o filtro do
+   *  painel guarda a raiz, que e texto e nao existe como registro. */
+  function naRaiz(nomeDoTema, raizDoFiltro) {
+    if (!raizDoFiltro) return true;
+    return norm(raiz(nomeDoTema)) === norm(raizDoFiltro);
+  }
+
   // A demanda casa com o filtro? Trata o roll-up e o "sem filtro".
   function casa(temaIdDaDemanda, temaIdDoFiltro, temas) {
     if (!temaIdDoFiltro) return true;
@@ -253,6 +281,8 @@
   window.catalogoResolve = resolve;
   window.catalogoLigaFiltro = ligaFiltro;
   window.catalogoCasa = casa;
+  window.catalogoRaiz = raiz;
+  window.catalogoNaRaiz = naRaiz;
   window.catalogoCaminhos = caminhos;
   window.catalogoOrdena = ordena;
   window.catalogoOpcoesHTML = opcoesHTML;

@@ -1524,7 +1524,154 @@ ok(!/function nmPopulateModulos/.test(semComentario(INDEX)),
 // folha, e "quanto o Cadastro consumiu no mes" fica sem resposta.
 ok(/catalogoCasa\(m\.tema_id, filters\.tema/.test(GANTT), 'o gantt filtra com roll-up');
 ok(/catalogoCasa\(m\.tema_id, _filtroTema/.test(ADMIN), 'o admin filtra com roll-up');
-ok(/catalogoCasa\(m\.tema_id, _temaFilter/.test(INDEX), 'o painel publico filtra com roll-up');
+/* O PAINEL PUBLICO AGRUPA PELA RAIZ, que e mais forte que roll-up por id.
+   O dropdown tinha 65 linhas: "AXCred - Operações", "- Dashboard", "- Nova
+   Operação", "- Regras de Alçada" e "- Simulador" eram cinco sistemas com 39, 1, 2,
+   1 e 0 demandas, e nenhum dos cinco respondia "quanto foi para Operações". */
+ok(/temaCasaRaiz\(m\)/.test(INDEX), 'o painel publico filtra pela raiz do sistema');
+ok(/catalogoNaRaiz/.test(INDEX), 'e usa a raiz do catalogo, e nao uma copia local');
+/* NENHUM RESTO DO FILTRO POR ID. Conferido por sabotagem: trocar so a primeira
+   ocorrencia deixava `temaCasaRaiz` na segunda, e o regex acima passava — a tela
+   ficava com duas regras de filtro, e o cartao de status discordava da lista. */
+ok(!/catalogoCasa\(m\.tema_id, _temaFilter/.test(INDEX),
+   'e nenhum lugar do painel filtra mais por tema_id');
+ok((INDEX.match(/temaCasaRaiz\(m\)/g) || []).length >= 2,
+   'os dois lugares que filtram usam a raiz — a lista e os cartoes de status');
+
+/* O CAMPO E UM INPUT, e nao um select com um datalist ao lado. Conferido por
+   sabotagem: trocar o <input> por <select> mantendo o <datalist> passava, e a
+   pessoa perdia justamente a capacidade de digitar. */
+(() => {
+  const c = corpo(INDEX, 'function fBusca(');
+  ok(!!c, 'existe o campo de busca do sistema');
+  if (!c) return;
+  ok(/<input class="filter-select filter-busca"/.test(c),
+     'e ele e um <input> digitavel');
+  ok(!/<select/.test(c), 'sem nenhum <select> escondido dentro dele');
+  ok(/list="\$\{idLista\}"/.test(c) && /<datalist id="\$\{idLista\}">/.test(c),
+     'ligado a um <datalist> pelo mesmo id — e o que faz sugerir enquanto digita');
+  ok(/onchange="\$\{handler\}\(this\.value\)"/.test(c),
+     'e o que foi digitado vai para o handler');
+})();
+
+/* setFiltroTema RESOLVE o texto. Conferido por sabotagem: guardar o texto cru
+   fazia o filtro comparar "cobranca" com "AXCred - Cobrança" — a tela ficava vazia
+   e o campo parecia certo. Os testes de `resolveRaiz` isolado nao pegavam isso,
+   porque o defeito estava em NAO CHAMAR a funcao. */
+(() => {
+  const c = corpo(INDEX, 'function setFiltroTema(');
+  ok(!!c, 'existe o handler do filtro de sistema');
+  if (!c) return;
+  const janela = {};
+  new Function('window', CAT)(janela);
+  let estado = 'INTOCADO';
+  let campo = { value: 'x', placeholder: '', focou: false,
+                focus() { this.focou = true; } };
+  const amb = {
+    resolveRaiz: new Function(corpo(INDEX, 'function resolveRaiz(') + '; return resolveRaiz;')(),
+    raizesDoPeriodo: () => [{ nome: 'AXCred - Cobrança', n: 3 },
+                            { nome: 'AXCred - Operações', n: 9 }],
+    _melhorias: [], matchPeriodo: () => true,
+    buildFilterBar: () => {}, renderConteudo: () => {},
+    document: { getElementById: () => campo },
+  };
+  const nomes = Object.keys(amb);
+  const f = new Function(...nomes, 'defineEstado',
+    c.replace(/_temaFilter = /g, 'defineEstado(') .replace(/achou;/, 'achou);') +
+    '; return setFiltroTema;'
+  )(...nomes.map(n => amb[n]), (v) => { estado = v; });
+
+  f('cobranca');
+  ok(estado === 'AXCred - Cobrança',
+     'digitar "cobranca" grava a raiz completa no filtro, e nao o texto cru',
+     JSON.stringify(estado));
+  f('AXCred - Operações');
+  ok(estado === 'AXCred - Operações', 'e o nome exato tambem grava');
+  f('');
+  ok(estado === null, 'campo vazio limpa o filtro');
+  campo = { value: 'nada', placeholder: '', focou: false, focus() { this.focou = true; } };
+  f('xyzabc');
+  ok(estado === null, 'o que nao existe limpa o filtro em vez de gravar lixo');
+  /* E DIZ QUE NAO ACHOU. Limpar em silencio faz a pessoa pensar que o filtro pegou
+     e que o sistema nao tem nada. */
+  ok(/Nenhum sistema/.test(campo.placeholder) && campo.value === '',
+     'e avisa no proprio campo que nao achou', JSON.stringify(campo.placeholder));
+})();
+
+/* TIPO SEM DEMANDA FICA FORA, pelo mesmo motivo do sistema. "Melhoria (0)" e
+   "Projeto (0)" eram duas das cinco opcoes, e escolher qualquer uma dava tela
+   vazia. Nao havia invariante nenhuma disso — apareceu por sabotagem. */
+(() => {
+  const c = corpo(INDEX, 'function buildFilterBar(');
+  ok(!!c, 'existe a barra de filtros');
+  if (!c) return;
+  ok(/\.filter\(o => o\.n > 0 \|\| String\(o\.key\) === String\(_tipoFilter\)\)/.test(c),
+     'tipo com zero demandas fica fora do filtro');
+  /* O TIPO ESCOLHIDO FICA, mesmo zerado: sumir com ele no meio da navegacao
+     tiraria da tela a opcao que esta ativa, e o filtro pareceria nao existir. */
+  ok(/String\(o\.key\) === String\(_tipoFilter\)/.test(c),
+     'e o tipo ativo sobrevive mesmo se zerar');
+})();
+(() => {
+  // A REGRA E EXECUTADA, e nao procurada no texto: e a de `catalogo.js`, a mesma
+  // que os Relatorios e o deck usam.
+  const janela = {};
+  new Function('window', CAT)(janela);
+  const R = janela.catalogoRaiz, N = janela.catalogoNaRaiz;
+  ok(typeof R === 'function' && typeof N === 'function', 'o catalogo publica raiz e naRaiz');
+  if (typeof R !== 'function') return;
+  ok(R('AXCred - Operações - Dashboard') === 'AXCred - Operações',
+     'a raiz sao os dois primeiros segmentos', R('AXCred - Operações - Dashboard'));
+  ok(R('AXCred - Cadastro - Análise de Crédito - Reanálise') === 'AXCred - Cadastro',
+     'e quatro niveis colapsam em dois', R('AXCred - Cadastro - Análise de Crédito - Reanálise'));
+  /* DOIS SEGMENTOS, E NAO UM: "AXCred" sozinho juntaria Cadastro, Cobranca,
+     Operacoes e Antifraude num balde de 90%, que e o mesmo que nao agrupar. */
+  ok(R('AXCred - Cobrança') !== R('AXCred - Operações'),
+     'Cobranca e Operacoes seguem separadas — um segmento so viraria um balde de 90%');
+  ok(N('AXCred - Operações - Nova Operação', 'AXCred - Operações'),
+     'a folha casa com a raiz dela');
+  ok(!N('AXCred - Cobrança', 'AXCred - Operações'), 'e nao casa com a raiz de outro');
+  ok(N('qualquer coisa', ''), 'sem filtro, tudo casa');
+  // Acento e caixa nao podem separar o que e o mesmo sistema.
+  ok(N('AXCRED - OPERAÇÕES - Dashboard', 'axcred - operacoes'),
+     'a comparacao ignora acento e caixa');
+})();
+/* SO AS RAIZES QUE TEM DEMANDA entram na lista: das 53 do cadastro, 22 estao
+   vazias, e uma opcao que filtra para lista vazia nao e escolha, e beco. */
+(() => {
+  const c = corpo(INDEX, 'function raizesDoPeriodo(');
+  ok(!!c, 'existe a lista de raizes do periodo');
+  if (!c) return;
+  ok(/localeCompare\(.*'pt-BR'/.test(c),
+     'em ordem alfabetica com localeCompare pt-BR — sort de codepoint joga acento para o fim');
+  const f = new Function('window', '_temas', 'temaNomeDe', c + '; return raizesDoPeriodo;')(
+    { catalogoRaiz: (n) => String(n).split(' - ').slice(0, 2).join(' - ') }, [],
+    (m) => m.tema);
+  const r = f([{ tema: 'AXCred - Operações' }, { tema: 'AXCred - Operações - Dashboard' },
+               { tema: 'AXCred - Cobrança' }, { tema: '' }]);
+  ok(r.length === 2, 'raiz repetida entra uma vez', JSON.stringify(r));
+  ok(r[0].nome === 'AXCred - Cobrança', 'e a ordem e alfabetica', r.map(x => x.nome).join(' | '));
+  ok(r.find(x => x.nome === 'AXCred - Operações').n === 2, 'com a soma das folhas dentro');
+  ok(!r.some(x => !x.nome), 'demanda sem tema nao vira raiz vazia na lista');
+})();
+/* O QUE FOI DIGITADO E RESOLVIDO contra a lista de verdade: guardar o texto cru
+   faria o filtro comparar "cobranca" com "AXCred - Cobrança" e nao achar nada — a
+   tela ficaria vazia e o campo pareceria certo. */
+(() => {
+  const c = corpo(INDEX, 'function resolveRaiz(');
+  ok(!!c, 'existe o resolvedor do que foi digitado');
+  if (!c) return;
+  const f = new Function(c + '; return resolveRaiz;')();
+  const rs = [{ nome: 'AXCred - Cobrança' }, { nome: 'AXCred - Operações' },
+              { nome: 'WorksOS RH - Bônus' }];
+  ok(f('AXCred - Cobrança', rs) === 'AXCred - Cobrança', 'nome exato');
+  ok(f('cobranca', rs) === 'AXCred - Cobrança', 'sem acento e em minuscula');
+  ok(f('operac', rs) === 'AXCred - Operações', 'pedaco do meio');
+  ok(f('bonus', rs) === 'WorksOS RH - Bônus', 'acento circunflexo tambem');
+  ok(f('  Cobrança  ', rs) === 'AXCred - Cobrança', 'com espaco sobrando');
+  ok(f('nao existe', rs) === null, 'e o que nao existe devolve null, para o filtro limpar');
+  ok(f('', rs) === null && f(null, rs) === null, 'vazio limpa o filtro');
+})();
 ok(/catalogoCasa\(m\.tema_id, t\.id/.test(DEV), 'a contagem do dev conta a subarvore');
 
 // No slide, o caminho inteiro nao cabe: "AXCred - Cadastro - Análise de Crédito -

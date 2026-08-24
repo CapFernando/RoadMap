@@ -161,6 +161,16 @@
     }
     .filter-btn:hover { border-color: var(--border2); color: var(--text); }
     .filter-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+    /* O campo de busca do sistema: o × so aparece quando ha filtro, e por isso
+       nao ocupa espaco quando nao ha. */
+    .fbusca { position: relative; display: flex; align-items: center; }
+    .filter-busca { width: 100%; padding-right: 26px; }
+    .filter-busca::placeholder { color: var(--text3); opacity: .8; }
+    .fbusca-x { position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+      background: none; border: 0; color: var(--text3); font-size: 17px; line-height: 1;
+      cursor: pointer; padding: 0 4px; }
+    .fbusca-x:hover { color: var(--text); }
+
     .filter-select {
       padding: 6px 12px;
       border-radius: 20px;
@@ -303,7 +313,7 @@
 <script src="prazo.js?v=592092724e"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
-<script src="catalogo.js?v=59b54a07ca"></script>
+<script src="catalogo.js?v=ff4d2dc0b6"></script>
 </head>
 <body>
 
@@ -857,13 +867,70 @@ function matchPeriodo(m) {
   return true;
 }
 
+/* O FILTRO DE TEMA E PELA RAIZ DO SISTEMA.
+ *
+ * Antes ele era por `tema_id`, e o dropdown tinha 65 linhas: "AXCred - Operações",
+ * "AXCred - Operações - Dashboard", "- Nova Operação", "- Regras de Alçada" e
+ * "- Simulador" apareciam como cinco sistemas diferentes, com 39, 1, 2, 1 e 0
+ * demandas. Quem procurava Operações tinha de escolher entre cinco, e nenhuma das
+ * cinco respondia "quanto foi para Operações".
+ *
+ * A raiz vem de `catalogo.js`, a mesma que os Relatorios e o deck usam — e o nome
+ * completo continua em cada card, então o detalhe não se perde.
+ */
+function temaNomeDe(m) {
+  const t = (_temas || []).find(x => String(x.id) === String(m && m.tema_id));
+  return t ? t.nome : '';
+}
+
+function temaCasaRaiz(m) {
+  return window.catalogoNaRaiz(temaNomeDe(m), _temaFilter);
+}
+
+/** As raizes que EXISTEM no periodo, em ordem alfabetica.
+ *
+ *  Só as que têm demanda: das 53 raízes do cadastro, 22 estão vazias. Uma opção que
+ *  filtra para lista vazia não é uma escolha, é um beco — e vinte e duas delas
+ *  enterram as que importam. */
+function raizesDoPeriodo(noPeriodo) {
+  const conta = new Map();
+  noPeriodo.forEach(m => {
+    const r = window.catalogoRaiz(temaNomeDe(m));
+    if (!r) return;
+    conta.set(r, (conta.get(r) || 0) + 1);
+  });
+  return [...conta.entries()]
+    .map(([nome, n]) => ({ nome, n }))
+    // ALFABETICA, com localeCompare pt-BR: "Órgão" depois de "Operações" e não no
+    // fim da lista, que e onde um sort de codepoint joga tudo que tem acento.
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+}
+
+/** O que a pessoa digitou, resolvido para uma raiz de verdade.
+ *
+ *  Digitar e o ponto do campo, e digitar erra: "operacoes" sem acento, "cobranca",
+ *  metade do nome. Aceita exato, depois começa-com, depois contém — e devolve null
+ *  quando nada serve, para o filtro limpar em vez de mostrar uma lista vazia sem
+ *  explicação. */
+function resolveRaiz(texto, raizes) {
+  const t = String(texto || '').trim();
+  if (!t) return null;
+  const norm = x => String(x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const alvo = norm(t);
+  const nomes = raizes.map(r => r.nome);
+  return nomes.find(n => norm(n) === alvo)
+      || nomes.find(n => norm(n).startsWith(alvo))
+      || nomes.find(n => norm(n).includes(alvo))
+      || null;
+}
+
 function filtradas() {
   return _melhorias.filter(m => {
     // Mesclada saiu do fluxo: quem pediu acompanha pela demanda principal.
     if (m.mesclado_em) return false;
     if (!matchPeriodo(m)) return false;
     if (!matchTipo(m, _tipoFilter)) return false;
-    if (_temaFilter && !catalogoCasa(m.tema_id, _temaFilter, _temas)) return false;
+    if (_temaFilter && !temaCasaRaiz(m)) return false;
     if (_statusFilter) return statusEfetivo(m) === _statusFilter;
     if (['concluido','negada'].includes(statusEfetivo(m))) return false;
     return true;
@@ -873,16 +940,30 @@ function filtradas() {
 function renderConteudo() {
   const mel = filtradas();
 
-  // Deixa explícito o tamanho do recorte: concluídas e negadas ficam escondidas
-  // por padrão, então o total dos filtros pode ser maior que a lista exibida.
+  /* A CONTAGEM DIZ UMA COISA SO, E A CERTA.
+     Era "Mostrando 7 de 299": o 7 vinha dos filtros MAIS o esconde-concluídas, e o
+     299 era a base inteira, sem filtro nenhum. Duas contas diferentes na mesma
+     frase, e a pergunta que ela provocava — "onde estão os outros 292?" — não tinha
+     resposta única. Agora ela compara com o recorte, e nomeia o que ficou de fora. */
   const cnt = document.getElementById('f-count');
-  if (cnt) cnt.textContent = `Mostrando ${mel.length} de ${_melhorias.length}`;
+  if (cnt) {
+    const noRecorte = _melhorias.filter(m => !m.mesclado_em && matchPeriodo(m) &&
+      matchTipo(m, _tipoFilter) && (!_temaFilter || temaCasaRaiz(m)));
+    const fechadas = noRecorte.filter(m => ['concluido', 'negada'].includes(statusEfetivo(m))).length;
+    cnt.textContent = _statusFilter || !fechadas
+      ? `${mel.length} de ${noRecorte.length} no recorte`
+      : `${mel.length} em aberto · ${fechadas} já ${fechadas === 1 ? 'fechada' : 'fechadas'}`;
+    cnt.title = fechadas
+      ? 'Concluídas e negadas ficam escondidas até você clicar no card delas. '
+        + `O recorte tem ${noRecorte.length} de ${_melhorias.length} demandas na base.`
+      : `O recorte tem ${noRecorte.length} de ${_melhorias.length} demandas na base.`;
+  }
 
   // conta por status unificado (usa mel sem filtro de status para mostrar totais reais)
   const melSemStatus = _melhorias.filter(m =>
     matchPeriodo(m) &&
     matchTipo(m, _tipoFilter) &&
-    (!_temaFilter || catalogoCasa(m.tema_id, _temaFilter, _temas))
+    (!_temaFilter || temaCasaRaiz(m))
   );
   const counts = { total: melSemStatus.length };
   STATUS_CARDS.forEach(c => { if (c.key !== 'total') counts[c.key] = melSemStatus.filter(m => statusEfetivo(m) === c.key).length; });
@@ -935,6 +1016,37 @@ function fEsc(s) {
   return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
 
+/* UM CAMPO DE TEXTO COM SUGESTOES, e nao um select de 53 linhas.
+ *
+ * Com cinquenta e três opções, achar "Cobrança" num `<select>` é rolar uma lista
+ * ou apostar na primeira letra. Aqui se digita: `<datalist>` é nativo do
+ * navegador, sugere enquanto se escreve, e não custa biblioteca nenhuma.
+ *
+ * O `change` resolve o que foi digitado contra a lista de verdade — sem acento,
+ * por começo ou por pedaço do meio — e reescreve o campo com o nome completo. Quem
+ * digita "cobranca" vê "AXCred - Cobrança" e sabe que acertou. Não achando nada, o
+ * filtro limpa e o campo diz por quê, em vez de devolver uma tela vazia sem
+ * explicação. */
+function fBusca(label, opcoes, valorAtual, handler, cls, idLista) {
+  const opts = opcoes.map(o =>
+    `<option value="${fEsc(o.nome)}">${fEsc(o.nome)} (${o.n})</option>`).join('');
+  const total = opcoes.reduce((t, o) => t + o.n, 0);
+  return `<div class="fgroup ${cls || ''}">
+    <label>${fEsc(label)}</label>
+    <div class="fbusca">
+      <input class="filter-select filter-busca" list="${idLista}" id="${idLista}-in"
+             placeholder="Todos (${total}) — digite para filtrar"
+             value="${fEsc(valorAtual || '')}"
+             onchange="${handler}(this.value)"
+             onfocus="this.select()"
+             autocomplete="off" spellcheck="false">
+      ${valorAtual ? `<button type="button" class="fbusca-x" title="Limpar tema"
+             onclick="${handler}('')">×</button>` : ''}
+    </div>
+    <datalist id="${idLista}">${opts}</datalist>
+  </div>`;
+}
+
 // Monta rótulo + select. O handler recebe o valor por this.value, então nome com
 // apóstrofo ou barra não quebra o HTML.
 function fGroup(label, opcoes, valorAtual, handler, disabled, cls) {
@@ -956,12 +1068,19 @@ function buildFilterBar() {
 
   const optAno  = [{ key: '', label: '— Ano —' },  ...anos.map(a => ({ key: a, label: String(a) }))];
   const optMes  = [{ key: '', label: '— Mês —' },  ...MESES.map((m, i) => ({ key: i, label: m }))];
-  const optTema = [{ key: '', label: 'Todos', n: noPeriodo.length },
-    ..._temas.map(t => ({ key: t.id, label: t.nome, n: noPeriodo.filter(m => m.tema_id === t.id).length }))];
+  const raizes = raizesDoPeriodo(noPeriodo);
 
+  /* TIPO SEM DEMANDA FICA FORA, pelo mesmo motivo do sistema: "Melhoria (0)" e
+     "Projeto (0)" eram duas das cinco opcoes, e escolher qualquer uma delas dava
+     tela vazia. Opcao que nao leva a nada nao e escolha, e ruido — e ela empurra
+     para baixo as duas que importam. */
   const semTipo = noPeriodo.filter(m => !m.tipo).length;
   const optTipo = [{ key: '', label: 'Todos', n: noPeriodo.length },
-    ...Object.keys(TIPO_LABELS).map(k => ({ key: k, label: TIPO_LABELS[k], n: noPeriodo.filter(m => m.tipo === k).length }))];
+    ...Object.keys(TIPO_LABELS)
+      .map(k => ({ key: k, label: TIPO_LABELS[k], n: noPeriodo.filter(m => m.tipo === k).length }))
+      // O tipo ESCOLHIDO fica, mesmo zerado: sumir com ele no meio da navegacao
+      // tiraria da tela a opcao que esta ativa.
+      .filter(o => o.n > 0 || String(o.key) === String(_tipoFilter))];
   if (semTipo) optTipo.push({ key: SEM_TIPO, label: '⚪ Sem tipo', n: semTipo });
 
   const ativos = [_ano, _mes, _temaFilter, _statusFilter, _tipoFilter].filter(v => v !== null && v !== undefined).length;
@@ -971,7 +1090,7 @@ function buildFilterBar() {
       ${fGroup('Tipo', optTipo, _tipoFilter, 'setFiltroTipoIssue', false, 'fg-tipo')}
       ${fGroup('Ano', optAno, _ano, 'setFiltroAno', anos.length === 0, 'fg-ano')}
       ${fGroup('Mês', optMes, _mes, 'setFiltroMes', false, 'fg-mes')}
-      ${_temas.length ? fGroup('Tema', optTema, _temaFilter, 'setFiltroTema', false, 'fg-tema') : ''}
+      ${raizes.length ? fBusca('Sistema', raizes, _temaFilter, 'setFiltroTema', 'fg-tema', 'dl-tema') : ''}
       <div class="fgroup">
         <label>&nbsp;</label>
         <button class="filter-btn" onclick="limparFiltros()"${ativos ? '' : ' disabled style="opacity:.35"'}>Limpar${ativos ? ` (${ativos})` : ''}</button>
@@ -982,11 +1101,26 @@ function buildFilterBar() {
 }
 
 
-// Vindo de um select, o valor escolhido é o estado — não alterna como o chip fazia
-function setFiltroTema(id) {
-  _temaFilter = id || null;
+/* O TEXTO DIGITADO VIRA UMA RAIZ, ou nada.
+ *
+ *  Guardar o texto cru faria o filtro comparar "cobranca" com "AXCred - Cobrança" e
+ *  não achar nada — a tela ficaria vazia e o campo pareceria certo. */
+function setFiltroTema(texto) {
+  const raizes = raizesDoPeriodo(_melhorias.filter(matchPeriodo));
+  const achou = resolveRaiz(texto, raizes);
+  _temaFilter = achou;
   buildFilterBar();
   renderConteudo();
+  // NAO ACHOU: diz isso no proprio campo. Limpar em silencio faz a pessoa pensar
+  // que o filtro pegou e que o sistema nao tem nada.
+  if (String(texto || '').trim() && !achou) {
+    const el = document.getElementById('dl-tema-in');
+    if (el) {
+      el.value = '';
+      el.placeholder = 'Nenhum sistema com "' + String(texto).trim().slice(0, 24) + '"';
+      el.focus();
+    }
+  }
 }
 
 function setFiltroTipoIssue(v) {
