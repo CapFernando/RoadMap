@@ -1550,6 +1550,60 @@ ok(/catalogoCasa\(m\.tema_id, _filtroTema/.test(ADMIN), 'o admin filtra com roll
   ok(!/slice\(0, 2\)/.test(c) && !/split\(' - '\)/.test(c),
      'sem nenhuma copia da regra dentro dela');
 })();
+/* O DONUT FALA A MESMA LINGUA DO FILTRO.
+   Ele listava os 66 temas do cadastro um por um: quarenta e tantos com ZERO —
+   quadradinhos que nao desenham fatia e enchem meia tela de legenda — e os que
+   tinham demanda apareciam picados, "AXCred - Operações 9" ao lado de "- Nova
+   Operação 1" e "- Dashboard 1", cada um com uma cor, como se fossem tres
+   assuntos. Pior que feio: quem lia "Operações 9" no grafico e escolhia
+   "Operações" no filtro logo acima via 49. */
+(() => {
+  const c = corpo(INDEX, 'function buildCharts(');
+  ok(!!c, 'existe a montagem dos graficos');
+  if (!c) return;
+  ok(/catalogoRaiz/.test(c), 'o donut agrupa pela raiz, a mesma regra do filtro');
+  ok(/\.filter\(\(\[, n\]\) => n > 0\)/.test(c), 'e descarta familia com zero demandas');
+
+  const janela = {};
+  new Function('window', CAT)(janela);
+  const legs = [];
+  const doc = { getElementById: (id) => ({
+    set innerHTML(v) { if (id === 'leg-temas') legs.push(v); }, getContext: () => ({}) }) };
+  let feitos = 0;
+  const temas = [
+    { id: 1, nome: 'AXCred - Operações' },
+    { id: 2, nome: 'AXCred - Operações - Dashboard' },
+    { id: 3, nome: 'BI' },
+    { id: 4, nome: 'BI - Reports' },
+    { id: 5, nome: 'Ninguem usa' },
+  ];
+  const mel = [{ tema_id: 1 }, { tema_id: 1 }, { tema_id: 2 }, { tema_id: 3 }, { tema_id: 4 }];
+  let F;
+  try {
+    F = new Function('window', 'document', 'Chart', 'TEMA_CORES', 'STATUS_META',
+                     'statusEfetivo', 'fEsc', c + '; return buildCharts;')(
+      janela, doc, function () { feitos++; }, ['#a', '#b', '#c'],
+      { backlog: { label: 'B', cor: '#1' } }, () => 'backlog', (x) => String(x == null ? '' : x));
+  } catch (e) { ok(false, 'buildCharts roda isolada', e.message); return; }
+  F(temas, mel);
+  const html = legs.join('');
+  const itens = [...html.matchAll(/<\/span>([^<]+)<strong[^>]*>(\d+)<\/strong>/g)]
+    .map((m) => [m[1].trim(), +m[2]]);
+  ok(itens.length === 2, 'cinco temas viram duas familias', JSON.stringify(itens));
+  ok(itens[0][0] === 'AXCred - Operações' && itens[0][1] === 3,
+     'e a folha soma dentro da raiz', JSON.stringify(itens[0]));
+  ok(!itens.some(([n]) => n === 'Ninguem usa'), 'tema sem demanda nao vira quadradinho');
+  /* ORDENADO POR TAMANHO, e nao alfabetico como o filtro: aqui a pergunta e "onde
+     esta a massa" e a resposta e a ordem; no filtro e "onde esta o que procuro". */
+  ok(itens[0][1] >= itens[1][1], 'em ordem de tamanho', JSON.stringify(itens.map((x) => x[1])));
+  ok(itens.reduce((t, [, v]) => t + v, 0) === mel.length,
+     'e a soma das fatias fecha com o total de demandas');
+  ok(/leg-click/.test(html) && /setFiltroTema/.test(html),
+     'a legenda filtra ao clique — era o gesto que a pessoa ja tentava');
+  ok(/role="button"/.test(html) && /tabindex="0"/.test(html) && /onkeydown/.test(html),
+     'e alcancavel pelo teclado, e nao so pelo mouse');
+  ok(feitos === 2, 'os dois graficos continuam sendo desenhados', String(feitos));
+})();
 ok(/temaCasaRaiz\(m\)/.test(INDEX), 'o painel publico filtra pela raiz do sistema');
 ok(/catalogoNaRaiz/.test(INDEX), 'e usa a raiz do catalogo, e nao uma copia local');
 /* NENHUM RESTO DO FILTRO POR ID. Conferido por sabotagem: trocar so a primeira

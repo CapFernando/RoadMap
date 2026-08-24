@@ -163,6 +163,13 @@
     .filter-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
     /* O campo de busca do sistema: o × so aparece quando ha filtro, e por isso
        nao ocupa espaco quando nao ha. */
+    /* A legenda do grafico filtra ao clique. Sem o cursor e o realce, o alvo existe
+       e ninguem descobre. */
+    .leg-click { cursor: pointer; border-radius: 4px; padding: 1px 4px; margin: -1px -4px;
+      transition: background .12s; }
+    .leg-click:hover { background: var(--bg3); }
+    .leg-click:focus-visible { outline: 2px solid var(--blue, #4C9AFF); outline-offset: 1px; }
+
     .fbusca { position: relative; display: flex; align-items: center; }
     .filter-busca { width: 100%; padding-right: 26px; }
     .filter-busca::placeholder { color: var(--text3); opacity: .8; }
@@ -751,10 +758,35 @@ function toggleTema(id) {
 }
 
 function buildCharts(temas, melhorias) {
-  // por tema
-  const temaLabels = temas.map(t => t.nome);
-  const temaData   = temas.map(t => melhorias.filter(m => m.tema_id === t.id).length);
-  const temaCores  = temas.map((_, i) => TEMA_CORES[i % TEMA_CORES.length]);
+  /* O DONUT FALA A MESMA LINGUA DO FILTRO: por familia, e sem os zeros.
+   *
+   * Ele listava os 65 temas do cadastro, um por um. Quarenta e tantos com ZERO —
+   * quadradinhos coloridos que nao desenham fatia nenhuma e enchem meia tela de
+   * legenda — e os que tinham demanda apareciam picados: "AXCred - Operações 9",
+   * "AXCred - Operações - Nova Operação 1", "- Dashboard 1", "- Regras de Alçada 1",
+   * cada um com uma cor diferente, como se fossem quatro assuntos.
+   *
+   * Pior que feio: o grafico e o filtro logo acima respondiam a mesma pergunta com
+   * recortes diferentes. Quem lia "AXCred - Operações 9" no grafico e escolhia
+   * "AXCred - Operações" no filtro via 49.
+   *
+   * Agora e `catalogoRaiz`, a mesma regra do filtro, dos Relatorios e do deck.
+   */
+  const porFamilia = new Map();
+  melhorias.forEach(m => {
+    const t = (temas || []).find(x => String(x.id) === String(m.tema_id));
+    const r = window.catalogoRaiz(t ? t.nome : '') || 'Sem sistema';
+    porFamilia.set(r, (porFamilia.get(r) || 0) + 1);
+  });
+  /* ORDENADO POR TAMANHO, e nao alfabetico como o filtro: aqui a pergunta e "onde
+     esta a massa", e a resposta e a ordem. No filtro a pergunta e "onde esta o que
+     eu procuro", e ali a ordem alfabetica e que responde. */
+  const familias = [...porFamilia.entries()]
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+  const temaLabels = familias.map(([nome]) => nome);
+  const temaData   = familias.map(([, n]) => n);
+  const temaCores  = familias.map((_, i) => TEMA_CORES[i % TEMA_CORES.length]);
 
   // por status
   const stLabels = Object.values(STATUS_META).map(s => s.label);
@@ -783,10 +815,15 @@ function buildCharts(temas, melhorias) {
 
   // legendas
   const legTema = document.getElementById('leg-temas');
-  temas.forEach((t, i) => {
-    const n = temaData[i];
-    legTema.innerHTML += `<span class="leg"><span class="leg-sq" style="background:${temaCores[i]}"></span>${fEsc(t.nome)} <strong style="color:var(--text);margin-left:2px;">${n}</strong></span>`;
-  });
+  /* A LEGENDA CLICA. Ela ja mostrava o nome da familia ao lado da cor; clicar nela
+     e o gesto que a pessoa tenta, e ate agora nao acontecia nada. */
+  legTema.innerHTML = familias.map(([nome, n], i) =>
+    `<span class="leg leg-click" role="button" tabindex="0"
+           title="Filtrar por ${fEsc(nome)}"
+           onclick="setFiltroTema('${fEsc(nome).replace(/'/g, "\\'")}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
+      ><span class="leg-sq" style="background:${temaCores[i]}"></span>${fEsc(nome)} <strong style="color:var(--text);margin-left:2px;">${n}</strong></span>`
+  ).join('');
 
   const legStatus = document.getElementById('leg-status');
   stKeys.forEach((k, i) => {
