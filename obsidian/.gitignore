@@ -1,0 +1,7 @@
+# O estado e a maquina de quem roda: quais aprovacoes ja viraram nota. Commitado,
+# ele diria a outra maquina que notas que ela nunca criou ja existem, e essas
+# entregas nunca apareceriam no vault dela.
+.estado-obsidian.json
+# O log e ruido no historico e conta o que foi aprovado quando — nao precisa
+# viajar para um repositorio publico.
+ultima-execucao.log
