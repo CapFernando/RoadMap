@@ -147,7 +147,7 @@ def devs(m):
     return [x.strip() for x in re.split(r'[/;,]', str(m.get('dev') or '')) if x.strip()]
 
 
-def limpaNome(s):
+def limpaNome(s, teto=110):
     r"""Um nome de arquivo que o Windows aceita e voce reconhece.
 
     O Windows recusa \ / : * ? " < > | e nao aceita nome terminado em ponto ou
@@ -155,7 +155,29 @@ def limpaNome(s):
     """
     s = re.sub(r'[\\/:*?"<>|]', ' ', str(s or ''))
     s = re.sub(r'\s+', ' ', s).strip(' .')
-    return s[:110].strip(' .') or 'sem titulo'
+    if len(s) > teto:
+        s = s[:teto - 1].rstrip() + '…'
+    return s.strip(' .') or 'sem titulo'
+
+
+def tetoDoTitulo():
+    """Quanto do titulo cabe, medido a partir de ONDE A PASTA ESTA.
+
+    O Windows corta em 260 caracteres o caminho inteiro, e o erro que ele devolve
+    nao diz isso — a nota simplesmente nao e escrita. Com a pasta de hoje (85
+    caracteres) o maior nome gerado dava 218: cabia, com 42 de folga. Folga de 42
+    some ao renomear uma pasta, ao aninhar mais um nivel, ou ao sincronizar com um
+    servico que prefixa o caminho.
+
+    Medindo a partir da pasta, o teto se ajusta sozinho se o vault mudar de lugar,
+    e sobra margem de verdade. O que se perde e o fim de um titulo longo — e o
+    codigo AX-### esta no nome, que e por onde se procura.
+    """
+    # data(10) + " - [Entrega] "(13) + "AX-9999"(7) + " "(1) + ".md"(3) = 34
+    fixo = 34
+    folga = 40          # para o Obsidian criar ".sync-conflict", ".tmp" e afins
+    cabe = 260 - len(PASTA) - 1 - fixo - folga
+    return max(30, min(110, cabe))
 
 
 def slug(s):
@@ -327,6 +349,7 @@ def main():
         gravaLog()
         return 0
 
+    TETO = tetoDoTitulo()
     if not args.simular:
         os.makedirs(PASTA, exist_ok=True)
 
@@ -335,7 +358,7 @@ def main():
         cod = m['codigo']
         data = diaLocal(m.get('validado_em')) or dia(m.get('concluido_em'))
         alvo = os.path.join(PASTA, '%s - [Entrega] %s %s.md'
-                            % (data, cod, limpaNome(m.get('titulo'))))
+                            % (data, cod, limpaNome(m.get('titulo'), TETO)))
 
         # UMA NOTA POR DEMANDA, mesmo que a data mude. Reaprovada num outro dia, o
         # nome do arquivo mudaria e sobrariam duas notas da mesma entrega.
