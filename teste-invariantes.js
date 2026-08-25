@@ -4931,6 +4931,108 @@ ok(/delta: relDeltaHTML\(r\.agora\.entregue, r\.antes\.entregue, true\)/.test(AD
    Havia 52 demandas alocadas sem pontuacao — 904 pontos invisiveis no cruzamento
    planejado x entregue. O buraco nao era de calculo, era de cadastro, e se repetia
    toda semana. Esta invariante EXECUTA `normalizaEstados`. */
+/* PUBLICAR NAO REVERTE O QUE ESTA ABA NAO EDITOU.
+   O merge do publish tratava TEMAS diferente de todo o resto: so acrescentava os
+   que o local nao conhecia, e para um tema presente dos dois lados o nome LOCAL
+   vencia — mexido ou nao. Uma aba aberta as 14h e publicada as 17h reverteu cinco
+   renomeacoes em 24/08, sem erro e sem aviso; so apareceu porque o grafico voltou a
+   mostrar os nomes velhos. Demandas, devs_perfil, projetos, feriados e ausencias ja
+   fundiam de verdade. */
+sec('Publicar nao apaga trabalho de outra tela');
+(() => {
+  const c = corpo(ADMIN, 'function mesclaTemas(');
+  ok(!!c, 'existe o merge de temas');
+  if (!c) return;
+  ok(!/localT\.has\(t\.id\)/.test(ADMIN) && !/localTemaIds\.has\(t\.id\)/.test(ADMIN),
+     'e nenhum caminho de gravacao guarda a versao antiga, que so acrescentava');
+  ok((ADMIN.match(/mesclaTemas\(/g) || []).length >= 3,
+     'os DOIS saves usam a mesma funcao — dois caminhos com regras diferentes e como esta base ja errou');
+
+  const monta = (locais, mexidos, apagados) => new Function(
+    'state', '_temasMexidos', '_deletedIds', c + '; return mesclaTemas;'
+  )({ temas: JSON.parse(JSON.stringify(locais)) }, new Set(mexidos || []), new Set(apagados || []));
+
+  // O CASO REAL DE 24/08: a aba nao editou nada, so estava velha.
+  const velha = [{ id: 'a', nome: 'Novo Ambiente' }, { id: 'c', nome: 'Ax Despesa - Melhorias' }];
+  const srv = [{ id: 'a', nome: 'AXCred - Operações - Novo Ambiente' },
+               { id: 'c', nome: 'Ax Despesas - Melhorias' },
+               { id: 'g', nome: 'Ax Despesas - Orçamento' }];
+  const r = monta(velha, [], [])(srv);
+  const por = Object.fromEntries(r.map((t) => [t.id, t.nome]));
+  ok(por.a === 'AXCred - Operações - Novo Ambiente' && por.c === 'Ax Despesas - Melhorias',
+     'aba velha nao reverte renomeacao feita no servidor', JSON.stringify(por));
+  ok(por.g === 'Ax Despesas - Orçamento', 'e o tema criado no servidor entra');
+
+  // O QUE A ABA EDITOU TEM DE VENCER, senao renomear pela tela pararia de funcionar.
+  const meu = [{ id: 'a', nome: 'Nome que EU dei agora' }];
+  ok(monta(meu, ['a'], [])([{ id: 'a', nome: 'Nome do servidor' }])[0].nome === 'Nome que EU dei agora',
+     'o rename feito nesta aba vence o servidor');
+  ok(monta(meu, [], [])([{ id: 'a', nome: 'Nome do servidor' }])[0].nome === 'Nome do servidor',
+     'e o MESMO nome local, sem edicao, perde — e a diferenca inteira');
+
+  ok(monta([{ id: 'x', nome: 'Novo daqui' }], ['x'], [])([]).length === 1,
+     'tema criado nesta aba sobrevive ao merge');
+  ok(!monta([], [], ['z'])([{ id: 'z', nome: 'Apagado aqui' }]).length,
+     'e o servidor nao ressuscita o que esta aba apagou');
+  ok(monta([{ id: 'a', nome: 'X' }], [], [])(null).length === 1, 'servidor sem temas nao apaga os locais');
+
+  /* A MARCA E POSTA EM TODO CAMINHO QUE CRIA OU RENOMEIA TEMA. Faltando num deles,
+     o tema criado por ali sumiria no proximo publish — pior que o defeito original. */
+  const salvar = corpo(ADMIN, 'async function saveTema(');
+  ok(/_temasMexidos\.add\(id\)/.test(salvar) && /_temasMexidos\.add\(novo\.id\)/.test(salvar),
+     'saveTema marca tanto o renomeado quanto o criado');
+  const resolve = corpo(ADMIN, 'function resolveTemaSelecao(');
+  ok(/_temasMexidos\.add\(novo\.id\)/.test(resolve),
+     'e o tema criado pelo modal de demanda tambem e marcado');
+})();
+
+/* SISTEMA E OBRIGATORIO A PARTIR DE PLANEJADO.
+   A AX-290 ficou viva sem tema e virou uma fatia "Sem sistema" no grafico — e o
+   efeito nao para na tela: demanda sem sistema cai fora do filtro, do corte por
+   assunto do deck, do agrupamento dos Relatorios e da conta de para onde a
+   capacidade foi. */
+sec('Sistema obrigatorio');
+(() => {
+  const c = corpo(W, 'function entrandoAlocadaSemSistema(');
+  ok(!!c, 'existe a trava do sistema obrigatorio');
+  if (!c) return;
+  const ALOC = eval((W.match(/const ETAPAS_ALOCADA = (\[[^\]]*\]);/) || [])[1]);
+  const F = new Function('ETAPAS_ALOCADA', c + '; return entrandoAlocadaSemSistema;')(ALOC);
+  const temas = [{ id: 't1', nome: 'AXCred - Cadastro' }];
+  const caso = (rec, velha) => F(
+    { temas, melhorias: [Object.assign({ id: 'x', codigo: 'AX-900' }, rec)] },
+    { melhorias: velha === undefined ? [] : [Object.assign({ id: 'x' }, velha)] });
+
+  ['planejado', 'em_andamento', 'validacao', 'concluido'].forEach((sp) => {
+    ok(caso({ status_planejamento: sp }).length === 1, sp + ' sem sistema e recusado');
+  });
+  /* BACKLOG E PLANNING PASSAM, como no piso de pontuacao: ali a ideia ainda esta
+     sendo entendida, e exigir o sistema barraria o registro de quem acabou de
+     receber a demanda. */
+  ['backlog', 'levantar_req', 'planning'].forEach((sp) => {
+    ok(!caso({ status_planejamento: sp }).length, sp + ' sem sistema passa');
+  });
+  ok(!caso({ status_planejamento: 'planejado', tema_id: 't1' }).length, 'com sistema valido passa');
+  ok(caso({ status_planejamento: 'planejado', tema_id: 'nao-existe' }).length === 1,
+     'tema_id apontando para tema apagado conta como sem sistema');
+  ok(!caso({ status_planejamento: 'concluido', oculto: true }).length, 'oculta nao e barrada');
+  ok(!caso({ status_planejamento: 'concluido', mesclado_em: '2026-01-01' }).length, 'mesclada tambem nao');
+  /* NA TRANSICAO, e nao no estado: travar por estado faria toda gravacao falhar por
+     causa de um registro antigo, e quem so queria salvar um texto ficaria preso a um
+     problema que nao criou. Mesmo criterio das horas e do responsavel. */
+  ok(!caso({ status_planejamento: 'planejado' }, { status_planejamento: 'planejado' }).length,
+     'quem JA estava alocada sem sistema nao trava a gravacao');
+  ok(caso({ status_planejamento: 'planejado' }, { status_planejamento: 'backlog' }).length === 1,
+     'mas ENTRAR em planejado sem sistema e recusado');
+  ok(caso({ status_planejamento: 'planejado' },
+           { status_planejamento: 'planejado', tema_id: 't1' }).length === 1,
+     'e TIRAR o sistema de quem ja estava alocada tambem');
+  // RECUSA, e nao carimba: nao ha sistema padrao defensavel.
+  ok(/error: 'sem_sistema'/.test(W), 'a rota recusa com um erro nomeado');
+  ok((W.match(/entrandoAlocadaSemSistema\(data,/g) || []).length === 2,
+     'e as duas rotas de gravacao chamam a trava', String((W.match(/entrandoAlocadaSemSistema\(data,/g) || []).length));
+})();
+
 sec('O piso de pontuacao');
 (() => {
   const konst = (nome) => {

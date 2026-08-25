@@ -1088,6 +1088,46 @@ function entrandoEmConcluidoSemHoras(recebido, servidor) {
 }
 
 
+/* SISTEMA E OBRIGATORIO A PARTIR DE PLANEJADO.
+ *
+ * A AX-290 ficou viva sem tema e aparecia como "Sem sistema" no grafico do painel —
+ * uma fatia que nao responde a pergunta que o grafico faz. E o efeito nao para na
+ * tela: demanda sem sistema cai fora do filtro por sistema, do corte por assunto do
+ * deck, do agrupamento dos Relatorios e da conta de "para onde a capacidade foi".
+ * Ela existe em todo lugar como uma sobra sem nome.
+ *
+ * SO A PARTIR DE PLANEJADO, como o piso de pontuacao: em backlog e levantar_req a
+ * ideia ainda esta sendo entendida, e exigir o sistema ali barraria o registro de
+ * uma demanda que acabou de chegar. Do compromisso em diante, ela precisa dizer de
+ * que sistema e.
+ *
+ * RECUSA, e nao carimba um padrao. Nao ha sistema padrao defensavel: escolher um
+ * colocaria informacao errada onde nao havia nenhuma, e informacao errada e pior
+ * que ausente porque ninguem a procura depois. Mesmo desenho de
+ * `entrandoEmConcluidoSemDev`.
+ */
+function entrandoAlocadaSemSistema(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const temas = new Set(((recebido.temas) || []).map(t => t && t.id).filter(Boolean));
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || m.oculto || m.mesclado_em) continue;
+    if (!ETAPAS_ALOCADA.includes(String(m.status_planejamento || ''))) continue;
+    if (m.tema_id && temas.has(m.tema_id)) continue;
+    const velha = antes.get(m.id);
+    /* JA ESTAVA ASSIM: nao barra. Travar por ESTADO faria toda gravacao falhar por
+       causa de um registro antigo, e a pessoa que so queria salvar um texto ficaria
+       presa a um problema que nao criou. A trava e na TRANSICAO — mesmo criterio das
+       horas e do responsavel. */
+    if (velha && ETAPAS_ALOCADA.includes(String(velha.status_planejamento || '')) &&
+        !(velha.tema_id && temas.has(velha.tema_id))) continue;
+    presos.push(m.codigo || m.id);
+  }
+  return presos;
+}
+
 // Entrar em CONCLUIDO sem responsavel. `corrigeSemDev` cobre planejado,
 // em_andamento e validacao rebaixando para backlog — mas concluido nao pode ser
 // rebaixado: a demanda foi entregue, e devolver ela para o backlog seria apagar
@@ -3476,6 +3516,14 @@ export default {
       // registraHistorico: gravar historico de uma publicacao que sera recusada
       // sujaria a trilha com um evento que nao aconteceu.
       const semHorasPub = entrandoEmConcluidoSemHoras(data, antesPub);
+      const semSistemaPub = entrandoAlocadaSemSistema(data, antesPub);
+      if (semSistemaPub.length) {
+        return json({ error: 'sem_sistema',
+                      codigos: semSistemaPub,
+                      detail: 'Escolha o sistema antes de planejar: ' + semSistemaPub.join(', ') +
+                              '. Sem ele a demanda fica de fora do filtro, do grafico e de ' +
+                              'todo relatorio por sistema.' }, 400, headers);
+      }
       const semDevPub = entrandoEmConcluidoSemDev(data, antesPub);
       if (semDevPub.length) {
         return json({ error: 'sem_responsavel',
@@ -3595,6 +3643,14 @@ export default {
       // registraHistorico: gravar historico de uma publicacao que sera recusada
       // sujaria a trilha com um evento que nao aconteceu.
       const semHorasDev = entrandoEmConcluidoSemHoras(data, antesDev);
+      const semSistema = entrandoAlocadaSemSistema(data, antesDev);
+      if (semSistema.length) {
+        return json({ error: 'sem_sistema',
+                      codigos: semSistema,
+                      detail: 'Escolha o sistema antes de planejar: ' + semSistema.join(', ') +
+                              '. Sem ele a demanda fica de fora do filtro, do grafico e de ' +
+                              'todo relatorio por sistema.' }, 400, headers);
+      }
       const semDevDev = entrandoEmConcluidoSemDev(data, antesDev);
       if (semDevDev.length) {
         return json({ error: 'sem_responsavel',

@@ -2468,6 +2468,32 @@ function mesclaMelhorias(serverMelhorias) {
   return merged;
 }
 
+/** Funde os temas do servidor com os desta aba.
+ *
+ *  A REGRA E A MESMA DE `devs_perfil`: local vence no que esta aba editou, e o
+ *  resto vem do servidor. A versao anterior so ACRESCENTAVA temas que o local nao
+ *  conhecia; para um tema presente dos dois lados com nomes diferentes, o nome
+ *  local vencia — inclusive quando esta aba nunca o tocou e so o tinha carregado
+ *  velho. Era a unica colecao do payload que sobrescrevia trabalho alheio.
+ *
+ *  Tema APAGADO nesta aba continua apagado: `_deletedIds` ganha do servidor, senao
+ *  a exclusao voltaria atras no proximo publish.
+ */
+function mesclaTemas(doServidor) {
+  const meus = new Map((state.temas || []).map(t => [t.id, t]));
+  const out = [];
+  (doServidor || []).forEach(t => {
+    if (!t || _deletedIds.has(t.id)) return;      // apagado aqui: fica apagado
+    const meu = meus.get(t.id);
+    meus.delete(t.id);
+    // Editado nesta aba vence; nao editado vem do servidor, com o nome de la.
+    out.push(meu && _temasMexidos.has(t.id) ? meu : t);
+  });
+  // O que sobrou e local e o servidor nao tem: tema novo desta aba.
+  meus.forEach(t => { if (!_deletedIds.has(t.id)) out.push(t); });
+  return out;
+}
+
 async function saveViaProxy(tentativa = 1) {
   showSaving(true);
   try {
@@ -2478,8 +2504,7 @@ async function saveViaProxy(tentativa = 1) {
     // avançar entre esta leitura e a gravação, ele recusa com 409 em vez de
     // deixar a nossa versão sobrescrever a de outra tela.
     const baseVersao = server.atualizado_em || null;
-    const localT = new Set(state.temas.map(t => t.id));
-    (server.temas || []).forEach(t => { if (!localT.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t); });
+    state.temas = mesclaTemas(server.temas);
     state.melhorias = mesclaMelhorias(server.melhorias);
     // `devs_perfil` funde por CHAVE, e nao por substituicao: o Planejamento tambem
     // edita esse mapa, e trocar o objeto inteiro faria a marcacao de quem publicou
@@ -2604,10 +2629,12 @@ async function saveToGitHub(attempt = 1) {
     // A leitura NÃO fica em catch silencioso: se falhar, o save é abortado —
     // nunca gravamos por cima de dados que não conseguimos ler (evita zerar o arquivo).
     const serverData = await ghReadRaw(runtimeToken);
-    const localTemaIds = new Set(state.temas.map(t => t.id));
-    (serverData.temas || []).forEach(t => {
-      if (!localTemaIds.has(t.id) && !_deletedIds.has(t.id)) state.temas.push(t);
-    });
+    /* O MESMO MERGE DO OUTRO CAMINHO. Este e o save direto no GitHub (sem Worker),
+       e tinha a copia do defeito: so acrescentava tema desconhecido, e o nome local
+       vencia para os que existiam dos dois lados. Dois caminhos de gravacao com
+       regras diferentes e como esta base ja errou antes — consertar um deixaria o
+       outro revertendo nomes em silencio. */
+    state.temas = mesclaTemas(serverData.temas);
     state.melhorias = mesclaMelhorias(serverData.melhorias);   // 3-way merge — ver comentário acima
     // Preserva devs e feriados cadastrados pelo Gantt — admin não os edita mas não deve apagá-los
     // `devs_perfil` funde por CHAVE, e nao por substituicao: o Planejamento tambem
@@ -7779,6 +7806,20 @@ function temaPrevia() {
     (p.length === 1 ? ' <span style="color:var(--text3)">(sistema, sem módulo)</span>' : '');
 }
 
+/* QUAIS TEMAS ESTA ABA EDITOU.
+ *
+ * Sem essa lista, publicar mandava a lista INTEIRA de temas do navegador e o nome
+ * local vencia sempre — mexido ou nao. Uma aba aberta as 14h e publicada as 17h
+ * revertia toda renomeacao feita nesse meio tempo, sem erro e sem aviso: aconteceu
+ * com cinco temas em 24/08 e so foi descoberto porque o grafico mostrou os nomes
+ * velhos de volta.
+ *
+ * Demandas, `devs_perfil`, projetos, feriados e ausencias ja fundiam de verdade no
+ * `saveViaProxy`. Temas era a unica colecao em que o local sobrescrevia o servidor
+ * — e por isso a unica que perdia trabalho alheio.
+ */
+const _temasMexidos = new Set();
+
 async function saveTema() {
   const nome = String(document.getElementById('t-nome').value || '').trim();
   if (!nome) { toast('Escreva o caminho do tema.', 'err'); return; }
@@ -7788,8 +7829,11 @@ async function saveTema() {
   if (id) {
     const t = state.temas.find(t => t.id === id);
     if (t) t.nome = nome; // mesmo id: demandas vinculadas não são afetadas
+    _temasMexidos.add(id);
   } else {
-    state.temas.push({ id: uid(), nome });
+    const novo = { id: uid(), nome };
+    state.temas.push(novo);
+    _temasMexidos.add(novo.id);
   }
   _pendingEdits = true;
   closeModal('modal-tema');
@@ -8033,6 +8077,7 @@ function resolveTemaSelecao(prefix, fallbackTemaId) {
   return catalogoResolve(prefix, state.temas || [], fallbackTemaId || '', function (nome) {
     const novo = { id: uid(), nome };
     state.temas.push(novo);
+    _temasMexidos.add(novo.id);
     return novo.id;
   });
 }
