@@ -1027,7 +1027,8 @@
 <script src="capa-tecnologia.js"></script>
 <script src="pipelines.js?v=a122233200"></script>
 <script src="capacidade.js?v=3769a13468"></script>
-<script src="apresentacao.js?v=e58707c595"></script>
+<script src="apresentacao.js?v=4137b6e9c0"></script>
+<script src="relatorio-ppt.js?v=551066c21b"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=cdc461dcbd"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -1443,6 +1444,19 @@
     </div>
 
     <div class="tab-content" id="tab-relatorios">
+      <style>
+        /* A previa do deck: rotulo a esquerda, valor a direita, uma linha cada.
+           Existe para a pessoa conferir os numeros ANTES de baixar 800 KB de
+           biblioteca — descobrir o periodo errado depois de gerar e o tipo de
+           espera que acontece cinco minutos antes da reuniao. */
+        .rp-previa { border:1px solid var(--border); border-radius:8px; overflow:hidden }
+        .rp-previa-l { display:flex; gap:14px; justify-content:space-between;
+                       align-items:baseline; padding:8px 12px; font-size:12.5px;
+                       border-bottom:1px solid var(--border) }
+        .rp-previa-l:last-child { border-bottom:0 }
+        .rp-previa-l span { color:var(--text3); flex:0 0 auto }
+        .rp-previa-l strong { text-align:right; font-weight:600 }
+      </style>
       <!-- A BARRA: escala, periodo e sistema.
            A ESCALA VEM PRIMEIRO porque ela muda o significado de tudo abaixo — e a
            pergunta "de que periodo estamos falando" antes de "de que assunto". Mes
@@ -1468,7 +1482,40 @@
           <select id="rel-sistema" onchange="renderRelatorios()"></select>
         </div>
         <button class="btn btn-secondary" onclick="renderRelatorios()">Atualizar</button>
+        <button class="btn btn-secondary" onclick="relPptAbrir()"
+                title="Monta um .pptx do assunto filtrado, ou o consolidado dos maiores">📊 Apresentação</button>
         <button class="btn btn-primary" onclick="copiarRelatorio()">📋 Copiar tudo</button>
+      </div>
+
+      <!-- O MODAL DO DECK. Fica dentro da aba porque o periodo e o sistema sao os
+           do filtro dela: um segundo seletor de periodo aqui divergiria do de cima
+           no pior momento — a pessoa le "agosto" na tela e recebe setembro. -->
+      <div id="modal-rel-ppt" class="modal-overlay" style="display:none">
+        <div class="modal" style="max-width:620px">
+          <button type="button" class="modal-close-btn" onclick="closeModal('modal-rel-ppt')" aria-label="Fechar">✕</button>
+          <h2>📊 Apresentação do assunto</h2>
+          <p class="ap-dica">Gera um <strong>.pptx</strong> no mesmo formato do deck mensal:
+            o panorama do período, a forma dele semana a semana, as entregas maiores em pontos
+            e as duas filas do que vem. O período é o do filtro da aba.</p>
+          <div id="rp-periodo" class="ap-periodo"></div>
+
+          <div class="form-group">
+            <label>Escopo</label>
+            <select id="rp-escopo" onchange="relPptPrevia()"></select>
+            <p class="ap-dica" style="margin:6px 0 0">O consolidado resume os cinco assuntos
+              que mais entregaram, um slide cada. Um assunto sozinho vem detalhado.</p>
+          </div>
+
+          <div class="form-group">
+            <label>O que vai sair</label>
+            <div id="rp-previa" class="rp-previa"></div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-secondary" onclick="closeModal('modal-rel-ppt')">Cancelar</button>
+            <button class="btn btn-primary" id="rp-btn" onclick="relPptGerar()">Gerar apresentação</button>
+          </div>
+        </div>
       </div>
       <div id="rel-periodo-info" style="font-size:12px;color:var(--text3);margin:-12px 0 18px"></div>
 
@@ -7070,15 +7117,28 @@ function relTrocaEscala() {
   renderRelatorios();
 }
 
-/** As demandas vivas, já com o filtro de sistema aplicado. */
-function relVivas() {
-  const raiz = relTemaFiltro();
+/** AS DEMANDAS VIVAS DE UMA RAIZ — a peneira, sem ler tela nenhuma.
+ *
+ *  A versão que lê o `<select>` está logo abaixo e delega para esta. A separação
+ *  existe porque o deck consolidado precisa da mesma peneira para CINCO raízes
+ *  numa passada: com só a versão que lê a tela, ele teria de reescrever a
+ *  condição — e uma regra escrita duas vezes nesta base já divergiu três vezes
+ *  (prazo, data de entrega, agrupamento por raiz).
+ *
+ *  `raiz` vazia significa TODAS, e não "nenhuma": é o mesmo significado que o
+ *  valor vazio tem no dropdown. */
+function relVivasDe(raiz) {
   return (state.melhorias || []).filter(m =>
     m && !m.oculto && !m.mesclado_em &&
     (m.status_planejamento || '') !== 'negada' && m.status !== 'negada' &&
     // A comparação é pela RAIZ: escolher "AXCred - Cadastro" traz também as
     // demandas de "AXCred - Cadastro - Análise de Crédito - Reanálise".
     (!raiz || relRaizDe(m) === raiz));
+}
+
+/** As demandas vivas, já com o filtro de sistema da tela aplicado. */
+function relVivas() {
+  return relVivasDe(relTemaFiltro());
 }
 
 /** COMO O TIME ANDOU — planejado × entregue em pontos, e a comparação.
@@ -7150,8 +7210,14 @@ function relDeltaHTML(atual, ant, bomSubir) {
  *  meia hora e a uma entrega de 13 pontos, e a pergunta aqui é para onde a
  *  capacidade foi. A contagem aparece ao lado, como segunda leitura. */
 function relTemas(j) {
+  return relTemasDe(relTemaFiltro(), j);
+}
+
+/** A mesma conta, para uma raiz escolhida por quem chama — sem passar pela tela.
+ *  É desta versão que o deck consolidado tira o ranking dos maiores. */
+function relTemasDe(raiz, j) {
   const CAPI = window.CAPACIDADE;
-  const vivas = relVivas();
+  const vivas = relVivasDe(raiz);
   /* AGRUPADO PELA RAIZ. Antes eram três linhas para o Cadastro — ele, a Reanálise
      e a Análise —, cada uma competindo com as outras na lista dos maiores: o
      sistema aparecia menor do que é e duas vezes na mesma lista. */
@@ -7180,8 +7246,13 @@ function relTemas(j) {
  *  NÃO PROJETO DATA para nenhum dos dois. Num relatório de diretoria, projeção é
  *  lida como compromisso — e o compromisso é do time, não meu. */
 function relOQueVem() {
+  return relOQueVemDe(relTemaFiltro());
+}
+
+/** As duas filas de uma raiz escolhida por quem chama, sem ler a tela. */
+function relOQueVemDe(raiz) {
   const CAPI = window.CAPACIDADE;
-  const vivas = relVivas();
+  const vivas = relVivasDe(raiz);
   // A RAIZ na coluna, e não o nome completo: "AXCred - Cadastro - Análise de
   // Crédito - Reanálise" não cabe em 150px e vira reticência — a raiz cabe e é o
   // que a pessoa usa para reconhecer a área.
@@ -7205,6 +7276,380 @@ function relOQueVem() {
   return { planning, semPrazo,
            ptsPlanning: planning.reduce((t, x) => t + x.pts, 0),
            ptsSemPrazo: semPrazo.reduce((t, x) => t + x.pts, 0) };
+}
+
+/* ═══ O RELATÓRIO EM .PPTX ════════════════════════════════════════════════
+
+   Pedido do Fernando: "extrair as principais tratativas em ppt igual foi feito
+   com a cobrança — visão geral de como foi o tema dentro do mês, as principais
+   entregas (mais pontuadas), e a quantidade de demandas".
+
+   O DECK DE COBRANÇA FOI FEITO À MÃO, slide por slide, e levou dois dias de
+   conversa. A segunda área a pedir não deve custar dois dias — e, principalmente,
+   não deve sair com números diferentes por eu ter recontado à mão. Estas funções
+   somam pelas MESMAS funções que a tela usa; o `relatorio-ppt.js` só desenha.
+
+   O PERÍODO E O SISTEMA SÃO OS DA ABA. Um segundo seletor de período dentro do
+   modal divergiria do filtro da tela no pior momento — a pessoa olha "agosto" na
+   tela, gera o deck e recebe setembro. É a mesma decisão que o deck mensal tomou.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/** AS FAIXAS DE TEMPO DA JANELA — o eixo do "como foi dentro do período".
+ *
+ *  Existe porque o total sozinho não responde a pergunta do slide. "168 pontos em
+ *  agosto" pode ser um mês parelho ou tudo numa semana, e são situações
+ *  diferentes: a segunda é um pico que não se repete.
+ *
+ *  AS FAIXAS COBREM A JANELA INTEIRA, sem furo e sem sobreposição — e essa é a
+ *  única propriedade que não pode faltar aqui.
+ *
+ *  A primeira versão usava `gerSemanasDoMes`, para o deck e o painel gerencial
+ *  quebrarem o mês no mesmo lugar. Boa intenção, resultado errado: aquela régua
+ *  enfileira só DIAS ÚTEIS, então uma entrega de sábado ou domingo cai entre duas
+ *  faixas e não entra em nenhuma. Medido em agosto de 2026 (que começa num
+ *  sábado): as colunas somavam 1.404 pontos contra os 1.602 do cartão ao lado, e
+ *  no Cadastro 332 contra 353. Um slide cujas colunas contradizem o próprio
+ *  número ao lado é pior do que um slide sem colunas — quem soma na plateia
+ *  conclui que o número está errado, e não a régua.
+ *
+ *  Então são semanas de CALENDÁRIO (segunda a domingo) recortadas no mês. Toda
+ *  data do mês pertence a exatamente uma faixa, e a soma fecha por construção.
+ *
+ *  UMA SOBRA CURTA NA PONTA SE JUNTA À VIZINHA. Agosto de 2026 começa no sábado e
+ *  termina na segunda: sem isso, o eixo abriria com uma coluna de dois dias e
+ *  fecharia com uma de um, e duas das seis colunas seriam tocos que a plateia lê
+ *  como "semana fraca". */
+function relPptFaixas(j) {
+  if (j.escala === 'semana') {
+    const DIA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    const ini = new Date(j.de + 'T00:00:00');
+    return [0, 1, 2, 3, 4, 5, 6].map(k => {
+      const d = iso(maisDias(ini, k));
+      return { de: d, ate: d, rot: DIA[new Date(d + 'T00:00:00').getDay()] };
+    });
+  }
+
+  const dias = (a, b) =>
+    Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000) + 1;
+  const faixas = [];
+  let cursor = j.de;
+  while (cursor <= j.ate) {
+    // O domingo daquela semana: 0 é domingo, então a distância até ele é 7-dow,
+    // e 0 para o próprio domingo.
+    const d = new Date(cursor + 'T00:00:00');
+    const dow = d.getDay();
+    const fim = iso(maisDias(d, dow === 0 ? 0 : 7 - dow));
+    const ate = fim > j.ate ? j.ate : fim;
+    faixas.push({ de: cursor, ate });
+    cursor = iso(maisDias(new Date(ate + 'T00:00:00'), 1));
+  }
+
+  // Sobra de menos de três dias na ponta entra na vizinha.
+  const MIN = 3;
+  if (faixas.length > 1 && dias(faixas[0].de, faixas[0].ate) < MIN) {
+    faixas[1].de = faixas[0].de;
+    faixas.shift();
+  }
+  const u = faixas.length - 1;
+  if (faixas.length > 1 && dias(faixas[u].de, faixas[u].ate) < MIN) {
+    faixas[u - 1].ate = faixas[u].ate;
+    faixas.pop();
+  }
+
+  return faixas.map(f => Object.assign({}, f, {
+    // O rótulo é o intervalo de dias, e não "S1": num slide sem a régua ao lado,
+    // "S1" não diz de que dias se fala.
+    rot: String(Number(f.de.slice(8))) + '–' + String(Number(f.ate.slice(8))),
+  }));
+}
+
+/** TUDO O QUE UM SLIDE DE ASSUNTO PRECISA, para uma raiz e uma janela.
+ *
+ *  `raiz` vazia devolve o consolidado de todos os sistemas — o mesmo significado
+ *  que o valor vazio tem no dropdown.
+ *
+ *  Nenhum número aqui é recontado: entrega e ponto saem de `capacidade.js`, as
+ *  duas filas de `relOQueVemDe`, e a quebra por módulo do próprio nome do tema. */
+function relPptAssunto(raiz, j) {
+  const CAPI = window.CAPACIDADE;
+  const vivas = relVivasDe(raiz);
+  const ENT = CAPI.ETAPAS_ENTREGUE;
+  const etapa = m => String(m.status_planejamento || '');
+
+  const saiuEntre = (m, de, ate) => {
+    const d = CAPI.diaDaEntrega(m);
+    return !!d && d >= de && d <= ate && ENT.includes(etapa(m));
+  };
+  const nasceuEntre = (m, de, ate) => {
+    const c = String(m.criado_em || '').slice(0, 10);
+    return !!c && c >= de && c <= ate;
+  };
+
+  const entregues = vivas.filter(m => saiuEntre(m, j.de, j.ate));
+  const pontos = entregues.reduce((t, m) => t + CAPI.entregues(m), 0);
+  /* ENTREGA SEM PONTUAÇÃO NÃO SOMA ZERO EM SILÊNCIO — a mesma regra de
+     `capacidade.js`. Sem dizer quantas são, a divisão "pontos ÷ entregas" que
+     alguém faz de cabeça na reunião sai errada, e o erro é atribuído ao slide. */
+  const semPonto = entregues.filter(m => !CAPI.entregues(m)).length;
+
+  const entregasAnt = vivas.filter(m => saiuEntre(m, j.deAnt, j.ateAnt)).length;
+  const entraram = vivas.filter(m => nasceuEntre(m, j.de, j.ate)).length;
+  const entraramAnt = vivas.filter(m => nasceuEntre(m, j.deAnt, j.ateAnt)).length;
+
+  const emAberto = vivas.filter(m => !ENT.includes(etapa(m)));
+  const abertoComPrazo = emAberto.filter(m => CAPI.diaDoPlano(m)).length;
+
+  // O plano da janela: pontos prometidos cujo PRAZO cai dentro dela.
+  const faixas = relPptFaixas(j).map(f => {
+    const linha = CAPI.porFaixa(vivas, [f])[0] || { plan: 0, entregue: 0 };
+    return { rot: f.rot, de: f.de, ate: f.ate, plan: linha.plan, entregue: linha.entregue };
+  });
+  const plan = faixas.reduce((t, f) => t + f.plan, 0);
+
+  /* AS MAIORES POR PONTOS, e não por data. A pergunta do slide é "o que valeu a
+     pena"; em ordem de data, a entrega de 55 pontos aparece entre duas de 2 só
+     porque saiu no dia 5. A data fica na coluna, para quem quer a sequência. */
+  const maiores = entregues
+    .map(m => ({
+      pts: CAPI.entregues(m), codigo: m.codigo || '', titulo: m.titulo || '(sem título)',
+      data: formatDate(CAPI.diaDaEntrega(m)), dev: m.dev || '',
+    }))
+    .sort((a, b) => b.pts - a.pts ||
+                    String(a.data).localeCompare(String(b.data)) ||
+                    String(a.codigo).localeCompare(String(b.codigo)));
+
+  /* A QUEBRA POR MÓDULO, dentro do assunto.
+     O rótulo é o que sobra do nome do tema DEPOIS da raiz — e não o último
+     segmento. Por último segmento, "AXCred - Cadastro - Análise de Crédito -
+     Análise" e "AXCred - Cadastro - Análise" viram os dois "Análise" e somam
+     numa linha só: duas coisas diferentes fundidas por corte de string. */
+  const modMap = new Map();
+  entregues.forEach(m => {
+    const t = (state.temas || []).find(x => x.id === m.tema_id);
+    const nomeTema = t ? String(t.nome) : '';
+    const rz = raiz || relRaizDe(m);
+    let rot = nomeTema;
+    if (rz && nomeTema.indexOf(rz) === 0) {
+      rot = nomeTema.slice(rz.length).replace(/^\s*-\s*/, '');
+    }
+    if (!rot) rot = String(rz).split(' - ').pop() || '—';
+    const a = modMap.get(rot) || { pts: 0, qtd: 0 };
+    a.pts += CAPI.entregues(m); a.qtd += 1;
+    modMap.set(rot, a);
+  });
+  const modulos = [...modMap.entries()]
+    .map(([nome, v]) => ({ nome, pts: v.pts, qtd: v.qtd }))
+    .sort((a, b) => b.pts - a.pts || b.qtd - a.qtd);
+
+  const vem = relOQueVemDe(raiz);
+  const naFila = vem.planning.length + vem.semPrazo.length;
+
+  // "Mês anterior" e "semana anterior" — curto, porque vai dentro de um cartão.
+  const curtoAnt = j.escala === 'semana' ? 'a semana anterior' : 'o mês anterior';
+  const delta = (agora, ant) => {
+    if (!ant && !agora) return '';
+    const d = agora - ant;
+    if (d === 0) return 'igual a ' + curtoAnt + ' (' + ant + ')';
+    return (d > 0 ? '+' : '−') + Math.abs(d) + ' vs. ' + curtoAnt + ' (' + ant + ')';
+  };
+
+  /* A FRASE DE FECHO DO PANORAMA: entrou contra saiu.
+     É a leitura que os quatro cartões permitem e ninguém faz de cabeça na
+     reunião — e é ela que diz se o assunto está encurtando a fila ou afundando
+     nela. Vale mais que qualquer um dos quatro números sozinho. */
+  const dif = entraram - entregues.length;
+  let notaPe = 'Entraram ' + entraram + ' e saíram ' + entregues.length + ': ' +
+    (dif > 0 ? 'a fila cresceu em ' + dif + '.'
+             : dif < 0 ? 'a fila encurtou em ' + Math.abs(dif) + '.'
+                       : 'a fila ficou do mesmo tamanho.');
+  if (semPonto) {
+    notaPe += '  ' + semPonto +
+      (semPonto === 1 ? ' entrega saiu sem pontuação e não soma'
+                      : ' entregas saíram sem pontuação e não somam') + ' na coluna de pontos.';
+  }
+
+  const nome = raiz || 'Todos os sistemas';
+  return {
+    raiz, nome, periodo: j.rot,
+    sub: entregues.length + (entregues.length === 1 ? ' entrega' : ' entregas') +
+         ' · ' + pontos + (pontos === 1 ? ' ponto' : ' pontos') + ' · ' + j.rot,
+    entregas: entregues.length, pontos, entraram, aberto: emAberto.length,
+    deltaEntregas: delta(entregues.length, entregasAnt) ||
+                   (entregues.length === 1 ? 'demanda concluída' : 'demandas concluídas'),
+    notaPontos: plan ? 'plano de ' + plan + ' pt · ' + CAPI.rotulo(plan, pontos)
+                     : 'sem plano registrado no período',
+    notaEntraram: delta(entraram, entraramAnt) || 'pedidos novos registrados',
+    notaAberto: abertoComPrazo + ' com prazo definido',
+    notaPe,
+    faixas,
+    rotFaixas: (j.escala === 'semana' ? 'PONTOS ENTREGUES POR DIA'
+                                      : 'PONTOS ENTREGUES POR SEMANA'),
+    maiores,
+    modulos,
+    planning: vem.planning, semPrazo: vem.semPrazo, ptsSemPrazo: vem.ptsSemPrazo,
+    // Os abertos que não estão em nenhuma das duas colunas (em andamento, ou
+    // planejado com data). Sem esta contagem, a soma das colunas não fecha com
+    // o cartão "em aberto" — e alguém soma.
+    abertoSemEtapa: Math.max(0, emAberto.length - naFila),
+    remate: emAberto.length + ' em aberto hoje — ' + vem.planning.length +
+            ' em Planning e ' + vem.semPrazo.length + ' pontuadas sem prazo.  ' + notaPe,
+  };
+}
+
+/** QUANTOS ASSUNTOS O CONSOLIDADO RESUME. Cinco é o pedido do Fernando, e cinco
+ *  slides de resumo é o que cabe antes de o deck deixar de ser resumo. */
+const REL_PPT_TOP = 5;
+
+/** Os escopos que valem oferecer: as raízes com QUALQUER atividade na janela —
+ *  entrega, entrada nova ou item em aberto. Sem esse corte, o dropdown listaria
+ *  os 28 sistemas da base, a maioria sem nada a apresentar no período. */
+function relPptEscopos(j) {
+  const CAPI = window.CAPACIDADE;
+  const cont = new Map();
+  relVivasDe('').forEach(m => {
+    const k = relRaizDe(m);
+    const a = cont.get(k) || { pts: 0, ent: 0, entrou: 0, aberto: 0 };
+    const d = CAPI.diaDaEntrega(m);
+    const sp = String(m.status_planejamento || '');
+    if (d && d >= j.de && d <= j.ate && CAPI.ETAPAS_ENTREGUE.includes(sp)) {
+      a.ent += 1; a.pts += CAPI.entregues(m);
+    }
+    const c = String(m.criado_em || '').slice(0, 10);
+    if (c && c >= j.de && c <= j.ate) a.entrou += 1;
+    if (!CAPI.ETAPAS_ENTREGUE.includes(sp)) a.aberto += 1;
+    cont.set(k, a);
+  });
+  return [...cont.entries()]
+    .map(([nome, v]) => Object.assign({ nome }, v))
+    .filter(v => v.ent || v.entrou || v.aberto)
+    .sort((a, b) => b.pts - a.pts || b.ent - a.ent ||
+                    String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+}
+
+/** O objeto que o `relatorio-ppt.js` desenha. */
+function relPptDados(escopo, j) {
+  const base = {
+    periodo: j.rot, subtitulo: 'Audax Capital · Tecnologia',
+    escopo: escopo ? 'assunto' : 'consolidado',
+  };
+  if (escopo) {
+    const t = relPptAssunto(escopo, j);
+    return Object.assign(base, {
+      rotuloCapa: 'RELATÓRIO DE', tituloCapa: escopo, assunto: t,
+    });
+  }
+  const geral = relPptAssunto('', j);
+  geral.nome = 'O período em números';
+  const rank = relTemasDe('', j).itens;
+  const topo = rank.slice(0, REL_PPT_TOP);
+  const sobra = rank.slice(REL_PPT_TOP);
+  return Object.assign(base, {
+    rotuloCapa: 'CONSOLIDADO DE', tituloCapa: 'TECNOLOGIA',
+    geral,
+    // O ranking mostra até dez barras: com 28, cada uma tem 3px de altura e a
+    // lista deixa de ser legível no projetor. As demais viram uma linha de soma
+    // no subtítulo — truncar em silêncio faria a sala achar que são só estas.
+    ranking: rank.slice(0, 10),
+    rankingSobra: Math.max(0, rank.length - 10),
+    rankingSobraPts: rank.slice(10).reduce((t, x) => t + x.pts, 0),
+    assuntos: topo.map(r => relPptAssunto(r.nome, j)),
+    semSobra: sobra.length,
+  });
+}
+
+/** O nome do arquivo. Sem acento e sem barra: os dois passam num nome de tema e
+ *  o segundo quebra o download inteiro no Windows. */
+function relPptNomeArquivo(escopo, j) {
+  const limpa = t => String(t || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+  const quando = j.escala === 'semana' ? j.de : j.de.slice(0, 7);
+  return 'relatorio-' + (escopo ? limpa(escopo) : 'consolidado') + '-' + quando + '.pptx';
+}
+
+function relPptAbrir() {
+  const j = relJanela();
+  const escopos = relPptEscopos(j);
+  const atual = relTemaFiltro();
+  const sel = document.getElementById('rp-escopo');
+  sel.innerHTML =
+    '<option value="">Consolidado — os ' + REL_PPT_TOP + ' maiores assuntos</option>' +
+    escopos.map(e => '<option value="' + esc(e.nome) + '">' + esc(e.nome) +
+      '  (' + e.ent + ' entregas · ' + e.pts + ' pt)</option>').join('');
+  // Já filtrou um sistema na aba? O deck abre nele. Reescolher o que já está na
+  // tela é trabalho que a tela já sabe.
+  if (atual && escopos.some(e => e.nome === atual)) sel.value = atual;
+
+  document.getElementById('rp-periodo').innerHTML =
+    '📅 <strong>' + esc(j.rot) + '</strong> <span style="color:var(--text3)">· ' +
+    'mude na barra da aba para trocar o período</span>';
+  relPptPrevia();
+  openModal('modal-rel-ppt');
+}
+
+/** A PRÉVIA, ANTES DO DOWNLOAD.
+ *
+ *  Diz quantos slides saem e com que números. A biblioteca são ~800 KB baixados
+ *  na hora, e gerar para descobrir que o período estava errado é o tipo de espera
+ *  que acontece justamente cinco minutos antes da reunião. */
+function relPptPrevia() {
+  const alvo = document.getElementById('rp-previa');
+  if (!alvo) return;
+  try {
+    const j = relJanela();
+    const escopo = String(document.getElementById('rp-escopo').value || '');
+    const d = relPptDados(escopo, j);
+    let linhas;
+    if (escopo) {
+      const t = d.assunto;
+      const comModulos = (t.modulos || []).length > 1;
+      linhas = [
+        ['Slides', (comModulos ? 5 : 4) + ' + capa'],
+        ['Entregas no período', t.entregas + ' · ' + t.pontos + ' pt'],
+        ['Entraram / em aberto', t.entraram + ' / ' + t.aberto],
+        ['O que vem', t.planning.length + ' em Planning · ' +
+                      t.semPrazo.length + ' pontuadas sem prazo'],
+      ];
+      if (!comModulos) {
+        linhas.push(['Sem quebra por módulo',
+                     'o assunto tem um módulo só — a barra de 100% não entra']);
+      }
+    } else {
+      linhas = [
+        ['Slides', (3 + d.assuntos.length) + ' + capa'],
+        ['Assuntos resumidos', d.assuntos.map(a => a.nome).join(', ') || '—'],
+        ['No período', d.geral.entregas + ' entregas · ' + d.geral.pontos + ' pt · ' +
+                       d.geral.entraram + ' entraram'],
+      ];
+    }
+    alvo.innerHTML = linhas.map(([k, v]) =>
+      '<div class="rp-previa-l"><span>' + esc(k) + '</span><strong>' +
+      esc(v) + '</strong></div>').join('');
+  } catch (e) {
+    alvo.innerHTML = '<div class="rp-previa-l"><span>Não consegui montar a prévia</span>' +
+      '<strong>' + esc(e.message) + '</strong></div>';
+  }
+}
+
+async function relPptGerar() {
+  const btn = document.getElementById('rp-btn');
+  const rotulo = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Gerando…';
+  try {
+    const j = relJanela();
+    const escopo = String(document.getElementById('rp-escopo').value || '');
+    const pptx = await relatorioPptMonta(relPptDados(escopo, j));
+    const nome = relPptNomeArquivo(escopo, j);
+    await pptx.writeFile({ fileName: nome });
+    toast('📊 ' + nome + ' gerado.', 'ok');
+    closeModal('modal-rel-ppt');
+  } catch (e) {
+    toast('Não consegui gerar: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = rotulo;
+  }
 }
 
 function relDados() {

@@ -2029,6 +2029,36 @@
     return pptx;
   }
 
+  /* ─── O KIT, PARA UM SEGUNDO DECK ────────────────────────────────────────
+     Estas pecas eram privadas do IIFE, e o deck de relatorio nasceria com as
+     proprias: outra capa, outro rodape, outro cartao, outra regra de corte de
+     titulo. Dois decks da mesma empresa projetados na mesma reuniao, cada um com
+     o seu jeito de desenhar um numero — e o segundo perde a credibilidade que o
+     primeiro construiu.
+  
+     E A LICAO JA FOI PAGA TRES VEZES nesta base: o prazo tinha quatro
+     implementacoes, a data de entrega duas, e o agrupamento por raiz duas. Toda
+     vez que a mesma regra vive em dois arquivos, os dois divergem — e o defeito
+     aparece na reuniao, nao no teste.
+  
+     Exporta a GRAMATICA (como se desenha), e nao os slides (o que se conta): cada
+     deck decide o que dizer, e nenhum decide de novo como um cartao se parece. */
+  window.apresentacaoKit = {
+    carregaLib: carregaLib,
+    slideBase: slideBase,
+    slideCapa: slideCapa,
+    slideTitulo: slideTitulo,
+    rodape: rodape,
+    cartao: cartao,
+    cartaoKpi: cartaoKpi,
+    tabela: tabela,
+    corta: corta,
+    textoLimpo: textoLimpo,
+    corPercentual: corPercentual,
+    cores: C,
+    significado: SIGNIFICADO,
+  };
+
   window.apresentacaoMontaDeck = montaDeck;
   window.apresentacaoGraficoPng = graficoEmPng;
   window.apresentacaoCores = C;

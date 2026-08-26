@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Reaponta tema.css / tema.js nas paginas para o hash do conteudo atual.
+"""Reaponta os arquivos selados das paginas para o hash do conteudo atual.
 
-Rode isto SEMPRE que editar tema.css ou tema.js:
+Rode isto SEMPRE que editar um .js ou .css compartilhado:
 
     python scripts-tema-versao.py
 
@@ -10,14 +10,26 @@ cache e a correcao nao chega. Aconteceu exatamente isso com um ?v= fixo escrito
 a mao: editei o tema.js e esqueci de trocar o numero, entao o gancho novo nunca
 rodou e o gantt nao redesenhava ao trocar de tema. Hash do conteudo nao deixa
 esquecer.
+
+O QUE ELE SELA NAO ESTA ESCRITO AQUI. Havia uma linha por arquivo — um
+`hash_de()` e um `re.sub()` para cada um —, e o defeito foi o previsivel: dos
+arquivos selados da base, `capacidade.js` e `prazo.js` nunca entraram na lista.
+Um ficou certo porque eu atualizei o selo a mao; o outro ficou por sorte. Uma
+lista escrita a mao de tudo que precisa de selo tem o mesmo defeito do selo
+escrito a mao: da para esquecer. As paginas ja dizem quem carregam, entao a
+resposta e ler as paginas.
 """
 import hashlib
 import io
+import os
 import re
 import sys
 
 PAGINAS = ['index.html', 'admin.html', 'dev.html', 'gantt.html',
            'poker.html', 'projetos.html', 'importar.html']
+
+# `src="algo.js?v=..."` ou `href="algo.css?v=..."`, so arquivo local.
+REF = re.compile(r'(?:src|href)="([A-Za-z0-9_.-]+\.(?:js|css))\?v=[^"]*"')
 
 
 def hash_de(caminho):
@@ -29,58 +41,40 @@ def hash_de(caminho):
         return hashlib.md5(fh.read()).hexdigest()[:10]
 
 
+def alvos():
+    """Os arquivos que as paginas selam, descobertos NELAS."""
+    achados = set()
+    for f in PAGINAS:
+        with io.open(f, encoding='utf-8') as fh:
+            achados.update(REF.findall(fh.read()))
+    # Selo apontando para arquivo que nao existe e 404 em producao: a pagina
+    # carrega sem o modulo e a tela quebra sem dizer por que. Melhor parar aqui.
+    faltando = sorted(a for a in achados if not os.path.exists(a))
+    if faltando:
+        raise SystemExit('selo aponta para arquivo inexistente: ' + ', '.join(faltando))
+    return sorted(achados)
+
+
 def main():
-    # anexo-cola.js entra aqui pelo mesmo motivo dos outros dois: e servido do
-    # cache do navegador, e uma correcao nele sem hash novo nunca chega a quem
-    # ja abriu o site.
-    vcss, vjs = hash_de('tema.css'), hash_de('tema.js')
-    vanx = hash_de('anexo-cola.js')
-    vmod = hash_de('modelo-descricao.js')
-    vlnk = hash_de('links-github.js')
-    vsen = hash_de('senha.js')
-    vdlg = hash_de('dialogo.js')
-    vapr = hash_de('apresentacao.js')
-    vcat = hash_de('catalogo.js')
-    # pipelines.js entra aqui pelo mesmo motivo dos outros: ele carrega a lista
-    # de frentes que o deck usa para agrupar. Uma frente corrigida sem hash novo
-    # nao chegaria a quem ja abriu o admin, e o deck sairia com o agrupamento
-    # antigo sem ninguem perceber.
-    vpip = hash_de('pipelines.js')
-    # prazo.js carrega a regra de quando o atraso comeca e quando ele PARA. Uma
-    # correcao nela sem hash novo deixaria metade das telas contando atraso pela
-    # regra antiga — que e exatamente o defeito que juntar a regra num arquivo so
-    # veio resolver.
-    vprz = hash_de('prazo.js')
+    selos = {a: hash_de(a) for a in alvos()}
     mudou = []
     for f in PAGINAS:
         with io.open(f, encoding='utf-8') as fh:
-            s = fh.read()
-        n = re.sub(r'href="tema\.css(\?v=[^"]*)?"', 'href="tema.css?v=%s"' % vcss, s)
-        n = re.sub(r'src="tema\.js(\?v=[^"]*)?"', 'src="tema.js?v=%s"' % vjs, n)
-        n = re.sub(r'src="anexo-cola\.js(\?v=[^"]*)?"',
-                   'src="anexo-cola.js?v=%s"' % vanx, n)
-        n = re.sub(r'src="modelo-descricao\.js(\?v=[^"]*)?"',
-                   'src="modelo-descricao.js?v=%s"' % vmod, n)
-        n = re.sub(r'src="links-github\.js(\?v=[^"]*)?"',
-                   'src="links-github.js?v=%s"' % vlnk, n)
-        n = re.sub(r'src="senha\.js(\?v=[^"]*)?"',
-                   'src="senha.js?v=%s"' % vsen, n)
-        n = re.sub(r'src="dialogo\.js(\?v=[^"]*)?"',
-                   'src="dialogo.js?v=%s"' % vdlg, n)
-        n = re.sub(r'src="apresentacao\.js(\?v=[^"]*)?"',
-                   'src="apresentacao.js?v=%s"' % vapr, n)
-        n = re.sub(r'src="catalogo\.js(\?v=[^"]*)?"',
-                   'src="catalogo.js?v=%s"' % vcat, n)
-        n = re.sub(r'src="pipelines\.js(\?v=[^"]*)?"',
-                   'src="pipelines.js?v=%s"' % vpip, n)
-        n = re.sub(r'src="prazo\.js(\?v=[^"]*)?"',
-                   'src="prazo.js?v=%s"' % vprz, n)
-        if n != s:
+            original = fh.read()
+        novo = original
+        for arq, v in selos.items():
+            attr = 'href' if arq.endswith('.css') else 'src'
+            novo = re.sub(
+                r'%s="%s(\?v=[^"]*)?"' % (attr, re.escape(arq)),
+                '%s="%s?v=%s"' % (attr, arq, v),
+                novo)
+        if novo != original:
             with io.open(f, 'w', encoding='utf-8', newline='') as fh:
-                fh.write(n)
+                fh.write(novo)
             mudou.append(f)
-    sys.stdout.write('tema.css=%s  tema.js=%s  anexo-cola=%s  modelo=%s  links-gh=%s  senha=%s  dialogo=%s  apres=%s  catalogo=%s\n'
-                     % (vcss, vjs, vanx, vmod, vlnk, vsen, vdlg, vapr, vcat))
+
+    for arq in sorted(selos):
+        sys.stdout.write('  %-26s %s\n' % (arq, selos[arq]))
     sys.stdout.write('paginas atualizadas: %s\n'
                      % (', '.join(mudou) if mudou else 'nenhuma (ja estavam certas)'))
 

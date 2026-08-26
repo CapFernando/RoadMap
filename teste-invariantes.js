@@ -527,6 +527,136 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Deck de assunto: o relatorio em .pptx');
+
+/* O DECK DE COBRANCA FOI FEITO A MAO, slide por slide, e levou dois dias. O
+   gerador existe para a segunda area nao custar dois dias — e, sobretudo, para
+   nao sair com numero diferente do da tela por alguem ter recontado. */
+const RPPT = fs.readFileSync('relatorio-ppt.js', 'utf8');
+
+ok(/src="relatorio-ppt\.js\?v=[a-f0-9]{10}"/.test(ADMIN),
+   'o admin carrega o gerador versionado');
+
+/* ELE NAO CALCULA. Se calculasse, o slide e a tela discordariam — que e o defeito
+   que ja apareceu com o prazo (quatro implementacoes), a data de entrega (duas) e
+   o agrupamento por raiz (duas). Recebe pronto de `relPptDados` e desenha. */
+ok(!/state\.melhorias|state\.temas|poker_pontos|status_planejamento/.test(RPPT),
+   'e o gerador nao toca na base: recebe pronto e so desenha');
+ok(!/diaDaEntrega|CAPACIDADE/.test(RPPT),
+   'nem reimplementa a ancora de data — quem soma e o admin, pelas funcoes da tela');
+
+/* A GRAMATICA VISUAL E A MESMA DO DECK MENSAL. Dois decks da mesma empresa
+   projetados na mesma reuniao, cada um com o seu jeito de desenhar um numero, e o
+   segundo perdendo a credibilidade que o primeiro construiu. */
+ok(/window\.apresentacaoKit = \{/.test(APRES), 'o deck mensal exporta a gramatica');
+(() => {
+  // O corpo do kit, e nao o arquivo inteiro: `tabela: tabela` existe em outro
+  // lugar do apresentacao.js, e conferir no arquivo todo passaria com o kit vazio.
+  const k = corpo(APRES, 'window.apresentacaoKit =');
+  ok(!!k, 'o kit tem corpo');
+  const falta = ['carregaLib', 'slideBase', 'slideCapa', 'slideTitulo', 'rodape',
+                 'cartao', 'cartaoKpi', 'tabela', 'corta', 'textoLimpo']
+    // `nome: nome` confere de quebra que a chave aponta para a funcao do mesmo
+    // nome — um `cartao: cartaoKpi` trocado passaria por qualquer regex de chave.
+    .filter((p) => !k.includes(p + ': ' + p));
+  ok(!falta.length, 'e leva as pecas que o gerador usa, cada uma na propria chave',
+     falta.length ? 'falta: ' + falta.join(', ') : '10 pecas');
+  ok(k.includes('cores: C'), 'e a paleta vai como `cores`');
+})();
+ok(/apresentacaoKit/.test(RPPT) && !/#[0-9A-Fa-f]{6}|'[0-9A-F]{6}'/.test(RPPT),
+   'e o gerador usa o kit sem escrever cor propria');
+
+/* AS FAIXAS COBREM A JANELA INTEIRA — sem furo e sem sobreposicao.
+   A primeira versao reusava `gerSemanasDoMes` para dividir o mes na MESMA regua do
+   painel gerencial. Boa intencao, resultado errado: aquela regua enfileira so dias
+   UTEIS, entao entrega de sabado ou domingo cai entre duas faixas. Em agosto de
+   2026 (que comeca num sabado) as colunas somavam 1.404 pontos contra os 1.602 do
+   cartao ao lado — o slide contradizia o proprio numero.
+   Esta invariante EXECUTA a funcao em 48 meses seguidos. */
+(() => {
+  const src = corpo(ADMIN, 'function relPptFaixas(');
+  ok(!!src, 'existe a regua do eixo do tempo');
+  if (!src) return;
+  const F = new Function(
+    'const iso = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-` +' +
+    '  `${String(d.getDate()).padStart(2,"0")}`;' +
+    'const maisDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };' +
+    src + '\nreturn relPptFaixas;')();
+
+  const ruins = [];
+  for (let an = 2024; an <= 2027; an++) {
+    for (let mn = 1; mn <= 12; mn++) {
+      const ult = new Date(an, mn, 0).getDate();
+      const ym = an + '-' + String(mn).padStart(2, '0');
+      const j = { escala: 'mes', de: ym + '-01', ate: ym + '-' + String(ult).padStart(2, '0') };
+      const f = F(j);
+      const contiguas = f.every((x, k) => k === 0 ||
+        new Date(x.de + 'T00:00:00') - new Date(f[k - 1].ate + 'T00:00:00') === 86400000);
+      if (!contiguas || f[0].de !== j.de || f[f.length - 1].ate !== j.ate) ruins.push(ym);
+    }
+  }
+  ok(!ruins.length, '48 meses: as faixas cobrem do dia 1 ao ultimo, sem furo',
+     ruins.length ? ruins.join(' ') : 'nenhum furo');
+
+  // E na semana sao os sete dias — a soma tem de fechar la tambem.
+  const sem = F({ escala: 'semana', de: '2026-08-17', ate: '2026-08-23' });
+  ok(sem.length === 7 && sem[0].de === '2026-08-17' && sem[6].ate === '2026-08-23',
+     'e na escala de semana sao os sete dias', sem.map((x) => x.rot).join(' '));
+})();
+
+/* A REGRA MORA NUM LUGAR SO: as tres funcoes que o deck reusa tem versao sem DOM,
+   e a versao da tela apenas repassa o filtro. (As duas primeiras estao provadas
+   junto dos blocos de relatorio; esta e a terceira.) */
+ok(semEspaco(corpo(ADMIN, 'function relVivas(')) ===
+   'function relVivas() { return relVivasDe(relTemaFiltro()); }',
+   'relVivas so repassa o filtro para relVivasDe');
+
+/* SLIDE QUE NAO INFORMA NAO ENTRA. Antifraude e Cobranca tem um modulo so: a
+   quebra sairia como uma barra de 100% ao lado do nome do proprio assunto. */
+ok(/\(t\.modulos \|\| \[\]\)\.length > 1\) slideModulos/.test(RPPT),
+   'a quebra por modulo so entra com dois ou mais modulos');
+
+/* A TABELA DE ENTREGAS NAO ENCOSTA NO RODAPE.
+   Eu tinha posto oito linhas. `tabela` desenha "… e mais N entregas" logo abaixo,
+   e com oito ela caia em 4,94" com 0,3" de altura — o rodape mora em 5,05", e as
+   duas se sobrepunham em 62%: na parede, o mes escrito por cima da contagem.
+   A conta esta aqui para o numero nao voltar a subir por parecer que cabe. */
+(() => {
+  const m = RPPT.match(/var MAX_ENTREGAS = (\d+);/);
+  ok(!!m, 'o teto de entregas por slide e uma constante nomeada');
+  if (!m) return;
+  const y0 = 1.62, linha = 0.36, altSobra = 0.3, rodape = 5.05;
+  const fim = y0 + linha * (Number(m[1]) + 1) + 0.08;
+  ok(fim + altSobra <= rodape,
+     'e com ' + m[1] + ' linhas a contagem de sobra fecha antes do rodape',
+     fim.toFixed(2) + '–' + (fim + altSobra).toFixed(2) + '" contra ' + rodape + '"');
+  ok(/y: 1\.62, max: MAX_ENTREGAS/.test(RPPT),
+     'e a tabela usa a constante, e nao um numero solto');
+})();
+
+/* NENHUM TRUNCAMENTO EM SILENCIO. Lista cortada sem dizer quantas ficaram de fora
+   faz a sala concluir que aquilo e tudo. */
+ok(/e mais ' \+ sobra/.test(RPPT), 'a fila cortada diz quantas ficaram de fora');
+ok(/rankingSobra/.test(RPPT) && /rankingSobra/.test(ADMIN),
+   'e o ranking tambem — com a soma dos que nao couberam');
+
+/* O NOME DO ARQUIVO NAO LEVA ACENTO NEM BARRA: os dois passam num nome de tema, e
+   "AXCred - Operações" viraria um download quebrado no Windows. */
+(() => {
+  const src = corpo(ADMIN, 'function relPptNomeArquivo(');
+  ok(!!src, 'existe o nome do arquivo');
+  if (!src) return;
+  const F = new Function(src + '\nreturn relPptNomeArquivo;')();
+  const j = { escala: 'mes', de: '2026-08-01' };
+  ok(F('AXCred - Operações', j) === 'relatorio-axcred-operacoes-2026-08.pptx',
+     'acento e espaco saem do nome', F('AXCred - Operações', j));
+  ok(F('', j) === 'relatorio-consolidado-2026-08.pptx',
+     'e o consolidado tem nome proprio', F('', j));
+  ok(!/[^\x20-\x7e]/.test(F('Ax Caixa / Tesouraria (novo)', j)),
+     'nada fora de ASCII sobrevive', F('Ax Caixa / Tesouraria (novo)', j));
+})();
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Sintaxe de cada tela');
 
 for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
@@ -4711,23 +4841,36 @@ ok(/delta: relDeltaHTML\(r\.agora\.entregue, r\.antes\.entregue, true\)/.test(AD
 /* ONDE A CAPACIDADE FOI: por PONTOS, e nao por contagem. Contar demandas da o
    mesmo peso a um ajuste de meia hora e a uma entrega de 13 pontos. */
 (() => {
-  const c = corpo(ADMIN, 'function relTemas(');
+  /* A REGRA MORA NA VERSAO SEM DOM, e a que le a tela delega.
+     `relTemas` era o corpo inteiro; virou um delegador quando o deck de assunto
+     passou a precisar da mesma conta para cinco raizes numa passada. Apontar esta
+     invariante para o delegador a faria passar vazia — ela conferiria uma linha
+     de repasse e nao a conta. */
+  const c = corpo(ADMIN, 'function relTemasDe(');
   ok(!!c, 'existe o bloco por sistema');
   if (!c) return;
   ok(/CAPI\.entregues\(m\)/.test(c), 'ele soma pontos entregues, e nao demandas');
   ok(/b\.pts - a\.pts/.test(c), 'e ordena por ponto');
+  // E A VERSAO DA TELA NAO REIMPLEMENTA: um `return` e nada mais. Sem isto, uma
+  // segunda copia da conta poderia nascer no delegador e divergir em silencio.
+  ok(semEspaco(corpo(ADMIN, 'function relTemas(')) ===
+     'function relTemas(j) { return relTemasDe(relTemaFiltro(), j); }',
+     'e a versao da tela so repassa o filtro — uma conta, um lugar');
 })();
 
 /* O QUE VEM: dois grupos, e a diferenca entre eles e a ACAO.
    Em Planning o tamanho nao existe (estimar); pontuado sem prazo tem tamanho e
    falta data (agendar). */
 (() => {
-  const c = corpo(ADMIN, 'function relOQueVem(');
+  const c = corpo(ADMIN, 'function relOQueVemDe(');
   ok(!!c, 'existe o bloco do que vem');
   if (!c) return;
   ok(/=== 'planning'/.test(c), 'um grupo e o que esta em Planning');
   ok(/Number\(m\.poker_pontos\) > 0 && !CAPI\.diaDoPlano\(m\)/.test(c),
      'e o outro e o pontuado SEM prazo — tem tamanho e falta data');
+  ok(semEspaco(corpo(ADMIN, 'function relOQueVem(')) ===
+     'function relOQueVem() { return relOQueVemDe(relTemaFiltro()); }',
+     'e a versao da tela so repassa o filtro — uma regra, um lugar');
   /* NAO PROJETA DATA. Num relatorio de diretoria, projecao e lida como
      compromisso — e o compromisso e do time, nao da ferramenta. */
   ok(!/prazoPrevisto|dataPrevista|projet/i.test(c),
