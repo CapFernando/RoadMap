@@ -527,6 +527,75 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Todo on* aponta para funcao que existe');
+
+/* O BOTAO NAO ABRIA NADA.
+   `relPptAbrir` terminava em `openModal('modal-rel-ppt')`. A funcao desta base
+   chama-se `abrirModal` — eu escrevi o nome que costuma existir, e nao o que
+   existe aqui. O clique lancava ReferenceError no console e a tela nao fazia
+   nada. Subiu para producao assim.
+   PASSOU POR TUDO porque ReferenceError nao e erro de SINTAXE, e porque a prova
+   do deck nunca executava as funcoes de DOM — so as de calculo.
+   Esta invariante le todo atributo on* das sete telas e confere que o nome
+   chamado esta declarado ali ou num .js que a pagina carrega. */
+(() => {
+  const EVENTOS = /\bon(?:click|change|input|submit|keyup|keydown|focus|blur|dblclick|mouseenter|mouseleave|dragstart|dragover|drop|dragend|dragleave|paste|contextmenu|load|error|toggle)\s*=\s*"([^"]*)"/g;
+  // SO IDENTIFICADOR SOLTO: sem excluir o que vem depois de ponto, `.focus()` e
+  // `JSON.stringify()` entram como funcao inexistente (foram 24 falsos positivos).
+  const CHAMADA = /(?<![.\w$])([A-Za-z_$][\w$]*)\s*\(/g;
+  const PALAVRAS = new Set(['if', 'for', 'while', 'switch', 'catch', 'return', 'typeof',
+    'new', 'function', 'var', 'let', 'const', 'do', 'else', 'delete', 'void', 'await', 'yield']);
+  const GLOBAIS = new Set(['alert', 'confirm', 'prompt', 'Number', 'String', 'Boolean',
+    'Array', 'Object', 'JSON', 'Math', 'Date', 'parseInt', 'parseFloat', 'isNaN',
+    'encodeURIComponent', 'decodeURIComponent', 'setTimeout', 'setInterval', 'RegExp',
+    'Promise', 'Set', 'Map', 'fetch', 'atob', 'btoa', 'Error', 'Intl']);
+
+  const declarados = (txt) => {
+    const d = new Set();
+    [/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g,
+     /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/g,
+     /\bwindow\.([A-Za-z_$][\w$]*)\s*=/g,
+     /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/g].forEach((re) => {
+      let m; while ((m = re.exec(txt))) d.add(m[1]);
+    });
+    return d;
+  };
+
+  const TELAS = ['index.html', 'admin.html', 'dev.html', 'gantt.html', 'poker.html',
+                 'projetos.html', 'importar.html'];
+  const fantasmas = [];
+  let conferidos = 0;
+  TELAS.forEach((tela) => {
+    const src = lerTela(tela);
+    const conhecidos = new Set([...declarados(src), ...GLOBAIS, ...PALAVRAS]);
+    const js = /src="([A-Za-z0-9_.-]+\.js)(?:\?v=[^"]*)?"/g;
+    let m;
+    while ((m = js.exec(src))) {
+      if (fs.existsSync(m[1])) {
+        declarados(fs.readFileSync(m[1], 'utf8')).forEach((n) => conhecidos.add(n));
+      }
+    }
+    EVENTOS.lastIndex = 0;
+    let ev;
+    while ((ev = EVENTOS.exec(src))) {
+      CHAMADA.lastIndex = 0;
+      let c;
+      while ((c = CHAMADA.exec(ev[1]))) {
+        conferidos++;
+        if (!conhecidos.has(c[1])) {
+          fantasmas.push(tela + ' L' + src.slice(0, ev.index).split('\n').length +
+                         ': ' + c[1] + '()');
+        }
+      }
+    }
+  });
+  ok(conferidos > 200, 'as telas foram varridas', conferidos + ' chamadas em on*');
+  ok(!fantasmas.length,
+     'e toda funcao chamada de um on* existe — botao que lanca ReferenceError nao abre nada',
+     fantasmas.slice(0, 6).join(' | '));
+})();
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Deck de assunto: o relatorio em .pptx');
 
 /* O DECK DE COBRANCA FOI FEITO A MAO, slide por slide, e levou dois dias. O
