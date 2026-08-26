@@ -434,7 +434,7 @@
 <script src="capacidade.js?v=3769a13468"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="catalogo.js?v=cdc461dcbd"></script>
+<script src="catalogo.js?v=75d59802ea"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -4252,7 +4252,31 @@ function nRemoveAnexo(i) {
   nRenderAnexos();
 }
 
+/** JA EXISTE UMA DEMANDA VIVA COM ESTE TITULO?
+ *
+ *  O Worker recusa de qualquer forma — esta funcao existe para a pessoa saber
+ *  ANTES de clicar, e nao levar um erro na hora de gravar. A assinatura vem de
+ *  `catalogo.js`, a mesma que o Worker copia: se as duas divergissem, a tela
+ *  liberaria o que o servidor barra.
+ *
+ *  `idAtual` sai da conta: editar uma demanda nao pode colidir com ela propria. */
+function tituloJaUsado(titulo, idAtual) {
+  if (!window.tituloAssinatura) return null;
+  const k = tituloAssinatura(titulo);
+  if (!k) return null;
+  return (state.melhorias || []).find(m =>
+    m && m.id !== idAtual && !m.oculto && !m.mesclado_em &&
+    String(m.status_planejamento || '') !== 'negada' &&
+    tituloAssinatura(m.titulo) === k) || null;
+}
+
 async function saveNewDemand() {
+  const btn = document.getElementById('btn-save-demand');
+  /* O BOTAO SE DESABILITA ENQUANTO GRAVA. Ele nao se desabilitava, e a gravacao
+     e assincrona: dois cliques viravam duas demandas, cada uma com o seu `uid()`.
+     Nao foi o que aconteceu com a AX-324 (91 segundos entre uma e outra), mas e a
+     mesma porta. */
+  if (btn && btn.disabled) return;
   const editId   = document.getElementById('n-id').value;
   const existing = editId ? state.melhorias.find(x => x.id === editId) : null;
   const titulo = document.getElementById('n-titulo').value.trim();
@@ -4268,6 +4292,17 @@ async function saveNewDemand() {
   // O modelo nao bloqueia: ver o comentario equivalente no admin.html. Aqui pesa
   // mais ainda — quem abre a demanda pelo painel dev costuma estar no meio de outra
   // coisa, e travar o registro faz a demanda nao ser aberta.
+  /* DEMANDA REPETIDA: pergunta antes, em vez de deixar o Worker recusar depois.
+     Vale so na CRIACAO — editar nao pode colidir com a propria demanda. */
+  if (!existing) {
+    const gemea = tituloJaUsado(titulo, null);
+    if (gemea && !(await confirmar({
+          titulo: 'Já existe uma demanda com este título',
+          texto: (gemea.codigo ? gemea.codigo + ' — ' : '') + gemea.titulo +
+                 '  (' + (gemea.dev || 'sem responsável') + ').  Se for a mesma coisa, ' +
+                 'volte e edite a que existe em vez de abrir outra.',
+          ok: 'Criar assim mesmo', cancelar: 'Voltar', perigo: true }))) return;
+  }
   const sp = document.getElementById('n-status').value;
   const spToStatus = { backlog:'recebida', planning:'estimada', planejado:'estimada',
                        em_andamento:'iniciada', validacao:'iniciada', atrasado:'iniciada',
@@ -4311,7 +4346,12 @@ async function saveNewDemand() {
   renderKanban();
   // Persiste (inclui temas se um novo sistema/módulo foi criado)
   const patch = { [obj.id]: obj };
-  await saveToGitHub(patch, state.temas.length !== temasBefore ? { temas: state.temas } : {});
+  if (btn) { btn.disabled = true; btn.dataset.rotulo = btn.textContent; btn.textContent = 'Gravando…'; }
+  try {
+    await saveToGitHub(patch, state.temas.length !== temasBefore ? { temas: state.temas } : {});
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.rotulo || 'Criar demanda'; }
+  }
 }
 
 // ─── TEMAS ───────────────────────────────────────────────────────

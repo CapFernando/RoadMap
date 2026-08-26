@@ -301,6 +301,33 @@
   window.catalogoResolve = resolve;
   window.catalogoLigaFiltro = ligaFiltro;
   window.catalogoCasa = casa;
+/** A ASSINATURA DE UM TITULO — como duas demandas se reconhecem iguais.
+   *
+   *  Existe porque nada, em camada nenhuma, impedia criar duas demandas identicas.
+   *  Em 25/08 a AX-324 e a AX-325 nasceram com 91 segundos de diferenca, mesmo
+   *  titulo, mesma dev e a MESMA descricao de 848 caracteres byte a byte. As duas
+   *  gravaram, as duas deram "Salvo!", e a primeira ficou orfa ate ser apagada a
+   *  mao — e apagar nao deixa rastro, entao o caso so foi reconstituivel pelos
+   *  commits do repositorio de dados.
+   *
+   *  So o TITULO entra. Medido nas 324 demandas da base: comparar por titulo,
+   *  ignorando dev e descricao, colide exatamente UMA vez — no par que se quer
+   *  barrar. Zero falso positivo em toda a historia. Uma regra que exigisse
+   *  tambem a descricao deixaria passar a duplicata que ninguem descreveu.
+   *
+   *  ESTE CORPO E COPIADO NO WORKER, e uma invariante exige que os dois sejam
+   *  identicos. A tela avisa antes; o Worker recusa. Se as duas normalizacoes
+   *  divergirem, a tela liberaria o que o servidor barra — e a pessoa levaria um
+   *  erro que a tela dizia nao existir. */
+  function tituloAssinatura(t) {
+    return String(t == null ? '' : t)
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+  window.tituloAssinatura = tituloAssinatura;
+
   window.catalogoRaiz = raiz;
   window.catalogoNaRaiz = naRaiz;
   window.catalogoCaminhos = caminhos;

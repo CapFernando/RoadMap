@@ -527,6 +527,93 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Demanda duplicada: prevencao, e nao so cura');
+
+/* A AX-324 E A AX-325 NASCERAM COM 91 SEGUNDOS DE DIFERENCA.
+   Mesmo titulo, mesma dev, e a MESMA descricao de 848 caracteres byte a byte. As
+   duas gravaram, as duas deram "Salvo!", e a primeira ficou orfa ate ser apagada a
+   mao — e apagar nao deixa rastro, entao o caso so foi reconstituivel pelos commits
+   do repositorio de dados.
+
+   A base tinha a CURA (`mesclado_em`, usada 4 vezes) e nao tinha a PREVENCAO:
+   dev.html, admin.html e worker.js somavam ZERO checagens de duplicidade. */
+(() => {
+  const CAT = fs.readFileSync('catalogo.js', 'utf8');
+
+  /* UMA REGRA, DOIS ARQUIVOS — e por isso a igualdade e conferida.
+     A tela avisa antes; o Worker recusa. Se as duas normalizacoes divergirem, a
+     tela libera o que o servidor barra, e a pessoa leva um erro que a tela dizia
+     nao existir. */
+  const noWk = corpo(WC, 'function tituloAssinatura(');
+  const noCat = corpo(CAT, 'function tituloAssinatura(');
+  ok(!!noWk && !!noCat, 'tituloAssinatura existe nos dois lados');
+  ok(semEspaco(noWk) === semEspaco(noCat),
+     'e e byte a byte igual no worker e no catalogo.js');
+
+  // As duas telas carregam o catalogo — sem isso o aviso nao roda.
+  ['admin.html', 'dev.html'].forEach((t) => {
+    ok(/src="catalogo\.js\?v=/.test(lerTela(t)), '  ' + t + ' carrega o catalogo');
+  });
+
+  /* A TRAVA ESTA NOS DOIS CAMINHOS DE GRAVACAO. Ligar so num deixaria a porta
+     aberta pelo outro — foi assim que o revert de temas sobreviveu, escondido no
+     segundo caminho de save. */
+  const chamadas = (WC.match(/criandoTituloRepetido\(data, antes(Pub|Dev)\)/g) || []);
+  ok(chamadas.length === 2, 'a trava roda no publish do admin E no do dev',
+     chamadas.join(', ') || 'nenhuma');
+
+  /* ELA EXECUTA, contra o par que originou tudo. */
+  const T = new Function(noWk + '\n' + corpo(WC, 'function criandoTituloRepetido(') +
+                         '\nreturn criandoTituloRepetido;')();
+  const velha = { id: 'a', codigo: 'AX-324', titulo: 'Vínculo com outros cedentes não sai no relatório de reanálise',
+                  status_planejamento: 'planejado' };
+  const nova = { id: 'b', titulo: 'Vínculo com outros cedentes não sai no relatório de reanálise',
+                 status_planejamento: 'planejado' };
+  const r = T({ melhorias: [velha, nova] }, { melhorias: [velha] });
+  ok(r.length === 1 && r[0].existente === 'AX-324',
+     'e recusa a segunda, nomeando a que ja existe', JSON.stringify(r[0] || {}));
+
+  // TRAVA NA CRIACAO, e nao no estado: republicar o que ja esta gravado passa.
+  ok(T({ melhorias: [velha] }, { melhorias: [velha] }).length === 0,
+     'mas regravar o que o servidor ja tem passa limpo — trava na transicao');
+  ok(T({ melhorias: [{ ...velha, titulo: velha.titulo + ' revisado' }] },
+       { melhorias: [velha] }).length === 0,
+     'e editar o titulo de uma existente tambem passa');
+
+  // Negada, oculta e mesclada liberam o titulo: a ideia pode voltar.
+  ['negada', 'oculto', 'mesclado_em'].forEach((caso) => {
+    const morta = caso === 'negada' ? { ...velha, status_planejamento: 'negada' }
+                : caso === 'oculto' ? { ...velha, oculto: true }
+                : { ...velha, mesclado_em: '2026-01-01' };
+    ok(T({ melhorias: [morta, nova] }, { melhorias: [morta] }).length === 0,
+       '  titulo de uma ' + caso + ' pode ser reaproveitado');
+  });
+
+  // Acento, caixa e pontuacao nao driblam.
+  ok(T({ melhorias: [velha, { id: 'c', titulo: 'VINCULO COM OUTROS CEDENTES NAO SAI NO RELATORIO DE REANALISE!' }] },
+       { melhorias: [velha] }).length === 1,
+     'e acento, caixa e pontuacao nao driblam a trava');
+
+  /* AS DUAS TELAS AVISAM ANTES, e desabilitam o botao enquanto gravam.
+     O aviso e conveniencia — a trava e do Worker. O botao e a outra porta: a
+     gravacao e assincrona, e dois cliques viravam duas demandas com uids
+     diferentes. */
+  [['dev.html', 'btn-save-demand'], ['admin.html', 'btn-salvar-melhoria']].forEach(([tela, btn]) => {
+    const src = lerTela(tela);
+    ok(!!corpo(src, 'function tituloJaUsado('), tela + ' sabe procurar o titulo repetido');
+    ok(/tituloJaUsado\(titulo/.test(src), '  e pergunta antes de gravar');
+    ok(new RegExp('id="' + btn + '"').test(src), '  o botao de salvar tem id');
+    ok(new RegExp(btn + '[\s\S]{0,400}?disabled = true').test(src) ||
+       /btn\.disabled = true/.test(src) || /btnSalvar\.disabled = true/.test(src),
+       '  e se desabilita durante a gravacao');
+    // O `finally` importa: gravacao que falha tem de devolver o botao, senao a
+    // pessoa fica sem como tentar de novo e o texto morre na tela.
+    ok(/finally \{[\s\S]{0,260}?disabled = false/.test(src),
+       '  e volta no finally, mesmo se a gravacao falhar');
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Todo on* aponta para funcao que existe');
 
 /* O BOTAO NAO ABRIA NADA.

@@ -1128,6 +1128,71 @@ function entrandoAlocadaSemSistema(recebido, servidor) {
   return presos;
 }
 
+/** A ASSINATURA DE UM TITULO — como duas demandas se reconhecem iguais.
+ *
+ *  Existe porque nada, em camada nenhuma, impedia criar duas demandas identicas.
+ *  Em 25/08 a AX-324 e a AX-325 nasceram com 91 segundos de diferenca, mesmo
+ *  titulo, mesma dev e a MESMA descricao de 848 caracteres byte a byte. As duas
+ *  gravaram, as duas deram "Salvo!", e a primeira ficou orfa ate ser apagada a
+ *  mao — e apagar nao deixa rastro, entao o caso so foi reconstituivel pelos
+ *  commits do repositorio de dados.
+ *
+ *  So o TITULO entra. Medido nas 324 demandas da base: comparar por titulo,
+ *  ignorando dev e descricao, colide exatamente UMA vez — no par que se quer
+ *  barrar. Zero falso positivo em toda a historia. Uma regra que exigisse
+ *  tambem a descricao deixaria passar a duplicata que ninguem descreveu.
+ *
+ *  ESTE CORPO E COPIADO NO WORKER, e uma invariante exige que os dois sejam
+ *  identicos. A tela avisa antes; o Worker recusa. Se as duas normalizacoes
+ *  divergirem, a tela liberaria o que o servidor barra — e a pessoa levaria um
+ *  erro que a tela dizia nao existir. */
+function tituloAssinatura(t) {
+  return String(t == null ? '' : t)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/** DUAS DEMANDAS VIVAS COM O MESMO TITULO — recusa.
+ *
+ *  Trava na CRIACAO, e nao no estado: so olha melhoria que o servidor ainda nao
+ *  conhece. Mesmo criterio das outras cinco guardas — travar por estado faria
+ *  toda gravacao falhar por causa de um registro antigo, e quem so queria salvar
+ *  um texto ficaria preso a um problema que nao criou.
+ *
+ *  Compara contra as VIVAS: negada, oculta e mesclada nao contam. Reaproveitar o
+ *  titulo de uma demanda negada e legitimo — a ideia voltou.
+ *
+ *  Confere tambem as novas ENTRE SI, no mesmo envio: duas iguais que nunca
+ *  chegaram ao servidor nao teriam com que colidir sem isso.
+ */
+function criandoTituloRepetido(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const viva = m => m && !m.oculto && !m.mesclado_em &&
+                    String(m.status_planejamento || '') !== 'negada';
+  const conhecidos = new Set();
+  const porTitulo = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) {
+    if (!m || !m.id) continue;
+    conhecidos.add(m.id);
+    if (!viva(m)) continue;
+    const k = tituloAssinatura(m.titulo);
+    if (k && !porTitulo.has(k)) porTitulo.set(k, m.codigo || m.id);
+  }
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id || conhecidos.has(m.id)) continue;   // so o que e NOVO
+    if (!viva(m)) continue;
+    const k = tituloAssinatura(m.titulo);
+    if (!k) continue;
+    const dono = porTitulo.get(k);
+    if (dono) presos.push({ titulo: String(m.titulo || '').slice(0, 70), existente: dono });
+    else porTitulo.set(k, m.codigo || '(a mesma gravacao)');
+  }
+  return presos;
+}
+
 // Entrar em CONCLUIDO sem responsavel. `corrigeSemDev` cobre planejado,
 // em_andamento e validacao rebaixando para backlog — mas concluido nao pode ser
 // rebaixado: a demanda foi entregue, e devolver ela para o backlog seria apagar
@@ -3524,6 +3589,18 @@ export default {
                               '. Sem ele a demanda fica de fora do filtro, do grafico e de ' +
                               'todo relatorio por sistema.' }, 400, headers);
       }
+      /* DUAS VIVAS COM O MESMO TITULO NAO ENTRAM. Vem junto das outras guardas,
+         antes de `registraHistorico`, para a trilha nao guardar evento de uma
+         gravacao que sera recusada. */
+      const repetidoPub = criandoTituloRepetido(data, antesPub);
+      if (repetidoPub.length) {
+        return json({ error: 'titulo_repetido',
+                      itens: repetidoPub,
+                      detail: 'Já existe demanda viva com este título: ' +
+                              repetidoPub.map(r => r.existente + ' — "' + r.titulo + '"').join('; ') +
+                              '. Se for a mesma coisa, edite a que existe; se for outra, ' +
+                              'diferencie o título.' }, 400, headers);
+      }
       const semDevPub = entrandoEmConcluidoSemDev(data, antesPub);
       if (semDevPub.length) {
         return json({ error: 'sem_responsavel',
@@ -3650,6 +3727,18 @@ export default {
                       detail: 'Escolha o sistema antes de planejar: ' + semSistema.join(', ') +
                               '. Sem ele a demanda fica de fora do filtro, do grafico e de ' +
                               'todo relatorio por sistema.' }, 400, headers);
+      }
+      /* DUAS VIVAS COM O MESMO TITULO NAO ENTRAM. Vem junto das outras guardas,
+         antes de `registraHistorico`, para a trilha nao guardar evento de uma
+         gravacao que sera recusada. */
+      const repetidoDev = criandoTituloRepetido(data, antesDev);
+      if (repetidoDev.length) {
+        return json({ error: 'titulo_repetido',
+                      itens: repetidoDev,
+                      detail: 'Já existe demanda viva com este título: ' +
+                              repetidoDev.map(r => r.existente + ' — "' + r.titulo + '"').join('; ') +
+                              '. Se for a mesma coisa, edite a que existe; se for outra, ' +
+                              'diferencie o título.' }, 400, headers);
       }
       const semDevDev = entrandoEmConcluidoSemDev(data, antesDev);
       if (semDevDev.length) {

@@ -1030,7 +1030,7 @@
 <script src="apresentacao.js?v=4137b6e9c0"></script>
 <script src="relatorio-ppt.js?v=551066c21b"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="catalogo.js?v=cdc461dcbd"></script>
+<script src="catalogo.js?v=75d59802ea"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -1846,7 +1846,7 @@
 
     <div class="form-actions" id="m-acoes-dados">
       <button class="btn btn-secondary" onclick="closeModal('modal-melhoria')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveMelhoria()">Salvar</button>
+      <button class="btn btn-primary" id="btn-salvar-melhoria" onclick="saveMelhoria()">Salvar</button>
     </div>
   </div>
 </div>
@@ -8743,7 +8743,29 @@ async function pausaSalvar(m, msg) {
   } else toast('Não foi possível salvar. A alteração continua pendente.', 'err');
 }
 
+/** JA EXISTE UMA DEMANDA VIVA COM ESTE TITULO?
+ *
+ *  O Worker recusa de qualquer forma — esta funcao existe para a pessoa saber
+ *  ANTES de clicar, e nao levar um erro na hora de gravar. A assinatura vem de
+ *  `catalogo.js`, a mesma que o Worker copia: se as duas divergissem, a tela
+ *  liberaria o que o servidor barra.
+ *
+ *  `idAtual` sai da conta: editar uma demanda nao pode colidir com ela propria. */
+function tituloJaUsado(titulo, idAtual) {
+  if (!window.tituloAssinatura) return null;
+  const k = tituloAssinatura(titulo);
+  if (!k) return null;
+  return (state.melhorias || []).find(m =>
+    m && m.id !== idAtual && !m.oculto && !m.mesclado_em &&
+    String(m.status_planejamento || '') !== 'negada' &&
+    tituloAssinatura(m.titulo) === k) || null;
+}
+
 async function saveMelhoria() {
+  /* O BOTAO SE DESABILITA ENQUANTO GRAVA. Ele nao se desabilitava, e a gravacao
+     e assincrona: dois cliques viravam duas demandas, cada uma com o seu `uid()`. */
+  const btnSalvar = document.getElementById('btn-salvar-melhoria');
+  if (btnSalvar && btnSalvar.disabled) return;
   const titulo = document.getElementById('m-titulo').value.trim();
   const temaId = resolveTemaSelecao('m', document.getElementById('m-id').value ? (state.melhorias.find(x => x.id === document.getElementById('m-id').value)||{}).tema_id : '');
   const sp     = document.getElementById('m-status').value; // agora é o status_planejamento
@@ -8773,6 +8795,17 @@ async function saveMelhoria() {
 
   const id = document.getElementById('m-id').value;
   const existing = id ? (state.melhorias.find(x => x.id === id) || {}) : {};
+
+  /* DEMANDA REPETIDA: pergunta antes, em vez de deixar o Worker recusar depois.
+     `id` vai na chamada mesmo em edicao — sem isso, salvar uma demanda existente
+     acusaria colisao com ela mesma. */
+  const gemea = tituloJaUsado(titulo, id || null);
+  if (gemea && !(await confirmar({
+        titulo: 'Já existe uma demanda com este título',
+        texto: (gemea.codigo ? gemea.codigo + ' — ' : '') + gemea.titulo +
+               '  (' + (gemea.dev || 'sem responsável') + ').  Se for a mesma coisa, ' +
+               'volte e edite a que existe em vez de abrir outra.',
+        ok: 'Salvar assim mesmo', cancelar: 'Voltar', perigo: true }))) return;
 
   // Priorização GUT/IP (Backlog / Levantar Req. / Planejado)
   let discovery = existing.discovery || undefined;
@@ -8883,7 +8916,21 @@ async function saveMelhoria() {
   // Grava agora. Antes dizia "salva" e esperava um segundo clique em "Publicar
   // alteracoes": quem fechava a tela achando que tinha salvo perdia a demanda, e
   // ela nunca aparecia no funil do dev.
-  await mPersistir('Demanda salva e publicada.');
+  if (btnSalvar) {
+    btnSalvar.disabled = true;
+    btnSalvar.dataset.rotulo = btnSalvar.textContent;
+    btnSalvar.textContent = 'Gravando…';
+  }
+  try {
+    await mPersistir('Demanda salva e publicada.');
+  } finally {
+    // `finally` de proposito: se a gravacao falhar, o botao TEM de voltar — senao
+    // a pessoa fica sem como tentar de novo e o texto dela morre na tela.
+    if (btnSalvar) {
+      btnSalvar.disabled = false;
+      btnSalvar.textContent = btnSalvar.dataset.rotulo || 'Salvar';
+    }
+  }
 }
 
 
