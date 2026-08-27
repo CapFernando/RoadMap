@@ -2686,6 +2686,92 @@ export default {
         return json({ ok: true, demanda: devVisao(m, temas) }, 200, headers);
       }
 
+      /* PROCURAR ANTES DE CRIAR.
+       *
+       * `demanda-consultar` responde "como esta a AX-042" — exige o codigo que se
+       * procura. Nao respondia "ja existe alguma sobre isto?", e era essa a
+       * pergunta que faltava: sem ela, o script cria e descobre a duplicata
+       * depois, no 409.
+       *
+       * NAO E "VALIDAR". O nome foi evitado de proposito: nesta base validacao e a
+       * ETAPA em que o PM/PO aprova a entrega, e um `demanda-validar` seria lido
+       * como "aprovar a demanda" por quem chegasse depois.
+       *
+       * DUAS RESPOSTAS DIFERENTES, e a distincao e o que torna o endpoint util:
+       *   `identica`   mesma assinatura de titulo. E o que `demanda-nova` VAI
+       *                recusar — quem chama sabe disso antes de tentar.
+       *   `parecidas`  compartilham palavras. Nao barram nada; sao para os olhos
+       *                de quem decide.
+       *
+       * A ASSINATURA E A MESMA DA TRAVA (`tituloAssinatura`). Se fosse outra, o
+       * endpoint diria "pode criar" e a gravacao recusaria — e quem automatiza
+       * ficaria sem entender qual das duas acreditar. */
+      if (body.action === 'demanda-procurar') {
+        /* O TETO DA BUSCA E MAIOR QUE O DA CRIACAO, e nao por descuido.
+         *
+         * `demanda-nova` corta o titulo em 200 porque e o maximo que ele grava.
+         * Cortar a BUSCA no mesmo numero criou uma divergencia silenciosa: a
+         * AX-257 tem 233 caracteres (nasceu pela tela, que nao corta), entao
+         * procurar por ela comparava os primeiros 200 contra os 233 gravados,
+         * nao achava, e o endpoint respondia "pode criar" para um titulo que a
+         * trava recusa. Pego rodando os 304 titulos vivos contra as duas regras.
+         *
+         * 500 cobre qualquer titulo que a base tenha (o maior tem 233) e continua
+         * sendo um limite — corpo sem teto e porta de abuso. Ha invariante
+         * conferindo que nenhum titulo vivo passa disso. */
+        const termo = limpaTexto(body.titulo || body.termo, 500);
+        if (termo.length < 3) {
+          return json({ error: 'termo',
+                        detail: 'Informe "titulo" (ou "termo") com ao menos 3 caracteres.' }, 400, headers);
+        }
+        const viva = m => m && !m.oculto && !m.mesclado_em &&
+                          String(m.status_planejamento || '') !== 'negada';
+        const alvoTema = String(body.tema_id || '').trim();
+        const candidatas = todas.filter(m => viva(m) && (!alvoTema || String(m.tema_id) === alvoTema));
+
+        const chave = tituloAssinatura(termo);
+        const identica = candidatas.find(m => tituloAssinatura(m.titulo) === chave) || null;
+
+        /* PALAVRAS DE 4 LETRAS OU MAIS, e sem as vazias. "de", "no", "da" estao em
+         * metade dos titulos da base e casariam tudo com tudo; "ajuste", "erro" e
+         * "tela" tambem, e por isso entram na lista de ruido. O que sobra e o
+         * assunto. */
+        const RUIDO = new Set(['para', 'pelo', 'pela', 'como', 'ajuste', 'ajustes', 'erro',
+                               'bug', 'tela', 'campo', 'novo', 'nova', 'quando', 'sobre',
+                               'esta', 'estao', 'mais', 'menos', 'todos', 'todas']);
+        const palavras = t => [...new Set(tituloAssinatura(t).split(' ')
+          .filter(p => p.length >= 4 && !RUIDO.has(p)))];
+        const doTermo = palavras(termo);
+        const parecidas = doTermo.length
+          ? candidatas
+              .filter(m => !identica || m.id !== identica.id)
+              .map(m => {
+                const dela = palavras(m.titulo);
+                const comuns = doTermo.filter(p => dela.includes(p));
+                // Jaccard: proporcao do que as duas compartilham sobre o que as
+                // duas tem juntas. Contar so os comuns faria um titulo enorme
+                // casar com qualquer coisa, por conter muitas palavras.
+                const uniao = new Set([...doTermo, ...dela]).size || 1;
+                return { m, comuns, forca: comuns.length / uniao };
+              })
+              .filter(x => x.comuns.length >= 2 || x.forca >= 0.34)
+              .sort((a, b) => b.forca - a.forca)
+              .slice(0, 8)
+          : [];
+
+        return json({ ok: true,
+                      termo: termo,
+                      // O que a trava vai fazer se este titulo for gravado. E a
+                      // informacao acionavel: `false` aqui significa que
+                      // `demanda-nova` aceita.
+                      bloqueia_criacao: !!identica,
+                      identica: identica ? devVisao(identica, temas) : null,
+                      parecidas: parecidas.map(x => Object.assign(
+                        devVisao(x.m, temas),
+                        { palavras_em_comum: x.comuns })),
+                      total_parecidas: parecidas.length }, 200, headers);
+      }
+
       // ── daqui para baixo, escreve ──────────────────────────────────────
       const alvo = acha();
       if (!alvo) {
@@ -2989,6 +3075,32 @@ export default {
         criado_em: agora,
       };
       atual.melhorias = atual.melhorias || [];
+
+      /* A API PASSA PELA MESMA TRAVA DAS TELAS.
+       *
+       * `criandoTituloRepetido` foi ligada em `publish` e `dev-publish` no dia em
+       * que a AX-324 e a AX-325 nasceram identicas com 91 segundos de diferenca —
+       * e ESTE caminho ficou de fora. As duas telas protegidas e a API aberta e
+       * pior do que nenhuma protecao: da a impressao de que o problema foi
+       * resolvido, e um script que rode duas vezes cria as duas mesmo assim.
+       *
+       * Reusa a funcao, e nao uma comparacao escrita aqui: uma segunda regra
+       * divergiria da das telas, e ai a API recusaria o que a tela aceita (ou o
+       * contrario), que e o pior dos dois mundos para quem automatiza.
+       *
+       * `nova.id` acabou de ser gerado e o servidor nao o conhece — entao ela e
+       * vista como criacao, que e exatamente o caso que a trava cobre. */
+      const repetida = criandoTituloRepetido({ melhorias: [nova] }, atual);
+      if (repetida.length) {
+        return json({ error: 'titulo_repetido',
+                      itens: repetida,
+                      detail: 'Ja existe demanda viva com este titulo: ' +
+                              repetida.map(r => r.existente + ' — "' + r.titulo + '"').join('; ') +
+                              '. Consulte antes com "demanda-procurar": se for a mesma coisa, ' +
+                              'atualize a que existe; se for outra, diferencie o titulo.' },
+                    409, headers);
+      }
+
       atual.melhorias.push(nova);
       atribuiCodigos(atual);
       corrigeSemDev(atual);

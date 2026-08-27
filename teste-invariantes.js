@@ -546,6 +546,102 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('API: a criacao tambem e barrada, e da para procurar antes');
+
+/* A TRAVA DE DUPLICIDADE COBRIA AS TELAS E DEIXAVA A API ABERTA.
+   `criandoTituloRepetido` foi ligada em `publish` e `dev-publish` no dia da
+   AX-324/AX-325, e `demanda-nova` ficou de fora — um script que rodasse duas
+   vezes criava as duas mesmo assim. Duas portas fechadas e uma aberta e pior que
+   nenhuma: passa a impressao de que o problema foi resolvido. */
+(() => {
+  const bloco = (acao) => {
+    const marca = "if (body.action === '" + acao + "') {";
+    const i = WC.indexOf(marca);
+    if (i < 0) return null;
+    let d = 0;
+    for (let k = WC.indexOf('{', i); k < WC.length; k++) {
+      if (WC[k] === '{') d++;
+      else if (WC[k] === '}') { d--; if (!d) return WC.slice(i, k + 1); }
+    }
+    return null;
+  };
+
+  const nova = bloco('demanda-nova');
+  ok(!!nova, 'existe o endpoint de criacao');
+  ok(/criandoTituloRepetido\(\{ melhorias: \[nova\] \}, atual\)/.test(nova),
+     'e ele passa pela MESMA trava das telas, e nao por uma comparacao propria');
+  ok(nova.indexOf('criandoTituloRepetido') < nova.indexOf('atual.melhorias.push(nova)'),
+     'e a recusa vem ANTES de empurrar a demanda para a lista');
+  ok(/'titulo_repetido'/.test(nova), 'com o mesmo codigo de erro das telas');
+
+  /* A TRAVA RODA NOS TRES CAMINHOS DE ESCRITA. Contar e o que impede o proximo
+     caminho de nascer sem ela. */
+  const usos = (WC.match(/criandoTituloRepetido\(/g) || []).length;
+  ok(usos === 4, 'a trava aparece 4x: a definicao e os tres caminhos de escrita',
+     usos + ' ocorrencia(s)');
+
+  /* PROCURAR ANTES DE CRIAR. `demanda-consultar` exige o codigo que se procura;
+     nao respondia "ja existe alguma sobre isto?". */
+  const proc = bloco('demanda-procurar');
+  ok(!!proc, 'existe o endpoint de busca');
+  ok(/bloqueia_criacao/.test(proc),
+     'e ele diz se a criacao sera barrada — a informacao acionavel');
+  ok(/tituloAssinatura\(/.test(proc),
+     'usando a MESMA assinatura da trava, senao um diria sim e o outro nao');
+  ok(!/demanda-validar/.test(WC),
+     'e nao se chama "validar": validacao nesta base e a etapa do PM/PO');
+
+  /* O TETO DA BUSCA E MAIOR QUE O DA CRIACAO, e essa diferenca e deliberada.
+     Cortar os dois em 200 fez a AX-257 (233 caracteres, nascida pela tela)
+     divergir: a busca comparava os primeiros 200 contra os 233 gravados, nao
+     achava, e respondia "pode criar" para um titulo que a trava recusa. */
+  const tetoBusca = Number((WC.match(/body\.titulo \|\| body\.termo, (\d+)\)/) || [])[1]);
+  const tetoCria = Number((nova.match(/limpaTexto\(body\.titulo, (\d+)\)/) || [])[1]);
+  ok(tetoBusca > tetoCria, 'o teto da busca (' + tetoBusca + ') e maior que o da criacao (' +
+     tetoCria + ') — senao titulo longo escapa da conferencia');
+  ok(tetoBusca >= 400 && tetoBusca <= 2000, 'e continua sendo um teto',
+     String(tetoBusca));
+
+  /* AS DUAS REGRAS CONCORDAM — executadas, nao lidas. Se divergissem, o endpoint
+     diria "pode criar" e a gravacao recusaria. */
+  const AMB = corpo(WC, 'function tituloAssinatura(') + ' ' +
+    corpo(WC, 'function criandoTituloRepetido(') + ' ' +
+    'const limpaTexto = (t, n) => String(t == null ? "" : t).trim().slice(0, n);' +
+    'const devVisao = (m) => ({ codigo: m.codigo || "", etapa: m.status_planejamento || "" });' +
+    'const temas = [];';
+  const corpoInterno = proc.slice(proc.indexOf('{') + 1, proc.lastIndexOf('}'));
+  const P = new Function('body', 'todas', 'json', 'headers',
+    AMB + corpoInterno + ' return { error: "fora" };');
+  const T = new Function(AMB + ' return criandoTituloRepetido;')();
+
+  const base = [
+    { id: 'v1', codigo: 'AX-100', titulo: 'Filtro por número do título', status_planejamento: 'planejado' },
+    { id: 'v2', codigo: 'AX-101', titulo: 'Ideia recusada', status_planejamento: 'negada' },
+    { id: 'v3', codigo: 'AX-102', titulo: 'Coisa mesclada', status_planejamento: 'concluido', mesclado_em: '2026-01-01' },
+  ];
+  const buscar = (b) => P(b, base, (x) => x, {});
+  const barra = (t) => T({ melhorias: [{ id: 'novo', titulo: t, status_planejamento: 'backlog' }] },
+                         { melhorias: base }).length > 0;
+  [['Filtro por número do título', true, 'titulo vivo identico'],
+   ['FILTRO POR NUMERO DO TITULO', true, '  o mesmo sem acento e em maiuscula'],
+   ['Ideia recusada', false, '  titulo de NEGADA — a ideia pode voltar'],
+   ['Coisa mesclada', false, '  titulo de mesclada, idem'],
+   ['Algo que nunca existiu por aqui', false, '  titulo inedito'],
+  ].forEach(([t, esperado, rot]) => {
+    const r = buscar({ titulo: t });
+    ok(r.bloqueia_criacao === esperado && barra(t) === esperado,
+       rot + ': busca e trava dizem ' + esperado,
+       'busca=' + r.bloqueia_criacao + ' trava=' + barra(t));
+  });
+
+  ok(buscar({ titulo: 'ab' }).error === 'termo', 'termo com menos de 3 caracteres e recusado');
+  const achou = buscar({ titulo: 'filtro por numero do titulo' });
+  ok(achou.identica && achou.identica.codigo === 'AX-100',
+     'e a resposta nomeia a demanda que ja existe, com a etapa dela',
+     achou.identica ? achou.identica.codigo + '/' + achou.identica.etapa : '-');
+})();
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Planning Poker: estrela no topo, e o convite na tela');
 
 /* PEDIDO DO FERNANDO: "as issues que eu marcar na estrela devem ficar no topo
