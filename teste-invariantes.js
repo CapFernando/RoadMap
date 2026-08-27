@@ -968,6 +968,45 @@ sec('Kanban: a rolagem sobrevive ao redesenho');
      'o dev guarda a rolagem do #kanban-wrap');
   ok(/wrap\.scrollTop = rolTopo; wrap\.scrollLeft = rolEsq;/.test(rk),
      'e devolve as duas direcoes — o quadro rola na horizontal tambem');
+
+  /* E A DEVOLUCAO INSISTE UMA VEZ QUANDO NAO HA LAYOUT.
+     `scrollTop` so gruda em elemento com caixa. Medido num navegador com o CSS
+     real: com o quadro em `display:none` no instante do redesenho, 400 vira 0 —
+     sem erro, sem sintoma, so a coluna de volta ao topo. Em vez de caçar qual
+     caminho redesenha escondido (e de essa lista crescer a cada tela nova), a
+     devolucao confere se pegou e repete no proximo quadro. */
+  const dev = corpo(ADMIN, 'function kbRolagemDevolve(');
+  ok(/requestAnimationFrame\(aplica\)/.test(dev),
+     'a devolucao tenta de novo no proximo quadro quando nao pegou');
+  ok(/corpo\.clientHeight === 0/.test(dev),
+     'e so quando a causa e falta de layout — coluna que encolheu nao repete');
+
+  /* EXECUTADA: com caixa, aplica de primeira e nao agenda nada; sem caixa,
+     agenda uma vez. */
+  (() => {
+    let agendou = 0;
+    const D = new Function('requestAnimationFrame', dev + ' return kbRolagemDevolve;')(
+      () => { agendou++; });
+    const monta = (altura) => {
+      const c = { scrollTop: 0, clientHeight: altura };
+      return { scrollLeft: 0, _c: c,
+               querySelectorAll: () => [{ dataset: { col: 'x' }, querySelector: () => c }] };
+    };
+    const guardado = { colunas: new Map([['x', 300]]), esquerda: 0 };
+
+    const comCaixa = monta(400);
+    D(comCaixa, guardado);
+    ok(comCaixa._c.scrollTop === 300 && agendou === 0,
+       'com layout: devolve de primeira, sem agendar nada',
+       'scrollTop=' + comCaixa._c.scrollTop + ' agendou=' + agendou);
+
+    agendou = 0;
+    const semCaixa = monta(0);
+    // Sem caixa o navegador engoliria a atribuicao; o duble imita isso.
+    Object.defineProperty(semCaixa._c, 'scrollTop', { get: () => 0, set: () => {} });
+    D(semCaixa, guardado);
+    ok(agendou === 1, 'sem layout: agenda UMA repeticao', 'agendou=' + agendou);
+  })();
   /* A DEVOLUCAO VEM DEPOIS DO innerHTML. Antes dele, o navegador limitaria contra
      o conteudo velho e a conta sairia errada. */
   ok(rk.indexOf('kanban.innerHTML') < rk.indexOf('wrap.scrollTop = rolTopo'),

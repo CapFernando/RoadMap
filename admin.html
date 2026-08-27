@@ -3372,14 +3372,38 @@ function kbRolagemGuarda(board) {
 function kbRolagemDevolve(board, guardado) {
   if (!guardado) return;
   board.scrollLeft = guardado.esquerda;
-  board.querySelectorAll('.kb-col').forEach(c => {
+
+  const aplica = () => {
+    board.querySelectorAll('.kb-col').forEach(c => {
+      const alvo = guardado.colunas.get(c.dataset.col);
+      if (!alvo) return;
+      const corpo = c.querySelector('.kb-col-body');
+      // O navegador limita sozinho quando a coluna encolheu: pedir 400 numa que
+      // agora tem 60 devolve 60, que e o fundo — e nao o topo.
+      if (corpo) corpo.scrollTop = alvo;
+    });
+  };
+  aplica();
+
+  /* E TENTA DE NOVO NO QUADRO SEGUINTE, se nao pegou.
+   *
+   * `scrollTop` so gruda em elemento COM LAYOUT. Se o quadro (ou a aba) estiver
+   * com `display:none` no instante do redesenho, a atribuicao e engolida em
+   * silencio e a coluna volta ao topo — medido num navegador com o CSS real: 400
+   * vira 0, sem erro nenhum.
+   *
+   * Em vez de caçar qual caminho redesenha escondido — e de a lista deles crescer
+   * a cada tela nova —, a devolucao confere se pegou e repete uma vez no proximo
+   * quadro, quando o layout ja existe. Uma tentativa so: se ainda nao pegou, a
+   * coluna encolheu de verdade e insistir seria empurrar a pessoa para um lugar
+   * que nao existe mais. */
+  const faltou = [...board.querySelectorAll('.kb-col')].some(c => {
     const alvo = guardado.colunas.get(c.dataset.col);
-    if (!alvo) return;
+    if (!alvo) return false;
     const corpo = c.querySelector('.kb-col-body');
-    // O navegador limita sozinho quando a coluna encolheu: pedir 400 numa que
-    // agora tem 60 devolve 60, que e o fundo — e nao o topo.
-    if (corpo) corpo.scrollTop = alvo;
+    return corpo && corpo.scrollTop !== alvo && corpo.clientHeight === 0;
   });
+  if (faltou) requestAnimationFrame(aplica);
 }
 
 function renderKanban() {
