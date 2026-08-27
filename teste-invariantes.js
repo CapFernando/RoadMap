@@ -642,6 +642,23 @@ sec('API: a criacao tambem e barrada, e da para procurar antes');
     ok(/in:title/.test(F) && /is:issue/.test(F),
        'busca no titulo e so em issue — sem isso vem PR e corpo de texto');
 
+    /* DUAS PALAVRAS, E DUAS TENTATIVAS. Medido contra o repositorio real com
+       sete titulos que descrevem issues existentes: seis palavras casaram 1 de 7,
+       tres casaram 5, duas casaram 6. E as duas escolhas de duas palavras erram
+       em casos DIFERENTES — "primeiras" perde a #1087 (o titulo comeca em
+       "expansao societaria" e a issue fala "rastreamento" e "autenticacao"), e
+       "mais longas" perde as que dependem de palavra curta como "serasa". Com as
+       duas tentativas: 7 de 7. */
+    ok(/palavras\.slice\(0, 2\)/.test(F),
+       'a primeira tentativa usa DUAS palavras — seis casavam quase nada');
+    ok(/nome: 'primeiras'/.test(F) && /nome: 'mais-longas'/.test(F),
+       'e ha duas escolhas de palavra, que erram em casos diferentes');
+    ok(/if \(\(j\.items \|\| \[\]\)\.length\) break;/.test(F),
+       'a segunda so roda quando a primeira volta vazia — custo medio de 1 chamada');
+    ok(/procurado_por: usada/.test(F),
+       'e a resposta diz por quais palavras procurou: "zero" sem isso nao ' +
+       'distingue "nao existe" de "procurei errado"');
+
     /* EXECUTADA contra as sete respostas que o GitHub pode dar. A propriedade e
        uma so: lista existe SE E SOMENTE SE consultou. */
     const monta = (f) => new Function('fetch', F + ' return procuraNoGit;')(f);

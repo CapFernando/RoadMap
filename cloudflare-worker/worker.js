@@ -1201,28 +1201,56 @@ async function procuraNoGit(env, palavras) {
     return { consultado: false, motivo: 'termo_sem_palavras',
              detalhe: 'O termo nao tem palavra especifica o bastante para procurar no codigo.' };
   }
-  const q = palavras.slice(0, 6).join(' ') + ' in:title repo:' + repo + ' is:issue';
+  /* DUAS PALAVRAS, E NAO SEIS. O GitHub trata os termos como E: exigir seis
+     palavras no titulo casou 1 de 7 nos testes contra o repositorio real; duas
+     casaram 6 de 7.
+
+     E sao DUAS TENTATIVAS porque as duas escolhas erram em casos diferentes. As
+     duas PRIMEIRAS palavras perdem a #1087 — o titulo do dev comeca em "expansao
+     societaria" e a issue fala "rastreamento" e "autenticacao". As duas MAIORES
+     acham essa e perdem as que dependem de palavra curta e especifica, como
+     "serasa" ou "grupo". A segunda so roda quando a primeira volta vazia, entao
+     na pratica a maioria das buscas custa uma chamada. */
+  const maiores = palavras.slice()
+    .sort((a, b) => b.length - a.length || palavras.indexOf(a) - palavras.indexOf(b));
+  const tentativas = [
+    { nome: 'primeiras', termos: palavras.slice(0, 2) },
+    { nome: 'mais-longas', termos: maiores.slice(0, 2) },
+  ].filter((t, i, todas) => t.termos.length &&
+    // A segunda so vale a pena se for diferente da primeira.
+    (i === 0 || t.termos.join(' ') !== todas[0].termos.join(' ')));
+
   try {
-    const r = await fetch('https://api.github.com/search/issues?per_page=8&q=' +
-                          encodeURIComponent(q), {
-      headers: { Authorization: 'token ' + env.GH_TOKEN,
-                 Accept: 'application/vnd.github.v3+json',
-                 'User-Agent': 'audax-roadmap-worker' },
-    });
-    if (!r.ok) {
-      // 403 aqui e quase sempre teto de busca do GitHub (30/min) ou token sem
-      // alcance no repositorio — os dois merecem aparecer, e nao virar lista vazia.
-      return { consultado: false, motivo: 'http_' + r.status, repositorio: repo,
-               detalhe: r.status === 403
-                 ? 'Sem permissao no repositorio, ou limite de busca do GitHub atingido.'
-                 : 'O GitHub respondeu ' + r.status + ' para a busca.' };
+    let j = null, usada = '';
+    for (const t of tentativas) {
+      const q = t.termos.join(' ') + ' in:title repo:' + repo + ' is:issue';
+      const r = await fetch('https://api.github.com/search/issues?per_page=8&q=' +
+                            encodeURIComponent(q), {
+        headers: { Authorization: 'token ' + env.GH_TOKEN,
+                   Accept: 'application/vnd.github.v3+json',
+                   'User-Agent': 'audax-roadmap-worker' },
+      });
+      if (!r.ok) {
+        // 403 aqui e quase sempre teto de busca do GitHub (30/min) ou token sem
+        // alcance no repositorio — os dois merecem aparecer, e nao virar lista vazia.
+        return { consultado: false, motivo: 'http_' + r.status, repositorio: repo,
+                 detalhe: r.status === 403
+                   ? 'Sem permissao no repositorio, ou limite de busca do GitHub atingido.'
+                   : 'O GitHub respondeu ' + r.status + ' para a busca.' };
+      }
+      j = await r.json();
+      usada = t.termos.join(' ');
+      if ((j.items || []).length) break;
     }
-    const j = await r.json();
     return {
       consultado: true,
       repositorio: repo,
-      total: j.total_count || 0,
-      issues: (j.items || []).map(i => ({
+      // Por quais palavras a busca foi feita. Sem isso, "total: 0" nao distingue
+      // "nao existe" de "procurei pelas palavras erradas" — e o dev nao tem como
+      // decidir se refina o termo ou se pode criar.
+      procurado_por: usada,
+      total: (j && j.total_count) || 0,
+      issues: ((j && j.items) || []).map(i => ({
         numero: i.number,
         titulo: i.title || '',
         estado: i.state || '',
