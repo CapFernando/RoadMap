@@ -1,0 +1,24 @@
+# O SELO DE CACHE E O md5 DOS BYTES DO ARQUIVO, e o GitHub Pages serve o que o
+# git guarda — que e sempre LF. Com `core.autocrlf=true` o checkout entrega CRLF
+# na arvore de trabalho, e ai `scripts-tema-versao.py` sela o md5 de um conteudo
+# que NINGUEM recebe: aconteceu com o qr.js, cujo selo publicado nao batia com o
+# arquivo servido.
+#
+# Nao muda nada do que esta guardado — o repositorio ja e LF em tudo. O que muda
+# e o checkout: a arvore passa a ser LF tambem, entao o selo e calculado sobre os
+# mesmos bytes que vao para o ar, em qualquer maquina.
+#
+# Sem isto, duas pessoas com configuracoes diferentes de autocrlf geram selos
+# diferentes para o MESMO conteudo, e o arquivo fica trocando de selo a cada
+# rodada do script sem ter mudado uma linha.
+* text=auto eol=lf
+
+# Binarios nao passam por conversao nenhuma.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
