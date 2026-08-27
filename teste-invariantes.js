@@ -546,6 +546,77 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Kanban: a rolagem sobrevive ao redesenho');
+
+/* "QUANDO EU TENHO QUE USAR A BARRA DE ROLAGEM, ELE FICA VOLTADO AO TOPO."
+   No Admin, `.kb-col` tem `max-height: calc(100vh - 210px)` e `.kb-col-body` tem
+   `overflow-y: auto`: CADA COLUNA rola por conta. `renderKanban` refaz o
+   `innerHTML` do quadro inteiro, o que destroi e recria essas colunas — e a
+   rolagem delas volta a zero em TODO render.
+
+   O que torna isso constante e o `setInterval(adminCheckUpdates, 30000)`: a cada
+   meio minuto, se alguem gravou, a tela recarrega. Com o time inteiro gravando,
+   "alguem gravou" e quase sempre.
+
+   Medido num navegador com o CSS real: coluna em 180 de rolagem, redesenho, 0.
+   No Dev o container e outro (`#kanban-wrap`) e o comportamento tambem: la a
+   rolagem SE MANTEM enquanto a altura do conteudo nao muda, e zera quando ele
+   encolhe. Duas telas, dois mecanismos, o mesmo sintoma. */
+(() => {
+  // ── Admin: captura e devolve, e as duas pontas existem ──────────────────
+  const render = corpo(ADMIN, 'function renderKanban(');
+  ok(/const rolagem = kbRolagemGuarda\(board\);/.test(render),
+     'o admin guarda a rolagem antes de refazer o quadro');
+  ok(/kbRolagemDevolve\(board, rolagem\);/.test(render),
+     'e devolve depois — as duas pontas, ou nao adianta');
+
+  /* E AS FUNCOES SAO EXECUTADAS contra um DOM de mentira. A parte sutil e a
+     CHAVE: por posicao, uma coluna que fique vazia e suma deslocaria as outras e
+     cada uma herdaria a rolagem da vizinha. */
+  const G = new Function(corpo(ADMIN, 'function kbRolagemGuarda(') + ' ' +
+                         corpo(ADMIN, 'function kbRolagemDevolve(') +
+                         ' return { kbRolagemGuarda, kbRolagemDevolve };')();
+  const montaQuadro = (chaves, tops) => {
+    const cols = chaves.map((k, i) => {
+      const corpoCol = { scrollTop: (tops && tops[i]) || 0 };
+      return { dataset: { col: k }, querySelector: () => corpoCol, _corpo: corpoCol };
+    });
+    return { scrollLeft: 0, _cols: cols, querySelectorAll: () => cols };
+  };
+
+  const antes = montaQuadro(['planejado', 'concluido'], [0, 180]);
+  antes.scrollLeft = 120;
+  const guardado = G.kbRolagemGuarda(antes);
+  // O redesenho: colunas novas, todas zeradas — e uma coluna a mais no meio.
+  const depois = montaQuadro(['planejado', 'validacao', 'concluido'], [0, 0, 0]);
+  G.kbRolagemDevolve(depois, guardado);
+  ok(depois._cols[2]._corpo.scrollTop === 180,
+     'a rolagem volta para a coluna certa, pela chave data-col',
+     'concluido=' + depois._cols[2]._corpo.scrollTop);
+  ok(depois._cols[0]._corpo.scrollTop === 0 && depois._cols[1]._corpo.scrollTop === 0,
+     'e nenhuma vizinha herda rolagem alheia');
+  ok(depois.scrollLeft === 120, 'e o quadro nao volta para a esquerda',
+     String(depois.scrollLeft));
+
+  // Coluna que sumiu nao deixa lixo, e quadro sem rolagem nenhuma nao quebra.
+  const semNada = montaQuadro(['backlog'], [0]);
+  ok(G.kbRolagemGuarda(semNada).colunas.size === 0,
+     'coluna sem rolagem nao entra na memoria — nada a devolver');
+  G.kbRolagemDevolve(montaQuadro(['backlog'], [0]), guardado);
+  ok(true, 'e devolver para um quadro que perdeu a coluna nao explode');
+
+  // ── Dev: o wrap inteiro ─────────────────────────────────────────────────
+  const rk = corpo(DEV, 'function renderKanban(');
+  ok(/const rolTopo = wrap \? wrap\.scrollTop : 0;/.test(rk),
+     'o dev guarda a rolagem do #kanban-wrap');
+  ok(/wrap\.scrollTop = rolTopo; wrap\.scrollLeft = rolEsq;/.test(rk),
+     'e devolve as duas direcoes — o quadro rola na horizontal tambem');
+  /* A DEVOLUCAO VEM DEPOIS DO innerHTML. Antes dele, o navegador limitaria contra
+     o conteudo velho e a conta sairia errada. */
+  ok(rk.indexOf('kanban.innerHTML') < rk.indexOf('wrap.scrollTop = rolTopo'),
+     'e devolve DEPOIS de repintar, e nao antes');
+})();
+
 // ═══════════════════════════════════════════════════════════════════════
 sec('Feriado: uma lista, e todo mundo le a mesma');
 
@@ -4271,7 +4342,12 @@ sec('A grade de topicos do deck');
   /* O QUE ENTRA SEM CAIXA esta escrito. Capa, destaques e mensagem final saem no
      arquivo e nao tem caixa — e nao ter caixa e correto, porque nao sao opcionais. */
   ok(/const AP_SEMPRE = /.test(ADMIN), 'existe a nota do que entra sempre');
-  const nota = (ADMIN.match(/const AP_SEMPRE = ([\s\S]*?);\n/) || [])[1] || '';
+  /* `;` MAIS QUEBRA DE LINHA NAO SERVE DE ANCORA CRUA. O git desta maquina esta
+     com autocrlf, entao um checkout limpo entrega o arquivo em CRLF — e ai a
+     ancora nao casa em lugar nenhum, `nota` sai vazia e esta invariante acusa um
+     defeito que nao existe. Aconteceu hoje: um `git stash` normalizou o admin e a
+     suite ficou vermelha sem ninguem ter tocado no AP_SEMPRE. */
+  const nota = (ADMIN.match(/const AP_SEMPRE = ([\s\S]*?);\r?\n/) || [])[1] || '';
   ok(/capa/i.test(nota) && /destaque/i.test(nota) && /mensagem/i.test(nota),
      'e ela nomeia capa, destaques e mensagem final');
   ok(/AP_SEMPRE/.test(corpo(ADMIN, 'function apresAbrir(') || ''),

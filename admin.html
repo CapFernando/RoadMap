@@ -3343,9 +3343,49 @@ function renderKbToolbar(exibidas) {
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}</span>`;
 }
 
+/* A ROLAGEM SOBREVIVE AO REDESENHO.
+ *
+ * `.kb-col` tem `max-height: calc(100vh - 210px)` e `.kb-col-body` tem
+ * `overflow-y: auto` — ou seja, CADA COLUNA rola por conta. E `renderKanban`
+ * refaz o `innerHTML` do quadro inteiro, o que destroi e recria essas colunas:
+ * a rolagem delas volta a zero em TODO render.
+ *
+ * Medido num navegador, com o CSS real: coluna em 180px de rolagem, redesenho,
+ * e ela volta para 0. Sempre — nao depende de o conteudo ter mudado.
+ *
+ * O que torna isso doloroso e o `setInterval(adminCheckUpdates, 30000)`: a cada
+ * meio minuto, se alguem gravou, a tela recarrega. Com o time inteiro gravando,
+ * "alguem gravou" e quase sempre — entao quem esta lendo a coluna de Concluido
+ * e jogado para o topo no meio da leitura, sem ter feito nada.
+ *
+ * A chave e `data-col`, e nao a posicao: uma coluna que fique vazia e some da
+ * lista deslocaria todas as outras, e cada uma herdaria a rolagem da vizinha. */
+function kbRolagemGuarda(board) {
+  const pos = new Map();
+  board.querySelectorAll('.kb-col').forEach(c => {
+    const corpo = c.querySelector('.kb-col-body');
+    if (corpo && corpo.scrollTop) pos.set(c.dataset.col, corpo.scrollTop);
+  });
+  return { colunas: pos, esquerda: board.scrollLeft };
+}
+
+function kbRolagemDevolve(board, guardado) {
+  if (!guardado) return;
+  board.scrollLeft = guardado.esquerda;
+  board.querySelectorAll('.kb-col').forEach(c => {
+    const alvo = guardado.colunas.get(c.dataset.col);
+    if (!alvo) return;
+    const corpo = c.querySelector('.kb-col-body');
+    // O navegador limita sozinho quando a coluna encolheu: pedir 400 numa que
+    // agora tem 60 devolve 60, que e o fundo — e nao o topo.
+    if (corpo) corpo.scrollTop = alvo;
+  });
+}
+
 function renderKanban() {
   const board = document.getElementById('kb-board');
   if (!board) return;
+  const rolagem = kbRolagemGuarda(board);
   const base = state.melhorias.filter(m =>
     !ehMesclada(m) &&
     (!_kbTema || m.tema_id === _kbTema) &&
@@ -3465,6 +3505,7 @@ function renderKanban() {
       <div class="kb-col-body">${cards || '<div class="kb-col-empty">—</div>'}</div>
     </div>`;
   }).join('');
+  kbRolagemDevolve(board, rolagem);
 }
 
 // ─── DRAG & DROP do Kanban ────────────────────────────────────────

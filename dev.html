@@ -3091,6 +3091,15 @@ function renderKanban() {
   if (document.getElementById('gantt-wrap')?.style.display === 'block') renderDevGantt();
   const kanban = document.getElementById('kanban');
   if (!kanban) return;
+  /* A ROLAGEM DO QUADRO SOBREVIVE AO REDESENHO.
+     Aqui quem rola e o `#kanban-wrap`, e nao cada coluna — entao trocar o
+     `innerHTML` do filho costuma preservar. Costuma: medido num navegador, com o
+     CSS real, ela se mantem quando o conteudo tem a mesma altura e ZERA quando
+     ele encolhe (filtro que corta cards, demanda que sai da coluna). E como o
+     `startPolling` recarrega de minuto em minuto, encolher acontece sozinho. */
+  const wrap = document.getElementById('kanban-wrap');
+  const rolTopo = wrap ? wrap.scrollTop : 0;
+  const rolEsq = wrap ? wrap.scrollLeft : 0;
   const items = getFiltered();
   atualizaContagemDev();
 
@@ -3123,6 +3132,9 @@ function renderKanban() {
         <div class="col-drop-hint">Soltar aqui</div>
       </div>`;
   }).join('');
+  // O navegador limita sozinho se o conteudo encolheu — pedir 800 num quadro que
+  // agora tem 200 devolve 200, o fundo, e nao o topo.
+  if (wrap) { wrap.scrollTop = rolTopo; wrap.scrollLeft = rolEsq; }
 }
 
 function renderCard(m, colKey) {
