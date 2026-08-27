@@ -10,7 +10,7 @@
   <title>Planning Poker — RoadMap de Melhorias</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
-  <script src="qr.js"></script>
+  <script src="qr.js?v=0875150707"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -133,6 +133,54 @@
 
     /* ── VOTACAO ── */
     .votacao { margin-top:24px; border-top:1px solid var(--border); padding-top:20px; }
+    /* DUAS COLUNAS: o convite a esquerda, o baralho no resto.
+       `minmax(0,1fr)` e nao `1fr`: com `1fr` o baralho nao encolhe abaixo do
+       proprio conteudo e as cartas empurram o convite para fora da tela. */
+    .votacao-grid { display:grid; grid-template-columns:auto minmax(0,1fr); gap:22px;
+                    align-items:start; }
+    .votacao-mesa { min-width:0; }
+    .convite-fixo { width:186px; background:var(--bg2); border:1px solid var(--border);
+                    border-radius:12px; padding:14px 12px; text-align:center;
+                    display:flex; flex-direction:column; gap:10px; align-items:center; }
+    .cf-rot { font-size:10.5px; text-transform:uppercase; letter-spacing:.1em;
+              color:var(--text3); }
+    /* O QR SEMPRE EM FUNDO BRANCO. Ele e lido por camera, e no tema escuro um QR
+       claro sobre fundo escuro inverte o contraste que o leitor espera. */
+    .cf-qr { background:#fff; padding:8px; border-radius:9px; line-height:0; }
+    .cf-qr svg { display:block; width:150px; height:150px; }
+    .cf-vazio { font-size:11px; color:#555; padding:14px 6px; line-height:1.4; }
+    .cf-codigo { font-family:ui-monospace,Consolas,monospace; font-size:19px; font-weight:700;
+                 letter-spacing:.14em; color:var(--teal,#2BBFA0); background:none;
+                 border:0; padding:0; cursor:pointer; }
+    .cf-codigo:hover { filter:brightness(1.25); }
+    .cf-link { font-size:11.5px; color:var(--text3); background:none; border:0;
+               padding:0; cursor:pointer; text-decoration:underline; font-family:inherit; }
+    .cf-link:hover { color:var(--text2); }
+    /* A ESTRELA NA FILA: a ordem tem de ter explicacao visivel, senao o topo
+       parece arbitrario para quem nao marcou. */
+    .fila-estrela { color:#E8B62C; margin-right:5px; }
+    .fila-item.estrelada { border-left:3px solid #E8B62C; }
+    /* A FAIXA APERTADA — 1200 a 1450px, o laptop de 1366.
+       O baralho de 12 cartas precisa de 710px numa linha (50px de carta + 10 de
+       vao). Com o painel em 186 e o vao em 22, sobram 700 nessa largura — dez
+       pixels de falta, e as cartas quebram em duas fileiras. Apertar o painel
+       devolve a linha; o QR cai para 128px, que uma camera de celular a meio
+       metro do monitor ainda le. Abaixo de 1200 nao ha o que apertar: ali sao
+       duas fileiras de seis, e duas fileiras de seis se leem bem. */
+    @media (min-width: 821px) and (max-width: 1450px) {
+      .votacao-grid { gap:14px; }
+      .convite-fixo { width:160px; padding:12px 10px; }
+      .cf-qr svg { width:128px; height:128px; }
+      .cf-codigo { font-size:17px; }
+    }
+    @media (max-width: 820px) {
+      /* Numa tela estreita o convite vai para baixo do baralho: acima dele,
+         empurraria as cartas — que sao o motivo da tela — para fora da primeira
+         dobra. */
+      .votacao-grid { grid-template-columns:1fr; }
+      .convite-fixo { width:100%; max-width:280px; margin:0 auto; order:2; }
+      .votacao-mesa { order:1; }
+    }
     .votacao-titulo { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); margin-bottom:12px; text-align:center; }
     .cartas { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
     /* Cartas um pouco menores para o detalhe da demanda caber sem rolagem: a mesa
@@ -338,15 +386,34 @@
     </div>
 
     <div class="votacao">
-      <div class="votacao-titulo" id="votacao-titulo">Escolha sua carta</div>
-      <div class="cartas" id="cartas"></div>
-    <!-- Referencia logo abaixo do baralho: em outra tela ela nao seria consultada
-         no segundo em que a pessoa escolhe a carta. -->
-    <div class="referencia" id="referencia"></div>
-      <div style="text-align:center;margin-top:18px;display:none" id="controles">
-        <button class="btn btn-primary" onclick="revelar()" id="btn-revelar">👁 Voto finalizado — revelar</button>
-        <button class="btn btn-secondary" onclick="revotar()" id="btn-revotar">↻ Votar de novo</button>
-        <button class="btn btn-secondary" onclick="zerarValores()" id="btn-zerar" title="Sai da pauta, esconde o resultado e apaga os votos da sala">⌫ Zerar valores</button>
+      <!-- O CONVITE FICA NA TELA, e nao so atras de um botao.
+           Ele era um modal: para o time entrar, alguem tinha de abrir "Convidar",
+           ler o codigo em voz alta e fechar — e repetir a cada pessoa que chegava
+           atrasada. Aqui ele fica ao lado do baralho, onde a sala inteira ve, e
+           quem entra depois aponta a camera sem interromper a votacao.
+           O botao "Convidar" continua no cabecalho: ele amplia o QR para quem
+           esta longe da tela. -->
+      <div class="votacao-grid">
+        <aside class="convite-fixo" id="convite-fixo" style="display:none">
+          <div class="cf-rot">Entre na sala</div>
+          <div class="cf-qr" id="cf-qr"></div>
+          <button type="button" class="cf-codigo" id="cf-codigo" onclick="copiarCodigo()"
+                  title="Clique para copiar o código">—</button>
+          <button type="button" class="cf-link" id="cf-link" onclick="copiarLink()"
+                  title="Clique para copiar o link do convite">copiar o link</button>
+        </aside>
+        <div class="votacao-mesa">
+          <div class="votacao-titulo" id="votacao-titulo">Escolha sua carta</div>
+          <div class="cartas" id="cartas"></div>
+          <!-- Referencia logo abaixo do baralho: em outra tela ela nao seria
+               consultada no segundo em que a pessoa escolhe a carta. -->
+          <div class="referencia" id="referencia"></div>
+          <div style="text-align:center;margin-top:18px;display:none" id="controles">
+            <button class="btn btn-primary" onclick="revelar()" id="btn-revelar">👁 Voto finalizado — revelar</button>
+            <button class="btn btn-secondary" onclick="revotar()" id="btn-revotar">↻ Votar de novo</button>
+            <button class="btn btn-secondary" onclick="zerarValores()" id="btn-zerar" title="Sai da pauta, esconde o resultado e apaga os votos da sala">⌫ Zerar valores</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -747,8 +814,23 @@ function fecharRanking(e) {
 
 function rkEsc(e) { if (e.key === 'Escape') fecharRanking(); }
 
+/* A FILA DA PLANNING, COM A ESTRELADA NO TOPO.
+ *
+ *  A estrela e a prioridade de ESTIMATIVA: o que precisa sair dimensionado desta
+ *  reuniao vem antes. Antes a ordem era a da base — quem chegou primeiro —, e a
+ *  demanda que a reuniao existia para estimar podia estar na posicao dezoito.
+ *
+ *  O DESEMPATE E O INDICE ORIGINAL, e nao o titulo nem a data. Duas razoes: a
+ *  ordem entre as nao estreladas nao muda (a pessoa reconhece a fila que ja
+ *  conhecia), e `proximoDaFila` anda pela POSICAO — uma ordem que oscilasse
+ *  faria "Proxima demanda" pular ou repetir item. `sort` e estavel desde a
+ *  ES2019, mas o indice deixa a intencao escrita em vez de depender disso. */
 function filaPlanning() {
-  return _melhorias.filter(m => (m.status_planejamento || '') === 'planning');
+  return _melhorias
+    .filter(m => (m.status_planejamento || '') === 'planning')
+    .map((m, i) => ({ m, i }))
+    .sort((a, b) => (b.m.destaque ? 1 : 0) - (a.m.destaque ? 1 : 0) || a.i - b.i)
+    .map(x => x.m);
 }
 
 function nomeTema(id) { const t = _temas.find(x => x.id === id); return t ? t.nome : ''; }
@@ -767,8 +849,8 @@ function renderFila() {
     const tipo = m.tipo === 'sustentacao' ? '🔧 Sustentação' : m.tipo === 'evolucao' ? '🚀 Evolução' : '⚪ Sem tipo';
     const pts  = m.poker_pontos != null ? `<span class="pill pontos">🃏 ${m.poker_pontos}</span>` : '';
     const acao = _facilitador ? `onclick="porEmPauta('${esc(m.id)}')"` : '';
-    return `<div class="fila-item ${m.id === atual ? 'ativa' : ''}" ${acao} title="${_facilitador ? 'Clique para votar esta demanda' : ''}">
-      <div class="fila-item-titulo">${esc(m.titulo || '(sem título)')}</div>
+    return `<div class="fila-item ${m.id === atual ? 'ativa' : ''}${m.destaque ? ' estrelada' : ''}" ${acao} title="${_facilitador ? 'Clique para votar esta demanda' : ''}">
+      <div class="fila-item-titulo">${m.destaque ? '<span class="fila-estrela" title="Prioridade para estimativa">★</span>' : ''}${esc(m.titulo || '(sem título)')}</div>
       <div class="fila-item-meta">
         <span class="pill">${tipo}</span>
         ${m.dev ? `<span class="pill">${esc(m.dev)}</span>` : ''}
@@ -869,21 +951,51 @@ window.addEventListener('pagehide', avisarSaida);
 
 // ─── CONVITE ──────────────────────────────────────────────────────
 function linkConvite() { return `${location.origin}${location.pathname}?s=${_codigo}`; }
+
+/** O SVG DO QR, ou null. UMA montagem, usada pelo painel fixo e pelo modal.
+ *
+ *  Gerado localmente (qr.js): a URL da sala nao sai para servico de terceiro, o
+ *  que contradiria o noindex/no-cache do resto do sistema.
+ *
+ *  Devolve null quando o link nao cabe na versao 4 — e ai quem chama ESCONDE o
+ *  QR em vez de desenhar um codigo que nao escaneia. O codigo de 6 caracteres
+ *  continua valendo, e e por isso que ele fica ao lado e nao dentro do QR. */
+function qrDoConvite(lado) {
+  if (!_codigo || !window.QR || !QR.qrSVG) return null;
+  return QR.qrSVG(linkConvite(), lado) || null;
+}
+
+/* O PAINEL FIXO, ao lado do baralho.
+ *
+ *  Mesma regra de visibilidade do botao "Convidar": quem convida e o
+ *  facilitador. Duas regras para a mesma pergunta divergiriam, e para quem so
+ *  vota o painel seria espaco morto grudado nas cartas.
+ *
+ *  Redesenhado a cada `iniciar()` porque o codigo da sala pode mudar: abrir uma
+ *  sala nova com a tela aberta trocaria o `_codigo` e o QR antigo levaria o time
+ *  para uma sala que expirou. */
+function renderConviteFixo() {
+  const cx = document.getElementById('convite-fixo');
+  if (!cx) return;
+  if (!_facilitador || !_codigo) { cx.style.display = 'none'; return; }
+  cx.style.display = '';
+  const svg = qrDoConvite(150);
+  const caixa = document.getElementById('cf-qr');
+  caixa.innerHTML = svg || '<div class="cf-vazio">Sem QR para este link — use o código abaixo.</div>';
+  caixa.style.background = svg ? '#fff' : 'transparent';
+  document.getElementById('cf-codigo').textContent = _codigo;
+}
+
 function abrirConvite() {
   const link = linkConvite();
   document.getElementById('conv-link').textContent = link;
   document.getElementById('conv-codigo').textContent = _codigo;
-
-  // QR gerado localmente (qr.js): a URL da sala nao sai para servico de
-  // terceiro. Se o link nao couber na versao 4, esconde em vez de desenhar
-  // um codigo que nao escaneia — o codigo de 6 caracteres continua valendo.
   const box = document.getElementById('conv-qr');
-  const svg = (window.QR && QR.qrSVG) ? QR.qrSVG(link, 190) : null;
+  const svg = qrDoConvite(190);
   box.innerHTML = svg
     ? `<div style="display:inline-block;background:#fff;padding:10px;border-radius:12px;line-height:0">${svg}</div>
        <div style="font-size:11px;color:var(--text3);margin-top:8px">Aponte a câmera do celular</div>`
     : `<div style="font-size:12px;color:var(--text3)">Use o código abaixo para entrar.</div>`;
-
   abrir('ov-convite');
 }
 function copiarLink() {
@@ -1692,6 +1804,7 @@ function iniciar() {
   document.getElementById('codigo-txt').textContent = _codigo;
   document.getElementById('quem').textContent = _facilitador ? 'Facilitador' : (_nome ? `Você: ${_nome}` : '');
   document.getElementById('btn-convite').style.display = _facilitador ? '' : 'none';
+  renderConviteFixo();
   carregarFila();
   atualizar();
   clearInterval(_timer);

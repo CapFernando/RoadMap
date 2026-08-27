@@ -2047,6 +2047,11 @@ export default {
           codigo: m.codigo || '', descricao: m.descricao || '',
           solicitante: m.solicitante || '', entrega: m.entrega || '',
           criado_em: m.criado_em || '', debito_tecnico: !!m.debito_tecnico,
+          /* A ESTRELA VEM, e e ela que ordena a fila da Planning.
+             Sem este campo a marca do card nao chegava a mesa: a estrela existia
+             no Admin, no Gantt e no deck, e a fila do poker a ignorava — quem
+             marcava as prioridades da reuniao nao via diferenca nenhuma nela. */
+          destaque: !!m.destaque,
           anexos: (m.anexos || []).map(a => ({
             nome: a.nome || 'arquivo', chave: a.chave || '',
             tipo: a.tipo || '', tamanho: a.tamanho || 0,

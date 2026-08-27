@@ -546,6 +546,95 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+sec('Planning Poker: estrela no topo, e o convite na tela');
+
+/* PEDIDO DO FERNANDO: "as issues que eu marcar na estrela devem ficar no topo
+   (prioridade para estimativa)" e "traga o QRCode para tela". */
+(() => {
+  const POKER = lerTela('poker.html');
+
+  /* A ESTRELA TEM DE CHEGAR A MESA. `enxuta` no worker recorta os campos que a
+     tela do poker recebe, e `destaque` nao estava nela: a marca existia no Admin,
+     no Gantt e no deck, e a fila do poker a ignorava — quem marcava as
+     prioridades da reuniao nao via diferenca nenhuma. */
+  const enx = WC.slice(WC.indexOf('const enxuta = (m) =>'), WC.indexOf('const enxuta = (m) =>') + 1400);
+  ok(/destaque: !!m\.destaque/.test(enx), 'o worker manda `destaque` para a tela do poker');
+
+  /* A FILA ORDENA PELA ESTRELA, e a ordem e ESTAVEL: `proximoDaFila` anda pela
+     POSICAO, entao uma ordem que oscilasse faria "Proxima demanda" pular ou
+     repetir item. Esta invariante EXECUTA a funcao. */
+  const F = new Function('_melhorias',
+    corpo(POKER, 'function filaPlanning(') + ' return filaPlanning;');
+  /* OS IDS ESTAO FORA DE ORDEM ALFABETICA DE PROPOSITO. Com 'a','b','c','d' o
+     desempate por indice e o desempate por id davam o mesmo resultado, e a
+     sabotagem que trocava um pelo outro passava lisa — o teste nao media a
+     propriedade que dizia medir. Com 'z' antes de 'a', os dois divergem:
+     por indice sai `b d z a`, por id sairia `b d a z`. */
+  const base = [
+    { id: 'z', status_planejamento: 'planning' },
+    { id: 'b', status_planejamento: 'planning', destaque: true },
+    { id: 'a', status_planejamento: 'planning' },
+    { id: 'd', status_planejamento: 'planning', destaque: true },
+    { id: 'x', status_planejamento: 'planejado', destaque: true },
+  ];
+  const fila = F(base)();
+  ok(fila.map((m) => m.id).join('') === 'bdza',
+     'estreladas no topo, e as demais na ordem original (nao alfabetica)',
+     fila.map((m) => m.id).join(''));
+  ok(!fila.some((m) => m.id === 'x'),
+     'e o que nao esta em Planning fica fora, mesmo estrelado');
+  ok(F(base)().map((m) => m.id).join('') === 'bdza',
+     'e chamar de novo devolve a mesma ordem — senao "Proxima demanda" oscila');
+  const semEstrela = [{ id: 'p', status_planejamento: 'planning' },
+                      { id: 'q', status_planejamento: 'planning' }];
+  ok(F(semEstrela)().map((m) => m.id).join('') === 'pq',
+     'e sem estrela nenhuma a ordem continua a da base');
+  ok(/fila-estrela/.test(POKER),
+     'e a estrela aparece no item — ordem sem explicacao parece arbitraria');
+
+  /* UMA MONTAGEM DE QR, usada pelo painel fixo E pelo modal. Duas divergiriam:
+     o modal desenharia um QR e o painel outro, e o dia em que o link crescesse
+     um deles escondia e o outro nao. */
+  ok(!!corpo(POKER, 'function qrDoConvite('), 'existe uma montagem so de QR');
+  const usos = (POKER.match(/QR\.qrSVG\(/g) || []).length;
+  ok(usos === 1, 'e QR.qrSVG e chamado num lugar unico', usos + ' chamada(s)');
+  ok(/qrDoConvite\(150\)/.test(POKER) && /qrDoConvite\(190\)/.test(POKER),
+     'o painel e o modal pedem tamanhos diferentes da MESMA montagem');
+
+  /* O PAINEL SEGUE A MESMA REGRA DO BOTAO. Duas regras para "quem convida"
+     divergiriam, e para quem so vota o painel seria espaco morto ao lado das
+     cartas. Executada contra um DOM de mentira. */
+  const RC = corpo(POKER, 'function renderConviteFixo(');
+  ok(/!_facilitador \|\| !_codigo/.test(RC),
+     'o painel some para quem nao e facilitador e sem sala aberta');
+  const nos = {};
+  const alvo = (id) => (nos[id] = nos[id] || { id, style: {}, innerHTML: '', textContent: '' });
+  const R = new Function('_facilitador', '_codigo', 'document', 'qrDoConvite',
+    RC + ' return renderConviteFixo;');
+  const doc = { getElementById: alvo };
+  R(false, 'ABC123', doc, () => '<svg/>')();
+  ok(alvo('convite-fixo').style.display === 'none', 'quem so vota nao ve o painel');
+  R(true, '', doc, () => '<svg/>')();
+  ok(alvo('convite-fixo').style.display === 'none', 'sem sala aberta, tambem nao');
+  R(true, 'ABC123', doc, () => '<svg/>')();
+  ok(alvo('convite-fixo').style.display === '', 'o facilitador com sala aberta ve');
+  ok(alvo('cf-codigo').textContent === 'ABC123', 'e o codigo da sala aparece nele');
+  // QR que nao cabe: diz o motivo em vez de deixar um quadrado vazio.
+  R(true, 'ABC123', doc, () => null)();
+  ok(/use o c.digo/i.test(alvo('cf-qr').innerHTML),
+     'e sem QR possivel ele manda usar o codigo, em vez de ficar em branco');
+
+  // O link continua na tela, como o Fernando pediu ("mantenha o link").
+  ok(/onclick="copiarLink\(\)"/.test(POKER) && /id="cf-link"/.test(POKER),
+     'o link do convite fica no painel, e nao so no modal');
+
+  /* `qr.js` ERA O UNICO .js COMPARTILHADO SEM SELO. A invariante de cache so
+     confere quem tem `?v=`, entao ele passava por fora — uma correcao nele nunca
+     chegaria a quem ja abriu a tela. */
+  ok(/src="qr\.js\?v=[a-f0-9]{10}"/.test(POKER), 'qr.js entrou no esquema de selo');
+})();
+
+// ═══════════════════════════════════════════════════════════════════════
 sec('Kanban: a rolagem sobrevive ao redesenho');
 
 /* "QUANDO EU TENHO QUE USAR A BARRA DE ROLAGEM, ELE FICA VOLTADO AO TOPO."
