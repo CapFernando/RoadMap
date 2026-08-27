@@ -580,6 +580,28 @@ sec('API: a criacao tambem e barrada, e da para procurar antes');
   ok(usos === 4, 'a trava aparece 4x: a definicao e os tres caminhos de escrita',
      usos + ' ocorrencia(s)');
 
+  /* TODA ACAO TRATADA NO BLOCO ESTA NA LISTA BRANCA QUE DA ENTRADA NELE.
+     Esquecer um nome ali nao da erro: a acao cai no `acao_invalida` do fim, como
+     se nunca tivesse sido escrita. Foi o que aconteceu com `demanda-procurar` —
+     subiu para producao como codigo morto, e a prova local nao pegou porque
+     extraia o bloco e o executava direto, sem passar pelo roteamento. */
+  (() => {
+    const i = WC.indexOf("if (['demandas-minhas'");
+    ok(i > 0, 'a lista branca do bloco do dev existe');
+    if (i < 0) return;
+    const lista = WC.slice(i, WC.indexOf('.includes(body.action)', i));
+    let d = 0, fim = i;
+    for (let k = WC.indexOf('{', WC.indexOf('.includes(body.action)', i)); k < WC.length; k++) {
+      if (WC[k] === '{') d++;
+      else if (WC[k] === '}') { d--; if (!d) { fim = k; break; } }
+    }
+    const dentro = [...new Set([...WC.slice(i, fim).matchAll(/body\.action === '([a-z-]+)'/g)]
+      .map((m) => m[1]))];
+    const fora = dentro.filter((a) => !lista.includes("'" + a + "'"));
+    ok(!fora.length, 'e toda acao tratada dentro dele esta nela',
+       fora.length ? 'fora: ' + fora.join(', ') : dentro.length + ' acoes conferidas');
+  })();
+
   /* PROCURAR ANTES DE CRIAR. `demanda-consultar` exige o codigo que se procura;
      nao respondia "ja existe alguma sobre isto?". */
   const proc = bloco('demanda-procurar');

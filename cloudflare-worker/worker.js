@@ -2576,7 +2576,18 @@ export default {
 
     const ETAPAS_DEV = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento'];
 
-    if (['demandas-minhas', 'demanda-consultar', 'demanda-atualizar', 'demanda-entregar']
+    /* A LISTA BRANCA DE QUEM ENTRA AQUI.
+     *
+     * Esquecer um nome nela nao da erro: a acao cai no `acao_invalida` la
+     * embaixo, como se nunca tivesse sido escrita. Aconteceu com
+     * `demanda-procurar` — o endpoint inteiro subiu para producao como codigo
+     * morto, e a prova local nao pegou porque extraia o BLOCO e o executava
+     * direto, passando por cima do roteamento.
+     *
+     * Ha invariante conferindo que todo `body.action` tratado dentro deste bloco
+     * esta nesta lista. */
+    if (['demandas-minhas', 'demanda-consultar', 'demanda-procurar',
+         'demanda-atualizar', 'demanda-entregar']
         .includes(body.action)) {
       const perm = await exigePapel(env, body, ['dev', 'admin'], headers);
       if (perm.recusa) return perm.recusa;
