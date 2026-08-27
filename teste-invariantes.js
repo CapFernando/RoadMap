@@ -61,6 +61,25 @@ function corpo(src, assinatura) {
 }
 const semEspaco = (t) => String(t || '').replace(/\s+/g, ' ').trim();
 
+/* Amostra de feriados para as contas de dia util. Fixa de proposito: a
+   invariante mede a REGRA, e ler a base de producao faria o teste depender da
+   rede e do cadastro do dia. Sao os de 2026, calculados (Pascoa em 05/04). */
+const FERIADOS_PROVA = [
+  { data: '2026-01-01', nome: 'Confraternização Universal' },
+  { data: '2026-02-16', nome: 'Carnaval (segunda)' },
+  { data: '2026-02-17', nome: 'Carnaval (terça)' },
+  { data: '2026-04-03', nome: 'Sexta-feira Santa' },
+  { data: '2026-04-21', nome: 'Tiradentes' },
+  { data: '2026-05-01', nome: 'Dia do Trabalho' },
+  { data: '2026-06-04', nome: 'Corpus Christi' },
+  { data: '2026-09-07', nome: 'Independência do Brasil' },
+  { data: '2026-10-12', nome: 'Nossa Senhora Aparecida' },
+  { data: '2026-11-02', nome: 'Finados' },
+  { data: '2026-11-15', nome: 'Proclamação da República' },
+  { data: '2026-11-20', nome: 'Consciência Negra' },
+  { data: '2026-12-25', nome: 'Natal' },
+];
+
 // ═══════════════════════════════════════════════════════════════════════
 sec('Acentuacao dos dados (1864 acentos corrompidos em 04/08/2026)');
 
@@ -525,6 +544,81 @@ for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV],
   ok(semHash.length === 0, nome + ' nao referencia arquivo compartilhado sem ?v=',
      semHash.join(' '));
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+sec('Feriado: uma lista, e todo mundo le a mesma');
+
+/* A COLECAO ESTAVA VAZIA DESDE SEMPRE, e por isso a divergencia nunca doeu: com
+   zero feriados, as tres contas do sistema concordavam em contar Natal como dia
+   de trabalho.
+
+   Havia TRES verdades:
+     gantt.html   um `NATIONAL_HOLIDAYS` fixo de 34 datas — a unica lista que
+                  existia, e o Worker nunca a viu
+     worker.js    `new Set(data.feriados)`, que so casa com string crua — e o
+                  Admin normaliza a colecao para `{ data }` e republica assim
+     admin/dev    a colecao, vazia
+
+   E a lista fixa estava ERRADA. Conferida contra a Pascoa calculada: 2025-04-03
+   nao e nada (a Sexta-feira Santa de 2025 foi em 18/04), 2027-03-19, 2027-04-02
+   e 2027-06-03 nao sao feriado, 2027-03-26 faltava, e o CARNAVAL nunca esteve la
+   em ano nenhum. */
+(() => {
+  ok(!/NATIONAL_HOLIDAYS\s*=/.test(GANTT),
+     'o Gantt nao tem mais lista propria de feriado');
+  /* E `isHoliday` E EXECUTADA. Conferir so que o normalizador existe deixou
+     passar a sabotagem obvia: trocar o corpo por `return false`. Presenca de
+     funcao nao e comportamento de funcao. */
+  const iFer = GANTT.indexOf('const feriadoISO =');
+  const gLinha = iFer < 0 ? '' : GANTT.slice(iFer, GANTT.indexOf(';', iFer) + 1);
+  ok(!!gLinha, 'e le a colecao pelo normalizador');
+  if (gLinha) {
+    const monta = (feriados) => new Function('state',
+      gLinha + ' ' + corpo(GANTT, 'function isHoliday(') + ' return isHoliday;')({ feriados });
+    const H = monta(FERIADOS_PROVA);
+    ok(H('2026-12-25') === true && H('2026-02-17') === true,
+       'e isHoliday reconhece o Natal e a terca de Carnaval');
+    ok(H('2026-12-24') === false, 'e a vespera do Natal nao e feriado');
+    // A forma antiga tambem: o Gantt gravava string crua.
+    ok(monta(['2026-12-25'])('2026-12-25') === true, 'e enxerga tambem a string crua');
+  }
+
+  /* O WORKER ACEITA AS DUAS FORMAS. Sem isso, o primeiro publish do Admin — que
+     converte a colecao para objeto — faria o Worker parar de enxergar feriado
+     nenhum, sem erro e sem sintoma. */
+  const F = new Function(corpo(WC, 'function feriadosISO(') + '\nreturn feriadosISO;')();
+  ok(F({ feriados: ['2026-12-25'] })[0] === '2026-12-25',
+     'o worker le feriado em string crua');
+  ok(F({ feriados: [{ data: '2026-12-25', nome: 'Natal' }] })[0] === '2026-12-25',
+     'e tambem no objeto que o Admin grava');
+  ok(!/new Set\(data\.feriados/.test(WC),
+     'e nao sobrou nenhum `new Set(data.feriados)` cru');
+
+  /* AS DUAS CONTAS DAO O MESMO NUMERO. Era esta a pergunta que nao tinha
+     resposta: `diasUteis` do Worker e `gerSemanasDoMes` do Admin medem a mesma
+     coisa por caminhos diferentes. */
+  const D = new Function(corpo(WC, 'function diasUteis(') + '\nreturn diasUteis;')();
+  const A = new Function('state', corpo(ADMIN, 'function gerSemanasDoMes(') +
+                         '\nreturn gerSemanasDoMes;')({ feriados: FERIADOS_PROVA });
+  const fer = new Set(FERIADOS_PROVA.map((f) => f.data));
+  const p = (n) => String(n).padStart(2, '0');
+  const divergem = [];
+  for (let mes = 1; mes <= 12; mes++) {
+    const ult = new Date(2026, mes, 0).getDate();
+    const w = D(`2026-${p(mes)}-01`, `2026-${p(mes)}-${p(ult)}`, fer);
+    const a = A(2026, mes).reduce((t, s2) => t + s2.length, 0);
+    if (w !== a) divergem.push(`${p(mes)}: worker=${w} admin=${a}`);
+  }
+  ok(!divergem.length, 'os 12 meses de 2026 batem entre worker e admin',
+     divergem.join(' | ') || 'nenhuma divergencia');
+
+  // E o feriado sai da conta de verdade: a semana do Natal tem quatro, e nao cinco.
+  ok(D('2026-12-21', '2026-12-25', fer) === 4,
+     'a semana do Natal/2026 tem 4 dias uteis', String(D('2026-12-21', '2026-12-25', fer)));
+  ok(D('2026-12-21', '2026-12-25', new Set()) === 5,
+     'e sem feriado nenhum ela teria 5 — o cadastro e o que faz diferenca');
+})();
 
 // ═══════════════════════════════════════════════════════════════════════
 sec('Demanda duplicada: prevencao, e nao so cura');
@@ -3695,8 +3789,11 @@ ok(/const temCredencial = !!\(_token \|\| _senha\);/.test(POKER) &&
 sec('Ranking de entregas (Planning)');
 
 (function () {
+  // `feriadosISO` entra porque `pokerRanking` passou a chama-la — a colecao de
+  // feriados tem duas formas vivas e ele normaliza antes de contar dia util.
+  // Sem ela aqui, a extracao roda e morre em ReferenceError.
   const fonte = ['function diaLocalBR(', 'function segundaDaSemana(',
-                 'function somaDias(', 'function pokerRanking(']
+                 'function somaDias(', 'function feriadosISO(', 'function pokerRanking(']
     .map(a => corpo(W, a));
   ok(fonte.every(Boolean), 'as funcoes do ranking existem no worker');
   if (!fonte.every(Boolean)) return;

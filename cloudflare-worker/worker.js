@@ -1580,6 +1580,19 @@ const POKER_CARTAS = ['1','2','3','5','8','13','21','34','55','89','100','?'];
 // Quantos dias UTEIS existem entre duas datas, contando as duas pontas. Feriado
 // cadastrado nao conta. Datas em texto ISO e aritmetica em UTC: `new Date(iso)` no
 // fuso local puxa o dia para tras em -03 e uma entrega no mesmo dia viraria zero.
+/** AS DATAS DOS FERIADOS, venha a colecao como for.
+ *
+ *  A colecao tem duas formas vivas: o Gantt gravava string crua e o Admin
+ *  normaliza para `{ data }` e republica assim. `new Set(data.feriados)` so casa
+ *  com a primeira — entao no dia em que um feriado fosse cadastrado, o Worker
+ *  pararia de enxerga-lo sem erro nenhum, e `diasUteis` contaria Natal como dia
+ *  util. Aceitar as duas custa uma linha e fecha a divergencia. */
+function feriadosISO(data) {
+  return ((data && data.feriados) || [])
+    .map(f => (f && typeof f === 'object' ? f.data : f))
+    .filter(Boolean);
+}
+
 function diasUteis(de, ate, feriados) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(de || '')) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(String(ate || ''))) return null;
@@ -1744,7 +1757,7 @@ function pokerRanking(data, agora) {
      aviso, todo mundo aparece "caindo" toda segunda e terca, e a pergunta que
      nasce disso ("por que voce entregou menos?") tem resposta obvia e culpa
      ninguem — o que gasta a reuniao e a confianca na propria tela. */
-  const fer = new Set(data.feriados || []);
+  const fer = new Set(feriadosISO(data));
   const uteis = (de, ate) => {
     let n = 0, d = de;
     for (let g = 0; g < 15 && d <= ate; g++) {
@@ -1770,7 +1783,7 @@ function pokerRanking(data, agora) {
 }
 
 function pokerReferencia(data) {
-  const feriados = new Set(data.feriados || []);
+  const feriados = new Set(feriadosISO(data));
   const porCarta = new Map();
   for (const m of (data.melhorias || [])) {
     if (!m || m.oculto || m.mesclado_em) continue;

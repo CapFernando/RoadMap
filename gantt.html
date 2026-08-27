@@ -1026,21 +1026,27 @@ const AUSENCIA_TIPOS = [
 ];
 const ausenciaTipo = (k) => AUSENCIA_TIPOS.find(t => t.key === k) || AUSENCIA_TIPOS[3];
 
-// ── HOLIDAYS ──────────────────────────────────────────────────────────────
-const NATIONAL_HOLIDAYS = new Set([
-  '2025-01-01','2025-04-03','2025-04-21','2025-05-01','2025-06-19',
-  '2025-09-07','2025-10-12','2025-11-02','2025-11-15','2025-11-20','2025-12-25',
-  '2026-01-01','2026-04-03','2026-04-21','2026-05-01','2026-06-04',
-  '2026-09-07','2026-10-12','2026-11-02','2026-11-15','2026-11-20','2026-12-25',
-  '2027-01-01','2027-03-19','2027-04-02','2027-04-21','2027-05-01',
-  '2027-05-27','2027-06-03','2027-09-07','2027-10-12','2027-11-02',
-  '2027-11-15','2027-11-20','2027-12-25',
-]);
+// ── FERIADOS ──────────────────────────────────────────────────────────────
+// A LISTA VEM DO CADASTRO, e nao daqui.
+//
+// Aqui havia um `NATIONAL_HOLIDAYS` fixo com 34 datas, e ele era a UNICA lista
+// de feriados do sistema: o Worker nunca a viu, entao `diasUteis` do poker e da
+// fila contava Natal como dia de trabalho. Duas telas, duas contas, e a segunda
+// silenciosa.
+//
+// E ela estava errada. Conferida contra o calendario calculado:
+//   2025-04-03  nao e nada — a Sexta-feira Santa de 2025 foi em 18/04
+//   2027-03-19, 2027-04-02, 2027-06-03  nao correspondem a feriado nenhum
+//   2027-03-26  (Sexta-feira Santa) faltava
+//   o CARNAVAL nunca esteve na lista, em ano nenhum — seis dias em tres anos
+//
+// Agora ha um cadastro so, na base, que Gantt, Admin, Dev, Projetos e Worker
+// leem. Corrigir um feriado passa a ser um lugar, e nao cinco.
+const feriadoISO = (f) => (f && typeof f === 'object' ? f.data : f) || '';
+
 
 function isHoliday(dateStr) {
-  if (NATIONAL_HOLIDAYS.has(dateStr)) return true;
-  if (state.feriados && state.feriados.includes(dateStr)) return true;
-  return false;
+  return (state.feriados || []).some(f => feriadoISO(f) === dateStr);
 }
 
 function isWeekend(d) { const w = d.getDay(); return w === 0 || w === 6; }
