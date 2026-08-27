@@ -16,6 +16,25 @@
 const fs = require('fs');
 
 let falhas = 0;
+
+/* INVARIANTE QUE PRECISA DE `await` ENTRA AQUI.
+ *
+ * A suite e sincrona: um bloco que devolvia Promise imprimia as suas linhas
+ * DEPOIS do resumo — ou nao imprimia, porque o `process.exit` chegava antes. E
+ * passava verde sem ter rodado, que e o pior dos casos: uma verificacao que nao
+ * verifica nada e indistinguivel de uma que aprova.
+ *
+ * Quem precisa de await faz `pendentes.push((async () => { ... })())`, e o fim do
+ * arquivo espera todas antes de fechar a conta.
+ *
+ * `feitas` conta quem CONCLUIU, e nao quem foi registrado. A diferenca importa:
+ * sem o `await` la embaixo, os blocos comecam e nunca terminam — o `ok` deles
+ * nunca roda, `falhas` fica em zero e a suite diz "todas de pe" tendo verificado
+ * menos do que diz. Descoberto sabotando o proprio mecanismo: comentar o
+ * `Promise.all` passava liso. */
+const pendentes = [];
+let feitas = 0;
+const registra = (p) => pendentes.push(Promise.resolve(p).then((v) => { feitas++; return v; }));
 const ok = (cond, titulo, detalhe) => {
   if (!cond) falhas++;
   console.log('  ' + (cond ? 'OK  ' : 'FALHOU ') + titulo + (detalhe ? '  ' + detalhe : ''));
@@ -602,6 +621,101 @@ sec('API: a criacao tambem e barrada, e da para procurar antes');
        fora.length ? 'fora: ' + fora.join(', ') : dentro.length + ' acoes conferidas');
   })();
 
+  /* A BUSCA ALCANCA O REPOSITORIO DE CODIGO — e diz quando NAO alcancou.
+     Das 98 issues abertas no AXCRED-DJANGO, 97 nao tem demanda no Roadmap (oito
+     delas de seguranca). Buscar so na plataforma deixava o dev criar demanda
+     sobre algo ja descrito numa issue.
+
+     A REGRA QUE DA FORMA A FUNCAO: "nao achei" e "nao consegui olhar" sao
+     respostas diferentes. O repositorio de codigo tem outro dono que o dos dados,
+     e nada garante que o token alcance os dois. Uma lista vazia numa falha faria
+     o dev criar a duplicata acreditando que a busca foi completa — pior que nao
+     ter busca, porque da confianca falsa. */
+  registra((async () => {
+    const F = corpo(WC, 'async function procuraNoGit(');
+    ok(!!F, 'existe a busca no repositorio de codigo');
+    if (!F) return;
+    const TOML = fs.readFileSync('cloudflare-worker/wrangler.toml', 'utf8');
+    ok(/CODE_REPO = "[^\/"]+\/[^"]+"/.test(TOML),
+       'e o repositorio esta declarado como dono/repo',
+       (TOML.match(/CODE_REPO = "([^"]+)"/) || [])[1] || '');
+    ok(/in:title/.test(F) && /is:issue/.test(F),
+       'busca no titulo e so em issue — sem isso vem PR e corpo de texto');
+
+    /* EXECUTADA contra as sete respostas que o GitHub pode dar. A propriedade e
+       uma so: lista existe SE E SOMENTE SE consultou. */
+    const monta = (f) => new Function('fetch', F + ' return procuraNoGit;')(f);
+    const ENV = { CODE_REPO: 'dono/repo', GH_TOKEN: 'x' };
+    // eslint-disable-next-line no-unused-vars
+    const PAL = ['expand', 'graph'];
+    const respostas = [
+      ['achou', async () => ({ ok: true, json: async () => ({ total_count: 1, items:
+        [{ number: 7, title: 't', state: 'closed', html_url: 'u', labels: ['security'] }] }) })],
+      ['nao achou', async () => ({ ok: true, json: async () => ({ total_count: 0, items: [] }) })],
+      ['401', async () => ({ ok: false, status: 401 })],
+      ['403', async () => ({ ok: false, status: 403 })],
+      ['404', async () => ({ ok: false, status: 404 })],
+      ['500', async () => ({ ok: false, status: 500 })],
+      ['rede caiu', async () => { throw new Error('x'); }],
+    ];
+    const saidas = [];
+    for (const [rot, f] of respostas) saidas.push({ rot, r: await monta(f)(ENV, PAL) });
+
+    const mentiu = saidas.filter(({ r }) => Array.isArray(r.issues) !== (r.consultado === true));
+    ok(!mentiu.length,
+       'em 7 respostas do GitHub, lista existe se e somente se consultou',
+       mentiu.map((x) => x.rot).join(', ') || 'nenhuma mentira por omissao');
+
+    /* COERENCIA NAO BASTA. A regra acima e satisfeita por um mentiroso que
+       afirme as DUAS coisas — `consultado: true` com lista vazia numa falha. Foi
+       exatamente isso que passou liso quando sabotei a falha de rede. Entao cada
+       caminho de falha e conferido pelo nome. */
+    const porRot = Object.fromEntries(saidas.map((x) => [x.rot, x.r]));
+    ['401', '403', '404', '500', 'rede caiu'].forEach((rot) => {
+      const r = porRot[rot];
+      ok(r && r.consultado === false && !Array.isArray(r.issues),
+         '  ' + rot + ' NAO consultou, e nao devolve lista',
+         r ? 'consultado=' + r.consultado + ' lista=' + Array.isArray(r.issues) : 'ausente');
+    });
+    ok(porRot['nao achou'].consultado === true && porRot['nao achou'].issues.length === 0,
+       '  e "nao achou" consultou de verdade, com lista vazia');
+    const achou = saidas[0].r;
+    ok(achou.issues[0].resolvida === true,
+       'e issue fechada vem marcada como resolvida — trabalho ja feito');
+    ok(achou.issues[0].rotulos[0] === 'security',
+       'com os rotulos, que e por onde "security" se destaca');
+    const falhou = saidas[3].r;
+    ok(falhou.consultado === false && !!falhou.motivo,
+       '403 devolve o motivo, e nao silencio', falhou.motivo);
+  })());
+
+  /* A SITUACAO NA VALIDACAO E DITA, e nao derivada do texto da etapa por quem
+     chama. Sao tres respostas para "isso ja passou pela validacao?", e cada
+     script derivaria de um jeito. */
+  (() => {
+    const proc = (() => {
+      const i = WC.indexOf("if (body.action === 'demanda-procurar') {");
+      let d = 0;
+      for (let k = WC.indexOf('{', i); k < WC.length; k++) {
+        if (WC[k] === '{') d++;
+        else if (WC[k] === '}') { d--; if (!d) return WC.slice(i, k + 1); }
+      }
+      return '';
+    })();
+    ok(/validada: e === 'concluido'/.test(proc), 'a resposta diz se ja foi validada');
+    ok(/aguardando_validacao: e === 'validacao'/.test(proc),
+       'e se esta esperando o PM/PO — que nao e a mesma coisa');
+    ok(/em_esteira:/.test(proc), 'e se ainda esta sendo feita');
+    /* E O QUE LEVA AO GIT VAI JUNTO: os tres campos de link, numa lista so, para
+       quem chama nao ter de testar tres campos vazios. */
+    ok(/links_git: doGit\(m\)/.test(proc) || /links_git/.test(proc),
+       'e os links do git vem juntos, numa lista');
+    ok(/m\.link_issue, m\.link_pr, m\.link_milestone/.test(proc),
+       'com issue, PR e milestone — os tres que a demanda pode ter');
+    ok(/git: await procuraNoGit\(env, doTermo\)/.test(proc),
+       'e a busca no codigo entra na mesma resposta');
+  })();
+
   /* PROCURAR ANTES DE CRIAR. `demanda-consultar` exige o codigo que se procura;
      nao respondia "ja existe alguma sobre isto?". */
   const proc = bloco('demanda-procurar');
@@ -629,10 +743,17 @@ sec('API: a criacao tambem e barrada, e da para procurar antes');
   const AMB = corpo(WC, 'function tituloAssinatura(') + ' ' +
     corpo(WC, 'function criandoTituloRepetido(') + ' ' +
     'const limpaTexto = (t, n) => String(t == null ? "" : t).trim().slice(0, n);' +
-    'const devVisao = (m) => ({ codigo: m.codigo || "", etapa: m.status_planejamento || "" });' +
+    'const devVisao = (m) => ({ codigo: m.codigo || "", etapa: m.status_planejamento || "",' +
+    '  link_issue: m.link_issue || "", link_pr: "", link_milestone: "" });' +
     'const temas = [];';
   const corpoInterno = proc.slice(proc.indexOf('{') + 1, proc.lastIndexOf('}'));
-  const P = new Function('body', 'todas', 'json', 'headers',
+  /* ASSINCRONA, e com `procuraNoGit` DUBLADO.
+     O bloco passou a fazer `await procuraNoGit(...)`, e `await` dentro de um
+     `new Function` sincrono e erro de SINTAXE — a suite inteira parava de
+     carregar, e nao era falha de invariante. A busca no git tem prova propria;
+     o que se mede aqui e a busca no Roadmap. */
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const P = new AsyncFunction('body', 'todas', 'json', 'headers', 'env', 'procuraNoGit',
     AMB + corpoInterno + ' return { error: "fora" };');
   const T = new Function(AMB + ' return criandoTituloRepetido;')();
 
@@ -641,26 +762,38 @@ sec('API: a criacao tambem e barrada, e da para procurar antes');
     { id: 'v2', codigo: 'AX-101', titulo: 'Ideia recusada', status_planejamento: 'negada' },
     { id: 'v3', codigo: 'AX-102', titulo: 'Coisa mesclada', status_planejamento: 'concluido', mesclado_em: '2026-01-01' },
   ];
-  const buscar = (b) => P(b, base, (x) => x, {});
+  const semGit = async () => ({ consultado: false, motivo: 'duble' });
+  const buscar = (b) => P(b, base, (x) => x, {}, {}, semGit);
   const barra = (t) => T({ melhorias: [{ id: 'novo', titulo: t, status_planejamento: 'backlog' }] },
                          { melhorias: base }).length > 0;
-  [['Filtro por número do título', true, 'titulo vivo identico'],
-   ['FILTRO POR NUMERO DO TITULO', true, '  o mesmo sem acento e em maiuscula'],
-   ['Ideia recusada', false, '  titulo de NEGADA — a ideia pode voltar'],
-   ['Coisa mesclada', false, '  titulo de mesclada, idem'],
-   ['Algo que nunca existiu por aqui', false, '  titulo inedito'],
-  ].forEach(([t, esperado, rot]) => {
-    const r = buscar({ titulo: t });
-    ok(r.bloqueia_criacao === esperado && barra(t) === esperado,
-       rot + ': busca e trava dizem ' + esperado,
-       'busca=' + r.bloqueia_criacao + ' trava=' + barra(t));
-  });
-
-  ok(buscar({ titulo: 'ab' }).error === 'termo', 'termo com menos de 3 caracteres e recusado');
-  const achou = buscar({ titulo: 'filtro por numero do titulo' });
-  ok(achou.identica && achou.identica.codigo === 'AX-100',
-     'e a resposta nomeia a demanda que ja existe, com a etapa dela',
-     achou.identica ? achou.identica.codigo + '/' + achou.identica.etapa : '-');
+  registra((async () => {
+    for (const [t, esperado, rot] of [
+      ['Filtro por número do título', true, 'titulo vivo identico'],
+      ['FILTRO POR NUMERO DO TITULO', true, '  o mesmo sem acento e em maiuscula'],
+      ['Ideia recusada', false, '  titulo de NEGADA — a ideia pode voltar'],
+      ['Coisa mesclada', false, '  titulo de mesclada, idem'],
+      ['Algo que nunca existiu por aqui', false, '  titulo inedito'],
+    ]) {
+      const r = await buscar({ titulo: t });
+      ok(r.bloqueia_criacao === esperado && barra(t) === esperado,
+         rot + ': busca e trava dizem ' + esperado,
+         'busca=' + r.bloqueia_criacao + ' trava=' + barra(t));
+    }
+    ok((await buscar({ titulo: 'ab' })).error === 'termo',
+       'termo com menos de 3 caracteres e recusado');
+    const achou = await buscar({ titulo: 'filtro por numero do titulo' });
+    ok(achou.identica && achou.identica.codigo === 'AX-100',
+       'e a resposta nomeia a demanda que ja existe, com a etapa dela',
+       achou.identica ? achou.identica.codigo + '/' + achou.identica.etapa : '-');
+    // A situacao na validacao vem junto, e nao derivada do texto da etapa.
+    ok(achou.identica.validada === false && achou.identica.aguardando_validacao === false &&
+       achou.identica.em_esteira === true,
+       'e com a situacao dela na validacao, dita em campo proprio',
+       'validada=' + achou.identica.validada + ' esteira=' + achou.identica.em_esteira);
+    ok(Array.isArray(achou.identica.links_git), 'e os links do git numa lista');
+    ok(achou.git && achou.git.consultado === false,
+       'e a secao do git vem na mesma resposta');
+  })());
 })();
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -6011,17 +6144,32 @@ sec('A etapa que o dev pode mover');
   }
 })();
 
-let erroW = null;
-try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
-ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
+(async () => {
+  /* AS ASSINCRONAS PRIMEIRO, e o resumo depois. Se uma delas estourar, isso e
+     falha — e nao um erro engolido que deixaria a suite verde. */
+  const quantas = pendentes.length;
+  try {
+    await Promise.all(pendentes);
+  } catch (e) {
+    ok(false, 'uma invariante assincrona estourou', String((e && e.message) || e).slice(0, 120));
+  }
+  /* CONCLUIRAM, e nao apenas comecaram. E esta linha que denuncia o `await`
+     removido: os blocos ficariam pendurados e `feitas` continuaria em zero. */
+  ok(feitas === quantas, 'os ' + quantas + ' blocos assincronos CONCLUIRAM antes do resumo',
+     feitas + ' de ' + quantas);
 
-let erroPz = null;
-try { new Function(PRZ); } catch (e) { erroPz = e.message; }
-ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
+  let erroW = null;
+  try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
+  ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
 
-let erroP = null;
-try { new Function(PIPE); } catch (e) { erroP = e.message; }
-ok(!erroP, 'pipelines.js sem erro de sintaxe', erroP || '');
+  let erroPz = null;
+  try { new Function(PRZ); } catch (e) { erroPz = e.message; }
+  ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
 
-console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
-process.exit(falhas ? 1 : 0);
+  let erroP = null;
+  try { new Function(PIPE); } catch (e) { erroP = e.message; }
+  ok(!erroP, 'pipelines.js sem erro de sintaxe', erroP || '');
+
+  console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
+  process.exit(falhas ? 1 : 0);
+})();

@@ -1167,6 +1167,76 @@ function tituloAssinatura(t) {
  *  Confere tambem as novas ENTRE SI, no mesmo envio: duas iguais que nunca
  *  chegaram ao servidor nao teriam com que colidir sem isso.
  */
+/* PROCURA A MESMA COISA NO REPOSITORIO DE CODIGO.
+ *
+ * A busca da plataforma cobria o Roadmap e mais nada, e o vinculo entre os dois
+ * mundos quase nao e feito: das 98 issues abertas no AXCRED-DJANGO, 97 nao tem
+ * demanda correspondente — oito delas de seguranca. Um dev consulta, recebe
+ * "pode criar", e cria uma demanda sobre algo que ja esta descrito numa issue.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * "NAO ACHEI" E "NAO CONSEGUI OLHAR" SAO RESPOSTAS DIFERENTES.
+ *
+ * Esta e a regra que da o formato a funcao. O repositorio de codigo tem OUTRO
+ * dono (`audaxcapitalsa`) que o dos dados (`CapFernando`), e nao ha garantia de
+ * que o token do Worker alcance os dois. Devolver `[]` quando a chamada falha
+ * faria o dev criar a duplicata acreditando que a busca foi completa — pior do
+ * que nao ter busca nenhuma, porque da confianca falsa.
+ *
+ * Entao: ou `consultado: true` com a lista, ou `consultado: false` com o motivo.
+ * Nunca uma lista vazia significando as duas coisas.
+ * ───────────────────────────────────────────────────────────────────────────
+ *
+ * Busca no TITULO (`in:title`), aberta E fechada: issue fechada e trabalho que
+ * ja foi feito, e saber disso vale tanto quanto saber do que esta em aberto — e
+ * a mesma pergunta que `validada` responde do lado do Roadmap.
+ */
+async function procuraNoGit(env, palavras) {
+  const repo = String((env && env.CODE_REPO) || '').trim();
+  if (!repo) {
+    return { consultado: false, motivo: 'repositorio_nao_configurado',
+             detalhe: 'Defina CODE_REPO (ex.: "dono/repo") para a busca alcancar o codigo.' };
+  }
+  if (!palavras || !palavras.length) {
+    return { consultado: false, motivo: 'termo_sem_palavras',
+             detalhe: 'O termo nao tem palavra especifica o bastante para procurar no codigo.' };
+  }
+  const q = palavras.slice(0, 6).join(' ') + ' in:title repo:' + repo + ' is:issue';
+  try {
+    const r = await fetch('https://api.github.com/search/issues?per_page=8&q=' +
+                          encodeURIComponent(q), {
+      headers: { Authorization: 'token ' + env.GH_TOKEN,
+                 Accept: 'application/vnd.github.v3+json',
+                 'User-Agent': 'audax-roadmap-worker' },
+    });
+    if (!r.ok) {
+      // 403 aqui e quase sempre teto de busca do GitHub (30/min) ou token sem
+      // alcance no repositorio — os dois merecem aparecer, e nao virar lista vazia.
+      return { consultado: false, motivo: 'http_' + r.status, repositorio: repo,
+               detalhe: r.status === 403
+                 ? 'Sem permissao no repositorio, ou limite de busca do GitHub atingido.'
+                 : 'O GitHub respondeu ' + r.status + ' para a busca.' };
+    }
+    const j = await r.json();
+    return {
+      consultado: true,
+      repositorio: repo,
+      total: j.total_count || 0,
+      issues: (j.items || []).map(i => ({
+        numero: i.number,
+        titulo: i.title || '',
+        estado: i.state || '',
+        resolvida: i.state === 'closed',
+        url: i.html_url || '',
+        rotulos: (i.labels || []).map(l => (typeof l === 'string' ? l : l.name)).filter(Boolean),
+      })),
+    };
+  } catch (e) {
+    return { consultado: false, motivo: 'falha_rede', repositorio: repo,
+             detalhe: String((e && e.message) || e).slice(0, 160) };
+  }
+}
+
 function criandoTituloRepetido(recebido, servidor) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const viva = m => m && !m.oculto && !m.mesclado_em &&
@@ -2770,17 +2840,45 @@ export default {
               .slice(0, 8)
           : [];
 
+        /* A SITUACAO NA VALIDACAO, DITA COM TODAS AS LETRAS.
+         *
+         * `etapa` ja vinha, mas obrigava quem chama a saber que 'concluido'
+         * significa "o PM/PO aprovou" e 'validacao' significa "entregue,
+         * esperando aprovacao". Sao tres respostas diferentes para "isso ja passou
+         * pela validacao?", e derivar isso de um texto de etapa e exatamente o
+         * tipo de regra que cada script escreve de um jeito.
+         *
+         *   validada              o PM/PO aprovou: acabou
+         *   aguardando_validacao  o dev entregou, esta com o PM/PO
+         *   em_esteira            ainda esta sendo feita
+         */
+        const situacao = (m) => {
+          const e = String(m.status_planejamento || '');
+          return { validada: e === 'concluido',
+                   aguardando_validacao: e === 'validacao',
+                   em_esteira: !['concluido', 'validacao'].includes(e) };
+        };
+        /* E O QUE LEVA AO GIT VAI JUNTO. `devVisao` ja carregava os tres campos de
+           link; o que faltava era dizer que ELES EXISTEM, sem quem chama ter de
+           testar tres campos vazios para descobrir. */
+        const doGit = (m) => [m.link_issue, m.link_pr, m.link_milestone]
+          .filter(x => String(x || '').trim());
+        const comSituacao = (m) => Object.assign(devVisao(m, temas), situacao(m),
+                                                 { links_git: doGit(m) });
+
         return json({ ok: true,
                       termo: termo,
                       // O que a trava vai fazer se este titulo for gravado. E a
                       // informacao acionavel: `false` aqui significa que
                       // `demanda-nova` aceita.
                       bloqueia_criacao: !!identica,
-                      identica: identica ? devVisao(identica, temas) : null,
+                      identica: identica ? comSituacao(identica) : null,
                       parecidas: parecidas.map(x => Object.assign(
-                        devVisao(x.m, temas),
-                        { palavras_em_comum: x.comuns })),
-                      total_parecidas: parecidas.length }, 200, headers);
+                        comSituacao(x.m), { palavras_em_comum: x.comuns })),
+                      total_parecidas: parecidas.length,
+                      // O repositorio de codigo. NUNCA devolve lista vazia para
+                      // dizer "nao consegui olhar" — ver `procuraNoGit`.
+                      git: await procuraNoGit(env, doTermo) }, 200, headers);
       }
 
       // ── daqui para baixo, escreve ──────────────────────────────────────

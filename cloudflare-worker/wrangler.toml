@@ -26,6 +26,18 @@ database_id = "03dd80b0-ea64-4042-bc23-6e7ee438b7cc"
 [vars]
 DATA_REPO = "RoadMap-dados"
 
+# O repositorio de CODIGO, para o `demanda-procurar` alcancar as issues.
+#
+# Dono diferente do dos dados, de proposito: `CapFernando/RoadMap-dados` guarda a
+# base e `audaxcapitalsa/AXCRED-DJANGO` guarda o sistema. Por isso o caminho aqui
+# e completo ("dono/repo") — o `gh()` do worker monta a URL com REPO_OWNER fixo e
+# nao serve para este.
+#
+# Se o token nao alcancar este repositorio, a busca NAO devolve lista vazia: ela
+# responde `consultado: false` com o motivo. "Nao achei" e "nao consegui olhar"
+# nao podem parecer a mesma coisa para quem decide se cria uma demanda.
+CODE_REPO = "audaxcapitalsa/AXCRED-DJANGO"
+
 # Anexos das demandas. Antes viviam como base64 dentro do proprio JSON e
 # representavam 1,53 MB de um arquivo de 1,64 MB — 93% do peso da base, baixado
 # inteiro em toda leitura. Aqui ficam fora do JSON, que passa a guardar so a
