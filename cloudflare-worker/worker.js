@@ -2775,24 +2775,99 @@ export default {
                       demandas: lista.map(m => devVisao(m, temas)) }, 200, headers);
       }
 
-      // Consulta por codigo (AX-###) ou por id. O codigo e o que a pessoa tem em
-      // maos, vindo do card ou do commit.
-      const acha = () => {
-        const cod = String(body.codigo || '').trim().toUpperCase().replace(/\s+/g, '');
+      /* ACHAR A DEMANDA PELO QUE A PESSOA TEM NA MAO.
+       *
+       * Ela chega de tres jeitos, e nenhum deles e escolha de quem procura:
+       *   AX-042   o codigo, que vem do card e do commit
+       *   #042     o mesmo codigo escrito como o time fala, com cerquilha
+       *   #1087    o numero da ISSUE no GitHub, que e o que aparece no PR
+       *
+       * O `#` NAO DIZ QUAL DOS DOIS E. "#157" pode ser a AX-157 e pode ser a issue
+       * 157 — as duas numeracoes existem e se cruzam. Entao tenta-se o codigo
+       * primeiro (e o que a plataforma usa) e a issue depois, e a RESPOSTA DIZ
+       * QUAL CASOU: sem isso, quem procurou a issue 157 e recebeu a AX-157 nao tem
+       * como perceber que veio outra coisa.
+       *
+       * Na base de producao, 25 das 357 demandas tem `link_issue` — procurar so
+       * por issue acharia quase nada, e procurar so por codigo deixaria de fora
+       * justamente o numero que o dev tem no navegador aberto. */
+      const soDigitos = t => String(t || '').replace(/\D+/g, '');
+
+      const achaPorCodigo = (cru) => {
+        // Sem limpeza previa: o que se usa sao os DIGITOS e as LETRAS, e o resto
+        // ja fica de fora. Ver o comentario equivalente em `busca-demanda.js`.
+        const cod = String(cru || '').trim().toUpperCase();
+        const num = cod.replace(/\D+/g, '');
+        if (!num) return null;
+        const letras = cod.replace(/[^A-Z]/g, '');
+        return todas.find(m => {
+          const c = String(m.codigo || '').toUpperCase();
+          const cn = c.replace(/\D+/g, '');
+          if (!cn) return false;
+          // O NUMERO COMO NUMERO: os codigos tem zero a esquerda ("AX-042") e quem
+          // digita escreve "42". Comparar texto escondia a demanda da forma mais
+          // natural de pedi-la.
+          if (Number(cn) !== Number(num)) return false;
+          if (letras && c.replace(/[^A-Z]/g, '') !== letras) return false;
+          return true;
+        }) || null;
+      };
+
+      /* A ISSUE E PROCURADA NO NUMERO, e nao no texto do link. `link_issue` guarda
+       * a URL inteira; comparar a string faria "1087" casar com a issue 10871 e
+       * com qualquer PR que tivesse 1087 no meio do caminho. O numero e o ultimo
+       * trecho da URL, e e ele que se compara. */
+      const numeroDaIssue = (url) => {
+        const m = String(url || '').trim().match(/(\d+)\s*$/);
+        return m ? m[1] : '';
+      };
+
+      const achaPorIssue = (cru) => {
+        const num = soDigitos(cru);
+        if (!num) return null;
+        return todas.find(m => numeroDaIssue(m.link_issue) === num) || null;
+      };
+
+      // Devolve a demanda E por qual caminho ela foi encontrada.
+      const achaComoAchou = () => {
         const id = String(body.id || '').trim();
-        if (id) return todas.find(m => m.id === id);
-        if (!cod) return null;
-        const norm = c => String(c || '').toUpperCase().replace(/-/g, '');
-        return todas.find(m => norm(m.codigo) === norm(cod));
+        if (id) {
+          const m = todas.find(x => x.id === id);
+          return m ? { m, por: 'id' } : null;
+        }
+        const cru = String(body.codigo || body.issue || '').trim();
+        if (!cru) return null;
+        // O codigo primeiro: e a identificacao da propria plataforma.
+        const porCod = body.issue && !body.codigo ? null : achaPorCodigo(cru);
+        if (porCod) return { m: porCod, por: 'codigo' };
+        const porIssue = achaPorIssue(cru);
+        if (porIssue) return { m: porIssue, por: 'issue' };
+        return null;
+      };
+
+      const acha = () => {
+        const r = achaComoAchou();
+        return r ? r.m : null;
       };
 
       if (body.action === 'demanda-consultar') {
-        const m = acha();
-        if (!m) {
+        const r = achaComoAchou();
+        if (!r) {
           return json({ error: 'nao_encontrada',
-                        detail: 'Informe "codigo" (ex.: AX-042) ou "id" de uma demanda existente.' }, 404, headers);
+                        detail: 'Informe "codigo" (ex.: AX-042, #042 ou #1087 para a issue) ' +
+                                'ou "id" de uma demanda existente.' }, 404, headers);
         }
-        return json({ ok: true, demanda: devVisao(m, temas) }, 200, headers);
+        /* CONSULTAR NAO EXIGE POSSE, e e deliberado: o dev precisa ver a demanda
+           que o colega esta tocando para nao duplicar trabalho, e a que o PM cita
+           na reuniao. GRAVAR continua exigindo — `demanda-atualizar` e
+           `demanda-entregar` respondem 403 `nao_sua`.
+           `sua` viaja na resposta para a tela saber se oferece as acoes ou se
+           mostra em modo leitura: oferecer um botao que o servidor vai recusar e
+           fazer a pessoa levar erro no clique de algo que a tela dizia poder. */
+        return json({ ok: true,
+                      achada_por: r.por,
+                      sua: meuDono(r.m),
+                      demanda: devVisao(r.m, temas) }, 200, headers);
       }
 
       /* PROCURAR ANTES DE CRIAR.

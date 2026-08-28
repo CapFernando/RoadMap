@@ -65,6 +65,7 @@ const CAPA = fs.readFileSync('capa-tecnologia.js', 'utf8');
 const PIPE = fs.readFileSync('pipelines.js', 'utf8');
 const PRZ = fs.readFileSync('prazo.js', 'utf8');
 const CAPJS = fs.readFileSync('capacidade.js', 'utf8');
+const BUSCAJS = fs.readFileSync('busca-demanda.js', 'utf8');
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -6442,6 +6443,162 @@ ok(/class="card-herdada"/.test(GANTT) && GANTT.indexOf('\u21e5') >= 0,
      'o cartao sabe quando a herdada esta em validacao');
   ok(/O DEV JÁ ENTREGOU/.test(GANTT),
      'e o texto do cartao diz que o dev ja entregou, em vez de deixar no ar');
+}
+
+
+// =======================================================================
+sec('Ver qualquer demanda pelo numero (codigo ou issue)');
+
+/* O PORTAL DO DEV MOSTRAVA SO A FILA DE QUEM ESTAVA LOGADO. Para olhar a demanda
+   que o colega esta tocando, ou a que o PM citou na reuniao, nao havia caminho
+   nenhum dali. Agora se digita o numero e ela abre EM LEITURA.
+
+   A regra de casamento vive em `busca-demanda.js`, e o Worker a replica — ele e
+   um bundle e nao importa arquivo do repositorio. A copia e inevitavel; o que
+   estas invariantes impedem e ela DIVERGIR, porque a divergencia seria muda: a
+   tela acharia e a API nao, e ninguem saberia qual acreditar. */
+{
+  const B = new Function(BUSCAJS + ' return BUSCA_DEMANDA;').call({});
+
+  const base = [
+    { id: '1', codigo: 'AX-042', link_issue: '' },
+    { id: '2', codigo: 'AX-157', link_issue: 'https://github.com/audaxcapitalsa/AXCRED-DJANGO/issues/1087' },
+    { id: '3', codigo: 'AX-200', link_issue: 'https://github.com/audaxcapitalsa/AXCRED-DJANGO/issues/157' },
+    { id: '4', codigo: 'AX-300', link_issue: 'https://github.com/audaxcapitalsa/AXCRED-DJANGO/issues/10871' },
+  ];
+
+  /* AS FORMAS QUE A PESSOA DIGITA. Nenhuma delas e escolha de quem procura: o
+     codigo vem do card, a cerquilha e como o time fala, e o numero puro e o que
+     sobra quando se copia do meio de uma frase. */
+  [['AX-042', '1'], ['ax-042', '1'], ['#042', '1'], ['042', '1'], ['42', '1'],
+   [' AX-042 ', '1'], ['AX042', '1']].forEach(([termo, id]) => {
+    const r = B.acha(base, termo);
+    ok(!!r && r.demanda.id === id && r.por === 'codigo',
+       'acha pelo codigo digitando ' + JSON.stringify(termo),
+       r ? r.demanda.codigo + ' por ' + r.por : 'NAO ACHOU');
+  });
+
+  /* AS LETRAS DIGITADAS TEM DE BATER. Quem escreve "XY-042" disse qual queria, e
+     devolver a AX-042 seria a busca ignorando a unica parte do termo que
+     desambigua. Sem este caso, apagar a checagem de prefixo nao quebrava teste
+     nenhum — a sabotagem mostrou. */
+  ok(B.acha(base, 'XY-042') === null,
+     'prefixo diferente NAO casa: "XY-042" nao e a AX-042',
+     JSON.stringify(B.acha(base, 'XY-042')));
+  ok(B.acha(base, 'ZZ042') === null, 'nem "ZZ042"');
+
+  /* PELO NUMERO DA ISSUE, que e o que o dev tem no navegador aberto. */
+  {
+    const r = B.acha(base, '#1087');
+    ok(!!r && r.demanda.id === '2' && r.por === 'issue',
+       'acha pela issue do GitHub',
+       r ? r.demanda.codigo + ' por ' + r.por : 'NAO ACHOU');
+  }
+
+  /* O CODIGO VEM PRIMEIRO, E A RESPOSTA DIZ QUAL CASOU.
+     "#157" e ao mesmo tempo a AX-157 e a issue 157 da AX-200 — as duas
+     numeracoes existem e se cruzam. Devolver uma delas sem dizer qual faria quem
+     procurou a issue trabalhar na demanda errada sem perceber. */
+  {
+    const r = B.acha(base, '#157');
+    ok(!!r && r.demanda.id === '2' && r.por === 'codigo',
+       'com numero ambiguo, o CODIGO vence',
+       r ? r.demanda.codigo + ' por ' + r.por : 'NAO ACHOU');
+    const so = B.acha(base, '157', { so: 'issue' });
+    ok(!!so && so.demanda.id === '3' && so.por === 'issue',
+       'e pedindo SO a issue, vem a issue',
+       so ? so.demanda.codigo + ' por ' + so.por : 'NAO ACHOU');
+  }
+
+  /* O NUMERO E O FIM DA URL, e nao um pedaco dela. Sem isso, "1087" casaria com
+     a issue 10871 — e com qualquer numero que aparecesse no caminho. */
+  {
+    const r = B.acha(base, '1087', { so: 'issue' });
+    ok(!!r && r.demanda.id === '2',
+       'a issue 1087 nao casa com a 10871',
+       r ? r.demanda.codigo : 'NAO ACHOU');
+    ok(B.numeroDaIssue('https://github.com/a/b/issues/10871') === '10871',
+       'o numero da issue e o ultimo trecho da URL');
+  }
+
+  /* O QUE NAO EXISTE NAO VIRA PALPITE. Devolver a demanda mais parecida faria
+     quem digitou errado trabalhar na demanda de outra pessoa. */
+  ['#999999', 'AX-999999', 'nada', '', '   ', '#', 'AX-'].forEach((t) => {
+    ok(B.acha(base, t) === null, 'nao inventa resposta para ' + JSON.stringify(t));
+  });
+}
+
+/* AS DUAS IMPLEMENTACOES RESPONDEM IGUAL — a compartilhada e a do Worker.
+   Elas rodam contra os MESMOS casos aqui dentro; divergir e a unica coisa que
+   nao pode acontecer, porque nao apareceria em lugar nenhum. */
+{
+  const B = new Function(BUSCAJS + ' return BUSCA_DEMANDA;').call({});
+
+  const inicio = WC.indexOf('const soDigitos =');
+  const fim = WC.indexOf('const acha = () => {', inicio);
+  ok(inicio >= 0 && fim > inicio, 'o worker tem o bloco de busca por codigo/issue');
+
+  if (inicio >= 0 && fim > inicio) {
+    const fimBloco = WC.indexOf('};', fim) + 2;
+    const TRECHO = WC.slice(inicio, fimBloco);
+    const doWorker = (termo) =>
+      new Function('todas', 'body', TRECHO + ' return achaComoAchou();')(base, { codigo: termo });
+
+    const base = [
+      { id: '1', codigo: 'AX-042', link_issue: '' },
+      { id: '2', codigo: 'AX-157', link_issue: 'https://github.com/a/b/issues/1087' },
+      { id: '3', codigo: 'AX-200', link_issue: 'https://github.com/a/b/issues/157' },
+    ];
+    const termos = ['AX-042', '#042', '042', '42', '#157', '157', '#1087', '1087',
+                    '#999999', '', '#', 'nada',
+                    // Prefixo ERRADO: sem ele, apagar a checagem de letras de uma
+                    // das duas implementacoes nao produzia divergencia nenhuma.
+                    'XY-042', 'ZZ042', 'AX-157', 'xy157'];
+    let divergiu = 0;
+    termos.forEach((t) => {
+      const w = doWorker(t);
+      const b = B.acha(base, t);
+      const iguais = (w ? w.m.id : null) === (b ? b.demanda.id : null) &&
+                     (w ? w.por : null) === (b ? b.por : null);
+      if (!iguais) divergiu++;
+    });
+    ok(divergiu === 0,
+       'worker e busca-demanda.js respondem igual nos ' + termos.length + ' termos',
+       divergiu ? divergiu + ' divergencia(s)' : 'nenhuma divergencia');
+  }
+}
+
+/* A TELA NAO REESCREVE A REGRA. Se `dev.html` tivesse a propria copia, seriam
+   TRES — e a terceira nao teria nem invariante comparando. */
+ok(/BUSCA_DEMANDA\.acha\(/.test(DEV),
+   'o portal do dev usa BUSCA_DEMANDA, e nao uma copia local');
+ok(/<script src="busca-demanda\.js\?v=/.test(DEV),
+   'e carrega o arquivo compartilhado, com selo de cache');
+
+/* VER E ABERTO; GRAVAR CONTINUA EXIGINDO POSSE. Esta e a fronteira que nao pode
+   mudar de lugar sem alguem perceber: consultar solto e util, gravar solto e uma
+   pessoa mexendo na demanda da outra. */
+ok(/if \(!ehAdm && !meuDono\(alvo\)\)/.test(WC),
+   'atualizar/entregar continuam recusando o que nao e seu (403 nao_sua)');
+ok(!/demanda-consultar[\s\S]{0,400}?nao_sua/.test(WC),
+   'e consultar NAO exige posse — e deliberado');
+
+/* A TELA DIZ QUE E LEITURA quando a demanda e de outra pessoa. Sem isso, quem
+   abre a demanda do colega acha que pode alterar e leva o 403 no clique. */
+ok(/leitura/.test(DEV) && /modal-ver/.test(DEV),
+   'o modal de leitura existe e se anuncia como leitura');
+{
+  /* O RECORTE E O MODAL, e nao um numero de caracteres. A primeira versao olhava
+     1200 letras a partir do `id`, e o modal SEGUINTE cabia dentro dessa janela —
+     o teste reprovava por causa dos campos do vizinho. Aqui se corta no proximo
+     `modal-overlay`, que e onde este acaba de verdade. */
+  const i = DEV.indexOf('id="modal-ver"');
+  const j = DEV.indexOf('modal-overlay', i + 20);
+  const bloco = i >= 0 ? DEV.slice(i, j > i ? j : i + 2000) : '';
+  ok(!!bloco, 'o modal de leitura foi localizado no arquivo');
+  ok(!/<(input|textarea|select)/.test(bloco),
+     'e ele NAO tem campo de edicao — nao ha o que esconder',
+     (bloco.match(/<(input|textarea|select)/g) || []).join(', '));
 }
 
   try {

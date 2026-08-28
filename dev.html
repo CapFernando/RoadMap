@@ -435,6 +435,7 @@
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=75d59802ea"></script>
+<script src="busca-demanda.js?v=1380650a7a"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -592,6 +593,20 @@
     <div class="filter-sep"></div>
     <button id="f-limpar" class="btn btn-secondary btn-sm" onclick="limparFiltrosDev()">Limpar</button>
     <span id="f-contagem" class="filter-count"></span>
+
+    <!-- VER QUALQUER DEMANDA, e nao so as suas.
+         O painel mostra a fila de quem esta logado, e era so isso: para olhar a
+         demanda que o colega esta tocando, ou a que o PM citou na reuniao, nao
+         havia caminho nenhum daqui. Agora se digita o numero — "#157" ou "AX-157"
+         para o codigo, "#1087" para a issue do GitHub — e ela abre em LEITURA.
+         Gravar continua exigindo ser o dono: o Worker responde 403 `nao_sua`. -->
+    <div class="filter-sep"></div>
+    <label for="f-ver">Ver demanda:</label>
+    <input type="text" id="f-ver" class="filter-select" style="width:150px"
+           placeholder="#157 ou AX-157"
+           title="Abre qualquer demanda para leitura, mesmo que não seja sua. Aceita o código (AX-157, #157) ou o número da issue no GitHub (#1087)."
+           onkeydown="if (event.key === 'Enter') { event.preventDefault(); verDemandaPorNumero(); }" />
+    <button class="btn btn-secondary btn-sm" onclick="verDemandaPorNumero()">Abrir</button>
   </div>
 
   <div class="dv-tabs">
@@ -737,6 +752,20 @@
 </div>
 
 <!-- ─── MODAL: STATUS ────────────────────────────── -->
+<!-- DEMANDA EM LEITURA. Separado do `modal-status`, que GRAVA.
+     Um modal so, com os botoes escondidos quando a demanda nao e sua, seria um
+     formulario de gravacao a um `display:none` de distancia — e o dia em que
+     alguem mexesse no CSS, a tela ofereceria salvar o que o servidor recusa.
+     Aqui nao ha campo nem botao de gravar: nao ha o que esconder. -->
+<div id="modal-ver" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:640px">
+    <button type="button" class="modal-close-btn" onclick="closeModal('modal-ver')" aria-label="Fechar">✕</button>
+    <h2 id="mv-title">Demanda</h2>
+    <div id="mv-aviso" style="display:none"></div>
+    <div id="mv-corpo"></div>
+  </div>
+</div>
+
 <div id="modal-status" class="modal-overlay" style="display:none">
   <div class="modal">
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-status')" aria-label="Fechar">✕</button>
@@ -2023,6 +2052,99 @@ function statusEfetivo(m) {
   return sk;
 }
 
+
+/* ABRIR QUALQUER DEMANDA PELO NUMERO — mesmo a que nao e sua.
+ *
+ * A REGRA DE CASAMENTO NAO MORA AQUI. Ela esta em `busca-demanda.js`, que o
+ * Worker tambem replica (ele e um bundle e nao importa daqui) — e ha invariante
+ * rodando as DUAS contra os mesmos casos e exigindo a mesma resposta. Uma copia
+ * local aqui seria a terceira, e a divergencia seria muda: a tela acharia e a API
+ * nao, sem ninguem saber qual acreditar.
+ *
+ * NAO HA IDA AO SERVIDOR. O painel ja carrega a base inteira — `state.melhorias`
+ * tem tudo, e o que a tela faz e filtrar para "minhas". Chamar a API para achar
+ * algo que ja esta em memoria seria latencia por nada, e um limite de taxa a
+ * gastar. O endpoint `demanda-consultar` continua existindo para quem automatiza.
+ */
+function verDemandaPorNumero() {
+  const campo = document.getElementById('f-ver');
+  const termo = String(campo && campo.value || '').trim();
+  if (!termo) { if (campo) campo.focus(); return; }
+
+  const achado = window.BUSCA_DEMANDA
+    ? BUSCA_DEMANDA.acha(state.melhorias || [], termo)
+    : null;
+
+  const titulo = document.getElementById('mv-title');
+  const aviso = document.getElementById('mv-aviso');
+  const corpo = document.getElementById('mv-corpo');
+
+  if (!achado) {
+    /* NAO ACHOU E RESPOSTA, e ela diz o que foi procurado. "Nada encontrado"
+       sozinho deixa a pessoa sem saber se digitou errado ou se a demanda nao
+       existe — e sem saber que a busca olha as duas numeracoes. */
+    titulo.textContent = 'Não encontrei ' + termo;
+    aviso.style.display = 'none';
+    corpo.innerHTML = '<p style="color:var(--text2);line-height:1.6">' +
+      'Procurei o código da demanda (<code>AX-157</code>, <code>#157</code> ou <code>157</code>) ' +
+      'e o número da issue no GitHub (<code>#1087</code>). Nenhum dos dois casou.</p>' +
+      '<p style="color:var(--text3);font-size:13px">Só 25 das demandas têm issue vinculada — ' +
+      'se você procurou por uma issue, pode ser que ela ainda não esteja ligada a nenhuma demanda aqui.</p>';
+    abrirModal('modal-ver');
+    return;
+  }
+
+  const m = achado.demanda;
+  /* A MESMA EXPRESSAO que o Kanban e o cronograma usam para montar a fila.
+     Escrever outra aqui seria uma segunda resposta para "e minha?" — e o dia em
+     que as duas discordassem, a tela diria que a demanda e sua e o servidor
+     recusaria a gravacao (ou o contrario, que e pior). */
+  const minha = splitDevs(m.dev).includes(currentDev);
+  titulo.textContent = (m.codigo || 'Demanda') + ' · ' + (m.titulo || '');
+
+  /* DE ONDE ELA VEIO, dito quando nao foi pelo codigo. Quem digitou "#157"
+     procurando a issue e recebeu a AX-157 precisa saber que veio outra coisa. */
+  const porIssue = achado.por === 'issue';
+  aviso.style.display = (porIssue || !minha) ? 'block' : 'none';
+  aviso.innerHTML = [
+    porIssue ? '<div style="margin-bottom:6px">🔗 Encontrada pela <b>issue ' +
+      escAttr(BUSCA_DEMANDA.numeroDaIssue(m.link_issue)) + '</b> do GitHub, e não pelo código.</div>' : '',
+    !minha ? '<div>👁 Esta demanda está com <b>' + escAttr(m.dev || 'ninguém') +
+      '</b>. Você está vendo em <b>leitura</b> — alterações só quem está com ela.</div>' : '',
+  ].join('');
+  aviso.style.cssText = 'display:' + ((porIssue || !minha) ? 'block' : 'none') +
+    ';background:var(--bg4);border:1px solid var(--border2);border-radius:8px;' +
+    'padding:10px 12px;margin-bottom:14px;font-size:13px;line-height:1.5;color:var(--text2)';
+
+  const linha = (rot, val) => val
+    ? '<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">' +
+      '<span style="color:var(--text3);min-width:120px;font-size:13px">' + rot + '</span>' +
+      '<span style="flex:1;font-size:13px">' + val + '</span></div>'
+    : '';
+
+  const tema = (state.temas || []).find(t => String(t.id) === String(m.tema_id));
+  const sp = getStatusKey(m);
+  const atraso = window.PRAZO ? PRAZO.diasDeAtraso(m, sp, PRAZO.hojeISO()) : null;
+
+  corpo.innerHTML =
+    linha('Situação', escAttr(STATUS_LABELS[sp] || sp) +
+      (atraso ? ' <span style="color:var(--red)">· ' + atraso + ' dia(s) de atraso</span>' : '')) +
+    linha('Responsável', escAttr(m.dev || '')) +
+    linha('Tema', escAttr(tema ? tema.nome : '')) +
+    linha('Solicitante', escAttr(m.solicitante || '')) +
+    linha('Início', escAttr(m.inicio || '')) +
+    linha('Previsão de entrega', escAttr(m.entrega || '') || '<i style="color:var(--text3)">sem data combinada</i>') +
+    linha('Pontos', m.poker_pontos == null ? '' : String(m.poker_pontos)) +
+    linha('Descrição', escAttr(m.descricao || '').replace(/\n/g, '<br>')) +
+    linha('Implementação', escAttr(m.implementacao || '').replace(/\n/g, '<br>')) +
+    [['link_issue', 'Issue'], ['link_pr', 'Pull request'], ['link_milestone', 'Milestone']]
+      .map(([campo, rot]) => m[campo]
+        ? linha(rot, '<a href="' + escAttr(m[campo]) + '" target="_blank" rel="noopener" ' +
+          'style="color:var(--blue)">' + escAttr(m[campo]) + '</a>')
+        : '').join('');
+
+  abrirModal('modal-ver');
+}
 
 const STATUS_LABELS = {
   backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
