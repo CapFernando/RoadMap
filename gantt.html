@@ -26,6 +26,14 @@
       --ouro-bg:   #3D2F08; --ouro-bd:   #9C7A14; --ouro-tx:   #F7D774;
       --prata-bg:  #2B2D31; --prata-bd:  #52565D; --prata-tx:  #DBDEE4;
       --bronze-bg: #33241A; --bronze-bd: #7A5537; --bronze-tx: #E3B389;
+      /* HERDADA DO MES ANTERIOR — rosa choque. Ela precisa saltar da tela num
+         quadro cheio de barras verdes e amarelas, e e o unico marcador aqui que
+         nao e etapa: as outras cores dizem EM QUE PE a demanda esta, esta diz
+         DE QUANDO ela e. Medido: texto 8.01:1 sobre o fundo do chip, borda
+         5.53:1 contra a pagina. O par claro esta em tema.css. */
+      --pink-bg: #4A0A2E;
+      --pink-bd: #FF2D8E;
+      --pink-tx: #FF9ECB;
       /* Pausado. Magenta para nao se confundir com o vermelho de atrasado. */
       --rose:    #D948B8;
       --rose-bg: #48123F;
@@ -149,6 +157,10 @@
        tamanho um rose vizinho do vermelho se confunde com ele a um metro da tela.
        Magenta tambem nao colide com o purpura de 'Levantar Req.' (#C9AEFF). */
     .ind-chip.pausado        { background:#48123F; border-color:#93257F; color:#F2A0DA; }
+    /* Rosa choque, por token, porque este chip existe nos dois temas. Ele fica
+       ao lado de 'Pausado', que e magenta — a borda #FF2D8E e bem mais saturada
+       e o icone ⇥ separa os dois de relance. */
+    .ind-chip.mes_passado    { background:var(--pink-bg); border-color:var(--pink-bd); color:var(--pink-tx); }
     /* Codigo da demanda: referencia curta para PR, review e deploy. */
     .cod-tag{font-family:ui-monospace,monospace;font-size:10px;font-weight:700;
       color:var(--blue-tx,#9BC8F8);background:var(--blue-bg,#0C3260);border-radius:4px;
@@ -323,6 +335,15 @@
     /* ROLOU DE SPRINT: neutro na contagem, atencao no nome. A contagem e fato; o
        nome e o que pede acao. */
     .cap-rolou { color: var(--text3); }
+    /* Rosa choque tambem aqui, para a linha do dev e a barra no quadro se lerem
+       como a mesma coisa. E `display:block` porque ela vem depois do percentual
+       e antes das rolagens: na mesma linha, os tres se atropelam a 210px.
+
+       `--pink-tx` E NAO `--pink-bd`: o `-bd` e cor de BORDA, medida contra o
+       minimo de 3:1 de componente. Como texto pequeno ele da 4.15:1 sobre a
+       superficie do tema claro, abaixo dos 4.5 exigidos — passaria despercebido
+       porque no escuro ele esta em 4.78:1. O `-tx` da 8.75:1 e 6.66:1. */
+    .cap-herdada { color: var(--pink-tx); display: block; white-space: normal; }
     .cap-rolou-alerta { color: var(--amber-tx, #FFC470); display: block; white-space: normal;
       line-height: 1.4; }
     .cap-text { font-size: 10px; color: var(--text3); white-space: nowrap; }
@@ -480,6 +501,25 @@
       background: repeating-linear-gradient(135deg,
         transparent 0 5px, rgba(0,0,0,.28) 5px 10px);
     }
+    /* HERDADA DO MES ANTERIOR — rosa choque, contorno e nao preenchimento.
+       O preenchimento continua sendo a cor da ETAPA: pintar a barra inteira de
+       rosa apagaria "em andamento" para dizer "veio de julho", e as duas coisas
+       precisam ser lidas juntas. O rosa fica na borda e na etiqueta.
+       A borda TRACEJADA e o segundo sinal, para quem nao distingue o rosa do
+       vermelho de atrasado: cor sozinha nunca e o unico portador da informacao. */
+    .gantt-card.gcard-herdada {
+      border: 2px dashed var(--pink-bd);
+      box-shadow: 0 0 0 1px var(--pink-bg) inset;
+    }
+    /* A etiqueta com o mes de origem e quantas sprints ja passaram do prazo.
+       Fundo proprio para nao depender da cor da etapa por baixo — sobre a barra
+       verde de 'concluido' um texto rosa sem fundo cai para menos de 2:1. */
+    .gantt-card .card-herdada {
+      font-size: 10px; font-weight: 700; flex-shrink: 0; z-index: 1;
+      background: var(--pink-bg); color: var(--pink-tx);
+      border: 1px solid var(--pink-bd); border-radius: 4px;
+      padding: 0 4px; letter-spacing: .02em; cursor: help;
+    }
     /* Ambar, nao vermelho: vermelho ja significa atrasado nesta tela, e reusar o
        tom faria "sem estimativa" ser lido como "vencida". */
     .card-sempt { font-size:10px; margin-right:3px; flex-shrink:0; cursor:help;
@@ -615,9 +655,9 @@
     .delete-btn { background: var(--red); color: #fff; }
     .delete-btn:hover { opacity: 0.85; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
+  <link rel="stylesheet" href="tema.css?v=427bab8a2a">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=592092724e"></script>
+<script src="prazo.js?v=902e1a4b11"></script>
 <script src="capacidade.js?v=3769a13468"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -1712,8 +1752,74 @@ async function saveToGitHub(tentativa = 1) {
 }
 
 // ── MONTH NAV ─────────────────────────────────────────────────────────────
-function prevMonth() { viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; } renderGantt(); }
-function nextMonth() { viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; } renderGantt(); }
+/** O mes EM EXIBICAO, em 'YYYY-MM'. O chip, o filtro e a barra do Gantt leem
+ *  daqui: se cada um calculasse o proprio, o chip diria 16 e o quadro desenharia
+ *  outra quantidade, e nao haveria como saber qual dos dois esta certo. */
+/** 'Julho' -> 'jul'. DERIVADO de MONTH_NAMES, e nao uma segunda lista: duas
+ *  listas de meses e uma a mais para alguem corrigir pela metade. */
+function mesAbrev(i) {
+  return (MONTH_NAMES[i] || '').slice(0, 3).toLowerCase();
+}
+
+function mesEmExibicao() {
+  return viewYear + '-' + String(viewMonth + 1).padStart(2, '0');
+}
+
+/** A demanda esta sendo herdada do mes anterior, no mes que esta na tela?
+ *  A regra mora em prazo.js; aqui so se passa a etapa efetiva e o mes. */
+function ehHerdada(m) {
+  /* `etapaReal`, e NUNCA `spEfetivo`: ver o comentario em `etapaReal`. Com o
+     efetivo, toda herdada chega como 'atrasado' e a funcao responde false para
+     todas — o recurso inteiro vira decoracao, sem erro nenhum. */
+  return !!(window.PRAZO &&
+    PRAZO.herdadaDeMesAnterior(m, etapaReal(m), mesEmExibicao(), PRAZO.hojeISO()));
+}
+
+// `renderIndicators` entra junto porque o chip "Mes passado" depende do mes que
+// esta na tela: sem isto, navegar para julho continuaria mostrando a contagem de
+// agosto, e o filtro esvaziaria o quadro sem dizer por que.
+/** ONDE A BARRA DA DEMANDA CAI NA REGUA DO MES — ou null, quando ela nao aparece.
+ *
+ *  Devolve indices de DIA UTIL, ja recortados ao mes, e diz se a barra esta ali
+ *  por heranca. E a unica fonte: o empacotamento em faixas e o desenho leem daqui.
+ *
+ *  ─────────────────────────────────────────────────────────────────────────────
+ *  A DEMANDA HERDADA OCUPA DO INICIO DO MES ATE HOJE.
+ *
+ *  Ela nao tem datas neste mes — o prazo dela ficou no mes passado, e nao foi
+ *  movido de proposito (ver `PRAZO.herdadaDeMesAnterior`). Antes disso ela
+ *  simplesmente SUMIA: `if (sIdx >= workDays.length || eIdx < 0) return` descartava
+ *  tudo que estivesse fora do mes, e na base de producao isso escondia 16 demandas
+ *  vivas — 10 em andamento — no primeiro dia de agosto. O dev aparecia com a
+ *  agenda livre carregando dez coisas.
+ *
+ *  Do inicio ate HOJE porque e o intervalo que ela realmente consumiu: comecar
+ *  no dia 1 diz "isto ja estava aqui quando o mes abriu", e parar em hoje evita
+ *  prometer o resto do mes a uma demanda cujo prazo ninguem remarcou.
+ *  Num mes que ja acabou, vai ate o fim dele — foi o que aconteceu.             */
+function faixaDoCard(m, workDays, todayStr) {
+  if (!workDays.length) return null;
+  const mesAte = workDays[workDays.length - 1].str;
+
+  if (ehHerdada(m)) {
+    const fim = todayStr > mesAte
+      ? workDays.length - 1
+      : Math.max(0, resolveWorkDayIdx(todayStr, workDays, 'prev'));
+    return { sIdx: 0, eIdx: fim, herdada: true };
+  }
+
+  let sIdx = resolveWorkDayIdx(m.inicio || m.entrega, workDays, 'next');
+  let eIdx = resolveWorkDayIdx(m.entrega || m.inicio, workDays, 'prev');
+  if (sIdx >= workDays.length || eIdx < 0 || eIdx < sIdx) return null;  // fora do mes
+  return {
+    sIdx: Math.max(0, sIdx),
+    eIdx: Math.min(workDays.length - 1, eIdx),
+    herdada: false,
+  };
+}
+
+function prevMonth() { viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; } renderIndicators(); renderGantt(); }
+function nextMonth() { viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; } renderIndicators(); renderGantt(); }
 
 const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                      'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1743,6 +1849,9 @@ function matchesFilters(m) {
   if (filters.sprint && !(m.sprint||'').toLowerCase().includes(filters.sprint)) return false;
   // Pausado e estado paralelo a etapa, nao um valor dela — daí o caso proprio.
   if (filters.indicator === '__pausado__') { if (!estaPausado(m)) return false; }
+  // Herdada tambem e paralelo: a demanda continua em 'em andamento' ou
+  // 'planejado', o que muda e DE QUANDO ela e.
+  else if (filters.indicator === '__mes_passado__') { if (!ehHerdada(m)) return false; }
   else if (filters.indicator && spEfetivo(m) !== filters.indicator) return false;
   return true;
 }
@@ -1822,9 +1931,27 @@ function semPontuacao(m) {
 
 // Status para EXIBIR e FILTRAR. NUNCA use ao gravar: o formulário e o drag
 // gravam status_planejamento cru; salvar o efetivo apagaria o estágio real.
-function spEfetivo(m) {
+/** A ETAPA COMO ELA ESTA GRAVADA, so com a normalizacao do 'deploy'.
+ *
+ *  Ela existe separada de `spEfetivo` porque as duas respondem perguntas
+ *  diferentes: esta diz EM QUE ETAPA a demanda esta, e `spEfetivo` diz COMO ELA
+ *  APARECE — e "aparece" inclui virar 'atrasado' quando o prazo estourou.
+ *
+ *  E foi exatamente ai que a heranca do mes nasceu quebrada: `ehHerdada`
+ *  perguntava com `spEfetivo`, e TODA demanda herdada esta vencida por
+ *  definicao (o prazo dela ficou no mes passado). Entao a etapa chegava sempre
+ *  como 'atrasado', que nao esta em `ETAPAS_QUE_CORREM`, e a resposta era sempre
+ *  false: as 16 continuariam sumindo, com o codigo todo escrito e nenhum erro no
+ *  console. Quem descobriu foi a prova contra a base — nao havia como ver isso
+ *  lendo o codigo. */
+function etapaReal(m) {
   // 'deploy' foi removido como etapa: remanescentes contam como concluído
-  let sp = m.status_planejamento === 'deploy' ? 'concluido' : (m.status_planejamento || 'backlog');
+  return (m || {}).status_planejamento === 'deploy'
+    ? 'concluido' : ((m || {}).status_planejamento || 'backlog');
+}
+
+function spEfetivo(m) {
+  let sp = etapaReal(m);
   // Pausada nao atrasa: prazo suspenso, nao estourado.
   if (estaPausado(m)) return sp;
   if (sp === 'atrasado') return 'atrasado';
@@ -1856,7 +1983,23 @@ function renderIndicators() {
       `title="Prazo suspenso. A entrega fica oculta e volta empurrada pelos dias parados." ` +
       `onclick="toggleIndicatorFilter('__pausado__')">⏸ Pausado <strong>${nPausadas}</strong></span>`
     : '';
-  document.getElementById('indicator-bar').innerHTML = todosChip + chips + chipPausado;
+
+  /* MES PASSADO — o que atravessou a virada sem concluir.
+     Conta por fora, como o Pausado: a demanda continua na etapa dela, e somar
+     aqui faria o total passar do numero de demandas.
+     O chip some quando o numero e zero, em vez de mostrar "0": um chip zerado que
+     esvazia a tela ao ser clicado e um convite a achar que a tela quebrou — a
+     mesma razao pela qual o Pausado ja fazia isso. */
+  const herdadas = visible.filter(ehHerdada);
+  const chipHerdadas = herdadas.length
+    ? `<span class="ind-chip mes_passado ${filters.indicator === '__mes_passado__' ? 'active-filter' : ''}" ` +
+      `title="Demandas ainda na esteira do dev cujo prazo ficou num mês anterior a ${MONTH_NAMES[viewMonth]}. ` +
+      `O prazo NÃO foi movido: elas aparecem no mês novo marcadas, e continuam atrasadas pelo tempo que estão." ` +
+      `onclick="toggleIndicatorFilter('__mes_passado__')">⇥ Mês passado <strong>${herdadas.length}</strong></span>`
+    : '';
+
+  document.getElementById('indicator-bar').innerHTML =
+    todosChip + chips + chipPausado + chipHerdadas;
 }
 
 function toggleIndicatorFilter(k) {
@@ -2163,6 +2306,10 @@ function renderGantt() {
     const mStart = workDays[0].str, mEnd = workDays[workDays.length - 1].str;
     devs = devs.filter(dev => visible.some(m => {
       if (!splitDevs(m.dev).includes(dev)) return false;
+      // A HERDADA CONTA COMO DEMANDA DO MES. Sem esta linha, quem entrou no mes
+      // carregando so pendencia do mes passado sumia da lista de devs inteira —
+      // e o Gantt dizia que a pessoa nao tem nada, com dez coisas na mao.
+      if (ehHerdada(m)) return true;
       const s = m.inicio || m.entrega, e = m.entrega || m.inicio;
       return s && s <= mEnd && e >= mStart;
     }));
@@ -2198,6 +2345,19 @@ function renderGantt() {
             totalFeito, semPontuar } = pontosPokerPorSemana(devCards, semanas, mesDe, mesAte);
     const rolou = window.CAPACIDADE.rolagens(devCards);
 
+    /* O QUE ESTE DEV TROUXE DO MES PASSADO — contado A PARTE do plano do mes.
+       O plano de agosto continua sendo so o que foi prometido PARA agosto: somar
+       aqui os pontos de julho faria o mesmo ponto contar duas vezes ao longo do
+       tempo, e o cruzamento planejado x entregue que o deck da Cobranca usa
+       deixaria de fechar com o mes.
+       A carga real aparece assim mesmo — e a linha "⇥ 3 de julho · 21 pt" logo
+       abaixo da barra, onde ninguem confunde com o percentual do mes. */
+    const herdadasDoDev = devCards.filter(ehHerdada);
+    const ptHerdados = Math.round(herdadasDoDev.reduce(
+      (t, m) => t + window.CAPACIDADE.planejados(m) / Math.max(1, splitDevs(m.dev).length), 0));
+    const mesesOrigem = [...new Set(herdadasDoDev
+      .map(m => PRAZO.mesDoPrazo(m, todayStr)).filter(Boolean))].sort();
+
     // capacity — conta apenas dias úteis do mês atual cobertos pelos cards
     const totalWD = workDays.filter(d => !d.holiday).length;
     const occupiedDays = new Set();
@@ -2223,15 +2383,23 @@ function renderGantt() {
     // Demanda planejada em cima de ausência: não deveria acontecer, então avisa.
     const conflitos = [...occupiedDays].filter(s => ausentes.has(s)).length;
 
+    /* ONDE CADA BARRA COMECA E TERMINA — calculado UMA vez, aqui.
+       O empacotamento em faixas abaixo e o desenho la embaixo faziam esta conta
+       cada um por sua vez, com o mesmo codigo copiado. Enquanto as duas eram
+       identicas ninguem via problema; a demanda herdada quebra isso na hora, e o
+       sintoma seria mudo: a barra desenhada num intervalo e reservada em outro,
+       ou seja, cartoes empilhados por cima uns dos outros sem erro nenhum. */
+    const faixas = new Map();
+    devCards.forEach(m => { faixas.set(m.id, faixaDoCard(m, workDays, todayStr)); });
+
     // track assignment (greedy lane packing)
     const sorted = [...devCards].sort((a,b) => (a.inicio||'').localeCompare(b.inicio||''));
     const tracks = []; // each track = [{start,end}]
     const cardTrack = new Map();
     sorted.forEach(m => {
-      const startDate = m.inicio || m.entrega;
-      const endDate   = m.entrega || m.inicio;
-      const sIdx = resolveWorkDayIdx(startDate, workDays, 'next');
-      const eIdx = resolveWorkDayIdx(endDate,   workDays, 'prev');
+      const f = faixas.get(m.id);
+      if (!f) return;                 // fora do mes: nao ocupa faixa nenhuma
+      const sIdx = f.sIdx, eIdx = f.eIdx;
       let placed = false;
       for (let t = 0; t < tracks.length; t++) {
         const last = tracks[t][tracks[t].length-1];
@@ -2333,6 +2501,7 @@ function renderGantt() {
       ${/* ROLAGEM DE SPRINT. Quantas demandas desta pessoa foram empurradas de uma
              semana para outra, e o NOME das que passaram de duas. Contagem sem nome
              nao da o que fazer — o numero da task e o que permite abrir e perguntar. */''}
+      ${herdadasDoDev.length ? `<span class="cap-text cap-herdada" title="Demandas que atravessaram a virada do mês sem concluir. O prazo delas NÃO foi movido — continuam combinadas para a data original e contando atraso. Estes pontos ficam FORA do planejado do mês: eles já foram planejados no mês de origem.">⇥ ${herdadasDoDev.length} de ${mesesOrigem.map(x => mesAbrev(+x.slice(5, 7) - 1)).join(', ')}${ptHerdados ? ` · ${ptHerdados} pt` : ''}</span>` : ''}
       ${rolou.total ? `<span class="cap-text cap-rolou" title="Demandas remarcadas de uma sprint para outra (avanço líquido do prazo, descontados os dias de pausa).">⤼ ${rolou.total} ${rolou.total === 1 ? 'rolou de sprint' : 'rolaram de sprint'}</span>` : ''}
       ${rolou.alerta.length ? `<span class="cap-text cap-rolou-alerta" title="Empurradas mais de ${window.CAPACIDADE.SPRINTS_PARA_ALERTA} sprints. Duas é tolerância de replanejamento; da terceira em diante a demanda está sendo adiada.">⚠ ${
         rolou.alerta.map(r => `${esc(r.codigo)} (+${r.sprints})`).join(', ')
@@ -2369,14 +2538,9 @@ function renderGantt() {
       const trackIdx = cardTrack.get(m.id) ?? 0;
       const top = trackIdx * 60 + 8;
 
-      const startDate = m.inicio || m.entrega;
-      const endDate   = m.entrega || m.inicio;
-      let sIdx = resolveWorkDayIdx(startDate, workDays, 'next');
-      let eIdx = resolveWorkDayIdx(endDate,   workDays, 'prev');
-      // clip to month bounds
-      if (sIdx >= workDays.length || eIdx < 0 || eIdx < sIdx) return; // outside month
-      sIdx = Math.max(0, sIdx);
-      eIdx = Math.min(workDays.length - 1, eIdx);
+      const faixa = faixas.get(m.id);
+      if (!faixa) return;                       // fora do mes
+      const { sIdx, eIdx, herdada } = faixa;
 
       const left = sIdx * dayW;
       const width = (eIdx - sIdx + 1) * dayW - 4;
@@ -2384,7 +2548,23 @@ function renderGantt() {
       const cardH = tema ? 54 : 36;
       const pausada = estaPausado(m);
       const dPausa = pausada ? diasPausadoAgora(m) : 0;
-      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}"
+      /* A ETIQUETA DA HERANCA. Duas informacoes num rotulo so:
+           ⇥ jul   — de que mes ela veio, que e o que o Fernando pediu marcar;
+           +6s     — quantas SPRINTS ja passaram do prazo (PRAZO.sprintsEstouradas).
+         O "+Ns" some quando e zero: uma demanda que virou o mes com 3 dias de
+         atraso nao pulou sprint nenhuma, e escrever "+0s" seria ruido. */
+      // `etapaReal` pelo mesmo motivo de `ehHerdada`: com 'atrasado', que e o que
+      // `sp` vale aqui, `diasDeAtraso` devolve null e o contador some.
+      const sprintsFora = herdada && window.PRAZO
+        ? PRAZO.sprintsEstouradas(m, etapaReal(m), todayStr) : 0;
+      const mesOrigem = herdada && window.PRAZO
+        ? PRAZO.mesDoPrazo(m, todayStr) : '';
+      const rotuloHerdada = herdada
+        ? `⇥ ${mesOrigem ? mesAbrev(+mesOrigem.slice(5, 7) - 1) : 'antes'}` +
+          (sprintsFora ? ` +${sprintsFora}s` : '')
+        : '';
+
+      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
         draggable="true"
@@ -2399,6 +2579,7 @@ function renderGantt() {
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
           ${state.melhorias.some(x => x.parent_id === m.id && x.status_planejamento !== 'concluido') ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;">⏳</span>` : ''}
           ${pausada ? `<span class="card-pausa" title="Pausada há ${dPausa} dia(s)${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${dPausa}d</span>` : ''}
+          ${herdada ? `<span class="card-herdada" title="Veio de ${mesOrigem || 'um mês anterior'} e ainda não concluiu. O prazo NÃO foi movido — ela continua combinada para ${fmtDate(m.entrega || m.inicio)}${sprintsFora ? ` e já passou ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} (semana${sprintsFora > 1 ? 's' : ''}) do combinado` : ''}. A barra ocupa do início do mês até hoje porque é o tempo que ela consumiu aqui.">${rotuloHerdada}</span>` : ''}
           ${semPontuacao(m) ? `<span class="card-sempt" title="Sem pontos do Planning Poker: a data foi combinada sem ninguém estimar o tamanho.">🃏</span>` : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>

@@ -6204,6 +6204,197 @@ sec('A etapa que o dev pode mover');
   /* AS ASSINCRONAS PRIMEIRO, e o resumo depois. Se uma delas estourar, isso e
      falha — e nao um erro engolido que deixaria a suite verde. */
   const quantas = pendentes.length;
+
+// =======================================================================
+sec('Demanda herdada do mes anterior (16 vivas sumiam do Gantt em 01/08)');
+
+/* O DEFEITO, com numero: `if (sIdx >= workDays.length || eIdx < 0) return`
+   descartava do Gantt tudo com datas fora do mes. Na base de producao, 16
+   demandas vivas e nao concluidas tinham prazo em julho — 10 delas EM ANDAMENTO
+   — e no dia 1 de agosto o quadro mostrava o dev com a agenda limpa carregando
+   dez coisas.
+
+   Estas invariantes EXECUTAM as funcoes extraidas de prazo.js. Casar o texto do
+   arquivo diria que o codigo existe, e nao que ele responde certo. */
+{
+  const P = new Function(PRZ + ' return PRAZO;').call({});
+
+  const emAndamento = (entrega, extra) =>
+    Object.assign({ entrega: entrega, status_planejamento: 'em_andamento' }, extra || {});
+
+  ok(P.herdadaDeMesAnterior(emAndamento('2026-07-16'), 'em_andamento', '2026-08', '2026-08-28'),
+     'prazo de julho aparece como herdada em agosto');
+  ok(!P.herdadaDeMesAnterior(emAndamento('2026-08-16'), 'em_andamento', '2026-08', '2026-08-28'),
+     'prazo do proprio mes NAO e herdada');
+  ok(!P.herdadaDeMesAnterior(emAndamento('2026-07-16'), 'em_andamento', '2026-07', '2026-08-28'),
+     'e no mes de origem ela tambem nao e herdada — ali ela e do mes');
+
+  /* NAO SE HERDA PARA O FUTURO. Sem esta trava, abrir janeiro de 2027 mostraria
+     as pendencias de julho de 2026 como se aquele mes ja as tivesse recebido —
+     a tela afirmando que a demanda continuara aberta la, o que ninguem sabe. */
+  ok(!P.herdadaDeMesAnterior(emAndamento('2026-07-16'), 'em_andamento', '2027-01', '2026-08-28'),
+     'mes no FUTURO nao herda nada');
+
+  /* AS ETAPAS SAO AS MESMAS DO ATRASO, e nao uma quinta lista. `validacao` fica
+     de fora porque o dev ja entregou: puxa-la para a linha dele no mes novo
+     diria que ele esta ocupado com algo que esta com o PM/PO. */
+  ['backlog', 'levantar_req', 'validacao', 'concluido', 'negada'].forEach((et) => {
+    ok(!P.herdadaDeMesAnterior(emAndamento('2026-07-16'), et, '2026-08', '2026-08-28'),
+       'etapa "' + et + '" nao e herdada para a linha do dev');
+  });
+  P.ETAPAS_QUE_CORREM.forEach((et) => {
+    ok(P.herdadaDeMesAnterior(emAndamento('2026-07-16'), et, '2026-08', '2026-08-28'),
+       'etapa "' + et + '" (a mesma lista do atraso) e herdada');
+  });
+
+  /* PAUSA ESTICA O PRAZO, E O MES DE COMPROMISSO ANDA JUNTO. Uma demanda com
+     prazo 30/07 pausada 5 dias tem prazo efetivo 04/08 — ela NAO veio de julho,
+     porque foi a propria ferramenta que empurrou a data. */
+  const pausada = emAndamento('2026-07-30', { pausado_em: '2026-07-28' });
+  ok(P.mesDoPrazo(pausada, '2026-08-28') === '2026-08',
+     'pausa que suspende o prazo por cima da virada muda o mes de compromisso',
+     P.mesDoPrazo(pausada, '2026-08-28') + ' (prazo efetivo ' +
+     P.prazoEfetivo(pausada, '2026-08-28') + ')');
+  ok(!P.herdadaDeMesAnterior(pausada, 'em_andamento', '2026-08', '2026-08-28'),
+     'e por isso ela NAO conta como vinda de julho');
+
+  /* AS SPRINTS SAO O ATRASO DIVIDIDO POR SETE, e nao uma conta nova. Duas contas
+     para a mesma pergunta e como a regra do atraso acabou em quatro versoes que
+     discordavam entre si. */
+  ok(P.sprintsEstouradas(emAndamento('2026-07-16'), 'em_andamento', '2026-08-28') === 6,
+     '43 dias de atraso = 6 sprints estouradas',
+     String(P.sprintsEstouradas(emAndamento('2026-07-16'), 'em_andamento', '2026-08-28')));
+  ok(P.sprintsEstouradas(emAndamento('2026-08-25'), 'em_andamento', '2026-08-28') === 0,
+     'tres dias de atraso NAO e sprint nenhuma — "+0s" seria ruido');
+
+  let bateram = 0, testados = 0;
+  for (let d = 0; d <= 90; d++) {
+    const dt = new Date(Date.UTC(2026, 7, 28) - d * 86400000).toISOString().slice(0, 10);
+    const m = emAndamento(dt);
+    const dias = P.diasDeAtraso(m, 'em_andamento', '2026-08-28');
+    const spr = P.sprintsEstouradas(m, 'em_andamento', '2026-08-28');
+    testados++;
+    if (spr === Math.max(0, Math.floor((dias || 0) / 7))) bateram++;
+  }
+  ok(bateram === testados, 'sprints = floor(diasDeAtraso/7) em 91 dias seguidos',
+     bateram + ' de ' + testados);
+
+  /* PAUSADA NAO ESTOURA SPRINT. `diasDeAtraso` devolve null para pausada — o
+     prazo esta suspenso, nao estourado — e o cartao nao pode ganhar "+Ns". */
+  ok(P.sprintsEstouradas(
+       emAndamento('2026-07-16', { pausado_em: '2026-07-20' }), 'em_andamento', '2026-08-28') === 0,
+     'demanda pausada nao acumula sprint estourada');
+}
+
+/* A REGUA DO CARD — uma conta so para o empacotamento em faixas e para o desenho.
+   As duas estavam escritas separadas, com o mesmo codigo copiado. Enquanto eram
+   iguais ninguem via problema; a barra herdada quebra isso, e o sintoma seria
+   MUDO — cartao desenhado num intervalo e reservado em outro, empilhado por cima
+   do vizinho, sem erro nenhum no console. */
+{
+  /* A pergunta nao e QUANTAS chamadas existem — e se alguma esta FORA de
+     `faixaDoCard`. Contar ocorrencias contava tambem a definicao da funcao, e um
+     numero magico ali quebraria no dia em que alguem so renomeasse algo. */
+  /* Tira os comentarios PRIMEIRO e extrai do texto ja limpo: extrair do
+     original e remover do limpo nao casa — o corpo extraido leva comentarios que
+     o outro texto nao tem, e o `replace` nao acha nada. */
+  const GLIMPO = semComentario(GANTT);
+  const semFaixa = GLIMPO
+    .replace(corpo(GLIMPO, 'function faixaDoCard(') || ' ', '')
+    .replace(corpo(GLIMPO, 'function resolveWorkDayIdx(') || ' ', '');
+  ok(!/resolveWorkDayIdx\(/.test(semFaixa),
+     'o intervalo do card e calculado num lugar so (faixaDoCard)',
+     (semFaixa.match(/resolveWorkDayIdx\(/g) || []).length + ' chamada(s) fora dela');
+
+  ok(/const faixa = faixas\.get\(m\.id\)/.test(GANTT) &&
+     /const f = faixas\.get\(m\.id\)/.test(GANTT),
+     'o desenho e o empacotamento leem a MESMA faixa');
+}
+
+/* O CHIP E O QUADRO RESPONDEM PELO MESMO MES. Se cada um calculasse o proprio,
+   o chip diria 16 e o quadro desenharia outra quantidade — e nao haveria como
+   saber qual dos dois esta certo. */
+ok((GANTT.match(/function mesEmExibicao\(\)/g) || []).length === 1 &&
+   (GANTT.match(/function ehHerdada\(m\)/g) || []).length === 1,
+   'mes em exibicao e "e herdada?" tem uma definicao cada');
+
+{
+  /* Extrai do texto JA LIMPO, e nao do original: o corpo tirado do arquivo com
+     comentarios nao aparece no texto sem eles, e o `replace` nao acha nada. Foi
+     assim que esta mesma invariante quebrou sozinha no minuto em que `ehHerdada`
+     ganhou um comentario dentro. */
+  const GL = semComentario(GANTT);
+  ok(!/PRAZO\.herdadaDeMesAnterior/.test(
+       GL.replace(corpo(GL, 'function ehHerdada(m)') || ' ', '')),
+     'ninguem chama a regra de heranca por fora de ehHerdada');
+}
+
+/* NAVEGAR DE MES REENCOSTA OS CHIPS. O chip "Mes passado" depende do mes que
+   esta na tela: sem isto, ir para julho mantinha a contagem de agosto e o filtro
+   esvaziava o quadro sem dizer por que. */
+['prevMonth', 'nextMonth'].forEach((f) => {
+  const c = corpo(GANTT, 'function ' + f + '(');
+  ok(!!c && /renderIndicators\(\)/.test(c) && /renderGantt\(\)/.test(c),
+     f + ' redesenha os chips junto com o quadro');
+});
+
+/* A COR VIVE NOS DOIS TEMAS. O rosa choque puro (#FF1493) da 3.31:1 sobre a
+   superficie clara: ele fica na BORDA, e o texto escurece. Sem o par no
+   tema.css, o chip ficaria com fundo escuro e texto claro no tema claro — que e
+   exatamente o defeito que o proprio arquivo registra sobre `--card`. */
+['--pink-bg', '--pink-bd', '--pink-tx'].forEach((t) => {
+  ok(TEMA.indexOf(t + ':') >= 0, 'tema claro define ' + t);
+  ok(GANTT.indexOf(t + ':') >= 0, 'tema escuro define ' + t);
+});
+
+/* E A COR NAO E O UNICO SINAL. Quem nao distingue o rosa do vermelho de
+   atrasado precisa de outra pista: a borda TRACEJADA e a etiqueta com o mes. */
+ok(/\.gantt-card\.gcard-herdada\s*\{[^}]*dashed/.test(GANTT),
+   'a barra herdada tem borda tracejada, e nao so cor');
+
+ok(/class="card-herdada"/.test(GANTT) && GANTT.indexOf('\u21e5') >= 0,
+   'e uma etiqueta escrita com o mes de origem');
+
+
+/* A ARMADILHA DO `spEfetivo` — a que fez este recurso subir morto.
+ *
+ * `spEfetivo` devolve 'atrasado' para qualquer demanda vencida, e TODA herdada
+ * esta vencida por definicao: o prazo dela ficou no mes passado. Perguntar a
+ * etapa por ali fazia `herdadaDeMesAnterior` receber 'atrasado', que nao esta em
+ * `ETAPAS_QUE_CORREM`, e responder false para as 16. Nenhum erro, nenhum aviso:
+ * o chip mostrava zero e o quadro continuava escondendo tudo.
+ *
+ * As duas travas: a etapa vem de `etapaReal`, e ela responde 'em_andamento' para
+ * uma demanda vencida — que e o caso real. */
+{
+  const P = new Function(PRZ + ' return PRAZO;').call({});
+  const vencida = { entrega: '2026-07-16', status_planejamento: 'em_andamento' };
+
+  ok(P.herdadaDeMesAnterior(vencida, 'em_andamento', '2026-08', '2026-08-28'),
+     'demanda VENCIDA continua sendo herdada — e o caso normal, nao a excecao');
+  ok(!P.herdadaDeMesAnterior(vencida, 'atrasado', '2026-08', '2026-08-28'),
+     "e 'atrasado' nao e etapa: se chegar aqui, a resposta e false para todas");
+
+  const usoDoEfetivo = corpo(semComentario(GANTT), 'function ehHerdada(m)') || '';
+  ok(!/spEfetivo\(/.test(usoDoEfetivo),
+     'ehHerdada NAO pergunta a etapa por spEfetivo',
+     usoDoEfetivo.replace(/\s+/g, ' ').slice(0, 96));
+  ok(/etapaReal\(/.test(usoDoEfetivo),
+     'ehHerdada pergunta por etapaReal, que nao vira "atrasado"');
+
+  /* O contador de sprints do cartao cai na MESMA armadilha: com 'atrasado',
+     `diasDeAtraso` devolve null e o "+Ns" some do cartao em silencio. */
+  ok(/sprintsEstouradas\(m, etapaReal\(m\)/.test(semComentario(GANTT)),
+     'o contador de sprints do cartao tambem usa etapaReal');
+
+  /* E `etapaReal` tem de ser a UNICA a normalizar o 'deploy'. Duas normalizacoes
+     sao duas listas de etapa esperando divergir. */
+  const gl = semComentario(GANTT);
+  ok((gl.match(/=== 'deploy'/g) || []).length === 1,
+     "a normalizacao do 'deploy' mora num lugar so",
+     (gl.match(/=== 'deploy'/g) || []).length + ' ocorrencia(s)');
+}
+
   try {
     await Promise.all(pendentes);
   } catch (e) {

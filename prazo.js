@@ -194,6 +194,66 @@
     return fim > pz;
   }
 
+  /** O MES DE COMPROMISSO da demanda: 'YYYY-MM' do prazo EFETIVO.
+   *
+   *  Efetivo, e nao a data crua: uma demanda pausada em julho tem o prazo
+   *  esticado pelos dias parados, e se a esticada a levou para agosto entao o
+   *  compromisso dela E de agosto. Usar `entrega` cru marcaria como atrasada de
+   *  julho uma demanda cujo prazo a propria ferramenta empurrou. */
+  function mesDoPrazo(m, ref) {
+    var pz = prazoEfetivo(m, ref);
+    return ehData(pz) ? pz.slice(0, 7) : '';
+  }
+
+  /** VEIO DE UM MES ANTERIOR? — a pergunta do Gantt na virada do mes.
+   *
+   *  O QUE ISTO NAO FAZ: nao move a `entrega`. A demanda continua com o prazo
+   *  que foi combinado, e continua atrasada pelo tempo que esta. Migrar o DADO
+   *  faria a ferramenta empurrar o compromisso sozinha — o `historico` encheria
+   *  de mudancas que ninguem fez, `rolagemDeSprint` passaria a contar pulo onde
+   *  houve so passagem de mes, e uma demanda parada ha 43 dias apareceria "no
+   *  prazo" no mes novo. Migra a VISTA, e o prazo fica onde esta.
+   *
+   *  AS MESMAS ETAPAS DO ATRASO, e nao uma quinta lista. `backlog` e
+   *  `levantar_req` nao prometeram nada, e `validacao` ja saiu da mao do dev —
+   *  puxa-la para a linha dele no mes novo diria que ele esta ocupado com uma
+   *  coisa que esta com o PM/PO. E a mesma fronteira do chip "Atrasado" ao lado.
+   *
+   *  `anoMes` e o mes SENDO OLHADO ('YYYY-MM'), e nao o mes corrente: quem abre
+   *  agosto em setembro tem de ver o que agosto herdou de julho. */
+  function herdadaDeMesAnterior(m, etapa, anoMes, hoje) {
+    if (!m || m.mesclado_em || m.oculto) return false;
+    if (!ETAPAS_QUE_CORREM.includes(etapa)) return false;
+    var mes = mesDoPrazo(m, hoje);
+    if (!mes || !anoMes) return false;
+    /* NAO SE HERDA PARA O FUTURO. Abrir janeiro de 2027 nao pode mostrar o que
+       julho de 2026 deixou pendente: aquele mes nao herdou nada ainda: seria a
+       tela afirmando que a demanda continuara aberta la, e isso ninguem sabe. */
+    var mesDeHoje = ehData(iso(hoje)) ? iso(hoje).slice(0, 7) : '';
+    if (mesDeHoje && anoMes > mesDeHoje) return false;
+    return mes < anoMes;
+  }
+
+  /** QUANTAS SPRINTS O PRAZO JA ESTOUROU — semanas inteiras passadas do combinado.
+   *
+   *  E `diasDeAtraso` dividido por sete, e nao uma conta nova: assim o numero do
+   *  cartao e o mesmo numero do badge de atraso, e os dois de pausa ja vem
+   *  descontados. Duas contas separadas para a mesma pergunta e como a regra do
+   *  atraso acabou em quatro versoes que discordavam.
+   *
+   *  NAO CONFUNDIR COM `CAPACIDADE.rolagemDeSprint`, que mede outra coisa: la e
+   *  quantas sprints o prazo foi REMARCADO (alguem mexeu na data), aqui e
+   *  quantas ja passaram sem entregar (ninguem mexeu em nada). Uma demanda pode
+   *  ter as duas, e sao conversas diferentes — "foi replanejada" e "esta parada".
+   *
+   *  Semana de sete dias corridos. Meia semana nao e sprint: 6 dias de atraso
+   *  devolve 0, e o badge de dias ao lado ja diz que ha atraso. */
+  function sprintsEstouradas(m, etapa, hoje) {
+    var dias = diasDeAtraso(m, etapa, hoje);
+    if (dias == null || dias <= 0) return 0;
+    return Math.floor(dias / 7);
+  }
+
   /** O dia de hoje em ISO, no fuso de quem esta olhando. Uma funcao so para as
    *  quatro telas nao escreverem quatro versoes de "hoje". */
   function hojeISO() {
@@ -212,6 +272,9 @@
     diasDeAtraso: diasDeAtraso,
     estaAtrasada: estaAtrasada,
     atrasouNaEntrega: atrasouNaEntrega,
+    mesDoPrazo: mesDoPrazo,
+    herdadaDeMesAnterior: herdadaDeMesAnterior,
+    sprintsEstouradas: sprintsEstouradas,
     hojeISO: hojeISO,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = raiz.PRAZO;
