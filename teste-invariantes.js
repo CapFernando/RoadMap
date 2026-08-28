@@ -6235,17 +6235,54 @@ sec('Demanda herdada do mes anterior (16 vivas sumiam do Gantt em 01/08)');
   ok(!P.herdadaDeMesAnterior(emAndamento('2026-07-16'), 'em_andamento', '2027-01', '2026-08-28'),
      'mes no FUTURO nao herda nada');
 
-  /* AS ETAPAS SAO AS MESMAS DO ATRASO, e nao uma quinta lista. `validacao` fica
-     de fora porque o dev ja entregou: puxa-la para a linha dele no mes novo
-     diria que ele esta ocupado com algo que esta com o PM/PO. */
-  ['backlog', 'levantar_req', 'validacao', 'concluido', 'negada'].forEach((et) => {
+  /* DUAS PERGUNTAS, DUAS LISTAS — e a diferenca entre elas e `validacao`.
+       "o atraso corre?"          -> nao, o dev ja entregou   (ETAPAS_QUE_CORREM)
+       "atravessou sem concluir?" -> sim, continua aberta     (ETAPAS_QUE_HERDAM)
+     `backlog` e `levantar_req` ficam de fora das duas: nada foi prometido ali. */
+  ['backlog', 'levantar_req', 'concluido', 'negada'].forEach((et) => {
     ok(!P.herdadaDeMesAnterior(emAndamento('2026-07-16'), et, '2026-08', '2026-08-28'),
-       'etapa "' + et + '" nao e herdada para a linha do dev');
+       'etapa "' + et + '" nao atravessa a virada');
   });
-  P.ETAPAS_QUE_CORREM.forEach((et) => {
+  P.ETAPAS_QUE_HERDAM.forEach((et) => {
     ok(P.herdadaDeMesAnterior(emAndamento('2026-07-16'), et, '2026-08', '2026-08-28'),
-       'etapa "' + et + '" (a mesma lista do atraso) e herdada');
+       'etapa "' + et + '" atravessa a virada');
   });
+  ok(P.ETAPAS_QUE_HERDAM.includes('validacao'),
+     'validacao ATRAVESSA a virada: ela continua aberta, esperando o PM/PO');
+
+  /* E A LISTA DO ATRASO NAO FOI JUNTO. Este e o guarda do defeito AX-165:
+     prazo 07/08, o dev entregou 03/08 — QUATRO DIAS ANTES —, a validacao saiu
+     12/08, e o relatorio mostrava 5 dias de atraso para quem entregou adiantado.
+     Eram 10 demandas e 20 dias cobrados de quem cumpriu o combinado. Acrescentar
+     `validacao` a `ETAPAS_QUE_CORREM` para fazer a heranca funcionar traria tudo
+     isso de volta — por isso a heranca ganhou lista propria. */
+  ok(!P.ETAPAS_QUE_CORREM.includes('validacao'),
+     'o ATRASO continua parando na entrega do dev (AX-165)');
+  ok(P.ETAPAS_QUE_HERDAM.length === P.ETAPAS_QUE_CORREM.length + 1 &&
+     P.ETAPAS_QUE_CORREM.every((e) => P.ETAPAS_QUE_HERDAM.includes(e)),
+     'a lista da heranca e a do atraso mais validacao, e nada alem disso',
+     P.ETAPAS_QUE_HERDAM.join(', '));
+
+  const ax165 = { entrega: '2026-08-07', status_planejamento: 'validacao',
+                  entregue_em: '2026-08-03' };
+  ok(P.diasDeAtraso(ax165, 'validacao', '2026-08-28') === 0,
+     'AX-165: entregue quatro dias ANTES do prazo continua com zero de atraso',
+     String(P.diasDeAtraso(ax165, 'validacao', '2026-08-28')));
+  ok(P.estaAtrasada(ax165, 'validacao', '2026-08-28') === false,
+     'e ela nao aparece como atrasada, com a validacao demorando ou nao');
+
+  /* O CONTADOR DE SPRINTS EM VALIDACAO CONGELA NA ENTREGA, porque `diasDeAtraso`
+     congela. Uma demanda entregue no prazo e presa na validacao desde julho
+     mostra "⇥ jul" SEM numero — e a verdade: o prazo do dev foi cumprido, e quem
+     esta devendo e a validacao. O cartao diz isso por escrito no title. */
+  ok(P.sprintsEstouradas(
+       { entrega: '2026-07-16', status_planejamento: 'validacao',
+         entregue_em: '2026-07-15' }, 'validacao', '2026-08-28') === 0,
+     'entregou no prazo e ficou em validacao: nenhuma sprint estourada');
+  ok(P.sprintsEstouradas(
+       { entrega: '2026-07-16', status_planejamento: 'validacao',
+         entregue_em: '2026-07-30' }, 'validacao', '2026-08-28') === 2,
+     'entregou 14 dias depois: duas sprints, congeladas na entrega');
 
   /* PAUSA ESTICA O PRAZO, E O MES DE COMPROMISSO ANDA JUNTO. Uma demanda com
      prazo 30/07 pausada 5 dias tem prazo efetivo 04/08 — ela NAO veio de julho,
@@ -6393,6 +6430,18 @@ ok(/class="card-herdada"/.test(GANTT) && GANTT.indexOf('\u21e5') >= 0,
   ok((gl.match(/=== 'deploy'/g) || []).length === 1,
      "a normalizacao do 'deploy' mora num lugar so",
      (gl.match(/=== 'deploy'/g) || []).length + ' ocorrencia(s)');
+}
+
+
+/* O CARTAO EM VALIDACAO DIZ QUEM ESTA DEVENDO. Sem esta frase, o cartao herdado
+   sem numero de sprint pareceria contador quebrado — quando na verdade significa
+   que o dev cumpriu o prazo e a validacao e que esta parada. */
+{
+  const gl = semComentario(GANTT);
+  ok(/etapaReal\(m\) === 'validacao'/.test(gl),
+     'o cartao sabe quando a herdada esta em validacao');
+  ok(/O DEV JÁ ENTREGOU/.test(GANTT),
+     'e o texto do cartao diz que o dev ja entregou, em vez de deixar no ar');
 }
 
   try {

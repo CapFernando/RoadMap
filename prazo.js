@@ -37,6 +37,20 @@
   // e nao pelo dia de hoje nem pela data da validacao.
   var ETAPAS_APOS_O_DEV = ['validacao', 'concluido'];
 
+  /* AS ETAPAS QUE ATRAVESSAM A VIRADA DO MES — e uma pergunta DIFERENTE da do
+     atraso, e por isso uma lista propria.
+       "o atraso corre?"        -> nao, em validacao o dev ja entregou
+       "atravessou sem concluir?" -> sim, ela continua aberta
+     E DERIVADA de `ETAPAS_QUE_CORREM`, e nao escrita a mao: a parte comum das
+     duas tem de andar junta. So a validacao e acrescentada, e so aqui.
+
+     ACRESCENTAR `validacao` A LISTA DO ATRASO SERIA O DEFEITO AX-165 DE VOLTA:
+     prazo 07/08, dev entregou 03/08 — quatro dias ANTES —, validacao saiu 12/08,
+     e o relatorio mostrava 5 dias de atraso para quem entregou adiantado. Eram 10
+     demandas e 20 dias cobrados de quem cumpriu o combinado. `ETAPAS_QUE_CORREM`
+     nao muda. */
+  var ETAPAS_QUE_HERDAM = ETAPAS_QUE_CORREM.concat(['validacao']);
+
   function iso(v) {
     return String(v == null ? '' : v).slice(0, 10);
   }
@@ -214,16 +228,20 @@
    *  houve so passagem de mes, e uma demanda parada ha 43 dias apareceria "no
    *  prazo" no mes novo. Migra a VISTA, e o prazo fica onde esta.
    *
-   *  AS MESMAS ETAPAS DO ATRASO, e nao uma quinta lista. `backlog` e
-   *  `levantar_req` nao prometeram nada, e `validacao` ja saiu da mao do dev —
-   *  puxa-la para a linha dele no mes novo diria que ele esta ocupado com uma
-   *  coisa que esta com o PM/PO. E a mesma fronteira do chip "Atrasado" ao lado.
+   *  AS ETAPAS SAO AS DE `ETAPAS_QUE_HERDAM`: as tres do atraso mais `validacao`.
+   *  `backlog` e `levantar_req` ficam de fora porque nada foi prometido ali.
+   *
+   *  `validacao` ENTRA, e a leitura dela e outra: o dev ja entregou, entao a
+   *  barra dele no mes novo NAO quer dizer que ele esta trabalhando naquilo —
+   *  quer dizer que a demanda de julho continua aberta, esperando o PM/PO. E a
+   *  pergunta que o quadro passa a responder e "o que atravessou a virada", e nao
+   *  "com o que o dev esta ocupado".
    *
    *  `anoMes` e o mes SENDO OLHADO ('YYYY-MM'), e nao o mes corrente: quem abre
    *  agosto em setembro tem de ver o que agosto herdou de julho. */
   function herdadaDeMesAnterior(m, etapa, anoMes, hoje) {
     if (!m || m.mesclado_em || m.oculto) return false;
-    if (!ETAPAS_QUE_CORREM.includes(etapa)) return false;
+    if (!ETAPAS_QUE_HERDAM.includes(etapa)) return false;
     var mes = mesDoPrazo(m, hoje);
     if (!mes || !anoMes) return false;
     /* NAO SE HERDA PARA O FUTURO. Abrir janeiro de 2027 nao pode mostrar o que
@@ -272,6 +290,7 @@
     diasDeAtraso: diasDeAtraso,
     estaAtrasada: estaAtrasada,
     atrasouNaEntrega: atrasouNaEntrega,
+    ETAPAS_QUE_HERDAM: ETAPAS_QUE_HERDAM,
     mesDoPrazo: mesDoPrazo,
     herdadaDeMesAnterior: herdadaDeMesAnterior,
     sprintsEstouradas: sprintsEstouradas,

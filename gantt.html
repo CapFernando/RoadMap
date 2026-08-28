@@ -657,7 +657,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=427bab8a2a">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=902e1a4b11"></script>
+<script src="prazo.js?v=1c999ccf4d"></script>
 <script src="capacidade.js?v=3769a13468"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -2557,6 +2557,13 @@ function renderGantt() {
       // `sp` vale aqui, `diasDeAtraso` devolve null e o contador some.
       const sprintsFora = herdada && window.PRAZO
         ? PRAZO.sprintsEstouradas(m, etapaReal(m), todayStr) : 0;
+      /* EM VALIDACAO, QUEM ESTA DEVENDO E OUTRO. O dev ja entregou, e o "+Ns"
+         ali fica CONGELADO no dia da entrega — ou seja, "entregou N sprints
+         depois do combinado", e nao "esta parada ha N semanas". Uma demanda
+         entregue no prazo e presa na validacao desde julho mostra "⇥ jul" sem
+         numero nenhum, que e a verdade: o prazo do dev foi cumprido.
+         Sem esta frase, o cartao sem numero pareceria contador quebrado. */
+      const emValidacao = herdada && etapaReal(m) === 'validacao';
       const mesOrigem = herdada && window.PRAZO
         ? PRAZO.mesDoPrazo(m, todayStr) : '';
       const rotuloHerdada = herdada
@@ -2579,7 +2586,7 @@ function renderGantt() {
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
           ${state.melhorias.some(x => x.parent_id === m.id && x.status_planejamento !== 'concluido') ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;">⏳</span>` : ''}
           ${pausada ? `<span class="card-pausa" title="Pausada há ${dPausa} dia(s)${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${dPausa}d</span>` : ''}
-          ${herdada ? `<span class="card-herdada" title="Veio de ${mesOrigem || 'um mês anterior'} e ainda não concluiu. O prazo NÃO foi movido — ela continua combinada para ${fmtDate(m.entrega || m.inicio)}${sprintsFora ? ` e já passou ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} (semana${sprintsFora > 1 ? 's' : ''}) do combinado` : ''}. A barra ocupa do início do mês até hoje porque é o tempo que ela consumiu aqui.">${rotuloHerdada}</span>` : ''}
+          ${herdada ? `<span class="card-herdada" title="Veio de ${mesOrigem || 'um mês anterior'} e ainda não concluiu. O prazo NÃO foi movido — ela continua combinada para ${fmtDate(m.entrega || m.inicio)}${sprintsFora ? ` e ${emValidacao ? `foi entregue ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} depois do combinado` : `já passou ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} (semana${sprintsFora > 1 ? 's' : ''}) do combinado`}` : ''}.${emValidacao ? ` O DEV JÁ ENTREGOU${m.entregue_em ? ' em ' + fmtDate(m.entregue_em) : ''} — o que falta é a validação, e por isso o contador de sprints parou na entrega.` : ''} A barra ocupa do início do mês até hoje porque é o tempo que ela consumiu aqui.">${rotuloHerdada}</span>` : ''}
           ${semPontuacao(m) ? `<span class="card-sempt" title="Sem pontos do Planning Poker: a data foi combinada sem ninguém estimar o tamanho.">🃏</span>` : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>
