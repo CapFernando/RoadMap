@@ -65,7 +65,9 @@ const CAPA = fs.readFileSync('capa-tecnologia.js', 'utf8');
 const PIPE = fs.readFileSync('pipelines.js', 'utf8');
 const PRZ = fs.readFileSync('prazo.js', 'utf8');
 const CAPJS = fs.readFileSync('capacidade.js', 'utf8');
+const CAPI = require('./capacidade.js');
 const BUSCAJS = fs.readFileSync('busca-demanda.js', 'utf8');
+const CATALOGO = fs.readFileSync('catalogo.js', 'utf8');
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -6599,6 +6601,110 @@ ok(/leitura/.test(DEV) && /modal-ver/.test(DEV),
   ok(!/<(input|textarea|select)/.test(bloco),
      'e ele NAO tem campo de edicao — nao ha o que esconder',
      (bloco.match(/<(input|textarea|select)/g) || []).join(', '));
+}
+
+
+// =======================================================================
+sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
+
+/* A lista vinha ordenada por DATA, e a leitura que ela produzia era a errada: o
+   primeiro card do "AXCred - Cadastro" era um de 3 pontos e o de 55 aparecia la
+   embaixo, depois de rolar. O cabecalho ja anuncia o total do grupo ("48 · 472
+   pt"), entao a lista tem de comecar pelo que forma esse total. */
+{
+  const CAT = new Function('window', CATALOGO + ' return window;')({});
+  const F = ['relRaizNome', 'relRaizDe', 'relAgrupaPorTema']
+    .map((f) => corpo(ADMIN, 'function ' + f + '(')).join('\n');
+  const temas = [{ id: 't1', nome: 'AXCred - Cadastro' },
+                 { id: 't2', nome: 'AXCred - Cadastro - Reanalise' },
+                 { id: 't3', nome: 'AXCred - Cobranca' }];
+  const { relAgrupaPorTema } = new Function(
+    'state', 'window',
+    F + ' return { relAgrupaPorTema };',
+  )({ temas }, Object.assign({ CAPACIDADE: CAPI }, CAT));
+
+  const d = (codigo, tema_id, pontos, entregue_em) =>
+    ({ id: codigo, codigo: codigo, titulo: codigo, tema_id: tema_id,
+       poker_pontos: pontos, entregue_em: entregue_em, entrega: entregue_em });
+
+  const lista = [
+    d('AX-001', 't1', 3, '2026-08-05'),
+    d('AX-002', 't1', 55, '2026-08-27'),
+    d('AX-003', 't1', 21, '2026-08-26'),
+    // Mesma RAIZ ("AXCred - Cadastro"), sub-tema diferente: entra no mesmo grupo.
+    d('AX-004', 't2', 34, '2026-08-10'),
+    d('AX-005', 't3', 8, '2026-08-01'),
+  ];
+
+  const grupos = relAgrupaPorTema(lista);
+  const cadastro = grupos.find((g) => /cadastro/i.test(g.nome));
+
+  ok(!!cadastro && cadastro.itens.length === 4,
+     'o grupo junta o tema e os sub-temas dele',
+     cadastro ? cadastro.itens.length + ' itens' : 'grupo nao encontrado');
+
+  ok(!!cadastro && cadastro.itens.map((m) => m.poker_pontos).join(',') === '55,34,21,3',
+     'e a ordem dentro do grupo e a da PONTUACAO, maior primeiro',
+     cadastro ? cadastro.itens.map((m) => m.poker_pontos).join(',') : '');
+
+  /* SEM PONTUACAO VALE ZERO E VAI PARA O FIM. Sao muitas na base — 36 das
+     entregas de agosto —, e joga-las para cima faria a lista comecar pelo que
+     nao se sabe medir. */
+  {
+    const comZero = relAgrupaPorTema([
+      d('AX-010', 't1', null, '2026-08-01'),
+      d('AX-011', 't1', 13, '2026-08-02'),
+      d('AX-012', 't1', 0, '2026-08-03'),
+    ]).find((g) => /cadastro/i.test(g.nome));
+    ok(!!comZero && comZero.itens[0].codigo === 'AX-011',
+       'a pontuada vem antes das sem pontuacao',
+       comZero ? comZero.itens.map((m) => m.codigo).join(',') : '');
+  }
+
+  /* O EMPATE E RESOLVIDO PELA DATA, e nao pelo acaso. Sem desempate, a ordem de
+     duas de mesma pontuacao dependeria da ordem de chegada — e ela muda entre
+     carregamentos, fazendo a lista dancar sozinha na tela de quem apresenta. */
+  {
+    const emp = relAgrupaPorTema([
+      d('AX-021', 't1', 21, '2026-08-20'),
+      d('AX-022', 't1', 21, '2026-08-03'),
+      d('AX-023', 't1', 21, '2026-08-11'),
+    ]).find((g) => /cadastro/i.test(g.nome));
+    ok(!!emp && emp.itens.map((m) => m.codigo).join(',') === 'AX-022,AX-023,AX-021',
+       'no empate, a data de saida decide — a mais antiga primeiro',
+       emp ? emp.itens.map((m) => m.codigo).join(',') : '');
+  }
+
+  /* ORDENAR NAO PODE PERDER NEM DUPLICAR. O cabecalho soma os itens do grupo; se
+     a ordenacao mexesse na lista, o total anunciado deixaria de bater com o que
+     esta embaixo dele — e ninguem confere soma de cabeca numa reuniao. */
+  {
+    const antes = lista.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+    const depois = grupos.reduce(
+      (t, g) => t + g.itens.reduce((x, m) => x + (Number(m.poker_pontos) || 0), 0), 0);
+    ok(antes === depois, 'a soma dos grupos continua igual a da lista inteira',
+       antes + ' pt contra ' + depois + ' pt');
+    const qtd = grupos.reduce((t, g) => t + g.itens.length, 0);
+    ok(qtd === lista.length, 'e a contagem tambem', qtd + ' de ' + lista.length);
+  }
+
+  /* OS GRUPOS continuam ordenados por QUANTIDADE. E a lista de sistemas, e a
+     pergunta ali e "onde saiu mais coisa" — nao "qual sistema teve o maior card". */
+  ok(grupos[0] && /cadastro/i.test(grupos[0].nome),
+     'os grupos seguem ordenados por quantidade de itens',
+     grupos.map((g) => g.nome + '(' + g.itens.length + ')').join(' '));
+}
+
+/* O CRITERIO DA ORDEM E O MESMO DO CABECALHO. Se o card fosse ordenado por uma
+   conta e somado por outra, a maior entrega da lista poderia nao ser a primeira
+   e ninguem saberia dizer por que. */
+{
+  const c = corpo(semComentario(ADMIN), 'function relAgrupaPorTema(');
+  ok(/poker_pontos/.test(c),
+     'a ordenacao usa poker_pontos, o mesmo campo que o cabecalho soma');
+  const cab = semComentario(ADMIN);
+  ok(/const pts = g\.itens\.reduce\(\(t, m\) => t \+ \(Number\(m\.poker_pontos\) \|\| 0\), 0\);/.test(cab),
+     'e o cabecalho continua somando esse mesmo campo');
 }
 
   try {

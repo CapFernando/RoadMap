@@ -8079,6 +8079,32 @@ function relRenderOQueVem() {
  *  A ordem é por VOLUME, e não pela ordem do cadastro: agrupado, o cadastro deixa
  *  de definir uma ordem útil (a raiz não existe como registro), e quem lê um
  *  relatório procura primeiro o maior. */
+/** DENTRO DO TEMA, A MAIOR PONTUACAO PRIMEIRO.
+ *
+ *  A lista vinha ordenada por DATA, e a leitura que ela produzia era a errada: o
+ *  primeiro card do "AXCred - Cadastro" era um de 3 pontos e o de 55 aparecia la
+ *  embaixo, depois de rolar. Quem abre o bloco na reuniao quer ver o que pesou —
+ *  e o cabecalho ja anuncia o total ("15 · 206 pt"), entao a lista tem de comecar
+ *  pelo que forma esse total.
+ *
+ *  O CRITERIO E O MESMO DO CABECALHO (`poker_pontos`), e nao um parecido: se o
+ *  card fosse ordenado por uma conta e somado por outra, a maior entrega da lista
+ *  poderia nao ser a primeira e ninguem saberia dizer por que.
+ *
+ *  E O DESEMPATE PRESERVA A ORDEM ANTIGA. Entre dois de mesma pontuacao — e entre
+ *  as SEM pontuacao, que sao muitas e valem zero — vale a data de entrega, que
+ *  era como a lista se ordenava antes. Sem isso, as sem ponto ficariam numa ordem
+ *  arbitraria que muda a cada carregamento.
+ *
+ *  Os GRUPOS continuam ordenados por quantidade: e a lista de sistemas, e a
+ *  pergunta ali e "onde saiu mais coisa".
+ *
+ *  O `[...itens]` E PRECAUCAO, E NAO PROTECAO — dito para ninguem ler como se
+ *  fosse. O array e montado logo acima, nesta mesma funcao, entao ordenar no
+ *  lugar nao alcancaria a lista de quem chamou: a sabotagem que troca o spread
+ *  por `itens.sort()` passa por todos os testes, e passa com razao. Ele fica
+ *  porque o dia em que esta funcao receber grupos prontos de fora, a copia e o
+ *  que impede a ordenacao de vazar — mas hoje nao ha o que testar nela. */
 function relAgrupaPorTema(lista) {
   const grupos = new Map();
   lista.forEach(m => {
@@ -8086,8 +8112,16 @@ function relAgrupaPorTema(lista) {
     if (!grupos.has(k)) grupos.set(k, []);
     grupos.get(k).push(m);
   });
+  const pts = m => Number(m.poker_pontos) || 0;
+  const saida = m => (window.CAPACIDADE ? CAPACIDADE.diaDaEntrega(m) : '') || m.entrega || '';
   return [...grupos.entries()]
-    .map(([nome, itens]) => ({ nome, itens }))
+    .map(([nome, itens]) => ({
+      nome,
+      itens: [...itens].sort((a, b) =>
+        pts(b) - pts(a) ||
+        String(saida(a)).localeCompare(String(saida(b))) ||
+        String(a.codigo || '').localeCompare(String(b.codigo || ''))),
+    }))
     .sort((a, b) => b.itens.length - a.itens.length ||
                     String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
 }
