@@ -208,14 +208,54 @@
     return fim > pz;
   }
 
-  /** O MES DE COMPROMISSO da demanda: 'YYYY-MM' do prazo EFETIVO.
+  /** O MES DE COMPROMISSO da demanda: 'YYYY-MM' da `entrega` GRAVADA.
    *
-   *  Efetivo, e nao a data crua: uma demanda pausada em julho tem o prazo
-   *  esticado pelos dias parados, e se a esticada a levou para agosto entao o
-   *  compromisso dela E de agosto. Usar `entrega` cru marcaria como atrasada de
-   *  julho uma demanda cujo prazo a propria ferramenta empurrou. */
-  function mesDoPrazo(m, ref) {
-    var pz = prazoEfetivo(m, ref);
+   *  ─────────────────────────────────────────────────────────────────────────
+   *  ISTO USAVA O PRAZO EFETIVO, E ESCONDIA DEMANDA PAUSADA NA VIRADA DO MES.
+   *
+   *  O raciocinio antigo era: a pausa estica o prazo, e se a esticada levou a
+   *  demanda para agosto, entao o compromisso dela e de agosto. Parece certo, e
+   *  quebra por um detalhe: numa demanda AINDA PAUSADA, `prazoEfetivo` e
+   *  `entrega + (hoje - pausado_em)`. Ela anda um dia por dia. O mes dela e,
+   *  portanto, SEMPRE o mes corrente — hoje, no mes que vem e em junho do ano
+   *  que vem.
+   *
+   *  Com isso, `herdadaDeMesAnterior` respondia `false` para ela (o mes dela
+   *  "e" o mes da tela), e o Gantt caia no calculo normal de faixa — que usa a
+   *  `entrega` CRUA, de agosto, fora de setembro. As duas metades discordavam, e
+   *  o card nao ia para lugar nenhum: DESAPARECIA do quadro.
+   *
+   *  Medido no dado de producao de 01/09/2026, no quadro de setembro: das 9
+   *  pausadas com prazo, 6 apareciam marcadas e TRES SUMIAM — AX-019, AX-199 e
+   *  AX-210, todas prometidas para agosto. E o AX-084 aparecia com o rotulo
+   *  errado: entrega 31/07, e o card dizia "⇥ ago", porque o efetivo dele ja
+   *  tinha passado para agosto.
+   *
+   *  Pior que sumir: a marcacao PISCAVA. O AX-084 (pausado 4 dias depois do
+   *  prazo) e herdado nos primeiros dias do mes e deixa de ser no meio dele —
+   *  01/09 sim, 15/09 nao, 01/10 sim, 15/01 nao. Mesma demanda, ninguem mexeu
+   *  em nada.
+   *
+   *  A CORRECAO E SEPARAR DUAS PERGUNTAS QUE NAO SAO A MESMA:
+   *
+   *    "quem esta devendo tempo?"      -> prazo EFETIVO. A pausa suspende o
+   *                                       relogio, e `diasDeAtraso` continua
+   *                                       usando o efetivo. Isto nao mudou.
+   *    "de que mes e este compromisso?" -> a `entrega` GRAVADA. A pausa para o
+   *                                       relogio; ela nao reescreve o mes em
+   *                                       que a coisa foi prometida.
+   *
+   *  E NAO HA PERDA NO CASO DA RETOMADA, que era a preocupacao original:
+   *  `aplicarRetomada` SOMA os dias parados na propria `entrega` e limpa o
+   *  `pausado_em`. Depois de retomada, a data gravada JA inclui a extensao — ler
+   *  a data crua devolve o prazo esticado, que e o que se queria. A divergencia
+   *  existia so na janela em que a demanda esta pausada AGORA.
+   *
+   *  Para demanda sem pausa nenhuma as duas contas dao o mesmo resultado
+   *  (`diasPausados` e zero), entao esta mudanca so alcanca as pausadas.
+   *  ───────────────────────────────────────────────────────────────────────── */
+  function mesDoPrazo(m) {
+    var pz = iso((m || {}).entrega);
     return ehData(pz) ? pz.slice(0, 7) : '';
   }
 
@@ -237,12 +277,23 @@
    *  pergunta que o quadro passa a responder e "o que atravessou a virada", e nao
    *  "com o que o dev esta ocupado".
    *
+   *  A PAUSADA HERDA IGUAL, e isso e proposital. O prazo dela esta suspenso — e
+   *  ela nao aparece atrasada, nem conta sprint estourada —, mas suspenso nao e
+   *  concluido: a demanda prometida para agosto e que segue pausada em setembro
+   *  ATRAVESSOU a virada, e o quadro tem de dizer isso. Enquanto esta funcao
+   *  perguntava pelo prazo efetivo, tres pausadas de producao desapareciam do
+   *  quadro do mes novo em vez de aparecerem marcadas — ver `mesDoPrazo`.
+   *
+   *  A pausa continua visivel por conta propria: o card pausado tem hachura.
+   *  Uma barra hachurada com "⇥ ago" le-se "veio de agosto e esta parada", que e
+   *  a frase certa.
+   *
    *  `anoMes` e o mes SENDO OLHADO ('YYYY-MM'), e nao o mes corrente: quem abre
    *  agosto em setembro tem de ver o que agosto herdou de julho. */
   function herdadaDeMesAnterior(m, etapa, anoMes, hoje) {
     if (!m || m.mesclado_em || m.oculto) return false;
     if (!ETAPAS_QUE_HERDAM.includes(etapa)) return false;
-    var mes = mesDoPrazo(m, hoje);
+    var mes = mesDoPrazo(m);
     if (!mes || !anoMes) return false;
     /* NAO SE HERDA PARA O FUTURO. Abrir janeiro de 2027 nao pode mostrar o que
        julho de 2026 deixou pendente: aquele mes nao herdou nada ainda: seria a

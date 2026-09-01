@@ -6287,16 +6287,103 @@ sec('Demanda herdada do mes anterior (16 vivas sumiam do Gantt em 01/08)');
          entregue_em: '2026-07-30' }, 'validacao', '2026-08-28') === 2,
      'entregou 14 dias depois: duas sprints, congeladas na entrega');
 
-  /* PAUSA ESTICA O PRAZO, E O MES DE COMPROMISSO ANDA JUNTO. Uma demanda com
-     prazo 30/07 pausada 5 dias tem prazo efetivo 04/08 — ela NAO veio de julho,
-     porque foi a propria ferramenta que empurrou a data. */
+  /* ─── A PAUSADA ATRAVESSA A VIRADA, E ESTE BLOCO JA AFIRMOU O CONTRARIO ─────
+
+     Havia aqui uma invariante dizendo que a pausada NAO vinha do mes anterior,
+     com este raciocinio: a pausa estica o prazo, entao se a esticada levou a
+     demanda para agosto, o compromisso dela e de agosto. Soa certo e esta
+     errado, por um detalhe que so aparece com o calendario andando.
+
+     Numa demanda AINDA PAUSADA, o prazo efetivo e `entrega + (hoje -
+     pausado_em)`: ele anda um dia por dia, e o mes dele e SEMPRE o mes corrente.
+     A demanda nunca vinha de mes anterior — nem em setembro, nem em junho do ano
+     seguinte. E como o Gantt posiciona o card pela `entrega` CRUA, as duas
+     metades discordavam e o cartao ia para lugar nenhum: SUMIA do quadro.
+
+     Medido no dado de producao de 01/09/2026, quadro de setembro: das 9 pausadas
+     com prazo, TRES desapareciam — AX-019, AX-199 e AX-210, todas prometidas
+     para agosto. E o AX-084 (entrega 31/07) exibia "⇥ ago", mentindo sobre a
+     propria origem.
+
+     Pior que sumir, a marcacao PISCAVA: o AX-084 era herdado no dia 1 do mes e
+     deixava de ser no dia 15 — 01/09 sim, 15/09 nao, 01/10 sim. Mesma demanda,
+     ninguem mexeu em nada.
+
+     SUSPENSO NAO E CONCLUIDO. A demanda prometida para agosto e pausada em
+     setembro atravessou a virada, e o quadro tem de dizer. O que a pausa suspende
+     e o RELOGIO DO ATRASO — e isso continua valendo, nos dois testes abaixo. */
   const pausada = emAndamento('2026-07-30', { pausado_em: '2026-07-28' });
-  ok(P.mesDoPrazo(pausada, '2026-08-28') === '2026-08',
-     'pausa que suspende o prazo por cima da virada muda o mes de compromisso',
-     P.mesDoPrazo(pausada, '2026-08-28') + ' (prazo efetivo ' +
+  ok(P.mesDoPrazo(pausada) === '2026-07',
+     'o mes de compromisso e o da entrega GRAVADA, e a pausa nao o reescreve',
+     P.mesDoPrazo(pausada) + ' (prazo efetivo ' +
      P.prazoEfetivo(pausada, '2026-08-28') + ')');
-  ok(!P.herdadaDeMesAnterior(pausada, 'em_andamento', '2026-08', '2026-08-28'),
-     'e por isso ela NAO conta como vinda de julho');
+
+  /* E ELE NAO DEPENDE DE QUE DIA E HOJE — a afirmacao acima, sozinha, nao provava
+     isso. Chamada sem o segundo argumento, a implementacao ANTIGA tambem
+     respondia '2026-07' (sem `ref` a pausa conta zero dias), e a sabotagem
+     passava liso por aqui. O que separa as duas e justamente a dependencia do
+     relogio: o mes de compromisso e uma propriedade da demanda, e uma data
+     qualquer no fim nao pode mudar a resposta. */
+  {
+    const respostas = new Set(
+      ['2026-07-30', '2026-08-01', '2026-08-28', '2026-12-31', '2027-06-15']
+        .map((quando) => P.mesDoPrazo(pausada, quando)));
+    respostas.add(P.mesDoPrazo(pausada));
+    ok(respostas.size === 1 && respostas.has('2026-07'),
+       'o mes de compromisso nao muda com o dia em que se pergunta',
+       [...respostas].join(' / '));
+  }
+  ok(P.herdadaDeMesAnterior(pausada, 'em_andamento', '2026-08', '2026-08-28'),
+     'e por isso ela CONTA como vinda de julho, mesmo pausada');
+
+  /* MAS ELA NAO APARECE ATRASADA: e a metade que a pausa protege, e que nao pode
+     ser levada junto. Herdar e "atravessou a virada"; atrasar e "esta devendo
+     tempo". Uma coisa nao implica a outra. */
+  ok(P.diasDeAtraso(pausada, 'em_andamento', '2026-08-28') === null,
+     'a pausada continua sem atraso — a pausa suspende o relogio');
+  ok(P.estaAtrasada(pausada, 'em_andamento', '2026-08-28') === false,
+     'e continua fora da lista de atrasadas');
+
+  /* E A MARCACAO NAO PISCA. O sintoma do defeito antigo era este: a mesma
+     demanda entrava e saia da marcacao conforme o dia do mes, porque o prazo
+     efetivo dela cruzava a fronteira do mes junto com o calendario. Aqui se
+     percorre um ano inteiro, dia a dia, exigindo a MESMA resposta em todos —
+     contar so dois ou tres dias deixaria o pisca-pisca passar. */
+  {
+    let inconsistentes = 0, dias = 0;
+    const inicio = Date.UTC(2026, 7, 1);            // 01/08/2026
+    for (let d = 0; d < 365; d++) {
+      const hoje = new Date(inicio + d * 86400000).toISOString().slice(0, 10);
+      const mesDaTela = hoje.slice(0, 7);
+      // Em agosto ela ainda nao atravessou nada; de setembro em diante, sim.
+      const esperado = mesDaTela > '2026-07';
+      if (P.herdadaDeMesAnterior(pausada, 'em_andamento', mesDaTela, hoje) !== esperado) {
+        inconsistentes++;
+      }
+      dias++;
+    }
+    ok(inconsistentes === 0,
+       'a marcacao da pausada nao pisca: mesma resposta em 365 dias seguidos',
+       inconsistentes + ' dias divergentes de ' + dias);
+  }
+
+  /* E O ROTULO DIZ O MES CERTO. `mesDoPrazo` alimenta o "⇥ jul" do cartao: com o
+     prazo efetivo, uma demanda de julho pausada em agosto anunciava "⇥ ago". */
+  ok(P.mesDoPrazo(emAndamento('2026-07-31', { pausado_em: '2026-08-04' })) === '2026-07',
+     'o rotulo da herdada aponta o mes prometido, e nao o mes para onde a pausa a levou');
+
+  /* DEPOIS DE RETOMADA, A EXTENSAO CONTINUA VALENDO — e era a preocupacao que
+     originou a regra antiga. Ela sobrevive porque `aplicarRetomada` SOMA os dias
+     parados na propria `entrega` e limpa o `pausado_em`: a data gravada ja
+     carrega a esticada, e ler a data crua devolve exatamente o prazo estendido.
+     Uma demanda de 30/07 parada 5 dias e retomada vira entrega 04/08, e agosto
+     nao a herda de julho — que e o certo. */
+  ok(P.mesDoPrazo({ entrega: '2026-08-04', status_planejamento: 'em_andamento',
+                    pausa_dias: 5 }) === '2026-08',
+     'retomada: a entrega ja vem esticada, e o mes de compromisso e o novo');
+  ok(!P.herdadaDeMesAnterior({ entrega: '2026-08-04', status_planejamento: 'em_andamento',
+                               pausa_dias: 5 }, 'em_andamento', '2026-08', '2026-08-28'),
+     'e ela nao e marcada como vinda de julho');
 
   /* AS SPRINTS SAO O ATRASO DIVIDIDO POR SETE, e nao uma conta nova. Duas contas
      para a mesma pergunta e como a regra do atraso acabou em quatro versoes que
