@@ -1253,6 +1253,84 @@ sec('Deck de assunto: o relatorio em .pptx');
    gerador existe para a segunda area nao custar dois dias — e, sobretudo, para
    nao sair com numero diferente do da tela por alguem ter recontado. */
 const RPPT = fs.readFileSync('relatorio-ppt.js', 'utf8');
+/* ─── BARRA PINTADA COM A COR DO TRILHO É BARRA INVISÍVEL ────────────────────
+ *
+ * `fundo3` está declarado na paleta como "trilho de barra / cartão inativo". Usá-lo
+ * como PREENCHIMENTO de uma barra desenha a barra por cima do próprio trilho, no
+ * comprimento certo e no mesmo tom: o dado existe no arquivo e não existe na
+ * parede.
+ *
+ * ACONTECEU DUAS VEZES, e as duas passaram sem ninguém ver:
+ *
+ *   - no ranking "Os assuntos que puxaram o período", os assuntos sem slide
+ *     próprio saíam com `cor: K.cores.fundo3`. Metade do gráfico aparecia vazia,
+ *     e não havia como comparar 132 pt com 47 pt. Foi o Fernando quem viu, na
+ *     apresentação montada;
+ *   - em `barrasFrente`, a barra do PLANEJADO usava `C.fundo3` — com um comentário
+ *     logo acima dizendo "o planejado vai em cinza-azulado". A intenção estava
+ *     certa e o valor não: 1,09:1 sobre a superfície do cartão.
+ *
+ * O QUE ESTA INVARIANTE PEGA: `fundo3` na chave `cor:` de um item — o lugar onde
+ * se escolhe a cor de um DADO. Ela NAO proibe `fundo3` como `fill` de um trilho ou
+ * de um cartao, que e o uso legitimo e o motivo de a cor existir.
+ *
+ * E NAO OLHA `chartColors`, de proposito. Na rosca de execucao ele e
+ * `[cor, C.fundo3]`, e o segundo item e o RESTO do anel — que e um trilho, e nao
+ * um dado. Ali o valor esta escrito em corpo 18 no centro do anel: o anel reforca
+ * um numero que ja se le. Incluir `chartColors` aqui obrigaria a uma excecao logo
+ * em seguida, e regra com excecao para o unico caso que ela encontraria e regra
+ * que nao vale.
+ */
+{
+  const fontes = [['relatorio-ppt.js', RPPT], ['apresentacao.js', APRES]];
+  const suspeitas = [];
+  for (const [nome, texto] of fontes) {
+    texto.split(/\r?\n/).forEach((linha, i) => {
+      const limpa = linha.replace(/\/\/.*$/, '');
+      // `cor:` de um item, ou `chartColors:` — os dois lugares onde se escolhe a
+      // cor de um DADO. `fill: { color: ... }` fica de fora: é o trilho.
+      /* `cor:` EM POSICAO DE CHAVE, e nao qualquer `cor` seguido de dois-pontos.
+         A primeira versao usava /\bcor\s*:/ e acusava um TERNARIO —
+         `i < 3 ? cor : C.fundo3` — como se fosse escolha de cor de dado. Aquela
+         linha e a medalha do podio, que tem borda propria e numero dentro: ela
+         se ve. Falso positivo em invariante e o caminho mais curto para alguem
+         desligar a invariante. */
+      const escolheCorDeDado = /(^|[{,])\s*cor\s*:/.test(limpa);
+      if (escolheCorDeDado && /fundo3/.test(limpa)) {
+        suspeitas.push(nome + ':' + (i + 1) + '  ' + limpa.trim().slice(0, 70));
+      }
+    });
+  }
+  ok(suspeitas.length === 0,
+     'nenhuma barra e pintada com a cor do trilho (fundo3) — ela ficaria invisivel',
+     suspeitas.join(' | '));
+}
+
+/* E A COR DO PLANEJADO CONTINUA VISÍVEL SOBRE O CARTÃO. A invariante acima pega o
+   NOME `fundo3`; esta pega o caso de alguém trocar por outro tom escuro qualquer.
+   O mínimo é 3:1 — é elemento gráfico, e não texto. */
+{
+  const paleta = {};
+  APRES.replace(/^\s*([a-z][a-zA-Z0-9]*)\s*:\s*'([0-9A-Fa-f]{6})'/gm,
+    (todo, k, v) => { paleta[k] = v; return todo; });
+  const lum = (h) => {
+    const c = [0, 2, 4].map((i) => parseInt(h.substr(i, 2), 16) / 255)
+      .map((v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const razao = (a, b) => {
+    const x = lum(a), y = lum(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+  const achado = APRES.match(/\{ v: it\.plan, cor: C\.([a-zA-Z0-9]+)/);
+  const nome = achado ? achado[1] : '';
+  const cor = paleta[nome];
+  const r = cor && paleta.fundo2 ? razao(cor, paleta.fundo2) : 0;
+  ok(r >= 3,
+     'a barra do planejado se ve sobre o cartao (minimo 3:1 de elemento grafico)',
+     'C.' + nome + ' = #' + cor + ' -> ' + r.toFixed(2) + ':1');
+}
+
 
 ok(/src="relatorio-ppt\.js\?v=[a-f0-9]{10}"/.test(ADMIN),
    'o admin carrega o gerador versionado');

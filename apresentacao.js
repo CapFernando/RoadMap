@@ -499,7 +499,13 @@
       var xq = 5.5, LQ = 3.8;
       [{ v: quebra.evolucao || 0, cor: C.verde },
        { v: quebra.sustentacao || 0, cor: SIGNIFICADO.categoria2 },
-       { v: quebra.sem || 0, cor: C.fundo3 }].forEach(function (q) {
+       /* "SEM CLASSIFICAR" EM `fraco`, e nao em `fundo3`. A fatia carrega dado —
+          a legenda logo abaixo escreve "N sem classificar" — e `fundo3` sobre o
+          fundo do slide da 1,17:1: a barra empilhada terminava antes da hora e o
+          numero da legenda nao tinha correspondente no desenho.
+          `fraco` da 6,31:1 sobre o fundo e 2,1:1 contra a prata da sustentacao,
+          que e a fatia vizinha — visivel, e distinguivel de quem esta ao lado. */
+       { v: quebra.sem || 0, cor: C.fraco }].forEach(function (q) {
         if (!q.v) return;
         var w = LQ * q.v / (totQ || 1);
         s.addShape(pptx.ShapeType.rect, { x: xq, y: 0.86, w: w, h: 0.16,
@@ -1197,7 +1203,14 @@
       s.addText(it.nome, {
         x: x, y: y, w: LARG_NOME, h: 0.32, fontSize: 9, color: C.texto,
         align: 'right', valign: 'middle', wrap: false });
-      [{ v: it.plan, cor: C.fundo3, dy: 0.045 },
+      /* O PLANEJADO EM `fraco`, E NAO EM `fundo3`.
+         O comentario acima ja dizia "o planejado vai em cinza-azulado" — a
+         intencao estava certa e o valor nao: `fundo3` e a cor do TRILHO DE BARRA
+         (esta escrito assim na paleta), e sobre a superficie do cartao ela da
+         1,09:1. A barra existia, com o comprimento certo, e nao aparecia.
+         `fraco` da 5,87:1 sobre o cartao e continua sem competir com a cor da
+         frente na barra do realizado, que e o que a comparacao pede. */
+      [{ v: it.plan, cor: C.fraco, dy: 0.045 },
        { v: it.real, cor: it.cor, dy: 0.155 }].forEach(function (b) {
         s.addShape(pptx.ShapeType.rect, {
           x: xBarra, y: y + b.dy, w: Math.max(0.02, wBarra * (b.v / max)), h: 0.09,

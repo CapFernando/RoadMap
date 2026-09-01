@@ -416,9 +416,23 @@
                           fmt(d.rankingSobraPts) + ' pt.' : ''), ++p);
       barrasRanking(pptx, s, {
         x: MARGEM, y: 1.74, w: LARG, alt: Math.min(0.42, 2.9 / Math.max(d.ranking.length, 1)),
+        /* A COR DIZ QUAIS GANHAM SLIDE PRÓPRIO, E NENHUMA BARRA FICA INVISÍVEL.
+           Os que não têm slide usavam `fundo3` — que é a cor do TRILHO da barra
+           (está escrito assim na paleta: "trilho de barra / cartão inativo"). A
+           barra era desenhada no comprimento certo e pintada por cima do trilho
+           com o mesmo tom: metade do gráfico aparecia vazia na parede, e quem
+           lia não tinha como comparar 132 pt com 47 pt.
+
+           PRATA, e a paleta já dizia qual usar: "neutro SECUNDÁRIO — quando duas
+           categorias precisam se distinguir na mesma barra e nenhuma das duas é
+           melhor que a outra". É exatamente o caso: todas são entregas, e a
+           diferença é só quais o deck detalha nos slides seguintes. Verde aqui
+           significaria "estas entregaram e aquelas não", que é falso. */
         itens: d.ranking.map(function (r, i) {
           return { nome: r.nome, valor: r.pts,
-                   cor: i < (d.assuntos || []).length ? K.cores.verde : K.cores.fundo3,
+                   cor: i < (d.assuntos || []).length
+                     ? K.significado.cumprido
+                     : K.significado.categoria2,
                    lado: fmt(r.qtd) + ' ' + plural(r.qtd, 'entrega', 'entregas') };
         }), unidade: ' pt', wNome: 2.6, corteNome: 34 });
       K.rodape(s, d.periodo, p);
