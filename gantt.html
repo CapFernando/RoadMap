@@ -26,14 +26,6 @@
       --ouro-bg:   #3D2F08; --ouro-bd:   #9C7A14; --ouro-tx:   #F7D774;
       --prata-bg:  #2B2D31; --prata-bd:  #52565D; --prata-tx:  #DBDEE4;
       --bronze-bg: #33241A; --bronze-bd: #7A5537; --bronze-tx: #E3B389;
-      /* HERDADA DO MES ANTERIOR — rosa choque. Ela precisa saltar da tela num
-         quadro cheio de barras verdes e amarelas, e e o unico marcador aqui que
-         nao e etapa: as outras cores dizem EM QUE PE a demanda esta, esta diz
-         DE QUANDO ela e. Medido: texto 8.01:1 sobre o fundo do chip, borda
-         5.53:1 contra a pagina. O par claro esta em tema.css. */
-      --pink-bg: #4A0A2E;
-      --pink-bd: #FF2D8E;
-      --pink-tx: #FF9ECB;
       /* Pausado. Magenta para nao se confundir com o vermelho de atrasado. */
       --rose:    #D948B8;
       --rose-bg: #48123F;
@@ -151,16 +143,64 @@
     .ind-chip.em_andamento   { background:#3D3600; border-color:#726500; color:#FFE14D; }
     .ind-chip.planning       { background:#0E3A3A; border-color:#1A6060; color:#7ED8D8; }
     .ind-chip.concluido      { background:#1E4208; border-color:#306010; color:#B2E07A; }
-    .ind-chip.atrasado       { background:#5C0A0A; border-color:#8C1010; color:#F9A0A0; }
+    /* ─── FITA DE PERIGO: 'Atrasado' e 'Mes passado' ─────────────────────────
+       Os dois ganham listra diagonal preta, e se distinguem pelo CORPO: vermelho
+       um, branco o outro. Antes eram #5C0A0A e rosa choque, e dividiam a fileira
+       com 'Pausado' (magenta) — tres tons de vermelho-a-rosa lado a lado nao se
+       separam de relance, e os chips que mais precisam saltar eram os mais
+       dificeis de achar. Com o 'Mes passado' fora da familia rosa, o magenta do
+       'Pausado' deixa de colidir e nao precisou mudar.
+
+       AS LISTRAS FICAM NAS PONTAS, NUNCA ATRAS DO TEXTO — e isto vale para os
+       dois. Listra cruzando a palavra a 45 graus destroi a leitura mesmo com
+       contraste de sobra: medi 5,89:1 para texto sobre listra preta a 45% de
+       opacidade, numero que passa em qualquer norma, e na tela a palavra
+       "Atrasado" simplesmente nao existia. Contraste por pixel nao e
+       legibilidade quando a listra corta o traco da letra a cada 5px. Testei as
+       quatro variantes na tela antes de escolher; corpo todo listrado ficou
+       ilegivel em todas.
+
+       O VERMELHO SUBIU DE #5C0A0A PARA #C81E1E porque listra PRETA sobre
+       vermelho quase preto nao aparece — a fita sumia e sobrava um chip escuro.
+       Neste tom o texto branco da 5,74:1. */
+    .ind-chip.atrasado {
+      background:#C81E1E; border-color:#0A0A0A; color:#FFFFFF;
+      position:relative; overflow:hidden;
+      /* Abre espaco para as faixas: sem isto o texto comeca por baixo delas. */
+      padding-left:22px; padding-right:22px;
+    }
+    .ind-chip.atrasado::before,
+    .ind-chip.atrasado::after {
+      content:''; position:absolute; top:0; bottom:0; width:14px; pointer-events:none;
+      background: repeating-linear-gradient(45deg, #C81E1E 0 4px, #0A0A0A 4px 8px);
+    }
+    .ind-chip.atrasado::before { left:0; }
+    .ind-chip.atrasado::after  { right:0; }
     .ind-chip.validacao      { background:#4A2800; border-color:#8A5000; color:#FFC470; }
     /* Magenta e nao rose avermelhado: 'Atrasado' e vermelho, e num chip deste
        tamanho um rose vizinho do vermelho se confunde com ele a um metro da tela.
        Magenta tambem nao colide com o purpura de 'Levantar Req.' (#C9AEFF). */
     .ind-chip.pausado        { background:#48123F; border-color:#93257F; color:#F2A0DA; }
-    /* Rosa choque, por token, porque este chip existe nos dois temas. Ele fica
-       ao lado de 'Pausado', que e magenta — a borda #FF2D8E e bem mais saturada
-       e o icone ⇥ separa os dois de relance. */
-    .ind-chip.mes_passado    { background:var(--pink-bg); border-color:var(--pink-bd); color:var(--pink-tx); }
+    /* MES PASSADO — BRANCO COM AS MESMAS LISTRAS PRETAS do 'Atrasado', e o corpo
+       branco e o que separa os dois. Era rosa choque, e o rosa ficava colado no
+       magenta do 'Pausado' logo ao lado: a diferenca existia no codigo e nao na
+       tela. Ver a explicacao completa em `.ind-chip.atrasado`. */
+    .ind-chip.mes_passado {
+      background:#FFFFFF; border-color:#0A0A0A; color:#0A0A0A;
+      position:relative; overflow:hidden;
+      padding-left:22px; padding-right:22px;
+    }
+    .ind-chip.mes_passado::before,
+    .ind-chip.mes_passado::after {
+      content:''; position:absolute; top:0; bottom:0; width:14px; pointer-events:none;
+      background: repeating-linear-gradient(45deg, #FFFFFF 0 4px, #0A0A0A 4px 8px);
+    }
+    .ind-chip.mes_passado::before { left:0; }
+    .ind-chip.mes_passado::after  { right:0; }
+    /* O anel de "filtro ligado" e branco translucido, pensado para chip escuro —
+       sobre o corpo branco ele desaparece, e o chip fica sem dizer que esta
+       ativo. Vale para os dois chips de fita clara. */
+    .ind-chip.mes_passado.active-filter { outline-color: rgba(0,0,0,.6); }
     /* Codigo da demanda: referencia curta para PR, review e deploy. */
     .cod-tag{font-family:ui-monospace,monospace;font-size:10px;font-weight:700;
       color:var(--blue-tx,#9BC8F8);background:var(--blue-bg,#0C3260);border-radius:4px;
@@ -335,15 +375,24 @@
     /* ROLOU DE SPRINT: neutro na contagem, atencao no nome. A contagem e fato; o
        nome e o que pede acao. */
     .cap-rolou { color: var(--text3); }
-    /* Rosa choque tambem aqui, para a linha do dev e a barra no quadro se lerem
-       como a mesma coisa. E `display:block` porque ela vem depois do percentual
-       e antes das rolagens: na mesma linha, os tres se atropelam a 210px.
+    /* A MESMA FITA, aqui como um risco listrado a esquerda do texto — e nao como
+       cor de letra. Ela fala da mesma coisa que o chip 'Mes passado' e a borda da
+       barra, e ficar rosa enquanto os dois viraram fita deixaria tres aparencias
+       para um conceito so.
 
-       `--pink-tx` E NAO `--pink-bd`: o `-bd` e cor de BORDA, medida contra o
-       minimo de 3:1 de componente. Como texto pequeno ele da 4.15:1 sobre a
-       superficie do tema claro, abaixo dos 4.5 exigidos — passaria despercebido
-       porque no escuro ele esta em 4.78:1. O `-tx` da 8.75:1 e 6.66:1. */
-    .cap-herdada { color: var(--pink-tx); display: block; white-space: normal; }
+       O TEXTO FICA NA COR NORMAL, de proposito: e uma linha corrida dentro do
+       painel, nao uma etiqueta. Tingi-la de branco a faria sumir no tema claro, e
+       de preto sumiria no escuro — o risco carrega o sinal e a letra carrega a
+       leitura. `var(--text)` e o unico valor que serve nos dois temas.
+
+       `display:block` porque ela vem depois do percentual e antes das rolagens:
+       na mesma linha, os tres se atropelam a 210px. */
+    .cap-herdada {
+      color: var(--text); display: block; white-space: normal;
+      background: repeating-linear-gradient(45deg, #FFFFFF 0 3px, #0A0A0A 3px 6px)
+                  left center / 3px 100% no-repeat;
+      padding-left: 8px;
+    }
     .cap-rolou-alerta { color: var(--amber-tx, #FFC470); display: block; white-space: normal;
       line-height: 1.4; }
     .cap-text { font-size: 10px; color: var(--text3); white-space: nowrap; }
@@ -501,23 +550,34 @@
       background: repeating-linear-gradient(135deg,
         transparent 0 5px, rgba(0,0,0,.28) 5px 10px);
     }
-    /* HERDADA DO MES ANTERIOR — rosa choque, contorno e nao preenchimento.
-       O preenchimento continua sendo a cor da ETAPA: pintar a barra inteira de
-       rosa apagaria "em andamento" para dizer "veio de julho", e as duas coisas
-       precisam ser lidas juntas. O rosa fica na borda e na etiqueta.
-       A borda TRACEJADA e o segundo sinal, para quem nao distingue o rosa do
-       vermelho de atrasado: cor sozinha nunca e o unico portador da informacao. */
+    /* HERDADA DO MES ANTERIOR — a mesma fita branca-e-preta do chip 'Mes
+       passado', em CONTORNO e nao em preenchimento.
+       O preenchimento continua sendo a cor da ETAPA: pintar a barra inteira
+       apagaria "em andamento" para dizer "veio de julho", e as duas coisas
+       precisam ser lidas juntas.
+
+       A LISTRA E A BORDA INTEIRA, via `border-image`. Ela nao acompanha o
+       `border-radius` — os cantos ficam retos —, e e o preco de a fita dar a
+       volta na barra. As alternativas eram piores: uma faixa em ::before ou
+       ::after brigaria com a hachura da pausada (que ocupa ::after) numa barra
+       que seja pausada E herdada, caso que existe na base e acabou de ser
+       corrigido em prazo.js.
+
+       Era rosa choque, e ele encostava no magenta do 'Pausado' logo ao lado. A
+       borda continua sendo o segundo sinal alem da cor: cor sozinha nunca e o
+       unico portador da informacao. */
     .gantt-card.gcard-herdada {
-      border: 2px dashed var(--pink-bd);
-      box-shadow: 0 0 0 1px var(--pink-bg) inset;
+      border: 3px solid transparent;
+      border-image: repeating-linear-gradient(45deg, #FFFFFF 0 4px, #0A0A0A 4px 8px) 3;
     }
     /* A etiqueta com o mes de origem e quantas sprints ja passaram do prazo.
        Fundo proprio para nao depender da cor da etapa por baixo — sobre a barra
-       verde de 'concluido' um texto rosa sem fundo cai para menos de 2:1. */
+       verde de 'concluido' um texto rosa sem fundo caia para menos de 2:1.
+       Branco com texto preto: 19,8:1 sobre qualquer barra, e casa com a fita. */
     .gantt-card .card-herdada {
       font-size: 10px; font-weight: 700; flex-shrink: 0; z-index: 1;
-      background: var(--pink-bg); color: var(--pink-tx);
-      border: 1px solid var(--pink-bd); border-radius: 4px;
+      background: #FFFFFF; color: #0A0A0A;
+      border: 1px solid #0A0A0A; border-radius: 4px;
       padding: 0 4px; letter-spacing: .02em; cursor: help;
     }
     /* Ambar, nao vermelho: vermelho ja significa atrasado nesta tela, e reusar o
@@ -551,7 +611,27 @@
     .gcard-em_andamento { background:#3D3600; border-color:#726500; color:#FFE14D; }
     .gcard-planning     { background:#0E3A3A; border-color:#1A6060; color:#7ED8D8; }
     .gcard-concluido    { background:#1E4208; border-color:#306010; color:#B2E07A; }
-    .gcard-atrasado     { background:#5C0A0A; border-color:#8C1010; color:#F9A0A0; }
+    /* ATRASADO NO CALENDARIO — a mesma fita do chip, ver `.ind-chip.atrasado`.
+
+       AQUI AS FAIXAS VAO EM CIMA E EMBAIXO, e nao nas pontas: a barra tem largura
+       variavel — uma demanda de um dia ocupa poucos pixels —, e faixa lateral
+       numa barra estreita viraria a barra inteira, sem sobrar miolo para o
+       titulo. Atravessando a largura, a listra aparece em qualquer tamanho e o
+       texto fica sempre numa faixa limpa no meio.
+       A esquerda tambem esta ocupada: `.card-drag-handle` mora nos primeiros
+       14px. */
+    .gcard-atrasado { background:#C81E1E; border-color:#0A0A0A; color:#FFFFFF; }
+    .gantt-card.gcard-atrasado::before,
+    .gantt-card.gcard-atrasado::after {
+      content:''; position:absolute; left:0; right:0; height:5px; pointer-events:none;
+      background: repeating-linear-gradient(45deg, #C81E1E 0 4px, #0A0A0A 4px 8px);
+    }
+    .gantt-card.gcard-atrasado::before { top:0; }
+    .gantt-card.gcard-atrasado::after  { bottom:0; }
+    /* `::after` NAO COLIDE COM `.gcard-pausada::after`, que e a hachura da pausa:
+       `spEfetivo` nunca devolve 'atrasado' para uma demanda pausada — prazo
+       suspenso nao e prazo estourado —, entao as duas classes nunca caem na
+       mesma barra. Se essa regra mudar, uma das duas hachuras some sem aviso. */
 
     /* priority dot colors */
     .dot-alta   { background: var(--red); }
@@ -655,7 +735,7 @@
     .delete-btn { background: var(--red); color: #fff; }
     .delete-btn:hover { opacity: 0.85; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=427bab8a2a">
+  <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="capacidade.js?v=3769a13468"></script>

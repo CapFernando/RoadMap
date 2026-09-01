@@ -61,14 +61,6 @@
   --ouro-bg:   #FBEFC8;  --ouro-bd:   #C79A17;  --ouro-tx:   #6B4E00;
   --prata-bg:  #EDEEF0;  --prata-bd:  #B9BCC2;  --prata-tx:  #4A4D53;
   --bronze-bg: #F6E3D2;  --bronze-bd: #C08F63;  --bronze-tx: #6B3F1C;
-  /* HERDADA DO MES ANTERIOR — rosa choque. Mesmo caso do pausado: o par escuro
-     inverte para fundo tingido claro + texto escuro. O rosa choque PURO (#FF1493)
-     nao serve como texto aqui, da 3.31:1 sobre #F5F4F0 — ele fica na BORDA, que
-     e o que da a identidade da cor, e o texto escurece. Medido: texto 6.31:1,
-     borda 4.38:1 contra a pagina. */
-  --pink-bg:   #FFE0EF;
-  --pink-bd:   #D6217A;
-  --pink-tx:   #A3005E;
   /* Pausado. O par escuro (#45142F/#F5A8CE) inverte para fundo tingido claro
      + texto escuro; #85116E sobre #FBDDF3 da 6.4:1. */
   --rose:      #A81C8C;

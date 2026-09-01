@@ -6465,19 +6465,70 @@ ok((GANTT.match(/function mesEmExibicao\(\)/g) || []).length === 1 &&
      f + ' redesenha os chips junto com o quadro');
 });
 
-/* A COR VIVE NOS DOIS TEMAS. O rosa choque puro (#FF1493) da 3.31:1 sobre a
-   superficie clara: ele fica na BORDA, e o texto escurece. Sem o par no
-   tema.css, o chip ficaria com fundo escuro e texto claro no tema claro — que e
-   exatamente o defeito que o proprio arquivo registra sobre `--card`. */
+/* ─── A FITA DE PERIGO NAO PRECISA DE TEMA, E ESSE E O PONTO ────────────────
+   'Atrasado' e 'Mes passado' eram rosa choque e vermelho, e cada um exigia um
+   par de tokens por tema — o rosa puro (#FF1493) da 3.31:1 sobre a superficie
+   clara e nao servia como texto, entao havia um `--pink-*` escuro no gantt e um
+   claro no tema.css, com o risco permanente de um mudar sem o outro.
+
+   Branco-e-preto e vermelho-e-preto sao os proprios contrastes: eles nao mudam
+   de tema porque nao dependem da superficie por baixo. Os tokens `--pink-*`
+   foram removidos dos DOIS arquivos por terem ficado sem nenhum leitor.
+
+   O que se guarda agora e que os dois marcadores continuem SEM depender de
+   token de tema — se alguem os trocar por `var(--algo)`, volta a dupla
+   manutencao que motivou tudo isto. */
 ['--pink-bg', '--pink-bd', '--pink-tx'].forEach((t) => {
-  ok(TEMA.indexOf(t + ':') >= 0, 'tema claro define ' + t);
-  ok(GANTT.indexOf(t + ':') >= 0, 'tema escuro define ' + t);
+  ok(TEMA.indexOf(t + ':') < 0 && GANTT.indexOf(t + ':') < 0,
+     'o token orfao ' + t + ' nao voltou');
 });
 
-/* E A COR NAO E O UNICO SINAL. Quem nao distingue o rosa do vermelho de
-   atrasado precisa de outra pista: a borda TRACEJADA e a etiqueta com o mes. */
-ok(/\.gantt-card\.gcard-herdada\s*\{[^}]*dashed/.test(GANTT),
-   'a barra herdada tem borda tracejada, e nao so cor');
+/* E A COR NAO E O UNICO SINAL — o principio nao mudou, so a forma. A pista
+   alternativa era a borda TRACEJADA; agora e a LISTRA, que e ainda melhor para
+   quem nao distingue as cores: ela e padrao, e nao tom. Guarda-se que a barra
+   herdada tenha um padrao repetido na borda, e nao apenas uma cor chapada. */
+ok(/\.gantt-card\.gcard-herdada\s*\{[^}]*repeating-linear-gradient/.test(GANTT),
+   'a barra herdada tem borda LISTRADA, e nao so cor');
+
+/* E OS DOIS MARCADORES SE SEPARAM PELO CORPO, nao pela listra: os dois usam a
+   mesma diagonal preta, e o que os distingue e o fundo — vermelho num, branco
+   no outro. Se os dois fundos convergirem, o quadro passa a ter dois sinais
+   identicos para coisas diferentes. */
+{
+  /* SEM REGEXP MONTADA A PARTIR DE STRING. `new RegExp('\.ind-chip')` parece
+     certo e nao e: dentro de uma string, `\.` ja e um ponto comum e `\s` vira
+     um `s` literal — a expressao sai procurando "ind-chip s*{" e nao casa com
+     nada. O teste passa a nao testar, sem erro nenhum. Aqui o bloco e recortado
+     por indice, que nao tem escape para errar. */
+  const blocoDoChip = (classe) => {
+    const marca = '.ind-chip.' + classe + ' {';
+    const i = GANTT.indexOf(marca);
+    if (i < 0) return '';
+    const fim = GANTT.indexOf('}', i);
+    return fim < 0 ? '' : GANTT.slice(i, fim + 1);
+  };
+  const corpoDoChip = (classe) => {
+    const m = blocoDoChip(classe).match(/background:\s*(#[0-9A-Fa-f]{6})/);
+    return m ? m[1].toUpperCase() : '';
+  };
+
+  const atrasado = corpoDoChip('atrasado');
+  const mesPassado = corpoDoChip('mes_passado');
+  ok(atrasado && mesPassado && atrasado !== mesPassado,
+     'Atrasado e Mes passado tem corpos de cor diferente',
+     (atrasado || '(nao achei)') + ' vs ' + (mesPassado || '(nao achei)'));
+
+  /* AS LISTRAS FICAM NAS PONTAS DO CHIP, E NAO ATRAS DO TEXTO. Este e o
+     resultado que custou quatro variantes na tela: listra cruzando a palavra a
+     45 graus destroi a leitura mesmo com 5,89:1 de contraste medido. O `padding`
+     lateral e o que reserva o espaco — sem ele o texto comeca por baixo da
+     faixa, e o defeito volta sem que nenhuma cor tenha mudado. */
+  ['atrasado', 'mes_passado'].forEach((classe) => {
+    const b = blocoDoChip(classe);
+    ok(/padding-left:\s*2[0-9]px/.test(b) && /padding-right:\s*2[0-9]px/.test(b),
+       'o chip ' + classe + ' reserva espaco lateral para a faixa listrada');
+  });
+}
 
 ok(/class="card-herdada"/.test(GANTT) && GANTT.indexOf('\u21e5') >= 0,
    'e uma etiqueta escrita com o mes de origem');
