@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mensageria — RoadMap</title>
+<script src="config.js"></script>
+<link rel="stylesheet" href="tema.css?v=65fa0bdf91">
+<script src="tema.js?v=7df38474d4"></script>
+<!-- ANTES do script da página, e não depois: a busca por código roda na abertura,
+     e `BUSCA_DEMANDA` precisa existir naquele instante. Carregado no fim, ele
+     chegava tarde e a tela caía no `find` por id — que não acha "AX-042" nem
+     "42", justamente as formas que a pessoa digita. -->
+<script src="busca-demanda.js?v=1380650a7a"></script>
+<style>
+  /* ─── A PALETA DO TEMA ESCURO, DECLARADA AQUI ─────────────────────────────
+     E ela FALTAVA. `tema.css` define os tokens só do tema CLARO, sob
+     `:root[data-tema="claro"]`; cada página declara os próprios valores do
+     escuro — está escrito assim no `gantt.html`: "aqui ficam so as cores do tema
+     escuro, que sao proprias da pagina".
+
+     Sem este bloco, `var(--bg2)` e `var(--border)` resolviam para VAZIO no tema
+     escuro: o painel de sugestões ficava transparente por cima do rótulo, e toda
+     borda saía com 0px. A tela parecia certa apenas porque o navegador pintou o
+     fundo escuro por conta própria — medi `backgroundColor: rgba(0,0,0,0)` e
+     `borderWidth: 0px` para descobrir.
+
+     Os valores são os das telas irmãs, e não novos: cor inventada aqui faria esta
+     tela divergir do resto do sistema no dia em que a paleta mudar. */
+  :root {
+    --bg:      #0E0E0D;
+    --bg2:     #161614;
+    --bg3:     #1E1E1C;
+    --bg4:     #252522;
+    --border:  #2E2E2B;
+    --border2: #3A3A36;
+    --text:    #ECEAE2;
+    --text2:   #A8A49A;
+    --text3:   #8A857B;
+    --blue:    #3B8FE8;  --blue-bg: #0C3260;  --blue-tx: #9BC8F8;
+    --red-tx:  #F9A0A0;
+    --amber-tx:#FFB84D;
+  }
+
+  /* ─── A LINHA DO TEMPO DA DEMANDA ─────────────────────────────────────────
+     Duas coisas convivem aqui, e a tela precisa que elas NÃO se confundam:
+
+       o HISTÓRICO   é o que o sistema observou — "entrega mudou de 21/08 para
+                     15/01". Ninguém escreveu aquilo; foi registrado.
+       a MENSAGEM    é o que uma pessoa quis dizer.
+
+     Misturar os dois numa aparência só faria a auditoria não distinguir fato
+     registrado de comentário — e é a auditoria que motivou esta tela. Por isso o
+     histórico fica em tom apagado, com a borda fina, e a mensagem ganha
+     superfície própria. */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    /* `--bg2` e nao `--bg1`: o `bg1` só existe no `importar.html` e no tema
+       claro, então no escuro ele vinha vazio e o cabeçalho ficava transparente
+       por cima da linha do tempo ao rolar. */
+    background: var(--bg2); border-bottom: 1px solid var(--border);
+    padding: 12px 20px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  }
+  header .cod {
+    font-family: ui-monospace, monospace; font-weight: 700; font-size: 15px;
+    background: var(--blue-bg); color: var(--blue-tx);
+    border-radius: 5px; padding: 2px 8px;
+  }
+  header h1 { margin: 0; font-size: 15px; font-weight: 600; flex: 1; min-width: 0; }
+  header .quem { font-size: 12px; color: var(--text2); }
+  main { max-width: 860px; margin: 0 auto; padding: 18px 20px 24px; }
+
+  .vazio { color: var(--text2); font-size: 13px; padding: 20px 0; }
+
+  .linha { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border2); }
+  .linha:last-child { border-bottom: none; }
+  /* O CARIMBO É COLUNA PRÓPRIA, e com dia E hora. É o que a auditoria pede:
+     "preciso saber o dia e hora que foi registrado". Em linha corrida com o
+     texto, a data se perde no meio da frase. */
+  .quando {
+    flex: 0 0 116px; font-family: ui-monospace, monospace; font-size: 11.5px;
+    color: var(--text2); padding-top: 1px; white-space: nowrap;
+  }
+  .corpo { flex: 1; min-width: 0; }
+  .autor { font-weight: 600; font-size: 12.5px; }
+  .origem { font-size: 11px; color: var(--text3); }
+
+  /* Histórico: apagado, é registro do sistema. */
+  .ev-hist .corpo { color: var(--text2); font-size: 13px; }
+  .ev-hist .mudanca { display: block; }
+  .ev-hist .campo { color: var(--text); font-weight: 600; }
+  .de { text-decoration: line-through; opacity: .75; }
+  .para { color: var(--text); }
+
+  /* Mensagem: superfície própria, é fala de pessoa. */
+  .ev-msg .corpo {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 11px;
+  }
+  .ev-msg .texto { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 3px; }
+  .mencao {
+    background: var(--blue-bg); color: var(--blue-tx);
+    border-radius: 4px; padding: 0 4px; font-weight: 600;
+  }
+
+  /* Os marcos que não vêm do histórico: criação e dependência atual. */
+  .ev-marco .corpo { font-size: 13px; }
+  .ev-marco .rot {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text3); display: block;
+  }
+  .aviso-sem-rastro { margin-top: 4px; font-size: 12px; color: var(--amber-tx); }
+
+  /* ─── O COMPOSITOR ───────────────────────────────────────────────────────── */
+  .escrever { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
+  .escrever label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 5px; }
+  .caixa { position: relative; }
+  textarea {
+    width: 100%; min-height: 84px; resize: vertical; font: inherit;
+    background: var(--bg2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px;
+  }
+  /* `--blue` e `--blue-tx` existem no tema; `--focus` e `--blue-bd` NAO — eu os
+     escrevi de memória. Com o fallback do `var()` a tela não quebrava, mas a cor
+     passava a ser um literal que não acompanha o tema claro: o defeito que este
+     projeto já pagou uma vez, e que só aparece para quem usa o outro tema. */
+  textarea:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+  /* A lista de pessoas do `@`. Ela é uma LISTBOX de verdade, com `aria-selected`
+     e o campo apontando para o item ativo: sem isso, quem usa leitor de tela
+     digita `@` e não ouve nada acontecer. */
+  .sugestoes {
+    position: absolute; left: 8px; right: 8px; bottom: 100%; margin-bottom: 4px;
+    background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px;
+    max-height: 190px; overflow: auto; z-index: 20; padding: 3px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35);
+  }
+  .sugestoes[hidden] { display: none; }
+  .sugestoes li {
+    list-style: none; padding: 6px 9px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .sugestoes li[aria-selected="true"] { background: var(--bg4); }
+  .acoes { display: flex; gap: 9px; align-items: center; margin-top: 9px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-weight: 600; font-size: 13px; cursor: pointer;
+    border-radius: 7px; padding: 7px 15px; border: 1px solid var(--border2);
+    background: var(--bg3); color: var(--text);
+  }
+  button.primario { background: var(--blue); border-color: var(--blue); color: #fff; }
+  button:disabled { opacity: .55; cursor: default; }
+  .dica { font-size: 11.5px; color: var(--text3); }
+  #erro { color: var(--red-tx); font-size: 13px; margin-top: 8px; }
+  #erro:empty { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="cod" id="cod">—</span>
+  <h1 id="titulo">Carregando…</h1>
+  <span class="quem" id="eu"></span>
+</header>
+
+<main>
+  <div id="linha-do-tempo"><p class="vazio">Carregando o histórico…</p></div>
+
+  <section class="escrever" id="escrever" hidden>
+    <label for="texto">Escreva uma mensagem — use <strong>@</strong> para marcar alguém</label>
+    <div class="caixa">
+      <ul class="sugestoes" id="sugestoes" role="listbox" aria-label="Pessoas" hidden></ul>
+      <textarea id="texto" aria-describedby="dica"
+                aria-autocomplete="list" aria-controls="sugestoes"></textarea>
+    </div>
+    <div class="acoes">
+      <button type="button" class="primario" id="enviar">Enviar</button>
+      <span class="dica" id="dica">A mensagem entra no registro da demanda e não pode ser apagada.</span>
+    </div>
+    <p id="erro" role="alert"></p>
+  </section>
+</main>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────────────
+   MENSAGERIA — o registro da demanda, em ordem, com dia e hora.
+
+   POR QUE UMA TELA PRÓPRIA, e não um bloco no card: o card responde "em que pé
+   está"; esta tela responde "como chegou até aqui". São duas leituras diferentes,
+   e a segunda é longa — ela não cabe num card sem empurrar o resto para fora.
+
+   O QUE ELA JUNTA, em uma linha do tempo só:
+     • a criação da demanda, com quem pediu;
+     • cada mudança que o servidor registrou — inclusive a IDA PARA O DEV e, de
+       agora em diante, o REGISTRO DA DEPENDÊNCIA;
+     • as mensagens escritas aqui.
+
+   O SERVIDOR É A AUTORIDADE de tudo isso. Esta tela LÊ e ESCREVE por rota; ela
+   não monta nem reescreve o registro. Um rastro que a tela pudesse editar não
+   serviria para auditar nada.
+   ───────────────────────────────────────────────────────────────────────────── */
+const PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
+
+/* A SESSÃO VEM DA ABA QUE ABRIU ESTA. `window.open` de mesma origem recebe uma
+   CÓPIA do sessionStorage de quem abriu — é assim que o token chega aqui sem
+   esta tela ter login próprio. Um quarto formulário de senha seria a quarta
+   chance de a regra de acesso divergir. */
+let _token = sessionStorage.getItem('rm_dev_token') || '';
+let _senha = sessionStorage.getItem('rm_dev_pw') || '';
+let _eu = null;
+try { _eu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) {}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+/** Dia e hora, no fuso de quem lê. A auditoria pede os dois — "preciso saber o
+ *  dia e hora que foi registrado" —, e a hora sozinha não localiza nada. */
+function quando(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso || '—');
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/* A demanda é pedida pelo CÓDIGO na URL, e não pelo id: o código é o que a pessoa
+   tem na mão e o que aparece no card. `busca-demanda.js` já sabe achar por código
+   ou por número de issue, e é ele que decide — não uma segunda comparação escrita
+   aqui. */
+const params = new URLSearchParams(location.search);
+const PEDIDO = params.get('codigo') || params.get('id') || '';
+
+let DEMANDA = null;
+let PESSOAS = [];
+let POR_ID = new Map();
+
+/** O código da demanda apontada por um id, ou o próprio id quando ela não está na
+ *  base. Devolver o id cru é melhor que devolver vazio: o vínculo existe, e quem
+ *  audita precisa ver que existe mesmo sem conseguir nomeá-lo. */
+function codigoDe(id) {
+  const m = POR_ID.get(id);
+  return (m && m.codigo) || String(id || '');
+}
+
+/** OS DADOS VÊM PELO WORKER, com `action: 'dados'`.
+ *
+ *  A PRIMEIRA VERSÃO LIA DIRETO DO `raw.githubusercontent`, copiando a linha de
+ *  `RAW_URL` que existe nas outras telas — e ali ela é o FALLBACK, não o caminho.
+ *  O repositório de dados é PRIVADO: o raw responde 404, e a tela abria com
+ *  "não consegui ler os dados (404)". As outras telas funcionam porque pedem ao
+ *  Worker, que é quem tem o token.
+ *
+ *  A credencial vai junto pelo mesmo motivo: a leitura pode estar travada por
+ *  senha, e é o Worker que decide. */
+async function carrega() {
+  const cred = {};
+  if (_token) cred.token = _token;
+  if (_senha) cred.senha = _senha;
+  const r = await fetch(PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'dados', ...cred }),
+  });
+  if (r.status === 401) {
+    throw new Error('Acesso não autorizado. Abra a Mensageria pelo Admin ou pelo portal do dev.');
+  }
+  if (!r.ok) throw new Error('não consegui ler os dados (' + r.status + ')');
+  const data = await r.json();
+  const lista = data.melhorias || [];
+
+  /* ACHA PELO ID PRIMEIRO, e pelo código depois. O id é exato; o código passa
+     pelo `BUSCA_DEMANDA`, que aceita "AX-042", "042" e "42" — a mesma regra que
+     o portal do dev usa, e não uma cópia dela. */
+  /* O MAPA DE ID PARA CODIGO. A dependencia e gravada como `parent_id`, que e um
+     uuid — e mostrar "depende de msd9sjdghu1qtwp7f1v" nao ajuda ninguem a achar a
+     outra demanda. Aqui ele volta a ser "AX-123", que e o que se cita numa
+     conversa. */
+  POR_ID = new Map(lista.map(x => [x.id, x]));
+  DEMANDA = lista.find(m => m.id === PEDIDO) || null;
+  if (!DEMANDA && window.BUSCA_DEMANDA) {
+    const achou = BUSCA_DEMANDA.acha(lista, PEDIDO, { so: 'codigo' });
+    DEMANDA = achou ? achou.demanda : null;
+  }
+  if (!DEMANDA) throw new Error('não achei a demanda "' + PEDIDO + '"');
+
+  /* AS PESSOAS DO `@` SÃO OS DEVS CADASTRADOS MAIS OS QUE APARECEM NAS DEMANDAS.
+     Só a lista cadastrada deixaria de fora quem já tem demanda e ainda não foi
+     cadastrado — e é exatamente essa pessoa que alguém quer marcar. */
+  const nomes = new Set((data.desenvolvedores || []).map(x => String(x || '').trim()));
+  lista.forEach(m => String(m.dev || '').split(/[,;\/]/).forEach(x => {
+    const t = x.trim(); if (t) nomes.add(t);
+  }));
+  PESSOAS = [...nomes].filter(Boolean).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  return DEMANDA;
+}
+
+/** Marca as menções no texto, sem confiar no que veio: só destaca `@Nome` quando
+ *  o nome casa com alguém da lista. `@` seguido de qualquer palavra não vira
+ *  menção — destacar o que não existe faria parecer que alguém foi notificado. */
+function comMencoes(texto) {
+  return esc(texto).replace(/@([\p{L}][\p{L}\s.'-]{1,39})/gu, (todo, nome) => {
+    const escrito = nome.trim().toLowerCase();
+    const casa = PESSOAS.find(p =>
+      escrito.startsWith(p.toLowerCase()) || p.toLowerCase().startsWith(escrito));
+    if (!casa) return todo;
+    // Só o trecho do NOME vira etiqueta; o que vier depois na captura volta como
+    // texto normal.
+    const usado = todo.slice(0, 1 + Math.min(nome.length, casa.length));
+    return `<span class="mencao">${usado}</span>` + todo.slice(usado.length);
+  });
+}
+
+function linha(classe, iso, cabecalho, corpo) {
+  return `<div class="linha ${classe}">
+    <div class="quando">${esc(quando(iso))}</div>
+    <div class="corpo">${cabecalho}${corpo}</div>
+  </div>`;
+}
+
+function desenha() {
+  const m = DEMANDA;
+  document.getElementById('cod').textContent = m.codigo || '—';
+  document.getElementById('titulo').textContent = m.titulo || '(sem título)';
+  document.title = (m.codigo || 'Mensageria') + ' — Mensageria';
+  document.getElementById('eu').textContent = _eu && _eu.nome ? _eu.nome : '';
+
+  const eventos = [];
+
+  /* ─── A CRIAÇÃO ─────────────────────────────────────────────────────────
+     Ela não está no histórico — o histórico compara duas versões, e não havia
+     versão anterior. Entra como marco, com quem pediu. */
+  const nascimento = m.criado_em || m.data_solicitacao;
+  if (nascimento) {
+    eventos.push({
+      em: nascimento,
+      html: linha('ev-marco', nascimento,
+        '<span class="rot">Demanda criada</span>',
+        `<div>${m.solicitante ? 'Pedida por <strong>' + esc(m.solicitante) + '</strong>' : 'Sem solicitante registrado'}` +
+        `${m.tipo ? ' · ' + esc(m.tipo) : ''}</div>`),
+    });
+  }
+
+  /* ─── O HISTÓRICO ───────────────────────────────────────────────────────
+     Cada entrada traz quem, de onde e o que mudou. A ida para o dev aparece aqui
+     como qualquer outra mudança de campo, e é isso que responde "quando foi para
+     o desenvolvedor". */
+  (Array.isArray(m.historico) ? m.historico : []).forEach(e => {
+    const mudancas = (e.mudancas || []).map(c => {
+      /* A DEPENDENCIA GRAVA O ID, e o id nao diz nada a ninguem. Aqui ela volta a
+         ser o codigo — a mesma tradução do bloco de dependência acima, e pelo
+         mesmo motivo: "passou a depender de AX-123" é a frase que se usa; "passou
+         a depender de msd9sjdghu1qtwp7f1v" obriga a ir procurar. */
+      const traduz = c.campo === 'parent_id' ? (v) => codigoDe(v) : (v) => v;
+      const cru = (v) =>
+        v === undefined || v === null || v === '' ? '(vazio)' : String(traduz(v));
+      const de = cru(c.de);
+      const para = cru(c.para);
+      /* O TAMANHO ENTRA QUANDO O TEXTO FOI CORTADO. O servidor guarda `de_tam` e
+         `para_tam` justamente para ninguém achar que a descrição inteira era
+         aquele trecho. */
+      const corte = c.para_tam && String(c.para).length < c.para_tam
+        ? ` <span class="origem">(${c.para_tam} caracteres)</span>` : '';
+      return `<span class="mudanca"><span class="campo">${esc(c.rotulo || c.campo)}</span>: ` +
+             `<span class="de">${esc(de)}</span> → <span class="para">${esc(para)}</span>${corte}</span>`;
+    }).join('');
+    const anexos = e.anexos ? `<span class="mudanca"><span class="campo">anexos</span>: ${esc(e.anexos)}</span>` : '';
+    eventos.push({
+      em: e.em,
+      html: linha('ev-hist', e.em,
+        `<span class="autor">${esc(e.quem || '(sem conta)')}</span>` +
+        (e.origem ? ` <span class="origem">· ${esc(e.origem)}</span>` : ''),
+        mudancas + anexos),
+    });
+  });
+
+  /* ─── AS MENSAGENS ──────────────────────────────────────────────────────── */
+  (Array.isArray(m.mensagens) ? m.mensagens : []).forEach(g => {
+    eventos.push({
+      em: g.em,
+      html: linha('ev-msg', g.em,
+        `<span class="autor">${esc(g.quem || '(sem conta)')}</span>`,
+        `<div class="texto">${comMencoes(g.texto)}</div>`),
+    });
+  });
+
+  /* ─── A DEPENDÊNCIA QUE EXISTE MAS NÃO TEM RASTRO ───────────────────────
+     `parent_id` só passou a entrar no histórico agora. As seis demandas que já
+     tinham vínculo na base não têm o momento do registro — e a tela DIZ isso, em
+     vez de mostrar a dependência como se o dia fosse desconhecido por acaso.
+     Daqui para frente, a criação do vínculo aparece na linha do tempo como
+     qualquer outra mudança. */
+  const jaNoHistorico = (Array.isArray(m.historico) ? m.historico : [])
+    .some(e => (e.mudancas || []).some(c => c.campo === 'parent_id'));
+  if (m.parent_id && !jaNoHistorico) {
+    eventos.push({
+      em: m.atualizado_em || nascimento || new Date().toISOString(),
+      html: linha('ev-marco', m.atualizado_em || nascimento,
+        '<span class="rot">Dependência</span>',
+        `<div>Esta demanda depende de <strong>${esc(codigoDe(m.parent_id))}</strong>` +
+        `${POR_ID.has(m.parent_id) ? ' — ' + esc(POR_ID.get(m.parent_id).titulo || '') : ''}.</div>` +
+        `<div class="aviso-sem-rastro">O vínculo foi criado antes de a dependência entrar no ` +
+        `registro, então o dia e a hora dele não estão guardados. Os próximos ficam.</div>`),
+    });
+  }
+
+  /* ORDEM CRESCENTE: o mais antigo em cima. É uma leitura de "como chegou até
+     aqui", e história se lê do começo. O compositor fica embaixo, onde a conversa
+     termina. */
+  eventos.sort((a, b) => String(a.em || '').localeCompare(String(b.em || '')));
+
+  const alvo = document.getElementById('linha-do-tempo');
+  alvo.innerHTML = eventos.length
+    ? eventos.map(e => e.html).join('')
+    : '<p class="vazio">Nada registrado nesta demanda ainda.</p>';
+}
+
+/* ─── O `@` ──────────────────────────────────────────────────────────────────
+   Teclado antes de mouse: seta para andar, Enter ou Tab para escolher, Esc para
+   fechar. Uma lista que só responde a clique exclui quem está digitando — e
+   digitar é o que a pessoa está fazendo quando o `@` aparece. */
+const cx = document.getElementById('texto');
+const sug = document.getElementById('sugestoes');
+let filtradas = [], ativo = 0, inicioArroba = -1;
+
+function fechaSugestoes() {
+  sug.hidden = true; filtradas = []; inicioArroba = -1;
+  cx.removeAttribute('aria-activedescendant');
+}
+
+function abreSugestoes() {
+  const pos = cx.selectionStart;
+  const antes = cx.value.slice(0, pos);
+  // O `@` tem de estar no começo ou depois de um espaço: um e-mail digitado no
+  // meio do texto não pode virar caixa de sugestão.
+  const m = antes.match(/(^|\s)@([\p{L}.'-]*)$/u);
+  if (!m) return fechaSugestoes();
+  inicioArroba = pos - m[2].length - 1;
+  const q = m[2].toLowerCase();
+  filtradas = PESSOAS.filter(p => !q || p.toLowerCase().includes(q)).slice(0, 8);
+  if (!filtradas.length) return fechaSugestoes();
+  ativo = 0;
+  sug.innerHTML = filtradas.map((p, i) =>
+    `<li id="sug-${i}" role="option" aria-selected="${i === 0}">${esc(p)}</li>`).join('');
+  sug.hidden = false;
+  cx.setAttribute('aria-activedescendant', 'sug-0');
+}
+
+function marcaAtivo() {
+  [...sug.children].forEach((li, i) => li.setAttribute('aria-selected', String(i === ativo)));
+  cx.setAttribute('aria-activedescendant', 'sug-' + ativo);
+  const li = sug.children[ativo];
+  if (li) li.scrollIntoView({ block: 'nearest' });
+}
+
+function escolhe(i) {
+  const nome = filtradas[i];
+  if (!nome || inicioArroba < 0) return;
+  const depois = cx.value.slice(cx.selectionStart);
+  cx.value = cx.value.slice(0, inicioArroba) + '@' + nome + ' ' + depois;
+  const cursor = inicioArroba + nome.length + 2;
+  fechaSugestoes();
+  cx.focus();
+  cx.setSelectionRange(cursor, cursor);
+}
+
+cx.addEventListener('input', abreSugestoes);
+cx.addEventListener('keydown', (e) => {
+  if (sug.hidden) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); ativo = (ativo + 1) % filtradas.length; marcaAtivo(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); ativo = (ativo - 1 + filtradas.length) % filtradas.length; marcaAtivo(); }
+  else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); escolhe(ativo); }
+  else if (e.key === 'Escape') { e.preventDefault(); fechaSugestoes(); }
+});
+sug.addEventListener('mousedown', (e) => {
+  // `mousedown` e não `click`: o clique tira o foco do campo antes de disparar, e
+  // aí a posição do cursor já mudou quando a inserção acontece.
+  const li = e.target.closest('li');
+  if (!li) return;
+  e.preventDefault();
+  escolhe([...sug.children].indexOf(li));
+});
+cx.addEventListener('blur', () => setTimeout(fechaSugestoes, 120));
+
+/* ─── ENVIAR ─────────────────────────────────────────────────────────────── */
+const btn = document.getElementById('enviar');
+const erroEl = document.getElementById('erro');
+
+btn.addEventListener('click', async () => {
+  const texto = cx.value.trim();
+  erroEl.textContent = '';
+  if (!texto) { erroEl.textContent = 'Escreva a mensagem antes de enviar.'; cx.focus(); return; }
+
+  btn.disabled = true;
+  const rotulo = btn.textContent;
+  btn.textContent = 'Enviando…';
+  try {
+    const cred = {};
+    if (_token) cred.token = _token;
+    if (_senha) cred.senha = _senha;
+    const r = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'mensagem-nova', melhoria_id: DEMANDA.id, texto, ...cred }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.detail || j.error || 'falha ao enviar (' + r.status + ')');
+
+    /* RECARREGA DO SERVIDOR em vez de acrescentar na tela o que acabou de ser
+       digitado. Se a gravação foi recusada no meio, a tela otimista mostraria uma
+       mensagem que não existe no registro — e esta tela existe para o registro
+       poder ser acreditado. */
+    cx.value = '';
+    await carrega();
+    desenha();
+  } catch (e) {
+    erroEl.textContent = String(e.message || e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = rotulo;
+  }
+});
+
+/* ─── ABERTURA ───────────────────────────────────────────────────────────── */
+(async () => {
+  try {
+    await carrega();
+    desenha();
+    /* O COMPOSITOR SÓ APARECE PARA QUEM TEM SESSÃO. Mostrar o campo e recusar no
+       envio faria a pessoa escrever para levar 401 — e a rota exige conta, então
+       a tela não pode prometer o que ela não aceita. */
+    if (_token || _senha) {
+      document.getElementById('escrever').hidden = false;
+    } else {
+      const p = document.createElement('p');
+      p.className = 'vazio';
+      p.textContent = 'Entre pelo portal do dev ou pelo Admin para escrever aqui. ' +
+                      'A leitura do registro continua liberada.';
+      document.querySelector('main').appendChild(p);
+    }
+  } catch (e) {
+    document.getElementById('linha-do-tempo').innerHTML =
+      '<p class="vazio">' + esc(String(e.message || e)) + '</p>';
+  }
+})();
+</script>
+</body>
+</html>

@@ -26,7 +26,7 @@ import re
 import sys
 
 PAGINAS = ['index.html', 'admin.html', 'dev.html', 'gantt.html',
-           'poker.html', 'projetos.html', 'importar.html']
+           'poker.html', 'projetos.html', 'importar.html', 'mensageria.html']
 
 # `src="algo.js?v=..."` ou `href="algo.css?v=..."`, so arquivo local.
 REF = re.compile(r'(?:src|href)="([A-Za-z0-9_.-]+\.(?:js|css))\?v=[^"]*"')

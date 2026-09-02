@@ -485,11 +485,31 @@ const HIST_CAMPOS = {
   link_issue:          'issue',
   link_pr:             'PR',
   link_milestone:      'milestone',
+  // A DEPENDENCIA ENTRA NO HISTORICO, e faltava. Ha seis demandas com
+  // `parent_id` na base e NENHUM registro de quando cada vinculo foi criado —
+  // "esta demanda ficou travada esperando qual outra, e desde quando" nao tinha
+  // resposta. E justamente a pergunta que se faz ao auditar um atraso: o vinculo
+  // aparecia no card e o dia dele, em nenhum lugar.
+  parent_id:           'dependencia',
+  is_dependency:       'e dependencia de outra',
 };
 // Guarda por demanda. Sem teto, um card antigo acumularia centenas de entradas e
 // o arquivo (164 KB hoje) cresceria sem controle — ele e lido inteiro em toda
 // abertura de tela.
 const HIST_MAX = 25;
+
+// ─── MENSAGERIA ──────────────────────────────────────────────────────────
+// As mensagens escritas a mao sobre a demanda. Ficam AO LADO do historico, e nao
+// dentro dele: o historico e o que o sistema observou (campo tal mudou de X para
+// Y), e a mensagem e o que uma pessoa quis dizer. Misturar os dois faria a
+// auditoria nao distinguir fato registrado de comentario.
+//
+// Teto maior que o do historico porque aqui as entradas SAO o recurso — cortar em
+// 25 apagaria a conversa que a tela existe para guardar. O arquivo e lido inteiro
+// em toda abertura de tela (164 KB hoje), entao o teto existe: sem ele, uma
+// demanda antiga com discussao longa passa a pesar em TODAS as telas.
+const MSG_MAX = 200;
+const MSG_TAM = 4000;
 const HIST_TEXTO = 180;   // texto longo entra cortado; o tamanho fica registrado
 
 function histValor(v) {
@@ -2470,6 +2490,89 @@ export default {
     //
     // Subir exige credencial de ESCRITA (admin ou dev) OU, no formulario publico,
     // o captcha — mesmo criterio de quem pode criar demanda.
+    // ── MENSAGERIA: uma mensagem nova na demanda ──────────────────────────
+    //
+    // O SERVIDOR E A AUTORIDADE, pela mesma razao do historico: a lista chega
+    // aqui pelo que ESTA GRAVADO, e nunca pelo que veio no corpo. Se a base fosse
+    // o corpo, bastaria enviar `mensagens: []` para apagar a propria conversa — e
+    // um registro que o auditado pode apagar nao serve para auditar.
+    //
+    // Cada mensagem carrega QUEM e QUANDO vindos do servidor, e nao do cliente.
+    // Aceitar o nome do corpo deixaria qualquer um escrever no lugar de qualquer
+    // outro, o que e o oposto do que uma trilha de auditoria precisa ser.
+    if (body.action === 'mensagem-nova') {
+      if (!(await ehDev())) return json({ error: 'credencial',
+        detail: 'Entre com a sua conta para escrever na mensageria.' }, 401, headers);
+
+      const mid = String(body.melhoria_id || '');
+      if (!mid) return json({ error: 'melhoria_id obrigatorio' }, 400, headers);
+      const texto = limpaTexto(body.texto, MSG_TAM);
+      if (!texto) return json({ error: 'texto_vazio',
+        detail: 'Escreva a mensagem antes de enviar.' }, 400, headers);
+
+      const metaM = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+      if (!metaM.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const fileM = await metaM.json();
+      const rawM = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawM.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const dataM = JSON.parse(await rawM.text());
+      const alvoM = (dataM.melhorias || []).find(x => x.id === mid);
+      if (!alvoM) return json({ error: 'Demanda nao encontrada' }, 404, headers);
+
+      /* O CARIMBO NASCE AQUI. Havia um `iso` pronto no arquivo e eu o usei — mas
+         ele mora DENTRO do bloco do Planning Poker (linhas 2059–2477), e esta
+         rota fica fora dele. `node --check` valida sintaxe e não escopo: passaria
+         limpo e estouraria `ReferenceError` na primeira mensagem enviada, com a
+         demanda já lida do GitHub e nada gravado. */
+      const agoraM = new Date().toISOString();
+      const quemM = nomeNaDemanda(_ident) || (_ident && _ident.login) || '(sem conta)';
+
+      /* AS MENCOES SAO CONFERIDAS CONTRA A LISTA DE PESSOAS, e nao aceitas como
+         vieram. Duas razoes: `@` seguido de qualquer coisa viraria mencao a
+         alguem que nao existe, e o nome so serve para notificar se casar com
+         alguem de verdade. O texto NAO e reescrito — quem escreveu "@Joao" ve
+         "@Joao"; o que se guarda separado e a lista de quem foi de fato
+         mencionado. */
+      const pessoas = devsDasDemandas(dataM, false) || [];
+      const mencoes = [];
+      const rx = /@([\p{L}][\p{L}\s.'-]{1,39})/gu;
+      let mm;
+      while ((mm = rx.exec(texto)) !== null) {
+        const escrito = mm[1].trim().toLowerCase();
+        for (const p of pessoas) {
+          const nome = String(p || '').trim();
+          if (!nome) continue;
+          // Casa pelo comeco: quem digita "@Emilly" alcanca "Emilly Souza" sem
+          // ter de escrever o nome inteiro.
+          if (escrito.startsWith(nome.toLowerCase()) || nome.toLowerCase().startsWith(escrito)) {
+            if (!mencoes.includes(nome)) mencoes.push(nome);
+          }
+        }
+      }
+
+      const anteriorM = Array.isArray(alvoM.mensagens) ? alvoM.mensagens : [];
+      const entradaM = { em: agoraM, quem: quemM, texto };
+      if (mencoes.length) entradaM.mencoes = mencoes;
+      alvoM.mensagens = anteriorM.concat([entradaM]).slice(-MSG_MAX);
+      dataM.atualizado_em = agoraM;
+
+      const riscoM = gravacaoSuspeita(dataM, fileM.size || 0);
+      if (riscoM) return json({ error: riscoM }, 409, headers);
+      const putM = await gh('contents/' + FILE_PATH, {
+        method: 'PUT',
+        body: JSON.stringify({
+          message: 'chore: mensageria ' + (alvoM.codigo || mid),
+          content: toB64(JSON.stringify(dataM)), sha: fileM.sha }),
+      });
+      if (!putM.ok) {
+        const e = await putM.text();
+        return json({ error: 'Falha ao salvar', detail: e.slice(0, 200) }, 502, headers);
+      }
+      return json({ ok: true, mensagem: entradaM,
+                    total: alvoM.mensagens.length }, 200, headers);
+    }
+
     if (body.action === 'anexo-subir') {
       if (!env.ANEXOS) return json({ error: 'armazenamento indisponivel' }, 503, headers);
       // ehDev() cobre conta por pessoa (token) E as senhas compartilhadas. Antes

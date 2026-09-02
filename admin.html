@@ -1024,7 +1024,7 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
-<script src="capa-tecnologia.js"></script>
+<script src="capa-tecnologia.js?v=e3aaaae81d"></script>
 <script src="pipelines.js?v=a122233200"></script>
 <script src="capacidade.js?v=3769a13468"></script>
 <script src="apresentacao.js?v=5bc88a3cb9"></script>
@@ -1034,6 +1034,7 @@
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
+<script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 </head>
 <body>
 
@@ -1692,6 +1693,11 @@
         <div id="m-mescladas" style="display:none;margin-bottom:10px"></div>
         <button type="button" class="btn btn-secondary btn-sm" id="m-btn-mesclar"
                 onclick="mescAbrirBusca()" style="display:none">🔗 Mesclar outra demanda nesta</button>
+        <!-- MENSAGERIA. Aqui e onde a auditoria comeca: quem abre uma demanda no
+             Admin para entender um atraso precisa da linha do tempo, e ela nao
+             cabe neste modal sem empurrar o formulario para fora da tela. -->
+        <button type="button" class="btn btn-secondary btn-sm" id="m-btn-msg"
+                onclick="admAbreMensageria()" style="display:none">💬 Mensageria</button>
       </div>
       <div class="form-group">
         <label>Projeto / Épico</label>
@@ -8759,7 +8765,29 @@ function aplicarRetomada(m) {
 
 
 // Bloco de pausa no card do admin: estado, motivo e as acoes.
+/** Abre a Mensageria da demanda que está no modal do Admin.
+ *  A regra de COMO abrir mora em `mensageria-abrir.js` — as três telas usam a
+ *  mesma, e é isso que impede uma delas de passar o argumento errado. */
+function admAbreMensageria() {
+  /* A DEMANDA VEM DE `#m-id`, que e como o resto desta tela a encontra —
+     `pausaIniciar` faz igual. Escrevi `editingId` na primeira versao, copiando do
+     Gantt: aqui essa variavel nao existe, e o botao teria falhado com
+     `ReferenceError` no console e nada acontecendo na tela. */
+  const id = document.getElementById('m-id') ? document.getElementById('m-id').value : '';
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) { toast('Salve a demanda antes de abrir a Mensageria.', 'err'); return; }
+  if (window.MENSAGERIA) MENSAGERIA.abre(m);
+}
+
+/** Mostra o botão da Mensageria só quando há demanda aberta: registro de demanda
+ *  que ainda não existe não existe. */
+function admMensageriaBotao(m) {
+  const b = document.getElementById('m-btn-msg');
+  if (b) b.style.display = m ? 'inline-flex' : 'none';
+}
+
 function pausaRenderBloco(m) {
+  admMensageriaBotao(m);
   const box = document.getElementById('m-pausa');
   if (!box) return;
   if (!m) { box.style.display = 'none'; box.innerHTML = ''; return; }

@@ -745,6 +745,7 @@
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
+<script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 </head>
 <body>
 
@@ -1020,6 +1021,10 @@
         <button class="btn btn-secondary" onclick="closeModal('modal-main')">Cancelar</button>
         <button id="delete-btn" class="btn delete-btn" onclick="deleteCurrent()" style="display:none">Excluir</button>
         <button id="backlog-btn" class="btn btn-secondary" onclick="returnToBacklog()" style="display:none;border-color:var(--amber);color:var(--amber-tx)">↩ Voltar ao Backlog</button>
+        <!-- MENSAGERIA. Fica junto das outras acoes do card, e nao no rodape de
+             salvar: ela nao grava nada aqui — abre a leitura do registro. Some na
+             Nova Tarefa, porque demanda que ainda nao existe nao tem historico. -->
+        <button id="msg-btn" class="btn btn-secondary" onclick="abreMensageria()" style="display:none">💬 Mensageria</button>
       </div>
       <button id="save-btn" class="btn btn-primary" onclick="saveTask()">Salvar</button>
     </div>
@@ -2911,12 +2916,22 @@ function onLayerClick(e, dev) {
 // ── MODAL ─────────────────────────────────────────────────────────────────
 let editingId = null;
 
+/** Abre a Mensageria da demanda que está no modal.
+ *  A regra de COMO abrir mora em `mensageria-abrir.js` — as três telas usam a
+ *  mesma, e é isso que impede uma delas de passar o argumento errado. */
+function abreMensageria() {
+  const m = state.melhorias.find(x => x.id === editingId);
+  if (m && window.MENSAGERIA) MENSAGERIA.abre(m);
+}
+
 function openModal(id, prefillDev, prefillDate) {
   editingId = id || null;
   const m = id ? state.melhorias.find(x => x.id === id) : null;
   document.getElementById('modal-main-title').textContent =
     m ? ('Editar Tarefa' + (m.codigo ? ' · ' + m.codigo : '')) : 'Nova Tarefa';
   document.getElementById('delete-btn').style.display  = m ? 'inline-flex' : 'none';
+  // Só existe registro de demanda que já existe.
+  document.getElementById('msg-btn').style.display = m ? 'inline-flex' : 'none';
   // mostra "Voltar ao Backlog" apenas para cards que já têm datas no Gantt
   document.getElementById('backlog-btn').style.display = (m && (m.inicio || m.entrega)) ? 'inline-flex' : 'none';
 

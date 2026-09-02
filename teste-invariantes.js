@@ -5499,6 +5499,104 @@ ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
    Nao ha build nesta base: os selos sao mantidos a mao, e e por isso que passam.
    Esta invariante e o que fecha a lacuna — ela recalcula todos e falha nomeando o
    arquivo, a tela e os dois valores.                                            */
+/* ─── MENSAGERIA ──────────────────────────────────────────────────────────────
+ *
+ * O recurso responde a uma pergunta de AUDITORIA: "como esta issue chegou aqui, e
+ * quando cada coisa foi registrada". O que ele guarda so vale se tres coisas
+ * valerem, e cada uma delas quebra em silencio.
+ */
+sec('Mensageria');
+
+/* 1. A DEPENDENCIA ENTRA NO HISTORICO.
+ *
+ * Era a lacuna que motivou o recurso: havia SEIS demandas com `parent_id` na base
+ * e NENHUM registro de quando cada vinculo foi criado. "Esta demanda ficou travada
+ * esperando qual outra, e desde quando" nao tinha resposta — e e exatamente a
+ * pergunta que se faz ao auditar um atraso.
+ *
+ * Tirar esta linha do `HIST_CAMPOS` nao quebra nada visivel: a Mensageria abre, a
+ * linha do tempo aparece, e a dependencia simplesmente nunca entra nela. */
+['parent_id', 'is_dependency'].forEach((campo) => {
+  /* SEM REGEXP MONTADA A PARTIR DE STRING. Escrevi
+     `new RegExp('^\s*' + campo + ':')` e dentro de uma string `\s` vira um `s`
+     comum — a expressao saiu procurando "^s*parent_id:" e nao casou com nada. A
+     invariante FALHOU com o campo PRESENTE, o que e o menos ruim dos dois erros
+     possiveis; escrita ao contrario, ela passaria sem testar.
+     Terceira vez que este escape me pega nesta base. Aqui a busca e por indice, e
+     o `HIST_CAMPOS` e recortado antes para a checagem nao casar com o campo em
+     outro lugar do arquivo. */
+  const iniHC = W.indexOf('const HIST_CAMPOS');
+  const fimHC = W.indexOf('};', iniHC);
+  const listaHC = iniHC >= 0 && fimHC > iniHC ? W.slice(iniHC, fimHC) : '';
+  ok(listaHC.indexOf(campo + ':') >= 0,
+     'o historico do Worker registra ' + campo);
+});
+
+/* 2. A MENSAGEM E GRAVADA PELO SERVIDOR, E A BASE E O QUE ESTA GRAVADO.
+ *
+ * A mesma regra do historico, e pelo mesmo motivo escrito la: se a base fosse o
+ * corpo da requisicao, bastaria enviar `mensagens: []` para apagar a propria
+ * conversa. Um registro que o auditado pode apagar nao serve para auditar.
+ *
+ * O que se guarda aqui: a rota existe, ela le a lista do ALVO (o que esta no
+ * arquivo do servidor) e nao do `body`, e o carimbo e o nome saem do servidor. */
+{
+  const i = W.indexOf("body.action === 'mensagem-nova'");
+  ok(i > 0, 'a rota mensagem-nova existe no Worker');
+  if (i > 0) {
+    let prof = 0, fim = i;
+    for (let k = i; k < W.length; k++) {
+      if (W[k] === '{') prof++;
+      else if (W[k] === '}') { prof--; if (prof === 0) { fim = k; break; } }
+    }
+    const rota = W.slice(i, fim + 1);
+
+    ok(/Array\.isArray\(alvoM\.mensagens\)/.test(rota),
+       'a lista de mensagens vem do que esta GRAVADO, e nao do corpo');
+    ok(!/body\.mensagens/.test(rota),
+       'a rota NAO le `body.mensagens` — quem escreve nao escolhe o historico dele');
+    ok(!/body\.quem|body\.autor/.test(rota),
+       'o autor vem do servidor, e nao do corpo: senao qualquer um escreve como outro');
+    ok(/const agoraM = new Date\(\)/.test(rota),
+       'o carimbo nasce no servidor');
+    /* O `iso` DO POKER NAO ALCANCA ESTA ROTA. Ele e declarado dentro do bloco
+       `poker-*` e esta rota fica fora dele: usa-lo aqui passa no `node --check`
+       (sintaxe) e estoura ReferenceError na PRIMEIRA mensagem enviada, com a
+       demanda ja lida do GitHub e nada gravado. Foi o que eu escrevi primeiro. */
+    ok(!/\bem: iso\b|atualizado_em = iso\b/.test(rota),
+       'a rota nao usa o `iso` do bloco do poker, que esta fora do escopo dela');
+    ok(/gravacaoSuspeita/.test(rota),
+       'a gravacao passa pela mesma trava de tamanho das outras');
+    ok(/await ehDev\(\)/.test(rota),
+       'escrever exige conta: a mensageria nao aceita anonimo');
+  }
+}
+
+/* 3. AS TRES TELAS ABREM PELA MESMA PORTA.
+ *
+ * Admin, portal do dev e Gantt abrem a MESMA tela. Tres `window.open` escritos a
+ * mao divergem na primeira mexida — uma passa o id, outra o codigo, a terceira
+ * esquece de conferir se ha demanda —, e o sintoma e um botao que nao faz nada em
+ * UMA das telas. Foi a razao de `prazo.js`, `capacidade.js` e `busca-demanda.js`
+ * existirem. */
+['admin.html', 'dev.html', 'gantt.html'].forEach((tela) => {
+  const s = fs.readFileSync(tela, 'utf8');
+  ok(/src="mensageria-abrir\.js\?v=/.test(s),
+     tela + ' carrega o abridor compartilhado da mensageria');
+  ok(!/window\.open\(\s*['"]mensageria\.html/.test(s),
+     tela + ' NAO abre a mensageria por conta propria');
+});
+
+/* E A TELA PEDE A DEMANDA PELO CODIGO. O id e um uuid que nao diz nada a ninguem;
+   o codigo e o que a pessoa reconhece na barra de endereco e consegue digitar a
+   mao para abrir outra demanda. */
+{
+  const AB = fs.readFileSync('mensageria-abrir.js', 'utf8');
+  ok(/mensageria\.html\?codigo=/.test(AB), 'a mensageria e aberta por codigo');
+  ok(/if \(!j\)/.test(AB),
+     'janela bloqueada pelo navegador AVISA — bloqueio silencioso e indistinguivel de botao quebrado');
+}
+
 sec('Selo de cache dos scripts');
 
 (() => {
@@ -5526,6 +5624,59 @@ sec('Selo de cache dos scripts');
      'e todo selo bate com o md5 do arquivo — script mudado sem selo novo nao chega a quem tem cache',
      errados.length ? errados.join(' ; ') : conferidos + ' selos conferidos');
 })();
+/* ─── E SCRIPT LOCAL SEM SELO NENHUM TAMBEM E DEFEITO ────────────────────────
+ *
+ * A invariante acima confere os selos que EXISTEM. Ela nao ve o arquivo incluido
+ * SEM `?v=` — e esse caso e pior, porque nunca vai receber selo: o
+ * `scripts-tema-versao.py` descobre o que selar lendo as referencias JA SELADAS
+ * das paginas, entao um script novo sem `?v=` fica invisivel para ele para
+ * sempre. Um arquivo que muda e nao chega a quem tem cache, sem nada acusando.
+ *
+ * Aconteceu agora, com `mensageria-abrir.js`: incluido sem selo, o script de selo
+ * respondeu "paginas atualizadas: nenhuma" e a invariante de cima passou limpa.
+ * Duas verificacoes verdes e o arquivo fora do mecanismo.
+ *
+ * O QUE FICA DE FORA, e de proposito: `config.js`. Ele guarda a configuracao da
+ * instalacao, e selar o conteudo dele publicaria o hash de um arquivo que muda por
+ * ambiente — e ele e carregado antes de tudo justamente para poder ser trocado
+ * sem mexer nas paginas.
+ */
+(() => {
+  const crypto = require('crypto');
+  const telas = ['admin.html', 'dev.html', 'gantt.html', 'index.html', 'poker.html',
+                 'importar.html', 'projetos.html', 'mensageria.html'];
+  const SEM_SELO_OK = ['config.js'];
+  const nus = [];
+  telas.forEach((tela) => {
+    if (!fs.existsSync(tela)) return;
+    const s = fs.readFileSync(tela, 'utf8');
+    // `src="algo.js"` sem `?v=`, e so arquivo LOCAL: CDN nao e nosso para selar.
+    [...s.matchAll(/src="([a-z0-9-]+\.js)"/g)].forEach(([, arq]) => {
+      if (SEM_SELO_OK.includes(arq)) return;
+      if (!fs.existsSync(arq)) return;   // a invariante de cima cobre inexistente
+      nus.push(tela + ' inclui ' + arq + ' sem ?v=');
+    });
+    // O mesmo para folha de estilo local.
+    [...s.matchAll(/href="([a-z0-9-]+\.css)"/g)].forEach(([, arq]) => {
+      if (!fs.existsSync(arq)) return;
+      nus.push(tela + ' inclui ' + arq + ' sem ?v=');
+    });
+  });
+  ok(nus.length === 0,
+     'nenhuma tela inclui script ou estilo local sem selo de cache',
+     nus.join(' | '));
+
+  /* E A PAGINA NOVA ENTRA NAS DUAS LISTAS. Sao tres listas de telas nesta base —
+     a do script de selo e as duas invariantes — e uma pagina que entre em duas
+     delas fica meio coberta: os selos dela sao conferidos e nao sao atualizados,
+     ou o contrario. */
+  const noScript = fs.readFileSync('scripts-tema-versao.py', 'utf8');
+  const faltando = telas.filter((t) => fs.existsSync(t) && noScript.indexOf("'" + t + "'") < 0);
+  ok(faltando.length === 0,
+     'toda tela conferida aqui tambem esta na lista do scripts-tema-versao.py',
+     faltando.join(', '));
+})();
+
 
 /* ─── PLANEJADO x ENTREGUE NO DECK ───────────────────────────────────────
    A leitura que o Fernando pediu para levar ao gerencial. O deck e a QUARTA tela

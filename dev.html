@@ -439,6 +439,7 @@
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
+<script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 </head>
 <body>
 
@@ -2141,7 +2142,19 @@ function verDemandaPorNumero() {
       .map(([campo, rot]) => m[campo]
         ? linha(rot, '<a href="' + escAttr(m[campo]) + '" target="_blank" rel="noopener" ' +
           'style="color:var(--blue)">' + escAttr(m[campo]) + '</a>')
-        : '').join('');
+        : '').join('') +
+    /* MENSAGERIA — o registro da demanda, em ordem, com dia e hora.
+       Entra aqui, no fim dos detalhes, porque e a continuacao natural da leitura:
+       este modal responde "o que e esta demanda", e a Mensageria responde "como
+       ela chegou aqui". A regra de COMO abrir mora em `mensageria-abrir.js`, uma
+       para as tres telas. */
+    (window.MENSAGERIA
+      ? '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2)">' +
+        MENSAGERIA.botaoHTML(m, 'btn btn-secondary btn-sm') +
+        '<div style="margin-top:6px;font-size:11.5px;color:var(--text3)">' +
+        'Historico da issue: criacao, ida para o dev, dependencias e mensagens — ' +
+        'com dia e hora.</div></div>'
+      : '');
 
   abrirModal('modal-ver');
 }
