@@ -204,12 +204,44 @@
    ───────────────────────────────────────────────────────────────────────────── */
 const PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
 
-/* A SESSÃO VEM DA ABA QUE ABRIU ESTA. `window.open` de mesma origem recebe uma
-   CÓPIA do sessionStorage de quem abriu — é assim que o token chega aqui sem
-   esta tela ter login próprio. Um quarto formulário de senha seria a quarta
-   chance de a regra de acesso divergir. */
-let _token = sessionStorage.getItem('rm_dev_token') || '';
-let _senha = sessionStorage.getItem('rm_dev_pw') || '';
+/* ─── A SESSÃO VEM DA ABA QUE ABRIU ESTA ────────────────────────────────────
+   `window.open` de mesma origem entrega a esta tela uma CÓPIA do
+   `sessionStorage` de quem abriu — é assim que o token chega aqui sem a
+   Mensageria ter login próprio. Um quarto formulário de senha seria a quarta
+   chance de a regra de acesso divergir.
+
+   CADA TELA GUARDA A SESSÃO COM CHAVE PRÓPRIA, e é aí que eu errei: li só
+   `rm_dev_*`, então abrir pelo ADMIN — que guarda em `rm_admin_*` — chegava aqui
+   sem credencial nenhuma e a tela dizia "Acesso não autorizado" a um
+   administrador logado.
+
+   A leitura abaixo é a MESMA de `credenciaisLeitura()` no `dev.html`, copiada de
+   lá e não reinventada: três chaves de senha (admin, visualização, dev), duas de
+   token e a chave do link de visualização. Escrever uma quinta versão desta
+   regra é exatamente como ela divergiu na quarta. */
+function credenciais() {
+  const c = {};
+  const senha = sessionStorage.getItem('rm_admin_pw')
+             || sessionStorage.getItem('rm_view_pw')
+             || sessionStorage.getItem('rm_dev_pw');
+  if (senha) c.senha = senha;
+  const tk = sessionStorage.getItem('rm_dev_token')
+          || sessionStorage.getItem('rm_admin_token');
+  if (tk) c.token = tk;
+  /* A CHAVE DO LINK DE VISUALIZAÇÃO também vale, e ela pode vir na própria URL:
+     é como alguém abre o roadmap sem digitar senha. */
+  const chave = new URLSearchParams(location.search).get('k')
+             || sessionStorage.getItem('rm_view_key');
+  if (chave) c.chave = chave;
+  return c;
+}
+
+/** Tem com o que autenticar? É o que decide se o campo de escrever aparece. */
+function temSessao() {
+  const c = credenciais();
+  return !!(c.token || c.senha || c.chave);
+}
+
 let _eu = null;
 try { _eu = JSON.parse(sessionStorage.getItem('rm_eu') || 'null'); } catch (_) {}
 
@@ -257,13 +289,10 @@ function codigoDe(id) {
  *  A credencial vai junto pelo mesmo motivo: a leitura pode estar travada por
  *  senha, e é o Worker que decide. */
 async function carrega() {
-  const cred = {};
-  if (_token) cred.token = _token;
-  if (_senha) cred.senha = _senha;
   const r = await fetch(PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'dados', ...cred }),
+    body: JSON.stringify({ action: 'dados', ...credenciais() }),
   });
   if (r.status === 401) {
     throw new Error('Acesso não autorizado. Abra a Mensageria pelo Admin ou pelo portal do dev.');
@@ -499,13 +528,12 @@ btn.addEventListener('click', async () => {
   const rotulo = btn.textContent;
   btn.textContent = 'Enviando…';
   try {
-    const cred = {};
-    if (_token) cred.token = _token;
-    if (_senha) cred.senha = _senha;
     const r = await fetch(PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'mensagem-nova', melhoria_id: DEMANDA.id, texto, ...cred }),
+      body: JSON.stringify({
+        action: 'mensagem-nova', melhoria_id: DEMANDA.id, texto, ...credenciais(),
+      }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) throw new Error(j.detail || j.error || 'falha ao enviar (' + r.status + ')');
@@ -533,7 +561,7 @@ btn.addEventListener('click', async () => {
     /* O COMPOSITOR SÓ APARECE PARA QUEM TEM SESSÃO. Mostrar o campo e recusar no
        envio faria a pessoa escrever para levar 401 — e a rota exige conta, então
        a tela não pode prometer o que ela não aceita. */
-    if (_token || _senha) {
+    if (temSessao()) {
       document.getElementById('escrever').hidden = false;
     } else {
       const p = document.createElement('p');
@@ -543,6 +571,10 @@ btn.addEventListener('click', async () => {
       document.querySelector('main').appendChild(p);
     }
   } catch (e) {
+    /* O CABEÇALHO PARA DE DIZER "Carregando…". Ele ficava assim quando a leitura
+       falhava — e "Carregando…" parado é indistinguível de tela travada: quem
+       olha espera, em vez de ler a mensagem logo abaixo. */
+    document.getElementById('titulo').textContent = 'Não foi possível abrir';
     document.getElementById('linha-do-tempo').innerHTML =
       '<p class="vazio">' + esc(String(e.message || e)) + '</p>';
   }

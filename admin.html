@@ -1580,6 +1580,20 @@
     <button type="button" id="m-estrela" onclick="destaqueAlterna(event, document.getElementById('m-id').value)"
             style="display:none;background:none;border:none;font-size:19px;cursor:pointer;
                    margin:-8px 0 14px 6px;line-height:1;vertical-align:middle"></button>
+    <!-- MENSAGERIA — no CABECALHO, junto do codigo e da estrela.
+         Estava no fim da aba "Dados", ao lado de "Pausar" e "Mesclar" — e ali ela
+         nao pertence: aquelas sao acoes SOBRE a demanda, e esta e ida ao REGISTRO
+         dela. O efeito pratico era pior que a incoerencia: ficava abaixo da dobra
+         do modal, entao quem abre um card para entender um atraso tinha de rolar
+         o formulario inteiro para achar a linha do tempo.
+         Aqui ela aparece em QUALQUER aba, sem rolagem, ao lado do codigo que a
+         pessoa acabou de ler. -->
+    <button type="button" id="m-btn-msg" onclick="admAbreMensageria()"
+            title="Histórico e mensagens desta demanda"
+            style="display:none;font-size:12px;font-weight:600;color:var(--text);
+                   background:var(--bg3);border:1px solid var(--border2);
+                   border-radius:5px;padding:3px 9px;margin:-8px 0 14px 6px;
+                   cursor:pointer;vertical-align:middle">💬 Mensageria</button>
     <input type="hidden" id="m-id" />
     <!-- O mes fica ao lado da etapa porque as duas juntas sao a leitura completa:
          "em andamento, comprometida com agosto". Separadas, cada uma conta metade. -->
@@ -1693,11 +1707,7 @@
         <div id="m-mescladas" style="display:none;margin-bottom:10px"></div>
         <button type="button" class="btn btn-secondary btn-sm" id="m-btn-mesclar"
                 onclick="mescAbrirBusca()" style="display:none">🔗 Mesclar outra demanda nesta</button>
-        <!-- MENSAGERIA. Aqui e onde a auditoria comeca: quem abre uma demanda no
-             Admin para entender um atraso precisa da linha do tempo, e ela nao
-             cabe neste modal sem empurrar o formulario para fora da tela. -->
-        <button type="button" class="btn btn-secondary btn-sm" id="m-btn-msg"
-                onclick="admAbreMensageria()" style="display:none">💬 Mensageria</button>
+
       </div>
       <div class="form-group">
         <label>Projeto / Épico</label>
@@ -8779,11 +8789,18 @@ function admAbreMensageria() {
   if (window.MENSAGERIA) MENSAGERIA.abre(m);
 }
 
-/** Mostra o botão da Mensageria só quando há demanda aberta: registro de demanda
- *  que ainda não existe não existe. */
+/** Mostra o botão da Mensageria só quando há demanda GRAVADA.
+ *
+ *  `m.id` e não só `m`: o modal de "Nova issue" recebe um objeto vazio em alguns
+ *  caminhos, e o botão apareceria para uma demanda que ainda não existe — o
+ *  clique abriria a Mensageria de nada.
+ *
+ *  `inline-block` para casar com os vizinhos do cabeçalho (`m-codigo` e
+ *  `m-estrela`): `inline-flex` alinharia diferente na mesma linha, e a fileira
+ *  ficaria com um botão fora de esquadro. */
 function admMensageriaBotao(m) {
   const b = document.getElementById('m-btn-msg');
-  if (b) b.style.display = m ? 'inline-flex' : 'none';
+  if (b) b.style.display = m && m.id ? 'inline-block' : 'none';
 }
 
 function pausaRenderBloco(m) {
