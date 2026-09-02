@@ -1580,20 +1580,6 @@
     <button type="button" id="m-estrela" onclick="destaqueAlterna(event, document.getElementById('m-id').value)"
             style="display:none;background:none;border:none;font-size:19px;cursor:pointer;
                    margin:-8px 0 14px 6px;line-height:1;vertical-align:middle"></button>
-    <!-- MENSAGERIA — no CABECALHO, junto do codigo e da estrela.
-         Estava no fim da aba "Dados", ao lado de "Pausar" e "Mesclar" — e ali ela
-         nao pertence: aquelas sao acoes SOBRE a demanda, e esta e ida ao REGISTRO
-         dela. O efeito pratico era pior que a incoerencia: ficava abaixo da dobra
-         do modal, entao quem abre um card para entender um atraso tinha de rolar
-         o formulario inteiro para achar a linha do tempo.
-         Aqui ela aparece em QUALQUER aba, sem rolagem, ao lado do codigo que a
-         pessoa acabou de ler. -->
-    <button type="button" id="m-btn-msg" onclick="admAbreMensageria()"
-            title="Histórico e mensagens desta demanda"
-            style="display:none;font-size:12px;font-weight:600;color:var(--text);
-                   background:var(--bg3);border:1px solid var(--border2);
-                   border-radius:5px;padding:3px 9px;margin:-8px 0 14px 6px;
-                   cursor:pointer;vertical-align:middle">💬 Mensageria</button>
     <input type="hidden" id="m-id" />
     <!-- O mes fica ao lado da etapa porque as duas juntas sao a leitura completa:
          "em andamento, comprometida com agosto". Separadas, cada uma conta metade. -->
@@ -1656,6 +1642,25 @@
     <div class="form-group">
       <label>Descrição</label>
       <textarea id="m-descricao" rows="3" placeholder="Texto da área ou editado pelo produto…"></textarea>
+      <!-- MENSAGERIA — LOGO ABAIXO DA DESCRICAO, que e onde o Fernando a pediu.
+           Ela ja morou em dois lugares errados: no fim da aba "Dados", junto de
+           "Pausar" e "Mesclar" (que sao acoes SOBRE a demanda, e esta e ida ao
+           REGISTRO dela), e depois no cabecalho, ao lado do codigo.
+
+           Aqui ela fica logo depois do texto que descreve a demanda — a leitura
+           natural e "isto e a demanda; e isto e o que aconteceu com ela".
+
+           Vem DEPOIS da barra do "Usar modelo" no desenho final, e nao antes:
+           `modelo-descricao.js` insere aquela barra como `nextSibling` do
+           textarea, entao qualquer coisa escrita aqui embaixo aparece sob ela. -->
+      <div id="m-msg-linha" style="display:none;margin-top:8px">
+        <button type="button" id="m-btn-msg" onclick="admAbreMensageria()"
+                class="btn btn-secondary btn-sm"
+                title="Histórico e mensagens desta demanda">💬 Mensageria</button>
+        <span style="margin-left:8px;font-size:11.5px;color:var(--text3)">
+          criação, ida para o dev, dependências e mensagens — com dia e hora
+        </span>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -8799,8 +8804,10 @@ function admAbreMensageria() {
  *  `m-estrela`): `inline-flex` alinharia diferente na mesma linha, e a fileira
  *  ficaria com um botão fora de esquadro. */
 function admMensageriaBotao(m) {
-  const b = document.getElementById('m-btn-msg');
-  if (b) b.style.display = m && m.id ? 'inline-block' : 'none';
+  /* Esconde a LINHA inteira, e nao so o botao: a legenda ao lado ficaria
+     sozinha na tela, explicando um botao que nao esta la. */
+  const linha = document.getElementById('m-msg-linha');
+  if (linha) linha.style.display = m && m.id ? 'block' : 'none';
 }
 
 function pausaRenderBloco(m) {

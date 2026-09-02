@@ -250,13 +250,40 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-/** Dia e hora, no fuso de quem lê. A auditoria pede os dois — "preciso saber o
- *  dia e hora que foi registrado" —, e a hora sozinha não localiza nada. */
+/** Dia e hora, no fuso de quem lê, em `DD-MM-AAAA HH:MM`.
+ *
+ *  A auditoria pede os dois — "preciso saber o dia e hora que foi registrado" —,
+ *  e a hora sozinha não localiza nada.
+ *
+ *  O SEPARADOR É HÍFEN, e foi pedido assim. Registro para quem vier depois: as
+ *  outras sete telas usam BARRA (`formatDate` no Admin, `formatDateBR` e
+ *  `fmtDate` no Gantt, todas devolvendo `DD/MM/AAAA`). Esta tela é a única com
+ *  hífen hoje — se a decisão for padronizar tudo em hífen, são três funções a
+ *  mudar, e este comentário é o mapa delas. */
+/** O VALOR GRAVADO, quando ele é uma data, no mesmo formato do carimbo.
+ *
+ *  O histórico guarda o valor cru do campo — "entrega: 2026-08-28 → 2026-08-14".
+ *  Ficava em ISO no meio de uma tela onde o carimbo já está em DD-MM-AAAA: duas
+ *  grafias de data na mesma linha, e a de baixo é a que a pessoa está comparando.
+ *
+ *  `AAAA-MM` VIRA `MM-AAAA`, e não `01-MM-AAAA`: o campo `mes` guarda mês sem
+ *  dia, e inventar o dia 1 seria a tela afirmando uma data que ninguém gravou.
+ *
+ *  O que não é data volta intacto — texto, número, nome, link. */
+function talvezData(v) {
+  const t = String(v);
+  const dia = t.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/);
+  if (dia) return `${dia[3]}-${dia[2]}-${dia[1]}`;
+  const mes = t.match(/^([0-9]{4})-([0-9]{2})$/);
+  if (mes) return `${mes[2]}-${mes[1]}`;
+  return t;
+}
+
 function quando(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return String(iso || '—');
   const p = n => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /* A demanda é pedida pelo CÓDIGO na URL, e não pelo id: o código é o que a pessoa
@@ -384,7 +411,7 @@ function desenha() {
          ser o codigo — a mesma tradução do bloco de dependência acima, e pelo
          mesmo motivo: "passou a depender de AX-123" é a frase que se usa; "passou
          a depender de msd9sjdghu1qtwp7f1v" obriga a ir procurar. */
-      const traduz = c.campo === 'parent_id' ? (v) => codigoDe(v) : (v) => v;
+      const traduz = c.campo === 'parent_id' ? (v) => codigoDe(v) : (v) => talvezData(v);
       const cru = (v) =>
         v === undefined || v === null || v === '' ? '(vazio)' : String(traduz(v));
       const de = cru(c.de);
