@@ -7088,6 +7088,90 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   try { new Function(W.replace(/^export default/m, 'const _x =')); } catch (e) { erroW = e.message; }
   ok(!erroW, 'worker.js sem erro de sintaxe', erroW || '');
 
+  /* ─── O SELO DE VALIDACAO ────────────────────────────────────────────────
+     "Esta demanda passou pela planning, e quem fechou foi X."
+
+     A INVARIANTE QUE IMPORTA: pontuacao NAO e validacao. Sao duas portas que
+     escrevem no mesmo `poker_pontos` — a reuniao e o formulario do card —, e
+     medido na base de 18/08: 158 demandas com pontos, 130 delas SEM nenhum sinal
+     de reuniao. Um selo que olhasse `poker_pontos` apareceria em 130 demandas que
+     ninguem votou, e a marca perderia todo o sentido no dia em que fosse criada.
+
+     Estes casos EXECUTAM a regra, e nao conferem o texto dela. */
+  sec('O selo de validacao');
+  const SL = require('./selo-validacao.js');
+
+  ok(typeof SL.de === 'function' && typeof SL.badge === 'function',
+     'a regra do selo e uma funcao unica, compartilhada pelas tres telas');
+
+  // 1. O caso que motivou o campo novo: gravado pelo Worker no poker-gravar.
+  ok((SL.de({ poker_validado_por: 'Fernando Nascimento', poker_validado_em: '2026-08-06T14:00:00Z' }) || {}).quem
+       === 'Fernando Nascimento',
+     'o selo usa quem o Worker gravou na planning');
+
+  // 2. RETROATIVO: as reunioes antigas so existem no historico.
+  const antiga = { historico: [
+    { origem: 'painel', quem: 'outra pessoa', em: '2026-08-01T10:00:00Z' },
+    { origem: 'planning poker', quem: 'Fernando Nascimento', em: '2026-08-06T14:00:00Z' },
+  ] };
+  ok((SL.de(antiga) || {}).quem === 'Fernando Nascimento',
+     'demanda antiga ganha selo pelo historico da planning');
+  ok(SL.dia((SL.de(antiga) || {}).em) === '06/08/2026',
+     'e a data do selo e a da reuniao, em DD/MM/AAAA');
+
+  // A ULTIMA passagem, e nao a primeira: repontuada em outra reuniao, vale a nova.
+  ok(SL.dia((SL.de({ historico: [
+    { origem: 'planning poker', quem: 'A', em: '2026-07-01T10:00:00Z' },
+    { origem: 'planning poker', quem: 'B', em: '2026-08-20T10:00:00Z' },
+  ] }) || {}).em) === '20/08/2026',
+     'repontuada em outra reuniao mostra a data mais recente');
+
+  // 3. Houve votacao e o autor nao ficou registrado: selo SEM nome.
+  const semAutor = SL.de({ poker_media: 6.4, poker_votado_em: '2026-08-11T09:00:00Z' });
+  ok(semAutor && semAutor.quem === '',
+     'votacao sem autor registrado da selo sem nome');
+  ok(/nao ficou registrado|não ficou registrado/.test(SL.titulo(semAutor)),
+     'e o texto explica a lacuna em vez de esconde-la');
+
+  /* A INVARIANTE CENTRAL. Pontos sozinhos vem do formulario, e nao da reuniao. */
+  ok(SL.de({ poker_pontos: 13 }) === null,
+     'PONTUADA NO FORMULARIO NAO TEM SELO — sao 130 demandas na base');
+  ok(SL.de({}) === null, 'demanda sem nada nao tem selo');
+  ok(SL.de(null) === null, 'demanda inexistente nao quebra a regra');
+
+  /* MESCLADA E OCULTA saem do quadro; selo sobre o que nao se ve e enfeite, e
+     sobre uma mesclada seria errado — o merito e de quem a absorveu. */
+  ok(SL.de({ poker_media: 8, mesclado_em: '2026-08-01' }) === null,
+     'mesclada nao tem selo');
+  ok(SL.de({ poker_media: 8, oculto: true }) === null, 'oculta nao tem selo');
+
+  // A marca so e desenhada quando ha selo — nunca uma caixa vazia no cartao.
+  ok(SL.badge({ poker_pontos: 13 }) === '', 'sem selo, nao se desenha marca nenhuma');
+  ok(SL.badge({ poker_media: 8 }).indexOf('Validado') > 0, 'com selo, a marca aparece');
+  ok(SL.grande({ poker_pontos: 13 }) === '', 'sem selo, nao se desenha carimbo nenhum');
+
+  /* O CARIMBO CABE NO ARCO. Sem `textLength`, "VALIDADO POR FERNANDO
+     NASCIMENTO" transborda o circulo e as primeiras letras somem atras da
+     borda — foi o que aconteceu na primeira versao. */
+  const carimbo = SL.grande({ poker_validado_por: 'Fernando Nascimento',
+                              poker_validado_em: '2026-08-06T14:00:00Z' });
+  ok(/textLength=/.test(carimbo) && /lengthAdjust="spacingAndGlyphs"/.test(carimbo),
+     'o texto curvo e comprimido para caber no arco');
+  ok(carimbo.indexOf('FERNANDO NASCIMENTO') > 0, 'e o nome de quem validou vai nele');
+  /* O `id` DO ARCO E UNICO: dois carimbos na mesma pagina com o mesmo id fazem o
+     segundo textPath apontar para o arco do primeiro, e no Firefox o texto some. */
+  const id1 = (carimbo.match(/id="(selo-arco-[a-z0-9]+)"/) || [])[1];
+  const id2 = (SL.grande({ poker_media: 8 }).match(/id="(selo-arco-[a-z0-9]+)"/) || [])[1];
+  ok(!!id1 && !!id2 && id1 !== id2, 'cada carimbo tem seu proprio id de arco');
+
+  /* AS TRES TELAS USAM A REGRA, e nenhuma delas reimplementa "passou pela
+     planning". Uma copia divergiria, e a mesma demanda ficaria selada numa tela
+     e nao na outra. */
+  for (const [nome, txt] of [['gantt', GANTT], ['admin', ADMIN], ['dev', lerTela('dev.html')]]) {
+    ok(txt.indexOf('SELO.badge(') > 0, 'o ' + nome + ' desenha a marca pela regra unica');
+    ok(txt.indexOf('selo-validacao.js') > 0, 'e carrega o arquivo dela');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

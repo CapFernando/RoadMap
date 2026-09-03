@@ -2326,6 +2326,36 @@ export default {
         const antesPoker = JSON.parse(JSON.stringify(alvo));
         alvo.poker_media = media;
         alvo.poker_pontos = pontos;
+        /* ── O SELO DE VALIDACAO ────────────────────────────────────────────
+           QUEM FECHOU A PONTUACAO, e quando. E o que permite o card dizer, no
+           Kanban e no Gantt, que aquela demanda passou pela planning — e por
+           quem.
+
+           POR QUE ISTO NAO SE DEDUZ do que ja existia: `poker_pontos` sozinho
+           nao distingue a pontuacao FECHADA numa reuniao da estimada por alguem
+           no formulario. As duas gravam o mesmo campo, e a segunda e comum —
+           por isso o proprio card ja tinha o aviso "sem pontos do Planning
+           Poker". O selo e a outra ponta dessa mesma distincao.
+
+           GRAVA O NOME E O LOGIN. O nome vai no selo, que e nominal; o login e
+           o que sobrevive a alguem trocar o nome de exibicao, e e por ele que
+           a tela decide de quem e o selo. O `nome_demandas` tem preferencia
+           porque e o nome com que a pessoa aparece nas demandas — o selo tem de
+           dizer o mesmo nome que o card ja diz.
+
+           APAGA QUANDO A PONTUACAO E APAGADA: gravar `null` nos pontos e
+           desfazer a pontuacao, e um selo de "validado" sobre demanda sem
+           pontos afirmaria algo que deixou de ser verdade. */
+        const _uP = (_ident && _ident.usuario) || null;
+        if (pontos === null && media === null) {
+          alvo.poker_validado_por = null;
+          alvo.poker_validado_login = null;
+          alvo.poker_validado_em = null;
+        } else if (_uP) {
+          alvo.poker_validado_por = String(_uP.nome_demandas || _uP.nome || '').trim() || null;
+          alvo.poker_validado_login = String(_uP.login || '').trim() || null;
+          alvo.poker_validado_em = iso;
+        }
         // QUEM VOTOU O QUE. Antes so a media sobrevivia a reuniao, e a media
         // esconde justamente o que interessa: um 3 e um 34 na mesma demanda dizem
         // que as duas pessoas entenderam coisas diferentes — e quem votou baixo
@@ -2361,7 +2391,8 @@ export default {
         });
         if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
         return json({ ok: true, poker_media: media, poker_pontos: pontos,
-                      votos: (alvo.poker_votos || []).length }, 200, headers);
+                      votos: (alvo.poker_votos || []).length,
+                      validado_por: alvo.poker_validado_por || null }, 200, headers);
       }
 
       // ── Complementar a demanda durante a reuniao ──────────────────────

@@ -97,6 +97,11 @@
     .kcard-sub-trilho { flex:1; height:4px; background:var(--bg3); border-radius:3px; overflow:hidden; }
     .kcard-sub-barra { height:100%; background:var(--green,#3EC98E); border-radius:3px; transition:width .2s; }
     .kcard-sub-num { font-size:10.5px; color:var(--text3); font-variant-numeric:tabular-nums; }
+    /* O selo de validacao. Azul: verde ja e etapa concluida e ambar e 'sem
+       pontuacao' logo acima — reusar um deles faria o selo ser lido como estado.
+       Par claro/escuro em `tema.css`. */
+    .kcard-prazo.selo { background:var(--selo-bg,#0B2E52); color:var(--selo-tx,#9FD0FF);
+      border:1px solid var(--selo-bd,#2C6EA8); cursor:help; }
     .kcard-prazo.pausada { background:var(--rose-bg,#48123F); color:var(--rose-tx,#F2A0DA);
       border:1px solid var(--rose-bd,#93257F); }
     /* Area de anexo da nova demanda. A dica de colar fica DENTRO da area para
@@ -428,7 +433,7 @@
     .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
   </style>
-  <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
+  <link rel="stylesheet" href="tema.css?v=20cec29a3a">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="capacidade.js?v=3769a13468"></script>
@@ -440,6 +445,7 @@
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
+<script src="selo-validacao.js?v=31d3880370"></script>
 </head>
 <body>
 
@@ -3307,6 +3313,12 @@ function renderCard(m, colKey) {
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
       ${semPontuacao(m) ? `<div class="kcard-prazo sempt" title="Sem pontos do Planning Poker: a data foi combinada sem estimativa de tamanho.">🃏 sem pontuação</div>` : ''}
+      ${/* O SELO DE VALIDACAO — passou pela planning, e por quem.
+            E o AVESSO da linha acima: uma diz "ninguem estimou", a outra diz
+            "foi fechada em reuniao". As duas nunca aparecem juntas, porque
+            `semPontuacao` exige a ausencia do que o selo exige a presenca.
+            A regra mora em `selo-validacao.js`, uma so para as tres telas. */''}
+      ${window.SELO ? SELO.badge(m, 'kcard-prazo selo') : ''}
       ${progressoHTML}
       <div class="kcard-title">${m.codigo ? `<span class="kcard-cod">${devEsc(m.codigo)}</span>` : ''}${devEsc(m.titulo)}</div>
       ${tema ? `<div class="kcard-tema">${tema}</div>` : ''}

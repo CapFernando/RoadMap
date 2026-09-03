@@ -349,6 +349,14 @@
       background:var(--teal-bg,#0E3A3A); border:1px solid #1A6060;
       border-radius:5px; padding:1px 6px; }
     .kb-pts.estimado { border-style:dashed; opacity:.85; }
+    /* O selo de validacao. Azul: verde ja e 'concluido' e ambar e 'sem
+       estimativa' nesta tela, e reusar um deles faria o selo virar etapa.
+       Par claro/escuro em `tema.css`, junto dos outros tokens de cor. */
+    .kb-selo {
+      font-size:10px; font-weight:700; border-radius:4px; padding:1px 6px;
+      background:var(--selo-bg,#0B2E52); color:var(--selo-tx,#9FD0FF);
+      border:1px solid var(--selo-bd,#2C6EA8); white-space:nowrap; cursor:help;
+    }
     .kb-sempt { font-size:10.5px; font-weight:700; color:var(--amber-tx,#FFC470);
       background:var(--amber-bg,#4A2800); border:1px solid var(--amber);
       border-radius:5px; padding:1px 6px; }
@@ -1020,7 +1028,7 @@
     }
     #conditional-fields { }
   </style>
-  <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
+  <link rel="stylesheet" href="tema.css?v=20cec29a3a">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
@@ -1035,6 +1043,7 @@
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
+<script src="selo-validacao.js?v=31d3880370"></script>
 </head>
 <body>
 
@@ -3496,6 +3505,14 @@ function renderKanban() {
             : 'Pontos por estimativa de duração — esta demanda não passou pelo Planning Poker.') +
           '">🃏 ' + ptsCard + ' pts' + (votado ? '' : ' ≈') + '</span>');
       }
+      /* O SELO DE VALIDACAO — passou pela planning, e por quem.
+         VEM LOGO DEPOIS DOS PONTOS, e antes de tudo o mais: os dois falam da
+         mesma coisa (a estimativa), e separa-los faria o olho pular de um para
+         outro no meio das outras marcas.
+         E ele NAO REPETE o `🃏 ... pts`: aquele diz QUANTO, este diz que foi
+         fechado em reuniao e por quem. A regra de quem tem selo mora em
+         `selo-validacao.js` — as tres telas usam a mesma. */
+      if (window.SELO) { const _sl = SELO.badge(m, 'kb-selo'); if (_sl) badges.push(_sl); }
       if (semPontuacao(m)) badges.push('<span class="kb-sempt" title="' +
         'Comprometida com data sem ter passado pelo Planning Poker: a estimativa ' +
         'nao existe. Pontue na reuniao ou pelo card.">🃏 sem pontos</span>');

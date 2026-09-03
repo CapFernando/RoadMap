@@ -580,6 +580,30 @@
       border: 1px solid #0A0A0A; border-radius: 4px;
       padding: 0 4px; letter-spacing: .02em; cursor: help;
     }
+    /* ─── O SELO DE VALIDACAO ────────────────────────────────────────────
+       "Esta demanda passou pela planning, e foi fechada por fulano."
+
+       AZUL, e nao verde nem ambar. Os dois ja tem significado nesta tela —
+       verde e 'concluido', ambar e 'sem estimativa' — e reusar um deles faria o
+       selo ser lido como etapa. O azul aqui so aparece no 'hoje' da regua, que
+       e coluna e nao cartao: nao ha como confundir os dois.
+
+       FUNDO PROPRIO, pelo mesmo motivo da etiqueta de heranca: a barra por baixo
+       muda de cor conforme a etapa, e um texto sem caixa cairia para menos de
+       2:1 sobre a barra verde de concluido.
+
+       Medido sobre as sete cores de barra desta tela: minimo 8,9:1. */
+    /* A caixa do carimbo no formulario. Ela nao tem fundo nem borda propria: o
+       selo ja e um circulo branco fechado, e uma moldura em volta faria dois
+       contornos concentricos disputando a atencao. */
+    .e-selo-caixa { display:flex; justify-content:center; padding:6px 0 2px; }
+    .e-selo-caixa:empty { display:none; }
+    .card-selo {
+      font-size: 10px; font-weight: 700; flex-shrink: 0; z-index: 1;
+      background: var(--selo-bg, #0B2E52); color: var(--selo-tx, #9FD0FF);
+      border: 1px solid var(--selo-bd, #2C6EA8);
+      border-radius: 4px; padding: 0 5px; white-space: nowrap; cursor: help;
+    }
     /* Ambar, nao vermelho: vermelho ja significa atrasado nesta tela, e reusar o
        tom faria "sem estimativa" ser lido como "vencida". */
     .card-sempt { font-size:10px; margin-right:3px; flex-shrink:0; cursor:help;
@@ -735,7 +759,7 @@
     .delete-btn { background: var(--red); color: #fff; }
     .delete-btn:hover { opacity: 0.85; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=65fa0bdf91">
+  <link rel="stylesheet" href="tema.css?v=20cec29a3a">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="capacidade.js?v=3769a13468"></script>
@@ -746,6 +770,7 @@
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
+<script src="selo-validacao.js?v=31d3880370"></script>
 </head>
 <body>
 
@@ -925,6 +950,13 @@
       <div class="form-group">
         <label>Pontos (Planning Poker)
           <span id="e-poker-media" style="font-weight:400;opacity:.6"></span></label>
+        <!-- O CARIMBO INTEIRO, e nao a marca do cartao.
+             Aqui ha espaco: o selo se le, o nome de quem validou aparece escrito
+             e a data fica embaixo. No cartao do quadro cabe so a marca — um selo
+             circular com texto curvo em 20px vira uma bolha azul.
+             Fica VAZIO quando a demanda nao passou pela planning; o selo nunca e
+             desenhado "apagado", porque carimbo apagado ainda parece carimbo. -->
+        <div id="e-selo" class="e-selo-caixa"></div>
         <select id="e-poker-pontos">
           <option value="">—</option>
           <option value="1">1</option><option value="2">2</option><option value="3">3</option>
@@ -2673,6 +2705,14 @@ function renderGantt() {
           ${pausada ? `<span class="card-pausa" title="Pausada há ${dPausa} dia(s)${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${dPausa}d</span>` : ''}
           ${herdada ? `<span class="card-herdada" title="Veio de ${mesOrigem || 'um mês anterior'} e ainda não concluiu. O prazo NÃO foi movido — ela continua combinada para ${fmtDate(m.entrega || m.inicio)}${sprintsFora ? ` e ${emValidacao ? `foi entregue ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} depois do combinado` : `já passou ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} (semana${sprintsFora > 1 ? 's' : ''}) do combinado`}` : ''}.${emValidacao ? ` O DEV JÁ ENTREGOU${m.entregue_em ? ' em ' + fmtDate(m.entregue_em) : ''} — o que falta é a validação, e por isso o contador de sprints parou na entrega.` : ''} A barra ocupa do início do mês até hoje porque é o tempo que ela consumiu aqui.">${rotuloHerdada}</span>` : ''}
           ${semPontuacao(m) ? `<span class="card-sempt" title="Sem pontos do Planning Poker: a data foi combinada sem ninguém estimar o tamanho.">🃏</span>` : ''}
+          ${/* O SELO DE VALIDACAO — esta demanda passou pela planning.
+                E o AVESSO do 🃏 logo acima: um diz "ninguem estimou", o outro diz
+                "foi fechada em reuniao, por fulano". Os dois nunca aparecem
+                juntos, porque `semPontuacao` exige a ausencia do que o selo
+                exige a presenca.
+                A regra de QUEM tem selo mora em `selo-validacao.js` — as tres
+                telas usam a mesma, pela razao de sempre. */''}
+          ${window.SELO ? SELO.badge(m, 'card-selo') : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>
         ${tema ? `<div class="card-tema-row"><span class="tema-badge" style="background:${tColor}25;color:${tColor};border-color:${tColor}55">${esc(tema.nome)}</span></div>` : ''}
@@ -2987,6 +3027,11 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-debito').checked = !!(m && m.debito_tecnico);
   document.getElementById('e-poker-media').textContent =
     (m && m.poker_media != null) ? '— média ' + String(m.poker_media).replace('.', ',') : '';
+  /* O CARIMBO. `SELO.grande` devolve string vazia quando a demanda nao passou
+     pela planning, entao a caixa some sozinha — sem `if` aqui e sem estado
+     intermediario para alguem esquecer de limpar entre uma demanda e outra. */
+  const _selo = document.getElementById('e-selo');
+  if (_selo) _selo.innerHTML = window.SELO ? SELO.grande(m, 132) : '';
   document.getElementById('e-status-plan').value = m?.status_planejamento || 'backlog';
   document.getElementById('e-inicio').value    = m?.inicio || prefillDate || '';
   document.getElementById('e-fim').value       = m?.entrega || prefillDate || '';

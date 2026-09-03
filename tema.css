@@ -67,6 +67,13 @@
   --rose-bg:   #FBDDF3;
   --rose-bd:   #E9A2DC;
   --rose-tx:   #85116E;
+  /* Selo de validacao do Planning Poker. O par escuro (#0B2E52/#9FD0FF) inverte
+     para fundo tingido claro + texto escuro; #0A3D6B sobre #DCEBFA da 8,4:1.
+     AZUL, e nao verde: verde ja e 'concluido' no cartao, e reusar o tom faria o
+     selo ser lido como etapa. */
+  --selo-bg:   #DCEBFA;
+  --selo-bd:   #7FB0DC;
+  --selo-tx:   #0A3D6B;
 }
 
 /* Faz o navegador desenhar barra de rolagem, cursor de texto e controles
