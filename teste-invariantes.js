@@ -7121,17 +7121,44 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
   // A ULTIMA passagem, e nao a primeira: repontuada em outra reuniao, vale a nova.
   ok(SL.dia((SL.de({ historico: [
-    { origem: 'planning poker', quem: 'A', em: '2026-07-01T10:00:00Z' },
-    { origem: 'planning poker', quem: 'B', em: '2026-08-20T10:00:00Z' },
+    { origem: 'planning poker', quem: 'Fernando Nascimento', em: '2026-07-01T10:00:00Z' },
+    { origem: 'planning poker', quem: 'Fernando Nascimento', em: '2026-08-20T10:00:00Z' },
   ] }) || {}).em) === '20/08/2026',
      'repontuada em outra reuniao mostra a data mais recente');
 
-  // 3. Houve votacao e o autor nao ficou registrado: selo SEM nome.
-  const semAutor = SL.de({ poker_media: 6.4, poker_votado_em: '2026-08-11T09:00:00Z' });
-  ok(semAutor && semAutor.quem === '',
-     'votacao sem autor registrado da selo sem nome');
-  ok(/nao ficou registrado|não ficou registrado/.test(SL.titulo(semAutor)),
-     'e o texto explica a lacuna em vez de esconde-la');
+  /* ── O SELO E UMA ASSINATURA ──────────────────────────────────────────
+     Ele diz "validado por fulano", entao NAO e qualquer pessoa que o gera. Sem
+     esta restricao, o dia em que outra pessoa conduzisse a planning o carimbo
+     sairia com o nome dela — e o selo deixaria de significar o que significa. */
+  ok(SL.de({ poker_validado_por: 'Joao Vitor', poker_validado_login: 'joao',
+             poker_validado_em: '2026-09-01T10:00:00Z' }) === null,
+     'OUTRA PESSOA pontuando nao gera selo');
+  ok(SL.de({ historico: [{ origem: 'planning poker', quem: 'Maria',
+                           em: '2026-08-06T14:00:00Z' }] }) === null,
+     'nem no historico: planning conduzida por outra pessoa nao sela');
+
+  /* VOTACAO SEM AUTOR NAO GERA SELO. Sao tres demandas na base com votos e
+     media e nenhum registro de quem conduziu. Uma versao anterior deste arquivo
+     lhes dava selo sem nome; um carimbo que nao pode dizer por quem foi validado
+     e justamente o que um selo nao pode ser. */
+  ok(SL.de({ poker_media: 6.4, poker_votado_em: '2026-08-11T09:00:00Z' }) === null,
+     'votacao sem autor registrado NAO gera selo');
+  ok(SL.de({ poker_votos: [{ nome: 'Ana', voto: '8' }] }) === null,
+     'nem votos nominais sem quem conduziu');
+
+  /* SEM ACENTO E SEM CAIXA. O nome de exibicao ja apareceu em grafias
+     diferentes na base; exigir a forma exata faria o selo sumir por um acento —
+     e sumir calado. */
+  ok(!!SL.de({ historico: [{ origem: 'planning poker', quem: 'FERNANDO NASCIMENTO',
+                             em: '2026-08-06T14:00:00Z' }] }),
+     'o nome e comparado sem caixa');
+
+  /* O LOGIN TEM PRIORIDADE sobre o nome: e ele que sobrevive a alguem trocar o
+     nome de exibicao. E por isso que o selo do Worker pode dizer "Fernando
+     Morais" mesmo com o cadastro em outro nome. */
+  ok((SL.de({ poker_validado_por: 'Fernando Morais', poker_validado_login: 'fernando',
+              poker_validado_em: '2026-09-03T10:00:00Z' }) || {}).quem === 'Fernando Morais',
+     'o login autoriza, e o nome gravado e o que aparece no selo');
 
   /* A INVARIANTE CENTRAL. Pontos sozinhos vem do formulario, e nao da reuniao. */
   ok(SL.de({ poker_pontos: 13 }) === null,
@@ -7147,7 +7174,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
   // A marca so e desenhada quando ha selo — nunca uma caixa vazia no cartao.
   ok(SL.badge({ poker_pontos: 13 }) === '', 'sem selo, nao se desenha marca nenhuma');
-  ok(SL.badge({ poker_media: 8 }).indexOf('Validado') > 0, 'com selo, a marca aparece');
+  ok(SL.badge({ poker_validado_por: 'Fernando Morais', poker_validado_login: 'fernando' })
+       .indexOf('Validado') > 0, 'com selo, a marca aparece');
   ok(SL.grande({ poker_pontos: 13 }) === '', 'sem selo, nao se desenha carimbo nenhum');
 
   /* O CARIMBO CABE NO ARCO. Sem `textLength`, "VALIDADO POR FERNANDO
@@ -7161,7 +7189,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   /* O `id` DO ARCO E UNICO: dois carimbos na mesma pagina com o mesmo id fazem o
      segundo textPath apontar para o arco do primeiro, e no Firefox o texto some. */
   const id1 = (carimbo.match(/id="(selo-arco-[a-z0-9]+)"/) || [])[1];
-  const id2 = (SL.grande({ poker_media: 8 }).match(/id="(selo-arco-[a-z0-9]+)"/) || [])[1];
+  const id2 = (SL.grande({ poker_validado_por: 'Fernando Morais',
+                           poker_validado_login: 'fernando' })
+                 .match(/id="(selo-arco-[a-z0-9]+)"/) || [])[1];
   ok(!!id1 && !!id2 && id1 !== id2, 'cada carimbo tem seu proprio id de arco');
 
   /* AS TRES TELAS USAM A REGRA, e nenhuma delas reimplementa "passou pela

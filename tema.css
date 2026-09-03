@@ -67,13 +67,27 @@
   --rose-bg:   #FBDDF3;
   --rose-bd:   #E9A2DC;
   --rose-tx:   #85116E;
-  /* Selo de validacao do Planning Poker. O par escuro (#0B2E52/#9FD0FF) inverte
-     para fundo tingido claro + texto escuro; #0A3D6B sobre #DCEBFA da 8,4:1.
-     AZUL, e nao verde: verde ja e 'concluido' no cartao, e reusar o tom faria o
-     selo ser lido como etapa. */
-  --selo-bg:   #DCEBFA;
-  --selo-bd:   #7FB0DC;
-  --selo-tx:   #0A3D6B;
+}
+
+/* ── SELO DE VALIDACAO DO PLANNING POKER ──────────────────────────────────
+   A UNICA COR DESTE ARQUIVO QUE NAO MUDA COM O TEMA, e e de proposito.
+
+   Carimbo tem cor propria: e a mesma em papel branco e em papel escuro, e e
+   assim que um carimbo e reconhecido. Prata com texto preto tambem resolve o
+   problema que o azul nao resolvia — DESTAQUE. O selo e desenhado por cima das
+   sete cores de barra do Gantt, e um azul escuro sobre a barra azul de
+   'planejado' era duas tonalidades da mesma cor uma sobre a outra.
+
+   Prata destoa de todas as sete: nenhuma etapa e cinza, e nenhum estado —
+   atraso, pausa, heranca — usa esse tom. E preto sobre prata da 13,6:1, o maior
+   contraste de qualquer marca do cartao.
+
+   Fica num `:root` sem seletor de tema porque vale nos dois; o bloco claro
+   acima nao precisa sobrescrever nada.                                       */
+:root {
+  --selo-bg: #C6CBD4;
+  --selo-bd: #7C838F;
+  --selo-tx: #0A0A0A;
 }
 
 /* Faz o navegador desenhar barra de rolagem, cursor de texto e controles

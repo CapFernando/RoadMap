@@ -13,22 +13,27 @@
    Planning Poker". O selo é a outra ponta dela.
 
    ───────────────────────────────────────────────────────────────────────────
-   AS TRÊS FONTES, NESTA ORDEM.
+   O SELO É DE ALGUÉM, e não de qualquer um que pontue.
 
-   1. `poker_validado_por` — gravado pelo Worker a partir de agora, no
-      `poker-gravar`. É o único que traz nome E data com certeza.
+   Ele diz "validado por fulano" — é uma assinatura. Quem pode assiná-lo está em
+   `LOGINS` e `NOMES`, logo abaixo, e é o único lugar a editar quando outra
+   pessoa passar a conduzir a planning.
+
+   AS DUAS FONTES:
+
+   1. `poker_validado_por` + `poker_validado_login` — gravado pelo Worker no
+      `poker-gravar`, daqui para a frente.
 
    2. O HISTÓRICO com origem 'planning poker'. É o que dá o selo RETROATIVO: o
       `registraHistorico` marca a origem desde sempre, então as reuniões antigas
-      já estão registradas com quem gravou e quando. Medido: 26 registros na
-      base, todos de Fernando Nascimento.
+      já estão registradas com quem gravou e quando. São 26 na base, todas de
+      Fernando Nascimento — e são elas que aparecem seladas hoje.
 
-   3. `poker_votos` ou `poker_media` — houve votação, mas o autor não ficou
-      registrado. O selo aparece SEM NOME, e isso é honesto: a demanda passou
-      pela reunião, e quem conduziu não está gravado. Inventar um nome num selo
-      de validação seria pior do que não ter nome.
-
-   Na base de 18/08 as três juntas dão 29 demandas com selo.
+   O QUE NÃO GERA SELO, e vale dizer: votação sem autor registrado. Há três
+   demandas assim na base — têm votos e média, e nenhum registro de quem
+   conduziu. Uma versão anterior deste arquivo lhes dava selo sem nome; isso
+   deixou de valer quando o selo virou assinatura. Um carimbo que não pode dizer
+   por quem foi validado é justamente o que um selo não pode ser.
 
    ───────────────────────────────────────────────────────────────────────────
    POR QUE ISTO É UM ARQUIVO, e não uma função em cada tela.
@@ -41,8 +46,46 @@
 (function (raiz) {
   'use strict';
 
+  /* ───────────────────────────────────────────────────────────────────────────
+     QUEM PODE SELAR — e este é o único lugar a editar.
+
+     O selo é NOMINAL: ele diz "validado por fulano", e por isso não é qualquer
+     pessoa que o gera. Hoje é só o Fernando; o dia em que outra pessoa passar a
+     conduzir a planning, o nome dela entra aqui e nada mais muda.
+
+     SÃO DUAS LISTAS PORQUE AS DUAS FONTES GUARDAM COISAS DIFERENTES:
+
+       `LOGINS` — o registro novo (`poker_validado_login`), gravado pelo Worker.
+                  É o que sobrevive a alguém trocar o nome de exibição.
+       `NOMES`  — o histórico antigo, que guarda só `quem` em texto. É por ele
+                  que as 26 reuniões já registradas ganham selo retroativo.
+
+     COMPARADO SEM ACENTO E SEM CAIXA. "Fernando Nascimento" e "fernando
+     nascimento" são a mesma pessoa, e o nome de exibição já apareceu das duas
+     formas na base. Exigir a grafia exata faria o selo sumir por causa de um
+     acento digitado diferente — e sumir em silêncio, que é o pior jeito. */
+  var LOGINS = ['fernando'];
+  var NOMES = ['fernando nascimento', 'fernando morais'];
+
   function texto(v) {
     return String(v == null ? '' : v).trim();
+  }
+
+  /** Minúsculo e sem acento, para comparar nome de gente. */
+  function chave(v) {
+    return texto(v).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  /** ESTA PESSOA PODE SELAR?
+   *
+   *  `login` tem prioridade porque é identidade; o nome é o que resta quando o
+   *  registro é antigo. Vazio nos dois é NÃO — uma reunião sem autor registrado
+   *  não pode virar selo de alguém. */
+  function podeSelar(login, nome) {
+    var l = chave(login);
+    if (l) return LOGINS.indexOf(l) >= 0;
+    var n = chave(nome);
+    return !!n && NOMES.indexOf(n) >= 0;
   }
 
   /** A última passagem pela planning registrada no histórico da demanda.
@@ -69,18 +112,25 @@
     if (m.mesclado_em || m.oculto) return null;
 
     var quem = texto(m.poker_validado_por);
-    if (quem) return { quem: quem, em: texto(m.poker_validado_em) };
+    if (quem) {
+      return podeSelar(m.poker_validado_login, quem)
+        ? { quem: quem, em: texto(m.poker_validado_em) }
+        : null;
+    }
 
     var h = daPlanning(m);
-    if (h) return { quem: texto(h.quem), em: texto(h.em) };
+    if (h && podeSelar('', h.quem)) return { quem: texto(h.quem), em: texto(h.em) };
 
-    /* HOUVE VOTAÇÃO, e o autor não ficou registrado. `poker_media` só existe
-       quando alguém votou — ela é a média dos votos —, e `poker_votos` guarda os
-       votos nominais. Qualquer um dos dois prova a reunião. */
-    var votos = m.poker_votos;
-    var temVoto = (votos && votos.length) || (m.poker_media != null && m.poker_media !== '');
-    if (temVoto) return { quem: '', em: texto(m.poker_votado_em) };
+    /* ─────────────────────────────────────────────────────────────────────
+       VOTAÇÃO SEM AUTOR REGISTRADO NÃO GERA SELO.
 
+       Há demandas com votos e média mas sem nenhum registro de quem conduziu —
+       três na base. A versão anterior deste arquivo dava selo a elas, sem nome.
+
+       Isso deixou de valer quando o selo passou a ser DE ALGUÉM: um carimbo que
+       diz "validado" sem poder dizer por quem é justamente o que um selo não
+       pode ser. Elas continuam com os pontos e com a média; o que não têm é a
+       assinatura. */
     return null;
   }
 
@@ -90,18 +140,15 @@
     return /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(d) ? d.split('-').reverse().join('/') : '';
   }
 
-  /** O que o selo diz quando o mouse para em cima dele. */
+  /** O que o selo diz quando o mouse para em cima dele.
+   *
+   *  SEMPRE TEM NOME. Havia aqui um ramo para selo sem autor, e ele deixou de
+   *  ter caminho quando o selo passou a exigir uma pessoa autorizada: sem nome
+   *  não há selo. Manter o ramo seria carregar código que nenhum teste alcança. */
   function titulo(selo) {
     if (!selo) return '';
     var d = dia(selo.em);
-    if (selo.quem) {
-      return 'Validado por ' + selo.quem + ' no Planning Poker' + (d ? ' em ' + d : '') + '.';
-    }
-    /* SEM NOME, O TEXTO DIZ POR QUÊ. "Validado" sem autor pareceria informação
-       faltando na tela; dizer que a reunião é anterior ao registro de autoria
-       explica a lacuna em vez de escondê-la. */
-    return 'Passou pelo Planning Poker' + (d ? ' em ' + d : '') +
-           '. Quem conduziu não ficou registrado — esta reunião é anterior ao registro de autoria.';
+    return 'Validado por ' + selo.quem + ' no Planning Poker' + (d ? ' em ' + d : '') + '.';
   }
 
   function esc(t) {
@@ -146,8 +193,7 @@
     var selo = de(m);
     if (!selo) return '';
     var px = tamanho || 150;
-    var nome = (selo.quem || 'Planning Poker').toUpperCase();
-    var curva = selo.quem ? 'VALIDADO POR ' + nome : 'VALIDADO NA PLANNING';
+    var curva = 'VALIDADO POR ' + selo.quem.toUpperCase();
     var d = dia(selo.em);
     /* O `id` DO ARCO É ÚNICO POR CHAMADA. Dois selos na mesma página com o mesmo
        id fariam o segundo `textPath` apontar para o arco do primeiro — e no
