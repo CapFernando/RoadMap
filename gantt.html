@@ -349,7 +349,12 @@
        estourava: a coluna do dev tem 230px (206 uteis) e a conta pedia ~210. Com
        as sprints no cabecalho a coluna do rotulo cai para tres caracteres. */
     .cap-quadro {
-      display: grid; grid-template-columns: 2.9em repeat(5, 1fr);
+      /* A COLUNA DO ROTULO CRESCEU de 2.9em para 3.9em: com tres linhas, o
+         rotulo mais longo passou a ser "S/plan" (seis caracteres), e em 2.9em
+         ele quebrava para a linha de baixo e desalinhava o quadro inteiro.
+         Sobram ~33px por sprint na coluna de 206px, que cabe numero de tres
+         digitos com folga. */
+      display: grid; grid-template-columns: 3.9em repeat(5, 1fr);
       column-gap: 1px; row-gap: 1px; width: 100%;
       font-size: 10.5px; font-variant-numeric: tabular-nums; line-height: 1.5;
     }
@@ -360,6 +365,13 @@
     .cq-r { color: var(--text3); font-size: 9.5px; text-transform: uppercase;
       letter-spacing: .04em; }
     .cq-v { color: var(--text2); }
+    /* O VALIDADO EM DESTAQUE, e o sem-plan no tom de sempre. A diferenca entre
+       as duas linhas e o ponto do quadro: e ela que responde "quanto do plano
+       desta semana alguem conferiu".
+       PESO E COR, e nao opacidade — este projeto parou de esmaecer texto (ver a
+       nota do `--esmaecido` em tema.css). */
+    .cq-val  { color: var(--text); font-weight: 700; }
+    .cq-sval { color: var(--text2); }
     /* AS TRES CORES DO EXECUTADO, no padrao do deck:
          verde    bateu ou passou o planejado — o resultado desejado aconteceu
          vermelho abaixo do planejado, na sprint que JA FECHOU
@@ -2290,6 +2302,20 @@ function semanaIndexFor(dataStr, semanas) {
  * Quinta cópia de conta nesta base é o caminho conhecido para duas telas
  * discordarem sobre o mesmo número.
  */
+/** ESTA DEMANDA TEM SELO DE VALIDACAO?
+ *
+ *  UMA FUNCAO SO para as duas perguntas que o Gantt faz: quanto do plano da
+ *  sprint foi validado, e em que faixa a barra cai. Elas nasceram com uma copia
+ *  cada, e duas copias da mesma pergunta divergem — seria a regra do atraso de
+ *  novo, em escala menor.
+ *
+ *  `window.SELO` PODE NAO ESTAR LA: se `selo-validacao.js` falhar em carregar, o
+ *  Gantt continua desenhando sem selo nenhum, em vez de quebrar a tela inteira
+ *  por causa de uma marca. */
+function ganttTemSelo(m) {
+  return window.SELO ? !!SELO.de(m) : false;
+}
+
 function pontosPokerPorSemana(devCards, semanas, de, ate) {
   const CAP = window.CAPACIDADE;
   /* AS DUAS PONTAS SAO FILTRADAS PELA JANELA DO MES.
@@ -2299,8 +2325,23 @@ function pontosPokerPorSemana(devCards, semanas, de, ate) {
      dizia 47% — duas telas, o mesmo numero, respostas diferentes. */
   const dentro = (d) => !!d && d >= de && d <= ate;
   const plan = new Array(semanas.length).fill(0);
+  /* ─── O PLANEJADO PARTIDO EM DOIS ─────────────────────────────────────────
+     `validado` — pontos de demanda que passou pela planning e tem selo.
+     `semSelo`  — pontos de demanda que está na sprint sem ter passado por lá.
+
+     SÃO OS MESMOS PONTOS, repartidos: `validado[i] + semSelo[i] === plan[i]`,
+     sempre. O total ao lado continua sendo a soma dos dois — se as duas linhas
+     não fechassem com o total, a régua diria uma coisa e o cabeçalho outra na
+     mesma coluna do mesmo dev.
+
+     O QUE ISSO RESPONDE, e que o `plan` sozinho não respondia: quanto do que
+     está prometido para a semana foi realmente dimensionado em reunião. Uma
+     sprint de 60 pontos toda estimada por fora é um plano de 60 pontos que
+     ninguém conferiu — e ela parecia igual a uma de 60 pontos votados. */
+  const validado = new Array(semanas.length).fill(0);
+  const semSelo = new Array(semanas.length).fill(0);
   const feito = new Array(semanas.length).fill(0);
-  let total = 0, totalFeito = 0, semPontuar = 0;
+  let total = 0, totalFeito = 0, semPontuar = 0, totalValidado = 0;
 
   devCards.forEach(m => {
     const p = CAP.planejados(m);
@@ -2313,6 +2354,15 @@ function pontosPokerPorSemana(devCards, semanas, de, ate) {
       // faria a soma das semanas não fechar com o total ao lado.
       const i = semanaIndexFor(CAP.diaDoPlano(m) || m.inicio, semanas);
       if (i >= 0) plan[i] += p;
+      /* A MESMA CONDIÇÃO E O MESMO ÍNDICE das linhas de cima. Repetir o
+         `dentro(...)` ou recalcular a semana aqui abriria a porta para as três
+         linhas discordarem sobre em que sprint a demanda cai. */
+      if (ganttTemSelo(m)) {
+        totalValidado += p;
+        if (i >= 0) validado[i] += p;
+      } else if (i >= 0) {
+        semSelo[i] += p;
+      }
     }
     if (e && dentro(CAP.diaDaEntrega(m))) {
       totalFeito += e;
@@ -2320,7 +2370,8 @@ function pontosPokerPorSemana(devCards, semanas, de, ate) {
       if (i >= 0) feito[i] += e;
     }
   });
-  return { porSemana: plan, total, feito, totalFeito, semPontuar };
+  return { porSemana: plan, porSemanaValidado: validado, porSemanaSemSelo: semSelo,
+           total, totalValidado, feito, totalFeito, semPontuar };
 }
 
 
@@ -2458,7 +2509,8 @@ function renderGantt() {
     const devCards = visible.filter(m => splitDevs(m.dev).includes(dev) && (m.inicio || m.entrega));
     const mesDe = workDays.length ? workDays[0].str : '';
     const mesAte = workDays.length ? workDays[workDays.length - 1].str : '';
-    const { porSemana, total: pontosTotal, feito: feitoSemana,
+    const { porSemana, porSemanaValidado, porSemanaSemSelo,
+            total: pontosTotal, totalValidado, feito: feitoSemana,
             totalFeito, semPontuar } = pontosPokerPorSemana(devCards, semanas, mesDe, mesAte);
     const rolou = window.CAPACIDADE.rolagens(devCards);
 
@@ -2533,10 +2585,9 @@ function renderGantt() {
        aprovar encaixes que se sobrepoem. Agora o teste e contra TODOS os
        intervalos da faixa. Custa um laco a mais numa lista de poucos cartoes por
        pessoa, e e o que torna qualquer ordem segura. */
-    const temSelo = (m) => (window.SELO ? !!SELO.de(m) : false);
     const sorted = [...devCards].sort((a, b) => {
-      const sa = temSelo(a) ? 0 : 1;
-      const sb = temSelo(b) ? 0 : 1;
+      const sa = ganttTemSelo(a) ? 0 : 1;
+      const sb = ganttTemSelo(b) ? 0 : 1;
       if (sa !== sb) return sa - sb;
       // Dentro do mesmo grupo, a ordem de sempre: quem comeca antes vem antes.
       return (a.inicio || '').localeCompare(b.inicio || '');
@@ -2601,8 +2652,23 @@ function renderGantt() {
              quebraria no primeiro numero de quatro digitos. */''}
       ${(pontosTotal > 0 || totalFeito > 0) ? `<div class="cap-quadro" title="Pontos por sprint: planejado pela data do prazo combinado, executado pela data em que o dev entregou.">
         <span class="cq-c"></span>${semanas.map((_, i) => `<span class="cq-h">S${i+1}</span>`).join('')}
-        <span class="cq-r">Plan.</span>${porSemana.map(p => `<span class="cq-v">${p}</span>`).join('')}
-        <span class="cq-r">Exec.</span>${feitoSemana.map((f, i) => {
+        ${/* ── AS TRES LINHAS DO PLANO ──────────────────────────────────────
+              VALID.  — o que foi dimensionado em reuniao e tem selo
+              S/PLAN  — o que esta na sprint sem ter passado pela planning
+              EXEC.   — o que o dev entregou, pela regra de sempre
+
+              AS DUAS PRIMEIRAS SOMAM O TOTAL AO LADO. Elas repartem os mesmos
+              pontos, e nao acrescentam nada: uma sprint de 60 pontos continua
+              sendo de 60, e o quadro passa a dizer QUANTO desses 60 alguem
+              conferiu. Antes as duas naturezas apareciam somadas numa linha so,
+              e um plano inteiro estimado por fora era indistinguivel de um
+              votado em reuniao.
+
+              O `title` de cada linha diz o que ela e: com tres linhas e rotulo
+              de seis caracteres, o rotulo sozinho nao cabe explicando. */''}
+        <span class="cq-r" title="Pontos que passaram pelo Planning Poker e têm selo de validação.">Valid.</span>${porSemanaValidado.map((p, i) => `<span class="cq-v cq-val" title="Sprint ${i+1}: ${p} pt validados no Planning Poker.">${p}</span>`).join('')}
+        <span class="cq-r" title="Pontos na sprint que NÃO passaram pelo Planning Poker — estimados por fora da reunião.">S/plan</span>${porSemanaSemSelo.map((p, i) => `<span class="cq-v cq-sval" title="Sprint ${i+1}: ${p} pt sem passar pela planning.">${p}</span>`).join('')}
+        <span class="cq-r" title="Pontos entregues pelo dev na sprint.">Exec.</span>${feitoSemana.map((f, i) => {
           /* A COR DIZ O VEREDITO, e so onde ha veredito.
 
              Sprint que JA FECHOU: abaixo do planejado e vermelho, bateu ou passou

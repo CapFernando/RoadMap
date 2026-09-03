@@ -5186,6 +5186,100 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      'e filtra o planejado E o entregue por ela');
 })();
 
+/* ─── O PLANO PARTIDO EM VALIDADO E SEM-PLAN ────────────────────────────────
+   O quadro de sprints do Gantt tem tres linhas: o que passou pela planning, o
+   que esta na sprint sem ter passado, e o entregue.
+
+   A INVARIANTE QUE IMPORTA: as duas primeiras REPARTEM os mesmos pontos, e nao
+   acrescentam nada. `validado[i] + semSelo[i]` tem de dar `plan[i]` em toda
+   sprint, e a soma dos tres numeros tem de fechar com o total ao lado do quadro.
+   Se nao fechassem, a regua diria uma coisa e o cabecalho outra na mesma coluna
+   do mesmo dev — e ninguem saberia qual dos dois acreditar.
+
+   ESTE BLOCO EXECUTA a funcao recortada do gantt.html, com demandas de verdade. */
+(() => {
+  sec('O plano validado e o sem-plan');
+  const fonte = corpo(GANTT, 'function pontosPokerPorSemana(');
+  const CAPm = require('./capacidade.js');
+  const SLm = require('./selo-validacao.js');
+
+  /* `semanaIndexFor` e chamada de dentro da funcao, entao entra junto. Ela e
+     pequena e sem estado — recortar as duas mantem o teste falando do arquivo. */
+  const idx = corpo(GANTT, 'function semanaIndexFor(');
+  /* `ganttTemSelo` ENTRA JUNTO. Ela e a funcao que responde "tem selo?" para as
+     duas perguntas do Gantt — a conta de pontos e o empacotamento —, e recorta-la
+     daqui mantem o teste executando o codigo do arquivo em vez de um substituto
+     escrito para o teste passar. */
+  const sel = corpo(GANTT, 'function ganttTemSelo(');
+  ok(!!fonte && !!idx && !!sel,
+     'a conta de pontos por semana foi encontrada para ser executada');
+  if (!fonte || !idx || !sel) return;
+
+  const conta = new Function('CAPACIDADE', 'SELO', `
+    const window = { CAPACIDADE, SELO };
+    function ganttTemSelo${sel.slice(sel.indexOf('('))}
+    function semanaIndexFor${idx.slice(idx.indexOf('('))}
+    function pontosPokerPorSemana${fonte.slice(fonte.indexOf('('))}
+    return pontosPokerPorSemana;
+  `)(CAPm, SLm);
+
+  // Duas semanas de setembro, e tres demandas na primeira.
+  const semanas = [
+    [{ str: '2026-09-01' }, { str: '2026-09-02' }, { str: '2026-09-03' },
+     { str: '2026-09-04' }, { str: '2026-09-05' }],
+    [{ str: '2026-09-08' }, { str: '2026-09-09' }, { str: '2026-09-10' },
+     { str: '2026-09-11' }, { str: '2026-09-12' }],
+  ];
+  /* `status_planejamento` E OBRIGATORIO nestes cartoes: `CAPACIDADE.planejados`
+     so conta demanda em etapa ALOCADA (planejado em diante). Sem ele a conta
+     devolve zero em tudo, e o teste passaria a afirmar sobre lista vazia — foi
+     o que aconteceu na primeira versao deste bloco. */
+  const selada = (id, pts, dia) => ({ id, poker_pontos: pts, entrega: dia, inicio: dia,
+    status_planejamento: 'planejado',
+    historico: [{ origem: 'planning poker', quem: 'Fernando Nascimento',
+                  em: '2026-08-06T14:00:00Z' }] });
+  const crua = (id, pts, dia) => ({ id, poker_pontos: pts, entrega: dia, inicio: dia,
+    status_planejamento: 'planejado' });
+
+  const r = conta([selada('a', 8, '2026-09-02'), selada('b', 5, '2026-09-02'),
+                   crua('c', 13, '2026-09-02'), crua('d', 3, '2026-09-09')],
+                  semanas, '2026-09-01', '2026-09-30');
+
+  /* SANIDADE PRIMEIRO. Sem esta linha, uma conta que devolvesse zero em tudo
+     passaria em "VALIDADO + S/PLAN da o PLANEJADO" — 0 + 0 === 0 — e o bloco
+     ficaria verde afirmando sobre nada. Foi exatamente o que aconteceu na
+     primeira versao, com os cartoes sem etapa. */
+  ok(r.total === 29, 'a conta devolveu os pontos dos cartoes de teste', String(r.total)); // 8+5+13 na S1 e 3 na S2
+  ok(r.porSemanaValidado[0] === 13, 'os pontos com selo entram na linha do validado',
+     String(r.porSemanaValidado[0]));
+  ok(r.porSemanaSemSelo[0] === 13, 'e os sem selo entram na linha do s/plan',
+     String(r.porSemanaSemSelo[0]));
+  ok(r.porSemanaSemSelo[1] === 3 && r.porSemanaValidado[1] === 0,
+     'cada sprint reparte os SEUS pontos');
+
+  /* A INVARIANTE CENTRAL: as duas linhas repartem, e nao acrescentam. */
+  let fecha = true;
+  for (let i = 0; i < semanas.length; i++) {
+    if (r.porSemanaValidado[i] + r.porSemanaSemSelo[i] !== r.porSemana[i]) fecha = false;
+  }
+  ok(fecha, 'VALIDADO + S/PLAN da o PLANEJADO em toda sprint');
+  ok(r.porSemana.reduce((t, x) => t + x, 0) === r.total,
+     'e a soma das sprints fecha com o total ao lado do quadro');
+  ok(r.totalValidado === 13, 'o total validado soma so o que tem selo',
+     String(r.totalValidado));
+
+  /* SEM SELO EM NINGUEM, a linha do validado fica zerada e a do s/plan carrega
+     tudo — e o total nao muda. A separacao nao pode inventar nem sumir ponto. */
+  const r2 = conta([crua('x', 21, '2026-09-02')], semanas, '2026-09-01', '2026-09-30');
+  ok(r2.porSemanaValidado[0] === 0 && r2.porSemanaSemSelo[0] === 21 && r2.total === 21,
+     'sem selo nenhum, tudo cai no s/plan e o total nao muda');
+
+  /* E O EXECUTADO NAO SE MEXEU: ele continua respondendo pelo que o dev
+     entregou, e nao tem nada a ver com validacao. */
+  ok(Array.isArray(r.feito) && r.feito.length === semanas.length,
+     'a linha do executado continua existindo, com uma coluna por sprint');
+})();
+
 /* NADA ACIMA DE 100% TAMBEM AQUI. "178%" numa linha de capacidade se le como erro,
    e travar em 100 seria mentir — os pontos existiram. Acima do plano sai a
    diferenca em pontos, que responde "quanto saiu alem do combinado". Acontece de
@@ -5402,15 +5496,27 @@ ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
   ok(r.todas[0].codigo === 'AX-C', 'a lista sai da maior para a menor');
 })();
 
-/* ─── AS TRES LINHAS DO GANTT ────────────────────────────────────────────
+/* ─── AS LINHAS DO QUADRO DE SPRINTS ─────────────────────────────────────
    A versao anterior punha tudo numa linha, com "S1:57→36 S2:65→47": o par dentro
    de cada semana obrigava o olho a ler duas coisas por bloco, e a comparacao que
-   interessa ("planejei 100 na S2 e sai 47") ficava dentro de um token.          */
+   interessa ("planejei 100 na S2 e sai 47") ficava dentro de um token.
+
+   E DEPOIS O PLANEJADO VIROU DUAS LINHAS: o que passou pela planning e o que
+   esta na sprint sem ter passado. Uma sprint de 60 pontos toda estimada por fora
+   era indistinguivel de uma de 60 votados em reuniao.                          */
 (() => {
   ok(/🃏 <b>\$\{pontosTotal\}<\/b> pt planejados/.test(GANTT),
      'a primeira linha e o cruzamento: planejado x entregue');
-  ok(/cq-r">Plan\.<\/span>/.test(GANTT) && /cq-r">Exec\.<\/span>/.test(GANTT),
-     'e ha uma linha para o planejado e outra para o executado');
+  ok(/cq-r"[^>]*>Valid\.<\/span>/.test(GANTT) &&
+     /cq-r"[^>]*>S\/plan<\/span>/.test(GANTT) &&
+     /cq-r"[^>]*>Exec\.<\/span>/.test(GANTT),
+     'o quadro tem as tres linhas: validado, sem-plan e executado');
+  /* CADA ROTULO DIZ O QUE E, no `title`. Com tres linhas e seis caracteres de
+     rotulo, "Valid." e "S/plan" nao se explicam sozinhos — e a diferenca entre
+     os dois e justamente o que o quadro passou a responder. */
+  ok(/cq-r" title="[^"]*Planning Poker[^"]*">Valid\./.test(GANTT) &&
+     /cq-r" title="[^"]*NÃO passaram[^"]*">S\/plan/.test(GANTT),
+     'e cada rotulo explica a linha no title');
   ok(!/S\$\{i\+1\}:\$\{p\}\$\{f \? '→' \+ f : ''\}/.test(GANTT),
      'os dois numeros nao voltam para dentro do mesmo bloco de semana');
   ok(/◐ \$\{semPontuar\} sem pontuar/.test(GANTT),
@@ -7208,12 +7314,18 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        reconstroi a partir do MESMO codigo do arquivo: o trecho e recortado do
        gantt.html e avaliado. Copiar a logica para ca faria este teste afirmar
        sobre a copia, e nao sobre a tela. */
-    const fonte = GANTT.slice(GANTT.indexOf('const temSelo = (m) =>'),
+    /* ANCORADO NO COMENTARIO DO BLOCO, e nao na primeira linha de codigo que
+       parecer com ele. A versao anterior recortava a partir de
+       `const temSelo = (m) =>`, e no dia em que essa expressao passou a existir
+       em dois lugares o recorte arrastou meio arquivo junto — o `new Function`
+       estourou com erro de sintaxe. Um comentario de secao e unico por
+       construcao. */
+    const fonte = GANTT.slice(GANTT.indexOf('const sorted = [...devCards].sort'),
                               GANTT.indexOf('const numTracks ='));
     ok(fonte.length > 200, 'o empacotamento do gantt foi encontrado para ser executado',
        fonte.length + ' caracteres');
 
-    const empacota = new Function('devCards', 'faixas', 'window', `
+    const empacota = new Function('devCards', 'faixas', 'ganttTemSelo', `
       ${fonte}
       return { cardTrack, tracks };
     `);
@@ -7227,7 +7339,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const faixas = new Map([['a', { sIdx: 0, eIdx: 2 }],
                             ['b', { sIdx: 0, eIdx: 2 }],
                             ['c', { sIdx: 0, eIdx: 2 }]]);
-    const r = empacota(cartoes, faixas, { SELO: SL });
+    const selar = (m) => !!SL.de(m);
+    const r = empacota(cartoes, faixas, selar);
 
     ok(r.cardTrack.get('a') < r.cardTrack.get('c') &&
        r.cardTrack.get('b') < r.cardTrack.get('c'),
@@ -7242,14 +7355,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const cartoes2 = [cru('cedo'), selado('tarde')];
     const faixas2 = new Map([['tarde', { sIdx: 0, eIdx: 20 }],
                              ['cedo',  { sIdx: 1, eIdx: 3 }]]);
-    const r2 = empacota(cartoes2, faixas2, { SELO: SL });
+    const r2 = empacota(cartoes2, faixas2, selar);
     ok(r2.cardTrack.get('cedo') !== r2.cardTrack.get('tarde'),
        'barras que se cruzam nunca dividem faixa, qualquer que seja a ordem');
 
     // E o que NAO se cruza continua compartilhando: a faixa nao pode inchar.
     const faixas3 = new Map([['tarde', { sIdx: 10, eIdx: 20 }],
                              ['cedo',  { sIdx: 0, eIdx: 3 }]]);
-    const r3 = empacota([cru('cedo'), selado('tarde')], faixas3, { SELO: SL });
+    const r3 = empacota([cru('cedo'), selado('tarde')], faixas3, selar);
     ok(r3.cardTrack.get('cedo') === r3.cardTrack.get('tarde'),
        'e quem nao se cruza continua dividindo a mesma faixa');
 
@@ -7257,7 +7370,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        antes. A mudanca nao pode reorganizar um quadro que nao tem selo nenhum. */
     const r4 = empacota([cru('b2'), cru('a2')],
       new Map([['a2', { sIdx: 0, eIdx: 2 }], ['b2', { sIdx: 0, eIdx: 2 }]]),
-      { SELO: SL });
+      selar);
     ok(r4.tracks.length === 2, 'sem selo nenhum, o empacotamento segue como era');
   }
 
