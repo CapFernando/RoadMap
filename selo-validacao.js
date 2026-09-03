@@ -78,13 +78,26 @@
 
   /** ESTA PESSOA PODE SELAR?
    *
-   *  `login` tem prioridade porque é identidade; o nome é o que resta quando o
-   *  registro é antigo. Vazio nos dois é NÃO — uma reunião sem autor registrado
-   *  não pode virar selo de alguém. */
+   *  ─────────────────────────────────────────────────────────────────────────
+   *  LOGIN **OU** NOME, e não o login com prioridade.
+   *
+   *  A primeira versão dava prioridade ao login: havendo login, o nome nem era
+   *  consultado. Parecia mais rigoroso e era mais frágil — se o login cadastrado
+   *  não fosse exatamente `fernando`, o selo sumiria de todas as pontuações
+   *  novas, e sumiria CALADO: a planning gravaria normalmente, o campo estaria lá
+   *  no dado, e a marca simplesmente não apareceria no cartão. Ninguém liga esse
+   *  sintoma a uma lista de logins.
+   *
+   *  Com "ou", errar o login custa nada: o nome gravado salva. E o risco do lado
+   *  oposto é pequeno — precisaria existir outra pessoa chamada exatamente
+   *  "Fernando Nascimento" ou "Fernando Morais" conduzindo planning.
+   *
+   *  Vazio nos dois continua sendo NÃO: uma reunião sem autor registrado não
+   *  pode virar selo de alguém. */
   function podeSelar(login, nome) {
     var l = chave(login);
-    if (l) return LOGINS.indexOf(l) >= 0;
     var n = chave(nome);
+    if (l && LOGINS.indexOf(l) >= 0) return true;
     return !!n && NOMES.indexOf(n) >= 0;
   }
 
