@@ -2316,6 +2316,85 @@ function ganttTemSelo(m) {
   return window.SELO ? !!SELO.de(m) : false;
 }
 
+/** COMO OS PONTOS DE UMA DEMANDA SE ESPALHAM PELAS SPRINTS.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * PROPORCIONAL AOS DIAS QUE ELA OCUPA EM CADA UMA.
+ *
+ * Antes o ponto caia inteiro na semana do PRAZO. Uma demanda de 89 pontos que
+ * comecava numa quinta e vencia na sexta seguinte aparecia com 89 na S2 e ZERO
+ * na S1 — e a S1, onde ela consumiu dois dias de trabalho, ficava vazia. Foi
+ * assim que o quadro do Gabriel mostrou "S1: 0" com uma barra atravessando a
+ * semana inteira.
+ *
+ * A coluna se chama CAPACIDADE, e capacidade e ocupacao: o que se quer saber e
+ * quanto trabalho esta em curso naquela semana, e nao em que semana a promessa
+ * vence.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * DIAS UTEIS, e nao corridos: e a mesma unidade do "7 dias livres / 21" logo
+ * acima, e nao faria sentido a barra ocupar 9 dias numa regua que so tem 5 por
+ * semana.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * O ARREDONDAMENTO PRESERVA A SOMA, pelo metodo do maior resto.
+ *
+ * 89 pontos em 2 e 5 dias dao 25,43 e 63,57. Arredondando cada um por conta
+ * propria sairia 25 + 64 = 89 por sorte; com 10 pontos em tres semanas iguais
+ * sairia 3 + 3 + 3 = 9, e a regua perderia um ponto que o total ao lado continua
+ * mostrando. O maior resto devolve o que faltou a quem tem a maior fracao. */
+function distribuiPorSprint(pontos, inicio, entrega, semanas) {
+  const zero = new Array(semanas.length).fill(0);
+  if (!pontos) return zero;
+
+  /* SEM UMA DAS PONTAS, a demanda vira um dia so — nao ha intervalo para
+     espalhar. E a data que existe manda: com prazo e sem inicio, ela conta na
+     semana do prazo, que e o comportamento de sempre. */
+  const ini = String(inicio || entrega || '').slice(0, 10);
+  const fim = String(entrega || inicio || '').slice(0, 10);
+  if (!ini || !fim) return zero;
+  /* PAR INVERTIDO existe na base. Trata como um dia, no prazo: e o que o resto
+     da tela ja faz com esses casos. */
+  const a = ini <= fim ? ini : fim;
+  const b = ini <= fim ? fim : ini;
+
+  // Quantos dias UTEIS da regua a barra ocupa em cada semana.
+  const dias = semanas.map(sem => sem.filter(d => d.str >= a && d.str <= b).length);
+  const totalDias = dias.reduce((t, n) => t + n, 0);
+
+  /* ─── NAO TOCA NENHUM DIA UTIL DO MES ──────────────────────────────────
+     Acontece com demanda marcada so para um fim de semana, e com a que
+     atravessa o mes inteiro sem nenhuma ponta aqui dentro.
+
+     ELA NAO PODE SUMIR. `semanaIndexFor` devolve -1 para uma data que nao cai
+     em nenhum dia util NEM dentro do intervalo de alguma semana — e 06/09, um
+     domingo entre a S1 (que acaba dia 4) e a S2 (que comeca dia 7), e
+     exatamente esse caso. A primeira versao disto devolvia zero em tudo, e os
+     pontos evaporavam: a soma das sprints deixava de fechar com o total ao
+     lado, sem nada na tela dizendo por que.
+
+     A REGRA E A MESMA DA BARRA: trabalho marcado para o fim de semana acontece
+     no proximo dia util. Nao havendo semana seguinte — prazo depois do fim do
+     mes —, cai na ultima, que e onde a barra tambem termina. */
+  if (!totalDias) {
+    let i = semanaIndexFor(fim, semanas);
+    if (i < 0) i = semanas.findIndex(sem => sem.length && sem[0].str > fim);
+    if (i < 0) i = semanas.length - 1;
+    if (i >= 0) zero[i] = pontos;
+    return zero;
+  }
+
+  const exato = dias.map(n => (pontos * n) / totalDias);
+  const parte = exato.map(v => Math.floor(v));
+  let sobra = pontos - parte.reduce((t, n) => t + n, 0);
+  // O que sobrou vai para quem tem a maior fracao — maior resto.
+  const ordem = exato
+    .map((v, i) => ({ i, resto: v - Math.floor(v) }))
+    .sort((x, y) => y.resto - x.resto);
+  for (let k = 0; k < ordem.length && sobra > 0; k++) { parte[ordem[k].i] += 1; sobra -= 1; }
+  return parte;
+}
+
 function pontosPokerPorSemana(devCards, semanas, de, ate) {
   const CAP = window.CAPACIDADE;
   /* AS DUAS PONTAS SAO FILTRADAS PELA JANELA DO MES.
@@ -2347,21 +2426,31 @@ function pontosPokerPorSemana(devCards, semanas, de, ate) {
     const p = CAP.planejados(m);
     const e = CAP.entregues(m);
     if (CAP.semPontuacao(m)) semPontuar += 1;
+    /* ─── O QUE ENTRA NO PLANEJADO DO MES ────────────────────────────────
+       A JANELA DO MES FILTRA PELO PRAZO, e e isso que deixa a demanda que
+       VIROU O MES de fora: uma prometida para julho e ainda aberta em setembro
+       tem prazo em julho, entao `dentro(...)` e falso e ela nao soma no plano de
+       setembro. Ela ja foi planejada no mes de origem, e conta-la de novo faria
+       o mesmo ponto aparecer duas vezes ao longo do tempo.
+
+       Ela continua VISIVEL na regua, com a fita de herdada, e a linha
+       "⇥ N de jul, ago · N pt" logo abaixo diz quanto ela pesa por fora. */
     if (p && dentro(CAP.diaDoPlano(m) || m.inicio)) {
       total += p;
-      // Sem prazo, o `inicio` serve de reserva: a demanda ESTÁ na tela do mês
-      // (o filtro exige uma das duas datas), e deixá-la fora da distribuição
-      // faria a soma das semanas não fechar com o total ao lado.
-      const i = semanaIndexFor(CAP.diaDoPlano(m) || m.inicio, semanas);
-      if (i >= 0) plan[i] += p;
-      /* A MESMA CONDIÇÃO E O MESMO ÍNDICE das linhas de cima. Repetir o
-         `dentro(...)` ou recalcular a semana aqui abriria a porta para as três
-         linhas discordarem sobre em que sprint a demanda cai. */
-      if (ganttTemSelo(m)) {
-        totalValidado += p;
-        if (i >= 0) validado[i] += p;
-      } else if (i >= 0) {
-        semSelo[i] += p;
+      /* OS PONTOS SE ESPALHAM PELAS SPRINTS QUE A BARRA OCUPA, proporcional aos
+         dias uteis em cada uma — ver `distribuiPorSprint`. Antes caiam inteiros
+         na semana do prazo, e a semana em que a demanda estava sendo TRABALHADA
+         aparecia zerada. */
+      const fatias = distribuiPorSprint(p, m.inicio, CAP.diaDoPlano(m), semanas);
+      /* AS TRES LINHAS USAM AS MESMAS FATIAS. Recalcular a distribuicao para o
+         validado abriria a porta para as linhas discordarem sobre em que sprint
+         a demanda cai — e `validado + semSelo` deixaria de dar `plan`. */
+      const selada = ganttTemSelo(m);
+      if (selada) totalValidado += p;
+      for (let i = 0; i < fatias.length; i++) {
+        plan[i] += fatias[i];
+        if (selada) validado[i] += fatias[i];
+        else semSelo[i] += fatias[i];
       }
     }
     if (e && dentro(CAP.diaDaEntrega(m))) {

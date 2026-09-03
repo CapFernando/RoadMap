@@ -5211,17 +5211,21 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      daqui mantem o teste executando o codigo do arquivo em vez de um substituto
      escrito para o teste passar. */
   const sel = corpo(GANTT, 'function ganttTemSelo(');
-  ok(!!fonte && !!idx && !!sel,
+  const dist = corpo(GANTT, 'function distribuiPorSprint(');
+  ok(!!fonte && !!idx && !!sel && !!dist,
      'a conta de pontos por semana foi encontrada para ser executada');
-  if (!fonte || !idx || !sel) return;
+  if (!fonte || !idx || !sel || !dist) return;
 
-  const conta = new Function('CAPACIDADE', 'SELO', `
+  const monta = (retorno) => new Function('CAPACIDADE', 'SELO', `
     const window = { CAPACIDADE, SELO };
     function ganttTemSelo${sel.slice(sel.indexOf('('))}
     function semanaIndexFor${idx.slice(idx.indexOf('('))}
+    function distribuiPorSprint${dist.slice(dist.indexOf('('))}
     function pontosPokerPorSemana${fonte.slice(fonte.indexOf('('))}
-    return pontosPokerPorSemana;
+    return ${retorno};
   `)(CAPm, SLm);
+  const conta = monta('pontosPokerPorSemana');
+  const distribui = monta('distribuiPorSprint');
 
   // Duas semanas de setembro, e tres demandas na primeira.
   const semanas = [
@@ -5257,6 +5261,24 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
   ok(r.porSemanaSemSelo[1] === 3 && r.porSemanaValidado[1] === 0,
      'cada sprint reparte os SEUS pontos');
 
+  /* ─── A DEMANDA QUE VIROU O MES NAO ENTRA NO PLANO ────────────────────
+     Uma prometida para julho e ainda aberta em setembro tem prazo em julho,
+     entao a janela do mes a deixa de fora. Ela ja foi planejada no mes de
+     origem: conta-la de novo faria o mesmo ponto aparecer duas vezes ao longo do
+     tempo, e o cruzamento planejado x entregue nunca fecharia.
+
+     Ela CONTINUA VISIVEL na regua, com a fita de herdada — o que nao conta e o
+     ponto, e nao a barra. */
+  const virou = conta(
+    [{ id: 'h', poker_pontos: 55, status_planejamento: 'em_andamento',
+       inicio: '2026-07-01', entrega: '2026-07-20' },
+     crua('doMes', 20, '2026-09-02')],
+    semanas, '2026-09-01', '2026-09-30');
+  ok(virou.total === 20, 'a demanda que virou o mes fica FORA do planejado',
+     'total ' + virou.total);
+  ok(virou.porSemana.reduce((t, x) => t + x, 0) === 20,
+     'e as sprints tambem nao a contam');
+
   /* A INVARIANTE CENTRAL: as duas linhas repartem, e nao acrescentam. */
   let fecha = true;
   for (let i = 0; i < semanas.length; i++) {
@@ -5273,6 +5295,66 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
   const r2 = conta([crua('x', 21, '2026-09-02')], semanas, '2026-09-01', '2026-09-30');
   ok(r2.porSemanaValidado[0] === 0 && r2.porSemanaSemSelo[0] === 21 && r2.total === 21,
      'sem selo nenhum, tudo cai no s/plan e o total nao muda');
+
+  /* ─── A DISTRIBUICAO PELAS SPRINTS ─────────────────────────────
+     Os pontos se espalham pelas sprints que a barra ocupa, PROPORCIONAL AOS
+     DIAS UTEIS em cada uma.
+
+     O CASO QUE MOTIVOU: no quadro do Gabriel, uma demanda de 89 pontos comecava
+     numa quinta (S1) e vencia na sexta seguinte (S2). Como o ponto caia inteiro
+     na semana do PRAZO, a S1 aparecia com ZERO enquanto a barra atravessava a
+     semana inteira. A coluna se chama Capacidade, e capacidade e ocupacao. */
+  {
+    const semanasG = [
+      [{ str: '2026-09-01' }, { str: '2026-09-02' }, { str: '2026-09-03' }, { str: '2026-09-04' }],
+      [{ str: '2026-09-07' }, { str: '2026-09-08' }, { str: '2026-09-09' },
+       { str: '2026-09-10' }, { str: '2026-09-11' }],
+    ];
+    // 2 dias uteis na S1 (3 e 4) e 5 na S2: 89 x 2/7 = 25,43 e 89 x 5/7 = 63,57.
+    const f = distribui(89, '2026-09-03', '2026-09-11', semanasG);
+    ok(f[0] === 25 && f[1] === 64, 'os pontos se dividem proporcionalmente aos dias uteis',
+       f.join(' + '));
+    ok(f[0] + f[1] === 89, 'e a divisao nao perde nem inventa ponto');
+    ok(f[0] > 0, 'a semana em que a barra COMECA deixa de aparecer zerada');
+
+    /* O ARREDONDAMENTO PRESERVA A SOMA, pelo maior resto. Dez pontos em tres
+       semanas iguais dao 3,33 cada: arredondando por conta propria sairia
+       3+3+3=9, e a regua perderia um ponto que o total ao lado continua
+       mostrando. */
+    const tres = [
+      [{ str: '2026-09-01' }], [{ str: '2026-09-08' }], [{ str: '2026-09-15' }],
+    ];
+    const g = distribui(10, '2026-09-01', '2026-09-15', tres);
+    ok(g.reduce((t, x) => t + x, 0) === 10, 'dez pontos em tres sprints continuam dez',
+       g.join(' + '));
+
+    // Uma sprint so: tudo nela, como era antes.
+    const h = distribui(21, '2026-09-01', '2026-09-04', semanasG);
+    ok(h[0] === 21 && h[1] === 0, 'demanda dentro de uma sprint so nao se divide');
+
+    /* SEM UMA DAS PONTAS a demanda vira um dia so, e a data que existe manda.
+       Com prazo e sem inicio ela conta na semana do prazo — o comportamento de
+       sempre para as importadas, que sao a maioria dos casos assim. */
+    const i1 = distribui(13, null, '2026-09-10', semanasG);
+    ok(i1[0] === 0 && i1[1] === 13, 'sem inicio, conta na semana do prazo');
+    const i2 = distribui(13, '2026-09-02', null, semanasG);
+    ok(i2[0] === 13 && i2[1] === 0, 'sem prazo, conta na semana do inicio');
+
+    /* PAR INVERTIDO existe na base: trata como um dia, e nao devolve negativo
+       nem perde o ponto. */
+    const inv = distribui(8, '2026-09-10', '2026-09-02', semanasG);
+    ok(inv.reduce((t, x) => t + x, 0) === 8 && inv.every(x => x >= 0),
+       'par de datas invertido nao perde ponto nem devolve negativo', inv.join(' + '));
+
+    /* NENHUM DIA UTIL DENTRO DO MES: cai inteira na semana do prazo. Acontece
+       com demanda marcada so para um fim de semana. */
+    const fds = distribui(5, '2026-09-05', '2026-09-06', semanasG);
+    ok(fds.reduce((t, x) => t + x, 0) === 5,
+       'demanda so no fim de semana nao some da regua', fds.join(' + '));
+
+    ok(distribui(0, '2026-09-01', '2026-09-11', semanasG).every(x => x === 0),
+       'sem pontos, nao se distribui nada');
+  }
 
   /* E O EXECUTADO NAO SE MEXEU: ele continua respondendo pelo que o dev
      entregou, e nao tem nada a ver com validacao. */
