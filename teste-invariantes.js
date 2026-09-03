@@ -7194,6 +7194,73 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                  .match(/id="(selo-arco-[a-z0-9]+)"/) || [])[1];
   ok(!!id1 && !!id2 && id1 !== id2, 'cada carimbo tem seu proprio id de arco');
 
+  /* ─── O VALIDADO SOBE NO GANTT ────────────────────────────────────────────
+     Num dia com tres cartoes, sendo dois validados, os dois aparecem em cima e o
+     terceiro embaixo. A leitura que isso da: correndo o olho pela primeira faixa
+     de cada pessoa, ve-se o que ja passou pela planning.
+
+     ESTE BLOCO EXECUTA O EMPACOTAMENTO, e nao confere o texto dele. A funcao e
+     extraida do gantt.html e rodada com cartoes de verdade — e o que denuncia
+     uma ordenacao que sobrepoe barras, que e o risco real desta mudanca. */
+  sec('O gantt poe o validado em cima');
+  {
+    /* O empacotamento vive dentro de `renderGantt`, entao a invariante o
+       reconstroi a partir do MESMO codigo do arquivo: o trecho e recortado do
+       gantt.html e avaliado. Copiar a logica para ca faria este teste afirmar
+       sobre a copia, e nao sobre a tela. */
+    const fonte = GANTT.slice(GANTT.indexOf('const temSelo = (m) =>'),
+                              GANTT.indexOf('const numTracks ='));
+    ok(fonte.length > 200, 'o empacotamento do gantt foi encontrado para ser executado',
+       fonte.length + ' caracteres');
+
+    const empacota = new Function('devCards', 'faixas', 'window', `
+      ${fonte}
+      return { cardTrack, tracks };
+    `);
+
+    // Tres cartoes no mesmo dia: dois validados e um sem selo.
+    const selado = (id) => ({ id, inicio: '2026-09-01',
+      historico: [{ origem: 'planning poker', quem: 'Fernando Nascimento',
+                    em: '2026-08-06T14:00:00Z' }] });
+    const cru = (id) => ({ id, inicio: '2026-09-01', poker_pontos: 8 });
+    const cartoes = [cru('c'), selado('a'), selado('b')];
+    const faixas = new Map([['a', { sIdx: 0, eIdx: 2 }],
+                            ['b', { sIdx: 0, eIdx: 2 }],
+                            ['c', { sIdx: 0, eIdx: 2 }]]);
+    const r = empacota(cartoes, faixas, { SELO: SL });
+
+    ok(r.cardTrack.get('a') < r.cardTrack.get('c') &&
+       r.cardTrack.get('b') < r.cardTrack.get('c'),
+       'os dois validados ficam ACIMA do sem selo');
+    ok(r.cardTrack.get('c') === 2, 'e o sem selo e o ultimo da ordem');
+
+    /* A ORDEM NAO PODE SOBREPOR BARRA. O empacotamento original comparava so com
+       o ULTIMO cartao da faixa, e isso so funciona com os cartoes chegando em
+       ordem crescente de inicio — premissa que ordenar por selo quebra. Este
+       caso e o que denuncia: um sem selo do inicio do mes chega DEPOIS de um
+       validado do fim, e os dois nao podem cair na mesma faixa se colidirem. */
+    const cartoes2 = [cru('cedo'), selado('tarde')];
+    const faixas2 = new Map([['tarde', { sIdx: 0, eIdx: 20 }],
+                             ['cedo',  { sIdx: 1, eIdx: 3 }]]);
+    const r2 = empacota(cartoes2, faixas2, { SELO: SL });
+    ok(r2.cardTrack.get('cedo') !== r2.cardTrack.get('tarde'),
+       'barras que se cruzam nunca dividem faixa, qualquer que seja a ordem');
+
+    // E o que NAO se cruza continua compartilhando: a faixa nao pode inchar.
+    const faixas3 = new Map([['tarde', { sIdx: 10, eIdx: 20 }],
+                             ['cedo',  { sIdx: 0, eIdx: 3 }]]);
+    const r3 = empacota([cru('cedo'), selado('tarde')], faixas3, { SELO: SL });
+    ok(r3.cardTrack.get('cedo') === r3.cardTrack.get('tarde'),
+       'e quem nao se cruza continua dividindo a mesma faixa');
+
+    /* SEM SELO EM NINGUEM, a ordem antiga permanece: quem comeca antes vem
+       antes. A mudanca nao pode reorganizar um quadro que nao tem selo nenhum. */
+    const r4 = empacota([cru('b2'), cru('a2')],
+      new Map([['a2', { sIdx: 0, eIdx: 2 }], ['b2', { sIdx: 0, eIdx: 2 }]]),
+      { SELO: SL });
+    ok(r4.tracks.length === 2, 'sem selo nenhum, o empacotamento segue como era');
+  }
+
   /* AS TRES TELAS USAM A REGRA, e nenhuma delas reimplementa "passou pela
      planning". Uma copia divergiria, e a mesma demanda ficaria selada numa tela
      e nao na outra. */

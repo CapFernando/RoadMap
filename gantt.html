@@ -2509,9 +2509,39 @@ function renderGantt() {
     const faixas = new Map();
     devCards.forEach(m => { faixas.set(m.id, faixaDoCard(m, workDays, todayStr)); });
 
-    // track assignment (greedy lane packing)
-    const sorted = [...devCards].sort((a,b) => (a.inicio||'').localeCompare(b.inicio||''));
-    const tracks = []; // each track = [{start,end}]
+    /* ─── EM QUE FAIXA CADA BARRA CAI ──────────────────────────────────────
+       O VALIDADO SOBE. Quem tem selo ocupa as faixas de cima; quem nao tem fica
+       abaixo. Num dia com tres cartoes, sendo dois validados, os dois aparecem
+       primeiro e o terceiro embaixo — e o mesmo vale para todos os dias.
+
+       A leitura que isso da: correndo o olho pela primeira faixa de cada pessoa,
+       ve-se o que ja passou pela planning. Sem a ordem, o validado e o nao
+       validado se misturam conforme a data, e a informacao so aparece quem le
+       cartao por cartao.
+
+       ─────────────────────────────────────────────────────────────────────────
+       A ORDEM NAO PODE SOBREPOR BARRA, e e por isso que o teste de encaixe
+       mudou junto.
+
+       O empacotamento guloso original comparava so com o ULTIMO cartao da faixa
+       (`tracks[t][tracks[t].length-1]`), e isso funciona por causa de uma
+       premissa: os cartoes chegam em ordem crescente de inicio, entao o ultimo
+       inserido e sempre o que termina mais tarde.
+
+       Ordenar por selo QUEBRA essa premissa — um cartao sem selo do dia 2 chega
+       depois de um com selo do dia 20 —, e comparar so com o ultimo passaria a
+       aprovar encaixes que se sobrepoem. Agora o teste e contra TODOS os
+       intervalos da faixa. Custa um laco a mais numa lista de poucos cartoes por
+       pessoa, e e o que torna qualquer ordem segura. */
+    const temSelo = (m) => (window.SELO ? !!SELO.de(m) : false);
+    const sorted = [...devCards].sort((a, b) => {
+      const sa = temSelo(a) ? 0 : 1;
+      const sb = temSelo(b) ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      // Dentro do mesmo grupo, a ordem de sempre: quem comeca antes vem antes.
+      return (a.inicio || '').localeCompare(b.inicio || '');
+    });
+    const tracks = []; // cada faixa = [{start,end,id}]
     const cardTrack = new Map();
     sorted.forEach(m => {
       const f = faixas.get(m.id);
@@ -2519,8 +2549,9 @@ function renderGantt() {
       const sIdx = f.sIdx, eIdx = f.eIdx;
       let placed = false;
       for (let t = 0; t < tracks.length; t++) {
-        const last = tracks[t][tracks[t].length-1];
-        if (sIdx > last.end) {
+        // Cabe se nao encosta em NENHUM dos que ja estao nesta faixa.
+        const livre = tracks[t].every(o => sIdx > o.end || eIdx < o.start);
+        if (livre) {
           tracks[t].push({ start: sIdx, end: eIdx, id: m.id });
           cardTrack.set(m.id, t);
           placed = true; break;
