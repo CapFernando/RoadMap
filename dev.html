@@ -3301,8 +3301,12 @@ function renderCard(m, colKey) {
   if (m.estimativa) meta.push(`⏱ ${devEsc(m.estimativa)}`);
   // Parent info (este card é dependência de outro)
   const parent = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
+  /* O CODIGO ENTRA JUNTO, e o titulo inteiro fica no `title`. O titulo aqui e
+     cortado em 38 caracteres, e quem le a etiqueta e sai procurando por ele na
+     busca pode nao achar nada — o codigo acha sempre, e o tooltip mostra o que
+     foi cortado. */
   const parentInfo = parent
-    ? `<div class="kcard-parent-info">🔗 Dep. de: ${devEsc(parent.titulo.substring(0,38))}${parent.titulo.length>38?'…':''}</div>`
+    ? `<div class="kcard-parent-info" title="${devEsc((parent.codigo ? parent.codigo + ' · ' : '') + parent.titulo)}">🔗 Dep. de: ${devEsc(parent.codigo || '')} ${devEsc(parent.titulo.substring(0,38))}${parent.titulo.length>38?'…':''}</div>`
     : '';
   return `
     <div class="kcard prazo-${prazoNivel(m)}" draggable="true" id="card-${m.id}"

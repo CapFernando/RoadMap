@@ -5198,6 +5198,138 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
 
    ESTE BLOCO EXECUTA a funcao recortada do gantt.html, com demandas de verdade. */
 
+/* ═══ A BUSCA DO KANBAN NAO PERDE PARA UM FILTRO QUE NINGUEM ESCOLHEU ══════
+
+   O relato: um card mostrava "🔗 Dep. de: Tela de controle de cheques", e
+   procurar por esse titulo no quadro devolvia "Mostrando 0 de 395". O card
+   existe — esta entre os 395 —, e mesmo assim a busca dizia que nao.
+
+   A CULPA ERA DO FILTRO "CONCLUIDAS: ESTE MES", e o detalhe cruel e que ele
+   nao se anuncia: por decisao propria (`renderKbToolbar`) o periodo `mes_atual`
+   NAO conta como filtro ativo, entao o botao dizia "Limpar (1)" — so a busca —
+   enquanto outra coisa escondia o resultado. Um filtro invisivel ganhando da
+   busca.
+
+   A REGRA JA EXISTIA UMA ABA AO LADO. `renderMelhorias` faz isso desde sempre:
+   "busca ativa quebra o esconde concluido/negada por padrao". O Kanban nunca
+   recebeu a mesma cortesia.
+
+   ESTE BLOCO EXECUTA a cadeia de filtros recortada do admin.html. */
+(() => {
+  sec('A busca do kanban acha o que existe');
+  const ADM = ADMIN;
+
+  const mb = corpo(ADM, 'function matchBusca(');
+  const mp = corpo(ADM, 'function matchPeriodoConclusao(');
+  const nt = corpo(ADM, 'function normTexto(');
+  const rk = corpo(ADM, 'function renderKanban(');
+  ok(!!mb && !!mp && !!nt && !!rk, 'a cadeia de filtros do quadro foi encontrada');
+  if (!mb || !mp || !nt || !rk) return;
+
+  /* SO O TRECHO DOS FILTROS entra no teste: `renderKanban` inteira mexe no DOM.
+     O corte vai de `const achadas` ate a chamada da toolbar, que e exatamente a
+     decisao sob teste. */
+  const ini = rk.indexOf('const achadas = state.melhorias.filter');
+  const fim = rk.indexOf('renderKbToolbar(base.length');
+  ok(ini > 0 && fim > ini, 'e o trecho que decide quem aparece foi isolado');
+  if (ini < 0 || fim < ini) return;
+  const trecho = rk.slice(ini, fim);
+
+  /* Os filtros que este bloco NAO esta testando passam tudo. Trocar `matchDev`
+     por um `() => true` aqui e honesto: o que se afirma e sobre busca e periodo,
+     e um stub deixa isso explicito em vez de esconder atras de dados montados. */
+  const roda = (melhorias, busca, periodo) => new Function('state', '_kbBusca', '_kbPeriodo', `
+    ${nt}
+    ${mb}
+    ${mp}
+    const statusEfetivo = m => m.status_planejamento || 'planejado';
+    const ehMesclada = m => !!m.mesclado_em;
+    const mescladaEm = m => String(m && m.mesclado_em || '');
+    const dataReferenciaKb = m => m.concluido_em ? new Date(m.concluido_em) : null;
+    const matchDev = () => true, matchPrazo = () => true, matchTipo = () => true;
+    const _kbTema = null, _kbDev = null, _kbPrazo = null, _kbTipo = null;
+    ${trecho}
+    return { base, mescladasAchadas };
+  `)({ melhorias }, busca, periodo);
+
+  const hoje = new Date();
+  const desteMes = new Date(hoje.getFullYear(), hoje.getMonth(), 10).toISOString();
+  const doAnoPassado = new Date(hoje.getFullYear() - 1, hoje.getMonth(), 10).toISOString();
+
+  const BASE = [
+    { id: 'p', codigo: 'AX-300', titulo: 'Tela de controle de cheques',
+      status_planejamento: 'concluido', concluido_em: doAnoPassado },
+    { id: 'f', codigo: 'AX-384', titulo: 'Aguardando Esteffane me chamar para validar',
+      status_planejamento: 'em_andamento', parent_id: 'p' },
+    { id: 'x', codigo: 'AX-301', titulo: 'Outra coisa qualquer',
+      status_planejamento: 'concluido', concluido_em: desteMes },
+  ];
+
+  /* O CASO RELATADO, e o primeiro a ser conferido: o pai concluido fora do mes
+     tem de aparecer quando alguem procura por ele. */
+  const achou = roda(BASE, 'tela de controle de cheques', 'mes_atual');
+  ok(achou.base.length === 1 && achou.base[0].id === 'p',
+     'buscar o titulo do pai concluido em outro mes ACHA o card',
+     achou.base.length + ' resultado(s)');
+
+  /* E O FILTRO CONTINUA VALENDO SEM BUSCA — a correcao nao pode ter desligado a
+     higiene do quadro, que e o que impede o "Concluido" de virar um deposito de
+     tudo o que ja foi feito. */
+  const semBusca = roda(BASE, '', 'mes_atual');
+  ok(!semBusca.base.some(m => m.id === 'p'),
+     'sem busca, o concluido de outro mes continua fora do quadro');
+  ok(semBusca.base.some(m => m.id === 'x'),
+     'e o concluido DESTE mes continua dentro');
+  ok(semBusca.base.length === 2, 'sem busca o quadro nao mudou de tamanho',
+     semBusca.base.length + ' cards');
+
+  // A busca continua sendo busca: termo que nao existe nao traz ninguem.
+  ok(roda(BASE, 'zzz nao existe', 'mes_atual').base.length === 0,
+     'termo sem correspondencia continua devolvendo nada');
+  // E o codigo acha, que e o caminho de quem le a etiqueta de dependencia.
+  ok(roda(BASE, 'AX-300', 'mes_atual').base.length === 1,
+     'e o codigo do pai tambem acha');
+
+  /* A MESCLADA NAO ENTRA EM COLUNA, MAS E ANUNCIADA. Sem esse aviso a busca
+     devolve o mesmo "nao achei" de antes para um card que existe — so que agora
+     por outro motivo, o que seria trocar um silencio por outro. */
+  const comMesclada = [
+    { id: 'm', codigo: 'AX-302', titulo: 'Tela de controle de cheques', mesclado_em: 'p',
+      status_planejamento: 'planejado' },
+  ].concat(BASE);
+  const r = roda(comMesclada, 'tela de controle de cheques', 'mes_atual');
+  ok(!r.base.some(x => x.id === 'm'), 'a mesclada continua fora das colunas');
+  ok(r.mescladasAchadas.length === 1 && r.mescladasAchadas[0].id === 'm',
+     'mas a busca a devolve para ser ANUNCIADA');
+  ok(roda(comMesclada, '', 'mes_atual').mescladasAchadas.length === 0,
+     'e sem busca nao se anuncia mesclada nenhuma');
+
+  /* O AVISO CHEGA NA TELA. Calcular e nao mostrar seria o mesmo defeito. */
+  ok(/renderKbToolbar\(base\.length, mescladasAchadas\)/.test(ADM),
+     'a toolbar recebe as mescladas achadas');
+  ok(/function renderKbToolbar\(exibidas, mescladasAchadas\)/.test(ADM),
+     'e sabe o que fazer com elas');
+  ok(/fb-mesc[^]{0,400}resultado\$\{mesc\.length > 1/.test(ADM),
+     'e escreve quantas sao e onde foram parar');
+  /* E A TELA DIZ QUE IGNOROU O PERIODO. Sem isso, ver um card de outro mes no
+     quadro com "Este mes" selecionado parece defeito. */
+  ok(/busca em todos os per\u00edodos|busca em todos os períodos/.test(ADM),
+     'e avisa que a busca passou por cima do periodo');
+
+  /* O CORTE DO TITULO PRECISA APARECER, nos dois lugares que desenham a etiqueta
+     de dependencia. Um titulo cortado em 30 caracteres SEM reticencias vira um
+     titulo curto de mentira: quem copia o que le para a busca procura por um
+     texto que nao existe. Foi assim que a pergunta comecou. */
+  ok(/Dep\. de: \$\{esc\(parentM\.codigo \|\| ''\)\} \$\{esc\(parentM\.titulo\.substring\(0,30\)\)\}\$\{parentM\.titulo\.length > 30 \? '…' : ''\}/.test(ADM),
+     'a etiqueta do admin mostra o codigo e marca o corte com reticencias');
+  ok(/<span title="\$\{esc\(\(parentM\.codigo/.test(ADM),
+     'e carrega o titulo inteiro no tooltip');
+  const DEVH = DEV;
+  ok(/kcard-parent-info" title="\$\{devEsc\(\(parent\.codigo/.test(DEVH) &&
+     /Dep\. de: \$\{devEsc\(parent\.codigo \|\| ''\)\}/.test(DEVH),
+     'e a do dev tambem mostra codigo e titulo inteiro');
+})();
+
 /* ═══ A SPRINT E A SEMANA DO CALENDARIO ═════════════════════════════
 
    O relato foi "tenho 8 + 13 pontos, por qual motivo soma-se apenas 10?", e a

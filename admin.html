@@ -468,6 +468,17 @@
       color:var(--text); padding:6px 10px; font-size:13px; font-family:inherit; outline:none; min-width:190px;
     }
     .filter-bar input[type="text"].fb-busca:focus { border-color:var(--blue); }
+    /* O AVISO DE QUE A BUSCA IGNOROU O PERIODO. Cor, e nao opacidade: este
+       projeto parou de esmaecer texto (ver a nota do --esmaecido em tema.css). */
+    .filter-bar .fb-nota { color:var(--text2); }
+    /* O RESULTADO QUE EXISTE E NAO CABE EM COLUNA — a mesclada. Quebra a linha
+       da barra inteira (`flex-basis:100%`) porque e frase, e nao rotulo: espremer
+       entre os selects a cortaria no primeiro titulo comprido. */
+    .filter-bar .fb-mesc {
+      flex-basis:100%; font-size:12px; color:var(--text2); line-height:1.5;
+      background:var(--bg3); border:1px solid var(--border);
+      border-radius:var(--radius); padding:6px 10px; margin-top:2px;
+    }
 
     .ger-summary { display:flex; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
     .ger-kpi {
@@ -3210,8 +3221,14 @@ function renderMelhorias() {
       }
       // Dependência de outro card
       const parentM = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
+      /* O CORTE PRECISA APARECER. Antes o titulo era cortado em 30 caracteres
+         SEM reticencias: um titulo mais longo virava um titulo curto de mentira,
+         e quem copiasse o que estava lendo para a busca procuraria por um texto
+         que nao existe em lugar nenhum. O `title` carrega o titulo inteiro, e o
+         codigo entra junto — e por ele que se acha o card sem depender do
+         titulo. (Igual ao dev.html, que ja fazia assim.) */
       const parentBadge = parentM
-        ? `<span style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;">🔗 Dep. de: ${esc(parentM.titulo.substring(0,30))}</span>`
+        ? `<span title="${esc((parentM.codigo ? parentM.codigo + ' · ' : '') + parentM.titulo)}" style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;cursor:help;">🔗 Dep. de: ${esc(parentM.codigo || '')} ${esc(parentM.titulo.substring(0,30))}${parentM.titulo.length > 30 ? '…' : ''}</span>`
         : '';
       // Dependências abertas deste card
       const depCount = state.melhorias.filter(x => x.parent_id === m.id && statusKey(x) !== 'concluido').length;
@@ -3363,9 +3380,17 @@ function limparFiltrosKb() {
   renderKanban();
 }
 
-function renderKbToolbar(exibidas) {
+function renderKbToolbar(exibidas, mescladasAchadas) {
   const el = document.getElementById('kb-toolbar');
   if (!el) return;
+  /* O RECADO DA MESCLADA. Ela nao aparece em coluna nenhuma, entao sem esta
+     linha a busca diria "nao achei" sobre um card que existe e que a pessoa
+     acabou de ver citado em outro lugar. Diz ONDE ele foi parar. */
+  const mesc = (mescladasAchadas || []).map(m => {
+    const pai = (state.melhorias || []).find(x => x.id === mescladaEm(m));
+    return esc((m.codigo ? m.codigo + ' · ' : '') + (m.titulo || '')) +
+      (pai ? ' → mesclada em <strong>' + esc((pai.codigo ? pai.codigo + ' · ' : '') + pai.titulo) + '</strong>' : ' → mesclada');
+  });
   // 'mes_atual' é o padrão de higiene, não uma escolha explícita — só conta
   // como filtro "ativo" quando alguém pede para ver mais (3 meses/tudo).
   const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbBusca,
@@ -3378,7 +3403,15 @@ function renderKbToolbar(exibidas) {
     fbGroup('Concluídas', _kbPeriodo, opcoesPeriodo(), 'setKbPeriodo') +
     fbBusca('kb-busca', _kbBusca, 'setBuscaKb') +
     botaoLimpar('limparFiltrosKb', ativos) +
-    `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}</span>`;
+    `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}` +
+    /* COM BUSCA ATIVA A TELA DIZ QUE O PERIODO FOI IGNORADO. Sem isso, quem
+       busca "concluídas: este mês" no alto e ve um card de julho no quadro
+       acharia que o filtro quebrou. */
+    (_kbBusca ? ' · <span class="fb-nota">busca em todos os períodos</span>' : '') +
+    `</span>` +
+    (mesc.length
+      ? `<div class="fb-mesc">🔗 ${mesc.length} resultado${mesc.length > 1 ? 's' : ''} fora do quadro: ${mesc.join(' · ')}</div>`
+      : '');
 }
 
 /* A ROLAGEM SOBREVIVE AO REDESENHO.
@@ -3448,16 +3481,31 @@ function renderKanban() {
   const board = document.getElementById('kb-board');
   if (!board) return;
   const rolagem = kbRolagemGuarda(board);
-  const base = state.melhorias.filter(m =>
+  /* A BUSCA VENCE O FILTRO DE PERIODO, e o motivo e o mesmo ja escrito na aba
+     Melhorias: quem digitou um termo quer ACHAR o item, mesmo concluido ou
+     negado. Esconder em silencio derrota o proposito da busca.
+
+     O CASO QUE MOTIVOU: um card mostrava "🔗 Dep. de: Tela de controle de
+     cheques", e procurar por esse titulo devolvia "Mostrando 0 de 395". O card
+     existia — so estava fora do periodo. E o pior detalhe e o "Limpar (1)" ao
+     lado: "Concluidas: Este mes" e o PADRAO e de proposito nao conta como filtro
+     ativo, entao a tela dizia que so a busca estava ligada enquanto outra coisa
+     escondia o resultado. Um filtro que ninguem escolheu, invisivel na conta de
+     filtros ativos, ganhando da busca. */
+  const achadas = state.melhorias.filter(m => matchBusca(m, _kbBusca));
+  const base = achadas.filter(m =>
     !ehMesclada(m) &&
     (!_kbTema || m.tema_id === _kbTema) &&
     matchDev(m, _kbDev) &&
     matchPrazo(m, _kbPrazo) &&
     matchTipo(m, _kbTipo) &&
-    matchBusca(m, _kbBusca) &&
-    matchPeriodoConclusao(m, _kbPeriodo)
+    (!!_kbBusca || matchPeriodoConclusao(m, _kbPeriodo))
   );
-  renderKbToolbar(base.length);
+  /* A MESCLADA CONTINUA FORA DAS COLUNAS — ela saiu do fluxo e vive dentro da
+     principal —, mas com busca ativa a pessoa e AVISADA de que existe e de onde
+     esta. Silencio aqui daria o mesmo "nao encontrei" para um card que existe. */
+  const mescladasAchadas = _kbBusca ? achadas.filter(m => ehMesclada(m)) : [];
+  renderKbToolbar(base.length, mescladasAchadas);
 
   board.innerHTML = KB_COLS.map(col => {
     // Coluna pela etapa GRAVADA. Antes era statusEfetivo, que derivava 'atrasado'
