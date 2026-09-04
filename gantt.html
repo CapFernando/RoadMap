@@ -354,7 +354,12 @@
          ele quebrava para a linha de baixo e desalinhava o quadro inteiro.
          Sobram ~33px por sprint na coluna de 206px, que cabe numero de tres
          digitos com folga. */
-      display: grid; grid-template-columns: 3.9em repeat(5, 1fr);
+      /* O NUMERO DE COLUNAS VEM DO MES, e nao de uma constante: desde que a
+         sprint passou a ser semana de calendario, um mes tem QUATRO OU CINCO
+         delas (nunca seis — ver `semanasDoMes`). Fevereiro de 2026 comeca numa
+         segunda e tem quatro; fixar cinco deixaria uma coluna vazia comendo um
+         quinto da largura, e os numeros ficariam desalinhados do cabecalho. */
+      display: grid; grid-template-columns: 3.9em repeat(var(--cq-colunas, 5), 1fr);
       column-gap: 1px; row-gap: 1px; width: 100%;
       font-size: 10.5px; font-variant-numeric: tabular-nums; line-height: 1.5;
     }
@@ -2257,16 +2262,88 @@ function sprintDaDemanda(m) {
 
 // ── GANTT ─────────────────────────────────────────────────────────────────
 // ── PONTOS DO PLANNING POKER POR SEMANA ────────────────────────────
-// "Semana" aqui é bloco de 5 dias úteis do mês em exibição (S1=dias úteis
-// 1-5, S2=6-10...), o mesmo recorte que já organiza as colunas do Gantt —
-// não é o campo de texto livre "Sprint" do card (esse é outro conceito,
-// preenchido à mão e hoje vazio na base). S5 só existe em meses com mais de
-// 20 dias úteis (a maioria tem entre 20 e 23).
+/** AS SPRINTS DO MES — uma por SEMANA DE CALENDARIO, de segunda a domingo.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ISTO AGRUPAVA DE CINCO EM CINCO DIAS UTEIS, e estava errado.
+ *
+ * A conta antiga era `uteis.slice(i, i + 5)`: pegava os dias uteis do mes em
+ * ordem e cortava a cada cinco. Funciona por acidente em mes sem feriado, e
+ * quebra no primeiro que tem.
+ *
+ * SETEMBRO DE 2026, com o 7 de Setembro caindo numa segunda:
+ *
+ *     S1: 01, 02, 03, 04, 08     <- o dia 8 veio para ca
+ *     S2: 09, 10, 11, 14, 15     <- e o 9 ficou aqui
+ *
+ * O dia 8 e o 9 sao terca e quarta da MESMA semana, e apareciam em sprints
+ * diferentes. Uma demanda de 8 pontos marcada de 08 a 09 saia partida em 4 e 4
+ * — e o relato foi exatamente esse: "tenho 8 + 13 pontos, por qual motivo
+ * soma-se apenas 10?". Os pontos estavam todos la, espalhados entre duas
+ * colunas que nao deviam existir daquele jeito.
+ *
+ * O feriado tirou um dia do meio e empurrou a fronteira: a S1 passou a pegar
+ * quatro dias de uma semana e um da seguinte. Nenhum aviso, e o numero continua
+ * somando certo — e por isso ninguem desconfia da coluna.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AGORA A FRONTEIRA E A SEGUNDA-FEIRA, que e o que "sprint semanal" significa.
+ *
+ *     S1: 01, 02, 03, 04         <- a semana que o mes pegou pela metade
+ *     S2: 08, 09, 10, 11         <- 07 e feriado e nao entra
+ *     S3: 14, 15, 16, 17, 18
+ *
+ * A PRIMEIRA E A ULTIMA SPRINT PODEM VIR CURTAS, e isso e a verdade do mes: em
+ * setembro de 2026 a primeira semana comeca numa terca porque o mes comeca
+ * numa terca. Forcar cinco dias em todas seria inventar dias que o mes nao tem.
+ *
+ * E O NUMERO DE SPRINTS DEIXA DE SER SEMPRE CINCO: sao QUATRO OU CINCO,
+ * conforme o mes. Fevereiro de 2026 comeca numa segunda, tem 28 dias e da
+ * exatamente quatro. Rodado mes a mes de 2025 a 2028: 43 meses com cinco e 5
+ * com quatro. O quadro acompanha — ver `--cq-colunas` no CSS.
+ *
+ * SEIS NAO ACONTECE, e vale saber por que: o `filter` de dia util roda ANTES do
+ * agrupamento. Um mes que comeca num domingo perde esse domingo, e a semana dele
+ * nao chega a existir aqui; a primeira sprint passa a ser a que comeca na segunda
+ * dia 2. Trinta e um dias cabem em cinco segundas, e nao em seis.
+ *
+ * `holiday` CONTINUA FORA: feriado nao e dia de trabalho, e a sprint que o
+ * contem tem um dia util a menos. E isso e proposital — a capacidade do time
+ * desloca junto, e a distribuicao de pontos por dia util usa a mesma lista. */
 function semanasDoMes(workDays) {
   const uteis = workDays.filter(d => !d.holiday);
   const semanas = [];
-  for (let i = 0; i < uteis.length; i += 5) semanas.push(uteis.slice(i, i + 5));
+  let atual = null;
+  let chaveAtual = '';
+  for (const d of uteis) {
+    const k = segundaDaSemanaISO(d.str);
+    if (k !== chaveAtual) {
+      atual = [];
+      semanas.push(atual);
+      chaveAtual = k;
+    }
+    atual.push(d);
+  }
   return semanas;
+}
+
+/** A SEGUNDA-FEIRA DA SEMANA DE UMA DATA, em ISO.
+ *
+ *  E a chave que agrupa os dias em sprints. Segunda a domingo, e nao domingo a
+ *  sabado: e como o time fala de semana — "o que voce entregou nesta semana"
+ *  comeca na segunda, e nao no domingo do calendario americano.
+ *
+ *  EM UTC, a partir das partes da data. `new Date('2026-09-08')` e lido como
+ *  UTC e volta 07/09 no fuso do Brasil — e um dia aqui muda a semana inteira de
+ *  uma demanda marcada numa segunda. */
+function segundaDaSemanaISO(iso) {
+  const p = String(iso).slice(0, 10).split('-');
+  const d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+  // getUTCDay(): 0 = domingo. O domingo pertence a semana que COMECOU na
+  // segunda anterior, entao ele volta seis dias, e nao zero.
+  const desloca = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - desloca);
+  return d.toISOString().slice(0, 10);
 }
 
 // Localiza em qual semana (índice) uma data cai. Se a data for fim de semana/
@@ -2739,7 +2816,7 @@ function renderGantt() {
              entao S2 do planejado cai sobre S2 do executado sem largura nenhuma
              adivinhada — foi o que a versao com `min-width: 52px` tentava fazer e
              quebraria no primeiro numero de quatro digitos. */''}
-      ${(pontosTotal > 0 || totalFeito > 0) ? `<div class="cap-quadro" title="Pontos por sprint: planejado pela data do prazo combinado, executado pela data em que o dev entregou.">
+      ${(pontosTotal > 0 || totalFeito > 0) ? `<div class="cap-quadro" style="--cq-colunas:${semanas.length}" title="Pontos por sprint: planejado pela data do prazo combinado, executado pela data em que o dev entregou.">
         <span class="cq-c"></span>${semanas.map((_, i) => `<span class="cq-h">S${i+1}</span>`).join('')}
         ${/* ── AS TRES LINHAS DO PLANO ──────────────────────────────────────
               VALID.  — o que foi dimensionado em reuniao e tem selo

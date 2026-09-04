@@ -5197,6 +5197,139 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
    do mesmo dev — e ninguem saberia qual dos dois acreditar.
 
    ESTE BLOCO EXECUTA a funcao recortada do gantt.html, com demandas de verdade. */
+
+/* ═══ A SPRINT E A SEMANA DO CALENDARIO ═════════════════════════════
+
+   O relato foi "tenho 8 + 13 pontos, por qual motivo soma-se apenas 10?", e a
+   conta estava CERTA: os 8 pontos de uma demanda de 08 a 09 de setembro sairam
+   partidos em 4 e 4 entre duas colunas. Nao era erro de aritmetica, era a
+   FRONTEIRA DA SPRINT no lugar errado.
+
+   A conta antiga cortava os dias uteis do mes a cada cinco. Com o 7 de Setembro
+   caindo numa segunda, a S1 ficou com 01, 02, 03, 04 e 08 — quatro dias de uma
+   semana e um da seguinte —, e o 09 comecou a S2. Dia 8 e dia 9 sao terca e
+   quarta da MESMA semana.
+
+   O numero total continuava correto, e e por isso que o defeito durou: nada
+   somava errado, so a coluna mentia sobre qual semana era qual.
+
+   ESTE BLOCO EXECUTA `semanasDoMes` recortada do gantt.html. */
+(() => {
+  sec('A sprint e a semana do calendario');
+  const seg = corpo(GANTT, 'function segundaDaSemanaISO(');
+  const sem = corpo(GANTT, 'function semanasDoMes(');
+  const dist = corpo(GANTT, 'function distribuiPorSprint(');
+  const idx = corpo(GANTT, 'function semanaIndexFor(');
+  ok(!!seg && !!sem && !!dist && !!idx,
+     'o agrupamento em sprints foi encontrado para ser executado');
+  if (!seg || !sem || !dist || !idx) return;
+
+  const monta = (retorno) => new Function(`
+    function segundaDaSemanaISO${seg.slice(seg.indexOf('('))}
+    function semanasDoMes${sem.slice(sem.indexOf('('))}
+    function semanaIndexFor${idx.slice(idx.indexOf('('))}
+    function distribuiPorSprint${dist.slice(dist.indexOf('('))}
+    return ${retorno};
+  `)();
+  const semanasDoMes = monta('semanasDoMes');
+  const segunda = monta('segundaDaSemanaISO');
+  const distribui = monta('distribuiPorSprint');
+
+  /* O MES DE VERDADE, do jeito que o gantt monta: dia util com `holiday`, e o 7
+     de Setembro marcado. Feito da data e nao escrito na mao, para o teste nao
+     concordar com um calendario que eu inventei. */
+  const mesUtil = (ano, mes, feriados) => {
+    const dias = [];
+    const ultimo = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+    for (let d = 1; d <= ultimo; d++) {
+      const dt = new Date(Date.UTC(ano, mes, d));
+      const s = dt.getUTCDay();
+      if (s === 0 || s === 6) continue;
+      const str = dt.toISOString().slice(0, 10);
+      dias.push({ str, holiday: (feriados || []).indexOf(str) >= 0 });
+    }
+    return dias;
+  };
+
+  const set26 = semanasDoMes(mesUtil(2026, 8, ['2026-09-07']));
+  const emQual = (iso) => set26.findIndex(sp => sp.some(d => d.str === iso));
+
+  /* O CASO RELATADO, e o primeiro a ser conferido. */
+  ok(emQual('2026-09-08') === emQual('2026-09-09') && emQual('2026-09-08') >= 0,
+     'dia 08 e dia 09 caem na MESMA sprint',
+     'S' + (emQual('2026-09-08') + 1) + ' e S' + (emQual('2026-09-09') + 1));
+  ok(emQual('2026-09-04') !== emQual('2026-09-08'),
+     'e a sexta e a terca seguinte continuam em sprints diferentes');
+
+  /* A REGRA, e nao so o caso: dentro de cada sprint todos os dias tem a mesma
+     segunda-feira. Se algum dia vazasse para a semana vizinha — que e exatamente
+     o que a conta antiga fazia —, este `every` acusaria. */
+  ok(set26.every(sp => sp.every(d => segunda(d.str) === segunda(sp[0].str))),
+     'toda sprint tem os dias de uma unica semana de calendario');
+  ok(set26.every((sp, i) => i === 0 || segunda(sp[0].str) > segunda(set26[i - 1][0].str)),
+     'e as sprints saem em ordem, uma semana por sprint');
+
+  /* O FERIADO CONTINUA FORA: 07/09 e segunda, e a sprint que a contem tem quatro
+     dias em vez de cinco. Deixar o feriado entrar inflaria a capacidade da
+     semana e a divisao de pontos por dia util junto. */
+  ok(emQual('2026-09-07') < 0, 'o feriado nao entra em sprint nenhuma');
+  ok(set26[1].length === 4,
+     'e a sprint do feriado fica com um dia util a menos', set26[1].length + ' dias');
+
+  /* AS PONTAS PODEM VIR CURTAS, e isso e o mes e nao um defeito: setembro de
+     2026 comeca numa terca. */
+  ok(set26[0].length === 4 && set26[0][0].str === '2026-09-01',
+     'a primeira sprint comeca no primeiro dia util do mes, mesmo curta');
+  ok(set26[set26.length - 1].every(d => d.str <= '2026-09-30'),
+     'e a ultima nao invade o mes seguinte');
+
+  /* QUATRO OU CINCO, NUNCA SEIS — e a promessa que o CSS do quadro cumpre com
+     `--cq-colunas`. Se um mes devolvesse seis, o quadro teria mais numeros do
+     que colunas; se `repeat(5)` voltasse a ser fixo, um mes de quatro deixaria
+     uma coluna vazia. Rodado mes a mes, e nao num mes escolhido a dedo. */
+  const contagem = {};
+  for (let a = 2025; a <= 2030; a++) {
+    for (let m = 0; m < 12; m++) {
+      const n = semanasDoMes(mesUtil(a, m, [])).length;
+      contagem[n] = (contagem[n] || 0) + 1;
+    }
+  }
+  const tamanhos = Object.keys(contagem).map(Number).sort();
+  ok(tamanhos.every(n => n === 4 || n === 5),
+     'nenhum mes de seis anos passa de cinco sprints', JSON.stringify(contagem));
+  ok(contagem[4] > 0, 'e o mes de quatro sprints existe — por isso a coluna e dinamica');
+
+  // Fevereiro de 2026 comeca numa segunda e tem 28 dias: quatro semanas exatas.
+  ok(semanasDoMes(mesUtil(2026, 1, [])).length === 4,
+     'fevereiro de 2026 da quatro sprints');
+
+  /* A SEGUNDA-FEIRA EM UTC, e nao no fuso local. `new Date('2026-09-08')` e
+     lido como UTC e vira 07/09 no Brasil — um dia atras muda a semana inteira de
+     uma demanda marcada numa segunda. */
+  ok(segunda('2026-09-08') === '2026-09-07', 'terca pertence a semana da segunda anterior');
+  ok(segunda('2026-09-07') === '2026-09-07', 'segunda e a propria chave');
+  ok(segunda('2026-09-13') === '2026-09-07',
+     'e o DOMINGO fecha a semana que comecou na segunda, nao abre a seguinte');
+  ok(segunda('2026-09-08T15:00:00Z') === '2026-09-07', 'com hora junto, da no mesmo');
+
+  ok(semanasDoMes([]).length === 0, 'mes sem dia util nao inventa sprint');
+  ok(semanasDoMes([{ str: '2026-09-07', holiday: true }]).length === 0,
+     'e um mes so de feriado tambem nao');
+
+  /* E O FIM: os 8 pontos do relato, contados contra o calendario de verdade.
+     INTEIROS numa sprint so. */
+  const oito = distribui(8, '2026-09-08', '2026-09-09', set26);
+  ok(oito[emQual('2026-09-08')] === 8,
+     'os 8 pontos de 08 a 09 caem inteiros numa sprint', oito.join(' + '));
+  ok(oito.filter(x => x > 0).length === 1, 'e nao aparecem em duas colunas');
+
+  /* A DIVISAO CONTINUA VALENDO quando a demanda REALMENTE atravessa a semana: a
+     correcao da fronteira nao pode ter desligado o rateio. */
+  const cruza = distribui(10, '2026-09-04', '2026-09-08', set26);
+  ok(cruza.filter(x => x > 0).length === 2 && cruza.reduce((t, x) => t + x, 0) === 10,
+     'demanda que cruza a segunda-feira continua se dividindo', cruza.join(' + '));
+})();
+
 (() => {
   sec('O plano validado e o sem-plan');
   const fonte = corpo(GANTT, 'function pontosPokerPorSemana(');
@@ -5614,15 +5747,26 @@ ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
      seja o numero de digitos. A versao com `min-width: 52px` era um palpite que
      quebraria no primeiro numero de quatro digitos. */
   ok(/\.cap-quadro \{/.test(GANTT), 'o planejado x executado e um quadro');
-  const tpl = GANTT.match(/grid-template-columns: ([\d.]+)em repeat\(5, 1fr\)/);
-  ok(!!tpl, 'com um template unico de seis colunas');
+  const tpl = GANTT.match(
+    /grid-template-columns: ([\d.]+)em repeat\(var\(--cq-colunas, 5\), 1fr\)/);
+  ok(!!tpl, 'com um template de rotulo mais UMA COLUNA POR SPRINT DO MES');
   if (tpl) {
     // 10,5px de fonte no quadro; 230px de coluna menos 24 de padding.
     const rotulo = parseFloat(tpl[1]) * 10.5;
+    // Pelo pior caso: cinco sprints e o mais apertado que o mes chega a pedir.
     const porSprint = (206 - rotulo - 5) / 5;
     ok(porSprint >= 28, 'e sobra largura por sprint para caber quatro digitos',
        porSprint.toFixed(0) + 'px por sprint');
   }
+  /* O NUMERO DE COLUNAS VEM DO MES, e nao de uma constante. Desde que a sprint
+     virou semana de calendario, o mes da QUATRO OU CINCO delas: com `repeat(5)`
+     fixo, fevereiro de 2026 desenharia quatro numeros em cinco colunas e o
+     cabecalho descolaria dos valores. A variavel e escrita no elemento a partir
+     de `semanas.length`, que e a mesma lista que gera as celulas. */
+  ok(/class="cap-quadro" style="--cq-colunas:\$\{semanas\.length\}"/.test(GANTT),
+     'e quem escreve o numero de colunas e a lista de semanas do mes');
+  ok(/\$\{semanas\.map\(\(_, i\) => `<span class="cq-h">S\$\{i\+1\}<\/span>`\)/.test(GANTT),
+     'o cabecalho S1..Sn sai da MESMA lista, e nao de um numero repetido');
   ok(!/\.cap-sem \{[^}]*min-width/.test(GANTT) && !/cap-regua/.test(GANTT),
      'as reguas em linha, que estouravam, nao existem mais');
 
