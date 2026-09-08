@@ -1980,7 +1980,14 @@ function matchesFilters(m) {
   if (filters.tema   && !catalogoCasa(m.tema_id, filters.tema, state.temas)) return false;
   if (filters.dev && filters.dev !== '__all__' && !splitDevs(m.dev).includes(filters.dev)) return false;
   if (filters.prio   && (m.prioridade||'') !== filters.prio)        return false;
-  if (filters.sprint && !(m.sprint||'').toLowerCase().includes(filters.sprint)) return false;
+  /* A SPRINT FILTRADA E A DERIVADA DAS DATAS, e nao o texto gravado no card.
+     O campo `sprint` e uma FOTO do que a regra dizia na hora do ultimo salvamento:
+     na base ainda ha 'S1-08-26' de quando o campo era texto livre, e ha rotulos
+     escritos pela regra antiga (blocos de cinco dias uteis). Filtrar pelo texto
+     gravado fazia "S2" trazer um conjunto e o quadro de sprints mostrar outro.
+     `|| m.sprint` cobre a demanda que perdeu as datas: ali o texto guardado e a
+     unica resposta que existe. */
+  if (filters.sprint && !(sprintDaDemanda(m) || m.sprint || '').toLowerCase().includes(filters.sprint)) return false;
   // Pausado e estado paralelo a etapa, nao um valor dela — daí o caso proprio.
   if (filters.indicator === '__pausado__') { if (!estaPausado(m)) return false; }
   // Herdada tambem e paralelo: a demanda continua em 'em andamento' ou
@@ -2215,13 +2222,15 @@ function renderBacklog() {
 
 
 // ─── SPRINT: S1-08-2026, derivada e nao digitada ──────────────────
-// Formato: S<n>-<MM>-<AAAA>. O <n> vem do bloco de 5 DIAS UTEIS dentro do mes —
-// a MESMA divisao que esta tela ja usa para somar os pontos por semana (S1 =
-// uteis 1-5, S2 = 6-10...). Inventar aqui uma segunda definicao de "semana"
-// faria o rotulo do card discordar do grafico de pontos logo acima dele.
+// Formato: S<n>-<MM>-<AAAA>. O <n> vem da SEMANA DE CALENDARIO dentro do mes —
+// a MESMA divisao que esta tela usa para somar os pontos por semana, e ela e
+// calculada num lugar so, `semanasDoMes`. Inventar aqui uma segunda definicao de
+// "semana" faria o rotulo do card discordar do grafico de pontos logo acima dele
+// — e foi exatamente o que aconteceu por quatro dias, ver o comentario dentro da
+// funcao.
 //
-// Feriado nao conta como dia util, entao um mes com feriado desloca as sprints.
-// Isso e proposital: a capacidade do time desloca junto.
+// Feriado nao conta como dia util, entao a sprint que contem um feriado tem um
+// dia a menos. Isso e proposital: a capacidade do time desloca junto.
 //
 // Antes o campo era texto livre, e com 11 preenchimentos a mao ja havia duas
 // grafias na base ('S1-08-2026' e 'S1-08-26') — duas linhas para a mesma sprint
@@ -2230,16 +2239,26 @@ function sprintDeData(dataStr) {
   const s = String(dataStr || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '';
   const [ano, mes] = s.split('-').map(Number);
-  const uteis = getWorkingDaysOfMonth(ano, mes - 1).filter(d => !d.holiday);
-  let idx = uteis.findIndex(d => d.str === s);
+  /* UMA SO DEFINICAO DE SEMANA, e ela mora em `semanasDoMes`.
+     A conta aqui era `Math.floor(idx / 5)` — dias uteis em blocos de cinco. No
+     dia em que a caixa de sprints passou a agrupar por SEGUNDA-FEIRA, esta
+     ficou para tras e o aviso escrito logo acima virou o defeito: SETE dos 21
+     dias uteis de setembro de 2026 davam um rotulo no card que discordava da
+     coluna logo acima dele (o dia 08 dizia S1 contra S2 da caixa, o 14 e o 15
+     diziam S2 contra S3, e assim por diante). Dois numeros para a mesma sprint,
+     na mesma tela, e nada dizendo qual acreditar. */
+  const semanas = semanasDoMes(getWorkingDaysOfMonth(ano, mes - 1));
+  if (!semanas.length) return '';
+  let idx = semanaIndexFor(s, semanas);
   if (idx < 0) {
-    // Data em fim de semana ou feriado (entrega marcada num sabado, por exemplo):
-    // cai na sprint do proximo dia util; se nao houver, na do ultimo.
-    const prox = uteis.findIndex(d => d.str > s);
-    idx = prox >= 0 ? prox : uteis.length - 1;
+    /* Data em fim de semana ou feriado (entrega marcada num sabado, por
+       exemplo): cai na sprint que COMECA depois dela; se nao houver, na ultima.
+       E o mesmo desempate de `distribuiPorSprint`, de proposito — a regua de
+       pontos e o rotulo do card nao podem discordar sobre um domingo. */
+    idx = semanas.findIndex(sem => sem.length && sem[0].str > s);
+    if (idx < 0) idx = semanas.length - 1;
   }
-  if (idx < 0) return '';
-  return 'S' + (Math.floor(idx / 5) + 1) + '-' + String(mes).padStart(2, '0') + '-' + ano;
+  return 'S' + (idx + 1) + '-' + String(mes).padStart(2, '0') + '-' + ano;
 }
 
 // A sprint de uma demanda: pelo INICIO, porque a sprint responde "quando isto vai
@@ -3023,7 +3042,7 @@ function showTooltip(e, id) {
     ${m.solicitante ? `<div class="tt-row"><b>Solicitante:</b> ${esc(m.solicitante)}</div>` : ''}
     ${m.inicio ? `<div class="tt-row"><b>Período:</b> ${fmtDate(m.inicio)} → ${fmtDate(m.entrega||m.inicio)}</div>` : ''}
     ${m.estimativa_horas ? `<div class="tt-row"><b>Estimativa:</b> ${esc(m.estimativa_horas)}h</div>` : ''}
-    ${m.sprint ? `<div class="tt-row"><b>Sprint:</b> ${esc(m.sprint)}</div>` : ''}
+    ${(sprintDaDemanda(m) || m.sprint) ? `<div class="tt-row"><b>Sprint:</b> ${esc(sprintDaDemanda(m) || m.sprint)}</div>` : ''}
   `;
   positionTooltip(e, tt);
   tt.classList.add('show');

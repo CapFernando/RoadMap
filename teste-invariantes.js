@@ -2040,13 +2040,48 @@ sec('Sprint: S1-08-2026, derivada e nao digitada');
 
 const sp = corpo(GANTT, 'function sprintDeData(');
 ok(!!sp, 'existe a derivacao da sprint');
-// A regra e a que a tela JA usa para somar pontos por semana. Uma segunda
-// definicao faria o rotulo do card discordar do grafico logo acima dele.
-ok(!!sp && /getWorkingDaysOfMonth/.test(sp), 'usa os DIAS UTEIS do mes, como o resto da tela');
-ok(!!sp && /!d\.holiday/.test(sp), 'feriado nao conta como dia util');
-ok(!!sp && /Math\.floor\(idx \/ 5\)/.test(sp), 'bloco de 5 dias uteis: S1 = uteis 1-5');
+
+/* SO O CODIGO, SEM OS COMENTARIOS — e isto tem uma historia.
+   A invariante daqui era `/Math.floor\(idx \/ 5\)/.test(sp)`, e ela CONTINUOU
+   VERDE depois de eu trocar a conta por `semanasDoMes`: o comentario novo
+   explicava "a conta aqui era `Math.floor(idx / 5)`", e o regex casou com a
+   explicacao. Uma invariante que le o arquivo inteiro le tambem o que se escreve
+   SOBRE o codigo, e um comentario honesto passou a sustentar uma afirmacao
+   falsa. Verificacao que casa com comentario nao verifica nada. */
+const semComent = (t) => String(t)
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+const spCod = semComent(sp);
+ok(/Math\.floor/.test(sp) && !/Math\.floor/.test(spCod),
+   'o recorte sem comentarios e o que vale: o texto do comentario nao conta');
+
+/* UMA SO DEFINICAO DE SEMANA. O rotulo do card e a coluna do quadro de sprints
+   sao duas funcoes, e elas tem de dizer o mesmo numero — senao a tela mostra
+   dois valores para a mesma sprint, um no card e outro na regua logo acima.
+   JA DIVERGIU: sete dos 21 dias uteis de setembro de 2026, quando a caixa passou
+   a agrupar por segunda-feira e esta funcao ficou com os blocos de cinco.
+   A conferencia de VERDADE — varrendo o mes inteiro e comparando os dois
+   numeros — esta na secao "A sprint e a semana do calendario". Aqui se garante
+   so que a derivacao nao tem aritmetica propria de semana. */
+ok(/getWorkingDaysOfMonth/.test(spCod), 'usa os DIAS UTEIS do mes, como o resto da tela');
+ok(/semanasDoMes\(/.test(spCod) && /semanaIndexFor\(/.test(spCod),
+   'e agrupa pela MESMA funcao do quadro de sprints, em vez de reagrupar por conta');
+ok(!/Math\.floor/.test(spCod) && !/\/ 5\b/.test(spCod),
+   'sem bloco de cinco dias: a fronteira da sprint e a segunda-feira');
+ok(!/!d\.holiday/.test(spCod),
+   'e nao filtra feriado de novo — quem faz isso e `semanasDoMes`, num lugar so');
 ok(/sprint:\s*sprintDeData\(inicio\)/.test(GANTT),
    'ao salvar, a sprint sai da DATA e nao do campo digitado');
+
+/* E QUEM LE TAMBEM DERIVA. O campo `sprint` gravado e uma FOTO do que a regra
+   dizia no ultimo salvamento: na base ainda ha 'S1-08-26' de quando o campo era
+   texto livre, e rotulos escritos pela regra antiga dos blocos de cinco. Filtrar
+   ou mostrar o texto guardado poe dois valores para a mesma sprint na mesma
+   tela — um no tooltip e outro na regua de pontos logo acima. */
+ok(/filters\.sprint && !\(sprintDaDemanda\(m\) \|\| m\.sprint \|\| ''\)/.test(GANTT),
+   'o filtro de sprint compara a DERIVADA das datas, e nao o texto gravado');
+ok(/<b>Sprint:<\/b> \$\{esc\(sprintDaDemanda\(m\) \|\| m\.sprint\)\}/.test(GANTT),
+   'e o tooltip mostra a derivada, com o gravado so como reserva');
 ok(/id="e-sprint" readonly/.test(GANTT), 'o campo e somente leitura');
 ok(/function atualizaSprintCampo\(/.test(GANTT),
    'o campo se atualiza enquanto a data muda, antes de salvar');
@@ -5454,6 +5489,99 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
   ok(oito[emQual('2026-09-08')] === 8,
      'os 8 pontos de 08 a 09 caem inteiros numa sprint', oito.join(' + '));
   ok(oito.filter(x => x > 0).length === 1, 'e nao aparecem em duas colunas');
+
+  /* ─── O ROTULO DO CARD E A COLUNA DA CAIXA SAO A MESMA SPRINT ───────────
+
+     `sprintDeData` escreve 'S2-09-2026' no campo Sprint do card; `semanasDoMes`
+     decide em que coluna do quadro os pontos entram. SAO DUAS FUNCOES, e elas
+     tem de dizer o mesmo numero — senao a tela mostra dois valores para a mesma
+     sprint, um no card e outro na regua logo acima, e nada diz qual acreditar.
+
+     ISTO JA ACONTECEU, por minha causa. Quando a caixa passou a agrupar por
+     segunda-feira, `sprintDeData` ficou com o `Math.floor(idx / 5)` de antes e
+     SETE dos 21 dias uteis de setembro de 2026 divergiram: o dia 08 dizia S1
+     contra S2 da caixa, o 14 e o 15 diziam S2 contra S3. O proprio comentario da
+     funcao avisava contra isso e ficou desatualizado junto com o codigo.
+
+     O TESTE VARRE O MES INTEIRO, e nao um dia escolhido: a divergencia aparecia
+     em dias especificos, e um caso pontual teria passado batido. */
+  {
+    const rot = corpo(GANTT, 'function sprintDeData(');
+    ok(!!rot, 'o rotulo de sprint do card foi encontrado para ser executado');
+    if (rot) {
+      /* `getWorkingDaysOfMonth` E INJETADA pelo teste, com o feriado de 7 de
+         setembro dentro. E a mesma lista que a tela passa para `semanasDoMes`. */
+      const comMes = (feriados) => new Function('getWorkingDaysOfMonth', `
+        ${seg}
+        ${sem}
+        ${idx}
+        ${rot}
+        return sprintDeData;
+      `)((ano, mes0) => mesUtil(ano, mes0, feriados));
+
+      const casos = [
+        { ano: 2026, mes0: 8, fer: ['2026-09-07'], nome: 'setembro de 2026, com feriado na segunda' },
+        { ano: 2026, mes0: 1, fer: [], nome: 'fevereiro de 2026, que da quatro sprints' },
+        { ano: 2027, mes0: 7, fer: [], nome: 'agosto de 2027, sem feriado' },
+        { ano: 2026, mes0: 11, fer: ['2026-12-25'], nome: 'dezembro de 2026, com Natal' },
+      ];
+
+      let divergentes = 0;
+      let varridos = 0;
+      for (const c of casos) {
+        const dias = mesUtil(c.ano, c.mes0, c.fer);
+        const semanasC = semanasDoMes(dias);
+        const sprint = comMes(c.fer);
+        for (const d of dias) {
+          if (d.holiday) continue;
+          varridos++;
+          const daCaixa = semanasC.findIndex(sp => sp.some(x => x.str === d.str)) + 1;
+          const doCard = Number(String(sprint(d.str)).slice(1).split('-')[0]);
+          if (daCaixa !== doCard) divergentes++;
+        }
+      }
+      ok(varridos > 70, 'o mes inteiro foi varrido, e nao um dia so',
+         varridos + ' dias uteis em ' + casos.length + ' meses');
+      ok(divergentes === 0,
+         'o rotulo do card e a coluna do quadro dizem a MESMA sprint em todo dia util',
+         divergentes + ' divergencia(s)');
+
+      // O caso do relato, dito pelo nome: 08 e 09 no mesmo rotulo.
+      const set = comMes(['2026-09-07']);
+      ok(set('2026-09-08') === set('2026-09-09'),
+         'e o rotulo do dia 08 e do dia 09 e o mesmo', set('2026-09-08'));
+      ok(/^S[0-9]-09-2026$/.test(set('2026-09-08')),
+         'no formato S<n>-<MM>-<AAAA>, que e o que a base ja tem gravado',
+         set('2026-09-08'));
+
+      /* FIM DE SEMANA CAI NA SPRINT QUE COMECA DEPOIS, e e o MESMO desempate de
+         `distribuiPorSprint`. Se os dois divergissem, uma entrega marcada num
+         sabado apareceria numa coluna e seria rotulada com outra. */
+      const semanasSet = semanasDoMes(mesUtil(2026, 8, ['2026-09-07']));
+      const fatia = distribui(10, '2026-09-05', '2026-09-06', semanasSet);
+      const ondeCaiu = 'S' + (fatia.findIndex(x => x > 0) + 1) + '-09-2026';
+      ok(set('2026-09-05') === ondeCaiu,
+         'sabado sem dia util: o rotulo e a regua concordam sobre a sprint',
+         set('2026-09-05') + ' contra ' + ondeCaiu);
+
+      /* ENTRADA INVALIDA NAO GERA ROTULO, e o caso tem de ser um que chegue
+         longe. Com 'nao-e-data' o mes sai NaN, a lista de dias vem vazia e a
+         funcao devolve '' por OUTRO caminho — a sabotagem que apagou o guarda de
+         formato passou batida por isso. Uma data com MES E ANO validos e dia sem
+         zero a esquerda ('2026-9-8') atravessa tudo: sem o guarda ela sai como
+         'S5-09-2026', a ultima sprint, porque a comparacao de texto poe
+         '2026-09-01' antes de '2026-9-8'. Rotulo errado e pior que rotulo
+         nenhum: ele entra no campo do card e depois no relatorio. */
+      ok(set('2026-9-8') === '', 'data sem zero a esquerda nao gera rotulo torto',
+         JSON.stringify(set('2026-9-8')));
+      ok(set('2026-09-1') === '', 'nem dia de um digito no fim',
+         JSON.stringify(set('2026-09-1')));
+      ok(set('08/09/2026') === '', 'nem data escrita no formato brasileiro',
+         JSON.stringify(set('08/09/2026')));
+      ok(set('nao-e-data') === '', 'texto que nao e data nao gera rotulo');
+      ok(set('') === '', 'e campo vazio tambem nao');
+    }
+  }
 
   /* A DIVISAO CONTINUA VALENDO quando a demanda REALMENTE atravessa a semana: a
      correcao da fronteira nao pode ter desligado o rateio. */
