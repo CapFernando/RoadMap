@@ -267,6 +267,30 @@
     .backlog-card-title { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 6px; }
     .backlog-card-desc { font-size: 11px; color: var(--text2); margin-bottom: 6px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .backlog-card-meta { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+    /* ── CARTAO SEM PONTUACAO ─────────────────────────────────────────────────
+       Ele APARECE na fila (para ser visto e aberto) e NAO ARRASTA. O cursor diz
+       isso antes do clique: `grab` prometeria um arrasto que nao acontece, e uma
+       promessa quebrada e pior do que a recusa.
+       BORDA TRACEJADA, e nao texto esmaecido: este projeto parou de esmaecer
+       texto (ver a nota do `--esmaecido` em tema.css). A borda distingue o cartao
+       sem gastar contraste do titulo, que continua legivel. */
+    /* A BORDA TRACEJADA PRECISA SER VISTA. Trocar so o `border-style` deixava a
+       cor em `--border2`, que mede 1.46:1 no escuro e 1.58:1 no claro sobre o
+       fundo do cartao — tracejado que ninguem enxerga nao distingue nada, e era
+       o mesmo defeito da borda que acabou de sair da marca aqui em cima.
+       `--text3` mede 4.55:1 e 5.64:1: acima do minimo de 3:1 para elemento de
+       interface, nos dois temas. */
+    .backlog-card.sem-pontuar { cursor: default; border-style: dashed; border-color: var(--text3); }
+    .backlog-card.sem-pontuar:hover { border-color: var(--text3); }
+    /* SEM BORDA, como a marca de pontos ao lado. A primeira versao tinha
+       `1px solid var(--border2)`, e a medicao deu 1.35:1 sobre o fundo do proprio
+       chip: uma borda que ninguem ve nao delimita nada, e o fundo `--bg4` ja
+       separa a marca do cartao. Decoracao que nao decora sai. */
+    .bl-sempt {
+      font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+      background: var(--bg4); color: var(--text2);
+      white-space: nowrap; cursor: help;
+    }
 
     /* ── GANTT AREA ── */
     .gantt-area {
@@ -891,7 +915,7 @@
     <div class="backlog-sidebar">
       <div class="backlog-header">
         <div class="backlog-header-row">
-          <span title="Demandas em Planning que já saíram do Planning Poker com pontuação">🃏 Planning pontuado</span>
+          <span id="backlog-titulo" title="Demandas em Planning que já saíram do Planning Poker com pontuação">🃏 Planning pontuado</span>
           <span id="backlog-count" style="font-size:11px;background:var(--bg4);padding:2px 7px;border-radius:10px;">0</span>
         </div>
         <input class="backlog-search" id="backlog-search" type="text" placeholder="Buscar por código, nome, tema ou dev…" oninput="renderBacklog()" />
@@ -2013,9 +2037,27 @@ function limparFiltrosGantt() {
 // select de dev em "Com demanda no mês" não dá para saber o que está filtrado.
 function atualizaContagemGantt() {
   const visiveis = state.melhorias.filter(m => !m.oculto);
-  const n = visiveis.filter(matchesFilters).length;
+  const doRecorte = visiveis.filter(matchesFilters);
+  const n = doRecorte.length;
   const el = document.getElementById('f-contagem');
-  if (el) el.textContent = `Mostrando ${n} de ${visiveis.length}`;
+  /* O NUMERO DIZ QUANTAS PASSARAM PELO FILTRO, e o calendario desenha barra so
+     para quem tem DEV E DATA. Os dois eram o mesmo texto, e a diferenca ficava
+     sem explicacao: clicar no chip "Backlog 5" mostrava uma barra e o rodape
+     dizia "Mostrando 5 de 146". Tres numeros na tela e nenhum deles errado — o
+     que faltava era dizer que eles respondem perguntas diferentes.
+     E o recado aponta PARA ONDE ir: as que faltam estao na fila da esquerda. */
+  const foraDoCalendario = doRecorte.filter(m => !(m.dev && (m.inicio || m.entrega))).length;
+  if (el) {
+    el.textContent = `Mostrando ${n} de ${visiveis.length}`;
+    if (foraDoCalendario > 0) {
+      el.textContent += ` · ${foraDoCalendario} sem dev ou sem data, na fila à esquerda`;
+      el.title = 'O calendário só desenha barra para demanda que tem dev E data. '
+        + foraDoCalendario + ' do recorte atual não têm — elas aparecem na fila lateral, '
+        + 'e é de lá que se arrasta para uma data.';
+    } else {
+      el.title = '';
+    }
+  }
 
   const ativos = [filters.tipo, filters.tema, filters.prio, filters.sprint, filters.indicator].filter(Boolean).length
                + (filters.dev && filters.dev !== '__all__' ? 1 : 0);
@@ -2102,6 +2144,11 @@ function spEfetivo(m) {
   return sp;
 }
 
+/* OS ROTULOS DAS ETAPAS, num lugar so. Estavam dentro de `renderIndicators`, e a
+   fila lateral passou a precisar dos mesmos nomes para dizer de que etapa ela
+   esta falando. Duas listas divergiriam no dia em que uma etapa fosse renomeada. */
+const ETAPA_LABELS = { backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação', concluido:'Concluído', atrasado:'Atrasado' };
+
 function renderIndicators() {
   const visible = state.melhorias.filter(m => !m.oculto);
   const counts = { backlog:0, levantar_req:0, planning:0, planejado:0, em_andamento:0, validacao:0, concluido:0, atrasado:0 };
@@ -2109,7 +2156,7 @@ function renderIndicators() {
     const sp = spEfetivo(m);
     if (counts[sp] !== undefined) counts[sp]++;
   });
-  const labels = { backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação', concluido:'Concluído', atrasado:'Atrasado' };
+  const labels = ETAPA_LABELS;
   const total = Object.values(counts).reduce((s, v) => s + v, 0);
   // Pausadas contam por fora: uma pausada continua na etapa dela, entao somar
   // aqui faria o total passar do numero de demandas.
@@ -2155,14 +2202,46 @@ function toggleIndicatorFilter(k) {
 // demandas em Planning que já passaram pelo Planning Poker e têm pontuação
 // gravada. O backlog inteiro poluía a lista com coisas que ainda nem foram
 // estimadas — planejar sem pontuação é justamente o que se quer evitar.
+//
+// ═══════════════════════════════════════════════════════════════════════════
+// MAS COM UM CHIP DE ETAPA ATIVO A FILA RESPONDE POR ELE, e isso conserta um
+// filtro que não dava para usar.
+//
+// O relato foi "em gantt tem um filtro backlog, não consigo usar". O chip
+// funcionava; ele só não tinha onde mostrar o resultado. Duas coisas se somavam:
+//
+//   1. o Gantt é um CALENDÁRIO, e só desenha barra para quem tem dev E data.
+//      Demanda em Backlog normalmente não tem nenhum dos dois.
+//   2. esta fila era travada em `planning` + pontuado. Filtrar por Backlog e
+//      exigir Planning é uma contradição: a fila ficava SEMPRE vazia.
+//
+// E o chip anunciava a etapa inteira ("Backlog 5") enquanto a tela mostrava uma
+// barra ou nenhuma, sem nada explicando a diferença.
+//
+// A REGRA DO "SÓ PONTUADO" NÃO FOI DERRUBADA. Ela continua valendo para o que
+// se ARRASTA: cartão sem pontuação aparece na fila para ser visto e aberto, com
+// a marca dizendo o que falta, e NÃO pode ser arrastado para o calendário. Ver a
+// demanda é uma pergunta; agendá-la sem estimativa é a decisão que se quer
+// evitar, e são coisas diferentes.
 function renderBacklog() {
   const el = document.getElementById('backlog-list');
+  // Chip de etapa (Backlog, Planning, ...). `__pausado__` e `__mes_passado__`
+  // sao estados paralelos a etapa, e nao etapas — a fila nao muda por causa
+  // deles, porque uma pausada continua pertencendo a etapa dela.
+  const etapaChip = ETAPA_LABELS[filters.indicator] ? filters.indicator : '';
 
   const list = state.melhorias.filter(m => {
     if (m.oculto) return false;
     if (m.status === 'negada') return false;
-    if ((m.status_planejamento || 'backlog') !== 'planning') return false;
-    if (!(Number(m.poker_pontos) > 0)) return false;
+    if (etapaChip) {
+      // `spEfetivo` e nao `status_planejamento` cru: e a mesma funcao que conta
+      // os chips, entao a fila fala do mesmo conjunto que o numero ao lado do
+      // rotulo. Com o cru, o chip 'Atrasado' nunca encontraria ninguem.
+      if (spEfetivo(m) !== etapaChip) return false;
+    } else {
+      if ((m.status_planejamento || 'backlog') !== 'planning') return false;
+      if (!(Number(m.poker_pontos) > 0)) return false;
+    }
     // Itens com dev + datas já estão no Gantt — não repetem na fila
     if (m.dev && (m.inicio || m.entrega)) return false;
     if (!matchesFilters(m)) return false;
@@ -2191,10 +2270,30 @@ function renderBacklog() {
   }) : sorted;
 
   document.getElementById('backlog-count').textContent = sorted.length;
+
+  /* O CABECALHO DIZ DE QUE ETAPA A FILA ESTA FALANDO. Sem isso, clicar em
+     Backlog mudaria o conteudo da lista embaixo de um titulo que continuaria
+     escrito "Planning pontuado" — e a pessoa nao teria como saber se o que ela
+     esta vendo e o que ela pediu. */
+  const tit = document.getElementById('backlog-titulo');
+  if (tit) {
+    if (etapaChip) {
+      tit.textContent = '⇤ ' + ETAPA_LABELS[etapaChip] + ' fora do calendário';
+      tit.title = 'Demandas em ' + ETAPA_LABELS[etapaChip] + ' que ainda não têm dev e data — '
+        + 'por isso não aparecem no calendário ao lado. Sem pontuação do Planning Poker '
+        + 'elas podem ser abertas, mas não arrastadas.';
+    } else {
+      tit.textContent = '🃏 Planning pontuado';
+      tit.title = 'Demandas em Planning que já saíram do Planning Poker com pontuação';
+    }
+  }
+
   if (!filtered.length) {
     el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;line-height:1.6">${q
       ? 'Nenhum resultado para "' + esc(q) + '"'
-      : 'Nada em Planning com pontuação.<br>Pontue no Planning Poker e use “Gravar no card”.'}</div>`;
+      : (etapaChip
+          ? 'Nada em ' + esc(ETAPA_LABELS[etapaChip]) + ' fora do calendário.<br>O que está nesta etapa já tem dev e data — veja as barras ao lado.'
+          : 'Nada em Planning com pontuação.<br>Pontue no Planning Poker e use “Gravar no card”.')}</div>`;
     return;
   }
 
@@ -2202,16 +2301,25 @@ function renderBacklog() {
     const tema = state.temas.find(t => t.id === m.tema_id);
     const temaColor = temaColorOf(m.tema_id);
     const dotCls = prioClass(m.prioridade);
-    return `<div class="backlog-card${estaPausado(m) ? ' pausado' : ''}"
-      draggable="true"
+    /* PONTUADO ARRASTA; SEM PONTUAR, NAO. E a regra do "so pontuado" mantida
+       onde ela importa — na hora de AGENDAR. `draggable="false"` desliga o
+       arrasto no navegador, e `onBacklogDragStart` confere de novo: o atributo
+       sozinho seria uma tranca de vidro, porque a fila e redesenhada por varios
+       caminhos e um deles poderia esquecer o atributo. */
+    const pontuado = Number(m.poker_pontos) > 0;
+    return `<div class="backlog-card${estaPausado(m) ? ' pausado' : ''}${pontuado ? '' : ' sem-pontuar'}"
+      draggable="${pontuado ? 'true' : 'false'}"
       data-id="${m.id}"
+      ${pontuado ? '' : 'title="Sem pontuação do Planning Poker: pode ser aberta, mas não entra no calendário. Pontue no Planning Poker e use “Gravar no card”."'}
       ondragstart="onBacklogDragStart(event,'${m.id}')"
       onclick="openModal('${m.id}')">
       <div class="backlog-card-title">${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}${esc(m.titulo)}</div>
       ${m.descricao ? `<div class="backlog-card-desc">${esc(m.descricao)}</div>` : ''}
       <div class="backlog-card-meta">
         ${estaPausado(m) ? `<span class="bl-pausa" title="Pausada${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${diasPausadoAgora(m)}d</span>` : ''}
-        <span title="Pontos do Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:10px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 6px;font-weight:700">🃏 ${m.poker_pontos}</span>
+        ${pontuado
+          ? `<span title="Pontos do Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:10px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 6px;font-weight:700">🃏 ${m.poker_pontos}</span>`
+          : `<span class="bl-sempt" title="Sem pontuação do Planning Poker — não pode ser arrastada para o calendário">◐ sem pontuação</span>`}
         ${tema ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${temaColor}22;color:${temaColor};font-weight:600">${esc(tema.nome)}</span>` : ''}
         ${m.dev ? `<span style="font-size:10px;color:var(--text3)">${esc(m.dev)}</span>` : ''}
         ${m.prioridade ? `<span class="card-dot ${dotCls}" style="width:6px;height:6px;border-radius:50%;display:inline-block"></span>` : ''}
@@ -3084,6 +3192,13 @@ function onCardDragEnd(e, id) {
 
 function onBacklogDragStart(e, id) {
   if (VIEWER_MODE) { e.preventDefault(); return; }
+  /* SEM PONTUACAO NAO ENTRA NO CALENDARIO, e a recusa e AQUI e nao so no
+     atributo `draggable`. O atributo e a porta que o navegador fecha; esta e a
+     tranca. A fila e redesenhada por varios caminhos (chip, busca, filtro,
+     recarga de dados), e basta um deles montar o cartao sem o atributo para a
+     regra virar decoracao. */
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (m && !(Number(m.poker_pontos) > 0)) { e.preventDefault(); return; }
   dragData = { type: 'backlog', id };
   e.dataTransfer.effectAllowed = 'move';
 }

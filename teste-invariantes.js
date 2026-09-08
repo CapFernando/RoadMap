@@ -5233,6 +5233,173 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
 
    ESTE BLOCO EXECUTA a funcao recortada do gantt.html, com demandas de verdade. */
 
+/* ═══ O CHIP DE ETAPA DO GANTT TEM ONDE ATERRISSAR ═══════════════════
+
+   O relato foi "em gantt tem um filtro backlog, nao consigo usar". O chip
+   funcionava — ele so nao tinha onde mostrar o resultado:
+
+     1. o Gantt e um CALENDARIO, e desenha barra so para quem tem dev E data.
+        Demanda em Backlog normalmente nao tem nenhum dos dois.
+     2. a fila lateral era travada em `planning` + pontuado. Filtrar por Backlog
+        e exigir Planning e uma contradicao: a fila ficava SEMPRE vazia.
+
+   Medido no arquivo de dados: das 5 demandas em Backlog, UMA tinha dev e data.
+   O chip anunciava 5, a tela mostrava 1, e nada explicava a diferenca.
+
+   A REGRA DO "SO PONTUADO" NAO FOI DERRUBADA — e e isso que a segunda metade
+   deste bloco confere. Cartao sem pontuacao APARECE (para ser visto e aberto) e
+   NAO ARRASTA: ver a demanda e uma pergunta, agenda-la sem estimativa e a
+   decisao que se quer evitar.
+
+   ESTE BLOCO EXECUTA o filtro da fila recortado do gantt.html. */
+(() => {
+  sec('O chip de etapa do gantt tem onde aterrissar');
+  const rb = corpo(GANTT, 'function renderBacklog(');
+  ok(!!rb, 'a fila lateral foi encontrada para ser executada');
+  if (!rb) return;
+
+  /* SO O TRECHO DO FILTRO: `renderBacklog` inteira escreve no DOM. O corte vai
+     do chip de etapa ate o fim do `filter`, que e a decisao sob teste. */
+  const ini = rb.indexOf('const etapaChip =');
+  const fim = rb.indexOf('const PRIO_ORDER');
+  ok(ini > 0 && fim > ini, 'e o trecho que decide quem entra na fila foi isolado');
+  if (ini < 0 || fim < ini) return;
+
+  const roda = (melhorias, indicador) => new Function('state', 'filters', `
+    const ETAPA_LABELS = { backlog:'Backlog', levantar_req:'Levantar Req.',
+      planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento',
+      validacao:'Validação', concluido:'Concluído', atrasado:'Atrasado' };
+    const spEfetivo = m => m.status_planejamento || 'backlog';
+    const matchesFilters = () => true;
+    ${rb.slice(ini, fim)}
+    return { list, etapaChip };
+  `)({ melhorias }, { indicator: indicador });
+
+  const BASE = [
+    // Backlog, sem dev e sem data: nao cabe no calendario, e a fila e o lugar dela.
+    { id: 'b1', codigo: 'AX-401', titulo: 'Backlog sem nada', status_planejamento: 'backlog' },
+    // Backlog pontuada, tambem fora do calendario.
+    { id: 'b2', codigo: 'AX-402', titulo: 'Backlog pontuada', status_planejamento: 'backlog',
+      poker_pontos: 8 },
+    // Backlog COM dev e data: essa o calendario desenha, e ela nao repete na fila.
+    { id: 'b3', codigo: 'AX-403', titulo: 'Backlog agendada', status_planejamento: 'backlog',
+      dev: 'Gabriel', inicio: '2026-09-08', entrega: '2026-09-09' },
+    // O padrao da fila: planning com pontuacao.
+    { id: 'p1', codigo: 'AX-404', titulo: 'Planning pontuada', status_planejamento: 'planning',
+      poker_pontos: 13 },
+    // Planning SEM pontuacao: fora do padrao, dentro do chip.
+    { id: 'p2', codigo: 'AX-405', titulo: 'Planning sem pontuar', status_planejamento: 'planning' },
+    // Negada nao entra em fila nenhuma.
+    { id: 'n1', codigo: 'AX-406', titulo: 'Negada', status_planejamento: 'backlog',
+      status: 'negada' },
+    { id: 'o1', codigo: 'AX-407', titulo: 'Oculta', status_planejamento: 'backlog', oculto: true },
+  ];
+  const ids = (r) => r.list.map(m => m.id).sort().join(',');
+
+  /* SEM CHIP, A FILA E A DE SEMPRE: planning com pontuacao. A correcao nao pode
+     ter mexido no que a tela mostra quando ninguem pediu nada. */
+  const semChip = roda(BASE, '');
+  ok(ids(semChip) === 'p1', 'sem chip, a fila continua sendo Planning pontuado', ids(semChip));
+  ok(semChip.etapaChip === '', 'e nao ha etapa em foco');
+
+  /* COM O CHIP BACKLOG a fila responde por ele — o defeito relatado. */
+  const backlog = roda(BASE, 'backlog');
+  ok(backlog.list.length > 0, 'o chip Backlog para de devolver fila vazia',
+     backlog.list.length + ' na fila');
+  ok(ids(backlog) === 'b1,b2', 'e traz as de Backlog que nao cabem no calendario',
+     ids(backlog));
+  ok(!backlog.list.some(m => m.id === 'b3'),
+     'a que JA tem dev e data nao repete na fila — ela e uma barra');
+  ok(!backlog.list.some(m => m.id === 'n1' || m.id === 'o1'),
+     'negada e oculta continuam fora');
+
+  /* O CHIP PLANNING mostra tambem a SEM pontuacao: quem clicou em "Planning 2"
+     pediu as duas, e esconder uma repetiria o defeito num tom mais baixo. */
+  const planning = roda(BASE, 'planning');
+  ok(ids(planning) === 'p1,p2', 'o chip Planning traz a pontuada E a sem pontuar',
+     ids(planning));
+
+  /* ESTADO PARALELO NAO E ETAPA. `__pausado__` e `__mes_passado__` nao trocam a
+     fila: uma pausada continua pertencendo a etapa dela, e trocar a fila ali
+     faria o chip dizer uma coisa e a lista outra. */
+  ok(roda(BASE, '__pausado__').etapaChip === '', 'o chip Pausado nao troca a fila');
+  ok(roda(BASE, '__mes_passado__').etapaChip === '', 'nem o chip Mes passado');
+  ok(ids(roda(BASE, '__pausado__')) === 'p1', 'e a fila segue no padrao com eles');
+
+  /* ─── A REGRA DO "SO PONTUADO", onde ela importa ───────────────────── */
+  ok(/draggable="\$\{pontuado \? 'true' : 'false'\}"/.test(GANTT),
+     'cartao sem pontuacao nasce com o arrasto desligado');
+  /* `[^>]*` NAO SERVE AQUI: ele para no primeiro `>`, que e o fim da tag de
+     abertura, e o texto visivel vem DEPOIS dele. A primeira versao desta
+     invariante nunca poderia casar, e o teste acusou na hora. */
+  ok(/class="bl-sempt"[\s\S]{0,220}>◐ sem pontua/.test(GANTT),
+     'e diz na cara do cartao o que falta');
+  ok(/title="Sem pontua[^"]*não pode ser arrastada/.test(GANTT),
+     'e o motivo fica no tooltip, em vez de deixar a pessoa adivinhar');
+
+  /* O SINAL DO CARTAO TEM DE SER VISTO, e as duas versoes anteriores nao eram.
+     Medido num navegador, sobre o fundo do proprio elemento:
+
+       borda da marca `--border2` sobre `--bg4`   1.35:1  saiu
+       borda do cartao `--border2` sobre `--bg3`  1.46 e 1.58:1  trocada
+       borda do cartao `--text3`  sobre `--bg3`   4.55 e 5.64:1  fica
+
+     Trocar so o `border-style` para `dashed` mantinha a cor invisivel: o
+     tracejado existia no CSS e nao na tela. Minimo de 3:1 para elemento de
+     interface, e os dois temas passam. */
+  ok(/\.backlog-card\.sem-pontuar \{[^}]*border-color: var\(--text3\)/.test(GANTT),
+     'a borda tracejada usa um token que se ve nos dois temas');
+  ok(!/\.bl-sempt \{[^}]*border:/.test(GANTT),
+     'e a marca nao carrega borda invisivel');
+  ok(/\.backlog-card\.sem-pontuar \{[^}]*cursor: default/.test(GANTT),
+     'o cursor recusa antes do clique, em vez de prometer um arrasto que nao vem');
+  ok(!/\.backlog-card\.sem-pontuar \{[^}]*opacity/.test(GANTT),
+     'e nada e esmaecido — este projeto parou de esmaecer texto');
+
+  /* E A TRANCA, e nao so a porta. O atributo `draggable` e o que o navegador
+     obedece; se a fila fosse redesenhada por um caminho que esquecesse o
+     atributo, a regra viraria decoracao. Entao `onBacklogDragStart` confere de
+     novo, e este teste EXECUTA essa recusa. */
+  const ds = corpo(GANTT, 'function onBacklogDragStart(');
+  ok(!!ds, 'o inicio do arrasto foi encontrado para ser executado');
+  if (ds) {
+    const arrasta = (m) => {
+      let barrou = false;
+      const ev = { preventDefault: () => { barrou = true; }, dataTransfer: {} };
+      const f = new Function('state', 'VIEWER_MODE', 'dragData', `
+        ${ds}
+        return onBacklogDragStart;
+      `)({ melhorias: [m] }, false, null);
+      f(ev, m.id);
+      return barrou;
+    };
+    ok(arrasta({ id: 'x', poker_pontos: 0 }) === true,
+       'arrastar sem pontuacao e RECUSADO, e nao so escondido pelo atributo');
+    ok(arrasta({ id: 'x' }) === true, 'e sem o campo nenhum, tambem');
+    ok(arrasta({ id: 'x', poker_pontos: 5 }) === false,
+       'e com pontuacao o arrasto passa, como sempre passou');
+  }
+
+  /* O RODAPE EXPLICA A DIFERENCA ENTRE OS NUMEROS. "Mostrando 5 de 146" com uma
+     barra na tela sao dois numeros certos respondendo perguntas diferentes, e
+     era isso que faltava dizer. */
+  const ac = corpo(GANTT, 'function atualizaContagemGantt(');
+  ok(!!ac && /foraDoCalendario/.test(ac),
+     'o rodape conta quantas nao cabem no calendario');
+  ok(!!ac && /sem dev ou sem data, na fila à esquerda/.test(ac),
+     'e aponta para onde ir procurar');
+  ok(!!ac && /!\(m\.dev && \(m\.inicio \|\| m\.entrega\)\)/.test(ac),
+     'pela MESMA condicao que a fila usa para incluir — dev E data');
+
+  /* O CABECALHO DA FILA DIZ DE QUE ETAPA ELA FALA. Trocar a lista embaixo de um
+     titulo que continua escrito "Planning pontuado" e pior do que nao trocar. */
+  ok(/id="backlog-titulo"/.test(GANTT), 'o titulo da fila tem endereco');
+  ok(/ETAPA_LABELS\[etapaChip\] \+ ' fora do calendário'/.test(GANTT),
+     'e passa a nomear a etapa em foco');
+  ok(/^const ETAPA_LABELS = \{/m.test(GANTT),
+     'os rotulos das etapas vivem num lugar so, e nao em duas listas');
+})();
+
 /* ═══ A BUSCA DO KANBAN NAO PERDE PARA UM FILTRO QUE NINGUEM ESCOLHEU ══════
 
    O relato: um card mostrava "🔗 Dep. de: Tela de controle de cheques", e
