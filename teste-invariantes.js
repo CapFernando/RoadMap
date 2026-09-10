@@ -5233,6 +5233,113 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
 
    ESTE BLOCO EXECUTA a funcao recortada do gantt.html, com demandas de verdade. */
 
+/* ═══ DOIS NOMES PARA O MESMO DEV SE JUNTAM ═══════════════════════
+
+   O relato: "eu havia arrastado do Murillo para o Murillo Jesus no gantt, por
+   isso" — duas faixas no quadro para uma pessoa so.
+
+   A lista de devs e texto livre em TRES portas: o campo "Nome do dev" do modal,
+   o vinculo de conta no Admin, e o proprio campo `dev` da demanda — o quadro
+   monta as faixas UNINDO o cadastro com os nomes das demandas ABERTAS. Escrever
+   "Murillo Jesus" uma vez cria uma faixa que passa a existir para sempre.
+
+   E `removeDev` NAO RESOLVIA. Ele tira o nome do cadastro e a faixa some (a
+   uniao so olha demanda aberta), mas toda demanda CONCLUIDA continua com
+   `dev: "Murillo"`. Capacidade por dev, fechamento do mes e PPT agrupam pelo
+   texto: as duas metades contam duas pessoas para sempre. E o mesmo defeito que
+   `catalogo.js` descreve para temas — "dois temas de 2, cada um com metade do
+   volume, nenhum dos dois com a verdade".
+
+   ESTE BLOCO EXECUTA `gJuntaDevEm` recortada do gantt.html. */
+(() => {
+  sec('Dois nomes para o mesmo dev se juntam');
+  const sd = corpo(GANTT, 'function splitDevs(');
+  const jd = corpo(GANTT, 'function gJuntaDevEm(');
+  ok(!!sd && !!jd, 'a juncao de devs foi encontrada para ser executada');
+  if (!sd || !jd) return;
+  const junta = new Function(sd + jd + 'return gJuntaDevEm;')();
+
+  const J = (v) => junta(v, 'Murillo', 'Murillo Jesus');
+
+  ok(J('Murillo') === 'Murillo Jesus', 'o nome antigo vira o novo', J('Murillo'));
+  ok(J('Gabriel') === 'Gabriel', 'e quem nao e o alvo fica intocado');
+  ok(J('Murillo Jesus') === 'Murillo Jesus', 'quem ja e o destino nao se mexe');
+
+  /* O CAMPO E COMPOSTO ("Gabriel / Anthony"), e a troca e por PARTE. Um
+     `replace` cru no texto acharia "Murillo" DENTRO de "Murillo Jesus" e
+     produziria "Murillo Jesus Jesus" — e o nome quebrado entraria em todo
+     relatorio agrupado por dev. */
+  ok(J('Gabriel / Murillo') === 'Gabriel / Murillo Jesus',
+     'no campo composto, so a parte que casa e trocada', J('Gabriel / Murillo'));
+  ok(J('Murillo').indexOf('Jesus Jesus') < 0,
+     'e nunca sai "Murillo Jesus Jesus" — casa a parte inteira, e nao o trecho');
+
+  /* A DEMANDA QUE TINHA OS DOIS NOMES vira uma so mencao. Sem isto, juntar
+     produziria "Murillo Jesus / Murillo Jesus" e a pessoa apareceria duas vezes
+     na mesma demanda — o que dobra a conta dela naquela entrega. */
+  ok(J('Murillo / Murillo Jesus') === 'Murillo Jesus',
+     'demanda com os dois nomes nao fica com o destino repetido',
+     J('Murillo / Murillo Jesus'));
+
+  // Maiuscula, acento e espaco nas pontas nao criam um terceiro nome.
+  ok(J('murillo') === 'Murillo Jesus', 'casa sem diferenciar maiuscula');
+  ok(J('  Murillo  ') === 'Murillo Jesus', 'e aparando espaco nas pontas');
+  ok(junta('Emilly Viana', 'Emilly Víana', 'Emilly') === 'Emilly',
+     'e sem diferenciar acento', junta('Emilly Viana', 'Emilly Víana', 'Emilly'));
+
+  // Virgula e barra sao os dois separadores que `splitDevs` le.
+  ok(J('Gabriel, Murillo') === 'Gabriel / Murillo Jesus',
+     'a virgula tambem separa, e sai normalizada em barra', J('Gabriel, Murillo'));
+
+  /* VAZIO E NULO VOLTAM COMO VIERAM. A demanda sem dev e a maioria do backlog;
+     devolver string vazia onde havia `null` marcaria a demanda como alterada no
+     merge por campo e publicaria uma mudanca que ninguem fez. */
+  ok(J('') === '', 'campo vazio volta vazio');
+  ok(J(null) === null, 'e nulo volta nulo, sem virar string');
+
+  /* ─── O QUE A TELA PROMETE ────────────────────────────────── */
+  const uc = corpo(GANTT, 'async function juntarDevs(');
+  ok(!!uc, 'o comando de juntar existe');
+  /* REESCREVE TODAS AS DEMANDAS, e nao so as abertas. Filtrar por etapa aqui
+     seria arrumar o quadro de hoje e deixar o historico partido — que e
+     exatamente o que `removeDev` fazia. */
+  ok(!!uc && /\(state\.melhorias \|\| \[\]\)\.forEach/.test(uc),
+     'e ele varre a lista INTEIRA de demandas');
+  ok(!!uc && !/status_planejamento[^;]{0,80}\.forEach/.test(uc),
+     'sem recortar por etapa na hora de reescrever');
+  /* O AVISO SEPARA ABERTAS DE CONCLUIDAS: e a diferenca entre "mexe no meu
+     quadro" e "reescreve meu historico", e quem confirma precisa saber das duas. */
+  /* `conclu[íi]da` E NAO `concluida`: a mensagem na tela e escrita com acento
+     ("concluida(s)"), e o regex sem acento reprovou o texto correto. */
+  ok(!!uc && /fechadas/.test(uc) && /conclu[íi]da/.test(uc),
+     'o aviso diz quantas ja estao concluidas, e nao so o total');
+  /* NAO JUNTA SOBRE DADO QUE NAO FOI LIDO. Reescrever o dev de uma lista
+     parcial e publicar apagaria o nome nas demandas que nao vieram — ver a
+     secao da faixa de leitura. */
+  ok(!!uc && /LEITURA\.incompleta\(\)/.test(uc),
+     'e recusa juntar quando a leitura falhou');
+  /* O DESTINO ENTRA NO CADASTRO. Juntar em alguem que so aparecia numa demanda
+     deixaria a faixa dele dependendo de haver demanda ABERTA — no dia em que a
+     ultima fechasse, a pessoa desapareceria do quadro. */
+  ok(!!uc && /state\.desenvolvedores\.push\(para\)/.test(uc),
+     'o nome que fica entra no cadastro, se ainda nao estava');
+  /* E A SAIDA DO ANTIGO E DECISAO GRAVADA, como em `removeDev`: sem
+     `devs_removidos` a lista se remonta unindo o servidor e o nome volta na
+     proxima carga. */
+  ok(!!uc && /devs_removidos/.test(uc),
+     'e a saida do nome antigo fica gravada, senao ele volta na proxima carga');
+
+  ok(/id="juntar-de"/.test(GANTT) && /id="juntar-para"/.test(GANTT),
+     'os dois campos existem na tela');
+  ok(/onclick="juntarDevs\(\)"/.test(GANTT), 'e o botao chama o comando');
+  /* OS SELECTS SAO REDESENHADOS POR `renderDevsList`, que e o caminho comum dos
+     cinco lugares que mexem na lista. No `onclick` do modal, um caminho que
+     esquecesse deixaria a pessoa juntando um nome que acabou de sair. */
+  const rl = corpo(GANTT, 'function renderDevsList(');
+  ok(!!rl && /gRenderJuntar\(\)/.test(rl),
+     'e eles se atualizam junto com a lista, num lugar so');
+})();
+
 /* ═══ A LEITURA QUE FALHA NAO PODE PARECER BASE VAZIA ════════════════
 
    O relato veio em tres pedacos, em minutos: "nao esta aparecendo os modulos",

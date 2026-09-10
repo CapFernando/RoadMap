@@ -1160,6 +1160,33 @@
       <input type="text" id="new-dev-name" placeholder="Nome do dev" style="flex:1;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Inter',sans-serif;outline:none;font-size:14px" onkeydown="if(event.key==='Enter')addDev()" />
       <button class="btn btn-primary" onclick="addDev()">Adicionar</button>
     </div>
+
+    <!-- ── JUNTAR DOIS NOMES DO MESMO DEV ──────────────────────────────────────
+         A lista de devs e texto livre em tres portas (este campo, o vinculo de
+         conta no Admin, e o proprio campo `dev` da demanda). Escrever
+         "Murillo Jesus" uma vez cria uma faixa que passa a existir para sempre
+         ao lado da do "Murillo" — foi assim que apareceram duas faixas para a
+         mesma pessoa.
+
+         FICA AQUI, e nao numa tela de configuracao: e nesta lista que a pessoa
+         VE os dois nomes lado a lado, e portanto onde ela percebe o problema. -->
+    <details style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+      <summary style="cursor:pointer;font-size:13px;color:var(--text2)">
+        Dois nomes para a mesma pessoa?
+      </summary>
+      <p style="font-size:12px;color:var(--text2);line-height:1.5;margin:8px 0 10px">
+        Juntar reescreve o dev em <strong>todas</strong> as demandas — inclusive as
+        concluidas, que e de onde sai o historico. Remover o nome nao faz isso: a
+        faixa sai do quadro e os relatorios seguem contando duas pessoas.
+      </p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="juntar-de" style="flex:1;min-width:130px;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px"></select>
+        <span style="font-size:13px;color:var(--text3)">vira</span>
+        <select id="juntar-para" style="flex:1;min-width:130px;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:13px"></select>
+        <button class="btn btn-secondary btn-sm" onclick="juntarDevs()">Juntar</button>
+      </div>
+    </details>
+
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-devs')">Fechar</button>
     </div>
@@ -4012,6 +4039,11 @@ function openDevsModal() {
 
 function renderDevsList() {
   const el = document.getElementById('devs-list');
+  /* OS SELECTS DO JUNTAR SAO REDESENHADOS AQUI, e nao no `onclick` do modal.
+     Quem chama `renderDevsList` sao cinco caminhos (abrir o modal, adicionar,
+     remover, juntar, trocar perfil), e um deles que esquecesse de atualizar os
+     selects deixaria a pessoa juntando um nome que acabou de sair da lista. */
+  gRenderJuntar();
   if (!state.desenvolvedores.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">Nenhum dev cadastrado.</div>';
     return;
@@ -4031,6 +4063,137 @@ function renderDevsList() {
       <button class="btn btn-ghost btn-sm" onclick="removeDev(${i})" style="color:var(--red);border-color:var(--red)">Remover</button>
     </div>`;
   }).join('');
+}
+
+/* ─── JUNTAR DOIS NOMES DO MESMO DEV ────────────────────────────────────────
+   O relato: "eu havia arrastado do Murillo para o Murillo Jesus no gantt, por
+   isso" — duas faixas no quadro para uma pessoa só.
+
+   POR QUE ISSO ACONTECE. A lista de devs é texto livre em três portas: o campo
+   "Nome do dev" daqui, o vínculo de conta no Admin, e o próprio campo `dev` de
+   cada demanda — o quadro monta as faixas UNINDO o cadastro com os nomes das
+   demandas ABERTAS. Escrever "Murillo Jesus" uma vez cria uma faixa que passa a
+   existir para sempre.
+
+   POR QUE REMOVER NÃO RESOLVE. `removeDev` tira o nome do cadastro, e a faixa
+   some porque a união só olha demandas abertas. Mas TODA demanda concluída
+   continua com `dev: "Murillo"` — e capacidade por dev, fechamento do mês e PPT
+   agrupam pelo texto. As duas metades ficam contando duas pessoas para sempre.
+   É o mesmo defeito que o `catalogo.js` descreve para os temas: "agrupado pelo
+   texto cru, o painel mostrava DOIS temas de 2 — cada um com metade do volume,
+   nenhum dos dois com a verdade, e nada na tela dizendo que era para somar".
+
+   ENTÃO JUNTAR REESCREVE AS DEMANDAS, e não só o cadastro. Todas: as abertas
+   porque é onde o trabalho está, e as CONCLUÍDAS porque é delas que sai o
+   histórico. Sem as concluídas, juntar arruma o quadro de hoje e deixa o
+   relatório partido.
+
+   O CAMPO É COMPOSTO ("Gabriel / Anthony"), e por isso a troca é por PARTE e não
+   por `replace` no texto: trocar "Murillo" dentro de "Murillo Jesus" por
+   `replace` cru produziria "Murillo Jesus Jesus". A substituição casa a parte
+   inteira, sem diferenciar maiúscula nem acento, e volta a montar o campo. */
+function gJuntaDevEm(valorDev, de, para) {
+  var partes = splitDevs(valorDev);
+  if (!partes.length) return valorDev;
+  var chave = function (t) {
+    return String(t || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  };
+  var alvo = chave(de);
+  var trocou = false;
+  var saida = [];
+  partes.forEach(function (p) {
+    var nome = chave(p) === alvo ? (trocou = true, para) : p;
+    // NÃO REPETE o destino: uma demanda de "Murillo / Murillo Jesus" tem de
+    // virar "Murillo Jesus", e não "Murillo Jesus / Murillo Jesus".
+    if (saida.some(function (x) { return chave(x) === chave(nome); })) return;
+    saida.push(nome);
+  });
+  return trocou ? saida.join(' / ') : valorDev;
+}
+
+async function juntarDevs() {
+  const de = document.getElementById('juntar-de').value;
+  const para = document.getElementById('juntar-para').value;
+  if (!de || !para) { toast('Escolha os dois nomes.', 'err'); return; }
+  if (de === para) { toast('Escolha dois nomes diferentes.', 'err'); return; }
+
+  /* NÃO DÁ PARA JUNTAR SOBRE DADO QUE NÃO FOI LIDO. A faixa de leitura falhada
+     significa que `state.melhorias` pode estar incompleto — e reescrever o campo
+     `dev` de uma lista parcial e publicar apagaria o nome nas demandas que não
+     vieram. Ver `leitura-estado.js`. */
+  if (window.LEITURA && LEITURA.incompleta()) {
+    await avisar('Os dados não foram lidos',
+      'Juntar reescreve o dev de todas as demandas, e a lista na tela pode estar ' +
+      'incompleta. Recarregue antes de juntar.');
+    return;
+  }
+
+  const afetadas = (state.melhorias || []).filter(m => gJuntaDevEm(m.dev, de, para) !== m.dev);
+  const abertas = afetadas.filter(m =>
+    !['concluido', 'negada'].includes(String(m.status_planejamento || '')));
+  const fechadas = afetadas.length - abertas.length;
+
+  /* O AVISO DIZ QUANTAS, E SEPARA ABERTAS DE CONCLUÍDAS. É a diferença entre
+     "vai mexer no meu quadro" e "vai reescrever meu histórico", e quem confirma
+     precisa saber que as duas coisas acontecem. */
+  if (!(await confirmar({
+    titulo: 'Juntar "' + de + '" em "' + para + '"',
+    texto: afetadas.length === 0
+      ? 'Nenhuma demanda usa "' + de + '". Ele sai apenas da lista de devs.'
+      : afetadas.length + ' demanda(s) passam a ser de "' + para + '"' +
+        (fechadas > 0
+          ? ' — ' + abertas.length + ' aberta(s) e ' + fechadas +
+            ' já concluída(s)/negada(s), que é de onde sai o histórico.'
+          : '.') +
+        ' Não há como desfazer.',
+    ok: 'Juntar', perigo: true }))) return;
+
+  (state.melhorias || []).forEach(m => {
+    const novo = gJuntaDevEm(m.dev, de, para);
+    /* SEM MARCAR NADA: o gantt detecta edicao comparando o objeto com o retrato
+       JSON de `_gBase` (ver `gCamposAlterados`). Mudar `m.dev` no lugar ja entra
+       no merge como patch do campo `dev` — e por campo, o que importa aqui: duas
+       abas juntando devs diferentes nao se sobrescrevem. Eu havia chamado um
+       `gMarcaDirty` que nao existe neste arquivo. */
+    if (novo !== m.dev) m.dev = novo;
+  });
+
+  // O destino tem de existir no cadastro: juntar em alguém que só aparecia numa
+  // demanda deixaria a faixa dependendo de haver demanda aberta dele.
+  if (!(state.desenvolvedores || []).includes(para)) state.desenvolvedores.push(para);
+
+  const i = (state.desenvolvedores || []).indexOf(de);
+  if (i >= 0) state.desenvolvedores.splice(i, 1);
+  /* A REMOÇÃO VIRA DECISÃO GRAVADA, como em `removeDev`: sem isso a lista se
+     remonta unindo o servidor e o nome antigo volta na próxima carga. */
+  state.devs_removidos = [...new Set([...(state.devs_removidos || []), de])];
+
+  // O perfil DEV-AXCred acompanha, se o destino ainda não tiver um.
+  if (state.devs_perfil && state.devs_perfil[de]) {
+    if (!state.devs_perfil[para]) state.devs_perfil[para] = state.devs_perfil[de];
+    delete state.devs_perfil[de];
+  }
+
+  renderDevsList();
+  renderFilters();
+  renderGantt();
+  await saveToGitHub();
+  toast(afetadas.length + ' demanda(s) agora são de "' + para + '".', 'ok');
+}
+
+/** Preenche os dois selects do juntar com a lista de devs atual. */
+function gRenderJuntar() {
+  const a = document.getElementById('juntar-de');
+  const b = document.getElementById('juntar-para');
+  if (!a || !b) return;
+  const nomes = gOrdenaDevs(state.desenvolvedores || []);
+  const opts = (vazio) => '<option value="">' + vazio + '</option>' +
+    nomes.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
+  const antesA = a.value, antesB = b.value;
+  a.innerHTML = opts('— nome a eliminar —');
+  b.innerHTML = opts('— nome que fica —');
+  if (nomes.includes(antesA)) a.value = antesA;
+  if (nomes.includes(antesB)) b.value = antesB;
 }
 
 async function addDev() {
