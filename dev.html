@@ -434,9 +434,10 @@
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
-  <script src="tema.js?v=7df38474d4"></script>
+  <script src="etapa-demanda.js?v=9aa231f848"></script>
+<script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
-<script src="capacidade.js?v=3769a13468"></script>
+<script src="capacidade.js?v=cc227d4867"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -1199,18 +1200,8 @@ function calcHorasPlanejadas(inicio, entrega) {
 }
 
 function getStatusKey(m) {
-  // 'deploy' foi removido como etapa: remanescentes contam como concluído
-  const sp = m.status_planejamento === 'deploy' ? 'concluido' : m.status_planejamento;
-  if (sp && sp !== 'backlog') return sp;
-  const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
-                   estimada:'planejado', iniciada:'em_andamento', concluida:'concluido',
-                   concluido:'concluido', negada:'negada' };
-  const base = legacy[m.status] || sp || 'backlog';
-  if (base === 'backlog' && m.inicio) {
-    const today = new Date().toISOString().slice(0,10);
-    return m.inicio <= today ? 'em_andamento' : 'planejado';
-  }
-  return base;
+  // DELEGA — a regra mora em `etapa-demanda.js`.
+  return ETAPA.gravada(m);
 }
 
 // Estágios com trabalho comprometido: entrega vencida neles conta como Atrasado.
@@ -1653,7 +1644,10 @@ function renderDevGantt() {
 // demanda nao conta como atrasada.
 // Ao retomar: os dias parados sao somados a entrega. Uma demanda parada 9 dias
 // entrega 9 dias depois — e o que acontece na vida real.
-const estaPausado = m => !!(m && String(m.pausado_em || '').trim());
+/* DELEGA — a mesma linha estava copiada em tres telas e AUSENTE do
+   `index.html`, que e por isso que o dash nao checava pausa antes de chamar uma
+   demanda de atrasada. Ver `etapa-demanda.js`. */
+const estaPausado = m => ETAPA.pausada(m);
 
 function _isoHoje() {
   const d = new Date();
@@ -2051,13 +2045,8 @@ function mescladasDev(m) {
 }
 
 function statusEfetivo(m) {
-  const sk = getStatusKey(m);
-  if (sk === 'atrasado') return 'atrasado';
-  if (estaPausado(m)) return sk;   // pausada nao atrasa
-  // A regra esta em prazo.js: o atraso e do dev ate ele entregar, e para ali. O
-  // tempo que a demanda passa em validacao do PM/PO nao conta contra quem fez.
-  if (window.PRAZO && PRAZO.estaAtrasada(m, sk, PRAZO.hojeISO())) return 'atrasado';
-  return sk;
+  // DELEGA — ver `etapa-demanda.js`.
+  return ETAPA.efetiva(m);
 }
 
 

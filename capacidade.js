@@ -45,6 +45,16 @@
 (function (raiz) {
   'use strict';
 
+  /* A REGRA DE ETAPA, quando este arquivo roda FORA do navegador. No navegador
+     `raiz.ETAPA` ja existe (as quatro telas carregam `etapa-demanda.js` antes);
+     no node, o teste de invariantes faz `require('./capacidade.js')` direto e
+     nada teria posto `ETAPA` no globalThis. O `try` e porque este mesmo arquivo
+     tambem e servido ao navegador, onde `require` nao existe. */
+  var _etapaNode = null;
+  if (typeof require === 'function' && !raiz.ETAPA) {
+    try { _etapaNode = require('./etapa-demanda.js'); } catch (_) { _etapaNode = null; }
+  }
+
   /** Etapas em que a demanda já foi ALOCADA a alguém — é daqui em diante que o
    *  ponto conta como planejado. Backlog e Planning não: ali ainda se discute se
    *  a demanda entra, e contar como plano infla o compromisso com o que pode nem
@@ -61,8 +71,18 @@
     return Number.isFinite(n) && n > 0 ? n : 0;
   }
 
+  /* A ETAPA VEM DE `etapa-demanda.js`, e essa troca CORRIGE contagem.
+     Isto lia `status_planejamento` cru: demanda anterior ao campo novo, que só
+     tem `status` (`estimada`, `iniciada`, `concluida`), saía com etapa VAZIA e
+     ficava fora de `ETAPAS_ALOCADA` e de `ETAPAS_ENTREGUE`. Medido no arquivo de
+     dados: 5 das 158 visíveis divergiam da etapa que o Admin mostra — pontos
+     prometidos e entregues que a capacidade simplesmente não somava.
+
+     O `require` no fim do arquivo é para o node: o teste de invariantes carrega
+     este módulo direto, e sem ele `ETAPA` não existiria fora do navegador. */
   function etapaDe(m) {
-    return String((m || {}).status_planejamento || '').trim();
+    var E = raiz.ETAPA || _etapaNode;
+    return E ? E.gravada(m) : String((m || {}).status_planejamento || '').trim();
   }
 
   function viva(m) {

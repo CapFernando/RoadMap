@@ -4062,8 +4062,15 @@ sec('O atraso e do dev, e para quando ele entrega');
   ok(/<script src="prazo\.js/.test(src), f + ' carrega prazo.js');
   ok(!/const STATUS_ATRASO\s*=/.test(semComentario(src)),
      f + ' NAO declara mais a propria lista de etapas que atrasam');
-  ok(/PRAZO\.estaAtrasada\(m, /.test(src),
-     f + ' decide o atraso pela regra compartilhada');
+  /* A CHAMADA MUDOU DE ENDERECO, e a invariante seguiu. Antes cada tela chamava
+     `PRAZO.estaAtrasada` dentro do seu proprio `statusEfetivo`; agora as quatro
+     delegam para `ETAPA.efetiva`, e e ELE quem pergunta ao prazo. Continua sendo
+     uma regra so — mudou de um lugar compartilhado para outro, e a exigencia
+     virou "nao reimplemente". */
+  ok(/ETAPA\.efetiva\(/.test(src),
+     f + ' decide a etapa efetiva pela regra compartilhada');
+  ok(!/PRAZO\.estaAtrasada\(m, /.test(semComentario(src)),
+     f + ' NAO pergunta o atraso por conta propria');
 });
 ok(!/new Date\(m\.entrega \+ 'T00:00:00'\) < hoje/.test(
      [ADMIN, GANTT, DEV, INDEX].join('\n')),
@@ -5233,6 +5240,182 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
 
    ESTE BLOCO EXECUTA a funcao recortada do gantt.html, com demandas de verdade. */
 
+/* ═══ EM QUE ETAPA ESTA A DEMANDA — UMA RESPOSTA, E NAO QUATRO ══════════
+
+   Havia QUATRO implementacoes da mesma pergunta, e duas respondiam diferente.
+   Medido no arquivo de dados, 158 demandas visiveis:
+
+     admin vs gantt         divergem em 4
+       2 que o admin chama de `negada`       e o gantt chamava de `backlog`
+       2 que o admin chama de `em_andamento` e o gantt chamava de `backlog`
+     admin vs capacidade.js divergem em 5
+
+   As duas negadas eram o pior caso: a regua de chips do Planejamento contava
+   demanda RECUSADA como Backlog. Ninguem veria — o numero esta certo somando
+   errado.
+
+   A CAUSA ERA SEMPRE A MESMA: `etapaReal` (gantt) e `etapaDe` (capacidade) liam
+   `status_planejamento` cru e IGNORAVAM o mapa do `status` legado. Demanda
+   anterior ao campo novo so tem `status`, e para elas as duas devolviam vazio ou
+   backlog enquanto as outras tres telas devolviam a etapa certa.
+
+   E HAVIA UMA SEGUNDA DIVERGENCIA, na camada efetiva: o `index.html` nao checava
+   PAUSA antes de derivar `atrasado` — nem tinha a funcao `estaPausado`, que
+   estava copiada nas outras tres. Uma demanda pausada e vencida aparecia
+   Atrasada no dash e pausada em todo o resto.
+
+   ESTE BLOCO EXECUTA `etapa-demanda.js`. */
+(() => {
+  sec('Em que etapa esta a demanda');
+  const ETAPA = require('./etapa-demanda.js');
+  const HOJE = '2026-09-10';
+
+  /* ─── CAMADA GRAVADA ──────────────────────────────────── */
+  ok(ETAPA.gravada({ status_planejamento: 'planejado' }, HOJE) === 'planejado',
+     'o campo novo manda quando existe');
+  ok(ETAPA.gravada({ status_planejamento: 'deploy' }, HOJE) === 'concluido',
+     "e o 'deploy' removido conta como concluido");
+
+  /* O MAPA LEGADO — o passo que faltava no gantt e na capacidade, e a razao das
+     nove divergencias medidas. */
+  ok(ETAPA.gravada({ status: 'concluida' }, HOJE) === 'concluido',
+     'demanda legada com status=concluida e CONCLUIDO, e nao backlog');
+  ok(ETAPA.gravada({ status: 'negada' }, HOJE) === 'negada',
+     'e status=negada e NEGADA — era o pior caso, contada como Backlog na regua');
+  ok(ETAPA.gravada({ status: 'iniciada' }, HOJE) === 'em_andamento',
+     'status=iniciada e em andamento');
+  ok(ETAPA.gravada({ status: 'estimada' }, HOJE) === 'planejado',
+     'e status=estimada e planejado');
+
+  /* O CAMPO NOVO VENCE O LEGADO quando os dois existem. E a ordem certa: quem
+     passou pela esteira nova tem a etapa dela gravada, e o `status` antigo ficou
+     para tras. */
+  ok(ETAPA.gravada({ status_planejamento: 'planejado', status: 'concluida' }, HOJE)
+       === 'planejado',
+     'o campo novo vence o status legado');
+
+  /* BACKLOG COM DATA DE INICIO: a data decide, e isso e da mesma familia — sem
+     ele, demanda importada com data e sem etapa ficava no Backlog enquanto o dev
+     ja estava nela. */
+  ok(ETAPA.gravada({ inicio: '2026-09-01' }, HOJE) === 'em_andamento',
+     'sem etapa e com inicio no passado, e trabalho comecado');
+  ok(ETAPA.gravada({ inicio: '2026-12-01' }, HOJE) === 'planejado',
+     'e com inicio no futuro, e planejado');
+  ok(ETAPA.gravada({ status_planejamento: 'backlog', inicio: '2026-09-01' }, HOJE)
+       === 'em_andamento',
+     'o backlog EXPLICITO tambem cede para a data — e o mesmo caso');
+  ok(ETAPA.gravada({}, HOJE) === 'backlog', 'sem nada, backlog');
+  ok(ETAPA.gravada(null, HOJE) === 'backlog', 'e demanda inexistente nao quebra');
+
+  /* O `hoje` E PARAMETRO, e a fronteira e o proprio dia: inicio HOJE ja e
+     trabalho comecado. Um `>=` no lugar do `<=` inverteria isso sem ninguem
+     notar, porque os dois valores sao etapas plausiveis. */
+  ok(ETAPA.gravada({ inicio: HOJE }, HOJE) === 'em_andamento',
+     'inicio HOJE conta como comecado, e nao como planejado');
+
+  /* ─── A PAUSA, NUM LUGAR SO ──────────────────────────────── */
+  ok(ETAPA.pausada({ pausado_em: '2026-09-01' }) === true, 'pausada quando tem data');
+  ok(ETAPA.pausada({ pausado_em: '   ' }) === false, 'e espaco em branco nao pausa');
+  ok(ETAPA.pausada({}) === false && ETAPA.pausada(null) === false,
+     'nem ausencia do campo, nem demanda inexistente');
+
+  /* ─── CAMADA EFETIVA ──────────────────────────────────── */
+  const PRAZO = require('./prazo.js');
+  ok(!!PRAZO, 'prazo.js carregado, que e quem responde pelo atraso');
+  /* `efetiva` PERGUNTA AO PRAZO por `globalThis.PRAZO`. No navegador ele ja esta
+     la; aqui o `require` acima o instala, porque `prazo.js` tambem se escreve no
+     globalThis. Sem isso este bloco afirmaria sobre um caminho que nunca deriva
+     `atrasado` — e passaria por vacuidade. */
+  ok(!!globalThis.PRAZO, 'e visivel para a regra de etapa, como no navegador');
+
+  const vencida = { status_planejamento: 'em_andamento', entrega: '2026-08-01' };
+  ok(ETAPA.efetiva(vencida, HOJE) === 'atrasado',
+     'demanda vencida em etapa que corre vira ATRASADO');
+  ok(ETAPA.gravada(vencida, HOJE) === 'em_andamento',
+     'e a etapa GRAVADA dela continua em_andamento, sem se confundir com a efetiva');
+
+  /* PAUSADA NAO ATRASA — E A REGRA MORA NO `prazo.js`, nao aqui.
+     Eu tinha posto um `if (pausada(m)) return sk;` em `efetiva`, copiando o que
+     tres telas faziam, e afirmei que a falta dele no dash era um defeito. A
+     SABOTAGEM PROVOU O CONTRARIO: removi o ramo e nenhuma invariante de
+     comportamento mudou. `diasDeAtraso` devolve `null` para demanda pausada,
+     qualquer que seja o tempo parado — as tres telas carregavam um ramo morto e
+     a quarta nao perdia nada.
+     Entao a invariante passou a cobrar o DONO da regra, e nao a copia. */
+  const pausadaVencida = { status_planejamento: 'em_andamento', entrega: '2026-08-01',
+                           pausado_em: '2026-08-05' };
+  ok(PRAZO.diasDeAtraso(pausadaVencida, 'em_andamento', HOJE) === null,
+     'o prazo.js nao conta atraso de demanda pausada — e ele o dono desta regra',
+     String(PRAZO.diasDeAtraso(pausadaVencida, 'em_andamento', HOJE)));
+  ok(PRAZO.estaAtrasada(pausadaVencida, 'em_andamento', HOJE) === false,
+     'e por isso pausada e vencida nao esta atrasada');
+  /* E A PAUSA CURTA TAMBEM NAO, que e o caso que um `prazoEfetivo` empurrado
+     deixaria passar: pausada ontem, com prazo de agosto, o prazo empurrado
+     continuaria no passado. `null` vem da PAUSA, e nao da conta de dias. */
+  const pausadaOntem = { status_planejamento: 'em_andamento', entrega: '2026-08-01',
+                         pausado_em: '2026-09-09' };
+  ok(PRAZO.estaAtrasada(pausadaOntem, 'em_andamento', HOJE) === false,
+     'nem a pausada ontem com prazo velho');
+  // E a etapa efetiva dela segue a etapa, sem virar 'atrasado'.
+  ok(ETAPA.efetiva(pausadaVencida, HOJE) === 'em_andamento',
+     'a etapa efetiva da pausada continua sendo a etapa dela',
+     ETAPA.efetiva(pausadaVencida, HOJE));
+  /* E O RAMO MORTO NAO VOLTA. Quem ler `efetiva` e nao conhecer o `prazo.js` vai
+     querer "consertar" a falta da checagem — o comentario de la explica, e esta
+     invariante impede que a explicacao seja ignorada. */
+  ok(!/if \(pausada\(m\)\)/.test(semComentario(lerTela('etapa-demanda.js'))),
+     'e `efetiva` nao reintroduz a checagem de pausa que nao muda resultado');
+
+  ok(ETAPA.efetiva({ status_planejamento: 'concluido', entrega: '2026-08-01' }, HOJE)
+       === 'concluido',
+     'concluida nao atrasa, mesmo com prazo velho');
+  ok(ETAPA.efetiva({ status_planejamento: 'backlog', entrega: '2026-08-01' }, HOJE)
+       === 'backlog',
+     'e backlog nao atrasa — ali nada foi prometido');
+
+  /* ─── EM ABERTO ─────────────────────────────────────── */
+  ok(ETAPA.aberta({ status_planejamento: 'em_andamento' }, HOJE) === true,
+     'em andamento esta em aberto');
+  ok(ETAPA.aberta({ status: 'concluida' }, HOJE) === false,
+     'e a legada concluida NAO esta — pela etapa derivada, e nao pelo campo cru');
+  ok(ETAPA.aberta({ status: 'negada' }, HOJE) === false, 'nem a negada');
+
+  /* ─── AS QUATRO TELAS DELEGAM, E NINGUEM REIMPLEMENTA ────────────── */
+  const TELAS = [['admin.html', ADMIN], ['gantt.html', GANTT],
+                 ['dev.html', DEV], ['index.html', INDEX]];
+  for (const [nome, txt] of TELAS) {
+    ok(/<script src="etapa-demanda\.js\?v=[0-9a-f]{10}"><\/script>/.test(txt),
+       nome + ' carrega a regra de etapa, selada');
+    ok(/ETAPA\.gravada\(/.test(txt), nome + ' pega a etapa gravada da regra');
+    ok(/ETAPA\.efetiva\(/.test(txt), 'e ' + nome + ' a efetiva tambem');
+    /* NINGUEM GUARDA O PROPRIO MAPA. `recebida` e a primeira chave dele, e
+       aparecer no corpo de uma tela significa que alguem recriou a traducao. */
+    ok(!/recebida:\s*'backlog'/.test(semComentario(txt)),
+       'e ' + nome + ' nao tem uma copia do mapa legado');
+  }
+  /* E A LINHA DA PAUSA NAO VOLTA A SER COPIADA. Ela estava em tres telas e
+     faltava na quarta — e a falta era o defeito. */
+  for (const [nome, txt] of TELAS) {
+    ok(!/pausado_em \|\| ''\)\.trim\(\)\)/.test(semComentario(txt)),
+       nome + ' nao reimplementa a checagem de pausa');
+  }
+
+  /* E O `capacidade.js` TAMBEM, que era a quinta cabeca do problema. */
+  const CAPSRC = semComentario(lerTela('capacidade.js'));
+  ok(/E\.gravada\(m\)/.test(CAPSRC), 'a capacidade tira a etapa da regra');
+  ok(!/status_planejamento \|\| ''\)\.trim\(\)$/m.test(CAPSRC),
+     'e nao le mais o campo cru como se fosse a etapa');
+  /* A CORRECAO, EXECUTADA: a demanda legada passou a contar. Antes `etapaDe`
+     devolvia '' e ela ficava fora de ETAPAS_ALOCADA e de ETAPAS_ENTREGUE. */
+  const CAPX = require('./capacidade.js');
+  ok(CAPX.entregues({ status: 'concluida', poker_pontos: 8 }) === 8,
+     'demanda legada concluida passa a somar no entregue',
+     String(CAPX.entregues({ status: 'concluida', poker_pontos: 8 })));
+  ok(CAPX.planejados({ status: 'estimada', poker_pontos: 13 }) === 13,
+     'e a legada estimada passa a somar no planejado',
+     String(CAPX.planejados({ status: 'estimada', poker_pontos: 13 })));
+})();
+
 /* ═══ DOIS NOMES PARA O MESMO DEV SE JUNTAM ═══════════════════════
 
    O relato: "eu havia arrastado do Murillo para o Murillo Jesus no gantt, por
@@ -5570,10 +5753,18 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
        etapa `concluido` para as demandas anteriores ao campo novo. Uma tela que
        o perdesse passaria a chamar de backlog o que as outras chamam de
        concluido. */
+    /* O MAPA LEGADO SAIU DO CORPO DE CADA TELA. Ele era a razao desta comparacao
+       existir: e ele que traduz `status: 'concluida'` em etapa `concluido` nas
+       demandas anteriores ao campo novo, e a tela que o perdesse passaria a
+       chamar de backlog o que as outras chamam de concluido.
+       Agora ele mora em `etapa-demanda.js`, e a exigencia mudou de "as tres tem
+       o mapa" para "nenhuma tem o proprio, e a regra tem um". */
+    const ETP = semComentario(lerTela('etapa-demanda.js'));
+    ok(/concluida: 'concluido'/.test(ETP),
+       'a regra compartilhada traduz o status legado em etapa');
     for (const [nome, txt] of [['admin', a], ['dash', b], ['dev', c]]) {
-      ok(/concluida:'concluido'|concluida: 'concluido'/.test(txt.replace(/ /g, '')
-           .replace('concluida:', 'concluida:')),
-         'e ' + nome + ' continua traduzindo o status legado em etapa');
+      ok(!/recebida/.test(txt),
+         nome + ' nao carrega mais o proprio mapa do status legado');
     }
   }
 })();
@@ -7898,12 +8089,18 @@ ok(/class="card-herdada"/.test(GANTT) && GANTT.indexOf('\u21e5') >= 0,
   ok(/sprintsEstouradas\(m, etapaReal\(m\)/.test(semComentario(GANTT)),
      'o contador de sprints do cartao tambem usa etapaReal');
 
-  /* E `etapaReal` tem de ser a UNICA a normalizar o 'deploy'. Duas normalizacoes
-     sao duas listas de etapa esperando divergir. */
+  /* O 'deploy' TEM DE SER NORMALIZADO NUM LUGAR SO, e esse lugar deixou de ser o
+     gantt: a normalizacao mudou para `etapa-demanda.js` junto com o resto da
+     derivacao de etapa. Duas normalizacoes sao duas listas de etapa esperando
+     divergir — o que a invariante cobra e ZERO no gantt e UMA na regra. */
   const gl = semComentario(GANTT);
-  ok((gl.match(/=== 'deploy'/g) || []).length === 1,
-     "a normalizacao do 'deploy' mora num lugar so",
+  ok((gl.match(/=== 'deploy'/g) || []).length === 0,
+     "o gantt nao normaliza mais o 'deploy' por conta propria",
      (gl.match(/=== 'deploy'/g) || []).length + ' ocorrencia(s)');
+  const el = semComentario(lerTela('etapa-demanda.js'));
+  ok((el.match(/=== 'deploy'/g) || []).length === 1,
+     "e a normalizacao do 'deploy' mora num lugar so",
+     (el.match(/=== 'deploy'/g) || []).length + ' ocorrencia(s)');
 }
 
 

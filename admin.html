@@ -1040,12 +1040,13 @@
     #conditional-fields { }
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
-  <script src="tema.js?v=7df38474d4"></script>
+  <script src="etapa-demanda.js?v=9aa231f848"></script>
+<script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js?v=e3aaaae81d"></script>
 <script src="pipelines.js?v=a122233200"></script>
-<script src="capacidade.js?v=3769a13468"></script>
+<script src="capacidade.js?v=cc227d4867"></script>
 <script src="apresentacao.js?v=5bc88a3cb9"></script>
 <script src="relatorio-ppt.js?v=ab9c8286e2"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
@@ -2837,18 +2838,11 @@ const STATUS_LABELS = {
   deploy:'Concluído',   // etapa removida: itens remanescentes exibem como Concluído
 };
 function statusKey(m) {
-  // 'deploy' foi removido como etapa: qualquer remanescente conta como concluído
-  const sp = m.status_planejamento === 'deploy' ? 'concluido' : m.status_planejamento;
-  if (sp && sp !== 'backlog') return sp;
-  const legacy = { recebida:'backlog', refinamento:'planejado', regra:'planejado',
-                   estimada:'planejado', iniciada:'em_andamento', concluida:'concluido',
-                   concluido:'concluido', negada:'negada' };
-  const base = legacy[m.status] || sp || 'backlog';
-  if (base === 'backlog' && m.inicio) {
-    const today = new Date().toISOString().slice(0, 10);
-    return m.inicio <= today ? 'em_andamento' : 'planejado';
-  }
-  return base;
+  /* DELEGA — a regra mora em `etapa-demanda.js`.
+     Esta funcao continua existindo porque ~90 chamadas neste arquivo a usam pelo
+     nome, e trocar todas de uma vez seria um diff em que ninguem acha o que
+     mudou. O que importa e que a REGRA passou a ter um lugar so. */
+  return ETAPA.gravada(m);
 }
 
 let _filtroStatus = null;
@@ -3363,14 +3357,11 @@ function kbSplitDevs(s) { return s ? String(s).split(/[\/,]/).map(x => x.trim())
 // Status para EXIBIR e FILTRAR (deriva atrasado). Nunca use no formulário:
 // statusKey() é o valor armazenado, e gravar o efetivo apagaria o estágio real.
 function statusEfetivo(m) {
-  const sk = statusKey(m);
-  // Pausada nao atrasa: o prazo esta suspenso, nao estourado.
-  if (typeof estaPausado === 'function' && estaPausado(m)) return sk;
-  if (sk === 'atrasado') return 'atrasado';
-  // Em validacao, o atraso e o do DEV e ja esta congelado na data da entrega:
-  // quem entregou no prazo nao aparece atrasado por causa do tempo de validacao.
-  if (window.PRAZO && PRAZO.estaAtrasada(m, sk, PRAZO.hojeISO())) return 'atrasado';
-  return sk;
+  /* DELEGA. A ordem (pausada antes de atrasado) e as tres etapas da decisao
+     estao documentadas em `etapa-demanda.js`. O `index.html` NAO fazia o passo
+     da pausa — ele nem tinha a funcao `estaPausado` — e por isso uma demanda
+     pausada e vencida aparecia Atrasada no dash e pausada em todo o resto. */
+  return ETAPA.efetiva(m);
 }
 
 function getIP(m) {
@@ -8832,7 +8823,10 @@ function exigeDev(sp) { return ETAPAS_COM_DEV.includes(sp); }
 // demanda nao conta como atrasada.
 // Ao retomar: os dias parados sao somados a entrega. Uma demanda parada 9 dias
 // entrega 9 dias depois — e o que acontece na vida real.
-const estaPausado = m => !!(m && String(m.pausado_em || '').trim());
+/* DELEGA — a mesma linha estava copiada em tres telas e AUSENTE do
+   `index.html`, que e por isso que o dash nao checava pausa antes de chamar uma
+   demanda de atrasada. Ver `etapa-demanda.js`. */
+const estaPausado = m => ETAPA.pausada(m);
 
 function _isoHoje() {
   const d = new Date();

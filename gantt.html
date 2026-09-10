@@ -801,9 +801,10 @@
     .delete-btn:hover { opacity: 0.85; }
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
-  <script src="tema.js?v=7df38474d4"></script>
+  <script src="etapa-demanda.js?v=9aa231f848"></script>
+<script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
-<script src="capacidade.js?v=3769a13468"></script>
+<script src="capacidade.js?v=cc227d4867"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -2177,20 +2178,19 @@ function semPontuacao(m) {
  *  console. Quem descobriu foi a prova contra a base — nao havia como ver isso
  *  lendo o codigo. */
 function etapaReal(m) {
-  // 'deploy' foi removido como etapa: remanescentes contam como concluído
-  return (m || {}).status_planejamento === 'deploy'
-    ? 'concluido' : ((m || {}).status_planejamento || 'backlog');
+  /* DELEGA — e aqui a delegacao CORRIGE, nao so organiza.
+     Esta funcao lia `status_planejamento` cru e ignorava o mapa do `status`
+     legado. Medido no arquivo de dados: 4 das 158 demandas visiveis divergiam
+     do Admin — 2 que ele chama de `negada` e esta chamava de `backlog`, e 2
+     `em_andamento` contadas como `backlog`. As negadas eram o pior caso: a
+     regua de chips contava demanda RECUSADA como Backlog. */
+  return ETAPA.gravada(m);
 }
 
 function spEfetivo(m) {
-  let sp = etapaReal(m);
-  // Pausada nao atrasa: prazo suspenso, nao estourado.
-  if (estaPausado(m)) return sp;
-  if (sp === 'atrasado') return 'atrasado';
-  // O atraso para quando o dev entrega: o tempo de validacao do PM/PO nao e
-  // atraso de desenvolvimento.
-  if (window.PRAZO && PRAZO.estaAtrasada(m, sp, PRAZO.hojeISO())) return 'atrasado';
-  return sp;
+  // DELEGA — mesma ordem que esta funcao ja tinha (pausada antes de atrasado),
+  // agora escrita num lugar so. Ver `etapa-demanda.js`.
+  return ETAPA.efetiva(m);
 }
 
 /* OS ROTULOS DAS ETAPAS, num lugar so. Estavam dentro de `renderIndicators`, e a
@@ -3603,7 +3603,10 @@ function exigeDev(sp) { return ETAPAS_COM_DEV.includes(sp); }
 // demanda nao conta como atrasada.
 // Ao retomar: os dias parados sao somados a entrega. Uma demanda parada 9 dias
 // entrega 9 dias depois — e o que acontece na vida real.
-const estaPausado = m => !!(m && String(m.pausado_em || '').trim());
+/* DELEGA — a mesma linha estava copiada em tres telas e AUSENTE do
+   `index.html`, que e por isso que o dash nao checava pausa antes de chamar uma
+   demanda de atrasada. Ver `etapa-demanda.js`. */
+const estaPausado = m => ETAPA.pausada(m);
 
 function _isoHoje() {
   const d = new Date();
