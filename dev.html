@@ -433,13 +433,14 @@
     .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
   </style>
-  <link rel="stylesheet" href="tema.css?v=ce460334a1">
+  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="capacidade.js?v=3769a13468"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
+<script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="catalogo.js?v=75d59802ea"></script>
+<script src="catalogo.js?v=b5aed8c999"></script>
 <script src="busca-demanda.js?v=1380650a7a"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
@@ -2263,7 +2264,11 @@ async function loadData(useApi = false) {
       ? { cache:'no-store', headers:{ Accept:'application/vnd.github.v3+json' } }
       : { cache:'no-store' };
     const res = await fetch(url, opts);
-    if (!res.ok) { if (useApi) throw new Error(res.status); return; }
+    /* NAO-OK NO MODO SENHA SAIA EM SILENCIO. O `return` seco deixava a tela com
+       o que estivesse em memoria — vazio, na primeira carga — sem erro, sem
+       aviso e sem `applyData`. Agora ele levanta como o outro modo e cai na
+       faixa do `catch`. */
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     let data;
     if (useApi) {
       const json = await res.json();
@@ -2273,7 +2278,20 @@ async function loadData(useApi = false) {
       data = await res.json();
     }
     applyData(data);
-  } catch(e) { console.warn('loadData error', e); }
+    if (window.LEITURA) LEITURA.ok();
+  } catch (e) {
+    /* ── ISTO ERA `console.warn` E MAIS NADA ─────────────────────────────────
+       A leitura falhava e a tela nao dizia uma palavra: o aviso ia para o
+       console, que ninguem abre. O painel do dev seguia com as listas vazias
+       parecendo uma base sem cadastro.
+       Ver `leitura-estado.js` — o relato que originou isto veio do Admin, mas o
+       defeito estava em tres telas com tres disfarces diferentes. */
+    console.warn('loadData error', e);
+    if (window.LEITURA) {
+      LEITURA.aoTentarDeNovo(function () { return loadData(); });
+      LEITURA.falhou((e && e.message) || 'falha ao ler os dados');
+    }
+  }
 }
 
 function applyData(data) {

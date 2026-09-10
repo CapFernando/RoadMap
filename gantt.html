@@ -800,13 +800,14 @@
     .delete-btn { background: var(--red); color: #fff; }
     .delete-btn:hover { opacity: 0.85; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=ce460334a1">
+  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="capacidade.js?v=3769a13468"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
+<script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="catalogo.js?v=75d59802ea"></script>
+<script src="catalogo.js?v=b5aed8c999"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -1613,7 +1614,17 @@ async function ganttCheckUpdates() {
     if (novo && gTemPendencia())  gAvisaDesatualizado(true);   // nunca por cima do que nao foi salvo
     else if (novo)                await loadFromGitHub();
     else                          gAvisaDesatualizado(false);
-  } catch(_) {}
+    if (window.LEITURA) LEITURA.ok();
+  } catch (e) {
+    /* O LACO ENGOLIA TUDO (`catch(_) {}`). Trinta segundos de silencio por
+       rodada e uma tela que segue mostrando — e deixando publicar — o estado de
+       quando ela abriu. A faixa nao e um toast a cada 30s: ela aparece uma vez e
+       fica enquanto a leitura nao voltar. */
+    if (window.LEITURA) {
+      LEITURA.aoTentarDeNovo(function () { return loadFromGitHub(); });
+      LEITURA.falhou((e && e.message) || 'falha ao checar atualizacoes');
+    }
+  }
   _ganttPollActive = false;
 }
 setInterval(ganttCheckUpdates, 30000);
@@ -1766,8 +1777,19 @@ async function loadFromGitHub() {
     gRetratoBase();   // base do merge por campo (depois da auto-promoção)
     _gPollTs = decoded.atualizado_em || null;
     _ausenciasTocadas = false;
+    if (window.LEITURA) LEITURA.ok();
     renderAll();
-  } catch(e) {
+  } catch (e) {
+    /* ── O MESMO DEFEITO DO ADMIN, COM O MESMO DISFARCE ──────────────────────
+       `toast` + `renderAll()`: o aviso desaparece e a tela volta com o estado
+       que sobrou. Aqui o efeito e a fila lateral e o filtro de dev aparecerem
+       vazios, e o campo de sistema oferecer "+ outro (escrever)" sobre uma lista
+       que ele nao conseguiu ler — que e como nasce tema duplicado.
+       Ver `leitura-estado.js`. */
+    if (window.LEITURA) {
+      LEITURA.aoTentarDeNovo(function () { return loadFromGitHub(); });
+      LEITURA.falhou(e.message);
+    }
     toast(e.message, 'err');
     renderAll();
   }

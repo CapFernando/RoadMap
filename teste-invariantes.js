@@ -5233,6 +5233,186 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
 
    ESTE BLOCO EXECUTA a funcao recortada do gantt.html, com demandas de verdade. */
 
+/* ═══ A LEITURA QUE FALHA NAO PODE PARECER BASE VAZIA ════════════════
+
+   O relato veio em tres pedacos, em minutos: "nao esta aparecendo os modulos",
+   "nem a lista de dev esta aparecendo", "criei a issue e aparentemente nao foi
+   criada" — e logo depois "agora a task apareceu".
+
+   Tres sintomas, UMA causa: a leitura dos dados falhou e cada tela escondeu isso
+   de um jeito diferente.
+
+     admin.html   `catch { toast(msg); renderAll(); }`
+                  O toast sai de cena em segundos e o `renderAll` redesenha com o
+                  ESTADO INICIAL — `temas: []`, `desenvolvedores: []`.
+     dev.html     `catch (e) { console.warn('loadData error', e); }`
+                  Nada na tela. E no modo senha um `!res.ok` fazia a funcao
+                  RETORNAR em silencio, sem nem chamar `applyData`.
+     gantt.html   `catch (_) {}` no laco de 30 segundos.
+
+   E O SILENCIO PRODUZIU DADO ERRADO, que e o que tira isto da categoria "faltou
+   um aviso". `catalogoResolve` evita tema duplicado comparando o nome digitado
+   com `state.temas`; com a lista vazia a comparacao e cega e o campo
+   "+ outro (escrever)" CRIA. O servidor tinha `AXCred - Cobranca`, a tela mostrou
+   uma lista vazia, e nasceu um `Cobranca` solto na raiz. A tela convidou a
+   recriar o que ela nao conseguia mostrar. */
+(() => {
+  sec('A leitura que falha se anuncia');
+  const LE = fs.readFileSync('leitura-estado.js', 'utf8');
+  ok(!!LE, 'o arquivo da faixa existe');
+
+  /* ESTE BLOCO EXECUTA o modulo, com um DOM de mentira do tamanho do que ele
+     usa. Afirmar sobre o texto do arquivo diria que a funcao esta escrita; o que
+     interessa e que ela LIGA e DESLIGA o estado. */
+  const monta = () => {
+    const criados = [];
+    const doc = {
+      body: { appendChild: (el) => { criados.push(el); } },
+      getElementById: (id) => criados.find(e => e.id === id) || null,
+      createElement: () => {
+        const el = {
+          id: '', innerHTML: '', style: {}, _attrs: {},
+          setAttribute(k, v) { this._attrs[k] = v; },
+          getAttribute(k) { return this._attrs[k]; },
+        };
+        return el;
+      },
+    };
+    const janela = { document: doc };
+    new Function('window', 'document', 'Date', LE)(janela, doc, Date);
+    return { API: janela.LEITURA, doc, criados };
+  };
+
+  const m = monta();
+  ok(!!m.API && typeof m.API.falhou === 'function', 'o modulo expoe LEITURA.falhou');
+  ok(m.API.incompleta() === false, 'e comeca dizendo que a leitura esta boa');
+
+  m.API.falhou('HTTP 401 — credencial');
+  ok(m.API.incompleta() === true, 'depois de falhar, a tela sabe que esta incompleta');
+  ok(m.API.motivo().indexOf('401') >= 0, 'e guarda o motivo para mostrar', m.API.motivo());
+  const faixa = m.criados[0];
+  ok(!!faixa && faixa.style.display !== 'none', 'a faixa fica visivel');
+  ok(faixa.getAttribute('role') === 'alert' && !!faixa.getAttribute('aria-live'),
+     'e se anuncia para leitor de tela, em vez de so pintar de vermelho');
+  ok(/n\u00e3o foram lidos|nao foram lidos/.test(faixa.innerHTML),
+     'o texto diz que os dados NAO foram lidos');
+  /* O AVISO PRECISA EXPLICAR O EFEITO, e nao so anunciar a falha. "Erro ao
+     carregar" nao liga o problema ao select vazio que a pessoa esta olhando. */
+  ok(/listas de sistema e de dev/.test(faixa.innerHTML),
+     'e explica POR QUE as listas aparecem vazias');
+  ok(/lf-retry/.test(faixa.innerHTML), 'e oferece tentar de novo');
+
+  m.API.ok();
+  ok(m.API.incompleta() === false, 'e a faixa sai quando a leitura volta');
+  ok(faixa.style.display === 'none', 'escondendo o elemento de verdade');
+
+  /* ─── O CAMPO DE SISTEMA FICA CEGO, E PARA DE OFERECER CRIAR ─────────── */
+  const CAT = fs.readFileSync('catalogo.js', 'utf8');
+  const cenario = (temas, incompleta, valorSel, textoNovo) => {
+    const els = {
+      'x-tema': { id: 'x-tema', innerHTML: '', value: valorSel, options: [], style: {} },
+      'x-tema-novo': { id: 'x-tema-novo', value: textoNovo || '', style: {} },
+    };
+    const doc = { getElementById: (id) => els[id] || null };
+    const janela = {
+      document: doc,
+      LEITURA: { incompleta: () => incompleta },
+    };
+    new Function('window', 'document', CAT)(janela, doc);
+    return { janela, els };
+  };
+
+  // Lista cheia: oferece criar, e reaproveita nome que ja existe.
+  {
+    const TEMAS = [{ id: 't1', nome: 'AXCred - Cobrança' }, { id: 't2', nome: 'BI' }];
+    const c = cenario(TEMAS, false, '__novo__', 'AXCred - Cobrança');
+    const html = c.janela.catalogoOpcoesHTML(TEMAS, '', { outro: true });
+    ok(html.indexOf('__novo__') >= 0, 'com a lista cheia, o campo oferece "+ outro"');
+    let criou = false;
+    const id = c.janela.catalogoResolve('x', TEMAS, '', () => { criou = true; return 'novo'; });
+    ok(id === 't1' && !criou, 'e digitar um nome que JA EXISTE reaproveita, sem criar',
+       id);
+  }
+
+  /* O CASO DO RELATO: lista vazia PORQUE a leitura falhou. */
+  {
+    const c = cenario([], true, '__novo__', 'Cobrança');
+    const html = c.janela.catalogoOpcoesHTML([], '', { outro: true });
+    ok(html.indexOf('__novo__') < 0,
+       'lista vazia por FALHA: o campo para de oferecer "+ outro"');
+    ok(/n\u00e3o carregou|nao carregou/.test(html),
+       'e diz no lugar dela por que nao da para criar agora');
+    /* A TRANCA, e nao so a porta: o formulario pode ja estar aberto com
+       `__novo__` escolhido quando a faixa aparece — o poll falha depois, e o
+       select montado antes nao se remonta. */
+    let criou = false;
+    const id = c.janela.catalogoResolve('x', [], 'fallback', () => { criou = true; return 'novo'; });
+    ok(!criou, 'e mesmo com __novo__ preso no DOM, NAO cria o tema duplicado');
+    ok(id === 'fallback', 'devolvendo o que a demanda ja tinha', String(id));
+  }
+
+  /* LISTA VAZIA DE VERDADE CONTINUA PODENDO CRIAR. Base nova e caso legitimo, e
+     travar sempre trocaria um defeito por outro — ninguem cadastraria o primeiro
+     sistema. A diferenca e `LEITURA.incompleta()`. */
+  {
+    const c = cenario([], false, '__novo__', 'Primeiro Sistema');
+    const html = c.janela.catalogoOpcoesHTML([], '', { outro: true });
+    ok(html.indexOf('__novo__') >= 0,
+       'lista vazia SEM falha continua oferecendo criar — base nova e legitima');
+    let criou = false;
+    c.janela.catalogoResolve('x', [], '', () => { criou = true; return 'novo'; });
+    ok(criou, 'e cria o primeiro tema');
+  }
+
+  /* ─── AS TRES TELAS AVISAM, E CARREGAM O ARQUIVO ─────────────────── */
+  const TELAS = [['admin.html', ADMIN], ['gantt.html', GANTT], ['dev.html', DEV]];
+  for (const [nome, txt] of TELAS) {
+    ok(/<script src="leitura-estado\.js\?v=[0-9a-f]{10}"><\/script>/.test(txt),
+       nome + ' carrega o arquivo da faixa, selado');
+    ok(/LEITURA\.falhou\(/.test(txt), nome + ' avisa quando a leitura falha');
+    ok(/LEITURA\.ok\(\)/.test(txt), 'e ' + nome + ' apaga a faixa quando ela volta');
+    ok(/LEITURA\.aoTentarDeNovo\(/.test(txt),
+       'e ' + nome + ' registra COMO reler, para o botao nao ser so um recarregar');
+  }
+
+  /* E O ARQUIVO VEM ANTES DO `catalogo.js` nas tres. O catalogo consulta
+     `window.LEITURA` para decidir se oferece "+ outro"; carregado depois, a
+     consulta acha `undefined` e o campo volta a oferecer criar em cima de uma
+     lista que nao carregou. */
+  for (const [nome, txt] of TELAS) {
+    const a = txt.indexOf('leitura-estado.js');
+    const b = txt.indexOf('catalogo.js');
+    ok(a >= 0 && b >= 0 && a < b,
+       'em ' + nome + ' a faixa e carregada ANTES do catalogo');
+  }
+
+  /* OS DISFARCES ANTIGOS NAO VOLTAM. Cada um destes e uma das tres formas de
+     silencio que o relato atravessou. */
+  /* O ALVO E O LACO DE ATUALIZACAO, e nao qualquer `catch (_) {}` do arquivo.
+     A primeira versao desta invariante varria o GANTT inteiro e reprovava 13
+     ocorrencias legitimas — `JSON.parse` de cache, guarda de `sessionStorage`,
+     leitura de `localStorage`. Engolir erro ao ler uma preferencia local nao e o
+     mesmo que engolir a falha de ler os DADOS: a primeira nao muda o que a tela
+     afirma, a segunda deixa a tela afirmando o estado de meia hora atras.
+     Recortar a funcao e o que faz a invariante falar do defeito, e nao do
+     idioma. */
+  const laco = corpo(GANTT, 'async function ganttCheckUpdates(');
+  ok(!!laco, 'o laco de atualizacao do gantt foi encontrado');
+  /* E SEM OS COMENTARIOS, pela SEGUNDA vez nesta sessao. O comentario novo do
+     `catch` explica "o laco engolia tudo (`catch(_) {}`)" — e o regex casou com a
+     EXPLICACAO, aprovando o defeito que ele descreve. Aconteceu igual com
+     `Math.floor(idx / 5)` no rotulo de sprint. `semComentario` ja existe neste
+     arquivo por esse motivo; usar o texto cru e que era o erro. */
+  ok(!!laco && !/catch\s*\(_\)\s*\{\s*\}/.test(semComentario(laco)),
+     'e ele nao engole mais a falha em silencio');
+  ok(!!laco && /LEITURA\.falhou\(/.test(laco),
+     'o laco avisa quando a checagem falha — 30s de silencio por rodada era o pior caso');
+  ok(!/catch\s*\(e\)\s*\{\s*console\.warn\('loadData error', e\);\s*\}/.test(DEV),
+     'o dev nao tem mais um catch que so escreve no console');
+  ok(!/if \(!res\.ok\) \{ if \(useApi\) throw new Error\(res\.status\); return; \}/.test(DEV),
+     'e nao volta em silencio quando a resposta nao e ok no modo senha');
+})();
+
 /* ═══ O CHIP DE ETAPA DO GANTT TEM ONDE ATERRISSAR ═══════════════════
 
    O relato foi "em gantt tem um filtro backlog, nao consigo usar". O chip

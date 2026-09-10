@@ -164,7 +164,28 @@
         '</option>';
     });
     if (sisAtual) html += '</optgroup>';
-    if (opts.outro) html += '<option value="__novo__">+ outro (escrever)…</option>';
+    /* ── "+ OUTRO" SAI QUANDO A LISTA NÃO CARREGOU ──────────────────────────
+       `resolve` só evita tema duplicado comparando o nome digitado com esta
+       lista. Com a lista VAZIA a comparação não acha nada, e o campo livre cria
+       um tema novo — não por escolha de ninguém, mas porque a checagem estava
+       cega.
+
+       ACONTECEU: a leitura dos dados falhou, o select apareceu vazio, e quem
+       precisava classificar em "AXCred - Cobrança" digitou "Cobrança". Nasceu um
+       tema solto na raiz ao lado de um que já existia no servidor. A tela
+       convidou a recriar o que ela não conseguia mostrar.
+
+       O ANTÍDOTO NÃO É ESCONDER O CAMPO SEMPRE: lista vazia de verdade (base
+       nova) é caso legítimo de escrever o primeiro nome. Só quando `LEITURA`
+       diz que a última leitura FALHOU é que a ausência da lista não significa
+       "não há temas", e sim "não sei quais são". Nesse caso a opção é trocada
+       por uma explicação, desabilitada — o select continua contando o que houve
+       em vez de ficar simplesmente curto. */
+    var cego = lista.length === 0 && !!(window.LEITURA && window.LEITURA.incompleta());
+    if (opts.outro && !cego) html += '<option value="__novo__">+ outro (escrever)…</option>';
+    if (opts.outro && cego) {
+      html += '<option value="" disabled>— a lista não carregou; recarregue antes de criar —</option>';
+    }
     return html;
   }
 
@@ -225,6 +246,14 @@
       return String(t.nome || '').toLowerCase() === nome.toLowerCase();
     });
     if (achou) return achou.id;
+    /* A TRANCA, e não só a porta. `opcoesHTML` deixa de OFERECER "+ outro"
+       quando a leitura falhou, mas o select pode já estar montado de antes com
+       `__novo__` selecionado — a faixa aparece depois de um poll que falhou, e o
+       formulário aberto não se remonta. Criar um tema aqui, sem lista para
+       comparar, é o que produziu o `Cobrança` duplicado. */
+    if ((temas || []).length === 0 && window.LEITURA && window.LEITURA.incompleta()) {
+      return fallbackId || '';
+    }
     return criar ? criar(nome) : (fallbackId || '');
   }
 

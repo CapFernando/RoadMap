@@ -1039,7 +1039,7 @@
     }
     #conditional-fields { }
   </style>
-  <link rel="stylesheet" href="tema.css?v=ce460334a1">
+  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
@@ -1048,8 +1048,9 @@
 <script src="capacidade.js?v=3769a13468"></script>
 <script src="apresentacao.js?v=5bc88a3cb9"></script>
 <script src="relatorio-ppt.js?v=ab9c8286e2"></script>
+<script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="catalogo.js?v=75d59802ea"></script>
+<script src="catalogo.js?v=b5aed8c999"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -2474,12 +2475,33 @@ async function loadFromGitHub(silent) {
     // voltasse depois, a pessoa veria a lista sem a demanda dela por um instante
     // e concluiria de novo que tinha perdido.
     rascunhoRestaurar();
+    if (window.LEITURA) LEITURA.ok();
     renderAll();
     restoreLastTab();
     // Abre o card que veio no endereco. So DEPOIS de os dados carregarem: antes
     // disso `state.melhorias` esta vazio e o codigo nao acharia nada.
     rotaAbrirDaURL();
   } catch (e) {
+    /* ── A LEITURA FALHOU, E A TELA TEM DE DIZER ISSO ────────────────────────
+       Aqui havia `toast(e.message)` seguido de `renderAll()`. O toast desaparece
+       em segundos e o `renderAll` redesenha com o ESTADO INICIAL — temas e
+       desenvolvedores vazios. O resultado era uma tela que parece funcionando e
+       esta vazia: o relato foi "nao esta aparecendo os modulos" e "nem a lista de
+       dev", dois minutos depois do aviso ter sumido.
+
+       E nao era so falta de informacao. Com `state.temas` vazio, a checagem de
+       duplicata de `catalogoResolve` fica cega e o campo "+ outro (escrever)"
+       cria tema novo: nasceu um `Cobranca` na raiz ao lado do `AXCred - Cobranca`
+       que o servidor ja tinha.
+
+       `silent` (o caminho do polling) NAO silencia mais a faixa. Ele existe para
+       nao encher a tela de toast a cada 30 segundos, e isso continua valendo — o
+       que ele nao pode e esconder que o estado na tela ficou velho. Ver
+       `leitura-estado.js`. */
+    if (window.LEITURA) {
+      LEITURA.aoTentarDeNovo(function () { return loadFromGitHub(true); });
+      LEITURA.falhou(e.message);
+    }
     if (!silent) toast(e.message, 'err');
     renderAll();
     restoreLastTab();

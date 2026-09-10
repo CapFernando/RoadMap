@@ -206,3 +206,44 @@ html.trocando-tema, html.trocando-tema *, html.trocando-tema *::before, html.tro
 /* Clicavel no Planejamento: o chip filtra a linha do tempo pelo dev. */
 button.prod-medalha { cursor:pointer; font-family:inherit; }
 button.prod-medalha:hover { filter:brightness(1.14); }
+
+/* ─── A FAIXA DE "OS DADOS NÃO FORAM LIDOS" ─────────────────────────────────
+   Ver `leitura-estado.js` para o motivo de ela existir. Aqui só a aparência.
+
+   FIXA NO TOPO E COM `z-index` ALTO: ela responde "em que estado esta tela
+   está", e uma faixa que rola para fora da vista deixa de responder isso
+   justamente quando a pessoa desce até o formulário — que é onde o dado que
+   falta faz diferença.
+
+   VERMELHO DO TEMA, e não hex solto: `--red-bg`/`--red-tx` já existem com par
+   claro e escuro. As duas telas medem acima de 4.5:1 — o texto aqui é o aviso
+   inteiro, não uma etiqueta, e ilegível ele não avisa nada. */
+#leitura-faixa {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 14px;
+  background: var(--red-bg, #3A1414);
+  color: var(--red-tx, #FFD8D8);
+  border-bottom: 2px solid var(--red, #CC3232);
+  font-size: 13px; line-height: 1.45;
+}
+/* O MOTIVO SE SEPARA POR TAMANHO, e não por cor.
+   A primeira versão punha `color: var(--red)` nele e a medição deu 3,15:1 sobre
+   o fundo da faixa — abaixo do mínimo de 4,5:1 para texto pequeno. Era o mesmo
+   erro de sempre: usar a cor de DESTAQUE como se fosse cor de texto secundário.
+   Esmaecer também está fora (ver a nota do `--esmaecido` acima), então sobra o
+   corpo da letra: 12px contra 13px do aviso, mesma cor, 12,45:1 nos dois temas.
+   O detalhe técnico (`HTTP 401`) não precisa saltar — precisa ser legível quando
+   alguém for procurá-lo. */
+#leitura-faixa .lf-motivo { font-size: 12px; }
+#leitura-faixa #lf-retry {
+  margin-left: auto;
+  background: transparent; color: inherit;
+  border: 1px solid currentColor; border-radius: 6px;
+  padding: 4px 12px; font: inherit; font-weight: 600; cursor: pointer;
+}
+#leitura-faixa #lf-retry:hover:not(:disabled) { filter: brightness(1.15); }
+#leitura-faixa #lf-retry:disabled { cursor: progress; }
+/* A faixa é fixa e cobriria o topo da página. Empurra o conteúdo para baixo
+   enquanto ela existe, em vez de deixá-la por cima do cabeçalho. */
+body:has(#leitura-faixa:not([style*="display: none"])) { padding-top: 46px; }
