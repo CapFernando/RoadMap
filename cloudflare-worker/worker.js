@@ -485,6 +485,14 @@ const HIST_CAMPOS = {
   link_issue:          'issue',
   link_pr:             'PR',
   link_milestone:      'milestone',
+  // A VERSAO E A PRODUCAO ENTRAM NO HISTORICO, e nao entraram depois: o comentario
+  // acima registra que campo novo fora desta lista muda em silencio, e este e o
+  // campo em que isso doeria mais. "Quando a AX-338 subiu para producao, e quem
+  // marcou" e a pergunta que o monitoramento de subida existe para responder — e
+  // ela vem do lote, sem ninguem digitando, o que torna o rastro a UNICA forma de
+  // reconstituir o que aconteceu.
+  versao:              'versao',
+  em_producao:         'producao',
   // A DEPENDENCIA ENTRA NO HISTORICO, e faltava. Ha seis demandas com
   // `parent_id` na base e NENHUM registro de quando cada vinculo foi criado —
   // "esta demanda ficou travada esperando qual outra, e desde quando" nao tinha
@@ -3286,6 +3294,188 @@ export default {
       return json({ ok: true, alterado: mudou,
                     demanda: devVisao((atual.melhorias || []).find(x => x.id === alvo.id) || m,
                                       atual.temas || []) }, 200, headers);
+    }
+
+    /* ─── A SUBIDA PARA PRODUCAO, EM LOTE ────────────────────────────────────
+       Marca `versao` e `em_producao` em uma ou muitas demandas, pelo CODIGO.
+
+       ═══════════════════════════════════════════════════════════════════════
+       POR QUE EM LOTE, E POR QUE ISSO MUDA O DESENHO.
+
+       Uma subida leva DEZENAS de demandas de uma vez — a versao 1.4.2 sobe com
+       tudo o que entrou nela. Chamar `demanda-atualizar` numa laco pelo lado do
+       cliente daria um COMMIT POR DEMANDA no repositorio de dados, e cada um
+       relendo o arquivo: trinta demandas seriam trinta commits e trinta janelas
+       de corrida em que outra tela publica no meio e o `sha` muda.
+
+       Entao este endpoint LE UMA VEZ, aplica o lote inteiro em memoria, e GRAVA
+       UMA VEZ. Um commit por subida, que e a unidade real da operacao.
+
+       ═══════════════════════════════════════════════════════════════════════
+       SUCESSO PARCIAL E O MODELO CERTO AQUI, e nao tudo-ou-nada.
+
+       Um codigo errado na lista do pipeline nao pode reprovar uma subida que
+       aconteceu de verdade: a versao ESTA em producao, e recusar o lote inteiro
+       deixaria as vinte e nove corretas sem marca nenhuma. Cada item volta com o
+       seu proprio resultado, e o chamador sabe exatamente quais nao casaram.
+
+       O que NAO acontece parcialmente e a GRAVACAO: ou o commit vai, ou nada vai.
+
+       ═══════════════════════════════════════════════════════════════════════
+       QUEM PODE CHAMAR.
+
+       Tres portas, e a terceira existe por causa do pipeline:
+
+         - token de sessao de admin ou dev (a pessoa, pela tela)
+         - a senha compartilhada de admin ou dev (legado)
+         - `chave` igual ao secret DEPLOY_CHAVE
+
+       A CHAVE DEDICADA e o ponto. Um pipeline nao pode usar token de sessao, que
+       vale 12 horas e morre; e por a senha de admin num runner de CI daria ao
+       pipeline poder de apagar demanda, fechar mes e mexer em conta. Esta chave
+       abre SO esta rota. Se o secret nao existir, a porta nao existe — nada a
+       desativar depois.
+
+           npx wrangler secret put DEPLOY_CHAVE
+
+       ═══════════════════════════════════════════════════════════════════════
+       O QUE ELE NAO FAZ.
+
+       Nao move etapa. Subir para producao e um FATO sobre o codigo, e concluir a
+       demanda e uma DECISAO do PM/PO — a mesma separacao que `demanda-atualizar`
+       ja mantem ("etapa, prazo, dev e pontos ficam FORA: sao decisao de
+       planejamento"). Uma demanda pode estar em producao e ainda em validacao,
+       e e justamente esse estado que se quer poder ver. */
+    if (body.action === 'deploy-versao') {
+      const chaveDeploy = String(env.DEPLOY_CHAVE || '').trim();
+      const chaveDada = String(body.chave || '').trim();
+      const porChave = !!chaveDeploy && chaveDada === chaveDeploy;
+      let ident = null;
+      if (!porChave) {
+        const perm = await exigePapel(env, body, ['dev', 'admin'], headers);
+        if (perm.recusa) return perm.recusa;
+        ident = perm.ident;
+      }
+
+      /* UM ITEM OU MUITOS, na mesma rota. O pipeline manda `itens`; a tela manda
+         um. Duas rotas para a mesma escrita seriam duas validacoes divergindo. */
+      const brutos = Array.isArray(body.itens) ? body.itens
+        : (body.codigo ? [{ codigo: body.codigo, versao: body.versao,
+                            producao: body.producao }] : []);
+      if (!brutos.length) {
+        return json({ error: 'itens',
+                      detail: 'Mande "itens": [{codigo, versao, producao}] ou um "codigo" so.' },
+                    400, headers);
+      }
+      const TETO = 500;
+      if (brutos.length > TETO) {
+        return json({ error: 'itens',
+                      detail: 'Maximo de ' + TETO + ' itens por chamada. Quebre o lote.' },
+                    400, headers);
+      }
+
+      const normCod = (c) => String(c || '').trim().toUpperCase();
+      const resultados = [];
+      const pedidos = [];
+      for (const it of brutos) {
+        const cod = normCod(it && it.codigo);
+        if (!cod) { resultados.push({ codigo: '', ok: false, erro: 'codigo_vazio' }); continue; }
+        /* `versao` E TEXTO, e nao numero com formato imposto. O DevOps escreve
+           o que a esteira dele gera — "1.4.2", "2026.09.10-rc1", um sha curto.
+           Impor semver aqui recusaria a subida de verdade por causa de um
+           palpite nosso sobre como eles versionam. */
+        const ver = it && it.versao !== undefined ? limpaTexto(it.versao, 40) : undefined;
+        /* `producao` SO ACEITA BOOLEANO DE VERDADE. Um `"false"` em texto vindo
+           de shell mal montado viraria `true` no teste de verdade, e a tela
+           passaria a dizer que subiu o que nao subiu. Recusar e mais seguro do
+           que adivinhar. */
+        let prod;
+        if (it && it.producao !== undefined) {
+          if (typeof it.producao !== 'boolean') {
+            resultados.push({ codigo: cod, ok: false, erro: 'producao_nao_booleana',
+                              detail: 'Use true ou false, sem aspas.' });
+            continue;
+          }
+          prod = it.producao;
+        }
+        if (ver === undefined && prod === undefined) {
+          resultados.push({ codigo: cod, ok: false, erro: 'nada_a_mudar',
+                            detail: 'Informe "versao", "producao", ou os dois.' });
+          continue;
+        }
+        pedidos.push({ cod, ver, prod });
+      }
+
+      if (!pedidos.length) {
+        return json({ ok: false, gravado: false, resultados }, 400, headers);
+      }
+
+      // Le UMA vez, com o sha, para gravar sobre a versao corrente.
+      const metaRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+      if (!metaRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const file = await metaRes.json();
+      const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const atual = JSON.parse(await rawRes.text());
+      /* O RETRATO INTOCADO, para o historico. `registraHistorico(novo, antigo,
+         ...)` compara os dois objetos campo por campo — sem a copia feita ANTES
+         de mexer, ele compararia o objeto consigo mesmo e a subida entraria sem
+         rastro. O caminho do `demanda-atualizar` resolve isso relendo o arquivo
+         duas vezes; a copia local e a mesma coisa sem a segunda ida a rede. */
+      const base = JSON.parse(JSON.stringify(atual));
+      const lista = atual.melhorias || [];
+
+      const quem = porChave ? 'deploy'
+        : ((ident && ident.usuario &&
+            (ident.usuario.nome_demandas || ident.usuario.nome)) || 'admin');
+      const agora = new Date().toISOString();
+
+      let mexidas = 0;
+
+      for (const p of pedidos) {
+        const m = lista.find(x => normCod(x.codigo) === p.cod);
+        if (!m) {
+          resultados.push({ codigo: p.cod, ok: false, erro: 'nao_encontrada' });
+          continue;
+        }
+        if (p.ver !== undefined) m.versao = p.ver;
+        if (p.prod !== undefined) {
+          const eraProd = !!m.em_producao;
+          m.em_producao = p.prod;
+          /* A DATA E O AUTOR SO SE MEXEM NA TRANSICAO. Reenviar o mesmo lote —
+             coisa que pipeline faz ao repetir um job — nao pode reescrever
+             "subiu agora" numa demanda que subiu ontem. */
+          if (p.prod && !eraProd) { m.producao_em = agora; m.producao_por = quem; }
+          if (!p.prod && eraProd) { m.producao_em = ''; m.producao_por = ''; }
+        }
+        mexidas++;
+        resultados.push({ codigo: p.cod, ok: true, id: m.id,
+                          versao: m.versao || '', em_producao: !!m.em_producao });
+      }
+
+      if (!mexidas) {
+        // Nenhum codigo casou: nada a gravar, e o chamador ve por item o motivo.
+        return json({ ok: false, gravado: false, resultados }, 404, headers);
+      }
+
+      registraHistorico(atual, base, quem, 'deploy');
+      atual.atualizado_em = agora;
+      const versoes = [...new Set(pedidos.map(p => p.ver).filter(Boolean))];
+      const msg = 'deploy: ' + mexidas + ' demanda(s)' +
+                  (versoes.length === 1 ? ' na versao ' + versoes[0] : '') +
+                  ' por ' + quem;
+      const put = await gh('contents/' + FILE_PATH, {
+        method: 'PUT',
+        body: JSON.stringify({ message: msg, content: toB64(JSON.stringify(atual)),
+                               sha: file.sha }),
+      });
+      if (!put.ok) {
+        const t = await put.text();
+        return json({ error: 'Falha ao salvar', detail: t.slice(0, 200),
+                      gravado: false, resultados }, 502, headers);
+      }
+      return json({ ok: true, gravado: true, alteradas: mexidas, resultados }, 200, headers);
     }
 
     if (body.action === 'projeto-novo') {

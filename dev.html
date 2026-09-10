@@ -423,6 +423,12 @@
     .empty-col { color:var(--text3); font-size:12px; text-align:center; padding:20px 0; }
 
     /* ── DEPENDÊNCIAS ── */
+    /* NO AR. Verde, e nao azul: azul ja e etapa nesta tela. */
+    .d-prod {
+      font-size:11px; font-weight:700; padding:1px 6px; border-radius:4px;
+      background:var(--green-bg, #1E4208); color:var(--green-tx, #B2E07A);
+      white-space:nowrap;
+    }
     .kcard-parent-info { font-size:11px; color:var(--purple-tx); background:var(--purple-bg); border-radius:4px; padding:3px 8px; margin-bottom:6px; display:inline-block; }
     .kcard-dep-section { border-top:1px solid var(--border); margin-top:8px; padding-top:8px; }
     .dep-row { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text2); padding:4px 0; flex-wrap:wrap; border-bottom:1px solid var(--border); }
@@ -1025,7 +1031,11 @@ const GITHUB_USER  = 'CapFernando';
 const GITHUB_REPO  = 'RoadMap';
 const DATA_PATH    = 'data/melhorias.json';
 const API_URL = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
-const RAW_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
+/* `RAW_URL` SAIU. Ele apontava para o arquivo no repositorio PUBLICO, que nao
+   existe mais desde que os dados foram para o privado: 404, sempre. A constante
+   sem uso era um convite a religar o endereco morto — e foi exatamente por esse
+   caminho que a tela do dev passou meses lendo um 404 em silencio. A unica porta
+   de leitura e o Worker, via `lerDados`. */
 
 // Worker que guarda o token do GitHub. Com ele, o dev grava sem token na máquina.
 const ADMIN_PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
@@ -1298,6 +1308,26 @@ function epFuncoesHTML() {
              '<code>link_pr</code> aceita vários separados por espaço.',
       corpo: '{"action":"demanda-atualizar","token":"TOKEN","codigo":"' + cod +
         '","link_repo":"audaxcapitalsa/AXCRED-DJANGO","link_pr":"712","link_issue":"683","horas_realizadas":6}',
+    },
+    {
+      acao: 'deploy-versao',
+      o_que: 'Marca a <b>versao</b> e se a demanda esta <b>em producao</b> \u2014 uma ou ' +
+             'muitas de uma vez, pelo codigo. Feito para a esteira do DevOps: uma ' +
+             'subida leva dezenas de demandas, e este endpoint le e grava UMA vez ' +
+             'para o lote inteiro (um commit por subida, e nao um por demanda). ' +
+             '<b>Sucesso parcial</b>: cada item volta com o seu resultado, e um ' +
+             'codigo errado na lista nao reprova a subida que aconteceu de verdade. ' +
+             '<code>producao</code> aceita so <code>true</code>/<code>false</code> ' +
+             'sem aspas \u2014 um <code>"false"</code> em texto seria lido como ' +
+             'verdadeiro, e a tela passaria a dizer que subiu o que nao subiu. ' +
+             '<b>Nao move etapa</b>: subir e um fato sobre o codigo, concluir e ' +
+             'decisao do PM/PO, e uma demanda pode estar em producao e ainda em ' +
+             'validacao. Alem do <code>token</code>, aceita uma chave dedicada de ' +
+             'pipeline (<code>chave</code>) que abre <b>so</b> esta rota \u2014 pedir ao ' +
+             'PM/PO para configurar.',
+      corpo: '{"action":"deploy-versao","token":"TOKEN","itens":[' +
+        '{"codigo":"' + cod + '","versao":"1.4.2","producao":true},' +
+        '{"codigo":"AX-340","versao":"1.4.2","producao":true}]}',
     },
     {
       acao: 'demanda-entregar',
@@ -2134,6 +2164,20 @@ function verDemandaPorNumero() {
     linha('Pontos', m.poker_pontos == null ? '' : String(m.poker_pontos)) +
     linha('Descrição', escAttr(m.descricao || '').replace(/\n/g, '<br>')) +
     linha('Implementação', escAttr(m.implementacao || '').replace(/\n/g, '<br>')) +
+    /* VERSAO E PRODUCAO, logo antes das referencias do GitHub — e a mesma
+       pergunta em outra ponta: os links dizem ONDE o codigo esta, e isto diz se
+       ele chegou ao ar. O dev le, e nao edita: quem marca e a esteira
+       (`deploy-versao`) ou o PM/PO pela tela do admin. */
+    linha('Versao', m.versao ? escAttr(m.versao) : '') +
+    linha('Em producao', m.em_producao
+      ? '<span class="d-prod">\u25b2 no ar</span>' +
+        (m.producao_em
+          ? ' <span style="color:var(--text3);font-size:11.5px">desde ' +
+            escAttr(new Date(m.producao_em).toLocaleString('pt-BR',
+              { dateStyle: 'short', timeStyle: 'short' })) +
+            (m.producao_por ? ' \u00b7 ' + escAttr(m.producao_por) : '') + '</span>'
+          : '')
+      : (m.versao ? '<i style="color:var(--text3)">ainda nao</i>' : '')) +
     [['link_issue', 'Issue'], ['link_pr', 'Pull request'], ['link_milestone', 'Milestone']]
       .map(([campo, rot]) => m[campo]
         ? linha(rot, '<a href="' + escAttr(m[campo]) + '" target="_blank" rel="noopener" ' +
@@ -2232,10 +2276,25 @@ async function lerDados(permitirCache, jaTentou) {
   } catch (e) {
     if (e && /nao autorizado/i.test(e.message)) throw e;
   }
-  if (!permitirCache) throw new Error('Nao foi possivel ler os dados atualizados. Tente novamente.');
-  const r2 = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-  if (!r2.ok) throw new Error('Falha ao ler dados (HTTP ' + r2.status + ')');
-  return r2.json();
+  /* ── O FALLBACK PUBLICO MORREU, E ELE ESTAVA MENTINDO O MOTIVO ────────────
+     Aqui havia uma leitura de `RAW_URL` —
+     `raw.githubusercontent.com/CapFernando/RoadMap/main/data/melhorias.json` —
+     como ultimo recurso. Os dados moram no repositorio PRIVADO e sao servidos
+     SO pelo Worker: aquele endereco responde 404, sempre. Conferido.
+
+     O problema nao era o fallback ser inutil, era ele TROCAR O MOTIVO. Uma falha
+     de verdade no Worker (502, rede, timeout) caia aqui e saia como "Falha ao ler
+     dados (HTTP 404)" — e foi esse 404 que apareceu na faixa para o dev, sobre um
+     erro que nao era 404 nenhum. Diagnosticar com o motivo errado na tela e pior
+     do que nao ter fallback.
+
+     Agora o erro que chega a faixa e o que aconteceu. `permitirCache` continua no
+     contrato porque as duas intencoes seguem diferentes — abrir a tela aceita
+     dado de minutos atras, gravar nunca —, e a distincao volta a valer no dia em
+     que houver um cache de verdade para servir. */
+  throw new Error(permitirCache
+    ? 'Nao foi possivel ler os dados. Tente de novo em instantes.'
+    : 'Nao foi possivel ler os dados atualizados. Tente novamente.');
 }
 
 async function ghReadRaw(token) {
@@ -2248,23 +2307,36 @@ async function ghReadRaw(token) {
 
 async function loadData(useApi = false) {
   try {
-    const url = useApi ? API_URL + '?t=' + Date.now() : RAW_URL + '?t=' + Date.now();
-    const opts = useApi
-      ? { cache:'no-store', headers:{ Accept:'application/vnd.github.v3+json' } }
-      : { cache:'no-store' };
-    const res = await fetch(url, opts);
-    /* NAO-OK NO MODO SENHA SAIA EM SILENCIO. O `return` seco deixava a tela com
-       o que estivesse em memoria — vazio, na primeira carga — sem erro, sem
-       aviso e sem `applyData`. Agora ele levanta como o outro modo e cai na
-       faixa do `catch`. */
-    if (!res.ok) throw new Error('HTTP ' + res.status);
     let data;
     if (useApi) {
+      const res = await fetch(API_URL + '?t=' + Date.now(),
+        { cache:'no-store', headers:{ Accept:'application/vnd.github.v3+json' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
       fileSha = json.sha;
       data = await ghReadRaw(runtimeToken);
     } else {
-      data = await res.json();
+      /* ── O MODO SENHA PASSA PELO WORKER, e nao pela URL raw ────────────────
+         Isto lia `RAW_URL` — `raw.githubusercontent.com/CapFernando/RoadMap/`
+         — e os dados moram no repositorio PRIVADO, servidos so pelo Worker.
+         O arquivo naquele endereco nao existe: 404, sempre.
+
+         O dev reportou exatamente isso, e foi a faixa de leitura que trouxe o
+         numero a tela: "os dados nao foram lidos ... HTTP 404". Antes da faixa,
+         este caminho falhava com um `return` seco e a tela ficava com o que
+         houvesse em memoria — vazio, na primeira carga. Um painel do dev em
+         branco, sem erro nenhum.
+
+         `lerDados` JA EXISTIA NESTE ARQUIVO, com o caminho certo, e era usado
+         pela gravacao e pelo poll. So a carga da tela tinha ficado para tras —
+         duas leituras no mesmo arquivo, e a que a tela usava era a morta. E o
+         `admin.html` ja fazia certo ("modo senha: leitura publica, sem token"
+         chama `lerDados(true)`).
+
+         `permitirCache: true` como no admin: aqui a pessoa esta ABRINDO a tela,
+         e um dado de minutos atras e melhor do que tela vazia. A gravacao
+         continua usando `lerDados(false)`, que nunca aceita cache. */
+      data = await lerDados(true);
     }
     applyData(data);
     if (window.LEITURA) LEITURA.ok();

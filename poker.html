@@ -513,7 +513,11 @@ const PROXY_URL   = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.de
 const GITHUB_USER = 'CapFernando';
 const GITHUB_REPO = 'RoadMap';
 const DATA_PATH   = 'data/melhorias.json';
-const RAW_URL     = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
+/* `RAW_URL` SAIU. Ele apontava para o arquivo no repositorio PUBLICO, que nao
+   existe mais desde que os dados foram para o privado: 404, sempre. A constante
+   sem uso era um convite a religar o endereco morto — e foi exatamente por esse
+   caminho que a tela do dev passou meses lendo um 404 em silencio. A unica porta
+   de leitura e o Worker, via `lerDados`. */
 const POLL_MS     = 1500;
 // Mesmo baralho do Worker (POKER_CARTAS, sem o '?'): usado para sugerir a carta
 // mais proxima da media.
@@ -653,10 +657,25 @@ async function lerDados(permitirCache, jaTentou) {
   } catch (e) {
     if (e && /nao autorizado/i.test(e.message)) throw e;
   }
-  if (!permitirCache) throw new Error('Nao foi possivel ler os dados atualizados. Tente novamente.');
-  const r2 = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-  if (!r2.ok) throw new Error('Falha ao ler dados (HTTP ' + r2.status + ')');
-  return r2.json();
+  /* ── O FALLBACK PUBLICO MORREU, E ELE ESTAVA MENTINDO O MOTIVO ────────────
+     Aqui havia uma leitura de `RAW_URL` —
+     `raw.githubusercontent.com/CapFernando/RoadMap/main/data/melhorias.json` —
+     como ultimo recurso. Os dados moram no repositorio PRIVADO e sao servidos
+     SO pelo Worker: aquele endereco responde 404, sempre. Conferido.
+
+     O problema nao era o fallback ser inutil, era ele TROCAR O MOTIVO. Uma falha
+     de verdade no Worker (502, rede, timeout) caia aqui e saia como "Falha ao ler
+     dados (HTTP 404)" — e foi esse 404 que apareceu na faixa para o dev, sobre um
+     erro que nao era 404 nenhum. Diagnosticar com o motivo errado na tela e pior
+     do que nao ter fallback.
+
+     Agora o erro que chega a faixa e o que aconteceu. `permitirCache` continua no
+     contrato porque as duas intencoes seguem diferentes — abrir a tela aceita
+     dado de minutos atras, gravar nunca —, e a distincao volta a valer no dia em
+     que houver um cache de verdade para servir. */
+  throw new Error(permitirCache
+    ? 'Nao foi possivel ler os dados. Tente de novo em instantes.'
+    : 'Nao foi possivel ler os dados atualizados. Tente novamente.');
 }
 
 // A fila vem por `poker-fila`, autorizada pelo CODIGO DA SALA — nao pela senha de

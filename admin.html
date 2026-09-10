@@ -471,6 +471,18 @@
     /* O AVISO DE QUE A BUSCA IGNOROU O PERIODO. Cor, e nao opacidade: este
        projeto parou de esmaecer texto (ver a nota do --esmaecido em tema.css). */
     .filter-bar .fb-nota { color:var(--text2); }
+    /* ── NO AR ─────────────────────────────────────────────────────────────
+       Verde, e nao azul: azul ja e "planejado" nesta tela, e duas coisas
+       diferentes na mesma cor e o que faz a regua de chips deixar de ser lida.
+       Par `--green-bg`/`--green-tx`, que existe nos dois temas com contraste. */
+    .kb-prod {
+      font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px;
+      background:var(--green-bg, #1E4208); color:var(--green-tx, #B2E07A);
+      white-space:nowrap; cursor:help;
+    }
+    /* Quando e quem marcou. Texto, e nao campo: nao se digita a data da subida. */
+    .m-prod-quando { font-size:11.5px; color:var(--text2); margin-top:6px; }
+    .m-prod-check { cursor:pointer; }
     /* O RESULTADO QUE EXISTE E NAO CABE EM COLUNA — a mesclada. Quebra a linha
        da barra inteira (`flex-basis:100%`) porque e frase, e nao rotulo: espremer
        entre os selects a cortaria no primeiro titulo comprido. */
@@ -1879,6 +1891,28 @@
         </div>
         <div id="m-link-chips" style="margin-top:7px"></div>
       </div>
+      <!-- ── VERSAO E PRODUCAO ────────────────────────────────────────────────
+           Fica logo abaixo da referencia no GitHub porque e a continuacao da
+           mesma pergunta: o bloco de cima diz ONDE o codigo esta (issue, PR,
+           milestone) e este diz SE ele chegou ao ar, e em que versao.
+
+           O campo e editavel a mao E alimentado em lote pelo `deploy-versao` —
+           a esteira do DevOps marca a subida, e quem planeja pode corrigir. -->
+      <div class="form-group">
+        <label>Versão e produção
+          <small style="font-weight:400;color:var(--text3)">— alimentado pela esteira
+          (<code>deploy-versao</code>) ou escrito aqui</small>
+        </label>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center">
+          <input type="text" id="m-versao" placeholder="Versão: 1.4.2"
+                 title="A versão em que esta demanda entrou. Texto livre: 1.4.2, 2026.09.10-rc1, um sha curto." />
+          <label class="m-prod-check" style="display:flex;align-items:center;gap:7px;font-weight:400;white-space:nowrap">
+            <input type="checkbox" id="m-em-producao" style="width:auto;margin:0" />
+            <span>Em produção</span>
+          </label>
+        </div>
+        <div id="m-prod-quando" class="m-prod-quando"></div>
+      </div>
       <!-- Anexos: incluir arquivo direto do card, para facilitar a explicação -->
       <div class="form-group">
         <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
@@ -2074,7 +2108,11 @@ const GITHUB_USER   = 'CapFernando';
 const GITHUB_REPO   = 'RoadMap';
 const DATA_PATH     = 'data/melhorias.json';
 const API_URL       = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`;
-const RAW_URL       = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${DATA_PATH}`;
+/* `RAW_URL` SAIU. Ele apontava para o arquivo no repositorio PUBLICO, que nao
+   existe mais desde que os dados foram para o privado: 404, sempre. A constante
+   sem uso era um convite a religar o endereco morto — e foi exatamente por esse
+   caminho que a tela do dev passou meses lendo um 404 em silencio. A unica porta
+   de leitura e o Worker, via `lerDados`. */
 // Worker que guarda token + senha. Com ele, o Admin loga só com senha (sem token).
 const ADMIN_PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
 let _adminPw = sessionStorage.getItem('rm_admin_pw') || '';
@@ -2439,10 +2477,25 @@ async function lerDados(permitirCache, jaTentou) {
   } catch (e) {
     if (e && /nao autorizado/i.test(e.message)) throw e;
   }
-  if (!permitirCache) throw new Error('Nao foi possivel ler os dados atualizados. Tente novamente.');
-  const r2 = await fetch(RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-  if (!r2.ok) throw new Error('Falha ao ler dados (HTTP ' + r2.status + ')');
-  return r2.json();
+  /* ── O FALLBACK PUBLICO MORREU, E ELE ESTAVA MENTINDO O MOTIVO ────────────
+     Aqui havia uma leitura de `RAW_URL` —
+     `raw.githubusercontent.com/CapFernando/RoadMap/main/data/melhorias.json` —
+     como ultimo recurso. Os dados moram no repositorio PRIVADO e sao servidos
+     SO pelo Worker: aquele endereco responde 404, sempre. Conferido.
+
+     O problema nao era o fallback ser inutil, era ele TROCAR O MOTIVO. Uma falha
+     de verdade no Worker (502, rede, timeout) caia aqui e saia como "Falha ao ler
+     dados (HTTP 404)" — e foi esse 404 que apareceu na faixa para o dev, sobre um
+     erro que nao era 404 nenhum. Diagnosticar com o motivo errado na tela e pior
+     do que nao ter fallback.
+
+     Agora o erro que chega a faixa e o que aconteceu. `permitirCache` continua no
+     contrato porque as duas intencoes seguem diferentes — abrir a tela aceita
+     dado de minutos atras, gravar nunca —, e a distincao volta a valer no dia em
+     que houver um cache de verdade para servir. */
+  throw new Error(permitirCache
+    ? 'Nao foi possivel ler os dados. Tente de novo em instantes.'
+    : 'Nao foi possivel ler os dados atualizados. Tente novamente.');
 }
 
 async function ghReadRaw(token) {
@@ -3261,6 +3314,12 @@ function renderMelhorias() {
         }
         sub += (sub ? ' · ' : '') + `<span style="${cor}">Entrega: ${formatDate(m.entrega)}${tag}</span>`;
       }
+      /* NO AR — a marca que responde "isso ja chegou ao usuario?".
+         Ela e a razao de o campo existir: sem marca no cartao, saber que a
+         AX-338 subiu exigiria abrir a demanda uma por uma. */
+      const prodBadge = m.em_producao
+        ? `<span class="kb-prod" title="Em produção${m.versao ? ' na versão ' + esc(m.versao) : ''}${m.producao_em ? ' desde ' + formatDate(String(m.producao_em).slice(0, 10)) : ''}">▲ no ar${m.versao ? ' ' + esc(m.versao) : ''}</span>`
+        : '';
       // Dependência de outro card
       const parentM = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
       /* O CORTE PRECISA APARECER. Antes o titulo era cortado em 30 caracteres
@@ -3285,7 +3344,7 @@ function renderMelhorias() {
       return `<div class="card${estaPausado(m) ? ' card-pausada' : ''}">
         <div class="card-info">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <div class="card-nome">${esc(m.titulo)}</div>${badge}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}
+            <div class="card-nome">${esc(m.titulo)}</div>${badge}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}${prodBadge}
           </div>
           ${sub ? `<div class="card-sub">${sub}</div>` : ''}
           ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${esc(m.descricao.substring(0,120))}${m.descricao.length>120?'…':''}</div>` : ''}
@@ -8689,6 +8748,22 @@ function openModalMelhoria(id) {
   if (window.ghLinkPreenche) ghLinkPreenche('m', m, state.melhorias);
   const mChips = document.getElementById('m-link-chips');
   if (mChips && window.ghLinkChips) mChips.innerHTML = ghLinkChips(m || {});
+  document.getElementById('m-versao').value = m?.versao || '';
+  document.getElementById('m-em-producao').checked = !!m?.em_producao;
+  /* QUANDO E QUEM, EM TEXTO E NAO EM CAMPO. Os dois sao escritos pelo Worker (a
+     esteira, ou esta tela ao marcar) e nao se digitam: um campo editavel para
+     "quando subiu" convidaria a inventar a data da subida, que e exatamente o
+     dado que o monitoramento existe para ter certo. */
+  const mQuando = document.getElementById('m-prod-quando');
+  if (mQuando) {
+    mQuando.textContent = (m?.em_producao && m?.producao_em)
+      /* `uQuando` E NAO um `formatDateTime` — que eu chamei e NAO EXISTE neste
+         arquivo. O admin nao tem um formatador de data-e-hora global; tem tres
+         `toLocaleString` locais e este auxiliar, que ja trata o valor vazio. */
+      ? 'No ar desde ' + uQuando(m.producao_em) +
+        (m.producao_por ? ' · marcado por ' + m.producao_por : '')
+      : '';
+  }
   document.getElementById('m-estimativa').value      = m?.estimativa       || '';
   populateDevSelect(m?.dev || '');
   document.getElementById('m-prioridade').value      = m?.prioridade       || '';
@@ -9215,6 +9290,15 @@ async function saveMelhoria() {
     meses:               existing.meses || [],
     motivo_negacao:      sp === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
     implementacao:       document.getElementById('m-implementacao').value.trim(),
+    versao:              document.getElementById('m-versao').value.trim(),
+    em_producao:         document.getElementById('m-em-producao').checked,
+    /* `producao_em` E `producao_por` VEM DO `existing`, e nao de campo nenhum.
+       Eles sao escritos por quem marca — a esteira do DevOps pelo `deploy-versao`,
+       ou o Worker quando esta tela liga a caixa. Fora desta lista, salvar pela aba
+       Dados os APAGARIA: e a mesma armadilha que o comentario do `grill` e o da
+       validacao logo abaixo registram, e que ja aconteceu duas vezes nesta base. */
+    producao_em:         existing.producao_em  || '',
+    producao_por:        existing.producao_por || '',
     debito_tecnico:      document.getElementById('m-debito').checked,
     // Quando o card nasce de dentro de um projeto, o vinculo ja vem selecionado.
     projeto_id:          document.getElementById('m-projeto').value || _pjRetorno || '',

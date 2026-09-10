@@ -5416,6 +5416,180 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      String(CAPX.planejados({ status: 'estimada', poker_pontos: 13 })));
 })();
 
+/* ═══ A SUBIDA PARA PRODUCAO ─ VERSAO, MARCA E O LOTE ══════════════
+
+   O pedido: um campo abaixo da referencia no GitHub para a VERSAO e para dizer se
+   a demanda esta EM PRODUCAO, alimentado por um endpoint que aceita SUBIDA EM
+   LOTE pelo codigo (AX-000), recebendo a versao e true/false.
+
+   Tres coisas aqui nao sao detalhe:
+
+   1. O LOTE GRAVA UMA VEZ. Uma subida leva dezenas de demandas; um commit por
+      demanda seria trinta commits e trinta janelas de corrida no `sha`.
+   2. SUCESSO PARCIAL. Um codigo errado na lista do pipeline nao pode reprovar
+      uma subida que aconteceu — as outras 29 ficariam sem marca.
+   3. `producao` SO BOOLEANO. Um `"false"` em texto, de shell mal montado, viraria
+      `true` no teste de verdade, e a tela diria que subiu o que nao subiu.
+
+   A PROVA QUE EXECUTA o endpoint (com `gh` e `env` dublados) esta em
+   `prova-deploy.js`. Aqui ficam as invariantes de FIACAO — as que respondem "isto
+   esta ligado?", que e o que faltou quando o `demanda-procurar` subiu como codigo
+   morto por nao estar na lista branca. */
+(() => {
+  sec('A subida para producao');
+  const WK = lerTela('cloudflare-worker/worker.js');
+
+  ok(/body\.action === 'deploy-versao'/.test(WK), 'o endpoint existe no worker');
+
+  /* ─── ELE ROTEIA? — a licao do `demanda-procurar` ───────────────────
+
+     O comentario da lista branca no worker conta o caso: "o endpoint inteiro
+     subiu para producao como codigo morto, e a prova local nao pegou porque
+     extraia o BLOCO e o executava direto, passando por cima do roteamento".
+
+     A checagem aqui e por PROFUNDIDADE DE CHAVES: o `if` do `deploy-versao` tem
+     de estar no mesmo nivel do `projeto-novo`, que e um `if` de topo que
+     funciona. Se ele acabasse dentro do bloco dos cinco `action` de dev, ficaria
+     inalcancavel para a chave de pipeline — e o sintoma seria 403 para o DevOps
+     e nenhuma pista no codigo. */
+  {
+    const linhas = WK.split('\n');
+    const prof = (ate) => {
+      let d = 0;
+      for (let n = 0; n < ate; n++) for (const c of linhas[n]) {
+        if (c === '{') d++; else if (c === '}') d--;
+      }
+      return d;
+    };
+    const iDep = linhas.findIndex(l => l.includes("body.action === 'deploy-versao'"));
+    const iPrj = linhas.findIndex(l => l.includes("body.action === 'projeto-novo'"));
+    ok(iDep > 0 && iPrj > 0, 'os dois endpoints foram localizados no arquivo');
+    ok(prof(iDep) === prof(iPrj),
+       'o deploy-versao esta no MESMO nivel do projeto-novo, que roteia',
+       'deploy ' + prof(iDep) + ' vs projeto ' + prof(iPrj));
+    /* E NAO ESTA DENTRO do bloco dos cinco `action` de dev, que exige token de
+       pessoa — la a chave de pipeline nunca chegaria. */
+    const iBloco = linhas.findIndex(l => l.includes("if (['demandas-minhas'"));
+    ok(iBloco > 0 && prof(iDep) === prof(iBloco),
+       'e no mesmo nivel do bloco de dev, e nao aninhado nele');
+  }
+
+  const bloco = corpo(WK, "if (body.action === 'deploy-versao') {");
+  ok(!!bloco, 'o bloco do endpoint foi recortado');
+  if (!bloco) return;
+  const cod = semComentario(bloco);
+
+  /* ─── UMA LEITURA, UMA GRAVACAO ──────────────────────────── */
+  ok((cod.match(/method: 'PUT'/g) || []).length === 1,
+     'grava o arquivo UMA vez, e nao uma por demanda do lote');
+  ok(/for \(const p of pedidos\)/.test(cod),
+     'e aplica o lote inteiro em memoria antes de gravar');
+  /* O TETO E CONFERIDO ANTES DE LER O ARQUIVO. Um lote de dez mil itens nao pode
+     custar a leitura do JSON inteiro para depois ser recusado. */
+  ok(cod.indexOf('TETO') < cod.indexOf("gh('contents/"),
+     'o teto do lote e conferido ANTES da ida ao GitHub');
+
+  /* ─── SUCESSO PARCIAL ───────────────────────────────── */
+  ok(/resultados\.push\(\{ codigo: p\.cod, ok: false, erro: 'nao_encontrada' \}\)/.test(cod),
+     'codigo que nao existe volta o motivo, por item');
+  ok(/continue;/.test(cod),
+     'e o lote SEGUE — um item errado nao reprova a subida que aconteceu');
+  ok(/alteradas: mexidas/.test(cod), 'e a resposta diz quantas mudaram');
+
+  /* ─── O BOOLEANO ───────────────────────────────────── */
+  ok(/typeof it\.producao !== 'boolean'/.test(cod),
+     "`producao` em texto e RECUSADA, e nao lida como verdadeira");
+  ok(/producao_nao_booleana/.test(cod), 'com um erro que diz o que esta errado');
+
+  /* ─── A CHAVE DEDICADA DO PIPELINE ──────────────────────── */
+  ok(/env\.DEPLOY_CHAVE/.test(cod), 'existe a chave dedicada de pipeline');
+  /* SEM O SECRET, A PORTA NAO EXISTE. `!!chaveDeploy &&` e o que impede uma
+     chave vazia de casar com um `chave: ''` do corpo — porta aberta por
+     configuracao AUSENTE e o pior tipo, porque ninguem a ve para fechar. */
+  ok(/!!chaveDeploy && chaveDada === chaveDeploy/.test(cod),
+     'e chave vazia NAO abre quando o secret nao esta configurado');
+  ok(/exigePapel\(env, body, \['dev', 'admin'\]/.test(cod),
+     'sem a chave, exige token ou senha de dev/admin');
+
+  /* ─── O QUE ELE NAO FAZ ───────────────────────────────
+
+     NAO MOVE ETAPA. Subir e um fato sobre o codigo; concluir e decisao do PM/PO,
+     e `demanda-atualizar` ja registra essa fronteira ("etapa, prazo, dev e pontos
+     ficam FORA: sao decisao de planejamento"). Uma demanda pode estar em producao
+     e ainda em validacao — e e esse estado que se quer poder ver. */
+  ok(!/status_planejamento\s*=/.test(cod),
+     'nao mexe na etapa da demanda');
+  ok(!/\bconcluido_em\s*=/.test(cod), 'nem na data de conclusao');
+
+  /* ─── A DATA SO SE MEXE NA TRANSICAO ───────────────────────
+
+     Pipeline repete job. Reenviar o mesmo lote nao pode reescrever "subiu agora"
+     numa demanda que subiu ontem — e a data da subida e o dado que o
+     monitoramento existe para ter certo. */
+  ok(/if \(p\.prod && !eraProd\)/.test(cod),
+     'a data e o autor da subida so mudam na TRANSICAO, e nao a cada reenvio');
+  ok(/if \(!p\.prod && eraProd\)/.test(cod), 'e o rollback limpa os dois');
+
+  /* ─── O RASTRO ────────────────────────────────────── */
+  ok(/registraHistorico\(atual, base, quem, 'deploy'\)/.test(cod),
+     'a subida deixa rastro, com o retrato de antes');
+  ok(/const base = JSON\.parse\(JSON\.stringify\(atual\)\)/.test(cod),
+     'e o retrato e copiado ANTES de mexer — senao o rastro compara o objeto consigo');
+  /* E OS CAMPOS ESTAO NA LISTA DO HISTORICO. O proprio worker avisa que campo
+     fora dela muda em silencio, e ja aconteceu com `parent_id`. */
+  ok(/versao:\s*'versao'/.test(WK) && /em_producao:\s*'producao'/.test(WK),
+     'e os dois campos estao na lista de campos que o historico observa');
+
+  /* ─── O CAMPO NA TELA DO ADMIN ────────────────────────── */
+  ok(/id="m-versao"/.test(ADMIN) && /id="m-em-producao"/.test(ADMIN),
+     'o admin tem os dois campos');
+  /* ABAIXO DA REFERENCIA NO GITHUB, que foi o pedido — e faz sentido: o bloco de
+     cima diz ONDE o codigo esta, este diz se ele chegou ao ar. */
+  ok(ADMIN.indexOf('id="m-link-chips"') < ADMIN.indexOf('id="m-versao"'),
+     'e eles vem DEPOIS do bloco do GitHub, como pedido');
+  ok(/document\.getElementById\('m-versao'\)\.value = m\?\.versao/.test(ADMIN),
+     'o modal LE a versao ao abrir');
+  ok(/getElementById\('m-em-producao'\)\.checked = !!m\?\.em_producao/.test(ADMIN),
+     'e a marca de producao');
+
+  /* ─── O SAVE NAO APAGA O QUE A ESTEIRA ESCREVEU ────────────────
+
+     A lista de campos do save e FECHADA, e campo fora dela e APAGADO ao salvar
+     pela aba Dados. O proprio arquivo registra isso tres vezes (grill, validacao,
+     meses). `producao_em` e `producao_por` nao tem campo no formulario — quem os
+     escreve e a esteira —, entao precisam vir do `existing`. */
+  ok(/versao:\s+document\.getElementById\('m-versao'\)\.value\.trim\(\)/.test(ADMIN),
+     'o save grava a versao digitada');
+  ok(/em_producao:\s+document\.getElementById\('m-em-producao'\)\.checked/.test(ADMIN),
+     'e a marca');
+  ok(/producao_em:\s+existing\.producao_em\s+\|\| ''/.test(ADMIN),
+     'e REPASSA a data que a esteira escreveu, em vez de apaga-la');
+  ok(/producao_por:\s+existing\.producao_por \|\| ''/.test(ADMIN),
+     'e quem marcou, pelo mesmo motivo');
+
+  /* ─── A MARCA NO CARTAO ───────────────────────────────
+
+     Sem marca no cartao, saber que a AX-338 subiu exigiria abrir demanda por
+     demanda — e o campo existe para responder isso de relance. */
+  ok(/class="kb-prod"/.test(ADMIN), 'o cartao mostra a marca de no ar');
+  ok(/\$\{depBadge\}\$\{prodBadge\}/.test(ADMIN), 'e ela e desenhada junto das outras');
+  /* VERDE, e nao azul: azul ja e `planejado` nesta tela, e duas coisas na mesma
+     cor e o que faz a regua de chips deixar de ser lida. */
+  ok(/\.kb-prod \{[^}]*--green-bg/.test(ADMIN),
+     'em verde, que nao colide com o azul de planejado');
+
+  /* ─── E O DEV: LE, E TEM O ENDPOINT DOCUMENTADO ──────────────── */
+  ok(/linha\('Versao'/.test(DEV), 'o dev ve a versao na demanda');
+  ok(/linha\('Em producao'/.test(DEV), 'e se ela esta no ar');
+  ok(/acao: 'deploy-versao'/.test(DEV),
+     'e o endpoint esta na documentacao da API do dev');
+  /* O EXEMPLO TEM DE SER UM LOTE. Um exemplo de um item so ensinaria o pipeline
+     a chamar N vezes — exatamente o que o endpoint existe para evitar. */
+  ok(/"itens":\[/.test(DEV), 'com exemplo de LOTE, e nao de um item so');
+  ok(/producao":true/.test(DEV) && /sem aspas/.test(DEV),
+     'e dizendo que o booleano vai sem aspas');
+})();
+
 /* ═══ DOIS TEMAS PARA O MESMO SISTEMA SE JUNTAM ════════════════════
 
    O caso: o servidor tinha `AXCred - Cobranca` e nasceu um `Cobranca` solto na
@@ -5796,6 +5970,48 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
     ok(a >= 0 && b >= 0 && a < b,
        'em ' + nome + ' a faixa e carregada ANTES do catalogo');
   }
+
+  /* ─── A LEITURA PASSA PELO WORKER, E SO POR ELE ─────────────────
+
+     A FAIXA ACHOU UM DEFEITO DE VERDADE no dia seguinte a subir: o dev relatou
+     "os dados nao foram lidos ... HTTP 404".
+
+     `loadData` do `dev.html`, no modo senha, lia `RAW_URL` —
+     `raw.githubusercontent.com/CapFernando/RoadMap/main/data/melhorias.json`.
+     Os dados moram no repositorio PRIVADO e sao servidos so pelo Worker: aquele
+     endereco responde 404, sempre. E `lerDados`, com o caminho certo, JA EXISTIA
+     no mesmo arquivo — usado pela gravacao e pelo poll. So a carga da tela tinha
+     ficado para tras. Duas leituras no mesmo arquivo, e a que a tela usava era a
+     morta.
+
+     Antes da faixa isso falhava com um `return` seco: painel do dev em branco,
+     sem erro nenhum. Era invisivel.
+
+     E O FALLBACK DAS OUTRAS TELAS MENTIA O MOTIVO. As seis tinham, no fim de
+     `lerDados`, uma ultima tentativa no mesmo `RAW_URL`. Uma falha de verdade no
+     Worker (502, rede, timeout) caia ali e saia como "Falha ao ler dados (HTTP
+     404)" — e era esse 404 que a faixa mostraria, sobre um erro que nao era 404.
+     Diagnosticar com o motivo errado na tela e pior do que nao ter fallback. */
+  const TELAS_LEITURA = [['admin.html', ADMIN], ['gantt.html', GANTT],
+                         ['dev.html', DEV], ['index.html', INDEX],
+                         ['projetos.html', lerTela('projetos.html')],
+                         ['poker.html', lerTela('poker.html')]];
+  for (const [nome, txt] of TELAS_LEITURA) {
+    const cod = semComentario(txt);
+    /* NEM A CONSTANTE SOBRA. Uma constante sem uso apontando para um endereco
+       morto e um convite a religa-lo — e foi por esse caminho que a tela do dev
+       ficou lendo 404. */
+    ok(!/RAW_URL/.test(cod),
+       nome + ' nao tem mais nem a constante do endereco publico morto');
+    ok(/lerDados\(/.test(cod), 'e ' + nome + ' le pelo Worker, via lerDados');
+  }
+  /* E A CARGA DA TELA DO DEV usa `lerDados`, e nao uma leitura propria. E o
+     defeito exato que o dev reportou. */
+  const ld = corpo(DEV, 'async function loadData(');
+  ok(!!ld && /await lerDados\(true\)/.test(ld),
+     'a carga da tela do dev passa pelo Worker no modo senha');
+  ok(!!ld && !/raw\.githubusercontent/.test(semComentario(ld)),
+     'e nao busca mais o arquivo no repositorio publico');
 
   /* OS DISFARCES ANTIGOS NAO VOLTAM. Cada um destes e uma das tres formas de
      silencio que o relato atravessou. */
