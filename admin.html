@@ -1172,6 +1172,27 @@
         <button class="btn btn-primary" onclick="openModalTema()">+ Novo tema</button>
       </div>
       <div id="lista-temas"></div>
+
+      <!-- ── JUNTAR DOIS TEMAS ─────────────────────────────────
+           Fica DEPOIS da lista, e nao no topo: e lendo a lista que se percebe
+           que ha dois nomes para a mesma coisa. -->
+      <details style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+        <summary style="cursor:pointer;font-size:13px;color:var(--text2)">
+          Dois temas para o mesmo sistema?
+        </summary>
+        <p style="font-size:12px;color:var(--text2);line-height:1.55;margin:8px 0 12px;max-width:70ch">
+          Juntar move as demandas de um tema para o outro e depois elimina o tema
+          vazio. <strong>Excluir nao faz isso</strong>: as demandas ficam sem
+          tema, saem de todo filtro por sistema e do &quot;Onde o esforco foi&quot; — ou
+          seja, de toda pergunta que comeca com &quot;quanto o AXCred...&quot;.
+        </p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="juntar-tema-de" style="flex:1;min-width:200px;max-width:320px"></select>
+          <span style="font-size:13px;color:var(--text3)">vira</span>
+          <select id="juntar-tema-para" style="flex:1;min-width:200px;max-width:320px"></select>
+          <button class="btn btn-secondary btn-sm" onclick="juntarTemas()">Juntar</button>
+        </div>
+      </details>
     </div>
 
     <!-- ABA ACESSO DEVS -->
@@ -3137,6 +3158,11 @@ function renderAll() {
 
 function renderTemas() {
   const el = document.getElementById('lista-temas');
+  /* OS SELECTS DO JUNTAR SEGUEM A LISTA. No `onclick` da aba, um caminho que
+     esquecesse de atualizar deixaria a pessoa juntando um tema que acabou de
+     sair — e `juntarTemas` recusaria com "Tema nao encontrado", que e um erro
+     sem explicacao para quem acabou de ver o nome no select. */
+  renderJuntarTemas();
   if (!state.temas.length) { el.innerHTML = '<div class="empty">Nenhum tema cadastrado.</div>'; return; }
   el.innerHTML = state.temas.map(t => {
     const n = state.melhorias.filter(m => m.tema_id === t.id).length;
@@ -8491,6 +8517,111 @@ async function saveTema() {
   renderAll();
   await mPersistir('Tema salvo e publicado.');
 }
+/* ─── JUNTAR DOIS TEMAS ──────────────────────────────────────
+   O caso: o servidor tinha `AXCred - Cobrança` e nasceu um `Cobrança` solto na
+   raiz, criado pelo campo "+ outro (escrever)" enquanto a lista de temas estava
+   vazia por falha de leitura (ver `leitura-estado.js`).
+
+   POR QUE `deleteTema` NÃO RESOLVE. Ele avisa que "as demandas vinculadas ficam
+   sem tema" — e ficam mesmo: elas guardam `tema_id`, e o id deixa de existir.
+   Isso é PIOR do que o tema duplicado: a demanda sai de qualquer filtro por
+   sistema, de qualquer agrupamento por tema, e do "Onde o esforço foi" do
+   painel. Ela vira invisível para toda pergunta que começa com "quanto o
+   AXCred...".
+
+   ════════════════════════════════════════════════════════════════════════════
+   A ÁRVORE SAI DO NOME, e é isso que torna este juntar diferente do de devs.
+
+   `catalogo.js` é explícito: "O NOME É O CAMINHO". Os temas são uma lista plana
+   de `{id, nome}`, e a hierarquia é lida partindo o nome por " - ". Não há
+   `parent_id`.
+
+   A CONSEQUÊNCIA: juntar um tema QUE TEM FILHOS não os quebra no dado — cada
+   filho tem id próprio e demandas próprias —, mas deixa o galho pendurado num
+   nome sem linha. `catalogoCasa`, que faz o roll-up do filtro, compara NOMES:
+   filtrar por `AXCred - Cobrança` deixaria de trazer um `Cobrança - Régua` que
+   ficou para trás. O galho continua na tela e sai das somas — exatamente o
+   defeito dos 42 temas que o catálogo foi escrito para acabar.
+
+   Então este comando RECUSA quando o tema a eliminar tem filhos, e diz quais.
+   Renomear a árvore em cascata é uma operação maior, e fazê-la escondida dentro
+   de um "juntar" é o tipo de coisa que reclassifica dezenas de cards sem ninguém
+   pedir. */
+function temaFilhosDe(nome) {
+  return (state.temas || []).filter(t =>
+    String(t.nome || '') !== String(nome || '') &&
+    catalogoDentro(t.nome, nome));
+}
+
+async function juntarTemas() {
+  const deId   = document.getElementById('juntar-tema-de').value;
+  const paraId = document.getElementById('juntar-tema-para').value;
+  if (!deId || !paraId) { toast('Escolha os dois temas.', 'err'); return; }
+  if (deId === paraId)  { toast('Escolha dois temas diferentes.', 'err'); return; }
+
+  const de   = (state.temas || []).find(t => t.id === deId);
+  const para = (state.temas || []).find(t => t.id === paraId);
+  if (!de || !para) { toast('Tema nao encontrado. Recarregue.', 'err'); return; }
+
+  /* NAO JUNTA SOBRE DADO QUE NAO FOI LIDO. Reescrever `tema_id` de uma lista
+     parcial e publicar deixaria SEM TEMA as demandas que nao vieram. */
+  if (window.LEITURA && LEITURA.incompleta()) {
+    await avisar('Os dados nao foram lidos',
+      'Juntar reescreve o tema de todas as demandas, e a lista na tela pode estar ' +
+      'incompleta. Recarregue antes de juntar.');
+    return;
+  }
+
+  const filhos = temaFilhosDe(de.nome);
+  if (filhos.length) {
+    await avisar('"' + de.nome + '" tem submodulos',
+      'Juntar deixaria ' + filhos.length + ' deles pendurados num caminho que ' +
+      'deixou de existir — e o filtro por sistema pararia de traze-los:' +
+      String.fromCharCode(10) + String.fromCharCode(10) +
+      filhos.map(t => '• ' + t.nome).join(String.fromCharCode(10)) +
+      String.fromCharCode(10) + String.fromCharCode(10) +
+      'Renomeie ou junte os submodulos primeiro.');
+    return;
+  }
+
+  const afetadas = (state.melhorias || []).filter(m => m.tema_id === deId);
+  if (!(await confirmar({
+    titulo: 'Juntar "' + de.nome + '" em "' + para.nome + '"',
+    texto: (afetadas.length
+        ? afetadas.length + ' demanda(s) passam a ser de "' + para.nome + '". '
+        : 'Nenhuma demanda usa este tema. ') +
+      'O tema "' + de.nome + '" sai da lista. Nao ha como desfazer.',
+    ok: 'Juntar', perigo: true }))) return;
+
+  /* `_dirtyMelhoriaIds` MARCA CADA DEMANDA TOCADA. O merge de publicacao mantem
+     a versao LOCAL dos ids marcados e adota a do SERVIDOR para os intocados —
+     sem a marca, outra aba com dado carregado antes reverteria o tema. */
+  afetadas.forEach(m => { m.tema_id = paraId; _dirtyMelhoriaIds.add(m.id); });
+
+  _deletedIds.add(deId);
+  state.temas = (state.temas || []).filter(t => t.id !== deId);
+  _temasMexidos.add(paraId);
+  _pendingEdits = true;
+  renderAll();
+  await mPersistir(afetadas.length + ' demanda(s) agora sao de "' + para.nome + '".');
+}
+
+/** Preenche os dois selects do juntar. Usa o catalogo, para a ordem e o recuo da
+ *  arvore serem os mesmos do resto do sistema. */
+function renderJuntarTemas() {
+  const a = document.getElementById('juntar-tema-de');
+  const b = document.getElementById('juntar-tema-para');
+  if (!a || !b) return;
+  const antesA = a.value, antesB = b.value;
+  a.innerHTML = catalogoOpcoesHTML(state.temas || [], '',
+    { rotuloVazio: '— tema a eliminar —' });
+  b.innerHTML = catalogoOpcoesHTML(state.temas || [], '',
+    { rotuloVazio: '— tema que fica —' });
+  const existe = (id) => (state.temas || []).some(t => String(t.id) === String(id));
+  if (existe(antesA)) a.value = antesA;
+  if (existe(antesB)) b.value = antesB;
+}
+
 async function deleteTema(id) {
   if (!(await confirmar({ titulo: 'Excluir tema',
       texto: 'As demandas vinculadas ficam sem tema. Nao ha como desfazer.',

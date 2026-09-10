@@ -5416,6 +5416,120 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      String(CAPX.planejados({ status: 'estimada', poker_pontos: 13 })));
 })();
 
+/* ═══ DOIS TEMAS PARA O MESMO SISTEMA SE JUNTAM ════════════════════
+
+   O caso: o servidor tinha `AXCred - Cobranca` e nasceu um `Cobranca` solto na
+   raiz, criado pelo campo "+ outro (escrever)" enquanto a lista de temas estava
+   vazia por falha de leitura.
+
+   `deleteTema` NAO RESOLVIA, e o aviso dele conta o porque: "as demandas
+   vinculadas ficam sem tema". Elas guardam `tema_id`, e o id deixa de existir —
+   a demanda sai de todo filtro por sistema, de todo agrupamento por tema e do
+   "Onde o esforco foi". Fica invisivel para qualquer pergunta que comece com
+   "quanto o AXCred...". Pior que o duplicado.
+
+   A ARVORE SAI DO NOME, e e isso que separa este juntar do de devs. `catalogo.js`
+   e explicito: "O NOME E O CAMINHO" — os temas sao uma lista plana de
+   `{id, nome}` e a hierarquia e lida partindo por " - ". Juntar um tema COM
+   FILHOS deixa o galho pendurado num caminho sem linha, e `catalogoCasa` (o
+   roll-up do filtro) compara NOMES: o galho continuaria na tela e sairia das
+   somas. Entao o comando recusa e diz quais sao.
+
+   ESTE BLOCO EXECUTA `temaFilhosDe` recortada do admin.html, contra a arvore de
+   verdade que o servidor devolve. */
+(() => {
+  sec('Dois temas para o mesmo sistema se juntam');
+  const tf = corpo(ADMIN, 'function temaFilhosDe(');
+  ok(!!tf, 'a deteccao de submodulos foi encontrada para ser executada');
+  if (!tf) return;
+
+  /* O `catalogo.js` DE VERDADE, e nao um `dentro` escrito para o teste: e ele
+     que define o que e filho de quem, e a razao desta invariante existir e
+     justamente as duas nao divergirem. */
+  const janelaCat = { document: { getElementById: () => null } };
+  new Function('window', 'document', fs.readFileSync('catalogo.js', 'utf8'))(
+    janelaCat, janelaCat.document);
+
+  const filhosDe = (temas, nome) => new Function('state', 'catalogoDentro',
+    tf + 'return temaFilhosDe;')({ temas }, janelaCat.catalogoDentro)(nome);
+
+  /* A ARVORE REAL, no formato que o catalogo espera. Nomes de mentira nao
+     exercitariam os quatro niveis que a base tem. */
+  const ARV = [
+    'AXCred', 'AXCred - Cadastro', 'AXCred - Cadastro - Analise de Credito',
+    'AXCred - Cadastro - Analise de Credito - Reanalise',
+    'AXCred - Cobranca', 'AXCred - Antifraude',
+    'BI', 'BI - Reports', 'Cobranca',
+  ].map((n, i) => ({ id: 't' + i, nome: n }));
+
+  /* O CASO DO RELATO, e o primeiro a conferir: `Cobranca` na raiz nao tem filho,
+     entao juntar e permitido. */
+  ok(filhosDe(ARV, 'Cobranca').length === 0,
+     'o tema solto na raiz nao tem submodulo, e pode ser juntado');
+  ok(filhosDe(ARV, 'AXCred - Cobranca').length === 0,
+     'e o destino tambem nao tem — juntar nele nao mexe em galho nenhum');
+
+  /* E O QUE TEM FILHO E RECUSADO. Sem esta checagem, juntar `AXCred` deixaria
+     cinco caminhos pendurados num nome que saiu da lista. */
+  const fAx = filhosDe(ARV, 'AXCred');
+  ok(fAx.length === 5, 'um sistema com submodulos os enxerga todos', fAx.length + ' filho(s)');
+  ok(fAx.some(t => t.nome === 'AXCred - Cobranca'), 'inclusive os de um nivel');
+  ok(fAx.some(t => t.nome.indexOf('Reanalise') >= 0),
+     'e os de tres niveis abaixo — o roll-up e por PREFIXO, e nao por um nivel');
+
+  /* `Cobranca` NAO E FILHO DE `AXCred - Cobranca`, e vice-versa. Se `dentro`
+     comparasse por trecho em vez de por prefixo com o separador, os dois se
+     enxergariam e o juntar do relato seria recusado sem motivo. */
+  ok(filhosDe(ARV, 'AXCred - Cobranca').every(t => t.nome !== 'Cobranca'),
+     'um nome que TERMINA igual nao e submodulo do outro');
+
+  /* E O PROPRIO TEMA NAO E FILHO DE SI. `catalogoDentro` devolve true para
+     iguais — e correto para o roll-up do filtro, e erra aqui: o tema apareceria
+     na propria lista de submodulos e o juntar se recusaria sempre. */
+  ok(filhosDe(ARV, 'BI').every(t => t.nome !== 'BI'),
+     'o tema nao aparece na propria lista de submodulos');
+  ok(filhosDe(ARV, 'BI').length === 1, 'e BI ve so o seu Reports', filhosDe(ARV, 'BI').length);
+
+  /* ─── O QUE O COMANDO PROMETE ────────────────────────────── */
+  const uc = corpo(ADMIN, 'async function juntarTemas(');
+  ok(!!uc, 'o comando de juntar temas existe');
+  ok(!!uc && /temaFilhosDe\(de\.nome\)/.test(uc),
+     'e ele consulta os submodulos ANTES de mexer em qualquer coisa');
+  ok(!!uc && /submodulos/.test(uc),
+     'recusando com o nome do problema, e nao com um erro seco');
+  /* MOVE AS DEMANDAS, e nao so apaga o tema. E a diferenca inteira com o
+     `deleteTema`. */
+  ok(!!uc && /m\.tema_id = paraId/.test(uc),
+     'move o `tema_id` das demandas para o tema que fica');
+  ok(!!uc && /_dirtyMelhoriaIds\.add\(m\.id\)/.test(uc),
+     'e marca cada uma como tocada — sem isso outra aba reverteria o tema');
+  ok(!!uc && /_deletedIds\.add\(deId\)/.test(uc),
+     'o tema vazio sai como exclusao gravada, e nao so do estado local');
+  /* A ORDEM IMPORTA: mover primeiro, apagar depois. Apagar antes deixaria a
+     janela em que as demandas apontam para um id que nao existe mais — e se a
+     gravacao falhasse ali, era exatamente o estado que este comando existe para
+     evitar. */
+  ok(!!uc && uc.indexOf('m.tema_id = paraId') < uc.indexOf('_deletedIds.add(deId)'),
+     'e as demandas se movem ANTES de o tema ser removido');
+  ok(!!uc && /LEITURA\.incompleta\(\)/.test(uc),
+     'e recusa juntar quando a leitura falhou');
+  ok(!!uc && /deId === paraId/.test(uc), 'nao junta um tema em si mesmo');
+
+  ok(/id="juntar-tema-de"/.test(ADMIN) && /id="juntar-tema-para"/.test(ADMIN),
+     'os dois campos existem na tela');
+  ok(/onclick="juntarTemas\(\)"/.test(ADMIN), 'e o botao chama o comando');
+  /* OS SELECTS SEGUEM A LISTA, pelo caminho comum de `renderTemas`. */
+  const rt = corpo(ADMIN, 'function renderTemas(');
+  ok(!!rt && /renderJuntarTemas\(\)/.test(rt),
+     'e se atualizam junto com a lista de temas');
+  /* E SAEM DO CATALOGO, com a ordem e o recuo da arvore. Uma lista montada a mao
+     aqui mostraria os 69 temas em ordem de insercao — e achar o par a juntar
+     numa lista dessas e o proprio problema. */
+  const rj = corpo(ADMIN, 'function renderJuntarTemas(');
+  ok(!!rj && (rj.match(/catalogoOpcoesHTML/g) || []).length === 2,
+     'os dois selects saem do catalogo, e nao de uma lista montada a mao');
+})();
+
 /* ═══ DOIS NOMES PARA O MESMO DEV SE JUNTAM ═══════════════════════
 
    O relato: "eu havia arrastado do Murillo para o Murillo Jesus no gantt, por
