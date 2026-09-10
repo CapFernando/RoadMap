@@ -319,7 +319,8 @@
   <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
-  <script src="anexo-cola.js?v=a860e5baad"></script>
+  <script src="leitura-estado.js?v=0242a709f1"></script>
+<script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="catalogo.js?v=b5aed8c999"></script>
 </head>
 <body>
@@ -1391,9 +1392,17 @@ async function forceRefresh() {
     // devolver conteúdo velho seria pior que avisar da falha.
     const data = await lerDados(false);
     applyData(data, { preserveView: true });
+    if (window.LEITURA) LEITURA.ok();
   } catch(e) {
     // Silencioso em visibilitychange; avisa só quando o usuário clicou
     if (btn && btn.disabled) dashToast('⚠️ ' + (e.message || 'Falha ao atualizar.'), 'err');
+    /* E A FAIXA FICA, mesmo no caminho do `visibilitychange`. O toast avisa quem
+       CLICOU; a faixa responde "este dash esta velho" para quem passa na frente
+       dele meia hora depois — que e o uso real de uma tela de parede. */
+    if (window.LEITURA) {
+      LEITURA.aoTentarDeNovo(function () { return forceRefresh(); });
+      LEITURA.falhou((e && e.message) || 'falha ao atualizar');
+    }
   }
   if (btn) { btn.textContent = '↻ Atualizar'; btn.disabled = false; }
 }
@@ -1414,7 +1423,28 @@ async function checkForUpdates() {
   try {
     const data = await lerDados(true);
     if (_pollTs !== undefined && data.atualizado_em !== _pollTs) applyData(data, { preserveView: true });
-  } catch(_) {}
+    if (window.LEITURA) LEITURA.ok();
+  } catch (e) {
+    /* ── ISTO ERA `catch(_) {}` ──────────────────────────────────────────────
+       O primeiro carregamento e honesto: `loadData` mostra a tela de acesso ou
+       a mensagem do erro. O LACO nao era. Falhando em silencio a cada 60
+       segundos, o dash seguia mostrando a etapa que leu quando abriu — e nada
+       na tela dizia isso.
+
+       O RELATO: "esta sendo apresentada no dash, porem na esteira esta
+       concluido". As duas telas derivam a etapa com codigo IDENTICO
+       (`getStatusKey` aqui e `statusKey` no admin, byte a byte) e leem a mesma
+       fonte pelo Worker — entao a unica forma de discordarem e uma das duas
+       estar com dado velho. Aqui estava o caminho que envelhece calado.
+
+       O `index.html` ficou de fora quando as outras tres telas ganharam a faixa
+       nesta mesma sessao. Era a tela mais exposta das quatro: e a que fica
+       aberta na parede. Ver `leitura-estado.js`. */
+    if (window.LEITURA) {
+      LEITURA.aoTentarDeNovo(function () { return forceRefresh(); });
+      LEITURA.falhou((e && e.message) || 'falha ao checar atualizacoes');
+    }
+  }
   _polling = false;
 }
 

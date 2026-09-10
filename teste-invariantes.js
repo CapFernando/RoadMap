@@ -5472,7 +5472,14 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
   }
 
   /* ─── AS TRES TELAS AVISAM, E CARREGAM O ARQUIVO ─────────────────── */
-  const TELAS = [['admin.html', ADMIN], ['gantt.html', GANTT], ['dev.html', DEV]];
+  /* AS QUATRO TELAS, e nao tres. O `index.html` ficou de fora quando as outras
+     ganharam a faixa, e o relato seguinte foi exatamente por causa dele: "esta
+     sendo apresentada no dash, porem na esteira esta concluido". O laco de 60s
+     do dash tinha `catch(_) {}` — falhando calado, ele seguia mostrando a etapa
+     que leu quando abriu. E o dash e a tela MAIS exposta das quatro: e a que
+     fica aberta na parede, onde ninguem recarrega. */
+  const TELAS = [['admin.html', ADMIN], ['gantt.html', GANTT], ['dev.html', DEV],
+                 ['index.html', INDEX]];
   for (const [nome, txt] of TELAS) {
     ok(/<script src="leitura-estado\.js\?v=[0-9a-f]{10}"><\/script>/.test(txt),
        nome + ' carrega o arquivo da faixa, selado');
@@ -5518,6 +5525,57 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      'o dev nao tem mais um catch que so escreve no console');
   ok(!/if \(!res\.ok\) \{ if \(useApi\) throw new Error\(res\.status\); return; \}/.test(DEV),
      'e nao volta em silencio quando a resposta nao e ok no modo senha');
+
+  /* O LACO DE 60s DO DASH. Mesmo recorte do laco do gantt, e pelo mesmo motivo:
+     a primeira carga do `index.html` E honesta (`loadData` mostra a tela de
+     acesso ou a mensagem do erro), mas o laco nao era. */
+  const lacoDash = corpo(INDEX, 'async function checkForUpdates(');
+  ok(!!lacoDash, 'o laco de atualizacao do dash foi encontrado');
+  ok(!!lacoDash && !/catch\s*\(_\)\s*\{\s*\}/.test(semComentario(lacoDash)),
+     'e ele nao engole mais a falha em silencio');
+  ok(!!lacoDash && /LEITURA\.falhou\(/.test(lacoDash),
+     'o dash avisa quando o poll falha — era a tela que mais tempo passa sem recarregar');
+
+  /* ─── A DERIVACAO DE ETAPA NAO PODE DIVERGIR ENTRE AS TELAS ───────────────
+
+     Quatro telas respondem "em que etapa esta esta demanda", e o relato "no dash
+     esta planejado, na esteira esta concluido" e o sintoma dessa pergunta ter
+     mais de uma resposta.
+
+     MEDIDO: `statusKey` (admin) e `getStatusKey` (index) sao IDENTICAS byte a
+     byte, e a do `dev.html` difere so por um espaco em `slice(0, 10)`. As tres
+     concordam. O `spEfetivo` do gantt NAO — ele chama `etapaReal`, que le
+     `status_planejamento` cru e IGNORA o mapa do `status` legado. Para uma
+     demanda com `status_planejamento` vazio e `status: 'concluida'`, as tres
+     dizem `concluido` e o gantt diz `backlog`.
+
+     Isto aqui nao unifica as quatro — seria uma fatia inteira, e o gantt tem
+     razoes proprias (pausa antes de atraso). O que a invariante FIXA e que as
+     tres que hoje concordam continuem concordando: e a divergencia silenciosa
+     entre elas que produz duas respostas para o mesmo card. */
+  {
+    const norm = (t) => semComentario(t).replace(/\s+/g, ' ')
+      .replace(/function \w+/, 'function F').trim();
+    const a = norm(corpo(ADMIN, 'function statusKey('));
+    const b = norm(corpo(INDEX, 'function getStatusKey('));
+    const c = norm(corpo(DEV, 'function getStatusKey('));
+    ok(!!a && !!b && !!c, 'as tres derivacoes de etapa foram encontradas');
+    ok(a === b, 'admin e dash derivam a etapa com o MESMO codigo');
+    /* O `dev.html` difere por um espaco em `slice(0, 10)`. Comparar sem espaco
+       nenhum e o que faz a invariante falar da REGRA, e nao da formatacao — e
+       ainda pegar uma mudanca de verdade em qualquer das tres. */
+    const semEspaco = (t) => t.replace(/ /g, '');
+    ok(semEspaco(a) === semEspaco(c), 'e o portal do dev tambem, a menos de espaco');
+    /* O MAPA LEGADO E O CORACAO DISSO: e ele que traduz `status: 'concluida'` em
+       etapa `concluido` para as demandas anteriores ao campo novo. Uma tela que
+       o perdesse passaria a chamar de backlog o que as outras chamam de
+       concluido. */
+    for (const [nome, txt] of [['admin', a], ['dash', b], ['dev', c]]) {
+      ok(/concluida:'concluido'|concluida: 'concluido'/.test(txt.replace(/ /g, '')
+           .replace('concluida:', 'concluida:')),
+         'e ' + nome + ' continua traduzindo o status legado em etapa');
+    }
+  }
 })();
 
 /* ═══ O CHIP DE ETAPA DO GANTT TEM ONDE ATERRISSAR ═══════════════════
