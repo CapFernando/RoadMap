@@ -1907,9 +1907,22 @@
         <label>Motivo da negativa *</label>
         <textarea id="m-motivo" rows="3" placeholder="Explique o motivo pelo qual a melhoria foi negada…"></textarea>
       </div>
+      <!-- O RESUMO fica ACIMA do texto completo, como no painel do dev: e ele que vai
+           para o relatorio e para a apresentacao. Aqui o PM/PO pode corrigir o que o
+           dev escreveu antes de levar para o comite. Limite de 300 = cinco linhas,
+           medido no campo real. -->
+      <div class="form-group">
+        <label>Resumo da entrega
+          <small style="font-weight:400;color:var(--text3)">— vai para o relatório e a
+          apresentação; até 300 caracteres (5 linhas)</small>
+        </label>
+        <textarea id="m-resumo" rows="3" maxlength="300" oninput="mResumoConta()"
+          placeholder="Uma frase do que mudou, na linguagem de quem vai ler o slide."></textarea>
+        <div id="m-resumo-conta" style="font-size:11.5px;color:var(--text3);margin-top:4px"></div>
+      </div>
       <div class="form-group">
         <label>O que foi implementado</label>
-        <textarea id="m-implementacao" rows="3" placeholder="Preenchido pelo dev ao concluir. Alimenta o relatório do comitê de produto."></textarea>
+        <textarea id="m-implementacao" rows="3" placeholder="Preenchido pelo dev ao concluir. É por este texto que a entrega é validada."></textarea>
       </div>
       <!-- Referencia ao codigo. E o que permite ir do card para o commit e
            voltar; sem isso "o que exatamente foi entregue nesta demanda" se
@@ -6116,9 +6129,12 @@ async function apresGerar() {
       const tema = (state.temas || []).find(t => String(t.id) === String(m.tema_id));
       return {
         codigo: m.codigo || '', titulo: m.titulo || '',
-        // O texto do slide e o que o dev escreveu na entrega: e a descricao do
-        // que mudou, escrita por quem fez. Cai na descricao se nao houver.
-        texto: String(m.implementacao || m.descricao || '').slice(0, 600),
+        /* O TEXTO DO SLIDE E O RESUMO, e nao o detalhe completo — era aqui que
+           o livro do dev chegava a apresentacao executiva. `resumoDaEntrega`
+           cai no texto completo quando nao ha resumo (demanda antiga), e a
+           descricao continua como ultima reserva. O corte em 600 fica: ele
+           protege o slide das demandas que ainda respondem pelo texto longo. */
+        texto: (resumoDaEntrega(m) || String(m.descricao || '')).slice(0, 600),
         dev: m.dev || '', tema: tema ? tema.nome : '',
         pontos: m.poker_pontos || null,
       };
@@ -8054,9 +8070,38 @@ function relSaidaHTML(m) {
          (atraso === 1 ? ' dia' : ' dias') + ' após o prazo (' + formatDate(pz) + ')</span></span>';
 }
 
+/* ─── QUAL TEXTO VAI PARA A APRESENTACAO ──────────────────────────────────
+   O RELATO: "ali alguns devs escrevem um livro e nao faz sentido levar para uma
+   apresentacao executiva".
+
+   Sao DOIS textos com publicos diferentes, e ate agora havia um so:
+
+     `resumo_entrega`   uma frase do que mudou. Limite de 300 caracteres, que e
+                        o que cabe em cinco linhas — medido no campo real.
+                        Vai para o RELATORIO, a ATA e o DECK.
+     `implementacao`    o detalhe completo. E por ele que o PM/PO VALIDA a
+                        entrega, e ele continua inteiro na tela de validacao.
+
+   A RESERVA E O TEXTO COMPLETO, e nao vazio. As demandas ja entregues nao tem
+   resumo — sao 268 na base — e um relatorio que emudecesse sobre todas elas
+   seria pior do que um texto longo. O resumo e obrigatorio DAQUI PARA A FRENTE
+   (exigido na entrega, em `dev.html`); o passado continua respondendo pelo que
+   tem.
+
+   UMA FUNCAO SO, e nao a mesma expressao em tres lugares: o deck, o card do
+   relatorio e a ata leem os mesmos campos, e tres copias divergiriam na primeira
+   vez que a regra mudasse — e esta base ja pagou por isso com a etapa, com o
+   prazo e com os temas. */
+function resumoDaEntrega(m) {
+  const r = String((m || {}).resumo_entrega || '').trim();
+  if (r) return r;
+  return String((m || {}).implementacao || '').trim();
+}
+
 function relCardHTML(m, modo) {
   const sm = relSistemaModulo(m);
-  const impl = (m.implementacao || '').trim();
+  // O card do relatorio mostra o RESUMO. Ver `resumoDaEntrega`.
+  const impl = resumoDaEntrega(m);
   const atrasado = statusEfetivo(m) === 'atrasado';
   /* O PRAZO EM DESENVOLVIMENTO E O EFETIVO, com os dias de pausa somados — o
      mesmo numero que o Painel Dev mostra ao dev. Sem isso a mesma demanda pausada
@@ -8450,8 +8495,10 @@ function relTexto(secao) {
     linhas.push(modo === 'entregues'
       ? `  Entrega: ${m.entrega ? formatDate(m.entrega) : '—'}`
       : `  Prazo: ${m.entrega ? formatDate(m.entrega) : '—'}${statusEfetivo(m) === 'atrasado' ? ' (atrasado)' : ''}`);
-    const impl = (m.implementacao || '').trim();
-    linhas.push(`  O que foi implementado: ${impl || '(não informado pelo dev)'}`);
+    // A ata segue o mesmo texto do card que foi apresentado — se ela trouxesse o
+    // detalhe completo, o registro discordaria do que a sala viu.
+    const impl = resumoDaEntrega(m);
+    linhas.push(`  Entrega: ${impl || '(não informado pelo dev)'}`);
     return linhas.join('\n');
   };
   // Mesma quebra por tema da tela, para a ata sair na ordem em que foi apresentada
@@ -8777,6 +8824,19 @@ window.addEventListener('hashchange', () => {
   else if (visivel) closeModal('modal-melhoria');
 });
 
+/* Conta o que FALTA, como no painel do dev, e le o teto do proprio campo. */
+function mResumoConta() {
+  const el = document.getElementById('m-resumo');
+  const alvo = document.getElementById('m-resumo-conta');
+  if (!el || !alvo) return;
+  const teto = Number(el.getAttribute('maxlength')) || 300;
+  const restam = teto - el.value.length;
+  alvo.textContent = restam === 0
+    ? 'limite de ' + teto + ' caracteres atingido — cabe em 5 linhas'
+    : 'restam ' + restam + ' de ' + teto + ' caracteres';
+  alvo.style.color = restam <= 30 ? 'var(--amber-tx, #FFC470)' : 'var(--text3)';
+}
+
 function openModalMelhoria(id) {
   const m = id ? state.melhorias.find(x => x.id === id) : null;
   document.getElementById('modal-melhoria-title').textContent = m ? 'Editar issue' : 'Nova issue';
@@ -8827,6 +8887,8 @@ function openModalMelhoria(id) {
   document.getElementById('m-entrega').value         = m?.entrega          || '';
   mesPreencheCampo(m);
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
+  document.getElementById('m-resumo').value          = m?.resumo_entrega  || '';
+  mResumoConta();
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
   mPopulaProjetos(m?.projeto_id || '');
@@ -9331,6 +9393,8 @@ async function saveMelhoria() {
     mes_alvo:            document.getElementById('m-mes-alvo').value,
     meses:               existing.meses || [],
     motivo_negacao:      sp === 'negada' ? document.getElementById('m-motivo').value.trim() : '',
+    // Na lista fechada pelo motivo que o comentario de `producao_em` registra.
+    resumo_entrega:      document.getElementById('m-resumo').value.trim(),
     implementacao:       document.getElementById('m-implementacao').value.trim(),
     versao:              document.getElementById('m-versao').value.trim(),
     em_producao:         document.getElementById('m-em-producao').checked,

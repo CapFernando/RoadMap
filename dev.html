@@ -830,10 +830,35 @@
            isto, o campo somente-leitura parece travado por defeito. -->
       <div id="ms-sub-horas-nota" style="display:none;font-size:12px;color:var(--text2);margin:-6px 0 12px 0"></div>
       <div id="ms-horas-plan" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:6px;padding:8px 12px;margin-bottom:12px;"></div>
+      <!-- ── RESUMO DA ENTREGA ────────────────────────────────────────────────
+           ACIMA do texto completo, e nao abaixo, porque e o que se escreve
+           PRIMEIRO: uma frase do que mudou, e depois o detalhe todo no campo de
+           baixo. Invertido, a pessoa escreveria o livro e resumiria de ma
+           vontade no fim.
+
+           O LIMITE DE 300 FOI MEDIDO, e nao escolhido. No campo real (modal de
+           500px, 442px uteis, Inter 14px) com texto em portugues:
+
+             200 chars -> 4 linhas      300 chars -> 5 linhas
+             250 chars -> 4 linhas      320 chars -> 6 linhas
+
+           300 e o maior valor que ainda cabe em cinco linhas. O `maxlength` e a
+           trava; o contador ao lado existe para a pessoa ver o limite chegando
+           em vez de o navegador parar de aceitar tecla sem explicacao. -->
+      <div class="form-group">
+        <label>Resumo da entrega *
+          <small style="font-weight:400;color:var(--text3)">— uma frase do que mudou; é
+          este texto que vai para o relatório e para a apresentação</small>
+        </label>
+        <textarea id="ms-resumo" rows="3" maxlength="300"
+          oninput="msResumoConta()"
+          placeholder="Ex.: Os trechos críticos do parecer passam a sair em vermelho e negrito no editor e no PDF."></textarea>
+        <div id="ms-resumo-conta" style="font-size:11.5px;color:var(--text3);margin-top:4px"></div>
+      </div>
       <div class="form-group">
         <label>O que foi implementado *</label>
         <div id="ms-devolucao" style="display:none;background:var(--red-bg);color:var(--red-tx);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.55;margin-bottom:10px"></div>
-        <textarea id="ms-implementacao" rows="4" placeholder="Descreva o que foi entregue — o PM/PO valida por este texto, que também vai para o relatório do comitê."></textarea>
+        <textarea id="ms-implementacao" rows="4" placeholder="Descreva o que foi entregue — o PM/PO valida por este texto. O detalhe todo cabe aqui."></textarea>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">Usado no relatório de comitê. Escreva para quem não acompanhou o desenvolvimento.</div>
       </div>
     </div>
@@ -1299,7 +1324,9 @@ function epFuncoesHTML() {
     },
     {
       acao: 'demanda-atualizar',
-      o_que: 'Grava o que é seu: <code>implementacao</code>, <code>descricao</code>, ' +
+      o_que: 'Grava o que é seu: <code>resumo_entrega</code> (até 300 caracteres — é o ' +
+             'texto que vai para o relatório e a apresentação), <code>implementacao</code> ' +
+             '(o detalhe completo, por onde o PM/PO valida), <code>descricao</code>, ' +
              '<code>observacao</code>, <code>horas_realizadas</code>, <code>projeto_id</code> ' +
              '(só projeto aprovado) e <code>etapa</code> até <code>em_andamento</code>. ' +
              'Referência no GitHub: <code>link_issue</code>, <code>link_pr</code> e ' +
@@ -1334,9 +1361,14 @@ function epFuncoesHTML() {
     },
     {
       acao: 'demanda-entregar',
-      o_que: 'Manda para a validação do PM/PO. Exige o texto do que foi implementado e as horas — é por esse texto que o PM/PO valida, e as horas alimentam o relatório do comitê.',
+      o_que: 'Manda para a validação do PM/PO. Exige o texto do que foi implementado e as ' +
+             'horas — é por esse texto que o PM/PO valida, e as horas alimentam o relatório ' +
+             'do comitê. Mande também o <code>resumo_entrega</code>: pela tela ele é ' +
+             'obrigatório, e é ele que vai para a apresentação. Se vier vazio, o relatório ' +
+             'usa o texto completo — que costuma ser longo demais para um slide.',
       corpo: '{"action":"demanda-entregar","token":"TOKEN","codigo":"' + cod +
-        '","implementacao":"O que foi feito","horas_realizadas":6}',
+        '","resumo_entrega":"Parecer passa a destacar os trechos críticos em vermelho.",' +
+        '"implementacao":"O que foi feito","horas_realizadas":6}',
     },
     {
       acao: 'projeto-novo',
@@ -2166,6 +2198,7 @@ function verDemandaPorNumero() {
     linha('Previsão de entrega', escAttr(m.entrega || '') || '<i style="color:var(--text3)">sem data combinada</i>') +
     linha('Pontos', m.poker_pontos == null ? '' : String(m.poker_pontos)) +
     linha('Descrição', escAttr(m.descricao || '').replace(/\n/g, '<br>')) +
+    linha('Resumo da entrega', escAttr(m.resumo_entrega || '').replace(/\n/g, '<br>')) +
     linha('Implementação', escAttr(m.implementacao || '').replace(/\n/g, '<br>')) +
     /* VERSAO E PRODUCAO, logo antes das referencias do GitHub — e a mesma
        pergunta em outra ponta: os links dizem ONDE o codigo esta, e isto diz se
@@ -3765,6 +3798,8 @@ function openStatusModal(id, preselect) {
 
   msSelectEtapa(document.getElementById('ms-status'), m, preselect);
   document.getElementById('ms-horas').value = m.horas_realizadas || '';
+  document.getElementById('ms-resumo').value = m.resumo_entrega || '';
+  msResumoConta();
   document.getElementById('ms-implementacao').value = m.implementacao || '';
   if (window.ghLinkPreenche) ghLinkPreenche('ms', m, state.melhorias);
   // Chips clicaveis abaixo dos campos: depois de gravar, o valor no input e uma
@@ -4086,6 +4121,26 @@ function msSubRender(m) {
     '</div>').join('');
 }
 
+/* O CONTADOR DO RESUMO.
+ *
+ *  Conta o que FALTA, e nao o que foi escrito: "restam 40" e acionavel enquanto
+ *  se escreve; "260 de 300" obriga a pessoa a fazer a subtracao. E ele so muda
+ *  de cor perto do fim — vermelho o tempo todo treina a ignorar.
+ *
+ *  O LIMITE E LIDO DO PROPRIO CAMPO (`maxlength`), e nao repetido aqui: dois
+ *  numeros para o mesmo limite divergem no dia em que um deles mudar. */
+function msResumoConta() {
+  const el = document.getElementById('ms-resumo');
+  const alvo = document.getElementById('ms-resumo-conta');
+  if (!el || !alvo) return;
+  const teto = Number(el.getAttribute('maxlength')) || 300;
+  const restam = teto - el.value.length;
+  alvo.textContent = restam === 0
+    ? 'limite de ' + teto + ' caracteres atingido — cabe em 5 linhas'
+    : 'restam ' + restam + ' de ' + teto + ' caracteres';
+  alvo.style.color = restam <= 30 ? 'var(--amber-tx, #FFC470)' : 'var(--text3)';
+}
+
 function msSubHoras(i, v) {
   if (!_msSubs[i]) return;
   _msSubs[i].horas = String(v);
@@ -4225,6 +4280,18 @@ async function salvarEntrega() {
     document.getElementById('ms-implementacao').focus();
     return;
   }
+  /* O RESUMO E EXIGIDO DAQUI PARA A FRENTE, e nao retroativamente.
+     A exigencia vale na ENTREGA, que e o momento em que o texto passa a ser
+     necessario — e so para quem entrega de agora em diante. As demandas ja
+     entregues nao voltam para ser preenchidas, e o relatorio cai no texto
+     completo delas (ver `resumoDaEntrega`). Travar o passado seria pedir que
+     alguem reescrevesse 268 demandas para publicar a proxima. */
+  const resumo = document.getElementById('ms-resumo').value.trim();
+  if (!resumo) {
+    toast('Escreva o resumo da entrega — é ele que vai para o relatório e a apresentação.', 'err');
+    document.getElementById('ms-resumo').focus();
+    return;
+  }
   // Espera o anexo terminar de subir: gravar no meio deixa o anexo de fora sem
   // ninguem perceber.
   if (!(await msAguardaAnexos())) return;
@@ -4232,11 +4299,14 @@ async function salvarEntrega() {
   const ghLinks = window.ghLinkColeta ? ghLinkColeta('ms', toast) : {};
   if (ghLinks === null) return;
   const antesH = m.horas_realizadas, antesI = m.implementacao, antesA = m.anexos;
+  const antesR = m.resumo_entrega;
   m.horas_realizadas = horas;
   m.implementacao = impl;
+  m.resumo_entrega = resumo;
   Object.assign(m, ghLinks);
   if (_msAnexosMexidos) m.anexos = _msAnexos;
-  const campos = Object.assign({ horas_realizadas: horas, implementacao: impl }, ghLinks);
+  const campos = Object.assign({ horas_realizadas: horas, implementacao: impl,
+                                 resumo_entrega: resumo }, ghLinks);
   if (_msAnexosMexidos) campos.anexos = _msAnexos;
   if (_msSubsMexido) campos.subtarefas = msSubParaGravar();
   const okSalvo = await saveToGitHub({ [id]: campos });
@@ -4248,6 +4318,7 @@ async function salvarEntrega() {
   } else {
     m.horas_realizadas = antesH;
     m.implementacao = antesI;
+    m.resumo_entrega = antesR;
     m.anexos = antesA;
     toast('Não foi possível salvar. Copie o texto antes de fechar, por segurança.', 'err');
   }

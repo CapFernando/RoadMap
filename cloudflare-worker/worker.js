@@ -465,6 +465,7 @@ function carimbaMeses(recebido, servidor, aceitaPedido) {
 
 const HIST_CAMPOS = {
   status_planejamento: 'etapa',
+  resumo_entrega:      'resumo da entrega',
   implementacao:       'o que foi implementado',
   horas_realizadas:    'horas',
   entrega:             'entrega',
@@ -2791,6 +2792,10 @@ export default {
       entrega: m.entrega || '',
       pontos: m.poker_pontos == null ? null : m.poker_pontos,
       horas_realizadas: m.horas_realizadas || 0,
+      // Os DOIS textos, e nao so um: quem le pela API precisa saber se ja existe
+      // resumo antes de mandar um. Sem isto, uma integracao sobrescreveria o que
+      // o dev escreveu na tela sem nunca ter visto.
+      resumo_entrega: m.resumo_entrega || '',
       implementacao: m.implementacao || '',
       // `link_externo` fica por compatibilidade: nenhuma demanda o usa, mas
       // automacao antiga pode ler o campo.
@@ -3181,6 +3186,13 @@ export default {
         // Lista fechada, de proposito. Etapa, prazo, dev e pontos ficam FORA: sao
         // decisao de planejamento, e abrir isso pela API tiraria do PM/PO o
         // controle do funil sem ninguem perceber.
+        /* O RESUMO tem teto de 300, e o texto completo tem 4000. Nao e capricho:
+           300 e o que cabe em cinco linhas do campo (medido), e e este texto que
+           vai para o slide. Quem manda mais que isso perde o excedente aqui em
+           vez de descobrir no comite que o slide cortou. */
+        if (typeof body.resumo_entrega === 'string') {
+          m.resumo_entrega = limpaTexto(body.resumo_entrega, 300); mudou.push('resumo_entrega');
+        }
         if (typeof body.implementacao === 'string') {
           m.implementacao = limpaTexto(body.implementacao, 4000); mudou.push('implementacao');
         }
@@ -3232,7 +3244,7 @@ export default {
         }
         if (!mudou.length) {
           return json({ error: 'nada_a_mudar',
-                        detail: 'Informe ao menos um campo: implementacao, descricao, observacao, ' +
+                        detail: 'Informe ao menos um campo: resumo_entrega, implementacao, descricao, observacao, ' +
                                 'link_issue, link_pr, link_milestone, horas_realizadas, ' +
                                 'etapa ou projeto_id.' }, 400, headers);
         }
@@ -3264,6 +3276,18 @@ export default {
         }
         const errLinkE = aplicaLinksGh(m, body, null);
         if (errLinkE) return json({ error: errLinkE.campo, detail: errLinkE.detail }, 400, headers);
+        /* O RESUMO E ACEITO AQUI, E NAO EXIGIDO — e a tela exige.
+           A assimetria e deliberada. Na tela o campo nasceu junto com a regra, e
+           quem entrega ve a exigencia na hora. Esta rota e chamada por integracao
+           que vive FORA deste repositorio: exigir um campo novo aqui transforma
+           toda chamada existente em 400 no minuto do deploy, e o primeiro aviso
+           seria uma entrega que nao entrou.
+           O relatorio nao fica mudo por causa disso: `resumoDaEntrega` cai no
+           texto completo quando nao ha resumo. Apertar isto e uma decisao de
+           quem opera a integracao, depois que ela passar a mandar o campo. */
+        if (typeof body.resumo_entrega === 'string') {
+          m.resumo_entrega = limpaTexto(body.resumo_entrega, 300);
+        }
         m.implementacao = impl;
         m.horas_realizadas = h;
         m.status_planejamento = 'validacao';

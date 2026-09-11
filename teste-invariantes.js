@@ -9269,6 +9269,174 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(txt.indexOf('selo-validacao.js') > 0, 'e carrega o arquivo dela');
   }
 
+  sec('Resumo da entrega \u2014 o texto que vai para a apresentacao');
+  /* O RELATO: "alguns devs escrevem um livro e nao faz sentido levar para uma
+     apresentacao executiva". A correcao foi separar DOIS textos, e o que estas
+     invariantes protegem e a separacao \u2014 nao a existencia dos campos.
+
+     Elas EXECUTAM `resumoDaEntrega`. Procurar a string `resumo_entrega` no
+     arquivo provaria apenas que alguem a digitou; nao provaria que o deck
+     escolhe o texto certo, que e a coisa que o usuario pediu. */
+  {
+    const R = new Function(corpo(ADMIN, 'function resumoDaEntrega(') +
+      '\nreturn resumoDaEntrega;')();
+
+    ok(R({ resumo_entrega: 'Uma frase.', implementacao: 'Um livro inteiro.' }) === 'Uma frase.',
+       'havendo resumo, e o RESUMO que sai \u2014 e nao o texto completo');
+    ok(R({ resumo_entrega: '', implementacao: 'Um livro inteiro.' }) === 'Um livro inteiro.',
+       'sem resumo, cai no texto completo \u2014 as 268 entregas antigas nao emudecem');
+    ok(R({ resumo_entrega: '   ', implementacao: 'Um livro.' }) === 'Um livro.',
+       'resumo so com espaco conta como vazio');
+    ok(R({}) === '' && R(null) === '',
+       'demanda sem nenhum dos dois devolve vazio, e nao quebra');
+
+    /* SABOTAGEM DO PROPRIO ARGUMENTO: se a funcao ignorasse o resumo e sempre
+       devolvesse `implementacao`, os dois primeiros casos ainda passariam?
+       Nao \u2014 o primeiro cai. E se ela devolvesse SO o resumo, o segundo cai.
+       Os dois casos juntos prendem a regra pelos dois lados. */
+
+    /* OS TRES CONSUMIDORES EXECUTIVOS LEEM PELA REGRA, e nao cada um pela sua.
+       Tres copias da mesma expressao divergem na primeira mudanca \u2014 esta base
+       ja pagou por isso com a etapa, com o prazo e com os temas. */
+    const AC = semComentario(ADMIN);
+    const chamadas = (AC.match(/resumoDaEntrega\(/g) || []).length;
+    ok(chamadas >= 4,
+       'deck, card do relatorio e ata chamam a regra (com a definicao, ' + chamadas + ')');
+    ok(!/texto:\s*String\(m\.implementacao/.test(AC),
+       'o slide da apresentacao nao le `implementacao` direto \u2014 era por ali que o livro chegava');
+
+    /* A TELA DE VALIDACAO CONTINUA COM O TEXTO COMPLETO. O PM/PO valida pelo
+       detalhe: se ela passasse a mostrar so o resumo, a separacao teria
+       resolvido o slide e quebrado a validacao. */
+    /* EXECUTA a tela, e nao procura `m.implementacao` nela. A versao anterior
+       procurava a string \u2014 e a sabotagem que troca o texto completo pelo resumo
+       LOGO NA PRIMEIRA LINHA da funcao passou em silencio, porque o nome do campo
+       continuava escrito mais abaixo. O que importa nao e o campo ser citado: e o
+       texto longo APARECER na tela por onde se valida. */
+    const entSrc = corpo(ADMIN, 'function entregaHTML(');
+    ok(!!entSrc, 'entregaHTML encontrada no admin');
+    if (entSrc) {
+      const LIVRO = 'ESTE_E_O_TEXTO_LONGO_QUE_O_PM_PO_LE_PARA_VALIDAR';
+      const E = new Function(
+        'statusKey', 'esc', 'formatDate', 'credAdmin', 'state',
+        entSrc + '\nreturn entregaHTML;')(
+        () => 'validacao', (x) => String(x == null ? '' : x),
+        (x) => String(x || ''), () => ({}), { melhorias: [] });
+      /* O `try` NAO E ENFEITE. Sem ele, uma tela que estoura derruba a suite
+         inteira: o processo morre no meio, as invariantes seguintes nunca rodam e
+         a saida termina sem veredito nenhum. Medido \u2014 sabotando esta funcao, o
+         arquivo parava calado no meio da secao. Erro e FALHA, e falha se reporta. */
+      let saida = '', estouro = null;
+      try {
+        saida = String(E({ id: 'D1', dev: 'Ana', horas_realizadas: 6,
+                           status_planejamento: 'validacao',
+                           resumo_entrega: 'Uma frase curta.',
+                           implementacao: LIVRO }));
+      } catch (e) { estouro = String((e && e.message) || e).slice(0, 120); }
+      ok(!estouro, 'a tela de validacao monta sem estourar', estouro || '');
+      ok(!estouro && saida.indexOf(LIVRO) > 0,
+         'a tela de validacao do PM/PO mostra o TEXTO COMPLETO, e nao o resumo');
+      ok(!estouro && saida.indexOf('Uma frase curta.') < 0,
+         'e nao troca o detalhe pelo resumo \u2014 validar por uma frase nao e validar');
+    }
+  }
+
+  {
+    /* O LIMITE DE 300 = CINCO LINHAS, medido no campo real. O numero mora no
+       `maxlength` do proprio campo, e o contador o LE de la: dois numeros para o
+       mesmo limite divergem no dia em que um deles mudar. */
+    for (const [nome, txt, id] of [['dev', DEV, 'ms-resumo'], ['admin', ADMIN, 'm-resumo']]) {
+      const campo = new RegExp('<textarea id="' + id + '"[^>]*maxlength="(\\d+)"').exec(txt);
+      ok(campo && campo[1] === '300',
+         'o campo do ' + nome + ' trava em 300 caracteres', campo ? campo[1] : '(sem maxlength)');
+    }
+    const cont = corpo(DEV, 'function msResumoConta(');
+    ok(cont && /getAttribute\('maxlength'\)/.test(cont),
+       'o contador le o teto do proprio campo, e nao repete o numero');
+
+    /* A EXIGENCIA VALE NA ENTREGA, e so daqui para a frente. Nao ha invariante
+       exigindo o campo nas demandas antigas de proposito: travar o passado seria
+       pedir que alguem reescrevesse 268 demandas para publicar a proxima.
+
+       ESTA INVARIANTE EXECUTA `salvarEntrega`, e nao procura `ms-resumo` no
+       texto dela. A primeira versao procurava a string e o `return;` \u2014 e a
+       sabotagem `if (false)` passou EM SILENCIO, porque os dois continuavam
+       escritos ali. E o mesmo furo que os testes do `confirmar` tinham: provavam
+       que a pergunta EXISTIA, nunca que a resposta era OBEDECIDA.
+
+       O que se mede aqui e a consequencia: com o resumo vazio, `saveToGitHub`
+       NAO e chamado; com ele preenchido, e. Os dois lados juntos \u2014 so o
+       primeiro passaria se a funcao nunca gravasse nada. */
+    const ent = corpo(DEV, 'async function salvarEntrega(');
+    ok(!!ent, 'salvarEntrega encontrada no painel do dev');
+    if (ent) {
+      const rodaEntrega = async (resumo) => {
+        const campos = { 'ms-id': 'D1', 'ms-horas': '6',
+                         'ms-implementacao': 'Um livro inteiro sobre o que mudou.',
+                         'ms-resumo': resumo };
+        let gravou = false;
+        const doc = { getElementById: (k) => ({
+          get value() { return campos[k] === undefined ? '' : campos[k]; },
+          set value(v) { campos[k] = v; },
+          focus() {}, innerHTML: '', style: {}, getAttribute: () => '300',
+        }) };
+        const f = new Function(
+          'document', 'state', 'getStatusKey', 'toast', 'saveToGitHub',
+          'msAguardaAnexos', 'msSubParaGravar', 'closeModal', 'renderKanban',
+          'window', '_msAnexosMexidos', '_msAnexos', '_msSubsMexido',
+          ent + '\nreturn salvarEntrega;')(
+          doc, { melhorias: [{ id: 'D1', status_planejamento: 'em_andamento' }] },
+          () => 'em_andamento', () => {},
+          async () => { gravou = true; return true; },
+          async () => true, () => [], () => {}, () => {},
+          {}, false, [], false);
+        await f();
+        return gravou;
+      };
+      /* `await` DIRETO, e nao `registra`. Este bloco fica depois do
+         `Promise.all(pendentes)` la de cima, e o `feitas === quantas` que o
+         acompanha conta os blocos registrados ATE ali: registrar aqui deixaria a
+         promessa pendurada e a suite fecharia a conta sem ter olhado. Estamos
+         dentro da funcao assincrona, entao o `await` resolve na hora. */
+      ok(!(await rodaEntrega('')),
+         'resumo vazio: a entrega NAO grava \u2014 o guarda e obedecido, e nao so escrito');
+      ok(!(await rodaEntrega('   ')),
+         'resumo so com espaco tambem barra');
+      ok(await rodaEntrega('Uma frase do que mudou.'),
+         'com o resumo preenchido a entrega grava \u2014 o guarda nao trava tudo');
+    }
+  }
+
+  {
+    /* O WORKER ACEITA O CAMPO E RESPEITA O MESMO TETO. Sem isto o texto chegaria
+       a tela e nao ao disco pelo caminho da API. */
+    ok(/resumo_entrega:\s*'resumo da entrega'/.test(WC),
+       'o historico sabe dizer o nome do campo em portugues');
+    /* AS DUAS ROTAS, e nao "alguma delas". `demanda-atualizar` e
+       `demanda-entregar` gravam o resumo, e a primeira versao desta invariante
+       so exigia UMA ocorrencia \u2014 estragar o teto de uma das rotas passou em
+       silencio porque a outra ainda casava. */
+    const tetos = (WC.match(/limpaTexto\(body\.resumo_entrega, 300\)/g) || []).length;
+    const tetosQuaisquer = (WC.match(/limpaTexto\(body\.resumo_entrega,/g) || []).length;
+    ok(tetos === 2 && tetos === tetosQuaisquer,
+       'as duas rotas da API cortam o resumo em 300, como o campo',
+       tetos + ' de ' + tetosQuaisquer);
+    ok(/resumo_entrega: m\.resumo_entrega/.test(WC),
+       'a API devolve o resumo na leitura da demanda');
+    /* E O `demanda-entregar` NAO EXIGE o campo: a rota e chamada por integracao
+       fora deste repositorio, e um campo novo obrigatorio viraria 400 em toda
+       chamada existente no minuto do deploy. */
+    /* A JANELA E O BLOCO DA ROTA, contado por chaves. Antes era um `slice` de
+       2500 caracteres a partir da PRIMEIRA aparicao do nome da acao \u2014 que e um
+       `if` de outro assunto, 100 linhas acima. A janela nao alcancava a rota, e
+       por isso aceitou uma sabotagem que POE a recusa la dentro. */
+    const rota = corpo(WC, "if (body.action === 'demanda-entregar') {");
+    ok(!!rota && rota.indexOf('m.resumo_entrega') > 0,
+       'a rota de entrega da API foi localizada e grava o resumo');
+    ok(rota && !/error:\s*'resumo_entrega'/.test(rota),
+       'a API nao recusa entrega por falta de resumo \u2014 so a tela exige');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
