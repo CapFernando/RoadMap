@@ -63,6 +63,7 @@ const POKER = lerTela('poker.html');
 const APRES = fs.readFileSync('apresentacao.js', 'utf8');
 const CAPA = fs.readFileSync('capa-tecnologia.js', 'utf8');
 const PIPE = fs.readFileSync('pipelines.js', 'utf8');
+const PIPELINES_API = require('./pipelines.js');
 const PRZ = fs.readFileSync('prazo.js', 'utf8');
 const CAPJS = fs.readFileSync('capacidade.js', 'utf8');
 const CAPI = require('./capacidade.js');
@@ -3809,12 +3810,125 @@ ok(!/const PIPELINES\s*=\s*\[/.test(semComentario(APRES)),
 
 // Suporte, Bitrix e Analise de requisitos ficam FORA por decisao. Sem trava,
 // alguem "conserta" a ausencia delas e o slide ganha tres cartoes zerados.
+/* SEM OS COMENTARIOS, pela TERCEIRA vez nesta sessao. A janela de 200 caracteres
+   parte do `indexOf('FORA_DO_DECK')` — e um comentario que MENCIONA
+   `FORA_DO_DECK` mais acima no arquivo desloca o inicio da janela para o texto
+   errado, reprovando a lista correta. Aconteceu igual com `Math.floor(idx / 5)`
+   e com `catch (_) {}`: invariante que le o arquivo inteiro le tambem o que se
+   escreve SOBRE o codigo. */
+const PIPE_COD = semComentario(PIPE);
 ['Suporte', 'Bitrix 24', 'Análise de requisitos'].forEach((f) => {
-  ok(new RegExp("'" + f + "'").test(PIPE.slice(PIPE.indexOf('FORA_DO_DECK'), PIPE.indexOf('FORA_DO_DECK') + 200)),
+  ok(new RegExp("'" + f + "'").test(
+       PIPE_COD.slice(PIPE_COD.indexOf('FORA_DO_DECK'), PIPE_COD.indexOf('FORA_DO_DECK') + 200)),
      'fica fora do deck por decisao: ' + f);
 });
-ok(/function canonica[\s\S]{0,200}VALIDOS\[norm\(nome\)\] \|\| ''/.test(PIPE),
+/* EXECUTA, em vez de casar o corpo. A versao anterior exigia o texto exato
+   `VALIDOS[norm(nome)] || ''`, e reprovou quando `canonica` ganhou o mapa de
+   apelidos — uma mudanca legitima. O que importa e o COMPORTAMENTO: frente fora
+   do deck vira '', e nunca ela mesma. */
+ok(PIPELINES_API.canonica('Suporte') === '',
    'frente que nao entra no deck resolve para vazio, e nao para si mesma');
+ok(PIPELINES_API.canonica('inventada') === '', 'e nome desconhecido tambem');
+
+/* ═══ A FUSAO DE `Dados & Inteligencia` COM `Power BI` ═══════════════
+
+   Eram duas frentes, com uma e com duas pessoas. Viraram `Dados & Power BI` com
+   quatro: Jhonantan, Dan Weine, Marina e Jose Amaro.
+
+   O RISCO DA FUSAO NAO E A LISTA, E O QUE JA FOI MARCADO. `canonica` devolve ''
+   para frente fora da lista, e `doDev` le '' como "nao cadastrado" e cai na
+   semente. Sem um mapa de apelidos, toda pessoa marcada NA TELA como
+   `Dados & Inteligencia` ou `Power BI` voltaria para "— definir —" no instante
+   da fusao — em silencio, e sem ninguem saber que alguem ja tinha decidido. */
+ok(PIPELINES_API.nomes.length === 4, 'sao quatro frentes depois da fusao',
+   PIPELINES_API.nomes.join(' | '));
+ok(PIPELINES_API.nomes.includes('Dados & Power BI'), 'e a fundida se chama assim');
+ok(!PIPELINES_API.nomes.includes('Power BI') &&
+   !PIPELINES_API.nomes.includes('Dados & Inteligência'),
+   'as duas antigas sairam da lista');
+
+/* OS NOMES ANTIGOS CONTINUAM RESOLVENDO — e o ponto todo. */
+ok(PIPELINES_API.canonica('Power BI') === 'Dados & Power BI',
+   'quem estava marcado como Power BI continua classificado');
+ok(PIPELINES_API.canonica('Dados & Inteligência') === 'Dados & Power BI',
+   'e quem estava em Dados & Inteligencia tambem');
+ok(PIPELINES_API.doDev('Fulano', { Fulano: { pipeline: 'Power BI' } }) === 'Dados & Power BI',
+   'a marcacao gravada no devs_perfil sobrevive a fusao');
+/* SEM ACENTO E EM CAIXA QUALQUER, porque `devs_perfil` guarda o que a tela
+   gravou em versoes diferentes do arquivo. */
+ok(PIPELINES_API.canonica('dados & inteligencia') === 'Dados & Power BI',
+   'inclusive gravada sem acento');
+ok(PIPELINES_API.canonica('POWER BI') === 'Dados & Power BI', 'e em caixa alta');
+
+/* NENHUM APELIDO PODE COLIDIR COM UMA FRENTE VIVA — e isto substitui uma
+   invariante que eu tentei escrever sobre a ORDEM de `VALIDOS[n] || APELIDOS[n]`.
+
+   A sabotagem que inverteu a ordem PASSOU BATIDA, e com razao: hoje nenhuma
+   chave esta nos dois mapas, entao a ordem nao muda resultado nenhum. Testar a
+   ordem seria fixar uma linha que nao decide nada — decoracao, pelo criterio
+   deste projeto.
+
+   O que decide e a AUSENCIA DE COLISAO. No dia em que alguem criar uma frente
+   chamada `Power BI` de novo, ou apontar um apelido para um nome vivo, a ordem
+   passa a importar de verdade e o comportamento fica dependendo dela. Esta
+   invariante impede que esse dia chegue sem aviso, e ai a ordem volta a ser
+   irrelevante — que e o estado seguro. */
+{
+  const norm = (t) => String(t || '').toLowerCase().normalize('NFD')
+    .replace(/[̀-ͯ]/g, '').trim();
+  const vivas = new Set(PIPELINES_API.nomes.map(norm));
+  const apelidos = [...PIPE_COD.matchAll(/^\s*'([^']+)':\s*'([^']+)',\s*$/gm)]
+    .map(m => m[1])
+    .filter(k => vivas.has(norm(k)));
+  ok(apelidos.length === 0,
+     'nenhum apelido usa o nome de uma frente viva — e por isso a ordem da consulta nao decide nada',
+     apelidos.length ? apelidos.join(', ') : 'nenhuma colisao');
+}
+
+/* OS QUATRO NOMES, pela semente. `Jhonantan` e nao `Jhonatan Soares`: a chave e
+   o nome COMO APARECE NAS DEMANDAS, e a entrada antiga nunca casou com ninguem. */
+['Jhonantan', 'Dan Weine', 'Marina', 'Jose Amaro'].forEach((n) => {
+  ok(PIPELINES_API.doDev(n, {}) === 'Dados & Power BI',
+     n + ' cai em Dados & Power BI');
+});
+ok(!/'Jhonatan Soares'/.test(PIPE_COD),
+   'e a chave que nunca casava saiu da semente');
+
+/* A COR DA FUNDIDA PRECISA SER DISTINGUIVEL das tres que ficaram — num slide
+   projetado, duas fatias de cor parecida sao lidas como a mesma. A medida e CIE76
+   sobre Lab; abaixo de ~25 o olho junta as duas.
+
+   Foi por isso que a cor escolhida foi a do Power BI e nao a de Dados: o roxo
+   #A855F7 fica a 10 do roxo de `Automacao & RPA`, e o azul #3B82F6 fica a 36. */
+{
+  const lab = (h) => {
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16) / 255)
+      .map(v => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+    const X = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
+    const Y = r * 0.2126 + g * 0.7152 + b * 0.0722;
+    const Z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+    const f = t => t > 0.008856 ? Math.cbrt(t) : (7.787 * t + 16 / 116);
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  };
+  const dist = (a, b) => {
+    const A = lab(a), B = lab(b);
+    return Math.round(Math.sqrt(A.reduce((s, v, i) => s + (v - B[i]) ** 2, 0)));
+  };
+  const cores = PIPELINES_API.lista.map(p => [p.nome, p.cor]);
+  let pior = 999, par = '';
+  for (let i = 0; i < cores.length; i++) {
+    for (let j = i + 1; j < cores.length; j++) {
+      const d = dist(cores[i][1], cores[j][1]);
+      if (d < pior) { pior = d; par = cores[i][0] + ' x ' + cores[j][0]; }
+    }
+  }
+  ok(pior >= 25, 'as quatro cores do deck continuam distinguiveis entre si',
+     'pior par: ' + par + ' a ' + pior);
+  ok(PIPELINES_API.cor('Dados & Power BI') === '3B82F6',
+     'a fundida ficou com o azul, que e o que passa longe do roxo de RPA');
+  ok(PIPELINES_API.cor('Power BI') === '3B82F6',
+     'e a cor responde pelo nome antigo tambem — senao um deck velho perderia a cor');
+}
 
 // O CADASTRO VENCE A SEMENTE. Marcar alguem na tela e o deck ignorar e o mesmo
 // defeito que fez as marcacoes de DEV-AXCred sumirem, so que silencioso.

@@ -1,10 +1,15 @@
 /* ─────────────────────────────────────────────────────────────────────────
    PIPELINES — a frente de trabalho de cada pessoa
 
-   Existe porque a visão que a diretoria APROVOU organiza tudo por pipeline
-   (IA & Vibe coding, Desenvolvimento, Dados & Inteligência, Power BI,
-   Automação & RPA), e esta ferramenta não tinha esse eixo: ela sabe o tema da
-   demanda e quem executou, e nada que diga "esta entrega é de RPA".
+   Existe porque a visão que a diretoria APROVOU organiza tudo por pipeline, e
+   esta ferramenta não tinha esse eixo: ela sabe o tema da demanda e quem
+   executou, e nada que diga "esta entrega é de RPA".
+
+   SÃO QUATRO HOJE: IA & Vibe coding, Desenvolvimento, Dados & Power BI e
+   Automação & RPA. Eram cinco — `Dados & Inteligência` e `Power BI` foram
+   fundidas, ver o comentário na lista abaixo. Os dois nomes antigos continuam
+   resolvendo para a frente nova (`APELIDOS`), senão a fusão apagaria em silêncio
+   toda marcação já feita na tela de contas.
 
    A FRENTE É DA PESSOA, E NÃO DA DEMANDA. Foi a escolha de menor atrito: o
    dado que já existe em toda demanda desde o primeiro dia é `dev`, e nenhuma
@@ -33,10 +38,40 @@
   var PIPELINES = [
     { k: 'ia',     nome: 'IA & Vibe coding',    cor: 'F97316' },
     { k: 'dev',    nome: 'Desenvolvimento',     cor: '22D3EE' },
-    { k: 'dados',  nome: 'Dados & Inteligência', cor: 'A855F7' },
-    { k: 'bi',     nome: 'Power BI',            cor: '3B82F6' },
+    /* `Dados & Inteligência` E `Power BI` VIRARAM UMA. Eram duas frentes com uma
+       pessoa e duas pessoas; na prática o time trata as duas como o mesmo
+       trabalho, e dois slides de um e de dois provocam no comitê a pergunta
+       "por que isso está separado?" — que é justamente o que o deck não deve
+       provocar (a mesma razão de `FORA_DO_DECK` existir logo abaixo).
+
+       A COR É A DO POWER BI, e a escolha foi medida. Fundir libera uma das duas,
+       e a que ficasse precisaria continuar distinguível das outras três. Em
+       distância perceptual (CIE76) até a cor mais próxima que sobra:
+
+         roxo de Dados   #A855F7   a 10 de `Automação & RPA` (#8B5CF6)
+         azul de Power BI #3B82F6  a 36 de `Automação & RPA`
+
+       Abaixo de ~25 duas cores se confundem num slide projetado. O roxo daria
+       duas fatias que a plateia leria como a mesma. */
+    { k: 'dados',  nome: 'Dados & Power BI',    cor: '3B82F6' },
     { k: 'rpa',    nome: 'Automação & RPA',     cor: '8B5CF6' },
   ];
+
+  /* ── OS NOMES ANTIGOS CONTINUAM RESOLVENDO ────────────────────────────────
+     `canonica` devolve '' para frente que não está na lista, e `doDev` trata ''
+     como "não cadastrado" e cai na semente. Sem este mapa, toda pessoa MARCADA
+     NA TELA como `Dados & Inteligência` ou `Power BI` perderia a marcação no
+     instante da fusão — silenciosamente, porque o seletor voltaria a "— definir —"
+     e ninguém saberia que alguém já tinha decidido aquilo.
+
+     É o mesmo cuidado do mapa de `status` legado em `etapa-demanda.js`: o dado
+     gravado ontem não muda de forma porque a lista de hoje mudou. Fica para
+     sempre — um `devs_perfil` gravado em agosto continua válido em qualquer
+     leitura futura, e remover isto reintroduz a perda. */
+  var APELIDOS = {
+    'dados & inteligencia': 'Dados & Power BI',
+    'power bi': 'Dados & Power BI',
+  };
 
   /* FORA DO DECK POR DECISÃO, e não por esquecimento.
      Ficam listadas para ninguém "corrigir" a ausência delas mais tarde: no mês
@@ -80,11 +115,18 @@
        classificado" num slide de diretoria é pior que a frente certa, porque
        convida a pergunta "e o que é isso?" sem ter resposta. */
     'João Carvalho': 'IA & Vibe coding',
-    // Dados & Inteligência
-    'Jhonatan Soares': 'Dados & Inteligência',
-    // Power BI
-    'Dan Weine': 'Power BI',
-    'Marina': 'Power BI',
+    /* Dados & Power BI — os quatro nomes conferidos com o Fernando.
+       `Jhonantan` E NAO `Jhonatan Soares`: a chave da semente e o nome COMO ELE
+       APARECE NAS DEMANDAS, e a entrada anterior nunca casou com ninguem. Ver a
+       nota sobre as chaves orfas no fim deste bloco. */
+    'Jhonantan': 'Dados & Power BI',
+    'Dan Weine': 'Dados & Power BI',
+    'Marina': 'Dados & Power BI',
+    /* `Jose Amaro` NAO ESTAVA na lista de devs do arquivo de dados conferido.
+       Entra porque foi pedido, e a semente so age quando o nome casa — se a
+       grafia na base for outra (com acento, ou com sobrenome), esta linha fica
+       inerte e a frente dele sai "— definir —" na tela, sem estragar nada. */
+    'Jose Amaro': 'Dados & Power BI',
     // Automação & RPA
     'Leite': 'Automação & RPA',
     // Sem frente de propósito:
@@ -99,6 +141,26 @@
       .trim().toLowerCase();
   }
 
+  /* ── MEDIDO: 10 DAS 16 CHAVES DESTA SEMENTE NUNCA CASAM COM NINGUÉM ───────
+     A semente é indexada pelo nome COMO ELE APARECE NAS DEMANDAS — é o que o
+     comentário acima promete, e é o que faz ela funcionar. Cruzando as chaves
+     com os nomes reais (cadastro de devs + campo `dev` de todas as demandas),
+     dez delas não encontram ninguém:
+
+       João Siqueira · João Vitor Batista de Siqueira · Emilly Souza ·
+       Gabriel Fernandes · Murillo Jesus · Maury Teixeira · Lucas Santos ·
+       Crisley Almeida · João Carvalho · Jhonatan Soares
+
+     São nomes COMPLETOS, e as demandas usam o curto: "Crisley Almeida" aqui
+     contra "Crisley" lá, "Jhonatan Soares" contra "Jhonantan". O próprio
+     comentário acima já avisava desse risco ("lá a pessoa é 'Guilherme Leite' e
+     aqui as demandas dizem 'Leite'") — e ainda assim dez entraram no formato
+     errado. Elas são INERTES: não quebram nada, e não classificam ninguém.
+
+     Não as corrigi em lote nesta fatia. Casar "Emilly Souza" com "Emilly Viana"
+     é um palpite sobre quem é quem, e o próprio arquivo já diz que chutar a
+     frente de alguém é pior que deixar em branco. Fica medido e escrito para
+     quem for arrumar com a lista de gente na mão. */
   var PORNOME = {};
   Object.keys(SEMENTE).forEach(function (n) { PORNOME[norm(n)] = SEMENTE[n]; });
 
@@ -109,7 +171,11 @@
    *  Devolver '' para "Suporte" é o que impede uma frente descontinuada de
    *  voltar ao slide só porque alguém a digitou no cadastro. */
   function canonica(nome) {
-    return VALIDOS[norm(nome)] || '';
+    var n = norm(nome);
+    // A LISTA ATUAL PRIMEIRO, o apelido como reserva. A ordem só importa no dia
+    // em que uma frente nova reusar um nome antigo: ali o nome vivo tem de
+    // vencer o apelido, e não o contrário.
+    return VALIDOS[n] || APELIDOS[n] || '';
   }
 
   /** A frente de uma pessoa. `perfis` é o `devs_perfil` do arquivo de dados.
