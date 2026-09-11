@@ -5530,6 +5530,139 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      String(CAPX.planejados({ status: 'estimada', poker_pontos: 13 })));
 })();
 
+/* ═══ HORAS POR SUBTAREFA, SOMANDO NO TOTAL DA DEMANDA ═════════════
+
+   A Marina usa subtarefa como passo do dia: uma demanda de suporte de 09 a 11 de
+   setembro, com "Abertura de Caixa" e "Fechamento de Caixa" em cada dia. O pedido
+   foi lancar as horas EM CADA passo e somar no fim.
+
+   O RISCO NAO E SOMAR, E TER DUAS FONTES. `horas_realizadas` e o campo que o
+   relatorio do comite e a `capacidade.js` leem. Se os passos somassem 5 e o campo
+   dissesse 3, existiriam duas respostas para "quanto custou esta demanda" e nada
+   na tela diria qual vale — o mesmo defeito dos 42 temas e das quatro derivacoes
+   de etapa, de novo.
+
+   Entao o campo passa a ser DERIVADO e somente-leitura QUANDO ha hora em algum
+   passo, e continua digitado a mao quando nao ha. A maioria das demandas nao tem
+   subtarefa, e nenhuma delas pode mudar de comportamento por causa deste caso.
+
+   ESTE BLOCO EXECUTA as funcoes recortadas do dev.html. */
+(() => {
+  sec('Horas por subtarefa');
+  const sd = corpo(DEV, 'function msSubsDe(');
+  const st = corpo(DEV, 'function msSubHorasTotal(');
+  const pg = corpo(DEV, 'function msSubParaGravar(');
+  ok(!!sd && !!st && !!pg, 'a soma das horas foi encontrada para ser executada');
+  if (!sd || !st || !pg) return;
+
+  const api = new Function('_msSubs', sd + st + pg +
+    'return { msSubsDe, msSubHorasTotal, msSubParaGravar };')([]);
+  const total = (subs) => api.msSubHorasTotal(api.msSubsDe({ subtarefas: subs }));
+
+  /* O CASO DA MARINA, numero por numero — o print mostra 3. */
+  ok(total([
+    { titulo: 'Abertura de Caixa', horas: 0.5 },
+    { titulo: 'Fechamento de Caixa', horas: 0.5 },
+    { titulo: 'Abertura de Caixa', horas: 0.5 },
+    { titulo: 'Fechamento de Caixa', horas: 0.5 },
+    { titulo: 'Abertura de Caixa', horas: 1 },
+  ]) === 3, 'os cinco passos da Marina somam 3, como no cartao dela');
+
+  /* `null` E A CHAVE DO MODO MANUAL, e foi aqui que eu errei na primeira versao.
+     `Number('')` e ZERO, e zero passa em `isFinite(h) && h >= 0` — entao toda
+     subtarefa sem hora somava 0 e a funcao devolvia 0 em vez de `null`. O efeito
+     seria o campo de horas virar somente-leitura com "0" em TODA demanda que
+     tivesse subtarefa, mesmo sem ninguem ter lancado hora nenhuma. */
+  ok(total([{ titulo: 'a' }, { titulo: 'b' }]) === null,
+     'sem hora em passo nenhum devolve null, e nao zero — o campo segue manual',
+     JSON.stringify(total([{ titulo: 'a' }, { titulo: 'b' }])));
+  ok(total([]) === null, 'e demanda sem subtarefa tambem');
+
+  /* ZERO LANCADO DE PROPOSITO E DIFERENTE DE NAO LANCADO. E a mesma distincao
+     que `semPontuacao` guarda em `capacidade.js`. */
+  ok(total([{ titulo: 'a', horas: 0 }, { titulo: 'b' }]) === 0,
+     'mas zero LANCADO conta, e liga o modo derivado');
+
+  ok(total([{ titulo: 'a', horas: 2 }, { titulo: 'b' }]) === 2,
+     'um passo lancado entre varios ja soma');
+
+  /* O ARREDONDAMENTO. Meia hora tres vezes da 1.5, mas 0.1 + 0.2 em ponto
+     flutuante da 0.30000000000000004 — e esse numero iria inteiro para o
+     relatorio do comite. */
+  ok(total([{ titulo: 'a', horas: 0.1 }, { titulo: 'b', horas: 0.2 }]) === 0.3,
+     'a soma e arredondada na centesima, e nao vaza ponto flutuante',
+     String(total([{ titulo: 'a', horas: 0.1 }, { titulo: 'b', horas: 0.2 }])));
+
+  ok(total([{ titulo: 'a', horas: -5 }, { titulo: 'b', horas: 'abc' }, { titulo: 'c', horas: 4 }]) === 4,
+     'negativo e texto sao ignorados, em vez de virarem NaN na soma');
+
+  /* O QUE VAI PARA O ARQUIVO. `horas` so entra quando ha numero: gravar
+     `horas: ''` em toda subtarefa encheria o arquivo de campo vazio. */
+  const grav = new Function('_msSubs', pg + 'return msSubParaGravar();')(
+    api.msSubsDe({ subtarefas: [
+      { titulo: 'Com hora', horas: 2 }, { titulo: 'Sem hora' }, { titulo: '', horas: 9 },
+    ] }));
+  ok(grav.length === 2, 'passo sem titulo nao e gravado', String(grav.length));
+  ok(grav[0].horas === 2, 'o passo com hora leva o numero');
+  ok(!('horas' in grav[1]), 'e o passo sem hora NAO ganha o campo vazio');
+
+  /* ─── A TELA ──────────────────────────────────────── */
+  const at = corpo(DEV, 'function msSubAplicaTotal(');
+  ok(!!at, 'o comando que aplica o total existe');
+  ok(!!at && /campo\.readOnly = true/.test(at) && /campo\.readOnly = false/.test(at),
+     'o campo de horas trava quando ha soma e destrava quando nao ha');
+  ok(!!at && /total === null/.test(at),
+     'e e o `null` que decide — nao a quantidade de subtarefas');
+  /* O AVISO DE ONDE VEIO O NUMERO. Campo somente-leitura sem explicacao parece
+     travado por defeito, e a pessoa nao descobre que basta apagar as horas. */
+  ok(!!at && /apague as horas das subtarefas/.test(at),
+     'e a tela diz como voltar a digitar a mao');
+
+  /* NAO REDESENHA A LISTA AO DIGITAR. `msSubRender` refaz o `innerHTML` inteiro,
+     e faze-lo no `oninput` tiraria o foco do campo a cada tecla — o mesmo
+     defeito que o `comFocoPreservado` do admin existe para evitar. */
+  const mh = corpo(DEV, 'function msSubHoras(');
+  ok(!!mh && !/msSubRender\(/.test(mh),
+     'digitar hora nao redesenha a lista, para o foco nao se perder a cada tecla');
+  ok(!!mh && /msSubAplicaTotal\(\)/.test(mh), 'mas o total se atualiza na hora');
+
+  /* ─── A LINHA CABE NO MODAL ─────────────────────────────
+
+     Medido no navegador, com o modal real (500px, 444 uteis):
+
+       sem `min-width:0` no campo de horas   ele saia com 163px e o titulo com 20
+       com `flex:0 0 138px` na data          a data ocupava 156, sobravam 143
+       como ficou                            uma linha, titulo 167px, altura 32
+
+     `min-width:0` NAO E DECORACAO: item de flex nasce com `min-width:auto`, que
+     resolve para o minimo INTRINSECO — e o de um `input[type=number]` com os
+     botoes de incremento mede ~163px, atropelando o `flex-basis`. */
+  const render = corpo(DEV, 'function msSubRender(');
+  /* ANCORA NO CAMPO CERTO. A primeira versao procurava `type="number"` seguido
+     de `min-width:0` em ate 400 caracteres, e PASSOU BATIDA na sabotagem: ha
+     outro `type="number"` no arquivo (o `ms-horas`, o total da demanda), e o
+     regex casava com ele. Agora o recorte comeca no `msSubHoras(`, que so existe
+     neste campo. */
+  /* E SEM OS COMENTARIOS — QUARTA vez nesta sessao. O comentario que eu escrevi
+     ao lado do campo explica `min-width:0` entre crases, e o regex casou com a
+     EXPLICACAO: a sabotagem que removeu o `min-width:0` do CODIGO passou batida
+     duas vezes seguidas. Aconteceu igual com `Math.floor(idx / 5)`,
+     `catch (_) {}` e `FORA_DO_DECK`. `semComentario` existe neste arquivo por
+     isso, e a licao e escrever a invariante JA com ele. */
+  const renderCod = semComentario(render);
+  const campoHoras = renderCod.slice(renderCod.indexOf('msSubHoras('));
+  ok(!!campoHoras && /min-width:0/.test(campoHoras.slice(0, 300)),
+     'o campo de horas tem min-width:0, senao o flex-basis e ignorado');
+  ok(!!renderCod && /flex-wrap:wrap/.test(renderCod),
+     'a linha quebra quando nao cabe, em vez de espremer o titulo');
+  /* BASE 120 no titulo, e nao a largura desejada: o que decide a quebra e a SOMA
+     DAS BASES. Com 170 a soma passava de 444 e a linha quebrava mesmo cabendo. */
+  ok(!!renderCod && /flex:1 1 120px;min-width:0/.test(renderCod),
+     'e o titulo pede 120 de base, que e o que mantem tudo numa linha no modal');
+  ok(!!renderCod && /flex:0 0 105px/.test(renderCod),
+     'a data encolheu para o minimo real dela, liberando espaco para o titulo');
+})();
+
 /* ═══ A SUBIDA PARA PRODUCAO ─ VERSAO, MARCA E O LOTE ══════════════
 
    O pedido: um campo abaixo da referencia no GitHub para a VERSAO e para dizer se

@@ -826,6 +826,9 @@
         <label>Horas de desenvolvimento *</label>
         <input type="number" id="ms-horas" min="0.5" step="0.5" placeholder="Ex: 16" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'" />
       </div>
+      <!-- Explica de onde veio o numero quando ele deixa de ser digitado. Sem
+           isto, o campo somente-leitura parece travado por defeito. -->
+      <div id="ms-sub-horas-nota" style="display:none;font-size:12px;color:var(--text2);margin:-6px 0 12px 0"></div>
       <div id="ms-horas-plan" style="font-size:12px;color:var(--text3);background:var(--bg3);border-radius:6px;padding:8px 12px;margin-bottom:12px;"></div>
       <div class="form-group">
         <label>O que foi implementado *</label>
@@ -3973,7 +3976,37 @@ function msSubsDe(m) {
     titulo: String(x.titulo || '').slice(0, 140),
     data: String(x.data || '').slice(0, 10),
     feita: !!x.feita,
+    /* HORAS POR PASSO. `''` e nao `0`: a diferenca entre "nao lancei" e "lancei
+       zero" e a mesma que `semPontuacao` guarda em `capacidade.js`, e zero em
+       silencio some da soma sem ninguem notar que faltou lancar. */
+    horas: (x.horas === 0 || x.horas) ? String(x.horas) : '',
   }));
+}
+
+/* A SOMA DAS HORAS DOS PASSOS, ou `null` quando NENHUM passo tem hora lancada.
+ *
+ *  `null` e a resposta que liga e desliga o modo derivado: com ele, o campo de
+ *  horas da demanda continua sendo digitado a mao, como sempre foi e como a
+ *  maioria das demandas usa. E o unico jeito de nao trocar o comportamento de
+ *  todo mundo para atender um caso. */
+function msSubHorasTotal(subs) {
+  /* O CAMPO VAZIO SAI ANTES DO `Number`, e nao depois. `Number('')` e ZERO, e
+     zero passa em `Number.isFinite(h) && h >= 0` — entao a primeira versao disto
+     somava 0 para toda subtarefa sem hora e devolvia 0 em vez de `null`. Efeito:
+     o campo de horas virava somente-leitura com "0" em TODA demanda que tivesse
+     subtarefa, mesmo sem ninguem ter lancado hora nenhuma. Era a distincao entre
+     "nao lancei" e "lancei zero" que o comentario de `msSubsDe` promete guardar,
+     perdida uma funcao depois. */
+  const lista = (subs || [])
+    .filter(x => String(x.horas == null ? '' : x.horas).trim() !== '')
+    .map(x => Number(x.horas))
+    .filter(h => Number.isFinite(h) && h >= 0);
+  if (!lista.length) return null;
+  const total = lista.reduce((t, h) => t + h, 0);
+  /* ARREDONDA NA CENTESIMA. Meia hora em cada um de tres passos da 1.5, mas
+     0.1 + 0.2 em ponto flutuante da 0.30000000000000004 — e esse numero iria
+     para o relatorio do comite do jeito que esta. */
+  return Math.round(total * 100) / 100;
 }
 
 function msSubProgresso(subs) {
@@ -3992,30 +4025,109 @@ function msSubRender(m) {
     alvo.textContent = p.total ? p.feitas + ' de ' + p.total + '  ·  ' + p.pct + '%' : '';
     alvo.style.color = p.pct === 100 ? 'var(--green-tx, #3EC98E)' : 'var(--text3)';
   }
+  msSubAplicaTotal();
   if (!_msSubs.length) {
     cx.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">' +
       'Nenhuma subtarefa. Quebre a demanda em passos para acompanhar o quanto já andou.</div>';
     return;
   }
   cx.innerHTML = _msSubs.map((x, i) =>
-    '<div style="display:flex;gap:7px;align-items:center;margin-bottom:5px">' +
+    /* A LINHA QUEBRA, e isso passou a ser necessario com as horas.
+       Medido no modal real (500px, 444 uteis): com o campo de horas a linha
+       deixava 102px para o TITULO — que e o unico conteudo que a pessoa escreve
+       e le — e abaixo de 440px ele colapsava para 20px, sumindo da tela. A data
+       sozinha ocupa 156px, e ela nao encolhe.
+       Com `flex-wrap`, o titulo pede 150px antes de empurrar o resto para a
+       linha de baixo: cabe tudo numa linha quando ha espaco, e vira duas quando
+       nao ha, em vez de espremer o que importa. */
+    '<div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:5px">' +
       '<input type="checkbox" ' + (x.feita ? 'checked' : '') +
         ' onchange="msSubMarca(' + i + ', this.checked)"' +
         ' title="' + (x.feita ? 'Feita' : 'Em andamento') + '"' +
         ' style="width:16px;height:16px;flex:0 0 auto;cursor:pointer" />' +
       '<input type="text" value="' + escAttr(x.titulo) + '" placeholder="O que é este passo"' +
         ' oninput="msSubTexto(' + i + ', this.value)" maxlength="140"' +
-        ' style="flex:1;min-width:0;padding:6px 9px;background:var(--bg3);border:1px solid var(--border);' +
+        /* BASE 120, e nao a largura desejada. O que decide a quebra e a soma das BASES,
+           e nao o tamanho final: com 170 a soma passava de 444 e a linha quebrava
+           mesmo cabendo. Com 120 a soma da 388, cabe numa linha, e o `flex-grow`
+           estica o titulo ate os 176px que sobram. Abaixo de ~400px a soma nao
+           cabe mais e a linha quebra sozinha, dando ao titulo a largura inteira —
+           que e o comportamento certo no celular. */
+        ' style="flex:1 1 120px;min-width:0;padding:6px 9px;background:var(--bg3);border:1px solid var(--border);' +
         'border-radius:6px;color:var(--text);font-size:13px;font-family:inherit;outline:none' +
         (x.feita ? ';text-decoration:line-through;color:var(--text3)' : '') + '" />' +
       '<input type="date" value="' + escAttr(x.data) + '" title="Data prevista ou de conclusão"' +
         ' onchange="msSubData(' + i + ', this.value)"' +
-        ' style="flex:0 0 138px;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);' +
+        /* 105px E O MINIMO REAL deste campo, medido no navegador: com o padding
+           e a borda ele renderiza 123px, que e o que "dd/mm/aaaa" mais o icone
+           do calendario exigem. Estava em 138 (=156 na tela) sem precisar, e os
+           33px de folga eram justamente o que faltava ao TITULO depois que a
+           coluna de horas entrou na linha. */
+        ' style="flex:0 0 105px;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);' +
         'border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;outline:none" />' +
+      /* AS HORAS DO PASSO. Estreito de proposito: e um numero de uma ou duas
+         casas, e um campo largo aqui empurraria o titulo — que e o que se le. */
+      '<input type="number" min="0" step="0.5" value="' + escAttr(x.horas) + '"' +
+        ' placeholder="h" title="Horas neste passo. Some sozinho no total da demanda."' +
+        ' oninput="msSubHoras(' + i + ', this.value)"' +
+        /* `min-width:0` NAO E DECORACAO. Item de flex nasce com `min-width:auto`,
+           que resolve para o minimo INTRINSECO do elemento — e o de um
+           `input[type=number]`, com o `size` padrao e os botoes de incremento,
+           mede ~163px. Sem isto o `flex-basis:62px` era ignorado: medido no
+           navegador, o campo saia com 163px e espremia o titulo da subtarefa
+           para 20px. E a mesma linha que o campo de texto ao lado ja carrega,
+           pelo mesmo motivo. */
+        ' style="flex:0 0 62px;min-width:0;padding:6px 8px;background:var(--bg3);' +
+        'border:1px solid var(--border);border-radius:6px;color:var(--text);' +
+        'font-size:12px;font-family:inherit;outline:none" />' +
       '<button type="button" onclick="msSubRemove(' + i + ')" title="Remover esta subtarefa"' +
         ' style="flex:0 0 auto;background:none;border:none;color:var(--text3);cursor:pointer;' +
         'font-size:16px;line-height:1;padding:4px 6px">×</button>' +
     '</div>').join('');
+}
+
+function msSubHoras(i, v) {
+  if (!_msSubs[i]) return;
+  _msSubs[i].horas = String(v);
+  _msSubsMexido = true;
+  /* NAO REDESENHA A LISTA. `msSubRender` refaz o `innerHTML` inteiro, e refazer
+     no `oninput` tiraria o foco do campo a cada tecla — o mesmo defeito que o
+     `comFocoPreservado` do admin existe para evitar. So o total se atualiza. */
+  msSubAplicaTotal();
+}
+
+/* O TOTAL MANDA NO CAMPO DE HORAS, quando ha hora em algum passo.
+ *
+ *  DUAS FONTES PARA O MESMO NUMERO SERIA O DEFEITO. `horas_realizadas` e o que o
+ *  relatorio do comite e a `capacidade.js` leem; se os passos somassem 5 e o
+ *  campo dissesse 3, existiriam duas respostas para "quanto custou esta demanda"
+ *  e nada na tela diria qual vale. Entao o campo passa a ser DERIVADO e fica
+ *  somente-leitura, com a conta a vista.
+ *
+ *  E SO QUANDO HA LANCAMENTO. Sem hora em passo nenhum, o campo continua como
+ *  sempre foi — digitado a mao. A maioria das demandas nao tem subtarefa, e
+ *  nenhuma delas pode mudar de comportamento por causa deste caso. */
+function msSubAplicaTotal() {
+  const campo = document.getElementById('ms-horas');
+  const nota = document.getElementById('ms-sub-horas-nota');
+  if (!campo) return;
+  const total = msSubHorasTotal(_msSubs);
+  if (total === null) {
+    campo.readOnly = false;
+    campo.title = '';
+    campo.style.opacity = '';
+    if (nota) { nota.textContent = ''; nota.style.display = 'none'; }
+    return;
+  }
+  campo.value = String(total);
+  campo.readOnly = true;
+  campo.title = 'Somado dos passos. Para digitar a mão, apague as horas das subtarefas.';
+  if (nota) {
+    const comHora = _msSubs.filter(x => String(x.horas || '').trim() !== '').length;
+    nota.textContent = 'Somado de ' + comHora + ' ' +
+      (comHora === 1 ? 'passo' : 'passos') + ' — para digitar à mão, apague as horas das subtarefas.';
+    nota.style.display = 'block';
+  }
 }
 
 function msSubAdiciona() {
@@ -4068,7 +4180,15 @@ function msSubParaGravar() {
   return _msSubs
     .filter(x => String(x.titulo || '').trim())
     .slice(0, 30)
-    .map(x => ({ titulo: x.titulo.trim(), data: x.data || '', feita: !!x.feita }));
+    .map(x => {
+      const o = { titulo: x.titulo.trim(), data: x.data || '', feita: !!x.feita };
+      /* SO GRAVA `horas` QUANDO HA NUMERO. Gravar `horas: ''` em toda subtarefa
+         encheria o arquivo de campo vazio e faria `msSubHorasTotal` ter de
+         distinguir '' de ausente em dois lugares em vez de um. */
+      const h = Number(x.horas);
+      if (String(x.horas || '').trim() !== '' && Number.isFinite(h) && h >= 0) o.horas = h;
+      return o;
+    });
 }
 
 function hojeISOdev() {
