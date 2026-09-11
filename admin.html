@@ -526,6 +526,45 @@
     .kb-card:hover .kb-estrela { opacity:.8; }
     .kb-estrela.on { color:var(--amber-tx,#FFC470); opacity:1; }
     .kb-estrela:hover { opacity:1; color:var(--amber-tx,#FFC470); }
+    /* ── EXCLUIR NO CARD, e por que ele se esconde ─────────────────────────
+       O Kanban e uma tela de ARRASTAR. Um botao de exclusao permanente fica a
+       um clique de distancia do gesto que a pessoa faz o dia inteiro, e a acao
+       nao tem desfazer — o proprio dialogo diz "nao ha como desfazer".
+
+       Entao ele aparece SO com o ponteiro sobre o card: quem vai excluir ja
+       parou em cima do card; quem esta arrastando nao passa perto dele. E a
+       confirmacao continua sendo a trava de verdade, nao o esconderijo.
+
+       CANTO INFERIOR DIREITO, e a distancia ate a estrela foi MEDIDA:
+
+         card so com titulo   63px de altura  ->  16px entre os dois
+         card com tema        83px            ->  36px
+         card tipico          125px           ->  78px
+
+       So o card minimo fica apertado, e eu considerei duas alternativas antes de
+       ficar com esta:
+
+         canto inferior ESQUERDO  separa 206px, e COBRE 5px do titulo de duas
+                                  linhas — medido. Um botao tapando texto e pior.
+         `min-height` no card     resolveria, ao custo de +14px em TODO card
+                                  minimo, e a coluna Backlog e feita deles.
+
+       Ficou como esta porque o pior caso de errar o alvo aqui NAO e perder uma
+       demanda: a exclusao abre um dialogo com o CODIGO e o titulo dentro, e a
+       estrela e um marcador reversivel. Errar custa ler e cancelar. Taxar a
+       altura de todos os cards para evitar isso seria pagar caro por uma
+       quase-colisao ja protegida.
+
+       O `padding-bottom` do card ja tem 10px, que cobre o botao sem mexer na
+       altura de nenhum card. */
+    .kb-excluir { position:absolute; bottom:4px; right:6px; background:none; border:none;
+      font-size:13px; line-height:1; cursor:pointer; color:var(--text3); padding:2px 3px;
+      opacity:0; transition:opacity .12s,color .12s; }
+    .kb-card:hover .kb-excluir { opacity:.5; }
+    .kb-excluir:hover { opacity:1; color:var(--red); }
+    /* O TECLADO TAMBEM CHEGA NELE. `opacity:0` esconde do olho e nao do foco: sem
+       isto, quem navega por Tab pousaria num botao invisivel de excluir. */
+    .kb-excluir:focus-visible { opacity:1; color:var(--red); outline:2px solid var(--red); outline-offset:1px; }
     /* As tres leituras do mesmo periodo. Abas, e nao tres blocos empilhados: sao
        recortes da MESMA conta, e empilhados fariam a pessoa rolar procurando qual
        deles responde a pergunta dela. */
@@ -3704,6 +3743,9 @@ function renderKanban() {
         <button type="button" class="kb-estrela${m.destaque ? ' on' : ''}"
           onclick="destaqueAlterna(event,'${m.id}')"
           title="${m.destaque ? 'É destaque — sai na apresentação. Clique para desmarcar.' : 'Marcar como destaque da apresentação'}">${m.destaque ? '★' : '☆'}</button>
+        <button type="button" class="kb-excluir"
+          onclick="kbExcluir(event,'${m.id}')"
+          title="Excluir esta demanda. Não há como desfazer.">🗑</button>
         <div class="kb-card-title">${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}${esc(m.titulo)}</div>
         ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
         ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
@@ -9504,8 +9546,39 @@ async function mPersistir(msgOk) {
   return false;
 }
 
-async function deleteMelhoria(id) {
-  if (!(await confirmar({ titulo: 'Excluir demanda',
+/* EXCLUIR PELO CARD DO KANBAN.
+ *
+ *  Delega para `deleteMelhoria`, que ja pede confirmacao e ja grava — duas
+ *  exclusoes com regras proprias divergiriam, e esta base tem historia disso.
+ *  O que este envelope acrescenta e o que o CARD exige:
+ *
+ *  `stopPropagation` + `preventDefault` porque o card inteiro e clicavel (duplo
+ *  clique abre a demanda) e arrastavel. Sem os dois, excluir tambem abriria o
+ *  modal por baixo do dialogo — e a estrela ao lado ja faz exatamente isto, pelo
+ *  mesmo motivo.
+ *
+ *  E O NOME NO DIALOGO. Na aba Melhorias a pessoa acabou de ler a linha inteira
+ *  antes de clicar; num quadro de oito colunas ela clica num cartao entre
+ *  dezenas, e "Excluir demanda / nao ha como desfazer" nao diz QUAL. */
+async function kbExcluir(ev, id) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) return;
+  const nome = (m.codigo ? m.codigo + ' · ' : '') + (m.titulo || '(sem título)');
+  if (!(await confirmar({ titulo: 'Excluir ' + (m.codigo || 'demanda'),
+      texto: '"' + nome + '" sai do quadro e de todos os relatórios. ' +
+             'Não há como desfazer.',
+      ok: 'Excluir', perigo: true }))) return;
+  await deleteMelhoria(id, { jaConfirmado: true });
+}
+
+async function deleteMelhoria(id, opcoes) {
+  /* `jaConfirmado` EVITA O DIALOGO DUPLO. O card do Kanban pergunta com o nome da
+     demanda dentro, que e o que faz sentido num quadro de dezenas de cartoes;
+     perguntar de novo aqui faria a pessoa confirmar duas vezes a mesma coisa —
+     e o segundo dialogo, generico, ensinaria a clicar sem ler. */
+  if (!(opcoes && opcoes.jaConfirmado) &&
+      !(await confirmar({ titulo: 'Excluir demanda',
       texto: 'Nao ha como desfazer.', ok: 'Excluir', perigo: true }))) return;
   _deletedIds.add(id);
   state.melhorias = state.melhorias.filter(m => m.id !== id);

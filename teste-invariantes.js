@@ -5530,6 +5530,121 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      String(CAPX.planejados({ status: 'estimada', poker_pontos: 13 })));
 })();
 
+/* ═══ EXCLUIR PELO CARD DO KANBAN ════════════════════════════
+
+   O relato foi "AX-124 excluir ou me da permissao para exclusao no adm para meu
+   usuario" — e nao era permissao: nao existe trava nenhuma na exclusao. O botao
+   existia num lugar so, a aba Melhorias. Quem trabalha no Kanban nao o via.
+
+   O KANBAN E UMA TELA DE ARRASTAR, e por isso o botao aparece SO com o ponteiro
+   sobre o card. Quem vai excluir ja parou em cima dele; quem esta arrastando nao
+   passa perto. A trava de verdade continua sendo a CONFIRMACAO — o esconderijo
+   e so para nao pendurar uma acao sem desfazer ao lado do gesto que se faz o dia
+   inteiro. */
+(async () => {
+  sec('Excluir pelo card do kanban');
+  const cod = semComentario(ADMIN);
+
+  ok(/class="kb-excluir"/.test(cod), 'o card do kanban tem o botao de excluir');
+  ok(/onclick="kbExcluir\(event,'\$\{m\.id\}'\)"/.test(cod), 'e ele chama o comando');
+
+  /* ESCONDIDO EM REPOUSO, VISIVEL NO HOVER. Medido no navegador: `opacity: 0`
+     em repouso e `.5` com o ponteiro no card. */
+  ok(/\.kb-excluir \{[^}]*opacity:0/.test(cod),
+     'fica invisivel em repouso, para nao pendurar exclusao ao lado do arrasto');
+  ok(/\.kb-card:hover \.kb-excluir \{[^}]*opacity:\.5/.test(cod),
+     'e aparece com o ponteiro sobre o card');
+  /* O TECLADO CHEGA NELE. `opacity:0` esconde do olho e nao do foco: sem a regra
+     de `:focus-visible`, quem navega por Tab pousaria num botao INVISIVEL de
+     excluir — que e pior do que nao ter botao. */
+  ok(/\.kb-excluir:focus-visible \{[^}]*opacity:1/.test(cod),
+     'e o foco por teclado o revela, em vez de deixar um botao invisivel no caminho');
+
+  const uc = corpo(ADMIN, 'async function kbExcluir(');
+  ok(!!uc, 'o comando existe');
+  if (!uc) return;
+
+  /* O CLIQUE NAO PODE VAZAR PARA O CARD. O card inteiro e clicavel (duplo clique
+     abre a demanda) e arrastavel; sem os dois, excluir abriria o modal por baixo
+     do dialogo. A estrela ao lado ja faz exatamente isto, pelo mesmo motivo. */
+  ok(/ev\.stopPropagation\(\); ev\.preventDefault\(\)/.test(uc),
+     'o clique nao vaza para o card, que abre a demanda no duplo clique');
+
+  /* PERGUNTA COM O NOME DENTRO. Na aba Melhorias a pessoa acabou de ler a linha
+     inteira; num quadro de oito colunas ela clica num cartao entre dezenas, e
+     "Excluir demanda / nao ha como desfazer" nao diz QUAL. */
+  ok(/const nome = \(m\.codigo \? m\.codigo/.test(uc),
+     'o dialogo monta o nome da demanda');
+  ok(/nome \+ '" sai do quadro/.test(uc), 'e mostra esse nome no texto');
+  ok(/desfazer/.test(uc), 'avisando que nao ha como desfazer');
+  ok(/perigo: true/.test(uc), 'com o dialogo marcado como perigoso');
+
+  /* E A RECUSA TEM DE IMPEDIR, que e a unica coisa que importa de verdade aqui.
+     As afirmacoes acima provam que o dialogo EXISTE e o que ele diz; nenhuma
+     delas provava que a resposta e OBEDECIDA. A sabotagem que trocou o guarda
+     por `if (false && ...)` passou batida — o dialogo continuava escrito no
+     arquivo, e a demanda era excluida sem ninguem confirmar.
+
+     ENTAO ESTE BLOCO EXECUTA `kbExcluir`, com o `confirmar` dublado nas duas
+     respostas. E a diferenca entre "o codigo do dialogo esta la" e "o dialogo
+     decide". */
+  {
+    const roda = async (resposta) => {
+      let excluiu = null;
+      let perguntou = null;
+      const f = new Function('confirmar', 'state', 'deleteMelhoria', uc + 'return kbExcluir;')(
+        async (o) => { perguntou = o; return resposta; },
+        { melhorias: [{ id: 'd1', codigo: 'AX-124', titulo: 'Demanda de teste' }] },
+        async (id, opcoes) => { excluiu = { id, opcoes }; });
+      await f({ stopPropagation() {}, preventDefault() {} }, 'd1');
+      return { excluiu, perguntou };
+    };
+
+    const negou = await roda(false);
+    ok(!!negou.perguntou, 'ele pergunta antes de qualquer coisa');
+    ok(negou.excluiu === null,
+       'e RECUSAR no dialogo nao exclui — o guarda obedece a resposta');
+
+    const aceitou = await roda(true);
+    ok(aceitou.excluiu && aceitou.excluiu.id === 'd1',
+       'e aceitar exclui a demanda certa', JSON.stringify(aceitou.excluiu));
+    ok(aceitou.excluiu && aceitou.excluiu.opcoes &&
+       aceitou.excluiu.opcoes.jaConfirmado === true,
+       'avisando que a confirmacao ja foi dada, para nao perguntar de novo');
+    ok(/AX-124/.test(String(negou.perguntou && negou.perguntou.texto)),
+       'e o texto do dialogo traz o codigo da demanda',
+       String(negou.perguntou && negou.perguntou.texto).slice(0, 60));
+
+    /* DEMANDA QUE NAO EXISTE NAO EXPLODE NEM PERGUNTA. O card pode ter ficado na
+       tela de uma carga anterior — e uma pergunta sobre "(sem titulo)" seria
+       pior do que nao acontecer nada. */
+    const f2 = new Function('confirmar', 'state', 'deleteMelhoria', uc + 'return kbExcluir;')(
+      async () => true, { melhorias: [] }, async () => { throw new Error('nao devia excluir'); });
+    let explodiu = false;
+    try { await f2({ stopPropagation() {}, preventDefault() {} }, 'fantasma'); }
+    catch (_) { explodiu = true; }
+    ok(!explodiu, 'card de uma demanda que sumiu nao quebra nem exclui nada');
+  }
+
+  /* E DELEGA, em vez de reimplementar. Duas exclusoes com regras proprias
+     divergiriam — esta base tem historia disso em quatro lugares diferentes. */
+  ok(/await deleteMelhoria\(id, \{ jaConfirmado: true \}\)/.test(uc),
+     'delega a gravacao para `deleteMelhoria`, sem uma segunda exclusao propria');
+
+  /* SEM DIALOGO DUPLO. Perguntar de novo dentro de `deleteMelhoria` faria
+     confirmar duas vezes a mesma coisa — e o segundo, generico, ensinaria a
+     clicar sem ler. */
+  const dm = corpo(ADMIN, 'async function deleteMelhoria(');
+  ok(!!dm && /opcoes && opcoes\.jaConfirmado/.test(dm),
+     '`deleteMelhoria` aceita a confirmacao ja dada, sem perguntar duas vezes');
+  /* E CONTINUA PERGUNTANDO QUANDO CHAMADA DIRETO, que e o caminho da aba
+     Melhorias. Um `jaConfirmado` que valesse sempre tiraria a confirmacao de la. */
+  ok(/onclick="deleteMelhoria\('\$\{m\.id\}'\)"/.test(cod),
+     'a aba Melhorias chama sem opcoes, e por isso continua perguntando');
+  ok(!!dm && /confirmar\(\{ titulo: 'Excluir demanda'/.test(dm),
+     'e o dialogo dela segue existindo');
+})();
+
 /* ═══ HORAS POR SUBTAREFA, SOMANDO NO TOTAL DA DEMANDA ═════════════
 
    A Marina usa subtarefa como passo do dia: uma demanda de suporte de 09 a 11 de
