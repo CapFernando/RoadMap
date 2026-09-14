@@ -9437,6 +9437,107 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a API nao recusa entrega por falta de resumo \u2014 so a tela exige');
   }
 
+  sec('De quem e a demanda \u2014 e por que o card sumia');
+  /* O RELATO: "um dev esta criando demanda, porem nao esta aparecendo para ele".
+     Duas causas independentes, as duas medidas executando a cadeia real. */
+  {
+    const DN = require('./dev-nome.js');
+
+    ok(DN.eDe({ dev: 'Dan' }, 'Dan'), 'o nome igual e dele');
+    ok(DN.eDe({ dev: 'Dan' }, 'DAN'), 'MAIUSCULA e a mesma pessoa \u2014 era isto que sumia');
+    ok(DN.eDe({ dev: 'dan' }, 'Dan'), 'minuscula tambem');
+    ok(DN.eDe({ dev: 'Dan ' }, 'Dan'), 'espaco sobrando nao cria outra pessoa');
+    ok(DN.eDe({ dev: 'Jose  Amaro' }, 'jose amaro'), 'espaco duplo tambem nao');
+    ok(DN.eDe({ dev: 'Jos\u00e9 Amaro' }, 'Jose Amaro'), 'acento tambem nao');
+    ok(DN.eDe({ dev: 'Ana / Dan' }, 'Dan'), 'demanda de duas pessoas e das duas');
+    ok(DN.eDe({ dev: 'Ana, Dan' }, 'Ana'), 'o separador virgula conta igual');
+
+    /* O QUE ELA NAO FAZ, e isto e tao importante quanto o que faz. Casar nome
+       PARCIAL faria "Ana" encontrar "Ana Paula": uma pessoa veria e editaria a
+       demanda da outra. Perder o proprio card e ruim; mexer no alheio e pior. */
+    ok(!DN.eDe({ dev: 'Dan Weine' }, 'Dan'),
+       'nome PARCIAL nao casa \u2014 dois nomes diferentes sao juncao de devs, nao grafia');
+    ok(!DN.eDe({ dev: 'Ana Paula' }, 'Ana'), 'e "Ana" nao vira dona da demanda da "Ana Paula"');
+
+    /* VAZIO NAO E NINGUEM. Sem esta guarda, o painel recem-aberto (sem dev
+       escolhido) mostraria toda demanda orfa como se fosse da pessoa. */
+    ok(!DN.eDe({ dev: '' }, ''), 'sem nome dos dois lados nao casa');
+    ok(!DN.eDe({ dev: 'Dan' }, ''), 'dev sem nome escolhido nao herda demanda');
+    ok(!DN.eDe({ dev: '' }, 'Dan'), 'demanda sem responsavel nao e de ninguem');
+    ok(!DN.eDe(null, 'Dan') && !DN.eDe(undefined, 'Dan'), 'demanda ausente nao quebra');
+    /* E ESTE E O CASO QUE COBRA A GUARDA DO VAZIO. Os tres de cima passam mesmo
+       sem ela — o `filter(Boolean)` do `daDemanda` ja barra nome vazio, e a
+       sabotagem provou isso passando em silencio. Um acento SOLTO nao e vazio
+       para o `filter` (e caractere), mas vira '' no `norm`: sem a guarda, ele
+       casaria com o alvo vazio e a demanda apareceria para quem nao escolheu
+       nome nenhum. */
+    ok(!DN.eDe({ dev: '́' }, ''),
+       'nome que sobra vazio depois de normalizado nao casa com alvo vazio');
+    ok(!DN.mesmo('', ''), 'dois vazios nao sao a mesma pessoa');
+    ok(!DN.mesmo('Dan', '') && !DN.mesmo('', 'Dan'), 'um lado vazio tambem nao');
+
+    /* A TELA E O SERVIDOR PRECISAM CONCORDAR SOBRE QUEM E QUEM.
+       O `limpaDevs` do Worker ja normalizava assim; a tela comparava string
+       crua. O servidor mantinha no time quem a tela nao encontrava. Aqui as
+       DUAS normalizacoes rodam sobre as mesmas entradas. */
+    const normW = new Function(
+      "const norm = " + /norm = (t => [\s\S]*?trim\(\);)/.exec(WC)[1] + "\nreturn norm;")();
+    for (const n of ['Dan', 'DAN', ' dan ', 'Jos\u00e9  Amaro', 'MURILLO JESUS']) {
+      ok(normW(n) === DN.norm(n),
+         'tela e Worker normalizam "' + n + '" igual', DN.norm(n));
+    }
+  }
+
+  {
+    /* A SEGUNDA CAUSA: etapa sem coluna. O card nao saia do lugar \u2014 SUMIA.
+       Esta invariante executa as listas de colunas REAIS das duas telas contra
+       todas as etapas que `ETAPA.gravada` consegue devolver. */
+    const ETP = require('./etapa-demanda.js');
+    ok(ETP.gravada({ status_planejamento: 'atrasado' }) === 'em_andamento',
+       'o `atrasado` gravado vira etapa de trabalho, e ganha coluna');
+    ok(ETP.efetiva({ status_planejamento: 'atrasado' }) === 'atrasado',
+       'e continua SENDO mostrado como atrasado \u2014 o aviso nao se perde');
+    ok(ETP.gravada({ status_planejamento: 'deploy' }) === 'concluido',
+       'o `deploy` legado segue virando concluido');
+
+    const colunasDev = new Function(
+      DEV.slice(DEV.indexOf('const COLUMNS = ['),
+              DEV.indexOf('];', DEV.indexOf('const COLUMNS = [')) + 2) +
+      '\nreturn COLUMNS;')();
+    const colunasAdm = new Function(
+      ADMIN.slice(ADMIN.indexOf('const KB_COLS = ['),
+                  ADMIN.indexOf('];', ADMIN.indexOf('const KB_COLS = [')) + 2) +
+      '\nreturn KB_COLS;')();
+
+    /* TODA etapa que se pode GRAVAR, e nao so as que alguem lembrou. A lista sai
+       das colunas do admin (que e a esteira inteira) mais as duas legadas. */
+    const GRAVAVEIS = ['backlog', 'levantar_req', 'planning', 'planejado',
+                       'em_andamento', 'validacao', 'concluido', 'negada',
+                       'deploy', 'atrasado', ''];
+    for (const sp of GRAVAVEIS) {
+      const etapa = ETP.gravada({ status_planejamento: sp, status: '' });
+      // O painel do dev descarta `negada` de proposito, antes da coluna.
+      if (etapa !== 'negada') {
+        ok(colunasDev.some(c => c.maps.includes(etapa)),
+           'painel do dev tem coluna para "' + (sp || '(vazio)') + '"', '-> ' + etapa);
+      }
+      ok(colunasAdm.some(c => c.key === etapa),
+         'esteira do admin tem coluna para "' + (sp || '(vazio)') + '"', '-> ' + etapa);
+    }
+  }
+
+  {
+    /* NENHUMA TELA VOLTA A COMPARAR NOME NA MAO. Uma copia que sobrasse traria
+       de volta exatamente o defeito relatado, numa tela so \u2014 que e a forma mais
+       cara de ter o defeito, porque ele passa a depender de por onde se olha. */
+    for (const [nome, txt] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV]]) {
+      const c = semComentario(txt);
+      ok(!/splitDevs\([^)]*\)\.includes\(/.test(c),
+         'o ' + nome + ' nao compara nome de dev por igualdade de string');
+      ok(txt.indexOf('dev-nome.js') > 0, 'e o ' + nome + ' carrega a regra unica');
+    }
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

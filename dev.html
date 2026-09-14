@@ -440,7 +440,8 @@
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
-  <script src="etapa-demanda.js?v=9aa231f848"></script>
+  <script src="etapa-demanda.js?v=710bc19507"></script>
+  <script src="dev-nome.js?v=c2db4198e7"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
@@ -1305,7 +1306,7 @@ function epFuncoesHTML() {
   const url = ADMIN_PROXY_URL;
   // Uma demanda real do dev, para o exemplo ser copiavel sem edicao.
   const minha = (state.melhorias || []).find(m =>
-    splitDevs(m.dev).includes(currentDev) && !['concluido', 'validacao'].includes(getStatusKey(m)));
+    DEVNOME.eDe(m, currentDev) && !['concluido', 'validacao'].includes(getStatusKey(m)));
   const cod = (minha && minha.codigo) || 'AX-042';
   const FUNCOES = [
     {
@@ -1477,7 +1478,9 @@ function renderProjetosDev() {
     return;
   }
   // Suas propostas primeiro: é o que você está esperando resposta.
-  const meu = p => String(p.solicitado_por || '').toLowerCase() === String(currentDev || '').toLowerCase();
+  // Mesma regra de nome do resto da tela: `toLowerCase` sozinho nao tirava
+  // acento nem espaco duplo, e "Jos\u00e9" deixava de ser "Jose".
+  const meu = p => DEVNOME.mesmo(p.solicitado_por, currentDev);
   const ord = [...ps].sort((a, b) => {
     if (meu(a) !== meu(b)) return meu(a) ? -1 : 1;
     if (dpPendente(a) !== dpPendente(b)) return dpPendente(a) ? -1 : 1;
@@ -1642,7 +1645,7 @@ function renderDevGantt() {
   // so as demandas do dev, e so as que tocam este mes
   const minhas = (state.melhorias || []).filter(m => {
     if (m.mesclado_em || m.oculto) return false;
-    if (!splitDevs(m.dev).includes(currentDev)) return false;
+    if (!DEVNOME.eDe(m, currentDev)) return false;
     const ini = m.inicio || m.entrega, fim = m.entrega || m.inicio;
     if (!ini || !fim) return false;
     return ini <= B && fim >= A;      // sobrepõe o mês
@@ -1893,8 +1896,7 @@ function prodAgrega(de, ate) {
   vivas.forEach(m => {
     if (getStatusKey(m) !== 'concluido') return;
     if (CAP.diaDaEntrega(m)) return;
-    if (splitDevs(m.dev).some(n => n && currentDev &&
-        n.toLowerCase() === String(currentDev).toLowerCase())) semDataMinhas++;
+    if (DEVNOME.eDe(m, currentDev)) semDataMinhas++;
   });
 
   /* Ordena por PONTOS ENTREGUES: contagem de issues sozinha premiaria quem pega
@@ -2027,7 +2029,7 @@ function renderMeuDia() {
   const el = document.getElementById('meu-dia');
   if (!el || !currentDev) return;
   const minhas = (state.melhorias || []).filter(m =>
-    !m.mesclado_em && splitDevs(m.dev).includes(currentDev));
+    !m.mesclado_em && DEVNOME.eDe(m, currentDev));
   const por = k => minhas.filter(m => getStatusKey(m) === k).length;
   const andamento = por('em_andamento');
   const validando = por('validacao');
@@ -2052,7 +2054,7 @@ function renderRiscoDev() {
   const el = document.getElementById('risco-dev');
   if (!el || !currentDev) return;
   const minhas = (state.melhorias || []).filter(m =>
-    !m.mesclado_em && splitDevs(m.dev).includes(currentDev) && statusEfetivo(m) === 'atrasado');
+    !m.mesclado_em && DEVNOME.eDe(m, currentDev) && statusEfetivo(m) === 'atrasado');
   el.style.display = minhas.length ? 'flex' : 'none';
   if (!minhas.length) return;
 
@@ -2161,7 +2163,7 @@ function verDemandaPorNumero() {
      Escrever outra aqui seria uma segunda resposta para "e minha?" — e o dia em
      que as duas discordassem, a tela diria que a demanda e sua e o servidor
      recusaria a gravacao (ou o contrario, que e pior). */
-  const minha = splitDevs(m.dev).includes(currentDev);
+  const minha = DEVNOME.eDe(m, currentDev);
   titulo.textContent = (m.codigo || 'Demanda') + ' · ' + (m.titulo || '');
 
   /* DE ONDE ELA VEIO, dito quando nao foi pelo codigo. Quem digitou "#157"
@@ -3259,7 +3261,7 @@ const TEMA_CORES = ['#3B8FE8','#9B6FE8','#2BBFA0','#E89C2F','#5EA832','#E84444',
 function buildTemaSelect() {
   const sel = document.getElementById('f-tema');
   if (!sel) return;
-  const doDev = state.melhorias.filter(m => !m.mesclado_em && splitDevs(m.dev).includes(currentDev));
+  const doDev = state.melhorias.filter(m => !m.mesclado_em && DEVNOME.eDe(m, currentDev));
   // A contagem e por SUBARVORE: escolher "Cadastro" traz Reanalise junto, entao o
   // numero ao lado de Cadastro tem de incluir os filhos. Contar so o proprio no
   // mostraria "(0)" ao lado de um filtro que devolve 36 demandas.
@@ -3286,7 +3288,7 @@ function limparFiltrosDev() {
 
 // Deixa explícito o recorte exibido e quantos filtros estão ativos
 function atualizaContagemDev() {
-  const doDev = state.melhorias.filter(m => !m.mesclado_em && splitDevs(m.dev).includes(currentDev));
+  const doDev = state.melhorias.filter(m => !m.mesclado_em && DEVNOME.eDe(m, currentDev));
   const el = document.getElementById('f-contagem');
   if (el) el.textContent = `Mostrando ${getFiltered().length} de ${doDev.length}`;
   const ativos = ['f-ano','f-mes','f-tipo','f-tema'].filter(i => (document.getElementById(i)||{}).value).length;
@@ -3308,7 +3310,7 @@ function getFiltered() {
   return state.melhorias.filter(m => {
     // Mesclada saiu do fluxo: o dev trata pela demanda principal.
     if (m.mesclado_em) return false;
-    if (!splitDevs(m.dev).includes(currentDev)) return false;
+    if (!DEVNOME.eDe(m, currentDev)) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     const fTipo = document.getElementById('f-tipo')?.value || '';
     if (fTipo === '__sem_tipo__') { if (m.tipo) return false; }

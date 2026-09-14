@@ -97,7 +97,28 @@
   /** A ETAPA EM QUE A DEMANDA ESTÁ. É o valor de formulário — este se grava. */
   function gravada(m, hoje) {
     var d = m || {};
-    var sp = d.status_planejamento === 'deploy' ? 'concluido' : d.status_planejamento;
+    var sp = d.status_planejamento;
+    if (sp === 'deploy') sp = 'concluido';
+    /* `atrasado` GRAVADO VIRA `em_andamento`, pelo mesmo motivo que `deploy`
+       vira `concluido`: a etapa foi removida da esteira e sobrou dado com ela.
+
+       ISTO FAZIA O CARD SUMIR — não sair do lugar, SUMIR. Medido, executando as
+       colunas reais das duas telas: nem o `COLUMNS` do painel do dev nem o
+       `KB_COLS` do admin têm coluna para `atrasado`, e as duas escolhem a coluna
+       por igualdade com a etapa gravada. Sem coluna que a receba, a demanda não
+       é desenhada em lugar nenhum e desaparece da tela de quem é dona dela.
+
+       O dev.html já registrava exatamente este acidente, uma vez: "como a coluna
+       'Atrasado' foi removida, a demanda vencida não caía em coluna nenhuma e
+       DESAPARECIA do painel". Aquela correção trocou `efetiva` por `gravada` e
+       resolveu o atraso DERIVADO. O atraso GRAVADO continuou sem casa — e o
+       conserto tinha de vir aqui, no dono, e não numa lista de colunas de cada
+       tela: quatro listas divergiriam na primeira vez que a regra mudasse.
+
+       `em_andamento` e não outra: demanda marcada como atrasada estava em
+       andamento e venceu. O atraso não se perde — ele continua aparecendo, pelo
+       `efetiva` logo abaixo, que é quem responde "mostrar como atrasado". */
+    if (sp === 'atrasado') sp = 'em_andamento';
     if (sp && sp !== 'backlog') return sp;
     var base = LEGADO[d.status] || sp || 'backlog';
     if (base === 'backlog' && d.inicio) {
@@ -140,6 +161,11 @@
    *  o `prazo.js`. Se alguém mudar isso lá, ela acusa; hoje, o ramo daqui
    *  esconderia a mudança em três telas e a deixaria aparecer só na quarta. */
   function efetiva(m, hoje) {
+    /* LÊ O CAMPO CRU, e não a etapa já traduzida. O `gravada` agora converte o
+       `atrasado` legado em `em_andamento` para o card ter coluna — se a pergunta
+       fosse feita a ele, o atraso gravado sumiria da tela junto com o problema
+       que a conversão resolveu. Aqui a demanda volta a se declarar atrasada. */
+    if (String((m || {}).status_planejamento || '') === 'atrasado') return 'atrasado';
     var sk = gravada(m, hoje);
     if (sk === 'atrasado') return 'atrasado';
     var dia = hoje || hojeISO();

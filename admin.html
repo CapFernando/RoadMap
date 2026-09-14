@@ -1091,7 +1091,8 @@
     #conditional-fields { }
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
-  <script src="etapa-demanda.js?v=9aa231f848"></script>
+  <script src="etapa-demanda.js?v=710bc19507"></script>
+  <script src="dev-nome.js?v=c2db4198e7"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
@@ -7184,7 +7185,7 @@ function renderGerDevChart(items, splitDevs) {
 
   const temas = state.temas || [];
   const cont = (dev, temaId) => items.filter(m =>
-    splitDevs(m.dev).includes(dev) && (temaId === null ? !temas.find(t => t.id === m.tema_id) : m.tema_id === temaId)).length;
+    DEVNOME.eDe(m, dev) && (temaId === null ? !temas.find(t => t.id === m.tema_id) : m.tema_id === temaId)).length;
 
   const datasets = temas.map((t, i) => ({
     label: t.nome,
