@@ -60,6 +60,7 @@ const GANTT = lerTela('gantt.html');
 const DEV = lerTela('dev.html');
 const INDEX = lerTela('index.html');
 const POKER = lerTela('poker.html');
+const FOLLOW = lerTela('follow.html');
 const APRES = fs.readFileSync('apresentacao.js', 'utf8');
 const CAPA = fs.readFileSync('capa-tecnologia.js', 'utf8');
 const PIPE = fs.readFileSync('pipelines.js', 'utf8');
@@ -7588,8 +7589,14 @@ sec('Selo de cache dos scripts');
 
 (() => {
   const crypto = require('crypto');
-  const telas = ['admin.html', 'dev.html', 'gantt.html', 'index.html', 'poker.html',
-                 'importar.html', 'projetos.html'];
+  /* AS TELAS SAO DESCOBERTAS, pelo mesmo motivo que o `scripts-tema-versao.py`
+     passou a descobri-las: a lista escrita a mao esquece.
+
+     Esta aqui ja esquecia `mensageria.html` — que ESTAVA na lista do selador —,
+     e nasceu esquecendo `follow.html`. Duas listas manuais do mesmo conjunto
+     divergem, e a invariante que deveria cobrar o selo estava calada justamente
+     sobre as paginas que ninguem lembrou de acrescentar. */
+  const telas = fs.readdirSync('.').filter(f => f.endsWith('.html')).sort();
   const selo = (arq) =>
     crypto.createHash('md5').update(fs.readFileSync(arq)).digest('hex').slice(0, 10);
 
@@ -7630,8 +7637,10 @@ sec('Selo de cache dos scripts');
  */
 (() => {
   const crypto = require('crypto');
-  const telas = ['admin.html', 'dev.html', 'gantt.html', 'index.html', 'poker.html',
-                 'importar.html', 'projetos.html', 'mensageria.html'];
+  // Descoberta, como as outras duas: era a TERCEIRA lista do mesmo conjunto, e a
+  // que mais custava ficar desatualizada — e ela que pega a pagina que inclui um
+  // script SEM selo nenhum.
+  const telas = fs.readdirSync('.').filter(f => f.endsWith('.html')).sort();
   const SEM_SELO_OK = ['config.js'];
   const nus = [];
   telas.forEach((tela) => {
@@ -7653,15 +7662,29 @@ sec('Selo de cache dos scripts');
      'nenhuma tela inclui script ou estilo local sem selo de cache',
      nus.join(' | '));
 
-  /* E A PAGINA NOVA ENTRA NAS DUAS LISTAS. Sao tres listas de telas nesta base —
-     a do script de selo e as duas invariantes — e uma pagina que entre em duas
-     delas fica meio coberta: os selos dela sao conferidos e nao sao atualizados,
-     ou o contrario. */
+  /* NINGUEM MAIS MANTEM LISTA DE TELAS A MAO — e esta invariante passou a cobrar
+     isso, em vez de comparar duas listas.
+
+     A versao anterior conferia que toda tela daqui aparecia escrita no
+     `scripts-tema-versao.py`. Ela cumpria o papel enquanto as duas fossem
+     listas, mas era a pergunta errada: as duas ficavam desatualizadas JUNTAS.
+     Uma pagina nova que ninguem acrescentasse em lugar nenhum passava limpa
+     pelas duas, e foi o que aconteceu — `mensageria.html` estava no selador e
+     fora daqui, e `follow.html` nasceu fora dos dois.
+
+     Agora os dois lados leem a pasta, e o que se cobra e que continuem lendo.
+     Voltar a escrever a lista a mao faz esta invariante falhar. */
   const noScript = fs.readFileSync('scripts-tema-versao.py', 'utf8');
-  const faltando = telas.filter((t) => fs.existsSync(t) && noScript.indexOf("'" + t + "'") < 0);
-  ok(faltando.length === 0,
-     'toda tela conferida aqui tambem esta na lista do scripts-tema-versao.py',
-     faltando.join(', '));
+  ok(/PAGINAS = sorted\(/.test(noScript) && /listdir/.test(noScript),
+     'o scripts-tema-versao.py DESCOBRE as paginas, em vez de listar');
+  ok(!/PAGINAS = \[/.test(noScript),
+     'e nao ha lista de paginas escrita a mao para alguem esquecer de atualizar');
+  /* As duas pontas enxergam o MESMO conjunto. Ler a pasta em dois lugares com
+     filtros diferentes traria de volta a divergencia por outro caminho. */
+  const doScript = (noScript.match(/endswith\('(\.html)'\)/) || [])[1];
+  ok(doScript === '.html', 'e as duas pontas olham para o mesmo tipo de arquivo');
+  ok(telas.indexOf('follow.html') >= 0 && telas.length >= 8,
+     'a descoberta alcanca as telas que a lista esquecia', telas.length + ' telas');
 })();
 
 
@@ -9536,6 +9559,177 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'o ' + nome + ' nao compara nome de dev por igualdade de string');
       ok(txt.indexOf('dev-nome.js') > 0, 'e o ' + nome + ' carrega a regra unica');
     }
+  }
+
+  sec('Acompanhamentos \u2014 a agenda de cobranca');
+  {
+    /* As regras da tela EXECUTADAS, e nao lidas. `situacao` decide a cor do chip,
+       o contador do topo e o filtro \u2014 as tres perguntas sao a mesma, e por isso
+       ha uma funcao so. */
+    const F = new Function(
+      corpo(FOLLOW, 'function situacao(') + '\n' +
+      corpo(FOLLOW, 'function naSemana(') + '\n' +
+      corpo(FOLLOW, 'function dataDe(') + '\n' +
+      corpo(FOLLOW, 'function hojeISO(') + '\n' +
+      corpo(FOLLOW, 'function diasDoMes(') + '\n' +
+      corpo(FOLLOW, 'function empilha(') + '\n' +
+      'return { situacao, naSemana, dataDe, hojeISO, diasDoMes, empilha };')();
+
+    const HJ = '2026-09-14';
+    ok(F.situacao({ retorno: '2026-09-10' }, HJ) === 'venc', 'retorno passado e vencido');
+    ok(F.situacao({ retorno: HJ }, HJ) === 'hoje', 'retorno de hoje e hoje');
+    ok(F.situacao({ retorno: '2026-09-20' }, HJ) === 'aberto', 'retorno futuro fica em aberto');
+    /* CONCLUIDO VENCE O VENCIMENTO. Sem esta ordem, o que ja voltou continuaria
+       vermelho para sempre e o contador de vencidos nunca zeraria \u2014 e um
+       contador que nunca zera para de ser lido. */
+    ok(F.situacao({ retorno: '2026-01-01', concluido: true }, HJ) === 'feito',
+       'o que ja retornou nao esta atrasado, por mais antiga que seja a data');
+    ok(F.situacao({ retorno: '' }, HJ) === 'aberto', 'sem data nao vira vencido');
+
+    ok(F.naSemana({ retorno: HJ }, HJ), 'hoje conta nos proximos 7 dias');
+    ok(F.naSemana({ retorno: '2026-09-20' }, HJ), 'o setimo dia ainda conta');
+    ok(!F.naSemana({ retorno: '2026-09-21' }, HJ), 'o oitavo nao');
+    ok(!F.naSemana({ retorno: '2026-09-10' }, HJ), 'vencido nao e "proximo"');
+    ok(!F.naSemana({ retorno: HJ, concluido: true }, HJ), 'concluido sai da conta');
+
+    /* A DATA NASCE LOCAL, e nao em UTC. `new Date('2026-09-20')` e meia-noite
+       UTC, que no Brasil ainda e dia 19 \u2014 o chip cairia na coluna do dia
+       anterior e o dia da semana sairia errado no cabecalho. */
+    const d = F.dataDe('2026-09-20');
+    ok(d.getDate() === 20 && d.getMonth() === 8 && d.getFullYear() === 2026,
+       'a data e montada local, sem escorregar um dia por causa do fuso',
+       d.getDate() + '/' + (d.getMonth() + 1));
+    ok(/^\d{4}-\d{2}-\d{2}$/.test(F.hojeISO()), 'hoje sai no formato da base');
+    const corpoHoje = corpo(FOLLOW, 'function hojeISO(');
+    ok(!/toISOString/.test(semComentario(corpoHoje)),
+       'e hoje NAO vem de toISOString \u2014 das 21h em diante ele ja e amanha');
+
+    const dias = F.diasDoMes(2026, 8);   // setembro
+    ok(dias.length === 30, 'setembro tem 30 colunas', String(dias.length));
+    ok(dias[0].semana === 2 && dias[29].semana === 3,
+       'e o dia da semana de cada coluna confere (1/9 terca, 30/9 quarta)');
+    ok(F.diasDoMes(2028, 1).length === 29, 'fevereiro bissexto tem 29');
+  }
+
+  {
+    /* O EMPILHAMENTO. Dois retornos proximos da mesma pessoa se cobririam \u2014 e o
+       de baixo sumiria, que e o defeito que esta base mais repete. */
+    const F = new Function(corpo(FOLLOW, 'function empilha(') + '\nreturn empilha;')();
+    const dias = [];
+    for (let i = 1; i <= 30; i++) {
+      dias.push({ iso: '2026-09-' + String(i).padStart(2, '0'), dia: i, semana: (i + 1) % 7 });
+    }
+    const LARG = 40, FIM = dias.length * LARG;
+
+    const juntos = F([
+      { atividade: 'Retorno do juridico sobre a minuta do contrato', retorno: '2026-09-03' },
+      { atividade: 'Aprovar orcamento do fornecedor', retorno: '2026-09-04' },
+      { atividade: 'Acesso ao ambiente de homologacao', retorno: '2026-09-05' },
+    ], dias, LARG);
+    ok(juntos.total === 3, 'tres retornos em dias seguidos ocupam tres faixas',
+       String(juntos.total));
+    let colide = false;
+    for (let i = 0; i < juntos.pos.length; i++) {
+      for (let j = i + 1; j < juntos.pos.length; j++) {
+        const a = juntos.pos[i], b = juntos.pos[j];
+        if (a.faixa === b.faixa && a.esq < b.esq + b.larg && b.esq < a.esq + a.larg) colide = true;
+      }
+    }
+    ok(!colide, 'e nenhum cobre o outro dentro da mesma faixa');
+
+    const longe = F([
+      { atividade: 'Curto', retorno: '2026-09-02' },
+      { atividade: 'Outro curto', retorno: '2026-09-20' },
+    ], dias, LARG);
+    ok(longe.total === 1, 'retornos distantes dividem a mesma faixa', String(longe.total));
+
+    /* NADA PASSA DO FIM DA GRADE. Medido antes da correcao: um titulo longo no
+       dia 30 estourava 375px e criava rolagem lateral num mes que cabia
+       inteiro na tela. O rotulo vira para a esquerda em vez de empurrar. */
+    const fim = F([
+      { atividade: 'Cobrar o parecer final da consultoria sobre o modelo de risco de credito',
+        retorno: '2026-09-30' },
+    ], dias, LARG);
+    const p = fim.pos[0];
+    ok(p.esq + p.larg <= FIM, 'rotulo no ultimo dia nao passa do fim da grade',
+       (p.esq + p.larg) + ' de ' + FIM);
+    ok(p.vira === true, 'ele VIRA para a esquerda, em vez de ser cortado');
+    ok(p.esq >= 0, 'e nao vaza para antes do dia 1');
+
+    ok(F([{ atividade: 'Fora do mes', retorno: '2026-10-05' }], dias, LARG).pos.length === 0,
+       'retorno de outro mes nao entra nesta grade');
+  }
+
+  {
+    /* O WORKER E A ULTIMA PALAVRA, e nao a tela. Um retorno invalido gravado
+       simplesmente sumiria do calendario \u2014 o mesmo desaparecimento silencioso
+       do card do dev. */
+    ok(/FOLLOW_PATH = 'data\/follow\.json'/.test(WC),
+       'os acompanhamentos moram em arquivo proprio, fora do alcance das telas que publicam o melhorias.json');
+    const ler = WC.indexOf("body.action === 'follow-ler'");
+    const grav = WC.indexOf("body.action === 'follow-gravar'");
+    ok(ler > 0 && grav > 0, 'as duas rotas existem');
+    const rotaG = corpo(WC, "if (body.action === 'follow-gravar') {");
+    const rotaL = corpo(WC, "if (body.action === 'follow-ler') {");
+    ok(!!rotaG && !!rotaL, 'as duas rotas foram localizadas pelo bloco');
+    for (const campo of ['atividade', 'pessoa', 'retorno']) {
+      ok(rotaG && new RegExp("error: '" + campo + "'").test(rotaG),
+         'o Worker recusa acompanhamento sem ' + campo);
+    }
+    ok(rotaG && /id_repetido/.test(rotaG),
+       'e recusa dois com o mesmo id \u2014 editar um alteraria o outro');
+    /* A CONDICAO DA TRAVA E EXECUTADA, e nao procurada no texto.
+       A primeira versao conferia que a string 'conflito' aparecia no bloco — e a
+       sabotagem `if (false)` passou EM SILENCIO, porque a string continuava
+       escrita ali dentro. E o mesmo furo dos testes do `confirmar` e do guarda
+       do resumo: provavam que a trava EXISTIA, nunca que ela era OBEDECIDA.
+       Aqui a condicao e recortada e rodada contra os casos que importam. */
+    /* O recorte exige `baseAtual` DENTRO da condicao, e para no `{` que abre o
+       bloco. Sem exigir, o padrao casava com o `if (existe) {` que vem antes —
+       e a invariante media a condicao errada, dizendo que uma aba em dia era
+       barrada. Ela mesma acusou isso; o `[^{]*` e o que a prende no `if` certo. */
+    const condConf = rotaG && /if \((existe[^{]*baseAtual[^{]*)\) \{/.exec(rotaG);
+    ok(!!condConf, 'a condicao da trava de concorrencia foi localizada');
+    if (condConf) {
+      const trava = new Function('existe', 'baseAtual', 'body',
+                                 'return !!(' + condConf[1] + ');');
+      ok(trava(true, 'V2', { base: 'V1' }),
+         'aba com versao velha e BARRADA \u2014 senao ela publica por cima de quem gravou depois');
+      ok(!trava(true, 'V2', { base: 'V2' }), 'aba na versao corrente passa');
+      ok(!trava(false, null, { base: '' }),
+         'primeira gravacao, com o arquivo ainda inexistente, passa');
+      ok(trava(true, 'V2', {}),
+         'aba que nem manda versao tambem e barrada \u2014 pagina velha em cache e o caso perigoso');
+    }
+    ok(rotaL && /status === 404/.test(rotaL),
+       'arquivo que ainda nao existe responde lista vazia, e nao erro');
+    for (const r of ["follow-ler", "follow-gravar"]) {
+      const i = WC.indexOf("body.action === '" + r + "'");
+      const trecho = WC.slice(Math.max(0, i - 400), i);
+      ok(/exigePapel/.test(WC.slice(i, i + 300)), r + ' exige papel antes de qualquer coisa');
+    }
+    /* CADA ROTA E CONFERIDA NO PROPRIO BLOCO. A versao anterior procurava
+       `exigePapel(..., 'admin', ...)` perto de um `FOLLOW_PATH` em qualquer
+       lugar do arquivo — entao abrir a GRAVACAO para `dev` passava em silencio,
+       porque a LEITURA ainda casava com o padrao. Uma rota certa nao atesta a
+       outra. */
+    for (const [nome, bloco] of [['follow-ler', rotaL], ['follow-gravar', rotaG]]) {
+      ok(bloco && /exigePapel\(env, body, 'admin', headers\)/.test(bloco),
+         nome + ' exige admin \u2014 e nao um papel mais fraco');
+      ok(bloco && !/\['dev'/.test(bloco), nome + ' nao abre para dev');
+    }
+  }
+
+  {
+    /* A TELA NAO PODE PARECER VAZIA QUANDO FALHA A LEITURA. E a regra que o
+       `leitura-estado.js` existe para carregar, e a tela nova nasce com ela. */
+    const c = semComentario(FOLLOW);
+    ok(/LEITURA\.falhou\(/.test(c) && /LEITURA\.aoTentarDeNovo\(/.test(c),
+       'a leitura que falha avisa, e oferece tentar de novo');
+    ok(/status === 401 \|\| r\.status === 403/.test(c),
+       'credencial recusada leva de volta ao login, e nao ao aviso de falha de leitura');
+    ok(/follow-gravar[\s\S]{0,200}base/.test(c),
+       'a tela manda a versao que carregou, para a trava de concorrencia ter o que comparar');
   }
 
   let erroPz = null;

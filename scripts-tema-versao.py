@@ -25,8 +25,19 @@ import os
 import re
 import sys
 
-PAGINAS = ['index.html', 'admin.html', 'dev.html', 'gantt.html',
-           'poker.html', 'projetos.html', 'importar.html', 'mensageria.html']
+# AS PAGINAS SAO DESCOBERTAS, e nao listadas.
+#
+# O argumento esta tres paragrafos acima, sobre os SCRIPTS: "uma lista escrita a
+# mao de tudo que precisa de selo tem o mesmo defeito do selo escrito a mao: da
+# para esquecer". A lista de PAGINAS era esse mesmo defeito um andar acima, e
+# cobrou: `follow.html` nasceu fora dela, entao o selo nunca olharia para ela — e
+# no dia em que o `tema.js` mudasse, todas as telas receberiam o hash novo menos
+# essa, servindo script velho do cache sem nada acusar.
+#
+# A pasta ja diz quais paginas existem. Quem nao tiver nada selado dentro
+# simplesmente nao casa com o REF e sai sem ser tocada.
+PAGINAS = sorted(f for f in os.listdir(os.path.dirname(os.path.abspath(__file__)) or '.')
+                 if f.endswith('.html'))
 
 # `src="algo.js?v=..."` ou `href="algo.css?v=..."`, so arquivo local.
 REF = re.compile(r'(?:src|href)="([A-Za-z0-9_.-]+\.(?:js|css))\?v=[^"]*"')

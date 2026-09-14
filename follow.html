@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Fora de buscadores: noindex nao indexa, nofollow nao segue links,
+       noarchive impede copia em cache. Isso reduz descoberta, NAO e controle de
+       acesso: a trava de verdade e o `exigePapel(admin)` no Worker. -->
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <title>Acompanhamentos — RoadMap</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="config.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0E0E0D; --bg2:#161614; --bg3:#1E1E1C; --bg4:#252522;
+      --border:#2E2E2B; --border2:#3A3A36;
+      --text:#ECEAE2; --text2:#A8A49A; --text3:#8A857B;
+      --blue:#3B8FE8; --amber:#E89C2F; --green:#5EA832;
+      --red:#E84444; --purple:#9B6FE8; --teal:#2BBFA0;
+      --radius:12px;
+      /* A largura da faixa de nomes e a do dia. O dia e RECALCULADO ao desenhar,
+         para o mes preencher a tela em vez de sobrar ou faltar — mesma conta do
+         gantt. O valor aqui e so o ponto de partida. */
+      --nome-w:190px; --dia-w:38px; --faixa-h:26px;
+    }
+    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif;
+      font-size:15px; line-height:1.6; min-height:100vh; }
+
+    /* ── ENTRADA ── */
+    #gate { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px; }
+    .gate-box { width:100%; max-width:380px; background:var(--bg2); border:1px solid var(--border);
+      border-radius:16px; padding:28px; }
+    .gate-box h1 { font-size:19px; margin-bottom:6px; }
+    .gate-box p { font-size:13px; color:var(--text2); margin-bottom:18px; }
+    .gate-box input { width:100%; padding:12px 14px; margin-bottom:10px; background:var(--bg3);
+      border:1px solid var(--border); border-radius:var(--radius); color:var(--text);
+      font-family:inherit; font-size:14px; outline:none; }
+    .gate-box input:focus { border-color:var(--blue); }
+    .gate-box button { width:100%; padding:13px; background:var(--blue); color:#fff; border:none;
+      border-radius:var(--radius); font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; }
+    .gate-erro { color:var(--red); font-size:13px; min-height:19px; margin-top:6px; }
+
+    /* ── CABECALHO ── */
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:14px 24px; border-bottom:1px solid var(--border); background:var(--bg2);
+      position:sticky; top:0; z-index:20; flex-wrap:wrap; }
+    header h1 { font-size:18px; font-weight:700; }
+    .cab-dir { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:var(--radius);
+      font-size:13.5px; font-weight:600; font-family:inherit; cursor:pointer; border:none;
+      text-decoration:none; transition:opacity .15s; }
+    .btn:hover { opacity:.85; }
+    .btn-1 { background:var(--blue); color:#fff; }
+    .btn-2 { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
+    .btn-perigo { background:transparent; color:var(--red); border:1px solid var(--red); }
+    .mes-nav { display:flex; align-items:center; gap:6px; }
+    .mes-nav button { background:var(--bg3); border:1px solid var(--border); color:var(--text);
+      width:30px; height:30px; border-radius:8px; cursor:pointer; font-size:15px; line-height:1; }
+    .mes-nav span { min-width:150px; text-align:center; font-weight:600; font-size:14px; }
+
+    /* ── RESUMO ── */
+    .resumo { display:flex; gap:10px; padding:16px 24px 0; flex-wrap:wrap; }
+    .rkpi { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+      padding:9px 14px; display:flex; align-items:baseline; gap:8px; cursor:pointer; }
+    .rkpi:hover { border-color:var(--border2); }
+    .rkpi.on { border-color:var(--blue); }
+    .rkpi b { font-size:19px; font-weight:700; }
+    .rkpi span { font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; }
+    .rkpi.venc b { color:var(--red); }
+    .rkpi.hoje b { color:var(--amber); }
+    .rkpi.sem b { color:var(--blue); }
+
+    /* ── LINHA DO TEMPO ── */
+    main { padding:16px 24px 60px; }
+    .tl-wrap { border:1px solid var(--border); border-radius:14px; background:var(--bg2);
+      overflow-x:auto; overflow-y:visible; }
+    .tl-grade { min-width:max-content; }
+    .tl-cab, .tl-linha { display:grid;
+      grid-template-columns:var(--nome-w) repeat(var(--dias), var(--dia-w)); }
+    .tl-cab { position:sticky; top:0; z-index:5; background:var(--bg3);
+      border-bottom:1px solid var(--border); }
+    .tl-cab .canto { padding:8px 12px; font-size:11.5px; font-weight:700; color:var(--text2);
+      text-transform:uppercase; letter-spacing:.06em; border-right:1px solid var(--border); }
+    .tl-dia { text-align:center; padding:6px 0; font-size:11px; color:var(--text2);
+      border-left:1px solid var(--border); line-height:1.25; }
+    .tl-dia b { display:block; font-size:12.5px; color:var(--text); font-weight:600; }
+    /* FIM DE SEMANA SOMBREADO, e nao removido. O gantt mostra so dia util porque
+       trabalho nao acontece no sabado; aqui a data e um COMPROMISSO DE RETORNO, e
+       um retorno marcado para sabado existe. Escondendo a coluna, o chip nao teria
+       onde pousar e o acompanhamento sumiria da tela — que e o defeito que o
+       painel do dev acabou de ter, por outro caminho. */
+    .tl-dia.fds, .tl-cel.fds { background:#00000033; }
+    .tl-dia.hoje { background:var(--amber); color:#1A1A18; }
+    .tl-dia.hoje b { color:#1A1A18; }
+    .tl-linha { border-top:1px solid var(--border); position:relative; }
+    .tl-nome { padding:8px 12px; font-size:13px; font-weight:600; border-right:1px solid var(--border);
+      display:flex; align-items:flex-start; gap:6px; position:sticky; left:0; background:var(--bg2); z-index:2; }
+    .tl-nome small { font-weight:400; color:var(--text3); font-size:11px; }
+    .tl-cel { border-left:1px solid var(--border); }
+    /* As faixas ficam por cima da grade, posicionadas em pixel — e nao dentro da
+       celula do dia: um chip com texto e mais largo que a coluna, e dentro dela o
+       texto seria cortado no primeiro nome proprio. */
+    .tl-faixas { position:absolute; top:0; left:var(--nome-w); right:0; bottom:0; pointer-events:none; }
+    .fw {
+      position:absolute; height:22px; display:inline-flex; align-items:center; gap:5px;
+      padding:0 9px 0 7px; border-radius:11px; font-size:11.5px; font-weight:600;
+      white-space:nowrap; cursor:pointer; pointer-events:auto; border:1px solid transparent;
+      background:var(--bg4); color:var(--text); max-width:520px; overflow:hidden;
+      text-overflow:ellipsis; font-family:inherit;
+    }
+    .fw:hover { border-color:var(--text3); }
+    .fw:focus-visible { outline:2px solid var(--blue); outline-offset:1px; }
+    .fw .pt { width:7px; height:7px; border-radius:50%; flex-shrink:0; background:var(--blue); }
+    /* Rotulo que cresceu para a esquerda: o ponto vai junto, para continuar
+       marcando o DIA. Sem trocar de lado, o ponto ficaria no comeco do texto e
+       apontaria para um dia varios dias antes do retorno — pior do que nao ter
+       ponto, porque estaria dizendo a data errada com confianca. */
+    .fw.vira { flex-direction:row-reverse; padding:0 7px 0 9px; }
+    .fw.venc { background:#3A1414; color:#FFB4B4; } .fw.venc .pt { background:var(--red); }
+    .fw.hoje { background:#3A2A10; color:#FFD79A; } .fw.hoje .pt { background:var(--amber); }
+    .fw.feito { background:var(--bg3); color:var(--text3); }
+    .fw.feito .pt { background:var(--green); }
+    .fw.feito .tx { text-decoration:line-through; }
+    .tl-vazio { padding:34px 20px; text-align:center; color:var(--text2); font-size:14px; }
+    .tl-vazio p { margin-bottom:12px; }
+
+    /* ── MODAL ── */
+    .mod { display:none; position:fixed; inset:0; background:#000000BB; z-index:100;
+      align-items:center; justify-content:center; padding:20px; }
+    .mod.on { display:flex; }
+    .mod-cx { background:var(--bg2); border:1px solid var(--border); border-radius:16px;
+      width:100%; max-width:520px; max-height:90vh; overflow-y:auto; padding:22px; }
+    .mod-cx h2 { font-size:17px; margin-bottom:16px; }
+    .campo { margin-bottom:14px; }
+    .campo label { display:block; font-size:12.5px; font-weight:600; color:var(--text2);
+      margin-bottom:5px; }
+    .campo label small { font-weight:400; color:var(--text3); }
+    .campo input, .campo textarea {
+      width:100%; padding:10px 12px; background:var(--bg3); border:1px solid var(--border);
+      border-radius:var(--radius); color:var(--text); font-family:inherit; font-size:14px;
+      outline:none; resize:vertical; }
+    .campo input:focus, .campo textarea:focus { border-color:var(--blue); }
+    .dupla { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media (max-width:520px) { .dupla { grid-template-columns:1fr; } }
+    .mod-pe { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
+    .mod-pe .esq { margin-right:auto; }
+    .mod-erro { color:var(--red); font-size:13px; min-height:19px; }
+    .caixa-feito { display:flex; align-items:center; gap:8px; font-size:13.5px; cursor:pointer;
+      padding:9px 12px; background:var(--bg3); border:1px solid var(--border);
+      border-radius:var(--radius); }
+    .caixa-feito input { width:auto; }
+    /* Lista de nomes ja usados, para nao criar "Ana" e "ana " como duas pessoas. */
+    datalist { display:none; }
+
+    #salvando { position:fixed; bottom:16px; right:16px; background:var(--bg3);
+      border:1px solid var(--border); border-radius:var(--radius); padding:8px 14px;
+      font-size:13px; display:none; z-index:200; }
+    #salvando.on { display:block; }
+  </style>
+</head>
+<body>
+
+<!-- ─── ENTRADA ─────────────────────────────────────────────────────────────
+     A senha do admin, a mesma do painel. Quem ja entrou no admin nesta aba nao
+     digita de novo: a sessao e do mesmo dominio, e pedir a senha outra vez para
+     ir de uma tela a outra treina a pessoa a digitar senha sem pensar. -->
+<div id="gate">
+  <div class="gate-box">
+    <h1>Acompanhamentos</h1>
+    <p>Área do PM/PO. Entre com a mesma conta do painel administrativo.</p>
+    <input type="text" id="g-user" placeholder="Usuário ou e-mail (opcional)" autocomplete="username" />
+    <input type="password" id="g-senha" placeholder="Senha" autocomplete="current-password" />
+    <button type="button" id="g-btn" onclick="entrar()">Entrar</button>
+    <div class="gate-erro" id="g-erro"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1>Acompanhamentos</h1>
+    <div class="mes-nav">
+      <button type="button" onclick="mudaMes(-1)" title="Mês anterior" aria-label="Mês anterior">‹</button>
+      <span id="rot-mes"></span>
+      <button type="button" onclick="mudaMes(1)" title="Próximo mês" aria-label="Próximo mês">›</button>
+      <button type="button" onclick="irHoje()" title="Voltar para o mês atual" aria-label="Mês atual" style="width:auto;padding:0 10px;font-size:12px">hoje</button>
+    </div>
+    <div class="cab-dir">
+      <button class="btn btn-1" type="button" onclick="abrirNovo()">+ Novo acompanhamento</button>
+      <a class="btn btn-2" href="admin.html">Painel</a>
+      <button class="btn btn-2" type="button" onclick="sair()">Sair</button>
+    </div>
+  </header>
+
+  <div class="resumo" id="resumo"></div>
+
+  <main>
+    <div class="tl-wrap" id="tl-wrap">
+      <div class="tl-grade" id="tl-grade"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ─── MODAL ─────────────────────────────────────────────────────────────── -->
+<div class="mod" id="mod" onclick="if(event.target===this) fechar()">
+  <div class="mod-cx" role="dialog" aria-modal="true" aria-labelledby="mod-tit">
+    <h2 id="mod-tit">Novo acompanhamento</h2>
+    <input type="hidden" id="f-id" />
+    <div class="campo">
+      <label for="f-atividade">Atividade *</label>
+      <input type="text" id="f-atividade" maxlength="200"
+        placeholder="Ex.: Retorno do jurídico sobre a minuta do contrato" />
+    </div>
+    <div class="dupla">
+      <div class="campo">
+        <label for="f-pessoa">Pessoa envolvida *</label>
+        <input type="text" id="f-pessoa" maxlength="80" list="lista-pessoas"
+          placeholder="Com quem você cobra" />
+        <datalist id="lista-pessoas"></datalist>
+      </div>
+      <div class="campo">
+        <label for="f-retorno">Data do retorno *</label>
+        <input type="date" id="f-retorno" />
+      </div>
+    </div>
+    <div class="campo">
+      <label for="f-obs">Observação <small>— o contexto que você não vai lembrar em duas semanas</small></label>
+      <textarea id="f-obs" rows="4" maxlength="2000"
+        placeholder="O que foi combinado, o que falta, o que já foi tentado."></textarea>
+    </div>
+    <div class="campo">
+      <label class="caixa-feito" for="f-feito">
+        <input type="checkbox" id="f-feito" />
+        <span>Já retornou — encerrado</span>
+      </label>
+    </div>
+    <div class="mod-erro" id="f-erro"></div>
+    <div class="mod-pe">
+      <button class="btn btn-perigo esq" type="button" id="f-excluir" onclick="excluir()"
+        style="display:none">Excluir</button>
+      <button class="btn btn-2" type="button" onclick="fechar()">Cancelar</button>
+      <button class="btn btn-1" type="button" id="f-salvar" onclick="salvar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="salvando">Salvando…</div>
+
+<script src="tema.js?v=7df38474d4"></script>
+<script src="dialogo.js?v=6e3b00ca0d"></script>
+<script src="leitura-estado.js?v=0242a709f1"></script>
+<script>
+'use strict';
+
+const ADMIN_PROXY_URL = 'https://roadmap-nova-melhoria.morais-tecnologico.workers.dev';
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+               'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const DIA_SEMANA = ['dom','seg','ter','qua','qui','sex','sáb'];
+
+let _token = sessionStorage.getItem('rm_admin_token') || '';
+let _senha = sessionStorage.getItem('rm_admin_pw') || '';
+let itens = [];
+let base = null;          // versao sobre a qual esta aba carregou (trava de concorrencia)
+let vAno = 0, vMes = 0;   // mes na tela
+let filtro = '';          // '', 'venc', 'hoje', 'sem'
+
+function cred() {
+  const c = {};
+  if (_token) c.token = _token;
+  if (_senha) c.senha = _senha;
+  return c;
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+/* HOJE EM HORARIO LOCAL, e nao `toISOString()`.
+   `new Date().toISOString().slice(0,10)` devolve a data em UTC: das 21h em
+   diante, no fuso de Brasilia, ela ja e a de AMANHA. Um acompanhamento marcado
+   para hoje apareceria como vencido a noite, e o "hoje" do calendario cairia na
+   coluna errada. O resto da base usa `diaLocalBR` pelo mesmo motivo. */
+function hojeISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+         '-' + String(d.getDate()).padStart(2, '0');
+}
+function dataBR(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ''))) return '';
+  const [a, m, d] = iso.split('-');
+  return d + '/' + m + '/' + a;
+}
+/* Constroi a data SEM fuso: `new Date('2026-09-20')` e meia-noite UTC, que no
+   Brasil e dia 19. Com os tres numeros, o Date nasce local e o dia da semana
+   sai certo — foi assim que o gantt resolveu a mesma armadilha. */
+function dataDe(iso) {
+  const [a, m, d] = String(iso).split('-').map(Number);
+  return new Date(a, m - 1, d);
+}
+
+// ─── ENTRADA ────────────────────────────────────────────────────────────────
+async function entrar() {
+  const btn = document.getElementById('g-btn');
+  const err = document.getElementById('g-erro');
+  const user = document.getElementById('g-user').value.trim();
+  const senha = document.getElementById('g-senha').value;
+  if (!senha) { err.textContent = 'Informe a senha.'; return; }
+  btn.disabled = true; btn.textContent = 'Entrando…';
+  err.textContent = '';
+  try {
+    if (user) {
+      const r = await fetch(ADMIN_PROXY_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', login: user, senhaUsuario: senha })
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { err.textContent = j.detail || 'Usuário ou senha inválidos.'; return; }
+      /* O PAPEL E CONFERIDO AQUI TAMBEM, e nao so no Worker. A trava de verdade
+         e la — sem admin, `follow-ler` responde 403 e a tela fica vazia. Isto
+         aqui existe para a pessoa LER o motivo em vez de ver uma tela em branco
+         e concluir que o sistema quebrou. */
+      if (j.usuario && j.usuario.papel !== 'admin') {
+        err.textContent = 'Sua conta é de ' + j.usuario.papel + ' e não abre esta área.';
+        return;
+      }
+      _token = j.token || '';
+      sessionStorage.setItem('rm_admin_token', _token);
+    } else {
+      const r = await fetch(ADMIN_PROXY_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'auth', senha })
+      });
+      if (!r.ok) { err.textContent = 'Senha incorreta.'; return; }
+      _senha = senha;
+      sessionStorage.setItem('rm_admin_pw', _senha);
+    }
+    await abrirApp();
+  } catch (e) {
+    err.textContent = 'Falha de conexão. Tente novamente.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+}
+
+function sair() {
+  if (_token) {
+    fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'logout', token: _token })
+    }).catch(() => {});
+  }
+  sessionStorage.removeItem('rm_admin_token');
+  sessionStorage.removeItem('rm_admin_pw');
+  location.reload();
+}
+
+async function abrirApp() {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  const hoje = dataDe(hojeISO());
+  vAno = hoje.getFullYear(); vMes = hoje.getMonth();
+  await carregar();
+}
+
+// ─── DADOS ──────────────────────────────────────────────────────────────────
+async function carregar() {
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'follow-ler' }, cred()))
+    });
+    const j = await r.json().catch(() => ({}));
+    /* CREDENCIAL RECUSADA NAO E FALHA DE LEITURA, e tratar as duas igual seria
+       mentir para quem esta olhando. A sessao do admin dura 12h: quem deixou a
+       aba aberta de ontem cai aqui, e a resposta certa e "entre de novo" — nao
+       um aviso vermelho dizendo que a leitura falhou, com um botao "tentar de
+       novo" que vai falhar igual para sempre. */
+    if (r.status === 401 || r.status === 403) {
+      _token = ''; _senha = '';
+      sessionStorage.removeItem('rm_admin_token');
+      sessionStorage.removeItem('rm_admin_pw');
+      if (window.LEITURA) LEITURA.ok();
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('gate').style.display = '';
+      document.getElementById('g-erro').textContent =
+        j.detail || 'Sua sessão expirou. Entre novamente.';
+      document.getElementById('g-senha').value = '';
+      document.getElementById('g-senha').focus();
+      return;
+    }
+    if (!r.ok) throw new Error(j.detail || ('falha ao ler (' + r.status + ')'));
+    itens = Array.isArray(j.itens) ? j.itens : [];
+    base = j.base || null;
+    if (window.LEITURA) LEITURA.ok();
+    desenhar();
+  } catch (e) {
+    /* LEITURA QUE FALHA NAO PODE PARECER BASE VAZIA. Sem o aviso, a tela
+       desenharia "nenhum acompanhamento" para quem tem trinta — e a pessoa
+       cadastraria tudo de novo por cima. O botao "tentar de novo" relê. */
+    if (window.LEITURA) {
+      LEITURA.aoTentarDeNovo(function () { return carregar(); });
+      LEITURA.falhou((e && e.message) || 'falha ao ler os acompanhamentos');
+    }
+    document.getElementById('tl-grade').innerHTML =
+      '<div class="tl-vazio"><p>Não consegui ler os acompanhamentos.</p>' +
+      '<p style="font-size:12.5px">Esta tela está <b>incompleta</b> — não é uma lista vazia. ' +
+      'Não cadastre de novo antes de recarregar.</p></div>';
+    document.getElementById('resumo').innerHTML = '';
+  }
+}
+
+async function gravar(lista) {
+  document.getElementById('salvando').classList.add('on');
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'follow-gravar', itens: lista, base }, cred()))
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { erro: j.detail || j.error || ('falha ao gravar (' + r.status + ')') };
+    // O servidor devolve o que GRAVOU, e e isso que a tela passa a mostrar: ele
+    // limpa texto e normaliza campos, e mostrar o que foi enviado faria a tela
+    // discordar do arquivo ate o proximo F5.
+    itens = Array.isArray(j.itens) ? j.itens : lista;
+    base = j.base || null;
+    return { ok: true };
+  } catch (e) {
+    return { erro: (e && e.message) || 'falha de conexão' };
+  } finally {
+    document.getElementById('salvando').classList.remove('on');
+  }
+}
+
+// ─── ESTADO DE UM ACOMPANHAMENTO ────────────────────────────────────────────
+/* UMA REGRA SO para "como esta este acompanhamento", pelo mesmo motivo que a
+   etapa da demanda virou um arquivo unico: o resumo, a cor do chip e o filtro
+   fazem a MESMA pergunta, e tres contas separadas divergem na primeira mudanca.
+
+   Concluido vence o vencimento: o que ja voltou nao esta atrasado, por mais
+   antiga que seja a data. */
+function situacao(it, hoje) {
+  const dia = hoje || hojeISO();
+  if (it && it.concluido) return 'feito';
+  const r = String((it || {}).retorno || '');
+  if (!r) return 'aberto';
+  if (r < dia) return 'venc';
+  if (r === dia) return 'hoje';
+  return 'aberto';
+}
+/* Dentro dos proximos 7 dias, contando hoje. Serve ao contador "esta semana". */
+function naSemana(it, hoje) {
+  const dia = hoje || hojeISO();
+  if (!it || it.concluido) return false;
+  const r = String(it.retorno || '');
+  if (!r || r < dia) return false;
+  const lim = dataDe(dia); lim.setDate(lim.getDate() + 6);
+  const limISO = lim.getFullYear() + '-' + String(lim.getMonth() + 1).padStart(2, '0') +
+                 '-' + String(lim.getDate()).padStart(2, '0');
+  return r <= limISO;
+}
+
+// ─── DESENHO ────────────────────────────────────────────────────────────────
+function mudaMes(d) {
+  vMes += d;
+  if (vMes < 0) { vMes = 11; vAno--; }
+  if (vMes > 11) { vMes = 0; vAno++; }
+  desenhar();
+}
+function irHoje() {
+  const h = dataDe(hojeISO());
+  vAno = h.getFullYear(); vMes = h.getMonth();
+  desenhar();
+}
+function alternaFiltro(k) { filtro = (filtro === k ? '' : k); desenhar(); }
+
+function diasDoMes(ano, mes) {
+  const total = new Date(ano, mes + 1, 0).getDate();
+  const out = [];
+  for (let d = 1; d <= total; d++) {
+    const dt = new Date(ano, mes, d);
+    const iso = ano + '-' + String(mes + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    out.push({ iso, dia: d, semana: dt.getDay() });
+  }
+  return out;
+}
+
+/* EMPILHAMENTO EM FAIXAS, e o lado para onde o rotulo cresce.
+ *
+ * Dois retornos da mesma pessoa em dias proximos se sobrepoem: o chip tem TEXTO,
+ * e texto e mais largo que uma coluna de dia. Sem empilhar, um cobriria o outro
+ * e o acompanhamento de baixo ficaria invisivel — de novo o desaparecimento
+ * silencioso, que e o defeito que esta base mais repete.
+ *
+ * A largura e ESTIMADA (media do Inter 11.5px semibold ~6.1px por caractere mais
+ * o enfeite). Estimativa erra alguns pixels; errar para MAIS e o lado seguro,
+ * porque sobra espaco em vez de encostar.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O ROTULO VIRA PARA A ESQUERDA QUANDO NAO CABE A DIREITA.
+ *
+ * MEDIDO, com um acompanhamento de titulo longo no dia 30: o chip passava
+ * 375px do fim da grade e criava 375px de rolagem lateral — num mes que cabia
+ * inteiro na tela. A pessoa teria de arrastar para o lado para ver o final de
+ * um texto, e no caminho perderia de vista a coluna de nomes.
+ *
+ * Virar e melhor do que cortar: o texto continua inteiro, e o ponto colorido
+ * segue marcando o DIA (por isso ele troca de lado junto — `row-reverse`).
+ * So quando nem virando cabe e que a largura e cortada, e ai o `title` carrega
+ * o texto completo. */
+function empilha(lista, dias, larguraDia) {
+  const fim = dias.length * larguraDia;
+  const faixas = [];
+  const pos = [];
+  for (const it of lista) {
+    const idx = dias.findIndex(d => d.iso === it.retorno);
+    if (idx < 0) continue;                       // retorno fora do mes na tela
+    const natural = Math.min(520, Math.max(48, it.atividade.length * 6.1 + 46));
+    const ancora = idx * larguraDia;
+    const cabeDireita = ancora + 2 + natural <= fim;
+    let esq, larg, vira = false;
+    if (cabeDireita) {
+      esq = ancora + 2; larg = natural;
+    } else {
+      // Cresce para a esquerda a partir do fim da coluna do dia.
+      vira = true;
+      larg = Math.min(natural, ancora + larguraDia - 2);
+      esq = Math.max(0, ancora + larguraDia - 2 - larg);
+    }
+    let faixa = 0;
+    while (faixas[faixa] !== undefined && esq < faixas[faixa]) faixa++;
+    faixas[faixa] = esq + larg + 6;              // onde esta faixa fica livre de novo
+    pos.push({ it, esq, larg, faixa, vira });
+  }
+  return { pos, total: Math.max(1, faixas.length) };
+}
+
+function desenhar() {
+  document.getElementById('rot-mes').textContent = MESES[vMes] + ' ' + vAno;
+  const hoje = hojeISO();
+  const dias = diasDoMes(vAno, vMes);
+
+  // A coluna do dia preenche a tela: mesma conta do gantt, com piso para o
+  // numero do dia nao encostar na borda.
+  const wrap = document.getElementById('tl-wrap');
+  const nomeW = parseInt(getComputedStyle(document.documentElement)
+                  .getPropertyValue('--nome-w')) || 190;
+  const disp = (wrap ? wrap.clientWidth : 1200) - nomeW - 2;
+  const larguraDia = Math.max(34, Math.floor(disp / dias.length));
+  document.documentElement.style.setProperty('--dia-w', larguraDia + 'px');
+  document.documentElement.style.setProperty('--dias', dias.length);
+
+  renderResumo(hoje);
+
+  const doMes = itens.filter(it => {
+    const r = String(it.retorno || '');
+    if (r.slice(0, 7) !== (vAno + '-' + String(vMes + 1).padStart(2, '0'))) return false;
+    if (filtro === 'venc') return situacao(it, hoje) === 'venc';
+    if (filtro === 'hoje') return situacao(it, hoje) === 'hoje';
+    if (filtro === 'sem')  return naSemana(it, hoje);
+    return true;
+  });
+
+  const grade = document.getElementById('tl-grade');
+  if (!doMes.length) {
+    grade.innerHTML = cabecalho(dias, hoje) +
+      '<div class="tl-vazio"><p>' +
+      (filtro ? 'Nenhum acompanhamento neste filtro, em ' + MESES[vMes] + '.'
+              : 'Nenhum acompanhamento com retorno em ' + MESES[vMes] + ' de ' + vAno + '.') +
+      '</p><button class="btn btn-1" type="button" onclick="abrirNovo()">+ Novo acompanhamento</button></div>';
+    return;
+  }
+
+  // Uma faixa por pessoa, e as pessoas em ordem alfabetica: a lista muda de
+  // tamanho a cada mes, e ordenar por quantidade faria o nome pular de lugar
+  // entre um mes e outro.
+  const pessoas = [...new Set(doMes.map(it => it.pessoa))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  let html = cabecalho(dias, hoje);
+  for (const p of pessoas) {
+    const meus = doMes.filter(it => it.pessoa === p)
+      .sort((a, b) => a.retorno.localeCompare(b.retorno));
+    const { pos, total } = empilha(meus, dias, larguraDia);
+    const altura = Math.max(40, total * 26 + 12);
+    const abertos = meus.filter(it => !it.concluido).length;
+    html += '<div class="tl-linha" style="min-height:' + altura + 'px">' +
+      '<div class="tl-nome">' + esc(p) +
+        '<small>' + abertos + (abertos === 1 ? ' aberto' : ' abertos') + '</small></div>' +
+      dias.map(d => '<div class="tl-cel' + (d.semana === 0 || d.semana === 6 ? ' fds' : '') + '"></div>').join('') +
+      '<div class="tl-faixas">' +
+        pos.map(({ it, esq, larg, faixa, vira }) => {
+          const st = situacao(it, hoje);
+          const titulo = it.atividade + ' — ' + it.pessoa + ' — retorno ' + dataBR(it.retorno) +
+            (it.observacao ? '\n\n' + it.observacao : '');
+          return '<button type="button" class="fw ' + st + (vira ? ' vira' : '') + '" ' +
+            'style="left:' + esq + 'px;max-width:' + Math.round(larg) + 'px;top:' +
+            (6 + faixa * 26) + 'px" ' +
+            'title="' + esc(titulo) + '" onclick="abrirEdicao(\'' + esc(it.id) + '\')">' +
+            '<span class="pt"></span><span class="tx">' + esc(it.atividade) + '</span></button>';
+        }).join('') +
+      '</div></div>';
+  }
+  grade.innerHTML = html;
+}
+
+function cabecalho(dias, hoje) {
+  return '<div class="tl-cab"><div class="canto">Pessoa</div>' +
+    dias.map(d => {
+      const cls = d.iso === hoje ? ' hoje' : ((d.semana === 0 || d.semana === 6) ? ' fds' : '');
+      return '<div class="tl-dia' + cls + '"><b>' + d.dia + '</b>' + DIA_SEMANA[d.semana] + '</div>';
+    }).join('') + '</div>';
+}
+
+function renderResumo(hoje) {
+  // O resumo conta a base INTEIRA, e nao o mes na tela: vencido de agosto
+  // continua sendo cobranca em setembro, e some do contador se a conta olhar
+  // so o mes aberto — que e justamente quando ele seria esquecido.
+  const venc = itens.filter(it => situacao(it, hoje) === 'venc').length;
+  const hj   = itens.filter(it => situacao(it, hoje) === 'hoje').length;
+  const sem  = itens.filter(it => naSemana(it, hoje)).length;
+  const ab   = itens.filter(it => !it.concluido).length;
+  const chip = (k, cls, n, rot) =>
+    '<button type="button" class="rkpi ' + cls + (filtro === k ? ' on' : '') + '" ' +
+    'onclick="alternaFiltro(\'' + k + '\')" title="Clique para filtrar">' +
+    '<b>' + n + '</b><span>' + rot + '</span></button>';
+  document.getElementById('resumo').innerHTML =
+    chip('venc', 'venc', venc, 'vencidos') +
+    chip('hoje', 'hoje', hj, 'hoje') +
+    chip('sem', 'sem', sem, 'próximos 7 dias') +
+    '<div class="rkpi" style="cursor:default"><b>' + ab + '</b><span>em aberto</span></div>';
+}
+
+// ─── MODAL ──────────────────────────────────────────────────────────────────
+function listaPessoas() {
+  const nomes = [...new Set(itens.map(it => it.pessoa).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  document.getElementById('lista-pessoas').innerHTML =
+    nomes.map(n => '<option value="' + esc(n) + '"></option>').join('');
+}
+
+function abrirNovo(isoSugerido) {
+  document.getElementById('mod-tit').textContent = 'Novo acompanhamento';
+  document.getElementById('f-id').value = '';
+  document.getElementById('f-atividade').value = '';
+  document.getElementById('f-pessoa').value = '';
+  document.getElementById('f-retorno').value = isoSugerido || hojeISO();
+  document.getElementById('f-obs').value = '';
+  document.getElementById('f-feito').checked = false;
+  document.getElementById('f-erro').textContent = '';
+  document.getElementById('f-excluir').style.display = 'none';
+  listaPessoas();
+  document.getElementById('mod').classList.add('on');
+  document.getElementById('f-atividade').focus();
+}
+
+function abrirEdicao(id) {
+  const it = itens.find(x => x.id === id);
+  if (!it) return;
+  document.getElementById('mod-tit').textContent = 'Acompanhamento';
+  document.getElementById('f-id').value = it.id;
+  document.getElementById('f-atividade').value = it.atividade || '';
+  document.getElementById('f-pessoa').value = it.pessoa || '';
+  document.getElementById('f-retorno').value = it.retorno || '';
+  document.getElementById('f-obs').value = it.observacao || '';
+  document.getElementById('f-feito').checked = !!it.concluido;
+  document.getElementById('f-erro').textContent = '';
+  document.getElementById('f-excluir').style.display = '';
+  listaPessoas();
+  document.getElementById('mod').classList.add('on');
+  document.getElementById('f-atividade').focus();
+}
+
+function fechar() { document.getElementById('mod').classList.remove('on'); }
+
+async function salvar() {
+  const err = document.getElementById('f-erro');
+  const atividade = document.getElementById('f-atividade').value.trim();
+  const pessoa = document.getElementById('f-pessoa').value.trim();
+  const retorno = document.getElementById('f-retorno').value;
+  if (!atividade) { err.textContent = 'Diga o que precisa ser acompanhado.';
+                    document.getElementById('f-atividade').focus(); return; }
+  if (!pessoa) { err.textContent = 'Com quem você cobra isso? Acompanhamento sem pessoa não se cobra.';
+                 document.getElementById('f-pessoa').focus(); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(retorno)) {
+    err.textContent = 'Informe a data do retorno.';
+    document.getElementById('f-retorno').focus(); return; }
+  err.textContent = '';
+
+  const id = document.getElementById('f-id').value;
+  const feito = document.getElementById('f-feito').checked;
+  const campos = { atividade, pessoa, retorno,
+                   observacao: document.getElementById('f-obs').value.trim(),
+                   concluido: feito };
+  // Cópia da lista, e não mutação: se a gravação falhar, a tela continua
+  // mostrando o que está no servidor em vez de uma alteração que não foi.
+  let lista;
+  if (id) {
+    lista = itens.map(x => x.id === id ? Object.assign({}, x, campos) : x);
+  } else {
+    lista = itens.concat([Object.assign({
+      id: 'fw-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
+      criado_em: new Date().toISOString(),
+    }, campos)]);
+  }
+  const btn = document.getElementById('f-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  const r = await gravar(lista);
+  btn.disabled = false; btn.textContent = 'Salvar';
+  if (r.erro) { err.textContent = r.erro; return; }
+  fechar();
+  // Vai para o mês do retorno: gravar um retorno de outubro estando em setembro
+  // fechava o modal numa tela onde o item não aparece, e parecia que sumiu.
+  const d = dataDe(retorno);
+  vAno = d.getFullYear(); vMes = d.getMonth();
+  desenhar();
+}
+
+async function excluir() {
+  const id = document.getElementById('f-id').value;
+  const it = itens.find(x => x.id === id);
+  if (!it) return;
+  const ok = window.confirmar
+    ? await confirmar({ titulo: 'Excluir acompanhamento',
+        texto: '"' + it.atividade + '" (' + it.pessoa + ') sai da lista. Não há como desfazer.',
+        ok: 'Excluir', perigo: true })
+    : window.confirm('Excluir "' + it.atividade + '"? Não há como desfazer.');
+  if (!ok) return;
+  const r = await gravar(itens.filter(x => x.id !== id));
+  if (r.erro) { document.getElementById('f-erro').textContent = r.erro; return; }
+  fechar();
+  desenhar();
+}
+
+// ─── ATALHOS E ARRANQUE ─────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('mod').classList.contains('on')) fechar();
+});
+['g-user', 'g-senha'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') entrar();
+  });
+});
+// A coluna do dia é medida em pixel: sem redesenhar ao redimensionar, ela fica
+// com a largura da janela de quando a página abriu.
+let _redim = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_redim);
+  _redim = setTimeout(() => { if (document.getElementById('app').style.display !== 'none') desenhar(); }, 150);
+});
+
+// Sessão já aberta no painel: entra direto. Se a credencial não valer mais, o
+// `follow-ler` responde 403 e a tela volta a pedir a senha.
+if (_token || _senha) {
+  abrirApp().catch(() => {});
+}
+</script>
+</body>
+</html>

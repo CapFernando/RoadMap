@@ -31,6 +31,20 @@ const REPO_OWNER = 'CapFernando';
 // e configuracao, nao deploy.
 const REPO_NAME_PADRAO = 'RoadMap';
 const FILE_PATH  = 'data/melhorias.json';
+/* OS ACOMPANHAMENTOS MORAM EM OUTRO ARQUIVO, e isso nao e organizacao — e a
+   unica forma de eles sobreviverem.
+
+   `melhorias.json` e publicado INTEIRO por tres telas, e cada uma monta o
+   documento a partir de uma lista FECHADA de chaves. O proprio `admin.html`
+   registra o que acontece com o que nao esta na lista: "o que a tela nao
+   carrega, ela apaga" — foi assim que `devs_removidos` sumiu uma vez.
+
+   Uma colecao nova ali dentro dependeria de eu lembrar de acrescenta-la em
+   admin, gantt e dev, e de quem mexer depois lembrar tambem. Aqui ela esta fora
+   do alcance das tres: nenhuma delas le nem grava este arquivo, entao nenhuma
+   delas pode apaga-lo. Em troca, o backup continua o mesmo — e o repositorio
+   inteiro que e copiado, e nao um arquivo escolhido a dedo. */
+const FOLLOW_PATH = 'data/follow.json';
 const ALLOWED_ORIGIN = 'https://capfernando.github.io';
 
 function corsHeaders() {
@@ -3500,6 +3514,126 @@ export default {
                       gravado: false, resultados }, 502, headers);
       }
       return json({ ok: true, gravado: true, alteradas: mexidas, resultados }, 200, headers);
+    }
+
+    /* ─── ACOMPANHAMENTOS ────────────────────────────────────────────────
+       Registro de cobranca: uma atividade, a pessoa envolvida e a data em que
+       ela deve voltar. Nao e demanda — nao tem etapa, nao tem dev, nao entra em
+       relatorio nenhum. E a agenda de quem coordena.
+
+       SO ADMIN, nas duas pontas. O pedido foi "eu registrar": quem le e quem
+       escreve e a mesma pessoa, e a lista tem nome de gente de fora do time
+       junto de cobranca em aberto. Abrir a leitura para `dev` seria decidir por
+       conta propria que isso e do time, e nao foi o que se pediu. */
+    if (body.action === 'follow-ler') {
+      const permF = await exigePapel(env, body, 'admin', headers);
+      if (permF.recusa) return permF.recusa;
+      const r = await gh('contents/' + FOLLOW_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      /* ARQUIVO QUE AINDA NAO EXISTE NAO E ERRO. Na primeira vez que a pagina
+         abrir, nao ha nada gravado — devolver 502 faria a tela dizer "falha ao
+         ler" para uma base que so esta vazia, e a pessoa concluiria que perdeu
+         dado que nunca existiu. `base: null` diz a ela que a primeira gravacao
+         cria o arquivo. */
+      if (r.status === 404) return json({ ok: true, itens: [], base: null }, 200, headers);
+      if (!r.ok) return json({ error: 'Falha ao ler acompanhamentos' }, 502, headers);
+      let doc = {};
+      try { doc = JSON.parse(await r.text()) || {}; } catch (_) { doc = {}; }
+      return json({ ok: true, itens: Array.isArray(doc.itens) ? doc.itens : [],
+                    base: doc.atualizado_em || null }, 200, headers);
+    }
+
+    if (body.action === 'follow-gravar') {
+      const permG = await exigePapel(env, body, 'admin', headers);
+      if (permG.recusa) return permG.recusa;
+      if (!Array.isArray(body.itens)) {
+        return json({ error: 'itens', detail: 'Envie a lista de acompanhamentos.' }, 400, headers);
+      }
+      if (body.itens.length > 2000) {
+        return json({ error: 'muitos', detail: 'Limite de 2000 acompanhamentos.' }, 400, headers);
+      }
+
+      /* A VALIDACAO E AQUI, e nao so na tela. A tela nunca e a ultima palavra
+         nesta base — o `projeto-novo` e o `demanda-nova` ja registram isso. Uma
+         data invalida gravada aqui nao quebra nada hoje: ela simplesmente some
+         do calendario, que e o mesmo tipo de desaparecimento silencioso que a
+         demanda do dev acabou de ter. */
+      const eData = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+      const limpos = [];
+      for (let i = 0; i < body.itens.length; i++) {
+        const it = body.itens[i] || {};
+        const atividade = limpaTexto(it.atividade, 200);
+        const pessoa = limpaTexto(it.pessoa, 80);
+        const retorno = String(it.retorno || '').slice(0, 10);
+        const onde = 'item ' + (i + 1) + (atividade ? ' ("' + atividade.slice(0, 40) + '")' : '');
+        if (!atividade) {
+          return json({ error: 'atividade', detail: 'Sem atividade no ' + onde + '.' }, 400, headers);
+        }
+        if (!pessoa) {
+          return json({ error: 'pessoa',
+                        detail: 'Sem pessoa envolvida no ' + onde + '. Acompanhamento sem ' +
+                                'alguem para cobrar nao e acompanhamento.' }, 400, headers);
+        }
+        if (!eData(retorno)) {
+          return json({ error: 'retorno',
+                        detail: 'Data de retorno invalida no ' + onde + '. Use AAAA-MM-DD.' }, 400, headers);
+        }
+        limpos.push({
+          id: limpaTexto(it.id, 40) || ('fw-' + Date.now().toString(36) + '-' + crypto.randomUUID().slice(0, 6)),
+          atividade, pessoa, retorno,
+          observacao: limpaTexto(it.observacao, 2000),
+          concluido: !!it.concluido,
+          concluido_em: it.concluido ? (String(it.concluido_em || '') || new Date().toISOString()) : '',
+          criado_em: String(it.criado_em || '') || new Date().toISOString(),
+        });
+      }
+
+      /* ID REPETIDO NAO ENTRA. Duas linhas com o mesmo id fazem a edicao de uma
+         alterar a outra, e a exclusao levar as duas — e o defeito so aparece
+         depois, quando alguem mexer. */
+      const vistos = new Set();
+      for (const it of limpos) {
+        if (vistos.has(it.id)) {
+          return json({ error: 'id_repetido',
+                        detail: 'Dois acompanhamentos com o mesmo id (' + it.id + ').' }, 409, headers);
+        }
+        vistos.add(it.id);
+      }
+
+      const metaRes = await gh('contents/' + FOLLOW_PATH + '?t=' + Date.now());
+      const existe = metaRes.ok;
+      let sha = null, baseAtual = null;
+      if (existe) {
+        sha = (await metaRes.json()).sha;
+        const rawF = await gh('contents/' + FOLLOW_PATH + '?raw=' + Date.now(),
+          { headers: { Accept: 'application/vnd.github.raw' } });
+        if (!rawF.ok) return json({ error: 'Falha ao ler acompanhamentos' }, 502, headers);
+        try { baseAtual = (JSON.parse(await rawF.text()) || {}).atualizado_em || null; } catch (_) {}
+      } else if (metaRes.status !== 404) {
+        return json({ error: 'Falha ao ler acompanhamentos' }, 502, headers);
+      }
+
+      /* MESMA TRAVA DE CONCORRENCIA DO RESTO, e pelo mesmo motivo: duas abas
+         abertas, a segunda a gravar publica seu estado antigo por cima. Aqui a
+         checagem e propria porque o `conflito()` compartilhado le o
+         `melhorias.json` — chama-lo aqui compararia a versao do arquivo errado
+         e deixaria passar exatamente o que ele existe para barrar. */
+      if (existe && baseAtual && String(body.base || '') !== baseAtual) {
+        return json({ error: 'conflito',
+                      detail: 'Outra aba gravou depois que esta carregou. Recarregue (F5) e refaca.',
+                      atual: baseAtual }, 409, headers);
+      }
+
+      const doc = { itens: limpos, atualizado_em: new Date().toISOString() };
+      const corpoPut = { message: 'chore: acompanhamentos ' + doc.atualizado_em,
+                         content: toB64(JSON.stringify(doc, null, 2)) };
+      if (sha) corpoPut.sha = sha;
+      const put = await gh('contents/' + FOLLOW_PATH, { method: 'PUT', body: JSON.stringify(corpoPut) });
+      if (!put.ok) {
+        const e = await put.text();
+        return json({ error: 'Falha ao salvar', detail: e }, 502, headers);
+      }
+      return json({ ok: true, itens: limpos, base: doc.atualizado_em }, 200, headers);
     }
 
     if (body.action === 'projeto-novo') {
