@@ -9732,6 +9732,111 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a tela manda a versao que carregou, para a trava de concorrencia ter o que comparar');
   }
 
+  sec('Filtro de producao \u2014 o que foi entregue e ainda nao subiu');
+  {
+    /* A REGRA, EXECUTADA. Ela decide quem entra na fila de deploy, e o erro
+       aqui nao aparece como erro: aparece como demanda que ninguem subiu. */
+    const MP = new Function('statusKey',
+      corpo(ADMIN, 'function matchProducao(') + '\nreturn matchProducao;')(
+      (m) => require('./etapa-demanda.js').gravada(m));
+
+    const feitaNoAr   = { status_planejamento: 'concluido', em_producao: true };
+    const feitaForaAr = { status_planejamento: 'concluido', em_producao: false };
+    const feitaAntiga = { status_planejamento: 'concluido' };          // sem o campo
+    const emAndamento = { status_planejamento: 'em_andamento' };
+    const backlog     = { status_planejamento: 'backlog' };
+    const validacao   = { status_planejamento: 'validacao' };
+
+    ok(MP(feitaForaAr, 'falta_subir'), 'concluida com a caixa desmarcada entra na fila');
+    /* AUSENTE CONTA COMO FORA DO AR. O campo nasceu em 10/09 \u2014 tratar a
+       demanda antiga como "nao sei" a esconderia da fila, e a fila existe
+       para nao esquecer nada. */
+    ok(MP(feitaAntiga, 'falta_subir'),
+       'concluida SEM o campo tambem entra \u2014 ausente e fora do ar, e nao desconhecido');
+    ok(!MP(feitaNoAr, 'falta_subir'), 'o que ja subiu sai da fila');
+
+    /* O QUE NAO E FILA DE DEPLOY. Sem a condicao de concluida, "fora do ar"
+       devolveria a base inteira: backlog tambem nao esta em producao. */
+    ok(!MP(emAndamento, 'falta_subir'), 'em andamento nao e fila de deploy');
+    ok(!MP(backlog, 'falta_subir'), 'backlog muito menos');
+    ok(!MP(validacao, 'falta_subir'), 'e o que ainda espera o PM/PO tambem nao');
+
+    ok(MP(feitaNoAr, 'no_ar'), 'o filtro "no ar" traz o que subiu');
+    ok(!MP(feitaForaAr, 'no_ar') && !MP(feitaAntiga, 'no_ar'), 'e so o que subiu');
+
+    ok(MP(backlog, null) && MP(feitaNoAr, null) && MP(feitaForaAr, ''),
+       'sem filtro escolhido, nada e cortado');
+    ok(MP(null, 'no_ar') === false && MP(undefined, 'falta_subir') === false,
+       'demanda ausente nao quebra a regra');
+  }
+
+  {
+    /* O FILTRO VENCE O "ESCONDE CONCLUIDA POR PADRAO".
+       Sem isto o filtro nasceria quebrado: a lista esconde concluida por padrao,
+       e "Concluidas fora do ar" pede exatamente concluidas \u2014 escolher a opcao
+       devolveria zero sobre uma fila cheia. E o mesmo defeito do dfdaee4, "filtro
+       invisivel ganhando da busca", por outro caminho.
+
+       Esta invariante EXECUTA a cadeia inteira de `renderMelhorias`, e nao
+       procura `_filtroProd` no texto: a variavel poderia estar escrita ali e a
+       condicao continuar errada. */
+    const cadeia = corpo(ADMIN, 'function renderMelhorias(');
+    // O recorte comeca no `HIDDEN_BY_DEFAULT`, e nao no `const lista`: e ele que
+    // define quem fica escondido por padrao, e e contra ele que esta invariante
+    // existe. Sem incluir, o trecho nao roda.
+    const i = cadeia.indexOf('const HIDDEN_BY_DEFAULT');
+    const j = cadeia.indexOf('});', i);
+    const filtro = new Function(
+      'ehMesclada', 'statusEfetivo', 'statusKey', 'catalogoCasa', 'matchPrazo',
+      'matchDev', 'matchTipo', 'matchBusca', 'state',
+      '_filtroStatus', '_filtroTema', '_filtroDev', '_filtroPrazo', '_filtroTipo',
+      '_filtroProd', '_buscaMel',
+      corpo(ADMIN, 'function matchProducao(') + '\n' +
+      cadeia.slice(i, j + 3) + '\nreturn lista;');
+
+    const ETP = require('./etapa-demanda.js');
+    const base = [
+      { id: 'a', titulo: 'ja subiu', status_planejamento: 'concluido', em_producao: true },
+      { id: 'b', titulo: 'falta subir', status_planejamento: 'concluido', em_producao: false },
+      { id: 'c', titulo: 'antiga, sem o campo', status_planejamento: 'concluido' },
+      { id: 'd', titulo: 'em andamento', status_planejamento: 'em_andamento' },
+    ];
+    const roda = (prod) => filtro(
+      () => false, (m) => ETP.efetiva(m), (m) => ETP.gravada(m), () => true,
+      () => true, () => true, () => true, () => true, { melhorias: base, temas: [] },
+      null, null, null, null, null, prod, '').map(m => m.id);
+
+    ok(JSON.stringify(roda(null)) === JSON.stringify(['d']),
+       'sem filtro, as concluidas seguem escondidas \u2014 a higiene da lista nao muda',
+       roda(null).join(','));
+    const fila = roda('falta_subir');
+    ok(fila.length === 2 && fila.indexOf('b') >= 0 && fila.indexOf('c') >= 0,
+       'com o filtro, as concluidas fora do ar APARECEM \u2014 e sao so elas',
+       fila.join(',') || '(vazio)');
+    ok(fila.indexOf('a') < 0, 'a que ja subiu nao entra');
+    ok(fila.indexOf('d') < 0, 'e a que nem foi concluida tambem nao');
+    ok(JSON.stringify(roda('no_ar')) === JSON.stringify(['a']),
+       'e "no ar" traz so a que subiu', roda('no_ar').join(','));
+  }
+
+  {
+    /* A OPCAO EXISTE NA BARRA, e o botao Limpar a conta. Um filtro que fica
+       ligado sem aparecer no "Limpar (n)" e a definicao do filtro invisivel. */
+    const c = semComentario(ADMIN);
+    ok(/fbGroup\('Produção', _filtroProd, opcoesProducao\(\), 'setFiltroProd'\)/.test(c),
+       'o select de producao esta na barra de filtros');
+    ok(/_filtroTipo,\s*\n?\s*_filtroProd, _buscaMel\]/.test(c) ||
+       /_filtroProd[\s\S]{0,40}\]\.filter\(Boolean\)\.length/.test(c),
+       'e ele entra na contagem do botao Limpar');
+    ok(/_filtroProd = null;/.test(c), 'e o Limpar realmente o zera');
+    const op = new Function(corpo(ADMIN, 'function matchProducao(') + '\n' +
+      ADMIN.slice(ADMIN.indexOf('const PRODUCAO_BUCKETS = ['),
+                  ADMIN.indexOf('];', ADMIN.indexOf('const PRODUCAO_BUCKETS = [')) + 2) +
+      '\nreturn PRODUCAO_BUCKETS;')();
+    ok(op.length === 3 && op[1].key === 'falta_subir',
+       'sao tres opcoes, e a fila de deploy e UMA escolha \u2014 nao duas');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

@@ -2982,6 +2982,7 @@ let _filtroTema   = null;
 let _filtroPrazo  = null; // null|'vencidas'|'semana'|'mes'|'sem_data'
 let _filtroDev    = null; // null|nome do dev|SEM_DEV
 let _filtroTipo   = null; // null|'sustentacao'|'evolucao'|SEM_TIPO
+let _filtroProd   = null; // null|'falta_subir'|'no_ar'
 let _buscaMel     = '';   // texto livre: título, descrição, dev, solicitante
 
 // Demanda "em aberto" (relevante para prazos): exclui concluída/negada
@@ -3029,6 +3030,37 @@ function opcoesTipo() {
   }));
   if (semTipo) lista.push({ key: SEM_TIPO, label: '⚪ Sem tipo', n: semTipo });
   return lista;
+}
+
+/* ─── O QUE JA FOI ENTREGUE E AINDA NAO SUBIU ──────────────────────────────
+   O pedido foi "trazer as issues concluidas que nao estao em producao".
+
+   E UMA PERGUNTA SO, e por isso e UMA opcao so: "Concluidas fora do ar" ja
+   carrega a condicao de concluida dentro dela. Um filtro solto de producao
+   obrigaria a marcar Concluido no chip E escolher "fora do ar" no select — dois
+   gestos para uma pergunta —, e pior: sozinho ele devolveria a base inteira,
+   porque demanda em Backlog tambem nao esta em producao. Isso nao e fila de
+   deploy, e ruido.
+
+   AUSENTE CONTA COMO FORA DO AR, e nao como desconhecido. O campo `em_producao`
+   nasceu em 10/09; demanda concluida antes disso nao tem o campo. Trata-la como
+   "nao sei" a esconderia da fila — e a fila existe justamente para nao esquecer
+   nada. A contagem ao lado da opcao no select diz quantas sao, entao o tamanho
+   do passivo antigo aparece na hora em vez de ser suposto aqui. */
+const PRODUCAO_BUCKETS = [
+  { key: '',            label: 'Geral' },
+  { key: 'falta_subir', label: '\u25b3 Conclu\u00eddas fora do ar' },
+  { key: 'no_ar',       label: '\u25b2 No ar' },
+];
+
+function matchProducao(m, filtro) {
+  if (!filtro) return true;
+  const noAr = !!(m && m.em_producao);
+  if (filtro === 'no_ar') return noAr;
+  // Etapa GRAVADA: `statusEfetivo` derivaria `atrasado`, e uma concluida nunca
+  // e atrasada — mas a regra fica explicita para nao depender disso.
+  if (filtro === 'falta_subir') return !noAr && statusKey(m) === 'concluido';
+  return true;
 }
 
 const PRAZO_BUCKETS = [
@@ -3140,6 +3172,13 @@ function opcoesDev() {
   if (semDev) lista.push({ key: SEM_DEV, label: '⚪ Sem dev', n: semDev });
   return lista;
 }
+function opcoesProducao() {
+  return PRODUCAO_BUCKETS.map(b => ({
+    key: b.key, label: b.label,
+    n: b.key ? state.melhorias.filter(m => !ehMesclada(m) && matchProducao(m, b.key)).length
+             : state.melhorias.length,
+  }));
+}
 function opcoesPrazo() {
   return PRAZO_BUCKETS.map(b => ({
     key: b.key, label: b.label,
@@ -3199,12 +3238,13 @@ function setFiltroTema(v)   { _filtroTema   = vazioNulo(v); renderMelToolbar(); 
 function setFiltroDev(v)    { _filtroDev    = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroPrazo(v)  { _filtroPrazo  = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroTipo(v)   { _filtroTipo   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
+function setFiltroProd(v)   { _filtroProd   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setBuscaMel(v) {
   _buscaMel = v || '';
   comFocoPreservado('mel-toolbar', () => { renderMelToolbar(); renderMelhorias(); });
 }
 function limparFiltrosMel() {
-  _filtroStatus = _filtroTema = _filtroDev = _filtroPrazo = _filtroTipo = null;
+  _filtroStatus = _filtroTema = _filtroDev = _filtroPrazo = _filtroTipo = _filtroProd = null;
   _buscaMel = '';
   renderStatusFilters(); renderMelToolbar(); renderMelhorias();
 }
@@ -3212,12 +3252,14 @@ function limparFiltrosMel() {
 function renderMelToolbar() {
   const el = document.getElementById('mel-toolbar');
   if (!el) return;
-  const ativos = [_filtroStatus, _filtroTema, _filtroDev, _filtroPrazo, _filtroTipo, _buscaMel].filter(Boolean).length;
+  const ativos = [_filtroStatus, _filtroTema, _filtroDev, _filtroPrazo, _filtroTipo,
+                  _filtroProd, _buscaMel].filter(Boolean).length;
   el.innerHTML =
     fbGroup('Tipo',  _filtroTipo,  opcoesTipo(),  'setFiltroTipo') +
     fbGroup('Tema',  _filtroTema,  opcoesTema(),  'setFiltroTema') +
     fbGroup('Dev',   _filtroDev,   opcoesDev(),   'setFiltroDev') +
     fbGroup('Prazo', _filtroPrazo, opcoesPrazo(), 'setFiltroPrazo') +
+    fbGroup('Produção', _filtroProd, opcoesProducao(), 'setFiltroProd') +
     fbBusca('mel-busca', _buscaMel, 'setBuscaMel') +
     botaoLimpar('limparFiltrosMel', ativos) +
     `<span class="fb-count" id="mel-contagem"></span>`;
@@ -3300,12 +3342,22 @@ function renderMelhorias() {
     // Busca ativa quebra o "esconde concluído/negada por padrão": se a pessoa
     // digitou um termo, ela quer achar o item mesmo que já tenha sido feito ou
     // negado — esconder silenciosamente derrotaria o propósito da busca.
-    if (!_filtroStatus && !_filtroPrazo && !_buscaMel && HIDDEN_BY_DEFAULT.includes(sk)) return false;
+    /* `_filtroProd` ENTRA AQUI, e sem isto o filtro nasceria quebrado: esta
+       linha esconde concluida por padrao, e "Concluidas fora do ar" pede
+       EXATAMENTE concluidas. Escolher a opcao devolveria zero, e a tela diria
+       "nenhuma melhoria com este status" sobre uma fila cheia.
+
+       E o mesmo defeito que a busca teve — "filtro invisivel ganhando da busca",
+       o relato que virou o commit dfdaee4. La foi o periodo derrubando o termo
+       digitado; aqui seria o padrao derrubando o filtro escolhido. */
+    if (!_filtroStatus && !_filtroPrazo && !_filtroProd && !_buscaMel &&
+        HIDDEN_BY_DEFAULT.includes(sk)) return false;
     return (!_filtroStatus || sk === _filtroStatus) &&
            (!_filtroTema   || catalogoCasa(m.tema_id, _filtroTema, state.temas)) &&
            matchPrazo(m, _filtroPrazo) &&
            matchDev(m, _filtroDev) &&
            matchTipo(m, _filtroTipo) &&
+           matchProducao(m, _filtroProd) &&
            matchBusca(m, _buscaMel);
   });
   atualizaContagemMel(lista.length);
