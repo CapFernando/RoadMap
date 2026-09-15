@@ -10125,6 +10125,152 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e abre a secao fechada \u2014 preencher um campo escondido seria mandar procurar');
   }
 
+  sec('Backlog no relatorio e no deck');
+  {
+    /* O relato: "nao consigo visualizar o que tenho em backlog". Ele nao
+       aparecia porque as duas filas do "O que vem" pedem PONTUACAO — `planning`
+       e a etapa onde o tamanho sera decidido, e `semPrazo` exige pontos > 0.
+       Demanda parada em Backlog sem estimativa nao casava com nenhuma. */
+    const HOJE = new Date();
+    const dias = (n) => {
+      const d = new Date(HOJE); d.setDate(d.getDate() - n);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+             '-' + String(d.getDate()).padStart(2, '0');
+    };
+    const B = new Function('relVivasDe', 'relRaizDe',
+      corpo(ADMIN, 'function relBacklogDe(') + '\nreturn relBacklogDe;');
+
+    const base = [
+      { codigo: 'A', titulo: 'velha sem ponto', status_planejamento: 'backlog',
+        tema_id: 't1', criado_em: dias(300) },
+      { codigo: 'B', titulo: 'nova pontuada', status_planejamento: 'backlog',
+        tema_id: 't1', poker_pontos: 5, criado_em: dias(10) },
+      { codigo: 'C', titulo: 'levantar requisitos', status_planejamento: 'levantar_req',
+        tema_id: 't2', criado_em: dias(100) },
+      { codigo: 'D', titulo: 'sem data de criacao', status_planejamento: 'backlog',
+        tema_id: 't2', criado_em: '' },
+      { codigo: 'E', titulo: 'ja planejada', status_planejamento: 'planejado',
+        tema_id: 't1', criado_em: dias(50) },
+      { codigo: 'F', titulo: 'em andamento', status_planejamento: 'em_andamento',
+        tema_id: 't1', criado_em: dias(50) },
+      { codigo: 'G', titulo: 'concluida', status_planejamento: 'concluido',
+        tema_id: 't1', criado_em: dias(50) },
+      { codigo: 'H', titulo: 'em planning', status_planejamento: 'planning',
+        tema_id: 't1', criado_em: dias(50) },
+    ];
+    const raizDe = (m) => (m.tema_id === 't1' ? 'AXCred' : 'BI');
+    const r = B(() => base, raizDe)();
+    const cods = r.itens.map(x => x.codigo);
+
+    /* SO AS ETAPAS SEM PROMESSA. A partir de `planejado` ha data, e data e
+       compromisso — misturar as duas faria o slide de backlog dizer que o time
+       nao prometeu coisas que ja estao no gantt. */
+    ok(JSON.stringify(cods.slice().sort()) === JSON.stringify(['A', 'B', 'C', 'D']),
+       'entram Backlog e Levantar Requisitos, e mais nada', cods.join(','));
+    /* `B` E BACKLOG COM PONTUACAO, e entra: ela e a SOBREPOSICAO com o "Pontuadas,
+       falta planejar" do "O que vem" — a mesma demanda respondendo a duas
+       perguntas ("o que esta na pilha" e "o que esta pronto para agendar"). A
+       tela diz isso em vez de esconder, para ninguem somar as duas listas. */
+    ok(cods.includes('B'),
+       'e backlog JA PONTUADA entra tambem — ela responde as duas perguntas');
+    ok(!cods.includes('E') && !cods.includes('F') && !cods.includes('H'),
+       'planejado, em andamento e planning ficam de fora \u2014 ja foram prometidos');
+    ok(!cods.includes('G'), 'e concluida muito menos');
+
+    /* A ORDEM E POR IDADE. Num backlog a pergunta nao e "qual e a maior" e sim
+       "ha quanto tempo isso espera" \u2014 e a idade que vira argumento na sala. */
+    ok(cods[0] === 'A' && cods[1] === 'C',
+       'a mais velha vem primeiro', cods.join(' > '));
+    /* SEM DATA DE CRIACAO VAI PARA O FIM. Valendo zero ela seria a mais nova;
+       valendo infinito, a mais velha \u2014 e as duas mentiriam. */
+    ok(cods[cods.length - 1] === 'D',
+       'a que nao tem data de criacao vai para o fim, e nao disputa posicao');
+    ok(r.itens[r.itens.length - 1].dias === null,
+       'e ela declara que nao sabe a idade, em vez de chutar um numero');
+
+    ok(r.total === 4, 'o total conta as quatro', String(r.total));
+    ok(r.pontuadas === 1 && r.semPonto === 3 && r.pontos === 5,
+       'e separa quantas ja tem tamanho \u2014 e a leitura que diz se da para priorizar',
+       r.pontuadas + ' de ' + r.total + ', ' + r.pontos + ' pt');
+    ok(r.maisVelha >= 299 && r.maisVelha <= 301,
+       'a idade da mais velha sai em dias', String(r.maisVelha));
+
+    const comPonto = B(() => base.concat([
+      { codigo: 'I', titulo: 'backlog pontuada', status_planejamento: 'backlog',
+        tema_id: 't1', poker_pontos: 8, criado_em: dias(20) }]), raizDe)();
+    ok(comPonto.pontuadas === 2 && comPonto.pontos === 13,
+       'mais uma pontuada soma nos dois contadores',
+       comPonto.pontuadas + ' / ' + comPonto.pontos + ' pt');
+
+    /* POR SISTEMA: numa apresentacao, "onde a pilha esta" vale mais que a lista. */
+    const sis = r.sistemas.map(x => x.nome + ':' + x.qtd).sort();
+    ok(JSON.stringify(sis) === JSON.stringify(['AXCred:2', 'BI:2']),
+       'a quebra por sistema conta certo', sis.join(' '));
+
+    ok(B(() => [], raizDe)().total === 0, 'base sem backlog devolve zero, e nao quebra');
+  }
+
+  {
+    /* O DECK SO GANHA O SLIDE QUANDO A CAIXA PEDE. O pedido foi explicito:
+       "traga uma caixa para confirmacao se eu quero ou nao levar esses dados". */
+    const PPT = fs.readFileSync('relatorio-ppt.js', 'utf8');
+    const monta = corpo(PPT, 'async function montaDeck(');
+    ok(!!monta, 'montaDeck localizada');
+    const chamadas = (semComentario(monta).match(/slideBacklog\(/g) || []).length;
+    ok(chamadas === 2, 'os dois formatos de deck podem levar o backlog', String(chamadas));
+    /* A CONDICAO E EXECUTADA, e nao procurada: `if (false)` deixaria a chamada
+       escrita e o slide nunca sairia \u2014 o furo que ja me pegou tres vezes. */
+    /* AS DUAS CONDICOES, e nao a primeira que aparecer. O deck tem dois
+       formatos \u2014 consolidado e assunto \u2014, cada um com a sua chamada. A versao
+       anterior extraia so a primeira, e abrir o slide no formato ASSUNTO passou
+       em silencio porque o CONSOLIDADO continuava certo. Uma condicao certa nao
+       atesta a outra, e este e o terceiro lugar nesta sessao em que isso morde. */
+    const conds = [...semComentario(monta).matchAll(/if \((d\.backlog[^)]*)\) slideBacklog/g)];
+    ok(conds.length === 2, 'as duas condicoes do slide foram localizadas',
+       String(conds.length));
+    conds.forEach((cond, i) => {
+      const onde = i === 0 ? 'consolidado' : 'assunto';
+      const quer = new Function('d', 'return !!(' + cond[1] + ');');
+      ok(!quer({ backlog: null }),
+         'sem a caixa marcada, o slide NAO entra (' + onde + ')');
+      ok(!quer({ backlog: { total: 0 } }),
+         'com a caixa marcada e a pilha vazia tambem nao (' + onde +
+         ') \u2014 slide dizendo "0" gasta a sala');
+      ok(quer({ backlog: { total: 7 } }),
+         'com a caixa marcada e pilha cheia, entra (' + onde + ')');
+    });
+
+    /* A ESCOLHA E LEMBRADA, e o escopo do backlog e o do deck. */
+    const c = semComentario(ADMIN);
+    ok(/localStorage\.setItem\('rm_ppt_backlog'/.test(c) &&
+       /localStorage\.getItem\('rm_ppt_backlog'/.test(c),
+       'a caixa lembra a escolha entre um deck e o proximo');
+    ok(/backlog: comBacklog \? relBacklogDe\(escopo\) : null/.test(c),
+       'e o backlog do deck respeita o escopo escolhido \u2014 nao a base inteira');
+    /* Um deck de "AXCred" com backlog da base inteira faria a sala ler a pilha
+       de todo mundo como se fosse a do AXCred, e ninguem confere: o numero
+       simplesmente parece grande. */
+    const dados = corpo(ADMIN, 'function relPptDados(');
+    ok(dados && /relBacklogDe\(escopo\)/.test(dados) && !/relBacklogDe\(''\)/.test(dados),
+       'e nunca com escopo fixo');
+
+    ok(/relPptDados\(escopo, j, relPptQuerBacklog\(\)\)/.test(c),
+       'a previa e a geracao perguntam a MESMA caixa \u2014 senao a previa mentiria');
+    ok((c.match(/relPptDados\(escopo, j, relPptQuerBacklog\(\)\)/g) || []).length === 2,
+       'as duas, e nao so uma');
+  }
+
+  {
+    /* A ATA TAMBEM LEVA O BACKLOG, e o botao Copiar da secao traz SO ela. */
+    const t = corpo(ADMIN, 'function relTexto(');
+    ok(t && /secao === 'backlog'/.test(t), 'a ata tem o bloco de backlog');
+    for (const outra of ["secao !== 'andamento' && secao !== 'vem' && secao !== 'backlog'",
+                         "secao !== 'entregues' && secao !== 'vem' && secao !== 'backlog'"]) {
+      ok(t && t.indexOf(outra) > 0,
+         'e as outras secoes se calam quando so o backlog e pedido');
+    }
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

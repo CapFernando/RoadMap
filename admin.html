@@ -411,6 +411,16 @@
     .ent-aviso.espera { background:var(--amber-bg, #3A2A08); color:var(--amber-tx, #FFD79A); }
     .ent-aviso.aprovada { background:var(--green-bg, #17300A); color:var(--green-tx, #B2E07A); }
     .ent-aviso.rejeitada { background:var(--red-bg, #3A1414); color:var(--red-tx, #F9A0A0); }
+    /* A caixa do backlog no modal do deck. O rotulo inteiro e clicavel — alvo de
+       12px so no quadradinho e o tipo de alvo que se erra com o mouse. */
+    .rp-caixa { display:flex; gap:10px; align-items:flex-start; cursor:pointer;
+      padding:11px 13px; background:var(--bg3); border:1px solid var(--border);
+      border-radius:var(--radius); }
+    .rp-caixa:hover { border-color:var(--border2); }
+    .rp-caixa input { margin-top:3px; flex-shrink:0; }
+    .rp-caixa strong { display:block; font-size:13.5px; }
+    .rp-caixa small { display:block; font-size:11.5px; color:var(--text2);
+      line-height:1.5; margin-top:2px; }
     /* ESTADO DE PRODUCAO — informa, nao alarma.
        Fundo neutro com barra lateral colorida, e nao o bloco inteiro tingido como
        os tres acima: aqueles sao AVISOS (esperando voce, aprovada, devolvida) e
@@ -1112,7 +1122,7 @@
 <script src="pipelines.js?v=eb8de916d3"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
 <script src="apresentacao.js?v=5bc88a3cb9"></script>
-<script src="relatorio-ppt.js?v=ab9c8286e2"></script>
+<script src="relatorio-ppt.js?v=39ee522d07"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -1627,6 +1637,26 @@
               que mais entregaram, um slide cada. Um assunto sozinho vem detalhado.</p>
           </div>
 
+          <!-- A CAIXA DO BACKLOG.
+               Fica ANTES da previa de proposito: marcar muda o que a previa diz,
+               e uma caixa embaixo obrigaria a pessoa a olhar para cima depois de
+               clicar para conferir o efeito.
+
+               NASCE DESMARCADA, e a escolha e LEMBRADA. Desmarcada porque um deck
+               que cresce um slide sozinho surpreende quem ja usa o formato; e
+               lembrada porque quem quer o backlog quer sempre — marcar de novo a
+               cada mes e a forma mais certa de esquecer no mes que importa. -->
+          <div class="form-group">
+            <label class="rp-caixa" for="rp-backlog">
+              <input type="checkbox" id="rp-backlog" onchange="relPptBacklogMarcou()" />
+              <span>
+                <strong>Incluir o backlog</strong>
+                <small>Um slide a mais, com o que está parado em Backlog e Levantar
+                Requisitos — o que ainda não foi prometido a ninguém.</small>
+              </span>
+            </label>
+          </div>
+
           <div class="form-group">
             <label>O que vai sair</label>
             <div id="rp-previa" class="rp-previa"></div>
@@ -1684,6 +1714,19 @@
         <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('vem')" style="margin-left:auto">📋 Copiar</button>
       </div>
       <div id="rel-vem"></div>
+
+      <!-- O BACKLOG vem DEPOIS do "O que vem", e nao antes: aquele responde "o
+           que entra agora", que e a pergunta da reuniao; este responde "quanto
+           ainda nao foi prometido", que e a pergunta do trimestre. Na ordem
+           inversa, a sala gasta o primeiro folego na lista mais longa e menos
+           urgente. -->
+      <div class="ger-section-sep"></div>
+      <div class="ger-section-title">
+        <span>📥 Backlog</span>
+        <span class="ger-section-hint" id="rel-bkl-hint"></span>
+        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('backlog')" style="margin-left:auto">📋 Copiar</button>
+      </div>
+      <div id="rel-bkl"></div>
     </div>
   </main>
 </div>
@@ -7681,6 +7724,80 @@ function relOQueVem() {
 }
 
 /** As duas filas de uma raiz escolhida por quem chama, sem ler a tela. */
+/* ─── O BACKLOG ────────────────────────────────────────────────────────────
+   O relato: "nao consigo visualizar o que tenho em backlog, penso que
+   interessante para mostrar em apresentacao".
+
+   ELE NAO APARECIA EM LUGAR NENHUM, e o motivo era estreito: o "O que vem"
+   mostra duas filas, e as duas pedem PONTUACAO. `planning` e a etapa em que o
+   tamanho vai ser decidido; `semPrazo` exige `poker_pontos > 0`. Demanda parada
+   em Backlog sem ter passado por estimativa nao casa com nenhuma das duas —
+   some da tela de relatorios e do deck, exatamente a parte da fila que mais
+   cresce em silencio.
+
+   O QUE ENTRA: as etapas `backlog` e `levantar_req`. Sao as duas em que nada foi
+   prometido a ninguem — a partir de `planejado` ha data, e data e compromisso.
+
+   A ORDEM E POR IDADE, da mais velha para a mais nova. Num backlog, a pergunta
+   que importa nao e "qual e a maior" e sim "ha quanto tempo isso esta esperando":
+   e a idade que transforma uma lista em argumento numa apresentacao.
+
+   SOBREPOSICAO COM `semPrazo`, dita e nao escondida: uma demanda em Backlog JA
+   PONTUADA aparece nas duas listas, porque responde a duas perguntas diferentes
+   ("o que esta na pilha" e "o que esta pronto para agendar"). O contador diz
+   quantas sao, para ninguem somar as duas listas e chegar a um numero que nao
+   existe. */
+function relBacklogDe(raiz) {
+  const vivas = relVivasDe(raiz);
+  const hoje = new Date();
+  const idade = (m) => {
+    const c = String(m.criado_em || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(c)) return null;
+    const [a, mes, d] = c.split('-').map(Number);
+    return Math.max(0, Math.round((hoje - new Date(a, mes - 1, d)) / 86400000));
+  };
+  const itens = vivas
+    .filter(m => ['backlog', 'levantar_req'].includes(String(m.status_planejamento || '')))
+    .map(m => ({
+      codigo: m.codigo || '', titulo: m.titulo || '(sem título)',
+      tema: m.tema_id ? relRaizDe(m) : '—',
+      pts: Number(m.poker_pontos) || 0,
+      dev: m.dev || '', dias: idade(m),
+      criado: String(m.criado_em || '').slice(0, 10),
+    }))
+    /* SEM DATA DE CRIACAO VAI PARA O FIM, e nao para o topo. Ordenar por idade
+       com `null` valendo zero poria a demanda sem data como a mais nova; valendo
+       infinito, como a mais velha — e as duas mentiriam. No fim, ela nao disputa
+       a posicao que nao sabe ocupar. */
+    .sort((a, b) => {
+      if ((a.dias == null) !== (b.dias == null)) return a.dias == null ? 1 : -1;
+      return (b.dias || 0) - (a.dias || 0) ||
+             String(a.codigo).localeCompare(String(b.codigo));
+    });
+
+  const pontuadas = itens.filter(x => x.pts > 0);
+  // Por sistema: numa apresentacao, "onde a pilha esta" vale mais que a lista.
+  const porSis = new Map();
+  itens.forEach(x => {
+    const a = porSis.get(x.tema) || { qtd: 0, pts: 0 };
+    a.qtd += 1; a.pts += x.pts;
+    porSis.set(x.tema, a);
+  });
+  return {
+    itens,
+    total: itens.length,
+    pontuadas: pontuadas.length,
+    pontos: pontuadas.reduce((t, x) => t + x.pts, 0),
+    semPonto: itens.length - pontuadas.length,
+    maisVelha: itens.length && itens[0].dias != null ? itens[0].dias : null,
+    sistemas: [...porSis.entries()]
+      .map(([nome, v]) => ({ nome, qtd: v.qtd, pts: v.pts }))
+      .sort((a, b) => b.qtd - a.qtd || b.pts - a.pts),
+  };
+}
+
+function relBacklog() { return relBacklogDe(relTemaFiltro()); }
+
 function relOQueVemDe(raiz) {
   const CAPI = window.CAPACIDADE;
   const vivas = relVivasDe(raiz);
@@ -7958,10 +8075,15 @@ function relPptEscopos(j) {
 }
 
 /** O objeto que o `relatorio-ppt.js` desenha. */
-function relPptDados(escopo, j) {
+function relPptDados(escopo, j, comBacklog) {
   const base = {
     periodo: j.rot, subtitulo: 'Audax Capital · Tecnologia',
     escopo: escopo ? 'assunto' : 'consolidado',
+    /* O BACKLOG VEM DO MESMO ESCOPO DO RESTO DO DECK. Um deck de "AXCred" com um
+       slide de backlog da base inteira faria a sala ler a pilha de todo mundo
+       como se fosse a do AXCred — e e o tipo de erro que ninguem confere,
+       porque o numero simplesmente parece grande. */
+    backlog: comBacklog ? relBacklogDe(escopo) : null,
   };
   if (escopo) {
     const t = relPptAssunto(escopo, j);
@@ -8014,6 +8136,8 @@ function relPptAbrir() {
   document.getElementById('rp-periodo').innerHTML =
     '📅 <strong>' + esc(j.rot) + '</strong> <span style="color:var(--text3)">· ' +
     'mude na barra da aba para trocar o período</span>';
+  const cx = document.getElementById('rp-backlog');
+  if (cx) cx.checked = relPptBacklogLembrado();
   relPptPrevia();
   abrirModal('modal-rel-ppt');
 }
@@ -8023,13 +8147,34 @@ function relPptAbrir() {
  *  Diz quantos slides saem e com que números. A biblioteca são ~800 KB baixados
  *  na hora, e gerar para descobrir que o período estava errado é o tipo de espera
  *  que acontece justamente cinco minutos antes da reunião. */
+/* A ESCOLHA DO BACKLOG SOBREVIVE AO FECHAR DO MODAL.
+   `localStorage` e nao `sessionStorage`: a pergunta "o backlog entra no deck?" e
+   do formato da apresentacao, e nao desta aba — quem decidiu que entra decidiu
+   para os proximos meses, e nao ate fechar o navegador.
+
+   O `try` existe porque `localStorage` estoura em aba anonima com dados de site
+   bloqueados, e um deck que deixa de ser gerado por causa de uma preferencia
+   seria um preco absurdo. */
+function relPptBacklogLembrado() {
+  try { return localStorage.getItem('rm_ppt_backlog') === '1'; } catch (_) { return false; }
+}
+function relPptBacklogMarcou() {
+  const el = document.getElementById('rp-backlog');
+  try { localStorage.setItem('rm_ppt_backlog', el && el.checked ? '1' : '0'); } catch (_) {}
+  relPptPrevia();
+}
+function relPptQuerBacklog() {
+  const el = document.getElementById('rp-backlog');
+  return !!(el && el.checked);
+}
+
 function relPptPrevia() {
   const alvo = document.getElementById('rp-previa');
   if (!alvo) return;
   try {
     const j = relJanela();
     const escopo = String(document.getElementById('rp-escopo').value || '');
-    const d = relPptDados(escopo, j);
+    const d = relPptDados(escopo, j, relPptQuerBacklog());
     let linhas;
     if (escopo) {
       const t = d.assunto;
@@ -8053,6 +8198,22 @@ function relPptPrevia() {
                        d.geral.entraram + ' entraram'],
       ];
     }
+    /* A PREVIA RESPONDE A CAIXA, e nao so a contagem de slides. Marcar e ver
+       "5 slides" virar "6" nao diz O QUE entrou; dizer quantas demandas e quantos
+       pontos vao para a parede e o que permite decidir se vale levar. */
+    if (d.backlog) {
+      const b = d.backlog;
+      linhas.splice(1, 0, ['Backlog (1 slide a mais)',
+        b.total
+          ? b.total + (b.total === 1 ? ' demanda' : ' demandas') +
+            (b.pontos ? ' · ' + b.pontos + ' pt' : ' · sem pontuação') +
+            (b.maisVelha != null ? ' · a mais antiga há ' + b.maisVelha + ' dias' : '')
+          : 'nada parado — o slide não entra']);
+      // A contagem de slides tambem muda, e ela e a primeira linha.
+      if (b.total && linhas[0] && linhas[0][0] === 'Slides') {
+        linhas[0][1] = String(linhas[0][1]).replace(/^(\d+)/, (n) => String(Number(n) + 1));
+      }
+    }
     alvo.innerHTML = linhas.map(([k, v]) =>
       '<div class="rp-previa-l"><span>' + esc(k) + '</span><strong>' +
       esc(v) + '</strong></div>').join('');
@@ -8070,7 +8231,7 @@ async function relPptGerar() {
   try {
     const j = relJanela();
     const escopo = String(document.getElementById('rp-escopo').value || '');
-    const pptx = await relatorioPptMonta(relPptDados(escopo, j));
+    const pptx = await relatorioPptMonta(relPptDados(escopo, j, relPptQuerBacklog()));
     const nome = relPptNomeArquivo(escopo, j);
     await pptx.writeFile({ fileName: nome });
     toast('📊 ' + nome + ' gerado.', 'ok');
@@ -8251,6 +8412,7 @@ function renderRelatorios() {
   relRenderAndou(janela);
   relRenderTemas(janela);
   relRenderOQueVem();
+  relRenderBacklog();
 
   /* A LINHA DE CONTEXTO DIZ O PERIODO, UM SO. Ela precisava explicar por que as
      datas dos blocos eram diferentes; agora nao sao, e ela apenas nomeia o periodo
@@ -8416,6 +8578,57 @@ function relRenderTemas(j) {
 }
 
 /** O QUE VEM — em Planning e pontuado sem prazo. */
+function relRenderBacklog() {
+  const box = document.getElementById('rel-bkl');
+  const hint = document.getElementById('rel-bkl-hint');
+  if (!box) return;
+  const b = relBacklog();
+  if (hint) {
+    hint.textContent = b.total
+      ? b.total + (b.total === 1 ? ' demanda' : ' demandas') +
+        (b.pontos ? '  ·  ' + b.pontos + ' pt estimados' : '')
+      : '';
+  }
+  if (!b.total) {
+    box.innerHTML = '<div class="ger-empty-box">Nada parado em Backlog' +
+      (relTemaFiltro() ? ' neste sistema' : '') + '.</div>';
+    return;
+  }
+
+  /* A IDADE NA COLUNA, e nao a data de criacao. "137 dias" se le de relance e ja
+     e o argumento; "12/05/2026" obriga quem le a fazer a conta — na reuniao,
+     ninguem faz. */
+  const linhas = b.itens.map(x =>
+    '<div class="rel-vem-item">' +
+      '<div class="rel-vem-cod">' + esc(x.codigo || '—') + '</div>' +
+      '<div class="rel-vem-tt" title="' + esc(x.titulo) + '">' + esc(x.titulo) + '</div>' +
+      '<div class="rel-vem-tema" title="' + esc(x.tema) + '">' + esc(x.tema) + '</div>' +
+      '<div class="rel-vem-pt">' +
+        (x.dias == null
+          ? '<span class="rel-vem-sem" title="sem data de criação registrada">—</span>'
+          : '<span title="parada desde ' + esc(formatDate(x.criado)) + '">' +
+            x.dias + 'd</span>') +
+        (x.pts ? ' <span style="color:var(--blue-tx,#9BC8F8)">' + x.pts + ' pt</span>' : '') +
+      '</div>' +
+    '</div>').join('');
+
+  const resumo = [
+    b.total + (b.total === 1 ? ' demanda parada' : ' demandas paradas'),
+    b.pontuadas ? b.pontuadas + ' já estimadas (' + b.pontos + ' pt)' : null,
+    b.semPonto ? b.semPonto + ' sem tamanho' : null,
+    b.maisVelha != null ? 'a mais antiga espera há ' + b.maisVelha + ' dias' : null,
+  ].filter(Boolean).join('  ·  ');
+
+  box.innerHTML = '<div class="rel-vem-grupo">' +
+    '<div class="rel-vem-head"><span class="rel-vem-tit">Nada foi prometido</span>' +
+      '<span class="rel-vem-tot">' + esc(resumo) + '</span></div>' +
+    '<p class="rel-vem-por">Etapas <strong>Backlog</strong> e <strong>Levantar ' +
+      'Requisitos</strong>: ninguém combinou data para nenhuma delas. As que já ' +
+      'têm pontuação aparecem também em “Pontuadas, falta planejar” acima — são a ' +
+      'mesma demanda respondendo a duas perguntas, e não devem ser somadas.</p>' +
+    linhas + '</div>';
+}
+
 function relRenderOQueVem() {
   const box = document.getElementById('rel-vem');
   const hint = document.getElementById('rel-vem-hint');
@@ -8669,11 +8882,11 @@ function relTexto(secao) {
   const rotEnt = janela.escala === 'mes' ? janela.rot
                                          : formatDate(A) + ' a ' + formatDate(B);
   const rotDev = rotEnt;
-  if (secao !== 'andamento' && secao !== 'vem') {
+  if (secao !== 'andamento' && secao !== 'vem' && secao !== 'backlog') {
     partes.push('ENTREGUES — ' + rotEnt + ' — ' + entregues.length);
     partes.push(entregues.length ? porTema(entregues, 'entregues') : '(nenhuma)');
   }
-  if (secao !== 'entregues' && secao !== 'vem') {
+  if (secao !== 'entregues' && secao !== 'vem' && secao !== 'backlog') {
     if (partes.length) partes.push('');
     partes.push('EM DESENVOLVIMENTO — ' + rotDev + ' — ' + andamento.length);
     partes.push(andamento.length ? porTema(andamento, 'andamento') : '(nenhuma)');
@@ -8697,6 +8910,22 @@ function relTexto(secao) {
         v.semPrazo.forEach(x => partes.push('    ' + (x.codigo || '—').padEnd(9) +
           String(x.pts).padStart(3) + ' pt  ' + x.titulo));
       }
+    }
+  }
+  /* O BACKLOG, como o "O que vem", entra SEM periodo: ele nao pertence a mes
+     nenhum — e a pilha no instante em que a ata foi tirada. E vem por ultimo,
+     que e a ordem da tela. */
+  if (!secao || secao === 'backlog') {
+    const b = relBacklog();
+    if (b.total) {
+      if (partes.length) partes.push('');
+      partes.push('BACKLOG (na data desta ata) — ' + b.total +
+        (b.pontos ? ' · ' + b.pontos + ' pt ja estimados' : ''));
+      partes.push('  Etapas Backlog e Levantar Requisitos: sem data combinada.' +
+        (b.maisVelha != null ? ' A mais antiga espera ha ' + b.maisVelha + ' dias.' : ''));
+      b.itens.forEach(x => partes.push('    ' + (x.codigo || '—').padEnd(9) +
+        (x.dias == null ? '   —  ' : String(x.dias).padStart(4) + 'd ') +
+        (x.pts ? String(x.pts).padStart(3) + ' pt  ' : '   ·   ') + x.titulo));
     }
   }
   return partes.join('\n');

@@ -338,6 +338,94 @@
     return s;
   }
 
+  /* ═══ O BACKLOG ═════════════════════════════════════════════════════════
+     Entra so quando a caixa do modal esta marcada — o pedido foi "podemos
+     incluir o backlog, mas traga uma caixa para confirmacao... dependendo pode
+     ser relevante".
+
+     O SLIDE RESPONDE TRES PERGUNTAS, nesta ordem, porque e a ordem em que a sala
+     as faz:
+
+       QUANTO E  ..... o numero grande, e quanto dele ja tem tamanho
+       ONDE ESTA ..... a quebra por sistema, que e onde a decisao mora
+       HA QUANTO TEMPO  a lista das mais antigas
+
+     A IDADE E A COLUNA DA DIREITA, e nao a pontuacao. Num backlog, o argumento
+     nao e "isto e grande" — e "isto espera desde marco". Pontuacao entra junto
+     do titulo, quando existe, porque metade da pilha nao tem.
+
+     E NADA DE BARRA DE PROGRESSO nem de meta: backlog nao tem meta. Um grafico
+     sugeriria que existe um numero certo para o tamanho da pilha, e a conversa
+     viraria sobre o grafico em vez de sobre o que priorizar. */
+  function slideBacklog(pptx, d, b, t, pagina) {
+    var K = kit(), C = K.cores;
+    var s = K.slideTitulo(pptx, 'Backlog',
+      fmt(b.total) + ' ' + plural(b.total, 'demanda', 'demandas') +
+      ' sem data combinada \u2014 Backlog e Levantar Requisitos.' +
+      (b.maisVelha != null ? '  A mais antiga espera h\u00e1 ' + fmt(b.maisVelha) + ' dias.' : ''),
+      pagina);
+
+    /* OS TRES NUMEROS DE CIMA. "Ja estimadas" e "sem tamanho" somam o total: e a
+       leitura que diz se a pilha esta pronta para ser priorizada ou se falta
+       passar metade dela por Planning antes de qualquer promessa. */
+    var wC = (LARG - 0.6) / 3;
+    [{ n: fmt(b.total), r: 'na pilha', c: C.texto },
+     { n: fmt(b.pontuadas) + (b.pontos ? '  ·  ' + fmt(b.pontos) + ' pt' : ''),
+       r: 'j\u00e1 estimadas', c: C.azul },
+     { n: fmt(b.semPonto), r: 'sem tamanho definido', c: C.fraco }
+    ].forEach(function (k, i) {
+      var x = MARGEM + i * (wC + 0.3);
+      s.addShape(pptx.ShapeType.rect, { x: x, y: 1.6, w: wC, h: 0.82,
+        fill: { color: C.fundo2 }, line: { color: C.borda, width: 0.5 } });
+      s.addText(String(k.n), { x: x + 0.16, y: 1.68, w: wC - 0.32, h: 0.42,
+        fontSize: 22, bold: true, color: k.c, valign: 'middle', wrap: false });
+      s.addText(k.r, { x: x + 0.16, y: 2.08, w: wC - 0.32, h: 0.26,
+        fontSize: 10, color: C.fraco, wrap: false });
+    });
+
+    var wCol = (LARG - 0.3) / 2;
+    var yL = 2.66;
+
+    // Esquerda: onde a pilha esta.
+    var sis = (b.sistemas || []).slice(0, 6);
+    /* AS CORES VEM DA TABELA DE SIGNIFICADO, e nao da paleta crua \u2014 `C` nem tem
+       `categoria2` nem `alerta`, entao os nomes que eu havia escrito caiam no
+       fallback e a escolha virava acidente.
+       PRATA em "Onde esta": a paleta define prata como "categoria neutra, nenhuma
+       melhor que a outra", que e exatamente sistemas lado a lado. AMBAR em "As
+       que mais esperam": e "atencao", que e o que uma demanda parada ha meses
+       pede. Verde e vermelho estariam errados nos dois \u2014 num backlog nao ha nada
+       cumprido nem falhado. */
+    cabecColuna(pptx, s, MARGEM, yL, wCol, K.significado.categoria2, 'Onde est\u00e1',
+      sis.length ? 'por sistema, do maior para o menor' : '');
+    sis.forEach(function (x, i) {
+      linhaFila(pptx, s, {
+        x: MARGEM, y: yL + 0.62 + i * 0.34, w: wCol, h: 0.3, cor: C.borda,
+        cod: '', titulo: x.nome, corte: 30,
+        dir: fmt(x.qtd) + (x.pts ? ' · ' + fmt(x.pts) + ' pt' : ''), corDir: C.texto });
+    });
+    var sobraSis = (b.sistemas || []).length - sis.length;
+    if (sobraSis > 0) {
+      s.addText('… e mais ' + sobraSis + ' ' + plural(sobraSis, 'sistema', 'sistemas'), {
+        x: MARGEM, y: yL + 0.62 + sis.length * 0.34 + 0.04, w: wCol, h: 0.24,
+        fontSize: 9.5, color: C.fraco });
+    }
+
+    // Direita: as que mais esperam.
+    var velhas = (b.itens || []).slice(0, 6);
+    cabecColuna(pptx, s, MARGEM + wCol + 0.3, yL, wCol, K.significado.atencao,
+      'As que mais esperam', 'em dias parados');
+    velhas.forEach(function (x, i) {
+      linhaFila(pptx, s, {
+        x: MARGEM + wCol + 0.3, y: yL + 0.62 + i * 0.34, w: wCol, h: 0.3,
+        cor: C.borda, cod: x.codigo, titulo: x.titulo, corte: 28,
+        dir: x.dias == null ? '—' : fmt(x.dias) + 'd', corDir: C.texto });
+    });
+
+    K.rodape(s, t.periodo, pagina);
+    return s;
+  }
+
   /* O RESUMO DE UM ASSUNTO, EM UM SLIDE — a peça do consolidado.
      Cabe o que a área precisa reconhecer: os números, as três maiores, e o
      tamanho da fila. Não cabe a forma do mês nem a quebra por módulo: com cinco
@@ -441,12 +529,19 @@
         slideResumoAssunto(pptx, d, t, ++p, i + 1);
       });
       slideOQueVem(pptx, d, d.geral, ++p);
+      /* O BACKLOG FECHA O DECK, depois do "O que vem". A ordem e a mesma da aba
+         de relatorios, e pelo mesmo motivo: "o que entra agora" e a pergunta da
+         reuniao; "quanto ainda nao foi prometido" e a do trimestre.
+         So entra se houver o que mostrar \u2014 um slide dizendo "0 na pilha" gasta
+         um minuto da sala para nao dizer nada. */
+      if (d.backlog && d.backlog.total) slideBacklog(pptx, d, d.backlog, d.geral, ++p);
     } else {
       var t = d.assunto;
       slidePanorama(pptx, d, t, ++p);
       slideEntregas(pptx, d, t, ++p);
       if ((t.modulos || []).length > 1) slideModulos(pptx, d, t, ++p);
       slideOQueVem(pptx, d, t, ++p);
+      if (d.backlog && d.backlog.total) slideBacklog(pptx, d, d.backlog, t, ++p);
     }
     return pptx;
   }
