@@ -10288,7 +10288,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        coisa foi parar. */
     const desenhar = (qtd, y) => {
       const postos = [];
-      const s2 = { addTable: (corpo, o) => postos.push({ tipo: 'tabela', linhas: corpo.length, y: o.y }),
+      const s2 = { addTable: (corpo, o) => postos.push({
+                     tipo: 'tabela', linhas: corpo.length, y: o.y, colW: o.colW,
+                     ultima: String((corpo[corpo.length - 1][0] || {}).text || '') }),
                    addText: (t, o) => postos.push({ tipo: 'texto', t: String(t), y: o.y }) };
       const linhas = [];
       for (let i = 0; i < qtd; i++) linhas.push(['1', 'AX-' + i, 'titulo ' + i, 'data', 'dev']);
@@ -10297,7 +10299,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       return postos;
     };
 
-    const ALT = 0.42, RODAPE = 5.05, UTIL = 4.90;
+    /* A ALTURA VEM DO FONTE, e nao de uma copia aqui. Uma segunda copia do
+       numero e o mesmo defeito que a tabela tinha (tres numeros para a mesma
+       linha): ajustei `ALT_LINHA` no codigo e esta invariante continuou medindo
+       com o valor velho, acusando um estouro que nao existia mais. */
+    const ALT = Number(/var ALT_LINHA = ([\d.]+);/.exec(APRES)[1]);
+    const UTIL = Number(/var Y_LIMITE\s*= ([\d.]+);/.exec(APRES)[1]);
+    const RODAPE = 5.05;
+    ok(ALT > 0 && UTIL > 0, 'a altura de linha e o limite vem do proprio arquivo',
+       ALT + '" ate ' + UTIL + '"');
     const p = desenhar(11, 1.62);
     const tab = p.find(x => x.tipo === 'tabela');
     const sobra = p.find(x => x.tipo === 'texto');
@@ -10311,20 +10321,25 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        enquanto a contagem era escrita por cima do mes. A prova e o conjunto
        inteiro, e nao a peca mais alta dele. */
     ok(fundo <= RODAPE, 'a tabela nao invade o rodape', fundo.toFixed(2) + '" vs ' + RODAPE);
-    ok(!!sobra, 'e a linha "… e mais N" existe quando sobra entrega');
-    ok(sobra && sobra.y >= fundo - 0.02,
-       'ela fica ABAIXO da tabela, e nao no meio da penultima entrega',
-       sobra ? sobra.y.toFixed(2) + '" vs fundo ' + fundo.toFixed(2) : '');
-    ok(sobra && sobra.y + 0.3 <= RODAPE,
-       'e ela tambem nao encosta no rodape',
-       sobra ? (sobra.y + 0.3).toFixed(2) + '" vs ' + RODAPE : '');
-    ok(/e mais 5 entregas no periodo/.test(sobra ? sobra.t : ''),
-       'e ela conta certo quantas ficaram de fora', sobra ? sobra.t : '');
+    /* A CONTAGEM E LINHA DA TABELA, e nao texto solto.
+       Ela era posicionada por calculo ao lado de uma tabela cuja altura eu nao
+       controlo, e todo calculo desses e um palpite sobre o renderizador — errei
+       duas vezes seguidas (0,42 e depois 0,48) antes de ver que o problema nao
+       era o numero. Como linha, quem garante que nada se sobrepoe e o PowerPoint,
+       e nao ha numero para errar uma terceira vez. */
+    ok(!sobra, 'a contagem NAO e mais um texto solto posicionado por calculo',
+       sobra ? 'ainda ha addText em ' + sobra.y : '');
+    ok(tab.ultima && /e mais 5 entregas no periodo/.test(tab.ultima),
+       'ela e a ULTIMA LINHA da tabela, e conta certo quantas ficaram de fora',
+       tab.ultima || '(sem ultima linha)');
 
     /* O TETO DO CHAMADOR NAO PODE ESTOURAR O ESPACO. Antes, `max: 7` era
        obedecido a qualquer custo; agora o espaco vence quando e menor. */
-    ok(tab.linhas <= 7, 'o espaco limita as linhas mesmo com max 7 pedido',
-       String(tab.linhas));
+    /* O TETO DO CHAMADOR NAO PODE ESTOURAR O ESPACO. Conta as linhas TOTAIS
+       (cabecalho + entregas + a contagem), que e o que ocupa altura. */
+    ok(tab.linhas * ALT <= UTIL - tab.y,
+       'o espaco limita as linhas mesmo com max 7 pedido',
+       tab.linhas + ' linhas x ' + ALT + '" cabem em ' + (UTIL - tab.y).toFixed(2) + '"');
     /* E A TABELA MAIS BAIXA NA PAGINA CABE MENOS, sozinha: e a prova de que a
        conta e por espaco, e nao um segundo numero fixo. */
     const baixa = desenhar(11, 3.2).find(x => x.tipo === 'tabela');
@@ -10332,7 +10347,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'tabela que comeca mais embaixo cabe menos \u2014 a conta e de espaco',
        baixa.linhas + ' vs ' + tab.linhas);
     ok(3.2 + ALT * baixa.linhas <= UTIL, 'e mesmo assim nao estoura',
-       (3.2 + ALT * baixa.linhas).toFixed(2));
+       (3.2 + ALT * baixa.linhas).toFixed(2) + '" de ' + UTIL);
 
     /* ─── O CORTE ────────────────────────────────────────────────────────── */
     const T = 'Ajustar valores das garantias - Visualizar no painel do cedente';
@@ -10375,6 +10390,113 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        arquivos, e tirar o parametro de todas seria 32 chances de errar uma. */
     ok(/function rodape\(s, texto, n\)/.test(APRES),
        'e a assinatura segue aceitando o numero, para nenhuma das 32 chamadas quebrar');
+  }
+
+  sec('A tabela que dobrava de altura, e a coluna que repetia o titulo');
+  {
+    const jan = {};
+    new Function('window', APRES)(jan);
+    const K = jan.apresentacaoKit;
+    const PPT = fs.readFileSync('relatorio-ppt.js', 'utf8');
+
+    /* ─── A CAUSA RAIZ: A COLUNA DA DATA ──────────────────────────────────
+       O sintoma era a tabela passando do rodape, e eu o tratei como altura de
+       linha DUAS vezes (0,42 e 0,48) antes de achar a causa: "Saiu em" tinha
+       0,9" e "09/09/2026" precisa de ~1,07" com a margem da celula. TODA linha
+       quebrava em duas, e uma tabela de linhas duplas ocupa o dobro.
+
+       A data e a unica coluna com o MESMO tamanho em toda linha: se ela nao
+       cabe, nao e uma linha que quebra — sao todas. */
+    const ent = corpo(PPT, 'function slideEntregas(');
+    const COL = new Function(ent.slice(ent.indexOf('var COL = {'),
+                                       ent.indexOf('};', ent.indexOf('var COL = {')) + 2) +
+                             '\nreturn COL;')();
+    const MARG = 0.2;
+    const larguraDe = (txt, corpoFonte) => txt.length * (corpoFonte * 0.52 / 72);
+
+    ok(COL.data - MARG >= larguraDe('09/09/2026', 12),
+       'a coluna da data cabe uma data inteira \u2014 se ela quebra, quebram TODAS as linhas',
+       (COL.data - MARG).toFixed(2) + '" para ' + larguraDe('09/09/2026', 12).toFixed(2) + '"');
+    ok(COL.data - MARG >= larguraDe('09/09/2026', 12) * 1.1,
+       'e com folga de pelo menos 10%, porque a estimativa de largura e estimativa',
+       ((COL.data - MARG) / larguraDe('09/09/2026', 12)).toFixed(2) + 'x');
+    /* A SOMA DAS COLUNAS E A LARGURA DA TABELA. Se passar, o pptxgenjs
+       redistribui sozinho e as folgas calculadas acima deixam de valer. */
+    const soma = COL.pt + COL.cod + COL.tit + COL.data + COL.dev;
+    ok(Math.abs(soma - 8.6) < 0.01, 'e as cinco colunas somam a largura da tabela',
+       soma.toFixed(2) + '" de 8.60');
+
+    /* OS CORTES SAEM DAS LARGURAS. Um `52` fixo num titulo de 4,35" tambem
+       quebrava a linha — mesma causa, outra coluna. */
+    const c = semComentario(ent);
+    ok(!/K\.corta\(e\.titulo, \d+\)/.test(c) && !/K\.corta\(e\.dev \|\| '—', \d+\)/.test(c),
+       'nenhum corte da tabela e numero escrito a mao');
+    ok(/cabemChars\(COL\.tit/.test(c) && /cabemChars\(COL\.dev/.test(c),
+       'os dois saem da largura da coluna');
+    /* A REGUA DESTA INVARIANTE E PROPRIA, e aqui a duplicacao do numero e o que
+       da valor ao teste. Comparar `corta(t, cabemChars(w))` com `cabemChars(w)`
+       e tautologia: os dois lados usam a MESMA estimativa, entao afrouxa-la em
+       40% passava em silencio. Com a regua de fora, afrouxar o codigo faz o
+       texto estourar a largura em POLEGADAS, que e o que importa. */
+    const REGUA_EM = 0.52;   // a mesma medida, mantida a parte de proposito
+    const larguraReal = (txt, fs) => txt.length * (fs * REGUA_EM / 72);
+    const cortado = K.corta('palavra '.repeat(40), K.cabemChars(COL.tit - MARG, 12));
+    ok(larguraReal(cortado, 12) <= COL.tit - MARG,
+       'e o titulo cortado cabe na coluna dele, medido em polegadas',
+       larguraReal(cortado, 12).toFixed(2) + '" de ' + (COL.tit - MARG).toFixed(2) + '"');
+    const devCortado = K.corta('Nome Muito Comprido De Pessoa', K.cabemChars(COL.dev - MARG, 12));
+    ok(larguraReal(devCortado, 12) <= COL.dev - MARG,
+       'e o responsavel tambem',
+       larguraReal(devCortado, 12).toFixed(2) + '" de ' + (COL.dev - MARG).toFixed(2) + '"');
+
+    /* ─── "ONDE ESTA" SO COM DOIS OU MAIS SISTEMAS ────────────────────────
+       "Quando ja existe filtro, essa informacao fica desnecessaria." Num deck
+       de um assunto, a coluna tinha UMA linha — o nome do proprio assunto, com
+       o total que ja esta no cartao acima. Repetia o titulo do slide e gastava
+       metade da largura.
+
+       Mesma regra que o `slideModulos` ja aplica, e por isto ela e conferida
+       EXECUTANDO a condicao: escrita e obedecida sao coisas diferentes. */
+    const bk = corpo(PPT, 'function slideBacklog(');
+    const cond = /var varios = ([^;]+);/.exec(semComentario(bk));
+    ok(!!cond, 'a condicao das duas colunas foi localizada');
+    if (cond) {
+      const varios = new Function('b', 'return !!(' + cond[1] + ');');
+      ok(!varios({ sistemas: [{ nome: 'AXCred - Cobranca', qtd: 10 }] }),
+         'com UM sistema, "Onde esta" nao entra \u2014 ela repetiria o titulo do slide');
+      ok(varios({ sistemas: [{ nome: 'A', qtd: 1 }, { nome: 'B', qtd: 2 }] }),
+         'com dois, entra');
+      ok(!varios({ sistemas: [] }), 'e sem sistema nenhum tambem nao');
+    }
+    /* E A OUTRA COLUNA APROVEITA O ESPACO. Tirar a coluna e deixar a que sobrou
+       com metade da largura seria trocar uma informacao inutil por um vazio. */
+    ok(/var wCol = varios \? \(LARG - 0\.3\) \/ 2 : LARG;/.test(semComentario(bk)),
+       'sem ela, "As que mais esperam" ocupa a largura inteira');
+    ok(/varios \? CABEM : CABEM \* 2/.test(semComentario(bk)),
+       'e mostra o dobro de demandas, que e o que sobrou de pe');
+    /* EXECUTA A CONTA, e nao procura o nome da variavel. A versao anterior
+       testava `/sobraVelhas/.test(bk)` — e `var sobraVelhas = 0;` passou em
+       silencio, porque o identificador continuava escrito ali. Presenca nao e
+       comportamento; e o mesmo furo pela quarta vez nesta sessao. */
+    const trVelhas = /var velhas = [^;]+;/.exec(bk);
+    const trSobra = /var sobraVelhas = [^;]+;/.exec(bk);
+    ok(!!trVelhas && !!trSobra, 'as duas contas do backlog foram localizadas');
+    if (trVelhas && trSobra) {
+      const conta = new Function('b', 'varios', 'CABEM',
+        trVelhas[0] + trSobra[0] +
+        'return { vis: velhas.length, sobra: sobraVelhas };');
+      const vinte = { itens: Array.from({ length: 20 }, (_, i) => ({ codigo: 'AX-' + i })) };
+      const umaCol = conta(vinte, false, 6);
+      const duasCol = conta(vinte, true, 6);
+      ok(umaCol.vis === duasCol.vis * 2,
+         'numa coluna so, cabe o dobro de demandas',
+         umaCol.vis + ' vs ' + duasCol.vis);
+      ok(umaCol.sobra === 20 - umaCol.vis && umaCol.sobra > 0,
+         'e o que nao coube e CONTADO, e nao truncado em silencio',
+         'sobraram ' + umaCol.sobra);
+      ok(conta({ itens: [{ codigo: 'A' }] }, false, 6).sobra === 0,
+         'e quando tudo cabe, nao ha sobra para anunciar');
+    }
   }
 
   let erroPz = null;

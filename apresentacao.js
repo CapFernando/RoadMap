@@ -452,12 +452,18 @@
   /* QUANTOS CARACTERES CABEM numa largura, para o corte deixar de ser um número
    * escrito à mão em cada chamada.
    *
-   * 0,55 em por caractere é a largura MÉDIA das fontes de texto usadas aqui —
-   * conferido contra o deck real: 36 caracteres ocupavam 2,8" a 10pt, que dá
-   * 0,56 em. Erra para MAIS de propósito: sobrar um caractere no fim da linha é
-   * invisível; faltar espaço faz o texto encostar na coluna vizinha. */
+   * 0,52 em por caractere, MEDIDO no deck renderizado: 38 caracteres ocuparam
+   * 2,61" numa coluna de 3,30" a 10pt, o que dá 0,495 em. O primeiro chute foi
+   * 0,55 e desperdiçava um quinto da coluna — o título saía cortado com a
+   * metade direita vazia.
+   *
+   * 0,52 e não 0,495: a média depende das letras. "Ajustar valores das
+   * garantias" é quase toda de caracteres estreitos; um título de maiúsculas e
+   * cedilhas é mais largo. A folga de 5% é o preço de não saber qual título vem
+   * — e errar para MAIS continua sendo o lado certo de errar, porque sobrar um
+   * caractere é invisível e faltar faz o texto encostar na coluna vizinha. */
   function cabemChars(polegadas, fontSize) {
-    return Math.max(8, Math.floor(polegadas / (fontSize * 0.55 / 72)));
+    return Math.max(8, Math.floor(polegadas / (fontSize * 0.52 / 72)));
   }
 
   /* TEXTO DE CARD PARA TEXTO DE SLIDE.
@@ -485,31 +491,43 @@
   // borda. Quando sobra fila, uma linha diz quantas ficaram de fora, porque
   // tabela truncada em silencio faz a diretoria achar que aquilo e tudo.
   var TAB_MAX = 6;
-  /* ALTURA REAL DE UMA LINHA DE TABELA — 0,42", MEDIDA E NÃO DECLARADA.
+  /* POR QUE A TABELA PASSAVA DO RODAPÉ — e por que eu errei duas vezes antes de
+   * achar a causa.
    *
-   * O `rowH: 0.32` abaixo é o que o arquivo DECLARA, e `<a:tr h="…">` no OOXML é
-   * um MÍNIMO: o PowerPoint estica a linha para o texto caber. Havia três números
-   * para a mesma linha — 0,32 no desenho, 0,36 no cálculo de onde pôr o "… e mais
-   * N", e o que o PowerPoint de fato renderiza. A tabela passava do rodapé e as
-   * duas últimas entregas saíam escritas por cima dele.
+   * O sintoma: as últimas entregas saíam escritas por cima da contagem e do mês.
+   * Eu tratei como altura de linha, medi 0,42" pelo print, ajustei — e voltou.
+   * Medi de novo, achei 0,48", e ia ajustar outra vez.
    *
-   * MEDIDO no deck real: com a sobra posicionada em 4,58" colidindo com a sétima
-   * linha e a oitava caindo sobre o rodapé (5,05"), sete linhas ocupam 2,96" —
-   * 0,42" cada. O XML dizia 0,32.
+   * A CAUSA ERA A COLUNA DA DATA. "Saiu em" tinha 0,9" e "09/09/2026" precisa de
+   * ~1,12" com a margem da célula: TODA linha quebrava em duas, e uma tabela de
+   * linhas duplas ocupa o dobro. O `rowH: 0.32` declarado estava certo para uma
+   * linha; o que estava errado era o texto não caber.
    *
-   * QUANTAS LINHAS CABEM PASSA A SER CONTA, e não número escrito à mão: o teto do
-   * chamador continua valendo, mas o espaço vertical vence quando é menor. Um
-   * `max` que não cabe deixou de ser possível. */
-  var ALT_LINHA = 0.42;
+   * DUAS DEFESAS, e a segunda é a que importa:
+   *
+   *   1. AS LARGURAS CABEM O TEXTO. Quem chama declara a largura, e o corte sai
+   *      dela (`cabemChars`) em vez de um número escrito à mão. Coluna que cabe
+   *      não quebra, e linha que não quebra tem a altura declarada.
+   *
+   *   2. A CONTAGEM VIROU UMA LINHA DA TABELA. Ela era um `addText` posicionado
+   *      por cálculo ao lado de uma tabela cuja altura eu não controlo — e todo
+   *      cálculo desses é um palpite sobre o renderizador. Como linha, quem
+   *      garante que nada se sobrepõe é o PowerPoint, e a classe inteira de
+   *      defeito deixa de existir: não há número para eu errar uma terceira vez.
+   *
+   * A altura abaixo ainda serve para decidir QUANTAS linhas cabem, e é o único
+   * palpite que sobrou. 0,38" é a linha de uma só altura com folga; se um
+   * renderizador apertar mais, sobra espaço em vez de faltar. */
+  var ALT_LINHA = 0.38;
   var Y_LIMITE  = 4.90;   // fim da área útil; o rodapé mora em 5,05
-  var ESPACO_SOBRA = 0.34;
 
   function tabela(pptx, s, cabec, linhas, opts) {
     opts = opts || {};
     var yTab = opts.y || 1.6;
     var ateY = opts.ateY || Y_LIMITE;
-    // −1 pelo cabeçalho, que ocupa uma linha como qualquer outra.
-    var cabem = Math.max(1, Math.floor((ateY - yTab - ESPACO_SOBRA) / ALT_LINHA) - 1);
+    // −2: o cabeçalho ocupa uma linha, e a contagem do que sobrou ocupa outra —
+    // ela agora é linha da tabela, e não texto solto posicionado por cálculo.
+    var cabem = Math.max(1, Math.floor((ateY - yTab) / ALT_LINHA) - 2);
     var vis = linhas.slice(0, Math.min(opts.max || TAB_MAX, cabem));
     var corpo = [cabec.map(function (t) {
       return { text: t, options: { bold: true, color: C.fraco, fontSize: 11 } };
@@ -521,6 +539,19 @@
           { color: C.texto, fontSize: 12 }, o.options || {}) };
       }));
     });
+    /* A CONTAGEM COMO ÚLTIMA LINHA. Ela ocupa a primeira célula e as outras vão
+       vazias: `colspan` no pptxgenjs exige montar a linha inteira com opções por
+       célula, e uma linha de aviso não merece esse acoplamento. O texto cabe na
+       coluna mais larga de todas as chamadas atuais. */
+    var sobra = linhas.length - vis.length;
+    if (sobra > 0) {
+      var aviso = cabec.map(function (_, i) {
+        return { text: i === 0 ? '… e mais ' + sobra + (opts.rotuloSobra || ' na planilha do mês') : '',
+                 options: { color: C.fraco, fontSize: 10.5, italic: true,
+                            colspan: i === 0 ? cabec.length : undefined } };
+      }).slice(0, 1);
+      corpo.push(aviso);
+    }
     s.addTable(corpo, {
       x: 0.7, y: yTab, w: 8.6, colW: opts.colW,
       rowH: 0.32, valign: 'middle',
@@ -529,14 +560,6 @@
       border: { type: 'solid', color: C.borda, pt: 1 },
       fill: { color: C.fundo2 }, autoPage: false,
     });
-    var sobra = linhas.length - vis.length;
-    if (sobra > 0) {
-      // O fundo REAL da tabela, pela altura medida — e não pelos 0,36 de antes,
-      // que punham esta linha no meio da sétima entrega.
-      s.addText('… e mais ' + sobra + (opts.rotuloSobra || ' na planilha do mês'), {
-        x: 0.7, y: yTab + ALT_LINHA * (vis.length + 1) + 0.06, w: 8.6, h: 0.3,
-        fontSize: 11, color: C.fraco });
-    }
   }
 
 

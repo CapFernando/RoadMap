@@ -258,17 +258,35 @@
       : 'Nenhuma entrega com data no período.';
     var s = K.slideTitulo(pptx, 'As principais entregas', sub, pagina);
     if (lista.length) {
+      /* AS LARGURAS CABEM O QUE VAI DENTRO — era aqui que a tabela engordava.
+         "Saiu em" tinha 0,9" e "09/09/2026" precisa de ~1,12" com a margem da
+         célula: TODA linha quebrava em duas, e uma tabela de linhas duplas
+         ocupa o dobro do espaço e passava do rodapé. O sintoma era a altura; a
+         causa era a coluna estreita.
+
+         E OS CORTES SAEM DAS LARGURAS, e não de números escritos à mão: `52`
+         para o título numa coluna de 4,45" também quebrava. `cabemChars` desconta
+         a margem da célula (0,2" no total) e devolve quantos caracteres entram. */
+      /* A DATA GANHA A MAIOR FOLGA das cinco, e de propósito: ela é a única que
+         tem o mesmo tamanho em toda linha, então se ela não couber, quebram
+         TODAS — foi assim que a tabela dobrou de altura. "09/09/2026" pede ~1,07"
+         com a margem; 1,25" dá 17% de folga para a imprecisão da estimativa de
+         largura. Os 0,10" saem do título, que tem de sobra. */
+      var COL = { pt: 0.55, cod: 0.95, tit: 4.35, data: 1.25, dev: 1.50 };
+      var MARG = 0.2;   // margem da célula, somando os dois lados
       K.tabela(pptx, s, ['Pt', 'Código', 'Entrega', 'Saiu em', 'Responsável'],
         lista.map(function (e) {
           return [
             { text: e.pts ? fmt(e.pts) : '—',
               options: { bold: true, color: e.pts ? C.verde : C.fraco } },
             { text: e.codigo || '—', options: { color: C.fraco } },
-            K.corta(e.titulo, 52),
+            K.corta(e.titulo, K.cabemChars(COL.tit - MARG, 12)),
             { text: e.data || '—', options: { color: C.fraco } },
-            { text: K.corta(e.dev || '—', 20), options: { color: C.fraco } },
+            { text: K.corta(e.dev || '—', K.cabemChars(COL.dev - MARG, 12)),
+              options: { color: C.fraco } },
           ];
-        }), { y: 1.62, max: MAX_ENTREGAS, colW: [0.6, 0.9, 4.55, 0.9, 1.65],
+        }), { y: 1.62, max: MAX_ENTREGAS,
+              colW: [COL.pt, COL.cod, COL.tit, COL.data, COL.dev],
               rotuloSobra: ' entregas no período' });
     }
     K.rodape(s, t.periodo, pagina);
@@ -395,11 +413,30 @@
         fontSize: 10, color: C.fraco, wrap: false });
     });
 
-    var wCol = (LARG - 0.3) / 2;
+    /* ─── "ONDE ESTA" SO EXISTE COM DOIS OU MAIS SISTEMAS ──────────────────
+       Num deck filtrado por um assunto, a coluna tinha uma linha so — o nome do
+       proprio assunto, com o total que ja esta no cartao acima. Ela repetia o
+       titulo do slide e ocupava metade da largura para nao dizer nada.
+
+       E a mesma regra que o `slideModulos` ja aplica, pelo mesmo motivo: "o slide
+       sairia com uma barra de 100% ao lado do nome do proprio assunto — um slide
+       que repete o titulo e nao informa nada".
+
+       SEM ELA, "As que mais esperam" OCUPA A LARGURA TODA e mostra o dobro de
+       demandas. Quem filtrou por um assunto ja sabe onde a pilha esta; o que ele
+       nao sabe e ha quanto tempo cada coisa espera. */
+    var varios = (b.sistemas || []).length > 1;
+    var wCol = varios ? (LARG - 0.3) / 2 : LARG;
+    var xEspera = varios ? MARGEM + wCol + 0.3 : MARGEM;
     var yL = 2.66;
+    /* Quantas cabem: de 2,66" + 0,62" de cabecalho ate a area util (4,90"), a
+       0,34" por linha. Numa coluna so, o mesmo espaco vertical — o que dobra e a
+       largura, e nao a altura; o ganho vem de nao gastar metade do slide com uma
+       linha. Com as duas colunas o teto e 6 para as duas ficarem da mesma altura. */
+    var CABEM = Math.max(1, Math.floor((4.90 - yL - 0.62) / 0.34));
 
     // Esquerda: onde a pilha esta.
-    var sis = (b.sistemas || []).slice(0, 6);
+    var sis = varios ? (b.sistemas || []).slice(0, CABEM) : [];
     /* AS CORES VEM DA TABELA DE SIGNIFICADO, e nao da paleta crua \u2014 `C` nem tem
        `categoria2` nem `alerta`, entao os nomes que eu havia escrito caiam no
        fallback e a escolha virava acidente.
@@ -408,8 +445,10 @@
        que mais esperam": e "atencao", que e o que uma demanda parada ha meses
        pede. Verde e vermelho estariam errados nos dois \u2014 num backlog nao ha nada
        cumprido nem falhado. */
-    cabecColuna(pptx, s, MARGEM, yL, wCol, K.significado.categoria2, 'Onde est\u00e1',
-      sis.length ? 'por sistema, do maior para o menor' : '');
+    if (varios) {
+      cabecColuna(pptx, s, MARGEM, yL, wCol, K.significado.categoria2, 'Onde est\u00e1',
+        'por sistema, do maior para o menor');
+    }
     sis.forEach(function (x, i) {
       linhaFila(pptx, s, {
         x: MARGEM, y: yL + 0.62 + i * 0.34, w: wCol, h: 0.3, cor: C.borda,
@@ -423,17 +462,27 @@
         fontSize: 9.5, color: C.fraco });
     }
 
-    // Direita: as que mais esperam.
-    var velhas = (b.itens || []).slice(0, 6);
-    cabecColuna(pptx, s, MARGEM + wCol + 0.3, yL, wCol, K.significado.atencao,
+    // As que mais esperam. Com um sistema so, ela toma a largura inteira e mostra
+    // o dobro de demandas — que e a informacao que sobrou de pe.
+    var velhas = (b.itens || []).slice(0, varios ? CABEM : CABEM * 2);
+    cabecColuna(pptx, s, xEspera, yL, wCol, K.significado.atencao,
       'As que mais esperam', 'em dias parados');
     velhas.forEach(function (x, i) {
+      // Numa coluna so, as linhas continuam de cima para baixo; em duas, a
+      // segunda metade nao existe.
       linhaFila(pptx, s, {
-        x: MARGEM + wCol + 0.3, y: yL + 0.62 + i * 0.34, w: wCol, h: 0.3,
+        x: xEspera, y: yL + 0.62 + i * 0.34, w: wCol, h: 0.3,
         cor: C.borda, cod: x.codigo, titulo: x.titulo,
         corte: K.cabemChars(wCol - 0.85 - 0.72, 10),
         dir: x.dias == null ? '—' : fmt(x.dias) + 'd', corDir: C.texto });
     });
+    var sobraVelhas = (b.itens || []).length - velhas.length;
+    if (sobraVelhas > 0) {
+      s.addText('… e mais ' + sobraVelhas + ' ' +
+                plural(sobraVelhas, 'demanda', 'demandas') + ' na pilha', {
+        x: xEspera, y: yL + 0.62 + velhas.length * 0.34 + 0.04, w: wCol, h: 0.24,
+        fontSize: 9.5, color: C.fraco });
+    }
 
     K.rodape(s, t.periodo, pagina);
     return s;
