@@ -191,10 +191,16 @@
 
   // Rodapé discreto: mês e página. Diretoria folheia o PDF depois, e slide sem
   // referência vira print solto sem contexto.
+  /* SEM NUMERO DE PAGINA — pedido do Fernando.
+     O `n` continua na assinatura de proposito: sao 32 chamadas nos dois arquivos,
+     e tirar o argumento de todas para nao desenhar nada seria 32 oportunidades de
+     errar uma. Quem decide o que aparece no rodape e o rodape.
+     Num deck de reuniao o numero nao serve para nada: ninguem diz "volta para o
+     slide 4" numa apresentacao de doze slides projetada por quem esta falando —
+     e ele ocupava o canto onde o periodo ja responde a unica pergunta que se faz
+     olhando para baixo ("de quando e isto?"). */
   function rodape(s, texto, n) {
-    s.addText(texto, { x: 0.5, y: 5.05, w: 7, h: 0.3, fontSize: 10, color: C.fraco });
-    if (n) s.addText(String(n), { x: 9.0, y: 5.05, w: 0.5, h: 0.3, fontSize: 10,
-                                  color: C.fraco, align: 'right' });
+    s.addText(texto, { x: 0.5, y: 5.05, w: 9, h: 0.3, fontSize: 10, color: C.fraco });
   }
 
   // A CAPA DA CASA. O deck abria com uma faixa azul e texto — generico, e nada
@@ -411,9 +417,47 @@
   // titulo longo quebra em tres e empurra a tabela para fora do slide — foi o que
   // aconteceu no primeiro deck de verdade, e o corte na borda e visto pela plateia
   // antes do numero.
+  /* CORTA NA PALAVRA INTEIRA, e não no caractere.
+   *
+   * "Ajustar valores das garantias - Visualizar no painel do cedente" virava
+   * "Ajustar valores das garantias - Vis…". O pedaço perdido não era o excesso:
+   * era a parte que dizia o que a demanda faz. Um corte no meio da palavra
+   * também parece defeito de renderização, e quem lê desconfia do slide.
+   *
+   * SÓ VOLTA ATÉ A PALAVRA ANTERIOR SE NÃO CUSTAR CARO. Com um limite de 40
+   * caracteres e a última palavra começando no 8º, recuar jogaria fora 80% do
+   * espaço — aí o corte duro é melhor. O piso de 60% é o que separa os dois
+   * casos; uma palavra única e gigante continua sendo cortada no meio, porque
+   * não há alternativa.
+   *
+   * E A PONTUAÇÃO PENDURADA SAI JUNTO: "Ajuste de nomes -…" tem um hífen que não
+   * liga mais nada. */
   function corta(t, n) {
     var s = String(t == null ? '' : t).trim();
-    return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
+    if (s.length <= n) return s;
+    var bruto = s.slice(0, n - 1);
+    /* SÓ RECUA SE O CORTE PARTIU UMA PALAVRA. A primeira versão recuava sempre, e
+       jogava fora uma palavra que já tinha cabido: com limite 43, o corte cai
+       exatamente no espaço depois de "Visualizar" — e mesmo assim ela sumia,
+       devolvendo "Ajustar valores das garantias…" com catorze caracteres de
+       coluna sobrando. Medido no deck real; era pior que o corte no meio. */
+    var partiu = s.charAt(n - 1) !== ' ' && !/\s$/.test(bruto);
+    if (partiu) {
+      var esp = bruto.lastIndexOf(' ');
+      if (esp >= Math.floor(n * 0.6)) bruto = bruto.slice(0, esp);
+    }
+    return bruto.replace(/[\s\-–—·,;:.]+$/, '') + '…';
+  }
+
+  /* QUANTOS CARACTERES CABEM numa largura, para o corte deixar de ser um número
+   * escrito à mão em cada chamada.
+   *
+   * 0,55 em por caractere é a largura MÉDIA das fontes de texto usadas aqui —
+   * conferido contra o deck real: 36 caracteres ocupavam 2,8" a 10pt, que dá
+   * 0,56 em. Erra para MAIS de propósito: sobrar um caractere no fim da linha é
+   * invisível; faltar espaço faz o texto encostar na coluna vizinha. */
+  function cabemChars(polegadas, fontSize) {
+    return Math.max(8, Math.floor(polegadas / (fontSize * 0.55 / 72)));
   }
 
   /* TEXTO DE CARD PARA TEXTO DE SLIDE.
@@ -441,9 +485,32 @@
   // borda. Quando sobra fila, uma linha diz quantas ficaram de fora, porque
   // tabela truncada em silencio faz a diretoria achar que aquilo e tudo.
   var TAB_MAX = 6;
+  /* ALTURA REAL DE UMA LINHA DE TABELA — 0,42", MEDIDA E NÃO DECLARADA.
+   *
+   * O `rowH: 0.32` abaixo é o que o arquivo DECLARA, e `<a:tr h="…">` no OOXML é
+   * um MÍNIMO: o PowerPoint estica a linha para o texto caber. Havia três números
+   * para a mesma linha — 0,32 no desenho, 0,36 no cálculo de onde pôr o "… e mais
+   * N", e o que o PowerPoint de fato renderiza. A tabela passava do rodapé e as
+   * duas últimas entregas saíam escritas por cima dele.
+   *
+   * MEDIDO no deck real: com a sobra posicionada em 4,58" colidindo com a sétima
+   * linha e a oitava caindo sobre o rodapé (5,05"), sete linhas ocupam 2,96" —
+   * 0,42" cada. O XML dizia 0,32.
+   *
+   * QUANTAS LINHAS CABEM PASSA A SER CONTA, e não número escrito à mão: o teto do
+   * chamador continua valendo, mas o espaço vertical vence quando é menor. Um
+   * `max` que não cabe deixou de ser possível. */
+  var ALT_LINHA = 0.42;
+  var Y_LIMITE  = 4.90;   // fim da área útil; o rodapé mora em 5,05
+  var ESPACO_SOBRA = 0.34;
+
   function tabela(pptx, s, cabec, linhas, opts) {
     opts = opts || {};
-    var vis = linhas.slice(0, opts.max || TAB_MAX);
+    var yTab = opts.y || 1.6;
+    var ateY = opts.ateY || Y_LIMITE;
+    // −1 pelo cabeçalho, que ocupa uma linha como qualquer outra.
+    var cabem = Math.max(1, Math.floor((ateY - yTab - ESPACO_SOBRA) / ALT_LINHA) - 1);
+    var vis = linhas.slice(0, Math.min(opts.max || TAB_MAX, cabem));
     var corpo = [cabec.map(function (t) {
       return { text: t, options: { bold: true, color: C.fraco, fontSize: 11 } };
     })];
@@ -455,7 +522,7 @@
       }));
     });
     s.addTable(corpo, {
-      x: 0.7, y: opts.y || 1.6, w: 8.6, colW: opts.colW,
+      x: 0.7, y: yTab, w: 8.6, colW: opts.colW,
       rowH: 0.32, valign: 'middle',
       // A borda vem da paleta, e nao escrita a mao: era um cinza-esverdeado da
       // paleta antiga e ficava fora de tom no fundo azul do painel.
@@ -464,8 +531,10 @@
     });
     var sobra = linhas.length - vis.length;
     if (sobra > 0) {
+      // O fundo REAL da tabela, pela altura medida — e não pelos 0,36 de antes,
+      // que punham esta linha no meio da sétima entrega.
       s.addText('… e mais ' + sobra + (opts.rotuloSobra || ' na planilha do mês'), {
-        x: 0.7, y: (opts.y || 1.6) + 0.36 * (vis.length + 1) + 0.08, w: 8.6, h: 0.3,
+        x: 0.7, y: yTab + ALT_LINHA * (vis.length + 1) + 0.06, w: 8.6, h: 0.3,
         fontSize: 11, color: C.fraco });
     }
   }
@@ -2066,6 +2135,7 @@
     cartaoKpi: cartaoKpi,
     tabela: tabela,
     corta: corta,
+    cabemChars: cabemChars,
     textoLimpo: textoLimpo,
     corPercentual: corPercentual,
     cores: C,

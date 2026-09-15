@@ -49,13 +49,19 @@
   var MARGEM = 0.7, LARG = 8.6;      // a coluna útil do slide, igual à do deck mensal
   var Y_TITULO = 0.5, Y_SUB = 1.02, Y_CORPO = 1.5, Y_FUNDO = 4.9;
 
-  /* QUANTAS ENTREGAS CABEM NO SLIDE, e o número sai de conta.
-     Eu tinha posto oito. A tabela começa em 1,62" e cada linha come 0,36", então
-     com oito mais o cabeçalho ela termina em 4,86" — e a linha "… e mais N
-     entregas no período", que o `tabela` desenha logo abaixo, caía em 4,94" com
-     0,3" de altura. O rodapé mora em 5,05". As duas coisas se sobrepunham em 62%,
-     e o resultado na parede é o mês escrito por cima da contagem.
-     Com sete, a última linha fecha em 4,88" e sobra folga até o rodapé. */
+  /* TETO DE ENTREGAS — hoje um limite de GOSTO, e não de espaço.
+   *
+   * Este número já foi a defesa contra a tabela passar do rodapé, e a conta que
+   * o justificava usava 0,36" por linha. O número estava errado: `<a:tr h>` é um
+   * MÍNIMO no OOXML, e o PowerPoint estica a linha para o texto caber — a altura
+   * real, medida no deck que o Fernando recebeu, é 0,42". Com sete entregas mais
+   * o cabeçalho a tabela chegava a 4,98" e escrevia por cima do rodapé (5,05"),
+   * que é o que o print mostrava.
+   *
+   * QUEM DEFENDE O ESPAÇO AGORA É O `tabela`, que recebe até onde pode ir e
+   * calcula quantas linhas cabem. Este teto continua valendo como limite
+   * editorial — sete entregas já é mais lista do que se lê num slide —, mas o
+   * espaço vence quando for menor. Com a área atual, cabem seis. */
   var MAX_ENTREGAS = 7;
 
   function n0(v) {
@@ -322,9 +328,15 @@
       }
       var TETO = 7, vis = col.lista.slice(0, TETO);
       vis.forEach(function (it, i) {
+        /* O CORTE VEM DA LARGURA DA COLUNA, e não de um 36 escrito à mão.
+           `linhaFila` dá ao título `w − 0.85` (o recuo do código) menos 0,72
+           quando há valor à direita; o 36 fixo ignorava os dois e cortava
+           "…garantias - Vis…" com meia polegada de coluna sobrando. */
+        var wDir = it.pts ? 0.72 : 0;
         linhaFila(pptx, s, {
           x: col.x, y: 2.24 + i * 0.36, w: wCol, h: 0.32, cor: col.cor,
-          cod: it.codigo, titulo: it.titulo, corte: 36,
+          cod: it.codigo, titulo: it.titulo,
+          corte: K.cabemChars(wCol - 0.85 - wDir, 10),
           dir: it.pts ? fmt(it.pts) + ' pt' : '', corDir: C.azul });
       });
       var sobra = col.lista.length - vis.length;
@@ -401,7 +413,7 @@
     sis.forEach(function (x, i) {
       linhaFila(pptx, s, {
         x: MARGEM, y: yL + 0.62 + i * 0.34, w: wCol, h: 0.3, cor: C.borda,
-        cod: '', titulo: x.nome, corte: 30,
+        cod: '', titulo: x.nome, corte: K.cabemChars(wCol - 0.85 - 0.72, 10),
         dir: fmt(x.qtd) + (x.pts ? ' · ' + fmt(x.pts) + ' pt' : ''), corDir: C.texto });
     });
     var sobraSis = (b.sistemas || []).length - sis.length;
@@ -418,7 +430,8 @@
     velhas.forEach(function (x, i) {
       linhaFila(pptx, s, {
         x: MARGEM + wCol + 0.3, y: yL + 0.62 + i * 0.34, w: wCol, h: 0.3,
-        cor: C.borda, cod: x.codigo, titulo: x.titulo, corte: 28,
+        cor: C.borda, cod: x.codigo, titulo: x.titulo,
+        corte: K.cabemChars(wCol - 0.85 - 0.72, 10),
         dir: x.dias == null ? '—' : fmt(x.dias) + 'd', corDir: C.texto });
     });
 

@@ -10271,6 +10271,112 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }
   }
 
+  sec('O deck: a tabela que passava do rodape, o corte e o numero da pagina');
+  {
+    const jan = {};
+    new Function('window', APRES)(jan);
+    const K = jan.apresentacaoKit;
+
+    /* ─── A TABELA NAO PASSA DO RODAPE ────────────────────────────────────
+       O print mostrava as duas ultimas entregas escritas por cima do "…e mais
+       4 entregas" e do mes. Havia TRES numeros para a mesma linha: 0,32 no
+       `rowH`, 0,36 na conta de onde pOr a sobra, e o que o PowerPoint de fato
+       renderiza. `<a:tr h>` e um MINIMO no OOXML — a linha estica para o texto
+       caber, e a altura real medida e 0,42".
+
+       Esta invariante EXECUTA o `tabela` com um slide falso e mede onde cada
+       coisa foi parar. */
+    const desenhar = (qtd, y) => {
+      const postos = [];
+      const s2 = { addTable: (corpo, o) => postos.push({ tipo: 'tabela', linhas: corpo.length, y: o.y }),
+                   addText: (t, o) => postos.push({ tipo: 'texto', t: String(t), y: o.y }) };
+      const linhas = [];
+      for (let i = 0; i < qtd; i++) linhas.push(['1', 'AX-' + i, 'titulo ' + i, 'data', 'dev']);
+      K.tabela({ ShapeType: {} }, s2, ['Pt', 'Cod', 'Entrega', 'Saiu', 'Resp'], linhas,
+               { y: y, max: 7, rotuloSobra: ' entregas no periodo' });
+      return postos;
+    };
+
+    const ALT = 0.42, RODAPE = 5.05, UTIL = 4.90;
+    const p = desenhar(11, 1.62);
+    const tab = p.find(x => x.tipo === 'tabela');
+    const sobra = p.find(x => x.tipo === 'texto');
+    ok(!!tab, 'a tabela foi desenhada');
+    const fundo = tab.y + ALT * tab.linhas;
+    ok(fundo <= UTIL, 'o fundo da tabela fica dentro da area util',
+       fundo.toFixed(2) + '" de ' + UTIL);
+    /* O QUE INVADIA O RODAPE, no print, era a linha "… e mais N" — a tabela
+       parava em 4,98" e ela caia depois. Medir so o fundo da TABELA contra 5,05
+       deixava passar: 4,98 < 5,05, e a invariante dizia que estava tudo bem
+       enquanto a contagem era escrita por cima do mes. A prova e o conjunto
+       inteiro, e nao a peca mais alta dele. */
+    ok(fundo <= RODAPE, 'a tabela nao invade o rodape', fundo.toFixed(2) + '" vs ' + RODAPE);
+    ok(!!sobra, 'e a linha "… e mais N" existe quando sobra entrega');
+    ok(sobra && sobra.y >= fundo - 0.02,
+       'ela fica ABAIXO da tabela, e nao no meio da penultima entrega',
+       sobra ? sobra.y.toFixed(2) + '" vs fundo ' + fundo.toFixed(2) : '');
+    ok(sobra && sobra.y + 0.3 <= RODAPE,
+       'e ela tambem nao encosta no rodape',
+       sobra ? (sobra.y + 0.3).toFixed(2) + '" vs ' + RODAPE : '');
+    ok(/e mais 5 entregas no periodo/.test(sobra ? sobra.t : ''),
+       'e ela conta certo quantas ficaram de fora', sobra ? sobra.t : '');
+
+    /* O TETO DO CHAMADOR NAO PODE ESTOURAR O ESPACO. Antes, `max: 7` era
+       obedecido a qualquer custo; agora o espaco vence quando e menor. */
+    ok(tab.linhas <= 7, 'o espaco limita as linhas mesmo com max 7 pedido',
+       String(tab.linhas));
+    /* E A TABELA MAIS BAIXA NA PAGINA CABE MENOS, sozinha: e a prova de que a
+       conta e por espaco, e nao um segundo numero fixo. */
+    const baixa = desenhar(11, 3.2).find(x => x.tipo === 'tabela');
+    ok(baixa.linhas < tab.linhas,
+       'tabela que comeca mais embaixo cabe menos \u2014 a conta e de espaco',
+       baixa.linhas + ' vs ' + tab.linhas);
+    ok(3.2 + ALT * baixa.linhas <= UTIL, 'e mesmo assim nao estoura',
+       (3.2 + ALT * baixa.linhas).toFixed(2));
+
+    /* ─── O CORTE ────────────────────────────────────────────────────────── */
+    const T = 'Ajustar valores das garantias - Visualizar no painel do cedente';
+    const largTitulo = (8.6 - 0.3) / 2 - 0.85;
+    const n = K.cabemChars(largTitulo, 10);
+    ok(n > 36, 'a largura real da coluna cabe mais que os 36 fixos de antes', String(n));
+    ok(K.corta(T, n) === 'Ajustar valores das garantias - Visualizar\u2026',
+       'e o corte preserva a palavra que diz o que a demanda faz', K.corta(T, n));
+    /* SO RECUA SE PARTIU UMA PALAVRA. A primeira versao recuava sempre e jogava
+       fora uma palavra que ja tinha cabido — pior que o corte no meio. */
+    ok(K.corta(T, 43).indexOf('Visualizar') > 0,
+       'com o corte caindo no espaco, a palavra inteira fica');
+    ok(K.corta(T, 36) === 'Ajustar valores das garantias\u2026',
+       'e com o corte no meio da palavra, ela sai inteira \u2014 e nao "Vis\u2026"',
+       K.corta(T, 36));
+    ok(K.corta('Erro Cobran\u00e7a', 43) === 'Erro Cobran\u00e7a',
+       'texto que cabe nao ganha reticencia');
+    /* UM CASO QUE DE FATO TERMINA EM HIFEN NO CORTE. O primeiro que escolhi
+       tinha 43 caracteres e o limite era 43 \u2014 ele passava inteiro, sem corte
+       nenhum, e a invariante nao exercitava a limpeza que dizia cobrar. */
+    ok(K.corta('Erro - Cobran\u00e7a', 8) === 'Erro\u2026',
+       'e a pontuacao pendurada sai junto \u2014 nada de "Erro -\u2026"',
+       K.corta('Erro - Cobran\u00e7a', 8));
+    ok(K.corta('Ajuste de nomes, Padroniza\u00e7\u00e3o', 17) === 'Ajuste de nomes\u2026',
+       'e a virgula pendurada tambem', K.corta('Ajuste de nomes, Padroniza\u00e7\u00e3o', 17));
+    /* Palavra unica e gigante nao tem alternativa: corta no meio mesmo. */
+    ok(K.corta('Supercalifragilisticoespialidoso', 20).length <= 20,
+       'palavra unica gigante continua cortada, e dentro do limite');
+    ok(K.cabemChars(0.1, 10) >= 8, 'coluna absurdamente estreita ainda devolve um minimo');
+
+    /* ─── SEM NUMERO DE PAGINA ───────────────────────────────────────────── */
+    const postos = [];
+    K.rodape({ addText: (t, o) => postos.push({ t: String(t), x: o.x }) }, 'setembro de 2026', 4);
+    ok(postos.length === 1, 'o rodape desenha UMA coisa so \u2014 o periodo',
+       String(postos.length));
+    ok(postos[0].t === 'setembro de 2026', 'e e o periodo', postos[0].t);
+    ok(!postos.some(x => x.t === '4'),
+       'o numero da pagina NAO e desenhado, mesmo quando passado');
+    /* O ARGUMENTO CONTINUA NA ASSINATURA de proposito: sao 32 chamadas nos dois
+       arquivos, e tirar o parametro de todas seria 32 chances de errar uma. */
+    ok(/function rodape\(s, texto, n\)/.test(APRES),
+       'e a assinatura segue aceitando o numero, para nenhuma das 32 chamadas quebrar');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
