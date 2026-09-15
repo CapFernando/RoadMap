@@ -1115,7 +1115,7 @@
 <script src="relatorio-ppt.js?v=ab9c8286e2"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
-<script src="catalogo.js?v=b5aed8c999"></script>
+<script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -1245,6 +1245,14 @@
       <!-- ── JUNTAR DOIS TEMAS ─────────────────────────────────
            Fica DEPOIS da lista, e nao no topo: e lendo a lista que se percebe
            que ha dois nomes para a mesma coisa. -->
+      <!-- ── FORA DO PADRAO ────────────────────────────────────────────────
+           Fica ACIMA do juntar, e depois da lista: e lendo a lista que se percebe
+           o problema, e e no juntar que se resolve. Entre os dois e onde a
+           pergunta "o que esta torto?" tem resposta.
+
+           Some quando nao ha nada. Painel que vive dizendo "0 problemas" vira
+           moldura e para de ser lido — e no dia em que tiver um, ninguem ve. -->
+      <div id="temas-padrao" style="margin-top:18px"></div>
       <details style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
         <summary style="cursor:pointer;font-size:13px;color:var(--text2)">
           Dois temas para o mesmo sistema?
@@ -3163,6 +3171,43 @@ function fbGroup(label, valor, opcoes, handler) {
   </div>`;
 }
 
+/* O MESMO INVOLUCRO DO `fbGroup`, com as opcoes ja montadas por fora.
+   O `fbGroup` monta `<option>` a partir de uma lista chapada, e a arvore de
+   temas precisa de `<optgroup>` e recuo — coisas que uma lista de
+   `{key,label}` nao expressa. Em vez de ensinar o `fbGroup` a desenhar arvore,
+   ele empresta a moldura e o catalogo desenha o conteudo, que ja e o dono
+   disso. */
+function fbGroupHTML(label, opcoesHTML, handler) {
+  return `<div class="ger-filter-group">
+    <label>${esc(label)}</label>
+    <select onchange="${handler}(this.value)">${opcoesHTML}</select>
+  </div>`;
+}
+
+/* O FILTRO DE TEMA SEGUE A ARVORE, e nao a ordem de cadastro.
+   Sao 71 temas. Chapados na ordem em que foram criados, achar
+   "AXCred - Operações - Simulador" e rolar a lista inteira lendo nome por nome
+   — e o `gantt` e o painel do dev ja usavam o catalogo para isso, entao a mesma
+   pessoa via ordens diferentes dependendo da aba.
+
+   `catalogoOpcoesHTML` agrupa por sistema, recua o modulo e ordena pela ordem do
+   produto (a esteira do AXCred, e nao o alfabeto). O que o catalogo nao conhece
+   vai para o FIM, visivel — e e la que aparecem `Cobrança`, `Jurídico` e
+   `Ax Despesa - Estoque SEC`, que e exatamente onde o que precisa de conserto
+   deve ficar. */
+function temaOpcoesHTML(valor) {
+  const conta = {};
+  (state.temas || []).forEach(t => {
+    conta[t.id] = (state.melhorias || []).filter(m => m.tema_id === t.id).length;
+  });
+  return window.catalogoOpcoesHTML
+    ? catalogoOpcoesHTML(state.temas || [], valor || '',
+        { rotuloVazio: `Todos (${(state.melhorias || []).length})`, contagem: conta })
+    : opcoesTema().map(o =>
+        `<option value="${esc(o.key)}"${String(o.key) === String(valor || '') ? ' selected' : ''}>` +
+        `${esc(o.label)}${o.n === undefined ? '' : ' (' + o.n + ')'}</option>`).join('');
+}
+
 function opcoesTema() {
   return [
     { key: '', label: 'Todos', n: state.melhorias.length },
@@ -3268,7 +3313,7 @@ function renderMelToolbar() {
                   _filtroProd, _buscaMel].filter(Boolean).length;
   el.innerHTML =
     fbGroup('Tipo',  _filtroTipo,  opcoesTipo(),  'setFiltroTipo') +
-    fbGroup('Tema',  _filtroTema,  opcoesTema(),  'setFiltroTema') +
+    fbGroupHTML('Tema', temaOpcoesHTML(_filtroTema), 'setFiltroTema') +
     fbGroup('Dev',   _filtroDev,   opcoesDev(),   'setFiltroDev') +
     fbGroup('Prazo', _filtroPrazo, opcoesPrazo(), 'setFiltroPrazo') +
     fbGroup('Produção', _filtroProd, opcoesProducao(), 'setFiltroProd') +
@@ -3328,6 +3373,7 @@ function renderTemas() {
      sair — e `juntarTemas` recusaria com "Tema nao encontrado", que e um erro
      sem explicacao para quem acabou de ver o nome no select. */
   renderJuntarTemas();
+  renderTemasPadrao();
   if (!state.temas.length) { el.innerHTML = '<div class="empty">Nenhum tema cadastrado.</div>'; return; }
   el.innerHTML = state.temas.map(t => {
     const n = state.melhorias.filter(m => m.tema_id === t.id).length;
@@ -3617,7 +3663,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
                   _kbPeriodo !== 'mes_atual' ? _kbPeriodo : null].filter(Boolean).length;
   el.innerHTML =
     fbGroup('Tipo',    _kbTipo,    opcoesTipo(),    'setKbTipo') +
-    fbGroup('Tema',    _kbTema,    opcoesTema(),    'setKbTema') +
+    fbGroupHTML('Tema', temaOpcoesHTML(_kbTema), 'setKbTema') +
     fbGroup('Dev',     _kbDev,     opcoesDev(),     'setKbDev') +
     fbGroup('Prazo',   _kbPrazo,   opcoesPrazo(),   'setKbPrazo') +
     fbGroup('Concluídas', _kbPeriodo, opcoesPeriodo(), 'setKbPeriodo') +
@@ -8822,6 +8868,92 @@ async function juntarTemas() {
   _pendingEdits = true;
   renderAll();
   await mPersistir(afetadas.length + ' demanda(s) agora sao de "' + para.nome + '".');
+}
+
+/* ─── O PAINEL DO QUE ESTA FORA DO PADRAO ────────────────────────────────
+   A regra de O QUE e desvio mora no `catalogo.js`, que e o dono do padrao.
+   Aqui so se desenha, e se liga o botao ao juntar que ja existe.
+
+   O BOTAO PREENCHE, E NAO EXECUTA. Juntar tema move demanda e nao tem desfazer.
+   Clicar aqui deixa os dois selects prontos e rola ate eles — a confirmacao
+   continua sendo a do `juntarTemas`, com o nome dos dois temas dentro. Um botao
+   que juntasse direto poria uma acao irreversivel a um clique de distancia de
+   uma lista que se le passando o olho.
+
+   `grafia` e `raizUsada` NAO GANHAM BOTAO, e isso e deliberado: "Ax Despesa"
+   vira "Ax Despesas" RENOMEANDO o tema (o modulo continua sendo Estoque SEC),
+   nao juntando com outro; e a raiz usada como tema pode ser a escolha certa.
+   Oferecer "Juntar" nos dois convidaria ao gesto errado. */
+function renderTemasPadrao() {
+  const el = document.getElementById('temas-padrao');
+  if (!el) return;
+  const achados = window.catalogoForaDoPadrao
+    ? catalogoForaDoPadrao(state.temas || []) : [];
+  if (!achados.length) { el.innerHTML = ''; return; }
+
+  const ROTULO = {
+    duplicado:  'Mesmo assunto, dois temas',
+    grafia:     'Sistema escrito de dois jeitos',
+    raizUsada:  'Raiz de sistema usada como tema',
+  };
+  const ORDEM = ['duplicado', 'grafia', 'raizUsada'];
+  const porTipo = {};
+  achados.forEach(a => { (porTipo[a.tipo] = porTipo[a.tipo] || []).push(a); });
+
+  // Quantas demandas cada tema torto carrega: e o tamanho do estrago, e muda a
+  // pressa. Um tema duplicado com 1 demanda e diferente de um com 40.
+  const qtd = (t) => (state.melhorias || []).filter(m => String(m.tema_id) === String(t.id)).length;
+
+  el.innerHTML =
+    '<div style="border:1px solid var(--amber,#E89C2F);border-radius:12px;padding:14px 16px;' +
+    'background:var(--amber-bg,#3A2A08)">' +
+    '<div style="font-size:13.5px;font-weight:700;color:var(--amber-tx,#FFD79A);margin-bottom:4px">' +
+    '⚠ ' + achados.length + (achados.length === 1 ? ' tema fora do padrão' : ' temas fora do padrão') +
+    '</div>' +
+    '<p style="font-size:12px;color:var(--text2);line-height:1.55;margin-bottom:10px;max-width:74ch">' +
+    'Nome fora do padrão quebra o filtro por sistema: quem filtra por um não vê o outro, ' +
+    'e a conta de &quot;quanto o AXCred consumiu&quot; sai menor do que foi.</p>' +
+    ORDEM.filter(t => porTipo[t]).map(tipo =>
+      '<div style="margin-top:10px">' +
+      '<div style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;' +
+      'color:var(--text2);margin-bottom:5px">' + esc(ROTULO[tipo]) + '</div>' +
+      porTipo[tipo].map(a => {
+        const n = qtd(a.de);
+        const carga = n ? '<span style="color:var(--text3);font-size:11.5px"> · ' + n +
+                          (n === 1 ? ' demanda' : ' demandas') + '</span>' : '';
+        const acao = a.tipo === 'duplicado'
+          ? '<button class="btn btn-secondary btn-sm" style="margin-left:8px"' +
+            ' onclick="prepararJuncao(\'' + esc(a.de.id) + '\',\'' + esc(a.para.id) + '\')">' +
+            'Preparar junção</button>'
+          : '';
+        const alvo = a.para
+          ? ' <span style="color:var(--text3)">vira</span> <strong>' + esc(a.para.nome) + '</strong>'
+          : (a.sistemaCerto
+              ? ' <span style="color:var(--text3)">o sistema deveria ser</span> <strong>' +
+                esc(a.sistemaCerto) + '</strong>'
+              : '');
+        return '<div style="display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;' +
+          'padding:5px 0;font-size:13px">' +
+          '<strong>' + esc(a.de.nome) + '</strong>' + alvo + carga + acao +
+          '<div style="flex-basis:100%;font-size:11.5px;color:var(--text2);line-height:1.5">' +
+          esc(a.motivo) + '</div></div>';
+      }).join('') + '</div>').join('') +
+    '</div>';
+}
+
+/** Deixa a junção pronta e leva a pessoa até ela. Não junta — ver o comentário
+ *  de `renderTemasPadrao`. */
+function prepararJuncao(deId, paraId) {
+  const a = document.getElementById('juntar-tema-de');
+  const b = document.getElementById('juntar-tema-para');
+  if (!a || !b) return;
+  // O `<details>` pode estar fechado: preencher um select escondido e mandar a
+  // pessoa "conferir abaixo" seria mandá-la procurar.
+  const det = a.closest('details');
+  if (det) det.open = true;
+  a.value = deId; b.value = paraId;
+  b.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  b.focus({ preventScroll: true });
 }
 
 /** Preenche os dois selects do juntar. Usa o catalogo, para a ordem e o recuo da

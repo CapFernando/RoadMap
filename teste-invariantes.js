@@ -9936,6 +9936,195 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a faixa do topo do modal usa a mesma regra de data');
   }
 
+  sec('Padrao dos temas \u2014 o que esta torto, e onde ele aparece na lista');
+  {
+    const jan = {};
+    new Function('window', CAT)(jan);
+
+    /* A BASE DE PROVA E A REAL, em miniatura: os casos vieram dos 71 temas de
+       producao, e nao de exemplo inventado. `Cobrança` e `Jurídico` existem
+       soltos ao lado do modulo do AXCred; `Ax Despesa` e o singular de
+       `Ax Despesas`; `BI` e `Bitrix` sao sistemas DIFERENTES que so comecam
+       igual. */
+    const T = [
+      { id: '1', nome: 'AXCred - Cobrança' },
+      { id: '2', nome: 'Cobrança' },
+      { id: '3', nome: 'AXCred - Jurídico' },
+      { id: '4', nome: 'Jurídico' },
+      { id: '5', nome: 'Ax Despesas - Orçamento' },
+      { id: '6', nome: 'Ax Despesas - Melhorias' },
+      { id: '7', nome: 'Ax Despesa - Estoque SEC' },
+      { id: '8', nome: 'BI' },
+      { id: '9', nome: 'BI - Reports' },
+      { id: '10', nome: 'Bitrix - Pré-Analise' },
+      { id: '11', nome: 'Smarts' },
+    ];
+    const achados = jan.catalogoForaDoPadrao(T);
+    const de = (t) => achados.filter(a => a.tipo === t).map(a => a.de.nome).sort();
+
+    ok(JSON.stringify(de('duplicado')) === JSON.stringify(['Cobrança', 'Jurídico']),
+       'aponta o modulo que existe TAMBEM solto na raiz', de('duplicado').join(', '));
+    const dup = achados.find(a => a.tipo === 'duplicado' && a.de.nome === 'Cobrança');
+    ok(dup && dup.para && dup.para.nome === 'AXCred - Cobrança',
+       'e diz para onde ele vai', dup && dup.para && dup.para.nome);
+
+    ok(JSON.stringify(de('grafia')) === JSON.stringify(['Ax Despesa - Estoque SEC']),
+       'aponta o sistema escrito no singular', de('grafia').join(', '));
+    const gr = achados.find(a => a.tipo === 'grafia');
+    ok(gr && gr.sistemaCerto === 'Ax Despesas',
+       'e diz qual grafia vence \u2014 a que tem mais temas', gr && gr.sistemaCerto);
+
+    /* O DETECTOR NAO PODE GRITAR ERRADO. A primeira versao comparava PREFIXO e
+       acusou "BI" contra "Bitrix", que sao sistemas diferentes. Um detector que
+       acusa o certo ensina a ignorar o detector \u2014 e ai ele nao serve nem para
+       o que estava certo em apontar. */
+    ok(!achados.some(a => /Bitrix/.test(a.de.nome)),
+       'e NAO acusa "BI" contra "Bitrix" \u2014 comecar igual nao e ser o mesmo nome');
+    ok(!achados.some(a => a.de.nome === 'Smarts'),
+       'nem sistema de um tema so, que esta certo assim');
+
+    ok(JSON.stringify(de('raizUsada')) === JSON.stringify(['BI']),
+       'aponta a raiz usada como tema, tendo modulos abaixo', de('raizUsada').join(', '));
+    /* `Cobrança` NAO entra aqui tambem: ja foi apontado como duplicado, que e o
+       diagnostico mais preciso. Dois apontamentos para o mesmo tema fariam a
+       lista parecer maior do que o problema. */
+    ok(!de('raizUsada').includes('Cobrança'), 'e nao repete o que ja foi apontado como duplicado');
+
+    ok(jan.catalogoForaDoPadrao([]).length === 0, 'lista vazia nao inventa problema');
+    ok(jan.catalogoForaDoPadrao([{ id: 'a', nome: 'AXCred - Painel' }]).length === 0,
+       'e tema em ordem nao vira alerta');
+  }
+
+  {
+    /* A ORDEM DA LISTA. Sao 71 temas: a ordem e a diferenca entre achar e rolar
+       lendo nome por nome. */
+    const jan = {};
+    new Function('window', CAT)(jan);
+    const nomes = (l) => jan.catalogoOrdena(l).map(t => t.nome);
+
+    /* MODULO NAO DECLARADO FICA JUNTO DO PAI. `Gestão de Patrimônio` nao esta na
+       arvore declarada; ele caia em `posicao(AXCred) + 1` e aparecia ACIMA de
+       `Painel` \u2014 tres niveis fora do lugar, longe do `Operações` a que
+       pertence. */
+    const ops = nomes([
+      { id: '1', nome: 'AXCred - Painel' },
+      { id: '2', nome: 'AXCred - Operações' },
+      { id: '3', nome: 'AXCred - Operações - Simulador' },
+      { id: '4', nome: 'AXCred - Operações - Gestão de Patrimônio' },
+      { id: '5', nome: 'AXCred - Domínio' },
+    ]);
+    ok(ops.indexOf('AXCred - Operações - Gestão de Patrimônio') > ops.indexOf('AXCred - Operações'),
+       'modulo nao declarado vem DEPOIS do pai dele', ops.join(' | '));
+    ok(ops.indexOf('AXCred - Operações - Gestão de Patrimônio') > ops.indexOf('AXCred - Operações - Simulador'),
+       'e depois dos irmaos declarados, como um irmao novo entraria');
+    ok(ops.indexOf('AXCred - Operações - Gestão de Patrimônio') < ops.indexOf('AXCred - Domínio'),
+       'e antes do proximo modulo do sistema \u2014 nao vaza para fora do pai');
+    ok(ops.indexOf('AXCred - Painel') < ops.indexOf('AXCred - Operações'),
+       'e nao atropela quem estava na frente');
+
+    /* `Jurídico` SAIU DO `OUTROS`. Enquanto o catalogo o declarava como sistema E
+       como modulo do AXCred, o orfao na raiz parecia certo e se misturava no meio
+       da lista. Fora de la, ele cai para o fim \u2014 que e onde o cabecalho deste
+       arquivo diz que o orfao tem de ficar. */
+    const comOrfaos = nomes([
+      { id: '1', nome: 'AXCred - Painel' },
+      { id: '2', nome: 'Jurídico' },
+      { id: '3', nome: 'Cobrança' },
+      { id: '4', nome: 'Infraestrutura' },
+      { id: '5', nome: 'AAA Inexistente' },
+    ]);
+    /* A SENTINELA ORDENA ANTES DE TUDO NO BALDE DO DESCONHECIDO. Comparar com
+       `Infraestrutura` nao provava nada: ela e a PRIMEIRA do `OUTROS`, entao
+       quase tudo vem depois dela — e a sabotagem que devolvia `Jurídico` ao
+       `OUTROS` passou em silencio. `AAA Inexistente` nao e declarado, logo cai
+       em 90000 e, no desempate alfabetico, vem antes de qualquer nome de
+       verdade. Quem estiver declarado vem ANTES dela; quem nao estiver, depois. */
+    ok(comOrfaos.indexOf('Jurídico') > comOrfaos.indexOf('AAA Inexistente'),
+       'o `Jurídico` solto cai no balde do desconhecido, e nao entre os sistemas',
+       comOrfaos.join(' | '));
+    ok(comOrfaos.indexOf('Cobrança') > comOrfaos.indexOf('AAA Inexistente'),
+       'o `Cobrança` solto tambem');
+    ok(comOrfaos.indexOf('Infraestrutura') < comOrfaos.indexOf('AAA Inexistente'),
+       'e um sistema declarado continua vindo antes dela — a sentinela separa os dois lados');
+    ok(!/'Jurídico'/.test(CAT.slice(CAT.indexOf('var OUTROS = ['),
+                                    CAT.indexOf('];', CAT.indexOf('var OUTROS = [')))),
+       'e o catalogo nao declara mais `Jurídico` como sistema, sendo modulo do AXCred');
+
+    /* Sistema que existe nos dados e ESTA declarado nao cai no fim junto com os
+       erros. `Smarts`, `Site Audax` e `Audax Stars` estavam de fora. */
+    for (const sis of ['Smarts', 'Site Audax', 'Audax Stars']) {
+      // Mesma sentinela, e pelo mesmo motivo: contra um `ZZZ` o teste passava
+      // mesmo com o sistema FORA do catalogo, porque no desempate alfabetico
+      // qualquer nome real ja vem antes de ZZZ.
+      const l = nomes([{ id: '1', nome: sis }, { id: '2', nome: 'AAA Inexistente' }]);
+      ok(l.indexOf(sis) < l.indexOf('AAA Inexistente'),
+         '"' + sis + '" tem lugar declarado, e nao cai no balde do desconhecido',
+         l.join(' | '));
+    }
+  }
+
+  {
+    /* O FILTRO DO ADMIN USA A ARVORE. O gantt e o painel do dev ja usavam; o
+       admin montava uma lista chapada na ordem de cadastro, entao a mesma pessoa
+       via ordens diferentes dependendo da aba. */
+    const jan = {};
+    new Function('window', CAT)(jan);
+    const escT = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const temas = [
+      { id: 'a', nome: 'AXCred - Operações' },
+      { id: 'b', nome: 'AXCred - Painel' },
+      { id: 'c', nome: 'Infraestrutura' },
+    ];
+    const html = new Function('state', 'esc', 'catalogoOpcoesHTML', 'window',
+      corpo(ADMIN, 'function fbGroupHTML(') + '\n' +
+      corpo(ADMIN, 'function temaOpcoesHTML(') + '\n' +
+      corpo(ADMIN, 'function opcoesTema(') + '\n' +
+      'return fbGroupHTML("Tema", temaOpcoesHTML(null), "setFiltroTema");')(
+      { temas, melhorias: [{ tema_id: 'b' }, { tema_id: 'b' }] },
+      escT, jan.catalogoOpcoesHTML, jan);
+
+    ok(/<optgroup/.test(html), 'o filtro de tema do admin agrupa por sistema');
+    ok(html.indexOf('AXCred - Painel') < html.indexOf('Infraestrutura'),
+       'e segue a ordem do catalogo, e nao a de cadastro');
+    ok(/\(2\)/.test(html), 'e mostra quantas demandas cada tema tem');
+    ok(/Todos \(2\)/.test(html), 'e o "Todos" diz o total');
+
+    /* AS DUAS BARRAS do admin \u2014 Melhorias e Kanban \u2014 usam a mesma funcao. Uma
+       ordenada e a outra nao seria pior do que nenhuma: a pessoa aprenderia a
+       posicao numa aba e erraria na outra. */
+    const c = semComentario(ADMIN);
+    ok((c.match(/fbGroupHTML\('Tema', temaOpcoesHTML\(/g) || []).length === 2,
+       'as duas barras de filtro do admin usam a arvore',
+       String((c.match(/fbGroupHTML\('Tema', temaOpcoesHTML\(/g) || []).length));
+  }
+
+  {
+    /* O BOTAO PREPARA A JUNCAO, E NAO JUNTA. Juntar tema move demanda e nao tem
+       desfazer. Um botao que juntasse direto poria uma acao irreversivel a um
+       clique de distancia de uma lista que se le passando o olho. */
+    const pj = corpo(ADMIN, 'function prepararJuncao(');
+    ok(!!pj, 'prepararJuncao existe');
+    ok(pj && !/juntarTemas\(/.test(semComentario(pj)),
+       'e ela NAO chama o juntar \u2014 so deixa pronto');
+    const valores = {};
+    const els = {};
+    const doc = { getElementById: (id) => (els[id] = els[id] || {
+      _v: '', get value() { return this._v; }, set value(v) { this._v = v; valores[id] = v; },
+      closest: () => ({ open: false }), scrollIntoView() {}, focus() {},
+    }) };
+    new Function('document', pj + '\nreturn prepararJuncao;')(doc)('X', 'Y');
+    ok(valores['juntar-tema-de'] === 'X' && valores['juntar-tema-para'] === 'Y',
+       'e preenche os dois selects com o par apontado',
+       JSON.stringify(valores));
+    const det = { open: false };
+    const doc2 = { getElementById: (id) => ({
+      value: '', closest: () => det, scrollIntoView() {}, focus() {} }) };
+    new Function('document', pj + '\nreturn prepararJuncao;')(doc2)('X', 'Y');
+    ok(det.open === true,
+       'e abre a secao fechada \u2014 preencher um campo escondido seria mandar procurar');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
