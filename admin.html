@@ -411,6 +411,18 @@
     .ent-aviso.espera { background:var(--amber-bg, #3A2A08); color:var(--amber-tx, #FFD79A); }
     .ent-aviso.aprovada { background:var(--green-bg, #17300A); color:var(--green-tx, #B2E07A); }
     .ent-aviso.rejeitada { background:var(--red-bg, #3A1414); color:var(--red-tx, #F9A0A0); }
+    /* ESTADO DE PRODUCAO — informa, nao alarma.
+       Fundo neutro com barra lateral colorida, e nao o bloco inteiro tingido como
+       os tres acima: aqueles sao AVISOS (esperando voce, aprovada, devolvida) e
+       competem por atencao de proposito. "Ainda nao subiu" nao e problema — e o
+       estado normal de quase toda entrega no momento da validacao. Pintado de
+       vermelho, ele pareceria erro e a pessoa aprenderia a ignorar a faixa
+       inteira, inclusive quando ela disser algo que importa. */
+    .ent-aviso.no-ar, .ent-aviso.fora-ar {
+      background:var(--bg3); border-left:3px solid var(--border2); color:var(--text2); }
+    .ent-aviso.no-ar { border-left-color:var(--green, #5EA832); }
+    .ent-aviso.no-ar strong { color:var(--green-tx, #B2E07A); }
+    .ent-aviso.fora-ar strong { color:var(--text); }
     /* Aviso no topo do admin: entregas esperando validacao. */
     .val-banner { display:none; align-items:center; gap:12px; background:var(--amber-bg, #3A2A08);
       color:var(--amber-tx, #FFD79A); border:1px solid var(--amber); border-radius:10px;
@@ -10568,6 +10580,35 @@ function entregaHTML(m) {
       esc(m.validacao_obs) + '</div>';
   }
 
+  /* ─── JA ESTA NO AR? ───────────────────────────────────────────────────────
+     O pedido: "traga a informacao se esta em producao no campo Entrega, assim
+     facilita a minha validacao".
+
+     FICA NO TOPO, junto do aviso de validacao, e nao na linha de dados la
+     embaixo. E ele que muda COMO se valida: com a demanda no ar, da para abrir o
+     sistema e conferir o que o dev descreveu; sem estar, so resta o texto. Essa
+     e uma decisao que se toma ANTES de ler, entao a informacao precisa chegar
+     antes — no fim do cartao ela seria lida depois de a pessoa ja ter decidido.
+
+     A VERSAO VEM JUNTO quando existe, e a data tambem: "no ar" sem dizer em que
+     versao nao responde "e essa mudanca que eu estou vendo?" quando ha duas
+     subidas na semana. */
+  const noAr = !!m.em_producao;
+  topo += '<div class="ent-aviso ' + (noAr ? 'no-ar' : 'fora-ar') + '">' +
+    (noAr
+      ? '▲ <strong>Em produção</strong>' +
+        (m.versao ? ' na versão <strong>' + esc(m.versao) + '</strong>' : '') +
+        (m.producao_em ? ' desde ' + esc(formatDate(m.producao_em)) : '') +
+        (m.producao_por ? ' · marcada por ' + esc(m.producao_por) : '') +
+        '. Dá para conferir no sistema antes de aprovar.'
+      : '△ <strong>Ainda não subiu para produção.</strong> ' +
+        (m.versao
+          ? 'Versão prevista <strong>' + esc(m.versao) + '</strong>. '
+          : '') +
+        'A validação aqui é pelo texto e pelos anexos — o que foi descrito ainda ' +
+        'não está no ar para conferir.') +
+    '</div>';
+
   const meta = ['<span>Dev: <strong>' + esc(dev) + '</strong></span>'];
   if (m.horas_realizadas) meta.push('<span>Horas: <strong>' + esc(String(m.horas_realizadas)) + 'h</strong></span>');
   if (m.entrega) meta.push('<span>Prazo: <strong>' + esc(formatDate(m.entrega)) + '</strong></span>');
@@ -11568,9 +11609,42 @@ function prazoNivel(m) {
 }
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+/* DATA PARA LER, a partir de `YYYY-MM-DD` OU de data-hora ISO.
+ *
+ * O DEFEITO, visto na tela: a faixa de validacao mostrava
+ *
+ *     "entregue em 15T17:17:17.731Z/09/2026"
+ *
+ * `entregue_em` guarda data-hora (`2026-09-15T17:17:17.731Z`), e esta funcao
+ * fazia `split('-')` esperando so a data: o terceiro pedaco vinha
+ * `15T17:17:17.731Z` e ia inteiro para o lugar do dia.
+ *
+ * MEDIDO: oito chamadas passavam campo de data-hora sem tratar — `entregue_em`,
+ * `concluido_em`, `pausado_em`, `aprovado_em`, `criado_em` — e outras quatro
+ * faziam `.slice(0, 10)` na mao antes de chamar. Doze pontos, duas convencoes,
+ * e a diferenca entre acertar e escrever lixo dependia de qual delas quem
+ * escreveu por ultimo lembrou. Uma funcao que aceita as duas formas acaba com a
+ * escolha: o `.slice()` das outras quatro passa a ser inofensivo, e a proxima
+ * chamada nao tem como errar.
+ *
+ * O DIA E O DAQUI, e nao o de Greenwich. Cortar os 10 primeiros caracteres
+ * parece resolver e erra: `2026-09-16T01:00:00Z` e 1h da manha em Londres e
+ * ainda 22h do dia 15 em Sao Paulo — o corte diria 16/09 sobre algo que
+ * aconteceu no dia 15. Data-hora passa pelo fuso de Sao Paulo (mesmo idioma que
+ * o `hojeISO` do relatorio ja usa); data PURA nao passa por `Date` nenhum,
+ * porque `new Date('2026-09-15')` e meia-noite UTC e voltaria como 14/09. */
 function formatDate(s) {
   if (!s) return '';
-  const [y,m,d] = s.split('-');
+  const txt = String(s);
+  const soData = /^\d{4}-\d{2}-\d{2}$/.test(txt);
+  let dia = txt.slice(0, 10);
+  if (!soData) {
+    const dt = new Date(txt);
+    if (isNaN(dt)) return '';          // texto que nao e data nenhuma
+    dia = dt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  }
+  const [y, m, d] = dia.split('-');
+  if (!y || !m || !d) return '';
   return `${d}/${m}/${y}`;
 }
 // Abre o modal SEMPRE no topo. O .modal tem overflow-y:auto e o scroll ficava

@@ -1221,7 +1221,24 @@ function discoveryHTMLDev(m) {
   return `<div class="disc-sec"><div class="disc-h">Discovery (preenchido no painel)</div>${rows.join('')}</div>`;
 }
 
-function formatDate(s) { if (!s) return ''; const [y,m,d]=s.split('-'); return `${d}/${m}/${y}`; }
+/* MESMA REGRA DO `admin.html`, e o comentario longo mora la.
+   Em resumo: aceita `YYYY-MM-DD` e data-hora ISO. Fazia `split('-')` supondo so
+   a data, e um campo `_em` virava "15T17:17:17.731Z/09/2026" na tela. Data-hora
+   passa pelo fuso de Sao Paulo; data pura nao passa por `Date` nenhum. */
+function formatDate(s) {
+  if (!s) return '';
+  const txt = String(s);
+  const soData = /^\d{4}-\d{2}-\d{2}$/.test(txt);
+  let dia = txt.slice(0, 10);
+  if (!soData) {
+    const dt = new Date(txt);
+    if (isNaN(dt)) return '';
+    dia = dt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  }
+  const [y, m, d] = dia.split('-');
+  if (!y || !m || !d) return '';
+  return `${d}/${m}/${y}`;
+}
 
 function calcHorasPlanejadas(inicio, entrega) {
   if (!inicio || !entrega) return null;

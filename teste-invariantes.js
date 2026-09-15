@@ -9837,6 +9837,105 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'sao tres opcoes, e a fila de deploy e UMA escolha \u2014 nao duas');
   }
 
+  sec('Data na tela, e o estado de producao na validacao');
+  {
+    /* O DEFEITO, visto na tela: a faixa de validacao mostrava
+         "entregue em 15T17:17:17.731Z/09/2026"
+       `entregue_em` guarda data-hora, e `formatDate` fazia `split('-')` supondo
+       so a data — o terceiro pedaco vinha inteiro para o lugar do dia. */
+    const F = new Function(corpo(ADMIN, 'function formatDate(') + '\nreturn formatDate;')();
+
+    ok(F('2026-09-15T17:17:17.731Z') === '15/09/2026',
+       'data-hora ISO vira dia legivel \u2014 era isto que saia como "15T17:17:17.731Z/09/2026"',
+       F('2026-09-15T17:17:17.731Z'));
+    ok(F('2026-09-15') === '15/09/2026', 'e a data pura continua funcionando');
+
+    /* O DIA E O DAQUI. Cortar os 10 primeiros caracteres parece resolver e erra:
+       01:00 em Londres ainda e ontem em Sao Paulo. A virada do dia no fuso de
+       Brasilia e as 03:00 UTC, e e nela que estes dois casos batem. */
+    ok(F('2026-09-16T02:59:00.000Z') === '15/09/2026',
+       '23h59 de Brasilia ainda e o dia 15, mesmo ja sendo 16 em Greenwich',
+       F('2026-09-16T02:59:00.000Z'));
+    ok(F('2026-09-16T03:01:00.000Z') === '16/09/2026',
+       'e 00h01 de Brasilia ja e o dia 16', F('2026-09-16T03:01:00.000Z'));
+
+    ok(F('') === '' && F(null) === '' && F(undefined) === '',
+       'vazio continua vazio');
+    ok(F('lixo') === '', 'texto que nao e data nao vira data torta');
+
+    /* AS QUATRO COPIAS CONCORDAM. `formatDate` existe em admin, dev e index, e
+       `formatDateBR` no gantt — quatro copias da mesma regra. Duas delas nao
+       tinham chamada com data-hora HOJE, e quebrariam igual no dia em que
+       tivessem. Enquanto forem copias, o que se pode cobrar e que nao divirjam. */
+    const copias = [
+      ['dev', new Function(corpo(DEV, 'function formatDate(') + '\nreturn formatDate;')()],
+      ['index', new Function(corpo(INDEX, 'function formatDate(') + '\nreturn formatDate;')()],
+      ['gantt', new Function(corpo(GANTT, 'function formatDateBR(') + '\nreturn formatDateBR;')()],
+    ];
+    for (const [nome, fn] of copias) {
+      for (const v of ['2026-09-15T17:17:17.731Z', '2026-09-15', '2026-09-16T02:59:00.000Z']) {
+        ok(fn(v) === F(v), 'o ' + nome + ' formata "' + v.slice(0, 16) + '" igual ao admin',
+           fn(v) + ' vs ' + F(v));
+      }
+    }
+    /* O vazio do gantt E DIFERENTE de proposito: la a funcao preenche celula de
+       tabela, e celula vazia parece coluna quebrada. A diferenca fica registrada
+       aqui para nao ser "corrigida" por engano. */
+    const gantt = copias[2][1];
+    ok(gantt('') === '\u2014', 'e so o vazio do gantt difere, devolvendo travessao', gantt(''));
+  }
+
+  {
+    /* O ESTADO DE PRODUCAO NA ABA ENTREGA. O pedido foi "traga a informacao se
+       esta em producao no campo Entrega, assim facilita a minha validacao".
+
+       EXECUTA a tela, e nao procura a string: o que importa e o que a pessoa LE
+       ao decidir se aprova. */
+    const F = new Function(corpo(ADMIN, 'function formatDate(') + '\nreturn formatDate;')();
+    const E = new Function('statusKey', 'esc', 'formatDate', 'credAdmin', 'state',
+      corpo(ADMIN, 'function entregaHTML(') + '\nreturn entregaHTML;')(
+      () => 'validacao', (x) => String(x == null ? '' : x), F, () => ({}), { melhorias: [] });
+
+    const base = { id: 'x', dev: 'Dan', horas_realizadas: 6,
+                   status_planejamento: 'validacao',
+                   entregue_em: '2026-09-15T17:17:17.731Z',
+                   implementacao: 'Entregue em tres fatias.' };
+    const tela = (extra) => String(E(Object.assign({}, base, extra)));
+
+    const fora = tela({});
+    ok(/ent-aviso fora-ar/.test(fora), 'quem nao subiu diz que nao subiu');
+    ok(/Ainda não subiu para produção/.test(fora), 'e diz com todas as letras');
+
+    const noAr = tela({ em_producao: true, versao: '1.4.2',
+                        producao_em: '2026-09-15T20:10:00.000Z', producao_por: 'esteira' });
+    ok(/ent-aviso no-ar/.test(noAr), 'quem subiu diz que subiu');
+    /* A VERSAO VEM JUNTO. "No ar" sem dizer em que versao nao responde "e essa
+       mudanca que eu estou vendo?" quando ha duas subidas na semana. */
+    ok(/1\.4\.2/.test(noAr), 'e diz em que versao');
+    ok(/15\/09\/2026/.test(noAr), 'e desde quando, com a data ja legivel');
+    ok(/esteira/.test(noAr), 'e quem marcou');
+
+    /* NO TOPO, ANTES DO TEXTO DA ENTREGA. E ele que muda COMO se valida — com a
+       demanda no ar da para conferir no sistema; sem estar, so resta o texto.
+       E uma decisao que se toma ANTES de ler, entao chegar depois nao serve. */
+    ok(noAr.indexOf('ent-aviso no-ar') < noAr.indexOf('O que foi implementado'),
+       'a faixa vem ANTES do texto da entrega, e nao no rodape do cartao');
+
+    /* E NAO APARECE onde nao faz sentido: demanda que nem foi entregue nao tem
+       estado de producao para informar. */
+    const naoEntregue = new Function('statusKey', 'esc', 'formatDate', 'credAdmin', 'state',
+      corpo(ADMIN, 'function entregaHTML(') + '\nreturn entregaHTML;')(
+      () => 'em_andamento', (x) => String(x == null ? '' : x), F, () => ({}), { melhorias: [] });
+    const emAberto = String(naoEntregue({ id: 'y', status_planejamento: 'em_andamento' }));
+    ok(!/ent-aviso (no-ar|fora-ar)/.test(emAberto),
+       'demanda ainda nao entregue nao ganha faixa de producao');
+
+    /* A DATA DA ENTREGA, no topo do modal, tambem passa pela regra corrigida. */
+    const VB = corpo(ADMIN, 'function valBarraRender(');
+    ok(VB && /formatDate\(m\.entregue_em\)/.test(VB),
+       'a faixa do topo do modal usa a mesma regra de data');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
