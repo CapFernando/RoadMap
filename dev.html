@@ -442,6 +442,7 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
+<script src="resumo-dev.js?v=bcc5db1705"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
@@ -754,6 +755,15 @@
       <button class="dg-nav" onclick="dgMes(-1)" aria-label="Mês anterior">‹</button>
       <span class="dg-mes" id="dg-mes">—</span>
       <button class="dg-nav" onclick="dgMes(1)" aria-label="Mês seguinte">›</button>
+      <!-- O MESMO RESUMO DO GANTT DO PLANEJAMENTO, e a mesma regra: `resumo-dev.js`.
+           Aqui ele e do PROPRIO dev, e e o mais util dos dois — quem da satisfacao
+           no grupo e ele. Fica ao lado da navegacao do mes, e nao dentro do
+           cronograma, porque o resumo NAO e do mes: e de tudo que esta na mao
+           dele, inclusive o que ficou de tras. -->
+      <button class="dg-nav" style="width:auto;padding:0 12px;font-size:12.5px"
+        onclick="RESUMODEV.abrir(state, currentDev, { proprio: true })"
+        title="Resumo do que está na sua mão — atrasado, em andamento e em validação, com texto pronto para o grupo">
+        📋 Meu resumo</button>
       <span class="dg-legenda">
         <i class="dg-chip ok"></i> no prazo
         <i class="dg-chip amanha"></i> vence amanhã
