@@ -521,6 +521,148 @@ const HIST_CAMPOS = {
 // abertura de tela.
 const HIST_MAX = 25;
 
+// ─── VINCULO: A TAREFA PRINCIPAL E O QUE PENDURA NELA ────────────────────
+//
+// A MESMA REGRA DE `vinculo.js`, e ela mora em dois lugares porque o Worker nao
+// importa arquivo nenhum — a mesma situacao de `limpaDevs` contra `dev-nome.js`.
+// Divergir aqui e o risco conhecido: a tela mostraria uma arvore e a API
+// responderia outra. A invariante "o Worker e o vinculo.js concordam" existe
+// exatamente para cobrar isso, caso por caso.
+//
+// POR QUE A SOMA DE PONTOS NAO E GRAVADA: `poker_pontos` e somado demanda a
+// demanda no ranking por dev, na capacidade e no deck. Gravar o total no pai
+// contaria os pontos do filho duas vezes em todos eles. O total e LEITURA.
+const VIN_MAX_NIVEIS = 24;
+
+/* DOIS ELOS DIFERENTES, e essa e a distincao que faltava. O pedido foi: "quero
+   poder usar uma issue como base para incluir outras vinculadas SEM ter
+   dependencias delas".
+
+     dependencia  trava a principal enquanto estiver aberta. E o elo antigo, e e
+                  o que as demandas ja gravadas usam.
+     parte        so pertence: soma ponto, aparece na arvore, e NAO trava nada.
+                  E a "issue base" com outras penduradas nela.
+
+   O CAMPO CONTINUA SENDO `is_dependency`, e nao um terceiro. Ele ja existe, ja
+   esta no historico, e as demandas da base tem `true` — ou seja, elas SAO
+   dependencias e continuam travando. Um campo novo deixaria as antigas sem tipo
+   e obrigaria a adivinhar qual delas trava. */
+const VIN_DEPENDENCIA = 'dependencia';
+const VIN_PARTE = 'parte';
+const vinTipo = (m) => (m && String(m.parent_id || '')) ? (m.is_dependency ? VIN_DEPENDENCIA : VIN_PARTE) : '';
+const vinBloqueia = (m) => vinTipo(m) === VIN_DEPENDENCIA;
+
+const vinVivo = (m) => !!m && !m.oculto && !m.mesclado_em;
+
+// `null` e nao `0`: "nao pontuei" e "pontuei zero" sao respostas diferentes, e e
+// a mesma distincao que `semPontuacao` guarda nas telas.
+const vinPonto = (m) => {
+  if (!vinVivo(m)) return null;
+  const v = (m || {}).poker_pontos;
+  if (v === null || v === undefined || String(v).trim() === '') return null;
+  const n = Number(v);
+  return (Number.isFinite(n) && n >= 0) ? n : null;
+};
+
+const vinFilhos = (lista, id) => {
+  const alvo = String(id || '');
+  if (!alvo) return [];
+  return (lista || []).filter(m => vinVivo(m) && String((m || {}).parent_id || '') === alvo);
+};
+
+const vinPai = (lista, m) => {
+  const pid = String((m || {}).parent_id || '');
+  if (!pid) return null;
+  return (lista || []).find(x => String((x || {}).id || '') === pid) || null;
+};
+
+// A arvore inteira abaixo, netos inclusive. `visto` nao e zelo: com ciclo na
+// base esta funcao e a que rodaria para sempre dentro de uma resposta HTTP.
+const vinArvore = (lista, id) => {
+  const fora = [], visto = new Set([String(id || '')]), fila = [String(id || '')];
+  let n = 0;
+  while (fila.length && n < 5000) {
+    const atual = fila.shift();
+    for (const f of vinFilhos(lista, atual)) {
+      const fid = String(f.id || '');
+      if (visto.has(fid)) continue;
+      visto.add(fid); fora.push(f); fila.push(fid);
+    }
+    n += 1;
+  }
+  return fora;
+};
+
+const vinPontos = (lista, m) => {
+  const meus = vinPonto(m);
+  const filhos = vinArvore(lista, String((m || {}).id || ''));
+  const comPonto = filhos.map(vinPonto).filter(p => p !== null);
+  const soma = comPonto.length ? comPonto.reduce((t, p) => t + p, 0) : null;
+  return {
+    proprios: meus,
+    vinculos: soma,
+    total: (meus === null && soma === null) ? null : (meus || 0) + (soma || 0),
+    n: filhos.length,
+    sem_pontuacao: filhos.length - comPonto.length,
+  };
+};
+
+/* PENDURAR `id` EM `novoPai` FECHARIA UM CICLO?
+ *
+ * E a guarda que a tela nunca precisou e a API precisa. A tela cria o filho do
+ * zero, e o que acabou de nascer nao pode ser ancestral de ninguem. Pela API o
+ * vinculo tambem MUDA numa demanda que ja existe — "A depende de B, B depende
+ * de A" e uma chamada de distancia, e o par sumiria das duas pontas: nao e raiz
+ * (as duas tem pai) e nao esta na arvore de mais ninguem. */
+const vinCriaCiclo = (lista, id, novoPai) => {
+  const alvo = String(id || ''), pai = String(novoPai || '');
+  if (!alvo || !pai) return false;
+  if (alvo === pai) return true;
+  let p = (lista || []).find(x => String((x || {}).id || '') === pai);
+  const visto = new Set();
+  let n = 0;
+  while (p && n < VIN_MAX_NIVEIS) {
+    const pid = String(p.id || '');
+    if (pid === alvo) return true;
+    if (visto.has(pid)) return false;   // ciclo que ja estava la, e nao este
+    visto.add(pid);
+    p = vinPai(lista, p);
+    n += 1;
+  }
+  return false;
+};
+
+/* ACHA A TAREFA PRINCIPAL PELO QUE QUEM CHAMA TEM NA MAO.
+ *
+ * Aceita o `id` interno E o codigo (AX-042, #042). Quem automatiza NAO tem o id
+ * interno: ele nao aparece no card, nao aparece no commit e nao aparece na
+ * conversa — o que circula e o AX. Exigir o id seria abrir o vinculo pela API e
+ * deixa-lo inalcancavel na pratica. */
+const vinAchaPai = (lista, cru) => {
+  const txt = String(cru || '').trim();
+  if (!txt) return null;
+  const porId = (lista || []).find(x => String((x || {}).id || '') === txt);
+  if (porId) return vinVivo(porId) ? porId : null;
+  /* O CODIGO COMPARADO COMO NUMERO, e nao como texto — a mesma conta do
+     `achaPorCodigo` da rota de consulta. Os codigos tem zero a esquerda
+     ("AX-042") e quem digita escreve "42"; comparar texto (ou remontar
+     "AX-" + padStart) esconderia a demanda da forma mais natural de pedi-la e
+     quebraria no dia em que houver AX-1000. Duas buscas por codigo com regras
+     diferentes e o defeito que esta base ja pagou quatro vezes. */
+  const cod = txt.toUpperCase();
+  const num = cod.replace(/\D+/g, '');
+  if (!num) return null;
+  const letras = cod.replace(/[^A-Z]/g, '');
+  const porCod = (lista || []).find(x => {
+    const c = String((x || {}).codigo || '').toUpperCase();
+    const cn = c.replace(/\D+/g, '');
+    if (!cn || Number(cn) !== Number(num)) return false;
+    if (letras && c.replace(/[^A-Z]/g, '') !== letras) return false;
+    return true;
+  });
+  return (porCod && vinVivo(porCod)) ? porCod : null;
+};
+
 // ─── MENSAGERIA ──────────────────────────────────────────────────────────
 // As mensagens escritas a mao sobre a demanda. Ficam AO LADO do historico, e nao
 // dentro dele: o historico e o que o sistema observou (campo tal mudou de X para
@@ -2791,7 +2933,12 @@ export default {
 
     // Subconjunto util de uma demanda. Nao devolve o objeto cru: campos internos
     // mudam de forma sem aviso, e quem automatiza acabaria dependendo deles.
-    const devVisao = (m, temas) => ({
+    /* `lista` E O TERCEIRO ARGUMENTO, e nao um detalhe: sem ela nao ha como
+       responder "o que pendura nesta demanda" — a pergunta mora na BASE, e nao
+       no objeto. Os quatro chamadores passam; um que esquecesse devolveria
+       "nenhum vinculo" para uma demanda que tem quatro, que e pior do que nao
+       responder. A invariante cobra os quatro. */
+    const devVisao = (m, temas, lista) => ({
       id: m.id,
       codigo: m.codigo || '',
       titulo: m.titulo || '',
@@ -2831,6 +2978,42 @@ export default {
       // nao atrasar, que ninguem adivinha de fora.
       atrasada: diasDeAtraso(m, hojeBR()) > 0,
       dias_atraso: diasDeAtraso(m, hojeBR()),
+      /* O VINCULO, NOS DOIS SENTIDOS. Quem chama precisa dos dois para saber o
+         que fazer: "de quem eu dependo" diz se posso comecar, "quem depende de
+         mim" diz o que eu travo ao atrasar. So o primeiro (que e o que o campo
+         `parent_id` guarda) deixaria a tarefa principal sem saber que e uma. */
+      parent_id: m.parent_id || '',
+      /* O TIPO DO ELO, e nao so a existencia dele. "dependencia" trava a
+         principal; "parte" so pertence a ela. Sem este campo, quem le pela API
+         nao distingue a issue guarda-chuva da pre-condicao — e a diferenca e
+         justamente "posso fechar a principal?". */
+      vinculo: vinTipo(m),
+      e_dependencia: vinBloqueia(m),
+      depende_de: (() => {
+        const p = vinPai(lista, m);
+        return p ? { id: p.id, codigo: p.codigo || '', titulo: p.titulo || '',
+                     etapa: p.status_planejamento || 'backlog',
+                     vinculo: vinTipo(m) } : null;
+      })(),
+      vinculadas: vinFilhos(lista, m.id).map(f => ({
+        id: f.id, codigo: f.codigo || '', titulo: f.titulo || '',
+        etapa: f.status_planejamento || 'backlog', dev: f.dev || '',
+        pontos: vinPonto(f),
+        vinculo: vinTipo(f),
+        trava: vinBloqueia(f) && (f.status_planejamento || '') !== 'concluido',
+        concluida: (f.status_planejamento || '') === 'concluido',
+      })),
+      /* TRAVADA — a resposta pronta de "posso avancar esta?". A tela ja recusa o
+         avanco com dependencia aberta ("🔒 Avanco bloqueado"); sem este campo
+         quem automatiza descobriria a mesma regra na recusa, depois de tentar.
+         So dependencia trava: item pendurado numa issue base nunca segura nada. */
+      travada: vinFilhos(lista, m.id)
+        .some(f => vinBloqueia(f) && (f.status_planejamento || '') !== 'concluido'),
+      /* A SOMA DOS PONTOS DA ARVORE — derivada aqui, nunca gravada. `total` e
+         `null` enquanto ninguem pontuou: "0 pontos" se le como "nao custa
+         nada", e o certo e dizer que nao se sabe. `sem_pontuacao` explica um
+         total menor do que a conversa da sala espera. */
+      pontos_arvore: vinPontos(lista, m),
     });
 
     const ETAPAS_DEV = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento'];
@@ -2933,7 +3116,7 @@ export default {
                       // essa duvida que gerou o chamado do dev.
                       nomes_procurados: declarados.length ? declarados : [eu],
                       criterio: declarados.length ? 'nome declarado na conta' : 'nome da conta',
-                      demandas: lista.map(m => devVisao(m, temas)) }, 200, headers);
+                      demandas: lista.map(m => devVisao(m, temas, todas)) }, 200, headers);
       }
 
       /* ACHAR A DEMANDA PELO QUE A PESSOA TEM NA MAO.
@@ -3028,7 +3211,7 @@ export default {
         return json({ ok: true,
                       achada_por: r.por,
                       sua: meuDono(r.m),
-                      demanda: devVisao(r.m, temas) }, 200, headers);
+                      demanda: devVisao(r.m, temas, todas) }, 200, headers);
       }
 
       /* PROCURAR ANTES DE CRIAR.
@@ -3127,7 +3310,7 @@ export default {
            testar tres campos vazios para descobrir. */
         const doGit = (m) => [m.link_issue, m.link_pr, m.link_milestone]
           .filter(x => String(x || '').trim());
-        const comSituacao = (m) => Object.assign(devVisao(m, temas), situacao(m),
+        const comSituacao = (m) => Object.assign(devVisao(m, temas, todas), situacao(m),
                                                  { links_git: doGit(m) });
 
         return json({ ok: true,
@@ -3256,11 +3439,85 @@ export default {
           }
           m.projeto_id = pid; mudou.push('projeto_id');
         }
+        /* ═══ PENDURAR (OU SOLTAR) ESTA DEMANDA EM OUTRA ════════════════════
+         *
+         * String vazia SOLTA o vinculo, e e por isso que o teste e `typeof
+         * string` e nao truthy: sem o caminho de soltar, um vinculo criado por
+         * engano pela API so sairia pela tela — e quem automatiza nao tem tela.
+         *
+         * A ETAPA CONTINUA FORA desta lista e o vinculo entra: sao coisas
+         * diferentes. Mudar etapa move a demanda no funil do PM/PO; dizer de
+         * quem ela depende e descrever a realidade do trabalho, que e
+         * exatamente o que o dev sabe e o PM/PO nao. */
+        /* O TIPO DO ELO, que se troca SEM mexer no pai. "Isto na verdade trava"
+           (ou o contrario) e a correcao mais provavel depois de pendurar em
+           lote, e sem este caminho ela exigiria soltar e pendurar de novo — o
+           que apaga e recria o rastro do vinculo no historico. */
+        const vincPedido = String(body.vinculo || '').trim().toLowerCase();
+        if (vincPedido && ![VIN_PARTE, VIN_DEPENDENCIA].includes(vincPedido)) {
+          return json({ error: 'vinculo',
+                        detail: 'vinculo aceita "parte" (pendura na principal, nao trava) ' +
+                                'ou "dependencia" (trava a principal ate ser concluida).',
+                        aceitas: [VIN_PARTE, VIN_DEPENDENCIA] }, 400, headers);
+        }
+        if (typeof body.parent_id === 'string' || typeof body.depende_de === 'string') {
+          const cru = String(body.parent_id !== undefined ? body.parent_id : body.depende_de).trim();
+          if (!cru) {
+            if (m.parent_id) { m.parent_id = ''; m.is_dependency = false; mudou.push('parent_id'); }
+          } else {
+            const novoPai = vinAchaPai(atual.melhorias || [], cru);
+            if (!novoPai) {
+              return json({ error: 'parent_id',
+                            detail: 'Nao encontrei a demanda principal "' + cru.slice(0, 40) +
+                                    '". Informe o codigo (AX-042) ou o id de uma demanda viva.' }, 400, headers);
+            }
+            /* O CICLO E RECUSADO, E A TELA NUNCA PRECISOU DESTA GUARDA. Ela cria
+               o filho do zero, e o que acabou de nascer nao pode ser ancestral de
+               ninguem. Aqui o vinculo muda numa demanda que ja existe: "A depende
+               de B, B depende de A" e uma chamada de distancia, e o par sumiria
+               das duas pontas — nenhuma das duas e raiz, e nenhuma esta na arvore
+               de mais ninguem. */
+            if (vinCriaCiclo(atual.melhorias || [], m.id, novoPai.id)) {
+              return json({ error: 'ciclo',
+                            detail: novoPai.id === m.id
+                              ? 'Uma demanda nao pode depender de si mesma.'
+                              : 'Isso fecharia um ciclo: ' + (novoPai.codigo || novoPai.id) +
+                                ' ja depende (direta ou indiretamente) de ' + (m.codigo || m.id) + '.' },
+                          409, headers);
+            }
+            /* O TIPO ANTIGO E LIDO ANTES DE MEXER NO PAI. `vinTipo` depende de
+               `parent_id`, e lido depois ele ja seria o tipo do elo novo — a
+               demanda que nao tinha pai nenhum "manteria" um tipo que nunca
+               teve. */
+            const tipoAntes = vinTipo(m);
+            if (String(m.parent_id || '') !== String(novoPai.id)) {
+              m.parent_id = novoPai.id; mudou.push('parent_id');
+            }
+            /* O TIPO SE MANTEM quando nao for dito e ja houver elo; quando o elo
+               nasce aqui, o padrao e o mesmo de `demanda-nova`: "parte". Ninguem
+               ganha uma trava que nao pediu. */
+            const querDep = (vincPedido || tipoAntes || VIN_PARTE) === VIN_DEPENDENCIA;
+            if (!!m.is_dependency !== querDep) {
+              m.is_dependency = querDep; mudou.push('is_dependency');
+            }
+          }
+        } else if (vincPedido) {
+          /* TROCAR SO O TIPO, com o pai onde esta. */
+          if (!String(m.parent_id || '')) {
+            return json({ error: 'vinculo',
+                          detail: 'Esta demanda nao esta vinculada a nenhuma outra. ' +
+                                  'Informe "parent_id" junto para criar o vinculo.' }, 400, headers);
+          }
+          const querDep = (vincPedido === VIN_DEPENDENCIA);
+          if (!!m.is_dependency !== querDep) {
+            m.is_dependency = querDep; mudou.push('is_dependency');
+          }
+        }
         if (!mudou.length) {
           return json({ error: 'nada_a_mudar',
                         detail: 'Informe ao menos um campo: resumo_entrega, implementacao, descricao, observacao, ' +
                                 'link_issue, link_pr, link_milestone, horas_realizadas, ' +
-                                'etapa ou projeto_id.' }, 400, headers);
+                                'etapa, projeto_id ou parent_id.' }, 400, headers);
         }
         msg = 'chore: ' + (m.codigo || m.id) + ' atualizada por ' + (eu || 'api') +
               ' (' + mudou.join(', ') + ')';
@@ -3331,7 +3588,7 @@ export default {
       }
       return json({ ok: true, alterado: mudou,
                     demanda: devVisao((atual.melhorias || []).find(x => x.id === alvo.id) || m,
-                                      atual.temas || []) }, 200, headers);
+                                      atual.temas || [], atual.melhorias || []) }, 200, headers);
     }
 
     /* ─── A SUBIDA PARA PRODUCAO, EM LOTE ────────────────────────────────────
@@ -3711,11 +3968,6 @@ export default {
       if (titulo.length < 3) {
         return json({ error: 'titulo', detail: 'Informe o titulo da demanda.' }, 400, headers);
       }
-      const tipo = ['sustentacao', 'evolucao'].includes(body.tipo) ? body.tipo : '';
-      if (!tipo) {
-        return json({ error: 'tipo',
-                      detail: 'Informe tipo: "sustentacao" (Erro/Bug) ou "evolucao" (Melhoria).' }, 400, headers);
-      }
       // Duas chamadas de proposito, como nas outras rotas de escrita: a primeira
       // traz o `sha` que o PUT exige, a segunda traz o conteudo em UTF-8.
       // NAO usar atob(file.content): atob devolve os bytes como Latin-1, entao
@@ -3729,13 +3981,71 @@ export default {
       if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       const atual = JSON.parse(await rawRes.text());
 
+      /* ═══ O VINCULO, QUANDO HOUVER ══════════════════════════════════════
+       *
+       * Era ISTO que faltava: `parent_id` esta em `HIST_CAMPOS` desde sempre —
+       * o historico sabia registrar a mudanca do vinculo — e nenhuma rota de
+       * escrita aceitava o campo. O vinculo so nascia pelo botao do `dev.html`,
+       * entao quem abria a principal e as ligadas pela API recebia quatro
+       * demandas soltas, sem nada dizendo que tinham errado.
+       *
+       * ACEITA CODIGO OU ID. Quem automatiza tem o AX na mao — do card, do
+       * commit, da conversa. O id interno nao aparece em lugar nenhum, e exigi-lo
+       * seria abrir o vinculo pela API e deixa-lo inalcancavel na pratica.
+       *
+       * A PRINCIPAL PODE SER OUTRA DEPENDENCIA. Arvore de tres niveis e legitima
+       * ("o modulo depende do endpoint, que depende da migracao"), e recusar
+       * obrigaria a achatar a arvore ate ela mentir sobre o que trava o que.  */
+      let pai = null;
+      const paiCru = String(body.parent_id || body.depende_de || '').trim();
+      if (paiCru) {
+        pai = vinAchaPai(atual.melhorias || [], paiCru);
+        if (!pai) {
+          return json({ error: 'parent_id',
+                        detail: 'Nao encontrei a demanda principal "' + paiCru.slice(0, 40) +
+                                '". Informe o codigo (AX-042) ou o id de uma demanda viva — ' +
+                                'use "demanda-procurar" para achar.' }, 400, headers);
+        }
+      }
+      /* QUE TIPO DE ELO, e o PADRAO E "parte". Foi pedido assim: "quero poder
+         usar uma issue como base para incluir outras vinculadas SEM ter
+         dependencias delas". Quem pendura item numa tarefa guarda-chuva e o
+         caso comum da API; travar a principal por isso seria o contrario do que
+         a tarefa base existe para fazer, e quem nao leu a doc levaria a trava
+         sem ter pedido. Dependencia de verdade continua existindo e passa a ser
+         DITA — `vinculo: "dependencia"` —, que e como ela deve ser: uma decisao,
+         e nao o que acontece por omissao. */
+      const vincCru = String(body.vinculo || '').trim().toLowerCase();
+      if (vincCru && ![VIN_PARTE, VIN_DEPENDENCIA].includes(vincCru)) {
+        return json({ error: 'vinculo',
+                      detail: 'vinculo aceita "parte" (pendura na principal, nao trava) ' +
+                              'ou "dependencia" (trava a principal ate ser concluida).',
+                      aceitas: [VIN_PARTE, VIN_DEPENDENCIA] }, 400, headers);
+      }
+      const vincTipo = vincCru || VIN_PARTE;
+
+      /* O TEMA E O TIPO HERDAM DA PRINCIPAL quando nao vierem — e o mesmo que o
+         botao do `dev.html` faz ha tempo. Uma dependencia classificada em outro
+         tema que a tarefa principal aparece em outra fatia de todo relatorio, e
+         quem cria pela API nao tem como adivinhar essa regra. Mandar o campo
+         continua vencendo a heranca. */
       // O tema tem de existir: aceitar texto livre criaria tema duplicado a cada
       // chamada e sujaria a classificacao para todo mundo.
-      const temaId = body.tema_id;
+      const temaId = String(body.tema_id || '').trim() || (pai ? pai.tema_id : '');
       const tema = (atual.temas || []).find(t => String(t.id) === String(temaId));
       if (!tema) {
         return json({ error: 'tema',
-                      detail: 'tema_id invalido. Consulte a lista em temas-publicos.' }, 400, headers);
+                      detail: pai
+                        ? 'tema_id invalido, e a demanda principal tambem nao tem tema para herdar. ' +
+                          'Consulte a lista em temas-publicos.'
+                        : 'tema_id invalido. Consulte a lista em temas-publicos.' }, 400, headers);
+      }
+      const tipo = ['sustentacao', 'evolucao'].includes(body.tipo)
+        ? body.tipo
+        : (pai && ['sustentacao', 'evolucao'].includes(pai.tipo) ? pai.tipo : '');
+      if (!tipo) {
+        return json({ error: 'tipo',
+                      detail: 'Informe tipo: "sustentacao" (Erro/Bug) ou "evolucao" (Melhoria).' }, 400, headers);
       }
       /* Quem abre e o dono. Conta legada (senha compartilhada) precisa dizer quem e.
 
@@ -3768,6 +4078,15 @@ export default {
         anexos: [], oculto: false,
         criado_em: agora,
       };
+      /* OS DOIS CAMPOS ANDAM JUNTOS. `parent_id` e a ligacao — ela existe nos
+         dois tipos de elo, e e ela que a soma de pontos e a arvore leem.
+         `is_dependency` e o TIPO: `true` trava a principal, `false` so pendura.
+         Gravar so `parent_id` deixaria o elo sem tipo, e a leitura teria de
+         adivinhar se aquele filho segura o pai ou nao. */
+      if (pai) {
+        nova.parent_id = pai.id;
+        nova.is_dependency = (vincTipo === VIN_DEPENDENCIA);
+      }
       atual.melhorias = atual.melhorias || [];
 
       /* A API PASSA PELA MESMA TRAVA DAS TELAS.
@@ -3810,7 +4129,18 @@ export default {
       }
       const salva = atual.melhorias.find(m => m.id === nova.id);
       return json({ ok: true, codigo: salva.codigo, id: salva.id,
-                    status_planejamento: salva.status_planejamento, dev: salva.dev }, 200, headers);
+                    status_planejamento: salva.status_planejamento, dev: salva.dev,
+                    /* O VINCULO VOLTA NA RESPOSTA, com o CODIGO da principal. Sem
+                       isto quem chama grava `parent_id` e nao tem como saber se
+                       pegou a demanda certa — mandou "42", e "42" casa com AX-042
+                       de um jeito que so o servidor conhece. Devolver o codigo faz
+                       o script conferir sem uma segunda chamada. */
+                    parent_id: salva.parent_id || '',
+                    vinculo: vinTipo(salva),
+                    depende_de: pai ? { id: pai.id, codigo: pai.codigo || '',
+                                        titulo: pai.titulo || '' } : null,
+                    pontos_arvore: pai ? vinPontos(atual.melhorias, pai) : null },
+                  200, headers);
     }
 
     if (body.action === 'login') {

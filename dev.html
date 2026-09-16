@@ -435,6 +435,7 @@
     .dep-row:last-of-type { border-bottom:none; }
     .dep-row.dep-done { color:var(--teal-tx); opacity:.7; }
     .dep-row.dep-open { color:var(--amber-tx); }
+    .dep-peso{font-size:10.5px;color:var(--text3);padding:2px 0 0;cursor:help;}
     .dep-blocked-banner { background:var(--red-bg); color:var(--red-tx); border-radius:5px; padding:5px 8px; font-size:11px; margin-top:6px; font-weight:600; }
     .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
@@ -442,6 +443,7 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
+  <script src="vinculo.js?v=437901d1fa"></script>
 <script src="resumo-dev.js?v=63938fc5e2"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
@@ -721,13 +723,35 @@
         <h3>Campos de "demanda-nova"</h3>
         <table class="ep-tab"><tbody>
           <tr><td><code>titulo</code></td><td class="ep-ob">obrigat&oacute;rio</td><td>texto curto, m&iacute;nimo 3 letras</td></tr>
-          <tr><td><code>tipo</code></td><td class="ep-ob">obrigat&oacute;rio</td><td><code>sustentacao</code> (Erro/Bug) ou <code>evolucao</code> (Melhoria)</td></tr>
-          <tr><td><code>tema_id</code></td><td class="ep-ob">obrigat&oacute;rio</td><td>o c&oacute;digo entre aspas, da lista abaixo</td></tr>
+          <tr><td><code>tipo</code></td><td class="ep-ob">obrigat&oacute;rio*</td><td><code>sustentacao</code> (Erro/Bug) ou <code>evolucao</code> (Melhoria). <em>*herda da principal quando h&aacute; <code>parent_id</code></em></td></tr>
+          <tr><td><code>tema_id</code></td><td class="ep-ob">obrigat&oacute;rio*</td><td>o c&oacute;digo entre aspas, da lista abaixo. <em>*herda da principal quando h&aacute; <code>parent_id</code></em></td></tr>
+          <tr><td><code>parent_id</code></td><td>opcional</td><td>pendura esta demanda em outra: o <strong>c&oacute;digo</strong> (<code>AX-042</code>, <code>#42</code>, <code>42</code>) ou o <code>id</code> da principal</td></tr>
+          <tr><td><code>vinculo</code></td><td>opcional</td><td>o tipo do elo. <code>parte</code> (padr&atilde;o) &mdash; pertence &agrave; principal, soma pontos nela e <strong>n&atilde;o trava</strong> o avan&ccedil;o dela. <code>dependencia</code> &mdash; a principal fica travada at&eacute; esta ser conclu&iacute;da</td></tr>
           <tr><td><code>descricao</code></td><td>opcional</td><td>o que aconteceu, como reproduzir</td></tr>
           <tr><td><code>status_planejamento</code></td><td>opcional</td><td><code>em_andamento</code> (padr&atilde;o), <code>planejado</code> ou <code>backlog</code></td></tr>
           <tr><td><code>entrega</code></td><td>opcional</td><td><code>AAAA-MM-DD</code></td></tr>
           <tr><td><code>solicitante</code></td><td>opcional</td><td>quem pediu; em branco fica voc&ecirc;</td></tr>
         </tbody></table>
+      </div>
+
+      <div class="ep-passo">
+        <h3>Uma issue como base, com outras penduradas nela</h3>
+        <p class="ep-nota">Crie a principal normalmente e depois cada uma das outras com
+          <code>"parent_id":"AX-042"</code>. Elas herdam tema e tipo da principal, aparecem
+          na &aacute;rvore dela e <strong>somam pontos</strong> nela &mdash; a soma volta em
+          <code>pontos_arvore</code> em toda leitura.</p>
+        <p class="ep-nota">O padr&atilde;o <code>vinculo: "parte"</code> <strong>n&atilde;o trava</strong>
+          a principal: ela avan&ccedil;a quando quem decide quiser, mesmo com itens em aberto.
+          Use <code>"vinculo":"dependencia"</code> s&oacute; quando a principal realmente n&atilde;o
+          puder andar antes &mdash; a&iacute; ela fica bloqueada, e <code>travada: true</code> vem na leitura.</p>
+        <p class="ep-nota">Para soltar o v&iacute;nculo depois:
+          <code>demanda-atualizar</code> com <code>"parent_id":""</code>. Para s&oacute; trocar o tipo,
+          mande <code>"vinculo"</code> sem <code>parent_id</code>. V&iacute;nculo que fecharia ciclo
+          &eacute; recusado.</p>
+        <p class="ep-nota"><strong>A soma &eacute; leitura, e n&atilde;o um campo.</strong>
+          <code>poker_pontos</code> continua sendo o tamanho <em>daquela</em> demanda: gravar o
+          total na principal faria os pontos dos v&iacute;nculos contarem duas vezes no ranking
+          por dev, na capacidade e no deck.</p>
       </div>
 
       <div class="ep-passo">
@@ -1031,19 +1055,38 @@
 <div id="modal-dep" class="modal-overlay" style="display:none">
   <div class="modal">
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-dep')" aria-label="Fechar">✕</button>
-    <h2>🔗 Abrir Dependência</h2>
+    <h2>🔗 Vincular demanda</h2>
     <input type="hidden" id="dep-parent-id" />
     <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:16px;">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Card pai</div>
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Demanda principal</div>
       <div id="dep-parent-title" style="font-weight:600;color:var(--text);font-size:14px;">—</div>
       <div id="dep-parent-tema" style="font-size:12px;color:var(--text3);margin-top:2px;">—</div>
     </div>
+    <!-- O TIPO DO ELO VEM PRIMEIRO, e não como caixinha no fim.
+         Ele muda o resto do formulário (o rótulo do título e o do botão) e,
+         principalmente, muda o que acontece com o card principal: uma trava o
+         avanço dele, a outra não. Perguntar isso depois de a pessoa ter digitado
+         tudo é perguntar quando ela já decidiu. -->
     <div class="form-group">
-      <label>O que está aguardando? *</label>
-      <input type="text" id="dep-titulo" placeholder="Ex: Validação de regra pela área de Crédito" />
+      <label>Que tipo de vínculo?</label>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-weight:400;">
+          <input type="radio" name="dep-tipo" value="parte" checked onchange="depTipoMudou()" style="margin-top:3px;" />
+          <span>🔗 <strong>Vinculada</strong> — faz parte deste card e soma pontos nele.
+            <span style="color:var(--text3)">Não trava o avanço.</span></span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-weight:400;">
+          <input type="radio" name="dep-tipo" value="dependencia" onchange="depTipoMudou()" style="margin-top:3px;" />
+          <span>⏳ <strong>Dependência</strong> — este card não avança enquanto ela estiver aberta.</span>
+        </label>
+      </div>
     </div>
     <div class="form-group">
-      <label>Responsável (outra área / dev) *</label>
+      <label id="dep-titulo-rot">O que faz parte deste card? *</label>
+      <input type="text" id="dep-titulo" placeholder="Ex: Tela de conferência do cadastro" />
+    </div>
+    <div class="form-group">
+      <label id="dep-dev-rot">Responsável *</label>
       <select id="dep-dev"></select>
     </div>
     <div class="form-group">
@@ -1056,7 +1099,7 @@
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-dep')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveNewDep()">Abrir dependência</button>
+      <button class="btn btn-primary" id="dep-salvar" onclick="saveNewDep()">Vincular</button>
     </div>
   </div>
 </div>
@@ -1353,7 +1396,12 @@ function epFuncoesHTML() {
              'valida). Mais os campos derivados <code>aguardando_validacao</code>, ' +
              '<code>concluida</code>, <code>atrasada</code> e <code>dias_atraso</code>. ' +
              'Demanda pausada nunca vem como atrasada: o prazo está suspenso por ' +
-             'dependência externa.',
+             'dependência externa. ' +
+             'O vínculo vem nos dois sentidos: <code>depende_de</code> (a principal em que ' +
+             'ela está pendurada) e <code>vinculadas</code> (o que pendura nela, cada uma ' +
+             'com <code>vinculo</code> e <code>trava</code>). <code>pontos_arvore</code> traz ' +
+             'a soma dos pontos dela e de tudo abaixo — <code>null</code> quando ninguém ' +
+             'pontuou, que é diferente de zero. <code>travada</code> responde "posso avançar?".',
       corpo: '{"action":"demanda-consultar","token":"TOKEN","codigo":"' + cod + '"}',
     },
     {
@@ -1372,6 +1420,18 @@ function epFuncoesHTML() {
              '<code>link_pr</code> aceita vários separados por espaço.',
       corpo: '{"action":"demanda-atualizar","token":"TOKEN","codigo":"' + cod +
         '","link_repo":"audaxcapitalsa/AXCRED-DJANGO","link_pr":"712","link_issue":"683","horas_realizadas":6}',
+    },
+    {
+      acao: 'demanda-atualizar (vínculo)',
+      o_que: 'Pendura esta demanda em outra, troca o tipo do elo, ou solta. ' +
+             '<code>parent_id</code> aceita o código da principal (<code>AX-042</code>, ' +
+             '<code>42</code>) ou o <code>id</code>; <code>""</code> solta o vínculo. ' +
+             '<code>vinculo</code> é <code>parte</code> (padrão — pertence e soma pontos, ' +
+             'mas <b>não trava</b> a principal) ou <code>dependencia</code> (trava a ' +
+             'principal até ser concluída). Mandar só <code>vinculo</code> troca o tipo sem ' +
+             'mexer no pai. Vínculo que fecharia ciclo é recusado.',
+      corpo: '{"action":"demanda-atualizar","token":"TOKEN","codigo":"' + cod +
+        '","parent_id":"AX-042","vinculo":"parte"}',
     },
     {
       acao: 'deploy-versao',
@@ -3485,11 +3545,18 @@ function renderCard(m, colKey) {
 
 // ─── DEPENDÊNCIAS ────────────────────────────────────────────────
 function getDeps(parentId) {
-  return state.melhorias.filter(m => m.parent_id === parentId);
+  // DELEGA — a regra mora em `vinculo.js`, que também tira oculta e mesclada da
+  // conta. Aqui elas entravam, e uma dependência excluída seguia bloqueando o
+  // avanço do card pai.
+  return VINCULO.filhosDe(state.melhorias, parentId);
 }
 
 function hasBlockingDep(id) {
-  return getDeps(id).some(d => getStatusKey(d) !== 'concluido');
+  /* SO DEPENDENCIA TRAVA, e nao todo vinculo. Depois que a "issue base" passou a
+     existir — outras penduradas nela SEM serem pre-requisito —, contar todo
+     filho aberto travaria justamente a tarefa guarda-chuva, que e o oposto do
+     que ela existe para fazer. A regra de quem trava mora em `vinculo.js`. */
+  return VINCULO.abertos(state.melhorias, id).length > 0;
 }
 
 // Bloqueia avanço (deploy/concluido) se há dep aberta
@@ -3501,25 +3568,45 @@ function checkDepBlock(id, targetColKey) {
 function renderDepSection(m) {
   const deps = getDeps(m.id);
   const sk = getStatusKey(m);
-  if (!deps.length && sk !== 'em_andamento') return '';
+  /* O BOTAO VALE EM QUALQUER ETAPA VIVA, e nao so em andamento.
+     A "issue base" — a que agrupa as outras — costuma estar em planejado, ou
+     ate no backlog, justamente porque ainda nao comecou: ela existe para
+     receber as partes. A trava antiga so deixava vincular no que ja estava
+     rodando, que e quando a decisao de agrupar ja passou. Concluida fica de
+     fora: pendurar coisa nova em card fechado e como o total dele muda depois
+     de ele ter entrado no relatorio. */
+  const podeVincular = sk !== 'concluido';
+  if (!deps.length && !podeVincular) return '';
   const rows = deps.map(d => {
     const dsk = getStatusKey(d);
     const done = dsk === 'concluido';
     const devName = d.dev || '—';
     const dt = d.entrega ? formatDate(d.entrega) : 'sem data';
-    return `<div class="dep-row ${done?'dep-done':'dep-open'}">
-      <span>${done?'✅':'⏳'}</span>
+    /* O ICONE DIZ O TIPO DO ELO. Sem isso, dois itens iguais na lista — um que
+       trava o card e outro que so pertence a ele — ficam indistinguiveis, e a
+       pessoa nao entende por que o avanco foi recusado (ou por que nao foi). */
+    const trava = VINCULO.bloqueia(d);
+    return `<div class="dep-row ${done?'dep-done':'dep-open'}" title="${trava?'Dependência — trava o avanço deste card até ser concluída':'Vinculada — pertence a este card, não trava nada'}">
+      <span>${done?'✅':(trava?'⏳':'🔗')}</span>
       <span><strong>${devEsc(d.titulo.substring(0,32))}${d.titulo.length>32?'…':''}</strong></span>
       <span style="color:var(--text3)">· ${devName} · ${dt}</span>
       <span class="kcard-badge badge-${dsk}" style="font-size:10px;">${STATUS_LABELS[dsk]||dsk}</span>
     </div>`;
   }).join('');
-  const blocked = deps.some(d => getStatusKey(d) !== 'concluido');
+  const blocked = hasBlockingDep(m.id);
   const banner = blocked ? `<div class="dep-blocked-banner">🔒 Avanço bloqueado — aguardando dependência</div>` : '';
-  const btn = sk === 'em_andamento'
-    ? `<button class="btn-dep-open" onclick="openDepModal('${m.id}',event)">🔗 + Abrir dependência</button>`
+  const btn = podeVincular
+    ? `<button class="btn-dep-open" onclick="openDepModal('${m.id}',event)">🔗 + Vincular demanda</button>`
     : '';
-  return `<div class="kcard-dep-section">${rows}${banner}${btn}</div>`;
+  /* QUANTO CUSTA A ÁRVORE INTEIRA. O card mostra o ponto DESTA demanda, e quem
+     abriu quatro dependências debaixo dela está olhando para o número errado na
+     hora de dizer o tamanho do trabalho na daily. A frase vem de `vinculo.js`,
+     a mesma que o admin, o gantt e a API usam. */
+  const peso = VINCULO.frase(state.melhorias, m);
+  const pesoLinha = peso
+    ? `<div class="dep-peso" title="Soma dos pontos desta demanda e de tudo que depende dela. É leitura: cada vínculo segue contando o próprio ponto nos relatórios.">🧮 ${devEsc(peso)}</div>`
+    : '';
+  return `<div class="kcard-dep-section">${rows}${pesoLinha}${banner}${btn}</div>`;
 }
 
 function openDepModal(parentId, event) {
@@ -3537,7 +3624,35 @@ function openDepModal(parentId, event) {
   document.getElementById('dep-dev').innerHTML =
     '<option value="">— Selecione o responsável —</option>' +
     devs.map(d => `<option value="${d}">${d}</option>`).join('');
+  const parte = document.querySelector('input[name="dep-tipo"][value="parte"]');
+  if (parte) parte.checked = true;   // o padrao é o que NÃO trava
+  depTipoMudou();
   abrirModal('modal-dep');
+}
+
+/** O TIPO ESCOLHIDO NO MODAL. `parte` é o padrão, e é deliberado: pendurar item
+ *  numa tarefa base é o caso comum, e travar o card principal é a exceção — que
+ *  deve ser dita, e não acontecer por omissão. */
+function depTipoEscolhido() {
+  const r = document.querySelector('input[name="dep-tipo"]:checked');
+  return r ? r.value : 'parte';
+}
+
+/* O FORMULÁRIO MUDA DE PERGUNTA junto com o tipo. "O que está aguardando?" não
+   é a pergunta certa para um item que faz parte do card — e um rótulo que não
+   corresponde ao que se está fazendo é como o campo é preenchido errado. */
+function depTipoMudou() {
+  const dep = depTipoEscolhido() === 'dependencia';
+  const rot = document.getElementById('dep-titulo-rot');
+  const inp = document.getElementById('dep-titulo');
+  const dv  = document.getElementById('dep-dev-rot');
+  const bt  = document.getElementById('dep-salvar');
+  if (rot) rot.textContent = dep ? 'O que está aguardando? *' : 'O que faz parte deste card? *';
+  if (inp) inp.placeholder = dep
+    ? 'Ex: Validação de regra pela área de Crédito'
+    : 'Ex: Tela de conferência do cadastro';
+  if (dv)  dv.textContent = dep ? 'Responsável (outra área / dev) *' : 'Responsável *';
+  if (bt)  bt.textContent = dep ? 'Abrir dependência' : 'Vincular';
 }
 
 async function saveNewDep() {
@@ -3559,7 +3674,10 @@ async function saveNewDep() {
     status: 'iniciada',
     status_planejamento: 'em_andamento',
     parent_id: parentId,
-    is_dependency: true,
+    /* `is_dependency` É O TIPO DO ELO, e não "existe elo" — `parent_id` já diz
+       isso. `true` trava o card principal; `false` só pendura. Gravar sempre
+       `true`, como era antes, fazia toda demanda vinculada virar pré-requisito. */
+    is_dependency: depTipoEscolhido() === 'dependencia',
     horas_realizadas: 0,
     criado_em: new Date().toISOString(),
   };

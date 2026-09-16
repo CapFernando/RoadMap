@@ -815,6 +815,7 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
+  <script src="vinculo.js?v=437901d1fa"></script>
   <script src="resumo-dev.js?v=63938fc5e2"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
@@ -3173,7 +3174,7 @@ function renderGantt() {
         <div class="card-row1">
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
-          ${state.melhorias.some(x => x.parent_id === m.id && x.status_planejamento !== 'concluido') ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;">⏳</span>` : ''}
+          ${VINCULO.abertos(state.melhorias, m.id).length ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;">⏳</span>` : ''}
           ${pausada ? `<span class="card-pausa" title="Pausada há ${dPausa} dia(s)${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${dPausa}d</span>` : ''}
           ${herdada ? `<span class="card-herdada" title="Veio de ${mesOrigem || 'um mês anterior'} e ainda não concluiu. O prazo NÃO foi movido — ela continua combinada para ${fmtDate(m.entrega || m.inicio)}${sprintsFora ? ` e ${emValidacao ? `foi entregue ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} depois do combinado` : `já passou ${sprintsFora} sprint${sprintsFora > 1 ? 's' : ''} (semana${sprintsFora > 1 ? 's' : ''}) do combinado`}` : ''}.${emValidacao ? ` O DEV JÁ ENTREGOU${m.entregue_em ? ' em ' + fmtDate(m.entregue_em) : ''} — o que falta é a validação, e por isso o contador de sprints parou na entrega.` : ''} A barra ocupa do início do mês até hoje porque é o tempo que ela consumiu aqui.">${rotuloHerdada}</span>` : ''}
           ${semPontuacao(m) ? `<span class="card-sempt" title="Sem pontos do Planning Poker: a data foi combinada sem ninguém estimar o tamanho.">🃏</span>` : ''}
@@ -3554,14 +3555,21 @@ function openModal(id, prefillDev, prefillDate) {
       🔗 <strong>Dependência de:</strong> ${par ? esc(par.titulo) : '(removido)'}
     </div>`;
   }
-  const childDeps = m ? state.melhorias.filter(x => x.parent_id === m.id) : [];
+  const childDeps = m ? VINCULO.filhosDe(state.melhorias, m.id) : [];
+  /* A mesma frase do admin, da mesma função: duas telas com dois textos para a
+     mesma soma é como as quatro derivações de etapa começaram. */
+  const pesoTxt = m ? VINCULO.frase(state.melhorias, m) : '';
   if (childDeps.length) {
     depHtml += `<div style="background:var(--bg3,#1E1E1C);border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:8px;">
-      <div style="font-weight:600;margin-bottom:6px;color:var(--text2,#A8A49A);">Dependências:</div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;">
+        <span style="font-weight:600;color:var(--text2,#A8A49A);">Dependências:</span>
+        ${pesoTxt ? `<span style="color:var(--text3,#6E6A62);">🧮 ${esc(pesoTxt)}</span>` : ''}
+      </div>
       ${childDeps.map(d => {
         const done = d.status_planejamento === 'concluido';
-        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-          <span>${done?'✅':'⏳'}</span>
+        const trava = VINCULO.bloqueia(d);
+        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;" title="${trava?'Dependência — trava o avanço':'Vinculada — não trava'}">
+          <span>${done?'✅':(trava?'⏳':'🔗')}</span>
           <span style="flex:1">${esc(d.titulo)}</span>
           <span style="color:var(--text3,#6E6A62)">${esc(d.dev||'—')}</span>
           <span style="color:var(--text3,#6E6A62)">${d.entrega||''}</span>

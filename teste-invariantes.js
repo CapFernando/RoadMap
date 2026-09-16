@@ -5935,7 +5935,11 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      Sem marca no cartao, saber que a AX-338 subiu exigiria abrir demanda por
      demanda — e o campo existe para responder isso de relance. */
   ok(/class="kb-prod"/.test(ADMIN), 'o cartao mostra a marca de no ar');
-  ok(/\$\{depBadge\}\$\{prodBadge\}/.test(ADMIN), 'e ela e desenhada junto das outras');
+  /* A SOMA DA ARVORE entrou entre os dois selos (`pesoBadge`), e a invariante
+     passou a citar os tres: o que ela guarda e que o selo de producao e
+     desenhado NA MESMA LINHA dos outros, e nao num canto proprio. */
+  ok(/\$\{depBadge\}\$\{pesoBadge\}\$\{prodBadge\}/.test(ADMIN),
+     'e ela e desenhada junto das outras');
   /* VERDE, e nao azul: azul ja e `planejado` nesta tela, e duas coisas na mesma
      cor e o que faz a regua de chips deixar de ser lida. */
   ok(/\.kb-prod \{[^}]*--green-bg/.test(ADMIN),
@@ -10915,7 +10919,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        Ele JA estava: `devVisao` devolve, e as duas rotas de escrita aceitam. O
        que faltava era a DOC das rotas de LEITURA dizer isso — campo que a
        automacao nao sabe que existe e campo que nao existe dao no mesmo. */
-    const dv = corpo(WC, 'const devVisao = (m, temas) => ({');
+    /* `lista` E O TERCEIRO ARGUMENTO desde que a API passou a responder o vinculo:
+       "o que pendura nesta demanda" mora na BASE, e nao no objeto. */
+    const dv = corpo(WC, 'const devVisao = (m, temas, lista) => ({');
     ok(!!dv, 'a projecao da API foi localizada');
     for (const campo of ['resumo_entrega', 'implementacao']) {
       ok(dv && new RegExp(campo + ': m\.' + campo).test(dv),
@@ -10947,6 +10953,297 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/resumo_entrega/.test(bloco),
          'e a doc de ' + rota + ' diz que ele pode ser gravado');
     }
+  }
+
+  /* === VINCULO: A TAREFA PRINCIPAL E O QUE PENDURA NELA =================
+
+     O relato foi "a API nao esta atendendo a criacao de issues como
+     dependencias de outras", e ele era literal: `parent_id` estava em
+     `HIST_CAMPOS` — o historico sabia registrar a mudanca do vinculo — e
+     NENHUMA rota de escrita aceitava o campo.
+
+     DUAS COPIAS DA MESMA REGRA, e e por isso que este bloco existe. O Worker
+     nao importa arquivo nenhum, entao a regra mora nele E em `vinculo.js`. E a
+     mesma situacao de `limpaDevs` contra `dev-nome.js`, e o jeito de ela nao
+     apodrecer e este: EXECUTAR as duas e comparar o resultado, caso a caso.
+
+     ESTE BLOCO EXECUTA o codigo recortado dos dois arquivos. */
+  sec('Vinculo entre demandas');
+  {
+    const VJS = fs.readFileSync('vinculo.js', 'utf8');
+    const V = new Function('var module; var raiz = {}; (' +
+      VJS.slice(VJS.indexOf('(function (raiz)')).replace(/\)\(typeof globalThis[\s\S]*$/, ')') +
+      ')(raiz); return raiz.VINCULO;')();
+    ok(!!V && typeof V.pontos === 'function', 'vinculo.js carrega e expoe a regra');
+
+    const iniV = W.indexOf('const VIN_MAX_NIVEIS');
+    const fimV = W.indexOf('MENSAGERIA', iniV);
+    ok(iniV > 0 && fimV > iniV, 'o bloco de vinculo do Worker foi achado para ser executado');
+    const WV = (iniV > 0 && fimV > iniV)
+      ? new Function(W.slice(iniV, W.lastIndexOf('//', fimV)) +
+          'return { vinPonto, vinFilhos, vinPai, vinArvore, vinPontos, vinCriaCiclo, vinAchaPai };')()
+      : null;
+    ok(!!WV, 'e o Worker executa fora do fetch');
+
+    if (V && WV) {
+      /* A BASE DE TESTE. Uma principal, dois vinculos diretos (um sem ponto), um
+         NETO, e um oculto — que nao pode entrar em conta nenhuma. */
+      const base = [
+        { id: 'A', codigo: 'AX-042', titulo: 'principal', poker_pontos: 8 },
+        { id: 'B', codigo: 'AX-043', parent_id: 'A', poker_pontos: 5 },
+        { id: 'C', codigo: 'AX-044', parent_id: 'A' },
+        { id: 'D', codigo: 'AX-045', parent_id: 'B', poker_pontos: 3 },
+        { id: 'E', codigo: 'AX-046', parent_id: 'A', poker_pontos: 2, oculto: true },
+        { id: 'Z', codigo: 'AX-1000', titulo: 'quatro digitos' },
+      ];
+      const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+      /* AS DUAS COPIAS RESPONDEM O MESMO. Trocar um `>=` por `>` num dos dois
+         lados nao quebraria nada ate a sala perguntar por que a tela e a API
+         discordam sobre quanto custa a mesma demanda. */
+      ok(igual(WV.vinPontos(base, base[0]), V.pontos(base, base[0])),
+         'Worker e vinculo.js somam a arvore igual',
+         JSON.stringify(WV.vinPontos(base, base[0])) + ' contra ' +
+         JSON.stringify(V.pontos(base, base[0])));
+      ok(igual(WV.vinArvore(base, 'A').map(x => x.id), V.arvoreDe(base, 'A').map(x => x.id)),
+         'e montam a mesma arvore');
+      ok(igual(WV.vinCriaCiclo(base, 'A', 'D'), V.criaCiclo(base, 'A', 'D')),
+         'e concordam sobre o que fecha ciclo');
+
+      /* O CICLO DE UM ELO SO — depender de si mesma — TEM DE SER RECUSADO, e a
+         sabotagem mostrou que eu nao estava cobrando isso. Trocar o
+         `if (alvo === pai) return true` por `false` passou pela suite inteira.
+         E o ciclo mais curto que existe e o mais facil de mandar por engano:
+         um script que repete o codigo da propria demanda no `parent_id`. O
+         efeito e uma demanda que nao e raiz (tem pai) e nao esta na arvore de
+         ninguem — some das duas pontas. */
+      ok(V.criaCiclo(base, 'A', 'A') === true && WV.vinCriaCiclo(base, 'A', 'A') === true,
+         'depender de si mesma e ciclo nos dois lados',
+         V.criaCiclo(base, 'A', 'A') + ' / ' + WV.vinCriaCiclo(base, 'A', 'A'));
+      /* E O CAMINHO LONGO TAMBEM: A -> B -> D, entao pendurar A em D fecha. */
+      ok(V.criaCiclo(base, 'A', 'D') === true, 'e o ciclo de tres elos tambem');
+      ok(V.criaCiclo(base, 'C', 'B') === false, 'mas um elo legitimo passa');
+
+      /* O NETO ENTRA NA SOMA. Um vinculo que abriu o proprio vinculo continua
+         sendo custo da mesma tarefa principal; parar no primeiro nivel esconderia
+         isso, e o total anunciado seria menor que o trabalho. */
+      const pA = V.pontos(base, base[0]);
+      ok(pA.total === 16, 'a arvore de A soma 16: 8 dela + 5 + 3 do neto', String(pA.total));
+      ok(pA.n === 3, 'e conta tres vinculos', String(pA.n));
+
+      /* O OCULTO FICA DE FORA. Uma dependencia excluida seguia bloqueando o
+         avanco do card pai no `dev.html`, e somaria ponto aqui. */
+      ok(!V.arvoreDe(base, 'A').some(x => x.id === 'E'),
+         'demanda oculta nao entra na arvore');
+      ok(pA.total === 16, 'nem nos pontos — os 2 dela nao aparecem no total');
+
+      /* `null` E NAO `0` — a mesma distincao que `msSubHorasTotal` guarda.
+         "0 pts no total" numa arvore que ninguem estimou se le como "nao custa
+         nada", e o certo e dizer que nao se sabe. */
+      const cru = [{ id: 'P' }, { id: 'Q', parent_id: 'P' }];
+      ok(V.pontos(cru, cru[0]).total === null,
+         'arvore sem pontuacao nenhuma devolve null, e nao zero',
+         JSON.stringify(V.pontos(cru, cru[0]).total));
+      const zero = [{ id: 'P' }, { id: 'Q', parent_id: 'P', poker_pontos: 0 }];
+      ok(V.pontos(zero, zero[0]).total === 0,
+         'mas zero LANCADO conta, e liga a soma');
+
+      /* CICLO JA GRAVADO NA BASE NAO PODE TRAVAR QUEM LE. Sem o `visto`, esta
+         funcao roda para sempre dentro de um `render` — a tela morre sem erro. */
+      const ciclo = [{ id: 'X', parent_id: 'Y' }, { id: 'Y', parent_id: 'X' }];
+      let travou = false;
+      try { V.arvoreDe(ciclo, 'X'); WV.vinArvore(ciclo, 'X'); } catch (e) { travou = true; }
+      ok(!travou, 'ciclo ja gravado na base nao derruba a leitura da arvore');
+
+      /* A PRINCIPAL SE ACHA PELO CODIGO, e nao so pelo id. Quem automatiza tem o
+         AX na mao — o id interno nao aparece no card, no commit nem na conversa.
+         E o codigo compara como NUMERO: "42" tem de achar AX-042, e AX-1000 nao
+         pode quebrar num `padStart(3)`. */
+      const achou = (x) => { const r = WV.vinAchaPai(base, x); return r ? r.id : null; };
+      ok(achou('AX-042') === 'A', 'acha a principal pelo codigo');
+      ok(achou('42') === 'A', 'e pelo numero solto, com o zero a esquerda no meio');
+      ok(achou('#42') === 'A', 'e com cerquilha, como o time escreve');
+      ok(achou('A') === 'A', 'e pelo id interno');
+      ok(achou('AX-1000') === 'Z', 'e um codigo de quatro digitos nao quebra',
+         String(achou('AX-1000')));
+      ok(achou('AX-046') === null, 'mas nao acha demanda oculta');
+    }
+
+    /* === OS DOIS ELOS: O QUE TRAVA E O QUE SO PENDURA ====================
+
+       "Quero poder usar uma issue como base para incluir outras vinculadas SEM
+       ter dependencias delas."
+
+       Ate aqui so existia UM elo, e ele bloqueia: `parent_id` + `is_dependency`
+       fazem o `dev.html` recusar o avanco do card principal enquanto houver
+       filho aberto. Isso esta certo para "nao posso subir o modulo antes da
+       migracao" e errado para "esta e a tarefa guarda-chuva do projeto X".
+
+       A ARMADILHA QUE ESTE BLOCO GUARDA: se `abertos` nao filtrasse por tipo,
+       pendurar vinte itens numa issue base TRAVARIA a issue base — exatamente o
+       oposto do que ela existe para fazer. */
+    {
+      const VJS2 = fs.readFileSync('vinculo.js', 'utf8');
+      const V2 = new Function('var module; var raiz = {}; (' +
+        VJS2.slice(VJS2.indexOf('(function (raiz)')).replace(/\)\(typeof globalThis[\s\S]*$/, ')') +
+        ')(raiz); return raiz.VINCULO;')();
+
+      const baseElo = [
+        { id: 'P', codigo: 'AX-100', titulo: 'issue base', poker_pontos: 3 },
+        { id: 'p1', parent_id: 'P', poker_pontos: 8, status_planejamento: 'em_andamento' },
+        { id: 'p2', parent_id: 'P', poker_pontos: 5, status_planejamento: 'em_andamento' },
+        { id: 'dep', parent_id: 'P', is_dependency: true, poker_pontos: 2,
+          status_planejamento: 'em_andamento' },
+      ];
+
+      ok(V2.tipoDe(baseElo[1]) === 'parte', 'sem `is_dependency`, o elo e "parte"');
+      ok(V2.tipoDe(baseElo[3]) === 'dependencia', 'com ele, e "dependencia"');
+      ok(V2.tipoDe(baseElo[0]) === '', 'e quem nao tem pai nao tem tipo de elo');
+
+      /* SO A DEPENDENCIA TRAVA. Tres filhos abertos, um unico segurando. */
+      ok(V2.abertos(baseElo, 'P').length === 1,
+         'dos tres vinculos abertos, so a dependencia trava a principal',
+         String(V2.abertos(baseElo, 'P').length));
+      ok(V2.emAberto(baseElo, 'P').length === 3,
+         'mas os tres continuam contando como abertos, para quem quer contar');
+
+      /* TIRANDO A DEPENDENCIA, A ISSUE BASE NAO TRAVA MAIS — que e o caso do
+         pedido: uma base com itens pendurados avanca quando quem decide quiser. */
+      const soPartes = baseElo.filter(x => !x.is_dependency);
+      ok(V2.abertos(soPartes, 'P').length === 0,
+         'uma issue base so com itens vinculados nao trava nada');
+
+      /* E A SOMA NAO DISTINGUE OS DOIS. "Quanto custa tudo isto" e a mesma
+         pergunta com elo travando ou nao; separar as somas faria a tarefa base
+         mostrar um total que nao e o total. */
+      ok(V2.pontos(baseElo, baseElo[0]).total === 18,
+         'a soma conta os dois tipos de elo: 3 + 8 + 5 + 2',
+         String(V2.pontos(baseElo, baseElo[0]).total));
+
+      /* A FRASE DIZ QUANTOS TRAVAM. Com os dois elos convivendo, "3 vinculos"
+         deixou de responder "eu posso fechar isto?". */
+      ok(/1 trava/.test(V2.frase(baseElo, baseElo[0])),
+         'e a frase avisa quantos travam', V2.frase(baseElo, baseElo[0]));
+      ok(!/trava/.test(V2.frase(soPartes, soPartes[0])),
+         'e cala quando nenhum trava', V2.frase(soPartes, soPartes[0]));
+
+      /* O WORKER CONCORDA SOBRE QUEM TRAVA. */
+      const iT = W.indexOf('const VIN_DEPENDENCIA');
+      const WT = new Function(W.slice(iT, W.indexOf('const vinVivo')) +
+        'return { vinTipo, vinBloqueia };')();
+      ok(WT.vinTipo(baseElo[1]) === V2.tipoDe(baseElo[1]) &&
+         WT.vinTipo(baseElo[3]) === V2.tipoDe(baseElo[3]) &&
+         WT.vinTipo(baseElo[0]) === V2.tipoDe(baseElo[0]),
+         'Worker e vinculo.js dao o mesmo tipo de elo');
+
+      /* A TELA DELEGA A TRAVA. Contar todo filho aberto era o defeito. */
+      ok(/VINCULO\.abertos\(state\.melhorias, id\)/.test(DEV),
+         'dev.html pergunta a regra quem trava, em vez de contar todo filho aberto');
+      ok(!/deps\.some\(d => getStatusKey\(d\) !== 'concluido'\)/.test(DEV),
+         'e a contagem antiga, que travava a issue base, saiu');
+
+      /* O MODAL DEIXA ESCOLHER, E O PADRAO E O QUE NAO TRAVA. Uma trava que
+         acontece por omissao e uma trava que ninguem pediu. */
+      ok(/name="dep-tipo" value="parte" checked/.test(DEV),
+         'o modal do dev nasce em "vinculada", e nao em "dependencia"');
+      ok(/is_dependency: depTipoEscolhido\(\) === 'dependencia'/.test(DEV),
+         'e a gravacao leva o tipo escolhido, em vez de `true` fixo');
+
+      /* A ROTA DA API TEM O MESMO PADRAO. */
+      const rNova = W.slice(W.indexOf("body.action === 'demanda-nova'"),
+                            W.indexOf("body.action === 'login'"));
+      ok(/const vincTipo = vincCru \|\| VIN_PARTE;/.test(rNova),
+         'e a API tambem: sem dizer o tipo, o vinculo nao trava');
+      ok(/nova\.is_dependency = \(vincTipo === VIN_DEPENDENCIA\);/.test(rNova),
+         'e ela grava o tipo, e nao `true` fixo');
+    }
+
+    /* === E A ROTA ACEITA O CAMPO — que era o defeito relatado === */
+    const rotaNova = W.slice(W.indexOf("body.action === 'demanda-nova'"),
+                             W.indexOf("body.action === 'login'"));
+    ok(/vinAchaPai\(atual\.melhorias/.test(rotaNova),
+       'demanda-nova resolve a principal pelo codigo ou id');
+    /* OS DOIS CAMPOS JUNTOS: `parent_id` faz o vinculo existir na conta,
+       `is_dependency` e o que a `gantt.html` le para desenhar o elo. Gravar um
+       so faria o vinculo somar ponto e sumir do desenho. */
+    ok(/nova\.parent_id = pai\.id;/.test(rotaNova) &&
+       /nova\.is_dependency = \(vincTipo === VIN_DEPENDENCIA\);/.test(rotaNova),
+       'e grava os DOIS campos: a ligacao e o TIPO do elo');
+    ok(/pai \? pai\.tema_id/.test(rotaNova) && /pai\.tipo/.test(rotaNova),
+       'e o tema e o tipo herdam da principal, como o botao da tela ja fazia');
+
+    const iAt = W.indexOf("body.action === 'demanda-atualizar'");
+    const rotaAt = W.slice(iAt, W.indexOf("body.action === 'demanda-entregar'", iAt));
+    ok(/typeof body\.parent_id === 'string'/.test(rotaAt),
+       'demanda-atualizar aceita parent_id');
+    ok(/if \(!cru\) \{\s*if \(m\.parent_id\)/.test(rotaAt),
+       'e string vazia SOLTA o vinculo — sem isso, um vinculo criado por engano ' +
+       'pela API so sairia pela tela, e quem automatiza nao tem tela');
+    ok(/vinCriaCiclo\(atual\.melhorias/.test(rotaAt) && /error: 'ciclo'/.test(rotaAt),
+       'e o ciclo e recusado — a guarda que so a API precisa');
+
+    /* OS QUATRO CHAMADORES DE `devVisao` PASSAM A LISTA. Um que esquecesse
+       devolveria "nenhum vinculo" para uma demanda que tem quatro — pior do que
+       nao responder, porque parece resposta. */
+    /* CONTA OS ARGUMENTOS DE VERDADE, e nao por `split(',')`.
+       A primeira versao disto contava virgulas e acusou falso: uma das chamadas
+       e `devVisao((atual.melhorias || []).find(x => x.id === alvo.id), ...)`, e
+       as virgulas de DENTRO do `find` nao sao argumentos. Aqui o parentese e
+       percorrido com profundidade, que e a unica forma de a conta bater. */
+    const argsDe = (src, i) => {
+      let d = 0, n = 1, dentro = false;
+      for (let k = i; k < src.length; k++) {
+        const c = src[k];
+        if (c === '(') { d++; dentro = true; }
+        else if (c === ')') { d--; if (d === 0) return n; }
+        else if (c === ',' && d === 1) n++;
+      }
+      return dentro ? -1 : 0;
+    };
+    const posicoes = [];
+    for (let i = W.indexOf('devVisao('); i >= 0; i = W.indexOf('devVisao(', i + 1)) {
+      /* A DEFINICAO NAO ENTRA, e ela se distingue sozinha: e
+         `const devVisao = (m, temas, lista) =>`, com espaco antes do parentese —
+         `indexOf('devVisao(')` nao casa com ela. A primeira versao disto tinha
+         uma segunda guarda procurando `=>` nos 12 caracteres anteriores, e ela
+         descartava uma CHAMADA de verdade: `lista.map(m => devVisao(...))`. */
+      if (/[A-Za-z0-9_$.]/.test(W[i - 1] || '')) continue;
+      posicoes.push(i + 'devVisao'.length);
+    }
+    const magros = posicoes.map(p => argsDe(W, p)).filter(n => n < 3);
+    ok(posicoes.length >= 4 && !magros.length,
+       'todos os chamadores de devVisao passam a lista da base',
+       posicoes.length + ' chamadas; com menos de 3 argumentos: ' + magros.length);
+
+    /* AS TELAS DELEGAM. Tres copias de "quem sao os filhos" e como as quatro
+       derivacoes de etapa comecaram. */
+    ok(/VINCULO\.filhosDe\(state\.melhorias/.test(DEV), 'dev.html usa a regra para achar os filhos');
+    ok(/VINCULO\.frase\(state\.melhorias/.test(DEV), 'e mostra a soma da arvore no card');
+    ok(/VINCULO\.frase\(state\.melhorias/.test(ADMIN), 'admin.html mostra a soma');
+    ok(/VINCULO\.frase\(state\.melhorias/.test(GANTT), 'gantt.html mostra a soma');
+    for (const par of [['admin.html', ADMIN], ['dev.html', DEV], ['gantt.html', GANTT]]) {
+      ok(/<script src="vinculo\.js\?v=/.test(par[1]), par[0] + ' carrega vinculo.js');
+    }
+
+    /* A DOC DIZ QUE OS CAMPOS EXISTEM. Campo que a automacao nao sabe que existe
+       e campo que nao existe dao no mesmo — foi a licao do `resumo_entrega`,
+       que JA estava na API e nao estava na doc. */
+    ok(/<code>parent_id<\/code>/.test(DEV), 'a doc lista parent_id em demanda-nova');
+    ok(/<code>vinculo<\/code>/.test(DEV), 'e o tipo do elo');
+    ok(/Uma issue como base/.test(DEV),
+       'e explica o caso que originou tudo: uma issue base com outras penduradas');
+    ok(/pontos_arvore/.test(DEV), 'e diz onde a soma volta na resposta');
+    ok(/"parent_id":""/.test(DEV), 'e como soltar o vinculo');
+
+    /* A SOMA NAO E GRAVADA, E ESSA E A DECISAO QUE SUSTENTA O RESTO.
+       `poker_pontos` e somado demanda a demanda no ranking por dev, na
+       capacidade e no deck. Gravar o total no pai contaria os pontos do filho
+       DUAS vezes em todos eles: uma principal com quatro vinculos de 8 viraria
+       64 pontos no mes em vez de 32. */
+    ok(!/poker_pontos\s*=\s*vinPontos|poker_pontos:\s*vinPontos/.test(W),
+       'o Worker nunca grava a soma da arvore em poker_pontos');
+    ok(!/poker_pontos\s*=\s*VINCULO\./.test(ADMIN + DEV + GANTT),
+       'e nenhuma tela grava a soma no campo de pontos');
   }
 
   let erroPz = null;

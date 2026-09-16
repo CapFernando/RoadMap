@@ -1115,6 +1115,7 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
+  <script src="vinculo.js?v=437901d1fa"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
@@ -3543,9 +3544,16 @@ function renderMelhorias() {
         ? `<span title="${esc((parentM.codigo ? parentM.codigo + ' · ' : '') + parentM.titulo)}" style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;cursor:help;">🔗 Dep. de: ${esc(parentM.codigo || '')} ${esc(parentM.titulo.substring(0,30))}${parentM.titulo.length > 30 ? '…' : ''}</span>`
         : '';
       // Dependências abertas deste card
-      const depCount = state.melhorias.filter(x => x.parent_id === m.id && statusKey(x) !== 'concluido').length;
+      const depCount = VINCULO.abertos(state.melhorias, m.id).length;
       const depBadge = depCount > 0
         ? `<span style="font-size:11px;background:#5C0A0A;color:#F9A0A0;border-radius:4px;padding:2px 7px;">⏳ ${depCount} dep. aberta${depCount>1?'s':''}</span>`
+        : '';
+      /* A SOMA DA ÁRVORE NO CARD DA PRINCIPAL. Sem ela o card diz "8 pts" e a
+         demanda custa 24 — e o número menor é o que vai para a cabeça de quem
+         está priorizando a lista. Só aparece onde há vínculo. */
+      const pesoTxt = VINCULO.frase(state.melhorias, m);
+      const pesoBadge = pesoTxt
+        ? `<span title="Soma dos pontos desta demanda e de tudo que depende dela. Cada vínculo continua contando o próprio ponto nos relatórios — este total é leitura, não é campo." style="font-size:11px;background:var(--bg3);color:var(--text3);border-radius:4px;padding:2px 7px;cursor:help;">🧮 ${esc(pesoTxt)}</span>`
         : '';
       // Selo na linha do titulo: "(pausada)" no fim da data passava batido para
       // quem varre a lista de cima a baixo.
@@ -3555,7 +3563,7 @@ function renderMelhorias() {
       return `<div class="card${estaPausado(m) ? ' card-pausada' : ''}">
         <div class="card-info">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <div class="card-nome">${esc(m.titulo)}</div>${badge}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}${prodBadge}
+            <div class="card-nome">${esc(m.titulo)}</div>${badge}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}${pesoBadge}${prodBadge}
           </div>
           ${sub ? `<div class="card-sub">${sub}</div>` : ''}
           ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${esc(m.descricao.substring(0,120))}${m.descricao.length>120?'…':''}</div>` : ''}
@@ -9413,15 +9421,24 @@ function openModalMelhoria(id) {
       🔗 <strong>Dependência de:</strong> ${esc(par ? par.titulo : '(card removido)')}
     </div>`;
   }
-  const childDeps = m ? state.melhorias.filter(x => x.parent_id === m.id) : [];
+  const childDeps = m ? VINCULO.filhosDe(state.melhorias, m.id) : [];
   if (childDeps.length) {
+    /* O PESO DA ÁRVORE, no alto da lista. A pergunta que se faz olhando para uma
+       tarefa principal com quatro vínculos é "quanto isto custa TUDO", e a
+       resposta estava espalhada em quatro cards que ninguém somava na mão.
+       A frase vem de `vinculo.js`: a mesma soma que a API devolve. */
+    const pesoTxt = VINCULO.frase(state.melhorias, m);
     depHTML += `<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;font-size:13px;">
-      <div style="font-weight:600;margin-bottom:6px;">Dependências abertas deste card:</div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;">
+        <span style="font-weight:600;">Dependências deste card:</span>
+        ${pesoTxt ? `<span style="color:var(--text3);font-size:12px;">🧮 ${esc(pesoTxt)}</span>` : ''}
+      </div>
       ${childDeps.map(d => {
         const dsk = statusKey(d);
         const done = dsk === 'concluido';
-        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-          <span>${done?'✅':'⏳'}</span>
+        const trava = VINCULO.bloqueia(d);
+        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;" title="${trava?'Dependência — trava o avanço':'Vinculada — pertence a este card, não trava'}">
+          <span>${done?'✅':(trava?'⏳':'🔗')}</span>
           <span style="flex:1">${esc(d.titulo)}</span>
           <span style="color:var(--text3);font-size:12px;">${esc(d.dev||'—')}</span>
           <span style="color:var(--text3);font-size:12px;">${d.entrega?formatDate(d.entrega):''}</span>
