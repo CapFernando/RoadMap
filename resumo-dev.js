@@ -143,10 +143,16 @@
     }
     if (balde === 'fim') {
       /* QUEM APROVOU entra na linha quando se sabe: numa daily, "o Fernando
-         aprovou" fecha a conversa que "foi concluída" deixa aberta. */
+         aprovou" fecha a conversa que "foi concluída" deixa aberta.
+
+         O PONTO NÃO ENTRA, e é decisão do Fernando — "não faz sentido para
+         esse contexto". Ele tem razão sobre o contexto: este texto é colado num
+         grupo, e ali "3 pt" é medida interna de planejamento. Quem lê no grupo
+         quer saber O QUE saiu e quem aprovou; o tamanho da carta do poker não
+         responde nenhuma das duas, e ainda convida a comparação errada entre
+         duas entregas que ninguém estimou para ser comparada assim. */
       return { rot: 'Concluído hoje',
-               det: (x.validadoPor ? 'aprovado por ' + x.validadoPor : 'aprovado hoje') +
-                    (x.pts ? ' · ' + x.pts + ' pt' : '') };
+               det: (x.validadoPor ? 'aprovado por ' + x.validadoPor : 'aprovado hoje') };
     }
     if (balde === 'pln') {
       /* O QUE FALTA AQUI É O TAMANHO, e é isso que a linha diz. Planning é a

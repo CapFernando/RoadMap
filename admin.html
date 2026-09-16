@@ -1123,8 +1123,8 @@
 <script src="capa-tecnologia.js?v=e3aaaae81d"></script>
 <script src="pipelines.js?v=eb8de916d3"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=8dfde5c19d"></script>
-<script src="relatorio-ppt.js?v=1d9a9a3615"></script>
+<script src="apresentacao.js?v=92f7c2561d"></script>
+<script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -7020,6 +7020,40 @@ function renderGerencial() {
  *  "Fora do mes" e "Sem sprint" ENTRAM como categoria propria, e nao somem: sem
  *  elas a soma das fatias nao fecha com o total, e a primeira coisa que se faz
  *  num slide de diretoria e somar.                                            */
+/** OS PONTOS DE CADA DEV, a partir de uma lista de entregas.
+ *
+ *  Estava dentro do `gerCortesDePontos`, que é keyed por ano+mês e pela base
+ *  inteira. O deck de Relatórios recorta por assunto e por janela, e precisava
+ *  do MESMO corte — copiá-lo daria dois "pontos do João" no mesmo mês, um por
+ *  deck, e nada na tela dizendo qual vale. É o defeito que esta ferramenta já
+ *  produziu quatro vezes com a conta da fila.
+ *
+ *  DEMANDA DE DUAS PESSOAS DIVIDE O PONTO. Somar cheio nos dois faria o total
+ *  dos devs passar do total do mês, e a soma que alguém faz de cabeça na sala
+ *  não fecharia.
+ *
+ *  SEM DEV, OS PONTOS VÃO PARA UM BALDE NOMEADO, e não para uma divisão por
+ *  zero. `devs.length === 0` dava `Infinity`/`NaN` e apagava o corte inteiro em
+ *  silêncio — foi assim que o slide saiu "sem dados no mês" com 1544 pontos ao
+ *  lado. Agora, se o corte vier vazio, é porque não há dono mesmo. */
+function cortePontosPorDev(itens, splitDevs) {
+  const porDev = {};
+  let semDono = 0;
+  (itens || []).forEach(m => {
+    const devs = splitDevs(m.dev);
+    const pts = Number(m.poker_pontos);
+    if (!Number.isFinite(pts) || pts <= 0) return;
+    if (!devs.length) { semDono += pts; return; }
+    const val = pts / devs.length;
+    devs.forEach(d => { porDev[d] = (porDev[d] || 0) + val; });
+  });
+  if (semDono > 0) porDev['Sem responsável'] = semDono;
+  // Arredonda no fim, e não a cada soma: meio ponto em duas demandas é um ponto
+  // inteiro, e arredondar antes o jogaria fora duas vezes.
+  Object.keys(porDev).forEach(k => { porDev[k] = Math.round(porDev[k]); });
+  return porDev;
+}
+
 function gerCortesDePontos(ano, mes, temaMap, splitDevs) {
   const semanas = gerSemanasDoMes(ano, mes);
   const itens = gerItensPontuados(ano, mes);
@@ -7034,19 +7068,8 @@ function gerCortesDePontos(ano, mes, temaMap, splitDevs) {
   });
   if (foraDaSemana > 0) porSemana['Fora do mês'] = foraDaSemana;
 
-  const porDev = {};
-  let semDono = 0;
-  itens.forEach(m => {
-    const devs = splitDevs(m.dev);
-    /* SEM DEV, OS PONTOS VAO PARA UM BALDE NOMEADO, e nao para uma divisao por
-       zero. `devs.length === 0` dava `Infinity`/`NaN` e apagava o corte inteiro em
-       silencio — foi assim que o slide saiu "sem dados no mes" com 1544 pontos
-       ao lado. Agora, se o corte vier vazio, e porque nao ha dono mesmo. */
-    if (!devs.length) { semDono += Number(m.poker_pontos); return; }
-    const val = Number(m.poker_pontos) / devs.length;
-    devs.forEach(d => { porDev[d] = (porDev[d] || 0) + val; });
-  });
-  if (semDono > 0) porDev['Sem responsável'] = semDono;
+  // DELEGA — ver `cortePontosPorDev`, que o deck de Relatórios usa também.
+  const porDev = cortePontosPorDev(itens, splitDevs);
 
   /* O ASSUNTO E A RAIZ DO SISTEMA, a mesma que o relatorio usa.
      Com o nome completo, "AXCred - Cadastro", "AXCred - Cadastro - Analise de
@@ -8051,9 +8074,22 @@ function relPptAssunto(raiz, j) {
   const frentes = (typeof apresPipelines === 'function')
     ? apresPipelines(entregues, j.de, j.ate) : null;
 
+  /* PONTOS ENTREGUES POR DESENVOLVEDOR — a página 14 do modelo.
+   *
+   * Mesma função do deck Gerencial (`cortePontosPorDev`), com as entregas
+   * DESTE recorte. `splitDevs` aqui é a mesma separação por "/" e "," que o
+   * resto da base usa: o campo aceita "Fulano / Beltrano" desde sempre, e as
+   * duas pessoas contam. */
+  const porDevPts = cortePontosPorDev(entregues, (dv) =>
+    String(dv || '').split(/[\/,]/).map(x => x.trim()).filter(Boolean));
+  const pontosDev = {
+    total: Object.keys(porDevPts).reduce((t, k) => t + porDevPts[k], 0),
+    porDev: porDevPts,
+  };
+
   const nome = raiz || 'Todos os sistemas';
   return {
-    raiz, nome, periodo: j.rot, fluxo, anterior, frentes,
+    raiz, nome, periodo: j.rot, fluxo, anterior, frentes, pontosDev,
     sub: entregues.length + (entregues.length === 1 ? ' entrega' : ' entregas') +
          ' · ' + pontos + (pontos === 1 ? ' ponto' : ' pontos') + ' · ' + j.rot,
     entregas: entregues.length, pontos, entraram, aberto: emAberto.length,

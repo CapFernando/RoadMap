@@ -1146,7 +1146,11 @@
   function slidePontosDev(pptx, pt, pagina, periodo) {
     return slideDeCorte(pptx, {
       pagina: pagina, periodo: periodo, titulo: 'Por desenvolvedor',
-      sub: 'a mesma distribuição do painel gerencial',
+      /* "Distribuição", e nao "a mesma distribuicao do painel gerencial".
+         E o que o modelo diz, e o texto antigo explicava a PROCEDENCIA do
+         numero em vez de dizer o que o slide mostra — quem le nao estava
+         perguntando de onde veio. */
+      sub: 'Distribuição',
       total: pt.total, itens: itensDoCorte(pt.porDev), larguraNome: 1.52 });
   }
 
@@ -2227,6 +2231,11 @@
        da fila comeca pelo meio da historia: a sala pergunta "quantos somos e
        quanto coube no mes" antes de "a fila cresceu". */
     slidePipelines: slidePipelines,
+    /* `slidePontosDev` — a pagina 14 do modelo ("Pontos entregues /
+       Distribuicao / Por desenvolvedor"). Era o ultimo slide do modelo que o
+       deck de Relatorios nao tinha: ele dizia QUAIS ASSUNTOS puxaram o mes e
+       calava sobre QUEM. */
+    slidePontosDev: slidePontosDev,
     rodape: rodape,
     cartao: cartao,
     cartaoKpi: cartaoKpi,

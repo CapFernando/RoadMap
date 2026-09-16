@@ -229,6 +229,21 @@
     return K.slidePipelines(pptx, pl, pagina, t.periodo);
   }
 
+  /* PONTOS ENTREGUES POR DESENVOLVEDOR — a página 14 do modelo.
+   *
+   * O deck dizia quais ASSUNTOS puxaram o mês e calava sobre QUEM. É o mesmo
+   * `slidePontosDev` do deck mensal, com o corte deste recorte — uma segunda
+   * soma por dev daria dois "pontos do João" no mesmo mês, um por deck.
+   *
+   * SEM PONTUAÇÃO NENHUMA, NÃO DESENHA. Um slide de distribuição com a lista
+   * vazia não diz "ninguém entregou", diz que o slide quebrou. */
+  function slidePontosPorDev(pptx, d, t, pagina) {
+    var K = kit();
+    var pt = t.pontosDev;
+    if (!pt || !pt.total || !Object.keys(pt.porDev || {}).length) return null;
+    return K.slidePontosDev(pptx, pt, pagina, t.periodo);
+  }
+
   function slidePanorama(pptx, d, t, pagina) {
     var K = kit();
     /* ESTE SLIDE É O `slideMes` DO DECK MENSAL, e não mais um parecido.
@@ -632,6 +647,14 @@
       (d.assuntos || []).forEach(function (t, i) {
         slideResumoAssunto(pptx, d, t, ++p, i + 1);
       });
+      /* O CORTE POR PESSOA VEM DEPOIS DOS ASSUNTOS, e nao entre o ranking e
+         eles. No modelo os dois slides de distribuicao ficam colados
+         (assuntos, depois pessoas), mas aqui o ranking e seguido pelos cinco
+         resumos que o detalham — e esse par ja tem razao escrita: "na ordem
+         inversa, a sala chega ao quinto slide sem saber se o primeiro era o
+         maior ou o menor". Entao a pessoa entra depois, ainda antes do "o que
+         vem", que e onde o modelo tambem a poe. */
+      if (slidePontosPorDev(pptx, d, d.geral, p + 1)) p += 1;
       slideOQueVem(pptx, d, d.geral, ++p);
       /* O BACKLOG FECHA O DECK, depois do "O que vem". A ordem e a mesma da aba
          de relatorios, e pelo mesmo motivo: "o que entra agora" e a pergunta da
@@ -646,6 +669,7 @@
       if (slideForma(pptx, d, t, p + 1)) p += 1;
       slideEntregas(pptx, d, t, ++p);
       if ((t.modulos || []).length > 1) slideModulos(pptx, d, t, ++p);
+      if (slidePontosPorDev(pptx, d, t, p + 1)) p += 1;
       slideOQueVem(pptx, d, t, ++p);
       if (d.backlog && d.backlog.total) slideBacklog(pptx, d, d.backlog, t, ++p);
     }

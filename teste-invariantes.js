@@ -4927,18 +4927,67 @@ ok((ADMIN.match(/gerCortesDePontos\(/g) || []).length >= 3,
    'e ela e chamada pelo painel E pelo deck, em vez de a soma ser repetida');
 
 (() => {
-  const c = corpo(ADMIN, 'function gerCortesDePontos(');
-  ok(!!c, 'existe o corpo da funcao');
+  /* O CORTE POR DEV SAIU do `gerCortesDePontos` e virou `cortePontosPorDev`:
+     o deck de Relatorios recorta por assunto e por janela e precisava do MESMO
+     corte — copia-lo daria dois "pontos do Joao" no mesmo mes, um por deck.
+
+     E AS INVARIANTES PASSARAM A EXECUTAR a funcao, em vez de procurar a linha
+     `Number(m.poker_pontos) / devs.length` no arquivo. Regex provava que a
+     divisao estava ESCRITA; executar prova que ela acontece. */
+  const c = corpo(ADMIN, 'function cortePontosPorDev(');
+  ok(!!c, 'existe o corpo da funcao do corte por dev');
   if (!c) return;
+  /* `corpo` devolve a FUNCAO INTEIRA, com assinatura — e nao so o miolo. Eu a
+     embrulhei numa segunda assinatura na primeira versao e o resultado foi uma
+     funcao que nao devolvia nada; o erro apareceu como "Cannot read properties
+     of undefined". */
+  const corte = new Function(c + 'return cortePontosPorDev;')();
+  const split = (dv) => String(dv || '').split(/[\\/,]/).map((x) => x.trim()).filter(Boolean);
+
   /* DEMANDA DE DUPLA DIVIDE O PONTO. Contar inteiro para cada um faz a soma por
      dev estourar o total do mes — e a primeira coisa que se faz num slide de
      diretoria e somar as fatias. */
-  ok(/Number\(m\.poker_pontos\) \/ devs\.length/.test(c),
-     'demanda de dupla divide o ponto entre os dois');
-  /* "FORA DO MES" E "SEM SPRINT" ENTRAM como categoria propria: sem elas a soma
-     das fatias nao fecha com o total. */
-  ok(/'Fora do mês'/.test(c) && /'Sem sprint'/.test(c),
-     'as sobras entram nomeadas, em vez de sumirem da conta');
+  {
+    const r = corte([{ dev: 'Ana / Bruno', poker_pontos: 8 }], split);
+    ok(r.Ana === 4 && r.Bruno === 4,
+       'demanda de dupla divide o ponto entre os dois', JSON.stringify(r));
+    const total = Object.keys(r).reduce((t, k) => t + r[k], 0);
+    ok(total === 8, 'e a soma por dev nao estoura o total', String(total));
+  }
+
+  /* SEM DEV, OS PONTOS VAO PARA UM BALDE NOMEADO, e nao para uma divisao por
+     zero. `devs.length === 0` dava `Infinity`/`NaN` e apagava o corte inteiro em
+     silencio — foi assim que o slide saiu "sem dados no mes" com 1544 pontos ao
+     lado. */
+  {
+    const r = corte([{ dev: '', poker_pontos: 5 }], split);
+    const vals = Object.keys(r).map((k) => r[k]);
+    ok(vals.every((v) => Number.isFinite(v)),
+       'demanda sem dono vai para um balde nomeado, e nao para uma divisao por zero',
+       JSON.stringify(r));
+    ok(r['Sem responsável'] === 5,
+       'e o balde tem nome — corte vazio passa a significar "nao ha dono mesmo"',
+       JSON.stringify(r));
+  }
+
+  /* ARREDONDA NO FIM, e nao a cada soma: meio ponto em duas demandas e um
+     ponto inteiro, e arredondar antes o jogaria fora duas vezes. */
+  {
+    const r = corte([{ dev: 'Ana / Bruno', poker_pontos: 1 },
+                     { dev: 'Ana / Bruno', poker_pontos: 1 }], split);
+    ok(r.Ana === 1, 'meio ponto em duas demandas soma um, e nao zero', JSON.stringify(r));
+  }
+
+  /* E SEM PONTUACAO NAO ENTRA — nem como zero, que criaria um dev de 0 pt na
+     lista e faria a distribuicao ter linha sem barra. */
+  ok(Object.keys(corte([{ dev: 'Ana' }], split)).length === 0,
+     'demanda sem pontuacao nao cria linha no corte');
+
+  /* E AS DUAS PONTAS CHAMAM A MESMA FUNCAO. */
+  ok(/const porDev = cortePontosPorDev\(itens, splitDevs\);/.test(ADMIN),
+     'o painel/deck Gerencial delega o corte');
+  ok(/cortePontosPorDev\(entregues,/.test(ADMIN),
+     'e o deck de Relatorios usa a mesma, com as entregas do recorte dele');
 })();
 
 /* BARRA HORIZONTAL, E NAO A ROSCA DO PAINEL. Unica coisa que muda de forma, e a
@@ -5264,15 +5313,14 @@ ok(/for \(let k = 1; k >= 0; k--\) \{/.test(ADMIN),
    STRING. Passei a primeira onde ia a segunda: a lista vinha vazia,
    `devs.length` dava zero, e a divisao apagava o corte inteiro EM SILENCIO — o
    slide saiu "sem dados no mes" com 1544 pontos ao lado. */
-(() => {
-  const c = corpo(ADMIN, 'function gerCortesDePontos(');
-  ok(!!c, 'existe o corpo dos cortes de pontos');
-  if (!c) return;
-  ok(/if \(!devs\.length\)/.test(c),
-     'demanda sem dono vai para um balde nomeado, e nao para uma divisao por zero');
-  ok(/porDev\['Sem responsável'\]/.test(c),
-     'e o balde tem nome — corte vazio passa a significar "nao ha dono mesmo"');
-})();
+/* ESTA COBRANCA MUDOU DE LUGAR, e nao sumiu: a regra saiu do
+   `gerCortesDePontos` para `cortePontosPorDev` (o deck de Relatorios precisava
+   do mesmo corte, por assunto e por janela), e as invariantes dela foram junto
+   — agora EXECUTANDO a funcao, e nao procurando `if (!devs.length)` no texto.
+   Ver o bloco "o corte por dev" acima. Manter as duas seria cobrar de um lugar
+   que nao decide mais nada. */
+ok(/const porDev = cortePontosPorDev\(itens, splitDevs\);/.test(ADMIN),
+   'os cortes de pontos delegam o corte por dev');
 // A chamada do deck adapta a assinatura, em vez de passar a funcao errada.
 ok(/\(txt\) => window\.PIPELINES\.devsDaDemanda\(\{ dev: txt \}\)/.test(ADMIN),
    'o deck adapta devsDaDemanda para a assinatura de splitDevs');
@@ -11018,6 +11066,50 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
     ok(/dr-nada/.test(RD.html(RD.montar({ temas: [], melhorias: [] }, 'X', HOJE))),
        'e a tela tambem diz, em vez de mostrar tres secoes vazias');
+
+    /* ─── O PONTO NAO VAI PARA O GRUPO ─────────────────────────────────
+     *
+     * Pedido do Fernando, com o print do grupo: "ajuste para nao levar os
+     * pontos, nao faz sentido para esse contexto". Ele tem razao sobre o
+     * contexto — este texto e colado num grupo, e ali "3 pt" e medida interna
+     * de planejamento. Quem le quer saber O QUE saiu e quem aprovou.
+     *
+     * A INVARIANTE EXECUTA O TEXTO, e nao procura a linha do codigo: o que se
+     * garante e que nenhuma LINHA do texto sai com "N pt". */
+    {
+      const linhas = RD.texto(RD.montar(state, 'Dan Weine', HOJE)).split('\n');
+      const comPonto = linhas.filter((l) => /^- AX/.test(l) &&
+                                           /\d+\s*pt\b/.test(l));
+      /* O balde de PLANNING e a unica excecao, e ela e do proprio balde:
+         planning e a etapa em que a demanda vai ser MEDIDA, e "3 pt ja
+         estimados" diz que ela esta pronta para sair da reuniao. Tirar o
+         numero dali deixaria a linha sem assunto. */
+      const foraDoPlanning = comPonto.filter((l) => !/Planning,/.test(l));
+      ok(foraDoPlanning.length === 0,
+         'nenhuma linha do texto do grupo leva pontuacao, fora o balde de Planning',
+         foraDoPlanning.join(' | ') || 'nenhuma');
+      /* E O CONCLUIDO, que foi o circulado no print, nao leva mesmo.
+         COM DADO PROPRIO: o fixture nao tem nenhuma concluida HOJE, entao a
+         primeira versao disto conferia ZERO linhas e passava por vacuidade —
+         que e o pior tipo de verificacao, a que da OK sem ter olhado nada. */
+      {
+        const hojeLocal = HOJE + 'T12:00:00';
+        const st2 = { temas: state.temas, melhorias: [
+          { id: 'f1', codigo: 'AX-459', titulo: 'Cancelar notificacao',
+            dev: 'Dan Weine', tema_id: 't1', status_planejamento: 'concluido',
+            poker_pontos: 3, validado_em: hojeLocal, validado_por: 'Fernando Nascimento' },
+        ] };
+        const t2 = RD.texto(RD.montar(st2, 'Dan Weine', HOJE)).split('\n');
+        const l2 = t2.filter((l) => /^- AX-459/.test(l));
+        ok(l2.length === 1, 'a concluida de hoje aparece no texto do grupo',
+           String(l2.length));
+        ok(/aprovado por Fernando Nascimento/.test(l2[0] || ''),
+           'e diz quem aprovou, que e o que fecha a conversa', l2[0] || '');
+        ok(!/\d+\s*pt\b/.test(l2[0] || ''),
+           'e NAO leva os 3 pt — foi exatamente esta linha que o Fernando circulou',
+           l2[0] || '');
+      }
+    }
   }
 
   {
