@@ -10909,6 +10909,46 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'no painel do dev o resumo e do PROPRIO dev, e o texto da tela diz "sua"');
   }
 
+  sec('O resumo da entrega na API — e a doc dizendo que ele existe');
+  {
+    /* "Esses dias criamos o resumo da demanda, deixe disponivel na api."
+       Ele JA estava: `devVisao` devolve, e as duas rotas de escrita aceitam. O
+       que faltava era a DOC das rotas de LEITURA dizer isso — campo que a
+       automacao nao sabe que existe e campo que nao existe dao no mesmo. */
+    const dv = corpo(WC, 'const devVisao = (m, temas) => ({');
+    ok(!!dv, 'a projecao da API foi localizada');
+    for (const campo of ['resumo_entrega', 'implementacao']) {
+      ok(dv && new RegExp(campo + ': m\.' + campo).test(dv),
+         'a API devolve `' + campo + '` em toda leitura de demanda');
+    }
+    /* AS DUAS ROTAS DE ESCRITA ACEITAM, e cortam no mesmo teto do campo da tela. */
+    const escrita = (WC.match(/limpaTexto\(body\.resumo_entrega, 300\)/g) || []).length;
+    ok(escrita === 2, 'e as duas rotas de escrita aceitam o resumo, cortando em 300',
+       String(escrita));
+
+    /* A DOC DAS ROTAS DE LEITURA CITA O CAMPO. Esta invariante existe porque a
+       doc e a unica porta de entrada de quem automatiza: o campo estava na API
+       desde que foi criado, e ninguem tinha como descobrir. */
+    const doc = corpo(DEV, 'function epFuncoesHTML(');
+    ok(!!doc, 'a doc da API foi localizada');
+    for (const rota of ['demanda-consultar', 'demandas-minhas']) {
+      const i = doc.indexOf("acao: '" + rota + "'");
+      ok(i > 0, 'a rota ' + rota + ' esta documentada');
+      // Ate o proximo `acao:` — o bloco daquela rota.
+      const prox = doc.indexOf("acao: '", i + 10);
+      const bloco = doc.slice(i, prox > 0 ? prox : i + 1200);
+      ok(/resumo_entrega/.test(bloco),
+         'e a doc dela DIZ que a resposta traz o resumo_entrega');
+    }
+    for (const rota of ['demanda-atualizar', 'demanda-entregar']) {
+      const i = doc.indexOf("acao: '" + rota + "'");
+      const prox = doc.indexOf("acao: '", i + 10);
+      const bloco = doc.slice(i, prox > 0 ? prox : i + 1600);
+      ok(/resumo_entrega/.test(bloco),
+         'e a doc de ' + rota + ' diz que ele pode ser gravado');
+    }
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
