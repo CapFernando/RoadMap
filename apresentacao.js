@@ -1504,24 +1504,24 @@
         x: x + 0.11, y: y + 0.49, w: CW - 0.22, h: 0.16, fontSize: 7.5, color: C.fraco });
     });
 
-    // -- O rodape que impede a leitura errada ----------------------------------
-    var cob = pl.cobertura || {};
-    var notas = [];
-    if (cob.total) {
-      notas.push('Horas lançadas em ' + cob.comHoras + ' de ' + cob.total +
-                 ' entregas (' + cob.pct + '%)' +
-                 (cob.pct < 90 ? ' — o restante entra por aproximação' : ''));
-    }
-    // Planejado = dia util da pessoa dividido entre o que ela tinha em maos. A
-    // frase existe porque a primeira pergunta da sala sobre este slide e sempre
-    // "de onde saiu o planejado?".
-    notas.push('Planejado: cada dia útil vale 8h, divididas entre as demandas do dia');
-    s.addText(notas.join('   ·   '), {
-      x: 0.5, y: 4.62, w: 9.0, h: 0.2, fontSize: 8, color: C.fraco });
-    if ((pl.foraDoDeck || []).length) {
-      s.addText('Fora do recorte: ' + pl.foraDoDeck.join(', '), {
-        x: 0.5, y: 4.80, w: 9.0, h: 0.2, fontSize: 8, color: C.fraco });
-    }
+    /* ── AS TRÊS NOTAS DE RODAPÉ SAÍRAM, e a decisão é do Fernando ───────────
+     *
+     * Ele mandou a página como modelo, sem elas: a cobertura de horas ("Horas
+     * lançadas em 172 de 175 entregas (98%)"), a explicação do planejado
+     * ("cada dia útil vale 8h…") e o "Fora do recorte: Suporte, Bitrix 24,
+     * Análise de requisitos".
+     *
+     * ELE TEM RAZÃO SOBRE O QUE ELAS FAZEM NUMA SALA. Cada uma foi escrita
+     * aqui para responder uma pergunta antes que ela fosse feita — e o efeito
+     * de três linhas de 8pt no pé de um slide executivo é o oposto: ninguém
+     * lê 8pt projetado, e quem lê encontra ressalva. "98% das horas lançadas"
+     * convida "e os 2%?"; "fora do recorte" convida "e por que estão fora?".
+     * São perguntas que quem apresenta responde melhor falando, e o slide
+     * sustenta o número em vez de se defender dele.
+     *
+     * O DADO NÃO SUMIU: `pl.cobertura` e `pl.foraDoDeck` continuam saindo do
+     * `apresPipelines`, e quem quiser a ressalva a tem na aba Gerencial. O que
+     * mudou é que ela deixou de ir para a parede. */
     rodape(s, periodo, pagina);
     return s;
   }

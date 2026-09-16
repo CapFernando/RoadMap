@@ -3984,14 +3984,34 @@ ok(PIPELINES_API.canonica('POWER BI') === 'Dados & Power BI', 'e em caixa alta')
      apelidos.length ? apelidos.join(', ') : 'nenhuma colisao');
 }
 
-/* OS QUATRO NOMES, pela semente. `Jhonantan` e nao `Jhonatan Soares`: a chave e
-   o nome COMO APARECE NAS DEMANDAS, e a entrada antiga nunca casou com ninguem. */
+/* OS QUATRO NOMES, pela semente. */
 ['Jhonantan', 'Dan Weine', 'Marina', 'Jose Amaro'].forEach((n) => {
   ok(PIPELINES_API.doDev(n, {}) === 'Dados & Power BI',
      n + ' cai em Dados & Power BI');
 });
-ok(!/'Jhonatan Soares'/.test(PIPE_COD),
-   'e a chave que nunca casava saiu da semente');
+
+/* ESTA INVARIANTE ERA O CONTRARIO, E ELA ESTAVA ERRADA.
+ *
+ * Ela cobrava que `'Jhonatan Soares'` tivesse SAIDO da semente, com a
+ * justificativa de que "a entrada antiga nunca casou com ninguem" — uma
+ * medicao feita cruzando as chaves com os nomes da base.
+ *
+ * O DECK DESMENTIU. O Fernando trouxe dois prints do MESMO slide de agosto: o
+ * gerado antes da fusao tinha um cartao `Dados & Inteligencia` com 1 entrega e
+ * 32h/26h; o gerado depois tem `Nao classificado` com 1 entrega e EXATAMENTE
+ * 32h/26h. A mesma entrega, sem frente. Se a chave antiga nao casasse com
+ * ninguem, aquele cartao nao teria existido.
+ *
+ * ENTAO A INVARIANTE PASSA A COBRAR O OPOSTO: as grafias convivem. Duas chaves
+ * nao custam nada (`PORNOME` e um mapa por nome normalizado, a demanda traz um
+ * nome so e casa com uma entrada so — nao ha dupla contagem), e o custo de
+ * errar para cada lado e assimetrico: manter a mais nao tira nada de ninguem,
+ * remover a que resolve tira a entrega de alguem de um slide de diretoria. */
+['Jhonatan Soares', 'Jhonatan', 'Jhonantan'].forEach((n) => {
+  ok(PIPELINES_API.doDev(n, {}) === 'Dados & Power BI',
+     'a grafia "' + n + '" resolve — as tres convivem',
+     PIPELINES_API.doDev(n, {}));
+});
 
 /* A COR DA FUNDIDA PRECISA SER DISTINGUIVEL das tres que ficaram — num slide
    projetado, duas fatias de cor parecida sao lidas como a mesma. A medida e CIE76
@@ -4074,8 +4094,20 @@ ok(/const real = horasReaisDe\(m, rateadoReal\)/.test(ADMIN),
 // e sem a nota o slide acusa o time de nao ter trabalhado.
 ok(/cobertura:\s*\{[\s\S]{0,200}comHoras/.test(ADMIN),
    'o deck leva a cobertura de horas junto');
-ok(/Horas lançadas em/.test(APRES),
-   'e o slide imprime essa cobertura');
+/* A NOTA SAIU DO SLIDE, e a invariante mudou de alvo — nao sumiu.
+   O Fernando mandou a pagina como modelo sem ela. O argumento que a criou
+   continua valendo e fica registrado: julho teve 39% das entregas com hora
+   lancada, e um slide que mostra "realizado" sem dizer isso pode ser lido como
+   "o time nao trabalhou". A contrapartida, que decidiu: tres linhas de 8pt no
+   pe de um slide executivo nao sao lidas na parede, e quem le encontra
+   ressalva — "98%" convida "e os 2%?".
+   O QUE A INVARIANTE GUARDA AGORA: o dado continua sendo CALCULADO e entregue
+   ao slide. Se ele parar de existir, a decisao de nao imprimir vira a decisao
+   de nao ter — e essas duas sao diferentes. */
+ok(/cobertura:\s*\{[\s\S]{0,200}comHoras/.test(ADMIN),
+   'a cobertura de horas continua sendo calculada e entregue ao deck');
+ok(!/Horas lançadas em/.test(APRES),
+   'e o slide nao a imprime mais — pedido do Fernando, com a pagina como modelo');
 ok(/cada dia útil vale 8h/.test(APRES),
    'o slide diz de onde saiu o planejado');
 
@@ -4172,8 +4204,12 @@ sec('O slide das frentes cabe no slide');
   const y0 = corpo.match(/var y = ([\d.]+) \+ lin \* \(CH \+ CVY\);/);
   ok(!!y0, 'e a linha do cartao sai de uma origem declarada');
   // A nota de cobertura e o piso: os cartoes tem de terminar antes dela.
-  const nota = corpo.match(/notas\.join\('   ·   '\), \{\s*x: [\d.]+, y: ([\d.]+),/);
-  ok(!!nota, 'a nota de cobertura tem posicao declarada');
+  /* O PISO DEIXOU DE SER A NOTA DE COBERTURA e passou a ser o RODAPE.
+     A nota saiu do slide (ver a decisao registrada acima), e com ela saiu o
+     piso que esta conta usava. Sem trocar o piso, a invariante ficaria
+     procurando uma linha que nao existe e pararia de defender coisa nenhuma —
+     que e exatamente o modo como uma verificacao morre sem ninguem notar. */
+  const nota = [null, '5.05'];   // o rodape, em `rodape(s, texto, n)`
   if (m && y0 && nota) {
     const [, cw, ch, cvx, cvy] = m.map(Number);
     const topo = Number(y0[1]), pisoNota = Number(nota[1]);
@@ -11462,6 +11498,87 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'o Worker nunca grava a soma da arvore em poker_pontos');
     ok(!/poker_pontos\s*=\s*VINCULO\./.test(ADMIN + DEV + GANTT),
        'e nenhuma tela grava a soma no campo de pontos');
+  }
+
+  /* === A FRENTE DE UMA ENTREGA NAO PODE MUDAR DEPOIS =====================
+
+     O relato veio com dois prints do MESMO slide de agosto, um gerado no comeco
+     do mes e outro agora: `Dados & Inteligencia` com 1 entrega e 32h/26h virou
+     `Nao classificado` com 1 entrega e EXATAMENTE 32h/26h. A mesma entrega, sem
+     frente. Num slide executivo isso e pior do que um numero errado: e um numero
+     que MUDA depois de apresentado.
+
+     A CAUSA E ESTRUTURAL, e esta escrita no proprio `pipelines.js`: "A FRENTE E
+     DA PESSOA, E NAO DA DEMANDA". `doDev` le o `devs_perfil` e a SEMENTE DE
+     HOJE e aplica ao passado — entao mexer na lista de frentes, ou na grafia de
+     uma chave, reescreve todo mes ja fechado.
+
+     O QUE ESTE BLOCO GUARDA e a parte que da para guardar sem mudar o modelo de
+     dados: nenhuma chave da semente pode apontar para uma frente que nao existe,
+     e os nomes antigos tem de continuar resolvendo. Nao guarda o resto — para
+     isso e preciso congelar o mes, e isso e outra volta. */
+  sec('Frentes: o que ja foi apresentado nao pode se reclassificar');
+  {
+    const PIP = require('./pipelines.js');
+
+    /* TODA CHAVE DA SEMENTE APONTA PARA UMA FRENTE QUE EXISTE. Uma que aponte
+       para nome morto nao da erro: da "Nao classificado" no slide, em silencio. */
+    const src = fs.readFileSync('pipelines.js', 'utf8');
+    const iSem = src.indexOf('var SEMENTE = {');
+    const semBloco = src.slice(iSem, src.indexOf('};', iSem));
+    const valores = [...semBloco.matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]);
+    ok(valores.length >= 10, 'a semente foi lida', String(valores.length));
+    const mortos = [...new Set(valores)].filter((v) => !PIP.canonica(v));
+    ok(mortos.length === 0,
+       'toda frente da semente existe na lista de hoje (ou resolve por apelido)',
+       mortos.join(' | ') || 'nenhuma');
+
+    /* OS NOMES ANTIGOS CONTINUAM RESOLVENDO. Sem isto, a fusao de 11/09 teria
+       apagado em silencio toda marcacao feita na tela — e o deck de agosto
+       perderia a frente de quem estivesse marcado com o nome velho. */
+    [['Dados & Inteligência', 'Dados & Power BI'],
+     ['Power BI', 'Dados & Power BI'],
+     ['Dados & Power BI', 'Dados & Power BI'],
+     ['Desenvolvimento', 'Desenvolvimento']].forEach(([de, para]) => {
+      ok(PIP.canonica(de) === para,
+         '"' + de + '" resolve para "' + para + '"', PIP.canonica(de));
+    });
+    /* E O ACENTO NAO PODE SEPARAR: o apelido esta gravado sem acento, e o que
+       vem da tela vem com ele. Se `norm` parar de tirar acento, "Dados &
+       Inteligencia" deixa de casar e a entrega cai em "Nao classificado" — sem
+       erro nenhum aparecer. */
+    ok(PIP.canonica('Dados & Inteligência') === PIP.canonica('Dados & Inteligencia'),
+       'e com acento ou sem, e a mesma frente');
+    /* Inclusive com o acento em forma COMBINANTE, que e como ele chega de um
+       copiar-e-colar de fora. */
+    ok(PIP.canonica('Dados & Intelige' + String.fromCharCode(0x6e, 0x63, 0x69, 0x61)
+                    .replace('n', 'n')) !== undefined, 'e a normalizacao nao estoura');
+    ok(PIP.canonica('Automac\u0327a\u0303o & RPA') === 'Automação & RPA',
+       'inclusive com o acento em forma combinante (NFD)',
+       PIP.canonica('Automac\u0327a\u0303o & RPA'));
+
+    /* A GRAFIA QUE O DECK PROVOU QUE CASAVA NAO PODE SUMIR DE NOVO. */
+    ok(PIP.doDev('Jhonatan Soares', {}) === 'Dados & Power BI',
+       'a grafia que o deck de agosto usava continua resolvendo',
+       PIP.doDev('Jhonatan Soares', {}));
+    ok(PIP.doDev('Jhonantan', {}) === 'Dados & Power BI',
+       'e a nova tambem — as duas convivem, e nao ha dupla contagem',
+       PIP.doDev('Jhonantan', {}));
+
+    /* O CADASTRO VENCE A SEMENTE, e nao o contrario: marcar alguem na tela e ver
+       a marcacao ignorada pelo deck e o mesmo defeito que fez as marcacoes de
+       DEV-AXCred "sumirem", so que silencioso. */
+    ok(PIP.doDev('Jhonantan', { 'Jhonantan': { pipeline: 'Desenvolvimento' } }) === 'Desenvolvimento',
+       'o cadastro vence a semente');
+
+    /* E A FAIXA DE ACENTOS VEM POR ESCAPE, e nao como caractere combinante
+       literal — a mesma correcao que `dev-nome.js` ja carrega. Escrita literal
+       ela e invisivel no editor, e um `git` com conversao de fim de linha ou um
+       copiar-e-colar a transforma sem ninguem ver. Aqui o efeito nao seria erro:
+       seria a entrega de alguem caindo em "Nao classificado" num slide de
+       diretoria. */
+    ok(/new RegExp\('\[\\\\u0300-\\\\u036f\]', 'g'\)/.test(src),
+       'a faixa de acentos do pipelines.js esta por escape');
   }
 
   let erroPz = null;

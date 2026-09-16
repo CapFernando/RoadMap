@@ -116,10 +116,24 @@
        convida a pergunta "e o que é isso?" sem ter resposta. */
     'João Carvalho': 'IA & Vibe coding',
     /* Dados & Power BI — os quatro nomes conferidos com o Fernando.
-       `Jhonantan` E NAO `Jhonatan Soares`: a chave da semente e o nome COMO ELE
-       APARECE NAS DEMANDAS, e a entrada anterior nunca casou com ninguem. Ver a
-       nota sobre as chaves orfas no fim deste bloco. */
+
+       AS DUAS GRAFIAS DE JHONATAN FICAM, e a segunda voltou por medição.
+       Quando as duas frentes foram fundidas, a chave passou de
+       `Jhonatan Soares` para `Jhonantan` com a justificativa de que a anterior
+       "nunca casou com ninguém". O deck desmente: antes da fusão havia um
+       cartão `Dados & Inteligência` com 1 entrega e 32h/26h; depois, um cartão
+       `Não classificado` com 1 entrega e EXATAMENTE 32h/26h. A mesma entrega,
+       agora sem frente — ou seja, a chave antiga casava, e a troca a perdeu.
+
+       DUAS CHAVES NÃO CUSTAM NADA: `PORNOME` é um mapa por nome normalizado, a
+       demanda traz um nome só e casa com uma entrada só. Não há dupla
+       contagem. Apagar a grafia que resolve, para deixar só a que talvez
+       resolva, é o negócio errado — o custo de errar para o lado de manter é
+       zero, e o de errar para o lado de remover é uma entrega sumindo da frente
+       dela num slide de diretoria. */
     'Jhonantan': 'Dados & Power BI',
+    'Jhonatan Soares': 'Dados & Power BI',
+    'Jhonatan': 'Dados & Power BI',
     'Dan Weine': 'Dados & Power BI',
     'Marina': 'Dados & Power BI',
     /* `Jose Amaro` NAO ESTAVA na lista de devs do arquivo de dados conferido.
@@ -135,9 +149,22 @@
 
   // Acento e caixa não podem separar a mesma pessoa: as demandas trazem
   // "Flávio" e a conta pode ter sido cadastrada como "Flavio".
+  /* A FAIXA DOS ACENTOS VEM POR ESCAPE, e não como caractere literal — a mesma
+     correção que `dev-nome.js` já carrega, e que faltava aqui.
+
+     Escrita direto no código, ela é `[<U+0300>-<U+036F>]`: dois caracteres
+     COMBINANTES, invisíveis, pendurados no colchete ao lado. Um editor que
+     normalize o arquivo, um copiar-e-colar ou um `git` com conversão de fim de
+     linha, e a faixa vira outra coisa sem ninguém ver — e aqui isso não daria
+     erro: daria "Dados & Inteligência" deixando de casar com o apelido, e a
+     entrega de alguém caindo em "Não classificado" num slide de diretoria.
+     Hoje ela funciona (conferido executando `canonica`); o escape é para que
+     continue funcionando. */
+  var ACENTOS = new RegExp('[\\u0300-\\u036f]', 'g');
+
   function norm(s) {
     return String(s == null ? '' : s)
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .normalize('NFD').replace(ACENTOS, '')
       .trim().toLowerCase();
   }
 
