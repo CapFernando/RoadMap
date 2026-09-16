@@ -1564,7 +1564,11 @@
     var q = d.quebra || {};
 
     // -- Cabecalho: DELEGA (ver `cabecalhoEm`) --------------------------------
-    cabecalhoEm(s, pptx, 'O MÊS', 'backlog, o que entrou e o que saiu', d.periodo,
+    /* O SUBTITULO PODE SER DITO POR QUEM CHAMA, e o padrao continua o do modelo.
+       O deck de Relatorios usa este MESMO slide recortado por assunto, e ali a
+       sala precisa saber de qual fila se esta falando: "backlog, o que entrou e
+       o que saiu" sem o nome do assunto seria lido como a fila inteira. */
+    cabecalhoEm(s, pptx, 'O MÊS', d.sub || 'backlog, o que entrou e o que saiu', d.periodo,
                 f.corte ? (f.emCurso ? 'posição de ' : 'fechamento em ') + f.corte : '');
 
     /* A CONTA DO MES, em quatro cartoes com os sinais entre eles.
@@ -2211,6 +2215,12 @@
     slideBase: slideBase,
     slideCapa: slideCapa,
     slideTitulo: slideTitulo,
+    /* `slideMes` SAI DO KIT porque o deck de Relatorios desenhava a propria
+       resposta para "como foi o mes" — quatro cartoes soltos (entregas, pontos,
+       entraram, em aberto hoje) contra a conta do modelo (backlog + entraram −
+       sairam = em aberto). Eram duas perguntas diferentes na mesma reuniao, e
+       o print que o Fernando circulou era exatamente isso. */
+    slideMes: slideMes,
     rodape: rodape,
     cartao: cartao,
     cartaoKpi: cartaoKpi,

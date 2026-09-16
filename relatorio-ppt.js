@@ -212,39 +212,56 @@
      inócuo e não é — lidos em sequência, eles contam se a fila cresceu ou
      encurtou, e essa é a leitura que o slide existe para dar. */
   function slidePanorama(pptx, d, t, pagina) {
-    var K = kit(), C = K.cores;
-    var s = K.slideTitulo(pptx, t.nome, t.sub, pagina, t.periodo);
-    var w = (LARG - 3 * 0.2) / 4;
-    var cards = [
-      { rot: 'ENTREGAS', val: fmt(t.entregas),
-        nota: t.deltaEntregas || plural(t.entregas, 'demanda concluída', 'demandas concluídas'),
-        cor: C.verde },
-      { rot: 'PONTOS ENTREGUES', val: fmt(t.pontos),
-        nota: t.notaPontos || '', cor: C.verde },
-      { rot: 'ENTRARAM NO PERÍODO', val: fmt(t.entraram),
-        nota: t.notaEntraram || 'pedidos novos registrados', cor: C.azul },
-      { rot: 'EM ABERTO HOJE', val: fmt(t.aberto),
-        nota: t.notaAberto || '', cor: t.aberto ? C.ambar : C.azul },
-    ];
-    cards.forEach(function (c, i) {
-      K.cartaoKpi(pptx, s, {
-        x: MARGEM + i * (w + 0.2), y: Y_CORPO, w: w, h: 1.06,
-        rot: c.rot, val: c.val, nota: c.nota, cor: c.cor, corpo: 30 });
-    });
+    var K = kit();
+    /* ESTE SLIDE É O `slideMes` DO DECK MENSAL, e não mais um parecido.
+     *
+     * Ele desenhava quatro cartões próprios — ENTREGAS · PONTOS · ENTRARAM · EM
+     * ABERTO HOJE — e respondia "quanto saiu". O modelo responde outra coisa,
+     * e é a que a diretoria cobra: BACKLOG NO DIA 1 + ENTRARAM − SAÍRAM = EM
+     * ABERTO NO FIM, ou seja "a fila cresceu ou encolheu". Foi exatamente esta
+     * página que o Fernando circulou no print dizendo que não condizia.
+     *
+     * DUAS PERGUNTAS DIFERENTES NA MESMA REUNIÃO era o defeito de fundo, e
+     * desenhar a conta aqui de novo só o trocaria por outro: dois decks com
+     * dois backlogs para o mesmo mês, e nada dizendo qual vale. Então este
+     * chama o slide do outro deck, com os números da MESMA `fila.js`.
+     *
+     * O QUE SE PERDEU, dito com todas as letras: os pontos entregues saíam num
+     * cartão de 30pt e agora saem na linha "Das saídas: … · 2174 pontos" do
+     * modelo; a distribuição por semana virou slide próprio (`slideForma`),
+     * que é onde o modelo a põe. Nenhum número sumiu. */
+    return K.slideMes(pptx, {
+      periodo: t.periodo,
+      sub: t.raiz ? t.raiz + '  ·  backlog, o que entrou e o que saiu'
+                  : 'backlog, o que entrou e o que saiu',
+      fluxo: t.fluxo || {},
+      kpi: { pontos: t.pontos },
+      quebra: (t.fluxo || {}).quebra,
+      anterior: t.anterior,
+    }, pagina);
+  }
 
-    /* A FORMA DO MÊS. Só desenha com mais de uma faixa: uma coluna sozinha não
-       é uma forma, é o mesmo total do cartão desenhado outra vez. */
-    var faixas = t.faixas || [];
-    if (faixas.length > 1) {
-      colunasNoTempo(pptx, s, {
-        x: MARGEM, w: LARG, base: 4.34, alto: 1.32, cor: C.verde,
-        rot: (t.rotFaixas || 'PONTOS ENTREGUES POR SEMANA'),
-        itens: faixas.map(function (f) { return { rot: f.rot, valor: f.entregue }; }) });
-    }
-    if (t.notaPe) {
-      s.addText(t.notaPe, { x: MARGEM, y: Y_FUNDO - 0.24, w: LARG, h: 0.24,
-                            fontSize: 10, color: C.fraco });
-    }
+  /* A FORMA DO MÊS — onde o esforço caiu dentro do período.
+     Era um gráfico no pé do panorama; virou slide porque o panorama passou a ser
+     a conta da fila, que ocupa a página inteira no modelo. Só existe com mais de
+     uma faixa: uma coluna sozinha não é uma forma, é o total desenhado de novo. */
+  function slideForma(pptx, d, t, pagina) {
+    var K = kit(), C = K.cores;
+    var faixas = (t.faixas || []).filter(Boolean);
+    if (faixas.length < 2) return null;
+    /* O ROTULO DO GRAFICO SAI, porque o subtitulo ja o diz. Como pe de pagina do
+       panorama ele era a unica legenda que havia; virando slide, o cabecalho
+       passou a responder a mesma coisa, e a frase aparecia duas vezes. */
+    var s = K.slideTitulo(pptx, 'A forma do período',
+      (t.rotFaixas || 'PONTOS ENTREGUES POR SEMANA').toLowerCase() +
+      (t.raiz ? '  ·  ' + t.raiz : ''), pagina, t.periodo);
+    colunasNoTempo(pptx, s, {
+      x: MARGEM, w: LARG, base: 4.10, alto: 2.20, cor: C.verde, rot: '',
+      itens: faixas.map(function (f) { return { rot: f.rot, valor: f.entregue }; }) });
+    /* E `notaPe` NAO SE REPETE AQUI. "Entraram 202 e sairam 175: a fila cresceu
+       em 27" e exatamente a frase que o slide anterior ja da em ambar, do
+       tamanho de quem le de longe. Repeti-la em 10pt nao acrescenta e ensina
+       que o deck se repete. */
     K.rodape(s, t.periodo, pagina);
     return s;
   }
@@ -560,6 +577,7 @@
     var p = 0;
     if (d.escopo === 'consolidado') {
       slidePanorama(pptx, d, d.geral, ++p);
+      if (slideForma(pptx, d, d.geral, p + 1)) p += 1;
 
       /* O RANKING VEM ANTES DOS RESUMOS. Ver os cinco lado a lado responde
          "quais assuntos puxaram o mês"; os slides seguintes respondem "o que
@@ -605,6 +623,7 @@
     } else {
       var t = d.assunto;
       slidePanorama(pptx, d, t, ++p);
+      if (slideForma(pptx, d, t, p + 1)) p += 1;
       slideEntregas(pptx, d, t, ++p);
       if ((t.modulos || []).length > 1) slideModulos(pptx, d, t, ++p);
       slideOQueVem(pptx, d, t, ++p);

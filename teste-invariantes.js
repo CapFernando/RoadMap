@@ -70,6 +70,7 @@ const CAPJS = fs.readFileSync('capacidade.js', 'utf8');
 const CAPI = require('./capacidade.js');
 const BUSCAJS = fs.readFileSync('busca-demanda.js', 'utf8');
 const CATALOGO = fs.readFileSync('catalogo.js', 'utf8');
+const FILA = require('./fila.js');   // a conta da fila, executada e nao regexada
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -3557,8 +3558,17 @@ ok(/function slidePrazo\(pptx, d, pagina\)/.test(APRES) && /Sem medição/.test(
    'e o prazo mostra a conta, inclusive a fatia que nao da para medir');
 // O backlog da virada e do FIM DO MES, e nao de hoje: numero de hoje contaria o
 // que entrou depois da reuniao.
-ok(/const vespera = vesp\.toISOString\(\)\.slice\(0, 10\);/.test(ADMIN),
-   'o backlog do inicio e o da vespera do dia 1');
+/* A CONTA DA FILA SAIU DO `admin.html` e virou `fila.js` — as invariantes
+   seguiram, e de regex passaram a EXECUÇÃO. Era o que elas mereciam: regex
+   sobre `const vespera = vesp.toISOString()` provava que a LINHA existia, e
+   nao que a vespera estava certa. */
+ok(FILA.vespera('2026-08-01') === '2026-07-31',
+   'o backlog do inicio e o da vespera do dia 1', FILA.vespera('2026-08-01'));
+/* E A VESPERA DO DIA 1 DE JANEIRO E 31 DE DEZEMBRO DO ANO ANTERIOR. A conta
+   por subtracao de string erraria aqui, e o mes de janeiro e o unico em que
+   isso apareceria — uma vez por ano, no fechamento anual. */
+ok(FILA.vespera('2026-01-01') === '2025-12-31',
+   'inclusive na virada do ano', FILA.vespera('2026-01-01'));
 
 sec('A capa nao pode depender de uma fonte instalada');
 
@@ -3606,14 +3616,91 @@ sec('A conta da fila fecha, e o corte tem data');
 
 // Slide de conta que nao fecha e pior que nenhum: alguem soma na sala. Em junho
 // dava 0 + 50 - 4 = 46 com backlog final de 32 — catorze demandas sumiam.
-ok(/const filaEntrada = m => diaDe\(m\.criado_em\);/.test(ADMIN),
+ok(FILA.entrada({ criado_em: '2026-08-03T14:20:00Z' }) === '2026-08-03',
    'a fila tem uma data de entrada');
-ok(/if \(c\) return c < e \? e : c;/.test(ADMIN),
+/* SAIDA ANTES DA ENTRADA: ha demandas com `concluido_em` anterior ao
+   `criado_em` (import legado). Pela data crua elas saiam antes de entrar e o
+   backlog ficava NEGATIVO. */
+ok(FILA.saida({ criado_em: '2026-08-15', concluido_em: '2026-08-01',
+                status_planejamento: 'concluido' }) === '2026-08-15',
    'e a saida nunca e anterior a entrada (demanda concluida antes de ser cadastrada)');
-ok(/return FECHADO\.includes\(m\.status_planejamento \|\| ''\) \? e : '';/.test(ADMIN),
+/* FECHADA SEM DATA NENHUMA: seis concluidas sem `concluido_em` e quinze
+   recusadas sem `negada_em`. Pela regra de data ficavam abertas para sempre, e
+   o backlog crescia sozinho. */
+ok(FILA.saida({ criado_em: '2026-08-11', status_planejamento: 'concluido' }) === '2026-08-11',
    'fechada sem data nenhuma sai no dia em que entrou, em vez de ficar aberta para sempre');
-ok(/const backlogFim = vivasFluxo\.filter\(m => abertaEm\(m, corte\)\)\.length;/.test(ADMIN),
-   'o backlog do fim usa a mesma regra do inicio');
+ok(FILA.saida({ criado_em: '2026-08-11', status_planejamento: 'em_andamento' }) === '',
+   'e a que nao fechou continua sem data de saida');
+/* RECUSADA TAMBEM SAI DA FILA. Recusa nao e entrega, mas desocupa a fila do
+   mesmo jeito — conta-la so como "nao entregue" fazia `saidas` menor que a
+   realidade e a conta nao fechava. */
+ok(FILA.saida({ criado_em: '2026-08-06', negada_em: '2026-08-09',
+                status_planejamento: 'negada' }) === '2026-08-09',
+   'e a recusada sai da fila no dia da recusa');
+
+/* A CONTA FECHA, e e a invariante do arquivo inteiro:
+     backlogInicio + recebidas - saidas = backlogFim, SEMPRE.
+   Slide de conta que nao fecha e pior que nenhum — alguem soma na sala. Em
+   junho dava 0 + 50 - 4 = 46 com backlog final de 32: catorze demandas sumiam. */
+{
+  const dd = (o) => Object.assign({ tipo: 'evolucao', status_planejamento: 'em_andamento' }, o);
+  const base = [
+    dd({ criado_em: '2026-07-10' }),                                            // aberta antes
+    dd({ criado_em: '2026-08-03', concluido_em: '2026-08-20', status_planejamento: 'concluido' }),
+    dd({ criado_em: '2026-08-05', tipo: 'sustentacao' }),
+    dd({ criado_em: '2026-08-06', negada_em: '2026-08-09', status_planejamento: 'negada' }),
+    dd({ criado_em: '2026-08-15', concluido_em: '2026-08-01', status_planejamento: 'concluido' }),
+    dd({ criado_em: '2026-08-11', status_planejamento: 'concluido' }),
+    dd({ criado_em: '2026-08-12', status_planejamento: 'negada', tipo: '' }),
+    dd({ criado_em: '2026-07-01', concluido_em: '2026-07-30', status_planejamento: 'concluido' }),
+    dd({ criado_em: '2026-08-02', oculto: true }),
+    dd({ criado_em: '2026-08-02', mesclado_em: 'x' }),
+  ];
+  for (const corte of ['2026-08-31', '2026-08-14']) {
+    const f = FILA.fluxo(base, '2026-08-01', corte, '2026-08-31');
+    ok(FILA.fecha(f),
+       'a conta da fila fecha no corte ' + corte,
+       f.backlogInicio + ' + ' + f.recebidas + ' - ' + f.saidas + ' = ' +
+       (f.backlogInicio + f.recebidas - f.saidas) + ', medido ' + f.backlogFim);
+  }
+  const f = FILA.fluxo(base, '2026-08-01', '2026-08-31', '2026-08-31');
+  /* DUAS sobram abertas em 31/08: a de 10/07 e a de 05/08. Todas as outras
+     saem — inclusive as duas torcidas, que e o ponto: a de 15/08 com conclusao
+     em 01/08 sai em 15/08, e a fechada sem data sai em 11/08. */
+  ok(f.backlogFim === 2, 'o backlog do fim usa a mesma regra do inicio', String(f.backlogFim));
+  /* OCULTA E MESCLADA FICAM DE FORA dos dois lados. Se entrassem so de um, a
+     conta deixaria de fechar por um motivo que ninguem acharia. */
+  ok(f.recebidas === 6, 'oculta e mesclada nao entram na conta', String(f.recebidas));
+  /* E AS QUATRO QUEBRAS SAEM DAS MESMAS LISTAS que foram contadas — recontar
+     abriria a chance de a quebra e o total divergirem. */
+  const q = f.quebra.recebidas;
+  ok(q.evolucao + q.sustentacao + q.sem === f.recebidas,
+     'a quebra de cada caixa soma o total da caixa',
+     JSON.stringify(q) + ' contra ' + f.recebidas);
+}
+
+/* E AS QUATRO PONTAS DO ADMIN DELEGAM. Havia quatro copias desta conta no
+   `admin.html` — o fluxo do mes, a `filaAnt` do mes anterior, o slide de
+   Evolucao e a quebra por tipo. A mais perigosa era a `filaAnt`: se ela
+   divergisse, o "▲ +34 vs julho" compararia dois meses medidos com reguas
+   diferentes, e o erro apareceria como um delta plausivel. */
+ok(!/const filaEntrada = |const filaSaida = /.test(ADMIN),
+   'nenhuma copia da regra da fila sobrou no admin.html');
+/* AS QUATRO PONTAS, UMA A UMA — e nao um regex frouxo.
+   A primeira versao disto procurava so `FILA.fluxo(vivasFluxo`, e a sabotagem
+   mostrou o furo: HA TRES chamadas com esse mesmo prefixo, entao matar a do
+   fluxo do mes deixava as outras duas satisfazendo o teste. Um regex que casa
+   com qualquer uma das tres nao prova nada sobre nenhuma delas. */
+{
+  const pontas = [
+    [/FILA\.fluxo\(vivasFluxo, iso \+ '-01', corte, fimMes\)/, 'o fluxo do mes no deck Gerencial'],
+    [/FILA\.fluxo\(vivasFluxo, isoAnt \+ '-01', fimAnt, fimAnt\)/, 'o mes anterior, que alimenta o "vs julho"'],
+    [/FILA\.fluxo\(vivasFluxo, iM \+ '-01', corteM, fimM\)/, 'as barras do slide de Evolucao'],
+    [/FILA\.fluxo\(vivas, j\.de, corteFila, j\.ate\)/, 'e o deck de Relatorios'],
+  ];
+  pontas.forEach(([re, quem]) => ok(re.test(ADMIN), quem + ' chama a regra'));
+}
+ok(/<script src="fila\.js\?v=/.test(ADMIN), 'e a pagina carrega fila.js');
 ok(/saiuEntregue/.test(ADMIN) && /saiuNegada/.test(ADMIN),
    'a recusa sai da fila sem virar entrega');
 // "Em aberto ao virar o mes" era ambiguo, e com o mes em curso virar o mes ainda
@@ -3700,9 +3787,20 @@ ok(/rotuloExtra: 'pts'/.test(APRES) && /if \(it\.extra != null && cfg\.rotuloExt
 sec('A historia do mes tem quebra, comparativo e tendencia');
 
 // O consolidado dizia quanto entrou e quanto saiu; nao dizia de que era.
-ok(/backlogInicio: quebraTipo\(abertasNaVespera\)/.test(ADMIN) &&
-   /saidas: quebraTipo\(saidas\)/.test(ADMIN),
-   'cada numero da historia tem a quebra evolucao x sustentacao');
+{
+  const f = FILA.fluxo([{ criado_em: '2026-08-01', tipo: 'evolucao' },
+                        { criado_em: '2026-08-02', tipo: 'sustentacao' },
+                        { criado_em: '2026-08-03', tipo: '' }],
+                       '2026-08-01', '2026-08-31', '2026-08-31');
+  ok(['backlogInicio', 'recebidas', 'saidas', 'backlogFim']
+       .every(k => f.quebra && f.quebra[k]),
+     'cada numero da historia tem a quebra evolucao x sustentacao',
+     Object.keys(f.quebra || {}).join(','));
+  ok(f.quebra.recebidas.evolucao === 1 && f.quebra.recebidas.sustentacao === 1 &&
+     f.quebra.recebidas.sem === 1,
+     'e a demanda sem tipo vai para "sem classificar", em vez de sumir',
+     JSON.stringify(f.quebra.recebidas));
+}
 // A COR SEGUE A MELHORA, E NAO O SINAL: em metade destes numeros crescer e ruim, e
 // pintar "+14 no backlog" de verde faria o slide mentir para a sala.
 ok(/var melhor = bomSubir \? dif > 0 : dif < 0;/.test(APRES),

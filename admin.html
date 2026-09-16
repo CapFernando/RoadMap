@@ -1116,14 +1116,15 @@
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=437901d1fa"></script>
+  <script src="fila.js?v=02cdf0fe21"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js?v=e3aaaae81d"></script>
 <script src="pipelines.js?v=eb8de916d3"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=9d437ae5ee"></script>
-<script src="relatorio-ppt.js?v=1499a7b47e"></script>
+<script src="apresentacao.js?v=2e949cad86"></script>
+<script src="relatorio-ppt.js?v=9aeee54159"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -5960,62 +5961,41 @@ async function apresGerar() {
        FECHADA SEM DATA NENHUMA sai no dia em que entrou: sao seis concluidas sem
        data e quinze recusadas sem `negada_em`, e pela regra de data elas ficavam
        abertas para sempre — o backlog crescia sozinho.                          */
-    const diaDe = v => String(v || '').slice(0, 10);
-    const FECHADO = ['concluido', 'negada'];
-    const filaEntrada = m => diaDe(m.criado_em);
-    const filaSaida = m => {
-      const e = filaEntrada(m);
-      const c = diaDe(m.concluido_em); if (c) return c < e ? e : c;
-      const n = diaDe(m.negada_em);    if (n) return n < e ? e : n;
-      return FECHADO.includes(m.status_planejamento || '') ? e : '';
-    };
-    const abertaEm = (m, dia) => {
-      const e = filaEntrada(m);
-      if (!e || e > dia) return false;
-      const s = filaSaida(m);
-      return !s || s > dia;
-    };
-
-    const vesp = new Date(iso + '-01T00:00:00');
-    vesp.setDate(vesp.getDate() - 1);
-    const vespera = vesp.toISOString().slice(0, 10);
-    const backlogInicio = vivasFluxo.filter(m => abertaEm(m, vespera)).length;
-
-    // AS ENTRADAS DIZEM DO QUE SAO. Evolucao e sustentacao respondem coisas
-    // diferentes: uma e construir, a outra e manter de pe o que ja existe.
+    /* DELEGA — a conta mora em `fila.js`, e as duas pontas chamam a mesma.
+     *
+     * Ela nasceu aqui dentro, amarrada a um mes e a base inteira. O deck de
+     * Relatorios, que recorta por assunto e por janela, nao alcancava — e por
+     * isso a pagina 2 dele respondia "quanto saiu" em vez de "a fila cresceu
+     * ou encolheu", que e a pergunta do modelo. Copiar a conta para la teria
+     * trocado um defeito por outro pior: dois backlogs para o mesmo mes, e
+     * nada na tela dizendo qual vale.
+     *
+     * `fluxoFila` devolve os mesmos numeros que este bloco devolvia — conferido
+     * executando as duas implementacoes lado a lado, com mes fechado e mes em
+     * curso, e com os tres casos torcidos (saida antes da entrada, fechada sem
+     * data, recusada saindo da fila). */
+    const fluxoFila = FILA.fluxo(vivasFluxo, iso + '-01', corte, fimMes);
+    const backlogInicio = fluxoFila.backlogInicio;
     const entradas = vivasFluxo.filter(m => {
-      const c = filaEntrada(m);
+      const c = FILA.entrada(m);
       return c >= iso + '-01' && c <= corte;
     });
-
-    // SAIDAS: a entrega e a recusa saem as duas da fila, e so a entrega e entrega.
     const saidas = vivasFluxo.filter(m => {
-      const s = filaSaida(m);
-      return s && s >= iso + '-01' && s <= corte;
+      const sd = FILA.saida(m);
+      return sd && sd >= iso + '-01' && sd <= corte;
     });
-    const saiuEntregue = saidas.filter(m => m.status_planejamento === 'concluido').length;
-    const saiuNegada = saidas.filter(m => m.status_planejamento === 'negada').length;
-    const porTipo = { evolucao: 0, sustentacao: 0, sem: 0 };
-    entradas.forEach(m => {
-      const t = String(m.tipo || '');
-      if (t === 'evolucao') porTipo.evolucao++;
-      else if (t === 'sustentacao') porTipo.sustentacao++;
-      else porTipo.sem++;
-    });
-
-    // TRABALHADAS: a demanda que o time pegou no mes, tenha ela saido ou nao —
-    // comecou dentro do mes ou foi concluida dentro dele. Sem este numero, o
-    // slide conta o que saiu e cala o que esta em curso, que e a maior parte do
-    // esforco de um mes com projeto grande dentro.
-    const dentro = (v) => v && v >= iso + '-01' && v <= fimMes;
-    const tocadas = vivasFluxo.filter(m =>
-      dentro(String(m.inicio || '').slice(0, 10)) ||
-      dentro(String(m.concluido_em || '').slice(0, 10))).length;
-
-    // BACKLOG NO FIM: o que sobrou aberto no corte. E a pergunta que vem depois
-    // de qualquer bom resultado — "e o que ficou?". Pela mesma regra do inicio,
+    const saiuEntregue = fluxoFila.saiuEntregue;
+    const saiuNegada = fluxoFila.saiuNegada;
+    // AS ENTRADAS DIZEM DO QUE SAO. Evolucao e sustentacao respondem coisas
+    // diferentes: uma e construir, a outra e manter de pe o que ja existe.
+    const porTipo = fluxoFila.quebra.recebidas;
+    // TRABALHADAS: a demanda que o time pegou no mes, tenha ela saido ou nao.
+    // Sem este numero, o slide conta o que saiu e cala o que esta em curso, que
+    // e a maior parte do esforco de um mes com projeto grande dentro.
+    const tocadas = fluxoFila.tocadas;
+    // BACKLOG NO FIM: o que sobrou aberto no corte. Pela mesma regra do inicio,
     // entao backlogInicio + entradas - saidas = backlogFim, sempre.
-    const backlogFim = vivasFluxo.filter(m => abertaEm(m, corte)).length;
+    const backlogFim = fluxoFila.backlogFim;
 
     // CAPACIDADE DE QUEM TRABALHOU: quantas pessoas atuaram, quantos dias uteis
     // elas tinham no periodo e quanto sobrou depois das ausencias. Sem isso,
@@ -6128,24 +6108,9 @@ async function apresGerar() {
        Evolucao e construir; sustentacao e manter de pe o que ja existe — e a
        proporcao entre as duas e o que explica um mes com muita entrega e pouca
        novidade, ou o contrario.                                                */
-    const quebraTipo = (lista) => {
-      const q = { evolucao: 0, sustentacao: 0, sem: 0 };
-      lista.forEach(m => {
-        const t = String(m.tipo || '');
-        if (t === 'evolucao') q.evolucao++;
-        else if (t === 'sustentacao') q.sustentacao++;
-        else q.sem++;
-      });
-      return q;
-    };
-    const abertasNaVespera = vivasFluxo.filter(m => abertaEm(m, vespera));
-    const abertasNoCorte = vivasFluxo.filter(m => abertaEm(m, corte));
-    const quebra = {
-      backlogInicio: quebraTipo(abertasNaVespera),
-      recebidas: quebraTipo(entradas),
-      saidas: quebraTipo(saidas),
-      backlogFim: quebraTipo(abertasNoCorte),
-    };
+    // DELEGA — `fila.js` ja devolve as quatro quebras, pelas mesmas listas que
+    // contou. Recontar aqui abriria a chance de a quebra e o total divergirem.
+    const quebra = fluxoFila.quebra;
 
     /* ENTREGAS RAPIDAS: entrou e saiu em ate dois dias.
        E o melhor argumento de eficiencia que estes dados tem, e estava invisivel.
@@ -6203,19 +6168,13 @@ async function apresGerar() {
       String(m.entrega || '').slice(0, 7) >= isoAnt).length;
     const medidasAnt = noPrazoAnt + atrasAntMes;
 
-    const filaAnt = (de, ate) => {
-      const backIni = vivasFluxo.filter(m => abertaEm(m, de)).length;
-      const entrou = vivasFluxo.filter(m => {
-        const c = filaEntrada(m); return c >= isoAnt + '-01' && c <= ate;
-      }).length;
-      const saiu = vivasFluxo.filter(m => {
-        const x = filaSaida(m); return x && x >= isoAnt + '-01' && x <= ate;
-      }).length;
-      return { backIni, entrou, saiu, backFim: vivasFluxo.filter(m => abertaEm(m, ate)).length };
-    };
-    const vAnt = new Date(isoAnt + '-01T00:00:00');
-    vAnt.setDate(vAnt.getDate() - 1);
-    const fAnt = filaAnt(vAnt.toISOString().slice(0, 10), fimAnt);
+    /* O MES ANTERIOR, pela MESMA conta. Ele tinha uma terceira implementacao
+       aqui — `filaAnt` —, e era a mais perigosa das tres: se ela divergisse, a
+       variacao "▲ +34 vs julho" compararia dois meses medidos com reguas
+       diferentes, e o erro apareceria como um delta plausivel. */
+    const fa = FILA.fluxo(vivasFluxo, isoAnt + '-01', fimAnt, fimAnt);
+    const fAnt = { backIni: fa.backlogInicio, entrou: fa.recebidas,
+                   saiu: fa.saidas, backFim: fa.backlogFim };
 
     const anterior = {
       nome: apresentacaoMesNome(pmMes - 1),
@@ -6247,8 +6206,10 @@ async function apresGerar() {
       const iM = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
       const fimM = iM + '-' + String(new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate()).padStart(2, '0');
       const corteM = (hojeISO >= iM + '-01' && hojeISO <= fimM) ? hojeISO : fimM;
-      const vespM = new Date(iM + '-01T00:00:00');
-      vespM.setDate(vespM.getDate() - 1);
+      // A QUARTA copia da conta era esta, no slide de Evolucao. Delega tambem:
+      // duas barras medidas com regua diferente da conta do slide anterior e o
+      // tipo de divergencia que ninguem confere, porque as duas sao plausiveis.
+      const fM = FILA.fluxo(vivasFluxo, iM + '-01', corteM, fimM);
       const cM = (state.melhorias || []).filter(m =>
         !m.oculto && !m.mesclado_em && (m.status_planejamento || '') === 'concluido' &&
         String(m.concluido_em || '').slice(0, 7) === iM);
@@ -6258,13 +6219,9 @@ async function apresGerar() {
         String(m.entrega || '').slice(0, 7) >= iM).length;
       evolucao.push({
         rot: apresentacaoMesNome(dt.getMonth()).slice(0, 3),
-        entraram: vivasFluxo.filter(m => {
-          const c = filaEntrada(m); return c >= iM + '-01' && c <= corteM;
-        }).length,
-        sairam: vivasFluxo.filter(m => {
-          const x = filaSaida(m); return x && x >= iM + '-01' && x <= corteM;
-        }).length,
-        backlog: vivasFluxo.filter(m => abertaEm(m, corteM)).length,
+        entraram: fM.recebidas,
+        sairam: fM.saidas,
+        backlog: fM.backlogFim,
         pct: (okM + atrM) ? Math.round(okM / (okM + atrM) * 100) : null,
         parcial: corteM !== fimM,
       });
@@ -8042,9 +7999,41 @@ function relPptAssunto(raiz, j) {
                       : ' entregas saíram sem pontuação e não somam') + ' na coluna de pontos.';
   }
 
+  /* ═══ A CONTA DA FILA, no recorte DESTE deck ═══════════════════════════
+   *
+   * Ela existia só dentro do `apresGerar` — amarrada a um mês e à base inteira.
+   * O deck de Relatórios, que recorta por assunto e por janela, não alcançava
+   * e por isso respondia outra pergunta: "quanto saiu" em vez de "a fila
+   * cresceu ou encolheu". Era essa a página 2 que não batia com o modelo.
+   *
+   * A REGRA MORA EM `fila.js`, e as duas pontas chamam a mesma — senão o deck
+   * Gerencial e o de Relatórios dariam dois backlogs diferentes para o mesmo
+   * mês, e nada na tela diria qual vale.
+   *
+   * O CORTE É HOJE ENQUANTO O PERÍODO CORRE. Com o mês em curso, "o que sobrou
+   * no fim" ainda não aconteceu: usar o último dia do calendário faria uma
+   * previsão sair disfarçada de fato. */
+  const hojeFila = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const emCurso = hojeFila >= j.de && hojeFila < j.ate;
+  const corteFila = emCurso ? hojeFila : j.ate;
+  const fluxo = FILA.fluxo(vivas, j.de, corteFila, j.ate);
+  fluxo.corte = formatDate(corteFila);
+  fluxo.emCurso = emCurso;
+
+  /* O PERÍODO ANTERIOR, para o "▲ +34 vs julho" de cada cartão. Um número
+     sozinho não diz se cresceu — é a mesma razão pela qual os cartões do
+     modelo carregam a variação. */
+  const fAnt = FILA.fluxo(vivas, j.deAnt, j.ateAnt, j.ateAnt);
+  const anterior = {
+    nome: j.escala === 'semana' ? 'a semana anterior' : String(j.rotAnt || '').split(' de ')[0],
+    parcial: emCurso,
+    backlogInicio: fAnt.backlogInicio, recebidas: fAnt.recebidas,
+    saidas: fAnt.saidas, backlogFim: fAnt.backlogFim,
+  };
+
   const nome = raiz || 'Todos os sistemas';
   return {
-    raiz, nome, periodo: j.rot,
+    raiz, nome, periodo: j.rot, fluxo, anterior,
     sub: entregues.length + (entregues.length === 1 ? ' entrega' : ' entregas') +
          ' · ' + pontos + (pontos === 1 ? ' ponto' : ' pontos') + ' · ' + j.rot,
     entregas: entregues.length, pontos, entraram, aberto: emAberto.length,
