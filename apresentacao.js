@@ -1675,7 +1675,10 @@
      Mês em curso leva reticências no rótulo: sem isso a última coluna sempre parece
      uma queda.                                                                   */
   function slideEvolucao(pptx, serie, pagina, periodo) {
-    var s = slideTitulo(pptx, 'Evolução', 'entradas, saídas e prazo mês a mês', pagina);
+    /* O SUBTITULO PAROU DE PROMETER PRAZO. Ele dizia "entradas, saidas e prazo
+       mes a mes" e o prazo saiu do slide junto com o percentual — um subtitulo
+       que anuncia o que nao esta ali faz quem le procurar o numero que falta. */
+    var s = slideTitulo(pptx, 'Evolução', 'entradas, saídas e saldo mês a mês', pagina);
     var vis = (serie || []).filter(function (x) { return x; });
     if (!vis.length) { rodape(s, periodo, pagina); return s; }
 
@@ -1712,14 +1715,22 @@
           x: X0 + i * col, y: BASE + 0.30, w: col, h: 0.2,
           fontSize: 8, color: C.fraco, align: 'center', wrap: false });
       }
-      // O percentual em BRANCO, pela mesma razao do slide do prazo: nao ha meta
-      // de prazo acordada, e a faixa de cor faz o numero chegar ja julgado.
-      s.addText(x.pct == null ? '—' : x.pct + '%', {
-        x: X0 + i * col, y: BASE + (x.parcial ? 0.50 : 0.36), w: col, h: 0.26,
-        fontSize: 11, color: x.pct == null ? C.fraco : SIGNIFICADO.leitura,
-        align: 'center', wrap: false });
-      s.addText(String(x.backlog), {
-        x: X0 + i * col, y: BASE + (x.parcial ? 0.78 : 0.64), w: col, h: 0.26,
+      /* O SALDO DO MES, e nao mais tres numeros empilhados.
+       *
+       * O ajuste e do Fernando, feito a mao no deck de agosto: onde estava
+       * "Backlog fim do mes 66" ele escreveu "Entrada - saidas = 34". A
+       * diferenca nao e de gosto. As barras JA mostram 109 e 75; o backlog no
+       * fim do mes e um quarto numero, que vem de outra conta e nao se confere
+       * olhando para o slide — e o percentual de prazo era um quinto, sem meta
+       * contra a qual comparar. O saldo e a UNICA leitura que as proprias
+       * barras sustentam: e a subtracao que a plateia faz de cabeca, escrita.
+       *
+       * SEM O `+` NO POSITIVO. Eu o tinha colocado para marcar que e um saldo, e
+       * ele nao marca nada: o rotulo ja diz "Entrada - saidas =". O negativo
+       * continua trazendo o proprio sinal, que e quando ele informa. */
+      var saldo = (x.entraram || 0) - (x.sairam || 0);
+      s.addText('Entrada - saídas = ' + saldo, {
+        x: X0 + i * col - 0.3, y: BASE + (x.parcial ? 0.52 : 0.38), w: col + 0.6, h: 0.26,
         fontSize: 11, color: C.fraco, align: 'center', wrap: false });
     });
 
@@ -1730,8 +1741,9 @@
                                         fill: { color: l.cor } });
       s.addText(l.t, { x: 1.1 + i * 1.4, y: 1.42, w: 1.2, h: 0.28, fontSize: 11, color: C.fraco });
     });
-    s.addText('abaixo de cada mês: % no prazo e backlog no fim do mês', {
-      x: 4.0, y: 1.42, w: 5.3, h: 0.28, fontSize: 11, color: C.fraco, align: 'right' });
+    /* A NOTA DA DIREITA SAIU JUNTO. Ela dizia "abaixo de cada mes: % no prazo e
+       backlog no fim do mes" — descrevia os dois numeros que nao estao mais la.
+       Legenda que aponta para o que nao existe e pior que legenda nenhuma. */
     rodape(s, periodo, pagina);
     return s;
   }
