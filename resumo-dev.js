@@ -14,10 +14,12 @@
    ═════════════════════════════════════════════════════════════════════════
    OS TRÊS BALDES, E POR QUE ELES SÃO DISJUNTOS
 
+     CONCLUÍDO HOJE  aprovado hoje pelo PM/PO
      ATRASADO      o prazo venceu e a demanda ainda é do dev
      EM ANDAMENTO  a bola está com o dev
      EM VALIDAÇÃO  ele entregou; a bola está com o PM/PO
      PLANEJADO     comprometido, com data, e ainda não começou
+     PLANNING      vai ser dimensionado na reunião — ainda não tem tamanho
 
    O PLANEJADO EXISTE PARA A DAILY. Sem ele o resumo responde "o que está
    acontecendo" e cala sobre "o que vem" — e a pergunta da daily é a segunda
@@ -25,10 +27,24 @@
    esse bloco, um dev com três coisas planejadas para a semana aparece com o
    mesmo resumo de um que não tem nada pela frente.
 
-   PLANEJADO VENCIDO NÃO APARECE AQUI, e isso sai de graça: `planejado` está em
-   `ETAPAS_QUE_CORREM` no `prazo.js`, então o prazo dele corre e a demanda vai
-   para ATRASADO antes de chegar neste balde. Os quatro continuam disjuntos sem
-   nenhuma regra nova.
+   PLANEJADO E PLANNING VENCIDOS NÃO APARECEM NOS BALDES DELES, e isso sai de
+   graça: as duas etapas estão em `ETAPAS_QUE_CORREM` no `prazo.js`, então o
+   prazo delas corre e a demanda vai para ATRASADO antes de chegar lá. Os cinco
+   continuam disjuntos sem nenhuma regra nova.
+
+   OS DOIS ÚLTIMOS ESTÃO NA ORDEM DO FUNIL, de trás para frente: planejado já tem
+   data e compromisso; planning ainda vai ser medido. Quem lê a daily desce do
+   mais concreto para o mais distante.
+
+   E O CONCLUÍDO HOJE VEM PRIMEIRO. "Caso eu aprove, não é mostrado": ao aprovar
+   a entrega, a demanda vira `concluido` e some do resumo inteiro — o trabalho
+   desaparece no instante em que fica pronto, que é o pior momento possível para
+   ele sumir. A daily abre por "o que saiu", e é essa a primeira pergunta.
+
+   Ele só aparece quando existe (`soSeTiver`): num dia sem nada aprovado, um
+   bloco "0 concluído" não responde nada — é ausência de assunto, e não resposta.
+   Os quatro do meio continuam aparecendo vazios, porque ali o zero É resposta
+   ("nada atrasado" é o que se quer ouvir).
 
    `validacao` NÃO APARECE EM ATRASADO, e isso não é escolha deste arquivo:
    quem decide é o `prazo.js`, e o cabeçalho dele registra por quê — "a demanda
@@ -72,6 +88,37 @@
    *  MONTADA UMA VEZ SÓ, aqui, e usada pela tela E pelo texto do grupo. Duas
    *  montagens da mesma frase divergiriam na primeira mudança — e o recado
    *  passaria a dizer algo diferente do que a tela mostrou para quem o mandou. */
+  /* O DIA EM QUE FOI CONCLUÍDA — em horário DAQUI, e não de Greenwich.
+   *
+   *  O `admin.html` grava `concluido_em` como `new Date().toISOString().slice(0,10)`,
+   *  que é a data UTC: aprovar às 21h30 de uma terça carimba QUARTA. Comparando
+   *  esse campo com "hoje", a entrega aprovada no fim da tarde não apareceria no
+   *  resumo do próprio dia — justamente a que o PM/PO acabou de aprovar e quer
+   *  ver na daily.
+   *
+   *  `validado_em` guarda o instante completo, então dele sai o dia local. O
+   *  `concluido_em` fica como reserva para registro antigo que não tenha o
+   *  carimbo de validação.
+   *
+   *  O FUSO É O DO NAVEGADOR, e não "America/Sao_Paulo" fixo — porque o outro
+   *  lado da comparação é o `PRAZO.hojeISO()`, que usa o do navegador. As duas
+   *  datas TÊM de sair da mesma régua: com uma em São Paulo e a outra na máquina,
+   *  um computador configurado noutro fuso diria que a entrega aprovada agora foi
+   *  concluída ontem, e ela sumiria do resumo do dia. Comparar é comparar duas
+   *  medidas do mesmo instrumento. */
+  function diaConclusao(m) {
+    var v = String((m && m.validado_em) || '');
+    if (v) {
+      var d = new Date(v);
+      if (!isNaN(d)) {
+        return d.getFullYear() + '-' +
+          String(d.getMonth() + 1).padStart(2, '0') + '-' +
+          String(d.getDate()).padStart(2, '0');
+      }
+    }
+    return String((m && m.concluido_em) || '').slice(0, 10);
+  }
+
   function situacaoDe(x, balde) {
     if (balde === 'atr') {
       return { rot: 'Atrasado',
@@ -93,6 +140,23 @@
       var ate = x.entrega ? 'entrega ' + dataBR(x.entrega) : '';
       return { rot: 'Planejado',
                det: [quando, ate].filter(Boolean).join(' · ') || 'sem datas' };
+    }
+    if (balde === 'fim') {
+      /* QUEM APROVOU entra na linha quando se sabe: numa daily, "o Fernando
+         aprovou" fecha a conversa que "foi concluída" deixa aberta. */
+      return { rot: 'Concluído hoje',
+               det: (x.validadoPor ? 'aprovado por ' + x.validadoPor : 'aprovado hoje') +
+                    (x.pts ? ' · ' + x.pts + ' pt' : '') };
+    }
+    if (balde === 'pln') {
+      /* O QUE FALTA AQUI É O TAMANHO, e é isso que a linha diz. Planning é a
+         etapa em que a demanda vai ser medida — mostrar só a data de entrega
+         faria parecer que já há compromisso de prazo sobre algo que ninguém
+         dimensionou ainda. Quando já tem pontos, ela diz: é a que está pronta
+         para sair da reunião. */
+      var tam = x.pts ? x.pts + ' pt já estimados' : 'tamanho a definir';
+      return { rot: 'Planning',
+               det: tam + (x.entrega ? ' · entrega ' + dataBR(x.entrega) : '') };
     }
     return { rot: 'Em validação',
              det: (x.entregueEm ? 'entregue ' + dataBR(x.entregueEm) : 'aguardando o PM/PO') +
@@ -129,10 +193,13 @@
         entregueEm: String(m.entregue_em || '').slice(0, 10),
         atrasouNaEntrega: !!(PRAZO.atrasouNaEntrega && PRAZO.atrasouNaEntrega(m)),
         pausada: ETAPA.pausada(m),
+        concluidoEm: diaConclusao(m),
+        validadoPor: String(m.validado_por || ''),
       };
     }
 
-    var atrasado = [], andamento = [], validacao = [], planejado = [];
+    var atrasado = [], andamento = [], validacao = [], planejado = [], planning = [],
+        concluidoHoje = [];
     function poe(lista, m, gr, balde) {
       var x = monta(m, gr);
       x.balde = balde;
@@ -142,10 +209,29 @@
     minhas.forEach(function (m) {
       var ef = ETAPA.efetiva(m, dia);
       var gr = ETAPA.gravada(m, dia);
+      /* O CONCLUÍDO VEM PRIMEIRO na escolha do balde, e é preciso dizer o que
+         isso NÃO faz.
+         Eu havia escrito que a ordem impede uma demanda entregue com atraso e
+         aprovada hoje de cair em ATRASADO. É FALSO, e a sabotagem provou:
+         inverter as duas linhas não mudou nada. `PRAZO.estaAtrasada` devolve
+         `false` para `concluido` — medido: uma concluída com prazo de 45 dias
+         atrás lê como `concluido`, e não como `atrasado` —, porque `concluido`
+         está em `ETAPAS_APOS_O_DEV` e ali o atraso é congelado na entrega.
+         A regra mora no `prazo.js`, e é lá que a invariante a prende.
+         A ordem fica por clareza: o balde mais específico primeiro, para quem
+         ler a cadeia não precisar saber de cor o que o `prazo.js` devolve.
+
+         E SÓ O DE HOJE ENTRA: `concluido` de ontem continua fora do resumo, que
+         é sobre o que está na mão agora. Este é o ramo que carrega peso. */
+      if (gr === 'concluido') {
+        if (diaConclusao(m) === dia) poe(concluidoHoje, m, gr, 'fim');
+        return;
+      }
       if (ef === 'atrasado') { poe(atrasado, m, gr, 'atr'); return; }
       if (gr === 'em_andamento') { poe(andamento, m, gr, 'and'); return; }
       if (gr === 'validacao') { poe(validacao, m, gr, 'val'); return; }
       if (gr === 'planejado') { poe(planejado, m, gr, 'pla'); return; }
+      if (gr === 'planning') { poe(planning, m, gr, 'pln'); return; }
     });
 
     // Atrasado: o mais vencido primeiro — é a ordem da conversa.
@@ -171,14 +257,32 @@
         .localeCompare(String(b.inicio || b.entrega || '9999-99-99')) ||
              String(a.codigo).localeCompare(String(b.codigo));
     });
+    /* Planning: a JÁ PONTUADA primeiro. Ela é a que pode sair da reunião — o
+       resto ainda vai ser medido, e entre duas por medir a ordem não muda nada.
+       Por data seria pior: planning é justamente a etapa em que a data ainda
+       não significa compromisso. */
+    planning.sort(function (a, b) {
+      return (b.pts || 0) - (a.pts || 0) ||
+             String(a.codigo).localeCompare(String(b.codigo));
+    });
+    // Concluído hoje: a maior primeiro — é a que a daily quer ouvir.
+    concluidoHoje.sort(function (a, b) {
+      return (b.pts || 0) - (a.pts || 0) ||
+             String(a.codigo).localeCompare(String(b.codigo));
+    });
 
-    return { dev: dev, hoje: dia, atrasado: atrasado, andamento: andamento,
-             validacao: validacao, planejado: planejado,
-             total: atrasado.length + andamento.length + validacao.length +
-                    planejado.length };
+    return { dev: dev, hoje: dia, concluidoHoje: concluidoHoje,
+             atrasado: atrasado, andamento: andamento,
+             validacao: validacao, planejado: planejado, planning: planning,
+             total: concluidoHoje.length + atrasado.length + andamento.length +
+                    validacao.length + planejado.length + planning.length };
   }
 
   var SECOES = [
+    /* PRIMEIRO, e só quando existe. A daily abre por "o que saiu", e esta é a
+       única seção que fala do passado — as outras são estado de agora. */
+    { k: 'fim', lista: 'concluidoHoje', rot: '✅ Concluído hoje', soSeTiver: true,
+      dica: 'aprovado hoje pelo PM/PO', txt: 'CONCLUÍDO HOJE' },
     { k: 'atr', lista: 'atrasado',  rot: '⚠ Atrasado',
       dica: 'o prazo venceu e ainda é dele', txt: 'ATRASADO' },
     { k: 'and', lista: 'andamento', rot: '▶ Em andamento',
@@ -191,6 +295,27 @@
        terceiro, e por fim o que entra em seguida. */
     { k: 'pla', lista: 'planejado', rot: '📅 Planejado',
       dica: 'combinado, e ainda não começou', txt: 'PLANEJADO' },
+    /* POR ÚLTIMO, seguindo o funil: planning vem ANTES de planejado no fluxo,
+       mas DEPOIS na leitura — é o mais distante do que a pessoa faz hoje.
+
+       E SÓ APARECE SE A PESSOA TIVER ALGO LÁ (`soSeTiver`).
+
+       Planning é a etapa em que a demanda vai ser DIMENSIONADA, e nessa altura
+       ela muitas vezes ainda não tem dono — o `dev` fica em branco até alguém
+       pegar. Duas consequências, e as duas importam:
+
+         1. Demanda de Planning SEM dev não é de ninguém, e já não entra: o
+            `DEVNOME.eDe` recusa nome vazio dos dois lados ("perder o próprio
+            card é ruim; ver o card alheio é pior").
+         2. Por isso o balde fica vazio na maioria dos devs — e um bloco
+            "Planning · nada aqui" em todo resumo é moldura: some da vista de
+            quem lê e, no dia em que tiver algo, não é notado.
+
+       OS OUTROS QUATRO CONTINUAM APARECENDO VAZIOS, e isso é deliberado:
+       "0 atrasado" é resposta, e some junto com a pergunta se o bloco sumir.
+       "0 em planning" não é resposta — é ausência de assunto. */
+    { k: 'pln', lista: 'planning', rot: '🃏 Planning', soSeTiver: true,
+      dica: 'o tamanho é definido na reunião', txt: 'PLANNING' },
   ];
 
   /** O TEXTO PARA O GRUPO.
@@ -242,17 +367,23 @@
         '<span class="dr-sit' + (x.balde === 'atr' ? ' venc' : '') + '">' +
           esc(x.situacao.rot) + '<small>' + esc(x.situacao.det) + '</small></span></div>';
     };
+    /* O CONTADOR E A SEÇÃO SAEM DA MESMA LISTA. Escritos à mão, o contador do
+       planning ficaria na tela depois de a seção sumir — e o resumo mostraria
+       "0 planning" apontando para um bloco que não existe. */
+    var mostrar = SECOES.filter(function (sc) {
+      return !sc.soSeTiver || r[sc.lista].length;
+    });
     return '<div class="dr-topo">' +
-      '<div class="dr-kpi atr"><b>' + r.atrasado.length + '</b><span>atrasado</span></div>' +
-      '<div class="dr-kpi and"><b>' + r.andamento.length + '</b><span>em andamento</span></div>' +
-      '<div class="dr-kpi val"><b>' + r.validacao.length + '</b><span>em validação</span></div>' +
-      '<div class="dr-kpi pla"><b>' + r.planejado.length + '</b><span>planejado</span></div>' +
+      mostrar.map(function (sc) {
+        return '<div class="dr-kpi ' + sc.k + '"><b>' + r[sc.lista].length +
+               '</b><span>' + sc.txt.toLowerCase() + '</span></div>';
+      }).join('') +
       '</div>' +
-      SECOES.map(function (s) {
-        var lista = r[s.lista];
-        return '<div class="dr-sec ' + s.k + '"><div class="dr-sec-tit">' + s.rot +
+      mostrar.map(function (sc) {
+        var lista = r[sc.lista];
+        return '<div class="dr-sec ' + sc.k + '"><div class="dr-sec-tit">' + sc.rot +
           '<small>' + lista.length + (lista.length === 1 ? ' demanda' : ' demandas') +
-          ' · ' + s.dica + '</small></div>' +
+          ' · ' + sc.dica + '</small></div>' +
           (lista.length ? lista.map(linha).join('')
                         : '<div class="dr-vazio">nada aqui</div>') + '</div>';
       }).join('');
@@ -263,12 +394,16 @@
      e o resumo passaria a ter aparências diferentes conforme a aba. */
   var CSS = [
     '.dr-topo{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}',
-    // 108px, e nao 120: sao QUATRO contadores agora, e com 120 o quarto quebrava
-    // para a linha de baixo numa largura de 760px. O `flex:1` divide o que sobra.
-    '.dr-kpi{flex:1;min-width:108px;background:var(--bg3);border:1px solid var(--border);',
+    /* 92px: sao CINCO contadores, e o modal tem 760px menos o padding — com 108
+       o quinto quebrava para a linha de baixo. O `flex:1` divide o que sobra, e
+       o rotulo mais longo ("em validação") cabe em 92 a 11,5px. */
+    '.dr-kpi{flex:1;min-width:92px;background:var(--bg3);border:1px solid var(--border);',
       'border-radius:var(--radius,12px);padding:10px 13px}',
     '.dr-kpi b{display:block;font-size:22px;font-weight:700;line-height:1.15}',
     '.dr-kpi span{font-size:11.5px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em}',
+    // VERDE no concluído: a paleta define verde como "cumprido", e é o único
+    // balde em que algo de fato foi cumprido.
+    '.dr-kpi.fim b{color:var(--green,#5EA832)}',
     '.dr-kpi.atr b{color:var(--red,#E84444)}',
     '.dr-kpi.and b{color:var(--green,#5EA832)}',
     '.dr-kpi.val b{color:var(--amber-tx,#FFC470)}',
@@ -276,14 +411,20 @@
        que ele e. Verde diria "cumprido" e ambar diria "atencao" — as duas
        mentiriam sobre algo que so esta agendado. */
     '.dr-kpi.pla b{color:var(--blue,#3B8FE8)}',
+    /* TEAL no planning, e nao uma cor nova: o `tema.css` ja pinta
+       `.badge-planning` e `.s-planning` de teal. Escolher outra aqui faria a
+       mesma etapa ter duas cores dependendo da tela. */
+    '.dr-kpi.pln b{color:var(--teal-tx,#2BBFA0)}',
     '.dr-sec{margin-bottom:16px}',
     '.dr-sec-tit{display:flex;align-items:baseline;gap:8px;font-size:13px;font-weight:700;',
       'padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:7px}',
     '.dr-sec-tit small{font-weight:400;color:var(--text2);font-size:11.5px}',
+    '.dr-sec.fim .dr-sec-tit{color:var(--green,#5EA832)}',
     '.dr-sec.atr .dr-sec-tit{color:var(--red,#E84444)}',
     '.dr-sec.and .dr-sec-tit{color:var(--green,#5EA832)}',
     '.dr-sec.val .dr-sec-tit{color:var(--amber-tx,#FFC470)}',
     '.dr-sec.pla .dr-sec-tit{color:var(--blue,#3B8FE8)}',
+    '.dr-sec.pln .dr-sec-tit{color:var(--teal-tx,#2BBFA0)}',
     /* O código e a situação têm largura FIXA: são os dois que se procura
        correndo o olho na vertical, e coluna que muda de largura a cada linha
        obriga o olho a reencontrar o começo. O título fica com o `1fr` porque é

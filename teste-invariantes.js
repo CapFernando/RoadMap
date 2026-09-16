@@ -10550,16 +10550,43 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         // PLANEJADO QUE JA VENCEU: ele tem de cair em ATRASADO, e nao aqui.
         { id: '15', codigo: 'AX-423', titulo: 'Planejado vencido', dev: 'Dan Weine',
           tema_id: 't1', status_planejamento: 'planejado', inicio: dia(-20), entrega: dia(-5) },
+        { id: '16', codigo: 'AX-430', titulo: 'Planning pontuada', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'planning', poker_pontos: 8 },
+        { id: '17', codigo: 'AX-431', titulo: 'Planning por medir', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'planning' },
+        // PLANNING SEM DONO: em Planning a demanda muitas vezes ainda nao tem
+        // dev, e ela nao e de ninguem.
+        { id: '18', codigo: 'AX-432', titulo: 'Planning de ninguem', dev: '',
+          tema_id: 't1', status_planejamento: 'planning' },
+        { id: '19', codigo: 'AX-440', titulo: 'Aprovada hoje', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'concluido', entrega: dia(-2),
+          concluido_em: HOJE, validado_em: HOJE + 'T13:00:00Z', validado_por: 'Fernando',
+          poker_pontos: 13 },
+        { id: '20', codigo: 'AX-443', titulo: 'Atrasada, mas aprovada hoje', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'concluido', entrega: dia(-30),
+          concluido_em: HOJE, validado_em: HOJE + 'T14:00:00Z', validado_por: 'Fernando',
+          poker_pontos: 21 },
+        { id: '21', codigo: 'AX-442', titulo: 'Concluida ontem', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'concluido', entrega: dia(-5),
+          concluido_em: dia(-1), validado_em: dia(-1) + 'T13:00:00Z' },
+        /* APROVADA AS 21h30: o `admin.html` grava `concluido_em` com a data UTC
+           (`toISOString().slice(0,10)`), que nessa hora JA E AMANHA. So o dia
+           local do `validado_em` a coloca no resumo de hoje — sem ele, a entrega
+           que o PM/PO acabou de aprovar no fim da tarde sumiria do proprio dia. */
+        { id: '22', codigo: 'AX-444', titulo: 'Aprovada as 21h30', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'concluido', entrega: dia(-4),
+          concluido_em: dia(1), validado_em: HOJE + 'T21:30:00-03:00',
+          validado_por: 'Fernando', poker_pontos: 3 },
       ],
     };
     const r = RD.montar(state, 'Dan Weine', HOJE);
     const cods = (l) => l.map(x => x.codigo);
-    const todos = [...cods(r.atrasado), ...cods(r.andamento), ...cods(r.validacao),
-                   ...cods(r.planejado)];
+    const todos = [...cods(r.concluidoHoje), ...cods(r.atrasado), ...cods(r.andamento),
+                   ...cods(r.validacao), ...cods(r.planejado), ...cods(r.planning)];
 
     ok(new Set(todos).size === todos.length,
        'nenhuma demanda aparece em dois baldes', todos.join(' '));
-    ok(todos.length === r.total, 'e o total e a soma dos tres', todos.length + ' / ' + r.total);
+    ok(todos.length === r.total, 'e o total e a soma de todos', todos.length + ' / ' + r.total);
 
     /* VALIDACAO NAO E ATRASO DO DEV \u2014 quem decide e o `prazo.js`. A AX-316
        venceu ha 10 dias e foi entregue ha 12: em atrasado, o recado cobraria a
@@ -10573,15 +10600,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e ela se declara pausada, para o rotulo explicar a data vencida');
 
     ok(!todos.includes('AX-600'), 'demanda de outra pessoa nao entra');
-    ok(!todos.includes('AX-700') && !todos.includes('AX-800') && !todos.includes('AX-900'),
-       'concluida, backlog e oculta tambem nao');
+    ok(!todos.includes('AX-800') && !todos.includes('AX-900'),
+       'backlog e oculta nao entram');
+    /* CONCLUIDA DE OUTRO DIA continua fora: o resumo e sobre o que esta na mao
+       agora, e a AX-700 foi concluida ha 40 dias. */
+    ok(!todos.includes('AX-700') && !todos.includes('AX-442'),
+       'concluida de outro dia tambem nao — so a de HOJE entra');
     ok(todos.includes('AX-901'), 'mas demanda de duas pessoas entra para as duas');
 
     /* A CONTA DE DIAS. `diasDeAtraso(m, etapa, hoje)` recebe TRES argumentos;
        com dois, `hoje` cai na posicao de `etapa`, a funcao devolve null e o
        `|| 0` vira ZERO \u2014 "venceu 09/09, 0 dias" no texto que alguem cola para
        cobrar uma pessoa. */
-    ok(r.atrasado.length >= 2, 'ha duas atrasadas para a ordem poder ser medida',
+    ok(r.atrasado.length >= 2, 'ha ao menos duas atrasadas para a ordem poder ser medida',
        String(r.atrasado.length));
     ok(r.atrasado.every(x => x.dias > 0),
        'nenhuma linha de atrasado sai com zero dia \u2014 zero ali e conta quebrada',
@@ -10625,6 +10656,67 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'planejado sem data de inicio mostra a entrega, e diz qual data e',
        semIni ? semIni.situacao.det : '');
 
+    /* ─── PLANNING, E SO SE FOR DELE ─────────────────────────────────────
+       "Coloca o planning tambem" / "mas a planning so se existir algo no nome
+       do dev." */
+    ok(JSON.stringify(cods(r.planning)) === JSON.stringify(['AX-430', 'AX-431']),
+       'o planning traz o que vai ser dimensionado', cods(r.planning).join(' '));
+    /* DEMANDA DE PLANNING SEM DONO NAO E DE NINGUEM. Em Planning ela muitas
+       vezes ainda nao tem dev, e o `DEVNOME.eDe` recusa nome vazio dos dois
+       lados — "perder o proprio card e ruim; ver o card alheio e pior". */
+    ok(!cods(r.planning).includes('AX-432'),
+       'planning sem dev nao entra no resumo de ninguem');
+    ok(cods(r.planning)[0] === 'AX-430',
+       'a ja pontuada vem primeiro — e a que pode sair da reuniao');
+    ok(/8 pt já estimados/.test(r.planning[0].situacao.det),
+       'e a situacao diz o tamanho quando existe', r.planning[0].situacao.det);
+    ok(/tamanho a definir/.test(r.planning[1].situacao.det),
+       'e diz que falta medir quando nao existe', r.planning[1].situacao.det);
+
+    /* A SECAO DO PLANNING SO APARECE SE TIVER ALGO. Vazia em quase todo dev
+       (a demanda so ganha dono depois da reuniao), ela seria moldura — e
+       moldura nao e notada no dia em que tem conteudo. */
+    const semPln = RD.montar({ temas: state.temas, melhorias: [state.melhorias[0]] },
+                             'Dan Weine', HOJE);
+    const htmSem = RD.html(semPln);
+    ok(htmSem.indexOf('dr-sec pln') < 0 && htmSem.indexOf('dr-kpi pln') < 0,
+       'sem planning, a secao E o contador somem juntos');
+    ok(!/PLANNING/.test(RD.texto(semPln)), 'e o texto do grupo tambem nao traz o bloco');
+    /* OS QUATRO DO MEIO CONTINUAM APARECENDO VAZIOS: ali o zero E resposta
+       ("nada atrasado" e o que se quer ouvir). */
+    ok(htmSem.indexOf('dr-sec atr') > 0 && htmSem.indexOf('dr-sec val') > 0,
+       'mas atrasado e validacao continuam aparecendo, mesmo vazios');
+
+    /* ─── CONCLUIDO HOJE ─────────────────────────────────────────────────
+       "Adicione os concluidos do dia, caso eu aprove, nao e mostrado." Ao
+       aprovar, a demanda virava `concluido` e sumia do resumo inteiro — o
+       trabalho desaparecia no instante em que ficava pronto. */
+    ok(cods(r.concluidoHoje).length === 3,
+       'o concluido de hoje aparece', cods(r.concluidoHoje).join(' '));
+    /* E O DE 21h30 TAMBEM, que so aparece pelo dia LOCAL do `validado_em`: o
+       `concluido_em` dele esta carimbado como AMANHA. */
+    ok(cods(r.concluidoHoje).includes('AX-444'),
+       'a aprovada as 21h30 entra no dia de HOJE, e nao no de amanha',
+       cods(r.concluidoHoje).join(' '));
+    /* APROVADA HOJE VENCE O ATRASO. Uma demanda entregue com atraso e aprovada
+       hoje e noticia BOA na daily: ela saiu. Em atrasado, o resumo cobraria a
+       pessoa por algo que ela acabou de fechar. */
+    ok(cods(r.concluidoHoje).includes('AX-443') && !cods(r.atrasado).includes('AX-443'),
+       'aprovada hoje entra como concluida, e nao como atrasada');
+    /* E A REGRA E DO `prazo.js`, e nao da ordem dos `if` aqui. Eu havia escrito
+       que a ordem protegia contra a concluida cair em atrasado; a sabotagem
+       provou que nao — inverter as linhas nao mudou nada, porque `concluido`
+       esta em `ETAPAS_APOS_O_DEV` e o atraso e congelado na entrega. A prova
+       fica onde a regra mora, e nao onde eu supus que morava. */
+    ok(PZ.estaAtrasada({ status_planejamento: 'concluido', entrega: '2026-08-01',
+                         concluido_em: HOJE }, 'concluido', HOJE) === false,
+       'concluida NUNCA le como atrasada — e o `prazo.js` que garante, nao esta tela');
+    ok(cods(r.concluidoHoje)[0] === 'AX-443',
+       'e a maior vem primeiro — e a que a daily quer ouvir',
+       cods(r.concluidoHoje).join(' > '));
+    ok(/aprovado por Fernando/.test(r.concluidoHoje[0].situacao.det),
+       'a linha diz quem aprovou', r.concluidoHoje[0].situacao.det);
+
     /* ─── OS QUATRO CAMPOS ────────────────────────────────────────────────
        "Ajuste para trazer AX-XXX, Sistema/modulo, titulo e situacao como esta."
        A SITUACAO E CAMPO DA LINHA, e nao so titulo da secao: quando alguem
@@ -10666,9 +10758,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        lados do teste, e a sabotagem que trocou 'pla' por 'XX' passou em silencio
        — com o CSS apontando para uma classe que nao existe mais e a secao
        saindo sem cor nenhuma. */
-    const CHAVES = ['atr', 'and', 'val', 'pla'];
+    /* A ORDEM E A DA DAILY: o que saiu, o que trava, o que anda, o que espera
+       terceiro, o que vem, e o que ainda vai ser medido. */
+    const CHAVES = ['fim', 'atr', 'and', 'val', 'pla', 'pln'];
     ok(JSON.stringify(RD.SECOES.map(x => x.k)) === JSON.stringify(CHAVES),
-       'os quatro baldes tem as chaves esperadas, e nesta ordem',
+       'os seis baldes tem as chaves esperadas, e nesta ordem',
        RD.SECOES.map(x => x.k).join(' '));
     /* E CADA CHAVE TEM COR NO CSS. Sem isto, um balde novo sai cinza no meio de
        tres coloridos, e a cor deixa de significar alguma coisa. */
