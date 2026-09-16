@@ -6678,7 +6678,14 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
     const mescladaEm = m => String(m && m.mesclado_em || '');
     const dataReferenciaKb = m => m.concluido_em ? new Date(m.concluido_em) : null;
     const matchDev = () => true, matchPrazo = () => true, matchTipo = () => true;
-    const _kbTema = null, _kbDev = null, _kbPrazo = null, _kbTipo = null;
+    /* matchProducao entrou na cadeia depois deste bloco existir, e sem o stub
+       ele estourava com ReferenceError — o teste antigo acusando que a cadeia
+       que ele executa ganhou uma dependencia nova. E o comportamento certo: ele
+       EXECUTA o trecho real, entao toda mudanca nele passa por aqui.
+       (Sem crases neste comentario: ele mora DENTRO de um template literal, e
+       uma crase aqui fecha a string — foi o que aconteceu na primeira versao.) */
+    const matchProducao = () => true;
+    const _kbTema = null, _kbDev = null, _kbPrazo = null, _kbTipo = null, _kbProd = null;
     ${trecho}
     return { base, mescladasAchadas };
   `)({ melhorias }, busca, periodo);
@@ -9817,6 +9824,81 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(fila.indexOf('d') < 0, 'e a que nem foi concluida tambem nao');
     ok(JSON.stringify(roda('no_ar')) === JSON.stringify(['a']),
        'e "no ar" traz so a que subiu', roda('no_ar').join(','));
+  }
+
+  {
+    /* ─── E NO KANBAN, que e onde o quadro e monitorado ───────────────────
+       "Nao estou enxergando": eu tinha posto o filtro so na aba Melhorias, e o
+       acompanhamento do dia a dia e feito no QUADRO.
+
+       A cadeia do Kanban e EXECUTADA aqui, recortada da tela, porque ela tem uma
+       armadilha que a outra nao tem: o filtro "Concluidas: Este mes". */
+    const ETP = require('./etapa-demanda.js');
+    const rk = corpo(ADMIN, 'function renderKanban(');
+    const iCad = rk.indexOf('const achadas = state.melhorias.filter');
+    const jCad = rk.indexOf('  );', iCad) + 4;
+    ok(iCad > 0 && jCad > iCad, 'a cadeia de filtros do kanban foi localizada');
+    const cadeiaKb = new Function(
+      'state', 'ehMesclada', 'matchDev', 'matchPrazo', 'matchTipo', 'matchBusca',
+      'matchPeriodoConclusao', 'statusKey', '_kbTema', '_kbDev', '_kbPrazo', '_kbTipo',
+      '_kbProd', '_kbBusca', '_kbPeriodo',
+      corpo(ADMIN, 'function matchProducao(') + '\n' + rk.slice(iCad, jCad) +
+      '\nreturn base;');
+    const baseKb = [
+      { id: 'a', codigo: 'AX-191', status_planejamento: 'concluido',
+        concluido_em: '2026-09-04', em_producao: true },
+      { id: 'b', codigo: 'AX-254', status_planejamento: 'concluido',
+        concluido_em: '2026-09-01' },
+      /* O CASO QUE IMPORTA: concluida em JULHO e nunca subiu. Ela e exatamente o
+         que a fila de deploy existe para achar, e e ela que o periodo esconde. */
+      { id: 'c', codigo: 'AX-100', status_planejamento: 'concluido',
+        concluido_em: '2026-07-15' },
+      { id: 'd', codigo: 'AX-081', status_planejamento: 'em_andamento' },
+    ];
+    /* O STUB DO PERIODO ESPELHA A REGRA REAL: ele so se aplica a CONCLUIDA (e
+       negada) — demanda em aberto e sempre visivel, senao o quadro nunca
+       mostraria as 42 "em andamento" do print. A primeira versao deste stub
+       cortava tudo que nao tinha `concluido_em`, e me fez escrever uma
+       expectativa errada sobre a saida. */
+    const periodoKb = (m, p) => {
+      const sk = ETP.gravada(m);
+      if (sk !== 'concluido' && sk !== 'negada') return true;
+      if (p !== 'mes_atual') return true;
+      return String(m.concluido_em || '').slice(0, 7) === '2026-09';
+    };
+    const rodaKb = (prod, busca) => cadeiaKb(
+      { melhorias: baseKb }, () => false, () => true, () => true, () => true, () => true,
+      periodoKb, (m) => ETP.gravada(m), null, null, null, null, prod, busca || '', 'mes_atual'
+    ).map(m => m.codigo);
+
+    ok(JSON.stringify(rodaKb(null)) === JSON.stringify(['AX-191', 'AX-254', 'AX-081']),
+       'sem o filtro, o padrao "Concluidas: Este mes" esconde a de julho',
+       rodaKb(null).join(' '));
+    const fila = rodaKb('falta_subir');
+    /* O FILTRO VENCE O PERIODO. Sem isto ele nasceria mostrando so o mes
+       corrente — e a demanda de julho que nunca subiu, que e o alvo, ficaria de
+       fora por um filtro que ninguem escolheu. Terceira vez que este defeito
+       aparece nesta base (ver dfdaee4). */
+    ok(fila.includes('AX-100'),
+       'com o filtro, a concluida em JULHO e fora do ar APARECE', fila.join(' '));
+    ok(fila.includes('AX-254'), 'e a deste mes tambem');
+    ok(!fila.includes('AX-191'), 'a que ja subiu nao entra');
+    ok(!fila.includes('AX-081'), 'e a que nem foi concluida tambem nao');
+    ok(JSON.stringify(rodaKb('no_ar')) === JSON.stringify(['AX-191']),
+       'e "no ar" traz so a que subiu, tambem sem o corte do periodo',
+       rodaKb('no_ar').join(' '));
+
+    /* A BARRA DO KANBAN MOSTRA O FILTRO, e o "Limpar" o conta — filtro ligado que
+       nao aparece na conta e a definicao de filtro invisivel. */
+    const kc = semComentario(ADMIN);
+    ok(/fbGroup\('Produção', _kbProd, opcoesProducao\(\), 'setKbProd'\)/.test(kc),
+       'o select de producao esta na barra do kanban');
+    ok(/_kbTipo, _kbProd, _kbBusca/.test(kc), 'e entra na contagem do botao Limpar');
+    ok(/_kbProd = null;/.test(kc), 'e o Limpar o zera');
+    /* E A TELA DIZ QUE IGNOROU O PERIODO. Calar seria o defeito ao contrario:
+       um card de julho sob "Concluidas: Este mes" pareceria quadro quebrado. */
+    ok(/produção em todos os períodos/.test(ADMIN),
+       'e a barra avisa que o periodo foi ignorado');
   }
 
   {

@@ -3637,6 +3637,7 @@ let _kbTema  = null;
 let _kbDev   = null;
 let _kbPrazo = null;
 let _kbTipo  = null;
+let _kbProd  = null;       // null|'falta_subir'|'no_ar' — ver PRODUCAO_BUCKETS
 let _kbBusca = '';         // texto livre: título, descrição, dev, solicitante
 let _kbPeriodo = 'mes_atual'; // higiene: concluído/negada de outros meses fica oculto por padrão
 
@@ -3679,13 +3680,15 @@ function setKbTema(v)  { _kbTema  = vazioNulo(v); renderKanban(); }
 function setKbDev(v)   { _kbDev   = vazioNulo(v); renderKanban(); }
 function setKbPrazo(v) { _kbPrazo = vazioNulo(v); renderKanban(); }
 function setKbTipo(v)  { _kbTipo  = vazioNulo(v); renderKanban(); }
+function setKbProd(v)  { _kbProd  = vazioNulo(v); renderKanban(); }
 function setBuscaKb(v) {
   _kbBusca = v || '';
   comFocoPreservado('kb-toolbar', () => renderKanban());
 }
 function setKbPeriodo(v) { _kbPeriodo = v || 'mes_atual'; renderKanban(); }
 function limparFiltrosKb() {
-  _kbTema = _kbDev = _kbPrazo = _kbTipo = null; _kbBusca = ''; _kbPeriodo = 'mes_atual';
+  _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = null;
+  _kbBusca = ''; _kbPeriodo = 'mes_atual';
   renderKanban();
 }
 
@@ -3702,7 +3705,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
   });
   // 'mes_atual' é o padrão de higiene, não uma escolha explícita — só conta
   // como filtro "ativo" quando alguém pede para ver mais (3 meses/tudo).
-  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbBusca,
+  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbBusca,
                   _kbPeriodo !== 'mes_atual' ? _kbPeriodo : null].filter(Boolean).length;
   el.innerHTML =
     fbGroup('Tipo',    _kbTipo,    opcoesTipo(),    'setKbTipo') +
@@ -3710,6 +3713,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
     fbGroup('Dev',     _kbDev,     opcoesDev(),     'setKbDev') +
     fbGroup('Prazo',   _kbPrazo,   opcoesPrazo(),   'setKbPrazo') +
     fbGroup('Concluídas', _kbPeriodo, opcoesPeriodo(), 'setKbPeriodo') +
+    fbGroup('Produção', _kbProd, opcoesProducao(), 'setKbProd') +
     fbBusca('kb-busca', _kbBusca, 'setBuscaKb') +
     botaoLimpar('limparFiltrosKb', ativos) +
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}` +
@@ -3717,6 +3721,12 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
        busca "concluídas: este mês" no alto e ve um card de julho no quadro
        acharia que o filtro quebrou. */
     (_kbBusca ? ' · <span class="fb-nota">busca em todos os períodos</span>' : '') +
+    /* E O FILTRO DE PRODUCAO TAMBEM DIZ. Ele ignora o periodo pelo mesmo motivo
+       que a busca, e calar sobre isso seria repetir o defeito ao contrario:
+       a pessoa veria um card de julho com "Concluidas: Este mes" no alto e
+       concluiria que o quadro quebrou. */
+    (!_kbBusca && _kbProd
+      ? ' · <span class="fb-nota">produção em todos os períodos</span>' : '') +
     `</span>` +
     (mesc.length
       ? `<div class="fb-mesc">🔗 ${mesc.length} resultado${mesc.length > 1 ? 's' : ''} fora do quadro: ${mesc.join(' · ')}</div>`
@@ -3808,7 +3818,15 @@ function renderKanban() {
     matchDev(m, _kbDev) &&
     matchPrazo(m, _kbPrazo) &&
     matchTipo(m, _kbTipo) &&
-    (!!_kbBusca || matchPeriodoConclusao(m, _kbPeriodo))
+    matchProducao(m, _kbProd) &&
+    /* O FILTRO DE PRODUCAO VENCE O PERIODO, e sem isto ele nasceria quebrado.
+       "Concluidas: Este mes" e o PADRAO — nao conta como filtro ativo, nao
+       aparece no "Limpar (n)" — e corta tudo que foi concluido em outro mes.
+       Uma demanda de agosto que nunca subiu e exatamente o que a fila de deploy
+       existe para achar, e ela ficaria escondida por um filtro que ninguem
+       escolheu. E o mesmo defeito do dfdaee4, pela terceira vez: la foi o
+       periodo derrubando a busca, aqui seria o periodo derrubando a fila. */
+    (!!_kbBusca || !!_kbProd || matchPeriodoConclusao(m, _kbPeriodo))
   );
   /* A MESCLADA CONTINUA FORA DAS COLUNAS — ela saiu do fluxo e vive dentro da
      principal —, mas com busca ativa a pessoa e AVISADA de que existe e de onde
