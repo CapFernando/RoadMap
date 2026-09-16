@@ -4115,17 +4115,45 @@ sec('O slide das frentes cabe no slide');
   /* O TITULO PARA ANTES DO PERIODO, que fica no canto direito do cabecalho.
      Na primeira versao o titulo tinha 6,4" de caixa a partir de 0,5" e o periodo
      abria em 6,6": 0,30" de invasao, que a prova do PPTX pegou. */
-  [[/addText\('FRENTES DE TRABALHO', \{\s*x: ([\d.]+), y: [\d.]+, w: ([\d.]+),/, 'FRENTES DE TRABALHO'],
-   [/addText\('PRINCIPAIS PROJETOS', \{\s*x: ([\d.]+), y: [\d.]+, w: ([\d.]+),/, 'PRINCIPAIS PROJETOS']]
-    .forEach(([re, tit]) => {
-      const t = APRES.match(re);
-      ok(!!t, 'o titulo "' + tit + '" tem caixa declarada');
-      if (t) {
-        ok(Number(t[1]) + Number(t[2]) <= 6.5,
-           'e ele para antes do periodo, no canto direito: ' + tit,
-           (Number(t[1]) + Number(t[2])).toFixed(2) + '" <= 6,50"');
-      }
-    });
+  /* AGORA A CAIXA DO TITULO E UMA SO, e a invariante mudou de alvo junto.
+     Ela nascia citando dois titulos literais ("FRENTES DE TRABALHO" e
+     "PRINCIPAIS PROJETOS") porque cada slide desenhava o proprio cabecalho.
+     Continuar citando os dois seria cobrar de duas copias que nao existem mais e
+     deixar as outras dezesseis sem cobranca nenhuma. */
+  {
+    /* RECORTA POR POSICAO, e nao com `corpo`: neste bloco `corpo` ja e uma
+       CONSTANTE de texto (o corpo do cartao de frente), e chamar a funcao global
+       de mesmo nome daqui da "corpo is not a function". */
+    const iCab = APRES.indexOf('function cabecalhoEm(');
+    const cab = iCab > 0 ? APRES.slice(iCab, APRES.indexOf('function slideTitulo(', iCab)) : '';
+    ok(!!cab, 'o cabecalho unico foi encontrado');
+    const larg = cab && cab.match(/var L_TIT = largTitulo \|\| \(periodo \? ([\d.]+) : ([\d.]+)\);/);
+    ok(!!larg, 'e a largura da coluna do titulo e declarada nele');
+    const cx = cab && cab.match(/addText\(txt, \{\s*x: ([\d.]+), y: [\d.]+, w: L_TIT,/);
+    ok(!!cx, 'e o titulo usa essa largura, em vez de um numero solto');
+    if (larg && cx) {
+      /* O TITULO PARA ANTES DO PERIODO, que abre em 6,6". Na primeira versao
+         disto o titulo tinha 6,4" de caixa a partir de 0,5" e invadia 0,30" —
+         a prova do PPTX pegou. */
+      ok(Number(cx[1]) + Number(larg[1]) <= 6.5,
+         'e para antes do periodo, no canto direito',
+         (Number(cx[1]) + Number(larg[1])).toFixed(2) + '" <= 6,50"');
+    }
+    /* E NENHUM SLIDE VOLTA A DESENHAR O PROPRIO. Era esse o defeito relatado —
+       "os relatorios que geramos nao atendem esse padrao" —, e ele se via na
+       propria secao de Tecnologia do deck: titulo de 21pt com regua em metade
+       dos slides e de 24pt sem regua na outra metade. A regua e a assinatura do
+       cabecalho; se ela aparece fora do `cabecalhoEm`, alguem montou outro. */
+    const reguas = (APRES + RPPT).split('y: 1.02, w: 9.0, h: 0.012').length - 1;
+    ok(reguas === 1, 'e a regua do cabecalho e desenhada num lugar so',
+       reguas + ' ocorrencia(s)');
+    /* E os dois arquivos param de posicionar titulo por conta propria. */
+    /* A BUSCA E PELO USO, e nao pelo nome: o comentario que explica por que as
+       constantes sairam CITA as duas, e a primeira versao desta linha acusou o
+       proprio comentario. */
+    ok(!/var Y_TITULO|y: Y_TITULO|y: Y_SUB/.test(RPPT),
+       'o deck de um assunto nao guarda mais as medidas da gramatica antiga');
+  }
 })();
 
 /* O DECK INTEIRO USA A PALETA DO PAINEL APROVADO.

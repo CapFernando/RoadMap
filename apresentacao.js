@@ -311,19 +311,9 @@
      PROJETO SEM TAREFA NO MES APARECE, dito com todas as letras em vez de com um
      zero — omitir o parado esconderia justamente o que merece pergunta.        */
   function slideProjetos(pptx, lista, pagina, periodo) {
-    var s = slideBase(pptx);
-    s.addText('PRINCIPAIS PROJETOS', {
-      x: 0.5, y: 0.28, w: 5.9, h: 0.42, fontSize: 21, bold: true, color: C.texto,
-      charSpacing: 0.5 });
-    s.addText('ranqueados por horas planejadas + executadas no período', {
-      x: 0.5, y: 0.70, w: 5.9, h: 0.24, fontSize: 10, color: C.fraco });
-    s.addText(periodo, {
-      x: 6.6, y: 0.30, w: 2.9, h: 0.26, fontSize: 11, bold: true, color: C.texto,
-      align: 'right' });
-    s.addText(lista.length + (lista.length === 1 ? ' projeto em aberto' : ' projetos em aberto'), {
-      x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
-    s.addShape(pptx.ShapeType.rect, {
-      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { type: 'none' } });
+    var s = slideTitulo(pptx, 'PRINCIPAIS PROJETOS',
+      'ranqueados por horas planejadas + executadas no período', pagina, periodo,
+      lista.length + (lista.length === 1 ? ' projeto em aberto' : ' projetos em aberto'));
 
     if (!lista.length) {
       s.addText('Nenhum projeto em aberto no período.', {
@@ -406,11 +396,87 @@
     return s;
   }
 
-  function slideTitulo(pptx, titulo, sub, pagina) {
-    var s = slideBase(pptx);
-    s.addText(titulo, { x: 0.7, y: 0.55, w: 8.6, h: 0.5, fontSize: 24, bold: true, color: C.texto });
-    if (sub) s.addText(sub, { x: 0.7, y: 1.05, w: 8.6, h: 0.35, fontSize: 13, color: C.fraco });
+  /* ═══ O CABEÇALHO DE TODO SLIDE — UM SÓ ═══════════════════════════════════
+   *
+   * "Os relatórios que geramos não atendem esse padrão." O padrão é o deck de
+   * fechamento, e o defeito estava DENTRO do nosso próprio gerador: ele tinha
+   * duas gramáticas de cabeçalho, e as duas aparecem na mesma seção de
+   * Tecnologia do deck de agosto. Medido nos spans do PDF (960×540pt, ÷1,333
+   * para polegadas):
+   *
+   *                    "FRENTES DE TRABALHO" / "O MÊS"   "Principais assuntos"
+   *   título           21pt em x=0,5" y=0,28"            24pt em x=0,7" y=0,55"
+   *   subtítulo        10pt                              13pt
+   *   período no topo  sim, à direita                    não
+   *   régua embaixo    sim                               não
+   *
+   * Quem folheia vê o título pular de tamanho e de posição de um slide para o
+   * outro, e a régua aparecer e sumir. Não se sabe dizer o que mudou — sabe-se
+   * que alguma coisa está desalinhada, e é isso que tira a credibilidade de um
+   * número correto.
+   *
+   * O PADRÃO ESCOLHIDO É O DAS PÁGINAS 10/11, e não por gosto: medi o
+   * cabeçalho de mais quatro áreas do mesmo deck, e três delas convergem para a
+   * MESMA forma — título em maiúscula, subtítulo cinza logo abaixo, e o período
+   * carregado ali (SalesOps p.20, Operações Estruturadas p.75 e p.83,
+   * Controladoria p.103). As nossas 13/14/15 eram a exceção da casa inteira.
+   *
+   * O TAMANHO DO TÍTULO É CALCULADO, e não escolhido — o mesmo que a capa já
+   * faz. A coluna do título tem 5,9" (o resto é do período), e por ela passam
+   * nomes que eu não controlo: o nome do dev e o nome do tema. "AXCred -
+   * Cadastro - Análise de Crédito - Reanálise" tem 49 caracteres e não cabe em
+   * 21pt; sem a conta ele quebraria em duas linhas por cima do subtítulo. */
+  /* DESENHA O CABEÇALHO NUM SLIDE QUE JÁ EXISTE.
+   *
+   * Separado de `slideTitulo` porque três slides (`slideAreas`, `slideMes`,
+   * `slidePipelines`) montam o próprio fundo antes do cabeçalho e não podem
+   * chamar quem cria o slide. Eram justamente eles que tinham a cópia inline. */
+  function cabecalhoEm(s, pptx, titulo, sub, periodo, nota, largTitulo) {
+    var txt = String(titulo == null ? '' : titulo).toUpperCase();
+    /* A LARGURA DA COLUNA DO TÍTULO É DITA quando o canto direito já tem dono.
+       O slide do time põe ali a quebra de evolução × sustentação, e o de frentes
+       põe o anel de execução — nos dois, uma caixa de título de 9" passaria por
+       cima. Sem o argumento, ela é 5,9" (o resto é do período) ou 9" (sem ele). */
+    var L_TIT = largTitulo || (periodo ? 5.9 : 9.0);
+    var corpo = 21;
+    while (corpo > 14 && txt.length > cabemChars(L_TIT, corpo)) corpo -= 1;
+
+    s.addText(txt, {
+      x: 0.5, y: 0.28, w: L_TIT, h: 0.42, fontSize: corpo, bold: true,
+      color: C.texto, charSpacing: 0.5, valign: 'middle' });
+    if (sub) {
+      /* DUAS LINHAS DE FOLGA no subtítulo, e é medida: 0,30" comporta duas
+         linhas de 10pt e para em 1,00" — dois centésimos acima da régua. Os
+         subtítulos do deck de um assunto são frases inteiras ("18 demandas sem
+         data combinada — Backlog e Levantar Requisitos. A mais antiga espera há
+         120 dias."), e numa linha só elas seriam cortadas. */
+      s.addText(sub, {
+        x: 0.5, y: 0.70, w: L_TIT, h: 0.30, fontSize: 10, color: C.fraco });
+    }
+    /* O PERÍODO NO ALTO, além do rodapé. Parece repetição e não é: o rodapé se
+       lê olhando para baixo, e quem projeta um slide isolado (ou cola o print
+       num grupo) leva o alto junto e o pé não. É o que as páginas 10/11 fazem, e
+       o que Operações Estruturadas resolve pondo o mês no subtítulo. */
+    if (periodo) {
+      s.addText(String(periodo), {
+        x: 6.6, y: 0.30, w: 2.9, h: 0.26, fontSize: 11, bold: true,
+        color: C.texto, align: 'right' });
+    }
+    /* A SEGUNDA LINHA DA DIREITA — o "fechamento em 31/08/2026" da página 11 e o
+       "4 frentes" da página 10. Ela existe porque o período responde "de quando
+       é isto" e não responde "até onde contei": um slide de mês em curso e um
+       de mês fechado dizem o mesmo "Agosto de 2026" e não são a mesma coisa. */
+    if (nota) {
+      s.addText(String(nota), {
+        x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
+    }
+    s.addShape(pptx.ShapeType.rect, {
+      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { type: 'none' } });
     return s;
+  }
+
+  function slideTitulo(pptx, titulo, sub, pagina, periodo, nota, largTitulo) {
+    return cabecalhoEm(slideBase(pptx), pptx, titulo, sub, periodo, nota, largTitulo);
   }
 
   // Corta o texto no tamanho que cabe em DUAS linhas da coluna. Sem isso um
@@ -567,13 +633,12 @@
   // em reuniao de diretoria, detalhe individual desloca a conversa de "o que a
   // area entregou" para "o que fulano fez", e nao e essa a pauta.
   function slideTime(pptx, t, pagina, periodo, ausencias, cap, quebra) {
-    /* Titulo proprio, e nao `slideTitulo`: a caixa dele tem 8,6" de largura e
-       cobriria a quebra de sustentacao x evolucao, que vive no canto direito. */
-    var s = slideBase(pptx);
-    s.addText('O time', { x: 0.7, y: 0.55, w: 4.6, h: 0.5,
-                          fontSize: 24, bold: true, color: C.texto });
-    s.addText('no período', { x: 0.7, y: 1.05, w: 4.6, h: 0.35,
-                              fontSize: 13, color: C.fraco });
+    /* O TITULO PROPRIO ERA A DEFESA DA QUEBRA no canto direito: a caixa tinha
+       8,6" e passaria por cima dela. Com o cabecalho unico isso deixou de ser
+       motivo — a largura da coluna do titulo se diz, e aqui ela e 4,6". O que
+       sobrava era um slide com titulo de outro tamanho e sem regua no meio de um
+       deck que tem as duas coisas em todos os outros. */
+    var s = slideTitulo(pptx, 'O time', 'no período', pagina, '', '', 4.6);
 
     /* CONSTRUIR OU MANTER DE PE — a quebra do que o time entregou.
 
@@ -673,7 +738,7 @@
   // barra diz em um olhar se foi concentrado ou distribuido — que e a pergunta que
   // a diretoria faz depois do numero.
   function slideAreas(pptx, areas, pagina, periodo) {
-    var s = slideTitulo(pptx, 'Onde atuamos', 'principais frentes do período', pagina);
+    var s = slideTitulo(pptx, 'Onde atuamos', 'principais frentes do período', pagina, periodo);
     var max = Math.max.apply(null, areas.map(function (a) { return a.entregas; }).concat([1]));
     areas.slice(0, 3).forEach(function (a, i) {
       var y = 1.7 + i * 1.05;
@@ -838,7 +903,7 @@
    *  o que faz esta funcao subir para tres colunas em vez de desenhar por cima do
    *  rodape. */
   function slideDeCorte(pptx, cfg) {
-    var s = slideTitulo(pptx, 'Pontos entregues', cfg.sub, cfg.pagina);
+    var s = slideTitulo(pptx, 'Pontos entregues', cfg.sub, cfg.pagina, cfg.periodo);
     var itens = cfg.itens;
     var X0 = 0.62, LARG_TOTAL = 8.76, VAO = 0.26;
     for (var n = 1; n <= 3; n++) {
@@ -892,7 +957,8 @@
      trabalho do próprio time, o vermelho existe e faz sentido.                 */
   function slideCapacidade(pptx, cap, pagina, periodo) {
     var s = slideTitulo(pptx, 'Planejado × entregue',
-                        'em pontos — o tamanho do que foi combinado e do que saiu', pagina);
+                        'em pontos — o tamanho do que foi combinado e do que saiu',
+                        pagina, periodo);
 
     /* A FAIXA DE TOTAIS. O `rotulo` de capacidade.js já resolve o "nada acima de
        100%": passando do plano, ele diz a diferença em pontos. */
@@ -1112,7 +1178,7 @@
   }
 
   function slideBarras(pptx, cfg, pagina, periodo) {
-    var s = slideTitulo(pptx, cfg.titulo, cfg.sub || '', pagina);
+    var s = slideTitulo(pptx, cfg.titulo, cfg.sub || '', pagina, periodo);
     var itens = (cfg.itens || []).slice(0, cfg.max || 12);
     if (!itens.length) {
       s.addText(cfg.vazio || 'Sem dados no período.',
@@ -1336,21 +1402,12 @@
       return i.entregas > 0 || i.plan > 0 || i.real > 0;
     });
 
-    // -- Cabecalho, como o do painel: titulo, subtitulo e o periodo a direita --
-    s.addText('FRENTES DE TRABALHO', {
-      x: 0.5, y: 0.28, w: 5.9, h: 0.42, fontSize: 21, bold: true, color: C.texto,
-      charSpacing: 0.5 });
-    s.addText('visão geral da execução', {
-      x: 0.5, y: 0.70, w: 5.9, h: 0.24, fontSize: 10, color: C.fraco });
-    s.addText(periodo, {
-      x: 6.6, y: 0.30, w: 2.9, h: 0.26, fontSize: 11, bold: true, color: C.texto,
-      align: 'right' });
-    if (pl.recorte) {
-      s.addText(pl.recorte, {
-        x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
-    }
-    s.addShape(pptx.ShapeType.rect, {
-      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { type: 'none' } });
+    // -- Cabecalho: DELEGA, e era uma das tres copias --------------------------
+    // Este slide desenhava o proprio cabecalho, e ele era o CERTO — o padrao da
+    // casa. O que estava errado era `slideTitulo` desenhar outro. Agora e um so,
+    // e mudar a gramatica do deck passou a ser mudar uma funcao.
+    cabecalhoEm(s, pptx, 'FRENTES DE TRABALHO', 'visão geral da execução',
+                periodo, pl.recorte);
 
     if (!itens.length) {
       s.addText('Sem entregas com frente definida no período.',
@@ -1506,21 +1563,9 @@
     var a = d.anterior;
     var q = d.quebra || {};
 
-    // -- Cabecalho, no mesmo padrao das outras secoes do painel --------------
-    s.addText('O MÊS', {
-      x: 0.5, y: 0.28, w: 5.9, h: 0.42, fontSize: 21, bold: true, color: C.texto,
-      charSpacing: 0.5 });
-    s.addText('backlog, o que entrou e o que saiu', {
-      x: 0.5, y: 0.70, w: 5.9, h: 0.24, fontSize: 10, color: C.fraco });
-    s.addText(d.periodo, {
-      x: 6.6, y: 0.30, w: 2.9, h: 0.26, fontSize: 11, bold: true, color: C.texto,
-      align: 'right' });
-    if (f.corte) {
-      s.addText((f.emCurso ? 'posição de ' : 'fechamento em ') + f.corte, {
-        x: 6.6, y: 0.56, w: 2.9, h: 0.22, fontSize: 8, color: C.fraco, align: 'right' });
-    }
-    s.addShape(pptx.ShapeType.rect, {
-      x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { type: 'none' } });
+    // -- Cabecalho: DELEGA (ver `cabecalhoEm`) --------------------------------
+    cabecalhoEm(s, pptx, 'O MÊS', 'backlog, o que entrou e o que saiu', d.periodo,
+                f.corte ? (f.emCurso ? 'posição de ' : 'fechamento em ') + f.corte : '');
 
     /* A CONTA DO MES, em quatro cartoes com os sinais entre eles.
 
@@ -1621,7 +1666,7 @@
      deck. Cada linha leva o que a sala pergunta em seguida: quantos dias, se é
      sustentação ou evolução, em que módulo e de quem foi.                        */
   function slideRapidas(pptx, r, pagina, periodo, anterior) {
-    var s = slideTitulo(pptx, 'Entregas rápidas', 'entraram e saíram em até dois dias', pagina);
+    var s = slideTitulo(pptx, 'Entregas rápidas', 'entraram e saíram em até dois dias', pagina, periodo);
     var itens = r.itens || [];
     if (!itens.length) {
       s.addText('Nenhuma entrega do período fechou em até dois dias.', {
@@ -1678,7 +1723,7 @@
     /* O SUBTITULO PAROU DE PROMETER PRAZO. Ele dizia "entradas, saidas e prazo
        mes a mes" e o prazo saiu do slide junto com o percentual — um subtitulo
        que anuncia o que nao esta ali faz quem le procurar o numero que falta. */
-    var s = slideTitulo(pptx, 'Evolução', 'entradas, saídas e saldo mês a mês', pagina);
+    var s = slideTitulo(pptx, 'Evolução', 'entradas, saídas e saldo mês a mês', pagina, periodo);
     var vis = (serie || []).filter(function (x) { return x; });
     if (!vis.length) { rodape(s, periodo, pagina); return s; }
 
@@ -1757,7 +1802,7 @@
   function slideGanttDev(pptx, dv, pagina, periodo) {
     var s = slideTitulo(pptx, dv.nome,
       dv.entregas + (dv.entregas === 1 ? ' entrega' : ' entregas') +
-      (dv.pontos ? '  ·  ' + dv.pontos + ' pontos' : '') + '  ·  no período', pagina);
+      (dv.pontos ? '  ·  ' + dv.pontos + ' pontos' : '') + '  ·  no período', pagina, periodo);
     var X0 = 3.5, LARG = 6.1, TOPO = 1.75, ALT = 0.42;
     var dias = dv.dias || 31;
 
@@ -1971,7 +2016,7 @@
       if (d.prazo.atrasadas.length) {
         var s = slideTitulo(pptx, 'Onde escapou do prazo',
           d.prazo.atrasadas.length + ' entregas, atraso médio de ' + d.prazo.diasMedio +
-          (d.prazo.diasMedio === 1 ? ' dia' : ' dias'), ++p);
+          (d.prazo.diasMedio === 1 ? ' dia' : ' dias'), ++p, d.periodo);
         tabela(pptx, s, ['Demanda', 'Responsável', 'Prazo → conclusão', 'Atraso'],
           d.prazo.atrasadas.map(function (a) {
             return [corta(a.titulo, 44), a.dev, a.datas,
@@ -2039,7 +2084,7 @@
     // As imagens seguem suportadas para quem quiser mandar um grafico pronto,
     // mas nenhum slide do deck depende delas hoje.
     (d.imagens || []).forEach(function (img) {
-      var si = slideTitulo(pptx, img.titulo, img.sub || '', ++p);
+      var si = slideTitulo(pptx, img.titulo, img.sub || '', ++p, d.periodo);
       si.addImage({ data: img.png, x: 0.7, y: 1.5, w: 8.6, h: 3.4 });
       rodape(si, d.periodo, p);
     });
@@ -2048,7 +2093,8 @@
        A única parte do deck que pede ação de quem está na sala. Vem depois de
        tudo que explica o mês, e antes do fecho.                              */
     if (d.secoes.riscos && (d.riscos.pausadas.length || d.riscos.semPonto)) {
-      var sr = slideTitulo(pptx, 'O que está travado', 'depende de decisão fora do time', ++p);
+      var sr = slideTitulo(pptx, 'O que está travado', 'depende de decisão fora do time',
+                           ++p, d.periodo);
       if (d.riscos.pausadas.length) {
         tabela(pptx, sr, ['Demanda', 'Parada há', 'Motivo'],
           d.riscos.pausadas.map(function (x) {
@@ -2098,7 +2144,7 @@
 
     // 8. O que vem. Terminar em compromisso, não em número.
     if (d.secoes.proximo) {
-      var sp = slideTitulo(pptx, 'O que vem', d.proximo.sub || '', ++p);
+      var sp = slideTitulo(pptx, 'O que vem', d.proximo.sub || '', ++p, d.periodo);
       if (d.proximo.itens.length) {
         tabela(pptx, sp, ['Demanda', 'Responsável', 'Entrega'],
           d.proximo.itens.map(function (x) {

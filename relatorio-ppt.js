@@ -47,7 +47,11 @@
   }
 
   var MARGEM = 0.7, LARG = 8.6;      // a coluna útil do slide, igual à do deck mensal
-  var Y_TITULO = 0.5, Y_SUB = 1.02, Y_CORPO = 1.5, Y_FUNDO = 4.9;
+  /* `Y_TITULO` e `Y_SUB` SAIRAM: quem posiciona titulo e subtitulo agora e o
+     cabecalho unico (`slideTitulo`), e deixar as duas constantes aqui seria
+     deixar de pe a medida da gramatica antiga — a proxima pessoa que precisasse
+     de um "y do titulo" as acharia e reconstruiria o cabecalho divergente. */
+  var Y_CORPO = 1.5, Y_FUNDO = 4.9;
 
   /* TETO DE ENTREGAS — hoje um limite de GOSTO, e não de espaço.
    *
@@ -209,7 +213,7 @@
      encurtou, e essa é a leitura que o slide existe para dar. */
   function slidePanorama(pptx, d, t, pagina) {
     var K = kit(), C = K.cores;
-    var s = K.slideTitulo(pptx, t.nome, t.sub, pagina);
+    var s = K.slideTitulo(pptx, t.nome, t.sub, pagina, t.periodo);
     var w = (LARG - 3 * 0.2) / 4;
     var cards = [
       { rot: 'ENTREGAS', val: fmt(t.entregas),
@@ -256,7 +260,7 @@
       ? 'Ordenadas por tamanho. ' + fmt(t.pontos) + ' ' + plural(t.pontos, 'ponto', 'pontos') +
         ' em ' + fmt(t.entregas) + ' ' + plural(t.entregas, 'entrega', 'entregas') + '.'
       : 'Nenhuma entrega com data no período.';
-    var s = K.slideTitulo(pptx, 'As principais entregas', sub, pagina);
+    var s = K.slideTitulo(pptx, 'As principais entregas', sub, pagina, t.periodo);
     if (lista.length) {
       /* AS LARGURAS CABEM O QUE VAI DENTRO — era aqui que a tabela engordava.
          "Saiu em" tinha 0,9" e "09/09/2026" precisa de ~1,12" com a margem da
@@ -303,7 +307,7 @@
     var itens = t.modulos || [];
     var s = K.slideTitulo(pptx, 'Onde o esforço foi',
       itens.length + ' ' + plural(itens.length, 'módulo', 'módulos') + ' de ' + t.nome +
-      ' com entrega no período, por pontos.', pagina);
+      ' com entrega no período, por pontos.', pagina, t.periodo);
     barrasRanking(pptx, s, {
       x: MARGEM, y: 1.72, w: LARG, alt: Math.min(0.46, 3.0 / itens.length),
       itens: itens.map(function (m) {
@@ -328,7 +332,7 @@
       fmt(pl.length + sp.length) + ' ' + plural(pl.length + sp.length, 'item', 'itens') +
       ' em aberto com dono definido' +
       (t.abertoSemEtapa ? ' · ' + fmt(t.abertoSemEtapa) + ' em outras etapas' : '') + '.',
-      pagina);
+      pagina, t.periodo);
 
     var wCol = (LARG - 0.3) / 2;
     [{ x: MARGEM, cor: C.fraco, nome: 'Em Planning', lista: pl,
@@ -393,7 +397,7 @@
       fmt(b.total) + ' ' + plural(b.total, 'demanda', 'demandas') +
       ' sem data combinada \u2014 Backlog e Levantar Requisitos.' +
       (b.maisVelha != null ? '  A mais antiga espera h\u00e1 ' + fmt(b.maisVelha) + ' dias.' : ''),
-      pagina);
+      pagina, t.periodo);
 
     /* OS TRES NUMEROS DE CIMA. "Ja estimadas" e "sem tamanho" somam o total: e a
        leitura que diz se a pilha esta pronta para ser priorizada ou se falta
@@ -495,12 +499,13 @@
      consolidado — se perderia. */
   function slideResumoAssunto(pptx, d, t, pagina, posicao) {
     var K = kit(), C = K.cores;
-    var s = K.slideBase(pptx);
-    s.addText(String(posicao) + 'º', { x: MARGEM, y: Y_TITULO + 0.04, w: 0.6, h: 0.42,
-                                       fontSize: 17, bold: true, color: C.fraco });
-    s.addText(t.nome, { x: MARGEM + 0.52, y: Y_TITULO, w: LARG - 0.52, h: 0.5,
-                        fontSize: 24, bold: true, color: C.texto, wrap: false });
-    s.addText(t.sub, { x: MARGEM, y: Y_SUB, w: LARG, h: 0.3, fontSize: 12.5, color: C.fraco });
+    /* A POSICAO ENTRA NO TITULO, e o cabecalho e o mesmo de todo slide.
+       Ela era desenhada a parte, com o titulo em 24pt numa caixa propria — mais
+       uma gramatica de cabecalho no mesmo deck. Como prefixo ela continua
+       dizendo a mesma coisa ("este e o 2o maior assunto do periodo") e para de
+       custar um layout so dele. O `wrap: false` some junto: o tamanho do titulo
+       agora e calculado para caber, que e o que o `wrap` estava mascarando. */
+    var s = K.slideTitulo(pptx, posicao + 'º  ' + t.nome, t.sub, pagina, t.periodo);
 
     var w = (LARG - 3 * 0.18) / 4;
     [{ rot: 'ENTREGAS', val: fmt(t.entregas), cor: C.verde },
@@ -563,7 +568,7 @@
       var s = K.slideTitulo(pptx, 'Os assuntos que puxaram o período',
         d.ranking.length + ' com entrega registrada, por pontos entregues.' +
         (d.rankingSobra ? ' Os ' + d.rankingSobra + ' demais somam ' +
-                          fmt(d.rankingSobraPts) + ' pt.' : ''), ++p);
+                          fmt(d.rankingSobraPts) + ' pt.' : ''), ++p, d.periodo);
       barrasRanking(pptx, s, {
         x: MARGEM, y: 1.74, w: LARG, alt: Math.min(0.42, 2.9 / Math.max(d.ranking.length, 1)),
         /* A COR DIZ QUAIS GANHAM SLIDE PRÓPRIO, E NENHUMA BARRA FICA INVISÍVEL.
