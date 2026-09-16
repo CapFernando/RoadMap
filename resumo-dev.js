@@ -17,6 +17,18 @@
      ATRASADO      o prazo venceu e a demanda ainda é do dev
      EM ANDAMENTO  a bola está com o dev
      EM VALIDAÇÃO  ele entregou; a bola está com o PM/PO
+     PLANEJADO     comprometido, com data, e ainda não começou
+
+   O PLANEJADO EXISTE PARA A DAILY. Sem ele o resumo responde "o que está
+   acontecendo" e cala sobre "o que vem" — e a pergunta da daily é a segunda
+   tanto quanto a primeira. Ele fecha a conta do que a pessoa tem na mão: sem
+   esse bloco, um dev com três coisas planejadas para a semana aparece com o
+   mesmo resumo de um que não tem nada pela frente.
+
+   PLANEJADO VENCIDO NÃO APARECE AQUI, e isso sai de graça: `planejado` está em
+   `ETAPAS_QUE_CORREM` no `prazo.js`, então o prazo dele corre e a demanda vai
+   para ATRASADO antes de chegar neste balde. Os quatro continuam disjuntos sem
+   nenhuma regra nova.
 
    `validacao` NÃO APARECE EM ATRASADO, e isso não é escolha deste arquivo:
    quem decide é o `prazo.js`, e o cabeçalho dele registra por quê — "a demanda
@@ -71,6 +83,17 @@
                det: (x.entrega ? 'entrega ' + dataBR(x.entrega) : 'sem data combinada') +
                     (x.pausada ? ' · pausada, aguardando terceiro' : '') };
     }
+    if (balde === 'pla') {
+      /* O INÍCIO VEM PRIMEIRO, e é o dado da daily: "começa quinta" responde a
+         pergunta que se faz na reunião; "entrega 30/09" responde a que se faz no
+         planejamento. Quando não há início marcado, a entrega assume — e a
+         frase diz qual das duas datas está sendo mostrada, para ninguém ler uma
+         pela outra. */
+      var quando = x.inicio ? 'começa ' + dataBR(x.inicio) : '';
+      var ate = x.entrega ? 'entrega ' + dataBR(x.entrega) : '';
+      return { rot: 'Planejado',
+               det: [quando, ate].filter(Boolean).join(' · ') || 'sem datas' };
+    }
     return { rot: 'Em validação',
              det: (x.entregueEm ? 'entregue ' + dataBR(x.entregueEm) : 'aguardando o PM/PO') +
                   (x.atrasouNaEntrega ? ' · entregou após o prazo' : '') };
@@ -109,7 +132,7 @@
       };
     }
 
-    var atrasado = [], andamento = [], validacao = [];
+    var atrasado = [], andamento = [], validacao = [], planejado = [];
     function poe(lista, m, gr, balde) {
       var x = monta(m, gr);
       x.balde = balde;
@@ -122,6 +145,7 @@
       if (ef === 'atrasado') { poe(atrasado, m, gr, 'atr'); return; }
       if (gr === 'em_andamento') { poe(andamento, m, gr, 'and'); return; }
       if (gr === 'validacao') { poe(validacao, m, gr, 'val'); return; }
+      if (gr === 'planejado') { poe(planejado, m, gr, 'pla'); return; }
     });
 
     // Atrasado: o mais vencido primeiro — é a ordem da conversa.
@@ -138,10 +162,20 @@
       return String(a.entregueEm || '9999-99-99')
         .localeCompare(String(b.entregueEm || '9999-99-99'));
     });
+    /* Planejado: o que COMEÇA antes vem antes — e não o que entrega antes. Na
+       daily a ordem util e a de quando a pessoa põe a mão, e ordenar pela
+       entrega poria em primeiro uma demanda que so começa daqui a duas semanas
+       so porque o prazo dela e curto. */
+    planejado.sort(function (a, b) {
+      return String(a.inicio || a.entrega || '9999-99-99')
+        .localeCompare(String(b.inicio || b.entrega || '9999-99-99')) ||
+             String(a.codigo).localeCompare(String(b.codigo));
+    });
 
     return { dev: dev, hoje: dia, atrasado: atrasado, andamento: andamento,
-             validacao: validacao,
-             total: atrasado.length + andamento.length + validacao.length };
+             validacao: validacao, planejado: planejado,
+             total: atrasado.length + andamento.length + validacao.length +
+                    planejado.length };
   }
 
   var SECOES = [
@@ -151,6 +185,12 @@
       dica: 'a bola está com o dev', txt: 'EM ANDAMENTO' },
     { k: 'val', lista: 'validacao', rot: '⏳ Em validação',
       dica: 'o dev entregou; está com o PM/PO', txt: 'EM VALIDAÇÃO' },
+    /* POR ÚLTIMO, e não por ser menos importante: os três de cima são o que
+       está acontecendo, e este é o que vem. Numa daily a leitura corre nessa
+       ordem — primeiro o que trava, depois o que anda, depois o que espera
+       terceiro, e por fim o que entra em seguida. */
+    { k: 'pla', lista: 'planejado', rot: '📅 Planejado',
+      dica: 'combinado, e ainda não começou', txt: 'PLANEJADO' },
   ];
 
   /** O TEXTO PARA O GRUPO.
@@ -206,6 +246,7 @@
       '<div class="dr-kpi atr"><b>' + r.atrasado.length + '</b><span>atrasado</span></div>' +
       '<div class="dr-kpi and"><b>' + r.andamento.length + '</b><span>em andamento</span></div>' +
       '<div class="dr-kpi val"><b>' + r.validacao.length + '</b><span>em validação</span></div>' +
+      '<div class="dr-kpi pla"><b>' + r.planejado.length + '</b><span>planejado</span></div>' +
       '</div>' +
       SECOES.map(function (s) {
         var lista = r[s.lista];
@@ -222,13 +263,19 @@
      e o resumo passaria a ter aparências diferentes conforme a aba. */
   var CSS = [
     '.dr-topo{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}',
-    '.dr-kpi{flex:1;min-width:120px;background:var(--bg3);border:1px solid var(--border);',
+    // 108px, e nao 120: sao QUATRO contadores agora, e com 120 o quarto quebrava
+    // para a linha de baixo numa largura de 760px. O `flex:1` divide o que sobra.
+    '.dr-kpi{flex:1;min-width:108px;background:var(--bg3);border:1px solid var(--border);',
       'border-radius:var(--radius,12px);padding:10px 13px}',
     '.dr-kpi b{display:block;font-size:22px;font-weight:700;line-height:1.15}',
     '.dr-kpi span{font-size:11.5px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em}',
     '.dr-kpi.atr b{color:var(--red,#E84444)}',
     '.dr-kpi.and b{color:var(--green,#5EA832)}',
     '.dr-kpi.val b{color:var(--amber-tx,#FFC470)}',
+    /* AZUL no planejado: a paleta usa azul para "previsto", que e exatamente o
+       que ele e. Verde diria "cumprido" e ambar diria "atencao" — as duas
+       mentiriam sobre algo que so esta agendado. */
+    '.dr-kpi.pla b{color:var(--blue,#3B8FE8)}',
     '.dr-sec{margin-bottom:16px}',
     '.dr-sec-tit{display:flex;align-items:baseline;gap:8px;font-size:13px;font-weight:700;',
       'padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:7px}',
@@ -236,6 +283,7 @@
     '.dr-sec.atr .dr-sec-tit{color:var(--red,#E84444)}',
     '.dr-sec.and .dr-sec-tit{color:var(--green,#5EA832)}',
     '.dr-sec.val .dr-sec-tit{color:var(--amber-tx,#FFC470)}',
+    '.dr-sec.pla .dr-sec-tit{color:var(--blue,#3B8FE8)}',
     /* O código e a situação têm largura FIXA: são os dois que se procura
        correndo o olho na vertical, e coluna que muda de largura a cada linha
        obriga o olho a reencontrar o começo. O título fica com o `1fr` porque é

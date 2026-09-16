@@ -10541,11 +10541,21 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(-3) },
         { id: '11', codigo: 'AX-901', titulo: 'Dividida', dev: 'Dan Weine / Gabriel',
           tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(3) },
+        { id: '12', codigo: 'AX-421', titulo: 'Comeca amanha', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'planejado', inicio: dia(1), entrega: dia(20) },
+        { id: '13', codigo: 'AX-420', titulo: 'Comeca semana que vem', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'planejado', inicio: dia(7), entrega: dia(14) },
+        { id: '14', codigo: 'AX-422', titulo: 'Planejado sem inicio', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'planejado', entrega: dia(9) },
+        // PLANEJADO QUE JA VENCEU: ele tem de cair em ATRASADO, e nao aqui.
+        { id: '15', codigo: 'AX-423', titulo: 'Planejado vencido', dev: 'Dan Weine',
+          tema_id: 't1', status_planejamento: 'planejado', inicio: dia(-20), entrega: dia(-5) },
       ],
     };
     const r = RD.montar(state, 'Dan Weine', HOJE);
     const cods = (l) => l.map(x => x.codigo);
-    const todos = [...cods(r.atrasado), ...cods(r.andamento), ...cods(r.validacao)];
+    const todos = [...cods(r.atrasado), ...cods(r.andamento), ...cods(r.validacao),
+                   ...cods(r.planejado)];
 
     ok(new Set(todos).size === todos.length,
        'nenhuma demanda aparece em dois baldes', todos.join(' '));
@@ -10583,6 +10593,38 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o sem data combinada vai para o fim de "em andamento"',
        cods(r.andamento).join(' '));
 
+    /* ─── O QUARTO BALDE: PLANEJADO ──────────────────────────────────────
+       "Adicione os planejados, faz muito sentido para controle das dailys."
+
+       Sem ele o resumo responde "o que esta acontecendo" e cala sobre "o que
+       vem" — e a pergunta da daily e a segunda tanto quanto a primeira. */
+    ok(cods(r.planejado).length === 3,
+       'o planejado traz o que esta combinado e ainda nao comecou',
+       cods(r.planejado).join(' '));
+    /* PLANEJADO VENCIDO VAI PARA ATRASADO, e isso sai de graca: `planejado`
+       esta em `ETAPAS_QUE_CORREM` no `prazo.js`, entao o prazo dele corre. Os
+       quatro baldes continuam disjuntos sem nenhuma regra nova — e a AX-423
+       prova isso, em vez de deixar a suposicao de pe. */
+    ok(cods(r.atrasado).includes('AX-423'),
+       'planejado com prazo vencido cai em ATRASADO, e nao em planejado');
+    ok(!cods(r.planejado).includes('AX-423'),
+       'e nao aparece nos dois');
+
+    /* A ORDEM E POR QUANDO COMECA, e nao por quando entrega: na daily a ordem
+       util e a de quando a pessoa poe a mao. Por entrega, a AX-420 (entrega em
+       14 dias) viria antes da AX-421 (comeca amanha, entrega em 20). */
+    ok(cods(r.planejado)[0] === 'AX-421',
+       'o que comeca primeiro vem primeiro', cods(r.planejado).join(' > '));
+    ok(cods(r.planejado)[1] === 'AX-420', 'depois o que comeca em seguida');
+    const pl = r.planejado[0];
+    ok(/começa/.test(pl.situacao.det) && /entrega/.test(pl.situacao.det),
+       'e a situacao diz QUANDO COMECA antes de quando entrega',
+       pl.situacao.det);
+    const semIni = r.planejado.find(x => x.codigo === 'AX-422');
+    ok(semIni && !/começa/.test(semIni.situacao.det) && /entrega/.test(semIni.situacao.det),
+       'planejado sem data de inicio mostra a entrega, e diz qual data e',
+       semIni ? semIni.situacao.det : '');
+
     /* ─── OS QUATRO CAMPOS ────────────────────────────────────────────────
        "Ajuste para trazer AX-XXX, Sistema/modulo, titulo e situacao como esta."
        A SITUACAO E CAMPO DA LINHA, e nao so titulo da secao: quando alguem
@@ -10608,6 +10650,42 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(htm.indexOf(x.situacao.det) > 0 && txt.indexOf(x.situacao.det) > 0,
        'a tela e o texto usam a MESMA frase de situacao');
 
+    /* OS QUATRO BALDES CHEGAM A TELA — contador e secao. A regra podia montar o
+       quarto e o `html` deixar de desenha-lo: a sabotagem que apagava o contador
+       do planejado passou em silencio, porque nenhuma invariante olhava a saida
+       da tela, so a da regra. Presenca na estrutura nao e presenca na tela. */
+    RD.SECOES.forEach((sc) => {
+      ok(htm.indexOf('dr-kpi ' + sc.k) > 0,
+         'o contador de "' + sc.txt.toLowerCase() + '" aparece na tela');
+      ok(htm.indexOf('dr-sec ' + sc.k) > 0,
+         'e a secao de "' + sc.txt.toLowerCase() + '" tambem');
+      ok(htm.indexOf(sc.rot) > 0, 'com o rotulo dela', sc.rot);
+    });
+    /* AS CHAVES SAO FIXAS, e nao "o que o SECOES disser". Percorrer `SECOES` e
+       conferir `dr-sec ' + sc.k` e tautologia: renomear a chave renomeia os dois
+       lados do teste, e a sabotagem que trocou 'pla' por 'XX' passou em silencio
+       — com o CSS apontando para uma classe que nao existe mais e a secao
+       saindo sem cor nenhuma. */
+    const CHAVES = ['atr', 'and', 'val', 'pla'];
+    ok(JSON.stringify(RD.SECOES.map(x => x.k)) === JSON.stringify(CHAVES),
+       'os quatro baldes tem as chaves esperadas, e nesta ordem',
+       RD.SECOES.map(x => x.k).join(' '));
+    /* E CADA CHAVE TEM COR NO CSS. Sem isto, um balde novo sai cinza no meio de
+       tres coloridos, e a cor deixa de significar alguma coisa. */
+    const cssRD = fs.readFileSync('resumo-dev.js', 'utf8');
+    CHAVES.forEach((k) => {
+      ok(cssRD.indexOf('.dr-kpi.' + k + ' b{color:') > 0,
+         'o contador "' + k + '" tem cor propria no CSS');
+      ok(cssRD.indexOf('.dr-sec.' + k + ' .dr-sec-tit{color:') > 0,
+         'e a secao "' + k + '" tambem');
+    });
+    /* E o numero de cada contador e o tamanho da lista, e nao um numero solto. */
+    RD.SECOES.forEach((sc) => {
+      const n = r[sc.lista].length;
+      ok(new RegExp('dr-kpi ' + sc.k + '"><b>' + n + '<').test(htm),
+         'e o contador de "' + sc.txt.toLowerCase() + '" mostra ' + n);
+    });
+
     /* ─── O TEXTO PARA O GRUPO ─────────────────────────────────────────── */
     ok(!/\*\*|^#|`/m.test(txt), 'o texto nao tem marcacao de markdown');
     ok(txt.indexOf('Dan Weine') === 0, 'comeca pelo nome de quem e o resumo');
@@ -10620,6 +10698,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/AX-500[^\n]*pausada, aguardando terceiro/.test(txt),
        'a pausada diz que esta pausada \u2014 senao a data vencida acusa alguem',
        (txt.match(/- AX-500[^\n]*/) || [''])[0]);
+
+    ok(/PLANEJADO \(3\)/.test(txt), 'o texto do grupo tem o bloco de planejado');
+    ok(/AX-421[^\n]*Planejado, começa/.test(txt),
+       'e a linha dele diz quando comeca', (txt.match(/- AX-421[^\n]*/) || [''])[0]);
 
     const soAtraso = RD.texto(RD.montar(
       { temas: state.temas, melhorias: [state.melhorias[0]] }, 'Dan Weine', HOJE));
