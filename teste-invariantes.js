@@ -11581,6 +11581,162 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a faixa de acentos do pipelines.js esta por escape');
   }
 
+  /* === O MES CONGELADO ==================================================
+
+     "O da esquerda eu havia montado no comeco do mes. Houve mudancas de
+     valores. Como ja fechou o mes nao deveria ter diferenca. Isso me trouxe
+     muita preocupacao, pois se trata de uma apresentacao executiva."
+
+     Ele tinha razao e a causa nao era erro de conta: o deck e RECALCULADO da
+     base viva a cada clique. Agosto se mexe enquanto alguem validar uma entrega
+     com data de agosto, lancar hora depois, pontuar depois, ou trocar a frente
+     de uma pessoa (a frente e da PESSOA, e o deck le o cadastro de hoje).
+
+     ESTE BLOCO EXECUTA as rotas do Worker contra um GitHub de mentira. Regex
+     provaria que o codigo esta escrito; executar prova que congelar congela, que
+     recongelar exige ser dito, e que o rastro fica. */
+  sec('O mes congelado');
+  {
+    const iniF = W.indexOf("if (body.action === 'fechamento-ler') {");
+    const fimF = W.indexOf("if (body.action === 'follow-ler') {");
+    ok(iniF > 0 && fimF > iniF, 'as rotas de fechamento foram achadas para serem executadas');
+    if (iniF > 0 && fimF > iniF) {
+      const rotasF = W.slice(iniF, fimF);
+      let arqF = null;
+      const chamaF = (corpoReq, hoje) => {
+        const jsonF = (o, st) => ({ status: st || 200, corpo: o });
+        const ghF = async (caminho, opt) => {
+          if (opt && opt.method === 'PUT') {
+            arqF = Buffer.from(JSON.parse(opt.body).content, 'base64').toString('utf8');
+            return { ok: true, json: async () => ({}), text: async () => '' };
+          }
+          if (arqF === null) return { ok: false, status: 404, json: async () => ({}), text: async () => '' };
+          if (/[?]raw=/.test(caminho)) return { ok: true, status: 200, text: async () => arqF };
+          return { ok: true, status: 200, json: async () => ({ sha: 'x' }), text: async () => arqF };
+        };
+        return new Function('body', 'json', 'gh', 'exigePapel', 'nomeNaDemanda',
+                            'limpaTexto', 'toB64', 'hojeBR', 'FECHA_PATH', 'FECHA_MAX',
+                            'headers', 'env',
+          'return (async () => {' + rotasF + ' return { status: 0, corpo: {} }; })();')(
+          corpoReq, jsonF, ghF,
+          async () => ({ recusa: null, ident: { usuario: { nome: 'Fernando Nascimento' } } }),
+          () => 'Fernando Nascimento',
+          (v, n) => String(v == null ? '' : v).slice(0, n),
+          (t) => Buffer.from(t, 'utf8').toString('base64'),
+          () => hoje, 'data/fechamentos.json', 1024 * 1024, {}, {});
+      };
+      const HJ = '2026-09-16';
+      /* `await` INLINE, e nao `registra`. O `Promise.all(pendentes)` que espera os
+         blocos assincronos roda LA EM CIMA; este bloco esta depois dele, entao
+         registrar aqui empilharia promessas que ninguem espera — e as
+         invariantes de dentro rodariam DEPOIS do resumo final, ou nao rodariam.
+         Descoberto por medicao: as dez checagens deste bloco nao apareceram na
+         saida na primeira versao. */
+      await (async () => {
+        let r = await chamaF({ action: 'fechamento-ler' }, HJ);
+        ok(r.status === 200 && (r.corpo.meses || []).length === 0,
+           'arquivo inexistente devolve lista vazia, e nao erro');
+
+        /* MES EM CURSO NAO CONGELA. Congelar agosto no dia 12 gravaria meio mes
+           como se fosse o fechamento, e o numero ficaria MENOR que o real para
+           sempre, sem nada dizendo por que. E o oposto do que isto resolve. */
+        r = await chamaF({ action: 'fechamento-gravar', mes: '2026-09', apuracao: {} }, HJ);
+        ok(r.status === 409 && r.corpo.error === 'mes_em_curso',
+           'mes em curso e recusado', r.corpo.detail || '');
+
+        r = await chamaF({ action: 'fechamento-gravar', mes: '2026-08',
+                           apuracao: { kpi: { concluidas: 170, pontos: 2174 } } }, HJ);
+        ok(r.status === 200 && r.corpo.ok, 'agosto congela');
+        ok(JSON.parse(arqF).meses['2026-08'].apuracao.kpi.concluidas === 170,
+           'e a apuracao fica gravada com os numeros do fechamento');
+
+        /* RECONGELAR EXIGE DIZER QUE E RECONGELAMENTO. Sem isto um clique a mais
+           sobrescreve em silencio a apuracao apresentada — e o mes volta a se
+           mexer, que e exatamente o que o congelamento impede. */
+        r = await chamaF({ action: 'fechamento-gravar', mes: '2026-08',
+                           apuracao: { kpi: { concluidas: 175 } } }, HJ);
+        ok(r.status === 409 && r.corpo.error === 'ja_congelado',
+           'regravar sem `refazer` e recusado');
+        ok(JSON.parse(arqF).meses['2026-08'].apuracao.kpi.concluidas === 170,
+           'e a tentativa recusada nao tocou na apuracao');
+
+        r = await chamaF({ action: 'fechamento-gravar', mes: '2026-08',
+                           apuracao: { kpi: { concluidas: 175 } }, refazer: true }, HJ);
+        ok(r.status === 200 && JSON.parse(arqF).meses['2026-08'].apuracao.kpi.concluidas === 175,
+           'com `refazer` ele regrava');
+        ok(!!(JSON.parse(arqF).meses['2026-08'].refeito_de || {}).congelado_em,
+           'e o rastro do congelamento anterior FICA — "este numero mudou depois ' +
+           'de apresentado" e a pergunta que originou tudo isto');
+
+        r = await chamaF({ action: 'fechamento-ler' }, HJ);
+        ok((r.corpo.meses || []).length === 1, 'o indice lista o mes');
+        /* E O INDICE NAO CARREGA A APURACAO. Sao dezenas de KB por mes, lidos em
+           toda abertura da aba para desenhar um cadeado. A checagem olha as
+           CHAVES do item, e nao so `apuracao === undefined`: qualquer campo
+           gordo que entrasse aqui teria o mesmo custo. */
+        ok(Object.keys(r.corpo.meses[0]).join(',') === 'mes,congelado_em,por,nota',
+           'e ele carrega so o que a tela desenha, sem a apuracao',
+           Object.keys(r.corpo.meses[0]).join(','));
+        /* E PEDINDO O MES CONGELADO, A APURACAO VEM NA RESPOSTA. Faltava esta:
+           eu conferia o ARQUIVO gravado e nunca o que a leitura devolve — e e a
+           leitura que alimenta o deck. A sabotagem que zerava `apuracao` na
+           resposta passou pela suite inteira. */
+        r = await chamaF({ action: 'fechamento-ler', mes: '2026-08' }, HJ);
+        ok(!!r.corpo.apuracao && r.corpo.apuracao.kpi.concluidas === 175,
+           'pedindo o mes congelado, a apuracao vem na RESPOSTA — e e dela que o deck sai',
+           JSON.stringify((r.corpo.apuracao || {}).kpi || null));
+        ok(!!r.corpo.congelado_em && !!r.corpo.por,
+           'com quando e por quem foi congelado, que e o que o slide imprime');
+
+        r = await chamaF({ action: 'fechamento-ler', mes: '2026-07' }, HJ);
+        ok(r.corpo.ok && r.corpo.apuracao === null,
+           'mes nao congelado responde `apuracao: null`, e nao erro');
+
+        r = await chamaF({ action: 'fechamento-gravar', mes: '2026-07',
+                           apuracao: { lixo: 'x'.repeat(1024 * 1024 + 10) } }, HJ);
+        ok(r.status === 413, 'apuracao acima do teto e recusada');
+
+        r = await chamaF({ action: 'fechamento-apagar', mes: '2026-08' }, HJ);
+        ok(r.status === 200 && !JSON.parse(arqF).meses['2026-08'], 'descongela');
+        r = await chamaF({ action: 'fechamento-apagar', mes: '2026-08' }, HJ);
+        ok(r.status === 404, 'e descongelar duas vezes diz que nao estava congelado');
+      })();
+    }
+
+    /* === A TELA === */
+    ok(/action: 'fechamento-gravar'/.test(ADMIN), 'o admin congela');
+    ok(/action: 'fechamento-apagar'/.test(ADMIN), 'e descongela');
+    ok(/id="ger-btn-congelar"/.test(ADMIN), 'o botao fica na barra da aba Gerencial');
+
+    /* O CONGELADO VENCE A BASE VIVA. Sem esta linha o congelamento gravaria um
+       arquivo que ninguem le — e o deck continuaria mudando. */
+    const gerF = corpo(ADMIN, 'async function apresGerar(');
+    ok(!!gerF && /const cong = await fechaApuracaoDe\(iso\)/.test(gerF),
+       'o deck procura a apuracao congelada do mes');
+    ok(!!gerF && /Object\.assign\(\{\}, cong\.apuracao,/.test(gerF),
+       'e sai dela quando existe');
+    /* E AS ESCOLHAS DE AGORA ENTRAM POR CIMA: quais slides entram, os graficos e
+       a frase de fecho sao de quem esta gerando, e nao fatos do mes. Congela-las
+       prenderia a selecao de quem congelou, e quem gerasse depois nao conseguiria
+       tirar um slide. */
+    ok(!!gerF && /secoes: apuracao\.secoes/.test(gerF) && /mensagem: apuracao\.mensagem/.test(gerF),
+       'e as escolhas desta geracao entram por cima da apuracao congelada');
+    ok(!!gerF && /delete apu\.secoes; delete apu\.imagens; delete apu\.mensagem;/.test(gerF),
+       'e por isso elas NAO entram no que se congela');
+
+    /* A APURACAO SAI DO MESMO CAMINHO QUE GERA O DECK. Uma segunda conta "so
+       para congelar" divergiria da que gera no primeiro ajuste — e o congelado
+       deixaria de ser o apresentado. */
+    ok(/return apresGerar\(\{ soApuracao: true \}\)/.test(ADMIN),
+       'congelar reusa `apresGerar`, em vez de recalcular por fora');
+
+    /* E O SLIDE DIZ QUE ESTA CONGELADO. Sem isto, quem comparar o deck com a
+       tela ve numeros diferentes e conclui que um dos dois esta errado — e os
+       dois estao certos, medindo coisas diferentes. */
+    ok(/f\.congelado \? 'congelado em '/.test(APRES),
+       'o slide do mes diz "congelado em" quando a apuracao veio congelada');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

@@ -1572,8 +1572,15 @@
        O deck de Relatorios usa este MESMO slide recortado por assunto, e ali a
        sala precisa saber de qual fila se esta falando: "backlog, o que entrou e
        o que saiu" sem o nome do assunto seria lido como a fila inteira. */
+    /* A NOTA DO CANTO DIZ DE ONDE O NÚMERO VEIO, e agora são três respostas.
+       "Congelado em" é a que faltava: sem ela, quem comparar o deck com a tela
+       vê números diferentes e conclui que um dos dois está errado — e os dois
+       estão certos, medindo coisas diferentes. Um mede o mês como ele foi
+       apurado no fechamento; o outro, a base de hoje. */
     cabecalhoEm(s, pptx, 'O MÊS', d.sub || 'backlog, o que entrou e o que saiu', d.periodo,
-                f.corte ? (f.emCurso ? 'posição de ' : 'fechamento em ') + f.corte : '');
+                f.corte
+                  ? (f.congelado ? 'congelado em ' : (f.emCurso ? 'posição de ' : 'fechamento em ')) + f.corte
+                  : '');
 
     /* A CONTA DO MES, em quatro cartoes com os sinais entre eles.
 

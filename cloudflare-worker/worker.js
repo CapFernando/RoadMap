@@ -45,6 +45,35 @@ const FILE_PATH  = 'data/melhorias.json';
    delas pode apaga-lo. Em troca, o backup continua o mesmo — e o repositorio
    inteiro que e copiado, e nao um arquivo escolhido a dedo. */
 const FOLLOW_PATH = 'data/follow.json';
+
+/* ─── O FECHAMENTO CONGELADO DE UM MES ────────────────────────────────────
+ *
+ * O relato foi um print de dois decks do MESMO agosto, gerados com dez dias de
+ * diferenca, com numeros diferentes: 170 entregas viraram 175, 2174 pontos
+ * viraram 2243, e uma frente inteira mudou de nome. "Como ja fechou o mes nao
+ * deveria ter diferenca."
+ *
+ * Ele tem razao, e a causa nao era defeito de conta: o deck e RECALCULADO da
+ * base viva a cada clique. Agosto continua se mexendo enquanto alguem validar
+ * uma entrega com data de agosto, editar uma hora, pontuar depois, ou trocar a
+ * frente de uma pessoa (a frente e da PESSOA, e o deck le o cadastro de hoje).
+ *
+ * ENTAO O QUE SE CONGELA E A APURACAO, e nao a base. Guardar as demandas de
+ * agosto exigiria congelar a base inteira e ainda assim mudaria se a REGRA
+ * mudasse; guardar os numeros apurados garante o que a sala precisa — o slide
+ * apresentado em setembro continua dizendo o que disse. Se uma conta for
+ * corrigida depois, o mes congelado mantem o numero apresentado, que e o
+ * comportamento certo para um deck que ja foi para a diretoria.
+ *
+ * NAO GUARDA IMAGEM. Os graficos sao redesenhados na hora a partir dos numeros;
+ * carregar PNG em base64 aqui multiplicaria o arquivo por dez sem congelar nada
+ * que ja nao esteja congelado.
+ */
+const FECHA_PATH = 'data/fechamentos.json';
+// Teto por mes. A apuracao de um mes real fica na casa das dezenas de KB; 1 MB e
+// fundo de poco contra um payload que venha inchado por engano (uma imagem
+// colada dentro, por exemplo), e nao regra de negocio.
+const FECHA_MAX = 1024 * 1024;
 const ALLOWED_ORIGIN = 'https://capfernando.github.io';
 
 function corsHeaders() {
@@ -3782,6 +3811,174 @@ export default {
        escreve e a mesma pessoa, e a lista tem nome de gente de fora do time
        junto de cobranca em aberto. Abrir a leitura para `dev` seria decidir por
        conta propria que isso e do time, e nao foi o que se pediu. */
+    /* ═══ O MES CONGELADO ══════════════════════════════════════════════════
+     *
+     * `fechamento-ler`     devolve o indice (que meses estao congelados) e, com
+     *                      `mes`, a apuracao daquele mes.
+     * `fechamento-gravar`  congela um mes. So admin.
+     * `fechamento-apagar`  descongela. So admin, e com o aviso de que o proximo
+     *                      deck vai sair diferente do que foi apresentado.
+     *
+     * LER NAO EXIGE ADMIN, e e deliberado: quem abre o painel precisa VER que
+     * agosto esta congelado, senao a marca so aparece para quem congelou e a
+     * proxima pessoa gera o deck sem saber que existe uma versao oficial. */
+    if (body.action === 'fechamento-ler') {
+      const r = await gh('contents/' + FECHA_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      // Arquivo que ainda nao existe nao e erro — nenhum mes foi congelado ainda.
+      if (r.status === 404) return json({ ok: true, meses: [], base: null }, 200, headers);
+      if (!r.ok) return json({ error: 'Falha ao ler fechamentos' }, 502, headers);
+      let doc = {};
+      try { doc = JSON.parse(await r.text()) || {}; } catch (_) { doc = {}; }
+      const porMes = doc.meses || {};
+      /* O INDICE VEM SEM A APURACAO. Sao dezenas de KB por mes, e a tela so
+         precisa saber QUAIS estao congelados para desenhar o cadeado. A
+         apuracao vai quando alguem pedir um mes — que e quando o deck e gerado. */
+      const indice = Object.keys(porMes).sort().map(k => ({
+        mes: k,
+        congelado_em: porMes[k].congelado_em || '',
+        por: porMes[k].por || '',
+        nota: porMes[k].nota || '',
+      }));
+      const pedido = String(body.mes || '').trim();
+      if (pedido) {
+        const um = porMes[pedido];
+        if (!um) return json({ ok: true, meses: indice, mes: pedido, apuracao: null }, 200, headers);
+        return json({ ok: true, meses: indice, mes: pedido,
+                      congelado_em: um.congelado_em || '', por: um.por || '',
+                      nota: um.nota || '',
+                      apuracao: um.apuracao || null,
+                      base: doc.atualizado_em || null }, 200, headers);
+      }
+      return json({ ok: true, meses: indice, base: doc.atualizado_em || null }, 200, headers);
+    }
+
+    if (body.action === 'fechamento-gravar') {
+      const permC = await exigePapel(env, body, 'admin', headers);
+      if (permC.recusa) return permC.recusa;
+      const mes = String(body.mes || '').trim();
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) {
+        return json({ error: 'mes', detail: 'Informe o mes como AAAA-MM.' }, 400, headers);
+      }
+      /* MES EM CURSO NAO CONGELA. Congelar agosto no dia 12 grava meio mes como
+         se fosse o fechamento — e o numero congelado seria MENOR que o real,
+         para sempre, sem nada na tela dizendo por que. E o oposto do que esta
+         funcao existe para resolver. */
+      const hojeMes = hojeBR().slice(0, 7);
+      if (mes >= hojeMes) {
+        return json({ error: 'mes_em_curso',
+                      detail: 'So da para congelar um mes que ja terminou. ' +
+                              mes + ' ainda esta em curso (hoje e ' + hojeBR() + ').' }, 409, headers);
+      }
+      if (!body.apuracao || typeof body.apuracao !== 'object') {
+        return json({ error: 'apuracao', detail: 'Envie a apuracao do mes.' }, 400, headers);
+      }
+      const bruto = JSON.stringify(body.apuracao);
+      if (bruto.length > FECHA_MAX) {
+        return json({ error: 'grande',
+                      detail: 'A apuracao veio com ' + Math.round(bruto.length / 1024) +
+                              ' KB, acima do teto de ' + Math.round(FECHA_MAX / 1024) + ' KB.' },
+                    413, headers);
+      }
+
+      const metaRes = await gh('contents/' + FECHA_PATH + '?t=' + Date.now());
+      const existe = metaRes.ok;
+      let sha = null, doc = { meses: {} };
+      if (existe) {
+        sha = (await metaRes.json()).sha;
+        const rawC = await gh('contents/' + FECHA_PATH + '?raw=' + Date.now(),
+          { headers: { Accept: 'application/vnd.github.raw' } });
+        if (!rawC.ok) return json({ error: 'Falha ao ler fechamentos' }, 502, headers);
+        try { doc = JSON.parse(await rawC.text()) || { meses: {} }; } catch (_) { doc = { meses: {} }; }
+      } else if (metaRes.status !== 404) {
+        return json({ error: 'Falha ao ler fechamentos' }, 502, headers);
+      }
+      doc.meses = doc.meses || {};
+
+      /* RECONGELAR EXIGE DIZER QUE E RECONGELAMENTO. Sem isto, um clique a mais
+         sobrescreve em silencio a apuracao que foi apresentada — e o mes volta
+         a se mexer, que e exatamente o que o congelamento impede. */
+      if (doc.meses[mes] && !body.refazer) {
+        return json({ error: 'ja_congelado',
+                      detail: mes + ' ja foi congelado em ' +
+                              (doc.meses[mes].congelado_em || '?') +
+                              '. Para regravar, mande "refazer": true.',
+                      congelado_em: doc.meses[mes].congelado_em || '' }, 409, headers);
+      }
+
+      const quem = nomeNaDemanda(permC.ident) ||
+                   ((permC.ident.usuario && permC.ident.usuario.nome) || 'admin');
+      doc.meses[mes] = {
+        mes,
+        congelado_em: new Date().toISOString(),
+        por: quem,
+        nota: limpaTexto(body.nota, 300),
+        /* O RASTRO DE RECONGELAMENTO FICA. "Este numero mudou depois de
+           apresentado" e a pergunta que originou tudo isto; se regravar
+           apagasse o registro anterior, ela voltaria a nao ter resposta. */
+        refeito_de: doc.meses[mes] ? {
+          congelado_em: doc.meses[mes].congelado_em || '',
+          por: doc.meses[mes].por || '',
+          anterior: doc.meses[mes].refeito_de || null,
+        } : null,
+        apuracao: body.apuracao,
+      };
+      doc.atualizado_em = new Date().toISOString();
+
+      const putC = await gh('contents/' + FECHA_PATH, {
+        method: 'PUT',
+        body: JSON.stringify(Object.assign({
+          message: 'chore: fechamento de ' + mes + ' congelado por ' + quem,
+          content: toB64(JSON.stringify(doc)),
+        }, sha ? { sha } : {})),
+      });
+      if (!putC.ok) {
+        const t = await putC.text();
+        return json({ error: 'Falha ao salvar', detail: t.slice(0, 200) }, 502, headers);
+      }
+      return json({ ok: true, mes, congelado_em: doc.meses[mes].congelado_em,
+                    por: quem, tamanho_kb: Math.round(bruto.length / 1024) }, 200, headers);
+    }
+
+    if (body.action === 'fechamento-apagar') {
+      const permD = await exigePapel(env, body, 'admin', headers);
+      if (permD.recusa) return permD.recusa;
+      const mes = String(body.mes || '').trim();
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) {
+        return json({ error: 'mes', detail: 'Informe o mes como AAAA-MM.' }, 400, headers);
+      }
+      const metaRes = await gh('contents/' + FECHA_PATH + '?t=' + Date.now());
+      if (metaRes.status === 404) {
+        return json({ error: 'nao_congelado', detail: 'Nenhum mes esta congelado.' }, 404, headers);
+      }
+      if (!metaRes.ok) return json({ error: 'Falha ao ler fechamentos' }, 502, headers);
+      const sha = (await metaRes.json()).sha;
+      const rawD = await gh('contents/' + FECHA_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawD.ok) return json({ error: 'Falha ao ler fechamentos' }, 502, headers);
+      let doc = { meses: {} };
+      try { doc = JSON.parse(await rawD.text()) || { meses: {} }; } catch (_) { doc = { meses: {} }; }
+      if (!doc.meses || !doc.meses[mes]) {
+        return json({ error: 'nao_congelado', detail: mes + ' nao esta congelado.' }, 404, headers);
+      }
+      delete doc.meses[mes];
+      doc.atualizado_em = new Date().toISOString();
+      const quemD = nomeNaDemanda(permD.ident) ||
+                    ((permD.ident.usuario && permD.ident.usuario.nome) || 'admin');
+      const putD = await gh('contents/' + FECHA_PATH, {
+        method: 'PUT',
+        body: JSON.stringify({
+          message: 'chore: fechamento de ' + mes + ' descongelado por ' + quemD,
+          content: toB64(JSON.stringify(doc)), sha,
+        }),
+      });
+      if (!putD.ok) {
+        const t = await putD.text();
+        return json({ error: 'Falha ao salvar', detail: t.slice(0, 200) }, 502, headers);
+      }
+      return json({ ok: true, mes, descongelado_por: quemD }, 200, headers);
+    }
+
     if (body.action === 'follow-ler') {
       const permF = await exigePapel(env, body, 'admin', headers);
       if (permF.recusa) return permF.recusa;

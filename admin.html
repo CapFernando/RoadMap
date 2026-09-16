@@ -472,7 +472,11 @@
 
     /* GERENCIAL */
     .ger-toolbar { display:flex; gap:16px; align-items:flex-end; margin-bottom:24px; flex-wrap:wrap; }
-    .ger-filter-group { display:flex; flex-direction:column; gap:4px; }
+    .ger-congelado{display:inline-flex;align-items:center;gap:6px;font-size:12px;
+  background:var(--bg3);color:var(--text2);border:1px solid var(--border);
+  border-radius:6px;padding:5px 10px;cursor:help;}
+.ger-congelado.viva{background:#3A2A05;color:#FFC861;border-color:#7A5A12;}
+.ger-filter-group { display:flex; flex-direction:column; gap:4px; }
     .ger-filter-group label { font-size:12px; color:var(--text2); }
     .ger-filter-group select {
       background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
@@ -1123,7 +1127,7 @@
 <script src="capa-tecnologia.js?v=e3aaaae81d"></script>
 <script src="pipelines.js?v=ef35f28412"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=e18a5c7de0"></script>
+<script src="apresentacao.js?v=31179a3e69"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -1375,6 +1379,13 @@
         <a href="projetos.html" class="btn btn-secondary" target="_blank">📁 Projetos por Tema</a>
         <button class="btn btn-secondary" onclick="apresAbrir()"
                 title="Monta um .pptx executivo com o que você escolher">📊 Apresentação</button>
+        <!-- O CADEADO FICA AO LADO DO BOTAO QUE GERA O DECK, e nao numa aba de
+             configuracao: a pergunta "este mes ja esta fechado?" se faz no
+             momento de apresentar, e uma marca que mora longe do gerador nao e
+             lida por quem esta gerando. -->
+        <span id="ger-congelado" class="ger-congelado" style="display:none"></span>
+        <button class="btn btn-secondary" id="ger-btn-congelar"
+                onclick="fechaAlternar()" style="display:none"></button>
       </div>
 
       <div id="ger-summary" class="ger-summary"></div>
@@ -5859,11 +5870,21 @@ function apresAbrir() {
   abrirModal('modal-apres');
 }
 
-async function apresGerar() {
+/* `soApuracao` FAZ ESTA FUNÇÃO PARAR ANTES DE GERAR e devolver os números.
+ *
+ * É como o congelamento pega a apuração sem duplicar 400 linhas de conta. Uma
+ * segunda implementação "só para congelar" divergiria da que gera o deck no
+ * primeiro ajuste — e aí o que ficaria congelado não seria o que foi
+ * apresentado, que é o oposto do ponto. */
+async function apresGerar(opts) {
+  opts = opts || {};
+  const soApuracao = !!opts.soApuracao;
   const btn = document.getElementById('ap-btn');
   const { mes, ano, iso } = apresMesAno();
-  btn.disabled = true;
-  btn.textContent = 'Montando…';
+  if (btn && !soApuracao) {
+    btn.disabled = true;
+    btn.textContent = 'Montando…';
+  }
   try {
     // Rele a base ANTES de montar. "O que vem" precisa da situacao de agora, e a
     // tela pode estar aberta desde a manha. Nao rele quando ha edicao local
@@ -5871,7 +5892,7 @@ async function apresGerar() {
     // perder trabalho para melhorar um slide e uma troca ruim.
     const pendente = _pendingEdits || _kbDirty || _dirtyMelhoriaIds.size > 0;
     if (!pendente) {
-      btn.textContent = 'Atualizando…';
+      if (btn && !soApuracao) btn.textContent = 'Atualizando…';
       try { await loadFromGitHub(true); } catch (_) { /* segue com o que tem */ }
     }
 
@@ -6270,8 +6291,16 @@ async function apresGerar() {
                dias: diasDoMes, barras };
     });
 
-    const destaques = [...document.querySelectorAll('.ap-dest:checked')].map(c => {
-      const m = (state.melhorias || []).find(x => x.id === c.value) || {};
+    /* PARA CONGELAR, O DESTAQUE VEM DA ESTRELA, e não da caixa marcada.
+       As caixas moram no modal, e o congelamento é acionado da barra — com o
+       modal fechado, `.ap-dest:checked` não devolve nada e o mês seria congelado
+       sem destaque nenhum. A estrela (`m.destaque`) é o dado; a caixa é a
+       escolha de uma geração específica. */
+    const idsDestaque = soApuracao
+      ? conc.filter(m => m.destaque).map(m => m.id)
+      : [...document.querySelectorAll('.ap-dest:checked')].map(c => c.value);
+    const destaques = idsDestaque.map(idDest => {
+      const m = (state.melhorias || []).find(x => x.id === idDest) || {};
       const tema = (state.temas || []).find(t => String(t.id) === String(m.tema_id));
       return {
         codigo: m.codigo || '', titulo: m.titulo || '',
@@ -6343,7 +6372,7 @@ async function apresGerar() {
     // o deck e a unica coisa nesta funcao que precisa dele.
     const temaMapDoDeck = {};
     (state.temas || []).forEach(t => { temaMapDoDeck[t.id] = t.nome; });
-    const pptx = await apresentacaoMontaDeck({
+    const apuracao = {
       titulo: 'Roadmap de Melhorias',
       periodo,
       subtitulo: 'Audax Capital · Tecnologia',
@@ -6459,21 +6488,268 @@ async function apresGerar() {
         sub: 'com data no mês seguinte e ainda em aberto em ' +
              new Date().toLocaleDateString('pt-BR'),
       },
-      mensagem: String(document.getElementById('ap-mensagem').value || '').trim(),
-    });
+      mensagem: soApuracao
+        ? ''
+        : String((document.getElementById('ap-mensagem') || {}).value || '').trim(),
+    };
+
+    /* ═══ O QUE É DO MÊS E O QUE É DESTA GERAÇÃO ═════════════════════════
+     *
+     * `secoes` (quais slides entram), `imagens` (os gráficos redesenhados) e
+     * `mensagem` (a frase de fecho) são escolhas de QUEM ESTÁ GERANDO AGORA —
+     * não são fatos de agosto. Congelá-las prenderia a seleção de slides de
+     * quem congelou, e quem gerasse depois não conseguiria tirar um slide. */
+    if (soApuracao) {
+      const apu = Object.assign({}, apuracao);
+      delete apu.secoes; delete apu.imagens; delete apu.mensagem;
+      return apu;
+    }
+
+    /* O MÊS CONGELADO VENCE A BASE VIVA. É a razão de tudo isto existir: o deck
+       apresentado em setembro tem de continuar dizendo o que disse.
+       As escolhas de agora entram por cima da apuração congelada — quem gera
+       hoje ainda escolhe quais slides quer e escreve a frase de fecho. */
+    const cong = await fechaApuracaoDe(iso);
+    const dados = cong
+      ? Object.assign({}, cong.apuracao, {
+          secoes: apuracao.secoes,
+          imagens: apuracao.imagens,
+          mensagem: apuracao.mensagem,
+          /* E O SLIDE DIZ QUE ESTÁ CONGELADO. Sem isto, quem comparar o deck com
+             a tela vai achar que um dos dois está errado — e os dois estarão
+             certos, medindo coisas diferentes. */
+          fluxo: Object.assign({}, cong.apuracao.fluxo || {}, {
+            corte: formatDate(String(cong.congelado_em).slice(0, 10)),
+            congelado: true, emCurso: false,
+          }),
+        })
+      : apuracao;
+    if (cong) {
+      toast('🔒 Deck gerado da apuração congelada em ' +
+            formatDate(String(cong.congelado_em).slice(0, 10)) + '.', 'ok');
+    }
+    const pptx = await apresentacaoMontaDeck(dados);
 
     const nome = 'roadmap-' + String(ano) + '-' + String(mes).padStart(2, '0') + '.pptx';
     await pptx.writeFile({ fileName: nome });
     toast('📊 ' + nome + ' gerado.', 'ok');
     closeModal('modal-apres');
   } catch (e) {
+    /* NO MODO APURAÇÃO O ERRO SOBE, em vez de virar um toast verde-claro.
+       Quem chamou é o congelamento, e congelar "o que deu" depois de uma falha
+       gravaria uma apuração incompleta como se fosse o fechamento. */
+    if (soApuracao) throw e;
     toast('Não consegui gerar: ' + e.message, 'err');
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Gerar apresentação';
+    if (btn && !soApuracao) {
+      btn.disabled = false;
+      btn.textContent = 'Gerar apresentação';
+    }
   }
 }
 
+/** A apuração de um mês, pelo MESMO caminho que gera o deck. */
+async function apresApuracao(isoPedido) {
+  const atual = apresMesAno().iso;
+  if (isoPedido && isoPedido !== atual) {
+    /* A APURAÇÃO É SEMPRE A DO MÊS SELECIONADO. `apresGerar` lê os seletores da
+       tela, e congelar um mês diferente do que está à vista gravaria números que
+       ninguém viu. A tela só oferece o botão para o mês selecionado, então isto
+       é rede de proteção — e ela avisa em vez de gravar errado. */
+    throw new Error('Selecione ' + apresPeriodoNome(isoPedido) + ' na aba antes de congelar.');
+  }
+  return apresGerar({ soApuracao: true });
+}
+
+
+/* ═══ O MES CONGELADO ══════════════════════════════════════════════════════
+ *
+ * "O da esquerda eu havia montado no começo do mês. Houve mudanças de valores.
+ * Como já fechou o mês não deveria ter diferença."
+ *
+ * Ele tinha razão, e a causa não era erro de conta: o deck é RECALCULADO da base
+ * viva a cada clique. Agosto se mexe enquanto alguém validar uma entrega com
+ * data de agosto, lançar hora depois, pontuar depois, ou trocar a frente de uma
+ * pessoa — a frente é da PESSOA, e o deck lê o cadastro de hoje.
+ *
+ * CONGELAR GRAVA A APURAÇÃO, e não a base. É o que a sala precisa: o slide
+ * apresentado em setembro continua dizendo o que disse. Se uma conta for
+ * corrigida depois, o mês congelado mantém o número apresentado — que é o
+ * comportamento certo para um deck que já foi à diretoria, e não um defeito.  */
+let _fechaMeses = [];          // [{mes, congelado_em, por, nota}]
+let _fechaCarregado = false;
+
+/** O mês selecionado na aba Gerencial, como AAAA-MM. */
+function fechaMesSel() {
+  const { iso } = apresMesAno();
+  return iso;
+}
+
+function fechaDoMes(iso) {
+  return _fechaMeses.find(x => x.mes === iso) || null;
+}
+
+/** Lê o índice de meses congelados. Sem admin também responde — quem abre o
+ *  painel precisa VER que agosto está congelado, senão a marca só existe para
+ *  quem congelou e a próxima pessoa gera o deck sem saber que há versão oficial. */
+async function fechaCarregar() {
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'fechamento-ler' }, credAdmin())),
+    });
+    const j = await r.json().catch(() => ({}));
+    _fechaMeses = Array.isArray(j.meses) ? j.meses : [];
+  } catch (_) {
+    /* FALHA DE REDE NÃO INVENTA ESTADO. Deixar `_fechaMeses` como está (vazio,
+       ou o que já foi lido) é melhor que assumir "nada congelado": assumir faria
+       a tela oferecer "Congelar" para um mês já congelado, e o servidor
+       responderia 409 — erro no clique, para algo que a tela dizia poder. */
+  }
+  _fechaCarregado = true;
+  fechaRender();
+}
+
+function fechaRender() {
+  const marca = document.getElementById('ger-congelado');
+  const btn = document.getElementById('ger-btn-congelar');
+  if (!marca || !btn) return;
+  const iso = fechaMesSel();
+  const f = fechaDoMes(iso);
+  const hojeIso = (window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10)).slice(0, 7);
+  const emCurso = iso >= hojeIso;
+
+  if (f) {
+    marca.style.display = '';
+    marca.className = 'ger-congelado';
+    marca.innerHTML = '🔒 <strong>congelado</strong> em ' +
+      formatDate(String(f.congelado_em).slice(0, 10)) +
+      (f.por ? ' por ' + esc(f.por) : '');
+    marca.title = 'O deck deste mês sai da apuração congelada, e não da base de ' +
+                  'hoje. É por isso que ele não muda mais.' +
+                  (f.nota ? '\n\n' + f.nota : '');
+    btn.style.display = '';
+    btn.textContent = '🔓 Descongelar';
+    btn.title = 'Volta a calcular da base viva — os números podem mudar.';
+    return;
+  }
+  btn.style.display = '';
+  btn.textContent = '🔒 Congelar mês';
+  if (emCurso) {
+    /* MÊS EM CURSO NÃO CONGELA, e a tela diz isso ANTES do clique. Congelar
+       agosto no dia 12 gravaria meio mês como se fosse o fechamento, e o número
+       ficaria menor que o real para sempre. O servidor também recusa; a tela
+       avisa para o clique não virar erro. */
+    btn.disabled = true;
+    btn.title = 'Só depois que o mês terminar — congelar um mês em curso ' +
+                'gravaria meio mês como se fosse o fechamento.';
+    marca.style.display = '';
+    marca.className = 'ger-congelado viva';
+    marca.innerHTML = '⏳ mês em curso — os números ainda se mexem';
+    marca.title = 'Enquanto o mês corre, cada entrega validada muda este deck. ' +
+                  'Depois que ele terminar, congele para a apresentação parar de mudar.';
+    return;
+  }
+  btn.disabled = false;
+  btn.title = 'Grava a apuração deste mês. O deck passa a sair dela, e para de mudar.';
+  marca.style.display = '';
+  marca.className = 'ger-congelado viva';
+  marca.innerHTML = '⚠ não congelado — o deck recalcula da base de hoje';
+  marca.title = 'Cada entrega validada com data deste mês, cada hora lançada e ' +
+                'cada troca de frente muda este deck. Congele para ele parar.';
+}
+
+async function fechaAlternar() {
+  const iso = fechaMesSel();
+  if (fechaDoMes(iso)) return fechaDescongelar(iso);
+  return fechaCongelar(iso);
+}
+
+/** Congela: monta a MESMA apuração que o deck usa e grava. */
+async function fechaCongelar(iso) {
+  const jaTem = fechaDoMes(iso);
+  const nome = apresPeriodoNome(iso);
+  const ok = await confirmar({
+    titulo: jaTem ? 'Recongelar ' + nome : 'Congelar ' + nome,
+    texto: jaTem
+      ? 'A apuração congelada será SUBSTITUÍDA pela de agora. O deck que já foi ' +
+        'apresentado passa a sair com os números de hoje. O registro do ' +
+        'congelamento anterior fica guardado.'
+      : 'Grava os números deste mês como estão agora. A partir daí o deck sai ' +
+        'desta apuração e para de mudar — mesmo que alguém valide uma entrega ' +
+        'com data deste mês depois.',
+    ok: jaTem ? 'Recongelar' : 'Congelar', perigo: !!jaTem });
+  if (!ok) return;
+
+  const btn = document.getElementById('ger-btn-congelar');
+  const rot = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Congelando…';
+  try {
+    const apuracao = apresApuracao(iso);
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({
+        action: 'fechamento-gravar', mes: iso, apuracao,
+        refazer: !!jaTem,
+      }, credAdmin())),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) {
+      toast('Não consegui congelar: ' + (j.detail || j.error || r.status), 'err');
+      return;
+    }
+    toast('🔒 ' + nome + ' congelado (' + (j.tamanho_kb || '?') + ' KB).', 'ok');
+    await fechaCarregar();
+  } catch (e) {
+    toast('Não consegui congelar: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = rot;
+  }
+}
+
+async function fechaDescongelar(iso) {
+  const nome = apresPeriodoNome(iso);
+  const ok = await confirmar({
+    titulo: 'Descongelar ' + nome,
+    texto: 'O deck volta a ser calculado da base viva. Os números podem ficar ' +
+           'diferentes do que já foi apresentado — foi exatamente isso que o ' +
+           'congelamento passou a impedir.',
+    ok: 'Descongelar', perigo: true });
+  if (!ok) return;
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'fechamento-apagar', mes: iso }, credAdmin())),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) {
+      toast('Não consegui descongelar: ' + (j.detail || j.error || r.status), 'err');
+      return;
+    }
+    toast('🔓 ' + nome + ' descongelado.', 'ok');
+    await fechaCarregar();
+  } catch (e) {
+    toast('Não consegui descongelar: ' + e.message, 'err');
+  }
+}
+
+/** Busca a apuração congelada de um mês, ou `null`. */
+async function fechaApuracaoDe(iso) {
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'fechamento-ler', mes: iso }, credAdmin())),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok || !j.apuracao) return null;
+    return { apuracao: j.apuracao, congelado_em: j.congelado_em, por: j.por };
+  } catch (_) { return null; }
+}
+
+function apresPeriodoNome(iso) {
+  const [a, m] = String(iso).split('-').map(Number);
+  return apresentacaoMesNome(m - 1).replace(/^./, c => c.toUpperCase()) + ' de ' + a;
+}
 
 // ─── DESTAQUE DA APRESENTACAO ─────────────────────────────────────
 // A estrela vive no card, e nao na hora de exportar. Marcar no fim do mes obriga a
@@ -6776,6 +7052,14 @@ function horasDoMes(m, deISO, ateISO, rateado) {
 function renderGerencial() {
   gerInitFilters();
   gerDestroyCharts();
+
+  /* A MARCA DO CONGELAMENTO SE REDESENHA COM A ABA. Trocar o mes no seletor tem
+     de trocar o cadeado junto — um cadeado que ficou de agosto enquanto a tela
+     mostra setembro diz a coisa errada sobre o mes errado, que e pior do que
+     nao dizer nada. O indice e lido UMA vez por sessao; daqui para frente e so
+     desenho. */
+  if (!_fechaCarregado) fechaCarregar();
+  else fechaRender();
 
   const mes = parseInt(document.getElementById('ger-mes').value);
   const ano = parseInt(document.getElementById('ger-ano').value);
