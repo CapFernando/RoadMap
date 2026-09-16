@@ -350,6 +350,45 @@
     .g-axcred.on { color:#0E0E0D; background:var(--amber-tx,#FFC470);
       border-color:var(--amber-tx,#FFC470); }
     .dev-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    /* O NOME VIRA BOTAO, e continua parecendo um nome.
+       Sublinhado pontilhado em vez de cor de link: a faixa ja tem cor demais
+       (barra de capacidade, chips de semana, avisos de ausencia), e mais um azul
+       ali competiria com a informacao. O pontilhado diz "tem mais aqui" sem
+       disputar atencao — e o cursor e o `title` confirmam antes do clique. */
+    .dev-abrir {
+      background: none; border: none; padding: 0; margin: 0; cursor: pointer;
+      font: inherit; color: inherit; text-align: left;
+      border-bottom: 1px dotted var(--text3); }
+    .dev-abrir:hover { color: var(--blue); border-bottom-color: var(--blue); }
+    .dev-abrir:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+    /* ── O RESUMO DO DEV ────────────────────────────────────────────────── */
+    .dr-topo { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .dr-kpi { flex:1; min-width:120px; background:var(--bg3); border:1px solid var(--border);
+      border-radius:var(--radius); padding:10px 13px; }
+    .dr-kpi b { display:block; font-size:22px; font-weight:700; line-height:1.15; }
+    .dr-kpi span { font-size:11.5px; color:var(--text2); text-transform:uppercase;
+      letter-spacing:.05em; }
+    .dr-kpi.atr b { color:var(--red, #E84444); }
+    .dr-kpi.and b { color:var(--green, #5EA832); }
+    .dr-kpi.val b { color:var(--amber-tx, #FFC470); }
+    .dr-sec { margin-bottom:16px; }
+    .dr-sec-tit { display:flex; align-items:baseline; gap:8px; font-size:13px; font-weight:700;
+      padding-bottom:5px; border-bottom:1px solid var(--border); margin-bottom:7px; }
+    .dr-sec-tit small { font-weight:400; color:var(--text2); font-size:11.5px; }
+    .dr-sec.atr .dr-sec-tit { color:var(--red, #E84444); }
+    .dr-sec.and .dr-sec-tit { color:var(--green, #5EA832); }
+    .dr-sec.val .dr-sec-tit { color:var(--amber-tx, #FFC470); }
+    .dr-item { display:grid; grid-template-columns:62px 1fr auto; gap:9px; align-items:baseline;
+      padding:5px 0; font-size:13px; border-bottom:1px solid var(--border); }
+    .dr-item:last-child { border-bottom:none; }
+    .dr-cod { color:var(--text3); font-family:ui-monospace,monospace; font-size:11.5px; }
+    .dr-tt { line-height:1.4; }
+    .dr-tt small { display:block; color:var(--text3); font-size:11px; }
+    .dr-dt { color:var(--text2); font-size:11.5px; white-space:nowrap; }
+    .dr-dt.venc { color:var(--red, #E84444); font-weight:600; }
+    .dr-vazio { color:var(--text3); font-size:12.5px; padding:5px 0; }
+    .dr-nada { text-align:center; color:var(--text2); padding:26px 10px; font-size:14px; }
     .cap-bar-wrap { display: flex; align-items: center; gap: 6px; }
     .cap-bar-track {
       flex: 1; height: 4px; background: var(--bg4); border-radius: 2px; overflow: hidden; max-width: 100px;
@@ -1153,6 +1192,28 @@
 </div>
 
 <!-- MODAL DEVS -->
+<!-- ── O RESUMO DE UM DEV ──────────────────────────────────────────────────
+     Abre clicando no nome na faixa do Gantt. Responde "o que esta na mao desta
+     pessoa agora", que e a pergunta que se faz antes de mandar recado no grupo —
+     e que o Gantt, por ser um calendario, responde em forma de barra.
+
+     MODAL, e nao pagina nova: o dado ja esta carregado nesta aba. Uma pagina
+     separada pediria login de novo, releria a base e mostraria numeros de outro
+     instante — e a comparacao com a faixa que a pessoa acabou de clicar seria
+     entre duas leituras diferentes. -->
+<div id="modal-dev-resumo" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:620px">
+    <button type="button" class="modal-close-btn" onclick="closeModal('modal-dev-resumo')" aria-label="Fechar">✕</button>
+    <h2 id="dr-titulo">Resumo</h2>
+    <p class="ap-dica" id="dr-sub" style="margin:-6px 0 14px"></p>
+    <div id="dr-corpo"></div>
+    <div class="form-actions" style="margin-top:16px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-dev-resumo')">Fechar</button>
+      <button class="btn btn-primary" id="dr-copiar" onclick="gDevResumoCopiar()">📋 Copiar para o grupo</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-devs" class="modal-overlay" style="display:none">
   <div class="modal" style="max-width:380px">
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-devs')" aria-label="Fechar">✕</button>
@@ -2986,7 +3047,7 @@ function renderGantt() {
     // onde os dois cabem sem competir com a barra de capacidade logo abaixo.
     const _pf = gPerfilDe(dev);
     html += `<div class="dev-label">
-      <div class="dev-name">${_pf.axcred ? '<span class="dev-perfil" style="color:var(--amber-tx,#FFC470);border-color:var(--amber-tx,#FFC470)" title="DEV-AXCred — aparece primeiro">AXCred</span> ' : ''}${esc(dev)}</div>
+      <div class="dev-name">${_pf.axcred ? '<span class="dev-perfil" style="color:var(--amber-tx,#FFC470);border-color:var(--amber-tx,#FFC470)" title="DEV-AXCred — aparece primeiro">AXCred</span> ' : ''}<button type="button" class="dev-abrir" onclick="gDevResumoAbrir('${esc(dev).replace(/'/g, "\\'")}')" title="Ver o resumo de ${esc(dev)} — atrasado, em andamento e em validação">${esc(dev)}</button></div>
       <div class="cap-bar-wrap">
         <div class="cap-bar-track"><div class="cap-bar-fill ${over?'over':''}" style="width:${Math.min(pct,100)}%"></div></div>
         <span class="cap-text">${pct}%</span>
@@ -4499,6 +4560,231 @@ function renderAnexosGantt(m) {
 
 // Abre o modal SEMPRE no topo — o scroll do .modal ficava guardado entre
 // aberturas, e a partir do segundo card o modal abria rolado no meio do form.
+/* ═══════════════════════════════════════════════════════════════════════════
+   O RESUMO DE UM DEV — "o que esta na mao desta pessoa agora"
+
+   TRES BALDES, e eles sao DISJUNTOS por construcao:
+
+     ATRASADO      o prazo venceu e a demanda ainda e do dev
+     EM ANDAMENTO  esta sendo feita, dentro do prazo
+     EM VALIDACAO  o dev entregou; a bola esta com o PM/PO
+
+   `validacao` NAO PODE APARECER EM ATRASADO, e isso nao e escolha minha: o
+   `prazo.js` ja decide assim, e o cabecalho dele conta por que — "a demanda
+   passa por um tempo na mao do PM/PO, e o tempo que ela passa ali nao e atraso
+   de desenvolvimento". Perguntar a ele em vez de comparar datas aqui e o que
+   impede este resumo de acusar o dev por uma espera que nao e dele.
+
+   NAO FILTRA PELO MES DA TELA. O Gantt mostra um mes porque e um calendario;
+   "o que o Dan esta devendo" nao e pergunta de mes. Um resumo que mostrasse so
+   setembro esconderia a demanda de agosto que ainda esta aberta — que e
+   justamente a que precisa de recado. O subtitulo diz isso, para o numero aqui
+   nao brigar em silencio com a faixa que a pessoa acabou de clicar.
+
+   NEM PELOS FILTROS DA BARRA. Mesmo motivo: se alguem filtrou por tema e clica
+   no nome, quer a pessoa inteira — nao a pessoa dentro do filtro. */
+function gDevResumo(dev) {
+  const hoje = PRAZO.hojeISO();
+  const minhas = (state.melhorias || []).filter(m =>
+    m && !m.oculto && !m.mesclado_em && DEVNOME.eDe(m, dev));
+
+  /* A ETAPA VAI JUNTO, e nao é detalhe: `diasDeAtraso(m, etapa, hoje)` recebe
+     TRÊS argumentos, e eu chamei com dois — `hoje` entrou na posição de `etapa`.
+     Uma data não está em `ETAPAS_QUE_CORREM` nem em `ETAPAS_APOS_O_DEV`, então a
+     função caía no `return null` e o `|| 0` que eu tinha escrito transformava
+     isso em zero. O resultado ia para a tela e para o grupo como "venceu
+     09/09, 0 dias" — um número errado com cara de número certo, no texto que
+     alguém cola para cobrar uma pessoa.
+
+     É a mesma função que decide o balde logo abaixo; passar a etapa dos dois
+     lados é o que mantém as duas respostas consistentes. */
+  const monta = (m, etapa) => {
+    const tema = (state.temas || []).find(t => String(t.id) === String(m.tema_id));
+    return {
+      codigo: m.codigo || '', titulo: m.titulo || '(sem título)',
+      tema: tema ? (window.catalogoCurto ? catalogoCurto(tema.nome) : tema.nome) : '',
+      entrega: m.entrega || '', inicio: m.inicio || '',
+      pts: Number(m.poker_pontos) || 0,
+      dias: PRAZO.diasDeAtraso(m, etapa, hoje) || 0,
+      entregueEm: String(m.entregue_em || '').slice(0, 10),
+      // Entregou depois do prazo? Vale como nota na linha da validacao, e nao
+      // como balde: e informacao de retrospectiva, nao acao de hoje.
+      atrasouNaEntrega: !!(PRAZO.atrasouNaEntrega && PRAZO.atrasouNaEntrega(m)),
+      pausada: ETAPA.pausada(m),
+    };
+  };
+
+  const atrasado = [], andamento = [], validacao = [];
+  minhas.forEach(m => {
+    const ef = ETAPA.efetiva(m, hoje);
+    const gr = ETAPA.gravada(m, hoje);
+    if (ef === 'atrasado') { atrasado.push(monta(m, gr)); return; }
+    if (gr === 'em_andamento') { andamento.push(monta(m, gr)); return; }
+    if (gr === 'validacao') { validacao.push(monta(m, gr)); return; }
+  });
+
+  // Atrasado: o mais vencido primeiro — e a ordem da conversa.
+  atrasado.sort((a, b) => b.dias - a.dias ||
+                          String(a.entrega).localeCompare(String(b.entrega)));
+  // Em andamento: o prazo mais proximo primeiro; sem data vai para o fim.
+  const porPrazo = (a, b) =>
+    String(a.entrega || '9999-99-99').localeCompare(String(b.entrega || '9999-99-99')) ||
+    String(a.codigo).localeCompare(String(b.codigo));
+  andamento.sort(porPrazo);
+  // Em validacao: quem entregou primeiro espera ha mais tempo.
+  validacao.sort((a, b) => String(a.entregueEm || '9999-99-99')
+    .localeCompare(String(b.entregueEm || '9999-99-99')));
+
+  return { dev, atrasado, andamento, validacao,
+           total: atrasado.length + andamento.length + validacao.length };
+}
+
+let _drDev = '';
+
+function gDevResumoAbrir(dev) {
+  _drDev = dev;
+  const r = gDevResumo(dev);
+  document.getElementById('dr-titulo').textContent = dev;
+  document.getElementById('dr-sub').textContent =
+    'Tudo que está na mão dele hoje — todas as demandas em aberto, e não só as ' +
+    'do mês na tela.';
+
+  const dt = (iso) => (iso ? formatDateBR(iso) : '—');
+  const linha = (x, modo) => {
+    let dir = '', cls = '';
+    if (modo === 'atr') {
+      dir = 'venceu ' + dt(x.entrega) + ' · ' + x.dias + (x.dias === 1 ? ' dia' : ' dias');
+      cls = ' venc';
+    } else if (modo === 'and') {
+      dir = x.entrega ? 'entrega ' + dt(x.entrega) : 'sem data';
+    } else {
+      dir = x.entregueEm ? 'entregue ' + dt(x.entregueEm) : 'aguardando';
+    }
+    const nota = [
+      x.tema,
+      x.pts ? x.pts + ' pt' : '',
+      x.pausada ? '⏸ pausada' : '',
+      modo === 'val' && x.atrasouNaEntrega ? 'entregou após o prazo' : '',
+    ].filter(Boolean).join(' · ');
+    return '<div class="dr-item">' +
+      '<span class="dr-cod">' + esc(x.codigo || '—') + '</span>' +
+      '<span class="dr-tt">' + esc(x.titulo) +
+        (nota ? '<small>' + esc(nota) + '</small>' : '') + '</span>' +
+      '<span class="dr-dt' + cls + '">' + esc(dir) + '</span></div>';
+  };
+
+  const sec = (k, cls, rot, dica, lista, modo) =>
+    '<div class="dr-sec ' + cls + '"><div class="dr-sec-tit">' + rot +
+      '<small>' + lista.length + (lista.length === 1 ? ' demanda' : ' demandas') +
+      (dica ? ' · ' + dica : '') + '</small></div>' +
+    (lista.length ? lista.map(x => linha(x, modo)).join('')
+                  : '<div class="dr-vazio">nada aqui</div>') + '</div>';
+
+  const corpo = document.getElementById('dr-corpo');
+  if (!r.total) {
+    corpo.innerHTML = '<div class="dr-nada">Nenhuma demanda em aberto para ' +
+      esc(dev) + '.<br><span style="font-size:12.5px;color:var(--text3)">' +
+      'Sem atraso, sem trabalho em andamento e nada esperando validação.</span></div>';
+  } else {
+    corpo.innerHTML =
+      '<div class="dr-topo">' +
+        '<div class="dr-kpi atr"><b>' + r.atrasado.length + '</b><span>atrasado</span></div>' +
+        '<div class="dr-kpi and"><b>' + r.andamento.length + '</b><span>em andamento</span></div>' +
+        '<div class="dr-kpi val"><b>' + r.validacao.length + '</b><span>em validação</span></div>' +
+      '</div>' +
+      sec('atr', 'atr', '⚠ Atrasado', 'o prazo venceu e ainda é dele',
+          r.atrasado, 'atr') +
+      /* "O TRABALHO ESTÁ COM O DEV", e não "dentro do prazo".
+         Demanda PAUSADA cai aqui — o `prazo.js` não a conta como atrasada
+         porque o prazo está suspenso, não estourado — e ela aparece com data de
+         entrega já vencida. Sob o rótulo "dentro do prazo", a seção
+         contradizia o próprio item, e quem lesse concluiria que a conta está
+         errada. O que as quatro têm em comum não é o prazo: é de quem é a bola. */
+      sec('and', 'and', '▶ Em andamento', 'a bola está com o dev', r.andamento, 'and') +
+      sec('val', 'val', '⏳ Em validação', 'o dev entregou; está com o PM/PO',
+          r.validacao, 'val');
+  }
+  abrirModal('modal-dev-resumo');
+}
+
+/* O TEXTO PARA O GRUPO.
+ *
+ * SEM MARCACAO. WhatsApp e Teams nao leem markdown igual, e um `**` que nao vira
+ * negrito aparece cru no meio da frase. Hifen, dois-pontos e quebra de linha
+ * funcionam em qualquer um.
+ *
+ * CADA BLOCO SO APARECE SE TIVER CONTEUDO. "Atrasado: nenhum" e uma linha que
+ * ninguem precisa ler — e num grupo, cada linha a mais e uma a menos de chance
+ * de a mensagem ser lida ate o fim.
+ *
+ * O CODIGO VEM ANTES DO TITULO porque e por ele que se responde no grupo
+ * ("o AX-318 ja subiu?"), e a data vem no fim de cada linha, onde o olho para. */
+function gDevResumoTexto(dev) {
+  const r = gDevResumo(dev);
+  const dt = (iso) => (iso ? formatDateBR(iso) : '—');
+  const L = [];
+  L.push(dev + ' — situação em ' + formatDateBR(PRAZO.hojeISO()));
+
+  if (r.atrasado.length) {
+    L.push('');
+    L.push('ATRASADO (' + r.atrasado.length + ')');
+    r.atrasado.forEach(x => L.push('- ' + (x.codigo ? x.codigo + ' ' : '') + x.titulo +
+      ' — venceu ' + dt(x.entrega) + ', ' + x.dias + (x.dias === 1 ? ' dia' : ' dias') +
+      (x.pausada ? ' (pausada)' : '')));
+  }
+  if (r.andamento.length) {
+    L.push('');
+    L.push('EM ANDAMENTO (' + r.andamento.length + ')');
+    /* A PAUSA VAI JUNTO, e aqui ela é obrigatória. Demanda pausada não conta
+       como atrasada (regra do `prazo.js`: o prazo está suspenso, não estourado),
+       então ela fica nesta lista — com uma data de entrega que já passou. Sem a
+       palavra "pausada", quem lê no grupo vê a data vencida e conclui atraso,
+       cobrando a pessoa por uma espera que é de outro. */
+    r.andamento.forEach(x => L.push('- ' + (x.codigo ? x.codigo + ' ' : '') + x.titulo +
+      (x.entrega ? ' — entrega ' + dt(x.entrega) : ' — sem data combinada') +
+      (x.pausada ? ' (pausada, aguardando terceiro)' : '')));
+  }
+  if (r.validacao.length) {
+    L.push('');
+    L.push('EM VALIDAÇÃO (' + r.validacao.length + ')');
+    r.validacao.forEach(x => L.push('- ' + (x.codigo ? x.codigo + ' ' : '') + x.titulo +
+      (x.entregueEm ? ' — entregue em ' + dt(x.entregueEm) : '')));
+  }
+  if (!r.total) L.push('Nada em aberto.');
+  return L.join('\n');
+}
+
+async function gDevResumoCopiar() {
+  const btn = document.getElementById('dr-copiar');
+  const rotulo = btn ? btn.textContent : '';
+  const txt = gDevResumoTexto(_drDev);
+  try {
+    await navigator.clipboard.writeText(txt);
+    if (btn) { btn.textContent = '✓ Copiado'; setTimeout(() => { btn.textContent = rotulo; }, 1800); }
+  } catch (_) {
+    /* CLIPBOARD BLOQUEADO nao pode virar "nao copiei e nao disse nada": sem
+       HTTPS ou sem permissao, a API recusa em silencio. O textarea selecionado
+       deixa a pessoa dar Ctrl+C — e se nem isso funcionar, o texto fica na tela
+       para copiar a mao, em vez de sumir. */
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.style.cssText = 'position:fixed;top:8%;left:50%;transform:translateX(-50%);' +
+      'width:min(620px,92vw);height:56vh;z-index:9999;font-family:ui-monospace,monospace;' +
+      'font-size:12.5px;padding:12px';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) {}
+    if (ok) { ta.remove(); if (btn) { btn.textContent = '✓ Copiado';
+      setTimeout(() => { btn.textContent = rotulo; }, 1800); } }
+    else {
+      ta.onblur = () => ta.remove();
+      if (btn) { btn.textContent = 'copie o texto na tela';
+        setTimeout(() => { btn.textContent = rotulo; }, 3000); }
+    }
+  }
+}
+
 function abrirModal(id) {
   const ov = document.getElementById(id);
   if (!ov) return;

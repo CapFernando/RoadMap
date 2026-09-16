@@ -10499,6 +10499,200 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }
   }
 
+  sec('O resumo do dev, e o texto que vai para o grupo');
+  {
+    const PZ = require('./prazo.js');
+    const ETP = require('./etapa-demanda.js');
+    const DN = require('./dev-nome.js');
+    const HOJE = '2026-09-16';
+    const dia = (n) => {
+      const d = new Date('2026-09-16T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const temas = [{ id: 't1', nome: 'AXCred - Cobrança' }];
+    const base = [
+      { id: '1', codigo: 'AX-318', titulo: 'Anexo no historico', dev: 'Dan Weine',
+        tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(-7), poker_pontos: 21 },
+      { id: '2', codigo: 'AX-317', titulo: 'Dois cliques', dev: 'Dan Weine',
+        tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(5) },
+      // SEGUNDA ATRASADA, e ela existe para a invariante da ORDEM ter o que
+      // ordenar: com uma so, o teste caia no `length < 2` e passava sem olhar —
+      // inverter o `sort` no codigo nao mudava nada na saida.
+      { id: '11', codigo: 'AX-145', titulo: 'Controle de cheques', dev: 'Dan Weine',
+        tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(-2) },
+      { id: '3', codigo: 'AX-401', titulo: 'Sem data', dev: 'Dan Weine',
+        tema_id: 't1', status_planejamento: 'em_andamento' },
+      { id: '4', codigo: 'AX-316', titulo: 'Ajuste de nomes', dev: 'Dan Weine',
+        tema_id: 't1', status_planejamento: 'validacao', entrega: dia(-10),
+        entregue_em: dia(-12) + 'T14:00:00Z' },
+      { id: '5', codigo: 'AX-500', titulo: 'Pausada e vencida', dev: 'Dan Weine',
+        tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(-30),
+        pausado_em: dia(-25) },
+      { id: '6', codigo: 'AX-600', titulo: 'De outra pessoa', dev: 'Gabriel',
+        tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(-3) },
+      { id: '7', codigo: 'AX-700', titulo: 'Concluida', dev: 'Dan Weine',
+        tema_id: 't1', status_planejamento: 'concluido', entrega: dia(-40) },
+      { id: '8', codigo: 'AX-800', titulo: 'Em backlog', dev: 'Dan Weine',
+        tema_id: 't1', status_planejamento: 'backlog' },
+      { id: '9', codigo: 'AX-900', titulo: 'Oculta', dev: 'Dan Weine', oculto: true,
+        tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(-3) },
+      { id: '10', codigo: 'AX-901', titulo: 'Dividida', dev: 'Dan Weine / Gabriel',
+        tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(3) },
+    ];
+    const fmtBR = (v) => { if (!v) return '—'; const p = String(v).split('-');
+      return p[2] + '/' + p[1] + '/' + p[0]; };
+    const monta = (fns) => new Function(
+      'state', 'PRAZO', 'ETAPA', 'DEVNOME', 'formatDateBR', 'catalogoCurto', 'window',
+      fns + '\nreturn { gDevResumo, gDevResumoTexto };')(
+      { melhorias: base, temas }, Object.assign({}, PZ, { hojeISO: () => HOJE }),
+      ETP, DN, fmtBR, (x) => x, { catalogoCurto: (x) => x });
+    const API = monta(corpo(GANTT, 'function gDevResumo(') + '\n' +
+                      corpo(GANTT, 'function gDevResumoTexto('));
+    const r = API.gDevResumo('Dan Weine');
+    const cods = (l) => l.map(x => x.codigo);
+
+    /* ─── OS TRES BALDES SAO DISJUNTOS ────────────────────────────────────
+       Uma demanda em dois baldes faria a soma dos tres contadores nao bater com
+       o total — e num recado de grupo, contar a mesma coisa duas vezes e pior
+       que nao contar. */
+    const todos = [...cods(r.atrasado), ...cods(r.andamento), ...cods(r.validacao)];
+    ok(new Set(todos).size === todos.length,
+       'nenhuma demanda aparece em dois baldes', todos.join(' '));
+    ok(todos.length === r.total, 'e o total e a soma dos tres', todos.length + ' / ' + r.total);
+
+    ok(cods(r.atrasado).includes('AX-318'), 'o que venceu e ainda e do dev entra em atrasado');
+    ok(cods(r.andamento).includes('AX-317') && cods(r.andamento).includes('AX-401'),
+       'o que corre dentro do prazo entra em andamento \u2014 com data ou sem');
+    ok(cods(r.validacao).includes('AX-316'), 'o que ja foi entregue entra em validacao');
+
+    /* VALIDACAO NAO E ATRASO DO DEV, e isso nao e escolha desta tela: o
+       `prazo.js` decide, e o cabecalho dele registra que "o tempo que ela passa
+       [com o PM/PO] nao e atraso de desenvolvimento". A AX-316 venceu ha 10
+       dias e foi entregue ha 12 \u2014 se aparecesse em atrasado, o recado cobraria
+       a pessoa por uma espera que nao e dela. */
+    ok(!cods(r.atrasado).includes('AX-316'),
+       'demanda em validacao com prazo vencido NAO entra em atrasado');
+
+    /* PAUSADA NAO ATRASA, pela mesma regra \u2014 e por isso ela cai em andamento
+       COM data vencida, o que obriga o rotulo da secao e o texto do grupo a
+       dizerem que ela esta pausada. */
+    ok(cods(r.andamento).includes('AX-500'),
+       'pausada e vencida fica em andamento, e nao em atrasado');
+    ok(r.andamento.find(x => x.codigo === 'AX-500').pausada === true,
+       'e ela se declara pausada, para o rotulo poder explicar a data vencida');
+
+    ok(!todos.includes('AX-600'), 'demanda de outra pessoa nao entra');
+    ok(!todos.includes('AX-700') && !todos.includes('AX-800'),
+       'concluida e backlog tambem nao \u2014 nada disso esta na mao dele agora');
+    ok(!todos.includes('AX-900'), 'e oculta nunca');
+    ok(todos.includes('AX-901'),
+       'mas demanda de duas pessoas entra para as duas \u2014 ela esta na mao dele tambem');
+
+    /* ─── A CONTA DE DIAS ─────────────────────────────────────────────────
+       `diasDeAtraso(m, etapa, hoje)` recebe TRES argumentos. Chamei com dois, e
+       `hoje` entrou na posicao de `etapa`: a funcao caia no `return null` e o
+       `|| 0` transformava isso em ZERO. "venceu 09/09, 0 dias" ia para a tela e
+       para o grupo \u2014 um numero errado com cara de numero certo, no texto que
+       alguem cola para cobrar uma pessoa. */
+    const atr = r.atrasado.find(x => x.codigo === 'AX-318');
+    ok(atr && atr.dias === 7, 'o atraso e contado em dias, e nao devolve zero',
+       atr ? atr.dias + ' dias' : '(nao achei)');
+    ok(r.atrasado.every(x => x.dias > 0),
+       'e nenhuma linha de atrasado sai com zero dia \u2014 zero ali e sinal de conta quebrada',
+       r.atrasado.map(x => x.codigo + ':' + x.dias).join(' '));
+
+    /* A ORDEM E A DA CONVERSA: o mais vencido primeiro. */
+    ok(r.atrasado.length >= 2, 'ha duas atrasadas para a ordem poder ser medida',
+       String(r.atrasado.length));
+    ok(r.atrasado[0].dias > r.atrasado[1].dias,
+       'o mais vencido vem primeiro — e a ordem da conversa',
+       r.atrasado.map(x => x.codigo + ':' + x.dias + 'd').join(' > '));
+    const semData = r.andamento[r.andamento.length - 1];
+    ok(semData && semData.codigo === 'AX-401',
+       'e o que nao tem data combinada vai para o fim de "em andamento"',
+       cods(r.andamento).join(' '));
+  }
+
+  {
+    /* ─── O TEXTO PARA O GRUPO ────────────────────────────────────────────
+       Ele sai desta tela e entra num WhatsApp ou num Teams. */
+    const PZ = require('./prazo.js');
+    const ETP = require('./etapa-demanda.js');
+    const DN = require('./dev-nome.js');
+    const HOJE = '2026-09-16';
+    const dia = (n) => { const d = new Date('2026-09-16T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    const base = [
+      { id: '1', codigo: 'AX-318', titulo: 'Anexo no historico', dev: 'Dan',
+        tema_id: 't1', status_planejamento: 'em_andamento', entrega: dia(-7) },
+      { id: '5', codigo: 'AX-500', titulo: 'Pausada', dev: 'Dan', tema_id: 't1',
+        status_planejamento: 'em_andamento', entrega: dia(-30), pausado_em: dia(-25) },
+      { id: '4', codigo: 'AX-316', titulo: 'Ajuste', dev: 'Dan', tema_id: 't1',
+        status_planejamento: 'validacao', entrega: dia(-10), entregue_em: dia(-12) + 'T14:00:00Z' },
+    ];
+    const fmtBR = (v) => { if (!v) return '—'; const p = String(v).split('-');
+      return p[2] + '/' + p[1] + '/' + p[0]; };
+    const API = new Function('state', 'PRAZO', 'ETAPA', 'DEVNOME', 'formatDateBR', 'catalogoCurto', 'window',
+      corpo(GANTT, 'function gDevResumo(') + '\n' + corpo(GANTT, 'function gDevResumoTexto(') +
+      '\nreturn { gDevResumo, gDevResumoTexto };')(
+      { melhorias: base, temas: [] }, Object.assign({}, PZ, { hojeISO: () => HOJE }),
+      ETP, DN, fmtBR, (x) => x, { catalogoCurto: (x) => x });
+    const txt = API.gDevResumoTexto('Dan');
+
+    /* SEM MARCACAO. WhatsApp e Teams nao leem markdown igual, e um `**` que nao
+       vira negrito aparece cru no meio da frase. */
+    ok(!/\*\*|^#|`|^\s*\|/m.test(txt), 'o texto nao tem marcacao de markdown');
+    ok(txt.indexOf('Dan') === 0, 'comeca pelo nome de quem e o resumo');
+    ok(/16\/09\/2026/.test(txt), 'e diz de quando e a foto');
+    ok(/ATRASADO \(1\)/.test(txt) && /EM ANDAMENTO \(1\)/.test(txt) &&
+       /EM VALIDAÇÃO \(1\)/.test(txt), 'os tres blocos trazem a contagem');
+    ok(/AX-318 Anexo no historico — venceu 09\/09\/2026, 7 dias/.test(txt),
+       'a linha de atrasado diz o que venceu, quando e ha quantos dias');
+
+    /* A PAUSA VAI JUNTO, e e obrigatorio: ela aparece em "em andamento" com data
+       de entrega ja vencida. Sem a palavra, quem le no grupo ve a data vencida e
+       cobra a pessoa por uma espera que e de outro. */
+    ok(/AX-500 Pausada — entrega 17\/08\/2026 \(pausada/.test(txt),
+       'a demanda pausada diz que esta pausada, e a data vencida deixa de acusar ninguem',
+       (txt.match(/AX-500[^\n]*/) || [''])[0]);
+
+    /* BLOCO VAZIO NAO ENTRA. Num grupo, cada linha a mais e uma a menos de
+       chance de a mensagem ser lida ate o fim. */
+    const soUm = new Function('state', 'PRAZO', 'ETAPA', 'DEVNOME', 'formatDateBR', 'catalogoCurto', 'window',
+      corpo(GANTT, 'function gDevResumo(') + '\n' + corpo(GANTT, 'function gDevResumoTexto(') +
+      '\nreturn gDevResumoTexto;')(
+      { melhorias: [base[0]], temas: [] }, Object.assign({}, PZ, { hojeISO: () => HOJE }),
+      ETP, DN, fmtBR, (x) => x, { catalogoCurto: (x) => x })('Dan');
+    ok(/ATRASADO/.test(soUm) && !/EM ANDAMENTO/.test(soUm) && !/VALIDAÇÃO/.test(soUm),
+       'bloco sem nada nao aparece no texto', JSON.stringify(soUm.slice(0, 60)));
+
+    const vazio = new Function('state', 'PRAZO', 'ETAPA', 'DEVNOME', 'formatDateBR', 'catalogoCurto', 'window',
+      corpo(GANTT, 'function gDevResumo(') + '\n' + corpo(GANTT, 'function gDevResumoTexto(') +
+      '\nreturn gDevResumoTexto;')(
+      { melhorias: [], temas: [] }, Object.assign({}, PZ, { hojeISO: () => HOJE }),
+      ETP, DN, fmtBR, (x) => x, { catalogoCurto: (x) => x })('Ninguem');
+    ok(/Nada em aberto/.test(vazio),
+       'e dev sem nada diz isso, em vez de mandar um titulo sozinho');
+  }
+
+  {
+    /* O NOME NA FAIXA E CLICAVEL, e alcancavel pelo teclado. */
+    const g = semComentario(GANTT);
+    ok(/class="dev-abrir"/.test(g) && /onclick="gDevResumoAbrir\(/.test(g),
+       'o nome do dev na faixa abre o resumo');
+    ok(/<button type="button" class="dev-abrir"/.test(g),
+       'e e um <button>, e nao um <div> com onclick \u2014 o teclado chega nele');
+    ok(/\.dev-abrir:focus-visible/.test(GANTT),
+       'e o foco do teclado aparece');
+    /* O MODAL EXISTE E TEM O BOTAO DE COPIAR. */
+    ok(/id="modal-dev-resumo"/.test(g), 'o modal do resumo existe');
+    ok(/onclick="gDevResumoCopiar\(\)"/.test(g), 'e tem o botao de copiar');
+    const cp = corpo(GANTT, 'async function gDevResumoCopiar(');
+    ok(cp && /execCommand\('copy'\)/.test(cp),
+       'com reserva para quando o clipboard e bloqueado \u2014 sem HTTPS a API recusa calada');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
