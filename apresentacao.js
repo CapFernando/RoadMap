@@ -2221,6 +2221,12 @@
        sairam = em aberto). Eram duas perguntas diferentes na mesma reuniao, e
        o print que o Fernando circulou era exatamente isso. */
     slideMes: slideMes,
+    /* `slidePipelines` SAI DO KIT pelo mesmo motivo do `slideMes`: no modelo ele
+       e o slide logo depois da capa — "FRENTES DE TRABALHO", a visao geral da
+       execucao —, e o deck de Relatorios nao o tinha. Abrir o deck pela conta
+       da fila comeca pelo meio da historia: a sala pergunta "quantos somos e
+       quanto coube no mes" antes de "a fila cresceu". */
+    slidePipelines: slidePipelines,
     rodape: rodape,
     cartao: cartao,
     cartaoKpi: cartaoKpi,

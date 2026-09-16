@@ -83,6 +83,13 @@
            String(x.getDate()).padStart(2, '0');
   }
 
+  /** Esta data caiu dentro do período? Vazia nunca cai — e é essa a metade que
+   *  se esquece: `'' <= '2026-08-31'` é verdadeiro em JavaScript, então sem a
+   *  guarda toda demanda sem data entraria em toda contagem. */
+  function noPeriodo(v, de, ate) {
+    return !!v && v >= de && v <= ate;
+  }
+
   function quebraTipo(lista) {
     var q = { evolucao: 0, sustentacao: 0, sem: 0 };
     (lista || []).forEach(function (m) {
@@ -120,9 +127,9 @@
     });
     var backlogFim = vivas.filter(function (m) { return abertaEm(m, ate); });
 
-    var dentro = function (v) { return !!v && v >= de && v <= fimCal; };
     var tocadas = vivas.filter(function (m) {
-      return dentro(dia((m || {}).inicio)) || dentro(dia((m || {}).concluido_em));
+      return noPeriodo(dia((m || {}).inicio), de, fimCal) ||
+             noPeriodo(dia((m || {}).concluido_em), de, fimCal);
     }).length;
 
     var ehStatus = function (m, s) { return String((m || {}).status_planejamento || '') === s; };
@@ -160,6 +167,7 @@
     abertaEm: abertaEm,
     vespera: vespera,
     quebraTipo: quebraTipo,
+    noPeriodo: noPeriodo,
     fluxo: fluxo,
     fecha: fecha,
   };

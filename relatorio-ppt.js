@@ -211,6 +211,24 @@
      entrou, quanto sobrou. Trocar "entraram" e "em aberto" de lugar parece
      inócuo e não é — lidos em sequência, eles contam se a fila cresceu ou
      encurtou, e essa é a leitura que o slide existe para dar. */
+  /* AS FRENTES DE TRABALHO — o slide que ABRE a seção no modelo.
+   *
+   * O deck de Relatórios começava na conta da fila, que é o meio da história: a
+   * sala pergunta "quantos somos e quanto coube no mês" antes de "a fila cresceu
+   * ou encolheu". É o mesmo `slidePipelines` do deck mensal, com a lista deste
+   * recorte — uma segunda conta de horas por frente daria dois "realizado" para
+   * o mesmo mês.
+   *
+   * Devolve `null` quando não há frente a mostrar, e aí o deck simplesmente não
+   * ganha a página: um slide de frentes vazio não é "nenhuma frente", é um slide
+   * que parece quebrado. */
+  function slideFrentes(pptx, d, t, pagina) {
+    var K = kit();
+    var pl = t.frentes;
+    if (!pl || !(pl.itens || []).length) return null;
+    return K.slidePipelines(pptx, pl, pagina, t.periodo);
+  }
+
   function slidePanorama(pptx, d, t, pagina) {
     var K = kit();
     /* ESTE SLIDE É O `slideMes` DO DECK MENSAL, e não mais um parecido.
@@ -576,6 +594,7 @@
 
     var p = 0;
     if (d.escopo === 'consolidado') {
+      if (slideFrentes(pptx, d, d.geral, p + 1)) p += 1;
       slidePanorama(pptx, d, d.geral, ++p);
       if (slideForma(pptx, d, d.geral, p + 1)) p += 1;
 
@@ -622,6 +641,7 @@
       if (d.backlog && d.backlog.total) slideBacklog(pptx, d, d.backlog, d.geral, ++p);
     } else {
       var t = d.assunto;
+      if (slideFrentes(pptx, d, t, p + 1)) p += 1;
       slidePanorama(pptx, d, t, ++p);
       if (slideForma(pptx, d, t, p + 1)) p += 1;
       slideEntregas(pptx, d, t, ++p);

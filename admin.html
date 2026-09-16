@@ -1116,15 +1116,15 @@
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=437901d1fa"></script>
-  <script src="fila.js?v=02cdf0fe21"></script>
+  <script src="fila.js?v=b7036b6f13"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js?v=e3aaaae81d"></script>
 <script src="pipelines.js?v=eb8de916d3"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=2e949cad86"></script>
-<script src="relatorio-ppt.js?v=9aeee54159"></script>
+<script src="apresentacao.js?v=8dfde5c19d"></script>
+<script src="relatorio-ppt.js?v=1d9a9a3615"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -6002,8 +6002,12 @@ async function apresGerar() {
     // "entrou mais do que saiu" nao tem contra o que ser lido.
     const devsAtuaram = new Set();
     vivasFluxo.forEach(m => {
-      const tocou = dentro(String(m.inicio || '').slice(0, 10)) ||
-                    dentro(String(m.concluido_em || '').slice(0, 10));
+      /* O MESMO PREDICADO DA REGRA, e nao um `dentro` local.
+         Ele era definido dentro do bloco do fluxo; ao delegar a conta para
+         `fila.js` eu levei a definicao junto e deixei este uso orfao — o deck
+         Gerencial parou de gerar com "dentro is not defined", em producao. */
+      const tocou = FILA.noPeriodo(String(m.inicio || '').slice(0, 10), iso + '-01', fimMes) ||
+                    FILA.noPeriodo(String(m.concluido_em || '').slice(0, 10), iso + '-01', fimMes);
       if (!tocou) return;
       String(m.dev || '').split(/[\/,]/).map(x => x.trim()).filter(Boolean)
         .forEach(dv => devsAtuaram.add(dv));
@@ -8031,9 +8035,25 @@ function relPptAssunto(raiz, j) {
     saidas: fAnt.saidas, backlogFim: fAnt.backlogFim,
   };
 
+  /* AS FRENTES DE TRABALHO DESTE RECORTE — planejado x realizado por frente.
+   *
+   * E o slide que abre a secao de Tecnologia no deck modelo, e o deck de
+   * Relatorios comecava sem ele: ia direto para a conta da fila, que e o meio
+   * da historia. A sala pergunta "quantos somos e quanto coube no mes" antes
+   * de "a fila cresceu ou encolheu".
+   *
+   * CHAMA A MESMA `apresPipelines` do deck Gerencial, com a lista entregue
+   * DESTE assunto — uma segunda conta de horas por frente daria dois
+   * "realizado" para o mesmo mes, e foi esse defeito que o comentario dela ja
+   * registra ter acontecido uma vez.
+   *
+   * Devolve `null` quando `pipelines.js` nao carregou; quem desenha checa. */
+  const frentes = (typeof apresPipelines === 'function')
+    ? apresPipelines(entregues, j.de, j.ate) : null;
+
   const nome = raiz || 'Todos os sistemas';
   return {
-    raiz, nome, periodo: j.rot, fluxo, anterior,
+    raiz, nome, periodo: j.rot, fluxo, anterior, frentes,
     sub: entregues.length + (entregues.length === 1 ? ' entrega' : ' entregas') +
          ' · ' + pontos + (pontos === 1 ? ' ponto' : ' pontos') + ' · ' + j.rot,
     entregas: entregues.length, pontos, entraram, aberto: emAberto.length,

@@ -27,6 +27,26 @@ jobs:
       # aqui é mais barato que descobrir na reunião.
       - run: node teste-invariantes.js
 
+  orfas:
+    name: Identificadores sem declaração
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # O deck Gerencial parou em produção com "dentro is not defined": a conta
+      # da fila saiu do admin.html para fila.js e levou junto uma função que
+      # outro trecho continuava chamando. `node --check` passou, as invariantes
+      # passaram, o CI passou — e o defeito só apareceu no clique do botão,
+      # porque nada aqui executa `apresGerar` (ela depende do DOM).
+      #
+      # `--no-save` de proposito: este repositorio nao tem package.json nem
+      # dependencias, e isso e uma propriedade — `node teste-invariantes.js`
+      # roda em qualquer maquina com Node e mais nada. O parser vive so aqui.
+      - run: npm i --no-save acorn acorn-walk
+      - run: node scripts-orfas.js
+
   worker-sintaxe:
     name: Sintaxe do Cloudflare Worker
     runs-on: ubuntu-latest
