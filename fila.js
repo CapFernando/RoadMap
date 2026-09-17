@@ -90,6 +90,48 @@
     return !!v && v >= de && v <= ate;
   }
 
+  /* ═══ O DIA DA ENTREGA — UMA DEFINIÇÃO, E NÃO QUATRO ══════════════════════
+   *
+   * "Inclusive os dados de um não estão batendo com o outro."
+   *
+   * Estavam mesmo. Havia QUATRO definições de "entrega do mês" em produção, e
+   * as quatro alimentavam o mesmo deck. Medido, sobre os mesmos seis casos:
+   *
+   *                                          entregas   pontos
+   *   Gerencial (kpi, frentes, prazo)            2         8
+   *   Gerencial, slide "O MÊS"                   3        16
+   *   Relatórios                                 4        24
+   *   cortes de pontos (por dev/semana/tema)     3        24
+   *
+   * E isso aparecia no deck que foi apresentado: a página de FRENTES dizia
+   * "170 entregas · 2174 pontos" e a de PONTOS ENTREGUES dizia "2243 pontos" —
+   * 69 pontos de diferença, no mesmo arquivo.
+   *
+   * A ESCOLHA É DO FERNANDO, e ele escolheu: entrega é a APROVADA PELO PM/PO.
+   * Etapa `concluido`, ancorada em `concluido_em`. Demanda em validação não
+   * conta — ela entra no mês em que for aprovada.
+   *
+   * O QUE ISSO COMPRA: o número nunca volta atrás. Nada é contado antes de
+   * estar fechado, então uma entrega recusada depois não faz um mês já
+   * apresentado ficar errado. O que custa: o trabalho que o dev terminou em
+   * 29/08 e o PM/PO aprovou em 02/09 aparece em setembro, e não em agosto.
+   *
+   * OS DOIS CASOS TORCIDOS SÃO OS MESMOS DA FILA, e é por isso que esta função
+   * mora aqui: `concluido_em` anterior ao `criado_em` (import legado) e
+   * concluída SEM `concluido_em` nenhuma. Tratá-los diferente aqui faria
+   * "ENTREGAS 170" e "Das saídas: 171 entregues" continuarem discordando por
+   * uma demanda — que foi exatamente o que aconteceu no deck de agosto.        */
+  function entregaEm(m) {
+    if (String((m || {}).status_planejamento || '') !== 'concluido') return '';
+    return saida(m);
+  }
+
+  /** Esta demanda é entrega deste período? */
+  function ehEntregaDe(m, de, ate) {
+    if (!viva(m)) return false;
+    return noPeriodo(entregaEm(m), de, ate);
+  }
+
   function quebraTipo(lista) {
     var q = { evolucao: 0, sustentacao: 0, sem: 0 };
     (lista || []).forEach(function (m) {
@@ -168,6 +210,8 @@
     vespera: vespera,
     quebraTipo: quebraTipo,
     noPeriodo: noPeriodo,
+    entregaEm: entregaEm,
+    ehEntregaDe: ehEntregaDe,
     fluxo: fluxo,
     fecha: fecha,
   };

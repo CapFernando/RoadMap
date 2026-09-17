@@ -1120,7 +1120,7 @@
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=437901d1fa"></script>
-  <script src="fila.js?v=b7036b6f13"></script>
+  <script src="fila.js?v=90c9b67421"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
@@ -4616,18 +4616,22 @@ function gerPontuadasSemData() {
 
 // Cards pontuados no Planning Poker cuja data de referência cai no mês/ano.
 function gerItensPontuados(ano, mes1) {
-  return (state.melhorias || []).filter(m => {
-    if (!(Number(m.poker_pontos) > 0)) return false;
-    if (m.oculto || m.mesclado_em) return false;
-    // Entregue, e nao apenas com data: a etapa e a confirmacao de que a data
-    // significa entrega. Sem isto, uma demanda reaberta com `entregue_em` antigo
-    // seguiria contando como entrega do mes.
-    if (!['validacao', 'concluido'].includes(m.status_planejamento || '')) return false;
-    const ref = gerDataRefPontos(m);
-    if (!ref) return false;
-    const d = new Date(ref + 'T00:00:00');
-    return !isNaN(d) && d.getFullYear() === ano && d.getMonth() + 1 === mes1;
-  });
+  /* DELEGA — a MESMA regra dos outros três cortes (`fila.js`).
+   *
+   * Esta era a quarta definição, e a que mais destoava dentro do PRÓPRIO deck
+   * Gerencial: ela contava `validacao` e ancorava em `entregue_em`, enquanto a
+   * página de frentes contava só a aprovada. Resultado, no deck de agosto que
+   * foi apresentado: "2174 pontos" numa página e "2243 pontos" na outra.
+   *
+   * A EXIGÊNCIA DE PONTUAÇÃO FICA: um corte de PONTOS não tem linha para quem
+   * não tem ponto, e uma entrega sem pontuação aqui viraria uma barra de zero
+   * com um nome ao lado. Quem cobra as não pontuadas é o `semPontuacao`. */
+  const iso = String(ano) + '-' + String(mes1).padStart(2, '0');
+  const ult = new Date(ano, mes1, 0).getDate();
+  const de = iso + '-01';
+  const ate = iso + '-' + String(ult).padStart(2, '0');
+  return (state.melhorias || []).filter(m =>
+    Number(m.poker_pontos) > 0 && FILA.ehEntregaDe(m, de, ate));
 }
 
 function gerInitFilters() {
@@ -5812,11 +5816,18 @@ function apresMesAno() {
 // Usar a data de inicio responderia outra pergunta e os dois numeros do deck
 // discordariam entre si.
 function apresConcluidasDoMes() {
+  /* DELEGA — a regra de "entrega do mês" mora em `fila.js`.
+   *
+   * Esta era uma das QUATRO definições que discordavam, e a diferença dela para
+   * a do slide "O MÊS" era de uma demanda: a concluída SEM `concluido_em`, que
+   * a fila faz sair no dia em que entrou e esta linha jogava fora. Era por isso
+   * que o deck dizia "ENTREGAS 170" numa página e "Das saídas: 171 entregues"
+   * na outra. */
   const { iso } = apresMesAno();
-  return (state.melhorias || []).filter(m =>
-    !m.mesclado_em && !m.oculto &&
-    (m.status_planejamento || '') === 'concluido' &&
-    String(m.concluido_em || '').slice(0, 7) === iso);
+  const ult = new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)), 0).getDate();
+  const de = iso + '-01';
+  const ate = iso + '-' + String(ult).padStart(2, '0');
+  return (state.melhorias || []).filter(m => FILA.ehEntregaDe(m, de, ate));
 }
 
 function apresAbrir() {
@@ -6094,9 +6105,8 @@ async function apresGerar(opts) {
       .map(p => {
         const itens = (state.melhorias || []).filter(m =>
           !m.oculto && !m.mesclado_em && String(m.projeto_id || '') === String(p.id));
-        const feitas = itens.filter(m =>
-          String(m.concluido_em || '').slice(0, 7) === iso &&
-          (m.status_planejamento || '') === 'concluido').length;
+        // DELEGA — a mesma regra de entrega do resto do deck (`fila.js`).
+        const feitas = itens.filter(m => FILA.ehEntregaDe(m, iso + '-01', fimMes)).length;
         // Em andamento NO PERIODO: comecou ate o corte e nao tinha saido ate la.
         const andando = itens.filter(m => {
           const ini = String(m.inicio || '').slice(0, 10);
@@ -6104,11 +6114,12 @@ async function apresGerar(opts) {
           return ini && ini <= corte && (!fim || fim > corte) &&
                  !['negada'].includes(m.status_planejamento || '');
         }).length;
-        // Somente as CONCLUIDAS NO MES entram nas horas: e o mesmo recorte das
-        // frentes, e o unico em que planejado e realizado existem os dois.
-        const doMes = itens.filter(m =>
-          String(m.concluido_em || '').slice(0, 7) === iso &&
-          (m.status_planejamento || '') === 'concluido');
+        /* Somente as ENTREGAS DO MES entram nas horas: e o mesmo recorte das
+           frentes, e o unico em que planejado e realizado existem os dois.
+           O comentario ja dizia "o mesmo recorte das frentes" e a linha abaixo
+           fazia o filtro a mao — entao quando as frentes mudaram de regra, esta
+           ficou para tras. Agora ela nao tem como divergir. */
+        const doMes = itens.filter(m => FILA.ehEntregaDe(m, iso + '-01', fimMes));
         let hPlan = 0, hReal = 0;
         doMes.forEach(m => {
           hPlan += prjPlan.get(m.id) || 0;
@@ -6184,9 +6195,11 @@ async function apresGerar(opts) {
     const isoAnt = pmAno + '-' + String(pmMes).padStart(2, '0');
     const fimAnt = isoAnt + '-' + String(new Date(pmAno, pmMes, 0).getDate()).padStart(2, '0');
 
+    /* O MES ANTERIOR PELA MESMA REGUA. Se ele fosse medido por outro criterio,
+       a variacao "vs julho" compararia dois meses com reguas diferentes — e o
+       erro sairia como um delta plausivel, que ninguem confere. */
     const concAnt = (state.melhorias || []).filter(m =>
-      !m.mesclado_em && !m.oculto && (m.status_planejamento || '') === 'concluido' &&
-      String(m.concluido_em || '').slice(0, 7) === isoAnt);
+      FILA.ehEntregaDe(m, isoAnt + '-01', fimAnt));
     const clAnt = new Map(concAnt.map(m => [m.id, prazoClassifica(m)]));
     const noPrazoAnt = concAnt.filter(m => (clAnt.get(m.id) || {}).tipo === 'no_prazo').length;
     const atrasAntMes = concAnt.filter(m => (clAnt.get(m.id) || {}).tipo === 'atraso' &&
@@ -8215,13 +8228,19 @@ function relPptFaixas(j) {
 function relPptAssunto(raiz, j) {
   const CAPI = window.CAPACIDADE;
   const vivas = relVivasDe(raiz);
-  const ENT = CAPI.ETAPAS_ENTREGUE;
-  const etapa = m => String(m.status_planejamento || '');
 
-  const saiuEntre = (m, de, ate) => {
-    const d = CAPI.diaDaEntrega(m);
-    return !!d && d >= de && d <= ate && ENT.includes(etapa(m));
-  };
+  /* DELEGA — a MESMA regra do deck Gerencial (`fila.js`).
+   *
+   * Aqui estava a maior das quatro divergências: `CAPI.diaDaEntrega` ancora em
+   * `entregue_em` e `ENT` inclui `validacao`, então este deck contava a demanda
+   * que o dev entregou e o PM/PO ainda não aprovou, e ancorava a entrega no dia
+   * em que ela saiu da mão do dev. O Gerencial contava só a aprovada, pela data
+   * da aprovação. Dois decks da mesma reunião, dois números para o mesmo mês.
+   *
+   * A escolha é do Fernando: entrega é a APROVADA. `CAPI.diaDaEntrega` continua
+   * existindo e continua certa para o que ela responde — quando a demanda saiu
+   * da mão de quem fez, que é o que o Gantt e o Painel Dev precisam saber. */
+  const saiuEntre = (m, de, ate) => FILA.ehEntregaDe(m, de, ate);
   const nasceuEntre = (m, de, ate) => {
     const c = String(m.criado_em || '').slice(0, 10);
     return !!c && c >= de && c <= ate;
@@ -8238,7 +8257,13 @@ function relPptAssunto(raiz, j) {
   const entraram = vivas.filter(m => nasceuEntre(m, j.de, j.ate)).length;
   const entraramAnt = vivas.filter(m => nasceuEntre(m, j.deAnt, j.ateAnt)).length;
 
-  const emAberto = vivas.filter(m => !ENT.includes(etapa(m)));
+  /* "EM ABERTO" PELA MESMA REGUA DA ENTREGA, e nao por uma lista de etapas.
+     Com entrega = APROVADA, uma demanda em validacao deixou de ser entrega. Se
+     "em aberto" continuasse excluindo `validacao`, ela nao seria nem uma coisa
+     nem outra — sumiria das duas contagens, e entrega + aberto deixaria de dar
+     o total. Em aberto e "ainda nao saiu da fila", que e o que o slide O MES ja
+     chama de `backlogFim`. */
+  const emAberto = vivas.filter(m => !FILA.saida(m));
   const abertoComPrazo = emAberto.filter(m => CAPI.diaDoPlano(m)).length;
 
   // O plano da janela: pontos prometidos cujo PRAZO cai dentro dela.

@@ -2170,8 +2170,21 @@ ok(/\.form-group input\[type="checkbox"\][\s\S]{0,220}?padding:0/.test(ADMIN),
 // A lista de destaques ja era so do mes; sem a data na linha, isso nao se prova.
 ok(/class="ap-dest"[\s\S]{0,1500}?encerrada ' \+ esc\(formatDate\(m\.concluido_em\)\)/.test(ADMIN),
    'cada linha da lista de destaques mostra a data de conclusao');
-ok(/function apresConcluidasDoMes[\s\S]{0,400}?String\(m\.concluido_em \|\| ''\)\.slice\(0, 7\) === iso/.test(ADMIN),
-   'a lista de destaques e recortada pelo mes de conclusao');
+/* A COBRANCA MUDOU DE LUGAR JUNTO COM A REGRA. Ela regexava o corpo do
+   `apresConcluidasDoMes`, que agora delega para `fila.js` — continuar
+   procurando ali seria cobrar de quem nao decide mais nada. O que importa
+   continua sendo o mesmo: a lista de destaques so mostra o que SAIU no mes. */
+ok(/FILA\.ehEntregaDe\(m, de, ate\)/.test(corpo(ADMIN, 'function apresConcluidasDoMes()') || ''),
+   'a lista de destaques e recortada pela regra de entrega do mes');
+{
+  const noMes = { status_planejamento: 'concluido', criado_em: '2026-08-01',
+                  concluido_em: '2026-08-20' };
+  const foraDoMes = { status_planejamento: 'concluido', criado_em: '2026-08-01',
+                      concluido_em: '2026-09-02' };
+  ok(FILA.ehEntregaDe(noMes, '2026-08-01', '2026-08-31') &&
+     !FILA.ehEntregaDe(foraDoMes, '2026-08-01', '2026-08-31'),
+     'e a regra de fato recorta pelo mes da conclusao');
+}
 
 // Prometer no slide algo que ja foi entregue queima o slide inteiro. O corte e do
 // momento da geracao, e a base e relida para que "agora" seja agora.
@@ -3736,8 +3749,14 @@ ok(/'sem tarefa no mês'/.test(APRES),
    'e o projeto sem movimento e dito com todas as letras');
 ok(/const PRJ_ABERTO = \['planejado', 'em_andamento', 'pausado', ''\];/.test(ADMIN),
    'so entram os projetos em aberto');
-ok(/String\(m\.concluido_em \|\| ''\)\.slice\(0, 7\) === iso &&/.test(ADMIN),
-   'as tarefas concluidas do projeto sao as do periodo');
+/* MUDOU DE LUGAR COM A REGRA. Este regex procurava o filtro escrito a mao no
+   bloco dos projetos — o mesmo que dizia no comentario "e o mesmo recorte das
+   frentes" e, quando as frentes mudaram de regra, ficou para tras. Agora ele
+   delega, e a cobranca e sobre a delegacao. */
+ok(/const feitas = itens\.filter\(m => FILA\.ehEntregaDe\(m, iso \+ '-01', fimMes\)\)/.test(ADMIN),
+   'as tarefas concluidas do projeto sao as do periodo, pela regra de entrega');
+ok(/const doMes = itens\.filter\(m => FILA\.ehEntregaDe\(m, iso \+ '-01', fimMes\)\)/.test(ADMIN),
+   'e as horas do projeto usam o MESMO recorte, como o comentario sempre prometeu');
 // O slide de demanda x capacidade repetia o slide do mes depois que ele passou a
 // contar backlog, entradas e saidas.
 ok(!/function slideFluxo/.test(APRES),
@@ -5219,9 +5238,21 @@ sec('A grade de topicos do deck');
      'o prazo e o inicio nao servem mais de reserva — nenhum dos dois e entrega');
 
   const it = corpo(ADMIN, 'function gerItensPontuados(');
-  ok(!!it && /\['validacao', 'concluido'\]\.includes/.test(it),
-     'e o corte do mes exige que a demanda tenha saido, nao so que tenha data');
-  ok(/m\.oculto \|\| m\.mesclado_em/.test(it),
+  /* TAMBEM MUDOU DE LUGAR. O corte listava `['validacao','concluido']` na mao;
+     agora delega, e a etapa que conta e a decisao do Fernando — so a APROVADA.
+     E as duas garantias que esta invariante existia para dar continuam
+     cobradas, executando a regra em vez de procurar a lista no texto. */
+  ok(!!it && /FILA\.ehEntregaDe\(m, de, ate\)/.test(it),
+     'e o corte do mes usa a MESMA regra de entrega dos outros tres');
+  ok(!FILA.ehEntregaDe({ status_planejamento: 'em_andamento', criado_em: '2026-08-01' },
+                       '2026-08-01', '2026-08-31'),
+     'o corte do mes exige que a demanda tenha saido, nao so que tenha data');
+  ok(!FILA.ehEntregaDe({ status_planejamento: 'concluido', criado_em: '2026-08-01',
+                         concluido_em: '2026-08-20', oculto: true },
+                       '2026-08-01', '2026-08-31') &&
+     !FILA.ehEntregaDe({ status_planejamento: 'concluido', criado_em: '2026-08-01',
+                         concluido_em: '2026-08-20', mesclado_em: 'x' },
+                       '2026-08-01', '2026-08-31'),
      'demanda aposentada ou mesclada fica fora do corte');
 
   /* E A OUTRA PERGUNTA GANHOU A PROPRIA FUNCAO. "Pontuada e nunca agendada" precisa
@@ -11735,6 +11766,123 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        dois estao certos, medindo coisas diferentes. */
     ok(/f\.congelado \? 'congelado em '/.test(APRES),
        'o slide do mes diz "congelado em" quando a apuracao veio congelada');
+  }
+
+  /* === UMA DEFINICAO DE "ENTREGA DO MES", E NAO QUATRO ==================
+
+     "Inclusive os dados de um nao estao batendo com o outro."
+
+     Estavam mesmo. Havia QUATRO definicoes em producao, e as quatro
+     alimentavam o MESMO deck. Medido sobre os mesmos seis casos:
+
+                                              entregas   pontos
+       Gerencial (kpi, frentes, prazo)            2         8
+       Gerencial, slide "O MES"                   3        16
+       Relatorios                                 4        24
+       cortes de pontos (dev/semana/tema)         3        24
+
+     E aparecia no deck apresentado: a pagina de FRENTES dizia "170 entregas ·
+     2174 pontos" e a de PONTOS ENTREGUES dizia "2243 pontos" — 69 pontos de
+     diferenca, no mesmo arquivo.
+
+     A ESCOLHA E DO FERNANDO: entrega e a APROVADA pelo PM/PO. Etapa
+     `concluido`, ancorada em `concluido_em`, com os mesmos dois casos torcidos
+     que a fila ja tratava (conclusao anterior a entrada, e fechada sem data).
+
+     ESTE BLOCO EXECUTA as contagens recortadas do `admin.html`, e nao procura
+     as chamadas no texto: regex provaria que elas chamam a regra; executar
+     prova que devolvem o mesmo conjunto. */
+  sec('Entrega do mes: uma definicao so');
+  {
+    const BASE_E = [
+      { id: 'A', poker_pontos: 8, status_planejamento: 'concluido',
+        criado_em: '2026-08-01', concluido_em: '2026-08-20', entregue_em: '2026-08-18' },
+      { id: 'B', poker_pontos: 8, status_planejamento: 'validacao',
+        criado_em: '2026-08-02', entregue_em: '2026-08-28' },
+      { id: 'C', poker_pontos: 8, status_planejamento: 'concluido',
+        criado_em: '2026-08-03', entregue_em: '2026-08-29', concluido_em: '2026-09-02' },
+      { id: 'D', poker_pontos: 8, status_planejamento: 'concluido', criado_em: '2026-08-11' },
+      { id: 'E', poker_pontos: 0, status_planejamento: 'concluido',
+        criado_em: '2026-08-04', concluido_em: '2026-08-14' },
+      { id: 'F', poker_pontos: 8, status_planejamento: 'negada',
+        criado_em: '2026-08-06', negada_em: '2026-08-09' },
+    ];
+    const DE_E = '2026-08-01', ATE_E = '2026-08-31';
+    const idsE = (l) => l.map((m) => m.id).sort().join(',');
+    const ptsE = (l) => l.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+
+    const c1 = corpo(ADMIN, 'function apresConcluidasDoMes()');
+    ok(!!c1, 'a contagem do deck Gerencial foi achada para ser executada');
+    const def1 = c1
+      ? new Function('state', 'FILA', 'apresMesAno',
+          c1 + ' return apresConcluidasDoMes();')(
+          { melhorias: BASE_E }, FILA, () => ({ iso: '2026-08' }))
+      : [];
+
+    const fl = FILA.fluxo(BASE_E, DE_E, ATE_E, ATE_E);
+
+    /* O DECK DE RELATORIOS DELEGA, E A COBRANCA E EXATA.
+       A primeira versao recortava a expressao do `saiuEntre` com `([^;]+);` e
+       executava o recorte. A sabotagem que reescrevia a funcao como um BLOCO
+       (`=> { const d = ...; return ...; }`) passou: o `[^;]+` parava no
+       primeiro `;` e o recorte virava outra coisa. Aqui a linha e cobrada
+       inteira — e o COMPORTAMENTO continua provado executando `FILA`. */
+    const rel = corpo(ADMIN, 'function relPptAssunto(');
+    ok(!!rel && /const saiuEntre = \(m, de, ate\) => FILA\.ehEntregaDe\(m, de, ate\);/.test(rel),
+       'o deck de Relatorios delega a entrega para a regra, sem ancora propria');
+    const def3 = BASE_E.filter((m) => FILA.ehEntregaDe(m, DE_E, ATE_E));
+
+    const c4 = corpo(ADMIN, 'function gerItensPontuados(');
+    ok(!!c4, 'o corte de pontos foi achado');
+    const def4 = c4
+      ? new Function('state', 'FILA', c4 + ' return gerItensPontuados(2026, 8);')(
+          { melhorias: BASE_E }, FILA)
+      : [];
+
+    ok(idsE(def1) === idsE(def3),
+       'o deck Gerencial e o de Relatorios contam as MESMAS entregas',
+       idsE(def1) + '  contra  ' + idsE(def3));
+    ok(def1.length === fl.saiuEntregue,
+       'e o slide "O MES" diz o mesmo numero que a pagina de frentes',
+       def1.length + ' contra ' + fl.saiuEntregue);
+    ok(idsE(def4) === idsE(def1.filter((m) => Number(m.poker_pontos) > 0)),
+       'e o corte de pontos e o mesmo conjunto, menos quem nao tem ponto',
+       idsE(def4));
+    ok(ptsE(def1) === ptsE(def3) && ptsE(def1) === ptsE(def4),
+       'os pontos batem entre as tres',
+       ptsE(def1) + ' / ' + ptsE(def3) + ' / ' + ptsE(def4));
+
+    /* E OS CASOS QUE DEFINEM A ESCOLHA. */
+    ok(!def1.some((m) => m.id === 'B'),
+       'demanda em validacao NAO conta — entra no mes em que for aprovada');
+    /* E O CASO QUE DISTINGUE A GUARDA DA ETAPA: validacao COM `concluido_em`
+       preenchido. Sem a guarda, `saida()` devolveria a data e ela contaria —
+       a sabotagem que trocava a etapa por `['validacao','concluido']` passava
+       pela suite inteira usando so o caso B, porque ali a `saida` ja era vazia
+       por outro motivo. */
+    ok(FILA.entregaEm({ status_planejamento: 'validacao', criado_em: '2026-08-02',
+                        concluido_em: '2026-08-20' }) === '',
+       'e nem mesmo em validacao COM data de conclusao preenchida');
+    ok(!def1.some((m) => m.id === 'C'),
+       'e a entregue em agosto mas aprovada em setembro conta em SETEMBRO');
+    ok(def1.some((m) => m.id === 'D'),
+       'a concluida sem data de conclusao conta, pela mesma regra da fila — era ' +
+       'ela que fazia "ENTREGAS 170" e "Das saidas: 171 entregues" discordarem');
+    ok(!def1.some((m) => m.id === 'F'), 'e a recusada nao e entrega');
+    ok(FILA.fecha(fl), 'e a conta da fila continua fechando',
+       fl.backlogInicio + ' + ' + fl.recebidas + ' - ' + fl.saidas + ' = ' + fl.backlogFim);
+
+    /* E NENHUMA PONTA VOLTA A TER REGRA PROPRIA. */
+    ok(!/String\(m\.concluido_em \|\| ''\)\.slice\(0, 7\) === iso/.test(ADMIN),
+       'o deck Gerencial nao filtra mais por `concluido_em` na mao');
+    ok(!/ENT\.includes\(etapa\(m\)\)/.test(ADMIN),
+       'e o de Relatorios nao conta mais `validacao` como entrega');
+    /* `CAPACIDADE.diaDaEntrega` CONTINUA EXISTINDO, e continua certa para o que
+       ela responde: quando a demanda saiu da mao de quem fez. E o que o Gantt e
+       o Painel Dev precisam saber, e e outra pergunta. Apaga-la seria trocar uma
+       divergencia por uma perda. */
+    ok(/function diaDaEntrega\(m\)/.test(CAPJS),
+       'e `diaDaEntrega` segue de pe para quem pergunta quando saiu da mao do dev');
   }
 
   let erroPz = null;
