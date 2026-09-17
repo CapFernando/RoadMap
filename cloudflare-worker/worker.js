@@ -3409,9 +3409,28 @@ export default {
       let msg = '';
 
       if (body.action === 'demanda-atualizar') {
-        // Lista fechada, de proposito. Etapa, prazo, dev e pontos ficam FORA: sao
-        // decisao de planejamento, e abrir isso pela API tiraria do PM/PO o
-        // controle do funil sem ninguem perceber.
+        /* A ETAPA COMO ELA CHEGOU, guardada antes de qualquer campo ser
+           aplicado. A trava das datas se pergunta sobre o estado ANTERIOR: uma
+           chamada que move para `em_andamento` e registra o inicio no mesmo
+           corpo tem de passar, e olhando o estado final ela travaria. */
+        const etapaAntes = String(m.status_planejamento || '');
+        /* Lista fechada, de proposito. DEV e PONTOS ficam FORA: sao decisao de
+           planejamento, e abrir isso pela API tiraria do PM/PO o controle do
+           funil sem ninguem perceber. A ETAPA entra so ate `em_andamento`.
+
+           O INICIO E A ENTREGA PASSARAM A ENTRAR, por pedido do Fernando
+           ("abra a api para lancamento de data de entrada e fim da task"). O
+           motivo de estarem fora era o mesmo do dev e dos pontos, e ele vale
+           menos para estas duas: a data de inicio e de quem COMECOU, e a de
+           entrega e o combinado que quem executa e o primeiro a saber que
+           mudou. O que o motivo antigo protegia continua protegido — as duas
+           entram no historico (`HIST_CAMPOS`), entao "quem mexeu no prazo, e
+           quando" tem resposta.
+
+           E AS DUAS MEXEM NO DECK. O planejado em horas sai do rateio de
+           `inicio` -> `entrega`, entao editar estas datas muda o slide de
+           frentes de um mes ja fechado. E por isso que o congelamento existe:
+           mes congelado nao se mexe mais. */
         /* O RESUMO tem teto de 300, e o texto completo tem 4000. Nao e capricho:
            300 e o que cabe em cinco linhas do campo (medido), e e este texto que
            vai para o slide. Quem manda mais que isso perde o excedente aqui em
@@ -3456,6 +3475,69 @@ export default {
           }
           m.status_planejamento = e; mudou.push('etapa');
         }
+        /* ═══ AS DATAS DA TASK ══════════════════════════════════════════
+         *
+         * `inicio`  o dia em que o trabalho comecou
+         * `entrega` o prazo combinado
+         *
+         * Formato `AAAA-MM-DD`, e string vazia LIMPA o campo. Sem o caminho de
+         * limpar, uma data posta por engano so sairia pela tela — e quem
+         * automatiza nao tem tela. E o mesmo raciocinio do `parent_id`.
+         *
+         * NAO E `concluido_em`. Concluir e do PM/PO, e a regra de "entrega do
+         * mes" se ancora justamente nessa data: deixar a API escreve-la seria
+         * deixar um script mover uma entrega de mes — inclusive de um mes ja
+         * apresentado. Quem entrega usa `demanda-entregar`. */
+        const eDataOuVazio = (v) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(String(v));
+        for (const campo of ['inicio', 'entrega']) {
+          if (typeof body[campo] !== 'string') continue;
+          const v = String(body[campo]).trim();
+          if (!eDataOuVazio(v)) {
+            return json({ error: campo,
+                          detail: 'Data invalida em "' + campo + '". Use AAAA-MM-DD, ' +
+                                  'ou "" para limpar.' }, 400, headers);
+          }
+          if (String(m[campo] || '') === v) continue;
+          /* ═══ A MESMA TRAVA QUE AS TELAS OBEDECEM ══════════════════════
+           *
+           * A partir de `planejado` a data virou COMPROMISSO: esta no gantt, na
+           * contagem de atrasadas e na conversa com a area. O `dev-publish` ja
+           * reverte silenciosamente quem tenta move-la (`travaDatasComprometidas`),
+           * e o comentario daquela regra registra que "a API ja recusava prazo".
+           *
+           * Abrir o campo sem a trava reabriria exatamente o furo que ela fechou,
+           * so que por outra porta. Entao a API aceita o campo e aplica a MESMA
+           * regra — e RECUSA em vez de reverter em silencio, porque quem chama
+           * por API precisa saber que nao pegou.
+           *
+           * ETAPA DE ANTES, e nao a de agora: `etapa` e aplicada algumas linhas
+           * acima, entao uma chamada que mande `etapa: "em_andamento"` junto com
+           * a data ja chegaria aqui travada — e o caso de registrar "comecei
+           * hoje" ao sair do planning e justamente o mais comum. */
+          if (ETAPAS_DATA_TRAVADA.includes(etapaAntes)) {
+            return json({ error: 'data_comprometida',
+                          detail: 'A partir de "planejado" a data e compromisso e nao muda pela ' +
+                                  'API: ela esta no gantt, na contagem de atrasadas e na conversa ' +
+                                  'com a area. Esta demanda esta em "' + etapaAntes + '". ' +
+                                  'Quem move e o PM/PO, na tela do Planejamento.',
+                          campo: campo, etapa: etapaAntes,
+                          editavel_em: ETAPAS_DEV.filter(e => !ETAPAS_DATA_TRAVADA.includes(e)) },
+                        409, headers);
+          }
+          m[campo] = v; mudou.push(campo);
+        }
+        /* A ENTREGA NAO PODE SER ANTES DO INICIO, e a conferencia e sobre o
+           estado FINAL — nao sobre o que veio no corpo. Mandar so `entrega`
+           numa demanda que ja tem `inicio` e o caso comum, e checar so os
+           campos enviados deixaria passar exatamente ele. Prazo anterior ao
+           inicio faz o rateio de horas do deck devolver zero para a demanda
+           inteira, sem erro nenhum aparecer. */
+        if (m.inicio && m.entrega && String(m.entrega) < String(m.inicio)) {
+          return json({ error: 'entrega',
+                        detail: 'A entrega (' + m.entrega + ') ficaria antes do inicio (' +
+                                m.inicio + ').' }, 400, headers);
+        }
+
         if (typeof body.projeto_id === 'string') {
           const pid = body.projeto_id.trim();
           if (pid) {
@@ -3546,7 +3628,7 @@ export default {
           return json({ error: 'nada_a_mudar',
                         detail: 'Informe ao menos um campo: resumo_entrega, implementacao, descricao, observacao, ' +
                                 'link_issue, link_pr, link_milestone, horas_realizadas, ' +
-                                'etapa, projeto_id ou parent_id.' }, 400, headers);
+                                'inicio, entrega, etapa, projeto_id ou parent_id.' }, 400, headers);
         }
         msg = 'chore: ' + (m.codigo || m.id) + ' atualizada por ' + (eu || 'api') +
               ' (' + mudou.join(', ') + ')';

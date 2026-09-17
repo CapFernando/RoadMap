@@ -11885,6 +11885,119 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e `diaDaEntrega` segue de pe para quem pergunta quando saiu da mao do dev');
   }
 
+  /* === AS DATAS DA TASK NA API ==========================================
+
+     "Abra a api para lancamento de data de entrada e fim da task."
+
+     Elas estavam FORA da lista de campos aceitos, e nao por descuido: o
+     comentario de `travaDatasComprometidas` registra que "a API ja recusava
+     prazo", e a trava existe porque a partir de `planejado` a data virou
+     COMPROMISSO — esta no gantt, na contagem de atrasadas e na conversa com a
+     area. Abrir o campo sem a trava reabriria o mesmo furo por outra porta.
+
+     ENTAO A API ACEITA O CAMPO E APLICA A MESMA REGRA, e RECUSA em vez de
+     reverter em silencio: quem chama por API precisa saber que nao pegou.
+
+     ESTE BLOCO EXECUTA o trecho recortado do Worker. */
+  sec('As datas da task na API');
+  {
+    const iniD = W.indexOf('        /* \u2550\u2550\u2550 AS DATAS DA TASK');
+    const fimD = W.indexOf("        if (typeof body.projeto_id === 'string') {");
+    ok(iniD > 0 && fimD > iniD, 'o bloco das datas foi achado para ser executado');
+    if (iniD > 0 && fimD > iniD) {
+      const blocoD = W.slice(iniD, fimD);
+      const TRAVADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+      const DEV_ET = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento'];
+      const rodaD = (m, body, etapaAntes) => {
+        const mudou = [];
+        let resp = null;
+        const jsonD = (o, st) => { resp = { status: st || 200, corpo: o }; return resp; };
+        new Function('m', 'body', 'mudou', 'json', 'headers', 'etapaAntes',
+                     'ETAPAS_DATA_TRAVADA', 'ETAPAS_DEV',
+          '(() => {' + blocoD + ' })();')(
+          m, body, mudou, jsonD, {}, etapaAntes, TRAVADA, DEV_ET);
+        return { m, mudou, resp };
+      };
+
+      /* O CAMINHO COMUM: em planning, as duas datas entram. */
+      {
+        const m = { status_planejamento: 'planning' };
+        const r = rodaD(m, { inicio: '2026-09-20', entrega: '2026-09-30' }, 'planning');
+        ok(!r.resp && m.inicio === '2026-09-20' && m.entrega === '2026-09-30',
+           'em planning, inicio e entrega entram', m.inicio + ' -> ' + m.entrega);
+        ok(r.mudou.join(',') === 'inicio,entrega',
+           'e as duas entram no historico', r.mudou.join(','));
+      }
+
+      /* "COMECEI HOJE": a mesma chamada move para em_andamento e registra o
+         inicio. A trava olha a etapa ANTERIOR — olhando a final, este caso (o
+         mais comum de todos) travaria. */
+      {
+        const m = { status_planejamento: 'em_andamento' };
+        const r = rodaD(m, { inicio: '2026-09-17' }, 'planning');
+        ok(!r.resp && m.inicio === '2026-09-17',
+           'sair do planning e registrar o inicio na mesma chamada passa');
+      }
+
+      /* A TRAVA. */
+      {
+        const m = { status_planejamento: 'em_andamento', entrega: '2026-09-30' };
+        const r = rodaD(m, { entrega: '2026-10-15' }, 'em_andamento');
+        ok(r.resp && r.resp.status === 409 && r.resp.corpo.error === 'data_comprometida',
+           'mover o prazo de uma demanda ja comprometida e RECUSADO');
+        ok(m.entrega === '2026-09-30', 'e a data nao e tocada', m.entrega);
+        ok((r.resp.corpo.editavel_em || []).join(',') === 'backlog,levantar_req,planning',
+           'e a resposta diz onde ainda da para editar',
+           (r.resp.corpo.editavel_em || []).join(','));
+      }
+
+      /* REENVIAR A MESMA DATA NAO E MUDANCA. Sem isto, um script idempotente
+         que manda o objeto inteiro toda vez levaria 409 numa demanda concluida
+         so por repetir o que ja esta la. */
+      {
+        const m = { status_planejamento: 'concluido', entrega: '2026-09-30' };
+        const r = rodaD(m, { entrega: '2026-09-30' }, 'concluido');
+        ok(!r.resp && r.mudou.length === 0,
+           'reenviar a data que ja esta la nao e mudanca, e nao e recusado');
+      }
+
+      /* FORMATO, LIMPEZA E ORDEM. */
+      {
+        const m = { status_planejamento: 'planning' };
+        const r = rodaD(m, { inicio: '20/09/2026' }, 'planning');
+        ok(r.resp && r.resp.status === 400 && r.resp.corpo.error === 'inicio',
+           'data em formato brasileiro e recusada, dizendo o campo');
+      }
+      {
+        const m = { status_planejamento: 'backlog', entrega: '2026-09-30' };
+        const r = rodaD(m, { entrega: '' }, 'backlog');
+        ok(!r.resp && m.entrega === '',
+           'string vazia limpa o campo — sem isso, data posta por engano so sairia pela tela');
+      }
+      {
+        /* A CONFERENCIA E SOBRE O ESTADO FINAL. Mandar so `entrega` numa
+           demanda que ja tem `inicio` e o caso comum, e checar so os campos
+           enviados deixaria passar exatamente ele. */
+        const m = { status_planejamento: 'planning', inicio: '2026-09-20' };
+        const r = rodaD(m, { entrega: '2026-09-10' }, 'planning');
+        ok(r.resp && r.resp.corpo.error === 'entrega',
+           'entrega antes do inicio e recusada, mesmo mandando so a entrega');
+      }
+    }
+
+    /* `concluido_em` NAO ENTRA, e e o ponto em que esta abertura para. Concluir
+       e do PM/PO, e a regra de "entrega do mes" se ancora nessa data: deixar a
+       API escreve-la seria deixar um script mover uma entrega de mes — inclusive
+       de um mes ja apresentado. */
+    const rotaAt2 = W.slice(W.indexOf("body.action === 'demanda-atualizar'"),
+                            W.indexOf("body.action === 'demanda-entregar'",
+                                      W.indexOf("body.action === 'demanda-atualizar'")));
+    ok(!/body\.concluido_em/.test(rotaAt2),
+       'a API nao escreve `concluido_em` — concluir e do PM/PO');
+    ok(/'inicio, entrega, etapa, projeto_id ou parent_id\.'/.test(W),
+       'e a mensagem de "nada a mudar" lista os campos novos');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
