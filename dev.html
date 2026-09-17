@@ -1419,12 +1419,14 @@ function epFuncoesHTML() {
              'repositório, senão um 712 de axcaixa gravaria link de axcred. ' +
              '<code>link_pr</code> aceita vários separados por espaço. ' +
              'Datas: <code>inicio</code> e <code>entrega</code> em <code>AAAA-MM-DD</code>, ' +
-             'ou <code>""</code> para limpar. <b>A partir de "planejado" a data é ' +
-             'compromisso e não muda pela API</b> — ela está no gantt e na contagem de ' +
-             'atrasadas; quem move é o PM/PO. Editável em <code>backlog</code>, ' +
-             '<code>levantar_req</code> e <code>planning</code>, e na mesma chamada que ' +
-             'sai do planning (a trava olha a etapa anterior). ' +
-             '<code>concluido_em</code> não entra: concluir é do PM/PO.',
+             'ou <code>""</code> para limpar. <b>Campo vazio você preenche em qualquer ' +
+             'etapa</b> — não há compromisso a desfazer. O que não muda pela API é a data ' +
+             '<b>já combinada</b> a partir de <code>planejado</code>: ela está no gantt e na ' +
+             'contagem de atrasadas, e quem move é o PM/PO (a recusa vem como ' +
+             '<code>409 data_comprometida</code>, dizendo qual valor está lá). Trocar ou ' +
+             'limpar continua livre em <code>backlog</code>, <code>levantar_req</code> e ' +
+             '<code>planning</code>, e na mesma chamada que sai do planning — a trava olha ' +
+             'a etapa anterior. <code>concluido_em</code> não entra: concluir é do PM/PO.',
       corpo: '{"action":"demanda-atualizar","token":"TOKEN","codigo":"' + cod +
         '","link_repo":"audaxcapitalsa/AXCRED-DJANGO","link_pr":"712","link_issue":"683","horas_realizadas":6}',
     },

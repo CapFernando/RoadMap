@@ -3497,7 +3497,8 @@ export default {
                           detail: 'Data invalida em "' + campo + '". Use AAAA-MM-DD, ' +
                                   'ou "" para limpar.' }, 400, headers);
           }
-          if (String(m[campo] || '') === v) continue;
+          const antes = String(m[campo] || '');
+          if (antes === v) continue;
           /* ═══ A MESMA TRAVA QUE AS TELAS OBEDECEM ══════════════════════
            *
            * A partir de `planejado` a data virou COMPROMISSO: esta no gantt, na
@@ -3514,13 +3515,28 @@ export default {
            * acima, entao uma chamada que mande `etapa: "em_andamento"` junto com
            * a data ja chegaria aqui travada — e o caso de registrar "comecei
            * hoje" ao sair do planning e justamente o mais comum. */
-          if (ETAPAS_DATA_TRAVADA.includes(etapaAntes)) {
+          /* INCLUIR NAO E EDITAR, e e essa a linha que separa as duas.
+           *
+           * Decisao do Fernando: "caso a demanda nao tenha data, devera permitir
+           * inclusao. Apenas edicao que nao podera."
+           *
+           * Ele esta certo sobre o que a trava protege. Ela existe para ninguem
+           * MOVER um compromisso que ja esta no gantt, na contagem de atrasadas
+           * e na conversa com a area. Campo VAZIO nao e compromisso nenhum: nao
+           * ha o que desfazer, e preencher e completar o registro — que e
+           * exatamente o que quem automatiza precisa fazer.
+           *
+           * LIMPAR CONTA COMO EDICAO. `entrega: ""` numa demanda que tem prazo
+           * apaga o compromisso, e apagar e a forma mais completa de move-lo. */
+          if (antes && ETAPAS_DATA_TRAVADA.includes(etapaAntes)) {
             return json({ error: 'data_comprometida',
-                          detail: 'A partir de "planejado" a data e compromisso e nao muda pela ' +
-                                  'API: ela esta no gantt, na contagem de atrasadas e na conversa ' +
-                                  'com a area. Esta demanda esta em "' + etapaAntes + '". ' +
-                                  'Quem move e o PM/PO, na tela do Planejamento.',
-                          campo: campo, etapa: etapaAntes,
+                          detail: 'A partir de "planejado" a data ja combinada nao MUDA pela API: ' +
+                                  'ela esta no gantt, na contagem de atrasadas e na conversa com a ' +
+                                  'area. Esta demanda esta em "' + etapaAntes + '" e o campo "' +
+                                  campo + '" ja vale ' + antes + '. Quem move e o PM/PO, na tela ' +
+                                  'do Planejamento. (Campo VAZIO pode ser preenchido por aqui em ' +
+                                  'qualquer etapa — o que nao pode e trocar o que ja foi combinado.)',
+                          campo: campo, etapa: etapaAntes, valor_atual: antes,
                           editavel_em: ETAPAS_DEV.filter(e => !ETAPAS_DATA_TRAVADA.includes(e)) },
                         409, headers);
           }

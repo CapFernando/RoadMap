@@ -11939,6 +11939,34 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            'sair do planning e registrar o inicio na mesma chamada passa');
       }
 
+      /* INCLUIR NAO E EDITAR, e e essa a linha que separa as duas.
+         Decisao do Fernando: "caso a demanda nao tenha data, devera permitir
+         inclusao. Apenas edicao que nao podera." Campo VAZIO nao e compromisso
+         nenhum — nao ha o que desfazer, e preencher e completar o registro. */
+      for (const et of ['planejado', 'em_andamento', 'validacao', 'concluido']) {
+        const m = { status_planejamento: et };
+        const r = rodaD(m, { inicio: '2026-09-17' }, et);
+        ok(!r.resp && m.inicio === '2026-09-17',
+           'campo VAZIO pode ser preenchido em "' + et + '"',
+           r.resp ? JSON.stringify(r.resp.corpo.error) : m.inicio);
+      }
+      /* E O CASO QUE ELE PEDIU, literal: demanda em andamento sem prazo. */
+      {
+        const m = { status_planejamento: 'em_andamento', inicio: '2026-09-01' };
+        const r = rodaD(m, { entrega: '2026-09-30' }, 'em_andamento');
+        ok(!r.resp && m.entrega === '2026-09-30',
+           'demanda em andamento SEM prazo ganha o prazo pela API');
+      }
+      /* LIMPAR CONTA COMO EDICAO: apagar e a forma mais completa de mover um
+         compromisso, e liberar isso seria deixar a trava pela porta dos fundos. */
+      {
+        const m = { status_planejamento: 'em_andamento', entrega: '2026-09-30' };
+        const r = rodaD(m, { entrega: '' }, 'em_andamento');
+        ok(r.resp && r.resp.corpo.error === 'data_comprometida',
+           'mas limpar uma data ja combinada e edicao, e e recusado');
+        ok(m.entrega === '2026-09-30', 'e ela fica onde estava', m.entrega);
+      }
+
       /* A TRAVA. */
       {
         const m = { status_planejamento: 'em_andamento', entrega: '2026-09-30' };
@@ -11949,6 +11977,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         ok((r.resp.corpo.editavel_em || []).join(',') === 'backlog,levantar_req,planning',
            'e a resposta diz onde ainda da para editar',
            (r.resp.corpo.editavel_em || []).join(','));
+        /* E QUAL E O VALOR QUE ESTA LA. Sem ele, quem levou o 409 nao sabe se a
+           data que quer ja e a que vale — e reenvia, ou pior, pede a alguem para
+           mudar uma data que ja esta certa. */
+        ok(r.resp.corpo.valor_atual === '2026-09-30',
+           'e qual data esta la hoje', r.resp.corpo.valor_atual);
       }
 
       /* REENVIAR A MESMA DATA NAO E MUDANCA. Sem isto, um script idempotente
