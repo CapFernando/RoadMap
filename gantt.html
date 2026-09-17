@@ -627,26 +627,48 @@
       font-size: 10.5px; color: var(--text3); margin-left: 6px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    /* VERMELHO, e não âmbar: âmbar nesta tela já significa "atenção, pode dar
-       errado" (pausada, prazo perto). Isto não é risco — é uma demanda que JÁ
-       está fora de vista, e a diferença entre as duas precisa ser vista de
-       longe. */
-    .g-limbo {
-      background:#3A0C0C; color:#F9A0A0; border-bottom:1px solid #7A1212;
-      padding:10px 24px; font-size:13px;
-    }
-    .g-limbo-topo { margin-bottom:6px; }
+    /* ERA UM PAINEL VERMELHO ABERTO, E ESTAVA ERRADO NAS DUAS PONTAS.
+       Em produção são 58 linhas: um bloco vermelho ocupando a tela inteira
+       acima do quadro, todo dia, dizendo a mesma coisa. Aviso desse tamanho
+       não é lido — é contornado, e aí ele deixa de avisar sobre qualquer
+       coisa. E vermelho aqui competia com o que é urgência de verdade.
+       Virou BANDEJA, como a de pausadas: uma linha discreta com a contagem,
+       a lista a um clique, e a escolha lembrada. */
+    .g-limbo { background:var(--bg3); border:1px solid var(--border);
+      border-left:3px solid var(--text3); border-radius:9px;
+      padding:9px 14px; margin:0 0 12px; }
+    .g-limbo-topo { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      font-size:12.5px; font-weight:600; color:var(--text2);
+      width:100%; background:none; border:none; padding:0; cursor:pointer;
+      font-family:inherit; text-align:left; }
+    .g-limbo-topo:hover { color:var(--text); }
+    .g-limbo-topo small { font-weight:400; color:var(--text3); }
+    .g-limbo-seta { display:inline-block; transition:transform .15s;
+      font-size:11px; opacity:.8; }
+    .g-limbo.aberta .g-limbo-seta { transform:rotate(90deg); }
+    .g-limbo.aberta .g-limbo-topo { margin-bottom:9px; }
+    .g-limbo:not(.aberta) .g-limbo-lista { display:none; }
     .g-limbo-lista { display:flex; flex-direction:column; gap:3px; }
+    .g-limbo-dica { color:var(--text3); font-size:11.5px; margin:0 0 6px; }
     .g-limbo-item {
       display:flex; align-items:baseline; gap:8px; cursor:pointer;
-      padding:3px 6px; border-radius:4px; background:#00000030;
+      padding:4px 8px; border-radius:5px; background:var(--bg2);
+      border:1px solid var(--border); font-size:12.5px; color:var(--text2);
     }
-    .g-limbo-item:hover { background:#00000055; }
-    .g-limbo-cod { font-weight:700; font-size:12px; flex-shrink:0; }
-    .g-limbo-tit { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
-                   white-space:nowrap; color:#FFD9D9; }
-    .g-limbo-por { font-size:11.5px; opacity:.85; }
-    .g-limbo-quando { font-size:11.5px; opacity:.7; flex-shrink:0; }
+    .g-limbo-item:hover { border-color:var(--blue); }
+    .g-limbo-cod { font-family:ui-monospace,Consolas,monospace; font-weight:700;
+                   font-size:11px; flex-shrink:0; color:var(--text3); }
+    /* O TÍTULO TEM PISO, e a razão é que cede.
+       Com `flex:1; min-width:0` nos dois, a razão longa ("o responsável (…) não
+       está no cadastro de devs") empurrava o título até ZERO: a linha ficava só
+       com o código e a explicação, sem dizer de que demanda se tratava. O
+       título é o que a pessoa procura na lista; ele encolhe por último. */
+    .g-limbo-tit { flex:1 1 220px; min-width:110px; overflow:hidden;
+                   text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+    .g-limbo-por { flex:0 1 auto; min-width:0; overflow:hidden;
+                   text-overflow:ellipsis; white-space:nowrap;
+                   font-size:11.5px; color:var(--text3); }
+    .g-limbo-quando { font-size:11.5px; color:var(--text3); flex-shrink:0; }
     .g-juntar-bar {
       display:flex; align-items:center; gap:12px; flex-wrap:wrap;
       background:#0E3A3A; color:#7ED8D8; border-bottom:1px solid #1A6060;
@@ -5090,6 +5112,19 @@ function gPausadasAlterna() {
  * onde ela deve estar, e listá-la aqui afogaria o aviso em ruído até ninguém
  * mais ler — que é a forma mais comum de um aviso morrer.
  */
+/* NASCE RECOLHIDA, e lembra a escolha — a mesma decisão da faixa de pausadas, e
+   pelo mesmo motivo: quem corrige essa lista toda semana não quer clicar sempre,
+   e quem nunca mexe nela não quer um painel de cinquenta linhas no topo da tela.
+   Sem memória, um dos dois perde todo dia. */
+let _limboAberta = false;
+try { _limboAberta = localStorage.getItem('rm_limbo_aberta') === '1'; } catch (_) {}
+
+function gLimboAlterna() {
+  _limboAberta = !_limboAberta;
+  try { localStorage.setItem('rm_limbo_aberta', _limboAberta ? '1' : ''); } catch (_) {}
+  renderLimbo();
+}
+
 function renderLimbo() {
   const box = document.getElementById('g-limbo');
   if (!box) return;
@@ -5112,10 +5147,25 @@ function renderLimbo() {
   if (!perdidas.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = 'block';
 
+  /* O QUADRO SÓ TEM LINHA PARA DEV CADASTRADO. Uma demanda no nome de quem não
+     está na lista de devs não tem onde ser desenhada — e essa é a causa mais
+     provável entre as que "não couberam", porque ela não depende de data
+     nenhuma. Sem nomear isso, a pessoa abre o card, vê a data certa no mês
+     certo, e não entende o aviso. */
+  const temLinha = (m) => (state.desenvolvedores || []).some(dv => DEVNOME.eDe(m, dv));
+
   const porQue = (m) => {
     if (!DEVNOME.daDemanda(m).length) return 'sem responsável';
+    if (!temLinha(m)) {
+      return 'o responsável (' + String(m.dev || '').slice(0, 30) +
+             ') não está no cadastro de devs';
+    }
     const quando = window.PRAZO ? PRAZO.mesDoPrazo(m, hoje) : '';
-    if (quando && mesTela && quando < mesTela) {
+    /* MEDIDO, E NÃO SUPOSTO. Esta linha dizia "«Em andamento» não reaparece nos
+       meses seguintes" — e `em_andamento` É uma das quatro de
+       `ETAPAS_QUE_HERDAM`: ela reaparece. O texto afirmava a causa em vez de
+       perguntar por ela, e mandava a pessoa mexer na etapa errada. */
+    if (quando && mesTela && quando < mesTela && !ehHerdada(m)) {
       const et = ETAPA_LABELS[etapaReal(m)] || etapaReal(m) || 'sem etapa';
       return 'planejada em ' + quando + ', e "' + et + '" não reaparece nos meses seguintes';
     }
@@ -5127,18 +5177,30 @@ function renderLimbo() {
     return '<div class="g-limbo-item" onclick="openModal(' + JSON.stringify(m.id) + ')">' +
       '<span class="g-limbo-cod">' + esc(m.codigo || '') + '</span> ' +
       '<span class="g-limbo-tit">' + esc(m.titulo || '') + '</span>' +
-      '<span class="g-limbo-por">' + esc(porQue(m)) + '</span>' +
+      /* `title` porque a razão agora corta com reticências quando é longa — sem
+         ele, o motivo cortado seria ilegível e a linha viraria enfeite. */
+      '<span class="g-limbo-por" title="' + esc(porQue(m)) + '">' +
+      esc(porQue(m)) + '</span>' +
       (quando ? '<span class="g-limbo-quando">' + esc(quando) + '</span>' : '') +
       '</div>';
   }).join('');
 
+  /* A EXPLICAÇÃO MORA DENTRO DA BANDEJA ABERTA, e não no topo. No topo ela era
+     lida todo dia por quem já sabe; aqui ela chega a quem acabou de abrir a
+     lista pela primeira vez, que é quem precisa dela. */
+  box.classList.toggle('aberta', _limboAberta);
   box.innerHTML =
-    '<div class="g-limbo-topo">⚠ <strong>' + perdidas.length +
-    (perdidas.length === 1 ? ' demanda com data marcada não aparece no quadro'
-                           : ' demandas com data marcada não aparecem no quadro') +
-    '</strong> — elas não estão em nenhuma linha deste mês nem na fila ao lado. ' +
-    'Clique para abrir e corrigir a data ou a etapa.</div>' +
-    '<div class="g-limbo-lista">' + linhas + '</div>';
+    '<button type="button" class="g-limbo-topo" onclick="gLimboAlterna()" ' +
+    'aria-expanded="' + (_limboAberta ? 'true' : 'false') + '">' +
+    '<span class="g-limbo-seta">▶</span>⚑ ' + perdidas.length +
+    (perdidas.length === 1 ? ' demanda com data fora do quadro'
+                           : ' demandas com data fora do quadro') +
+    '<small style="margin-left:auto">' + (_limboAberta ? 'recolher' : 'ver a lista') +
+    '</small></button>' +
+    '<div class="g-limbo-lista">' +
+    '<p class="g-limbo-dica">Têm data marcada e não estão em nenhuma linha deste mês ' +
+    'nem na fila ao lado. Clique para abrir e corrigir a data, a etapa ou o responsável.</p>' +
+    linhas + '</div>';
 }
 
 function renderPausadas() {

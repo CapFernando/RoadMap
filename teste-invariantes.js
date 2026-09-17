@@ -12591,6 +12591,64 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
     ok(/if \(!\(await gConfirmaRetroativo\(inicio, fim, sp\)\)\) return;/.test(GANTT),
        'e o salvar do gantt passa por ele antes de gravar');
+
+    /* ── A REDE TEM DE CABER NA TELA ────────────────────────────────────
+     *
+     * "Não quero essa mensagem extensa e nem em vermelho."
+     *
+     * Em producao sao 58 linhas. Um painel vermelho aberto com 58 linhas em
+     * cima do quadro, todo dia, dizendo a mesma coisa, nao e lido — e
+     * contornado. E ai ele para de avisar sobre qualquer coisa, inclusive
+     * sobre a demanda nova que cair ali amanha. */
+    ok(/class="g-limbo-topo" onclick="gLimboAlterna\(\)"/.test(GANTT),
+       'a rede e uma bandeja, e nao um painel sempre aberto');
+    ok(/let _limboAberta = false;/.test(GANTT),
+       'e ela nasce RECOLHIDA — a contagem basta para saber se ha o que olhar');
+    ok(/localStorage\.setItem\('rm_limbo_aberta'/.test(GANTT) &&
+       /localStorage\.getItem\('rm_limbo_aberta'\) === '1'/.test(GANTT),
+       'e lembra a escolha: quem corrige a lista toda semana nao clica sempre, ' +
+       'e quem nunca mexe nela nao ve o painel');
+    ok(/\.g-limbo:not\(\.aberta\) \.g-limbo-lista \{ display:none; \}/.test(GANTT),
+       'recolhida, a lista nao ocupa a tela');
+    /* NAO E VERMELHO. O vermelho desta tela e para o que precisa de acao hoje;
+       gasta-lo aqui faz o resto perder a forca. */
+    {
+      const cssLimbo = (GANTT.match(/\.g-limbo[^{]*\{[^}]*\}/g) || []).join(' ');
+      ok(!/#3A0C0C|#7A1212|#F9A0A0|#FFD9D9/.test(cssLimbo),
+         'e a faixa nao usa mais o vermelho');
+      ok(/var\(--text3\)/.test(cssLimbo) && /var\(--bg3\)/.test(cssLimbo),
+         'ela usa os tons neutros do tema');
+    }
+    /* A EXPLICACAO SAIU DO TOPO e mora dentro da bandeja: no topo ela era lida
+       todo dia por quem ja sabe. */
+    ok(/class="g-limbo-dica"/.test(GANTT), 'a explicacao mora dentro da lista aberta');
+
+    /* ── E O TEXTO DIZ A CAUSA CERTA ────────────────────────────────────
+     *
+     * A linha dizia «"Em andamento" não reaparece nos meses seguintes» — e
+     * `em_andamento` E uma das quatro de `ETAPAS_QUE_HERDAM`. O aviso AFIRMAVA
+     * a causa em vez de perguntar por ela, e mandava mexer na etapa errada. */
+    ok(PRZM.ETAPAS_QUE_HERDAM.includes('em_andamento'),
+       'em_andamento reaparece no mes seguinte — era o que o texto negava');
+    ok(/quando < mesTela && !ehHerdada\(m\)/.test(GANTT),
+       'entao a frase da etapa so sai para quem de fato NAO reaparece');
+    /* E A CAUSA MAIS PROVAVEL GANHOU NOME. O quadro so tem linha para dev
+       CADASTRADO: demanda no nome de quem saiu da lista nao tem onde ser
+       desenhada, e isso nao depende de data nenhuma. Sem nomear, a pessoa abre
+       o card, ve a data certa no mes certo, e nao entende o aviso. */
+    ok(/const temLinha = \(m\) => \(state\.desenvolvedores \|\| \[\]\)\.some\(dv => DEVNOME\.eDe\(m, dv\)\);/
+       .test(GANTT), 'a rede sabe que o quadro so tem linha para dev cadastrado');
+    ok(/não está no cadastro de devs/.test(GANTT),
+       'e diz isso em vez de "nao coube no mes"');
+    /* E O TITULO NAO PODE SUMIR. Com `flex:1; min-width:0` nos dois, a razao
+       longa empurrava o titulo ate ZERO — a linha ficava so com o codigo e a
+       explicacao, sem dizer de que demanda se tratava. Visto na previa. */
+    ok(/\.g-limbo-tit \{ flex:1 1 220px; min-width:110px;/.test(GANTT),
+       'o titulo da linha tem piso de largura');
+    ok(/\.g-limbo-por \{ flex:0 1 auto;/.test(GANTT),
+       'e e a RAZAO que cede quando falta espaco, nao ele');
+    ok(/class="g-limbo-por" title="/.test(GANTT),
+       'e a razao cortada continua legivel ao passar o mouse');
   }
 
   /* === O RESUMO EXECUTIVO DE UM PROJETO =================================
