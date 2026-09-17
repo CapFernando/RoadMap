@@ -1128,7 +1128,7 @@
 <script src="capa-tecnologia.js?v=e3aaaae81d"></script>
 <script src="pipelines.js?v=ef35f28412"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=31179a3e69"></script>
+<script src="apresentacao.js?v=3ad7ad11e7"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -1337,7 +1337,14 @@
         <div id="ap-periodo" class="ap-periodo"></div>
 
         <div class="form-group">
-          <label>Slides que entram</label>
+          <label>Slides que entram
+            <span style="float:right;font-weight:400">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="apSecoesPreset('padrao')"
+                title="Os quatro slides da reunião de resultados: o mês, a evolução, as frentes e os pontos por dev">Padrão do fechamento</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="apSecoesPreset('tudo')"
+                title="Marca todas as caixas">Tudo</button>
+            </span>
+          </label>
           <div id="ap-secoes" class="ap-checks"></div>
         </div>
 
@@ -5562,27 +5569,57 @@ function gerBandejasAplicaTodas() {
  *
  * `n` e quantos slides a caixa produz quando ha dado para todos. A tela mostra esse
  * numero ao lado do rotulo: uma caixa que vale tres slides e uma decisao diferente
- * de uma que vale um. */
+ * de uma que vale um.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * `pad` E O DECK DO FECHAMENTO, E NAO "TUDO QUE EXISTE".
+ *
+ * As quinze caixas nasceram todas marcadas, e o arquivo saia com vinte e um
+ * slides. So que o PADRAO de fato — a "REUNIAO DE RESULTADOS" que o Fernando
+ * mandou como modelo — usa QUATRO deles: o mes, a evolucao, as frentes de
+ * trabalho e os pontos por dev. Quem montava o fechamento desmarcava onze
+ * caixas na mao, toda vez, e a decima segunda que escapasse ia para a
+ * diretoria.
+ *
+ * O resto NAO saiu: continua ali, a um clique, e "Tudo" remarca tudo. O que
+ * mudou foi qual das duas escolhas custa trabalho.
+ *
+ * OS PONTOS VIRARAM TRES CAIXAS pelo mesmo motivo: a caixa unica valia tres
+ * slides, e o modelo quer so o corte POR DEV. Sem dividir, o padrao levaria
+ * dois slides que o modelo nao tem. Apuracao congelada ANTES desta divisao
+ * guarda a chave antiga (`pontos`) — `cortesDePontos`, no apresentacao.js, le
+ * a antiga como "as tres", que e o que aquele deck mostrava. */
 const AP_SECOES = [
   { k: 'entregas', rot: 'O mês: backlog, o que entrou e o que saiu', n: 1, pad: true },
   { k: 'evolucao', rot: 'Evolução: este mês e o anterior', n: 1, pad: true },
   { k: 'pipelines', rot: 'Frentes de trabalho: horas planejadas × realizadas', n: 1, pad: true },
-  { k: 'projetos', rot: 'Projetos em aberto', n: 1, pad: true },
-  { k: 'capacidade', rot: 'Planejado × entregue em pontos, por dev', n: 1, pad: true },
-  { k: 'pontos',   rot: 'Pontos entregues: por semana, por dev e por sistema',
-    n: 3, nota: 'três slides, um por corte', pad: true },
+  { k: 'pontos_dev', rot: 'Pontos entregues por desenvolvedor', n: 1, pad: true },
+  { k: 'pontos_semana', rot: 'Pontos entregues por semana', n: 1 },
+  { k: 'pontos_tema', rot: 'Pontos entregues por sistema', n: 1 },
+  { k: 'projetos', rot: 'Projetos em aberto', n: 1 },
+  { k: 'capacidade', rot: 'Planejado × entregue em pontos, por dev', n: 1 },
   { k: 'prazo',    rot: 'No prazo × com atraso',
-    n: 2, nota: 'o segundo slide lista as atrasadas, e só sai se houver', pad: true },
-  { k: 'rapidas',  rot: 'Entregas rápidas (até 2 dias)', n: 1, pad: true },
-  { k: 'areas',    rot: 'Onde atuamos (as 3 maiores frentes)', n: 1, pad: true },
-  { k: 'solicit',  rot: 'Quem mais pediu (top 5)', n: 1, pad: true },
-  { k: 'time',     rot: 'O time (agregado) e quem esteve fora', n: 1, pad: true },
-  { k: 'grafico',  rot: 'Entregas por desenvolvedor (com os pontos ao lado)', n: 1, pad: true },
+    n: 2, nota: 'o segundo slide lista as atrasadas, e só sai se houver' },
+  { k: 'rapidas',  rot: 'Entregas rápidas (até 2 dias)', n: 1 },
+  { k: 'areas',    rot: 'Onde atuamos (as 3 maiores frentes)', n: 1 },
+  { k: 'solicit',  rot: 'Quem mais pediu (top 5)', n: 1 },
+  { k: 'time',     rot: 'O time (agregado) e quem esteve fora', n: 1 },
+  { k: 'grafico',  rot: 'Entregas por desenvolvedor (com os pontos ao lado)', n: 1 },
   { k: 'ganttdev', rot: 'A linha do tempo dos 3 primeiros devs',
-    n: 3, nota: 'um slide por pessoa', pad: true },
-  { k: 'riscos',   rot: 'O que está travado (demandas pausadas)', n: 1, pad: true },
-  { k: 'proximo',  rot: 'O que vem no próximo mês', n: 1, pad: true },
+    n: 3, nota: 'um slide por pessoa' },
+  { k: 'riscos',   rot: 'O que está travado (demandas pausadas)', n: 1 },
+  { k: 'proximo',  rot: 'O que vem no próximo mês', n: 1 },
 ];
+
+/* OS DOIS ATALHOS, e o padrao e o do modelo. Marcar ou desmarcar dezessete
+   caixas na mao e o tipo de trabalho que se faz errado na terceira vez — e o
+   deck do fechamento e sempre o mesmo. */
+function apSecoesPreset(qual) {
+  AP_SECOES.forEach(s => {
+    const el = document.getElementById('ap-s-' + s.k);
+    if (el) el.checked = (qual === 'tudo') ? true : !!s.pad;
+  });
+}
 
 /* O QUE ENTRA SEM CAIXA. Nao ter caixa e o correto — nenhum deles e opcional —,
    mas nao estar escrito em lugar nenhum fazia a soma da grade nao bater com o

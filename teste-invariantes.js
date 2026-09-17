@@ -5166,23 +5166,29 @@ sec('A grade de topicos do deck');
   /* TODA CHAVE DA GRADE E CONSULTADA PELO GERADOR, e vice-versa. Uma caixa sem
      `d.secoes.<k>` no apresentacao.js e uma caixa que nao faz nada; um
      `d.secoes.<k>` sem caixa e um slide que ninguem consegue tirar. */
-    const doGerador = new Set();
-  const re = /d\.secoes\.([a-zA-Z]+)/g;
+  const doGerador = new Set();
+  /* `_` NO NOME, e o prefixo `d.` opcional: as tres chaves dos pontos sao lidas
+     por `cortesDePontos(secoes)`, que recebe o objeto e nao o `d` inteiro. Sem
+     as duas frouxidoes o varredor nao enxergava `secoes.pontos_dev` e acusava
+     tres caixas "ignoradas pelo gerador" que estao ligadas. */
+  const re = /(?:d\.)?secoes\.([a-zA-Z_]+)/g;
   let m;
   while ((m = re.exec(APRES)) !== null) doGerador.add(m[1]);
   const daGrade = new Set(SEC.map(x => x.k));
+  /* A CHAVE LEGADA NAO TEM CAIXA, E ISSO E CORRETO. `pontos` era uma caixa so
+     valendo tres slides; hoje sao tres caixas. Mas toda apuracao CONGELADA
+     guarda o `secoes` do dia em que o mes fechou, e la esta `pontos: true` —
+     `cortesDePontos` le a antiga como "as tres". Dar caixa a ela seria oferecer
+     na tela uma chave que so existe no passado. */
+  const LEGADO = new Set(['pontos']);
   const soNaGrade = [...daGrade].filter(k => !doGerador.has(k));
-  const soNoGerador = [...doGerador].filter(k => !daGrade.has(k));
+  const soNoGerador = [...doGerador].filter(k => !daGrade.has(k) && !LEGADO.has(k));
   ok(!soNaGrade.length, 'nenhuma caixa da grade e ignorada pelo gerador', soNaGrade.join(', '));
   ok(!soNoGerador.length, 'e nenhum slide do gerador fica sem caixa', soNoGerador.join(', '));
 
   /* O ROTULO NAO PROMETE O QUE NAO EXISTE. O painel de sprint saiu do deck, e o
      rotulo seguiu dizendo "(semana, dev, assunto, sprint)". */
-  const pontos = SEC.find(x => x.k === 'pontos');
-  ok(!!pontos && !/sprint/i.test(pontos.rot),
-     'o topico de pontos nao promete o painel de sprint, que saiu do deck',
-     pontos ? pontos.rot : '');
-  ok(!SEC.some(x => /sprint/i.test(x.rot)), 'e nenhum outro topico promete sprint');
+  ok(!SEC.some(x => /sprint/i.test(x.rot)), 'nenhum topico promete o painel de sprint, que saiu do deck');
 
   /* A CONTAGEM DE SLIDES E DECLARADA, e bate com o gerador. `pontos` chama tres
      funcoes de slide; `prazo` desenha o painel e mais a tabela das atrasadas. */
@@ -5196,9 +5202,13 @@ sec('A grade de topicos do deck');
   };
   const chamadas = (t) => (t.match(/slide[A-Z]\w*\(pptx/g) || []).length +
                           (t.match(/slideTitulo\(pptx/g) || []).length;
-  ok(pontos.n === 3 && chamadas(trecho('pontos')) === 3,
-     'pontos declara 3 slides e o gerador chama 3',
-     pontos.n + ' vs ' + chamadas(trecho('pontos')));
+  /* OS TRES CORTES DE PONTOS VALEM UM SLIDE CADA — era uma caixa so valendo
+     tres, e por isso o padrao nao conseguia pedir so o corte por dev. */
+  for (const k of ['pontos_semana', 'pontos_dev', 'pontos_tema']) {
+    const c = SEC.find(x => x.k === k);
+    ok(!!c && c.n === 1, 'o corte "' + k + '" e uma caixa de um slide so',
+       c ? String(c.n) : 'nao existe');
+  }
   const prazo = SEC.find(x => x.k === 'prazo');
   ok(prazo && prazo.n === 2, 'prazo declara 2 — o painel e a tabela das atrasadas',
      prazo ? String(prazo.n) : '');
@@ -5223,6 +5233,93 @@ sec('A grade de topicos do deck');
   const abrir = corpo(ADMIN, 'function apresAbrir(');
   ok(/s\.n \|\| 1\) > 1/.test(abrir) && /slides</.test(abrir),
      'a tela diz quantos slides a caixa produz quando e mais de um');
+
+  /* ═══ O PADRAO E O DECK DO FECHAMENTO, e nao "tudo que existe" ═══════════
+   *
+   * O modelo que o Fernando mandou — a "REUNIAO DE RESULTADOS" — usa QUATRO
+   * slides. O deck saia com vinte e um, e quem montava desmarcava onze caixas
+   * na mao toda vez. A decima segunda que escapasse ia para a diretoria. */
+  const padrao = SEC.filter((x) => x.pad).map((x) => x.k);
+  ok(padrao.join(',') === 'entregas,evolucao,pipelines,pontos_dev',
+     'o padrao e exatamente o do modelo: o mes, a evolucao, as frentes e os ' +
+     'pontos por dev', padrao.join(',') || 'nenhuma');
+  /* E O RESTO NAO SAIU: continua ali, a um clique. Tirar a caixa seria decidir
+     pelo Fernando o que ele nunca mais pode mostrar. */
+  ok(SEC.length >= 15, 'e as outras caixas continuam existindo, desmarcadas',
+     (SEC.length - padrao.length) + ' fora do padrao');
+
+  /* OS DOIS ATALHOS, EXECUTADOS. */
+  const preset = corpo(ADMIN, 'function apSecoesPreset(');
+  ok(!!preset, 'existe o atalho das caixas');
+  if (preset) {
+    const caixas = {};
+    SEC.forEach((x) => { caixas['ap-s-' + x.k] = { checked: true }; });
+    const roda = (qual) => {
+      new Function('AP_SECOES', 'document',
+        preset + ' apSecoesPreset(' + JSON.stringify(qual) + ');')(
+        SEC, { getElementById: (id) => caixas[id] || null });
+      return SEC.filter((x) => caixas['ap-s-' + x.k].checked).map((x) => x.k);
+    };
+    ok(roda('padrao').join(',') === 'entregas,evolucao,pipelines,pontos_dev',
+       '"Padrao do fechamento" deixa marcadas exatamente as quatro',
+       roda('padrao').join(','));
+    ok(roda('tudo').length === SEC.length,
+       'e "Tudo" remarca todas — o caminho de volta custa um clique, e nao onze',
+       roda('tudo').length + ' de ' + SEC.length);
+  }
+  ok(/apSecoesPreset\('padrao'\)/.test(ADMIN) && /apSecoesPreset\('tudo'\)/.test(ADMIN),
+     'e os dois botoes estao na tela');
+
+  /* ═══ A APURACAO CONGELADA CONTINUA SAINDO IGUAL ═════════════════════════
+   *
+   * Aqui estava o risco real desta mudanca. Todo mes congelado guarda o
+   * `secoes` do dia em que fechou, e la esta a chave ANTIGA (`pontos: true`).
+   * Lida com as chaves novas ela daria tres `false`, e reabrir um mes fechado
+   * geraria um deck SEM os slides de pontos que foram apresentados — o oposto
+   * exato do que o congelamento existe para garantir.
+   *
+   * EXECUTADO, e nao conferido no texto. */
+  {
+    const cp = corpo(APRES, 'function cortesDePontos(');
+    ok(!!cp, 'existe a ponte entre a chave antiga e as tres novas');
+    if (cp) {
+      const cortes = new Function(cp + ' return cortesDePontos;')();
+      const j = (o) => [o.semana, o.dev, o.tema].join(',');
+      ok(j(cortes({ pontos: true })) === 'true,true,true',
+         'apuracao congelada com a chave antiga devolve os TRES cortes, ' +
+         'como o deck daquele mes mostrava', j(cortes({ pontos: true })));
+      ok(j(cortes({ pontos: false })) === 'false,false,false',
+         'e congelada com ela desmarcada nao devolve nenhum');
+      /* A REGRA E POR PRESENCA, E NAO POR VALOR. Testar o valor confundiria
+         "a chave nao existe" com "a caixa foi desmarcada": quem tirasse os tres
+         cortes de proposito receberia os tres de volta. */
+      ok(j(cortes({ pontos: true, pontos_semana: false, pontos_dev: false,
+                    pontos_tema: false })) === 'false,false,false',
+         'e desmarcar os tres de proposito vence a chave antiga — a regra e por ' +
+         'PRESENCA da chave nova, e nao pelo valor dela',
+         j(cortes({ pontos: true, pontos_semana: false, pontos_dev: false,
+                    pontos_tema: false })));
+      ok(j(cortes({ pontos_dev: true })) === 'false,true,false',
+         'e o padrao de hoje leva so o corte por dev',
+         j(cortes({ pontos_dev: true })));
+      ok(j(cortes(undefined)) === 'false,false,false', 'e sem secoes nenhuma nao quebra');
+    }
+    /* E O GERADOR PASSA PELA PONTE, em vez de ler a chave na mao. */
+    const deck = corpo(APRES, 'async function montaDeck(') || APRES;
+    ok(/var cortesP = cortesDePontos\(d\.secoes\);/.test(deck),
+       'o deck pergunta a ponte');
+    ok(!/d\.secoes\.pontos\b/.test(deck),
+       'e nao le mais a chave antiga por conta propria');
+    /* E CADA CORTE MANDA NO SLIDE DELE. Trocar dois fios aqui nao quebra nada —
+       o deck sai com o mesmo numero de slides, so que com o grafico errado, e
+       o erro so apareceria na sala. */
+    ok(/if \(cortesP\.semana\) slidePontos\(pptx/.test(deck),
+       'o corte por semana liga o slide por semana');
+    ok(/if \(cortesP\.dev\) slidePontosDev\(pptx/.test(deck),
+       'o corte por dev liga o slide por dev');
+    ok(/if \(cortesP\.tema\) slidePontos2\(pptx/.test(deck),
+       'e o corte por sistema liga o slide por sistema');
+  }
 })();
 
 /* "PONTOS ENTREGUES" CONTA SO O QUE FOI ENTREGUE.

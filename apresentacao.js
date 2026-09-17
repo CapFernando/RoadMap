@@ -1967,6 +1967,33 @@
     return s;
   }
 
+  /* ── Os três cortes de pontos, e a chave antiga que ainda existe ─────────
+   *
+   * A caixa de pontos era UMA e valia TRÊS slides: por semana, por dev e por
+   * sistema. O padrão do fechamento quer só o corte por dev, então ela virou
+   * três caixas — `pontos_semana`, `pontos_dev` e `pontos_tema`.
+   *
+   * MAS A CHAVE ANTIGA NÃO MORREU: toda apuração CONGELADA guarda o `secoes`
+   * do dia em que o mês fechou, e lá está escrito `pontos: true`. Ler isso com
+   * as chaves novas devolveria os três `false`, e reabrir um mês fechado
+   * geraria um deck SEM os slides de pontos que foram apresentados — exatamente
+   * o que o congelamento existe para impedir.
+   *
+   * Então a regra é por PRESENÇA, e não por valor: se nenhuma das três chaves
+   * novas está no objeto, ele é antigo, e `pontos` vale pelas três. Testar o
+   * valor (`!s.pontos_dev`) confundiria "não existe" com "foi desmarcada", e
+   * quem tirasse os três cortes de propósito receberia os três de volta. */
+  function cortesDePontos(secoes) {
+    secoes = secoes || {};
+    var novas = ('pontos_semana' in secoes) || ('pontos_dev' in secoes) ||
+                ('pontos_tema' in secoes);
+    if (!novas) {
+      return { semana: !!secoes.pontos, dev: !!secoes.pontos, tema: !!secoes.pontos };
+    }
+    return { semana: !!secoes.pontos_semana, dev: !!secoes.pontos_dev,
+             tema: !!secoes.pontos_tema };
+  }
+
   /* ── O deck ─────────────────────────────────────────────────────────────
      A ordem é a da conversa, não a da tela: o que entregamos, o que valeu a
      pena, onde falhamos e por quê, o que vem. */
@@ -2016,10 +2043,11 @@
     if (d.secoes.capacidade && d.capacidade && (d.capacidade.devs || []).length) {
       slideCapacidade(pptx, d.capacidade, ++p, d.periodo);
     }
-    if (d.secoes.pontos && d.pontos && d.pontos.total > 0) {
-      slidePontos(pptx, d.pontos, ++p, d.periodo);       // por semana
-      slidePontosDev(pptx, d.pontos, ++p, d.periodo);    // por desenvolvedor
-      slidePontos2(pptx, d.pontos, ++p, d.periodo);      // por assunto
+    var cortesP = cortesDePontos(d.secoes);
+    if (d.pontos && d.pontos.total > 0) {
+      if (cortesP.semana) slidePontos(pptx, d.pontos, ++p, d.periodo);    // por semana
+      if (cortesP.dev) slidePontosDev(pptx, d.pontos, ++p, d.periodo);    // por desenvolvedor
+      if (cortesP.tema) slidePontos2(pptx, d.pontos, ++p, d.periodo);     // por assunto
     }
 
     /* ─── ATO 3 · CUMPRIMOS O COMBINADO? ─────────────────────────────────
