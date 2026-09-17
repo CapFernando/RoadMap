@@ -3114,22 +3114,42 @@ function gEmpacota(sorted, faixas, tracks, recolhidos) {
     cardTrack.set(m.id, t);
   };
 
-  /* AS FAIXAS QUE SÃO SÓ DO AGRUPADOR. A barra da D0 costuma cobrir um pedaço
-     do mês e deixar o resto da faixa vazio — e essa faixa era reservada por
-     inteiro, para ninguém. Numa linha de dev cheia isso é uma faixa perdida por
-     grupo, e foi o que o Fernando viu: a D0 sozinha no alto com três semanas de
-     vazio ao lado. Elas ficam marcadas aqui para o resto poder ocupar o que
-     sobra. As faixas das QUEBRAS continuam exclusivas: é lá que misturar
-     confunde, porque o que está ao lado de uma quebra parece ser do grupo. */
-  const faixasDoAgrupador = [];
+  /* ═══ O BLOCO É UM RETÂNGULO, E NÃO UM PUNHADO DE FAIXAS INTEIRAS ═══════
+   *
+   * "Não adiantou, algumas desceram sendo que tem espaço."
+   *
+   * A primeira tentativa liberou só a faixa do agrupador e manteve as das
+   * quebras reservadas de ponta a ponta. Na tela do Fernando isso continuou
+   * jogando cards para baixo com a faixa das quebras vazia da metade do mês
+   * para a direita — a "Carteira do Gestor" tem uma quebra que ocupa um quarto
+   * da largura, e os outros três quartos não eram de ninguém.
+   *
+   * O QUE O BLOCO PRECISA PROTEGER É UMA ÁREA, e não linhas inteiras: o
+   * retângulo é a BARRA DA D0 projetada para baixo, sobre as faixas das
+   * quebras. Quem cai debaixo da barra do agrupador passa por parte do grupo —
+   * é a única leitura errada possível. Fora desse retângulo a faixa é de quem
+   * chegar, inclusive a das quebras.
+   *
+   * E SÓ A BARRA DA D0, sem esticar até a quebra mais distante. Esticar era a
+   * mesma reserva de antes com outro nome: na tela do Fernando a D0 fica no fim
+   * do mês e uma quebra dela no começo, então o retângulo esticado voltava a
+   * cobrir a linha quase inteira. As quebras não precisam disso — elas já se
+   * defendem pelo teste normal de sobreposição, porque estão em `tracks`.
+   *
+   * `blocos` guarda as faixas `de`..`ate` e o intervalo de dias `s`..`e` da
+   * barra do pai. O recolhido entra com uma faixa só, que é tudo que ele
+   * desenha. */
+  const blocos = [];
 
   /* ── os blocos primeiro, na ordem em que os pais aparecem ── */
   let proxima = 0;
   noMes.forEach(pai => {
     const filhos = filhosDe.get(pai.id);
     if (!filhos) return;
+    const daPai = faixas.get(pai.id);
+    const bloco = { de: proxima, ate: proxima, s: daPai.sIdx, e: daPai.eIdx };
+    blocos.push(bloco);
     poe(pai, proxima);
-    faixasDoAgrupador.push(proxima);
     proxima += 1;
     if (fechados.has(pai.id)) return;      // recolhido: as quebras não ocupam faixa
     /* As quebras empacotam ENTRE SI, começando na faixa seguinte à do pai. */
@@ -3143,20 +3163,23 @@ function gEmpacota(sorted, faixas, tracks, recolhidos) {
       poe(f, proxima + t);
     });
     proxima += Math.max(1, locais.length);
+    bloco.ate = proxima - 1;
   });
 
-  /* ── e o resto: primeiro o vazio que sobrou ao lado dos agrupadores, depois
-        as faixas livres abaixo dos blocos ── */
-  const cabe = (t, f) => !tracks[t] ||
-    tracks[t].every(o => f.sIdx > o.end || f.eIdx < o.start);
+  /* ── e o resto, ocupando todo vazio que não seja área de bloco ── */
+  const dentroDeBloco = (t, f) => blocos.some(b =>
+    t >= b.de && t <= b.ate && !(f.sIdx > b.e || f.eIdx < b.s));
+  const cabe = (t, f) =>
+    (!tracks[t] || tracks[t].every(o => f.sIdx > o.end || f.eIdx < o.start)) &&
+    !dentroDeBloco(t, f);
   noMes.forEach(m => {
     if (emBloco.has(m.id)) return;
     const f = faixas.get(m.id);
-    let t = faixasDoAgrupador.find(fa => cabe(fa, f));
-    if (t === undefined) {
-      t = proxima;
-      while (!cabe(t, f)) t += 1;
-    }
+    /* DE CIMA PARA BAIXO: a primeira faixa em que ele cabe sem invadir bloco
+       nenhum. Começar depois dos blocos era o que deixava o vazio deles sem
+       dono. */
+    let t = 0;
+    while (!cabe(t, f)) t += 1;
     poe(m, t);
   });
 
