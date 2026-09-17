@@ -627,6 +627,26 @@
       font-size: 10.5px; color: var(--text3); margin-left: 6px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
+    /* VERMELHO, e não âmbar: âmbar nesta tela já significa "atenção, pode dar
+       errado" (pausada, prazo perto). Isto não é risco — é uma demanda que JÁ
+       está fora de vista, e a diferença entre as duas precisa ser vista de
+       longe. */
+    .g-limbo {
+      background:#3A0C0C; color:#F9A0A0; border-bottom:1px solid #7A1212;
+      padding:10px 24px; font-size:13px;
+    }
+    .g-limbo-topo { margin-bottom:6px; }
+    .g-limbo-lista { display:flex; flex-direction:column; gap:3px; }
+    .g-limbo-item {
+      display:flex; align-items:baseline; gap:8px; cursor:pointer;
+      padding:3px 6px; border-radius:4px; background:#00000030;
+    }
+    .g-limbo-item:hover { background:#00000055; }
+    .g-limbo-cod { font-weight:700; font-size:12px; flex-shrink:0; }
+    .g-limbo-tit { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+                   white-space:nowrap; color:#FFD9D9; }
+    .g-limbo-por { font-size:11.5px; opacity:.85; }
+    .g-limbo-quando { font-size:11.5px; opacity:.7; flex-shrink:0; }
     .g-juntar-bar {
       display:flex; align-items:center; gap:12px; flex-wrap:wrap;
       background:#0E3A3A; color:#7ED8D8; border-bottom:1px solid #1A6060;
@@ -938,6 +958,12 @@
        planejamento justamente enquanto esta parada. Esta faixa e o unico lugar
        onde ela reaparece sem que alguem lembre de voltar o mes. -->
   <div id="g-pausadas" class="g-pausadas" style="display:none"></div>
+
+  <!-- A REDE CONTRA O LIMBO. Uma demanda com data marcada que não aparece em
+       NENHUMA linha do quadro está perdida — ninguém olha para ela, e ela não
+       está em lugar nenhum que alguém olhe. Esta faixa é o único lugar onde ela
+       reaparece sem depender de alguém desconfiar que existe. -->
+  <div id="g-limbo" class="g-limbo" style="display:none"></div>
 
   <!-- A FAIXA DA SELEÇÃO. Só aparece no modo de juntar, e mostra quantas estão
        marcadas — sem o contador, quem clicou em oito cards não tem como saber
@@ -3099,7 +3125,15 @@ function gEmpacota(sorted, faixas, tracks, recolhidos) {
   return cardTrack;
 }
 
+/* O QUE O QUADRO DE FATO DESENHOU, por id.
+   É a base da rede contra o limbo: em vez de enumerar as causas de uma demanda
+   sumir — e errar a lista, como eu erraria —, a tela registra quem apareceu e
+   depois cobra a diferença. Causa que eu não previ entra na conta do mesmo
+   jeito, que é o ponto. */
+const _gNoQuadro = new Set();
+
 function renderGantt() {
+  _gNoQuadro.clear();
   renderResumoMes();
   renderPausadas();
   atualizaContagemGantt();
@@ -3489,6 +3523,7 @@ function renderGantt() {
           (sprintsFora ? ` +${sprintsFora}s` : '')
         : '';
 
+      _gNoQuadro.add(m.id);
       html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}${ehGrupo ? ' gcard-agrupador' : ''}${paiNaTela ? ' gcard-parte' : ''}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
@@ -3532,6 +3567,8 @@ function renderGantt() {
   });
 
   table.innerHTML = html;
+  /* DEPOIS DO DESENHO, e não antes: só aqui `_gNoQuadro` está completo. */
+  renderLimbo();
   attachCardClickListeners();
 }
 
@@ -4137,7 +4174,54 @@ function marcaConclusao(m, etapaNova) {
   }
 }
 
-function saveTask() {
+/* ═══ PLANEJAMENTO RETROATIVO PEDE CONFIRMAÇÃO ════════════════════════════
+ *
+ * "Havia uma issue AX-288 programada para agosto de forma indevida, não estava
+ * aparecendo no gantt. Preciso blindar isso."
+ *
+ * A rede (`renderLimbo`) garante que ela reapareça. Isto é a outra metade:
+ * avisar NO MOMENTO em que a data retroativa é digitada, que é quando custa um
+ * clique consertar em vez de um mês.
+ *
+ * PEDE CONFIRMAÇÃO, E NÃO RECUSA. Datar para trás é legítimo com frequência —
+ * registrar o que de fato começou no mês passado é o caso mais comum desta
+ * ferramenta. Recusar obrigaria a mentir a data para conseguir gravar, e aí o
+ * número do mês fica errado em vez de a demanda ficar invisível: troca de um
+ * problema por um pior.
+ *
+ * O AVISO DIZ A CONSEQUÊNCIA, e não "tem certeza?". "Vai ficar fora do quadro
+ * de setembro" é o que faz a pessoa reconsiderar; "confirma?" só ensina a
+ * clicar em Sim.
+ *
+ * Devolve `true` para seguir.                                                 */
+async function gConfirmaRetroativo(inicio, fim, sp) {
+  const alvo = String(fim || inicio || '').slice(0, 7);
+  if (!alvo) return true;
+  const hojeMes = (window.PRAZO ? PRAZO.hojeISO() : '').slice(0, 7);
+  if (!hojeMes || alvo >= hojeMes) return true;
+
+  /* AS ETAPAS QUE REAPARECEM não somem do quadro: elas voltam no mês seguinte
+     como "herdada". Avisar sobre elas seria gritar sobre o que está certo — e
+     um aviso que grita sobre o certo deixa de ser lido no dia em que estiver
+     certo. */
+  const reaparece = !!(window.PRAZO && PRAZO.ETAPAS_QUE_HERDAM.includes(sp));
+  const rotEtapa = ETAPA_LABELS[sp] || sp || 'sem etapa';
+
+  return confirmar({
+    titulo: 'Planejamento retroativo',
+    texto: 'A data cai em ' + alvo + ', que já passou.\n\n' +
+      (reaparece
+        ? 'Como a etapa é "' + rotEtapa + '", ela continua aparecendo no quadro ' +
+          'do mês atual marcada como herdada (⇥). Confirme se é isso que você quer.'
+        : 'E a etapa é "' + rotEtapa + '", que NÃO reaparece nos meses seguintes: ' +
+          'a demanda vai sair do quadro de ' + hojeMes + ' e só voltará se alguém ' +
+          'mudar a data ou a etapa.\n\nEla vai aparecer na faixa vermelha ' +
+          '"não aparecem no quadro", no topo desta tela — foi para isso que ela ' +
+          'existe. Mas ninguém vai olhar a demanda em si.'),
+    ok: 'Gravar assim', perigo: !reaparece });
+}
+
+async function saveTask() {
   const titulo = document.getElementById('e-titulo').value.trim();
   const temaId = resolveTemaSelecao('e', editingId ? (state.melhorias.find(x => x.id === editingId)||{}).tema_id : '');
   if (!titulo) { toast('Informe o título.', 'err'); return; }
@@ -4149,6 +4233,9 @@ function saveTask() {
   if (inicio && fim && fim < inicio) { toast('Data fim deve ser >= data início.', 'err'); return; }
 
   const sp = document.getElementById('e-status-plan').value;
+  /* O AVISO VEM ANTES de qualquer gravação, e depois de a etapa ser conhecida:
+     a consequência depende dela. */
+  if (!(await gConfirmaRetroativo(inicio, fim, sp))) return;
   const devSel = document.getElementById('e-dev').value.trim();
   if (exigeDev(sp) && !devSel) {
     const rot = { planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação PM/PO' }[sp] || sp;
@@ -4977,6 +5064,81 @@ function gPausadasAlterna() {
   _pausadasAberta = !_pausadasAberta;
   try { localStorage.setItem('rm_pausadas_aberta', _pausadasAberta ? '1' : ''); } catch (_) {}
   renderPausadas();
+}
+
+/* ═══ A REDE CONTRA O LIMBO ═══════════════════════════════════════════════
+ *
+ * "Havia uma issue AX-288 programada para agosto de forma indevida, não estava
+ * aparecendo no gantt. Preciso blindar isso: caso ocorra planejamento
+ * retroativo, bloquear para a demanda não se perder e ficar no limbo sem
+ * ninguém olhando."
+ *
+ * MEDIDO, e o buraco é maior que a AX-288: uma demanda em `backlog` ou
+ * `levantar_req` com data em mês passado some do quadro, porque só as quatro
+ * etapas de `PRAZO.ETAPAS_QUE_HERDAM` (planning, planejado, em_andamento,
+ * validacao) reaparecem no mês seguinte. E a barra lateral, por padrão, só
+ * mostra `planning` com pontos. Ou seja: ela não está no quadro e não está na
+ * fila — está em lugar nenhum.
+ *
+ * ESTA FAIXA NÃO ENUMERA AS CAUSAS, e é de propósito. Enumerar exige eu acertar
+ * a lista, e eu já errei uma vez ao supor que "herdada" cobria tudo. Em vez
+ * disso o quadro REGISTRA quem desenhou (`_gNoQuadro`) e aqui se cobra a
+ * diferença — uma causa que eu não previ cai na rede do mesmo jeito.
+ *
+ * O QUE ENTRA: demanda viva, não concluída, COM data marcada, que não apareceu
+ * em nenhuma linha. Demanda sem data não entra: ela mora no backlog, que é
+ * onde ela deve estar, e listá-la aqui afogaria o aviso em ruído até ninguém
+ * mais ler — que é a forma mais comum de um aviso morrer.
+ */
+function renderLimbo() {
+  const box = document.getElementById('g-limbo');
+  if (!box) return;
+  const mesTela = mesEmExibicao();
+  const hoje = window.PRAZO ? PRAZO.hojeISO() : '';
+
+  const perdidas = (state.melhorias || []).filter(m => {
+    if (m.oculto || m.mesclado_em) return false;
+    const sp = etapaReal(m);
+    if (sp === 'concluido' || sp === 'negada' || m.status === 'negada') return false;
+    if (!(m.inicio || m.entrega)) return false;        // sem data: mora no backlog
+    if (_gNoQuadro.has(m.id)) return false;            // apareceu
+    /* PLANEJADA PARA O FUTURO NÃO ESTÁ PERDIDA — ela aparece quando o mês
+       chegar, e avisar sobre ela seria gritar sobre o que está certo. */
+    const quando = window.PRAZO ? PRAZO.mesDoPrazo(m, hoje) : '';
+    if (quando && mesTela && quando > mesTela) return false;
+    return true;
+  });
+
+  if (!perdidas.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+
+  const porQue = (m) => {
+    if (!DEVNOME.daDemanda(m).length) return 'sem responsável';
+    const quando = window.PRAZO ? PRAZO.mesDoPrazo(m, hoje) : '';
+    if (quando && mesTela && quando < mesTela) {
+      const et = ETAPA_LABELS[etapaReal(m)] || etapaReal(m) || 'sem etapa';
+      return 'planejada em ' + quando + ', e "' + et + '" não reaparece nos meses seguintes';
+    }
+    return 'não coube no mês em exibição';
+  };
+
+  const linhas = perdidas.map(m => {
+    const quando = window.PRAZO ? PRAZO.mesDoPrazo(m, hoje) : '';
+    return '<div class="g-limbo-item" onclick="openModal(' + JSON.stringify(m.id) + ')">' +
+      '<span class="g-limbo-cod">' + esc(m.codigo || '') + '</span> ' +
+      '<span class="g-limbo-tit">' + esc(m.titulo || '') + '</span>' +
+      '<span class="g-limbo-por">' + esc(porQue(m)) + '</span>' +
+      (quando ? '<span class="g-limbo-quando">' + esc(quando) + '</span>' : '') +
+      '</div>';
+  }).join('');
+
+  box.innerHTML =
+    '<div class="g-limbo-topo">⚠ <strong>' + perdidas.length +
+    (perdidas.length === 1 ? ' demanda com data marcada não aparece no quadro'
+                           : ' demandas com data marcada não aparecem no quadro') +
+    '</strong> — elas não estão em nenhuma linha deste mês nem na fila ao lado. ' +
+    'Clique para abrir e corrigir a data ou a etapa.</div>' +
+    '<div class="g-limbo-lista">' + linhas + '</div>';
 }
 
 function renderPausadas() {

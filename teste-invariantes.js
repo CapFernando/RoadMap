@@ -72,6 +72,7 @@ const BUSCAJS = fs.readFileSync('busca-demanda.js', 'utf8');
 const CATALOGO = fs.readFileSync('catalogo.js', 'utf8');
 const FILA = require('./fila.js');   // a conta da fila, executada e nao regexada
 const VINCULO = require('./vinculo.js');   // idem, para a regra do vinculo
+const PRZM = require('./prazo.js');        // e a regra do prazo, para a rede do limbo
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -12199,6 +12200,117 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'arrastar fica desligado enquanto se marca — senao um clique frouxo ' +
        'moveria o prazo de uma demanda achando que a estava marcando');
     ok(/function gSoltar\(/.test(GANTT), 'e da para tirar uma quebra do grupo');
+  }
+
+  /* === A DEMANDA NAO PODE FICAR NO LIMBO ================================
+
+     "Havia uma issue AX-288 programada para agosto de forma indevida, nao
+     estava aparecendo no gantt. Preciso blindar isso: caso ocorra planejamento
+     retroativo, bloquear para a demanda nao se perder e ficar no limbo sem
+     ninguem olhando."
+
+     MEDIDO, e o buraco e maior que a AX-288: so as quatro etapas de
+     `ETAPAS_QUE_HERDAM` reaparecem no mes seguinte. `backlog` e
+     `levantar_req` com data em mes passado SOMEM do quadro — e a barra
+     lateral, por padrao, so mostra `planning` com pontos. A demanda nao esta
+     no quadro e nao esta na fila.
+
+     DUAS METADES, e as duas sao cobradas aqui:
+       PREVENCAO  o aviso no momento em que a data retroativa e digitada
+       REDE       a faixa que mostra quem nao apareceu, seja qual for a causa  */
+  sec('Nenhuma demanda no limbo');
+  {
+    /* ── A medicao que originou tudo: quais etapas somem ── */
+    const somem = ['backlog', 'levantar_req'].filter(et =>
+      !PRZM.herdadaDeMesAnterior({ entrega: '2026-08-20', criado_em: '2026-08-01' },
+                                  et, '2026-09', '2026-09-17'));
+    ok(somem.length === 2,
+       'backlog e levantar_req com data em mes passado somem do quadro — e por ' +
+       'isso que a rede existe', somem.join(', '));
+    const ficam = PRZM.ETAPAS_QUE_HERDAM.filter(et =>
+      PRZM.herdadaDeMesAnterior({ entrega: '2026-08-20', criado_em: '2026-08-01' },
+                                et, '2026-09', '2026-09-17'));
+    ok(ficam.length === PRZM.ETAPAS_QUE_HERDAM.length,
+       'e as quatro que herdam continuam aparecendo', ficam.join(', '));
+
+    /* ── A REDE: ela se baseia no que o quadro DESENHOU, e nao numa lista de
+          causas. Enumerar causas exige acertar a lista, e eu ja errei uma vez
+          supondo que "herdada" cobria tudo. ── */
+    ok(/const _gNoQuadro = new Set\(\);/.test(GANTT),
+       'o quadro registra quem desenhou');
+    ok(/_gNoQuadro\.clear\(\);/.test(GANTT), 'e zera o registro a cada render');
+    ok(/_gNoQuadro\.add\(m\.id\);/.test(GANTT), 'e marca cada card desenhado');
+    ok(/if \(_gNoQuadro\.has\(m\.id\)\) return false;/.test(GANTT),
+       'e a rede cobra a DIFERENCA, em vez de enumerar as causas');
+    /* A ORDEM IMPORTA: a faixa e desenhada DEPOIS do quadro, senao o conjunto
+       estaria vazio e ela acusaria todas as demandas do mes. */
+    const iRender = GANTT.indexOf('table.innerHTML = html;');
+    const iLimbo = GANTT.indexOf('renderLimbo();');
+    ok(iRender > 0 && iLimbo > iRender,
+       'e ela roda DEPOIS do desenho — antes, o registro estaria vazio e ela ' +
+       'acusaria o mes inteiro');
+
+    /* ── O QUE NAO ENTRA NA REDE, e e o que a mantem legivel ── */
+    const limbo = corpo(GANTT, 'function renderLimbo()');
+    ok(!!limbo, 'a rede foi encontrada');
+    ok(/if \(!\(m\.inicio \|\| m\.entrega\)\) return false;/.test(limbo || ''),
+       'demanda SEM data nao entra: ela mora no backlog, que e onde deve estar');
+    ok(/if \(quando && mesTela && quando > mesTela\) return false;/.test(limbo || ''),
+       'e a planejada para o FUTURO tambem nao: ela aparece quando o mes chegar, ' +
+       'e gritar sobre o que esta certo faz o aviso deixar de ser lido');
+    ok(/sp === 'concluido'/.test(limbo || ''),
+       'e a concluida nao entra — ela sai do quadro por direito');
+
+    /* ── A PREVENCAO, EXECUTADA ── */
+    const fnRetro = corpo(GANTT, 'async function gConfirmaRetroativo(');
+    ok(!!fnRetro, 'o aviso de planejamento retroativo foi encontrado');
+    if (fnRetro) {
+      /* `await` INLINE, e nao `registra`: este bloco esta DEPOIS do
+         `Promise.all(pendentes)` la em cima, e registrar aqui empilharia
+         promessas que ninguem espera — as checagens rodariam depois do resumo
+         final, ou nao rodariam. Segunda vez que caio nisso nesta sessao. */
+      await (async () => {
+        let pedidos = [];
+        const retro = new Function('PRAZO', 'ETAPA_LABELS', 'confirmar', 'window',
+          fnRetro + ' return gConfirmaRetroativo;')(
+          PRZM, { backlog: 'Backlog', em_andamento: 'Em andamento' },
+          (o) => { pedidos.push(o); return Promise.resolve(true); }, { PRAZO: PRZM });
+
+        pedidos = [];
+        await retro('2026-09-10', '2026-09-20', 'backlog');
+        ok(pedidos.length === 0, 'data no mes atual nao pergunta nada');
+
+        pedidos = [];
+        await retro('', '', 'backlog');
+        ok(pedidos.length === 0, 'e sem data tambem nao');
+
+        /* A ETAPA QUE NAO REAPARECE e o caso perigoso, e o aviso diz isso. */
+        pedidos = [];
+        await retro('2026-08-01', '2026-08-20', 'backlog');
+        ok(pedidos.length === 1 && pedidos[0].perigo === true,
+           'data em mes passado com etapa que NAO reaparece pergunta, e marca perigo');
+        ok(/NÃO reaparece/.test(pedidos[0].texto || ''),
+           'e o texto diz a CONSEQUENCIA, e nao "tem certeza?"',
+           (pedidos[0].texto || '').slice(0, 60));
+
+        /* A QUE REAPARECE tambem pergunta — datar para tras e decisao —, mas
+           sem alarme: ela volta como herdada, e tratar as duas igual ensinaria
+           a clicar em Sim sem ler. */
+        pedidos = [];
+        await retro('2026-08-01', '2026-08-20', 'em_andamento');
+        ok(pedidos.length === 1 && pedidos[0].perigo === false,
+           'e a etapa que reaparece pergunta sem alarme');
+
+        /* PEDE CONFIRMACAO, E NAO RECUSA. Recusar obrigaria a mentir a data
+           para conseguir gravar — troca a demanda invisivel por um numero
+           errado, que e pior. */
+        const r = await retro('2026-08-01', '2026-08-20', 'backlog');
+        ok(r === true, 'e confirmando, a gravacao segue');
+      })();
+    }
+
+    ok(/if \(!\(await gConfirmaRetroativo\(inicio, fim, sp\)\)\) return;/.test(GANTT),
+       'e o salvar do gantt passa por ele antes de gravar');
   }
 
   let erroPz = null;
