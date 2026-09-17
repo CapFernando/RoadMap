@@ -12313,6 +12313,129 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o salvar do gantt passa por ele antes de gravar');
   }
 
+  /* === O RESUMO EXECUTIVO DE UM PROJETO =================================
+
+     "Preciso gerar um resumo executivo do projeto, com o nome do projeto,
+     issues que estao nele, titulos e um resumo."
+
+     ESTE BLOCO EXECUTA `resumo-projeto.js` — nao le o codigo dele. O que
+     importa aqui e o TEXTO que sai, porque e ele que vai para o grupo. */
+  sec('Resumo executivo do projeto');
+  {
+    const RP = require('./resumo-projeto.js');
+    global.PRAZO = PRZM;
+    global.ETAPADEMANDA = require('./etapa-demanda.js');
+
+    const ST = {
+      projetos: [{ id: 'p1', codigo: 'EP-004', nome: 'Site Audax',
+                   status: 'em_andamento', responsavel: 'Murillo Jesus',
+                   inicio: '2026-09-01', fim: '2026-12-20',
+                   descricao: 'Nova estrutura do site institucional.' }],
+      temas: [{ id: 't1', nome: 'Site Audax' }],
+      melhorias: [
+        { id: '1', codigo: 'AX-501', titulo: 'D1 - Captura do legado', projeto_id: 'p1',
+          tema_id: 't1', dev: 'Murillo Jesus', poker_pontos: 13,
+          status_planejamento: 'concluido', concluido_em: '2026-09-10',
+          inicio: '2026-09-01', entrega: '2026-09-08',
+          resumo_entrega: 'Base antiga mapeada e importada.' },
+        { id: '2', codigo: 'AX-502', titulo: 'D2 - Monorepo', projeto_id: 'p1',
+          tema_id: 't1', dev: 'Murillo Jesus', poker_pontos: 8,
+          status_planejamento: 'validacao', entregue_em: '2026-09-15',
+          inicio: '2026-09-09', entrega: '2026-09-16' },
+        { id: '3', codigo: 'AX-503', titulo: 'D3 - Identidade', projeto_id: 'p1',
+          tema_id: 't1', dev: 'Eloi', status_planejamento: 'em_andamento',
+          inicio: '2026-09-05', entrega: '2026-09-09' },
+        { id: '4', codigo: 'AX-504', titulo: 'D4 - Recrutamento', projeto_id: 'p1',
+          tema_id: 't1', status_planejamento: 'planejado' },
+        /* CODIGO BAIXO E ETAPA TARDIA — e o caso que distingue a ordem da
+           CONVERSA da ordem do CODIGO. Sem ele o fixture saia em AX-501..504,
+           que e a mesma coisa nas duas ordens, e a sabotagem que desligava a
+           ordenacao passava em silencio. */
+        { id: '0', codigo: 'AX-100', titulo: 'D0 - Guarda-chuva', projeto_id: 'p1',
+          tema_id: 't1', status_planejamento: 'planejado' },
+        { id: '9', codigo: 'AX-900', titulo: 'De outro projeto', projeto_id: 'p2' },
+        { id: '8', codigo: 'AX-800', titulo: 'Oculta', projeto_id: 'p1', oculto: true },
+      ],
+    };
+    const r = RP.montar(ST, 'p1', '2026-09-17');
+    const t = RP.texto(r);
+
+    ok(r.total === 5, 'so as issues DESTE projeto entram, e a oculta fica fora',
+       String(r.total));
+    ok(/^EP-004 — Site Audax/.test(t), 'o texto comeca pelo codigo e o nome do projeto');
+    ok(/responsável: Murillo Jesus/.test(t), 'e traz o responsavel');
+    ok(/Nova estrutura do site institucional\./.test(t), 'e a descricao do projeto');
+    ok(/1 de 5 concluídas \(20%\)/.test(t), 'e o andamento', (t.match(/\d+ de \d+ conclu[^\n]*/) || [''])[0]);
+    ok(/13 de 21 pontos entregues/.test(t), 'e os pontos');
+    ok(/3 sem pontuação/.test(t),
+       'e quantas nao foram estimadas — sem isso o percentual de pontos nao significa nada');
+
+    /* TITULO E RESUMO DE CADA ISSUE — era o pedido literal. */
+    ok(/AX-501 \[Site Audax\] D1 - Captura do legado/.test(t),
+       'cada issue leva codigo, tema e titulo');
+    ok(/\n  Base antiga mapeada e importada\./.test(t),
+       'e o resumo dela entra recuado, na linha de baixo');
+
+    /* AS DATAS APARECEM SEMPRE QUE EXISTIREM — pedido do Fernando. */
+    ok(/01\/09\/2026 a 08\/09\/2026/.test(t),
+       'a janela combinada aparece quando ha as duas datas');
+    /* CONFERE O DADO, e nao o texto. A primeira versao procurava " a " seguido
+       de digito na linha, e a sabotagem que devolvia `' a '` com as duas datas
+       vazias passava: nao havia digito depois dela. */
+    const semData = r.issues.find((x) => x.codigo === 'AX-504');
+    ok(semData && semData.periodo === '',
+       'quem nao tem data nenhuma fica com periodo vazio, e nao com um traco solto',
+       JSON.stringify(semData && semData.periodo));
+    ok(/AX-504[^\n]*sem data combinada/.test(t),
+       'e a linha dela diz que nao ha data combinada',
+       (t.match(/- AX-504[^\n]*/) || [''])[0]);
+    /* E COM UMA DATA SO, ela se nomeia — "30/09" sozinho nao diz se e inicio
+       ou entrega. */
+    const soFim = RP.montar({ projetos: [{ id: 'z' }], temas: [],
+      melhorias: [{ id: 'a', projeto_id: 'z', entrega: '2026-09-30' }] }, 'z', '2026-09-17');
+    ok(soFim.issues[0].periodo === 'entrega 30/09/2026',
+       'e com uma data so, ela se nomeia', soFim.issues[0].periodo);
+
+    /* O ATRASO EM DIAS — e aqui eu errei na primeira versao: passei a etapa
+       EFETIVA para `diasDeAtraso`, e com 'atrasado' ela devolve `null`. Toda
+       linha atrasada dizia "0 dias". */
+    ok(/Atrasado, 8 dias, venceu 09\/09\/2026/.test(t),
+       'o atraso sai em dias de verdade, e nao zero',
+       (t.match(/- AX-503[^\n]*/) || [''])[0]);
+
+    /* A ORDEM E A DA CONVERSA: o que saiu primeiro. */
+    const ordem = (t.match(/- (AX-\d+)/g) || []).join(',');
+    ok(ordem === '- AX-501,- AX-502,- AX-503,- AX-100,- AX-504',
+       'a ordem e a da CONVERSA — concluido, validacao, atrasado, o resto — e ' +
+       'AX-100, de codigo menor, sai por ultimo justamente por isso', ordem);
+
+    /* SEM MARKDOWN: o destino e um grupo de mensagem. */
+    ok(!/\*\*|^#/m.test(t), 'o texto nao tem marcacao de markdown');
+
+    /* PROJETO SEM ISSUE DIZ ISSO, em vez de sair um cabecalho sozinho. */
+    const vazio = RP.texto(RP.montar(
+      { projetos: [{ id: 'z', nome: 'Vazio' }], temas: [], melhorias: [] }, 'z', '2026-09-17'));
+    ok(/Nenhuma issue vinculada/.test(vazio), 'projeto sem issue diz isso');
+
+    /* A TELA E O TEXTO SAEM DA MESMA MONTAGEM. Duas montagens divergiriam no
+       primeiro ajuste, e o que a pessoa leu na tela nao seria o que ela colou. */
+    const h = RP.html(r);
+    ok(/D1 - Captura do legado/.test(h) && /Base antiga mapeada/.test(h),
+       'o html mostra os mesmos titulos e resumos');
+    ok(/EP-004/.test(h), 'e o codigo do projeto');
+
+    /* E O BOTAO ESTA NO MODAL DO PROJETO, no admin. */
+    ok(/id="pj-resumo-btn"/.test(ADMIN), 'o botao existe no modal do projeto');
+    ok(/onclick="pjResumoExecutivo\(\)"/.test(ADMIN), 'e chama o resumo');
+    ok(/RESUMOPROJETO\.abrir\(state, id\)/.test(ADMIN),
+       'que delega para o modulo, sem montar nada por fora');
+    /* SO EM PROJETO QUE EXISTE: num "Novo projeto" nao ha o que resumir, e um
+       botao que abre tela vazia ensina que o botao nao funciona. */
+    ok(/if \(btnRes\) btnRes\.style\.display = p \? 'inline-flex' : 'none';/.test(ADMIN),
+       'e so aparece em projeto que ja existe');
+    ok(/<script src="resumo-projeto\.js\?v=/.test(ADMIN), 'e a pagina carrega o modulo');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

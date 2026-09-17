@@ -1120,6 +1120,7 @@
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
+  <script src="resumo-projeto.js?v=8bfa581857"></script>
   <script src="fila.js?v=90c9b67421"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
@@ -2122,6 +2123,14 @@
             style="display:none;font-family:ui-monospace,monospace;font-size:12px;font-weight:700;
                    color:var(--purple-tx,#C9AEFF);background:var(--purple-bg,#341A6E);border:none;
                    border-radius:5px;padding:3px 9px;margin:-8px 0 14px;cursor:pointer"></button>
+    <!-- O RESUMO FICA NO TOPO, ao lado do codigo, e nao no rodape com Salvar.
+         Ele nao grava nada — e leitura —, e um botao de leitura entre os de
+         gravacao e clicado por engano. -->
+    <button type="button" class="btn btn-secondary btn-sm" id="pj-resumo-btn"
+            onclick="pjResumoExecutivo()" style="display:none;margin:-8px 0 14px 8px"
+            title="Resumo executivo: as issues do projeto, títulos, datas e o que já saiu — pronto para copiar">
+      📄 Resumo executivo
+    </button>
     <input type="hidden" id="pj-id" />
     <!-- Decisao do PM/PO sobre proposta de dev. Fica ANTES das abas: e a
          primeira coisa a resolver ao abrir, nao um detalhe no meio do form. -->
@@ -11716,6 +11725,10 @@ function pjAbrir(id) {
   const cod = document.getElementById('pj-modal-cod');
   cod.style.display = p && p.codigo ? 'inline-block' : 'none';
   if (p && p.codigo) cod.textContent = p.codigo;
+  /* SÓ EM PROJETO QUE EXISTE. Num "Novo projeto" não há o que resumir, e um
+     botão que abre uma tela vazia ensina que o botão não funciona. */
+  const btnRes = document.getElementById('pj-resumo-btn');
+  if (btnRes) btnRes.style.display = p ? 'inline-flex' : 'none';
   pjAprovRender(p);
   document.getElementById('pj-nome').value = p ? (p.nome || '') : '';
   document.getElementById('pj-desc').value = p ? (p.descricao || '') : '';
@@ -11732,6 +11745,20 @@ function pjAbrir(id) {
   pjRenderDemandas();
   pjAba('dados');
   abrirModal('modal-projeto');
+}
+
+/** O RESUMO EXECUTIVO DO PROJETO.
+ *
+ *  "Preciso gerar um resumo executivo do projeto, com o nome do projeto, issues
+ *  que estão nele, títulos e um resumo."
+ *
+ *  A regra mora em `resumo-projeto.js`, e não aqui: é o mesmo desenho do
+ *  `resumo-dev.js`, e pela mesma razão — a tela é onde se confere, o texto
+ *  copiado é o que viaja, e os dois têm de sair da MESMA montagem. */
+function pjResumoExecutivo() {
+  const id = document.getElementById('pj-id').value;
+  if (!id) return;
+  RESUMOPROJETO.abrir(state, id);
 }
 
 function pjCopiarCodigo() {
