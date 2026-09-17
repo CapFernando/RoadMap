@@ -3114,12 +3114,22 @@ function gEmpacota(sorted, faixas, tracks, recolhidos) {
     cardTrack.set(m.id, t);
   };
 
+  /* AS FAIXAS QUE SÃO SÓ DO AGRUPADOR. A barra da D0 costuma cobrir um pedaço
+     do mês e deixar o resto da faixa vazio — e essa faixa era reservada por
+     inteiro, para ninguém. Numa linha de dev cheia isso é uma faixa perdida por
+     grupo, e foi o que o Fernando viu: a D0 sozinha no alto com três semanas de
+     vazio ao lado. Elas ficam marcadas aqui para o resto poder ocupar o que
+     sobra. As faixas das QUEBRAS continuam exclusivas: é lá que misturar
+     confunde, porque o que está ao lado de uma quebra parece ser do grupo. */
+  const faixasDoAgrupador = [];
+
   /* ── os blocos primeiro, na ordem em que os pais aparecem ── */
   let proxima = 0;
   noMes.forEach(pai => {
     const filhos = filhosDe.get(pai.id);
     if (!filhos) return;
     poe(pai, proxima);
+    faixasDoAgrupador.push(proxima);
     proxima += 1;
     if (fechados.has(pai.id)) return;      // recolhido: as quebras não ocupam faixa
     /* As quebras empacotam ENTRE SI, começando na faixa seguinte à do pai. */
@@ -3135,12 +3145,18 @@ function gEmpacota(sorted, faixas, tracks, recolhidos) {
     proxima += Math.max(1, locais.length);
   });
 
-  /* ── e o resto, empacotado como sempre, nas faixas depois dos blocos ── */
+  /* ── e o resto: primeiro o vazio que sobrou ao lado dos agrupadores, depois
+        as faixas livres abaixo dos blocos ── */
+  const cabe = (t, f) => !tracks[t] ||
+    tracks[t].every(o => f.sIdx > o.end || f.eIdx < o.start);
   noMes.forEach(m => {
     if (emBloco.has(m.id)) return;
     const f = faixas.get(m.id);
-    let t = proxima;
-    while (tracks[t] && !tracks[t].every(o => f.sIdx > o.end || f.eIdx < o.start)) t += 1;
+    let t = faixasDoAgrupador.find(fa => cabe(fa, f));
+    if (t === undefined) {
+      t = proxima;
+      while (!cabe(t, f)) t += 1;
+    }
     poe(m, t);
   });
 

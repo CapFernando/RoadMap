@@ -12360,8 +12360,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       /* A D0 FICA SOZINHA NA FAIXA DELA. Dividir a faixa com outra barra faria
          o contorno do grupo passar a ser o contorno de duas coisas. */
       ok(t1.get('D0') === 0, 'a D0 fica na primeira faixa, sozinha', String(t1.get('D0')));
+      /* NESTE FIXTURE a D0 cobre o mes inteiro (0..20), entao nao ha vazio ao
+         lado dela para ninguem ocupar — o que este `ok` mede e que a faixa nao
+         e invadida por sobreposicao. O caso do VAZIO tem fixture proprio logo
+         abaixo, e e outra pergunta. */
       ok(![...fx.keys()].some(k => k !== 'D0' && t1.get(k) === 0),
-         'e ninguem mais entra nela');
+         'e ninguem se sobrepoe a ela');
 
       /* AS QUEBRAS VEM LOGO ABAIXO, e empacotadas ENTRE SI. */
       ['D1', 'D2', 'D3'].forEach(k => {
@@ -12392,6 +12396,51 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'e as quebras nao recebem faixa nenhuma — o desenho pula quem nao tem');
       ok(tr2.length < tr.length,
          'e a linha do dev encolhe', tr2.length + ' faixas contra ' + tr.length);
+
+      /* ═══ O VAZIO AO LADO DA D0 NAO E RESERVADO PARA NINGUEM ═══════════
+       *
+       * "Por qual motivo essa demanda fica na linha de cima e nao na de baixo,
+       *  consumindo espaco?"
+       *
+       * A "Carteira do Gestor" cobria so o fim do mes e ficava sozinha no alto,
+       * com tres semanas de faixa vazia ao lado. Numa linha de dev cheia isso e
+       * uma faixa perdida por grupo — e a reserva nao estava protegendo nada
+       * ali: o que confunde e uma barra de fora ao lado de uma QUEBRA, porque
+       * parece ser do grupo. Ao lado da D0 nao parece: ela e tracejada e leva a
+       * soma do grupo escrita nela.
+       *
+       * FIXTURE PROPRIO, com a D0 curta — no de cima ela ocupa o mes inteiro e
+       * este caso nao existiria. */
+      {
+        const s4 = [{ id: 'D0' }, { id: 'D1', parent_id: 'D0' },
+                    { id: 'D2', parent_id: 'D0' },
+                    { id: 'W' }, { id: 'V' }, { id: 'T' }];
+        const f4 = new Map([
+          ['D0', { sIdx: 14, eIdx: 20 }],           // so o fim do mes
+          ['D1', { sIdx: 14, eIdx: 16 }], ['D2', { sIdx: 17, eIdx: 20 }],
+          ['W', { sIdx: 0, eIdx: 5 }],              // nao encosta na D0
+          ['V', { sIdx: 15, eIdx: 18 }],            // colide com a D0
+          ['T', { sIdx: 0, eIdx: 5 }],              // nao encosta na D0, mas colide com W
+        ]);
+        let tr4 = [];
+        const t4 = pack(s4, f4, tr4, new Set());
+        ok(t4.get('D0') === 0 && t4.get('D1') === 1 && t4.get('D2') === 1,
+           'o bloco continua sendo bloco: D0 em cima, as duas quebras na faixa de baixo',
+           'D0=' + t4.get('D0') + ' D1=' + t4.get('D1') + ' D2=' + t4.get('D2'));
+        ok(t4.get('W') === 0,
+           'e quem cabe no vazio AO LADO da D0 ocupa esse vazio, em vez de abrir ' +
+           'uma faixa nova', 'W=' + t4.get('W'));
+        /* E O LIMITE DISSO, que e o que mantem o bloco legivel. */
+        ok(t4.get('V') !== 0 && t4.get('V') !== 1,
+           'quem colide com a D0 nao entra na faixa dela', 'V=' + t4.get('V'));
+        ok(t4.get('T') !== 1,
+           'e NINGUEM de fora entra na faixa das quebras, mesmo cabendo nela — ' +
+           'ao lado de uma quebra, uma barra de fora parece ser do grupo',
+           'T=' + t4.get('T'));
+        ok(tr4.length === 3,
+           'o resultado e uma faixa a menos do que a reserva antiga daria',
+           tr4.length + ' faixas');
+      }
 
       /* FILHO CUJO PAI NAO ESTA NA TELA e card solto, e nao some. Outro dev,
          ou fora do mes: ele continua aparecendo, senao sumiria esperando um
@@ -12813,6 +12862,61 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/if \(btnRes\) btnRes\.style\.display = p \? 'inline-flex' : 'none';/.test(ADMIN),
        'e so aparece em projeto que ja existe');
     ok(/<script src="resumo-projeto\.js\?v=/.test(ADMIN), 'e a pagina carrega o modulo');
+
+    /* ═══ TEM DE CABER NA TELA ══════════════════════════════════════════
+     *
+     * "Quero um visual que me permita ver tudo no quadro sem ter a necessidade
+     *  de usar barra de rolagem. Tambem preciso do ajuste do texto para caber."
+     *
+     * MEDIDO na previa, com o projeto da tela dele (EP-008, 15 issues): o
+     * desenho antigo dava ~1200px de altura — uma coluna so, cartoes de 50px e
+     * KPIs de numero 22px. Nenhum projeto real cabia. */
+    const RPJ = fs.readFileSync('resumo-projeto.js', 'utf8');
+    /* A LISTA E GRADE, e quantas colunas cabem e conta do navegador. Fixar um
+       numero estaria errado na outra tela. */
+    ok(/grid-template-columns:repeat\(auto-fill,minmax\(360px,1fr\)\)/.test(RPJ),
+       'a lista e grade com colunas por largura, e nao uma coluna so');
+    /* O TETO DE ALTURA E A LISTA QUE ROLA, e nao a pagina: projeto com oitenta
+       issues vai rolar de qualquer jeito, mas o cabecalho e os numeros — que sao
+       a leitura de cinco segundos — nao podem sair de vista junto. */
+    ok(/max-height:calc\(100vh - 56px\)/.test(RPJ), 'a caixa tem teto de altura');
+    ok(/\.rxp-lista\{[^}]*overflow:auto/.test(RPJ.replace(/\n\s*/g, '')),
+       'e e a LISTA que rola');
+    ok(/\.rxp-cab\{[^}]*flex-shrink:0/.test(RPJ.replace(/\n\s*/g, '')) &&
+       /\.rxp-kpis\{[^}]*flex-shrink:0/.test(RPJ.replace(/\n\s*/g, '')),
+       'o cabecalho e os numeros ficam fixos enquanto a lista rola');
+    /* `box-sizing` DECLARADO, e nao herdado. Medido: sem ele o teto vale para a
+       caixa de CONTEUDO e a caixa fica 38px mais alta que o teto (padding 18+18
+       e borda 1+1) — o bastante para a pagina inteira voltar a rolar. O
+       `admin.html` tem o reset global e disfarcaria isso; modulo que injeta CSS
+       em pagina que nao e dele nao pode depender do reset dela. */
+    ok(/\.rxp-overlay,\.rxp-overlay \*\{box-sizing:border-box;\}/.test(RPJ),
+       'o modulo declara o proprio box-sizing, em vez de herdar o da pagina');
+
+    /* ═══ E O TEXTO CABE ════════════════════════════════════════════════
+     *
+     * A descricao do EP-008 traz uma URL do SharePoint de duzentos caracteres,
+     * sem ponto de quebra nenhum: ela atravessava a borda direita da caixa.
+     * `anywhere` quebra DENTRO da palavra quando nao ha alternativa — e a unica
+     * que resolve URL, porque `break-word` respeita a palavra ate o fim. */
+    ok(/\.rxp-desc\{[^}]*overflow-wrap:anywhere/.test(RPJ.replace(/\n\s*/g, '')),
+       'a descricao quebra dentro da URL em vez de atravessar a borda');
+    ok(/\.rxp-desc\{[^}]*-webkit-line-clamp:2/.test(RPJ.replace(/\n\s*/g, '')),
+       'e ocupa no maximo duas linhas — a altura do alto e das issues');
+    ok(/\.rxp-tit\{[^}]*white-space:nowrap/.test(RPJ.replace(/\n\s*/g, '')),
+       'o titulo da issue fica em uma linha, para os cartoes terem altura igual');
+    /* TEXTO CORTADO SEM COMO LER O RESTO E INFORMACAO PERDIDA, nao resumida. */
+    for (const [alvo, oque] of [['rxp-desc', 'a descricao'], ['rxp-tit', 'o titulo'],
+                                ['rxp-item-sub', 'a linha de baixo'],
+                                ['rxp-resumo', 'o resumo']]) {
+      ok(new RegExp('class="' + alvo + '" title="').test(RPJ),
+         oque + ' cortada continua legivel ao passar o mouse');
+    }
+
+    /* E O CONTEUDO NAO ENCOLHEU JUNTO: a data continua saindo, que foi pedido
+       explicito ("quando houver data, devera mostrar"). */
+    ok(/x\.periodo \? '<span class="rxp-prazo">/.test(RPJ),
+       'a data continua no cartao depois do aperto');
   }
 
   let erroPz = null;

@@ -276,19 +276,25 @@
           var cls = x.gravada === 'concluido' ? 'fim'
             : x.gravada === 'validacao' ? 'val'
             : x.efetiva === 'atrasado' ? 'atr' : 'and';
+          /* `title` EM TUDO QUE CORTA. A grade exige altura igual por cartão,
+             então título, subtítulo e resumo cortam — e texto cortado sem o
+             recurso de ler o resto é informação perdida, não resumida. */
+          var sit = x.situacao.rot + ', ' + x.situacao.det;
+          var sub = [x.tema, sit, x.periodo, x.dev].filter(Boolean).join('  ·  ');
           return '<div class="rxp-item ' + cls + '">' +
             '<div class="rxp-item-topo">' +
             (x.codigo ? '<span class="rxp-cod">' + esc(x.codigo) + '</span>' : '') +
-            '<span class="rxp-tit">' + esc(x.titulo) + '</span>' +
+            '<span class="rxp-tit" title="' + esc(x.titulo) + '">' + esc(x.titulo) + '</span>' +
             (x.pontos != null ? '<span class="rxp-pts">' + x.pontos + ' pt</span>' : '') +
             '</div>' +
-            '<div class="rxp-item-sub">' +
+            '<div class="rxp-item-sub" title="' + esc(sub) + '">' +
             (x.tema ? '<span class="rxp-tema">' + esc(x.tema) + '</span>' : '') +
-            '<span class="rxp-sit">' + esc(x.situacao.rot) + ', ' + esc(x.situacao.det) + '</span>' +
+            '<span class="rxp-sit">' + esc(sit) + '</span>' +
             (x.periodo ? '<span class="rxp-prazo">📅 ' + esc(x.periodo) + '</span>' : '') +
             (x.dev ? '<span class="rxp-dev">' + esc(x.dev) + '</span>' : '') +
             '</div>' +
-            (x.resumo ? '<div class="rxp-resumo">' + esc(x.resumo) + '</div>' : '') +
+            (x.resumo ? '<div class="rxp-resumo" title="' + esc(x.resumo) + '">' +
+                        esc(x.resumo) + '</div>' : '') +
             '</div>';
         }).join('') + '</div>';
 
@@ -296,7 +302,8 @@
       '<div class="rxp-nome">' + (p.codigo ? '<span class="rxp-cod-proj">' + esc(p.codigo) +
         '</span> ' : '') + esc(p.nome) + '</div>' +
       (cab.length ? '<div class="rxp-meta">' + cab.join('  ·  ') + '</div>' : '') +
-      (p.descricao ? '<div class="rxp-desc">' + esc(p.descricao) + '</div>' : '') +
+      (p.descricao ? '<div class="rxp-desc" title="' + esc(p.descricao) + '">' +
+                     esc(p.descricao) + '</div>' : '') +
       '</div>' + kpis + lista;
   }
 
@@ -312,41 +319,94 @@
    * cobra que nenhuma classe daqui exista nas páginas que carregam o módulo —
    * uma colisão nova entra pelo mesmo caminho e não aparece em teste nenhum,
    * porque o JavaScript funciona e só o desenho quebra. */
+  /* ═══ CABER NA TELA, SEM BARRA DE ROLAGEM ═══════════════════════════════
+   *
+   * "Quero um visual que me permita ver tudo no quadro sem ter a necessidade
+   *  de usar barra de rolagem. Também preciso do ajuste do texto para caber."
+   *
+   * O DESENHO ANTERIOR GASTAVA ALTURA EM TRÊS LUGARES: uma coluna só (cada
+   * issue ocupando a largura inteira para mostrar meia linha de texto), cartões
+   * de 50px com folga de 8px entre eles, e KPIs de número 22px. Quinze issues
+   * davam cerca de 1200px — sempre além da tela, em qualquer projeto real.
+   *
+   * O QUE MUDOU: a lista virou GRADE. `auto-fill` com mínimo de 360px decide
+   * sozinho quantas colunas cabem — duas na largura nova, uma quando a janela
+   * é estreita —, e ninguém precisa escolher um número de colunas que estaria
+   * errado na outra tela. Com duas colunas e o cartão mais apertado, trinta
+   * issues cabem onde quinze não cabiam.
+   *
+   * E O TEXTO PASSOU A SER CONTIDO. A descrição do projeto trazia uma URL do
+   * SharePoint de duzentos caracteres: sem ponto de quebra nenhum, ela
+   * atravessava a borda direita da caixa. `overflow-wrap:anywhere` quebra
+   * dentro da palavra quando não há alternativa — é a única regra que resolve
+   * URL, porque `break-word` respeita a palavra até o fim.
+   *
+   * A CAIXA TEM TETO DE ALTURA e a lista é que rola, não a página inteira.
+   * Projeto com oitenta issues vai rolar de qualquer jeito; o que não pode é o
+   * cabeçalho e os números saírem de vista junto — eles são a leitura de cinco
+   * segundos, e quem rola perde justamente eles. */
   var CSS = [
+    /* `box-sizing` DECLARADO AQUI, e não herdado da página.
+       Medido: sem ele o teto de altura vale para a CAIXA DE CONTEÚDO, e a caixa
+       fica 38px mais alta que o teto (o padding de 18+18 e a borda de 1+1) — o
+       bastante para a página inteira voltar a rolar. O `admin.html` tem o reset
+       global e disfarçaria isso; um módulo que injeta CSS em página que não é
+       dele não pode depender do reset dela. Foi assim que o prefixo `rp-`
+       quebrou esta mesma tela. */
+    '.rxp-overlay,.rxp-overlay *{box-sizing:border-box;}',
     '.rxp-overlay{position:fixed;inset:0;background:#000A;z-index:800;display:flex;',
-    '  align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;}',
+    '  align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto;}',
     '.rxp-caixa{background:var(--bg2,#14141A);border:1px solid var(--border,#2A2A32);',
-    '  border-radius:12px;max-width:860px;width:100%;padding:22px 24px;}',
-    '.rxp-topo{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;}',
+    '  border-radius:12px;max-width:1120px;width:100%;padding:18px 20px;',
+    '  max-height:calc(100vh - 56px);display:flex;flex-direction:column;min-height:0;}',
+    '.rxp-topo{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;flex-shrink:0;}',
     '.rxp-topo-acoes{margin-left:auto;display:flex;gap:8px;flex-shrink:0;}',
-    '.rxp-cab{margin-bottom:14px;}',
-    '.rxp-nome{font-size:19px;font-weight:800;color:var(--text,#EDEDF0);}',
-    '.rxp-cod-proj{font-family:ui-monospace,monospace;font-size:13px;color:#C9AEFF;',
-    '  background:#341A6E;border-radius:5px;padding:2px 8px;margin-right:6px;}',
-    '.rxp-meta{font-size:12.5px;color:var(--text3,#8A8A96);margin-top:4px;}',
-    '.rxp-desc{font-size:13px;color:var(--text2,#B8B8C4);margin-top:8px;line-height:1.5;}',
-    '.rxp-kpis{display:flex;gap:10px;margin:14px 0 10px;flex-wrap:wrap;}',
-    '.rxp-kpi{flex:1;min-width:96px;background:var(--bg3,#1C1C24);border-radius:8px;padding:8px 12px;}',
-    '.rxp-kpi b{display:block;font-size:22px;line-height:1.1;}',
-    '.rxp-kpi span{font-size:11px;color:var(--text3,#8A8A96);}',
+    '.rxp-cab{margin-bottom:10px;flex-shrink:0;min-width:0;}',
+    '.rxp-nome{font-size:17px;font-weight:800;color:var(--text,#EDEDF0);line-height:1.3;',
+    '  overflow-wrap:anywhere;}',
+    '.rxp-cod-proj{font-family:ui-monospace,monospace;font-size:12px;color:#C9AEFF;',
+    '  background:#341A6E;border-radius:5px;padding:2px 7px;margin-right:6px;}',
+    '.rxp-meta{font-size:12px;color:var(--text3,#8A8A96);margin-top:3px;}',
+    /* DUAS LINHAS, E O RESTO NO `title`. Uma descrição de projeto com URL colada
+       ocupava sete linhas do alto da caixa — altura que as issues precisam. */
+    '.rxp-desc{font-size:12.5px;color:var(--text2,#B8B8C4);margin-top:6px;line-height:1.45;',
+    '  overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;',
+    '  -webkit-box-orient:vertical;overflow:hidden;}',
+    '.rxp-kpis{display:flex;gap:8px;margin:0 0 8px;flex-wrap:wrap;flex-shrink:0;}',
+    '.rxp-kpi{flex:1;min-width:88px;background:var(--bg3,#1C1C24);border-radius:8px;',
+    '  padding:6px 10px;}',
+    '.rxp-kpi b{display:block;font-size:18px;line-height:1.15;}',
+    '.rxp-kpi span{font-size:10.5px;color:var(--text3,#8A8A96);}',
     '.rxp-kpi.fim b{color:#3EC98E;} .rxp-kpi.val b{color:#7ED8D8;}',
     '.rxp-kpi.atr b{color:#F9A0A0;} .rxp-kpi.tot b{color:var(--text,#EDEDF0);}',
-    '.rxp-barra{height:6px;background:var(--bg4,#24242E);border-radius:3px;overflow:hidden;}',
+    '.rxp-barra{height:5px;background:var(--bg4,#24242E);border-radius:3px;overflow:hidden;',
+    '  flex-shrink:0;}',
     '.rxp-barra-fill{height:100%;background:#3EC98E;}',
-    '.rxp-barra-txt{font-size:11.5px;color:var(--text3,#8A8A96);margin:5px 0 14px;}',
-    '.rxp-lista{display:flex;flex-direction:column;gap:8px;}',
+    '.rxp-barra-txt{font-size:11px;color:var(--text3,#8A8A96);margin:4px 0 8px;flex-shrink:0;}',
+    /* `auto-fill` E NÃO UM NÚMERO DE COLUNAS: o mínimo de 360px é a largura em
+       que o título ainda se lê; quantas cabem é conta do navegador, e ela sai
+       certa no monitor largo e no notebook. */
+    '.rxp-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));',
+    '  gap:6px;overflow:auto;min-height:0;align-content:start;}',
     '.rxp-item{background:var(--bg3,#1C1C24);border-left:3px solid var(--border2,#3A3A46);',
-    '  border-radius:6px;padding:9px 12px;}',
+    '  border-radius:6px;padding:6px 10px;min-width:0;}',
     '.rxp-item.fim{border-left-color:#3EC98E;} .rxp-item.val{border-left-color:#7ED8D8;}',
     '.rxp-item.atr{border-left-color:#F9A0A0;} .rxp-item.and{border-left-color:#FFC861;}',
-    '.rxp-item-topo{display:flex;align-items:baseline;gap:8px;}',
-    '.rxp-cod{font-family:ui-monospace,monospace;font-size:11.5px;font-weight:700;',
+    '.rxp-item-topo{display:flex;align-items:baseline;gap:7px;min-width:0;}',
+    '.rxp-cod{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;',
     '  color:var(--text3,#8A8A96);flex-shrink:0;}',
-    '.rxp-tit{font-weight:600;color:var(--text,#EDEDF0);flex:1;min-width:0;}',
-    '.rxp-pts{font-size:11px;color:var(--text3,#8A8A96);flex-shrink:0;}',
-    '.rxp-item-sub{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;',
-    '  color:var(--text3,#8A8A96);margin-top:3px;}',
-    '.rxp-resumo{font-size:12.5px;color:var(--text2,#B8B8C4);margin-top:6px;line-height:1.5;}',
+    /* UMA LINHA, COM RETICÊNCIAS. Título que quebra em duas linhas faz cada
+       cartão ter altura diferente, e a grade vira um paredão irregular. */
+    '.rxp-tit{font-weight:600;font-size:13px;color:var(--text,#EDEDF0);flex:1;min-width:0;',
+    '  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+    '.rxp-pts{font-size:10.5px;color:var(--text3,#8A8A96);flex-shrink:0;}',
+    '.rxp-item-sub{display:flex;gap:8px;font-size:11px;color:var(--text3,#8A8A96);',
+    '  margin-top:1px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+    '.rxp-item-sub span{overflow:hidden;text-overflow:ellipsis;}',
+    '.rxp-item-sub .rxp-prazo{flex-shrink:0;}',
+    '.rxp-resumo{font-size:11.5px;color:var(--text2,#B8B8C4);margin-top:3px;line-height:1.4;',
+    '  overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;',
+    '  -webkit-box-orient:vertical;overflow:hidden;}',
     '.rxp-vazio{font-size:13px;color:var(--text3,#8A8A96);}',
   ].join('\n');
 
