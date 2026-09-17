@@ -619,6 +619,10 @@
       opacity: .85;
     }
     .card-recolhe:hover { opacity: 1; }
+    .card-derivada {
+      font-size:9.5px; color:var(--text3); border:1px dashed var(--border2,#444);
+      border-radius:3px; padding:0 4px; margin-right:4px; flex-shrink:0; cursor:help;
+    }
     .card-soma {
       font-size: 10.5px; color: var(--text3); margin-left: 6px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -3238,26 +3242,32 @@ function renderGantt() {
      * esta parte ela não teria faixa nenhuma (`faixaDoCard` devolve nada sem
      * data) e sumiria do gantt, levando o bloco junto.
      *
-     * Então o período dela é o das quebras: do primeiro dia da primeira ao
-     * último da última. Se ela TIVER datas próprias, elas entram na conta —
-     * quem marcou um início antes da primeira quebra quis dizer alguma coisa,
-     * e encolher a barra apagaria isso. */
+     * A DATA PRÓPRIA MANDA, E A DERIVADA É SÓ A RESERVA. A primeira versão
+     * disto fazia a UNIÃO das duas, e o resultado foi um defeito meu que o
+     * Fernando encontrou na tela: editar a data da D0 gravava certo e não
+     * mudava NADA no desenho, porque o período das quebras já cobria o novo.
+     * Edição que grava e não aparece é pior que edição recusada — a pessoa
+     * repete, desconfia do salvamento, e não tem como saber que pegou.
+     *
+     * Então: quem marcou data na D0 manda nela. Quem não marcou nenhuma recebe
+     * o período das quebras, que é o que faz a barra existir — sem isso a D0
+     * (que nasce sem datas) sumiria do gantt levando o bloco junto. */
     devCards.forEach(m => {
       const filhos = devCards.filter(f => String(f.parent_id || '') === m.id);
       if (!filhos.length) return;
+      if (faixas.get(m.id)) return;          // tem data própria: ela manda
       let sIdx = null, eIdx = null, herdada = false;
-      const junta = (f) => {
+      filhos.forEach(id => {
+        const f = faixas.get(id.id);
         if (!f) return;
         sIdx = sIdx === null ? f.sIdx : Math.min(sIdx, f.sIdx);
         eIdx = eIdx === null ? f.eIdx : Math.max(eIdx, f.eIdx);
         herdada = herdada || !!f.herdada;
-      };
-      junta(faixas.get(m.id));
-      filhos.forEach(f => junta(faixas.get(f.id)));
+      });
       /* NENHUMA QUEBRA NO MÊS, E A D0 SEM DATA: não há o que desenhar, e uma
          barra de largura zero seria um risco que ninguém sabe clicar. */
-      if (sIdx === null) { faixas.delete(m.id); return; }
-      faixas.set(m.id, { sIdx, eIdx, herdada });
+      if (sIdx === null) return;
+      faixas.set(m.id, { sIdx, eIdx, herdada, derivada: true });
     });
 
     /* ─── EM QUE FAIXA CADA BARRA CAI ──────────────────────────────────────
@@ -3437,7 +3447,7 @@ function renderGantt() {
 
       const faixa = faixas.get(m.id);
       if (!faixa) return;                       // fora do mes
-      const { sIdx, eIdx, herdada } = faixa;
+      const { sIdx, eIdx, herdada, derivada } = faixa;
 
       /* ═══ O GRUPO: a D0 por fora, as quebras recuadas por dentro ═══════ */
       const ehGrupo = VINCULO.ehAgrupador(state.melhorias, m);
@@ -3491,6 +3501,10 @@ function renderGantt() {
         <span class="card-drag-handle">⠿⠿</span>
         <div class="card-row1">
           ${ehGrupo ? `<button type="button" class="card-recolhe" onclick="gRecolhe('${m.id}',event)" title="${fechado ? 'Mostrar as quebras' : 'Recolher as quebras'}">${fechado ? '▸' : '▾'}</button>` : ''}
+          ${/* A BARRA DERIVADA SE ANUNCIA. Uma D0 sem data mostra uma barra do
+                mesmo jeito (o periodo das quebras), e sem esta marca quem abre a
+                demanda procura a data que desenhou aquilo e nao acha. */''}
+          ${derivada ? `<span class="card-derivada" title="Esta D0 não tem data própria: a barra cobre o período das quebras. Marque início e fim nela para mandar na barra.">↔ das quebras</span>` : ''}
           ${paiNaTela ? `<button type="button" class="card-recolhe" onclick="gSoltar('${m.id}',event)" title="Tirar do grupo — volta a ser uma demanda solta">⤴</button>` : ''}
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}

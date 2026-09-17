@@ -12121,6 +12121,53 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(t3.has('orfao'), 'quebra cujo pai nao esta na tela continua sendo desenhada');
     }
 
+    /* === A DATA DA D0: A PRÓPRIA MANDA, A DERIVADA É RESERVA ===============
+     *
+     * Defeito meu, encontrado pelo Fernando na tela: "por qual motivo a edição
+     * de data não está dando certo?". Ela ESTAVA gravando. O que não acontecia
+     * era o desenho mudar — a primeira versão fazia a UNIÃO da data própria com
+     * o período das quebras, e uma data nova dentro daquele período não movia
+     * nada. Edição que grava e não aparece é pior que edição recusada: a pessoa
+     * repete, desconfia do salvamento, e não tem como saber que pegou.
+     *
+     * ESTE BLOCO EXECUTA o trecho que monta as faixas do agrupador. */
+    {
+      const iniF = GANTT.indexOf('    devCards.forEach(m => {\n      const filhos = devCards.filter');
+      const fimF = GANTT.indexOf('/* ─── EM QUE FAIXA CADA BARRA CAI');
+      ok(iniF > 0 && fimF > iniF, 'o trecho da faixa do agrupador foi achado');
+      if (iniF > 0 && fimF > iniF) {
+        const trecho = GANTT.slice(iniF, fimF);
+        const rodaFaixa = (devCards, faixasIni) => {
+          const faixas = new Map(faixasIni);
+          new Function('devCards', 'faixas', trecho)(devCards, faixas);
+          return faixas;
+        };
+        const cards = [{ id: 'D0' }, { id: 'D1', parent_id: 'D0' }, { id: 'D2', parent_id: 'D0' }];
+
+        /* SEM DATA PRÓPRIA: a barra vem das quebras, e se diz derivada. */
+        let f = rodaFaixa(cards, [['D1', { sIdx: 2, eIdx: 6 }], ['D2', { sIdx: 8, eIdx: 12 }]]);
+        ok(f.get('D0') && f.get('D0').sIdx === 2 && f.get('D0').eIdx === 12,
+           'D0 sem data propria cobre o periodo das quebras',
+           JSON.stringify(f.get('D0')));
+        ok(f.get('D0').derivada === true,
+           'e se marca como derivada — senao quem abre procura a data que desenhou aquilo');
+
+        /* COM DATA PRÓPRIA: ela manda, mesmo DENTRO do periodo das quebras.
+           Era exatamente este caso que nao mudava nada. */
+        f = rodaFaixa(cards, [['D0', { sIdx: 4, eIdx: 5 }],
+                              ['D1', { sIdx: 2, eIdx: 6 }], ['D2', { sIdx: 8, eIdx: 12 }]]);
+        ok(f.get('D0').sIdx === 4 && f.get('D0').eIdx === 5,
+           'D0 COM data propria manda na barra, mesmo dentro do periodo das quebras',
+           JSON.stringify(f.get('D0')));
+        ok(!f.get('D0').derivada, 'e nao se diz derivada');
+
+        /* SEM DATA E SEM QUEBRA NO MES: nao desenha. Barra de largura zero e um
+           risco que ninguem sabe clicar. */
+        f = rodaFaixa(cards, []);
+        ok(!f.has('D0'), 'sem data propria e sem quebra no mes, a D0 nao desenha');
+      }
+    }
+
     /* A REGRA DO AGRUPADOR. */
     const baseG = [{ id: 'D0' }, { id: 'D1', parent_id: 'D0', poker_pontos: 8 },
                    { id: 'D2', parent_id: 'D0', poker_pontos: 13 }, { id: 'X' }];
