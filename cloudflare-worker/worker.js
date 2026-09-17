@@ -3373,11 +3373,42 @@ export default {
       // propria descricao e as horas segue liberado — pedir mais detalhe no texto
       // e justamente o caso mais comum enquanto o PM/PO analisa. Se a API
       // recusasse, ela contradiria a tela, e quem automatiza receberia erro no que
-      // a interface aceita. Concluida continua fechada para tudo.
+      // a interface aceita.
       const etapaAtual = alvo.status_planejamento || 'backlog';
-      if (etapaAtual === 'concluido') {
+      /* ═══ A CONCLUIDA: PREENCHER O QUE FALTA, SIM; MUDAR O QUE HA, NAO ═══
+       *
+       * Aqui havia uma recusa seca — "Demanda concluida e validada: nao pode ser
+       * alterada pela API", 409 em qualquer campo, independente do que viesse no
+       * corpo. Ela custou um relato de producao: um dev foi lancar as DATAS de
+       * demandas ja concluidas que tinham ficado SEM data nenhuma, e levou 409
+       * nas dezoito.
+       *
+       * O ERRO DE DESENHO ERA CONFUNDIR DUAS COISAS. Uma demanda concluida nao
+       * pode ter os fatos dela REESCRITOS — e para isso que ela fecha. Mas campo
+       * VAZIO nao e fato nenhum: nao ha o que reescrever, e completar o registro
+       * e justamente o que faz a demanda voltar a aparecer nos filtros e nos
+       * relatorios. Decisao do Fernando: "estando sem lancamento e para permitir,
+       * para facilitar a filtragem e relatorios (...) vale a regra geral, campo
+       * vazio pode preencher".
+       *
+       * A GUARDA E UMA POS-CONDICAO, E NAO UMA LISTA DE CAMPOS LIBERADOS. Os
+       * setters rodam todos, e ANTES DE GRAVAR se confere o retrato tirado na
+       * entrada: se algum campo que JA TINHA VALOR mudou, a chamada inteira e
+       * recusada e nada vai para o commit. Uma lista de campos liberados
+       * apodreceria no primeiro campo novo — quem o escrevesse teria de lembrar
+       * de vir ate aqui, e ninguem lembra. Assim o campo que nascer amanha ja
+       * nasce coberto.
+       *
+       * ENTREGAR CONTINUA FORA. Nao ha o que entregar numa demanda que o PM/PO
+       * ja validou, e aquela rota mexe em `status_planejamento`, `entregue_em` e
+       * horas de uma vez — a pos-condicao recusaria de qualquer forma, so que
+       * com uma mensagem que nao explicaria o motivo real. */
+      const eraConcluida = etapaAtual === 'concluido';
+      if (eraConcluida && body.action === 'demanda-entregar') {
         return json({ error: 'concluida',
-                      detail: 'Demanda concluida e validada: nao pode ser alterada pela API.' }, 409, headers);
+                      detail: 'Demanda ja concluida e validada pelo PM/PO: nao ha o que entregar. ' +
+                              'Para completar um campo que ficou vazio, use demanda-atualizar.' },
+                    409, headers);
       }
       const emValidacao = etapaAtual === 'validacao';
       if (emValidacao && body.action === 'demanda-entregar') {
@@ -3404,6 +3435,12 @@ export default {
       const atual = JSON.parse(await raw2.text());
       const m = (atual.melhorias || []).find(x => x.id === alvo.id);
       if (!m) return json({ error: 'nao_encontrada' }, 404, headers);
+
+      /* O RETRATO DA CONCLUIDA, tirado antes de qualquer setter rodar. Copia
+         FUNDA de proposito: os setters mexem neste mesmo objeto, e uma copia
+         rasa entregaria o estado de depois como se fosse o de antes — a guarda
+         nunca acusaria nada. */
+      const retratoConcluida = eraConcluida ? JSON.parse(JSON.stringify(m)) : null;
 
       const mudou = [];
       let msg = '';
@@ -3698,6 +3735,46 @@ export default {
         // aprovacao do PM/PO.
         mudou.push('entregue para validacao');
         msg = 'chore: ' + (m.codigo || m.id) + ' entregue para validacao por ' + (eu || 'api');
+      }
+
+      /* ═══ A POS-CONDICAO DA CONCLUIDA ═══════════════════════════════════
+       *
+       * Vale para TODO campo do objeto — inclusive os que ainda nao existem no
+       * dia em que isto foi escrito. E a razao de a guarda estar aqui embaixo, e
+       * nao espalhada em cada setter.
+       *
+       * VAZIO E: ausente, null, "", lista sem itens — e ZERO. O zero entra
+       * porque neste sistema `horas_realizadas: 0` significa "nao lancado", e
+       * nao "levou zero hora": o proprio `demanda-entregar`, algumas linhas
+       * acima, recusa `h <= 0` como se o campo nao tivesse vindo. Deixar o zero
+       * de fora recriaria, num campo vizinho, exatamente o problema que este
+       * conserto veio resolver.
+       *
+       * `false` NAO E VAZIO. `is_dependency: false` e um fato gravado — "este
+       * vinculo e parte, nao trava" —, e nao a ausencia de um.
+       *
+       * E A RECUSA E TOTAL: ou a chamada inteira passa, ou nada e gravado. Meia
+       * atualizacao numa demanda fechada e pior que erro nenhum. */
+      if (retratoConcluida) {
+        const vazioApi = (v) => v === undefined || v === null || v === '' || v === 0 ||
+                                (Array.isArray(v) && v.length === 0);
+        const alterados = [];
+        for (const campo of Object.keys(retratoConcluida)) {
+          const valorAntes = retratoConcluida[campo];
+          if (vazioApi(valorAntes)) continue;
+          if (JSON.stringify(valorAntes) === JSON.stringify(m[campo])) continue;
+          alterados.push({ campo: campo, valor_atual: valorAntes,
+                           valor_enviado: m[campo] === undefined ? null : m[campo] });
+        }
+        if (alterados.length) {
+          return json({ error: 'concluida_alterada',
+                        detail: 'Esta demanda ja foi concluida e validada pelo PM/PO. Campo que ja ' +
+                                'tem valor nao muda mais por aqui: quem corrige e o PM/PO, na tela. ' +
+                                'Campo VAZIO pode ser preenchido normalmente — e para isso que a ' +
+                                'chamada existe. Nada foi gravado.',
+                        campos: alterados.map(x => x.campo),
+                        alteracoes: alterados }, 409, headers);
+        }
       }
 
       normalizaEstados(atual);

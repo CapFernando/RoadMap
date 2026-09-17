@@ -1426,7 +1426,14 @@ function epFuncoesHTML() {
              '<code>409 data_comprometida</code>, dizendo qual valor está lá). Trocar ou ' +
              'limpar continua livre em <code>backlog</code>, <code>levantar_req</code> e ' +
              '<code>planning</code>, e na mesma chamada que sai do planning — a trava olha ' +
-             'a etapa anterior. <code>concluido_em</code> não entra: concluir é do PM/PO.',
+             'a etapa anterior. <code>concluido_em</code> não entra: concluir é do PM/PO. ' +
+             '<b>Demanda já concluída aceita esta chamada</b>, e vale a mesma regra em ' +
+             'todo campo: o que está <b>vazio</b> você preenche — é assim que a demanda ' +
+             'volta a aparecer nos filtros e nos relatórios —, e o que <b>já tem valor</b> ' +
+             'não muda mais (<code>409 concluida_alterada</code>, dizendo quais campos, e ' +
+             'sem gravar nada). Quem corrige um valor já registrado é o PM/PO, na tela. ' +
+             '<code>demanda-entregar</code> continua recusada na concluída: não há o que ' +
+             'entregar depois da validação.',
       corpo: '{"action":"demanda-atualizar","token":"TOKEN","codigo":"' + cod +
         '","link_repo":"audaxcapitalsa/AXCRED-DJANGO","link_pr":"712","link_issue":"683","horas_realizadas":6}',
     },

@@ -12041,6 +12041,189 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e a mensagem de "nada a mudar" lista os campos novos');
   }
 
+  /* === A CONCLUIDA SEM LANCAMENTO =======================================
+
+     "Alta: as 18 concluidas. A API responde `concluida` — 'Demanda concluida e
+     validada: nao pode ser alterada pela API'. Mensagem veio de um dev que usou
+     a api para lancamento das DATAS, demanda ja concluida porem estava SEM data
+     lancada. Estando sem lancamento e para permitir, para facilitar a filtragem
+     e relatorios."  E, sobre o alcance: "vale a regra geral, campo vazio pode
+     preencher."
+
+     A RECUSA ERA GERAL DEMAIS. Uma concluida nao pode ter os fatos dela
+     REESCRITOS; um campo VAZIO nao e fato nenhum. A guarda nova e uma
+     POS-CONDICAO: os setters rodam todos, e antes de gravar se confere o
+     retrato — se algum campo que ja tinha valor mudou, a chamada inteira cai.
+
+     ESTE BLOCO EXECUTA a guarda recortada do Worker. */
+  sec('Concluida: preencher o vazio sim, mudar o que ha nao');
+  {
+    /* A RECUSA SECA SAIU. Se ela voltar, o relato volta junto. */
+    ok(!/nao pode ser alterada pela API/.test(W),
+       'a recusa seca em qualquer campo saiu da rota');
+    /* E `demanda-entregar` CONTINUA FORA: nao ha o que entregar depois que o
+       PM/PO validou, e aquela rota mexe em etapa, `entregue_em` e horas de uma
+       vez — cairia na pos-condicao, mas com uma mensagem que nao explica. */
+    ok(/const eraConcluida = etapaAtual === 'concluido';/.test(W),
+       'a etapa de entrada vira uma marca, em vez de uma recusa');
+    ok(/if \(eraConcluida && body\.action === 'demanda-entregar'\)/.test(W),
+       'e entregar continua recusado na concluida');
+
+    /* ── ONDE A GUARDA MORA. Estas tres posicoes sao a guarda: retrato antes de
+       todo setter, conferencia depois de todos eles e antes do commit. ── */
+    ok(/const retratoConcluida = eraConcluida \? JSON\.parse\(JSON\.stringify\(m\)\) : null;/.test(W),
+       'o retrato e copia FUNDA — a rasa entregaria o estado de DEPOIS como se ' +
+       'fosse o de antes, e a guarda nunca acusaria nada');
+    const iRetrato = W.indexOf('const retratoConcluida =');
+    const iAtualizar = W.indexOf("if (body.action === 'demanda-atualizar') {");
+    const iGuarda = W.indexOf('if (retratoConcluida) {');
+    const iNorm = W.indexOf('\n      normalizaEstados(atual);');
+    ok(iRetrato > 0 && iAtualizar > iRetrato,
+       'o retrato e tirado ANTES de qualquer setter rodar');
+    ok(iGuarda > iAtualizar && iNorm > iGuarda,
+       'e a conferencia acontece DEPOIS de todos eles e antes de gravar');
+
+    const iniC = W.indexOf('      /* \u2550\u2550\u2550 A POS-CONDICAO DA CONCLUIDA');
+    ok(iniC > 0 && iNorm > iniC, 'o bloco da pos-condicao foi achado para ser executado');
+    if (iniC > 0 && iNorm > iniC) {
+      const blocoC = W.slice(iniC, iNorm);
+      /* `antes` e o estado na entrada, `depois` o objeto como os setters o
+         deixaram. `null` em `antes` significa demanda NAO concluida. */
+      const rodaC = (antes, depois) => {
+        let resp = null;
+        const jsonC = (o, st) => { resp = { status: st || 200, corpo: o }; return resp; };
+        new Function('retratoConcluida', 'm', 'json', 'headers',
+          '(() => {' + blocoC + '\n})();')(
+          antes === null ? null : JSON.parse(JSON.stringify(antes)), depois, jsonC, {});
+        return resp;
+      };
+      /* Atalho: parte do estado de entrada e aplica as mudancas por cima, que e
+         exatamente o que os setters fazem. */
+      const passa = (antes, mudancas) => rodaC(antes, Object.assign({}, antes, mudancas));
+
+      /* ── O RELATO, LITERAL: 18 concluidas sem data nenhuma ── */
+      {
+        const m = { id: '1', codigo: 'AX-288', status_planejamento: 'concluido',
+                    concluido_em: '2026-08-20', inicio: '', entrega: '' };
+        ok(passa(m, { inicio: '2026-08-01', entrega: '2026-08-20' }) === null,
+           'demanda concluida SEM data aceita o lancamento das datas — era o relato');
+      }
+      /* CAMPO QUE NEM EXISTE tambem nasce: "vazio" nao e so string vazia. */
+      {
+        const m = { id: '1', status_planejamento: 'concluido' };
+        ok(passa(m, { resumo_entrega: 'Saiu na 1.4.2' }) === null,
+           'campo ausente conta como vazio e pode nascer');
+      }
+
+      /* ── O QUE A GUARDA PROTEGE ── */
+      {
+        const m = { id: '1', status_planejamento: 'concluido', entrega: '2026-08-20' };
+        const r = passa(m, { entrega: '2026-09-30' });
+        ok(r && r.status === 409 && r.corpo.error === 'concluida_alterada',
+           'mas campo que JA TEM valor nao muda mais',
+           r ? r.corpo.error : 'passou');
+        ok(r && (r.corpo.campos || []).join(',') === 'entrega',
+           'e a resposta diz QUAL campo — sem isso, quem levou o 409 nao sabe o que tirar',
+           r ? (r.corpo.campos || []).join(',') : '');
+        ok(r && r.corpo.alteracoes[0].valor_atual === '2026-08-20',
+           'e qual valor esta la hoje',
+           r ? String(r.corpo.alteracoes[0].valor_atual) : '');
+      }
+      /* A ETAPA E O CASO PERIGOSO: sem a guarda, um `etapa: "em_andamento"`
+         reabriria pela API uma demanda que o PM/PO ja validou — e o mes fechado
+         passaria a contar diferente. */
+      {
+        const m = { id: '1', status_planejamento: 'concluido', concluido_em: '2026-08-20' };
+        const r = passa(m, { status_planejamento: 'em_andamento' });
+        ok(r && (r.corpo.campos || []).includes('status_planejamento'),
+           'a etapa de uma concluida NAO volta pela API');
+      }
+      /* E ELA COBRE CAMPO QUE NINGUEM ENUMEROU. E a razao inteira de ser uma
+         pos-condicao, e nao uma lista de campos liberados: o campo que nascer
+         amanha ja nasce coberto, sem ninguem lembrar de vir aqui. */
+      {
+        const m = { id: '1', status_planejamento: 'concluido', campo_do_futuro: 'x' };
+        const r = passa(m, { campo_do_futuro: 'y' });
+        ok(r && (r.corpo.campos || []).includes('campo_do_futuro'),
+           'e cobre campo que nao esta em lista nenhuma');
+      }
+
+      /* ── O QUE CONTA COMO VAZIO ── */
+      /* ZERO CONTA. Neste sistema `horas_realizadas: 0` significa "nao
+         lancado", e nao "levou zero hora" — o proprio `demanda-entregar` recusa
+         `h <= 0` como se o campo nao tivesse vindo. Deixar o zero de fora
+         recriaria, num campo vizinho, o problema que isto veio consertar. */
+      ok(/if \(!Number\.isFinite\(h\) \|\| h <= 0\)/.test(W),
+         'o proprio entregar ja trata zero hora como ausencia — e a base da regra');
+      {
+        const m = { id: '1', status_planejamento: 'concluido', horas_realizadas: 0 };
+        ok(passa(m, { horas_realizadas: 8 }) === null,
+           'hora em zero e "nao lancado", e pode ser lancada');
+      }
+      {
+        const m = { id: '1', status_planejamento: 'concluido', horas_realizadas: 6 };
+        const r = passa(m, { horas_realizadas: 8 });
+        ok(r && (r.corpo.campos || []).includes('horas_realizadas'),
+           'e hora ja lancada nao e recontada');
+      }
+      /* `false` NAO CONTA como vazio: `is_dependency: false` e um fato gravado
+         ("este vinculo e parte, nao trava"), e nao a ausencia de um. */
+      {
+        const m = { id: '1', status_planejamento: 'concluido',
+                    parent_id: '9', is_dependency: false };
+        const r = passa(m, { is_dependency: true });
+        ok(r && (r.corpo.campos || []).includes('is_dependency'),
+           '`false` e um fato gravado, e nao a ausencia de um');
+      }
+      /* LISTA VAZIA conta como vazio; lista com item, nao. */
+      {
+        const m = { id: '1', status_planejamento: 'concluido', anexos: [] };
+        ok(passa(m, { anexos: ['a.png'] }) === null, 'lista vazia pode receber o primeiro item');
+        const m2 = { id: '1', status_planejamento: 'concluido', anexos: ['a.png'] };
+        ok(passa(m2, { anexos: ['a.png', 'b.png'] }) !== null,
+           'e lista que ja tem item nao e mexida');
+      }
+
+      /* ── O RESTO DO CONTRATO ── */
+      /* REENVIAR O MESMO VALOR NAO E MUDANCA. Um script idempotente que manda o
+         objeto inteiro toda vez levaria 409 so por repetir o que ja esta la. */
+      {
+        const m = { id: '1', status_planejamento: 'concluido', entrega: '2026-08-20',
+                    resumo_entrega: 'Feito' };
+        ok(passa(m, { entrega: '2026-08-20' }) === null,
+           'reenviar exatamente o que ja esta la nao e mudanca');
+      }
+      /* A RECUSA E TOTAL. Meia atualizacao numa demanda fechada — a data nova
+         gravada e o resumo recusado — e pior que erro nenhum: ninguem
+         conseguiria dizer, depois, o que pegou. */
+      {
+        const m = { id: '1', status_planejamento: 'concluido',
+                    inicio: '', entrega: '2026-08-20' };
+        const r = passa(m, { inicio: '2026-08-01', entrega: '2026-09-30' });
+        ok(r && r.status === 409,
+           'uma mudanca proibida derruba a chamada INTEIRA, inclusive o que era permitido');
+        ok(r && /Nada foi gravado/.test(r.corpo.detail || ''),
+           'e a resposta diz isso, em vez de deixar a duvida');
+        ok(r && /vazio/i.test(r.corpo.detail || ''),
+           'e diz tambem o que AINDA da para fazer — senao o 409 ensina a desistir');
+      }
+      /* E EM DEMANDA NAO CONCLUIDA A GUARDA NEM RODA: as outras etapas tem as
+         travas delas (`data_comprometida`, `em_validacao`), e esta aqui trancaria
+         o trabalho do dia. */
+      {
+        const r = rodaC(null, { id: '1', status_planejamento: 'em_andamento',
+                                entrega: '2026-09-30' });
+        ok(r === null, 'em demanda nao concluida a guarda nem roda');
+      }
+    }
+
+    /* E A DOCUMENTACAO DA API CONTA A REGRA. Quem levou o 409 antigo vai ler
+       esta pagina antes de abrir chamado. */
+    ok(/concluida_alterada/.test(DEV), 'a pagina do dev nomeia o erro novo');
+    ok(/Demanda já concluída aceita esta chamada/.test(DEV),
+       'e diz, em uma linha, que a concluida aceita a chamada');
+  }
+
   /* === JUNTAR DEMANDAS NUMA PRINCIPAL, NO GANTT ==========================
 
      "Quero ter opcao de juntar varias demandas em uma unica. Ao juntar, essa se
