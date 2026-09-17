@@ -3114,41 +3114,37 @@ function gEmpacota(sorted, faixas, tracks, recolhidos) {
     cardTrack.set(m.id, t);
   };
 
-  /* ═══ O BLOCO É UM RETÂNGULO, E NÃO UM PUNHADO DE FAIXAS INTEIRAS ═══════
+  /* ═══ O BLOCO GARANTE ORDEM, E NÃO TERRITÓRIO ═══════════════════════════
    *
-   * "Não adiantou, algumas desceram sendo que tem espaço."
+   * TRÊS RODADAS ATÉ CHEGAR AQUI, e o histórico importa porque a reserva vai
+   * parecer um esquecimento para quem ler isto depois. Ela foi TIRADA.
    *
-   * A primeira tentativa liberou só a faixa do agrupador e manteve as das
-   * quebras reservadas de ponta a ponta. Na tela do Fernando isso continuou
-   * jogando cards para baixo com a faixa das quebras vazia da metade do mês
-   * para a direita — a "Carteira do Gestor" tem uma quebra que ocupa um quarto
-   * da largura, e os outros três quartos não eram de ninguém.
+   *   1ª  faixa do agrupador liberada, as das quebras reservadas inteiras
+   *       → "não adiantou, algumas desceram sendo que tem espaço"
+   *   2ª  reserva virou retângulo: a barra da D0 projetada sobre as faixas
+   *       das quebras
+   *       → e ele apontou de novo os cards que ficavam logo abaixo da barra
    *
-   * O QUE O BLOCO PRECISA PROTEGER É UMA ÁREA, e não linhas inteiras: o
-   * retângulo é a BARRA DA D0 projetada para baixo, sobre as faixas das
-   * quebras. Quem cai debaixo da barra do agrupador passa por parte do grupo —
-   * é a única leitura errada possível. Fora desse retângulo a faixa é de quem
-   * chegar, inclusive a das quebras.
+   * O ARGUMENTO DA RESERVA ERA que um card de fora, parado debaixo da barra
+   * tracejada, passaria por quebra do grupo. Ele é verdadeiro e é fraco: a
+   * quebra tem marca própria à esquerda (`gcard-parte::before`), a D0 é
+   * tracejada e leva a soma escrita nela. O custo, esse, era medido em faixas
+   * vazias na tela toda semana.
    *
-   * E SÓ A BARRA DA D0, sem esticar até a quebra mais distante. Esticar era a
-   * mesma reserva de antes com outro nome: na tela do Fernando a D0 fica no fim
-   * do mês e uma quebra dela no começo, então o retângulo esticado voltava a
-   * cobrir a linha quase inteira. As quebras não precisam disso — elas já se
-   * defendem pelo teste normal de sobreposição, porque estão em `tracks`.
+   * ENTÃO O QUE O BLOCO GARANTE É A ORDEM VERTICAL: a D0 ganha uma faixa, e as
+   * quebras dela vêm nas faixas imediatamente abaixo, empacotadas entre si e
+   * nunca espalhadas pelo quadro. Era isso que o pedido original comprava —
+   * "a D0 e lá dentro as quebras da D1 até D8". O espaço que sobra ao lado é
+   * de quem chegar, e a colisão normal cuida do resto.
    *
-   * `blocos` guarda as faixas `de`..`ate` e o intervalo de dias `s`..`e` da
-   * barra do pai. O recolhido entra com uma faixa só, que é tudo que ele
-   * desenha. */
-  const blocos = [];
+   * SE ALGUÉM FOR REPOR A RESERVA: leia as invariantes desta função primeiro.
+   * Elas cobram a densidade de propósito, e não por omissão. */
 
   /* ── os blocos primeiro, na ordem em que os pais aparecem ── */
   let proxima = 0;
   noMes.forEach(pai => {
     const filhos = filhosDe.get(pai.id);
     if (!filhos) return;
-    const daPai = faixas.get(pai.id);
-    const bloco = { de: proxima, ate: proxima, s: daPai.sIdx, e: daPai.eIdx };
-    blocos.push(bloco);
     poe(pai, proxima);
     proxima += 1;
     if (fechados.has(pai.id)) return;      // recolhido: as quebras não ocupam faixa
@@ -3163,21 +3159,16 @@ function gEmpacota(sorted, faixas, tracks, recolhidos) {
       poe(f, proxima + t);
     });
     proxima += Math.max(1, locais.length);
-    bloco.ate = proxima - 1;
   });
 
-  /* ── e o resto, ocupando todo vazio que não seja área de bloco ── */
-  const dentroDeBloco = (t, f) => blocos.some(b =>
-    t >= b.de && t <= b.ate && !(f.sIdx > b.e || f.eIdx < b.s));
-  const cabe = (t, f) =>
-    (!tracks[t] || tracks[t].every(o => f.sIdx > o.end || f.eIdx < o.start)) &&
-    !dentroDeBloco(t, f);
+  /* ── e o resto, ocupando todo vazio que exista ── */
+  const cabe = (t, f) => !tracks[t] ||
+    tracks[t].every(o => f.sIdx > o.end || f.eIdx < o.start);
   noMes.forEach(m => {
     if (emBloco.has(m.id)) return;
     const f = faixas.get(m.id);
-    /* DE CIMA PARA BAIXO: a primeira faixa em que ele cabe sem invadir bloco
-       nenhum. Começar depois dos blocos era o que deixava o vazio deles sem
-       dono. */
+    /* DE CIMA PARA BAIXO, e a primeira faixa livre serve — inclusive as do
+       bloco. Começar depois deles era o que deixava o vazio sem dono. */
     let t = 0;
     while (!cabe(t, f)) t += 1;
     poe(m, t);

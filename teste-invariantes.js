@@ -12377,14 +12377,32 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(t1.get('D3') !== t1.get('D1'),
          'e a que cruza com a primeira desce uma');
 
-      /* E NINGUEM DE FORA ENTRA NO MEIO DO BLOCO — era isso que o empacotador
-         guloso fazia, e o que tornava "la dentro" impossivel de ler. */
+      /* ═══ O QUE EMPURRA UM CARD PARA BAIXO E COLISAO, E NAO TERRITORIO ═══
+       *
+       * ATENCAO A QUEM VIER DEPOIS: aqui havia `t1.get(k) > fimBloco` para X, Y
+       * e Z — o bloco reservava as faixas dele inteiras. A reserva foi TIRADA,
+       * em tres rodadas de pedido do Fernando ("algumas desceram sendo que tem
+       * espaco"), e este bloco existe para que ninguem a reponha achando que a
+       * densidade de hoje e um esquecimento.
+       *
+       * O ARGUMENTO DELA era que um card de fora parado debaixo da barra
+       * tracejada passaria por quebra do grupo. Verdadeiro e fraco: a quebra
+       * tem marca propria a esquerda e a D0 e tracejada com a soma escrita
+       * nela. O custo era faixa vazia na tela toda semana.
+       *
+       * X E Y CONTINUAM DESCENDO — mas por COLIDIREM com o bloco, que e outra
+       * coisa: X (0-2) e Y (3-6) cruzam a D0 e as quebras. */
       const fimBloco = Math.max(t1.get('D1'), t1.get('D2'), t1.get('D3'));
-      ['X', 'Y', 'Z'].forEach(k => {
+      ['X', 'Y'].forEach(k => {
         ok(t1.get(k) > fimBloco,
-           k + ' fica DEPOIS do bloco inteiro, e nao no meio dele',
+           k + ' desce porque COLIDE com o bloco, e nao por ser de fora',
            k + '=' + t1.get(k) + ' contra bloco ate ' + fimBloco);
       });
+      /* E Z (12-16) NAO COLIDE COM NINGUEM: as quebras acabam no dia 9, e a
+         faixa delas esta livre dali para a direita. Ele sobe. */
+      ok(t1.get('Z') === 1,
+         'e Z, que nao colide com quebra nenhuma, OCUPA a faixa delas em vez de ' +
+         'abrir faixa nova', 'Z=' + t1.get('Z'));
 
       /* RECOLHIDO: o bloco vira uma linha so, e as quebras nao recebem faixa —
          e nao a faixa 0, que era onde o `?? 0` do desenho as jogaria, por cima
@@ -12397,21 +12415,18 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(tr2.length < tr.length,
          'e a linha do dev encolhe', tr2.length + ' faixas contra ' + tr.length);
 
-      /* ═══ O BLOCO E UM RETANGULO, E NAO FAIXAS INTEIRAS ════════════════
+      /* ═══ TODO VAZIO E APROVEITADO, INCLUSIVE O DAS FAIXAS DO BLOCO ════
        *
        * "Por qual motivo essa demanda fica na linha de cima e nao na de baixo,
-       *  consumindo espaco?"  E depois: "Nao adiantou, algumas desceram sendo
-       *  que tem espaco."
+       *  consumindo espaco?"  Depois: "Nao adiantou, algumas desceram sendo que
+       *  tem espaco."  E na terceira vez, apontando os cards logo abaixo do
+       *  tracejado da D0.
        *
-       * DUAS RODADAS. A primeira liberou so a faixa do AGRUPADOR e manteve as
-       * das quebras reservadas de ponta a ponta — e a tela continuou jogando
-       * card para baixo com a faixa da quebra vazia da metade do mes para a
-       * direita.
-       *
-       * O QUE O BLOCO PROTEGE E UMA AREA. Ele ocupa as faixas do pai e das
-       * quebras, e horizontalmente vai do primeiro ao ultimo dia do grupo.
-       * Dentro desse retangulo ninguem de fora entra; fora dele a faixa e de
-       * quem chegar, inclusive na linha das quebras.
+       * A RESERVA CAIU EM TRES RODADAS: primeiro so a faixa do agrupador,
+       * depois a barra da D0 projetada para baixo, e por fim nada. O bloco
+       * garante ORDEM — a D0 e, imediatamente abaixo, as quebras dela
+       * empacotadas entre si — e nao territorio. Quem separa as coisas na tela
+       * e a marca da quebra e o tracejado do agrupador.
        *
        * FIXTURE PROPRIO, com a D0 curta — no de cima ela ocupa o mes inteiro e
        * este caso nao existiria. */
@@ -12422,9 +12437,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         const f4 = new Map([
           ['D0', { sIdx: 14, eIdx: 20 }],           // so o fim do mes
           ['D1', { sIdx: 14, eIdx: 16 }], ['D2', { sIdx: 17, eIdx: 20 }],
-          ['W', { sIdx: 0, eIdx: 5 }],              // fora do retangulo
-          ['V', { sIdx: 15, eIdx: 18 }],            // DENTRO do retangulo
-          ['T', { sIdx: 0, eIdx: 5 }],              // fora, mas colide com W
+          ['W', { sIdx: 0, eIdx: 5 }],              // longe do grupo
+          ['V', { sIdx: 15, eIdx: 18 }],            // cruza a D0 e as quebras
+          ['T', { sIdx: 0, eIdx: 5 }],              // longe, mas colide com W
           ['S', { sIdx: 19, eIdx: 20 }],            // DENTRO, no pedaco da D2
         ]);
         let tr4 = [];
@@ -12438,31 +12453,30 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         /* E ESTE E O CASO DA SEGUNDA RODADA: a faixa da QUEBRA tambem e
            aproveitada, desde que longe do grupo. */
         ok(t4.get('T') === 1,
-           'e a faixa das QUEBRAS tambem e aproveitada fora do retangulo — era ' +
-           'o "algumas desceram sendo que tem espaco"', 'T=' + t4.get('T'));
+           'e a faixa das QUEBRAS tambem e aproveitada — era o "algumas ' +
+           'desceram sendo que tem espaco"', 'T=' + t4.get('T'));
 
-        /* ── O LIMITE, que e o que mantem o bloco legivel ── */
+        /* ── E O LIMITE E A COLISAO, que continua valendo ── */
         ok(t4.get('V') !== 0 && t4.get('V') !== 1,
-           'quem cai DENTRO do retangulo nao entra em faixa nenhuma do bloco',
-           'V=' + t4.get('V'));
+           'quem cruza a D0 e as quebras desce, porque nao cabe', 'V=' + t4.get('V'));
         ok(t4.get('S') !== 0 && t4.get('S') !== 1,
-           'nem mesmo encostando so no pedaco de uma quebra — ali uma barra de ' +
-           'fora passa por parte do grupo', 'S=' + t4.get('S'));
+           'e quem encosta no pedaco de uma quebra tambem — barra nao se ' +
+           'sobrepoe a barra', 'S=' + t4.get('S'));
         ok(tr4.length === 3,
            'e tudo isso em tres faixas, contra as quatro da reserva por linha inteira',
            tr4.length + ' faixas');
       }
 
-      /* ═══ E O RETANGULO E SO A BARRA DA D0, sem esticar ═════════════════
+      /* ═══ O FIXTURE DA TELA DELE, com a D0 longe da quebra ══════════════
        *
-       * ESTE E O FIXTURE DA TELA DELE. Na linha do Joao Siqueira a "Carteira do
-       * Gestor" fica no FIM do mes e uma quebra dela no COMECO — e entre as
-       * duas ha meio mes de faixa vazia, que foi o que ele circulou.
+       * Na linha do Joao Siqueira a "Carteira do Gestor" fica no FIM do mes e
+       * uma quebra dela no COMECO — e entre as duas ha meio mes de faixa vazia,
+       * que foi o que ele circulou duas vezes.
        *
-       * Esticar o retangulo ate a quebra mais distante seria a mesma reserva de
-       * linha inteira com outro nome: ele cobriria de 1 a 17 e o miolo
-       * continuaria sem dono. So a barra da D0 e projetada para baixo; a quebra
-       * se defende sozinha pelo teste normal de sobreposicao. */
+       * ESTA GEOMETRIA E A QUE DERRUBA QUALQUER RESERVA POR AREA: o grupo se
+       * espalha de ponta a ponta do mes, entao "a area do grupo" e a linha
+       * inteira, com qualquer definicao. So a colisao card a card sobrevive a
+       * ela — e e o que o empacotador usa hoje. */
       {
         const s5 = [{ id: 'D0' }, { id: 'Q1', parent_id: 'D0' },
                     { id: 'M' }, { id: 'M2' }, { id: 'N' }, { id: 'P' }];
@@ -12480,20 +12494,26 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            'a D0 em cima e a quebra na faixa de baixo, como sempre');
         ok(t5.get('N') === 0,
            'quem vem depois da D0 divide a faixa dela', 'N=' + t5.get('N'));
-        /* AS DUAS ASSERCOES QUE SEPARAM AS REGRAS. Com o retangulo esticado ate
-           a quebra (1..17), M e M2 cairiam para as faixas 2 e 3 — que e
-           exatamente o "algumas desceram sendo que tem espaco". */
+        /* AS DUAS ASSERCOES DA DENSIDADE. Com qualquer reserva por area, M e M2
+           cairiam para as faixas 2 e 3 — que e exatamente o "algumas desceram
+           sendo que tem espaco". */
         ok(t5.get('M') <= 1,
            'o MIOLO entre a quebra e a D0 e usavel, e nao empurra ninguem para ' +
            'baixo do bloco', 'M=' + t5.get('M'));
         ok(t5.get('M2') === 1,
            'e o segundo, que nao cabe junto do primeiro, ocupa a faixa da QUEBRA ' +
            'ali no miolo — em vez de abrir faixa nova', 'M2=' + t5.get('M2'));
-        ok(t5.get('P') !== 0 && t5.get('P') !== 1,
-           'mas debaixo da barra da D0 ninguem de fora entra: ali a barra do ' +
-           'agrupador passa por cima e o card parece ser do grupo',
-           'P=' + t5.get('P'));
-        ok(tr5.length === 3, 'tres faixas no total', tr5.length + ' faixas');
+        /* P (15-16) FICA DEBAIXO DA BARRA DA D0, e entra assim mesmo — na faixa
+           da quebra, que ali esta livre. Foi o ultimo pedaco de reserva a cair,
+           e foi exatamente o que o Fernando circulou na terceira vez: os cards
+           que ficavam logo abaixo do tracejado. */
+        ok(t5.get('P') === 1,
+           'e ate quem fica debaixo da barra da D0 entra, se a faixa estiver ' +
+           'livre — a marca da quebra e o tracejado do agrupador e que separam ' +
+           'as coisas, e nao um espaco reservado', 'P=' + t5.get('P'));
+        ok(tr5.length === 2,
+           'seis cards em DUAS faixas — a reserva antiga dava quatro',
+           tr5.length + ' faixas');
       }
 
       /* FILHO CUJO PAI NAO ESTA NA TELA e card solto, e nao some. Outro dev,
