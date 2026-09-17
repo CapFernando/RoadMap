@@ -12424,6 +12424,47 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'o html mostra os mesmos titulos e resumos');
     ok(/EP-004/.test(h), 'e o codigo do projeto');
 
+    /* === O CSS DO MODULO NAO PODE COLIDIR COM O DA PAGINA ================
+     *
+     * Custou uma tela quebrada. A primeira versao usava o prefixo `rp-`, e o
+     * `admin.html` JA TEM esse prefixo: e o do modal de Relatorio PPT
+     * (`rp-escopo`, `rp-btn`, `rp-previa`...). Uma classe batia exatamente —
+     * `.rp-caixa`, que la vale `display:flex` — e o resumo inteiro virou
+     * colunas empilhadas de lado.
+     *
+     * ESTE E O TIPO DE DEFEITO QUE NENHUM TESTE DE LOGICA PEGA: o JavaScript
+     * funciona, os numeros estao certos, e so o desenho quebra. Entao a
+     * cobranca e sobre os NOMES. */
+    {
+      const classesDo = (txt) => new Set(
+        [...txt.matchAll(/\brxp-[a-z-]+/g)].map((x) => x[0]));
+      const minhas = classesDo(fs.readFileSync('resumo-projeto.js', 'utf8'));
+      ok(minhas.size > 10, 'o modulo declara as classes dele com o prefixo proprio',
+         String(minhas.size));
+      /* NENHUMA DELAS PODE EXISTIR na pagina que carrega o modulo. */
+      const naPagina = classesDo(ADMIN);
+      const colisao = [...minhas].filter((c) => naPagina.has(c));
+      ok(colisao.length === 0,
+         'e nenhuma delas colide com o admin.html',
+         colisao.join(', ') || 'nenhuma');
+      /* E O PREFIXO ANTIGO NAO VOLTA. `rp-` e do Relatorio PPT desde antes. */
+      /* SEM OS COMENTARIOS, e nao no arquivo cru: o comentario que explica este
+         erro CITA `rp-caixa` e `rp-escopo`, e a primeira versao desta linha
+         acusou o proprio comentario. Mesmo tropeco do `Y_TITULO`. */
+      ok(!/rp-[a-z]/.test(semComentario(fs.readFileSync('resumo-projeto.js', 'utf8'))
+                            .replace(/rxp-/g, '')),
+         'e o prefixo `rp-`, que ja e do Relatorio PPT, nao volta a ser usado aqui');
+      /* O MESMO VALE PARA O `resumo-dev.js`, que usa `dr-` e mora nas mesmas
+         telas — se um dia alguem repetir o erro la, cai aqui. */
+      const doDev = new Set([...fs.readFileSync('resumo-dev.js', 'utf8')
+        .matchAll(/\bdr-[a-z-]+/g)].map((x) => x[0]));
+      const naGantt = new Set([...GANTT.matchAll(/\bdr-[a-z-]+/g)].map((x) => x[0]));
+      const soNaTela = [...naGantt].filter((c) => !doDev.has(c));
+      ok(soNaTela.length === 0,
+         'e o `dr-` do resumo-dev tambem nao e usado por conta propria nas telas',
+         soNaTela.join(', ') || 'nenhuma');
+    }
+
     /* E O BOTAO ESTA NO MODAL DO PROJETO, no admin. */
     ok(/id="pj-resumo-btn"/.test(ADMIN), 'o botao existe no modal do projeto');
     ok(/onclick="pjResumoExecutivo\(\)"/.test(ADMIN), 'e chama o resumo');

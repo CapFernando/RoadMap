@@ -257,91 +257,103 @@
 
     var kpis = '';
     if (r.total) {
-      kpis = '<div class="rp-kpis">' +
-        '<div class="rp-kpi fim"><b>' + r.feitas + '</b><span>concluídas</span></div>' +
-        '<div class="rp-kpi val"><b>' + r.validando + '</b><span>em validação</span></div>' +
-        '<div class="rp-kpi atr"><b>' + r.atrasadas + '</b><span>atrasadas</span></div>' +
-        '<div class="rp-kpi tot"><b>' + r.total + '</b><span>no projeto</span></div>' +
+      kpis = '<div class="rxp-kpis">' +
+        '<div class="rxp-kpi fim"><b>' + r.feitas + '</b><span>concluídas</span></div>' +
+        '<div class="rxp-kpi val"><b>' + r.validando + '</b><span>em validação</span></div>' +
+        '<div class="rxp-kpi atr"><b>' + r.atrasadas + '</b><span>atrasadas</span></div>' +
+        '<div class="rxp-kpi tot"><b>' + r.total + '</b><span>no projeto</span></div>' +
         '</div>' +
-        '<div class="rp-barra"><div class="rp-barra-fill" style="width:' + r.pct + '%"></div></div>' +
-        '<div class="rp-barra-txt">' + r.pct + '% concluído' +
+        '<div class="rxp-barra"><div class="rxp-barra-fill" style="width:' + r.pct + '%"></div></div>' +
+        '<div class="rxp-barra-txt">' + r.pct + '% concluído' +
         (r.pontos ? '  ·  ' + r.pontosFeitos + ' de ' + r.pontos + ' pontos' : '') +
         (r.semPonto ? '  ·  ' + r.semPonto + ' sem pontuação' : '') + '</div>';
     }
 
     var lista = !r.total
-      ? '<p class="rp-vazio">Nenhuma issue vinculada a este projeto ainda. ' +
+      ? '<p class="rxp-vazio">Nenhuma issue vinculada a este projeto ainda. ' +
         'Use a aba <strong>Demandas</strong> do projeto para ligar os cards.</p>'
-      : '<div class="rp-lista">' + r.issues.map(function (x) {
+      : '<div class="rxp-lista">' + r.issues.map(function (x) {
           var cls = x.gravada === 'concluido' ? 'fim'
             : x.gravada === 'validacao' ? 'val'
             : x.efetiva === 'atrasado' ? 'atr' : 'and';
-          return '<div class="rp-item ' + cls + '">' +
-            '<div class="rp-item-topo">' +
-            (x.codigo ? '<span class="rp-cod">' + esc(x.codigo) + '</span>' : '') +
-            '<span class="rp-tit">' + esc(x.titulo) + '</span>' +
-            (x.pontos != null ? '<span class="rp-pts">' + x.pontos + ' pt</span>' : '') +
+          return '<div class="rxp-item ' + cls + '">' +
+            '<div class="rxp-item-topo">' +
+            (x.codigo ? '<span class="rxp-cod">' + esc(x.codigo) + '</span>' : '') +
+            '<span class="rxp-tit">' + esc(x.titulo) + '</span>' +
+            (x.pontos != null ? '<span class="rxp-pts">' + x.pontos + ' pt</span>' : '') +
             '</div>' +
-            '<div class="rp-item-sub">' +
-            (x.tema ? '<span class="rp-tema">' + esc(x.tema) + '</span>' : '') +
-            '<span class="rp-sit">' + esc(x.situacao.rot) + ', ' + esc(x.situacao.det) + '</span>' +
-            (x.periodo ? '<span class="rp-prazo">📅 ' + esc(x.periodo) + '</span>' : '') +
-            (x.dev ? '<span class="rp-dev">' + esc(x.dev) + '</span>' : '') +
+            '<div class="rxp-item-sub">' +
+            (x.tema ? '<span class="rxp-tema">' + esc(x.tema) + '</span>' : '') +
+            '<span class="rxp-sit">' + esc(x.situacao.rot) + ', ' + esc(x.situacao.det) + '</span>' +
+            (x.periodo ? '<span class="rxp-prazo">📅 ' + esc(x.periodo) + '</span>' : '') +
+            (x.dev ? '<span class="rxp-dev">' + esc(x.dev) + '</span>' : '') +
             '</div>' +
-            (x.resumo ? '<div class="rp-resumo">' + esc(x.resumo) + '</div>' : '') +
+            (x.resumo ? '<div class="rxp-resumo">' + esc(x.resumo) + '</div>' : '') +
             '</div>';
         }).join('') + '</div>';
 
-    return '<div class="rp-cab">' +
-      '<div class="rp-nome">' + (p.codigo ? '<span class="rp-cod-proj">' + esc(p.codigo) +
+    return '<div class="rxp-cab">' +
+      '<div class="rxp-nome">' + (p.codigo ? '<span class="rxp-cod-proj">' + esc(p.codigo) +
         '</span> ' : '') + esc(p.nome) + '</div>' +
-      (cab.length ? '<div class="rp-meta">' + cab.join('  ·  ') + '</div>' : '') +
-      (p.descricao ? '<div class="rp-desc">' + esc(p.descricao) + '</div>' : '') +
+      (cab.length ? '<div class="rxp-meta">' + cab.join('  ·  ') + '</div>' : '') +
+      (p.descricao ? '<div class="rxp-desc">' + esc(p.descricao) + '</div>' : '') +
       '</div>' + kpis + lista;
   }
 
+  /* O PREFIXO É `rxp-`, E NÃO `rp-`, E ISSO CUSTOU UMA TELA QUEBRADA.
+   *
+   * A primeira versão usava `rp-`, e o `admin.html` JÁ TEM esse prefixo: é o do
+   * modal de Relatório PPT (`rp-escopo`, `rp-btn`, `rp-previa`...). Uma das
+   * classes batia exatamente — `.rp-caixa`, que lá vale `display:flex` — e o
+   * resumo inteiro virou colunas empilhadas de lado, ilegível.
+   *
+   * MÓDULO QUE INJETA CSS NUMA PÁGINA QUE NÃO É DELE PRECISA DE UM PREFIXO QUE
+   * NINGUÉM MAIS USE. O `resumo-dev.js` usa `dr-`; este usa `rxp-`. A invariante
+   * cobra que nenhuma classe daqui exista nas páginas que carregam o módulo —
+   * uma colisão nova entra pelo mesmo caminho e não aparece em teste nenhum,
+   * porque o JavaScript funciona e só o desenho quebra. */
   var CSS = [
-    '.rp-overlay{position:fixed;inset:0;background:#000A;z-index:800;display:flex;',
+    '.rxp-overlay{position:fixed;inset:0;background:#000A;z-index:800;display:flex;',
     '  align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;}',
-    '.rp-caixa{background:var(--bg2,#14141A);border:1px solid var(--border,#2A2A32);',
+    '.rxp-caixa{background:var(--bg2,#14141A);border:1px solid var(--border,#2A2A32);',
     '  border-radius:12px;max-width:860px;width:100%;padding:22px 24px;}',
-    '.rp-topo{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;}',
-    '.rp-topo-acoes{margin-left:auto;display:flex;gap:8px;flex-shrink:0;}',
-    '.rp-cab{margin-bottom:14px;}',
-    '.rp-nome{font-size:19px;font-weight:800;color:var(--text,#EDEDF0);}',
-    '.rp-cod-proj{font-family:ui-monospace,monospace;font-size:13px;color:#C9AEFF;',
+    '.rxp-topo{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;}',
+    '.rxp-topo-acoes{margin-left:auto;display:flex;gap:8px;flex-shrink:0;}',
+    '.rxp-cab{margin-bottom:14px;}',
+    '.rxp-nome{font-size:19px;font-weight:800;color:var(--text,#EDEDF0);}',
+    '.rxp-cod-proj{font-family:ui-monospace,monospace;font-size:13px;color:#C9AEFF;',
     '  background:#341A6E;border-radius:5px;padding:2px 8px;margin-right:6px;}',
-    '.rp-meta{font-size:12.5px;color:var(--text3,#8A8A96);margin-top:4px;}',
-    '.rp-desc{font-size:13px;color:var(--text2,#B8B8C4);margin-top:8px;line-height:1.5;}',
-    '.rp-kpis{display:flex;gap:10px;margin:14px 0 10px;flex-wrap:wrap;}',
-    '.rp-kpi{flex:1;min-width:96px;background:var(--bg3,#1C1C24);border-radius:8px;padding:8px 12px;}',
-    '.rp-kpi b{display:block;font-size:22px;line-height:1.1;}',
-    '.rp-kpi span{font-size:11px;color:var(--text3,#8A8A96);}',
-    '.rp-kpi.fim b{color:#3EC98E;} .rp-kpi.val b{color:#7ED8D8;}',
-    '.rp-kpi.atr b{color:#F9A0A0;} .rp-kpi.tot b{color:var(--text,#EDEDF0);}',
-    '.rp-barra{height:6px;background:var(--bg4,#24242E);border-radius:3px;overflow:hidden;}',
-    '.rp-barra-fill{height:100%;background:#3EC98E;}',
-    '.rp-barra-txt{font-size:11.5px;color:var(--text3,#8A8A96);margin:5px 0 14px;}',
-    '.rp-lista{display:flex;flex-direction:column;gap:8px;}',
-    '.rp-item{background:var(--bg3,#1C1C24);border-left:3px solid var(--border2,#3A3A46);',
+    '.rxp-meta{font-size:12.5px;color:var(--text3,#8A8A96);margin-top:4px;}',
+    '.rxp-desc{font-size:13px;color:var(--text2,#B8B8C4);margin-top:8px;line-height:1.5;}',
+    '.rxp-kpis{display:flex;gap:10px;margin:14px 0 10px;flex-wrap:wrap;}',
+    '.rxp-kpi{flex:1;min-width:96px;background:var(--bg3,#1C1C24);border-radius:8px;padding:8px 12px;}',
+    '.rxp-kpi b{display:block;font-size:22px;line-height:1.1;}',
+    '.rxp-kpi span{font-size:11px;color:var(--text3,#8A8A96);}',
+    '.rxp-kpi.fim b{color:#3EC98E;} .rxp-kpi.val b{color:#7ED8D8;}',
+    '.rxp-kpi.atr b{color:#F9A0A0;} .rxp-kpi.tot b{color:var(--text,#EDEDF0);}',
+    '.rxp-barra{height:6px;background:var(--bg4,#24242E);border-radius:3px;overflow:hidden;}',
+    '.rxp-barra-fill{height:100%;background:#3EC98E;}',
+    '.rxp-barra-txt{font-size:11.5px;color:var(--text3,#8A8A96);margin:5px 0 14px;}',
+    '.rxp-lista{display:flex;flex-direction:column;gap:8px;}',
+    '.rxp-item{background:var(--bg3,#1C1C24);border-left:3px solid var(--border2,#3A3A46);',
     '  border-radius:6px;padding:9px 12px;}',
-    '.rp-item.fim{border-left-color:#3EC98E;} .rp-item.val{border-left-color:#7ED8D8;}',
-    '.rp-item.atr{border-left-color:#F9A0A0;} .rp-item.and{border-left-color:#FFC861;}',
-    '.rp-item-topo{display:flex;align-items:baseline;gap:8px;}',
-    '.rp-cod{font-family:ui-monospace,monospace;font-size:11.5px;font-weight:700;',
+    '.rxp-item.fim{border-left-color:#3EC98E;} .rxp-item.val{border-left-color:#7ED8D8;}',
+    '.rxp-item.atr{border-left-color:#F9A0A0;} .rxp-item.and{border-left-color:#FFC861;}',
+    '.rxp-item-topo{display:flex;align-items:baseline;gap:8px;}',
+    '.rxp-cod{font-family:ui-monospace,monospace;font-size:11.5px;font-weight:700;',
     '  color:var(--text3,#8A8A96);flex-shrink:0;}',
-    '.rp-tit{font-weight:600;color:var(--text,#EDEDF0);flex:1;min-width:0;}',
-    '.rp-pts{font-size:11px;color:var(--text3,#8A8A96);flex-shrink:0;}',
-    '.rp-item-sub{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;',
+    '.rxp-tit{font-weight:600;color:var(--text,#EDEDF0);flex:1;min-width:0;}',
+    '.rxp-pts{font-size:11px;color:var(--text3,#8A8A96);flex-shrink:0;}',
+    '.rxp-item-sub{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;',
     '  color:var(--text3,#8A8A96);margin-top:3px;}',
-    '.rp-resumo{font-size:12.5px;color:var(--text2,#B8B8C4);margin-top:6px;line-height:1.5;}',
-    '.rp-vazio{font-size:13px;color:var(--text3,#8A8A96);}',
+    '.rxp-resumo{font-size:12.5px;color:var(--text2,#B8B8C4);margin-top:6px;line-height:1.5;}',
+    '.rxp-vazio{font-size:13px;color:var(--text3,#8A8A96);}',
   ].join('\n');
 
   function garanteCss() {
-    if (document.getElementById('rp-css')) return;
+    if (document.getElementById('rxp-css')) return;
     var st = document.createElement('style');
-    st.id = 'rp-css';
+    st.id = 'rxp-css';
     st.textContent = CSS;
     document.head.appendChild(st);
   }
@@ -351,21 +363,21 @@
   function abrir(estado, projetoId) {
     garanteCss();
     _ultimo = montar(estado, projetoId, raiz.PRAZO ? raiz.PRAZO.hojeISO() : '');
-    var el = document.getElementById('rp-overlay');
+    var el = document.getElementById('rxp-overlay');
     if (!el) {
       el = document.createElement('div');
-      el.id = 'rp-overlay';
-      el.className = 'rp-overlay';
+      el.id = 'rxp-overlay';
+      el.className = 'rxp-overlay';
       /* FECHA CLICANDO FORA, e só fora: o `target === el` evita que um clique
          que começou dentro e terminou na borda feche a tela por acidente. */
       el.addEventListener('click', function (ev) { if (ev.target === el) fechar(); });
       document.body.appendChild(el);
     }
     el.innerHTML =
-      '<div class="rp-caixa">' +
-      '<div class="rp-topo">' +
+      '<div class="rxp-caixa">' +
+      '<div class="rxp-topo">' +
       '<div style="font-size:12px;color:var(--text3,#8A8A96)">RESUMO EXECUTIVO DO PROJETO</div>' +
-      '<div class="rp-topo-acoes">' +
+      '<div class="rxp-topo-acoes">' +
       '<button type="button" class="btn btn-secondary btn-sm" onclick="RESUMOPROJETO.copiar()">📋 Copiar</button>' +
       '<button type="button" class="btn btn-secondary btn-sm" onclick="RESUMOPROJETO.fechar()">Fechar</button>' +
       '</div></div>' +
@@ -375,7 +387,7 @@
   }
 
   function fechar() {
-    var el = document.getElementById('rp-overlay');
+    var el = document.getElementById('rxp-overlay');
     if (el) el.style.display = 'none';
   }
 
