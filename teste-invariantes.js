@@ -71,6 +71,7 @@ const CAPI = require('./capacidade.js');
 const BUSCAJS = fs.readFileSync('busca-demanda.js', 'utf8');
 const CATALOGO = fs.readFileSync('catalogo.js', 'utf8');
 const FILA = require('./fila.js');   // a conta da fila, executada e nao regexada
+const VINCULO = require('./vinculo.js');   // idem, para a regra do vinculo
 const TEMA = lerTela('tema.css');
 
 // Corpo de uma funcao, por contagem de chaves.
@@ -9487,7 +9488,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(fonte.length > 200, 'o empacotamento do gantt foi encontrado para ser executado',
        fonte.length + ' caracteres');
 
-    const empacota = new Function('devCards', 'faixas', 'ganttTemSelo', `
+    /* O EMPACOTADOR VIROU FUNCAO PROPRIA (`gEmpacota`), e a invariante seguiu.
+       Antes o trecho era recortado de dentro do `renderGantt` e avaliado; agora
+       ele e uma funcao com nome, e o recorte traz as DUAS partes — a ordenacao,
+       que continua inline, e a funcao, que a chama. Sem a segunda, o `eval`
+       estoura com "gEmpacota is not defined" (foi assim que isto apareceu). */
+    const fnEmpacota = corpo(GANTT, 'function gEmpacota(');
+    ok(!!fnEmpacota, 'e a funcao de empacotar tambem');
+    const empacota = new Function('devCards', 'faixas', 'ganttTemSelo', '_gRecolhidos', `
+      ${fnEmpacota}
       ${fonte}
       return { cardTrack, tracks };
     `);
@@ -9502,7 +9511,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                             ['b', { sIdx: 0, eIdx: 2 }],
                             ['c', { sIdx: 0, eIdx: 2 }]]);
     const selar = (m) => !!SL.de(m);
-    const r = empacota(cartoes, faixas, selar);
+    const r = empacota(cartoes, faixas, selar, new Set());
 
     ok(r.cardTrack.get('a') < r.cardTrack.get('c') &&
        r.cardTrack.get('b') < r.cardTrack.get('c'),
@@ -9517,7 +9526,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const cartoes2 = [cru('cedo'), selado('tarde')];
     const faixas2 = new Map([['tarde', { sIdx: 0, eIdx: 20 }],
                              ['cedo',  { sIdx: 1, eIdx: 3 }]]);
-    const r2 = empacota(cartoes2, faixas2, selar);
+    const r2 = empacota(cartoes2, faixas2, selar, new Set());
     ok(r2.cardTrack.get('cedo') !== r2.cardTrack.get('tarde'),
        'barras que se cruzam nunca dividem faixa, qualquer que seja a ordem');
 
@@ -12029,6 +12038,120 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a API nao escreve `concluido_em` — concluir e do PM/PO');
     ok(/'inicio, entrega, etapa, projeto_id ou parent_id\.'/.test(W),
        'e a mensagem de "nada a mudar" lista os campos novos');
+  }
+
+  /* === JUNTAR DEMANDAS NUMA PRINCIPAL, NO GANTT ==========================
+
+     "Quero ter opcao de juntar varias demandas em uma unica. Ao juntar, essa se
+     transforma na principal e as demais ficam visiveis dentro. Exemplo: a D0
+     que consumira todo planejamento e la dentro as quebras da D1 ate D8. A D0
+     nao coloco pontuacao e nem tempo, ai sera contabilizado nas outras e
+     somado."
+
+     O elo ja existia (`parent_id` + `vinculo: parte`) e so nascia de um em um.
+     O que faltava era juntar em LOTE e DESENHAR o bloco.
+
+     ESTE BLOCO EXECUTA o empacotador do gantt (`gEmpacota`). O risco real desta
+     mudanca e de layout — quebra caindo por cima do agrupador, ou card de fora
+     entrando no meio do bloco —, e isso so se ve rodando. */
+  sec('O grupo no gantt: a D0 por fora, as quebras dentro');
+  {
+    const fnPack = corpo(GANTT, 'function gEmpacota(');
+    ok(!!fnPack, 'o empacotador de blocos foi achado para ser executado');
+    if (fnPack) {
+      const pack = new Function(fnPack + ' return gEmpacota;')();
+      /* `Z` E O CASO QUE DENUNCIA O BLOCO FURADO, e faltava.
+         X e Y colidem com as quebras, entao o proprio teste de sobreposicao ja
+         os empurrava para baixo do bloco — e a invariante passava mesmo com a
+         reserva de faixas removida. `Z` (dias 12-16) NAO colide com quebra
+         nenhuma: sem a reserva, ele cai na faixa 1, dentro do bloco, ao lado de
+         uma quebra com que ele nada tem a ver. Descoberto sabotando. */
+      const sorted = [{ id: 'D0' }, { id: 'D1', parent_id: 'D0' },
+                      { id: 'D2', parent_id: 'D0' }, { id: 'D3', parent_id: 'D0' },
+                      { id: 'X' }, { id: 'Y' }, { id: 'Z' }];
+      const fx = new Map([['D0', { sIdx: 0, eIdx: 20 }], ['D1', { sIdx: 0, eIdx: 4 }],
+                          ['D2', { sIdx: 5, eIdx: 9 }], ['D3', { sIdx: 0, eIdx: 9 }],
+                          ['X', { sIdx: 0, eIdx: 2 }], ['Y', { sIdx: 3, eIdx: 6 }],
+                          ['Z', { sIdx: 12, eIdx: 16 }]]);
+      let tr = [];
+      const t1 = pack(sorted, fx, tr, new Set());
+
+      /* A D0 FICA SOZINHA NA FAIXA DELA. Dividir a faixa com outra barra faria
+         o contorno do grupo passar a ser o contorno de duas coisas. */
+      ok(t1.get('D0') === 0, 'a D0 fica na primeira faixa, sozinha', String(t1.get('D0')));
+      ok(![...fx.keys()].some(k => k !== 'D0' && t1.get(k) === 0),
+         'e ninguem mais entra nela');
+
+      /* AS QUEBRAS VEM LOGO ABAIXO, e empacotadas ENTRE SI. */
+      ['D1', 'D2', 'D3'].forEach(k => {
+        ok(t1.get(k) >= 1 && t1.get(k) <= 2,
+           k + ' fica nas faixas do bloco, logo abaixo da D0', String(t1.get(k)));
+      });
+      ok(t1.get('D1') === t1.get('D2'),
+         'duas quebras que nao se cruzam dividem a mesma faixa');
+      ok(t1.get('D3') !== t1.get('D1'),
+         'e a que cruza com a primeira desce uma');
+
+      /* E NINGUEM DE FORA ENTRA NO MEIO DO BLOCO — era isso que o empacotador
+         guloso fazia, e o que tornava "la dentro" impossivel de ler. */
+      const fimBloco = Math.max(t1.get('D1'), t1.get('D2'), t1.get('D3'));
+      ['X', 'Y', 'Z'].forEach(k => {
+        ok(t1.get(k) > fimBloco,
+           k + ' fica DEPOIS do bloco inteiro, e nao no meio dele',
+           k + '=' + t1.get(k) + ' contra bloco ate ' + fimBloco);
+      });
+
+      /* RECOLHIDO: o bloco vira uma linha so, e as quebras nao recebem faixa —
+         e nao a faixa 0, que era onde o `?? 0` do desenho as jogaria, por cima
+         da propria D0. */
+      let tr2 = [];
+      const t2 = pack(sorted, fx, tr2, new Set(['D0']));
+      ok(t2.get('D0') === 0, 'recolhida, a D0 continua na faixa 0');
+      ok(!t2.has('D1') && !t2.has('D2') && !t2.has('D3'),
+         'e as quebras nao recebem faixa nenhuma — o desenho pula quem nao tem');
+      ok(tr2.length < tr.length,
+         'e a linha do dev encolhe', tr2.length + ' faixas contra ' + tr.length);
+
+      /* FILHO CUJO PAI NAO ESTA NA TELA e card solto, e nao some. Outro dev,
+         ou fora do mes: ele continua aparecendo, senao sumiria esperando um
+         bloco que ninguem vai desenhar. */
+      let tr3 = [];
+      const t3 = pack([{ id: 'orfao', parent_id: 'nao-esta-aqui' }],
+                      new Map([['orfao', { sIdx: 0, eIdx: 3 }]]), tr3, new Set());
+      ok(t3.has('orfao'), 'quebra cujo pai nao esta na tela continua sendo desenhada');
+    }
+
+    /* A REGRA DO AGRUPADOR. */
+    const baseG = [{ id: 'D0' }, { id: 'D1', parent_id: 'D0', poker_pontos: 8 },
+                   { id: 'D2', parent_id: 'D0', poker_pontos: 13 }, { id: 'X' }];
+    ok(VINCULO.ehAgrupador(baseG, baseG[0]), 'quem tem quebra e agrupador');
+    ok(!VINCULO.ehAgrupador(baseG, baseG[3]), 'e quem nao tem, nao e');
+    /* A SOMA VEM DAS QUEBRAS. A D0 nao pontua — "sera contabilizado nas outras
+       e somado". */
+    ok(VINCULO.pontos(baseG, baseG[0]).total === 21,
+       'e a soma da D0 e a das quebras', String(VINCULO.pontos(baseG, baseG[0]).total));
+    ok(VINCULO.pontos(baseG, baseG[0]).proprios === null,
+       'sem ela propria pontuar');
+
+    /* O AGRUPADOR NAO CONTA TEMPO NEM PONTO NO GANTT. E a parte que, errada,
+       corrompe numero: a barra da D0 cobre o mes inteiro por desenho, e somando
+       ocupacao ela sozinha deixaria o dev em 100%. */
+    ok(/if \(VINCULO\.ehAgrupador\(state\.melhorias, m\)\) return;/.test(GANTT),
+       'o agrupador sai da conta de ocupacao do dev');
+    ok(/devCards = \(devCards \|\| \[\]\)\.filter\(m =>\s*!\(window\.VINCULO && VINCULO\.ehAgrupador/.test(GANTT),
+       'e da conta de pontos por semana');
+
+    /* A ACAO DE JUNTAR. */
+    ok(/function gJuntarConfirmar\(\)/.test(GANTT), 'o gantt tem a acao de juntar');
+    ok(/f\.is_dependency = false;/.test(GANTT),
+       'e o elo criado e "parte", e nao "dependencia" — juntar para organizar ' +
+       'nao pode travar o avanco da principal');
+    ok(/VINCULO\.criaCiclo\(state\.melhorias, f\.id, principal\.id\)/.test(GANTT),
+       'e o ciclo e recusado antes de perguntar');
+    ok(/if \(_gJuntando\) \{\s*e\.preventDefault\(\); return; \}/.test(GANTT),
+       'arrastar fica desligado enquanto se marca — senao um clique frouxo ' +
+       'moveria o prazo de uma demanda achando que a estava marcando');
+    ok(/function gSoltar\(/.test(GANTT), 'e da para tirar uma quebra do grupo');
   }
 
   let erroPz = null;

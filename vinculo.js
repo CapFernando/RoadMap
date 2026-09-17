@@ -119,6 +119,26 @@
     });
   }
 
+  /** ESTA DEMANDA É UM AGRUPADOR? — a "D0" do pedido do Fernando.
+   *
+   *  "Quero ter a D0 que consumirá todo planejamento e lá dentro as quebras da
+   *  D1 até D8. A D0 não coloco pontuação e nem tempo, aí será contabilizado
+   *  nas outras e somado."
+   *
+   *  Agrupador é simplesmente quem TEM vínculo pendurado. Não há campo novo, e
+   *  é deliberado: um `e_agrupador` gravado na demanda poderia dizer `true` numa
+   *  que ficou sem filhos (o último foi excluído), e aí ela sumiria das contas
+   *  sem nada dizendo por quê. Ter filho é observável e não tem como mentir.
+   *
+   *  O QUE ISSO MUDA NAS CONTAS: o agrupador não conta tempo nem ponto. A barra
+   *  dele no gantt cobre o período inteiro por desenho — se ela também somasse
+   *  ocupação, o dev apareceria com o mês cheio por causa de uma linha que não é
+   *  trabalho, e os dias dos filhos entrariam duas vezes na leitura de quem olha.
+   */
+  function ehAgrupador(lista, m) {
+    return filhosDe(lista, idDe(m)).length > 0;
+  }
+
   /** A tarefa principal de um vínculo, ou `null`. */
   function paiDe(lista, m) {
     var pid = String((m || {}).parent_id || '');
@@ -292,6 +312,7 @@
     DEPENDENCIA: DEPENDENCIA,
     PARTE: PARTE,
     tipoDe: tipoDe,
+    ehAgrupador: ehAgrupador,
     bloqueia: bloqueia,
     concluida: concluida,
     emAberto: emAberto,

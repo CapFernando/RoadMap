@@ -597,6 +597,48 @@
     /* Pausada: hachura diagonal sobre a cor da etapa. A barra ja usa cor para
        dizer a etapa — outra cor competiria com essa leitura; textura nao compete.
        O ::after cobre a barra inteira, entao o padrao acompanha qualquer largura. */
+    /* ═══ O GRUPO: a D0 por fora, as quebras por dentro ═══════════════════
+       O agrupador e as quebras precisam ser lidos como UM bloco, e a distinção
+       não pode depender de cor — a cor do card já significa etapa, e roubá-la
+       para significar hierarquia faria as duas leituras brigarem. Então o que
+       distingue é a BORDA: tracejada no agrupador (ele não é trabalho, é um
+       contorno) e uma marca à esquerda nas quebras, que as prende visualmente
+       à barra de cima. */
+    .gantt-card.gcard-agrupador {
+      border-style: dashed; border-width: 2px;
+      background: transparent; box-shadow: none;
+    }
+    .gantt-card.gcard-agrupador .card-label { font-weight: 800; }
+    .gantt-card.gcard-parte::before {
+      content: ''; position: absolute; left: -8px; top: 50%;
+      width: 8px; height: 2px; background: var(--border2, #444);
+    }
+    .card-recolhe {
+      background: none; border: 0; color: inherit; cursor: pointer;
+      font-size: 11px; line-height: 1; padding: 0 3px 0 0; flex-shrink: 0;
+      opacity: .85;
+    }
+    .card-recolhe:hover { opacity: 1; }
+    .card-soma {
+      font-size: 10.5px; color: var(--text3); margin-left: 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .g-juntar-bar {
+      display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+      background:#0E3A3A; color:#7ED8D8; border-bottom:1px solid #1A6060;
+      padding:10px 24px; font-size:13px;
+    }
+    .g-juntar-dica { color:var(--text3); font-size:12px; }
+    /* A MARCA DA SELEÇÃO É UM ANEL, e não uma troca de cor de fundo: a cor do
+       card significa etapa, e pintá-lo de outra coisa enquanto se escolhe faria
+       a pessoa perder de vista justamente o que está escolhendo. */
+    body.g-juntando .gantt-card { cursor:pointer; }
+    .gantt-card.g-sel { outline:2px solid #7ED8D8; outline-offset:1px; }
+    .gantt-card.g-sel-principal { outline:3px solid #FFC861; outline-offset:1px; }
+    .gantt-card .g-sel-tag {
+      position:absolute; right:4px; top:3px; font-size:9.5px; font-weight:700;
+      background:#FFC861; color:#1a1a1a; border-radius:3px; padding:0 4px;
+    }
     .gantt-card.gcard-pausada { opacity: .72; }
     .gantt-card.gcard-pausada::after {
       content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -815,7 +857,7 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
-  <script src="vinculo.js?v=437901d1fa"></script>
+  <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=e85b8c6bbe"></script>
@@ -893,10 +935,23 @@
        onde ela reaparece sem que alguem lembre de voltar o mes. -->
   <div id="g-pausadas" class="g-pausadas" style="display:none"></div>
 
+  <!-- A FAIXA DA SELEÇÃO. Só aparece no modo de juntar, e mostra quantas estão
+       marcadas — sem o contador, quem clicou em oito cards não tem como saber
+       se pegou os oito antes de apertar o botão que muda tudo de uma vez. -->
+  <div id="g-juntar-bar" class="g-juntar-bar" style="display:none">
+    <span id="g-juntar-cont">nenhuma selecionada</span>
+    <button class="btn btn-primary btn-sm" id="g-juntar-ok" onclick="gJuntarConfirmar()" disabled>Juntar</button>
+    <button class="btn btn-secondary btn-sm" onclick="gJuntarModo(false)">Cancelar</button>
+    <span class="g-juntar-dica">Clique nos cards para marcar. A primeira que você marcar vira a principal.</span>
+  </div>
+
   <div id="resumo-mes" class="resumo-mes"></div>
   <div class="indicator-bar" id="indicator-bar"></div>
 
   <div class="filter-bar">
+    <button class="btn btn-secondary btn-sm" id="g-juntar-btn" onclick="gJuntarModo(true)"
+            title="Marcar várias demandas e juntá-las numa principal">🔗 Juntar</button>
+    <div class="filter-divider"></div>
     <label>Tipo</label>
     <select id="f-tipo" onchange="applyFilters()">
       <option value="">Todos</option>
@@ -2683,6 +2738,14 @@ function distribuiPorSprint(pontos, inicio, entrega, semanas) {
 }
 
 function pontosPokerPorSemana(devCards, semanas, de, ate) {
+  /* O AGRUPADOR FICA DE FORA, pelo mesmo motivo da ocupação: o ponto dele é a
+     SOMA dos filhos (`VINCULO.pontos`), e somar os dois faria cada ponto contar
+     duas vezes no planejado do dev. Hoje a D0 nasce sem pontuação, então na
+     prática ela soma zero — mas "na prática soma zero" é o tipo de coisa que
+     deixa de valer no dia em que alguém pontuar a D0 por engano, e aí o número
+     do dev dobra sem nada acusar. */
+  devCards = (devCards || []).filter(m =>
+    !(window.VINCULO && VINCULO.ehAgrupador(state.melhorias, m)));
   const CAP = window.CAPACIDADE;
   /* AS DUAS PONTAS SAO FILTRADAS PELA JANELA DO MES.
      `devCards` traz o que APARECE no mes (tem inicio ou entrega nele), e somar o
@@ -2809,6 +2872,229 @@ function gIrParaMes(ym) {
   renderAll();
 }
 
+/* ═══ JUNTAR VÁRIAS DEMANDAS NUMA PRINCIPAL ══════════════════════════════
+ *
+ * "Quero ter opção de juntar várias demandas em uma única. Ao juntar, essa se
+ * transforma na principal e as demais ficam visíveis dentro."
+ *
+ * O elo já existia (`parent_id` + `vinculo: parte`, em `vinculo.js`) e só
+ * nascia de um em um, pelo botão do Painel Dev. O que faltava era juntar em
+ * LOTE, que é como a decisão de fato acontece: olhando o mês inteiro e vendo
+ * que oito cards são o mesmo projeto.
+ *
+ * A PRIMEIRA MARCADA É A PRINCIPAL, e a ordem fica visível na tela. A
+ * alternativa — perguntar depois, numa lista de oito títulos — obriga a
+ * reconhecer pelo texto o card que a pessoa acabou de apontar com o dedo.
+ *
+ * O ELO É `parte`, e NÃO `dependencia`: juntar para organizar não pode travar o
+ * avanço da principal. Quem quer a trava usa o botão de dependência do Painel
+ * Dev, que é onde essa decisão tem nome.                                      */
+let _gJuntando = false;
+const _gSel = [];          // ordem importa: [0] é a principal
+
+function gJuntarModo(liga) {
+  _gJuntando = !!liga;
+  _gSel.length = 0;
+  document.body.classList.toggle('g-juntando', _gJuntando);
+  const bar = document.getElementById('g-juntar-bar');
+  if (bar) bar.style.display = _gJuntando ? 'flex' : 'none';
+  gJuntarPinta();
+  renderGantt();
+}
+
+function gJuntarClique(id) {
+  const i = _gSel.indexOf(id);
+  if (i >= 0) _gSel.splice(i, 1); else _gSel.push(id);
+  gJuntarPinta();
+}
+
+function gJuntarPinta() {
+  document.querySelectorAll('.gantt-card').forEach(el => {
+    const id = el.getAttribute('data-id');
+    const i = _gSel.indexOf(id);
+    el.classList.toggle('g-sel', i > 0);
+    el.classList.toggle('g-sel-principal', i === 0);
+    const tag = el.querySelector('.g-sel-tag');
+    if (tag) tag.remove();
+    if (i === 0) {
+      const t = document.createElement('span');
+      t.className = 'g-sel-tag';
+      t.textContent = 'PRINCIPAL';
+      el.appendChild(t);
+    }
+  });
+  const cont = document.getElementById('g-juntar-cont');
+  const ok = document.getElementById('g-juntar-ok');
+  if (cont) {
+    cont.textContent = _gSel.length === 0
+      ? 'nenhuma selecionada'
+      : _gSel.length === 1
+        ? '1 selecionada (a principal) — marque as que ficam dentro dela'
+        : _gSel.length + ' selecionadas · ' + (_gSel.length - 1) +
+          (_gSel.length - 1 === 1 ? ' quebra' : ' quebras') + ' dentro da principal';
+  }
+  if (ok) ok.disabled = _gSel.length < 2;
+}
+
+async function gJuntarConfirmar() {
+  if (_gSel.length < 2) return;
+  const principal = state.melhorias.find(m => m.id === _gSel[0]);
+  const filhos = _gSel.slice(1)
+    .map(id => state.melhorias.find(m => m.id === id))
+    .filter(Boolean);
+  if (!principal || !filhos.length) return;
+
+  /* CICLO É RECUSADO ANTES DE PERGUNTAR. Marcar a principal e um ancestral
+     dela fecharia um laço, e o par sumiria das duas pontas do quadro. A regra
+     é a mesma que a API usa. */
+  const ciclo = filhos.filter(f => VINCULO.criaCiclo(state.melhorias, f.id, principal.id));
+  if (ciclo.length) {
+    toast('Não dá: ' + ciclo.map(f => f.codigo || f.titulo).join(', ') +
+          ' já está acima da principal na árvore.', 'err');
+    return;
+  }
+
+  const nomes = filhos.map(f => (f.codigo ? f.codigo + ' ' : '') + f.titulo).join('\n· ');
+  const okConf = await confirmar({
+    titulo: 'Juntar ' + filhos.length + (filhos.length === 1 ? ' demanda' : ' demandas'),
+    texto: 'A principal passa a ser:\n\n' +
+           (principal.codigo ? principal.codigo + ' ' : '') + principal.titulo +
+           '\n\nE ficam dentro dela:\n· ' + nomes +
+           '\n\nOs pontos delas passam a somar na principal, e a barra da ' +
+           'principal cobre o período de todas. Nada é apagado.',
+    ok: 'Juntar' });
+  if (!okConf) return;
+
+  filhos.forEach(f => {
+    f.parent_id = principal.id;
+    /* `is_dependency: false` — é "parte", e não "dependência". Juntar para
+       organizar não pode travar o avanço da principal. */
+    f.is_dependency = false;
+  });
+  gJuntarModo(false);
+  renderGantt();
+  /* `saveToGitHub` E NAO UM `gSalvar` PROPRIO — a varredura de identificadores
+     orfaos pegou o nome que eu tinha inventado. Esta tela grava o estado inteiro
+     por essa funcao, e uma segunda gravacao aqui teria a mesma vida curta das
+     quatro copias da conta da fila. */
+  await saveToGitHub();
+  toast('🔗 ' + filhos.length + (filhos.length === 1 ? ' demanda juntada' : ' demandas juntadas') +
+        ' em ' + (principal.codigo || principal.titulo) + '.', 'ok');
+}
+
+/** Solta uma quebra do grupo. */
+async function gSoltar(id, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m || !m.parent_id) return;
+  const okConf = await confirmar({
+    titulo: 'Tirar do grupo',
+    texto: (m.codigo ? m.codigo + ' ' : '') + m.titulo +
+           ' volta a ser uma demanda solta. Os pontos dela saem da soma da principal.',
+    ok: 'Tirar' });
+  if (!okConf) return;
+  m.parent_id = '';
+  m.is_dependency = false;
+  renderGantt();
+  await saveToGitHub();
+  toast('Tirada do grupo.', 'ok');
+}
+
+/* QUAIS GRUPOS ESTÃO FECHADOS. Vive na sessão e não na base: é preferência de
+   quem está olhando a tela agora, não um fato da demanda — gravar no arquivo
+   faria o quadro de uma pessoa mudar o de todo mundo. */
+const _gRecolhidos = new Set();
+
+function gRecolhe(id, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  if (_gRecolhidos.has(id)) _gRecolhidos.delete(id); else _gRecolhidos.add(id);
+  renderGantt();
+}
+
+/* ═══ AS FAIXAS DO GANTT, COM OS GRUPOS INTEIROS ══════════════════════════
+ *
+ * "Quero ter a D0 que consumirá todo planejamento e lá dentro as quebras da D1
+ * até D8. Assim fica mais organizado."
+ *
+ * O empacotador antigo era guloso e cego: cada card caía na primeira faixa em
+ * que coubesse. Com isso a D0 (que cobre o mês inteiro) tomava a faixa 0 e as
+ * quebras se espalhavam pelas seguintes MISTURADAS com demandas de outros
+ * assuntos — que é exatamente o contrário de "lá dentro".
+ *
+ * Agora ele empacota em BLOCOS: o agrupador ganha uma faixa só dele, e as
+ * quebras dele são empacotadas entre si nas faixas logo abaixo, sem ninguém de
+ * fora entrar no meio. Depois dos blocos, o resto empacota como sempre.
+ *
+ * O CUSTO É ALTURA, e é consciente: um grupo de oito quebras que caberiam em
+ * duas faixas misturadas ocupa 1 + 2 faixas só dele. É o preço de o bloco ser
+ * legível como bloco — e era isso que o pedido comprava.
+ *
+ * `recolhidos` é o conjunto de agrupadores fechados: as quebras deles não
+ * recebem faixa nenhuma, e o bloco vira uma linha só.
+ */
+function gEmpacota(sorted, faixas, tracks, recolhidos) {
+  const cardTrack = new Map();
+  const fechados = recolhidos || new Set();
+  const noMes = sorted.filter(m => faixas.get(m.id));
+
+  /* Quem é filho de quem, DENTRO desta lista. Um filho cujo pai não está aqui
+     (outro dev, ou fora do mês) é tratado como card solto — senão ele sumiria
+     da tela esperando por um bloco que ninguém vai desenhar. */
+  const porId = new Map(noMes.map(m => [m.id, m]));
+  const filhosDe = new Map();
+  noMes.forEach(m => {
+    const pid = String(m.parent_id || '');
+    if (!pid || !porId.has(pid)) return;
+    if (!filhosDe.has(pid)) filhosDe.set(pid, []);
+    filhosDe.get(pid).push(m);
+  });
+
+  const emBloco = new Set();
+  filhosDe.forEach((filhos, pid) => {
+    emBloco.add(pid);
+    filhos.forEach(f => emBloco.add(f.id));
+  });
+
+  const poe = (m, t) => {
+    const f = faixas.get(m.id);
+    while (tracks.length <= t) tracks.push([]);
+    tracks[t].push({ start: f.sIdx, end: f.eIdx, id: m.id });
+    cardTrack.set(m.id, t);
+  };
+
+  /* ── os blocos primeiro, na ordem em que os pais aparecem ── */
+  let proxima = 0;
+  noMes.forEach(pai => {
+    const filhos = filhosDe.get(pai.id);
+    if (!filhos) return;
+    poe(pai, proxima);
+    proxima += 1;
+    if (fechados.has(pai.id)) return;      // recolhido: as quebras não ocupam faixa
+    /* As quebras empacotam ENTRE SI, começando na faixa seguinte à do pai. */
+    const locais = [];
+    filhos.forEach(f => {
+      const ff = faixas.get(f.id);
+      let t = 0;
+      while (locais[t] && !locais[t].every(o => ff.sIdx > o.end || ff.eIdx < o.start)) t += 1;
+      if (!locais[t]) locais[t] = [];
+      locais[t].push({ start: ff.sIdx, end: ff.eIdx, id: f.id });
+      poe(f, proxima + t);
+    });
+    proxima += Math.max(1, locais.length);
+  });
+
+  /* ── e o resto, empacotado como sempre, nas faixas depois dos blocos ── */
+  noMes.forEach(m => {
+    if (emBloco.has(m.id)) return;
+    const f = faixas.get(m.id);
+    let t = proxima;
+    while (tracks[t] && !tracks[t].every(o => f.sIdx > o.end || f.eIdx < o.start)) t += 1;
+    poe(m, t);
+  });
+
+  return cardTrack;
+}
+
 function renderGantt() {
   renderResumoMes();
   renderPausadas();
@@ -2907,6 +3193,13 @@ function renderGantt() {
     const totalWD = workDays.filter(d => !d.holiday).length;
     const occupiedDays = new Set();
     devCards.forEach(m => {
+      /* O AGRUPADOR NÃO OCUPA DIA. "A D0 não coloco pontuação e nem tempo, aí
+         será contabilizado nas outras e somado" — decisão do Fernando, e ela é
+         necessária para a conta não mentir: a barra da D0 cobre o período
+         inteiro por desenho, e somando ocupação ela sozinha deixaria o dev em
+         100% por causa de uma linha que não é trabalho. Quem ocupa são as
+         quebras (D1..D8), cada uma nos seus dias. */
+      if (VINCULO.ehAgrupador(state.melhorias, m)) return;
       const startDate = m.inicio || m.entrega;
       const endDate   = m.entrega || m.inicio;
       if (!startDate) return;
@@ -2936,6 +3229,36 @@ function renderGantt() {
        ou seja, cartoes empilhados por cima uns dos outros sem erro nenhum. */
     const faixas = new Map();
     devCards.forEach(m => { faixas.set(m.id, faixaDoCard(m, workDays, todayStr)); });
+
+    /* ═══ A BARRA DO AGRUPADOR COBRE AS QUEBRAS ══════════════════════════
+     *
+     * "Quero ter a D0 que consumirá TODO planejamento e lá dentro as quebras."
+     *
+     * A D0 nasce sem datas próprias — ela não é trabalho, é o guarda-chuva. Sem
+     * esta parte ela não teria faixa nenhuma (`faixaDoCard` devolve nada sem
+     * data) e sumiria do gantt, levando o bloco junto.
+     *
+     * Então o período dela é o das quebras: do primeiro dia da primeira ao
+     * último da última. Se ela TIVER datas próprias, elas entram na conta —
+     * quem marcou um início antes da primeira quebra quis dizer alguma coisa,
+     * e encolher a barra apagaria isso. */
+    devCards.forEach(m => {
+      const filhos = devCards.filter(f => String(f.parent_id || '') === m.id);
+      if (!filhos.length) return;
+      let sIdx = null, eIdx = null, herdada = false;
+      const junta = (f) => {
+        if (!f) return;
+        sIdx = sIdx === null ? f.sIdx : Math.min(sIdx, f.sIdx);
+        eIdx = eIdx === null ? f.eIdx : Math.max(eIdx, f.eIdx);
+        herdada = herdada || !!f.herdada;
+      };
+      junta(faixas.get(m.id));
+      filhos.forEach(f => junta(faixas.get(f.id)));
+      /* NENHUMA QUEBRA NO MÊS, E A D0 SEM DATA: não há o que desenhar, e uma
+         barra de largura zero seria um risco que ninguém sabe clicar. */
+      if (sIdx === null) { faixas.delete(m.id); return; }
+      faixas.set(m.id, { sIdx, eIdx, herdada });
+    });
 
     /* ─── EM QUE FAIXA CADA BARRA CAI ──────────────────────────────────────
        O VALIDADO SOBE. Quem tem selo ocupa as faixas de cima; quem nao tem fica
@@ -2969,26 +3292,7 @@ function renderGantt() {
       return (a.inicio || '').localeCompare(b.inicio || '');
     });
     const tracks = []; // cada faixa = [{start,end,id}]
-    const cardTrack = new Map();
-    sorted.forEach(m => {
-      const f = faixas.get(m.id);
-      if (!f) return;                 // fora do mes: nao ocupa faixa nenhuma
-      const sIdx = f.sIdx, eIdx = f.eIdx;
-      let placed = false;
-      for (let t = 0; t < tracks.length; t++) {
-        // Cabe se nao encosta em NENHUM dos que ja estao nesta faixa.
-        const livre = tracks[t].every(o => sIdx > o.end || eIdx < o.start);
-        if (livre) {
-          tracks[t].push({ start: sIdx, end: eIdx, id: m.id });
-          cardTrack.set(m.id, t);
-          placed = true; break;
-        }
-      }
-      if (!placed) {
-        tracks.push([{ start: sIdx, end: eIdx, id: m.id }]);
-        cardTrack.set(m.id, tracks.length-1);
-      }
-    });
+    const cardTrack = gEmpacota(sorted, faixas, tracks, _gRecolhidos);
 
     const numTracks = Math.max(1, tracks.length);
     const rowH = numTracks * 60 + 16;
@@ -3125,15 +3429,29 @@ function renderGantt() {
       const tema = state.temas.find(t => t.id === m.tema_id);
       const tColor = temaColorOf(m.tema_id);
       const dotCls = prioClass(m.prioridade);
-      const trackIdx = cardTrack.get(m.id) ?? 0;
+      /* SEM FAIXA, NÃO DESENHA. Uma quebra de grupo recolhido não recebe faixa,
+         e o `?? 0` antigo a jogaria na faixa 0 — por cima do próprio agrupador. */
+      if (!cardTrack.has(m.id)) return;
+      const trackIdx = cardTrack.get(m.id);
       const top = trackIdx * 60 + 8;
 
       const faixa = faixas.get(m.id);
       if (!faixa) return;                       // fora do mes
       const { sIdx, eIdx, herdada } = faixa;
 
-      const left = sIdx * dayW;
-      const width = (eIdx - sIdx + 1) * dayW - 4;
+      /* ═══ O GRUPO: a D0 por fora, as quebras recuadas por dentro ═══════ */
+      const ehGrupo = VINCULO.ehAgrupador(state.melhorias, m);
+      const paiNaTela = String(m.parent_id || '') &&
+                        devCards.some(x => x.id === String(m.parent_id || '')) &&
+                        cardTrack.has(String(m.parent_id || ''));
+      const fechado = _gRecolhidos.has(m.id);
+      /* O RECUO É DE 16px, e sai da LARGURA junto. Recuar só o `left` faria a
+         quebra terminar 16px depois do fim do agrupador — e "dentro" que passa
+         da borda se lê como erro de desenho, não como hierarquia. */
+      const recuo = paiNaTela ? 16 : 0;
+
+      const left = sIdx * dayW + recuo;
+      const width = (eIdx - sIdx + 1) * dayW - 4 - recuo;
 
       const cardH = tema ? 54 : 36;
       const pausada = estaPausado(m);
@@ -3161,7 +3479,7 @@ function renderGantt() {
           (sprintsFora ? ` +${sprintsFora}s` : '')
         : '';
 
-      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}"
+      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}${ehGrupo ? ' gcard-agrupador' : ''}${paiNaTela ? ' gcard-parte' : ''}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
         draggable="true"
@@ -3172,6 +3490,8 @@ function renderGantt() {
         onmouseleave="hideTooltip()">
         <span class="card-drag-handle">⠿⠿</span>
         <div class="card-row1">
+          ${ehGrupo ? `<button type="button" class="card-recolhe" onclick="gRecolhe('${m.id}',event)" title="${fechado ? 'Mostrar as quebras' : 'Recolher as quebras'}">${fechado ? '▸' : '▾'}</button>` : ''}
+          ${paiNaTela ? `<button type="button" class="card-recolhe" onclick="gSoltar('${m.id}',event)" title="Tirar do grupo — volta a ser uma demanda solta">⤴</button>` : ''}
           ${m.prioridade ? `<span class="card-dot ${dotCls}"></span>` : ''}
           ${m.is_dependency ? `<span title="Dependência" style="font-size:10px;margin-right:2px;">🔗</span>` : ''}
           ${VINCULO.abertos(state.melhorias, m.id).length ? `<span title="Tem dependência aberta" style="font-size:10px;margin-right:2px;">⏳</span>` : ''}
@@ -3188,7 +3508,8 @@ function renderGantt() {
           ${window.SELO ? SELO.badge(m, 'card-selo') : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>
-        ${tema ? `<div class="card-tema-row"><span class="tema-badge" style="background:${tColor}25;color:${tColor};border-color:${tColor}55">${esc(tema.nome)}</span></div>` : ''}
+        ${tema ? `<div class="card-tema-row"><span class="tema-badge" style="background:${tColor}25;color:${tColor};border-color:${tColor}55">${esc(tema.nome)}</span>${ehGrupo ? `<span class="card-soma" title="Soma dos pontos das quebras. A D0 não pontua: o tamanho está nelas.">🧮 ${esc(VINCULO.frase(state.melhorias, m))}</span>` : ''}</div>` :
+          (ehGrupo ? `<div class="card-tema-row"><span class="card-soma" title="Soma dos pontos das quebras. A D0 não pontua: o tamanho está nelas.">🧮 ${esc(VINCULO.frase(state.melhorias, m))}</span></div>` : '')}
       </div>`;
     });
     html += `</div>`; // cards-layer
@@ -3205,6 +3526,15 @@ function setupGanttCardListener() {} // no-op
 let _lastCardTap = { time: 0, id: null };
 function onCardMouseDown(e, id) {
   if (e.button !== 0) return; // apenas botão esquerdo
+  /* NO MODO JUNTAR, O CLIQUE MARCA — e nao abre o modal. Um clique que faz duas
+     coisas conforme o modo precisa ser obvio, e e por isso que o modo tem faixa
+     propria no topo e o cursor muda: sem esses dois sinais, quem clicasse para
+     abrir uma demanda marcaria uma sem entender. */
+  if (_gJuntando) {
+    e.preventDefault(); e.stopPropagation();
+    gJuntarClique(id);
+    return;
+  }
   const now = Date.now();
   if (_lastCardTap.id === id && (now - _lastCardTap.time) < 400) {
     _lastCardTap = { time: 0, id: null };
@@ -3257,6 +3587,10 @@ let dragData = { type: null, id: null }; // type: 'card' | 'backlog'
 let _cardWasDragged = false;
 
 function onCardDragStart(e, id) {
+  /* ARRASTAR FICA DESLIGADO ENQUANTO SE MARCA. O arrasto move a DATA da
+     demanda; um clique com o dedo um pouco frouxo viraria arrasto, e a pessoa
+     mudaria um prazo achando que estava marcando um card. */
+  if (_gJuntando) { e.preventDefault(); return; }
   if (VIEWER_MODE) { e.preventDefault(); return; }
   _cardWasDragged = true;
   dragData = { type: 'card', id };
