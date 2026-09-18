@@ -91,6 +91,36 @@
        oposto de urgencia. */
     .kcard-prazo.sempt { background:var(--amber-bg); color:var(--amber-tx);
       border:1px solid var(--amber); }
+    /* ── GRILL ──
+       A FAIXA E A BORDA JUNTAS, e nao so um selo a mais. O card ja carrega ate
+       cinco etiquetas (pausada, prazo, sem pontuacao, selo de validacao,
+       progresso); mais uma se perderia no meio delas. O Grill precisa PARAR a
+       pessoa, entao ele muda o contorno do card inteiro — e some assim que ela
+       responde. */
+    .kcard-grill { display:block; font-size:11px; font-weight:800; letter-spacing:.03em;
+      background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470);
+      border-radius:6px; padding:3px 8px; margin:0 0 7px; cursor:pointer; }
+    .kcard.kcard-grill-on { border-color:var(--amber,#E89C2F); box-shadow:0 0 0 1px var(--amber,#E89C2F); }
+    /* O bloco no modal. Ambar de novo, e no topo: e a unica coisa desta tela
+       que alguem esta esperando. */
+    .ms-grill { background:var(--bg3); border:1px solid var(--amber,#E89C2F);
+      border-left:4px solid var(--amber,#E89C2F); border-radius:9px;
+      padding:13px 15px; margin-bottom:14px; }
+    .ms-grill.respondido { border-color:var(--border); border-left-color:var(--border2,#3A3A36); }
+    .ms-grill-tit { font-size:14px; font-weight:700; color:var(--text); margin-bottom:6px; }
+    .ms-grill-txt { font-size:12.5px; color:var(--text2); line-height:1.55; margin-bottom:10px; }
+    .ms-grill textarea { width:100%; box-sizing:border-box; font-family:inherit;
+      font-size:13.5px; color:var(--text); background:var(--bg);
+      border:1px solid var(--border); border-radius:7px; padding:9px 11px;
+      resize:vertical; min-height:62px; }
+    /* OS DOIS BOTOES SEPARADOS, e o de seguir por ULTIMO: e o gesto que fecha a
+       decisao, e fechar fica na direita nesta base inteira. */
+    .ms-grill-acoes { display:flex; gap:9px; justify-content:flex-end;
+      flex-wrap:wrap; margin-top:10px; }
+    .ms-grill-ja { background:var(--bg2); border-radius:7px; padding:8px 11px;
+      margin-bottom:10px; font-size:12.5px; color:var(--text2); }
+    .ms-grill-ja-p { color:var(--text); margin-top:4px; overflow-wrap:anywhere;
+      white-space:pre-wrap; }
     /* Barra de subtarefas: fina e discreta. Ela informa de relance e nao pode
        competir com o titulo do card, que e o que a pessoa procura primeiro. */
     .kcard-sub { display:flex; align-items:center; gap:6px; margin:6px 0 2px; }
@@ -443,6 +473,7 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="subtarefa.js?v=81d990c6e3"></script>
+  <script src="grill.js?v=c85bb8b63f"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
@@ -825,6 +856,19 @@
     <div id="ms-info"></div>
     <div id="ms-pausa" style="margin-bottom:12px"></div>
     <div id="ms-trava" style="display:none;background:var(--amber-bg);color:var(--amber-tx);border-radius:8px;padding:11px 13px;font-size:13px;line-height:1.6;margin-bottom:12px"></div>
+    <!-- ── GRILL ────────────────────────────────────────────────────────────
+         "Onde ele deverá levantar os pontos da task" — e um ponto, aqui, é uma
+         dúvida ou um questionamento.
+
+         FICA NO TOPO, antes de projeto, subtarefa e "mover para": é a única
+         coisa nesta tela que alguém está esperando. Enterrá-lo no meio do
+         formulário faria o dev responder na semana seguinte.
+
+         AS DUAS SAÍDAS SÃO O DESTINO: "entendi" manda para Planning, "tenho
+         dúvidas" manda para Levantar Requisitos com os pontos escritos. Por
+         isso elas são botões, e não mais uma opção do "Mover para" — a lista de
+         lá é do fluxo normal, e misturar faria o dev escolher Planning à toa. -->
+    <div id="ms-grill" style="display:none"></div>
     <!-- So projetos aprovados entram na lista: pendente e recusado nao aceitam
          demanda, e o Worker solta o vinculo na gravacao. Oferecer aqui faria a
          pessoa vincular e depois ver o vinculo desaparecer sozinho. -->
@@ -2347,6 +2391,25 @@ function verDemandaPorNumero() {
   abrirModal('modal-ver');
 }
 
+/* A ETAPA MANDA NO `status`, E O MAPA E UM SO.
+ *
+ * Havia DOIS, declarados dentro de funcoes diferentes, e eles ja divergiam: o
+ * da criacao de demanda nao tinha `levantar_req`. Hoje isso nao produz numero
+ * errado porque o padrao (`'recebida'`) calha de ser o mesmo — mas essa e a
+ * definicao de defeito esperando: a proxima etapa que nascer entra num mapa e
+ * nao no outro, e "concluida em Planejado" volta a existir.
+ *
+ * Deixar um sem o outro cria demanda "concluida" em Planejado, e todo relatorio
+ * que cruza os dois passa a discordar de si — e o que o Worker registra em
+ * `travaEtapaDoDev`. */
+const STATUS_POR_ETAPA = {
+  backlog: 'recebida', levantar_req: 'recebida',
+  planning: 'estimada', planejado: 'estimada',
+  em_andamento: 'iniciada', validacao: 'iniciada',
+  concluido: 'iniciada', atrasado: 'iniciada',
+};
+const statusDaEtapa = (e) => STATUS_POR_ETAPA[e] || 'recebida';
+
 const STATUS_LABELS = {
   backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
   planning:'Planning', em_andamento:'Em Andamento', validacao:'Em validação',
@@ -3535,11 +3598,29 @@ function renderCard(m, colKey) {
   const parentInfo = parent
     ? `<div class="kcard-parent-info" title="${devEsc((parent.codigo ? parent.codigo + ' · ' : '') + parent.titulo)}">🔗 Dep. de: ${devEsc(parent.codigo || '')} ${devEsc(parent.titulo.substring(0,38))}${parent.titulo.length>38?'…':''}</div>`
     : '';
+  /* ═══ O VISUAL DE GRILL ═════════════════════════════════════════════
+   *
+   * "Aparecer na esteira que existe hoje mas com visual de grill."
+   *
+   * ESTEIRA QUE EXISTE HOJE: o card não muda de coluna e não ganha coluna
+   * nova. O que muda é a aparência — borda âmbar e uma faixa no topo —, porque
+   * o Grill é um pedido de decisão sobre uma demanda que já está onde deveria.
+   *
+   * SÓ O PENDENTE PINTA. Respondido continua marcado no dado, e o rastro fica
+   * no admin; manter o card aceso depois de respondido faria a esteira ter um
+   * aviso permanente, que é a forma mais rápida de um aviso deixar de ser
+   * lido. */
+  const grillEst = window.GRILL ? GRILL.estado(m) : 'nao';
+  const grillFaixa = grillEst === 'pendente'
+    ? '<div class="kcard-grill" title="O PM/PO pediu seu parecer antes de esta ' +
+      'demanda entrar no planejamento. Abra e responda.">🔥 Grill — dê seu parecer</div>'
+    : '';
   return `
-    <div class="kcard prazo-${prazoNivel(m)}" draggable="true" id="card-${m.id}"
+    <div class="kcard prazo-${prazoNivel(m)}${grillEst === 'pendente' ? ' kcard-grill-on' : ''}" draggable="true" id="card-${m.id}"
          ondragstart="onDragStart(event,'${m.id}')"
          ondragend="onDragEnd(event)"
          onclick="openStatusModal('${m.id}')">
+      ${grillFaixa}
       ${parentInfo}
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
@@ -3940,6 +4021,7 @@ function openStatusModal(id, preselect) {
   // volta nem reentregar enquanto o PM/PO analisa. Concluir tambem nunca foi
   // opcao dele — quem fecha e quem valida.
   msProjetoRender(m);
+  msGrillRender(m);
   const emValidacao = getStatusKey(m) === 'validacao';
   const jaConcluida = getStatusKey(m) === 'concluido';
   const grupo = document.getElementById('ms-status-group');
@@ -4136,6 +4218,110 @@ function onStatusModalChange() {
 // Seletor de projeto no card do dev. Guarda se mexeu, porque updateStatus monta
 // o patch por campo e um vinculo alterado tem de entrar nele.
 let _msProjetoMexido = false;
+/* ═══ GRILL, NO PAINEL DO DEV ══════════════════════════════════════════════
+ *
+ * "Onde ele deverá levantar os pontos da task" — ponto, aqui, é dúvida ou
+ * questionamento.
+ *
+ * DUAS SAÍDAS, E CADA UMA É UM DESTINO:
+ *   ENTENDI       → Planning
+ *   TENHO DÚVIDAS → Levantar Requisitos, com os pontos escritos
+ *
+ * São BOTÕES, e não opções do "Mover para". A lista de lá é do fluxo normal do
+ * dev (começar, entregar); pôr Planning nela faria qualquer demanda poder ir
+ * para a pauta de terça sem ninguém ter decidido isso — que é exatamente o que
+ * o comentário daquele `<select>` registra ter acontecido com a AX-150.
+ * Aqui a ida para Planning é consequência de um parecer, não uma opção solta. */
+function msGrillRender(m) {
+  const cx = document.getElementById('ms-grill');
+  if (!cx) return;
+  const est = window.GRILL ? GRILL.estado(m) : 'nao';
+  const g = window.GRILL ? GRILL.dados(m) : { pontos: [] };
+
+  /* RESPONDIDO NÃO SOME DA TELA: o dev precisa poder reler o que ele mesmo
+     perguntou enquanto espera. O que some é a COBRANÇA. */
+  if (est === 'nao') { cx.style.display = 'none'; cx.innerHTML = ''; return; }
+  cx.style.display = 'block';
+
+  const jaPerguntou = g.pontos.length
+    ? '<div class="ms-grill-ja"><b>Já levantado:</b>' + g.pontos.map(p =>
+        '<div class="ms-grill-ja-p">' + devEsc(p.texto) + '</div>').join('') + '</div>'
+    : '';
+
+  if (est !== 'pendente') {
+    cx.innerHTML = '<div class="ms-grill respondido">' +
+      '<div class="ms-grill-tit">🔥 Grill — ' +
+      (est === 'ok' ? 'você respondeu que entendeu' : 'você devolveu com dúvidas') +
+      '</div>' + jaPerguntou + '</div>';
+    return;
+  }
+
+  cx.innerHTML =
+    '<div class="ms-grill">' +
+    '<div class="ms-grill-tit">🔥 Grill — dê seu parecer antes do planejamento</div>' +
+    '<div class="ms-grill-txt">Leia a demanda acima. Se faltar alguma coisa para você ' +
+    'conseguir estimar e executar, escreva os pontos — <b>uma dúvida por linha</b>. ' +
+    'Ela volta para Levantar Requisitos com o que você perguntou. Se estiver claro, ' +
+    'ela segue para o Planning.</div>' +
+    jaPerguntou +
+    '<textarea id="ms-grill-pontos" rows="3" placeholder="Ex.: De onde vem o valor do limite?&#10;O que acontece quando o cedente tem dois contratos?"></textarea>' +
+    '<div class="ms-grill-acoes">' +
+    '<button type="button" class="btn btn-secondary btn-sm" onclick="msGrillResponde(\'duvida\')">' +
+    'Tenho dúvidas → Levantar Req.</button>' +
+    '<button type="button" class="btn btn-primary btn-sm" onclick="msGrillResponde(\'ok\')">' +
+    'Entendi → Planning</button>' +
+    '</div></div>';
+}
+
+async function msGrillResponde(veredito) {
+  const id = document.getElementById('ms-id').value;
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+
+  const cru = String((document.getElementById('ms-grill-pontos') || {}).value || '');
+  /* UMA DÚVIDA POR LINHA. Um textarea só, e não um campo por dúvida: quem está
+     com a pergunta na cabeça escreve tudo de uma vez, e "+ adicionar" a cada
+     linha faz a pessoa escrever menos. */
+  const pontos = cru.split('\n').map(t => t.trim()).filter(Boolean);
+
+  if (veredito === 'duvida' && !pontos.length) {
+    toast('Escreva pelo menos uma dúvida — é ela que vai com a demanda.', 'err');
+    const el = document.getElementById('ms-grill-pontos');
+    if (el) el.focus();
+    return;
+  }
+  /* ENTENDI COM TEXTO ESCRITO É QUASE SEMPRE ENGANO: a pessoa escreveu a dúvida
+     e clicou no botão errado. Perguntar custa um clique; mandar para o Planning
+     com a dúvida por escrever custa uma semana. */
+  if (veredito === 'ok' && pontos.length) {
+    const segue = await confirmar({
+      titulo: 'Seguir para o Planning?',
+      texto: 'Você escreveu ' + pontos.length + (pontos.length === 1 ? ' ponto' : ' pontos') +
+             ', mas "Entendi" manda a demanda para o Planning sem eles. Para enviar ' +
+             'suas dúvidas, use "Tenho dúvidas".',
+      ok: 'Seguir assim' });
+    if (!segue) return;
+  }
+
+  /* O MÓDULO É QUEM DECIDE O DESTINO. A tela não conhece "planning" nem
+     "levantar_req" — se um dia o caminho mudar, ele muda num lugar só. */
+  const alvo = { grill: JSON.parse(JSON.stringify(m.grill || {})) };
+  const destino = GRILL.responde(alvo, veredito, pontos, currentDev || '');
+  if (!destino) { toast('Não foi possível registrar o parecer.', 'err'); return; }
+
+  const campos = { grill: alvo.grill, status_planejamento: destino,
+                   status: statusDaEtapa(destino) };
+  const ok = await saveToGitHub({ [id]: campos });
+  if (!ok) { toast('Não foi possível salvar o parecer.', 'err'); return; }
+  Object.assign(m, campos);
+  closeModal('modal-status');
+  renderKanban();
+  toast(veredito === 'ok'
+    ? '🔥 Parecer registrado — a demanda seguiu para o Planning.'
+    : '🔥 ' + pontos.length + (pontos.length === 1 ? ' dúvida enviada' : ' dúvidas enviadas') +
+      ' — a demanda voltou para Levantar Requisitos.', 'ok');
+}
+
 function msProjetoRender(m) {
   const sel = document.getElementById('ms-projeto');
   if (!sel) return;
@@ -4541,12 +4727,10 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   const implAnterior = m.implementacao;
   const projAnterior = m.projeto_id;
   const anexosAnterior = m.anexos;
-  const spToStatus = { backlog:'recebida', levantar_req:'recebida', planejado:'estimada',
-                       em_andamento:'iniciada', planning:'estimada', validacao:'iniciada',
-                       concluido:'iniciada', atrasado:'iniciada' };
+  // DELEGA — ver `STATUS_POR_ETAPA`, que era escrito duas vezes.
   // Atualiza localmente (otimista)
   m.status_planejamento = colKey;
-  m.status = spToStatus[colKey] || 'recebida';
+  m.status = statusDaEtapa(colKey);
   if (horasRealizadas !== undefined) m.horas_realizadas = horasRealizadas;
   if (implementacao !== undefined) m.implementacao = implementacao;
   if (_msAnexosMexidos) m.anexos = _msAnexos;
@@ -4880,9 +5064,7 @@ async function saveNewDemand() {
           ok: 'Criar assim mesmo', cancelar: 'Voltar', perigo: true }))) return;
   }
   const sp = document.getElementById('n-status').value;
-  const spToStatus = { backlog:'recebida', planning:'estimada', planejado:'estimada',
-                       em_andamento:'iniciada', validacao:'iniciada', atrasado:'iniciada',
-                       concluido:'iniciada' };
+  // DELEGA — ver `STATUS_POR_ETAPA`. Esta copia nao tinha `levantar_req`.
   const obj = {
     ...(existing || {}),
     id: editId || uid(),
@@ -4904,7 +5086,7 @@ async function saveNewDemand() {
     anexos: (existing?.anexos || []).concat(_nAnexos),
     inicio: document.getElementById('n-inicio').value || '',
     entrega: document.getElementById('n-entrega').value || '',
-    status: spToStatus[sp] || existing?.status || 'recebida',
+    status: statusDaEtapa(sp),
     status_planejamento: sp,
     estimativa: existing?.estimativa || '',
     motivo_negacao: existing?.motivo_negacao || '',

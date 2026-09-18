@@ -281,37 +281,29 @@
     .pj-busca { width:100%; box-sizing:border-box; }
     .pj-sugestao { max-height:210px; overflow-y:auto; display:grid; gap:6px; margin-top:8px; }
     /* marca no card do Kanban */
-    /* ── GRILL ── */
-    .grill-q { background:var(--bg3); border:1px solid var(--border); border-left:3px solid var(--border2);
-      border-radius:10px; padding:14px 16px; margin-bottom:12px; }
-    .grill-q.falta { border-left-color:var(--amber); }
-    .grill-q-topo { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
-    .grill-n { font-family:ui-monospace,monospace; font-size:11px; font-weight:700; color:var(--text3); }
-    .grill-txt { font-size:14px; font-weight:600; color:var(--text); flex:1; min-width:200px; }
-    .grill-peso { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
-      border-radius:20px; padding:2px 8px; }
-    .grill-peso.essencial { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
-    .grill-peso.importante{ background:var(--blue-bg,#0C3260);  color:var(--blue-tx,#9BC8F8); }
-    .grill-peso.bom       { background:var(--bg4); color:var(--text2); }
-    .grill-ajuda { font-size:12.5px; color:var(--text2); line-height:1.55; margin:6px 0 10px; }
-    .grill-resp { width:100%; box-sizing:border-box; margin:0; }
-    /* Bloco 1: resposta lida do formulario, com veredito de qualidade. */
-    .grill-lido { border-left:3px solid var(--border2); padding:10px 0 10px 12px; margin-bottom:10px; }
-    .grill-lido.vaga  { border-left-color:var(--amber); }
-    .grill-lido.vazia { border-left-color:var(--red); }
-    .grill-lido-topo { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:4px; }
-    .grill-lido-rot { font-size:12px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.04em; }
-    .grill-sel { font-size:10.5px; font-weight:700; border-radius:20px; padding:1px 8px; }
-    .grill-sel.ok    { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
-    .grill-sel.vaga  { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
-    .grill-sel.vazia { background:var(--red-bg,#3A1414);   color:var(--red-tx,#F9A0A0); }
-    .grill-lido-txt { font-size:13.5px; line-height:1.55; color:var(--text); white-space:pre-wrap; word-break:break-word; }
-    .grill-lido-txt.vazio { color:var(--text3); font-style:italic; }
-    /* Bloco 2: a contradicao em si. */
-    .grill-contra { background:var(--amber-bg,#3A2A08); color:var(--amber-tx,#FFD79A);
-      border-left:3px solid var(--amber); border-radius:0 8px 8px 0; padding:11px 14px;
-      font-size:13.5px; line-height:1.6; }
-    .grill-contra b { color:var(--text); }
+    /* ── GRILL ──
+       Um selo âmbar, que nesta tela significa "pede atenção" — é o mesmo peso
+       de pausada e de prazo perto, e é o que o Grill é: um pedido de decisão
+       parado. Verde quando o dev entendeu, azul quando ele perguntou: as duas
+       são respostas, e resposta não pede nada de ninguém. */
+    .m-grill-chave { display:flex; align-items:flex-start; gap:9px; font-weight:400;
+      font-size:13.5px; color:var(--text2); cursor:pointer; line-height:1.45; }
+    .m-grill-chave input { width:auto; margin:2px 0 0; flex-shrink:0; }
+    .m-grill-chave b { color:var(--text); }
+    .m-grill-estado { font-size:12px; color:var(--text3); margin:6px 0 0 24px; }
+    .m-grill-selo { display:inline-block; font-size:10.5px; font-weight:700;
+      border-radius:20px; padding:1px 9px; margin-right:7px;
+      text-transform:uppercase; letter-spacing:.04em; }
+    .m-grill-selo.pendente { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
+    .m-grill-selo.ok       { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
+    .m-grill-selo.duvida   { background:var(--blue-bg,#0C3260);  color:var(--blue-tx,#9BC8F8); }
+    .m-grill-ponto { background:var(--bg3); border:1px solid var(--border);
+      border-left:3px solid var(--blue,#3B8FE8); border-radius:7px;
+      padding:8px 11px; margin-top:6px; }
+    .m-grill-ponto-txt { font-size:13.5px; color:var(--text); line-height:1.5;
+      white-space:pre-wrap; overflow-wrap:anywhere; }
+    .m-grill-ponto-quem { font-size:11px; color:var(--text3); margin-top:3px; }
+    /* ── GRILL (antigo, removido) ── */
     /* Pausada esmaece: o prazo esta suspenso, ela nao esta pedindo acao hoje. */
     .card.card-pausada { opacity:.78; }
     /* Magenta: 'Atrasado' e vermelho, e um rose vizinho do vermelho se confunde
@@ -1136,6 +1128,7 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="subtarefa.js?v=81d990c6e3"></script>
+  <script src="grill.js?v=c85bb8b63f"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-projeto.js?v=63d219aac1"></script>
@@ -1789,9 +1782,6 @@
 
     <div class="mtabs">
       <button type="button" class="mtab ativa" id="mtab-dados" onclick="mAba('dados')">Dados</button>
-      <button type="button" class="mtab" id="mtab-grill" onclick="mAba('grill')">
-        Grill <span class="mtab-sino" id="mtab-grill-n" style="display:none">0</span>
-      </button>
       <button type="button" class="mtab" id="mtab-entrega" onclick="mAba('entrega')">
         Entrega <span class="mtab-sino" id="mtab-sino" style="display:none">1</span>
       </button>
@@ -1812,16 +1802,6 @@
     <div id="m-val-barra" class="val-barra" style="display:none"></div>
 
     <!-- ABA GRILL: as perguntas que a demanda precisa aguentar -->
-    <div id="m-pane-grill" style="display:none">
-      <div id="grill-topo"></div>
-      <div id="grill-corpo"></div>
-      <div class="form-actions">
-        <button class="btn btn-secondary" onclick="closeModal('modal-melhoria')">Fechar</button>
-        <button class="btn btn-primary" onclick="grillSalvar()">Salvar respostas</button>
-      </div>
-    </div>
-
-    <!-- ABA ENTREGA: validacao do PM/PO -->
     <div id="m-pane-entrega" style="display:none">
       <div id="ent-conteudo"></div>
     </div>
@@ -1892,6 +1872,25 @@
           <option value="negada">Negada</option>
         </select>
       </div>
+    </div>
+
+    <!-- ── GRILL ────────────────────────────────────────────────────────────
+         "Abra uma marcação para admin e dev, onde eu consiga flagar Grill."
+
+         Fica logo abaixo do Status porque é do Status que ela trata: o veredito
+         do dev MOVE a demanda — "entendi" leva para Planning, "tenho dúvidas"
+         leva para Levantar Requisitos. Pôr isto num canto do formulário faria a
+         marca parecer um rótulo, e ela é um pedido de decisão.
+
+         O bloco cresce quando há dúvidas: aí ele deixa de ser um interruptor e
+         passa a ser o lugar onde se lê o que o dev perguntou. -->
+    <div class="form-group" id="m-grill-bloco">
+      <label class="m-grill-chave">
+        <input type="checkbox" id="m-grill" onchange="mGrillMarca()" />
+        <span><b>Grill</b> — o dev julga a demanda antes de ela entrar no planejamento</span>
+      </label>
+      <div id="m-grill-estado" class="m-grill-estado"></div>
+      <div id="m-grill-pontos"></div>
     </div>
 
     <div class="form-row">
@@ -9794,15 +9793,6 @@ function openModalMelhoria(id) {
   mPopulaProjetos(m?.projeto_id || '');
   mescRenderBloco(m || null);
   pausaRenderBloco(m || null);
-  // Sino na aba Grill: mostra o que falta antes de a pessoa abrir.
-  const gn = document.getElementById('mtab-grill-n');
-  if (gn) {
-    // O sino aponta CONTRADICOES, nao campo em branco: e o que precisa de
-    // conversa antes de a demanda entrar na fila.
-    const n = m ? grillContagem(m).alertas : 0;
-    gn.style.display = n ? 'inline-block' : 'none';
-    gn.textContent = n;
-  }
   const cod = document.getElementById('m-codigo');
   cod.style.display = m?.codigo ? 'inline-block' : 'none';
   if (m?.codigo) cod.textContent = m.codigo;
@@ -9836,6 +9826,9 @@ function openModalMelhoria(id) {
   mRenderAnexosEdit();
   atualizaHorasPlanejadas();
   mSubsRender(m || null);
+  /* COPIA, como os anexos: cancelar nao pode deixar a marca aplicada. */
+  _mGrill = JSON.parse(JSON.stringify((m && m.grill) || {}));
+  mGrillRender(m || null);
 
   // preenche Sistema / Módulo a partir do tema atual
   populateSistemaModulo('m', m?.tema_id);
@@ -9919,6 +9912,70 @@ function calcHorasPlanejadas(inicio, entrega) {
     d.setDate(d.getDate() + 1);
   }
   return count * 8;
+}
+
+/* ═══ GRILL, NO ADMIN ══════════════════════════════════════════════════════
+ *
+ * O PM/PO marca; o dev julga no painel dele e o veredito MOVE a demanda.
+ *
+ * `_mGrill` é a cópia em edição, como `_mAnexos`. O objeto inteiro é gravado —
+ * e não um booleano solto — porque o veredito e as dúvidas do dev moram nele:
+ * gravar só a marca apagaria o que o dev escreveu, e esse é o tipo de perda que
+ * ninguém percebe até precisar da resposta. */
+let _mGrill = {};
+
+function mGrillMarca() {
+  const cx = document.getElementById('m-grill');
+  const eu = (_eu && (_eu.nome || _eu.login)) || 'admin';
+  /* O OBJETO É O DA DEMANDA, e o módulo é quem o monta — a tela não escreve o
+     formato do dado à mão. */
+  const alvo = { grill: _mGrill };
+  if (cx && cx.checked) GRILL.marca(alvo, eu); else GRILL.desmarca(alvo);
+  _mGrill = alvo.grill;
+  mGrillRender({ grill: _mGrill });
+}
+
+function mGrillRender(m) {
+  const cx = document.getElementById('m-grill');
+  const est = document.getElementById('m-grill-estado');
+  const pts = document.getElementById('m-grill-pontos');
+  if (!cx || !est || !pts) return;
+
+  const g = GRILL.dados({ grill: _mGrill });
+  cx.checked = g.marcado;
+
+  const e = GRILL.estado({ grill: _mGrill });
+  const selo = (cls, txt) => '<span class="m-grill-selo ' + cls + '">' + txt + '</span>';
+  if (e === 'pendente') {
+    est.innerHTML = selo('pendente', 'aguardando o dev') +
+      'Aparece no painel dele com o visual de Grill. Ele responde ' +
+      '<b>entendi</b> — e a demanda vai para Planning — ou <b>tenho dúvidas</b>, ' +
+      'e ela vai para Levantar Requisitos com os pontos escritos aqui embaixo.';
+  } else if (e === 'ok') {
+    est.innerHTML = selo('ok', 'entendido') +
+      'O dev leu e não tem dúvida' + (g.respondido_por ? ' — ' + esc(g.respondido_por) : '') + '.';
+  } else if (e === 'duvida') {
+    est.innerHTML = selo('duvida', 'devolvida com dúvidas') +
+      'O dev levantou os pontos abaixo' +
+      (g.respondido_por ? ', ' + esc(g.respondido_por) : '') +
+      '. Resolva e mova para Planning.';
+  } else {
+    est.innerHTML = 'Marque quando a demanda precisar passar pelo crivo de quem vai ' +
+      'executá-la antes de entrar no planejamento.';
+  }
+
+  /* AS DÚVIDAS APARECEM MESMO DESMARCADA. Desmarcar é dizer "não precisa mais
+     de Grill", e não "aquelas perguntas nunca existiram" — e é justamente
+     depois de resolver que alguém volta para reler o que foi perguntado. */
+  pts.innerHTML = !g.pontos.length ? '' :
+    '<div style="margin-top:10px">' + g.pontos.map(p =>
+      '<div class="m-grill-ponto">' +
+      '<div class="m-grill-ponto-txt">' + esc(p.texto) + '</div>' +
+      (p.por || p.em
+        ? '<div class="m-grill-ponto-quem">' + esc(p.por || '') +
+          (p.em ? ' · ' + esc(formatDate(p.em)) : '') + '</div>'
+        : '') +
+      '</div>').join('') + '</div>';
 }
 
 /* ═══ AS SUBTAREFAS NO MODAL DO ADMIN, SÓ PARA LER ════════════════════════
@@ -10379,9 +10436,10 @@ async function saveMelhoria() {
     // Estampada mais abaixo por marcaConclusao, que decide pela etapa escolhida.
     concluido_em:        existing.concluido_em  || '',
     concluido_retroativo: existing.concluido_retroativo || undefined,
-    // O grill nao tem campo no formulario de Dados: sem repassar, salvar por la
     // apagaria as respostas.
-    grill:               existing.grill || {},
+    /* O OBJETO INTEIRO, e nao so a marca: o veredito do dev e as duvidas dele
+       moram aqui. Gravar so o booleano apagaria o que ele escreveu. */
+    grill:               _mGrill || existing.grill || {},
     // Pausa nao tem campo no formulario: sem repassar, salvar apagaria a pausa.
     pausado_em:          existing.pausado_em     || '',
     pausa_motivo:        existing.pausa_motivo   || '',
@@ -11381,7 +11439,7 @@ function histRender() {
 }
 
 function mAba(qual) {
-  const abas = ['dados', 'grill', 'entrega', 'votos', 'hist'];
+  const abas = ['dados', 'entrega', 'votos', 'hist'];
   if (!abas.includes(qual)) qual = 'dados';
   abas.forEach(a => {
     document.getElementById('m-pane-' + a).style.display = (a === qual) ? 'block' : 'none';
@@ -11389,7 +11447,6 @@ function mAba(qual) {
   });
   const acoes = document.getElementById('m-acoes-dados');
   if (acoes) acoes.style.display = (qual === 'dados') ? '' : 'none';
-  if (qual === 'grill') grillRender();
   if (qual === 'votos') votosRender();
   if (qual === 'hist') histRender();
   document.querySelector('#modal-melhoria .modal').scrollTop = 0;
@@ -12295,199 +12352,6 @@ async function mescDesfazer(idFilha) {
     if (m) mescRenderBloco(m);
     renderAll();
   } else toast('Não foi possível separar.', 'err');
-}
-
-
-// ─── GRILL ────────────────────────────────────────────────────────
-// A primeira versao repetia o formulario: cinco das dez perguntas ja estavam
-// respondidas na abertura da solicitacao. Isso e um segundo formulario, nao uma
-// sabatina.
-//
-// Grill e o que LE o que a pessoa escreveu e confronta. Tres blocos: o que ja
-// foi respondido (com veredito de qualidade), o que ninguem perguntou, e as
-// contradicoes entre campos — que e onde mora a pergunta que faz desistir.
-
-// Palavras que prometem sem medir. Sozinhas nao condenam; sem numero por perto,
-// sim: "agilizar o processo" nao diz de quanto para quanto.
-const GRILL_VAGAS = /\b(melhorar|otimizar|agilizar|facilitar|dinamizar|simplificar|aprimorar|mais r[aá]pido|mais f[aá]cil|mais [aá]gil|maior efici[eê]ncia)\b/i;
-const temNumero = t => /\d/.test(String(t || ''));
-const palavras  = t => String(t || '').trim().split(/\s+/).filter(Boolean).length;
-
-// Veredito de uma resposta: vazia, vaga ou respondida.
-function grillVeredito(texto, exigeNumero) {
-  const t = String(texto || '').trim();
-  if (!t) return { v: 'vazia', rot: 'em branco' };
-  if (palavras(t) < 4) return { v: 'vaga', rot: 'curta demais' };
-  if (exigeNumero && !temNumero(t)) return { v: 'vaga', rot: 'sem número' };
-  if (GRILL_VAGAS.test(t) && !temNumero(t)) return { v: 'vaga', rot: 'promete sem medir' };
-  return { v: 'ok', rot: 'respondida' };
-}
-
-const gD = m => (m && m.discovery) || {};
-const gCtx = m => gD(m).contexto || {};
-const gGanho = m => gD(m).ganho || {};
-const gEsc = m => gD(m).escopo || {};
-
-// O que o formulario ja coletou. Nada aqui e reperguntado.
-function grillJaRespondido(m) {
-  const d = gD(m), c = gCtx(m), g = gGanho(m), e = gEsc(m);
-  return [
-    { rot: 'Para que serve',            txt: m.descricao,      num: false },
-    { rot: 'Como é hoje',               txt: c.as_is,          num: false },
-    { rot: 'O que dá errado',           txt: c.dor,            num: false },
-    { rot: 'E se continuar assim',      txt: c.nao_fazer,      num: false },
-    { rot: 'O que muda no dia a dia',   txt: d.impacto,        num: false },
-    { rot: 'Quem mais vai usar',        txt: d.beneficiarios,  num: false },
-    { rot: 'Ganho estimado',            txt: g.resumo || (g.horas_dia ? g.horas_dia + 'h/dia × ' + (g.pessoas || '?') + ' pessoa(s)' : ''), num: true },
-    { rot: 'Fora do escopo',            txt: e.fora,           num: false },
-  ];
-}
-
-// As tres perguntas que NAO existem em lugar nenhum do formulario.
-const GRILL_LACUNAS = [
-  { id:'alternativa', q:'Dá para resolver sem desenvolvimento?',
-    ajuda:'Processo, configuração, treinamento. A entrega mais barata é a que não precisa de código.' },
-  { id:'metrica',     q:'Que número muda quando isso ficar pronto?',
-    ajuda:'Sem um número, não há como validar a entrega depois — e a validação PM/PO vira achismo.' },
-  { id:'valida',      q:'Quem valida que ficou pronto?',
-    ajuda:'Nome de pessoa. "A área" não valida nada.' },
-];
-
-// Contradicoes entre campos. E o cruzamento que uma pessoa lendo campo a campo
-// nao faz, e que derruba demanda mal formulada.
-function grillContradicoes(m) {
-  const d = gD(m), c = gCtx(m), g = gGanho(m), e = gEsc(m);
-  const sk = statusKey(m);
-  const fora = [];
-
-  if (d.tipo === 'ganho' && !String(g.horas_dia || '').trim()) {
-    fora.push('Foi marcada como <b>ganho de produtividade</b>, mas ninguém disse quantas horas por dia se perde hoje. Sem esse número não dá para comparar com outras demandas.');
-  }
-  if (String(g.horas_dia || '').trim() && !String(g.pessoas || '').trim()) {
-    fora.push('Informou as horas por pessoa, mas não quantas pessoas. O ganho total ainda é desconhecido.');
-  }
-  if (/\b(tod[oa]s?|toda a [áa]rea|equipe inteira|geral)\b/i.test(String(d.impacto || '')) &&
-      palavras(d.beneficiarios) > 0 && palavras(d.beneficiarios) <= 3) {
-    fora.push('O impacto fala em <b>todos / a área toda</b>, mas os beneficiários listam pouca gente. Qual dos dois vale?');
-  }
-  if (['planning', 'planejado', 'em_andamento'].includes(sk) && !(d.criterios_aceite || []).length) {
-    fora.push('Está em <b>' + esc(STATUS_LABELS[sk] || sk) + '</b> sem nenhum critério de aceite. O dev vai desenvolver sem saber o que é "pronto", e a validação PM/PO não terá contra o que comparar.');
-  }
-  if (Number(m.poker_pontos) >= 21 && !String(e.fora || '').trim()) {
-    fora.push('Pontuada em <b>' + m.poker_pontos + '</b> e sem nada declarado fora do escopo. Demanda grande sem limite é onde o prazo estoura.');
-  }
-  if (!String(m.solicitante || '').trim()) {
-    fora.push('Sem solicitante. Quando surgir dúvida no meio do desenvolvimento, não há a quem perguntar.');
-  }
-  if (m.tipo === 'sustentacao' && !String(c.dor || '').trim()) {
-    fora.push('Classificada como <b>Erro/Bug</b> mas sem descrição do que dá errado. Não dá para reproduzir o problema.');
-  }
-  if (!String(c.as_is || '').trim() && d.tipo === 'ganho') {
-    fora.push('Promete ganho sem dizer como é feito hoje. Não há de onde medir a economia.');
-  }
-  if (m.entrega && !m.inicio && ['planejado', 'em_andamento'].includes(sk)) {
-    fora.push('Tem prazo de entrega mas não tem data de início. O gantt não consegue dimensionar o esforço.');
-  }
-  if (Number(m.poker_pontos) > 0 && !m.dev && sk !== 'backlog') {
-    fora.push('Já foi pontuada mas não tem dev responsável. Ponto sem dono não vira entrega.');
-  }
-  return fora;
-}
-
-const grillRespostas = m => (m && m.grill) || {};
-
-function grillContagem(m) {
-  const r = grillRespostas(m);
-  const respondidas = GRILL_LACUNAS.filter(p => String(r[p.id] || '').trim()).length;
-  return { respondidas, total: GRILL_LACUNAS.length, alertas: grillContradicoes(m).length };
-}
-
-function grillRender() {
-  const id = document.getElementById('m-id').value;
-  const m = (state.melhorias || []).find(x => x.id === id) || null;
-  const topo = document.getElementById('grill-topo');
-  const corpo = document.getElementById('grill-corpo');
-  if (!m) {
-    topo.innerHTML = '';
-    corpo.innerHTML = '<p class="pj-vazio">Salve a demanda primeiro.</p>';
-    return;
-  }
-  const contras = grillContradicoes(m);
-  const jaResp = grillJaRespondido(m);
-  const vagas = jaResp.filter(x => grillVeredito(x.txt, x.num).v !== 'ok').length;
-  const c = grillContagem(m);
-
-  topo.innerHTML =
-    '<div class="ent-aviso ' + (contras.length ? 'espera' : 'aprovada') + '">' +
-      (contras.length
-        ? '⚠ <strong>' + contras.length + (contras.length > 1 ? ' pontos frágeis' : ' ponto frágil') +
-          ' nesta demanda.</strong> São perguntas para fazer a quem pediu — e algumas ela pode não conseguir responder.'
-        : '✅ <strong>Nenhuma contradição encontrada.</strong> A demanda se sustenta.') +
-      '<br>' + vagas + ' de ' + jaResp.length + ' respostas do formulário estão fracas · ' +
-      c.respondidas + ' de ' + c.total + ' lacunas preenchidas.' +
-    '</div>';
-
-  // ── bloco 1: o que ja foi respondido ──
-  let html = '<div class="ent-bloco"><h4>O que já foi respondido</h4>' +
-    '<p class="us-hint" style="margin:0 0 12px">Veio do formulário de abertura. Não precisa redigitar — ' +
-    'o que interessa aqui é a <strong>qualidade</strong> de cada resposta.</p>';
-  jaResp.forEach(x => {
-    const v = grillVeredito(x.txt, x.num);
-    html += '<div class="grill-lido ' + v.v + '">' +
-      '<div class="grill-lido-topo"><span class="grill-lido-rot">' + esc(x.rot) + '</span>' +
-      '<span class="grill-sel ' + v.v + '">' + v.rot + '</span></div>' +
-      (String(x.txt || '').trim()
-        ? '<div class="grill-lido-txt">' + esc(x.txt) + '</div>'
-        : '<div class="grill-lido-txt vazio">— ninguém respondeu</div>') +
-    '</div>';
-  });
-  html += '</div>';
-
-  // ── bloco 2: contradicoes ──
-  if (contras.length) {
-    html += '<div class="ent-bloco"><h4>Perguntas que a demanda não responde</h4>' +
-      '<div style="display:grid;gap:10px">' +
-      contras.map(t => '<div class="grill-contra">' + t + '</div>').join('') +
-      '</div></div>';
-  }
-
-  // ── bloco 3: as lacunas reais ──
-  const r = grillRespostas(m);
-  html += '<div class="ent-bloco"><h4>O que ninguém perguntou ainda</h4>' +
-    '<p class="us-hint" style="margin:0 0 12px">Três perguntas que não existem no formulário de abertura ' +
-    'e costumam decidir se a demanda vale o mês de alguém.</p>' +
-    GRILL_LACUNAS.map((p, i) => {
-      const val = String(r[p.id] || '');
-      return '<div class="grill-q' + (val.trim() ? '' : ' falta') + '">' +
-        '<div class="grill-q-topo"><span class="grill-n">' + String(i + 1).padStart(2, '0') + '</span>' +
-        '<span class="grill-txt">' + esc(p.q) + '</span></div>' +
-        '<div class="grill-ajuda">' + esc(p.ajuda) + '</div>' +
-        '<textarea class="grill-resp" data-q="' + esc(p.id) + '" rows="2" ' +
-          'placeholder="Resposta de quem pediu…">' + esc(val) + '</textarea>' +
-      '</div>';
-    }).join('') + '</div>';
-
-  corpo.innerHTML = html;
-}
-
-async function grillSalvar() {
-  const id = document.getElementById('m-id').value;
-  const m = (state.melhorias || []).find(x => x.id === id);
-  if (!m) return;
-  const novo = {};
-  document.querySelectorAll('#grill-corpo .grill-resp').forEach(t => {
-    const v = t.value.trim();
-    if (v) novo[t.dataset.q] = v;
-  });
-  m.grill = novo;
-  _dirtyMelhoriaIds.add(id);
-  _pendingEdits = true;
-  const okSalvo = await saveViaProxy();
-  if (okSalvo) {
-    _dirtyMelhoriaIds.clear(); _pendingEdits = false;
-    toast('Grill salvo.', 'ok');
-    grillRender(); renderAll();
-  } else toast('Não foi possível salvar as respostas.', 'err');
 }
 
 

@@ -8605,7 +8605,16 @@ sec('A etapa que o dev pode mover');
   if (!c) return;
   let trava;
   try {
-    trava = new Function('ETAPAS_QUE_O_DEV_MOVE', c + '\n; return travaEtapaDoDev;')(srv);
+    /* A EXCECAO DO GRILL ENTRA JUNTO. `travaEtapaDoDev` passou a chamar
+       `grillLiberaEtapa`, e recortar so a trava estoura em
+       `grillLiberaEtapa is not defined`. Melhor do que so voltar a compilar:
+       com as duas, os casos abaixo continuam medindo a regra INTEIRA — se a
+       excecao um dia liberar demais, e aqui que aparece. */
+    const exc = W.slice(W.indexOf('const GRILL_DESTINO = {'),
+                        W.indexOf('function travaEtapaDoDev(')) +
+                corpo(W, 'function grillLiberaEtapa(');
+    trava = new Function('ETAPAS_QUE_O_DEV_MOVE',
+      exc + '\n' + c + '\n; return travaEtapaDoDev;')(srv);
   } catch (e) { ok(false, 'a trava roda isolada', e.message); return; }
 
   const caso = (de, para, extra) => {
@@ -13288,6 +13297,184 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(lit.indexOf('...existing') < lit.indexOf('titulo'),
          'e ele vem ANTES dos campos — depois deles, desfaria a propria edicao');
     }
+  }
+
+  /* === GRILL: O DEV JULGA A DEMANDA ANTES DO PLANEJAMENTO ===============
+
+     "Abra uma marcacao para admin e dev, onde eu consiga flagar Grill e, quando
+     for para o dev, aparecer na esteira que existe hoje mas com visual de
+     grill, onde ele devera levantar os pontos da task."  E, sobre "pontos":
+     "seria duvidas ou questionamentos".
+
+     O fluxo, decidido por ele: o dev responde ENTENDI (vai para Planning) ou
+     TENHO DUVIDAS (volta para Levantar Requisitos com os pontos escritos). Nao
+     trava nada — "nao trava, e um aviso". */
+  sec('Grill');
+  {
+    const G = require('./grill.js');
+
+    /* ── O MODULO, EXECUTADO ── */
+    ok(G.DESTINO_OK === 'planning' && G.DESTINO_DUVIDA === 'levantar_req',
+       'os dois destinos sao do modulo, e nao de cada tela',
+       G.DESTINO_OK + ' / ' + G.DESTINO_DUVIDA);
+    ok(G.estado({}) === 'nao', 'demanda sem marca nao esta em grill');
+
+    const marcada = G.marca({}, 'Fernando');
+    ok(G.estado(marcada) === 'pendente', 'marcada e sem veredito fica PENDENTE');
+    ok(G.pendente(marcada), 'e so o pendente pede acao');
+
+    const comOk = JSON.parse(JSON.stringify(marcada));
+    ok(G.responde(comOk, 'ok', [], 'Dan') === 'planning',
+       '"entendi" leva para o Planning');
+    ok(!G.pendente(comOk) && G.estado(comOk) === 'ok',
+       'e para de pedir acao — aviso que fica aceso depois de respondido deixa ' +
+       'de ser lido');
+
+    const comDuv = JSON.parse(JSON.stringify(marcada));
+    ok(G.responde(comDuv, 'duvida', ['De onde vem o limite?'], 'Dan') === 'levantar_req',
+       '"tenho duvidas" volta para Levantar Requisitos');
+    ok(G.pontos(comDuv).length === 1 && G.pontos(comDuv)[0].por === 'Dan',
+       'e a duvida fica gravada com quem perguntou');
+
+    /* DUVIDA SEM PONTO NENHUM NAO E DUVIDA. Gravaria uma demanda em Levantar
+       Req. sem uma linha dizendo o que falta — o pior estado possivel para
+       quem vai ler. */
+    const vazio = JSON.parse(JSON.stringify(marcada));
+    ok(G.responde(vazio, 'duvida', ['  ', ''], 'Dan') === '',
+       'duvida sem nenhum ponto escrito e recusada');
+    ok(G.estado(vazio) === 'pendente', 'e a demanda continua pendente, sem meia gravacao');
+    ok(G.responde(JSON.parse(JSON.stringify(marcada)), 'talvez', [], 'x') === '',
+       'veredito que nao existe nao move nada');
+
+    /* REMARCAR E PEDIR UM NOVO JULGAMENTO. */
+    const rodada2 = G.marca(JSON.parse(JSON.stringify(comDuv)), 'Fernando');
+    ok(G.estado(rodada2) === 'pendente',
+       'remarcar zera o veredito — manter o "entendido" da rodada passada faria ' +
+       'a demanda nascer respondida');
+    ok(G.pontos(rodada2).length === 1,
+       'mas as duvidas da rodada anterior FICAM: elas sao o que ja se perguntou');
+
+    /* DESMARCAR NAO APAGA O QUE FOI PERGUNTADO. */
+    const des = G.desmarca(JSON.parse(JSON.stringify(comDuv)));
+    ok(G.estado(des) === 'nao' && G.pontos(des).length === 1,
+       'desmarcar e dizer "nao precisa mais", e nao "aquelas perguntas nunca existiram"');
+
+    /* O FORMATO ANTIGO NAO EXPLODE. Havia um "Grill" que era outra coisa — uma
+       sabatina sobre o discovery — e o campo tinha outro formato. */
+    ok(G.estado({ grill: { p1: 'resposta do formato velho' } }) === 'nao',
+       'demanda com o formato ANTIGO do campo le como nao marcada');
+    ok(G.pontos({ grill: { pontos: ['texto solto'] } })[0].texto === 'texto solto',
+       'e ponto que venha como string solta tambem e lido');
+
+    /* ── A TRAVA DO WORKER, EXECUTADA ─────────────────────────────────
+     *
+     * O Grill e o UNICO caso em que o dev move para Planning ou Levantar Req.
+     * O `dev-publish` recebe o estado inteiro montado no navegador, entao a
+     * pergunta que importa e: o cliente consegue se autorizar? */
+    const trecho = W.slice(W.indexOf('const GRILL_DESTINO = {'),
+                           W.indexOf('function travaEtapaDoDev(')) +
+                   corpo(W, 'function travaEtapaDoDev(');
+    ok(/const GRILL_DESTINO = \{/.test(trecho), 'a excecao do grill existe no Worker');
+    const trava = new Function('ETAPAS_QUE_O_DEV_MOVE',
+      trecho + ' return travaEtapaDoDev;')(['em_andamento', 'validacao']);
+    const roda = (velha, recebida) => {
+      const rec = { melhorias: [Object.assign({ id: '1', codigo: 'AX-1' }, recebida)] };
+      const srv = { melhorias: [Object.assign({ id: '1', codigo: 'AX-1' }, velha)] };
+      trava(rec, srv);
+      return rec.melhorias[0].status_planejamento;
+    };
+    const base = Object.assign({ status_planejamento: 'backlog' },
+                               JSON.parse(JSON.stringify(marcada)));
+    const comVeredito = (v, pts) => {
+      const m = JSON.parse(JSON.stringify(base));
+      const d = G.responde(m, v, pts || [], 'Dan');
+      return Object.assign({}, m, { status_planejamento: d });
+    };
+
+    ok(roda({ status_planejamento: 'backlog' }, { status_planejamento: 'planning' }) === 'backlog',
+       'sem Grill, o dev continua SEM poder mover para Planning');
+    ok(roda(base, comVeredito('ok')) === 'planning',
+       'com Grill marcado e veredito "entendi", a ida para Planning passa');
+    ok(roda(base, comVeredito('duvida', ['x y z'])) === 'levantar_req',
+       'e com "tenho duvidas", a volta para Levantar Requisitos passa');
+
+    /* ── E O QUE A EXCECAO NAO ABRE ── */
+    /* A MARCA QUE VALE E A DO SERVIDOR. Se a liberacao olhasse o `grill`
+       recebido, qualquer cliente se autorizaria mandando `marcado: true`. */
+    ok(roda({ status_planejamento: 'backlog' },
+            { status_planejamento: 'planning',
+              grill: { marcado: true, veredito: 'ok' } }) === 'backlog',
+       'cliente NAO se autoriza mandando a marca no corpo — vale a copia do servidor');
+    ok(roda(base, Object.assign({}, JSON.parse(JSON.stringify(base)),
+                                { status_planejamento: 'planning' })) === 'backlog',
+       'marca sem veredito nao move: a transicao so vale com a resposta junto');
+    ok(roda(base, Object.assign({}, comVeredito('ok'),
+                                { status_planejamento: 'levantar_req' })) === 'backlog',
+       'e o destino tem de ser o que AQUELE veredito manda, e nao outro');
+    ok(roda(base, Object.assign({}, comVeredito('ok'),
+                                { status_planejamento: 'concluido' })) === 'backlog',
+       'e o Grill nao vira passe livre para concluir');
+
+    /* ── AS DUAS TELAS ── */
+    for (const [nome, src] of [['dev', DEV], ['admin', ADMIN]]) {
+      ok(/<script src="grill\.js\?v=/.test(src), nome + ' carrega o modulo');
+    }
+    ok(/id="m-grill"/.test(ADMIN) && /onchange="mGrillMarca\(\)"/.test(ADMIN),
+       'o admin tem a marcacao');
+    ok(/grill:               _mGrill \|\| existing\.grill \|\| \{\},/.test(ADMIN),
+       'e grava o OBJETO inteiro — so a marca apagaria o que o dev escreveu');
+    ok(/mGrillRender\(m \|\| null\);/.test(ADMIN), 'e o modal o preenche ao abrir');
+
+    /* O VISUAL NA ESTEIRA QUE JA EXISTE: o card nao muda de coluna. */
+    const card = corpo(DEV, 'function renderCard(m, colKey) {');
+    ok(!!card && /GRILL\.estado\(m\)/.test(card), 'o card do dev pergunta o estado ao modulo');
+    ok(!!card && /grillEst === 'pendente' \? ' kcard-grill-on' : ''/.test(card),
+       'e so o PENDENTE pinta o card — respondido nao fica aceso para sempre');
+    ok(!/COLUMNS\.push|key:'grill'/.test(DEV),
+       'e nao ha coluna nova: e a esteira que ja existe');
+    const acoes = corpo(DEV, 'async function msGrillResponde(');
+    ok(!!acoes, 'a acao do dev foi achada');
+    /* O DESTINO TEM DE VIR DA CHAMADA, e nao so haver uma chamada. Sabotei
+       mantendo `GRILL.responde(...)` e calculando o destino logo abaixo na mao,
+       e a primeira versao desta invariante PASSOU — ela media que a funcao era
+       chamada, e nao que a resposta dela fosse usada. */
+    ok(!!acoes && /const destino = GRILL\.responde\(alvo, veredito, pontos/.test(acoes),
+       'o destino VEM do modulo, e nao de uma conta paralela na tela');
+    ok(!!acoes && !/'planning'|'levantar_req'/.test(acoes),
+       'e a tela nao escreve o nome das etapas em lugar nenhum — se o caminho ' +
+       'mudar, muda num lugar so',
+       (acoes.match(/'(planning|levantar_req)'/g) || []).join(', ') || 'nenhuma');
+    ok(!!acoes && /cru\.split\('\\n'\)/.test(acoes),
+       'uma duvida por linha: campo unico, porque "+ adicionar" a cada linha faz ' +
+       'a pessoa escrever menos');
+    ok(!!acoes && /veredito === 'ok' && pontos\.length/.test(acoes),
+       '"entendi" COM texto escrito pergunta antes — quase sempre e o botao errado');
+    ok(/id="ms-grill"/.test(DEV), 'e o bloco existe no modal do dev');
+
+    /* ── O GRILL ANTIGO SAIU ──
+       Era uma sabatina sobre as respostas do discovery, nunca usada (medido:
+       zero demandas com o campo preenchido). O Fernando pediu para retirar. */
+    ok(!/function grillRender\(/.test(ADMIN) && !/function grillSalvar\(/.test(ADMIN),
+       'a sabatina antiga saiu do admin');
+    ok(!/id="mtab-grill"/.test(ADMIN), 'e a aba dela tambem');
+    ok(!/const abas = \['dados', 'grill'/.test(ADMIN), 'e o despacho de abas nao a cita mais');
+
+    /* ── E O MAPA ETAPA -> STATUS VIROU UM SO ──
+       Havia DOIS no dev.html, declarados dentro de funcoes diferentes, e eles ja
+       divergiam: o da criacao nao tinha `levantar_req`. Como o Grill move a
+       demanda para essa etapa, a divergencia deixou de ser teorica. */
+    ok(/const STATUS_POR_ETAPA = \{/.test(DEV), 'o mapa etapa -> status e um so');
+    const mapa = new Function(
+      DEV.slice(DEV.indexOf('const STATUS_POR_ETAPA = {'),
+                DEV.indexOf('const STATUS_LABELS = {')) +
+      ' return statusDaEtapa;')();
+    ok(mapa('levantar_req') === 'recebida' && mapa('planning') === 'estimada',
+       'e ele conhece as duas etapas que o Grill usa',
+       mapa('levantar_req') + ' / ' + mapa('planning'));
+    ok(mapa('concluido') === 'iniciada' && mapa('inventada') === 'recebida',
+       'e tem padrao para o que nao conhece');
+    const copias = (DEV.match(/const spToStatus = \{/g) || []).length;
+    ok(copias === 0, 'e nao sobrou copia dele dentro de funcao', String(copias));
   }
 
   let erroPz = null;

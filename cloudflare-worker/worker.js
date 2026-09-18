@@ -1226,6 +1226,34 @@ function travaDatasComprometidas(recebido, servidor) {
 // o analista faz descoberta, e o admin e a autoridade que decide.
 const ETAPAS_QUE_O_DEV_MOVE = ['em_andamento', 'validacao'];
 
+/* ═══ A EXCECAO DO GRILL ════════════════════════════════════════════════════
+ *
+ * O Grill e o unico caso em que o dev move a demanda para PLANNING ou para
+ * LEVANTAR REQUISITOS — e ele so move porque foi o PM/PO quem pediu o parecer.
+ * "Entendi" leva para Planning; "tenho duvidas" leva para Levantar Req. com as
+ * perguntas escritas.
+ *
+ * A MARCA QUE VALE E A DO SERVIDOR, e nao a que veio no corpo. O `dev-publish`
+ * recebe o estado inteiro montado no navegador: se a liberacao olhasse o
+ * `grill` recebido, qualquer cliente se autorizaria a mover uma demanda para o
+ * Planning mandando `grill: { marcado: true }` junto. Por isso a checagem e em
+ * `velha`, a copia que o servidor ja tinha.
+ *
+ * E EXIGE O VEREDITO, e nao so a marca: a transicao so vale acompanhada da
+ * resposta do dev, e o destino tem de ser o que aquele veredito manda. Mover
+ * para Planning "por causa do Grill" sem ter respondido nada e exatamente o
+ * atalho que a marca existe para impedir. */
+const GRILL_DESTINO = { ok: 'planning', duvida: 'levantar_req' };
+
+function grillLiberaEtapa(recebida, velha, nova) {
+  const antes = (velha && velha.grill) || {};
+  if (!antes.marcado) return false;
+  const agora = (recebida && recebida.grill) || {};
+  const v = String(agora.veredito || '');
+  if (!GRILL_DESTINO[v]) return false;
+  return GRILL_DESTINO[v] === nova;
+}
+
 function travaEtapaDoDev(recebido, servidor) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Map();
@@ -1241,6 +1269,7 @@ function travaEtapaDoDev(recebido, servidor) {
     const orig = String(velha.status_planejamento || '');
     if (nova === orig) continue;
     if (ETAPAS_QUE_O_DEV_MOVE.includes(nova)) continue;
+    if (grillLiberaEtapa(m, velha, nova)) continue;
     m.status_planejamento = velha.status_planejamento;
     // O `status` acompanha a etapa: deixar um sem o outro cria demanda "concluida"
     // em Planejado, e todo relatorio que cruza os dois passa a discordar de si.
