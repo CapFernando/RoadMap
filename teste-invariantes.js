@@ -12993,6 +12993,132 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a data continua no cartao depois do aperto');
   }
 
+  /* === O DASH NO PAPEL ==================================================
+
+     "Ajuste o campo de impressao ou crie possibilidade de geracao de PDF para
+     melhor visibilidade. Para contexto, preciso passar o planejamento com as
+     respectivas datas de um determinado tema (AXCred - Cobranca)."
+
+     O Ctrl+P do Dash nao tinha regra nenhuma e saia inutil por tres motivos ao
+     mesmo tempo, e o pior deles e silencioso. */
+  sec('O Dash no papel');
+  {
+    /* SEM OS COMENTARIOS, e isso nao e capricho: eu sabotei a regra
+       `.tema-body { display: block !important; }` comentando-a, e a invariante
+       PASSOU — o regex casou com o texto dentro do proprio `/* *\/`. E o mesmo
+       erro que ja tinha me pegado com `Y_TITULO` e com `rp-caixa`. Regra em CSS
+       comentada nao vale nada, e a medicao tem de enxergar isso. */
+    const bloco = (() => {
+      const i = INDEX.indexOf('@media print {');
+      if (i < 0) return '';
+      let n = 1, k = INDEX.indexOf('{', i) + 1;
+      const ini = k;
+      while (n && k < INDEX.length) {
+        if (INDEX[k] === '{') n += 1;
+        else if (INDEX[k] === '}') n -= 1;
+        k += 1;
+      }
+      return INDEX.slice(ini, k - 1).replace(/\/\*[\s\S]*?\*\//g, '');
+    })();
+    ok(!!bloco, 'existe a regra de impressao');
+    ok(!/\/\*/.test(bloco), 'e a medicao abaixo enxerga so CSS que vale, sem comentario');
+
+    /* ── O DEFEITO SILENCIOSO, e o mais caro dos tres ──
+       Os temas nascem RECOLHIDOS (`.tema-body` sem `.open`). Sem esta linha a
+       folha sai com os cabecalhos dos temas e NENHUMA demanda — ou seja, sem
+       as datas, que sao o motivo inteiro de imprimir. E sai assim em silencio:
+       o papel parece so "curto". */
+    ok(/\.tema-body \{ display: block !important; \}/.test(bloco),
+       'todo tema sai ABERTO no papel — recolhido, a folha nao traz uma unica ' +
+       'demanda');
+    ok(/\.tema-body \{ display: none/.test(INDEX),
+       'e na tela ele continua nascendo recolhido, que e o motivo de a regra existir');
+
+    /* ── TINTA, e pelos TOKENS ──
+       Sobrescrever regra por regra deixaria de fora tudo que for escrito
+       depois. E fundo escuro impresso vira mancha; com "imprimir cores de
+       fundo" desligado (o padrao) o texto claro some no branco. */
+    ok(/--bg: #fff;/.test(bloco) && /--text: #000;/.test(bloco),
+       'o papel e branco com tinta preta, trocando os TOKENS num lugar so');
+    ok(/:root\[data-theme='dark'\]/.test(bloco),
+       'e vale mesmo com o tema escuro escolhido na tela');
+
+    /* ── O QUE NAO VAI PARA O PAPEL ── */
+    for (const alvo of ['header', 'footer', '.filter-bar', '.charts']) {
+      ok(new RegExp('[ ,\\n]' + alvo.replace('.', '\\.') + '[ ,\\n]').test(bloco),
+         'o que so serve para clicar fica fora da folha: ' + alvo);
+    }
+    /* ── E O QUE NENHUMA QUEBRA DE PAGINA PODE CORTAR ── */
+    ok(/\.melhoria \{ break-inside: avoid; page-break-inside: avoid; \}/.test(bloco),
+       'nenhuma demanda e cortada ao meio pela quebra de pagina');
+    ok(/\.tema-header \{ break-after: avoid; page-break-after: avoid; \}/.test(bloco),
+       'e nenhum cabecalho de tema fica orfao no pe da folha');
+
+    /* ── A DEMANDA SEM DATA DIZ ISSO ──
+       Linha muda deixa quem le sem saber se nao ha prazo combinado ou se a
+       impressao comeu o campo — e e sobre prazo que o documento sera cobrado. */
+    ok(/content: 'sem data combinada'/.test(bloco),
+       'demanda sem data combinada diz isso no papel, em vez de sair muda');
+
+    /* === O RECORTE VIAJA JUNTO ==========================================
+
+       AQUI HAVIA UM DEFEITO DE VERDADE, e nao so de desenho: o relatorio
+       exportado montava a linha do filtro com mes, ano e status — e NAO com o
+       SISTEMA. Quem filtrasse "AXCred - Cobranca" e exportasse recebia um PDF
+       cabecalhado "Todos os periodos", sem uma palavra dizendo que aquelas dez
+       linhas eram de um sistema so. O documento sai da tela para uma conversa
+       onde ninguem sabe qual filtro estava ligado.
+
+       EXECUTADO. */
+    const fnRec = corpo(INDEX, 'function descricaoDoFiltro(');
+    ok(!!fnRec, 'a descricao do recorte foi achada');
+    if (fnRec) {
+      const monta = (estado) => new Function(
+        '_temaFilter', '_mes', '_ano', '_tipoFilter', '_statusFilter',
+        'SEM_TIPO', 'TIPO_LABELS', 'STATUS_BADGE_PRINT',
+        fnRec + ' return descricaoDoFiltro();')(
+        estado.tema || null, estado.mes === undefined ? null : estado.mes,
+        estado.ano === undefined ? null : estado.ano,
+        estado.tipo || null, estado.status || null,
+        '__sem_tipo__', { sustentacao: '🔧 Sustentação', evolucao: '🚀 Evolução' },
+        { concluida: { label: 'Concluído' } });
+
+      ok(monta({ tema: 'AXCred - Cobrança' }) === 'AXCred - Cobrança · Todos os períodos',
+         'o SISTEMA filtrado aparece, e aparece PRIMEIRO — e o assunto do ' +
+         'documento, nao uma observacao sobre ele',
+         monta({ tema: 'AXCred - Cobrança' }));
+      ok(monta({}) === 'Todos os períodos', 'sem filtro nenhum, diz isso', monta({}));
+      const tudo = monta({ tema: 'AXCred - Cobrança', mes: 9, ano: 2026,
+                           tipo: 'evolucao', status: 'concluida' });
+      ok(/AXCred - Cobrança/.test(tudo) && /Setembro de 2026/.test(tudo) &&
+         /Evolução/.test(tudo) && /Concluído/.test(tudo),
+         'e com tudo ligado, os quatro recortes saem na linha', tudo);
+      ok(monta({ ano: 2026 }) === 'Ano 2026', 'so o ano', monta({ ano: 2026 }));
+    }
+    /* E O PDF EXPORTADO USA A MESMA FUNCAO — duas iam divergir no primeiro
+       ajuste, e o recorte do PDF deixaria de bater com o da folha. */
+    const rep = corpo(INDEX, 'function buildReportHTML(');
+    ok(!!rep && /const filtroDesc = descricaoDoFiltro\(\);/.test(rep),
+       'o relatorio exportado le o recorte da mesma funcao');
+    ok(!/let filtroDesc = 'Todos os períodos';/.test(INDEX),
+       'e nao monta mais a linha por conta propria, sem o sistema');
+
+    /* === O CABECALHO DA FOLHA ===========================================
+       O `@media print` desenha, mas nao sabe qual filtro esta ligado. */
+    ok(/id="print-head"/.test(INDEX), 'a folha tem cabecalho proprio');
+    ok(/#print-head \{ display: block !important;/.test(bloco),
+       'que so aparece no papel');
+    ok(/<div id="print-head" style="display:none">/.test(INDEX),
+       'e fica escondido na tela');
+    /* `beforeprint` E NAO O CLIQUE DO BOTAO: o Ctrl+P do teclado e como a
+       maioria imprime, e amarrar o preenchimento ao botao faria a folha sair
+       com o recorte VAZIO justamente para quem nao usou o botao. */
+    ok(/window\.addEventListener\('beforeprint', preencheCabecalhoImpressao\);/.test(INDEX),
+       'e e preenchido no `beforeprint`, para o Ctrl+P do teclado valer tambem');
+    ok(/function imprimirDash\(\)/.test(INDEX) && /onclick="imprimirDash\(\)"/.test(INDEX),
+       'e ha o botao, para quem nao sabe do Ctrl+P');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

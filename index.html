@@ -314,6 +314,104 @@
       .melhoria-titulo { font-size: 15px; }
       .melhoria-desc   { font-size: 14px; }
     }
+
+    /* ═══ NO PAPEL ════════════════════════════════════════════════════════
+     *
+     * "Ajuste o campo de impressão (…). Preciso passar o planejamento com as
+     *  respectivas datas de um determinado tema."
+     *
+     * O Ctrl+P desta tela não tinha regra nenhuma, e saía inútil por três
+     * motivos ao mesmo tempo:
+     *
+     *   OS TEMAS NASCEM RECOLHIDOS (`.tema-body` sem `.open`), então a folha
+     *   trazia os cabeçalhos e NENHUMA demanda — justamente as datas que ele
+     *   precisa passar.
+     *
+     *   O FUNDO É ESCURO. Impresso vira uma mancha de tinta, e com "imprimir
+     *   cores de fundo" desligado — que é o padrão — o texto claro some no
+     *   branco.
+     *
+     *   O RECORTE NÃO VIAJAVA. A folha não dizia qual sistema estava filtrado,
+     *   e o documento sai da tela para uma conversa onde ninguém sabe disso.
+     *
+     * A escolha aqui é fazer o Ctrl+P funcionar, e não mais um botão de PDF: o
+     * "Salvar como PDF" do navegador gera texto SELECIONÁVEL e com quebra de
+     * página de verdade, enquanto o export por imagem que já existe gera um
+     * retrato rasterizado. Para um documento que vai circular, o primeiro é
+     * melhor — e não custa biblioteca nenhuma.
+     */
+    @media print {
+      /* OS TOKENS VIRAM TINTA, num lugar só. Sobrescrever regra por regra com
+         `!important` deixaria de fora tudo que for escrito depois. */
+      :root, :root[data-theme='dark'], :root[data-theme='light'] {
+        --bg: #fff; --bg2: #fff; --bg3: #fff; --bg4: #fff;
+        --text: #000; --text2: #333; --text3: #555;
+        --border: #bbb; --border2: #999;
+      }
+      html, body { background: #fff !important; color: #000 !important; }
+      @page { size: A4; margin: 13mm 11mm 15mm; }
+      body { font-size: 11pt; line-height: 1.45; }
+
+      /* O QUE NÃO VAI PARA O PAPEL: o que só serve para clicar. */
+      header, footer, .filter-bar, .charts, .summary,
+      #export-overlay, #nm-overlay, .dlg-overlay,
+      .tema-arrow, .section-title { display: none !important; }
+
+      /* E O QUE PASSA A APARECER: o cabeçalho do documento, que na tela não
+         existe porque na tela o filtro está logo ali em cima. */
+      #print-head { display: block !important; margin-bottom: 14px;
+        padding-bottom: 8px; border-bottom: 1.5px solid #000; }
+      #print-head .ph-tit { font-size: 15pt; font-weight: 700; }
+      #print-head .ph-sub { font-size: 9.5pt; color: #333; margin-top: 2px; }
+      #print-head .ph-rec { font-size: 11pt; font-weight: 600; margin-top: 7px; }
+      #print-head .ph-ger { font-size: 8.5pt; color: #555; margin-top: 2px; }
+
+      main { max-width: none; margin: 0; padding: 0; }
+
+      /* TODO TEMA ABERTO. Sem esta linha a folha sai sem uma única demanda. */
+      .tema-body { display: block !important; }
+
+      .tema-block { border: none; margin-bottom: 10px; }
+      .tema-header { background: none !important; padding: 2px 0 3px;
+        border-bottom: 1px solid #000; cursor: default; }
+      .tema-nome { font-size: 11.5pt; font-weight: 700; }
+      .tema-count { font-size: 9pt; color: #555; }
+
+      .melhoria { border: none; border-left: 2px solid #999; border-radius: 0;
+        margin: 0 0 4px; padding: 3px 0 3px 8px; background: none !important; }
+      .melhoria-titulo { font-size: 10.5pt; font-weight: 600; }
+      .melhoria-desc { font-size: 9pt; color: #333; }
+      /* AS DATAS SÃO O DOCUMENTO, e não um detalhe do rodapé do card.
+         SEM A PÍLULA: na tela a caixinha separa os campos, no papel ela vira
+         moldura em volta de oito caracteres — gasta linha, gasta tinta, e a
+         data fica menos legível do que solta. */
+      .melhoria-meta { font-size: 9.5pt; color: #000; margin-top: 2px; gap: 0; }
+      .meta-item { background: none !important; border: none !important;
+        border-radius: 0; padding: 0; margin-right: 16px; color: #000; }
+      .meta-item svg { display: none; }
+      .mel-cod { background: none !important; color: #000 !important;
+        border: 1px solid #999; padding: 0 3px; margin-right: 6px; }
+
+      /* SEM DATA, DITO. Uma linha que sai muda deixa quem lê sem saber se a
+         demanda não tem prazo combinado ou se a impressão comeu o campo — e é
+         exatamente sobre prazo que este documento vai ser cobrado. Só no papel:
+         na tela a ausência se resolve olhando o card. */
+      .melhoria:not(:has(.melhoria-meta))::after {
+        content: 'sem data combinada'; display: block;
+        font-size: 9.5pt; color: #555; margin-top: 2px;
+      }
+
+      /* O SELO DE ETAPA IMPRESSO A TRAÇO. Fundo colorido depende de "imprimir
+         cores de fundo", que vem desligado — sem a borda o selo sumiria. */
+      .badge { background: none !important; border: 1px solid #666;
+        color: #000 !important; font-size: 8.5pt; padding: 0 5px; }
+
+      /* NENHUMA DEMANDA CORTADA AO MEIO pela quebra de página, e nenhum
+         cabeçalho de tema órfão no pé da folha. */
+      .melhoria { break-inside: avoid; page-break-inside: avoid; }
+      .tema-header { break-after: avoid; page-break-after: avoid; }
+      a { color: #000 !important; text-decoration: none; }
+    }
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
@@ -336,11 +434,21 @@
     <button id="btn-nova-melhoria" onclick="openNovaMelhoria()" style="display:none;font-size:13px;color:#fff;background:var(--blue,#3B8FE8);border:1px solid var(--blue,#3B8FE8);border-radius:var(--radius);padding:6px 14px;cursor:pointer;font-weight:600;">+ Nova issue</button>
     <button id="btn-refresh" onclick="forceRefresh()" style="font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Forçar atualização dos dados" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">↻ Atualizar</button>
     <button onclick="openExportModal()" style="font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Exportar relatório" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⬇ Exportar</button>
+    <button onclick="imprimirDash()" style="font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);border-radius:var(--radius);padding:5px 12px;cursor:pointer;transition:color 0.15s,border-color 0.15s;" title="Imprimir ou salvar em PDF o que está filtrado, com as datas" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">🖨 Imprimir / PDF</button>
     <a href="admin.html" style="font-size:13px;color:var(--text2);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);transition:color 0.15s,border-color 0.15s;" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border2)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">⚙ Admin</a>
   </div>
 </header>
 
 <main>
+  <!-- SÓ NO PAPEL. Na tela o filtro está logo acima e a data no topo; na folha
+       nada disso existe, e sem esta caixa o documento chega ao destinatário sem
+       dizer de que sistema ele fala. -->
+  <div id="print-head" style="display:none">
+    <div class="ph-tit">RoadMap de Melhorias</div>
+    <div class="ph-sub">Audax Capital · Produto &amp; Tecnologia</div>
+    <div class="ph-rec" id="print-recorte"></div>
+    <div class="ph-ger" id="print-gerado"></div>
+  </div>
   <div id="app">
     <div class="loading">Carregando melhorias…</div>
   </div>
@@ -1490,18 +1598,44 @@ const STATUS_BADGE_PRINT = {
   negada:       { label: 'Negada',        bg: '#5C0A0A', color: '#F9A0A0' },
 };
 
+/* ═══ O RECORTE, ESCRITO POR EXTENSO ═══════════════════════════════════════
+ *
+ * "Preciso passar o planejamento com as respectivas datas de um determinado
+ *  tema (AXCred - Cobrança)."
+ *
+ * ESTA FUNÇÃO NASCEU DE UM DEFEITO. O relatório exportado montava a linha do
+ * filtro com mês, ano e status — e NÃO com o SISTEMA. Quem filtrasse
+ * "AXCred - Cobrança" e exportasse recebia um PDF cabeçalhado "Todos os
+ * períodos", sem uma palavra dizendo que aquelas dez linhas eram de um sistema
+ * só. O documento sai da tela e vai para uma conversa onde ninguém sabe qual
+ * filtro estava ligado; o recorte tem de viajar junto com os números.
+ *
+ * Uma função só, usada pelo PDF e pela impressão, porque duas iam divergir. */
+function descricaoDoFiltro() {
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho',
+                    'Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const p = [];
+  /* O SISTEMA VEM PRIMEIRO quando existe: é o assunto do documento, e não uma
+     observação sobre ele. */
+  if (_temaFilter) p.push(_temaFilter);
+  if (_mes !== null && _ano !== null) p.push(`${MESES_PT[_mes - 1]} de ${_ano}`);
+  else if (_mes !== null) p.push(MESES_PT[_mes - 1] + ' — todos os anos');
+  else if (_ano !== null) p.push(`Ano ${_ano}`);
+  else p.push('Todos os períodos');
+  if (_tipoFilter) {
+    p.push(String(_tipoFilter) === String(typeof SEM_TIPO !== 'undefined' ? SEM_TIPO : '')
+      ? 'Sem tipo' : (TIPO_LABELS[_tipoFilter] || _tipoFilter));
+  }
+  if (_statusFilter) p.push(STATUS_BADGE_PRINT[_statusFilter]?.label || _statusFilter);
+  return p.join(' · ');
+}
+
 function buildReportHTML() {
   const mel = filtradas();
   const now = new Date();
   const dateStr = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
 
-  // Descrição do filtro ativo
-  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  let filtroDesc = 'Todos os períodos';
-  if (_mes !== null && _ano !== null) filtroDesc = `${MESES_PT[_mes - 1]} de ${_ano}`;
-  else if (_mes !== null) filtroDesc = MESES_PT[_mes - 1] + ' — todos os anos';
-  else if (_ano !== null) filtroDesc = `Ano ${_ano}`;
-  if (_statusFilter) filtroDesc += ` · ${STATUS_BADGE_PRINT[_statusFilter]?.label || _statusFilter}`;
+  const filtroDesc = descricaoDoFiltro();
 
   // Agrupar por tema
   const temaOrder = _temas.map(t => t.id);
@@ -1576,6 +1710,32 @@ function buildReportHTML() {
       capfernando.github.io/RoadMap
     </div>
   </div>`;
+}
+
+/* ═══ O CABEÇALHO DO DOCUMENTO, PREENCHIDO NA HORA DE IMPRIMIR ════════════
+ *
+ * `beforeprint` e não o clique do botão: o Ctrl+P do teclado é como a maioria
+ * imprime, e amarrar o preenchimento ao botão faria a folha sair com o recorte
+ * VAZIO justamente para quem não usou o botão. O botão só chama `print()`; o
+ * navegador dispara o evento nos dois caminhos.
+ *
+ * O `@media print` sozinho não resolveria: ele desenha, mas não sabe qual
+ * filtro está ligado. */
+function preencheCabecalhoImpressao() {
+  const rec = document.getElementById('print-recorte');
+  const ger = document.getElementById('print-gerado');
+  if (!rec || !ger) return;
+  const n = filtradas().length;
+  rec.textContent = descricaoDoFiltro();
+  ger.textContent = n + (n === 1 ? ' demanda' : ' demandas') +
+    ' · gerado em ' + new Date().toLocaleDateString('pt-BR',
+      { day: '2-digit', month: 'long', year: 'numeric' });
+}
+window.addEventListener('beforeprint', preencheCabecalhoImpressao);
+
+function imprimirDash() {
+  preencheCabecalhoImpressao();
+  window.print();
 }
 
 async function openExportModal() {
