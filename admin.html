@@ -211,6 +211,23 @@
     .kb-sub { font-size: 10.5px; color: var(--text3); border: 1px solid var(--border);
       border-radius: 5px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
     /* Codigo da demanda: referencia curta para PR, review e deploy. */
+    /* Subtarefas no modal, SO LEITURA. Sem caixa de marcar e sem campo: um
+       checkbox desabilitado convida ao clique e devolve silencio, que ensina que
+       a tela esta quebrada. O simbolo diz o estado sem prometer interacao. */
+    .m-subs-lista { display:flex; flex-direction:column; gap:4px; }
+    .m-sub { display:flex; align-items:baseline; gap:9px; font-size:13px;
+      background:var(--bg3); border:1px solid var(--border); border-radius:7px;
+      padding:6px 10px; }
+    .m-sub-mk { flex-shrink:0; width:13px; font-weight:700; }
+    .m-sub.fez .m-sub-mk { color:var(--green-tx,#B2E07A); }
+    .m-sub.falta .m-sub-mk { color:var(--text3); }
+    .m-sub-tit { flex:1; min-width:0; color:var(--text); overflow-wrap:anywhere; }
+    /* FEITA NAO E RISCADA AQUI. No painel do dev o risco marca o que ele acabou
+       de fechar; nesta tela a lista e lida inteira para validar a entrega, e
+       texto riscado e o mais dificil de ler da pagina. */
+    .m-sub.fez .m-sub-tit { color:var(--text2); }
+    .m-sub-data, .m-sub-horas { flex-shrink:0; font-size:11.5px; color:var(--text3);
+      font-variant-numeric:tabular-nums; }
     /* ── PROJETOS / ÉPICOS ── */
     .pj-topo { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
     .pj-topo h3 { margin:0; font-size:17px; font-weight:700; }
@@ -1118,6 +1135,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
+  <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-projeto.js?v=63d219aac1"></script>
@@ -1984,6 +2002,31 @@
         <label>Horas planejadas <span style="font-weight:400;color:var(--text3)">(automático)</span></label>
         <div id="m-horas-plan" style="padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text3);min-height:42px;line-height:1.4;">—</div>
       </div>
+    </div>
+
+    <!-- ── AS SUBTAREFAS, COMO O DEV AS LANÇOU ────────────────────────────────
+         "Em adm não consigo visualizar as subtarefas que o dev lançou."
+
+         Elas existiam no dado e no Painel Dev, e desta tela só se via a BARRINHA
+         de progresso no card do Kanban — o número sem os passos. Quem valida a
+         entrega via "5 de 5" e tinha de abrir o painel do dev para saber o que
+         eram os cinco.
+
+         SÓ LEITURA, e de propósito: o passo a passo é o registro de quem está
+         fazendo, e é ele quem marca. O PM/PO precisa LER para validar e para
+         conferir de onde vieram as horas — não para reescrever o diário de
+         outra pessoa. Fica logo abaixo das horas porque é daqui que elas saem
+         quando o dev lança hora por passo.
+
+         O bloco some inteiro quando não há subtarefa: espaço vazio com um
+         "nenhuma" em toda demanda ensina a pular a região da tela. -->
+    <div class="form-group" id="m-subs-bloco" style="display:none">
+      <label>Subtarefas
+        <small style="font-weight:400;color:var(--text3)">— lançadas pelo dev, no
+        painel dele; aqui só para leitura</small>
+        <span id="m-subs-prog" style="float:right;font-weight:600"></span>
+      </label>
+      <div id="m-subs-lista" class="m-subs-lista"></div>
     </div>
 
     <div id="conditional-fields">
@@ -3940,13 +3983,13 @@ function renderKanban() {
          O dev quebra a demanda em passos no painel dele; sem trazer isso para ca,
          o PM/PO continua com "em andamento" como unica resposta a pergunta "como
          esta?" — que e a pergunta que ele faz todo dia. */
-      const subs = (Array.isArray(m.subtarefas) ? m.subtarefas : []).filter(Boolean);
-      if (subs.length) {
-        const feitas = subs.filter(x => x && x.feita).length;
-        const pct = Math.round(feitas / subs.length * 100);
-        badges.push('<span class="kb-sub" title="' + feitas + ' de ' + subs.length +
-          (subs.length === 1 ? ' subtarefa concluída' : ' subtarefas concluídas') +
-          '">◐ ' + feitas + '/' + subs.length + ' · ' + pct + '%</span>');
+      /* DELEGA a conta — ver `subtarefa.js`. Ela era feita a mao aqui, outra vez
+         no modal e uma terceira no painel do dev. */
+      const prog = SUBTAREFA.progresso(SUBTAREFA.lista(m));
+      if (prog.total) {
+        badges.push('<span class="kb-sub" title="' + prog.feitas + ' de ' + prog.total +
+          (prog.total === 1 ? ' subtarefa concluída' : ' subtarefas concluídas') +
+          '">◐ ' + prog.feitas + '/' + prog.total + ' · ' + prog.pct + '%</span>');
       }
       // Atraso agora e marca no card, nao coluna.
       const nivelPrazo = prazoNivel(m);
@@ -9792,6 +9835,7 @@ function openModalMelhoria(id) {
   _mAnexos = JSON.parse(JSON.stringify(m?.anexos || []));
   mRenderAnexosEdit();
   atualizaHorasPlanejadas();
+  mSubsRender(m || null);
 
   // preenche Sistema / Módulo a partir do tema atual
   populateSistemaModulo('m', m?.tema_id);
@@ -9875,6 +9919,58 @@ function calcHorasPlanejadas(inicio, entrega) {
     d.setDate(d.getDate() + 1);
   }
   return count * 8;
+}
+
+/* ═══ AS SUBTAREFAS NO MODAL DO ADMIN, SÓ PARA LER ════════════════════════
+ *
+ * "Em adm não consigo visualizar as subtarefas que o dev lançou."
+ *
+ * Elas estavam no dado e no painel do dev; desta tela só se via a barrinha
+ * "5/5 · 100%" no card do Kanban. Quem valida a entrega lia o número e tinha de
+ * abrir o painel do outro para saber o que eram os cinco passos.
+ *
+ * SÓ LEITURA. O passo a passo é o registro de quem está fazendo, e é ele quem
+ * marca; o PM/PO precisa LER para validar e para saber de onde vieram as horas.
+ * Por isso não há caixa de marcar nem campo: um checkbox desabilitado convida
+ * ao clique e devolve silêncio, o que ensina que a tela está quebrada.
+ *
+ * E o bloco SOME quando não há subtarefa, em vez de mostrar "nenhuma": espaço
+ * vazio repetido em toda demanda ensina a pular aquela região da tela. */
+function mSubsRender(m) {
+  const bloco = document.getElementById('m-subs-bloco');
+  const cx = document.getElementById('m-subs-lista');
+  const prog = document.getElementById('m-subs-prog');
+  if (!bloco || !cx) return;
+
+  const subs = SUBTAREFA.lista(m);
+  if (!subs.length) { bloco.style.display = 'none'; cx.innerHTML = ''; return; }
+  bloco.style.display = '';
+
+  const p = SUBTAREFA.progresso(subs);
+  if (prog) {
+    prog.textContent = p.feitas + ' de ' + p.total + '  ·  ' + p.pct + '%';
+    prog.style.color = p.pct === 100 ? 'var(--green-tx, #B2E07A)' : 'var(--text3)';
+  }
+
+  /* AS HORAS SÓ APARECEM QUANDO ALGUÉM LANÇOU. `horasTotal` devolve `null`
+     quando nenhum passo tem hora — e é justamente a distinção entre "não
+     lancei" e "lancei zero" que o módulo existe para não perder. */
+  const som = SUBTAREFA.horasTotal(subs);
+
+  cx.innerHTML = subs.map(x => {
+    const d = SUBTAREFA.dataBR(x.data);
+    return '<div class="m-sub ' + (x.feita ? 'fez' : 'falta') + '">' +
+      '<span class="m-sub-mk">' + (x.feita ? '✓' : '○') + '</span>' +
+      '<span class="m-sub-tit">' + esc(x.titulo || '(sem título)') + '</span>' +
+      (d ? '<span class="m-sub-data">' + esc(d) + '</span>' : '') +
+      (String(x.horas).trim() !== ''
+        ? '<span class="m-sub-horas">' + esc(x.horas) + 'h</span>' : '') +
+      '</div>';
+  }).join('') +
+    (som != null
+      ? '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">' +
+        'Somam ' + som + 'h nos passos.</div>'
+      : '');
 }
 
 function atualizaHorasPlanejadas() {

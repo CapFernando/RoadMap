@@ -442,6 +442,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
+  <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
@@ -4174,49 +4175,22 @@ function msProjetoRender(m) {
 let _msSubs = [];
 let _msSubsMexido = false;
 
+/* DELEGA — ver `subtarefa.js`. A leitura mora la desde que o admin passou a
+   mostrar a lista tambem: eram tres copias da mesma normalizacao, e a que ia
+   apodrecer primeiro era a distincao entre `horas: ''` e `horas: 0`. */
 function msSubsDe(m) {
-  const l = (m && Array.isArray(m.subtarefas)) ? m.subtarefas : [];
-  return l.filter(Boolean).map(x => ({
-    titulo: String(x.titulo || '').slice(0, 140),
-    data: String(x.data || '').slice(0, 10),
-    feita: !!x.feita,
-    /* HORAS POR PASSO. `''` e nao `0`: a diferenca entre "nao lancei" e "lancei
-       zero" e a mesma que `semPontuacao` guarda em `capacidade.js`, e zero em
-       silencio some da soma sem ninguem notar que faltou lancar. */
-    horas: (x.horas === 0 || x.horas) ? String(x.horas) : '',
-  }));
+  return SUBTAREFA.lista(m);
 }
 
-/* A SOMA DAS HORAS DOS PASSOS, ou `null` quando NENHUM passo tem hora lancada.
- *
- *  `null` e a resposta que liga e desliga o modo derivado: com ele, o campo de
- *  horas da demanda continua sendo digitado a mao, como sempre foi e como a
- *  maioria das demandas usa. E o unico jeito de nao trocar o comportamento de
- *  todo mundo para atender um caso. */
+/* DELEGA — a soma e o progresso vivem em `subtarefa.js`. O `null` de
+   `horasTotal` continua sendo o que liga e desliga o modo derivado do campo de
+   horas, e o comentario de la explica por que ele nao pode virar zero. */
 function msSubHorasTotal(subs) {
-  /* O CAMPO VAZIO SAI ANTES DO `Number`, e nao depois. `Number('')` e ZERO, e
-     zero passa em `Number.isFinite(h) && h >= 0` — entao a primeira versao disto
-     somava 0 para toda subtarefa sem hora e devolvia 0 em vez de `null`. Efeito:
-     o campo de horas virava somente-leitura com "0" em TODA demanda que tivesse
-     subtarefa, mesmo sem ninguem ter lancado hora nenhuma. Era a distincao entre
-     "nao lancei" e "lancei zero" que o comentario de `msSubsDe` promete guardar,
-     perdida uma funcao depois. */
-  const lista = (subs || [])
-    .filter(x => String(x.horas == null ? '' : x.horas).trim() !== '')
-    .map(x => Number(x.horas))
-    .filter(h => Number.isFinite(h) && h >= 0);
-  if (!lista.length) return null;
-  const total = lista.reduce((t, h) => t + h, 0);
-  /* ARREDONDA NA CENTESIMA. Meia hora em cada um de tres passos da 1.5, mas
-     0.1 + 0.2 em ponto flutuante da 0.30000000000000004 — e esse numero iria
-     para o relatorio do comite do jeito que esta. */
-  return Math.round(total * 100) / 100;
+  return SUBTAREFA.horasTotal(subs);
 }
 
 function msSubProgresso(subs) {
-  const total = subs.length;
-  const feitas = subs.filter(x => x.feita).length;
-  return { total, feitas, pct: total ? Math.round(feitas / total * 100) : null };
+  return SUBTAREFA.progresso(subs);
 }
 
 function msSubRender(m) {

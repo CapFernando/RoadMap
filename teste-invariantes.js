@@ -4562,10 +4562,16 @@ sec('Subtarefas');
     .filter(Boolean);
   ok(fonte.length === 3, 'as tres funcoes puras da subtarefa existem em dev.html');
   if (fonte.length !== 3) return;
-  const F = new Function('_msSubs', fonte.join('\n') +
+  /* `SUBTAREFA` ENTRA COMO ARGUMENTO desde que a leitura virou modulo. Sem
+     isto o recorte estoura em `SUBTAREFA is not defined` — e, melhor do que so
+     voltar a compilar, estas assercoes passaram a exercitar a DELEGACAO ponta a
+     ponta: se o `dev.html` parar de delegar, ou o modulo mudar de resposta,
+     elas acusam. */
+  const F = new Function('_msSubs', 'SUBTAREFA', fonte.join('\n') +
     '\nreturn { msSubsDe, msSubProgresso, msSubParaGravar };');
+  const SUBMOD = require('./subtarefa.js');
 
-  const S = F([]);
+  const S = F([], SUBMOD);
   ok(S.msSubProgresso([]).pct === null,
      'demanda sem subtarefa nao tem percentual — e nao 0%',
      '0% diria "nada feito"; o certo e "nao se aplica"');
@@ -4585,11 +4591,11 @@ sec('Subtarefas');
 
   // A gravacao: linha em branco e linha que alguem abriu e nao usou.
   const G = F([{ titulo: ' passo ', data: '', feita: true },
-               { titulo: '   ', data: '2026-08-19', feita: false }]);
+               { titulo: '   ', data: '2026-08-19', feita: false }], SUBMOD);
   const grav = G.msSubParaGravar();
   ok(grav.length === 1 && grav[0].titulo === 'passo',
      'subtarefa sem texto nao vai para a base');
-  const M = F(Array.from({ length: 60 }, (_, i) => ({ titulo: 'p' + i, data: '', feita: false })));
+  const M = F(Array.from({ length: 60 }, (_, i) => ({ titulo: 'p' + i, data: '', feita: false })), SUBMOD);
   ok(M.msSubParaGravar().length === 30,
      'a lista tem teto de 30 — demanda que precisa de mais que isso sao duas demandas');
 })();
@@ -4606,7 +4612,10 @@ ok((DEV.match(/campos\.subtarefas = msSubParaGravar\(\)/g) || []).length ===
    que e exatamente o que o campo veio resolver. */
 ok(/kcard-sub-barra/.test(DEV) && /msSubProgresso\(subs\)/.test(DEV),
    'o card do dev mostra o progresso sem precisar abrir a demanda');
-ok(/kb-sub/.test(ADMIN) && /m\.subtarefas/.test(ADMIN),
+/* `SUBTAREFA.progresso` E NAO `m.subtarefas`: a conta saiu da mao e foi para o
+   modulo, e a ancora antiga apontava para a implementacao, nao para o que ela
+   garante. O que se cobra aqui e que o CARD mostre o progresso. */
+ok(/kb-sub/.test(ADMIN) && /SUBTAREFA\.progresso\(/.test(ADMIN),
    'o card do admin tambem — quem acompanha nao entra no painel do dev');
 
 /* ─── O REQUISITO NA PAUTA DO PLANNING ───────────────────────────────────
@@ -6011,8 +6020,12 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
   ok(!!sd && !!st && !!pg, 'a soma das horas foi encontrada para ser executada');
   if (!sd || !st || !pg) return;
 
-  const api = new Function('_msSubs', sd + st + pg +
-    'return { msSubsDe, msSubHorasTotal, msSubParaGravar };')([]);
+  /* O MODULO ENTRA COMO ARGUMENTO — a leitura e a soma saíram para
+     `subtarefa.js` quando o admin passou a mostrar a lista. Estas contas
+     continuam sendo feitas pelo caminho REAL da tela, agora atravessando a
+     delegacao. */
+  const api = new Function('_msSubs', 'SUBTAREFA', sd + st + pg +
+    'return { msSubsDe, msSubHorasTotal, msSubParaGravar };')([], require('./subtarefa.js'));
   const total = (subs) => api.msSubHorasTotal(api.msSubsDe({ subtarefas: subs }));
 
   /* O CASO DA MARINA, numero por numero — o print mostra 3. */
@@ -13165,6 +13178,116 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e e preenchido no `beforeprint`, para o Ctrl+P do teclado valer tambem');
     ok(/function imprimirDash\(\)/.test(INDEX) && /onclick="imprimirDash\(\)"/.test(INDEX),
        'e ha o botao, para quem nao sabe do Ctrl+P');
+  }
+
+  /* === AS SUBTAREFAS, VISTAS DE TODAS AS TELAS ==========================
+
+     "Em adm nao consigo visualizar as subtarefas que o dev lancou."
+
+     Elas estavam no dado e no painel do dev; do admin so se via a barrinha
+     "5/5 · 100%" no card do Kanban. Quem valida a entrega lia o numero e tinha
+     de abrir o painel do OUTRO para saber o que eram os cinco passos. */
+  sec('Subtarefas: a leitura compartilhada');
+  {
+    const SUB = require('./subtarefa.js');
+
+    /* ── A LEITURA E UMA SO, E E EXECUTADA ──
+       A lista passou a ter tres leitores. Tres copias de "o que e uma subtarefa
+       valida" e de "quanto por cento andou" e o formato exato do defeito que
+       este repositorio ja teve varias vezes. */
+    ok(fs.existsSync('subtarefa.js'), 'existe o modulo da leitura');
+    for (const [nome, src] of [['dev', DEV], ['admin', ADMIN]]) {
+      ok(/<script src="subtarefa\.js\?v=/.test(src), nome + ' carrega o modulo');
+    }
+    ok(/return SUBTAREFA\.lista\(m\);/.test(DEV),
+       'o painel do dev le pelo modulo');
+    ok(/return SUBTAREFA\.horasTotal\(subs\);/.test(DEV) &&
+       /return SUBTAREFA\.progresso\(subs\);/.test(DEV),
+       'e a soma e o progresso tambem');
+    ok(/const prog = SUBTAREFA\.progresso\(SUBTAREFA\.lista\(m\)\);/.test(ADMIN),
+       'o card do Kanban do admin tambem — a conta era feita a mao la');
+    /* E NENHUMA CONTA SOBROU A MAO. Uma copia esquecida e o que faz a correcao
+       valer so em metade das telas. */
+    for (const [nome, src] of [['dev', DEV], ['admin', ADMIN]]) {
+      const semComent = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      ok(!/Array\.isArray\(m\.subtarefas\)/.test(semComent),
+         nome + ' nao normaliza a lista por conta propria', '');
+      ok(!/feitas\s*\/\s*subs\.length/.test(semComent),
+         nome + ' nao calcula o percentual por conta propria');
+    }
+
+    /* ── O MODULO, EXECUTADO ──
+       O caso que espera para acontecer e o `horas`: o painel distingue `''`
+       (nao lancei) de `0` (lancei zero). Quem reescrever a leitura na mao vai
+       usar `Number(x.horas) || 0` e a distincao morre sem erro nenhum. */
+    ok(SUB.horasTotal([{ horas: '' }, { horas: '' }]) === null,
+       'NENHUM passo com hora devolve `null`, e nao zero — e a diferenca entre ' +
+       '"nao lancei" e "lancei zero"',
+       String(SUB.horasTotal([{ horas: '' }, { horas: '' }])));
+    ok(SUB.horasTotal([{ horas: 0 }, { horas: '' }]) === 0,
+       'e um passo com ZERO lancado devolve zero',
+       String(SUB.horasTotal([{ horas: 0 }, { horas: '' }])));
+    /* ARREDONDA NA CENTESIMA: 0.1 + 0.2 em ponto flutuante da
+       0.30000000000000004, e esse numero iria para o relatorio do comite. */
+    ok(SUB.horasTotal([{ horas: '0.1' }, { horas: '0.2' }]) === 0.3,
+       'a soma arredonda na centesima', String(SUB.horasTotal([{ horas: '0.1' }, { horas: '0.2' }])));
+    ok(SUB.lista({ subtarefas: [null, { titulo: 'x' }, undefined] }).length === 1,
+       'lista com buraco (`null` no meio) nao quebra a leitura');
+    ok(SUB.lista({}).length === 0 && SUB.lista(null).length === 0,
+       'demanda sem o campo devolve lista vazia');
+    const pv = SUB.progresso([]);
+    ok(pv.total === 0 && pv.pct === null,
+       'sem passo nenhum o percentual e `null`, e nao 0% — 0% diria que nada andou');
+    ok(SUB.dataBR('2026-09-16') === '16/09/2026', 'a data sai em dia/mes/ano');
+    ok(SUB.dataBR('16/09/2026') === '' && SUB.dataBR('') === '',
+       'e o que nao e AAAA-MM-DD sai vazio, em vez de "undefined/undefined"');
+
+    /* ── O BLOCO NO MODAL DO ADMIN ── */
+    ok(/id="m-subs-bloco"/.test(ADMIN) && /id="m-subs-lista"/.test(ADMIN),
+       'o modal do admin tem o bloco das subtarefas');
+    ok(/mSubsRender\(m \|\| null\);/.test(ADMIN),
+       'e ele e preenchido ao abrir a demanda');
+    const rend = corpo(ADMIN, 'function mSubsRender(m) {');
+    ok(!!rend, 'a funcao de render foi achada');
+    /* SO LEITURA, E SEM CAIXA DESABILITADA. Um checkbox que nao responde ensina
+       que a tela esta quebrada; o simbolo diz o estado sem prometer interacao. */
+    ok(!!rend && !/<input/.test(rend),
+       'o bloco e SO LEITURA — nao ha campo nem caixa de marcar');
+    ok(!!rend && /x\.feita \? '✓' : '○'/.test(rend),
+       'o estado sai como simbolo, que nao convida ao clique');
+    /* E SOME QUANDO NAO HA NADA: "nenhuma" repetido em toda demanda ensina a
+       pular aquela regiao da tela. */
+    ok(!!rend && /if \(!subs\.length\) \{ bloco\.style\.display = 'none';/.test(rend),
+       'e o bloco some quando a demanda nao tem subtarefa');
+    ok(!!rend && /esc\(x\.titulo/.test(rend),
+       'e o titulo do passo e escapado — ele e texto que outra pessoa digitou');
+
+    /* === E O SAVE DO ADMIN NAO APAGA O QUE O DEV ESCREVEU ================
+
+       EU QUASE CONSERTEI O QUE NAO ESTAVA QUEBRADO AQUI. `saveMelhoria`
+       REMONTA o objeto campo a campo, e `subtarefas` nao esta na lista — parece
+       perda de dado garantida. Nao e: a PRIMEIRA linha do literal e
+       `...existing`, e o espalhamento preserva tudo que a lista nao sobrescreve.
+
+       E disso que esta invariante cuida. Se alguem tirar o espalhamento, ou
+       move-lo para DEPOIS dos campos, o sintoma seria silencioso: o dev lanca
+       cinco passos, o PM/PO abre a demanda e salva qualquer coisa, e os cinco
+       somem sem mensagem nenhuma. */
+    {
+      const i = ADMIN.indexOf('const obj = {',
+                              ADMIN.indexOf('async function saveMelhoria('));
+      ok(i > 0, 'o objeto gravado pelo admin foi achado');
+      const depois = ADMIN.slice(i + 'const obj = {'.length, i + 260);
+      ok(/^\s*\.\.\.existing,/.test(depois),
+         'ele comeca espalhando o que ja existe — e o que preserva `subtarefas` ' +
+         'e todo campo que o admin nao conhece',
+         depois.split('\n')[1]);
+      /* E O ESPALHAMENTO E O PRIMEIRO, nao o ultimo: depois dos campos ele
+         desfaria toda edicao da tela. */
+      const lit = ADMIN.slice(i, ADMIN.indexOf('criado_em:', i));
+      ok(lit.indexOf('...existing') < lit.indexOf('titulo'),
+         'e ele vem ANTES dos campos — depois deles, desfaria a propria edicao');
+    }
   }
 
   let erroPz = null;
