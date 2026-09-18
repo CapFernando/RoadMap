@@ -315,103 +315,7 @@
       .melhoria-desc   { font-size: 14px; }
     }
 
-    /* ═══ NO PAPEL ════════════════════════════════════════════════════════
-     *
-     * "Ajuste o campo de impressão (…). Preciso passar o planejamento com as
-     *  respectivas datas de um determinado tema."
-     *
-     * O Ctrl+P desta tela não tinha regra nenhuma, e saía inútil por três
-     * motivos ao mesmo tempo:
-     *
-     *   OS TEMAS NASCEM RECOLHIDOS (`.tema-body` sem `.open`), então a folha
-     *   trazia os cabeçalhos e NENHUMA demanda — justamente as datas que ele
-     *   precisa passar.
-     *
-     *   O FUNDO É ESCURO. Impresso vira uma mancha de tinta, e com "imprimir
-     *   cores de fundo" desligado — que é o padrão — o texto claro some no
-     *   branco.
-     *
-     *   O RECORTE NÃO VIAJAVA. A folha não dizia qual sistema estava filtrado,
-     *   e o documento sai da tela para uma conversa onde ninguém sabe disso.
-     *
-     * A escolha aqui é fazer o Ctrl+P funcionar, e não mais um botão de PDF: o
-     * "Salvar como PDF" do navegador gera texto SELECIONÁVEL e com quebra de
-     * página de verdade, enquanto o export por imagem que já existe gera um
-     * retrato rasterizado. Para um documento que vai circular, o primeiro é
-     * melhor — e não custa biblioteca nenhuma.
-     */
-    @media print {
-      /* OS TOKENS VIRAM TINTA, num lugar só. Sobrescrever regra por regra com
-         `!important` deixaria de fora tudo que for escrito depois. */
-      :root, :root[data-theme='dark'], :root[data-theme='light'] {
-        --bg: #fff; --bg2: #fff; --bg3: #fff; --bg4: #fff;
-        --text: #000; --text2: #333; --text3: #555;
-        --border: #bbb; --border2: #999;
-      }
-      html, body { background: #fff !important; color: #000 !important; }
-      @page { size: A4; margin: 13mm 11mm 15mm; }
-      body { font-size: 11pt; line-height: 1.45; }
 
-      /* O QUE NÃO VAI PARA O PAPEL: o que só serve para clicar. */
-      header, footer, .filter-bar, .charts, .summary,
-      #export-overlay, #nm-overlay, .dlg-overlay,
-      .tema-arrow, .section-title { display: none !important; }
-
-      /* E O QUE PASSA A APARECER: o cabeçalho do documento, que na tela não
-         existe porque na tela o filtro está logo ali em cima. */
-      #print-head { display: block !important; margin-bottom: 14px;
-        padding-bottom: 8px; border-bottom: 1.5px solid #000; }
-      #print-head .ph-tit { font-size: 15pt; font-weight: 700; }
-      #print-head .ph-sub { font-size: 9.5pt; color: #333; margin-top: 2px; }
-      #print-head .ph-rec { font-size: 11pt; font-weight: 600; margin-top: 7px; }
-      #print-head .ph-ger { font-size: 8.5pt; color: #555; margin-top: 2px; }
-
-      main { max-width: none; margin: 0; padding: 0; }
-
-      /* TODO TEMA ABERTO. Sem esta linha a folha sai sem uma única demanda. */
-      .tema-body { display: block !important; }
-
-      .tema-block { border: none; margin-bottom: 10px; }
-      .tema-header { background: none !important; padding: 2px 0 3px;
-        border-bottom: 1px solid #000; cursor: default; }
-      .tema-nome { font-size: 11.5pt; font-weight: 700; }
-      .tema-count { font-size: 9pt; color: #555; }
-
-      .melhoria { border: none; border-left: 2px solid #999; border-radius: 0;
-        margin: 0 0 4px; padding: 3px 0 3px 8px; background: none !important; }
-      .melhoria-titulo { font-size: 10.5pt; font-weight: 600; }
-      .melhoria-desc { font-size: 9pt; color: #333; }
-      /* AS DATAS SÃO O DOCUMENTO, e não um detalhe do rodapé do card.
-         SEM A PÍLULA: na tela a caixinha separa os campos, no papel ela vira
-         moldura em volta de oito caracteres — gasta linha, gasta tinta, e a
-         data fica menos legível do que solta. */
-      .melhoria-meta { font-size: 9.5pt; color: #000; margin-top: 2px; gap: 0; }
-      .meta-item { background: none !important; border: none !important;
-        border-radius: 0; padding: 0; margin-right: 16px; color: #000; }
-      .meta-item svg { display: none; }
-      .mel-cod { background: none !important; color: #000 !important;
-        border: 1px solid #999; padding: 0 3px; margin-right: 6px; }
-
-      /* SEM DATA, DITO. Uma linha que sai muda deixa quem lê sem saber se a
-         demanda não tem prazo combinado ou se a impressão comeu o campo — e é
-         exatamente sobre prazo que este documento vai ser cobrado. Só no papel:
-         na tela a ausência se resolve olhando o card. */
-      .melhoria:not(:has(.melhoria-meta))::after {
-        content: 'sem data combinada'; display: block;
-        font-size: 9.5pt; color: #555; margin-top: 2px;
-      }
-
-      /* O SELO DE ETAPA IMPRESSO A TRAÇO. Fundo colorido depende de "imprimir
-         cores de fundo", que vem desligado — sem a borda o selo sumiria. */
-      .badge { background: none !important; border: 1px solid #666;
-        color: #000 !important; font-size: 8.5pt; padding: 0 5px; }
-
-      /* NENHUMA DEMANDA CORTADA AO MEIO pela quebra de página, e nenhum
-         cabeçalho de tema órfão no pé da folha. */
-      .melhoria { break-inside: avoid; page-break-inside: avoid; }
-      .tema-header { break-after: avoid; page-break-after: avoid; }
-      a { color: #000 !important; text-decoration: none; }
-    }
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
@@ -2465,5 +2369,141 @@ document.addEventListener('DOMContentLoaded', () => {
     ligaZonaAnexo('nm-file', nmAddFiles);
 });
 </script>
+<!-- ESTE BLOCO É O ÚLTIMO DO DOCUMENTO, E ISSO É A REGRA E NÃO ACASO.
+     Ele nasceu dentro do <style> do <head>, e de lá PERDIA: o <style> que mora
+     no corpo desta página redefine `.melhoria-desc` e `.mel-cod` com a mesma
+     especificidade e vem depois, então o navegador ficava com a versão de tela
+     — a descrição saía com 13px no papel, no lugar dos 8.8pt. Regra de
+     impressão precisa ser a última a falar, ou ganhar `!important` campo a
+     campo, que apodrece.
+     QUALQUER <style> NOVO VAI DEPOIS DAQUI É UM DEFEITO. Há invariante sobre
+     isso, porque o sintoma não aparece na tela: só no papel de quem imprimir. -->
+<style id="css-impressao">
+    /* ═══ NO PAPEL ════════════════════════════════════════════════════════
+     *
+     * "Ajuste o campo de impressão (…). Preciso passar o planejamento com as
+     *  respectivas datas de um determinado tema."
+     *
+     * O Ctrl+P desta tela não tinha regra nenhuma, e saía inútil por três
+     * motivos ao mesmo tempo:
+     *
+     *   OS TEMAS NASCEM RECOLHIDOS (`.tema-body` sem `.open`), então a folha
+     *   trazia os cabeçalhos e NENHUMA demanda — justamente as datas que ele
+     *   precisa passar.
+     *
+     *   O FUNDO É ESCURO. Impresso vira uma mancha de tinta, e com "imprimir
+     *   cores de fundo" desligado — que é o padrão — o texto claro some no
+     *   branco.
+     *
+     *   O RECORTE NÃO VIAJAVA. A folha não dizia qual sistema estava filtrado,
+     *   e o documento sai da tela para uma conversa onde ninguém sabe disso.
+     *
+     * A escolha aqui é fazer o Ctrl+P funcionar, e não mais um botão de PDF: o
+     * "Salvar como PDF" do navegador gera texto SELECIONÁVEL e com quebra de
+     * página de verdade, enquanto o export por imagem que já existe gera um
+     * retrato rasterizado. Para um documento que vai circular, o primeiro é
+     * melhor — e não custa biblioteca nenhuma.
+     */
+    @media print {
+      /* OS TOKENS VIRAM TINTA, num lugar só. Sobrescrever regra por regra com
+         `!important` deixaria de fora tudo que for escrito depois. */
+      :root, :root[data-theme='dark'], :root[data-theme='light'] {
+        --bg: #fff; --bg2: #fff; --bg3: #fff; --bg4: #fff;
+        --text: #000; --text2: #333; --text3: #555;
+        --border: #bbb; --border2: #999;
+      }
+      html, body { background: #fff !important; color: #000 !important; }
+      @page { size: A4; margin: 13mm 11mm 15mm; }
+      body { font-size: 11pt; line-height: 1.45; }
+
+      /* O QUE NÃO VAI PARA O PAPEL: o que só serve para clicar. */
+      header, footer, .filter-bar, .charts, .summary,
+      #export-overlay, #nm-overlay, .dlg-overlay,
+      .tema-arrow, .section-title { display: none !important; }
+
+      /* E O QUE PASSA A APARECER: o cabeçalho do documento, que na tela não
+         existe porque na tela o filtro está logo ali em cima. */
+      #print-head { display: block !important; margin-bottom: 14px;
+        padding-bottom: 8px; border-bottom: 1.5px solid #000; }
+      #print-head .ph-tit { font-size: 15pt; font-weight: 700; }
+      #print-head .ph-sub { font-size: 9.5pt; color: #333; margin-top: 2px; }
+      #print-head .ph-rec { font-size: 11pt; font-weight: 600; margin-top: 7px; }
+      #print-head .ph-ger { font-size: 8.5pt; color: #555; margin-top: 2px; }
+
+      /* NADA ENCOSTA NA BORDA. O `padding: 0` deixava o selo de etapa colado na
+         margem direita, e impressora tem área não-imprimível própria: o que
+         encosta, corta. 3mm de folga resolve, e some na folha. */
+      main { max-width: none; margin: 0; padding: 0 3mm; }
+      #app, .tema-block, .melhoria { max-width: 100%; }
+
+      /* TODO TEMA ABERTO. Sem esta linha a folha sai sem uma única demanda. */
+      .tema-body { display: block !important; }
+
+      .tema-block { border: none; margin-bottom: 10px; }
+      .tema-header { background: none !important; padding: 2px 0 3px;
+        border-bottom: 1px solid #000; cursor: default; }
+      .tema-nome { font-size: 11.5pt; font-weight: 700; }
+      .tema-count { font-size: 9pt; color: #555; }
+
+      /* ── CADA DEMANDA É UM BLOCO FECHADO ──────────────────────────────
+       *
+       * "Está tendo corte, o layout não está bonito, uma demanda se mistura
+       *  com a outra."
+       *
+       * A primeira versão separava as demandas por um filete de 2px à esquerda
+       * e 4px de espaço. Funciona com título de uma linha; não funciona com o
+       * texto real — a AX-532 tem QUATRO parágrafos, e depois deles a próxima
+       * demanda começa sem nenhuma pausa visual. O olho perde onde uma acaba.
+       *
+       * Então o cartão fecha de verdade: moldura fina, um filete grosso à
+       * esquerda e espaço entre eles. Moldura é o que diz "isto é uma unidade"
+       * sem depender de cor de fundo — que a impressora não imprime por padrão.
+       */
+      .melhoria { border: 1px solid #c8c8c8; border-left: 3px solid #555;
+        border-radius: 3px; margin: 0 0 7px; padding: 6px 9px;
+        background: none !important; }
+      .melhoria-top { margin-bottom: 3px; gap: 10px; align-items: baseline; }
+      .melhoria-titulo { font-size: 10.5pt; font-weight: 700; line-height: 1.3; }
+      /* O TEXTO RECUADO E MENOR, para o título continuar sendo a âncora da
+         leitura quando a descrição tem quatro parágrafos. */
+      .melhoria-desc { font-size: 8.8pt; color: #3a3a3a; line-height: 1.4;
+        margin: 3px 0 0 2px; padding-left: 7px; border-left: 1px solid #ddd; }
+      /* AS DATAS SÃO O DOCUMENTO, e não um detalhe do rodapé do card.
+         SEM A PÍLULA: na tela a caixinha separa os campos, no papel ela vira
+         moldura em volta de oito caracteres — gasta linha, gasta tinta, e a
+         data fica menos legível do que solta. Elas fecham o cartão, separadas
+         do texto por um filete: depois de quatro parágrafos, a linha do prazo
+         precisa se anunciar. */
+      .melhoria-meta { font-size: 9.5pt; color: #000; gap: 0; font-weight: 600;
+        margin-top: 5px; padding-top: 4px; border-top: 1px solid #e2e2e2; }
+      .meta-item { background: none !important; border: none !important;
+        border-radius: 0; padding: 0; margin-right: 16px; color: #000; }
+      .meta-item svg { display: none; }
+      .mel-cod { background: none !important; color: #000 !important;
+        border: 1px solid #999; padding: 0 3px; margin-right: 6px; }
+
+      /* SEM DATA, DITO. Uma linha que sai muda deixa quem lê sem saber se a
+         demanda não tem prazo combinado ou se a impressão comeu o campo — e é
+         exatamente sobre prazo que este documento vai ser cobrado. Só no papel:
+         na tela a ausência se resolve olhando o card. */
+      .melhoria:not(:has(.melhoria-meta))::after {
+        content: 'sem data combinada'; display: block;
+        font-size: 9.5pt; color: #555; font-weight: 600;
+        margin-top: 5px; padding-top: 4px; border-top: 1px solid #e2e2e2;
+      }
+
+      /* O SELO DE ETAPA IMPRESSO A TRAÇO. Fundo colorido depende de "imprimir
+         cores de fundo", que vem desligado — sem a borda o selo sumiria. */
+      .badge { background: none !important; border: 1px solid #666;
+        color: #000 !important; font-size: 8.5pt; padding: 0 5px; }
+
+      /* NENHUMA DEMANDA CORTADA AO MEIO pela quebra de página, e nenhum
+         cabeçalho de tema órfão no pé da folha. */
+      .melhoria { break-inside: avoid; page-break-inside: avoid; }
+      .tema-header { break-after: avoid; page-break-after: avoid; }
+      a { color: #000 !important; text-decoration: none; }
+    }
+</style>
+
 </body>
 </html>

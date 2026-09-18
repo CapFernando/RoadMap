@@ -13023,6 +13023,34 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!!bloco, 'existe a regra de impressao');
     ok(!/\/\*/.test(bloco), 'e a medicao abaixo enxerga so CSS que vale, sem comentario');
 
+    /* ── E ELA E A ULTIMA A FALAR ──────────────────────────────────────
+     *
+     * MEDIDO, e quase foi para producao assim: o bloco nasceu dentro do
+     * `<style>` do `<head>`, e de la PERDIA. O `<style>` que mora no corpo
+     * desta pagina redefine `.melhoria-desc` e `.mel-cod` com a mesma
+     * especificidade e vem depois — o navegador ficava com a versao de tela, e
+     * a descricao saia com 13px no papel em vez dos 8.8pt.
+     *
+     * O SINTOMA NAO APARECE NA TELA. So no papel de quem imprimir, e so se
+     * alguem conferir o tamanho da fonte. Por isso a ordem e cobrada aqui. */
+    {
+      const iPrint = INDEX.indexOf('<style id="css-impressao">');
+      ok(iPrint > 0, 'a regra de impressao mora num <style> proprio');
+      const outros = [...INDEX.matchAll(/<style[ >]/g)].map((x) => x.index)
+        .filter((i) => i !== iPrint);
+      const depois = outros.filter((i) => i > iPrint);
+      ok(depois.length === 0,
+         'e ele e o ULTIMO <style> do documento — de dentro do <head> ele perdia ' +
+         'para o <style> do corpo, que redefine `.melhoria-desc`',
+         depois.length + ' bloco(s) depois dele');
+      /* E A COLISAO QUE MOTIVOU ISSO CONTINUA EXISTINDO: se um dia ela sumir, a
+         regra acima vira superticao, e este `ok` avisa. */
+      const corpoStyle = INDEX.slice(INDEX.indexOf('<style>', INDEX.indexOf('</head>')));
+      ok(/\.melhoria-desc\{/.test(corpoStyle),
+         'e a colisao que motivou a mudanca ainda esta la (`.melhoria-desc` no ' +
+         '<style> do corpo) — sem ela, a regra de ordem seria superticao');
+    }
+
     /* ── O DEFEITO SILENCIOSO, e o mais caro dos tres ──
        Os temas nascem RECOLHIDOS (`.tema-body` sem `.open`). Sem esta linha a
        folha sai com os cabecalhos dos temas e NENHUMA demanda — ou seja, sem
@@ -13053,6 +13081,26 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'nenhuma demanda e cortada ao meio pela quebra de pagina');
     ok(/\.tema-header \{ break-after: avoid; page-break-after: avoid; \}/.test(bloco),
        'e nenhum cabecalho de tema fica orfao no pe da folha');
+
+    /* ── O DESENHO: "está tendo corte, uma demanda se mistura com a outra" ──
+     *
+     * A primeira versão separava as demandas por um filete de 2px à esquerda e
+     * 4px de espaço. Funciona com título de uma linha; NÃO funciona com o texto
+     * real — a AX-532 tem quatro parágrafos, e depois deles a próxima demanda
+     * começava sem pausa nenhuma. */
+    ok(/\.melhoria \{ border: 1px solid #c8c8c8; border-left: 3px solid #555;/.test(bloco),
+       'cada demanda e um cartao FECHADO por moldura — e moldura, e nao fundo, ' +
+       'porque a impressora nao imprime fundo por padrao');
+    ok(/margin: 0 0 7px;/.test(bloco), 'e ha espaco entre um cartao e o seguinte');
+    /* E AS DATAS FECHAM O CARTAO, separadas por um filete: depois de quatro
+       paragrafos, a linha do prazo precisa se anunciar. */
+    ok(/\.melhoria-meta \{[^}]*border-top: 1px solid/.test(bloco.replace(/\n\s*/g, ' ')),
+       'e a linha das datas se separa do texto, em vez de virar mais um paragrafo');
+    /* ── O CORTE NA DIREITA ──
+       O `padding: 0` deixava o selo de etapa colado na margem, e impressora tem
+       area nao-imprimivel propria: o que encosta, corta. */
+    ok(/main \{ max-width: none; margin: 0; padding: 0 3mm; \}/.test(bloco),
+       'nada encosta na borda direita da folha');
 
     /* ── A DEMANDA SEM DATA DIZ ISSO ──
        Linha muda deixa quem le sem saber se nao ha prazo combinado ou se a
