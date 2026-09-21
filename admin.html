@@ -276,6 +276,13 @@
     /* demandas dentro do projeto */
     .pj-item { display:flex; align-items:center; gap:10px; background:var(--bg3);
       border:1px solid var(--border); border-radius:9px; padding:10px 12px; }
+    /* A LINHA CLICÁVEL SE ANUNCIA. Sem cursor e sem realce, ninguém descobre
+       que ela abre — e um clique que funciona mas não parece clicável é o mesmo
+       que não existir. Só as do PROJETO ganham isso: as da busca acima têm
+       "Adicionar" e não abrem nada. */
+    .pj-item-clic { cursor:pointer; transition:border-color .12s, background .12s; }
+    .pj-item-clic:hover { border-color:var(--blue); background:var(--bg4); }
+    .pj-item-clic:hover .pj-item-nome { color:var(--blue-tx,#9BC8F8); }
     .pj-item-nome { flex:1; min-width:0; font-size:13px; color:var(--text); }
     .pj-item-sub { font-size:11.5px; color:var(--text3); margin-top:2px; }
     .pj-busca { width:100%; box-sizing:border-box; }
@@ -10542,13 +10549,8 @@ async function saveMelhoria() {
   // novo se a pessoa quer salvar o que ela acabou de salvar.
   if (window.guardaDesliga) guardaDesliga('modal-melhoria');
   closeModal('modal-melhoria');
-  // Veio de dentro de um projeto: devolve a pessoa para la, com a demanda ja
-  // listada. Sem isto ela ficaria sem saber se o vinculo pegou.
-  if (_pjRetorno) {
-    const voltarPara = _pjRetorno;
-    _pjRetorno = null;
-    setTimeout(() => { switchTab('projetos'); pjAbrir(voltarPara); pjAba('demandas'); }, 400);
-  }
+  // A volta para o projeto acontece no `closeModal`, logo acima — um lugar so,
+  // para o caminho de LER e o de SALVAR nao divergirem.
   renderAll();
   // Grava agora. Antes dizia "salva" e esperava um segundo clique em "Publicar
   // alteracoes": quem fechava a tela achando que tinha salvo perdia a demanda, e
@@ -12076,13 +12078,26 @@ function pjRenderDemandas() {
     .map(m => {
       const sk = statusKey(m);
       const atras = statusEfetivo(m) === 'atrasado';
-      return '<div class="pj-item">' +
+      /* A LINHA INTEIRA ABRE A DEMANDA.
+         "Quero poder acessar o projeto e com 2 cliques abrir a task para
+         visualizar os detalhes" — um clique no projeto, um na linha.
+
+         A linha, e não um botão "abrir": o alvo que a pessoa já tenta é o
+         título. Um botão a mais ao lado de "Desvincular" seria um terceiro
+         clique e um segundo lugar para errar.
+
+         E O `stopPropagation` NO DESVINCULAR não é detalhe: sem ele, tirar a
+         demanda do projeto abriria a demanda no mesmo gesto — e o card abriria
+         já sem o vínculo, parecendo que o clique fez outra coisa. */
+      const jsId = JSON.stringify(m.id).replace(/"/g, '&quot;');
+      return '<div class="pj-item pj-item-clic" onclick="pjAbrirDemanda(' + jsId + ')"' +
+        ' title="Abrir ' + esc(m.codigo || 'a demanda') + '">' +
         (m.codigo ? '<span class="cod-tag">' + esc(m.codigo) + '</span>' : '') +
         '<div class="pj-item-nome">' + esc(m.titulo) +
           '<div class="pj-item-sub">' + esc(STATUS_LABELS[sk] || sk) +
           (m.dev ? ' · ' + esc(m.dev) : '') +
           (atras ? ' · <span style="color:var(--red)">atrasada</span>' : '') + '</div></div>' +
-        '<button class="btn btn-secondary btn-sm" onclick="pjDesvincular(' + JSON.stringify(m.id).replace(/"/g, '&quot;') + ')">Desvincular</button>' +
+        '<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();pjDesvincular(' + jsId + ')">Desvincular</button>' +
       '</div>';
     }).join('');
 }
@@ -12090,6 +12105,37 @@ function pjRenderDemandas() {
 // Abrir o card por fora e depois lembrar de vincular e passo a mais que se
 // esquece. Daqui, a demanda ja nasce dentro do projeto e a tela volta para ele.
 let _pjRetorno = null;
+
+/* ═══ DO PROJETO PARA A DEMANDA, E DE VOLTA ════════════════════════════════
+ *
+ * `_pjRetorno` ja existia, mas so para a demanda NOVA — e a volta so acontecia
+ * ao SALVAR. Para abrir e apenas LER, isso nao serve: quem fechasse sem salvar
+ * deixaria a marca pendurada, e ela dispararia numa gravacao seguinte, sem
+ * relacao nenhuma, jogando a pessoa para dentro de um projeto que ela nao
+ * estava olhando. A volta passou a morar no `closeModal`, que e por onde TODO
+ * fechamento passa — botao, Cancelar e Esc.
+ *
+ * O `await` no fechamento tambem nao e enfeite: o modal do projeto tem guarda
+ * de alteracao nao salva, e ela pode CANCELAR o fechamento. Sem esperar, a
+ * demanda abriria por cima de um projeto que continuou aberto. */
+async function pjAbrirDemanda(melId) {
+  const m = (state.melhorias || []).find(x => x.id === melId);
+  if (!m) { toast('Demanda não encontrada.', 'err'); return; }
+  const idProj = document.getElementById('pj-id').value;
+  if (!(await closeModal('modal-projeto'))) return;
+  _pjRetorno = idProj || null;
+  openModalMelhoria(melId);
+}
+
+/* A VOLTA, consumida uma vez so. O `setTimeout` deixa o fechamento terminar
+   antes de a outra tela abrir: sem ele os dois modais se cruzam e o de baixo
+   aparece por um quadro. */
+function pjVoltaSeVeioDeProjeto() {
+  if (!_pjRetorno) return;
+  const voltarPara = _pjRetorno;
+  _pjRetorno = null;
+  setTimeout(() => { switchTab('projetos'); pjAbrir(voltarPara); pjAba('demandas'); }, 400);
+}
 function pjNovaDemanda() {
   const id = document.getElementById('pj-id').value;
   if (!id) { toast('Salve o projeto primeiro.', 'err'); return; }
@@ -12495,7 +12541,13 @@ async function closeModal(id) {
   if (window.guardaDesliga) guardaDesliga(id);
   // Fechou o card: o endereco volta ao normal, senao um F5 reabriria o card que a
   // pessoa acabou de fechar.
-  if (id === 'modal-melhoria') rotaEscreve('');
+  if (id === 'modal-melhoria') {
+    rotaEscreve('');
+    // Veio de dentro de um projeto? Devolve a pessoa para la. Aqui, e nao no
+    // salvar: quem abriu so para LER fecha sem gravar, e a marca ficaria
+    // pendurada esperando uma gravacao qualquer para disparar.
+    pjVoltaSeVeioDeProjeto();
+  }
   return true;
 }
 

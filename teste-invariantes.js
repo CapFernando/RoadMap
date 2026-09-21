@@ -1941,9 +1941,16 @@ ok(!/history\.pushState/.test(ADMIN), 'nao usa pushState');
 // quem abriu por ele perderia o acesso ao recarregar.
 ok(/const base = location\.pathname \+ location\.search;/.test(ADMIN),
    'preserva o ?k= do link de consulta');
-// Fechou o card, endereco limpo: senao um F5 reabriria o que a pessoa fechou.
-ok(/if \(id === 'modal-melhoria'\) rotaEscreve\(''\)/.test(ADMIN),
-   'fechar o card limpa o endereco');
+/* Fechou o card, endereco limpo: senao um F5 reabriria o que a pessoa fechou.
+   A ANCORA E O BLOCO, e nao a linha unica: o `closeModal` passou a fazer duas
+   coisas ao fechar o card (limpar a rota e devolver quem veio de um projeto), e
+   a versao antiga desta invariante exigia `if (...) rotaEscreve('')` na MESMA
+   linha — ela reprovava um refactor que nao muda garantia nenhuma. */
+{
+  const i = ADMIN.indexOf("if (id === 'modal-melhoria')");
+  const bloco = i > 0 ? ADMIN.slice(i, ADMIN.indexOf('return true;', i)) : '';
+  ok(/rotaEscreve\(''\)/.test(bloco), 'fechar o card limpa o endereco');
+}
 // O hash tem de ser validado: `#token=...` ja circula nesta tela e nao pode virar
 // busca de demanda.
 const rotaD = corpo(ADMIN, 'function rotaDemanda(');
@@ -13558,6 +13565,73 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(sel.indexOf('value="completo"') < sel.indexOf('value="resumo"'),
        'e a primeira opcao — a que vale sem ninguem escolher — e a de HOJE');
     ok(/onchange="renderRelatorios\(\)"/.test(sel), 'e trocar o filtro redesenha a tela');
+  }
+
+  /* === DO PROJETO PARA A DEMANDA, EM DOIS CLIQUES ========================
+
+     "Quero poder acessar o projeto e com 2 cliques abrir a task para
+     visualizar os detalhes."  Um clique no projeto, um na linha. */
+  sec('Projeto: abrir a demanda da lista');
+  {
+    const lista = corpo(ADMIN, 'function pjRenderDemandas(') ||
+                  ADMIN.slice(ADMIN.indexOf('box.innerHTML = r.demandas'),
+                              ADMIN.indexOf('}).join(\'\');',
+                                            ADMIN.indexOf('box.innerHTML = r.demandas')));
+    ok(!!lista, 'a lista de demandas do projeto foi achada');
+    /* A LINHA INTEIRA ABRE, e nao um botao a mais: o alvo que a pessoa ja tenta
+       e o titulo, e um terceiro botao ao lado de "Desvincular" seria um clique
+       a mais e um segundo lugar para errar. */
+    ok(/onclick="pjAbrirDemanda\(/.test(lista), 'a linha da demanda abre a demanda');
+    ok(/class="pj-item pj-item-clic"/.test(lista), 'e ela se anuncia como clicavel');
+    ok(/\.pj-item-clic \{ cursor:pointer;/.test(ADMIN),
+       'com cursor e realce — clique que funciona mas nao parece clicavel e o ' +
+       'mesmo que nao existir');
+    /* E A BUSCA ACIMA NAO GANHA ISSO: la as linhas tem "Adicionar" e nao abrem
+       nada, e dar cursor de mao a elas prometeria o que nao acontece. */
+    const busca = corpo(ADMIN, 'function pjBuscar()');
+    ok(!!busca && !/pj-item-clic/.test(busca),
+       'as linhas da BUSCA nao ficam clicaveis — elas servem para adicionar');
+
+    /* ── O DESVINCULAR NAO PODE ABRIR A DEMANDA ──
+       Sem `stopPropagation`, tirar a demanda do projeto abriria o card no mesmo
+       gesto — e ele abriria JA SEM o vinculo, parecendo que o clique fez outra
+       coisa. */
+    ok(/onclick="event\.stopPropagation\(\);pjDesvincular\(/.test(lista),
+       'o Desvincular nao dispara a abertura da demanda');
+
+    /* ── A VOLTA PARA O PROJETO ──
+     *
+     * `_pjRetorno` ja existia, mas a volta acontecia SO NO SALVAR. Abrir para
+     * apenas LER quebraria isso: quem fechasse sem salvar deixaria a marca
+     * pendurada, e ela dispararia numa gravacao seguinte sem relacao nenhuma,
+     * jogando a pessoa dentro de um projeto que ela nao estava olhando. */
+    const fechar = corpo(ADMIN, 'async function closeModal(id) {');
+    ok(!!fechar && /pjVoltaSeVeioDeProjeto\(\);/.test(fechar),
+       'a volta mora no `closeModal` — por onde TODO fechamento passa: botao, ' +
+       'Cancelar e Esc');
+    const salvar = corpo(ADMIN, 'async function saveMelhoria() {');
+    ok(!!salvar && !/setTimeout\(\(\) => \{ switchTab\('projetos'\)/.test(salvar),
+       'e o salvar nao tem mais uma copia dela — uma volta, um lugar');
+    const volta = corpo(ADMIN, 'function pjVoltaSeVeioDeProjeto()');
+    ok(!!volta && /_pjRetorno = null;/.test(volta),
+       'a marca e consumida uma vez so, e nao fica pendurada');
+    ok(!!volta && /pjAba\('demandas'\)/.test(volta),
+       'e a volta cai na aba de Demandas, que e de onde a pessoa saiu');
+
+    /* ── O FECHAMENTO DO PROJETO E ESPERADO ──
+       O modal do projeto tem guarda de alteracao nao salva, e ela pode CANCELAR
+       o fechamento. Sem `await`, a demanda abriria por cima de um projeto que
+       continuou aberto. */
+    const abrir = corpo(ADMIN, 'async function pjAbrirDemanda(melId)');
+    ok(!!abrir, 'a abertura pelo projeto foi achada');
+    ok(!!abrir && /if \(!\(await closeModal\('modal-projeto'\)\)\) return;/.test(abrir),
+       'a guarda do projeto pode cancelar, e a demanda so abre se ele fechou');
+    /* E A MARCA E POSTA DEPOIS do fechamento: antes, um fechamento cancelado
+       deixaria `_pjRetorno` apontando para um projeto que nunca saiu da tela. */
+    ok(!!abrir && abrir.indexOf('await closeModal') < abrir.indexOf('_pjRetorno = idProj'),
+       'e a marca so e posta DEPOIS de o projeto fechar de fato');
+    ok(!!abrir && /if \(!m\) \{ toast\('Demanda não encontrada\.'/.test(abrir),
+       'e demanda que nao existe mais avisa, em vez de abrir um card vazio');
   }
 
   let erroPz = null;
