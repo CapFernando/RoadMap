@@ -13477,6 +13477,89 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(copias === 0, 'e nao sobrou copia dele dentro de funcao', String(copias));
   }
 
+  /* === O FILTRO DE TEXTO DO RELATORIO ===================================
+
+     "Foi criado um novo campo de resumo da entrega. No relatorio semanal e
+     mostrado toda implementacao, quero um filtro para visualizar do mesmo
+     jeito, apenas com esse resumo da entrega, por tema, assim como e hoje."
+
+     MEDIDO na base de producao no dia do pedido: das 49 entregas da semana, o
+     texto completo somava ~55.000 caracteres e os resumos, ~1.600. E a queixa
+     em numero. */
+  sec('Relatorio: resumo ou texto completo');
+  {
+    const escolhe = new Function(
+      corpo(ADMIN, 'function resumoDaEntrega(m, soResumo) {') + ' return resumoDaEntrega;')();
+
+    const comResumo = { resumo_entrega: 'A aba Limites passou a mostrar o tomado.',
+                        implementacao: 'Texto longo com tudo o que foi feito, em markdown.' };
+    const soTexto = { resumo_entrega: '', implementacao: 'Texto longo, quatro paragrafos.' };
+    const vazia = { resumo_entrega: '', implementacao: '' };
+
+    /* O PADRAO NAO MUDOU, e isso e deliberado. 284 entregas ja concluidas so
+       tem o texto completo; trocar o padrao faria o relatorio emudecer sobre
+       elas sem ninguem ter pedido. */
+    ok(escolhe(comResumo) === comResumo.resumo_entrega,
+       'no padrao, quem tem resumo mostra o resumo');
+    ok(escolhe(soTexto) === soTexto.implementacao,
+       'e quem nao tem cai no texto completo — a reserva de sempre');
+    ok(escolhe(vazia) === '', 'e sem nenhum dos dois, vazio');
+
+    /* O FILTRO NOVO: so o resumo, e o silencio e aceito por quem escolheu. */
+    ok(escolhe(comResumo, true) === comResumo.resumo_entrega,
+       'com "so o resumo", quem tem resumo mostra a mesma frase');
+    ok(escolhe(soTexto, true) === '',
+       'e quem so tem o texto longo fica VAZIO — e o ponto do filtro');
+    ok(escolhe(comResumo) === escolhe(comResumo, true),
+       'quem tem resumo le igual nos dois modos: o filtro nao inventa diferenca');
+
+    /* A TELA E A ATA LEEM O MESMO FILTRO. Escolher "so o resumo" na tela e
+       copiar o texto longo seria a mesma divergencia que esta base ja pagou com
+       a etapa, o prazo e os temas — so que por outro caminho. */
+    ok(/function relSoResumo\(\)/.test(ADMIN), 'a escolha do filtro e lida num lugar so');
+    const card = corpo(ADMIN, 'function relCardHTML(m, modo) {');
+    ok(!!card && /const soResumo = relSoResumo\(\);/.test(card),
+       'o card do relatorio le o filtro');
+    ok(!!card && /resumoDaEntrega\(m, soResumo\)/.test(card),
+       'e passa a escolha para a regra');
+    const ata = corpo(ADMIN, 'function relTexto(');
+    ok(!!ata && /resumoDaEntrega\(m, relSoResumo\(\)\)/.test(ata),
+       'e o "Copiar tudo" le o MESMO filtro — a ata nao pode sair diferente do ' +
+       'que a sala leu');
+
+    /* E O DECK E A APRESENTACAO NAO MUDARAM: eles chamam sem argumento, entao
+       continuam com a reserva. O pedido era sobre a tela de Relatorios. */
+    ok(/\(resumoDaEntrega\(m\) \|\| String\(m\.descricao \|\| ''\)\)/.test(ADMIN),
+       'o deck segue chamando sem o filtro, com a reserva de sempre');
+
+    /* DUAS FALTAS DIFERENTES, e dizer a errada manda cobrar a pessoa errada. */
+    ok(!!card && /soResumo && String\(m\.implementacao \|\| ''\)\.trim\(\)/.test(card),
+       'a tela separa "nao descreveu nada" de "escreveu, mas sem a frase curta"');
+    ok(/Sem resumo da entrega/.test(ADMIN) && /ainda não descreveu o que foi implementado/.test(ADMIN),
+       'e tem uma mensagem para cada uma');
+
+    /* A COBERTURA, DITA DE UMA VEZ. Na semana do pedido, 38 das 49 entregas
+       viravam aviso — e trinta e oito avisos sem um numero no alto fazem a tela
+       parecer quebrada, em vez de parecer o que e. */
+    ok(/const covTxt = relSoResumo\(\) && entregues\.length/.test(ADMIN),
+       'a tela conta quantas entregas tem a frase curta, quando o filtro esta ligado');
+    /* E A CONTA VAI PARA A TELA. Sabotei tirando o `+ covTxt` da concatenacao e
+       a invariante acima PASSOU: ela media a DECLARACAO, e nao o uso. E o mesmo
+       erro que me escapou no Grill, onde eu media que o modulo era chamado e
+       nao que a resposta dele fosse usada. */
+    ok(/\+ filtroTxt \+ covTxt;/.test(ADMIN),
+       'e a conta chega na linha de contexto, e nao fica declarada sem uso');
+    ok(/rel-cobertura/.test(ADMIN), 'e isso tem estilo proprio, sem disputar com o periodo');
+
+    /* O CONTROLE EXISTE E O PADRAO E O ANTIGO. */
+    ok(/id="rel-texto"/.test(ADMIN), 'o filtro esta na barra do relatorio');
+    const sel = ADMIN.slice(ADMIN.indexOf('id="rel-texto"'),
+                            ADMIN.indexOf('</select>', ADMIN.indexOf('id="rel-texto"')));
+    ok(sel.indexOf('value="completo"') < sel.indexOf('value="resumo"'),
+       'e a primeira opcao — a que vale sem ninguem escolher — e a de HOJE');
+    ok(/onchange="renderRelatorios\(\)"/.test(sel), 'e trocar o filtro redesenha a tela');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

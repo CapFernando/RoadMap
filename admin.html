@@ -788,6 +788,10 @@
       border-left:2px solid var(--border2); padding-left:10px;
     }
     .rel-impl-falta { color:var(--amber-tx,#FFE14D); border-left-color:var(--amber,#E89C2F); font-size:12px; }
+    /* A cobertura do resumo na linha de contexto: informa sem disputar com o
+       periodo, que e o que a pessoa le primeiro ali. */
+    .rel-cobertura { color:var(--text3); }
+    .rel-cobertura b { color:var(--text2); }
     /* ─── PLANEJADO x ENTREGUE ────────────────────────────────────────
        Duas barras na MESMA escala, uma sobre a outra: o entregue se le contra o
        planejado da propria pessoa, e a escala compartilhada permite comparar
@@ -1643,6 +1647,23 @@
         <div class="ger-filter-group">
           <label>Sistema</label>
           <select id="rel-sistema" onchange="renderRelatorios()"></select>
+        </div>
+        <!-- O TEXTO DA ENTREGA: resumo ou resumo-com-reserva.
+             "No relatório semanal é mostrado toda implementação, quero um filtro
+             para visualizar do mesmo jeito, apenas com esse resumo da entrega."
+
+             O padrão continua sendo o de hoje, e não o novo: 268 demandas já
+             entregues não têm resumo, e trocar o padrão faria o relatório
+             emudecer sobre elas sem ninguém ter pedido. Quem quer a leitura
+             curta escolhe aqui — e a escolha vale para a tela E para o
+             "Copiar tudo", senão a ata sai diferente do que se leu. -->
+        <div class="ger-filter-group">
+          <label>Texto da entrega</label>
+          <select id="rel-texto" onchange="renderRelatorios()"
+                  title="O resumo é a frase de até 300 caracteres que o dev escreve ao entregar. O texto completo é o detalhe que o PM/PO usa para validar.">
+            <option value="completo">Resumo, ou o completo quando faltar</option>
+            <option value="resumo">Só o resumo da entrega</option>
+          </select>
         </div>
         <button class="btn btn-secondary" onclick="renderRelatorios()">Atualizar</button>
         <button class="btn btn-secondary" onclick="relPptAbrir()"
@@ -8837,16 +8858,33 @@ function relSaidaHTML(m) {
    relatorio e a ata leem os mesmos campos, e tres copias divergiriam na primeira
    vez que a regra mudasse — e esta base ja pagou por isso com a etapa, com o
    prazo e com os temas. */
-function resumoDaEntrega(m) {
+/* `soResumo` E A ESCOLHA DE QUEM LE, e por isso e um argumento e nao um estado
+   global: o deck e a ata chamam esta funcao sem passar nada e continuam com a
+   reserva, exatamente como antes. So a aba de Relatorios pergunta ao filtro.
+
+   E a reserva continua sendo o TEXTO COMPLETO no padrao. Quem pede "so o
+   resumo" esta aceitando o silencio sobre as 268 entregas antigas que nao tem
+   resumo — e a tela diz que o silencio e falta de resumo, nao falta de
+   entrega. */
+function resumoDaEntrega(m, soResumo) {
   const r = String((m || {}).resumo_entrega || '').trim();
   if (r) return r;
+  if (soResumo) return '';
   return String((m || {}).implementacao || '').trim();
+}
+
+/* A ESCOLHA DO FILTRO, lida num lugar so — a tela e o "Copiar tudo" precisam da
+   MESMA resposta, senao a ata do comite sai diferente do que se leu na tela. */
+function relSoResumo() {
+  const el = document.getElementById('rel-texto');
+  return !!el && el.value === 'resumo';
 }
 
 function relCardHTML(m, modo) {
   const sm = relSistemaModulo(m);
   // O card do relatorio mostra o RESUMO. Ver `resumoDaEntrega`.
-  const impl = resumoDaEntrega(m);
+  const soResumo = relSoResumo();
+  const impl = resumoDaEntrega(m, soResumo);
   const atrasado = statusEfetivo(m) === 'atrasado';
   /* O PRAZO EM DESENVOLVIMENTO E O EFETIVO, com os dias de pausa somados — o
      mesmo numero que o Painel Dev mostra ao dev. Sem isso a mesma demanda pausada
@@ -8868,7 +8906,13 @@ function relCardHTML(m, modo) {
     ${modo === 'entregues'
       ? (impl
           ? `<div class="rel-impl">${esc(impl)}</div>`
-          : `<div class="rel-impl rel-impl-falta">⚠ O dev ainda não descreveu o que foi implementado — pedir no Painel Dev ao concluir.</div>`)
+          /* DUAS FALTAS DIFERENTES, e dizer a errada manda cobrar a pessoa
+             errada. Sem resumo E sem texto, o dev nao descreveu nada. Com o
+             filtro em "só o resumo", o texto completo pode estar lá inteiro —
+             o que falta é a frase curta, e é ela que se pede. */
+          : (soResumo && String(m.implementacao || '').trim()
+              ? `<div class="rel-impl rel-impl-falta">✎ Sem resumo da entrega — o texto completo existe. Peça a frase curta ao dev, ou troque o filtro acima.</div>`
+              : `<div class="rel-impl rel-impl-falta">⚠ O dev ainda não descreveu o que foi implementado — pedir no Painel Dev ao concluir.</div>`))
       : (impl ? `<div class="rel-impl">${esc(impl)}</div>` : '')}
   </div>`;
 }
@@ -8889,11 +8933,21 @@ function renderRelatorios() {
   const filtroTxt = sisNome
     ? ` Filtrado por <b>${esc(sisNome)}</b> — todos os blocos abaixo consideram só este sistema.`
     : '';
+  /* A COBERTURA DO RESUMO, dita de uma vez.
+     Medido na base: das 49 entregas desta semana, 11 têm a frase curta. Com o
+     filtro em "só o resumo", as outras 38 viram aviso — e trinta e oito avisos
+     sem um número no alto fazem a tela parecer quebrada, em vez de parecer o
+     que é: o campo nasceu esta semana e o passado não o tem. */
+  const covTxt = relSoResumo() && entregues.length
+    ? ` <span class="rel-cobertura">Só o resumo: <b>${
+        entregues.filter(m => String(m.resumo_entrega || '').trim()).length} de ${
+        entregues.length}</b> entregas têm a frase curta — as demais mostram o aviso.</span>`
+    : '';
   document.getElementById('rel-periodo-info').innerHTML = (janela.escala === 'mes'
     ? `Fechamento de <b>${janela.rot}</b>, comparado com <b>${janela.rotAnt}</b>. ` +
       `Todos os blocos abaixo são deste mês.`
     : `Semana de <b>${formatDate(A)} a ${formatDate(B)}</b>, comparada com a ` +
-      `${janela.rotAnt}. Todos os blocos abaixo são desta semana.`) + filtroTxt;
+      `${janela.rotAnt}. Todos os blocos abaixo são desta semana.`) + filtroTxt + covTxt;
 
   document.getElementById('rel-ent-titulo').innerHTML =
     `✅ Entregues <span class="rel-per">${formatDate(C)} a ${formatDate(D)}</span>`;
@@ -9293,9 +9347,11 @@ function relTexto(secao) {
       ? `  Entrega: ${m.entrega ? formatDate(m.entrega) : '—'}`
       : `  Prazo: ${m.entrega ? formatDate(m.entrega) : '—'}${statusEfetivo(m) === 'atrasado' ? ' (atrasado)' : ''}`);
     // A ata segue o mesmo texto do card que foi apresentado — se ela trouxesse o
-    // detalhe completo, o registro discordaria do que a sala viu.
-    const impl = resumoDaEntrega(m);
-    linhas.push(`  Entrega: ${impl || '(não informado pelo dev)'}`);
+    // detalhe completo, o registro discordaria do que a sala viu. Por isso ela
+    // le o MESMO filtro: escolher "só o resumo" na tela e copiar o texto longo
+    // seria a mesma divergencia por outro caminho.
+    const impl = resumoDaEntrega(m, relSoResumo());
+    linhas.push(`  Entrega: ${impl || '(sem resumo da entrega)'}`);
     return linhas.join('\n');
   };
   // Mesma quebra por tema da tela, para a ata sair na ordem em que foi apresentada
