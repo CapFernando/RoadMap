@@ -5299,9 +5299,13 @@ sec('A grade de topicos do deck');
      literal: "necessito que a apresentacao traga um storytelling". Deixa-la
      desmarcada por omissao devolveria o deck corrido de que a diretoria
      reclamou. */
-  ok(padrao.join(',') === 'atos,entregas,evolucao,pipelines,pontos_dev',
+  /* E O COMPARATIVO TAMBEM. "No grafico mes atual x mes anterior, falta detalhes
+     da evolucao ou involucao" — era a falta DELE por tras da critica, e um padrao
+     que o deixasse de fora reproduziria o deck reclamado. */
+  ok(padrao.join(',') === 'atos,entregas,evolucao,comparativo,pipelines,pontos_dev',
      'o padrao e o do modelo — o mes, a evolucao, as frentes e os pontos por ' +
-     'dev — dividido em atos', padrao.join(',') || 'nenhuma');
+     'dev —, dividido em atos e com os dois meses comparados',
+     padrao.join(',') || 'nenhuma');
   /* E O RESTO NAO SAIU: continua ali, a um clique. Tirar a caixa seria decidir
      pelo Fernando o que ele nunca mais pode mostrar. */
   ok(SEC.length >= 15, 'e as outras caixas continuam existindo, desmarcadas',
@@ -5319,9 +5323,9 @@ sec('A grade de topicos do deck');
         SEC, { getElementById: (id) => caixas[id] || null });
       return SEC.filter((x) => caixas['ap-s-' + x.k].checked).map((x) => x.k);
     };
-    ok(roda('padrao').join(',') === 'atos,entregas,evolucao,pipelines,pontos_dev',
-       '"Padrao do fechamento" deixa marcadas as quatro do modelo, mais a moldura',
-       roda('padrao').join(','));
+    ok(roda('padrao').join(',') === 'atos,entregas,evolucao,comparativo,pipelines,pontos_dev',
+       '"Padrao do fechamento" deixa marcadas as do modelo, mais a moldura e o ' +
+       'comparativo', roda('padrao').join(','));
     ok(roda('tudo').length === SEC.length,
        'e "Tudo" remarca todas — o caminho de volta custa um clique, e nao onze',
        roda('tudo').length + ' de ' + SEC.length);
@@ -14560,6 +14564,226 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const nomes = d1.itens.filter(i => i.texto === 'Dados' || i.texto === 'Produto');
     ok(nomes.length === 2 && nomes.every(t => t.o.wrap === false && t.o.align === 'right'),
        'o nome sai inteiro, alinhado a direita, encostado na barra');
+  }
+
+  /* === OS COMPARATIVOS ==================================================
+
+     "Comparativos conforme imagem anexada." Sao duas referencias: o bloco de
+     duas barras grandes com a variacao numa caixa, e o combinado de barra com
+     linha em dois eixos. As duas entraram na gramatica, e cada uma foi para o
+     lugar em que ela funciona. */
+  sec('Deck: os dois comparativos');
+  {
+    const DG = require('./deck-grafico.js');
+    const DGJS = fs.readFileSync('deck-grafico.js', 'utf8');
+    const pf = { ShapeType: { rect: 'rect', roundRect: 'roundRect',
+                              ellipse: 'ellipse', line: 'line' } };
+    const desenha = () => {
+      const itens = [];
+      return { s: { addShape: (t, o) => itens.push({ forma: t, o }),
+                    addText: (t, o) => itens.push({ texto: t, o }) }, itens };
+    };
+    const naPagina = (itens) => itens.filter(i => i.o &&
+      (i.o.x < -0.001 || i.o.y < -0.001 || i.o.x + (i.o.w || 0) > 10.001 ||
+       i.o.y + (i.o.h || 0) > 5.631));
+
+    /* ── O NEUTRO DO DELTA ──
+       "Nenhuma cor com juizo pode aparecer num numero que nao tem meta" — a
+       regra ja esta escrita neste deck, e foi paga com o ambar que significava
+       duas coisas em slides vizinhos. Horas realizadas e o caso: subir nao e
+       merito nem falha, e o tamanho do mes. */
+    const dN = DG.delta(1307, 1192, { neutro: true });
+    const dJ = DG.delta(1307, 1192);
+    ok(dN.cor === DG.COR.fraco && dJ.cor === DG.COR.verde,
+       'grandeza sem lado bom sai em cinza, e a que tem lado bom continua ' +
+       'julgando', '#' + dN.cor + ' vs #' + dJ.cor);
+    ok(dN.seta === '▲' && dN.sinal === '+115',
+       'e a DIRECAO continua dita em dois canais — o que sai e so o juizo',
+       dN.seta + ' ' + dN.sinal);
+
+    /* ── O BLOCO DE DUAS BARRAS ── */
+    const c1 = desenha();
+    const dv = DG.comparativo(c1.s, pf, {
+      x: 0.5, y: 1.14, w: 2.25, base: 3.55, alto: 1.85,
+      rot: 'ENTREGAS', cor: '60A5FA',
+      antes: { rot: 'agosto', valor: 170 }, agora: { rot: 'setembro', valor: 125 },
+    });
+    const barras1 = c1.itens.filter(i => i.forma === 'rect');
+    ok(barras1.length === 2, 'o comparativo desenha exatamente duas barras',
+       String(barras1.length));
+    /* A ESCALA E COMUM AS DUAS, e e a unica coisa que faz a comparacao valer:
+       cada uma com o proprio maximo sairia com a mesma altura sempre. */
+    const maior = barras1.reduce((m, b) => Math.max(m, b.o.h), 0);
+    ok(Math.abs(maior - 1.85) < 0.001, 'a maior ocupa a altura util inteira',
+       maior.toFixed(3) + '"');
+    const menor = barras1.reduce((m, b) => Math.min(m, b.o.h), 9);
+    ok(Math.abs(menor / maior - 125 / 170) < 0.005,
+       'e a outra sai na proporcao do valor — escala comum, senao a comparacao ' +
+       'e desenho e nao dado');
+    ok(barras1[0].o.fill.color === DG.COR.fraco,
+       'o periodo ANTERIOR vai em cinza — com as duas coloridas, a comparacao ' +
+       'vira adivinhacao de qual tom e qual');
+    ok(!!dv && dv.dir === 'desce' && dv.sinal === '−45',
+       'e ele devolve o delta que desenhou, para quem chama poder narrar');
+    ok(naPagina(c1.itens).length === 0, 'e nada dele passa da borda do slide');
+    /* A VARIACAO E O ELEMENTO MAIS PESADO DO BLOCO. Com duas colunas, comparar
+       alturas parecidas de longe e justamente o que ninguem consegue: "1.307 e
+       1.192 sao quase iguais no desenho e sao 115 horas". A resposta e a
+       variacao, e por isso ela tem caixa. */
+    const caixas = c1.itens.filter(i => i.forma === 'roundRect');
+    ok(caixas.length === 1 && caixas[0].o.y > 3.55,
+       'a variacao vem numa caixa, embaixo das duas barras');
+
+    /* ── BARRA E LINHA, DOIS EIXOS ── */
+    const c2 = desenha();
+    DG.barraLinha(c2.s, pf, {
+      x: 0.7, w: 8.6, base: 4.0, alto: 2.05, yEixos: 1.12,
+      itens: [{ rot: 'A', barra: 300, linha: 200 }, { rot: 'B', barra: 400, linha: 600 },
+              { rot: 'C', barra: 250, linha: 300 }, { rot: 'D', barra: 500, linha: 800 }],
+      corBarra: '60A5FA', corLinha: 'FBBF24',
+      rotBarra: 'HORAS', rotLinha: 'PONTOS', sufixoBarra: 'h',
+    });
+    const linhas = c2.itens.filter(i => i.forma === 'line');
+    const bolas = c2.itens.filter(i => i.forma === 'ellipse');
+    ok(linhas.length === 3 && bolas.length === 4,
+       'quatro pontos dao quatro marcas e tres trechos de linha',
+       bolas.length + ' marcas, ' + linhas.length + ' trechos');
+    /* O `flipV` E O QUE FAZ A LINHA DESCER. O pptxgenjs nao tem polilinha: cada
+       trecho e uma forma que so conhece a propria caixa, e sem a inversao TODO
+       segmento sai subindo — o grafico inteiro mentiria, e mentiria de um jeito
+       plausivel. Conferido tambem no XML de um .pptx gerado: `flipV="1"` sai nos
+       trechos certos. */
+    const sobe = linhas.map(l => !!l.o.flipV);
+    ok(sobe.join(',') === 'true,false,true',
+       'e o trecho que SOBE e o unico invertido — 200→600 sobe, 600→300 desce, ' +
+       '300→800 sobe', sobe.join(','));
+    /* OS DOIS MAXIMOS, ESCRITOS. Dois eixos e a forma mais facil de mentir com um
+       grafico: quem desenha escolhe as escalas e com elas escolhe onde as curvas
+       se cruzam. Sem os maximos, o cruzamento parece informacao e e artefato. */
+    const eixos = c2.itens.filter(i => typeof i.texto === 'string' && /máx\./.test(i.texto));
+    ok(eixos.length === 2, 'os dois eixos dizem o proprio maximo — sem isso o ' +
+       'cruzamento das series parece significar alguma coisa e nao significa',
+       eixos.map(e => e.texto).join(' | '));
+
+    /* ── E OS DOIS ROTULOS NAO SE ATROPELAM ──
+       Foi o defeito que a previa renderizada mostrou e asserção nenhuma pegava: o
+       valor da barra nascia ACIMA dela, e o valor do ponto da linha nasce acima
+       do ponto — e a linha passa justamente perto do topo das barras, que e o que
+       este grafico existe para mostrar. Os quatro pares se sobrepunham. */
+    const rotBarras = c2.itens.filter(i => typeof i.texto === 'string' && /h$/.test(i.texto));
+    const rotLinha = c2.itens.filter(i => typeof i.texto === 'string' &&
+      ['200', '600', '300', '800'].includes(i.texto));
+    ok(rotBarras.length === 4 && rotLinha.length === 4,
+       'cada barra e cada ponto tem o valor escrito (`direct-labeling`)');
+    const cruza = (a, b) => !(a.o.x + a.o.w <= b.o.x || b.o.x + b.o.w <= a.o.x ||
+                              a.o.y + a.o.h <= b.o.y || b.o.y + b.o.h <= a.o.y);
+    const colisoes = [];
+    rotBarras.forEach(a => rotLinha.forEach(b => { if (cruza(a, b)) colisoes.push(a.texto + '×' + b.texto); }));
+    ok(colisoes.length === 0,
+       'e nenhum valor de barra colide com nenhum valor de linha',
+       colisoes.join(', ') || 'nenhuma colisao');
+    ok(/var dentro = h >= 0\.32;/.test(DGJS),
+       'o valor da barra mora DENTRO dela quando ela comporta — ali a colisao ' +
+       'deixa de ser possivel');
+    ok(naPagina(c2.itens).length === 0, 'e nada dele passa da borda do slide');
+  }
+
+  /* === O SLIDE "ESTE MES CONTRA O ANTERIOR" ============================== */
+  sec('Deck: este mes contra o anterior');
+  {
+    const SC = corpo(APRES, 'function slideComparativo(pptx, d, pagina) {') || '';
+    ok(!!SC, 'o slide existe');
+
+    /* ── AS QUATRO MOEDAS DA CONVERSA ──
+       O deck ja comparava os dois meses em UMA: entradas e saidas da fila. A
+       conversa da diretoria acontece em quatro, e "entregamos menos e com mais
+       peso" so existe com duas delas lado a lado. */
+    ['ENTREGAS', 'PONTOS', 'HORAS REALIZADAS', 'NO PRAZO'].forEach(r => {
+      ok(SC.indexOf("rot: '" + r + "'") > 0, 'compara ' + r.toLowerCase());
+    });
+
+    /* ── NENHUMA COR DE JUIZO NAS BARRAS ──
+       A primeira versao pintou HORAS de verde e NO PRAZO de branco: verde
+       significa "o resultado desejado aconteceu", e hora realizada nao e
+       resultado desejado — e o tamanho do mes. A barra branca, sendo a mais clara
+       do slide, ainda puxava o olho para o bloco menos importante. */
+    ok(/cor: SIGNIFICADO\.neutro/.test(SC) && !/cor: C\.verde/.test(SC) &&
+       !/cor: C\.vermelho/.test(SC) && !/cor: C\.texto,/.test(SC),
+       'as quatro barras sao neutras — o juizo mora no chip, que tem meta contra ' +
+       'a qual existir');
+    ok(/neutro: !!b\.neutro/.test(SC) && /suf: 'h', neutro: true/.test(SC),
+       'e horas realizadas vai marcada como grandeza sem lado bom');
+
+    /* ── PONTO PERCENTUAL NAO E PERCENTUAL ──
+       "78% subiu 8,3%" e uma frase que ninguem interpreta de primeira: sao seis
+       pontos percentuais, e 8,3% e a variacao relativa deles. */
+    ok(/sinal: dl\.sinal \+ ' p\.p\.'/.test(SC) && /pct: null, pctTexto: '—'/.test(SC),
+       'a variacao do prazo sai em pontos percentuais, e sem percentual de ' +
+       'percentual');
+
+    /* ── A FRASE QUE LIGA VOLUME E PESO ──
+       O slide mostra quatro variacoes; a leitura que importa e o cruzamento de
+       duas delas, e e a que quem apresenta diria em voz alta. Escrita, ela
+       sobrevive ao PDF que circula depois. */
+    const casos = (SC.match(/frase = '/g) || []).length;
+    ok(casos === 4, 'os quatro cruzamentos de volume com peso tem frase propria',
+       casos + ' casos');
+    ok(/dE\.dir !== 'igual' && dP\.dir !== 'igual'/.test(SC),
+       'e sem variacao em uma delas nao ha frase — inventar leitura de um empate ' +
+       'e pior que calar');
+
+    /* ── SEM MES ANTERIOR, O SLIDE DIZ ISSO ──
+       Quatro blocos vazios seriam lidos como "nao entregamos nada". */
+    ok(/Não há mês anterior com que comparar/.test(SC),
+       'e sem base de comparacao ele diz com todas as letras, em vez de desenhar ' +
+       'quatro blocos vazios');
+
+    /* ── AS HORAS DO MES ANTERIOR VEM DA MESMA CONTA ──
+       Hora nao e campo, e conta: rateio por dia util, aproximacao de quem nao
+       lancou, recorte do mes. Uma segunda implementacao divergiria da primeira, e
+       o slide mostraria as duas lado a lado. */
+    ok(/horas: \(\(\) => \{\s*const p = apresPipelines\(concAnt/.test(ADMIN),
+       'as horas do mes anterior saem da MESMA `apresPipelines` do mes atual');
+
+    /* ── AS DUAS CAIXAS NA GRADE ── */
+    ok(/k: 'comparativo'[^}]*pad: true/.test(semComentario(ADMIN)),
+       'a caixa do comparativo nasce marcada');
+    ok(/k: 'pipelines'[\s\S]{0,140}n: 2/.test(semComentario(ADMIN)),
+       'e a das frentes declara os dois slides que produz agora');
+  }
+
+  /* === O SLIDE "ESFORCO POR FRENTE" ===================================== */
+  sec('Deck: esforco por frente');
+  {
+    const SE = corpo(APRES, 'function slideEsforcoFrente(pptx, pl, pagina, periodo) {') || '';
+    ok(!!SE && /DECKG\.barraLinha\(/.test(SE),
+       'o slide de dois eixos existe, e usa a gramatica');
+
+    /* ── ELE NAO E "MES ATUAL x ANTERIOR", E A ESCOLHA E DELIBERADA ──
+       Uma linha de dois pontos e um traco, e traco nao mostra forma nenhuma. A
+       regra de comparar so dois meses esta certa; o que nao serve e gastar o
+       formato com ela. Aqui sao quatro a seis frentes, e as duas grandezas sao de
+       naturezas diferentes — que e o unico caso em que dois eixos se justificam. */
+    ok(/barra: i\.real, linha: i\.pontos/.test(SE),
+       'as colunas sao horas e a linha e pontos — grandezas de naturezas ' +
+       'diferentes, que e quando dois eixos valem');
+    ok(/itens\.length < 2/.test(SE),
+       'e com menos de duas frentes ele diz que nao ha o que comparar, em vez de ' +
+       'desenhar uma linha de um ponto so');
+
+    /* ── A RAZAO ENTRE AS DUAS SERIES VAI ESCRITA ──
+       E justamente o que o olho NAO extrai de dois eixos: ele ve as duas curvas e
+       nao a divisao entre elas. Sem esta linha, o slide mostra e nao conclui. */
+    ok(/Densidade: /.test(SE) && /pt\/h/.test(SE),
+       'a densidade (pontos por hora) vai escrita — e a leitura que o grafico de ' +
+       'dois eixos nao da sozinho');
+
+    /* ── O CORTE DO NOME SAI DA COLUNA ──
+       Com 18 fixo, "Dados & Inteligência" saia "Dados & Inteligên…" numa coluna
+       que comporta trinta e tres caracteres. */
+    ok(/corta\(i\.nome, cabemChars\(8\.6 \/ itens\.length, 9\)\)/.test(SE),
+       'e o nome da frente e cortado pela largura da coluna, e nao por um numero ' +
+       'escrito a mao');
   }
 
   let erroPz = null;

@@ -1645,6 +1645,181 @@
     return s;
   }
 
+  /* ═══ ESTE MÊS CONTRA O ANTERIOR ═══════════════════════════════════════════
+   *
+   * "Comparativos conforme imagem anexada." A referência é o bloco de duas
+   * barras grandes com a variação numa caixa — e o pedido que veio junto foi
+   * "no gráfico mês atual x mês anterior, falta detalhes da evolução ou
+   * involução. Crescimento e comparativo".
+   *
+   * O DECK JÁ COMPARAVA OS DOIS MESES, e comparava em UMA moeda: entradas e
+   * saídas da fila, no slide de evolução. A conversa da diretoria acontece em
+   * quatro — quantas entregas, quanto peso, quantas horas e quanto saiu no
+   * prazo —, e as quatro juntas contam uma história que nenhuma conta sozinha:
+   * "entregamos menos e com mais peso" é uma frase que só existe com duas delas
+   * lado a lado, e era exatamente a frase que faltava na sala.
+   *
+   * POR QUE QUATRO BLOCOS IGUAIS, E NÃO UM PAINEL. Mesma forma quatro vezes
+   * significa que quem aprendeu a ler o primeiro lê os outros três sem pensar —
+   * e o slide passa a ser lido em cinco segundos, que é o tempo que ele tem.  */
+  function slideComparativo(pptx, d, pagina) {
+    var ant = d.anterior || {};
+    var pl = (d.pipelines || {}).total || {};
+    var s = slideTitulo(pptx, 'Este mês contra o anterior',
+      'as quatro moedas do mês, lado a lado', pagina, d.periodo,
+      ant.parcial ? 'mês em curso — comparação parcial' : '');
+
+    var mesAgora = String(d.periodo || '').split(' ')[0].toLowerCase();
+    var mesAntes = String(ant.nome || 'mês anterior').toLowerCase();
+
+    /* A QUARTA MOEDA É O PRAZO, E ELA NÃO TEM PERCENTUAL DE PERCENTUAL.
+       "78% subiu 8,3%" é uma frase que ninguém consegue interpretar de primeira:
+       são seis pontos percentuais, e "8,3%" é a variação relativa deles. O chip
+       perde o percentual e o número ganha a unidade escrita. */
+    /* AS QUATRO BARRAS SÃO AZUIS, e isso é doutrina e não economia de paleta.
+     *
+     * Azul é o neutro desta base — "categoria, contagem, previsto; não julga
+     * nada". A primeira versão pintou HORAS de verde e NO PRAZO de branco, e as
+     * duas estavam erradas pela regra que este deck já paga caro para manter:
+     * verde significa "o resultado desejado aconteceu", e hora realizada não é
+     * resultado desejado — é o tamanho do mês. E a barra branca, sendo a mais
+     * clara do slide, puxava o olho para o bloco menos importante.
+     *
+     * O JUÍZO MORA NO CHIP, que é onde ele tem meta contra a qual existir: verde
+     * quando melhorou, vermelho quando piorou, cinza quando a grandeza não tem
+     * lado bom. A barra mostra tamanho; o chip mostra direção.
+     *
+     * HORAS REALIZADAS VAI COM `neutro`: subir não é mérito nem falha. */
+    var blocos = [
+      { rot: 'ENTREGAS', antes: ant.concluidas, agora: (d.kpi || {}).concluidas, suf: '' },
+      { rot: 'PONTOS', antes: ant.pontos, agora: (d.kpi || {}).pontos, suf: '' },
+      { rot: 'HORAS REALIZADAS', antes: ant.horas, agora: pl.real,
+        suf: 'h', neutro: true },
+      { rot: 'NO PRAZO', antes: ant.pct, agora: (d.prazo || {}).pct,
+        suf: '%', pp: true },
+    ].filter(function (b) { return b.antes != null && b.agora != null; });
+
+    if (!blocos.length) {
+      s.addText('Não há mês anterior com que comparar.', {
+        x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
+      rodape(s, d.periodo, pagina);
+      return s;
+    }
+
+    var L = 9.0 / blocos.length, BASE = 3.55, ALTO = 1.85;
+    var deltas = {};
+    blocos.forEach(function (b, i) {
+      var dl = DECKG.delta(b.agora, b.antes, { neutro: !!b.neutro });
+      if (b.pp) {
+        /* PONTOS PERCENTUAIS, escritos. Sem a unidade, "+6" ao lado de um número
+           que termina em % é lido como 6%, que é outra coisa. */
+        dl = Object.assign({}, dl, { pct: null, pctTexto: '—',
+                                     sinal: dl.sinal + ' p.p.' });
+      }
+      deltas[b.rot] = dl;
+      DECKG.comparativo(s, pptx, {
+        x: 0.5 + i * L, y: 1.14, w: L, base: BASE, alto: ALTO,
+        rot: b.rot, cor: SIGNIFICADO.neutro, sufixo: b.suf, delta: dl,
+        antes: { rot: mesAntes, valor: b.antes },
+        agora: { rot: mesAgora, valor: b.agora },
+      });
+    });
+
+    /* A FRASE QUE LIGA DUAS DELAS. O slide mostra quatro variações; a leitura
+       que importa é o CRUZAMENTO de volume com peso, e é ela que quem apresenta
+       diria em voz alta. Escrita, ela sobrevive ao PDF que circula depois. */
+    var dE = deltas['ENTREGAS'], dP = deltas['PONTOS'];
+    var frase = null;
+    if (dE && dP && dE.dir !== 'igual' && dP.dir !== 'igual') {
+      if (dE.dir === 'desce' && dP.dir === 'sobe') {
+        frase = 'Menos entregas e mais pontos: o mês trocou volume por peso — ' +
+                'as entregas foram maiores.';
+      } else if (dE.dir === 'sobe' && dP.dir === 'desce') {
+        frase = 'Mais entregas e menos pontos: o mês fez mais itens, e mais leves.';
+      } else if (dE.dir === 'sobe') {
+        frase = 'Volume e peso subiram juntos: mais entregas, e maiores.';
+      } else {
+        frase = 'Volume e peso caíram juntos: menos entregas, e menores.';
+      }
+    }
+    if (frase) {
+      s.addText(frase, { x: 0.7, y: 4.42, w: 8.6, h: 0.44, fontSize: 12,
+                         color: C.texto, italic: true, lineSpacingMultiple: 1.2 });
+    }
+    rodape(s, d.periodo, pagina);
+    return s;
+  }
+
+  /* ═══ ESFORÇO POR FRENTE: HORAS E PONTOS ═══════════════════════════════════
+   *
+   * A segunda referência dos comparativos — colunas para uma grandeza, linha
+   * para outra, cada uma na sua escala.
+   *
+   * ELE NÃO É "MÊS ATUAL × ANTERIOR", e a escolha é deliberada. Duas colunas de
+   * dois meses não fazem linha: uma linha de dois pontos é um traço, e traço não
+   * mostra forma nenhuma. A regra do Fernando de comparar só dois meses está
+   * certa (a base começou em junho, e quatro pares zerados num slide de
+   * diretoria não dizem "não havia dado", dizem "não entregamos nada") — o que
+   * não serve é gastar o formato com ela.
+   *
+   * ONDE ELE SERVE é aqui: hora e ponto são grandezas de NATUREZAS diferentes, a
+   * pergunta é sobre a relação entre as duas ("a frente que consome mais hora é
+   * a que entrega mais peso?"), e há quatro a seis frentes para desenhar. É
+   * exatamente o caso em que dois eixos se justificam — e o único: para duas
+   * grandezas comparáveis, a resposta são barras pareadas na mesma régua.     */
+  function slideEsforcoFrente(pptx, pl, pagina, periodo) {
+    var itens = (pl.itens || []).filter(function (i) { return i.real > 0 || i.pontos > 0; });
+    var s = slideTitulo(pptx, 'Esforço por frente',
+      'horas realizadas e pontos entregues, na mesma página', pagina, periodo,
+      itens.length + (itens.length === 1 ? ' frente' : ' frentes'));
+
+    if (itens.length < 2) {
+      s.addText('Menos de duas frentes com esforço no período — não há o que comparar.', {
+        x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
+      rodape(s, periodo, pagina);
+      return s;
+    }
+
+    DECKG.barraLinha(s, pptx, {
+      x: 0.7, w: 8.6, base: 4.00, alto: 2.05, yEixos: 1.12,
+      /* O CORTE DO NOME SAI DA COLUNA, e não de um número escrito à mão. Com 18
+         fixo, "Dados & Inteligência" saía "Dados & Inteligên…" numa coluna de
+         2,15" que comporta trinta e três caracteres — um terço dela vazio e o
+         nome mutilado à toa. Com seis frentes a coluna encolhe, e a conta
+         acompanha. */
+      itens: itens.map(function (i) {
+        return { rot: corta(i.nome, cabemChars(8.6 / itens.length, 9)),
+                 barra: i.real, linha: i.pontos };
+      }),
+      corBarra: C.azul, corLinha: C.ambar,
+      rotBarra: 'HORAS REALIZADAS', rotLinha: 'PONTOS ENTREGUES',
+      sufixoBarra: 'h', sufixoLinha: '',
+    });
+
+    /* A LEITURA QUE O GRÁFICO NÃO DÁ SOZINHO: quantos pontos saem por hora em
+       cada frente. É a razão entre as duas séries, e razão é justamente o que o
+       olho não extrai de dois eixos — ele vê as duas curvas e não a divisão
+       entre elas. Sem esta linha, o slide mostra e não conclui. */
+    var comRazao = itens.filter(function (i) { return i.real > 0 && i.pontos > 0; })
+      .map(function (i) { return { nome: i.nome, r: i.pontos / i.real }; })
+      .sort(function (a, b) { return b.r - a.r; });
+    if (comRazao.length >= 2) {
+      var alto = comRazao[0], baixo = comRazao[comRazao.length - 1];
+      s.addText([
+        { text: 'Densidade: ', options: { color: C.fraco } },
+        { text: corta(alto.nome, 26) + ' ' + DECKG.num(Math.round(alto.r * 100) / 100) +
+                ' pt/h', options: { color: C.texto, bold: true } },
+        { text: '   ·   ', options: { color: C.fraco } },
+        { text: corta(baixo.nome, 26) + ' ' + DECKG.num(Math.round(baixo.r * 100) / 100) +
+                ' pt/h', options: { color: C.texto, bold: true } },
+        { text: '   — a mesma hora rende pesos diferentes conforme a frente.',
+          options: { color: C.fraco } },
+      ], { x: 0.7, y: 4.46, w: 8.6, h: 0.3, fontSize: 10.5 });
+    }
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
   /* A VARIAÇÃO CONTRA O MÊS ANTERIOR.
 
      A COR SEGUE A MELHORA, E NÃO O SINAL. Em metade dos números deste deck crescer
@@ -2211,12 +2386,25 @@
       cena('situacao', function (p) { slideEvolucao(pptx, d.evolucao, p, d.periodo); });
     }
 
+    /* O COMPARATIVO FECHA O ATO DO MÊS. A evolução mostra a FILA nos dois meses
+       (o que entrou, o que saiu); este mostra o que foi ENTREGUE nos dois, nas
+       quatro moedas da conversa. A ordem é essa porque a fila explica o contexto
+       e a entrega é a resposta — e porque "entregamos menos e com mais peso" só
+       se diz depois de a sala saber que a fila cresceu. */
+    if (d.secoes.comparativo && d.anterior) {
+      cena('situacao', function (p) { slideComparativo(pptx, d, p); });
+    }
+
     /* ─── ATO 2 · PARA ONDE FOI ───────────────────────────────────────────
        O corte que a diretoria já lê no painel aprovado. Responde "em que o mês
        foi gasto" antes de o deck cobrar prazo — porque cobrar prazo sem mostrar
        no que o time esteve é cobrar no escuro.                               */
     if (d.secoes.pipelines && d.pipelines) {
       cena('capacidade', function (p) { slidePipelines(pptx, d.pipelines, p, d.periodo); });
+      /* E LOGO DEPOIS, A MESMA FRENTE VISTA PELA RELAÇÃO ENTRE HORA E PONTO. O
+         slide anterior diz quanto cada frente consumiu; este diz o que cada hora
+         rendeu. É a pergunta seguinte, e ela some se os dois slides se separam. */
+      cena('capacidade', function (p) { slideEsforcoFrente(pptx, d.pipelines, p, d.periodo); });
     }
 
     /* OS PROJETOS VÊM LOGO DEPOIS DAS FRENTES — pedido do Fernando, e a ordem tem

@@ -59,6 +59,15 @@
    * O PERCENTUAL NÃO EXISTE QUANDO A BASE É ZERO, e `Infinity%` é pior do que
    * não dizer: de 0 para 5 não é "crescimento de infinito por cento", é "não
    * havia e agora há 5". O campo vem `null` e o texto diz a frase. */
+  /* `neutro` EXISTE PORQUE NEM TODA GRANDEZA TEM LADO BOM, e a regra desta base
+   * é explícita: "nenhuma cor com juízo pode aparecer num número que não tem
+   * meta". Horas realizadas é o caso — subir não é mérito nem falha, é o
+   * tamanho do mês. Pintar "+115h" de verde faz o slide dar uma nota que
+   * ninguém combinou, e foi assim que o âmbar já significou duas coisas em
+   * slides vizinhos.
+   *
+   * SETA E SINAL FICAM. O que sai é só o juízo: a direção continua dita, e em
+   * dois canais — quem lê impresso em preto e branco não perde nada. */
   function delta(atual, anterior, opts) {
     var o = opts || {};
     var bomSubir = o.bomSubir !== false;
@@ -67,7 +76,7 @@
     var dif = a - b;
     var pct = b === 0 ? null : (dif / Math.abs(b)) * 100;
     var dir = dif > 0 ? 'sobe' : (dif < 0 ? 'desce' : 'igual');
-    var bom = dir === 'igual' ? null : ((dir === 'sobe') === bomSubir);
+    var bom = (o.neutro || dir === 'igual') ? null : ((dir === 'sobe') === bomSubir);
 
     return {
       atual: a, anterior: b, dif: dif, pct: pct, dir: dir, bom: bom,
@@ -255,6 +264,176 @@
     }
   }
 
+  /* ─── O COMPARATIVO DE DOIS PERÍODOS ───────────────────────────────────
+   *
+   * "Comparativos conforme imagem anexada." A primeira referência é este: duas
+   * barras grandes, o valor escrito em cada uma, e a variação numa CAIXA entre
+   * elas.
+   *
+   * POR QUE ELE EXISTE SEPARADO DE `barras`. `barras` compara N categorias e o
+   * olho mede alturas; aqui há só DUAS colunas, e comparar duas alturas parecidas
+   * a olho é justamente o que ninguém consegue fazer de longe — "1.307 e 1.192
+   * são quase iguais no desenho e são 115 horas de diferença". Com dois valores a
+   * resposta é a VARIAÇÃO, e por isso ela é o elemento tipograficamente mais
+   * pesado do bloco, e não uma nota ao lado do gráfico.
+   *
+   * O PASSADO EM CINZA E O PRESENTE EM COR. É a mesma convenção da barra deitada
+   * do slide das frentes: com as duas coloridas, a comparação vira adivinhação de
+   * qual tom é qual. */
+  function comparativo(s, pptx, cfg) {
+    var x = cfg.x, w = cfg.w, base = cfg.base, alto = cfg.alto;
+    var suf = cfg.sufixo || '';
+    var va = Number(cfg.antes.valor) || 0, vb = Number(cfg.agora.valor) || 0;
+    var max = Math.max(va, vb, 1);
+
+    if (cfg.rot) {
+      s.addText(String(cfg.rot), {
+        x: x, y: cfg.y, w: w, h: 0.22, fontSize: cfg.fsRot || 10, bold: true,
+        color: COR.fraco, charSpacing: 1.2, align: 'center', wrap: false });
+    }
+
+    /* AS DUAS COLUNAS OCUPAM 30% DA LARGURA CADA, com 10% de vão. O resto é
+       margem: barra encostando na vizinha faz dois blocos parecerem um. */
+    var lb = w * 0.30, vao = w * 0.10;
+    var x0 = x + (w - (2 * lb + vao)) / 2;
+    [{ v: va, cor: cfg.corAntes || COR.fraco, rot: cfg.antes.rot, i: 0 },
+     { v: vb, cor: cfg.cor || COR.azul, rot: cfg.agora.rot, i: 1 }].forEach(function (b) {
+      var h = Math.max(0.05, alto * (b.v / max));
+      var bx = x0 + b.i * (lb + vao);
+      s.addShape(pptx.ShapeType.rect, {
+        x: bx, y: base - h, w: lb, h: h, fill: { color: b.cor }, line: { type: 'none' } });
+      s.addText(num(b.v) + suf, {
+        x: bx - 0.3, y: base - h - 0.30, w: lb + 0.6, h: 0.28,
+        fontSize: cfg.fsValor || 15, bold: true, color: b.cor, align: 'center', wrap: false });
+      s.addText(String(b.rot || ''), {
+        x: bx - 0.2, y: base + 0.06, w: lb + 0.4, h: 0.2,
+        fontSize: 9, color: COR.fraco, align: 'center', wrap: false });
+    });
+
+    /* A CAIXA DA VARIAÇÃO, embaixo e larga. É o mesmo chip do resto do deck —
+       quem aprendeu a lê-lo no slide de evolução já sabe ler aqui — em corpo
+       maior, porque neste bloco ele é a resposta e não o acessório. */
+    var d = cfg.delta || delta(vb, va, { bomSubir: cfg.bomSubir !== false });
+    chipDelta(s, pptx, { delta: d, x: x + w * 0.08, y: base + 0.32,
+                         w: w * 0.84, h: 0.34, fontSize: cfg.fsDelta || 12 });
+    return d;
+  }
+
+  /* ─── BARRA E LINHA, COM DOIS EIXOS ────────────────────────────────────
+   *
+   * A segunda referência: colunas para uma grandeza, linha para outra, cada uma
+   * na sua escala.
+   *
+   * QUANDO ELE SE JUSTIFICA — e o padrão é claro sobre isso: dois eixos é a
+   * forma mais fácil de mentir com um gráfico, porque quem desenha escolhe as
+   * escalas e com elas escolhe onde as curvas se cruzam. Vale quando as duas
+   * grandezas são de NATUREZAS diferentes e a pergunta é sobre a RELAÇÃO entre
+   * elas ("a frente que consome mais hora é a que entrega mais peso?"). Não vale
+   * para duas grandezas comparáveis — essas vão em barras pareadas, na mesma
+   * régua, e é o que `barras` e `barrasH` fazem.
+   *
+   * POR ISSO O MÁXIMO DE CADA EIXO VAI ESCRITO. Sem ele, o cruzamento das duas
+   * séries parece significar alguma coisa e não significa nada — é onde as duas
+   * escalas que eu escolhi se encontram. Com ele, quem lê sabe que são réguas
+   * diferentes antes de tirar conclusão.
+   *
+   * A LINHA É DESENHADA EM SEGMENTOS porque o pptxgenjs não tem polilinha. Cada
+   * trecho é uma forma `line` da esquerda para a direita; quando o valor CAI, o
+   * segmento nasce invertido no eixo vertical (`flipV`) — é assim que se desenha
+   * uma diagonal descendente com uma forma que só conhece a própria caixa. */
+  function barraLinha(s, pptx, cfg) {
+    var itens = (cfg.itens || []).filter(Boolean);
+    if (!itens.length) return;
+    var X0 = cfg.x, LARG = cfg.w, BASE = cfg.base, ALTO = cfg.alto;
+    var col = LARG / itens.length;
+    var maxB = itens.reduce(function (m, i) { return Math.max(m, Number(i.barra) || 0); }, 1);
+    var maxL = itens.reduce(function (m, i) { return Math.max(m, Number(i.linha) || 0); }, 1);
+    var corB = cfg.corBarra || COR.azul, corL = cfg.corLinha || COR.ambar;
+
+    s.addShape(pptx.ShapeType.rect, {
+      x: X0, y: BASE, w: LARG, h: 0.012, fill: { color: COR.borda } });
+
+    var larg = Math.min(cfg.largura || 0.55, col * 0.5);
+    var pontos = [];
+    itens.forEach(function (it, i) {
+      var vb = Number(it.barra) || 0, vl = Number(it.linha) || 0;
+      var cx = X0 + i * col + col / 2;
+      var h = Math.max(0.04, ALTO * (vb / maxB));
+      s.addShape(pptx.ShapeType.rect, {
+        x: cx - larg / 2, y: BASE - h, w: larg, h: h, fill: { color: corB } });
+      /* O VALOR DA BARRA VAI DENTRO DELA, e não em cima.
+         Em cima ele disputa o mesmo pedaço de slide com o rótulo do PONTO DA
+         LINHA, que nasce logo acima do ponto — e a linha passa justamente por
+         perto do topo das barras, que é o que este gráfico existe para mostrar.
+         Medido na prévia: os quatro pares se sobrepunham, nos quatro. Dentro da
+         barra o número tem fundo garantido, e a colisão deixa de ser possível.
+         Barra curta demais não comporta o número: aí ele sobe, e ali não há
+         topo de barra por perto para disputar. */
+      var dentro = h >= 0.32;
+      var yb = dentro ? BASE - h + 0.05 : BASE - h - 0.25;
+      s.addText(num(vb) + (cfg.sufixoBarra || ''), {
+        x: cx - 0.45, y: yb, w: 0.9, h: 0.23,
+        fontSize: 9.5, bold: true, color: dentro ? COR.fundo : corB,
+        align: 'center', wrap: false });
+      s.addText(String(it.rot || ''), {
+        x: X0 + i * col, y: BASE + 0.07, w: col, h: 0.22,
+        fontSize: cfg.fsRot || 9, color: COR.fraco, align: 'center', wrap: false });
+      // A caixa do rótulo da barra viaja com o ponto: é contra ela que o rótulo
+      // da linha se desvia, logo abaixo.
+      pontos.push({ x: cx, y: BASE - ALTO * (vl / maxL), v: vl, caixa: [yb, yb + 0.23] });
+    });
+
+    for (var k = 0; k < pontos.length - 1; k++) {
+      var a = pontos[k], b = pontos[k + 1];
+      var sobe = b.y < a.y;             // no slide, subir é y MENOR
+      s.addShape(pptx.ShapeType.line, {
+        x: a.x, y: Math.min(a.y, b.y), w: b.x - a.x, h: Math.abs(b.y - a.y),
+        line: { color: corL, width: 2 }, flipV: sobe });
+    }
+    pontos.forEach(function (p) {
+      s.addShape(pptx.ShapeType.ellipse, {
+        x: p.x - 0.055, y: p.y - 0.055, w: 0.11, h: 0.11,
+        fill: { color: corL }, line: { color: COR.fundo, width: 1 } });
+      /* O RÓTULO DA LINHA SE DESVIA DO DA BARRA.
+       *
+       * Pôr o valor da barra dentro dela resolveu a colisão do caso comum, e não
+       * do geral: quando a linha PASSA POR DENTRO da barra — série baixa em
+       * relação ao próprio máximo, barra alta em relação ao dela —, o rótulo do
+       * ponto cai justamente onde está o da barra. A invariante pegou em
+       * `250h × 300`, que é exatamente esse caso.
+       *
+       * A regra é: acima do ponto, que é o lugar natural; se ali houver o rótulo
+       * da barra, abaixo; e se abaixo também houver, logo depois dele. Três
+       * posições em ordem de preferência resolvem qualquer combinação, e nenhuma
+       * delas depende de eu ter previsto os números. */
+      var alturas = [p.y - 0.30, p.y + 0.08, p.caixa[1] + 0.03];
+      var yr = alturas.find(function (y) {
+        return !(y + 0.22 > p.caixa[0] && y < p.caixa[1]);
+      });
+      s.addText(num(p.v) + (cfg.sufixoLinha || ''), {
+        x: p.x - 0.45, y: yr == null ? alturas[2] : yr, w: 0.9, h: 0.22,
+        fontSize: 9, bold: true, color: corL, align: 'center', wrap: false });
+    });
+
+    /* OS DOIS MÁXIMOS, ESCRITOS. Ver a nota acima: sem eles o cruzamento das
+       séries parece informação e é artefato da escala que eu escolhi. */
+    /* A ALTURA DELES SE DIZ, e não sai de `BASE − ALTO`. Ficando colados no topo
+       do desenho, eles batem no valor escrito em cima da barra mais alta — que
+       nasce exatamente ali. Quem chama sabe onde acaba a régua do cabeçalho. */
+    var yE = cfg.yEixos == null ? BASE - ALTO - 0.34 : cfg.yEixos;
+    if (cfg.rotBarra) {
+      s.addText(cfg.rotBarra + '  (máx. ' + num(maxB) + (cfg.sufixoBarra || '') + ')', {
+        x: X0, y: yE, w: LARG / 2, h: 0.22,
+        fontSize: 8.5, bold: true, color: corB, charSpacing: 0.6, wrap: false });
+    }
+    if (cfg.rotLinha) {
+      s.addText(cfg.rotLinha + '  (máx. ' + num(maxL) + (cfg.sufixoLinha || '') + ')', {
+        x: X0 + LARG / 2, y: yE, w: LARG / 2, h: 0.22,
+        fontSize: 8.5, bold: true, color: corL, charSpacing: 0.6,
+        align: 'right', wrap: false });
+    }
+  }
+
   /* ─── LEGENDA ──────────────────────────────────────────────────────────
      `legend-visible`: sempre visível e perto do gráfico. Uma função só, para a
      legenda não nascer em três alturas diferentes em três slides. */
@@ -269,7 +448,8 @@
   }
 
   var api = { COR: COR, num: num, delta: delta, chipDelta: chipDelta,
-              barras: barras, barrasH: barrasH, legenda: legenda };
+              barras: barras, barrasH: barrasH, comparativo: comparativo,
+              barraLinha: barraLinha, legenda: legenda };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.DECKG = api;

@@ -1141,7 +1141,7 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=03bc22afd7"></script>
-  <script src="deck-grafico.js?v=db3804642c"></script>
+  <script src="deck-grafico.js?v=d56d720fd0"></script>
   <script src="deck-fundo.js?v=050a7db483"></script>
   <script src="deck-narrativa.js?v=88fceaf4e4"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
@@ -1154,7 +1154,7 @@
 <script src="capa-tecnologia.js?v=e3aaaae81d"></script>
 <script src="pipelines.js?v=ef35f28412"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=c138f9f2d2"></script>
+<script src="apresentacao.js?v=f613e7c011"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -5674,7 +5674,14 @@ const AP_SECOES = [
     nota: 'um slide de abertura por ato — só os atos que tiverem conteúdo' },
   { k: 'entregas', rot: 'O mês: backlog, o que entrou e o que saiu', n: 1, pad: true },
   { k: 'evolucao', rot: 'Evolução: este mês e o anterior', n: 1, pad: true },
-  { k: 'pipelines', rot: 'Frentes de trabalho: horas planejadas × realizadas', n: 1, pad: true },
+  /* O COMPARATIVO NASCE MARCADO. A evolução mostra a FILA nos dois meses; este
+     mostra o que foi ENTREGUE nos dois, nas quatro moedas da conversa — e era a
+     falta dele que estava por trás de "no gráfico mês atual x mês anterior,
+     falta detalhes da evolução ou involução". */
+  { k: 'comparativo', rot: 'Este mês contra o anterior: entregas, pontos, horas e prazo',
+    n: 1, pad: true },
+  { k: 'pipelines', rot: 'Frentes de trabalho: horas planejadas × realizadas',
+    n: 2, pad: true, nota: 'o segundo cruza horas e pontos por frente — o que cada hora rendeu' },
   { k: 'pontos_dev', rot: 'Pontos entregues por desenvolvedor', n: 1, pad: true },
   { k: 'pontos_semana', rot: 'Pontos entregues por semana', n: 1 },
   { k: 'pontos_tema', rot: 'Pontos entregues por sistema', n: 1 },
@@ -6348,6 +6355,20 @@ async function apresGerar(opts) {
       backlogFim: fAnt.backFim,
       concluidas: concAnt.length,
       pontos: concAnt.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0),
+      /* AS HORAS DO MES ANTERIOR, pela MESMA `apresPipelines` que produz as do
+         mes apresentado. O slide "Este mes contra o anterior" compara quatro
+         moedas, e tres delas ja estavam aqui — a hora nao, e sem ela o
+         comparativo sairia com um bloco a menos justamente na moeda em que a
+         diretoria discute capacidade.
+
+         PELA MESMA FUNCAO, E NAO POR UMA SOMA AQUI: hora nao e campo, e conta —
+         rateio por dia util, aproximacao de quem nao lancou, recorte do mes. Uma
+         segunda implementacao divergiria da primeira, e o slide mostraria as duas
+         lado a lado, que e a pior forma de descobrir isso. */
+      horas: (() => {
+        const p = apresPipelines(concAnt, isoAnt + '-01', fimAnt);
+        return p ? p.total.real : null;
+      })(),
       rapidas: rapidasDe(concAnt).length,
       pct: medidasAnt ? Math.round(noPrazoAnt / medidasAnt * 100) : null,
       // Mes em curso comparado com mes fechado engana: o slide diz que e parcial.
