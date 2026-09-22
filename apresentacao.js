@@ -48,6 +48,10 @@
      carregue este arquivo ANTES deste aqui. */
   var DECKG = (typeof window !== 'undefined') ? window.DECKG : require('./deck-grafico.js');
 
+  /* A NARRATIVA — os atos, o trilho de capítulos e o slide divisor — mora em
+     `deck-narrativa.js`. Mesmo motivo e mesma forma do alias acima. */
+  var NARR = (typeof window !== 'undefined') ? window.DECKNARR : require('./deck-narrativa.js');
+
   var C = {
     fundo:   '070B16',   // o azul-quase-preto do painel
     fundo2:  '0E1428',   // superfície dos cartões
@@ -194,6 +198,20 @@
 
   /* ── Blocos de slide ───────────────────────────────────────────────────── */
 
+  /* ONDE A CONVERSA ESTÁ, no momento em que o slide é desenhado.
+   *
+   * Estado de módulo, e não argumento: o trilho de capítulos precisa aparecer em
+   * TODO slide, e são trinta e poucas chamadas de `slideBase` — passar o ato por
+   * argumento em cada uma seria trinta e poucas oportunidades de esquecer uma, e
+   * o slide esquecido é justamente o que quebra a sensação de continuidade que o
+   * trilho existe para dar. É o mesmo raciocínio do fundo de curvas.
+   *
+   * `montaDeck` zera isto na entrada e na saída. Fora dele — o deck de
+   * Relatórios, que usa o kit — `_narrativa` é nulo e nada do cromo narrativo é
+   * desenhado: aquele deck tem outra conversa, e uma moldura de atos que ele não
+   * cumpre seria pior que moldura nenhuma. */
+  var _narrativa = null;   // { plano, indice, ato }
+
   function slideBase(pptx) {
     var s = pptx.addSlide();
     s.background = { color: C.fundo };
@@ -214,6 +232,17 @@
     var fundo = (typeof window !== 'undefined' && window.DECKFUNDO)
       ? window.DECKFUNDO.png({ fundo: C.fundo }) : null;
     if (fundo) s.addImage({ data: fundo, x: 0, y: 0, w: 10, h: 5.63 });
+
+    /* O TRILHO DE CAPÍTULOS, colado no topo. Depois do fundo, senão a imagem o
+       cobre. A capa passa por aqui e o cobre de propósito — ela vem ANTES da
+       história, e um indicador de progresso na capa diria que a conversa já
+       começou. */
+    if (_narrativa) {
+      NARR.trilho(s, pptx, {
+        atos: _narrativa.plano.atos, paginas: _narrativa.plano.paginas,
+        indice: _narrativa.indice, cores: C,
+      });
+    }
     return s;
   }
 
@@ -227,8 +256,26 @@
      slide 4" numa apresentacao de doze slides projetada por quem esta falando —
      e ele ocupava o canto onde o periodo ja responde a unica pergunta que se faz
      olhando para baixo ("de quando e isto?"). */
+  /* O ATO ENTRA NO RODAPÉ, e é ele que responde "de que parte da conversa é
+     isto?" — a pergunta que um print solto de um slide não respondia. O período
+     atravessa para a direita: a linha passa a ter duas informações, e duas
+     informações lado a lado no canto esquerdo se leem como uma frase truncada.
+
+     SÓ QUANDO HÁ NARRATIVA. Sem ela (o deck de Relatórios), o rodapé é o de
+     sempre, à esquerda — mover o período para a direita num deck que não tem ato
+     nenhum deixaria o canto esquerdo vazio sem motivo. */
   function rodape(s, texto, n) {
-    s.addText(texto, { x: 0.5, y: 5.05, w: 9, h: 0.3, fontSize: 10, color: C.fraco });
+    var rot = _narrativa ? NARR.rotulo(_narrativa.ato) : null;
+    if (!rot) {
+      s.addText(texto, { x: 0.5, y: 5.05, w: 9, h: 0.3, fontSize: 10, color: C.fraco });
+      return;
+    }
+    s.addText([
+      { text: rot.n, options: { color: C.texto, bold: true } },
+      { text: '   ' + rot.titulo, options: { color: C.fraco } },
+    ], { x: 0.5, y: 5.05, w: 5.4, h: 0.3, fontSize: 9, charSpacing: 1 });
+    s.addText(texto, { x: 5.4, y: 5.05, w: 4.1, h: 0.3, fontSize: 10,
+                       color: C.fraco, align: 'right' });
   }
 
   // A CAPA DA CASA. O deck abria com uma faixa azul e texto — generico, e nada
@@ -2083,33 +2130,57 @@
     pptx.author = 'Roadmap de Melhorias';
     pptx.title = d.titulo + ' — ' + d.periodo;
 
-    var p = 0;
+    _narrativa = null;
     slideCapa(pptx, d);
 
-    /* ─── ATO 1 · ONDE ESTAMOS ────────────────────────────────────────────
+    /* ─── O ROTEIRO, E NÃO A MONTAGEM DIRETA ──────────────────────────────
+     *
+     * Até aqui cada seção desenhava o próprio slide na hora em que a condição
+     * dava verdadeira. Isso bastava enquanto o deck era uma lista; deixou de
+     * bastar quando ele passou a ser uma conversa dividida em atos, porque um
+     * ato precisa saber QUANTAS páginas tem antes de a primeira ser desenhada:
+     * o divisor anuncia o tamanho e o trilho do topo mostra o peso de cada
+     * capítulo. Nenhum dos dois pode ser calculado depois.
+     *
+     * Então a montagem virou duas passadas. Aqui embaixo, cada seção declara a
+     * CENA — o ato a que pertence e como se desenha — e nada é desenhado. Lá no
+     * fim, com o roteiro inteiro na mão, os atos vazios somem, o trilho ganha as
+     * proporções e cada ato é aberto pelo seu divisor.
+     *
+     * A ORDEM DAS DECLARAÇÕES CONTINUA SENDO A ORDEM DO DECK. Cada ato é um
+     * trecho contíguo desta lista, e agrupar por ato preserva a sequência que
+     * foi discutida slide a slide nos comentários abaixo. Se um dia uma cena for
+     * declarada fora do bloco do seu ato, ela salta de lugar no deck — há
+     * invariante cobrando que os atos apareçam em blocos contíguos.           */
+    var roteiro = [];
+    function cena(ato, desenha) { roteiro.push({ ato: ato, desenha: desenha }); }
+
+    /* ─── ATO 1 · O MÊS ───────────────────────────────────────────────────
        O panorama do mês e, logo em seguida, o mesmo mês dentro da série. Um
        número sozinho não diz se é bom: "114 entraram" só ganha sentido ao lado
        dos 110 de julho e dos 50 de junho. A evolução vinha DEPOIS de prazo e de
        entregas rápidas, e a sala passava três slides sem saber se o mês foi
        típico ou fora da curva.                                                */
-    if (d.secoes.entregas) slideMes(pptx, d, ++p);
+    if (d.secoes.entregas) cena('situacao', function (p) { slideMes(pptx, d, p); });
 
     if (d.secoes.evolucao && (d.evolucao || []).length) {
-      slideEvolucao(pptx, d.evolucao, ++p, d.periodo);
+      cena('situacao', function (p) { slideEvolucao(pptx, d.evolucao, p, d.periodo); });
     }
 
-    /* ─── ATO 2 · ONDE A CAPACIDADE FOI ───────────────────────────────────
+    /* ─── ATO 2 · PARA ONDE FOI ───────────────────────────────────────────
        O corte que a diretoria já lê no painel aprovado. Responde "em que o mês
        foi gasto" antes de o deck cobrar prazo — porque cobrar prazo sem mostrar
        no que o time esteve é cobrar no escuro.                               */
-    if (d.secoes.pipelines && d.pipelines) slidePipelines(pptx, d.pipelines, ++p, d.periodo);
+    if (d.secoes.pipelines && d.pipelines) {
+      cena('capacidade', function (p) { slidePipelines(pptx, d.pipelines, p, d.periodo); });
+    }
 
     /* OS PROJETOS VÊM LOGO DEPOIS DAS FRENTES — pedido do Fernando, e a ordem tem
        lógica: a frente diz EM QUE o mês foi gasto, o projeto diz PARA QUÊ. Uma
        pergunta puxa a outra, e separá-las por cinco slides obrigava a sala a
        lembrar do número anterior. */
     if (d.secoes.projetos && (d.projetos || []).length) {
-      slideProjetos(pptx, d.projetos, ++p, d.periodo);
+      cena('capacidade', function (p) { slideProjetos(pptx, d.projetos, p, d.periodo); });
     }
 
     /* OS PONTOS FECHAM O ATO DA CAPACIDADE. Frente, projeto e ponto respondem a
@@ -2120,51 +2191,56 @@
        pergunta que se faz primeiro; "onde os 849 foram gastos" e a seguinte. Na
        ordem inversa, a sala ve a distribuicao sem saber se o mes foi bom. */
     if (d.secoes.capacidade && d.capacidade && (d.capacidade.devs || []).length) {
-      slideCapacidade(pptx, d.capacidade, ++p, d.periodo);
+      cena('capacidade', function (p) { slideCapacidade(pptx, d.capacidade, p, d.periodo); });
     }
     var cortesP = cortesDePontos(d.secoes);
     if (d.pontos && d.pontos.total > 0) {
-      if (cortesP.semana) slidePontos(pptx, d.pontos, ++p, d.periodo);    // por semana
-      if (cortesP.dev) slidePontosDev(pptx, d.pontos, ++p, d.periodo);    // por desenvolvedor
-      if (cortesP.tema) slidePontos2(pptx, d.pontos, ++p, d.periodo);     // por assunto
+      // por semana, por desenvolvedor, por assunto
+      if (cortesP.semana) cena('capacidade', function (p) { slidePontos(pptx, d.pontos, p, d.periodo); });
+      if (cortesP.dev) cena('capacidade', function (p) { slidePontosDev(pptx, d.pontos, p, d.periodo); });
+      if (cortesP.tema) cena('capacidade', function (p) { slidePontos2(pptx, d.pontos, p, d.periodo); });
     }
 
-    /* ─── ATO 3 · CUMPRIMOS O COMBINADO? ─────────────────────────────────
+    /* ─── ATO 3 · O COMBINADO ────────────────────────────────────────────
        A pergunta que a diretoria faz. Vem depois de "onde a capacidade foi", e
        fecha com as entregas rápidas — que é onde o time responde.            */
     if (d.secoes.prazo && d.prazo.medidas) {
-      slidePrazo(pptx, d, ++p);
+      cena('combinado', function (p) { slidePrazo(pptx, d, p); });
 
       if (d.prazo.atrasadas.length) {
-        var s = slideTitulo(pptx, 'Onde escapou do prazo',
-          d.prazo.atrasadas.length + ' entregas, atraso médio de ' + d.prazo.diasMedio +
-          (d.prazo.diasMedio === 1 ? ' dia' : ' dias'), ++p, d.periodo);
-        tabela(pptx, s, ['Demanda', 'Responsável', 'Prazo → conclusão', 'Atraso'],
-          d.prazo.atrasadas.map(function (a) {
-            return [corta(a.titulo, 44), a.dev, a.datas,
-                    { text: '+' + a.dias + 'd', options: { color: C.vermelho, bold: true } }];
-          }), { colW: [3.9, 1.6, 2.1, 1.0], rotuloSobra: ' entregas com atraso' });
-        rodape(s, d.periodo, p);
+        cena('combinado', function (p) {
+          var s = slideTitulo(pptx, 'Onde escapou do prazo',
+            d.prazo.atrasadas.length + ' entregas, atraso médio de ' + d.prazo.diasMedio +
+            (d.prazo.diasMedio === 1 ? ' dia' : ' dias'), p, d.periodo);
+          tabela(pptx, s, ['Demanda', 'Responsável', 'Prazo → conclusão', 'Atraso'],
+            d.prazo.atrasadas.map(function (a) {
+              return [corta(a.titulo, 44), a.dev, a.datas,
+                      { text: '+' + a.dias + 'd', options: { color: C.vermelho, bold: true } }];
+            }), { colW: [3.9, 1.6, 2.1, 1.0], rotuloSobra: ' entregas com atraso' });
+          rodape(s, d.periodo, p);
+        });
       }
     }
 
     // As entregas rápidas fecham o ato: e o contraponto ao slide de atraso — o
     // mesmo time que escapou do prazo em algumas entregou outras em dois dias.
     if (d.secoes.rapidas && d.rapidas && (d.rapidas.itens || []).length) {
-      slideRapidas(pptx, d.rapidas, ++p, d.periodo, d.anterior);
+      cena('combinado', function (p) { slideRapidas(pptx, d.rapidas, p, d.periodo, d.anterior); });
     }
 
-    /* ─── ATO 4 · EM QUE TRABALHAMOS ──────────────────────────────────────
+    /* ─── ATO 4 · QUEM PEDIU, QUEM FEZ ────────────────────────────────────
        Área e quem pediu são a mesma pergunta em dois recortes: onde o esforço foi
        aplicado. O PROJETO SAIU DAQUI e subiu para junto das frentes — a frente diz
        em que o mês foi gasto e o projeto diz para quê, e as duas perguntas se
        puxam.                                                                   */
-    if (d.secoes.areas && (d.areas || []).length) slideAreas(pptx, d.areas, ++p, d.periodo);
+    if (d.secoes.areas && (d.areas || []).length) {
+      cena('esforco', function (p) { slideAreas(pptx, d.areas, p, d.periodo); });
+    }
 
     // Quem pediu fecha o ato: o time e uma leitura; a area cliente e outra, e e a que diz
     //    para onde a capacidade foi de fato.
     if (d.secoes.solicit && d.solicitantes) {
-      slideBarras(pptx, {
+      cena('esforco', function (p) { slideBarras(pptx, {
         titulo: 'Quem mais pediu', sub: 'demandas concluídas no período, por solicitante',
         itens: d.solicitantes.itens, max: 5, cor: SIGNIFICADO.neutro,
         rotuloSobra: ' solicitantes',
@@ -2175,68 +2251,78 @@
           ? d.solicitantes.sem + ' de ' + d.solicitantes.total + ' sem solicitante registrado'
           : '',
         vazio: 'Nenhuma entrega do período tem solicitante registrado.',
-      }, ++p, d.periodo);
+      }, p, d.periodo); });
     }
 
-    /* ─── ATO 5 · QUEM FEZ ────────────────────────────────────────────────
-       O agregado primeiro, o detalhe depois: o time inteiro, a distribuição por
+    /* O agregado primeiro, o detalhe depois: o time inteiro, a distribuição por
        pessoa e, no fim, a linha do tempo dos três primeiros. Este bloco estava
        partido ao meio por "onde atuamos" e "quem pediu".                      */
     if (d.secoes.time && d.time) {
       // A quebra das SAIDAS, e nao das entradas: o slide fala do que o time
       // entregou, e o que entrou na fila e assunto do slide do mes.
-      slideTime(pptx, d.time, ++p, d.periodo, d.ausencias, d.capacidade,
-                (d.quebra || {}).saidas);
+      cena('esforco', function (p) {
+        slideTime(pptx, d.time, p, d.periodo, d.ausencias, d.capacidade,
+                  (d.quebra || {}).saidas);
+      });
     }
 
     if (d.secoes.grafico && (d.porDev || []).length) {
-      slideBarras(pptx, {
-        titulo: 'Entregas por desenvolvedor', sub: 'demandas concluídas no período',
-        itens: d.porDev, cor: SIGNIFICADO.neutro, rotuloSobra: ' pessoas', rotuloExtra: 'pts',
-      }, ++p, d.periodo);
+      cena('esforco', function (p) {
+        slideBarras(pptx, {
+          titulo: 'Entregas por desenvolvedor', sub: 'demandas concluídas no período',
+          itens: d.porDev, cor: SIGNIFICADO.neutro, rotuloSobra: ' pessoas', rotuloExtra: 'pts',
+        }, p, d.periodo);
+      });
     }
 
     // O mês de cada um dos três primeiros devs, em linha do tempo.
     if (d.secoes.ganttdev) {
       (d.ganttDev || []).forEach(function (dv) {
-        if ((dv.barras || []).length) slideGanttDev(pptx, dv, ++p, d.periodo);
+        if ((dv.barras || []).length) {
+          cena('esforco', function (p) { slideGanttDev(pptx, dv, p, d.periodo); });
+        }
       });
     }
 
     // As imagens seguem suportadas para quem quiser mandar um grafico pronto,
     // mas nenhum slide do deck depende delas hoje.
     (d.imagens || []).forEach(function (img) {
-      var si = slideTitulo(pptx, img.titulo, img.sub || '', ++p, d.periodo);
-      si.addImage({ data: img.png, x: 0.7, y: 1.5, w: 8.6, h: 3.4 });
-      rodape(si, d.periodo, p);
+      cena('esforco', function (p) {
+        var si = slideTitulo(pptx, img.titulo, img.sub || '', p, d.periodo);
+        si.addImage({ data: img.png, x: 0.7, y: 1.5, w: 8.6, h: 3.4 });
+        rodape(si, d.periodo, p);
+      });
     });
 
-    /* ─── ATO 6 · O QUE DEPENDE DE DECISÃO ───────────────────────────────
+    /* ─── ATO 5 · O QUE VEM ──────────────────────────────────────────────
        A única parte do deck que pede ação de quem está na sala. Vem depois de
        tudo que explica o mês, e antes do fecho.                              */
     if (d.secoes.riscos && (d.riscos.pausadas.length || d.riscos.semPonto)) {
-      var sr = slideTitulo(pptx, 'O que está travado', 'depende de decisão fora do time',
-                           ++p, d.periodo);
-      if (d.riscos.pausadas.length) {
-        tabela(pptx, sr, ['Demanda', 'Parada há', 'Motivo'],
-          d.riscos.pausadas.map(function (x) {
-            return [corta(x.titulo, 40),
-                    { text: x.dias + 'd', options: { color: SIGNIFICADO.atencao } },
-                    corta(x.motivo, 46)];
-          }), { colW: [3.6, 1.0, 4.0], rotuloSobra: ' pausadas' });
-      } else {
-        sr.addText('Nenhuma demanda pausada.', { x: 0.7, y: 1.7, w: 8.6, h: 0.4,
-                                                 fontSize: 15, color: C.fraco });
-      }
-      rodape(sr, d.periodo, p);
+      cena('rumo', function (p) {
+        var sr = slideTitulo(pptx, 'O que está travado', 'depende de decisão fora do time',
+                             p, d.periodo);
+        if (d.riscos.pausadas.length) {
+          tabela(pptx, sr, ['Demanda', 'Parada há', 'Motivo'],
+            d.riscos.pausadas.map(function (x) {
+              return [corta(x.titulo, 40),
+                      { text: x.dias + 'd', options: { color: SIGNIFICADO.atencao } },
+                      corta(x.motivo, 46)];
+            }), { colW: [3.6, 1.0, 4.0], rotuloSobra: ' pausadas' });
+        } else {
+          sr.addText('Nenhuma demanda pausada.', { x: 0.7, y: 1.7, w: 8.6, h: 0.4,
+                                                   fontSize: 15, color: C.fraco });
+        }
+        rodape(sr, d.periodo, p);
+      });
     }
 
-    /* ─── ATO 7 · O FECHO ─────────────────────────────────────────────────
+    /* ─── O FECHO, dentro do mesmo ato ────────────────────────────────────
        Os destaques, o que vem e a frase de quem apresenta. Eles saiam no meio do
        deck, antes dos graficos — mas quem apresenta usa as ultimas paginas para
        as entregas que importam, e slide de encerramento no meio e slide que a
        sala nao leva embora.                                                   */
     (d.destaques || []).forEach(function (m) {
+      cena('rumo', function (p) {
       var s = slideBase(pptx);
       s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.verde } });
       s.addText(m.codigo || '', { x: 0.7, y: 0.52, w: 8.6, h: 0.3, fontSize: 13, color: C.verde, bold: true });
@@ -2261,12 +2347,14 @@
                   m.pontos ? m.pontos + ' pontos' : ''].filter(Boolean).join('   ·   ');
       if (meta) s.addText(meta, { x: 0.7, y: 4.32, w: 8.6, h: 0.3, fontSize: 12,
                                   color: C.fraco, wrap: false });
-      rodape(s, 'Destaque · ' + d.periodo, ++p);
+      rodape(s, 'Destaque · ' + d.periodo, p);
+      });
     });
 
     // 8. O que vem. Terminar em compromisso, não em número.
     if (d.secoes.proximo) {
-      var sp = slideTitulo(pptx, 'O que vem', d.proximo.sub || '', ++p, d.periodo);
+      cena('rumo', function (p) {
+      var sp = slideTitulo(pptx, 'O que vem', d.proximo.sub || '', p, d.periodo);
       if (d.proximo.itens.length) {
         tabela(pptx, sp, ['Demanda', 'Responsável', 'Entrega'],
           d.proximo.itens.map(function (x) {
@@ -2277,11 +2365,13 @@
           { x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
       }
       rodape(sp, d.periodo, p);
+      });
     }
 
     // 9. A mensagem de quem apresenta. Fica por último porque é a frase que a
     //    sala leva embora, e ela é escrita por uma pessoa — não calculada.
     if (d.mensagem || (d.frentesAtraso || []).length) {
+      cena('rumo', function (p) {
       var sm = slideBase(pptx);
       sm.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.azul } });
       if (d.mensagem) {
@@ -2308,8 +2398,34 @@
           }
         });
       }
-      rodape(sm, d.periodo, ++p);
+      rodape(sm, d.periodo, p);
+      });
     }
+
+    /* ─── A SEGUNDA PASSADA: OS ATOS ─────────────────────────────────────
+     *
+     * Com o roteiro pronto, os atos sem cena somem, o trilho ganha a proporção
+     * de cada capítulo, e cada ato é aberto pelo divisor com a sua pergunta.
+     *
+     * `secoes.atos === false` desliga a moldura narrativa e devolve o deck
+     * corrido de antes. Existe porque há um uso legítimo para isso — mandar por
+     * e-mail as páginas de dado sem os divisores —, e porque a chave ausente
+     * tem que significar LIGADO: toda apuração congelada guarda o `secoes` do
+     * dia em que o mês fechou, e nenhuma delas conhece esta chave. */
+    var plano = NARR.plano(roteiro, d.secoes.atos !== false);
+    var p = 0;
+    plano.atos.forEach(function (a, i) {
+      _narrativa = { plano: plano, indice: i, ato: a };
+      if (plano.divide) {
+        var sd = slideBase(pptx);
+        NARR.divisor(sd, pptx, { ato: a, cores: C, paginas: plano.paginas[i] - 1 });
+        rodape(sd, d.periodo, ++p);
+      }
+      roteiro.forEach(function (c) { if (c.ato === a.chave) c.desenha(++p); });
+    });
+    /* ZERADO NA SAÍDA. O estado é de módulo, e um deck seguinte gerado por outro
+       caminho (o kit, em Relatórios) herdaria o ato do último slide deste. */
+    _narrativa = null;
 
     return pptx;
   }
