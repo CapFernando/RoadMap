@@ -1517,6 +1517,11 @@
         <a href="projetos.html" class="btn btn-secondary" target="_blank">📁 Projetos por Tema</a>
         <button class="btn btn-secondary" onclick="apresAbrir()"
                 title="Monta um .pptx executivo com o que você escolher">📊 Apresentação</button>
+        <!-- O CSV PARA O METABASE fica ao lado do gerador do deck, e não numa aba
+             de exportação: os dois respondem à mesma pergunta ("o fechamento
+             deste mês"), e o período dos dois é o mesmo filtro logo acima. -->
+        <button class="btn btn-secondary" id="ger-csv-btn" onclick="baixarCsvMetabase()"
+                title="Uma linha por demanda × pessoa, com pontos, horas, prazo, frente e projeto — para subir no Metabase">📥 CSV para o Metabase</button>
         <!-- O CADEADO FICA AO LADO DO BOTAO QUE GERA O DECK, e nao numa aba de
              configuracao: a pergunta "este mes ja esta fechado?" se faz no
              momento de apresentar, e uma marca que mora longe do gerador nao e
@@ -8300,6 +8305,160 @@ function relRaizNome(nome) {
   return (window.catalogoRaiz ? window.catalogoRaiz(nome) : String(nome || '')) || '—';
 }
 
+
+/* ═══ A BASE PARA O METABASE ════════════════════════════════════════════════
+ *
+ * "Me foi orientado a fazer uso [do Metabase] para padronizar o relatório."
+ *
+ * O Metabase lê BANCO DE DADOS — a lista oficial de drivers é Postgres, MySQL,
+ * SQL Server, Oracle, BigQuery, Snowflake e afins. Não há driver de REST nem de
+ * JSON. Os dados desta ferramenta são um JSON num repositório privado do GitHub,
+ * servido pelo Worker: o Metabase não alcança isso de jeito nenhum.
+ *
+ * O que ele alcança sem infraestrutura nova é CSV: a instância aceita upload de
+ * até 50 MB, cria um "model" em cima dele, e no mês seguinte o mesmo arquivo
+ * pode ser REPLACE — os gráficos e o dashboard construídos por cima continuam
+ * de pé e passam a mostrar o mês novo. É por aí que dá para começar hoje.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O GRÃO É (DEMANDA × PESSOA), e essa é a única decisão de modelagem aqui.
+ *
+ * Uma demanda pode ter duas pessoas, e elas podem ser de frentes diferentes.
+ * Com uma linha por demanda, "entregas por dev" e "horas por frente" não têm
+ * como sair certos. Com uma linha por par, saem — e a contagem de demandas
+ * continua certa desde que se conte `count(distinct demanda_id)`, e não linhas.
+ *
+ * Por isso cada linha leva `peso` = 1/nº de pessoas, e os dois lados de cada
+ * medida: `pontos` (o valor cheio da demanda) e `pontos_rateados` (a fatia
+ * daquela pessoa). Somar a coluna cheia infla; somar a rateada fecha com o
+ * total do mês. As duas existem porque as duas perguntas existem.
+ *
+ * AS CONTAS SÃO AS MESMAS DO DECK — `prazoClassifica`, `horasDoMes`,
+ * `PIPELINES.doDev`, `catalogoRaiz`. Um CSV com regra própria seria a quinta
+ * implementação do prazo nesta base, e a primeira que ninguém confere porque
+ * mora dentro de um arquivo que só o Metabase lê. */
+function csvMetabase(de, ate) {
+  const api = window.PIPELINES;
+  const perfis = state.devs_perfil || {};
+  const vivas = (state.melhorias || []).filter(m => m && !m.oculto && !m.mesclado_em);
+  const conc = vivas.filter(m => FILA.ehEntregaDe(m, de, ate));
+  // O MESMO rateio do slide das frentes, para a hora não divergir.
+  const ratReal = rateiaHoras(conc, m => ({
+    de: String(m.inicio || '').slice(0, 10),
+    ate: String(m.concluido_em || m.entrega || '').slice(0, 10),
+  }), de, ate);
+  const plan = rateiaHoras(conc, m => ({
+    de: String(m.inicio || '').slice(0, 10),
+    ate: String(m.entrega || '').slice(0, 10),
+  }), de, ate);
+
+  const dias = (a, b) => {
+    const x = Date.parse(String(a || '').slice(0, 10) + 'T00:00:00Z');
+    const y = Date.parse(String(b || '').slice(0, 10) + 'T00:00:00Z');
+    return (isFinite(x) && isFinite(y) && y >= x) ? Math.round((y - x) / 86400000) : '';
+  };
+  const TIPO = { evolucao: 'Evolução', sustentacao: 'Sustentação' };
+  const PRAZO = { no_prazo: 'No prazo', atraso: 'Com atraso',
+                  sem_prazo: 'Sem prazo combinado', sem_conclusao: 'Sem data de conclusão' };
+
+  const linhas = [];
+  conc.forEach(m => {
+    const devs = api ? api.devsDaDemanda(m) : [];
+    const alvos = devs.length ? devs : [''];
+    const q = alvos.length;
+    const pontos = Number(m.poker_pontos) || 0;
+    const hReal = horasDoMes(m, de, ate, ratReal);
+    const hPlan = plan.get(m.id) || 0;
+    const cl = prazoClassifica(m) || {};
+    const pj = m.projeto_id
+      ? (state.projetos || []).find(x => String(x.id) === String(m.projeto_id)) : null;
+    const tema = (state.temas || []).find(x => String(x.id) === String(m.tema_id));
+    alvos.forEach(nome => {
+      linhas.push({
+        demanda_id: m.id || '',
+        codigo: m.codigo || '',
+        titulo: m.titulo || '',
+        sistema: relRaizDe(m),
+        tema: tema ? tema.nome : '',
+        frente: (nome && api) ? (api.doDev(nome, perfis) || api.NAO_CLASSIFICADO)
+                              : (api ? api.NAO_CLASSIFICADO : ''),
+        pessoa: nome,
+        pessoas_na_demanda: q,
+        peso: Math.round(1 / q * 10000) / 10000,
+        projeto_codigo: pj ? (pj.codigo || '') : '',
+        projeto: pj ? (pj.nome || '') : '',
+        tipo: TIPO[String(m.tipo || '')] || '',
+        etapa: m.status_planejamento || '',
+        solicitante: m.solicitante || '',
+        area: m.area || '',
+        pontos: pontos,
+        pontos_rateados: Math.round(pontos / q * 100) / 100,
+        horas_realizadas: Math.round(hReal * 100) / 100,
+        horas_realizadas_rateadas: Math.round(hReal / q * 100) / 100,
+        horas_planejadas: Math.round(hPlan * 100) / 100,
+        horas_planejadas_rateadas: Math.round(hPlan / q * 100) / 100,
+        criado_em: String(m.criado_em || '').slice(0, 10),
+        inicio: String(m.inicio || '').slice(0, 10),
+        prazo_combinado: String(m.entrega || '').slice(0, 10),
+        concluido_em: String(m.concluido_em || '').slice(0, 10),
+        prazo: PRAZO[String(cl.tipo || '')] || '',
+        dias_atraso: cl.tipo === 'atraso' ? (cl.dias || 0) : 0,
+        dias_execucao: dias(m.inicio, m.concluido_em),
+        dias_ate_entregar: dias(m.criado_em, m.concluido_em),
+        mes_referencia: String(de).slice(0, 7),
+      });
+    });
+  });
+  return linhas;
+}
+
+/* CSV NO FORMATO QUE O METABASE ESPERA: vírgula como separador, ponto como
+   decimal, aspas duplas escapadas dobrando, e UTF-8 COM BOM.
+   O BOM existe porque sem ele o Excel abre o arquivo em ANSI e "Cobrança" vira
+   "CobranÃ§a" — e quem confere o CSV antes de subir abre no Excel. O Metabase
+   ignora o BOM. */
+function csvTexto(linhas) {
+  if (!linhas.length) return '';
+  const cols = Object.keys(linhas[0]);
+  const cel = (v) => {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  /* O BOM VAI COMO ESCAPE, e nao como o caractere de verdade: escrito
+     literalmente ele e INVISIVEL no editor, e a proxima pessoa que mexer
+     nesta linha o apaga sem saber que apagou. */
+  return '\uFEFF' + [cols.join(',')]
+    .concat(linhas.map(l => cols.map(c => cel(l[c])).join(','))).join('\n');
+}
+
+async function baixarCsvMetabase() {
+  const btn = document.getElementById('ger-csv-btn');
+  const rot = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Montando…'; }
+  try {
+    const { mes, ano, iso } = apresMesAno();
+    const fim = iso + '-' + String(new Date(ano, mes, 0).getDate()).padStart(2, '0');
+    const linhas = csvMetabase(iso + '-01', fim);
+    if (!linhas.length) {
+      toast('Nenhuma entrega no período — o arquivo sairia vazio.', 'err');
+      return;
+    }
+    const nome = 'roadmap-' + iso + '.csv';
+    const url = URL.createObjectURL(new Blob([csvTexto(linhas)],
+      { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const demandas = new Set(linhas.map(l => l.demanda_id)).size;
+    toast('📥 ' + nome + ': ' + demandas + ' demandas em ' + linhas.length + ' linhas.', 'ok');
+  } catch (e) {
+    toast('Não consegui gerar o CSV: ' + e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = rot; }
+  }
+}
 
 /** A raiz do tema de uma demanda. */
 function relRaizDe(m) {

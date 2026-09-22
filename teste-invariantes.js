@@ -15215,6 +15215,85 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'frente sem entrega no mes nao ganha slide de detalhe');
   }
 
+  /* === A BASE PARA O METABASE ==========================================
+
+     "Me foi orientado a fazer uso [do Metabase] para padronizar o relatorio."
+
+     O Metabase le BANCO DE DADOS — a lista oficial de drivers e Postgres, MySQL,
+     SQL Server, Oracle, BigQuery, Snowflake e afins, e nao ha driver de REST nem
+     de JSON. Os dados desta ferramenta sao um JSON num repositorio privado
+     servido pelo Worker, e o Metabase nao alcanca isso. O que ele alcanca sem
+     infraestrutura nova e CSV. */
+  sec('Metabase: a base que ele consegue ler');
+  {
+    const CSV = corpo(ADMIN, 'function csvMetabase(de, ate) {') || '';
+    ok(!!CSV, 'a exportacao existe');
+
+    /* ── O GRAO E (DEMANDA × PESSOA) ──
+       Uma demanda pode ter duas pessoas, e elas podem ser de frentes diferentes.
+       Com uma linha por demanda, "entregas por dev" e "horas por frente" nao tem
+       como sair certos. */
+    ok(/alvos\.forEach\(function \(nome\)/.test(CSV) || /alvos\.forEach\(nome =>/.test(CSV),
+       'ha uma linha por pessoa da demanda, e nao uma por demanda');
+    ok(/peso: Math\.round\(1 \/ q \* 10000\) \/ 10000/.test(CSV),
+       'e cada linha carrega o peso dela — somar linha conta errado, somar peso ' +
+       'conta certo');
+    ok(/demanda_id: m\.id \|\| ''/.test(CSV),
+       'com o id da demanda, para contar `distinct` em vez de linhas');
+
+    /* ── OS DOIS LADOS DE CADA MEDIDA ──
+       Somar a coluna cheia infla (a mesma demanda aparece duas vezes); somar a
+       rateada fecha com o total do mes. As duas perguntas existem, entao as duas
+       colunas existem. */
+    [['pontos', 'pontos_rateados'],
+     ['horas_realizadas', 'horas_realizadas_rateadas'],
+     ['horas_planejadas', 'horas_planejadas_rateadas']].forEach(([cheio, rat]) => {
+      ok(CSV.indexOf(cheio + ':') > 0 && CSV.indexOf(rat + ':') > 0,
+         'cada medida sai cheia e rateada: ' + cheio);
+    });
+
+    /* ── AS CONTAS SAO AS MESMAS DO DECK ──
+       Um CSV com regra propria seria a quinta implementacao do prazo nesta base,
+       e a primeira que ninguem confere porque mora num arquivo que so o Metabase
+       le. Quando a regra mudar aqui, ela muda la tambem. */
+    ok(/FILA\.ehEntregaDe\(m, de, ate\)/.test(CSV),
+       'o recorte do periodo e o mesmo `fila.js` do deck');
+    ok(/prazoClassifica\(m\)/.test(CSV), 'o prazo e o mesmo `prazoClassifica`');
+    ok(/horasDoMes\(m, de, ate, ratReal\)/.test(CSV) && /rateiaHoras\(/.test(CSV),
+       'a hora e o mesmo rateio por dia util das frentes');
+    ok(/api\.doDev\(nome, perfis\)/.test(CSV), 'a frente e a mesma `pipelines.js`');
+    ok(/relRaizDe\(m\)/.test(CSV), 'e o sistema e a mesma regra de raiz do catalogo');
+
+    /* ── O CSV E LIDO POR DUAS COISAS, E UMA DELAS E O EXCEL ──
+       Sem BOM o Excel abre em ANSI e "Cobranca" vira "CobranÃ§a" — e quem confere
+       o arquivo antes de subir abre no Excel. O Metabase ignora o BOM. */
+    const TXT = corpo(ADMIN, 'function csvTexto(linhas) {') || '';
+    ok(/'\\uFEFF' \+/.test(TXT), 'o arquivo sai com BOM, para o Excel nao corromper acento');
+
+    /* E O ESCAPE E CONFERIDO EXECUTANDO, porque titulo de demanda tem virgula e
+       aspas com frequencia — "Ajuste no campo "valor", do cedente" quebraria o
+       arquivo em colunas erradas sem ninguem notar ate o grafico sair torto. */
+    const csvTxt = new Function(TXT + '; return csvTexto;')();
+    const saida = csvTxt([{ a: 'sem nada', b: 'com, virgula', c: 'com "aspas"', d: 3 }]);
+    const linhas = saida.replace('\uFEFF', '').split('\n');
+    ok(linhas[0] === 'a,b,c,d', 'o cabecalho sai com o nome das colunas', linhas[0]);
+    const ESPERADO_CSV = 'sem nada,' + '"com, virgula","com ""aspas""",3';
+    ok(linhas[1] === ESPERADO_CSV,
+       'e virgula e aspas no dado nao quebram o arquivo', linhas[1]);
+    ok(csvTxt([]) === '', 'e sem linha nenhuma ele nao inventa cabecalho');
+
+    /* ── O BOTAO EXISTE E LE O PERIODO DA ABA ──
+       Um segundo seletor de periodo divergiria do de cima no pior momento. */
+    ok(/id="ger-csv-btn"/.test(ADMIN) && /onclick="baixarCsvMetabase\(\)"/.test(ADMIN),
+       'e ha um botao para baixar, ao lado do que gera o deck');
+    const BX = corpo(ADMIN, 'async function baixarCsvMetabase() {') || '';
+    ok(/apresMesAno\(\)/.test(BX),
+       'que usa o MESMO periodo do filtro da aba, e nao um seletor proprio');
+    ok(/Nenhuma entrega no período/.test(BX),
+       'e avisa quando o periodo esta vazio, em vez de baixar um arquivo so com ' +
+       'cabecalho');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
