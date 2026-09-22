@@ -13986,6 +13986,117 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'grafico@' + iG + ' gerador@' + iA);
   }
 
+  /* === O FUNDO DE CURVAS DE NIVEL =======================================
+
+     "Necessito desse fundo."  E logo depois: "o fundo nao e so p capa, e
+     geral."
+
+     A referencia e o quase-preto com curvas topograficas finas da apresentacao
+     de resultados. Aqui ele e DESENHADO — a capa que ja existe carrega 260KB de
+     base64 para UM slide, e um arquivo de imagem em todos os vinte multiplicaria
+     isso no .pptx. */
+  sec('Deck: o fundo de curvas de nivel');
+  {
+    const DF = require('./deck-fundo.js');
+
+    /* ── AS CURVAS SAO NIVEIS DE UM RELEVO, e e isso que faz o desenho parecer
+       topografico: curva de nivel nunca cruza outra e se aninha sozinha. Traco
+       a esmo produz linhas que se cortam, e o olho reconhece isso como errado
+       sem saber dizer por que. ── */
+    ok(typeof DF.relevo === 'function', 'o relevo existe, e as curvas saem dele');
+    ok(Math.abs(DF.relevo(0, 0) - DF.relevo(0, 0)) < 1e-12,
+       'e ele e uma funcao pura: o mesmo ponto da sempre o mesmo valor');
+    /* A AMPLITUDE CABE NA FAIXA VARRIDA. Os niveis vao de -2 a 2; se o relevo
+       passasse muito disso, as curvas dos extremos nao existiriam e a textura
+       sairia rala num canto e densa no outro. */
+    let minR = Infinity, maxR = -Infinity;
+    for (let x = 0; x < 1920; x += 37) {
+      for (let y = 0; y < 1081; y += 37) {
+        const v = DF.relevo(x, y);
+        if (v < minR) minR = v;
+        if (v > maxR) maxR = v;
+      }
+    }
+    ok(minR < -1.5 && maxR > 1.5,
+       'o relevo cobre a faixa varrida pelos niveis — textura pareja na tela toda',
+       minR.toFixed(2) + ' a ' + maxR.toFixed(2));
+
+    /* ── A COR DA CURVA SAI DO FUNDO DO DECK ──
+       Um PNG fixo teria o proprio preto, e "quase a mesma cor" e o que produz
+       aquele retangulo visivel que o comentario da capa ja registra ter custado
+       caro. */
+    const lum = (h) => {
+      const c = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16) / 255)
+        .map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    };
+    const razao = (a, b) => {
+      const l1 = lum(a), l2 = lum(b);
+      return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    };
+    const rgbHex = (css) => {
+      const m = String(css).match(/(\d+),\s*(\d+),\s*(\d+)/);
+      return m ? [m[1], m[2], m[3]].map(v => Number(v).toString(16).padStart(2, '0')).join('') : '';
+    };
+    const curva = rgbHex(DF.clareia('070B16', 16));
+    ok(!!curva, 'a cor da curva e derivada do fundo', '#' + curva);
+
+    /* ── E ELA E TEXTURA, E NAO FORMA ──
+       `trend-emphasis` do padrao citado diz para nao por textura por cima do
+       dado. Este fundo respeita por CONTRASTE: a curva fica perto demais do
+       fundo para competir com qualquer coisa. */
+    const rCurva = razao(curva, '070B16');
+    ok(rCurva < 1.3,
+       'a curva fica abaixo de 1,3:1 do fundo — visivel como textura, invisivel ' +
+       'como forma', rCurva.toFixed(3) + ':1');
+
+    /* ── E O DADO POR CIMA DELA NAO PERDE LEGIBILIDADE ──
+       E a unica pergunta que importa: a textura pode existir se ela nao empurra
+       nenhum numero abaixo do minimo. Medido no PIOR caso, que e o dado sobre a
+       propria linha. */
+    const ruins = [];
+    ['FFFFFF', '4ADE80', 'F87171', '60A5FA', 'FBBF24', 'A78BFA', '8792AD'].forEach(c => {
+      const r = razao(c, curva);
+      if (r < 4.5) ruins.push('#' + c + ' = ' + r.toFixed(2));
+    });
+    ok(ruins.length === 0,
+       'e todo dado sobre a CURVA continua acima de 4.5:1 — a textura nao custa ' +
+       'legibilidade a ninguem', ruins.join(', ') || 'nenhum abaixo');
+
+    /* ── O FUNDO ENTRA EM TODO SLIDE, E PELO `slideBase` ──
+       "O fundo nao e so p capa, e geral." Um slide que o desenhasse por conta
+       propria ficaria de fora no dia em que alguem criasse o proximo. */
+    const base = corpo(APRES, 'function slideBase(pptx) {');
+    ok(!!base && /window\.DECKFUNDO/.test(base),
+       'o fundo entra pelo `slideBase`, por onde TODO slide passa');
+    ok(!!base && /if \(fundo\) s\.addImage/.test(base),
+       'e com reserva: faltando o modulo, o slide sai com o fundo liso de sempre ' +
+       '— ninguem perde numero nenhum');
+    /* SO O CODIGO CONTA. A primeira versao contava `DECKFUNDO` no arquivo todo e
+       achava DOIS — um deles no comentario que EXPLICA a regra. E o mesmo erro
+       que ja me pegou com `Y_TITULO` e com `rp-caixa`. */
+    /* A GARANTIA E "SO DENTRO DO `slideBase`", e nao um NUMERO de ocorrencias.
+       Contar deu errado duas vezes: primeiro achou 2 porque o comentario cita o
+       nome; depois porque a guarda e a chamada ocupam duas linhas do MESMO uso.
+       Contar e fragil; a pergunta certa e ONDE. */
+    const apresSemComent = APRES.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const foraDaBase = apresSemComent.split('DECKFUNDO').length - 1 -
+                       (base.replace(/\/\*[\s\S]*?\*\//g, '').split('DECKFUNDO').length - 1);
+    ok(foraDaBase === 0,
+       'e nenhum slide o desenha por conta propria — todo uso mora no `slideBase`',
+       foraDaBase + ' uso(s) fora dele');
+
+    /* ── GERADO UMA VEZ ──
+       Sao vinte slides pedindo o mesmo fundo. Sem cache, o .pptx levaria vinte
+       copias do mesmo PNG. */
+    ok(/var _cache = null;/.test(fs.readFileSync('deck-fundo.js', 'utf8')) &&
+       /if \(_cache && _cache\.fundo === fundo\) return _cache\.dado;/
+         .test(fs.readFileSync('deck-fundo.js', 'utf8')),
+       'o PNG e gerado uma vez por deck, e nao por slide');
+
+    ok(/<script src="deck-fundo\.js\?v=/.test(ADMIN), 'e o admin carrega o modulo');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

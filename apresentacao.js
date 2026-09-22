@@ -197,6 +197,23 @@
   function slideBase(pptx) {
     var s = pptx.addSlide();
     s.background = { color: C.fundo };
+    /* AS CURVAS DE NÍVEL, EM TODO SLIDE — "o fundo não é só p capa, é geral".
+     *
+     * Desenhadas, e não um arquivo de imagem: ver `deck-fundo.js`. A cor sai da
+     * paleta do deck, então não há duas ideias de preto no mesmo arquivo.
+     *
+     * COM RESERVA, e aqui ela é certa. Se o módulo faltar, o slide sai com o
+     * fundo liso de sempre — que é o que ele tinha até hoje, e ninguém perde
+     * número nenhum. É o oposto do caso da gramática dos gráficos, onde faltar
+     * significa metade dos dados sem desenho.
+     *
+     * A CAPA PASSA POR AQUI e a textura fica COBERTA: `slideCapa` desenha a
+     * imagem dela de borda a borda logo em seguida. Não é desperdício de
+     * desenho — o PNG é gerado uma vez por deck e reusado —, e é melhor que uma
+     * exceção: o dia em que a capa perder a imagem, ela cai no fundo certo. */
+    var fundo = (typeof window !== 'undefined' && window.DECKFUNDO)
+      ? window.DECKFUNDO.png({ fundo: C.fundo }) : null;
+    if (fundo) s.addImage({ data: fundo, x: 0, y: 0, w: 10, h: 5.63 });
     return s;
   }
 
