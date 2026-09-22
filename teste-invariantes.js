@@ -13858,6 +13858,134 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o do painel mostra a fita LISA');
   }
 
+  /* === A GRAMATICA UNICA DOS GRAFICOS DO DECK ===========================
+
+     "Necessito de um padrao unico para toda apresentacao na demonstracao
+     grafica."  E: "no grafico mes atual x mes anterior, falta detalhes da
+     evolucao ou involucao. Crescimento e comparativo."
+
+     Veio de uma reuniao de diretoria com muitas criticas, e a instrucao foi
+     seguir `ui-ux-pro-max`. A regra dele que manda aqui e `color-not-only`:
+     nao transmitir informacao so pela cor. */
+  sec('Deck: a gramatica dos graficos');
+  {
+    const DG = require('./deck-grafico.js');
+
+    /* ── O DELTA TEM TRES CANAIS, e e a regra central ──
+       SETA (visivel sem cor) · SINAL (o numero escrito) · COR.
+       Tres porque parte da diretoria le o slide impresso em preto e branco, e
+       daltonismo vermelho-verde atinge 8% dos homens: um "crescemos" que so
+       existe em verde nao foi dito para essas pessoas. */
+    const sobe = DG.delta(109, 75);
+    ok(sobe.seta === '▲' && sobe.sinal === '+34' && sobe.cor === DG.COR.verde,
+       'subir traz seta, sinal E cor — tres canais, e nao so a cor',
+       sobe.seta + ' ' + sobe.sinal + ' ' + sobe.cor);
+    const desce = DG.delta(75, 109);
+    ok(desce.seta === '▼' && desce.sinal === '−34' && desce.cor === DG.COR.vermelho,
+       'e cair, idem');
+    const igual = DG.delta(12, 12);
+    ok(igual.seta === '▬' && igual.cor === DG.COR.fraco,
+       'igual tem glifo proprio — nao e "sem marca", e "nao mudou"');
+    /* A SETA E GLIFO DE TEXTO, e nao um triangulo desenhado: ela precisa
+       acompanhar o tamanho da fonte e sobreviver ao PDF e a impressao. */
+    ok(['▲', '▼', '▬'].every(g => g.length === 1),
+       'as setas sao glifos, e acompanham a fonte');
+
+    /* ── SUBIR NAO E BOM POR SI ──
+       Subir entregas e bom; subir atrasadas e ruim. Quem chama diz o caso. */
+    const atrasoSobe = DG.delta(8, 3, { bomSubir: false });
+    ok(atrasoSobe.seta === '▲' && atrasoSobe.cor === DG.COR.vermelho,
+       'em indicador onde subir e RUIM, a seta sobe e a cor avisa',
+       atrasoSobe.seta + ' ' + atrasoSobe.cor);
+    const atrasoCai = DG.delta(3, 8, { bomSubir: false });
+    ok(atrasoCai.seta === '▼' && atrasoCai.cor === DG.COR.verde,
+       'e cair fica verde — a direcao e a cor dizem coisas diferentes, de proposito');
+
+    /* ── A BASE ZERO NAO VIRA "INFINITO POR CENTO" ──
+       De 0 para 5 nao e crescimento de infinito; e "nao havia e agora ha 5". */
+    const doZero = DG.delta(5, 0);
+    ok(doZero.pct === null && doZero.pctTexto === '—',
+       'de zero para algum, o percentual nao existe — e `Infinity%` e pior que ' +
+       'nao dizer', String(doZero.pctTexto));
+    ok(/não havia base/.test(doZero.texto),
+       'e o texto diz por que', doZero.texto);
+
+    /* ── NUMERO NO FORMATO DE QUEM LE ──
+       `1.234` e nao `1234`: o separador e o que permite ler a ordem de grandeza
+       de relance, e e ela que a diretoria compara. */
+    ok(DG.num(1234) === '1.234', 'milhar com separador', DG.num(1234));
+    ok(DG.num(45.33) === '45,3', 'decimal com virgula, uma casa', DG.num(45.33));
+    ok(DG.num('abc') === '—', 'e o que nao e numero sai como travessao');
+
+    /* ── A PALETA E A MESMA DO DECK ──
+       Duas paletas e como este deck ja errou antes: o mesmo ambar significando
+       duas coisas em slides vizinhos. A do modulo e a do `apresentacao.js` sao
+       comparadas COR A COR. */
+    {
+      const bloco = APRES.slice(APRES.indexOf('var C = {'), APRES.indexOf('};', APRES.indexOf('var C = {')));
+      const doDeck = {};
+      [...bloco.matchAll(/(\w+):\s*'([0-9A-Fa-f]{6})'/g)].forEach(m => { doDeck[m[1]] = m[2]; });
+      const divergem = Object.keys(DG.COR).filter(k => doDeck[k] && doDeck[k] !== DG.COR[k]);
+      ok(Object.keys(doDeck).length > 8, 'a paleta do deck foi lida', String(Object.keys(doDeck).length));
+      ok(divergem.length === 0,
+         'e a do modulo nao diverge dela em nenhuma cor',
+         divergem.map(k => k + ': ' + doDeck[k] + ' vs ' + DG.COR[k]).join(', ') || 'nenhuma');
+    }
+
+    /* ── CONTRASTE, MEDIDO ──
+       `contrast-data`: dado >=3:1 contra o fundo, rotulo >=4.5:1. O deck e
+       escuro, e uma cor bonita que nao se le e um numero que nao foi dito. */
+    {
+      const lum = (h) => {
+        const c = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16) / 255)
+          .map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      };
+      const razao = (a, b) => {
+        const l1 = lum(a), l2 = lum(b);
+        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      };
+      const ruins = [];
+      ['verde', 'vermelho', 'ambar', 'azul', 'roxo', 'fraco', 'texto'].forEach(k => {
+        ['fundo', 'fundo2', 'fundo3'].forEach(f => {
+          const r = razao(DG.COR[k], DG.COR[f]);
+          if (r < 4.5) ruins.push(k + ' sobre ' + f + ' = ' + r.toFixed(2));
+        });
+      });
+      ok(ruins.length === 0,
+         'toda cor de dado passa 4.5:1 sobre os tres fundos do deck',
+         ruins.join(' | ') || 'nenhuma reprova');
+    }
+
+    /* ── E O SLIDE DE EVOLUCAO USA A GRAMATICA ──
+       Era ele que o Fernando nomeou: "mes atual x mes anterior, falta detalhes
+       da evolucao". */
+    const ev = corpo(APRES, 'function slideEvolucao(pptx, serie, pagina, periodo) {');
+    ok(!!ev, 'o slide de evolucao foi achado');
+    ok(!!ev && /DECKG\.barras\(s, pptx, \{/.test(ev),
+       'ele desenha pela barra COMUM, e nao pela dele');
+    ok(!!ev && /delta: ant \? DECKG\.delta\(x\.sairam \|\| 0, ant\.sairam \|\| 0\) : null/.test(ev),
+       'e cada mes carrega o crescimento contra o anterior — era o que faltava');
+    ok(!!ev && /DECKG\.delta\(ult\.sairam \|\| 0, pen\.sairam \|\| 0\)/.test(ev),
+       'e o topo do slide traz a comparacao do mes contra o anterior');
+    ok(!!ev && !/s\.addShape\(pptx\.ShapeType\.rect, \{ x: cx/.test(ev),
+       'e nao sobrou barra desenhada a mao neste slide');
+    /* A FRASE DE LEITURA: dois deltas lado a lado deixam a sala montando a
+       conclusao, e cada um monta a sua. */
+    ok(!!ev && /a fila cresceu por duas razões/.test(ev),
+       'e ha uma frase dizendo o que os dois deltas juntos significam');
+
+    /* ── A ORDEM DE CARGA ──
+       Sem guarda em `apresentacao.js`, o modulo faltando derruba a geracao com
+       a linha exata — melhor que um deck com metade dos graficos vazios. Mas
+       so se ele carregar ANTES. */
+    const iG = ADMIN.indexOf('deck-grafico.js?v=');
+    const iA = ADMIN.indexOf('apresentacao.js?v=');
+    ok(iG > 0 && iA > iG,
+       'o admin carrega a gramatica ANTES do gerador do deck',
+       'grafico@' + iG + ' gerador@' + iA);
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

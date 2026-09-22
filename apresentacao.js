@@ -37,6 +37,17 @@
      Trocar os VALORES e manter os nomes muda o deck inteiro de uma vez: nenhum
      slide fica com a paleta antiga por esquecimento, porque nenhum slide escreve
      cor na mão. */
+  /* A GRAMÁTICA DOS GRÁFICOS mora em `deck-grafico.js`: o delta com três canais,
+     a barra, a legenda e o número em pt-BR. Alias local, e não `window.DECKG`
+     em cada chamada — assim o varredor de órfãs enxerga a declaração, que é o
+     que ele existe para cobrar.
+
+     SEM GUARDA DE PROPÓSITO. Se o módulo não carregar, o deck sai com metade
+     dos gráficos vazios e ninguém percebe até a reunião; sem guarda, ele falha
+     na geração, com a linha exata. Há invariante cobrando que o `admin.html`
+     carregue este arquivo ANTES deste aqui. */
+  var DECKG = (typeof window !== 'undefined') ? window.DECKG : require('./deck-grafico.js');
+
   var C = {
     fundo:   '070B16',   // o azul-quase-preto do painel
     fundo2:  '0E1428',   // superfície dos cartões
@@ -1738,69 +1749,120 @@
     /* O SUBTITULO PAROU DE PROMETER PRAZO. Ele dizia "entradas, saidas e prazo
        mes a mes" e o prazo saiu do slide junto com o percentual — um subtitulo
        que anuncia o que nao esta ali faz quem le procurar o numero que falta. */
-    var s = slideTitulo(pptx, 'Evolução', 'entradas, saídas e saldo mês a mês', pagina, periodo);
+    var s = slideTitulo(pptx, 'Evolução',
+      'entradas, saídas e o quanto mudou de um mês para o outro', pagina, periodo);
     var vis = (serie || []).filter(function (x) { return x; });
     if (!vis.length) { rodape(s, periodo, pagina); return s; }
 
-    /* ALTO 1,55 e nao 1,85: o valor impresso no topo da barra fica em
-       BASE - ALTO - 0,28, e com 1,85 isso dava 1,49" — dentro da legenda do
-       cabecalho, que ocupa de 1,42" a 1,70". A barra mais alta do mes escrevia
-       o proprio numero por cima de "entraram / sairam". */
-    var X0 = 0.9, LARG = 8.4, BASE = 3.62, ALTO = 1.55;
-    var col = LARG / vis.length;
-    var max = vis.reduce(function (m, x) {
-      return Math.max(m, x.entraram || 0, x.sairam || 0);
-    }, 1);
-    var barra = Math.min(0.5, col * 0.3);
+    /* ═══ A LEITURA DE CIMA: QUANTO MUDOU ═══════════════════════════════
+     *
+     * "No gráfico mês atual x mês anterior, falta detalhes da evolução ou
+     *  involução. Crescimento e comparativo."
+     *
+     * As barras mostravam 109 e 75 e paravam ali: quem lê fazia a subtração de
+     * cabeça e o percentual ninguém fazia. Agora a comparação está escrita — e
+     * escrita em três canais (seta, sinal e cor), porque parte da diretoria lê
+     * isto impresso em preto e branco.
+     *
+     * O DESTAQUE É DAS SAÍDAS, e não das entradas: entregar é o que o time
+     * controla. Entrada é demanda que chega, e um mês com mais entradas não é
+     * um mês melhor nem pior — é só mais fila. */
+    var ult = vis[vis.length - 1];
+    var pen = vis.length > 1 ? vis[vis.length - 2] : null;
+    if (pen) {
+      var dEnt = DECKG.delta(ult.sairam || 0, pen.sairam || 0);
+      var dRec = DECKG.delta(ult.entraram || 0, pen.entraram || 0);
+      s.addText([
+        { text: 'Entregas  ', options: { color: C.fraco, fontSize: 12 } },
+        { text: DECKG.num(ult.sairam || 0), options: { color: C.verde, bold: true, fontSize: 19 } },
+        { text: '   ' + dEnt.seta + ' ' + dEnt.sinal + ' ' + dEnt.pctTexto,
+          options: { color: dEnt.cor, bold: true, fontSize: 13 } },
+        { text: '   contra ' + (pen.rot || 'o mês anterior') + '  (' +
+                DECKG.num(pen.sairam || 0) + ')', options: { color: C.fraco, fontSize: 11 } },
+      ], { x: 0.9, y: 1.16, w: 8.4, h: 0.34, wrap: false });
+      s.addText([
+        { text: 'Entradas  ', options: { color: C.fraco, fontSize: 11 } },
+        { text: DECKG.num(ult.entraram || 0), options: { color: C.azul, bold: true, fontSize: 13 } },
+        { text: '   ' + dRec.seta + ' ' + dRec.sinal + ' ' + dRec.pctTexto,
+          options: { color: dRec.cor, fontSize: 11 } },
+      ], { x: 0.9, y: 1.50, w: 4.6, h: 0.28, wrap: false });
+      /* A INTERPRETAÇÃO, EM LINHA PRÓPRIA E EM UMA FRASE.
+         Dois deltas lado a lado deixam a sala montando a conclusão — e cada um
+         monta a sua. A frase é a leitura que o slide sustenta, dita de uma vez.
+         Na mesma linha das Entradas ela brigava com o número. */
+      s.addText((function () {
+          var sai = (ult.sairam || 0) - (pen.sairam || 0);
+          var ent = (ult.entraram || 0) - (pen.entraram || 0);
+          if (sai > 0 && ent <= 0) return 'Entregamos mais e recebemos menos: a fila encolheu dos dois lados.';
+          if (sai > 0 && ent > 0) return 'Entregamos mais, mas entrou mais também.';
+          if (sai < 0 && ent > 0) return 'Entregamos menos e entrou mais: a fila cresceu por duas razões.';
+          if (sai < 0) return 'Entregamos menos que no mês anterior.';
+          return 'Entregas estáveis em relação ao mês anterior.';
+        }()), { x: 0.9, y: 1.80, w: 8.4, h: 0.26,
+                fontSize: 11, italic: true, color: C.fraco, wrap: false });
+    }
 
+    /* AS BARRAS SAEM DA GRAMATICA COMUM — ver `deck-grafico.js`. Antes cada
+       slide desenhava a sua, e por isso o deck tinha tres larguras de barra,
+       dois lugares para o valor e duas alturas de rotulo. E o que a critica de
+       "padrao unico para toda a demonstracao grafica" apontava.
+
+       A GEOMETRIA DESCEU para abrir espaco ao bloco de comparacao acima: o
+       valor impresso no topo da barra mais alta fica em BASE - ALTO - 0,27, e
+       com a base antiga ele batia na linha de "Entradas". */
+    var X0 = 0.9, LARG = 8.4, BASE = 3.72, ALTO = 1.45;
+    var col = LARG / vis.length;
+
+    DECKG.barras(s, pptx, {
+      x: X0, w: LARG, base: BASE, h: ALTO, largura: 0.5, fsValor: 10, fsRot: 12,
+      itens: vis.map(function (x, i) {
+        var ant = i > 0 ? vis[i - 1] : null;
+        return {
+          rot: x.rot,
+          /* "ago…" LIA-SE COMO TEXTO CORTADO. As reticencias marcavam mes em
+             curso, mas ninguem ve isso — ve um rotulo que nao coube e desconfia
+             do slide inteiro. A palavra resolve, e ainda diz o que a reticencia
+             nunca disse: que aquele mes ainda nao acabou. */
+          sub: x.parcial ? 'mês em curso' : '',
+          corRot: x.parcial ? C.texto : C.fraco,
+          series: [{ valor: x.entraram || 0, cor: C.azul },
+                   { valor: x.sairam || 0, cor: C.verde }],
+          /* O CRESCIMENTO MES A MES, embaixo de cada coluna. E das SAIDAS: e o
+             que o time controla. O primeiro mes nao tem contra o que comparar, e
+             um chip vazio ali seria pior que a ausencia dele. */
+          delta: ant ? DECKG.delta(x.sairam || 0, ant.sairam || 0) : null,
+        };
+      }),
+    });
+
+    /* O SALDO DO MES, e nao mais tres numeros empilhados.
+     *
+     * O ajuste e do Fernando, feito a mao no deck de agosto: onde estava
+     * "Backlog fim do mes 66" ele escreveu "Entrada - saidas = 34". A diferenca
+     * nao e de gosto. As barras JA mostram 109 e 75; o backlog no fim do mes e
+     * um quarto numero, que vem de outra conta e nao se confere olhando para o
+     * slide. O saldo e a UNICA leitura que as proprias barras sustentam: e a
+     * subtracao que a plateia faz de cabeca, escrita.
+     *
+     * SEM O `+` NO POSITIVO: o rotulo ja diz "Entrada - saidas =". O negativo
+     * continua trazendo o proprio sinal, que e quando ele informa. */
+    /* TODOS NA MESMA ALTURA, inclusive o primeiro mês — que não tem chip de
+       delta por não ter contra o que comparar. Alinhar pelo conteúdo deixava a
+       linha do primeiro mês flutuando acima das outras, e uma linha fora do
+       lugar faz a sala procurar o motivo em vez de ler o número. */
+    var Y_SALDO = BASE + 0.86;
     vis.forEach(function (x, i) {
-      var cx = X0 + i * col + (col - barra * 2 - 0.08) / 2;
-      [{ v: x.entraram, cor: C.azul, dx: 0 },
-       { v: x.sairam, cor: C.verde, dx: barra + 0.08 }].forEach(function (b) {
-        var h = Math.max(0.04, ALTO * (b.v / max));
-        s.addShape(pptx.ShapeType.rect, { x: cx + b.dx, y: BASE - h, w: barra, h: h,
-                                          fill: { color: b.cor } });
-        s.addText(String(b.v), { x: cx + b.dx - 0.12, y: BASE - h - 0.28, w: barra + 0.24, h: 0.26,
-                                 fontSize: 10, color: b.cor, align: 'center' });
-      });
-      /* "ago…" LIA-SE COMO TEXTO CORTADO. As reticencias marcavam mes em curso,
-         mas ninguem ve isso — ve um rotulo que nao coube e desconfia do slide
-         inteiro. A palavra resolve, e ainda diz o que a reticencia nunca disse:
-         que aquele mes ainda nao acabou e por isso e menor que os outros. */
-      s.addText(x.rot, {
-        x: X0 + i * col, y: BASE + 0.06, w: col, h: 0.26,
-        fontSize: 12, color: x.parcial ? C.texto : C.fraco, align: 'center', wrap: false });
-      if (x.parcial) {
-        s.addText('mês em curso', {
-          x: X0 + i * col, y: BASE + 0.30, w: col, h: 0.2,
-          fontSize: 8, color: C.fraco, align: 'center', wrap: false });
-      }
-      /* O SALDO DO MES, e nao mais tres numeros empilhados.
-       *
-       * O ajuste e do Fernando, feito a mao no deck de agosto: onde estava
-       * "Backlog fim do mes 66" ele escreveu "Entrada - saidas = 34". A
-       * diferenca nao e de gosto. As barras JA mostram 109 e 75; o backlog no
-       * fim do mes e um quarto numero, que vem de outra conta e nao se confere
-       * olhando para o slide — e o percentual de prazo era um quinto, sem meta
-       * contra a qual comparar. O saldo e a UNICA leitura que as proprias
-       * barras sustentam: e a subtracao que a plateia faz de cabeca, escrita.
-       *
-       * SEM O `+` NO POSITIVO. Eu o tinha colocado para marcar que e um saldo, e
-       * ele nao marca nada: o rotulo ja diz "Entrada - saidas =". O negativo
-       * continua trazendo o proprio sinal, que e quando ele informa. */
       var saldo = (x.entraram || 0) - (x.sairam || 0);
       s.addText('Entrada - saídas = ' + saldo, {
-        x: X0 + i * col - 0.3, y: BASE + (x.parcial ? 0.52 : 0.38), w: col + 0.6, h: 0.26,
-        fontSize: 11, color: C.fraco, align: 'center', wrap: false });
+        x: X0 + i * col - 0.3, y: Y_SALDO, w: col + 0.6, h: 0.24,
+        fontSize: 10.5, color: C.fraco, align: 'center', wrap: false });
     });
 
-    // A legenda diz o que e cada linha; sem ela, tres numeros embaixo da barra
-    // viram adivinhacao.
-    [{ t: 'entraram', cor: C.azul }, { t: 'saíram', cor: C.verde }].forEach(function (l, i) {
-      s.addShape(pptx.ShapeType.rect, { x: 0.9 + i * 1.4, y: 1.5, w: 0.14, h: 0.14,
-                                        fill: { color: l.cor } });
-      s.addText(l.t, { x: 1.1 + i * 1.4, y: 1.42, w: 1.2, h: 0.28, fontSize: 11, color: C.fraco });
-    });
+    // A legenda diz o que e cada barra; sem ela, duas cores viram adivinhacao.
+    // A DIREITA do bloco de comparacao, e nao embaixo dele: a esquerda ja esta
+    // ocupada pela leitura de quanto mudou, que e o que se le primeiro.
+    DECKG.legenda(s, pptx, { x: 6.9, y: 1.50, passo: 1.25,
+      itens: [{ rot: 'entraram', cor: C.azul }, { rot: 'saíram', cor: C.verde }] });
     /* A NOTA DA DIREITA SAIU JUNTO. Ela dizia "abaixo de cada mes: % no prazo e
        backlog no fim do mes" — descrevia os dois numeros que nao estao mais la.
        Legenda que aponta para o que nao existe e pior que legenda nenhuma. */
