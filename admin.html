@@ -632,6 +632,30 @@
     .ap-dica { font-size:12.5px; color:var(--text3); line-height:1.55; margin:0 0 12px; }
     .ap-periodo { font-size:14px; color:var(--text); background:var(--bg3);
       border:1px solid var(--border); border-radius:8px; padding:9px 12px; margin-bottom:14px; }
+    /* A ESCOLHA DO DECK: dois cartões lado a lado, e não um `<select>`.
+       São duas coisas diferentes com nomes parecidos ("fechamento do mês" e "um
+       assunto"), e num select a segunda opção fica escondida atrás de um clique —
+       quem não sabe que ela existe continua sem saber. Lado a lado, as duas se
+       leem de uma vez, com a diferença escrita embaixo de cada uma. */
+    .ap-modos { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    /* `.form-group label { display:block }` tem especificidade 0,2,0 e venceria
+       um `.ap-modo` sozinho (0,1,0): a marca do rádio caía numa linha e o texto
+       na seguinte. O seletor abaixo vale 0,3,0 e ganha sem `!important`. */
+    .form-group label.ap-modo { display:flex; align-items:flex-start; gap:9px; cursor:pointer;
+      border:1px solid var(--border); border-radius:9px; padding:11px 13px;
+      background:var(--bg3); transition:border-color .15s; }
+    .ap-modo:hover { border-color:var(--border2); }
+    .ap-modo:has(input:checked) { border-color:var(--blue); background:var(--bg2); }
+    .ap-modo strong { display:block; font-size:13.5px; color:var(--text); }
+    .ap-modo small { display:block; font-size:11.5px; color:var(--text3);
+      line-height:1.45; margin-top:2px; }
+    /* A linha de período do deck de assunto: três seletores que cabem lado a lado
+       e quebram no celular em vez de espremer. */
+    .ap-linha { display:flex; gap:12px; flex-wrap:wrap; }
+    .ap-linha > div { flex:1 1 150px; min-width:0; }
+    .ap-linha label { display:block; font-size:12px; color:var(--text3);
+      margin-bottom:5px; }
+    @media (max-width:560px) { .ap-modos { grid-template-columns:1fr; } }
     .ap-checks { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:7px; }
     .ap-checks label, .ap-lista label { display:flex; align-items:flex-start; gap:8px;
       font-size:13px; color:var(--text2); cursor:pointer; line-height:1.4; }
@@ -1357,11 +1381,33 @@
       <div class="modal" style="max-width:720px">
         <button type="button" class="modal-close-btn" onclick="closeModal('modal-apres')" aria-label="Fechar">✕</button>
         <h2>📊 Apresentação executiva</h2>
-        <p class="ap-dica">Gera um <strong>.pptx</strong> de fundo escuro, um número por slide,
-          na ordem de uma conversa: o que entregamos, o que valeu a pena, onde escapou e o que vem.
-          O período é o do filtro da aba.</p>
+
+        <!-- OS DOIS DECKS, NUM LUGAR SÓ.
+             "Em admin, gerencial e relatorios tenho possibilidade de imprimir
+             PPT. Necessito trazer tudo para um único local (gerencial)."
+
+             Eram dois botões idênticos em duas abas, gerando coisas diferentes —
+             e qual deles fazia o quê só se descobria gerando. Aqui a escolha é
+             explícita e vem ANTES de tudo, porque ela muda todo o resto do
+             formulário. -->
+        <div class="form-group">
+          <label>O que gerar</label>
+          <div class="ap-modos">
+            <label class="ap-modo"><input type="radio" name="ap-modo" value="mes" checked
+                     onchange="apModoTrocou()">
+              <span><strong>Fechamento do mês</strong>
+                <small>o deck da reunião de resultados — o mês inteiro, dividido em atos</small></span></label>
+            <label class="ap-modo"><input type="radio" name="ap-modo" value="assunto"
+                     onchange="apModoTrocou()">
+              <span><strong>Um assunto</strong>
+                <small>o deck de um sistema: o panorama dele, a forma do período e o que vem</small></span></label>
+          </div>
+        </div>
+
+        <p class="ap-dica" id="ap-dica"></p>
         <div id="ap-periodo" class="ap-periodo"></div>
 
+        <div id="ap-painel-mes">
         <div class="form-group">
           <label>Slides que entram
             <span style="float:right;font-weight:400">
@@ -1386,6 +1432,65 @@
           <textarea id="ap-mensagem" rows="2"
             placeholder="Ex.: entregamos o dobro de julho e reduzimos o retrabalho de cadastro pela metade."></textarea>
         </div>
+        </div><!-- /ap-painel-mes -->
+
+        <!-- O PAINEL DO DECK DE ASSUNTO.
+             Ele traz os PRÓPRIOS seletores de período. Na aba Relatórios o deck
+             usava o filtro dela; trazido para cá sem período próprio, quem
+             quisesse a semana teria de voltar para a outra aba, mudar o filtro e
+             voltar — que é o oposto de "um único local". A conta da janela é a
+             mesma (`janelaDe`), então as duas telas não podem divergir. -->
+        <div id="ap-painel-assunto" style="display:none">
+          <div class="form-group ap-linha">
+            <div>
+              <label>Escala</label>
+              <select id="ap-rp-escala" onchange="apRpTrocaEscala()">
+                <option value="mes">Mês (fechamento)</option>
+                <option value="semana">Semana (reunião)</option>
+              </select>
+            </div>
+            <div id="ap-rp-grupo-mes">
+              <label>Mês</label>
+              <select id="ap-rp-mes" onchange="relPptPrevia()"></select>
+            </div>
+            <div id="ap-rp-grupo-semana" style="display:none">
+              <label>Reunião da semana de</label>
+              <select id="ap-rp-semana" onchange="relPptPrevia()"></select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Escopo</label>
+            <select id="rp-escopo" onchange="relPptPrevia()"></select>
+            <p class="ap-dica" style="margin:6px 0 0">O consolidado resume os cinco assuntos
+              que mais entregaram, um slide cada. Um assunto sozinho vem detalhado.</p>
+          </div>
+
+          <!-- A CAIXA DO BACKLOG.
+               Fica ANTES da previa de proposito: marcar muda o que a previa diz,
+               e uma caixa embaixo obrigaria a pessoa a olhar para cima depois de
+               clicar para conferir o efeito.
+
+               NASCE DESMARCADA, e a escolha e LEMBRADA. Desmarcada porque um deck
+               que cresce um slide sozinho surpreende quem ja usa o formato; e
+               lembrada porque quem quer o backlog quer sempre — marcar de novo a
+               cada mes e a forma mais certa de esquecer no mes que importa. -->
+          <div class="form-group">
+            <label class="rp-caixa" for="rp-backlog">
+              <input type="checkbox" id="rp-backlog" onchange="relPptBacklogMarcou()" />
+              <span>
+                <strong>Incluir o backlog</strong>
+                <small>Um slide a mais, com o que está parado em Backlog e Levantar
+                Requisitos — o que ainda não foi prometido a ninguém.</small>
+              </span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label>O que vai sair</label>
+            <div id="rp-previa" class="rp-previa"></div>
+          </div>
+        </div><!-- /ap-painel-assunto -->
 
         <div class="form-actions">
           <button class="btn btn-secondary" onclick="closeModal('modal-apres')">Cancelar</button>
@@ -1677,61 +1782,16 @@
           </select>
         </div>
         <button class="btn btn-secondary" onclick="renderRelatorios()">Atualizar</button>
-        <button class="btn btn-secondary" onclick="relPptAbrir()"
-                title="Monta um .pptx do assunto filtrado, ou o consolidado dos maiores">📊 Apresentação</button>
         <button class="btn btn-primary" onclick="copiarRelatorio()">📋 Copiar tudo</button>
+        <!-- O BOTÃO DA APRESENTAÇÃO SAIU DAQUI, e a linha que ficou no lugar não
+             é decoração: quem usava este botão vai procurá-lo, e "sumiu" é a
+             pior resposta possível. Ela diz para onde ele foi, e não é um
+             segundo gerador — é uma frase. -->
+        <span class="ger-section-hint" style="align-self:center">
+          📊 A apresentação deste assunto agora sai na aba <strong>Gerencial</strong>,
+          junto com a do fechamento.</span>
       </div>
 
-      <!-- O MODAL DO DECK. Fica dentro da aba porque o periodo e o sistema sao os
-           do filtro dela: um segundo seletor de periodo aqui divergiria do de cima
-           no pior momento — a pessoa le "agosto" na tela e recebe setembro. -->
-      <div id="modal-rel-ppt" class="modal-overlay" style="display:none">
-        <div class="modal" style="max-width:620px">
-          <button type="button" class="modal-close-btn" onclick="closeModal('modal-rel-ppt')" aria-label="Fechar">✕</button>
-          <h2>📊 Apresentação do assunto</h2>
-          <p class="ap-dica">Gera um <strong>.pptx</strong> no mesmo formato do deck mensal:
-            o panorama do período, a forma dele semana a semana, as entregas maiores em pontos
-            e as duas filas do que vem. O período é o do filtro da aba.</p>
-          <div id="rp-periodo" class="ap-periodo"></div>
-
-          <div class="form-group">
-            <label>Escopo</label>
-            <select id="rp-escopo" onchange="relPptPrevia()"></select>
-            <p class="ap-dica" style="margin:6px 0 0">O consolidado resume os cinco assuntos
-              que mais entregaram, um slide cada. Um assunto sozinho vem detalhado.</p>
-          </div>
-
-          <!-- A CAIXA DO BACKLOG.
-               Fica ANTES da previa de proposito: marcar muda o que a previa diz,
-               e uma caixa embaixo obrigaria a pessoa a olhar para cima depois de
-               clicar para conferir o efeito.
-
-               NASCE DESMARCADA, e a escolha e LEMBRADA. Desmarcada porque um deck
-               que cresce um slide sozinho surpreende quem ja usa o formato; e
-               lembrada porque quem quer o backlog quer sempre — marcar de novo a
-               cada mes e a forma mais certa de esquecer no mes que importa. -->
-          <div class="form-group">
-            <label class="rp-caixa" for="rp-backlog">
-              <input type="checkbox" id="rp-backlog" onchange="relPptBacklogMarcou()" />
-              <span>
-                <strong>Incluir o backlog</strong>
-                <small>Um slide a mais, com o que está parado em Backlog e Levantar
-                Requisitos — o que ainda não foi prometido a ninguém.</small>
-              </span>
-            </label>
-          </div>
-
-          <div class="form-group">
-            <label>O que vai sair</label>
-            <div id="rp-previa" class="rp-previa"></div>
-          </div>
-
-          <div class="form-actions">
-            <button class="btn btn-secondary" onclick="closeModal('modal-rel-ppt')">Cancelar</button>
-            <button class="btn btn-primary" id="rp-btn" onclick="relPptGerar()">Gerar apresentação</button>
-          </div>
-        </div>
-      </div>
       <div id="rel-periodo-info" style="font-size:12px;color:var(--text3);margin:-12px 0 18px"></div>
 
       <!-- COMO O TIME ANDOU. Vem antes da lista de entregas de proposito: a
@@ -5985,9 +6045,9 @@ function apresAbrir() {
     '<div style="grid-column:1/-1;color:var(--text3);font-size:11.5px;margin-top:8px;' +
     'padding-top:8px;border-top:1px solid var(--border)">' + esc(AP_SEMPRE) + '</div>';
 
-  document.getElementById('ap-periodo').innerHTML =
-    '📅 <strong>' + esc(apresentacaoMesNome(mes - 1)) + ' de ' + ano + '</strong>' +
-    ' <span style="color:var(--text3)">· mude no filtro da aba para trocar o período</span>';
+  // O painel do deck de assunto, que ate hoje morava na aba Relatorios.
+  apAssuntoPreenche();
+  apModoTrocou();
 
   // Candidatas a destaque: as concluidas do mes, maiores em pontos primeiro —
   // ordem que ajuda a escolher, sem decidir por quem apresenta.
@@ -6016,6 +6076,134 @@ function apresAbrir() {
   abrirModal('modal-apres');
 }
 
+/* ═══ OS DOIS DECKS, NUM LUGAR SÓ ═══════════════════════════════════════════
+ *
+ * "Em admin, gerencial e relatorios tenho possibilidade de imprimir PPT.
+ *  Necessito trazer tudo para um único local (gerencial)."
+ *
+ * Eram dois botões com o MESMO rótulo — "📊 Apresentação" — em duas abas,
+ * gerando coisas diferentes: aqui o fechamento do mês, lá o deck de um assunto.
+ * Qual deles fazia o quê só se descobria gerando, e cinco minutos antes da
+ * reunião gerar o errado custa a reunião.
+ *
+ * Agora é um botão e uma escolha explícita, e ela vem ANTES de tudo no
+ * formulário porque muda todo o resto dele.
+ *
+ * O QUE NÃO SE UNIFICOU FOI O CONTEÚDO, e isso é deliberado: são duas perguntas
+ * diferentes ("como foi o mês?" e "o que andou em Cobrança?") e cada uma tem o
+ * seu deck. O que estava errado era a porta, e não o produto. */
+function apModo() {
+  const el = document.querySelector('input[name="ap-modo"]:checked');
+  return el && el.value === 'assunto' ? 'assunto' : 'mes';
+}
+
+const AP_DICA = {
+  mes: 'Gera um .pptx de fundo escuro, um número por slide, na ordem de uma ' +
+       'conversa: o que entregamos, o que valeu a pena, onde escapou e o que vem. ' +
+       'O período é o do filtro da aba.',
+  assunto: 'Gera um .pptx no mesmo formato: o panorama do assunto no período, a ' +
+           'forma dele semana a semana, as entregas maiores em pontos e as duas ' +
+           'filas do que vem.',
+};
+
+function apModoTrocou() {
+  const assunto = apModo() === 'assunto';
+  const pm = document.getElementById('ap-painel-mes');
+  const pa = document.getElementById('ap-painel-assunto');
+  if (pm) pm.style.display = assunto ? 'none' : '';
+  if (pa) pa.style.display = assunto ? '' : 'none';
+  const dica = document.getElementById('ap-dica');
+  if (dica) dica.textContent = AP_DICA[assunto ? 'assunto' : 'mes'];
+
+  /* O PERÍODO SÓ APARECE NO MODO MÊS. No de assunto ele tem seletores próprios
+     logo abaixo, e a faixa repetiria — com o agravante de poder repetir ERRADO,
+     porque a de cima lê o filtro da aba Gerencial e os seletores leem a si
+     mesmos. Duas datas diferentes na mesma tela é o defeito que este modal
+     nasceu dentro da aba para evitar. */
+  const per = document.getElementById('ap-periodo');
+  if (per) {
+    per.style.display = assunto ? 'none' : '';
+    if (!assunto) {
+      const { mes, ano } = apresMesAno();
+      per.innerHTML = '📅 <strong>' + esc(apresentacaoMesNome(mes - 1)) + ' de ' + ano +
+        '</strong> <span style="color:var(--text3)">· mude no filtro da aba para ' +
+        'trocar o período</span>';
+    }
+  }
+  if (assunto) relPptPrevia();
+}
+
+/** A janela do deck de assunto — dos seletores DELE, pela mesma `janelaDe`. */
+function apJanelaDeck() {
+  const e = document.getElementById('ap-rp-escala');
+  const escala = e && e.value === 'semana' ? 'semana' : 'mes';
+  const sel = document.getElementById(escala === 'semana' ? 'ap-rp-semana' : 'ap-rp-mes');
+  return janelaDe(escala, (sel && sel.value) || '');
+}
+
+function apRpTrocaEscala() {
+  const ehSemana = (document.getElementById('ap-rp-escala') || {}).value === 'semana';
+  const gm = document.getElementById('ap-rp-grupo-mes');
+  const gs = document.getElementById('ap-rp-grupo-semana');
+  if (gm) gm.style.display = ehSemana ? 'none' : '';
+  if (gs) gs.style.display = ehSemana ? '' : 'none';
+  relPptPrevia();
+}
+
+/* PREENCHE O PAINEL DO ASSUNTO. Era o `relPptAbrir`, que abria um modal próprio.
+   Os seletores de período nascem espelhando os da aba Relatórios — quem já tinha
+   filtrado lá encontra o mesmo período aqui, e reescolher o que já está escolhido
+   é trabalho que a tela sabe poupar. */
+function apAssuntoPreenche() {
+  const mes = document.getElementById('ap-rp-mes');
+  if (mes && !mes.options.length) {
+    const hoje = new Date();
+    const opts = [];
+    for (let k = -1; k <= 12; k++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - k, 1);
+      const ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      opts.push('<option value="' + ym + '">' +
+        apresentacaoMesNome(d.getMonth()) + ' de ' + d.getFullYear() + '</option>');
+    }
+    mes.innerHTML = opts.join('');
+    const daAba = document.getElementById('rel-mes');
+    mes.value = (daAba && daAba.value) ||
+      (hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0'));
+  }
+  const sem = document.getElementById('ap-rp-semana');
+  if (sem && !sem.options.length) {
+    const base = segundaDa(new Date());
+    for (let i = 0; i < 12; i++) {
+      const ini = maisDias(base, -7 * i), fim = maisDias(ini, 6);
+      const o = document.createElement('option');
+      o.value = iso(ini);
+      o.textContent = formatDate(iso(ini)) + ' a ' + formatDate(iso(fim)) +
+        (i === 0 ? ' (esta semana)' : i === 1 ? ' (semana passada)' : '');
+      sem.appendChild(o);
+    }
+    const daAba = document.getElementById('rel-semana');
+    if (daAba && daAba.value) sem.value = daAba.value;
+  }
+  const esc0 = document.getElementById('ap-rp-escala');
+  if (esc0 && typeof relEscala === 'function') esc0.value = relEscala();
+  apRpTrocaEscala();
+
+  const j = apJanelaDeck();
+  const escopos = relPptEscopos(j);
+  const atual = relTemaFiltro();
+  const sel = document.getElementById('rp-escopo');
+  if (sel) {
+    sel.innerHTML =
+      '<option value="">Consolidado — os ' + REL_PPT_TOP + ' maiores assuntos</option>' +
+      escopos.map(e => '<option value="' + esc(e.nome) + '">' + esc(e.nome) +
+        '  (' + e.ent + ' entregas · ' + e.pts + ' pt)</option>').join('');
+    // Já filtrou um sistema na aba Relatórios? O deck abre nele.
+    if (atual && escopos.some(e => e.nome === atual)) sel.value = atual;
+  }
+  const cx = document.getElementById('rp-backlog');
+  if (cx) cx.checked = relPptBacklogLembrado();
+}
+
 /* `soApuracao` FAZ ESTA FUNÇÃO PARAR ANTES DE GERAR e devolver os números.
  *
  * É como o congelamento pega a apuração sem duplicar 400 linhas de conta. Uma
@@ -6025,6 +6213,10 @@ function apresAbrir() {
 async function apresGerar(opts) {
   opts = opts || {};
   const soApuracao = !!opts.soApuracao;
+  /* O MODO DESVIA AQUI, e não em dois botões. `soApuracao` nunca é do modo
+     assunto: o congelamento guarda a apuração do MÊS, e o deck de assunto não
+     produz apuração nenhuma — quem congela chama esta função por dentro. */
+  if (!soApuracao && apModo() === 'assunto') return relPptGerar();
   const btn = document.getElementById('ap-btn');
   const { mes, ano, iso } = apresMesAno();
   if (btn && !soApuracao) {
@@ -7967,10 +8159,24 @@ function relTemaFiltroNome() {
  *
  *  `rot` e `rotAnt` são os rótulos que a tela mostra — nomeados aqui para as duas
  *  escalas não terem duas formas de escrever a mesma coisa. */
-function relJanela() {
-  if (relEscala() === 'semana') {
-    const sel = document.getElementById('rel-semana');
-    const ini = sel && sel.value ? new Date(sel.value + 'T00:00:00') : segundaDa(new Date());
+/* A JANELA DE UM PERÍODO, SEM LER TELA NENHUMA.
+ *
+ * `relJanela()` está logo abaixo e delega para esta. A separação nasceu quando o
+ * deck de assunto saiu da aba Relatórios e foi para o Gerencial — "necessito
+ * trazer tudo para um único local": lá ele tem os PRÓPRIOS seletores de escala e
+ * período, e sem uma função pura no meio a conta da janela viraria a segunda
+ * implementação da mesma regra.
+ *
+ * E isso já aconteceu três vezes nesta base — prazo, data de entrega,
+ * agrupamento por raiz —, sempre com as duas plausíveis e divergindo em silêncio
+ * até alguém conferir na reunião.
+ *
+ * `valor` é AAAA-MM na escala de mês e a segunda-feira (AAAA-MM-DD) na de
+ * semana. Vazio cai no período corrente, que é o que os dois seletores trazem
+ * marcado quando a tela abre. */
+function janelaDe(escala, valor) {
+  if (escala === 'semana') {
+    const ini = valor ? new Date(valor + 'T00:00:00') : segundaDa(new Date());
     const de = iso(ini), ate = iso(maisDias(ini, 6));
     const deAnt = iso(maisDias(ini, -7)), ateAnt = iso(maisDias(ini, -1));
     return { escala: 'semana', de, ate, deAnt, ateAnt,
@@ -7978,8 +8184,7 @@ function relJanela() {
              rotAnt: 'semana anterior (' + formatDate(deAnt) + ' a ' + formatDate(ateAnt) + ')',
              curto: 'semana' };
   }
-  const sel = document.getElementById('rel-mes');
-  const ym = (sel && sel.value) || new Date().toISOString().slice(0, 7);
+  const ym = valor || new Date().toISOString().slice(0, 7);
   const [an, mn] = ym.split('-').map(Number);
   const ult = (a, m) => new Date(a, m, 0).getDate();
   const de = ym + '-01';
@@ -7993,6 +8198,13 @@ function relJanela() {
            rot: apresentacaoMesNome(mn - 1) + ' de ' + an,
            rotAnt: apresentacaoMesNome(pm - 1) + ' de ' + pa,
            curto: 'mês' };
+}
+
+/** A janela da ABA Relatórios — a mesma conta, lendo os seletores dela. */
+function relJanela() {
+  const escala = relEscala();
+  const sel = document.getElementById(escala === 'semana' ? 'rel-semana' : 'rel-mes');
+  return janelaDe(escala, (sel && sel.value) || '');
 }
 
 /** Monta os dois seletores e o de sistema. Idempotente: chamada a cada render. */
@@ -8649,28 +8861,6 @@ function relPptNomeArquivo(escopo, j) {
   return 'relatorio-' + (escopo ? limpa(escopo) : 'consolidado') + '-' + quando + '.pptx';
 }
 
-function relPptAbrir() {
-  const j = relJanela();
-  const escopos = relPptEscopos(j);
-  const atual = relTemaFiltro();
-  const sel = document.getElementById('rp-escopo');
-  sel.innerHTML =
-    '<option value="">Consolidado — os ' + REL_PPT_TOP + ' maiores assuntos</option>' +
-    escopos.map(e => '<option value="' + esc(e.nome) + '">' + esc(e.nome) +
-      '  (' + e.ent + ' entregas · ' + e.pts + ' pt)</option>').join('');
-  // Já filtrou um sistema na aba? O deck abre nele. Reescolher o que já está na
-  // tela é trabalho que a tela já sabe.
-  if (atual && escopos.some(e => e.nome === atual)) sel.value = atual;
-
-  document.getElementById('rp-periodo').innerHTML =
-    '📅 <strong>' + esc(j.rot) + '</strong> <span style="color:var(--text3)">· ' +
-    'mude na barra da aba para trocar o período</span>';
-  const cx = document.getElementById('rp-backlog');
-  if (cx) cx.checked = relPptBacklogLembrado();
-  relPptPrevia();
-  abrirModal('modal-rel-ppt');
-}
-
 /** A PRÉVIA, ANTES DO DOWNLOAD.
  *
  *  Diz quantos slides saem e com que números. A biblioteca são ~800 KB baixados
@@ -8701,7 +8891,9 @@ function relPptPrevia() {
   const alvo = document.getElementById('rp-previa');
   if (!alvo) return;
   try {
-    const j = relJanela();
+    // A janela sai dos seletores DO MODAL, e não mais do filtro da aba
+    // Relatórios — o deck mudou de lugar e levou o período junto.
+    const j = apJanelaDeck();
     const escopo = String(document.getElementById('rp-escopo').value || '');
     const d = relPptDados(escopo, j, relPptQuerBacklog());
     let linhas;
@@ -8753,23 +8945,22 @@ function relPptPrevia() {
 }
 
 async function relPptGerar() {
-  const btn = document.getElementById('rp-btn');
-  const rotulo = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Gerando…';
+  // O MESMO BOTÃO dos dois decks — o modal é um só desde a consolidação.
+  const btn = document.getElementById('ap-btn');
+  const rotulo = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Gerando…'; }
   try {
-    const j = relJanela();
+    const j = apJanelaDeck();
     const escopo = String(document.getElementById('rp-escopo').value || '');
     const pptx = await relatorioPptMonta(relPptDados(escopo, j, relPptQuerBacklog()));
     const nome = relPptNomeArquivo(escopo, j);
     await pptx.writeFile({ fileName: nome });
     toast('📊 ' + nome + ' gerado.', 'ok');
-    closeModal('modal-rel-ppt');
+    closeModal('modal-apres');
   } catch (e) {
     toast('Não consegui gerar: ' + e.message, 'err');
   } finally {
-    btn.disabled = false;
-    btn.textContent = rotulo;
+    if (btn) { btn.disabled = false; btn.textContent = rotulo; }
   }
 }
 

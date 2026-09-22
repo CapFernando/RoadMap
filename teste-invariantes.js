@@ -14786,6 +14786,139 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'escrito a mao');
   }
 
+  /* === OS DOIS DECKS, NUM LUGAR SO ======================================
+
+     "Em admin, gerencial e relatorios tenho possibilidade de imprimir PPT.
+      Necessito trazer tudo para um unico local (gerencial)."
+
+     Eram dois botoes com o MESMO rotulo — "Apresentacao" — em duas abas, gerando
+     coisas diferentes: aqui o fechamento do mes, la o deck de um assunto. Qual
+     deles fazia o que so se descobria gerando, e cinco minutos antes da reuniao
+     gerar o errado custa a reuniao. */
+  sec('Deck: os dois geradores, numa porta so');
+  {
+    const AC = semComentario(ADMIN);
+
+    /* ── UMA PORTA ── */
+    ok(!/onclick="relPptAbrir\(\)"/.test(AC),
+       'o segundo botao de apresentacao saiu da aba Relatorios');
+    ok(!/function relPptAbrir/.test(AC),
+       'e a funcao que abria o segundo modal deixou de existir');
+    ok((AC.match(/id="modal-rel-ppt"/g) || []).length === 0,
+       'o segundo modal tambem saiu');
+    ok((AC.match(/onclick="apresAbrir\(\)"/g) || []).length === 1,
+       'sobrou UM botao de apresentacao em todo o admin');
+    ok((AC.match(/id="ap-btn"/g) || []).length === 1,
+       'e um botao de gerar so, que serve aos dois decks');
+
+    /* ── QUEM PROCURAR O BOTAO ANTIGO ENCONTRA A RESPOSTA ──
+       "Sumiu" e a pior resposta possivel para quem usava um botao todo mes. */
+    ok(/apresenta..o deste assunto agora sai na aba/.test(ADMIN),
+       'e a aba Relatorios diz para onde ele foi');
+
+    /* ── OS CAMPOS DO DECK DE ASSUNTO MORAM DENTRO DO MODAL UNICO ── */
+    const modal = ADMIN.slice(ADMIN.indexOf('<div id="modal-apres"'),
+                              ADMIN.indexOf('<div class="ger-toolbar">',
+                                            ADMIN.indexOf('<div id="modal-apres"')));
+    ['id="rp-escopo"', 'id="rp-backlog"', 'id="rp-previa"',
+     'id="ap-painel-mes"', 'id="ap-painel-assunto"'].forEach(id => {
+      ok(modal.indexOf(id) > 0, 'o modal unico tem ' + id);
+    });
+
+    /* ── A ESCOLHA VEM ANTES DE TUDO, e e explicita ──
+       Ela muda todo o resto do formulario; embaixo, a pessoa preencheria a grade
+       de secoes para depois descobrir que escolheu o outro deck. */
+    const iModo = modal.indexOf('name="ap-modo"');
+    ok(iModo > 0 && iModo < modal.indexOf('id="ap-painel-mes"'),
+       'a escolha do deck vem ANTES dos dois paineis');
+    ok((modal.match(/name="ap-modo"/g) || []).length === 2,
+       'sao exatamente dois modos', String((modal.match(/name="ap-modo"/g) || []).length));
+    ok(/value="mes" checked/.test(modal),
+       'e o fechamento do mes e o padrao — e o deck que sai todo mes');
+
+    /* ── O DESVIO E POR MODO, E O CONGELAMENTO NAO PASSA POR ELE ──
+       `soApuracao` guarda a apuracao do MES; o deck de assunto nao produz
+       apuracao nenhuma, e quem congela chama `apresGerar` por dentro. Um desvio
+       antes dessa guarda congelaria nada, em silencio. */
+    const ger = corpo(ADMIN, 'async function apresGerar(opts) {') || '';
+    ok(/if \(!soApuracao && apModo\(\) === 'assunto'\) return relPptGerar\(\);/.test(ger),
+       'o modo desvia dentro do gerador, e o congelamento nunca cai no deck de ' +
+       'assunto');
+
+    /* ── UMA REGRA DE JANELA, DOIS LEITORES ──
+       O deck de assunto ganhou seletores proprios de periodo. Sem uma funcao pura
+       no meio, a conta da janela viraria a segunda implementacao da mesma regra —
+       e regra escrita duas vezes nesta base ja divergiu tres vezes (prazo, data de
+       entrega, agrupamento por raiz). */
+    const JD = corpo(ADMIN, 'function janelaDe(escala, valor) {') || '';
+    ok(!!JD, 'a janela de um periodo e uma funcao que nao le tela nenhuma');
+    const RJ = corpo(ADMIN, 'function relJanela() {') || '';
+    const AJ = corpo(ADMIN, 'function apJanelaDeck() {') || '';
+    ok(/janelaDe\(/.test(RJ) && !/segundaDa\(/.test(RJ),
+       'a aba Relatorios le os seletores dela e DELEGA a conta');
+    ok(/janelaDe\(/.test(AJ) && !/segundaDa\(/.test(AJ),
+       'e o modal le os dele e delega a MESMA conta');
+
+    /* E ELA E CONFERIDA EXECUTANDO, com os dois casos que existem. */
+    const janela = new Function('segundaDa', 'iso', 'maisDias', 'formatDate',
+                                'apresentacaoMesNome',
+                                JD + ' return janelaDe;')(
+      (d) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+               const w = x.getDay(); x.setDate(x.getDate() - (w === 0 ? 6 : w - 1)); return x; },
+      (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
+             String(d.getDate()).padStart(2, '0'),
+      (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; },
+      (v) => String(v), (i) => ['janeiro','fevereiro','março','abril','maio','junho','julho',
+                                'agosto','setembro','outubro','novembro','dezembro'][i]);
+    const jm = janela('mes', '2026-09');
+    ok(jm.de === '2026-09-01' && jm.ate === '2026-09-30' &&
+       jm.deAnt === '2026-08-01' && jm.ateAnt === '2026-08-31',
+       'setembro vai de 01 a 30, e o anterior e agosto inteiro',
+       jm.de + '→' + jm.ate + ' / ' + jm.deAnt + '→' + jm.ateAnt);
+    const js = janela('semana', '2026-09-21');
+    ok(js.de === '2026-09-21' && js.ate === '2026-09-27' &&
+       js.deAnt === '2026-09-14' && js.ateAnt === '2026-09-20',
+       'e a semana vai de segunda a domingo, contra a semana imediatamente anterior',
+       js.de + '→' + js.ate + ' / ' + js.deAnt + '→' + js.ateAnt);
+    /* A ESCALA VIRA O MES QUANDO NAO E SEMANA. Um terceiro valor cair no mes e o
+       comportamento certo: o deck de um periodo que nao existe seria pior. */
+    ok(janela('qualquer', '2026-09').escala === 'mes',
+       'e qualquer outra escala cai no mes, que e o padrao da casa');
+
+    /* ── O MODAL NAO MEXE NO FILTRO DA OUTRA ABA ──
+       Se ele lesse `rel-mes`, trocar o periodo do deck trocaria o que a aba
+       Relatorios mostra — e a pessoa voltaria para uma tela diferente da que
+       deixou, sem ter pedido. */
+    const PRE = corpo(ADMIN, 'function apAssuntoPreenche() {') || '';
+    ok(/ap-rp-mes/.test(PRE) && /ap-rp-semana/.test(PRE) && /ap-rp-escala/.test(AJ),
+       'o modal tem seletores de periodo PROPRIOS');
+    ok(/getElementById\('rel-mes'\)/.test(PRE) && /getElementById\('rel-semana'\)/.test(PRE),
+       'e ele COPIA o que a aba Relatorios tinha filtrado, em vez de ignorar');
+    ok(!/document\.getElementById\('rel-mes'\)\.value =/.test(PRE) &&
+       !/document\.getElementById\('rel-semana'\)\.value =/.test(PRE),
+       'sem escrever de volta — trocar o periodo do deck nao muda a outra aba');
+
+    /* ── A PREVIA E O GERADOR LEEM A JANELA DO MODAL ──
+       Deixar um deles lendo a aba faria a previa dizer setembro e o arquivo sair
+       de agosto, que e a classe de defeito que so aparece depois da reuniao. */
+    const PV = corpo(ADMIN, 'function relPptPrevia() {') || '';
+    const GA = corpo(ADMIN, 'async function relPptGerar() {') || '';
+    ok(/apJanelaDeck\(\)/.test(PV) && !/relJanela\(\)/.test(PV),
+       'a previa le a janela do modal');
+    ok(/apJanelaDeck\(\)/.test(GA) && !/relJanela\(\)/.test(GA),
+       'e o gerador le a MESMA — previa e arquivo nao podem falar de meses ' +
+       'diferentes');
+    ok(/closeModal\('modal-apres'\)/.test(GA),
+       'e ele fecha o modal que existe');
+
+    /* ── O CSS DO CARTAO DE MODO GANHA DO GENERICO ──
+       `.form-group label { display:block }` vale 0,2,0 e venceria um `.ap-modo`
+       sozinho: a marca do radio caia numa linha e o texto na seguinte. */
+    ok(/\.form-group label\.ap-modo \{ display:flex/.test(ADMIN),
+       'o cartao do modo e declarado com especificidade suficiente para vencer a ' +
+       'regra generica de label');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
