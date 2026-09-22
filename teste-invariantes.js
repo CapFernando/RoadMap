@@ -13,6 +13,29 @@
    a saida e travar aqui. Falhar este arquivo e mais barato que descobrir na
    reuniao.
    ───────────────────────────────────────────────────────────────────────── */
+
+/* ═══ A SUITE TEM RELOGIO PROPRIO ══════════════════════════════════════════
+ *
+ * O CI rodava VERMELHO e o meu computador VERDE, com o mesmo commit — que e a
+ * forma mais rapida de uma equipe aprender a ignorar o CI, e ai ele deixa de
+ * valer para o dia em que estiver certo.
+ *
+ * A CAUSA: `resumo-dev.js` decide o dia de uma entrega pelo fuso de QUEM OLHA,
+ * e isso esta certo — o outro lado da comparacao e `PRAZO.hojeISO()`, que usa o
+ * mesmo relogio, e comparar e comparar duas medidas do mesmo instrumento. A
+ * invariante que cobre isso usa "aprovada as 21h30 de terca" para provar que ela
+ * nao escorrega para quarta. Em Sao Paulo (UTC−3) ela e de terca; no runner do
+ * GitHub, que roda em UTC, o mesmo instante e 00h30 de QUARTA.
+ *
+ * Entao a invariante media o relogio da maquina em vez da regra. Fixar o fuso
+ * aqui e o conserto certo: o teste passa a declarar em que fuso ele fala, e
+ * qualquer maquina — o runner, este computador, o de outra pessoa — reproduz o
+ * mesmo resultado. No Windows daqui isto nao muda nada, porque o fuso ja e este.
+ *
+ * ANTES DE QUALQUER `new Date()`: o Node so reavalia o fuso quando `process.env.TZ`
+ * muda, e uma data criada antes disso ficaria com o fuso antigo. */
+process.env.TZ = 'America/Sao_Paulo';
+
 const fs = require('fs');
 
 let falhas = 0;
@@ -8030,8 +8053,21 @@ sec('Selo de cache dos scripts');
      divergem, e a invariante que deveria cobrar o selo estava calada justamente
      sobre as paginas que ninguem lembrou de acrescentar. */
   const telas = fs.readdirSync('.').filter(f => f.endsWith('.html')).sort();
-  const selo = (arq) =>
-    crypto.createHash('md5').update(fs.readFileSync(arq)).digest('hex').slice(0, 10);
+  /* NORMALIZADO PARA LF, como o `scripts-tema-versao.py` faz — e pelo mesmo
+     motivo: o git guarda LF e e isso que o GitHub Pages serve. Sem normalizar,
+     esta invariante media os bytes do DISCO, que num checkout Windows podem ter
+     CRLF, e acusava divergencia num selo que estava certo para quem recebe. Era
+     o CI vermelho e o computador de casa verde com o mesmo commit. */
+  /* SEPARADO EM DOIS: `seloDe` recebe os BYTES e `selo` lê o arquivo. A primeira
+     versão era uma função só, e a invariante que prova a equivalência CRLF/LF
+     teve de refazer o md5 por conta própria — quebrar a função de verdade não
+     fazia a prova falhar, que é uma prova que não prova nada. Verificado por
+     sabotagem: era a única das quarenta e seis que passava em silêncio. */
+  const seloDe = (buf) =>
+    crypto.createHash('md5')
+      .update(buf.toString('latin1').split('\r\n').join('\n'), 'latin1')
+      .digest('hex').slice(0, 10);
+  const selo = (arq) => seloDe(fs.readFileSync(arq));
 
   const errados = [];
   let conferidos = 0;
@@ -8050,7 +8086,64 @@ sec('Selo de cache dos scripts');
   ok(!errados.length,
      'e todo selo bate com o md5 do arquivo — script mudado sem selo novo nao chega a quem tem cache',
      errados.length ? errados.join(' ; ') : conferidos + ' selos conferidos');
+
+  /* ═══ O SELO E O MESMO EM QUALQUER MAQUINA ═══════════════════════════════
+   *
+   * O CI rodava VERMELHO e este computador VERDE, com o MESMO commit — e nao
+   * ha forma mais rapida de uma equipe aprender a ignorar o CI, que e quando
+   * ele deixa de valer para o dia em que estiver certo.
+   *
+   * A causa: o selo saia do md5 dos bytes DO DISCO. O git guarda LF e e isso que
+   * o GitHub Pages serve, mas a arvore de trabalho aqui tinha 26 CRLF no
+   * `capa-tecnologia.js` — o `.gitattributes` pede LF no checkout, e arquivo que
+   * ja estava com CRLF quando a regra entrou continuou como estava. Duas
+   * maquinas, dois selos, para o mesmo conteudo publicado.
+   *
+   * Normalizar nos dois lados fecha a classe inteira: o selo passa a ser o do
+   * arquivo SERVIDO, e nao o do arquivo salvo. */
+  const geradorSelo = fs.readFileSync('scripts-tema-versao.py', 'utf8');
+  ok(/replace\(b'\\r\\n', b'\\n'\)/.test(geradorSelo),
+     'o gerador do selo normaliza para LF antes de somar — o selo e dos bytes ' +
+     'que o Pages serve, e nao dos que estao no disco');
+  {
+    const cru = fs.readFileSync('capa-tecnologia.js');
+    const comCRLF = Buffer.from(cru.toString('latin1').split('\n').join('\r\n'), 'latin1');
+    // Pela FUNCAO QUE A SUITE USA, e nao por um md5 refeito aqui — senao a prova
+    // continua verde com a funcao quebrada.
+    ok(seloDe(cru) === seloDe(comCRLF),
+       'e o mesmo arquivo em CRLF e em LF produz o MESMO selo — a maquina de quem ' +
+       'gera deixou de importar', seloDe(cru));
+  }
 })();
+
+/* ═══ E A SUITE TEM RELOGIO PROPRIO ════════════════════════════════════════
+ *
+ * Mesma historia, outra causa: duas invariantes do resumo do dev passavam aqui
+ * e falhavam no runner. `resumo-dev.js` decide o dia de uma entrega pelo fuso de
+ * QUEM OLHA — e isso esta certo, porque o outro lado da comparacao usa o mesmo
+ * relogio. A invariante usa "aprovada as 21h30 de terca" para provar que ela nao
+ * escorrega para quarta; em UTC aquele instante E quarta.
+ *
+ * Fixar o fuso faz o teste declarar em que relogio ele fala. Conferido rodando a
+ * suite em UTC, aqui e em Toquio: os tres verdes. */
+{
+  /* SEM COMENTARIO, e a primeira versao desta invariante nao fazia isso: ela
+     achou o `new Date(` que esta escrito no comentario logo acima, concluiu que
+     havia uma data antes do fuso e reprovou codigo certo. E o terceiro caso
+     nesta suite — verificacao que acusa a legenda em vez do fato e a forma mais
+     rapida de alguem aprender a ignora-la. */
+  const eu = semComentario(fs.readFileSync('teste-invariantes.js', 'utf8'));
+  const iTZ = eu.indexOf("process.env.TZ = 'America/Sao_Paulo';");
+  ok(iTZ > 0, 'a suite fixa o proprio fuso, em vez de herdar o da maquina');
+  /* ANTES DE QUALQUER DATA CRIADA: o Node so reavalia o fuso quando
+     `process.env.TZ` muda, e uma data feita antes disso ficaria com o antigo. */
+  const iData = eu.indexOf('new Date(');
+  ok(iTZ > 0 && iTZ < iData,
+     'e fixa ANTES da primeira data criada — depois dela, o fuso antigo ja ficou ' +
+     'preso na data', iTZ + ' < ' + iData);
+  ok(process.env.TZ === 'America/Sao_Paulo',
+     'e o processo que esta rodando esta mesmo nesse fuso', String(process.env.TZ));
+}
 /* ─── E SCRIPT LOCAL SEM SELO NENHUM TAMBEM E DEFEITO ────────────────────────
  *
  * A invariante acima confere os selos que EXISTEM. Ela nao ve o arquivo incluido

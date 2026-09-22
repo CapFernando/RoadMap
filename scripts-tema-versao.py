@@ -49,7 +49,19 @@ def hash_de(caminho):
     # argument". Aconteceu — o script abortou no meio, deixando parte das
     # paginas com hash novo e parte com o antigo.
     with io.open(caminho, 'rb') as fh:
-        return hashlib.md5(fh.read()).hexdigest()[:10]
+        bruto = fh.read()
+    # ═══ O SELO E DOS BYTES QUE O PAGES SERVE, E NAO DOS QUE ESTAO NO DISCO.
+    #
+    # O git guarda tudo em LF e e isso que vai para o ar. Na arvore de trabalho
+    # de uma maquina Windows pode haver CRLF — o `.gitattributes` pede LF no
+    # checkout, mas arquivo que JA estava com CRLF quando a regra entrou continua
+    # como estava, e o `capa-tecnologia.js` era exatamente esse caso: 26 quebras.
+    #
+    # O resultado era o CI vermelho e o computador de casa verde com o MESMO
+    # commit, porque os dois selavam conteudos diferentes. Normalizando aqui, o
+    # selo passa a ser o mesmo em qualquer maquina e sempre igual ao do arquivo
+    # servido — que e a unica coisa que ele promete.
+    return hashlib.md5(bruto.replace(b'\r\n', b'\n')).hexdigest()[:10]
 
 
 def alvos():
