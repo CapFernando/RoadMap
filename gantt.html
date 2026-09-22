@@ -197,22 +197,27 @@
     }
     .ind-chip.mes_passado::before { left:0; }
     .ind-chip.mes_passado::after  { right:0; }
-    /* O CHIP CARREGA A PROPRIA FITA, nas duas pontas. Legenda que nao se parece
-       com o que ela explica obriga a pessoa a decorar a correspondencia — e o
-       mesmo desenho que o chip de "Mes passado" ja usa para a fita dele.
-       135deg aqui tambem, como na barra. */
-    .ind-chip.deapi {
+    /* CADA CHIP CARREGA A PROPRIA MARCA, nas duas pontas. Legenda que nao se
+       parece com o que ela explica obriga a pessoa a decorar a correspondencia
+       — e e o mesmo desenho que o chip de "Mes passado" ja usa.
+       LISTRADA no da API, LISA no do painel: a mesma distincao da barra. */
+    .ind-chip.origem-api, .ind-chip.origem-painel {
       background:#0C3260; border-color:#1a5080; color:#9BC8F8;
       position:relative; overflow:hidden;
       padding-left:20px; padding-right:20px;
     }
-    .ind-chip.deapi::before,
-    .ind-chip.deapi::after {
+    .ind-chip.origem-api::before, .ind-chip.origem-api::after,
+    .ind-chip.origem-painel::before, .ind-chip.origem-painel::after {
       content:''; position:absolute; top:0; bottom:0; width:12px; pointer-events:none;
+    }
+    .ind-chip.origem-api::before, .ind-chip.origem-api::after {
       background: repeating-linear-gradient(135deg, #3B8FE8 0 5px, #0A1E33 5px 10px);
     }
-    .ind-chip.deapi::before { left:0; }
-    .ind-chip.deapi::after  { right:0; }
+    .ind-chip.origem-painel::before, .ind-chip.origem-painel::after {
+      background: #3B8FE8;
+    }
+    .ind-chip.origem-api::before, .ind-chip.origem-painel::before { left:0; }
+    .ind-chip.origem-api::after,  .ind-chip.origem-painel::after  { right:0; }
     /* O anel de "filtro ligado" e branco translucido, pensado para chip escuro —
        sobre o corpo branco ele desaparece, e o chip fica sem dizer que esta
        ativo. Vale para os dois chips de fita clara. */
@@ -837,18 +842,41 @@
      * já são de pausada, atrasado e quebra.
      *
      * A barra tem `align-items:center`, então o texto mora no miolo: a fita no
-     * pé não encosta nele em nenhuma altura de card. */
-    .gantt-card.gcard-deapi {
-      background-image: repeating-linear-gradient(135deg,
-        #3B8FE8 0 5px, #0A1E33 5px 10px);
+     * pé não encosta nele em nenhuma altura de card.
+     *
+     * ═══ DUAS ORIGENS, DUAS MARCAS ══════════════════════════════════════
+     *
+     * "Separe em dois chips, endpoint e painel dev."
+     *
+     * Dois chips com a MESMA fita seriam duas linhas de legenda com o mesmo
+     * símbolo — a legenda deixaria de explicar. Então a barra também separa, e
+     * a distinção é de TEXTURA e não de cor: as duas ficam no mesmo azul,
+     * porque as duas dizem a mesma coisa de fundo ("não passou pelo
+     * planejamento"), e trocar a cor faria parecer que são assuntos diferentes.
+     *
+     *   LISTRADA   endpoint — máquina. É o que se cobra de uma integração.
+     *   LISA       Painel Dev — pessoa. Grava pela mesma porta, mas é o dev
+     *              abrindo o próprio card, e isso não se cobra de ninguém.
+     *
+     * Medido: das 53 marcadas no quadro, 28 do endpoint e 25 do painel. */
+    .gantt-card.gcard-api,
+    .gantt-card.gcard-painel {
       background-size: 100% 5px;
       background-position: bottom left;
       background-repeat: repeat-x;
     }
+    .gantt-card.gcard-api {
+      background-image: repeating-linear-gradient(135deg,
+        #3B8FE8 0 5px, #0A1E33 5px 10px);
+    }
+    .gantt-card.gcard-painel {
+      background-image: linear-gradient(#3B8FE8, #3B8FE8);
+    }
     /* ATRASADO JA TEM FITA NO PE (`::after`, 5px). A de origem sobe 5px para as
        duas coexistirem — sem isso ela ficaria escondida embaixo da vermelha
        justamente nas demandas que mais se olha. */
-    .gantt-card.gcard-deapi.gcard-atrasado {
+    .gantt-card.gcard-api.gcard-atrasado,
+    .gantt-card.gcard-painel.gcard-atrasado {
       background-position: bottom 5px left;
     }
     .gcard-atrasado { background:#C81E1E; border-color:#0A0A0A; color:#FFFFFF; }
@@ -968,7 +996,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
-  <script src="abertura.js?v=f912921679"></script>
+  <script src="abertura.js?v=03bc22afd7"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
@@ -2276,8 +2304,11 @@ function matchesFilters(m) {
   // 'planejado', o que muda e DE QUANDO ela e.
   else if (filters.indicator === '__mes_passado__') { if (!ehHerdada(m)) return false; }
   // Origem tambem e paralelo: quem abriu nao muda a etapa em que a demanda esta.
-  else if (filters.indicator === '__deapi__') {
-    if (!(window.ABERTURA && ABERTURA.deDevOuApi(m))) return false;
+  else if (filters.indicator === '__api__') {
+    if (!(window.ABERTURA && ABERTURA.viaEndpoint(m))) return false;
+  }
+  else if (filters.indicator === '__painel__') {
+    if (!(window.ABERTURA && ABERTURA.viaPainelDev(m))) return false;
   }
   else if (filters.indicator && spEfetivo(m) !== filters.indicator) return false;
   return true;
@@ -2447,36 +2478,38 @@ function renderIndicators() {
       `onclick="toggleIndicatorFilter('__mes_passado__')">⇥ Mês passado <strong>${herdadas.length}</strong></span>`
     : '';
 
-  /* ABERTA POR FORA DO PLANEJAMENTO — o chip que explica a fita azul no pé da
-     barra. "Também alimente a legenda das cores."
+  /* AS DUAS ORIGENS, EM DOIS CHIPS. "Separe em dois chips, endpoint e painel
+     dev."  Sao coisas diferentes para quem vai agir: uma integracao que abre
+     demanda errada se cobra de quem a mantem; o dev abrindo o proprio card nao
+     se cobra de ninguem. Um numero so mandava cobrar a integracao por metade do
+     que ela nao fez — no dia da separacao, 28 do endpoint e 25 do painel.
 
-     A LEGENDA DESTA TELA É A BARRA DE CHIPS, e ela não só explica: filtra. Um
-     chip que só pinta um quadradinho seria a única coisa aqui que não responde
-     ao clique, e a pessoa tentaria clicar de qualquer forma.
+     A LEGENDA DESTA TELA E A BARRA DE CHIPS, e ela nao so explica: filtra. Um
+     chip que so pintasse um quadradinho seria a unica coisa aqui que nao
+     responde ao clique, e a pessoa tentaria clicar de qualquer forma.
 
-     CONTA POR FORA, como o Pausado e o Mês passado: a demanda continua na etapa
-     dela, e somar aqui faria o total passar do número de demandas.
+     CONTAM POR FORA, como o Pausado e o Mes passado: a demanda continua na
+     etapa dela, e somar aqui faria o total passar do numero de demandas.
 
-     E SOME QUANDO É ZERO — chip zerado que esvazia a tela ao ser clicado é um
-     convite a achar que a tela quebrou. */
-  const deApiLista = visible.filter(m => window.ABERTURA && ABERTURA.deDevOuApi(m));
-  /* O ROTULO DIZ "API" E O TOOLTIP ABRE EM DOIS. Medido no dia da mudanca: das
-     53 marcadas no quadro, 28 vieram do endpoint e 25 do Painel Dev. As duas
-     gravam pela mesma porta — o painel tambem fala com a API —, mas quem le
-     "via API" pensa em script, e um numero que mistura as duas sem dizer isso
-     seria cobrado da integracao errada. */
-  const deApiEndpoint = deApiLista.filter(m => String(m.origem || '') === 'endpoint').length;
-  const deApiPainel = deApiLista.length - deApiEndpoint;
-  const chipDeApi = deApiLista.length
-    ? `<span class="ind-chip deapi ${filters.indicator === '__deapi__' ? 'active-filter' : ''}" ` +
-      `title="Entraram pela API do sistema — o endpoint (${deApiEndpoint}) ou o Painel Dev ` +
-      `(${deApiPainel}), que grava pela mesma porta. Nenhuma passou pelo planejamento. ` +
-      `No calendário elas levam uma fita azul listrada no pé da barra." ` +
-      `onclick="toggleIndicatorFilter('__deapi__')">▨ Inclusão via API <strong>${deApiLista.length}</strong></span>`
+     E SOMEM QUANDO SAO ZERO — chip zerado que esvazia a tela ao ser clicado e
+     um convite a achar que a tela quebrou. */
+  const nApi = visible.filter(m => window.ABERTURA && ABERTURA.viaEndpoint(m)).length;
+  const nPainel = visible.filter(m => window.ABERTURA && ABERTURA.viaPainelDev(m)).length;
+  const chipApi = nApi
+    ? `<span class="ind-chip origem-api ${filters.indicator === '__api__' ? 'active-filter' : ''}" ` +
+      `title="Entraram pelo endpoint da API — script ou integracao, sem passar pelo ` +
+      `planejamento. No calendario levam uma fita azul LISTRADA no pe da barra." ` +
+      `onclick="toggleIndicatorFilter('__api__')">▨ Inclusão via API <strong>${nApi}</strong></span>`
+    : '';
+  const chipPainel = nPainel
+    ? `<span class="ind-chip origem-painel ${filters.indicator === '__painel__' ? 'active-filter' : ''}" ` +
+      `title="O proprio dev abriu no Painel Dev. Grava pela mesma porta da API, mas e ` +
+      `pessoa e nao script. No calendario levam uma fita azul LISA no pe da barra." ` +
+      `onclick="toggleIndicatorFilter('__painel__')">▬ Aberta no Painel Dev <strong>${nPainel}</strong></span>`
     : '';
 
   document.getElementById('indicator-bar').innerHTML =
-    todosChip + chips + chipPausado + chipHerdadas + chipDeApi;
+    todosChip + chips + chipPausado + chipHerdadas + chipApi + chipPainel;
 }
 
 function toggleIndicatorFilter(k) {
@@ -3675,11 +3708,14 @@ function renderGantt() {
         : '';
 
       _gNoQuadro.add(m.id);
-      /* ABERTA PELO DEV OU PELA API — ver `abertura.js`. A regra de quem conta
-         como "sem planejamento" mora la, ao lado da trava de data retroativa:
-         sao a mesma pergunta vista de dois lados, e duas listas divergiriam. */
-      const deApi = window.ABERTURA ? ABERTURA.deDevOuApi(m) : false;
-      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}${ehGrupo ? ' gcard-agrupador' : ''}${paiNaTela ? ' gcard-parte' : ''}${deApi ? ' gcard-deapi' : ''}"
+      /* DE ONDE A DEMANDA VEIO — ver `abertura.js`. A regra de quem conta como
+         "sem planejamento" mora la, ao lado da trava de data retroativa: sao a
+         mesma pergunta vista de dois lados, e duas listas divergiriam.
+         AS DUAS SEPARADAS porque nao sao a mesma conversa: integracao se cobra
+         de quem a mantem; o dev abrindo o proprio card nao se cobra de ninguem. */
+      const viaApi = window.ABERTURA ? ABERTURA.viaEndpoint(m) : false;
+      const viaPainel = window.ABERTURA ? ABERTURA.viaPainelDev(m) : false;
+      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}${ehGrupo ? ' gcard-agrupador' : ''}${paiNaTela ? ' gcard-parte' : ''}${viaApi ? ' gcard-api' : ''}${viaPainel ? ' gcard-painel' : ''}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
         draggable="true"

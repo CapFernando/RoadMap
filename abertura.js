@@ -54,10 +54,26 @@
     return SEM_PLANEJAMENTO.indexOf(String(origem || '').toLowerCase()) < 0;
   }
 
-  /* ABERTA PELO DEV OU PELA API — é o que o gantt pinta de listrado, para quem
-     olha o quadro saber de onde aquela barra veio sem abrir o card. */
+  /* ABERTA PELO DEV OU PELA API — é o que o gantt marca na barra, para quem
+     olha o quadro saber de onde aquela barra veio sem abrir o card.
+     A UNIÃO CONTINUA EXISTINDO porque é ela que responde "não passou pelo
+     planejamento", que é a pergunta da trava de data lá em cima. */
   function deDevOuApi(m) {
     return SEM_PLANEJAMENTO.indexOf(String((m || {}).origem || '').toLowerCase()) >= 0;
+  }
+
+  /* E AS DUAS SEPARADAS, porque não são a mesma conversa.
+   *
+   * O Painel Dev grava pela mesma porta do endpoint — ele também fala com a
+   * API —, mas quem lê "via API" pensa em script, e integração é cobrada de
+   * quem a mantém. Medido no dia em que isto foi escrito: das 53 marcadas no
+   * quadro, 28 vieram do endpoint e 25 do painel. Um número só mandaria cobrar
+   * a integração por metade do que ela não fez. */
+  function viaEndpoint(m) {
+    return String((m || {}).origem || '').toLowerCase() === 'endpoint';
+  }
+  function viaPainelDev(m) {
+    return String((m || {}).origem || '').toLowerCase() === 'dev';
   }
 
   /* O VEREDITO DE UM CAMPO. Devolve `''` quando está tudo bem, ou a frase que a
@@ -114,7 +130,8 @@
   }
 
   var api = { SEM_PLANEJAMENTO: SEM_PLANEJAMENTO, ehData: ehData, planeja: planeja,
-              deDevOuApi: deDevOuApi, checaCampo: checaCampo, checa: checa, ajusta: ajusta };
+              deDevOuApi: deDevOuApi, viaEndpoint: viaEndpoint, viaPainelDev: viaPainelDev,
+              checaCampo: checaCampo, checa: checa, ajusta: ajusta };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.ABERTURA = api;

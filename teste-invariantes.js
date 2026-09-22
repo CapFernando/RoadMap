@@ -13744,111 +13744,118 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        /ABERTURA\.checa\(.{0,200}'admin', PRAZO\.hojeISO\(\)\)/.test(GANTT.replace(/\s+/g, ' ')),
        'e o admin e o gantt como `admin`, que e a que ainda planeja');
 
-    /* ── A LISTRA NO GANTT ──
-       "Trazer em gantt um azul listrado para saber que foi aberto pelo dev ou
-       api." */
-    ok(/const deApi = window\.ABERTURA \? ABERTURA\.deDevOuApi\(m\) : false;/.test(GANTT),
-       'o card pergunta ao modulo quem abriu');
-    ok(/\$\{deApi \? ' gcard-deapi' : ''\}/.test(GANTT), 'e a classe entra na barra');
-    ok(AB.deDevOuApi({ origem: 'dev' }) && AB.deDevOuApi({ origem: 'endpoint' }),
-       'dev e endpoint contam como aberta por fora do planejamento');
-    ok(!AB.deDevOuApi({ origem: 'admin' }) && !AB.deDevOuApi({}),
-       'e admin, ou sem origem, nao');
-    /* A MESMA LISTA DOS DOIS LADOS: quem nao planeja e quem ganha listra sao a
-       mesma pergunta vista de dois lados. */
-    ok(!AB.planeja('dev') && !AB.planeja('endpoint') && AB.planeja('admin'),
-       'e a lista de "quem nao planeja" e a mesma que decide a listra');
+    /* ── AS MARCAS NO GANTT ──
+     *
+     * "Trazer em gantt um azul listrado para saber que foi aberto pelo dev ou
+     *  api."  Depois: "melhore a visibilidade da escrita".  E por fim:
+     *  "separe em dois chips, endpoint e painel dev."
+     *
+     * Chegou em tres rodadas, e o historico importa porque cada uma desfez algo
+     * da anterior:
+     *   1a  listra sobre a barra INTEIRA — o titulo passou a ser lido por cima
+     *   2a  virou fita de 5px no PE, e ganhou chip na legenda
+     *   3a  separou em DUAS origens, cada uma com marca e chip proprios */
+    ok(/const viaApi = window\.ABERTURA \? ABERTURA\.viaEndpoint\(m\) : false;/.test(GANTT) &&
+       /const viaPainel = window\.ABERTURA \? ABERTURA\.viaPainelDev\(m\) : false;/.test(GANTT),
+       'o card pergunta ao modulo, e pelas duas origens separadas');
+    ok(/\$\{viaApi \? ' gcard-api' : ''\}\$\{viaPainel \? ' gcard-painel' : ''\}/.test(GANTT),
+       'e as duas classes entram na barra');
 
-    /* A LISTRA E FUNDO, e nao pseudo-elemento: `::before` e `::after` ja estao
-       ocupados por pausada, atrasado e quebra, e um card pode ser tres coisas ao
-       mesmo tempo. */
-    ok(/\.gantt-card\.gcard-deapi \{\s*background-image: repeating-linear-gradient/.test(
-         GANTT.replace(/\n\s*/g, ' ').replace(/ \{ /g, ' {\n        ')) ||
-       /gcard-deapi \{[\s\S]{0,80}background-image/.test(GANTT),
-       'a listra vai no fundo da barra');
-    ok(!/gcard-deapi::(before|after)/.test(GANTT),
-       'e nao disputa `::before`/`::after`, que ja sao de pausada, atrasado e quebra');
-    /* 135deg PARA NAO CONFUNDIR COM A HERDADA, que corre a 45deg — as duas podem
-       aparecer na mesma barra.
-       CADA BLOCO E MEDIDO SOZINHO: ha DUAS regras `gcard-deapi` (a segunda so
-       troca a cor sobre o vermelho e o verde), e a primeira versao desta
-       invariante varria 200 caracteres a frente — com a sabotagem que punha
-       45deg na primeira, ela achava o 135deg da segunda e passava. */
+    /* AS DUAS SAO EXCLUDENTES no dado, e e o que permite ler a barra sem
+       ambiguidade: uma demanda tem UMA origem. */
+    ok(AB.viaEndpoint({ origem: 'endpoint' }) && !AB.viaPainelDev({ origem: 'endpoint' }),
+       'endpoint e endpoint, e nao painel');
+    ok(AB.viaPainelDev({ origem: 'dev' }) && !AB.viaEndpoint({ origem: 'dev' }),
+       'e painel e painel, e nao endpoint');
+    ok(!AB.viaEndpoint({ origem: 'admin' }) && !AB.viaPainelDev({ origem: 'admin' }) &&
+       !AB.viaEndpoint({}) && !AB.viaPainelDev({}),
+       'e o que veio do planejamento nao e nenhuma das duas');
+    /* E A UNIAO CONTINUA DE PE, porque e ela que responde "nao passou pelo
+       planejamento" — a pergunta da trava de data. */
+    ok(AB.deDevOuApi({ origem: 'endpoint' }) && AB.deDevOuApi({ origem: 'dev' }) &&
+       !AB.deDevOuApi({ origem: 'admin' }),
+       'e a uniao das duas e o que a trava de data usa');
+
+    /* ── AS DUAS MARCAS: FITA NO PE, E TEXTURA DIFERENTE ────────────────
+     *
+     * Dois chips com a MESMA fita seriam duas linhas de legenda com o mesmo
+     * simbolo. A distincao e de TEXTURA e nao de cor: as duas ficam no mesmo
+     * azul, porque dizem a mesma coisa de fundo, e trocar a cor faria parecer
+     * que sao assuntos diferentes.
+     *
+     * A FITA VAI NO PE, e nao no fundo inteiro: a primeira versao listrava a
+     * barra toda e o titulo era lido POR CIMA da textura, em 45% dos cards
+     * abertos (medido: 53 de 119). */
     {
-      /* SO AS REGRAS DE CSS. `gcard-deapi[^{]*\{` tambem casava com a montagem
-         do card no JS (`${deApi ? ' gcard-deapi' : ''}`) e com o comentario, e
-         ai o `every` reprovava o codigo certo. O seletor completo, e `[^{}]*`
-         para nao atravessar o fim de um bloco. */
-      const blocos = [...GANTT.matchAll(/\.gantt-card\.gcard-deapi[^{}]*\{([^}]*)\}/g)]
-        .map(x => x[1]);
-      ok(blocos.length >= 1, 'a regra da listra foi achada', String(blocos.length));
-      /* SO OS BLOCOS QUE DECLARAM O GRADIENTE. Ha um que apenas reposiciona a
-         fita sobre a barra de atrasado (`background-position`), e exigir 135deg
-         dele reprovava codigo certo — a invariante acusou isso na hora. */
-      const comGradiente = blocos.filter(b => /linear-gradient/.test(b));
-      ok(comGradiente.length >= 1 && comGradiente.every(b => /135deg/.test(b)),
-         'toda listra de dev/api corre a 135deg',
-         comGradiente.length + ' bloco(s) com gradiente');
-      ok(blocos.every(b => !/\b45deg/.test(b)),
-         'e nenhuma a 45deg, que e o angulo da fita de HERDADA — as duas podem ' +
-         'aparecer na mesma barra');
-      const herd = (GANTT.match(/gcard-herdada[^{]*\{([^}]*)\}/) || [])[1] || '';
-      ok(/45deg/.test(herd), 'e a fita de herdada continua a 45deg', '');
+      /* O CORPO DE UMA REGRA, pelo seletor EXATO, sobre o texto ACHATADO.
+         A primeira versao montava o regex a partir de um pedaco do seletor e
+         errava o escape; a segunda precisou de uma quebra de linha DENTRO da
+         string do seletor, e a quebra derrubou a suite inteira. Achatar os
+         espacos resolve as duas coisas: o seletor vira uma linha so. */
+      const G1 = GANTT.replace(/\s+/g, ' ');
+      /* `desde` NAO E LUXO: a regra de geometria termina com o MESMO seletor do
+         painel (`.gantt-card.gcard-api, .gantt-card.gcard-painel {`), entao um
+         `indexOf` solto devolvia o corpo errado — e a invariante acusava que a
+         fita do painel nao era lisa quando ela era. */
+      const corpoRegra = (sel, desde) => {
+        const i = G1.indexOf(sel + ' {', desde || 0);
+        if (i < 0) return '';
+        return G1.slice(i + sel.length, G1.indexOf('}', i));
+      };
+      const geometria = corpoRegra('.gantt-card.gcard-api, .gantt-card.gcard-painel');
+      ok(/background-size: 100% 5px;/.test(geometria) &&
+         /background-position: bottom left;/.test(geometria) &&
+         /background-repeat: repeat-x;/.test(geometria),
+         'as duas marcas sao uma FITA de 5px no pe — o titulo fica numa faixa limpa',
+         geometria.slice(0, 60));
 
-      /* ── E ELA E UMA FITA NO PE, E NAO O FUNDO INTEIRO ──────────────────
-       *
-       * "Melhore a visibilidade da escrita, apos o ajuste dificultou a
-       *  leitura."  A primeira versao listrava a barra toda, e o titulo passou
-       *  a ser lido POR CIMA da textura — em 45% dos cards abertos (medido: 53
-       *  de 119), que e quase o quadro inteiro.
-       *
-       * A saida e a mesma que a barra de ATRASADO ja usava: a fita atravessa a
-       * largura e o texto fica numa faixa limpa no meio. */
-      const principal = comGradiente[0] || '';
-      ok(/background-size: 100% 5px;/.test(principal),
-         'a fita tem altura fixa — nao e o fundo da barra inteira');
-      ok(/background-position: bottom left;/.test(principal) &&
-         /background-repeat: repeat-x;/.test(principal),
-         'e mora no PE da barra, longe do titulo');
-      /* ATRASADO JA TEM FITA NO PE (`::after`, 5px). Sem o desvio, a de origem
-         ficaria escondida embaixo da vermelha justamente nas demandas que mais
-         se olha. */
-      ok(/\.gantt-card\.gcard-deapi\.gcard-atrasado \{\s*background-position: bottom 5px left;/
-         .test(GANTT.replace(/\n\s*/g, ' ').replace(/\{ /g, '{\n')) ||
-         /gcard-deapi\.gcard-atrasado[^}]*bottom 5px left/.test(GANTT),
-         'e sobe 5px no atrasado, que ja tem fita propria no pe');
+      const api = corpoRegra('.gantt-card.gcard-api');
+      ok(/repeating-linear-gradient\(135deg/.test(api),
+         'a do endpoint e LISTRADA, a 135deg — maquina', api.slice(0, 60));
+      ok(!/\b45deg/.test(api),
+         'e nao a 45deg, que e o angulo da fita de HERDADA — as duas podem ' +
+         'aparecer na mesma barra');
+      const painel = corpoRegra('.gantt-card.gcard-painel',
+        G1.indexOf('.gantt-card.gcard-api {'));
+      ok(/linear-gradient/.test(painel) && !/repeating-/.test(painel),
+         'e a do Painel Dev e LISA — pessoa, e nao script', painel.slice(0, 60));
+      /* MESMO AZUL NAS DUAS: elas dizem a mesma coisa de fundo. */
+      ok(/#3B8FE8/.test(api) && /#3B8FE8/.test(painel),
+         'e as duas no mesmo azul — cor diferente faria parecer assunto diferente');
+      /* ATRASADO JA TEM FITA NO PE (`::after`, 5px). Sem o desvio, a marca de
+         origem sumiria embaixo da vermelha justamente nas que mais se olha. */
+      ok(/gcard-api\.gcard-atrasado[\s\S]{0,140}bottom 5px left/.test(GANTT),
+         'e as duas sobem 5px no atrasado, que ja tem fita propria no pe');
     }
 
-    /* ── A LEGENDA ─────────────────────────────────────────────────────
+    /* ── A LEGENDA, EM DOIS CHIPS ───────────────────────────────────────
      *
-     * "Tambem alimente a legenda das cores."
+     * "Tambem alimente a legenda das cores."  E depois: "separe em dois chips".
      *
-     * A legenda desta tela E a barra de chips, e ela nao so explica: filtra.
-     * Um chip que so pintasse um quadradinho seria a unica coisa ali que nao
-     * responde ao clique — e a pessoa tentaria clicar de qualquer forma. */
-    ok(/chipHerdadas \+ chipDeApi;/.test(GANTT),
-       'o chip da origem entra na barra de chips, junto dos outros');
-    ok(/const chipDeApi = deApiLista\.length/.test(GANTT),
-       'e some quando nao ha nenhuma — chip zerado que esvazia a tela parece ' +
-       'defeito');
-    ok(/filters\.indicator === '__deapi__'/.test(GANTT) &&
-       /if \(!\(window\.ABERTURA && ABERTURA\.deDevOuApi\(m\)\)\) return false;/.test(GANTT),
-       'e ele FILTRA, como todos os outros desta barra');
-    /* O ROTULO E "Inclusao via API", escolhido pelo Fernando. Ele cobre DUAS
-       origens — o endpoint e o Painel Dev, que grava pela mesma porta —, e no
-       dia da mudanca eram 28 e 25. Um numero que mistura as duas sem dizer isso
-       seria cobrado da integracao errada, entao o tooltip abre a conta. */
-    ok(/Inclusão via API/.test(GANTT), 'o chip se chama "Inclusao via API"');
-    ok(/const deApiEndpoint = deApiLista\.filter\(m => String\(m\.origem \|\| ''\) === 'endpoint'\)\.length;/
-       .test(GANTT) && /\$\{deApiEndpoint\}/.test(GANTT) && /\$\{deApiPainel\}/.test(GANTT),
-       'e o tooltip abre o numero em endpoint e Painel Dev, que sao coisas ' +
-       'diferentes para quem vai cobrar');
-    /* O CHIP CARREGA A PROPRIA FITA. Legenda que nao se parece com o que ela
+     * Sao coisas diferentes para quem vai AGIR: uma integracao que abre demanda
+     * errada se cobra de quem a mantem; o dev abrindo o proprio card nao se
+     * cobra de ninguem. Um numero so mandava cobrar a integracao por metade do
+     * que ela nao fez — no dia da separacao, 28 do endpoint e 25 do painel. */
+    ok(/chipHerdadas \+ chipApi \+ chipPainel;/.test(GANTT),
+       'os dois chips entram na barra, junto dos outros');
+    ok(/Inclusão via API/.test(GANTT) && /Aberta no Painel Dev/.test(GANTT),
+       'e cada um tem o nome da sua origem');
+    ok(/const chipApi = nApi/.test(GANTT) && /const chipPainel = nPainel/.test(GANTT),
+       'e somem quando sao zero — chip zerado que esvazia a tela parece defeito');
+    ok(/filters\.indicator === '__api__'/.test(GANTT) &&
+       /if \(!\(window\.ABERTURA && ABERTURA\.viaEndpoint\(m\)\)\) return false;/.test(GANTT),
+       'o chip da API filtra pela API');
+    ok(/filters\.indicator === '__painel__'/.test(GANTT) &&
+       /if \(!\(window\.ABERTURA && ABERTURA\.viaPainelDev\(m\)\)\) return false;/.test(GANTT),
+       'e o do painel, pelo painel — cada um pelo seu, e nao os dois pela uniao');
+    /* CADA CHIP CARREGA A PROPRIA MARCA. Legenda que nao se parece com o que
        explica obriga a decorar a correspondencia. */
-    ok(/\.ind-chip\.deapi::before,/.test(GANTT) && /\.ind-chip\.deapi::after \{/.test(GANTT),
-       'e ele mostra a fita nas pontas, como o chip de "Mes passado" faz');
-    ok(/\.ind-chip\.deapi::before[\s\S]{0,260}135deg/.test(GANTT),
-       'na mesma inclinacao da barra, senao a legenda desmente o quadro');
+    ok(/\.ind-chip\.origem-api::before[\s\S]{0,180}repeating-linear-gradient\(135deg/.test(GANTT),
+       'o chip da API mostra a fita LISTRADA, como a barra');
+    ok(/\.ind-chip\.origem-painel::before, \.ind-chip\.origem-painel::after \{\s*background: #3B8FE8;/
+       .test(GANTT.replace(/\n\s*/g, ' ').replace(/\{ /g, '{\n      ')) ||
+       /origem-painel::after \{[\s\S]{0,60}background: #3B8FE8/.test(GANTT),
+       'e o do painel mostra a fita LISA');
   }
 
   let erroPz = null;
