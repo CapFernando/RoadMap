@@ -5013,9 +5013,19 @@ ok(/itens: d\.porDev, cor: SIGNIFICADO\.neutro/.test(APRES),
 /* OURO, PRATA E BRONZE FICAM SO NO PODIO. Ali eles nao sao juizo: sao primeiro,
    segundo e terceiro, convencao que se le sem legenda. Fora do podio, seriam uma
    sexta e setima cores sem significado declarado. */
-ok((APRES.match(/C\.ouro/g) || []).length === 1 &&
-   /MEDALHA = \[C\.ouro, C\.prata, C\.bronze\]/.test(APRES),
-   'o ouro aparece uma vez so, e e no podio do ranking');
+/* A CONTAGEM ERA `=== 1`, E REPROVOU CODIGO CERTO: o slide de principais
+   entregas nasceu com o MESMO podio do de projetos, e dois usos legitimos da
+   mesma convencao acusaram violacao. O que a regra quer dizer e que todo uso do
+   ouro E um podio — nao que exista um podio so. A lista virou uma declaracao de
+   modulo, e a invariante passou a cobrar a relacao em vez do numero. */
+{
+  const usos = (APRES.match(/C\.ouro/g) || []).length;
+  const podios = (APRES.match(/var MEDALHA = \[C\.ouro, C\.prata, C\.bronze\];/g) || []).length;
+  ok(usos === podios && podios === 1,
+     'o ouro so aparece na declaracao do podio, e ela e uma so — dois rankings ' +
+     'vizinhos com ordens de cor diferentes seriam lidos como significado',
+     usos + ' uso(s), ' + podios + ' podio(s)');
+}
 
 /* ─── OS CORTES DE PONTOS NO DECK ────────────────────────────────────────
    Os mesmos quatro recortes do painel gerencial, que faltavam no deck.       */
@@ -5302,7 +5312,7 @@ sec('A grade de topicos do deck');
   /* E O COMPARATIVO TAMBEM. "No grafico mes atual x mes anterior, falta detalhes
      da evolucao ou involucao" — era a falta DELE por tras da critica, e um padrao
      que o deixasse de fora reproduziria o deck reclamado. */
-  ok(padrao.join(',') === 'atos,entregas,evolucao,comparativo,pipelines,pontos_dev',
+  ok(padrao.join(',') === 'atos,entregas,evolucao,comparativo,pipelines,pontos_dev,entregas_top,projetos,capacidade',
      'o padrao e o do modelo — o mes, a evolucao, as frentes e os pontos por ' +
      'dev —, dividido em atos e com os dois meses comparados',
      padrao.join(',') || 'nenhuma');
@@ -5323,7 +5333,7 @@ sec('A grade de topicos do deck');
         SEC, { getElementById: (id) => caixas[id] || null });
       return SEC.filter((x) => caixas['ap-s-' + x.k].checked).map((x) => x.k);
     };
-    ok(roda('padrao').join(',') === 'atos,entregas,evolucao,comparativo,pipelines,pontos_dev',
+    ok(roda('padrao').join(',') === 'atos,entregas,evolucao,comparativo,pipelines,pontos_dev,entregas_top,projetos,capacidade',
        '"Padrao do fechamento" deixa marcadas as do modelo, mais a moldura e o ' +
        'comparativo', roda('padrao').join(','));
     ok(roda('tudo').length === SEC.length,
@@ -14917,6 +14927,172 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/\.form-group label\.ap-modo \{ display:flex/.test(ADMIN),
        'o cartao do modo e declarado com especificidade suficiente para vencer a ' +
        'regra generica de label');
+  }
+
+  /* === PRINCIPAIS ENTREGAS ==============================================
+
+     "Principais entregas. Trazer o esforco pela pontuacao e trazer media de
+      tempo gasto para melhor entendimento. Performance e comparacao em relacao
+      ao ultimo mes. Principais projetos."
+
+     O deck dizia QUANTAS entregas e QUANTOS pontos no agregado, e mostrava
+     demanda com nome em dois lugares: o slide de destaque (escolhido a dedo) e o
+     de atraso (o que deu errado). A lista das MAIORES nao existia. */
+  sec('Deck: as principais entregas');
+  {
+    const SE = corpo(APRES, 'function slideEntregas(pptx, e, pagina, periodo) {') || '';
+    ok(!!SE, 'o slide das principais entregas existe');
+
+    /* ── AS TRES CAIXAS ENTRARAM NO PADRAO ──
+        As tres que respondem ao pedido existiam desmarcadas, e o deck do
+        fechamento saia sem nenhuma delas. */
+    const AC = semComentario(ADMIN);
+    ['entregas_top', 'projetos', 'capacidade'].forEach(k => {
+      ok(new RegExp("k: '" + k + "'[^}]*pad: true").test(AC),
+         'a caixa `' + k + '` nasce marcada');
+    });
+
+    /* ── O TEMPO E DO INICIO A ENTREGA, e o slide diz isso ──
+       Sao duas perguntas e as duas tem resposta nesta base: do cadastro sai o que
+       quem pediu esperou (e assim que "entregas rapidas" conta, de proposito); do
+       inicio sai o que o trabalho levou. Sem o rotulo, os dois numeros do deck
+       parecem se contradizer. */
+    ok(/nota: 'do início à entrega'/.test(SE),
+       'o cartao do tempo diz de onde ate onde ele conta');
+    ok(/tempoDe = \(m\) => diasCorridos\(m\.inicio,/.test(ADMIN),
+       'e a conta parte do INICIO, e nao do cadastro');
+
+    /* ── MENOS DIAS E MELHOR ──
+       E o unico numero do deck em que descer e boa noticia. Sem dizer isso, a
+       seta para baixo sairia em vermelho e o slide daria como problema o que e o
+       resultado desejado. */
+    ok(/bomSubir: false/.test(SE),
+       'o tempo medio e o unico indicador do deck em que CAIR e bom, e ele diz ' +
+       'isso ao delta');
+
+    /* ── QUEM NAO TEM INICIO FICA FORA DA MEDIA, E A BASE VAI ESCRITA ──
+       Contar como zero puxaria a media para baixo e o slide diria que o time e
+       mais rapido do que e. E media que esconde a propria base nao se defende
+       quando alguem pergunta. */
+    ok(/filter\(v => v !== null\)/.test(ADMIN),
+       'demanda sem inicio fica fora da media de tempo');
+    ok(/tempo médio apurado em ' \+ e\.comTempo \+ ' de ' \+ e\.entregas/.test(SE),
+       'e o slide diz em quantas de quantas a media foi apurada');
+
+    /* ── O PODIO E O MESMO DO SLIDE DE PROJETOS ──
+       Dois rankings vizinhos com gramaticas diferentes obrigam a sala a
+       reaprender a ler no meio do deck. */
+    ok(/MEDALHA\[i\] \|\| C\.fraco/.test(SE),
+       'o podio e o mesmo objeto que o slide de projetos usa');
+
+    /* ══ E AGORA O QUE NENHUMA EXPRESSAO REGULAR PEGA: O SLIDE, DESENHADO ══
+     *
+     * A conta dos tres andares do cartao fechava em 1,98" numa caixa que acaba em
+     * 1,92": a nota saia escrita POR CIMA da borda. Nenhuma assercao de codigo
+     * enxerga isso — so a previa renderizada mostrou. Entao a previa virou
+     * invariante: a funcao roda com um dubla de pptxgenjs e o desenho inteiro e
+     * medido. */
+    const deps = {
+      C: { fundo: '070B16', fundo2: '0E1428', fundo3: '141C36', borda: '223052',
+           texto: 'FFFFFF', fraco: '8792AD', azul: '60A5FA', verde: '4ADE80',
+           vermelho: 'F87171', ambar: 'FBBF24', ouro: 'FCD34D', prata: 'CBD5E1',
+           bronze: 'D8A07A' },
+      DECKG: require('./deck-grafico.js'),
+    };
+    deps.MEDALHA = [deps.C.ouro, deps.C.prata, deps.C.bronze];
+    const desenhado = [];
+    const slideFalso = {
+      addShape: (t, o) => desenhado.push({ forma: t, o }),
+      addText: (t, o) => desenhado.push({ texto: t, o }),
+      addImage: () => {}, addTable: () => {},
+    };
+    const pptxFalso = { ShapeType: { rect: 'rect', roundRect: 'roundRect',
+                                     ellipse: 'ellipse', line: 'line' } };
+    const cortaR = (t, n) => { t = String(t == null ? '' : t).trim();
+      return t.length <= n ? t : t.slice(0, n - 1) + '…'; };
+    const cabemR = (pol, fs) => Math.max(8, Math.floor(pol / (fs * 0.52 / 72)));
+    let rodapeY = null;
+    const fn = new Function('slideTitulo', 'cartao', 'rodape', 'corta', 'cabemChars',
+                            'C', 'DECKG', 'MEDALHA',
+                            SE + '; return slideEntregas;')(
+      () => slideFalso,
+      (p, s2, x, y, w, h) => desenhado.push({ forma: 'cartao', o: { x, y, w, h } }),
+      (s2, txt, pag) => { rodapeY = 5.05; },
+      cortaR, cabemR, deps.C, deps.DECKG, deps.MEDALHA);
+
+    const E = {
+      entregas: 125, pontos: 1544, tempo: 11.4, comTempo: 112, semPontos: 18,
+      media: 12.4, mediaAnt: 12.8,
+      anterior: { entregas: 170, pontos: 2174, tempo: 13.9 },
+      itens: [21, 13, 13, 8, 8, 5, 5, 3].map((pts, i) => ({
+        codigo: 'AX-3' + (10 + i), pontos: pts, dias: i === 6 ? null : 3 + i * 4,
+        titulo: 'Saída de risco no painel do cedente — recalcular garantias do lote',
+        dev: 'Josias Nascimento', tema: 'Ax Despesa - Estoque SEC',
+      })),
+    };
+    fn(pptxFalso, E, 7, 'Setembro de 2026');
+    ok(desenhado.length > 40, 'ele desenha o slide inteiro', desenhado.length + ' peças');
+
+    /* NADA PASSA DA BORDA, e nada invade o rodape. */
+    const fora = desenhado.filter(p => p.o &&
+      (p.o.x < -0.001 || p.o.y < -0.001 ||
+       p.o.x + (p.o.w || 0) > 10.001 || p.o.y + (p.o.h || 0) > 5.631));
+    ok(fora.length === 0, 'e nenhuma peça dele passa da borda do slide',
+       fora.map(p => (p.texto || p.forma) + ' @' + p.o.y.toFixed(2)).join(', ') || 'nenhuma');
+    const noRodape = desenhado.filter(p => p.o && p.o.y + (p.o.h || 0) > 5.04);
+    ok(noRodape.length === 0,
+       'nem invade a faixa do rodapé, que mora em 5,05"',
+       noRodape.map(p => (p.texto || p.forma)).join(', ') || 'nenhuma');
+
+    /* OS TRES ANDARES DE CADA CARTAO CABEM DENTRO DELE. Foi o defeito real: seis
+       centesimos de transbordo, invisiveis no codigo e visiveis na parede. */
+    /* A FAIXA DE CIMA, e não as linhas do ranking: as duas usam `cartao`, e
+       separá-las pela ALTURA é o que distingue as duas coisas sem inventar um
+       marcador novo — 0,78" contra 0,32". */
+    const cartoes = desenhado.filter(p => p.forma === 'cartao' &&
+                                          p.o.h > 0.5 && p.o.h < 1);
+    ok(cartoes.length === 3, 'a faixa tem os três cartões de número',
+       String(cartoes.length));
+    const vazando = [];
+    cartoes.forEach(c => {
+      desenhado.forEach(p => {
+        if (p.forma === 'cartao' || !p.o || p.o.w == null) return;
+        const dentroX = p.o.x >= c.o.x - 0.001 && p.o.x + p.o.w <= c.o.x + c.o.w + 0.001;
+        const comecaDentro = p.o.y >= c.o.y - 0.001 && p.o.y < c.o.y + c.o.h;
+        if (dentroX && comecaDentro && p.o.y + (p.o.h || 0) > c.o.y + c.o.h + 0.001) {
+          vazando.push(String(p.texto).slice(0, 22) + ' termina em ' +
+                       (p.o.y + p.o.h).toFixed(2) + '" e o cartão em ' +
+                       (c.o.y + c.o.h).toFixed(2) + '"');
+        }
+      });
+    });
+    ok(vazando.length === 0,
+       'e o que começa dentro de um cartão termina dentro dele — rótulo, número ' +
+       'e nota', vazando.join(' | ') || 'nada vaza');
+
+    /* AS LINHAS DO RANKING NAO SE SOBREPOEM. Sete cartoes de 0,32" a cada 0,36":
+       um passo menor que a altura faria as linhas se montarem umas sobre as
+       outras, e o slide continuaria "cabendo" na pagina. */
+    const linhas = desenhado.filter(p => p.forma === 'cartao' && p.o.w > 8);
+    ok(linhas.length === 7, 'sete linhas de ranking', String(linhas.length));
+    const coladas = linhas.filter((l, i) =>
+      i > 0 && l.o.y < linhas[i - 1].o.y + linhas[i - 1].o.h - 0.001);
+    ok(coladas.length === 0, 'e nenhuma se sobrepõe à anterior',
+       String(coladas.length));
+
+    /* A COLUNA DE QUEM FEZ NAO INVADE A DOS PONTOS. Com `wrap: false` o texto
+       que nao cabe nao some: ele sai por cima da coluna vizinha. */
+    const meta = desenhado.find(p => typeof p.texto === 'string' &&
+                                     /Josias/.test(p.texto));
+    const pts = desenhado.find(p => p.texto === '21');
+    ok(!!meta && !!pts && meta.o.x + meta.o.w <= pts.o.x + 0.001,
+       'a coluna de quem fez termina antes da coluna dos pontos',
+       meta ? (meta.o.x + meta.o.w).toFixed(2) + '" <= ' + pts.o.x.toFixed(2) + '"' : '');
+    /* E O PAR QUE NAO CABE VIRA SO O NOME. Meia palavra com reticencia no meio do
+       sistema parece defeito de renderizacao. */
+    ok(!!meta && meta.texto === 'Josias Nascimento',
+       'e quando "quem · sistema" não cabe, fica o nome inteiro em vez de meia ' +
+       'palavra', meta ? meta.texto : '');
   }
 
   let erroPz = null;

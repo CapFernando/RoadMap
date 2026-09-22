@@ -115,6 +115,13 @@
     leitura:   C.texto,
   };
 
+  /* O PÓDIO, UMA VEZ SÓ. Ouro, prata e bronze não são juízo — são primeiro,
+     segundo e terceiro, convenção que se lê sem legenda. Eles estavam
+     declarados dentro de `slideProjetos`, e o slide de principais entregas
+     precisou dos mesmos três: duas listas escritas à mão é o caminho conhecido
+     para a segunda nascer com outra ordem de cores. */
+  var MEDALHA = [C.ouro, C.prata, C.bronze];
+
   function carregaLib() {
     if (window.PptxGenJS) return Promise.resolve();
     return new Promise(function (ok, erro) {
@@ -401,7 +408,6 @@
        mais" cabe em 4,74" — antes do rodape em 5,05". Com seis linhas a ultima
        caia sobre ele. */
     var TOPO = 1.20, ALT = 0.70;
-    var MEDALHA = [C.ouro, C.prata, C.bronze];
     var vis = lista.slice(0, 5);
     vis.forEach(function (p, i) {
       var y = TOPO + i * ALT;
@@ -1750,6 +1756,149 @@
     return s;
   }
 
+  /* ═══ PRINCIPAIS ENTREGAS ══════════════════════════════════════════════════
+   *
+   * "Principais entregas. Trazer o esforço pela pontuação e trazer média de
+   *  tempo gasto para melhor entendimento."
+   *
+   * O deck dizia QUANTAS entregas e QUANTOS pontos no agregado, e mostrava
+   * demanda com nome em dois lugares: o slide de destaque (escolhido a dedo por
+   * quem apresenta) e o de atraso (o que deu errado). A lista das MAIORES não
+   * existia — e é a que responde "o que o time fez este mês" com nome e peso.
+   *
+   * ELE É O IRMÃO DE "PRINCIPAIS PROJETOS", e a forma é de propósito a mesma:
+   * medalha nos três primeiros, uma linha por item, os números à direita. Dois
+   * rankings vizinhos com gramáticas diferentes obrigam a sala a reaprender a
+   * ler no meio do deck.
+   *
+   * O TEMPO É DO INÍCIO À ENTREGA, e não do cadastro. São duas perguntas, e as
+   * duas têm resposta: do cadastro sai o que quem pediu esperou (é assim que
+   * "entregas rápidas" conta, de propósito); do início sai o que o trabalho
+   * levou. Aqui vale a segunda, porque a pergunta veio colada em "esforço pela
+   * pontuação" — as duas falam do trabalho, e não da fila. O rótulo diz isso com
+   * todas as letras, senão os dois números do deck parecem se contradizer.     */
+  function slideEntregas(pptx, e, pagina, periodo) {
+    var ant = e.anterior || {};
+    var s = slideTitulo(pptx, 'Principais entregas',
+      'as maiores em pontos, e o tempo que cada uma levou', pagina, periodo,
+      e.semPontos ? e.semPontos + ' sem pontuação, fora do ranking' : '');
+
+    /* A FAIXA DE TRÊS NÚMEROS, cada um com a variação contra o mês anterior —
+       "performance e comparação em relação ao último mês". Cartões mais baixos
+       que os do slide de frentes (0,78" contra 1,06"): aqui embaixo vem uma lista
+       de oito linhas, e é ela que precisa do espaço. */
+    var chips = [
+      { rot: 'PONTOS ENTREGUES', val: DECKG.num(e.pontos),
+        d: DECKG.delta(e.pontos, ant.pontos) },
+      { rot: 'MÉDIA POR ENTREGA', val: DECKG.num(e.media) + ' pts',
+        d: e.mediaAnt == null ? null : DECKG.delta(e.media, e.mediaAnt) },
+      /* MENOS DIAS É MELHOR, e é o único número do deck em que descer é boa
+         notícia. Sem dizer isso, a seta para baixo sairia em vermelho e o slide
+         daria como problema o que é o resultado desejado. */
+      { rot: 'TEMPO MÉDIO', val: e.tempo == null ? '—' : DECKG.num(e.tempo) + 'd',
+        d: (e.tempo == null || ant.tempo == null) ? null
+          : DECKG.delta(e.tempo, ant.tempo, { bomSubir: false }),
+        nota: 'do início à entrega' },
+    ];
+    var LC = 2.90, VC = 0.15;
+    chips.forEach(function (c, i) {
+      var x = 0.5 + i * (LC + VC);
+      /* O CARTÃO TEM 0,78" E TRÊS ANDARES: rótulo, número e nota. A primeira
+         conta deu 0,20 + 0,40 + 0,16 a partir de 1,22 e fechou em 1,98" — seis
+         centésimos ABAIXO da borda do cartão, com a nota escrita por cima dela.
+         Com 0,18 + 0,34 + 0,16 fecha em 1,88", dentro. */
+      cartao(pptx, s, x, 1.14, LC, 0.78);
+      s.addText(c.rot, { x: x + 0.14, y: 1.22, w: LC - 0.28, h: 0.18,
+                         fontSize: 8.5, bold: true, color: C.fraco, charSpacing: 1.1 });
+      s.addText(String(c.val), { x: x + 0.13, y: 1.40, w: 1.55, h: 0.34,
+                                 fontSize: 22, bold: true, color: C.texto, wrap: false });
+      if (c.d) {
+        DECKG.chipDelta(s, pptx, { delta: c.d, x: x + LC - 1.40, y: 1.44,
+                                   w: 1.26, h: 0.30, fontSize: 10 });
+      }
+      if (c.nota) {
+        s.addText(c.nota, { x: x + 0.14, y: 1.72, w: LC - 0.28, h: 0.16,
+                            fontSize: 7.5, color: C.fraco });
+      }
+    });
+
+    if (!(e.itens || []).length) {
+      s.addText('Nenhuma entrega pontuada no período.', {
+        x: 0.5, y: 2.20, w: 9.0, h: 0.4, fontSize: 15, color: C.fraco });
+      rodape(s, periodo, pagina);
+      return s;
+    }
+
+    /* Oito linhas de 0,36" a partir de 2,10" fecham em 4,98" — depois do rodapé.
+       Com 0,34" e vão de 0,02" elas fecham em 4,98 − 0,26 = 4,72", e a nota cabe
+       em 4,76". A conta é a mesma do slide de projetos, com uma linha a mais. */
+    var TOPO = 2.10, ALT = 0.36;
+    var vis = e.itens.slice(0, 7);
+    vis.forEach(function (it, i) {
+      var y = TOPO + i * ALT;
+      cartao(pptx, s, 0.5, y, 9.0, 0.32);
+      var cor = MEDALHA[i] || C.fraco;
+      var med = { x: 0.62, y: y + 0.05, w: 0.22, h: 0.22,
+                  fill: { color: i < 3 ? cor : C.fundo3 },
+                  line: { color: i < 3 ? cor : C.borda, width: 0.75 } };
+      if (i >= 3) med.rectRadius = 0.04;
+      s.addShape(i < 3 ? pptx.ShapeType.ellipse : pptx.ShapeType.roundRect, med);
+      s.addText(String(i + 1), { x: 0.62, y: y + 0.06, w: 0.22, h: 0.20,
+                                 fontSize: 8, bold: true,
+                                 color: i < 3 ? C.fundo : C.fraco, align: 'center' });
+
+      s.addText([
+        { text: it.codigo ? it.codigo + '  ' : '',
+          options: { color: C.azul, bold: true, fontSize: 9 } },
+        { text: corta(it.titulo, 58), options: { color: C.texto, fontSize: 10.5 } },
+      ], { x: 0.94, y: y + 0.04, w: 4.90, h: 0.24, valign: 'middle', wrap: false });
+
+      /* QUEM FEZ E EM QUE SISTEMA, e o corte é pelo que a coluna comporta.
+         `corta(meta, 40)` cabia 26 caracteres numa caixa de 1,55", e com
+         `wrap: false` o excesso não some — ele sai por cima da coluna dos
+         pontos. A coluna foi para 1,95" e o corte passou a sair dela.
+
+         E QUANDO O PAR NÃO CABE, FICA O NOME. Meia palavra com reticência no
+         meio do sistema parece defeito de renderização; a pessoa é a atribuição
+         que importa, e o sistema se recupera pelo código da demanda ao lado. */
+      var cabeMeta = cabemChars(1.95, 8);
+      var meta = [it.dev, it.tema].filter(Boolean).join(' · ');
+      if (meta.length > cabeMeta) meta = corta(it.dev || it.tema || '', cabeMeta);
+      s.addText(meta, {
+        x: 5.90, y: y + 0.04, w: 1.95, h: 0.24, fontSize: 8,
+        color: C.fraco, valign: 'middle', wrap: false });
+
+      s.addText(DECKG.num(it.pontos), {
+        x: 7.90, y: y + 0.03, w: 0.70, h: 0.26, fontSize: 12, bold: true,
+        color: C.azul, align: 'right', wrap: false });
+      s.addText('pts', { x: 8.61, y: y + 0.09, w: 0.28, h: 0.18,
+                         fontSize: 7, color: C.fraco });
+      s.addText(it.dias == null ? '—' : DECKG.num(it.dias) + 'd', {
+        x: 8.90, y: y + 0.03, w: 0.58, h: 0.26, fontSize: 12, bold: true,
+        color: C.texto, align: 'right', wrap: false });
+    });
+
+    var sobra = (e.entregas || 0) - vis.length;
+    var nota = [];
+    if (sobra > 0) {
+      nota.push('e mais ' + sobra + (sobra === 1 ? ' entrega no período' : ' entregas no período'));
+    }
+    /* QUANTAS ENTRARAM NA MÉDIA DE TEMPO. Demanda sem início registrado fica
+       fora — contá-la como zero diria que o time é mais rápido do que é —, e uma
+       média que esconde a própria base não se defende quando alguém pergunta. */
+    if (e.comTempo != null && e.entregas) {
+      nota.push('tempo médio apurado em ' + e.comTempo + ' de ' + e.entregas +
+                ' entregas (as que têm data de início)');
+    }
+    if (nota.length) {
+      s.addText(nota.join('   ·   '), {
+        x: 0.5, y: TOPO + vis.length * ALT + 0.04, w: 9.0, h: 0.2,
+        fontSize: 7.5, color: C.fraco });
+    }
+    rodape(s, periodo, pagina);
+    return s;
+  }
+
   /* ═══ ESFORÇO POR FRENTE: HORAS E PONTOS ═══════════════════════════════════
    *
    * A segunda referência dos comparativos — colunas para uma grandeza, linha
@@ -2431,6 +2580,15 @@
       if (cortesP.semana) cena('capacidade', function (p) { slidePontos(pptx, d.pontos, p, d.periodo); });
       if (cortesP.dev) cena('capacidade', function (p) { slidePontosDev(pptx, d.pontos, p, d.periodo); });
       if (cortesP.tema) cena('capacidade', function (p) { slidePontos2(pptx, d.pontos, p, d.periodo); });
+    }
+
+    /* AS PRINCIPAIS ENTREGAS FECHAM O ATO DA CAPACIDADE, e a ordem tem razão: os
+       slides anteriores dizem quanto peso saiu por frente, por projeto e por
+       pessoa — sempre em agregado. Este dá NOME às maiores. É a pergunta que a
+       sala faz depois de ver os totais, e até hoje ela só era respondida pelo
+       slide de destaque, que é escolhido a dedo e não é ranking. */
+    if (d.secoes.entregas_top && d.entregasTop && (d.entregasTop.itens || []).length) {
+      cena('capacidade', function (p) { slideEntregas(pptx, d.entregasTop, p, d.periodo); });
     }
 
     /* ─── ATO 3 · O COMBINADO ────────────────────────────────────────────

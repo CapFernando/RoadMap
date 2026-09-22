@@ -1178,7 +1178,7 @@
 <script src="capa-tecnologia.js?v=e3aaaae81d"></script>
 <script src="pipelines.js?v=ef35f28412"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=f613e7c011"></script>
+<script src="apresentacao.js?v=4a7e80bbc6"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -5743,10 +5743,17 @@ const AP_SECOES = [
   { k: 'pipelines', rot: 'Frentes de trabalho: horas planejadas × realizadas',
     n: 2, pad: true, nota: 'o segundo cruza horas e pontos por frente — o que cada hora rendeu' },
   { k: 'pontos_dev', rot: 'Pontos entregues por desenvolvedor', n: 1, pad: true },
+  /* AS PRINCIPAIS ENTREGAS, OS PROJETOS E A CAPACIDADE ENTRAM NO PADRÃO.
+     "Principais entregas. Trazer o esforço pela pontuação e trazer média de
+     tempo gasto. Performance e comparação em relação ao último mês. Principais
+     projetos." — as três caixas que respondem a esse pedido existiam
+     desmarcadas, e o deck do fechamento saía sem nenhuma delas. */
+  { k: 'entregas_top', rot: 'Principais entregas: pontos e tempo de cada uma',
+    n: 1, pad: true, nota: 'com a variação de pontos, média e tempo contra o mês anterior' },
   { k: 'pontos_semana', rot: 'Pontos entregues por semana', n: 1 },
   { k: 'pontos_tema', rot: 'Pontos entregues por sistema', n: 1 },
-  { k: 'projetos', rot: 'Projetos em aberto', n: 1 },
-  { k: 'capacidade', rot: 'Planejado × entregue em pontos, por dev', n: 1 },
+  { k: 'projetos', rot: 'Principais projetos em aberto', n: 1, pad: true },
+  { k: 'capacidade', rot: 'Planejado × entregue em pontos, por dev', n: 1, pad: true },
   { k: 'prazo',    rot: 'No prazo × com atraso',
     n: 2, nota: 'o segundo slide lista as atrasadas, e só sai se houver' },
   { k: 'rapidas',  rot: 'Entregas rápidas (até 2 dias)', n: 1 },
@@ -6814,6 +6821,64 @@ async function apresGerar(opts) {
         };
       })(),
       rapidas: { itens: rapidasLista, total: conc.length },
+      /* AS PRINCIPAIS ENTREGAS, COM ESFORÇO E TEMPO.
+       *
+       * "Principais entregas. Trazer o esforço pela pontuação e trazer média de
+       * tempo gasto para melhor entendimento."
+       *
+       * O deck dizia QUANTAS entregas e QUANTOS pontos no agregado, e mostrava
+       * demanda com nome só no slide de destaque (que é escolhido a dedo) e no de
+       * atraso (que é o que deu errado). A lista das maiores não existia — e é a
+       * que responde "o que o time fez este mês" com nome e peso.
+       *
+       * O TEMPO É DO INÍCIO À ENTREGA, e não do cadastro. São duas perguntas
+       * diferentes e as duas têm resposta nesta base: do cadastro sai o que quem
+       * pediu esperou (e é assim que "entregas rápidas" conta, de propósito); do
+       * início sai o que o trabalho levou. Aqui vale a segunda, porque a pergunta
+       * veio colada em "esforço pela pontuação" — as duas falam do trabalho, e
+       * não da fila.
+       *
+       * QUEM NÃO TEM INÍCIO FICA FORA DA MÉDIA, e o slide diz quantas. Contar
+       * como zero puxaria a média para baixo e o slide diria que o time é mais
+       * rápido do que é. */
+      entregasTop: (() => {
+        const tempoDe = (m) => diasCorridos(m.inicio,
+          (window.PRAZO ? PRAZO.fimDoDev(m) : null) || m.concluido_em);
+        const medida = (lista) => {
+          const ts = lista.map(tempoDe).filter(v => v !== null);
+          return {
+            pontos: lista.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0),
+            entregas: lista.length,
+            tempo: ts.length ? Math.round(ts.reduce((a, b) => a + b, 0) / ts.length * 10) / 10 : null,
+            comTempo: ts.length,
+          };
+        };
+        const agora = medida(conc), antes = medida(concAnt);
+        const nomeTema = (m) => {
+          const t = (state.temas || []).find(x => String(x.id) === String(m.tema_id));
+          return t ? (window.catalogoCurto ? catalogoCurto(t.nome) : t.nome) : '';
+        };
+        return {
+          ...agora,
+          anterior: antes,
+          media: agora.entregas ? Math.round(agora.pontos / agora.entregas * 10) / 10 : null,
+          mediaAnt: antes.entregas ? Math.round(antes.pontos / antes.entregas * 10) / 10 : null,
+          /* ORDENADAS POR PONTO, e o desempate é pelo tempo: entre duas de oito
+             pontos, a que levou menos dias é a que a sala quer ver primeiro. */
+          itens: conc
+            .filter(m => (Number(m.poker_pontos) || 0) > 0)
+            .sort((a, b) => (Number(b.poker_pontos) || 0) - (Number(a.poker_pontos) || 0) ||
+                            ((tempoDe(a) == null ? 1e9 : tempoDe(a)) -
+                             (tempoDe(b) == null ? 1e9 : tempoDe(b))))
+            .slice(0, 8)
+            .map(m => ({
+              codigo: m.codigo || '', titulo: m.titulo || '',
+              dev: m.dev || '', tema: nomeTema(m),
+              pontos: Number(m.poker_pontos) || 0, dias: tempoDe(m),
+            })),
+          semPontos: conc.filter(m => !(Number(m.poker_pontos) || 0)).length,
+        };
+      })(),
       quebra,
       fluxo: { recebidas: entradas.length, entregues: conc.length,
                tocadas, backlogInicio, backlogFim, porTipo,
