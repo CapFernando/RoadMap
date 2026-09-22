@@ -2460,11 +2460,19 @@ function renderIndicators() {
      E SOME QUANDO É ZERO — chip zerado que esvazia a tela ao ser clicado é um
      convite a achar que a tela quebrou. */
   const deApiLista = visible.filter(m => window.ABERTURA && ABERTURA.deDevOuApi(m));
+  /* O ROTULO DIZ "API" E O TOOLTIP ABRE EM DOIS. Medido no dia da mudanca: das
+     53 marcadas no quadro, 28 vieram do endpoint e 25 do Painel Dev. As duas
+     gravam pela mesma porta — o painel tambem fala com a API —, mas quem le
+     "via API" pensa em script, e um numero que mistura as duas sem dizer isso
+     seria cobrado da integracao errada. */
+  const deApiEndpoint = deApiLista.filter(m => String(m.origem || '') === 'endpoint').length;
+  const deApiPainel = deApiLista.length - deApiEndpoint;
   const chipDeApi = deApiLista.length
     ? `<span class="ind-chip deapi ${filters.indicator === '__deapi__' ? 'active-filter' : ''}" ` +
-      `title="Abertas no Painel Dev ou pelo endpoint da API — não passaram pelo planejamento. ` +
+      `title="Entraram pela API do sistema — o endpoint (${deApiEndpoint}) ou o Painel Dev ` +
+      `(${deApiPainel}), que grava pela mesma porta. Nenhuma passou pelo planejamento. ` +
       `No calendário elas levam uma fita azul listrada no pé da barra." ` +
-      `onclick="toggleIndicatorFilter('__deapi__')">▨ Aberta por fora <strong>${deApiLista.length}</strong></span>`
+      `onclick="toggleIndicatorFilter('__deapi__')">▨ Inclusão via API <strong>${deApiLista.length}</strong></span>`
     : '';
 
   document.getElementById('indicator-bar').innerHTML =

@@ -13834,6 +13834,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/filters\.indicator === '__deapi__'/.test(GANTT) &&
        /if \(!\(window\.ABERTURA && ABERTURA\.deDevOuApi\(m\)\)\) return false;/.test(GANTT),
        'e ele FILTRA, como todos os outros desta barra');
+    /* O ROTULO E "Inclusao via API", escolhido pelo Fernando. Ele cobre DUAS
+       origens — o endpoint e o Painel Dev, que grava pela mesma porta —, e no
+       dia da mudanca eram 28 e 25. Um numero que mistura as duas sem dizer isso
+       seria cobrado da integracao errada, entao o tooltip abre a conta. */
+    ok(/Inclusão via API/.test(GANTT), 'o chip se chama "Inclusao via API"');
+    ok(/const deApiEndpoint = deApiLista\.filter\(m => String\(m\.origem \|\| ''\) === 'endpoint'\)\.length;/
+       .test(GANTT) && /\$\{deApiEndpoint\}/.test(GANTT) && /\$\{deApiPainel\}/.test(GANTT),
+       'e o tooltip abre o numero em endpoint e Painel Dev, que sao coisas ' +
+       'diferentes para quem vai cobrar');
     /* O CHIP CARREGA A PROPRIA FITA. Legenda que nao se parece com o que ela
        explica obriga a decorar a correspondencia. */
     ok(/\.ind-chip\.deapi::before,/.test(GANTT) && /\.ind-chip\.deapi::after \{/.test(GANTT),
