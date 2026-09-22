@@ -1315,8 +1315,7 @@ const RPPT = fs.readFileSync('relatorio-ppt.js', 'utf8');
      regra continuaria passando e teria deixado de defender o codigo que ela
      existe para defender. */
   const fontes = [['relatorio-ppt.js', RPPT], ['apresentacao.js', APRES],
-                  ['deck-grafico.js', fs.readFileSync('deck-grafico.js', 'utf8')],
-                  ['deck-narrativa.js', fs.readFileSync('deck-narrativa.js', 'utf8')]];
+                  ['deck-grafico.js', fs.readFileSync('deck-grafico.js', 'utf8')]];
   const suspeitas = [];
   for (const [nome, texto] of fontes) {
     texto.split(/\r?\n/).forEach((linha, i) => {
@@ -3540,59 +3539,55 @@ ok(/hrLog > 0 \? hrLog \+ 'h' : hrEf \+ 'h\*'/.test(ADMIN),
    estava partido ao meio por "onde atuamos" e "quem pediu", que sao produto —
    dois trocas de assunto que ninguem pediu.                                   */
 (() => {
-  /* A ORDEM AGORA E DADO, E NAO COMENTARIO.
-     Ate aqui isto cobrava os comentarios `ATO N · ...`, que era a unica
-     evidencia que existia. Hoje cada slide DECLARA o ato dele — `cena('rumo',
-     ...)` —, e a montagem agrupa por ato. Cobrar o comentario seria cobrar a
-     legenda em vez do fato: ele pode estar certo com o codigo errado. */
+  /* A ORDEM DO DECK E A ORDEM DAS DECLARACOES.
+     Isto ja cobrou os comentarios `ATO N · ...` e depois a chave de ato de cada
+     cena. Os dois sumiram com a moldura narrativa — "retirar, nao faz sentido" —,
+     e cobrar ora um ora outro esta mostrando que a EVIDENCIA mudava mais que a
+     regra. A regra e uma so e nao mudou nunca: a ordem em que os slides aparecem
+     na reuniao. Hoje ela e literal — `roteiro.forEach` desenha na ordem em que as
+     cenas foram declaradas —, entao a invariante mede POSICAO no arquivo, que e
+     a coisa que de fato determina o deck. */
   const MONTA = corpo(APRES, 'async function montaDeck(d) {') || '';
-  const NARRA = require('./deck-narrativa.js');
+  const onde = (marca) => MONTA.indexOf(marca);
 
-  /* Que ato desenha um dado slide: a ultima `cena(` declarada antes dele. */
-  const atoDe = (marca) => {
-    const i = MONTA.indexOf(marca);
-    if (i < 0) return null;
-    const re = /cena\('(\w+)'/g;
-    let m, atual = null;
-    while ((m = re.exec(MONTA)) && m.index < i) atual = m[1];
-    return atual;
-  };
-  const sequencia = (MONTA.match(/cena\('(\w+)'/g) || [])
-    .map(x => x.replace(/cena\('|'/g, ''))
-    .filter((c, i, a) => c !== a[i - 1]);
+  ok(/roteiro\.forEach\(function \(c\) \{ c\.desenha\(\+\+p\); \}\);/.test(MONTA),
+     'o deck sai na ordem em que as cenas foram declaradas, sem agrupamento no meio');
+  ok(!/c\.ato/.test(MONTA) && !/plano\.atos/.test(MONTA),
+     'e nada reordena as cenas pelas costas de quem monta');
 
-  ok(sequencia.join(',') === NARRA.atos.map(a => a.chave).join(','),
-     'os cinco atos do deck aparecem na ordem em que a historia e contada',
-     sequencia.join(' > '));
+  /* ── A PAGINA 2 E "FRENTES DE TRABALHO" ──
+     "Essa deveria ser a pagina 2, atual e a 7." E o que o modelo faz: a visao
+     geral da execucao vem logo depois da capa. Abrir pela conta da fila comeca a
+     conversa pelo meio. */
+  const iFrentes = onde('slidePipelines(pptx, d.pipelines');
+  const iMes = onde('slideMes(pptx, d, p)');
+  ok(iFrentes > 0 && iMes > 0 && iFrentes < iMes,
+     'as frentes de trabalho sao o primeiro slide de conteudo — antes de "O MES"');
+  const primeira = ['slidePipelines(pptx, d.pipelines', 'slideMes(pptx, d, p)',
+                    'slideEvolucao(pptx, d.evolucao', 'slideComparativo(pptx, d, p)']
+    .map(onde).filter(i => i > 0);
+  ok(primeira.every((v, i) => i === 0 || v > primeira[i - 1]),
+     'e a abertura segue: frentes, o mes, a evolucao e o comparativo',
+     primeira.join(' < '));
 
-  ok(atoDe('slideEvolucao(pptx, d.evolucao') === 'situacao',
-     'a evolucao fica no ato do mes: o mes so tem sentido dentro da serie');
-  ok(atoDe('slidePipelines(pptx, d.pipelines') === 'capacidade',
-     'as frentes ficam no ato da capacidade, antes de o deck cobrar prazo');
-  ok(atoDe('slidePrazo(pptx, d, p)') === 'combinado',
-     'e o prazo so e cobrado depois de a sala ver onde o mes foi gasto');
-  /* O PROJETO SUBIU PARA JUNTO DAS FRENTES — pedido do Fernando. A frente diz EM QUE
-   o mes foi gasto e o projeto diz PARA QUE: uma pergunta puxa a outra, e separa-las
-   por cinco slides obrigava a sala a lembrar do numero anterior. */
-  ok(/slidePipelines\(pptx[\s\S]{0,800}slideProjetos\(pptx/.test(MONTA),
-     'os projetos vem logo depois das frentes de trabalho');
+  /* O ESFORCO POR FRENTE VEM COLADO NAS FRENTES: o primeiro diz quanto cada
+     frente consumiu, o segundo diz o que cada hora rendeu. Separados, a pergunta
+     seguinte se perde. */
+  ok(/slidePipelines\(pptx[\s\S]{0,400}slideEsforcoFrente\(pptx/.test(MONTA),
+     'o esforco por frente vem logo depois das frentes');
+  /* O PROJETO VEM DEPOIS DAS FRENTES — pedido do Fernando. A frente diz EM QUE o
+     mes foi gasto e o projeto diz PARA QUE. */
+  ok(onde('slideProjetos(pptx, d.projetos') > iFrentes,
+     'os projetos vem depois das frentes de trabalho');
   ok((APRES.match(/slideProjetos\(pptx, d\.projetos/g) || []).length === 1,
      'e o slide de projetos e gerado uma vez so — mover nao pode virar duplicar');
-  // A marca do gantt precisa ser a CHAMADA, e nao a definicao: `slideGanttDev(pptx, dv`
-  // casa com as duas, e a definicao mora la em cima, fora do montaDeck.
-  ok(atoDe('slideTime(pptx, d.time') === 'esforco' &&
-     atoDe('slideGanttDev(pptx, dv, p') === 'esforco',
-     'e o bloco de pessoas fica inteiro num ato so, sem corte no meio');
 
   // O fecho: destaques e "o que vem" sao as ultimas paginas de quem apresenta.
-  const iDest = MONTA.indexOf('(d.destaques || []).forEach');
-  const iVem  = MONTA.indexOf("var sp = slideTitulo(pptx, 'O que vem'");
-  const iBarr = MONTA.indexOf("titulo: 'Entregas por desenvolvedor'");
+  const iDest = onde('(d.destaques || []).forEach');
+  const iVem  = onde("var sp = slideTitulo(pptx, 'O que vem'");
+  const iBarr = onde("titulo: 'Entregas por desenvolvedor'");
   ok(iDest > iBarr && iVem > iDest,
      'os destaques vem depois dos graficos, e "o que vem" depois deles');
-  ok(atoDe('(d.destaques || []).forEach') === 'esforco' ||
-     atoDe("var sp = slideTitulo(pptx, 'O que vem'") === 'rumo',
-     'e o fecho inteiro mora no ultimo ato');
 })();
 ok(/fluxo: \{ recebidas: entradas\.length, entregues: conc\.length/.test(ADMIN),
    'e ele recebe entradas e entregues do mesmo periodo');
@@ -4912,7 +4907,7 @@ ok(/SIGNIFICADO\.categoria2/.test(APRES),
   if (!sl) return;
   ok(!/x\.rot \+ \(x\.parcial \? '…' : ''\)/.test(sl),
      'o mes em curso nao e marcado com reticencia atras do nome');
-  ok(/'mês em curso'/.test(sl),
+  ok(/\(ult\.parcial \? ' \(em curso\)' : ''\)/.test(sl),
      'ele e dito por escrito, que e o que a reticencia nunca disse');
   ok(!/x\.pct >= 80 \? C\.verde/.test(sl),
      'o percentual mes a mes tambem nao muda de cor conforme o valor');
@@ -5272,15 +5267,9 @@ sec('A grade de topicos do deck');
 
   /* A CONTAGEM DE SLIDES E DECLARADA, e bate com o gerador. `pontos` chama tres
      funcoes de slide; `prazo` desenha o painel e mais a tabela das atrasadas. */
-  /* A CAIXA DOS ATOS E A EXCECAO, e ela e honesta: o numero de divisores e o
-     numero de atos QUE TEM CONTEUDO, e isso muda conforme as outras caixas. Um
-     `n` fixo ali seria uma promessa que o gerador nao cumpre. */
-  ok(SEC.every(x => x.k === 'atos' || (Number.isInteger(x.n) && x.n >= 1)),
-     'toda caixa declara quantos slides produz — menos a dos atos, cujo numero ' +
-     'depende de quantos atos sobrarem com conteudo',
-     SEC.filter(x => x.k !== 'atos' && !(x.n >= 1)).map(x => x.k).join() || '');
-  ok(!!(SEC.find(x => x.k === 'atos') || {}).nota,
-     'e ela diz isso na tela, em vez de deixar a conta sem resposta');
+  ok(SEC.every(x => Number.isInteger(x.n) && x.n >= 1),
+     'toda caixa declara quantos slides produz',
+     SEC.filter(x => !(x.n >= 1)).map(x => x.k).join() || '');
   const corpoGer = corpo(APRES, 'async function montaDeck(') ||
                    corpo(APRES, 'function montaDeck(') || APRES;
   const trecho = (k) => {
@@ -5327,17 +5316,13 @@ sec('A grade de topicos do deck');
    * slides. O deck saia com vinte e um, e quem montava desmarcava onze caixas
    * na mao toda vez. A decima segunda que escapasse ia para a diretoria. */
   const padrao = SEC.filter((x) => x.pad).map((x) => x.k);
-  /* A MOLDURA NARRATIVA ENTRA NO PADRAO. Ela nao acrescenta assunto nenhum —
-     acrescenta os divisores dos atos que o padrao ja produz —, e o pedido foi
-     literal: "necessito que a apresentacao traga um storytelling". Deixa-la
-     desmarcada por omissao devolveria o deck corrido de que a diretoria
-     reclamou. */
-  /* E O COMPARATIVO TAMBEM. "No grafico mes atual x mes anterior, falta detalhes
-     da evolucao ou involucao" — era a falta DELE por tras da critica, e um padrao
-     que o deixasse de fora reproduziria o deck reclamado. */
-  ok(padrao.join(',') === 'atos,entregas,evolucao,comparativo,pipelines,pontos_dev,entregas_top,projetos,capacidade',
-     'o padrao e o do modelo — o mes, a evolucao, as frentes e os pontos por ' +
-     'dev —, dividido em atos e com os dois meses comparados',
+  /* O COMPARATIVO ENTRA NO PADRAO. "No grafico mes atual x mes anterior, falta
+     detalhes da evolucao ou involucao" — era a falta DELE por tras da critica, e
+     um padrao que o deixasse de fora reproduziria o deck reclamado.
+     A MOLDURA DE ATOS SAIU daqui e do deck: "retirar, nao faz sentido". */
+  ok(padrao.join(',') === 'entregas,evolucao,comparativo,pipelines,pontos_dev,entregas_top,projetos,capacidade',
+     'o padrao e o do modelo, mais o comparativo dos dois meses, as principais ' +
+     'entregas, os projetos e a capacidade',
      padrao.join(',') || 'nenhuma');
   /* E O RESTO NAO SAIU: continua ali, a um clique. Tirar a caixa seria decidir
      pelo Fernando o que ele nunca mais pode mostrar. */
@@ -5356,9 +5341,9 @@ sec('A grade de topicos do deck');
         SEC, { getElementById: (id) => caixas[id] || null });
       return SEC.filter((x) => caixas['ap-s-' + x.k].checked).map((x) => x.k);
     };
-    ok(roda('padrao').join(',') === 'atos,entregas,evolucao,comparativo,pipelines,pontos_dev,entregas_top,projetos,capacidade',
-       '"Padrao do fechamento" deixa marcadas as do modelo, mais a moldura e o ' +
-       'comparativo', roda('padrao').join(','));
+    ok(roda('padrao').join(',') === 'entregas,evolucao,comparativo,pipelines,pontos_dev,entregas_top,projetos,capacidade',
+       '"Padrao do fechamento" deixa marcadas exatamente as do padrao',
+       roda('padrao').join(','));
     ok(roda('tudo').length === SEC.length,
        'e "Tudo" remarca todas — o caminho de volta custa um clique, e nao onze',
        roda('tudo').length + ' de ' + SEC.length);
@@ -5409,11 +5394,11 @@ sec('A grade de topicos do deck');
     /* E CADA CORTE MANDA NO SLIDE DELE. Trocar dois fios aqui nao quebra nada —
        o deck sai com o mesmo numero de slides, so que com o grafico errado, e
        o erro so apareceria na sala. */
-    ok(/if \(cortesP\.semana\) cena\('capacidade'[^;]*slidePontos\(pptx/.test(deck),
+    ok(/if \(cortesP\.semana\) cena\(function \(p\) \{ slidePontos\(pptx/.test(deck),
        'o corte por semana liga o slide por semana');
-    ok(/if \(cortesP\.dev\) cena\('capacidade'[^;]*slidePontosDev\(pptx/.test(deck),
+    ok(/if \(cortesP\.dev\) cena\(function \(p\) \{ slidePontosDev\(pptx/.test(deck),
        'o corte por dev liga o slide por dev');
-    ok(/if \(cortesP\.tema\) cena\('capacidade'[^;]*slidePontos2\(pptx/.test(deck),
+    ok(/if \(cortesP\.tema\) cena\(function \(p\) \{ slidePontos2\(pptx/.test(deck),
        'e o corte por sistema liga o slide por sistema');
   }
 })();
@@ -14112,17 +14097,43 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          ruins.join(' | ') || 'nenhuma reprova');
     }
 
-    /* ── E O SLIDE DE EVOLUCAO USA A GRAMATICA ──
-       Era ele que o Fernando nomeou: "mes atual x mes anterior, falta detalhes
-       da evolucao". */
+    /* ── O SLIDE DE EVOLUCAO PAREIA AS BARRAS QUE SE COMPARAM ──
+     *
+     * "O grafico esta muito simples; ao ver a imagem, qualquer um consiga ler e
+     *  comparar SEM A NECESSIDADE DE LEITURA."
+     *
+     * Ele agrupava as barras POR MES — entraram e sairam de agosto juntas —, e
+     * com isso a comparacao que o slide existe para mostrar acontecia entre
+     * barras separadas por meia pagina.
+     *
+     * TENTEI CONSERTAR LIGANDO OS TOPOS COM UM TRACO, e o traco atravessou a
+     * barra do meio: o mesmo defeito que ele ja tinha apontado no slide de
+     * esforco ("o risco sobrepos muita coisa"). Nao e ajuste de posicao — com as
+     * barras agrupadas por mes, QUALQUER ligacao entre meses cruza a serie
+     * vizinha, por construcao. O agrupamento virou por SERIE, e as duas barras
+     * que se comparam ficam lado a lado. */
     const ev = corpo(APRES, 'function slideEvolucao(pptx, serie, pagina, periodo) {');
     ok(!!ev, 'o slide de evolucao foi achado');
-    ok(!!ev && /DECKG\.barras\(s, pptx, \{/.test(ev),
-       'ele desenha pela barra COMUM, e nao pela dele');
-    ok(!!ev && /delta: ant \? DECKG\.delta\(x\.sairam \|\| 0, ant\.sairam \|\| 0\) : null/.test(ev),
-       'e cada mes carrega o crescimento contra o anterior — era o que faltava');
-    ok(!!ev && /DECKG\.delta\(ult\.sairam \|\| 0, pen\.sairam \|\| 0\)/.test(ev),
-       'e o topo do slide traz a comparacao do mes contra o anterior');
+    ok(!!ev && (ev.match(/DECKG\.comparativo\(s, pptx, \{/g) || []).length === 1,
+       'ele usa o bloco de comparacao pareada — o mesmo de "este mes contra o ' +
+       'anterior", desenhado uma vez para as duas series');
+    ok(!!ev && /rot: 'ENTRARAM NA FILA'/.test(ev) && /rot: 'SAÍRAM DA FILA'/.test(ev),
+       'com uma comparacao para o que entrou e outra para o que saiu');
+    ok(!!ev && !/DECKG\.conector\(/.test(ev) && !/DECKG\.barras\(/.test(ev),
+       'e nao sobrou nem o traco que cruzava a barra vizinha nem o agrupamento ' +
+       'por mes que o obrigava a cruzar');
+
+    /* ── ENTRAR MAIS NAO E BOA NOTICIA ──
+       E fila crescendo. Sair mais e. Sem dizer isso, os dois chips sairiam
+       verdes por subirem — e o slide daria como ganho o que e acumulo. */
+    ok(!!ev && /campo: 'entraram'[^}]*bomSubir: false/.test(ev) &&
+       /campo: 'sairam'[^}]*bomSubir: true/.test(ev),
+       'entrar mais conta como piora e sair mais como melhora');
+
+    /* ── SEM PERIODO ANTERIOR, ELE DIZ ISSO ──
+       Um bloco de comparacao com uma barra so seria lido como queda a zero. */
+    ok(!!ev && /Só há um período na série/.test(ev),
+       'e com um periodo so na serie ele diz que nao ha com o que comparar');
     ok(!!ev && !/s\.addShape\(pptx\.ShapeType\.rect, \{ x: cx/.test(ev),
        'e nao sobrou barra desenhada a mao neste slide');
     /* A FRASE DE LEITURA: dois deltas lado a lado deixam a sala montando a
@@ -14250,279 +14261,6 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'o PNG e gerado uma vez por deck, e nao por slide');
 
     ok(/<script src="deck-fundo\.js\?v=/.test(ADMIN), 'e o admin carrega o modulo');
-  }
-
-  /* === A NARRATIVA, VISIVEL ==============================================
-
-     "Volto a dizer que necessito que a apresentacao traga um storytelling."
-
-     O deck JA tinha a historia — em comentario. Os atos organizavam a ordem dos
-     slides desde sempre e nada disso chegava a sala. `deck-narrativa.js` tira a
-     estrutura do comentario e poe no slide: o divisor de cada ato com a PERGUNTA
-     que ele responde, o trilho de capitulos no alto de todo slide, e o nome do
-     ato no rodape. */
-  sec('Deck: a narrativa visivel');
-  {
-    const NARR = require('./deck-narrativa.js');
-    const NARRJS = fs.readFileSync('deck-narrativa.js', 'utf8');
-
-    /* ── ATO VAZIO NAO EXISTE ──
-       O deck e configuravel secao a secao e o padrao do fechamento liga quatro
-       de dezoito. Um trilho de cinco capitulos com tres apagados mentiria sobre
-       o tamanho da conversa, e um divisor anunciando um ato sem slide nenhum e
-       pior: a sala espera o assunto e vem o proximo capitulo. */
-    const roteiroP = [{ ato: 'situacao' }, { ato: 'situacao' },
-                      { ato: 'capacidade' }, { ato: 'capacidade' }];
-    const pP = NARR.plano(roteiroP, true);
-    ok(pP.atos.length === 2 && pP.atos[0].chave === 'situacao' &&
-       pP.atos[1].chave === 'capacidade',
-       'ato sem cena nao entra no plano — o padrao do fechamento vira dois atos, ' +
-       'e nao cinco',
-       pP.atos.map(a => a.chave).join(', '));
-
-    /* ── A ORDEM E A CANONICA, e nao a de chegada ──
-       O roteiro e montado na ordem do deck, mas um dia alguem declara uma cena
-       fora do bloco dela. Se o plano respeitasse a ordem de chegada, o ato
-       inteiro saltaria de lugar no deck sem ninguem pedir. */
-    const fora = NARR.plano([{ ato: 'rumo' }, { ato: 'situacao' }], true);
-    ok(fora.atos[0].chave === 'situacao' && fora.atos[1].chave === 'rumo',
-       'e a ordem dos atos e a canonica, mesmo se a cena chegar fora de ordem');
-
-    /* ── UM ATO SO NAO E HISTORIA ──
-       Dividir em capitulos um deck de um assunto so e cerimonia sem conteudo: o
-       divisor anunciaria o deck inteiro e o trilho teria um segmento. */
-    const um = NARR.plano([{ ato: 'situacao' }, { ato: 'situacao' }], true);
-    ok(um.divide === false,
-       'com um ato so, a moldura narrativa some — nao ha o que navegar');
-    ok(NARR.plano(roteiroP, false).divide === false,
-       'e `secoes.atos` desmarcado devolve o deck corrido');
-
-    /* ── A CONTA DE PAGINAS INCLUI O DIVISOR ──
-       O trilho mostra PESO. Um ato de uma cena ocupa duas paginas de verdade, e
-       contar so a cena faria o segmento mentir. */
-    ok(pP.paginas[0] === 3 && pP.paginas[1] === 3,
-       'e a largura de cada capitulo conta o divisor junto — duas cenas sao tres ' +
-       'paginas', pP.paginas.join(' / '));
-    ok(NARR.plano(roteiroP, false).paginas.join() === '2,2',
-       'sem divisor, a conta volta a ser so das cenas');
-
-    /* ── O TRILHO OCUPA A LARGURA INTEIRA ──
-       Ele e um indicador de progresso colado na borda: se a soma dos segmentos
-       mais os vaos nao fechar 10", ou sobra fundo a direita (e o deck parece
-       cortado) ou o ultimo segmento sai da pagina. */
-    const desenha = () => {
-      const itens = [];
-      const s = { addShape: (t, o) => itens.push({ forma: t, o }),
-                  addText: (t, o) => itens.push({ texto: t, o }),
-                  addImage: () => {} };
-      return { s, itens };
-    };
-    const pptxF = { ShapeType: { rect: 'rect', roundRect: 'roundRect', ellipse: 'ellipse' } };
-    const CORES = { fundo: '070B16', fundo2: '0E1428', fundo3: '141C36',
-                    borda: '223052', texto: 'FFFFFF', fraco: '8792AD' };
-    const cinco = NARR.plano(
-      [1, 1, 2, 2, 2, 3, 3, 4, 4, 5].map(n => ({ ato: NARR.atos[n - 1].chave })), true);
-    const t2 = desenha();
-    NARR.trilho(t2.s, pptxF, { atos: cinco.atos, paginas: cinco.paginas,
-                               indice: 2, cores: CORES });
-    ok(t2.itens.length === 5, 'o trilho tem um segmento por ato',
-       String(t2.itens.length));
-    const larguraTotal = t2.itens.reduce((tt, i) => tt + i.o.w, 0) + 0.05 * 4;
-    ok(Math.abs(larguraTotal - 10) < 0.001,
-       'e eles mais os vaos fecham exatamente as 10 polegadas da pagina',
-       larguraTotal.toFixed(4) + '"');
-    const fim = t2.itens[4].o.x + t2.itens[4].o.w;
-    ok(Math.abs(fim - 10) < 0.001, 'o ultimo encosta na borda direita',
-       fim.toFixed(4) + '"');
-
-    /* ── PROPORCIONAL, E NAO IGUAL ──
-       O trilho responde "quanto falta". Segmentos iguais responderiam errado num
-       deck onde um ato tem oito paginas e outro tem uma. */
-    const maior = cinco.paginas.indexOf(Math.max.apply(null, cinco.paginas));
-    const menor = cinco.paginas.indexOf(Math.min.apply(null, cinco.paginas));
-    ok(t2.itens[maior].o.w > t2.itens[menor].o.w,
-       'e a largura acompanha o peso do ato — o capitulo maior ocupa mais trilho');
-
-    /* ── TRES ESTADOS, E OS TRES SE DISTINGUEM ──
-       Dois estados — aceso e apagado — deixariam a sala sem saber se o vazio a
-       direita ja passou ou ainda vem, que e metade do que um indicador de
-       progresso serve para dizer.
-
-       A PRIMEIRA VERSAO ERROU AQUI: usava a superficie inativa (141C36) para o
-       que ainda vem, e 1,16:1 sobre o fundo e o mesmo contraste das curvas de
-       nivel — ou seja, invisivel. O trilho virava uma barra branca sozinha. */
-    const lum = (h) => {
-      const c = [0, 2, 4].map(i => parseInt(String(h).substr(i, 2), 16) / 255)
-        .map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
-      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-    };
-    const razao = (a, b) => {
-      const l1 = lum(a), l2 = lum(b);
-      return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-    };
-    const corDe = (i) => t2.itens[i].o.fill.color;
-    const rPass = razao(corDe(0), CORES.fundo);
-    const rAtual = razao(corDe(2), CORES.fundo);
-    const rFut = razao(corDe(4), CORES.fundo);
-    ok(corDe(0) !== corDe(2) && corDe(2) !== corDe(4) && corDe(0) !== corDe(4),
-       'passado, presente e futuro sao tres cores diferentes',
-       [corDe(0), corDe(2), corDe(4)].join(' / '));
-    ok(rFut > 1.3,
-       'o que AINDA VEM e visivel sobre o fundo — senao o trilho calaria sobre ' +
-       'quanto falta', rFut.toFixed(2) + ':1');
-    ok(rPass > rFut && rAtual > rPass,
-       'e a escala cresce do futuro para o passado e do passado para o agora',
-       [rFut, rPass, rAtual].map(x => x.toFixed(2)).join(' < '));
-
-    /* ── NENHUMA COR DE DADO NA MOLDURA ──
-       Esta base tem cinco cores com significado fixo, e a licao de pintar um
-       ambar que nao quer dizer atencao ja foi paga: "o amarelo me leva a
-       entender que esta no prazo, porem la no grafico mostra ainda em aberto".
-       Um trilho colorido por ato — que e o que o padrao de narrativa sugere —
-       poria a navegacao a disputar com o dado. */
-    const DADO = ['4ADE80', 'F87171', 'FBBF24', '60A5FA', 'A78BFA'];
-    const naModura = t2.itens.map(i => i.o.fill.color.toUpperCase());
-    ok(!naModura.some(c => DADO.includes(c)),
-       'e nenhuma cor com significado de dado aparece no trilho — a navegacao ' +
-       'nao disputa com o grafico', naModura.join(' '));
-
-    /* ── COM MENOS DE DOIS ATOS, O TRILHO NAO EXISTE ──
-       Um segmento unico ocupando a largura inteira nao e indicador de progresso,
-       e uma faixa decorativa no topo. */
-    const t1 = desenha();
-    NARR.trilho(t1.s, pptxF, { atos: [NARR.atos[0]], paginas: [3], indice: 0, cores: CORES });
-    ok(t1.itens.length === 0, 'com um ato so, o trilho nao e desenhado');
-
-    /* ── O DIVISOR CARREGA A PERGUNTA, e nao so o nome ──
-       E o que transforma "mais um grafico" em "agora vamos falar de prazo". Um
-       divisor que diz so "O COMBINADO" avisa que mudou de assunto; a pergunta
-       deixa a sala com ela na cabeca quando o dado aparece. */
-    const dv = desenha();
-    NARR.divisor(dv.s, pptxF, { ato: NARR.ato('combinado'), cores: CORES, paginas: 3 });
-    const textos = dv.itens.filter(i => i.texto !== undefined).map(i => String(i.texto));
-    ok(textos.includes(NARR.ato('combinado').pergunta),
-       'o divisor escreve a PERGUNTA do ato, e nao so o titulo');
-    ok(textos.includes('O COMBINADO') && textos.includes('ATO 03'),
-       'com o titulo e o numero do ato junto');
-    ok(textos.some(t => /3 p.ginas/.test(t)),
-       'e diz quantas paginas o ato tem — a conta que a sala faz sozinha e errado');
-    ok(NARR.atos.every(a => a.pergunta && /\?$/.test(a.pergunta)),
-       'e TODO ato tem uma pergunta, terminada em interrogacao',
-       NARR.atos.filter(a => !/\?$/.test(a.pergunta || '')).map(a => a.chave).join() || 'todos');
-
-    /* ── O NUMERO GIGANTE E FANTASMA ──
-       Ele da escala e ritmo a pagina sem disputar leitura com o titulo. Em tom de
-       texto seria a primeira coisa lida, e "03" nao e o que a sala precisa levar. */
-    const gigante = dv.itens.filter(i => i.o && i.o.fontSize >= 100);
-    ok(gigante.length === 1 && gigante[0].o.color === CORES.fundo2,
-       'o numero gigante sai em tom de SUPERFICIE, e nao de texto — ele da ritmo, ' +
-       'nao leitura', gigante.length ? '#' + gigante[0].o.color : 'nenhum');
-
-    /* ── E TUDO CABE NA PAGINA ──
-       Ninguem ve uma asserção de posicao; a plateia ve o corte na borda. */
-    const foraDaPagina = dv.itens.filter(i => i.o &&
-      (i.o.x < 0 || i.o.y < 0 || i.o.x + (i.o.w || 0) > 10.001 ||
-       i.o.y + (i.o.h || 0) > 5.631));
-    ok(foraDaPagina.length === 0,
-       'e nenhuma peca do divisor passa da borda do slide',
-       foraDaPagina.length + ' fora');
-
-    /* ── O VERDE DO DIVISOR E O DA CAPA ──
-       Duas ideias de verde no mesmo arquivo e o defeito que o comentario do
-       fundo ja registra ter custado caro. O divisor e a unica peca do miolo que
-       usa a cor da marca, e ela tem de ser A MESMA. */
-    const verdeCapa = (CAPA.match(/verde:\s*'([0-9A-Fa-f]{6})'/) || [])[1];
-    ok(!!verdeCapa && verdeCapa.toUpperCase() === NARR.MARCA.toUpperCase(),
-       'o verde do divisor e exatamente o verde da capa',
-       '#' + NARR.MARCA + ' vs #' + verdeCapa);
-
-    /* ── A MOLDURA ENTRA POR ONDE TODO SLIDE PASSA ──
-       Mesmo raciocinio do fundo de curvas: sao trinta e poucas chamadas de
-       `slideBase`, e o slide esquecido e justamente o que quebra a continuidade
-       que o trilho existe para dar. */
-    const base = corpo(APRES, 'function slideBase(pptx) {');
-    ok(!!base && /NARR\.trilho/.test(base),
-       'o trilho entra pelo `slideBase`, por onde TODO slide passa');
-    const apresSC = semComentario(APRES);
-    ok((apresSC.match(/NARR\.trilho/g) || []).length === 1,
-       'e nenhum slide o desenha por conta propria');
-
-    /* ── O ESTADO E ZERADO NAS DUAS PONTAS ──
-       `_narrativa` e estado de modulo. Sem zerar na entrada, um deck herda o ato
-       do anterior; sem zerar na saida, o deck de Relatorios — que usa o kit e
-       nao tem ato nenhum — sairia com o rodape do ultimo slide deste. */
-    const monta = corpo(APRES, 'async function montaDeck(d) {');
-    ok(!!monta && /_narrativa = null;[\s\S]*slideCapa/.test(monta),
-       'o ato e zerado na ENTRADA do deck');
-    ok(!!monta && /_narrativa = null;\s*\n\s*return pptx;/.test(monta),
-       'e na SAIDA, para o deck de Relatorios nao herdar ato nenhum');
-
-    /* ── SEM NARRATIVA, O RODAPE E O DE SEMPRE ──
-       O deck de Relatorios usa o kit e tem outra conversa. Uma moldura de atos
-       que ele nao cumpre e pior que moldura nenhuma. */
-    const rod = corpo(APRES, 'function rodape(s, texto, n) {');
-    ok(!!rod && /if \(!rot\) \{[\s\S]*x: 0\.5, y: 5\.05, w: 9/.test(rod),
-       'sem ato, o rodape volta a ser a linha unica a esquerda');
-
-    /* ── AS CHAVES DE ATO USADAS NO DECK EXISTEM ──
-       Um `cena('capacidad', ...)` com um erro de digitacao nao quebra nada: a
-       cena simplesmente nunca e desenhada, e o slide some do deck em silencio.
-       E o pior defeito possivel aqui. */
-    const usadas = (apresSC.match(/cena\('([a-z]+)'/g) || [])
-      .map(m => m.replace(/cena\('|'/g, ''));
-    const conhecidas = NARR.atos.map(a => a.chave);
-    const orfas = usadas.filter(c => !conhecidas.includes(c));
-    ok(usadas.length > 15 && orfas.length === 0,
-       'toda cena do deck aponta para um ato que existe — chave errada faria o ' +
-       'slide sumir em silencio',
-       usadas.length + ' cenas, ' + (orfas.join() || 'nenhuma orfa'));
-
-    /* ── E AS CENAS DE UM ATO SAO UM BLOCO CONTIGUO ──
-       O plano devolve os atos na ordem canonica e agrupa as cenas por ato. Isso
-       preserva a ordem do deck SE — e so se — cada ato for um trecho contiguo da
-       lista de declaracoes. Uma cena declarada no meio do ato errado salta de
-       lugar no arquivo final, e a ordem de cada slide foi discutida uma a uma
-       nos comentarios do `montaDeck`. */
-    const vistos = [];
-    let anterior = null;
-    usadas.forEach(c => {
-      if (c === anterior) return;
-      vistos.push(c);
-      anterior = c;
-    });
-    const repetido = vistos.filter((c, i) => vistos.indexOf(c) !== i);
-    ok(repetido.length === 0,
-       'e as cenas de cada ato sao um bloco contiguo no codigo — senao o ato ' +
-       'inteiro salta de lugar no deck', repetido.join() || 'nenhum ato partido');
-
-    /* ── A CHAVE AUSENTE SIGNIFICA LIGADO ──
-       Toda apuracao CONGELADA guarda o `secoes` do dia em que o mes fechou, e
-       nenhuma delas conhece esta chave. Ler `!!secoes.atos` devolveria falso e
-       reabrir um mes fechado daria um deck sem a moldura. E a mesma armadilha
-       que `cortesDePontos` ja documenta. */
-    ok(/d\.secoes\.atos !== false/.test(apresSC),
-       'a moldura so sai quando a caixa foi DESMARCADA — chave ausente vale ' +
-       'ligado, como manda a apuracao congelada');
-    ok(/k: 'atos'[^}]*pad: true/.test(semComentario(ADMIN)),
-       'e a caixa nasce marcada na grade do admin');
-
-    /* ── A CONTA DE CARACTERES E A MESMA DOS OUTROS ──
-       O modulo desenha sozinho e repete a conta de caber texto (0,52 em por
-       caractere, medida no deck renderizado). Duas contas que divergem produzem
-       um titulo que cabe num slide e estoura no outro. */
-    ok(NARR.cabem(6.0, 40) === Math.max(8, Math.floor(6.0 / (40 * 0.52 / 72))),
-       'a conta de quantos caracteres cabem e a mesma do `apresentacao.js`');
-
-    ok(/<script src="deck-narrativa\.js\?v=/.test(ADMIN),
-       'e o admin carrega o modulo');
-    const iNarr = ADMIN.indexOf('deck-narrativa.js?v=');
-    const iApres = ADMIN.indexOf('apresentacao.js?v=');
-    ok(iNarr > 0 && iApres > 0 && iNarr < iApres,
-       'ANTES do apresentacao.js — o alias `NARR` e lido na carga, e sem guarda ' +
-       'de proposito: sem ele o deck nao tem historia nenhuma');
-    ok(/module\.exports = api/.test(NARRJS),
-       'e o modulo roda tambem fora do navegador, que e como estas contas foram ' +
-       'medidas aqui');
   }
 
   /* === O SLIDE DAS FRENTES, ADAPTADO EM PONTOS =========================
@@ -14801,9 +14539,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        O deck ja comparava os dois meses em UMA: entradas e saidas da fila. A
        conversa da diretoria acontece em quatro, e "entregamos menos e com mais
        peso" so existe com duas delas lado a lado. */
-    ['ENTREGAS', 'PONTOS', 'HORAS REALIZADAS', 'NO PRAZO'].forEach(r => {
+    /* ERAM QUATRO MOEDAS E SAO TRES: "necessito apenas da comparacao com o mes
+       anterior e nao precisa mostrar dentro do prazo".
+
+       A decisao tem base no que o deck real mostrou: 99% em julho contra 46% em
+       agosto, "−53 p.p." em vermelho. Nao ha meta de prazo acordada nesta empresa,
+       e o que a queda mede e sobretudo quantas demandas tinham data combinada em
+       cada mes — o slide acusava o time de um numero que nao e dele. */
+    ['ENTREGAS', 'PONTOS', 'HORAS REALIZADAS'].forEach(r => {
       ok(SC.indexOf("rot: '" + r + "'") > 0, 'compara ' + r.toLowerCase());
     });
+    ok(SC.indexOf("rot: 'NO PRAZO'") < 0,
+       'e o prazo NAO entra aqui — ele tem slide proprio, com as entregas ' +
+       'nomeadas ao lado');
 
     /* ── NENHUMA COR DE JUIZO NAS BARRAS ──
        A primeira versao pintou HORAS de verde e NO PRAZO de branco: verde
@@ -14812,17 +14560,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        do slide, ainda puxava o olho para o bloco menos importante. */
     ok(/cor: SIGNIFICADO\.neutro/.test(SC) && !/cor: C\.verde/.test(SC) &&
        !/cor: C\.vermelho/.test(SC) && !/cor: C\.texto,/.test(SC),
-       'as quatro barras sao neutras — o juizo mora no chip, que tem meta contra ' +
+       'as tres barras sao neutras — o juizo mora no chip, que tem meta contra ' +
        'a qual existir');
     ok(/neutro: !!b\.neutro/.test(SC) && /suf: 'h', neutro: true/.test(SC),
        'e horas realizadas vai marcada como grandeza sem lado bom');
-
-    /* ── PONTO PERCENTUAL NAO E PERCENTUAL ──
-       "78% subiu 8,3%" e uma frase que ninguem interpreta de primeira: sao seis
-       pontos percentuais, e 8,3% e a variacao relativa deles. */
-    ok(/sinal: dl\.sinal \+ ' p\.p\.'/.test(SC) && /pct: null, pctTexto: '—'/.test(SC),
-       'a variacao do prazo sai em pontos percentuais, e sem percentual de ' +
-       'percentual');
 
     /* ── A FRASE QUE LIGA VOLUME E PESO ──
        O slide mostra quatro variacoes; a leitura que importa e o cruzamento de
@@ -14839,7 +14580,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        Quatro blocos vazios seriam lidos como "nao entregamos nada". */
     ok(/Não há mês anterior com que comparar/.test(SC),
        'e sem base de comparacao ele diz com todas as letras, em vez de desenhar ' +
-       'quatro blocos vazios');
+       'blocos vazios');
 
     /* ── AS HORAS DO MES ANTERIOR VEM DA MESMA CONTA ──
        Hora nao e campo, e conta: rateio por dia util, aproximacao de quem nao
@@ -14855,39 +14596,63 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e a das frentes declara os dois slides que produz agora');
   }
 
-  /* === O SLIDE "ESFORCO POR FRENTE" ===================================== */
+  /* === O SLIDE "ESFORCO POR FRENTE" =====================================
+
+     Ele desenhava barras de horas com uma LINHA de pontos por cima, em dois
+     eixos. O Fernando gerou o deck e cortou: "o risco sobrepos muita coisa, nao
+     ficou bonito, os dados da legenda estao ruins".
+
+     Ele estava certo, e o defeito nao era de acabamento:
+
+       - a linha cruzava as barras porque as duas series ocupam o MESMO
+         retangulo;
+       - com quatro frentes ela ligava categorias que nao tem ordem entre si,
+         sugerindo uma progressao que nao existe;
+       - o rotulo do ponto caia sobre o nome da frente, porque os dois moram na
+         base do grafico;
+       - e a RESPOSTA — quantos pontos cada hora rendeu — acabava escrita num
+         rodape de 10,5pt, que foi a linha que ele sublinhou.
+
+     Se a pergunta e a RELACAO entre duas grandezas, entao e a relacao que se
+     desenha. O olho nao divide duas series. */
   sec('Deck: esforco por frente');
   {
     const SE = corpo(APRES, 'function slideEsforcoFrente(pptx, pl, pagina, periodo) {') || '';
-    ok(!!SE && /DECKG\.barraLinha\(/.test(SE),
-       'o slide de dois eixos existe, e usa a gramatica');
+    ok(!!SE, 'o slide existe');
+    ok(!/DECKG\.barraLinha\(/.test(SE),
+       'e nao usa mais o grafico de dois eixos — a linha cruzava as barras e o ' +
+       'rotulo caia sobre o nome da frente');
 
-    /* ── ELE NAO E "MES ATUAL x ANTERIOR", E A ESCOLHA E DELIBERADA ──
-       Uma linha de dois pontos e um traco, e traco nao mostra forma nenhuma. A
-       regra de comparar so dois meses esta certa; o que nao serve e gastar o
-       formato com ela. Aqui sao quatro a seis frentes, e as duas grandezas sao de
-       naturezas diferentes — que e o unico caso em que dois eixos se justificam. */
-    ok(/barra: i\.real, linha: i\.pontos/.test(SE),
-       'as colunas sao horas e a linha e pontos — grandezas de naturezas ' +
-       'diferentes, que e quando dois eixos valem');
+    /* A RAZAO E O DADO, e nao mais uma nota de rodape. */
+    ok(/pontos \/ i\.real/.test(SE) && /pt\/h/.test(SE),
+       'pontos por hora virou o proprio grafico, ordenado do maior para o menor');
+    ok(/sort\(function \(a, b\) \{ return b\.r - a\.r; \}\)/.test(SE),
+       'e a ordem e por densidade — ranking se le sem legenda');
+
+    /* A MEDIA DO PERIODO COMO REGUA. Sem ela "1,8 pt/h" e um numero solto: a
+       sala nao sabe se e alto. Ela aparece escrita E como marca no grafico. */
+    ok(/Média do período/.test(SE) && /pl\.total\.pontos \/ pl\.total\.real/.test(SE),
+       'a media do periodo vai escrita, para cada frente se ler contra ela');
+    ok(/xm = X_BAR \+ W_BAR \* \(mediaR \/ maxR\)/.test(SE),
+       'e marcada no proprio grafico — quem esta acima e quem esta abaixo se ve ' +
+       'sem ler numero');
+
+    /* O TRILHO ATRAS DA BARRA mostra o quanto FALTA para a maior, que e metade
+       da comparacao. E ele e `fundo3`, que e para isso que a cor existe. */
+    ok(/fill: \{ color: C\.fundo3 \}/.test(SE),
+       'a barra tem trilho atras — o vazio tambem informa');
+
+    /* A CONCLUSAO EM UMA FRASE, com a razao entre a maior e a menor. */
+    ok(/× mais por hora que/.test(SE),
+       'e o slide conclui: quantas vezes a frente mais densa rende mais que a ' +
+       'menos densa');
     ok(/itens\.length < 2/.test(SE),
-       'e com menos de duas frentes ele diz que nao ha o que comparar, em vez de ' +
-       'desenhar uma linha de um ponto so');
-
-    /* ── A RAZAO ENTRE AS DUAS SERIES VAI ESCRITA ──
-       E justamente o que o olho NAO extrai de dois eixos: ele ve as duas curvas e
-       nao a divisao entre elas. Sem esta linha, o slide mostra e nao conclui. */
-    ok(/Densidade: /.test(SE) && /pt\/h/.test(SE),
-       'a densidade (pontos por hora) vai escrita — e a leitura que o grafico de ' +
-       'dois eixos nao da sozinho');
-
-    /* ── O CORTE DO NOME SAI DA COLUNA ──
-       Com 18 fixo, "Dados & Inteligência" saia "Dados & Inteligên…" numa coluna
-       que comporta trinta e tres caracteres. */
-    ok(/corta\(i\.nome, cabemChars\(8\.6 \/ itens\.length, 9\)\)/.test(SE),
+       'com menos de duas frentes ele diz que nao ha o que comparar');
+    ok(/corta\(i\.nome, cabemChars\(1\.85, 11\)\)/.test(SE),
        'e o nome da frente e cortado pela largura da coluna, e nao por um numero ' +
        'escrito a mao');
   }
+
 
   /* === OS DOIS DECKS, NUM LUGAR SO ======================================
 
@@ -15186,6 +14951,128 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!!meta && meta.texto === 'Josias Nascimento',
        'e quando "quem · sistema" não cabe, fica o nome inteiro em vez de meia ' +
        'palavra', meta ? meta.texto : '');
+  }
+
+  /* === O QUE O DECK MARCADO A MAO MANDOU TIRAR E POR ===================
+
+     O Fernando gerou o .pptx de agosto, imprimiu e marcou oito coisas. Elas
+     viram invariante aqui porque cada uma e uma decisao dele sobre o produto —
+     e decisao de produto que so vive no meu comentario volta sozinha na proxima
+     mexida. */
+  sec('Deck: as correcoes do deck marcado');
+  {
+    const AC = semComentario(ADMIN);
+    const MONTA = corpo(APRES, 'async function montaDeck(d) {') || '';
+
+    /* ── 1. A MOLDURA DE ATOS SAIU INTEIRA ──
+       "Retirar, nao faz sentido." / "Retire a nomenclatura ATO 01, O MES logo
+       abaixo." / "Ato 2 nao precisa." */
+    ok(!fs.existsSync('deck-narrativa.js'), 'o modulo dos atos nao existe mais');
+    ok(!/deck-narrativa/.test(ADMIN), 'e o admin nao o carrega');
+    const rod = corpo(APRES, 'function rodape(s, texto, n) {') || '';
+    ok(/x: 0\.5, y: 5\.05, w: 9, h: 0\.3/.test(rod) && !/ATO/.test(rod),
+       'o rodape voltou a ser so o periodo, sem rotulo de ato');
+    const base = corpo(APRES, 'function slideBase(pptx) {') || '';
+    ok(!/trilho/i.test(base),
+       'e o trilho de capitulos saiu do topo dos slides');
+
+    /* ── 2. AS HORAS ENTRARAM NO SLIDE DO MES ──
+       "Nesse slide, trazer alem das demandas, a quantidade de horas." */
+    const SM = corpo(APRES, 'function slideMes(pptx, d, pagina) {') || '';
+    ok(/var pt = \(d\.pipelines \|\| \{\}\)\.total \|\| \{\};/.test(SM),
+       'o slide do mes le as horas do periodo');
+    ok(/' realizadas'/.test(SM) && /' planejadas'/.test(SM),
+       'e mostra realizadas e planejadas — "1.307h" sozinho nao diz se foi muito');
+
+    /* ── 3. O COMPARATIVO PERDEU O PRAZO ──
+       "Necessito apenas da comparacao com o mes anterior e nao precisa mostrar
+       dentro do prazo." Nao ha meta de prazo acordada nesta empresa, e a queda
+       de 99% para 46% media sobretudo quantas demandas tinham data combinada em
+       cada mes — o slide acusava o time de um numero que nao e dele. */
+    const SC = corpo(APRES, 'function slideComparativo(pptx, d, pagina) {') || '';
+    ok(SC.indexOf("rot: 'NO PRAZO'") < 0 && !/d\.prazo \|\| \{\}\)\.pct/.test(SC),
+       'o bloco do prazo saiu do comparativo');
+    /* SEM COMENTARIO: a primeira versao achou o "−53 p.p." que esta escrito no
+       COMENTARIO que explica por que o bloco saiu, e reprovou o codigo que ela
+       existe para defender. E a quarta vez nesta suite que eu cobro a legenda em
+       vez do fato — o comentario pode estar certo com o codigo errado, e o
+       contrario tambem. */
+    ok(!/p\.p\./.test(semComentario(SC)),
+       'e com ele saiu a conta de pontos percentuais, que so existia para ele');
+
+    /* ── 4. FRENTES DE TRABALHO E A PAGINA 2 ──
+       "Essa deveria ser a pagina 2, atual e a 7." */
+    ok(MONTA.indexOf('slidePipelines(pptx, d.pipelines') <
+       MONTA.indexOf('slideMes(pptx, d, p)'),
+       'as frentes vem antes do slide do mes');
+
+    /* ── 5. O SLIDE DE DOIS EIXOS SAIU ──
+       "O risco sobrepos muita coisa, nao ficou bonito, os dados da legenda estao
+       ruins." A linha cruzava as barras porque as duas series ocupam o MESMO
+       retangulo — nao era ajuste de posicao. */
+    const SE = corpo(APRES, 'function slideEsforcoFrente(pptx, pl, pagina, periodo) {') || '';
+    ok(!/DECKG\.barraLinha\(/.test(APRES),
+       'nenhum slide do deck desenha mais barra com linha por cima');
+
+    /* ── 6. PROJETO TEM CONTEXTO, E NAO SO TITULO ──
+       "Tela de projetos nao fala muita coisa, so esta fazendo a leitura do
+       titulo, que nao da contexto — vai me complicar na reuniao." */
+    const SP = corpo(APRES, 'function slideProjetos(pptx, lista, pagina, periodo) {') || '';
+    ok(/p\.descricao/.test(SP) && /p\.entregou/.test(SP),
+       'cada projeto traz a descricao cadastrada; faltando ela, o que andou no mes');
+    ok(/descricao: String\(p\.descricao \|\| ''\)\.trim\(\)/.test(ADMIN) &&
+       /entregou: titulosDoMes/.test(ADMIN),
+       'e os dois campos saem do dado, que ja existia e nao chegava ao slide');
+    ok(/p\.situacao/.test(SP) && /previsto até/.test(SP),
+       'com a situacao do projeto e o prazo combinado, quando existem');
+    ok(/var vis = lista\.slice\(0, 4\);/.test(SP),
+       'sao quatro projetos com contexto, e nao cinco sem — a linha nova custa ' +
+       'espaco e ele decidiu por qual lado pagar');
+
+    /* ── 7. "EXECUCAO" NAO QUEBRA EM DUAS LINHAS ──
+       No deck real ele saiu como "EXECUCA" e "O". A caixa comporta a palavra; o
+       `charSpacing` entra na conta do renderizador e nao na minha. */
+    const SPI = corpo(APRES, 'function slidePipelines(pptx, pl, pagina, periodo) {') || '';
+    ok(/s\.addText\('EXECUÇÃO', \{[\s\S]{0,180}wrap: false/.test(SPI),
+       'o rotulo EXECUCAO nao tem como quebrar');
+
+    /* ── 8. NENHUM TEXTO DE SLIDE PASSA DO RODAPE ──
+       Varredura geral: toda caixa de texto com `y` declarado tem de acabar antes
+       de 5,05". E a familia de defeito que mais apareceu no deck impresso. */
+    /* A MEDIDA E A ALTURA DO TEXTO, E NAO A DA CAIXA.
+     *
+     * A primeira versao somava `y + h` e acusou quatro lugares que estao certos:
+     * uma caixa de 0,32" com texto de 13pt tem 0,23" de folga embaixo, e o que
+     * chega perto do rodape e a LETRA, nao a borda invisivel da caixa. Ela ainda
+     * acusava o proprio `rodape`, que mora em 5,05 por definicao.
+     *
+     * Conta: 13pt = 13/72" de corpo, e uma linha ocupa ~1,25 disso. */
+    const linhas = APRES.split(/\r?\n/);
+    const iRodape = APRES.slice(0, APRES.indexOf('function rodape(s, texto, n) {'))
+      .split(/\r?\n/).length;
+    const fora = [];
+    linhas.forEach((linha, i) => {
+      if (i >= iRodape - 1 && i <= iRodape + 3) return;   // o proprio rodape
+      const m = linha.match(/y: (\d\.\d+), w: [\d.]+, h: \d\.\d+/);
+      if (!m || Number(m[1]) < 4.2) return;
+      /* E TEM DE SER UM `addText`. A versao anterior olhava tres linhas adiante
+         atras do `fontSize` e encontrava o da chamada SEGUINTE: o quadradinho da
+         legenda do slide do dev (um `addShape` de 0,14") foi acusado com o corpo
+         do texto que vem depois dele. */
+      const tras = linhas.slice(Math.max(0, i - 2), i + 1).join(' ');
+      const ultimo = Math.max(tras.lastIndexOf('addText('), tras.lastIndexOf('addShape('));
+      if (ultimo < 0 || tras.slice(ultimo).indexOf('addText(') !== 0) return;
+      const janela = linhas.slice(i, i + 3).join(' ');
+      const fs = janela.match(/fontSize: ([\d.]+)/);
+      if (!fs) return;                                   // nao e caixa de texto
+      const fim = Number(m[1]) + Number(fs[1]) / 72 * 1.25;
+      if (fim > 5.06) {
+        fora.push('linha ' + (i + 1) + ': a letra acaba em ' + fim.toFixed(2) + '"');
+      }
+    });
+    ok(fora.length === 0,
+       'nenhum texto de posicao fixa alcanca o rodape',
+       fora.join(' ; ') || 'nenhum');
   }
 
   let erroPz = null;

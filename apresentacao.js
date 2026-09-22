@@ -48,10 +48,6 @@
      carregue este arquivo ANTES deste aqui. */
   var DECKG = (typeof window !== 'undefined') ? window.DECKG : require('./deck-grafico.js');
 
-  /* A NARRATIVA — os atos, o trilho de capítulos e o slide divisor — mora em
-     `deck-narrativa.js`. Mesmo motivo e mesma forma do alias acima. */
-  var NARR = (typeof window !== 'undefined') ? window.DECKNARR : require('./deck-narrativa.js');
-
   var C = {
     fundo:   '070B16',   // o azul-quase-preto do painel
     fundo2:  '0E1428',   // superfície dos cartões
@@ -205,20 +201,6 @@
 
   /* ── Blocos de slide ───────────────────────────────────────────────────── */
 
-  /* ONDE A CONVERSA ESTÁ, no momento em que o slide é desenhado.
-   *
-   * Estado de módulo, e não argumento: o trilho de capítulos precisa aparecer em
-   * TODO slide, e são trinta e poucas chamadas de `slideBase` — passar o ato por
-   * argumento em cada uma seria trinta e poucas oportunidades de esquecer uma, e
-   * o slide esquecido é justamente o que quebra a sensação de continuidade que o
-   * trilho existe para dar. É o mesmo raciocínio do fundo de curvas.
-   *
-   * `montaDeck` zera isto na entrada e na saída. Fora dele — o deck de
-   * Relatórios, que usa o kit — `_narrativa` é nulo e nada do cromo narrativo é
-   * desenhado: aquele deck tem outra conversa, e uma moldura de atos que ele não
-   * cumpre seria pior que moldura nenhuma. */
-  var _narrativa = null;   // { plano, indice, ato }
-
   function slideBase(pptx) {
     var s = pptx.addSlide();
     s.background = { color: C.fundo };
@@ -240,16 +222,6 @@
       ? window.DECKFUNDO.png({ fundo: C.fundo }) : null;
     if (fundo) s.addImage({ data: fundo, x: 0, y: 0, w: 10, h: 5.63 });
 
-    /* O TRILHO DE CAPÍTULOS, colado no topo. Depois do fundo, senão a imagem o
-       cobre. A capa passa por aqui e o cobre de propósito — ela vem ANTES da
-       história, e um indicador de progresso na capa diria que a conversa já
-       começou. */
-    if (_narrativa) {
-      NARR.trilho(s, pptx, {
-        atos: _narrativa.plano.atos, paginas: _narrativa.plano.paginas,
-        indice: _narrativa.indice, cores: C,
-      });
-    }
     return s;
   }
 
@@ -263,26 +235,25 @@
      slide 4" numa apresentacao de doze slides projetada por quem esta falando —
      e ele ocupava o canto onde o periodo ja responde a unica pergunta que se faz
      olhando para baixo ("de quando e isto?"). */
-  /* O ATO ENTRA NO RODAPÉ, e é ele que responde "de que parte da conversa é
-     isto?" — a pergunta que um print solto de um slide não respondia. O período
-     atravessa para a direita: a linha passa a ter duas informações, e duas
-     informações lado a lado no canto esquerdo se leem como uma frase truncada.
-
-     SÓ QUANDO HÁ NARRATIVA. Sem ela (o deck de Relatórios), o rodapé é o de
-     sempre, à esquerda — mover o período para a direita num deck que não tem ato
-     nenhum deixaria o canto esquerdo vazio sem motivo. */
+  /* ═══ OS ATOS SAÍRAM DO DECK ════════════════════════════════════════════════
+   *
+   * "Retirar, não faz sentido." / "Retire a nomenclatura ATO 01, O MÊS logo
+   * abaixo." / "Ato 2 não precisa."
+   *
+   * O deck ganhou divisores de ato, um rótulo de ato no rodapé e um trilho de
+   * capítulos no topo. O Fernando gerou o arquivo de verdade e cortou os três.
+   *
+   * E SAIU A CAMADA INTEIRA, e não só o que se via. O agrupamento por ato
+   * reordenava as cenas: uma declarada no meio do arquivo podia sair em outro
+   * lugar do deck, porque a montagem juntava as do mesmo ato. Com os divisores
+   * fora, isso vira maquinaria invisível mexendo na ordem — e a ordem é
+   * exatamente o que ele precisa mandar ("essa deveria ser a página 2, atual é a
+   * 7"). Hoje o deck sai na ordem em que as cenas são declaradas, e ponto.
+   *
+   * O que ficou da tentativa está nos slides, e não na moldura: a gramática
+   * única dos gráficos, os comparativos e as principais entregas. */
   function rodape(s, texto, n) {
-    var rot = _narrativa ? NARR.rotulo(_narrativa.ato) : null;
-    if (!rot) {
-      s.addText(texto, { x: 0.5, y: 5.05, w: 9, h: 0.3, fontSize: 10, color: C.fraco });
-      return;
-    }
-    s.addText([
-      { text: rot.n, options: { color: C.texto, bold: true } },
-      { text: '   ' + rot.titulo, options: { color: C.fraco } },
-    ], { x: 0.5, y: 5.05, w: 5.4, h: 0.3, fontSize: 9, charSpacing: 1 });
-    s.addText(texto, { x: 5.4, y: 5.05, w: 4.1, h: 0.3, fontSize: 10,
-                       color: C.fraco, align: 'right' });
+    s.addText(texto, { x: 0.5, y: 5.05, w: 9, h: 0.3, fontSize: 10, color: C.fraco });
   }
 
   // A CAPA DA CASA. O deck abria com uma faixa azul e texto — generico, e nada
@@ -407,11 +378,25 @@
     /* Cinco linhas de 0,70" a partir de 1,20" fecham em 4,70", e a linha do "e
        mais" cabe em 4,74" — antes do rodape em 5,05". Com seis linhas a ultima
        caia sobre ele. */
-    var TOPO = 1.20, ALT = 0.70;
-    var vis = lista.slice(0, 5);
+    /* ═══ CADA PROJETO GANHOU UMA LINHA DE CONTEXTO ═══════════════════════
+     *
+     * "Só está fazendo a leitura do título, que não dá contexto — vai me
+     *  complicar na reunião."
+     *
+     * A linha do meio é a descrição cadastrada do projeto; faltando ela, o que
+     * ANDOU no mês, pelos títulos das entregas. "Ambiente de Operações" não diz
+     * nada na parede; "saiu: ajuste de garantias, painel do cedente" diz o que
+     * aconteceu ali.
+     *
+     * SÃO QUATRO PROJETOS E NÃO CINCO, e a troca é deliberada: a linha nova
+     * custa 0,16" por projeto. Quatro com contexto valem mais numa reunião do
+     * que cinco que obrigam quem apresenta a explicar cada um de cabeça — que é
+     * exatamente a reclamação. Quantos ficaram de fora continua escrito no pé. */
+    var TOPO = 1.18, ALT = 0.88;
+    var vis = lista.slice(0, 4);
     vis.forEach(function (p, i) {
       var y = TOPO + i * ALT;
-      cartao(pptx, s, 0.5, y, 9.0, 0.62);
+      cartao(pptx, s, 0.5, y, 9.0, 0.80);
 
       // A posicao: circulo de medalha nos tres primeiros, quadrado nos demais.
       /* `rectRadius` SO VAI NO roundRect. Passado junto com `ellipse`, o
@@ -420,46 +405,68 @@
          PowerPoint descartava a forma E o resto do cartao junto: o slide saia
          com o cabecalho certo e os cartoes vazios. */
       var cor = MEDALHA[i] || C.fraco;
-      var medalha = { x: 0.63, y: y + 0.17, w: 0.28, h: 0.28,
+      var medalha = { x: 0.63, y: y + 0.26, w: 0.28, h: 0.28,
                       fill: { color: i < 3 ? cor : C.fundo3 },
                       line: { color: i < 3 ? cor : C.borda, width: 0.75 } };
       if (i >= 3) medalha.rectRadius = 0.04;
       s.addShape(i < 3 ? pptx.ShapeType.ellipse : pptx.ShapeType.roundRect, medalha);
       s.addText(String(i + 1), {
-        x: 0.63, y: y + 0.19, w: 0.28, h: 0.24, fontSize: 9, bold: true,
+        x: 0.63, y: y + 0.28, w: 0.28, h: 0.24, fontSize: 9, bold: true,
         color: i < 3 ? C.fundo : C.fraco, align: 'center' });
 
-      s.addText(corta(p.nome, 52), {
-        x: 1.00, y: y + 0.08, w: 5.5, h: 0.24, fontSize: 11, bold: true, color: C.texto });
+      s.addText(corta(p.nome, 56), {
+        x: 1.00, y: y + 0.07, w: 5.5, h: 0.24, fontSize: 11.5, bold: true, color: C.texto });
 
-      // A linha de contexto: quem conduz, quantas tarefas, em que pe.
+      /* A LINHA DE CONTEXTO — a que faltava.
+         Primeiro a descrição cadastrada; faltando ela, o que ANDOU no mês pelos
+         títulos das entregas; faltando os dois, ela some em vez de sair vazia. */
+      var ctx = '';
+      if (p.descricao) {
+        ctx = corta(p.descricao, cabemChars(5.5, 9));
+      } else if ((p.entregou || []).length) {
+        ctx = corta('saiu: ' + p.entregou.join('; '), cabemChars(5.5, 9));
+      }
+      if (ctx) {
+        s.addText(ctx, { x: 1.00, y: y + 0.30, w: 5.5, h: 0.2,
+                         fontSize: 9, color: C.prata, italic: !p.descricao, wrap: false });
+      }
+
+      // Quem conduz, em que pé está, quantas tarefas.
       var meta = [];
-      if (p.resp) meta.push(corta(p.resp, 34));
+      if (p.resp) meta.push(corta(p.resp, 28));
+      if (p.situacao) meta.push(p.situacao);
       var tarefas = (p.feitas || 0) + (p.andando || 0);
       if (tarefas) meta.push(tarefas + (tarefas === 1 ? ' tarefa' : ' tarefas'));
       if (p.feitas) meta.push(p.feitas + ' concluída' + (p.feitas === 1 ? '' : 's'));
       if (p.andando) meta.push(p.andando + ' em andamento');
-      s.addText(meta.join('   ·   '), {
-        x: 1.00, y: y + 0.33, w: 5.5, h: 0.2, fontSize: 8, color: C.fraco });
+      /* O PRAZO COMBINADO DO PROJETO, quando existe. Projeto com fim no passado e
+         tarefa em andamento é a pergunta que a reunião faz sozinha — e sem a data
+         no slide quem apresenta responde de memória. */
+      if (p.fim) meta.push('previsto até ' + p.fim.split('-').reverse().join('/'));
+      /* SEPARADOR CURTO NESTA LINHA. Com "   ·   " os cinco pedaços somavam 98
+         caracteres numa coluna que comporta 95, e a data — o pedaço que mais
+         importa — era justamente o que a reticência comia. */
+      s.addText(corta(meta.join(' · '), cabemChars(5.5, 8)), {
+        x: 1.00, y: y + 0.52, w: 5.5, h: 0.2, fontSize: 8, color: C.fraco, wrap: false });
 
       var parado = !p.feitas && !p.andando;
       if (parado) {
         // Dito com todas as letras, e nao com um zero que se le como "nao sei".
         s.addText('sem tarefa no mês', {
-          x: 6.55, y: y + 0.19, w: 2.8, h: 0.24, fontSize: 10, bold: true,
+          x: 6.55, y: y + 0.28, w: 2.8, h: 0.24, fontSize: 10, bold: true,
           color: SIGNIFICADO.atencao, align: 'right' });
         return;
       }
       var cols = [
-        { v: (p.plan || 0) + 'h', rot: 'PLAN', cor: C.azul,  x: 6.55 },
-        { v: (p.real || 0) + 'h', rot: 'REAL', cor: C.verde, x: 7.50 },
+        { v: DECKG.num(p.plan || 0) + 'h', rot: 'PLAN', cor: C.azul,  x: 6.55 },
+        { v: DECKG.num(p.real || 0) + 'h', rot: 'REAL', cor: C.verde, x: 7.50 },
         { v: rotuloExecucao(p.pct, p.plan, p.real), rot: 'EXEC',
           cor: corPercentual(p.pct), x: 8.45 },
       ];
       cols.forEach(function (c) {
-        s.addText(String(c.v), { x: c.x, y: y + 0.09, w: 0.9, h: 0.26,
+        s.addText(String(c.v), { x: c.x, y: y + 0.18, w: 0.9, h: 0.26,
                                  fontSize: 13, bold: true, color: c.cor, align: 'right' });
-        s.addText(c.rot, { x: c.x, y: y + 0.36, w: 0.9, h: 0.18,
+        s.addText(c.rot, { x: c.x, y: y + 0.45, w: 0.9, h: 0.18,
                            fontSize: 7, color: C.fraco, align: 'right', charSpacing: 0.8 });
       });
     });
@@ -1572,8 +1579,13 @@
     s.addText(rotuloExecucao(t.pct, t.plan, t.real), {
       x: XE + 0.80, y: 1.33, w: 0.64, h: 0.34,
       fontSize: 16, bold: true, color: corPercentual(t.pct), wrap: false });
-    s.addText('EXECUÇÃO', { x: XE + 0.80, y: 1.67, w: 0.64, h: 0.17,
-                            fontSize: 6.5, bold: true, color: C.fraco, charSpacing: 0.6 });
+    /* `wrap: false` — no deck de verdade "EXECUÇÃO" saiu quebrado em "EXECUÇÃ" e
+       "O". A caixa comporta a palavra (0,38" de texto em 0,64"), mas o
+       `charSpacing` entra na conta do renderizador e não na minha, e ali bastou
+       para ele decidir quebrar. Sem quebra possível, não há o que decidir. */
+    s.addText('EXECUÇÃO', { x: XE + 0.78, y: 1.67, w: 0.70, h: 0.17,
+                            fontSize: 6.5, bold: true, color: C.fraco,
+                            charSpacing: 0.6, wrap: false });
     s.addText('realizado ÷ planejado', { x: XE + 0.04, y: 1.93, w: 1.42, h: 0.17,
                                          fontSize: 6.5, color: C.fraco, align: 'center' });
 
@@ -1672,16 +1684,20 @@
     var ant = d.anterior || {};
     var pl = (d.pipelines || {}).total || {};
     var s = slideTitulo(pptx, 'Este mês contra o anterior',
-      'as quatro moedas do mês, lado a lado', pagina, d.periodo,
+      'entregas, pontos e horas — este mês contra o anterior', pagina, d.periodo,
       ant.parcial ? 'mês em curso — comparação parcial' : '');
 
     var mesAgora = String(d.periodo || '').split(' ')[0].toLowerCase();
     var mesAntes = String(ant.nome || 'mês anterior').toLowerCase();
 
-    /* A QUARTA MOEDA É O PRAZO, E ELA NÃO TEM PERCENTUAL DE PERCENTUAL.
-       "78% subiu 8,3%" é uma frase que ninguém consegue interpretar de primeira:
-       são seis pontos percentuais, e "8,3%" é a variação relativa deles. O chip
-       perde o percentual e o número ganha a unidade escrita. */
+    /* ERAM QUATRO MOEDAS E SÃO TRÊS: "não precisa mostrar dentro do prazo".
+     *
+     * O bloco do prazo saiu por decisão do Fernando, e a decisão tem base no que
+     * o deck real mostrou: 99% em julho contra 46% em agosto, "−53 p.p." em
+     * vermelho. Não há meta de prazo acordada nesta empresa, e o que a queda
+     * mede é sobretudo quantas demandas tinham data combinada em cada mês — o
+     * slide acusava o time de um número que não é dele. O prazo continua no deck,
+     * no slide próprio, onde ele vem com as entregas nomeadas ao lado. */
     /* AS QUATRO BARRAS SÃO AZUIS, e isso é doutrina e não economia de paleta.
      *
      * Azul é o neutro desta base — "categoria, contagem, previsto; não julga
@@ -1701,8 +1717,6 @@
       { rot: 'PONTOS', antes: ant.pontos, agora: (d.kpi || {}).pontos, suf: '' },
       { rot: 'HORAS REALIZADAS', antes: ant.horas, agora: pl.real,
         suf: 'h', neutro: true },
-      { rot: 'NO PRAZO', antes: ant.pct, agora: (d.prazo || {}).pct,
-        suf: '%', pp: true },
     ].filter(function (b) { return b.antes != null && b.agora != null; });
 
     if (!blocos.length) {
@@ -1716,12 +1730,6 @@
     var deltas = {};
     blocos.forEach(function (b, i) {
       var dl = DECKG.delta(b.agora, b.antes, { neutro: !!b.neutro });
-      if (b.pp) {
-        /* PONTOS PERCENTUAIS, escritos. Sem a unidade, "+6" ao lado de um número
-           que termina em % é lido como 6%, que é outra coisa. */
-        dl = Object.assign({}, dl, { pct: null, pctTexto: '—',
-                                     sinal: dl.sinal + ' p.p.' });
-      }
       deltas[b.rot] = dl;
       DECKG.comparativo(s, pptx, {
         x: 0.5 + i * L, y: 1.14, w: L, base: BASE, alto: ALTO,
@@ -1917,54 +1925,109 @@
    * exatamente o caso em que dois eixos se justificam — e o único: para duas
    * grandezas comparáveis, a resposta são barras pareadas na mesma régua.     */
   function slideEsforcoFrente(pptx, pl, pagina, periodo) {
-    var itens = (pl.itens || []).filter(function (i) { return i.real > 0 || i.pontos > 0; });
+    /* ═══ O GRÁFICO DE DOIS EIXOS SAIU ═════════════════════════════════════
+     *
+     * "O risco sobrepôs muita coisa, não ficou bonito, os dados da legenda estão
+     *  ruins."
+     *
+     * Ele estava certo, e o defeito não era de acabamento. A linha cruzava as
+     * barras porque as duas séries ocupam o MESMO retângulo, e com quatro
+     * frentes ela ainda ligava categorias que não têm ordem nenhuma entre si —
+     * uma linha entre "Desenvolvimento" e "Dados & Power BI" sugere uma
+     * progressão que não existe. E o rótulo do ponto caía sobre o nome da
+     * frente, porque os dois moram na base do gráfico.
+     *
+     * MAIS FUNDO: eu tinha escrito aqui que dois eixos se justificam quando a
+     * pergunta é a RELAÇÃO entre duas grandezas. Está certo — e a conclusão que
+     * eu não tirei é que, se a pergunta é a relação, então é a RELAÇÃO que se
+     * desenha, e não as duas séries deixando a divisão por conta do olho. O olho
+     * não divide. A prova é que eu precisei escrever a resposta num rodapé de
+     * 10,5pt embaixo do gráfico — a linha que ele sublinhou.
+     *
+     * Agora o slide desenha pontos por hora, que é a resposta, ordenado do maior
+     * para o menor. As horas e os pontos continuam na linha, à direita, como
+     * contexto de onde o número saiu. Nada se sobrepõe porque não há duas
+     * camadas.                                                                */
+    var itens = (pl.itens || []).filter(function (i) { return i.real > 0 && i.pontos > 0; });
     var s = slideTitulo(pptx, 'Esforço por frente',
-      'horas realizadas e pontos entregues, na mesma página', pagina, periodo,
+      'quantos pontos cada hora de trabalho rendeu', pagina, periodo,
       itens.length + (itens.length === 1 ? ' frente' : ' frentes'));
 
     if (itens.length < 2) {
-      s.addText('Menos de duas frentes com esforço no período — não há o que comparar.', {
+      s.addText('Menos de duas frentes com horas e pontos no período — não há o que comparar.', {
         x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
       rodape(s, periodo, pagina);
       return s;
     }
 
-    DECKG.barraLinha(s, pptx, {
-      x: 0.7, w: 8.6, base: 4.00, alto: 2.05, yEixos: 1.12,
-      /* O CORTE DO NOME SAI DA COLUNA, e não de um número escrito à mão. Com 18
-         fixo, "Dados & Inteligência" saía "Dados & Inteligên…" numa coluna de
-         2,15" que comporta trinta e três caracteres — um terço dela vazio e o
-         nome mutilado à toa. Com seis frentes a coluna encolhe, e a conta
-         acompanha. */
-      itens: itens.map(function (i) {
-        return { rot: corta(i.nome, cabemChars(8.6 / itens.length, 9)),
-                 barra: i.real, linha: i.pontos };
-      }),
-      corBarra: C.azul, corLinha: C.ambar,
-      rotBarra: 'HORAS REALIZADAS', rotLinha: 'PONTOS ENTREGUES',
-      sufixoBarra: 'h', sufixoLinha: '',
+    var orden = itens.map(function (i) {
+      return { nome: i.nome, cor: i.cor, real: i.real, pontos: i.pontos,
+               r: Math.round(i.pontos / i.real * 100) / 100 };
+    }).sort(function (a, b) { return b.r - a.r; });
+
+    /* A MÉDIA DO TIME, como régua. Sem ela "1,8 pt/h" é um número solto: a sala
+       não sabe se é alto. Com ela, cada frente se lê contra o próprio mês. */
+    var mediaR = Math.round((pl.total.pontos / pl.total.real) * 100) / 100;
+    s.addText([
+      { text: 'Média do período:  ', options: { color: C.fraco } },
+      { text: DECKG.num(mediaR) + ' pt/h', options: { color: C.texto, bold: true } },
+      { text: '     ' + DECKG.num(pl.total.pontos) + ' pontos em ' +
+              DECKG.num(pl.total.real) + 'h', options: { color: C.fraco } },
+    ], { x: 0.7, y: 1.18, w: 8.6, h: 0.3, fontSize: 13, wrap: false });
+
+    /* A CONTA DAS ALTURAS, e ela foi refeita: com 0,52" e seis frentes as linhas
+       fechavam em 4,84" e a frase de conclusão nascia em 4,86" — sete centésimos
+       POR CIMA do rodapé. Com 0,48" a partir de 1,80" elas param em 4,68", e a
+       frase cabe em 4,76". O rótulo da média subiu para cima do trilho pelo mesmo
+       motivo: embaixo ele disputava o mesmo espaço. */
+    var TOPO = 1.80, ALT = 0.48, X_BAR = 2.55, W_BAR = 4.35;
+    var maxR = orden.reduce(function (m, i) { return Math.max(m, i.r); }, 0.01);
+    orden.slice(0, 6).forEach(function (i, k) {
+      var y = TOPO + k * ALT;
+      s.addText(corta(i.nome, cabemChars(1.85, 11)), {
+        x: 0.6, y: y, w: 1.85, h: 0.32, fontSize: 11, color: C.texto,
+        align: 'right', valign: 'middle', wrap: false });
+      // O trilho atrás da barra: é ele que mostra o quanto FALTA para a maior.
+      s.addShape(pptx.ShapeType.rect, {
+        x: X_BAR, y: y + 0.09, w: W_BAR, h: 0.16,
+        fill: { color: C.fundo3 }, line: { type: 'none' } });
+      s.addShape(pptx.ShapeType.rect, {
+        x: X_BAR, y: y + 0.09, w: Math.max(0.03, W_BAR * (i.r / maxR)), h: 0.16,
+        fill: { color: i.cor || C.azul }, line: { type: 'none' } });
+      s.addText(DECKG.num(i.r) + ' pt/h', {
+        x: X_BAR + W_BAR + 0.10, y: y, w: 0.95, h: 0.32, fontSize: 13, bold: true,
+        color: C.texto, valign: 'middle', wrap: false });
+      s.addText(DECKG.num(i.real) + 'h   ·   ' + DECKG.num(i.pontos) + ' pts', {
+        x: X_BAR + W_BAR + 1.10, y: y, w: 1.45, h: 0.32, fontSize: 9.5,
+        color: C.fraco, valign: 'middle', align: 'right', wrap: false });
     });
 
-    /* A LEITURA QUE O GRÁFICO NÃO DÁ SOZINHO: quantos pontos saem por hora em
-       cada frente. É a razão entre as duas séries, e razão é justamente o que o
-       olho não extrai de dois eixos — ele vê as duas curvas e não a divisão
-       entre elas. Sem esta linha, o slide mostra e não conclui. */
-    var comRazao = itens.filter(function (i) { return i.real > 0 && i.pontos > 0; })
-      .map(function (i) { return { nome: i.nome, r: i.pontos / i.real }; })
-      .sort(function (a, b) { return b.r - a.r; });
-    if (comRazao.length >= 2) {
-      var alto = comRazao[0], baixo = comRazao[comRazao.length - 1];
-      s.addText([
-        { text: 'Densidade: ', options: { color: C.fraco } },
-        { text: corta(alto.nome, 26) + ' ' + DECKG.num(Math.round(alto.r * 100) / 100) +
-                ' pt/h', options: { color: C.texto, bold: true } },
-        { text: '   ·   ', options: { color: C.fraco } },
-        { text: corta(baixo.nome, 26) + ' ' + DECKG.num(Math.round(baixo.r * 100) / 100) +
-                ' pt/h', options: { color: C.texto, bold: true } },
-        { text: '   — a mesma hora rende pesos diferentes conforme a frente.',
-          options: { color: C.fraco } },
-      ], { x: 0.7, y: 4.46, w: 8.6, h: 0.3, fontSize: 10.5 });
+    // A MARCA DA MÉDIA sobre o trilho: uma régua vertical que atravessa as
+    // linhas e diz, sem texto, quem está acima e quem está abaixo dela.
+    if (maxR > 0) {
+      var xm = X_BAR + W_BAR * (mediaR / maxR);
+      s.addShape(pptx.ShapeType.rect, {
+        x: xm - 0.01, y: TOPO + 0.02, w: 0.02,
+        h: Math.min(orden.length, 6) * ALT - 0.1,
+        fill: { color: C.fraco }, line: { type: 'none' } });
+      s.addText('média', { x: xm - 0.45, y: TOPO - 0.22,
+                           w: 0.9, h: 0.2, fontSize: 8, color: C.fraco, align: 'center' });
     }
+
+    /* A CONCLUSÃO FICA COLADA NAS LINHAS, e não num rodapé fixo: com quatro
+       frentes um `y` fixo a deixaria flutuando meia página abaixo do gráfico,
+       parecendo pertencer a outra coisa. O teto de 4,76" é o que a mantém fora
+       do rodapé quando há seis. */
+    var yFim = Math.min(TOPO + Math.min(orden.length, 6) * ALT + 0.14, 4.76);
+    var maior = orden[0], menor = orden[orden.length - 1];
+    s.addText([
+      { text: corta(maior.nome, 28), options: { color: C.texto, bold: true } },
+      { text: ' rende ' + DECKG.num(Math.round(maior.r / menor.r * 10) / 10) +
+              '× mais por hora que ', options: { color: C.fraco } },
+      { text: corta(menor.nome, 28), options: { color: C.texto, bold: true } },
+      { text: ' — a mesma hora vale pesos diferentes conforme a frente.',
+        options: { color: C.fraco } },
+    ], { x: 0.6, y: yFim, w: 8.9, h: 0.26, fontSize: 10.5, wrap: false });
     rodape(s, periodo, pagina);
     return s;
   }
@@ -2099,13 +2162,38 @@
         { x: 0.5, y: 3.66, w: 9.0, h: 0.4, fontSize: 17, bold: true,
           color: saldo > 0 ? SIGNIFICADO.atencao : SIGNIFICADO.cumprido });
     }
+    /* ── O QUE AS SAÍDAS CUSTARAM, E NÃO SÓ QUANTAS FORAM ───────────────────
+     *
+     * "Nesse slide, trazer além das demandas, a quantidade de horas."
+     *
+     * Os quatro cartões contam DEMANDAS, que é a unidade da fila. A conversa
+     * seguinte é sempre sobre esforço, e a hora estava só no slide das frentes —
+     * três páginas adiante. Aqui ela fecha a linha das saídas, com o planejado
+     * ao lado: "1.307h realizadas" sozinho não diz se foi muito ou pouco.
+     *
+     * OS NÚMEROS DESTA LINHA SÃO DESTACADOS do texto que os liga. Ela é lida de
+     * longe e tinha tudo no mesmo cinza de 11,5pt — a sala via um parágrafo, e
+     * não quatro medidas. */
+    var pt = (d.pipelines || {}).total || {};
     var saiu = [];
-    if (f.saiuEntregue) saiu.push(f.saiuEntregue + ' entregues');
-    if (f.saiuNegada) saiu.push(f.saiuNegada + (f.saiuNegada === 1 ? ' recusada' : ' recusadas'));
-    if (k.pontos) saiu.push(k.pontos + ' pontos');
+    if (f.saiuEntregue) saiu.push({ v: DECKG.num(f.saiuEntregue), r: ' entregues' });
+    if (f.saiuNegada) {
+      saiu.push({ v: DECKG.num(f.saiuNegada),
+                  r: f.saiuNegada === 1 ? ' recusada' : ' recusadas' });
+    }
+    if (k.pontos) saiu.push({ v: DECKG.num(k.pontos), r: ' pontos' });
+    if (pt.real) {
+      saiu.push({ v: DECKG.num(pt.real) + 'h', r: ' realizadas', cor: C.verde });
+      if (pt.plan) saiu.push({ v: DECKG.num(pt.plan) + 'h', r: ' planejadas', cor: C.azul });
+    }
     if (saiu.length) {
-      s.addText('Das saídas: ' + saiu.join('   ·   '), {
-        x: 0.5, y: 4.12, w: 9.0, h: 0.28, fontSize: 11.5, color: C.fraco });
+      var linha = [{ text: 'Das saídas:   ', options: { color: C.fraco } }];
+      saiu.forEach(function (x, i) {
+        if (i) linha.push({ text: '     ·     ', options: { color: C.borda } });
+        linha.push({ text: x.v, options: { color: x.cor || C.texto, bold: true } });
+        linha.push({ text: x.r, options: { color: C.fraco } });
+      });
+      s.addText(linha, { x: 0.5, y: 4.10, w: 9.0, h: 0.30, fontSize: 12, wrap: false });
     }
     var rodapeNotas = [];
     if (f.tocadas) rodapeNotas.push(f.tocadas + ' demandas trabalhadas no período');
@@ -2182,122 +2270,88 @@
        mes a mes" e o prazo saiu do slide junto com o percentual — um subtitulo
        que anuncia o que nao esta ali faz quem le procurar o numero que falta. */
     var s = slideTitulo(pptx, 'Evolução',
-      'entradas, saídas e o quanto mudou de um mês para o outro', pagina, periodo);
+      'a fila do mês contra a do mês anterior', pagina, periodo);
     var vis = (serie || []).filter(function (x) { return x; });
     if (!vis.length) { rodape(s, periodo, pagina); return s; }
 
-    /* ═══ A LEITURA DE CIMA: QUANTO MUDOU ═══════════════════════════════
+    /* ═══ DUAS COMPARAÇÕES PAREADAS, E NÃO QUATRO BARRAS SOLTAS ═════════
      *
-     * "No gráfico mês atual x mês anterior, falta detalhes da evolução ou
-     *  involução. Crescimento e comparativo."
+     * "O gráfico está muito simples, quero algo mais completo e bem desenhado;
+     *  ao ver a imagem, qualquer um consiga ler e comparar SEM A NECESSIDADE DE
+     *  LEITURA."
      *
-     * As barras mostravam 109 e 75 e paravam ali: quem lê fazia a subtração de
-     * cabeça e o percentual ninguém fazia. Agora a comparação está escrita — e
-     * escrita em três canais (seta, sinal e cor), porque parte da diretoria lê
-     * isto impresso em preto e branco.
+     * O desenho anterior agrupava as barras POR MÊS: entraram e saíram de agosto
+     * juntas, entraram e saíram de setembro juntas. Com isso, a comparação que o
+     * slide existe para mostrar — agosto contra setembro — acontecia entre barras
+     * SEPARADAS por meia página, e quem lia precisava saltar o olho por cima de
+     * duas colunas que não interessavam naquele momento.
      *
-     * O DESTAQUE É DAS SAÍDAS, e não das entradas: entregar é o que o time
-     * controla. Entrada é demanda que chega, e um mês com mais entradas não é
-     * um mês melhor nem pior — é só mais fila. */
+     * TENTEI CONSERTAR LIGANDO OS TOPOS COM UM TRAÇO, e o traço atravessou a
+     * barra do meio — o mesmo defeito que ele já tinha apontado no slide de
+     * esforço ("o risco sobrepôs muita coisa"). Não é ajuste de posição: com as
+     * barras agrupadas por mês, QUALQUER ligação entre meses cruza a série
+     * vizinha, por construção.
+     *
+     * Então o agrupamento virou POR SÉRIE. As duas barras que se comparam ficam
+     * lado a lado, a variação vem numa caixa embaixo delas, e não há o que
+     * cruzar. É a mesma peça do slide "este mês contra o anterior" — quem
+     * aprendeu a ler lá já sabe ler aqui.
+     *
+     * E A LEITURA DE CIMA SAIU: ela repetia, em texto, os mesmos dois deltas que
+     * agora estão desenhados. */
     var ult = vis[vis.length - 1];
     var pen = vis.length > 1 ? vis[vis.length - 2] : null;
-    if (pen) {
-      var dEnt = DECKG.delta(ult.sairam || 0, pen.sairam || 0);
-      var dRec = DECKG.delta(ult.entraram || 0, pen.entraram || 0);
-      s.addText([
-        { text: 'Entregas  ', options: { color: C.fraco, fontSize: 12 } },
-        { text: DECKG.num(ult.sairam || 0), options: { color: C.verde, bold: true, fontSize: 19 } },
-        { text: '   ' + dEnt.seta + ' ' + dEnt.sinal + ' ' + dEnt.pctTexto,
-          options: { color: dEnt.cor, bold: true, fontSize: 13 } },
-        { text: '   contra ' + (pen.rot || 'o mês anterior') + '  (' +
-                DECKG.num(pen.sairam || 0) + ')', options: { color: C.fraco, fontSize: 11 } },
-      ], { x: 0.9, y: 1.16, w: 8.4, h: 0.34, wrap: false });
-      s.addText([
-        { text: 'Entradas  ', options: { color: C.fraco, fontSize: 11 } },
-        { text: DECKG.num(ult.entraram || 0), options: { color: C.azul, bold: true, fontSize: 13 } },
-        { text: '   ' + dRec.seta + ' ' + dRec.sinal + ' ' + dRec.pctTexto,
-          options: { color: dRec.cor, fontSize: 11 } },
-      ], { x: 0.9, y: 1.50, w: 4.6, h: 0.28, wrap: false });
-      /* A INTERPRETAÇÃO, EM LINHA PRÓPRIA E EM UMA FRASE.
-         Dois deltas lado a lado deixam a sala montando a conclusão — e cada um
-         monta a sua. A frase é a leitura que o slide sustenta, dita de uma vez.
-         Na mesma linha das Entradas ela brigava com o número. */
-      s.addText((function () {
-          var sai = (ult.sairam || 0) - (pen.sairam || 0);
-          var ent = (ult.entraram || 0) - (pen.entraram || 0);
-          if (sai > 0 && ent <= 0) return 'Entregamos mais e recebemos menos: a fila encolheu dos dois lados.';
-          if (sai > 0 && ent > 0) return 'Entregamos mais, mas entrou mais também.';
-          if (sai < 0 && ent > 0) return 'Entregamos menos e entrou mais: a fila cresceu por duas razões.';
-          if (sai < 0) return 'Entregamos menos que no mês anterior.';
-          return 'Entregas estáveis em relação ao mês anterior.';
-        }()), { x: 0.9, y: 1.80, w: 8.4, h: 0.26,
-                fontSize: 11, italic: true, color: C.fraco, wrap: false });
+    if (!pen) {
+      s.addText('Só há um período na série — não há com o que comparar.', {
+        x: 0.7, y: 1.7, w: 8.6, h: 0.4, fontSize: 15, color: C.fraco });
+      rodape(s, periodo, pagina);
+      return s;
     }
 
-    /* AS BARRAS SAEM DA GRAMATICA COMUM — ver `deck-grafico.js`. Antes cada
-       slide desenhava a sua, e por isso o deck tinha tres larguras de barra,
-       dois lugares para o valor e duas alturas de rotulo. E o que a critica de
-       "padrao unico para toda a demonstracao grafica" apontava.
-
-       A GEOMETRIA DESCEU para abrir espaco ao bloco de comparacao acima: o
-       valor impresso no topo da barra mais alta fica em BASE - ALTO - 0,27, e
-       com a base antiga ele batia na linha de "Entradas". */
-    var X0 = 0.9, LARG = 8.4, BASE = 3.72, ALTO = 1.45;
-    var col = LARG / vis.length;
-
-    DECKG.barras(s, pptx, {
-      x: X0, w: LARG, base: BASE, h: ALTO, largura: 0.5, fsValor: 10, fsRot: 12,
-      itens: vis.map(function (x, i) {
-        var ant = i > 0 ? vis[i - 1] : null;
-        return {
-          rot: x.rot,
-          /* "ago…" LIA-SE COMO TEXTO CORTADO. As reticencias marcavam mes em
-             curso, mas ninguem ve isso — ve um rotulo que nao coube e desconfia
-             do slide inteiro. A palavra resolve, e ainda diz o que a reticencia
-             nunca disse: que aquele mes ainda nao acabou. */
-          sub: x.parcial ? 'mês em curso' : '',
-          corRot: x.parcial ? C.texto : C.fraco,
-          series: [{ valor: x.entraram || 0, cor: C.azul },
-                   { valor: x.sairam || 0, cor: C.verde }],
-          /* O CRESCIMENTO MES A MES, embaixo de cada coluna. E das SAIDAS: e o
-             que o time controla. O primeiro mes nao tem contra o que comparar, e
-             um chip vazio ali seria pior que a ausencia dele. */
-          delta: ant ? DECKG.delta(x.sairam || 0, ant.sairam || 0) : null,
-        };
-      }),
+    var BASE = 3.80, ALTO = 1.95, LB = 4.30;
+    [{ rot: 'ENTRARAM NA FILA', campo: 'entraram', cor: C.azul, bomSubir: false, x: 0.55 },
+     { rot: 'SAÍRAM DA FILA', campo: 'sairam', cor: C.verde, bomSubir: true, x: 5.15 },
+    ].forEach(function (b) {
+      DECKG.comparativo(s, pptx, {
+        x: b.x, y: 1.22, w: LB, base: BASE, alto: ALTO,
+        rot: b.rot, cor: b.cor, fsRot: 11, fsValor: 26, fsDelta: 13,
+        antes: { rot: pen.rot || 'anterior', valor: pen[b.campo] || 0 },
+        agora: { rot: (ult.rot || 'atual') + (ult.parcial ? ' (em curso)' : ''),
+                 valor: ult[b.campo] || 0 },
+        /* ENTRAR MAIS NÃO É BOA NOTÍCIA: é fila crescendo. Sair mais é. Sem
+           dizer isso, os dois chips sairiam verdes por subirem. */
+        bomSubir: b.bomSubir,
+      });
     });
 
-    /* O SALDO DO MES, e nao mais tres numeros empilhados.
-     *
-     * O ajuste e do Fernando, feito a mao no deck de agosto: onde estava
-     * "Backlog fim do mes 66" ele escreveu "Entrada - saidas = 34". A diferenca
-     * nao e de gosto. As barras JA mostram 109 e 75; o backlog no fim do mes e
-     * um quarto numero, que vem de outra conta e nao se confere olhando para o
-     * slide. O saldo e a UNICA leitura que as proprias barras sustentam: e a
-     * subtracao que a plateia faz de cabeca, escrita.
-     *
-     * SEM O `+` NO POSITIVO: o rotulo ja diz "Entrada - saidas =". O negativo
-     * continua trazendo o proprio sinal, que e quando ele informa. */
-    /* TODOS NA MESMA ALTURA, inclusive o primeiro mês — que não tem chip de
-       delta por não ter contra o que comparar. Alinhar pelo conteúdo deixava a
-       linha do primeiro mês flutuando acima das outras, e uma linha fora do
-       lugar faz a sala procurar o motivo em vez de ler o número. */
-    var Y_SALDO = BASE + 0.86;
-    vis.forEach(function (x, i) {
-      var saldo = (x.entraram || 0) - (x.sairam || 0);
-      s.addText('Entrada - saídas = ' + saldo, {
-        x: X0 + i * col - 0.3, y: Y_SALDO, w: col + 0.6, h: 0.24,
-        fontSize: 10.5, color: C.fraco, align: 'center', wrap: false });
-    });
+    /* A FRASE QUE A SALA LEVA, dos dois deltas juntos. Cada um separado deixa a
+       conclusão por conta de quem lê — e cada um monta a sua. */
+    var dSai = (ult.sairam || 0) - (pen.sairam || 0);
+    var dEnt = (ult.entraram || 0) - (pen.entraram || 0);
+    s.addText((function () {
+        if (dSai > 0 && dEnt <= 0) return 'Entregamos mais e recebemos menos: a fila encolheu dos dois lados.';
+        if (dSai > 0 && dEnt > 0) return 'Entregamos mais, mas entrou mais também.';
+        if (dSai < 0 && dEnt > 0) return 'Entregamos menos e entrou mais: a fila cresceu por duas razões.';
+        if (dSai < 0) return 'Entregamos menos que no mês anterior.';
+        return 'Entregas estáveis em relação ao mês anterior.';
+      }()), { x: 0.55, y: 4.56, w: 8.9, h: 0.28, fontSize: 13, bold: true,
+              color: C.texto, wrap: false });
 
-    // A legenda diz o que e cada barra; sem ela, duas cores viram adivinhacao.
-    // A DIREITA do bloco de comparacao, e nao embaixo dele: a esquerda ja esta
-    // ocupada pela leitura de quanto mudou, que e o que se le primeiro.
-    DECKG.legenda(s, pptx, { x: 6.9, y: 1.50, passo: 1.25,
-      itens: [{ rot: 'entraram', cor: C.azul }, { rot: 'saíram', cor: C.verde }] });
-    /* A NOTA DA DIREITA SAIU JUNTO. Ela dizia "abaixo de cada mes: % no prazo e
-       backlog no fim do mes" — descrevia os dois numeros que nao estao mais la.
-       Legenda que aponta para o que nao existe e pior que legenda nenhuma. */
+    /* O SALDO DOS DOIS MESES, na mesma linha. É a subtração que a plateia faz de
+       cabeça olhando para os quatro números — escrita, e com o sinal pintado:
+       saldo positivo é fila crescendo, que é atenção. */
+    var saldoTxt = [{ text: 'Entrou − saiu:   ', options: { color: C.fraco } }];
+    [pen, ult].forEach(function (m, i) {
+      var v = (m.entraram || 0) - (m.sairam || 0);
+      if (i) saldoTxt.push({ text: '      ', options: { color: C.fraco } });
+      saldoTxt.push({ text: (m.rot || '') + ' ', options: { color: C.fraco } });
+      saldoTxt.push({ text: (v > 0 ? '+' : '') + DECKG.num(v),
+                      options: { bold: true,
+                                 color: v > 0 ? SIGNIFICADO.atencao
+                                      : (v < 0 ? C.verde : C.fraco) } });
+    });
+    s.addText(saldoTxt, { x: 0.55, y: 4.84, w: 8.9, h: 0.22, fontSize: 11, wrap: false });
+
     rodape(s, periodo, pagina);
     return s;
   }
@@ -2498,7 +2552,6 @@
     pptx.author = 'Roadmap de Melhorias';
     pptx.title = d.titulo + ' — ' + d.periodo;
 
-    _narrativa = null;
     slideCapa(pptx, d);
 
     /* ─── O ROTEIRO, E NÃO A MONTAGEM DIRETA ──────────────────────────────
@@ -2521,39 +2574,39 @@
      * declarada fora do bloco do seu ato, ela salta de lugar no deck — há
      * invariante cobrando que os atos apareçam em blocos contíguos.           */
     var roteiro = [];
-    function cena(ato, desenha) { roteiro.push({ ato: ato, desenha: desenha }); }
+    function cena(desenha) { roteiro.push({ desenha: desenha }); }
 
-    /* ─── ATO 1 · O MÊS ───────────────────────────────────────────────────
-       O panorama do mês e, logo em seguida, o mesmo mês dentro da série. Um
-       número sozinho não diz se é bom: "114 entraram" só ganha sentido ao lado
-       dos 110 de julho e dos 50 de junho. A evolução vinha DEPOIS de prazo e de
-       entregas rápidas, e a sala passava três slides sem saber se o mês foi
-       típico ou fora da curva.                                                */
-    if (d.secoes.entregas) cena('situacao', function (p) { slideMes(pptx, d, p); });
+    /* ─── A PÁGINA 2 É "FRENTES DE TRABALHO" ──────────────────────────────
+       "Essa deveria ser a página 2, atual é a 7."
+
+       É o que o modelo faz: logo depois da capa vem a visão geral da execução —
+       quantas frentes, quantas pessoas, quantas horas. A sala pergunta "quantos
+       somos e quanto coube no mês" antes de "a fila cresceu", e abrir pela conta
+       da fila começa a conversa pelo meio.
+
+       E LOGO DEPOIS, A MESMA FRENTE VISTA PELA RELAÇÃO ENTRE HORA E PONTO: o
+       slide anterior diz quanto cada frente consumiu, este diz o que cada hora
+       rendeu. É a pergunta seguinte, e ela some se os dois se separam.        */
+    if (d.secoes.pipelines && d.pipelines) {
+      cena(function (p) { slidePipelines(pptx, d.pipelines, p, d.periodo); });
+      cena(function (p) { slideEsforcoFrente(pptx, d.pipelines, p, d.periodo); });
+    }
+
+    /* ─── DEPOIS, O MÊS ───────────────────────────────────────────────────
+       O panorama da fila e, em seguida, o mesmo mês contra o anterior. Um número
+       sozinho não diz se é bom: "197 entraram" só ganha sentido ao lado dos 108
+       de julho.                                                               */
+    if (d.secoes.entregas) cena(function (p) { slideMes(pptx, d, p); });
 
     if (d.secoes.evolucao && (d.evolucao || []).length) {
-      cena('situacao', function (p) { slideEvolucao(pptx, d.evolucao, p, d.periodo); });
+      cena(function (p) { slideEvolucao(pptx, d.evolucao, p, d.periodo); });
     }
 
-    /* O COMPARATIVO FECHA O ATO DO MÊS. A evolução mostra a FILA nos dois meses
-       (o que entrou, o que saiu); este mostra o que foi ENTREGUE nos dois, nas
-       quatro moedas da conversa. A ordem é essa porque a fila explica o contexto
-       e a entrega é a resposta — e porque "entregamos menos e com mais peso" só
-       se diz depois de a sala saber que a fila cresceu. */
+    /* O COMPARATIVO FECHA O BLOCO DO MÊS. A evolução mostra a FILA nos dois
+       meses (o que entrou, o que saiu); este mostra o que foi ENTREGUE nos dois.
+       A ordem é essa porque a fila explica o contexto e a entrega é a resposta. */
     if (d.secoes.comparativo && d.anterior) {
-      cena('situacao', function (p) { slideComparativo(pptx, d, p); });
-    }
-
-    /* ─── ATO 2 · PARA ONDE FOI ───────────────────────────────────────────
-       O corte que a diretoria já lê no painel aprovado. Responde "em que o mês
-       foi gasto" antes de o deck cobrar prazo — porque cobrar prazo sem mostrar
-       no que o time esteve é cobrar no escuro.                               */
-    if (d.secoes.pipelines && d.pipelines) {
-      cena('capacidade', function (p) { slidePipelines(pptx, d.pipelines, p, d.periodo); });
-      /* E LOGO DEPOIS, A MESMA FRENTE VISTA PELA RELAÇÃO ENTRE HORA E PONTO. O
-         slide anterior diz quanto cada frente consumiu; este diz o que cada hora
-         rendeu. É a pergunta seguinte, e ela some se os dois slides se separam. */
-      cena('capacidade', function (p) { slideEsforcoFrente(pptx, d.pipelines, p, d.periodo); });
+      cena(function (p) { slideComparativo(pptx, d, p); });
     }
 
     /* OS PROJETOS VÊM LOGO DEPOIS DAS FRENTES — pedido do Fernando, e a ordem tem
@@ -2561,7 +2614,7 @@
        pergunta puxa a outra, e separá-las por cinco slides obrigava a sala a
        lembrar do número anterior. */
     if (d.secoes.projetos && (d.projetos || []).length) {
-      cena('capacidade', function (p) { slideProjetos(pptx, d.projetos, p, d.periodo); });
+      cena(function (p) { slideProjetos(pptx, d.projetos, p, d.periodo); });
     }
 
     /* OS PONTOS FECHAM O ATO DA CAPACIDADE. Frente, projeto e ponto respondem a
@@ -2572,14 +2625,14 @@
        pergunta que se faz primeiro; "onde os 849 foram gastos" e a seguinte. Na
        ordem inversa, a sala ve a distribuicao sem saber se o mes foi bom. */
     if (d.secoes.capacidade && d.capacidade && (d.capacidade.devs || []).length) {
-      cena('capacidade', function (p) { slideCapacidade(pptx, d.capacidade, p, d.periodo); });
+      cena(function (p) { slideCapacidade(pptx, d.capacidade, p, d.periodo); });
     }
     var cortesP = cortesDePontos(d.secoes);
     if (d.pontos && d.pontos.total > 0) {
       // por semana, por desenvolvedor, por assunto
-      if (cortesP.semana) cena('capacidade', function (p) { slidePontos(pptx, d.pontos, p, d.periodo); });
-      if (cortesP.dev) cena('capacidade', function (p) { slidePontosDev(pptx, d.pontos, p, d.periodo); });
-      if (cortesP.tema) cena('capacidade', function (p) { slidePontos2(pptx, d.pontos, p, d.periodo); });
+      if (cortesP.semana) cena(function (p) { slidePontos(pptx, d.pontos, p, d.periodo); });
+      if (cortesP.dev) cena(function (p) { slidePontosDev(pptx, d.pontos, p, d.periodo); });
+      if (cortesP.tema) cena(function (p) { slidePontos2(pptx, d.pontos, p, d.periodo); });
     }
 
     /* AS PRINCIPAIS ENTREGAS FECHAM O ATO DA CAPACIDADE, e a ordem tem razão: os
@@ -2588,17 +2641,17 @@
        sala faz depois de ver os totais, e até hoje ela só era respondida pelo
        slide de destaque, que é escolhido a dedo e não é ranking. */
     if (d.secoes.entregas_top && d.entregasTop && (d.entregasTop.itens || []).length) {
-      cena('capacidade', function (p) { slideEntregas(pptx, d.entregasTop, p, d.periodo); });
+      cena(function (p) { slideEntregas(pptx, d.entregasTop, p, d.periodo); });
     }
 
     /* ─── ATO 3 · O COMBINADO ────────────────────────────────────────────
        A pergunta que a diretoria faz. Vem depois de "onde a capacidade foi", e
        fecha com as entregas rápidas — que é onde o time responde.            */
     if (d.secoes.prazo && d.prazo.medidas) {
-      cena('combinado', function (p) { slidePrazo(pptx, d, p); });
+      cena(function (p) { slidePrazo(pptx, d, p); });
 
       if (d.prazo.atrasadas.length) {
-        cena('combinado', function (p) {
+        cena(function (p) {
           var s = slideTitulo(pptx, 'Onde escapou do prazo',
             d.prazo.atrasadas.length + ' entregas, atraso médio de ' + d.prazo.diasMedio +
             (d.prazo.diasMedio === 1 ? ' dia' : ' dias'), p, d.periodo);
@@ -2615,7 +2668,7 @@
     // As entregas rápidas fecham o ato: e o contraponto ao slide de atraso — o
     // mesmo time que escapou do prazo em algumas entregou outras em dois dias.
     if (d.secoes.rapidas && d.rapidas && (d.rapidas.itens || []).length) {
-      cena('combinado', function (p) { slideRapidas(pptx, d.rapidas, p, d.periodo, d.anterior); });
+      cena(function (p) { slideRapidas(pptx, d.rapidas, p, d.periodo, d.anterior); });
     }
 
     /* ─── ATO 4 · QUEM PEDIU, QUEM FEZ ────────────────────────────────────
@@ -2624,13 +2677,13 @@
        em que o mês foi gasto e o projeto diz para quê, e as duas perguntas se
        puxam.                                                                   */
     if (d.secoes.areas && (d.areas || []).length) {
-      cena('esforco', function (p) { slideAreas(pptx, d.areas, p, d.periodo); });
+      cena(function (p) { slideAreas(pptx, d.areas, p, d.periodo); });
     }
 
     // Quem pediu fecha o ato: o time e uma leitura; a area cliente e outra, e e a que diz
     //    para onde a capacidade foi de fato.
     if (d.secoes.solicit && d.solicitantes) {
-      cena('esforco', function (p) { slideBarras(pptx, {
+      cena(function (p) { slideBarras(pptx, {
         titulo: 'Quem mais pediu', sub: 'demandas concluídas no período, por solicitante',
         itens: d.solicitantes.itens, max: 5, cor: SIGNIFICADO.neutro,
         rotuloSobra: ' solicitantes',
@@ -2650,14 +2703,14 @@
     if (d.secoes.time && d.time) {
       // A quebra das SAIDAS, e nao das entradas: o slide fala do que o time
       // entregou, e o que entrou na fila e assunto do slide do mes.
-      cena('esforco', function (p) {
+      cena(function (p) {
         slideTime(pptx, d.time, p, d.periodo, d.ausencias, d.capacidade,
                   (d.quebra || {}).saidas);
       });
     }
 
     if (d.secoes.grafico && (d.porDev || []).length) {
-      cena('esforco', function (p) {
+      cena(function (p) {
         slideBarras(pptx, {
           titulo: 'Entregas por desenvolvedor', sub: 'demandas concluídas no período',
           itens: d.porDev, cor: SIGNIFICADO.neutro, rotuloSobra: ' pessoas', rotuloExtra: 'pts',
@@ -2669,7 +2722,7 @@
     if (d.secoes.ganttdev) {
       (d.ganttDev || []).forEach(function (dv) {
         if ((dv.barras || []).length) {
-          cena('esforco', function (p) { slideGanttDev(pptx, dv, p, d.periodo); });
+          cena(function (p) { slideGanttDev(pptx, dv, p, d.periodo); });
         }
       });
     }
@@ -2677,7 +2730,7 @@
     // As imagens seguem suportadas para quem quiser mandar um grafico pronto,
     // mas nenhum slide do deck depende delas hoje.
     (d.imagens || []).forEach(function (img) {
-      cena('esforco', function (p) {
+      cena(function (p) {
         var si = slideTitulo(pptx, img.titulo, img.sub || '', p, d.periodo);
         si.addImage({ data: img.png, x: 0.7, y: 1.5, w: 8.6, h: 3.4 });
         rodape(si, d.periodo, p);
@@ -2688,7 +2741,7 @@
        A única parte do deck que pede ação de quem está na sala. Vem depois de
        tudo que explica o mês, e antes do fecho.                              */
     if (d.secoes.riscos && (d.riscos.pausadas.length || d.riscos.semPonto)) {
-      cena('rumo', function (p) {
+      cena(function (p) {
         var sr = slideTitulo(pptx, 'O que está travado', 'depende de decisão fora do time',
                              p, d.periodo);
         if (d.riscos.pausadas.length) {
@@ -2712,7 +2765,7 @@
        as entregas que importam, e slide de encerramento no meio e slide que a
        sala nao leva embora.                                                   */
     (d.destaques || []).forEach(function (m) {
-      cena('rumo', function (p) {
+      cena(function (p) {
       var s = slideBase(pptx);
       s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.verde } });
       s.addText(m.codigo || '', { x: 0.7, y: 0.52, w: 8.6, h: 0.3, fontSize: 13, color: C.verde, bold: true });
@@ -2743,7 +2796,7 @@
 
     // 8. O que vem. Terminar em compromisso, não em número.
     if (d.secoes.proximo) {
-      cena('rumo', function (p) {
+      cena(function (p) {
       var sp = slideTitulo(pptx, 'O que vem', d.proximo.sub || '', p, d.periodo);
       if (d.proximo.itens.length) {
         tabela(pptx, sp, ['Demanda', 'Responsável', 'Entrega'],
@@ -2761,7 +2814,7 @@
     // 9. A mensagem de quem apresenta. Fica por último porque é a frase que a
     //    sala leva embora, e ela é escrita por uma pessoa — não calculada.
     if (d.mensagem || (d.frentesAtraso || []).length) {
-      cena('rumo', function (p) {
+      cena(function (p) {
       var sm = slideBase(pptx);
       sm.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.azul } });
       if (d.mensagem) {
@@ -2792,30 +2845,18 @@
       });
     }
 
-    /* ─── A SEGUNDA PASSADA: OS ATOS ─────────────────────────────────────
+    /* ─── A SEGUNDA PASSADA: O DECK, NA ORDEM EM QUE FOI DECLARADO ───────
      *
-     * Com o roteiro pronto, os atos sem cena somem, o trilho ganha a proporção
-     * de cada capítulo, e cada ato é aberto pelo divisor com a sua pergunta.
+     * Aqui havia um agrupamento por ato, e ele saiu junto com os divisores. O
+     * motivo não é só "ficou sem uso": agrupar REORDENA. Uma cena declarada no
+     * meio do arquivo podia sair em outro lugar do deck porque a montagem
+     * juntava as do mesmo ato — e com a moldura invisível isso vira maquinaria
+     * mexendo na ordem pelas costas de quem monta.
      *
-     * `secoes.atos === false` desliga a moldura narrativa e devolve o deck
-     * corrido de antes. Existe porque há um uso legítimo para isso — mandar por
-     * e-mail as páginas de dado sem os divisores —, e porque a chave ausente
-     * tem que significar LIGADO: toda apuração congelada guarda o `secoes` do
-     * dia em que o mês fechou, e nenhuma delas conhece esta chave. */
-    var plano = NARR.plano(roteiro, d.secoes.atos !== false);
+     * A ordem do deck é a ordem em que as cenas aparecem acima. Para mover um
+     * slide, move-se a declaração dele. */
     var p = 0;
-    plano.atos.forEach(function (a, i) {
-      _narrativa = { plano: plano, indice: i, ato: a };
-      if (plano.divide) {
-        var sd = slideBase(pptx);
-        NARR.divisor(sd, pptx, { ato: a, cores: C, paginas: plano.paginas[i] - 1 });
-        rodape(sd, d.periodo, ++p);
-      }
-      roteiro.forEach(function (c) { if (c.ato === a.chave) c.desenha(++p); });
-    });
-    /* ZERADO NA SAÍDA. O estado é de módulo, e um deck seguinte gerado por outro
-       caminho (o kit, em Relatórios) herdaria o ato do último slide deste. */
-    _narrativa = null;
+    roteiro.forEach(function (c) { c.desenha(++p); });
 
     return pptx;
   }

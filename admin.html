@@ -1165,9 +1165,8 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=03bc22afd7"></script>
-  <script src="deck-grafico.js?v=d56d720fd0"></script>
+  <script src="deck-grafico.js?v=30e803d757"></script>
   <script src="deck-fundo.js?v=050a7db483"></script>
-  <script src="deck-narrativa.js?v=88fceaf4e4"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-projeto.js?v=63d219aac1"></script>
@@ -1178,7 +1177,7 @@
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=ef35f28412"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=4a7e80bbc6"></script>
+<script src="apresentacao.js?v=e22f5223a5"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -5724,14 +5723,6 @@ function gerBandejasAplicaTodas() {
  * guarda a chave antiga (`pontos`) — `cortesDePontos`, no apresentacao.js, le
  * a antiga como "as tres", que e o que aquele deck mostrava. */
 const AP_SECOES = [
-  /* A MOLDURA NARRATIVA — o slide de abertura de cada ato e o trilho de
-     capítulos no alto de todo slide. Vem marcada, e desmarcá-la devolve o deck
-     corrido: existe para quem manda só as páginas de dado por e-mail, onde os
-     divisores não têm quem os apresente.
-     A CAIXA É A PRIMEIRA da grade de propósito — ela muda a forma do arquivo
-     inteiro, e não o conteúdo de uma página. */
-  { k: 'atos', rot: 'Dividir o deck em atos, com a pergunta de cada um', pad: true,
-    nota: 'um slide de abertura por ato — só os atos que tiverem conteúdo' },
   { k: 'entregas', rot: 'O mês: backlog, o que entrou e o que saiu', n: 1, pad: true },
   { k: 'evolucao', rot: 'Evolução: este mês e o anterior', n: 1, pad: true },
   /* O COMPARATIVO NASCE MARCADO. A evolução mostra a FILA nos dois meses; este
@@ -6459,11 +6450,39 @@ async function apresGerar(opts) {
           hPlan += prjPlan.get(m.id) || 0;
           hReal += horasDoMes(m, iso + '-01', fimMes, prjRatReal);
         });
+        /* ═══ O CONTEXTO DO PROJETO, QUE EXISTIA E NÃO CHEGAVA AO SLIDE ═════
+         *
+         * "Tela de projetos não fala muita coisa, só está fazendo a leitura do
+         *  título, que não dá contexto — vai me complicar na reunião."
+         *
+         * Ele tem razão e o dado já estava lá: `descricao` está preenchida em
+         * boa parte dos projetos ("Adapter para diferentes fornecedores de API
+         * do Whatsapp"), e o slide mostrava só "EP-002 · Migração e
+         * centralização de mensagens do Whatsapp AXCred" — o nome repetido com
+         * outras palavras.
+         *
+         * E QUANDO A DESCRIÇÃO É VAZIA, O QUE ANDOU NO MÊS responde melhor que
+         * ela: "Ambiente de Operações" não diz nada; "saiu: ajuste de garantias,
+         * painel do cedente" diz o que aconteceu ali em agosto. Os títulos das
+         * entregas são o contexto que nunca falta quando houve movimento. */
+        const titulosDoMes = doMes
+          .map(m => String(m.titulo || '').trim())
+          .filter(Boolean)
+          .slice(0, 3);
+        const situacao = { planejado: 'planejado', em_andamento: 'em andamento',
+                           pausado: 'pausado' }[String(p.status || '')] || '';
         return {
           nome: (p.codigo ? p.codigo + ' · ' : '') + (p.nome || '(sem nome)'),
           resp: p.responsavel || '', feitas, andando, total: itens.length,
           plan: Math.round(hPlan), real: Math.round(hReal),
           pct: hPlan > 0 ? Math.round(hReal / hPlan * 100) : null,
+          descricao: String(p.descricao || '').trim(),
+          entregou: titulosDoMes,
+          situacao,
+          // A janela combinada, quando existe: projeto com fim no passado e
+          // tarefa em andamento é a pergunta que a reunião faz sozinha.
+          inicio: String(p.inicio || '').slice(0, 10),
+          fim: String(p.fim || '').slice(0, 10),
         };
       })
       // Ordenado por HORAS, e nao por contagem de tarefas: e o que o subtitulo do

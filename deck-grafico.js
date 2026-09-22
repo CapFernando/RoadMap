@@ -165,14 +165,21 @@
     s.addShape(pptx.ShapeType.rect, {
       x: X0, y: BASE, w: LARG, h: 0.012, fill: { color: COR.borda } });
 
+    /* DEVOLVE A GEOMETRIA DE CADA BARRA. Quem chama precisa dela para ligar o
+       topo de uma ao topo da outra (ver `conector`) — e recalcular a posição do
+       lado de fora seria a segunda implementação da mesma conta, com a garantia
+       de divergir no dia em que a largura da barra mudar aqui. */
+    var pontos = [];
     itens.forEach(function (it, i) {
       var sr = seriesDe(it);
       var largGrupo = sr.length * larg + (sr.length - 1) * vao;
       var cx0 = X0 + i * col + (col - largGrupo) / 2;
+      pontos.push([]);
       sr.forEach(function (b, k) {
         var v = Number(b.valor) || 0;
         var alt = Math.max(0.04, ALTO * (Math.abs(v) / max));
         var cx = cx0 + k * (larg + vao);
+        pontos[i].push({ x: cx + larg / 2, y: BASE - alt, valor: v, cor: b.cor });
         s.addShape(pptx.ShapeType.rect, {
           x: cx, y: BASE - alt, w: larg, h: alt,
           fill: { color: b.cor || COR.azul } });
@@ -200,6 +207,7 @@
                              fontSize: 9.5 });
       }
     });
+    return { pontos: pontos, col: col, max: max };
   }
 
   /* ─── BARRAS DEITADAS, PAREADAS ────────────────────────────────────────
@@ -434,6 +442,49 @@
     }
   }
 
+  /* ─── O CONECTOR ───────────────────────────────────────────────────────
+   *
+   * "Ao ver a imagem, qualquer um consiga ler e comparar SEM A NECESSIDADE DE
+   *  LEITURA. Pode riscar os gráficos trazendo comparativo ou valores."
+   *
+   * É a peça que faltava. O gráfico mostrava duas colunas em cada mês e deixava
+   * a comparação por conta de quem lê: a plateia via 108 e 197 e tinha de fazer
+   * a subtração de cabeça — ou procurar o número num rodapé de 10pt. O conector
+   * DESENHA a comparação: um traço do topo de uma barra ao topo da outra, com o
+   * delta escrito em cima dele, no meio do caminho.
+   *
+   * A INCLINAÇÃO É A INFORMAÇÃO. Subiu muito, o traço é íngreme; ficou igual,
+   * ele é horizontal. Isso se lê de longe e sem saber português — que é
+   * exatamente o pedido.
+   *
+   * TRACEJADO, e não sólido: ele liga dois dados e não É um dado. Sólido, ele
+   * competiria com a linha de série do gráfico de dois eixos, que é outra coisa.
+   *
+   * O CHIP FICA ACIMA DO TRAÇO, nunca em cima. Sobre a linha ele a corta ao
+   * meio, e o traço perde justamente a inclinação que ele veio mostrar — foi o
+   * que aconteceu no primeiro desenho deste deck ("o risco sobrepôs muita
+   * coisa, não ficou bonito"). */
+  function conector(s, pptx, cfg) {
+    var x1 = cfg.x1, y1 = cfg.y1, x2 = cfg.x2, y2 = cfg.y2;
+    var cor = cfg.cor || COR.fraco;
+    s.addShape(pptx.ShapeType.line, {
+      x: Math.min(x1, x2), y: Math.min(y1, y2),
+      w: Math.abs(x2 - x1), h: Math.abs(y2 - y1),
+      /* A forma `line` nasce descendo da esquerda para a direita; `flipV` a vira
+         quando o segundo ponto está MAIS ALTO (y menor no slide). */
+      flipV: y2 < y1,
+      line: { color: cor, width: cfg.espessura || 1.5, dashType: cfg.traco || 'dash' },
+    });
+    if (cfg.delta) {
+      var w = cfg.larguraChip || 1.35;
+      chipDelta(s, pptx, {
+        delta: cfg.delta, x: (x1 + x2) / 2 - w / 2,
+        y: Math.min(y1, y2) - (cfg.alturaChip || 0.34) - 0.06,
+        w: w, h: cfg.alturaChip || 0.34, fontSize: cfg.fontSize || 11,
+      });
+    }
+  }
+
   /* ─── LEGENDA ──────────────────────────────────────────────────────────
      `legend-visible`: sempre visível e perto do gráfico. Uma função só, para a
      legenda não nascer em três alturas diferentes em três slides. */
@@ -449,7 +500,7 @@
 
   var api = { COR: COR, num: num, delta: delta, chipDelta: chipDelta,
               barras: barras, barrasH: barrasH, comparativo: comparativo,
-              barraLinha: barraLinha, legenda: legenda };
+              barraLinha: barraLinha, conector: conector, legenda: legenda };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.DECKG = api;
