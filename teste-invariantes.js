@@ -13634,6 +13634,164 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e demanda que nao existe mais avisa, em vez de abrir um card vazio');
   }
 
+  /* === A DATA COM QUE UMA DEMANDA PODE NASCER ===========================
+
+     "Bloquear abertura de issues com datas retroativas, tanto admin, gantt, dev
+     ou api. Se abrir permitir apenas para data atual."
+
+     Demanda que nasce com data no passado se perde — foi a AX-288, programada
+     para agosto em setembro, que nunca apareceu no gantt. E suja o passado:
+     entra num fechamento ja apresentado.
+
+     MEDIDO na base antes de escrever a regra: 79 demandas nasceram com inicio
+     no passado, 216 com inicio no FUTURO e 302 com entrega no futuro. O
+     primeiro numero justifica a trava; os outros dois definem o limite dela —
+     proibir o futuro trocaria um defeito por uma tela que nao planeja. */
+  sec('Abertura: nada de data retroativa');
+  {
+    const AB = require('./abertura.js');
+    const HOJE = '2026-09-22';
+
+    /* ── A REGRA, EXECUTADA ── */
+    ok(!AB.checa({ inicio: '2026-09-21' }, 'admin', HOJE).ok,
+       'ninguem abre com inicio no passado — nem o admin');
+    ok(!AB.checa({ entrega: '2026-09-21' }, 'admin', HOJE).ok,
+       'e nem com entrega no passado');
+    ok(AB.checa({ inicio: HOJE, entrega: HOJE }, 'admin', HOJE).ok, 'hoje passa');
+    /* O PLANEJAMENTO SEGUE VIVO no admin e no gantt: 216 demandas nasceram
+       assim, e proibir isso seria o remedio pior que a doenca. */
+    ok(AB.checa({ inicio: '2026-10-15', entrega: '2026-12-20' }, 'admin', HOJE).ok,
+       'e o admin/gantt continua abrindo com data a frente — e planejamento');
+
+    /* ── DEV E API: SO HOJE ── */
+    ok(AB.checa({ inicio: HOJE }, 'dev', HOJE).ok, 'o dev abre com a data de hoje');
+    ok(!AB.checa({ inicio: '2026-10-15' }, 'dev', HOJE).ok,
+       'mas nao combina prazo para frente — isso e do planejamento');
+    ok(!AB.checa({ entrega: '2026-09-23' }, 'endpoint', HOJE).ok,
+       'e a API tampouco, nem para o dia seguinte');
+    ok(!AB.checa({ inicio: '2026-09-21' }, 'endpoint', HOJE).ok,
+       'e o passado continua barrado para ela');
+
+    /* ── OS CASOS DE BORDA ── */
+    ok(AB.checa({}, 'dev', HOJE).ok, 'sem data nenhuma nao ha o que recusar');
+    ok(!AB.checa({ inicio: '22/09/2026' }, 'admin', HOJE).ok,
+       'data em formato brasileiro e recusada');
+    ok(AB.checa({ inicio: '2026-01-01' }, 'admin', '').ok,
+       'sem um "hoje" confiavel a regra nao inventa recusa — melhor deixar passar ' +
+       'do que travar a tela por causa de um relogio');
+    ok(AB.checa({ inicio: '2026-09-21' }, 'admin', HOJE).campo === 'inicio',
+       'a recusa diz QUAL campo, para a tela pôr o foco nele');
+
+    /* ── A COPIA DO WORKER RESPONDE IGUAL ──
+     *
+     * O Worker nao importa nada — e um Worker, sem bundler —, entao a regra esta
+     * escrita duas vezes. E a duplicacao que esta base ja pagou caro: uma copia
+     * corrigida e a outra nao. Aqui as DUAS sao executadas sobre os mesmos
+     * casos, e qualquer divergencia aparece. */
+    const copia = new Function(
+      W.slice(W.indexOf('const ABERT_SEM_PLANEJAMENTO'),
+              W.indexOf('function aberturasRetroativas(')) +
+      ' return abertCheca;')();
+    const CASOS = [];
+    for (const origem of ['admin', '', 'dev', 'endpoint']) {
+      for (const d of ['2026-09-20', '2026-09-21', HOJE, '2026-09-23', '2026-12-01', '']) {
+        CASOS.push([{ inicio: d }, origem], [{ entrega: d }, origem]);
+      }
+    }
+    const divergem = CASOS.filter(([dados, origem]) =>
+      AB.checa(dados, origem, HOJE).ok !== copia(dados, origem, HOJE).ok);
+    ok(divergem.length === 0,
+       'a copia do Worker responde igual ao modulo nos ' + CASOS.length + ' casos',
+       divergem.slice(0, 3).map(([d, o]) => JSON.stringify(d) + ' como ' + (o || '(admin)')).join(' | '));
+
+    /* ── AS TRES PORTAS DO SERVIDOR ──
+       As telas nao bastam: admin e gantt publicam um estado montado no
+       navegador, e uma aba antiga, um script ou o console abrem com a data que
+       quiserem. */
+    ok(/const retroPub = aberturasRetroativas\(data, antesPub, 'admin', hojeBR\(\)\);/.test(W),
+       'o publish (admin e gantt) recusa abertura retroativa');
+    ok(/const retroDev = aberturasRetroativas\(data, antesDev, 'dev', hojeBR\(\)\);/.test(W),
+       'o dev-publish tambem, e com a regra mais estreita');
+    ok(/const retroApi = abertCheca\(nova, 'endpoint', hojeBR\(\)\);/.test(W),
+       'e a API, no `demanda-nova`');
+    /* E ELA VALE SO PARA QUEM ESTA NASCENDO. Editar demanda velha continua
+       livre: a data dela ja e passado por construcao. */
+    const quem = corpo(W, 'function aberturasRetroativas(');
+    ok(!!quem && /if \(!m \|\| !m\.id \|\| conhecidas\.has\(m\.id\)\) continue;/.test(quem),
+       'so as demandas que o servidor NAO conhece sao conferidas — editar velha ' +
+       'continua livre');
+    /* E `criado_em` NAO SERVE DE CRITERIO: ele vem do cliente. */
+    ok(!!quem && !/criado_em/.test(quem),
+       'e "nova" nao e decidido por `criado_em`, que vem do cliente');
+
+    /* ── AS TRES TELAS, SO NA CRIACAO ── */
+    for (const [nome, src, cond] of [
+      ['admin', ADMIN, "if (!id) {"],
+      ['gantt', GANTT, "if (!editingId) {"],
+      ['dev', DEV, "if (!editId) {"]]) {
+      ok(new RegExp('<script src="abertura\\.js\\?v=').test(src), nome + ' carrega o modulo');
+      const i = src.indexOf('ABERTURA.checa(');
+      ok(i > 0, nome + ' consulta a regra ao salvar');
+      const antes = src.slice(Math.max(0, i - 400), i);
+      ok(antes.includes(cond),
+         nome + ' so confere na CRIACAO — editar demanda velha continua livre');
+    }
+    /* A CHAMADA OCUPA TRES LINHAS, entao a medicao e sobre o texto achatado —
+       `[^)]*` nunca casaria: ha `getElementById(...)` no meio, com parenteses. */
+    ok(/ABERTURA\.checa\(.{0,200}'dev', PRAZO\.hojeISO\(\)\)/.test(DEV.replace(/\s+/g, ' ')),
+       'e o painel do dev se identifica como `dev`, que e a regra estreita');
+    ok(/ABERTURA\.checa\(.{0,200}'admin', PRAZO\.hojeISO\(\)\)/.test(ADMIN.replace(/\s+/g, ' ')) &&
+       /ABERTURA\.checa\(.{0,200}'admin', PRAZO\.hojeISO\(\)\)/.test(GANTT.replace(/\s+/g, ' ')),
+       'e o admin e o gantt como `admin`, que e a que ainda planeja');
+
+    /* ── A LISTRA NO GANTT ──
+       "Trazer em gantt um azul listrado para saber que foi aberto pelo dev ou
+       api." */
+    ok(/const deApi = window\.ABERTURA \? ABERTURA\.deDevOuApi\(m\) : false;/.test(GANTT),
+       'o card pergunta ao modulo quem abriu');
+    ok(/\$\{deApi \? ' gcard-deapi' : ''\}/.test(GANTT), 'e a classe entra na barra');
+    ok(AB.deDevOuApi({ origem: 'dev' }) && AB.deDevOuApi({ origem: 'endpoint' }),
+       'dev e endpoint contam como aberta por fora do planejamento');
+    ok(!AB.deDevOuApi({ origem: 'admin' }) && !AB.deDevOuApi({}),
+       'e admin, ou sem origem, nao');
+    /* A MESMA LISTA DOS DOIS LADOS: quem nao planeja e quem ganha listra sao a
+       mesma pergunta vista de dois lados. */
+    ok(!AB.planeja('dev') && !AB.planeja('endpoint') && AB.planeja('admin'),
+       'e a lista de "quem nao planeja" e a mesma que decide a listra');
+
+    /* A LISTRA E FUNDO, e nao pseudo-elemento: `::before` e `::after` ja estao
+       ocupados por pausada, atrasado e quebra, e um card pode ser tres coisas ao
+       mesmo tempo. */
+    ok(/\.gantt-card\.gcard-deapi \{\s*background-image: repeating-linear-gradient/.test(
+         GANTT.replace(/\n\s*/g, ' ').replace(/ \{ /g, ' {\n        ')) ||
+       /gcard-deapi \{[\s\S]{0,80}background-image/.test(GANTT),
+       'a listra vai no fundo da barra');
+    ok(!/gcard-deapi::(before|after)/.test(GANTT),
+       'e nao disputa `::before`/`::after`, que ja sao de pausada, atrasado e quebra');
+    /* 135deg PARA NAO CONFUNDIR COM A HERDADA, que corre a 45deg — as duas podem
+       aparecer na mesma barra.
+       CADA BLOCO E MEDIDO SOZINHO: ha DUAS regras `gcard-deapi` (a segunda so
+       troca a cor sobre o vermelho e o verde), e a primeira versao desta
+       invariante varria 200 caracteres a frente — com a sabotagem que punha
+       45deg na primeira, ela achava o 135deg da segunda e passava. */
+    {
+      /* SO AS REGRAS DE CSS. `gcard-deapi[^{]*\{` tambem casava com a montagem
+         do card no JS (`${deApi ? ' gcard-deapi' : ''}`) e com o comentario, e
+         ai o `every` reprovava o codigo certo. O seletor completo, e `[^{}]*`
+         para nao atravessar o fim de um bloco. */
+      const blocos = [...GANTT.matchAll(/\.gantt-card\.gcard-deapi[^{}]*\{([^}]*)\}/g)]
+        .map(x => x[1]);
+      ok(blocos.length >= 1, 'a regra da listra foi achada', String(blocos.length));
+      ok(blocos.every(b => /135deg/.test(b)),
+         'toda listra de dev/api corre a 135deg');
+      ok(blocos.every(b => !/\b45deg/.test(b)),
+         'e nenhuma a 45deg, que e o angulo da fita de HERDADA — as duas podem ' +
+         'aparecer na mesma barra');
+      const herd = (GANTT.match(/gcard-herdada[^{]*\{([^}]*)\}/) || [])[1] || '';
+      ok(/45deg/.test(herd), 'e a fita de herdada continua a 45deg', '');
+    }
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

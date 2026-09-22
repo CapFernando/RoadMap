@@ -1226,6 +1226,77 @@ function travaDatasComprometidas(recebido, servidor) {
 // o analista faz descoberta, e o admin e a autoridade que decide.
 const ETAPAS_QUE_O_DEV_MOVE = ['em_andamento', 'validacao'];
 
+/* ═══ A DATA COM QUE UMA DEMANDA PODE NASCER ════════════════════════════════
+ *
+ * "Bloquear abertura de issues com datas retroativas, tanto admin, gantt, dev
+ *  ou api. Se abrir permitir apenas para data atual."
+ *
+ * Demanda que nasce com data no passado se perde: foi a AX-288, programada para
+ * agosto em setembro, que nunca apareceu no gantt. E suja o passado — ela entra
+ * num fechamento ja apresentado.
+ *
+ * DUAS REGRAS:
+ *   TODOS      nao se abre com data no passado (medido: 79 na base nasceram assim)
+ *   DEV E API  so o dia de hoje; planejar adiante e do PM/PO
+ *
+ * A REGRA MORA EM `abertura.js` E ESTA COPIA E DELIBERADA. Este arquivo nao
+ * importa nada — e um Worker, sem bundler — e a duplicacao e cobrada por
+ * invariante, que executa as duas e compara resposta por resposta. E como as
+ * outras regras compartilhadas deste repositorio ja vivem.
+ *
+ * E ELA E DO SERVIDOR PORQUE AS TELAS NAO BASTAM: admin e gantt publicam o
+ * estado inteiro montado no navegador. Uma aba antiga, um script, ou o proprio
+ * console abrem uma demanda com a data que quiserem — a tela recusa, o servidor
+ * e quem impede. */
+const ABERT_SEM_PLANEJAMENTO = ['dev', 'endpoint'];
+const abertEhData = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+const abertPlaneja = (o) => !ABERT_SEM_PLANEJAMENTO.includes(String(o || '').toLowerCase());
+
+function abertChecaCampo(valor, rot, origem, hoje) {
+  const v = String(valor || '').trim();
+  if (!v) return '';
+  if (!abertEhData(v)) return 'A data de ' + rot + ' precisa estar em AAAA-MM-DD.';
+  if (!abertEhData(hoje)) return '';
+  if (v < hoje) {
+    return 'Nao da para abrir uma demanda com ' + rot + ' em ' + v + ', que ja passou. ' +
+           'Demanda com data para tras nao aparece no planejamento e entra num mes que ' +
+           'ja foi apresentado. Use ' + hoje + ' ou uma data a frente.';
+  }
+  if (v > hoje && !abertPlaneja(origem)) {
+    return 'Pelo ' + (String(origem).toLowerCase() === 'endpoint' ? 'endpoint' : 'painel') +
+           ', a demanda nasce com a data de hoje (' + hoje + '). Combinar prazo para ' +
+           v + ' e do planejamento.';
+  }
+  return '';
+}
+
+function abertCheca(dados, origem, hoje) {
+  for (const [chave, rot] of [['inicio', 'inicio'], ['entrega', 'entrega']]) {
+    const erro = abertChecaCampo((dados || {})[chave], rot, origem, hoje);
+    if (erro) return { ok: false, erro, campo: chave };
+  }
+  return { ok: true, erro: '', campo: '' };
+}
+
+/* AS DEMANDAS QUE ESTAO NASCENDO NESTA GRAVACAO, e so elas. Editar uma demanda
+   velha continua livre: a data dela ja e passado por construcao, e recusar a
+   edicao prenderia o historico inteiro.
+ *
+ * NOVA E A QUE O SERVIDOR NAO CONHECE — o mesmo criterio de `travaEtapaDoDev`.
+ * Olhar `criado_em` nao serviria: ele vem do cliente. */
+function aberturasRetroativas(recebido, servidor, origem, hoje) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const conhecidas = new Set();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) conhecidas.add(m.id);
+  const presas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id || conhecidas.has(m.id)) continue;
+    const r = abertCheca(m, origem, hoje);
+    if (!r.ok) presas.push({ codigo: m.codigo || m.titulo || m.id, campo: r.campo, erro: r.erro });
+  }
+  return presas;
+}
+
 /* ═══ A EXCECAO DO GRILL ════════════════════════════════════════════════════
  *
  * O Grill e o unico caso em que o dev move a demanda para PLANNING ou para
@@ -4504,6 +4575,16 @@ export default {
        *
        * `nova.id` acabou de ser gerado e o servidor nao o conhece — entao ela e
        * vista como criacao, que e exatamente o caso que a trava cobre. */
+      /* E A API PELA MESMA REGRA. Aqui a recusa vem ANTES da trava de titulo
+         repetido de proposito: data invalida e erro do proprio pedido, e dizer
+         "ja existe demanda com este titulo" para quem mandou a data errada
+         manda corrigir a coisa errada. */
+      const retroApi = abertCheca(nova, 'endpoint', hojeBR());
+      if (!retroApi.ok) {
+        return json({ error: 'abertura_retroativa', campo: retroApi.campo,
+                      detail: retroApi.erro,
+                      hoje: hojeBR() }, 400, headers);
+      }
       const repetida = criandoTituloRepetido({ melhorias: [nova] }, atual);
       if (repetida.length) {
         return json({ error: 'titulo_repetido',
@@ -5156,6 +5237,17 @@ export default {
                               '. Se for a mesma coisa, edite a que existe; se for outra, ' +
                               'diferencie o título.' }, 400, headers);
       }
+      /* NENHUMA DEMANDA NASCE COM DATA NO PASSADO. Vale para o admin e para o
+         gantt, que publicam por aqui. Planejar ADIANTE segue liberado: medido na
+         base, 216 demandas nasceram com inicio no futuro e 302 com entrega —
+         proibir isso trocaria um defeito por uma tela que nao planeja. */
+      const retroPub = aberturasRetroativas(data, antesPub, 'admin', hojeBR());
+      if (retroPub.length) {
+        return json({ error: 'abertura_retroativa',
+                      itens: retroPub,
+                      detail: retroPub.map(r => r.codigo + ': ' + r.erro).join(' | ') },
+                    400, headers);
+      }
       const semDevPub = entrandoEmConcluidoSemDev(data, antesPub);
       if (semDevPub.length) {
         return json({ error: 'sem_responsavel',
@@ -5294,6 +5386,17 @@ export default {
                               repetidoDev.map(r => r.existente + ' — "' + r.titulo + '"').join('; ') +
                               '. Se for a mesma coisa, edite a que existe; se for outra, ' +
                               'diferencie o título.' }, 400, headers);
+      }
+      /* PELO PAINEL DO DEV, A DEMANDA NASCE COM A DATA DE HOJE. Nem para tras
+         (que a faria sumir do quadro) nem para frente — combinar prazo e do
+         planejamento, a mesma separacao que `ETAPAS_QUE_O_DEV_MOVE` mantem na
+         etapa. */
+      const retroDev = aberturasRetroativas(data, antesDev, 'dev', hojeBR());
+      if (retroDev.length) {
+        return json({ error: 'abertura_retroativa',
+                      itens: retroDev,
+                      detail: retroDev.map(r => r.codigo + ': ' + r.erro).join(' | ') },
+                    400, headers);
       }
       const semDevDev = entrandoEmConcluidoSemDev(data, antesDev);
       if (semDevDev.length) {

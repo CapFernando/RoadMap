@@ -1140,6 +1140,7 @@
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
+  <script src="abertura.js?v=f912921679"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-projeto.js?v=63d219aac1"></script>
@@ -10530,6 +10531,23 @@ async function saveMelhoria() {
     const h = document.getElementById('m-horas-real');
     if (h) { h.focus(); h.select(); }
     return;
+  }
+  /* NENHUMA DEMANDA NASCE COM DATA NO PASSADO — ver `abertura.js`.
+     SO NA CRIACAO: editar uma demanda velha continua livre, porque a data dela
+     ja e passado por construcao e recusar prenderia o historico inteiro.
+     A recusa aqui e cortesia; quem impede de verdade e o Worker, porque esta
+     tela publica um estado montado no navegador. */
+  if (!id) {
+    const ab = ABERTURA.checa(obj, 'admin', PRAZO.hojeISO());
+    if (!ab.ok) {
+      toast(ab.erro, 'err');
+      /* `elAb`, e nao `campo`: ja existe um `campo` nesta funcao, declarado mais
+         abaixo. Reusar o nome cria uma segunda ligacao no mesmo escopo de bloco
+         e e o tipo de coisa que compila e quebra em runtime. */
+      const elAb = document.getElementById('m-' + ab.campo);
+      if (elAb) elAb.focus();
+      return;
+    }
   }
   marcaConclusao(obj, sp);
 

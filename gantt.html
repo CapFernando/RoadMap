@@ -785,6 +785,38 @@
        texto fica sempre numa faixa limpa no meio.
        A esquerda tambem esta ocupada: `.card-drag-handle` mora nos primeiros
        14px. */
+    /* ═══ ABERTA PELO DEV OU PELA API ═══════════════════════════════════════
+     *
+     * "Trazer em gantt um azul listrado para saber que foi aberto pelo dev ou
+     *  api."
+     *
+     * LISTRA NO FUNDO DA BARRA, e nao mais uma etiqueta nem outra cor de barra:
+     *   - a COR da barra ja significa ETAPA, e roubá-la faria as duas leituras
+     *     brigarem — a mesma razao que o comentário do grupo registra;
+     *   - `::before` e `::after` ja estao ocupados (pausada, atrasado, quebra),
+     *     e um card pode ser tres coisas ao mesmo tempo;
+     *   - etiqueta some em barra estreita, e uma demanda de um dia ocupa poucos
+     *     pixels.
+     *
+     * `background-image` e o unico canal livre, e ele COMPOE com a cor da etapa:
+     * as regras acima usam o atalho `background`, que zera a imagem, e esta vem
+     * com especificidade maior. A etapa continua sendo lida pela cor, e a
+     * origem pela textura.
+     *
+     * 135deg para nao confundir com a fita da HERDADA, que corre a 45deg — as
+     * duas podem aparecer juntas na mesma barra. */
+    .gantt-card.gcard-deapi {
+      background-image: repeating-linear-gradient(135deg,
+        rgba(59,143,232,0) 0 7px, rgba(59,143,232,.55) 7px 14px);
+    }
+    /* Sobre a barra VERMELHA de atrasado e a VERDE de concluido, o azul
+       translucido vira lama. Ali a listra e clara: o que importa e existir
+       textura diagonal, e nao a matiz exata. */
+    .gantt-card.gcard-deapi.gcard-atrasado,
+    .gantt-card.gcard-deapi.gcard-concluido {
+      background-image: repeating-linear-gradient(135deg,
+        rgba(255,255,255,0) 0 7px, rgba(190,222,255,.5) 7px 14px);
+    }
     .gcard-atrasado { background:#C81E1E; border-color:#0A0A0A; color:#FFFFFF; }
     .gantt-card.gcard-atrasado::before,
     .gantt-card.gcard-atrasado::after {
@@ -902,6 +934,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
+  <script src="abertura.js?v=f912921679"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
@@ -3576,7 +3609,11 @@ function renderGantt() {
         : '';
 
       _gNoQuadro.add(m.id);
-      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}${ehGrupo ? ' gcard-agrupador' : ''}${paiNaTela ? ' gcard-parte' : ''}"
+      /* ABERTA PELO DEV OU PELA API — ver `abertura.js`. A regra de quem conta
+         como "sem planejamento" mora la, ao lado da trava de data retroativa:
+         sao a mesma pergunta vista de dois lados, e duas listas divergiriam. */
+      const deApi = window.ABERTURA ? ABERTURA.deDevOuApi(m) : false;
+      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}${ehGrupo ? ' gcard-agrupador' : ''}${paiNaTela ? ' gcard-parte' : ''}${deApi ? ' gcard-deapi' : ''}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"
         draggable="true"
@@ -4304,6 +4341,20 @@ async function saveTask() {
   const ghLinks = window.ghLinkColeta ? ghLinkColeta('e', toast) : {};
   if (ghLinks === null) return;
 
+  /* NENHUMA DEMANDA NASCE COM DATA NO PASSADO — ver `abertura.js`.
+     SO NA CRIACAO: editar uma demanda velha continua livre, porque a data dela
+     ja e passado por construcao e recusar prenderia o historico inteiro.
+     A recusa aqui e cortesia; quem impede de verdade e o Worker, porque esta
+     tela publica um estado montado no navegador. */
+  if (!editingId) {
+    const ab = ABERTURA.checa({ inicio: inicio, entrega: fim }, 'admin', PRAZO.hojeISO());
+    if (!ab.ok) {
+      toast(ab.erro, 'err');
+      const campo = document.getElementById(ab.campo === 'entrega' ? 'e-fim' : 'e-inicio');
+      if (campo) campo.focus();
+      return;
+    }
+  }
   const existing = editingId ? (state.melhorias.find(x => x.id === editingId) || {}) : {};
   const obj = {
     ...existing,  // preserva campos não editados pelo Gantt (estimativa, motivo_negacao, etc.)

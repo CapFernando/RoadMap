@@ -474,6 +474,7 @@
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
+  <script src="abertura.js?v=f912921679"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
@@ -5062,6 +5063,20 @@ async function saveNewDemand() {
                  '  (' + (gemea.dev || 'sem responsável') + ').  Se for a mesma coisa, ' +
                  'volte e edite a que existe em vez de abrir outra.',
           ok: 'Criar assim mesmo', cancelar: 'Voltar', perigo: true }))) return;
+  }
+  /* PELO PAINEL, A DEMANDA NASCE COM A DATA DE HOJE — ver `abertura.js`.
+     Nem para tras (que a faria sumir do quadro) nem para frente: combinar prazo
+     e do planejamento, a mesma separacao que este painel ja mantem na etapa. */
+  if (!editId) {
+    const ab = ABERTURA.checa({ inicio: document.getElementById('n-inicio').value,
+                                entrega: document.getElementById('n-entrega').value },
+                              'dev', PRAZO.hojeISO());
+    if (!ab.ok) {
+      toast(ab.erro, 'err');
+      const campo = document.getElementById('n-' + ab.campo);
+      if (campo) campo.focus();
+      return;
+    }
   }
   const sp = document.getElementById('n-status').value;
   // DELEGA — ver `STATUS_POR_ETAPA`. Esta copia nao tinha `levantar_req`.
