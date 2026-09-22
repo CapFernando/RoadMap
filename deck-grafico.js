@@ -193,6 +193,68 @@
     });
   }
 
+  /* ─── BARRAS DEITADAS, PAREADAS ────────────────────────────────────────
+   *
+   * A mesma comparação de `barras`, virada de lado. Ela existe porque a
+   * categoria aqui tem NOME ("Dados & Inteligência"), e nome de categoria não
+   * cabe embaixo de uma coluna: ou ele encolhe até não se ler, ou gira na
+   * diagonal, que é a pior leitura de um slide projetado. Deitada, o nome fica
+   * numa coluna à esquerda, no corpo do resto do deck.
+   *
+   * ERA DESENHADA À MÃO no `apresentacao.js`, e era a última exceção à "gramática
+   * única" — a razão de existir este arquivo. Duas barras que se comparam não
+   * podem ter uma altura no slide das frentes e outra em qualquer slide que venha
+   * depois.
+   *
+   * A PRIMEIRA SÉRIE VAI EM CINZA e as seguintes na cor da categoria: com as duas
+   * coloridas, a comparação vira adivinhação de tom. E `fraco`, nunca `fundo3` —
+   * `fundo3` é a cor do TRILHO, e barra pintada de trilho existe no arquivo e não
+   * existe na parede (1,09:1 sobre o cartão). Há invariante cobrando isso, e ela
+   * nasceu deste defeito exato. */
+  function barrasH(s, pptx, cfg) {
+    var itens = (cfg.itens || []).filter(Boolean);
+    if (!itens.length) return;
+    var serDe = function (it) {
+      return it.series && it.series.length ? it.series : [{ valor: it.valor, cor: it.cor }];
+    };
+    var max = itens.reduce(function (m, it) {
+      return serDe(it).reduce(function (mm, b) {
+        return Math.max(mm, Math.abs(Number(b.valor) || 0));
+      }, m);
+    }, 1);
+
+    var LN = cfg.largNome || 1.55, VAO = 0.1, LV = cfg.largValor || 0.62;
+    var xBarra = cfg.x + LN + VAO;
+    var wBarra = cfg.w - LN - VAO - LV;
+    var suf = cfg.sufixo || '';
+
+    itens.forEach(function (it, i) {
+      var y = cfg.y + i * cfg.alt;
+      s.addText(String(it.nome || ''), {
+        x: cfg.x, y: y, w: LN, h: 0.32, fontSize: cfg.fsNome || 9, color: COR.texto,
+        align: 'right', valign: 'middle', wrap: false });
+      var sr = serDe(it);
+      sr.forEach(function (b, k) {
+        var v = Math.abs(Number(b.valor) || 0);
+        s.addShape(pptx.ShapeType.rect, {
+          x: xBarra, y: y + 0.045 + k * 0.11,
+          w: Math.max(0.02, wBarra * (v / max)), h: 0.09,
+          fill: { color: b.cor || (k === 0 ? COR.fraco : COR.azul) },
+          line: { type: 'none' } });
+      });
+      s.addText(sr.map(function (b) { return num(b.valor) + suf; }).join(' / '), {
+        x: xBarra + wBarra + 0.06, y: y, w: LV, h: 0.32,
+        fontSize: cfg.fsValor || 8, color: COR.fraco, valign: 'middle', wrap: false });
+    });
+
+    // A legenda explica as séries UMA vez, e não em cada linha.
+    if (cfg.rodape) {
+      s.addText(cfg.rodape, {
+        x: xBarra, y: cfg.y + itens.length * cfg.alt + 0.02, w: wBarra + LV, h: 0.2,
+        fontSize: 7.5, color: COR.fraco });
+    }
+  }
+
   /* ─── LEGENDA ──────────────────────────────────────────────────────────
      `legend-visible`: sempre visível e perto do gráfico. Uma função só, para a
      legenda não nascer em três alturas diferentes em três slides. */
@@ -207,7 +269,7 @@
   }
 
   var api = { COR: COR, num: num, delta: delta, chipDelta: chipDelta,
-              barras: barras, legenda: legenda };
+              barras: barras, barrasH: barrasH, legenda: legenda };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.DECKG = api;

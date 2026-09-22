@@ -1394,8 +1394,16 @@
                                  fontSize: cfg.corpo || 30, bold: true, color: C.texto,
                                  wrap: false });
     if (cfg.nota) {
-      s.addText(cfg.nota, { x: cfg.x + 0.14, y: cfg.y + 0.83, w: cfg.w - 0.28, h: 0.19,
-                            fontSize: 8, color: C.fraco });
+      /* A NOTA E CORTADA NO QUE CABE, e o corte e a defesa certa aqui.
+         A caixa tem 0,19" — uma linha. Um texto mais largo que ela nao some: o
+         PowerPoint quebra em duas linhas, a segunda sai POR BAIXO do cartao, e o
+         que a plateia ve e meia frase escrita sobre o proximo bloco. Aconteceu
+         com "+115h alem do planejado" e "101 evolucao · 69 sustentacao" no dia
+         em que o cartao encolheu de 1,72" para 1,40" para caber o dos pontos.
+         Reticencia num rodape de 8pt e invisivel; texto vazando nao e. */
+      s.addText(corta(cfg.nota, cabemChars(cfg.w - 0.28, 8)), {
+        x: cfg.x + 0.14, y: cfg.y + 0.83, w: cfg.w - 0.28, h: 0.19,
+        fontSize: 8, color: C.fraco, wrap: false });
     }
   }
 
@@ -1427,40 +1435,29 @@
 
      A cor da frente fica na barra do realizado e o planejado vai em cinza-azulado:
      com as duas coloridas, a comparacao virava adivinhacao de tom. */
+  /* DELEGA. Esta funcao era a ULTIMA barra desenhada a mao no deck — a excecao
+     que sobrava da "gramatica unica". O desenho mora em `DECKG.barrasH`; aqui
+     fica so a traducao de "frente" para "categoria com duas series".
+
+     A LARGURA DO NOME E 1,55" e continua sendo dita daqui: ela comporta "Dados &
+     Inteligencia" (o maior nome) em corpo 9 sem corte, e com 1,32" ele saia como
+     "Dados & Inteligen…" com a barra ficando sem dono. E medida deste slide, e
+     nao da gramatica.
+
+     O PLANEJADO VAI EM `fraco`, E NAO EM `fundo3` — `fundo3` e a cor do TRILHO,
+     e a barra desenhada nela existia no arquivo com o comprimento certo e nao
+     aparecia (1,09:1 sobre o cartao). Hoje o padrao de `barrasH` ja e `fraco`
+     para a primeira serie; a cor vai escrita assim mesmo, porque uma leitura
+     nao deve depender do padrao de outro arquivo. */
   function barrasFrente(pptx, s, cfg) {
-    var itens = cfg.itens, x = cfg.x, w = cfg.w;
-    var max = itens.reduce(function (mx, i) { return Math.max(mx, i.plan, i.real); }, 1);
-    // 1,55" comporta "Dados & Inteligência" (o maior nome) em corpo 9 sem corte;
-    // com 1,32" ele saia como "Dados & Inteligên…" e a barra ficava sem dono.
-    var LARG_NOME = 1.55, VAO = 0.1;
-    var xBarra = x + LARG_NOME + VAO;
-    var wBarra = w - LARG_NOME - VAO - 0.62;
-    itens.forEach(function (it, i) {
-      var y = cfg.y + i * cfg.alt;
-      s.addText(it.nome, {
-        x: x, y: y, w: LARG_NOME, h: 0.32, fontSize: 9, color: C.texto,
-        align: 'right', valign: 'middle', wrap: false });
-      /* O PLANEJADO EM `fraco`, E NAO EM `fundo3`.
-         O comentario acima ja dizia "o planejado vai em cinza-azulado" — a
-         intencao estava certa e o valor nao: `fundo3` e a cor do TRILHO DE BARRA
-         (esta escrito assim na paleta), e sobre a superficie do cartao ela da
-         1,09:1. A barra existia, com o comprimento certo, e nao aparecia.
-         `fraco` da 5,87:1 sobre o cartao e continua sem competir com a cor da
-         frente na barra do realizado, que e o que a comparacao pede. */
-      [{ v: it.plan, cor: C.fraco, dy: 0.045 },
-       { v: it.real, cor: it.cor, dy: 0.155 }].forEach(function (b) {
-        s.addShape(pptx.ShapeType.rect, {
-          x: xBarra, y: y + b.dy, w: Math.max(0.02, wBarra * (b.v / max)), h: 0.09,
-          fill: { color: b.cor }, line: { type: 'none' } });
-      });
-      s.addText(it.plan + 'h / ' + it.real + 'h', {
-        x: xBarra + wBarra + 0.06, y: y, w: 0.62, h: 0.32,
-        fontSize: 8, color: C.fraco, valign: 'middle', wrap: false });
+    DECKG.barrasH(s, pptx, {
+      x: cfg.x, y: cfg.y, w: cfg.w, alt: cfg.alt, largNome: 1.55, sufixo: 'h',
+      itens: cfg.itens.map(function (it) {
+        return { nome: it.nome, series: [{ valor: it.plan, cor: C.fraco },
+                                         { valor: it.real, cor: it.cor }] };
+      }),
+      rodape: 'planejado (claro)   ·   realizado (na cor da frente)',
     });
-    // A legenda explica as duas barras UMA vez, e nao em cada linha.
-    s.addText('planejado (claro)   ·   realizado (na cor da frente)', {
-      x: xBarra, y: cfg.y + itens.length * cfg.alt + 0.02, w: wBarra + 0.6, h: 0.2,
-      fontSize: 7.5, color: C.fraco });
   }
 
   /* AS FRENTES DE TRABALHO — o slide no formato do painel aprovado.
@@ -1495,41 +1492,83 @@
       return s;
     }
 
-    // -- A faixa de numeros do mes, com o anel de execucao no canto ------------
+    /* -- A faixa de numeros do mes, com o anel de execucao no canto ------------
+     *
+     * OS PONTOS GANHARAM CARTAO PROPRIO — "o segundo slide deve seguir o padrao
+     * conforme imagem anexo ADAPTADA EM PONTOS E HORAS E FRENTES". Eles existiam
+     * como nota de 8pt debaixo de ENTREGAS, e nota de 8pt projetada nao se le:
+     * na pratica o esforco do mes estava fora do slide que se chama "visao geral
+     * da execucao". Sao tres moedas, e as tres passam a ter o mesmo peso
+     * tipografico — frentes, entregas/pontos e horas. */
     var t = pl.total || {};
+    /* A QUEBRA ENTRE CONSTRUIR E MANTER DE PE, somada das frentes. Vinte entregas
+       de evolucao e vinte de sustentacao sao o mesmo numero e dois meses
+       completamente diferentes. Ela ja era desenhada no slide do time; aqui ela
+       cabia como nota, e nota que informa vale mais que "no periodo". */
+    var somaQ = function (c) {
+      return itens.reduce(function (acc, i) { return acc + (Number(i[c]) || 0); }, 0);
+    };
+    var evo = somaQ('evolucao'), sus = somaQ('sustentacao');
     var kpis = [
       { rot: 'FRENTES',   val: itens.length, cor: SIGNIFICADO.neutro,
         nota: (pl.devs || 0) + (pl.devs === 1 ? ' pessoa' : ' pessoas') },
-      { rot: 'ENTREGAS',  val: t.entregas, cor: C.azul,
-        nota: t.pontos ? t.pontos + ' pontos' : '' },
-      { rot: 'PLANEJADO', val: t.plan + 'h', cor: C.azul, nota: 'no período' },
-      { rot: 'REALIZADO', val: t.real + 'h', cor: C.verde,
-        nota: t.pct == null ? ''
-          : (t.pct <= 100 ? t.pct + '% do planejado'
-                          : rotuloExecucao(t.pct, t.plan, t.real) + ' além do planejado') },
+      /* UM NUMERO NA NOTA, E NAO DOIS. "101 evolucao · 69 sustentacao" nao cabe
+         em 1,14" a 8pt (precisa de 1,68") e sairia cortado. O percentual de
+         evolucao diz a mesma coisa em doze caracteres — e diz melhor: a sala
+         compara "59%" com o mes passado sem fazer conta, e nao compara "101 e
+         69" com "94 e 52". */
+      { rot: 'ENTREGAS',  val: DECKG.num(t.entregas), cor: C.azul,
+        nota: (evo || sus) ? Math.round(evo / (evo + sus) * 100) + '% evolução'
+                           : 'no período' },
+      { rot: 'PONTOS',    val: DECKG.num(t.pontos), cor: C.azul,
+        nota: t.entregas ? DECKG.num(Math.round(t.pontos / t.entregas * 10) / 10) +
+                           ' por entrega' : '' },
+      { rot: 'PLANEJADO', val: DECKG.num(t.plan) + 'h', cor: C.azul, nota: 'no período' },
+      /* O PERCENTUAL NOS DOIS CASOS. Acima de 100 a nota dizia "+115h acima do
+         planejado" — vinte caracteres numa caixa que comporta dezenove, e a
+         reticencia comia a palavra que dava sentido a frase. O "+115h" nao se
+         perdeu: ele e o numero GRANDE do cartao de execucao, ao lado. Dizer o
+         mesmo duas vezes era o que nao cabia. */
+      { rot: 'REALIZADO', val: DECKG.num(t.real) + 'h', cor: C.verde,
+        nota: t.pct == null ? '' : t.pct + '% do planejado' },
     ];
-    /* Quatro cartoes de 1,72" + o de execucao de 1,60", com vao de 0,12":
-       4 x 1,72 + 1,60 + 4 x 0,12 = 8,96", de 0,5" a 9,46" — dentro da margem.
-       Com 1,80/1,66/0,14 a conta dava 9,92" e o cartao de execucao saia do slide. */
-    var LK = 1.72, VK = 0.12;
+    /* Cinco cartoes de 1,40" + o de execucao de 1,50", com vao de 0,10":
+       5 x 1,40 + 1,50 + 5 x 0,10 = 9,00", de 0,5" a 9,50" — a margem exata.
+       Eram quatro de 1,72"; o cartao dos pontos custou 0,32" de cada um. */
+    var LK = 1.40, VK = 0.10;
+    /* O CORPO DO NUMERO E CALCULADO, E UM SO PARA A FILA INTEIRA.
+     *
+     * Com o cartao a 1,40" o corpo 30 de antes nao cabe mais: "1.192h" ocupa
+     * 1,35" e a area util e 1,14". Calcular POR CARTAO resolveria o transbordo e
+     * criaria outro defeito — cinco numeros em cinco tamanhos numa fila, que se
+     * le como desalinho. Entao a conta acha o maior corpo que serve para TODOS, e
+     * a fila continua uniforme. Mesma conta de caber texto do resto do arquivo. */
+    var corpoKpi = kpis.reduce(function (menor, k) {
+      return Math.min(menor, (LK - 0.26) * 72 / (String(k.val).length * 0.52));
+    }, 30);
+    corpoKpi = Math.max(16, Math.floor(corpoKpi));
     kpis.forEach(function (k, i) {
       cartaoKpi(pptx, s, { x: 0.5 + i * (LK + VK), y: 1.14, w: LK, h: 1.06,
-                           rot: k.rot, val: k.val, cor: k.cor, nota: k.nota });
+                           rot: k.rot, val: k.val, cor: k.cor, nota: k.nota,
+                           corpo: corpoKpi });
     });
 
     /* O CARTAO DE EXECUCAO: anel a esquerda, numero e legenda a direita.
        O anel era desenhado sozinho num cartao estreito e o percentual saia POR
        CIMA do proprio circulo — ilegivel, e sem dizer o que media. Agora o numero
        tem lugar proprio, e embaixo dele a frase que responde "percentual de que?". */
-    var XE = 0.5 + 4 * (LK + VK);
-    cartao(pptx, s, XE, 1.14, 1.60, 1.06);
-    anelExecucao(pptx, s, XE + 0.06, 1.26, 0.82, t.pct);
+    var XE = 0.5 + kpis.length * (LK + VK);
+    cartao(pptx, s, XE, 1.14, 1.50, 1.06);
+    /* O ANEL ACABA EM XE+0,77 E O NUMERO COMECA EM XE+0,80. Com o anel a 0,78" os
+       dois encostavam: o "+115h" nascia na mesma polegada em que o circulo
+       terminava, e num projetor isso se le como texto grudado no desenho. */
+    anelExecucao(pptx, s, XE + 0.05, 1.28, 0.72, t.pct);
     s.addText(rotuloExecucao(t.pct, t.plan, t.real), {
-      x: XE + 0.86, y: 1.32, w: 0.68, h: 0.36,
-      fontSize: 18, bold: true, color: corPercentual(t.pct), wrap: false });
-    s.addText('EXECUÇÃO', { x: XE + 0.86, y: 1.68, w: 0.68, h: 0.17,
+      x: XE + 0.80, y: 1.33, w: 0.64, h: 0.34,
+      fontSize: 16, bold: true, color: corPercentual(t.pct), wrap: false });
+    s.addText('EXECUÇÃO', { x: XE + 0.80, y: 1.67, w: 0.64, h: 0.17,
                             fontSize: 6.5, bold: true, color: C.fraco, charSpacing: 0.6 });
-    s.addText('realizado ÷ planejado', { x: XE + 0.05, y: 1.93, w: 1.50, h: 0.17,
+    s.addText('realizado ÷ planejado', { x: XE + 0.04, y: 1.93, w: 1.42, h: 0.17,
                                          fontSize: 6.5, color: C.fraco, align: 'center' });
 
     // -- Esquerda: planejado x realizado por frente ----------------------------
@@ -1568,14 +1607,19 @@
       s.addText(it.nome, {
         x: x + 0.11, y: y + 0.07, w: CW - 0.22, h: 0.2, fontSize: 9, bold: true,
         color: C.texto, wrap: false });
-      s.addText(it.plan + 'h', { x: x + 0.11, y: y + 0.27, w: 0.62, h: 0.23,
+      s.addText(DECKG.num(it.plan) + 'h', { x: x + 0.11, y: y + 0.27, w: 0.62, h: 0.23,
                                  fontSize: 12, bold: true, color: C.azul, wrap: false });
-      s.addText(it.real + 'h', { x: x + 0.76, y: y + 0.27, w: 0.62, h: 0.23,
+      s.addText(DECKG.num(it.real) + 'h', { x: x + 0.76, y: y + 0.27, w: 0.62, h: 0.23,
                                  fontSize: 12, bold: true, color: C.verde, wrap: false });
       s.addText(rotuloExecucao(it.pct, it.plan, it.real), {
         x: x + CW - 0.72, y: y + 0.27, w: 0.61, h: 0.23, fontSize: 11.5, bold: true,
         color: corPercentual(it.pct), align: 'right', wrap: false });
-      s.addText(it.entregas + (it.entregas === 1 ? ' entrega' : ' entregas'), {
+      /* OS PONTOS DA FRENTE, ao lado das entregas. Sem eles a linha diz quantas
+         entregas a frente teve e cala sobre o PESO delas — e duas frentes com
+         doze entregas podem ser um mes inteiro de diferenca. E a mesma adaptacao
+         que a faixa de cima recebeu, no recorte da frente. */
+      s.addText(it.entregas + (it.entregas === 1 ? ' entrega' : ' entregas') +
+                (it.pontos ? '   ·   ' + DECKG.num(it.pontos) + ' pts' : ''), {
         x: x + 0.11, y: y + 0.49, w: CW - 0.22, h: 0.16, fontSize: 7.5, color: C.fraco });
     });
 

@@ -1287,7 +1287,13 @@ const RPPT = fs.readFileSync('relatorio-ppt.js', 'utf8');
  * que nao vale.
  */
 {
-  const fontes = [['relatorio-ppt.js', RPPT], ['apresentacao.js', APRES]];
+  /* OS MODULOS DO DECK ENTRAM NA VARREDURA. A barra deitada saiu do
+     `apresentacao.js` e virou `DECKG.barrasH`; sem incluir o arquivo aqui, a
+     regra continuaria passando e teria deixado de defender o codigo que ela
+     existe para defender. */
+  const fontes = [['relatorio-ppt.js', RPPT], ['apresentacao.js', APRES],
+                  ['deck-grafico.js', fs.readFileSync('deck-grafico.js', 'utf8')],
+                  ['deck-narrativa.js', fs.readFileSync('deck-narrativa.js', 'utf8')]];
   const suspeitas = [];
   for (const [nome, texto] of fontes) {
     texto.split(/\r?\n/).forEach((linha, i) => {
@@ -1327,7 +1333,11 @@ const RPPT = fs.readFileSync('relatorio-ppt.js', 'utf8');
     const x = lum(a), y = lum(b);
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   };
-  const achado = APRES.match(/\{ v: it\.plan, cor: C\.([a-zA-Z0-9]+)/);
+  /* A CHAVE E `valor:`, e nao `v:`. A barra do planejado deixou de ser
+     desenhada a mao no `apresentacao.js` e passou a ser uma serie de
+     `DECKG.barrasH` — a ultima excecao a gramatica unica. A cor continua
+     sendo escolhida aqui, que e o que esta invariante mede. */
+  const achado = APRES.match(/\{ valor: it\.plan, cor: C\.([a-zA-Z0-9]+)/);
   const nome = achado ? achado[1] : '';
   const cor = paleta[nome];
   const r = cor && paleta.fundo2 ? razao(cor, paleta.fundo2) : 0;
@@ -4241,11 +4251,16 @@ sec('O slide das frentes cabe no slide');
    em 4,72", mesma colisao). Layout que depende de eu somar certo de cabeca e
    layout que quebra — entao a soma vira invariante.                            */
 (() => {
-  const corpo = APRES.slice(APRES.indexOf('function slidePipelines'),
-                            APRES.indexOf('function slidePipelines') + 9000);
-  const m = corpo.match(/var CW = ([\d.]+), CH = ([\d.]+), CVX = ([\d.]+), CVY = ([\d.]+);/);
+  /* O CORPO INTEIRO, POR CONTAGEM DE CHAVES — e nao uma fatia de 9000
+     caracteres. A fatia era um palpite sobre o tamanho da funcao, e o palpite
+     venceu no dia em que o slide ganhou o cartao dos pontos: a ultima linha do
+     cartao de frente caiu fora da janela e a invariante acusou um defeito que
+     nao existia. Verificacao que reprova codigo certo e pior que verificacao
+     nenhuma — ela ensina a ignorar a saida. */
+  const trecho = corpo(APRES, 'function slidePipelines(pptx, pl, pagina, periodo) {') || '';
+  const m = trecho.match(/var CW = ([\d.]+), CH = ([\d.]+), CVX = ([\d.]+), CVY = ([\d.]+);/);
   ok(!!m, 'as medidas do cartao de frente estao declaradas juntas');
-  const y0 = corpo.match(/var y = ([\d.]+) \+ lin \* \(CH \+ CVY\);/);
+  const y0 = trecho.match(/var y = ([\d.]+) \+ lin \* \(CH \+ CVY\);/);
   ok(!!y0, 'e a linha do cartao sai de uma origem declarada');
   // A nota de cobertura e o piso: os cartoes tem de terminar antes dela.
   /* O PISO DEIXOU DE SER A NOTA DE COBERTURA e passou a ser o RODAPE.
@@ -4266,7 +4281,7 @@ sec('O slide das frentes cabe no slide');
     ok(5.05 + (cw + cvx) + cw <= 9.55,
        'a segunda coluna de cartoes nao passa da margem direita');
     // E o conteudo cabe DENTRO do cartao: nome, numeros e a linha de entregas.
-    const ult = corpo.match(/y: y \+ ([\d.]+), w: CW - [\d.]+, h: ([\d.]+), fontSize: 7\.5,/);
+    const ult = trecho.match(/y: y \+ ([\d.]+), w: CW - [\d.]+, h: ([\d.]+), fontSize: 7\.5,/);
     ok(!!ult && Number(ult[1]) + Number(ult[2]) <= ch,
        'a ultima linha de texto cabe dentro do cartao',
        ult ? (Number(ult[1]) + Number(ult[2])).toFixed(2) + '" <= ' + ch.toFixed(2) + '"' : '');
@@ -4275,13 +4290,13 @@ sec('O slide das frentes cabe no slide');
      Ele dividia a linha com o percentual e sobrava caixa para 13 caracteres — os
      nomes tem ate 20 ("Dados & Inteligência"). O percentual desceu para a linha
      dos numeros, e o nome ficou com a largura toda do cartao. */
-  ok(/s\.addText\(it\.nome, \{\s*x: x \+ [\d.]+, y: y \+ [\d.]+, w: CW - 0\.22,/.test(corpo),
+  ok(/s\.addText\(it\.nome, \{\s*x: x \+ [\d.]+, y: y \+ [\d.]+, w: CW - 0\.22,/.test(trecho),
      'o nome da frente ocupa a largura do cartao, sem corte');
-  ok(!/corta\(it\.nome/.test(corpo),
+  ok(!/corta\(it\.nome/.test(trecho),
      'e nao passa por `corta`: nome truncado nao diz qual frente e');
   // Na linha dos numeros, o percentual comeca depois de onde o realizado termina.
-  const real = corpo.match(/it\.real \+ 'h', \{ x: x \+ ([\d.]+), y: y \+ [\d.]+, w: ([\d.]+)/);
-  const pct = corpo.match(/x: x \+ CW - ([\d.]+), y: y \+ [\d.]+, w: [\d.]+, h: [\d.]+, fontSize: 11\.5,/);
+  const real = trecho.match(/num\(it\.real\) \+ 'h', \{ x: x \+ ([\d.]+), y: y \+ [\d.]+, w: ([\d.]+)/);
+  const pct = trecho.match(/x: x \+ CW - ([\d.]+), y: y \+ [\d.]+, w: [\d.]+, h: [\d.]+, fontSize: 11\.5,/);
   ok(!!real && !!pct, 'realizado e percentual do cartao estao posicionados');
   if (real && pct && m) {
     const cw = Number(m[1]);
@@ -5505,8 +5520,13 @@ sec('Execucao acima do plano');
    prazo" — `noPrazo / (noPrazo + atraso)` —, uma razao que nao passa de 100 por
    construcao. Passar ele por `rotuloExecucao` seria proteger contra um caso que
    a aritmetica ja impede, e ainda faria o slide falar de hora onde nao ha hora. */
-ok((APRES.match(/rotuloExecucao\(/g) || []).length >= 5,
-   'os quatro rotulos de execucao do deck passam pela regra',
+/* ERAM QUATRO USOS, E VIRARAM TRES. A nota do cartao REALIZADO dizia "+115h
+   acima do planejado" e passou a dizer "110% do planejado": vinte caracteres nao
+   cabiam nos dezenove da caixa depois que o cartao encolheu para abrir espaco ao
+   dos pontos, e a reticencia comia a palavra que dava sentido a frase. O "+115h"
+   nao se perdeu — ele e o numero grande do cartao de execucao, ao lado. */
+ok((APRES.match(/rotuloExecucao\(/g) || []).length >= 4,
+   'os tres rotulos de execucao do deck passam pela regra',
    (APRES.match(/rotuloExecucao\(/g) || []).length + ' usos, com a definicao');
 ok(/'% no prazo'|% no prazo/.test(APRES) || /x\.pct/.test(APRES),
    'e o percentual da evolucao segue direto: e razao no prazo, limitada a 100');
@@ -14396,6 +14416,150 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/module\.exports = api/.test(NARRJS),
        'e o modulo roda tambem fora do navegador, que e como estas contas foram ' +
        'medidas aqui');
+  }
+
+  /* === O SLIDE DAS FRENTES, ADAPTADO EM PONTOS =========================
+
+     "O segundo slide deve seguir o padrao conforme imagem anexo ADAPTADA EM
+     PONTOS E HORAS E FRENTES NECESSARIAS."
+
+     Ele ja seguia a pagina 10 do modelo em horas e frentes. O que faltava era a
+     terceira moeda: os pontos existiam como nota de 8pt debaixo de ENTREGAS, e
+     nota de 8pt projetada nao se le — na pratica o ESFORCO do mes estava fora do
+     slide que se chama "visao geral da execucao". */
+  sec('Deck: as frentes, com pontos');
+  {
+    const SP = corpo(APRES, 'function slidePipelines(pptx, pl, pagina, periodo) {') || '';
+
+    /* ── OS PONTOS SAO CARTAO, E NAO NOTA ── */
+    ok(/rot: 'PONTOS',\s*val: DECKG\.num\(t\.pontos\)/.test(SP),
+       'os pontos tem cartao proprio na faixa de numeros do mes');
+    ok(!/nota: t\.pontos \? t\.pontos \+ ' pontos'/.test(SP),
+       'e deixaram de ser a nota miuda de outro cartao');
+    ok(/it\.pontos \? '   ·   ' \+ DECKG\.num\(it\.pontos\) \+ ' pts'/.test(SP),
+       'e cada frente tambem diz o peso dela, e nao so quantas entregas teve');
+
+    /* ── A FAIXA CABE NA MARGEM, POR CONTA E NAO POR SORTE ──
+       Errei esta soma duas vezes neste slide, e as duas apareceram no arquivo
+       gerado: com 1,80/1,66/0,14 o cartao de execucao saia da pagina. O cartao
+       dos pontos apertou tudo de novo — 0,32" a menos em cada um. */
+    const med = SP.match(/var LK = ([\d.]+), VK = ([\d.]+);/);
+    ok(!!med, 'as medidas da faixa de cartoes estao declaradas juntas');
+    const quantos = (SP.match(/\{ rot: '[A-ZÇÃÕ]+',/g) || []).length;
+    ok(quantos === 5, 'sao cinco cartoes: frentes, entregas, pontos, planejado e ' +
+       'realizado', String(quantos));
+    if (med) {
+      const LK = Number(med[1]), VK = Number(med[2]);
+      const RING = Number((SP.match(/cartao\(pptx, s, XE, 1\.14, ([\d.]+), 1\.06\);/) || [])[1]);
+      const fim = 0.5 + quantos * (LK + VK) + RING;
+      ok(Math.abs(fim - 9.5) < 0.005,
+         'e os cinco mais o anel de execucao terminam exatamente na margem direita',
+         fim.toFixed(2) + '"');
+    }
+
+    /* ── UM CORPO SO PARA A FILA INTEIRA ──
+       Com o cartao a 1,40" o corpo 30 nao cabe em "1.192h". Calcular POR CARTAO
+       resolveria o transbordo e criaria outro defeito: cinco numeros em cinco
+       tamanhos numa fila, que se le como desalinho. */
+    ok(/var corpoKpi = kpis\.reduce\(/.test(SP) && /Math\.min\(menor,/.test(SP),
+       'o corpo do numero e o MENOR que serve para todos os cartoes — a fila sai ' +
+       'uniforme e nada transborda');
+    ok(/corpo: corpoKpi/.test(SP) && !/corpo: 30/.test(SP),
+       'e todo cartao da faixa recebe esse mesmo corpo');
+    /* E A CONTA E CONFERIDA COM OS NUMEROS DE UM MES DE VERDADE (pagina 10 do
+       modelo): o maior valor da fila e "1.192h", com sete caracteres. */
+    if (med) {
+      const LK = Number(med[1]);
+      const cabe = (LK - 0.26) * 72 / ('1.192h'.length * 0.52);
+      ok(Math.floor(cabe) >= 16,
+         'e com os numeros do modelo ele nao desce abaixo de 16pt, que e o piso ' +
+         'do que se le projetado', Math.floor(cabe) + 'pt');
+    }
+
+    /* ── A NOTA DO CARTAO NAO VAZA ──
+       A caixa tem 0,19" — uma linha. Texto mais largo nao some: o PowerPoint
+       quebra em duas, a segunda sai POR BAIXO do cartao, e a plateia ve meia
+       frase escrita sobre o proximo bloco. Aconteceu com "+115h alem do
+       planejado" e "101 evolucao · 69 sustentacao" no dia em que o cartao
+       encolheu. */
+    const CK = corpo(APRES, 'function cartaoKpi(pptx, s, cfg) {') || '';
+    ok(/corta\(cfg\.nota, cabemChars\(cfg\.w - 0\.28, 8\)\)/.test(CK),
+       'a nota do cartao e cortada no que cabe na largura dele');
+    ok(/fontSize: 8, color: C\.fraco, wrap: false/.test(CK),
+       'e com `wrap: false`, para nao haver segunda linha nem por acidente');
+    /* AS NOTAS DO SLIDE CABEM SEM PRECISAR DO CORTE. O corte e a rede; uma nota
+       que so existe cortada ja nasceu dizendo menos do que queria. */
+    if (med) {
+      const LK = Number(med[1]);
+      const cabeNota = Math.floor((LK - 0.28) * 72 / (8 * 0.52));
+      const notas = ['12 pessoas', '59% evolução', '12,8 por entrega',
+                     'no período', '110% do planejado'];
+      const grandes = notas.filter(t => t.length > cabeNota);
+      ok(grandes.length === 0,
+         'e as notas do slide cabem inteiras nele — o corte fica de rede, e nao ' +
+         'de regra', grandes.join(' | ') || cabeNota + ' caracteres por nota');
+    }
+  }
+
+  /* === A BARRA DEITADA ENTROU NA GRAMATICA ============================== */
+  sec('Deck: a barra deitada, na gramatica unica');
+  {
+    const DG = require('./deck-grafico.js');
+    const DGJS = fs.readFileSync('deck-grafico.js', 'utf8');
+
+    ok(typeof DG.barrasH === 'function',
+       'a barra deitada mora na gramatica, e nao no slide que a usa');
+    /* ERA A ULTIMA EXCECAO. "Necessito de um padrao unico para toda apresentacao
+       na demonstracao grafica" — e o `apresentacao.js` continuava desenhando esta
+       barra a mao, com a propria altura e o proprio lugar do valor. */
+    const BF = corpo(APRES, 'function barrasFrente(pptx, s, cfg) {') || '';
+    ok(/DECKG\.barrasH\(/.test(BF) && !/addShape/.test(BF),
+       'e o slide das frentes DELEGA — nao sobrou barra desenhada a mao no deck');
+
+    const desenha = () => {
+      const itens = [];
+      return { s: { addShape: (t, o) => itens.push({ forma: t, o }),
+                    addText: (t, o) => itens.push({ texto: t, o }) }, itens };
+    };
+    const pf = { ShapeType: { rect: 'rect', roundRect: 'roundRect' } };
+    const d1 = desenha();
+    DG.barrasH(d1.s, pf, {
+      x: 0.5, y: 2.48, w: 4.35, alt: 0.34, largNome: 1.55, sufixo: 'h',
+      itens: [{ nome: 'Dados', series: [{ valor: 441, cor: '8792AD' }, { valor: 503, cor: '60A5FA' }] },
+              { nome: 'Produto', series: [{ valor: 358, cor: '8792AD' }, { valor: 402, cor: '4ADE80' }] }],
+      rodape: 'planejado (claro)   ·   realizado (na cor da frente)',
+    });
+    const barras1 = d1.itens.filter(i => i.forma === 'rect');
+    ok(barras1.length === 4, 'duas categorias de duas series dao quatro barras',
+       String(barras1.length));
+
+    /* ── A ESCALA E COMUM AS DUAS SERIES ──
+       Se cada serie tivesse o proprio maximo, a barra do planejado e a do
+       realizado teriam reguas diferentes na mesma linha, e a comparacao — que e a
+       unica razao de o grafico existir — seria mentira. */
+    const maior = barras1.reduce((m, b) => Math.max(m, b.o.w), 0);
+    const doMaior = barras1.find(b => b.o.w === maior);
+    ok(Math.abs(doMaior.o.w - (4.35 - 1.55 - 0.1 - 0.62)) < 0.001,
+       'a maior barra ocupa a largura util inteira — a escala e comum as series',
+       doMaior.o.w.toFixed(3) + '"');
+    const porValor = barras1.map(b => b.o.w).sort((a, b) => a - b);
+    ok(Math.abs(porValor[0] / porValor[3] - 358 / 503) < 0.005,
+       'e as outras saem na proporcao do valor delas');
+
+    /* ── NUNCA `fundo3` NUMA BARRA ──
+       `fundo3` e a cor do TRILHO (esta escrito assim na paleta). A barra do
+       planejado foi desenhada nela uma vez: existia no arquivo, com o comprimento
+       certo, e nao aparecia — 1,09:1 sobre o cartao. */
+    ok(/k === 0 \? COR\.fraco : COR\.azul/.test(DGJS),
+       'a primeira serie cai em `fraco` quando ninguem diz a cor — nunca no tom ' +
+       'do trilho');
+
+    /* ── E O NOME DA CATEGORIA NAO E CORTADO ──
+       Nome de categoria nao cabe embaixo de uma coluna: ou encolhe ate nao se
+       ler, ou gira na diagonal. E por isso que esta barra e deitada. */
+    const nomes = d1.itens.filter(i => i.texto === 'Dados' || i.texto === 'Produto');
+    ok(nomes.length === 2 && nomes.every(t => t.o.wrap === false && t.o.align === 'right'),
+       'o nome sai inteiro, alinhado a direita, encostado na barra');
   }
 
   let erroPz = null;
