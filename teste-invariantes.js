@@ -1359,8 +1359,18 @@ const RPPT = fs.readFileSync('relatorio-ppt.js', 'utf8');
      desenhada a mao no `apresentacao.js` e passou a ser uma serie de
      `DECKG.barrasH` — a ultima excecao a gramatica unica. A cor continua
      sendo escolhida aqui, que e o que esta invariante mede. */
-  const achado = APRES.match(/\{ valor: it\.plan, cor: C\.([a-zA-Z0-9]+)/);
-  const nome = achado ? achado[1] : '';
+  /* A COR PASSOU A SER DITA PELO PAPEL (`SIGNIFICADO.planejado`) e nao pelo tom
+     (`C.azul`) — "preciso padronizar as cores dos graficos". A invariante resolve
+     o papel na tabela antes de medir o contraste; sem isso ela procurava uma cor
+     chamada "planejado" na paleta e nao achava. */
+  const papeis = {};
+  const bloco = APRES.slice(APRES.indexOf('var SIGNIFICADO = {'),
+                            APRES.indexOf('};', APRES.indexOf('var SIGNIFICADO = {')));
+  bloco.replace(/([a-zA-Z0-9]+):\s*C\.([a-zA-Z0-9]+)/g,
+    (todo, papel, tom) => { papeis[papel] = tom; return todo; });
+  const achado = APRES.match(/\{ valor: it\.plan, cor: SIGNIFICADO\.([a-zA-Z0-9]+) \}/) ||
+                 APRES.match(/\{ valor: it\.plan, cor: C\.([a-zA-Z0-9]+)/);
+  const nome = achado ? (papeis[achado[1]] || achado[1]) : '';
   const cor = paleta[nome];
   const r = cor && paleta.fundo2 ? razao(cor, paleta.fundo2) : 0;
   ok(r >= 3,
@@ -5320,7 +5330,7 @@ sec('A grade de topicos do deck');
      detalhes da evolucao ou involucao" — era a falta DELE por tras da critica, e
      um padrao que o deixasse de fora reproduziria o deck reclamado.
      A MOLDURA DE ATOS SAIU daqui e do deck: "retirar, nao faz sentido". */
-  ok(padrao.join(',') === 'entregas,evolucao,comparativo,pipelines,pontos_dev,entregas_top,projetos,capacidade',
+  ok(padrao.join(',') === 'entregas,evolucao,comparativo,pipelines,frentes_detalhe,pontos_dev,entregas_top,projetos,capacidade',
      'o padrao e o do modelo, mais o comparativo dos dois meses, as principais ' +
      'entregas, os projetos e a capacidade',
      padrao.join(',') || 'nenhuma');
@@ -5341,7 +5351,7 @@ sec('A grade de topicos do deck');
         SEC, { getElementById: (id) => caixas[id] || null });
       return SEC.filter((x) => caixas['ap-s-' + x.k].checked).map((x) => x.k);
     };
-    ok(roda('padrao').join(',') === 'entregas,evolucao,comparativo,pipelines,pontos_dev,entregas_top,projetos,capacidade',
+    ok(roda('padrao').join(',') === 'entregas,evolucao,comparativo,pipelines,frentes_detalhe,pontos_dev,entregas_top,projetos,capacidade',
        '"Padrao do fechamento" deixa marcadas exatamente as do padrao',
        roda('padrao').join(','));
     ok(roda('tudo').length === SEC.length,
@@ -14558,10 +14568,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        significa "o resultado desejado aconteceu", e hora realizada nao e
        resultado desejado — e o tamanho do mes. A barra branca, sendo a mais clara
        do slide, ainda puxava o olho para o bloco menos importante. */
-    ok(/cor: SIGNIFICADO\.neutro/.test(SC) && !/cor: C\.verde/.test(SC) &&
-       !/cor: C\.vermelho/.test(SC) && !/cor: C\.texto,/.test(SC),
-       'as tres barras sao neutras — o juizo mora no chip, que tem meta contra ' +
-       'a qual existir');
+    /* AS TRES BARRAS SAO `realizado`, E O ANTERIOR E `anterior`.
+       "Aqui na empresa tudo que e bom vem na cor verde." Entregas, pontos e horas
+       realizadas sao as tres o que o time PRODUZIU, e saiam azuis aqui e verdes
+       no slide da evolucao — para o mesmo mes. O JUIZO continua no chip: um mes
+       de queda sai com a barra verde e o chip vermelho, e isso esta certo, porque
+       o verde nao e elogio, e a categoria do numero. */
+    ok(/cor: SIGNIFICADO\.realizado, corAntes: SIGNIFICADO\.anterior/.test(SC) &&
+       !/cor: C\.verde/.test(SC) && !/cor: C\.azul/.test(SC) && !/cor: C\.texto,/.test(SC),
+       'as tres barras usam o papel `realizado`, e o periodo anterior o papel ' +
+       '`anterior` — nenhuma cor escrita a mao');
     ok(/neutro: !!b\.neutro/.test(SC) && /suf: 'h', neutro: true/.test(SC),
        'e horas realizadas vai marcada como grandeza sem lado bom');
 
@@ -14870,13 +14886,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       return t.length <= n ? t : t.slice(0, n - 1) + '…'; };
     const cabemR = (pol, fs) => Math.max(8, Math.floor(pol / (fs * 0.52 / 72)));
     let rodapeY = null;
+    /* `SIGNIFICADO` ENTROU NA LISTA quando os pontos da linha passaram a ser
+       pintados pelo PAPEL (`realizado`) em vez do tom (`C.azul`). Sem ele a
+       funcao recortada estourava — e o estouro e a forma certa de descobrir:
+       melhor a suite quebrar do que passar verde sem executar o slide. */
     const fn = new Function('slideTitulo', 'cartao', 'rodape', 'corta', 'cabemChars',
-                            'C', 'DECKG', 'MEDALHA',
+                            'C', 'DECKG', 'MEDALHA', 'SIGNIFICADO',
                             SE + '; return slideEntregas;')(
       () => slideFalso,
       (p, s2, x, y, w, h) => desenhado.push({ forma: 'cartao', o: { x, y, w, h } }),
       (s2, txt, pag) => { rodapeY = 5.05; },
-      cortaR, cabemR, deps.C, deps.DECKG, deps.MEDALHA);
+      cortaR, cabemR, deps.C, deps.DECKG, deps.MEDALHA,
+      { realizado: deps.C.verde, planejado: deps.C.azul, anterior: deps.C.fraco,
+        neutro: deps.C.azul, atencao: deps.C.ambar, falhou: deps.C.vermelho });
 
     const E = {
       entregas: 125, pontos: 1544, tempo: 11.4, comTempo: 112, semPontos: 18,
@@ -15073,6 +15095,124 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(fora.length === 0,
        'nenhum texto de posicao fixa alcanca o rodape',
        fora.join(' ; ') || 'nenhum');
+  }
+
+  /* === A COR DE UM NUMERO SAI DO PAPEL DELE ============================
+
+     "Preciso padronizar as cores dos graficos. Hora vem azul com verde, outra
+      hora azul e cinza. Aqui na empresa TUDO QUE E BOM VEM NA COR VERDE."
+
+     O defeito era real e media-se olhando dois slides vizinhos: o mesmo mes de
+     agosto saia verde no slide da evolucao e azul no do comparativo; o realizado
+     por frente saia na cor da frente num grafico e verde no cartao ao lado. Cada
+     slide escolhia a cor pelo que parecia bom ALI, e a sala reaprendia a legenda
+     a cada pagina. */
+  sec('Deck: a cor sai do papel, e nao do gosto do slide');
+  {
+    const AP = semComentario(APRES);
+
+    /* ── OS TRES PAPEIS EXISTEM E TEM TOM DECLARADO ── */
+    const papeis = {};
+    const tabela = APRES.slice(APRES.indexOf('var SIGNIFICADO = {'),
+                               APRES.indexOf('};', APRES.indexOf('var SIGNIFICADO = {')));
+    tabela.replace(/([a-zA-Z0-9]+):\s*C\.([a-zA-Z0-9]+)/g,
+      (t, papel, tom) => { papeis[papel] = tom; return t; });
+    ok(papeis.realizado === 'verde',
+       'o que o time ENTREGOU e verde — a convencao da casa',
+       'realizado = C.' + papeis.realizado);
+    ok(papeis.planejado === 'azul',
+       'o que foi COMBINADO e azul — compromisso nao e resultado',
+       'planejado = C.' + papeis.planejado);
+    ok(papeis.anterior === 'fraco',
+       'e o periodo de REFERENCIA e cinza: com os dois coloridos, comparar vira ' +
+       'adivinhacao de qual tom e qual', 'anterior = C.' + papeis.anterior);
+
+    /* ── E NENHUM SLIDE ESCOLHE A COR NA MAO ──
+       Esta e a invariante que impede o defeito de voltar. `cor: C.verde` num
+       slide e `cor: C.azul` no vizinho foi exatamente como as duas cores se
+       espalharam — cada uma certa no seu slide e erradas juntas. */
+    const naMao = [];
+    AP.split(/\r?\n/).forEach((linha, i) => {
+      const m = linha.match(/(^|[{,\s])cor:\s*C\.(verde|azul|fraco)\b/);
+      if (m) naMao.push('linha ' + (i + 1) + ': C.' + m[2]);
+    });
+    ok(naMao.length === 0,
+       'nenhum slide escreve verde, azul ou cinza na mao — todos pedem o PAPEL',
+       naMao.join(' ; ') || 'nenhum');
+
+    /* ── OS DOIS COMPARATIVOS DIZEM A MESMA COISA COM A MESMA COR ──
+       Era o caso concreto: o mesmo mes de agosto, dois slides, duas cores. */
+    const SC = corpo(APRES, 'function slideComparativo(pptx, d, pagina) {') || '';
+    const EV = corpo(APRES, 'function slideEvolucao(pptx, serie, pagina, periodo) {') || '';
+    ok(/corAntes: SIGNIFICADO\.anterior/.test(SC) && /corAntes: SIGNIFICADO\.anterior/.test(EV),
+       'o periodo anterior e cinza nos dois slides que comparam meses');
+    ok(/cor: SIGNIFICADO\.realizado/.test(SC) &&
+       /campo: 'sairam', cor: SIGNIFICADO\.realizado/.test(EV),
+       'e o que o time entregou e verde nos dois');
+    ok(/campo: 'entraram', cor: SIGNIFICADO\.planejado/.test(EV),
+       'o que ENTROU na fila fica azul — demanda chegando nao e conquista');
+
+    /* ── O REALIZADO POR FRENTE DEIXOU DE USAR A COR DA FRENTE ──
+       A barra saia na cor da frente (quatro cores) e o cartao logo ao lado
+       mostrava o mesmo numero em verde. */
+    const BF = corpo(APRES, 'function barrasFrente(pptx, s, cfg) {') || '';
+    ok(/valor: it\.real, cor: SIGNIFICADO\.realizado/.test(BF) &&
+       /valor: it\.plan, cor: SIGNIFICADO\.planejado/.test(BF),
+       'a barra de horas usa os mesmos dois papeis que os numeros do cartao');
+    ok(/planejado \(azul\)/.test(APRES) && /realizado \(verde\)/.test(APRES),
+       'e a legenda do grafico diz as cores certas');
+  }
+
+  /* === CADA FRENTE POR DENTRO ========================================== */
+  sec('Deck: a frente por dentro');
+  {
+    const SF = corpo(APRES, 'function slideFrente(pptx, f, pagina, periodo, posicao) {') || '';
+    ok(!!SF, 'o slide de detalhe da frente existe');
+
+    /* ── AS TRES PERGUNTAS, NA ORDEM EM QUE A SALA FAZ ──
+       "Já mostro as principais entregas, projetos, devs, horas e pontos. Assim
+       dou contexto aos slides." */
+    ok(/PRINCIPAIS ENTREGAS/.test(SF) && /PROJETOS/.test(SF) && /QUEM FEZ/.test(SF),
+       'ele responde o que saiu, para que projeto e por quem');
+    ['ENTREGAS', 'PONTOS', 'HORAS REALIZADAS', 'PESSOAS'].forEach(r => {
+      ok(SF.indexOf("rot: '" + r + "'") > 0, 'e a faixa de cima traz ' + r.toLowerCase());
+    });
+
+    /* ── ELE VEM LOGO DEPOIS DO PANORAMA ──
+       "Após o slide 2 é bom já quebrarmos pelas áreas." Separados, a sala teria
+       de lembrar o numero da pagina anterior. */
+    const MONTA = corpo(APRES, 'async function montaDeck(d) {') || '';
+    const iFrentes = MONTA.indexOf('slidePipelines(pptx, d.pipelines');
+    const iDetalhe = MONTA.indexOf('slideFrente(pptx, f, p, d.periodo, i)');
+    const iMes = MONTA.indexOf('slideMes(pptx, d, p)');
+    ok(iFrentes > 0 && iDetalhe > iFrentes && iDetalhe < iMes,
+       'o detalhe das frentes fica entre o panorama delas e o slide do mes');
+
+    /* ── AS MAIS TRABALHADAS, E SO ELAS ──
+       Uma frente por slide em seis frentes viraria meio deck. */
+    ok(/\.slice\(0, 3\);/.test(corpo(ADMIN, 'const frentesDetalhe = (() => {') || ''),
+       'sao as tres frentes mais trabalhadas, e nao todas');
+    ok(/k: 'frentes_detalhe'[\s\S]{0,160}n: 3/.test(semComentario(ADMIN)),
+       'e a grade do admin declara que a caixa vale tres slides');
+
+    /* ── A DEMANDA CONTA EM TODA FRENTE QUE A TOCOU ──
+       E nao e erro de soma: se duas pessoas de frentes diferentes entregaram
+       junto, a entrega aconteceu nas duas. O que e RATEADO sao horas e pontos,
+       em `apresPipelines`, porque ali a soma das frentes fecha com o total do
+       mes. Aqui a lista e qualitativa, e cortar a demanda ao meio faria o titulo
+       aparecer sem dono. */
+    const FD = corpo(ADMIN, 'const frentesDetalhe = (() => {') || '';
+    ok(/const frentes = new Set\(/.test(FD),
+       'a demanda entra na lista de toda frente que a tocou, sem duplicar a frente');
+    ok(/pipelines\.itens/.test(FD) && !/rateiaHoras/.test(FD),
+       'e os numeros vem de `apresPipelines` — hora e conta, e uma segunda soma ' +
+       'divergiria com as duas no mesmo deck');
+
+    /* ── FRENTE SEM ENTREGA NAO RENDE SLIDE ──
+       Ela ja tem uma linha no slide anterior; um slide de detalhe vazio seria
+       lido como "esta frente parou". */
+    ok(/filter\(f => acc\[f\.nome\] && acc\[f\.nome\]\.entregas\.length\)/.test(FD),
+       'frente sem entrega no mes nao ganha slide de detalhe');
   }
 
   let erroPz = null;

@@ -99,7 +99,42 @@
      diferentes sem significar a mesma coisa em nenhum deles. Ouro, prata e
      bronze ficam SO no podio do ranking — ali eles nao sao juizo, sao a
      convencao de primeiro, segundo e terceiro, que todo mundo le sem legenda. */
+  /* ═══ OS TRÊS PAPÉIS DE UM NÚMERO NUM GRÁFICO ══════════════════════════════
+   *
+   * "Preciso padronizar as cores dos gráficos. Hora vem azul com verde, outra
+   *  hora azul e cinza. Aqui na empresa TUDO QUE É BOM VEM NA COR VERDE."
+   *
+   * Ele está certo e o defeito era real: o mesmo mês de agosto saía verde no
+   * slide da evolução e azul no do comparativo; o realizado por frente saía na
+   * cor da frente num gráfico e verde no cartão logo ao lado. Cada slide
+   * escolhia a cor pelo que parecia bom ALI, e a sala reaprendia a legenda a
+   * cada página.
+   *
+   * A partir daqui, todo gráfico do deck pinta pelo PAPEL do número, e são três:
+   *
+   *   REALIZADO   verde — o que o time entregou: entregas, pontos, horas
+   *               realizadas, saídas da fila, o período ATUAL numa comparação.
+   *               É a convenção da casa, e ela vale mesmo quando o número caiu:
+   *               quem diz se melhorou ou piorou é o chip de variação, que
+   *               continua verde/vermelho por conta própria.
+   *   PLANEJADO   azul — o compromisso e o que ainda não é resultado: horas
+   *               planejadas, demandas que ENTRARAM na fila, categoria neutra.
+   *   ANTERIOR    cinza — o período de referência, em qualquer comparação. Com
+   *               os dois coloridos, comparar vira adivinhação de qual tom é
+   *               qual.
+   *
+   * O QUE NÃO MUDA: vermelho é falha, âmbar é atenção, e nenhuma cor com juízo
+   * entra num número sem meta. E ranking de PESSOA continua neutro — um pódio
+   * todo verde diz que todo mundo está bom, o que não informa nada. */
   var SIGNIFICADO = {
+    realizado: C.verde,    // o que saiu — "tudo que é bom vem na cor verde"
+    planejado: C.azul,     // o combinado, o previsto, o que entrou
+    anterior:  C.fraco,    // o período de referência numa comparação
+    /* O PONTO DE PARTIDA E O QUE NÃO SE CLASSIFICA. Também cinza, e pela mesma
+       razão do `anterior`: está presente e não é julgado. O backlog do dia 1 não
+       é conquista nem compromisso — é o estoque que já existia; e a fatia "sem
+       classificar" é dado que existe sem categoria. */
+    referencia: C.fraco,
     cumprido:  C.verde,
     falhou:    C.vermelho,
     atencao:   C.ambar,
@@ -458,8 +493,8 @@
         return;
       }
       var cols = [
-        { v: DECKG.num(p.plan || 0) + 'h', rot: 'PLAN', cor: C.azul,  x: 6.55 },
-        { v: DECKG.num(p.real || 0) + 'h', rot: 'REAL', cor: C.verde, x: 7.50 },
+        { v: DECKG.num(p.plan || 0) + 'h', rot: 'PLAN', cor: SIGNIFICADO.planejado, x: 6.55 },
+        { v: DECKG.num(p.real || 0) + 'h', rot: 'REAL', cor: SIGNIFICADO.realizado, x: 7.50 },
         { v: rotuloExecucao(p.pct, p.plan, p.real), rot: 'EXEC',
           cor: corPercentual(p.pct), x: 8.45 },
       ];
@@ -742,7 +777,7 @@
       s.addText('O QUE FOI ENTREGUE', { x: 5.5, y: 0.62, w: 3.8, h: 0.2,
         fontSize: 8, bold: true, color: C.fraco, charSpacing: 1.2 });
       var xq = 5.5, LQ = 3.8;
-      [{ v: quebra.evolucao || 0, cor: C.verde },
+      [{ v: quebra.evolucao || 0, cor: SIGNIFICADO.realizado },
        { v: quebra.sustentacao || 0, cor: SIGNIFICADO.categoria2 },
        /* "SEM CLASSIFICAR" EM `fraco`, e nao em `fundo3`. A fatia carrega dado —
           a legenda logo abaixo escreve "N sem classificar" — e `fundo3` sobre o
@@ -750,7 +785,7 @@
           numero da legenda nao tinha correspondente no desenho.
           `fraco` da 6,31:1 sobre o fundo e 2,1:1 contra a prata da sustentacao,
           que e a fatia vizinha — visivel, e distinguivel de quem esta ao lado. */
-       { v: quebra.sem || 0, cor: C.fraco }].forEach(function (q) {
+       { v: quebra.sem || 0, cor: SIGNIFICADO.referencia }].forEach(function (q) {
         if (!q.v) return;
         var w = LQ * q.v / (totQ || 1);
         s.addShape(pptx.ShapeType.rect, { x: xq, y: 0.86, w: w, h: 0.16,
@@ -764,10 +799,14 @@
       s.addText(legQ.join('   ·   '), { x: 5.5, y: 1.06, w: 3.8, h: 0.22,
                                         fontSize: 9, color: C.fraco });
     }
+    /* OS TITULOS DAS TRES COLUNAS, e aqui a cor e do TITULO e nao de um dado:
+       entregas e pontos sao os dois `realizado` e ficariam verdes iguais, o que
+       apagaria a diferenca entre as colunas. O verde marca a primeira — a que se
+       le primeiro — e a segunda fica neutra. */
     var col = [
-      { x: 0.7,  tit: 'Mais entregas',  cor: C.verde,    lista: t.entregas },
-      { x: 3.65, tit: 'Mais pontos',    cor: C.azul,     lista: t.pontos },
-      { x: 6.6,  tit: 'Mais atrasos',   cor: C.vermelho, lista: t.atrasos },
+      { x: 0.7,  tit: 'Mais entregas',  cor: SIGNIFICADO.realizado, lista: t.entregas },
+      { x: 3.65, tit: 'Mais pontos',    cor: SIGNIFICADO.neutro,    lista: t.pontos },
+      { x: 6.6,  tit: 'Mais atrasos',   cor: SIGNIFICADO.falhou,    lista: t.atrasos },
     ];
     col.forEach(function (c) {
       s.addText(c.tit, { x: c.x, y: 1.6, w: 2.7, h: 0.3, fontSize: 12, color: c.cor, bold: true });
@@ -1466,10 +1505,11 @@
     DECKG.barrasH(s, pptx, {
       x: cfg.x, y: cfg.y, w: cfg.w, alt: cfg.alt, largNome: 1.55, sufixo: 'h',
       itens: cfg.itens.map(function (it) {
-        return { nome: it.nome, series: [{ valor: it.plan, cor: C.fraco },
-                                         { valor: it.real, cor: it.cor }] };
+        return { nome: it.nome,
+                 series: [{ valor: it.plan, cor: SIGNIFICADO.planejado },
+                          { valor: it.real, cor: SIGNIFICADO.realizado }] };
       }),
-      rodape: 'planejado (claro)   ·   realizado (na cor da frente)',
+      rodape: 'planejado (azul)   ·   realizado (verde)',
     });
   }
 
@@ -1530,19 +1570,20 @@
          evolucao diz a mesma coisa em doze caracteres — e diz melhor: a sala
          compara "59%" com o mes passado sem fazer conta, e nao compara "101 e
          69" com "94 e 52". */
-      { rot: 'ENTREGAS',  val: DECKG.num(t.entregas), cor: C.azul,
+      { rot: 'ENTREGAS',  val: DECKG.num(t.entregas), cor: SIGNIFICADO.realizado,
         nota: (evo || sus) ? Math.round(evo / (evo + sus) * 100) + '% evolução'
                            : 'no período' },
-      { rot: 'PONTOS',    val: DECKG.num(t.pontos), cor: C.azul,
+      { rot: 'PONTOS',    val: DECKG.num(t.pontos), cor: SIGNIFICADO.realizado,
         nota: t.entregas ? DECKG.num(Math.round(t.pontos / t.entregas * 10) / 10) +
                            ' por entrega' : '' },
-      { rot: 'PLANEJADO', val: DECKG.num(t.plan) + 'h', cor: C.azul, nota: 'no período' },
+      { rot: 'PLANEJADO', val: DECKG.num(t.plan) + 'h', cor: SIGNIFICADO.planejado,
+        nota: 'no período' },
       /* O PERCENTUAL NOS DOIS CASOS. Acima de 100 a nota dizia "+115h acima do
          planejado" — vinte caracteres numa caixa que comporta dezenove, e a
          reticencia comia a palavra que dava sentido a frase. O "+115h" nao se
          perdeu: ele e o numero GRANDE do cartao de execucao, ao lado. Dizer o
          mesmo duas vezes era o que nao cabia. */
-      { rot: 'REALIZADO', val: DECKG.num(t.real) + 'h', cor: C.verde,
+      { rot: 'REALIZADO', val: DECKG.num(t.real) + 'h', cor: SIGNIFICADO.realizado,
         nota: t.pct == null ? '' : t.pct + '% do planejado' },
     ];
     /* Cinco cartoes de 1,40" + o de execucao de 1,50", com vao de 0,10":
@@ -1698,20 +1739,19 @@
      * mede é sobretudo quantas demandas tinham data combinada em cada mês — o
      * slide acusava o time de um número que não é dele. O prazo continua no deck,
      * no slide próprio, onde ele vem com as entregas nomeadas ao lado. */
-    /* AS QUATRO BARRAS SÃO AZUIS, e isso é doutrina e não economia de paleta.
+    /* AS TRÊS BARRAS DO MÊS ATUAL SÃO VERDES, e as do anterior cinzas.
      *
-     * Azul é o neutro desta base — "categoria, contagem, previsto; não julga
-     * nada". A primeira versão pintou HORAS de verde e NO PRAZO de branco, e as
-     * duas estavam erradas pela regra que este deck já paga caro para manter:
-     * verde significa "o resultado desejado aconteceu", e hora realizada não é
-     * resultado desejado — é o tamanho do mês. E a barra branca, sendo a mais
-     * clara do slide, puxava o olho para o bloco menos importante.
+     * "Aqui na empresa tudo que é bom vem na cor verde." Entregas, pontos e
+     * horas realizadas são as três o que o time PRODUZIU — papel `realizado` —,
+     * e saíam azuis aqui e verdes no slide da evolução, para o mesmo mês.
      *
-     * O JUÍZO MORA NO CHIP, que é onde ele tem meta contra a qual existir: verde
-     * quando melhorou, vermelho quando piorou, cinza quando a grandeza não tem
-     * lado bom. A barra mostra tamanho; o chip mostra direção.
+     * O JUÍZO CONTINUA NO CHIP, e é ele que fica vermelho quando o número caiu.
+     * A barra diz o que é (resultado); o chip diz para que lado foi. Um mês de
+     * queda sai com a barra verde e o chip vermelho, e isso está certo: o verde
+     * não é elogio, é a categoria do número.
      *
-     * HORAS REALIZADAS VAI COM `neutro`: subir não é mérito nem falha. */
+     * HORAS REALIZADAS SEGUE COM `neutro` no delta: subir não é mérito nem
+     * falha, e o chip dela é cinza. A COR DA BARRA é outra conversa. */
     var blocos = [
       { rot: 'ENTREGAS', antes: ant.concluidas, agora: (d.kpi || {}).concluidas, suf: '' },
       { rot: 'PONTOS', antes: ant.pontos, agora: (d.kpi || {}).pontos, suf: '' },
@@ -1733,7 +1773,8 @@
       deltas[b.rot] = dl;
       DECKG.comparativo(s, pptx, {
         x: 0.5 + i * L, y: 1.14, w: L, base: BASE, alto: ALTO,
-        rot: b.rot, cor: SIGNIFICADO.neutro, sufixo: b.suf, delta: dl,
+        rot: b.rot, cor: SIGNIFICADO.realizado, corAntes: SIGNIFICADO.anterior,
+        sufixo: b.suf, delta: dl,
         antes: { rot: mesAntes, valor: b.antes },
         agora: { rot: mesAgora, valor: b.agora },
       });
@@ -1761,6 +1802,121 @@
                          color: C.texto, italic: true, lineSpacingMultiple: 1.2 });
     }
     rodape(s, d.periodo, pagina);
+    return s;
+  }
+
+  /* ═══ UMA FRENTE POR DENTRO ════════════════════════════════════════════════
+   *
+   * "Após o slide 2 é bom já quebrarmos pelas áreas para mostrar os projetos
+   *  conforme frentes mais trabalhadas. Maior demanda é de desenvolvimento, já
+   *  mostro as principais entregas, projetos, devs, horas e pontos. Assim dou
+   *  contexto aos slides."
+   *
+   * O slide das frentes diz QUANTO cada uma consumiu. Este diz O QUE aconteceu
+   * dentro dela — e é a pergunta que a sala faz no segundo seguinte. Sem ele,
+   * quem apresenta responde de cabeça: "Desenvolvimento foram 987 horas" e
+   * alguém pergunta "em quê?".
+   *
+   * TRÊS COLUNAS, E A ORDEM É A DA PERGUNTA: o que saiu (com nome), para que
+   * projeto, e por quem. Cada uma responde uma pergunta diferente sobre as
+   * mesmas horas.
+   *
+   * A FAIXA DE CIMA REPETE OS NÚMEROS DO SLIDE ANTERIOR de propósito. Sem eles
+   * a página começa com uma lista sem escala, e quem chegou atrasado na reunião
+   * não tem como saber se 132 entregas é muito. */
+  function slideFrente(pptx, f, pagina, periodo, posicao) {
+    var s = slideTitulo(pptx, f.nome,
+      (posicao === 0 ? 'a frente que mais trabalhou no período' : 'no período') +
+      ' — entregas, projetos e quem fez', pagina, periodo,
+      DECKG.num(f.entregas) + (f.entregas === 1 ? ' entrega' : ' entregas'));
+
+    /* Quatro cartões de 2,17" com vão de 0,11": 4 × 2,17 + 3 × 0,11 = 9,01",
+       de 0,5" a 9,51" — a margem, com um centésimo de folga. */
+    var kpis = [
+      { rot: 'ENTREGAS', val: DECKG.num(f.entregas), cor: SIGNIFICADO.realizado,
+        nota: (f.evolucao || f.sustentacao)
+          ? f.evolucao + ' evolução · ' + f.sustentacao + ' sustentação' : '' },
+      { rot: 'PONTOS', val: DECKG.num(f.pontos), cor: SIGNIFICADO.realizado,
+        nota: f.entregas ? DECKG.num(Math.round(f.pontos / f.entregas * 10) / 10) +
+                           ' por entrega' : '' },
+      { rot: 'HORAS REALIZADAS', val: DECKG.num(f.real) + 'h',
+        cor: SIGNIFICADO.realizado,
+        nota: f.plan ? 'de ' + DECKG.num(f.plan) + 'h planejadas' : '' },
+      { rot: 'PESSOAS', val: DECKG.num(f.pessoas), cor: SIGNIFICADO.neutro,
+        nota: f.pessoas ? DECKG.num(Math.round(f.entregas / f.pessoas * 10) / 10) +
+                          ' entregas por pessoa' : '' },
+    ];
+    var LK = 2.17, VK = 0.11;
+    var corpoKpi = kpis.reduce(function (menor, k) {
+      return Math.min(menor, (LK - 0.26) * 72 / (String(k.val).length * 0.52));
+    }, 28);
+    corpoKpi = Math.max(16, Math.floor(corpoKpi));
+    kpis.forEach(function (k, i) {
+      cartaoKpi(pptx, s, { x: 0.5 + i * (LK + VK), y: 1.10, w: LK, h: 0.94,
+                           rot: k.rot, val: k.val, cor: k.cor, nota: k.nota,
+                           corpo: corpoKpi });
+    });
+
+    var tituloCol = function (txt, x, w, y) {
+      s.addText(txt, { x: x, y: y, w: w, h: 0.2, fontSize: 8.5, bold: true,
+                       color: C.fraco, charSpacing: 1.2 });
+    };
+
+    // ── Esquerda: o que saiu, com nome ──────────────────────────────────────
+    tituloCol('PRINCIPAIS ENTREGAS', 0.5, 5.0, 2.22);
+    var TOPO_E = 2.48, ALT_E = 0.42;
+    (f.topEntregas || []).slice(0, 5).forEach(function (e, i) {
+      var y = TOPO_E + i * ALT_E;
+      cartao(pptx, s, 0.5, y, 5.0, 0.36);
+      s.addText([
+        { text: e.codigo ? e.codigo + '  ' : '',
+          options: { color: C.azul, bold: true, fontSize: 8.5 } },
+        { text: corta(e.titulo, cabemChars(3.75, 10)), options: { color: C.texto, fontSize: 10 } },
+      ], { x: 0.64, y: y + 0.06, w: 3.75, h: 0.24, valign: 'middle', wrap: false });
+      s.addText(DECKG.num(e.pontos) + ' pts', {
+        x: 4.45, y: y + 0.06, w: 0.9, h: 0.24, fontSize: 10.5, bold: true,
+        color: SIGNIFICADO.realizado, align: 'right', valign: 'middle', wrap: false });
+    });
+    if (!(f.topEntregas || []).length) {
+      s.addText('Sem entrega nomeada no período.', { x: 0.5, y: 2.48, w: 5.0, h: 0.3,
+                                                     fontSize: 11, color: C.fraco });
+    }
+
+    // ── Direita, em cima: para que projeto ──────────────────────────────────
+    var XD = 5.75, WD = 3.75;
+    tituloCol('PROJETOS', XD, WD, 2.22);
+    var proj = (f.topProjetos || []).slice(0, 3);
+    proj.forEach(function (p, i) {
+      var y = 2.48 + i * 0.34;
+      s.addText(corta(p.nome, cabemChars(WD - 0.95, 9.5)), {
+        x: XD, y: y, w: WD - 0.95, h: 0.26, fontSize: 9.5, color: C.texto,
+        valign: 'middle', wrap: false });
+      s.addText(DECKG.num(p.qtd) + (p.qtd === 1 ? ' tarefa' : ' tarefas'), {
+        x: XD + WD - 0.95, y: y, w: 0.95, h: 0.26, fontSize: 9, color: C.fraco,
+        align: 'right', valign: 'middle', wrap: false });
+    });
+    if (!proj.length) {
+      s.addText('Nenhuma entrega desta frente está ligada a projeto.', {
+        x: XD, y: 2.48, w: WD, h: 0.4, fontSize: 9.5, color: C.fraco });
+    }
+
+    // ── Direita, embaixo: por quem ──────────────────────────────────────────
+    var Y_DEV = 2.48 + Math.max(proj.length, 1) * 0.34 + 0.26;
+    tituloCol('QUEM FEZ', XD, WD, Y_DEV);
+    (f.topDevs || []).slice(0, 4).forEach(function (d, i) {
+      var y = Y_DEV + 0.26 + i * 0.32;
+      s.addText(corta(d.nome, cabemChars(WD - 1.75, 10)), {
+        x: XD, y: y, w: WD - 1.75, h: 0.26, fontSize: 10, color: C.texto,
+        valign: 'middle', wrap: false });
+      s.addText([
+        { text: DECKG.num(d.entregas), options: { color: SIGNIFICADO.realizado, bold: true } },
+        { text: ' entregas   ·   ', options: { color: C.fraco } },
+        { text: DECKG.num(d.pontos), options: { color: SIGNIFICADO.realizado, bold: true } },
+        { text: ' pts', options: { color: C.fraco } },
+      ], { x: XD + WD - 1.75, y: y, w: 1.75, h: 0.26, fontSize: 9,
+           align: 'right', valign: 'middle', wrap: false });
+    });
+    rodape(s, periodo, pagina);
     return s;
   }
 
@@ -1878,7 +2034,7 @@
 
       s.addText(DECKG.num(it.pontos), {
         x: 7.90, y: y + 0.03, w: 0.70, h: 0.26, fontSize: 12, bold: true,
-        color: C.azul, align: 'right', wrap: false });
+        color: SIGNIFICADO.realizado, align: 'right', wrap: false });
       s.addText('pts', { x: 8.61, y: y + 0.09, w: 0.28, h: 0.18,
                          fontSize: 7, color: C.fraco });
       s.addText(it.dias == null ? '—' : DECKG.num(it.dias) + 'd', {
@@ -1993,7 +2149,7 @@
         fill: { color: C.fundo3 }, line: { type: 'none' } });
       s.addShape(pptx.ShapeType.rect, {
         x: X_BAR, y: y + 0.09, w: Math.max(0.03, W_BAR * (i.r / maxR)), h: 0.16,
-        fill: { color: i.cor || C.azul }, line: { type: 'none' } });
+        fill: { color: SIGNIFICADO.realizado }, line: { type: 'none' } });
       s.addText(DECKG.num(i.r) + ' pt/h', {
         x: X_BAR + W_BAR + 0.10, y: y, w: 0.95, h: 0.32, fontSize: 13, bold: true,
         color: C.texto, valign: 'middle', wrap: false });
@@ -2093,11 +2249,11 @@
        `bomSubir`: sair mais e bom, sobrar mais nao e. Backlog e estoque, e estoque
        que cresce nao e ganho — por isso a cor segue a MELHORA, e nao o sinal.  */
     var passos = [
-      { rot: 'BACKLOG NO DIA 1', val: f.backlogInicio, cor: C.fraco, sinal: '',
+      { rot: 'BACKLOG NO DIA 1', val: f.backlogInicio, cor: SIGNIFICADO.referencia, sinal: '',
         chave: 'backlogInicio', bomSubir: false },
-      { rot: 'ENTRARAM', val: f.recebidas, cor: C.azul, sinal: '+',
+      { rot: 'ENTRARAM', val: f.recebidas, cor: SIGNIFICADO.planejado, sinal: '+',
         chave: 'recebidas', bomSubir: true },
-      { rot: 'SAÍRAM DA FILA', val: f.saidas, cor: C.verde, sinal: '−',
+      { rot: 'SAÍRAM DA FILA', val: f.saidas, cor: SIGNIFICADO.realizado, sinal: '−',
         chave: 'saidas', bomSubir: true },
       /* AZUL, E NAO AMBAR. Este numero e um SALDO — quantas demandas ficaram na
          fila —, e saldo e fato, nao alerta. Em ambar ele chegava a sala como
@@ -2183,8 +2339,12 @@
     }
     if (k.pontos) saiu.push({ v: DECKG.num(k.pontos), r: ' pontos' });
     if (pt.real) {
-      saiu.push({ v: DECKG.num(pt.real) + 'h', r: ' realizadas', cor: C.verde });
-      if (pt.plan) saiu.push({ v: DECKG.num(pt.plan) + 'h', r: ' planejadas', cor: C.azul });
+      saiu.push({ v: DECKG.num(pt.real) + 'h', r: ' realizadas',
+                  cor: SIGNIFICADO.realizado });
+      if (pt.plan) {
+        saiu.push({ v: DECKG.num(pt.plan) + 'h', r: ' planejadas',
+                    cor: SIGNIFICADO.planejado });
+      }
     }
     if (saiu.length) {
       var linha = [{ text: 'Das saídas:   ', options: { color: C.fraco } }];
@@ -2309,12 +2469,18 @@
     }
 
     var BASE = 3.80, ALTO = 1.95, LB = 4.30;
-    [{ rot: 'ENTRARAM NA FILA', campo: 'entraram', cor: C.azul, bomSubir: false, x: 0.55 },
-     { rot: 'SAÍRAM DA FILA', campo: 'sairam', cor: C.verde, bomSubir: true, x: 5.15 },
+    /* ENTRAR NAO E CONQUISTA — e demanda chegando, papel `planejado`. SAIR e o
+       que o time produziu, papel `realizado`. Os dois blocos do slide passam a
+       dizer isso pela cor, e a mesma cor quer dizer a mesma coisa no deck todo. */
+    [{ rot: 'ENTRARAM NA FILA', campo: 'entraram', cor: SIGNIFICADO.planejado,
+      bomSubir: false, x: 0.55 },
+     { rot: 'SAÍRAM DA FILA', campo: 'sairam', cor: SIGNIFICADO.realizado,
+      bomSubir: true, x: 5.15 },
     ].forEach(function (b) {
       DECKG.comparativo(s, pptx, {
         x: b.x, y: 1.22, w: LB, base: BASE, alto: ALTO,
-        rot: b.rot, cor: b.cor, fsRot: 11, fsValor: 26, fsDelta: 13,
+        rot: b.rot, cor: b.cor, corAntes: SIGNIFICADO.anterior,
+        fsRot: 11, fsValor: 26, fsDelta: 13,
         antes: { rot: pen.rot || 'anterior', valor: pen[b.campo] || 0 },
         agora: { rot: (ult.rot || 'atual') + (ult.parcial ? ' (em curso)' : ''),
                  valor: ult[b.campo] || 0 },
@@ -2590,6 +2756,16 @@
     if (d.secoes.pipelines && d.pipelines) {
       cena(function (p) { slidePipelines(pptx, d.pipelines, p, d.periodo); });
       cena(function (p) { slideEsforcoFrente(pptx, d.pipelines, p, d.periodo); });
+    }
+
+    /* E LOGO DEPOIS, CADA FRENTE POR DENTRO — "após o slide 2 é bom já
+       quebrarmos pelas áreas". O panorama abre, o detalhe da maior vem em
+       seguida, e só então a conversa passa para a fila do mês. Separar os dois
+       obrigaria a sala a lembrar do número da página anterior. */
+    if (d.secoes.frentes_detalhe) {
+      (d.frentesDetalhe || []).forEach(function (f, i) {
+        cena(function (p) { slideFrente(pptx, f, p, d.periodo, i); });
+      });
     }
 
     /* ─── DEPOIS, O MÊS ───────────────────────────────────────────────────

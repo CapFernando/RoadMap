@@ -1177,7 +1177,7 @@
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=ef35f28412"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=e22f5223a5"></script>
+<script src="apresentacao.js?v=34c8c5351a"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -5733,6 +5733,10 @@ const AP_SECOES = [
     n: 1, pad: true },
   { k: 'pipelines', rot: 'Frentes de trabalho: horas planejadas × realizadas',
     n: 2, pad: true, nota: 'o segundo cruza horas e pontos por frente — o que cada hora rendeu' },
+  /* O ZOOM QUE A REUNIÃO PEDE logo depois do panorama: o que saiu dentro de cada
+     frente, para que projeto e por quem. "Assim dou contexto aos slides." */
+  { k: 'frentes_detalhe', rot: 'Cada frente por dentro: entregas, projetos e quem fez',
+    n: 3, pad: true, nota: 'um slide para cada uma das 3 frentes mais trabalhadas' },
   { k: 'pontos_dev', rot: 'Pontos entregues por desenvolvedor', n: 1, pad: true },
   /* AS PRINCIPAIS ENTREGAS, OS PROJETOS E A CAPACIDADE ENTRAM NO PADRÃO.
      "Principais entregas. Trazer o esforço pela pontuação e trazer média de
@@ -6638,6 +6642,93 @@ async function apresGerar(opts) {
     // aqui — foi assim que "o que está travado" vazou dado de outro mês.
     const pipelines = apresPipelines(conc, iso + '-01', fimMes);
 
+    /* ═══ A QUEBRA POR FRENTE, COM O DETALHE DENTRO DELA ════════════════════
+     *
+     * "Após o slide 2 é bom já quebrarmos pelas áreas para mostrar os projetos
+     *  conforme frentes mais trabalhadas. Maior demanda é de desenvolvimento, já
+     *  mostro as principais entregas, projetos, devs, horas e pontos. Assim dou
+     *  contexto aos slides."
+     *
+     * O slide das frentes diz QUANTO cada uma consumiu; estes dizem O QUE
+     * aconteceu dentro da maior delas. É o zoom que a reunião pede logo depois
+     * do panorama, e que hoje obriga quem apresenta a responder de cabeça.
+     *
+     * UMA DEMANDA CONTA EM TODA FRENTE QUE A TOCOU, e não é erro de soma: se
+     * duas pessoas de frentes diferentes entregaram junto, a entrega aconteceu
+     * nas duas. O que é RATEADO são as horas e os pontos (em `apresPipelines`),
+     * porque ali a soma das frentes tem de fechar com o total do mês. Aqui a
+     * lista é qualitativa — "o que saiu nesta frente" —, e cortar a demanda ao
+     * meio faria o título aparecer sem dono.
+     *
+     * OS NÚMEROS VÊM DE `apresPipelines`, e não de uma segunda soma: hora é
+     * conta (rateio por dia útil, aproximação de quem não lançou), e uma segunda
+     * implementação divergiria da primeira com as duas no mesmo deck. */
+    const frentesDetalhe = (() => {
+      const api = window.PIPELINES;
+      if (!api || !pipelines) return [];
+      const perfis = state.devs_perfil || {};
+      const acc = {};
+      const poe = (nome) => {
+        acc[nome] = acc[nome] || { entregas: [], devs: new Map(), projetos: new Map() };
+        return acc[nome];
+      };
+      conc.forEach(m => {
+        const devs = api.devsDaDemanda(m);
+        const frentes = new Set((devs.length ? devs : [null]).map(
+          n => (n ? (api.doDev(n, perfis) || api.NAO_CLASSIFICADO) : api.NAO_CLASSIFICADO)));
+        const pts = Number(m.poker_pontos) || 0;
+        frentes.forEach(f => {
+          const a = poe(f);
+          a.entregas.push({ codigo: m.codigo || '', titulo: m.titulo || '',
+                            pontos: pts, dev: (devs[0] || '') });
+          devs.forEach(n => {
+            if ((api.doDev(n, perfis) || api.NAO_CLASSIFICADO) !== f) return;
+            const d = a.devs.get(n) || { entregas: 0, pontos: 0 };
+            d.entregas += 1; d.pontos += pts / devs.length;
+            a.devs.set(n, d);
+          });
+          if (m.projeto_id) {
+            const p = (state.projetos || []).find(x => String(x.id) === String(m.projeto_id));
+            if (p) {
+              const k = String(p.id);
+              const j = a.projetos.get(k) ||
+                { nome: (p.codigo ? p.codigo + ' · ' : '') + (p.nome || ''), qtd: 0, pontos: 0 };
+              j.qtd += 1; j.pontos += pts;
+              a.projetos.set(k, j);
+            }
+          }
+        });
+      });
+      /* ORDENADAS PELO QUE `apresPipelines` JA ORDENOU (a ordem fixa do painel),
+         e o slide pega as primeiras COM ENTREGA — frente sem entrega no mes nao
+         rende um slide de detalhe, rende uma linha no slide anterior. */
+      return pipelines.itens
+        .filter(f => acc[f.nome] && acc[f.nome].entregas.length)
+        .map(f => {
+          const a = acc[f.nome];
+          return {
+            nome: f.nome, cor: f.cor, plan: f.plan, real: f.real,
+            pontos: f.pontos, entregas: f.entregas, pessoas: f.devs,
+            pct: f.pct, evolucao: f.evolucao, sustentacao: f.sustentacao,
+            topEntregas: a.entregas
+              .sort((x, y) => y.pontos - x.pontos ||
+                              String(x.codigo).localeCompare(String(y.codigo)))
+              .slice(0, 5),
+            topProjetos: [...a.projetos.values()]
+              .sort((x, y) => y.qtd - x.qtd || y.pontos - x.pontos).slice(0, 4),
+            topDevs: [...a.devs.entries()]
+              .map(([nome, d]) => ({ nome, entregas: d.entregas,
+                                     pontos: Math.round(d.pontos) }))
+              .sort((x, y) => y.pontos - x.pontos || y.entregas - x.entregas)
+              .slice(0, 4),
+          };
+        })
+        // As MAIS TRABALHADAS primeiro — por hora realizada, que e o criterio do
+        // slide anterior. Ordem diferente entre os dois faria a sala reler.
+        .sort((a, b) => (b.plan + b.real) - (a.plan + a.real))
+        .slice(0, 3);
+    })();
+
     /* O MES DE CADA UM DOS TRES PRIMEIROS DEVS, em linha do tempo.
        E a visao que o quadro do Planejamento da e o deck nao dava: o que a pessoa
        pegou, quando, e por quanto tempo cada coisa ficou com ela.
@@ -6794,6 +6885,7 @@ async function apresGerar(opts) {
         x => x.entraram || x.sairam || x.backlog))),
       ganttDev,
       pipelines,
+      frentesDetalhe,
       /* OS CORTES DE PONTOS, da MESMA funcao que o painel gerencial usa.
          Chamar `gerCortesDePontos` em vez de repetir a soma aqui e o que impede o
          deck e a tela de discordarem — foi assim que a "eficiencia" deu 100% todo
