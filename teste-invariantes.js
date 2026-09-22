@@ -13782,14 +13782,64 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const blocos = [...GANTT.matchAll(/\.gantt-card\.gcard-deapi[^{}]*\{([^}]*)\}/g)]
         .map(x => x[1]);
       ok(blocos.length >= 1, 'a regra da listra foi achada', String(blocos.length));
-      ok(blocos.every(b => /135deg/.test(b)),
-         'toda listra de dev/api corre a 135deg');
+      /* SO OS BLOCOS QUE DECLARAM O GRADIENTE. Ha um que apenas reposiciona a
+         fita sobre a barra de atrasado (`background-position`), e exigir 135deg
+         dele reprovava codigo certo — a invariante acusou isso na hora. */
+      const comGradiente = blocos.filter(b => /linear-gradient/.test(b));
+      ok(comGradiente.length >= 1 && comGradiente.every(b => /135deg/.test(b)),
+         'toda listra de dev/api corre a 135deg',
+         comGradiente.length + ' bloco(s) com gradiente');
       ok(blocos.every(b => !/\b45deg/.test(b)),
          'e nenhuma a 45deg, que e o angulo da fita de HERDADA — as duas podem ' +
          'aparecer na mesma barra');
       const herd = (GANTT.match(/gcard-herdada[^{]*\{([^}]*)\}/) || [])[1] || '';
       ok(/45deg/.test(herd), 'e a fita de herdada continua a 45deg', '');
+
+      /* ── E ELA E UMA FITA NO PE, E NAO O FUNDO INTEIRO ──────────────────
+       *
+       * "Melhore a visibilidade da escrita, apos o ajuste dificultou a
+       *  leitura."  A primeira versao listrava a barra toda, e o titulo passou
+       *  a ser lido POR CIMA da textura — em 45% dos cards abertos (medido: 53
+       *  de 119), que e quase o quadro inteiro.
+       *
+       * A saida e a mesma que a barra de ATRASADO ja usava: a fita atravessa a
+       * largura e o texto fica numa faixa limpa no meio. */
+      const principal = comGradiente[0] || '';
+      ok(/background-size: 100% 5px;/.test(principal),
+         'a fita tem altura fixa — nao e o fundo da barra inteira');
+      ok(/background-position: bottom left;/.test(principal) &&
+         /background-repeat: repeat-x;/.test(principal),
+         'e mora no PE da barra, longe do titulo');
+      /* ATRASADO JA TEM FITA NO PE (`::after`, 5px). Sem o desvio, a de origem
+         ficaria escondida embaixo da vermelha justamente nas demandas que mais
+         se olha. */
+      ok(/\.gantt-card\.gcard-deapi\.gcard-atrasado \{\s*background-position: bottom 5px left;/
+         .test(GANTT.replace(/\n\s*/g, ' ').replace(/\{ /g, '{\n')) ||
+         /gcard-deapi\.gcard-atrasado[^}]*bottom 5px left/.test(GANTT),
+         'e sobe 5px no atrasado, que ja tem fita propria no pe');
     }
+
+    /* ── A LEGENDA ─────────────────────────────────────────────────────
+     *
+     * "Tambem alimente a legenda das cores."
+     *
+     * A legenda desta tela E a barra de chips, e ela nao so explica: filtra.
+     * Um chip que so pintasse um quadradinho seria a unica coisa ali que nao
+     * responde ao clique — e a pessoa tentaria clicar de qualquer forma. */
+    ok(/chipHerdadas \+ chipDeApi;/.test(GANTT),
+       'o chip da origem entra na barra de chips, junto dos outros');
+    ok(/const chipDeApi = deApiLista\.length/.test(GANTT),
+       'e some quando nao ha nenhuma — chip zerado que esvazia a tela parece ' +
+       'defeito');
+    ok(/filters\.indicator === '__deapi__'/.test(GANTT) &&
+       /if \(!\(window\.ABERTURA && ABERTURA\.deDevOuApi\(m\)\)\) return false;/.test(GANTT),
+       'e ele FILTRA, como todos os outros desta barra');
+    /* O CHIP CARREGA A PROPRIA FITA. Legenda que nao se parece com o que ela
+       explica obriga a decorar a correspondencia. */
+    ok(/\.ind-chip\.deapi::before,/.test(GANTT) && /\.ind-chip\.deapi::after \{/.test(GANTT),
+       'e ele mostra a fita nas pontas, como o chip de "Mes passado" faz');
+    ok(/\.ind-chip\.deapi::before[\s\S]{0,260}135deg/.test(GANTT),
+       'na mesma inclinacao da barra, senao a legenda desmente o quadro');
   }
 
   let erroPz = null;

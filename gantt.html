@@ -197,6 +197,22 @@
     }
     .ind-chip.mes_passado::before { left:0; }
     .ind-chip.mes_passado::after  { right:0; }
+    /* O CHIP CARREGA A PROPRIA FITA, nas duas pontas. Legenda que nao se parece
+       com o que ela explica obriga a pessoa a decorar a correspondencia — e o
+       mesmo desenho que o chip de "Mes passado" ja usa para a fita dele.
+       135deg aqui tambem, como na barra. */
+    .ind-chip.deapi {
+      background:#0C3260; border-color:#1a5080; color:#9BC8F8;
+      position:relative; overflow:hidden;
+      padding-left:20px; padding-right:20px;
+    }
+    .ind-chip.deapi::before,
+    .ind-chip.deapi::after {
+      content:''; position:absolute; top:0; bottom:0; width:12px; pointer-events:none;
+      background: repeating-linear-gradient(135deg, #3B8FE8 0 5px, #0A1E33 5px 10px);
+    }
+    .ind-chip.deapi::before { left:0; }
+    .ind-chip.deapi::after  { right:0; }
     /* O anel de "filtro ligado" e branco translucido, pensado para chip escuro —
        sobre o corpo branco ele desaparece, e o chip fica sem dizer que esta
        ativo. Vale para os dois chips de fita clara. */
@@ -804,18 +820,36 @@
      * origem pela textura.
      *
      * 135deg para nao confundir com a fita da HERDADA, que corre a 45deg — as
-     * duas podem aparecer juntas na mesma barra. */
+     * duas podem aparecer juntas na mesma barra.
+     *
+     * ═══ A LISTRA E UMA FITA NO PE DA BARRA, E NAO O FUNDO INTEIRO ═══════
+     *
+     * "Melhore a visibilidade da escrita, após o ajuste dificultou a leitura."
+     *
+     * A primeira versão listrava a barra inteira — e 45% dos cards abertos têm
+     * essa origem (medido: 53 de 119). Quase todo o quadro virou textura, e o
+     * título passou a ser lido POR CIMA dela.
+     *
+     * A saída é a mesma que a barra de ATRASADO já usava, e o comentário dela
+     * diz por quê: a fita atravessa a largura e o texto fica sempre numa faixa
+     * limpa no meio. Aqui ela vai só no pé — 5px —, feita com
+     * `background-size` + `background-position`, porque `::before` e `::after`
+     * já são de pausada, atrasado e quebra.
+     *
+     * A barra tem `align-items:center`, então o texto mora no miolo: a fita no
+     * pé não encosta nele em nenhuma altura de card. */
     .gantt-card.gcard-deapi {
       background-image: repeating-linear-gradient(135deg,
-        rgba(59,143,232,0) 0 7px, rgba(59,143,232,.55) 7px 14px);
+        #3B8FE8 0 5px, #0A1E33 5px 10px);
+      background-size: 100% 5px;
+      background-position: bottom left;
+      background-repeat: repeat-x;
     }
-    /* Sobre a barra VERMELHA de atrasado e a VERDE de concluido, o azul
-       translucido vira lama. Ali a listra e clara: o que importa e existir
-       textura diagonal, e nao a matiz exata. */
-    .gantt-card.gcard-deapi.gcard-atrasado,
-    .gantt-card.gcard-deapi.gcard-concluido {
-      background-image: repeating-linear-gradient(135deg,
-        rgba(255,255,255,0) 0 7px, rgba(190,222,255,.5) 7px 14px);
+    /* ATRASADO JA TEM FITA NO PE (`::after`, 5px). A de origem sobe 5px para as
+       duas coexistirem — sem isso ela ficaria escondida embaixo da vermelha
+       justamente nas demandas que mais se olha. */
+    .gantt-card.gcard-deapi.gcard-atrasado {
+      background-position: bottom 5px left;
     }
     .gcard-atrasado { background:#C81E1E; border-color:#0A0A0A; color:#FFFFFF; }
     .gantt-card.gcard-atrasado::before,
@@ -2241,6 +2275,10 @@ function matchesFilters(m) {
   // Herdada tambem e paralelo: a demanda continua em 'em andamento' ou
   // 'planejado', o que muda e DE QUANDO ela e.
   else if (filters.indicator === '__mes_passado__') { if (!ehHerdada(m)) return false; }
+  // Origem tambem e paralelo: quem abriu nao muda a etapa em que a demanda esta.
+  else if (filters.indicator === '__deapi__') {
+    if (!(window.ABERTURA && ABERTURA.deDevOuApi(m))) return false;
+  }
   else if (filters.indicator && spEfetivo(m) !== filters.indicator) return false;
   return true;
 }
@@ -2409,8 +2447,28 @@ function renderIndicators() {
       `onclick="toggleIndicatorFilter('__mes_passado__')">⇥ Mês passado <strong>${herdadas.length}</strong></span>`
     : '';
 
+  /* ABERTA POR FORA DO PLANEJAMENTO — o chip que explica a fita azul no pé da
+     barra. "Também alimente a legenda das cores."
+
+     A LEGENDA DESTA TELA É A BARRA DE CHIPS, e ela não só explica: filtra. Um
+     chip que só pinta um quadradinho seria a única coisa aqui que não responde
+     ao clique, e a pessoa tentaria clicar de qualquer forma.
+
+     CONTA POR FORA, como o Pausado e o Mês passado: a demanda continua na etapa
+     dela, e somar aqui faria o total passar do número de demandas.
+
+     E SOME QUANDO É ZERO — chip zerado que esvazia a tela ao ser clicado é um
+     convite a achar que a tela quebrou. */
+  const deApiLista = visible.filter(m => window.ABERTURA && ABERTURA.deDevOuApi(m));
+  const chipDeApi = deApiLista.length
+    ? `<span class="ind-chip deapi ${filters.indicator === '__deapi__' ? 'active-filter' : ''}" ` +
+      `title="Abertas no Painel Dev ou pelo endpoint da API — não passaram pelo planejamento. ` +
+      `No calendário elas levam uma fita azul listrada no pé da barra." ` +
+      `onclick="toggleIndicatorFilter('__deapi__')">▨ Aberta por fora <strong>${deApiLista.length}</strong></span>`
+    : '';
+
   document.getElementById('indicator-bar').innerHTML =
-    todosChip + chips + chipPausado + chipHerdadas;
+    todosChip + chips + chipPausado + chipHerdadas + chipDeApi;
 }
 
 function toggleIndicatorFilter(k) {
