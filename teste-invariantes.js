@@ -15294,6 +15294,126 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'cabecalho');
   }
 
+  /* === O RELATORIO NO METABASE, PELA API ===============================
+
+     "Faca via api." A API do Metabase da os tres verbos que o fechamento pede:
+     `POST /api/upload/csv` cria a tabela (uma vez), `POST /api/table/{id}/
+     replace-csv` troca os dados (todo mes, e o painel continua de pe), e
+     `POST /api/card` + `/api/dashboard` montam o painel por codigo.
+
+     O TERCEIRO E O QUE "PADRONIZAR" QUER DIZER: um painel montado a mao no
+     navegador e um painel que ninguem consegue repetir. */
+  sec('Metabase: o painel pela API');
+  {
+    const MB = fs.readFileSync('metabase.js', 'utf8');
+    const MBAPI = require('./metabase.js');
+
+    /* ── A CHAVE NAO ENTRA NO REPOSITORIO ──
+       Ela e credencial. Se um dia alguem a escrever aqui "so para testar", ela
+       vai para o GitHub e fica no historico para sempre. */
+    ok(/process\.env\.METABASE_API_KEY/.test(MB) && /process\.env\.METABASE_URL/.test(MB),
+       'a chave e a URL vem do ambiente');
+    ok(!/mb_[a-zA-Z0-9]{8,}/.test(MB),
+       'e nenhuma chave de verdade esta escrita no arquivo');
+    ok(/'X-API-Key': cfg\.chave/.test(MB),
+       'ela viaja no cabecalho que a documentacao manda');
+
+    /* ── OS TRES VERBOS ── */
+    ['/api/upload/csv', '/replace-csv', '/api/card', '/api/dashboard'].forEach(r => {
+      ok(MB.indexOf(r) > 0, 'usa ' + r);
+    });
+    /* NO FORMULARIO DO UPLOAD, e nao em qualquer lugar do arquivo. A primeira
+       versao procurava `collection_id` no arquivo inteiro e passava mesmo com o
+       campo do multipart renomeado — o texto ainda aparece no corpo do cartao e
+       do painel. Sabotagem confirmou o buraco. */
+    const FORM = corpo(MB, 'function formDoCsv(caminho, colecaoId) {') || '';
+    ok(/f\.append\('collection_id'/.test(FORM),
+       'e manda `collection_id` no formulario do upload — sem ele a API responde ' +
+       '400 sem dizer qual campo faltou');
+
+    /* ── A RESPOSTA DO UPLOAD E UM NUMERO CRU ──
+       E o detalhe que mais quebra integracao com esta API: `POST /api/upload/csv`
+       devolve o id do model como numero, e nao como objeto. Ler `.id` de um
+       numero da `undefined`, e a chamada seguinte sai com /api/card/undefined. */
+    ok(/typeof r === 'number' \? r : \(r && r\.id\) \|\| r/.test(MB),
+       'o id do model e lido tanto de um numero quanto de um objeto');
+
+    /* ══ E AGORA O QUE IMPORTA: TODA PERGUNTA SO CITA COLUNA QUE O CSV TEM ══
+     *
+     * E o defeito real desta integracao, e ele e silencioso do lado errado:
+     * alguem renomeia uma coluna no `csvMetabase` do admin, o upload continua
+     * funcionando, e o painel quebra la no Metabase — onde ninguem desta base
+     * esta olhando. As duas pontas moram em arquivos diferentes e nada as
+     * amarrava. */
+    const CSV = corpo(ADMIN, 'function csvMetabase(de, ate) {') || '';
+    const colunas = new Set();
+    const bloco = CSV.slice(CSV.indexOf('linhas.push({'));
+    bloco.replace(/^\s*([a-z_][a-z0-9_]*):/gm, (t, c) => { colunas.add(c); return t; });
+    ok(colunas.size >= 25, 'o CSV exporta as colunas do fechamento',
+       colunas.size + ' colunas');
+
+    /* Os apelidos que o SQL cria (`AS entregas`) e as palavras da linguagem nao
+       sao coluna, e ficam de fora da conferencia. */
+    const RESERVADAS = new Set(['select', 'from', 'where', 'group', 'by', 'order',
+      'desc', 'asc', 'limit', 'count', 'distinct', 'sum', 'round', 'avg', 'as',
+      'and', 'or', 'is', 'not', 'null', 'nullif', 't']);
+    const perguntas = MBAPI.PERGUNTAS('t');
+    const orfas = [];
+    perguntas.forEach(p => {
+      const apelidos = new Set((p.sql.match(/AS ([a-z_][a-z0-9_]*)/g) || [])
+        .map(x => x.replace('AS ', '')));
+      (p.sql.match(/[a-z_][a-z0-9_]*/g) || []).forEach(w => {
+        if (RESERVADAS.has(w) || apelidos.has(w) || colunas.has(w)) return;
+        orfas.push(p.nome + ' → ' + w);
+      });
+    });
+    ok(orfas.length === 0,
+       'e TODA pergunta do painel cita so coluna que o CSV exporta — renomear uma ' +
+       'coluna no admin quebraria o painel do outro lado, em silencio',
+       [...new Set(orfas)].join(' ; ') || perguntas.length + ' perguntas conferidas');
+
+    /* ── A CONTAGEM RESPEITA O GRAO DO CSV ──
+       O CSV tem uma linha por (demanda × pessoa). `count(*)` infla toda demanda
+       de duas pessoas, e somar a coluna cheia infla junto. As perguntas usam
+       `count(distinct demanda_id)` e as colunas rateadas. */
+    /* A REGRA E "NUNCA CONTAR LINHA", e nao "sempre contar demanda": a pergunta
+       "pessoas que entregaram" conta `distinct pessoa`, e esta certa. A primeira
+       versao exigia `demanda_id` em toda contagem e reprovava essa — e verificacao
+       que acusa codigo certo e a forma mais rapida de alguem desligar a suite.
+       Foi a quinta vez nesta base; o padrao e sempre o mesmo, eu escrevendo o
+       exemplo que tinha na cabeca em vez da regra. */
+    const contam = perguntas.filter(p => /count\(/.test(p.sql));
+    const contamLinha = contam.filter(p => !/count\(distinct /.test(p.sql));
+    ok(contam.length > 0 && contamLinha.length === 0,
+       'nenhuma pergunta conta LINHA — o CSV tem uma por (demanda × pessoa), e ' +
+       '`count(*)` inflaria toda demanda de duas pessoas',
+       contam.length + ' contam, ' + (contamLinha.map(p => p.nome).join() || 'nenhuma por linha'));
+    const deEntrega = contam.filter(p => /AS entregas/.test(p.sql));
+    ok(deEntrega.length > 0 && deEntrega.every(p => /count\(distinct demanda_id\)/.test(p.sql)),
+       'e toda contagem de ENTREGA conta demanda distinta',
+       deEntrega.length + ' perguntas');
+    const somam = perguntas.filter(p => /sum\(/.test(p.sql));
+    ok(somam.length > 0 && somam.every(p => !/sum\((pontos|horas_realizadas|horas_planejadas)\)/.test(p.sql)),
+       'e toda soma usa a coluna RATEADA — a cheia infla quando a demanda teve ' +
+       'duas pessoas', somam.length + ' perguntas somam');
+
+    /* ── O PAINEL CABE NA GRADE ──
+       Sem `size_x`/`size_y` o Metabase empilha tudo numa coluna so, e catorze
+       cartoes empilhados nao se leem. A grade dele tem 18 colunas. */
+    ok(/size_x: largura, size_y: altura/.test(MB), 'os cartoes declaram tamanho');
+    ok(/const largura = escalar \? 4 : 9;/.test(MB) && /porLinha = escalar \? 4 : 2/.test(MB),
+       'e a largura fecha a linha de 18 colunas: quatro numeros de 4, ou dois ' +
+       'graficos de 9');
+
+    /* ── E HA COMO OLHAR ANTES DE ESCREVER NO SISTEMA DE TERCEIRO ── */
+    /* E ELE E LIDO DA LINHA DE COMANDO. A primeira versao procurava a string
+       `--ensaio` no arquivo, que continua la mesmo com a leitura removida —
+       outro buraco que so a sabotagem mostrou. */
+    ok(/const ensaio = args\.includes\('--ensaio'\);/.test(MB) && /\[ensaio\]/.test(MB),
+       'existe um modo de ensaio, lido da linha de comando, que imprime as ' +
+       'chamadas sem enviar nenhuma');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
