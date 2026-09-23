@@ -15215,18 +15215,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'frente sem entrega no mes nao ganha slide de detalhe');
   }
 
-  /* === A BASE PARA O METABASE ==========================================
+  /* === A BASE DO MES EM CSV =============================================
 
-     "Me foi orientado a fazer uso [do Metabase] para padronizar o relatorio."
-
-     O Metabase le BANCO DE DADOS — a lista oficial de drivers e Postgres, MySQL,
-     SQL Server, Oracle, BigQuery, Snowflake e afins, e nao ha driver de REST nem
-     de JSON. Os dados desta ferramenta sao um JSON num repositorio privado
-     servido pelo Worker, e o Metabase nao alcanca isso. O que ele alcanca sem
-     infraestrutura nova e CSV. */
-  sec('Metabase: a base que ele consegue ler');
+     Uma linha por (demanda × pessoa) com tudo que o fechamento usa. Nasceu para
+     o Metabase, que foi abortado — a empresa nao tem onde rodar um container nem
+     um Postgres, e a licenca gratis exige os dois. O arquivo ficou porque se
+     sustenta sem a ferramenta: Excel, uma pergunta avulsa, mandar a base do mes
+     para alguem. */
+  sec('A base do mes em CSV');
   {
-    const CSV = corpo(ADMIN, 'function csvMetabase(de, ate) {') || '';
+    const CSV = corpo(ADMIN, 'function csvBaseDoMes(de, ate) {') || '';
     ok(!!CSV, 'a exportacao existe');
 
     /* ── O GRAO E (DEMANDA × PESSOA) ──
@@ -15254,8 +15252,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
     /* ── AS CONTAS SAO AS MESMAS DO DECK ──
        Um CSV com regra propria seria a quinta implementacao do prazo nesta base,
-       e a primeira que ninguem confere porque mora num arquivo que so o Metabase
-       le. Quando a regra mudar aqui, ela muda la tambem. */
+       e a primeira que ninguem confere porque mora num arquivo que so se abre
+       por fora. Quando a regra mudar aqui, ela muda la tambem. */
     ok(/FILA\.ehEntregaDe\(m, de, ate\)/.test(CSV),
        'o recorte do periodo e o mesmo `fila.js` do deck');
     ok(/prazoClassifica\(m\)/.test(CSV), 'o prazo e o mesmo `prazoClassifica`');
@@ -15266,7 +15264,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
     /* ── O CSV E LIDO POR DUAS COISAS, E UMA DELAS E O EXCEL ──
        Sem BOM o Excel abre em ANSI e "Cobranca" vira "CobranÃ§a" — e quem confere
-       o arquivo antes de subir abre no Excel. O Metabase ignora o BOM. */
+       este arquivo vai ser aberto justamente no Excel. */
     const TXT = corpo(ADMIN, 'function csvTexto(linhas) {') || '';
     ok(/'\\uFEFF' \+/.test(TXT), 'o arquivo sai com BOM, para o Excel nao corromper acento');
 
@@ -15284,134 +15282,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
     /* ── O BOTAO EXISTE E LE O PERIODO DA ABA ──
        Um segundo seletor de periodo divergiria do de cima no pior momento. */
-    ok(/id="ger-csv-btn"/.test(ADMIN) && /onclick="baixarCsvMetabase\(\)"/.test(ADMIN),
+    ok(/id="ger-csv-btn"/.test(ADMIN) && /onclick="baixarCsvDoMes\(\)"/.test(ADMIN),
        'e ha um botao para baixar, ao lado do que gera o deck');
-    const BX = corpo(ADMIN, 'async function baixarCsvMetabase() {') || '';
+    const BX = corpo(ADMIN, 'async function baixarCsvDoMes() {') || '';
     ok(/apresMesAno\(\)/.test(BX),
        'que usa o MESMO periodo do filtro da aba, e nao um seletor proprio');
     ok(/Nenhuma entrega no período/.test(BX),
        'e avisa quando o periodo esta vazio, em vez de baixar um arquivo so com ' +
        'cabecalho');
-  }
-
-  /* === O RELATORIO NO METABASE, PELA API ===============================
-
-     "Faca via api." A API do Metabase da os tres verbos que o fechamento pede:
-     `POST /api/upload/csv` cria a tabela (uma vez), `POST /api/table/{id}/
-     replace-csv` troca os dados (todo mes, e o painel continua de pe), e
-     `POST /api/card` + `/api/dashboard` montam o painel por codigo.
-
-     O TERCEIRO E O QUE "PADRONIZAR" QUER DIZER: um painel montado a mao no
-     navegador e um painel que ninguem consegue repetir. */
-  sec('Metabase: o painel pela API');
-  {
-    const MB = fs.readFileSync('metabase.js', 'utf8');
-    const MBAPI = require('./metabase.js');
-
-    /* ── A CHAVE NAO ENTRA NO REPOSITORIO ──
-       Ela e credencial. Se um dia alguem a escrever aqui "so para testar", ela
-       vai para o GitHub e fica no historico para sempre. */
-    ok(/process\.env\.METABASE_API_KEY/.test(MB) && /process\.env\.METABASE_URL/.test(MB),
-       'a chave e a URL vem do ambiente');
-    ok(!/mb_[a-zA-Z0-9]{8,}/.test(MB),
-       'e nenhuma chave de verdade esta escrita no arquivo');
-    ok(/'X-API-Key': cfg\.chave/.test(MB),
-       'ela viaja no cabecalho que a documentacao manda');
-
-    /* ── OS TRES VERBOS ── */
-    ['/api/upload/csv', '/replace-csv', '/api/card', '/api/dashboard'].forEach(r => {
-      ok(MB.indexOf(r) > 0, 'usa ' + r);
-    });
-    /* NO FORMULARIO DO UPLOAD, e nao em qualquer lugar do arquivo. A primeira
-       versao procurava `collection_id` no arquivo inteiro e passava mesmo com o
-       campo do multipart renomeado — o texto ainda aparece no corpo do cartao e
-       do painel. Sabotagem confirmou o buraco. */
-    const FORM = corpo(MB, 'function formDoCsv(caminho, colecaoId) {') || '';
-    ok(/f\.append\('collection_id'/.test(FORM),
-       'e manda `collection_id` no formulario do upload — sem ele a API responde ' +
-       '400 sem dizer qual campo faltou');
-
-    /* ── A RESPOSTA DO UPLOAD E UM NUMERO CRU ──
-       E o detalhe que mais quebra integracao com esta API: `POST /api/upload/csv`
-       devolve o id do model como numero, e nao como objeto. Ler `.id` de um
-       numero da `undefined`, e a chamada seguinte sai com /api/card/undefined. */
-    ok(/typeof r === 'number' \? r : \(r && r\.id\) \|\| r/.test(MB),
-       'o id do model e lido tanto de um numero quanto de um objeto');
-
-    /* ══ E AGORA O QUE IMPORTA: TODA PERGUNTA SO CITA COLUNA QUE O CSV TEM ══
-     *
-     * E o defeito real desta integracao, e ele e silencioso do lado errado:
-     * alguem renomeia uma coluna no `csvMetabase` do admin, o upload continua
-     * funcionando, e o painel quebra la no Metabase — onde ninguem desta base
-     * esta olhando. As duas pontas moram em arquivos diferentes e nada as
-     * amarrava. */
-    const CSV = corpo(ADMIN, 'function csvMetabase(de, ate) {') || '';
-    const colunas = new Set();
-    const bloco = CSV.slice(CSV.indexOf('linhas.push({'));
-    bloco.replace(/^\s*([a-z_][a-z0-9_]*):/gm, (t, c) => { colunas.add(c); return t; });
-    ok(colunas.size >= 25, 'o CSV exporta as colunas do fechamento',
-       colunas.size + ' colunas');
-
-    /* Os apelidos que o SQL cria (`AS entregas`) e as palavras da linguagem nao
-       sao coluna, e ficam de fora da conferencia. */
-    const RESERVADAS = new Set(['select', 'from', 'where', 'group', 'by', 'order',
-      'desc', 'asc', 'limit', 'count', 'distinct', 'sum', 'round', 'avg', 'as',
-      'and', 'or', 'is', 'not', 'null', 'nullif', 't']);
-    const perguntas = MBAPI.PERGUNTAS('t');
-    const orfas = [];
-    perguntas.forEach(p => {
-      const apelidos = new Set((p.sql.match(/AS ([a-z_][a-z0-9_]*)/g) || [])
-        .map(x => x.replace('AS ', '')));
-      (p.sql.match(/[a-z_][a-z0-9_]*/g) || []).forEach(w => {
-        if (RESERVADAS.has(w) || apelidos.has(w) || colunas.has(w)) return;
-        orfas.push(p.nome + ' → ' + w);
-      });
-    });
-    ok(orfas.length === 0,
-       'e TODA pergunta do painel cita so coluna que o CSV exporta — renomear uma ' +
-       'coluna no admin quebraria o painel do outro lado, em silencio',
-       [...new Set(orfas)].join(' ; ') || perguntas.length + ' perguntas conferidas');
-
-    /* ── A CONTAGEM RESPEITA O GRAO DO CSV ──
-       O CSV tem uma linha por (demanda × pessoa). `count(*)` infla toda demanda
-       de duas pessoas, e somar a coluna cheia infla junto. As perguntas usam
-       `count(distinct demanda_id)` e as colunas rateadas. */
-    /* A REGRA E "NUNCA CONTAR LINHA", e nao "sempre contar demanda": a pergunta
-       "pessoas que entregaram" conta `distinct pessoa`, e esta certa. A primeira
-       versao exigia `demanda_id` em toda contagem e reprovava essa — e verificacao
-       que acusa codigo certo e a forma mais rapida de alguem desligar a suite.
-       Foi a quinta vez nesta base; o padrao e sempre o mesmo, eu escrevendo o
-       exemplo que tinha na cabeca em vez da regra. */
-    const contam = perguntas.filter(p => /count\(/.test(p.sql));
-    const contamLinha = contam.filter(p => !/count\(distinct /.test(p.sql));
-    ok(contam.length > 0 && contamLinha.length === 0,
-       'nenhuma pergunta conta LINHA — o CSV tem uma por (demanda × pessoa), e ' +
-       '`count(*)` inflaria toda demanda de duas pessoas',
-       contam.length + ' contam, ' + (contamLinha.map(p => p.nome).join() || 'nenhuma por linha'));
-    const deEntrega = contam.filter(p => /AS entregas/.test(p.sql));
-    ok(deEntrega.length > 0 && deEntrega.every(p => /count\(distinct demanda_id\)/.test(p.sql)),
-       'e toda contagem de ENTREGA conta demanda distinta',
-       deEntrega.length + ' perguntas');
-    const somam = perguntas.filter(p => /sum\(/.test(p.sql));
-    ok(somam.length > 0 && somam.every(p => !/sum\((pontos|horas_realizadas|horas_planejadas)\)/.test(p.sql)),
-       'e toda soma usa a coluna RATEADA — a cheia infla quando a demanda teve ' +
-       'duas pessoas', somam.length + ' perguntas somam');
-
-    /* ── O PAINEL CABE NA GRADE ──
-       Sem `size_x`/`size_y` o Metabase empilha tudo numa coluna so, e catorze
-       cartoes empilhados nao se leem. A grade dele tem 18 colunas. */
-    ok(/size_x: largura, size_y: altura/.test(MB), 'os cartoes declaram tamanho');
-    ok(/const largura = escalar \? 4 : 9;/.test(MB) && /porLinha = escalar \? 4 : 2/.test(MB),
-       'e a largura fecha a linha de 18 colunas: quatro numeros de 4, ou dois ' +
-       'graficos de 9');
-
-    /* ── E HA COMO OLHAR ANTES DE ESCREVER NO SISTEMA DE TERCEIRO ── */
-    /* E ELE E LIDO DA LINHA DE COMANDO. A primeira versao procurava a string
-       `--ensaio` no arquivo, que continua la mesmo com a leitura removida —
-       outro buraco que so a sabotagem mostrou. */
-    ok(/const ensaio = args\.includes\('--ensaio'\);/.test(MB) && /\[ensaio\]/.test(MB),
-       'existe um modo de ensaio, lido da linha de comando, que imprime as ' +
-       'chamadas sem enviar nenhuma');
   }
 
   let erroPz = null;

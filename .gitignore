@@ -22,10 +22,3 @@ resposta-ticket-github.md
 # `npm i --no-save acorn acorn-walk`, e a pasta e descartavel. Sem esta linha
 # ela aparece em todo `git status` de quem roda a varredura.
 node_modules/
-
-# OS IDS DO METABASE, e nao a chave: o `metabase.js` grava aqui o model, a
-# tabela e o painel que ele criou, para `trocar` saber o que substituir e
-# `painel` nao criar um segundo a cada execucao. Fica de fora do repositorio
-# porque os ids sao da INSTANCIA de quem rodou — commita-los faria a proxima
-# pessoa escrever no painel de outra instalacao.
-metabase-estado.json
