@@ -1165,6 +1165,7 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=03bc22afd7"></script>
+  <script src="sistema-obrigatorio.js?v=7a27f8d016"></script>
   <script src="deck-grafico.js?v=30e803d757"></script>
   <script src="deck-fundo.js?v=050a7db483"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
@@ -3097,8 +3098,7 @@ async function saveViaProxy(tentativa = 1) {
       const culpado = corpo && Array.isArray(corpo.itens) && corpo.itens[0];
       if (corpo && corpo.error === 'sem_sistema' && culpado && culpado.id &&
           levaAoCampo(culpado.id, 'm-tema',
-                      'Escolha o sistema antes de planejar — sem ele a demanda fica ' +
-                      'de fora do filtro, do gráfico e de todo relatório por sistema.')) {
+                      window.SISTEMA ? SISTEMA.MOTIVO : corpo.detail)) {
         showSaving(false);
         return false;
       }
@@ -11227,29 +11227,29 @@ async function saveMelhoria() {
  * o estado. Demanda que JÁ estava alocada sem sistema não é barrada — senão uma
  * pendência antiga prenderia quem só queria salvar um texto. O retrato do
  * servidor (`_baseMelhorias`) é o que permite distinguir as duas coisas aqui. */
-const ETAPAS_ALOCADA_UI = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+/* A REGRA MORA NO `sistema-obrigatorio.js`, e não aqui. Ela nasceu escrita
+   nesta página; quando o painel Dev pediu a mesma jornada, manter uma segunda
+   cópia à mão daria três versões de uma regra só. Ver a nota do módulo.
+
+   O que sobra desta tela é o RETRATO: o módulo compara o que vai ser gravado
+   com o que está no servidor, e no Admin esse "antes" é o `_baseMelhorias`,
+   que guarda cada demanda como JSON de quando ela foi lida. */
+function retratoDoServidor() {
+  const melhorias = [];
+  if (_baseMelhorias) {
+    _baseMelhorias.forEach(txt => {
+      // Retrato ilegível é retrato ausente — e ausente cobra a mais, nunca a
+      // menos, porque a demanda passa a contar como entrando agora.
+      try { melhorias.push(JSON.parse(txt)); } catch (_) {}
+    });
+  }
+  return { melhorias };
+}
 
 function preVooObrigatorio() {
-  const temas = new Set((state.temas || []).map(t => t && t.id).filter(Boolean));
-  const temSistema = (m) => !!(m && m.tema_id && temas.has(m.tema_id));
-  for (const m of (state.melhorias || [])) {
-    if (!m || m.oculto || m.mesclado_em) continue;
-    if (!ETAPAS_ALOCADA_UI.includes(String(m.status_planejamento || ''))) continue;
-    if (temSistema(m)) continue;
-    // Já estava assim no servidor? Então não foi esta edição que criou o
-    // problema, e o servidor também não vai barrar.
-    const base = _baseMelhorias && _baseMelhorias.get(m.id);
-    if (base) {
-      try {
-        const v = JSON.parse(base);
-        if (ETAPAS_ALOCADA_UI.includes(String(v.status_planejamento || '')) && !temSistema(v)) continue;
-      } catch (_) { /* retrato ilegível: trata como novo, que é o lado seguro */ }
-    }
-    return { id: m.id, campo: 'm-tema',
-             motivo: 'Escolha o sistema antes de planejar — sem ele a demanda fica ' +
-                     'de fora do filtro, do gráfico e de todo relatório por sistema.' };
-  }
-  return null;
+  if (!window.SISTEMA) return null;   // módulo não carregou: o Worker ainda barra
+  return SISTEMA.primeiro({ temas: state.temas || [], melhorias: state.melhorias || [] },
+                          retratoDoServidor(), 'm-tema');
 }
 
 /* Abre a demanda, vai para a aba certa e põe o cursor no campo — com um realce

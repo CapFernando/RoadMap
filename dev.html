@@ -475,6 +475,7 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=03bc22afd7"></script>
+  <script src="sistema-obrigatorio.js?v=7a27f8d016"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
@@ -2586,6 +2587,28 @@ function applyData(data) {
   rotaAbrirDaURL();
 }
 
+/* Abre a demanda culpada e põe o cursor no campo que falta, com um realce que
+   dura o suficiente para o olho achar e some sozinho. Sem o realce, o campo
+   focado passa despercebido num formulário desta altura.
+
+   Gêmeo do `levaAoCampo` do Admin — o que muda é só qual modal abre. A regra que
+   decide QUEM abrir é compartilhada (`sistema-obrigatorio.js`); isto aqui é o
+   HTML de cada tela, que não dá para compartilhar nem faria sentido. */
+function levaAoCampo(id, campo, motivo) {
+  try { openEditDemand(id); } catch (_) { return false; }
+  setTimeout(() => {
+    const el = document.getElementById(campo);
+    if (!el) return;
+    try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+    try { el.focus(); } catch (_) {}
+    const antes = el.style.boxShadow;
+    el.style.boxShadow = '0 0 0 3px var(--amber, #FBBF24)';
+    setTimeout(() => { el.style.boxShadow = antes; }, 2600);
+  }, 120);
+  if (motivo) toast(motivo, 'err');
+  return true;
+}
+
 async function saveToGitHub(patch, opts = {}) {
   // Modo proxy: navegador monta o estado completo e o Worker só grava (leve, sem token)
   if (ADMIN_PROXY_URL) {
@@ -2598,6 +2621,11 @@ async function saveToGitHub(patch, opts = {}) {
       if (!Array.isArray(server.melhorias) || !server.melhorias.length) {
         throw new Error('Gravação abortada por segurança: leitura do servidor veio vazia.');
       }
+      /* O RETRATO DE ANTES, guardado antes do patch entrar. É metade do par que
+         a regra do sistema obrigatório precisa: sem ele não há como distinguir
+         "acabou de subir para Planejado sem sistema" de "está assim há meses" —
+         e travar por estado prenderia quem só queria salvar um texto. */
+      const antesDoPatch = server.melhorias.slice();
       server.melhorias = server.melhorias.map(m => patch[m.id] ? { ...m, ...patch[m.id] } : m);
       // Só cria registro novo se o patch for uma melhoria completa. Patches são
       // parciais (apenas campos alterados); empurrá-los criava itens sem
@@ -2608,6 +2636,23 @@ async function saveToGitHub(patch, opts = {}) {
         if (p && p.id && typeof p.titulo === 'string' && p.titulo.trim()) server.melhorias.push(p);
       });
       if (opts.temas !== undefined) server.temas = opts.temas;
+      /* ═══ O QUE FALTA É COBRADO AQUI, E NÃO NA RECUSA ═════════════════════
+       *
+       * Mesma jornada do Admin, e no mesmo lugar: dentro de quem publica, e não
+       * em cada chamador. São ONZE caminhos que gravam nesta tela, e o que
+       * expõe não é o formulário — ele já exige o sistema na linha do
+       * `resolveTemaSelecao`. É o ARRASTE do quadro: mover para Planejado uma
+       * demanda que nasceu sem sistema muda `status_planejamento` sem passar
+       * por formulário nenhum, e o servidor recusava a gravação inteira.
+       *
+       * O par que a regra precisa está pronto bem aqui: `server` já é o estado
+       * depois do patch, e `antes` é o mesmo estado sem ele. É exatamente o par
+       * que o Worker compara — por isso a conferência não pode discordar dele
+       * por construção, e não só por teste. */
+      if (window.SISTEMA) {
+        const falta = SISTEMA.primeiro(server, { melhorias: antesDoPatch }, 'n-tema');
+        if (falta) { levaAoCampo(falta.id, falta.campo, falta.motivo); return false; }
+      }
       // Versao sobre a qual o patch foi aplicado (leitura fresca, logo acima)
       const baseVersao = server.atualizado_em || null;
       const res = await fetch(ADMIN_PROXY_URL, {
@@ -2622,6 +2667,16 @@ async function saveToGitHub(patch, opts = {}) {
         if (res.status === 409 && corpo && corpo.error === 'conflito' && !opts._retry) {
           showSaving(false);
           return saveToGitHub(patch, { ...opts, _retry: true });
+        }
+        /* O SERVIDOR AINDA PODE RECUSAR: outra aba gravou, ou a regra é mais
+           nova que esta tela. Quando ele diz QUAL demanda, leva-se até ela em
+           vez de repetir o texto — é a mesma jornada, pela outra porta. O
+           `itens[].id` existe justamente para isto. */
+        const culpado = corpo && Array.isArray(corpo.itens) && corpo.itens[0];
+        if (corpo && corpo.error === 'sem_sistema' && culpado && culpado.id &&
+            levaAoCampo(culpado.id, 'n-tema',
+                        window.SISTEMA ? SISTEMA.MOTIVO : corpo.detail)) {
+          return false;
         }
         let msg = 'Falha ao salvar';
         if (corpo) {

@@ -96,14 +96,27 @@ const CATALOGO = fs.readFileSync('catalogo.js', 'utf8');
 const FILA = require('./fila.js');   // a conta da fila, executada e nao regexada
 const VINCULO = require('./vinculo.js');   // idem, para a regra do vinculo
 const PRZM = require('./prazo.js');        // e a regra do prazo, para a rede do limbo
+const SISTEMA = require('./sistema-obrigatorio.js');   // o sistema obrigatorio, executado
+const SISTEMAJS = fs.readFileSync('sistema-obrigatorio.js', 'utf8');
 const TEMA = lerTela('tema.css');
 
-// Corpo de uma funcao, por contagem de chaves.
+/* Corpo de uma funcao, por contagem de chaves.
+ *
+ * A CONTAGEM COMECA NO FIM DA ASSINATURA, e nao no comeco. Procurar a primeira
+ * `{` a partir do indice da assinatura parece igual e nao e: numa assinatura com
+ * parametro opcional — `saveToGitHub(patch, opts = {}) {` — a primeira chave e a
+ * do `{}`, que fecha no caractere seguinte. O corpo devolvido era a propria
+ * assinatura, e SEIS invariantes passaram a medir uma string vazia, dando
+ * "FALHOU" em codigo correto. */
 function corpo(src, assinatura) {
   const i = src.indexOf(assinatura);
   if (i < 0) return null;
   let d = 0;
-  for (let k = src.indexOf('{', i); k < src.length; k++) {
+  const chaveNaAssinatura = assinatura.lastIndexOf('{');
+  const inicio = chaveNaAssinatura >= 0
+    ? i + chaveNaAssinatura            // a chave do corpo ja veio na assinatura
+    : src.indexOf('{', i + assinatura.length);   // assinatura sem chave: procura adiante
+  for (let k = inicio; k < src.length; k++) {
     if (src[k] === '{') d++;
     else if (src[k] === '}') { d--; if (!d) return src.slice(i, k + 1); }
   }
@@ -15429,6 +15442,34 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   sec('Admin: a jornada leva ao campo, em vez de avisar');
   {
     const VIA = corpo(ADMIN, 'async function saveViaProxy(tentativa = 1) {') || '';
+    const DEVSAVE = corpo(DEV, 'async function saveToGitHub(patch, opts = {}) {') || '';
+
+    /* ══ A REGRA E UMA SO, E NAO UMA POR TELA ══════════════════════════════
+     *
+     * Ela nasceu escrita dentro do admin.html. Quando o painel Dev pediu a mesma
+     * jornada, uma segunda copia daria TRES versoes de uma regra so — e esta
+     * base ja pagou essa conta: a de Sistema/Modulo morou em quatro copias, "e e
+     * exatamente por isso que a lista divergiu entre as telas".
+     *
+     * Sobram duas: o modulo e a do Worker, que duplica porque nao importa nada.
+     * Uma terceira copia escrita a mao em qualquer das telas e o que isto barra. */
+    ok(!/for \(const m of \(state\.melhorias \|\| \[\]\)\)[\s\S]{0,400}tema_id/.test(ADMIN),
+       'o Admin nao tem mais copia propria da regra — ele delega');
+    ok(/SISTEMA\.primeiro\(/.test(ADMIN) && /SISTEMA\.primeiro\(/.test(DEV),
+       'as duas telas chamam a MESMA regra');
+    ok(/sistema-obrigatorio\.js/.test(ADMIN) && /sistema-obrigatorio\.js/.test(DEV),
+       'e as duas carregam o modulo');
+    /* A FRASE TAMBEM E UMA SO — mesmo motivo do `abertura.js`: duas telas
+       dizendo a mesma recusa com palavras diferentes ensinam que a regra
+       "depende da tela". */
+    /* Medido SEM COMENTARIO: as duas paginas contam, em comentario, a recusa que
+       originou isto ("Escolha o sistema antes de planejar: mufxdq9ocnh7k27dbb").
+       Procurar no arquivo cru acusava a propria explicacao — e a sexta vez nesta
+       base que um comentario e confundido com o codigo que ele explica. */
+    ok(/MOTIVO/.test(SISTEMAJS) && /MOTIVO/.test(semComentario(ADMIN) + semComentario(DEV)) &&
+       !/Escolha o sistema antes de planejar/.test(semComentario(ADMIN)) &&
+       !/Escolha o sistema antes de planejar/.test(semComentario(DEV)),
+       'e o texto da recusa mora no modulo, e nao copiado em cada tela');
 
     /* ── A CONFERENCIA ACONTECE ANTES DE ENVIAR ──
        Depois da recusa ja e tarde: a pessoa descobriu o que falta por uma
@@ -15441,6 +15482,61 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e leva a pessoa ate o campo, em vez de mostrar texto');
     ok(/return false;/.test(VIA.slice(iPre, iPre + 400)),
        'e nao chega a chamar o servidor — a requisicao so existiria para ser recusada');
+
+    /* ══ E NO PAINEL DEV, NO MESMO LUGAR: DENTRO DE QUEM PUBLICA ═══════════
+     *
+     * Sao ONZE caminhos que gravam naquela tela. O que expoe nao e o formulario
+     * — ele ja exige o sistema no `resolveTemaSelecao` —, e o ARRASTE do quadro:
+     * mover para Planejado uma demanda que nasceu sem sistema muda
+     * `status_planejamento` sem passar por formulario nenhum. Regra que mora em
+     * cada chamador e regra que o proximo chamador esquece. */
+    const iPreDev = DEVSAVE.indexOf('SISTEMA.primeiro(');
+    const iFetchDev = DEVSAVE.indexOf('fetch(ADMIN_PROXY_URL');
+    ok(iPreDev > 0 && iPreDev < iFetchDev,
+       'o painel Dev tambem confere ANTES de enviar, dentro do publicador');
+    ok(/levaAoCampo\(falta\.id, falta\.campo, falta\.motivo\)/.test(DEVSAVE) &&
+       /return false;/.test(DEVSAVE.slice(iPreDev, iPreDev + 300)),
+       'e leva ao campo sem chamar o servidor');
+    /* O PAR CERTO. `server.melhorias` ja esta patcheado quando a conferencia
+       roda; comparar contra ele mesmo faria toda transicao parecer estado
+       antigo, e a conferencia nunca barraria nada. O retrato tem de ser
+       guardado ANTES do patch. */
+    const iAntes = DEVSAVE.indexOf('const antesDoPatch = server.melhorias.slice()');
+    const iPatch = DEVSAVE.indexOf('patch[m.id] ? { ...m, ...patch[m.id] } : m');
+    ok(iAntes > 0 && iAntes < iPatch,
+       'e o retrato de "antes" e guardado antes do patch entrar');
+    ok(/SISTEMA\.primeiro\(server, \{ melhorias: antesDoPatch \}/.test(DEVSAVE),
+       'e e ele que vai para a regra, e nao o estado ja patcheado');
+    ok(/corpo\.error === 'sem_sistema' && culpado && culpado\.id/.test(DEVSAVE) &&
+       DEVSAVE.indexOf("if (corpo && corpo.error === 'sem_sistema'") >= 0,
+       'e se o servidor recusar mesmo assim, o painel Dev tambem leva ate la');
+    /* O CAMPO E O DE CADA TELA. `m-tema` no Admin, `n-tema` no painel — o HTML
+       nao da para compartilhar, e trocar os dois poria o foco num campo que nao
+       existe, falhando calado. */
+    /* E O CAMPO EXISTE NA TELA QUE O APONTA.
+     *
+     * Trocar `n-tema` por `m-tema` no painel Dev nao da erro: o `levaAoCampo`
+     * faz `if (!el) return;`, entao a demanda abre e o cursor simplesmente nao
+     * vai a lugar nenhum — a jornada morre calada, que e o pior jeito de
+     * quebrar. Conferir que cada tela cita o SEU id nao bastava: o painel cita
+     * `n-tema` em dois lugares, e a sabotagem que trocou um so passou.
+     *
+     * Entao a invariante e outra: todo campo que qualquer das duas telas manda
+     * para a jornada tem de ser um `id=` daquela mesma pagina. */
+    const camposDaJornada = (tela) => [...new Set(
+      [...semComentario(tela).matchAll(/(?:SISTEMA\.primeiro\([^;]*?|levaAoCampo\([^;]*?),\s*'([a-z]-[a-z-]+)'/g)]
+        .map(m => m[1]))];
+    const orfaos = [];
+    [['admin.html', ADMIN], ['dev.html', DEV]].forEach(([nome, tela]) => {
+      const campos = camposDaJornada(tela);
+      if (!campos.length) { orfaos.push(nome + ': nenhum campo declarado'); return; }
+      campos.forEach(c => {
+        if (tela.indexOf('id="' + c + '"') < 0) orfaos.push(nome + ' aponta para ' + c);
+      });
+    });
+    ok(orfaos.length === 0,
+       'e o campo que cada tela aponta existe NELA — id trocado falharia calado',
+       orfaos.join(' ; ') || 'm-tema no Admin, n-tema no painel Dev');
 
     /* ── A TRAVA DO SERVIDOR CONTINUA ──
        Ela e a regra de verdade: quem grava por fora da tela (endpoint, outra aba
@@ -15464,10 +15560,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       (fonte.match(new RegExp('const ' + nome + ' = (\\[[^\\]]*\\])')) || [, '[]'])[1]
         .replace(/'/g, '"'));
     const ETAPAS_W = listaDe(W, 'ETAPAS_ALOCADA');
-    const ETAPAS_UI = listaDe(ADMIN, 'ETAPAS_ALOCADA_UI');
+    const ETAPAS_UI = SISTEMA.ETAPAS;
     ok(ETAPAS_W.length === 4 && ETAPAS_UI.join('|') === ETAPAS_W.join('|'),
-       'a tela e o servidor cobram o sistema nas MESMAS etapas',
-       'tela [' + ETAPAS_UI + '] servidor [' + ETAPAS_W + ']');
+       'as telas e o servidor cobram o sistema nas MESMAS etapas',
+       'modulo [' + ETAPAS_UI + '] servidor [' + ETAPAS_W + ']');
     const pegaSem = new Function('ETAPAS_ALOCADA',
       SEM + '; return entrandoAlocadaSemSistema;')(ETAPAS_W);
     const r1 = pegaSem({ temas: [{ id: 't1' }],
@@ -15511,8 +15607,6 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * E a invariante que importa. Se a tela barrar o que o servidor aceita, a
      * pessoa fica presa por uma regra que nao existe; se deixar passar o que ele
      * barra, a jornada volta a ser descobrir pelo erro. */
-    const preVoo = new Function('state', '_baseMelhorias', 'ETAPAS_ALOCADA_UI',
-      corpo(ADMIN, 'function preVooObrigatorio() {') + '; return preVooObrigatorio;');
     const TEMAS = [{ id: 't1', nome: 'AXCred - Cobrança' }];
     const casos = [
       ['nova, em Planning, sem sistema',
@@ -15534,26 +15628,82 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ];
     const divergiram = [];
     casos.forEach(([nome, m, noServidor, esperaBarrar]) => {
-      const base = new Map(noServidor ? [[m.id, JSON.stringify(noServidor)]] : []);
-      const daTela = !!preVoo({ temas: TEMAS, melhorias: [m] }, base, ETAPAS_UI)();
-      const doServidor = pegaSem({ temas: TEMAS, melhorias: [m] },
-                                 { melhorias: noServidor ? [noServidor] : [] }).length > 0;
+      const depois = { temas: TEMAS, melhorias: [m] };
+      const antes = { melhorias: noServidor ? [noServidor] : [] };
+      // O MODULO, executado — e nao um regex sobre ele.
+      const daTela = SISTEMA.presos(depois, antes).length > 0;
+      // O WORKER, executado — a copia que existe porque o isolate nao importa nada.
+      const doServidor = pegaSem(depois, antes).length > 0;
       if (daTela !== esperaBarrar || doServidor !== esperaBarrar) {
         divergiram.push(nome + ' (tela ' + (daTela ? 'barra' : 'passa') +
                         ', servidor ' + (doServidor ? 'barra' : 'passa') + ')');
       }
     });
     ok(divergiram.length === 0,
-       'a conferencia da tela e a trava do servidor concordam em todos os casos',
+       'o modulo e a trava do servidor concordam em todos os casos',
        divergiram.join(' ; ') || casos.length + ' casos conferidos');
+
+    /* E O ROTULO TAMBEM E O MESMO NOS DOIS. Se divergisse, a pessoa leria um
+       nome ao ser barrada pela tela e outro ao ser barrada pelo servidor — e
+       concluiria que sao dois problemas. */
+    const rotulosDiferentes = [
+      { id: 'z1', titulo: 'Relatório de garantias', status_planejamento: 'planejado' },
+      { id: 'z2', codigo: 'AX-99', titulo: 'Com código', status_planejamento: 'planejado' },
+      { id: 'z3', status_planejamento: 'planejado' },
+    ].filter(m => {
+      const a = SISTEMA.presos({ temas: TEMAS, melhorias: [m] }, { melhorias: [] })[0];
+      const b = pegaSem({ temas: TEMAS, melhorias: [m] }, { melhorias: [] })[0];
+      return !a || !b || a.rotulo !== b.rotulo || a.id !== b.id;
+    });
+    ok(rotulosDiferentes.length === 0,
+       'e nomeiam a demanda com o MESMO rotulo',
+       rotulosDiferentes.map(m => m.id).join(', ') || '3 formas conferidas');
 
     /* ── A TRANSICAO, E NAO O ESTADO ──
        Demanda que JA estava alocada sem sistema nao e barrada: senao uma
        pendencia antiga prenderia quem so queria salvar um texto. E o mesmo
-       criterio das horas e do responsavel. */
-    const PRE = corpo(ADMIN, 'function preVooObrigatorio() {') || '';
-    ok(/_baseMelhorias && _baseMelhorias\.get\(m\.id\)/.test(PRE),
-       'a tela usa o retrato do servidor para distinguir transicao de estado');
+       criterio das horas e do responsavel. Provado executando, e nao lendo: e
+       o caso 'ja estava alocada sem sistema' la de cima, aqui isolado para
+       falhar com nome proprio quando quebrar. */
+    const soMudouTexto = SISTEMA.presos(
+      { temas: TEMAS, melhorias: [{ id: 'e', titulo: 'Novo', status_planejamento: 'planejado' }] },
+      { melhorias: [{ id: 'e', titulo: 'Velho', status_planejamento: 'planejado' }] });
+    ok(soMudouTexto.length === 0,
+       'quem ja estava alocado sem sistema nao prende quem so editou o texto');
+    const semRetrato = SISTEMA.presos(
+      { temas: TEMAS, melhorias: [{ id: 'e', titulo: 'Novo', status_planejamento: 'planejado' }] },
+      null);
+    ok(semRetrato.length === 1,
+       'e sem retrato do servidor cobra-se a mais, nunca a menos');
+
+    /* ══ E O ADMIN ENTREGA O RETRATO DE VERDADE ════════════════════════════
+     *
+     * A regra distingue transicao de estado — mas so se quem a chama passar o
+     * "antes". Trocar `retratoDoServidor()` por `{ melhorias: [] }` nao quebra
+     * nada visivel e nenhum regex percebe: a regra continua correta, e o Admin
+     * passa a barrar por ESTADO. Efeito: qualquer demanda antiga alocada sem
+     * sistema tranca TODA publicacao, e a pessoa que so queria salvar um texto
+     * fica presa a um problema que nao criou. Esta sabotagem passou em silencio
+     * ate esta invariante existir.
+     *
+     * Por isso aqui se EXECUTA o par do Admin — as duas funcoes como estao no
+     * arquivo — em vez de ler o texto delas. */
+    const preVooAdmin = new Function('window', 'SISTEMA', 'state', '_baseMelhorias',
+      corpo(ADMIN, 'function retratoDoServidor() {') + '\n' +
+      corpo(ADMIN, 'function preVooObrigatorio() {') + '\n' +
+      '; return preVooObrigatorio;');
+    const jaEra = { id: 'velha', titulo: 'Antiga sem sistema', status_planejamento: 'planejado' };
+    const rodaAdmin = (melhorias, base) => preVooAdmin(
+      { SISTEMA: SISTEMA }, SISTEMA, { temas: TEMAS, melhorias: melhorias }, base)();
+    ok(!rodaAdmin([jaEra], new Map([['velha', JSON.stringify(jaEra)]])),
+       'o Admin nao tranca a publicacao por causa de pendencia antiga');
+    ok(!!rodaAdmin([{ id: 'nova', titulo: 'Nova', status_planejamento: 'planejado' }], new Map()),
+       'mas barra a que esta entrando agora');
+    const subiu = rodaAdmin(
+      [{ id: 's', titulo: 'Subiu', status_planejamento: 'planejado' }],
+      new Map([['s', JSON.stringify({ id: 's', titulo: 'Subiu', status_planejamento: 'planning' })]]));
+    ok(subiu && subiu.id === 's' && subiu.campo === 'm-tema',
+       'e barra quem subiu de Planning para Planejado, apontando o campo');
   }
 
   let erroPz = null;
