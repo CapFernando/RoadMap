@@ -1437,7 +1437,28 @@ function entrandoAlocadaSemSistema(recebido, servidor) {
        horas e do responsavel. */
     if (velha && ETAPAS_ALOCADA.includes(String(velha.status_planejamento || '')) &&
         !(velha.tema_id && temas.has(velha.tema_id))) continue;
-    presos.push(m.codigo || m.id);
+    /* ═══ O QUE VOLTA E O NOME DA DEMANDA, E NAO O ID INTERNO ═══════════════
+     *
+     * Aqui estava `m.codigo || m.id`, e o `||` e o defeito: demanda NOVA nao tem
+     * codigo — ele nasce na gravacao, no servidor —, entao sobrava o id.
+     *
+     * Aconteceu em 24/09: a recusa chegou a tela como "Escolha o sistema antes
+     * de planejar: mufxdq9ocnh7k27dbb". Quem estava na tela nao tinha como saber
+     * de que demanda se tratava; pior, a demanda que ela acabara de escrever
+     * estava correta — quem bloqueou foi OUTRA, criada na mesma aba, porque o
+     * `publish` manda o estado inteiro e uma recusa barra tudo.
+     *
+     * Volta objeto, e nao texto: o `id` deixa a tela ABRIR a demanda culpada, que
+     * e a unica coisa que resolve de verdade. O `rotulo` e o que se le. */
+    const titulo = String(m.titulo || '').trim();
+    presos.push({
+      id: m.id || '',
+      codigo: m.codigo || '',
+      titulo: titulo,
+      rotulo: m.codigo
+        ? m.codigo + (titulo ? ' · ' + titulo.slice(0, 60) : '')
+        : (titulo ? '"' + titulo.slice(0, 60) + '"' : '(demanda sem título)'),
+    });
   }
   return presos;
 }
@@ -5220,8 +5241,10 @@ export default {
       const semSistemaPub = entrandoAlocadaSemSistema(data, antesPub);
       if (semSistemaPub.length) {
         return json({ error: 'sem_sistema',
-                      codigos: semSistemaPub,
-                      detail: 'Escolha o sistema antes de planejar: ' + semSistemaPub.join(', ') +
+                      itens: semSistemaPub,
+                      codigos: semSistemaPub.map(x => x.codigo || x.titulo),
+                      detail: 'Escolha o sistema antes de planejar: ' +
+                              semSistemaPub.map(x => x.rotulo).join(', ') +
                               '. Sem ele a demanda fica de fora do filtro, do grafico e de ' +
                               'todo relatorio por sistema.' }, 400, headers);
       }
@@ -5370,8 +5393,10 @@ export default {
       const semSistema = entrandoAlocadaSemSistema(data, antesDev);
       if (semSistema.length) {
         return json({ error: 'sem_sistema',
-                      codigos: semSistema,
-                      detail: 'Escolha o sistema antes de planejar: ' + semSistema.join(', ') +
+                      itens: semSistema,
+                      codigos: semSistema.map(x => x.codigo || x.titulo),
+                      detail: 'Escolha o sistema antes de planejar: ' +
+                              semSistema.map(x => x.rotulo).join(', ') +
                               '. Sem ele a demanda fica de fora do filtro, do grafico e de ' +
                               'todo relatorio por sistema.' }, 400, headers);
       }

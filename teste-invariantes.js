@@ -15292,6 +15292,270 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'cabecalho');
   }
 
+  /* === O TRABALHO NAO PODE FICAR SO NA MEMORIA DA ABA ==================
+
+     "Ultima gravacao de task deu erro." / "Ficou sem numero."
+
+     O codigo AX-### nasce NO SERVIDOR, na gravacao. Demanda que nao publicou
+     nao tem numero — entao "ficou sem numero" e o sintoma de uma publicacao
+     recusada, e nao um defeito a parte. O que importa e o que acontece com o
+     texto digitado quando isso ocorre.
+
+     A copia local ja existia, e nasceu de um incidente anterior ("uma demanda
+     registrada e nao encontrada no dia seguinte"). O furo era OUTRO: ela era
+     chamada POR FORA, no caminho do modal. Sao quinze lugares que publicam, e os
+     outros catorze nao chamavam — inclusive o arraste do Kanban, que marca a
+     demanda como pendente e publica direto.
+
+     Regra que mora em cada chamador e regra que o proximo chamador esquece. */
+  sec('Admin: a copia local de quem publica');
+  {
+    const VIA = corpo(ADMIN, 'async function saveViaProxy(tentativa = 1) {') || '';
+    const GIT = corpo(ADMIN, 'async function saveToGitHub(attempt = 1) {') || '';
+    ok(!!VIA && !!GIT, 'os dois caminhos de publicacao foram achados');
+
+    /* ── A COPIA E FEITA ANTES DE TENTAR ──
+       Se a aba morrer no meio da requisicao, o que seria publicado ja esta no
+       navegador. Depois da tentativa nao serve: o meio do caminho e justamente
+       onde se perde. */
+    [['saveViaProxy', VIA], ['saveToGitHub', GIT]].forEach(([nome, corpoFn]) => {
+      const iSalva = corpoFn.indexOf('rascunhoSalvar();');
+      const iTenta = corpoFn.indexOf('fetch(');
+      ok(iSalva > 0 && iSalva < iTenta,
+         'o `' + nome + '` guarda a copia ANTES de tentar publicar');
+      ok((corpoFn.match(/rascunhoSalvar\(\);/g) || []).length >= 2,
+         'e guarda de novo quando falha — entre a copia e o erro a tela pode ter ' +
+         'mudado (' + nome + ')');
+      ok(/rascunhoLimpar\(\);/.test(corpoFn),
+         'e a apaga quando publica, para a proxima abertura nao avisar sobre ' +
+         'pendencia que nao existe (' + nome + ')');
+    });
+
+    /* ── E NENHUM CHAMADOR PRECISA LEMBRAR ──
+       Esta e a invariante que impede o furo de voltar: a garantia mora em quem
+       publica, e nao na disciplina de quem chama. */
+    const AC = semComentario(ADMIN);
+    const chamadores = (AC.match(/(saveViaProxy|saveToGitHub)\(/g) || []).length;
+    ok(chamadores > 10,
+       'ha muitos caminhos de publicacao — e por isso a garantia nao pode ser de ' +
+       'cada um deles', chamadores + ' chamadas');
+
+    /* ── A COPIA GUARDA O QUE ESTA PENDENTE, E SO ISSO ──
+       Guardar o estado inteiro (1,6 MB) estouraria o `localStorage` em algumas
+       maquinas, e o que se perde numa gravacao recusada e o que estava pendente. */
+    const SALVA = corpo(ADMIN, 'function rascunhoSalvar() {') || '';
+    ok(/\[\.\.\._dirtyMelhoriaIds\]/.test(SALVA),
+       'a copia leva as demandas marcadas como pendentes, e nao a base inteira');
+    ok(/try \{/.test(SALVA) && /catch \(_\)/.test(SALVA),
+       'e `localStorage` indisponivel nao derruba a publicacao — aba anonima com ' +
+       'dados de site bloqueados estoura na escrita');
+
+    /* ══ E A VOLTA E CONFERIDA EXECUTANDO ══
+     *
+     * A restauracao compara por CONTEUDO, e nao so por id: uma demanda publicada
+     * com sucesso e depois editada de novo tem o mesmo id, e comparar so o id
+     * faria a copia antiga voltar por cima da nova. */
+    const REST = corpo(ADMIN, 'function rascunhoRestaurar() {') || '';
+    const LER = corpo(ADMIN, 'function rascunhoLer() {') || '';
+    const LIMPA = corpo(ADMIN, 'function rascunhoLimpar() {') || '';
+    const guardado = {};
+    const fakeLocal = {
+      getItem: (k) => (k in guardado ? guardado[k] : null),
+      setItem: (k, v) => { guardado[k] = String(v); },
+      removeItem: (k) => { delete guardado[k]; },
+    };
+    const monta = (extra) => new Function('localStorage', 'RASCUNHO_KEY', 'state',
+      'toast', 'renderAll', 'bannerPendentes', '_dirtyMelhoriaIds', 'saida',
+      LER + '\n' + LIMPA + '\n' + REST + '\n' + extra);
+
+    // Caso 1: o rascunho tem uma demanda que o servidor NAO conhece.
+    guardado['rm_admin_rascunho'] = JSON.stringify({
+      em: '2026-09-24T18:50:00.000Z',
+      itens: [{ id: 'x1', codigo: '', titulo: 'Flexibilizações - Operações' }],
+    });
+    let estado = { melhorias: [{ id: 'outro', codigo: 'AX-585', titulo: 'Outra' }] };
+    let sujos = new Set();
+    let avisou = '';
+    monta('rascunhoRestaurar(); saida.push(state.melhorias.length);')(
+      fakeLocal, 'rm_admin_rascunho', estado,
+      (t) => { avisou = t; }, () => {}, () => {}, sujos, []);
+    ok(estado.melhorias.length === 2 && sujos.has('x1'),
+       'a demanda que nao chegou ao servidor volta para a tela, marcada como ' +
+       'pendente', estado.melhorias.length + ' na tela');
+    ok(/não tinham sido publicadas/.test(avisou),
+       'e a tela diz que ela nao tinha sido publicada, em vez de reaparecer calada');
+
+    /* Caso 1b: o id EXISTE no servidor, mas com outro conteudo — a edicao nao
+       chegou. Comparar so pelo id daria "ja esta la" e jogaria fora o trabalho.
+       Esta era a sabotagem que passava em silencio. */
+    guardado['rm_admin_rascunho'] = JSON.stringify({
+      em: '2026-09-24T18:50:00.000Z',
+      itens: [{ id: 'y1', codigo: 'AX-500', titulo: 'Titulo NOVO, ainda nao publicado' }],
+    });
+    let est2 = { melhorias: [{ id: 'y1', codigo: 'AX-500', titulo: 'Titulo velho' }] };
+    let suj2 = new Set();
+    monta('rascunhoRestaurar();')(fakeLocal, 'rm_admin_rascunho', est2,
+      () => {}, () => {}, () => {}, suj2, []);
+    ok(est2.melhorias[0].titulo === 'Titulo NOVO, ainda nao publicado' && suj2.has('y1'),
+       'e a edicao que nao chegou volta mesmo com o id ja existindo no servidor — ' +
+       'a comparacao e por CONTEUDO', est2.melhorias[0].titulo);
+
+    // Caso 2: o rascunho ja esta no servidor, identico. Nada a restaurar.
+    guardado['rm_admin_rascunho'] = JSON.stringify({
+      em: '2026-09-24T18:50:00.000Z',
+      itens: [{ id: 'x1', codigo: 'AX-586', titulo: 'Flexibilizações - Operações' }],
+    });
+    estado = { melhorias: [{ id: 'x1', codigo: 'AX-586', titulo: 'Flexibilizações - Operações' }] };
+    sujos = new Set(); avisou = '';
+    monta('rascunhoRestaurar();')(fakeLocal, 'rm_admin_rascunho', estado,
+      (t) => { avisou = t; }, () => {}, () => {}, sujos, []);
+    ok(estado.melhorias.length === 1 && sujos.size === 0 && !avisou,
+       'e o que JA foi publicado nao volta nem avisa — a copia se apaga sozinha');
+    ok(!('rm_admin_rascunho' in guardado),
+       'inclusive limpando o navegador, para o aviso nao ressuscitar na proxima ' +
+       'abertura');
+  }
+
+  /* === O CAMPO OBRIGATORIO E COBRADO NA TELA, E NAO NA RECUSA ==========
+
+     "Melhore a jornada: em vez de dar erro, levar o usuario para o campo que e
+      obrigatorio o preenchimento."
+
+     Em 24/09 a recusa chegou assim: "Escolha o sistema antes de planejar:
+     mufxdq9ocnh7k27dbb". Tres problemas de uma vez — o aviso nomeava um ID
+     INTERNO; a demanda culpada era OUTRA, criada na mesma aba (o `publish` manda
+     o estado inteiro, entao uma recusa barra tudo); e, mesmo sabendo qual era,
+     ainda faltava acha-la no quadro. */
+  sec('Admin: a jornada leva ao campo, em vez de avisar');
+  {
+    const VIA = corpo(ADMIN, 'async function saveViaProxy(tentativa = 1) {') || '';
+
+    /* ── A CONFERENCIA ACONTECE ANTES DE ENVIAR ──
+       Depois da recusa ja e tarde: a pessoa descobriu o que falta por uma
+       mensagem de erro, que e exatamente o que se quer evitar. */
+    const iPre = VIA.indexOf('preVooObrigatorio()');
+    const iFetch = VIA.indexOf('fetch(');
+    ok(iPre > 0 && iPre < iFetch,
+       'a tela confere o campo obrigatorio ANTES de enviar');
+    ok(/levaAoCampo\(falta\.id, falta\.campo, falta\.motivo\)/.test(VIA),
+       'e leva a pessoa ate o campo, em vez de mostrar texto');
+    ok(/return false;/.test(VIA.slice(iPre, iPre + 400)),
+       'e nao chega a chamar o servidor — a requisicao so existiria para ser recusada');
+
+    /* ── A TRAVA DO SERVIDOR CONTINUA ──
+       Ela e a regra de verdade: quem grava por fora da tela (endpoint, outra aba
+       velha) tem de esbarrar nela tambem. A conferencia da tela e jornada, e nao
+       seguranca. */
+    ok(/entrandoAlocadaSemSistema\(data, antesPub\)/.test(W) &&
+       /entrandoAlocadaSemSistema\(data, antesDev\)/.test(W),
+       'e o servidor segue barrando nas duas portas — a da tela e a do dev');
+
+    /* ── A RECUSA NOMEIA A DEMANDA, E NAO O ID ──
+       `m.codigo || m.id` era o defeito: demanda NOVA nao tem codigo (ele nasce na
+       gravacao), entao sobrava o id. */
+    const SEM = corpo(W, 'function entrandoAlocadaSemSistema(recebido, servidor) {') || '';
+    ok(!/presos\.push\(m\.codigo \|\| m\.id\)/.test(SEM),
+       'a recusa nao devolve mais o id interno quando falta codigo');
+    /* AS DUAS LISTAS SAO LIDAS DOS ARQUIVOS, e nao escritas aqui. Enquanto o
+       teste ditava a lista para os dois lados, ele nunca poderia flagrar uma
+       divergencia ENTRE elas: dava para acrescentar `planning` so na tela e a
+       comparacao caso a caso seguia dizendo que os dois concordavam. */
+    const listaDe = (fonte, nome) => JSON.parse(
+      (fonte.match(new RegExp('const ' + nome + ' = (\\[[^\\]]*\\])')) || [, '[]'])[1]
+        .replace(/'/g, '"'));
+    const ETAPAS_W = listaDe(W, 'ETAPAS_ALOCADA');
+    const ETAPAS_UI = listaDe(ADMIN, 'ETAPAS_ALOCADA_UI');
+    ok(ETAPAS_W.length === 4 && ETAPAS_UI.join('|') === ETAPAS_W.join('|'),
+       'a tela e o servidor cobram o sistema nas MESMAS etapas',
+       'tela [' + ETAPAS_UI + '] servidor [' + ETAPAS_W + ']');
+    const pegaSem = new Function('ETAPAS_ALOCADA',
+      SEM + '; return entrandoAlocadaSemSistema;')(ETAPAS_W);
+    const r1 = pegaSem({ temas: [{ id: 't1' }],
+                         melhorias: [{ id: 'abc123', titulo: 'Relatório de garantias',
+                                       status_planejamento: 'planejado' }] },
+                       { melhorias: [] });
+    ok(r1.length === 1 && r1[0].rotulo.indexOf('Relatório de garantias') >= 0,
+       'demanda NOVA e nomeada pelo titulo', r1[0].rotulo);
+    ok(r1[0].id === 'abc123',
+       'e o id vem junto, para a tela conseguir ABRIR a demanda culpada');
+    const r2 = pegaSem({ temas: [{ id: 't1' }],
+                         melhorias: [{ id: 'x', codigo: 'AX-99', titulo: 'Já tem código',
+                                       status_planejamento: 'planejado' }] },
+                       { melhorias: [] });
+    ok(r2[0].rotulo.indexOf('AX-99') === 0,
+       'e quando ja ha codigo, ele vem na frente', r2[0].rotulo);
+    /* AS DUAS RECUSAS, E NAO "alguma delas". Sao duas portas — a da tela e a do
+       dev — e um `.test(W)` file-wide daria certo com UMA sO arrumada. Ja
+       aconteceu: a sabotagem que estragava a mensagem do dev passou em silencio
+       porque a da tela ainda dizia `x.rotulo`. */
+    const recusas = W.split("error: 'sem_sistema'").slice(1)
+      .map(t => t.slice(0, t.indexOf('}, 400, headers)')));
+    ok(recusas.length === 2,
+       'o servidor recusa sem sistema nas duas portas', recusas.length + ' recusas');
+    const frouxas = recusas.filter(
+      (r, i) => !/itens: semSistema/.test(r) || !/\.map\(x => x\.rotulo\)/.test(r));
+    ok(frouxas.length === 0,
+       'e as duas mensagens usam o rotulo, e mandam os itens para a tela agir',
+       frouxas.length + ' recusa(s) sem rotulo ou sem itens');
+
+    /* ── PELA OUTRA PORTA TAMBEM ──
+       O servidor ainda pode recusar (outra aba publicou, regra mais nova que a
+       tela). Quando ele diz QUAL, a tela leva ate la em vez de repetir o texto.
+       O `if (` grudado e de proposito: sem ele, um `if (false && …)` na frente
+       deixaria o texto intacto e a condicao morta. */
+    ok(VIA.indexOf("if (corpo && corpo.error === 'sem_sistema' && culpado && culpado.id") >= 0,
+       'e se o servidor recusar mesmo assim, a tela usa o id para levar ate la');
+
+    /* ══ E AS DUAS REGRAS CONCORDAM, CASO A CASO ══
+     *
+     * E a invariante que importa. Se a tela barrar o que o servidor aceita, a
+     * pessoa fica presa por uma regra que nao existe; se deixar passar o que ele
+     * barra, a jornada volta a ser descobrir pelo erro. */
+    const preVoo = new Function('state', '_baseMelhorias', 'ETAPAS_ALOCADA_UI',
+      corpo(ADMIN, 'function preVooObrigatorio() {') + '; return preVooObrigatorio;');
+    const TEMAS = [{ id: 't1', nome: 'AXCred - Cobrança' }];
+    const casos = [
+      ['nova, em Planning, sem sistema',
+       { id: 'a', status_planejamento: 'planning' }, null, false],
+      ['nova, em Planejado, SEM sistema',
+       { id: 'b', titulo: 'Sem sistema', status_planejamento: 'planejado' }, null, true],
+      ['nova, em Planejado, com sistema',
+       { id: 'c', status_planejamento: 'planejado', tema_id: 't1' }, null, false],
+      ['com tema_id que nao existe na lista de temas',
+       { id: 'd', titulo: 'Fantasma', status_planejamento: 'planejado', tema_id: 'tX' }, null, true],
+      ['ja estava alocada sem sistema, e so mudou o texto',
+       { id: 'e', titulo: 'Novo', status_planejamento: 'planejado' },
+       { id: 'e', titulo: 'Velho', status_planejamento: 'planejado' }, false],
+      ['subiu de Planning para Planejado sem sistema',
+       { id: 'f', titulo: 'Subiu', status_planejamento: 'planejado' },
+       { id: 'f', titulo: 'Subiu', status_planejamento: 'planning' }, true],
+      ['oculta, alocada e sem sistema',
+       { id: 'g', status_planejamento: 'planejado', oculto: true }, null, false],
+    ];
+    const divergiram = [];
+    casos.forEach(([nome, m, noServidor, esperaBarrar]) => {
+      const base = new Map(noServidor ? [[m.id, JSON.stringify(noServidor)]] : []);
+      const daTela = !!preVoo({ temas: TEMAS, melhorias: [m] }, base, ETAPAS_UI)();
+      const doServidor = pegaSem({ temas: TEMAS, melhorias: [m] },
+                                 { melhorias: noServidor ? [noServidor] : [] }).length > 0;
+      if (daTela !== esperaBarrar || doServidor !== esperaBarrar) {
+        divergiram.push(nome + ' (tela ' + (daTela ? 'barra' : 'passa') +
+                        ', servidor ' + (doServidor ? 'barra' : 'passa') + ')');
+      }
+    });
+    ok(divergiram.length === 0,
+       'a conferencia da tela e a trava do servidor concordam em todos os casos',
+       divergiram.join(' ; ') || casos.length + ' casos conferidos');
+
+    /* ── A TRANSICAO, E NAO O ESTADO ──
+       Demanda que JA estava alocada sem sistema nao e barrada: senao uma
+       pendencia antiga prenderia quem so queria salvar um texto. E o mesmo
+       criterio das horas e do responsavel. */
+    const PRE = corpo(ADMIN, 'function preVooObrigatorio() {') || '';
+    ok(/_baseMelhorias && _baseMelhorias\.get\(m\.id\)/.test(PRE),
+       'a tela usa o retrato do servidor para distinguir transicao de estado');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

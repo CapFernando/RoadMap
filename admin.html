@@ -2976,6 +2976,31 @@ function mesclaTemas(doServidor) {
 }
 
 async function saveViaProxy(tentativa = 1) {
+  /* ═══ A CÓPIA LOCAL É GARANTIA DESTA FUNÇÃO, E NÃO DE QUEM A CHAMA ═══════
+   *
+   * O rascunho existia e funcionava — mas só no caminho do modal, que chamava
+   * `rascunhoSalvar()` por fora antes e depois de publicar. São QUINZE lugares
+   * que publicam, e os outros catorze não chamavam. O mais grave era o arraste
+   * do Kanban: ele marca a demanda como pendente e publica direto, então uma
+   * falha ali deixava a mudança de coluna só na memória da aba.
+   *
+   * Regra que mora em cada chamador é regra que o próximo chamador esquece —
+   * e esta base já pagou isso com o prazo, a data de entrega e o agrupamento por
+   * raiz. Guardar aqui dentro cobre todo caminho que existe hoje e todo que
+   * vier, por construção.
+   *
+   * ANTES DE TENTAR, e não depois: se a aba morrer no meio da requisição, o que
+   * seria publicado já está no navegador. */
+  rascunhoSalvar();
+  /* ANTES DE ENVIAR, e não depois da recusa. A trava do servidor continua sendo
+     a regra; esta conferência existe para a pessoa não descobrir o que falta por
+     uma mensagem de erro. Ver `preVooObrigatorio`. */
+  const falta = preVooObrigatorio();
+  if (falta) {
+    showSaving(false);
+    levaAoCampo(falta.id, falta.campo, falta.motivo);
+    return false;
+  }
   showSaving(true);
   try {
     // Lê o estado atual do servidor (público) e incorpora itens de terceiros
@@ -3065,6 +3090,18 @@ async function saveViaProxy(tentativa = 1) {
         showSaving(false);
         return saveViaProxy(2);
       }
+      /* O SERVIDOR AINDA PODE RECUSAR: outra aba publicou, ou a regra é mais
+         nova que esta tela. Quando ele diz QUAL demanda, a tela leva até ela em
+         vez de repetir o texto — é a mesma jornada do pré-voo, pela outra porta.
+         O `itens[].id` existe justamente para isto. */
+      const culpado = corpo && Array.isArray(corpo.itens) && corpo.itens[0];
+      if (corpo && corpo.error === 'sem_sistema' && culpado && culpado.id &&
+          levaAoCampo(culpado.id, 'm-tema',
+                      'Escolha o sistema antes de planejar — sem ele a demanda fica ' +
+                      'de fora do filtro, do gráfico e de todo relatório por sistema.')) {
+        showSaving(false);
+        return false;
+      }
       let msg = 'Falha ao publicar';
       if (corpo) {
         msg = corpo.error === 'senha'     ? 'Sessão expirada — saia e entre novamente.'
@@ -3076,13 +3113,18 @@ async function saveViaProxy(tentativa = 1) {
     }
     _pollTs = state.atualizado_em;
     _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase();
+    // Publicado: a cópia local perde a razão de existir. Deixá-la faria a
+    // próxima abertura da tela avisar sobre pendência que não existe mais.
+    rascunhoLimpar();
     const errEl = document.getElementById('save-error'); if (errEl) errEl.style.display = 'none';
     toast('✅ Publicado!', 'ok');
     showSaving(false);
     return true;
   } catch (e) {
+    // Regrava: entre a cópia do início e o erro a tela pode ter mudado.
+    rascunhoSalvar();
     const errEl = document.getElementById('save-error');
-    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — sua alteração segue nesta tela. Tente publicar de novo.'; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar de novo.'; errEl.style.display = 'block'; }
     toast('Erro ao publicar: ' + e.message, 'err');
   }
   showSaving(false);
@@ -3091,6 +3133,9 @@ async function saveViaProxy(tentativa = 1) {
 
 async function saveToGitHub(attempt = 1) {
   if (!runtimeToken && ADMIN_PROXY_URL) return saveViaProxy();
+  // Mesma garantia do `saveViaProxy` — ver a nota lá. Este é o caminho que o
+  // arraste do Kanban usa quando ha token.
+  rascunhoSalvar();
   showSaving(true);
   try {
     // Busca SHA mais recente para evitar conflito
@@ -3166,6 +3211,7 @@ async function saveToGitHub(attempt = 1) {
     const data = await res.json();
     fileSha = data.content.sha;
     _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase(); // tudo publicado
+    rascunhoLimpar();
     toast('✅ Publicado!', 'ok');
   } catch (e) {
     showSaving(false);
@@ -3175,8 +3221,9 @@ async function saveToGitHub(attempt = 1) {
       await new Promise(r => setTimeout(r, 2000));
       return saveToGitHub(2);
     }
+    rascunhoSalvar();
     const errEl = document.getElementById('save-error');
-    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — seus dados estão seguros, tente publicar novamente.'; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar novamente.'; errEl.style.display = 'block'; }
     toast('Erro ao publicar: ' + e.message, 'err');
     return;
   }
@@ -11157,6 +11204,73 @@ async function saveMelhoria() {
 // Duas maneiras de salvar na mesma tela e uma delas mentindo no aviso e pior que
 // qualquer das duas isolada: a pessoa aprende que "salvar" salva, e um dia perde
 // trabalho na acao que era a excecao.
+/* ═══ O CAMPO OBRIGATÓRIO É COBRADO NA TELA, E NÃO NA RECUSA ═══════════════
+ *
+ * "Melhore a jornada: em vez de dar erro, levar o usuário para o campo que é
+ *  obrigatório o preenchimento."
+ *
+ * O que acontecia em 24/09: a pessoa escreveu uma demanda, clicou em Salvar, e
+ * recebeu "Escolha o sistema antes de planejar: mufxdq9ocnh7k27dbb". Três
+ * problemas de uma vez:
+ *
+ *   1. o aviso nomeava um ID INTERNO, que ninguém consegue resolver;
+ *   2. a demanda culpada era OUTRA, criada na mesma aba — o `publish` manda o
+ *      estado inteiro, então uma recusa barra tudo, inclusive o que estava certo;
+ *   3. e mesmo sabendo qual era, ainda faltava achá-la no meio do quadro.
+ *
+ * A trava do servidor continua — ela é a regra de verdade, e quem edita por
+ * fora da tela tem de esbarrar nela também. O que muda é que a tela deixa de
+ * DESCOBRIR o problema pela recusa: ela confere antes de enviar, abre a demanda
+ * culpada e põe o cursor no campo que falta.
+ *
+ * O CRITÉRIO É O MESMO DO SERVIDOR, e isso importa: ele barra a TRANSIÇÃO, e não
+ * o estado. Demanda que JÁ estava alocada sem sistema não é barrada — senão uma
+ * pendência antiga prenderia quem só queria salvar um texto. O retrato do
+ * servidor (`_baseMelhorias`) é o que permite distinguir as duas coisas aqui. */
+const ETAPAS_ALOCADA_UI = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+
+function preVooObrigatorio() {
+  const temas = new Set((state.temas || []).map(t => t && t.id).filter(Boolean));
+  const temSistema = (m) => !!(m && m.tema_id && temas.has(m.tema_id));
+  for (const m of (state.melhorias || [])) {
+    if (!m || m.oculto || m.mesclado_em) continue;
+    if (!ETAPAS_ALOCADA_UI.includes(String(m.status_planejamento || ''))) continue;
+    if (temSistema(m)) continue;
+    // Já estava assim no servidor? Então não foi esta edição que criou o
+    // problema, e o servidor também não vai barrar.
+    const base = _baseMelhorias && _baseMelhorias.get(m.id);
+    if (base) {
+      try {
+        const v = JSON.parse(base);
+        if (ETAPAS_ALOCADA_UI.includes(String(v.status_planejamento || '')) && !temSistema(v)) continue;
+      } catch (_) { /* retrato ilegível: trata como novo, que é o lado seguro */ }
+    }
+    return { id: m.id, campo: 'm-tema',
+             motivo: 'Escolha o sistema antes de planejar — sem ele a demanda fica ' +
+                     'de fora do filtro, do gráfico e de todo relatório por sistema.' };
+  }
+  return null;
+}
+
+/* Abre a demanda, vai para a aba certa e põe o cursor no campo — com um realce
+   que dura o suficiente para o olho achar, e some sozinho. Sem o realce, o campo
+   focado passa despercebido num formulário desta altura. */
+function levaAoCampo(id, campo, motivo) {
+  try { openModalMelhoria(id); } catch (_) { return false; }
+  try { mAba('dados'); } catch (_) {}
+  setTimeout(() => {
+    const el = document.getElementById(campo);
+    if (!el) return;
+    try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+    try { el.focus(); } catch (_) {}
+    const antes = el.style.boxShadow;
+    el.style.boxShadow = '0 0 0 3px var(--amber, #FBBF24)';
+    setTimeout(() => { el.style.boxShadow = antes; }, 2600);
+  }, 120);
+  if (motivo) toast(motivo, 'err');
+  return true;
+}
+
 /* ─── RASCUNHO LOCAL ───────────────────────────────────────────────
    Uma demanda registrada e nao encontrada no dia seguinte. A numeração provou
    que ela nunca chegou ao servidor: o código AX-NNN nasce NA GRAVAÇÃO, e a
