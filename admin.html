@@ -193,7 +193,20 @@
     /* colunas dividem o espaço disponível; só rolam na horizontal se a tela for estreita */
     .kb-col { flex: 1 1 0; min-width: 138px; background: var(--bg2, #161614); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 210px); }
     .kb-col-head { padding: 10px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg2, #161614); border-radius: 10px 10px 0 0; }
-    .kb-col-head .kb-count { font-size: 11px; font-weight: 600; background: var(--bg3, #252522); color: var(--text3); border-radius: 10px; padding: 1px 8px; }
+    /* O contador e botao: abre o filtro de producao daquela coluna.
+       `min-height:22px` em vez dos 16px que o texto pediria — alvo de clique
+       pequeno demais num cabecalho e onde se erra a mira. */
+    .kb-col-head .kb-count { font-size: 11px; font-weight: 600; background: var(--bg3, #252522); color: var(--text3); border-radius: 10px; padding: 2px 8px; min-height: 22px; border: 1px solid transparent; font-family: inherit; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+    .kb-col-head .kb-count:hover { background: var(--border, #3A3A36); color: var(--text); }
+    /* Filtro ligado: verde, como tudo que e leitura boa nesta casa — e com
+       borda, para nao depender so da cor. */
+    .kb-col-head .kb-count.filtrado { background: var(--green-bg, #1E4208); color: var(--green-tx, #B2E07A); border-color: var(--green-tx, #B2E07A); }
+    .kb-col-head .kb-count:focus-visible { outline: 2px solid var(--amber, #FBBF24); outline-offset: 2px; }
+    .kb-prod-menu { position: absolute; z-index: 1000; background: var(--bg2, #161614); border: 1px solid var(--border2, #3A3A36); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.45); display: flex; flex-direction: column; min-width: 152px; }
+    .kb-prod-item { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text2, #C9C9C4); font-size: 12px; font-family: inherit; padding: 7px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+    .kb-prod-item:hover { background: var(--bg3, #252522); color: var(--text); }
+    .kb-prod-item.on { color: var(--green-tx, #B2E07A); font-weight: 600; }
+    .kb-prod-item:focus-visible { outline: 2px solid var(--amber, #FBBF24); outline-offset: -2px; }
     .kb-col-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
     /* position:relative para a estrela poder ancorar no canto sem entrar no fluxo
        do titulo — dentro dele, ela mudaria a altura de todos os cards.
@@ -3337,6 +3350,14 @@ function matchProducao(m, filtro) {
   // Etapa GRAVADA: `statusEfetivo` derivaria `atrasado`, e uma concluida nunca
   // e atrasada — mas a regra fica explicita para nao depender disso.
   if (filtro === 'falta_subir') return !noAr && statusKey(m) === 'concluido';
+  /* `fora_ar` E SO PARA O FILTRO DA COLUNA, e por isso nao entra no
+     `PRODUCAO_BUCKETS` do select la de cima.
+     O argumento contra ele na barra continua de pe: solto, "nao esta no ar"
+     devolve a base inteira, porque demanda em Backlog tambem nao esta. Dentro de
+     UMA coluna esse argumento nao existe — a etapa ja esta fixada pela propria
+     coluna, e a pergunta vira legitima: "das 18 que esperam validacao, quais ja
+     subiram?". E a pergunta que a barra nao sabe fazer. */
+  if (filtro === 'fora_ar') return !noAr;
   return true;
 }
 
@@ -3859,6 +3880,23 @@ let _kbDev   = null;
 let _kbPrazo = null;
 let _kbTipo  = null;
 let _kbProd  = null;       // null|'falta_subir'|'no_ar' — ver PRODUCAO_BUCKETS
+/* ─── O FILTRO DE PRODUCAO DE CADA COLUNA ─────────────────────────────────
+   "Quero poder clicar aqui e poder filtrar o que esta em producao e o que nao
+    esta ou tudo (3 opcoes)" — apontando o contador da Validacao PM/PO.
+
+   POR COLUNA, e nao no lugar da barra. Sao perguntas diferentes: a barra
+   responde "onde esta a fila de deploy?" e vale para o quadro inteiro; o
+   contador responde "destas 18 que esperam validacao, quais ja subiram?" — e
+   essa so faz sentido com a etapa ja fixada, que e o que a coluna faz.
+
+   Por isso guarda um valor POR COLUNA, e nao um so: filtrar Validacao por "no
+   ar" nao tem por que mexer em Concluido, e um valor unico forcaria isso. */
+const KB_PROD_COL = [
+  { key: '',        label: 'Tudo',              marca: '' },
+  { key: 'no_ar',   label: '▲ No ar',      marca: '▲' },
+  { key: 'fora_ar', label: '△ Fora do ar', marca: '△' },
+];
+let _kbProdCol = {};       // { [coluna]: '' | 'no_ar' | 'fora_ar' }
 let _kbBusca = '';         // texto livre: título, descrição, dev, solicitante
 let _kbPeriodo = 'mes_atual'; // higiene: concluído/negada de outros meses fica oculto por padrão
 
@@ -3909,8 +3947,111 @@ function setBuscaKb(v) {
 function setKbPeriodo(v) { _kbPeriodo = v || 'mes_atual'; renderKanban(); }
 function limparFiltrosKb() {
   _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = null;
+  // O da coluna entra aqui tambem: ele conta no "Limpar (n)", e um filtro que
+  // conta mas nao limpa deixa o botao mentindo sobre o que acabou de fazer.
+  _kbProdCol = {};
   _kbBusca = ''; _kbPeriodo = 'mes_atual';
   renderKanban();
+}
+
+/* ─── O MENU DO CONTADOR ──────────────────────────────────────────────────
+   Tres opcoes, e nao um clique que cicla. Ciclar precisa de ate dois cliques
+   para voltar, nao tem como saber o que vem a seguir sem tentar, e nao diz que
+   existem tres estados — num contador que ate ontem nao clicava, isso seria
+   pedir para a funcao nao ser achada. O menu mostra as tres de uma vez e marca
+   a que esta valendo. */
+function kbProdMenuFecha(devolveFoco) {
+  const m = document.getElementById('kb-prod-menu');
+  /* DEVOLVE O FOCO A QUEM ABRIU, quando o fechamento veio do teclado.
+     Sem isto o Escape deixava o foco no `body` — medido num navegador — e quem
+     navega por Tab voltava ao inicio da pagina em vez de ao contador de onde
+     saiu. Clique nao devolve: o mouse ja levou a pessoa para outro lugar, e
+     roubar o foco de volta seria o oposto do que ela pediu. */
+  const col = m && m.dataset.col;
+  if (m) m.remove();
+  document.removeEventListener('click', kbProdMenuFecha);
+  document.removeEventListener('keydown', kbProdMenuTecla);
+  if (devolveFoco === true && col) {
+    const botao = document.querySelector('.kb-col[data-col="' + col + '"] .kb-count');
+    if (botao) botao.focus();
+  }
+}
+
+function kbProdMenuTecla(ev) {
+  if (ev.key === 'Escape') { ev.preventDefault(); kbProdMenuFecha(true); }
+}
+
+function kbProdMenu(ev, coluna) {
+  // Sem isto o clique sobe ate o `document` e o proprio listener de fechar —
+  // registrado logo abaixo — mataria o menu no mesmo gesto que o abriu.
+  ev.stopPropagation();
+  const jaAberto = document.getElementById('kb-prod-menu');
+  const eraDesta = jaAberto && jaAberto.dataset.col === coluna;
+  kbProdMenuFecha();
+  if (eraDesta) return;          // segundo clique no mesmo contador: fecha
+
+  const botao = ev.currentTarget;
+  const menu = document.createElement('div');
+  menu.id = 'kb-prod-menu';
+  menu.className = 'kb-prod-menu';
+  menu.dataset.col = coluna;
+  menu.setAttribute('role', 'menu');
+  const atual = _kbProdCol[coluna] || '';
+  menu.innerHTML = KB_PROD_COL.map(o => {
+    const on = o.key === atual;
+    return '<button type="button" role="menuitemradio" aria-checked="' + on + '"' +
+      ' class="kb-prod-item' + (on ? ' on' : '') + '"' +
+      ' onclick="kbProdEscolhe(\'' + coluna + '\',\'' + o.key + '\')">' +
+      (on ? '●' : '○') + ' ' + o.label + '</button>';
+  }).join('');
+  document.body.appendChild(menu);
+
+  /* ANCORA NO BOTAO, com o scroll da pagina somado: o menu esta no `body`, e
+     nao dentro da coluna, de proposito — a coluna tem `overflow-y:auto`, e um
+     filho absoluto dela seria cortado na borda. */
+  const r = botao.getBoundingClientRect();
+  menu.style.top = (r.bottom + window.scrollY + 4) + 'px';
+  // Nao deixa passar da direita da janela: a ultima coluna (Negada) fica na
+  // borda, e sem isto o menu dela nasceria metade fora da tela.
+  const esq = Math.min(r.left + window.scrollX,
+                       window.scrollX + document.documentElement.clientWidth - menu.offsetWidth - 8);
+  menu.style.left = Math.max(window.scrollX + 8, esq) + 'px';
+
+  document.addEventListener('click', kbProdMenuFecha);
+  document.addEventListener('keydown', kbProdMenuTecla);
+  const primeiro = menu.querySelector('.kb-prod-item.on') || menu.querySelector('.kb-prod-item');
+  if (primeiro) primeiro.focus();
+}
+
+/* O CONTADOR, que agora e botao.
+   Era um `<span>`. Virou `<button>` de verdade — e nao span com onclick —
+   porque o que ele faz agora precisa de foco, de teclado e de ser anunciado
+   como controle; um span clicavel some para quem navega por Tab. */
+function kbContadorHTML(col, exibidas, total) {
+  const f = _kbProdCol[col.key] || '';
+  const op = KB_PROD_COL.find(o => o.key === f) || KB_PROD_COL[0];
+  const rotulo = (op.marca ? op.marca + ' ' : '') +
+                 (f ? exibidas + '/' + total : total);
+  const titulo = f
+    ? op.label + ' · mostrando ' + exibidas + ' de ' + total +
+      ' em ' + col.label + '. Clique para trocar o filtro.'
+    : 'Filtrar ' + col.label + ' por produção: tudo, no ar ou fora do ar.';
+  return '<button type="button" class="kb-count' + (f ? ' filtrado' : '') + '"' +
+    ' aria-haspopup="menu" aria-label="' + esc(titulo) + '" title="' + esc(titulo) + '"' +
+    ' onclick="kbProdMenu(event,\'' + col.key + '\')">' + esc(rotulo) + '</button>';
+}
+
+function kbProdEscolhe(coluna, valor) {
+  if (valor) _kbProdCol[coluna] = valor;
+  else delete _kbProdCol[coluna];   // 'Tudo' apaga a chave: `ativos` conta por chave
+  kbProdMenuFecha();
+  renderKanban();
+  /* O FOCO VOLTA AO CONTADOR, que o redesenho acabou de recriar — senao quem
+     escolheu pelo teclado e devolvido ao inicio da pagina. Para quem usou o
+     mouse isto e invisivel: o anel so aparece em `:focus-visible`, que o
+     navegador nao liga depois de um clique. */
+  const botao = document.querySelector('.kb-col[data-col="' + coluna + '"] .kb-count');
+  if (botao) botao.focus();
 }
 
 function renderKbToolbar(exibidas, mescladasAchadas) {
@@ -3927,7 +4068,12 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
   // 'mes_atual' é o padrão de higiene, não uma escolha explícita — só conta
   // como filtro "ativo" quando alguém pede para ver mais (3 meses/tudo).
   const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbBusca,
-                  _kbPeriodo !== 'mes_atual' ? _kbPeriodo : null].filter(Boolean).length;
+                  _kbPeriodo !== 'mes_atual' ? _kbPeriodo : null].filter(Boolean).length +
+    /* CADA COLUNA FILTRADA CONTA UMA. Sem isto, o filtro do contador seria o
+       segundo "filtro invisivel na conta" desta tela — o primeiro foi o periodo,
+       e o comentario logo acima conta o estrago: a pessoa ve o quadro encolhido,
+       o "Limpar" diz que nao ha filtro, e conclui que sumiu dado. */
+    Object.keys(_kbProdCol).length;
   el.innerHTML =
     fbGroup('Tipo',    _kbTipo,    opcoesTipo(),    'setKbTipo') +
     fbGroupHTML('Tema', temaOpcoesHTML(_kbTema), 'setKbTema') +
@@ -4053,12 +4199,23 @@ function renderKanban() {
      principal —, mas com busca ativa a pessoa e AVISADA de que existe e de onde
      esta. Silencio aqui daria o mesmo "nao encontrei" para um card que existe. */
   const mescladasAchadas = _kbBusca ? achadas.filter(m => ehMesclada(m)) : [];
-  renderKbToolbar(base.length, mescladasAchadas);
+  /* O "Mostrando X de Y" CONTA DEPOIS DO FILTRO DA COLUNA. Ele somava `base`, que
+     e o resultado da barra — com uma coluna filtrada, a tela diria "mostrando
+     395" enquanto o quadro exibe 382. A barra nao pode falar de um quadro que
+     ela so conhece pela metade. */
+  renderKbToolbar(
+    base.filter(m => matchProducao(m, _kbProdCol[statusKey(m)] || null)).length,
+    mescladasAchadas);
 
   board.innerHTML = KB_COLS.map(col => {
     // Coluna pela etapa GRAVADA. Antes era statusEfetivo, que derivava 'atrasado'
     // e tirava o card da coluna real.
     let items = base.filter(m => statusKey(m) === col.key);
+    /* O TOTAL ANTES DO RECORTE, para o contador poder dizer "5 de 18". Mostrar
+       so o 5 esconderia que ha um filtro ligado — e um quadro que encolheu sem
+       dizer por que e a forma mais rapida de alguem concluir que sumiu dado. */
+    const totalDaColuna = items.length;
+    items = items.filter(m => matchProducao(m, _kbProdCol[col.key] || null));
     // Vencidas primeiro, da mais antiga para a mais recente: o que ja passou do
     // prazo e o que precisa de decisao hoje, independentemente da etapa. Depois
     // vem a regra propria da etapa.
@@ -4170,7 +4327,7 @@ function renderKanban() {
       </div>`;
     }).join('');
     return `<div class="kb-col" data-col="${col.key}" ondragover="kbDragOver(event)" ondragleave="kbDragLeave(event)" ondrop="kbDrop(event,'${col.key}')">
-      <div class="kb-col-head"><span>${col.label}</span><span class="kb-count">${items.length}</span></div>
+      <div class="kb-col-head"><span>${col.label}</span>${kbContadorHTML(col, items.length, totalDaColuna)}</div>
       <div class="kb-col-body">${cards || '<div class="kb-col-empty">—</div>'}</div>
     </div>`;
   }).join('');

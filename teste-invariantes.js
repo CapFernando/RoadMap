@@ -7118,7 +7118,11 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      O corte vai de `const achadas` ate a chamada da toolbar, que e exatamente a
      decisao sob teste. */
   const ini = rk.indexOf('const achadas = state.melhorias.filter');
-  const fim = rk.indexOf('renderKbToolbar(base.length');
+  /* A ancora era `renderKbToolbar(base.length`. Ela deixou de existir quando o
+     contador da coluna passou a filtrar: a toolbar agora recebe a conta JA
+     recortada, e o argumento virou um `base.filter(...)`. O fim continua sendo a
+     chamada da toolbar — so que sem presumir o que vai dentro dela. */
+  const fim = rk.indexOf('renderKbToolbar(');
   ok(ini > 0 && fim > ini, 'e o trecho que decide quem aparece foi isolado');
   if (ini < 0 || fim < ini) return;
   const trecho = rk.slice(ini, fim);
@@ -7199,8 +7203,11 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
   ok(roda(comMesclada, '', 'mes_atual').mescladasAchadas.length === 0,
      'e sem busca nao se anuncia mesclada nenhuma');
 
-  /* O AVISO CHEGA NA TELA. Calcular e nao mostrar seria o mesmo defeito. */
-  ok(/renderKbToolbar\(base\.length, mescladasAchadas\)/.test(ADM),
+  /* O AVISO CHEGA NA TELA. Calcular e nao mostrar seria o mesmo defeito.
+     O primeiro argumento deixou de ser `base.length` quando o contador da coluna
+     passou a recortar — o que se afirma aqui e sobre o SEGUNDO, que e o unico
+     que este bloco calcula. */
+  ok(/renderKbToolbar\([\s\S]{0,140}?,\s*mescladasAchadas\)/.test(ADM),
      'a toolbar recebe as mescladas achadas');
   ok(/function renderKbToolbar\(exibidas, mescladasAchadas\)/.test(ADM),
      'e sabe o que fazer com elas');
@@ -15704,6 +15711,141 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       new Map([['s', JSON.stringify({ id: 's', titulo: 'Subiu', status_planejamento: 'planning' })]]));
     ok(subiu && subiu.id === 's' && subiu.campo === 'm-tema',
        'e barra quem subiu de Planning para Planejado, apontando o campo');
+  }
+
+  /* === O CONTADOR DA COLUNA FILTRA POR PRODUCAO ==========================
+
+     "Quero poder clicar aqui e poder filtrar o que esta em producao e o que nao
+      esta ou tudo (3 opcoes)" — apontando o contador da Validacao PM/PO. */
+  sec('Kanban: o contador da coluna filtra por producao');
+  {
+    const AC = semComentario(ADMIN);
+    const mProd = new Function('statusKey',
+      corpo(ADMIN, 'function matchProducao(m, filtro) {') + '; return matchProducao;')(
+      m => m.status_planejamento);
+    const noAr    = { id: 'a', status_planejamento: 'validacao', em_producao: true };
+    const foraAr  = { id: 'b', status_planejamento: 'validacao' };
+    const concFora = { id: 'c', status_planejamento: 'concluido' };
+
+    /* ── AS TRES OPCOES, EXECUTADAS ── */
+    ok(mProd(noAr, null) && mProd(foraAr, null),
+       '"Tudo" nao corta nada');
+    ok(mProd(noAr, 'no_ar') && !mProd(foraAr, 'no_ar'),
+       '"No ar" traz so o que subiu');
+    ok(!mProd(noAr, 'fora_ar') && mProd(foraAr, 'fora_ar'),
+       '"Fora do ar" traz so o que nao subiu');
+    ok(mProd(foraAr, 'fora_ar') && mProd(concFora, 'fora_ar'),
+       'e "fora do ar" vale em qualquer etapa — a coluna ja fixou qual');
+
+    /* ── AUSENTE CONTA COMO FORA DO AR ──
+       `em_producao` nasceu em 10/09; demanda anterior nao tem o campo. Trata-la
+       como "nao sei" a esconderia das duas listas, e some do quadro sem aviso. */
+    ok(mProd({ id: 'd', status_planejamento: 'validacao' }, 'fora_ar') &&
+       !mProd({ id: 'd', status_planejamento: 'validacao' }, 'no_ar'),
+       'demanda sem o campo conta como fora do ar, e nao como desconhecida');
+
+    /* ── E `fora_ar` NAO ENTRA NO SELECT DA BARRA ──
+       O comentario do `PRODUCAO_BUCKETS` argumenta por que: solto, ele devolve a
+       base inteira, porque Backlog tambem nao esta no ar. Dentro de uma coluna o
+       argumento cai — a etapa ja esta fixada. Se alguem o acrescentar la, o
+       filtro da barra volta a ser ruido. */
+    const BUCKETS = (AC.match(/const PRODUCAO_BUCKETS = \[[\s\S]*?\];/) || [''])[0];
+    ok(BUCKETS.indexOf('fora_ar') < 0,
+       'e "fora do ar" fica fora do select da barra — la ele devolveria a base inteira');
+    const COLBUCKETS = (AC.match(/const KB_PROD_COL = \[[\s\S]*?\];/) || [''])[0];
+    ok((COLBUCKETS.match(/key:/g) || []).length === 3,
+       'o menu da coluna tem exatamente as tres opcoes pedidas',
+       (COLBUCKETS.match(/key:/g) || []).length + ' opcoes');
+
+    /* ══ O CONTADOR E UM BOTAO DE VERDADE ══
+     * Era `<span>`. Span com onclick nao recebe Tab, nao dispara com Enter e
+     * nao e anunciado como controle — a funcao existiria so para quem usa
+     * mouse e enxerga. */
+    const CONT = corpo(ADMIN, 'function kbContadorHTML(col, exibidas, total) {') || '';
+    ok(/<button type="button" class="kb-count/.test(CONT),
+       'o contador e <button>, e nao <span> com onclick');
+    ok(/aria-haspopup="menu"/.test(CONT) && /aria-label=/.test(CONT),
+       'e se anuncia como menu, com nome proprio');
+    /* E A REGRA TEM DE DESENHAR ALGO. Conferir que o seletor existe deixava
+       passar um `outline: none` dentro dele — a regra presente, o anel ausente,
+       que e exatamente o defeito com a aparencia de correcao. */
+    const focoCSS = (AC.match(/\.kb-count:focus-visible\s*\{([^}]*)\}/) || [, ''])[1];
+    ok(/outline:\s*\d+px/.test(focoCSS) && !/outline:\s*none/.test(focoCSS),
+       'e tem foco visivel — sem isso, quem navega por Tab nao sabe onde esta',
+       focoCSS.trim());
+    const focoItem = (AC.match(/\.kb-prod-item:focus-visible\s*\{([^}]*)\}/) || [, ''])[1];
+    ok(/outline:\s*\d+px/.test(focoItem) && !/outline:\s*none/.test(focoItem),
+       'e as opcoes do menu tambem', focoItem.trim());
+
+    /* ══ O RECORTE NAO SE ESCONDE ══
+     * Tres jeitos de a tela esconder que ha filtro ligado, e os tres ja
+     * morderam esta base antes (foi o periodo, no dfdaee4). */
+    const contador = new Function('esc', '_kbProdCol', 'KB_PROD_COL',
+      CONT + '; return kbContadorHTML;');
+    const KBPC = [{ key: '', label: 'Tudo', marca: '' },
+                  { key: 'no_ar', label: '▲ No ar', marca: '▲' },
+                  { key: 'fora_ar', label: '△ Fora do ar', marca: '△' }];
+    const col = { key: 'validacao', label: 'Validação PM/PO' };
+    const limpo = contador(String, {}, KBPC)(col, 18, 18);
+    const filtrado = contador(String, { validacao: 'no_ar' }, KBPC)(col, 5, 18);
+    ok(limpo.indexOf('>18<') > 0 && limpo.indexOf('filtrado') < 0,
+       'sem filtro o contador e so o numero, como sempre foi');
+    ok(filtrado.indexOf('5/18') > 0,
+       'com filtro ele diz 5/18 — o total nao some junto com os cards', filtrado.slice(-40));
+    ok(filtrado.indexOf('class="kb-count filtrado"') > 0,
+       'e o proprio contador fica marcado');
+    /* NO ROTULO VISIVEL, e nao no HTML inteiro: o `title` e o `aria-label`
+       carregam o nome da opcao ("▲ No ar"), entao procurar o simbolo no atributo
+       daria certo mesmo com o rotulo mostrando um "5/18" pelado. Foi assim que a
+       sabotagem que apagava a marca passou em silencio. */
+    const visivel = (html) => html.slice(html.indexOf('>') + 1, html.lastIndexOf('<'));
+    ok(visivel(filtrado).indexOf('▲') === 0,
+       'com a marca do recorte no rotulo, para nao depender so da cor',
+       JSON.stringify(visivel(filtrado)));
+    ok(visivel(limpo) === '18',
+       'e sem filtro o rotulo nao ganha simbolo nenhum', JSON.stringify(visivel(limpo)));
+
+    /* E A BARRA CONTA DEPOIS DO RECORTE. Somar `base` diria "mostrando 395"
+       com o quadro exibindo 382 — a barra falando de um quadro que ela so
+       conhece pela metade. */
+    const REND = corpo(ADMIN, 'function renderKanban() {') || '';
+    const iToolbar = REND.indexOf('renderKbToolbar(');
+    ok(/renderKbToolbar\(\s*base\.filter\(m => matchProducao\(m, _kbProdCol\[statusKey\(m\)\]/
+       .test(REND), 'o "Mostrando X de Y" conta depois do filtro da coluna');
+    ok(/const totalDaColuna = items\.length;[\s\S]{0,120}items = items\.filter\(m => matchProducao\(m, _kbProdCol\[col\.key\]/
+       .test(REND), 'e o total da coluna e guardado ANTES do recorte');
+
+    /* E CONTA NO "Limpar (n)", e e limpo por ele. Um filtro que encolhe o
+       quadro sem aparecer na conta e o defeito que esta tela ja teve com o
+       periodo: a pessoa ve menos cards, le "nenhum filtro" e conclui que sumiu
+       dado. */
+    const TOOL = corpo(ADMIN, 'function renderKbToolbar(exibidas, mescladasAchadas) {') || '';
+    ok(/Object\.keys\(_kbProdCol\)\.length/.test(TOOL),
+       'cada coluna filtrada conta uma no "Limpar (n)"');
+    ok(/_kbProdCol = \{\};/.test(corpo(ADMIN, 'function limparFiltrosKb() {') || ''),
+       'e o "Limpar" limpa mesmo — contar sem limpar faria o botao mentir');
+
+    /* ══ POR COLUNA, E NAO UM VALOR SO ══ */
+    ok(/_kbProdCol\[col\.key\]/.test(REND) && /_kbProdCol\[coluna\]/.test(AC),
+       'o filtro e guardado por coluna: filtrar Validacao nao mexe em Concluido');
+
+    /* ══ O MENU FECHA, E DEVOLVE O FOCO ══
+     * Medido num navegador: sem a devolucao, o Escape deixava o foco no `body`
+     * e quem navega por Tab voltava ao inicio da pagina. */
+    const FECHA = corpo(ADMIN, 'function kbProdMenuFecha(devolveFoco) {') || '';
+    const TECLA = corpo(ADMIN, 'function kbProdMenuTecla(ev) {') || '';
+    ok(/removeEventListener\('click'/.test(FECHA) && /removeEventListener\('keydown'/.test(FECHA),
+       'fechar solta os dois ouvintes — senao eles se empilham a cada abertura');
+    ok(/kbProdMenuFecha\(true\)/.test(TECLA) && /devolveFoco === true/.test(FECHA),
+       'e o Escape devolve o foco a quem abriu');
+    ok(/\.kb-count/.test(FECHA), 'e devolve para o contador, e nao para o body');
+    const ABRE = corpo(ADMIN, 'function kbProdMenu(ev, coluna) {') || '';
+    ok(/ev\.stopPropagation\(\)/.test(ABRE),
+       'o clique que abre nao sobe ate o ouvinte que fecha');
+    ok(/document\.body\.appendChild\(menu\)/.test(ABRE),
+       'e o menu nasce no body — dentro da coluna, o overflow dela o cortaria');
+    ok(/role="menuitemradio"/.test(ABRE) && /aria-checked="/.test(ABRE),
+       'e as tres opcoes dizem qual esta valendo');
   }
 
   let erroPz = null;

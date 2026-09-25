@@ -22,3 +22,9 @@ resposta-ticket-github.md
 # `npm i --no-save acorn acorn-walk`, e a pasta e descartavel. Sem esta linha
 # ela aparece em todo `git status` de quem roda a varredura.
 node_modules/
+
+# Previas montadas a partir do codigo real das telas, para ver um componente
+# funcionando sem precisar da senha do admin. Ficam DENTRO do repositorio
+# porque o painel de previa nao executa script de arquivo fora da pasta do
+# projeto — ele renderiza como imagem estatica, e ai nada clica.
+.previa/
