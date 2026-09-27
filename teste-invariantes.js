@@ -15974,6 +15974,116 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e as tres opcoes dizem qual esta valendo');
   }
 
+  /* === O RELATORIO ABRE OS DETALHES DA ENTREGA ==========================
+
+     "em relatorios semanais, quero poder clicar e ver os detalhes da entrega." */
+  sec('Relatorio: o card abre os detalhes da entrega');
+  {
+    const AC = semComentario(ADMIN);
+    const ENT = corpo(ADMIN, 'function entregaHTML(m, opts) {') || '';
+    const CARD = corpo(ADMIN, 'function relCardHTML(m, modo) {') || '';
+    const ALT = corpo(ADMIN, 'function relDetalheAlterna(id) {') || '';
+
+    /* ══ O DETALHE E O MESMO DO MODAL, E NAO UMA SEGUNDA VERSAO ══
+     * Escrever de novo "o que foi implementado / horas / prazo / no ar" seria a
+     * quinta regra duplicada desta base — foi assim com a etapa, o prazo, os
+     * temas e o sistema obrigatorio. */
+    ok(/entregaHTML\(m, \{ leitura: true \}\)/.test(CARD) &&
+       /entregaHTML\(m, \{ leitura: true \}\)/.test(ALT),
+       'o relatorio chama o MESMO `entregaHTML` do modal, em modo leitura');
+    ok((AC.match(/function entregaHTML/g) || []).length === 1,
+       'e existe uma so `entregaHTML` no arquivo',
+       (AC.match(/function entregaHTML/g) || []).length + ' definicoes');
+
+    /* ══ MAS SEM O CONVITE A AGIR ══
+     * Num relatorio lido em reuniao, "Aprovar entrega" a um clique de uma lista
+     * que se le passando o olho e uma acao irreversivel no lugar errado. E a
+     * mesma razao pela qual o painel de temas fora do padrao PREENCHE o juntar
+     * em vez de executa-lo. */
+    const monta = new Function('statusKey', 'esc', 'formatDate',
+      ENT + '; return entregaHTML;')(
+      (m) => m.status_planejamento || '', (s) => String(s == null ? '' : s),
+      (d) => String(d || '').slice(0, 10));
+    const esperando = { id: 'e1', status_planejamento: 'validacao',
+                        implementacao: 'fez isso', entregue_em: '2026-09-25T10:00:00Z',
+                        anexos: [{ nome: 'print.png' }] };
+    const noModal = monta(esperando);
+    const noRelat = monta(esperando, { leitura: true });
+    ok(/valAprovar\(\)/.test(noModal) && /valRejeitar\(\)/.test(noModal),
+       'no modal, a validacao continua tendo os botoes de decidir');
+    ok(!/valAprovar\(\)/.test(noRelat) && !/valRejeitar\(\)/.test(noRelat),
+       'e no relatorio NAO — nao se aprova entrega de dentro de um relatorio');
+    ok(!/aprove, ou devolva/.test(noRelat) && !/antes de aprovar/.test(noRelat),
+       'nem o texto que manda validar — o relatorio informa, nao instrui');
+    ok(/fez isso/.test(noRelat) && /Ainda não validada/.test(noRelat),
+       'mas os FATOS continuam todos la', 'implementacao e estado');
+    /* E O MESMO NA DEMANDA QUE ESTA NO AR. A instrucao de validar aparece em
+       DOIS ramos — no ar ("Da para conferir no sistema antes de aprovar") e fora
+       ("a validacao aqui e pelo texto") — e o caso acima so passava pelo
+       segundo. A sabotagem do primeiro passou em silencio ate este caso. */
+    const noArM = { id: 'e2', status_planejamento: 'concluido', implementacao: 'x',
+                    em_producao: true, versao: '2.31', producao_em: '2026-09-02' };
+    const noArRel = monta(noArM, { leitura: true });
+    const noArMod = monta(noArM);
+    ok(/antes de aprovar/.test(noArMod),
+       'no modal, a demanda no ar convida a conferir antes de aprovar');
+    ok(!/antes de aprovar/.test(noArRel) && /Em produção/.test(noArRel),
+       'e no relatorio o fato fica e o convite sai', noArRel.match(/produção[^<]*/)[0]);
+    const foraRel = monta({ id: 'e3', status_planejamento: 'concluido',
+                            implementacao: 'x', versao: '2.32' }, { leitura: true });
+    ok(!/A validação aqui/.test(foraRel) && /Ainda não subiu/.test(foraRel),
+       'idem na que ainda nao subiu');
+
+    /* ══ O ANEXO LEVA O ID DA DEMANDA ══
+     * `abrirAnexoIdx(i)` lia o id do campo `m-id`, que e o do MODAL. Chamado do
+     * relatorio, abriria o anexo de indice `i` de OUTRA demanda — arquivo
+     * errado, sem erro nenhum na tela. */
+    ok(/abrirAnexoIdx\(' \+ i \+\s*\n?\s*',\\'' \+ esc\(m\.id/.test(ENT) ||
+       /abrirAnexoIdx\([^)]*m\.id/.test(ENT),
+       'o link do anexo carrega o id da demanda, e nao so o indice');
+    ok(/function abrirAnexoIdx\(i, id\)/.test(AC) &&
+       /const alvo = id \|\|/.test(AC),
+       'e `abrirAnexoIdx` usa esse id, caindo no modal so quando nao vem nenhum');
+    ok(new RegExp("abrirAnexoIdx\\(0,'e1'\\)").test(noRelat),
+       'provado no HTML gerado', (noRelat.match(/abrirAnexoIdx\([^)]*\)/) || [''])[0]);
+
+    /* ══ O CARD E UM BOTAO, E ABRE NO LUGAR ══ */
+    ok(/<button type="button" class="rel-card-titulo"/.test(CARD) &&
+       /aria-expanded=/.test(CARD),
+       'o titulo e <button> com aria-expanded, e nao div com onclick');
+    ok(/\.rel-card-titulo:focus-visible/.test(AC),
+       'com foco visivel');
+    ok(!/openModalMelhoria/.test(CARD) && !/openModalMelhoria/.test(ALT),
+       'e abre NO LUGAR, sem modal por cima da lista que se esta lendo');
+    /* O CODIGO ENTROU NO CARD. E ele que se cita em reuniao — "a AX-191 ficou
+       pronta" —, e ele nao aparecia em lugar nenhum do relatorio. */
+    ok(/m\.codigo \? `<span class="cod-tag">/.test(CARD),
+       'e o card mostra o codigo, que e como a entrega e citada');
+
+    /* ══ MONTA NA PRIMEIRA ABERTURA, E NAO EM TODO DESENHO ══
+     * A semana fechada tem 154 entregas. Montar o detalhe das 154 para esconder
+     * as 154 e trabalho jogado fora em cada render. */
+    ok(/painel\.dataset\.pronto/.test(ALT) && /painel\.innerHTML = entregaHTML/.test(ALT),
+       'o detalhe e montado uma vez, na primeira abertura');
+    /* E NO DESENHO, SO PARA QUEM ESTA ABERTO. Conferir que existe um `pronto` no
+       toggle nao basta: da para o card montar os 154 detalhes e esconde-los, que
+       e o desperdicio que se quer evitar, sem mexer no toggle. A afirmacao tem
+       de ser sobre a CONDICAO do card. */
+    ok(/aberto \? entregaHTML\(m, \{ leitura: true \}\) : ''/.test(CARD),
+       'e o desenho so monta o detalhe do que esta aberto — 154 entregas por semana');
+    ok(/_relAbertos\.has\(m\.id\)/.test(CARD),
+       'e o que estava aberto continua aberto depois de um redesenho');
+
+    /* ══ O ANEXO PRECISA SER LEGIVEL ══
+     * `.anexo-link` nunca foi estilizado no admin — so no gantt. Os anexos do
+     * modal saiam com o azul padrao do navegador (#0000EE) sobre fundo escuro:
+     * 1,78:1 medido. Trazer o bloco para o relatorio poria isso na frente de
+     * quem le toda semana. */
+    ok(/\.anexo-link\s*\{[^}]*color:\s*var\(--blue\)/.test(AC),
+       'o link de anexo tem cor propria — o azul padrao dava 1,78:1 no escuro');
+    ok(/\.anexo-link:focus-visible/.test(AC), 'e foco visivel');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

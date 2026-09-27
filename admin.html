@@ -822,7 +822,32 @@
       padding:14px 16px; margin-bottom:10px;
     }
     .rel-card-head { display:flex; align-items:flex-start; gap:10px; margin-bottom:6px; }
-    .rel-card-titulo { font-size:14px; font-weight:700; color:var(--text); flex:1; }
+    /* O titulo virou botao (abre os detalhes). Zera o visual de botao para o
+       card continuar o mesmo — o que muda e o cursor, o foco e o alvo. */
+    .rel-card-titulo {
+      font-size:14px; font-weight:700; color:var(--text); flex:1;
+      background:none; border:0; padding:0; margin:0; font-family:inherit;
+      text-align:left; cursor:pointer; display:flex; align-items:baseline;
+      gap:7px; line-height:1.35; width:100%;
+    }
+    .rel-card-titulo:hover { color:var(--blue,#3B8FE8); }
+    .rel-card-titulo:focus-visible { outline:2px solid var(--amber,#E89C2F); outline-offset:3px; border-radius:4px; }
+    .rel-card-seta { color:var(--text3); font-size:11px; flex-shrink:0; }
+    /* O detalhe herda o `.ent-*` do modal — e o MESMO HTML, por construcao. Aqui
+       so se dá o respiro que separa o detalhe do resumo logo acima. */
+    .rel-detalhe { margin-top:12px; padding-top:12px; border-top:1px dashed var(--border2); }
+    .rel-detalhe .ent-bloco { margin-bottom:10px; }
+    .rel-detalhe .ent-bloco h4 { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text3); margin:0 0 5px; }
+    /* `.anexo-link` NUNCA FOI ESTILIZADO AQUI — so no gantt. Os anexos do modal
+       de entrega saiam com o azul padrao do navegador (#0000EE) sobre o fundo
+       escuro: 1,78:1 medido, ilegivel. Nao apareceu antes porque o bloco de
+       anexos so existe em demanda que tem anexo; trazer o mesmo bloco para o
+       relatorio poe o defeito na frente de quem le toda semana.
+       A regra e a do `gantt.html`, igual: o anexo tem de parecer a mesma coisa
+       nas duas telas. Com --blue: 4,99:1 no escuro, 5,10:1 no claro. */
+    .anexo-link { display:inline-flex; align-items:center; gap:4px; color:var(--blue); text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:12px; }
+    .anexo-link:hover { text-decoration:underline; }
+    .anexo-link:focus-visible { outline:2px solid var(--amber,#E89C2F); outline-offset:2px; }
     .rel-pts { font-size:11px; background:#123A52; color:#8AD5F0; border-radius:4px; padding:2px 7px; font-weight:700; white-space:nowrap; }
     .rel-card-meta { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--text2); margin-bottom:8px; }
     .rel-card-meta b { color:var(--text); }
@@ -9658,9 +9683,23 @@ function relCardHTML(m, modo) {
      aparece com prazos diferentes em duas telas, e quem cobra usa o errado. */
   const pzEf = (window.PRAZO && m.entrega) ? PRAZO.prazoEfetivo(m, PRAZO.hojeISO()) : m.entrega;
   const prazo = pzEf ? formatDate(pzEf) : '—';
-  return `<div class="rel-card">
+  /* O TITULO ABRE OS DETALHES DA ENTREGA.
+     "em relatorios semanais, quero poder clicar e ver os detalhes da entrega."
+     Botao de verdade, com `aria-expanded`, igual ao cabecalho do grupo logo
+     acima — um `<div>` com onclick nao recebe Tab nem e anunciado como
+     controle, e o relatorio inteiro viraria clicavel so para quem usa mouse. */
+  const aberto = _relAbertos.has(m.id);
+  /* O CODIGO ESTAVA FALTANDO NO CARD, e e ele que se cita em reuniao: "a AX-191
+     ficou pronta". Sem ele, so o titulo — e titulo nao e identificador. */
+  return `<div class="rel-card" data-id="${esc(m.id)}">
     <div class="rel-card-head">
-      <span class="rel-card-titulo">${esc(m.titulo || '(sem título)')}</span>
+      <button type="button" class="rel-card-titulo" aria-expanded="${aberto}"
+              onclick="relDetalheAlterna('${esc(m.id)}')"
+              title="Ver os detalhes desta entrega">
+        <span class="rel-card-seta">${aberto ? '▾' : '▸'}</span>
+        ${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}
+        ${esc(m.titulo || '(sem título)')}
+      </button>
       ${m.poker_pontos != null ? `<span class="rel-pts" title="Pontos do Planning Poker">🃏 ${m.poker_pontos}</span>` : ''}
     </div>
     <div class="rel-card-meta">
@@ -9681,7 +9720,42 @@ function relCardHTML(m, modo) {
               ? `<div class="rel-impl rel-impl-falta">✎ Sem resumo da entrega — o texto completo existe. Peça a frase curta ao dev, ou troque o filtro acima.</div>`
               : `<div class="rel-impl rel-impl-falta">⚠ O dev ainda não descreveu o que foi implementado — pedir no Painel Dev ao concluir.</div>`))
       : (impl ? `<div class="rel-impl">${esc(impl)}</div>` : '')}
+    <div class="rel-detalhe"${aberto ? ' data-pronto="1"' : ' hidden'}>${
+      aberto ? entregaHTML(m, { leitura: true }) : ''}</div>
   </div>`;
+}
+
+/* ─── OS DETALHES DA ENTREGA, DENTRO DO RELATORIO ─────────────────────────
+   ABRE NO LUGAR, e nao em modal. O relatorio e lido de cima a baixo numa
+   reuniao; um modal por cima tira a lista da vista justamente quando a
+   pergunta e "e essa aqui?". Recolhido, o card continua do tamanho de antes.
+
+   E O CONTEUDO E MONTADO NA PRIMEIRA ABERTURA, nao em todo desenho: a semana
+   fechada tem 154 entregas, e montar o detalhe das 154 para esconder as 154
+   seria trabalho jogado fora em cada render. Montado uma vez, o `hidden`
+   resolve o resto. */
+const _relAbertos = new Set();
+
+function relDetalheAlterna(id) {
+  const card = document.querySelector('.rel-card[data-id="' + id + '"]');
+  if (!card) return;
+  const painel = card.querySelector('.rel-detalhe');
+  const botao = card.querySelector('.rel-card-titulo');
+  const seta = card.querySelector('.rel-card-seta');
+  const abrir = !_relAbertos.has(id);
+  if (abrir) {
+    _relAbertos.add(id);
+    const m = (state.melhorias || []).find(x => x.id === id);
+    if (m && painel && !painel.dataset.pronto) {
+      painel.innerHTML = entregaHTML(m, { leitura: true });
+      painel.dataset.pronto = '1';
+    }
+  } else {
+    _relAbertos.delete(id);
+  }
+  if (painel) painel.hidden = !abrir;
+  if (botao) botao.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+  if (seta) seta.textContent = abrir ? '▾' : '▸';
 }
 
 function renderRelatorios() {
@@ -12477,7 +12551,26 @@ function irParaValidacao() {
   if (col) col.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 }
 
-function entregaHTML(m) {
+/* `opts.leitura` — O MESMO CONTEUDO, SEM O CONVITE A AGIR.
+ *
+ * "em relatorios semanais, quero poder clicar e ver os detalhes da entrega."
+ *
+ * Os fatos que o relatorio precisa sao exatamente os desta funcao: o que foi
+ * implementado, quem validou e quando, se esta no ar e em que versao, horas,
+ * prazo, anexos. Escrever uma segunda versao deles seria a quinta vez que esta
+ * base paga por uma regra duplicada — foi assim com a etapa, com o prazo, com os
+ * temas e com o sistema obrigatorio.
+ *
+ * O que NAO serve ao relatorio e a voz: aqui o texto manda validar ("aprove, ou
+ * devolva ao dev"), e traz os botoes que fazem isso. Num relatorio lido em
+ * reuniao, isso poe uma acao irreversivel a um clique de distancia de uma lista
+ * que se le passando o olho — a mesma razao pela qual o painel de temas fora do
+ * padrao PREENCHE o juntar em vez de executa-lo.
+ *
+ * Entao `leitura` troca a instrucao pelo fato e tira os botoes. Os dados sao os
+ * mesmos, e continuam saindo daqui. */
+function entregaHTML(m, opts) {
+  const leitura = !!(opts && opts.leitura);
   const sk = statusKey(m);
   const impl = String(m.implementacao || '').trim();
   const dev = m.dev || '—';
@@ -12491,9 +12584,12 @@ function entregaHTML(m) {
 
   let topo = '';
   if (sk === 'validacao') {
-    topo = '<div class="ent-aviso espera">⏳ <strong>Aguardando sua validação.</strong> ' +
-      'Confira o que foi implementado e aprove, ou devolva ao dev explicando o que falta.' +
-      (m.entregue_em ? '<br>Entregue em ' + esc(quando(m.entregue_em)) : '') + '</div>';
+    topo = leitura
+      ? '<div class="ent-aviso espera">⏳ <strong>Ainda não validada.</strong>' +
+        (m.entregue_em ? ' Entregue em ' + esc(quando(m.entregue_em)) + '.' : '') + '</div>'
+      : '<div class="ent-aviso espera">⏳ <strong>Aguardando sua validação.</strong> ' +
+        'Confira o que foi implementado e aprove, ou devolva ao dev explicando o que falta.' +
+        (m.entregue_em ? '<br>Entregue em ' + esc(quando(m.entregue_em)) : '') + '</div>';
   } else if (m.validado_em) {
     topo = '<div class="ent-aviso aprovada">✅ <strong>Entrega aprovada</strong>' +
       (m.validado_por ? ' por ' + esc(m.validado_por) : '') +
@@ -12524,13 +12620,14 @@ function entregaHTML(m) {
         (m.versao ? ' na versão <strong>' + esc(m.versao) + '</strong>' : '') +
         (m.producao_em ? ' desde ' + esc(formatDate(m.producao_em)) : '') +
         (m.producao_por ? ' · marcada por ' + esc(m.producao_por) : '') +
-        '. Dá para conferir no sistema antes de aprovar.'
+        (leitura ? '.' : '. Dá para conferir no sistema antes de aprovar.')
       : '△ <strong>Ainda não subiu para produção.</strong> ' +
         (m.versao
           ? 'Versão prevista <strong>' + esc(m.versao) + '</strong>. '
           : '') +
-        'A validação aqui é pelo texto e pelos anexos — o que foi descrito ainda ' +
-        'não está no ar para conferir.') +
+        (leitura ? ''
+                 : 'A validação aqui é pelo texto e pelos anexos — o que foi descrito ainda ' +
+                   'não está no ar para conferir.')) +
     '</div>';
 
   const meta = ['<span>Dev: <strong>' + esc(dev) + '</strong></span>'];
@@ -12540,15 +12637,21 @@ function entregaHTML(m) {
   if (m.debito_tecnico) meta.push('<span><strong>🧱 Débito técnico</strong></span>');
   if (m.sprint) meta.push('<span>Sprint: <strong>' + esc(m.sprint) + '</strong></span>');
 
+  /* O LINK DO ANEXO LEVA O ID DA DEMANDA.
+     `abrirAnexoIdx(i)` lia o id do campo `m-id`, que e o do MODAL. Fora dele —
+     no relatorio — isso abriria o anexo de indice `i` de outra demanda, ou de
+     nenhuma: arquivo errado, sem erro nenhum na tela. */
   const anexos = (m.anexos || []).length
     ? '<div class="ent-bloco"><h4>Anexos</h4><div style="display:grid;gap:6px">' +
         (m.anexos || []).map((a, i) =>
-          '<a href="#" class="anexo-link" onclick="abrirAnexoIdx(' + i + ');return false">📎 ' +
+          '<a href="#" class="anexo-link" onclick="abrirAnexoIdx(' + i +
+          ',\'' + esc(m.id || '') + '\');return false">📎 ' +
           esc(a.nome || 'arquivo') + '</a>').join('') +
       '</div></div>'
     : '';
 
-  const acoes = sk === 'validacao'
+  // Sem botao de decidir em modo leitura — ver a nota da assinatura.
+  const acoes = (sk === 'validacao' && !leitura)
     ? '<div class="ent-acoes">' +
         '<button class="btn btn-success" onclick="valAprovar()">✅ Aprovar entrega</button>' +
         '<button class="btn btn-danger" onclick="valRejeitar()">↩ Devolver ao dev</button>' +
@@ -12575,8 +12678,12 @@ function renderEntrega(m) {
   if (sino && esperando) sino.textContent = '!';
 }
 
-function abrirAnexoIdx(i) {
-  const m = state.melhorias.find(x => x.id === document.getElementById('m-id').value);
+/* `id` e opcional so por compatibilidade: quem chama de dentro do modal nao
+   precisa passa-lo. Fora dele, o campo `m-id` e o da demanda ABERTA no modal —
+   e ai o indice apontaria para o anexo de outra demanda. */
+function abrirAnexoIdx(i, id) {
+  const alvo = id || (document.getElementById('m-id') || {}).value;
+  const m = state.melhorias.find(x => x.id === alvo);
   const a = m && (m.anexos || [])[i];
   if (a) abrirAnexo(a, ADMIN_PROXY_URL, credAdmin());
 }
