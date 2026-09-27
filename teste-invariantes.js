@@ -15378,6 +15378,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const REST = corpo(ADMIN, 'function rascunhoRestaurar() {') || '';
     const LER = corpo(ADMIN, 'function rascunhoLer() {') || '';
     const LIMPA = corpo(ADMIN, 'function rascunhoLimpar() {') || '';
+    const PATCH = corpo(ADMIN, 'function rascunhoComoPatch(it, noServidor) {') || '';
+    const DIFF = corpo(ADMIN, 'function camposAlterados(local, baseStr) {') || '';
+    const SEMVALOR = (ADMIN.match(/const semValor = [^\n]+/) || [''])[0];
+    const DOSERVIDOR = (ADMIN.match(/const RASCUNHO_DO_SERVIDOR = \[[^\]]*\];/) || [''])[0];
     const guardado = {};
     const fakeLocal = {
       getItem: (k) => (k in guardado ? guardado[k] : null),
@@ -15386,7 +15390,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     };
     const monta = (extra) => new Function('localStorage', 'RASCUNHO_KEY', 'state',
       'toast', 'renderAll', 'bannerPendentes', '_dirtyMelhoriaIds', 'saida',
-      LER + '\n' + LIMPA + '\n' + REST + '\n' + extra);
+      '_baseMelhorias', '_pendingEdits',
+      SEMVALOR + '\n' + DIFF + '\n' + DOSERVIDOR + '\n' + PATCH + '\n' +
+      LER + '\n' + LIMPA + '\n' + SALVA + '\n' + REST + '\n' + extra);
 
     // Caso 1: o rascunho tem uma demanda que o servidor NAO conhece.
     guardado['rm_admin_rascunho'] = JSON.stringify({
@@ -15398,7 +15404,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     let avisou = '';
     monta('rascunhoRestaurar(); saida.push(state.melhorias.length);')(
       fakeLocal, 'rm_admin_rascunho', estado,
-      (t) => { avisou = t; }, () => {}, () => {}, sujos, []);
+      (t) => { avisou = t; }, () => {}, () => {}, sujos, [], new Map(), false);
     ok(estado.melhorias.length === 2 && sujos.has('x1'),
        'a demanda que nao chegou ao servidor volta para a tela, marcada como ' +
        'pendente', estado.melhorias.length + ' na tela');
@@ -15415,7 +15421,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     let est2 = { melhorias: [{ id: 'y1', codigo: 'AX-500', titulo: 'Titulo velho' }] };
     let suj2 = new Set();
     monta('rascunhoRestaurar();')(fakeLocal, 'rm_admin_rascunho', est2,
-      () => {}, () => {}, () => {}, suj2, []);
+      () => {}, () => {}, () => {}, suj2, [], new Map(), false);
     ok(est2.melhorias[0].titulo === 'Titulo NOVO, ainda nao publicado' && suj2.has('y1'),
        'e a edicao que nao chegou volta mesmo com o id ja existindo no servidor — ' +
        'a comparacao e por CONTEUDO', est2.melhorias[0].titulo);
@@ -15428,12 +15434,132 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     estado = { melhorias: [{ id: 'x1', codigo: 'AX-586', titulo: 'Flexibilizações - Operações' }] };
     sujos = new Set(); avisou = '';
     monta('rascunhoRestaurar();')(fakeLocal, 'rm_admin_rascunho', estado,
-      (t) => { avisou = t; }, () => {}, () => {}, sujos, []);
+      (t) => { avisou = t; }, () => {}, () => {}, sujos, [], new Map(), false);
     ok(estado.melhorias.length === 1 && sujos.size === 0 && !avisou,
        'e o que JA foi publicado nao volta nem avisa — a copia se apaga sozinha');
     ok(!('rm_admin_rascunho' in guardado),
        'inclusive limpando o navegador, para o aviso nao ressuscitar na proxima ' +
        'abertura');
+
+    /* Caso 2b: o rascunho ANTIGO, com a demanda inteira, contra um servidor que
+       JA carimbou. E o caso de verdade de quem nao recarregou ainda — e o unico
+       em que `RASCUNHO_DO_SERVIDOR` age. Sem ele, `camposAlterados` ve um
+       `historico` que existe no servidor e nao na copia, chama isso de "campo
+       apagado" e a faixa dispara. Foi a sabotagem que passou em silencio ate
+       este caso existir. */
+    guardado['rm_admin_rascunho'] = JSON.stringify({
+      em: '2026-09-25T17:00:00.000Z',
+      itens: [{ id: 'v1', codigo: 'AX-590', titulo: 'Texto publicado' }],
+    });
+    const estV = { melhorias: [{ id: 'v1', codigo: 'AX-590', titulo: 'Texto publicado',
+                                 historico: [{ em: '2026-09-25T17:00:01.000Z', quem: 'f' }] }] };
+    const sujV = new Set(); let avisouV = '';
+    monta('rascunhoRestaurar();')(fakeLocal, 'rm_admin_rascunho', estV,
+      (t) => { avisouV = t; }, () => {}, () => {}, sujV, [], new Map(), false);
+    ok(!avisouV && sujV.size === 0,
+       'rascunho antigo + servidor ja carimbado tambem cala', avisouV || 'silencio');
+    ok((estV.melhorias[0].historico || []).length === 1,
+       'e o carimbo nao e tratado como campo que a tela apagou');
+
+    /* ══ O CARIMBO DO SERVIDOR NAO PODE VIRAR "NAO PUBLICOU" ══════════════
+     *
+     * "esta dando muito erro desse", sobre a faixa "1 alteracao(oes) de ... nao
+     * tinham sido publicadas (AX-567)".
+     *
+     * A faixa guardava a demanda INTEIRA e perguntava "a minha copia e identica
+     * a do servidor?". Nunca e: o Worker carimba `historico` ao gravar — entrada
+     * com hora DELE, `quem` e `origem` — e demanda nova ainda ganha `codigo`.
+     * Toda publicacao bem-sucedida virava alarme.
+     *
+     * Aqui o carimbo e o REAL: `registraHistorico` recortada do worker.js. Um
+     * carimbo inventado provaria que a minha suposicao do carimbo funciona. */
+    const HC = { titulo: 'Titulo', descricao: 'Descricao',
+                 status_planejamento: 'Etapa', dev: 'Responsavel' };
+    const carimba = new Function('HIST_CAMPOS', 'histValor', 'HIST_MAX',
+      corpo(W, 'function registraHistorico(recebido, servidor, quem, origem) {') +
+      '; return registraHistorico;')(HC, v => String(v == null ? '' : v), 60);
+
+    const antesNoServidor = { id: 'z1', codigo: 'AX-567', titulo: 'Titulo velho',
+                              status_planejamento: 'validacao', tema_id: 't1',
+                              historico: [{ em: '2026-09-20T10:00:00.000Z', quem: 'f', mudancas: [] }] };
+    const naTela = JSON.parse(JSON.stringify(antesNoServidor));
+    naTela.titulo = 'Titulo novo';
+
+    // O rascunho sai da funcao real, com o retrato do servidor no lugar.
+    const g2 = {};
+    const local2 = { getItem: (k) => (k in g2 ? g2[k] : null),
+                     setItem: (k, v) => { g2[k] = String(v); },
+                     removeItem: (k) => { delete g2[k]; } };
+    monta('rascunhoSalvar();')(local2, 'rm', { melhorias: [naTela] },
+      () => {}, () => {}, () => {}, new Set(['z1']), [],
+      new Map([['z1', JSON.stringify(antesNoServidor)]]), false);
+    const guardadoZ = JSON.parse(g2['rm']);
+    ok(!('historico' in (guardadoZ.itens[0].campos || {})),
+       'o rascunho guarda SO o que a tela mudou — o carimbo do servidor nao entra',
+       JSON.stringify(guardadoZ.itens[0].campos));
+
+    // Publica de verdade: o Worker carimba por cima.
+    const gravado = { melhorias: [JSON.parse(JSON.stringify(naTela))] };
+    carimba(gravado, { melhorias: [antesNoServidor] }, 'fernando', 'admin');
+    ok(gravado.melhorias[0].historico.length === 2,
+       'e o servidor de fato carimba ao gravar (1 -> 2 entradas)');
+
+    // Recarrega a tela com a versao carimbada.
+    const estZ = { melhorias: [gravado.melhorias[0]] };
+    const sujZ = new Set(); let avisouZ = '';
+    monta('rascunhoRestaurar();')(local2, 'rm', estZ,
+      (t) => { avisouZ = t; }, () => {}, () => {}, sujZ, [], new Map(), false);
+    ok(!avisouZ,
+       'e a tela NAO avisa quando a alteracao chegou — era este o alarme falso',
+       avisouZ || 'silencio');
+    ok(sujZ.size === 0, 'nem marca a demanda como pendente outra vez');
+    ok(!('rm' in g2), 'e descarta o rascunho');
+    ok((estZ.melhorias[0].historico || []).length === 2,
+       'e o historico recem-gravado continua na tela');
+
+    /* ══ E QUANDO NAO CHEGOU, A REDE CONTINUA ══
+     * O risco de arrumar o alarme falso e desligar o alarme. */
+    g2['rm'] = JSON.stringify({ em: '2026-09-25T17:00:00.000Z', v: 2, itens: [
+      { id: 'z2', codigo: 'AX-568', titulo: 'Novo',
+        campos: { titulo: 'Novo' }, apagados: [] }] });
+    const estN = { melhorias: [{ id: 'z2', codigo: 'AX-568', titulo: 'Velho',
+                                 historico: [{ em: '2026-09-20T10:00:00.000Z' }] }] };
+    const sujN = new Set(); let avisouN = '';
+    monta('rascunhoRestaurar();')(local2, 'rm', estN,
+      (t) => { avisouN = t; }, () => {}, () => {}, sujN, [], new Map(), false);
+    ok(/não tinham sido publicadas/.test(avisouN) && sujN.has('z2'),
+       'a alteracao que NAO chegou continua voltando, e avisando');
+    ok(estN.melhorias[0].titulo === 'Novo',
+       'com o texto digitado de volta');
+    /* ── E SEM ATROPELAR O SERVIDOR ──
+       Antes a volta fazia `state.melhorias[i] = copia`, trocando o objeto
+       inteiro: o historico do servidor sumia da tela junto. Agora aplica o
+       patch. */
+    ok((estN.melhorias[0].historico || []).length === 1,
+       'e sem apagar o que e do servidor — aplica o campo, nao troca o objeto');
+
+    /* ══ CAMPO APAGADO DE PROPOSITO ══
+     * `JSON.stringify` come as chaves com `undefined`, que e como o patch diz
+     * "apaguei este campo". Sem guardar a parte, apagar e recarregar traria o
+     * valor velho de volta calado. */
+    const g3 = {};
+    const local3 = { getItem: (k) => (k in g3 ? g3[k] : null),
+                     setItem: (k, v) => { g3[k] = String(v); },
+                     removeItem: (k) => { delete g3[k]; } };
+    const comDev = { id: 'z3', codigo: 'AX-570', titulo: 'T', dev: 'Joao' };
+    monta('rascunhoSalvar();')(local3, 'rm', { melhorias: [{ id: 'z3', codigo: 'AX-570', titulo: 'T' }] },
+      () => {}, () => {}, () => {}, new Set(['z3']), [],
+      new Map([['z3', JSON.stringify(comDev)]]), false);
+    const gz3 = JSON.parse(g3['rm']);
+    ok((gz3.itens[0].apagados || []).indexOf('dev') >= 0,
+       'o rascunho registra o campo APAGADO, que o JSON engoliria',
+       JSON.stringify(gz3.itens[0].apagados));
+    const estD = { melhorias: [JSON.parse(JSON.stringify(comDev))] };
+    let avisouD = '';
+    monta('rascunhoRestaurar();')(local3, 'rm', estD,
+      (t) => { avisouD = t; }, () => {}, () => {}, new Set(), [], new Map(), false);
+    ok(!!avisouD && !('dev' in estD.melhorias[0]),
+       'e ele volta apagado, em vez de o valor velho ressuscitar');
   }
 
   /* === O CAMPO OBRIGATORIO E COBRADO NA TELA, E NAO NA RECUSA ==========

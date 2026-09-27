@@ -11440,14 +11440,48 @@ function levaAoCampo(id, campo, motivo) {
    publicado fica no navegador e volta quando a tela reabre.                  */
 const RASCUNHO_KEY = 'rm_admin_rascunho';
 
+/* ═══ O RASCUNHO GUARDA O QUE MUDOU, E NAO A DEMANDA INTEIRA ════════════════
+ *
+ * "esta dando muito erro desse" — sobre a faixa "1 alteracao(oes) de ... nao
+ *  tinham sido publicadas (AX-567). Estao de volta na tela."
+ *
+ * A faixa mentia. Ela guardava a demanda inteira e, ao recarregar, perguntava
+ * "a minha copia e IDENTICA a do servidor?". Essa nao e a pergunta: a pergunta
+ * e "a minha alteracao chegou la?".
+ *
+ * As duas nunca coincidem, porque O SERVIDOR CARIMBA a demanda ao gravar —
+ * `registraHistorico` acrescenta uma entrada com hora dele, `quem` e `origem`, e
+ * demanda nova ainda ganha `codigo` em `atribuiCodigos`. A copia local nunca vira
+ * igual. Reproduzido executando as duas funcoes reais lado a lado: publicacao
+ * bem-sucedida, titulo no servidor, e a tela avisando que nao tinha publicado.
+ *
+ * E o estrago passava do aviso. O restaurar fazia `state.melhorias[i] = copia`,
+ * trocando o objeto do servidor pelo local — o historico recem-gravado sumia da
+ * tela, e a demanda voltava a ser marcada como suja.
+ *
+ * Agora guarda o PATCH, pela mesma funcao que a publicacao usa
+ * (`camposAlterados`): o rascunho passa a conter exatamente o que seria enviado.
+ * Campo que o servidor carimba nunca entra, porque ninguem o alterou na tela. */
 function rascunhoSalvar() {
   try {
     const ids = [..._dirtyMelhoriaIds];
     if (!ids.length) { localStorage.removeItem(RASCUNHO_KEY); return; }
-    const itens = (state.melhorias || []).filter(m => ids.includes(m.id));
+    const itens = [];
+    (state.melhorias || []).forEach(m => {
+      if (!m || !ids.includes(m.id)) return;
+      const campos = camposAlterados(m, _baseMelhorias && _baseMelhorias.get(m.id));
+      /* `JSON.stringify` COME AS CHAVES COM `undefined`, e e assim que o patch
+         diz "este campo foi apagado". Sem separa-las, apagar um campo e recarregar
+         traria o valor velho de volta — silenciosamente. */
+      const apagados = Object.keys(campos).filter(k => campos[k] === undefined);
+      apagados.forEach(k => { delete campos[k]; });
+      if (!Object.keys(campos).length && !apagados.length) return;
+      itens.push({ id: m.id, codigo: m.codigo || '', titulo: m.titulo || '',
+                   campos, apagados });
+    });
     if (!itens.length) { localStorage.removeItem(RASCUNHO_KEY); return; }
     localStorage.setItem(RASCUNHO_KEY, JSON.stringify({
-      em: new Date().toISOString(), itens,
+      em: new Date().toISOString(), v: 2, itens,
     }));
   } catch (_) { /* sem localStorage, seguimos sem a rede de seguranca */ }
 }
@@ -11465,23 +11499,62 @@ function rascunhoLimpar() {
   try { localStorage.removeItem(RASCUNHO_KEY); } catch (_) {}
 }
 
-// Na abertura da tela: o que ficou no rascunho e ainda NAO esta no servidor volta
-// para a tela, marcado como pendente. Compara pelo conteudo, e nao so pelo id:
-// uma demanda publicada com sucesso e depois editada de novo tem o mesmo id.
+/* CAMPOS QUE SAO DO SERVIDOR, e por isso nunca contam como alteracao da tela.
+   `historico` e carimbado por `registraHistorico` e `codigo` por `atribuiCodigos`,
+   os dois no Worker. Eles so aparecem em rascunho da versao ANTIGA, que guardava
+   a demanda inteira — e eram eles que faziam a faixa disparar sempre. */
+const RASCUNHO_DO_SERVIDOR = ['historico', 'codigo', 'atualizado_em'];
+
+/* O rascunho antigo guardava a demanda inteira. Ele ainda esta no navegador de
+   quem nao recarregou, entao converte-se em patch aqui em vez de jogar fora —
+   descartar poderia levar junto trabalho de verdade. */
+function rascunhoComoPatch(it, noServidor) {
+  if (it && it.campos) return it;              // ja e da versao nova
+  const campos = camposAlterados(it, noServidor ? JSON.stringify(noServidor) : '');
+  RASCUNHO_DO_SERVIDOR.forEach(k => { delete campos[k]; });
+  const apagados = Object.keys(campos).filter(k => campos[k] === undefined);
+  apagados.forEach(k => { delete campos[k]; });
+  return { id: it.id, codigo: it.codigo || '', titulo: it.titulo || '',
+           campos, apagados };
+}
+
+/* Na abertura da tela: o que ficou no rascunho e ainda NAO chegou ao servidor
+   volta para a tela, marcado como pendente.
+   A PERGUNTA E POR CAMPO. Comparar o objeto inteiro dizia "nao publicou" em toda
+   publicacao bem-sucedida — ver a nota do `rascunhoSalvar`. */
 function rascunhoRestaurar() {
   const d = rascunhoLer();
   if (!d) return;
-  const noServidor = new Map((state.melhorias || []).map(m => [m.id, JSON.stringify(m)]));
-  const faltando = d.itens.filter(m => noServidor.get(m.id) !== JSON.stringify(m));
+  const porId = new Map((state.melhorias || []).map(m => [m.id, m]));
+  const faltando = d.itens
+    .map(it => rascunhoComoPatch(it, porId.get(it && it.id)))
+    .filter(it => {
+      if (!it || !it.id) return false;
+      const noServidor = porId.get(it.id);
+      if (!noServidor) return true;            // a demanda nem chegou la
+      const mudou = Object.keys(it.campos || {}).some(k =>
+        JSON.stringify(noServidor[k]) !== JSON.stringify(it.campos[k]));
+      // Campo apagado aqui que o servidor ainda tem com valor: tambem falta.
+      const faltaApagar = (it.apagados || []).some(k => !semValor(noServidor[k]));
+      return mudou || faltaApagar;
+    });
   if (!faltando.length) { rascunhoLimpar(); return; }
-  faltando.forEach(m => {
-    const i = (state.melhorias || []).findIndex(x => x.id === m.id);
-    if (i >= 0) state.melhorias[i] = m; else state.melhorias.push(m);
-    _dirtyMelhoriaIds.add(m.id);
+  faltando.forEach(it => {
+    const alvo = porId.get(it.id);
+    /* APLICA SO O QUE MUDOU, em vez de trocar o objeto.
+       Trocar apagava do lado da tela o que o servidor tinha acabado de gravar —
+       o historico, primeiro de todos. */
+    if (alvo) {
+      Object.assign(alvo, it.campos);
+      (it.apagados || []).forEach(k => { delete alvo[k]; });
+    } else {
+      state.melhorias.push(Object.assign({ id: it.id }, it.campos));
+    }
+    _dirtyMelhoriaIds.add(it.id);
   });
   _pendingEdits = true;
   const quando = new Date(d.em).toLocaleString('pt-BR');
-  const cods = faltando.map(m => m.codigo || '(sem código)').join(', ');
+  const cods = faltando.map(it => it.codigo || it.titulo || '(sem código)').join(', ');
   toast(faltando.length + ' alteração(ões) de ' + quando + ' não tinham sido publicadas ' +
         '(' + cods + '). Estão de volta na tela.', 'err');
   renderAll();
