@@ -3045,6 +3045,10 @@ function mesclaTemas(doServidor) {
 }
 
 async function saveViaProxy(tentativa = 1) {
+  /* Cada tentativa comeca sem explicacao dada. Sem zerar, uma recusa explicada
+     calaria a mensagem generica da tentativa SEGUINTE, que pode ter falhado por
+     outro motivo — e ai a tela emudece de vez. */
+  _jaExpliquei = false;
   /* ═══ A CÓPIA LOCAL É GARANTIA DESTA FUNÇÃO, E NÃO DE QUEM A CHAMA ═══════
    *
    * O rascunho existia e funcionava — mas só no caminho do modal, que chamava
@@ -11645,7 +11649,32 @@ function preVooObrigatorio() {
 /* Abre a demanda, vai para a aba certa e põe o cursor no campo — com um realce
    que dura o suficiente para o olho achar, e some sozinho. Sem o realce, o campo
    focado passa despercebido num formulário desta altura. */
+/* ═══ QUEM JA EXPLICOU, MARCA ═══════════════════════════════════════════════
+ *
+ * "Não me permitiu salvar" — e a tela mostrando so "NÃO foi salvo no servidor",
+ * sem dizer por que.
+ *
+ * O pre-voo barrava, `levaAoCampo` mostrava o motivo, e logo depois quem chamou
+ * (`mPersistir`, `pjPersistir`, e mais) mostrava a sua mensagem generica POR
+ * CIMA. O toast e um so: a segunda apagava a primeira, e sobrava a frase que nao
+ * explica nada — a unica que a pessoa lia.
+ *
+ * Marcar e mais confiavel que combinar retornos: sao quinze chamadores, e
+ * `saveViaProxy` ja devolve `false` para tudo. Quem tem uma frase generica
+ * pergunta antes se alguem ja disse algo melhor. */
+let _jaExpliquei = false;
+
 function levaAoCampo(id, campo, motivo) {
+  _jaExpliquei = true;
+  /* FECHA O QUE ESTIVER POR CIMA. O caso que apareceu foi salvar uma demanda a
+     partir do modal de Projeto: a demanda culpada abria ATRAS dele, e a tela
+     parecia nao ter feito nada. Sem `guardaPodeFechar`, de proposito — perguntar
+     "descarta as alteracoes?" aqui seria uma segunda pergunta no meio de uma
+     recusa que a pessoa ainda nao entendeu. */
+  ['modal-projeto', 'modal-tema'].forEach(mo => {
+    const el = document.getElementById(mo);
+    if (el && el.style.display !== 'none') el.style.display = 'none';
+  });
   try { openModalMelhoria(id); } catch (_) { return false; }
   try { mAba('dados'); } catch (_) {}
   setTimeout(() => {
@@ -11833,8 +11862,12 @@ async function mPersistir(msgOk) {
   _pendingEdits = true;
   rascunhoSalvar();
   bannerPendentes();
-  toast('NÃO foi salvo no servidor. A alteração está guardada neste navegador — ' +
-        'use "Publicar agora" na faixa vermelha do topo.', 'err');
+  /* SO FALA SE NINGUEM EXPLICOU. Esta frase diz o QUE aconteceu; a do pre-voo diz
+     POR QUE, e e a unica acionavel. Mostrar as duas apagava a segunda. */
+  if (!_jaExpliquei) {
+    toast('NÃO foi salvo no servidor. A alteração está guardada neste navegador — ' +
+          'use "Publicar agora" na faixa vermelha do topo.', 'err');
+  }
   return false;
 }
 
@@ -13538,7 +13571,7 @@ function pjDesvincular(melId) {
 async function pjPersistir() {
   const okSalvo = await saveViaProxy();
   if (okSalvo) { _dirtyMelhoriaIds.clear(); _pendingEdits = false; renderAll(); renderProjetos(); }
-  else toast('Não foi possível salvar. A alteração continua pendente.', 'err');
+  else if (!_jaExpliquei) toast('Não foi possível salvar. A alteração continua pendente.', 'err');
 }
 
 async function pjSalvar() {

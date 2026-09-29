@@ -15822,6 +15822,36 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/corpo\.error === 'sem_sistema' && culpado && culpado\.id/.test(DEVSAVE) &&
        DEVSAVE.indexOf("if (corpo && corpo.error === 'sem_sistema'") >= 0,
        'e se o servidor recusar mesmo assim, o painel Dev tambem leva ate la');
+    /* ══ A EXPLICACAO NAO PODE SER APAGADA PELA FRASE GENERICA ═══════════
+     *
+     * "Não me permitiu salvar" — e a tela mostrando so "NÃO foi salvo no
+     * servidor", sem dizer por que.
+     *
+     * O pre-voo barrava, `levaAoCampo` dizia o motivo, e quem chamou mostrava a
+     * sua mensagem generica logo depois. O toast e UM SO: a segunda apagava a
+     * primeira, e sobrava justamente a frase que nao explica nada. A jornada
+     * inteira existia e era invisivel. */
+    const LEVA = corpo(ADMIN, 'function levaAoCampo(id, campo, motivo) {') || '';
+    ok(/_jaExpliquei = true;/.test(LEVA),
+       'quem leva ao campo marca que ja explicou');
+    ok(/_jaExpliquei = false;/.test(VIA),
+       'e cada tentativa comeca sem explicacao dada — senao uma recusa explicada ' +
+       'calaria a mensagem da tentativa seguinte');
+    const PERS = corpo(ADMIN, 'async function mPersistir(msgOk) {') || '';
+    ok(/if \(!_jaExpliquei\) \{[\s\S]{0,200}NÃO foi salvo no servidor/.test(PERS),
+       'e a frase generica so aparece quando ninguem explicou');
+    ok(/else if \(!_jaExpliquei\) toast\('Não foi possível salvar/.test(semComentario(ADMIN)),
+       'idem no caminho do Projeto, que foi onde apareceu');
+    /* E O SILENCIO NAO VIRA A REGRA: falha de rede nao explica nada, e ai a
+       frase generica e a unica coisa que a pessoa tem. */
+    ok(/NÃO foi salvo no servidor/.test(PERS),
+       'mas ela continua existindo — falha de rede nao explica sozinha');
+    /* E O MODAL POR CIMA SAI DA FRENTE. O caso foi salvar uma demanda a partir
+       do modal de Projeto: a culpada abria ATRAS dele, e a tela parecia nao ter
+       feito nada. */
+    ok(/modal-projeto/.test(LEVA),
+       'e o modal aberto por cima e fechado, para a demanda aparecer');
+
     /* O CAMPO E O DE CADA TELA. `m-tema` no Admin, `n-tema` no painel — o HTML
        nao da para compartilhar, e trocar os dois poria o foco num campo que nao
        existe, falhando calado. */
