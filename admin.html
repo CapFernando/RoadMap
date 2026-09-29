@@ -1203,7 +1203,7 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=03bc22afd7"></script>
-  <script src="sistema-obrigatorio.js?v=7a27f8d016"></script>
+  <script src="prevoo.js?v=7436dabb7a"></script>
   <script src="deck-grafico.js?v=30e803d757"></script>
   <script src="deck-fundo.js?v=050a7db483"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
@@ -3134,9 +3134,10 @@ async function saveViaProxy(tentativa = 1) {
          vez de repetir o texto — é a mesma jornada do pré-voo, pela outra porta.
          O `itens[].id` existe justamente para isto. */
       const culpado = corpo && Array.isArray(corpo.itens) && corpo.itens[0];
-      if (corpo && corpo.error === 'sem_sistema' && culpado && culpado.id &&
-          levaAoCampo(culpado.id, 'm-tema',
-                      window.SISTEMA ? SISTEMA.MOTIVO : corpo.detail)) {
+      const doServidor = culpado && culpado.id && recusaConhecida(corpo.error);
+      if (doServidor &&
+          levaAoCampo(culpado.id, { tema: 'm-tema', dev: 'm-dev' }[doServidor.campo],
+                      doServidor.motivo || corpo.detail)) {
         showSaving(false);
         return false;
       }
@@ -11477,10 +11478,25 @@ function retratoDoServidor() {
   return { melhorias };
 }
 
+/* DE QUAL REGRA O SERVIDOR ESTA FALANDO.
+   Ele devolve um `error` por regra (`sem_sistema`, `sem_responsavel`); o
+   `prevoo.js` tem o campo e a frase de cada uma. Assim a recusa do servidor e a
+   conferencia da tela dizem a MESMA coisa, em vez de duas redacoes da mesma
+   regra — que e como a pessoa aprende que "depende de onde apareceu". */
+const RECUSA_REGRA = { sem_sistema: 'sistema', sem_responsavel: 'responsavel' };
+
+function recusaConhecida(erro) {
+  const nome = RECUSA_REGRA[String(erro || '')];
+  if (!nome || !window.PREVOO) return null;
+  return (PREVOO.REGRAS || []).find(r => r.nome === nome) || null;
+}
+
 function preVooObrigatorio() {
-  if (!window.SISTEMA) return null;   // módulo não carregou: o Worker ainda barra
-  return SISTEMA.primeiro({ temas: state.temas || [], melhorias: state.melhorias || [] },
-                          retratoDoServidor(), 'm-tema');
+  if (!window.PREVOO) return null;   // módulo não carregou: o Worker ainda barra
+  /* O CAMPO LOGICO VIRA O ID DESTA TELA. A regra nao conhece o HTML de
+     ninguém — `m-tema`/`m-dev` aqui, `n-tema` no painel Dev. */
+  return PREVOO.primeiro({ temas: state.temas || [], melhorias: state.melhorias || [] },
+                         retratoDoServidor(), { tema: 'm-tema', dev: 'm-dev' });
 }
 
 /* Abre a demanda, vai para a aba certa e põe o cursor no campo — com um realce

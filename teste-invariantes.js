@@ -96,8 +96,8 @@ const CATALOGO = fs.readFileSync('catalogo.js', 'utf8');
 const FILA = require('./fila.js');   // a conta da fila, executada e nao regexada
 const VINCULO = require('./vinculo.js');   // idem, para a regra do vinculo
 const PRZM = require('./prazo.js');        // e a regra do prazo, para a rede do limbo
-const SISTEMA = require('./sistema-obrigatorio.js');   // o sistema obrigatorio, executado
-const SISTEMAJS = fs.readFileSync('sistema-obrigatorio.js', 'utf8');
+const PREVOO = require('./prevoo.js');   // o sistema obrigatorio, executado
+const PREVOOJS = fs.readFileSync('prevoo.js', 'utf8');
 const TEMA = lerTela('tema.css');
 
 /* Corpo de uma funcao, por contagem de chaves.
@@ -15588,7 +15588,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * Uma terceira copia escrita a mao em qualquer das telas e o que isto barra. */
     ok(!/for \(const m of \(state\.melhorias \|\| \[\]\)\)[\s\S]{0,400}tema_id/.test(ADMIN),
        'o Admin nao tem mais copia propria da regra — ele delega');
-    ok(/SISTEMA\.primeiro\(/.test(ADMIN) && /SISTEMA\.primeiro\(/.test(DEV),
+    ok(/PREVOO\.primeiro\(/.test(ADMIN) && /PREVOO\.primeiro\(/.test(DEV),
        'as duas telas chamam a MESMA regra');
     ok(/sistema-obrigatorio\.js/.test(ADMIN) && /sistema-obrigatorio\.js/.test(DEV),
        'e as duas carregam o modulo');
@@ -15599,10 +15599,85 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        originou isto ("Escolha o sistema antes de planejar: mufxdq9ocnh7k27dbb").
        Procurar no arquivo cru acusava a propria explicacao — e a sexta vez nesta
        base que um comentario e confundido com o codigo que ele explica. */
-    ok(/MOTIVO/.test(SISTEMAJS) && /MOTIVO/.test(semComentario(ADMIN) + semComentario(DEV)) &&
-       !/Escolha o sistema antes de planejar/.test(semComentario(ADMIN)) &&
-       !/Escolha o sistema antes de planejar/.test(semComentario(DEV)),
-       'e o texto da recusa mora no modulo, e nao copiado em cada tela');
+    /* CADA REGRA CARREGA A SUA FRASE, dentro do modulo. Duas telas dizendo a
+       mesma recusa com palavras diferentes ensinam que a regra "depende da
+       tela" — e agora sao duas regras, o que dobraria as redacoes soltas. */
+    /* Medido no modulo EXECUTADO, e nao contando `motivo:` no texto — a palavra
+       aparece tambem no repasse de `presos` e de `primeiro`, e a contagem
+       reprovaria codigo correto. Ja reprovou. */
+    ok((PREVOO.REGRAS || []).length >= 2 &&
+       PREVOO.REGRAS.every(r => r.nome && r.campo && r.motivo && r.motivo.length > 20),
+       'toda regra do pre-voo carrega nome, campo e a sua frase',
+       (PREVOO.REGRAS || []).map(r => r.nome + '→' + r.campo).join(', '));
+
+    /* ══ O RESPONSAVEL PARA CONCLUIR ═══════════════════════════════════════
+     *
+     * "realizei muita mudanca e nao esta gravando" — a recusa era "Sem
+     * responsavel para concluir: AX-081".
+     *
+     * O `exigeDev` do Admin cobrava `planejado`, `em_andamento` e `validacao`.
+     * `concluido` NAO estava na lista — e e exatamente em `concluido` que o
+     * servidor cobra. Duas listas para a mesma regra, discordando no unico caso
+     * que importa: arrastar de Validacao para Concluido passava na tela e era
+     * recusado na publicacao, depois de a pessoa ja ter feito muita coisa. */
+    const semDevW = new Function(
+      corpo(W, 'function entrandoEmConcluidoSemDev(recebido, servidor) {') +
+      '; return entrandoEmConcluidoSemDev;')();
+    const TM = [{ id: 't1', nome: 'AXCred - Cadastro' }];
+    const concluindo = (m, velha) => ({
+      tela: PREVOO.presos({ temas: TM, melhorias: [m] }, { melhorias: velha ? [velha] : [] }),
+      srv: semDevW({ temas: TM, melhorias: [m] }, { melhorias: velha ? [velha] : [] }),
+    });
+
+    const caso81 = concluindo(
+      { id: 'x', codigo: 'AX-081', titulo: 'Ajuste', status_planejamento: 'concluido', tema_id: 't1' },
+      { id: 'x', codigo: 'AX-081', titulo: 'Ajuste', status_planejamento: 'validacao', tema_id: 't1', dev: 'Lucas' });
+    ok(caso81.tela.length === 1 && caso81.tela[0].regra === 'responsavel',
+       'a tela barra a conclusao sem responsavel ANTES de enviar',
+       caso81.tela.map(x => x.regra).join(',') || 'passou');
+    ok(caso81.tela[0].campo === 'dev',
+       'e aponta o campo do responsavel, e nao o do sistema');
+    ok(caso81.srv.length === 1, 'e o servidor barra o mesmo caso');
+    ok(caso81.srv[0].rotulo === 'AX-081 · Ajuste' && caso81.srv[0].id === 'x',
+       'nomeando a demanda e mandando o id para a tela agir', caso81.srv[0].rotulo);
+    ok(!/presos\.push\(m\.codigo \|\| m\.id\)/
+        .test(corpo(W, 'function entrandoEmConcluidoSemDev(recebido, servidor) {') || ''),
+       'e sem devolver o id interno quando falta codigo');
+
+    /* A TRANSICAO, E NAO O ESTADO — tambem aqui. */
+    const jaConcluida = concluindo(
+      { id: 'y', titulo: 'Novo', status_planejamento: 'concluido', tema_id: 't1' },
+      { id: 'y', titulo: 'Velho', status_planejamento: 'concluido', tema_id: 't1' });
+    ok(jaConcluida.tela.length === 0 && jaConcluida.srv.length === 0,
+       'quem ja estava concluida sem responsavel nao prende quem so editou o texto');
+
+    /* ══ E A TELA NAO PODE SER MAIS RIGIDA QUE O SERVIDOR ══
+     *
+     * A primeira versao desta regra cobrava "de Planejado em diante", que e o
+     * que a frase do servidor diz. Mas a trava dele e so na entrada em
+     * CONCLUIDO — e a prova caso a caso flagrou a tela barrando "Planejado com
+     * sistema e sem dev" enquanto o servidor deixava passar.
+     *
+     * Esse e o pior dos dois erros: a pessoa fica presa por uma regra que nao
+     * existe, e nao ha nada que ela possa ler para descobrir isso. */
+    const soPlanejado = concluindo(
+      { id: 'z', titulo: 'Sem dev', status_planejamento: 'planejado', tema_id: 't1' }, null);
+    ok(soPlanejado.tela.length === 0 && soPlanejado.srv.length === 0,
+       'em Planejado sem dev, a tela passa — porque o servidor passa');
+    const regraDev = PREVOO.REGRAS.find(r => r.nome === 'responsavel');
+    ok(regraDev && regraDev.etapas.length === 1 && regraDev.etapas[0] === 'concluido',
+       'a lista da regra e a do servidor, e nao a da frase dele',
+       (regraDev && regraDev.etapas.join(',')) || '');
+    /* E as etapas anteriores seguem cobradas, so que mais cedo e no lugar certo:
+       no modal e no arraste, com o cursor no campo, na hora de mexer. */
+    ok(/const ETAPAS_COM_DEV = \['planejado', 'em_andamento', 'validacao'\]/.test(ADMIN) &&
+       /if \(exigeDev\(sp\) && !devSel\)/.test(ADMIN) &&
+       /if \(exigeDev\(colKey\) && !String\(m\.dev/.test(ADMIN),
+       'e o modal e o arraste seguem cobrando as etapas anteriores, na hora de mexer');
+    ok(!/Escolha o sistema antes de planejar/.test(semComentario(ADMIN)) &&
+       !/Escolha o sistema antes de planejar/.test(semComentario(DEV)) &&
+       !/Escolha o responsável —/.test(semComentario(ADMIN)),
+       'e o texto da recusa nao e copiado em nenhuma das telas');
 
     /* ── A CONFERENCIA ACONTECE ANTES DE ENVIAR ──
        Depois da recusa ja e tarde: a pessoa descobriu o que falta por uma
@@ -15623,7 +15698,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * mover para Planejado uma demanda que nasceu sem sistema muda
      * `status_planejamento` sem passar por formulario nenhum. Regra que mora em
      * cada chamador e regra que o proximo chamador esquece. */
-    const iPreDev = DEVSAVE.indexOf('SISTEMA.primeiro(');
+    const iPreDev = DEVSAVE.indexOf('PREVOO.primeiro(');
     const iFetchDev = DEVSAVE.indexOf('fetch(ADMIN_PROXY_URL');
     ok(iPreDev > 0 && iPreDev < iFetchDev,
        'o painel Dev tambem confere ANTES de enviar, dentro do publicador');
@@ -15638,7 +15713,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const iPatch = DEVSAVE.indexOf('patch[m.id] ? { ...m, ...patch[m.id] } : m');
     ok(iAntes > 0 && iAntes < iPatch,
        'e o retrato de "antes" e guardado antes do patch entrar');
-    ok(/SISTEMA\.primeiro\(server, \{ melhorias: antesDoPatch \}/.test(DEVSAVE),
+    ok(/PREVOO\.primeiro\(server, \{ melhorias: antesDoPatch \}/.test(DEVSAVE),
        'e e ele que vai para a regra, e nao o estado ja patcheado');
     ok(/corpo\.error === 'sem_sistema' && culpado && culpado\.id/.test(DEVSAVE) &&
        DEVSAVE.indexOf("if (corpo && corpo.error === 'sem_sistema'") >= 0,
@@ -15656,9 +15731,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      *
      * Entao a invariante e outra: todo campo que qualquer das duas telas manda
      * para a jornada tem de ser um `id=` daquela mesma pagina. */
-    const camposDaJornada = (tela) => [...new Set(
-      [...semComentario(tela).matchAll(/(?:SISTEMA\.primeiro\([^;]*?|levaAoCampo\([^;]*?),\s*'([a-z]-[a-z-]+)'/g)]
-        .map(m => m[1]))];
+    /* Os campos vem do MAPA que cada tela passa (`{ tema: 'm-tema', dev: 'm-dev' }`)
+       e dos `levaAoCampo` diretos. Antes era um argumento solto; virou mapa quando
+       a segunda regra entrou, porque cada regra resolve num campo diferente. */
+    const camposDaJornada = (tela) => {
+      const limpo = semComentario(tela);
+      const dosMapas = [...limpo.matchAll(/(?:tema|dev):\s*'([a-z]-[a-z-]+)'/g)].map(m => m[1]);
+      const dosDiretos = [...limpo.matchAll(/levaAoCampo\([^;]*?,\s*'([a-z]-[a-z-]+)'/g)].map(m => m[1]);
+      return [...new Set(dosMapas.concat(dosDiretos))];
+    };
     const orfaos = [];
     [['admin.html', ADMIN], ['dev.html', DEV]].forEach(([nome, tela]) => {
       const campos = camposDaJornada(tela);
@@ -15693,7 +15774,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       (fonte.match(new RegExp('const ' + nome + ' = (\\[[^\\]]*\\])')) || [, '[]'])[1]
         .replace(/'/g, '"'));
     const ETAPAS_W = listaDe(W, 'ETAPAS_ALOCADA');
-    const ETAPAS_UI = SISTEMA.ETAPAS;
+    const ETAPAS_UI = PREVOO.ETAPAS;
     ok(ETAPAS_W.length === 4 && ETAPAS_UI.join('|') === ETAPAS_W.join('|'),
        'as telas e o servidor cobram o sistema nas MESMAS etapas',
        'modulo [' + ETAPAS_UI + '] servidor [' + ETAPAS_W + ']');
@@ -15717,23 +15798,43 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        dev — e um `.test(W)` file-wide daria certo com UMA sO arrumada. Ja
        aconteceu: a sabotagem que estragava a mensagem do dev passou em silencio
        porque a da tela ainda dizia `x.rotulo`. */
-    const recusas = W.split("error: 'sem_sistema'").slice(1)
-      .map(t => t.slice(0, t.indexOf('}, 400, headers)')));
-    ok(recusas.length === 2,
-       'o servidor recusa sem sistema nas duas portas', recusas.length + ' recusas');
-    const frouxas = recusas.filter(
-      (r, i) => !/itens: semSistema/.test(r) || !/\.map\(x => x\.rotulo\)/.test(r));
+    /* A VARREDURA E POR REGRA, E NAO SO PELO SISTEMA.
+       Enquanto olhava so `sem_sistema`, a recusa de RESPONSAVEL podia parar de
+       mandar `itens` sem ninguem notar — e a tela, sem `itens[].id`, volta a
+       mostrar texto em vez de levar ate a demanda. Duas sabotagens passaram em
+       silencio exatamente por isso. Agora toda recusa que a tela sabe traduzir
+       (as do `RECUSA_REGRA`) e conferida nas suas duas portas. */
+    const NAVEGAVEIS = [...semComentario(ADMIN)
+      .matchAll(/(\w+):\s*'(?:sistema|responsavel)'/g)].map(m => m[1]);
+    ok(NAVEGAVEIS.length >= 2,
+       'a tela sabe traduzir mais de uma recusa do servidor', NAVEGAVEIS.join(', '));
+    const frouxas = [];
+    NAVEGAVEIS.forEach(erro => {
+      const blocos = W.split("error: '" + erro + "'").slice(1)
+        .map(t => t.slice(0, t.indexOf('}, 400, headers)')));
+      if (blocos.length !== 2) { frouxas.push(erro + ': ' + blocos.length + ' portas'); return; }
+      blocos.forEach((b, i) => {
+        if (!/itens: /.test(b)) frouxas.push(erro + ' porta ' + (i + 1) + ': sem itens');
+        if (!/\.map\(x => x\.rotulo\)/.test(b)) frouxas.push(erro + ' porta ' + (i + 1) + ': sem rotulo');
+      });
+    });
     ok(frouxas.length === 0,
-       'e as duas mensagens usam o rotulo, e mandam os itens para a tela agir',
-       frouxas.length + ' recusa(s) sem rotulo ou sem itens');
+       'e toda recusa navegavel manda os itens e usa o rotulo, nas duas portas',
+       frouxas.join(' ; ') || NAVEGAVEIS.length + ' recusas x 2 portas conferidas');
 
     /* ── PELA OUTRA PORTA TAMBEM ──
        O servidor ainda pode recusar (outra aba publicou, regra mais nova que a
        tela). Quando ele diz QUAL, a tela leva ate la em vez de repetir o texto.
        O `if (` grudado e de proposito: sem ele, um `if (false && …)` na frente
        deixaria o texto intacto e a condicao morta. */
-    ok(VIA.indexOf("if (corpo && corpo.error === 'sem_sistema' && culpado && culpado.id") >= 0,
+    /* A ancora deixou de citar UMA recusa: agora o servidor devolve `itens`
+       em duas (`sem_sistema` e `sem_responsavel`), e a tela decide qual campo
+       abrir pelo `RECUSA_REGRA`. Afirmar a condicao, e nao o nome de uma delas. */
+    ok(VIA.indexOf('const doServidor = culpado && culpado.id && recusaConhecida(corpo.error)') >= 0 &&
+       VIA.indexOf('if (doServidor &&') >= 0,
        'e se o servidor recusar mesmo assim, a tela usa o id para levar ate la');
+    ok(/sem_sistema: 'sistema'/.test(ADMIN) && /sem_responsavel: 'responsavel'/.test(ADMIN),
+       'e sabe traduzir as DUAS recusas em campo — nao so a do sistema');
 
     /* ══ E AS DUAS REGRAS CONCORDAM, CASO A CASO ══
      *
@@ -15764,7 +15865,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const depois = { temas: TEMAS, melhorias: [m] };
       const antes = { melhorias: noServidor ? [noServidor] : [] };
       // O MODULO, executado — e nao um regex sobre ele.
-      const daTela = SISTEMA.presos(depois, antes).length > 0;
+      const daTela = PREVOO.presos(depois, antes).length > 0;
       // O WORKER, executado — a copia que existe porque o isolate nao importa nada.
       const doServidor = pegaSem(depois, antes).length > 0;
       if (daTela !== esperaBarrar || doServidor !== esperaBarrar) {
@@ -15784,7 +15885,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       { id: 'z2', codigo: 'AX-99', titulo: 'Com código', status_planejamento: 'planejado' },
       { id: 'z3', status_planejamento: 'planejado' },
     ].filter(m => {
-      const a = SISTEMA.presos({ temas: TEMAS, melhorias: [m] }, { melhorias: [] })[0];
+      const a = PREVOO.presos({ temas: TEMAS, melhorias: [m] }, { melhorias: [] })[0];
       const b = pegaSem({ temas: TEMAS, melhorias: [m] }, { melhorias: [] })[0];
       return !a || !b || a.rotulo !== b.rotulo || a.id !== b.id;
     });
@@ -15798,12 +15899,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        criterio das horas e do responsavel. Provado executando, e nao lendo: e
        o caso 'ja estava alocada sem sistema' la de cima, aqui isolado para
        falhar com nome proprio quando quebrar. */
-    const soMudouTexto = SISTEMA.presos(
+    const soMudouTexto = PREVOO.presos(
       { temas: TEMAS, melhorias: [{ id: 'e', titulo: 'Novo', status_planejamento: 'planejado' }] },
       { melhorias: [{ id: 'e', titulo: 'Velho', status_planejamento: 'planejado' }] });
     ok(soMudouTexto.length === 0,
        'quem ja estava alocado sem sistema nao prende quem so editou o texto');
-    const semRetrato = SISTEMA.presos(
+    const semRetrato = PREVOO.presos(
       { temas: TEMAS, melhorias: [{ id: 'e', titulo: 'Novo', status_planejamento: 'planejado' }] },
       null);
     ok(semRetrato.length === 1,
@@ -15821,13 +15922,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      *
      * Por isso aqui se EXECUTA o par do Admin — as duas funcoes como estao no
      * arquivo — em vez de ler o texto delas. */
-    const preVooAdmin = new Function('window', 'SISTEMA', 'state', '_baseMelhorias',
+    const preVooAdmin = new Function('window', 'PREVOO', 'state', '_baseMelhorias',
       corpo(ADMIN, 'function retratoDoServidor() {') + '\n' +
       corpo(ADMIN, 'function preVooObrigatorio() {') + '\n' +
       '; return preVooObrigatorio;');
     const jaEra = { id: 'velha', titulo: 'Antiga sem sistema', status_planejamento: 'planejado' };
     const rodaAdmin = (melhorias, base) => preVooAdmin(
-      { SISTEMA: SISTEMA }, SISTEMA, { temas: TEMAS, melhorias: melhorias }, base)();
+      { PREVOO: PREVOO }, PREVOO, { temas: TEMAS, melhorias: melhorias }, base)();
     ok(!rodaAdmin([jaEra], new Map([['velha', JSON.stringify(jaEra)]])),
        'o Admin nao tranca a publicacao por causa de pendencia antiga');
     ok(!!rodaAdmin([{ id: 'nova', titulo: 'Nova', status_planejamento: 'planejado' }], new Map()),

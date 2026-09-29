@@ -1646,7 +1646,21 @@ function entrandoEmConcluidoSemDev(recebido, servidor) {
     // cadastro do proprio PM/PO, e nao o furo do fluxo.
     if (!velha) continue;
     if (String(velha.status_planejamento || '') === 'concluido') continue;
-    if (!String(m.dev || '').trim()) presos.push(m.codigo || m.id);
+    /* VOLTA OBJETO, E NAO TEXTO — mesma razao de `entrandoAlocadaSemSistema`.
+       `m.codigo || m.id` sobra o id quando a demanda e nova, e id interno nao
+       resolve nada para quem esta na tela. O `id` deixa a tela ABRIR a demanda
+       culpada, que e a unica coisa que resolve; o `rotulo` e o que se le. */
+    if (!String(m.dev || '').trim()) {
+      const titulo = String(m.titulo || '').trim();
+      presos.push({
+        id: m.id || '',
+        codigo: m.codigo || '',
+        titulo: titulo,
+        rotulo: m.codigo
+          ? m.codigo + (titulo ? ' · ' + titulo.slice(0, 60) : '')
+          : (titulo ? '"' + titulo.slice(0, 60) + '"' : '(demanda sem título)'),
+      });
+    }
   }
   return presos;
 }
@@ -5274,7 +5288,10 @@ export default {
       const semDevPub = entrandoEmConcluidoSemDev(data, antesPub);
       if (semDevPub.length) {
         return json({ error: 'sem_responsavel',
-                      detail: 'Sem responsável para concluir: ' + semDevPub.join(', ') +
+                      itens: semDevPub,
+                      codigos: semDevPub.map(x => x.codigo || x.titulo),
+                      detail: 'Sem responsável para concluir: ' +
+                              semDevPub.map(x => x.rotulo).join(', ') +
                               '. De Planejado em diante toda demanda tem dono — sem ele a '  +
                               'entrega não entra em nenhum relatório por pessoa.' },
                     400, headers);
@@ -5426,7 +5443,10 @@ export default {
       const semDevDev = entrandoEmConcluidoSemDev(data, antesDev);
       if (semDevDev.length) {
         return json({ error: 'sem_responsavel',
-                      detail: 'Sem responsável para concluir: ' + semDevDev.join(', ') +
+                      itens: semDevDev,
+                      codigos: semDevDev.map(x => x.codigo || x.titulo),
+                      detail: 'Sem responsável para concluir: ' +
+                              semDevDev.map(x => x.rotulo).join(', ') +
                               '. De Planejado em diante toda demanda tem dono — sem ele a '  +
                               'entrega não entra em nenhum relatório por pessoa.' },
                     400, headers);

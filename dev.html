@@ -475,7 +475,7 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=03bc22afd7"></script>
-  <script src="sistema-obrigatorio.js?v=7a27f8d016"></script>
+  <script src="prevoo.js?v=7436dabb7a"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
@@ -2649,8 +2649,12 @@ async function saveToGitHub(patch, opts = {}) {
        * depois do patch, e `antes` é o mesmo estado sem ele. É exatamente o par
        * que o Worker compara — por isso a conferência não pode discordar dele
        * por construção, e não só por teste. */
-      if (window.SISTEMA) {
-        const falta = SISTEMA.primeiro(server, { melhorias: antesDoPatch }, 'n-tema');
+      if (window.PREVOO) {
+        /* Só `tema` tem campo nesta tela: o responsável do painel Dev é o
+           próprio dono da conta (`obj.dev = existing?.dev || currentDev`), e
+           não há campo para escolher. Campo sem id abre a demanda e diz o
+           motivo — melhor que apontar para um elemento que não existe. */
+        const falta = PREVOO.primeiro(server, { melhorias: antesDoPatch }, { tema: 'n-tema' });
         if (falta) { levaAoCampo(falta.id, falta.campo, falta.motivo); return false; }
       }
       // Versao sobre a qual o patch foi aplicado (leitura fresca, logo acima)
@@ -2672,10 +2676,15 @@ async function saveToGitHub(patch, opts = {}) {
            nova que esta tela. Quando ele diz QUAL demanda, leva-se até ela em
            vez de repetir o texto — é a mesma jornada, pela outra porta. O
            `itens[].id` existe justamente para isto. */
+        /* Só o sistema é navegável AQUI. `sem_responsavel` não tem campo neste
+           painel — o dono é a própria conta — então ela cai no aviso comum, com
+           o texto do servidor, em vez de abrir um card que não resolve nada. */
         const culpado = corpo && Array.isArray(corpo.itens) && corpo.itens[0];
+        const regraSis = window.PREVOO &&
+          (PREVOO.REGRAS || []).find(r => r.nome === 'sistema');
         if (corpo && corpo.error === 'sem_sistema' && culpado && culpado.id &&
             levaAoCampo(culpado.id, 'n-tema',
-                        window.SISTEMA ? SISTEMA.MOTIVO : corpo.detail)) {
+                        (regraSis && regraSis.motivo) || corpo.detail)) {
           return false;
         }
         let msg = 'Falha ao salvar';
