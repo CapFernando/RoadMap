@@ -182,8 +182,13 @@ ok(/const facilitadorOk = async/.test(blocoPoker),
 //   4. meu-nome-demandas, pela mesma razao da 3: a pergunta e "tem conta e qual e
 //      o id dela", porque a escrita e na PROPRIA conta. Papel nao decide nada aqui
 //      — o que decide e de quem e a sessao.
+//   5. spike-assinar, pela mesma familia: a pergunta e "QUEM esta assinando", e a
+//      resposta e gravada como autorizacao. Papel nao decide — o que decide e a
+//      marca `aprova_spike` daquela conta, conferida logo em seguida. E a
+//      identidade tem de vir da sessao por definicao: se viesse do corpo,
+//      bastaria publicar tres aprovacoes inventadas.
 const diretos = (W.match(/const ident\w* = await identifica\(env, body\);/g) || []).length;
-ok(diretos <= 4, 'identifica chamado direto apenas onde a semantica difere',
+ok(diretos <= 5, 'identifica chamado direto apenas onde a semantica difere',
    diretos + ' ocorrencia(s) (helper + quem-sou)');
 ok((W.match(/exigePapel\(env, body/g) || []).length >= 4,
    'as rotas que exigem papel usam exigePapel');
@@ -15605,10 +15610,17 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* Medido no modulo EXECUTADO, e nao contando `motivo:` no texto — a palavra
        aparece tambem no repasse de `presos` e de `primeiro`, e a contagem
        reprovaria codigo correto. Ja reprovou. */
-    ok((PREVOO.REGRAS || []).length >= 2 &&
-       PREVOO.REGRAS.every(r => r.nome && r.campo && r.motivo && r.motivo.length > 20),
-       'toda regra do pre-voo carrega nome, campo e a sua frase',
-       (PREVOO.REGRAS || []).map(r => r.nome + '→' + r.campo).join(', '));
+    /* CAMPO PODE SER VAZIO, e a do spike e. Nao ha campo para preencher: o que
+       falta e outra pessoa assinar, e pôr o cursor em algum lugar seria mentir
+       sobre o que resolve. Mas ai a FRASE tem de carregar o caminho sozinha —
+       por isso a do spike diz de quem se esta esperando. */
+    ok((PREVOO.REGRAS || []).length >= 3 &&
+       PREVOO.REGRAS.every(r => r.nome && r.motivo &&
+         (typeof r.motivo === 'function' || r.motivo.length > 20)),
+       'toda regra do pre-voo carrega nome e a sua frase',
+       (PREVOO.REGRAS || []).map(r => r.nome + '→' + (r.campo || '(sem campo)')).join(', '));
+    ok(PREVOO.REGRAS.filter(r => !r.campo).every(r => typeof r.motivo === 'function'),
+       'e regra sem campo explica o caminho na frase, que e calculada por demanda');
 
     /* ══ O RESPONSAVEL PARA CONCLUIR ═══════════════════════════════════════
      *
@@ -16275,6 +16287,172 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/\.anexo-link\s*\{[^}]*color:\s*var\(--blue\)/.test(AC),
        'o link de anexo tem cor propria — o azul padrao dava 1,78:1 no escuro');
     ok(/\.anexo-link:focus-visible/.test(AC), 'e foco visivel');
+  }
+
+  /* === SPIKE SO CONCLUI COM TRES ASSINATURAS ============================
+
+     "As tasks devem me permitir abrir spike, ao usar essa categoria, na
+      validacao devera exigir 3 aprovacoes (Fernando, Paullymax e Guilherme
+      Augusto) sem essas aprovacoes, nao conseguimos finalizar e abrir tasks
+      para desenvolvimento." */
+  sec('Spike: tres assinaturas para concluir');
+  {
+    const ROTA = W.slice(W.indexOf("if (body.action === 'spike-assinar') {"));
+    const rotaSpike = ROTA.slice(0, ROTA.indexOf("if (body.action === 'usuarios')"));
+
+    /* ══ A ASSINATURA VEM DA SESSAO, E NUNCA DO CORPO ══════════════════════
+     *
+     * E a invariante que sustenta tudo o resto. A assinatura E a autorizacao:
+     * se a tela pudesse dizer quem assinou, bastaria publicar tres nomes
+     * inventados e o controle inteiro seria teatro.
+     *
+     * Mesma razao ja escrita em `registraHistorico`: "um registro que o
+     * auditado pode apagar nao serve". Aqui vale em dobro. */
+    ok(/const identS = await identifica\(env, body\)/.test(rotaSpike) &&
+       /const uS = identS && identS\.usuario/.test(rotaSpike),
+       'quem assina sai da SESSAO');
+    ok(/login: uS\.login/.test(rotaSpike) && /nome: uS\.nome_demandas \|\| uS\.nome/.test(rotaSpike),
+       'e e o dado da sessao que vira a assinatura gravada');
+    const doCorpo = (rotaSpike.match(/body\.\w+/g) || [])
+      .filter(x => !['body.action', 'body.id', 'body.retirar'].includes(x));
+    ok(doCorpo.length === 0,
+       'e a rota nao le identidade nenhuma do corpo — so o id e se e assinar ou retirar',
+       doCorpo.join(', ') || 'nada alem de action/id/retirar');
+    /* A CONDICAO, e nao o texto: `if (false) { ... error: 'sessao' ... }` deixa
+       a mensagem intacta e a trava morta. Foi assim que a sabotagem passou. */
+    ok(rotaSpike.indexOf('if (!uS) {') >= 0 && /error: 'sessao'/.test(rotaSpike),
+       'senha compartilhada nao assina — ela nao diz quem e');
+    ok(/error: 'nao_aprovador'/.test(rotaSpike) &&
+       /podem\.some\(a => String\(a\.login\)/.test(rotaSpike),
+       'e so assina quem carrega a marca na conta');
+
+    /* ══ O CORPO NAO E A BASE DAS ASSINATURAS ══
+     * As telas montam a demanda por lista fechada de campos. Sem devolver as
+     * assinaturas gravadas, salvar pela aba Dados as apagaria — ja aconteceu
+     * nesta base com `historico`, com a pausa e com o grill. */
+    ok(/preservaAssinaturasSpike\(data, antesPub\)/.test(W),
+       'as assinaturas gravadas voltam ao objeto antes de publicar');
+    const PRES = corpo(W, 'function preservaAssinaturasSpike(recebido, servidor) {') || '';
+    const preserva = new Function(PRES + '; return preservaAssinaturasSpike;')();
+    const comAss = [{ login: 'fernando', nome: 'F' }];
+    const recebido = { melhorias: [{ id: 'a', spike: true, status_planejamento: 'validacao',
+                                     spike_aprovacoes: [{ login: 'falso' }, { login: 'falso2' },
+                                                        { login: 'falso3' }] }] };
+    preserva(recebido, { melhorias: [{ id: 'a', spike: true,
+                                       status_planejamento: 'validacao',
+                                       spike_aprovacoes: comAss }] });
+    ok(recebido.melhorias[0].spike_aprovacoes.length === 1 &&
+       recebido.melhorias[0].spike_aprovacoes[0].login === 'fernando',
+       'tres assinaturas inventadas no corpo sao descartadas pelas gravadas',
+       JSON.stringify(recebido.melhorias[0].spike_aprovacoes));
+    const semNada = { melhorias: [{ id: 'b', spike: true, status_planejamento: 'concluido',
+                                    spike_aprovacoes: [{ login: 'x' }, { login: 'y' }, { login: 'z' }] }] };
+    preserva(semNada, { melhorias: [] });
+    ok(semNada.melhorias[0].spike_aprovacoes.length === 0,
+       'e demanda que o servidor nao conhece nao traz assinatura nenhuma de brinde');
+
+    /* ══ DEVOLVER AO DEV ZERA ══
+     * O que foi assinado era a entrega que voltou. Manter as assinaturas faria a
+     * proxima versao concluir com o aval de uma anterior, que ninguem leu. */
+    const devolveu = { melhorias: [{ id: 'c', spike: true, status_planejamento: 'em_andamento' }] };
+    preserva(devolveu, { melhorias: [{ id: 'c', spike: true, status_planejamento: 'validacao',
+                                       spike_aprovacoes: [{ login: 'fernando' }, { login: 'paullymax' }] }] });
+    ok(devolveu.melhorias[0].spike_aprovacoes.length === 0,
+       'devolver ao dev zera as assinaturas');
+
+    /* ══ A TELA E O SERVIDOR CONTAM IGUAL ══
+     * Duas contagens diferentes fariam a tela liberar o que o servidor recusa —
+     * e o erro voltaria na publicacao, que e o que se quer evitar. */
+    const validasW = new Function(
+      corpo(W, 'function spikeAprovacoesValidas(m, aprovadores) {') +
+      '; return spikeAprovacoesValidas;')();
+    const APROV = [{ login: 'fernando', nome: 'Fernando' },
+                   { login: 'paullymax', nome: 'Paullymax' },
+                   { login: 'guilherme', nome: 'Guilherme Augusto' }];
+    const lotes = [
+      [[], 0, 'nenhuma'],
+      [[{ login: 'fernando' }], 1, 'uma'],
+      [[{ login: 'fernando' }, { login: 'FERNANDO' }, { login: 'fernando' }], 1, 'a mesma pessoa tres vezes'],
+      [[{ login: 'fernando' }, { login: 'lucas' }, { login: 'paullymax' }], 2, 'com um nao-aprovador no meio'],
+      [[{ login: 'fernando' }, { login: 'paullymax' }, { login: 'guilherme' }], 3, 'as tres'],
+      [[{ login: '' }, { login: null }], 0, 'assinatura sem login'],
+    ];
+    const divergem = lotes.filter(([ass, esperado]) => {
+      const m = { spike: true, spike_aprovacoes: ass };
+      return validasW(m, APROV).length !== esperado ||
+             PREVOO.assinaturasValidas(m, APROV).length !== esperado;
+    });
+    ok(divergem.length === 0,
+       'a tela e o servidor contam as assinaturas do MESMO jeito',
+       divergem.map(l => l[2]).join(' ; ') || lotes.length + ' lotes conferidos');
+    ok(PREVOO.ASSINATURAS_SPIKE === 3 && /const SPIKE_ASSINATURAS = 3;/.test(W),
+       'e os dois exigem o mesmo numero de assinaturas');
+
+    /* ══ A TRAVA DO SERVIDOR, EXECUTADA ══ */
+    const barraW = new Function('SPIKE_ASSINATURAS', 'spikeAprovacoesValidas',
+      corpo(W, 'function entrandoEmConcluidoSpikeSemAssinatura(recebido, servidor, aprovadores) {') +
+      '; return entrandoEmConcluidoSpikeSemAssinatura;')(3, validasW);
+    const spikeEm = (ass, etapaAntes) => ({
+      depois: { melhorias: [{ id: 's', codigo: 'AX-900', titulo: 'Spike X', spike: true,
+                              status_planejamento: 'concluido' }] },
+      antes: { melhorias: [{ id: 's', codigo: 'AX-900', spike: true,
+                             status_planejamento: etapaAntes, spike_aprovacoes: ass }] },
+    });
+    const duas = [{ login: 'fernando' }, { login: 'paullymax' }];
+    const tres = duas.concat([{ login: 'guilherme' }]);
+    const c2 = spikeEm(duas, 'validacao');
+    ok(barraW(c2.depois, c2.antes, APROV).length === 1,
+       'com duas assinaturas o servidor recusa concluir');
+    ok(barraW(c2.depois, c2.antes, APROV)[0].faltam === 1,
+       'e diz quantas faltam');
+    const c3 = spikeEm(tres, 'validacao');
+    ok(barraW(c3.depois, c3.antes, APROV).length === 0,
+       'com as tres, deixa');
+    /* A CONTA E SOBRE O QUE ESTA GRAVADO. Se ela olhasse o objeto recebido,
+       mandar as assinaturas no corpo passaria — e a rota propria seria inutil. */
+    const forjado = { melhorias: [{ id: 's', spike: true, status_planejamento: 'concluido',
+                                    spike_aprovacoes: tres }] };
+    ok(barraW(forjado, spikeEm([], 'validacao').antes, APROV).length === 1,
+       'e assinatura que veio no corpo nao conta — a conta e sobre o gravado');
+    /* TRANSICAO, e nao estado: spike ja concluido antes desta regra nao prende. */
+    const jaFechado = spikeEm([], 'concluido');
+    ok(barraW(jaFechado.depois, jaFechado.antes, APROV).length === 0,
+       'e spike que ja estava concluido nao volta a ser cobrado');
+    /* SEM LISTA DE APROVADORES, RECUSA. Liberar por indisponibilidade
+       transformaria uma falha de infra em porta aberta. */
+    ok(barraW(c3.depois, c3.antes, []).length === 1,
+       'sem aprovadores cadastrados, nenhuma assinatura vale — e recusa');
+
+    /* ══ E A TELA BARRA OS TRES GESTOS ══ */
+    ok(/if \(colKey === 'concluido' && m\.spike && window\.PREVOO\)/.test(ADMIN),
+       'o arraste para Concluido barra spike sem assinatura');
+    ok(/if \(aprovar && m\.spike && window\.PREVOO\)/.test(ADMIN),
+       'aprovar a entrega tambem');
+    ok(PREVOO.REGRAS.some(r => r.nome === 'spike'),
+       'e o pre-voo barra antes de publicar');
+    /* E O PUBLISH USA O RESULTADO DA GUARDA. Ter a funcao e chama-la nao basta:
+       `if (false)` sobre o resultado deixa tudo de pe e nada barrando. */
+    ok(W.indexOf('const spikeSemAssPub = entrandoEmConcluidoSpikeSemAssinatura(data, antesPub, aprovadoresPub);') >= 0 &&
+       W.indexOf('if (spikeSemAssPub.length) {') >= 0 &&
+       /error: 'spike_sem_assinatura'/.test(W),
+       'e o publish recusa de verdade quando faltam assinaturas');
+    ok(/spike_sem_assinatura: 'spike'/.test(semComentario(ADMIN)),
+       'e a tela traduz a recusa do servidor para levar ate a demanda');
+
+    /* ══ O GRUPO E CONFIGURAVEL, E NAO UMA LISTA NO CODIGO ══
+     * Nomes escritos no codigo falham calados no dia em que alguem sai. */
+    ok(/aprova_spike/.test(W) && /op === 'aprova-spike'/.test(W),
+       'quem assina e uma marca na conta, mudavel na aba Usuarios');
+    /* Medido SEM COMENTARIO: os tres arquivos CITAM o pedido, que traz os nomes.
+       Procurar no texto cru acusava a propria frase que explica a regra — e a
+       setima vez nesta base que um comentario e confundido com o codigo que ele
+       explica. O que nao pode e o nome virar dado. */
+    ok(!/Paullymax|Guilherme Augusto/.test(WC) &&
+       !/Paullymax|Guilherme Augusto/.test(semComentario(ADMIN)) &&
+       !/Paullymax|Guilherme Augusto/.test(semComentario(PREVOOJS)),
+       'e nenhum nome proprio foi escrito no codigo');
+    ok(/d\.spike_aprovadores = await spikeAprovadores\(env\)/.test(W),
+       'e a tela recebe do servidor quem pode assinar, para dizer de quem espera');
   }
 
   let erroPz = null;

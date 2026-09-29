@@ -1666,6 +1666,113 @@ function entrandoEmConcluidoSemDev(recebido, servidor) {
 }
 
 
+/* ═══ SPIKE SO CONCLUI COM TRES ASSINATURAS ════════════════════════════════
+ *
+ * "As tasks devem me permitir abrir spike, ao usar essa categoria, na validacao
+ *  devera exigir 3 aprovacoes (Fernando, Paullymax e Guilherme Augusto) sem
+ *  essas aprovacoes, nao conseguimos finalizar e abrir tasks para
+ *  desenvolvimento."
+ *
+ * O spike e trabalho de investigacao: o que sai dele nao e codigo, e uma
+ * DECISAO — e por isso ela e assinada por mais de uma pessoa antes de virar
+ * backlog de desenvolvimento.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AS ASSINATURAS SAO DO SERVIDOR, E NUNCA DO CORPO.
+ *
+ * Esta e a parte que nao pode ser negociada. `spike_aprovacoes` e gravado pela
+ * rota `spike-aprovar`, que le QUEM esta assinando da sessao — nao do que a tela
+ * mandou. Se a base viesse do corpo, bastaria publicar tres aprovacoes
+ * inventadas para passar, e o controle inteiro seria teatro.
+ *
+ * E a mesma razao ja escrita em `registraHistorico`: "um registro que o auditado
+ * pode apagar nao serve". Aqui vale em dobro, porque o registro E a autorizacao.
+ */
+const SPIKE_ASSINATURAS = 3;
+
+/* As aprovacoes que VALEM: uma por pessoa, e so de quem carrega a marca hoje.
+ * Quem perdeu a marca deixa de contar — a assinatura dela nao autoriza mais
+ * nada, e manter o numero de pe com uma assinatura que nao vale seria pior que
+ * pedir de novo. */
+function spikeAprovacoesValidas(m, aprovadores) {
+  const podem = new Set((aprovadores || [])
+    .map(a => String((a && a.login) || a || '').toLowerCase()).filter(Boolean));
+  const vistos = new Set();
+  return (((m || {}).spike_aprovacoes) || []).filter(a => {
+    const login = String((a && a.login) || '').toLowerCase();
+    if (!login || !podem.has(login) || vistos.has(login)) return false;
+    vistos.add(login);
+    return true;
+  });
+}
+
+/* QUEM PODE ASSINAR, lido da base de contas. Devolve `[]` quando nao ha D1 —
+ * e ai a guarda barra qualquer spike, porque nenhuma assinatura vale. Recusar e
+ * o lado seguro: liberar por falta de lista transformaria uma indisponibilidade
+ * em porta aberta, que e como controles de aprovacao costumam morrer. */
+async function spikeAprovadores(env) {
+  if (!env || !env.POKER_DB) return [];
+  try {
+    await contasMigrar(env.POKER_DB);
+    const r = await env.POKER_DB.prepare(
+      'SELECT login, nome FROM usuario WHERE aprova_spike = 1 AND ativo = 1 ORDER BY nome').all();
+    return r.results || [];
+  } catch (_) { return []; }
+}
+
+/* AS ASSINATURAS GRAVADAS VOLTAM AO OBJETO QUE VAI SER ESCRITO.
+ * O corpo NUNCA e a base. Sem isto, qualquer tela que monte a demanda por lista
+ * fechada de campos apagaria as assinaturas ao salvar — e foi exatamente o que
+ * ja aconteceu nesta base com `historico`, com a pausa e com o grill. */
+function preservaAssinaturasSpike(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return;
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    const gravadas = (velha && Array.isArray(velha.spike_aprovacoes)) ? velha.spike_aprovacoes : [];
+    /* DEVOLVIDA AO DEV ZERA AS ASSINATURAS. O que foi assinado era a entrega que
+       voltou; deixar as assinaturas de pe faria a proxima versao ser concluida
+       com o aval de uma anterior, que ninguem leu. */
+    const voltou = velha && String(velha.status_planejamento || '') === 'validacao' &&
+                   String(m.status_planejamento || '') === 'em_andamento';
+    m.spike_aprovacoes = voltou ? [] : gravadas;
+  }
+}
+
+/* Quem esta entrando em Concluido sendo spike e sem as assinaturas.
+ * TRANSICAO, e nao estado — mesmo criterio das horas, do responsavel e do
+ * sistema: spike ja concluido antes desta regra existir nao prende ninguem. */
+function entrandoEmConcluidoSpikeSemAssinatura(recebido, servidor, aprovadores) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || m.oculto || m.mesclado_em) continue;
+    if (!m.spike) continue;
+    if (String(m.status_planejamento || '') !== 'concluido') continue;
+    const velha = antes.get(m.id);
+    if (velha && String(velha.status_planejamento || '') === 'concluido') continue;
+    /* A CONTA E SOBRE O QUE ESTA GRAVADO, e nao sobre o que veio no corpo. */
+    const gravadas = spikeAprovacoesValidas(velha || m, aprovadores);
+    if (gravadas.length >= SPIKE_ASSINATURAS) continue;
+    const titulo = String(m.titulo || '').trim();
+    presos.push({
+      id: m.id || '',
+      codigo: m.codigo || '',
+      titulo: titulo,
+      faltam: SPIKE_ASSINATURAS - gravadas.length,
+      assinaram: gravadas.map(a => a.nome || a.login),
+      rotulo: m.codigo
+        ? m.codigo + (titulo ? ' · ' + titulo.slice(0, 60) : '')
+        : (titulo ? '"' + titulo.slice(0, 60) + '"' : '(demanda sem título)'),
+    });
+  }
+  return presos;
+}
+
 // ─── REFERENCIA AO GITHUB ──────────────────────────────────────────────
 // Antes havia UM campo `link_externo` para "o link da demanda", e ele estava
 // preenchido em ZERO das 201 demandas. Duas razoes: um slot para tres coisas
@@ -1891,6 +1998,13 @@ async function contasMigrar(db) {
     criado_em TEXT NOT NULL, ip TEXT, usado_em TEXT)`).run();
   // Data da ultima redefinicao propria, para o proximo login avisar a pessoa.
   await colunaSeFaltar(db, 'usuario', 'reset_em', 'TEXT');
+  /* QUEM ASSINA A CONCLUSAO DE UM SPIKE.
+     "ao usar essa categoria, na validacao devera exigir 3 aprovacoes (Fernando,
+      Paullymax e Guilherme Augusto)."
+     Fica na CONTA, e nao numa lista fixa no codigo: quem entra e sai do grupo
+     se resolve na tela, e uma pessoa que deixa a empresa nao trava a regra nem a
+     faz falhar calada. */
+  await colunaSeFaltar(db, 'usuario', 'aprova_spike', 'INTEGER NOT NULL DEFAULT 0');
   // E-mail unico, mas so entre quem tem e-mail (contas antigas ficam com NULL).
   try { await db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_usuario_email ON usuario(email) WHERE email IS NOT NULL').run(); } catch (_) {}
 }
@@ -4990,6 +5104,82 @@ export default {
     }
 
     // Gestao de usuarios — so admin.
+    /* ═══ ASSINAR (OU RETIRAR) A APROVACAO DE UM SPIKE ══════════════════════
+     *
+     * ROTA PROPRIA, e nao um campo do `publish`. A assinatura e a autorizacao:
+     * ela precisa dizer QUEM assinou, e isso so tem valor se vier da sessao. Se
+     * fosse um campo publicado pela tela, bastaria mandar tres nomes.
+     *
+     * Por isso aqui nao se le nada do corpo sobre a identidade — nem `login`,
+     * nem `nome`. So o `id` da demanda e se e assinatura ou retirada. */
+    if (body.action === 'spike-assinar') {
+      const identS = await identifica(env, body);
+      const uS = identS && identS.usuario;
+      if (!uS) {
+        return json({ error: 'sessao',
+                      detail: 'Entre com a sua conta para assinar — a assinatura ' +
+                              'registra quem aprovou, e senha compartilhada não diz quem é.' },
+                    401, headers);
+      }
+      const podem = await spikeAprovadores(env);
+      if (!podem.some(a => String(a.login).toLowerCase() === String(uS.login).toLowerCase())) {
+        return json({ error: 'nao_aprovador',
+                      detail: 'Sua conta não está marcada como aprovadora de spike. ' +
+                              'Um admin habilita isso na aba Usuários.' }, 403, headers);
+      }
+      const idS = String(body.id || '').trim();
+      if (!idS) return json({ error: 'id_obrigatorio' }, 400, headers);
+      const retirar = body.retirar === true;
+
+      const metaS = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
+      if (!metaS.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const fileS = await metaS.json();
+      const rawS = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+        { headers: { Accept: 'application/vnd.github.raw' } });
+      if (!rawS.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+      const atualS = JSON.parse(await rawS.text());
+      const mS = (atualS.melhorias || []).find(x => x && x.id === idS);
+      if (!mS) return json({ error: 'nao_encontrada' }, 404, headers);
+      if (!mS.spike) {
+        return json({ error: 'nao_e_spike',
+                      detail: 'Esta demanda não está marcada como spike.' }, 400, headers);
+      }
+      const antesS = Array.isArray(mS.spike_aprovacoes) ? mS.spike_aprovacoes : [];
+      const meu = String(uS.login).toLowerCase();
+      if (retirar) {
+        mS.spike_aprovacoes = antesS.filter(a =>
+          String((a && a.login) || '').toLowerCase() !== meu);
+      } else {
+        // Uma por pessoa: reassinar nao vira duas.
+        if (antesS.some(a => String((a && a.login) || '').toLowerCase() === meu)) {
+          return json({ ok: true, ja: true,
+                        aprovacoes: spikeAprovacoesValidas(mS, podem),
+                        faltam: Math.max(0, SPIKE_ASSINATURAS -
+                          spikeAprovacoesValidas(mS, podem).length) }, 200, headers);
+        }
+        mS.spike_aprovacoes = antesS.concat([{
+          login: uS.login,
+          nome: uS.nome_demandas || uS.nome || uS.login,
+          em: new Date().toISOString(),
+        }]);
+      }
+      atualS.atualizado_em = new Date().toISOString();
+      const putS = await gh('contents/' + FILE_PATH, {
+        method: 'PUT',
+        body: JSON.stringify({
+          message: 'chore: spike ' + (retirar ? 'assinatura retirada' : 'assinada') +
+                   ' por ' + uS.login,
+          content: toB64(JSON.stringify(atualS)), sha: fileS.sha }),
+      });
+      if (!putS.ok) {
+        return json({ error: 'Falha ao salvar', detail: await putS.text() }, 502, headers);
+      }
+      const valem = spikeAprovacoesValidas(mS, podem);
+      return json({ ok: true, aprovacoes: valem,
+                    faltam: Math.max(0, SPIKE_ASSINATURAS - valem.length),
+                    atualizado_em: atualS.atualizado_em }, 200, headers);
+    }
+
     if (body.action === 'usuarios') {
       if (!env.POKER_DB) return json({ error: 'indisponivel' }, 503, headers);
       // Mesmo ponto das outras rotas. temNivel compara por hierarquia (NIVEL) e
@@ -5008,7 +5198,7 @@ export default {
         // nenhuma, nao havia nada certo para escolher.
         const r = await env.POKER_DB.prepare(
           `SELECT id, login, nome, email, papel, ativo, pendente, criado_em, ultimo_acesso,
-                  nome_demandas, reset_em
+                  nome_demandas, reset_em, aprova_spike
              FROM usuario ORDER BY pendente DESC, nome`).all();
         // Pedidos de senha em aberto, para o admin resolver na mesma tela.
         const p = await env.POKER_DB.prepare(
@@ -5181,6 +5371,24 @@ export default {
         return json({ ok: true, nome_demandas: nomes.join(' / ') }, 200, headers);
       }
 
+      /* A MARCA DE APROVADOR DE SPIKE. Fica junto de `papel` e `ativo` porque e
+         a mesma natureza — permissao de conta, e so admin mexe. */
+      if (op === 'aprova-spike') {
+        const loginA = String(body.login || '').trim().toLowerCase();
+        const uA = await env.POKER_DB.prepare(
+          'SELECT id FROM usuario WHERE login = ?').bind(loginA).first();
+        if (!uA) return json({ error: 'nao_encontrado' }, 404, headers);
+        await env.POKER_DB.prepare('UPDATE usuario SET aprova_spike = ? WHERE id = ?')
+          .bind(body.aprova ? 1 : 0, uA.id).run();
+        const quantos = await env.POKER_DB.prepare(
+          'SELECT COUNT(*) AS n FROM usuario WHERE aprova_spike = 1 AND ativo = 1').first();
+        /* DEVOLVE QUANTOS SOBRARAM. Com menos de tres aprovadores ativos, nenhum
+           spike consegue fechar — e isso tem de aparecer na hora de desmarcar,
+           nao no dia em que alguem tentar concluir. */
+        return json({ ok: true, aprovadores: (quantos && quantos.n) || 0,
+                      minimo: SPIKE_ASSINATURAS }, 200, headers);
+      }
+
       if (op === 'papel' || op === 'ativo') {
         const login = String(body.login || '').trim().toLowerCase();
         const uu = await env.POKER_DB.prepare('SELECT id, papel FROM usuario WHERE login = ?').bind(login).first();
@@ -5216,7 +5424,20 @@ export default {
       if (!(await leituraLiberadaAsync(body))) return json({ error: 'credencial' }, 401, headers);
       const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
       if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
-      return new Response(await rawRes.text(), {
+      /* QUEM PODE ASSINAR SPIKE VAI JUNTO — so login e nome, e so de quem
+         carrega a marca. A tela precisa disso para dizer "faltam Fernando e
+         Guilherme" em vez de "faltam 2"; sem os nomes, quem le o card nao sabe a
+         quem pedir. Nao e a lista de contas: e o grupo de aprovadores, que e
+         justamente o que o card exibe. */
+      const baseTxt = await rawRes.text();
+      let comSpike = baseTxt;
+      try {
+        const d = JSON.parse(baseTxt);
+        d.spike_aprovadores = await spikeAprovadores(env);
+        d.spike_assinaturas = SPIKE_ASSINATURAS;
+        comSpike = JSON.stringify(d);
+      } catch (_) { /* base ilegivel: devolve como veio, quem le ja trata */ }
+      return new Response(comSpike, {
         status: 200,
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
       });
@@ -5251,8 +5472,28 @@ export default {
       // Nada entra em Concluido sem custo registrado. A recusa vem ANTES de
       // registraHistorico: gravar historico de uma publicacao que sera recusada
       // sujaria a trilha com um evento que nao aconteceu.
+      /* AS ASSINATURAS DO SPIKE VOLTAM AO OBJETO ANTES DE QUALQUER GUARDA.
+         Mesma armadilha ja documentada em `registraHistorico`: as telas montam a
+         demanda por lista fechada de campos, e `spike_aprovacoes` nao esta nelas
+         — salvar pela aba Dados chegaria aqui sem ele e apagaria as assinaturas.
+         E, se a base fosse o corpo, bastaria mandar tres inventadas. */
+      preservaAssinaturasSpike(data, antesPub);
       const semHorasPub = entrandoEmConcluidoSemHoras(data, antesPub);
       const semSistemaPub = entrandoAlocadaSemSistema(data, antesPub);
+      const aprovadoresPub = await spikeAprovadores(env);
+      const spikeSemAssPub = entrandoEmConcluidoSpikeSemAssinatura(data, antesPub, aprovadoresPub);
+      if (spikeSemAssPub.length) {
+        const p = spikeSemAssPub[0];
+        return json({ error: 'spike_sem_assinatura',
+                      itens: spikeSemAssPub,
+                      codigos: spikeSemAssPub.map(x => x.codigo || x.titulo),
+                      detail: 'Spike só conclui com ' + SPIKE_ASSINATURAS +
+                              ' aprovações: ' + spikeSemAssPub.map(x => x.rotulo).join(', ') +
+                              '. Faltam ' + p.faltam +
+                              (p.assinaram.length ? ' (já assinaram: ' + p.assinaram.join(', ') + ')' : '') +
+                              '. A decisão do spike vira backlog de desenvolvimento — ' +
+                              'por isso ela é assinada antes de fechar.' }, 400, headers);
+      }
       if (semSistemaPub.length) {
         return json({ error: 'sem_sistema',
                       itens: semSistemaPub,

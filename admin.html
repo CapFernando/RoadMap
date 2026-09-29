@@ -848,6 +848,21 @@
     .anexo-link { display:inline-flex; align-items:center; gap:4px; color:var(--blue); text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:12px; }
     .anexo-link:hover { text-decoration:underline; }
     .anexo-link:focus-visible { outline:2px solid var(--amber,#E89C2F); outline-offset:2px; }
+    /* ─── SPIKE: as tres assinaturas ─────────────────────────────────────── */
+    .kb-spike { font-size:11px; background:var(--purple-bg,#2A1F4A); color:var(--purple-tx,#C4AEF5); border-radius:4px; padding:2px 7px; font-weight:700; white-space:nowrap; }
+    .kb-spike.ok { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
+    .spike-bloco { border-left:3px solid var(--purple,#9B6FE8); }
+    .spike-bloco.completo { border-left-color:var(--green,#5EA832); }
+    .spike-linha { display:flex; align-items:center; gap:10px; padding:6px 0; font-size:13px; color:var(--text2); border-bottom:1px solid var(--border); }
+    .spike-linha:last-of-type { border-bottom:0; }
+    .spike-linha.ok .spike-nome { color:var(--text); font-weight:600; }
+    .spike-mk { width:18px; flex-shrink:0; }
+    .spike-nome { flex:1; }
+    .spike-em { font-size:11px; color:var(--text3); white-space:nowrap; }
+    .spike-aviso { font-size:12px; color:var(--amber-tx,#FFE14D); margin:8px 0 0; }
+    .spike-aviso.ok { color:var(--green-tx,#B2E07A); }
+    .us-spike { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); cursor:pointer; white-space:nowrap; }
+    .us-spike input { width:auto; margin:0; }
     .rel-pts { font-size:11px; background:#123A52; color:#8AD5F0; border-radius:4px; padding:2px 7px; font-weight:700; white-space:nowrap; }
     .rel-card-meta { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--text2); margin-bottom:8px; }
     .rel-card-meta b { color:var(--text); }
@@ -1203,7 +1218,7 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=03bc22afd7"></script>
-  <script src="prevoo.js?v=7436dabb7a"></script>
+  <script src="prevoo.js?v=48c879306a"></script>
   <script src="deck-grafico.js?v=30e803d757"></script>
   <script src="deck-fundo.js?v=050a7db483"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
@@ -2070,6 +2085,17 @@
           <input type="checkbox" id="m-debito" style="width:auto;margin:0" />
           🧱 Débito técnico
         </label>
+        <!-- SPIKE: investigacao que termina em DECISAO, e nao em codigo. Por isso
+             ela e assinada por tres pessoas antes de virar backlog de
+             desenvolvimento. Marca propria, e nao um terceiro Tipo: os relatorios
+             que dividem Sustentacao x Evolucao continuam como estao. -->
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;
+                      background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
+                      padding:11px 12px;font-size:14px;margin-top:8px"
+               title="Spike só conclui com 3 aprovações — a decisão é assinada antes de virar backlog.">
+          <input type="checkbox" id="m-spike" style="width:auto;margin:0" onchange="renderEntrega(mAtual())" />
+          🔬 Spike <span style="color:var(--text3);font-size:12px">(exige 3 aprovações para concluir)</span>
+        </label>
       </div>
     </div>
 
@@ -2870,6 +2896,10 @@ async function loadFromGitHub(silent) {
       feriados:       decoded.feriados        || [],
       ausencias:      decoded.ausencias       || [],
       projetos:       decoded.projetos        || [],
+      /* QUEM PODE ASSINAR SPIKE. Vem do servidor em `dados`, lido da base de
+         contas — nao e editavel aqui e nao vai no `publish`. A tela usa so para
+         dizer de quem se esta esperando a assinatura. */
+      spike_aprovadores: decoded.spike_aprovadores || [],
     };
     retratoBase();          // base do merge por campo
     _dirtyMelhoriaIds.clear();
@@ -3049,6 +3079,7 @@ async function saveViaProxy(tentativa = 1) {
     // avançar entre esta leitura e a gravação, ele recusa com 409 em vez de
     // deixar a nossa versão sobrescrever a de outra tela.
     const baseVersao = server.atualizado_em || null;
+    state.spike_aprovadores = server.spike_aprovadores || state.spike_aprovadores || [];
     state.temas = mesclaTemas(server.temas);
     state.melhorias = mesclaMelhorias(server.melhorias);
     // `devs_perfil` funde por CHAVE, e nao por substituicao: o Planejamento tambem
@@ -3137,7 +3168,12 @@ async function saveViaProxy(tentativa = 1) {
       const doServidor = culpado && culpado.id && recusaConhecida(corpo.error);
       if (doServidor &&
           levaAoCampo(culpado.id, { tema: 'm-tema', dev: 'm-dev' }[doServidor.campo],
-                      doServidor.motivo || corpo.detail)) {
+                      /* Frase de regra que depende da demanda — a do spike diz
+                         quem ja assinou — vem montada do SERVIDOR, que tem os
+                         dados. Chamar a funcao daqui daria um texto com a conta
+                         da tela, que pode estar desatualizada. */
+                      (typeof doServidor.motivo === 'string' && doServidor.motivo) ||
+                      corpo.detail)) {
         showSaving(false);
         return false;
       }
@@ -3199,6 +3235,7 @@ async function saveToGitHub(attempt = 1) {
        vencia para os que existiam dos dois lados. Dois caminhos de gravacao com
        regras diferentes e como esta base ja errou antes — consertar um deixaria o
        outro revertendo nomes em silencio. */
+    state.spike_aprovadores = serverData.spike_aprovadores || state.spike_aprovadores || [];
     state.temas = mesclaTemas(serverData.temas);
     state.melhorias = mesclaMelhorias(serverData.melhorias);   // 3-way merge — ver comentário acima
     // Preserva devs e feriados cadastrados pelo Gantt — admin não os edita mas não deve apagá-los
@@ -4303,6 +4340,15 @@ function renderKanban() {
       if (projDoCard) badges.push('<span class="kb-proj" title="' + esc(projDoCard.nome || '') + '">🗂 ' +
         esc(projDoCard.codigo || projDoCard.nome || '') + '</span>');
       if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
+      /* O SELO DIZ QUANTAS ASSINATURAS FALTAM, e nao so "spike". Quem olha o
+         quadro quer saber o que impede de fechar, e esse numero e a resposta. */
+      if (m.spike) {
+        const _v = window.PREVOO
+          ? PREVOO.assinaturasValidas(m, state.spike_aprovadores || []).length : 0;
+        const _min = (window.PREVOO && PREVOO.ASSINATURAS_SPIKE) || 3;
+        badges.push('<span class="kb-spike' + (_v >= _min ? ' ok' : '') +
+          '" title="Spike: ' + _v + ' de ' + _min + ' aprovações">🔬 ' + _v + '/' + _min + '</span>');
+      }
       if (nAnexos) badges.push(`<span class="kb-anexo-tag">📎 ${nAnexos}</span>`);
       /* O PROGRESSO DAS SUBTAREFAS, para quem acompanha e nao executa.
          O dev quebra a demanda em passos no painel dele; sem trazer isso para ca,
@@ -4458,6 +4504,21 @@ function kbDrop(e, colKey) {
     openModalMelhoria(id);
     setTimeout(() => { document.getElementById('m-status').value = colKey; onStatusChange(); document.getElementById('m-dev').focus(); }, 320);
     return;
+  }
+  /* SPIKE SEM ASSINATURA NAO ARRASTA PARA CONCLUIDO. O arraste e o caminho em
+     que a pessoa NAO ve a aba Entrega — sem esta trava ela solta o card, parece
+     que concluiu, e o erro so aparece na publicacao. */
+  if (colKey === 'concluido' && m.spike && window.PREVOO) {
+    const valem = PREVOO.assinaturasValidas(m, state.spike_aprovadores || []);
+    if (valem.length < PREVOO.ASSINATURAS_SPIKE) {
+      toast('"' + (m.codigo || m.titulo) + '" é um spike com ' + valem.length +
+            ' de ' + PREVOO.ASSINATURAS_SPIKE + ' aprovações — abra a aba Entrega ' +
+            'para ver quem falta assinar.', 'err');
+      renderKanban();
+      openModalMelhoria(id);
+      setTimeout(() => { try { mAba('entrega'); } catch (_) {} }, 320);
+      return;
+    }
   }
   if (pedeHoras(m, colKey)) return;
   m.status_planejamento = colKey;
@@ -10690,6 +10751,7 @@ function openModalMelhoria(id) {
   mResumoConta();
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
+  document.getElementById('m-spike').checked         = !!m?.spike;
   mPopulaProjetos(m?.projeto_id || '');
   mescRenderBloco(m || null);
   pausaRenderBloco(m || null);
@@ -11388,6 +11450,13 @@ async function saveMelhoria() {
     producao_em:         existing.producao_em  || '',
     producao_por:        existing.producao_por || '',
     debito_tecnico:      document.getElementById('m-debito').checked,
+    spike:               document.getElementById('m-spike').checked,
+    /* AS ASSINATURAS NAO SAO DESTE FORMULARIO. Elas vem do servidor, que e
+       quem as grava lendo a sessao de quem assina — mandar daqui abriria a
+       porta para tres aprovacoes inventadas. Repassar o que ja existe evita
+       que a lista fechada de campos apague o registro; o Worker confere de
+       qualquer forma. */
+    spike_aprovacoes:    existing.spike_aprovacoes || [],
     // Quando o card nasce de dentro de um projeto, o vinculo ja vem selecionado.
     projeto_id:          document.getElementById('m-projeto').value || _pjRetorno || '',
     // Campos da validacao nao tem campo no formulario: sem repassar, salvar pela
@@ -11548,7 +11617,15 @@ function retratoDoServidor() {
    `prevoo.js` tem o campo e a frase de cada uma. Assim a recusa do servidor e a
    conferencia da tela dizem a MESMA coisa, em vez de duas redacoes da mesma
    regra — que e como a pessoa aprende que "depende de onde apareceu". */
-const RECUSA_REGRA = { sem_sistema: 'sistema', sem_responsavel: 'responsavel' };
+const RECUSA_REGRA = { sem_sistema: 'sistema', sem_responsavel: 'responsavel',
+                       spike_sem_assinatura: 'spike' };
+
+/* A demanda aberta no modal. O `m-id` ja era a fonte disso em cinco lugares;
+   ter um nome evita a sexta copia da mesma expressao. */
+function mAtual() {
+  const id = (document.getElementById('m-id') || {}).value;
+  return id ? (state.melhorias || []).find(x => x.id === id) || null : null;
+}
 
 function recusaConhecida(erro) {
   const nome = RECUSA_REGRA[String(erro || '')];
@@ -11560,7 +11637,8 @@ function preVooObrigatorio() {
   if (!window.PREVOO) return null;   // módulo não carregou: o Worker ainda barra
   /* O CAMPO LOGICO VIRA O ID DESTA TELA. A regra nao conhece o HTML de
      ninguém — `m-tema`/`m-dev` aqui, `n-tema` no painel Dev. */
-  return PREVOO.primeiro({ temas: state.temas || [], melhorias: state.melhorias || [] },
+  return PREVOO.primeiro({ temas: state.temas || [], melhorias: state.melhorias || [],
+                          spike_aprovadores: state.spike_aprovadores || [] },
                          retratoDoServidor(), { tema: 'm-tema', dev: 'm-dev' });
 }
 
@@ -12013,7 +12091,14 @@ function uLinhaAtiva(u) {
       PAPEIS_CONTA.map(p =>
         '<option value="' + p + '"' + (u.papel === p ? ' selected' : '') + '>' + U_PAPEL_ROTULO[p] + '</option>'
       ).join('') + '</select>' +
-      (off ? ' <span class="us-tag us-tag-off">desativado</span>' : '') + '</td>' +
+      (off ? ' <span class="us-tag us-tag-off">desativado</span>' : '') +
+      /* A MARCA FICA COLADA NO PAPEL porque e da mesma natureza: permissao da
+         conta. Assinar um spike autoriza uma decisao a virar backlog — nao e
+         preferencia de tela. */
+      '<label class="us-spike" title="Pode assinar a aprovação de um spike">' +
+        '<input type="checkbox"' + (u.aprova_spike ? ' checked' : '') +
+        ' onchange="uAprovaSpike(\'' + l + '\', this.checked)"> aprova spike</label>' +
+      '</td>' +
     '<td>' + uCelulaNomeDemandas(u) + '</td>' +
     uCelulaPerfil(u) +
     uCelulaPipeline(u) +
@@ -12152,6 +12237,24 @@ function uTabela(cabecalhos, linhas) {
   return '<div class="us-tabela-wrap"><table class="us-tabela"><thead><tr>' +
     cabecalhos.map(c => '<th>' + c + '</th>').join('') +
     '</tr></thead><tbody>' + linhas.join('') + '</tbody></table></div>';
+}
+
+/* AVISA QUANDO O GRUPO FICA PEQUENO DEMAIS. Com menos de tres aprovadores
+   ativos nenhum spike consegue fechar — e isso tem de aparecer na hora de
+   desmarcar, e nao no dia em que alguem tentar concluir e nao entender por que
+   a tela recusa. O servidor devolve a conta justamente para isto. */
+async function uAprovaSpike(login, aprova) {
+  try {
+    const r = await uChamar('aprova-spike', { login, aprova });
+    await renderUsuarios();
+    if (r && typeof r.aprovadores === 'number' && r.aprovadores < (r.minimo || 3)) {
+      toast('Agora só ' + r.aprovadores + ' pessoa(s) podem assinar spike, e são ' +
+            'necessárias ' + (r.minimo || 3) + '. Enquanto for assim, nenhum spike ' +
+            'consegue ser concluído.', 'err');
+    } else {
+      toast(aprova ? 'Passa a aprovar spike.' : 'Não aprova mais spike.', 'ok');
+    }
+  } catch (e) { toast(e.message, 'err'); }
 }
 
 function uLinhaPendente(u) {
@@ -12731,6 +12834,54 @@ function entregaHTML(m, opts) {
       '</div></div>'
     : '';
 
+  /* ─── AS TRES ASSINATURAS DO SPIKE ────────────────────────────────────────
+     Aparece ANTES dos botoes, e nao depois: e ela que decide se aprovar e
+     possivel. Um bloco embaixo seria lido depois de a pessoa ja ter clicado.
+
+     A LISTA E NOMINAL, e nao um contador. "Faltam 2" nao diz a quem pedir; o
+     card e lido justamente por quem vai cobrar a assinatura. */
+  let spikeBloco = '';
+  if (m.spike) {
+    const podem = (state.spike_aprovadores || []);
+    const valem = window.PREVOO ? PREVOO.assinaturasValidas(m, podem) : [];
+    const minimo = (window.PREVOO && PREVOO.ASSINATURAS_SPIKE) || 3;
+    const assinou = (login) => valem.find(a =>
+      String(a.login || '').toLowerCase() === String(login || '').toLowerCase());
+    const euSou = _eu && podem.some(a =>
+      String(a.login || '').toLowerCase() === String(_eu.login || '').toLowerCase());
+    const jaAssinei = _eu && assinou(_eu.login);
+    const linhas = podem.map(a => {
+      const s = assinou(a.login);
+      return '<div class="spike-linha' + (s ? ' ok' : '') + '">' +
+        '<span class="spike-mk">' + (s ? '✅' : '⬚') + '</span>' +
+        '<span class="spike-nome">' + esc(a.nome || a.login) + '</span>' +
+        (s ? '<span class="spike-em">' + esc(quando(s.em)) + '</span>'
+           : '<span class="spike-em">aguardando</span>') +
+      '</div>';
+    }).join('');
+    const faltam = Math.max(0, minimo - valem.length);
+    spikeBloco =
+      '<div class="ent-bloco spike-bloco' + (faltam ? ' pendente' : ' completo') + '">' +
+        '<h4>🔬 Spike · ' + valem.length + ' de ' + minimo + ' aprovações</h4>' +
+        (podem.length < minimo
+          ? '<p class="ent-vazio">Só ' + podem.length + ' pessoa(s) marcada(s) como ' +
+            'aprovadora de spike, e são necessárias ' + minimo + '. Um admin habilita ' +
+            'na aba Usuários — sem isso nenhum spike consegue fechar.</p>'
+          : linhas) +
+        (faltam
+          ? '<p class="spike-aviso">Enquanto faltar assinatura, este spike não conclui — ' +
+            'a decisão dele vira backlog de desenvolvimento.</p>'
+          : '<p class="spike-aviso ok">Assinado. Pode concluir.</p>') +
+        (leitura || !euSou ? ''
+          : '<div class="ent-acoes">' +
+              (jaAssinei
+                ? '<button class="btn btn-secondary" onclick="spikeAssinar(false)">↩ Retirar minha aprovação</button>'
+                : '<button class="btn btn-success" onclick="spikeAssinar(true)">✍ Aprovar como ' +
+                  esc((_eu && (_eu.nome || _eu.login)) || '') + '</button>') +
+            '</div>') +
+      '</div>';
+  }
+
   // Sem botao de decidir em modo leitura — ver a nota da assinatura.
   const acoes = (sk === 'validacao' && !leitura)
     ? '<div class="ent-acoes">' +
@@ -12739,7 +12890,7 @@ function entregaHTML(m, opts) {
       '</div>'
     : '';
 
-  return topo +
+  return topo + spikeBloco +
     '<div class="ent-bloco"><h4>O que foi implementado</h4>' +
       (impl ? '<div class="ent-impl">' + esc(impl) + '</div>'
             : '<p class="ent-vazio">O dev não descreveu a entrega. Devolva pedindo a descrição — ' +
@@ -12769,6 +12920,45 @@ function abrirAnexoIdx(i, id) {
   if (a) abrirAnexo(a, ADMIN_PROXY_URL, credAdmin());
 }
 
+/* ═══ ASSINAR UM SPIKE ══════════════════════════════════════════════════════
+ *
+ * ROTA PROPRIA NO SERVIDOR, e nao um campo publicado. Quem assinou vem da
+ * SESSAO, no Worker — a tela nao manda login nem nome. Se mandasse, bastaria
+ * publicar tres aprovacoes inventadas e o controle inteiro seria teatro.
+ *
+ * Por isso aqui nao se toca em `state`: grava-se no servidor e recarrega-se. A
+ * tela nao tem o que "aplicar localmente", porque ela nao e a autora do dado. */
+async function spikeAssinar(assinar) {
+  const m = mAtual();
+  if (!m) return;
+  showSaving(true);
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign(
+        { action: 'spike-assinar', id: m.id, retirar: !assinar }, credAdmin())),
+    });
+    const corpo = await r.json().catch(() => null);
+    if (!r.ok) {
+      toast((corpo && corpo.detail) || 'Não foi possível registrar a aprovação.', 'err');
+      return;
+    }
+    /* RECARREGA DO SERVIDOR. A assinatura foi gravada la, e o numero que importa
+       — quantas valem — depende de quem esta marcado como aprovador AGORA. */
+    await loadFromGitHub(true);
+    const atual = mAtual();
+    if (atual) renderEntrega(atual);
+    const faltam = (corpo && corpo.faltam) || 0;
+    toast(assinar
+      ? (faltam ? '✍ Aprovado. Ainda faltam ' + faltam + '.' : '✍ Aprovado — o spike já pode concluir.')
+      : '↩ Sua aprovação foi retirada.', 'ok');
+  } catch (e) {
+    toast('Falha ao registrar a aprovação: ' + e.message, 'err');
+  } finally {
+    showSaving(false);
+  }
+}
+
 // Aprovar fecha a demanda. Rejeitar devolve para Em Andamento com o motivo — o
 // dev precisa saber o que faltou, senao entrega a mesma coisa de novo.
 async function valDecidir(aprovar, obs) {
@@ -12788,6 +12978,27 @@ async function valDecidir(aprovar, obs) {
      que veio pela entrega do dev tem dono; este e o posto em validacao a mao.
      Sem isto, aprovar era o terceiro caminho para encerrar sem dono, e o unico
      em que a pessoa nem escolhe uma etapa — ela so clica em Aprovar. */
+  /* SPIKE SEM AS TRES ASSINATURAS NAO APROVA. Vem antes da trava do
+     responsavel porque e a que a pessoa esta olhando: ela abriu a aba Entrega,
+     viu as assinaturas e clicou em Aprovar. O servidor recusa de qualquer
+     forma; isto e para ela nao chegar la. */
+  if (aprovar && m.spike && window.PREVOO) {
+    const podem = state.spike_aprovadores || [];
+    const valem = PREVOO.assinaturasValidas(m, podem);
+    const minimo = PREVOO.ASSINATURAS_SPIKE;
+    if (valem.length < minimo) {
+      const faltam = minimo - valem.length;
+      const nomes = podem
+        .filter(a => !valem.some(v => String(v.login || '').toLowerCase() ===
+                                      String(a.login || '').toLowerCase()))
+        .map(a => a.nome || a.login);
+      toast('Este spike tem ' + valem.length + ' de ' + minimo + ' aprovações. ' +
+            (faltam === 1 ? 'Falta 1' : 'Faltam ' + faltam) +
+            (nomes.length ? ' — ' + nomes.join(', ') : '') + '.', 'err');
+      try { mAba('entrega'); } catch (_) {}
+      return;
+    }
+  }
   if (aprovar && gestoSemDev(m, 'concluido', m.dev)) {
     /* `levaAoCampo` porque aprovar tambem acontece pelo BOTAO DO CARD, com o
        modal fechado — ali um `focus()` no campo nao acha elemento nenhum e a

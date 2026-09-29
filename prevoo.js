@@ -55,6 +55,30 @@
 
   function etapa(m) { return String((m || {}).status_planejamento || ''); }
 
+  /* Quantas assinaturas um spike precisa. O numero e do pedido; QUEM assina e
+     configuravel na aba Usuarios, porque grupo de gente muda e regra escrita em
+     codigo nao acompanha — ela so falha calada no dia em que alguem sai. */
+  var ASSINATURAS_SPIKE = 3;
+
+  /* AS QUE VALEM: uma por pessoa, e so de quem carrega a marca hoje. Igual ao
+     `spikeAprovacoesValidas` do Worker, e as duas sao executadas lado a lado
+     pela invariante — e ele quem manda, esta aqui e para a tela nao enviar o que
+     sera recusado. */
+  function assinaturasValidas(m, aprovadores) {
+    var podem = {};
+    (aprovadores || []).forEach(function (a) {
+      var l = String((a && a.login) || a || '').toLowerCase();
+      if (l) podem[l] = true;
+    });
+    var vistos = {};
+    return (((m || {}).spike_aprovacoes) || []).filter(function (a) {
+      var login = String((a && a.login) || '').toLowerCase();
+      if (!login || !podem[login] || vistos[login]) return false;
+      vistos[login] = true;
+      return true;
+    });
+  }
+
   /* O ROTULO E O QUE SE LE, e o id e o que a tela usa para ABRIR a demanda.
      `m.codigo || m.id` era o defeito que originou tudo isto: demanda nova nao
      tem codigo — ele nasce na gravacao, no servidor — e sobrava o id. */
@@ -104,6 +128,44 @@
       motivo: 'Escolha o responsável — sem ele a entrega não entra em nenhum ' +
               'relatório por pessoa.',
     },
+    {
+      /* ─── SPIKE SO FECHA COM TRES ASSINATURAS ────────────────────────────
+       *
+       * "ao usar essa categoria, na validacao devera exigir 3 aprovacoes
+       *  (Fernando, Paullymax e Guilherme Augusto) sem essas aprovacoes, nao
+       *  conseguimos finalizar e abrir tasks para desenvolvimento."
+       *
+       * O spike e investigacao: o que sai dele nao e codigo, e uma DECISAO — e
+       * por isso ela e assinada antes de virar backlog de desenvolvimento.
+       *
+       * QUEM ASSINA VEM DA BASE DE CONTAS, e a contagem so vale para quem
+       * carrega a marca HOJE: assinatura de quem saiu do grupo nao autoriza
+       * mais nada. O `ctx.aprovadores` chega do servidor, em `dados`.
+       *
+       * E AQUI NAO HA CAMPO PARA PREENCHER — e o unico caso assim. Nao adianta
+       * pôr o cursor em lugar nenhum: o que falta e outra pessoa assinar. Por
+       * isso o campo e vazio e a frase diz de QUEM se esta esperando. */
+      nome: 'spike',
+      etapas: ETAPAS_CONCLUIDO,
+      campo: '',
+      cumpre: function (m, ctx) {
+        if (!m || !m.spike) return true;
+        return assinaturasValidas(m, ctx.aprovadores).length >= ASSINATURAS_SPIKE;
+      },
+      motivo: function (m, ctx) {
+        var tem = assinaturasValidas(m, ctx.aprovadores);
+        var faltam = ASSINATURAS_SPIKE - tem.length;
+        var assinaram = tem.map(function (a) { return a.nome || a.login; });
+        var podem = (ctx.aprovadores || []).map(function (a) { return a.nome || a.login; });
+        var quemFalta = podem.filter(function (n) { return assinaram.indexOf(n) < 0; });
+        return 'Spike só conclui com ' + ASSINATURAS_SPIKE + ' aprovações — ' +
+               (faltam === 1 ? 'falta 1' : 'faltam ' + faltam) + '. ' +
+               (assinaram.length ? 'Já assinaram: ' + assinaram.join(', ') + '. ' : '') +
+               (quemFalta.length ? 'Falta a aprovação de: ' + quemFalta.join(', ') + '.'
+                                 : 'Não há aprovadores suficientes cadastrados — ' +
+                                   'um admin habilita na aba Usuários.');
+      },
+    },
   ];
 
   /* O QUE O SERVIDOR VAI BARRAR. `depois` e `antes` sao retratos no formato do
@@ -113,7 +175,7 @@
      agora, que e o lado seguro: cobra-se a mais, nunca a menos. */
   function presos(depois, antes) {
     if (!depois || !Array.isArray(depois.melhorias)) return [];
-    var ctx = { temas: {} };
+    var ctx = { temas: {}, aprovadores: (depois.spike_aprovadores) || [] };
     ((depois.temas) || []).forEach(function (t) { if (t && t.id) ctx.temas[t.id] = true; });
 
     var velhas = {};
@@ -131,9 +193,12 @@
         // Ja estava assim no servidor, na mesma situacao: nao foi esta gravacao
         // que criou o problema, e o servidor tambem nao vai barrar.
         if (velha && r.etapas.indexOf(etapa(velha)) >= 0 && !r.cumpre(velha, ctx)) return;
+        /* A FRASE PODE DEPENDER DA DEMANDA. A do spike precisa dizer quem ja
+           assinou e de quem se espera — "faltam 2" nao diz a quem pedir. */
+        var frase = typeof r.motivo === 'function' ? r.motivo(m, ctx) : r.motivo;
         fora.push({ id: m.id || '', codigo: m.codigo || '',
                     titulo: String(m.titulo || '').trim(), rotulo: rotuloDe(m),
-                    regra: r.nome, campo: r.campo, motivo: r.motivo });
+                    regra: r.nome, campo: r.campo, motivo: frase });
       });
     });
     return fora;
@@ -154,6 +219,8 @@
   }
 
   var api = { REGRAS: REGRAS, ETAPAS: ETAPAS_ALOCADA, ETAPAS_CONCLUIDO: ETAPAS_CONCLUIDO,
+              ASSINATURAS_SPIKE: ASSINATURAS_SPIKE,
+              assinaturasValidas: assinaturasValidas,
               rotuloDe: rotuloDe, presos: presos, primeiro: primeiro };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
