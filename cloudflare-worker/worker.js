@@ -1713,7 +1713,12 @@ function spikeAprovacoesValidas(m, aprovadores) {
 async function spikeAprovadores(env) {
   if (!env || !env.POKER_DB) return [];
   try {
-    await contasMigrar(env.POKER_DB);
+    /* SEM `contasMigrar` AQUI. Ela estava nesta funcao e esta funcao estava na
+       rota `dados` — dezenas de statements no D1 em toda leitura, e a tela
+       inteira ficou em branco. A coluna e criada pelas rotas que gerenciam
+       conta (`usuarios`, `identifica`), que ja chamam a migracao; enquanto ela
+       nao existir, a consulta abaixo falha e devolve lista vazia, que e o lado
+       seguro: sem aprovadores, nenhum spike fecha. */
     const r = await env.POKER_DB.prepare(
       'SELECT login, nome FROM usuario WHERE aprova_spike = 1 AND ativo = 1 ORDER BY nome').all();
     return r.results || [];
@@ -5112,6 +5117,15 @@ export default {
      *
      * Por isso aqui nao se le nada do corpo sobre a identidade — nem `login`,
      * nem `nome`. So o `id` da demanda e se e assinatura ou retirada. */
+    /* QUEM PODE ASSINAR SPIKE. Rota propria, e nao um extra do `dados`: a tela
+       pede UMA vez ao carregar, e uma falha aqui nao pode derrubar a leitura da
+       base. Nao roda migracao — ver a nota em `spikeAprovadores`. */
+    if (body.action === 'spike-aprovadores') {
+      if (!(await leituraLiberadaAsync(body))) return json({ error: 'credencial' }, 401, headers);
+      return json({ ok: true, aprovadores: await spikeAprovadores(env),
+                    assinaturas: SPIKE_ASSINATURAS }, 200, headers);
+    }
+
     if (body.action === 'spike-assinar') {
       const identS = await identifica(env, body);
       const uS = identS && identS.usuario;
@@ -5422,22 +5436,22 @@ export default {
       // 401 sinaliza ao painel que ele deve pedir a credencial. O cliente reage
       // ao status, entao nao precisa saber se a trava esta ligada ou nao.
       if (!(await leituraLiberadaAsync(body))) return json({ error: 'credencial' }, 401, headers);
+      /* ═══ ESTE CAMINHO NAO TOCA EM NADA ALEM DO ARQUIVO ═══════════════════
+       *
+       * Aqui eu tinha posto a lista de aprovadores de spike: `JSON.parse` da
+       * base inteira, uma consulta ao D1 — com `contasMigrar` junto, que sao
+       * dezenas de statements — e `JSON.stringify` de volta. Em TODA leitura.
+       *
+       * `dados` e a rota mais quente que existe: toda abertura de tela e o
+       * polling de 30 segundos de cada aba aberta passam por aqui. O resultado
+       * foi a tela inteira em branco, com "Os dados nao foram lidos".
+       *
+       * Migracao em caminho de leitura e erro de desenho, e nao de ajuste: ela
+       * nao pertence a uma rota que so le. Quem precisa da lista pede em
+       * `spike-aprovadores`, que e barata e nao bloqueia o carregamento. */
       const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
       if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
-      /* QUEM PODE ASSINAR SPIKE VAI JUNTO — so login e nome, e so de quem
-         carrega a marca. A tela precisa disso para dizer "faltam Fernando e
-         Guilherme" em vez de "faltam 2"; sem os nomes, quem le o card nao sabe a
-         quem pedir. Nao e a lista de contas: e o grupo de aprovadores, que e
-         justamente o que o card exibe. */
-      const baseTxt = await rawRes.text();
-      let comSpike = baseTxt;
-      try {
-        const d = JSON.parse(baseTxt);
-        d.spike_aprovadores = await spikeAprovadores(env);
-        d.spike_assinaturas = SPIKE_ASSINATURAS;
-        comSpike = JSON.stringify(d);
-      } catch (_) { /* base ilegivel: devolve como veio, quem le ja trata */ }
-      return new Response(comSpike, {
+      return new Response(await rawRes.text(), {
         status: 200,
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
       });

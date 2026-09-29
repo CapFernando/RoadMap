@@ -2896,11 +2896,16 @@ async function loadFromGitHub(silent) {
       feriados:       decoded.feriados        || [],
       ausencias:      decoded.ausencias       || [],
       projetos:       decoded.projetos        || [],
-      /* QUEM PODE ASSINAR SPIKE. Vem do servidor em `dados`, lido da base de
-         contas — nao e editavel aqui e nao vai no `publish`. A tela usa so para
-         dizer de quem se esta esperando a assinatura. */
-      spike_aprovadores: decoded.spike_aprovadores || [],
+      /* QUEM PODE ASSINAR SPIKE. Vem de rota PROPRIA, e nao junto de `dados`.
+         Estava junto, e foi um erro de desenho: `dados` e a rota mais quente que
+         existe — toda abertura de tela e o polling de 30s de cada aba — e uma
+         consulta ao banco de contas ali deixou a tela inteira em branco.
+         Buscada a parte e sem `await`: se a lista falhar, o quadro carrega do
+         mesmo jeito. O que se perde e o NOME de quem falta assinar; o que nao se
+         pode perder e a base. */
+      spike_aprovadores: state.spike_aprovadores || [],
     };
+    spikeCarregaAprovadores();
     retratoBase();          // base do merge por campo
     _dirtyMelhoriaIds.clear();
     // O que ficou por publicar volta para a tela ANTES do primeiro desenho: se
@@ -3083,7 +3088,6 @@ async function saveViaProxy(tentativa = 1) {
     // avançar entre esta leitura e a gravação, ele recusa com 409 em vez de
     // deixar a nossa versão sobrescrever a de outra tela.
     const baseVersao = server.atualizado_em || null;
-    state.spike_aprovadores = server.spike_aprovadores || state.spike_aprovadores || [];
     state.temas = mesclaTemas(server.temas);
     state.melhorias = mesclaMelhorias(server.melhorias);
     // `devs_perfil` funde por CHAVE, e nao por substituicao: o Planejamento tambem
@@ -3239,7 +3243,6 @@ async function saveToGitHub(attempt = 1) {
        vencia para os que existiam dos dois lados. Dois caminhos de gravacao com
        regras diferentes e como esta base ja errou antes — consertar um deixaria o
        outro revertendo nomes em silencio. */
-    state.spike_aprovadores = serverData.spike_aprovadores || state.spike_aprovadores || [];
     state.temas = mesclaTemas(serverData.temas);
     state.melhorias = mesclaMelhorias(serverData.melhorias);   // 3-way merge — ver comentário acima
     // Preserva devs e feriados cadastrados pelo Gantt — admin não os edita mas não deve apagá-los
@@ -12961,6 +12964,24 @@ function abrirAnexoIdx(i, id) {
  *
  * Por isso aqui nao se toca em `state`: grava-se no servidor e recarrega-se. A
  * tela nao tem o que "aplicar localmente", porque ela nao e a autora do dado. */
+/* A lista de quem pode assinar, buscada a parte. SEM `await` de quem chama e
+   com tudo engolido no erro: o quadro nao pode depender disto para aparecer. */
+async function spikeCarregaAprovadores() {
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'spike-aprovadores' }, credenciaisLeitura())),
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && Array.isArray(d.aprovadores)) {
+      state.spike_aprovadores = d.aprovadores;
+      // So redesenha se houver spike na tela: redesenho a toa rouba a rolagem.
+      if ((state.melhorias || []).some(m => m && m.spike)) renderAll();
+    }
+  } catch (_) { /* sem a lista, o card mostra o numero e nao os nomes */ }
+}
+
 async function spikeAssinar(assinar) {
   const m = mAtual();
   if (!m) return;

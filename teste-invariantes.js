@@ -16481,8 +16481,32 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        !/Paullymax|Guilherme Augusto/.test(semComentario(ADMIN)) &&
        !/Paullymax|Guilherme Augusto/.test(semComentario(PREVOOJS)),
        'e nenhum nome proprio foi escrito no codigo');
-    ok(/d\.spike_aprovadores = await spikeAprovadores\(env\)/.test(W),
-       'e a tela recebe do servidor quem pode assinar, para dizer de quem espera');
+    /* ══ E A LISTA NAO PODE ESTAR NO CAMINHO DE LEITURA ══════════════════
+     *
+     * Eu a tinha posto dentro de `dados`: JSON.parse da base inteira, consulta
+     * ao D1 e JSON.stringify de volta, em TODA leitura. `dados` e a rota mais
+     * quente que existe — toda abertura de tela e o polling de 30s de cada aba.
+     * A tela inteira ficou em branco, com "Os dados nao foram lidos".
+     *
+     * Rota so de leitura nao consulta banco de contas e nao roda migracao. */
+    /* Medido SEM COMENTARIO e no bloco EXATO da rota: o texto que explica a
+       correcao cita `contasMigrar`, e procurar no cru acusava a propria nota.
+       Oitava vez nesta base. */
+    const iDados = WC.indexOf("if (body.action === 'dados') {");
+    // A rota vai ate o proximo `if (body.action`, que e o comeco da seguinte.
+    const soDados = WC.slice(iDados,
+      WC.indexOf('if (body.action', iDados + 20));
+    const sujo = (soDados.match(/POKER_DB|contasMigrar|spikeAprovadores|JSON\.parse/g) || []);
+    ok(iDados > 0 && sujo.length === 0,
+       'a rota de leitura nao toca no banco de contas nem reserializa a base',
+       sujo.join(', ') || 'limpa (' + soDados.length + ' chars)');
+    ok(!/contasMigrar/.test(semComentario(corpo(W, 'async function spikeAprovadores(env) {') || '')),
+       'e a busca dos aprovadores nao roda migracao — migracao em caminho quente foi o defeito');
+    ok(/body\.action === 'spike-aprovadores'/.test(W) &&
+       /function spikeCarregaAprovadores\(\)/.test(ADMIN),
+       'a lista vem de rota propria, pedida a parte');
+    ok(!/await spikeCarregaAprovadores\(\)/.test(ADMIN),
+       'e sem await: falhar a lista nao pode impedir o quadro de carregar');
   }
 
   let erroPz = null;
