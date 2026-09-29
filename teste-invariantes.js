@@ -15670,10 +15670,102 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        (regraDev && regraDev.etapas.join(',')) || '');
     /* E as etapas anteriores seguem cobradas, so que mais cedo e no lugar certo:
        no modal e no arraste, com o cursor no campo, na hora de mexer. */
-    ok(/const ETAPAS_COM_DEV = \['planejado', 'em_andamento', 'validacao'\]/.test(ADMIN) &&
-       /if \(exigeDev\(sp\) && !devSel\)/.test(ADMIN) &&
-       /if \(exigeDev\(colKey\) && !String\(m\.dev/.test(ADMIN),
-       'e o modal e o arraste seguem cobrando as etapas anteriores, na hora de mexer');
+    /* ══ E O GESTO NAO PASSA ═════════════════════════════════════════════
+     *
+     * "penso que o erro aconteceu por encerrar task sem dev. Trate para nao
+     *  acontecer."
+     *
+     * O pre-voo acima segura na publicacao — tarde demais para o que se pediu.
+     * Sao TRES gestos que levam a `concluido`, e os tres tinham de fechar:
+     * arrastar o card, mudar a etapa no modal e aprovar a entrega. O terceiro e
+     * o pior, porque nele a pessoa nem escolhe uma etapa: so clica em Aprovar. */
+    const gesto = new Function('window', 'PREVOO',
+      (ADMIN.match(/const ETAPAS_COM_DEV = \[[^\]]*\];/) || [''])[0] + '\n' +
+      corpo(ADMIN, 'function exigeDev(sp) {') + '\n' +
+      corpo(ADMIN, 'function etapasQueExigemDevAoEntrar() {') + '\n' +
+      corpo(ADMIN, 'function exigeDevAoEntrar(sp) {') + '\n' +
+      corpo(ADMIN, 'function gestoSemDev(velha, destino, dev) {') +
+      '; return gestoSemDev;')({ PREVOO: PREVOO }, PREVOO);
+
+    ok(gesto({ status_planejamento: 'validacao', dev: '' }, 'concluido', ''),
+       'encerrar sem responsavel NAO passa — era o gesto do relato');
+    ok(!gesto({ status_planejamento: 'validacao', dev: 'Lucas' }, 'concluido', 'Lucas'),
+       'e com responsavel passa');
+    ok(gesto({ status_planejamento: 'validacao', dev: '' }, 'concluido', '   '),
+       'nome so de espacos nao vale como dono');
+    ok(gesto(null, 'concluido', ''),
+       'e demanda nova direto em concluido sem dono tambem nao');
+    /* E AS ETAPAS ANTERIORES CONTINUAM COBRADAS — executando, e nao so lendo a
+       lista. A comparacao com o pre-voo nao cobre isto: o servidor tambem deixa
+       `planejado` sem dono passar, entao tirar a cobranca da tela nao gera
+       discordancia nenhuma. Passou em silencio ate este caso existir. */
+    ok(gesto({ status_planejamento: 'planning', dev: '' }, 'planejado', '') &&
+       gesto({ status_planejamento: 'planejado', dev: 'L' }, 'em_andamento', '') &&
+       gesto({ status_planejamento: 'em_andamento', dev: 'L' }, 'validacao', ''),
+       'e Planejado, Em Andamento e Validacao seguem exigindo dono');
+    ok(!gesto({ status_planejamento: 'planejado', dev: '' }, 'backlog', '') &&
+       !gesto({ status_planejamento: 'planning', dev: '' }, 'negada', ''),
+       'mas voltar para Backlog ou negar nao exige — nao ha trabalho comprometido');
+
+    /* O QUE NAO PODE SER BARRADO. Sao 612 demandas com historia: travar por
+       estado prenderia quem nao criou o problema. */
+    ok(!gesto({ status_planejamento: 'concluido', dev: '' }, 'concluido', ''),
+       'mas editar o texto de uma concluida antiga sem dono continua livre');
+
+    /* A PRIMEIRA VERSAO ERRAVA JUSTO O CASO DO RELATO: ela perguntava "ja
+       estava numa etapa que exige dono, sem dono?", e uma parada em Validacao
+       sem dono respondia que sim. A escapatoria tem de ser pelo DESTINO. */
+    const GST = corpo(ADMIN, 'function gestoSemDev(velha, destino, dev) {') || '';
+    ok(/!== 'concluido'/.test(GST) && !/exigeDevAoEntrar\(antes\)/.test(GST),
+       'e a escapatoria olha o destino, e nao "estava numa etapa qualquer que exige dono"');
+
+    /* OS TRES GESTOS USAM ESTA FUNCAO, e nenhum ficou com o `exigeDev` velho —
+       que e o que deixava `concluido` de fora. */
+    ok(/if \(gestoSemDev\(m, colKey, m\.dev\)\)/.test(ADMIN),
+       'o arraste usa a regra nova');
+    ok(/if \(gestoSemDev\(_antesDoSalvar, sp, devSel\)\)/.test(ADMIN),
+       'o modal tambem');
+    /* E O `antes` DO MODAL SAI DO ESTADO, e nao e `null` fixo. Com `null` a
+       regra passa a barrar por estado sem parecer que mudou — a chamada
+       continua identica —, e editar o texto de uma concluida antiga volta a ser
+       impossivel. A sabotagem passou em silencio ate esta afirmacao. */
+    ok(/_antesDoSalvar = _idEdit\s*\n?\s*\? \(state\.melhorias \|\| \[\]\)\.find\(x => x\.id === _idEdit\) : null/
+       .test(ADMIN),
+       'e o "antes" do modal e a demanda como esta na tela, e nao `null` fixo');
+    ok(/if \(aprovar && gestoSemDev\(m, 'concluido', m\.dev\)\)/.test(ADMIN),
+       'e aprovar a entrega — o gesto em que nem se escolhe etapa');
+    ok(/levaAoCampo\(id, 'm-dev'/.test(corpo(ADMIN, 'async function valDecidir(aprovar, obs) {') || ''),
+       'e a recusa de aprovar leva ao campo, porque o botao tambem existe no card');
+
+    /* E A LISTA NAO FOI ESCRITA DE NOVO. Duas listas para a mesma regra foi o
+       defeito; corrigir o valor mantendo o desenho traria a proxima. */
+    ok(/PREVOO\.REGRAS \|\| \[\]/.test(corpo(ADMIN, 'function etapasQueExigemDevAoEntrar() {') || ''),
+       'e `concluido` vem do prevoo.js, e nao de uma segunda lista escrita a mao');
+
+    /* ══ E O GESTO NAO PODE SER MAIS FROUXO QUE A PUBLICACAO ══
+     * Gesto que passa e publicacao que recusa e trocar um erro tardio por
+     * outro: a pessoa faz, parece que deu certo, e o erro volta no fim. */
+    const TMG = [{ id: 't1' }];
+    const discordam = [
+      [{ status_planejamento: 'validacao', dev: '' }, 'concluido', ''],
+      [{ status_planejamento: 'validacao', dev: 'Lucas' }, 'concluido', 'Lucas'],
+      [{ status_planejamento: 'concluido', dev: '' }, 'concluido', ''],
+      [{ status_planejamento: 'planning', dev: '' }, 'planejado', ''],
+      [null, 'concluido', ''],
+      [{ status_planejamento: 'planejado', dev: '' }, 'backlog', ''],
+    ].filter(([velha, destino, dev]) => {
+      if (gesto(velha, destino, dev)) return false;          // barrou no gesto: ok
+      const m = { id: 'g', titulo: 'T', status_planejamento: destino, tema_id: 't1', dev: dev };
+      const ant = velha ? [Object.assign({ id: 'g', titulo: 'T', tema_id: 't1' }, velha)] : [];
+      return PREVOO.presos({ temas: TMG, melhorias: [m] }, { melhorias: ant })
+        .some(p => p.regra === 'responsavel');
+    });
+    ok(discordam.length === 0,
+       'todo gesto que passa tambem passa no pre-voo',
+       discordam.length + ' discordancia(s)');
+
+    ok(/const ETAPAS_COM_DEV = \['planejado', 'em_andamento', 'validacao'\]/.test(ADMIN),
+       'e as etapas anteriores seguem cobradas por ESTADO, como sempre foram');
     ok(!/Escolha o sistema antes de planejar/.test(semComentario(ADMIN)) &&
        !/Escolha o sistema antes de planejar/.test(semComentario(DEV)) &&
        !/Escolha o responsável —/.test(semComentario(ADMIN)),

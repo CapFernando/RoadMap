@@ -4447,9 +4447,11 @@ function kbDrop(e, colKey) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   if (m.status_planejamento === colKey) { renderKanban(); return; }
-  // Arrastar e o caminho mais rapido de mover card — e o mais facil de esquecer
-  // o responsavel. Barra aqui, abre o card e leva ao campo.
-  if (exigeDev(colKey) && !String(m.dev || '').trim()) {
+  /* Arrastar e o caminho mais rapido de mover card — e o mais facil de esquecer
+     o responsavel. Barra aqui, abre o card e leva ao campo.
+     `gestoSemDev` no lugar de `exigeDev` porque o arraste e uma TRANSICAO por
+     construcao, e `concluido` precisa entrar: encerrar sem dono era o furo. */
+  if (gestoSemDev(m, colKey, m.dev)) {
     toast('"' + (m.codigo || m.titulo) + '" precisa de desenvolvedor para ir a ' +
           (STATUS_LABELS[colKey] || colKey) + '.', 'err');
     renderKanban();
@@ -11039,6 +11041,62 @@ function sugereFibonacci() {
 const ETAPAS_COM_DEV = ['planejado', 'em_andamento', 'validacao'];
 function exigeDev(sp) { return ETAPAS_COM_DEV.includes(sp); }
 
+/* ═══ E `concluido` TAMBEM, AO ENTRAR ═══════════════════════════════════════
+ *
+ * "penso que o erro aconteceu por encerrar task sem dev. Trate para nao
+ *  acontecer."
+ *
+ * Era isso mesmo. `ETAPAS_COM_DEV` nao tinha `concluido` — entao encerrar uma
+ * demanda sem responsavel passava em todos os gestos da tela, e o servidor
+ * recusava a publicacao INTEIRA depois, com sete alteracoes represadas junto.
+ *
+ * O pre-voo do `prevoo.js` ja segurava isso antes de enviar, mas tarde demais
+ * para o que foi pedido: o gesto passava, e a pessoa so descobria ao publicar.
+ * Aqui a recusa e NO GESTO — o card nao se move, a etapa nao muda, a aprovacao
+ * nao acontece.
+ *
+ * A LISTA VEM DO `prevoo.js`, e nao e escrita de novo: ele e quem guarda a
+ * regra do servidor (`entrandoEmConcluidoSemDev`). Duas listas para a mesma
+ * regra, em lugares diferentes, foi exatamente o defeito — e nao adianta
+ * corrigir o valor mantendo o desenho que o produziu.
+ *
+ * SO AO ENTRAR, e nao por estado. Editar o texto de uma demanda que JA estava
+ * concluida sem responsavel continua livre: travar por estado prenderia quem
+ * nao criou o problema, e sao 612 demandas com historia. E o mesmo criterio do
+ * servidor, do pre-voo e da regra das horas. */
+function etapasQueExigemDevAoEntrar() {
+  const doPrevoo = (window.PREVOO && (PREVOO.REGRAS || [])
+    .find(r => r.nome === 'responsavel')) || { etapas: [] };
+  return ETAPAS_COM_DEV.concat(
+    (doPrevoo.etapas || []).filter(e => ETAPAS_COM_DEV.indexOf(e) < 0));
+}
+function exigeDevAoEntrar(sp) { return etapasQueExigemDevAoEntrar().includes(sp); }
+
+/* O gesto e barrado quando LEVA a demanda para uma etapa que exige dono e ela
+   nao tem. `velha` e como a demanda esta antes do gesto.
+ *
+ * AS DUAS METADES TEM CRITERIOS DIFERENTES, e isso e deliberado:
+ *
+ *   `planejado`/`em_andamento`/`validacao`  por ESTADO, como sempre foi. Salvar
+ *        uma demanda nessas etapas sem dono ja era impossivel, e afrouxar isso
+ *        de carona numa correcao seria trocar um defeito por outro.
+ *
+ *   `concluido`  por TRANSICAO, como o servidor. Editar o texto de uma
+ *        concluida antiga sem dono precisa continuar possivel — sao 612
+ *        demandas com historia, e prender quem nao criou o problema e pior que
+ *        o problema.
+ *
+ * A PRIMEIRA VERSAO ERRAVA JUSTO O CASO DO RELATO. Ela perguntava "a demanda ja
+ * estava numa etapa que exige dono, sem dono?" — e uma parada em Validacao sem
+ * dono respondia que sim, entao encerra-la passava. Que e exatamente o gesto
+ * que se pediu para impedir. A prova caso a caso pegou. */
+function gestoSemDev(velha, destino, dev) {
+  if (String(dev || '').trim()) return false;
+  if (exigeDev(destino)) return true;                 // por estado
+  if (destino !== 'concluido') return false;
+  return String((velha || {}).status_planejamento || '') !== 'concluido';
+}
+
 
 // ─── PAUSA DE DEMANDA ─────────────────────────────────────────────
 // Demanda travada por dependencia externa — resposta de terceiro, licenca,
@@ -11249,7 +11307,14 @@ async function saveMelhoria() {
   const ghLinks = window.ghLinkColeta ? ghLinkColeta('m', toast) : {};
   if (ghLinks === null) return;
   const devSel = document.getElementById('m-dev').value.trim();
-  if (exigeDev(sp) && !devSel) {
+  /* A demanda COMO ESTAVA antes deste salvamento. Sem ela a trava seria por
+     estado, e editar o texto de uma concluida antiga sem responsavel ficaria
+     impossivel — sao 612 demandas com historia, e prender quem nao criou o
+     problema e pior que o problema. */
+  const _idEdit = document.getElementById('m-id').value;
+  const _antesDoSalvar = _idEdit
+    ? (state.melhorias || []).find(x => x.id === _idEdit) : null;
+  if (gestoSemDev(_antesDoSalvar, sp, devSel)) {
     toast('Escolha o desenvolvedor: ' + (STATUS_LABELS[sp] || sp) + ' exige responsável.', 'err');
     document.getElementById('m-dev').focus();
     return;
@@ -12716,6 +12781,20 @@ async function valDecidir(aprovar, obs) {
     // caso e o do card posto em validacao a mao, que aprovado gravaria zero.
     toast('Esta entrega esta sem horas de desenvolvimento. Preencha o campo Horas ' +
           'na aba Dados antes de aprovar.', 'err');
+    return;
+  }
+  /* E SEM RESPONSAVEL NAO SE APROVA — aprovar poe a demanda em `concluido`, que
+     e a transicao que o servidor recusa. Mesmo caso das horas logo acima: card
+     que veio pela entrega do dev tem dono; este e o posto em validacao a mao.
+     Sem isto, aprovar era o terceiro caminho para encerrar sem dono, e o unico
+     em que a pessoa nem escolhe uma etapa — ela so clica em Aprovar. */
+  if (aprovar && gestoSemDev(m, 'concluido', m.dev)) {
+    /* `levaAoCampo` porque aprovar tambem acontece pelo BOTAO DO CARD, com o
+       modal fechado — ali um `focus()` no campo nao acha elemento nenhum e a
+       recusa morreria como um toast sem saida. E a mesma jornada do pre-voo. */
+    levaAoCampo(id, 'm-dev',
+      'Esta entrega está sem responsável. Escolha o desenvolvedor antes de ' +
+      'aprovar — sem ele a entrega não entra em nenhum relatório por pessoa.');
     return;
   }
   // Retrato ANTES de mexer. Se a gravacao falhar, tudo volta: a tela nao pode
