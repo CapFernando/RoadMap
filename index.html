@@ -325,6 +325,7 @@
   <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
+<script src="anexo-tipos.js?v=70df77eaa0"></script>
 </head>
 <body>
 
@@ -2067,15 +2068,22 @@ const NM_MAX = 1.5 * 1024 * 1024;
 // avisar ANTES de subir o arquivo, e nao depois de esperar o envio.
 // Anexos antigos de outros tipos continuam guardados e abrindo normalmente; a
 // regra vale para o que entra de agora em diante.
-const ANEXO_TIPOS_OK = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-const ANEXO_EXT_OK = /\.(pdf|jpe?g|png)$/i;
+/* A REGRA MORA NO `anexo-tipos.js`, e nao aqui. Ela estava escrita nesta pagina
+   e em mais TRES, identica — e a lista de formatos e justamente o que muda com
+   o tempo. Quatro copias de uma lista que muda e a forma de as telas passarem a
+   aceitar coisas diferentes sem ninguem perceber.
+   A EXTENSAO DECIDE, e nao o `type` do navegador: `.excalidraw` e `.drawio` nao
+   tem tipo registrado e chegavam com `type` vazio — era por isso que nao
+   subiam. */
 function anexoPermitido(arq) {
-  const t = String(arq.type || '').toLowerCase();
-  // Alguns navegadores mandam type vazio; a extensao decide nesse caso.
-  return t ? ANEXO_TIPOS_OK.includes(t) : ANEXO_EXT_OK.test(arq.name || '');
+  return !!(window.ANEXOTIPO && ANEXOTIPO.permitido((arq || {}).name || ''));
 }
-const ANEXO_RECUSA = arq => '"' + (arq.name || 'arquivo') +
-  '" não foi anexado: só aceitamos PDF, JPEG e PNG.';
+// A frase tambem vem do modulo: quatro redacoes da mesma recusa ensinam que a
+// regra depende da tela — e ela agora lista treze formatos, que ninguem mantem
+// alinhados a mao em quatro lugares.
+const ANEXO_RECUSA = arq => (window.ANEXOTIPO
+  ? ANEXOTIPO.recusa((arq || {}).name || '')
+  : '"' + ((arq || {}).name || 'arquivo') + '" não foi anexado.');
 function nmAddFiles(files) {
   [...files].forEach(f => {
     if (!anexoPermitido(f)) { dashToast(ANEXO_RECUSA(f), 'err'); return; }
@@ -2124,10 +2132,15 @@ async function nmPreview(i) {
     const res = await fetch(NM_PROXY_URL, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(Object.assign({ action:'anexo-baixar', chave:a.chave }, credenciaisLeitura())) });
     if (!res.ok) { dashToast('Nao foi possivel abrir o anexo.', 'err'); return; }
-    window.open(URL.createObjectURL(await res.blob()), '_blank');
+    // Entrega pelo modulo: o que nao e imagem nem PDF baixa, em vez de abrir
+    // num blob que herda a origem desta pagina — ver `anexo-tipos.js`.
+    ANEXOTIPO.entrega(await res.blob(), a.nome, a.tipo, window);
     return;
   }
-  if (a.dados) window.open(URL.createObjectURL(nmDataUrlToBlob(a.dados)), '_blank');
+  if (a.dados) {
+    const bl = nmDataUrlToBlob(a.dados);
+    ANEXOTIPO.entrega(bl, a.nome, a.tipo || bl.type, window);
+  }
 }
 
 // ── Abrir / fechar / salvar ──

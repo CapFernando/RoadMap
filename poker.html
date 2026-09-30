@@ -296,6 +296,7 @@
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
+<script src="anexo-tipos.js?v=70df77eaa0"></script>
 </head>
 <body>
 
@@ -1592,7 +1593,9 @@ async function abrirAnexoPauta(i) {
       return;
     }
     const blob = await res.blob();
-    window.open(URL.createObjectURL(blob), '_blank');
+    // Mesma entrega das outras telas. Era o quinto `window.open` solto: bastava
+    // um ficar para tras para o `.svg` continuar abrindo dentro da aplicacao.
+    ANEXOTIPO.entrega(blob, (a && a.nome) || 'anexo', (a && a.tipo) || blob.type, window);
   } catch (_) {
     toast('Falha de rede ao abrir o anexo.', 'err');
   }

@@ -1218,6 +1218,7 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=03bc22afd7"></script>
+  <script src="anexo-tipos.js?v=70df77eaa0"></script>
   <script src="prevoo.js?v=48c879306a"></script>
   <script src="deck-grafico.js?v=30e803d757"></script>
   <script src="deck-fundo.js?v=050a7db483"></script>
@@ -4608,7 +4609,10 @@ async function abrirAnexo(a, proxyUrl, cred) {
     if (!res.ok) { await avisar('Nao foi possivel abrir o anexo',
                               'O servidor respondeu HTTP ' + res.status + '.'); return; }
     const blob = await res.blob();
-    window.open(URL.createObjectURL(blob), '_blank');
+    /* ENTREGA PELO MODULO. O que nao e imagem nem PDF BAIXA, em vez de abrir num
+       blob que herda a origem desta pagina — ver a nota em `anexo-tipos.js`. O
+       tipo vem do que foi GRAVADO, entao anexo antigo tambem responde certo. */
+    ANEXOTIPO.entrega(blob, a.nome, a.tipo || blob.type, window);
     return;
   }
   if (a.dados) {
@@ -4616,7 +4620,8 @@ async function abrirAnexo(a, proxyUrl, cred) {
     const mime = (head.match(/:(.*?);/) || [])[1] || 'application/octet-stream';
     const bin = atob(b64); const arr = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-    window.open(URL.createObjectURL(new Blob([arr], { type: mime })), '_blank');
+    // Anexo antigo, guardado no proprio JSON. Mesma entrega.
+    ANEXOTIPO.entrega(new Blob([arr], { type: mime }), a.nome, mime, window);
   }
 }
 
@@ -4659,15 +4664,22 @@ async function subirAnexo(file, dataUrl, proxyUrl, cred) {
 // avisar ANTES de subir o arquivo, e nao depois de esperar o envio.
 // Anexos antigos de outros tipos continuam guardados e abrindo normalmente; a
 // regra vale para o que entra de agora em diante.
-const ANEXO_TIPOS_OK = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-const ANEXO_EXT_OK = /\.(pdf|jpe?g|png)$/i;
+/* A REGRA MORA NO `anexo-tipos.js`, e nao aqui. Ela estava escrita nesta pagina
+   e em mais TRES, identica — e a lista de formatos e justamente o que muda com
+   o tempo. Quatro copias de uma lista que muda e a forma de as telas passarem a
+   aceitar coisas diferentes sem ninguem perceber.
+   A EXTENSAO DECIDE, e nao o `type` do navegador: `.excalidraw` e `.drawio` nao
+   tem tipo registrado e chegavam com `type` vazio — era por isso que nao
+   subiam. */
 function anexoPermitido(arq) {
-  const t = String(arq.type || '').toLowerCase();
-  // Alguns navegadores mandam type vazio; a extensao decide nesse caso.
-  return t ? ANEXO_TIPOS_OK.includes(t) : ANEXO_EXT_OK.test(arq.name || '');
+  return !!(window.ANEXOTIPO && ANEXOTIPO.permitido((arq || {}).name || ''));
 }
-const ANEXO_RECUSA = arq => '"' + (arq.name || 'arquivo') +
-  '" não foi anexado: só aceitamos PDF, JPEG e PNG.';
+// A frase tambem vem do modulo: quatro redacoes da mesma recusa ensinam que a
+// regra depende da tela — e ela agora lista treze formatos, que ninguem mantem
+// alinhados a mao em quatro lugares.
+const ANEXO_RECUSA = arq => (window.ANEXOTIPO
+  ? ANEXOTIPO.recusa((arq || {}).name || '')
+  : '"' + ((arq || {}).name || 'arquivo') + '" não foi anexado.');
 function mAddFiles(files) {
   [...files].forEach(f => {
     if (!anexoPermitido(f)) { toast(ANEXO_RECUSA(f), 'err'); return; }

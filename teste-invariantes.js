@@ -16509,6 +16509,114 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e sem await: falhar a lista nao pode impedir o quadro de carregar');
   }
 
+  /* === O QUE PODE SER ANEXADO, E COMO ELE VOLTA ========================
+
+     "em projetos, preciso anexar arquivos excalidraw e hoje nao me permite.
+      Tambem necessito de outros formatos, pode abrir?" */
+  sec('Anexo: a lista abriu, e a defesa mudou de lugar');
+  {
+    const AT = require('./anexo-tipos.js');
+    const ATJS = fs.readFileSync('anexo-tipos.js', 'utf8');
+    const TELAS = [['admin.html', ADMIN], ['dev.html', DEV], ['gantt.html', GANTT],
+                   ['index.html', INDEX], ['poker.html', POKER]];
+
+    /* ══ A DEFESA NAO E A LISTA, E O MODO DE ABRIR ═════════════════════════
+     *
+     * `window.open(URL.createObjectURL(blob))` abre o blob HERDANDO A ORIGEM da
+     * pagina. Com um `.svg` dentro, o arquivo executa script no Admin, com a
+     * sessao de quem clicou. Era isso que a lista curta evitava — e por isso
+     * cada formato novo virava uma decisao de seguranca.
+     *
+     * Agora so imagem e PDF abrem na tela; o resto baixa. Se ESTA invariante
+     * cair, a lista aberta vira um buraco. */
+    ok(AT.abreNaTela('application/pdf') && AT.abreNaTela('image/png') &&
+       AT.abreNaTela('image/jpeg') && AT.abreNaTela('image/gif') &&
+       AT.abreNaTela('image/webp'),
+       'imagem e PDF abrem na tela');
+    const perigosos = ['image/svg+xml', 'text/html', 'application/xml',
+                       'text/plain', 'application/json', 'text/markdown'];
+    ok(perigosos.every(t => !AT.abreNaTela(t)),
+       'e nada que possa carregar marcacao abre — svg e xml antes de todos',
+       perigosos.filter(t => AT.abreNaTela(t)).join(', ') || 'nenhum abre');
+
+    /* NENHUMA TELA ABRE ANEXO POR FORA. Eram CINCO `window.open` soltos, um em
+       cada tela: bastava um ficar para tras para o svg continuar abrindo dentro
+       da aplicacao. Agora todas passam pela mesma entrega. */
+    const soltas = TELAS.filter(([, t]) =>
+      /window\.open\(URL\.createObjectURL/.test(semComentario(t)));
+    ok(soltas.length === 0,
+       'nenhuma tela abre anexo com window.open direto',
+       soltas.map(s => s[0]).join(', ') || TELAS.length + ' telas pela entrega');
+    ok(TELAS.every(([, t]) => /ANEXOTIPO\.entrega\(/.test(t)),
+       'e todas entregam pelo modulo');
+    const ENT = corpo(ATJS, 'function entrega(blob, nome, tipo, janela) {') || '';
+    ok(/application\/octet-stream/.test(ENT) && /a\.download = /.test(ENT),
+       'a entrega troca o tipo por octet-stream E usa <a download> — duas camadas');
+
+    /* ══ A EXTENSAO DECIDE, E NAO O QUE O NAVEGADOR DISSE ══
+     * Dois motivos, e o primeiro e a razao de o `.excalidraw` nao subir:
+     * ele nao tem tipo registrado e chegava com `type` vazio. */
+    ok(AT.permitido('desenho.excalidraw') && AT.permitido('fluxo.drawio'),
+       'excalidraw e drawio entram — nao tem tipo registrado e eram recusados antes');
+    ok(AT.tipoDe('a.excalidraw') === 'application/json',
+       'e o tipo guardado sai do mapa daqui, e nao do cliente', AT.tipoDe('a.excalidraw'));
+    ok(!AT.permitido('pagina.html') && !AT.permitido('x.js') &&
+       !AT.permitido('x.exe') && !AT.permitido('sem-extensao'),
+       'html, js, exe e arquivo sem extensao continuam fora');
+    ok(AT.permitido('DESENHO.EXCALIDRAW'), 'e maiuscula nao muda nada');
+
+    /* ══ UMA LISTA SO, E NAO UMA POR TELA ══
+     * Ela estava escrita em QUATRO paginas, identica — e lista de formato e
+     * justamente o que muda com o tempo. */
+    const comCopia = TELAS.filter(([, t]) =>
+      /const ANEXO_TIPOS_OK = \[/.test(semComentario(t)));
+    ok(comCopia.length === 0,
+       'nenhuma tela tem copia propria da lista',
+       comCopia.map(c => c[0]).join(', ') || 'todas delegam');
+    ok(TELAS.every(([, t]) => /anexo-tipos\.js/.test(t)),
+       'e todas carregam o modulo');
+
+    /* ══ E O SERVIDOR CONFERE IGUAL ══
+     * A trava real e la: validar so no navegador se contorna com uma requisicao
+     * direta. As duas listas sao executadas lado a lado. */
+    const rotaSub = W.slice(W.indexOf("if (body.action === 'anexo-subir') {"));
+    const soSubir = rotaSub.slice(0, rotaSub.indexOf("if (body.action === 'anexo-baixar')"));
+    const mapaW = {};
+    (soSubir.match(/(\w+): '([\w.\/+-]+)'/g) || []).forEach(p => {
+      const [, k, v] = /(\w+): '([\w.\/+-]+)'/.exec(p) || [];
+      if (k && v && v.indexOf('/') > 0) mapaW[k] = v;
+    });
+    const divergem = Object.keys(mapaW)
+      .filter(e => AT.tipoDe('x.' + e) !== mapaW[e]);
+    ok(Object.keys(mapaW).length >= 15 && divergem.length === 0,
+       'a lista do Worker e a do modulo sao a MESMA, extensao por extensao',
+       divergem.map(e => e + ': ' + mapaW[e] + ' vs ' + AT.tipoDe('x.' + e)).join(' ; ') ||
+       Object.keys(mapaW).length + ' extensoes conferidas');
+    ok(/const extA = /.test(soSubir) && /ANEXO_INLINE\[extA\] \|\| ANEXO_BAIXA\[extA\]/.test(soSubir),
+       'e la tambem e a extensao que decide');
+    /* E O TIPO DECLARADO NAO E LIDO. `mt[1]` e o que o cliente disse: ele existe
+       na expressao so porque a base64 e `mt[2]`. Bastava um `mt[1] || …` para o
+       cliente voltar a escolher como o arquivo volta — e o `||` passa por
+       qualquer regex que procure o mapa, porque o mapa continua la. Foi assim
+       que a sabotagem escapou. */
+    ok(!/mt\[1\]/.test(semComentario(soSubir)),
+       'e o tipo DECLARADO pelo cliente nao e lido em lugar nenhum',
+       (semComentario(soSubir).match(/mt\[1\][^;]*/g) || []).join(' ; ') || 'nao aparece');
+    ok(/data:\(\[a-zA-Z0-9\.\+\\\/-\]\*\);base64/.test(soSubir) ||
+       /base64,\(\[A-Za-z0-9/.test(soSubir) && soSubir.indexOf('-]*);base64') > 0,
+       'e o tipo no data: virou opcional — era ele que barrava o excalidraw');
+
+    /* ══ E O DOWNLOAD DIRETO TAMBEM NAO RENDERIZA ══
+     * A defesa da tela e a que importa, porque e ela que monta o blob. Mas quem
+     * chega direto no endereco tambem nao pode receber um svg para renderizar. */
+    const rotaBx = W.slice(W.indexOf("if (body.action === 'anexo-baixar') {"));
+    const soBaixar = rotaBx.slice(0, rotaBx.indexOf('if (body.action', 40));
+    ok(/Content-Disposition/.test(soBaixar) && /attachment/.test(soBaixar),
+       'o download manda Content-Disposition');
+    ok(/X-Content-Type-Options/.test(soBaixar) && /nosniff/.test(soBaixar),
+       'e nosniff — sem isso o navegador adivinha o tipo e um .txt com HTML vira pagina');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

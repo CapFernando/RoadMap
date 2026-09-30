@@ -3066,16 +3066,39 @@ export default {
         }
       }
       const dados = String(body.dados || '');
-      const mt = dados.match(/^data:([a-zA-Z0-9.+\/-]+);base64,([A-Za-z0-9+\/=\s]*)$/);
+      /* O TIPO NO `data:` PASSOU A SER OPCIONAL, e e por isso que `.excalidraw`
+         nao subia. Ele nao tem tipo registrado: o navegador manda `type` vazio,
+         o `readAsDataURL` produz `data:;base64,...`, e esta expressao exigia um
+         tipo — a recusa vinha antes de qualquer lista. */
+      const mt = dados.match(/^data:([a-zA-Z0-9.+\/-]*);base64,([A-Za-z0-9+\/=\s]*)$/);
       if (!mt) return json({ error: 'formato invalido', detail: 'Envie o arquivo como data: URL base64.' }, 400, headers);
-      const tipo = mt[1];
-      // Lista fechada de tipos. A trava real e aqui: validar so no navegador se
-      // contorna com uma requisicao direta. Anexos antigos de outros tipos
-      // continuam guardados e acessiveis — a regra vale para o que ENTRA.
-      const TIPOS_OK = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-      if (!TIPOS_OK.includes(String(tipo).toLowerCase())) {
+      const nomeAnexo = limpaTexto(body.nome, 160) || 'anexo';
+      /* A EXTENSAO DECIDE, E O TIPO SAI DE UM MAPA FIXO.
+         O tipo declarado vem do cliente: guarda-lo seria deixa-lo escolher como
+         o arquivo volta — e como ele volta e o que decide se o navegador RENDERIZA
+         ou baixa. Copia do `anexo-tipos.js`; o isolate nao importa nada, e a
+         invariante executa as duas listas lado a lado. */
+      const ANEXO_INLINE = {
+        pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        png: 'image/png', gif: 'image/gif', webp: 'image/webp',
+      };
+      const ANEXO_BAIXA = {
+        excalidraw: 'application/json', drawio: 'application/xml',
+        svg: 'image/svg+xml',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        csv: 'text/csv', txt: 'text/plain', md: 'text/markdown',
+        json: 'application/json', zip: 'application/zip',
+      };
+      const extA = (/\.([A-Za-z0-9]+)$/.exec(nomeAnexo) || [, ''])[1].toLowerCase();
+      const tipo = ANEXO_INLINE[extA] || ANEXO_BAIXA[extA] || '';
+      if (!tipo) {
+        const aceitas = Object.keys(ANEXO_INLINE).concat(Object.keys(ANEXO_BAIXA))
+          .filter(x => x !== 'jpeg').sort();
         return json({ error: 'tipo_nao_permitido',
-                      detail: 'Só é possível anexar PDF, JPEG ou PNG.' }, 415, headers);
+                      detail: 'Formato não aceito. Aceitamos: ' + aceitas.join(', ') + '.' },
+                    415, headers);
       }
       let bin;
       try { bin = Uint8Array.from(atob(mt[2].replace(/\s/g, '')), c => c.charCodeAt(0)); }
@@ -3085,8 +3108,14 @@ export default {
       // chave opaca: o nome original nao entra no caminho (evita colisao e
       // evita expor nome de arquivo em log de acesso)
       const chave = 'a/' + Date.now().toString(36) + '-' + crypto.randomUUID();
-      await env.ANEXOS.put(chave, bin, { httpMetadata: { contentType: tipo } });
-      return json({ ok: true, chave, nome: limpaTexto(body.nome, 160) || 'anexo',
+      /* O NOME VAI JUNTO, em metadado. O caminho continua opaco — o nome nao
+         entra nele —, mas quem BAIXA precisa receber o arquivo com o nome que a
+         pessoa reconhece, e a rota de download so tem a chave. */
+      await env.ANEXOS.put(chave, bin, {
+        httpMetadata: { contentType: tipo },
+        customMetadata: { nome: nomeAnexo.slice(0, 120) },
+      });
+      return json({ ok: true, chave, nome: nomeAnexo,
                     tipo, tamanho: bin.length }, 200, headers);
     }
 
@@ -3099,10 +3128,25 @@ export default {
       if (!/^a\/[a-z0-9-]+$/.test(chave)) return json({ error: 'chave invalida' }, 400, headers);
       const obj = await env.ANEXOS.get(chave);
       if (!obj) return json({ error: 'anexo nao encontrado' }, 404, headers);
+      /* O QUE NAO E IMAGEM NEM PDF VOLTA COMO DOWNLOAD.
+         A defesa de verdade esta na tela, que monta o blob — mas quem chega
+         direto neste endereco tambem nao pode receber um `.svg` para renderizar
+         na origem do Worker. Defesa dos dois lados, porque so um lado e
+         suposicao sobre quem chama. */
+      const tipoA = (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream';
+      const NA_TELA = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      const inline = NA_TELA.includes(String(tipoA).toLowerCase());
+      const nomeA = String((obj.customMetadata && obj.customMetadata.nome) || 'anexo')
+        .replace(/[^\w.\- ]+/g, '_').slice(0, 120);
       return new Response(obj.body, {
         status: 200,
         headers: {
-          'Content-Type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream',
+          'Content-Type': tipoA,
+          'Content-Disposition': (inline ? 'inline' : 'attachment') +
+                                 '; filename="' + nomeA + '"',
+          // Nem o navegador deve adivinhar o tipo por conta propria: adivinhar
+          // e como um .txt com HTML dentro vira pagina.
+          'X-Content-Type-Options': 'nosniff',
           'Cache-Control': 'private, no-store',
           ...headers,
         },
