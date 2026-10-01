@@ -12883,9 +12883,20 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           PRZM, { backlog: 'Backlog', em_andamento: 'Em andamento' },
           (o) => { pedidos.push(o); return Promise.resolve(true); }, { PRAZO: PRZM });
 
+        /* AS DATAS SAO DERIVADAS DE HOJE, e nao escritas a mao.
+           Elas eram '2026-09-10' (mes atual) e '2026-08-01' (mes passado), e a
+           suite ficou vermelha sozinha em 01/10 — setembro virou passado e a
+           primeira afirmacao passou a exigir o contrario do que mede. Teste que
+           quebra na virada do mes nao mede a regra: mede o calendario. */
+        const hojeISO = PRZM.hojeISO();
+        const mesAtual = hojeISO;                       // hoje nunca e retroativo
+        const [anoH, mesH] = hojeISO.split('-').map(Number);
+        const antes = new Date(Date.UTC(anoH, mesH - 2, 1));   // mes -1, dia 01
+        const mesPassado = antes.toISOString().slice(0, 10);
+
         pedidos = [];
-        await retro('2026-09-10', '2026-09-20', 'backlog');
-        ok(pedidos.length === 0, 'data no mes atual nao pergunta nada');
+        await retro(mesAtual, mesAtual, 'backlog');
+        ok(pedidos.length === 0, 'data no mes atual nao pergunta nada', mesAtual);
 
         pedidos = [];
         await retro('', '', 'backlog');
@@ -12893,7 +12904,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
         /* A ETAPA QUE NAO REAPARECE e o caso perigoso, e o aviso diz isso. */
         pedidos = [];
-        await retro('2026-08-01', '2026-08-20', 'backlog');
+        await retro(mesPassado, mesPassado, 'backlog');
         ok(pedidos.length === 1 && pedidos[0].perigo === true,
            'data em mes passado com etapa que NAO reaparece pergunta, e marca perigo');
         ok(/NÃO reaparece/.test(pedidos[0].texto || ''),
@@ -12904,14 +12915,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            sem alarme: ela volta como herdada, e tratar as duas igual ensinaria
            a clicar em Sim sem ler. */
         pedidos = [];
-        await retro('2026-08-01', '2026-08-20', 'em_andamento');
+        await retro(mesPassado, mesPassado, 'em_andamento');
         ok(pedidos.length === 1 && pedidos[0].perigo === false,
            'e a etapa que reaparece pergunta sem alarme');
 
         /* PEDE CONFIRMACAO, E NAO RECUSA. Recusar obrigaria a mentir a data
            para conseguir gravar — troca a demanda invisivel por um numero
            errado, que e pior. */
-        const r = await retro('2026-08-01', '2026-08-20', 'backlog');
+        const r = await retro(mesPassado, mesPassado, 'backlog');
         ok(r === true, 'e confirmando, a gravacao segue');
       })();
     }
@@ -16615,6 +16626,116 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'o download manda Content-Disposition');
     ok(/X-Content-Type-Options/.test(soBaixar) && /nosniff/.test(soBaixar),
        'e nosniff — sem isso o navegador adivinha o tipo e um .txt com HTML vira pagina');
+  }
+
+  /* === A API DA COLUNA VALIDACAO PM/PO ==================================
+
+     "Em admin tenho o Kanban - Validacao PM/PO. Gere uma api para consulta
+      dessa etapa. A consulta servira para repassar a task e eu validar se o que
+      foi implementado subiu para producao." */
+  sec('API: a coluna Validacao PM/PO');
+  {
+    const iVP = W.indexOf("if (body.action === 'validacao-pendentes') {");
+    const ROTAVP = W.slice(iVP, W.indexOf("if (body.action === 'demanda-consultar')", iVP));
+    const VISAO = W.slice(W.indexOf('const devVisao = (m, temas, lista) => ({'),
+                          W.indexOf('const ETAPAS_DEV'));
+
+    /* ══ A ROTA ESTA LIGADA ══
+     * Esquecer o nome na lista branca nao da erro: a acao cai no `acao_invalida`
+     * la embaixo. Ja aconteceu com `demanda-procurar`, que subiu para producao
+     * como codigo morto. */
+    ok(iVP > 0, 'a rota existe');
+    ok(/'demanda-entregar', 'validacao-pendentes'\]/.test(W) ||
+       /'validacao-pendentes'[,\]]/.test(W.slice(W.indexOf("if (['demandas-minhas'"),
+                                                 W.indexOf('.includes(body.action)'))),
+       'e esta na lista branca do bloco — fora dela ela sobe como codigo morto');
+    ok(/'validacao-pendentes': \{ max: \d+, janela: \d+ \}/.test(W),
+       'e tem freio por IP, como as outras');
+    /* A ENTRADA, e nao a string: o `corpo:` do exemplo cita a acao, entao
+       procurar o nome solto casava mesmo com a entrada renomeada. */
+    ok(/acao: 'validacao-pendentes'/.test(DEV) &&
+       /"action":"validacao-pendentes"/.test(DEV),
+       'e esta documentada no painel Dev, junto das outras');
+
+    /* ══ A ETAPA GRAVADA, E NAO A EFETIVA ══
+     * `statusEfetivo` derivaria `atrasado` e tiraria da lista justamente as que
+     * esperam ha mais tempo — que sao as primeiras a conferir. */
+    ok(/String\(m\.status_planejamento \|\| ''\) === 'validacao'/.test(ROTAVP),
+       'filtra pela etapa GRAVADA, igual a coluna do quadro');
+
+    /* ══ OS CAMPOS QUE O PEDIDO NOMEIA ══ */
+    ['codigo:', 'titulo:', 'descricao:', 'dev:', 'entregue_em:'].forEach(c => {
+      ok(VISAO.indexOf(c) > 0, 'a resposta traz ' + c.replace(':', ''));
+    });
+
+    /* ══ E A PERGUNTA DO PEDIDO: SUBIU? ══
+     * Sem estes campos a resposta diz o que foi implementado e nao diz se aquilo
+     * esta no ar — que e metade do que a decisao exige. */
+    ['em_producao:', 'versao:', 'producao_em:'].forEach(c => {
+      ok(VISAO.indexOf(c) > 0, 'e ' + c.replace(':', '') + ', que e a pergunta do pedido');
+    });
+    ok(/em_producao: !!m\.em_producao/.test(VISAO),
+       'com ausente contando como FORA DO AR, e nao como desconhecido — o campo ' +
+       'nasceu em 10/09 e demanda anterior nao o tem');
+    ok(/no_ar:/.test(ROTAVP) && /fora_do_ar:/.test(ROTAVP),
+       'e a conta vem pronta, para quem chama nao ter de somar');
+
+    /* ══ O CORTE NAO E SILENCIOSO ══
+     * Lista truncada em silencio faz quem confere achar que acabou. */
+    ok(/truncado:/.test(ROTAVP) && /total: ordenadas\.length/.test(ROTAVP),
+       'o limite diz que cortou, e o total e o verdadeiro');
+    ok(/Math\.min\(Math\.max\(parseInt\(body\.limite/.test(ROTAVP),
+       'e o teto e do servidor, nao de quem chama');
+
+    /* ══ A ORDEM E A DA ESPERA ══ */
+    ok(/entregue_em \|\| m\.concluido_em/.test(ROTAVP) && /'9999'/.test(ROTAVP),
+       'ordena por quem entregou primeiro, e sem data vai para o fim');
+
+    /* ══ E O ANEXO NAO VAZA PELO CAMINHO ERRADO ══
+     * O nome diz que existe; o conteudo sai por `anexo-baixar`, que tem a sua
+     * propria permissao e o seu proprio freio. */
+    ok(/anexos: \(m\.anexos \|\| \[\]\)\.map/.test(VISAO) &&
+       !/dados: /.test(VISAO.slice(VISAO.indexOf('anexos:'), VISAO.indexOf('anexos:') + 300)),
+       'o anexo vai por nome, e nunca com o conteudo embutido');
+
+    /* ══ EXECUTADA ══ */
+    const roda = new Function('temas', 'todas', 'body', 'json', 'headers', `
+      const limpaTexto = (t, n) => String(t == null ? '' : t).trim().slice(0, n || 200);
+      const normNome = t => String(t || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+        .toLowerCase().replace(/\\s+/g, ' ').trim();
+      const hojeBR = () => '2026-10-01';
+      const diasDeAtraso = () => 0;
+      const vinTipo = () => '', vinBloqueia = () => false, vinPai = () => null,
+            vinFilhos = () => [], vinPonto = () => null, vinPontos = () => null;
+      ${VISAO}
+      ${ROTAVP}
+      return json({ error: 'nao rodou' }, 500, headers);
+    `);
+    const TM = [{ id: 't1', nome: 'AXCred - Cadastro' }];
+    const BASE = [
+      { id: 'a', codigo: 'AX-1', titulo: 'No ar', status_planejamento: 'validacao',
+        tema_id: 't1', dev: 'João Siqueira', entregue_em: '2026-09-28', em_producao: true },
+      { id: 'b', codigo: 'AX-2', titulo: 'Fora', status_planejamento: 'validacao',
+        tema_id: 't1', dev: 'Gabriel', entregue_em: '2026-09-25' },
+      { id: 'c', codigo: 'AX-3', titulo: 'Concluida', status_planejamento: 'concluido',
+        tema_id: 't1', dev: 'Gabriel' },
+    ];
+    const chama = (b) => { let s = null;
+      roda(TM, BASE, Object.assign({ action: 'validacao-pendentes' }, b),
+           (o) => { s = o; return o; }, {});
+      return s; };
+    const todos = chama({});
+    ok(todos.total === 2 && !todos.demandas.some(d => d.codigo === 'AX-3'),
+       'executada: traz so a coluna de validacao', 'total=' + todos.total);
+    ok(todos.demandas[0].codigo === 'AX-2',
+       'e quem espera ha mais tempo vem primeiro',
+       todos.demandas.map(d => d.codigo).join(' < '));
+    ok(todos.no_ar === 1 && todos.fora_do_ar === 1, 'com a conta certa');
+    const fora = chama({ em_producao: false });
+    ok(fora.total === 1 && fora.demandas[0].codigo === 'AX-2',
+       'e o filtro `em_producao:false` da a lista a conferir');
+    ok(chama({ dev: 'joao' }).total === 1,
+       'o filtro por dev ignora acento e caixa — "joao" acha "João"');
   }
 
   let erroPz = null;

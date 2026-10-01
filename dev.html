@@ -1533,6 +1533,18 @@ function epFuncoesHTML() {
         '"implementacao":"O que foi feito","horas_realizadas":6}',
     },
     {
+      acao: 'validacao-pendentes',
+      o_que: 'Lista a coluna <b>Validação PM/PO</b> do quadro — o que foi entregue e ' +
+             'espera validação. Traz <code>em_producao</code>, <code>versao</code> e ' +
+             '<code>producao_em</code> junto do que o dev implementou, para conferir se ' +
+             'aquilo subiu. Ordena pela ESPERA: quem entregou primeiro vem primeiro. ' +
+             'Filtros opcionais: <code>em_producao</code> (true/false), <code>dev</code>, ' +
+             '<code>tema</code> e <code>limite</code> (padrão 200, teto 500). A resposta ' +
+             'traz <code>no_ar</code> e <code>fora_do_ar</code> prontos, e ' +
+             '<code>truncado</code> quando o limite cortou.',
+      corpo: '{"action":"validacao-pendentes","token":"TOKEN","em_producao":false}',
+    },
+    {
       acao: 'projeto-novo',
       o_que: 'Propõe um projeto. Nasce <b>pendente</b>: não aceita demanda até o PM/PO aprovar.',
       corpo: '{"action":"projeto-novo","token":"TOKEN","nome":"Nome do projeto","justificativa":"Por que agora"}',

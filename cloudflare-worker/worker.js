@@ -211,6 +211,8 @@ const LIMITES = {
   'poker-negar':       { max: 20, janela: 60 },
   'demandas-minhas':   { max: 60, janela: 60 },
   'demanda-consultar': { max: 60, janela: 60 },
+  // Lista de conferencia: quem confere relê varias vezes na mesma sessao.
+  'validacao-pendentes': { max: 60, janela: 60 },
   'demanda-atualizar': { max: 30, janela: 60 },
   'demanda-entregar':  { max: 20, janela: 60 },
   // Trocar senha exige a senha atual: sem limite, o campo viraria oraculo para
@@ -3341,6 +3343,36 @@ export default {
          nada", e o certo e dizer que nao se sabe. `sem_pontuacao` explica um
          total menor do que a conversa da sala espera. */
       pontos_arvore: vinPontos(lista, m),
+      /* ═══ JA SUBIU? ════════════════════════════════════════════════════════
+       *
+       * "A consulta servira para repassar a task e eu validar se o que foi
+       *  implementado subiu para producao."
+       *
+       * E a pergunta que a resposta tem de responder, e ela nao estava aqui —
+       * quem lia pela API via o que foi implementado e nao via se aquilo estava
+       * no ar. Sao os mesmos campos que a aba Entrega mostra ao PM/PO; sem eles
+       * a resposta diz metade do que a decisao exige.
+       *
+       * `em_producao` ausente conta como FORA DO AR, e nao como desconhecido: o
+       * campo nasceu em 10/09 e demanda anterior nao o tem. Tratar como "nao
+       * sei" esconderia justamente o que se esta procurando. */
+      em_producao: !!m.em_producao,
+      versao: m.versao || '',
+      producao_em: m.producao_em || '',
+      producao_por: m.producao_por || '',
+      validado_em: m.validado_em || '',
+      validado_por: m.validado_por || '',
+      /* O NOME DOS ANEXOS, e nao o conteudo. Quem confere uma entrega costuma
+         ter um print junto; saber que existe muda o caminho da conferencia. O
+         arquivo em si sai por `anexo-baixar`, que tem a sua propria permissao. */
+      anexos: (m.anexos || []).map(a => ({ nome: (a && a.nome) || 'anexo',
+                                           tipo: (a && a.tipo) || '',
+                                           chave: (a && a.chave) || '' })),
+      /* SPIKE: um spike em validacao nao fecha sem as tres assinaturas, e quem
+         repassa a task precisa saber disso antes de cobrar a conclusao. */
+      spike: !!m.spike,
+      spike_aprovacoes: (m.spike_aprovacoes || []).map(a => ({
+        nome: (a && (a.nome || a.login)) || '', em: (a && a.em) || '' })),
     });
 
     const ETAPAS_DEV = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento'];
@@ -3356,7 +3388,7 @@ export default {
      * Ha invariante conferindo que todo `body.action` tratado dentro deste bloco
      * esta nesta lista. */
     if (['demandas-minhas', 'demanda-consultar', 'demanda-procurar',
-         'demanda-atualizar', 'demanda-entregar']
+         'demanda-atualizar', 'demanda-entregar', 'validacao-pendentes']
         .includes(body.action)) {
       const perm = await exigePapel(env, body, ['dev', 'admin'], headers);
       if (perm.recusa) return perm.recusa;
@@ -3520,6 +3552,69 @@ export default {
         const r = achaComoAchou();
         return r ? r.m : null;
       };
+
+      /* ═══ A COLUNA VALIDACAO PM/PO, PARA CONFERIR NO AR ══════════════════
+       *
+       * "Em admin tenho o Kanban - Validacao PM/PO. Gere uma api para consulta
+       *  dessa etapa. A consulta servira para repassar a task e eu validar se o
+       *  que foi implementado subiu para producao."
+       *
+       * A ETAPA GRAVADA, e nao a efetiva. `statusEfetivo` derivaria `atrasado` e
+       * tiraria da lista justamente as que esperam ha mais tempo — que sao as
+       * primeiras a conferir. A coluna do quadro usa a gravada pelo mesmo
+       * motivo, e duas respostas para "o que esta em validacao" seria o comeco
+       * da proxima divergencia.
+       *
+       * A ORDEM E A DA ESPERA: quem entregou primeiro aparece primeiro. Lista de
+       * conferencia ordenada por outra coisa faz a fila ser trabalhada fora de
+       * ordem sem ninguem decidir isso.
+       *
+       * O FILTRO QUE IMPORTA E `em_producao`. Com `false`, a resposta e
+       * exatamente a pergunta do pedido: o que foi entregue, esta esperando
+       * validacao e AINDA NAO subiu. */
+      if (body.action === 'validacao-pendentes') {
+        const naEtapa = todas.filter(m =>
+          String(m.status_planejamento || '') === 'validacao');
+
+        const soProd = body.em_producao;
+        const porProd = (typeof soProd === 'boolean')
+          ? naEtapa.filter(m => !!m.em_producao === soProd) : naEtapa;
+
+        const filtroDev = limpaTexto(body.dev, 80);
+        const porDev = filtroDev
+          ? porProd.filter(m => normNome(m.dev).indexOf(normNome(filtroDev)) >= 0)
+          : porProd;
+
+        const filtroTema = limpaTexto(body.tema, 120);
+        const porTema = filtroTema
+          ? porDev.filter(m => {
+              const t = (temas.find(x => String(x.id) === String(m.tema_id)) || {}).nome || '';
+              return normNome(t).indexOf(normNome(filtroTema)) >= 0;
+            })
+          : porDev;
+
+        // Quem entregou primeiro, primeiro. Sem data vai para o fim: ela nao
+        // compete com as que tem, e some no meio da lista se for ordenada como
+        // vazia-primeiro.
+        const quando = m => String(m.entregue_em || m.concluido_em || '') || '9999';
+        const ordenadas = porTema.slice().sort((a, b) => quando(a).localeCompare(quando(b)));
+
+        const teto = Math.min(Math.max(parseInt(body.limite, 10) || 200, 1), 500);
+        const pagina = ordenadas.slice(0, teto);
+
+        return json({ ok: true,
+                      etapa: 'validacao',
+                      total: ordenadas.length,
+                      // Diz que cortou, e quanto: uma lista truncada em silencio
+                      // faz quem confere achar que acabou.
+                      truncado: ordenadas.length > pagina.length,
+                      limite: teto,
+                      /* A CONTA QUE O PEDIDO PEDE, pronta. Quem chama nao devia
+                         ter de somar para saber quantas faltam subir. */
+                      no_ar: naEtapa.filter(m => m.em_producao).length,
+                      fora_do_ar: naEtapa.filter(m => !m.em_producao).length,
+                      demandas: pagina.map(m => devVisao(m, temas, todas)) }, 200, headers);
+      }
 
       if (body.action === 'demanda-consultar') {
         const r = achaComoAchou();
