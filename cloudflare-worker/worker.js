@@ -2443,6 +2443,23 @@ async function pokerEstado(db, codigo) {
 export default {
   async fetch(request, env) {
     const headers = corsHeaders();
+    /* ═══ NADA SAI DAQUI SEM CABECALHO CORS ════════════════════════════════
+     *
+     * "Falha ao anexar AX-728.png: Failed to fetch."
+     *
+     * Nao havia try de ultima instancia em volta deste roteador. Excecao nao
+     * tratada vira a pagina de erro da Cloudflare — que NAO tem os cabecalhos
+     * CORS. O navegador entao recusa a resposta antes de ler, e o que chega a
+     * tela e "Failed to fetch": sem status, sem corpo, sem motivo.
+     *
+     * Era o teto de tudo o que vinha sendo investigado. Por mais que a tela
+     * carregue o motivo adiante, ela nao pode mostrar o que nunca recebeu — e
+     * um erro de servidor chegava como se fosse queda de rede.
+     *
+     * O CORPO NAO FOI REINDENTADO de proposito: sao 3.500 linhas, e um diff
+     * inteiro so de espaco esconderia a mudanca que importa, que sao estas
+     * duas bordas. */
+    try {
     if (request.method === 'OPTIONS') return new Response(null, { headers });
     if (request.method !== 'POST') return new Response('Method not allowed', { status: 405, headers });
 
@@ -5995,5 +6012,12 @@ export default {
     if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
     // Devolve o codigo: quem abriu precisa saber o numero para acompanhar.
     return json({ ok: true, id: nova.id, codigo: nova.codigo }, 200, headers);
+    } catch (e) {
+      /* 500 COM CORS E COM O MOTIVO. A alternativa e o que havia: a tela
+         recebendo "Failed to fetch" e quem investiga procurando rede quando o
+         problema era o servidor. */
+      return json({ error: 'erro_interno',
+                    detail: String((e && e.message) || e) }, 500, headers);
+    }
   },
 };

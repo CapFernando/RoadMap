@@ -16942,6 +16942,52 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      "Erro ao publicar: Nao foi possivel ler os dados atualizados." */
   sec('Leitura: o motivo da falha, e o freio por pessoa');
   {
+    /* ══ NADA SAI DO WORKER SEM CORS ═══════════════════════════════════════
+     *
+     * "Falha ao anexar AX-728.png: Failed to fetch."
+     *
+     * Nao havia try de ultima instancia no roteador. Excecao nao tratada vira a
+     * pagina de erro da Cloudflare, que NAO tem cabecalho CORS: o navegador
+     * recusa a resposta antes de ler, e o que chega a tela e "Failed to fetch"
+     * — sem status, sem corpo, sem motivo.
+     *
+     * Era o TETO de tudo o que vinha sendo investigado: por mais que a tela
+     * carregue o motivo adiante, ela nao mostra o que nunca recebeu. E um erro
+     * de servidor chegava com cara de queda de rede, mandando procurar no lugar
+     * errado.
+     *
+     * Verificado carregando o modulo de verdade, e nao recortando um trecho: a
+     * borda do `export default` e justamente o que esta sob teste. */
+    const cors = (() => {
+      const os = require('os'), fsx = require('fs');
+      const arq = os.tmpdir() + '/worker-inv.cjs';
+      fsx.writeFileSync(arq, W.replace('export default', 'module.exports ='), 'utf8');
+      delete require.cache[require.resolve(arq)];
+      return require(arq);
+    })();
+    const reqFalso = {
+      method: 'POST', headers: { get: () => null },
+      json: async () => ({ action: 'anexo-subir', nome: 't.png',
+                           dados: 'data:image/png;base64,iVBORw0KGgo=' }),
+    };
+    const envQuebrado = { get POKER_DB() { throw new Error('D1 fora do ar'); }, ANEXOS: null };
+    let resp = null, escapou = null;
+    try { resp = await cors.fetch(reqFalso, envQuebrado); }
+    catch (e) { escapou = (e && e.message) || String(e); }
+    ok(!escapou, 'excecao no roteador nao escapa do worker', escapou || 'nao escapou');
+    ok(!!resp && resp.status === 500, 'ela vira 500', resp ? 'HTTP ' + resp.status : '—');
+    ok(!!resp && !!resp.headers.get('Access-Control-Allow-Origin'),
+       'COM CORS — sem isto o navegador recusa antes de ler e vira "Failed to fetch"');
+    const corpoErro = resp ? JSON.parse(await resp.text()) : {};
+    ok(/D1 fora do ar/.test(corpoErro.detail || ''),
+       'e carregando o motivo de verdade', corpoErro.detail || '(sem detalhe)');
+    /* E O CAMINHO NORMAL NAO MUDA: um 500 em tudo seria pior que o buraco. */
+    const envOk = { POKER_DB: null, ANEXOS: null };
+    const rNorm = await cors.fetch({ method: 'POST', headers: { get: () => null },
+                                     json: async () => ({ action: 'nao-existe' }) }, envOk);
+    ok(rNorm.status !== 500 && !!rNorm.headers.get('Access-Control-Allow-Origin'),
+       'e acao desconhecida continua respondendo como antes', 'HTTP ' + rNorm.status);
+
     /* ══ O MOTIVO VIAJA ══
      * `lerDados` descartava TUDO — status HTTP e erro de rede — e jogava sempre
      * a mesma frase. 429 por limite, 502 do GitHub e cabo desconectado chegavam
