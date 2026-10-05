@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="66b4c0cb23">
+<html lang="pt-BR" data-build="7c07c26e73">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -2818,12 +2818,35 @@ async function pedirSenhaLeitura() {
 }
 
 async function lerDados(permitirCache, jaTentou) {
+  /* ═══ O MOTIVO DA FALHA VIAJA ATE A TELA ════════════════════════════════
+   *
+   * "Erro ao publicar: Nao foi possivel ler os dados atualizados."
+   *
+   * Era onde a investigacao parava. Esta funcao descartava TUDO — o status HTTP
+   * e o erro de rede — e jogava sempre a mesma frase. 429 por limite, 502 do
+   * GitHub e cabo desconectado chegavam iguais, e nenhum deles da para agir.
+   *
+   * A ironia e que o comentario logo abaixo ja dizia isto sobre o fallback que
+   * foi removido: "diagnosticar com o motivo errado na tela e pior do que nao
+   * ter fallback". Dizer SEMPRE o mesmo motivo e a mesma coisa, sem o fallback.
+   *
+   * `porque` acumula o que de fato aconteceu. */
+  let porque = '';
   try {
     const r = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'dados' }, credenciaisLeitura()))
     });
     if (r.ok) return await r.json();
+    /* O `detail` do servidor e a frase mais util que existe aqui: e ele que diz
+       "Muitas requisicoes. Aguarde um minuto" num 429, e ninguem adivinha isso
+       de um "nao foi possivel". */
+    let detalhe = '';
+    try { const j = await r.clone().json(); detalhe = (j && (j.detail || j.error)) || ''; } catch (_) {}
+    porque = 'HTTP ' + r.status + (detalhe ? ' — ' + detalhe : '');
+    if (r.status === 429) {
+      porque = detalhe || 'Muitas leituras em pouco tempo. Aguarde um minuto.';
+    }
     if (r.status === 401) {
       // Credencial invalida ou ausente: pede uma vez e repete. Nao cai no
       // fallback publico, que deixaria de existir com o repositorio privado.
@@ -2839,6 +2862,10 @@ async function lerDados(permitirCache, jaTentou) {
     }
   } catch (e) {
     if (e && /nao autorizado/i.test(e.message)) throw e;
+    // Falha de rede: `fetch` estoura sem status. "Failed to fetch" nao diz nada
+    // a quem le, mas DIZ que o problema foi chegar no servidor — e isso ja
+    // separa "a rede caiu" de "o servidor recusou".
+    if (!porque) porque = 'sem resposta do servidor (' + ((e && e.message) || 'rede') + ')';
   }
   /* ── O FALLBACK PUBLICO MORREU, E ELE ESTAVA MENTINDO O MOTIVO ────────────
      Aqui havia uma leitura de `RAW_URL` —
@@ -2856,9 +2883,10 @@ async function lerDados(permitirCache, jaTentou) {
      contrato porque as duas intencoes seguem diferentes — abrir a tela aceita
      dado de minutos atras, gravar nunca —, e a distincao volta a valer no dia em
      que houver um cache de verdade para servir. */
-  throw new Error(permitirCache
+  throw new Error((permitirCache
     ? 'Nao foi possivel ler os dados. Tente de novo em instantes.'
-    : 'Nao foi possivel ler os dados atualizados. Tente novamente.');
+    : 'Nao foi possivel ler os dados atualizados. Tente novamente.') +
+    (porque ? ' (' + porque + ')' : ''));
 }
 
 async function ghReadRaw(token) {

@@ -16937,6 +16937,105 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'o filtro por dev ignora acento e caixa — "joao" acha "João"');
   }
 
+  /* === O FREIO E POR PESSOA, E O MOTIVO CHEGA A TELA ====================
+
+     "Erro ao publicar: Nao foi possivel ler os dados atualizados." */
+  sec('Leitura: o motivo da falha, e o freio por pessoa');
+  {
+    /* ══ O MOTIVO VIAJA ══
+     * `lerDados` descartava TUDO — status HTTP e erro de rede — e jogava sempre
+     * a mesma frase. 429 por limite, 502 do GitHub e cabo desconectado chegavam
+     * iguais, e nenhum deles da para agir. A investigacao parava ali. */
+    const LER = corpo(ADMIN, 'async function lerDados(permitirCache, jaTentou) {') || '';
+    ok(/porque = 'HTTP ' \+ r\.status/.test(LER),
+       'o status HTTP entra no motivo');
+    ok(/j\.detail \|\| j\.error/.test(LER),
+       'e o `detail` do servidor tambem — e ele que diz "aguarde um minuto" num 429');
+    ok(/r\.status === 429/.test(LER),
+       'com o 429 nomeado, que e o caso que a pessoa pode resolver sozinha');
+    ok(/if \(!porque\) porque = 'sem resposta do servidor/.test(LER),
+       'e falha de rede se separa de recusa do servidor');
+    ok(/\(porque \? ' \(' \+ porque \+ '\)' : ''\)/.test(LER),
+       'e tudo isso chega na mensagem, em vez de morrer na funcao');
+
+    /* ══ O FREIO E POR PESSOA ══
+     * Era so por IP, e a empresa inteira sai por um IP. `dados` permite 40/min e
+     * cada tela faz polling a cada 30s: com uma duzia de abas no time o teto
+     * chega perto sem ninguem errar — e quem paga e quem salvou naquele minuto. */
+    ok(/const chaveLim = tk \? 'u:' \+ tk\.slice\(0, 32\) : 'ip:' \+ ip;/.test(W),
+       'quem tem conta tem a propria cota');
+    ok(/if \(tk && await limiteExcedido\(env, 'ip:' \+ ip, acaoLim, LIMITE_IP_FATOR\)\)/.test(W),
+       'e o IP continua com um teto maior — senao bastaria inventar tokens para ' +
+       'ter cota nova sempre');
+    /* E O FATOR TEM DE SER MAIOR QUE UM, DE VERDADE.
+       Afirmar so que ele existe nao mede nada: com `1`, o teto da rede volta a
+       ser o de uma pessoa e a empresa inteira divide 40/min outra vez — o
+       defeito de origem, com outro nome. A conta abaixo usa o valor LIDO do
+       arquivo, entao ela se adaptaria a qualquer numero; esta linha e o que
+       impede isso. Quatro e o piso: abaixo disso nao cabe nem meia equipe. */
+    const fatorDecl = Number((W.match(/const LIMITE_IP_FATOR = (\d+);/) || [, 0])[1]);
+    ok(fatorDecl >= 4,
+       'e o teto da rede e varias vezes o de uma pessoa — com 1, a empresa ' +
+       'inteira volta a dividir a mesma cota', 'fator ' + fatorDecl);
+
+    /* ══ EXECUTADO ══ */
+    const LIM = { 'dados': { max: 40, janela: 60 } };
+    const fator = Number((W.match(/const LIMITE_IP_FATOR = (\d+);/) || [, 1])[1]);
+    const banco = () => {
+      const linhas = new Map();
+      return { prepare(sql) { return {
+        bind(...a) { this._a = a; return this; },
+        async run() {
+          if (/INSERT INTO rate_limit/.test(sql)) {
+            const at = linhas.get(this._a[0]) || { n: 0 };
+            at.n += 1; linhas.set(this._a[0], at);
+          }
+          return {};
+        },
+        async first() {
+          return /SELECT n FROM rate_limit/.test(sql) ? (linhas.get(this._a[0]) || null) : null;
+        } }; } };
+    };
+    const limite = new Function('LIMITES',
+      corpo(W, 'async function limiteExcedido(env, ip, acao, fator) {') +
+      '; return limiteExcedido;')(LIM);
+
+    const env1 = { POKER_DB: banco() };
+    let barrou = 0;
+    for (let v = 0; v < 20; v++) {
+      for (const p of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']) {
+        if (await limite(env1, 'u:tok-' + p, 'dados')) barrou++;
+      }
+    }
+    ok(barrou === 0,
+       '200 leituras de 10 pessoas passam — so por IP, 160 cairiam',
+       barrou + ' bloqueada(s)');
+
+    const env2 = { POKER_DB: banco() };
+    for (let i = 0; i < 41; i++) await limite(env2, 'u:tok-a', 'dados');
+    ok(await limite(env2, 'u:tok-a', 'dados'),
+       'mas a cota de cada um continua existindo');
+    ok(!(await limite(env2, 'u:tok-b', 'dados')),
+       'e estourar a sua nao derruba a do colega');
+
+    const env3 = { POKER_DB: banco() };
+    let ondeBarrou = -1;
+    for (let i = 1; i <= 40 * fator + 3; i++) {
+      if (await limite(env3, 'ip:1.2.3.4', 'dados', fator)) { ondeBarrou = i; break; }
+    }
+    ok(ondeBarrou === 40 * fator + 1,
+       'e a rede inteira ainda tem teto, em ' + (40 * fator),
+       'barrou na ' + ondeBarrou);
+
+    const env4 = { POKER_DB: banco() };
+    let semConta = -1;
+    for (let i = 1; i <= 45; i++) {
+      if (await limite(env4, 'ip:1.2.3.4', 'dados')) { semConta = i; break; }
+    }
+    ok(semConta === 41, 'e sem conta o IP segue com o teto de sempre',
+       'barrou na ' + semConta);
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

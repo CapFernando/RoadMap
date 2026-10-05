@@ -231,9 +231,16 @@ const LIMITES = {
   // poker-estado fica de fora: o painel faz polling a cada 1,5s (~40/min por pessoa)
 };
 
-async function limiteExcedido(env, ip, acao) {
+/* QUANTAS VEZES O TETO DA REDE E MAIOR QUE O DA PESSOA.
+   Oito porque o time cabe bem dentro disso e uma coleta em massa nao: o limite
+   existe para encarecer quem baixa a base inteira em laco, e nao para brigar
+   com uma duzia de abas abertas no escritorio. */
+const LIMITE_IP_FATOR = 8;
+
+async function limiteExcedido(env, ip, acao, fator) {
   const cfg = LIMITES[acao];
   if (!cfg || !env.POKER_DB) return false;
+  const teto = cfg.max * (fator || 1);
   try {
     const db = env.POKER_DB;
     await db.prepare('CREATE TABLE IF NOT EXISTS rate_limit (chave TEXT PRIMARY KEY, expira INTEGER NOT NULL, n INTEGER NOT NULL)').run();
@@ -245,7 +252,7 @@ async function limiteExcedido(env, ip, acao) {
     const row = await db.prepare('SELECT n FROM rate_limit WHERE chave = ?').bind(chave).first();
     // faxina barata: 1 em ~50 requisicoes limpa o que expirou
     if (Math.random() < 0.02) await db.prepare('DELETE FROM rate_limit WHERE expira < ?').bind(agora).run();
-    return !!row && row.n > cfg.max;
+    return !!row && row.n > teto;
   } catch (_) {
     return false;
   }
@@ -2442,14 +2449,38 @@ export default {
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: 'JSON invalido' }, 400, headers); }
 
-    // Freio por IP antes de qualquer trabalho. `sugestao` cobre o formulario
-    // publico, que nao tem action propria.
+    /* ═══ O FREIO E POR PESSOA QUANDO HA CONTA, E POR IP QUANDO NAO HA ══════
+     *
+     * Ele era so por IP, e a empresa inteira sai por um IP so. `dados` permite
+     * 40 por minuto e cada tela aberta faz polling a cada 30s: com uma duzia de
+     * abas espalhadas pelo time, o teto chega perto sem ninguem fazer nada de
+     * errado — e a conta estourada nao e de quem estourou, e de quem salvou
+     * naquele minuto. O comentario do limite dizia "~4/min por pessoa cobre uso
+     * normal com sobra", e essa conta vale por PESSOA, nao por escritorio.
+     *
+     * O token de sessao identifica a pessoa sem ida ao banco, e e por isso que
+     * ele serve de chave aqui, antes de qualquer autenticacao.
+     *
+     * E O IP CONTINUA, COM TETO MAIOR. Sem ele, bastaria inventar tokens
+     * diferentes a cada requisicao para ter cota nova sempre — token falso nao
+     * autentica, mas o freio roda ANTES de autenticar, entao ele daria um balde
+     * novo de graca. Os dois juntos: cada pessoa com o seu, e o conjunto com um
+     * teto que so uma coleta em massa alcanca. */
     const ip = request.headers.get('CF-Connecting-IP') || 'sem-ip';
     const acaoLim = body.action || 'sugestao';
-    if (await limiteExcedido(env, ip, acaoLim)) {
-      await contaTentativa(env, ip, acaoLim);
+    const tk = String(body.token || '');
+    const chaveLim = tk ? 'u:' + tk.slice(0, 32) : 'ip:' + ip;
+    if (await limiteExcedido(env, chaveLim, acaoLim)) {
+      await contaTentativa(env, chaveLim, acaoLim);
       return json({ error: 'muitas_tentativas',
-                    detail: 'Muitas requisicoes. Aguarde um minuto e tente de novo.' }, 429, headers);
+                    detail: 'Muitas requisicoes suas em pouco tempo. Aguarde um minuto.' }, 429, headers);
+    }
+    // O teto do conjunto. So entra quando a chave fina ja e a da pessoa: sem
+    // conta, a chave acima JA e o IP e contar duas vezes cobraria em dobro.
+    if (tk && await limiteExcedido(env, 'ip:' + ip, acaoLim, LIMITE_IP_FATOR)) {
+      await contaTentativa(env, 'ip:' + ip, acaoLim);
+      return json({ error: 'muitas_tentativas',
+                    detail: 'Muitas requisicoes vindas desta rede. Aguarde um minuto.' }, 429, headers);
     }
 
     const REPO_NAME = env.DATA_REPO || REPO_NAME_PADRAO;
