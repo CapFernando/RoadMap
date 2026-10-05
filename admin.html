@@ -11362,7 +11362,7 @@ async function pausaSalvar(m, msg) {
     pausaRenderBloco(m);
     document.getElementById('m-entrega') && (document.getElementById('m-entrega').value = m.entrega || '');
     renderAll();
-  } else toast('Não foi possível salvar. A alteração continua pendente.', 'err');
+  } else avisaFalha('Não foi possível salvar. A alteração continua pendente.');
 }
 
 /** JA EXISTE UMA DEMANDA VIVA COM ESTE TITULO?
@@ -11709,6 +11709,16 @@ function explica(msg, tipo) {
   toast(msg, tipo || 'err');
 }
 
+/* A FRASE GENERICA, NUM PONTO SO.
+ *
+ * Eram SETE mensagens de "nao salvou" espalhadas, e eu havia tornado DUAS
+ * condicionais — as outras cinco continuavam apagando a razao real. Corrigir
+ * uma por vez e como a lista de anexos morava em quatro telas: a proxima nasce
+ * errada. Quem tem frase generica chama isto, e a condicao vive aqui. */
+function avisaFalha(msg) {
+  if (!_jaExpliquei) toast(msg, 'err');
+}
+
 function levaAoCampo(id, campo, motivo) {
   _jaExpliquei = true;
   /* FECHA O QUE ESTIVER POR CIMA. O caso que apareceu foi salvar uma demanda a
@@ -11909,10 +11919,8 @@ async function mPersistir(msgOk) {
   bannerPendentes();
   /* SO FALA SE NINGUEM EXPLICOU. Esta frase diz o QUE aconteceu; a do pre-voo diz
      POR QUE, e e a unica acionavel. Mostrar as duas apagava a segunda. */
-  if (!_jaExpliquei) {
-    toast('NÃO foi salvo no servidor. A alteração está guardada neste navegador — ' +
-          'use "Publicar agora" na faixa vermelha do topo.', 'err');
-  }
+  avisaFalha('NÃO foi salvo no servidor. A alteração está guardada neste navegador — ' +
+             'use "Publicar agora" na faixa vermelha do topo.');
   return false;
 }
 
@@ -13168,6 +13176,11 @@ async function valDecidir(aprovar, obs) {
   _dirtyMelhoriaIds.add(id);
   _pendingEdits = true;
   renderEntrega(m);
+  /* A BARRA DO TOPO JUNTO. Sem isto a contradicao nascia no proprio clique: o
+     painel passava a dizer "Entrega aprovada por Fulano as 13:49" e a barra
+     continuava oferecendo "Aprovar entrega" — duas afirmacoes sobre a mesma
+     demanda, na mesma tela, e uma delas com nome e hora. */
+  valBarraRender(m);
   renderAll();
   renderValBanner();
   const okSalvo = await saveViaProxy();
@@ -13182,13 +13195,28 @@ async function valDecidir(aprovar, obs) {
     // depois de a gravacao falhar e a tela mentindo. Diferente de um campo
     // editado, que continua pendente de proposito — ali o texto na tela e o que a
     // pessoa digitou, e "Publicar alteracoes" ainda resolve.
-    Object.assign(m, antes);
+    /* DESFAZ NO OBJETO QUE ESTA NO ESTADO, e nao no que foi capturado antes.
+     *
+     * `saveViaProxy` REFAZ `state.melhorias` — `mesclaMelhorias` devolve objetos
+     * NOVOS. O `m` desta funcao foi pego antes da chamada e, quando ela volta,
+     * pode ja estar fora do estado: desfazer nele seria corrigir um orfao, e a
+     * tela seguiria desenhando outra coisa.
+     *
+     * Era o que produzia a tela se contradizendo — "Aguardando sua validacao" na
+     * barra e "Entrega aprovada por Fernando" no painel, ao mesmo tempo. */
+    const atual = (state.melhorias || []).find(x => x.id === id) || m;
+    Object.assign(atual, antes);
     _dirtyMelhoriaIds.delete(id);
-    renderEntrega(m);
+    renderEntrega(atual);
+    /* E A BARRA DO TOPO TAMBEM. Ela e desenhada por `valBarraRender`, que nao
+       era chamada aqui: ela ficava com o estado de antes do clique enquanto o
+       painel mostrava o de depois. Duas afirmacoes sobre a mesma demanda, na
+       mesma tela, discordando — e uma delas com nome e hora. */
+    valBarraRender(atual);
     renderAll();
     renderValBanner();
-    toast('A aprovação NÃO foi gravada: a demanda continua em Validação. ' +
-          'Tente de novo — se persistir, alguém pode estar salvando ao mesmo tempo.', 'err');
+    avisaFalha('A aprovação NÃO foi gravada: a demanda continua em Validação. ' +
+               'Tente de novo — se persistir, alguém pode estar salvando ao mesmo tempo.');
   }
 }
 
@@ -13338,7 +13366,7 @@ async function pjAprovSalvar(p, msg) {
     toast(msg, 'ok');
     pjAprovRender(doServidor || p);
     renderProjetos(); renderAll(); pjRenderDemandas();
-  } else toast('Não foi possível salvar. A decisão continua pendente.', 'err');
+  } else avisaFalha('Não foi possível salvar. A decisão continua pendente.');
 }
 
 
@@ -13669,7 +13697,7 @@ function pjDesvincular(melId) {
 async function pjPersistir() {
   const okSalvo = await saveViaProxy();
   if (okSalvo) { _dirtyMelhoriaIds.clear(); _pendingEdits = false; renderAll(); renderProjetos(); }
-  else if (!_jaExpliquei) toast('Não foi possível salvar. A alteração continua pendente.', 'err');
+  else avisaFalha('Não foi possível salvar. A alteração continua pendente.');
 }
 
 async function pjSalvar() {
@@ -13714,7 +13742,7 @@ async function pjSalvar() {
     toast('Projeto salvo.', 'ok');
     renderProjetos(); renderAll(); pjRenderDemandas();
   } else {
-    toast('Não foi possível salvar o projeto.', 'err');
+    avisaFalha('Não foi possível salvar o projeto.');
   }
 }
 
@@ -13890,7 +13918,7 @@ async function mescConfirmar(idFilha) {
     _dirtyMelhoriaIds.clear(); _pendingEdits = false;
     toast('🔗 ' + (filha.codigo || '') + ' mesclada em ' + (pai.codigo || '') + '.', 'ok');
     mescRenderBloco(pai); renderAll();
-  } else toast('Não foi possível salvar a mesclagem.', 'err');
+  } else avisaFalha('Não foi possível salvar a mesclagem.');
 }
 
 async function mescDesfazer(idFilha) {

@@ -2034,7 +2034,10 @@ sec('Aprovacao: a tela nao afirma o que nao gravou');
 const vd = corpo(ADMIN, 'async function valDecidir(');
 ok(!!vd, 'existe valDecidir');
 ok(!!vd && /const antes = \{/.test(vd), 'guarda um retrato antes de decidir');
-ok(!!vd && /Object\.assign\(m, antes\)/.test(vd),
+/* `atual`, e nao `m`: `saveViaProxy` refaz `state.melhorias` com objetos novos,
+   entao o `m` capturado antes da chamada pode ja estar fora do estado. Desfazer
+   nele seria corrigir um orfao — e foi o que fez a tela se contradizer. */
+ok(!!vd && /Object\.assign\(atual, antes\)/.test(vd),
    'desfaz a decisao quando a gravacao falha');
 ok(!!vd && /A aprovação NÃO foi gravada/.test(vd),
    'a mensagem diz que NAO gravou, em vez de "continua pendente"');
@@ -15863,6 +15866,51 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(soltos.length === 0,
        'e nenhum caminho de erro usa `toast` cru — a razao seria apagada',
        soltos.length + ' ocorrencia(s)');
+
+    /* ══ E A FRASE GENERICA TEM UM PONTO SO ════════════════════════════════
+     *
+     * Eram SETE mensagens de "nao salvou" espalhadas, e eu havia tornado DUAS
+     * condicionais — as outras cinco seguiam apagando a razao. Uma delas era a
+     * da APROVACAO, que foi a reclamada: "A aprovacao NAO foi gravada" por cima
+     * de "Outra tela publicou ao mesmo tempo".
+     *
+     * Corrigir uma por vez e como a lista de anexos em quatro telas: a proxima
+     * nasce errada. A VARREDURA abaixo e o que impede isso — ela procura o
+     * PADRAO, e nao os lugares que eu ja conheco. */
+    const AVISA = corpo(ADMIN, 'function avisaFalha(msg) {') || '';
+    ok(/if \(!_jaExpliquei\) toast\(msg/.test(AVISA),
+       'a condicao mora num ponto so');
+    const AC2 = semComentario(ADMIN);
+    const genericasSoltas = (AC2.match(
+      /toast\('(?:NÃO foi salvo|Não foi possível salvar|A aprovação NÃO)[^;]*'/g) || []);
+    ok(genericasSoltas.length === 0,
+       'e nenhuma frase de "nao salvou" chama `toast` por fora dela',
+       genericasSoltas.map(s => s.slice(7, 45)).join(' ; ') || 'todas por avisaFalha');
+    ok((AC2.match(/avisaFalha\(/g) || []).length >= 8,
+       'sao varias, e todas pelo mesmo caminho',
+       (AC2.match(/avisaFalha\(/g) || []).length + ' chamadas');
+
+    /* ══ E A TELA NAO SE CONTRADIZ ═════════════════════════════════════════
+     *
+     * O print trazia, ao mesmo tempo: "⏳ Aguardando sua validacao" na barra do
+     * topo e "✅ Entrega aprovada por Fernando as 13:49" no painel. Duas
+     * afirmacoes sobre a mesma demanda, na mesma tela, e uma delas com nome e
+     * hora — que e exatamente o que o comentario do desfazer diz nao poder.
+     *
+     * Duas causas: a barra nao era redesenhada com o painel, e o desfazer
+     * escrevia no objeto CAPTURADO antes do save — mas `saveViaProxy` refaz
+     * `state.melhorias` com objetos novos, entao ele podia ja ser um orfao. */
+    const VD = corpo(ADMIN, 'async function valDecidir(aprovar, obs) {') || '';
+    const desenhosPainel = (VD.match(/renderEntrega\(/g) || []).length;
+    const desenhosBarra = (VD.match(/valBarraRender\(/g) || []).length;
+    ok(desenhosBarra === desenhosPainel && desenhosBarra >= 2,
+       'a barra e o painel sao redesenhados juntos, sempre',
+       'painel ' + desenhosPainel + ' x barra ' + desenhosBarra);
+    ok(/const atual = \(state\.melhorias \|\| \[\]\)\.find\(x => x\.id === id\) \|\| m;/.test(VD) &&
+       /Object\.assign\(atual, antes\)/.test(VD),
+       'e o desfazer age sobre o objeto que ESTA no estado, nao sobre o capturado');
+    ok(/renderEntrega\(atual\)/.test(VD) && /valBarraRender\(atual\)/.test(VD),
+       'e e esse objeto que vai para os dois desenhos');
     ok((semComentario(ADMIN).match(/explica\('Erro ao publicar: ' \+ e\.message\)/g) || []).length === 2,
        'os DOIS publicadores dizem a razao pelo caminho que marca',
        (semComentario(ADMIN).match(/explica\('Erro ao publicar/g) || []).length + ' de 2');
@@ -15870,14 +15918,21 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e cada tentativa comeca sem explicacao dada — senao uma recusa explicada ' +
        'calaria a mensagem da tentativa seguinte');
     const PERS = corpo(ADMIN, 'async function mPersistir(msgOk) {') || '';
-    ok(/if \(!_jaExpliquei\) \{[\s\S]{0,200}NÃO foi salvo no servidor/.test(PERS),
+    /* A condicao saiu de dentro de cada chamador e virou `avisaFalha` — ver a
+       varredura logo abaixo, que cobre as SETE em vez destas duas. */
+    ok(/avisaFalha\('NÃO foi salvo no servidor/.test(PERS),
        'e a frase generica so aparece quando ninguem explicou');
-    ok(/else if \(!_jaExpliquei\) toast\('Não foi possível salvar/.test(semComentario(ADMIN)),
+    ok(/else avisaFalha\('Não foi possível salvar\. A alteração continua pendente/
+       .test(semComentario(ADMIN)),
        'idem no caminho do Projeto, que foi onde apareceu');
     /* E O SILENCIO NAO VIRA A REGRA: falha de rede nao explica nada, e ai a
-       frase generica e a unica coisa que a pessoa tem. */
-    ok(/NÃO foi salvo no servidor/.test(PERS),
-       'mas ela continua existindo — falha de rede nao explica sozinha');
+       frase generica e a unica coisa que a pessoa tem.
+       A CHAMADA TEM DE SER INCONDICIONAL — um `if (false)` na frente deixa o
+       texto intacto e a tela muda, e foi assim que a sabotagem escapou. A
+       condicao de "ja explicaram" vive dentro de `avisaFalha`, e so la. */
+    ok(/\n  avisaFalha\('NÃO foi salvo no servidor/.test(semComentario(PERS)),
+       'mas ela continua existindo, e sem condicao em volta — falha de rede ' +
+       'nao explica sozinha');
     /* E O MODAL POR CIMA SAI DA FRENTE. O caso foi salvar uma demanda a partir
        do modal de Projeto: a culpada abria ATRAS dele, e a tela parecia nao ter
        feito nada. */
