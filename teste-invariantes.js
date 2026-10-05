@@ -17082,6 +17082,86 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'barrou na ' + semConta);
   }
 
+  /* === O FILTRO DE DEV MOSTRA QUEM ESTA NO TIME HOJE ===================
+
+     "Tenho dev que nao esta ativo e nao tem demanda e esta aparecendo no
+      filtro. Trazer apenas o que estao ativos." */
+  sec('Filtro de dev: quem esta no time hoje');
+  {
+    /* ══ A DECISAO JA GRAVADA PASSOU A VALER AQUI TAMBEM ══
+     * O servidor tira do cadastro quem saiu (`limpaDevs`, lendo
+     * `devs_removidos`), e a tela o trazia de volta pelo outro lado: ela une o
+     * cadastro com TODO nome que aparece em demanda, e o trabalho antigo da
+     * pessoa recoloca o nome. A remocao feita no Planejamento valia no cadastro
+     * e nao valia no filtro — dois lugares respondendo diferente sobre o mesmo
+     * time. */
+    const monta = (st) => new Function('state', `
+      ${corpo(ADMIN, 'function normTexto(s) {')}
+      ${corpo(ADMIN, 'function kbSplitDevs(s) {')}
+      const ehMesclada = (m) => !!(m && m.mesclado_em);
+      ${corpo(ADMIN, 'function devsComTrabalhoAberto() {')}
+      ${corpo(ADMIN, 'function devsDisponiveis() {')}
+      return devsDisponiveis;
+    `)(st);
+    const base = (ex) => Object.assign({
+      desenvolvedores: ['Emilly Souza', 'Dan Weine'],
+      devs_removidos: [], devs_inativos: [],
+      melhorias: [
+        { id: '1', dev: 'Emilly Souza', status_planejamento: 'em_andamento' },
+        { id: '2', dev: 'Cairo', status_planejamento: 'concluido' },
+        { id: '3', dev: 'João Carvalho', status_planejamento: 'concluido' },
+        { id: '4', dev: 'Dan Weine', status_planejamento: 'validacao' },
+      ],
+    }, ex || {});
+
+    ok(monta(base())().includes('Cairo'),
+       'quem ninguem marcou continua aparecendo — "saiu do time" nao e dedutivel ' +
+       'dos dados, e o codigo do servidor diz isso com estas palavras');
+    ok(!monta(base({ devs_removidos: ['Cairo'] }))().includes('Cairo'),
+       'removido do time com so trabalho concluido SAI — era o pedido');
+    ok(!monta(base({ devs_inativos: ['João Carvalho'] }))().includes('João Carvalho'),
+       'e conta desativada tambem tira');
+
+    /* A ESCAPATORIA E A DO SERVIDOR, com as mesmas palavras: "a decisao vale
+       enquanto ninguem contrariar na pratica". */
+    const voltou = base({ devs_removidos: ['Cairo'] });
+    voltou.melhorias.push({ id: '9', dev: 'Cairo', status_planejamento: 'em_andamento' });
+    ok(monta(voltou)().includes('Cairo'),
+       'mas quem volta a receber demanda ABERTA reaparece sozinho');
+    const negada = base({ devs_removidos: ['Cairo'] });
+    negada.melhorias.push({ id: '10', dev: 'Cairo', status_planejamento: 'negada' });
+    ok(!monta(negada)().includes('Cairo'),
+       'e concluida ou negada nao contam como aberta — senao a saida nunca valeria');
+    const mescl = base({ devs_removidos: ['Cairo'] });
+    mescl.melhorias.push({ id: '11', dev: 'Cairo', status_planejamento: 'em_andamento', mesclado_em: 'x' });
+    ok(!monta(mescl)().includes('Cairo'), 'nem demanda mesclada');
+
+    ok(!monta(base({ devs_removidos: ['joao carvalho'] }))().includes('João Carvalho'),
+       'a comparacao ignora acento e caixa — a lista e digitada por gente');
+
+    /* ══ E SEM SABER, NAO ESCONDE NINGUEM ══
+     * A lista de contas inativas chega depois do quadro, como a dos aprovadores
+     * de spike. La, contar "nao sei" como zero barrou uma aprovacao valida. */
+    ok(monta(base({ devs_inativos: null }))().includes('Cairo'),
+       'lista de inativos ausente nao faz ninguem sumir');
+    ok(/function devsCarregaInativos\(/.test(ADMIN) &&
+       /body\.action === 'devs-inativos'/.test(W),
+       'e ela vem de rota propria, fora do caminho que carrega o quadro');
+    const rotaDI = W.slice(W.indexOf("if (body.action === 'devs-inativos') {"));
+    const soDI = rotaDI.slice(0, rotaDI.indexOf('if (body.action', 40));
+    ok(!/contasMigrar/.test(semComentario(soDI)),
+       'e sem migracao — migracao em rota de leitura ja derrubou a tela inteira');
+    /* E ELA CONSULTA DE VERDADE. Existir e ser chamada nao basta: devolvendo
+       sempre `[]` ela responde "ninguem inativo", e o filtro volta ao que era
+       sem erro nenhum para investigar. Foi assim que a mesma sabotagem escapou
+       na rota dos aprovadores de spike. */
+    ok(/WHERE ativo = 0/.test(soDI) &&
+       /nome, nome_demandas FROM usuario/.test(soDI),
+       'e consulta quem esta DESATIVADO, pelos dois nomes que a base usa');
+    ok(!/await devsCarregaInativos\(\)/.test(ADMIN),
+       'e sem await: falhar a lista nao pode impedir o quadro de carregar');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

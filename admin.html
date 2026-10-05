@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7c07c26e73">
+<html lang="pt-BR" data-build="8a0d27f420">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -2945,6 +2945,7 @@ async function loadFromGitHub(silent) {
       spike_aprovadores: spikeQuemAssina(),
     };
     spikeCarregaAprovadores();
+    devsCarregaInativos();
     retratoBase();          // base do merge por campo
     _dirtyMelhoriaIds.clear();
     // O que ficou por publicar volta para a tela ANTES do primeiro desenho: se
@@ -3519,11 +3520,55 @@ function matchPeriodoConclusao(m, bucket) {
 
 // Une devs cadastrados e devs que aparecem nas demandas. O campo dev pode ser
 // composto ("Gabriel / Anthony"), por isso o split.
+/* ═══ QUEM APARECE NO FILTRO DE DEV ═════════════════════════════════════════
+ *
+ * "Tenho dev que nao esta ativo e nao tem demanda e esta aparecendo no filtro.
+ *  Trazer apenas o que estao ativos."
+ *
+ * A LISTA IGNORAVA A DECISAO JA GRAVADA. O servidor tira do cadastro quem saiu
+ * do time (`limpaDevs`, lendo `devs_removidos`), e esta funcao o trazia de volta
+ * pelo outro lado: ela une o cadastro com TODO nome que aparece em demanda, e o
+ * trabalho antigo da pessoa recoloca o nome ali. A remocao feita no Planejamento
+ * valia no cadastro e nao valia no filtro.
+ *
+ * DOIS SINAIS TIRAM DA LISTA — saiu do time, ou tem conta desativada —, e um
+ * DEVOLVE: demanda ABERTA. E a mesma escapatoria do servidor, com as mesmas
+ * palavras: "a decisao vale enquanto ninguem contrariar na pratica". Quem volta
+ * a receber trabalho volta a aparecer, sem ninguem precisar desfazer nada.
+ *
+ * E O HISTORICO NAO SE PERDE: o campo BUSCAR procura no nome do dev, entao as
+ * demandas de quem saiu continuam achaveis digitando o nome. O filtro passa a
+ * ser a lista de quem esta no time hoje, que e o que ele promete.
+ */
+function devsComTrabalhoAberto() {
+  const abertas = new Set();
+  (state.melhorias || []).forEach(m => {
+    if (!m || m.oculto || ehMesclada(m)) return;
+    if (['concluido', 'negada'].includes(String(m.status_planejamento || ''))) return;
+    kbSplitDevs(m.dev).forEach(d => abertas.add(normTexto(d)));
+  });
+  return abertas;
+}
+
 function devsDisponiveis() {
-  return [...new Set([
+  const todos = [...new Set([
     ...(state.desenvolvedores || []).flatMap(d => kbSplitDevs(d)),
     ...state.melhorias.flatMap(m => kbSplitDevs(m.dev)),
-  ])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  ])];
+  const removido = new Set((state.devs_removidos || []).map(normTexto));
+  /* `null` = a lista de contas inativas ainda nao chegou. Nao e o mesmo que
+     "ninguem esta inativo", e contar como vazio aqui seria inofensivo — mas a
+     distincao fica explicita porque a licao ja custou caro no spike: a tela nao
+     decide com o que ainda nao sabe. */
+  const inativo = new Set((state.devs_inativos || []).map(normTexto));
+  const abertas = devsComTrabalhoAberto();
+  return todos
+    .filter(d => {
+      const k = normTexto(d);
+      if (!removido.has(k) && !inativo.has(k)) return true;
+      return abertas.has(k);   // saiu, mas voltou a ter trabalho: aparece
+    })
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
 function matchDev(m, filtro) {
@@ -13083,6 +13128,27 @@ function abrirAnexoIdx(i, id) {
  * lado de quem manda, pode nem existir. */
 function spikeQuemAssina() {
   return Array.isArray(state.spike_aprovadores) ? state.spike_aprovadores : null;
+}
+
+/* A lista de contas desativadas, buscada a parte e sem `await` de quem chama —
+   mesma forma dos aprovadores de spike, e pelo mesmo motivo: consulta ao banco
+   de contas nao entra no caminho que carrega o quadro. */
+async function devsCarregaInativos(tentativa) {
+  try {
+    const r = await fetch(ADMIN_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: 'devs-inativos' }, credenciaisLeitura())),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (d && Array.isArray(d.nomes)) {
+      state.devs_inativos = d.nomes;
+      // So redesenha se isso muda alguma coisa na lista que esta na tela.
+      if (d.nomes.length) renderAll();
+    }
+  } catch (_) {
+    if (!tentativa) setTimeout(() => devsCarregaInativos(1), 4000);
+  }
 }
 
 async function spikeCarregaAprovadores(tentativa) {

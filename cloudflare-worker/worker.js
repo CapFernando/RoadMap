@@ -5304,6 +5304,40 @@ export default {
      *
      * Por isso aqui nao se le nada do corpo sobre a identidade — nem `login`,
      * nem `nome`. So o `id` da demanda e se e assinatura ou retirada. */
+    /* ═══ QUEM TEM CONTA DESATIVADA ═══════════════════════════════════════
+     *
+     * "Tenho dev que nao esta ativo e nao tem demanda e esta aparecendo no
+     *  filtro. Trazer apenas o que estao ativos."
+     *
+     * Sao NOMES, e nao contas: o filtro do Admin trabalha com o nome que aparece
+     * na demanda, e e por ele que a comparacao tem de ser feita. Vai o
+     * `nome_demandas` e o `nome` da conta, porque os dois aparecem na base —
+     * "Crisley Almeida" na demanda e "Crisley Matheus" na conta.
+     *
+     * ROTA PROPRIA, pelo mesmo motivo do `spike-aprovadores`: consulta ao banco
+     * de contas nao entra no caminho de leitura. Ja derrubei a tela inteira uma
+     * vez fazendo isso. */
+    if (body.action === 'devs-inativos') {
+      if (!(await leituraLiberadaAsync(body))) return json({ error: 'credencial' }, 401, headers);
+      let nomes = [];
+      if (env.POKER_DB) {
+        try {
+          const r = await env.POKER_DB.prepare(
+            'SELECT nome, nome_demandas FROM usuario WHERE ativo = 0').all();
+          const fora = new Set();
+          for (const u of (r.results || [])) {
+            String(u.nome_demandas || '').split(/[\/,;]/).forEach(x => {
+              const t = x.trim(); if (t) fora.add(t);
+            });
+            const n = String(u.nome || '').trim();
+            if (n) fora.add(n);
+          }
+          nomes = [...fora];
+        } catch (_) { nomes = []; }
+      }
+      return json({ ok: true, nomes }, 200, headers);
+    }
+
     /* QUEM PODE ASSINAR SPIKE. Rota propria, e nao um extra do `dados`: a tela
        pede UMA vez ao carregar, e uma falha aqui nao pode derrubar a leitura da
        base. Nao roda migracao — ver a nota em `spikeAprovadores`. */
