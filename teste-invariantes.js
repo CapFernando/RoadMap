@@ -15880,12 +15880,41 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const AVISA = corpo(ADMIN, 'function avisaFalha(msg) {') || '';
     ok(/if \(!_jaExpliquei\) toast\(msg/.test(AVISA),
        'a condicao mora num ponto so');
+    /* ══ A VARREDURA E ESTRUTURAL, E NAO UMA LISTA DE FRASES ══════════════
+     *
+     * A primeira versao procurava as frases que eu CONHECIA — "NAO foi salvo",
+     * "Nao foi possivel salvar", "A aprovacao NAO". E escapou a oitava: "Nao
+     * consegui salvar a marcacao de destaque", na estrela do card, que nao usa
+     * nenhuma dessas palavras. Foi reportada como erro logo depois de eu dizer
+     * que tinha varrido todas.
+     *
+     * Procurar o que eu ja conheco e o mesmo defeito da lista de anexos em
+     * quatro telas, um andar acima: cobre o passado e nao cobre o proximo.
+     * Agora a busca e pela FORMA — todo `toast` que caia num ramo de falha
+     * depois de um save —, e a frase nao importa. */
     const AC2 = semComentario(ADMIN);
-    const genericasSoltas = (AC2.match(
-      /toast\('(?:NÃO foi salvo|Não foi possível salvar|A aprovação NÃO)[^;]*'/g) || []);
-    ok(genericasSoltas.length === 0,
-       'e nenhuma frase de "nao salvou" chama `toast` por fora dela',
-       genericasSoltas.map(s => s.slice(7, 45)).join(' ; ') || 'todas por avisaFalha');
+    const linhas = AC2.split('\n');
+    const porFora = [];
+    linhas.forEach((l, i) => {
+      if (!/await (saveViaProxy|saveToGitHub)\(/.test(l)) return;
+      for (let k = i + 1; k < Math.min(linhas.length, i + 30); k++) {
+        if (!/toast\(/.test(linhas[k])) continue;
+        if (/avisaFalha|'ok'\)/.test(linhas[k])) continue;  // sucesso, ou ja certo
+        /* O MARCADOR DE FALHA TEM DE ESTAR JUNTO — na propria linha ou nas duas
+           anteriores. Procurar na janela inteira acusava validacao de ANTES de
+           salvar ("Informe o titulo", "De um nome ao projeto") que por acaso
+           caia dentro dela: um `else` qualquer no meio bastava. Reprovou codigo
+           correto duas vezes. */
+        const perto = linhas.slice(Math.max(i, k - 2), k + 1).join(' ');
+        if (/!okSalvo|!ok\b|\}\s*else|ok === false|=== false/.test(perto)) {
+          porFora.push((k + 1) + ': ' + linhas[k].trim().slice(0, 60));
+        }
+      }
+    });
+    const reais = [...new Set(porFora)];
+    ok(reais.length === 0,
+       'nenhuma mensagem de falha chama `toast` por fora de `avisaFalha`',
+       reais.join(' | ') || 'varrido por forma, e nao por frase');
     ok((AC2.match(/avisaFalha\(/g) || []).length >= 8,
        'sao varias, e todas pelo mesmo caminho',
        (AC2.match(/avisaFalha\(/g) || []).length + ' chamadas');

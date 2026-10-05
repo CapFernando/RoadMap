@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="812dab9716">
+<html lang="pt-BR" data-build="66b4c0cb23">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7650,7 +7650,7 @@ async function destaqueAlterna(ev, id) {
     _dirtyMelhoriaIds.delete(id);
     renderAll();
     destaqueRenderNoCard(m);
-    toast('Não consegui salvar a marcação de destaque.', 'err');
+    avisaFalha('Não consegui salvar a marcação de destaque.');
     return;
   }
   _dirtyMelhoriaIds.delete(id);
@@ -13784,7 +13784,7 @@ async function pjExcluir() {
     closeModal('modal-projeto');
     toast('Projeto excluído.', 'ok');
     renderProjetos(); renderAll();
-  } else toast('Não foi possível excluir.', 'err');
+  } else avisaFalha('Não foi possível excluir.');
 }
 
 // Preenche o select de projeto do card.
@@ -13959,7 +13959,7 @@ async function mescDesfazer(idFilha) {
     const m = (state.melhorias || []).find(x => x.id === aberta);
     if (m) mescRenderBloco(m);
     renderAll();
-  } else toast('Não foi possível separar.', 'err');
+  } else avisaFalha('Não foi possível separar.');
 }
 
 
