@@ -78,9 +78,36 @@ def alvos():
     return sorted(achados)
 
 
+# ═══ O SELO DA PROPRIA PAGINA ═══════════════════════════════════════════════
+#
+# O selo acima resolve o cache dos SCRIPTS, e nao o da pagina. A pagina em si o
+# navegador guarda, e nao ha `?v=` que a cubra — ela e o endereco.
+#
+# O custo disso apareceu tres vezes seguidas: uma correcao subia, o arquivo
+# servido ja estava certo, e a tela continuava com o defeito porque o navegador
+# servia a copia antiga. Cada rodada gastava uma ida e volta so para descobrir
+# "qual versao voce esta rodando?" — e, no meio, uma aprovacao que falhava.
+#
+# `data-build` no `<html>` responde isso de olhada, e sem depender de ninguem
+# lembrar: ele e o md5 da propria pagina com o campo zerado — mesma tecnica do
+# selo dos scripts, um andar acima. Muda qualquer coisa, muda o build.
+BUILD = re.compile(r'(<html[^>]*\sdata-build=")[^"]*(")')
+
+
+def com_build(texto):
+    """Devolve o texto com `data-build` recalculado sobre ele mesmo."""
+    if not BUILD.search(texto):
+        return texto, ''
+    # Zera antes de medir: medir com o valor dentro nunca convergiria.
+    zerado = BUILD.sub(r'\g<1>\g<2>', texto)
+    sel = hashlib.md5(zerado.replace('\r\n', '\n').encode('utf-8')).hexdigest()[:10]
+    return BUILD.sub(lambda m: m.group(1) + sel + m.group(2), texto), sel
+
+
 def main():
     selos = {a: hash_de(a) for a in alvos()}
     mudou = []
+    builds = {}
     for f in PAGINAS:
         with io.open(f, encoding='utf-8') as fh:
             original = fh.read()
@@ -91,6 +118,11 @@ def main():
                 r'%s="%s(\?v=[^"]*)?"' % (attr, re.escape(arq)),
                 '%s="%s?v=%s"' % (attr, arq, v),
                 novo)
+        # DEPOIS dos selos dos scripts: o build cobre a pagina inteira, e eles
+        # fazem parte dela. Antes, trocar um script nao mudaria o build.
+        novo, sel = com_build(novo)
+        if sel:
+            builds[f] = sel
         if novo != original:
             with io.open(f, 'w', encoding='utf-8', newline='') as fh:
                 fh.write(novo)
@@ -98,6 +130,8 @@ def main():
 
     for arq in sorted(selos):
         sys.stdout.write('  %-26s %s\n' % (arq, selos[arq]))
+    for f in sorted(builds):
+        sys.stdout.write('  build %-20s %s\n' % (f, builds[f]))
     sys.stdout.write('paginas atualizadas: %s\n'
                      % (', '.join(mudou) if mudou else 'nenhuma (ja estavam certas)'))
 

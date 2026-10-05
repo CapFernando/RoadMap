@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-build="812dab9716">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -848,6 +848,11 @@
     .anexo-link { display:inline-flex; align-items:center; gap:4px; color:var(--blue); text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:12px; }
     .anexo-link:hover { text-decoration:underline; }
     .anexo-link:focus-visible { outline:2px solid var(--amber,#E89C2F); outline-offset:2px; }
+    /* O build fica discreto: e diagnostico, e nao informacao do dia a dia.
+       Mas tem de estar na tela, e nao escondido no console — quem precisa
+       dele esta justamente sem saber se a tela e a nova. */
+    #build-selo { font-size:10px; color:var(--text3); opacity:.6; margin-left:8px;
+                  font-family:ui-monospace,monospace; letter-spacing:.02em; }
     /* ─── SPIKE: as tres assinaturas ─────────────────────────────────────── */
     .kb-spike { font-size:11px; background:var(--purple-bg,#2A1F4A); color:var(--purple-tx,#C4AEF5); border-radius:4px; padding:2px 7px; font-weight:700; white-space:nowrap; }
     .kb-spike.ok { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
@@ -1274,7 +1279,11 @@
   <header>
     <div class="header-left">
       <h1>⚙️ Admin — RoadMap de Melhorias</h1>
-      <p>Audax Capital · Produto &amp; Tecnologia</p>
+      <p>Audax Capital &middot; Produto &amp; Tecnologia<!-- O BUILD DA TELA, visivel. Tres rodadas seguidas se gastaram em "qual
+           versao voce esta rodando?": a correcao subia, o arquivo servido ja
+           estava certo, e o navegador seguia com a copia antiga. O numero e
+           preenchido pelo `scripts-tema-versao.py` — md5 da propria pagina —, e
+           da para comparar com o que esta no ar sem perguntar a ninguem. --><span id="build-selo" title="Versão desta tela. Se não bater com a publicada, o navegador está servindo uma cópia antiga: Ctrl+Shift+R."></span></p>
     </div>
     <div class="header-right">
       <!-- Links, nao botoes: com <button onclick="window.open"> o meio-clique e o
@@ -11657,6 +11666,14 @@ const RECUSA_REGRA = { sem_sistema: 'sistema', sem_responsavel: 'responsavel',
 
 /* A demanda aberta no modal. O `m-id` ja era a fonte disso em cinco lugares;
    ter um nome evita a sexta copia da mesma expressao. */
+/* O build na tela, lido do proprio documento. Nao ha o que calcular aqui: o
+   numero e gravado no `<html data-build>` pelo selo, na publicacao. */
+function mostraBuild() {
+  const el = document.getElementById('build-selo');
+  const b = document.documentElement.getAttribute('data-build');
+  if (el && b) el.textContent = 'build ' + b;
+}
+
 function mAtual() {
   const id = (document.getElementById('m-id') || {}).value;
   return id ? (state.melhorias || []).find(x => x.id === id) || null : null;
@@ -14084,6 +14101,7 @@ function showSaving(on) {
 // cliques abrem o seletor de arquivos do computador. O handler e o mesmo que o
 // onchange chamava — a zona muda o gesto, nao o que acontece com o arquivo.
 document.addEventListener('DOMContentLoaded', () => {
+  mostraBuild();
   if (typeof ligaZonaAnexo === 'function' && typeof mAddFiles === 'function')
     ligaZonaAnexo('m-file', mAddFiles);
   if (typeof ligaZonaAnexo === 'function' && typeof pjAddFiles === 'function')

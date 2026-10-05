@@ -15890,6 +15890,33 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'sao varias, e todas pelo mesmo caminho',
        (AC2.match(/avisaFalha\(/g) || []).length + ' chamadas');
 
+    /* ══ A TELA DIZ QUAL VERSAO ELA E ══════════════════════════════════════
+     *
+     * O selo dos scripts resolve o cache dos `.js`, e nao o da PAGINA — ela e o
+     * endereco, e nao ha `?v=` que a cubra. O custo apareceu tres vezes
+     * seguidas: a correcao subia, o arquivo servido ja estava certo, e a tela
+     * seguia com o defeito porque o navegador servia a copia antiga. Cada
+     * rodada gastava uma ida e volta so para responder "qual versao voce esta
+     * rodando?" — e, no meio, uma aprovacao que falhava.
+     *
+     * O `data-build` e o md5 da propria pagina com o campo zerado: mesma
+     * tecnica do selo dos scripts, um andar acima. Conferido executando o
+     * `scripts-tema-versao.py`: muda uma letra, muda o build; desfaz, volta. */
+    const buildAttr = (ADMIN.match(/<html[^>]*\sdata-build="([^"]*)"/) || [])[1];
+    ok(!!buildAttr && /^[0-9a-f]{10}$/.test(buildAttr),
+       'a pagina carrega um build de dez digitos', buildAttr || '(sem build)');
+    /* E ELE E O DA PAGINA DE AGORA. Selo que nao bate e pior que selo nenhum:
+       ele responde a pergunta com um numero errado. */
+    const zerado = ADMIN.replace(/(<html[^>]*\sdata-build=")[^"]*(")/, '$1$2');
+    const esperado = require('crypto').createHash('md5')
+      .update(zerado.replace(/\r\n/g, '\n'), 'utf8').digest('hex').slice(0, 10);
+    ok(buildAttr === esperado,
+       'e ele bate com o conteudo atual da pagina',
+       buildAttr + ' vs ' + esperado);
+    ok(/mostraBuild\(\);/.test(ADMIN) && /id="build-selo"/.test(ADMIN),
+       'e aparece na tela, e nao so no atributo — quem precisa dele esta sem ' +
+       'saber se a tela e a nova, e nao vai abrir o console');
+
     /* ══ E A TELA NAO SE CONTRADIZ ═════════════════════════════════════════
      *
      * O print trazia, ao mesmo tempo: "⏳ Aguardando sua validacao" na barra do
