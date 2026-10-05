@@ -150,6 +150,18 @@
       campo: '',
       cumpre: function (m, ctx) {
         if (!m || !m.spike) return true;
+        /* NAO SABER QUEM ASSINA NAO E O MESMO QUE NINGUEM TER ASSINADO.
+         *
+         * A lista de aprovadores chega do servidor DEPOIS do quadro, de
+         * proposito — ela nao pode segurar o carregamento. Enquanto nao chega,
+         * `aprovadores` e `null`, e contar isso como zero faria a tela barrar
+         * uma aprovacao que o servidor aceitaria.
+         *
+         * Ja aconteceu, e e a segunda vez que caio nisto: tela mais rigida que
+         * o servidor e o pior dos dois erros, porque a pessoa fica presa por uma
+         * regra que nao existe. Sem saber, a tela deixa passar — o servidor e a
+         * autoridade e recusa se precisar. */
+        if (!ctx.aprovadores) return true;
         return assinaturasValidas(m, ctx.aprovadores).length >= ASSINATURAS_SPIKE;
       },
       motivo: function (m, ctx) {
@@ -175,7 +187,10 @@
      agora, que e o lado seguro: cobra-se a mais, nunca a menos. */
   function presos(depois, antes) {
     if (!depois || !Array.isArray(depois.melhorias)) return [];
-    var ctx = { temas: {}, aprovadores: (depois.spike_aprovadores) || [] };
+    /* `aprovadores` CONTINUA `null` QUANDO NAO SE SABE. Um `|| []` aqui apagaria
+       a diferenca entre "o grupo esta vazio" e "a lista ainda nao chegou" — e e
+       essa diferenca que decide se a tela pode barrar. */
+    var ctx = { temas: {}, aprovadores: depois.spike_aprovadores || null };
     ((depois.temas) || []).forEach(function (t) { if (t && t.id) ctx.temas[t.id] = true; });
 
     var velhas = {};

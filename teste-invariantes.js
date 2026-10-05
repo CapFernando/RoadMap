@@ -15845,6 +15845,27 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const LEVA = corpo(ADMIN, 'function levaAoCampo(id, campo, motivo) {') || '';
     ok(/_jaExpliquei = true;/.test(LEVA),
        'quem leva ao campo marca que ja explicou');
+
+    /* ══ E DIZER A RAZAO TAMBEM E EXPLICAR ════════════════════════════════
+     *
+     * A primeira correcao marcou so no `levaAoCampo`, e com isso cobriu so o
+     * pre-voo. O `catch` do publicador mostra a razao de VERDADE — "Outra tela
+     * publicou ao mesmo tempo", "Sessao expirada", o `detail` do servidor — e
+     * nao marcava: a generica entrava por cima e apagava a unica frase
+     * acionavel. Foi o que continuou aparecendo DEPOIS da correcao.
+     *
+     * Entao toda frase que diga POR QUE passa por `explica`. */
+    const EXPL = corpo(ADMIN, 'function explica(msg, tipo) {') || '';
+    ok(/_jaExpliquei = true;/.test(EXPL) && /toast\(msg/.test(EXPL),
+       'existe um unico ponto que diz a razao E marca');
+    const soltos = (semComentario(ADMIN)
+      .match(/toast\('Erro ao publicar: ' \+ e\.message/g) || []);
+    ok(soltos.length === 0,
+       'e nenhum caminho de erro usa `toast` cru — a razao seria apagada',
+       soltos.length + ' ocorrencia(s)');
+    ok((semComentario(ADMIN).match(/explica\('Erro ao publicar: ' \+ e\.message\)/g) || []).length === 2,
+       'os DOIS publicadores dizem a razao pelo caminho que marca',
+       (semComentario(ADMIN).match(/explica\('Erro ao publicar/g) || []).length + ' de 2');
     ok(/_jaExpliquei = false;/.test(VIA),
        'e cada tentativa comeca sem explicacao dada — senao uma recusa explicada ' +
        'calaria a mensagem da tentativa seguinte');
@@ -16067,7 +16088,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      *
      * Por isso aqui se EXECUTA o par do Admin — as duas funcoes como estao no
      * arquivo — em vez de ler o texto delas. */
+    /* `spikeQuemAssina` entra no monte porque o pre-voo passou a chama-la — e
+       foi o teste que avisou, com um ReferenceError. E o comportamento certo:
+       ele EXECUTA o trecho real, entao toda dependencia nova passa por aqui. */
     const preVooAdmin = new Function('window', 'PREVOO', 'state', '_baseMelhorias',
+      corpo(ADMIN, 'function spikeQuemAssina() {') + '\n' +
       corpo(ADMIN, 'function retratoDoServidor() {') + '\n' +
       corpo(ADMIN, 'function preVooObrigatorio() {') + '\n' +
       '; return preVooObrigatorio;');
@@ -16467,8 +16492,66 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* ══ E A TELA BARRA OS TRES GESTOS ══ */
     ok(/if \(colKey === 'concluido' && m\.spike && window\.PREVOO\)/.test(ADMIN),
        'o arraste para Concluido barra spike sem assinatura');
-    ok(/if \(aprovar && m\.spike && window\.PREVOO\)/.test(ADMIN),
+    ok(/if \(aprovar && m\.spike && window\.PREVOO && _podemAssinar\)/.test(ADMIN),
        'aprovar a entrega tambem');
+
+    /* ══ MAS NAO BARRA POR NAO SABER QUEM ASSINA ══════════════════════════
+     *
+     * "acabo de ter um erro no kanban admin para aprovar uma issue (...) logo
+     *  em seguida retornou a mensagem salvo."
+     *
+     * A lista de aprovadores chega do servidor DEPOIS do quadro, de proposito —
+     * ela nao pode segurar o carregamento. Enquanto nao chegava, a tela lia a
+     * ausencia como "zero aprovadores" e recusava a aprovacao de um spike que
+     * estava assinado pelas tres pessoas. No clique seguinte, com a lista na
+     * mao, o mesmo gesto passava.
+     *
+     * E a SEGUNDA vez que caio nisto — a primeira foi a regra do responsavel.
+     * Tela mais rigida que o servidor e o pior dos dois erros: a pessoa fica
+     * presa por uma regra que, do lado de quem manda, pode nem existir. */
+    const QA = corpo(ADMIN, 'function spikeQuemAssina() {') || '';
+    ok(/Array\.isArray\(state\.spike_aprovadores\) \? state\.spike_aprovadores : null/.test(QA),
+       '`null` quando a lista ainda nao chegou, e array depois — mesmo vazio');
+    const semSaber = (ADMIN.match(/state\.spike_aprovadores \|\| \[\]/g) || []);
+    ok(semSaber.length === 0,
+       'e nenhum lugar troca esse "nao sei" por lista vazia',
+       semSaber.length + ' ocorrencia(s) de `|| []`');
+
+    /* CADA CONSUMIDOR, UM POR UM. Afirmar so que `|| []` sumiu nao bastava: a
+       troca pode voltar com outro nome (`_quem || []`) ou a condicao pode ser
+       neutralizada. Duas sabotagens escaparam exatamente assim. */
+    const AC = semComentario(ADMIN);
+    ok(/const _podemAssinar = spikeQuemAssina\(\);/.test(AC) &&
+       /if \(aprovar && m\.spike && window\.PREVOO && _podemAssinar\)/.test(AC),
+       'aprovar so decide quando sabe quem assina');
+    ok(/const valem = _quem \? PREVOO\.assinaturasValidas\(m, _quem\) : null;/.test(AC) &&
+       /if \(valem && valem\.length < PREVOO\.ASSINATURAS_SPIKE\)/.test(AC),
+       'o arraste tambem — e so barra com a lista na mao');
+    ok(/if \(!_quem \|\| !window\.PREVOO\) \{/.test(AC),
+       'e o selo do card desenha "conferindo" em vez de um numero inventado');
+    ok(/if \(m\.spike && !spikeQuemAssina\(\)\) \{/.test(AC),
+       'idem o painel da aba Entrega');
+
+    /* E A REGRA DO PRE-VOO FAZ O MESMO. */
+    const regraSpike = PREVOO.REGRAS.find(r => r.nome === 'spike');
+    const spikeAssinado = { id: 's', spike: true, status_planejamento: 'concluido',
+      spike_aprovacoes: [{ login: 'a' }, { login: 'b' }, { login: 'c' }] };
+    ok(regraSpike.cumpre(spikeAssinado, { aprovadores: null }),
+       'o pre-voo tambem deixa passar enquanto nao sabe quem assina');
+    ok(!regraSpike.cumpre(spikeAssinado, { aprovadores: [] }),
+       'mas com a lista VAZIA de verdade ele barra — grupo vazio nao autoriza nada');
+    ok(!regraSpike.cumpre({ id: 's', spike: true, spike_aprovacoes: [] },
+                          { aprovadores: [{ login: 'a' }, { login: 'b' }, { login: 'c' }] }),
+       'e sabendo quem assina, a trava continua valendo');
+
+    /* E A TELA NAO INVENTA UM NUMERO ENQUANTO NAO SABE. "0/3" num spike
+       assinado faz quem le o quadro cobrar assinatura de quem ja assinou. */
+    ok(/Conferindo as aprovações/.test(ADMIN) && /🔬 …/.test(ADMIN),
+       'o selo e o painel dizem que estao conferindo, em vez de mostrar 0 de 3');
+    /* E TENTA DE NOVO. Desistir calado na primeira falha deixava a tela cega
+       pelo resto da sessao. */
+    ok(/spikeCarregaAprovadores\(1\)/.test(ADMIN),
+       'e a busca da lista tenta uma segunda vez antes de desistir');
     ok(PREVOO.REGRAS.some(r => r.nome === 'spike'),
        'e o pre-voo barra antes de publicar');
     /* E O PUBLISH USA O RESULTADO DA GUARDA. Ter a funcao e chama-la nao basta:
@@ -16514,8 +16597,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!/contasMigrar/.test(semComentario(corpo(W, 'async function spikeAprovadores(env) {') || '')),
        'e a busca dos aprovadores nao roda migracao — migracao em caminho quente foi o defeito');
     ok(/body\.action === 'spike-aprovadores'/.test(W) &&
-       /function spikeCarregaAprovadores\(\)/.test(ADMIN),
+       /function spikeCarregaAprovadores\(/.test(ADMIN),
        'a lista vem de rota propria, pedida a parte');
+    /* E A ROTA DEVOLVE A LISTA DE VERDADE. Existir e ser chamada nao basta:
+       devolvendo `[]` ela responde "ninguem assina", e a tela passaria a vida
+       achando que o grupo esta vazio — sem erro nenhum para investigar. */
+    ok(/aprovadores: await spikeAprovadores\(env\)/.test(W),
+       'e devolve quem a base de contas diz, e nao uma lista vazia');
     ok(!/await spikeCarregaAprovadores\(\)/.test(ADMIN),
        'e sem await: falhar a lista nao pode impedir o quadro de carregar');
   }

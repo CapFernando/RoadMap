@@ -1219,7 +1219,7 @@
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=03bc22afd7"></script>
   <script src="anexo-tipos.js?v=70df77eaa0"></script>
-  <script src="prevoo.js?v=48c879306a"></script>
+  <script src="prevoo.js?v=b86be156b3"></script>
   <script src="deck-grafico.js?v=30e803d757"></script>
   <script src="deck-fundo.js?v=050a7db483"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
@@ -2904,7 +2904,8 @@ async function loadFromGitHub(silent) {
          Buscada a parte e sem `await`: se a lista falhar, o quadro carrega do
          mesmo jeito. O que se perde e o NOME de quem falta assinar; o que nao se
          pode perder e a base. */
-      spike_aprovadores: state.spike_aprovadores || [],
+      // `null` = ainda nao sei quem assina. Ver `spikeQuemAssina`.
+      spike_aprovadores: spikeQuemAssina(),
     };
     spikeCarregaAprovadores();
     retratoBase();          // base do merge por campo
@@ -3209,7 +3210,10 @@ async function saveViaProxy(tentativa = 1) {
     rascunhoSalvar();
     const errEl = document.getElementById('save-error');
     if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar de novo.'; errEl.style.display = 'block'; }
-    toast('Erro ao publicar: ' + e.message, 'err');
+    // `explica`, e nao `toast`: esta e a razao de verdade. Com `toast` puro, a
+    // frase generica de quem chamou entrava por cima e a pessoa ficava sem saber
+    // o que impediu de salvar.
+    explica('Erro ao publicar: ' + e.message);
   }
   showSaving(false);
   return false;
@@ -3308,7 +3312,9 @@ async function saveToGitHub(attempt = 1) {
     rascunhoSalvar();
     const errEl = document.getElementById('save-error');
     if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar novamente.'; errEl.style.display = 'block'; }
-    toast('Erro ao publicar: ' + e.message, 'err');
+    // Mesma razao do `saveViaProxy`: esta frase diz POR QUE, e nao pode ser
+    // apagada pela generica de quem chamou.
+    explica('Erro ao publicar: ' + e.message);
     return;
   }
   showSaving(false);
@@ -4351,11 +4357,18 @@ function renderKanban() {
       /* O SELO DIZ QUANTAS ASSINATURAS FALTAM, e nao so "spike". Quem olha o
          quadro quer saber o que impede de fechar, e esse numero e a resposta. */
       if (m.spike) {
-        const _v = window.PREVOO
-          ? PREVOO.assinaturasValidas(m, state.spike_aprovadores || []).length : 0;
+        const _quem = spikeQuemAssina();
         const _min = (window.PREVOO && PREVOO.ASSINATURAS_SPIKE) || 3;
-        badges.push('<span class="kb-spike' + (_v >= _min ? ' ok' : '') +
-          '" title="Spike: ' + _v + ' de ' + _min + ' aprovações">🔬 ' + _v + '/' + _min + '</span>');
+        /* SEM A LISTA, O SELO NAO INVENTA UM NUMERO. "0/3" num spike assinado e
+           pior que nao dizer nada: quem le o quadro vai cobrar assinatura de
+           quem ja assinou. */
+        if (!_quem || !window.PREVOO) {
+          badges.push('<span class="kb-spike" title="Spike — conferindo as aprovações…">🔬 …</span>');
+        } else {
+          const _v = PREVOO.assinaturasValidas(m, _quem).length;
+          badges.push('<span class="kb-spike' + (_v >= _min ? ' ok' : '') +
+            '" title="Spike: ' + _v + ' de ' + _min + ' aprovações">🔬 ' + _v + '/' + _min + '</span>');
+        }
       }
       if (nAnexos) badges.push(`<span class="kb-anexo-tag">📎 ${nAnexos}</span>`);
       /* O PROGRESSO DAS SUBTAREFAS, para quem acompanha e nao executa.
@@ -4517,8 +4530,11 @@ function kbDrop(e, colKey) {
      que a pessoa NAO ve a aba Entrega — sem esta trava ela solta o card, parece
      que concluiu, e o erro so aparece na publicacao. */
   if (colKey === 'concluido' && m.spike && window.PREVOO) {
-    const valem = PREVOO.assinaturasValidas(m, state.spike_aprovadores || []);
-    if (valem.length < PREVOO.ASSINATURAS_SPIKE) {
+    // Sem saber quem assina, nao barra: o servidor recusa se precisar. Ver
+    // `spikeQuemAssina` — contar `null` como zero ja barrou aprovacao valida.
+    const _quem = spikeQuemAssina();
+    const valem = _quem ? PREVOO.assinaturasValidas(m, _quem) : null;
+    if (valem && valem.length < PREVOO.ASSINATURAS_SPIKE) {
       toast('"' + (m.codigo || m.titulo) + '" é um spike com ' + valem.length +
             ' de ' + PREVOO.ASSINATURAS_SPIKE + ' aprovações — abra a aba Entrega ' +
             'para ver quem falta assinar.', 'err');
@@ -11657,7 +11673,7 @@ function preVooObrigatorio() {
   /* O CAMPO LOGICO VIRA O ID DESTA TELA. A regra nao conhece o HTML de
      ninguém — `m-tema`/`m-dev` aqui, `n-tema` no painel Dev. */
   return PREVOO.primeiro({ temas: state.temas || [], melhorias: state.melhorias || [],
-                          spike_aprovadores: state.spike_aprovadores || [] },
+                          spike_aprovadores: spikeQuemAssina() },
                          retratoDoServidor(), { tema: 'm-tema', dev: 'm-dev' });
 }
 
@@ -11678,6 +11694,20 @@ function preVooObrigatorio() {
  * `saveViaProxy` ja devolve `false` para tudo. Quem tem uma frase generica
  * pergunta antes se alguem ja disse algo melhor. */
 let _jaExpliquei = false;
+
+/* DIZER ALGO ESPECIFICO E EXPLICAR — nao so levar ao campo.
+ *
+ * A primeira versao marcava apenas no `levaAoCampo`, e com isso cobriu so o
+ * pre-voo. O `catch` do publicador mostra a razao de VERDADE — "Outra tela
+ * publicou ao mesmo tempo", "Sessao expirada", o `detail` do servidor — e nao
+ * marcava: a frase generica entrava por cima e apagava justamente a unica
+ * acionavel. Foi o que continuou aparecendo depois da correcao.
+ *
+ * Toda frase que diga POR QUE passa por aqui. */
+function explica(msg, tipo) {
+  _jaExpliquei = true;
+  toast(msg, tipo || 'err');
+}
 
 function levaAoCampo(id, campo, motivo) {
   _jaExpliquei = true;
@@ -12889,8 +12919,15 @@ function entregaHTML(m, opts) {
      A LISTA E NOMINAL, e nao um contador. "Faltam 2" nao diz a quem pedir; o
      card e lido justamente por quem vai cobrar a assinatura. */
   let spikeBloco = '';
-  if (m.spike) {
-    const podem = (state.spike_aprovadores || []);
+  if (m.spike && !spikeQuemAssina()) {
+    /* A LISTA AINDA NAO CHEGOU. Desenhar "0 de 3" aqui faria quem le cobrar
+       assinatura de quem talvez ja tenha assinado — e foi assim que a tela
+       chegou a recusar uma aprovacao valida. Dizer que esta conferindo e o
+       unico texto honesto enquanto nao se sabe. */
+    spikeBloco = '<div class="ent-bloco spike-bloco pendente">' +
+      '<h4>🔬 Spike</h4><p class="ent-vazio">Conferindo as aprovações…</p></div>';
+  } else if (m.spike) {
+    const podem = spikeQuemAssina() || [];
     const valem = window.PREVOO ? PREVOO.assinaturasValidas(m, podem) : [];
     const minimo = (window.PREVOO && PREVOO.ASSINATURAS_SPIKE) || 3;
     const assinou = (login) => valem.find(a =>
@@ -12978,20 +13015,43 @@ function abrirAnexoIdx(i, id) {
  * tela nao tem o que "aplicar localmente", porque ela nao e a autora do dado. */
 /* A lista de quem pode assinar, buscada a parte. SEM `await` de quem chama e
    com tudo engolido no erro: o quadro nao pode depender disto para aparecer. */
-async function spikeCarregaAprovadores() {
+/* ═══ "JA SEI QUEM ASSINA?" ═════════════════════════════════════════════════
+ *
+ * `null` enquanto a lista nao chegou; array depois — mesmo que vazio.
+ *
+ * A DIFERENCA E O QUE EVITA O DEFEITO: a lista vem do servidor DEPOIS do quadro,
+ * de proposito (ela nao pode segurar o carregamento). Enquanto nao chegava, a
+ * tela lia a ausencia como "zero aprovadores" e RECUSAVA aprovar um spike —
+ * depois, com a lista na mao, o mesmo clique funcionava. Foi o "erro ao aprovar
+ * e, logo em seguida, salvo".
+ *
+ * Sem saber, a tela nao barra: o servidor e a autoridade e recusa se precisar.
+ * Barrar por desconhecimento proprio e prender a pessoa por uma regra que, do
+ * lado de quem manda, pode nem existir. */
+function spikeQuemAssina() {
+  return Array.isArray(state.spike_aprovadores) ? state.spike_aprovadores : null;
+}
+
+async function spikeCarregaAprovadores(tentativa) {
   try {
     const r = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'spike-aprovadores' }, credenciaisLeitura())),
     });
-    if (!r.ok) return;
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     if (d && Array.isArray(d.aprovadores)) {
       state.spike_aprovadores = d.aprovadores;
       // So redesenha se houver spike na tela: redesenho a toa rouba a rolagem.
       if ((state.melhorias || []).some(m => m && m.spike)) renderAll();
     }
-  } catch (_) { /* sem a lista, o card mostra o numero e nao os nomes */ }
+  } catch (_) {
+    /* TENTA UMA VEZ MAIS. Desistir calado na primeira falha deixava a tela cega
+       pelo resto da sessao — e cega ela mostrava "0 de 3" num spike que podia
+       estar assinado. Uma tentativa so: insistir em laco esconderia um problema
+       de verdade. */
+    if (!tentativa) setTimeout(() => spikeCarregaAprovadores(1), 4000);
+  }
 }
 
 async function spikeAssinar(assinar) {
@@ -13048,8 +13108,13 @@ async function valDecidir(aprovar, obs) {
      responsavel porque e a que a pessoa esta olhando: ela abriu a aba Entrega,
      viu as assinaturas e clicou em Aprovar. O servidor recusa de qualquer
      forma; isto e para ela nao chegar la. */
-  if (aprovar && m.spike && window.PREVOO) {
-    const podem = state.spike_aprovadores || [];
+  /* SO BARRA SE SOUBER QUEM ASSINA. Com `spikeQuemAssina()` em `null` — a
+     lista ainda nao chegou do servidor — contar zero recusava uma aprovacao
+     legitima, e no clique seguinte ela passava. Era o "erro ao aprovar e, logo
+     em seguida, salvo". Sem saber, deixa ir: o servidor recusa se precisar. */
+  const _podemAssinar = spikeQuemAssina();
+  if (aprovar && m.spike && window.PREVOO && _podemAssinar) {
+    const podem = _podemAssinar;
     const valem = PREVOO.assinaturasValidas(m, podem);
     const minimo = PREVOO.ASSINATURAS_SPIKE;
     if (valem.length < minimo) {
