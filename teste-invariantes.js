@@ -14169,30 +14169,55 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         if (i < 0) return '';
         return G1.slice(i + sel.length, G1.indexOf('}', i));
       };
+      /* A FITA NO PE VIROU GUIRLANDA. "Quero um maior destaque... circular todo
+         o quadro como se fosse uma guirlanda verde de natal, bolas amarelas
+         para API e bolas azuis para painel dev."
+         Dar a volta na barra foi o que a PRIMEIRA versao tentou e desfez, e por
+         isso estas invariantes guardam o que torna esta diferente: o laco mora
+         na BORDA (`outline`), e o texto mora no miolo (`justify-content:
+         center`). A reclamacao de antes era o titulo lido POR CIMA da textura;
+         contorno nao passa por cima de texto nenhum. */
       const geometria = corpoRegra('.gantt-card.gcard-api, .gantt-card.gcard-painel');
-      ok(/background-size: 100% 5px;/.test(geometria) &&
-         /background-position: bottom left;/.test(geometria) &&
-         /background-repeat: repeat-x;/.test(geometria),
-         'as duas marcas sao uma FITA de 5px no pe — o titulo fica numa faixa limpa',
-         geometria.slice(0, 60));
+      ok(/outline: 2px solid #2BBF6A;/.test(geometria) &&
+         /outline-offset: -2px;/.test(geometria),
+         'o laco da guirlanda e verde e da a volta na barra', geometria.slice(0, 60));
+      /* Pela REGRA BASE, achada pelo conteudo dela: `corpoRegra('.gantt-card')`
+         caia em `body.viewer .gantt-card { cursor: default; }`, que vem antes no
+         arquivo, e a invariante media a regra errada. */
+      ok(/\.gantt-card \{[^}]*flex-direction: column;[^}]*justify-content: center;/.test(G1),
+         'e o titulo fica no MIOLO — e o que faz o contorno nao encostar nele');
+      ok((geometria.match(/radial-gradient/g) || []).length === 2,
+         'as bolas sao duas fileiras, topo e pe');
+      ok(/top 1px left 3px, bottom 1px left 11px/.test(geometria),
+         'defasadas meio periodo — alinhadas virariam duas listras pontilhadas');
+      /* ARO ESCURO EM CADA BOLA. Sem ele a marca do Painel Dev nao existia:
+         bola #4DA3F5 sobre a barra #1E6FBF some, e essa e a etapa mais comum. */
+      ok(/var\(--bola\) 2\.1px, #07111F/.test(geometria),
+         'cada bola tem aro escuro — senao a azul some na barra azul');
 
       const api = corpoRegra('.gantt-card.gcard-api');
-      ok(/repeating-linear-gradient\(135deg/.test(api),
-         'a do endpoint e LISTRADA, a 135deg — maquina', api.slice(0, 60));
-      ok(!/\b45deg/.test(api),
-         'e nao a 45deg, que e o angulo da fita de HERDADA — as duas podem ' +
-         'aparecer na mesma barra');
+      ok(/--bola: #F5C542/.test(api), 'as bolas da API sao AMARELAS', api.slice(0, 60));
+      ok(/outline-style: dashed/.test(api),
+         'e o laco dela e TRACEJADO — maquina, a mesma leitura da fita antiga');
       const painel = corpoRegra('.gantt-card.gcard-painel',
         G1.indexOf('.gantt-card.gcard-api {'));
-      ok(/linear-gradient/.test(painel) && !/repeating-/.test(painel),
-         'e a do Painel Dev e LISA — pessoa, e nao script', painel.slice(0, 60));
-      /* MESMO AZUL NAS DUAS: elas dizem a mesma coisa de fundo. */
-      ok(/#3B8FE8/.test(api) && /#3B8FE8/.test(painel),
-         'e as duas no mesmo azul — cor diferente faria parecer assunto diferente');
-      /* ATRASADO JA TEM FITA NO PE (`::after`, 5px). Sem o desvio, a marca de
-         origem sumiria embaixo da vermelha justamente nas que mais se olha. */
-      ok(/gcard-api\.gcard-atrasado[\s\S]{0,140}bottom 5px left/.test(GANTT),
-         'e as duas sobem 5px no atrasado, que ja tem fita propria no pe');
+      ok(/--bola: #4DA3F5/.test(painel), 'as do Painel Dev sao AZUIS', painel.slice(0, 60));
+      ok(!/dashed/.test(painel),
+         'e o laco dele e INTEIRO — pessoa, e nao script');
+      /* A COR NAO E O UNICO PORTADOR: tracejado x inteiro carrega a mesma
+         distincao sem depender de distinguir amarelo de azul. */
+      ok(/outline-style: dashed/.test(api) && !/dashed/.test(painel),
+         'e a distincao sobrevive sem cor nenhuma — tracejado contra inteiro');
+      /* ATRASADO TEM FITA NAS DUAS PONTAS (`::before` e `::after`, 5px). Sem o
+         desvio, as bolas sumiriam embaixo das vermelhas nas que mais se olha. */
+      ok(/gcard-api\.gcard-atrasado[\s\S]{0,180}top 6px left 3px, bottom 6px left 11px/.test(GANTT),
+         'e as bolas entram 5px no atrasado, que ja tem fita propria nas pontas');
+      /* A SELECAO GANHA DO LACO, e esta escrito em vez de depender da ordem do
+         arquivo: `.g-sel` tambem e `outline` e tem a mesma especificidade. */
+      ok(/gcard-api\.g-sel,[\s\S]{0,120}#7ED8D8/.test(GANTT),
+         'a barra selecionada mantem o anel de selecao, e nao o laco');
+      ok(/gcard-api\.g-sel-principal,[\s\S]{0,140}#FFC861/.test(GANTT),
+         'e a principal do arrasto tambem');
     }
 
     /* ── A LEGENDA, EM DOIS CHIPS ───────────────────────────────────────
@@ -14217,12 +14242,28 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o do painel, pelo painel — cada um pelo seu, e nao os dois pela uniao');
     /* CADA CHIP CARREGA A PROPRIA MARCA. Legenda que nao se parece com o que
        explica obriga a decorar a correspondencia. */
-    ok(/\.ind-chip\.origem-api::before[\s\S]{0,180}repeating-linear-gradient\(135deg/.test(GANTT),
-       'o chip da API mostra a fita LISTRADA, como a barra');
-    ok(/\.ind-chip\.origem-painel::before, \.ind-chip\.origem-painel::after \{\s*background: #3B8FE8;/
-       .test(GANTT.replace(/\n\s*/g, ' ').replace(/\{ /g, '{\n      ')) ||
-       /origem-painel::after \{[\s\S]{0,60}background: #3B8FE8/.test(GANTT),
-       'e o do painel mostra a fita LISA');
+    ok(/\.ind-chip\.origem-api\s*\{[^}]*--bola:#F5C542[^}]*outline-style:dashed/.test(GANTT),
+       'o chip da API tem guirlanda tracejada e bolas amarelas, como a barra');
+    ok(/\.ind-chip\.origem-painel\s*\{[^}]*--bola:#4DA3F5/.test(GANTT),
+       'e o do painel, bolas azuis');
+    ok(/\.ind-chip\.origem-api, \.ind-chip\.origem-painel \{[^}]*outline:2px solid #2BBF6A/
+       .test(GANTT.replace(/\s*\n\s*/g, ' ')),
+       'e os dois com o mesmo laco verde da barra');
+    /* O ANEL DE "FILTRO LIGADO" TAMBEM E `outline`, e com o ATALHO: mexer so no
+       `outline-offset` deixava a guirlanda virar branca e solida no clique — o
+       chip parava de se parecer com o que explica no momento em que era usado.
+       Medido no navegador; a bancada nao tinha denunciado a olho. */
+    {
+      const G2 = GANTT.replace(/\s*\n\s*/g, ' ');
+      const i = G2.indexOf('.ind-chip.origem-api.active-filter,');
+      const corpo = i < 0 ? '' : G2.slice(i, G2.indexOf('}', i));
+      ok(/outline: 2px solid #2BBF6A/.test(corpo),
+         'com o filtro ligado o laco verde FICA — o atalho `outline` leva cor junto');
+      ok(/box-shadow: 0 0 0 3px rgba\(255,255,255,0\.3\)/.test(corpo),
+         'e o anel de ligado vira sombra, para nao disputar o mesmo canal');
+      ok(/\.ind-chip\.origem-api\.active-filter \{ outline-style:dashed/.test(G2),
+         'e o tracejado da API sobrevive ao clique');
+    }
   }
 
   /* === A GRAMATICA UNICA DOS GRAFICOS DO DECK ===========================

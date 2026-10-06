@@ -200,24 +200,43 @@
     /* CADA CHIP CARREGA A PROPRIA MARCA, nas duas pontas. Legenda que nao se
        parece com o que ela explica obriga a pessoa a decorar a correspondencia
        — e e o mesmo desenho que o chip de "Mes passado" ja usa.
-       LISTRADA no da API, LISA no do painel: a mesma distincao da barra. */
+       LISTRADA no da API, LISA no do painel: a mesma distincao da barra.
+
+       O CHIP GANHOU A GUIRLANDA JUNTO. Ele carregava a fita antiga nas duas
+       pontas; quando a barra virou guirlanda, manter a fita aqui faria a
+       legenda explicar um desenho que nao existe mais no quadro — que e
+       exatamente o que esta regra foi escrita para evitar. Mesmo laco, mesmas
+       bolas, so que num retangulo menor: bolas um pouco menores e so no topo e
+       no pe, porque o chip tem a altura de uma linha de texto. */
     .ind-chip.origem-api, .ind-chip.origem-painel {
       background:#0C3260; border-color:#1a5080; color:#9BC8F8;
-      position:relative; overflow:hidden;
-      padding-left:20px; padding-right:20px;
+      position:relative;
+      outline:2px solid #2BBF6A; outline-offset:-2px;
+      background-image:
+        radial-gradient(circle at 5px 3px, var(--bola) 1.8px, #07111F 2px, transparent 2.6px),
+        radial-gradient(circle at 5px 3px, var(--bola) 1.8px, #07111F 2px, transparent 2.6px);
+      background-size: 14px 6px, 14px 6px;
+      background-position: top 1px left 3px, bottom 1px left 10px;
+      background-repeat: repeat-x, repeat-x;
     }
-    .ind-chip.origem-api::before, .ind-chip.origem-api::after,
-    .ind-chip.origem-painel::before, .ind-chip.origem-painel::after {
-      content:''; position:absolute; top:0; bottom:0; width:12px; pointer-events:none;
+    .ind-chip.origem-api    { --bola:#F5C542; outline-style:dashed; }
+    .ind-chip.origem-painel { --bola:#4DA3F5; }
+    /* O ANEL DE "FILTRO LIGADO" TAMBEM E `outline`, e ele apagaria a guirlanda
+       justamente no clique — o chip pararia de se parecer com o que explica no
+       exato momento em que a pessoa o usa. Aqui o anel vira sombra e o laco
+       fica. Mesmo remendo que `.ind-chip.mes_passado.active-filter` ja faz
+       logo abaixo, pelo mesmo motivo.
+
+       O LACO E REESCRITO INTEIRO AQUI, e nao so o `outline-offset`: o anel de
+       ligado usa o ATALHO `outline`, que leva junto cor e estilo. Mexer so no
+       offset deixava a guirlanda virar branca e solida no clique — medido, e o
+       olho nao tinha percebido na bancada. */
+    .ind-chip.origem-api.active-filter,
+    .ind-chip.origem-painel.active-filter {
+      outline: 2px solid #2BBF6A; outline-offset:-2px;
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
     }
-    .ind-chip.origem-api::before, .ind-chip.origem-api::after {
-      background: repeating-linear-gradient(135deg, #3B8FE8 0 5px, #0A1E33 5px 10px);
-    }
-    .ind-chip.origem-painel::before, .ind-chip.origem-painel::after {
-      background: #3B8FE8;
-    }
-    .ind-chip.origem-api::before, .ind-chip.origem-painel::before { left:0; }
-    .ind-chip.origem-api::after,  .ind-chip.origem-painel::after  { right:0; }
+    .ind-chip.origem-api.active-filter { outline-style:dashed; }
     /* O anel de "filtro ligado" e branco translucido, pensado para chip escuro —
        sobre o corpo branco ele desaparece, e o chip fica sem dizer que esta
        ativo. Vale para os dois chips de fita clara. */
@@ -858,26 +877,78 @@
      *   LISA       Painel Dev — pessoa. Grava pela mesma porta, mas é o dev
      *              abrindo o próprio card, e isso não se cobra de ninguém.
      *
-     * Medido: das 53 marcadas no quadro, 28 do endpoint e 25 do painel. */
+     * Medido: das 53 marcadas no quadro, 28 do endpoint e 25 do painel.
+     *
+     * ═══ A FITA NO PE VIROU GUIRLANDA ═══════════════════════════════════
+     *
+     * "Quero um maior destaque... circular todo o quadro do gantt como se fosse
+     * uma guirlanda verde de natal e bolas amarelas para API e guirlanda verde
+     * com bolas azuis para painel dev."
+     *
+     * Dar a volta na barra foi o que a primeira versão tentou, e ela voltou
+     * atrás porque listrava o MIOLO: 45% dos cards têm essa origem, e o título
+     * passou a ser lido por cima da textura. A guirlanda não repete isso, e a
+     * razão é geométrica, não de grau: a barra tem `justify-content:center`,
+     * então o texto mora no miolo, e a guirlanda mora na BORDA. Destaque maior
+     * sem nunca encostar na escrita — que foi a reclamação de antes.
+     *
+     * `outline` é o único canal de contorno que sobrou, e é por isso que ela
+     * está aí: `border` é da HERDADA (via `border-image`), `::before` e
+     * `::after` são de pausada, atrasado e quebra. `outline` também não ocupa
+     * espaço, então a barra não muda de tamanho ao ganhar a marca — numa régua
+     * de dias, 2px de largura a mais deslocariam a demanda no calendário.
+     *
+     * A DISTINÇÃO DE ANTES SOBREVIVEU, só mudou de lugar: o laço é TRACEJADO no
+     * endpoint e INTEIRO no painel, que é a mesma leitura de máquina × pessoa
+     * da fita antiga. As bolas (amarelas × azuis) vêm por cima disso, então a
+     * cor não é o único portador — se fosse, azul e amarelo seriam a única
+     * diferença entre dois chips que já são ambos azuis.
+     *
+     * VERDE para o laço, e nenhuma das duas etapas usa verde na borda: verde
+     * nesta tela é o PREENCHIMENTO de 'concluído', e contorno e preenchimento
+     * não se confundem. */
     .gantt-card.gcard-api,
     .gantt-card.gcard-painel {
-      background-size: 100% 5px;
-      background-position: bottom left;
-      background-repeat: repeat-x;
+      outline: 2px solid #2BBF6A;
+      outline-offset: -2px;
+      /* AS BOLAS. Duas fileiras, topo e pé, defasadas meio período uma da outra
+         — alinhadas elas viram duas listras pontilhadas, e não uma guirlanda.
+         CADA BOLA TEM ARO ESCURO, e sem ele a marca do Painel Dev não existia:
+         medido na bancada, bola #4DA3F5 sobre a barra #1E6FBF de 'em andamento'
+         — que é a etapa mais comum do quadro — ficava invisível. Mesma doutrina
+         da etiqueta de herança e do selo de validação: quem precisa ser lido
+         sobre sete cores de barra carrega o próprio fundo. */
+      background-image:
+        radial-gradient(circle at 6px 3.5px, var(--bola) 2.1px, #07111F 2.3px, transparent 3.1px),
+        radial-gradient(circle at 6px 3.5px, var(--bola) 2.1px, #07111F 2.3px, transparent 3.1px);
+      background-size: 16px 7px, 16px 7px;
+      background-position: top 1px left 3px, bottom 1px left 11px;
+      background-repeat: repeat-x, repeat-x;
     }
-    .gantt-card.gcard-api {
-      background-image: repeating-linear-gradient(135deg,
-        #3B8FE8 0 5px, #0A1E33 5px 10px);
-    }
-    .gantt-card.gcard-painel {
-      background-image: linear-gradient(#3B8FE8, #3B8FE8);
-    }
-    /* ATRASADO JA TEM FITA NO PE (`::after`, 5px). A de origem sobe 5px para as
-       duas coexistirem — sem isso ela ficaria escondida embaixo da vermelha
-       justamente nas demandas que mais se olha. */
+    .gantt-card.gcard-api    { --bola: #F5C542; outline-style: dashed; }
+    .gantt-card.gcard-painel { --bola: #4DA3F5; }
+    /* ATRASADO TEM FITA NAS DUAS PONTAS (`::before` e `::after`, 5px cada). As
+       bolas entram 5px para dentro para não ficarem escondidas embaixo das
+       vermelhas justamente nas demandas que mais se olha. O laço não precisa
+       disso: ele é contorno, e as fitas são faixas horizontais. */
     .gantt-card.gcard-api.gcard-atrasado,
     .gantt-card.gcard-painel.gcard-atrasado {
-      background-position: bottom 5px left;
+      background-position: top 6px left 3px, bottom 6px left 11px;
+    }
+    /* A SELECAO GANHA DO LACO, e isto esta escrito em vez de ficar por conta da
+       ordem do arquivo. `.g-sel` e `.g-sel-principal` tambem sao `outline` e tem
+       a mesma especificidade da guirlanda; como elas vem ANTES aqui, o laco
+       venceria e a barra selecionada ficaria sem anel — some o sinal de "e esta
+       que estou arrastando", que e transitorio e urgente, para manter um que e
+       permanente. As bolas continuam no lugar enquanto dura a selecao, entao a
+       origem nao se perde enquanto o anel esta emprestado. */
+    .gantt-card.gcard-api.g-sel,
+    .gantt-card.gcard-painel.g-sel {
+      outline:2px solid #7ED8D8; outline-offset:1px; outline-style:solid;
+    }
+    .gantt-card.gcard-api.g-sel-principal,
+    .gantt-card.gcard-painel.g-sel-principal {
+      outline:3px solid #FFC861; outline-offset:1px; outline-style:solid;
     }
     .gcard-atrasado { background:#C81E1E; border-color:#0A0A0A; color:#FFFFFF; }
     .gantt-card.gcard-atrasado::before,
