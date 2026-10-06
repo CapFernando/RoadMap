@@ -2852,6 +2852,89 @@ ok((INDEX.match(/temaCasaRaiz\(m\)/g) || []).length >= 2,
   ok(f('nao existe', rs) === null, 'e o que nao existe devolve null, para o filtro limpar');
   ok(f('', rs) === null && f(null, rs) === null, 'vazio limpa o filtro');
 })();
+/* O PAINEL PUBLICO DIZ QUE A DEMANDA PAROU.
+ *
+ * Antes ele nao ficava calado sobre a pausa — dizia o contrario. Nada filtra as
+ * pausadas (`filtradas()` so descarta mesclada e fechada), entao elas estavam la,
+ * com o selo da etapa em que pararam. Medido na base de 06/10/2026: 13 pausadas
+ * na lista, nenhuma marcada, cinco anunciando "Em Andamento" paradas havia de 36
+ * a 56 dias, e a AX-084 havia 63. Quem lia via trabalho onde nao havia trabalho.
+ *
+ * Roda a funcao recortada, com os modulos de verdade — nada de casar regex. */
+(() => {
+  const EP = require('./etapa-demanda.js');
+  const PZP = require('./prazo.js');
+  const hoje = PZP.hojeISO();
+  const c = corpo(INDEX, 'function pausaHTML(');
+  ok(!!c, 'o painel publico tem a marca de parada');
+  if (!c) return;
+  const f = new Function('ETAPA', 'PRAZO', 'svgIcon',
+    c + '; return pausaHTML;')(EP, PZP, () => '<svg/>');
+
+  const parou = (dias) => {
+    const d = new Date(Date.UTC(2026, 9, 6) - dias * 86400000);
+    return { pausado_em: d.toISOString().slice(0, 10), status_planejamento: 'em_andamento' };
+  };
+
+  ok(f({ status_planejamento: 'em_andamento' }) === '',
+     'demanda que anda nao ganha marca nenhuma');
+  ok(f({ pausado_em: '' }) === '' && f({}) === '' && f(null) === '',
+     'campo vazio, ausente e nulo nao viram pausa');
+
+  const h = f(parou(63));
+  ok(/Pausada/.test(h), 'a palavra "Pausada" sai escrita, e nao so uma cor', h);
+  ok(/63d/.test(h), 'com os dias parados', h);
+  ok(/<svg/.test(h), 'e o icone junto, para quem nao distingue a cor');
+
+  /* A CONTA E A DE `prazo.js`, e nao uma segunda conta parecida. Se divergirem,
+     o painel publico e o admin passam a dizer numeros diferentes da mesma parada. */
+  [1, 7, 36, 56, 63, 400].forEach(d => {
+    const m = parou(d);
+    ok(h !== null && f(m).includes('· ' + PZP.diasPausados(m, hoje) + 'd'),
+       'os dias vem de PRAZO.diasPausados, em ' + d + 'd', f(m));
+  });
+  ok(!/·/.test(f(parou(0))), 'parada hoje nao diz "0d", so "Pausada"', f(parou(0)));
+
+  /* O SELO DA ETAPA FICA. Ele responde ONDE a demanda parou, que continua sendo
+     a informacao mais util das duas; a marca nova responde QUE ela parou. Trocar
+     um pelo outro perderia metade do que o cartao dizia. */
+  /* RODANDO, e nao casando o texto do arquivo: `${pausaHTML(m) || badgeHTML(...)}`
+     contem as duas chamadas e mesmo assim engole a etapa. A sabotagem escapou
+     assim, e a invariante so passou a valer quando desenhou o cartao de verdade. */
+  const rm = corpo(INDEX, 'function renderMelhoria(');
+  const render = new Function('badgeHTML', 'pausaHTML', 'metaHTML', 'fEsc',
+    rm + '; return renderMelhoria;')(
+      () => '<!--ETAPA-->', f, () => '', (s) => String(s));
+  const cartao = render(parou(63));
+  ok(cartao.includes('<!--ETAPA-->') && /Pausada/.test(cartao),
+     'o cartao desenha a etapa E a parada: uma nao substitui a outra', cartao);
+
+  /* O MOTIVO E VISIVEL, e nao um segredo de quem tem mouse. No admin ele mora no
+     `title` do selo; em telefone nao existe hover, e e no telefone que este
+     painel e lido. */
+  const mh = corpo(INDEX, 'function metaHTML(');
+  const g = new Function('ETAPA', 'svgIcon', 'formatDate', 'fEsc',
+    mh + '; return metaHTML;')(EP, () => '', (s) => String(s),
+    (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'));
+  const comMotivo = g({ pausado_em: '2026-08-04', pausa_motivo: 'aguardando fornecedor',
+                        inicio: '2026-07-01' });
+  /* LIDO NA TELA, e nao escondido num atributo. `title="aguardando fornecedor"`
+     casa com /aguardando fornecedor/ e nao mostra nada a quem nao tem mouse — foi
+     assim que a sabotagem escapou. Entao apaga-se o valor de todo atributo antes
+     de perguntar: o que sobrar e o que a pessoa le. */
+  const soTexto = (h) => String(h).replace(/="[^"]*"/g, '=""');
+  ok(/aguardando fornecedor/.test(soTexto(comMotivo)),
+     'o motivo da parada sai como texto na tela, fora de atributo', comMotivo);
+  ok(/2026-08-04/.test(comMotivo), 'junto da data em que parou');
+  ok(comMotivo.indexOf('Parada desde') < comMotivo.indexOf('Início'),
+     'e vem antes das datas, porque explica que elas sao de antes da parada');
+  ok(!/Parada desde/.test(g({ inicio: '2026-07-01' })),
+     'demanda que anda nao ganha linha de parada');
+  ok(/Parada desde/.test(g({ pausado_em: '2026-08-04' })),
+     'pausada sem motivo ainda diz que parou');
+  ok(!/<b>/.test(g({ pausado_em: '2026-08-04', pausa_motivo: '<b>x</b>' })),
+     'o motivo passa por fEsc — e texto que alguem digitou');
+})();
 ok(/catalogoCasa\(m\.tema_id, t\.id/.test(DEV), 'a contagem do dev conta a subarvore');
 
 // No slide, o caminho inteiro nao cabe: "AXCred - Cadastro - Análise de Crédito -
