@@ -17042,7 +17042,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           return /SELECT n FROM rate_limit/.test(sql) ? (linhas.get(this._a[0]) || null) : null;
         } }; } };
     };
-    const limite = new Function('LIMITES',
+    /* `_criofRateLimit` mora FORA da funcao recortada: o CREATE TABLE saiu do
+       caminho quente e passou a depender de uma flag de modulo. Sem declara-la
+       aqui, a funcao estoura com ReferenceError, o proprio `catch` dela devolve
+       `false` e o freio parece nao existir — foi o que a suite acusou, e e o
+       comportamento certo: ela EXECUTA o codigo real, entao toda dependencia
+       nova passa por aqui. */
+    const limite = new Function('LIMITES', 'let _criouRateLimit = false; ' +
       corpo(W, 'async function limiteExcedido(env, ip, acao, fator) {') +
       '; return limiteExcedido;')(LIM);
 

@@ -256,14 +256,15 @@ async function limiteExcedido(env, ip, acao, fator) {
     const agora = Math.floor(Date.now() / 1000);
     const bucket = Math.floor(agora / cfg.janela);
     const chave = acao + '|' + ip + '|' + bucket;
-    /* INSERT E SELECT NUMA IDA SO. Eram duas, vezes duas chamadas por
-       requisicao. `RETURNING` e do SQLite 3.35 e o D1 o suporta; se um dia nao
-       suportar, o `catch` de fora devolve `false` e o freio deixa de barrar —
-       o lado seguro aqui e nao travar quem esta trabalhando. */
-    const row = await db.prepare(
-      'INSERT INTO rate_limit (chave, expira, n) VALUES (?,?,1) ' +
-      'ON CONFLICT(chave) DO UPDATE SET n = n + 1 RETURNING n')
-      .bind(chave, agora + cfg.janela * 2).first();
+    /* DUAS IDAS, E NAO UMA COM `RETURNING`.
+       Tentei juntar as duas num `INSERT ... RETURNING n`. Duas coisas me fizeram
+       voltar atras: a medicao nao mostrou ganho nenhum de CPU, e o `catch` que
+       envolve isto devolve `false` quando algo estoura — ou seja, se o
+       `RETURNING` nao fosse suportado, o freio PARARIA DE BARRAR em silencio.
+       Economia nao medida nao paga um controle que falha calado. */
+    await db.prepare('INSERT INTO rate_limit (chave, expira, n) VALUES (?,?,1) ON CONFLICT(chave) DO UPDATE SET n = n + 1')
+      .bind(chave, agora + cfg.janela * 2).run();
+    const row = await db.prepare('SELECT n FROM rate_limit WHERE chave = ?').bind(chave).first();
     // faxina barata: 1 em ~50 requisicoes limpa o que expirou
     if (Math.random() < 0.02) await db.prepare('DELETE FROM rate_limit WHERE expira < ?').bind(agora).run();
     return !!row && row.n > teto;
