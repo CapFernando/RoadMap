@@ -237,19 +237,33 @@ const LIMITES = {
    com uma duzia de abas abertas no escritorio. */
 const LIMITE_IP_FATOR = 8;
 
+let _criouRateLimit = false;
+
 async function limiteExcedido(env, ip, acao, fator) {
   const cfg = LIMITES[acao];
   if (!cfg || !env.POKER_DB) return false;
   const teto = cfg.max * (fator || 1);
   try {
     const db = env.POKER_DB;
-    await db.prepare('CREATE TABLE IF NOT EXISTS rate_limit (chave TEXT PRIMARY KEY, expira INTEGER NOT NULL, n INTEGER NOT NULL)').run();
+    /* O CREATE TABLE SAIU DO CAMINHO QUENTE. Ele roda em toda requisicao, e sao
+       DUAS chamadas por requisicao desde que o freio passou a ter teto de rede.
+       "IF NOT EXISTS" nao e de graca: e uma ida ao banco para descobrir que nao
+       ha nada a fazer. Uma vez por isolate basta — a tabela nao some sozinha. */
+    if (!_criouRateLimit) {
+      _criouRateLimit = true;
+      await db.prepare('CREATE TABLE IF NOT EXISTS rate_limit (chave TEXT PRIMARY KEY, expira INTEGER NOT NULL, n INTEGER NOT NULL)').run();
+    }
     const agora = Math.floor(Date.now() / 1000);
     const bucket = Math.floor(agora / cfg.janela);
     const chave = acao + '|' + ip + '|' + bucket;
-    await db.prepare('INSERT INTO rate_limit (chave, expira, n) VALUES (?,?,1) ON CONFLICT(chave) DO UPDATE SET n = n + 1')
-      .bind(chave, agora + cfg.janela * 2).run();
-    const row = await db.prepare('SELECT n FROM rate_limit WHERE chave = ?').bind(chave).first();
+    /* INSERT E SELECT NUMA IDA SO. Eram duas, vezes duas chamadas por
+       requisicao. `RETURNING` e do SQLite 3.35 e o D1 o suporta; se um dia nao
+       suportar, o `catch` de fora devolve `false` e o freio deixa de barrar —
+       o lado seguro aqui e nao travar quem esta trabalhando. */
+    const row = await db.prepare(
+      'INSERT INTO rate_limit (chave, expira, n) VALUES (?,?,1) ' +
+      'ON CONFLICT(chave) DO UPDATE SET n = n + 1 RETURNING n')
+      .bind(chave, agora + cfg.janela * 2).first();
     // faxina barata: 1 em ~50 requisicoes limpa o que expirou
     if (Math.random() < 0.02) await db.prepare('DELETE FROM rate_limit WHERE expira < ?').bind(agora).run();
     return !!row && row.n > teto;
@@ -1979,7 +1993,33 @@ function atribuiCodigos(data) {
 }
 
 
+/* ═══ A MIGRACAO RODA UMA VEZ POR ISOLATE, E NAO POR REQUISICAO ════════════
+ *
+ * "esta dando muitos erros" — e o log do Worker mostrou o que era:
+ * `exceededCpu`. Uma leitura de 102 bytes queimava 20 a 29ms de CPU e as vezes
+ * estourava o teto, morrendo ANTES de responder. Nao e rede e nao e limite de
+ * requisicoes: o Worker era morto no meio.
+ *
+ * Esta funcao e cinco `prepare` mais cinco ALTER TABLE que ESTOURAM e sao
+ * capturados — exceção custa CPU —, e ela roda dentro de `identifica`, que roda
+ * em toda requisicao autenticada. Dez idas ao banco e cinco excecoes para
+ * devolver um arquivo que ja estava pronto.
+ *
+ * O isolate e reaproveitado entre requisicoes, entao uma flag de modulo reduz
+ * isso a uma vez por partida fria. O esquema nao muda sozinho no meio do
+ * caminho: quem muda e um deploy, e deploy troca o isolate.
+ *
+ * NAO E CACHE DE DADO, e de TRABALHO JA FEITO. Se o isolate reiniciar, ela roda
+ * de novo — que e exatamente o que se quer. */
+let _migrouContas = false;
+
 async function contasMigrar(db) {
+  if (_migrouContas) return;
+  _migrouContas = true;
+  return contasMigrarAgora(db);
+}
+
+async function contasMigrarAgora(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS usuario (
       id TEXT PRIMARY KEY, login TEXT NOT NULL UNIQUE, nome TEXT NOT NULL,
