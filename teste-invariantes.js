@@ -2935,6 +2935,95 @@ ok((INDEX.match(/temaCasaRaiz\(m\)/g) || []).length >= 2,
   ok(!/<b>/.test(g({ pausado_em: '2026-08-04', pausa_motivo: '<b>x</b>' })),
      'o motivo passa por fEsc — e texto que alguem digitou');
 })();
+/* O REQUISITO CHEGA AO CELULAR.
+ *
+ * O PNG do requisito abria pelo `anexo-baixar`, que exige credencial de leitura.
+ * Quem entra pelo QR da so o nome — e e essa pessoa, a do telefone, que precisa
+ * ler o requisito para escolher a carta. O time no desktop via porque estava
+ * logado; o celular votava no escuro. Pior: `renderDetalhe` recebia os anexos
+ * zerados para quem nao tem credencial, entao a imagem nem era pedida.
+ *
+ * A porta nova e estreita, e estas invariantes guardam a largura dela. */
+(() => {
+  const W = lerTela('cloudflare-worker/worker.js');
+  const cTela = corpo(POKER, 'function ehRequisito(');
+  const cWrk = corpo(W, 'function pokerEhRequisito(');
+  ok(!!cTela && !!cWrk, 'a regra do requisito existe na tela e no worker');
+  if (!cTela || !cWrk) return;
+
+  const naTela = new Function(cTela + '; return ehRequisito;')();
+  const noWorker = new Function(cWrk + '; return pokerEhRequisito;')();
+
+  /* AS DUAS LADO A LADO. O worker nao importa nada da tela, entao a regra esta
+     escrita duas vezes — e e ela que decide quem ve a imagem SEM credencial.
+     Divergir aqui abriria ou fecharia a porta sem ninguem perceber. */
+  const casos = [
+    [{ nome: 'AX-218.png', chave: 'a/x' }, { codigo: 'AX-218' }, true,  'o requisito da propria demanda'],
+    [{ nome: 'AX-218.PNG', chave: 'a/x' }, { codigo: 'ax-218' }, true,  'caixa nao importa'],
+    [{ nome: 'AX-218.jpeg', chave: 'a/x' }, { codigo: 'AX-218' }, true, 'jpeg tambem'],
+    [{ nome: 'AX-219.png', chave: 'a/x' }, { codigo: 'AX-218' }, false, 'print de OUTRA demanda nao passa'],
+    [{ nome: 'print.png', chave: 'a/x' }, { codigo: 'AX-218' }, false,  'print sem codigo no nome nao passa'],
+    [{ nome: 'AX-218.pdf', chave: 'a/x' }, { codigo: 'AX-218' }, false, 'pdf nao e requisito'],
+    [{ nome: 'AX-218.png', chave: '' }, { codigo: 'AX-218' }, false,    'anexo sem chave nao tem o que buscar'],
+    [{ nome: 'AX-218.png', chave: 'a/x' }, { codigo: '' }, true,        'demanda ainda sem codigo aceita AX-### solto'],
+    [null, { codigo: 'AX-218' }, false, 'anexo nulo'],
+  ];
+  casos.forEach(([a, m, esperado, oque]) => {
+    ok(!!naTela(a, m) === esperado, 'tela: ' + oque);
+    ok(!!noWorker(a, m) === esperado, 'worker: ' + oque);
+  });
+  ok(casos.every(([a, m]) => !!naTela(a, m) === !!noWorker(a, m)),
+     'e as duas respondem igual em todos os casos — e esta regra e a porta');
+  // `inline` so a tela conhece (o worker ja recebe a chave); o worker barra pelo
+  // mesmo motivo, por falta de chave.
+  ok(!naTela({ nome: 'AX-218.png', inline: true, chave: '' }, { codigo: 'AX-218' }),
+     'anexo antigo em base64 nao vira requisito na tela');
+
+  /* A ROTA NOVA NAO PODE SER UM `anexo-baixar` SEM SENHA. */
+  const rota = corpo(W, "if (body.action === 'poker-requisito') {");
+  ok(!!rota, 'existe a rota do requisito da sala');
+  if (!rota) return;
+  ok(/FROM poker_participante WHERE id = \? AND codigo = \?/.test(rota),
+     'so quem esta NESTA sala — senao bastaria o codigo da sala, que circula em QR');
+  /* A COMPARACAO, e nao o nome da coluna. `SELECT melhoria_id, expira_em` casa
+     com /expira_em/ mesmo depois de a checagem ser apagada — a sabotagem tirou a
+     linha inteira e a invariante nao percebeu. */
+  ok(/new Date\(ses\.expira_em\) < agora/.test(rota),
+     'e a sala tem de estar viva — conferido pela comparacao, nao pela coluna');
+  ok(/ses\.melhoria_id/.test(rota) && /find\(x => x\.id === ses\.melhoria_id\)/.test(rota),
+     'a demanda e a QUE ESTA EM PAUTA, e nao uma que o cliente nomeie');
+  /* O ANEXO E PROCURADO DENTRO DA DEMANDA. Sem esta, bastava trocar a busca por
+     um objeto montado com a chave do cliente para a rota virar um `anexo-baixar`
+     sem senha: a regra do requisito continuava sendo chamada, e aprovava, porque
+     o nome tambem vinha do cliente. Foi assim que a sabotagem escapou. */
+  ok(/\(\(emPautaR && emPautaR\.anexos\) \|\| \[\]\)\.find\(x => x && x\.chave === chaveR\)/.test(rota),
+     'o anexo sai da LISTA da demanda em pauta — chave do cliente nao vira anexo');
+  ok(/pokerEhRequisito\(anexoR, emPautaR\)/.test(rota),
+     'e ainda tem de passar na regra do requisito');
+  ok(/\^a\\\/\[a-z0-9-\]\+\$/.test(rota), 'a chave e conferida no formato');
+  ok(/IMAGENS\.includes\(tipoR\)/.test(rota) && !/application\/pdf/.test(rota),
+     'so sai imagem: esta rota alcanca gente sem credencial');
+  ok(/nosniff/.test(rota), 'e o navegador nao adivinha o tipo');
+
+  /* A PORTEIRA DO FACILITADOR FICA DEPOIS. Quem vota nao conduz: se a rota
+     caisse abaixo dela, so o facilitador veria o requisito — que e exatamente o
+     defeito anterior, de volta por outro caminho. */
+  ok(W.indexOf("body.action === 'poker-requisito'") <
+     W.indexOf('if (!(await facilitadorOk())) return recusaFacilitador();\n\n      if (body.action === '),
+     'a rota fica ANTES da porteira do facilitador');
+
+  /* E A TELA PRECISA PEDIR. Zerar os anexos do convidado levava o requisito
+     junto, e era por isso que o celular nao via nada. */
+  const det = corpo(POKER, 'function renderSala(') || POKER;
+  ok(/anexos: \(m\.anexos \|\| \[\]\)\.filter\(a => ehRequisito\(a, m\)\)/.test(POKER),
+     'sem credencial o detalhe mantem o requisito (e so ele)');
+  ok(!/anexos: \[\] \}\)\) : null\)/.test(POKER),
+     'e nao zera mais os anexos do convidado');
+  const cr = corpo(POKER, 'async function carregaRequisito(');
+  ok(/action: 'poker-requisito'/.test(cr) && /action: 'anexo-baixar'/.test(cr),
+     'a tela escolhe a porta pela credencial de quem pede', cr.slice(0, 0));
+  ok(/temCred\s*\?/.test(cr), 'e a escolha e por ter credencial, nao por conduzir');
+})();
 ok(/catalogoCasa\(m\.tema_id, t\.id/.test(DEV), 'a contagem do dev conta a subarvore');
 
 // No slide, o caminho inteiro nao cabe: "AXCred - Cadastro - Análise de Crédito -
@@ -4841,12 +4930,18 @@ ok(/_reqUrl = '';\s*\n\s*if \(iReq >= 0\) carregaRequisito/.test(POKER),
 ok(/_reqCache\.has\(a\.chave\)/.test(POKER) && /_reqCache\.set\(a\.chave/.test(POKER),
    'o requisito e baixado uma vez, e nao a cada redesenho');
 
-/* O ANEXO CHEGA A QUEM TEM CREDENCIAL, e nao a quem conduz. O requisito e escrito
-   PARA O DEV, e o dev vota — enquanto isso dependia de ser facilitador, a unica
-   pessoa que via o requisito era justamente a que nao ia implementar. */
+/* O REQUISITO CHEGA A QUEM ESTA NA SALA — e esta frase ja foi duas outras.
+   Primeiro ele dependia de CONDUZIR, e a unica pessoa que via o requisito era
+   justamente a que nao ia implementar. Depois passou a depender de TER
+   CREDENCIAL, o que ainda deixava de fora quem entra pelo QR — ou seja, o
+   telefone. Agora o convidado mantem o requisito no detalhe e o busca pela rota
+   da sala; os DEMAIS anexos seguem exigindo credencial, porque para eles so
+   existe o `anexo-baixar`. */
 ok(/const temCredencial = !!\(_token \|\| _senha\);/.test(POKER) &&
-   /renderDetalhe\(m \? \(temCredencial \?/.test(POKER),
-   'ver o requisito depende de ter credencial, e nao de ser facilitador');
+   /renderDetalhe\(m \? \(temCredencial \? m/.test(POKER),
+   'o detalhe ainda distingue quem tem credencial de quem nao tem');
+ok(/filter\(a => ehRequisito\(a, m\)\)/.test(POKER),
+   'e para quem nao tem, o que sobra e o requisito — nao o vazio de antes');
 
 /* ─── RANKING DE ENTREGAS DA SEMANA ──────────────────────────────────────
    Aparece na sala do Planning para uma conversa que so acontece com o time

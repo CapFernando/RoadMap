@@ -239,8 +239,23 @@
     .req-lupa { position:fixed; inset:0; z-index:9000; background:rgba(4,8,18,.92);
       display:flex; align-items:center; justify-content:center; padding:44px 24px 24px;
       cursor:zoom-out; }
-    .req-lupa img { max-width:100%; max-height:100%; object-fit:contain; cursor:default;
+    .req-lupa img { max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in;
       border-radius:6px; box-shadow:0 12px 48px rgba(0,0,0,.6); }
+
+    /* CABER NA TELA E LER SAO COISAS DIFERENTES, e no telefone elas brigam.
+       Um print de requisito tem uns 1900px de largura; encolhido para caber nos
+       330px de um celular ele vira um borrao — a imagem aparecia e continuava
+       sem servir para tirar duvida nenhuma, que e o motivo de ela estar ali.
+       No modo `real` a imagem fica no tamanho dela e a lupa rola nos dois
+       eixos. `display:block` no lugar do flex e necessario: conteudo maior que
+       um container centralizado por flex tem a borda de cima cortada, e sem
+       isso o topo do print ficaria inalcancavel. */
+    .req-lupa.real { display:block; overflow:auto; -webkit-overflow-scrolling:touch;
+      cursor:default; padding:44px 12px 12px; }
+    .req-lupa.real img { max-width:none; max-height:none; cursor:zoom-out;
+      /* Nunca menor que a tela: print estreito ficaria encolhido no modo "real",
+         que e o oposto do que o toque pediu. */
+      min-width:100%; display:block; margin:0 auto; }
     .req-lupa-dica { position:absolute; top:14px; left:0; right:0; text-align:center;
       font-size:12px; color:var(--text3); }
     .pd-anexos { display:flex; gap:7px; flex-wrap:wrap; }
@@ -1507,13 +1522,29 @@ function ampliaRequisito() {
   const cx = document.createElement('div');
   cx.className = 'req-lupa';
   cx.id = 'req-lupa';
-  cx.innerHTML = '<div class="req-lupa-dica">clique fora ou Esc para voltar à sala</div>';
+  const dica = document.createElement('div');
+  dica.className = 'req-lupa-dica';
+  cx.appendChild(dica);
   const img = document.createElement('img');
   img.src = _reqUrl;
   img.alt = 'Requisito ampliado';
-  // A imagem nao fecha ao ser clicada: quem quer ler um print arrasta e amplia
-  // nele, e fechar no clique transformaria a leitura em briga com a tela.
-  img.onclick = (e) => e.stopPropagation();
+  /* TOCAR NA IMAGEM ALTERNA entre caber e ler, e nao fecha.
+     A imagem nunca fechou ao clique de proposito — quem quer ler um print
+     arrasta nele, e fechar no toque transforma a leitura em briga com a tela.
+     O que faltava era o outro tamanho: no celular "caber" significa ilegivel,
+     e nao havia gesto nenhum que desse o tamanho real. Agora o mesmo toque que
+     ja era inofensivo passou a ser o zoom.
+     A dica muda junto, porque gesto que ninguem anuncia e gesto que nao existe. */
+  const diz = () => { dica.textContent = cx.classList.contains('real')
+    ? 'toque na imagem para ajustar à tela · Esc ou fora para voltar'
+    : 'toque na imagem para ver em tamanho real · Esc ou fora para voltar'; };
+  img.onclick = (e) => {
+    e.stopPropagation();
+    cx.classList.toggle('real');
+    diz();
+    if (cx.classList.contains('real')) cx.scrollTop = 0;
+  };
+  diz();
   cx.appendChild(img);
   cx.onclick = fechaRequisito;
   document.body.appendChild(cx);
@@ -1551,16 +1582,27 @@ async function carregaRequisito(a) {
   const recado = (t) => { if (quadro.isConnected) quadro.innerHTML =
     '<div class="pd-req-msg">' + esc(t) + '</div>'; };
   try {
+    /* DUAS PORTAS PARA A MESMA IMAGEM, e a escolha e por QUEM ESTA PEDINDO.
+       Quem tem credencial segue pelo `anexo-baixar` de sempre. Quem entrou pelo
+       QR so com o nome vai pela rota da sala, que confere estar na mesa e so
+       entrega o requisito da demanda em pauta — foi o que destravou o celular. */
+    const temCred = !!(_token || _senha);
     const res = await fetch(PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({ action: 'anexo-baixar', chave: a.chave },
-        _token ? { token: _token } : {}, _senha ? { senha: _senha } : {}))
+      body: JSON.stringify(temCred
+        ? Object.assign({ action: 'anexo-baixar', chave: a.chave },
+            _token ? { token: _token } : {}, _senha ? { senha: _senha } : {})
+        : { action: 'poker-requisito', codigo: _codigo,
+            participante: _participante, chave: a.chave })
     });
     if (!res.ok) {
       // O recado diz O QUE FAZER. "Erro 401" faria a pessoa chamar o facilitador
       // no meio da votacao para descobrir a mesma coisa.
+      // Quem entrou pelo QR nao tem conta para "entrar com" — mandar essa pessoa
+      // buscar credencial no meio da votacao e mandar ela desistir de ler.
       recado(res.status === 401 || res.status === 403
-        ? 'Entre com sua conta para ver o requisito.'
+        ? (temCred ? 'Sua conta não tem permissão para ver o requisito.'
+                   : 'Entre na sala novamente para ver o requisito.')
         : 'Não foi possível carregar o requisito (HTTP ' + res.status + ').');
       return;
     }
@@ -1733,8 +1775,19 @@ function aplicar(est) {
      requisito e escrito para o dev, e o dev vota; enquanto isso dependia de ser
      facilitador, a unica pessoa que via o requisito era justamente a que nao ia
      implementar. */
+  /* QUEM ENTROU SO COM O NOME FICA COM O REQUISITO, E SO COM ELE.
+     Antes os anexos eram esvaziados para quem nao tem credencial, e isso levava
+     o requisito junto: o PNG sumia exatamente para quem entrou pelo QR, que e
+     quem esta no telefone. O time no desktop via, porque estava logado, e o
+     celular votava sem ler o pedido. A imagem agora vem pela rota da sala
+     (`poker-requisito`), que exige estar na mesa em vez de ter credencial.
+
+     Os DEMAIS anexos continuam de fora: para eles so existe o `anexo-baixar`,
+     que pede credencial, e um botao que devolve 401 e pior que botao nenhum. */
   const temCredencial = !!(_token || _senha);
-  renderDetalhe(m ? (temCredencial ? m : Object.assign({}, m, { anexos: [] })) : null);
+  renderDetalhe(m ? (temCredencial ? m
+        : Object.assign({}, m, { anexos: (m.anexos || []).filter(a => ehRequisito(a, m)) }))
+      : null);
   // Complementar e negar sao acoes de quem conduz, e so fazem sentido com uma
   // demanda em pauta.
   const acoes = document.getElementById('pauta-acoes');

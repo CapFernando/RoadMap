@@ -2310,6 +2310,27 @@ function nomeNaDemanda(ident) {
   return declarado || String(u.nome || '').trim();
 }
 
+/* O NOME E O CONTRATO: AX-218.PNG e o requisito da AX-218.
+ *
+ * MESMA REGRA DO `ehRequisito` em `poker.html`, duplicada aqui de proposito — o
+ * worker nao importa nada da tela — e conferida pelas invariantes, que rodam as
+ * duas lado a lado contra os mesmos casos. Ela e o que decide quem pode ver a
+ * imagem sem credencial, entao divergir aqui seria abrir ou fechar a porta sem
+ * ninguem perceber.
+ *
+ * Aceita AX-### solto porque o anexo pode ter sido subido antes de a demanda
+ * receber o codigo; e recusa anexo sem chave, que e o antigo guardado em base64
+ * dentro do proprio JSON e nao tem o que buscar no R2.                        */
+function pokerEhRequisito(a, m) {
+  if (!a || !a.chave) return false;
+  const nome = String(a.nome || '');
+  if (!/\.(png|jpe?g|webp|gif)$/i.test(nome)) return false;
+  const cod = String((m || {}).codigo || '').trim().toUpperCase();
+  const doNome = (nome.match(/^\s*(AX-\d+)/i) || [])[1];
+  if (!doNome) return false;
+  return !cod || doNome.toUpperCase() === cod;
+}
+
 function pokerRanking(data, agora) {
   const hoje = diaLocalBR(agora.toISOString());
   const iniAtual = segundaDaSemana(hoje);
@@ -2788,6 +2809,72 @@ export default {
         await db.prepare('INSERT INTO poker_voto (codigo, melhoria_id, participante, valor, votado_em) VALUES (?,?,?,?,?) ON CONFLICT(codigo, melhoria_id, participante) DO UPDATE SET valor = ?, votado_em = ?')
           .bind(codigo, ses.melhoria_id, p.id, String(body.valor), iso, String(body.valor), iso).run();
         return json({ ok: true }, 200, headers);
+      }
+
+      /* O REQUISITO PARA QUEM ESTA NA SALA, E SO ELE.
+       *
+       * O PNG do requisito abria pela rota `anexo-baixar`, que exige credencial de
+       * leitura. Quem entra pelo QR da so o nome — e e justamente essa pessoa, a do
+       * telefone, que precisa ler o requisito para escolher a carta. O time no
+       * desktop via, porque estava logado; o celular votava no escuro.
+       *
+       * Nao se afrouxou o `anexo-baixar`. Esta rota e estreita de proposito:
+       *   - a sala tem de estar viva e o participante tem de estar NELA;
+       *   - o anexo tem de ser da demanda QUE ESTA EM PAUTA agora — nao de uma
+       *     demanda qualquer que o cliente nomeie;
+       *   - e tem de passar na mesma regra de requisito da tela (AX-###.PNG), que
+       *     esta duplicada aqui de proposito e conferida pelas invariantes;
+       *   - e so sai imagem.
+       * Fora disso, quem esta na sala continua sem poder ler anexo nenhum.
+       *
+       * Nada aqui e novidade para o convidado: `poker-fila` ja lhe entrega titulo,
+       * descricao, solicitante, discovery e a CHAVE deste anexo, sem credencial. O
+       * que faltava eram os bytes da imagem que ele ja sabia existir.
+       *
+       * Fica ANTES da porteira do facilitador porque quem vota nao conduz.       */
+      if (body.action === 'poker-requisito') {
+        if (!env.ANEXOS) return json({ error: 'armazenamento indisponivel' }, 503, headers);
+        const ses = await db.prepare('SELECT melhoria_id, expira_em FROM poker_sessao WHERE codigo = ?')
+          .bind(codigo).first();
+        if (!ses) return json({ error: 'Sessao nao encontrada' }, 404, headers);
+        if (new Date(ses.expira_em) < agora) return json({ error: 'Sessao expirada' }, 410, headers);
+        if (!ses.melhoria_id) return json({ error: 'Nenhuma demanda em votacao' }, 409, headers);
+        const pReq = await db.prepare('SELECT id FROM poker_participante WHERE id = ? AND codigo = ?')
+          .bind(String(body.participante || ''), codigo).first();
+        if (!pReq) return json({ error: 'Participante nao esta na sala' }, 403, headers);
+        const chaveR = String(body.chave || '');
+        if (!/^a\/[a-z0-9-]+$/.test(chaveR)) return json({ error: 'chave invalida' }, 400, headers);
+
+        const reqRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+                                { headers: { Accept: 'application/vnd.github.raw' } });
+        if (!reqRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+        let dadosR;
+        try { dadosR = JSON.parse(await reqRes.text()); }
+        catch (_) { return json({ error: 'Falha ao ler dados' }, 502, headers); }
+        const emPautaR = (dadosR.melhorias || []).find(x => x.id === ses.melhoria_id);
+        const anexoR = ((emPautaR && emPautaR.anexos) || []).find(x => x && x.chave === chaveR);
+        if (!anexoR || !pokerEhRequisito(anexoR, emPautaR)) {
+          return json({ error: 'Este anexo nao e o requisito da demanda em pauta' }, 403, headers);
+        }
+
+        const objR = await env.ANEXOS.get(chaveR);
+        if (!objR) return json({ error: 'anexo nao encontrado' }, 404, headers);
+        /* SO IMAGEM SAI POR AQUI. O nome ja foi conferido, mas o tipo gravado e
+           que manda no navegador: um `.png` com SVG dentro renderizaria script na
+           origem do Worker, e esta rota alcanca gente sem credencial. */
+        const tipoR = String((objR.httpMetadata && objR.httpMetadata.contentType) || '').toLowerCase();
+        const IMAGENS = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+        if (!IMAGENS.includes(tipoR)) return json({ error: 'requisito nao e imagem' }, 415, headers);
+        return new Response(objR.body, {
+          status: 200,
+          headers: {
+            'Content-Type': tipoR,
+            'Content-Disposition': 'inline',
+            'X-Content-Type-Options': 'nosniff',
+            'Cache-Control': 'private, no-store',
+            ...headers,
+          },
+        });
       }
 
       // Daqui pra baixo e o facilitador. Esta porteira roda ANTES da conferencia de
