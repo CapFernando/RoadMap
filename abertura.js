@@ -76,6 +76,68 @@
     return String((m || {}).origem || '').toLowerCase() === 'dev';
   }
 
+  /* ═══ NASCER POR UMA PORTA E ESCAPAR DO PLANEJAMENTO SAO COISAS DIFERENTES ══
+   *
+   * "Foi inserido pela API? Se sim meu controle está furado, pois passou por
+   *  mim. Se esse for o caso, colocamos apenas as bolinhas para situações que
+   *  foram direto sem passar por mim."
+   *
+   * O controle não estava furado — a marca é que respondia outra pergunta.
+   * `origem` diz por qual PORTA o registro nasceu, e mais nada. Uma demanda pode
+   * nascer pelo endpoint e, no dia seguinte, ser pontuada na Planning e
+   * planejada: ela passou pelo PM/PO, e a marca acusava mesmo assim.
+   *
+   * MEDIDO na base de 06/10/2026: das 133 marcadas por `origem`, 121 (91%)
+   * tinham passado — 83 com ponto de Planning, 34 com a transição registrada no
+   * histórico, 4 numa etapa do planejamento naquele momento. Sobravam 12 (9%)
+   * que entraram e ficaram. Uma marca que erra em nove de cada dez deixa de ser
+   * lida, e era o que estava acontecendo.
+   *
+   * TRÊS PROVAS, E BASTA UMA, porque nenhuma sozinha cobre a base:
+   *
+   *   ETAPA DE AGORA    o jeito direto, e o único que serve para as 12 demandas
+   *                     marcadas que não têm histórico nenhum.
+   *   HISTÓRICO         `de` E `para`: uma demanda que SAIU de 'planejado' para
+   *                     'em andamento' passou pelo planejamento tanto quanto a
+   *                     que entrou nele, e olhar só o `para` perderia metade.
+   *   PONTO DE PLANNING a reunião é do PM/PO, e o ponto é a prova dela. Pega as
+   *                     34 que foram pontuadas antes de o histórico existir —
+   *                     sem ele, um terço voltaria a ser acusado sem motivo.
+   *
+   * ESTA MARCA É UMA FILA, E NÃO UMA PROCEDÊNCIA. Ela some quando a demanda é
+   * triada, e isso é deliberado: a pergunta é "o que entrou e ainda não passou
+   * por mim", que tem resposta acionável. A procedência continua em `origem`, e
+   * é dela que os dois contadores da legenda vivem — eles não mudam, porque
+   * cobrar de quem mantém a integração é outra conversa e segue valendo. */
+  var ETAPAS_DO_PLANEJAMENTO = ['planning', 'planejado'];
+
+  function temValor(v) { return v !== null && v !== undefined && String(v) !== ''; }
+
+  function passouPeloPlanejamento(m) {
+    var d = m || {};
+    if (ETAPAS_DO_PLANEJAMENTO.indexOf(
+          String(d.status_planejamento || '').toLowerCase()) >= 0) return true;
+    var h = Array.isArray(d.historico) ? d.historico : [];
+    for (var i = 0; i < h.length; i++) {
+      var mud = (h[i] && h[i].mudancas) || [];
+      for (var j = 0; j < mud.length; j++) {
+        if (mud[j] && mud[j].campo !== 'status_planejamento') continue;
+        if (ETAPAS_DO_PLANEJAMENTO.indexOf(String((mud[j] || {}).de || '').toLowerCase()) >= 0 ||
+            ETAPAS_DO_PLANEJAMENTO.indexOf(String((mud[j] || {}).para || '').toLowerCase()) >= 0) {
+          return true;
+        }
+      }
+    }
+    return temValor(d.poker_pontos) || temValor(d.poker_media);
+  }
+
+  /* ENTROU POR FORA E AINDA NAO PASSOU. E a uniao das duas condicoes, e nao uma
+     delas: demanda aberta pelo proprio PM/PO no admin nunca entra aqui, por mais
+     parada que esteja, porque ela nao entrou por fora. */
+  function foiDireto(m) {
+    return deDevOuApi(m) && !passouPeloPlanejamento(m);
+  }
+
   /* O VEREDITO DE UM CAMPO. Devolve `''` quando está tudo bem, ou a frase que a
      tela mostra — a frase mora aqui para as quatro portas dizerem a MESMA coisa.
      Quatro mensagens diferentes para a mesma recusa é como se fossem quatro
@@ -131,6 +193,8 @@
 
   var api = { SEM_PLANEJAMENTO: SEM_PLANEJAMENTO, ehData: ehData, planeja: planeja,
               deDevOuApi: deDevOuApi, viaEndpoint: viaEndpoint, viaPainelDev: viaPainelDev,
+              ETAPAS_DO_PLANEJAMENTO: ETAPAS_DO_PLANEJAMENTO,
+              passouPeloPlanejamento: passouPeloPlanejamento, foiDireto: foiDireto,
               checaCampo: checaCampo, checa: checa, ajusta: ajusta };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

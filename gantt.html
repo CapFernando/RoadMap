@@ -1067,7 +1067,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
-  <script src="abertura.js?v=03bc22afd7"></script>
+  <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=70df77eaa0"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
@@ -2569,14 +2569,18 @@ function renderIndicators() {
   const nPainel = visible.filter(m => window.ABERTURA && ABERTURA.viaPainelDev(m)).length;
   const chipApi = nApi
     ? `<span class="ind-chip origem-api ${filters.indicator === '__api__' ? 'active-filter' : ''}" ` +
-      `title="Entraram pelo endpoint da API — script ou integracao, sem passar pelo ` +
-      `planejamento. No calendario levam uma fita azul LISTRADA no pe da barra." ` +
+      `title="Nasceram pelo endpoint da API — script ou integracao. O numero conta ` +
+      `PROCEDENCIA: inclui as que depois voce pontuou na Planning ou planejou. A ` +
+      `guirlanda tracejada de bolas AMARELAS no calendario marca so as que entraram ` +
+      `e ainda NAO passaram por voce." ` +
       `onclick="toggleIndicatorFilter('__api__')">▨ Inclusão via API <strong>${nApi}</strong></span>`
     : '';
   const chipPainel = nPainel
     ? `<span class="ind-chip origem-painel ${filters.indicator === '__painel__' ? 'active-filter' : ''}" ` +
       `title="O proprio dev abriu no Painel Dev. Grava pela mesma porta da API, mas e ` +
-      `pessoa e nao script. No calendario levam uma fita azul LISA no pe da barra." ` +
+      `pessoa e nao script. O numero conta PROCEDENCIA: inclui as que depois voce ` +
+      `pontuou na Planning ou planejou. A guirlanda inteira de bolas AZUIS no ` +
+      `calendario marca so as que entraram e ainda NAO passaram por voce." ` +
       `onclick="toggleIndicatorFilter('__painel__')">▬ Aberta no Painel Dev <strong>${nPainel}</strong></span>`
     : '';
 
@@ -3785,8 +3789,16 @@ function renderGantt() {
          mesma pergunta vista de dois lados, e duas listas divergiriam.
          AS DUAS SEPARADAS porque nao sao a mesma conversa: integracao se cobra
          de quem a mantem; o dev abrindo o proprio card nao se cobra de ninguem. */
-      const viaApi = window.ABERTURA ? ABERTURA.viaEndpoint(m) : false;
-      const viaPainel = window.ABERTURA ? ABERTURA.viaPainelDev(m) : false;
+      /* A GUIRLANDA E SO PARA O QUE AINDA NAO PASSOU POR VOCE.
+         Ela lia `origem`, que diz por qual porta o registro nasceu — e nascer
+         pelo endpoint nao impede de ser pontuada na Planning no dia seguinte.
+         Medido: das 133 marcadas assim, 121 (91%) ja tinham passado. Marca que
+         erra em nove de cada dez para de ser lida.
+         Os dois CONTADORES da legenda seguem lendo `origem`: eles contam
+         procedencia, que e outra conversa e continua valendo. */
+      const foiDireto = window.ABERTURA ? ABERTURA.foiDireto(m) : false;
+      const viaApi = foiDireto && ABERTURA.viaEndpoint(m);
+      const viaPainel = foiDireto && ABERTURA.viaPainelDev(m);
       html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}${ehGrupo ? ' gcard-agrupador' : ''}${paiNaTela ? ' gcard-parte' : ''}${viaApi ? ' gcard-api' : ''}${viaPainel ? ' gcard-painel' : ''}"
         style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
         data-id="${m.id}"

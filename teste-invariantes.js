@@ -14121,10 +14121,82 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * da anterior:
      *   1a  listra sobre a barra INTEIRA — o titulo passou a ser lido por cima
      *   2a  virou fita de 5px no PE, e ganhou chip na legenda
-     *   3a  separou em DUAS origens, cada uma com marca e chip proprios */
-    ok(/const viaApi = window\.ABERTURA \? ABERTURA\.viaEndpoint\(m\) : false;/.test(GANTT) &&
-       /const viaPainel = window\.ABERTURA \? ABERTURA\.viaPainelDev\(m\) : false;/.test(GANTT),
+     *   3a  separou em DUAS origens, cada uma com marca e chip proprios
+     *   4a  a fita virou GUIRLANDA em volta da barra — "maior destaque"
+     *   5a  a guirlanda deixou de ser procedencia e virou FILA: so o que entrou
+     *       por fora e ainda nao passou pelo planejamento. As 4 primeiras
+     *       rodadas discutiam o DESENHO; esta trocou a pergunta. */
+    ok(/ABERTURA\.viaEndpoint\(m\)/.test(GANTT) && /ABERTURA\.viaPainelDev\(m\)/.test(GANTT),
        'o card pergunta ao modulo, e pelas duas origens separadas');
+    /* ── A GUIRLANDA E UMA FILA, E NAO UMA PROCEDENCIA ──────────────────
+     *
+     * "Foi inserido pela API? Se sim meu controle esta furado, pois passou por
+     *  mim. Se esse for o caso, colocamos apenas as bolinhas para situacoes que
+     *  foram direto sem passar por mim."
+     *
+     * O controle nao estava furado: a marca lia `origem`, que diz por qual PORTA
+     * o registro nasceu, e nascer pelo endpoint nao impede de ser pontuada na
+     * Planning no dia seguinte. Medido na base de 06/10/2026: das 133 marcadas,
+     * 121 (91%) ja tinham passado — 83 por ponto de Planning, 34 pelo historico,
+     * 4 pela etapa daquele momento. Sobravam 12.
+     *
+     * Roda a regra de verdade, e nao casa o texto do arquivo. */
+    {
+      const AB = require('./abertura.js');
+      const api = (extra) => Object.assign({ origem: 'endpoint' }, extra || {});
+      const pm  = (extra) => Object.assign({ origem: 'painel' }, extra || {});
+      const etapa = (de, para) => ({ mudancas: [
+        { campo: 'status_planejamento', de: de, para: para }] });
+
+      ok(AB.foiDireto(api({ status_planejamento: 'backlog' })),
+         'nasceu pelo endpoint e ficou no backlog: entrou e nao passou');
+      ok(AB.foiDireto(pm({ origem: 'dev', status_planejamento: 'backlog' })),
+         'o mesmo pelo Painel Dev');
+      ok(!AB.foiDireto(pm({ status_planejamento: 'backlog' })),
+         'mas demanda aberta por voce no admin nunca entra, por mais parada que esteja');
+
+      /* AS TRES PROVAS, uma a uma: nenhuma sozinha cobre a base. */
+      ok(!AB.foiDireto(api({ status_planejamento: 'planning' })),
+         'esta na Planning agora: passou (e e a unica prova para as 12 sem historico)');
+      ok(!AB.foiDireto(api({ status_planejamento: 'planejado' })),
+         'planejado agora tambem');
+      ok(!AB.foiDireto(api({ status_planejamento: 'em_andamento',
+                             historico: [etapa('planning', 'planejado')] })),
+         'ja saiu da Planning, mas o historico lembra');
+      ok(!AB.foiDireto(api({ status_planejamento: 'concluido',
+                             historico: [etapa('planejado', 'em_andamento')] })),
+         'SAIR de planejado conta tanto quanto entrar — olhar so o `para` perderia metade');
+      ok(!AB.foiDireto(api({ status_planejamento: 'em_andamento', poker_pontos: 8 })),
+         'pontuada na Planning: a reuniao e sua, e o ponto e a prova — eram 83 dos 121');
+      ok(!AB.foiDireto(api({ status_planejamento: 'em_andamento', poker_media: 5.5 })),
+         'a media tambem serve');
+      ok(AB.foiDireto(api({ status_planejamento: 'em_andamento', poker_pontos: '' })),
+         'mas ponto VAZIO nao e ponto — senao a marca sumia para todo mundo');
+      /* ZERO E PONTO. Demanda votada como 0 na Planning passou pela Planning
+         tanto quanto a de 13 — `!v` a trataria como nao pontuada. */
+      ok(!AB.foiDireto(api({ status_planejamento: 'em_andamento', poker_pontos: 0 })),
+         'e zero ponto conta como pontuada, e nao como ausencia de ponto');
+
+      /* ETAPA QUE NAO E SUA NAO PROVA NADA. */
+      ok(AB.foiDireto(api({ status_planejamento: 'em_andamento',
+                            historico: [etapa('backlog', 'em_andamento')] })),
+         'backlog -> em andamento pulou o planejamento: segue marcada');
+      ok(AB.foiDireto(api({ status_planejamento: 'em_andamento',
+                            historico: [{ mudancas: [{ campo: 'dev', de: '', para: 'planning' }] }] })),
+         'e mudanca de OUTRO campo com o texto "planning" dentro nao vale como prova');
+
+      ok(!AB.foiDireto(null) && !AB.foiDireto({}),
+         'sem demanda, sem marca');
+      /* A PROCEDENCIA CONTINUA SEPARADA, e e dela que os contadores vivem. */
+      ok(AB.viaEndpoint(api({ status_planejamento: 'planning' })),
+         'e `viaEndpoint` NAO muda: o contador conta procedencia, que e outra conversa');
+    }
+    ok(/const foiDireto = window\.ABERTURA \? ABERTURA\.foiDireto\(m\) : false;/.test(GANTT) &&
+       /const viaApi = foiDireto && ABERTURA\.viaEndpoint\(m\)/.test(GANTT) &&
+       /const viaPainel = foiDireto && ABERTURA\.viaPainelDev\(m\)/.test(GANTT),
+       'e a barra do gantt pergunta pela FILA, e nao pela procedencia');
+    ok(/ABERTURA\.viaPainelDev\(m\)\)\.length/.test(GANTT.replace(/\s+/g, ' ')),
+       'enquanto o contador da legenda segue lendo a procedencia');
     ok(/\$\{viaApi \? ' gcard-api' : ''\}\$\{viaPainel \? ' gcard-painel' : ''\}/.test(GANTT),
        'e as duas classes entram na barra');
 
