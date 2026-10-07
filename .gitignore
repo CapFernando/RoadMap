@@ -33,3 +33,9 @@ node_modules/
 # e deixava passar este: `cache/wrangler-account.json` guarda o id e o e-mail da
 # conta Cloudflare, e o repositorio e PUBLICO.
 .wrangler/
+
+# Configuracao LOCAL do Claude Code. Estava protegida so pelo gitignore GLOBAL
+# da maquina do Fernando — protecao que nao viaja no clone. Na maquina de quem
+# assumir, um `git add -A` publicaria a configuracao local num repo PUBLICO.
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
