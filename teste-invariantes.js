@@ -2871,8 +2871,13 @@ ok((INDEX.match(/temaCasaRaiz\(m\)/g) || []).length >= 2,
   const f = new Function('ETAPA', 'PRAZO', 'svgIcon',
     c + '; return pausaHTML;')(EP, PZP, () => '<svg/>');
 
+  /* A DATA SAI DE `hojeISO()`, e nao de uma constante. Estas duas invariantes
+     nasceram com 2026-10-06 escrito a mao e quebraram sozinhas na virada do dia
+     seguinte — o mesmo defeito que a rede do limbo ja tinha tido em 1 de
+     outubro. Teste que depende do calendario tem de perguntar as horas. */
   const parou = (dias) => {
-    const d = new Date(Date.UTC(2026, 9, 6) - dias * 86400000);
+    const p = hoje.split('-').map(Number);
+    const d = new Date(Date.UTC(p[0], p[1] - 1, p[2]) - dias * 86400000);
     return { pausado_em: d.toISOString().slice(0, 10), status_planejamento: 'em_andamento' };
   };
 

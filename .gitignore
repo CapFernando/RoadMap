@@ -28,3 +28,8 @@ node_modules/
 # porque o painel de previa nao executa script de arquivo fora da pasta do
 # projeto — ele renderiza como imagem estatica, e ai nada clica.
 .previa/
+
+# Estado local do Wrangler na raiz. O ignore cobria so `cloudflare-worker/.wrangler`
+# e deixava passar este: `cache/wrangler-account.json` guarda o id e o e-mail da
+# conta Cloudflare, e o repositorio e PUBLICO.
+.wrangler/
