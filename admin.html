@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a41d723258">
+<html lang="pt-BR" data-build="f0444887e5">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -389,6 +389,21 @@
     .kb-sempt { font-size:10.5px; font-weight:700; color:var(--amber-tx,#FFC470);
       background:var(--amber-bg,#4A2800); border:1px solid var(--amber);
       border-radius:5px; padding:1px 6px; }
+
+    /* A FAIXA DA DEVOLUCAO. Vermelha porque e recusa, e nao aviso: no Kanban ela
+       convive com a tarja de atraso, e as duas dizem "ha trabalho pendente aqui".
+       O corte e por `line-clamp`, no navegador — cortar a string no JavaScript
+       decidiria por conta propria quantos caracteres cabem num card cuja largura
+       muda com a tela, e ainda arriscaria partir palavra no meio. */
+    .kb-devolucao {
+      font-size:11px; line-height:1.45; margin-bottom:6px;
+      background:var(--red-bg,#3A0C0C); color:var(--red-tx,#F5A3A3);
+      border-left:3px solid var(--red,#C81E1E); border-radius:4px;
+      padding:5px 7px;
+      display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+      overflow:hidden; word-break:break-word;
+    }
+    .kb-devolucao strong { font-weight:700; }
     .kb-pausa { font-size:10.5px; font-weight:700; color:var(--rose-tx,#F2A0DA);
       background:var(--rose-bg,#48123F); border:1px solid var(--rose-bd,#93257F);
       border-radius:5px; padding:1px 6px; }
@@ -1247,6 +1262,7 @@
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=c07e7b1591"></script>
+<script src="devolucao.js?v=327a41666f"></script>
 </head>
 <body>
 
@@ -4491,6 +4507,7 @@ function renderKanban() {
           title="Excluir esta demanda. Não há como desfazer.">🗑</button>
         <div class="kb-card-title">${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}${esc(m.titulo)}</div>
         ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
+        ${window.DEVOLUCAO ? DEVOLUCAO.faixa(m, 'kb-devolucao') : ''}
         ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
         ${badges.filter(Boolean).length ? `<div class="kb-badges">${badges.join('')}</div>` : ''}
         ${statusKey(m) === 'validacao' ? `<div class="kb-val">

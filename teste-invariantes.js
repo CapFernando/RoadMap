@@ -10041,6 +10041,80 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(txt.indexOf('selo-validacao.js') > 0, 'e carrega o arquivo dela');
   }
 
+  sec('A devolucao do PM/PO \u2014 o motivo tem de aparecer sem abrir o card');
+  /* "Ao devolver uma demanda p/ dev, e preenchido um texto e o mesmo nao e
+     mostrado."
+     O texto nunca se perdeu: `valRejeitar` o EXIGE, `valDecidir` o grava em
+     `validacao_obs`, o normalizador o repassa e o Worker devolve o campo. O que
+     faltava era onde ele aparece \u2014 havia dois lugares, e os dois exigem ABRIR o
+     card. Nos quadros a demanda voltava identica a todas as outras. */
+  {
+    const DV = require('./devolucao.js');
+    const DEVt = lerTela('dev.html');
+
+    ok(DV.motivo({ validacao_obs: '  refazer o calculo  ' }) === 'refazer o calculo',
+       'o motivo sai aparado');
+    ok(DV.motivo({}) === '' && DV.motivo(null) === '' &&
+       DV.motivo({ validacao_obs: '   ' }) === '',
+       'sem texto, sem motivo \u2014 inclusive so com espacos');
+    ok(!DV.houve({ validacao_obs: '   ' }) && DV.houve({ validacao_obs: 'x' }),
+       'e "houve devolucao" segue o motivo, nao a presenca do campo');
+
+    ok(DV.faixa({ validacao_obs: '' }) === '' && DV.faixa({}) === '',
+       'demanda nao devolvida nao ganha faixa nenhuma');
+    const f = DV.faixa({ validacao_obs: 'refazer com o caso do print' }, 'kb-devolucao');
+    ok(/class="kb-devolucao"/.test(f), 'a faixa aceita a classe de cada tela', f);
+    ok(/refazer com o caso do print/.test(f.replace(/="[^"]*"/g, '="')),
+       'e o motivo sai como TEXTO na tela, fora de atributo \u2014 em telefone nao ha hover');
+    ok(/title="refazer com o caso do print"/.test(f),
+       'e a integra vai no title tambem, como extra');
+    /* O TEXTO INTEIRO VAI NO HTML, e quem corta e o navegador. Conferir so o
+       `line-clamp` no CSS nao basta: um `slice` no modulo passa por ele intacto,
+       e foi assim que a sabotagem escapou. Cortar no JS decide por conta propria
+       quantos caracteres cabem num card cuja largura muda com a tela. */
+    // Sem espaco no fim: `motivo()` apara, e comparar com a versao nao aparada
+    // reprovaria o codigo certo — foi o que esta invariante fez ao nascer.
+    const longo = ('refazer o calculo. ' + 'detalhe '.repeat(60)).trim();
+    ok(DV.faixa({ validacao_obs: longo }).includes(longo),
+       'o motivo longo sai INTEIRO no HTML — o corte e do navegador, nao do JS');
+
+    /* ESCAPADO. O motivo e texto que uma pessoa digitou, e ele vai para o card
+       de outra pessoa \u2014 e o unico campo desta tela cujo autor e o PM/PO e cujo
+       leitor e o dev. */
+    const mau = DV.faixa({ validacao_obs: '<img src=x onerror=alert(1)>"&' });
+    ok(!/<img/.test(mau) && /&lt;img/.test(mau),
+       'o motivo passa por escape \u2014 ele e texto digitado', mau);
+    ok(/&quot;/.test(mau) && /&amp;/.test(mau), 'aspas e & tambem, por causa do title');
+
+    /* AS DUAS TELAS DESENHAM, e nenhuma reimplementa. Era o defeito: o texto so
+       vivia dentro dos modais. */
+    for (const [nome, txt, classe] of [['admin', ADMIN, 'kb-devolucao'],
+                                       ['dev', DEVt, 'kcard-devolucao']]) {
+      ok(txt.indexOf('DEVOLUCAO.faixa(m, \'' + classe + '\')') > 0,
+         'o card do ' + nome + ' mostra a devolucao pela regra unica');
+      /* PELA TAG, e nao pelo nome solto: `indexOf('devolucao.js')` casava com o
+         COMENTARIO que eu mesmo escrevi no dev.html dizendo onde a regra mora, e
+         a sabotagem que renomeou o `src` passou limpa. */
+      ok(/<script src="devolucao\.js\?v=/.test(txt),
+         'e o ' + nome + ' carrega o arquivo dela, pela tag');
+      ok(new RegExp('\\.' + classe + ' \\{[^}]*-webkit-line-clamp').test(
+           txt.replace(/\s*\n\s*/g, ' ')),
+         'e o corte do ' + nome + ' e por line-clamp, e nao por slice no texto');
+    }
+
+    /* O CAMPO SO E LIMPO NA APROVACAO. E disso que a faixa depende para saber
+       que "ha texto" significa "voltou e ninguem aprovou desde entao". Se
+       alguem passar a limpa-lo na reentrega, a faixa some antes da hora e o
+       PM/PO perde o que ele mesmo pediu. */
+    const limpezas = (ADMIN.match(/m\.validacao_obs = ''/g) || []).length;
+    ok(limpezas === 1, 'ha UM unico ponto que apaga o motivo', String(limpezas));
+    const ramo = ADMIN.slice(ADMIN.indexOf('if (aprovar) {', ADMIN.indexOf('const antes = {')));
+    ok(ramo.indexOf("m.validacao_obs = ''") < ramo.indexOf('} else {'),
+       'e ele esta no ramo do APROVAR \u2014 devolver grava, aprovar limpa');
+    ok(!DEVt.includes('validacao_obs ='),
+       'e o painel do dev nunca apaga o motivo: quem devolve e quem aprova e o PM/PO');
+  }
+
   sec('Resumo da entrega \u2014 o texto que vai para a apresentacao');
   /* O RELATO: "alguns devs escrevem um livro e nao faz sentido levar para uma
      apresentacao executiva". A correcao foi separar DOIS textos, e o que estas
