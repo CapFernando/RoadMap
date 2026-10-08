@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="ec938505c9">
+<html lang="pt-BR" data-build="8de37bfdf5">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -208,6 +208,32 @@
     .dp-faixa.pend { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
     .dp-faixa.rec  { background:var(--red-bg,#4A1D1D);   color:var(--red-tx,#F9A0A0); }
     .dp-rod { font-size:12px; color:var(--text3); margin-top:9px; }
+    /* AS DEMANDAS DENTRO DO CARD DE PROJETO. Recolhidas por padrao: o maior
+       projeto da base tem 21, e sete cards abertos de uma vez viram parede. */
+    .dp-tasks { margin-top:9px; }
+    .dp-tasks > summary { font-size:12px; color:var(--text2); cursor:pointer;
+      padding:4px 0; user-select:none; }
+    .dp-tasks > summary:hover { color:var(--text); }
+    .dp-task { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      padding:6px 8px; border-top:1px solid var(--border); font-size:12px; }
+    /* A SUA FICA MARCADA — numa lista de 21, achar as proprias e a primeira
+       coisa que se tenta. Barra lateral, e nao so cor de fundo: cor sozinha
+       nunca e o unico portador. */
+    .dp-task.meu { border-left:3px solid var(--blue); background:var(--bg3); }
+    .dp-task-cod { font-family:ui-monospace,monospace; font-size:10px; font-weight:700;
+      color:var(--blue-tx); background:var(--blue-bg); border-radius:4px; padding:1px 5px; }
+    .dp-task-tit { flex:1; min-width:120px; color:var(--text); }
+    .dp-task-et { font-size:10px; flex-shrink:0; }
+    .dp-task-dev { font-size:11px; color:var(--text3); white-space:nowrap; }
+    /* O aviso de leitura. Amarelo e nao vermelho: nao houve erro nenhum —
+       a pessoa abriu a demanda de um colega, que e leitura legitima. */
+    .ms-leitura { background:var(--amber-bg); color:var(--amber-tx); font-size:12px;
+      border-radius:7px; padding:7px 10px; margin:-4px 0 12px; }
+    .dp-anexos { display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; }
+    .dp-anexo { font-size:12px; background:var(--bg3); border:1px solid var(--border2);
+      color:var(--text2); border-radius:7px; padding:4px 9px; cursor:pointer;
+      font-family:inherit; }
+    .dp-anexo:hover { border-color:var(--blue); color:var(--text); }
     .dp-erro { font-size:13px; line-height:1.6; color:var(--red-tx,#F9A0A0);
       background:var(--red-bg,#4A1D1D); border-radius:8px; padding:10px 12px; margin-bottom:14px; }
     /* Documentacao do endpoint. Texto tecnico, mas para quem esta com pressa:
@@ -1284,6 +1310,21 @@ async function abrirAnexo(a, proxyUrl, cred) {
   }
 }
 
+/* ABRE O ANEXO DE UM PROJETO. Gemeo do `devViewAnexo`, que e o das demandas:
+ * mesma rota, mesma credencial, mesma entrega pelo `anexo-tipos.js`. O que
+ * muda e so de onde sai a lista — os anexos do projeto sao onde o estudo dele
+ * costuma morar, e nenhuma tela do dev os abria.
+ *
+ * Acha o projeto PELO ID, e nao por indice: a aba reordena conforme quem olha.
+ */
+async function devProjetoAnexo(projetoId, i) {
+  const p = (state.projetos || []).find(x => String(x.id) === String(projetoId));
+  const a = p && (p.anexos || [])[i];
+  if (!a) { await avisar('Anexo não encontrado',
+    'A lista pode ter mudado desde que a tela foi desenhada. Atualize e tente de novo.'); return; }
+  await abrirAnexo(a, ADMIN_PROXY_URL, credenciaisLeitura());
+}
+
 async function devViewAnexo(melId, i) {
   const m = state.melhorias.find(x => x.id === melId);
   if (!m || !m.anexos || !m.anexos[i]) return;
@@ -1684,11 +1725,57 @@ function renderProjetosDev() {
     return String(b.criado_em || '').localeCompare(String(a.criado_em || ''));
   });
   box.innerHTML = ord.map(p => {
-    const minhas = (state.melhorias || []).filter(m => m.projeto_id === p.id);
-    const feitas = minhas.filter(m => getStatusKey(m) === 'concluido').length;
+    /* AS DEMANDAS DO PROJETO, e nao so a contagem delas.
+       "Necessito que no ambiente DEV eles tenham acesso aos projetos e consigam
+        visualizar as task que ali estao."
+       O card dizia "3/5 concluidas" e parava ai: quem lia sabia QUANTAS havia e
+       nao sabia QUAIS. Para entender um projeto — que e o que o estudo dele
+       pede — e preciso ver as demandas, e nao o placar delas.
+       Mesclada e oculta ficam de fora, como no resto das telas: demanda que saiu
+       do fluxo inflaria a conta de um projeto que ninguem mexeu. */
+    const doProjeto = (state.melhorias || [])
+      .filter(m => m && m.projeto_id === p.id && !m.oculto && !m.mesclado_em);
+    const feitas = doProjeto.filter(m => getStatusKey(m) === 'concluido').length;
     const sel = dpAprovado(p)
-      ? '<span class="dp-cont">' + feitas + '/' + minhas.length + ' concluídas</span>'
+      ? '<span class="dp-cont">' + feitas + '/' + doProjeto.length + ' concluídas</span>'
       : '';
+    /* RECOLHIDO POR PADRAO. O maior projeto da base tem 21 demandas; sete cards
+       abertos de uma vez viram uma parede e a aba deixa de servir para escolher.
+       O placar ja esta no topo, entao quem so quer o numero nao precisa abrir. */
+    const listaHTML = doProjeto.length ? '<details class="dp-tasks">' +
+      '<summary>' + doProjeto.length +
+        (doProjeto.length === 1 ? ' demanda' : ' demandas') + ' neste projeto</summary>' +
+      doProjeto.map(m => {
+        const k = getStatusKey(m);
+        /* A SUA FICA MARCADA. Numa lista de 21, achar as proprias no meio das
+           dos colegas e a primeira coisa que se tenta fazer. */
+        const meuCard = DEVNOME.mesmo(m.dev, currentDev);
+        /* DUPLO CLIQUE ABRE A DEMANDA. Mesmo gesto e mesma funcao do gantt do
+           dev (`dgAbrirCard`), que ja limpa a selecao de texto que o duplo
+           clique deixa — clique simples nao serve aqui porque a linha inteira e
+           area de leitura, e um clique acidental abriria modal o tempo todo. */
+        return '<div class="dp-task' + (meuCard ? ' meu' : '') + '"' +
+          ' ondblclick="dgAbrirCard(' + JSON.stringify(m.id).replace(/"/g, '&quot;') + ')"' +
+          ' title="Duplo clique para abrir a demanda">' +
+          (m.codigo ? '<span class="dp-task-cod">' + escAttr(m.codigo) + '</span>' : '') +
+          '<span class="dp-task-tit">' + escAttr(m.titulo || '(sem título)') + '</span>' +
+          '<span class="badge badge-' + escAttr(k) + ' dp-task-et">' +
+            escAttr(STATUS_LABELS[k] || k) + '</span>' +
+          '<span class="dp-task-dev">' + escAttr(m.dev || '— sem responsável') + '</span>' +
+        '</div>';
+      }).join('') + '</details>' : '';
+    /* OS ANEXOS DO PROJETO — e onde o estudo costuma morar. Eles ja existiam no
+       dado e nenhuma tela do dev os abria; sem isto, "tenho estudos sobre alguns
+       projetos" continuava sendo coisa que so o PM/PO lia. */
+    const anexos = (p.anexos || []).filter(a => a && (a.chave || a.dados));
+    const anexosHTML = anexos.length ? '<div class="dp-anexos">' +
+      /* PELO ID DO PROJETO, e nao pelo indice da lista desenhada: a ordem desta
+         aba depende de quem esta olhando (as suas propostas vem primeiro) e de
+         `criado_em`. Um indice guardado no `onclick` abre o anexo de outro
+         projeto assim que a lista se reordenar. */
+      anexos.map((a, ai) => '<button type="button" class="dp-anexo" ' +
+        'onclick="devProjetoAnexo(\'' + escAttr(p.id) + '\',' + ai + ')">📎 ' +
+        escAttr(a.nome || 'anexo') + '</button>').join('') + '</div>' : '';
     let faixa = '';
     if (dpPendente(p)) {
       faixa = '<div class="dp-faixa pend">⏳ Aguardando validação do PM/PO' +
@@ -1704,7 +1791,9 @@ function renderProjetosDev() {
         '<span class="dp-nome">' + escAttr(p.nome || '(sem nome)') + '</span>' + sel +
       '</div>' +
       (p.descricao ? '<div class="dp-desc">' + escAttr(p.descricao) + '</div>' : '') +
+      anexosHTML +
       faixa +
+      listaHTML +
       '<div class="dp-rod">Proposto por ' + escAttr(p.solicitado_por || p.responsavel || '—') + '</div>' +
     '</div>';
   }).join('');
@@ -4089,6 +4178,64 @@ window.addEventListener('hashchange', () => {
   } else if (visivel) closeModal('modal-status');
 });
 
+/* ABRIR A DEMANDA DE OUTRO DEV E PARA LER, E NAO PARA MEXER.
+ *
+ * A aba Projetos passou a listar as demandas do projeto — e elas sao de todo o
+ * time, nao so de quem olha (medido: das 35 em projeto, 25 sao de uma pessoa
+ * so). Ligar o duplo clique sem isto abriria um caminho que nao existia: um dev
+ * editando o texto de entrega, as horas ou os anexos do colega, ou movendo a
+ * demanda dele para validacao.
+ *
+ * O pedido era VER ("abrir e ser demonstrada em tela"), e e isso que fica.
+ *
+ * DESABILITA PELO CONTAINER, e nao campo a campo: uma lista de ids envelhece,
+ * e o campo acrescentado amanha nasceria editavel sem ninguem notar. O que o
+ * modal tiver dentro fica travado, e os botoes de gravar saem de cena.
+ *
+ * NAO E CONTROLE DE ACESSO — e o servidor quem decide o que um dev pode
+ * gravar. Isto e para a tela nao convidar ao gesto errado.
+ */
+function msModoLeitura(m) {
+  const cx = document.getElementById('modal-status');
+  if (!cx) return;
+  const dono = !m.dev || DEVNOME.mesmo(m.dev, currentDev);
+  cx.querySelectorAll('input, select, textarea, button').forEach(el => {
+    if (el.classList.contains('modal-close-btn')) return;   // fechar sempre pode
+    if (/closeModal/.test(el.getAttribute('onclick') || '')) return;
+    if (dono) { if (el.dataset.leituraOff) { el.disabled = false; delete el.dataset.leituraOff; } return; }
+    if (!el.disabled) { el.disabled = true; el.dataset.leituraOff = '1'; }
+  });
+  ['btn-save-status', 'btn-save-entrega'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    /* `in`, E NAO TRUTHY. O display original do botao de gravar e string
+       VAZIA, e `if (b.dataset.leituraHide)` e falso para ''. O botao era
+       escondido ao abrir a demanda do colega e nunca mais voltava — ele
+       sumia para sempre, inclusive nas demandas da propria pessoa. */
+    if (dono) {
+      if ('leituraHide' in b.dataset) {
+        b.style.display = b.dataset.leituraHide;
+        delete b.dataset.leituraHide;
+      }
+    } else if (!('leituraHide' in b.dataset)) {
+      b.dataset.leituraHide = b.style.display || '';
+      b.style.display = 'none';
+    }
+  });
+  let aviso = document.getElementById('ms-leitura');
+  if (!dono) {
+    if (!aviso) {
+      aviso = document.createElement('div');
+      aviso.id = 'ms-leitura';
+      aviso.className = 'ms-leitura';
+      const t = document.getElementById('ms-title');
+      t.parentNode.insertBefore(aviso, t.nextSibling);
+    }
+    aviso.textContent = '👁 Demanda de ' + (m.dev || '—') + ' — aberta para leitura.';
+    aviso.style.display = '';
+  } else if (aviso) { aviso.style.display = 'none'; }
+}
+
 function openStatusModal(id, preselect) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
@@ -4185,6 +4332,8 @@ function openStatusModal(id, preselect) {
   // O codigo vai para o endereco. Demanda sem codigo (recem-criada, o codigo
   // nasce no servidor) deixa a URL limpa.
   rotaEscreve(m.codigo || '');
+  // Depois de tudo desenhado: o modo leitura varre o que existe no modal.
+  msModoLeitura(m);
   abrirModal('modal-status');
 }
 

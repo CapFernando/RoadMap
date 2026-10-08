@@ -10228,6 +10228,158 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'lendo o FORMULARIO: a conta tem de mudar enquanto se digita, antes de salvar');
   }
 
+  sec('Projetos no painel do dev \u2014 as tasks que estao ali');
+  /* "Necessito que no ambiente DEV eles tenham acesso aos projetos e consigam
+      visualizar as task que ali estao. Pois tenho estudos sobre alguns projetos."
+     E depois: "ao dar 2 cliques a task deve abrir e ser demonstrada em tela."
+     A aba ja existia e dizia "3/5 concluidas" \u2014 quem lia sabia QUANTAS havia e
+     nao sabia QUAIS. */
+  {
+    const DEVt = lerTela('dev.html');
+    const rp = corpo(DEVt, 'function renderProjetosDev(');
+
+    /* ── DESENHANDO DE VERDADE ──────────────────────────────────────
+       Conferir que a lista e CONSTRUIDA nao prova que ela e USADA: a sabotagem
+       que tirou `listaHTML` da montagem do card — o defeito original, de volta —
+       passou limpa por tres invariantes de texto. O mesmo com os anexos. Aqui o
+       card e desenhado e o resultado e lido. */
+    const DN = require('./dev-nome.js');
+    const caixa = { innerHTML: '' };
+    const LABELS = { backlog: 'Backlog', planejado: 'Planejado',
+                     em_andamento: 'Em Andamento', concluido: 'Concluído' };
+    const escA = (s) => String(s == null ? '' : s)
+      .replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const projetos = [{ id: 'p1', codigo: 'EP-9', nome: 'Projeto', descricao: 'estudo',
+                        anexos: [{ nome: 'estudo.pdf', chave: 'a/x' }] }];
+    const melhorias = [
+      { id: 'd1', codigo: 'AX-1', titulo: 'Minha', dev: 'João Siqueira',
+        projeto_id: 'p1', status_planejamento: 'em_andamento' },
+      { id: 'd2', codigo: 'AX-2', titulo: 'Do colega', dev: 'Gabriel',
+        projeto_id: 'p1', status_planejamento: 'planejado' },
+      { id: 'd3', codigo: 'AX-3', titulo: 'Mesclada', dev: 'Gabriel',
+        projeto_id: 'p1', status_planejamento: 'planejado', mesclado_em: 'd1' },
+      { id: 'd4', codigo: 'AX-4', titulo: 'Oculta', dev: 'Gabriel',
+        projeto_id: 'p1', status_planejamento: 'planejado', oculto: true },
+      { id: 'd5', codigo: 'AX-5', titulo: 'De outro projeto', dev: 'Gabriel',
+        projeto_id: 'p2', status_planejamento: 'planejado' },
+    ];
+    const desenha = new Function('document', 'dpLista', 'state', 'getStatusKey',
+      'DEVNOME', 'currentDev', 'dpAprovado', 'dpPendente', 'dpRecusado',
+      'escAttr', 'STATUS_LABELS', rp + '; return renderProjetosDev;')(
+      { getElementById: () => caixa }, () => projetos,
+      { projetos: projetos, melhorias: melhorias },
+      (m) => String(m.status_planejamento || 'backlog'), DN, 'joao siqueira',
+      () => true, () => false, () => false, escA, LABELS);
+    desenha();
+    const saida = caixa.innerHTML;
+    const linhas = (saida.match(/class="dp-task( meu)?"/g) || []).length;
+    ok(linhas === 2,
+       'o card DESENHA as demandas do projeto — nao so a contagem delas', 'linhas=' + linhas);
+    ok(/AX-1/.test(saida) && /AX-2/.test(saida), 'com o codigo de cada uma');
+    ok(!/AX-3/.test(saida) && !/AX-4/.test(saida),
+       'e sem mesclada nem oculta, que inflariam a conta do projeto');
+    ok(!/AX-5/.test(saida), 'nem demanda de outro projeto');
+    ok((saida.match(/class="dp-task meu"/g) || []).length === 1,
+       'a sua sai marcada, mesmo escrita sem acento e em minuscula');
+    ok(/Em Andamento/.test(saida) && /Gabriel/.test(saida),
+       'e cada linha leva etapa e responsavel');
+    ok(/devProjetoAnexo\('p1',0\)/.test(saida) && /estudo\.pdf/.test(saida),
+       'o anexo do projeto SAI no card, com o id do projeto no clique', saida.slice(0, 0));
+    ok(/ondblclick="dgAbrirCard\(&quot;d1&quot;\)"/.test(saida),
+       'e a linha leva o duplo clique com o id da demanda');
+    ok(/<details class="dp-tasks">/.test(saida) && !/<details[^>]* open/.test(saida),
+       'e a lista sai recolhida');
+
+    ok(/m\.projeto_id === p\.id/.test(rp), 'o card junta as demandas do projeto');
+    ok(/!m\.oculto && !m\.mesclado_em/.test(rp),
+       'e tira mesclada e oculta, como o resto das telas \u2014 elas inflariam a conta');
+    ok(/<details class="dp-tasks">/.test(rp),
+       'a lista vem RECOLHIDA: o maior projeto da base tem 21 demandas');
+    ok(/dp-task-cod/.test(rp) && /dp-task-tit/.test(rp) &&
+       /STATUS_LABELS\[k\]/.test(rp) && /dp-task-dev/.test(rp),
+       'e cada linha diz codigo, titulo, etapa e responsavel');
+    ok(/DEVNOME\.mesmo\(m\.dev, currentDev\)/.test(rp),
+       'a sua fica marcada, pela regra de nome que ignora acento e caixa');
+    ok(/\.dp-task\.meu \{[^}]*border-left/.test(DEVt.replace(/\s*\n\s*/g, ' ')),
+       'e a marca nao e so cor: tem barra lateral');
+
+    /* OS ANEXOS DO PROJETO \u2014 onde o estudo mora. Nenhuma tela do dev os abria. */
+    ok(/p\.anexos \|\| \[\]/.test(rp) && /devProjetoAnexo\(/.test(rp),
+       'os anexos do projeto abrem pelo painel do dev');
+    ok(/devProjetoAnexo\(\\'' \+ escAttr\(p\.id\)/.test(rp),
+       'e o botao leva o ID do projeto, nao o indice \u2014 a aba reordena por quem olha');
+    const ab = corpo(DEVt, 'async function devProjetoAnexo(');
+    ok(/String\(x\.id\) === String\(projetoId\)/.test(ab), 'e a funcao acha pelo id');
+    ok(/abrirAnexo\(a, ADMIN_PROXY_URL, credenciaisLeitura\(\)\)/.test(ab),
+       'pela mesma rota e credencial dos anexos de demanda');
+
+    /* O DUPLO CLIQUE. Mesmo gesto do gantt do dev. */
+    ok(/ondblclick="dgAbrirCard\(/.test(rp),
+       'duplo clique na linha abre a demanda, com a funcao que ja existia');
+
+    /* \u2500\u2500 E ABRIR A DO COLEGA E PARA LER \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+       A lista e do time inteiro: medido, das 35 demandas em projeto, 25 sao de
+       uma pessoa so. Ligar o duplo clique sem isto criaria um caminho que nao
+       existia \u2014 um dev editando horas, texto de entrega ou anexos do colega, ou
+       movendo a demanda dele para validacao. */
+    const ml = corpo(DEVt, 'function msModoLeitura(');
+    ok(/DEVNOME\.mesmo\(m\.dev, currentDev\)/.test(ml),
+       'o modo leitura decide pelo dono, com a regra de nome de sempre');
+    ok(/!m\.dev \|\|/.test(ml),
+       'e demanda SEM dono segue editavel \u2014 e justamente a que alguem vai pegar');
+    /* PELO CONTAINER, e nao por lista de ids: lista envelhece, e o campo
+       acrescentado amanha nasceria editavel sem ninguem notar. */
+    ok(/querySelectorAll\('input, select, textarea, button'\)/.test(ml),
+       'trava o que existe no modal, e nao uma lista de campos que envelhece');
+    ok(/modal-close-btn/.test(ml) && /closeModal/.test(ml),
+       'menos o fechar \u2014 modal que nao fecha e pior que modal que edita');
+    ok(/btn-save-status/.test(ml) && /btn-save-entrega/.test(ml),
+       'e os botoes de gravar saem de cena');
+    /* O DESTRAVAR, RODANDO A SEQUENCIA. `/leituraOff/` no texto nao prova nada:
+       a sabotagem que apagou o ramo de restauracao deixou a string intacta no
+       outro ramo e passou limpa. Aqui o modal e de mentira, mas a sequencia e a
+       real — abre a do colega, depois a sua. */
+    const campos = () => [
+      { tagName: 'INPUT', disabled: false, dataset: {}, classList: { contains: () => false },
+        getAttribute: () => null, style: {} },
+      { tagName: 'SELECT', disabled: false, dataset: {}, classList: { contains: () => false },
+        getAttribute: () => null, style: {} },
+    ];
+    const fakeModal = (cs) => ({ querySelectorAll: () => cs });
+    const botoes = { 'btn-save-status': { style: { display: '' }, dataset: {} },
+                     'btn-save-entrega': { style: { display: 'none' }, dataset: {} } };
+    const cs = campos();
+    const tituloEl = { parentNode: { insertBefore: () => {} }, nextSibling: null };
+    const criados = {};
+    const docFake = {
+      getElementById: (id) => id === 'modal-status' ? fakeModal(cs)
+        : id === 'ms-title' ? tituloEl
+        : botoes[id] || criados[id] || null,
+      createElement: () => { const e = { style: {}, dataset: {} }; criados['ms-leitura'] = e; return e; },
+    };
+    const leitura = new Function('document', 'DEVNOME', 'currentDev',
+      ml + '; return msModoLeitura;')(docFake, DN, 'João Siqueira');
+
+    leitura({ dev: 'Gabriel Fernandes' });
+    const travouColega = cs.every(c => c.disabled) &&
+                         botoes['btn-save-status'].style.display === 'none';
+    ok(travouColega, 'abrir a do colega trava os campos e esconde o gravar');
+
+    leitura({ dev: 'joao siqueira' });   // a sua, logo em seguida
+    ok(cs.every(c => !c.disabled),
+       'e abrir a SUA logo depois DESTRAVA — senao a sua ficaria travada para sempre',
+       JSON.stringify(cs.map(c => c.disabled)));
+    ok(botoes['btn-save-status'].style.display !== 'none',
+       'e o botao de gravar volta');
+    ok(botoes['btn-save-entrega'].style.display === 'none',
+       'sem reviver o que ja estava escondido por outro motivo');
+
+    leitura({ dev: '' });
+    ok(cs.every(c => !c.disabled), 'e demanda sem dono abre editavel');
+    ok(corpo(DEVt, 'function openStatusModal(').includes('msModoLeitura(m);'),
+       'e o modal chama o modo leitura ao abrir');
+  }
+
   sec('A devolucao do PM/PO \u2014 o motivo tem de aparecer sem abrir o card');
   /* "Ao devolver uma demanda p/ dev, e preenchido um texto e o mesmo nao e
      mostrado."
