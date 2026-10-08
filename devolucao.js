@@ -42,6 +42,37 @@
 (function (raiz) {
   'use strict';
 
+  /* ═══ PARA ONDE A DEMANDA VOLTA ═══════════════════════════════════════════
+   *
+   * "Toda task devolvida na etapa de validação deverá voltar para planejado na
+   *  visão do dev."
+   *
+   * Ela voltava para `em_andamento`, e isso dizia uma coisa que não era verdade:
+   * que havia trabalho em curso. Não há — o dev entregou, a entrega foi recusada
+   * e ela volta para a fila do que está combinado e à espera de ser retomado.
+   * Quem decide que algo está planejado com data é o PM/PO, e devolver é
+   * justamente um ato dele.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * O DEV NÃO FICA PRESO, e isso foi conferido antes e não suposto:
+   *
+   *   - `planejado` está em `ETAPAS_QUE_CORREM` (`prazo.js`), então o prazo
+   *     segue correndo: devolver não dá sobrevida de graça.
+   *   - está em `ETAPAS_COMPROMETIDAS` no painel do dev, então a demanda
+   *     continua na carga dele, e não some da visão.
+   *   - o Worker reverte etapa que o dev mova para fora de
+   *     `['em_andamento','validacao']` — mas quem devolve é o PM/PO, pela rota
+   *     de admin, que não passa por essa trava. E `em_andamento` ESTÁ na lista,
+   *     então o dev retoma normalmente.
+   *   - no modal do dev o seletor é "Mover para", e `msSelectEtapa` já insere
+   *     "Manter em Planejado" para etapa que não é dele. Abrir e salvar não
+   *     move nada sozinho.
+   *
+   * É UMA CONSTANTE, e não uma string solta no meio do `valDecidir`: a etapa de
+   * volta é a mesma pergunta que a faixa do motivo responde, e as duas moram no
+   * mesmo arquivo para não divergirem quando alguém mudar uma delas.         */
+  var ETAPA_AO_DEVOLVER = 'planejado';
+
   function esc(t) {
     return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
@@ -75,7 +106,8 @@
            esc(txt) + '</div>';
   }
 
-  var api = { motivo: motivo, houve: houve, faixa: faixa };
+  var api = { motivo: motivo, houve: houve, faixa: faixa,
+              ETAPA_AO_DEVOLVER: ETAPA_AO_DEVOLVER };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.DEVOLUCAO = api;

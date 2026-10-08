@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="6934f60004">
+<html lang="pt-BR" data-build="a9a6ebb23b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1265,7 +1265,7 @@
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=c07e7b1591"></script>
-<script src="devolucao.js?v=327a41666f"></script>
+<script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
 <body>
@@ -13364,9 +13364,19 @@ async function valDecidir(aprovar, obs) {
     m.validado_por = (_eu && (_eu.nome || _eu.login)) || 'admin';
     m.validacao_obs = '';
   } else {
-    m.status_planejamento = 'em_andamento';
-    m.status = 'iniciada';
-    m.concluido_em = '';   // voltou a ser trabalho em curso
+    /* VOLTA PARA PLANEJADO, e nao para Em Andamento. Dizer "em andamento"
+       afirmava que havia trabalho em curso, e nao ha: o dev entregou, a entrega
+       foi recusada, e a demanda volta para a fila do que esta combinado e
+       esperando ser retomado. A etapa mora em `devolucao.js`, junto da faixa do
+       motivo — as duas respondem a mesma devolucao. */
+    const _volta = (window.DEVOLUCAO && DEVOLUCAO.ETAPA_AO_DEVOLVER) || 'planejado';
+    m.status_planejamento = _volta;
+    /* O `status` ACOMPANHA, pelo mesmo mapa de sempre. Fixar 'iniciada' aqui
+       deixaria a demanda "iniciada" em Planejado, e todo relatorio que cruza os
+       dois campos passaria a discordar de si — e o proprio Worker tem uma nota
+       dizendo isso, na trava que reverte etapa do dev. */
+    m.status = SP_TO_STATUS[_volta] || 'estimada';
+    m.concluido_em = '';   // deixou de ser entrega: nao ha conclusao a registrar
     m.validacao_obs = obs;
     m.validado_em = '';
     m.validado_por = '';
@@ -13383,7 +13393,8 @@ async function valDecidir(aprovar, obs) {
   renderValBanner();
   const okSalvo = await saveViaProxy();
   if (okSalvo) {
-    toast(aprovar ? '✅ Entrega aprovada — demanda concluída.' : '↩ Devolvida ao dev.', 'ok');
+    toast(aprovar ? '✅ Entrega aprovada — demanda concluída.'
+                  : '↩ Devolvida ao dev — voltou para Planejado.', 'ok');
     _dirtyMelhoriaIds.delete(id);
     _pendingEdits = false;
     if (window.guardaDesliga) guardaDesliga('modal-melhoria');
@@ -13434,7 +13445,7 @@ async function valAprovar() {
 async function valRejeitar() {
   const obs = await pedirTexto({
     titulo: 'Devolver ao dev',
-    texto: 'A demanda volta para Em Andamento. Este texto e o que o dev vai ler — ' +
+    texto: 'A demanda volta para Planejado, na fila do dev. Este texto e o que ele vai ler — ' +
            'sem ele, a proxima entrega vem igual.',
     multilinha: true, obrigatorio: true, ok: 'Devolver', perigo: true,
     placeholder: 'Ex.: o calculo do saldo nao considera estorno; refazer com o caso do print' });

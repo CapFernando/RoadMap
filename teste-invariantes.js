@@ -10300,6 +10300,69 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e ele esta no ramo do APROVAR \u2014 devolver grava, aprovar limpa');
     ok(!DEVt.includes('validacao_obs ='),
        'e o painel do dev nunca apaga o motivo: quem devolve e quem aprova e o PM/PO');
+
+    /* ── PARA ONDE A DEMANDA VOLTA ────────────────────────────────────
+       "Toda task devolvida na etapa de validacao devera voltar para planejado
+        na visao do dev."
+       Voltava para `em_andamento`, e isso afirmava trabalho em curso que nao
+       existe: o dev entregou, a entrega foi recusada, e ela volta para a fila do
+       que esta combinado. RODA a transicao, e nao casa o texto. */
+    ok(DV.ETAPA_AO_DEVOLVER === 'planejado',
+       'a devolucao manda para Planejado', String(DV.ETAPA_AO_DEVOLVER));
+
+    /* O RAMO DO `else` RECORTADO POR CONTAGEM DE CHAVES, a partir de uma ancora
+       unica dentro dele. Fatiar ate a proxima linha conhecida levava junto a
+       chave de fechamento, e o `new Function` nem compilava. */
+    const iVolta = ADMIN.indexOf('const _volta = (window.DEVOLUCAO');
+    const iElse = ADMIN.lastIndexOf('} else {', iVolta);
+    let prof = 0, fim = -1;
+    for (let k = iElse + '} else '.length; k < ADMIN.length; k++) {
+      if (ADMIN[k] === '{') prof++;
+      else if (ADMIN[k] === '}') { prof--; if (!prof) { fim = k; break; } }
+    }
+    ok(iVolta > 0 && fim > iElse, 'achei o ramo da devolucao no valDecidir');
+    const corpoElse = ADMIN.slice(ADMIN.indexOf('{', iElse + 1) + 1, fim);
+    const devolve = new Function('m', 'obs', 'window', 'DEVOLUCAO', 'SP_TO_STATUS',
+      corpoElse + '; return m;');
+    const SPTS = JSON.parse('{' + (ADMIN.match(/const SP_TO_STATUS = \{([^}]*)\}/) || [, ''])[1]
+      .replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"') + '}');
+    const volta = devolve({ status_planejamento: 'validacao', status: 'iniciada',
+                            concluido_em: '2026-10-01', validado_em: 'x', validado_por: 'y' },
+                          'refazer', { DEVOLUCAO: DV }, DV, SPTS);
+    ok(volta.status_planejamento === 'planejado',
+       'e a demanda devolvida sai de Validacao para Planejado', volta.status_planejamento);
+    /* O `status` ACOMPANHA A ETAPA. Fixar 'iniciada' deixaria a demanda
+       "iniciada" em Planejado, e todo relatorio que cruza os dois campos passaria
+       a discordar de si — o proprio Worker tem essa nota na trava do dev. */
+    ok(volta.status === SPTS['planejado'],
+       'e o `status` acompanha pelo mapa, sem ficar "iniciada" em Planejado',
+       volta.status + ' vs ' + SPTS['planejado']);
+    ok(volta.concluido_em === '' && volta.validado_em === '' && volta.validado_por === '',
+       'e a marca de conclusao e de validacao sai junto');
+    ok(volta.validacao_obs === 'refazer', 'e o motivo fica gravado');
+
+    /* O DEV NAO FICA PRESO: `planejado` nao e etapa que ele move, mas
+       `em_andamento` e — entao ele retoma. Se um dia tirarem `em_andamento`
+       dessa lista, a devolvida fica parada sem ninguem perceber. */
+    const DEVMOVE = (lerTela('cloudflare-worker/worker.js')
+      .match(/const ETAPAS_QUE_O_DEV_MOVE = \[([^\]]*)\]/) || [, ''])[1];
+    ok(/'em_andamento'/.test(DEVMOVE),
+       'e o dev consegue retomar: `em_andamento` segue entre as etapas que ele move', DEVMOVE);
+    ok(!new RegExp("'" + DV.ETAPA_AO_DEVOLVER + "'").test(DEVMOVE),
+       'enquanto Planejado continua sendo do PM/PO — devolver e ato dele');
+    /* E O PRAZO SEGUE CORRENDO: devolver nao pode dar sobrevida de graca. */
+    ok(require('./prazo.js').ETAPAS_QUE_CORREM.includes(DV.ETAPA_AO_DEVOLVER),
+       'e o prazo da devolvida continua correndo');
+
+    /* O QUE A TELA PROMETE TEM DE SER O QUE ELA FAZ. O dialogo dizia "volta para
+       Em Andamento" — texto que sobrevive a mudanca vira mentira com aparencia
+       de documentacao. */
+    for (const [nome, txt] of [['admin', ADMIN], ['dev', DEVt]]) {
+      ok(!/volta para Em Andamento/i.test(txt),
+         'o ' + nome + ' nao promete mais que a devolvida volta para Em Andamento');
+    }
+    ok(/volta para Planejado/i.test(ADMIN) && /volta para Planejado/i.test(DEVt),
+       'e as duas telas dizem para onde ela volta de verdade');
   }
 
   sec('Resumo da entrega \u2014 o texto que vai para a apresentacao');
