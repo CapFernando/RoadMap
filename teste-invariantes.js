@@ -17041,9 +17041,77 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(BUCKETS.indexOf('fora_ar') < 0,
        'e "fora do ar" fica fora do select da barra — la ele devolveria a base inteira');
     const COLBUCKETS = (AC.match(/const KB_PROD_COL = \[[\s\S]*?\];/) || [''])[0];
-    ok((COLBUCKETS.match(/key:/g) || []).length === 3,
-       'o menu da coluna tem exatamente as tres opcoes pedidas',
+    /* ── QUATRO OPCOES: as tres de producao e a pausa ──
+       Esta invariante dizia "exatamente as tres opcoes pedidas", e dizia certo
+       enquanto o pedido era "em producao, fora e tudo (3 opcoes)". Depois veio
+       "preciso de um filtro a mais para levantar os itens em pausa".
+       Continua FECHADA no numero de proposito: o menu e um radio, cada opcao
+       nova tira o recorte da anterior, e crescer sem decidir isso transforma o
+       filtro numa lista que ninguem le. */
+    ok((COLBUCKETS.match(/key:/g) || []).length === 4,
+       'o menu da coluna tem as tres de producao mais a pausa',
        (COLBUCKETS.match(/key:/g) || []).length + ' opcoes');
+    ok(/key: 'pausado'/.test(COLBUCKETS), 'e a pausa esta entre elas');
+    /* A REGRA E A DE SEMPRE. Uma segunda leitura de `pausado_em` aqui
+       divergiria no dia em que a pausa mudasse de forma — e ela ja mudou uma
+       vez, quando `pausa_dias` entrou. */
+    const mp = corpo(AC, 'function matchProducao(m, filtro) {');
+    ok(/ETAPA\.pausada\(m\)/.test(mp),
+       'e o filtro pergunta a `etapa-demanda.js`, sem ler `pausado_em` por fora');
+    ok(!/pausado_em/.test(mp), 'nao ha leitura crua do campo aqui');
+    /* RODANDO: o filtro de pausa nao pode responder pela producao, nem o
+       contrario — sao eixos diferentes no mesmo controle. */
+    {
+      const EPp = require('./etapa-demanda.js');
+      const f = new Function('window', 'ETAPA', 'statusKey',
+        mp + '; return matchProducao;')({ ETAPA: EPp }, EPp,
+        (m) => String(m.status_planejamento || ''));
+      const parada = { pausado_em: '2026-09-01', em_producao: false, status_planejamento: 'em_andamento' };
+      const andando = { em_producao: false, status_planejamento: 'em_andamento' };
+      const noAr = { em_producao: true, status_planejamento: 'concluido' };
+      const paradaNoAr = { pausado_em: '2026-09-01', em_producao: true, status_planejamento: 'concluido' };
+      ok(f(parada, 'pausado') && !f(andando, 'pausado'),
+         'o filtro de pausa pega a parada e so ela');
+      ok(f(paradaNoAr, 'pausado'),
+         'inclusive a que esta parada E no ar — o filtro e de pausa, nao de producao');
+      ok(!f(parada, 'no_ar') && f(noAr, 'no_ar'),
+         'e "no ar" segue respondendo producao, sem olhar pausa');
+      ok(f(parada, '') && f(andando, '') && f(noAr, ''),
+         'e "Tudo" nao filtra nada');
+      ok(f(parada, 'fora_ar'), 'parada fora do ar ainda aparece em "fora do ar"');
+    }
+
+    /* ── O CONTADOR SE DECLARA ──────────────────────────────────────
+       Duas coisas que o menu sozinho nao garante, e que escaparam quando eu so
+       olhava a lista de opcoes: o rotulo do contador tem de MOSTRAR que ha
+       filtro ligado (senao a coluna aparece recortada sem dizer por que), e o
+       texto de ajuda tem de sair da LISTA — ele enumerava "tudo, no ar ou fora
+       do ar" a mao e ficou errado no dia em que a pausa entrou. */
+    {
+      const KB = eval('(' + (AC.match(/const KB_PROD_COL = (\[[\s\S]*?\]);/) || [, '[]'])[1] + ')');
+      const escF = (s) => String(s).replace(/[&<>"]/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const cont = new Function('KB_PROD_COL', '_kbProdCol', 'esc',
+        corpo(AC, 'function kbContadorHTML(col, exibidas, total) {') + '; return kbContadorHTML;');
+      const col = { key: 'em_andamento', label: 'Em andamento' };
+      const limpo = cont(KB, {}, escF)(col, 31, 31);
+      const filtrado = cont(KB, { em_andamento: 'pausado' }, escF)(col, 5, 31);
+      const titulo = (s) => (s.match(/title="([^"]*)"/) || [, ''])[1];
+      const rotulo = (s) => (s.match(/>([^<]*)<\/button>/) || [, ''])[1];
+      ok(/Em pausa/.test(titulo(limpo)),
+         'o texto de ajuda do contador sai da LISTA — citar as opcoes a mao envelhece',
+         titulo(limpo));
+      ok(KB.every(o => !o.label || titulo(limpo).includes(o.label.replace(/^[▲△⏸]\s*/, ''))),
+         'e nenhuma opcao fica de fora dele');
+      ok(/⏸/.test(rotulo(filtrado)) && /5\/31/.test(rotulo(filtrado)),
+         'e com a pausa ligada o contador mostra a marca e o recorte',
+         rotulo(filtrado));
+      ok(/class="kb-count filtrado"/.test(filtrado) && !/filtrado/.test(limpo),
+         'e se declara filtrado, para a coluna recortada nao parecer vazia');
+      ok(KB.filter(o => o.key).every(o => o.marca),
+         'toda opcao que filtra tem marca — sem ela o contador nao diz qual esta ligado',
+         KB.map(o => o.key + '=' + (o.marca || '(sem)')).join(' '));
+    }
 
     /* ══ O CONTADOR E UM BOTAO DE VERDADE ══
      * Era `<span>`. Span com onclick nao recebe Tab, nao dispara com Enter e

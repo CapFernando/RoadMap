@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a796c91088">
+<html lang="pt-BR" data-build="73040f849d">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3504,6 +3504,23 @@ function matchProducao(m, filtro) {
      coluna, e a pergunta vira legitima: "das 18 que esperam validacao, quais ja
      subiram?". E a pergunta que a barra nao sabe fazer. */
   if (filtro === 'fora_ar') return !noAr;
+  /* ═══ EM PAUSA ═══════════════════════════════════════════════════════
+     "No kanban e possivel filtrar o que esta em prod, fora e todos.
+      Preciso de um filtro a mais para levantar os itens em pausa."
+
+     E DO MESMO MENU, e nao de um controle novo: a pergunta tem a mesma
+     forma das outras tres — "destas N desta coluna, quais estao assim?" —
+     e vive no mesmo lugar em que a pessoa ja clica para recortar a coluna.
+
+     E DE OUTRO EIXO que as duas de producao, e isso tem consequencia: como
+     o menu escolhe UMA opcao, filtrar por pausa deixa de filtrar por "no
+     ar". Nao da para pedir as duas ao mesmo tempo. Fica assim de proposito —
+     o controle e um radio, e uma demanda pausada raramente esta no ar.
+
+     A REGRA E A DE SEMPRE: `ETAPA.pausada`, a mesma que o selo do card, o
+     gantt e o painel publico usam. Uma segunda leitura de `pausado_em` aqui
+     divergiria no dia em que a pausa mudasse de forma. */
+  if (filtro === 'pausado') return !!(window.ETAPA && ETAPA.pausada(m));
   return true;
 }
 
@@ -4085,6 +4102,8 @@ const KB_PROD_COL = [
   { key: '',        label: 'Tudo',              marca: '' },
   { key: 'no_ar',   label: '▲ No ar',      marca: '▲' },
   { key: 'fora_ar', label: '△ Fora do ar', marca: '△' },
+  // Outro eixo que os dois acima — ver a nota em `matchProducao`.
+  { key: 'pausado', label: '⏸ Em pausa',   marca: '⏸' },
 ];
 let _kbProdCol = {};       // { [coluna]: '' | 'no_ar' | 'fora_ar' }
 let _kbBusca = '';         // texto livre: título, descrição, dev, solicitante
@@ -4225,7 +4244,11 @@ function kbContadorHTML(col, exibidas, total) {
   const titulo = f
     ? op.label + ' · mostrando ' + exibidas + ' de ' + total +
       ' em ' + col.label + '. Clique para trocar o filtro.'
-    : 'Filtrar ' + col.label + ' por produção: tudo, no ar ou fora do ar.';
+    /* AS OPCOES SAEM DA LISTA, e nao de uma frase escrita a mao. Ela dizia
+       "tudo, no ar ou fora do ar" e ficou errada no dia em que a pausa entrou —
+       texto que enumera uma lista envelhece com ela. */
+    : 'Filtrar ' + col.label + ': ' +
+      KB_PROD_COL.map(o => o.label.replace(/^[▲△⏸]\s*/, '')).join(', ') + '.';
   return '<button type="button" class="kb-count' + (f ? ' filtrado' : '') + '"' +
     ' aria-haspopup="menu" aria-label="' + esc(titulo) + '" title="' + esc(titulo) + '"' +
     ' onclick="kbProdMenu(event,\'' + col.key + '\')">' + esc(rotulo) + '</button>';
