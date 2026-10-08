@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-build="63d6325380">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -35,6 +35,13 @@
       --purple: #9B6FE8; --purple-bg:#341A6E;--purple-tx:#C9AEFF;
       --radius: 10px;
     }
+    /* MESMO SELO DO ADMIN. O comentario em `scripts-tema-versao.py` diz que o
+       custo de "qual versao voce esta rodando?" apareceu tres vezes seguidas;
+       com esta tela sem selo, apareceu uma quarta: o campo novo ja estava no ar
+       e a tela servia a copia antiga do HTML. O `?v=` sela os SCRIPTS, nao a
+       propria pagina — e e a pagina que o Pages guarda por 10 minutos. */
+    #build-selo { font-size:10px; color:var(--text3); opacity:.6; margin-left:8px;
+      font-family:ui-monospace,monospace; letter-spacing:.02em; }
     body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; font-size:15px; min-height:100vh; }
 
     /* ── LOGIN ── */
@@ -615,7 +622,7 @@
   <div class="meu-dia" id="meu-dia"></div>
   <header>
     <div class="header-left">
-      <h1>🗂️ Meu Painel</h1>
+      <h1>🗂️ Meu Painel</h1><span id="build-selo" title="Versão desta tela. Se não bater com a publicada, o navegador está servindo uma cópia antiga: Ctrl+Shift+R."></span>
       <div class="dev-switcher" id="dev-switcher" onclick="toggleDevDropdown(event)">
         <span id="dev-label">—</span>
         <span class="dev-switcher-arrow">▾</span>
@@ -5410,6 +5417,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof ligaZonaAnexo === 'function' && typeof nAddFiles === 'function')
     ligaZonaAnexo('n-file', nAddFiles);
 });
+
+/* O NUMERO DA VERSAO DESTA TELA, para comparar com a publicada sem perguntar
+   a ninguem. Gravado no `<html data-build>` pelo selo, na publicacao. */
+function mostraBuild() {
+  const el = document.getElementById('build-selo');
+  const b = document.documentElement.getAttribute('data-build');
+  if (el && b) el.textContent = 'build ' + b;
+}
+mostraBuild();
 </script>
 </body>
 </html>

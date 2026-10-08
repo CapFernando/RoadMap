@@ -16488,20 +16488,28 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * O `data-build` e o md5 da propria pagina com o campo zerado: mesma
      * tecnica do selo dos scripts, um andar acima. Conferido executando o
      * `scripts-tema-versao.py`: muda uma letra, muda o build; desfaz, volta. */
-    const buildAttr = (ADMIN.match(/<html[^>]*\sdata-build="([^"]*)"/) || [])[1];
-    ok(!!buildAttr && /^[0-9a-f]{10}$/.test(buildAttr),
-       'a pagina carrega um build de dez digitos', buildAttr || '(sem build)');
-    /* E ELE E O DA PAGINA DE AGORA. Selo que nao bate e pior que selo nenhum:
-       ele responde a pergunta com um numero errado. */
-    const zerado = ADMIN.replace(/(<html[^>]*\sdata-build=")[^"]*(")/, '$1$2');
-    const esperado = require('crypto').createHash('md5')
-      .update(zerado.replace(/\r\n/g, '\n'), 'utf8').digest('hex').slice(0, 10);
-    ok(buildAttr === esperado,
-       'e ele bate com o conteudo atual da pagina',
-       buildAttr + ' vs ' + esperado);
-    ok(/mostraBuild\(\);/.test(ADMIN) && /id="build-selo"/.test(ADMIN),
-       'e aparece na tela, e nao so no atributo — quem precisa dele esta sem ' +
-       'saber se a tela e a nova, e nao vai abrir o console');
+    /* AS QUATRO TELAS, e nao so o Admin. O selo nasceu aqui depois de o custo
+       aparecer tres vezes seguidas; com o gantt sem selo, apareceu uma quarta —
+       o campo novo ja estava publicado, o arquivo servido ja o tinha, e a tela
+       continuava sem ele porque o navegador guardava a copia antiga do HTML.
+       O `?v=` sela os SCRIPTS; a propria pagina o Pages guarda por 10 minutos. */
+    for (const [nome, pag] of [['admin', ADMIN], ['gantt', GANTT],
+                               ['dev', lerTela('dev.html')], ['index', INDEX]]) {
+      const buildAttr = (pag.match(/<html[^>]*\sdata-build="([^"]*)"/) || [])[1];
+      ok(!!buildAttr && /^[0-9a-f]{10}$/.test(buildAttr),
+         'o ' + nome + ' carrega um build de dez digitos', buildAttr || '(sem build)');
+      /* E ELE E O DA PAGINA DE AGORA. Selo que nao bate e pior que selo nenhum:
+         ele responde a pergunta com um numero errado. */
+      const zerado = pag.replace(/(<html[^>]*\sdata-build=")[^"]*(")/, '$1$2');
+      const esperado = require('crypto').createHash('md5')
+        .update(zerado.replace(/\r\n/g, '\n'), 'utf8').digest('hex').slice(0, 10);
+      ok(buildAttr === esperado,
+         'e o do ' + nome + ' bate com o conteudo atual da pagina',
+         buildAttr + ' vs ' + esperado);
+      ok(/mostraBuild\(\);/.test(pag) && /id="build-selo"/.test(pag),
+         'e aparece na tela do ' + nome + ', e nao so no atributo — quem precisa ' +
+         'dele esta sem saber se a tela e a nova, e nao vai abrir o console');
+    }
 
     /* ══ E A TELA NAO SE CONTRADIZ ═════════════════════════════════════════
      *
