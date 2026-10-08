@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="f0444887e5">
+<html lang="pt-BR" data-build="6934f60004">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -404,6 +404,9 @@
       overflow:hidden; word-break:break-word;
     }
     .kb-devolucao strong { font-weight:700; }
+    /* O qualificador do rotulo: "(fim do dev)" e "(pos-PR)". Sem ele os dois
+       campos se chamam "entrega" e a pessoa escolhe pelo acaso. */
+    .eu-sub { font-weight:400; color:var(--text3); font-size:11px; }
     .kb-pausa { font-size:10.5px; font-weight:700; color:var(--rose-tx,#F2A0DA);
       background:var(--rose-bg,#48123F); border:1px solid var(--rose-bd,#93257F);
       border-radius:5px; padding:1px 6px; }
@@ -1263,6 +1266,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=c07e7b1591"></script>
 <script src="devolucao.js?v=327a41666f"></script>
+<script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
 <body>
 
@@ -2160,11 +2164,22 @@
     <div class="form-row">
       <div class="form-group">
         <label>Data de início</label>
-        <input type="date" id="m-inicio" oninput="atualizaHorasPlanejadas()" />
+        <input type="date" id="m-inicio" oninput="atualizaHorasPlanejadas();entregaUsuRender()" />
       </div>
       <div class="form-group">
-        <label>Data de entrega prevista</label>
-        <input type="date" id="m-entrega" oninput="atualizaHorasPlanejadas()" />
+        <label>Data de entrega prevista <span class="eu-sub">(fim do dev)</span></label>
+        <input type="date" id="m-entrega" oninput="atualizaHorasPlanejadas();entregaUsuRender()" />
+      </div>
+      <!-- A ENTREGA AO USUARIO FICA COLADA NA DO DEV, e nao numa aba a parte: a
+           distancia entre as duas e a propria informacao ("quantos dias a PR
+           custa"), e so se enxerga distancia com as duas a vista. Preenchida
+           depois do PR; enquanto ninguem a preenche, ela HERDA a data do dev
+           para a demanda nao ficar sem resposta. A regra mora em
+           `entrega-usuario.js`. -->
+      <div class="form-group">
+        <label>Entrega ao usuário <span class="eu-sub">(pós-PR)</span></label>
+        <input type="date" id="m-entrega-usuario" oninput="entregaUsuRender()" />
+        <div id="m-entrega-usuario-hint" class="us-hint" style="margin-top:5px"></div>
       </div>
       <!-- O mes de compromisso fica AO LADO da entrega de proposito: a entrega e a
            data prometida, o mes e o ciclo em que a demanda foi combinada. Elas
@@ -5334,6 +5349,50 @@ const MES_NOMES = ['janeiro','fevereiro','março','abril','maio','junho','julho'
 // O select do mes. Doze opcoes em torno do mes corrente: alocar para tres meses a
 // frente e planejamento legitimo, e alocar para tras acontece ao corrigir um
 // registro antigo. Mais que isso vira lista de rolagem infinita sem uso real.
+/* O AVISO DA ENTREGA AO USUARIO.
+ *
+ * Ele responde tres coisas que o campo sozinho nao responde:
+ *
+ *   DE ONDE VEM O VALOR. Enquanto ninguem preenche, vale a data do dev por
+ *   heranca (ver `entrega-usuario.js`). Sem dizer isso, um campo vazio parece
+ *   "sem data" quando ja ha uma valendo — e as proximas a organizar ficam
+ *   indistinguiveis das 279 que so herdaram.
+ *
+ *   QUANTO A PR CUSTA. "Pretendo diminuir os dias da PR" — o numero so existe
+ *   como DISTANCIA entre as duas datas, e e por isso que elas ficam coladas.
+ *
+ *   QUANDO A DATA E IMPOSSIVEL. Entrega ao usuario antes do fim do dev e
+ *   promessa que nao se cumpre. Avisa, e nao bloqueia: ha ajuste em que a data
+ *   do dev e que vai mudar depois.
+ *
+ * Le o FORMULARIO, e nao o objeto gravado: quem digita quer ver a conta mudar
+ * enquanto digita, antes de salvar. */
+function entregaUsuRender(m) {
+  const hint = document.getElementById('m-entrega-usuario-hint');
+  if (!hint || !window.ENTREGAUSU) return;
+  const vivo = {
+    inicio: document.getElementById('m-inicio')?.value || '',
+    entrega: document.getElementById('m-entrega')?.value || '',
+    entrega_usuario: document.getElementById('m-entrega-usuario')?.value || '',
+  };
+  const aviso = ENTREGAUSU.alerta(vivo);
+  if (aviso) { hint.innerHTML = '<span style="color:var(--red-tx,#F5A3A3)">⚠ ' + esc(aviso) + '</span>'; return; }
+  const valor = ENTREGAUSU.data(vivo);
+  if (!valor) {
+    hint.textContent = vivo.entrega
+      ? 'Preencha o início para herdar a data do dev, ou informe a data pós-PR.'
+      : 'Sem data. Ela nasce da planning, junto com início e entrega do dev.';
+    return;
+  }
+  const dias = ENTREGAUSU.diasDePr(vivo);
+  const gap = dias === null ? ''
+    : dias === 0 ? ' · mesmo dia do fim do dev'
+    : ' · ' + dias + ' dia(s) depois do fim do dev';
+  hint.textContent = ENTREGAUSU.herdada(vivo)
+    ? 'Herdada da entrega do dev (' + formatDate(valor) + '). Informe a data pós-PR quando souber.'
+    : 'Entrega ao usuário em ' + formatDate(valor) + gap + '.';
+}
+
 function mesPreencheCampo(m) {
   const sel = document.getElementById('m-mes-alvo');
   const tr = document.getElementById('m-mes-trilha');
@@ -10879,6 +10938,12 @@ function openModalMelhoria(id) {
   document.getElementById('m-data-solicitacao').value= m?.data_solicitacao || '';
   document.getElementById('m-inicio').value          = m?.inicio           || '';
   document.getElementById('m-entrega').value         = m?.entrega          || '';
+  /* SO O VALOR DIGITADO VAI PARA O CAMPO, nunca o herdado. Pondo a heranca
+     aqui, abrir e salvar um card GRAVARIA a data herdada sem ninguem decidir
+     nada — e as 279 que so herdam deixariam de ser distinguiveis das que
+     foram organizadas de verdade. A heranca aparece no aviso ao lado. */
+  document.getElementById('m-entrega-usuario').value = m?.entrega_usuario  || '';
+  entregaUsuRender(m);
   mesPreencheCampo(m);
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
   document.getElementById('m-resumo').value          = m?.resumo_entrega  || '';
@@ -11460,6 +11525,8 @@ async function pausaSalvar(m, msg) {
     toast(msg, 'ok');
     pausaRenderBloco(m);
     document.getElementById('m-entrega') && (document.getElementById('m-entrega').value = m.entrega || '');
+    document.getElementById('m-entrega-usuario') && (document.getElementById('m-entrega-usuario').value = m.entrega_usuario || '');
+    entregaUsuRender(m);
     renderAll();
   } else avisaFalha('Não foi possível salvar. A alteração continua pendente.');
 }
@@ -11565,6 +11632,9 @@ async function saveMelhoria() {
     data_solicitacao:    document.getElementById('m-data-solicitacao').value,
     inicio:              document.getElementById('m-inicio').value,
     entrega:             document.getElementById('m-entrega').value,
+    // Data em que o usuario recebe, pos-PR. Aditiva: nenhuma conta de prazo,
+    // atraso, mes ou capacidade a le. Ver `entrega-usuario.js`.
+    entrega_usuario:     document.getElementById('m-entrega-usuario').value,
     // Manda a INTENCAO. Quem escreve a trilha (`meses`) e o Worker: se a tela
     // escrevesse, bastaria uma aba desatualizada para apagar o passado de uma
     // demanda — e o passado e o unico lugar onde o transbordo mora.

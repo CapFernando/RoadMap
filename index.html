@@ -340,6 +340,7 @@
 <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="anexo-tipos.js?v=70df77eaa0"></script>
+<script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
 <body>
 
@@ -743,7 +744,18 @@ function metaHTML(m) {
              + (motivo ? ` — ${fEsc(motivo)}` : ''));
   }
   if (m.inicio)  items.push(`${svgIcon('calendar')} Início: ${formatDate(m.inicio)}`);
-  if (m.entrega) items.push(`${svgIcon('calendar')} Entrega: ${formatDate(m.entrega)}`);
+  /* A ENTREGA AQUI E A DE QUEM PEDIU, e nao a do dev.
+     Este painel e de consulta: a pergunta de quem o abre e "quando eu recebo?",
+     e a resposta certa e a data POS-PR. A do dev e marco interno — ela nao
+     inclui code review, merge e deploy.
+     NADA SOME HOJE: enquanto ninguem informa a data pos-PR, `aMostrar` devolve a
+     propria entrega do dev, que e o que esta linha ja mostrava. O rotulo e que
+     muda junto com o numero — dizer "ao usuario" exibindo a data do dev seria
+     prometer uma coisa com o numero de outra. Ver `entrega-usuario.js`. */
+  const dEnt = window.ENTREGAUSU ? ENTREGAUSU.aMostrar(m) : (m.entrega || '');
+  if (dEnt) items.push(`${svgIcon('calendar')} ` +
+    (window.ENTREGAUSU && ENTREGAUSU.ehDoUsuario(m) ? 'Entrega ao usuário: ' : 'Entrega: ') +
+    formatDate(dEnt));
   if (m.estimativa) items.push(`${svgIcon('clock')} Estimativa: ${fEsc(m.estimativa)}`);
   if (!items.length) return '';
   return `<div class="melhoria-meta">${items.map(i => `<span class="meta-item">${i}</span>`).join('')}</div>`;
@@ -1615,7 +1627,11 @@ function buildReportHTML() {
       const badge = `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:${bm.bg};color:${bm.color};white-space:nowrap;">${bm.label}</span>`;
       const meta = [];
       if (m.inicio)  meta.push(`📅 Início: ${formatDate(m.inicio)}`);
-      if (m.entrega) meta.push(`🏁 Entrega: ${formatDate(m.entrega)}`);
+      // MESMA REGRA DA TELA: papel que diverge do painel vira duas verdades.
+      const dEntP = window.ENTREGAUSU ? ENTREGAUSU.aMostrar(m) : (m.entrega || '');
+      if (dEntP) meta.push(`🏁 ` +
+        (window.ENTREGAUSU && ENTREGAUSU.ehDoUsuario(m) ? 'Entrega ao usuário: ' : 'Entrega: ') +
+        formatDate(dEntP));
       if (m.estimativa) meta.push(`⏱ ${fEsc(m.estimativa)}`);
       return `<div style="background:#1E1E1C;border:1px solid #2E2E2B;border-radius:8px;padding:12px 14px;margin-bottom:8px;">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:${meta.length?'6px':'0'};">

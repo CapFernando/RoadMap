@@ -2917,9 +2917,18 @@ ok((INDEX.match(/temaCasaRaiz\(m\)/g) || []).length >= 2,
   /* O MOTIVO E VISIVEL, e nao um segredo de quem tem mouse. No admin ele mora no
      `title` do selo; em telefone nao existe hover, e e no telefone que este
      painel e lido. */
+  /* `window` VAI NO HARNESS. `metaHTML` passou a consultar `window.ENTREGAUSU`
+     para a linha de entrega, e sem ele o recorte estourava com "Cannot read
+     properties of undefined" — a invariante das pausadas morria por causa de uma
+     mudanca que nao era dela. Vai o modulo de verdade, e nao um boneco. */
   const mh = corpo(INDEX, 'function metaHTML(');
-  const g = new Function('ETAPA', 'svgIcon', 'formatDate', 'fEsc',
-    mh + '; return metaHTML;')(EP, () => '', (s) => String(s),
+  /* OS DOIS NOMES: no navegador `window.ENTREGAUSU` tambem cria o global solto,
+     e a tela guarda com `window.X` e chama `X`. O harness nao tem esse espelho,
+     entao recebe os dois — e e o modulo de verdade nos dois. */
+  const _EUm = require('./entrega-usuario.js');
+  const g = new Function('window', 'ENTREGAUSU', 'ETAPA', 'svgIcon', 'formatDate', 'fEsc',
+    mh + '; return metaHTML;')({ ENTREGAUSU: _EUm }, _EUm,
+    EP, () => '', (s) => String(s),
     (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'));
   const comMotivo = g({ pausado_em: '2026-08-04', pausa_motivo: 'aguardando fornecedor',
                         inicio: '2026-07-01' });
@@ -10039,6 +10048,149 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   for (const [nome, txt] of [['gantt', GANTT], ['admin', ADMIN], ['dev', lerTela('dev.html')]]) {
     ok(txt.indexOf('SELO.badge(') > 0, 'o ' + nome + ' desenha a marca pela regra unica');
     ok(txt.indexOf('selo-validacao.js') > 0, 'e carrega o arquivo dela');
+  }
+
+  sec('A entrega ao usuario \u2014 a segunda data, pos-PR');
+  /* "Vou precisar de um novo campo de data de entrega para o usuario, que sera
+      pos-PR... Tudo que ja tem data de inicio e fim preenchida, considerar a
+      data fim para essa nova data de entrega."
+     Duas datas diferentes: `entrega` e quando o DEV termina e e lida em ~190
+     lugares; `entrega_usuario` e quando quem PEDIU recebe. O campo novo e
+     ADITIVO \u2014 nenhuma conta de prazo, atraso, mes ou capacidade pode passar a
+     le-lo, ou todo relatorio ja apresentado mudaria de numero. */
+  {
+    const EU = require('./entrega-usuario.js');
+    const d = (i, e, u) => ({ inicio: i, entrega: e, entrega_usuario: u });
+
+    /* A HERANCA \u2014 a regra que faz as 279 ja planejadas terem resposta hoje. */
+    ok(EU.data(d('2026-09-01', '2026-09-20', '')) === '2026-09-20',
+       'planejada e sem data do usuario: herda a entrega do dev');
+    ok(EU.herdada(d('2026-09-01', '2026-09-20', '')),
+       'e ela se declara HERDADA \u2014 e o que separa "falta organizar" de "organizei"');
+    ok(EU.data(d('2026-09-01', '2026-09-20', '2026-09-25')) === '2026-09-25',
+       'a data digitada ganha da herdada');
+    ok(!EU.herdada(d('2026-09-01', '2026-09-20', '2026-09-25')),
+       'e nesse caso ela nao e herdada');
+
+    /* SO HERDA QUEM TEM AS DUAS DATAS. Literal ao pedido: ter as duas e o sinal
+       de que a demanda passou pelo planejamento. Sao 11 demandas com entrega e
+       sem inicio na base, e elas nao herdam. */
+    ok(EU.data(d('', '2026-09-20', '')) === '',
+       'so entrega, sem inicio: NAO herda \u2014 nao passou pelo planejamento');
+    ok(EU.data(d('2026-09-01', '', '')) === '', 'so inicio: nao ha o que herdar');
+    ok(EU.data(d('', '', '')) === '' && EU.data(null) === '' && EU.data({}) === '',
+       'sem datas, sem resposta');
+    ok(EU.data(d('', '', '2026-09-25')) === '2026-09-25',
+       'mas a digitada vale sozinha, sem depender de planejamento');
+
+    /* OS DIAS DA PR \u2014 o numero que se quer encurtar. */
+    ok(EU.diasDePr(d('2026-09-01', '2026-09-20', '2026-09-25')) === 5, 'cinco dias de PR');
+    ok(EU.diasDePr(d('2026-09-01', '2026-09-20', '2026-09-20')) === 0,
+       'mesmo dia e ZERO, e nao null \u2014 zero espera e uma resposta');
+    ok(EU.diasDePr(d('2026-09-01', '2026-09-20', '')) === 0,
+       'a herdada tem zero dias por construcao: ela E a data do dev');
+    ok(EU.diasDePr(d('', '', '')) === null,
+       'sem as duas datas devolve null \u2014 0 diria "nao ha espera", que e outra coisa');
+    ok(EU.diasDePr(d('2026-12-28', '2026-12-28', '2027-01-04')) === 7,
+       'e a conta atravessa a virada do ano');
+
+    /* A PROMESSA IMPOSSIVEL avisa, e nao bloqueia. */
+    ok(/ANTES do fim/.test(EU.alerta(d('2026-09-01', '2026-09-20', '2026-09-15'))),
+       'entrega ao usuario antes do fim do dev e avisada');
+    ok(EU.alerta(d('2026-09-01', '2026-09-20', '2026-09-25')) === '' &&
+       EU.alerta(d('2026-09-01', '2026-09-20', '2026-09-20')) === '',
+       'igual ou depois nao avisa nada');
+    /* A HERDADA NUNCA AVISA, e nao por um `if` que diga isso: ela E a data do
+       dev, entao a distancia e zero. Varrido em vez de afirmado \u2014 era o que
+       faltava para a suite perceber que o guarda antigo era inalcancavel. */
+    let herdadaNegativa = null;
+    for (let i = -400; i <= 400 && !herdadaNegativa; i++) {
+      const dt = new Date(Date.UTC(2026, 8, 20) + i * 86400000).toISOString().slice(0, 10);
+      for (const ini of ['', '2026-01-01', dt]) {
+        const mm = { inicio: ini, entrega: dt, entrega_usuario: '' };
+        const dd = EU.diasDePr(mm);
+        if (dd !== null && dd < 0) { herdadaNegativa = JSON.stringify(mm); break; }
+        if (EU.alerta(mm) !== '') { herdadaNegativa = 'avisou: ' + JSON.stringify(mm); break; }
+      }
+    }
+    ok(!herdadaNegativa,
+       'nenhuma herdada avisa, em 801 datas x 3 formas de inicio', herdadaNegativa || '');
+
+    /* `planejada` E TESTADA DIRETO. Ela so muda o resultado de `data()` em casos
+       que ja dao vazio pelos dois caminhos, entao uma sabotagem nela passava
+       invisivel atraves de `data()` \u2014 foi o que aconteceu. */
+    ok(EU.planejada(d('2026-09-01', '2026-09-20', '')), 'as duas datas: passou pelo planejamento');
+    ok(!EU.planejada(d('2026-09-01', '', '')), 'so inicio NAO e planejada');
+    ok(!EU.planejada(d('', '2026-09-20', '')), 'so entrega NAO e planejada \u2014 sao as 11 da base');
+    ok(!EU.planejada(d('', '', '')) && !EU.planejada({}) && !EU.planejada(null),
+       'e sem datas, tambem nao');
+    ok(!EU.planejada({ inicio: 'ontem', entrega: '2026-09-20' }),
+       'data que nao e data nao conta como planejamento');
+
+    /* ADITIVO: as contas de prazo seguem lendo `entrega`, e so ela. Se alguma
+       passar a ler o campo novo, todo numero ja apresentado muda. */
+    const PZ = require('./prazo.js');
+    ok(!lerTela('prazo.js').includes('entrega_usuario'),
+       'prazo.js NAO conhece a entrega ao usuario \u2014 o campo e aditivo');
+    ok(!lerTela('capacidade.js').includes('entrega_usuario'),
+       'capacidade.js tambem nao');
+    const base = { inicio: '2026-09-01', entrega: '2026-09-20', status_planejamento: 'em_andamento' };
+    const comUsu = Object.assign({}, base, { entrega_usuario: '2027-01-01' });
+    ok(PZ.diasDeAtraso(base, '2026-10-01') === PZ.diasDeAtraso(comUsu, '2026-10-01'),
+       'e o atraso nao muda ao preencher a data do usuario', String(PZ.diasDeAtraso(comUsu, '2026-10-01')));
+    ok(PZ.prazoEfetivo(base, '2026-10-01') === PZ.prazoEfetivo(comUsu, '2026-10-01'),
+       'nem o prazo efetivo');
+
+    /* ── O PAINEL PUBLICO ──────────────────────────────────────────────
+       "Essa nova data devera aparecer no dash publico de consulta."
+
+       Quem abre aquele painel pergunta "quando eu recebo?", e a resposta certa
+       e a pos-PR. Mas a regra de EXIBICAO nao e a do planejamento: `data()`
+       exige inicio E entrega para herdar, e medido na base ha 11 demandas com
+       entrega e sem inicio — usar a regra estrita la as deixaria SEM DATA
+       NENHUMA, trocando um rotulo impreciso por uma regressao. */
+    ok(EU.aMostrar(d('', '2026-09-20', '')) === '2026-09-20',
+       'o painel nao perde a data das 11 que tem entrega sem inicio');
+    ok(EU.aMostrar(d('2026-09-01', '2026-09-20', '2026-09-25')) === '2026-09-25',
+       'e mostra a pos-PR quando ela existe');
+    ok(EU.aMostrar(d('2026-09-01', '2026-09-20', '')) === '2026-09-20',
+       'enquanto ninguem informa, mostra o que ja mostrava — nada muda hoje');
+    ok(EU.aMostrar(d('', '', '')) === '', 'e sem data nenhuma, nada');
+    /* O ROTULO ANDA COM O NUMERO. Dizer "ao usuario" exibindo a data do dev
+       seria prometer uma coisa com o numero de outra. */
+    ok(EU.ehDoUsuario(d('2026-09-01', '2026-09-20', '2026-09-25')) &&
+       !EU.ehDoUsuario(d('2026-09-01', '2026-09-20', '')),
+       'e o rotulo so diz "ao usuario" quando o numero e mesmo dele');
+    ok(/<script src="entrega-usuario\.js\?v=/.test(INDEX), 'o painel publico carrega a regra');
+    const mh = corpo(INDEX, 'function metaHTML(');
+    ok(/ENTREGAUSU\.aMostrar\(m\)/.test(mh) && !/formatDate\(m\.entrega\)/.test(mh),
+       'e a linha de entrega passa pela regra, sem ler `m.entrega` direto', mh.slice(0, 0));
+    ok(/ENTREGAUSU\.ehDoUsuario\(m\)/.test(mh), 'e escolhe o rotulo pelo que esta na mao');
+    /* O PAPEL NAO PODE DIVERGIR DA TELA: duas verdades sobre a mesma demanda. */
+    ok((INDEX.match(/ENTREGAUSU\.aMostrar\(m\)/g) || []).length >= 2,
+       'e a versao de impressao usa a mesma regra');
+    /* E O PUBLICO NAO GANHA UMA SEGUNDA LINHA DE DATA: a do dev e marco interno,
+       e repeti-la ao lado so ensinaria a ignorar as duas. */
+    ok(!/Entrega do dev|Fim do dev/.test(INDEX),
+       'o painel publico nao expoe a data interna do dev');
+
+    /* A TELA: campo, gravacao e o aviso que diz de onde vem o valor. */
+    ok(/<input type="date" id="m-entrega-usuario"/.test(ADMIN), 'o formulario tem o campo');
+    ok(/entrega_usuario:\s*document\.getElementById\('m-entrega-usuario'\)\.value/.test(ADMIN),
+       'e ele e GRAVADO \u2014 sem isto a pessoa digita e perde ao salvar');
+    ok(/<script src="entrega-usuario\.js\?v=/.test(ADMIN),
+       'e a tela carrega a regra, pela tag');
+    /* O CAMPO RECEBE SO O DIGITADO. Pondo a heranca no input, abrir e salvar um
+       card gravaria a data herdada sem ninguem decidir nada, e as 279 que so
+       herdam deixariam de ser distinguiveis das organizadas de verdade. */
+    ok(/getElementById\('m-entrega-usuario'\)\.value = m\?\.entrega_usuario\s*\|\| ''/.test(ADMIN),
+       'o input recebe o valor DIGITADO, nunca o herdado');
+    const rend = corpo(ADMIN, 'function entregaUsuRender(');
+    ok(/ENTREGAUSU\.herdada\(/.test(rend) && /Herdada da entrega do dev/.test(rend),
+       'e o aviso diz quando o valor e herdado');
+    ok(/ENTREGAUSU\.diasDePr\(/.test(rend), 'e mostra os dias de PR, que e o que se quer encurtar');
+    ok(/getElementById\('m-entrega'\)\?\.value/.test(rend),
+       'lendo o FORMULARIO: a conta tem de mudar enquanto se digita, antes de salvar');
   }
 
   sec('A devolucao do PM/PO \u2014 o motivo tem de aparecer sem abrir o card');
