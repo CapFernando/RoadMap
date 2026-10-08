@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="8de37bfdf5">
+<html lang="pt-BR" data-build="a8762cc8e8">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -523,7 +523,7 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
-  <script src="anexo-tipos.js?v=70df77eaa0"></script>
+  <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="prevoo.js?v=b86be156b3"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
@@ -1017,7 +1017,7 @@
     <!-- Anexos: incluir arquivo direto do card, para explicar melhor a demanda -->
     <div class="form-group">
       <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
-      <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" id="ms-file" multiple onchange="msAddFiles(this.files)"
+      <input type="file" data-anexo-accept id="ms-file" multiple onchange="msAddFiles(this.files)"
              style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:inherit" />
       <div id="ms-anexos-edit" style="display:grid;gap:6px;margin-top:8px"></div>
     </div>
@@ -1061,7 +1061,7 @@
          duas mecanicas no mesmo campo anexariam o arquivo duas vezes. -->
     <div class="form-group">
       <label>Imagens e PDF <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada · PDF, JPEG, PNG)</small></label>
-      <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+      <input type="file" data-anexo-accept
              id="n-file" multiple onchange="nAddFiles(this.files)" />
       <div id="n-anexos" style="display:grid;gap:6px;margin-top:8px"></div>
     </div>

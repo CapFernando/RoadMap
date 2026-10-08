@@ -60,6 +60,25 @@
     'md':   'text/markdown',
     'json': 'application/json',
     'zip':  'application/zip',
+    /* HTML, PARA O DEV ANEXAR ESTUDO E SPIKE.
+     *
+     * Ele entra EXATAMENTE como o `svg` entrou, e pelo mesmo motivo: o perigo
+     * do HTML nunca foi o formato, foi o modo de abrir. O comentário no topo
+     * deste arquivo já o nomeia — "um `.svg` ou um `.html` anexado executaria
+     * script dentro do Admin, com acesso à sessão de quem abriu". Era verdade
+     * quando a defesa era a lista curta; deixou de ser quando a defesa virou o
+     * `entrega`, que embrulha tudo que não é INLINE em `octet-stream` e baixa.
+     *
+     * NUNCA MOVER PARA `INLINE`. Um `.html` aberto em aba a partir de um `blob:`
+     * roda script na origem de quem abriu — e um estudo de spike costuma vir de
+     * uma ferramenta de fora, que é justamente o arquivo em que ninguém olhou o
+     * conteúdo. Baixado, ele abre no navegador como arquivo local, fora da
+     * origem do painel, e lá não alcança sessão nenhuma.
+     *
+     * `htm` vai junto: é o mesmo formato, e aceitar um e recusar o outro faria a
+     * recusa parecer defeito. */
+    'html': 'text/html',
+    'htm':  'text/html',
   };
 
   function ext(nome) {
@@ -96,6 +115,21 @@
     // 'jpg' e 'jpeg' sao o mesmo formato para quem le.
     return todas.filter(function (x) { return x !== 'jpeg'; }).sort();
   }
+  /** O `accept` DO SELETOR DE ARQUIVO, saído da mesma lista.
+   *
+   *  Ele estava escrito à mão em cinco telas, e tinha ficado para trás: dizia
+   *  `.pdf,.jpg,.jpeg,.png` muito depois de excalidraw, docx e zip passarem a
+   *  ser aceitos. A regra abriu e o seletor não — quem fosse anexar um
+   *  `.excalidraw` via o arquivo cinza na janela e concluía que não dava, sem
+   *  nunca chegar à mensagem que explicaria.
+   *
+   *  Escrito à mão, isso acontece de novo no próximo formato. Daqui, não. */
+  function aceita() {
+    return lista().map(function (e) { return '.' + e; })
+      .concat(['.jpeg'])   // par de `.jpg`, tirado de `lista()` por ser o mesmo formato
+      .join(',');
+  }
+
   function recusa(nome) {
     return '"' + (nome || 'arquivo') + '" não foi anexado. Aceitamos: ' +
            lista().join(', ') + '.';
@@ -138,8 +172,28 @@
   }
 
   var api = { INLINE: INLINE, BAIXA: BAIXA, ext: ext, permitido: permitido,
-              tipoDe: tipoDe, abreNaTela: abreNaTela, lista: lista, recusa: recusa,
+              tipoDe: tipoDe, abreNaTela: abreNaTela, lista: lista, aceita: aceita, recusa: recusa,
               entrega: entrega };
+
+  /* E O PROPRIO MODULO PREENCHE OS SELETORES. Qualquer `<input type="file">`
+     marcado com `data-anexo-accept` recebe a lista ao carregar a pagina. Sem
+     isto, cada tela teria de lembrar de chamar `aceita()` — e lembrar em cinco
+     lugares e exatamente o que fez a lista antiga ficar para tras.
+
+     `DOMContentLoaded` ja passou? Entao o HTML ja esta de pe e preenche na
+     hora: este arquivo pode ser carregado depois do corpo da pagina. */
+  function ligaSeletores(doc) {
+    if (!doc || !doc.querySelectorAll) return 0;
+    var ns = doc.querySelectorAll('input[type="file"][data-anexo-accept]');
+    for (var i = 0; i < ns.length; i++) ns[i].setAttribute('accept', aceita());
+    return ns.length;
+  }
+  api.ligaSeletores = ligaSeletores;
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () { ligaSeletores(document); });
+    } else { ligaSeletores(document); }
+  }
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.ANEXOTIPO = api;

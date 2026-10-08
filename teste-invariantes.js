@@ -17550,10 +17550,137 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'excalidraw e drawio entram — nao tem tipo registrado e eram recusados antes');
     ok(AT.tipoDe('a.excalidraw') === 'application/json',
        'e o tipo guardado sai do mapa daqui, e nao do cliente', AT.tipoDe('a.excalidraw'));
-    ok(!AT.permitido('pagina.html') && !AT.permitido('x.js') &&
-       !AT.permitido('x.exe') && !AT.permitido('sem-extensao'),
-       'html, js, exe e arquivo sem extensao continuam fora');
+    ok(!AT.permitido('x.js') && !AT.permitido('x.exe') && !AT.permitido('sem-extensao'),
+       'js, exe e arquivo sem extensao continuam fora');
     ok(AT.permitido('DESENHO.EXCALIDRAW'), 'e maiuscula nao muda nada');
+
+    /* ══ O HTML ENTROU, E ENTROU COMO O SVG ══════════════════════════════
+     * "No anexo, permitir arquivos com extensao html (para o dev anexar
+     *  estudos / spike)."
+     *
+     * Esta invariante dizia o contrario — "html continua fora" — e dizia certo
+     * enquanto a defesa era a lista curta. Deixou de dizer quando a defesa virou
+     * o modo de abrir: o `entrega` embrulha tudo que nao e INLINE em
+     * `octet-stream` e baixa, e arquivo baixado nao roda na origem de ninguem.
+     *
+     * O QUE NAO PODE MUDAR e que ele BAIXE. Um `.html` aberto em aba a partir de
+     * um `blob:` executa script na origem de quem abriu, com a sessao junto — e
+     * estudo de spike costuma vir de ferramenta de fora, que e justamente o
+     * arquivo em que ninguem leu o conteudo. */
+    ok(AT.permitido('estudo.html') && AT.permitido('spike.htm'),
+       'html e htm entram, para o dev anexar estudo e spike');
+    ok(AT.tipoDe('estudo.html') === 'text/html' && AT.tipoDe('x.htm') === 'text/html',
+       'com o tipo saindo do mapa daqui');
+    ok(!AT.abreNaTela('text/html'),
+       'E NUNCA ABRE NA TELA — e o unico ponto que torna isto seguro');
+    ok(!AT.INLINE['html'] && !AT.INLINE['htm'] && !!AT.BAIXA['html'] && !!AT.BAIXA['htm'],
+       'ele mora em BAIXA, ao lado do svg, e nao em INLINE');
+
+    /* RODANDO A ENTREGA com um HTML que tenta executar: o que importa nao e
+       onde o nome esta escrito, e o que acontece com o arquivo. */
+    {
+      let abriu = null, baixouComo = null, tipoEntregue = null;
+      const elo = { click() {}, remove() {}, style: {} };
+      Object.defineProperty(elo, 'download', { set(v) { baixouComo = v; } });
+      const doc = { createElement: () => elo,
+                    body: { appendChild() {}, removeChild() {} } };
+      const janela = {
+        open: (u) => { abriu = u; return {}; },
+        URL: { createObjectURL: (b) => { tipoEntregue = b && b.type; return 'blob:x'; },
+               revokeObjectURL() {} },
+        Blob: function (p, o) { this.type = (o || {}).type; },
+        document: doc, setTimeout: () => {},
+      };
+      const antesDoc = global.document;
+      global.document = doc;
+      const mau = new janela.Blob(['<script>roubar(document.cookie)<' + '/script>'],
+                                  { type: 'text/html' });
+      const r = AT.entrega(mau, 'estudo.html', 'text/html', janela);
+      global.document = antesDoc;
+      ok(r === 'baixou' && abriu === null,
+         'um .html com script dentro BAIXA, e nao abre em aba', r + ' / abriu=' + abriu);
+      ok(tipoEntregue === 'application/octet-stream',
+         'e sai como octet-stream, para o navegador nao renderizar nem por engano',
+         String(tipoEntregue));
+      ok(baixouComo === 'estudo.html', 'com o nome que a pessoa reconhece');
+    }
+
+    /* O SERVIDOR NAO PODE MANDA-LO INLINE. A tela e uma camada; quem chega
+       direto no endereco do anexo recebe o que o Worker disser. */
+    const NATELA = (W.match(/const NA_TELA = \[([^\]]*)\]/) || [, ''])[1];
+    ok(!/text\/html/.test(NATELA),
+       'e `NA_TELA` do Worker nao tem text/html — senao ele voltaria inline', NATELA);
+    ok(/nosniff/.test(W), 'e o navegador nao adivinha o tipo por conta propria');
+
+    /* ══ O `accept` DO SELETOR SAI DA MESMA LISTA ════════════════════════
+     * Ele estava escrito a mao em cinco telas e tinha ficado para tras: dizia
+     * `.pdf,.jpg,.jpeg,.png` muito depois de excalidraw, docx e zip entrarem. A
+     * regra abria e o seletor nao — quem fosse anexar via o arquivo cinza na
+     * janela e concluia que nao dava, sem chegar a mensagem que explicaria. */
+    const acc = AT.aceita();
+    ok(/\.html/.test(acc) && /\.excalidraw/.test(acc) && /\.zip/.test(acc) && /\.jpeg/.test(acc),
+       'o accept cobre tudo que a lista aceita, inclusive o que entrou depois', acc);
+    ok(AT.lista().every(e => acc.includes('.' + e)),
+       'e nenhuma extensao da lista fica de fora do seletor');
+    const fixos = TELAS.filter(([, t]) => /accept="\.pdf,\.jpg/.test(t));
+    ok(fixos.length === 0,
+       'nenhuma tela escreve o accept a mao — foi assim que ele ficou para tras',
+       fixos.map(f => f[0]).join(', ') || 'todas marcadas com data-anexo-accept');
+    const comMarca = TELAS.filter(([, t]) => /data-anexo-accept/.test(t));
+    ok(comMarca.length >= 4,
+       'e as telas que anexam marcam o seletor para o modulo preencher',
+       comMarca.map(c => c[0]).join(', '));
+    /* RODANDO O MODULO CONTRA UM DOCUMENTO DE MENTIRA, nos DOIS estados de
+       carga. `/DOMContentLoaded/` no texto nao prova nada: a sabotagem que
+       apagou o ramo do `else` — o que vale quando o script carrega DEPOIS do
+       corpo da pagina, que e o caso real aqui — deixou a string intacta. */
+    for (const estado of ['loading', 'complete']) {
+      const campos = [{ marcado: true, attrs: {} }, { marcado: true, attrs: {} },
+                      { marcado: false, attrs: {} }];
+      const el = (c) => ({
+        hasAttribute: (a) => a === 'data-anexo-accept' ? c.marcado : false,
+        setAttribute: (a, v) => { c.attrs[a] = v; },
+        getAttribute: (a) => c.attrs[a] || null,
+      });
+      let pendente = null;
+      const docF = {
+        readyState: estado,
+        querySelectorAll: (sel) => /data-anexo-accept/.test(sel)
+          ? campos.filter(c => c.marcado).map(el) : [],
+        addEventListener: (ev, fn) => { if (ev === 'DOMContentLoaded') pendente = fn; },
+      };
+      const win = {};
+      new Function('window', 'document', 'module', ATJS)(win, docF, undefined);
+      if (estado === 'loading') {
+        ok(typeof pendente === 'function',
+           'com a pagina ainda carregando, o modulo espera o DOM');
+        ok(!campos[0].attrs.accept, 'e nao preenche antes da hora');
+        pendente();
+      }
+      ok(/\.html/.test(campos[0].attrs.accept || '') &&
+         /\.excalidraw/.test(campos[1].attrs.accept || ''),
+         'o modulo PREENCHE os seletores marcados (readyState=' + estado + ')',
+         String(campos[0].attrs.accept).slice(0, 40));
+      ok(!campos[2].attrs.accept, 'e nao mexe em input que nao foi marcado');
+    }
+
+    /* A DIVERGENCIA NOS DOIS SENTIDOS. A conferencia que ja existia varria as
+       chaves do WORKER contra o modulo — tirar uma do Worker nao deixava chave
+       para comparar, e a sabotagem que recusava no servidor o que a tela aceita
+       passou limpa. Agora o modulo tambem e varrido contra o Worker. */
+    const _rotaSub = W.slice(W.indexOf("if (body.action === 'anexo-subir') {"));
+    const _soSubir = _rotaSub.slice(0, _rotaSub.indexOf("if (body.action === 'anexo-baixar')"));
+    const faltamNoWorker = AT.lista().filter(e => !new RegExp('\\b' + e + ":\\s*'").test(_soSubir));
+    ok(faltamNoWorker.length === 0,
+       'tudo que a tela aceita, o servidor tambem aceita',
+       faltamNoWorker.join(', ') || 'nenhuma extensao so na tela');
+
+    /* O TIPO SAI DA EXTENSAO, E SO DELA. Uma assinatura que recebesse o tipo do
+       cliente abriria de volta a porta que este arquivo fechou: quem envia
+       escolheria como o arquivo volta. */
+    ok(AT.tipoDe.length === 1,
+       'tipoDe recebe so o nome — nenhum caminho para o cliente dizer o tipo',
+       'aridade=' + AT.tipoDe.length);
 
     /* ══ UMA LISTA SO, E NAO UMA POR TELA ══
      * Ela estava escrita em QUATRO paginas, identica — e lista de formato e

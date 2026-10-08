@@ -3268,6 +3268,14 @@ export default {
         pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         csv: 'text/csv', txt: 'text/plain', md: 'text/markdown',
         json: 'application/json', zip: 'application/zip',
+        /* HTML para estudo e spike do dev. Entra como o `svg`: o perigo nunca
+           foi o formato, foi o modo de abrir. Esta rota marca
+           `Content-Disposition: attachment` para tudo que nao esta em
+           `NA_TELA`, mais `nosniff` — entao ele baixa, e arquivo baixado nao
+           roda na origem de ninguem. NUNCA ACRESCENTAR 'text/html' A `NA_TELA`.
+           Duplicado de `anexo-tipos.js` de proposito: o Worker nao importa
+           nada, e a invariante roda as duas listas lado a lado. */
+        html: 'text/html', htm: 'text/html',
       };
       const extA = (/\.([A-Za-z0-9]+)$/.exec(nomeAnexo) || [, ''])[1].toLowerCase();
       const tipo = ANEXO_INLINE[extA] || ANEXO_BAIXA[extA] || '';

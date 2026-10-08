@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a9a6ebb23b">
+<html lang="pt-BR" data-build="a796c91088">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1241,7 +1241,7 @@
   <script src="subtarefa.js?v=81d990c6e3"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
-  <script src="anexo-tipos.js?v=70df77eaa0"></script>
+  <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="prevoo.js?v=b86be156b3"></script>
   <script src="deck-grafico.js?v=30e803d757"></script>
   <script src="deck-fundo.js?v=050a7db483"></script>
@@ -2302,7 +2302,7 @@
       <!-- Anexos: incluir arquivo direto do card, para facilitar a explicação -->
       <div class="form-group">
         <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
-        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" id="m-file" multiple onchange="mAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
+        <input type="file" data-anexo-accept id="m-file" multiple onchange="mAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
         <div id="m-anexos-edit" style="display:grid;gap:6px;margin-top:8px"></div>
       </div>
     </div>
@@ -2430,7 +2430,7 @@
       </div>
       <div class="form-group">
         <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
-        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" id="pj-file" multiple onchange="pjAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
+        <input type="file" data-anexo-accept id="pj-file" multiple onchange="pjAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
         <div id="pj-anexos" style="display:grid;gap:6px;margin-top:8px"></div>
       </div>
       <div class="form-actions">

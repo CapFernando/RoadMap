@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="f2c377aad2">
+<html lang="pt-BR" data-build="ff6294743b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -346,7 +346,7 @@
   <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
-<script src="anexo-tipos.js?v=70df77eaa0"></script>
+<script src="anexo-tipos.js?v=f38cdc110c"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
 <body>
@@ -605,7 +605,7 @@
         <label class="nm-f">Print, planilha ou documento que ajude a explicar <span class="nm-opc">opcional</span>
           <small style="font-weight:400;color:var(--text2,#A8A49A);display:block;margin-top:2px">
             Um print da tela costuma explicar melhor que texto. Até 1,5 MB cada.</small>
-          <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" id="nm-file" multiple onchange="nmAddFiles(this.files)" style="padding:8px;background:var(--bg,#0E0E0D);">
+          <input type="file" data-anexo-accept id="nm-file" multiple onchange="nmAddFiles(this.files)" style="padding:8px;background:var(--bg,#0E0E0D);">
         </label>
         <div id="nm-anexos" style="display:grid;gap:8px"></div>
       </section>
