@@ -611,6 +611,11 @@
     .gantt-cards-layer {
       position: absolute; top: 0; left: 0; right: 0; bottom: 0;
     }
+    /* O qualificador do rotulo e o aviso da entrega ao usuario. Sem o "(fim do
+       dev)" e o "(pos-PR)", os dois campos se chamam quase a mesma coisa e a
+       pessoa escolhe pelo acaso. */
+    .eu-sub { font-weight:400; color:var(--text3); font-size:11px; }
+    .eu-hint { font-size:11px; color:var(--text3); line-height:1.45; margin-top:5px; }
     .gantt-card {
       position: absolute; border-radius: 6px; border: 1px solid;
       overflow: hidden; cursor: pointer; pointer-events: all; z-index: 5;
@@ -1084,6 +1089,7 @@
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=c07e7b1591"></script>
+<script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
 <body>
 
@@ -1325,9 +1331,20 @@
         <input type="date" id="e-inicio" oninput="atualizaHorasPlanGantt(); atualizaSprintCampo()" />
       </div>
       <div class="form-group">
-        <label>Data fim</label>
-        <input type="date" id="e-fim" oninput="atualizaHorasPlanGantt(); atualizaSprintCampo()" />
+        <label>Data fim <span class="eu-sub">(fim do dev)</span></label>
+        <input type="date" id="e-fim" oninput="atualizaHorasPlanGantt(); atualizaSprintCampo(); gEntregaUsuRender()" />
       </div>
+    </div>
+    <!-- A ENTREGA AO USUARIO FICA COLADA NAS DUAS DATAS DA PLANNING. E aqui que o
+         planejamento acontece: aloca o dev, poe inicio e fim. A terceira data e a
+         que se promete para fora do time, depois do PR, e a distancia ate a do dev
+         e o que se quer encurtar — so se enxerga distancia com as duas a vista.
+         Enquanto ninguem a preenche, ela HERDA a data fim. Regra em
+         `entrega-usuario.js`, a mesma do Admin. -->
+    <div class="form-group">
+      <label>Entrega ao usuário <span class="eu-sub">(pós-PR)</span></label>
+      <input type="date" id="e-entrega-usuario" oninput="gEntregaUsuRender()" />
+      <div id="e-entrega-usuario-hint" class="eu-hint"></div>
     </div>
     <!-- Logo abaixo das datas de proposito: e a data fim que a pausa esconde e
          depois empurra. Longe delas, ninguem liga uma coisa a outra. -->
@@ -2772,6 +2789,47 @@ function sprintDeData(dataStr) {
 // campo vazio no relatorio.
 // Espelha o campo enquanto a pessoa mexe nas datas, sem esperar o salvamento:
 // ver a sprint mudar e o que ensina a regra sem precisar de texto explicando.
+/* O AVISO DA ENTREGA AO USUARIO — gemeo do `entregaUsuRender` do Admin.
+ *
+ * As duas telas desenham, porque nas duas se planeja: o Admin pelo card, o
+ * Planejamento pelo calendario. A REGRA e uma so (`entrega-usuario.js`) — o que
+ * se repete aqui e o desenho, com os ids desta tela.
+ *
+ * Responde tres coisas que o campo sozinho nao responde: de onde vem o valor
+ * (digitado ou herdado da data fim), quantos dias a PR custa, e quando a data e
+ * impossivel — usuario recebendo antes de o dev terminar.
+ *
+ * Le o FORMULARIO, e nao o objeto gravado: a conta tem de mudar enquanto se
+ * digita, antes de salvar. */
+function gEntregaUsuRender() {
+  const hint = document.getElementById('e-entrega-usuario-hint');
+  if (!hint || !window.ENTREGAUSU) return;
+  const vivo = {
+    inicio: document.getElementById('e-inicio')?.value || '',
+    entrega: document.getElementById('e-fim')?.value || '',
+    entrega_usuario: document.getElementById('e-entrega-usuario')?.value || '',
+  };
+  const aviso = ENTREGAUSU.alerta(vivo);
+  if (aviso) {
+    hint.innerHTML = '<span style="color:var(--red-tx,#F5A3A3)">⚠ ' + esc(aviso) + '</span>';
+    return;
+  }
+  const valor = ENTREGAUSU.data(vivo);
+  if (!valor) {
+    hint.textContent = vivo.entrega
+      ? 'Preencha a data início para herdar a data fim, ou informe a data pós-PR.'
+      : 'Sem data. Ela nasce aqui, junto com início e fim.';
+    return;
+  }
+  const dias = ENTREGAUSU.diasDePr(vivo);
+  const gap = dias === null ? ''
+    : dias === 0 ? ' · mesmo dia do fim do dev'
+    : ' · ' + dias + ' dia(s) depois do fim do dev';
+  hint.textContent = ENTREGAUSU.herdada(vivo)
+    ? 'Herdada da data fim (' + formatDateBR(valor) + '). Informe a data pós-PR quando souber.'
+    : 'Entrega ao usuário em ' + formatDateBR(valor) + gap + '.';
+}
+
 function atualizaSprintCampo() {
   const el = document.getElementById('e-sprint');
   if (!el) return;
@@ -4175,6 +4233,11 @@ function openModal(id, prefillDev, prefillDate) {
   document.getElementById('e-status-plan').value = m?.status_planejamento || 'backlog';
   document.getElementById('e-inicio').value    = m?.inicio || prefillDate || '';
   document.getElementById('e-fim').value       = m?.entrega || prefillDate || '';
+  /* SO O VALOR DIGITADO. Pondo a heranca no input, abrir e salvar um card
+     GRAVARIA a data herdada sem ninguem decidir nada, e as 279 que so herdam
+     deixariam de ser distinguiveis das organizadas. A heranca vai no aviso. */
+  document.getElementById('e-entrega-usuario').value = m?.entrega_usuario || '';
+  gEntregaUsuRender();
   document.getElementById('e-horas-real').value= m?.horas_realizadas || '';
   document.getElementById('e-solicitante').value = m?.solicitante || '';
   document.getElementById('e-data-solic').value  = m?.data_solicitacao || '';
@@ -4412,6 +4475,7 @@ async function gPausaRetomar() {
       ok: 'Retomar' }))) return;
   const dias = aplicarRetomada(m);
   document.getElementById('e-fim').value = m.entrega || '';
+  gEntregaUsuRender();   // a heranca segue a data fim, que acabou de mudar
   gPausaRender(m); renderAll(); await saveToGitHub();
   toast('▶ Retomada. Entrega empurrada em ' + dias + (dias===1?' dia':' dias') + '.', 'ok');
 }
@@ -4553,6 +4617,9 @@ async function saveTask() {
     dev:                document.getElementById('e-dev').value,
     inicio:             inicio,
     entrega:            fim,
+    // Data em que o usuario recebe, pos-PR. Aditiva: prazo, atraso, mes e
+    // capacidade seguem lendo so `entrega`. Ver `entrega-usuario.js`.
+    entrega_usuario:    document.getElementById('e-entrega-usuario').value,
     criado_em:          existing.criado_em || new Date().toISOString(),
     prioridade:         document.getElementById('e-prio').value,
     solicitante:        document.getElementById('e-solicitante').value.trim(),

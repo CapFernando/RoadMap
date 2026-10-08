@@ -10174,6 +10174,41 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!/Entrega do dev|Fim do dev/.test(INDEX),
        'o painel publico nao expoe a data interna do dev');
 
+    /* ── AS DUAS TELAS DE PLANEJAMENTO ────────────────────────────────
+       "Novo campo nao apareceu."
+       Ele tinha sido posto so no Admin, e o planejamento acontece no GANTT:
+       e la que se aloca o dev e se poem inicio e fim. Cada tela tem o seu
+       formulario, com ids proprios — um campo no Admin nao aparece no outro.
+       A REGRA e uma so; o que se repete e o desenho. */
+    for (const [nome, txt, pre, rend] of [
+      ['admin', ADMIN, 'm', 'entregaUsuRender'],
+      ['gantt', GANTT, 'e', 'gEntregaUsuRender'],
+    ]) {
+      const id = pre + '-entrega-usuario';
+      ok(txt.includes('id="' + id + '"'), 'o formulario do ' + nome + ' tem o campo');
+      ok(txt.includes('id="' + id + '-hint"'), 'e o aviso ao lado dele');
+      ok(new RegExp('entrega_usuario:\\s*document\\.getElementById\\(\'' + id + '\'\\)\\.value')
+           .test(txt),
+         'e o ' + nome + ' GRAVA o campo — sem isto a pessoa digita e perde ao salvar');
+      ok(/<script src="entrega-usuario\.js\?v=/.test(txt),
+         'e o ' + nome + ' carrega a regra, pela tag');
+      /* O INPUT RECEBE SO O DIGITADO. Pondo a heranca ali, abrir e salvar um
+         card gravaria a data herdada sem ninguem decidir nada. */
+      ok(new RegExp("getElementById\\('" + id + "'\\)\\.value\\s*=\\s*m\\?\\.entrega_usuario")
+           .test(txt),
+         'e o input do ' + nome + ' recebe o DIGITADO, nunca o herdado');
+      const c = corpo(txt, 'function ' + rend + '(');
+      ok(/ENTREGAUSU\.herdada\(/.test(c), 'o aviso do ' + nome + ' distingue herdada de organizada');
+      ok(/ENTREGAUSU\.diasDePr\(/.test(c), 'e mostra os dias de PR');
+      ok(/ENTREGAUSU\.alerta\(/.test(c), 'e avisa a data impossivel');
+      ok(new RegExp("getElementById\\('" + pre + "-(entrega|fim)'\\)\\?\\.value").test(c),
+         'lendo o FORMULARIO do ' + nome + ', para a conta mudar enquanto se digita');
+    }
+    /* A RETOMADA DA PAUSA EMPURRA A DATA FIM no gantt. Sem redesenhar, o aviso
+       seguiria mostrando a heranca da data velha. */
+    ok(/e-fim'\)\.value = m\.entrega \|\| '';\s*gEntregaUsuRender\(\)/.test(GANTT),
+       'e retomar a pausa redesenha o aviso — a data fim acabou de mudar');
+
     /* A TELA: campo, gravacao e o aviso que diz de onde vem o valor. */
     ok(/<input type="date" id="m-entrega-usuario"/.test(ADMIN), 'o formulario tem o campo');
     ok(/entrega_usuario:\s*document\.getElementById\('m-entrega-usuario'\)\.value/.test(ADMIN),
