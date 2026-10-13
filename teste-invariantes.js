@@ -11689,7 +11689,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const cortes = [...corpo.matchAll(/\.slice\(0,\s*(\d+)\)/g)].map(m => m[1]);
       if (!cortes.length) continue;
       if (LIMITADAS[fns[k].nome]) continue;
-      if (/e mais /.test(corpo)) continue;
+      /* DUAS FORMAS DE DIZER O MESMO: "e mais N" quando a lista segue
+         logo abaixo, e "mostrando N de M" quando o resto nao cabe ali e
+         sobe para o cabecalho — foi o caso das barras de esforco, cuja
+         linha do pe ja estava ocupada pela frase de comparacao. */
+      if (/e mais |mostrando |' de ' \+/.test(corpo)) continue;
       mudos.push(fns[k].nome + ' (corta em ' + cortes.join(', ') + ')');
     }
     ok(mudos.length === 0,
@@ -11721,20 +11725,94 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!!(I.slideFrente && I.slideTime && I.slideEsforcoFrente),
        'as tres funcoes de slide foram alcancadas para o teste');
 
+    /* ═══ NENHUMA FORMA SAI DO PALCO ═══════════════════════════════════════
+     *
+     * "Texto fora do quadro, com sobreposicao."
+     *
+     * O olho achou um caso; a medicao achou quatro. O pior era o slide da
+     * frente: com 3 projetos e 4 pessoas, o titulo QUEM FEZ caia em 4,10", a
+     * quarta pessoa em 5,32" e a linha do resto em 5,64" — num palco de 5,625".
+     * As posicoes vinham de constantes somadas, e somar nao conhece o fim da
+     * pagina.
+     *
+     * Os outros tres so apareceram ao DESENHAR: a lista de ausencias terminando
+     * em 5,10 sobre o rodape, o rotulo dela encostando na propria lista, e a
+     * linha "e mais N frentes" — que eu mesmo tinha acabado de acrescentar —
+     * caindo em cima da frase de comparacao do pe.
+     *
+     * Entao a conferencia e de GEOMETRIA, sobre as formas que foram para a
+     * lamina: posicao definida, dentro do palco, e nada por cima do rodape. */
+    const PALCO_W = 10, PALCO_H = 5.625, RODAPE = 5.05;
+    const confereForma = (nome, f) => {
+      const comY = f.filter(x => typeof x.y === 'number');
+      const semPos = f.filter(x => typeof x.y !== 'number' || typeof x.x !== 'number');
+      /* SEM POSICAO E O PIOR CASO: o PowerPoint joga a caixa no canto superior
+         esquerdo, por cima do que estiver la. Foi o que aconteceu com o titulo
+         PROJETOS quando ele passou a ler uma variavel declarada depois dele —
+         `var` iça o nome e nao o valor. */
+      ok(semPos.length === 0, nome + ': toda forma tem posicao definida',
+         semPos.map(x => JSON.stringify(x.txt).slice(0, 30)).join(', ') || 'todas');
+      const fora = comY.filter(x => x.y + (x.h || 0) > PALCO_H + 0.001 ||
+                                    x.x + (x.w || 0) > PALCO_W + 0.001 || x.y < -0.001);
+      ok(fora.length === 0, nome + ': nada passa da borda do palco',
+         fora.map(x => 'y=' + (x.y + (x.h || 0)).toFixed(2)).join(' ') || '10" x 5,625"');
+      // O rodape e a unica coisa que pode morar abaixo de 5,05".
+      const sobre = comY.filter(x => x.y + (x.h || 0) > RODAPE + 0.001 &&
+                                     !/^[A-Z][a-zç]+ de 20\d\d$/.test(x.txt));
+      ok(sobre.length === 0, nome + ': nada invade o rodape',
+         sobre.map(x => JSON.stringify(x.txt).slice(0, 26)).join(' ') || 'rodape livre');
+
+      /* ═══ E TEXTO NAO PISA EM TEXTO ══════════════════════════════════
+       *
+       * "Com sobreposicao." Era isto, e a medicao achou CINCO — tres delas em
+       * linhas que eu acabara de acrescentar nesta sessao: o "e mais N" do
+       * ranking caindo sobre "N pessoas atuaram no periodo", o "mostrando N de
+       * M" cobrindo o rotulo da regua da media, e a caixa do nome do projeto
+       * invadindo a do numero porque eu alarguei uma e esqueci a outra.
+       *
+       * Nenhuma delas se via lendo o codigo: sao somas de constantes que so
+       * colidem quando desenhadas.
+       *
+       * SO TEXTO CONTRA TEXTO. Cartao atras de texto e o desenho funcionando;
+       * texto sobre texto nunca e. A folga de 0,02" existe porque caixa
+       * encostando na vizinha por um centesimo e arredondamento, e nao
+       * colisao. */
+      const txts = comY.filter(x => x.tipo === 'txt' && (x.w || 0) > 0 && (x.h || 0) > 0);
+      const colisoes = [];
+      for (let a = 0; a < txts.length; a++) {
+        for (let b = a + 1; b < txts.length; b++) {
+          const A = txts[a], B = txts[b];
+          const ox = Math.min(A.x + A.w, B.x + B.w) - Math.max(A.x, B.x);
+          const oy = Math.min(A.y + A.h, B.y + B.h) - Math.max(A.y, B.y);
+          if (ox > 0.02 && oy > 0.02) {
+            colisoes.push(JSON.stringify(A.txt).slice(0, 22) + ' x ' +
+                          JSON.stringify(B.txt).slice(0, 22));
+          }
+        }
+      }
+      ok(colisoes.length === 0, nome + ': nenhum texto por cima de outro',
+         colisoes.join(' | ') || txts.length + ' caixas de texto conferidas');
+    };
+
     /* UM PPTX DE MENTIRA que so anota o texto que recebe. */
     const gravador = () => {
-      const textos = [];
+      const textos = [], formas = [];
+      const anota = (x, o, tipo) => {
+        const txt = Array.isArray(x) ? x.map(p2 => p2.text).join('') : String(x == null ? '' : x);
+        textos.push(txt);
+        formas.push({ txt: txt, tipo: tipo, x: o && o.x, y: o && o.y,
+                      w: o && o.w, h: o && o.h });
+      };
       const slide = {
-        addText: (t, o) => {
-          textos.push(Array.isArray(t) ? t.map(x => x.text).join('') : String(t));
-          return slide;
-        },
-        addShape: () => slide, addImage: () => slide, addChart: () => slide,
+        addText: (x, o) => { anota(x, o, 'txt'); return slide; },
+        addShape: (k, o) => { anota('', o, 'shape'); return slide; },
+        addImage: (o) => { anota('', o, 'img'); return slide; },
+        addChart: (k, d, o) => { anota('', o, 'chart'); return slide; },
         background: {},
       };
       return { pptx: { addSlide: () => slide, ShapeType: new Proxy({}, { get: () => 'rect' }),
                        ChartType: new Proxy({}, { get: () => 'bar' }) },
-               textos };
+               textos, formas };
     };
     const juntou = (g) => g.textos.join(' | ');
 
@@ -11755,12 +11833,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                   { nome: 'E', entregas: 25, pontos: 150 },
                   { nome: 'F', entregas: 16, pontos: 88 }],
       }, 1, 'Setembro de 2026');
+      confereForma('slideFrente', g.formas);
       const txt = juntou(g);
       ok(/e mais 2 pessoas/.test(txt),
          'DESENHADO: QUEM FEZ diz que 2 pessoas nao couberam', txt.slice(0, 0));
       ok(/41/.test(txt) && /238/.test(txt),
          'e diz as 41 entregas e os 238 pontos que elas levam — o que a sala somava');
-      ok(/e mais 2 projetos/.test(txt), 'e a coluna PROJETOS tambem declara o resto');
+      ok(/e mais 3 projetos/.test(txt),
+         'e a coluna PROJETOS tambem declara o resto — agora 2 cabem de 5');
       ok(/entregas/.test(txt) && !/\btarefas\b/.test(txt),
          'e ela conta "entregas", nao "tarefas" — a palavra do outro slide');
     }
@@ -11772,10 +11852,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         1, 'Setembro de 2026',
         new Array(8).fill(0).map((_, i) => ({ nome: 'A' + i, dias: 2, tipo: 'férias' })),
         { devs: 11, uteis: 21, fora: 16 }, null);
+      confereForma('slideTime', g.formas);
       const txt = juntou(g);
-      ok(/e mais 3/.test(txt), 'DESENHADO: o ranking de 7 diz que 3 ficaram de fora', txt.slice(0, 0));
-      ok(/e mais 1\b/.test(txt), 'e o de 5 diz que 1 ficou');
-      ok(!/e mais 0/.test(txt), 'e o de 4, que coube inteiro, nao diz nada');
+      /* A FRACAO, e nao o sinal de mais. "+3" se le como "tres a mais do que o
+         esperado"; "4 de 7" diz o que esta na tela e o que existe, que e a
+         pergunta de quem soma a coluna na sala. */
+      ok(/4 de 7/.test(txt),
+         'DESENHADO: o ranking de 7 diz que mostra 4 delas', txt.slice(0, 0));
+      ok(/4 de 5/.test(txt), 'e o de 5 diz 4 de 5');
+      ok(!/4 de 4/.test(txt), 'e o de 4, que coube inteiro, nao diz nada');
       ok(/e mais 2/.test(txt), 'e as 8 ausencias viram "e mais 2" depois das 6 que cabem');
     }
 
@@ -11787,9 +11872,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           entregas: 3, devs: 2, pct: 90, evolucao: 2, sustentacao: 1, cor: '2BBF6A' })),
         total: { pontos: 90, real: 600, plan: 620, entregas: 27 },
       }, 1, 'Setembro de 2026');
+      confereForma('slideEsforcoFrente', g.formas);
       const txt = juntou(g);
-      ok(/e mais 3 frentes/.test(txt),
-         'DESENHADO: as barras dizem que 3 frentes ficaram de fora', txt.slice(0, 0));
+      ok(/mostrando 6 de 9 frentes/.test(txt),
+         'DESENHADO: as barras dizem quantas frentes ficaram de fora', txt.slice(0, 0));
     }
     /* E A EXCECAO TEM DE CONTINUAR SENDO EXCECAO: se `partes` crescer, ela deixa
        de ser limitada e volta a precisar declarar. */

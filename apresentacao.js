@@ -832,7 +832,14 @@
       { x: 6.6,  tit: 'Mais atrasos',   cor: SIGNIFICADO.falhou,    lista: t.atrasos },
     ];
     col.forEach(function (c) {
-      s.addText(c.tit, { x: c.x, y: 1.6, w: 2.7, h: 0.3, fontSize: 12, color: c.cor, bold: true });
+      /* "4 de 7" E NAO "+3": o sinal de mais e ambiguo — pode ser lido como
+         "tres a mais do que o esperado". A fracao diz o que esta na tela e o
+         que existe, que e a pergunta de quem soma a coluna. */
+      var cVisN = Math.min(4, c.lista.length);
+      var sobram = Math.max(0, c.lista.length - 4);
+      s.addText(c.tit + (sobram ? '  ·  ' + cVisN + ' de ' + c.lista.length : ''),
+                { x: c.x, y: 1.6, w: 2.7, h: 0.3,
+                                                           fontSize: 12, color: c.cor, bold: true });
       if (!c.lista.length) {
         s.addText('—', { x: c.x, y: 2.0, w: 2.7, h: 0.3, fontSize: 14, color: C.fraco });
         return;
@@ -851,11 +858,9 @@
         s.addText(corta(it.nome, 17), {
           x: c.x + 0.95, y: y + 0.08, w: 1.8, h: 0.35, fontSize: 12, color: C.texto });
       });
-      if (c.lista.length > cVis.length) {
-        s.addText('e mais ' + (c.lista.length - cVis.length), {
-          x: c.x, y: 1.9 + cVis.length * 0.55, w: 2.7, h: 0.3,
-          fontSize: 9, color: C.fraco });
-      }
+      /* O RESTO VAI NO TITULO DA COLUNA, e nao abaixo da ultima linha: la ele
+         caia em 4,10" e cobria a frase "N pessoas atuaram no periodo", que
+         mora em 4,15". Medido desenhando o slide. */
     });
     // O TAMANHO DO TIME E OS DIAS QUE ELE TINHA. Vinha do slide de demanda x
     // capacidade, que saiu por repetir o slide do mês; aqui a informação fica onde
@@ -875,7 +880,10 @@
     // Uma linha, e nao um numero ao lado de cada nome: sao tres colunas que ja tem
     // numero, e um quarto ali vira ruido.
     if ((ausencias || []).length) {
-      s.addText('Fora no período', { x: 0.7, y: 4.5, w: 8.6, h: 0.3,
+      /* 4,48 + 0,24 = 4,72, e a lista abre em 4,74. Antes o rotulo ia ate
+         4,80 e a lista comecava em 4,78 — encostavam —, e a lista terminava
+         em 5,10, POR CIMA do rodape de 5,05. Medido desenhando o slide. */
+      s.addText('Fora no período', { x: 0.7, y: 4.48, w: 8.6, h: 0.24,
                                      fontSize: 13, color: C.fraco });
       s.addText(ausencias.slice(0, 6).map(function (a) {
         return a.nome + ' (' + a.dias + (a.dias === 1 ? ' dia' : ' dias') +
@@ -891,7 +899,7 @@
       // ausencia que some e justamente a que explicaria a entrega menor.
       }).join('   ·   ') + (ausencias.length > 6
         ? '   ·   e mais ' + (ausencias.length - 6) : ''),
-        { x: 0.7, y: 4.78, w: 8.6, h: 0.32, fontSize: 13,
+        { x: 0.7, y: 4.74, w: 8.6, h: 0.24, fontSize: 13,
                             color: SIGNIFICADO.atencao });
     }
     rodape(s, periodo, pagina);
@@ -1921,7 +1929,6 @@
 
     // ── Direita, em cima: para que projeto ──────────────────────────────────
     var XD = 5.75, WD = 3.75;
-    tituloCol('PROJETOS', XD, WD, 2.22);
     /* ═══ "TAREFAS" AQUI E "TAREFAS" NO SLIDE DE PROJETOS ERAM COISAS
        DIFERENTES, e a sala via contradicao onde havia duas perguntas.
 
@@ -1932,12 +1939,53 @@
 
        Agora esta coluna diz "entregas", que e o que ela conta, e o numero deixa
        de parecer erro do outro slide. */
+    /* ═══ A COLUNA TEM PISO, E ELE E DURO ═══════════════════════════════════
+     *
+     * "Alguns slides fora do padrao — texto fora do quadro."
+     *
+     * Era aqui, e a conta prova: com 3 projetos e 4 pessoas, o titulo QUEM FEZ
+     * caia em 4,10", a quarta pessoa em 5,32" e a linha do resto em 5,64" — num
+     * palco de 5,625". O rodape mora em 5,05", entao as duas ultimas ja estavam
+     * POR CIMA dele antes mesmo de sair do slide.
+     *
+     * A coluna tinha dois blocos empilhados e nenhum deles sabia onde parar: as
+     * posicoes vinham de constantes somadas, e somar nao conhece o fim da pagina.
+     *
+     * AGORA O PISO E QUEM MANDA. Os dois blocos sao dimensionados a partir do
+     * espaco que existe, e nao do numero que alguem achou bonito — o que nao
+     * couber vira "e mais N", que ja e como o resto desta lamina fala. Mudar
+     * fonte, pitch ou rodape reaproveita a conta em vez de quebra-la.
+     *
+     * DOIS PROJETOS E QUATRO PESSOAS e o que cabe nos 2,73" uteis, e a escolha
+     * entre os dois e deliberada: quem olha este slide pergunta "quem fez", e a
+     * lista de projetos tem um slide inteiro so para ela. */
+    var PISO = 4.95;              // o rodape comeca em 5,05"
+    var TIT = 0.24, RESTO = 0.22, GAP = 0.10, LIN = 0.28;
     var projTodos = f.topProjetos || [];
-    var proj = projTodos.slice(0, 3);
+    var devsTodos0 = f.topDevs || [];
+
+    var yProjTit = 2.20, yProjLin = yProjTit + TIT;
+
+    /* O TITULO SO DEPOIS DA CONTA. Ele estava ANTES da declaracao de
+       `yProjTit`: `var` iça o nome mas nao o valor, entao a caixa nascia com
+       `y: undefined` e o PowerPoint a jogava no canto superior esquerdo, por
+       cima do KPI. Defeito meu, achado ao medir as formas desenhadas. */
+    tituloCol('PROJETOS', XD, WD, yProjTit);
+    /* Quantas linhas cabem deixando o bloco de baixo de pe: ele precisa de
+       titulo + as pessoas + o resto, e e o que a sala veio ver. */
+    var altDevs = TIT + Math.min(4, Math.max(1, devsTodos0.length)) * LIN +
+                  (devsTodos0.length > 4 ? RESTO : 0);
+    var espacoProj = PISO - yProjLin - GAP - altDevs;
+    var cabemProj = Math.max(1, Math.floor((espacoProj - RESTO) / LIN));
+    var proj = projTodos.slice(0, Math.min(2, cabemProj));
     proj.forEach(function (p, i) {
-      var y = 2.48 + i * 0.34;
-      s.addText(corta(p.nome, cabemChars(WD - 0.95, 9.5)), {
-        x: XD, y: y, w: WD - 0.95, h: 0.26, fontSize: 9.5, color: C.texto,
+      var y = yProjLin + i * LIN;
+      /* A CAIXA DO NOME TERMINA ONDE A DO NUMERO COMECA. Eu alarguei a do
+         numero para 1,05" (para caber "N entregas") e esqueci de estreitar
+         esta: as duas se sobrepunham em 0,10", e o nome longo passava por
+         baixo do numero. Achado medindo, nao olhando. */
+      s.addText(corta(p.nome, cabemChars(WD - 1.15, 9.5)), {
+        x: XD, y: y, w: WD - 1.15, h: 0.26, fontSize: 9.5, color: C.texto,
         valign: 'middle', wrap: false });
       s.addText(DECKG.num(p.qtd) + (p.qtd === 1 ? ' entrega' : ' entregas'), {
         x: XD + WD - 1.05, y: y, w: 1.05, h: 0.26, fontSize: 9, color: C.fraco,
@@ -1948,7 +1996,7 @@
     if (projTodos.length > proj.length) {
       s.addText('e mais ' + (projTodos.length - proj.length) + ' projeto' +
                 (projTodos.length - proj.length === 1 ? '' : 's'), {
-        x: XD, y: 2.48 + proj.length * 0.34, w: WD, h: 0.26,
+        x: XD, y: yProjLin + proj.length * LIN, w: WD, h: RESTO,
         fontSize: 8.5, color: C.fraco, valign: 'middle', wrap: false });
     }
     if (!proj.length) {
@@ -1958,12 +2006,14 @@
 
     // ── Direita, embaixo: por quem ──────────────────────────────────────────
     var sobramProj = Math.max(0, projTodos.length - proj.length);
-    var Y_DEV = 2.48 + (Math.max(proj.length, 1) + (sobramProj ? 1 : 0)) * 0.34 + 0.26;
+    var Y_DEV = yProjLin + proj.length * LIN + (sobramProj ? RESTO : 0) + GAP;
     tituloCol('QUEM FEZ', XD, WD, Y_DEV);
-    var devsTodos = f.topDevs || [];
-    var devs = devsTodos.slice(0, 4);
+    var devsTodos = devsTodos0;
+    /* E AQUI O PISO FECHA A CONTA: o que nao couber vira 'e mais N'. */
+    var cabemDev = Math.max(1, Math.floor((PISO - (Y_DEV + TIT) - RESTO) / LIN));
+    var devs = devsTodos.slice(0, Math.min(4, cabemDev));
     devs.forEach(function (d, i) {
-      var y = Y_DEV + 0.26 + i * 0.32;
+      var y = Y_DEV + TIT + i * LIN;
       s.addText(corta(d.nome, cabemChars(WD - 1.75, 10)), {
         x: XD, y: y, w: WD - 1.75, h: 0.26, fontSize: 10, color: C.texto,
         valign: 'middle', wrap: false });
@@ -1991,7 +2041,7 @@
     if (sobramDevs.length) {
       var rEnt = sobramDevs.reduce(function (s2, d) { return s2 + (d.entregas || 0); }, 0);
       var rPts = sobramDevs.reduce(function (s2, d) { return s2 + (d.pontos || 0); }, 0);
-      var yR = Y_DEV + 0.26 + devs.length * 0.32;
+      var yR = Y_DEV + TIT + devs.length * LIN;
       s.addText('e mais ' + sobramDevs.length +
                 (sobramDevs.length === 1 ? ' pessoa' : ' pessoas'), {
         x: XD, y: yR, w: WD - 1.75, h: 0.26, fontSize: 9, color: C.fraco,
@@ -2217,6 +2267,8 @@
       { text: DECKG.num(mediaR) + ' pt/h', options: { color: C.texto, bold: true } },
       { text: '     ' + DECKG.num(pl.total.pontos) + ' pontos em ' +
               DECKG.num(pl.total.real) + 'h', options: { color: C.fraco } },
+      { text: orden.length > 6 ? '     mostrando 6 de ' + orden.length + ' frentes' : '',
+        options: { color: C.fraco } },
     ], { x: 0.7, y: 1.18, w: 8.6, h: 0.3, fontSize: 13, wrap: false });
 
     /* A CONTA DAS ALTURAS, e ela foi refeita: com 0,52" e seis frentes as linhas
@@ -2248,12 +2300,14 @@
         x: X_BAR + W_BAR + 1.10, y: y, w: 1.45, h: 0.32, fontSize: 9.5,
         color: C.fraco, valign: 'middle', align: 'right', wrap: false });
     });
-    if (orden.length > ordenVis.length) {
-      s.addText('e mais ' + (orden.length - ordenVis.length) + ' frente' +
-                (orden.length - ordenVis.length === 1 ? '' : 's'),
-        { x: 0.6, y: TOPO + ordenVis.length * ALT + 0.04, w: 4.0, h: 0.3,
-          fontSize: 9, color: C.fraco, valign: 'middle' });
-    }
+    /* O RESTO VAI NO TOPO, JUNTO DA MEDIA, e nao embaixo da ultima barra:
+       la ele caia em 5,02" e colidia com a frase de comparacao que ja mora
+       no pe — duas linhas de 9pt no mesmo lugar. Medido desenhando.
+       E o topo e onde este slide ja fala do CONJUNTO. */
+    /* O RESTO ENTRA NA PROPRIA LINHA DA MEDIA. Como caixa solta em 1,50" ele
+       cobria o rotulo "média" da regua, em 1,58" — e como caixa no pe cobria
+       a frase de comparacao. Na linha que ja fala do conjunto nao disputa
+       espaco com ninguem. */
 
     // A MARCA DA MÉDIA sobre o trilho: uma régua vertical que atravessa as
     // linhas e diz, sem texto, quem está acima e quem está abaixo dela.
