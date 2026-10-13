@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="73040f849d">
+<html lang="pt-BR" data-build="d16c1b5c07">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1255,7 +1255,7 @@
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=ef35f28412"></script>
 <script src="capacidade.js?v=cc227d4867"></script>
-<script src="apresentacao.js?v=34c8c5351a"></script>
+<script src="apresentacao.js?v=2fdf6d18b9"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -7228,13 +7228,17 @@ async function apresGerar(opts) {
               .sort((x, y) => y.pontos - x.pontos ||
                               String(x.codigo).localeCompare(String(y.codigo)))
               .slice(0, 5),
+            /* ORDENADAS AQUI, CORTADAS NO SLIDE. O corte morava nos dois lugares
+               — 4 aqui e 3 la — e o de ca apagava o resto antes de o slide poder
+               dizer que havia resto. Era por isso que "QUEM FEZ" mostrava 4
+               pessoas somando 128 entregas sob um cabecalho que dizia 6 pessoas
+               e 169: as outras duas nao chegavam ao slide. */
             topProjetos: [...a.projetos.values()]
-              .sort((x, y) => y.qtd - x.qtd || y.pontos - x.pontos).slice(0, 4),
+              .sort((x, y) => y.qtd - x.qtd || y.pontos - x.pontos),
             topDevs: [...a.devs.entries()]
               .map(([nome, d]) => ({ nome, entregas: d.entregas,
                                      pontos: Math.round(d.pontos) }))
-              .sort((x, y) => y.pontos - x.pontos || y.entregas - x.entregas)
-              .slice(0, 4),
+              .sort((x, y) => y.pontos - x.pontos || y.entregas - x.entregas),
           };
         })
         // As MAIS TRABALHADAS primeiro — por hora realizada, que e o criterio do

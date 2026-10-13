@@ -814,7 +814,12 @@
         s.addText('—', { x: c.x, y: 2.0, w: 2.7, h: 0.3, fontSize: 14, color: C.fraco });
         return;
       }
-      c.lista.slice(0, 4).forEach(function (it, i) {
+      /* CORTA EM 4 E DIZ QUE CORTOU. Ranking que some com o 5o lugar sem
+         avisar faz quem esta na sala achar que o time tem quatro pessoas —
+         e foi essa classe de defeito que gerou "estou tendo divergencias".
+         Mesma regra do `slideFrente`. */
+      var cVis = c.lista.slice(0, 4);
+      cVis.forEach(function (it, i) {
         var y = 1.9 + i * 0.55;
         // A caixa do numero termina em +0,88" e o nome abre em +0,95": com o nome
         // em +0,85" os dois se encostavam, e "210" em corpo 22 tocava a inicial.
@@ -823,6 +828,11 @@
         s.addText(corta(it.nome, 17), {
           x: c.x + 0.95, y: y + 0.08, w: 1.8, h: 0.35, fontSize: 12, color: C.texto });
       });
+      if (c.lista.length > cVis.length) {
+        s.addText('e mais ' + (c.lista.length - cVis.length), {
+          x: c.x, y: 1.9 + cVis.length * 0.55, w: 2.7, h: 0.3,
+          fontSize: 9, color: C.fraco });
+      }
     });
     // O TAMANHO DO TIME E OS DIAS QUE ELE TINHA. Vinha do slide de demanda x
     // capacidade, que saiu por repetir o slide do mês; aqui a informação fica onde
@@ -854,7 +864,11 @@
          economia de paleta. */
       /* AMBAR: ausencia e atencao de verdade — e capacidade que o mes nao teve, e
          a pergunta "por que entregou menos" tem resposta aqui. */
-      }).join('   ·   '), { x: 0.7, y: 4.78, w: 8.6, h: 0.32, fontSize: 13,
+      // Seis cabem na linha; o resto vira CONTAGEM, e nao silencio — a
+      // ausencia que some e justamente a que explicaria a entrega menor.
+      }).join('   ·   ') + (ausencias.length > 6
+        ? '   ·   e mais ' + (ausencias.length - 6) : ''),
+        { x: 0.7, y: 4.78, w: 8.6, h: 0.32, fontSize: 13,
                             color: SIGNIFICADO.atencao });
     }
     rodape(s, periodo, pagina);
@@ -1885,25 +1899,47 @@
     // ── Direita, em cima: para que projeto ──────────────────────────────────
     var XD = 5.75, WD = 3.75;
     tituloCol('PROJETOS', XD, WD, 2.22);
-    var proj = (f.topProjetos || []).slice(0, 3);
+    /* ═══ "TAREFAS" AQUI E "TAREFAS" NO SLIDE DE PROJETOS ERAM COISAS
+       DIFERENTES, e a sala via contradicao onde havia duas perguntas.
+
+       Medido no deck de setembro: o EP-006 aparecia com 9 tarefas em PRINCIPAIS
+       PROJETOS e 6 aqui; o EP-003, com 6 la e 4 aqui. Os dois numeros estavam
+       certos — la e TUDO do projeto (concluidas + em andamento), aqui e so o que
+       ESTA FRENTE entregou NESTE MES. A palavra e que era a mesma.
+
+       Agora esta coluna diz "entregas", que e o que ela conta, e o numero deixa
+       de parecer erro do outro slide. */
+    var projTodos = f.topProjetos || [];
+    var proj = projTodos.slice(0, 3);
     proj.forEach(function (p, i) {
       var y = 2.48 + i * 0.34;
       s.addText(corta(p.nome, cabemChars(WD - 0.95, 9.5)), {
         x: XD, y: y, w: WD - 0.95, h: 0.26, fontSize: 9.5, color: C.texto,
         valign: 'middle', wrap: false });
-      s.addText(DECKG.num(p.qtd) + (p.qtd === 1 ? ' tarefa' : ' tarefas'), {
-        x: XD + WD - 0.95, y: y, w: 0.95, h: 0.26, fontSize: 9, color: C.fraco,
+      s.addText(DECKG.num(p.qtd) + (p.qtd === 1 ? ' entrega' : ' entregas'), {
+        x: XD + WD - 1.05, y: y, w: 1.05, h: 0.26, fontSize: 9, color: C.fraco,
         align: 'right', valign: 'middle', wrap: false });
     });
+    /* O RESTO SE DECLARA. Lista cortada em silencio e a origem da desconfianca:
+       quem soma o que esta na tela nao chega ao total do cabecalho. */
+    if (projTodos.length > proj.length) {
+      s.addText('e mais ' + (projTodos.length - proj.length) + ' projeto' +
+                (projTodos.length - proj.length === 1 ? '' : 's'), {
+        x: XD, y: 2.48 + proj.length * 0.34, w: WD, h: 0.26,
+        fontSize: 8.5, color: C.fraco, valign: 'middle', wrap: false });
+    }
     if (!proj.length) {
       s.addText('Nenhuma entrega desta frente está ligada a projeto.', {
         x: XD, y: 2.48, w: WD, h: 0.4, fontSize: 9.5, color: C.fraco });
     }
 
     // ── Direita, embaixo: por quem ──────────────────────────────────────────
-    var Y_DEV = 2.48 + Math.max(proj.length, 1) * 0.34 + 0.26;
+    var sobramProj = Math.max(0, projTodos.length - proj.length);
+    var Y_DEV = 2.48 + (Math.max(proj.length, 1) + (sobramProj ? 1 : 0)) * 0.34 + 0.26;
     tituloCol('QUEM FEZ', XD, WD, Y_DEV);
-    (f.topDevs || []).slice(0, 4).forEach(function (d, i) {
+    var devsTodos = f.topDevs || [];
+    var devs = devsTodos.slice(0, 4);
+    devs.forEach(function (d, i) {
       var y = Y_DEV + 0.26 + i * 0.32;
       s.addText(corta(d.nome, cabemChars(WD - 1.75, 10)), {
         x: XD, y: y, w: WD - 1.75, h: 0.26, fontSize: 10, color: C.texto,
@@ -1916,6 +1952,35 @@
       ], { x: XD + WD - 1.75, y: y, w: 1.75, h: 0.26, fontSize: 9,
            align: 'right', valign: 'middle', wrap: false });
     });
+    /* ═══ E AS QUE NAO COUBERAM DIZEM QUANTAS SAO ════════════════════════════
+     *
+     * "Preciso que as informacoes casem, estou tendo divergencias nos dados."
+     *
+     * Era aqui. O cabecalho deste slide dizia PESSOAS 6, ENTREGAS 169 e PONTOS
+     * 1.404; esta coluna mostrava quatro nomes somando 128 entregas e 1.166
+     * pontos. Duas pessoas, 41 entregas e 238 pontos sumiam sem uma palavra —
+     * e quem soma a coluna na sala conclui que o deck esta errado.
+     *
+     * A conta nunca esteve errada: a lista e que era cortada em silencio. O
+     * resto agora aparece com os dois numeros, para a coluna FECHAR com o
+     * cabecalho — que e a unica forma de a sala parar de somar. */
+    var sobramDevs = devsTodos.slice(devs.length);
+    if (sobramDevs.length) {
+      var rEnt = sobramDevs.reduce(function (s2, d) { return s2 + (d.entregas || 0); }, 0);
+      var rPts = sobramDevs.reduce(function (s2, d) { return s2 + (d.pontos || 0); }, 0);
+      var yR = Y_DEV + 0.26 + devs.length * 0.32;
+      s.addText('e mais ' + sobramDevs.length +
+                (sobramDevs.length === 1 ? ' pessoa' : ' pessoas'), {
+        x: XD, y: yR, w: WD - 1.75, h: 0.26, fontSize: 9, color: C.fraco,
+        valign: 'middle', wrap: false });
+      s.addText([
+        { text: DECKG.num(rEnt), options: { color: C.fraco, bold: true } },
+        { text: ' entregas   ·   ', options: { color: C.fraco } },
+        { text: DECKG.num(rPts), options: { color: C.fraco, bold: true } },
+        { text: ' pts', options: { color: C.fraco } },
+      ], { x: XD + WD - 1.75, y: yR, w: 1.75, h: 0.26, fontSize: 8.5,
+           align: 'right', valign: 'middle', wrap: false });
+    }
     rodape(s, periodo, pagina);
     return s;
   }
@@ -2138,7 +2203,10 @@
        motivo: embaixo ele disputava o mesmo espaço. */
     var TOPO = 1.80, ALT = 0.48, X_BAR = 2.55, W_BAR = 4.35;
     var maxR = orden.reduce(function (m, i) { return Math.max(m, i.r); }, 0.01);
-    orden.slice(0, 6).forEach(function (i, k) {
+    // Seis barras cabem; se houver mais frentes, o slide diz quantas ficaram
+    // de fora em vez de deixar a soma das barras nao fechar com o total.
+    var ordenVis = orden.slice(0, 6);
+    ordenVis.forEach(function (i, k) {
       var y = TOPO + k * ALT;
       s.addText(corta(i.nome, cabemChars(1.85, 11)), {
         x: 0.6, y: y, w: 1.85, h: 0.32, fontSize: 11, color: C.texto,
@@ -2157,6 +2225,12 @@
         x: X_BAR + W_BAR + 1.10, y: y, w: 1.45, h: 0.32, fontSize: 9.5,
         color: C.fraco, valign: 'middle', align: 'right', wrap: false });
     });
+    if (orden.length > ordenVis.length) {
+      s.addText('e mais ' + (orden.length - ordenVis.length) + ' frente' +
+                (orden.length - ordenVis.length === 1 ? '' : 's'),
+        { x: 0.6, y: TOPO + ordenVis.length * ALT + 0.04, w: 4.0, h: 0.3,
+          fontSize: 9, color: C.fraco, valign: 'middle' });
+    }
 
     // A MARCA DA MÉDIA sobre o trilho: uma régua vertical que atravessa as
     // linhas e diz, sem texto, quem está acima e quem está abaixo dela.

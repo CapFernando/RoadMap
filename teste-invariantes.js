@@ -11571,6 +11571,181 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }
   }
 
+  sec('Deck: lista cortada tem de DIZER que cortou');
+  /* ═══ A ORIGEM DAS "DIVERGENCIAS NOS DADOS" ═══════════════════════════════
+   *
+   * "Preciso que as informacoes casem, estou tendo divergencias nos dados."
+   *
+   * Nenhuma conta estava errada. Conferidos os slides de setembro, 10 de 10
+   * somas globais fechavam: Frentes x Mandala x O MES casavam entre si.
+   *
+   * O QUE NAO FECHAVA ERAM AS LISTAS. O slide DESENVOLVIMENTO dizia PESSOAS 6,
+   * ENTREGAS 169 e PONTOS 1.404 no cabecalho, e a coluna "QUEM FEZ" mostrava
+   * quatro nomes somando 128 entregas e 1.166 pontos — duas pessoas, 41
+   * entregas e 238 pontos sumiam sem uma palavra. Quem soma a coluna na sala
+   * conclui que o deck esta errado, e perde a confianca no resto.
+   *
+   * Uma varredura achou mais TRES slides com a mesma doenca, que ninguem tinha
+   * notado ainda: os rankings do TIME, as ausencias e as barras de esforco.
+   *
+   * A REGRA: lista cortada declara o resto. Sempre. */
+  {
+    const fns = [...APRES.matchAll(/function (slide[A-Za-z0-9_]+)\s*\(/g)]
+      .map(m => ({ nome: m[1], i: m.index }));
+    fns.push({ nome: '(fim)', i: APRES.length });
+    /* AS EXCECOES SAO NOMEADAS, com o motivo. Lista cujo tamanho maximo e menor
+       que o corte nunca corta nada — exigir "e mais" dela seria pedir uma frase
+       que nunca aparece, e a excecao sem motivo escrito vira porta de entrada
+       para a proxima regressao. */
+    const LIMITADAS = {
+      slideMes: 'corta `partes` em 3, e `partes` tem no maximo 3 por construcao: ' +
+                'evolucao, sustentacao e sem classificar',
+    };
+    const mudos = [];
+    for (let k = 0; k < fns.length - 1; k++) {
+      const corpo = APRES.slice(fns[k].i, fns[k + 1].i);
+      const cortes = [...corpo.matchAll(/\.slice\(0,\s*(\d+)\)/g)].map(m => m[1]);
+      if (!cortes.length) continue;
+      if (LIMITADAS[fns[k].nome]) continue;
+      if (/e mais /.test(corpo)) continue;
+      mudos.push(fns[k].nome + ' (corta em ' + cortes.join(', ') + ')');
+    }
+    ok(mudos.length === 0,
+       'nenhum slide corta uma lista sem dizer quantas ficaram de fora',
+       mudos.join(' | ') || fns.length - 1 + ' slides varridos');
+
+    /* ═══ E AGORA DESENHANDO, porque a varredura acima e de TEXTO ═══════════
+     *
+     * Ela acha a frase `'e mais '` no arquivo e da por satisfeita. Seis
+     * sabotagens passaram por ela intactas: `if (false)`, `if (0)` e
+     * `sobramDevs = []` desligam o aviso e DEIXAM A FRASE no codigo.
+     *
+     * Entao os slides sao desenhados de verdade, com listas MAIORES que o corte,
+     * e o que se confere e o texto que foi parar na lamina.
+     *
+     * As funcoes nao estao no kit — elas sao internas ao IIFE. A exposicao e
+     * feita aqui, transformando a FONTE no harness: o arquivo de producao nao
+     * ganha export nenhum so para ser testado. */
+    const fonte = APRES.replace('window.apresentacaoKit = {',
+      'window.__internos = { slideFrente: slideFrente, slideTime: slideTime, ' +
+      'slideEsforcoFrente: slideEsforcoFrente };\n  window.apresentacaoKit = {');
+    /* O SANDBOX PRECISA DOS MODULOS QUE O DECK LE do `window`: `DECKG` e o
+       `DECKFUNDO`. Sem eles o slide estoura na primeira formatacao de numero,
+       e o teste viraria um erro em vez de uma resposta. */
+    const janI = { DECKG: require('./deck-grafico.js'),
+                   DECKFUNDO: require('./deck-fundo.js') };
+    new Function('window', fonte)(janI);
+    const I = janI.__internos || {};
+    ok(!!(I.slideFrente && I.slideTime && I.slideEsforcoFrente),
+       'as tres funcoes de slide foram alcancadas para o teste');
+
+    /* UM PPTX DE MENTIRA que so anota o texto que recebe. */
+    const gravador = () => {
+      const textos = [];
+      const slide = {
+        addText: (t, o) => {
+          textos.push(Array.isArray(t) ? t.map(x => x.text).join('') : String(t));
+          return slide;
+        },
+        addShape: () => slide, addImage: () => slide, addChart: () => slide,
+        background: {},
+      };
+      return { pptx: { addSlide: () => slide, ShapeType: new Proxy({}, { get: () => 'rect' }),
+                       ChartType: new Proxy({}, { get: () => 'bar' }) },
+               textos };
+    };
+    const juntou = (g) => g.textos.join(' | ');
+
+    if (I.slideFrente) {
+      const g = gravador();
+      I.slideFrente(g.pptx, {
+        nome: 'Desenvolvimento', cor: '2BBF6A', plan: 848, real: 1006,
+        pontos: 1404, entregas: new Array(169).fill(0), pessoas: 6,
+        pct: 100, evolucao: 111, sustentacao: 58,
+        topEntregas: [{ codigo: 'AX-1', titulo: 'x', pontos: 89 }],
+        topProjetos: [{ nome: 'EP-1', qtd: 6 }, { nome: 'EP-2', qtd: 4 },
+                      { nome: 'EP-3', qtd: 2 }, { nome: 'EP-4', qtd: 1 },
+                      { nome: 'EP-5', qtd: 1 }],
+        topDevs: [{ nome: 'A', entregas: 63, pontos: 505 },
+                  { nome: 'B', entregas: 38, pontos: 257 },
+                  { nome: 'C', entregas: 16, pontos: 203 },
+                  { nome: 'D', entregas: 11, pontos: 201 },
+                  { nome: 'E', entregas: 25, pontos: 150 },
+                  { nome: 'F', entregas: 16, pontos: 88 }],
+      }, 1, 'Setembro de 2026');
+      const txt = juntou(g);
+      ok(/e mais 2 pessoas/.test(txt),
+         'DESENHADO: QUEM FEZ diz que 2 pessoas nao couberam', txt.slice(0, 0));
+      ok(/41/.test(txt) && /238/.test(txt),
+         'e diz as 41 entregas e os 238 pontos que elas levam — o que a sala somava');
+      ok(/e mais 2 projetos/.test(txt), 'e a coluna PROJETOS tambem declara o resto');
+      ok(/entregas/.test(txt) && !/\btarefas\b/.test(txt),
+         'e ela conta "entregas", nao "tarefas" — a palavra do outro slide');
+    }
+
+    if (I.slideTime) {
+      const g = gravador();
+      const seis = (n) => new Array(n).fill(0).map((_, i) => ({ nome: 'P' + i, valor: 10 - i }));
+      I.slideTime(g.pptx, { entregas: seis(7), pontos: seis(5), atrasos: seis(4) },
+        1, 'Setembro de 2026',
+        new Array(8).fill(0).map((_, i) => ({ nome: 'A' + i, dias: 2, tipo: 'férias' })),
+        { devs: 11, uteis: 21, fora: 16 }, null);
+      const txt = juntou(g);
+      ok(/e mais 3/.test(txt), 'DESENHADO: o ranking de 7 diz que 3 ficaram de fora', txt.slice(0, 0));
+      ok(/e mais 1\b/.test(txt), 'e o de 5 diz que 1 ficou');
+      ok(!/e mais 0/.test(txt), 'e o de 4, que coube inteiro, nao diz nada');
+      ok(/e mais 2/.test(txt), 'e as 8 ausencias viram "e mais 2" depois das 6 que cabem');
+    }
+
+    if (I.slideEsforcoFrente) {
+      const g = gravador();
+      I.slideEsforcoFrente(g.pptx, {
+        itens: new Array(9).fill(0).map((_, i) => ({
+          nome: 'F' + i, plan: 100 - i * 5, real: 90 - i * 5, pontos: 10,
+          entregas: 3, devs: 2, pct: 90, evolucao: 2, sustentacao: 1, cor: '2BBF6A' })),
+        total: { pontos: 90, real: 600, plan: 620, entregas: 27 },
+      }, 1, 'Setembro de 2026');
+      const txt = juntou(g);
+      ok(/e mais 3 frentes/.test(txt),
+         'DESENHADO: as barras dizem que 3 frentes ficaram de fora', txt.slice(0, 0));
+    }
+    /* E A EXCECAO TEM DE CONTINUAR SENDO EXCECAO: se `partes` crescer, ela deixa
+       de ser limitada e volta a precisar declarar. */
+    const sm = APRES.slice(APRES.indexOf('function slideMes('));
+    const partes = (sm.match(/partes\.push\(/g) || []).length;
+    ok(partes <= 3,
+       'e a lista isenta continua cabendo no corte dela', partes + ' push(es)');
+
+    /* OS DOIS CASOS QUE O USUARIO VIU, nomeados: eles nao podem voltar a somar
+       menos que o cabecalho sem avisar. */
+    const sf = APRES.slice(APRES.indexOf('function slideFrente('),
+                           APRES.indexOf('function slideEntregas('));
+    ok(/devsTodos\.slice\(devs\.length\)/.test(sf) && /e mais '/.test(sf),
+       'QUEM FEZ declara as pessoas que nao couberam');
+    ok(/rEnt/.test(sf) && /rPts/.test(sf),
+       'e declara com entregas E pontos — o que a sala estava somando');
+    /* "TAREFAS" NAO PODE SIGNIFICAR DUAS COISAS NO MESMO DECK. Em PRINCIPAIS
+       PROJETOS e tudo do projeto; nesta coluna e so o que a frente entregou no
+       mes. O EP-006 aparecia com 9 la e 6 aqui, e os dois estavam certos. */
+    ok(/' entrega' : ' entregas'/.test(sf),
+       'e a coluna PROJETOS da frente diz "entregas", e nao "tarefas"');
+    ok(!/' tarefa' : ' tarefas'/.test(sf),
+       'sem reusar a palavra do outro slide, que conta outra coisa');
+
+    /* ── E QUEM MONTA OS DADOS NAO PODE CORTAR ANTES ──────────────────
+       O corte morava em DOIS lugares: 4 no `admin.html` e 3 no slide. O de ca
+       apagava o resto antes de a lamina poder dizer que havia resto — nenhum
+       aviso no deck conserta isso, porque a informacao nunca chega la. O slide
+       e que decide quantas cabem; a agregacao entrega tudo, ordenado. */
+    const agreg = ADMIN.slice(ADMIN.indexOf('topProjetos: [...a.projetos.values()]'));
+    const ate = agreg.slice(0, agreg.indexOf('};'));
+    ok(!/\.slice\(0,\s*\d+\)/.test(ate),
+       'a agregacao das frentes entrega as listas INTEIRAS ao slide',
+       (ate.match(/\.slice\(0,\s*\d+\)/g) || []).join(', ') || 'sem corte');
+    ok(/topDevs:/.test(ate) && /topProjetos:/.test(ate),
+       'e sao essas duas listas que alimentam as colunas do slide de frente');
+  }
+
   sec('O deck: a tabela que passava do rodape, o corte e o numero da pagina');
   {
     const jan = {};
