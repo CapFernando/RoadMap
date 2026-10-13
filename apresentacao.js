@@ -427,11 +427,22 @@
      * custa 0,16" por projeto. Quatro com contexto valem mais numa reunião do
      * que cinco que obrigam quem apresenta a explicar cada um de cabeça — que é
      * exatamente a reclamação. Quantos ficaram de fora continua escrito no pé. */
-    var TOPO = 1.18, ALT = 0.88;
+    /* ═══ RESPIRO DE VERDADE ════════════════════════════════════════════
+       "Os cartoes com borda e respiro."
+
+       O cartao tinha 0,80" num passo de 0,88": 0,08" entre um e outro, que a
+       olho e quase encosto. E sobravam 0,43" mortos entre o ultimo cartao e o
+       rodape — espaco que existia e nao estava sendo usado para nada.
+
+       Agora o cartao tem 0,86" num passo de 0,96": o vao cresceu para 0,10" e
+       a altura ganhou os 0,06" que faltavam para o conteudo respirar dentro,
+       com folga IGUAL em cima e embaixo. Quatro cartoes terminam em 4,92", e
+       o rodape comeca em 5,05". */
+    var TOPO = 1.20, ALT = 0.98, CARTA = 0.86;
     var vis = lista.slice(0, 4);
     vis.forEach(function (p, i) {
       var y = TOPO + i * ALT;
-      cartao(pptx, s, 0.5, y, 9.0, 0.80);
+      cartao(pptx, s, 0.5, y, 9.0, CARTA);
 
       // A posicao: circulo de medalha nos tres primeiros, quadrado nos demais.
       /* `rectRadius` SO VAI NO roundRect. Passado junto com `ellipse`, o
@@ -440,20 +451,20 @@
          PowerPoint descartava a forma E o resto do cartao junto: o slide saia
          com o cabecalho certo e os cartoes vazios. */
       var cor = MEDALHA[i] || C.fraco;
-      var medalha = { x: 0.63, y: y + 0.26, w: 0.28, h: 0.28,
+      var medalha = { x: 0.63, y: y + 0.29, w: 0.28, h: 0.28,
                       fill: { color: i < 3 ? cor : C.fundo3 },
                       line: { color: i < 3 ? cor : C.borda, width: 0.75 } };
       if (i >= 3) medalha.rectRadius = 0.04;
       s.addShape(i < 3 ? pptx.ShapeType.ellipse : pptx.ShapeType.roundRect, medalha);
       s.addText(String(i + 1), {
-        x: 0.63, y: y + 0.28, w: 0.28, h: 0.24, fontSize: 9, bold: true,
+        x: 0.63, y: y + 0.31, w: 0.28, h: 0.24, fontSize: 9, bold: true,
         color: i < 3 ? C.fundo : C.fraco, align: 'center' });
 
       s.addText(corta(p.nome, 56), {
         /* h 0,22 E NAO 0,24: com 0,24 a caixa do nome terminava em y+0,31 e a
            da descricao abria em y+0,30 — um centesimo de sobreposicao, que em
            corpo 11,5 vira o descendente do "g" tocando a linha de baixo. */
-        x: 1.00, y: y + 0.07, w: 5.5, h: 0.22, fontSize: 11.5, bold: true, color: C.texto });
+        x: 1.00, y: y + 0.09, w: 5.5, h: 0.22, fontSize: 11.5, bold: true, color: C.texto });
 
       /* A LINHA DE CONTEXTO — a que faltava.
          Primeiro a descrição cadastrada; faltando ela, o que ANDOU no mês pelos
@@ -467,7 +478,7 @@
         ctx = corta('saiu: ' + p.entregou.join('; '), cabemChars(5.5, 9));
       }
       if (ctx) {
-        s.addText(ctx, { x: 1.00, y: y + 0.30, w: 5.5, h: 0.2,
+        s.addText(ctx, { x: 1.00, y: y + 0.33, w: 5.5, h: 0.2,
                          fontSize: 9, color: C.prata, italic: !p.descricao, wrap: false });
       }
 
@@ -487,13 +498,13 @@
          caracteres numa coluna que comporta 95, e a data — o pedaço que mais
          importa — era justamente o que a reticência comia. */
       s.addText(corta(meta.join(' · '), cabemChars(5.5, 8)), {
-        x: 1.00, y: y + 0.52, w: 5.5, h: 0.2, fontSize: 8, color: C.fraco, wrap: false });
+        x: 1.00, y: y + 0.57, w: 5.5, h: 0.2, fontSize: 8, color: C.fraco, wrap: false });
 
       var parado = !p.feitas && !p.andando;
       if (parado) {
         // Dito com todas as letras, e nao com um zero que se le como "nao sei".
         s.addText('sem tarefa no mês', {
-          x: 6.55, y: y + 0.28, w: 2.8, h: 0.24, fontSize: 10, bold: true,
+          x: 6.55, y: y + 0.31, w: 2.8, h: 0.24, fontSize: 10, bold: true,
           color: SIGNIFICADO.atencao, align: 'right' });
         return;
       }
@@ -504,9 +515,9 @@
           cor: corPercentual(p.pct), x: 8.45 },
       ];
       cols.forEach(function (c) {
-        s.addText(String(c.v), { x: c.x, y: y + 0.18, w: 0.9, h: 0.26,
+        s.addText(String(c.v), { x: c.x, y: y + 0.21, w: 0.9, h: 0.26,
                                  fontSize: 13, bold: true, color: c.cor, align: 'right' });
-        s.addText(c.rot, { x: c.x, y: y + 0.45, w: 0.9, h: 0.18,
+        s.addText(c.rot, { x: c.x, y: y + 0.50, w: 0.9, h: 0.18,
                            fontSize: 7, color: C.fraco, align: 'right', charSpacing: 0.8 });
       });
     });
@@ -517,9 +528,13 @@
       nota.push('e mais ' + sobra + (sobra === 1 ? ' projeto em aberto' : ' projetos em aberto'));
     }
     nota.push('Planejado: cada dia útil vale 8h, divididas entre as demandas do dia');
+    /* A NOTA SUBIU PARA CIMA DOS CARTOES. Embaixo ela terminava em 5,26" —
+       por cima do rodape — assim que os cartoes ganharam o respiro que
+       faltava. E ela e METADADO ("quantos ficaram de fora" e "como o
+       planejado e calculado"), nao conclusao: ler antes da lista serve melhor
+       do que depois, e libera o pe inteiro da lamina para o conteudo. */
     s.addText(nota.join('   ·   '), {
-      x: 0.5, y: TOPO + vis.length * ALT + 0.04, w: 9.0, h: 0.2,
-      fontSize: 7.5, color: C.fraco });
+      x: 0.5, y: 1.00, w: 9.0, h: 0.18, fontSize: 7.5, color: C.fraco, wrap: false });
     rodape(s, periodo, pagina);
     return s;
   }
@@ -1909,7 +1924,10 @@
 
     // ── Esquerda: o que saiu, com nome ──────────────────────────────────────
     tituloCol('PRINCIPAIS ENTREGAS', 0.5, 5.0, 2.22);
-    var TOPO_E = 2.48, ALT_E = 0.42;
+    /* ALT_E 0,44 e nao 0,42: com 0,42 sobravam 0,06" entre um cartao e outro, e
+       a conferencia de vao os acusou de encostados — eram o item mais apertado
+       desta lamina. Cinco linhas terminam em 4,60", bem acima do rodape. */
+    var TOPO_E = 2.48, ALT_E = 0.44;
     (f.topEntregas || []).slice(0, 5).forEach(function (e, i) {
       var y = TOPO_E + i * ALT_E;
       cartao(pptx, s, 0.5, y, 5.0, 0.36);
@@ -1928,7 +1946,14 @@
     }
 
     // ── Direita, em cima: para que projeto ──────────────────────────────────
-    var XD = 5.75, WD = 3.75;
+    /* DECLARADAS ANTES DE QUEM AS USA. Elas moravam mais abaixo, junto do
+       PISO, e `XD` virava `NaN` — `var` iça o nome e nao o valor. Os nomes das
+       pessoas saiam como "…", porque `cabemChars(NaN)` devolve NaN e `corta`
+       com limite NaN so entrega a reticencia. Segunda vez que esta armadilha
+       morde nesta lamina. */
+    var PAINEL_X = 5.61, PAINEL_W = 3.90;   // alinhado com o fim dos KPIs, em 9,51"
+    var PAD = 0.10;                          // respiro interno do painel
+    var XD = PAINEL_X + 0.14, WD = PAINEL_W - 0.28;
     /* ═══ "TAREFAS" AQUI E "TAREFAS" NO SLIDE DE PROJETOS ERAM COISAS
        DIFERENTES, e a sala via contradicao onde havia duas perguntas.
 
@@ -1959,21 +1984,51 @@
      * DOIS PROJETOS E QUATRO PESSOAS e o que cabe nos 2,73" uteis, e a escolha
      * entre os dois e deliberada: quem olha este slide pergunta "quem fez", e a
      * lista de projetos tem um slide inteiro so para ela. */
+    /* ═══ A DIREITA PASSOU A TER CARTAO ════════════════════════════════════
+     *
+     * "Os cartoes com borda e respiro, e a hierarquia do numero grande."
+     *
+     * Metade deste slide nao tinha cartao nenhum: a linha de KPIs usava
+     * `cartaoKpi` e as entregas da esquerda tinham um cartao por linha, mas
+     * PROJETOS e QUEM FEZ eram texto solto sobre o fundo. Era a assimetria que
+     * fazia a lamina parecer de outro deck.
+     *
+     * UM PAINEL POR BLOCO, e nao um cartao por linha: as linhas aqui tem 0,26"
+     * e um cartao em cada deixaria 0,04" entre elas — o contrario de respiro. O
+     * painel e a mesma forma que a Mandala usa, e e nele que o respiro mora.
+     *
+     * AS MEDIDAS SAIEM DOS LIMITES, e nao de gosto: os KPIs terminam em 2,04" e
+     * o rodape comeca em 5,05", entao a coluna tem 2,94" e os dois paineis sao
+     * dimensionados para caber ali com folga igual. */
     var PISO = 4.95;              // o rodape comeca em 5,05"
-    var TIT = 0.24, RESTO = 0.22, GAP = 0.10, LIN = 0.28;
+    var TIT = 0.24, RESTO = 0.22, GAP = 0.18, LIN = 0.28;
     var projTodos = f.topProjetos || [];
     var devsTodos0 = f.topDevs || [];
 
-    var yProjTit = 2.20, yProjLin = yProjTit + TIT;
+    /* 2,22 e nao 2,20: o painel abre em `yProjTit - PAD`, e com 2,20 ele
+       comecava em 2,10 — a 0,06" dos KPIs, que terminam em 2,04. Os dois liam
+       como um bloco rachado. */
+    var yProjTit = 2.22, yProjLin = yProjTit + TIT;
+    var LIN_D = 0.26;   // as pessoas sao mais linhas no mesmo espaco
 
     /* O TITULO SO DEPOIS DA CONTA. Ele estava ANTES da declaracao de
        `yProjTit`: `var` iça o nome mas nao o valor, entao a caixa nascia com
        `y: undefined` e o PowerPoint a jogava no canto superior esquerdo, por
        cima do KPI. Defeito meu, achado ao medir as formas desenhadas. */
+    /* ═══ UM PAINEL SO PARA OS DOIS BLOCOS ═════════════════════════════
+       Dois paineis nao cabem: cada um custa 0,20" de respiro proprio mais o
+       vao entre eles, e medido isso estourava o rodape em 0,08" — a saida
+       seria mostrar 3 pessoas em vez de 4, que e perder informacao para
+       ganhar moldura. Um painel com divisoria entrega a mesma borda e o mesmo
+       respiro, e e o que a Mandala faz: um quadro por regiao, conteudo dentro.
+       O painel e desenhado DEPOIS, quando as duas alturas ja sao conhecidas,
+       porque e o conteudo que define o quadro, e nao o contrario. */
+    var fimProj = yProjLin + Math.min(2, Math.max(1, projTodos.length)) * LIN +
+                  (projTodos.length > 2 ? RESTO : 0);
     tituloCol('PROJETOS', XD, WD, yProjTit);
     /* Quantas linhas cabem deixando o bloco de baixo de pe: ele precisa de
        titulo + as pessoas + o resto, e e o que a sala veio ver. */
-    var altDevs = TIT + Math.min(4, Math.max(1, devsTodos0.length)) * LIN +
+    var altDevs = TIT + Math.min(4, Math.max(1, devsTodos0.length)) * LIN_D +
                   (devsTodos0.length > 4 ? RESTO : 0);
     var espacoProj = PISO - yProjLin - GAP - altDevs;
     var cabemProj = Math.max(1, Math.floor((espacoProj - RESTO) / LIN));
@@ -2007,13 +2062,20 @@
     // ── Direita, embaixo: por quem ──────────────────────────────────────────
     var sobramProj = Math.max(0, projTodos.length - proj.length);
     var Y_DEV = yProjLin + proj.length * LIN + (sobramProj ? RESTO : 0) + GAP;
+    var fimDev = Y_DEV + TIT + Math.min(4, Math.max(1, devsTodos0.length)) * LIN_D +
+                 (devsTodos0.length > 4 ? RESTO : 0);
+    cartao(pptx, s, PAINEL_X, yProjTit - PAD, PAINEL_W, (fimDev - yProjTit) + 2 * PAD);
+    /* A DIVISORIA, no meio do vao: separa os dois assuntos sem a moldura
+       dupla que nao cabia. Fica no fundo do painel, e nao e texto. */
+    s.addShape(pptx.ShapeType.rect, { x: PAINEL_X + 0.14, y: fimProj + GAP / 2,
+      w: PAINEL_W - 0.28, h: 0.008, fill: { color: C.borda }, line: { type: 'none' } });
     tituloCol('QUEM FEZ', XD, WD, Y_DEV);
     var devsTodos = devsTodos0;
     /* E AQUI O PISO FECHA A CONTA: o que nao couber vira 'e mais N'. */
-    var cabemDev = Math.max(1, Math.floor((PISO - (Y_DEV + TIT) - RESTO) / LIN));
+    var cabemDev = Math.max(1, Math.floor((PISO - (Y_DEV + TIT) - RESTO) / LIN_D));
     var devs = devsTodos.slice(0, Math.min(4, cabemDev));
     devs.forEach(function (d, i) {
-      var y = Y_DEV + TIT + i * LIN;
+      var y = Y_DEV + TIT + i * LIN_D;
       s.addText(corta(d.nome, cabemChars(WD - 1.75, 10)), {
         x: XD, y: y, w: WD - 1.75, h: 0.26, fontSize: 10, color: C.texto,
         valign: 'middle', wrap: false });
@@ -2041,7 +2103,7 @@
     if (sobramDevs.length) {
       var rEnt = sobramDevs.reduce(function (s2, d) { return s2 + (d.entregas || 0); }, 0);
       var rPts = sobramDevs.reduce(function (s2, d) { return s2 + (d.pontos || 0); }, 0);
-      var yR = Y_DEV + TIT + devs.length * LIN;
+      var yR = Y_DEV + TIT + devs.length * LIN_D;
       s.addText('e mais ' + sobramDevs.length +
                 (sobramDevs.length === 1 ? ' pessoa' : ' pessoas'), {
         x: XD, y: yR, w: WD - 1.75, h: 0.26, fontSize: 9, color: C.fraco,
@@ -2425,9 +2487,25 @@
         s.addText(e.sinal, { x: x - VC - 0.02, y: 1.58, w: VC + 0.04, h: 0.4,
                              fontSize: 22, color: C.fraco, align: 'center' });
       }
-      cartao(pptx, s, x, 1.16, LC, 2.30);
-      s.addText(e.rot, { x: x + 0.13, y: 1.26, w: LC - 0.26, h: 0.2,
-                         fontSize: 8, bold: true, color: e.cor, charSpacing: 1 });
+      /* ═══ O MESMO CARTAO DO RESTO DO DECK ═══════════════════════════════
+       *
+       * "Os cartoes com borda e respiro, e a hierarquia do numero grande."
+       *
+       * Esta lamina desenhava o cartao a mao, com o rotulo em 8pt e
+       * `charSpacing: 1` — enquanto `cartaoKpi`, que o FRENTES e o
+       * DESENVOLVIMENTO usam, poe 9pt com 1,2. Dois corpos de rotulo no mesmo
+       * deck fazem a sala reaprender a ler no meio da apresentacao.
+       *
+       * E A ALTURA SOBRAVA. O cartao tinha 2,30" e o conteudo terminava em
+       * 3,12" — 0,34" de vazio no pe, que nao e respiro: respiro e folga
+       * IGUAL em cima e embaixo, e esta era so sobra. Agora o pe fecha com os
+       * mesmos 0,10" do topo. */
+      cartao(pptx, s, x, 1.16, LC, 2.00);
+      /* h 0,19 e nao 0,21: com 0,21 o rotulo ia ate 1,47 e o numero abre em
+         1,46 — um centesimo de sobreposicao, que e como esta lamina ja
+         tinha quebrado no cartao de projeto. */
+      s.addText(e.rot, { x: x + 0.13, y: 1.26, w: LC - 0.26, h: 0.19,
+                         fontSize: 9, bold: true, color: e.cor, charSpacing: 1.2 });
       s.addText(String(e.val), { x: x + 0.12, y: 1.46, w: LC - 0.24, h: 0.62,
                                  fontSize: 36, bold: true, color: e.cor, wrap: false });
       // A variacao contra o mes anterior: 114 sozinho nao diz se cresceu.

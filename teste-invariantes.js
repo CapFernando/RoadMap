@@ -11646,7 +11646,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(desc.y + desc.h <= meta.y,
          'e a descricao termina antes da linha de meta',
          (desc.y + desc.h).toFixed(2) + ' <= ' + meta.y.toFixed(2));
-      const altCartao = +(sp.match(/cartao\(pptx, s, 0\.5, y, 9\.0, (0\.\d+)\)/) || [, 0])[1];
+      /* A ALTURA VIROU CONSTANTE (`CARTA`) quando o cartao ganhou respiro, e
+         esta invariante lia o numero literal da chamada — passou a medir contra
+         zero e a reprovar codigo correto. Le a constante. */
+      const altCartao = +(sp.match(/CARTA = (0\.\d+)/) || [, 0])[1];
       ok(altCartao > 0 && meta.y + meta.h <= altCartao,
          'e nada passa do pe do cartao',
          (meta.y + meta.h).toFixed(2) + ' <= ' + altCartao);
@@ -11714,7 +11717,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * ganha export nenhum so para ser testado. */
     const fonte = APRES.replace('window.apresentacaoKit = {',
       'window.__internos = { slideFrente: slideFrente, slideTime: slideTime, ' +
-      'slideEsforcoFrente: slideEsforcoFrente };\n  window.apresentacaoKit = {');
+      'slideEsforcoFrente: slideEsforcoFrente, slideProjetos: slideProjetos, ' +
+      'slideMes: slideMes };\n  window.apresentacaoKit = {');
     /* O SANDBOX PRECISA DOS MODULOS QUE O DECK LE do `window`: `DECKG` e o
        `DECKFUNDO`. Sem eles o slide estoura na primeira formatacao de numero,
        e o teste viraria um erro em vez de uma resposta. */
@@ -11743,9 +11747,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * Entao a conferencia e de GEOMETRIA, sobre as formas que foram para a
      * lamina: posicao definida, dentro do palco, e nada por cima do rodape. */
     const PALCO_W = 10, PALCO_H = 5.625, RODAPE = 5.05;
-    const confereForma = (nome, f) => {
-      const comY = f.filter(x => typeof x.y === 'number');
-      const semPos = f.filter(x => typeof x.y !== 'number' || typeof x.x !== 'number');
+    const confereForma = (nome, f, soltosEsperados) => {
+      const comY = f.filter(x => isFinite(x.y));
+      /* `isFinite` E NAO `typeof`: NaN E do tipo number, e passava limpo. Foi
+         assim que `XD = PAINEL_X + 0.14` com `PAINEL_X` ainda indefinido
+         atravessou esta conferencia — toda comparacao com NaN e falsa, entao
+         "nada passa da borda" dava OK enquanto a coluna inteira saia com
+         posicao NaN e os nomes viravam "…". */
+      const semPos = f.filter(x => !isFinite(x.y) || !isFinite(x.x) ||
+                                   !isFinite(x.w == null ? 0 : x.w) ||
+                                   !isFinite(x.h == null ? 0 : x.h));
       /* SEM POSICAO E O PIOR CASO: o PowerPoint joga a caixa no canto superior
          esquerdo, por cima do que estiver la. Foi o que aconteceu com o titulo
          PROJETOS quando ele passou a ler uma variavel declarada depois dele —
@@ -11792,6 +11803,70 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       }
       ok(colisoes.length === 0, nome + ': nenhum texto por cima de outro',
          colisoes.join(' | ') || txts.length + ' caixas de texto conferidas');
+
+
+      /* ═══ O CARTAO CONTEM O QUE E DELE, E COM RESPIRO PARELHO ═══════════
+       *
+       * "Os cartoes com borda e respiro."
+       *
+       * Seis sabotagens de layout escapavam das conferencias acima porque
+       * encolher um cartao nao tira o texto do PALCO — tira do CARTAO. O texto
+       * continua legivel, flutuando meio dentro meio fora da moldura, que e
+       * precisamente a lamina "fora do padrao".
+       *
+       * Entao: todo texto que mora na faixa de conteudo tem de estar DENTRO de
+       * algum cartao, e a folga de cima tem de bater com a de baixo. Respiro e
+       * folga IGUAL nos dois lados; sobra num lado so e desperdicio, e foi o
+       * que O MES tinha — 0,10" em cima e 0,34" embaixo. */
+      const cartoes = comY.filter(x => x.tipo === 'shape' && (x.w || 0) > 0.8 &&
+                                       (x.h || 0) > 0.25);
+      const dentro = (c, b) => b.x >= c.x - 0.01 && b.x + b.w <= c.x + c.w + 0.01 &&
+                               b.y >= c.y - 0.01 && b.y + b.h <= c.y + c.h + 0.01;
+      // So o conteudo: cabecalho e rodape vivem fora de cartao, por desenho.
+      const conteudo = txts.filter(x => x.y >= 1.05 && x.y + x.h <= RODAPE);
+      const soltos = conteudo.filter(b => !cartoes.some(c => dentro(c, b)));
+      /* O NUMERO ESPERADO E FIXADO POR LAMINA, e nao um teto generoso: um
+         teto de 6 aceitava 30 soltos de 30, que e dizer nada. Ha textos que
+         moram fora de cartao POR DESENHO — os sinais +, − e = entre os
+         cartoes de O MES, as barras do esforco, os rankings do time. Fixar o
+         numero transforma isso numa regressao visivel: tirar o painel da
+         direita do slide de frente leva 5 soltos para 22. */
+      ok(soltos.length === soltosEsperados,
+         nome + ': ' + soltosEsperados + ' texto(s) fora de cartao, como no desenho',
+         soltos.length + ' de ' + conteudo.length +
+         (soltos.length !== soltosEsperados ? '  ->  ' + soltos.slice(0, 3)
+            .map(x => JSON.stringify(x.txt).slice(0, 18)).join(' ') : ''));
+
+      const tortos = [];
+      cartoes.forEach(c => {
+        const seus = conteudo.filter(b => dentro(c, b));
+        if (seus.length < 2) return;
+        const topo = Math.min.apply(null, seus.map(b => b.y)) - c.y;
+        const pe = (c.y + c.h) - Math.max.apply(null, seus.map(b => b.y + b.h));
+        if (Math.abs(topo - pe) > 0.10) {
+          tortos.push('y=' + c.y.toFixed(2) + ' topo ' + topo.toFixed(2) +
+                      ' x pe ' + pe.toFixed(2));
+        }
+      });
+      ok(tortos.length === 0, nome + ': o respiro do cartao e parelho em cima e embaixo',
+         tortos.join(' | ') || cartoes.length + ' cartoes conferidos');
+
+
+      /* ═══ E CARTAO NAO ENCOSTA EM CARTAO ════════════════════════════════
+       * Dois cartoes com 0,02" entre eles leem-se como um bloco rachado, e nao
+       * como dois. O vao e parte do "respiro" tanto quanto a folga interna. */
+      const colados = [];
+      for (let a = 0; a < cartoes.length; a++) {
+        for (let b = a + 1; b < cartoes.length; b++) {
+          const A = cartoes[a], B = cartoes[b];
+          const mesmaColuna = Math.min(A.x + A.w, B.x + B.w) - Math.max(A.x, B.x) > 0.3;
+          if (!mesmaColuna) continue;
+          const vao = B.y > A.y ? B.y - (A.y + A.h) : A.y - (B.y + B.h);
+          if (vao < 0.07 && vao > -0.5) colados.push(vao.toFixed(2) + '"');
+        }
+      }
+      ok(colados.length === 0, nome + ': os cartoes nao se encostam',
+         colados.join(' ') || 'vaos de ao menos 0,07"');
     };
 
     /* UM PPTX DE MENTIRA que so anota o texto que recebe. */
@@ -11833,7 +11908,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                   { nome: 'E', entregas: 25, pontos: 150 },
                   { nome: 'F', entregas: 16, pontos: 88 }],
       }, 1, 'Setembro de 2026');
-      confereForma('slideFrente', g.formas);
+      confereForma('slideFrente', g.formas, 5);
       const txt = juntou(g);
       ok(/e mais 2 pessoas/.test(txt),
          'DESENHADO: QUEM FEZ diz que 2 pessoas nao couberam', txt.slice(0, 0));
@@ -11852,7 +11927,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         1, 'Setembro de 2026',
         new Array(8).fill(0).map((_, i) => ({ nome: 'A' + i, dias: 2, tipo: 'férias' })),
         { devs: 11, uteis: 21, fora: 16 }, null);
-      confereForma('slideTime', g.formas);
+      confereForma('slideTime', g.formas, 30);
       const txt = juntou(g);
       /* A FRACAO, e nao o sinal de mais. "+3" se le como "tres a mais do que o
          esperado"; "4 de 7" diz o que esta na tela e o que existe, que e a
@@ -11864,6 +11939,44 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/e mais 2/.test(txt), 'e as 8 ausencias viram "e mais 2" depois das 6 que cabem');
     }
 
+    /* ═══ E OS DOIS QUE FALTAVAM ═══════════════════════════════════════
+     * Oito sabotagens de layout escaparam porque so TRES slides eram
+     * desenhados aqui. Encolher o cartao de O MES, afrouxar o passo dos
+     * Projetos ou devolver a nota para o pe nao tocava em nenhuma invariante —
+     * e sao justamente as laminas que o usuario apontou como fora do padrao. */
+    if (I.slideMes) {
+      const g = gravador();
+      I.slideMes(g.pptx, {
+        periodo: 'Setembro de 2026',
+        fluxo: { backlogInicio: 81, recebidas: 283, saidas: 205, backlogFim: 159,
+                 corte: '30/09/2026' },
+        kpi: { entregas: 203, pontos: 1757 },
+        anterior: { nome: 'agosto', backlogInicio: 66, recebidas: 202,
+                    saidas: 175, backlogFim: 93 },
+        quebra: {
+          backlogInicio: { evolucao: 73, sustentacao: 8, sem: 2 },
+          recebidas: { evolucao: 201, sustentacao: 82, sem: 3 },
+          saidas: { evolucao: 133, sustentacao: 72, sem: 1 },
+          backlogFim: { evolucao: 141, sustentacao: 18, sem: 4 },
+        },
+      }, 1);
+      confereForma('slideMes', g.formas, 5);
+    }
+
+    if (I.slideProjetos) {
+      const g = gravador();
+      I.slideProjetos(g.pptx, new Array(7).fill(0).map((_, i) => ({
+        nome: 'EP-00' + i + ' · Projeto de nome razoavelmente comprido para o corte',
+        descricao: 'Primeira linha' + String.fromCharCode(10) + 'Segunda linha com texto.',
+        resp: 'Responsavel ' + i, situacao: 'em andamento', feitas: 4, andando: 2,
+        plan: 17, real: 68, pct: 400, fim: '2026-10-30',
+      })), 1, 'Setembro de 2026');
+      confereForma('slideProjetos', g.formas, 0);
+      const txt = juntou(g);
+      ok(/e mais 3 projetos em aberto/.test(txt),
+         'e PRINCIPAIS PROJETOS diz quantos ficaram de fora', txt.slice(0, 0));
+    }
+
     if (I.slideEsforcoFrente) {
       const g = gravador();
       I.slideEsforcoFrente(g.pptx, {
@@ -11872,13 +11985,31 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           entregas: 3, devs: 2, pct: 90, evolucao: 2, sustentacao: 1, cor: '2BBF6A' })),
         total: { pontos: 90, real: 600, plan: 620, entregas: 27 },
       }, 1, 'Setembro de 2026');
-      confereForma('slideEsforcoFrente', g.formas);
+      confereForma('slideEsforcoFrente', g.formas, 21);
       const txt = juntou(g);
       ok(/mostrando 6 de 9 frentes/.test(txt),
          'DESENHADO: as barras dizem quantas frentes ficaram de fora', txt.slice(0, 0));
     }
     /* E A EXCECAO TEM DE CONTINUAR SENDO EXCECAO: se `partes` crescer, ela deixa
        de ser limitada e volta a precisar declarar. */
+    /* ── O ROTULO DO CARTAO TEM UM CORPO SO NO DECK ──────────────────
+       `cartaoKpi` — que o FRENTES e o DESENVOLVIMENTO usam — poe o rotulo em
+       9pt com `charSpacing: 1.2`. O MES desenhava o cartao a mao e usava 8pt
+       com 1: dois corpos de rotulo no mesmo deck fazem a sala reaprender a
+       ler no meio da apresentacao. A geometria nao ve corpo de fonte, entao
+       esta e a conferencia que cobre essa metade. */
+    const kpiFn = corpo(APRES, 'function cartaoKpi(pptx, s, cfg) {');
+    const corpoRot = (kpiFn.match(/fontSize: (\d+(?:\.\d+)?), bold: true, color: cfg\.cor/) || [, ''])[1];
+    const espRot = (kpiFn.match(/charSpacing: (\d+(?:\.\d+)?)/) || [, ''])[1];
+    ok(corpoRot === '9' && espRot === '1.2',
+       'o rotulo do cartao padrao e 9pt com charSpacing 1,2',
+       corpoRot + 'pt / ' + espRot);
+    const smRot = APRES.slice(APRES.indexOf('function slideMes('));
+    const rotMes = smRot.match(/fontSize: (\d+(?:\.\d+)?), bold: true, color: e\.cor, charSpacing: (\d+(?:\.\d+)?)/);
+    ok(!!rotMes && rotMes[1] === corpoRot && rotMes[2] === espRot,
+       'e O MES usa o MESMO corpo e o mesmo espacejamento',
+       rotMes ? rotMes[1] + 'pt / ' + rotMes[2] : '(nao achei)');
+
     const sm = APRES.slice(APRES.indexOf('function slideMes('));
     const partes = (sm.match(/partes\.push\(/g) || []).length;
     ok(partes <= 3,
