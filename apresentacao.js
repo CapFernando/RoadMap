@@ -450,14 +450,19 @@
         color: i < 3 ? C.fundo : C.fraco, align: 'center' });
 
       s.addText(corta(p.nome, 56), {
-        x: 1.00, y: y + 0.07, w: 5.5, h: 0.24, fontSize: 11.5, bold: true, color: C.texto });
+        /* h 0,22 E NAO 0,24: com 0,24 a caixa do nome terminava em y+0,31 e a
+           da descricao abria em y+0,30 — um centesimo de sobreposicao, que em
+           corpo 11,5 vira o descendente do "g" tocando a linha de baixo. */
+        x: 1.00, y: y + 0.07, w: 5.5, h: 0.22, fontSize: 11.5, bold: true, color: C.texto });
 
       /* A LINHA DE CONTEXTO — a que faltava.
          Primeiro a descrição cadastrada; faltando ela, o que ANDOU no mês pelos
          títulos das entregas; faltando os dois, ela some em vez de sair vazia. */
       var ctx = '';
       if (p.descricao) {
-        ctx = corta(p.descricao, cabemChars(5.5, 9));
+        // `textoLimpo` e nao `corta`: a descricao e o unico campo deste slide
+        // que a pessoa escreve em varias linhas, com markdown e marcadores.
+        ctx = textoLimpo(p.descricao, cabemChars(5.5, 9));
       } else if ((p.entregou || []).length) {
         ctx = corta('saiu: ' + p.entregou.join('; '), cabemChars(5.5, 9));
       }
@@ -621,8 +626,26 @@
    *
    * E A PONTUAÇÃO PENDURADA SAI JUNTO: "Ajuste de nomes -…" tem um hífen que não
    * liga mais nada. */
+  /* ═══ COLAPSA O BRANCO ANTES DE MEDIR ══════════════════════════════════
+   *
+   * "Alguns slides fora do padrao — texto fora do quadro, com sobreposicao."
+   *
+   * Era isto. Uma descricao digitada com Enter chega aqui com `
+` dentro;
+   * `corta` media o comprimento, nao via problema, e devolvia o texto com a
+   * quebra intacta. O PowerPoint entao desenhava DUAS linhas numa caixa de
+   * 0,2" — a segunda saia por baixo e caia em cima da linha seguinte do
+   * cartao. Foi o que aconteceu com o EP-005 no deck de setembro.
+   *
+   * TODA CAIXA QUE CHAMA `corta` E DE UMA LINHA SO (elas vao com `wrap:
+   * false` ou com altura de uma linha), entao quebra de linha nunca e
+   * intencional aqui — colapsar e sempre o certo. Sao 22 pontos no arquivo
+   * que recebem texto digitado por gente; consertar nos 22 seria deixar o
+   * 23o nascer quebrado.
+   *
+   * Colapsar so ENCURTA, entao a garantia de caber em `n` continua valendo. */
   function corta(t, n) {
-    var s = String(t == null ? '' : t).trim();
+    var s = String(t == null ? '' : t).replace(/\s+/g, ' ').trim();
     if (s.length <= n) return s;
     var bruto = s.slice(0, n - 1);
     /* SÓ RECUA SE O CORTE PARTIU UMA PALAVRA. A primeira versão recuava sempre, e

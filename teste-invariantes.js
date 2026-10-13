@@ -11571,6 +11571,88 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }
   }
 
+  sec('Deck: texto digitado nao pode transbordar da caixa');
+  /* "Alguns slides fora do padrao — texto fora do quadro, com sobreposicao."
+   *
+   * Uma descricao digitada com Enter chegava com `\n` dentro. `corta` media o
+   * COMPRIMENTO, nao via problema, e devolvia a quebra intacta — o PowerPoint
+   * desenhava duas linhas numa caixa de 0,2" e a segunda caia sobre a linha
+   * seguinte do cartao. Foi o EP-005 do deck de setembro.
+   *
+   * O conserto e na raiz: toda caixa que chama `corta` e de uma linha so, entao
+   * quebra de linha nunca e intencional ali. Sao 22 pontos do arquivo que
+   * recebem texto digitado por gente — consertar nos 22 deixaria o 23o nascer
+   * quebrado. */
+  {
+    const janT = { DECKG: require('./deck-grafico.js'),
+                   DECKFUNDO: require('./deck-fundo.js') };
+    new Function('window', APRES)(janT);
+    const K = janT.apresentacaoKit;
+    const N = String.fromCharCode(10);
+    const sujo = 'Descrição do projeto' + N + 'Projeto voltado à análise' +
+                 N + N + '  e otimização do consumo.';
+    ok(!/[\r\n]/.test(K.corta(sujo, 200)),
+       'corta devolve UMA linha, sempre — a quebra nao chega ao PowerPoint',
+       JSON.stringify(K.corta(sujo, 200)).slice(0, 56));
+    ok(!/  /.test(K.corta(sujo, 200)),
+       'e sem espaco duplo, que abre buraco no meio da frase');
+    ok(!/[\r\n]/.test(K.textoLimpo(sujo, 200)), 'o mesmo pelo textoLimpo');
+    /* ── E O MARKDOWN NAO VAI PARA A PAREDE ───────────────────────────
+       Com `corta` colapsando, perder o `textoLimpo` deixou de causar
+       transbordo — mas ainda e perda: a descricao e escrita em editor com
+       markdown, e `## Titulo **negrito**` sai cru no slide. Medido: `corta`
+       sozinho devolve "## Titulo **negrito** e *enfase* - item um". */
+    const md = '## Título' + N + '**negrito** e *ênfase*' + N + '- item um';
+    const limpo = K.textoLimpo(md, 200);
+    ok(!/#|\*/.test(limpo), 'textoLimpo tira titulo, negrito e enfase do markdown', limpo);
+    ok(/·/.test(limpo), 'e transforma marcador de lista em ponto medio');
+    ok(/Título/.test(limpo) && /negrito/.test(limpo),
+       'sem comer o texto junto com a marcacao');
+    /* E A DESCRICAO DO PROJETO USA ELE. E o unico campo deste slide que a pessoa
+       escreve em varias linhas, com marcacao. */
+    const spD = APRES.slice(APRES.indexOf('function slideProjetos('),
+                            APRES.indexOf('function slideTitulo('));
+    ok(/textoLimpo\(p\.descricao/.test(spD),
+       'e a descricao do projeto passa por ele, e nao so pelo corta');
+    /* COLAPSAR SO ENCURTA, entao a promessa de caber em `n` continua valendo —
+       se ela caisse, o texto voltaria a sair do quadro por outro caminho. */
+    ok(K.corta(sujo, 30).length <= 30 && K.corta('x'.repeat(99), 30).length <= 30,
+       'e o resultado continua cabendo no limite pedido');
+    ok(K.corta('Nome simples', 40) === 'Nome simples',
+       'e texto que ja estava limpo passa intacto');
+    ok(K.corta(null, 10) === '' && K.corta(undefined, 10) === '',
+       'e nulo nao vira a palavra "null" no slide');
+
+    /* ── E AS CAIXAS DO CARTAO DE PROJETO NAO SE ENCOSTAM ──────────────
+       O titulo terminava em y+0,31 e a descricao abria em y+0,30: um centesimo
+       de sobreposicao, que em corpo 11,5 vira o descendente do "g" tocando a
+       linha de baixo. As posicoes sao lidas do arquivo e conferidas por conta,
+       em vez de confiadas ao olho. */
+    const sp = APRES.slice(APRES.indexOf('function slideProjetos('),
+                           APRES.indexOf('function slideTitulo('));
+    const cx = (marca) => {
+      const m = sp.match(new RegExp('y: y \\+ (0\\.\\d+), w: 5\\.5, h: (0\\.\\d+)[^}]*' + marca));
+      return m ? { y: +m[1], h: +m[2] } : null;
+    };
+    const nome = cx('bold: true');
+    const desc = cx("color: C.prata");
+    const meta = cx("fontSize: 8");
+    ok(!!(nome && desc && meta), 'as tres caixas do cartao foram lidas do arquivo',
+       JSON.stringify({ nome, desc, meta }));
+    if (nome && desc && meta) {
+      ok(nome.y + nome.h <= desc.y,
+         'o titulo termina antes de a descricao comecar',
+         (nome.y + nome.h).toFixed(2) + ' <= ' + desc.y.toFixed(2));
+      ok(desc.y + desc.h <= meta.y,
+         'e a descricao termina antes da linha de meta',
+         (desc.y + desc.h).toFixed(2) + ' <= ' + meta.y.toFixed(2));
+      const altCartao = +(sp.match(/cartao\(pptx, s, 0\.5, y, 9\.0, (0\.\d+)\)/) || [, 0])[1];
+      ok(altCartao > 0 && meta.y + meta.h <= altCartao,
+         'e nada passa do pe do cartao',
+         (meta.y + meta.h).toFixed(2) + ' <= ' + altCartao);
+    }
+  }
+
   sec('Deck: lista cortada tem de DIZER que cortou');
   /* ═══ A ORIGEM DAS "DIVERGENCIAS NOS DADOS" ═══════════════════════════════
    *
