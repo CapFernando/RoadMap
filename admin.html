@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="613c113cee">
+<html lang="pt-BR" data-build="9298ea064d">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -428,6 +428,16 @@
     /* DADOS/BI EM CIANO, e nao em mais um roxo: `kb-proj` e `kb-debito` ja sao
        roxos, e tres marcas da mesma cor no mesmo card viram uma mancha so —
        quem varre o quadro atras do time de Dados precisa achar pela cor. */
+    /* A marca de um BI no formulario. Botao de tirar DENTRO do chip: o alvo de
+       clique fica junto do nome que ele remove. */
+    .bi-chip { display:inline-flex; align-items:center; gap:5px; font-size:11.5px;
+      font-weight:600; background:var(--cyan-bg, #06363F); color:var(--cyan-tx, #7FD8E8);
+      border:1px solid var(--cyan-bd, #10697C); border-radius:5px; padding:2px 5px 2px 7px; }
+    .bi-chip button { background:none; border:0; color:inherit; cursor:pointer;
+      font-size:14px; line-height:1; padding:0 2px; opacity:.7; }
+    .bi-chip button:hover { opacity:1; }
+    .kb-bi { font-size: 10.5px; font-weight: 700; background: var(--cyan-bg, #06363F);
+      color: var(--cyan-tx, #7FD8E8); border-radius: 5px; padding: 1px 6px; cursor: help; }
     .kb-dados { font-size: 10.5px; font-weight: 700; background: var(--cyan-bg, #06363F);
       color: var(--cyan-tx, #7FD8E8); border: 1px solid var(--cyan-bd, #10697C);
       border-radius: 5px; padding: 1px 6px; }
@@ -518,6 +528,8 @@
       display: inline-block; margin-bottom: 5px; }
     /* Coluna de validacao: e onde a acao do PM/PO fica esperando. */
     .kb-col[data-col="validacao"] .kb-col-head { color: var(--amber); }
+    /* E a da area, onde a acao e de QUEM PEDIU — por isso cor propria. */
+    .kb-col[data-col="validacao_area"] .kb-col-head { color: #D8AEF0; }
     .kb-col.drop-target { outline: 2px dashed var(--blue, #3B8FE8); outline-offset: -2px; background: rgba(59,143,232,.06); }
     .kb-col.drop-target .kb-col-head { background: rgba(59,143,232,.10); }
     .gut-row { display: grid; grid-template-columns: 210px 1fr 34px; gap: 12px; align-items: center; font-size: 13px; color: var(--text2, #C9C6BE); }
@@ -1161,6 +1173,14 @@
     .badge-atrasado    { background:#5C0A0A; color:#F9A0A0; }
     .badge-validacao   { background:var(--amber-bg, #4A2800); color:var(--amber-tx, #FFC470); }
     .sf-btn.validacao.active { background:var(--amber-bg, #4A2800); color:var(--amber-tx, #FFC470); border-color:var(--amber); }
+    /* Validacao da AREA em roxo, e nao no ambar da validacao do PM/PO: duas
+       etapas vizinhas da mesma cor se leem como uma so, e a pergunta "parou na
+       area ou no PM/PO?" e justamente a que a etapa nova existe para responder. */
+    .badge-validacao_area { background:#2E1540; color:#D8AEF0; }
+    .sf-btn.validacao_area.active { background:#2E1540; color:#D8AEF0; border-color:#7B4A9C; }
+    .kb-area-tag { font-size: 10.5px; font-weight: 700; color: #D8AEF0;
+      background: #2E1540; border: 1px solid #7B4A9C; border-radius: 4px;
+      padding: 1px 6px; cursor: help; }
     .badge-negada      { background:#5C0A0A; color:#F9A0A0; }
 
     /* MODAL */
@@ -1253,10 +1273,13 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="subtarefa.js?v=81d990c6e3"></script>
+  <!-- Os BIs que a demanda impacta. Regra num lugar so: o nome e normalizado
+       aqui, e o catalogo nasce do uso — ver o cabecalho de `bis.js`. -->
+  <script src="bis.js?v=735ed4e46d"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
-  <script src="prevoo.js?v=b86be156b3"></script>
+  <script src="prevoo.js?v=ab2758c54c"></script>
   <script src="deck-grafico.js?v=30e803d757"></script>
   <script src="deck-fundo.js?v=050a7db483"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
@@ -1264,11 +1287,11 @@
   <script src="resumo-projeto.js?v=63d219aac1"></script>
   <script src="fila.js?v=90c9b67421"></script>
 <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=e85b8c6bbe"></script>
+<script src="prazo.js?v=1f6897d06a"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=ef35f28412"></script>
-<script src="capacidade.js?v=cc227d4867"></script>
+<script src="capacidade.js?v=63737a8670"></script>
 <script src="apresentacao.js?v=58a6ebb784"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
@@ -2054,10 +2077,36 @@
     <div class="form-group">
       <label class="tag-dados"
              title="Marque quando a demanda for do time de Dados/BI. A marca aparece no card do Kanban e na fila da sala do Planning Poker.">
-        <input type="checkbox" id="m-dados-bi" style="width:auto;margin:0" />
+        <input type="checkbox" id="m-dados-bi" style="width:auto;margin:0"
+               onchange="bisMostraCaixa()" />
         📊 <strong>Dados / BI</strong>
         <span style="font-size:12px;opacity:.75">— demanda do time de Dados</span>
       </label>
+      <!-- OS BIs IMPACTADOS, presos a marca acima.
+           "Escolho o assunto BI apenas — devo conseguir informar quais BIs
+           terao impactos." A caixa aparece quando a demanda e marcada como
+           Dados/BI, e some quando desmarca: um campo de BI aberto numa demanda
+           de Desenvolvimento e ruido em 90% das aberturas.
+           O QUE JA FOI MARCADO NAO SE PERDE AO DESMARCAR — ver `bisMostraCaixa`:
+           a caixa some da tela, a lista continua no objeto, e desmarcar por
+           engano nao apaga rastreio. -->
+      <div id="m-bis-caixa" style="display:none;margin-top:10px;background:var(--bg3);
+           border:1px solid var(--border);border-radius:var(--radius);padding:11px 12px">
+        <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:7px">
+          BIs impactados
+          <span style="color:var(--text3)">— para rastrear o que foi feito em cada um</span>
+        </label>
+        <div id="m-bis-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px">
+          <!-- `datalist` e nao `select`: o catalogo nasce do uso, entao a lista
+               sugere o que ja existe SEM impedir um nome novo. Um select puro
+               obrigaria a cadastrar BI antes de usar, e ninguem faz isso. -->
+          <input type="text" id="m-bi-novo" list="m-bi-lista" placeholder="Nome do BI — digite ou escolha"
+                 style="flex:1;min-width:0" onkeydown="if(event.key==='Enter'){event.preventDefault();bisAdiciona();}" />
+          <datalist id="m-bi-lista"></datalist>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="bisAdiciona()">+ Incluir</button>
+        </div>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -2074,6 +2123,7 @@
           <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em Andamento</option>
+          <option value="validacao_area">Validação da área</option>
           <option value="validacao">Validação PM/PO</option>
           <option value="concluido">Concluído</option>
           <option value="negada">Negada</option>
@@ -2224,7 +2274,10 @@
     <div class="form-row">
       <div class="form-group">
         <label>Horas realizadas</label>
-        <input type="number" id="m-horas-real" min="0" step="0.5" placeholder="Preenchido pelo dev ao concluir" />
+        <!-- 0,25 porque a hora pode VIR do painel do dev, somada de subtarefas
+             de 15 minutos. Com `step="0.5"` este campo recusaria 0,75 — um
+             numero que o proprio sistema calculou. -->
+        <input type="number" id="m-horas-real" min="0" step="0.25" placeholder="Preenchido pelo dev ao concluir" />
       </div>
       <div class="form-group">
         <label>Horas planejadas <span style="font-weight:400;color:var(--text3)">(automático)</span></label>
@@ -3484,6 +3537,77 @@ function matchTipo(m, filtro) {
   return m.tipo === filtro;
 }
 
+/* ═══ OS BIs IMPACTADOS, NO FORMULARIO ═══════════════════════════════════
+ *
+ * `_mBis` e a lista EM EDICAO do card aberto — a mesma ideia do `_msSubs` do
+ * painel do dev. A leitura, a normalizacao e o catalogo moram em `bis.js`;
+ * aqui so se move a lista e se desenha.
+ */
+let _mBis = [];
+
+/* A CAIXA SEGUE A MARCA, E A LISTA NAO.
+   Desmarcar Dados/BI esconde o campo e NAO apaga o que ja foi marcado: o
+   rastreio de uma demanda entregue nao pode sumir porque alguem clicou na
+   caixa errada. Se a demanda deixou de ser de Dados mesmo, a lista se tira
+   marca a marca — que e um gesto deliberado, e nao um efeito colateral. */
+function bisMostraCaixa() {
+  const cx = document.getElementById('m-bis-caixa');
+  if (!cx) return;
+  const marcada = !!(document.getElementById('m-dados-bi') || {}).checked;
+  cx.style.display = (marcada || _mBis.length) ? 'block' : 'none';
+}
+
+function bisRender() {
+  const chips = document.getElementById('m-bis-chips');
+  const lista = document.getElementById('m-bi-lista');
+  if (!chips || !lista) return;
+  chips.innerHTML = _mBis.length
+    ? _mBis.map((nome, i) =>
+        '<span class="bi-chip">📈 ' + esc(nome) +
+        '<button type="button" title="Tirar este BI" onclick="bisRemove(' + i + ')">×</button></span>'
+      ).join('')
+    : '<span style="font-size:12px;color:var(--text3)">Nenhum BI marcado ainda.</span>';
+  /* O CATALOGO E O DA BASE INTEIRA, menos os que esta demanda ja tem: sugerir
+     o que ja esta marcado so gera um clique que nao faz nada. */
+  const jaTem = _mBis.map(x => BIS.norm(x));
+  lista.innerHTML = BIS.catalogo(state.melhorias)
+    .filter(b => !jaTem.includes(BIS.norm(b.nome)))
+    // `esc` e nao `escAttr`: o segundo so existe no painel do dev, e chamar aqui
+    // quebraria na renderizacao sem nenhuma checagem de sintaxe acusar. O `esc`
+    // do admin ja escapa aspas, entao serve para atributo.
+    .map(b => '<option value="' + esc(b.nome) + '">' + b.qtd + ' demanda(s)</option>')
+    .join('');
+  bisMostraCaixa();
+}
+
+function bisAdiciona() {
+  const campo = document.getElementById('m-bi-novo');
+  if (!campo) return;
+  const nome = BIS.limpa(campo.value);
+  if (!nome) { campo.focus(); return; }
+  /* REPETIDO NAO ENTRA, e a comparacao e pela normalizada: "Carteira" e
+     "carteira " seriam duas linhas no relatorio de impacto, que e o defeito dos
+     42 temas de novo. */
+  if (_mBis.some(x => BIS.norm(x) === BIS.norm(nome))) {
+    toast('Esse BI já está marcado nesta demanda.', 'err');
+    campo.value = ''; campo.focus();
+    return;
+  }
+  if (_mBis.length >= BIS.MAX_POR_DEMANDA) {
+    toast('Limite de ' + BIS.MAX_POR_DEMANDA + ' BIs por demanda.', 'err');
+    return;
+  }
+  _mBis.push(nome);
+  campo.value = '';
+  bisRender();
+  campo.focus();
+}
+
+function bisRemove(i) {
+  _mBis.splice(i, 1);
+  bisRender();
+}
+
 /* ─── O FILTRO DO TIME DE DADOS ───────────────────────────────────────────
    A marca existe para ACOMPANHAR o time, e acompanhar e isolar: ver o quadro
    so com o que e de Dados, ou so com o que nao e. Sem o filtro, a etiqueta
@@ -3495,6 +3619,28 @@ function matchTipo(m, filtro) {
 function matchDados(m, filtro) {
   if (!filtro) return true;
   return filtro === 'dados' ? !!(m && m.dados_bi) : !(m && m.dados_bi);
+}
+
+/* ─── O RASTREIO POR BI ───────────────────────────────────────────────────
+   "Gerar rastreio do que foi feito em cada BI." O filtro E o rastreio: escolher
+   um BI deixa no quadro so o que o atingiu, em todas as etapas, e o "Mostrando
+   N de M" ao lado ja responde quanto foi. A contagem de cada opcao e a mesma
+   do catalogo — nasce do uso, sem ninguem cadastrar BI antes. */
+function opcoesBi() {
+  const cat = BIS.catalogo(state.melhorias);
+  const comBi = state.melhorias.filter(m => !ehMesclada(m) && BIS.daDemanda(m).length).length;
+  return [{ key: '', label: 'Todos', n: state.melhorias.length }]
+    .concat(cat.map(b => ({ key: b.nome, label: '📈 ' + b.nome, n: b.qtd })))
+    /* "Sem BI" no fim, e so quando ha algum BI marcado na base: numa base sem
+       nenhum BI a opcao devolveria tudo e so ocuparia espaco na barra. */
+    .concat(comBi ? [{ key: '__sem__', label: 'Sem BI marcado',
+                       n: state.melhorias.length - comBi }] : []);
+}
+
+function matchBi(m, filtro) {
+  if (!filtro) return true;
+  if (filtro === '__sem__') return !BIS.daDemanda(m).length;
+  return BIS.cita(m, filtro);
 }
 
 function opcoesDados() {
@@ -3874,6 +4020,7 @@ function renderStatusFilters() {
     { key: 'planning',     label: 'Planning',             cls: 'planning' },
     { key: 'planejado',    label: 'Planejado',            cls: 'planejado' },
     { key: 'em_andamento',label: 'Em Andamento',  cls: 'em_andamento' },
+    { key: 'validacao_area', label: 'Validação da área', cls: 'validacao_area' },
     { key: 'validacao',   label: 'Validação PM/PO', cls: 'validacao' },
     { key: 'concluido',   label: 'Concluído',     cls: 'concluido' },
     // Atrasado segue como FILTRO: deixou de ser coluna no Kanban, mas continua
@@ -4128,6 +4275,12 @@ const KB_COLS = [
   { key:'planning',     label:'Planning' },
   { key:'planejado',    label:'Planejado' },
   { key:'em_andamento', label:'Em Andamento' },
+  /* A COLUNA NOVA TEM DE EXISTIR AQUI TAMBEM, e nao so no painel do dev.
+     A etapa e da DEMANDA: se o Admin nao tivesse coluna para ela, todo card que
+     o dev mandasse para a area sumiria deste quadro — nem erro, nem aviso, so
+     um card que nao e desenhado em lugar nenhum. E o acidente que o
+     `etapa-demanda.js` registra sobre o `atrasado`, e que ja aconteceu. */
+  { key:'validacao_area', label:'Validação da área' },
   { key:'validacao',    label:'Validação PM/PO' },
   { key:'concluido',    label:'Concluído' },
   { key:'negada',       label:'Negada' },
@@ -4137,6 +4290,7 @@ let _kbDev   = null;
 let _kbPrazo = null;
 let _kbTipo  = null;
 let _kbDados = null;
+let _kbBi    = null;
 let _kbProd  = null;       // null|'falta_subir'|'no_ar' — ver PRODUCAO_BUCKETS
 /* ─── O FILTRO DE PRODUCAO DE CADA COLUNA ─────────────────────────────────
    "Quero poder clicar aqui e poder filtrar o que esta em producao e o que nao
@@ -4200,6 +4354,7 @@ function setKbDev(v)   { _kbDev   = vazioNulo(v); renderKanban(); }
 function setKbPrazo(v) { _kbPrazo = vazioNulo(v); renderKanban(); }
 function setKbTipo(v)  { _kbTipo  = vazioNulo(v); renderKanban(); }
 function setKbDados(v) { _kbDados = vazioNulo(v); renderKanban(); }
+function setKbBi(v)    { _kbBi    = vazioNulo(v); renderKanban(); }
 function setKbProd(v)  { _kbProd  = vazioNulo(v); renderKanban(); }
 function setBuscaKb(v) {
   _kbBusca = v || '';
@@ -4207,7 +4362,7 @@ function setBuscaKb(v) {
 }
 function setKbPeriodo(v) { _kbPeriodo = v || 'mes_atual'; renderKanban(); }
 function limparFiltrosKb() {
-  _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = _kbDados = null;
+  _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = _kbDados = _kbBi = null;
   // O da coluna entra aqui tambem: ele conta no "Limpar (n)", e um filtro que
   // conta mas nao limpa deixa o botao mentindo sobre o que acabou de fazer.
   _kbProdCol = {};
@@ -4332,7 +4487,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
   });
   // 'mes_atual' é o padrão de higiene, não uma escolha explícita — só conta
   // como filtro "ativo" quando alguém pede para ver mais (3 meses/tudo).
-  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbDados, _kbBusca,
+  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbDados, _kbBi, _kbBusca,
                   _kbPeriodo !== 'mes_atual' ? _kbPeriodo : null].filter(Boolean).length +
     /* CADA COLUNA FILTRADA CONTA UMA. Sem isto, o filtro do contador seria o
        segundo "filtro invisivel na conta" desta tela — o primeiro foi o periodo,
@@ -4347,6 +4502,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
     fbGroup('Concluídas', _kbPeriodo, opcoesPeriodo(), 'setKbPeriodo') +
     fbGroup('Produção', _kbProd, opcoesProducao(), 'setKbProd') +
     fbGroup('Dados/BI', _kbDados, opcoesDados(), 'setKbDados') +
+    fbGroup('BI impactado', _kbBi, opcoesBi(), 'setKbBi') +
     fbBusca('kb-busca', _kbBusca, 'setBuscaKb') +
     botaoLimpar('limparFiltrosKb', ativos) +
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}` +
@@ -4452,6 +4608,7 @@ function renderKanban() {
     matchPrazo(m, _kbPrazo) &&
     matchTipo(m, _kbTipo) &&
     matchDados(m, _kbDados) &&
+    matchBi(m, _kbBi) &&
     matchProducao(m, _kbProd) &&
     /* O FILTRO DE PRODUCAO VENCE O PERIODO, e sem isto ele nasceria quebrado.
        "Concluidas: Este mes" e o PADRAO — nao conta como filtro ativo, nao
@@ -4545,6 +4702,21 @@ function renderKanban() {
         esc(projDoCard.codigo || projDoCard.nome || '') + '</span>');
       if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
       if (m.dados_bi) badges.push('<span class="kb-dados" title="Demanda do time de Dados/BI">📊 Dados/BI</span>');
+      /* OS BIs IMPACTADOS, no card. Um chip com a CONTA e os nomes na dica, e
+         nao um chip por BI: uma demanda que atinge seis BIs encheria o card de
+         marcas e empurraria o titulo, que e o que se le primeiro. */
+      const _bis = BIS.daDemanda(m);
+      if (_bis.length) badges.push('<span class="kb-bi" title="BIs impactados: ' +
+        esc(_bis.join(' · ')) + '">📈 ' +
+        (_bis.length === 1 ? esc(_bis[0]) : _bis.length + ' BIs') + '</span>');
+      /* HA QUANTOS DIAS A BOLA ESTA COM A AREA. A conta vem do `prazo.js`, a
+         mesma que o painel do dev mostra — duas contas a mao divergiriam na
+         primeira virada de dia. `null` (sem carimbo) nao desenha nada: "0 dias"
+         para algo parado ha um mes e pior que nao dizer. */
+      const _dAr = (window.PRAZO && PRAZO.diasNaArea) ? PRAZO.diasNaArea(m) : null;
+      if (_dAr != null) badges.push('<span class="kb-area-tag" title="' +
+        'Esperando a área conferir. O prazo do dev continua correndo enquanto isso.">' +
+        '👁 Área · ' + _dAr + 'd</span>');
       /* O SELO DIZ QUANTAS ASSINATURAS FALTAM, e nao so "spike". Quem olha o
          quadro quer saber o que impede de fechar, e esse numero e a resposta. */
       if (m.spike) {
@@ -11033,6 +11205,8 @@ function openModalMelhoria(id) {
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
   document.getElementById('m-dados-bi').checked      = !!m?.dados_bi;
+  _mBis = BIS.daDemanda(m);
+  bisRender();
   document.getElementById('m-spike').checked         = !!m?.spike;
   mPopulaProjetos(m?.projeto_id || '');
   mescRenderBloco(m || null);
@@ -11382,7 +11556,7 @@ function sugereFibonacci() {
 // Etapa com trabalho comprometido exige responsavel. Sem dev, ninguem cobra
 // prazo, a demanda nao aparece em painel de dev nenhum e vence sem dono — que e
 // o modo mais silencioso de uma demanda morrer.
-const ETAPAS_COM_DEV = ['planejado', 'em_andamento', 'validacao'];
+const ETAPAS_COM_DEV = ['planejado', 'em_andamento', 'validacao_area', 'validacao'];
 function exigeDev(sp) { return ETAPAS_COM_DEV.includes(sp); }
 
 /* ═══ E `concluido` TAMBEM, AO ENTRAR ═══════════════════════════════════════
@@ -11740,6 +11914,11 @@ async function saveMelhoria() {
     // Na lista fechada pelo mesmo motivo de todos os outros: fora dela, salvar
     // pela aba Dados APAGARIA a marca do time de Dados em toda demanda.
     dados_bi:            document.getElementById('m-dados-bi').checked,
+    /* A LISTA VEM DO ESTADO DA TELA, e nao do campo de texto: o campo e so a
+       porta de entrada, e o que vale sao as marcas ja incluidas. Na lista
+       fechada pelo mesmo motivo de todas as outras — fora dela, salvar pela aba
+       Dados apagaria o rastreio de BI de toda demanda. */
+    bis_impactados:      BIS.daDemanda({ bis_impactados: _mBis }),
     spike:               document.getElementById('m-spike').checked,
     /* AS ASSINATURAS NAO SAO DESTE FORMULARIO. Elas vem do servidor, que e
        quem as grava lendo a sessao de quem assina — mandar daqui abriria a
@@ -11751,6 +11930,11 @@ async function saveMelhoria() {
     projeto_id:          document.getElementById('m-projeto').value || _pjRetorno || '',
     // Campos da validacao nao tem campo no formulario: sem repassar, salvar pela
     // aba Dados apagaria quem aprovou e o motivo da ultima devolucao.
+    /* O carimbo da area nao tem campo no formulario — ele nasce no servidor, na
+       transicao. Repassar o que ja existe evita que a lista fechada o apague
+       entre a leitura e a gravacao; o Worker o repoe de qualquer forma, mas sem
+       esta linha o contador sumiria do card ate o proximo F5. */
+    validacao_area_em:   existing.validacao_area_em || '',
     validado_em:         existing.validado_em   || '',
     validado_por:        existing.validado_por  || '',
     validacao_obs:       existing.validacao_obs || '',
@@ -13169,6 +13353,8 @@ function entregaHTML(m, opts) {
   if (m.concluido_em) meta.push('<span>Concluída em: <strong>' + esc(formatDate(m.concluido_em)) + '</strong></span>');
   if (m.debito_tecnico) meta.push('<span><strong>🧱 Débito técnico</strong></span>');
   if (m.dados_bi) meta.push('<span><strong>📊 Dados / BI</strong></span>');
+  const _biM = BIS.daDemanda(m);
+  if (_biM.length) meta.push('<span><strong>📈 BIs:</strong> ' + esc(_biM.join(' · ')) + '</span>');
   if (m.sprint) meta.push('<span>Sprint: <strong>' + esc(m.sprint) + '</strong></span>');
 
   /* O LINK DO ANEXO LEVA O ID DA DEMANDA.
@@ -13674,7 +13860,8 @@ async function pjAprovSalvar(p, msg) {
 //
 // Backlog, Levantar Requisitos e Planning ficam de fora de proposito: nessas
 // etapas a demanda ainda nao foi estimada porque ainda nao chegou a hora.
-const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao_area',
+                              'validacao', 'concluido'];
 function semPontuacao(m) {
   if (!m || m.mesclado_em) return false;
   if (!ETAPAS_COMPROMETIDAS.includes(m.status_planejamento || '')) return false;

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="023f669af1">
+<html lang="pt-BR" data-build="0f5e2ff7d2">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -141,6 +141,10 @@
       border:1px solid var(--selo-bd,#7C838F); cursor:help; }
     .kcard-prazo.pausada { background:var(--rose-bg,#48123F); color:var(--rose-tx,#F2A0DA);
       border:1px solid var(--rose-bd,#93257F); }
+    /* O contador da area, no mesmo roxo da coluna — o selo e a coluna tem de se
+       reconhecer, senao o card parece marcado por outra coisa. */
+    .kcard-prazo.area { background:#2E1540; color:#D8AEF0;
+      border:1px solid #7B4A9C; cursor:help; }
     /* Area de anexo da nova demanda. A dica de colar fica DENTRO da area para
        quem nunca colou descobrir que da. */
     .an-item { display:flex; align-items:center; gap:8px; background:var(--bg3);
@@ -521,16 +525,17 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="subtarefa.js?v=81d990c6e3"></script>
+  <script src="bis.js?v=735ed4e46d"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
-  <script src="prevoo.js?v=b86be156b3"></script>
+  <script src="prevoo.js?v=ab2758c54c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=e85b8c6bbe"></script>
-<script src="capacidade.js?v=cc227d4867"></script>
+<script src="prazo.js?v=1f6897d06a"></script>
+<script src="capacidade.js?v=63737a8670"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -950,13 +955,19 @@
            pausar, esta no proprio card (nao e etapa, sao os dias parados). -->
       <select id="ms-status" onchange="onStatusModalChange()">
         <option value="em_andamento">Em Andamento</option>
+        <!-- A ORDEM AQUI E A DO FLUXO, e nao alfabetica: quem abre o select ve o
+             proximo passo logo abaixo de onde esta. -->
+        <option value="validacao_area">Mandar para a área conferir</option>
         <option value="validacao">Entregar para validação</option>
       </select>
     </div>
     <div id="ms-horas-group" style="display:none">
       <div class="form-group">
         <label>Horas de desenvolvimento *</label>
-        <input type="number" id="ms-horas" min="0.5" step="0.5" placeholder="Ex: 16" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'" />
+        <!-- `min` 0,25 e `step` 0,25: este campo RECEBE a soma das subtarefas,
+             que agora anda de 15 em 15 minutos. Ver a nota no campo de horas do
+             passo, em `msSubLinha`. -->
+        <input type="number" id="ms-horas" min="0.25" step="0.25" placeholder="Ex: 16" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border)'" />
       </div>
       <!-- Explica de onde veio o numero quando ele deixa de ser digitado. Sem
            isto, o campo somente-leitura parece travado por defeito. -->
@@ -2019,6 +2030,12 @@ function _difDias(de, ate) {
 }
 // Dias parados ate hoje na pausa corrente.
 const diasPausadoAgora = m => estaPausado(m) ? _difDias(m.pausado_em, _isoHoje()) : 0;
+/* DELEGA ao `prazo.js`: a mesma conta aparece no Kanban do Admin, e duas contas
+   a mao divergiriam na primeira virada de dia com fuso. Sem o modulo carregado
+   devolve `null`, que a tela ja trata como "nao mostra a linha" — melhor do que
+   um numero inventado por uma copia local. */
+const diasNaAreaAgora = m => (window.PRAZO && PRAZO.diasNaArea)
+  ? PRAZO.diasNaArea(m, _isoHoje()) : null;
 
 // Aplica a pausa. Motivo e obrigatorio: sem ele, dias depois ninguem lembra por
 // que a demanda parou, e o prazo empurrado nao se justifica no comite.
@@ -2209,7 +2226,8 @@ const prodNum = n => Number.isInteger(n) ? String(n) : String(Math.round(n * 10)
 //
 // Backlog, Levantar Requisitos e Planning ficam de fora de proposito: nessas
 // etapas a demanda ainda nao foi estimada porque ainda nao chegou a hora.
-const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao_area',
+                              'validacao', 'concluido'];
 function semPontuacao(m) {
   if (!m || m.mesclado_em) return false;
   if (!ETAPAS_COMPROMETIDAS.includes(m.status_planejamento || '')) return false;
@@ -2536,14 +2554,15 @@ function verDemandaPorNumero() {
 const STATUS_POR_ETAPA = {
   backlog: 'recebida', levantar_req: 'recebida',
   planning: 'estimada', planejado: 'estimada',
-  em_andamento: 'iniciada', validacao: 'iniciada',
+  em_andamento: 'iniciada', validacao_area: 'iniciada', validacao: 'iniciada',
   concluido: 'iniciada', atrasado: 'iniciada',
 };
 const statusDaEtapa = (e) => STATUS_POR_ETAPA[e] || 'recebida';
 
 const STATUS_LABELS = {
   backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
-  planning:'Planning', em_andamento:'Em Andamento', validacao:'Em validação',
+  planning:'Planning', em_andamento:'Em Andamento',
+  validacao_area:'Validação da área', validacao:'Em validação',
   concluido:'Concluído', atrasado:'Atrasado', negada:'Negada'
 };
 
@@ -2551,6 +2570,15 @@ const COLUMNS = [
   { key:'planning',     label:'Planning',     color:'#2BBFA0', maps:['planning'] },
   { key:'planejado',    label:'Planejado',    color:'#3B8FE8', maps:['backlog','levantar_req','planejado'] },
   { key:'em_andamento', label:'Em Andamento', color:'#5EA832', maps:['em_andamento'] },
+  /* A AREA TESTA ANTES DO PM/PO. O card fica aqui enquanto quem pediu confere a
+     solucao; so depois ele vai para Validacao PM/PO, e so la conta como
+     entregue (ver `ETAPAS_ENTREGUE` em capacidade.js).
+
+     COR PROPRIA, e nao o mesmo ambar da validacao seguinte: duas colunas
+     vizinhas da mesma cor se leem como uma so quando o quadro esta cheio, e a
+     pergunta "parou na area ou no PM/PO?" e justamente a que esta coluna
+     existe para responder. */
+  { key:'validacao_area', label:'Validação da área', color:'#B06FD4', maps:['validacao_area'] },
   { key:'validacao',    label:'Em validação',  color:'#E89C2F', maps:['validacao'] },
   { key:'concluido',    label:'Concluído',    color:'#2BBFA0', maps:['concluido'] },
 ];
@@ -3819,6 +3847,13 @@ function renderCard(m, colKey) {
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
       ${semPontuacao(m) ? `<div class="kcard-prazo sempt" title="Sem pontos do Planning Poker: a data foi combinada sem estimativa de tamanho.">🃏 sem pontuação</div>` : ''}
+      ${/* O CONTADOR DA AREA. Foi o pedido junto com a coluna, e e o motivo dela:
+            demanda parada esperando a area nao aparece em lugar nenhum hoje, e o
+            atraso do dev continua correndo enquanto isso. O numero diz ha quanto
+            tempo a bola esta do outro lado.
+            `diasNaArea` devolve `null` quando nao ha carimbo — e ai a linha nao
+            aparece, em vez de dizer "0 dias" para algo parado ha um mes. */''}
+      ${diasNaAreaAgora(m) != null ? `<div class="kcard-prazo area" title="Esperando a área conferir desde ${devEsc(formatDate(m.validacao_area_em))}. O prazo do dev continua correndo.">👁 Na área há ${diasNaAreaAgora(m)} dia(s)</div>` : ''}
       ${/* O SELO DE VALIDACAO — passou pela planning, e por quem.
             E o AVESSO da linha acima: uma diz "ninguem estimou", a outra diz
             "foi fechada em reuniao". As duas nunca aparecem juntas, porque
@@ -4075,11 +4110,17 @@ function onDrop(e, colKey) {
 // entrega, porque e o que o PM/PO le para validar e o que alimenta o relatorio.
 const ETAPAS_EXIGEM_ENTREGA = ['validacao', 'concluido'];
 
-/* AS ETAPAS QUE O DEV MOVE. Duas, e a mesma lista que o Worker aplica.
+/* AS ETAPAS QUE O DEV MOVE. Tres, e a mesma lista que o Worker aplica.
  *
- * Comecar (Em Andamento) e entregar para validacao. Pausar e a terceira acao de
- * fluxo dele, e nao esta aqui porque nao e etapa — sao campos (`pausado_em`,
- * `pausa_dias`) que suspendem o prazo sem tirar a demanda da coluna.
+ * Comecar (Em Andamento), mandar para a area conferir (Validacao da area) e
+ * entregar para o PM/PO (Validacao). Pausar e a quarta acao de fluxo dele, e
+ * nao esta aqui porque nao e etapa — sao campos (`pausado_em`, `pausa_dias`)
+ * que suspendem o prazo sem tirar a demanda da coluna.
+ *
+ * `validacao_area` E DO DEV NOS DOIS SENTIDOS, por decisao: a area avisa o dev
+ * que aprovou, e ele leva o card adiante. A alternativa — so o PM/PO tirar de
+ * la — deixaria o dev sem caminho para a propria entrega, e a area sem tela
+ * nenhuma ainda assim.
  *
  * O QUE FICA DE FORA E POR QUE:
  *   planning, planejado, backlog, levantar_req  decisao de planejamento — do PM/PO
@@ -4088,7 +4129,7 @@ const ETAPAS_EXIGEM_ENTREGA = ['validacao', 'concluido'];
  * A tela obedecer nao basta: foi um caminho de tela (o arraste no Kanban, que
  * testava 'concluido' e esquecia 'validacao') que deixou a AX-179 chegar em
  * Validacao sem horas. O `dev-publish` reverte no servidor o que passar daqui. */
-const ETAPAS_DO_DEV = ['em_andamento', 'validacao'];
+const ETAPAS_DO_DEV = ['em_andamento', 'validacao_area', 'validacao'];
 /** O SELECT DE ETAPA DO CARD — e o "manter onde esta".
  *
  *  Com a lista reduzida a Em Andamento e Validacao, uma demanda em Planejado nao
@@ -4269,6 +4310,7 @@ function openStatusModal(id, preselect) {
     ${estaPausado(m) ? `<div class="modal-info-row"><span>Entrega:</span><strong style="color:var(--text3)">oculta enquanto pausada</strong></div>` : ''}
     ${m.debito_tecnico ? `<div class="modal-info-row"><span>Débito técnico:</span><strong>🧱 Sim</strong></div>` : ''}
     ${m.dados_bi ? `<div class="modal-info-row"><span>Time:</span><strong>📊 Dados / BI</strong></div>` : ''}
+    ${BIS.daDemanda(m).length ? `<div class="modal-info-row"><span>BIs impactados:</span><strong>📈 ${devEsc(BIS.daDemanda(m).join(' · '))}</strong></div>` : ''}
     ${mescladasDev(m)}
     ${m.concluido_em ? `<div class="modal-info-row"><span>Concluída em:</span><strong>${formatDate(m.concluido_em)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${devEsc(m.descricao)}</div>` : ''}
@@ -4699,8 +4741,19 @@ function msSubRender(m) {
         'border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;outline:none" />' +
       /* AS HORAS DO PASSO. Estreito de proposito: e um numero de uma ou duas
          casas, e um campo largo aqui empurraria o titulo — que e o que se le. */
-      '<input type="number" min="0" step="0.5" value="' + escAttr(x.horas) + '"' +
-        ' placeholder="h" title="Horas neste passo. Some sozinho no total da demanda."' +
+      /* QUINZE MINUTOS, E NAO MEIA HORA. O passo de 0,5 obrigava a arredondar
+         todo ajuste de 15 minutos para cima ou para baixo, e e exatamente esse
+         tamanho de tarefa que mais aparece aqui. Com 0,25 a hora lancada passa a
+         ser a hora gasta.
+
+         O PASSO DOS OUTROS CAMPOS DE HORA MUDOU JUNTO, e nao por simetria: a
+         soma destes passos ALIMENTA o campo de horas da demanda (`ms-horas`, via
+         `SUBTAREFA.horasTotal`). Tres passos de 15 minutos dao 0,75 — um valor
+         que um input com `step="0.5"` recusa como invalido. O campo ficaria
+         vermelho exibindo um numero que a propria tela calculou, e o mesmo
+         numero chegaria ao Admin, ao Planejamento e a importacao. */
+      '<input type="number" min="0" step="0.25" value="' + escAttr(x.horas) + '"' +
+        ' placeholder="h" title="Horas neste passo (de 15 em 15 min). Some sozinho no total da demanda."' +
         ' oninput="msSubHoras(' + i + ', this.value)"' +
         /* `min-width:0` NAO E DECORACAO. Item de flex nasce com `min-width:auto`,
            que resolve para o minimo INTRINSECO do elemento — e o de um
@@ -5117,7 +5170,8 @@ function nProjetoMudou() {
 // Datas de demanda ja comprometida sao do PM/PO. Aqui elas ficam visiveis (a
 // pessoa precisa saber o prazo) mas nao editaveis, com o motivo do lado — campo
 // desabilitado sem explicacao vira chamado.
-const ETAPAS_DATA_TRAVADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+const ETAPAS_DATA_TRAVADA = ['planejado', 'em_andamento', 'validacao_area',
+                             'validacao', 'concluido'];
 
 function travaDatasNoCard(m) {
   const trava = !!m && ETAPAS_DATA_TRAVADA.includes(m.status_planejamento || '');

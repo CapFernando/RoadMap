@@ -2487,8 +2487,16 @@ ok(/function mesDesdeOInicio/.test(ADMIN), 'a tela separa comprometido de somado
 // Carimbar demanda ja concluida encheria julho e junho de compromisso que ninguem
 // assumiu (84 demandas, na conta feita antes de decidir isso), e o fechamento
 // desses meses viraria ficcao retroativa.
-ok(/MES_ETAPAS = \['planejado', 'em_andamento', 'validacao'\]/.test(WC),
-   'concluida e negada NAO ganham mes automatico (nao se inventa compromisso passado)');
+/* A AFIRMACAO E SOBRE `concluido` E `negada`, e so sobre eles. O literal
+   tambem fixava quais etapas ABERTAS entram, e quebrou quando a Validacao da
+   area entrou — uma etapa aberta, que deve carimbar como as outras. */
+(() => {
+  const mME = WC.match(/MES_ETAPAS = (\[[^\]]*\]);/);
+  const me = mME ? eval(mME[1]) : [];
+  ok(me.length && !me.includes('concluido') && !me.includes('negada'),
+     'concluida e negada NAO ganham mes automatico (nao se inventa compromisso passado)',
+     JSON.stringify(me));
+})();
 ok(/mesEntrouEm\(m\) <= alvo \+ '-01'/.test(ADMIN), 'o corte e o dia 1 do mes');
 
 // A rolagem do fechamento tem de gravar dia 1 do destino, senao fechar agosto no
@@ -4673,9 +4681,25 @@ ok(/PRAZO\.diasDeAtraso\(maisAntiga, statusKey\(maisAntiga\)/.test(ADMIN),
      suspeitas.join(', '));
 })();
 
-// A ETAPA DE VALIDACAO FICA FORA das que correm: e ali que o dev ja saiu de cena.
-ok(/ETAPAS_QUE_CORREM = \['planning', 'planejado', 'em_andamento'\]/.test(PRZ),
-   'validacao NAO esta entre as etapas em que o atraso corre');
+/* A ETAPA DE VALIDACAO FICA FORA das que correm: e ali que o dev ja saiu de cena.
+   AVALIA A LISTA, e nao casa o literal dela. O literal quebrava com qualquer
+   etapa nova — e, pior, `validacao_area` CONTEM a palavra `validacao`: uma
+   checagem por texto diria que a regra foi violada quando ela nao foi, e uma
+   checagem por `indexOf` diria que esta tudo bem quando `validacao` entrasse de
+   verdade. Comparacao de item exato nao tem nenhum dos dois problemas. */
+(() => {
+  const mC = PRZ.match(/ETAPAS_QUE_CORREM = (\[[^\]]*\]);/);
+  ok(!!mC, 'prazo.js declara as etapas em que o atraso corre');
+  if (!mC) return;
+  let corre = [];
+  try { corre = eval(mC[1]); } catch (e) { ok(false, 'a lista avalia', e.message); return; }
+  ok(!corre.includes('validacao'),
+     'validacao NAO esta entre as etapas em que o atraso corre', JSON.stringify(corre));
+  /* E `validacao_area` ESTA, pela decisao oposta: ali o dev ainda nao entregou,
+     e o relogio dele nao pode parar enquanto a area nao devolve. */
+  ok(corre.includes('validacao_area'),
+     'mas validacao_area esta — o dev ainda nao entregou', JSON.stringify(corre));
+})();
 ok(/ETAPAS_APOS_O_DEV = \['validacao', 'concluido'\]/.test(PRZ),
    'validacao e conclusao medem pela entrega do dev, e nao por hoje');
 
@@ -7351,9 +7375,9 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
        avisar — que e o ponto deste bloco executar o trecho real em vez de
        procurar texto nele. (Sem crases: ver a nota logo acima. Eu acabei de
        errar isto escrevendo este comentario.) */
-    const matchDados = () => true;
+    const matchDados = () => true, matchBi = () => true;
     const _kbTema = null, _kbDev = null, _kbPrazo = null, _kbTipo = null, _kbProd = null;
-    const _kbDados = null;
+    const _kbDados = null, _kbBi = null;
     ${trecho}
     return { base, mescladasAchadas };
   `)({ melhorias }, busca, periodo);
@@ -8976,8 +9000,17 @@ sec('A etapa que o dev pode mover');
   if (!mLista || !mTela) return;
   let srv, tela;
   try { srv = eval(mLista[1]); tela = eval(mTela[1]); } catch (e) { ok(false, 'as listas avaliam', e.message); return; }
-  ok(JSON.stringify(srv) === JSON.stringify(['em_andamento', 'validacao']),
-     'e sao Em Andamento e Validacao — comecar e entregar', JSON.stringify(srv));
+  /* A AFIRMACAO E SOBRE O QUE NAO PODE ESTAR NA LISTA, e nao sobre o tamanho
+     dela. A versao anterior fixava o par exato e quebrou no dia em que a
+     Validacao da area entrou — acusando a etapa nova em vez do defeito que o
+     bloco existe para pegar, que e o dev movendo o PLANEJAMENTO (a AX-150 indo
+     para planning sozinha). Com a lista proibida explicita, acrescentar uma
+     etapa de trabalho passa, e acrescentar uma de planejamento acusa. */
+  const PROIBIDAS_AO_DEV = ['backlog', 'levantar_req', 'planning', 'planejado',
+                            'concluido', 'negada'];
+  const invasoras = srv.filter(e => PROIBIDAS_AO_DEV.includes(e));
+  ok(!invasoras.length && srv.includes('em_andamento') && srv.includes('validacao'),
+     'o dev comeca e entrega, e nao decide planejamento', JSON.stringify(srv));
   /* AS DUAS LISTAS TEM DE SER IGUAIS. Divergentes, a tela oferece o que o servidor
      reverte (o dev clica e nada acontece, sem explicacao) ou o servidor aceita o
      que a tela esconde (a trava existe no papel). */
@@ -9065,8 +9098,12 @@ sec('A etapa que o dev pode mover');
   const sel = DEV.slice(DEV.indexOf('<select id="ms-status"'),
                         DEV.indexOf('</select>', DEV.indexOf('<select id="ms-status"')));
   const vals = [...sel.matchAll(/value="([^"]*)"/g)].map(m => m[1]);
-  ok(JSON.stringify(vals) === JSON.stringify(['em_andamento', 'validacao']),
-     'o select do card oferece so as duas etapas do dev', JSON.stringify(vals));
+  /* O QUE IMPORTA E A IGUALDADE COM A LISTA, e nao um par fixo: o select nao
+     pode oferecer uma etapa que o servidor reverte (clique sem efeito), nem
+     esconder uma que ele aceita (trava que so existe no papel). */
+  ok(JSON.stringify(vals) === JSON.stringify(tela),
+     'o select do card oferece exatamente as etapas do dev',
+     JSON.stringify(vals) + ' vs ' + JSON.stringify(tela));
 
   const salvar = corpo(DEV, 'async function saveStatus(');
   ok(/ETAPAS_DO_DEV\.includes\(escolhido\)/.test(salvar),
@@ -10572,11 +10609,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!!entSrc, 'entregaHTML encontrada no admin');
     if (entSrc) {
       const LIVRO = 'ESTE_E_O_TEXTO_LONGO_QUE_O_PM_PO_LE_PARA_VALIDAR';
+      /* `BIS` entra como o MODULO DE VERDADE, e nao como stub: a linha dos BIs
+         impactados vive dentro desta funcao, e um stub que devolvesse `[]`
+         provaria que a tela monta sem provar que ela monta COM a lista. */
       const E = new Function(
-        'statusKey', 'esc', 'formatDate', 'credAdmin', 'state',
+        'statusKey', 'esc', 'formatDate', 'credAdmin', 'state', 'BIS',
         entSrc + '\nreturn entregaHTML;')(
         () => 'validacao', (x) => String(x == null ? '' : x),
-        (x) => String(x || ''), () => ({}), { melhorias: [] });
+        (x) => String(x || ''), () => ({}), { melhorias: [] },
+        require('./bis.js'));
       /* O `try` NAO E ENFEITE. Sem ele, uma tela que estoura derruba a suite
          inteira: o processo morre no meio, as invariantes seguintes nunca rodam e
          a saida termina sem veredito nenhum. Medido \u2014 sabotando esta funcao, o
@@ -11070,7 +11111,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       // matchDados/_kbDados entraram na cadeia depois deste bloco. Como ele
       // EXECUTA o trecho real, a dependencia nova estourou aqui — que e o aviso
       // funcionando, e nao um teste velho atrapalhando.
-      'matchDados', '_kbDados',
+      'matchDados', '_kbDados', 'matchBi', '_kbBi',
       corpo(ADMIN, 'function matchProducao(') + '\n' + rk.slice(iCad, jCad) +
       '\nreturn base;');
     const baseKb = [
@@ -11098,7 +11139,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const rodaKb = (prod, busca) => cadeiaKb(
       { melhorias: baseKb }, () => false, () => true, () => true, () => true, () => true,
       periodoKb, (m) => ETP.gravada(m), null, null, null, null, prod, busca || '', 'mes_atual',
-      () => true, null
+      () => true, null, () => true, null
     ).map(m => m.codigo);
 
     ok(JSON.stringify(rodaKb(null)) === JSON.stringify(['AX-191', 'AX-254', 'AX-081']),
@@ -11222,9 +11263,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        EXECUTA a tela, e nao procura a string: o que importa e o que a pessoa LE
        ao decidir se aprova. */
     const F = new Function(corpo(ADMIN, 'function formatDate(') + '\nreturn formatDate;')();
-    const E = new Function('statusKey', 'esc', 'formatDate', 'credAdmin', 'state',
+    // `BIS` real, pelo mesmo motivo do outro executor de `entregaHTML`.
+    const E = new Function('statusKey', 'esc', 'formatDate', 'credAdmin', 'state', 'BIS',
       corpo(ADMIN, 'function entregaHTML(') + '\nreturn entregaHTML;')(
-      () => 'validacao', (x) => String(x == null ? '' : x), F, () => ({}), { melhorias: [] });
+      () => 'validacao', (x) => String(x == null ? '' : x), F, () => ({}), { melhorias: [] },
+      require('./bis.js'));
 
     const base = { id: 'x', dev: 'Dan', horas_realizadas: 6,
                    status_planejamento: 'validacao',
@@ -17066,8 +17109,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'todo gesto que passa tambem passa no pre-voo',
        discordam.length + ' discordancia(s)');
 
-    ok(/const ETAPAS_COM_DEV = \['planejado', 'em_andamento', 'validacao'\]/.test(ADMIN),
-       'e as etapas anteriores seguem cobradas por ESTADO, como sempre foram');
+    /* A afirmacao e que as etapas COMPROMETIDAS cobram responsavel por estado.
+       O literal fixava tres e quebrou com a Validacao da area — que e
+       exatamente uma etapa que TEM de cobrar dev, entao a regra nao mudou. */
+    const mCD = ADMIN.match(/const ETAPAS_COM_DEV = (\[[^\]]*\]);/);
+    const comDev = mCD ? eval(mCD[1]) : [];
+    ok(['planejado', 'em_andamento', 'validacao_area', 'validacao']
+         .every(e => comDev.includes(e)) && !comDev.includes('backlog'),
+       'e as etapas anteriores seguem cobradas por ESTADO, como sempre foram',
+       JSON.stringify(comDev));
     ok(!/Escolha o sistema antes de planejar/.test(semComentario(ADMIN)) &&
        !/Escolha o sistema antes de planejar/.test(semComentario(DEV)) &&
        !/Escolha o responsável —/.test(semComentario(ADMIN)),
@@ -17336,7 +17386,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         .replace(/'/g, '"'));
     const ETAPAS_W = listaDe(W, 'ETAPAS_ALOCADA');
     const ETAPAS_UI = PREVOO.ETAPAS;
-    ok(ETAPAS_W.length === 4 && ETAPAS_UI.join('|') === ETAPAS_W.join('|'),
+    /* O TAMANHO E CONFERIDO contra a lista do Worker, e nao contra um literal:
+       a afirmacao e "as duas sao IGUAIS", e um numero fixo aqui so acusava a
+       propria etapa nova — que e uma melhoria, nao um defeito. O que nao pode
+       e uma lista andar sem a outra, e isso o `join` ja diz. */
+    ok(ETAPAS_W.length >= 4 && ETAPAS_UI.join('|') === ETAPAS_W.join('|'),
        'as telas e o servidor cobram o sistema nas MESMAS etapas',
        'modulo [' + ETAPAS_UI + '] servidor [' + ETAPAS_W + ']');
     const pegaSem = new Function('ETAPAS_ALOCADA',
@@ -17734,10 +17788,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * que se le passando o olho e uma acao irreversivel no lugar errado. E a
      * mesma razao pela qual o painel de temas fora do padrao PREENCHE o juntar
      * em vez de executa-lo. */
-    const monta = new Function('statusKey', 'esc', 'formatDate',
+    // `BIS` real — terceiro executor de `entregaHTML` nesta suite, todos pelo
+    // mesmo caminho: a funcao agora le a lista de BIs impactados.
+    const monta = new Function('statusKey', 'esc', 'formatDate', 'BIS',
       ENT + '; return entregaHTML;')(
       (m) => m.status_planejamento || '', (s) => String(s == null ? '' : s),
-      (d) => String(d || '').slice(0, 10));
+      (d) => String(d || '').slice(0, 10), require('./bis.js'));
     const esperando = { id: 'e1', status_planejamento: 'validacao',
                         implementacao: 'fez isso', entregue_em: '2026-09-25T10:00:00Z',
                         anexos: [{ nome: 'print.png' }] };
@@ -18381,6 +18437,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const limpaTexto = (t, n) => String(t == null ? '' : t).trim().slice(0, n || 200);
       const normNome = t => String(t || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
         .toLowerCase().replace(/\\s+/g, ' ').trim();
+      /* A projecao do painel do dev passou a levar os BIs impactados, e sem
+         esta funcao o bloco estoura com ReferenceError — o teste antigo
+         acusando que o que ele executa ganhou dependencia nova. Comportamento
+         certo: ele EXECUTA a projecao real. */
+      const bisDaDemanda = (m) => Array.isArray((m || {}).bis_impactados)
+        ? m.bis_impactados.slice(0, 20) : [];
       const hojeBR = () => '2026-10-01';
       const diasDeAtraso = () => 0;
       const vinTipo = () => '', vinBloqueia = () => false, vinPai = () => null,
@@ -18687,6 +18749,230 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const assin = corpo(POKER, 'function assinaturaDetalhe(');
     ok(!!assin && /m\.dados_bi/.test(assin),
        'e a assinatura do detalhe inclui a marca — senao a tela so muda na troca de pauta');
+  }
+
+  /* ═══ VALIDACAO DA AREA: A ETAPA NOVA TEM CASA EM TODA TELA ═══════════════
+   *
+   * Etapa sem coluna NAO da erro: o card simplesmente nao e desenhado e
+   * DESAPARECE da tela de quem e dono dele. O `etapa-demanda.js` registra esse
+   * acidente com o `atrasado`, e ele ja custou cards nesta base.
+   *
+   * E etapa sem rotulo sai com a chave crua ("validacao_area") no painel de
+   * parede, que e a tela que fica projetada.
+   */
+  {
+    sec('Validacao da area: a etapa nova tem casa em toda tela');
+    const E = 'validacao_area';
+
+    // `var` E `const`: capacidade.js e um modulo IIFE em `var`, as telas usam
+    // `const`. Fixar uma das duas formas daria `null` em silencio — e `null`
+    // passaria num teste escrito como "nao contem".
+    const lista = (fonte, nome) => {
+      const m = fonte.match(new RegExp('(?:const|var|let) ' + nome + ' = (\\[[^\\]]*\\])'));
+      try { return m ? eval(m[1]) : null; } catch (_) { return null; }
+    };
+
+    // ── As colunas dos dois quadros ──
+    const kbAdmin = ADMIN.slice(ADMIN.indexOf('const KB_COLS = ['),
+                                ADMIN.indexOf('];', ADMIN.indexOf('const KB_COLS = [')));
+    ok(kbAdmin.includes("key:'" + E + "'"),
+       'o Kanban do Admin tem coluna para ela — sem isso o card sumiria do quadro');
+    const colDev = DEV.slice(DEV.indexOf('const COLUMNS = ['),
+                             DEV.indexOf('];', DEV.indexOf('const COLUMNS = [')));
+    ok(colDev.includes("key:'" + E + "'") && colDev.includes("maps:['" + E + "']"),
+       'e o painel do dev tambem, mapeada para a propria etapa');
+    /* A ORDEM IMPORTA: o pedido foi "antes de entregar a solucao para
+       validacao". Coluna depois da validacao do PM/PO leria o fluxo ao
+       contrario. */
+    ok(colDev.indexOf("key:'em_andamento'") < colDev.indexOf("key:'" + E + "'") &&
+       colDev.indexOf("key:'" + E + "'") < colDev.indexOf("key:'validacao'"),
+       'e ela fica ENTRE Em Andamento e a validacao do PM/PO');
+
+    // ── Os rotulos, nas quatro telas ──
+    ok(new RegExp(E + "\\s*:\\s*'Validação da área'").test(DEV),
+       'o painel do dev tem rotulo para ela');
+    /* OS TRES MAPAS DO PAINEL DE PAREDE, um a um. Procurar a chave no arquivo
+       inteiro nao servia: ela aparece em tres mapas, e a sabotagem que apagou a
+       entrada de UM deles passou batida porque as outras duas seguravam o
+       `indexOf`. Cada mapa responde por uma tela diferente — o selo do card, o
+       contador do topo e o PDF exportado. */
+    /* SEM COMENTARIO, e a licao e recente: o comentario que eu escrevi ACIMA da
+       entrada nova dizia a palavra `validacao_area` para explicar por que ela
+       precisa existir. A sabotagem apagou a LINHA DE DADOS, o comentario ficou,
+       e o teste disse que estava tudo bem. Terceira vez nesta base que um
+       comentario defende o codigo que ele explica. */
+    const IDX = semComentario(INDEX);
+    const mapaIndex = (nome) => {
+      const i = IDX.indexOf('const ' + nome);
+      return i < 0 ? '' : IDX.slice(i, IDX.indexOf('\n};', i));
+    };
+    ['STATUS_META', 'STATUS_CARDS', 'STATUS_BADGE_PRINT'].forEach(nome => {
+      const bloco = nome === 'STATUS_CARDS'
+        ? IDX.slice(IDX.indexOf('const STATUS_CARDS'),
+                    IDX.indexOf('\n];', IDX.indexOf('const STATUS_CARDS')))
+        : mapaIndex(nome);
+      ok(bloco.includes(E),
+         'o painel de parede tambem, em ' + nome + ' — senao sai a chave crua na projecao');
+    });
+    ok(/<option value="validacao_area">/.test(ADMIN),
+       'o formulario do Admin oferece a etapa');
+    ok(/<option value="validacao_area">/.test(GANTT),
+       'e o do Planejamento tambem');
+
+    // ── A decisao que separa as duas validacoes ──
+    const entregue = lista(CAPJS, 'ETAPAS_ENTREGUE');
+    ok(!!entregue && !entregue.includes(E),
+       'NAO conta como entregue: a area testa ANTES de a solucao ir ao PM/PO',
+       JSON.stringify(entregue));
+    const alocada = lista(CAPJS, 'ETAPAS_ALOCADA');
+    ok(!!alocada && alocada.includes(E),
+       'mas conta como alocada — o compromisso existe e a data esta de pe',
+       JSON.stringify(alocada));
+
+    /* ── O CARIMBO, EXECUTADO ────────────────────────────────────────────
+       Procurar o texto da funcao provaria que ela existe, e nao que ela
+       carimba. Aqui ela roda contra as tres transicoes que importam. */
+    const fn = corpo(W, 'function carimbaAreaValidacao(');
+    ok(!!fn, 'o Worker tem a funcao que carimba a entrada na area');
+    if (fn) {
+      const roda = new Function('recebido', 'servidor', 'HOJE',
+        'function hojeBR(){ return HOJE; }\n' + fn +
+        '\nreturn carimbaAreaValidacao(recebido, servidor);');
+      const HOJE = '2026-10-15';
+      const dem = (sp, carimbo) => ({ id: 'x', status_planejamento: sp,
+                                      validacao_area_em: carimbo });
+
+      const entrou = { melhorias: [dem(E, '')] };
+      roda(entrou, { melhorias: [dem('em_andamento', '')] }, HOJE);
+      ok(entrou.melhorias[0].validacao_area_em === HOJE,
+         'entrar na area carimba a data de hoje', entrou.melhorias[0].validacao_area_em);
+
+      /* FICAR NA ETAPA NAO RECARIMBA — e o caso que faria o contador nunca
+         passar de zero, porque toda gravacao de qualquer outro campo passa
+         por aqui. E o valor vem do SERVIDOR, nao do corpo: a tela remonta a
+         demanda por lista fechada e pode nao mandar o campo. */
+      const ficou = { melhorias: [dem(E, undefined)] };
+      roda(ficou, { melhorias: [dem(E, '2026-10-01')] }, HOJE);
+      ok(ficou.melhorias[0].validacao_area_em === '2026-10-01',
+         'ficar na area preserva o carimbo original, vindo do servidor',
+         ficou.melhorias[0].validacao_area_em);
+
+      /* SAIR LIMPA. Sem isto, uma demanda que foi para a area em marco e
+         voltou para la em outubro mostraria 220 dias — e o numero existe
+         justamente para ser cobrado de alguem. */
+      const saiu = { melhorias: [dem('validacao', '2026-10-01')] };
+      roda(saiu, { melhorias: [dem(E, '2026-10-01')] }, HOJE);
+      ok(!saiu.melhorias[0].validacao_area_em,
+         'sair da area limpa o carimbo', String(saiu.melhorias[0].validacao_area_em));
+
+      const voltou = { melhorias: [dem(E, '2026-03-01')] };
+      roda(voltou, { melhorias: [dem('em_andamento', '')] }, HOJE);
+      ok(voltou.melhorias[0].validacao_area_em === HOJE,
+         'e reentrar recarimba — mede a espera ATUAL, nao a soma das esperas',
+         voltou.melhorias[0].validacao_area_em);
+    }
+
+    // ── As duas rotas de gravacao carimbam ──
+    ok((W.match(/carimbaAreaValidacao\(data, antes\w+\)/g) || []).length === 2,
+       'as duas rotas de gravacao carimbam — o dev e quem mais move o card');
+
+    /* ── O CONTADOR E UM SO ──────────────────────────────────────────────
+       Duas contas a mao divergiriam na primeira virada de dia com fuso. */
+    const dn = corpo(PRZ, 'function diasNaArea(');
+    ok(!!dn, 'a conta dos dias mora no prazo.js');
+    if (dn) {
+      const dias = new Function('m', 'ref',
+        'function iso(v){ return String(v==null?"":v).slice(0,10); }\n' +
+        'function ehData(s){ return /^\\d{4}-\\d{2}-\\d{2}$/.test(s); }\n' +
+        'function hojeISO(){ return "2026-10-15"; }\n' + dn +
+        '\nreturn diasNaArea(m, ref);');
+      ok(dias({ validacao_area_em: '2026-10-01' }, '2026-10-15') === 14,
+         'quatorze dias entre 01/10 e 15/10', String(dias({ validacao_area_em: '2026-10-01' }, '2026-10-15')));
+      ok(dias({}, '2026-10-15') === null,
+         'e SEM carimbo devolve null, e nao zero — "nao sei" nao e "entrou hoje"',
+         String(dias({}, '2026-10-15')));
+    }
+    ok(/PRAZO\.diasNaArea/.test(DEV) && /PRAZO\.diasNaArea/.test(ADMIN),
+       'e as duas telas perguntam a ele, em vez de refazer a conta');
+  }
+
+  /* ═══ BIs IMPACTADOS: DUAS IMPLEMENTACOES, UMA REGRA ═════════════════════
+   *
+   * O Worker nao importa modulo nenhum, entao a normalizacao dos nomes existe
+   * DUAS vezes: em `bis.js` (telas) e em `bisDaDemanda` (servidor). Duas copias
+   * da mesma regra e o formato exato do defeito que esta base ja teve varias
+   * vezes — uma corrigida e a outra nao.
+   *
+   * Aqui as duas rodam LADO A LADO contra as mesmas entradas. Divergir acusa.
+   */
+  {
+    sec('BIs impactados: as duas implementacoes concordam');
+    const BISMOD = require('./bis.js');
+
+    const srcW = corpo(W, 'function bisDaDemanda(');
+    ok(!!srcW, 'o Worker tem a sua propria limpeza de BIs');
+    if (srcW) {
+      const doW = new Function('m',
+        'const BI_MAX_NOME = 80, BI_MAX_POR_DEMANDA = 20;\n' +
+        "const limpaTexto = (t, n) => String(t == null ? '' : t).trim().slice(0, n || 200);\n" +
+        srcW + '\nreturn bisDaDemanda(m);');
+
+      /* OS CASOS SAO OS QUE QUEBRAM DE VERDADE: grafia repetida, espaco
+         sobrando, acento, `null` no meio da lista (ja aconteceu com
+         `subtarefas`), string em vez de array, e campo ausente. */
+      const CASOS = [
+        { bis_impactados: ['Carteira', 'carteira ', 'CARTEIRA'] },
+        { bis_impactados: ['  Inadimplência  ', 'Inadimplencia'] },
+        { bis_impactados: ['Safra', null, '', 'Risco'] },
+        { bis_impactados: 'Carteira, Risco; Safra' },
+        { bis_impactados: [] },
+        {},
+        { bis_impactados: ['A'.repeat(200)] },
+      ];
+      const divergem = CASOS.filter(c =>
+        JSON.stringify(BISMOD.daDemanda(c)) !== JSON.stringify(doW(c)));
+      ok(!divergem.length,
+         'modulo e Worker devolvem a MESMA lista nos sete casos',
+         divergem.map(c => JSON.stringify(c.bis_impactados)).join(' | '));
+
+      ok(JSON.stringify(BISMOD.daDemanda(CASOS[0])) === JSON.stringify(['Carteira']),
+         'grafia repetida vira UMA entrada — e o defeito dos 42 temas de novo',
+         JSON.stringify(BISMOD.daDemanda(CASOS[0])));
+      ok(JSON.stringify(BISMOD.daDemanda(CASOS[1])) === JSON.stringify(['Inadimplência']),
+         'e acento nao separa o mesmo BI em dois',
+         JSON.stringify(BISMOD.daDemanda(CASOS[1])));
+    }
+
+    // ── O campo atravessa as listas fechadas ──
+    ok(/bis_impactados:\s*BIS\.daDemanda/.test(ADMIN),
+       'o Admin grava a lista — sem esta linha, salvar pela aba Dados a apagaria');
+    const enx = W.slice(W.indexOf('const enxuta = (m) => ({'),
+                        W.indexOf('});', W.indexOf('const enxuta = (m) => ({')));
+    ok(/bis_impactados:\s*bisDaDemanda\(m\)/.test(enx),
+       'e a fila do Planning recebe a lista — e la que se estima o tamanho');
+    /* AS CHAMADAS, e nao a declaracao junto: `function limpaBis(data) {` casa
+       com um padrao ingenuo e fazia a conta dar tres. O `;` no fim da linha e o
+       que separa chamar de declarar. */
+    ok((W.match(/^\s+limpaBis\(data\);$/gm) || []).length === 2,
+       'as duas rotas de gravacao higienizam a lista na ENTRADA',
+       String((W.match(/^\s+limpaBis\(data\);$/gm) || []).length));
+
+    // ── O rastreio ──
+    ok(/matchBi\(m, _kbBi\)/.test(semComentario(ADMIN)),
+       'a cadeia do quadro consulta o filtro por BI — sem isso o rastreio nao filtra');
+    ok(/const ativos = \[[^\]]*_kbBi[^\]]*\]/.test(semComentario(ADMIN)),
+       'e ele conta no botao Limpar');
+
+    /* O CATALOGO NASCE DO USO, e agrupa pela normalizada: duas grafias do mesmo
+       BI tem de virar UMA linha com a soma, e nao duas com metade cada. */
+    const cat = BISMOD.catalogo([
+      { id: 'a', bis_impactados: ['Carteira', 'Risco'] },
+      { id: 'b', bis_impactados: ['carteira'] },
+      { id: 'c', bis_impactados: ['Carteira'], mesclado_em: 'x' },
+    ]);
+    ok(cat.length === 2 && cat[0].nome === 'Carteira' && cat[0].qtd === 2,
+       'o catalogo agrupa as grafias e ignora demanda mesclada',
+       JSON.stringify(cat.map(c => c.nome + ':' + c.qtd)));
   }
 
   let erroPz = null;

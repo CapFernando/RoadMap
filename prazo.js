@@ -31,7 +31,17 @@
      `backlog` e `levantar_req` ficam fora: nada foi prometido ainda.
      `validacao` fica fora POR ESTA REGRA: o dev ja entregou.
      `concluido` e `negada` nao atrasam — o que houve ja esta registrado. */
-  var ETAPAS_QUE_CORREM = ['planning', 'planejado', 'em_andamento'];
+  /* `validacao_area` CORRE, e `validacao` nao — e a diferenca foi decidida, nao
+     deduzida. Nas duas a demanda esta esperando alguem de fora do dev, mas:
+
+       validacao       o dev ENTREGOU. O relogio dele parou (regra do AX-165).
+       validacao_area  o dev ainda NAO entregou. A area testa ANTES de a solucao
+                       ir para o PM/PO, e so depois disso ela conta como entregue.
+
+     Se as duas ficassem fora, uma demanda poderia morar meses na area sem
+     nenhum atraso aparecer — e o contador de dias da coluna existe justamente
+     porque isso e o risco da etapa nova. */
+  var ETAPAS_QUE_CORREM = ['planning', 'planejado', 'em_andamento', 'validacao_area'];
 
   // Etapas em que o dev JA SAIU DE CENA. O atraso delas e medido pela entrega,
   // e nao pelo dia de hoje nem pela data da validacao.
@@ -96,6 +106,33 @@
       return Date.UTC(+q[0], +q[1] - 1, +q[2]);
     };
     return Math.round((d(r) - d(p)) / 86400000);
+  }
+
+  /** HA QUANTOS DIAS ESTA DEMANDA ESPERA A AREA.
+   *
+   *  O pedido foi "um contador de tempo (dias) que a demanda esta nessa etapa",
+   *  e a conta mora aqui pelo mesmo motivo que `diasPausados`: duas telas
+   *  mostram o numero (o painel do dev e o Kanban do Admin), e duas contas a mao
+   *  divergiriam no primeiro fuso.
+   *
+   *  LE `validacao_area_em`, e nao o historico. O carimbo e do SERVIDOR, posto
+   *  no instante em que o card entra na etapa — igual a `pausado_em`,
+   *  `entregue_em` e `validado_em`. Deduzir do historico pareceria mais limpo e
+   *  nao e: historico pode ter sido truncado, e uma demanda sem linha nenhuma
+   *  devolveria "0 dias" para algo parado ha um mes.
+   *
+   *  Devolve `null` — e nao 0 — quando nao ha carimbo. Zero se le como "entrou
+   *  hoje", e essa e a leitura errada para "nao sei quando entrou". */
+  function diasNaArea(m, ref) {
+    var e = iso((m || {}).validacao_area_em);
+    if (!ehData(e)) return null;
+    var r = iso(ref || hojeISO());
+    if (!ehData(r) || r < e) return 0;
+    var d = function (t) {
+      var q = t.split('-');
+      return Date.UTC(+q[0], +q[1] - 1, +q[2]);
+    };
+    return Math.round((d(r) - d(e)) / 86400000);
   }
 
   /** O PRAZO QUE VALE — o combinado, esticado pelos dias em que a demanda esteve
@@ -337,6 +374,7 @@
     ETAPAS_APOS_O_DEV: ETAPAS_APOS_O_DEV,
     fimDoDev: fimDoDev,
     diasPausados: diasPausados,
+    diasNaArea: diasNaArea,
     prazoEfetivo: prazoEfetivo,
     diasDeAtraso: diasDeAtraso,
     estaAtrasada: estaAtrasada,

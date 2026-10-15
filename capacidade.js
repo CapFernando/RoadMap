@@ -59,11 +59,19 @@
    *  ponto conta como planejado. Backlog e Planning não: ali ainda se discute se
    *  a demanda entra, e contar como plano infla o compromisso com o que pode nem
    *  ser feito. */
-  var ETAPAS_ALOCADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+  var ETAPAS_ALOCADA = ['planejado', 'em_andamento', 'validacao_area',
+                        'validacao', 'concluido'];
 
   /** E aqui o dev já tirou a demanda da mão dele. `validacao` entra porque o
    *  trabalho terminou — a espera do PM/PO não é do dev, a mesma regra do prazo
-   *  (ver prazo.js). */
+   *  (ver prazo.js).
+   *
+   *  `validacao_area` NÃO ENTRA, e esta é a decisão que separa as duas etapas.
+   *  A área testa ANTES de a solução ir para o PM/PO: enquanto ela está lá, o
+   *  dev ainda não entregou. Pôr aqui faria os pontos entrarem na sprint no dia
+   *  em que o card foi para a área — e uma demanda que a área devolvesse teria
+   *  contado como entrega que nunca houve. É o mesmo cuidado de
+   *  `ETAPAS_ALOCADA` acima: alocado e entregue são perguntas diferentes. */
   var ETAPAS_ENTREGUE = ['validacao', 'concluido'];
 
   function num(v) {

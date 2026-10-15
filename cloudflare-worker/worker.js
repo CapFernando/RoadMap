@@ -438,7 +438,7 @@ async function loginLivre(db, base) {
 //
 // Consequencia assumida: o cumprimento so passa a valer de agora em diante. O mes
 // corrente comeca sem "comprometido no inicio", porque de fato nao houve.
-const MES_ETAPAS = ['planejado', 'em_andamento', 'validacao'];
+const MES_ETAPAS = ['planejado', 'em_andamento', 'validacao_area', 'validacao'];
 
 function mesValido(v) {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(v || ''));
@@ -983,7 +983,8 @@ const STATUS_PARA_SP = {
    carta que o time usa para o que sai em ate duas horas. */
 const PONTOS_PADRAO = 3;
 
-const ETAPAS_ALOCADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+const ETAPAS_ALOCADA = ['planejado', 'em_andamento', 'validacao_area',
+                        'validacao', 'concluido'];
 
 function normalizaEstados(data) {
   if (!data || !Array.isArray(data.melhorias)) return 0;
@@ -1112,6 +1113,98 @@ function hojeBR() {
   }
 }
 
+/* ═══ OS BIs IMPACTADOS, HIGIENIZADOS NA ENTRADA ═══════════════════════════
+ *
+ * O WORKER NAO IMPORTA O `bis.js` — ele nao importa modulo nenhum, por decisao
+ * de arquitetura (ver o cabecalho deste arquivo). A regra e DUPLICADA aqui e
+ * conferida por invariante que roda as duas lado a lado.
+ *
+ * A LIMPEZA ACONTECE NA ENTRADA, como a de titulo: o nome do BI vai para a tela
+ * do Admin, para a sala do Planning e para relatorio. Texto vindo de fora nao
+ * entra cru em lugar nenhum desta base desde o "<img src=x onerror=...>" no
+ * titulo, e um campo novo nao abre a porta de novo.
+ */
+const BI_MAX_NOME = 80;
+const BI_MAX_POR_DEMANDA = 20;
+function bisDaDemanda(m) {
+  let bruto = (m || {}).bis_impactados;
+  if (typeof bruto === 'string') bruto = bruto.split(/[;,]/);
+  if (!Array.isArray(bruto)) return [];
+  const vistos = new Set();
+  const fora = [];
+  for (const x of bruto) {
+    const nome = limpaTexto(String(x == null ? '' : x).replace(/\s+/g, ' ').trim(),
+                            BI_MAX_NOME);
+    if (!nome) continue;
+    const k = nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    if (vistos.has(k)) continue;
+    vistos.add(k);
+    fora.push(nome);
+    if (fora.length >= BI_MAX_POR_DEMANDA) break;
+  }
+  return fora;
+}
+
+/* Aplica a limpeza em TODA demanda do payload, nas duas rotas de gravacao.
+   Sem isto, a higiene existiria so na leitura — e o dado sujo ja estaria
+   gravado, esperando a primeira tela que o lesse por outro caminho. */
+function limpaBis(data) {
+  if (!data || !Array.isArray(data.melhorias)) return 0;
+  let n = 0;
+  for (const m of data.melhorias) {
+    if (!m) continue;
+    if (m.bis_impactados === undefined) continue;
+    const antes = JSON.stringify(m.bis_impactados);
+    m.bis_impactados = bisDaDemanda(m);
+    if (JSON.stringify(m.bis_impactados) !== antes) n += 1;
+  }
+  return n;
+}
+
+/* ═══ O CARIMBO DA VALIDACAO DA AREA ═══════════════════════════════════════
+ *
+ * "Preciso de um contador de tempo (dias) que a demanda esta nessa etapa."
+ *
+ * O CARIMBO E DO SERVIDOR, e nao do formulario, pela mesma razao de
+ * `entregue_em`, `validado_em` e `producao_em`: data que a tela manda e data
+ * que uma aba desatualizada pode reescrever. Aqui ela nasce da TRANSICAO, que
+ * so o servidor ve — ele tem o antes e o depois na mesma funcao.
+ *
+ * SAIR DA ETAPA LIMPA O CARIMBO. Sem isso, uma demanda que foi para a area em
+ * marco, voltou e foi de novo em outubro mostraria "220 dias na area" — e o
+ * numero existe justamente para ser cobrado de alguem.
+ *
+ * REENTRAR RECARIMBA. E a mesma regra do `entregue_em` ("se a validacao
+ * reprovou e o dev entregou de novo, e a ENTREGA QUE PASSOU que encerra o
+ * prazo"): o que se mede e a espera ATUAL, e nao a soma das esperas.
+ *
+ * QUEM JA ESTAVA LA NAO E RECARIMBADO — senao toda gravacao de qualquer outro
+ * campo zeraria o contador, e ele nunca passaria de zero.
+ */
+function carimbaAreaValidacao(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return 0;
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const hoje = hojeBR();
+  let n = 0;
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    const agoraNaArea = String(m.status_planejamento || '') === 'validacao_area';
+    const estavaNaArea = !!velha && String(velha.status_planejamento || '') === 'validacao_area';
+    if (agoraNaArea && estavaNaArea) {
+      /* Continua la: vale o carimbo DO SERVIDOR, e nao o que veio no corpo. As
+         telas remontam a demanda por lista fechada de campos — sem esta linha,
+         salvar um texto pela aba Dados apagaria o contador. */
+      m.validacao_area_em = (velha && velha.validacao_area_em) || hoje;
+      continue;
+    }
+    if (agoraNaArea) { m.validacao_area_em = hoje; n += 1; continue; }
+    if (m.validacao_area_em) { m.validacao_area_em = ''; n += 1; }
+  }
+  return n;
+}
+
 // Comparacao por STRING ISO, nunca por objeto Date: `new Date('2026-08-06')` e
 // meia-noite UTC, e converter para local muda o dia. Ja custou off-by-one aqui.
 //
@@ -1199,7 +1292,8 @@ function diasDeAtraso(m, hoje) {
 // Demanda que ainda nao existe no servidor, ou que esta em backlog / levantar_req
 // / planning, segue editavel: ali nada foi prometido, e e onde o dev de fato
 // precisa registrar uma previsao.
-const ETAPAS_DATA_TRAVADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+const ETAPAS_DATA_TRAVADA = ['planejado', 'em_andamento', 'validacao_area',
+                             'validacao', 'concluido'];
 
 function travaDatasComprometidas(recebido, servidor) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
@@ -1248,7 +1342,10 @@ function travaDatasComprometidas(recebido, servidor) {
 // VALE SO PARA O PAPEL `dev`. `analista` e `admin` tambem entram por esta rota
 // (`ehDev` aceita os tres) e para eles mover para Planning e trabalho legitimo —
 // o analista faz descoberta, e o admin e a autoridade que decide.
-const ETAPAS_QUE_O_DEV_MOVE = ['em_andamento', 'validacao'];
+// `validacao_area` entra: a area avisa o dev que aprovou e ele leva o card
+// adiante. Fora daqui o Worker REVERTERIA a movimentacao dele, e o dev ficaria
+// sem caminho para a propria entrega.
+const ETAPAS_QUE_O_DEV_MOVE = ['em_andamento', 'validacao_area', 'validacao'];
 
 /* ═══ A DATA COM QUE UMA DEMANDA PODE NASCER ════════════════════════════════
  *
@@ -1956,7 +2053,7 @@ function corrigeProjetoInvalido(data) {
 // mundo por um card. Devolve a etapa para 'backlog' e informa quais mexeu, para a
 // tela avisar.
 function corrigeSemDev(data) {
-  const ETAPAS = ['planejado', 'em_andamento', 'validacao'];
+  const ETAPAS = ['planejado', 'em_andamento', 'validacao_area', 'validacao'];
   const ajustados = [];
   for (const m of (data.melhorias || [])) {
     if (!m || m.mesclado_em) continue;
@@ -2730,6 +2827,10 @@ export default {
              nunca ver a marca — e a sala e metade do motivo pelo qual ela
              existe, porque e la que o time de Dados e acompanhado. */
           dados_bi: !!m.dados_bi,
+          /* OS BIs IMPACTADOS NA MESA. Quem estima uma demanda de Dados precisa
+             saber quantos paineis ela encosta — e a diferenca entre 3 e 13
+             pontos, e e justamente o que a sala discute. */
+          bis_impactados: bisDaDemanda(m),
           /* A ESTRELA VEM, e e ela que ordena a fila da Planning.
              Sem este campo a marca do card nao chegava a mesa: a estrela existia
              no Admin, no Gantt e no deck, e a fila do poker a ignorava — quem
@@ -3565,6 +3666,7 @@ export default {
       // Mesma razao do `enxuta` do poker: lista fechada, e o painel do dev
       // tambem mostra de qual time a demanda e.
       dados_bi: !!m.dados_bi,
+      bis_impactados: bisDaDemanda(m),
     });
 
     const ETAPAS_DEV = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento'];
@@ -5932,6 +6034,10 @@ export default {
       const voltaramPub = preservaChaves(data, antesPub);
       const devsForaPub = await limpaDevs(env, data);
       carimbaMeses(data, antesPub, true);
+      // ANTES do historico, como o carimbo do mes: assim a entrada na area
+      // tambem vira linha no card, e nao um campo que muda sozinho sem rastro.
+      carimbaAreaValidacao(data, antesPub);
+      limpaBis(data);
       registraHistorico(data, antesPub, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel');
       const espelhos = limpaEspelhos(data);
@@ -6087,6 +6193,10 @@ export default {
       const voltaramDev = preservaChaves(data, antesDev);
       const devsForaDev = await limpaDevs(env, data);
       carimbaMeses(data, antesDev, false);
+      // O dev e quem mais vai mover o card para a area — sem esta linha o
+      // carimbo so nasceria quando o PM/PO publicasse pelo Admin.
+      carimbaAreaValidacao(data, antesDev);
+      limpaBis(data);
       registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel dev');
       const espelhos = limpaEspelhos(data);

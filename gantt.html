@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="d16f43feeb">
+<html lang="pt-BR" data-build="954db9893f">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1093,8 +1093,8 @@
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=e85b8c6bbe"></script>
-<script src="capacidade.js?v=cc227d4867"></script>
+<script src="prazo.js?v=1f6897d06a"></script>
+<script src="capacidade.js?v=63737a8670"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=005f049189"></script>
@@ -1346,6 +1346,7 @@
           <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em andamento</option>
+          <option value="validacao_area">Validação da área</option>
           <option value="validacao">Validação PM/PO</option>
           <option value="concluido">Concluído</option>
         </select>
@@ -1381,7 +1382,9 @@
     <div class="form-row">
       <div class="form-group">
         <label>Horas realizadas</label>
-        <input type="number" id="e-horas-real" placeholder="0" min="0" step="0.5" />
+        <!-- 0,25: ver a nota do mesmo campo no admin.html. A hora chega aqui
+             somada de subtarefas de 15 minutos. -->
+        <input type="number" id="e-horas-real" placeholder="0" min="0" step="0.25" />
       </div>
       <div class="form-group">
         <label>Horas planejadas <span style="font-weight:400;opacity:.6">(auto)</span></label>
@@ -4665,6 +4668,8 @@ async function saveTask() {
     pausa_historico:    existing.pausa_historico || [],
     // Idem: o Worker repoe, mas a copia local tem de continuar coerente.
     historico:          existing.historico || [],
+    // E o carimbo da validacao da area, pelo mesmo motivo da pausa logo acima.
+    validacao_area_em:  existing.validacao_area_em || '',
     debito_tecnico:     document.getElementById('e-debito').checked,
     dados_bi:           document.getElementById('e-dados-bi').checked,
     estimativa_horas:   existing.estimativa_horas || 0,

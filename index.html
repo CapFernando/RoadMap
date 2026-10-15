@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="ff6294743b">
+<html lang="pt-BR" data-build="43e72e4083">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -258,6 +258,9 @@
     .badge-regra     { background: var(--teal-bg);   color: var(--teal-tx);   }
     .badge-estimada  { background: var(--amber-bg);  color: var(--amber-tx);  }
     .badge-iniciada  { background: #3D3600;  color: #FFE14D;  }
+    /* Validacao da AREA — roxo, para nao se confundir com o ambar da validacao
+       do PM/PO logo ao lado no painel de parede. */
+    .badge-validacao_area { background: #2E1540; color: #D8AEF0; }
     .badge-negada    { background: var(--red-bg);    color: var(--red-tx);    }
     .badge-levantar_req { background: #2A1A4E22;     color: #C9AEFF;          }
     .badge-planejado    { background: #0C326022;     color: #9BC8F8;          }
@@ -341,7 +344,7 @@
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
 <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=e85b8c6bbe"></script>
+<script src="prazo.js?v=1f6897d06a"></script>
 <script src="dialogo.js?v=6e3b00ca0d"></script>
   <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="anexo-cola.js?v=a860e5baad"></script>
@@ -687,6 +690,10 @@ const STATUS_META = {
   planning:     { label: 'Planning',            cls: 'badge-planning',     cor: '#2BBFA0' },
   planejado:    { label: 'Planejado',           cls: 'badge-planejado',    cor: '#E89C2F' },
   em_andamento: { label: 'Em Andamento',        cls: 'badge-iniciada',     cor: '#FFE14D' },
+  /* ETAPA NOVA — PRECISA ESTAR AQUI TAMBEM. Este mapa e consultado por rotulo:
+     uma etapa sem entrada sai como a chave crua ("validacao_area") no painel de
+     parede, ou sem cor nenhuma. */
+  validacao_area: { label: 'Validação da área', cls: 'badge-validacao_area', cor: '#B06FD4' },
   validacao:    { label: 'Validação PM/PO',     cls: 'badge-em_andamento', cor: '#E89C2F' },
   atrasado:     { label: 'Atrasado',            cls: 'badge-negada',       cor: '#E84444' },
   concluido:    { label: 'Concluído',           cls: 'badge-concluida',    cor: '#2BBFA0' },
@@ -793,8 +800,8 @@ function formatDate(s) {
 // Ordem das demandas dentro de cada tema. Por data de inicio, o que esta em
 // andamento se mistura com o que ainda nao comecou — e quem abre o dash quer
 // ver primeiro o que esta acontecendo agora. Etapa manda; a data desempata.
-const DASH_ORDEM = ['em_andamento', 'validacao', 'planejado', 'planning',
-                    'levantar_req', 'backlog', 'concluido', 'negada'];
+const DASH_ORDEM = ['em_andamento', 'validacao_area', 'validacao', 'planejado',
+                    'planning', 'levantar_req', 'backlog', 'concluido', 'negada'];
 function ordemDash(m) {
   const i = DASH_ORDEM.indexOf(getStatusKey(m));
   return i < 0 ? DASH_ORDEM.length : i;
@@ -962,6 +969,7 @@ const STATUS_CARDS = [
   { key:'planejado',    label:'Planejado',           cor:'var(--blue)' },
   { key:'em_andamento', label:'Em Andamento',        cor:'#FFE14D' },
   { key:'concluido',    label:'Concluído',           cor:'#2BBFA0' },
+  { key:'validacao_area', label:'Validação da área', cor:'#B06FD4' },
   { key:'validacao',    label:'Validação PM/PO',     cor:'var(--amber)' },
   { key:'atrasado',     label:'Atrasado',            cor:'var(--red)' },
   { key:'negada',       label:'Negada',              cor:'var(--red)' },
@@ -1564,6 +1572,7 @@ const STATUS_BADGE_PRINT = {
   planejado:    { label: 'Planejado',     bg: '#5C3608', color: '#F9C97A' },
   em_andamento: { label: 'Em Andamento',  bg: '#3D3600', color: '#FFE14D' },
   concluido:    { label: 'Concluído',     bg: '#1E4208', color: '#B2E07A' },
+  validacao_area: { label: 'Validação da área', bg: '#2E1540', color: '#D8AEF0' },
   validacao:    { label: 'Validação PM/PO', bg: 'var(--amber-bg, #4A2800)', color: 'var(--amber-tx, #FFC470)' },
   atrasado:     { label: 'Atrasado',      bg: '#5C0A0A', color: '#F9A0A0' },
   negada:       { label: 'Negada',        bg: '#5C0A0A', color: '#F9A0A0' },

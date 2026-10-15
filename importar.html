@@ -481,7 +481,7 @@ function addRow(data={}) {
     <td class="col-w-sm">${buildTipoSel(data.tipo||'')}</td>
     <td class="col-w-date"><input data-f="inicio" type="date" value="${esc(data.inicio||'')}"></td>
     <td class="col-w-date"><input data-f="entrega" type="date" value="${esc(data.entrega||'')}"></td>
-    <td class="col-w-num"><input data-f="horas_realizadas" type="number" min="0" step="0.5" placeholder="0" value="${data.horas_realizadas!=null&&data.horas_realizadas!==''?esc(data.horas_realizadas):''}"></td>
+    <td class="col-w-num"><input data-f="horas_realizadas" type="number" min="0" step="0.25" placeholder="0" value="${data.horas_realizadas!=null&&data.horas_realizadas!==''?esc(data.horas_realizadas):''}"></td>
     <td class="col-w-sm"><input data-f="solicitante" type="text" placeholder="Nome" value="${esc(data.solicitante||'')}"></td>
     <td class="col-w-sm">${buildPrioSel(data.prioridade||'')}</td>
     <td class="col-w-sm"><input data-f="descricao" type="text" placeholder="Observações" value="${esc(data.descricao||'')}"></td>

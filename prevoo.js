@@ -50,7 +50,8 @@
      para o sistema e a entrada em `concluido` para o responsavel —, e a
      invariante exige que batam: ler as duas dos arquivos e compara-las e o que
      impede um valor a mais de um lado so. */
-  var ETAPAS_ALOCADA = ['planejado', 'em_andamento', 'validacao', 'concluido'];
+  var ETAPAS_ALOCADA = ['planejado', 'em_andamento', 'validacao_area',
+                        'validacao', 'concluido'];
   var ETAPAS_CONCLUIDO = ['concluido'];
 
   function etapa(m) { return String((m || {}).status_planejamento || ''); }
