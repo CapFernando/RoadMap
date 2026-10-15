@@ -2870,6 +2870,19 @@ export default {
                       referencia: pokerReferencia(data),
                       // Mesmo motivo da referencia: o arquivo ja esta lido aqui.
                       ranking: pokerRanking(data, agora),
+                      /* A FRENTE DE CADA PESSOA, para a sala saber de qual time e
+                         a demanda em pauta.
+                         VAI O CADASTRO, e nao a frente ja calculada: a regra mora
+                         em `pipelines.js`, que a tela carrega, e o Worker nao
+                         importa modulo nenhum. Duplicar a regra aqui criaria a
+                         segunda copia que esta base passa a vida consertando —
+                         mandando o dado cru, a conta continua num lugar so.
+                         So o campo `pipeline` de cada perfil: o resto do cadastro
+                         nao e da conta de quem esta votando. */
+                      devs_perfil: Object.fromEntries(
+                        Object.entries(data.devs_perfil || {})
+                          .filter(([, p]) => p && typeof p === 'object' && p.pipeline)
+                          .map(([nome, p]) => [nome, { pipeline: p.pipeline }])),
                       temas: (data.temas || []).map(t => ({ id: t.id, nome: t.nome })) }, 200, headers);
       }
 

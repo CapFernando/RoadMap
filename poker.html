@@ -290,6 +290,9 @@
     /* A marca do time de Dados, na mesma cor que o Kanban usa — quem passa do
        quadro para a sala reconhece a demanda sem reler o titulo. */
     .pill.dados { background:#06363F; color:#7FD8E8; border:1px solid #10697C; font-weight:700; }
+    /* A frente usa a COR DA PROPRIA FRENTE, vinda de `pipelines.js` — as mesmas
+       quatro cores do deck. Quem viu o slide reconhece o time na mesa. */
+    .pill.frente { font-weight:700; }
     .fila-vazia { color:var(--text3); font-size:13px; font-style:italic; padding:8px 0; }
 
     /* ── ACESSO / MODAL ── */
@@ -314,6 +317,9 @@
 <script src="dialogo.js?v=6e3b00ca0d"></script>
 <script src="senha.js?v=005f049189"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
+<!-- A frente de trabalho de cada pessoa. A sala mostra de qual time e a demanda
+     em pauta, e a regra vem do mesmo arquivo que o deck e a tela de contas usam. -->
+<script src="pipelines.js?v=d7d8fef9a0"></script>
 <script src="anexo-tipos.js?v=f38cdc110c"></script>
 </head>
 <body>
@@ -565,6 +571,8 @@ let _melhorias    = [];
 let _referencia   = null;
 let _refAberta    = false;
 let _temas        = [];
+// `devs_perfil` enxuto, so com a frente de cada pessoa. Ver `carregarFila`.
+let _perfis       = {};
 let _meuVoto      = '';
 // Cresce a cada ação que muda a rodada (votar, revelar, votar de novo, trocar a
 // pauta). Serve para descartar respostas de polling que saíram antes da ação.
@@ -719,6 +727,10 @@ async function carregarFila() {
     _temas     = (r.body && r.body.temas) || [];
     _referencia = (r.body && r.body.referencia) || null;
     _ranking    = (r.body && r.body.ranking) || null;
+    /* O CADASTRO DE FRENTES, para a sala saber de qual time e cada demanda.
+       Vem cru do Worker e a conta e feita aqui, pelo `pipelines.js` — a mesma
+       regra do deck e da tela de contas, e nao uma segunda copia. */
+    _perfis     = (r.body && r.body.devs_perfil) || {};
     renderFila();
     renderReferencia();
     renderRanking();
@@ -873,6 +885,38 @@ function filaPlanning() {
 
 function nomeTema(id) { const t = _temas.find(x => x.id === id); return t ? t.nome : ''; }
 
+/* ═══ A FRENTE DE TRABALHO NA MESA ═════════════════════════════════════════
+ *
+ * "Planning poker nao esta diferenciando o planner de dados."
+ *
+ * A MARCA `dados_bi` NAO RESOLVE SOZINHA: ela e manual, nasceu vazia, e das
+ * 811 demandas da base nenhuma esta marcada. O pill dela continua aqui — quem
+ * marcar vai ver —, mas ele so responde depois de alguem marcar.
+ *
+ * A FRENTE JA ESTA NO DADO. Toda demanda tem `dev`, e `pipelines.js` sabe a
+ * frente de cada pessoa: Dan Weine e Dados & Power BI, Leite e Automacao & RPA.
+ * Isso classifica a fila inteira no primeiro carregamento, sem ninguem marcar
+ * nada.
+ *
+ * SEM FRENTE NAO DESENHA NADA, e isso e informacao e nao omissao: a pessoa nao
+ * esta no cadastro nem na semente. Foi exatamente assim que o Crisley ficou um
+ * mes inteiro fora da contagem — a chave da semente era o nome completo e as
+ * demandas usam o curto. Um pill ausente na mesa e a chance de alguem perceber
+ * antes do fechamento do mes.
+ */
+function frentePill(m) {
+  if (!window.PIPELINES || !m || !m.dev) return '';
+  /* O PRIMEIRO NOME SO. O campo aceita "Fulano / Beltrano" desde sempre, e a
+     mesa tem largura para um pill — `devsDaDemanda` ja sabe separar. */
+  const quem = PIPELINES.devsDaDemanda(m)[0];
+  if (!quem) return '';
+  const frente = PIPELINES.doDev(quem, _perfis);
+  if (!frente) return '';
+  return '<span class="pill frente" style="background:#' + PIPELINES.cor(frente) +
+         '22;color:#' + PIPELINES.cor(frente) + ';border:1px solid #' +
+         PIPELINES.cor(frente) + '55">' + esc(frente) + '</span>';
+}
+
 function renderFila() {
   const lista = filaPlanning();
   document.getElementById('fila-count').textContent = `${lista.length} demanda(s)`;
@@ -891,6 +935,7 @@ function renderFila() {
       <div class="fila-item-titulo">${m.destaque ? '<span class="fila-estrela" title="Prioridade para estimativa">★</span>' : ''}${esc(m.titulo || '(sem título)')}</div>
       <div class="fila-item-meta">
         <span class="pill">${tipo}</span>
+        ${frentePill(m)}
         ${m.dados_bi ? `<span class="pill dados">📊 Dados/BI</span>` : ''}
         ${m.dev ? `<span class="pill">${esc(m.dev)}</span>` : ''}
         ${pts}
@@ -1411,6 +1456,8 @@ function assinaturaDetalhe(m) {
   if (!m) return 'vazio';
   try {
     return JSON.stringify([m.id, m.titulo, m.descricao, m.solicitante, m.dev, m.entrega,
+                           /* `dev` ja estava na assinatura, e e dele que a frente
+                              sai — mudou o dev, muda a frente, redesenha. */
                            m.tema_id, m.debito_tecnico, m.dados_bi, m.criado_em,
                            (m.anexos || []).map(a => a.nome + ':' + (a.tamanho || 0)),
                            m.discovery]);
@@ -1459,6 +1506,12 @@ function renderDetalhe(m) {
   const disc = discoveryHTML(m);
 
   box.innerHTML =
+    /* A FRENTE PRIMEIRO, antes do tema. Quem vota precisa saber de qual time e
+       a demanda ANTES de ler o resto — uma de Dados e uma de Desenvolvimento
+       com o mesmo titulo nao valem o mesmo tanto. */
+    (frentePill(m)
+      ? '<div class="pd-linha"><span class="pd-rot">Frente</span>' + frentePill(m) + '</div>'
+      : '') +
     (m.dados_bi
       ? '<div class="pd-linha"><span class="pd-rot">Time</span>' +
         '<span class="pill dados">📊 Dados / BI</span></div>'

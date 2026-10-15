@@ -106,6 +106,18 @@
     'Cairo': 'Desenvolvimento',
     'Lucas Santos': 'Desenvolvimento',
     // IA & Vibe coding
+    /* AS DUAS GRAFIAS DO CRISLEY, e a curta e a que resolve.
+       O bloco medido no fim deste arquivo listava `Crisley Almeida` entre as
+       dez chaves que NUNCA casam com ninguem: a semente trazia o nome completo
+       e as demandas dizem `Crisley`. Efeito: o trabalho dele caia em "Nao
+       classificado" e ficava FORA da contagem de frentes — foi assim que ele
+       sumiu do deck de setembro inteiro.
+       A confirmacao veio do Fernando ("Crisley entra no IA e VIBE"), e e por
+       isso que esta linha entra agora e nao antes: o proprio arquivo diz que
+       chutar a frente de alguem e pior que deixar em branco. Duas chaves nao
+       custam nada — `PORNOME` e um mapa por nome normalizado, a demanda traz um
+       nome so e casa com uma entrada so. Nao ha dupla contagem. */
+    'Crisley': 'IA & Vibe coding',
     'Crisley Almeida': 'IA & Vibe coding',
     'Eloi': 'IA & Vibe coding',
     'Flávio': 'IA & Vibe coding',
@@ -177,6 +189,11 @@
        João Siqueira · João Vitor Batista de Siqueira · Emilly Souza ·
        Gabriel Fernandes · Murillo Jesus · Maury Teixeira · Lucas Santos ·
        Crisley Almeida · João Carvalho · Jhonatan Soares
+
+     UMA JÁ FOI ARRUMADA: `Crisley`. O deck de setembro saiu sem ele — o
+     trabalho inteiro caiu em "Não classificado" —, e o Fernando confirmou a
+     frente. As outras nove continuam inertes, esperando a mesma confirmação
+     pessoa a pessoa. É esta lista que diz quais faltam.
 
      São nomes COMPLETOS, e as demandas usam o curto: "Crisley Almeida" aqui
      contra "Crisley" lá, "Jhonatan Soares" contra "Jhonantan". O próprio
