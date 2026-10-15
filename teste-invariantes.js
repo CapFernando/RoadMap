@@ -7346,7 +7346,14 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
        (Sem crases neste comentario: ele mora DENTRO de um template literal, e
        uma crase aqui fecha a string — foi o que aconteceu na primeira versao.) */
     const matchProducao = () => true;
+    /* E matchDados entrou depois dele, pelo mesmo caminho e com o mesmo
+       estouro. Quando a cadeia ganhar o proximo filtro, e aqui que ela vai
+       avisar — que e o ponto deste bloco executar o trecho real em vez de
+       procurar texto nele. (Sem crases: ver a nota logo acima. Eu acabei de
+       errar isto escrevendo este comentario.) */
+    const matchDados = () => true;
     const _kbTema = null, _kbDev = null, _kbPrazo = null, _kbTipo = null, _kbProd = null;
+    const _kbDados = null;
     ${trecho}
     return { base, mescladasAchadas };
   `)({ melhorias }, busca, periodo);
@@ -11060,6 +11067,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       'state', 'ehMesclada', 'matchDev', 'matchPrazo', 'matchTipo', 'matchBusca',
       'matchPeriodoConclusao', 'statusKey', '_kbTema', '_kbDev', '_kbPrazo', '_kbTipo',
       '_kbProd', '_kbBusca', '_kbPeriodo',
+      // matchDados/_kbDados entraram na cadeia depois deste bloco. Como ele
+      // EXECUTA o trecho real, a dependencia nova estourou aqui — que e o aviso
+      // funcionando, e nao um teste velho atrapalhando.
+      'matchDados', '_kbDados',
       corpo(ADMIN, 'function matchProducao(') + '\n' + rk.slice(iCad, jCad) +
       '\nreturn base;');
     const baseKb = [
@@ -11086,7 +11097,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     };
     const rodaKb = (prod, busca) => cadeiaKb(
       { melhorias: baseKb }, () => false, () => true, () => true, () => true, () => true,
-      periodoKb, (m) => ETP.gravada(m), null, null, null, null, prod, busca || '', 'mes_atual'
+      periodoKb, (m) => ETP.gravada(m), null, null, null, null, prod, busca || '', 'mes_atual',
+      () => true, null
     ).map(m => m.codigo);
 
     ok(JSON.stringify(rodaKb(null)) === JSON.stringify(['AX-191', 'AX-254', 'AX-081']),
@@ -11111,8 +11123,26 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const kc = semComentario(ADMIN);
     ok(/fbGroup\('Produção', _kbProd, opcoesProducao\(\), 'setKbProd'\)/.test(kc),
        'o select de producao esta na barra do kanban');
-    ok(/_kbTipo, _kbProd, _kbBusca/.test(kc), 'e entra na contagem do botao Limpar');
-    ok(/_kbProd = null;/.test(kc), 'e o Limpar o zera');
+    /* A AFIRMACAO E SOBRE `_kbProd`, e nao sobre quem esta ao lado dele.
+       A versao anterior casava a linha inteira (`_kbTipo, _kbProd, _kbBusca`) e
+       quebrou no dia em que um filtro novo entrou no meio — acusando uma
+       melhoria em vez de um defeito. Agora procura o nome DENTRO da lista. */
+    ok(/const ativos = \[[^\]]*_kbProd[^\]]*\]/.test(kc),
+       'e entra na contagem do botao Limpar');
+    ok(/_kbTema = [^;]*_kbProd[^;]*= null;/.test(kc), 'e o Limpar o zera');
+
+    /* ─── E O FILTRO DO TIME DE DADOS, pelas mesmas tres perguntas ──────────
+       Ele nasceu para ACOMPANHAR o time de Dados no quadro. Um filtro que
+       filtra mas nao aparece no "Limpar (n)" deixa a pessoa vendo o quadro
+       encolhido sem saber por que — o defeito que esta tela ja teve duas vezes
+       (o periodo e, depois, o contador da coluna). */
+    ok(/fbGroup\('Dados\/BI', _kbDados, opcoesDados\(\), 'setKbDados'\)/.test(kc),
+       'o filtro de Dados/BI esta na barra do kanban');
+    ok(/const ativos = \[[^\]]*_kbDados[^\]]*\]/.test(kc),
+       'e ele tambem entra na contagem do botao Limpar');
+    ok(/_kbTema = [^;]*_kbDados[^;]*= null;/.test(kc), 'e o Limpar o zera tambem');
+    ok(/matchDados\(m, _kbDados\)/.test(kc),
+       'e a cadeia que decide quem aparece no quadro realmente o consulta');
     /* E A TELA DIZ QUE IGNOROU O PERIODO. Calar seria o defeito ao contrario:
        um card de julho sob "Concluidas: Este mes" pareceria quadro quebrado. */
     ok(/produção em todos os períodos/.test(ADMIN),
@@ -18615,6 +18645,48 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e consulta quem esta DESATIVADO, pelos dois nomes que a base usa');
     ok(!/await devsCarregaInativos\(\)/.test(ADMIN),
        'e sem await: falhar a lista nao pode impedir o quadro de carregar');
+  }
+
+  /* ═══ A MARCA DE DADOS/BI SOBREVIVE AS LISTAS FECHADAS ═══════════════════
+   *
+   * Tres telas remontam a demanda campo a campo, e uma chave que falte numa
+   * delas nao da erro: ela simplesmente some na proxima gravacao por aquela
+   * tela. Esta base ja perdeu pausa, assinatura de spike e marca de producao
+   * exatamente assim — os comentarios de `producao_em`, da pausa e do
+   * `spike_aprovacoes` registram as tres vezes.
+   *
+   * E o caminho ate a MESA e outra lista fechada: a projecao `enxuta` do
+   * Worker decide o que a sala do Planning Poker enxerga. Marcar no Admin sem
+   * por o campo la seria marcar para ninguem — e a sala e metade do motivo
+   * pelo qual o Fernando pediu a marca.
+   */
+  {
+    sec('Dados/BI: a marca atravessa as listas fechadas');
+    const salvaAdm = corpo(ADMIN, 'function montaMelhoriaDoForm(') ||
+                     ADMIN.slice(ADMIN.indexOf('debito_tecnico:      document'));
+    ok(/dados_bi:\s*document\.getElementById\('m-dados-bi'\)\.checked/.test(ADMIN),
+       'o Admin grava a marca — sem esta linha, salvar pela aba Dados a apagaria');
+    ok(/dados_bi:\s*document\.getElementById\('e-dados-bi'\)\.checked/.test(GANTT),
+       'e o Gantt tambem — a lista dele e OUTRA, e esquecer aqui apaga pelo Planejamento');
+    ok(/getElementById\('m-dados-bi'\)\.checked\s*=\s*!!m\?\.dados_bi/.test(ADMIN),
+       'e o Admin recarrega a marca no formulario');
+    ok(/getElementById\('e-dados-bi'\)\.checked\s*=\s*!!\(m && m\.dados_bi\)/.test(GANTT),
+       'e o Gantt tambem');
+    /* A PROJECAO DO WORKER: o campo tem de estar DENTRO do `enxuta` da fila do
+       poker, e nao em qualquer lugar do arquivo. */
+    const iEnx = W.indexOf('const enxuta = (m) => ({');
+    const enx = iEnx > 0 ? W.slice(iEnx, W.indexOf('});', iEnx)) : '';
+    ok(!!enx, 'a projecao da fila do poker foi encontrada');
+    ok(/dados_bi:\s*!!m\.dados_bi/.test(enx),
+       'e ela leva a marca para a sala do Planning Poker');
+    ok(/m\.dados_bi/.test(POKER),
+       'e a sala desenha a marca que recebeu');
+    /* E O REDESENHO TEM DE PERCEBER A MUDANCA. A sala compara uma assinatura
+       antes de redesenhar; fora dela, marcar a demanda durante a reuniao nao
+       mudaria nada na tela ate alguem trocar de pauta. */
+    const assin = corpo(POKER, 'function assinaturaDetalhe(');
+    ok(!!assin && /m\.dados_bi/.test(assin),
+       'e a assinatura do detalhe inclui a marca — senao a tela so muda na troca de pauta');
   }
 
   let erroPz = null;

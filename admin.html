@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="da2bb319ed">
+<html lang="pt-BR" data-build="613c113cee">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -425,6 +425,20 @@
       padding: 1px 5px; margin-right: 6px; letter-spacing: .02em; }
     .kb-debito { font-size: 10.5px; font-weight: 700; background: var(--purple-bg, #341A6E);
       color: var(--purple-tx, #C9AEFF); border-radius: 5px; padding: 1px 6px; }
+    /* DADOS/BI EM CIANO, e nao em mais um roxo: `kb-proj` e `kb-debito` ja sao
+       roxos, e tres marcas da mesma cor no mesmo card viram uma mancha so —
+       quem varre o quadro atras do time de Dados precisa achar pela cor. */
+    .kb-dados { font-size: 10.5px; font-weight: 700; background: var(--cyan-bg, #06363F);
+      color: var(--cyan-tx, #7FD8E8); border: 1px solid var(--cyan-bd, #10697C);
+      border-radius: 5px; padding: 1px 6px; }
+    /* A ETIQUETA LIGADA PRECISA PARECER LIGADA. Caixa marcada dentro de uma
+       caixa cinza se le como desmarcada de relance, e esta e a marca que decide
+       de qual time e a demanda. */
+    .tag-dados { display:flex; align-items:center; gap:8px; font-weight:400; cursor:pointer;
+      background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+      padding:11px 12px; font-size:14px; transition:background .12s, border-color .12s; }
+    .tag-dados:has(input:checked) { background: var(--cyan-bg, #06363F);
+      border-color: var(--cyan-bd, #10697C); color: var(--cyan-tx, #7FD8E8); }
     .kb-col-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 14px 4px; opacity: .6; }
     .kb-card.dragging { opacity: .4; }
     /* Abas dentro do card: os dados e a validacao da entrega sao duas conversas
@@ -2032,6 +2046,19 @@
         </span>
       </div>
     </div>
+    <!-- A MARCA DO TIME DE DADOS, no alto e nao em "Classificacao extra".
+         As duas marcas de la — debito tecnico e spike — descrevem a NATUREZA do
+         trabalho. Esta diz QUEM toca, e isso se decide junto com o titulo, nao
+         tres secoes abaixo. Ela viaja para o Kanban e para a sala do Planning
+         Poker, que e onde o acompanhamento do time acontece. -->
+    <div class="form-group">
+      <label class="tag-dados"
+             title="Marque quando a demanda for do time de Dados/BI. A marca aparece no card do Kanban e na fila da sala do Planning Poker.">
+        <input type="checkbox" id="m-dados-bi" style="width:auto;margin:0" />
+        📊 <strong>Dados / BI</strong>
+        <span style="font-size:12px;opacity:.75">— demanda do time de Dados</span>
+      </label>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label>Sistema / módulo *</label>
@@ -3457,6 +3484,29 @@ function matchTipo(m, filtro) {
   return m.tipo === filtro;
 }
 
+/* ─── O FILTRO DO TIME DE DADOS ───────────────────────────────────────────
+   A marca existe para ACOMPANHAR o time, e acompanhar e isolar: ver o quadro
+   so com o que e de Dados, ou so com o que nao e. Sem o filtro, a etiqueta
+   seria uma decoracao que obriga a varrer oito colunas com o olho.
+
+   "Fora de Dados" NAO e o avesso inutil que "nao esta no ar" seria: aqui as
+   duas perguntas sao legitimas, porque a marca e binaria e deliberada — alguem
+   decidiu que e de Dados, ou decidiu que nao e. */
+function matchDados(m, filtro) {
+  if (!filtro) return true;
+  return filtro === 'dados' ? !!(m && m.dados_bi) : !(m && m.dados_bi);
+}
+
+function opcoesDados() {
+  const n = state.melhorias.filter(m => !ehMesclada(m) && m.dados_bi).length;
+  return [
+    { key: '', label: 'Todos', n: state.melhorias.length },
+    { key: 'dados', label: '📊 Dados/BI', n },
+    { key: 'fora', label: 'Fora de Dados',
+      n: state.melhorias.filter(m => !ehMesclada(m) && !m.dados_bi).length },
+  ];
+}
+
 function opcoesTipo() {
   const semTipo = state.melhorias.filter(m => !m.tipo).length;
   const lista = [{ key: '', label: 'Todos', n: state.melhorias.length }];
@@ -4086,6 +4136,7 @@ let _kbTema  = null;
 let _kbDev   = null;
 let _kbPrazo = null;
 let _kbTipo  = null;
+let _kbDados = null;
 let _kbProd  = null;       // null|'falta_subir'|'no_ar' — ver PRODUCAO_BUCKETS
 /* ─── O FILTRO DE PRODUCAO DE CADA COLUNA ─────────────────────────────────
    "Quero poder clicar aqui e poder filtrar o que esta em producao e o que nao
@@ -4148,6 +4199,7 @@ function setKbTema(v)  { _kbTema  = vazioNulo(v); renderKanban(); }
 function setKbDev(v)   { _kbDev   = vazioNulo(v); renderKanban(); }
 function setKbPrazo(v) { _kbPrazo = vazioNulo(v); renderKanban(); }
 function setKbTipo(v)  { _kbTipo  = vazioNulo(v); renderKanban(); }
+function setKbDados(v) { _kbDados = vazioNulo(v); renderKanban(); }
 function setKbProd(v)  { _kbProd  = vazioNulo(v); renderKanban(); }
 function setBuscaKb(v) {
   _kbBusca = v || '';
@@ -4155,7 +4207,7 @@ function setBuscaKb(v) {
 }
 function setKbPeriodo(v) { _kbPeriodo = v || 'mes_atual'; renderKanban(); }
 function limparFiltrosKb() {
-  _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = null;
+  _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = _kbDados = null;
   // O da coluna entra aqui tambem: ele conta no "Limpar (n)", e um filtro que
   // conta mas nao limpa deixa o botao mentindo sobre o que acabou de fazer.
   _kbProdCol = {};
@@ -4280,7 +4332,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
   });
   // 'mes_atual' é o padrão de higiene, não uma escolha explícita — só conta
   // como filtro "ativo" quando alguém pede para ver mais (3 meses/tudo).
-  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbBusca,
+  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbDados, _kbBusca,
                   _kbPeriodo !== 'mes_atual' ? _kbPeriodo : null].filter(Boolean).length +
     /* CADA COLUNA FILTRADA CONTA UMA. Sem isto, o filtro do contador seria o
        segundo "filtro invisivel na conta" desta tela — o primeiro foi o periodo,
@@ -4294,6 +4346,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
     fbGroup('Prazo',   _kbPrazo,   opcoesPrazo(),   'setKbPrazo') +
     fbGroup('Concluídas', _kbPeriodo, opcoesPeriodo(), 'setKbPeriodo') +
     fbGroup('Produção', _kbProd, opcoesProducao(), 'setKbProd') +
+    fbGroup('Dados/BI', _kbDados, opcoesDados(), 'setKbDados') +
     fbBusca('kb-busca', _kbBusca, 'setBuscaKb') +
     botaoLimpar('limparFiltrosKb', ativos) +
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}` +
@@ -4398,6 +4451,7 @@ function renderKanban() {
     matchDev(m, _kbDev) &&
     matchPrazo(m, _kbPrazo) &&
     matchTipo(m, _kbTipo) &&
+    matchDados(m, _kbDados) &&
     matchProducao(m, _kbProd) &&
     /* O FILTRO DE PRODUCAO VENCE O PERIODO, e sem isto ele nasceria quebrado.
        "Concluidas: Este mes" e o PADRAO — nao conta como filtro ativo, nao
@@ -4490,6 +4544,7 @@ function renderKanban() {
       if (projDoCard) badges.push('<span class="kb-proj" title="' + esc(projDoCard.nome || '') + '">🗂 ' +
         esc(projDoCard.codigo || projDoCard.nome || '') + '</span>');
       if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
+      if (m.dados_bi) badges.push('<span class="kb-dados" title="Demanda do time de Dados/BI">📊 Dados/BI</span>');
       /* O SELO DIZ QUANTAS ASSINATURAS FALTAM, e nao so "spike". Quem olha o
          quadro quer saber o que impede de fechar, e esse numero e a resposta. */
       if (m.spike) {
@@ -10977,6 +11032,7 @@ function openModalMelhoria(id) {
   mResumoConta();
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
+  document.getElementById('m-dados-bi').checked      = !!m?.dados_bi;
   document.getElementById('m-spike').checked         = !!m?.spike;
   mPopulaProjetos(m?.projeto_id || '');
   mescRenderBloco(m || null);
@@ -11681,6 +11737,9 @@ async function saveMelhoria() {
     producao_em:         existing.producao_em  || '',
     producao_por:        existing.producao_por || '',
     debito_tecnico:      document.getElementById('m-debito').checked,
+    // Na lista fechada pelo mesmo motivo de todos os outros: fora dela, salvar
+    // pela aba Dados APAGARIA a marca do time de Dados em toda demanda.
+    dados_bi:            document.getElementById('m-dados-bi').checked,
     spike:               document.getElementById('m-spike').checked,
     /* AS ASSINATURAS NAO SAO DESTE FORMULARIO. Elas vem do servidor, que e
        quem as grava lendo a sessao de quem assina — mandar daqui abriria a
@@ -13109,6 +13168,7 @@ function entregaHTML(m, opts) {
   if (m.entrega) meta.push('<span>Prazo: <strong>' + esc(formatDate(m.entrega)) + '</strong></span>');
   if (m.concluido_em) meta.push('<span>Concluída em: <strong>' + esc(formatDate(m.concluido_em)) + '</strong></span>');
   if (m.debito_tecnico) meta.push('<span><strong>🧱 Débito técnico</strong></span>');
+  if (m.dados_bi) meta.push('<span><strong>📊 Dados / BI</strong></span>');
   if (m.sprint) meta.push('<span>Sprint: <strong>' + esc(m.sprint) + '</strong></span>');
 
   /* O LINK DO ANEXO LEVA O ID DA DEMANDA.

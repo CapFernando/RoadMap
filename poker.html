@@ -287,6 +287,9 @@
     .fila-item-meta { font-size:11px; color:var(--text3); margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; }
     .pill { font-size:10px; border-radius:4px; padding:1px 6px; background:var(--bg4); color:var(--text2); }
     .pill.pontos { background:#123A52; color:#8AD5F0; }
+    /* A marca do time de Dados, na mesma cor que o Kanban usa — quem passa do
+       quadro para a sala reconhece a demanda sem reler o titulo. */
+    .pill.dados { background:#06363F; color:#7FD8E8; border:1px solid #10697C; font-weight:700; }
     .fila-vazia { color:var(--text3); font-size:13px; font-style:italic; padding:8px 0; }
 
     /* ── ACESSO / MODAL ── */
@@ -888,6 +891,7 @@ function renderFila() {
       <div class="fila-item-titulo">${m.destaque ? '<span class="fila-estrela" title="Prioridade para estimativa">★</span>' : ''}${esc(m.titulo || '(sem título)')}</div>
       <div class="fila-item-meta">
         <span class="pill">${tipo}</span>
+        ${m.dados_bi ? `<span class="pill dados">📊 Dados/BI</span>` : ''}
         ${m.dev ? `<span class="pill">${esc(m.dev)}</span>` : ''}
         ${pts}
       </div>
@@ -1407,7 +1411,7 @@ function assinaturaDetalhe(m) {
   if (!m) return 'vazio';
   try {
     return JSON.stringify([m.id, m.titulo, m.descricao, m.solicitante, m.dev, m.entrega,
-                           m.tema_id, m.debito_tecnico, m.criado_em,
+                           m.tema_id, m.debito_tecnico, m.dados_bi, m.criado_em,
                            (m.anexos || []).map(a => a.nome + ':' + (a.tamanho || 0)),
                            m.discovery]);
   } catch (_) {
@@ -1455,6 +1459,10 @@ function renderDetalhe(m) {
   const disc = discoveryHTML(m);
 
   box.innerHTML =
+    (m.dados_bi
+      ? '<div class="pd-linha"><span class="pd-rot">Time</span>' +
+        '<span class="pill dados">📊 Dados / BI</span></div>'
+      : '') +
     linha('Tema', nomeTema(m.tema_id)) +
     linha('Solicitante', m.solicitante) +
     linha('Responsável', m.dev) +

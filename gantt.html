@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="57b698ac01">
+<html lang="pt-BR" data-build="d16f43feeb">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1022,6 +1022,14 @@
     }
     .modal-close-btn:hover { background: var(--bg3); color: var(--text); }
     .form-group { margin-bottom: 14px; }
+    /* A etiqueta de Dados/BI, igual a do Admin: marcada tem de PARECER marcada,
+       senao de relance ela se le como desmarcada — e e ela que diz de qual time
+       e a demanda. */
+    .tag-dados { display:flex; align-items:center; gap:8px; font-weight:400; cursor:pointer;
+      background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+      padding:10px 12px; font-size:13px; transition:background .12s, border-color .12s; }
+    .tag-dados:has(input:checked) { background: var(--cyan-bg, #06363F);
+      border-color: var(--cyan-bd, #10697C); color: var(--cyan-tx, #7FD8E8); }
     /* Caixa de pausa no modal. Tokens, nao cor cravada: com #252522 o tema
        claro ficava com caixa escura e texto claro sobre fundo branco. */
     .g-pausa-box { background:var(--bg3,#1E1E1C); border:1px solid var(--border,#2E2E2B);
@@ -1318,6 +1326,16 @@
                       padding:10px 12px;font-size:13px">
           <input type="checkbox" id="e-debito" style="width:auto;margin:0" />
           🧱 Débito técnico
+        </label>
+        <!-- A MESMA MARCA DO ADMIN, e por isso ela existe AQUI TAMBEM: esta tela
+             reconstroi a demanda por lista fechada de campos. Sem a caixa e sem
+             a linha no `obj`, editar qualquer coisa pelo gantt apagaria a marca
+             do time de Dados — a armadilha que os comentarios da pausa e do
+             historico logo abaixo ja registram. -->
+        <label class="tag-dados" style="margin-top:8px"
+               title="Marque quando a demanda for do time de Dados/BI.">
+          <input type="checkbox" id="e-dados-bi" style="width:auto;margin:0" />
+          📊 Dados / BI
         </label>
       </div>
       <div class="form-group">
@@ -4231,6 +4249,7 @@ function openModal(id, prefillDev, prefillDate) {
   }
   selPts.value = valPts;
   document.getElementById('e-debito').checked = !!(m && m.debito_tecnico);
+  document.getElementById('e-dados-bi').checked = !!(m && m.dados_bi);
   document.getElementById('e-poker-media').textContent =
     (m && m.poker_media != null) ? '— média ' + String(m.poker_media).replace('.', ',') : '';
   /* O CARIMBO. `SELO.grande` devolve string vazia quando a demanda nao passou
@@ -4647,6 +4666,7 @@ async function saveTask() {
     // Idem: o Worker repoe, mas a copia local tem de continuar coerente.
     historico:          existing.historico || [],
     debito_tecnico:     document.getElementById('e-debito').checked,
+    dados_bi:           document.getElementById('e-dados-bi').checked,
     estimativa_horas:   existing.estimativa_horas || 0,
     // `|| 0` sozinho zerava a hora que o dev tinha registrado quando o campo
     // chegava vazio. Cai no valor que ja estava gravado, como o Admin ja fazia.

@@ -2725,6 +2725,11 @@ export default {
           codigo: m.codigo || '', descricao: m.descricao || '',
           solicitante: m.solicitante || '', entrega: m.entrega || '',
           criado_em: m.criado_em || '', debito_tecnico: !!m.debito_tecnico,
+          /* DADOS/BI VIAJA PARA A MESA. Esta projecao e lista FECHADA: marcar a
+             demanda no Admin e nao por o campo aqui faria a sala do Planning
+             nunca ver a marca — e a sala e metade do motivo pelo qual ela
+             existe, porque e la que o time de Dados e acompanhado. */
+          dados_bi: !!m.dados_bi,
           /* A ESTRELA VEM, e e ela que ordena a fila da Planning.
              Sem este campo a marca do card nao chegava a mesa: a estrela existia
              no Admin, no Gantt e no deck, e a fila do poker a ignorava — quem
@@ -3557,6 +3562,9 @@ export default {
       spike: !!m.spike,
       spike_aprovacoes: (m.spike_aprovacoes || []).map(a => ({
         nome: (a && (a.nome || a.login)) || '', em: (a && a.em) || '' })),
+      // Mesma razao do `enxuta` do poker: lista fechada, e o painel do dev
+      // tambem mostra de qual time a demanda e.
+      dados_bi: !!m.dados_bi,
     });
 
     const ETAPAS_DEV = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento'];

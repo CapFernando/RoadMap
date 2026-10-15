@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a8762cc8e8">
+<html lang="pt-BR" data-build="023f669af1">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -4268,6 +4268,7 @@ function openStatusModal(id, preselect) {
     ${m.entrega && !estaPausado(m) ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
     ${estaPausado(m) ? `<div class="modal-info-row"><span>Entrega:</span><strong style="color:var(--text3)">oculta enquanto pausada</strong></div>` : ''}
     ${m.debito_tecnico ? `<div class="modal-info-row"><span>Débito técnico:</span><strong>🧱 Sim</strong></div>` : ''}
+    ${m.dados_bi ? `<div class="modal-info-row"><span>Time:</span><strong>📊 Dados / BI</strong></div>` : ''}
     ${mescladasDev(m)}
     ${m.concluido_em ? `<div class="modal-info-row"><span>Concluída em:</span><strong>${formatDate(m.concluido_em)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${devEsc(m.descricao)}</div>` : ''}
