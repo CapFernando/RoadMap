@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="954db9893f">
+<html lang="pt-BR" data-build="6c682b549e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1090,6 +1090,8 @@
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
+  <!-- A frente de trabalho de cada pessoa, para o filtro de frente do quadro. -->
+  <script src="pipelines.js?v=d7d8fef9a0"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
@@ -1206,6 +1208,15 @@
     <div class="filter-divider"></div>
     <label>Dev</label>
     <select id="f-dev" onchange="applyFilters()"></select>
+    <div class="filter-divider"></div>
+    <!-- A FRENTE DE TRABALHO. "Melhore a visão gantt para trazer apenas o time
+         de dados/BI."
+         Vem do DEV, e nao de marcacao manual: a marca `dados_bi` existe mas
+         nasceu vazia, e das 811 demandas da base nenhuma esta marcada. A frente
+         classifica o quadro inteiro no primeiro carregamento — mesma regra do
+         deck, da tela de contas e da mesa do Planning. -->
+    <label>Frente</label>
+    <select id="f-frente" onchange="applyFilters()"></select>
     <div class="filter-divider"></div>
     <label>Prioridade</label>
     <select id="f-prio" onchange="applyFilters()">
@@ -1578,7 +1589,7 @@ function splitDevs(str) {
   return str.split(/[\/,]/).map(s => s.trim()).filter(Boolean);
 }
 
-let filters  = { tipo: '', tema: '', dev: '', prio: '', sprint: '', indicator: '' };
+let filters  = { tipo: '', tema: '', dev: '', frente: '', prio: '', sprint: '', indicator: '' };
 
 // Marca que esta aba editou ausências — evita que o merge do save descarte a
 // edição local adotando a lista do servidor.
@@ -2392,6 +2403,7 @@ function applyFilters() {
   filters.tipo     = document.getElementById('f-tipo').value;
   filters.tema     = document.getElementById('f-tema').value;
   filters.dev      = document.getElementById('f-dev').value;
+  filters.frente   = document.getElementById('f-frente').value;
   filters.prio     = document.getElementById('f-prio').value;
   filters.sprint   = document.getElementById('f-sprint').value.trim().toLowerCase();
   renderGantt();
@@ -2407,6 +2419,7 @@ function matchesFilters(m) {
   // Com quatro niveis, comparar so o id obriga a filtrar folha por folha.
   if (filters.tema   && !catalogoCasa(m.tema_id, filters.tema, state.temas)) return false;
   if (filters.dev && filters.dev !== '__all__' && !DEVNOME.eDe(m, filters.dev)) return false;
+  if (filters.frente && frenteDaDemanda(m) !== filters.frente) return false;
   if (filters.prio   && (m.prioridade||'') !== filters.prio)        return false;
   /* A SPRINT FILTRADA E A DERIVADA DAS DATAS, e nao o texto gravado no card.
      O campo `sprint` e uma FOTO do que a regra dizia na hora do ultimo salvamento:
@@ -2433,10 +2446,12 @@ function matchesFilters(m) {
 }
 
 function limparFiltrosGantt() {
-  filters.tipo = ''; filters.tema = ''; filters.dev = ''; filters.prio = ''; filters.sprint = ''; filters.indicator = '';
+  filters.tipo = ''; filters.tema = ''; filters.dev = ''; filters.prio = ''; filters.sprint = '';
+  filters.indicator = ''; filters.frente = '';
   document.getElementById('f-tipo').value   = '';
   document.getElementById('f-tema').value   = '';
   document.getElementById('f-dev').value    = '';
+  document.getElementById('f-frente').value = '';
   document.getElementById('f-prio').value   = '';
   document.getElementById('f-sprint').value = '';
   renderIndicators();
@@ -2500,6 +2515,49 @@ function renderFilters() {
   fd.innerHTML = `<option value="">Com demanda no mês</option>` +
     `<option value="__all__" ${dv==='__all__'?'selected':''}>Todos devs</option>` +
     state.desenvolvedores.map(d => `<option value="${d}" ${dv===d?'selected':''}>${d}</option>`).join('');
+
+  /* ── FRENTE DE TRABALHO ──────────────────────────────────────────────────
+     AS OPCOES SAO A LISTA DO `pipelines.js`, e nao escritas aqui: o dia em que
+     uma frente nascer ou duas se fundirem — ja aconteceu com `Dados &
+     Inteligencia` e `Power BI` —, este select acompanha sozinho.
+
+     A CONTAGEM VAI NO ROTULO porque frente vazia e informacao: "Dados & Power
+     BI (0)" responde "nao tem nada deles no recorte" em vez de deixar a pessoa
+     achando que o filtro quebrou.
+
+     "Nao classificado" fecha a lista pelo mesmo motivo que o pill ausente na
+     mesa do Planning: e onde aparece quem o cadastro nao alcanca. Foi ali que o
+     Crisley passou setembro inteiro escondido. */
+  const ff = document.getElementById('f-frente');
+  if (ff && window.PIPELINES) {
+    const fvv = ff.value;
+    const vivas = (state.melhorias || []).filter(m => m && !m.oculto && !m.mesclado_em);
+    const conta = (nome) => vivas.filter(m => frenteDaDemanda(m) === nome).length;
+    const naoClass = PIPELINES.NAO_CLASSIFICADO;
+    ff.innerHTML = `<option value="">Todas as frentes</option>` +
+      PIPELINES.nomes.map(nome =>
+        `<option value="${nome}" ${fvv === nome ? 'selected' : ''}>${nome} (${conta(nome)})</option>`
+      ).join('') +
+      `<option value="${naoClass}" ${fvv === naoClass ? 'selected' : ''}>` +
+      `${naoClass} (${conta(naoClass)})</option>`;
+  }
+}
+
+/* A FRENTE DE UMA DEMANDA — pela pessoa que a faz.
+ *
+ * A frente e da PESSOA e nao da demanda (ver o cabecalho de `pipelines.js`), e
+ * e por isso que ela sai do campo `dev`: "AXCred" aparece em Desenvolvimento,
+ * em Dados e em RPA, porque o produto e o mesmo e a frente e que muda.
+ *
+ * O PRIMEIRO NOME SO. O campo aceita "Fulano / Beltrano" desde sempre; uma
+ * demanda tem uma linha no quadro, e uma linha tem uma frente.
+ *
+ * SEM DEV OU SEM CADASTRO CAI EM "Nao classificado", em vez de sumir do
+ * filtro: demanda sem dono e justamente o que alguem quer achar. */
+function frenteDaDemanda(m) {
+  if (!window.PIPELINES) return '';
+  const quem = PIPELINES.devsDaDemanda(m)[0];
+  return (quem && PIPELINES.doDev(quem, state.devs_perfil)) || PIPELINES.NAO_CLASSIFICADO;
 }
 
 // ── INDICATORS ────────────────────────────────────────────────────────────
