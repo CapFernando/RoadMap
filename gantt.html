@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="6c682b549e">
+<html lang="pt-BR" data-build="a838b1386e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1274,6 +1274,23 @@
       <label>Descrição</label>
       <textarea id="e-descricao" rows="2" placeholder="Detalhes da melhoria…"></textarea>
     </div>
+    <!-- A MARCA DO TIME DE DADOS, NO MESMO LUGAR QUE NO ADMIN.
+         Ela nasceu aqui dentro de "Classificacao extra", la embaixo junto do
+         debito tecnico — e o Fernando abriu o card e nao achou: "nao aparece a
+         opcao de marcar que faz parte do time de dados". Existia, so que
+         abaixo da dobra do modal.
+         DUAS TELAS QUE EDITAM A MESMA DEMANDA NAO PODEM GUARDAR O MESMO CAMPO
+         EM LUGARES DIFERENTES. E a mesma razao de o campo estar no alto no
+         Admin: quem toca a demanda decide o time junto com o titulo, e nao
+         depois de rolar o formulario inteiro. -->
+    <div class="form-group">
+      <label class="tag-dados"
+             title="Marque quando a demanda for do time de Dados/BI. A marca aparece no card do Kanban e na fila da sala do Planning Poker.">
+        <input type="checkbox" id="e-dados-bi" style="width:auto;margin:0" />
+        📊 <strong>Dados / BI</strong>
+        <span style="font-size:12px;opacity:.75">— demanda do time de Dados</span>
+      </label>
+    </div>
     <div class="form-group">
       <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
       <input type="file" data-anexo-accept id="e-file" multiple onchange="gAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
@@ -1338,16 +1355,11 @@
           <input type="checkbox" id="e-debito" style="width:auto;margin:0" />
           🧱 Débito técnico
         </label>
-        <!-- A MESMA MARCA DO ADMIN, e por isso ela existe AQUI TAMBEM: esta tela
-             reconstroi a demanda por lista fechada de campos. Sem a caixa e sem
-             a linha no `obj`, editar qualquer coisa pelo gantt apagaria a marca
-             do time de Dados — a armadilha que os comentarios da pausa e do
-             historico logo abaixo ja registram. -->
-        <label class="tag-dados" style="margin-top:8px"
-               title="Marque quando a demanda for do time de Dados/BI.">
-          <input type="checkbox" id="e-dados-bi" style="width:auto;margin:0" />
-          📊 Dados / BI
-        </label>
+        <!-- A caixa de Dados/BI MORAVA AQUI e subiu para o alto do formulario,
+             ao lado da descricao — ver a nota la. Ela continua existindo nesta
+             tela porque o gantt reconstroi a demanda por lista fechada de
+             campos: sem a caixa e sem a linha no `obj`, editar qualquer coisa
+             por aqui apagaria a marca. O que mudou foi onde ela aparece. -->
       </div>
       <div class="form-group">
         <label>Status Planejamento</label>
