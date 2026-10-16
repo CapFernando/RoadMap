@@ -880,7 +880,11 @@ sec('Planning Poker: estrela no topo, e o convite na tela');
   /* A FILA ORDENA PELA ESTRELA, e a ordem e ESTAVEL: `proximoDaFila` anda pela
      POSICAO, entao uma ordem que oscilasse faria "Proxima demanda" pular ou
      repetir item. Esta invariante EXECUTA a funcao. */
-  const F = new Function('_melhorias',
+  /* `_estado`, `_filaFrente` e `frenteDaDemanda` entraram na funcao quando a
+     fila ganhou o recorte por frente. Sem os stubs ela estoura com
+     ReferenceError — o teste antigo acusando que o que ele EXECUTA ganhou
+     dependencia nova, que e o comportamento certo. */
+  const F = new Function('_melhorias', '_estado', '_filaFrente', 'frenteDaDemanda',
     corpo(POKER, 'function filaPlanning(') + ' return filaPlanning;');
   /* OS IDS ESTAO FORA DE ORDEM ALFABETICA DE PROPOSITO. Com 'a','b','c','d' o
      desempate por indice e o desempate por id davam o mesmo resultado, e a
@@ -894,10 +898,38 @@ sec('Planning Poker: estrela no topo, e o convite na tela');
     { id: 'd', status_planejamento: 'planning', destaque: true },
     { id: 'x', status_planejamento: 'planejado', destaque: true },
   ];
-  const fila = F(base)();
+  const semFiltro = (ms) => F(ms, null, '', () => '');
+  const fila = semFiltro(base)();
   ok(fila.map((m) => m.id).join('') === 'bdza',
      'estreladas no topo, e as demais na ordem original (nao alfabetica)',
      fila.map((m) => m.id).join(''));
+
+  /* ── O RECORTE POR FRENTE ────────────────────────────────────────────────
+     "Para planning poker, e possivel escolher apenas Dados?" */
+  {
+    const frentes = { z: 'Dados', b: 'Dev', a: 'Dados', d: 'Dev' };
+    const comFrente = (filtro, emPauta) => F(
+      base, emPauta ? { melhoria_id: emPauta } : null, filtro,
+      (m) => frentes[m.id] || '')();
+
+    ok(comFrente('Dados').map(m => m.id).join('') === 'za',
+       'escolher uma frente deixa na fila so o que e dela',
+       comFrente('Dados').map(m => m.id).join(''));
+    ok(comFrente('').length === 4, 'e sem escolha a fila inteira volta');
+
+    /* A DEMANDA EM PAUTA NUNCA SAI DA LISTA. Sem esta regra, recortar por
+       Dados enquanto se vota uma de Dev tirava da tela o card que esta sendo
+       votado — com as cartas abertas e nada na fila mostrando o que e.
+       `proximoDaFila` tambem depende disso: ele anda pela POSICAO da atual, e
+       uma atual ausente da lista faria o "Proxima" voltar para o topo. */
+    const comPauta = comFrente('Dados', 'b');
+    ok(comPauta.some(m => m.id === 'b'),
+       'a demanda em pauta fica na fila mesmo fora da frente escolhida',
+       comPauta.map(m => m.id).join(''));
+    ok(comPauta.findIndex(m => m.id === 'b') >= 0 &&
+       comPauta[comPauta.findIndex(m => m.id === 'b') + 1],
+       'e por isso "Proxima demanda" ainda acha quem vem depois dela');
+  }
   ok(!fila.some((m) => m.id === 'x'),
      'e o que nao esta em Planning fica fora, mesmo estrelado');
   ok(F(base)().map((m) => m.id).join('') === 'bdza',

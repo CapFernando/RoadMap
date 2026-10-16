@@ -279,6 +279,11 @@
     .fila-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
     .fila-titulo { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text2); }
     .fila-count { font-size:12px; color:var(--text3); }
+    .fila-filtro { display:flex; align-items:center; gap:7px; margin:0 0 9px;
+      font-size:11.5px; color:var(--text3); }
+    .fila-filtro select { flex:1; min-width:0; background:var(--bg3);
+      border:1px solid var(--border); border-radius:7px; color:var(--text2);
+      font-size:12px; font-family:inherit; padding:5px 7px; outline:none; }
     .fila-item { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:11px 13px;
                  margin-bottom:8px; cursor:pointer; transition:border-color .15s; }
     .fila-item:hover { border-color:var(--border2); }
@@ -448,6 +453,16 @@
     <div class="fila-head">
       <span class="fila-titulo">Fila — Planning</span>
       <span class="fila-count" id="fila-count"></span>
+    </div>
+    <!-- RECORTAR A FILA POR FRENTE. "Para planning poker, é possível escolher
+         apenas Dados?" Uma planning de Dados com a fila inteira na tela obriga
+         o time a passar o olho por demanda de todo mundo para achar a sua.
+         O RECORTE É DE QUEM OLHA, e não da sala: cada participante escolhe o
+         seu, e nada disso vai para o servidor. Mudar o que a sala inteira vê
+         é decisão do facilitador e tem porta própria — a de pôr em pauta. -->
+    <div class="fila-filtro">
+      <label for="fila-frente">Frente</label>
+      <select id="fila-frente" onchange="setFilaFrente(this.value)"></select>
     </div>
     <div id="fila-lista"><div class="fila-vazia">Carregando…</div></div>
   </div>
@@ -875,12 +890,61 @@ function rkEsc(e) { if (e.key === 'Escape') fecharRanking(); }
  *  conhecia), e `proximoDaFila` anda pela POSICAO — uma ordem que oscilasse
  *  faria "Proxima demanda" pular ou repetir item. `sort` e estavel desde a
  *  ES2019, mas o indice deixa a intencao escrita em vez de depender disso. */
+/* A frente escolhida por QUEM OLHA. Vazio = todas. Não vai para o servidor:
+   recortar a própria fila não muda a pauta de ninguém. */
+let _filaFrente = '';
+
+function setFilaFrente(v) {
+  _filaFrente = v || '';
+  renderFila();
+}
+
 function filaPlanning() {
+  const atual = _estado ? _estado.melhoria_id : '';
   return _melhorias
     .filter(m => (m.status_planejamento || '') === 'planning')
+    /* A DEMANDA EM PAUTA NUNCA É FILTRADA FORA. Sem esta linha, recortar por
+       Dados enquanto se vota uma de Desenvolvimento tirava da tela justamente
+       o card que está sendo votado — e as cartas continuariam abertas, sem
+       nada na lista para mostrar o que é.
+       É a mesma regra que o Worker já aplica ao montar a fila: ele reinjeta a
+       demanda em pauta mesmo que ela tenha saído de Planning no meio da
+       reunião. Duas portas, o mesmo cuidado. */
+    .filter(m => !_filaFrente || m.id === atual || frenteDaDemanda(m) === _filaFrente)
     .map((m, i) => ({ m, i }))
     .sort((a, b) => (b.m.destaque ? 1 : 0) - (a.m.destaque ? 1 : 0) || a.i - b.i)
     .map(x => x.m);
+}
+
+/* A frente de uma demanda, pela pessoa que a faz — mesma conta do `frentePill`.
+   `NAO_CLASSIFICADO` para quem o cadastro não alcança, e não string vazia: é
+   uma opção escolhível no select, e é onde se vê quem ficou de fora. */
+function frenteDaDemanda(m) {
+  if (!window.PIPELINES) return '';
+  const quem = PIPELINES.devsDaDemanda(m)[0];
+  return (quem && PIPELINES.doDev(quem, _perfis)) || PIPELINES.NAO_CLASSIFICADO;
+}
+
+/* AS OPÇÕES SAÍEM DA FILA DE VERDADE, e não da lista fixa de frentes: numa
+   planning com três demandas, oferecer seis frentes — cinco delas vazias — é
+   dar cinco caminhos para a tela ficar em branco. A contagem vai no rótulo
+   pelo mesmo motivo. */
+function renderFilaFrentes(naPlanning) {
+  const sel = document.getElementById('fila-frente');
+  if (!sel || !window.PIPELINES) return;
+  const conta = {};
+  naPlanning.forEach(m => {
+    const f = frenteDaDemanda(m);
+    conta[f] = (conta[f] || 0) + 1;
+  });
+  const ordem = PIPELINES.nomes.concat([PIPELINES.NAO_CLASSIFICADO])
+    .filter(nome => conta[nome]);
+  sel.innerHTML = `<option value="">Todas as frentes (${naPlanning.length})</option>` +
+    ordem.map(nome => `<option value="${esc(nome)}"${_filaFrente === nome ? ' selected' : ''}>` +
+      `${esc(nome)} (${conta[nome]})</option>`).join('');
+  // A frente escolhida pode ter esvaziado entre dois polls — o select volta
+  // para "todas" junto com a fila, em vez de ficar apontando para o nada.
+  if (_filaFrente && !conta[_filaFrente]) { _filaFrente = ''; sel.value = ''; }
 }
 
 function nomeTema(id) { const t = _temas.find(x => x.id === id); return t ? t.nome : ''; }
@@ -918,11 +982,22 @@ function frentePill(m) {
 }
 
 function renderFila() {
+  /* O TOTAL DA PLANNING E O RECORTE SAO CONTAS DIFERENTES, e as duas aparecem.
+     "3 de 29 demandas" diz que o filtro está ligado; só "3" faria quem chega
+     depois achar que a pauta encolheu. */
+  const naPlanning = _melhorias.filter(m => (m.status_planejamento || '') === 'planning');
+  renderFilaFrentes(naPlanning);
   const lista = filaPlanning();
-  document.getElementById('fila-count').textContent = `${lista.length} demanda(s)`;
+  document.getElementById('fila-count').textContent = _filaFrente
+    ? `${lista.length} de ${naPlanning.length} demanda(s)`
+    : `${lista.length} demanda(s)`;
   const el = document.getElementById('fila-lista');
   if (!lista.length) {
-    el.innerHTML = `<div class="fila-vazia">Nenhuma demanda na etapa Planning. Mova cards para Planning no Admin ou no Planejamento.</div>`;
+    el.innerHTML = _filaFrente
+      ? `<div class="fila-vazia">Nenhuma demanda de <strong>${esc(_filaFrente)}</strong> na fila.
+         <button type="button" class="btn btn-ghost btn-sm" onclick="setFilaFrente('')"
+                 style="margin-top:8px">Ver todas as frentes</button></div>`
+      : `<div class="fila-vazia">Nenhuma demanda na etapa Planning. Mova cards para Planning no Admin ou no Planejamento.</div>`;
     atualizaBotaoProximo();
     return;
   }
