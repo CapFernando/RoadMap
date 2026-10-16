@@ -19343,6 +19343,159 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }
   }
 
+  /* ═══ LINKS DE REFERENCIA: O `href` NAO PODE EXECUTAR ════════════════════
+   *
+   * "Campos de links de referencia, para podermos colocar uma descricao e
+   *  link, e poder adicionar varios links por meio de um botao +."
+   *
+   * O valor vira `<a href>` em tres telas. `javascript:alert(1)` num href e
+   * execucao de script na ORIGEM de quem abriu — e no Admin a credencial mora
+   * ali. Esta base ja teve XSS por texto vindo de fora: o
+   * `<img src=x onerror=...>` no titulo. Por isso a limpeza vale na ENTRADA
+   * (Worker) e tambem na SAIDA (telas): confiar no que esta gravado e supor
+   * que ninguem nunca escreveu na base por fora da tela, e a API agora aceita
+   * `links` justamente de fora.
+   *
+   * E a regra existe DUAS vezes — `referencia.js` e o Worker, que nao importa
+   * modulo nenhum. As duas rodam lado a lado aqui, como em `bisDaDemanda`.
+   */
+  {
+    sec('Links de referencia: so http/https, e as duas copias concordam');
+    const REF = require('./referencia.js');
+
+    /* SO O ESQUEMA — a lista de perigosos e executada, e nao procurada no
+       texto: um `if (false)` deixaria a string `'javascript'` intacta no
+       arquivo e a recusa morreria sem ninguem ver. */
+    /* OS DOIS COM `//` SAO O QUE TORNA A TRAVA NECESSARIA, e nao enfeite de
+       lista. Sem ela, `javascript:alert(1)` ainda cairia fora por acidente —
+       `new URL` devolve hostname vazio e a checagem de host o pega. Mas
+       `javascript://evil.com/%0aalert(1)` TEM host com ponto: `//` vira
+       comentario em JS e o `%0a` quebra a linha, entao o `alert` roda. Medido
+       sabotando: com a lista sem este caso, tirar a trava de esquema passava
+       liso — a invariante afirmava guardar o esquema e guardava o host. */
+    const PERIGO = ['javascript:alert(1)', 'JAVASCRIPT:alert(1)',
+                    '  javascript:alert(1)', '\njavascript:alert(1)',
+                    'javascript://evil.com/%0aalert(1)',
+                    'JaVaScRiPt://x.com/%0aalert(1)',
+                    'data:text/html,<script>x</script>', 'data://x.com/a',
+                    'vbscript:msgbox',
+                    'file:///c:/windows', 'mailto:a@b.com', 'tel:+5511'];
+    const passou = PERIGO.filter(v => REF.limpaUrl(v) !== '');
+    ok(!passou.length, 'nenhum esquema executavel vira link', passou.join(' | '));
+    ok(REF.limpaUrl('https://') === '' && REF.limpaUrl('https://x') === '',
+       'e endereco sem host de verdade nao vira link pela metade');
+    ok(REF.limpaUrl('docs.google.com/a') === 'https://docs.google.com/a',
+       'quem cola sem esquema recebe https — senao o href sairia RELATIVO ao painel',
+       REF.limpaUrl('docs.google.com/a'));
+
+    const srcRef = corpo(W, 'function refUrl(');
+    const srcLnk = corpo(W, 'function linksDaDemanda(');
+    ok(!!srcRef && !!srcLnk, 'o Worker tem a sua propria copia da regra');
+    if (srcRef && srcLnk) {
+      const doW = new Function('m',
+        'const REF_MAX = 20, REF_DESC = 120, REF_URL = 500;\n' +
+        "const limpaTexto = (t, n) => String(t == null ? '' : t).trim().slice(0, n || 200);\n" +
+        srcRef + '\n' + srcLnk + '\nreturn linksDaDemanda(m);');
+
+      /* OS CASOS SAO OS QUE QUEBRAM DE VERDADE: o esquema executavel, o link
+         repetido, a descricao ausente, `null` no meio da lista (ja aconteceu
+         com `subtarefas`), string em vez de array e campo ausente. */
+      const CASOS = [
+        { links: [{ descricao: 'Planilha', url: 'https://docs.google.com/x' }] },
+        { links: [{ descricao: 'XSS', url: 'javascript:alert(1)' }] },
+        { links: [{ descricao: 'XSS com host', url: 'javascript://evil.com/%0aalert(1)' }] },
+        { links: [{ descricao: 'a', url: 'https://x.com/1' },
+                  { descricao: 'b', url: 'https://x.com/1' }] },
+        { links: [{ url: 'https://www.exemplo.com.br/p' }] },
+        { links: [{ descricao: '  dois   espacos  ', url: 'exemplo.com' }] },
+        { links: [null, { descricao: 'ok', url: 'https://ok.com' }, 'texto'] },
+        { links: [{ descricao: 'D'.repeat(300), url: 'https://ok.com/a' }] },
+        { links: 'https://naoEArray.com' },
+        { links: [] },
+        {},
+      ];
+      const divergem = CASOS.filter(c =>
+        JSON.stringify(REF.daDemanda(c)) !== JSON.stringify(doW(c)));
+      ok(!divergem.length,
+         'modulo e Worker devolvem a MESMA lista nos ' + CASOS.length + ' casos',
+         divergem.map(c => JSON.stringify(c.links)).join(' | '));
+
+      ok(doW(CASOS[1]).length === 0 && doW(CASOS[2]).length === 0,
+         'o `javascript:` e descartado NA ENTRADA — com host ou sem, nao chega a ser gravado',
+         JSON.stringify(doW(CASOS[2])));
+      ok(doW(CASOS[3]).length === 1, 'link repetido vira uma linha so');
+      ok(doW(CASOS[4])[0] && doW(CASOS[4])[0].descricao === 'exemplo.com.br',
+         'sem descricao entra o host — a pior possivel, mas ainda diz para onde vai',
+         JSON.stringify(doW(CASOS[4])[0]));
+    }
+
+    /* ── O campo atravessa as listas fechadas de cada tela ──
+       Sem estas linhas o campo nao some com erro: ele some em SILENCIO, no
+       primeiro save feito pela outra tela. E a armadilha que o comentario da
+       pausa e o do carimbo da validacao ja registram — ela aconteceu duas
+       vezes nesta base. Medido sem comentario para que a explicacao nao
+       defenda o codigo que ela explica. */
+    const ADM_C = semComentario(ADMIN), GNT_C = semComentario(GANTT);
+    ok(/links:\s*REFERENCIA\.daDemanda/.test(ADM_C),
+       'o Admin grava os links pela regra compartilhada, e nao por um regex local');
+    ok(/_mRefs\s*=\s*REFERENCIA\.daDemanda\(m\)/.test(ADM_C),
+       'e abrir um card recarrega a lista — senao ela viria do card ANTERIOR');
+    ok(/links:\s*existing\.links\s*\|\|\s*\[\]/.test(GNT_C) &&
+       /bis_impactados:\s*existing\.bis_impactados\s*\|\|\s*\[\]/.test(GNT_C),
+       'o Gantt REPASSA links e BIs — ele nao os edita, e a lista dele e fechada');
+    /* A TELA DO DEV SO MOSTRA, e mostra passando pela regra: um `javascript:`
+       que tivesse entrado por fora viraria href executavel se ela confiasse
+       no que esta na base. */
+    ok(/REFERENCIA\.daDemanda\(m\)/.test(semComentario(DEV)),
+       'o painel do dev limpa os links tambem na SAIDA, e nao so na entrada');
+    /* O `noopener` E MEDIDO DENTRO DE QUEM DESENHA O LINK, e nao na pagina
+       inteira: o Admin ja tem `noopener` em outros lugares, e procurar na
+       pagina toda deixava passar tira-lo justamente daqui.
+       E SEM COMENTARIO, porque o comentario que EXPLICA o `noopener` contem a
+       propria string — ele defendia o codigo que explica, e a sabotagem passou
+       liso por isso. E a terceira vez que esta base cai nesse padrao; as duas
+       anteriores estao registradas no comentario de `semComentario`. */
+    [['admin.html', ADMIN, 'function refRender('],
+     ['dev.html', DEV, 'function linksHTMLDev(']].forEach(([nome, src, assin]) => {
+      const f = semComentario(corpo(src, assin) || '');
+      ok(/target="_blank"/.test(f) && /rel="noopener noreferrer"/.test(f),
+         'o link do ' + nome + ' abre com noopener — senao a pagina aberta ' +
+         'troca a URL da aba do painel pelo `window.opener`');
+    });
+
+    /* O ARQUIVO E CARREGADO POR QUEM O USA. Sem a tag, `REFERENCIA` e
+       `undefined` e a tela quebra no primeiro card aberto. */
+    ['admin.html', 'dev.html'].forEach((t) => {
+      ok(/<script src="referencia\.js\?v=[0-9a-f]{10}"><\/script>/
+         .test(lerTela(t)), t + ' carrega referencia.js, com o selo de cache');
+    });
+
+    /* ── Os anexos pela API: so a REFERENCIA do R2, nunca o conteudo ──
+       Anexo inline em base64 foi o que levou a base a 1,53 MB de 1,64 MB —
+       93% do peso, baixado inteiro em toda leitura. */
+    const srcAnx = corpo(W, 'function anexosDoPedido(');
+    ok(!!srcAnx, 'a API tem a leitura de anexos do pedido');
+    if (srcAnx) {
+      const doA = new Function('bruto',
+        "const limpaTexto = (t, n) => String(t == null ? '' : t).trim().slice(0, n || 200);\n" +
+        srcAnx + '\nreturn anexosDoPedido(bruto);');
+      const r = doA([
+        { chave: 'a/abc-123', nome: 'contrato.pdf', tipo: 'application/pdf', tamanho: 2048 },
+        { chave: 'a/abc-123', nome: 'repetido.pdf' },
+        { chave: '../../segredo', nome: 'fuga' },
+        { chave: 'a/ok-2', conteudo: 'JVBERi0xLjQK' },
+        null,
+      ]);
+      ok(r.length === 2, 'repetido e caminho fora do padrao do R2 ficam de fora',
+         JSON.stringify(r.map(x => x.chave)));
+      ok(r.every(x => !('conteudo' in x)),
+         'e o conteudo em base64 NAO atravessa — so a chave, o nome, o tipo e o tamanho');
+      ok(r[0].tamanho === 2048 && r[1].nome === 'anexo',
+         'o tamanho vem como numero e o anexo sem nome ganha um',
+         JSON.stringify(r[1]));
+    }
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

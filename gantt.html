@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="62f617c3cd">
+<html lang="pt-BR" data-build="e969988df4">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -4733,6 +4733,14 @@ async function saveTask() {
     validacao_area_em:  existing.validacao_area_em || '',
     debito_tecnico:     document.getElementById('e-debito').checked,
     dados_bi:           document.getElementById('e-dados-bi').checked,
+    /* ESTA TELA TEM A MARCA DADOS/BI, MAS NAO TEM A LISTA DE BIs NEM A DE LINKS
+       — e a lista de campos e FECHADA. Sem estas duas linhas, abrir uma demanda
+       aqui e salvar apagava os BIs impactados e os links de referencia que
+       foram marcados no Admin, em silencio. E a mesma armadilha da pausa e do
+       carimbo da validacao logo acima; os dois comentarios dali existem porque
+       ela ja aconteceu. Repassar e so repassar: quem edita e o Admin. */
+    bis_impactados:     existing.bis_impactados || [],
+    links:              existing.links || [],
     estimativa_horas:   existing.estimativa_horas || 0,
     // `|| 0` sozinho zerava a hora que o dev tinha registrado quando o campo
     // chegava vazio. Cai no valor que ja estava gravado, como o Admin ja fazia.

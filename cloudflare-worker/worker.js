@@ -1167,6 +1167,86 @@ function bisDaDemanda(m) {
   return fora;
 }
 
+/* ═══ LINKS DE REFERENCIA ══════════════════════════════════════════════════
+ *
+ * Copia de `referencia.js` — o Worker nao importa modulo nenhum, e ha
+ * invariante rodando as duas lado a lado, como em `bisDaDemanda`.
+ *
+ * SO `http` E `https`. O link vira `<a href>` em tres telas, e
+ * `javascript:...` num href e execucao de script na origem de quem abriu.
+ * Esta base ja teve XSS por texto vindo de fora — o `<img src=x onerror=...>`
+ * no titulo, que rodava no navegador do Admin, onde a credencial vive. Um
+ * campo que e href por natureza nao pode nascer sem essa regra, e a regra tem
+ * de valer NA ENTRADA: limpar so na tela deixaria o dado sujo gravado,
+ * esperando a primeira tela que esquecesse de limpar.
+ */
+const REF_MAX = 20, REF_DESC = 120, REF_URL = 500;
+function refUrl(v) {
+  let s = String(v == null ? '' : v).trim().slice(0, REF_URL);
+  if (!s) return '';
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) s = 'https://' + s;
+  const esquema = (/^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(s) || [, ''])[1].toLowerCase();
+  if (esquema !== 'http' && esquema !== 'https') return '';
+  try {
+    const u = new URL(s);
+    if (!u.hostname || u.hostname.indexOf('.') < 0) return '';
+    return u.href.slice(0, REF_URL);
+  } catch (_) { return ''; }
+}
+function linksDaDemanda(m) {
+  const bruto = (m || {}).links;
+  if (!Array.isArray(bruto)) return [];
+  const vistos = new Set();
+  const fora = [];
+  for (const x of bruto) {
+    if (!x || typeof x !== 'object') continue;
+    const url = refUrl(x.url || x.link);
+    if (!url || vistos.has(url)) continue;
+    vistos.add(url);
+    let desc = limpaTexto(String(x.descricao || x.titulo || '').replace(/\s+/g, ' '), REF_DESC);
+    if (!desc) { try { desc = new URL(url).hostname.replace(/^www\./, ''); } catch (_) { desc = ''; } }
+    fora.push({ descricao: desc, url });
+    if (fora.length >= REF_MAX) break;
+  }
+  return fora;
+}
+
+/* ═══ ANEXOS PENDURADOS PELA API ═══════════════════════════════════════════
+ *
+ * "Permitir a insercao de arquivos pdf e imagens nos anexos via api."
+ *
+ * O FORMATO JA ERA ACEITO — `anexo-subir` recebe pdf, jpg, png, gif, webp e
+ * mais uma duzia. O que faltava era o ELO: aquela rota joga o arquivo no R2 e
+ * devolve `{ chave, nome, tipo, tamanho }`, e nenhuma rota de escrita aceitava
+ * essa referencia. Subia o arquivo e nao dava para liga-lo a demanda.
+ *
+ * SO A REFERENCIA ENTRA, nunca o conteudo. Anexo inline em base64 dentro do
+ * JSON foi o que fez a base chegar a 1,53 MB de 1,64 MB — 93% do peso, baixado
+ * inteiro em toda leitura. A chave aponta para o R2 e fica.
+ *
+ * A CHAVE TEM DE TER A FORMA QUE O `anexo-subir` GERA. Caminho livre aqui
+ * deixaria o chamador apontar para qualquer objeto do bucket.
+ */
+function anexosDoPedido(bruto) {
+  if (!Array.isArray(bruto)) return [];
+  const vistos = new Set();
+  const fora = [];
+  for (const x of bruto) {
+    if (!x || typeof x !== 'object') continue;
+    const chave = String(x.chave || '').trim();
+    if (!/^a\/[a-z0-9-]+$/.test(chave) || vistos.has(chave)) continue;
+    vistos.add(chave);
+    fora.push({
+      chave,
+      nome: limpaTexto(x.nome, 160) || 'anexo',
+      tipo: limpaTexto(x.tipo, 120),
+      tamanho: Number(x.tamanho) > 0 ? Math.round(Number(x.tamanho)) : 0,
+    });
+    if (fora.length >= 20) break;
+  }
+  return fora;
+}
+
 /* ═══ SUBTAREFAS COM INICIO E FIM ══════════════════════════════════════════
  *
  * "Permitir criar subtarefas com data de inicio e data fim."
@@ -4352,6 +4432,18 @@ export default {
         }
         const errLink = aplicaLinksGh(m, body, mudou);
         if (errLink) return json({ error: errLink.campo, detail: errLink.detail }, 400, headers);
+        /* ── LINKS E ANEXOS, TAMBEM NA ATUALIZACAO ──────────────────────
+           SUBSTITUEM a lista, e nao acrescentam. Acrescentar faria um script
+           que roda duas vezes duplicar tudo, e nao haveria jeito de REMOVER um
+           link pela API — mandar a lista inteira e o unico gesto que exprime
+           as duas coisas. Para tirar um, mande a lista sem ele; para limpar,
+           mande `[]`. Omitir o campo nao mexe em nada. */
+        if (body.links !== undefined) {
+          m.links = linksDaDemanda(body); mudou.push('links');
+        }
+        if (body.anexos !== undefined) {
+          m.anexos = anexosDoPedido(body.anexos); mudou.push('anexos');
+        }
         if (body.horas_realizadas !== undefined) {
           const h = Number(body.horas_realizadas);
           if (!Number.isFinite(h) || h < 0) {
@@ -4538,7 +4630,7 @@ export default {
         if (!mudou.length) {
           return json({ error: 'nada_a_mudar',
                         detail: 'Informe ao menos um campo: resumo_entrega, implementacao, descricao, observacao, ' +
-                                'link_issue, link_pr, link_milestone, horas_realizadas, ' +
+                                'link_issue, link_pr, link_milestone, links, anexos, horas_realizadas, ' +
                                 'inicio, entrega, etapa, projeto_id ou parent_id.' }, 400, headers);
         }
         msg = 'chore: ' + (m.codigo || m.id) + ' atualizada por ' + (eu || 'api') +
@@ -5379,7 +5471,11 @@ export default {
         dados_bi: body.dados_bi === true,
         bis_impactados: bisDaDemanda(body),
         subtarefas: subtarefasDoPedido(body.subtarefas),
-        anexos: [], oculto: false,
+        links: linksDaDemanda(body),
+        /* AS REFERENCIAS DO `anexo-subir`, e nao o conteudo. Suba o arquivo
+           primeiro, mande a `chave` que ele devolveu aqui. */
+        anexos: anexosDoPedido(body.anexos),
+        oculto: false,
         criado_em: agora,
       };
       /* O PROJETO TEM DE EXISTIR, como o tema. Id solto criaria vinculo para

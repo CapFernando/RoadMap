@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="35d086f14b">
+<html lang="pt-BR" data-build="05ff2257bd">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -526,6 +526,7 @@
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="subtarefa.js?v=23179d9523"></script>
   <script src="bis.js?v=735ed4e46d"></script>
+  <script src="referencia.js?v=1750882d31"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
@@ -1347,6 +1348,24 @@ function anexosHTMLDev(m) {
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${
     anexos.map((a, i) =>
       `<a href="#" onclick="devViewAnexo('${devEsc(m.id)}',${i});return false;" style="display:inline-flex;align-items:center;gap:4px;color:#9BC8F8;text-decoration:none;border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-size:12px;">📎 ${devEsc(a.nome)}</a>`
+    ).join('')
+  }</div>`;
+}
+/* OS LINKS DE REFERENCIA, SO PARA LER. Quem inclui e o Admin (ou a API); o dev
+   abre e vai. Passa por `REFERENCIA.daDemanda` e nao direto por `m.links`
+   porque a lista pode ter vindo da API: um `javascript:` gravado por fora
+   viraria href executavel aqui dentro se a tela confiasse no que esta na base.
+   Validar na entrada E na saida e o que o titulo ja faz desde o XSS do
+   `<img src=x onerror=...>`. */
+function linksHTMLDev(m) {
+  const links = (window.REFERENCIA ? REFERENCIA.daDemanda(m) : []);
+  if (!links.length) return '';
+  return `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">${
+    links.map(r =>
+      `<a href="${devEsc(r.url)}" target="_blank" rel="noopener noreferrer" title="${devEsc(r.url)}" ` +
+      `style="display:inline-flex;align-items:center;gap:6px;color:#9BC8F8;text-decoration:none;` +
+      `border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:12px;` +
+      `overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${devEsc(r.descricao)}</a>`
     ).join('')
   }</div>`;
 }
@@ -4315,6 +4334,7 @@ function openStatusModal(id, preselect) {
     ${m.concluido_em ? `<div class="modal-info-row"><span>Concluída em:</span><strong>${formatDate(m.concluido_em)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${devEsc(m.descricao)}</div>` : ''}
     ${anexosHTMLDev(m)}
+    ${linksHTMLDev(m)}
     ${discoveryHTMLDev(m)}
     ${depsInfoHTML}
   `;

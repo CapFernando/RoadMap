@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="256900104c">
+<html lang="pt-BR" data-build="1473b9915f">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1276,6 +1276,9 @@
   <!-- Os BIs que a demanda impacta. Regra num lugar so: o nome e normalizado
        aqui, e o catalogo nasce do uso — ver o cabecalho de `bis.js`. -->
   <script src="bis.js?v=735ed4e46d"></script>
+  <!-- Links de referencia da demanda: descricao + endereco, varios. A regra do
+       esquema aceito mora la — `javascript:` num href e execucao de script. -->
+  <script src="referencia.js?v=1750882d31"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
@@ -2356,6 +2359,36 @@
           <input type="text" id="m-link-milestone" placeholder="Milestone: 4" title="Milestone no GitHub. Digite só o número." />
         </div>
         <div id="m-link-chips" style="margin-top:7px"></div>
+      </div>
+      <!-- ── LINKS DE REFERENCIA ──────────────────────────────────────────────
+           "Campos de links de referencia, para podermos colocar uma descricao e
+           link, e poder adicionar varios links por meio de um botao +."
+
+           FICA LOGO ABAIXO DO GITHUB porque responde a mesma pergunta — "onde
+           esta o material desta demanda" — e separado dele porque o de cima tem
+           significado proprio (issue, PR, milestone viram chip e relatorio) e
+           este e livre: a planilha do cliente, o Figma, o chamado, a thread.
+
+           A regra do endereco aceito mora em `referencia.js`, e nao aqui: o
+           link vira `<a href>` em tres telas, e `javascript:` num href e
+           execucao de script na origem de quem abriu. Esta base ja teve XSS por
+           texto vindo de fora. -->
+      <div class="form-group">
+        <label>Links de referência
+          <small style="font-weight:400;color:var(--text3)">— material de apoio: planilha,
+          Figma, chamado, thread. Quantos precisar.</small>
+        </label>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) auto;gap:8px">
+          <input type="text" id="m-ref-desc" maxlength="120" placeholder="Descrição: Planilha do cliente"
+                 title="Para que serve o link. Sem ela, fica o endereço do site."
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();refAdiciona();}" />
+          <input type="text" id="m-ref-url" placeholder="https://..."
+                 title="Endereço do link. Só http e https."
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();refAdiciona();}" />
+          <button type="button" class="btn btn-secondary btn-sm" onclick="refAdiciona()">+ Incluir</button>
+        </div>
+        <!-- "E vai acrescentando abaixo os links." -->
+        <div id="m-ref-lista" style="display:grid;gap:6px;margin-top:8px"></div>
       </div>
       <!-- ── VERSAO E PRODUCAO ────────────────────────────────────────────────
            Fica logo abaixo da referencia no GitHub porque e a continuacao da
@@ -3606,6 +3639,79 @@ function bisAdiciona() {
 function bisRemove(i) {
   _mBis.splice(i, 1);
   bisRender();
+}
+
+/* ═══ OS LINKS DE REFERENCIA, NO FORMULARIO ══════════════════════════════
+ *
+ * `_mRefs` e a lista EM EDICAO do card aberto — mesma ideia de `_mBis` acima.
+ * A regra do que e um link aceitavel mora em `referencia.js`; aqui so se move
+ * a lista e se desenha.
+ */
+let _mRefs = [];
+
+function refRender() {
+  const cx = document.getElementById('m-ref-lista');
+  if (!cx) return;
+  if (!_mRefs.length) {
+    cx.innerHTML = '<span style="font-size:12px;color:var(--text3)">Nenhum link ainda.</span>';
+    return;
+  }
+  cx.innerHTML = _mRefs.map((r, i) =>
+    '<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);' +
+      'border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px">' +
+      '<span style="flex:0 0 auto">🔗</span>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+          esc(r.descricao) + '</div>' +
+        /* `rel="noopener noreferrer"` E OBRIGATORIO com `target="_blank"`: sem
+           ele a pagina aberta recebe `window.opener` e pode trocar a URL desta
+           aba — o painel do Admin, onde a credencial vive. */
+        '<a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer" ' +
+          'style="font-size:11.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;' +
+          'white-space:nowrap;display:block">' + esc(r.url) + '</a>' +
+      '</div>' +
+      '<button type="button" class="btn btn-secondary btn-sm" title="Tirar este link" ' +
+        'onclick="refRemove(' + i + ')">×</button>' +
+    '</div>'
+  ).join('');
+}
+
+function refAdiciona() {
+  const cd = document.getElementById('m-ref-desc');
+  const cu = document.getElementById('m-ref-url');
+  if (!cd || !cu) return;
+  /* A URL PASSA PELA MESMA LIMPEZA QUE O WORKER USA. Validar aqui com um regex
+     escrito a mao seria a terceira copia da regra — e a copia que diverge e
+     sempre a que deixa passar o `javascript:`. */
+  const url = REFERENCIA.limpaUrl(cu.value);
+  if (!url) {
+    toast(cu.value.trim()
+      ? 'Endereço inválido. Use um link http ou https.'
+      : 'Informe o endereço do link.', 'err');
+    cu.focus();
+    return;
+  }
+  if (_mRefs.some(r => r.url === url)) {
+    toast('Esse link já está nesta demanda.', 'err');
+    cu.value = ''; cu.focus();
+    return;
+  }
+  if (_mRefs.length >= REFERENCIA.MAX_LINKS) {
+    toast('Limite de ' + REFERENCIA.MAX_LINKS + ' links por demanda.', 'err');
+    return;
+  }
+  /* SEM DESCRICAO, ENTRA O HOST. Link sem descricao vira uma fileira de URLs
+     que ninguem le; o host e a pior descricao possivel, mas ainda diz para
+     onde o link vai. A regra e a mesma de `referencia.js`. */
+  _mRefs.push({ descricao: REFERENCIA.limpaDesc(cd.value) || REFERENCIA.host(url), url: url });
+  cd.value = ''; cu.value = '';
+  refRender();
+  cd.focus();
+}
+
+function refRemove(i) {
+  _mRefs.splice(i, 1);
+  refRender();
 }
 
 /* ─── O FILTRO DO TIME DE DADOS ───────────────────────────────────────────
@@ -11207,6 +11313,10 @@ function openModalMelhoria(id) {
   document.getElementById('m-dados-bi').checked      = !!m?.dados_bi;
   _mBis = BIS.daDemanda(m);
   bisRender();
+  // Card novo abre com a lista vazia; sem esta linha ela viria com os links do
+  // card anterior, e o primeiro save os colaria na demanda errada.
+  _mRefs = REFERENCIA.daDemanda(m);
+  refRender();
   document.getElementById('m-spike').checked         = !!m?.spike;
   mPopulaProjetos(m?.projeto_id || '');
   mescRenderBloco(m || null);
@@ -11919,6 +12029,10 @@ async function saveMelhoria() {
        fechada pelo mesmo motivo de todas as outras — fora dela, salvar pela aba
        Dados apagaria o rastreio de BI de toda demanda. */
     bis_impactados:      BIS.daDemanda({ bis_impactados: _mBis }),
+    /* Os links vem do estado da tela pelo mesmo motivo dos BIs: o par de
+       campos e so a porta de entrada. Na lista fechada porque, fora dela,
+       salvar pela aba Dados apagaria os links de toda demanda. */
+    links:               REFERENCIA.daDemanda({ links: _mRefs }),
     spike:               document.getElementById('m-spike').checked,
     /* AS ASSINATURAS NAO SAO DESTE FORMULARIO. Elas vem do servidor, que e
        quem as grava lendo a sessao de quem assina — mandar daqui abriria a
