@@ -2764,7 +2764,11 @@ export default {
     }
 
     const REPO_NAME = env.DATA_REPO || REPO_NAME_PADRAO;
-    const gh = (path, opts = {}) => fetch('https://api.github.com/repos/' + REPO_OWNER + '/' + REPO_NAME + '/' + path, {
+    /* CAMINHO VAZIO E O PROPRIO REPOSITORIO, e ele NAO leva barra no fim.
+       `gh('')` montava `/repos/dono/repo/` e o GitHub responde 404 a isso —
+       foi o que quebrou a gravacao assim que ela passou a perguntar o ramo
+       padrao. Todo chamador com caminho continua igual. */
+    const gh = (path, opts = {}) => fetch('https://api.github.com/repos/' + REPO_OWNER + '/' + REPO_NAME + (path ? '/' + path : ''), {
       ...opts,
       headers: { Authorization: 'token ' + env.GH_TOKEN, Accept: 'application/vnd.github.v3+json', 'User-Agent': 'audax-roadmap-worker', ...(opts.headers || {}) },
     });
