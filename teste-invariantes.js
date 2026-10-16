@@ -19059,6 +19059,122 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o pill da mesa usa a MESMA conta do filtro');
   }
 
+  /* ═══ GRAVACAO: A BASE E LIDA UMA VEZ ════════════════════════════════════
+   *
+   * MEDIDO EM PRODUCAO, no log do Worker:
+   *     POST ... - Exceeded CPU Limit
+   *     X [ERROR] Error: Worker exceeded CPU time limit.
+   *
+   * O publish lia o arquivo de 1,7 MB DUAS vezes do GitHub e fazia dois
+   * `JSON.parse` completos — um deles so para olhar `atualizado_em` —, mais
+   * dois `JSON.stringify` do corpo antes de a gravacao comecar. Estourava o
+   * limite de CPU, o Cloudflare devolvia pagina de erro SEM cabecalho CORS, e
+   * o navegador mostrava "Failed to fetch". A tela dizia "rede", o problema
+   * era trabalho repetido.
+   *
+   * E NAO ERA SO CUSTO: as duas leituras podiam ver versoes diferentes. O
+   * conflito era conferido contra uma e a gravacao montada sobre a outra.
+   *
+   * Esta invariante EXECUTA `conflito` com um `gh` que conta chamadas.
+   */
+  {
+    sec('Gravacao: a base e lida uma vez so');
+
+    const srcConf = corpo(W, 'async function conflito(');
+    ok(!!srcConf, 'a funcao de conflito foi encontrada');
+    if (srcConf) {
+      const fazConflito = (jaLido, base) => {
+        let leituras = 0;
+        const gh = async () => {
+          leituras += 1;
+          return { ok: true, text: async () => JSON.stringify(base) };
+        };
+        const fn = new Function('gh', 'body', 'headers', 'jaLido', 'FILE_PATH', 'json',
+          srcConf + '\nreturn conflito(gh, body, headers, jaLido);');
+        return fn(gh, { base: base.atualizado_em }, {}, jaLido, 'f.json',
+                  (o, s) => ({ _erro: o, _status: s }))
+          .then(r => ({ leituras, r }));
+      };
+
+      const BASE = { atualizado_em: '2026-10-15T10:00:00Z', melhorias: [] };
+      return fazConflito(BASE, BASE).then(async (comBase) => {
+        ok(comBase.leituras === 0,
+           'recebendo a base ja lida, NAO vai ao GitHub de novo',
+           comBase.leituras + ' leitura(s)');
+        ok(!comBase.r, 'e sem conflito ela libera a gravacao');
+
+        const semBase = await fazConflito(undefined, BASE);
+        ok(semBase.leituras === 1,
+           'e sem a base ela continua lendo sozinha — nenhum chamador quebrou',
+           semBase.leituras + ' leitura(s)');
+
+        /* A REGRA QUE ELA GUARDA NAO MUDOU: versao diferente ainda recusa. */
+        const velha = await fazConflito({ atualizado_em: '2026-10-15T11:00:00Z' }, BASE);
+        ok(velha.r && velha.r._status === 409,
+           'e versao divergente continua recusada com 409');
+
+        // ── As tres chamadas passam a base, e cada rota le o raw uma vez ──
+        ['conf = await conflito(gh, body, headers, antesPub)',
+         'confDev = await conflito(gh, body, headers, antesDev)',
+         'confM = await conflito(gh, body, headers, dataM)'].forEach(t => {
+          ok(WC.includes(t), 'passa a base ja lida: ' + t.split(' = ')[0]);
+        });
+
+        /* UMA LEITURA RAW POR ROTA DE GRAVACAO. O corte vai do inicio da rota
+           ate o PUT: e ali que o custo mora, e e ali que uma segunda leitura
+           voltaria sem ninguem notar. */
+        [['publish', "if (body.action === 'publish') {"],
+         ['dev-publish', "if (body.action === 'dev-publish') {"]].forEach(([nome, marca]) => {
+          /* O BLOCO FECHA CONTANDO CHAVES, e nao por marcador de texto.
+             Ja quebrou de duas formas: `method: 'PUT'` sumiu quando a gravacao
+             deixou de ser um PUT, e "a proxima rota" nao existe para a ULTIMA
+             delas — ali o recorte ia ate o fim do arquivo e contava leitura de
+             quem nao era da rota. Contar chaves acerta o fim em qualquer caso,
+             e nao depende de como a rota termina. */
+          const i = WC.indexOf(marca);
+          let bloco = '';
+          if (i >= 0) {
+            let prof = 0, fim = WC.length;
+            for (let k = i + marca.length - 1; k < WC.length; k++) {
+              const c = WC[k];
+              if (c === '{') prof++;
+              else if (c === '}') { prof--; if (prof === 0) { fim = k + 1; break; } }
+            }
+            bloco = WC.slice(i, fim);
+          }
+          /* CONTAR `?raw=` NO TEXTO DA ROTA NAO BASTA, e a sabotagem provou:
+             tirar o argumento de `conflito` devolve a segunda leitura sem
+             acrescentar nenhum `?raw=` aqui — ela acontece DENTRO da funcao.
+             O invariante afirmava guardar uma coisa e guardava outra.
+             Entao sao duas medidas: as leituras diretas da rota E a garantia
+             de que toda chamada a `conflito` daqui entrega a base ja lida. */
+          const raws = (bloco.match(/\?raw=/g) || []).length;
+          const chamadas = bloco.match(/conflito\([^)]*\)/g) || [];
+          const todasComBase = chamadas.length > 0 &&
+            chamadas.every(c => c.split(',').length === 4);
+          ok(raws === 1 && todasComBase,
+             'a rota ' + nome + ' le o arquivo bruto UMA vez',
+             raws + ' leitura(s) direta(s), conflito: ' + (chamadas.join(' ') || 'nenhum'));
+          const strs = (bloco.match(/JSON\.stringify\(data\)/g) || []).length;
+          ok(strs <= 1, 'e serializa o corpo no maximo uma vez antes de gravar',
+             strs + ' stringify(data)');
+        });
+
+        ok(/function gravacaoSuspeita\(data, tamanhoAtual, tamanhoNovo\)/.test(WC),
+           'a guarda de tamanho aceita o tamanho ja calculado');
+
+        let erroPz2 = null;
+        try { new Function(PRZ); } catch (e) { erroPz2 = e.message; }
+        ok(!erroPz2, 'prazo.js sem erro de sintaxe', erroPz2 || '');
+        let erroP2 = null;
+        try { new Function(PIPE); } catch (e) { erroP2 = e.message; }
+        ok(!erroP2, 'pipelines.js sem erro de sintaxe', erroP2 || '');
+        console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
+        process.exit(falhas ? 1 : 0);
+      });
+    }
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

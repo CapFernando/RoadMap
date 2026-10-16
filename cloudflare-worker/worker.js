@@ -86,11 +86,16 @@ function corsHeaders() {
 // Guardrail de gravacao: recusa payload vazio ou drasticamente menor que o
 // arquivo atual. Protege contra abuso e contra bug — nenhuma operacao normal
 // remove metade da base de uma vez. Usa file.size, que ja vem da metadata.
-function gravacaoSuspeita(data, tamanhoAtual) {
+/* `tamanhoNovo` VEM DE FORA quando quem chama ja serializou. As duas rotas de
+   gravacao medem o tamanho do corpo logo antes de chamar esta funcao, e
+   serializar 1,7 MB de novo aqui era o segundo `JSON.stringify` da mesma
+   gravacao — parte do que estourava o limite de CPU do Worker. Sem o parametro
+   a funcao continua se virando sozinha. */
+function gravacaoSuspeita(data, tamanhoAtual, tamanhoNovo) {
   if (!Array.isArray(data.melhorias) || data.melhorias.length === 0) {
     return 'Gravacao recusada: nenhuma melhoria no payload.';
   }
-  const novo = JSON.stringify(data).length;
+  const novo = tamanhoNovo != null ? tamanhoNovo : JSON.stringify(data).length;
   if (tamanhoAtual > 100000 && novo < tamanhoAtual * 0.5) {
     return 'Gravacao recusada por seguranca: o conteudo enviado tem menos da metade do tamanho atual.';
   }
@@ -105,12 +110,29 @@ function gravacaoSuspeita(data, tamanhoAtual) {
 //
 // `base` ausente tambem e recusado: pagina antiga em cache e justamente o caso
 // perigoso. O erro pede recarregar, em vez de deixar sobrescrever.
-async function conflito(gh, body, headers) {
-  const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
-                          { headers: { Accept: 'application/vnd.github.raw' } });
-  if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+/* `jaLido` E A BASE QUE QUEM CHAMA JA TEM NA MAO.
+ *
+ * MEDIDO EM PRODUCAO: "Worker exceeded CPU time limit" no publish. Esta funcao
+ * lia o arquivo inteiro (1,7 MB) e fazia um `JSON.parse` COMPLETO dele para
+ * olhar UM campo — e logo depois a rota lia e parseava o MESMO arquivo outra
+ * vez. Duas viagens ao GitHub e dois parses de 1,7 MB por gravacao, metade
+ * deles para nada.
+ *
+ * E NAO ERA SO LENTIDAO: as duas leituras podiam ver versoes DIFERENTES. O
+ * conflito era conferido contra a versao A e a gravacao montada sobre a B, que
+ * nunca passou pela checagem. Recebendo a base ja lida, a versao conferida e a
+ * mesma sobre a qual se grava — a corrida some junto com o custo.
+ */
+async function conflito(gh, body, headers, jaLido) {
   let atual = null;
-  try { atual = JSON.parse(await rawRes.text()).atualizado_em || null; } catch (_) {}
+  if (jaLido != null) {
+    atual = (jaLido && jaLido.atualizado_em) || null;
+  } else {
+    const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
+                            { headers: { Accept: 'application/vnd.github.raw' } });
+    if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
+    try { atual = JSON.parse(await rawRes.text()).atualizado_em || null; } catch (_) {}
+  }
   if (!body.base) {
     return json({ error: 'recarregue', detail: 'Esta aba esta desatualizada. Recarregue a pagina (F5) e refaca a acao.', atual }, 409, headers);
   }
@@ -2240,6 +2262,79 @@ function toB64(str) {
   for (let i = 0; i < bytes.length; i += CHUNK) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
   return btoa(bin);
 }
+/* ═══ GRAVAR SEM BASE64 ════════════════════════════════════════════════════
+ *
+ * MEDIDO NO LOG: "Exceeded CPU Limit" em toda publicacao. A conta esta no
+ * plano FREE do Workers — 10 ms de CPU por requisicao, e NAO configuravel (a
+ * API recusa `[limits] cpu_ms` com o codigo 100328).
+ *
+ * A API DE CONTEUDO DO GITHUB EXIGE BASE64, e converter 1,8 MB e CPU pura:
+ * `TextEncoder`, 55 blocos de `String.fromCharCode`, a string binaria inteira
+ * montada por concatenacao e o `btoa` por cima. Nada disso e I/O — conta tudo
+ * contra os 10 ms.
+ *
+ * A GIT DATA API ACEITA `encoding: "utf-8"`. O texto vai como esta. Sao cinco
+ * chamadas em vez de uma, mas chamada e ESPERA DE REDE, que nao conta no teto
+ * de CPU. Troca-se trabalho do processador por tempo de rede, e e exatamente
+ * essa a moeda que falta aqui.
+ *
+ * A TRAVA DE CONCORRENCIA CONTINUA. Antes vinha do `sha` do arquivo no PUT;
+ * agora vem do commit-pai somado ao `PATCH` da ref SEM `force`: se alguem
+ * gravou no meio do caminho, a ref deixou de ser avanco direto e o GitHub
+ * recusa. Perder isso faria duas gravacoes simultaneas se sobrescreverem em
+ * silencio, que e o defeito que o `conflito` existe para impedir.
+ */
+async function gravaTexto(gh, caminho, texto, mensagem) {
+  const erro = (etapa, r, corpo) => ({
+    ok: false, etapa,
+    detalhe: etapa + ': HTTP ' + (r && r.status) + ' ' + String(corpo || '').slice(0, 200),
+  });
+
+  // O ramo padrao do repositorio, e nao 'main' chutado: repo de dados criado
+  // antes de 2020 ainda se chama 'master', e o chute falharia so em producao.
+  const infoRes = await gh('');
+  if (!infoRes.ok) return erro('repo', infoRes, await infoRes.text());
+  const ramo = (await infoRes.json()).default_branch || 'main';
+
+  const blobRes = await gh('git/blobs', {
+    method: 'POST',
+    body: JSON.stringify({ content: texto, encoding: 'utf-8' }),
+  });
+  if (!blobRes.ok) return erro('blob', blobRes, await blobRes.text());
+  const blobSha = (await blobRes.json()).sha;
+
+  const refRes = await gh('git/ref/heads/' + ramo);
+  if (!refRes.ok) return erro('ref', refRes, await refRes.text());
+  const commitAtual = (await refRes.json()).object.sha;
+
+  const commitRes = await gh('git/commits/' + commitAtual);
+  if (!commitRes.ok) return erro('commit-atual', commitRes, await commitRes.text());
+  const treeAtual = (await commitRes.json()).tree.sha;
+
+  const treeRes = await gh('git/trees', {
+    method: 'POST',
+    body: JSON.stringify({ base_tree: treeAtual,
+                           tree: [{ path: caminho, mode: '100644', type: 'blob', sha: blobSha }] }),
+  });
+  if (!treeRes.ok) return erro('tree', treeRes, await treeRes.text());
+  const treeNova = (await treeRes.json()).sha;
+
+  const novoRes = await gh('git/commits', {
+    method: 'POST',
+    body: JSON.stringify({ message: mensagem, tree: treeNova, parents: [commitAtual] }),
+  });
+  if (!novoRes.ok) return erro('commit-novo', novoRes, await novoRes.text());
+  const novoSha = (await novoRes.json()).sha;
+
+  // SEM `force`: e esta ausencia que mantem a trava de concorrencia.
+  const patchRes = await gh('git/refs/heads/' + ramo, {
+    method: 'PATCH',
+    body: JSON.stringify({ sha: novoSha }),
+  });
+  if (!patchRes.ok) return erro('ref-patch', patchRes, await patchRes.text());
+  return { ok: true };
+}
+
 function uid() { return 'm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 // charset=utf-8 NAO e decorativo: sem ele o cliente escolhe como decodificar, e
 // quem assume latin-1 le "JoÃ£o Vitor" e "AxCred - OperaÃ§Ãµes". O JSON.stringify
@@ -2624,6 +2719,15 @@ export default {
 
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: 'JSON invalido' }, 400, headers); }
+
+    /* O TAMANHO DO PEDIDO SAI DO CABECALHO, de graca.
+       As rotas de gravacao mediam o corpo com `JSON.stringify(data).length` —
+       um `stringify` de 1,7 MB antes de a gravacao comecar, so para saber o
+       tamanho de algo que o navegador ja declarou. Com 10 ms de CPU no plano
+       Free, esse desperdicio e a diferenca entre publicar e nao publicar.
+       `0` quando o cabecalho nao vem (corpo em chunks): quem usa cai no
+       calculo antigo em vez de decidir com numero errado. */
+    const tamCorpo = Number(request.headers.get('content-length')) || 0;
 
     /* ═══ O FREIO E POR PESSOA QUANDO HA CONTA, E POR IP QUANDO NAO HA ══════
      *
@@ -5338,7 +5442,8 @@ export default {
       if (!rawM.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       const textoM = await rawM.text();
       const dataM = JSON.parse(textoM);
-      const confM = await conflito(gh, body, headers);
+      // A base ja esta lida e parseada aqui — ver a nota em `conflito`.
+      const confM = await conflito(gh, body, headers, dataM);
       if (confM) return confM;
 
       const ABERTAS = m => !['concluido', 'negada'].includes(String(m.status_planejamento || ''));
@@ -5952,17 +6057,24 @@ export default {
       if (!(await ehAdmin())) return json({ error: 'senha' }, 401, headers);
       const data = body.data;
       if (!data || !Array.isArray(data.melhorias)) return json({ error: 'dados invalidos' }, 400, headers);
-      if (JSON.stringify(data).length > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
+      /* AS DUAS GUARDAS DE TAMANHO USAM O CABECALHO, e nao um `stringify`.
+         Eram DOIS `JSON.stringify` de 1,7 MB antes de a gravacao comecar, so
+         para medir. O corpo do pedido e um punhado de bytes maior que `data`
+         (a acao e a credencial), e para uma guarda de "encolheu pela metade"
+         essa diferenca nao muda nada. */
+      if (tamCorpo > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
       const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
       if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       const file = await getRes.json();
-      const risco = gravacaoSuspeita(data, file.size || 0);
+      const risco = gravacaoSuspeita(data, file.size || 0, tamCorpo || null);
       if (risco) return json({ error: risco }, 409, headers);
-      const conf = await conflito(gh, body, headers);
-      if (conf) return conf;
-      // Antes de mexer em nada: compara com o que esta gravado.
+      /* A BASE E LIDA UMA VEZ SO, e a mesma leitura serve ao conflito e a
+         comparacao. Eram duas viagens ao GitHub e dois parses de 1,7 MB, e e
+         por isso que o publish estourava o limite de CPU do Worker. */
       const antesPub = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
         { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      const conf = await conflito(gh, body, headers, antesPub);
+      if (conf) return conf;
       // Nada entra em Concluido sem custo registrado. A recusa vem ANTES de
       // registraHistorico: gravar historico de uma publicacao que sera recusada
       // sujaria a trilha com um evento que nao aconteceu.
@@ -6066,11 +6178,17 @@ export default {
       const codigosPrj = {};
       (data.projetos || []).forEach(p => { if (p && p.id && p.codigo) codigosPrj[p.id] = p.codigo; });
       data.atualizado_em = new Date().toISOString();
-      const putRes = await gh('contents/' + FILE_PATH, {
-        method: 'PUT',
-        body: JSON.stringify({ message: 'chore: admin publica ' + new Date().toISOString(), content: toB64(JSON.stringify(data)), sha: file.sha }),
-      });
-      if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
+      /* SEM BASE64 — ver `gravaTexto`. Converter 1,8 MB era CPU pura, e e a
+         CPU que falta nesta conta. O tempo gasto aqui vai para o log: com o
+         numero na mao da para saber se ainda falta cortar, e onde. */
+      const t0 = Date.now();
+      const corpoFinal = JSON.stringify(data);
+      const gravou = await gravaTexto(gh, FILE_PATH, corpoFinal,
+        'chore: admin publica ' + new Date().toISOString());
+      console.log('publish: ' + (corpoFinal.length / 1048576).toFixed(2) + ' MB, ' +
+                  (data.melhorias || []).length + ' demandas, gravacao em ' +
+                  (Date.now() - t0) + 'ms');
+      if (!gravou.ok) return json({ error: 'Falha ao salvar', detail: gravou.detalhe }, 502, headers);
       // `espelhos_descartados` vai na resposta para o descarte nao ser silencioso:
       // se uma tela voltar a mandar espelho, aparece aqui em vez de virar um dado
       // que ninguem sabe explicar de onde veio.
@@ -6104,16 +6222,18 @@ export default {
       if (!(await ehDev())) return json({ error: 'senha' }, 401, headers);
       const data = body.data;
       if (!data || !Array.isArray(data.melhorias)) return json({ error: 'dados invalidos' }, 400, headers);
-      if (JSON.stringify(data).length > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
+      // Mesmas economias do `publish`: tamanho pelo cabecalho e uma leitura da
+      // base para o conflito e a comparacao.
+      if (tamCorpo > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
       const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
       if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
       const file = await getRes.json();
-      const risco = gravacaoSuspeita(data, file.size || 0);
+      const risco = gravacaoSuspeita(data, file.size || 0, tamCorpo || null);
       if (risco) return json({ error: risco }, 409, headers);
-      const confDev = await conflito(gh, body, headers);
-      if (confDev) return confDev;
       const antesDev = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
         { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      const confDev = await conflito(gh, body, headers, antesDev);
+      if (confDev) return confDev;
       // PROJETO NAO E EDITAVEL PELO DEV. Fechar, renomear ou reabrir projeto e do
       // PM/PO — e o painel do dev nem tem tela para isso. Mas esta rota recebe o
       // estado inteiro e grava o que recebe: sem esta linha, bastaria um corpo
@@ -6217,11 +6337,10 @@ export default {
       atribuiCodigos(data);
       corrigeProjetoInvalido(data);
       data.atualizado_em = new Date().toISOString();
-      const putRes = await gh('contents/' + FILE_PATH, {
-        method: 'PUT',
-        body: JSON.stringify({ message: 'chore: dev atualiza ' + new Date().toISOString(), content: toB64(JSON.stringify(data)), sha: file.sha }),
-      });
-      if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
+      // Mesma gravacao sem base64 do `publish` — ver `gravaTexto`.
+      const gravouDev = await gravaTexto(gh, FILE_PATH, JSON.stringify(data),
+        'chore: dev atualiza ' + new Date().toISOString());
+      if (!gravouDev.ok) return json({ error: 'Falha ao salvar', detail: gravouDev.detalhe }, 502, headers);
       // Diz o que foi revertido: gravar diferente do que a tela mandou e recusar em
       // silencio, e a pessoa so descobriria no proximo F5.
       return json({ ok: true, datas_revertidas: datasRevertidas,

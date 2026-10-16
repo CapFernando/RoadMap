@@ -12,6 +12,25 @@ name = "roadmap-nova-melhoria"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
+# ── NAO PONHA `[limits] cpu_ms` AQUI ────────────────────────────────────────
+#
+# Tentado em 16/10/2026 e RECUSADO pela API do Cloudflare:
+#     CPU limits are not supported for the Free plan. [code: 100328]
+#
+# A conta esta no plano FREE, onde o teto e 10 ms de CPU por requisicao e NAO
+# e configuravel. Declarar o bloco nao fica inerte: ele faz TODO deploy falhar,
+# inclusive os que nada tem a ver com isso.
+#
+# E o teto importa, porque e ele que derruba a publicacao:
+#     POST ... - Exceeded CPU Limit
+#     X [ERROR] Error: Worker exceeded CPU time limit.
+# O Cloudflare responde com pagina de erro SEM cabecalho CORS, e o navegador so
+# sabe dizer "Failed to fetch" — a tela culpa a rede, e o problema e o teto.
+#
+# Ha dois caminhos, e os dois estao fora deste arquivo: subir para o Workers
+# Paid (ai este bloco passa a valer), ou parar de mandar a base inteira em
+# toda gravacao.
+
 # Banco da votação do Planning Poker.
 # database_id é preenchido a partir de `wrangler d1 list` (é o UUID do banco).
 [[d1_databases]]
