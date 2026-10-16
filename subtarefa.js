@@ -31,12 +31,30 @@
 
   /* A LISTA NORMALIZADA. Aceita o que vier na base — inclusive `null` no meio
      do array, que já aconteceu — e devolve sempre a mesma forma. */
+  /* `AAAA-MM-DD` ou vazio. Texto que não é data não vira data pela metade:
+     "15/09" gravado num campo de data quebra toda comparação depois, e é mais
+     fácil de achar quando ele some do que quando ele fica. */
+  function dia(v) {
+    var s = String(v == null ? '' : v).slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+  }
+
   function lista(m) {
     var l = (m && Array.isArray(m.subtarefas)) ? m.subtarefas : [];
     return l.filter(Boolean).map(function (x) {
+      /* DUAS DATAS, E A ANTIGA CONTINUA VALENDO.
+         O passo nasceu com UMA data — `data`, "prevista ou de conclusão" — e a
+         base está cheia dela. Agora ele tem início e fim, pedidos para a API.
+         `data` NÃO foi renomeada nem removida: é o que as subtarefas gravadas
+         até hoje carregam, e trocar o nome do campo apagaria a data de todas
+         elas em silêncio. Ela passa a valer como FIM quando o fim não veio —
+         era disso que ela sempre falou ("prevista ou de conclusão"). */
+      var fim = dia(x.fim) || dia(x.data);
       return {
         titulo: String(x.titulo || '').slice(0, MAX_TITULO),
         data: String(x.data || '').slice(0, 10),
+        inicio: dia(x.inicio),
+        fim: fim,
         feita: !!x.feita,
         /* `''` E NÃO `0`: a diferença entre "não lancei" e "lancei zero" é a
            mesma que `semPontuacao` guarda em `capacidade.js`. Zero em silêncio
@@ -87,8 +105,26 @@
     return s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4);
   }
 
+  /* O PERÍODO DO PASSO, em texto. Devolve '' quando não há data nenhuma —
+     quem mostra decide se omite a linha, em vez de receber um travessão solto
+     para interpretar. */
+  function periodo(x) {
+    var i = dataBR(x && x.inicio), f = dataBR(x && (x.fim || x.data));
+    if (i && f) return i === f ? i : i + ' a ' + f;
+    return f || i || '';
+  }
+
+  /* O passo começou depois de terminar? Não é erro de digitação que se conserta
+     sozinho: as duas datas vieram de alguém, e inverter por conta própria
+     esconderia o engano em vez de mostrá-lo. */
+  function periodoInvertido(x) {
+    var i = dia(x && x.inicio), f = dia(x && (x.fim || x.data));
+    return !!(i && f && i > f);
+  }
+
   var api = { MAX_TITULO: MAX_TITULO, lista: lista, progresso: progresso,
-              horasTotal: horasTotal, dataBR: dataBR };
+              horasTotal: horasTotal, dataBR: dataBR, dia: dia,
+              periodo: periodo, periodoInvertido: periodoInvertido };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.SUBTAREFA = api;

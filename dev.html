@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="0f5e2ff7d2">
+<html lang="pt-BR" data-build="35d086f14b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -524,7 +524,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
-  <script src="subtarefa.js?v=81d990c6e3"></script>
+  <script src="subtarefa.js?v=23179d9523"></script>
   <script src="bis.js?v=735ed4e46d"></script>
   <script src="grill.js?v=c85bb8b63f"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
@@ -4730,8 +4730,15 @@ function msSubRender(m) {
         ' style="flex:1 1 120px;min-width:0;padding:6px 9px;background:var(--bg3);border:1px solid var(--border);' +
         'border-radius:6px;color:var(--text);font-size:13px;font-family:inherit;outline:none' +
         (x.feita ? ';text-decoration:line-through;color:var(--text3)' : '') + '" />' +
-      '<input type="date" value="' + escAttr(x.data) + '" title="Data prevista ou de conclusão"' +
-        ' onchange="msSubData(' + i + ', this.value)"' +
+      /* INICIO E FIM, e nao uma data so. O passo nasceu com uma — "prevista ou
+         de conclusao" — e o pedido foi dar as duas. A de inicio vem primeiro
+         porque e nessa ordem que se preenche. */
+      '<input type="date" value="' + escAttr(x.inicio || '') + '" title="Data de início do passo"' +
+        ' onchange="msSubData(' + i + ', this.value, \'inicio\')"' +
+        ' style="flex:0 0 105px;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);' +
+        'border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;outline:none" />' +
+      '<input type="date" value="' + escAttr(x.fim || x.data || '') + '" title="Data de fim do passo"' +
+        ' onchange="msSubData(' + i + ', this.value, \'fim\')"' +
         /* 105px E O MINIMO REAL deste campo, medido no navegador: com o padding
            e a borda ele renderiza 123px, que e o que "dd/mm/aaaa" mais o icone
            do calendario exigem. Estava em 138 (=156 na tela) sem precisar, e os
@@ -4866,10 +4873,26 @@ function msSubTexto(i, valor) {
   if (alvo) alvo.textContent = p.total ? p.feitas + ' de ' + p.total + '  ·  ' + p.pct + '%' : '';
 }
 
-function msSubData(i, valor) {
+/* AS DUAS DATAS DO PASSO. `data` continua sendo gravada junto com `fim` para
+   a base seguir uniforme — toda subtarefa ja gravada tem o campo, e as telas
+   antigas que ainda leem `data` continuam achando a data certa. */
+function msSubData(i, valor, qual) {
   if (!_msSubs[i]) return;
-  _msSubs[i].data = String(valor || '').slice(0, 10);
+  const d = String(valor || '').slice(0, 10);
+  if (qual === 'inicio') {
+    _msSubs[i].inicio = d;
+  } else {
+    _msSubs[i].fim = d;
+    _msSubs[i].data = d;
+  }
   _msSubsMexido = true;
+  /* AVISA QUANDO O FIM VEM ANTES DO INICIO, e nao conserta sozinho: as duas
+     datas vieram de alguem, e inverter por conta propria esconde o engano em
+     vez de mostra-lo. So avisa — nao trava, porque o passo pode estar sendo
+     digitado na ordem inversa. */
+  if (SUBTAREFA.periodoInvertido(_msSubs[i])) {
+    toast('Nesse passo o fim está antes do início — confira as datas.', 'err');
+  }
 }
 
 function msSubRemove(i) {

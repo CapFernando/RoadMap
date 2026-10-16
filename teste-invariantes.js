@@ -19124,8 +19124,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           .then(r => ({ leituras, r }));
       };
 
+      /* NAO ENCERRA A SUITE AQUI. A versao anterior terminava com
+         `process.exit` dentro deste `.then`, e isso matava o processo antes de
+         qualquer secao escrita DEPOIS — elas nao falhavam, simplesmente nunca
+         rodavam, e o veredito saia "todas de pe" sem te-las executado. O
+         resultado assincrono vai para `pendentes`, e o fim do arquivo espera. */
       const BASE = { atualizado_em: '2026-10-15T10:00:00Z', melhorias: [] };
-      return fazConflito(BASE, BASE).then(async (comBase) => {
+      registra(fazConflito(BASE, BASE).then(async (comBase) => {
         ok(comBase.leituras === 0,
            'recebendo a base ja lida, NAO vai ao GitHub de novo',
            comBase.leituras + ' leitura(s)');
@@ -19190,16 +19195,151 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
         ok(/function gravacaoSuspeita\(data, tamanhoAtual, tamanhoNovo\)/.test(WC),
            'a guarda de tamanho aceita o tamanho ja calculado');
+      }));
+    }
+  }
 
-        let erroPz2 = null;
-        try { new Function(PRZ); } catch (e) { erroPz2 = e.message; }
-        ok(!erroPz2, 'prazo.js sem erro de sintaxe', erroPz2 || '');
-        let erroP2 = null;
-        try { new Function(PIPE); } catch (e) { erroP2 = e.message; }
-        ok(!erroP2, 'pipelines.js sem erro de sintaxe', erroP2 || '');
-        console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
-        process.exit(falhas ? 1 : 0);
+  /* ═══ A API DE CRIACAO: DONO OPCIONAL, CAMPOS ABERTOS, TRES FECHADOS ═════ */
+  {
+    sec('API de criacao: sem dono, campos abertos e os tres bloqueados');
+    const rota = (() => {
+      const i = WC.indexOf("if (body.action === 'demanda-nova') {");
+      if (i < 0) return '';
+      let prof = 0;
+      for (let k = i; k < WC.length; k++) {
+        if (WC[k] === '{') prof++;
+        else if (WC[k] === '}') { prof--; if (prof === 0) return WC.slice(i, k + 1); }
+      }
+      return '';
+    })();
+    ok(!!rota, 'a rota de criacao foi encontrada');
+
+    // ── Sem dono ──
+    ok(/const semDono = body\.dev === null \|\| body\.sem_dono === true;/.test(rota),
+       'da para abrir sem dono, e dizendo isso explicitamente');
+    /* OMITIR O CAMPO NAO PODE VIRAR "SEM DONO": quem automatiza hoje nao manda
+       `dev` e herda a conta. Se `undefined` passasse a contar, todo script
+       existente comecaria a abrir demanda orfa sem ter mudado nada. */
+    ok(!/body\.dev == null/.test(rota) && !/!body\.dev\b/.test(rota),
+       'e OMITIR o campo continua herdando a conta — so `null` significa sem dono');
+    ok(/const sp = semDono \? 'backlog' : spPedido;/.test(rota),
+       'sem dono a demanda nasce em Backlog, e nao e movida em silencio depois');
+
+    /* ── Os tres bloqueados, EXECUTADOS ──────────────────────────────────
+       Procurar `error: 'campo_bloqueado'` no texto nao prova nada: trocar a
+       condicao da guarda por `if (false)` deixa a string intacta no arquivo e
+       o campo passa a ser ignorado em silencio — exatamente o defeito que ela
+       existe para impedir. Medido sabotando: a versao por texto passou lisa.
+       Aqui o trecho e recortado e RODADO com um corpo de pedido de verdade. */
+    const guarda = rota.slice(rota.indexOf('const BLOQUEADOS'), rota.indexOf('const getRes'));
+    ok(!!guarda, 'o trecho da guarda de campos bloqueados foi isolado');
+    if (guarda) {
+      const roda = (corpo) => new Function('body', 'json', 'headers',
+        guarda + "\nreturn null;")(corpo, (o, s) => ({ erro: o, status: s }), {});
+      ['poker_pontos', 'pontos', 'entrega_usuario', 'mes_alvo'].forEach(c => {
+        const r = roda({ [c]: 1 });
+        ok(r && r.status === 400 && r.erro.error === 'campo_bloqueado' &&
+           r.erro.campos.includes(c),
+           'a API RECUSA ' + c + ' na criacao, e diz qual campo', JSON.stringify(r && r.erro));
       });
+      ok(roda({ titulo: 'x', prioridade: 'alta', dados_bi: true }) === null,
+         'e nao recusa o que esta liberado');
+      /* `null` TAMBEM E "MANDOU". `body[k] !== undefined` cobre `pontos: null`,
+         que e como varios clientes limpam um campo — e aceitar isso calado
+         seria o mesmo silencio por outra porta. */
+      ok(roda({ poker_pontos: null }) !== null,
+         'e mandar o campo como null tambem e recusado, e nao ignorado');
+    }
+
+    // ── Os campos abertos ──
+    ['prioridade', 'debito_tecnico', 'spike', 'dados_bi', 'bis_impactados',
+     'observacao', 'estimativa_horas', 'subtarefas', 'projeto_id'].forEach(c => {
+      ok(rota.includes(c), 'a criacao aceita ' + c);
+    });
+    /* TEMA E PROJETO TEM DE EXISTIR. Texto livre criaria tema duplicado a cada
+       chamada, e id de projeto fantasma seria solto na gravacao seguinte. */
+    /* TAMBEM EXECUTADO, pelo mesmo motivo: `if (false) return json(...)`
+       mantem a string e mata a recusa. */
+    /* O CORTE PARA NO `if (pai)`, que e o bloco seguinte. Ir ate
+       `atual.melhorias` arrastava junto o vinculo com a demanda principal e o
+       trecho estourava em `pai is not defined` — recorte generoso demais
+       executa codigo que nao e o que se esta medindo. */
+    const prjTrecho = rota.slice(rota.indexOf('const prjCru'), rota.indexOf('if (pai) {'));
+    ok(!!prjTrecho, 'o trecho do vinculo com projeto foi isolado');
+    if (prjTrecho) {
+      const rodaPrj = (corpo, projetos) => new Function('body', 'atual', 'nova', 'json', 'headers',
+        prjTrecho + '\nreturn null;')(
+        corpo, { projetos }, {}, (o, s) => ({ erro: o, status: s }), {});
+      const r = rodaPrj({ projeto_id: 'nao-existe' }, [{ id: 'p1' }]);
+      ok(r && r.status === 400 && r.erro.error === 'projeto_id',
+         'projeto_id inexistente e RECUSADO, em vez de virar vinculo fantasma',
+         JSON.stringify(r && r.erro));
+      ok(rodaPrj({ projeto_id: 'p1' }, [{ id: 'p1' }]) === null,
+         'e projeto que existe passa');
+      ok(rodaPrj({}, [{ id: 'p1' }]) === null, 'e sem projeto tambem');
+    }
+
+    // ── As subtarefas, com a regra EXECUTADA e comparada com o modulo ──
+    const srcSub = corpo(W, 'function subtarefasDoPedido(');
+    ok(!!srcSub, 'o Worker tem a leitura das subtarefas do pedido');
+    if (srcSub) {
+      const doW = new Function('bruto',
+        'const SUB_MAX = 50, SUB_TITULO = 140;\n' +
+        "const limpaTexto = (t, n) => String(t == null ? '' : t).trim().slice(0, n || 200);\n" +
+        srcSub + '\nreturn subtarefasDoPedido(bruto);');
+      const SUB = require('./subtarefa.js');
+
+      const entrada = [
+        { titulo: 'com as duas', inicio: '2026-09-10', fim: '2026-09-14', horas: 2 },
+        { titulo: 'so a antiga', data: '2026-09-15' },
+        { titulo: 'data invalida', inicio: '15/09', fim: 'ontem' },
+        { titulo: '' },
+        null,
+        { titulo: 'zero hora', horas: 0 },
+      ];
+      const saida = doW(entrada);
+      ok(saida.length === 4, 'passo sem titulo e `null` no meio da lista ficam de fora',
+         String(saida.length));
+      ok(saida[0].inicio === '2026-09-10' && saida[0].fim === '2026-09-14',
+         'inicio e fim chegam gravados');
+      /* A DATA ANTIGA VIRA FIM. A base esta cheia de `data`, e renomear o campo
+         apagaria a data de toda subtarefa ja gravada, em silencio. */
+      ok(saida[1].fim === '2026-09-15' && saida[1].data === '2026-09-15',
+         'a data antiga vira FIM, e `data` continua gravada para a base seguir uniforme',
+         JSON.stringify(saida[1]));
+      ok(saida[2].inicio === '' && saida[2].fim === '',
+         'data invalida vira VAZIO, e nao data pela metade');
+      ok(saida[3].horas === '0',
+         'zero hora e gravado como "0" — diferente de "nao lancei"', JSON.stringify(saida[3].horas));
+
+      /* AS DUAS IMPLEMENTACOES CONCORDAM, como em `bisDaDemanda`: o Worker nao
+         importa `subtarefa.js`, entao a regra existe duas vezes. */
+      /* AS ENTRADAS CRUAS, e nao a saida do Worker: comparar as duas sobre o
+         que o Worker ja normalizou nao mede nada — ele entrega `fim` pronto, e
+         o modulo acerta mesmo tendo perdido a regra da data antiga. Medido
+         sabotando: tirar o `|| dia(x.data)` do modulo passava liso.
+         Com a entrada CRUA, as duas implementacoes respondem a mesma pergunta
+         a partir do mesmo ponto de partida. */
+      /* SO O QUE O WORKER ACEITA entra na comparacao, e a diferenca que sobra
+         e de PAPEL e nao de regra: o Worker RECUSA na porta (passo sem titulo
+         nao e gravado), o modulo LE o que esta gravado. Exigir que o modulo
+         descartasse tambem o faria esconder dado que ja existe na base — o
+         contrario do que ele serve para fazer.
+         O que as duas TEM de responder igual sao as DATAS, e e isso aqui. */
+      const divergem = entrada.filter(Boolean)
+        .filter(x => doW([x]).length)
+        .filter(x => {
+          const doWorker = doW([x])[0];
+          const doModulo = SUB.lista({ subtarefas: [x] })[0];
+          return doWorker.inicio !== doModulo.inicio || doWorker.fim !== doModulo.fim;
+        });
+      ok(!divergem.length,
+         'modulo e Worker leem as MESMAS datas a partir do pedido cru',
+         divergem.map(x => x.titulo || '(sem titulo)').join(', '));
+
+      ok(SUB.periodoInvertido({ inicio: '2026-09-20', fim: '2026-09-10' }) === true &&
+         SUB.periodoInvertido({ inicio: '2026-09-10', fim: '2026-09-20' }) === false,
+         'e fim antes do inicio e detectado — avisa, sem consertar sozinho');
     }
   }
 
@@ -19211,6 +19351,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   try { new Function(PIPE); } catch (e) { erroP = e.message; }
   ok(!erroP, 'pipelines.js sem erro de sintaxe', erroP || '');
 
-  console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
-  process.exit(falhas ? 1 : 0);
+  /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
+     de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
+     esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao
+     contaria. `pendentes` reune essas poucas; o resto continua sincrono. */
+  Promise.all(pendentes).then(() => {
+    console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
+    process.exit(falhas ? 1 : 0);
+  });
 })();

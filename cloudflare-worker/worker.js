@@ -1167,6 +1167,56 @@ function bisDaDemanda(m) {
   return fora;
 }
 
+/* ═══ SUBTAREFAS COM INICIO E FIM ══════════════════════════════════════════
+ *
+ * "Permitir criar subtarefas com data de inicio e data fim."
+ *
+ * O passo nasceu com UMA data (`data`, "prevista ou de conclusao") e a base
+ * esta cheia dela. `data` NAO foi renomeada: a leitura compartilhada
+ * (`subtarefa.js`) continua aceitando-a e a trata como FIM quando o fim nao
+ * veio. Trocar o nome do campo apagaria a data de toda subtarefa ja gravada,
+ * em silencio.
+ *
+ * O WORKER NAO IMPORTA MODULO — a regra e duplicada aqui e conferida por
+ * invariante que roda as duas lado a lado, como em `bisDaDemanda`.
+ *
+ * DATA INVALIDA VIRA VAZIO, e nao data pela metade: "15/09" gravado num campo
+ * de data quebra toda comparacao depois, e e mais facil de achar quando some
+ * do que quando fica.
+ */
+const SUB_MAX = 50;
+const SUB_TITULO = 140;
+function subtarefasDoPedido(bruto) {
+  if (!Array.isArray(bruto)) return [];
+  const dia = (v) => {
+    const s = String(v == null ? '' : v).slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+  };
+  const fora = [];
+  for (const x of bruto) {
+    if (!x || typeof x !== 'object') continue;
+    const titulo = limpaTexto(x.titulo, SUB_TITULO);
+    if (!titulo) continue;
+    const inicio = dia(x.inicio);
+    const fim = dia(x.fim) || dia(x.data);
+    fora.push({
+      titulo,
+      inicio,
+      fim,
+      // `data` continua sendo gravada para a base seguir uniforme: o que ja
+      // existe tem o campo, e o que nasce agora tambem.
+      data: fim,
+      feita: x.feita === true,
+      // `''` e nao `0`: a diferenca entre "nao lancei" e "lancei zero" e a
+      // mesma que `semPontuacao` guarda — ver `subtarefa.js`.
+      horas: (x.horas === 0 || x.horas) && Number.isFinite(Number(x.horas))
+        ? String(Number(x.horas)) : '',
+    });
+    if (fora.length >= SUB_MAX) break;
+  }
+  return fora;
+}
+
 /* Aplica a limpeza em TODA demanda do payload, nas duas rotas de gravacao.
    Sem isto, a higiene existiria so na leitura — e o dado sujo ja estaria
    gravado, esperando a primeira tela que o lesse por outro caminho. */
@@ -5148,6 +5198,40 @@ export default {
       if (titulo.length < 3) {
         return json({ error: 'titulo', detail: 'Informe o titulo da demanda.' }, 400, headers);
       }
+
+      /* ═══ OS TRES CAMPOS QUE A API NAO ABRE ════════════════════════════
+       *
+       * "Liberar todos os campos de criacao EXCETO pontos, entrega ao usuario
+       *  e mes de compromisso."
+       *
+       * Os tres tem dono fora daqui, e e por isso que ficam de fora:
+       *
+       *   poker_pontos      nasce da votacao do time na sala do Planning. Um
+       *                     numero mandado por script entraria com o mesmo
+       *                     peso de um fechado em reuniao, e a lamina de
+       *                     sprint nao saberia distinguir os dois.
+       *   entrega_usuario   e a data em que a area RECEBE, pos-PR. Quem a
+       *                     declara e quem entrega, no fim do caminho.
+       *   mes_alvo          e compromisso de planejamento. Carimbar o mes na
+       *                     criacao e decidir a capacidade do mes por fora da
+       *                     reuniao que a decide.
+       *
+       * RECUSA, E NAO IGNORA EM SILENCIO. Ignorar faria um script mandar
+       * pontos todo dia e jurar que eles estao gravados — o pior tipo de
+       * defeito, o que nao da sinal nenhum. */
+      const BLOQUEADOS = {
+        poker_pontos: 'Pontos saem da votacao na sala do Planning Poker.',
+        pontos: 'Pontos saem da votacao na sala do Planning Poker.',
+        entrega_usuario: 'A entrega ao usuario e declarada por quem entrega, depois do PR.',
+        mes_alvo: 'O mes de compromisso e decidido no planejamento.',
+      };
+      const mandouBloqueado = Object.keys(BLOQUEADOS).filter(k => body[k] !== undefined);
+      if (mandouBloqueado.length) {
+        return json({ error: 'campo_bloqueado',
+                      campos: mandouBloqueado,
+                      detail: mandouBloqueado.map(k => k + ': ' + BLOQUEADOS[k]).join(' ') +
+                              ' Nada foi gravado.' }, 400, headers);
+      }
       // Duas chamadas de proposito, como nas outras rotas de escrita: a primeira
       // traz o `sha` que o PUT exige, a segunda traz o conteudo em UTF-8.
       // NAO usar atob(file.content): atob devolve os bytes como Latin-1, entao
@@ -5232,13 +5316,35 @@ export default {
          O nome vem de `nomeNaDemanda`, e nao direto da conta: a conta guarda o
          nome civil e a base guarda o nome do time. Carimbar o civil fazia a
          mesma pessoa aparecer duas vezes em todo relatorio. */
-      const devNome = nomeNaDemanda(ident) || limpaTexto(body.dev, 80);
-      if (!devNome) {
+      /* ═══ DEMANDA PODE NASCER SEM DONO ═════════════════════════════════
+       *
+       * Pedido: "possibilidade de criar task sem dono". Antes o dono era
+       * obrigatorio e, com conta identificada, era carimbado sozinho — nao
+       * havia como abrir uma demanda que ainda nao e de ninguem, que e
+       * justamente o caso de quem cadastra em lote ou registra um pedido que
+       * ainda vai ser distribuido.
+       *
+       * O JEITO DE DIZER "SEM DONO" E EXPLICITO: `dev: null` ou
+       * `sem_dono: true`. Omitir o campo continua herdando a conta de quem
+       * chama, que e o comportamento de sempre — quem automatiza hoje nao
+       * muda de resultado.
+       *
+       * SEM DONO, NASCE EM BACKLOG. Nao e invencao desta rota: `corrigeSemDev`
+       * ja devolve para backlog toda demanda de Planejado em diante sem
+       * responsavel, nas duas telas e aqui. Forcar na entrada e dizer na
+       * resposta e melhor do que aceitar `em_andamento` e mover em silencio —
+       * quem automatiza veria a etapa mudar sozinha e nao saberia por que. */
+      const semDono = body.dev === null || body.sem_dono === true;
+      const devNome = semDono ? '' : (nomeNaDemanda(ident) || limpaTexto(body.dev, 80));
+      if (!devNome && !semDono) {
         return json({ error: 'dev',
-                      detail: 'Sem conta identificada, informe "dev" com o seu nome.' }, 400, headers);
+                      detail: 'Sem conta identificada, informe "dev" com o seu nome — ' +
+                              'ou mande "dev": null (ou "sem_dono": true) para abrir sem dono.' },
+                    400, headers);
       }
-      const sp = ['backlog', 'planejado', 'em_andamento'].includes(body.status_planejamento)
+      const spPedido = ['backlog', 'planejado', 'em_andamento'].includes(body.status_planejamento)
         ? body.status_planejamento : 'em_andamento';
+      const sp = semDono ? 'backlog' : spPedido;
       const agora = new Date().toISOString();
       const nova = {
         id: 'ep-' + Date.now().toString(36) + '-' + crypto.randomUUID().slice(0, 6),
@@ -5254,10 +5360,41 @@ export default {
         status: sp === 'backlog' ? 'recebida' : (sp === 'planejado' ? 'estimada' : 'iniciada'),
         inicio: /^\d{4}-\d{2}-\d{2}$/.test(String(body.inicio || '')) ? body.inicio : '',
         entrega: /^\d{4}-\d{2}-\d{2}$/.test(String(body.entrega || '')) ? body.entrega : '',
-        prioridade: '', estimativa: '', horas_realizadas: 0,
+        /* ═══ OS CAMPOS LIBERADOS NA CRIACAO ═════════════════════════════
+         * Todos passam pela MESMA limpeza das telas: `limpaTexto` no que e
+         * texto, lista fechada no que e enumeracao, `bisDaDemanda` nos BIs.
+         * Abrir campo pela API sem a higiene da tela seria abrir a porta que
+         * o titulo ja abriu uma vez — "<img src=x onerror=...>" renderizado
+         * dentro do Admin. */
+        prioridade: ['alta', 'media', 'baixa'].includes(String(body.prioridade || ''))
+          ? body.prioridade : '',
+        estimativa: '',
+        estimativa_horas: Number(body.estimativa_horas) > 0 ? Number(body.estimativa_horas) : 0,
+        horas_realizadas: Number(body.horas_realizadas) > 0 ? Number(body.horas_realizadas) : 0,
+        observacao: limpaTexto(body.observacao, 2000),
+        data_solicitacao: /^\d{4}-\d{2}-\d{2}$/.test(String(body.data_solicitacao || ''))
+          ? body.data_solicitacao : '',
+        debito_tecnico: body.debito_tecnico === true,
+        spike: body.spike === true,
+        dados_bi: body.dados_bi === true,
+        bis_impactados: bisDaDemanda(body),
+        subtarefas: subtarefasDoPedido(body.subtarefas),
         anexos: [], oculto: false,
         criado_em: agora,
       };
+      /* O PROJETO TEM DE EXISTIR, como o tema. Id solto criaria vinculo para
+         um projeto fantasma, e `corrigeProjetoInvalido` o soltaria de volta na
+         gravacao seguinte — o chamador veria o campo sumir sem explicacao. */
+      const prjCru = String(body.projeto_id || '').trim();
+      if (prjCru) {
+        const prj = (atual.projetos || []).find(p => String(p.id) === prjCru);
+        if (!prj) {
+          return json({ error: 'projeto_id',
+                        detail: 'projeto_id nao encontrado. Crie a demanda sem ele ou ' +
+                                'consulte os projetos existentes.' }, 400, headers);
+        }
+        nova.projeto_id = prj.id;
+      }
       /* OS DOIS CAMPOS ANDAM JUNTOS. `parent_id` e a ligacao — ela existe nos
          dois tipos de elo, e e ela que a soma de pontos e a arvore leem.
          `is_dependency` e o TIPO: `true` trava a principal, `false` so pendura.
