@@ -242,6 +242,37 @@
       .filter(Boolean);
   }
 
+  var NAO_CLASSIFICADO = 'Não classificado';
+  // O nome vem da LISTA, e não de um literal solto: se a frente for renomeada,
+  // a marca `dados_bi` continua resolvendo para ela sem ninguém lembrar daqui.
+  var FRENTE_DADOS = (PIPELINES.filter(function (p) { return p.k === 'dados'; })[0] || {}).nome || '';
+
+  /** A FRENTE DE UMA DEMANDA — e não de uma pessoa.
+   *
+   *  ═══════════════════════════════════════════════════════════════════════
+   *  A MARCA NA DEMANDA VENCE A INFERÊNCIA PELA PESSOA.
+   *
+   *  O cabeçalho deste arquivo diz que a frente é da PESSOA, e declara o
+   *  limite disso: "dividir de verdade exige marcar a frente NA DEMANDA, e
+   *  isso é a próxima volta". `dados_bi` É essa marcação, para uma frente.
+   *
+   *  Quem marca está AFIRMANDO de quem é o trabalho; derivar do `dev` é
+   *  SUPOR. Supor não pode ganhar de afirmar — e o caso que provou isso tinha
+   *  as duas coisas contra: a AX-739 ("BI - Resumo Sacado e Antifraude") está
+   *  marcada como Dados/BI e não tem dev nenhum. Pela pessoa ela caía em
+   *  "Não classificado", e o filtro de Dados nem oferecia a opção, com uma
+   *  demanda de Dados na fila bem à vista.
+   *
+   *  SEM MARCA E SEM CADASTRO cai em "Não classificado", em vez de sumir: é
+   *  ali que se vê quem o cadastro não alcança — foi assim que o Crisley
+   *  passou um mês inteiro fora da contagem.
+   */
+  function daDemanda(m, perfis) {
+    if (m && m.dados_bi && FRENTE_DADOS) return FRENTE_DADOS;
+    var quem = devsDaDemanda(m)[0];
+    return (quem && doDev(quem, perfis)) || NAO_CLASSIFICADO;
+  }
+
   raiz.PIPELINES = {
     lista: PIPELINES,
     foraDoDeck: FORA_DO_DECK,
@@ -249,11 +280,13 @@
     canonica: canonica,
     doDev: doDev,
     devsDaDemanda: devsDaDemanda,
+    daDemanda: daDemanda,
+    FRENTE_DADOS: FRENTE_DADOS,
     cor: function (nome) {
       var achou = PIPELINES.filter(function (p) { return p.nome === canonica(nome); })[0];
       return achou ? achou.cor : '9A968C';
     },
-    NAO_CLASSIFICADO: 'Não classificado',
+    NAO_CLASSIFICADO: NAO_CLASSIFICADO,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = raiz.PIPELINES;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

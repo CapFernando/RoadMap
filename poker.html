@@ -324,7 +324,7 @@
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <!-- A frente de trabalho de cada pessoa. A sala mostra de qual time e a demanda
      em pauta, e a regra vem do mesmo arquivo que o deck e a tela de contas usam. -->
-<script src="pipelines.js?v=d7d8fef9a0"></script>
+<script src="pipelines.js?v=a6a54ef3d1"></script>
 <script src="anexo-tipos.js?v=f38cdc110c"></script>
 </head>
 <body>
@@ -916,13 +916,12 @@ function filaPlanning() {
     .map(x => x.m);
 }
 
-/* A frente de uma demanda, pela pessoa que a faz — mesma conta do `frentePill`.
-   `NAO_CLASSIFICADO` para quem o cadastro não alcança, e não string vazia: é
-   uma opção escolhível no select, e é onde se vê quem ficou de fora. */
+/* DELEGA — a regra mora em `pipelines.js`, e inclui a parte que não é óbvia:
+   a marca `dados_bi` na demanda VENCE a frente deduzida da pessoa. Esta tela
+   tinha a própria cópia, sem essa parte, e a AX-739 (marcada como Dados/BI e
+   sem dev) nem aparecia na opção de Dados do filtro. */
 function frenteDaDemanda(m) {
-  if (!window.PIPELINES) return '';
-  const quem = PIPELINES.devsDaDemanda(m)[0];
-  return (quem && PIPELINES.doDev(quem, _perfis)) || PIPELINES.NAO_CLASSIFICADO;
+  return window.PIPELINES ? PIPELINES.daDemanda(m, _perfis) : '';
 }
 
 /* AS OPÇÕES SAÍEM DA FILA DE VERDADE, e não da lista fixa de frentes: numa
@@ -969,13 +968,13 @@ function nomeTema(id) { const t = _temas.find(x => x.id === id); return t ? t.no
  * antes do fechamento do mes.
  */
 function frentePill(m) {
-  if (!window.PIPELINES || !m || !m.dev) return '';
-  /* O PRIMEIRO NOME SO. O campo aceita "Fulano / Beltrano" desde sempre, e a
-     mesa tem largura para um pill — `devsDaDemanda` ja sabe separar. */
-  const quem = PIPELINES.devsDaDemanda(m)[0];
-  if (!quem) return '';
-  const frente = PIPELINES.doDev(quem, _perfis);
-  if (!frente) return '';
+  if (!window.PIPELINES || !m) return '';
+  /* MESMA CONTA DO FILTRO, e nao uma paralela: um card podia aparecer sob o
+     recorte de Dados sem o pill de Dados, porque o pill olhava so o `dev` e o
+     filtro passou a olhar tambem a marca. Duas respostas para "de qual frente
+     e esta demanda" na mesma tela. */
+  const frente = PIPELINES.daDemanda(m, _perfis);
+  if (!frente || frente === PIPELINES.NAO_CLASSIFICADO) return '';
   return '<span class="pill frente" style="background:#' + PIPELINES.cor(frente) +
          '22;color:#' + PIPELINES.cor(frente) + ';border:1px solid #' +
          PIPELINES.cor(frente) + '55">' + esc(frente) + '</span>';

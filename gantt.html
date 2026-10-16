@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a838b1386e">
+<html lang="pt-BR" data-build="62f617c3cd">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1091,7 +1091,7 @@
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <!-- A frente de trabalho de cada pessoa, para o filtro de frente do quadro. -->
-  <script src="pipelines.js?v=d7d8fef9a0"></script>
+  <script src="pipelines.js?v=a6a54ef3d1"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
@@ -2555,21 +2555,12 @@ function renderFilters() {
   }
 }
 
-/* A FRENTE DE UMA DEMANDA — pela pessoa que a faz.
- *
- * A frente e da PESSOA e nao da demanda (ver o cabecalho de `pipelines.js`), e
- * e por isso que ela sai do campo `dev`: "AXCred" aparece em Desenvolvimento,
- * em Dados e em RPA, porque o produto e o mesmo e a frente e que muda.
- *
- * O PRIMEIRO NOME SO. O campo aceita "Fulano / Beltrano" desde sempre; uma
- * demanda tem uma linha no quadro, e uma linha tem uma frente.
- *
- * SEM DEV OU SEM CADASTRO CAI EM "Nao classificado", em vez de sumir do
- * filtro: demanda sem dono e justamente o que alguem quer achar. */
+/* DELEGA — a regra mora em `pipelines.js`, inclusive a parte que esta tela
+   errava sozinha: a marca `dados_bi` na demanda VENCE a frente deduzida da
+   pessoa. Com a copia local, uma demanda marcada como Dados/BI e sem dev caia
+   em "Nao classificado" e nao aparecia no recorte de Dados. */
 function frenteDaDemanda(m) {
-  if (!window.PIPELINES) return '';
-  const quem = PIPELINES.devsDaDemanda(m)[0];
-  return (quem && PIPELINES.doDev(quem, state.devs_perfil)) || PIPELINES.NAO_CLASSIFICADO;
+  return window.PIPELINES ? PIPELINES.daDemanda(m, state.devs_perfil) : '';
 }
 
 // ── INDICATORS ────────────────────────────────────────────────────────────

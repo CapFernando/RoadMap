@@ -19007,6 +19007,58 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        JSON.stringify(cat.map(c => c.nome + ':' + c.qtd)));
   }
 
+  /* ═══ A FRENTE DE UMA DEMANDA: MARCA VENCE INFERENCIA ════════════════════
+   *
+   * O caso que originou isto: a AX-739 ("BI - Resumo Sacado e Antifraude")
+   * estava MARCADA como Dados/BI e sem dev nenhum. A frente saia so do `dev`,
+   * entao ela caia em "Nao classificado" — e o filtro do Planning nem oferecia
+   * a opcao Dados, com uma demanda de Dados na fila bem a vista.
+   *
+   * Quem marca AFIRMA de quem e o trabalho; derivar do `dev` SUPOE. E por isso
+   * que a ordem importa, e por isso que ela e invariante: "simplificar" esta
+   * funcao para olhar so o dev reintroduz o defeito sem erro nenhum aparecer.
+   */
+  {
+    sec('Frente da demanda: a marca vence a deducao pelo dev');
+    const PIPE = require('./pipelines.js');
+
+    ok(PIPE.daDemanda({ dados_bi: true, dev: '' }, {}) === PIPE.FRENTE_DADOS,
+       'marcada e SEM dev cai em Dados — era a AX-739 sumindo do filtro',
+       PIPE.daDemanda({ dados_bi: true, dev: '' }, {}));
+    ok(PIPE.daDemanda({ dados_bi: true, dev: 'João Siqueira' }, {}) === PIPE.FRENTE_DADOS,
+       'e marcada com dev de OUTRA frente tambem — afirmar vence supor',
+       PIPE.daDemanda({ dados_bi: true, dev: 'João Siqueira' }, {}));
+    ok(PIPE.daDemanda({ dev: 'Dan Weine' }, {}) === PIPE.FRENTE_DADOS,
+       'sem marca, o dev continua decidindo');
+    ok(PIPE.daDemanda({ dev: 'João Siqueira' }, {}) === 'Desenvolvimento',
+       'e nao arrasta todo mundo para Dados');
+    ok(PIPE.daDemanda({ dev: '' }, {}) === PIPE.NAO_CLASSIFICADO,
+       'sem marca e sem dev fica em "Nao classificado", e nao some do filtro');
+    /* O CADASTRO AINDA VENCE A SEMENTE no caminho do dev — a marca entrou
+       ANTES dessa decisao, e nao no lugar dela. */
+    ok(PIPE.daDemanda({ dev: 'Leite' }, { Leite: { pipeline: 'IA & Vibe coding' } })
+         === 'IA & Vibe coding',
+       'e o cadastro continua vencendo a semente quando nao ha marca');
+
+    /* O NOME VEM DA LISTA, e nao de um literal: renomear a frente nao pode
+       deixar a marca apontando para uma frente que nao existe mais. */
+    ok(PIPE.nomes.includes(PIPE.FRENTE_DADOS),
+       'a frente da marca e uma das frentes vivas', PIPE.FRENTE_DADOS);
+
+    /* AS TELAS NAO PODEM TER COPIA PROPRIA. Era assim que o defeito existia em
+       duas e nao na regra: cada uma deduzia a frente a sua maneira. */
+    [['poker.html', POKER], ['gantt.html', GANTT]].forEach(([nome, src]) => {
+      const f = corpo(src, 'function frenteDaDemanda(');
+      ok(!!f && /PIPELINES\.daDemanda\(/.test(f) && !/PIPELINES\.doDev\(/.test(f),
+         nome + ' pergunta ao modulo, em vez de refazer a conta');
+    });
+    /* E O PILL DA MESA USA A MESMA CONTA DO FILTRO. Com contas diferentes, um
+       card aparecia sob o recorte de Dados sem o pill de Dados. */
+    const pill = corpo(POKER, 'function frentePill(');
+    ok(!!pill && /PIPELINES\.daDemanda\(/.test(pill),
+       'e o pill da mesa usa a MESMA conta do filtro');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
