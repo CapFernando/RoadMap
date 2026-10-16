@@ -884,7 +884,11 @@ sec('Planning Poker: estrela no topo, e o convite na tela');
      fila ganhou o recorte por frente. Sem os stubs ela estoura com
      ReferenceError — o teste antigo acusando que o que ele EXECUTA ganhou
      dependencia nova, que e o comportamento certo. */
+  /* `FILA_MARCADAS` entrou junto com o recorte pela MARCA, separado do recorte
+     pela frente deduzida. Mais uma dependencia que estourou aqui porque este
+     bloco executa a funcao de verdade. */
   const F = new Function('_melhorias', '_estado', '_filaFrente', 'frenteDaDemanda',
+    'FILA_MARCADAS',
     corpo(POKER, 'function filaPlanning(') + ' return filaPlanning;');
   /* OS IDS ESTAO FORA DE ORDEM ALFABETICA DE PROPOSITO. Com 'a','b','c','d' o
      desempate por indice e o desempate por id davam o mesmo resultado, e a
@@ -898,7 +902,8 @@ sec('Planning Poker: estrela no topo, e o convite na tela');
     { id: 'd', status_planejamento: 'planning', destaque: true },
     { id: 'x', status_planejamento: 'planejado', destaque: true },
   ];
-  const semFiltro = (ms) => F(ms, null, '', () => '');
+  const MARCADAS = '__marcadas__';
+  const semFiltro = (ms) => F(ms, null, '', () => '', MARCADAS);
   const fila = semFiltro(base)();
   ok(fila.map((m) => m.id).join('') === 'bdza',
      'estreladas no topo, e as demais na ordem original (nao alfabetica)',
@@ -908,9 +913,9 @@ sec('Planning Poker: estrela no topo, e o convite na tela');
      "Para planning poker, e possivel escolher apenas Dados?" */
   {
     const frentes = { z: 'Dados', b: 'Dev', a: 'Dados', d: 'Dev' };
-    const comFrente = (filtro, emPauta) => F(
-      base, emPauta ? { melhoria_id: emPauta } : null, filtro,
-      (m) => frentes[m.id] || '')();
+    const comFrente = (filtro, emPauta, lista) => F(
+      lista || base, emPauta ? { melhoria_id: emPauta } : null, filtro,
+      (m) => frentes[m.id] || '', MARCADAS)();
 
     ok(comFrente('Dados').map(m => m.id).join('') === 'za',
        'escolher uma frente deixa na fila so o que e dela',
@@ -929,6 +934,29 @@ sec('Planning Poker: estrela no topo, e o convite na tela');
     ok(comPauta.findIndex(m => m.id === 'b') >= 0 &&
        comPauta[comPauta.findIndex(m => m.id === 'b') + 1],
        'e por isso "Proxima demanda" ainda acha quem vem depois dela');
+
+    /* ── O RECORTE PELA MARCA E OUTRA PERGUNTA ───────────────────────────
+       "O filtro devera olhar o NOVO CAMPO que criamos, e nao se e BI."
+
+       A demanda `d` e marcada e o dev dela e de Dev; a `z` e de Dados pelo
+       dev e NAO esta marcada. As duas perguntas tem de devolver conjuntos
+       diferentes — se devolverem o mesmo, o filtro voltou a misturar o que
+       alguem DECLAROU com o que o sistema DEDUZIU, que foi o defeito. */
+    const comMarca = [
+      { id: 'z', status_planejamento: 'planning' },                      // Dados pelo dev
+      { id: 'b', status_planejamento: 'planning', destaque: true },      // Dev
+      { id: 'd', status_planejamento: 'planning', destaque: true, dados_bi: true }, // Dev, MARCADA
+    ];
+    const marcadas = comFrente(MARCADAS, null, comMarca).map(m => m.id);
+    ok(marcadas.join('') === 'd',
+       'o recorte pela marca traz SO o que foi marcado, mesmo com dev de outra frente',
+       marcadas.join(''));
+    const porFrente = comFrente('Dados', null, comMarca).map(m => m.id);
+    ok(porFrente.join('') === 'z',
+       'e o recorte por frente continua olhando o dev, sem exigir marca',
+       porFrente.join(''));
+    ok(marcadas.join('') !== porFrente.join(''),
+       'as duas perguntas devolvem conjuntos diferentes — nao sao sinonimos');
   }
   ok(!fila.some((m) => m.id === 'x'),
      'e o que nao esta em Planning fica fora, mesmo estrelado');

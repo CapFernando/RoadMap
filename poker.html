@@ -894,6 +894,23 @@ function rkEsc(e) { if (e.key === 'Escape') fecharRanking(); }
    recortar a própria fila não muda a pauta de ninguém. */
 let _filaFrente = '';
 
+/* ═══ O RECORTE PELA MARCA, E NÃO PELA DEDUÇÃO ═════════════════════════════
+ *
+ * "O filtro deverá olhar o novo campo que criamos, e não se é BI."
+ *
+ * São DUAS perguntas diferentes, e a fila oferece as duas separadas:
+ *
+ *   📊 Dados/BI — marcadas   olha `dados_bi`, o campo que alguém MARCOU.
+ *                            Resposta exata, sem inferência nenhuma.
+ *   Dados & Power BI         olha a FRENTE, deduzida de quem faz a demanda.
+ *
+ * Misturar as duas num item só foi o erro anterior: uma demanda marcada ficava
+ * escondida atrás da dedução pelo dev, e uma demanda de alguém de Dados
+ * entrava sem nunca ter sido marcada. Quem pergunta "o que o time de Dados
+ * marcou para esta planning?" quer a primeira, e ela agora tem item próprio.
+ */
+const FILA_MARCADAS = '__marcadas__';
+
 function setFilaFrente(v) {
   _filaFrente = v || '';
   renderFila();
@@ -910,7 +927,9 @@ function filaPlanning() {
        É a mesma regra que o Worker já aplica ao montar a fila: ele reinjeta a
        demanda em pauta mesmo que ela tenha saído de Planning no meio da
        reunião. Duas portas, o mesmo cuidado. */
-    .filter(m => !_filaFrente || m.id === atual || frenteDaDemanda(m) === _filaFrente)
+    .filter(m => !_filaFrente || m.id === atual ||
+                 (_filaFrente === FILA_MARCADAS ? !!m.dados_bi
+                                                : frenteDaDemanda(m) === _filaFrente))
     .map((m, i) => ({ m, i }))
     .sort((a, b) => (b.m.destaque ? 1 : 0) - (a.m.destaque ? 1 : 0) || a.i - b.i)
     .map(x => x.m);
@@ -938,12 +957,20 @@ function renderFilaFrentes(naPlanning) {
   });
   const ordem = PIPELINES.nomes.concat([PIPELINES.NAO_CLASSIFICADO])
     .filter(nome => conta[nome]);
+  /* AS MARCADAS VEM PRIMEIRO, logo abaixo de "todas". É a pergunta que o
+     Fernando faz na planning — "o que o time de Dados marcou?" — e ela não
+     pode ficar no fim de uma lista de frentes deduzidas. */
+  const marcadas = naPlanning.filter(m => m && m.dados_bi).length;
   sel.innerHTML = `<option value="">Todas as frentes (${naPlanning.length})</option>` +
+    (marcadas ? `<option value="${FILA_MARCADAS}"` +
+      `${_filaFrente === FILA_MARCADAS ? ' selected' : ''}>` +
+      `📊 Dados/BI — marcadas (${marcadas})</option>` : '') +
     ordem.map(nome => `<option value="${esc(nome)}"${_filaFrente === nome ? ' selected' : ''}>` +
       `${esc(nome)} (${conta[nome]})</option>`).join('');
-  // A frente escolhida pode ter esvaziado entre dois polls — o select volta
+  // A opção escolhida pode ter esvaziado entre dois polls — o select volta
   // para "todas" junto com a fila, em vez de ficar apontando para o nada.
-  if (_filaFrente && !conta[_filaFrente]) { _filaFrente = ''; sel.value = ''; }
+  const aindaTem = _filaFrente === FILA_MARCADAS ? marcadas : conta[_filaFrente];
+  if (_filaFrente && !aindaTem) { _filaFrente = ''; sel.value = ''; }
 }
 
 function nomeTema(id) { const t = _temas.find(x => x.id === id); return t ? t.nome : ''; }
@@ -993,7 +1020,7 @@ function renderFila() {
   const el = document.getElementById('fila-lista');
   if (!lista.length) {
     el.innerHTML = _filaFrente
-      ? `<div class="fila-vazia">Nenhuma demanda de <strong>${esc(_filaFrente)}</strong> na fila.
+      ? `<div class="fila-vazia">Nenhuma demanda de <strong>${esc(_filaFrente === FILA_MARCADAS ? 'Dados/BI marcada' : _filaFrente)}</strong> na fila.
          <button type="button" class="btn btn-ghost btn-sm" onclick="setFilaFrente('')"
                  style="margin-top:8px">Ver todas as frentes</button></div>`
       : `<div class="fila-vazia">Nenhuma demanda na etapa Planning. Mova cards para Planning no Admin ou no Planejamento.</div>`;
