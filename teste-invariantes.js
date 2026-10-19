@@ -1807,6 +1807,71 @@ ok(/action: 'senha-recuperar'/.test(SNR) && /action: 'senha-redefinir'/.test(SNR
 ok(/audaxcapitalsa\.com\.br/.test(SNR), 'a tela cobra o dominio antes de ir ao servidor');
 ok(/setInterval\(tique, 1000\)/.test(SNR), 'o cronometro corre na tela');
 ok(/tempo esgotado/.test(SNR), 'o fim do tempo e explicito, e nao um erro seco');
+
+/* ═══ O CRONOMETRO NAO PODE COMPARAR DOIS RELOGIOS ════════════════════════
+ *
+ * Chamado do Dan: tres tokens pedidos em dois minutos, NENHUM usado. O
+ * servidor estava certo — as duas rotas respondiam, a conta era `dev`, ativa
+ * e liberada. O que o prendia era a propria tela.
+ *
+ * O cronometro fazia `expira_em (hora do SERVIDOR) - Date.now() (hora do
+ * NAVEGADOR)`. Num computador adiantado, essa subtracao ja nasce negativa:
+ * "tempo esgotado" aparecia no instante em que a etapa 2 abria e o botao de
+ * salvar nascia DESLIGADO, com o token valido do outro lado. Pede de novo,
+ * acontece igual, e no terceiro bate no limite de 3 por hora.
+ *
+ * As duas invariantes abaixo EXECUTAM o codigo com um relogio desacertado.
+ * Procurar `Date.now()` no texto nao serviria: ele aparece dos dois jeitos.
+ */
+{
+  /* 1. A janela e contada do relogio LOCAL, e nao da distancia ate a hora do
+        servidor. O trecho e recortado e rodado com um `expira_em` no passado
+        — e o que um navegador adiantado enxerga. */
+  /* O RECORTE VAI DE `tk = j.token` ATE O AVISO, e nao do nome da variavel que
+     eu mesmo escrevi. Ancorado em `var jan = ...`, a sabotagem que voltava a
+     subtrair os relogios era pega por o recorte sair VAZIO — ou seja, pela
+     ausencia do texto, e nao pela conta errada. Qualquer reescrita cai dentro
+     destes dois marcos, e quem acusa passa a ser a medida. */
+  const atrib = SNR.slice(SNR.indexOf('tk = j.token;'),
+                          SNR.indexOf('aviso(\'Conta encontrada\''));
+  ok(!!atrib.trim(), 'o calculo da janela foi isolado');
+  if (atrib.trim()) {
+    const calcula = (j) => new Function('j',
+      'var tk = "", fim = 0;\n' + atrib + '\nreturn fim;')(j);
+    /* O SERVIDOR DIZ QUE EXPIRA DAQUI A 5 MIN; o navegador acha que ja passou
+       uma hora. A janela tem de continuar de pe. */
+    const comSkew = calcula({ minutos: 5,
+                              expira_em: new Date(Date.now() - 3600e3).toISOString() });
+    ok(comSkew - Date.now() > 4 * 60e3,
+       'relogio adiantado NAO zera a janela — era o que prendia o Dan',
+       'restam ' + Math.round((comSkew - Date.now()) / 1000) + 's');
+    /* E sem `minutos` (Worker antigo) tambem nao cai na subtracao. */
+    const semMin = calcula({ expira_em: new Date(Date.now() - 3600e3).toISOString() });
+    ok(semMin - Date.now() > 60e3,
+       'e sem `minutos` no retorno ela cai no padrao, nao na conta entre relogios');
+  }
+
+  /* 2. O FIM DO TEMPO AVISA, E NAO TRANCA. Quem decide se o token vale e o
+        servidor (410 com texto proprio). Uma tranca na tela poe um relogio
+        que ninguem controla no caminho de uma funcao de RECUPERACAO — e
+        quando ele erra, erra fechando a porta. */
+  const tq = corpo(SNR, 'function tique(');
+  ok(!!tq, 'o cronometro foi isolado');
+  if (tq) {
+    const botao = { disabled: false };
+    const relogio = { textContent: '', style: {} };
+    const avisos = [];
+    new Function('relogio', 'ov', 'timer', 'clearInterval', 'aviso', 'fim',
+      tq + '\ntique();')(
+      relogio, { querySelector: () => botao }, 1, () => {}, (t) => avisos.push(t),
+      Date.now() - 60e3);   // tempo ja esgotado
+    ok(botao.disabled === false,
+       'tempo esgotado NAO desliga o botao — o servidor e quem recusa, com motivo',
+       JSON.stringify(relogio.textContent));
+    ok(/esgotado/.test(relogio.textContent),
+       'e o esgotamento continua visivel, em vez de sumir sem explicacao');
+  }
+}
 for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT], ['dev', DEV], ['poker', POKER]]) {
   ok(/abrirRecuperarSenha\(\)/.test(src), nome + ' oferece recuperar senha no login');
 }

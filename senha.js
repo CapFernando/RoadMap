@@ -166,8 +166,27 @@
       el.style.color = fo.cor;
     });
 
-    // O cronometro e a unica barreira de tempo entre o pedido e a senha nova, e
-    // precisa ser VISIVEL: janela que expira sem avisar vira "o site quebrou".
+    /* O CRONOMETRO CONTA O TEMPO QUE PASSOU AQUI, e nao a distancia ate um
+       horario do servidor.
+       ═══════════════════════════════════════════════════════════════════════
+       Ele fazia `expira_em (do servidor) - Date.now() (do navegador)`. Sao
+       DOIS RELOGIOS DIFERENTES, e a conta so vale se os dois concordarem. Num
+       computador adiantado alguns minutos a subtracao ja nasce negativa: o
+       cronometro mostra "tempo esgotado" no instante em que a etapa 2 abre, o
+       botao de salvar nasce desligado, e a pessoa nao consegue digitar senha
+       nenhuma — com o token perfeitamente valido no servidor. Ela pede de
+       novo, acontece igual, e no terceiro pedido bate no limite de 3 por hora.
+       Foi esse o caminho do chamado do Dan: tres tokens em dois minutos,
+       nenhum usado.
+
+       Agora a janela e a que o SERVIDOR declara (`minutos`), medida a partir
+       do instante local em que a resposta chegou. Os dois lados da subtracao
+       passam a ser o mesmo relogio, e o desacerto de hora deixa de importar.
+
+       E O CRONOMETRO VIROU AVISO, nao tranca: quem decide se o token vale e o
+       servidor, que responde 410 com texto proprio. Deixar a tela barrar a
+       tentativa colocava um relogio que ninguem controla no caminho de uma
+       funcao de recuperacao — e quando ele erra, erra fechando a porta. */
     function tique() {
       var resta = Math.max(0, Math.round((fim - Date.now()) / 1000));
       var mm = Math.floor(resta / 60), ss = resta % 60;
@@ -176,9 +195,8 @@
       relogio.style.color = resta <= 60 ? 'var(--red-tx,#F9A0A0)' : 'var(--text3,#8B8B85)';
       if (resta <= 0) {
         clearInterval(timer);
-        relogio.textContent = '⏱ tempo esgotado';
-        ov.querySelector('#rc-salvar').disabled = true;
-        aviso('O tempo terminou. Feche e peca de novo.', 'erro');
+        relogio.textContent = '⏱ tempo esgotado — tente salvar; se nao valer mais, ' +
+                              'o servidor avisa e voce pede de novo';
       }
     }
 
@@ -228,7 +246,13 @@
           return;
         }
         tk = j.token;
-        fim = new Date(j.expira_em).getTime();
+        /* A JANELA VEM EM MINUTOS, contada do relogio DESTE navegador. O
+           `expira_em` continua sendo a verdade do servidor — e e o servidor
+           que a aplica —, mas ele nao serve para cronometrar aqui, porque a
+           hora local pode estar longe da dele. Sem `minutos` (Worker antigo),
+           cai na janela padrao em vez de cair na subtracao entre relogios. */
+        var jan = Number(j.minutos) > 0 ? Number(j.minutos) : 5;
+        fim = Date.now() + jan * 60 * 1000;
         aviso('Conta encontrada' + (j.nome ? ': <b>' + j.nome + '</b>' : '') +
               '. Defina a nova senha antes de o tempo acabar.', 'ok');
         e1.style.display = 'none';
