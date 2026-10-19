@@ -19561,6 +19561,82 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }
   }
 
+  /* ═══ O REFRESCO AUTOMATICO NAO PISA EM CIMA DO CARD ABERTO ═══════════════
+   *
+   * "Ao abrir algumas tasks, modificar algumas informacoes, do nada da
+   *  refresh, apagando ou limpando campos preenchidos nao gravados."
+   *
+   * As tres telas se recarregam sozinhas a cada 30-60s, e TAMBEM quando o foco
+   * volta para a aba. Quando o servidor avancava, elas redesenhavam por cima do
+   * card aberto e o que estava digitado sumia. Parecia aleatorio porque depende
+   * de alguem mais ter publicado no intervalo.
+   *
+   * O caminho pelo FOCO e o pior: sair da aba para copiar um link e voltar
+   * dispara na hora. O campo de links de referencia convida exatamente a isso.
+   *
+   * A guarda que existia para isto (`dialogo.js`) so era consultada ao FECHAR o
+   * card — e quem apagava o texto nao era o fechamento, era o recarregamento.
+   */
+  {
+    sec('Refresco automatico: nao redesenha por cima do card aberto');
+
+    const DLG = lerTela('dialogo.js');
+    ok(/window\.guardaAlgoMexido = function/.test(DLG),
+       'a guarda sabe responder se ALGUMA edicao esta pendente');
+
+    /* ── Cada tela consulta, no ponto em que decide recarregar ──
+       Medido no texto SEM COMENTARIO para que a explicacao nao conte como a
+       defesa — foi assim que uma sabotagem passou liso nesta sessao. */
+    const ADM_C2 = semComentario(ADMIN), GNT_C2 = semComentario(GANTT),
+          DEV_C2 = semComentario(DEV);
+    ok(/const bloqueado = [^;]*guardaAlgoMexido/.test(ADM_C2) &&
+       /const bloqueado = [^;]*cardAberto/.test(ADM_C2),
+       'o Admin bloqueia o recarregamento por card aberto E por edicao pendente');
+    ok(/novo && \(gTemPendencia\(\) \|\| gCardAberto\)/.test(GNT_C2),
+       'o Gantt idem, no ponto onde o poll decide');
+    ok(/guardaAlgoMexido/.test(semComentario(DLG)) && /devDigitando\(\)/.test(DEV_C2),
+       'e o painel do dev tem a sua propria checagem');
+
+    /* ── A CHECAGEM DO DEV, EXECUTADA ──
+       O `modal-status` — onde o dev escreve o que foi implementado, lanca
+       horas e marca subtarefas — NAO tem guarda registrada. Medir so pelas
+       guardas deixaria de fora justamente o formulario onde o texto se
+       perdia, e o teste passaria afirmando o contrario. */
+    const fnDev = corpo(DEV, 'function devDigitando(');
+    ok(!!fnDev, 'a checagem do dev foi isolada');
+    if (fnDev) {
+      /* `guardaAlgoMexido` entra como parametro ALEM de `window.`: no navegador
+         `window.x = ...` cria o global, e a chamada nua resolve; aqui dentro do
+         `new Function` ela nao resolveria, e o teste estouraria por culpa do
+         stub e nao da pagina. */
+      const roda = (overlays, guardaSuja) => new Function(
+        'window', 'document', 'getComputedStyle', 'guardaAlgoMexido',
+        fnDev + '\nreturn devDigitando();')(
+        { guardaAlgoMexido: () => guardaSuja },
+        { querySelectorAll: () => overlays },
+        (o) => ({ display: o.display }),
+        () => guardaSuja);
+
+      ok(roda([{ display: 'flex' }], false) === true,
+         'card ABERTO sem guarda nenhuma ja bloqueia — e o caso do `modal-status`');
+      ok(roda([{ display: 'none' }], false) === false,
+         'e com tudo fechado o refresco acontece, em vez de parar para sempre');
+      ok(roda([{ display: 'none' }], true) === true,
+         'guarda suja bloqueia mesmo com os cards fechados');
+    }
+
+    /* ── ADIAR NAO PODE VIRAR DESLIGAR ──
+       Parar de olhar o servidor em silencio e um defeito que esta base ja
+       teve: o comentario de `adminCheckUpdates` registra que quem movia card
+       em outra tela nao via nada mudar. No dev o refresco fica DEVENDO e tem
+       de acontecer no fechamento. */
+    ok(/_devRefrescoAdiado = true/.test(DEV_C2),
+       'o dev ANOTA o refresco que deixou de fazer');
+    const fechar = semComentario(corpo(DEV, 'async function closeModal(') || '');
+    ok(/_devRefrescoAdiado/.test(fechar) && /loadData\(true\)/.test(fechar),
+       'e o paga ao fechar o card — adiar nao virou desligar');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

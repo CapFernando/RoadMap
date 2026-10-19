@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="9f8cb79291">
+<html lang="pt-BR" data-build="b0d295c90d">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1097,7 +1097,7 @@
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=1f6897d06a"></script>
 <script src="capacidade.js?v=63737a8670"></script>
-<script src="dialogo.js?v=6e3b00ca0d"></script>
+<script src="dialogo.js?v=171b484b8c"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -1956,6 +1956,12 @@ function gMesclaMelhorias(serverMelhorias) {
 }
 // Ha edicao local nao publicada? (usado para nao recarregar por cima)
 function gTemPendencia() {
+  // O CARD ABERTO COM TEXTO DIGITADO CONTA COMO PENDENCIA. A comparacao abaixo
+  // so ve o que ja entrou em `state.melhorias` — digitar num campo do modal nao
+  // muda nada ali ate clicar em Salvar. Sem isto, o recarregamento de 30s (e o
+  // que dispara ao voltar o foco para a aba) redesenhava a tela por cima do
+  // card e apagava o que estava sendo escrito.
+  if (window.guardaAlgoMexido && guardaAlgoMexido()) return true;
   return state.melhorias.some(m => {
     const b = _gBase.get(m.id);
     return !b || JSON.stringify(m) !== b;
@@ -2001,7 +2007,18 @@ async function ganttCheckUpdates() {
       const d = await lerDados(true);
       novo = _gPollTs !== null && d.atualizado_em !== _gPollTs;
     }
-    if (novo && gTemPendencia())  gAvisaDesatualizado(true);   // nunca por cima do que nao foi salvo
+    /* CARD ABERTO BLOQUEIA O REFRESCO AUTOMATICO, e so ele.
+       `loadFromGitHub` redesenha a tela inteira; com um card aberto, o que
+       estava sendo digitado ia junto. So o `modal-main` tem guarda, entao
+       medir apenas por `gTemPendencia` deixava de fora todo formulario sem
+       ela. Aqui bloquear nao silencia nada: a faixa de desatualizado aparece
+       e quem decide e quem esta na tela.
+       NAO entra em `gTemPendencia` porque o outro chamador dela e o botao
+       "atualizar agora" — ali um card aberto e intocado viraria um alarme
+       falso de "descartar o que nao foi salvo". */
+    const gCardAberto = [...document.querySelectorAll('.modal-overlay')]
+      .some(o => getComputedStyle(o).display !== 'none');
+    if (novo && (gTemPendencia() || gCardAberto)) gAvisaDesatualizado(true);
     else if (novo)                await loadFromGitHub();
     else                          gAvisaDesatualizado(false);
     if (window.LEITURA) LEITURA.ok();

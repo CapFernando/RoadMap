@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="8d2ce4b7c6">
+<html lang="pt-BR" data-build="7120ea5da1">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1291,7 +1291,7 @@
   <script src="fila.js?v=90c9b67421"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=1f6897d06a"></script>
-<script src="dialogo.js?v=6e3b00ca0d"></script>
+<script src="dialogo.js?v=171b484b8c"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=a6a54ef3d1"></script>
 <script src="capacidade.js?v=63737a8670"></script>
@@ -2896,7 +2896,20 @@ async function adminCheckUpdates() {
   // via nada mudar no Admin e parecia que a alteração não tinha sido gravada.
   // Agora ela sempre checa: sem edição local, recarrega; com edição local,
   // mostra o aviso e deixa a decisão de descartar para o usuário.
-  const bloqueado = _kbDirty || _pendingEdits || _dirtyMelhoriaIds.size > 0;
+  // O CARD ABERTO COM TEXTO DIGITADO TAMBEM BLOQUEIA. As tres marcas acima so
+  // enxergam o que ja entrou em `state` — mexer num campo do modal nao mexe em
+  // nenhuma delas ate clicar em Salvar. Sem esta quarta, o recarregamento
+  // redesenhava a tela por cima do card e apagava o que estava sendo digitado.
+  // E CARD ABERTO TAMBEM CONTA, mesmo sem guarda: so o `modal-melhoria` tem
+  // guarda registrada, e `loadFromGitHub` redesenha a tela inteira — qualquer
+  // outro formulario aberto seria apagado do mesmo jeito. Aqui bloquear nao
+  // silencia nada: a faixa de "desatualizado" aparece e a decisao fica com quem
+  // esta na tela.
+  const cardAberto = [...document.querySelectorAll('.modal-overlay')]
+    .some(o => getComputedStyle(o).display !== 'none');
+  const bloqueado = _kbDirty || _pendingEdits || _dirtyMelhoriaIds.size > 0 ||
+                    cardAberto ||
+                    !!(window.guardaAlgoMexido && guardaAlgoMexido());
   _adminPollActive = true;
   try {
     let novo = false;

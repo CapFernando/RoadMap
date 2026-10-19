@@ -248,6 +248,29 @@
     return !!g && retrato(modalId) !== g.base;
   };
 
+  /* ALGUMA GUARDA LIGADA TEM COISA NAO GRAVADA?
+     ═══════════════════════════════════════════════════════════════════════
+     Esta pergunta nasceu de um defeito que a guarda existia para impedir e
+     nao impedia: as tres telas recarregam sozinhas a cada 30-60s (e tambem
+     ao voltar o foco para a aba). Quando o servidor avancava, elas
+     redesenhavam a tela por cima do card ABERTO — e o que estava digitado e
+     ainda nao gravado sumia, "do nada".
+
+     A guarda so era consultada ao FECHAR o card. Mas quem apagava o texto
+     nao era o fechamento: era o recarregamento, que nao perguntava nada a
+     ninguem. O relato foi exatamente esse — abre a task, mexe, e de repente
+     a tela da refresh e limpa os campos.
+
+     O caminho pelo FOCO e o mais traicoeiro: sair da aba para copiar um link
+     e voltar dispara a checagem na hora. O campo de links de referencia, que
+     acabou de nascer, convida justamente a esse ida-e-volta.
+
+     Quem recarrega chama isto ANTES e, se houver, mostra o aviso em vez de
+     redesenhar — a decisao de descartar continua sendo de quem digitou. */
+  window.guardaAlgoMexido = function () {
+    return Object.keys(guardas).some(function (id) { return window.guardaMexeu(id); });
+  };
+
   // Devolve true se pode fechar. Pergunta so quando ha o que perder.
   window.guardaPodeFechar = async function (modalId) {
     var g = guardas[modalId];
