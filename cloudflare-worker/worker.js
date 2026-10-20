@@ -91,9 +91,32 @@ function corsHeaders() {
    serializar 1,7 MB de novo aqui era o segundo `JSON.stringify` da mesma
    gravacao — parte do que estourava o limite de CPU do Worker. Sem o parametro
    a funcao continua se virando sozinha. */
-function gravacaoSuspeita(data, tamanhoAtual, tamanhoNovo) {
+/* A GUARDA DE ENCOLHIMENTO.
+ *
+ * `quantasAntes` E O CAMINHO PREFERIDO, e o de bytes so existe para quem nao
+ * tem a base lida na mao.
+ *
+ * Por que: a tela parou de mandar a trilha no corpo (ver `sem_trilha` na rota
+ * de publish), entao o corpo e legitimamente MENOR que o arquivo gravado — hoje
+ * 62% dele. A comparacao de bytes continuaria passando por pouco, e iria
+ * encolhendo junto com o crescimento da trilha ate cruzar os 50% e passar a
+ * RECUSAR publicacao legitima, com uma mensagem falando de seguranca. Um
+ * alarme que vira ruido e pior que alarme nenhum.
+ *
+ * E a contagem de demandas e uma medida MELHOR do perigo real. O que esta
+ * guarda existe para pegar e payload truncado — perder registros. Byte e um
+ * proxy disso; a contagem e a coisa em si, custa O(1) e nao se deixa enganar
+ * por um campo grande que entrou ou saiu. */
+function gravacaoSuspeita(data, tamanhoAtual, tamanhoNovo, quantasAntes) {
   if (!Array.isArray(data.melhorias) || data.melhorias.length === 0) {
     return 'Gravacao recusada: nenhuma melhoria no payload.';
+  }
+  if (quantasAntes != null) {
+    if (quantasAntes > 20 && data.melhorias.length < quantasAntes * 0.5) {
+      return 'Gravacao recusada por seguranca: o envio tem ' + data.melhorias.length +
+             ' demandas e a base tem ' + quantasAntes + '. Recarregue a pagina antes de publicar.';
+    }
+    return null;
   }
   const novo = tamanhoNovo != null ? tamanhoNovo : JSON.stringify(data).length;
   if (tamanhoAtual > 100000 && novo < tamanhoAtual * 0.5) {
@@ -6294,22 +6317,22 @@ export default {
       if (!(await ehAdmin())) return json({ error: 'senha' }, 401, headers);
       const data = body.data;
       if (!data || !Array.isArray(data.melhorias)) return json({ error: 'dados invalidos' }, 400, headers);
-      /* AS DUAS GUARDAS DE TAMANHO USAM O CABECALHO, e nao um `stringify`.
-         Eram DOIS `JSON.stringify` de 1,7 MB antes de a gravacao comecar, so
-         para medir. O corpo do pedido e um punhado de bytes maior que `data`
-         (a acao e a credencial), e para uma guarda de "encolheu pela metade"
-         essa diferenca nao muda nada. */
+      /* O TETO DE TAMANHO USA O CABECALHO, e nao um `stringify`. Era um
+         `JSON.stringify` de 1,7 MB antes de a gravacao comecar, so para medir. */
       if (tamCorpo > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
-      const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
-      if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
-      const file = await getRes.json();
-      const risco = gravacaoSuspeita(data, file.size || 0, tamCorpo || null);
-      if (risco) return json({ error: risco }, 409, headers);
-      /* A BASE E LIDA UMA VEZ SO, e a mesma leitura serve ao conflito e a
-         comparacao. Eram duas viagens ao GitHub e dois parses de 1,7 MB, e e
-         por isso que o publish estourava o limite de CPU do Worker. */
+      /* A BASE E LIDA UMA VEZ SO, e a mesma leitura serve ao conflito, a
+         comparacao e a guarda de encolhimento. Eram duas viagens ao GitHub e
+         dois parses de 1,7 MB, e e por isso que o publish estourava o limite de
+         CPU do Worker.
+         A TERCEIRA VIAGEM TAMBEM SUMIU: havia um `contents/` so para ler
+         `file.size` e alimentar a guarda de bytes. Com a guarda medindo
+         DEMANDAS, o numero sai de `antesPub`, que ja esta na mao — uma ida ao
+         GitHub a menos por publicacao, sem perder a protecao. */
       const antesPub = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
         { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      const risco = gravacaoSuspeita(data, 0, null,
+                                     (antesPub.melhorias || []).length);
+      if (risco) return json({ error: risco }, 409, headers);
       const conf = await conflito(gh, body, headers, antesPub);
       if (conf) return conf;
       // Nada entra em Concluido sem custo registrado. A recusa vem ANTES de
@@ -6459,16 +6482,15 @@ export default {
       if (!(await ehDev())) return json({ error: 'senha' }, 401, headers);
       const data = body.data;
       if (!data || !Array.isArray(data.melhorias)) return json({ error: 'dados invalidos' }, 400, headers);
-      // Mesmas economias do `publish`: tamanho pelo cabecalho e uma leitura da
-      // base para o conflito e a comparacao.
+      // Mesmas economias do `publish`: uma leitura da base serve ao conflito, a
+      // comparacao e a guarda de encolhimento — que mede DEMANDAS, porque o
+      // corpo ja nao traz a trilha e os bytes deixaram de ser comparaveis.
       if (tamCorpo > 25 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
-      const getRes = await gh('contents/' + FILE_PATH + '?t=' + Date.now());
-      if (!getRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
-      const file = await getRes.json();
-      const risco = gravacaoSuspeita(data, file.size || 0, tamCorpo || null);
-      if (risco) return json({ error: risco }, 409, headers);
       const antesDev = JSON.parse(await (await gh('contents/' + FILE_PATH + '?raw=' + Date.now(),
         { headers: { Accept: 'application/vnd.github.raw' } })).text());
+      const risco = gravacaoSuspeita(data, 0, null,
+                                     (antesDev.melhorias || []).length);
+      if (risco) return json({ error: risco }, 409, headers);
       const confDev = await conflito(gh, body, headers, antesDev);
       if (confDev) return confDev;
       // PROJETO NAO E EDITAVEL PELO DEV. Fechar, renomear ou reabrir projeto e do

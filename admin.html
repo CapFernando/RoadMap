@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7120ea5da1">
+<html lang="pt-BR" data-build="677b35032d">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1298,6 +1298,7 @@
 <script src="apresentacao.js?v=58a6ebb784"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
+<script src="publicacao.js?v=8abd4d5426"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -3330,7 +3331,9 @@ async function saveViaProxy(tentativa = 1) {
 
     const res = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(Object.assign({ action: 'publish', data: state, base: baseVersao }, credAdmin()))
+      // `semTrilha` — ver o comentario do replacer. Tira 1,15 MB do envio.
+      body: JSON.stringify(Object.assign({ action: 'publish', data: state, base: baseVersao,
+                                           sem_trilha: true }, credAdmin()), semTrilha)
     });
     if (res.ok) {
       // O Worker atribui os codigos (AX-###, EP-###) e devolve o mapa: sem isto o

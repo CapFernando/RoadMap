@@ -19258,8 +19258,42 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
              strs + ' stringify(data)');
         });
 
-        ok(/function gravacaoSuspeita\(data, tamanhoAtual, tamanhoNovo\)/.test(WC),
-           'a guarda de tamanho aceita o tamanho ja calculado');
+        /* ── A GUARDA DE ENCOLHIMENTO, EXECUTADA ──────────────────────────
+           Era medida pela ASSINATURA (`function gravacaoSuspeita(data, a, b)`),
+           o que nao diz nada sobre o que ela faz — e quebrou sozinha quando a
+           assinatura mudou, sem que nenhum comportamento tivesse se perdido.
+           Agora ela roda.
+
+           A guarda passou a contar DEMANDAS, e nao bytes, porque o corpo deixou
+           de trazer a trilha (ver `publicacao.js`): o envio e legitimamente 62%
+           do arquivo gravado, e a razao iria encolhendo junto com a trilha ate
+           cruzar os 50% e recusar publicacao boa falando de seguranca. */
+        const srcGs = corpo(W, 'function gravacaoSuspeita(');
+        ok(!!srcGs, 'a guarda de encolhimento foi isolada');
+        if (srcGs) {
+          const gs = new Function('data', 'tamanhoAtual', 'tamanhoNovo', 'quantasAntes',
+            srcGs + '\nreturn gravacaoSuspeita(data, tamanhoAtual, tamanhoNovo, quantasAntes);');
+          const demandas = (n) => ({ melhorias: Array.from({ length: n }, (_, i) => ({ id: 'd' + i })) });
+
+          ok(!!gs({ melhorias: [] }, 0, 0, 900),
+             'payload sem demanda nenhuma e recusado');
+          ok(!gs(demandas(904), 0, null, 904),
+             'a publicacao normal passa — mesmo com o corpo menor que o arquivo');
+          ok(!!gs(demandas(400), 0, null, 904),
+             'perder metade das demandas e RECUSADO, que e o perigo real',
+             String(gs(demandas(400), 0, null, 904)));
+          /* E o caminho por BYTES continua existindo para quem nao tem a base
+             lida na mao — as outras quatro rotas ainda o usam. */
+          ok(!!gs(demandas(900), 3000000, 1000000),
+             'sem a contagem, a medida por bytes ainda recusa o encolhimento');
+          ok(!gs(demandas(900), 3000000, 2900000),
+             'e nao recusa uma variacao normal de tamanho');
+          /* A ASSIMETRIA QUE MOTIVOU A MUDANCA: hoje o corpo e 62% do arquivo.
+             Pela regra de bytes isso passa raspando; conforme a trilha cresce,
+             passaria a ser recusado. Pela contagem, nao ha o que encolher. */
+          ok(!!gs(demandas(900), 3000000, 1400000) && !gs(demandas(900), 0, null, 900),
+             'o corpo sem a trilha seria recusado por bytes, e passa pela contagem');
+        }
       }));
     }
   }
@@ -19635,6 +19669,107 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const fechar = semComentario(corpo(DEV, 'async function closeModal(') || '');
     ok(/_devRefrescoAdiado/.test(fechar) && /loadData\(true\)/.test(fechar),
        'e o paga ao fechar o card — adiar nao virou desligar');
+  }
+
+  /* ═══ A TRILHA NAO ATRAVESSA O FIO ═══════════════════════════════════════
+   *
+   * `historico` e 1,15 MB dos 2,9 MB da base, e o Worker SEMPRE o ignorou: a
+   * trilha e lida do arquivo gravado e reatada ao objeto. Era mais de um mega
+   * enviado, recebido e parseado por publicacao para ser descartado — e o
+   * publish estourava o teto de CPU do Worker.
+   *
+   * O QUE TORNA ISSO SEGURO e a regra de seguranca que ja existia: se a base
+   * fosse o corpo, bastaria mandar `historico: []` para apagar o proprio
+   * rastro. Esta secao guarda as duas pontas — que o Worker nao le do corpo, e
+   * que as telas nao mandam.
+   */
+  {
+    sec('Publicacao: a trilha de auditoria nao vai no corpo');
+
+    const PUB = require('./publicacao.js');
+    ok(PUB.semTrilha('historico', [1, 2]) === undefined,
+       'o replacer descarta `historico`');
+    /* `pausa_historico` TEM OUTRO NOME. Cortar por prefixo levaria a pausa
+       junto, e `prazo.js` a le para descontar dias de atraso — o calculo de
+       atraso mudaria em silencio na base inteira. */
+    ok(PUB.semTrilha('pausa_historico', [1]) !== undefined &&
+       PUB.semTrilha('titulo', 'x') === 'x',
+       'e NAO leva junto `pausa_historico`, que e dado de regra');
+
+    /* A PROVA DE QUE DA PARA NAO MANDAR: o corpo serializado com o replacer,
+       passado pela leitura do Worker, produz a MESMA base gravada que o corpo
+       cheio. Executado com o `registraHistorico` de verdade. */
+    const srcRh = corpo(W, 'function registraHistorico(');
+    ok(!!srcRh, 'a funcao que reata a trilha foi isolada');
+    if (srcRh) {
+      /* O RELOGIO E CONGELADO. `registraHistorico` carimba `new Date()`, e sem
+         isto as duas execucoes comparadas abaixo pegam milissegundos
+         diferentes e a invariante falha SOZINHA, ao acaso. A bateria de
+         sabotagem mostrou: ela acusou sabotagens que nao tinham nada a ver com
+         ela, so porque a execucao demorou o suficiente para virar o ms.
+         Invariante instavel e pior que invariante nenhuma — ela ensina a
+         ignorar o vermelho. */
+      const RELOGIO = class { toISOString() { return '2026-10-20T12:00:00.000Z'; } };
+      const rodaRh = (recebido, servidor) => {
+        const fn = new Function('recebido', 'servidor', 'quem', 'origem',
+          'HIST_CAMPOS', 'HIST_MAX', 'histValor', 'Date',
+          srcRh + '\nreturn registraHistorico(recebido, servidor, quem, origem);');
+        fn(recebido, servidor, 'eu', 'painel',
+           { titulo: 'titulo' }, 25, (v) => String(v == null ? '' : v).slice(0, 180),
+           RELOGIO);
+        return recebido;
+      };
+      const noServidor = { melhorias: [
+        { id: 'a', titulo: 'velho', historico: [{ em: '2026-01-01', quem: 'x', mudancas: [] }] },
+        { id: 'b', titulo: 'parado', historico: [{ em: '2026-01-02', quem: 'y', mudancas: [] }] },
+      ] };
+      const corpoCheio = JSON.parse(JSON.stringify({ melhorias: [
+        { id: 'a', titulo: 'novo', historico: noServidor.melhorias[0].historico },
+        { id: 'b', titulo: 'parado', historico: noServidor.melhorias[1].historico },
+      ] }));
+      // O mesmo corpo, serializado como a tela passa a mandar.
+      const corpoMagro = JSON.parse(JSON.stringify({ melhorias: [
+        { id: 'a', titulo: 'novo' }, { id: 'b', titulo: 'parado' },
+      ] }, PUB.semTrilha));
+      ok(!('historico' in corpoMagro.melhorias[0]),
+         'o corpo magro realmente sai sem a trilha');
+
+      const comCheio = rodaRh(corpoCheio, JSON.parse(JSON.stringify(noServidor)));
+      const comMagro = rodaRh(corpoMagro, JSON.parse(JSON.stringify(noServidor)));
+      ok(JSON.stringify(comCheio) === JSON.stringify(comMagro),
+         'mandar ou nao mandar a trilha produz a MESMA base gravada',
+         JSON.stringify(comMagro.melhorias[0].historico || []).slice(0, 80));
+      ok((comMagro.melhorias[1].historico || []).length === 1,
+         'e a demanda que NAO mudou tambem recupera a trilha dela');
+      /* A DEFESA CONTRA APAGAR O PROPRIO RASTRO continua: mandar a trilha
+         vazia no corpo nao apaga nada, porque a base e sempre o servidor. */
+      const tentandoApagar = rodaRh({ melhorias: [{ id: 'a', titulo: 'novo', historico: [] }] },
+                                    JSON.parse(JSON.stringify(noServidor)));
+      ok((tentandoApagar.melhorias[0].historico || []).length >= 1,
+         'e mandar `historico: []` NAO apaga o rastro — a base e o servidor');
+    }
+
+    /* ── As tres telas mandam sem a trilha, e avisam o servidor ── */
+    [['admin.html', ADMIN], ['gantt.html', GANTT], ['dev.html', DEV]].forEach(([nome, src]) => {
+      const s = semComentario(src);
+      ok(/sem_trilha: true/.test(s) && /\}, *(credAdmin|credGantt|credDev)\(\)\), *semTrilha\)/.test(s),
+         nome + ' publica sem a trilha, e declara isso ao servidor');
+      ok(/<script src="publicacao\.js\?v=[0-9a-f]{10}"><\/script>/.test(src),
+         nome + ' carrega publicacao.js, com o selo de cache');
+    });
+
+    /* ── E O WORKER NAO LE A TRILHA DO CORPO EM LUGAR NENHUM ──
+       Esta e a invariante que sustenta todas as outras. Se qualquer rota
+       passar a ler `historico` do que chegou, o envio magro vira perda de
+       dado — silenciosa, porque nada falha. */
+    const leituras = (WC.match(/\.historico\b/g) || []).length;
+    const noReata = (semComentario(corpo(W, 'function registraHistorico(') || '')
+                     .match(/\.historico\b/g) || []).length;
+    ok(leituras === noReata,
+       'so `registraHistorico` toca em `historico`, e so do lado do servidor',
+       leituras + ' no Worker, ' + noReata + ' dentro de registraHistorico');
+    ok(/const anterior = Array\.isArray\(velha\.historico\)/.test(WC),
+       'e a trilha vem de `velha` (o arquivo gravado), nunca de `m` (o corpo)');
   }
 
   let erroPz = null;
