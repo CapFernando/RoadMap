@@ -19772,6 +19772,110 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e a trilha vem de `velha` (o arquivo gravado), nunca de `m` (o corpo)');
   }
 
+  /* ═══ A DEMANDA QUE NAO CHEGOU AO SERVIDOR APARECE MARCADA ════════════════
+   *
+   * "Por que essa task nao esta sendo demonstrada no meu kanban?"
+   *
+   * Ela nao estava na base — nem naquele momento, nem em nenhuma das 25
+   * versoes anteriores do arquivo. A gravacao falhou, o card continuou na tela
+   * IGUAL a um card gravado, e o unico aviso foi um toast de 4 segundos.
+   *
+   * O defeito nao e a falha de rede: e a tela mostrar como existente o que nao
+   * existe. Pior no painel do dev, que recarrega sozinho a cada 60s — o
+   * fantasma some sem deixar rastro.
+   */
+  {
+    sec('Gravacao falhou: a tela marca, em vez de fingir que salvou');
+
+    const NP = require('./nao-publicada.js');
+    NP.zera();
+
+    // ── O conjunto, executado ──
+    NP.marca({ 'd1': { titulo: 'Ajustes aplicação de lançamentos' } });
+    ok(NP.tem('d1') && NP.quantas() === 1, 'marcar pelo patch registra a demanda');
+    ok(NP.itens()[0].titulo === 'Ajustes aplicação de lançamentos',
+       'e GUARDA O TITULO — o card some da tela quando outra gravacao der certo, ' +
+       'e o aviso precisa continuar dizendo qual era');
+    ok(!!NP.itens()[0].patch,
+       'e o conteudo, para dar pe de volta em vez de so acusar a perda');
+
+    NP.marca({ 'd2': { titulo: 'outra' } });
+    NP.limpa({ 'd2': {} });
+    ok(NP.quantas() === 1 && NP.tem('d1'),
+       'gravar a demanda B NAO limpa o aviso da A — sao perdas independentes');
+    NP.zera();
+    ok(NP.quantas() === 0, 'e publicar tudo zera o conjunto');
+
+    /* ── A MARCA NAO PODE IR PARA A BASE ──
+       O caminho obvio seria `m._naoPublicada = true`. `limpaEspelhos` varre as
+       chaves `_` do TOPO do arquivo, nao as de cada demanda — o campo
+       atravessaria e ficaria GRAVADO numa demanda que, por definicao, acabou de
+       ser gravada com sucesso. */
+    ok(!/_naoPublicada|_nao_publicada/.test(semComentario(DEV) + semComentario(ADMIN)),
+       'a marca vive fora da demanda, e nao vira campo que a gravacao carrega');
+
+    /* ── O CAMINHO DA FALHA, EXECUTADO ──
+       Procurar `NAOPUBLICADA.marca` no texto nao prova nada: trocar o `catch`
+       por um que nao chama deixa a string intacta. Aqui o `catch` do
+       `saveToGitHub` do dev e recortado e RODADO com um erro de verdade. */
+    /* A ASSINATURA VAI INTEIRA, ate a chave do corpo. Com
+       `async function saveToGitHub(` o recorte saia com 44 caracteres: o `{` do
+       valor padrao de `opts = {}` e lido como inicio do corpo, e o `}` seguinte
+       fecha na hora. `corpo` usa a ULTIMA chave da assinatura quando ela tem
+       uma — e aqui ela tem duas. */
+    const srcSave = corpo(DEV, 'async function saveToGitHub(patch, opts = {}) {');
+    ok(!!srcSave && srcSave.length > 500, 'a gravacao do painel do dev foi isolada',
+       srcSave ? srcSave.length + ' caracteres' : 'nao achei');
+    if (srcSave) {
+      const iCatch = srcSave.indexOf('} catch(e) {');
+      const trecho = iCatch < 0 ? '' : srcSave.slice(iCatch + 12, srcSave.indexOf('return false;', iCatch) + 13);
+      ok(!!trecho.trim(), 'o trecho do erro foi isolado');
+      if (trecho.trim()) {
+        const marcadas = [];
+        const janela = { NAOPUBLICADA: { marca: (p) => marcadas.push(Object.keys(p)) } };
+        new Function('window', 'NAOPUBLICADA', 'avisaNaoPublicadas', 'toast', 'patch', 'e',
+          trecho.replace(/return false;\s*$/, ''))(
+          janela, janela.NAOPUBLICADA, () => {}, () => {},
+          { 'ax-1': { titulo: 'x' } }, { message: 'Failed to fetch' });
+        ok(marcadas.length === 1 && marcadas[0][0] === 'ax-1',
+           'falhar a gravacao MARCA a demanda do patch', JSON.stringify(marcadas));
+      }
+    }
+
+    // ── E o sucesso tira a marca, senao o aviso vira ruido permanente ──
+    ok(/NAOPUBLICADA\.limpa\(patch\)/.test(semComentario(DEV)),
+       'gravar com sucesso tira a marca das que foram');
+    ok(/NAOPUBLICADA\.zera\(\)/.test(semComentario(ADMIN)),
+       'e publicar no Admin zera o conjunto');
+
+    // ── As duas telas mostram a marca no CARD ──
+    /* A CONDICAO TEM DE ESTAR LIGADA AO EFEITO, e nao so existir na pagina.
+       Procurar `NAOPUBLICADA.tem(m.id)` solto passava liso: trocar a condicao
+       da classe por `false ?` deixa a chamada intacta na LINHA DO BADGE logo
+       abaixo, e a invariante seguia verde com o contorno morto. So o selo de
+       cache acusou — e selo nao mede comportamento. */
+    [['dev.html', DEV, 'nao-pub-card', /NAOPUBLICADA\.tem\(m\.id\)[^?]{0,30}\?\s*' nao-pub-card'/],
+     ['admin.html', ADMIN, 'kb-naopub', /naoPub\s*=\s*!!\(window\.NAOPUBLICADA && NAOPUBLICADA\.tem\(m\.id\)\)/]
+    ].forEach(([nome, src, cls, liga]) => {
+      const s = semComentario(src);
+      ok(liga.test(s) && s.includes(cls),
+         nome + ' marca o card da demanda nao gravada');
+      ok(new RegExp('\\.' + cls + '\\b').test(src),
+         'e ' + nome + ' tem o estilo dessa marca — classe sem CSS nao aparece');
+    });
+    /* A FAIXA DIZ QUANTAS, O CARD DIZ QUAL. So a faixa nao diz onde olhar; so
+       o card se perde em oito colunas. */
+    ok(/function avisaNaoPublicadas\(/.test(DEV) && /id="nao-pub"/.test(DEV),
+       'o painel do dev tem a faixa, alem da marca no card');
+    ok(/function tentarPublicarDeNovo\(/.test(DEV),
+       'e oferece reenviar o que ficou pendente');
+
+    ['admin.html', 'dev.html', 'gantt.html'].forEach((t) => {
+      ok(/<script src="nao-publicada\.js\?v=[0-9a-f]{10}"><\/script>/.test(lerTela(t)),
+         t + ' carrega nao-publicada.js, com o selo de cache');
+    });
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="3aba9de871">
+<html lang="pt-BR" data-build="bccc383165">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -346,6 +346,23 @@
     .risco-dev { display:none; align-items:flex-start; gap:10px; flex-direction:column; background:var(--red-bg);
       color:var(--red-tx); border-bottom:1px solid var(--red); padding:10px 24px;
       font-size:13.5px; line-height:1.5; }
+    /* ── A FAIXA DE "NAO GRAVADA" ──────────────────────────────────────────
+       Ambar e nao vermelho: vermelho ja e o atraso, e duas emergencias da
+       mesma cor viram uma so. Aqui a mensagem e outra — "isto nao existe no
+       servidor" —, e ela tem acao propria. */
+    .nao-pub { display:none; background:var(--amber-bg,#3a2d12); color:var(--amber-tx,#FFC470);
+      border-bottom:1px solid var(--amber,#B07D28); padding:10px 24px;
+      font-size:13.5px; line-height:1.55; }
+    .nao-pub b { color:#FFE0A8; }
+    .nao-pub ul { margin:6px 0 0; padding-left:20px; }
+    .nao-pub button { background:var(--amber,#B07D28); color:#20160a; border:0; border-radius:8px;
+      padding:6px 14px; font-size:13px; font-weight:700; cursor:pointer;
+      font-family:'Inter',sans-serif; margin-top:8px; }
+    /* O card tambem se marca: a faixa diz QUANTAS, o card diz QUAL. */
+    .kcard.nao-pub-card { outline:2px dashed var(--amber,#B07D28); outline-offset:-2px; }
+    .kcard-naopub { display:inline-block; background:var(--amber,#B07D28); color:#20160a;
+      border-radius:5px; padding:1px 6px; font-size:10px; font-weight:800;
+      letter-spacing:.3px; margin-bottom:4px; }
     .login-dica { font-size:12px; color:var(--text3); line-height:1.5; text-align:left; margin:-2px 0 12px; }
     /* Ver a senha vale mais que repetir a senha: um campo a menos e o erro de
        digitacao aparece na hora, em vez de virar "as senhas nao sao iguais". */
@@ -540,6 +557,7 @@
 <script src="dialogo.js?v=171b484b8c"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
+<script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="busca-demanda.js?v=1380650a7a"></script>
@@ -651,6 +669,10 @@
     <span>⚠️ <strong>Conta de teste detectada.</strong> Todos os dados abaixo são de demonstração.</span>
     <button onclick="limparDadosTeste()" style="margin-left:auto;background:#6b2d2d;color:#F9A0A0;border:1px solid #a04040;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">🗑️ Apagar todos os dados de Teste</button>
   </div>
+  <!-- A GRAVACAO FALHOU E O CARD CONTINUA NA TELA. Fica ACIMA de tudo, e so
+       sai quando a demanda chega ao servidor — um toast de 4 segundos nao da
+       conta de uma perda que dura ate alguem reparar. Ver `nao-publicada.js`. -->
+  <div class="nao-pub" id="nao-pub"></div>
   <div class="risco-dev" id="risco-dev"></div>
   <div class="meu-dia" id="meu-dia"></div>
   <header>
@@ -2373,6 +2395,63 @@ function renderMeuDia() {
     bloco(minhas.filter(m => getStatusKey(m) === 'concluido').length, 'concluídas');
 }
 
+/* ═══ O AVISO DE DEMANDA NAO GRAVADA ══════════════════════════════════════
+ *
+ * "Por que essa task nao esta sendo demonstrada no meu kanban?"
+ *
+ * Ela nao estava na base — nem naquele momento, nem em nenhuma das 25 versoes
+ * anteriores do arquivo. A gravacao falhou, o card continuou na tela igual a
+ * um card gravado, e o unico aviso foi um toast que some em 4 segundos.
+ *
+ * A FAIXA DIZ QUANTAS; O CARD DIZ QUAL. Uma coisa sem a outra nao resolve:
+ * so a faixa nao diz onde olhar, e so o card se perde em oito colunas.
+ *
+ * E ela NOMEIA a demanda, porque o card pode ter sumido: uma gravacao
+ * bem-sucedida depois desta troca o estado pelo do servidor, e a demanda que
+ * falhou (que no servidor nao existe) desaparece da tela. Ver `nao-publicada.js`.
+ */
+function avisaNaoPublicadas() {
+  const el = document.getElementById('nao-pub');
+  if (!el || !window.NAOPUBLICADA) return;
+  const itens = NAOPUBLICADA.itens();
+  if (!itens.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const n = itens.length;
+  el.style.display = 'block';
+  el.innerHTML =
+    '⚠️ <b>' + n + (n === 1 ? ' demanda não foi gravada' : ' demandas não foram gravadas') +
+    ' no servidor.</b> ' +
+    'Ela' + (n === 1 ? '' : 's') + ' aparece' + (n === 1 ? '' : 'm') +
+    ' aqui na sua tela e <b>não existe' + (n === 1 ? '' : 'm') +
+    '</b> para mais ninguém — e some' + (n === 1 ? '' : 'm') +
+    ' se você recarregar a página.' +
+    '<ul>' + itens.map(i =>
+      '<li>' + devEsc(i.titulo || '(sem título)') + '</li>').join('') + '</ul>' +
+    '<button type="button" onclick="tentarPublicarDeNovo()">Tentar gravar de novo</button>';
+}
+
+/** Repete a gravação do que ficou pendente, uma de cada vez.
+ *
+ *  UMA DE CADA VEZ, e não tudo num patch só: o motivo mais comum da falha é o
+ *  servidor estourar o teto de CPU, e juntar todas no mesmo envio é
+ *  exatamente o jeito de estourar de novo. */
+async function tentarPublicarDeNovo() {
+  if (!window.NAOPUBLICADA) return;
+  const itens = NAOPUBLICADA.itens().filter(i => i.patch);
+  if (!itens.length) {
+    toast('Não há conteúdo guardado para reenviar — recrie a demanda.', 'err');
+    return;
+  }
+  let ok = 0;
+  for (const i of itens) {
+    if (await saveToGitHub({ [i.id]: i.patch })) ok++;
+  }
+  toast(ok === itens.length ? '✅ Tudo gravado.'
+        : ok + ' de ' + itens.length + ' gravadas. O resto continua pendente.',
+        ok === itens.length ? 'ok' : 'err');
+  avisaNaoPublicadas();
+  renderKanban();
+}
+
 function renderRiscoDev() {
   const el = document.getElementById('risco-dev');
   if (!el || !currentDev) return;
@@ -2878,9 +2957,19 @@ async function saveToGitHub(patch, opts = {}) {
         throw new Error(msg);
       }
       applyData(server);
+      /* CHEGOU AO SERVIDOR: tira a marca destas, e so destas. Ver
+         `nao-publicada.js` — gravar a demanda A nao prova nada sobre a B que
+         falhou antes. */
+      if (window.NAOPUBLICADA) { NAOPUBLICADA.limpa(patch); avisaNaoPublicadas(); }
       toast('✅ Salvo!','ok');
       return true;
     } catch(e) {
+      /* A GRAVACAO FALHOU E O CARD CONTINUA NA TELA. Sem esta marca ele fica
+         igual a um card gravado, e o unico aviso e um toast de 4 segundos —
+         foi assim que uma demanda da Marina existiu so na aba de quem a criou
+         e nunca apareceu no quadro de ninguem. Pior: o painel recarrega
+         sozinho a cada 60s, e o fantasma some sem deixar rastro. */
+      if (window.NAOPUBLICADA) { NAOPUBLICADA.marca(patch); avisaNaoPublicadas(); }
       toast('Erro ao salvar: ' + e.message,'err');
       return false;
     } finally { showSaving(false); }
@@ -3861,10 +3950,16 @@ function renderCard(m, colKey) {
       'demanda entrar no planejamento. Abra e responda.">🔥 Grill — dê seu parecer</div>'
     : '';
   return `
-    <div class="kcard prazo-${prazoNivel(m)}${grillEst === 'pendente' ? ' kcard-grill-on' : ''}" draggable="true" id="card-${m.id}"
+    <div class="kcard prazo-${prazoNivel(m)}${grillEst === 'pendente' ? ' kcard-grill-on' : ''}${
+           window.NAOPUBLICADA && NAOPUBLICADA.tem(m.id) ? ' nao-pub-card' : ''}" draggable="true" id="card-${m.id}"
          ondragstart="onDragStart(event,'${m.id}')"
          ondragend="onDragEnd(event)"
          onclick="openStatusModal('${m.id}')">
+      ${/* A FAIXA DIZ QUANTAS, O CARD DIZ QUAL. So a faixa nao diz onde olhar,
+            e so o card se perde em oito colunas. */''}
+      ${window.NAOPUBLICADA && NAOPUBLICADA.tem(m.id)
+        ? '<div class="kcard-naopub" title="A gravação falhou. Esta demanda só existe nesta tela — ' +
+          'ela some se você recarregar a página, e ninguém mais a enxerga.">⚠ NÃO GRAVADA</div>' : ''}
       ${grillFaixa}
       ${parentInfo}
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}

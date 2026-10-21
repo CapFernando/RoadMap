@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="677b35032d">
+<html lang="pt-BR" data-build="77abd1247d">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -515,6 +515,12 @@
     /* Atraso deixou de ser coluna: e condicao, e aparece no proprio card, sem
        tirar a demanda da etapa em que ela esta. */
     .kb-card.kb-atrasada { border-color: var(--red); border-left: 3px solid var(--red); }
+    /* AMBAR E NAO VERMELHO: vermelho ja e o atraso, e duas emergencias da mesma
+       cor viram uma so. A mensagem aqui e outra — "isto nao existe no servidor". */
+    .kb-card.kb-naopub { outline: 2px dashed var(--amber, #B07D28); outline-offset: -2px; }
+    .kb-naopub-tag { display:inline-block; background: var(--amber, #B07D28); color:#20160a;
+      border-radius:5px; padding:1px 6px; font-size:10px; font-weight:800;
+      letter-spacing:.3px; margin-bottom:5px; }
     /* Prazo: amarelo um dia antes, vermelho no dia. A borda e o que o olho pega
        varrendo a coluna; a etiqueta confirma. */
     .kb-card.kb-prazo-amanha { border-left: 3px solid var(--amber); }
@@ -1299,6 +1305,7 @@
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
+<script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -3395,6 +3402,8 @@ async function saveViaProxy(tentativa = 1) {
       throw new Error(msg);
     }
     _pollTs = state.atualizado_em;
+    // Chegou ao servidor: nenhuma demanda esta mais pendente.
+    if (window.NAOPUBLICADA) NAOPUBLICADA.zera();
     _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase();
     // Publicado: a cópia local perde a razão de existir. Deixá-la faria a
     // próxima abertura da tela avisar sobre pendência que não existe mais.
@@ -3404,6 +3413,19 @@ async function saveViaProxy(tentativa = 1) {
     showSaving(false);
     return true;
   } catch (e) {
+    /* QUAIS demandas ficaram de fora, e nao so "a publicacao falhou".
+       A faixa de erro aqui ja e persistente e o rascunho sobrevive ao F5 —
+       o que faltava era o quadro dizer EM QUE CARDS a alteracao nao chegou ao
+       servidor. Sem isso, quem publicou e nao reparou na faixa segue movendo
+       cards que ninguem mais enxerga. Ver `nao-publicada.js`. */
+    if (window.NAOPUBLICADA && _dirtyMelhoriaIds && _dirtyMelhoriaIds.size) {
+      const porId = {};
+      _dirtyMelhoriaIds.forEach(id => {
+        const m = (state.melhorias || []).find(x => x.id === id);
+        if (m) porId[id] = m;
+      });
+      NAOPUBLICADA.marca(porId);
+    }
     // Regrava: entre a cópia do início e o erro a tela pode ter mudado.
     rascunhoSalvar();
     const errEl = document.getElementById('save-error');
@@ -4879,10 +4901,15 @@ function renderKanban() {
          Era a mesma regra em dois lugares dando duas respostas no MESMO card. */
       const diasAtraso = window.PRAZO
         ? (PRAZO.diasDeAtraso(m, statusKey(m), PRAZO.hojeISO()) || 0) : 0;
-      return `<div class="kb-card${atrasada ? ' kb-atrasada' : ''} kb-prazo-${nivelPrazo}" draggable="true"
+      const naoPub = !!(window.NAOPUBLICADA && NAOPUBLICADA.tem(m.id));
+      return `<div class="kb-card${atrasada ? ' kb-atrasada' : ''} kb-prazo-${nivelPrazo}${
+          naoPub ? ' kb-naopub' : ''}" draggable="true"
         ondragstart="kbDragStart(event,'${m.id}')" ondragend="kbDragEnd(event)"
         onmousedown="kbCardMouseDown(event,'${m.id}')"
-        title="${atrasada ? 'Entrega vencida · ' : ''}Arraste para mover · duplo clique para editar">
+        title="${naoPub ? 'Alteração NÃO publicada — só existe nesta tela · ' : ''}${atrasada ? 'Entrega vencida · ' : ''}Arraste para mover · duplo clique para editar">
+        ${/* A FAIXA DE ERRO DIZ QUE FALHOU; O CARD DIZ ONDE. Sem isto, quem nao
+              reparou na faixa segue movendo cards que ninguem mais enxerga. */''}
+        ${naoPub ? '<div class="kb-naopub-tag">⚠ Não publicada</div>' : ''}
         ${atrasada ? `<div class="kb-atraso-tag">⚠ Atrasada${diasAtraso > 0 ? ' · ' + diasAtraso + 'd' : ''}</div>` : ''}
         ${nivelPrazo === 'hoje' ? '<div class="kb-prazo-tag hoje">⚠ Vence hoje</div>' : ''}
         ${nivelPrazo === 'amanha' ? '<div class="kb-prazo-tag amanha">⏰ Vence amanhã</div>' : ''}
