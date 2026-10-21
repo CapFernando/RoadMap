@@ -19876,6 +19876,88 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     });
   }
 
+  /* ═══ A COLUNA BACKLOG DO PAINEL DO DEV ═══════════════════════════════════
+   *
+   * "Criar uma nova etapa no kanban Backlog — deverá cair lá as demandas
+   *  abertas pelo próprio dev."
+   *
+   * A etapa `backlog` sempre existiu; o que nao existia era a COLUNA. Ela vinha
+   * somada dentro de "Planejado", e o efeito era o contrario do nome: demanda
+   * que o dev abriu por conta propria, sem data e sem passar por ninguem,
+   * aparecia igual as que o PM/PO planejou.
+   */
+  {
+    sec('Painel do dev: a coluna Backlog');
+
+    const COLS = (() => {
+      const i = DEV.indexOf('const COLUMNS = [');
+      if (i < 0) return null;
+      const fim = DEV.indexOf('];', i);
+      return new Function('return ' + semComentario(DEV.slice(i + 16, fim + 1)))();
+    })();
+    ok(Array.isArray(COLS) && COLS.length, 'as colunas foram lidas do arquivo',
+       COLS ? COLS.map(c => c.key).join(' ') : 'nao achei');
+
+    if (COLS) {
+      const backlog = COLS.find(c => c.key === 'backlog');
+      ok(!!backlog, 'existe a coluna Backlog');
+      ok(backlog && COLS[0].key === 'backlog',
+         'e ela e a PRIMEIRA — o balde de entrada vem antes do caminho');
+      ok(backlog && backlog.maps.length === 1 && backlog.maps[0] === 'backlog',
+         'a coluna Backlog recebe a etapa backlog');
+
+      /* NENHUMA ETAPA EM DUAS COLUNAS. As colunas filtram por
+         `col.maps.includes(...)` de forma INDEPENDENTE: deixar `backlog`
+         tambem no mapa de "Planejado" nao a moveria — DUPLICARIA o card em
+         duas colunas ao mesmo tempo, e arrastar uma copia deixaria a outra
+         para tras. */
+      const onde = {};
+      const duplicadas = [];
+      COLS.forEach(c => (c.maps || []).forEach(e => {
+        if (onde[e]) duplicadas.push(e + ' em ' + onde[e] + ' e ' + c.key);
+        onde[e] = c.key;
+      }));
+      ok(!duplicadas.length, 'nenhuma etapa cai em duas colunas ao mesmo tempo',
+         duplicadas.join(' | '));
+
+      /* TODA ETAPA QUE A TELA CONHECE TEM COLUNA. Uma etapa sem coluna some do
+         quadro — e demanda que some do quadro foi o defeito de AX-096, AX-127 e
+         AX-211, que o comentario de `onDrop` registra. */
+      const doMapa = Object.keys(new Function(
+        'return ' + semComentario(DEV.slice(DEV.indexOf('const STATUS_POR_ETAPA = {') + 25,
+          DEV.indexOf('};', DEV.indexOf('const STATUS_POR_ETAPA = {')) + 1)))());
+      const semColuna = doMapa.filter(e => e !== 'atrasado' && !onde[e]);
+      ok(!semColuna.length,
+         'toda etapa conhecida tem coluna — etapa sem coluna some do quadro',
+         semColuna.join(', '));
+    }
+
+    /* ── A DEMANDA DO DEV NASCE NO BACKLOG ──
+       Medido pelo `selected` do select, que e o que decide de verdade. */
+    const sel = DEV.slice(DEV.indexOf('<select id="n-status">'),
+                          DEV.indexOf('</select>', DEV.indexOf('<select id="n-status">')));
+    ok(/<option value="backlog" selected>/.test(sel),
+       'a demanda aberta pelo dev nasce no Backlog', sel.replace(/\s+/g, ' ').slice(0, 120));
+    ok(!/value="planejado"/.test(sel),
+       'e "Planejado" saiu da lista — planejar e do PM/PO, como no arraste');
+    /* "EM ANDAMENTO" FICA, de proposito: o bug que chega direto ao dev e ele ja
+       comeca a resolver e real, e obriga-lo a abrir no Backlog para arrastar em
+       seguida so produziria um card errado por dez segundos. */
+    ok(/value="em_andamento"/.test(sel),
+       'e "Em Andamento" continua, para quem ja esta fazendo');
+
+    /* ── O ARRASTE PARA O BACKLOG E RECUSADO COM MOTIVO ──
+       `backlog` nao esta em `ETAPAS_DO_DEV`, entao o arraste cai na recusa. Sem
+       mensagem propria ele usaria a frase generica, que nao explica nada a quem
+       acabou de ver a coluna aparecer. */
+    const etapasDoDev = new Function('return ' + (
+      /const ETAPAS_DO_DEV = (\[[^\]]*\])/.exec(semComentario(DEV)) || [, '[]'])[1])();
+    ok(!etapasDoDev.includes('backlog'),
+       'devolver ao Backlog NAO e movimento do dev — e repriorizar');
+    ok(/backlog:\s*'O Backlog recebe o que voc/.test(DEV),
+       'e a recusa explica isso, em vez da frase generica');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');

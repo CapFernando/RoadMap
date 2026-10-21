@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="bccc383165">
+<html lang="pt-BR" data-build="17e99678bb">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1138,10 +1138,20 @@
     </div>
     <div class="form-group">
       <label>Status inicial</label>
+      <!-- A DEMANDA QUE O DEV ABRE NASCE NO BACKLOG.
+           Antes nascia em "Planejado", e isso era dizer pelo campo o contrário
+           do que acontecia: ninguém tinha planejado nada — nem data, nem
+           sprint, nem prioridade. Ela entrava no quadro com a mesma aparência
+           do que o PM/PO organizou, e a fila de triagem dele não via.
+
+           "Em Andamento" CONTINUA NA LISTA, e de propósito: o bug que chega
+           direto ao dev e ele já começa a resolver é real, e obrigá-lo a abrir
+           no Backlog para arrastar em seguida só produziria um card errado por
+           dez segundos. "Planejado" saiu — planejar é do PM/PO, e é a mesma
+           regra que `COLUNAS_BLOQUEADAS_MSG` aplica ao arraste. -->
       <select id="n-status">
-        <option value="backlog">Backlog (aguardando planejamento)</option>
-        <option value="planejado" selected>Planejado</option>
-        <option value="em_andamento">Em Andamento</option>
+        <option value="backlog" selected>Backlog (aguardando planejamento)</option>
+        <option value="em_andamento">Em Andamento (já estou fazendo)</option>
       </select>
     </div>
     <div class="form-actions">
@@ -2666,8 +2676,31 @@ const STATUS_LABELS = {
 };
 
 const COLUMNS = [
+  /* ── BACKLOG, A PRIMEIRA COLUNA ───────────────────────────────────────────
+     "Criar uma nova etapa no kanban Backlog — deverá cair lá as demandas
+      abertas pelo próprio dev."
+
+     A etapa `backlog` SEMPRE existiu (ver `STATUS_POR_ETAPA` e `STATUS_LABELS`);
+     o que não existia era a coluna. Ela vinha somada dentro de "Planejado", e
+     o efeito era o oposto do que o nome diz: uma demanda que o dev abriu por
+     conta própria, sem data e sem passar por ninguém, aparecia lado a lado com
+     as que o PM/PO planejou — indistinguíveis.
+
+     E `backlog` SAIU do mapa de "Planejado" na mesma linha. As colunas são
+     filtradas por `col.maps.includes(...)` INDEPENDENTEMENTE: deixar a etapa
+     nos dois mapas não a moveria, duplicaria o card em duas colunas ao mesmo
+     tempo — e arrastar uma das cópias deixaria a outra para trás.
+
+     `levantar_req` FICA onde estava. Ela é uma decisão do PM/PO ("isto precisa
+     de levantamento antes"), e não o balde de entrada do dev; movê-la junto
+     seria mudar uma coisa que ninguém pediu.
+
+     CINZA, e não mais uma cor: as seis colunas seguintes já contam uma história
+     de progresso em cor. O balde de entrada não é um estágio desse caminho —
+     é o que ainda não entrou nele. */
+  { key:'backlog',      label:'Backlog',      color:'#7C8698', maps:['backlog'] },
   { key:'planning',     label:'Planning',     color:'#2BBFA0', maps:['planning'] },
-  { key:'planejado',    label:'Planejado',    color:'#3B8FE8', maps:['backlog','levantar_req','planejado'] },
+  { key:'planejado',    label:'Planejado',    color:'#3B8FE8', maps:['levantar_req','planejado'] },
   { key:'em_andamento', label:'Em Andamento', color:'#5EA832', maps:['em_andamento'] },
   /* A AREA TESTA ANTES DO PM/PO. O card fica aqui enquanto quem pediu confere a
      solucao; so depois ele vai para Validacao PM/PO, e so la conta como
@@ -4289,6 +4322,12 @@ function msSelectEtapa(sel, m, preselect) {
 }
 
 const COLUNAS_BLOQUEADAS_MSG = {
+  /* Devolver uma demanda ao Backlog é dizer "isto não vai ser feito agora", e
+     essa é a mesma decisão de planejar — do PM/PO. Sem esta linha o arraste
+     caía na frase genérica, que não explica nada a quem acabou de ver a
+     coluna nova aparecer. */
+  backlog: 'O Backlog recebe o que você abre. Tirar uma demanda de andamento e ' +
+           'devolvê-la para lá é repriorizar — fale com o PM/PO.',
   planning: 'Quem leva uma demanda para o Planning é o PM/PO — é ele que monta a pauta da reunião.',
   planejado: 'Planejar (definir data e sprint) é do PM/PO. Se a demanda não é sua para agora, fale com ele.',
   concluido: 'Quem conclui é o PM/PO, ao validar. Entregue para validação e ele fecha.',
