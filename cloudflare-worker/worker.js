@@ -2484,7 +2484,27 @@ async function gravaTexto(gh, caminho, texto, mensagem) {
     method: 'PATCH',
     body: JSON.stringify({ sha: novoSha }),
   });
-  if (!patchRes.ok) return erro('ref-patch', patchRes, await patchRes.text());
+  if (!patchRes.ok) {
+    const corpoPatch = await patchRes.text();
+    /* ═══ "Update is not a fast forward" E CORRIDA, E NAO FALHA ═══════════════
+     *
+     * O ramo andou ENTRE a leitura do commit atual e este PATCH. Nao e erro do
+     * GitHub nem do payload: e outra gravacao que entrou na janela — e a janela
+     * ficou grande porque uma gravacao leva 5 a 7 segundos nesta base.
+     *
+     * A trava funcionou: o `conflito` por `atualizado_em` roda ANTES, e aqui o
+     * GitHub recusou sem sobrescrever ninguem. O defeito era o que a pessoa
+     * via: `ref-patch: HTTP 422 {"message":"Update is not a fast forward"...}`
+     * na faixa vermelha, um texto que nao diz o que fazer e que a tela nao sabe
+     * tratar.
+     *
+     * Marcado como conflito, ele cai no caminho que as telas JA TEM: o Admin
+     * refaz a mesclagem sobre a versao nova e tenta de novo, uma vez, sozinho.
+     * O mesmo desfecho que uma publicacao simultanea detectada mais cedo. */
+    const corrida = patchRes.status === 422 && /not a fast forward/i.test(corpoPatch);
+    const e = erro('ref-patch', patchRes, corpoPatch);
+    return corrida ? { ...e, conflito: true } : e;
+  }
   return { ok: true };
 }
 
@@ -6466,6 +6486,16 @@ export default {
       console.log('publish: ' + (corpoFinal.length / 1048576).toFixed(2) + ' MB, ' +
                   (data.melhorias || []).length + ' demandas, gravacao em ' +
                   (Date.now() - t0) + 'ms');
+      /* CORRIDA NO RAMO vira CONFLITO, e nao 502. `gravaTexto` marca quando o
+         GitHub recusou por "not a fast forward": outra gravacao entrou na
+         janela de 5 a 7 segundos que uma gravacao desta base leva. A tela ja
+         sabe refazer a mesclagem sobre a versao nova quando ve 409 `conflito`;
+         com 502 ela so mostrava o texto cru do GitHub. */
+      if (!gravou.ok && gravou.conflito) {
+        return json({ error: 'conflito',
+                      detail: 'Outra gravacao entrou enquanto esta era salva. Tentando de novo.' },
+                    409, headers);
+      }
       if (!gravou.ok) return json({ error: 'Falha ao salvar', detail: gravou.detalhe }, 502, headers);
       // `espelhos_descartados` vai na resposta para o descarte nao ser silencioso:
       // se uma tela voltar a mandar espelho, aparece aqui em vez de virar um dado
@@ -6617,6 +6647,16 @@ export default {
       // Mesma gravacao sem base64 do `publish` — ver `gravaTexto`.
       const gravouDev = await gravaTexto(gh, FILE_PATH, JSON.stringify(data),
         'chore: dev atualiza ' + new Date().toISOString());
+      /* CORRIDA NO RAMO vira CONFLITO, e nao 502. `gravaTexto` marca quando o
+         GitHub recusou por "not a fast forward": outra gravacao entrou na
+         janela de 5 a 7 segundos que uma gravacao desta base leva. A tela ja
+         sabe refazer a mesclagem sobre a versao nova quando ve 409 `conflito`;
+         com 502 ela so mostrava o texto cru do GitHub. */
+      if (!gravouDev.ok && gravouDev.conflito) {
+        return json({ error: 'conflito',
+                      detail: 'Outra gravacao entrou enquanto esta era salva. Tentando de novo.' },
+                    409, headers);
+      }
       if (!gravouDev.ok) return json({ error: 'Falha ao salvar', detail: gravouDev.detalhe }, 502, headers);
       // Diz o que foi revertido: gravar diferente do que a tela mandou e recusar em
       // silencio, e a pessoa so descobriria no proximo F5.

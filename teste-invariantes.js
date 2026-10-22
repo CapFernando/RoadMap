@@ -20000,6 +20000,41 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        deixou a tela em branco uma vez; o comentario da rota registra. */
     ok(!/POKER_DB|contasMigrar/.test(rota),
        'a leitura nao consulta o banco nem roda migracao');
+
+    /* ── A CORRIDA NO RAMO VIRA CONFLITO, E NAO ERRO CRU ──────────────────
+       O ramo anda ENTRE a leitura do commit atual e o PATCH, porque uma
+       gravacao desta base leva 5 a 7 SEGUNDOS. O GitHub recusa com 422 "not a
+       fast forward" — a trava funcionou, ninguem foi sobrescrito —, mas a
+       pessoa via `ref-patch: HTTP 422 {"message":"Update is not a fast
+       forward"...}` na faixa vermelha: um texto que nao diz o que fazer e que
+       a tela nao sabe tratar.
+       Marcado como conflito, cai no caminho que as telas JA TEM: refazer a
+       mesclagem sobre a versao nova e tentar de novo, sozinhas. */
+    const srcGrava = corpo(W, 'async function gravaTexto(');
+    ok(!!srcGrava, 'a gravacao foi isolada');
+    if (srcGrava) {
+      /* O recorte tem `await`, entao roda dentro de uma funcao async. */
+      const pega = async (status, txt) => {
+        const f = new Function('status', 'corpoTxt',
+          'return (async () => {\n' +
+          'const erro = (etapa, r, c) => ({ ok: false, etapa, detalhe: String(c) });\n' +
+          'const patchRes = { ok: false, status, text: async () => corpoTxt };\n' +
+          srcGrava.slice(srcGrava.indexOf('if (!patchRes.ok) {'),
+                         srcGrava.lastIndexOf('return { ok: true };')) +
+          '\nreturn null; })();');
+        return f(status, txt);
+      };
+      registra(pega(422, '{"message":"Update is not a fast forward"}').then(async (r) => {
+        ok(r && r.conflito === true,
+           'o 422 "not a fast forward" e marcado como CORRIDA', JSON.stringify(r));
+        const outro = await pega(404, '{"message":"Not Found"}');
+        ok(outro && !outro.conflito,
+           'e outro erro do GitHub NAO vira conflito — so a corrida vira',
+           JSON.stringify(outro));
+      }));
+      ok(/gravou\.conflito/.test(WC) && /gravouDev\.conflito/.test(WC),
+         'as duas rotas de gravacao devolvem 409 conflito nesse caso');
+    }
   }
 
   let erroPz = null;
