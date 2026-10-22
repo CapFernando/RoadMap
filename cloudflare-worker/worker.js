@@ -6296,7 +6296,25 @@ export default {
        * `spike-aprovadores`, que e barata e nao bloqueia o carregamento. */
       const rawRes = await gh('contents/' + FILE_PATH + '?raw=' + Date.now(), { headers: { Accept: 'application/vnd.github.raw' } });
       if (!rawRes.ok) return json({ error: 'Falha ao ler dados' }, 502, headers);
-      return new Response(await rawRes.text(), {
+      /* ═══ O CORPO PASSA DIRETO, SEM VIRAR STRING ═══════════════════════════
+       *
+       * Era `new Response(await rawRes.text(), ...)`: os 3,24 MB do arquivo
+       * eram BAIXADOS INTEIROS, decodificados de UTF-8 para uma string JS e
+       * recodificados para sair — tudo para entregar byte por byte o mesmo
+       * conteudo que havia chegado.
+       *
+       * Isso aparecia na tela como "Nao foi possivel ler os dados atualizados
+       * (Failed to fetch)". O Cloudflare corta o Worker por recursos e devolve
+       * a propria pagina de erro, SEM cabecalho CORS — e o navegador so
+       * consegue chamar isso de falha de rede. A mesma confusao da gravacao,
+       * agora na LEITURA, que e a rota mais quente que existe: toda abertura de
+       * tela e o polling de 30 segundos de cada aba passam por aqui.
+       *
+       * `rawRes.body` e um ReadableStream. Repassa-lo nao le, nao decodifica e
+       * nao aloca o arquivo: o Worker vira um cano. O custo deixa de crescer
+       * junto com a base — e a base cresceu 1,7 -> 2,9 -> 3,24 MB enquanto
+       * cortavamos custo em volta dela. */
+      return new Response(rawRes.body, {
         status: 200,
         headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
       });

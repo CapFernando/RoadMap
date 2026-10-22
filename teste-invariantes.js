@@ -19958,6 +19958,50 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e a recusa explica isso, em vez da frase generica');
   }
 
+  /* ═══ A LEITURA NAO BUFFERIZA O ARQUIVO ═══════════════════════════════════
+   *
+   * "Nao foi possivel ler os dados atualizados (Failed to fetch)" — agora na
+   * LEITURA, que e a rota mais quente que existe: toda abertura de tela e o
+   * polling de 30 segundos de cada aba passam por `dados`.
+   *
+   * Ela fazia `new Response(await rawRes.text(), ...)`: baixava os 3,24 MB
+   * inteiros, decodificava de UTF-8 para uma string JS e recodificava para
+   * sair — tudo para entregar byte por byte o mesmo conteudo que chegou. O
+   * Cloudflare cortava por recursos e devolvia a propria pagina de erro, sem
+   * CORS, que o navegador so sabe chamar de falha de rede.
+   *
+   * `rawRes.body` e um ReadableStream: repassa-lo nao le, nao decodifica e nao
+   * aloca. Medido depois: 1 a 7 ms de CPU, contra os 28+ de antes.
+   */
+  {
+    sec('Leitura da base: o corpo passa direto');
+
+    const rota = (() => {
+      const i = WC.indexOf("if (body.action === 'dados') {");
+      if (i < 0) return '';
+      let prof = 0;
+      for (let k = i; k < WC.length; k++) {
+        if (WC[k] === '{') prof++;
+        else if (WC[k] === '}') { prof--; if (prof === 0) return WC.slice(i, k + 1); }
+      }
+      return '';
+    })();
+    ok(!!rota, 'a rota de leitura foi isolada');
+    ok(/new Response\(rawRes\.body,/.test(rota),
+       'o corpo e repassado como fluxo, e nao transformado em string');
+    /* A MEDIDA QUE IMPORTA: nenhuma leitura do corpo dentro da rota. `.text()`,
+       `.json()` e `.arrayBuffer()` todos materializam os 3,24 MB — trocar um
+       pelo outro nao resolveria nada, e e o tipo de troca que parece correcao. */
+    const materializa = (rota.match(/\.(text|json|arrayBuffer|blob)\(\)/g) || []);
+    ok(!materializa.length,
+       'e a rota nao materializa o arquivo de jeito nenhum',
+       materializa.join(' '));
+    /* E ELA CONTINUA SEM TOCAR NO BANCO. Migracao em caminho de leitura ja
+       deixou a tela em branco uma vez; o comentario da rota registra. */
+    ok(!/POKER_DB|contasMigrar/.test(rota),
+       'a leitura nao consulta o banco nem roda migracao');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
