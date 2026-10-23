@@ -4837,11 +4837,35 @@ ok(/if \(colKey === 'validacao'\) \{\s*m\.entregue_em = new Date\(\)\.toISOStrin
    a primeira data faria uma demanda REPROVADA aparecer no prazo no relatorio. */
 ok(!/colKey === 'validacao' && !m\.entregue_em/.test(DEV),
    'e entregar DE NOVO depois de reprovada sobrescreve a data');
-ok(/m\.entregue_em = new Date\(\)\.toISOString\(\);/.test(
-     WC.slice(WC.indexOf("m.status_planejamento = 'validacao'"),
-              WC.indexOf("m.status_planejamento = 'validacao'") + 400)) &&
-   !/if \(!m\.entregue_em\) m\.entregue_em = new Date/.test(WC),
-   'a rota de entrega da API tambem sobrescreve, e nao so na primeira vez');
+/* ANCORADO NA ROTA, e nao num literal.
+   Isto procurava `m.status_planejamento = 'validacao'` e media 400 caracteres
+   adiante. Quando o destino da entrega passou a depender do tipo — evolucao
+   vai para a Validacao da area, sustentacao ja validada vai direto —, o
+   literal deixou de existir e a invariante quebrou sem que nada do que ela
+   protege tivesse mudado. O que ela guarda e OUTRA coisa: que a data e
+   sobrescrita SEMPRE, e nao so na primeira entrega. */
+{
+  /* MEDE A INTENCAO, e nao um recorte.
+     Duas ancoras falharam antes desta. `m.status_planejamento = 'validacao'`
+     sumiu quando o destino passou a depender do tipo. E recortar a partir de
+     `body.action === 'demanda-entregar'` cai na GUARDA da concluida — a
+     primeira ocorrencia do texto no arquivo —, um bloco de 323 caracteres que
+     nao contem o que a invariante afirma guardar.
+     O que ela guarda e simples e nao precisa de recorte: a data da entrega e
+     atribuida sem condicao, e nao ha guarda de "so na primeira vez" em lugar
+     nenhum do Worker. */
+  const atribuicoes = (WC.match(/m\.entregue_em = new Date\(\)\.toISOString\(\);/g) || []).length;
+  ok(atribuicoes >= 1, 'a entrega pela API grava a data', atribuicoes + ' atribuicao(oes)');
+  /* O PADRAO PROCURADO E A ATRIBUICAO GUARDADA, e nao a palavra solta.
+     `!/m\.entregue_em \|\|/` acusava `String(m.entregue_em || '')` em
+     `normalizaEstados` — uma LEITURA com valor padrao, que nao tem nada a ver
+     com gravar so na primeira vez. Regra larga demais vira alarme falso, e
+     alarme falso ensina a ignorar o vermelho. */
+  const guardaPrimeira = /if \(!m\.entregue_em\)\s*m\.entregue_em\s*=/.test(WC) ||
+                         /m\.entregue_em\s*=\s*m\.entregue_em\s*\|\|/.test(WC);
+  ok(!guardaPrimeira,
+     'a rota de entrega da API tambem sobrescreve, e nao so na primeira vez');
+}
 // Mas CONCLUIR nao e entregar: quem conclui e o PM/PO, e a data do dev fica.
 ok(/colKey === 'concluido' && !m\.entregue_em/.test(DEV),
    'concluir so preenche a data quando ela nao existe — validar nao vira entrega');
@@ -9247,7 +9271,7 @@ sec('A etapa que o dev pode mover');
     { key: 'validacao', maps: ['validacao'] },
     { key: 'concluido', maps: ['concluido'] },
   ];
-  const solta = (etapaAtual, coluna) => {
+  const solta = (etapaAtual, coluna, extra) => {
     const feito = { moveu: null, modal: null, recusou: null };
     const tarefas = [];
     const amb = {
@@ -9256,7 +9280,8 @@ sec('A etapa que o dev pode mover');
       COLUNAS_BLOQUEADAS_MSG: {},
       ETAPAS_EXIGEM_ENTREGA: ['validacao', 'concluido'],
       COLUMNS,
-      state: { melhorias: [{ id: 'x', codigo: 'AX-150', status_planejamento: etapaAtual }] },
+      state: { melhorias: [Object.assign(
+        { id: 'x', codigo: 'AX-150', status_planejamento: etapaAtual }, extra || {})] },
       getStatusKey: (m) => m.status_planejamento,
       getDeps: () => [],
       checkDepBlock: () => false,
@@ -9265,6 +9290,13 @@ sec('A etapa que o dev pode mover');
       updateStatus: (id, k) => { feito.moveu = k; },
       setTimeout: (fn) => tarefas.push(fn),
       document: { querySelectorAll: () => [], getElementById: () => null },
+      /* `onDrop` passou a consultar `HOMOLOGACAO` — evolucao nao pula a
+         Validacao da area, e o arraste ja foi a porta dos fundos tres vezes.
+         O modulo entra de VERDADE, e nao um stub que sempre libera: um stub
+         faria esta bateria provar o contrario do que ela existe para provar. */
+      window: { HOMOLOGACAO: require('./homologacao.js'), PRAZO: require('./prazo.js') },
+      HOMOLOGACAO: require('./homologacao.js'),
+      PRAZO: require('./prazo.js'),
     };
     const nomes = Object.keys(amb);
     // `dragId` e reatribuido dentro de onDrop, entao entra como `let`, e nao como
@@ -9288,9 +9320,24 @@ sec('A etapa que o dev pode mover');
   {
     const r = solta('planejado', 'em_andamento');
     ok(r.moveu === 'em_andamento' && !r.recusou, 'soltar em Em Andamento move');
-    const e = solta('em_andamento', 'validacao');
+    /* VINDO DA AREA E COM A HOMOLOGACAO REGISTRADA — que e o unico caminho
+       legitimo depois do fluxo novo. Antes a demanda ia de Em andamento
+       direto para Validacao; hoje isso e justamente o que a regra barra, e
+       manter o caso antigo aqui provaria que a trava NAO funciona. */
+    const e = solta('validacao_area', 'validacao',
+      { tipo: 'evolucao', solicitante: 'Ana',
+        homologacao: { quem: 'Ana', ok: true, em: '2026-10-23T10:00:00Z' } });
     ok(e.modal === 'validacao' && !e.recusou,
-       'e soltar em Validacao abre o pedido de horas e texto');
+       'e soltar em Validacao abre o pedido de horas e texto', e.recusou || '');
+    /* E O CAMINHO QUE A REGRA FECHA: evolucao pulando a area. */
+    const pulo = solta('em_andamento', 'validacao', { tipo: 'evolucao', solicitante: 'Ana' });
+    ok(pulo.moveu === null && !!pulo.recusou,
+       'e evolucao NAO pula a Validacao da area no arraste', pulo.recusou || '(passou)');
+    /* Sustentacao com registro corta caminho, que e o que foi pedido. */
+    const sust = solta('em_andamento', 'validacao',
+      { tipo: 'sustentacao', homologacao: { quem: 'Bia', ok: true } });
+    ok(sust.modal === 'validacao' && !sust.recusou,
+       'e sustentacao JA VALIDADA vai direto ao PM/PO', sust.recusou || '');
   }
 
   const over = corpo(DEV, 'function onDragOver(');
@@ -20035,6 +20082,138 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/gravou\.conflito/.test(WC) && /gravouDev\.conflito/.test(WC),
          'as duas rotas de gravacao devolvem 409 conflito nesse caso');
     }
+  }
+
+  /* ═══ A HOMOLOGACAO DA AREA ═══════════════════════════════════════════════
+   *
+   * "Etapa validacao da area passa a ser obrigatoria para todos (homologacao)
+   *  com esse solicitante. Ate 5 dias; apos 5 dias, abrir campo perguntando
+   *  quem homologou e se esta ok. Nao tendo resposta, fica em validacao da
+   *  area. Unicas movimentacoes possiveis: em andamento ou validacao PM/PO
+   *  (aqui so perante o aceite e registro)."
+   *
+   * E depois: "obrigatorio para EVOLUCAO. Sustentacao pode ir direto ao PM/PO,
+   * mas com registro de quem validou a entrega."
+   */
+  {
+    sec('Homologacao da area: as duas portas para o PM/PO');
+
+    const HOM = require('./homologacao.js');
+
+    /* ── A REGRA, EXECUTADA ── */
+    const demanda = (x) => Object.assign({ status_planejamento: 'em_andamento' }, x);
+    const CASOS = [
+      ['evolucao pulando a area', demanda({ tipo: 'evolucao', solicitante: 'Ana' }), 'validacao', 'etapa'],
+      ['sem tipo pulando a area', demanda({ solicitante: 'Ana' }), 'validacao', 'etapa'],
+      ['entrar na area sem solicitante', demanda({ tipo: 'evolucao' }), 'validacao_area', 'solicitante'],
+      ['sustentacao direta sem registro', demanda({ tipo: 'sustentacao' }), 'validacao', 'homologacao'],
+      ['sair da area sem registro', demanda({ tipo: 'evolucao', solicitante: 'Ana',
+        status_planejamento: 'validacao_area' }), 'validacao', 'homologacao'],
+      ['sair da area para concluido', demanda({ tipo: 'evolucao', solicitante: 'Ana',
+        status_planejamento: 'validacao_area' }), 'concluido', 'etapa'],
+      ['registro com ok=false', demanda({ tipo: 'evolucao', solicitante: 'Ana',
+        status_planejamento: 'validacao_area',
+        homologacao: { quem: 'Ana', ok: false } }), 'validacao', 'homologacao'],
+    ];
+    CASOS.forEach(([nome, m, destino, campo]) => {
+      const r = HOM.barra(m, destino);
+      ok(r && r.campo === campo, 'barra: ' + nome, r ? r.campo : '(passou)');
+    });
+    const PASSAM = [
+      ['evolucao para a area, com solicitante', demanda({ tipo: 'evolucao', solicitante: 'Ana' }), 'validacao_area'],
+      ['da area de volta para Em andamento', demanda({ tipo: 'evolucao', solicitante: 'Ana',
+        status_planejamento: 'validacao_area' }), 'em_andamento'],
+      ['da area ao PM/PO com registro', demanda({ tipo: 'evolucao', solicitante: 'Ana',
+        status_planejamento: 'validacao_area', homologacao: { quem: 'Ana', ok: true } }), 'validacao'],
+      ['sustentacao direta COM registro', demanda({ tipo: 'sustentacao',
+        homologacao: { quem: 'Bia', ok: true } }), 'validacao'],
+    ];
+    PASSAM.forEach(([nome, m, destino]) => {
+      const r = HOM.barra(m, destino);
+      ok(!r, 'passa: ' + nome, r ? r.motivo : '');
+    });
+
+    /* ── OS CINCO DIAS ──
+       "Nao tendo resposta, fica em validacao da area": a regra PERGUNTA, e nao
+       move. Uma funcao que movesse sozinha produziria "homologado" sem
+       ninguem ter homologado. */
+    const naArea = (desde) => ({ status_planejamento: 'validacao_area',
+                                 solicitante: 'Ana', validacao_area_em: desde });
+    const HOJE = '2026-10-23';
+    ok(HOM.diasNaArea(naArea('2026-10-18'), HOJE) === 5,
+       'o contador de dias na area funciona sob Node',
+       String(HOM.diasNaArea(naArea('2026-10-18'), HOJE)));
+    ok(!HOM.cobraHomologacao(naArea('2026-10-20'), HOJE), 'antes dos 5 dias nao cobra');
+    ok(HOM.cobraHomologacao(naArea('2026-10-18'), HOJE), 'aos 5 dias cobra');
+    ok(HOM.cobraHomologacao(naArea('2026-10-10'), HOJE),
+       'e continua cobrando enquanto nao houver resposta — nao desiste nem move');
+    const jaReg = Object.assign(naArea('2026-10-10'), { homologacao: { quem: 'Ana', ok: true } });
+    ok(!HOM.cobraHomologacao(jaReg, HOJE), 'com registro, para de cobrar');
+
+    /* ── MODULO E WORKER CONCORDAM ──
+       O Worker nao importa modulo nenhum, entao a regra existe duas vezes. */
+    const srcW = corpo(W, 'function entrandoSemHomologacao(');
+    ok(!!srcW, 'o Worker tem a sua propria copia da regra');
+    if (srcW) {
+      const doW = new Function('recebido', 'servidor',
+        "const HOMOLOG_AREA = 'validacao_area', HOMOLOG_PMPO = 'validacao';\n" +
+        corpo(W, 'function homologRegistro(') + '\n' +
+        corpo(W, 'function homologada(') + '\n' +
+        corpo(W, 'function homologEhEvolucao(') + '\n' +
+        srcW + '\nreturn entrandoSemHomologacao(recebido, servidor);');
+      const divergem = [];
+      CASOS.concat(PASSAM.map(x => [x[0], x[1], x[2], null]))
+        .forEach(([nome, m, destino, campo]) => {
+          const velha = Object.assign({}, m, { id: 'd1' });
+          const nova = Object.assign({}, m, { id: 'd1', status_planejamento: destino });
+          const doWorker = doW({ melhorias: [nova] }, { melhorias: [velha] });
+          const doModulo = HOM.barra(m, destino);
+          const wBarra = doWorker.length ? doWorker[0].campo : null;
+          const mBarra = doModulo ? doModulo.campo : null;
+          if (wBarra !== mBarra) divergem.push(nome + ' (worker:' + wBarra + ' modulo:' + mBarra + ')');
+        });
+      ok(!divergem.length,
+         'modulo e Worker barram as MESMAS transicoes, pelo mesmo motivo',
+         divergem.join(' | '));
+    }
+
+    /* ── AS TRES PORTAS DO SERVIDOR ──
+       Publicacao do admin, publicacao do dev e a entrega pela API. A terceira
+       era a porta dos fundos: ela punha a demanda em `validacao` direto. */
+    ok(/const semHomologPub = entrandoSemHomologacao\(data, antesPub\)/.test(WC) &&
+       /const semHomologDev = entrandoSemHomologacao\(data, antesDev\)/.test(WC),
+       'as duas rotas de publicacao consultam a regra');
+    ok(/m\.status_planejamento = vaiDireto \? 'validacao' : HOMOLOG_AREA;/.test(WC),
+       'e a entrega pela API cai na Validacao da area, e nao no PM/PO');
+    ok(/if \(m\.status_planejamento === HOMOLOG_AREA && !m\.validacao_area_em\)/.test(WC),
+       'e carimba a entrada na area, senao o contador de 5 dias nunca comeca');
+
+    /* ── AS TELAS ── */
+    const DEV_C = semComentario(DEV), ADM_C = semComentario(ADMIN), GNT_C = semComentario(GANTT);
+    ok(/HOMOLOGACAO\.barra\(m, colKey/.test(DEV_C),
+       'o arraste do dev consulta a regra — ele ja foi a porta dos fundos tres vezes');
+    ok(/HOMOLOGACAO\.barra\(atual, escolhido/.test(DEV_C),
+       'e o select tambem');
+    ok(/function msHomologRender\(/.test(DEV) && /id="ms-homolog"/.test(DEV),
+       'o card do dev tem o formulario de homologacao');
+    ok(/homologacao:\s*existing\.homologacao/.test(ADM_C) &&
+       /homologacao:\s*existing\.homologacao/.test(GNT_C),
+       'o registro atravessa as listas fechadas do Admin e do Gantt');
+    /* O SOLICITANTE NO CARD, nos dois paineis.
+       MEDIDO COMO COMANDO SOLTO, e nao pela string: `if (false) meta.push(...)`
+       mantem o texto intacto e apaga o comportamento — so o selo de cache
+       acusou essa sabotagem, e selo nao mede comportamento. O `^\s*` exige que
+       o `meta.push` comece a linha, que e justamente o que a guarda quebra. */
+    ok(/^\s*meta\.push\(String\(m\.solicitante/m.test(ADM_C) &&
+       /^\s*meta\.push\(String\(m\.solicitante/m.test(DEV_C),
+       'o solicitante aparece no card do Admin e no do dev');
+    ok(/sem solicitante/.test(ADM_C) && /sem solicitante/.test(DEV_C),
+       'e o card diz quando ele falta, em vez de ficar calado');
+
+    ['admin.html', 'dev.html', 'gantt.html'].forEach((t) => {
+      ok(/<script src="homologacao\.js\?v=[0-9a-f]{10}"><\/script>/.test(lerTela(t)),
+         t + ' carrega homologacao.js, com o selo de cache');
+    });
   }
 
   let erroPz = null;

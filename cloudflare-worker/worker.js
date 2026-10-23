@@ -1698,6 +1698,89 @@ function entrandoEmConcluidoSemHoras(recebido, servidor) {
 }
 
 
+/* ═══ A HOMOLOGACAO DA AREA ════════════════════════════════════════════════
+ *
+ * Copia de `homologacao.js` — o Worker nao importa modulo nenhum, e ha
+ * invariante rodando as duas lado a lado, como em `bisDaDemanda`.
+ *
+ *   evolucao     em andamento -> VALIDACAO DA AREA -> PM/PO. Sem atalho.
+ *   sustentacao  pode cortar direto para o PM/PO, COM registro de quem validou.
+ *
+ * E a TELA NAO PODE SER A UNICA TRAVA: o arraste no Kanban ja foi a porta dos
+ * fundos tres vezes (AX-096, AX-127, AX-211), e a API aceita pedido de script.
+ *
+ * SEM TIPO CONTA COMO EVOLUCAO. Deixar a classificacao vazia nao pode virar o
+ * caminho mais curto para pular a homologacao.
+ */
+const HOMOLOG_AREA = 'validacao_area';
+const HOMOLOG_PMPO = 'validacao';
+
+function homologRegistro(m) {
+  const h = (m || {}).homologacao;
+  if (!h || typeof h !== 'object') return null;
+  const quem = String(h.quem == null ? '' : h.quem).trim();
+  if (!quem) return null;
+  return { quem: quem.slice(0, 120), em: String(h.em || '').slice(0, 30),
+           ok: h.ok !== false, obs: String(h.obs || '').slice(0, 300) };
+}
+function homologada(m) {
+  const r = homologRegistro(m);
+  return !!(r && r.ok);
+}
+function homologEhEvolucao(m) {
+  return String((m || {}).tipo || '').trim().toLowerCase() !== 'sustentacao';
+}
+
+/** Quem esta ENTRANDO numa etapa sem cumprir a regra da homologacao.
+ *  Devolve `[{ id, codigo, motivo, campo }]` — o `id` e o que leva a tela ate
+ *  a demanda, como nas outras guardas desta rota. */
+function entrandoSemHomologacao(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    // Demanda que o servidor nao conhece e cadastro novo — nao ha transicao
+    // para policiar, e a mesma excecao das outras guardas desta rota.
+    if (!velha) continue;
+    const de = String(velha.status_planejamento || '');
+    const para = String(m.status_planejamento || '');
+    if (de === para) continue;
+
+    if (para === HOMOLOG_AREA && !String(m.solicitante || '').trim()) {
+      presos.push({ id: m.id, codigo: m.codigo || m.id, campo: 'solicitante',
+                    motivo: 'Informe o solicitante: e ele quem homologa nesta etapa.' });
+      continue;
+    }
+    if (para === HOMOLOG_PMPO) {
+      if (de === HOMOLOG_AREA) {
+        if (!homologada(m)) {
+          presos.push({ id: m.id, codigo: m.codigo || m.id, campo: 'homologacao',
+                        motivo: 'Registre quem homologou na area antes de enviar ao PM/PO.' });
+        }
+        continue;
+      }
+      if (homologEhEvolucao(m)) {
+        presos.push({ id: m.id, codigo: m.codigo || m.id, campo: 'etapa',
+                      motivo: 'Evolucao passa pela Validacao da area antes do PM/PO.' });
+      } else if (!homologada(m)) {
+        presos.push({ id: m.id, codigo: m.codigo || m.id, campo: 'homologacao',
+                      motivo: 'Sustentacao pode ir direto ao PM/PO, mas registre quem validou a entrega.' });
+      }
+      continue;
+    }
+    /* SAIR DA AREA so para Em andamento ou PM/PO. Qualquer outro destino sai
+       do fluxo — inclusive Concluido, que pularia a validacao inteira. */
+    if (de === HOMOLOG_AREA && para !== 'em_andamento') {
+      presos.push({ id: m.id, codigo: m.codigo || m.id, campo: 'etapa',
+                    motivo: 'Da Validacao da area so se vai para Em andamento ou para a Validacao PM/PO.' });
+    }
+  }
+  return presos;
+}
+
 /* SISTEMA E OBRIGATORIO A PARTIR DE PLANEJADO.
  *
  * A AX-290 ficou viva sem tema e aparecia como "Sem sistema" no grafico do painel —
@@ -4718,16 +4801,58 @@ export default {
         }
         m.implementacao = impl;
         m.horas_realizadas = h;
-        m.status_planejamento = 'validacao';
+        /* ═══ ENTREGAR AGORA CAI NA VALIDACAO DA AREA ═══════════════════════
+         *
+         * Esta rota punha a demanda em `validacao` direto, e era a porta dos
+         * fundos do fluxo novo: a automacao que entrega por script pularia a
+         * homologacao inteira, que e justamente o que ela passou a existir
+         * para garantir.
+         *
+         * O DESTINO MUDA, A CHAMADA NAO. Exigir um campo novo aqui
+         * transformaria toda chamada existente em 400 no minuto do deploy —
+         * a integracao vive fora deste repositorio, e o primeiro aviso seria
+         * uma entrega que nao entrou. Entao ela continua entregando: o que
+         * muda e ONDE a demanda para.
+         *
+         *   evolucao                      -> Validacao da area (a area homologa)
+         *   sustentacao sem registro      -> Validacao da area (pode homologar)
+         *   sustentacao COM `homologacao` -> PM/PO direto, como ela permite
+         *
+         * SEM SOLICITANTE NAO DA PARA ENTRAR NA AREA: e ele quem homologa, e o
+         * contador de cinco dias correria para ninguem. Aqui a recusa e
+         * legitima e diz o campo que falta. */
+        const regEntrega = homologRegistro(body.homologacao) ||
+                           homologRegistro(m);
+        if (regEntrega && regEntrega.ok) m.homologacao = regEntrega;
+        const vaiDireto = !homologEhEvolucao(m) && !!(regEntrega && regEntrega.ok);
+        if (!vaiDireto && !String(m.solicitante || '').trim()) {
+          return json({ error: 'solicitante',
+                        detail: 'Informe o solicitante antes de entregar: e ele quem ' +
+                                'homologa na Validacao da area. Use `demanda-atualizar` ' +
+                                'com `solicitante`, ou mande `homologacao` se a entrega ' +
+                                'ja foi validada.' }, 400, headers);
+        }
+        m.status_planejamento = vaiDireto ? 'validacao' : HOMOLOG_AREA;
         m.status = 'iniciada';
         // SEMPRE atualiza, e nao so na primeira vez: se a validacao reprovou e o
         // dev entregou de novo, e a ENTREGA QUE PASSOU que encerra o prazo. Manter
         // a data da primeira ida faria uma demanda reprovada aparecer no prazo.
         m.entregue_em = new Date().toISOString();
+        /* O CARIMBO DA AREA NASCE AQUI, e nao no `carimbaAreaValidacao` — ele
+           so roda nas rotas de publicacao, e esta nao passa por la. Sem o
+           carimbo, o contador de cinco dias nunca comecaria para o que foi
+           entregue por script, e a cobranca de homologacao jamais apareceria.
+           SO QUANDO ENTRA DE FATO: entrega de sustentacao ja validada vai
+           direto ao PM/PO e nao tem dia na area para contar. */
+        if (m.status_planejamento === HOMOLOG_AREA && !m.validacao_area_em) {
+          m.validacao_area_em = hojeBR();
+        }
         // NAO grava concluido_em: quem entrega nao conclui. A data nasce na
         // aprovacao do PM/PO.
-        mudou.push('entregue para validacao');
-        msg = 'chore: ' + (m.codigo || m.id) + ' entregue para validacao por ' + (eu || 'api');
+        mudou.push(vaiDireto ? 'entregue para validacao' : 'entregue para a homologacao da area');
+        msg = 'chore: ' + (m.codigo || m.id) +
+              (vaiDireto ? ' entregue para validacao por ' : ' entregue para a area por ') +
+              (eu || 'api');
       }
 
       /* ═══ A POS-CONDICAO DA CONCLUIDA ═══════════════════════════════════
@@ -6383,6 +6508,7 @@ export default {
          E, se a base fosse o corpo, bastaria mandar tres inventadas. */
       preservaAssinaturasSpike(data, antesPub);
       const semHorasPub = entrandoEmConcluidoSemHoras(data, antesPub);
+      const semHomologPub = entrandoSemHomologacao(data, antesPub);
       const semSistemaPub = entrandoAlocadaSemSistema(data, antesPub);
       const aprovadoresPub = await spikeAprovadores(env);
       const spikeSemAssPub = entrandoEmConcluidoSpikeSemAssinatura(data, antesPub, aprovadoresPub);
@@ -6439,6 +6565,18 @@ export default {
                               semDevPub.map(x => x.rotulo).join(', ') +
                               '. De Planejado em diante toda demanda tem dono — sem ele a '  +
                               'entrega não entra em nenhum relatório por pessoa.' },
+                    400, headers);
+      }
+      /* A HOMOLOGACAO DA AREA. Recusa ANTES de registrar historico, como as
+         outras: gravar a trilha de uma publicacao que sera recusada sujaria o
+         rastro com um evento que nao aconteceu.
+         `itens[].id` leva a tela ate a demanda, e `campo` diz onde esta o que
+         falta — e o que transforma "nao pode" em "nao pode, e e aqui". */
+      if (semHomologPub.length) {
+        return json({ error: 'homologacao',
+                      itens: semHomologPub,
+                      codigos: semHomologPub.map(x => x.codigo),
+                      detail: semHomologPub.map(x => x.codigo + ': ' + x.motivo).join(' | ') },
                     400, headers);
       }
       if (semHorasPub.length) {
@@ -6573,7 +6711,20 @@ export default {
       // registraHistorico: gravar historico de uma publicacao que sera recusada
       // sujaria a trilha com um evento que nao aconteceu.
       const semHorasDev = entrandoEmConcluidoSemHoras(data, antesDev);
+      const semHomologDev = entrandoSemHomologacao(data, antesDev);
       const semSistema = entrandoAlocadaSemSistema(data, antesDev);
+      /* A HOMOLOGACAO DA AREA. Recusa ANTES de registrar historico, como as
+         outras: gravar a trilha de uma publicacao que sera recusada sujaria o
+         rastro com um evento que nao aconteceu.
+         `itens[].id` leva a tela ate a demanda, e `campo` diz onde esta o que
+         falta — e o que transforma "nao pode" em "nao pode, e e aqui". */
+      if (semHomologDev.length) {
+        return json({ error: 'homologacao',
+                      itens: semHomologDev,
+                      codigos: semHomologDev.map(x => x.codigo),
+                      detail: semHomologDev.map(x => x.codigo + ': ' + x.motivo).join(' | ') },
+                    400, headers);
+      }
       if (semSistema.length) {
         return json({ error: 'sem_sistema',
                       itens: semSistema,

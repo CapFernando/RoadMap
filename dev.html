@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="17e99678bb">
+<html lang="pt-BR" data-build="ba2a5c44ca">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -346,6 +346,26 @@
     .risco-dev { display:none; align-items:flex-start; gap:10px; flex-direction:column; background:var(--red-bg);
       color:var(--red-tx); border-bottom:1px solid var(--red); padding:10px 24px;
       font-size:13.5px; line-height:1.5; }
+    /* ── O BLOCO DA HOMOLOGACAO DA AREA ────────────────────────────────────
+       Roxo, que e a cor da coluna "Validacao da area": o bloco e a mesma etapa
+       vista de dentro do card. Ambar quando passa dos cinco dias — ali ele
+       deixa de ser um campo disponivel e vira uma cobranca. */
+    .ms-homolog { background:var(--bg3,#161614); border:1px solid #B06FD4;
+      border-left:3px solid #B06FD4; border-radius:8px; padding:11px 13px;
+      margin-bottom:12px; font-size:13px; line-height:1.55; }
+    .ms-homolog.cobrando { border-color:var(--amber,#B07D28);
+      border-left-color:var(--amber,#B07D28); background:var(--amber-bg,#3a2d12); }
+    .ms-homolog.ok { border-color:var(--green,#3EC98E); border-left-color:var(--green,#3EC98E); }
+    .msh-tit { font-weight:700; margin-bottom:3px; }
+    .ms-homolog.cobrando .msh-tit { color:var(--amber-tx,#FFC470); }
+    .ms-homolog.ok .msh-tit { color:var(--green,#3EC98E); }
+    .msh-sub { color:var(--text2); margin-bottom:9px; }
+    .msh-obs { color:var(--text2); font-style:italic; margin-bottom:4px; }
+    .msh-f { display:block; font-size:12px; color:var(--text3); margin-bottom:8px; }
+    .msh-f input { width:100%; margin-top:3px; }
+    .msh-opt { color:var(--text3); font-weight:400; }
+    .msh-nota { font-size:11.5px; color:var(--text3); margin-top:7px; }
+
     /* ── A FAIXA DE "NAO GRAVADA" ──────────────────────────────────────────
        Ambar e nao vermelho: vermelho ja e o atraso, e duas emergencias da
        mesma cor viram uma so. Aqui a mensagem e outra — "isto nao existe no
@@ -558,6 +578,7 @@
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
+<script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="busca-demanda.js?v=1380650a7a"></script>
@@ -937,6 +958,17 @@
     <div id="ms-info"></div>
     <div id="ms-pausa" style="margin-bottom:12px"></div>
     <div id="ms-trava" style="display:none;background:var(--amber-bg);color:var(--amber-tx);border-radius:8px;padding:11px 13px;font-size:13px;line-height:1.6;margin-bottom:12px"></div>
+    <!-- ── A HOMOLOGAÇÃO DA ÁREA ─────────────────────────────────────────────
+         "Até 5 dias nessa etapa; após 5 dias, automaticamente abrir campo
+          perguntando quem homologou e se está ok."
+
+         O bloco aparece sozinho quando o contador passa de cinco dias, e
+         continua aparecendo enquanto não houver resposta — "não tendo
+         resposta, fica em validação da área". Ele NÃO move a demanda: quem
+         move é quem registra. Mover sozinho produziria "homologado" sem
+         ninguém ter homologado, que é o carimbo que este fluxo existe para
+         impedir. -->
+    <div id="ms-homolog" class="ms-homolog" style="display:none"></div>
     <!-- ── GRILL ────────────────────────────────────────────────────────────
          "Onde ele deverá levantar os pontos da task" — e um ponto, aqui, é uma
          dúvida ou um questionamento.
@@ -2420,6 +2452,85 @@ function renderMeuDia() {
  * bem-sucedida depois desta troca o estado pelo do servidor, e a demanda que
  * falhou (que no servidor nao existe) desaparece da tela. Ver `nao-publicada.js`.
  */
+/* ═══ O FORMULÁRIO DE HOMOLOGAÇÃO ═════════════════════════════════════════
+ *
+ * "Após 5 dias, automaticamente abrir campo perguntando quem homologou e se
+ *  está ok. A partir daí, segue para Validação PM/PO."
+ *
+ * ELE NÃO MOVE A DEMANDA SOZINHO. Quem move é quem registra: mover por tempo
+ * produziria "homologado" sem ninguém ter homologado — o carimbo que este
+ * fluxo existe para impedir. Sem resposta, a demanda fica onde está, visível,
+ * com o contador correndo. É isso que "não tendo resposta, fica em validação
+ * da área" quer dizer.
+ *
+ * APARECE ANTES DOS CINCO DIAS TAMBÉM, mas discreto: quem já falou com a área
+ * no segundo dia não deve esperar o quinto para registrar. O que os cinco dias
+ * mudam é o tom — de "registre quando tiver" para "isto está parado".
+ */
+function msHomologRender(m) {
+  const cx = document.getElementById('ms-homolog');
+  if (!cx || !window.HOMOLOGACAO) return;
+  const naArea = getStatusKey(m) === 'validacao_area';
+  if (!naArea) { cx.style.display = 'none'; cx.innerHTML = ''; return; }
+
+  const reg = HOMOLOGACAO.registro(m);
+  const dias = HOMOLOGACAO.diasNaArea(m, PRAZO.hojeISO());
+  const cobra = HOMOLOGACAO.cobraHomologacao(m, PRAZO.hojeISO());
+  cx.style.display = 'block';
+  cx.className = 'ms-homolog' + (cobra ? ' cobrando' : '') + (reg ? ' ok' : '');
+
+  if (reg) {
+    cx.innerHTML =
+      '<div class="msh-tit">✅ Homologado por <strong>' + devEsc(reg.quem) + '</strong></div>' +
+      (reg.obs ? '<div class="msh-obs">' + devEsc(reg.obs) + '</div>' : '') +
+      '<div class="msh-sub">Pode seguir para a Validação PM/PO.</div>';
+    return;
+  }
+
+  const quemSugerido = HOMOLOGACAO.solicitante(m);
+  cx.innerHTML =
+    '<div class="msh-tit">' + (cobra ? '⏳ Parada há ' + dias + ' dias na área' : '👁 Em homologação') +
+      (dias != null && !cobra ? ' · ' + dias + ' dia(s)' : '') + '</div>' +
+    '<div class="msh-sub">' + (cobra
+      ? 'Passou dos ' + HOMOLOGACAO.DIAS_ATE_COBRAR + ' dias. Quem homologou?'
+      : 'Já falou com a área? Registre aqui.') +
+      (quemSugerido ? ' Solicitante: <strong>' + devEsc(quemSugerido) + '</strong>.' : '') +
+    '</div>' +
+    '<label class="msh-f">Quem homologou' +
+      '<input type="text" id="msh-quem" maxlength="120" value="' + devEsc(quemSugerido) + '" ' +
+      'placeholder="Nome de quem conferiu na área" /></label>' +
+    '<label class="msh-f">Observação <span class="msh-opt">(opcional)</span>' +
+      '<input type="text" id="msh-obs" maxlength="300" placeholder="O que foi conferido" /></label>' +
+    '<button type="button" class="btn btn-primary btn-sm" onclick="msHomologRegistra()">' +
+      '✅ Registrar homologação</button>' +
+    '<div class="msh-nota">Sem registro, a demanda continua aqui — ela não anda sozinha.</div>';
+}
+
+/** Grava o registro e deixa a demanda PRONTA para seguir, sem movê-la.
+ *
+ *  Mover junto seria cômodo e errado: registrar é dizer "a área conferiu",
+ *  e enviar ao PM/PO é outra decisão — de quem está com a demanda na mão. */
+async function msHomologRegistra() {
+  const id = document.getElementById('ms-id').value;
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  const quem = (document.getElementById('msh-quem').value || '').trim();
+  if (!quem) {
+    toast('Informe quem homologou na área.', 'err');
+    document.getElementById('msh-quem').focus();
+    return;
+  }
+  const reg = { quem: quem.slice(0, 120), em: new Date().toISOString(), ok: true,
+                obs: (document.getElementById('msh-obs').value || '').trim().slice(0, 300) };
+  const ok = await saveToGitHub({ [id]: { homologacao: reg } });
+  if (!ok) return;
+  m.homologacao = reg;
+  msHomologRender(m);
+  msSelectEtapa(document.getElementById('ms-status'), m);
+  toast('Homologação registrada. Agora dá para enviar ao PM/PO.', 'ok');
+  renderKanban();
+}
+
 function avisaNaoPublicadas() {
   const el = document.getElementById('nao-pub');
   if (!el || !window.NAOPUBLICADA) return;
@@ -3953,6 +4064,13 @@ function renderCard(m, colKey) {
       <span class="kcard-sub-num">${prog.feitas}/${prog.total}</span>
     </div>` : '';
   const meta = [];
+  /* O SOLICITANTE NO CARD. Ele deixou de ser um dado de cadastro: e ele
+     quem homologa na Validacao da area, e saber QUEM antes de abrir o
+     card e o que permite planejar a conversa. Sem nome, o card diz isso
+     em vez de ficar calado — a demanda nao avanca sem ele. */
+  meta.push(String(m.solicitante || '').trim()
+    ? `🙋 ${devEsc(m.solicitante)}`
+    : '🙋 sem solicitante');
   if (m.inicio)  meta.push(`📅 ${formatDate(m.inicio)}`);
   if (m.entrega) meta.push(`🏁 ${formatDate(m.entrega)}`);
   if (m.estimativa) meta.push(`⏱ ${devEsc(m.estimativa)}`);
@@ -4237,6 +4355,20 @@ function onDrop(e, colKey) {
     toast('🔒 ' + (COLUNAS_BLOQUEADAS_MSG[colKey] || 'Esta coluna não é movida pelo Painel Dev.'), 'err');
     return;
   }
+  /* ── A REGRA DA HOMOLOGAÇÃO VALE NO ARRASTE TAMBÉM ────────────────────
+     Evolução não pula a Validação da área, e sair dela para o PM/PO exige o
+     registro. O arraste já foi a porta dos fundos três vezes (AX-096, AX-127,
+     AX-211) — por isso a regra é consultada aqui e não só no select.
+     Quando falta o registro, abre o card: é lá que está o formulário, e
+     mandar a pessoa "ir procurar" seria repetir o problema por outra porta. */
+  if (window.HOMOLOGACAO) {
+    const impede = HOMOLOGACAO.barra(m, colKey, PRAZO.hojeISO());
+    if (impede) {
+      toast('🔒 ' + impede.motivo, 'err');
+      if (impede.campo === 'homologacao') openStatusModal(id);
+      return;
+    }
+  }
   // Difere para depois que dragend completar — evita re-render durante drag ativo
   setTimeout(() => {
     if (checkDepBlock(id, colKey)) {
@@ -4481,6 +4613,7 @@ function openStatusModal(id, preselect) {
   // opcao dele — quem fecha e quem valida.
   msProjetoRender(m);
   msGrillRender(m);
+  msHomologRender(m);
   const emValidacao = getStatusKey(m) === 'validacao';
   const jaConcluida = getStatusKey(m) === 'concluido';
   const grupo = document.getElementById('ms-status-group');
@@ -5177,6 +5310,21 @@ async function saveStatus() {
     toast('🔒 ' + (COLUNAS_BLOQUEADAS_MSG[escolhido] ||
           'Esta etapa não é movida pelo Painel Dev.'), 'err');
     return;
+  }
+  /* QUARTA BARREIRA, e a do fluxo novo: evolução não pula a Validação da área,
+     e sair dela para o PM/PO exige o registro de quem homologou. A regra mora
+     em `homologacao.js` e é a MESMA que o arraste e o servidor consultam —
+     três cópias da condição divergiriam na primeira correção. */
+  if (escolhido && atual && window.HOMOLOGACAO) {
+    const impede = HOMOLOGACAO.barra(atual, escolhido, PRAZO.hojeISO());
+    if (impede) {
+      toast('🔒 ' + impede.motivo, 'err');
+      if (impede.campo === 'homologacao') {
+        const campo = document.getElementById('msh-quem');
+        if (campo) { campo.focus(); campo.scrollIntoView({ block: 'center' }); }
+      }
+      return;
+    }
   }
   // Vinculo de projeto: gravado junto, para nao exigir dois salvamentos.
   const selProj = document.getElementById('ms-projeto');

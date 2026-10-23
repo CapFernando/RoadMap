@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="34da72caeb">
+<html lang="pt-BR" data-build="d4e894d7aa">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1101,6 +1101,7 @@
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
+<script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4753,6 +4754,11 @@ async function saveTask() {
     historico:          existing.historico || [],
     // E o carimbo da validacao da area, pelo mesmo motivo da pausa logo acima.
     validacao_area_em:  existing.validacao_area_em || '',
+    /* O REGISTRO DA HOMOLOGACAO nao tem campo nesta lista e some sem esta
+       linha — a mesma armadilha da pausa e do carimbo da area logo acima,
+       que ja aconteceu duas vezes nesta base. Quem escreve e o formulario
+       de homologacao; aqui so se repassa. */
+    homologacao:        existing.homologacao || null,
     debito_tecnico:     document.getElementById('e-debito').checked,
     dados_bi:           document.getElementById('e-dados-bi').checked,
     /* ESTA TELA TEM A MARCA DADOS/BI, MAS NAO TEM A LISTA DE BIs NEM A DE LINKS

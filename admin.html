@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="77abd1247d">
+<html lang="pt-BR" data-build="1e84aeb0af">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1306,6 +1306,7 @@
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
+<script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -4809,6 +4810,13 @@ function renderKanban() {
       const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
       const meta = [];
       if (m.dev) meta.push('👤 ' + m.dev);
+      /* O SOLICITANTE NO CARD. Ele deixou de ser um dado de cadastro: e ele
+         quem homologa na Validacao da area, e saber QUEM antes de abrir o
+         card e o que permite planejar a conversa. Sem nome, o card diz isso
+         em vez de ficar calado — a demanda nao avanca sem ele. */
+      meta.push(String(m.solicitante || '').trim()
+        ? '🙋 ' + m.solicitante
+        : '🙋 sem solicitante');
       if (m.criado_em) meta.push('🗓 Criada: ' + formatDate((m.criado_em || '').slice(0, 10)));
       if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
       const nAnexos = (m.anexos || []).length;
@@ -12092,6 +12100,11 @@ async function saveMelhoria() {
        entre a leitura e a gravacao; o Worker o repoe de qualquer forma, mas sem
        esta linha o contador sumiria do card ate o proximo F5. */
     validacao_area_em:   existing.validacao_area_em || '',
+    /* O REGISTRO DA HOMOLOGACAO nao tem campo nesta lista e some sem esta
+       linha — a mesma armadilha da pausa e do carimbo da area logo acima,
+       que ja aconteceu duas vezes nesta base. Quem escreve e o formulario
+       de homologacao; aqui so se repassa. */
+    homologacao:         existing.homologacao || null,
     validado_em:         existing.validado_em   || '',
     validado_por:        existing.validado_por  || '',
     validacao_obs:       existing.validacao_obs || '',
