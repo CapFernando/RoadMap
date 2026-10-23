@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="d08474559e">
+<html lang="pt-BR" data-build="6ac1a1f0ca">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -607,6 +607,21 @@
     }
 
     .ger-summary { display:flex; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
+    /* ── A FAIXA DE COBERTURA ──────────────────────────────────────────
+       Uma linha, e nao cartoes: ela e uma leitura secundaria sobre o mesmo
+       conjunto que o resumo acima ja contou. Cartoes do mesmo tamanho dos de
+       cima competiriam com eles pela atencao. */
+    .ger-cobertura { display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      background:var(--bg3); border:1px solid var(--border); border-radius:10px;
+      padding:12px 14px; margin:-14px 0 28px; font-size:13px; }
+    .ger-cob-tit { font-weight:700; color:var(--text2); margin-right:4px; }
+    .ger-cob-item { display:inline-flex; align-items:center; gap:6px;
+      padding:3px 10px; border-radius:999px; border:1px solid var(--border); }
+    .ger-cob-item b { font-size:15px; }
+    .ger-cob-planning { background:#0B2E52; color:#9FD0FF; border-color:#2C6EA8; }
+    .ger-cob-comite   { background:#3A2D12; color:#FFC470; border-color:#B07D28; }
+    .ger-cob-sem      { color:var(--text3); }
+    .ger-cob-nota { color:var(--text3); font-size:12px; flex-basis:100%; margin-top:2px; }
     .ger-kpi {
       flex:1; min-width:140px; background:var(--bg2); border:1px solid var(--border);
       border-radius:var(--radius); padding:16px 18px;
@@ -1310,7 +1325,7 @@
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=a6a54ef3d1"></script>
 <script src="capacidade.js?v=63737a8670"></script>
-<script src="apresentacao.js?v=58a6ebb784"></script>
+<script src="apresentacao.js?v=6da179e50d"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
@@ -1322,7 +1337,7 @@
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
-<script src="selo-validacao.js?v=619747e847"></script>
+<script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
@@ -1674,6 +1689,12 @@
       </div>
 
       <div id="ger-summary" class="ger-summary"></div>
+      <!-- ── COBERTURA DE VALIDAÇÃO ────────────────────────────────────────
+           Não responde "esta demanda foi validada?" — isso o card já diz.
+           Responde "de tudo o que entregamos, quanto tinha passado pelos
+           fóruns?". É medida de PROCESSO, e fica logo abaixo do resumo do mês
+           porque é sobre o mesmo conjunto de demandas. -->
+      <div id="ger-cobertura" class="ger-cobertura"></div>
       <div id="ger-charts" class="ger-charts"></div>
 
       <!-- Veio do painel público: alocação por pessoa não deve ficar num painel
@@ -3677,6 +3698,46 @@ let _mBis = [];
  *  pessoa nao preencher um campo que vai ser desfeito. Quem nao pode continua
  *  VENDO a marca e quem validou: esconder viraria uma demanda que parece nao
  *  ter passado pelo comite. */
+/* ═══ A FAIXA DE COBERTURA DE VALIDAÇÃO ═══════════════════════════════════
+ *
+ * "Trate as demandas validadas nos relatórios, gerencial, ppt."
+ *
+ * Responde uma pergunta de PROCESSO, e não de entrega: de tudo o que saiu no
+ * mês, quanto tinha passado pela planning e quanto pelo comitê.
+ *
+ * O NÚMERO BAIXO É O ACHADO. Medido na base: das 297 entregas de outubro, 19
+ * tinham selo de planning (6%) e nenhuma tinha comitê. Um painel que escondesse
+ * isso só funcionaria depois que a prática já funcionasse — e aí não serviria
+ * para nada, porque é exatamente agora que o número precisa ser visto.
+ *
+ * AS CATEGORIAS NÃO SOMAM 100%: uma demanda pode ter as duas marcas. Por isso
+ * "sem validação" é contado à parte, e não deduzido das outras duas.
+ */
+function coberturaRender(lista) {
+  const cx = document.getElementById('ger-cobertura');
+  if (!cx || !window.SELO) return;
+  const c = SELO.cobertura(lista || []);
+  if (!c.total) {
+    cx.style.display = 'none';
+    cx.innerHTML = '';
+    return;
+  }
+  cx.style.display = 'flex';
+  const item = (cls, icone, rotulo, n) =>
+    '<span class="ger-cob-item ' + cls + '" title="' + esc(rotulo) + '">' + icone +
+    ' <b>' + n + '</b> ' + esc(rotulo) + ' <span style="opacity:.75">(' +
+    SELO.pct(n, c.total) + '%)</span></span>';
+  cx.innerHTML =
+    '<span class="ger-cob-tit">Validação das ' + c.total +
+      (c.total === 1 ? ' entrega' : ' entregas') + ' do mês</span>' +
+    item('ger-cob-planning', '✔', 'Planning', c.planning) +
+    item('ger-cob-comite', '🏛', 'Comitê', c.comite) +
+    item('ger-cob-sem', '—', 'sem validação', c.nenhuma) +
+    (c.ambas ? '<span class="ger-cob-nota">' + c.ambas +
+      (c.ambas === 1 ? ' passou' : ' passaram') + ' pelos dois fóruns — por isso os ' +
+      'números não somam o total.</span>' : '');
+}
+
 function comiteAutoriza() {
   const cx = document.getElementById('m-comite');
   if (!cx || !window.SELO) return;
@@ -7992,6 +8053,12 @@ async function apresGerar(opts) {
         };
       })(),
       quebra,
+      /* A COBERTURA DE VALIDAÇÃO vai para o deck pelo MESMO cálculo da tela
+         (`SELO.cobertura`). Recalcular aqui faria o slide e a Gerencial
+         discordarem sobre o mesmo mês — e quem notasse concluiria que um dos
+         dois está errado, quando os dois estariam só medindo diferente.
+         Medida sobre as CONCLUÍDAS, como na tela. */
+      cobertura: (window.SELO ? SELO.cobertura(conc) : null),
       fluxo: { recebidas: entradas.length, entregues: conc.length,
                tocadas, backlogInicio, backlogFim, porTipo,
                saidas: saidas.length, saiuEntregue, saiuNegada,
@@ -8623,6 +8690,13 @@ function renderGerencial() {
 
   const items = filterMonth(mes, ano);
   const concluidos = items.filter(m => m.status_planejamento === 'concluido' || m.status === 'concluida');
+
+  /* ── COBERTURA DE VALIDAÇÃO DO MÊS ──────────────────────────────────────
+     Mede sobre o que foi CONCLUÍDO, e não sobre tudo o que apareceu no mês: a
+     pergunta é "do que entregamos, quanto tinha passado pelos fóruns?". Medir
+     sobre o planejado misturaria o que ainda vai ser validado com o que já
+     deveria ter sido — e o número cairia por quem ainda nem começou. */
+  coberturaRender(concluidos);
 
   // Mês anterior para comparativo
   let pmMes = mes - 1, pmAno = ano;

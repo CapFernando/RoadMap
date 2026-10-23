@@ -20375,6 +20375,49 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/function comiteAutoriza\(/.test(ADMIN) && /SELO\.podeComite\(_eu\)/.test(ADM_S),
        'e o campo nasce desligado para quem nao pode marcar');
 
+    /* ── A COBERTURA NOS RELATORIOS ──────────────────────────────────────
+       "Trate as demandas validadas nos relatorios, gerencial, ppt."
+       A pergunta deixa de ser "esta demanda foi validada?" — isso o card ja
+       diz — e passa a ser "de tudo o que entregamos, quanto passou pelos
+       foruns?". E medida de PROCESSO. */
+    const cobPl = { poker_validado_por: 'Fernando Nascimento',
+                    poker_validado_login: 'fernando', poker_validado_em: '2026-09-10T10:00:00Z' };
+    const cobCo = { comite: { quem: 'Lucas', em: '2026-10-21' } };
+    const amostra = [Object.assign({ id: 1 }, cobPl), Object.assign({ id: 2 }, cobCo),
+                     Object.assign({ id: 3 }, cobPl, cobCo), { id: 4 }, { id: 5 }];
+    const cob = SELOM.cobertura(amostra);
+    ok(cob.total === 5 && cob.planning === 2 && cob.comite === 2 &&
+       cob.ambas === 1 && cob.nenhuma === 2,
+       'a cobertura conta cada forum e quem nao passou por nenhum', JSON.stringify(cob));
+    /* AS CATEGORIAS NAO SOMAM 100%: uma demanda pode ter as duas. `ambas` existe
+       para quem quiser fechar a conta, e `nenhuma` e o complemento REAL — nao
+       o total menos as outras duas. */
+    ok(cob.planning + cob.comite - cob.ambas + cob.nenhuma === cob.total,
+       'e a conta fecha descontando a sobreposicao');
+    ok(SELOM.cobertura([]).total === 0 && SELOM.pct(0, 0) === 0,
+       'lista vazia nao vira NaN% no slide');
+
+    ok(/function coberturaRender\(/.test(ADMIN) && /id="ger-cobertura"/.test(ADMIN),
+       'a Gerencial tem a faixa de cobertura');
+    ok(/^\s*coberturaRender\(concluidos\);/m.test(ADM_S),
+       'e ela mede sobre o que foi CONCLUIDO no mes, e nao sobre tudo que apareceu');
+    /* O DECK USA O MESMO CALCULO. Recalcular no gerador faria o slide e a tela
+       discordarem sobre o mesmo mes, e quem notasse concluiria que um dos dois
+       esta errado — quando os dois estariam so medindo diferente. */
+    ok(/cobertura: \(window\.SELO \? SELO\.cobertura\(conc\) : null\)/.test(ADM_S),
+       'e o deck recebe a cobertura pelo MESMO calculo da tela');
+    ok(/var cob = d\.cobertura;/.test(APRES) && /pelo comit/.test(APRES),
+       'o slide do mes mostra a cobertura');
+
+    /* A REGUA DO SLIDE: a linha nova nao pode empurrar nada para cima do
+       rodape, que comeca em 5,05. */
+    const slideMes = corpo(APRES, 'function slideMes(');
+    const ys = [...(slideMes || '').matchAll(/y:\s*(4\.\d+)[^}]*h:\s*(0\.\d+)/g)]
+      .map(m => ({ y: Number(m[1]), fim: Number(m[1]) + Number(m[2]) }));
+    const invadem = ys.filter(x => x.fim > 5.05);
+    ok(!invadem.length, 'e nada do rodape do slide invade a faixa do rodape da pagina',
+       invadem.map(x => x.y + '+' + (x.fim - x.y).toFixed(2)).join(' '));
+
     /* MODULO E WORKER CONCORDAM sobre quem pode. */
     const srcPode = corpo(W, 'function podeMarcarComite(');
     ok(!!srcPode, 'o Worker tem a sua copia de quem pode marcar');

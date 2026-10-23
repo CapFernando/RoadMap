@@ -357,7 +357,48 @@
     ].filter(Boolean).join('\n');
   }
 
+  /* ═══ A COBERTURA — QUANTO PASSOU POR CADA FÓRUM ══════════════════════════
+   *
+   * "Agora trate as demandas validadas nos relatórios, gerencial, ppt."
+   *
+   * A pergunta que o relatório passa a responder não é "esta demanda foi
+   * validada?" — isso o card já diz. É "de tudo o que entregamos, quanto tinha
+   * passado pelos fóruns?". É uma medida de PROCESSO, e não de entrega.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════
+   * O NÚMERO BAIXO É O ACHADO, E NÃO UM DEFEITO DO RELATÓRIO.
+   *
+   * Medido na base ao escrever isto: das 297 entregas de outubro, 19 tinham
+   * selo da planning (6%) e 1 tinha comitê. Um relatório que mostrasse isso
+   * como "quase nada validado" estaria certo — é essa a informação. Esconder o
+   * numerador baixo seria produzir um painel que só funciona quando a prática
+   * já funciona.
+   *
+   * AS CATEGORIAS NÃO SE SOMAM A 100%: uma demanda pode ter as duas marcas, e
+   * `ambas` existe justamente para quem quiser fechar a conta. `nenhuma` é o
+   * complemento real — total menos quem tem pelo menos uma.
+   */
+  function cobertura(lista) {
+    var l = Array.isArray(lista) ? lista : [];
+    var r = { total: l.length, planning: 0, comite: 0, ambas: 0, nenhuma: 0 };
+    for (var i = 0; i < l.length; i++) {
+      var p = !!de(l[i]), c = !!comite(l[i]);
+      if (p) r.planning++;
+      if (c) r.comite++;
+      if (p && c) r.ambas++;
+      if (!p && !c) r.nenhuma++;
+    }
+    return r;
+  }
+
+  /** A porcentagem, protegida do zero. Devolve 0 quando não há o que medir —
+   *  e não `NaN`, que vira "NaN%" no slide. */
+  function pct(parte, total) {
+    return total > 0 ? Math.round((parte / total) * 100) : 0;
+  }
+
   raiz.SELO = { de: de, titulo: titulo, badge: badge, grande: grande, dia: dia,
+                cobertura: cobertura, pct: pct,
                 comite: comite, tituloComite: tituloComite,
                 badgeComite: badgeComite, badges: badges,
                 podeComite: podeComite, COMITE_LOGINS: COMITE_LOGINS };

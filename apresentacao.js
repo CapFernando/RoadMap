@@ -2587,9 +2587,43 @@
     var rodapeNotas = [];
     if (f.tocadas) rodapeNotas.push(f.tocadas + ' demandas trabalhadas no período');
     if (a && a.parcial) rodapeNotas.push('comparação parcial: ' + a.nome + ' está completo');
+    /* ── A COBERTURA DE VALIDAÇÃO ──────────────────────────────────────────
+     *
+     * "Trate as demandas validadas nos relatórios, gerencial, ppt."
+     *
+     * Uma linha, e não cartões: ela responde uma pergunta de PROCESSO — de
+     * tudo o que saiu, quanto tinha passado pelos fóruns — e os quatro cartões
+     * acima já respondem a do fluxo. Cartões do mesmo peso competiriam com
+     * eles pela atenção da sala.
+     *
+     * O NÚMERO BAIXO É O ACHADO. Medido na base ao escrever isto: 19 das 297
+     * entregas de outubro tinham selo da planning, e nenhuma tinha comitê. Um
+     * slide que omitisse a linha quando ela é pequena só serviria depois que a
+     * prática já estivesse funcionando — e é agora que ela precisa ser vista.
+     *
+     * AS DUAS NÃO SOMAM O TOTAL: uma demanda pode ter as duas marcas. Por isso
+     * "sem validação" é contado à parte, e não deduzido. */
+    var cob = d.cobertura;
+    if (cob && cob.total) {
+      var p = function (n) { return Math.round((n / cob.total) * 100); };
+      s.addText([
+        { text: 'Validação: ', options: { color: C.fraco } },
+        { text: cob.planning + ' (' + p(cob.planning) + '%)',
+          options: { color: SIGNIFICADO.realizado, bold: true } },
+        { text: ' pela planning   ·   ', options: { color: C.fraco } },
+        { text: cob.comite + ' (' + p(cob.comite) + '%)',
+          options: { color: SIGNIFICADO.atencao, bold: true } },
+        { text: ' pelo comitê   ·   ', options: { color: C.fraco } },
+        { text: cob.nenhuma + ' (' + p(cob.nenhuma) + '%)', options: { bold: true } },
+        { text: ' sem validação', options: { color: C.fraco } },
+      ], { x: 0.5, y: 4.42, w: 9.0, h: 0.26, fontSize: 11, wrap: false });
+    }
     if (rodapeNotas.length) {
       s.addText(rodapeNotas.join('   ·   '), {
-        x: 0.5, y: 4.42, w: 9.0, h: 0.24, fontSize: 9.5, color: C.fraco });
+        /* DESCEU DE 4,42 PARA 4,70 para a linha de validação ocupar o lugar
+           dela. O rodapé da página começa em 5,05, então 4,70 + 0,24 = 4,94
+           ainda deixa folga — medido, e não estimado. */
+        x: 0.5, y: 4.70, w: 9.0, h: 0.24, fontSize: 9.5, color: C.fraco });
     }
     rodape(s, d.periodo, pagina);
     return s;
