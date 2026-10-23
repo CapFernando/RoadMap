@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="d4e894d7aa">
+<html lang="pt-BR" data-build="a86dc36a87">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -791,6 +791,15 @@
        contornos concentricos disputando a atencao. */
     .e-selo-caixa { display:flex; justify-content:center; padding:6px 0 2px; }
     .e-selo-caixa:empty { display:none; }
+    /* ── AS DUAS TAGS SE DISTINGUEM PELA COR ───────────────────────────
+       "Quero tags diferentes". Duas tags iguais lado a lado obrigam a ler o
+       texto de cada uma para saber qual e qual — e num card de Kanban o que
+       se le e a cor. Azul segue sendo a planning (o selo circular ja e azul,
+       e trocar isso quebraria o reconhecimento); o comite ganha ambar, que
+       nenhuma outra marca do card usa. */
+    .card-selo.selo-planning { background:#0B2E52; color:#9FD0FF; border-color:#2C6EA8; }
+    .card-selo.selo-comite   { background:#3A2D12; color:#FFC470; border-color:#B07D28; }
+    .card-selo + .card-selo { margin-left:4px; }
     .card-selo {
       font-size: 10px; font-weight: 700; flex-shrink: 0; z-index: 1;
       background: var(--selo-bg, #0B2E52); color: var(--selo-tx, #9FD0FF);
@@ -1108,7 +1117,7 @@
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
-<script src="selo-validacao.js?v=c07e7b1591"></script>
+<script src="selo-validacao.js?v=d59f4d4665"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
 <body>
@@ -4000,7 +4009,7 @@ function renderGantt() {
                 exige a presenca.
                 A regra de QUEM tem selo mora em `selo-validacao.js` — as tres
                 telas usam a mesma, pela razao de sempre. */''}
-          ${window.SELO ? SELO.badge(m, 'card-selo') : ''}
+          ${window.SELO ? SELO.badges(m, 'card-selo') : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>
         ${tema ? `<div class="card-tema-row"><span class="tema-badge" style="background:${tColor}25;color:${tColor};border-color:${tColor}55">${esc(tema.nome)}</span>${ehGrupo ? `<span class="card-soma" title="Soma dos pontos das quebras. A D0 não pontua: o tamanho está nelas.">🧮 ${esc(VINCULO.frase(state.melhorias, m))}</span>` : ''}</div>` :
@@ -4759,6 +4768,9 @@ async function saveTask() {
        que ja aconteceu duas vezes nesta base. Quem escreve e o formulario
        de homologacao; aqui so se repassa. */
     homologacao:        existing.homologacao || null,
+    /* A marca do comite nao tem campo aqui e some sem esta linha — quem a
+       edita e o Admin. Mesma armadilha da pausa e do carimbo da area. */
+    comite:             existing.comite || null,
     debito_tecnico:     document.getElementById('e-debito').checked,
     dados_bi:           document.getElementById('e-dados-bi').checked,
     /* ESTA TELA TEM A MARCA DADOS/BI, MAS NAO TEM A LISTA DE BIs NEM A DE LINKS

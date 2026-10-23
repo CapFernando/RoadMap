@@ -182,11 +182,76 @@
    *  de detalhe da demanda (`grande`, abaixo).
    *
    *  Aqui vai o essencial: o carimbo, e o nome de quem validou no `title`. */
+  /* ═══ AS DUAS VALIDAÇÕES SÃO COISAS DIFERENTES ═══════════════════════════
+   *
+   * "Crie uma tag para marcar que passou pelo Comitê. Hoje temos tag validado
+   *  (passou pela planning), pode retirar o formato que está, quero tags
+   *  diferentes (Validado em Comitê), (Validado Planning). Task pode ter as 2,
+   *  pode ter uma das duas e poderá ter nenhuma."
+   *
+   * O selo antigo dizia só "Validado", e com duas validações no mundo isso
+   * passou a ser uma afirmação ambígua: quem lia o card não sabia se a demanda
+   * tinha tamanho acordado (planning) ou aprovação de prioridade (comitê) — e
+   * são decisões de fóruns diferentes, em momentos diferentes, por pessoas
+   * diferentes.
+   *
+   * AS DUAS SÃO INDEPENDENTES. Nenhuma implica a outra: há demanda dimensionada
+   * que o comitê ainda não viu, e há demanda aprovada no comitê que ninguém
+   * pontuou. Por isso são dois campos e dois selos, e não um com dois estados.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════
+   * A DIFERENÇA DE NATUREZA, que decide por que uma é derivada e a outra é
+   * gravada:
+   *
+   *   planning  DERIVADA do que aconteceu — a votação ficou registrada, com
+   *             quem conduziu e quando. Ninguém "marca" que passou: passou.
+   *   comitê    GRAVADA, porque o comitê acontece FORA deste sistema. Não há
+   *             rastro a derivar; alguém precisa dizer que aconteceu, e por
+   *             isso o registro tem nome e data — como a homologação da área.
+   */
+  function comite(m) {
+    if (!m || m.mesclado_em || m.oculto) return null;
+    var c = m.comite;
+    if (!c || typeof c !== 'object') return null;
+    var quem = texto(c.quem);
+    if (!quem) return null;
+    /* SEM NOME NÃO HÁ SELO, a mesma regra do selo da planning: um carimbo que
+       diz "validado" sem poder dizer por quem é justamente o que um selo não
+       pode ser. */
+    return { quem: quem, em: texto(c.em), obs: texto(c.obs) };
+  }
+
+  function tituloComite(selo) {
+    if (!selo) return '';
+    var d = dia(selo.em);
+    return 'Validado no Comitê por ' + selo.quem + (d ? ' em ' + d : '') + '.' +
+           (selo.obs ? ' ' + selo.obs : '');
+  }
+
+  /** UMA das marcas. Mantida porque três telas a chamam, e porque o selo
+   *  grande continua sendo o da planning. */
   function badge(m, classe) {
     var selo = de(m);
     if (!selo) return '';
-    return '<span class="' + (classe || 'selo-validado') + '" title="' + esc(titulo(selo)) + '">' +
-           '<span aria-hidden="true">✔</span> Validado</span>';
+    return '<span class="' + (classe || 'selo-validado') + ' selo-planning" title="' +
+           esc(titulo(selo)) + '">' +
+           '<span aria-hidden="true">✔</span> Validado Planning</span>';
+  }
+
+  function badgeComite(m, classe) {
+    var selo = comite(m);
+    if (!selo) return '';
+    return '<span class="' + (classe || 'selo-validado') + ' selo-comite" title="' +
+           esc(tituloComite(selo)) + '">' +
+           '<span aria-hidden="true">🏛</span> Validado em Comitê</span>';
+  }
+
+  /** AS DUAS, na ordem do fluxo: planning dimensiona, comitê aprova.
+   *
+   *  Devolve '' quando não há nenhuma — e é isso que permite "poderá ter
+   *  nenhuma" sem que a tela precise saber de nada. */
+  function badges(m, classe) {
+    return badge(m, classe) + badgeComite(m, classe);
   }
 
   /** O SELO INTEIRO, para onde há espaço — o painel de detalhe da demanda.
@@ -260,6 +325,8 @@
     ].filter(Boolean).join('\n');
   }
 
-  raiz.SELO = { de: de, titulo: titulo, badge: badge, grande: grande, dia: dia };
+  raiz.SELO = { de: de, titulo: titulo, badge: badge, grande: grande, dia: dia,
+                comite: comite, tituloComite: tituloComite,
+                badgeComite: badgeComite, badges: badges };
   if (typeof module !== 'undefined' && module.exports) module.exports = raiz.SELO;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

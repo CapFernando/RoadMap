@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="68afc794c3">
+<html lang="pt-BR" data-build="1e9a065482">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -381,6 +381,15 @@
     /* O selo de validacao. Azul: verde ja e 'concluido' e ambar e 'sem
        estimativa' nesta tela, e reusar um deles faria o selo virar etapa.
        Par claro/escuro em `tema.css`, junto dos outros tokens de cor. */
+    /* ── AS DUAS TAGS SE DISTINGUEM PELA COR ───────────────────────────
+       "Quero tags diferentes". Duas tags iguais lado a lado obrigam a ler o
+       texto de cada uma para saber qual e qual — e num card de Kanban o que
+       se le e a cor. Azul segue sendo a planning (o selo circular ja e azul,
+       e trocar isso quebraria o reconhecimento); o comite ganha ambar, que
+       nenhuma outra marca do card usa. */
+    .kb-selo.selo-planning { background:#0B2E52; color:#9FD0FF; border-color:#2C6EA8; }
+    .kb-selo.selo-comite   { background:#3A2D12; color:#FFC470; border-color:#B07D28; }
+    .kb-selo + .kb-selo { margin-left:4px; }
     .kb-selo {
       font-size:10px; font-weight:700; border-radius:4px; padding:1px 6px;
       background:var(--selo-bg,#C6CBD4); color:var(--selo-tx,#0A0A0A);
@@ -1313,7 +1322,7 @@
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
-<script src="selo-validacao.js?v=c07e7b1591"></script>
+<script src="selo-validacao.js?v=d59f4d4665"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
@@ -2204,6 +2213,33 @@
           <input type="checkbox" id="m-debito" style="width:auto;margin:0" />
           🧱 Débito técnico
         </label>
+        <!-- ── VALIDADO EM COMITÊ ────────────────────────────────────────────
+             A OUTRA validação, e não a mesma com outro nome. A da planning é
+             DERIVADA — a votação ficou registrada, ninguém a marca. Esta é
+             GRAVADA, porque o comitê acontece fora deste sistema: não há
+             rastro a derivar, alguém precisa dizer que aconteceu.
+
+             POR ISSO ELA TEM NOME. Sem quem validou não há selo — a mesma
+             regra do selo da planning, pelo mesmo motivo: um carimbo que diz
+             "validado" sem poder dizer por quem é o que um selo não pode ser. -->
+        <label class="m-comite-check" style="display:flex;align-items:center;gap:8px;font-weight:400;
+                      cursor:pointer;background:var(--bg3);border:1px solid var(--border);
+                      border-radius:var(--radius);padding:11px 12px;font-size:14px;margin-top:8px">
+          <input type="checkbox" id="m-comite" style="width:auto;margin:0" onchange="comiteMostra()" />
+          🏛 Validado em Comitê
+        </label>
+        <div id="m-comite-caixa" style="display:none;margin-top:8px;background:var(--bg3);
+             border:1px solid var(--border);border-radius:var(--radius);padding:11px 12px">
+          <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:6px">
+            Quem validou no comitê
+            <span style="color:var(--text3)">— sem nome a marca não vale</span>
+          </label>
+          <input type="text" id="m-comite-quem" maxlength="120"
+                 placeholder="Nome de quem levou ou aprovou no comitê" />
+          <input type="text" id="m-comite-obs" maxlength="300" style="margin-top:7px"
+                 placeholder="Observação do comitê (opcional)" />
+          <div id="m-comite-quando" style="font-size:11.5px;color:var(--text3);margin-top:6px"></div>
+        </div>
         <!-- SPIKE: investigacao que termina em DECISAO, e nao em codigo. Por isso
              ela e assinada por tres pessoas antes de virar backlog de
              desenvolvimento. Marca propria, e nao um terceiro Tipo: os relatorios
@@ -3622,6 +3658,38 @@ let _mBis = [];
    rastreio de uma demanda entregue nao pode sumir porque alguem clicou na
    caixa errada. Se a demanda deixou de ser de Dados mesmo, a lista se tira
    marca a marca — que e um gesto deliberado, e nao um efeito colateral. */
+/* ═══ A MARCA DO COMITÊ, NO FORMULÁRIO ════════════════════════════════════
+ *
+ * A caixa de quem validou segue a marca, e a marca não se perde ao desmarcar
+ * por engano — mesma escolha de `bisMostraCaixa`: o que já foi registrado
+ * continua no objeto até alguém salvar sem ele, que é um gesto deliberado.
+ */
+function comiteMostra() {
+  const cx = document.getElementById('m-comite-caixa');
+  if (!cx) return;
+  cx.style.display = (document.getElementById('m-comite') || {}).checked ? 'block' : 'none';
+}
+
+/** O que a tela vai gravar: `null` quando a marca está desligada ou sem nome.
+ *
+ *  SEM NOME NÃO HÁ MARCA. Deixar passar um `comite: {}` criaria uma tag que o
+ *  `SELO.comite` recusa — a marca apareceria ligada no formulário e invisível
+ *  no card, e ninguém entenderia por quê. */
+function comiteDoForm(existing) {
+  const liga = (document.getElementById('m-comite') || {}).checked;
+  if (!liga) return null;
+  const quem = (document.getElementById('m-comite-quem').value || '').trim();
+  if (!quem) return null;
+  const antes = (existing && existing.comite) || null;
+  return {
+    quem: quem.slice(0, 120),
+    /* A DATA É A DO PRIMEIRO REGISTRO, e não a de cada save: corrigir um erro
+       de digitação no nome não pode reescrever quando o comitê aconteceu. */
+    em: (antes && antes.em) || new Date().toISOString(),
+    obs: (document.getElementById('m-comite-obs').value || '').trim().slice(0, 300),
+  };
+}
+
 function bisMostraCaixa() {
   const cx = document.getElementById('m-bis-caixa');
   if (!cx) return;
@@ -4841,7 +4909,9 @@ function renderKanban() {
          E ele NAO REPETE o `🃏 ... pts`: aquele diz QUANTO, este diz que foi
          fechado em reuniao e por quem. A regra de quem tem selo mora em
          `selo-validacao.js` — as tres telas usam a mesma. */
-      if (window.SELO) { const _sl = SELO.badge(m, 'kb-selo'); if (_sl) badges.push(_sl); }
+      /* AS DUAS TAGS, independentes: a demanda pode ter as duas, uma, ou
+         nenhuma. `badges` devolve '' quando nao ha nenhuma. */
+      if (window.SELO) { const _sl = SELO.badges(m, 'kb-selo'); if (_sl) badges.push(_sl); }
       if (semPontuacao(m)) badges.push('<span class="kb-sempt" title="' +
         'Comprometida com data sem ter passado pelo Planning Poker: a estimativa ' +
         'nao existe. Pontue na reuniao ou pelo card.">🃏 sem pontos</span>');
@@ -11361,6 +11431,16 @@ function openModalMelhoria(id) {
   mResumoConta();
   document.getElementById('m-implementacao').value   = m?.implementacao    || '';
   document.getElementById('m-debito').checked        = !!m?.debito_tecnico;
+  /* A MARCA DO COMITE. Ligada quando ha registro COM NOME — `SELO.comite`
+     e quem decide, para o formulario e o card nunca discordarem. */
+  const _cmt = (window.SELO && SELO.comite(m || {})) || null;
+  document.getElementById('m-comite').checked = !!_cmt;
+  document.getElementById('m-comite-quem').value = _cmt ? _cmt.quem : '';
+  document.getElementById('m-comite-obs').value  = _cmt ? (_cmt.obs || '') : '';
+  const _cq = document.getElementById('m-comite-quando');
+  if (_cq) _cq.textContent = (_cmt && _cmt.em)
+    ? 'Registrado em ' + uQuando(_cmt.em) : '';
+  comiteMostra();
   document.getElementById('m-dados-bi').checked      = !!m?.dados_bi;
   _mBis = BIS.daDemanda(m);
   bisRender();
@@ -12091,6 +12171,10 @@ async function saveMelhoria() {
     producao_em:         existing.producao_em  || '',
     producao_por:        existing.producao_por || '',
     debito_tecnico:      document.getElementById('m-debito').checked,
+    /* A MARCA DO COMITE vem do formulario, e `null` quando desligada ou sem
+       nome. Na lista fechada pelo mesmo motivo de todas as outras: fora
+       dela, salvar pela aba Dados apagaria a validacao de toda demanda. */
+    comite:              comiteDoForm(existing),
     // Na lista fechada pelo mesmo motivo de todos os outros: fora dela, salvar
     // pela aba Dados APAGARIA a marca do time de Dados em toda demanda.
     dados_bi:            document.getElementById('m-dados-bi').checked,

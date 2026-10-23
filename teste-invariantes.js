@@ -10261,8 +10261,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   /* AS TRES TELAS USAM A REGRA, e nenhuma delas reimplementa "passou pela
      planning". Uma copia divergiria, e a mesma demanda ficaria selada numa tela
      e nao na outra. */
+  /* `SELO.badges(` E NAO `SELO.badge(`: as validacoes viraram DUAS — planning
+     e comite —, e a tela tem de desenhar as duas. Chamar so `badge` renderiza
+     apenas a da planning, e a do comite ficaria invisivel no card sem nada
+     falhar: a marca existiria no dado e nao na tela. */
   for (const [nome, txt] of [['gantt', GANTT], ['admin', ADMIN], ['dev', lerTela('dev.html')]]) {
-    ok(txt.indexOf('SELO.badge(') > 0, 'o ' + nome + ' desenha a marca pela regra unica');
+    ok(txt.indexOf('SELO.badges(') > 0, 'o ' + nome + ' desenha as marcas pela regra unica');
     ok(txt.indexOf('selo-validacao.js') > 0, 'e carrega o arquivo dela');
   }
 
@@ -20234,6 +20238,77 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(/<script src="homologacao\.js\?v=[0-9a-f]{10}"><\/script>/.test(lerTela(t)),
          t + ' carrega homologacao.js, com o selo de cache');
     });
+  }
+
+  /* ═══ AS DUAS VALIDACOES SAO INDEPENDENTES ════════════════════════════════
+   *
+   * "Crie uma tag para marcar que passou pelo Comite. Hoje temos tag validado
+   *  (passou pela planning) — quero tags diferentes. Task pode ter as 2, pode
+   *  ter uma das duas e podera ter nenhuma."
+   *
+   * O selo antigo dizia so "Validado", e com duas validacoes isso virou uma
+   * afirmacao ambigua: quem lia o card nao sabia se a demanda tinha TAMANHO
+   * acordado (planning) ou PRIORIDADE aprovada (comite) — decisoes de foruns
+   * diferentes, em momentos diferentes.
+   */
+  {
+    sec('Validado Planning e Validado em Comite: duas marcas, independentes');
+
+    const SELOM = require('./selo-validacao.js');
+    const comPlanning = { id: 'p', poker_validado_por: 'Fernando Nascimento',
+                          poker_validado_login: 'fernando',
+                          poker_validado_em: '2026-09-10T10:00:00Z' };
+    const comComite = { id: 'c', comite: { quem: 'Lucas Santos', em: '2026-10-21T09:00:00Z' } };
+
+    /* AS QUATRO COMBINACOES, executadas — e "nenhuma" e uma delas. */
+    const conta = (m) => (SELOM.badges(m, 'tag').match(/<span class="tag/g) || []).length;
+    ok(conta({ id: 'n' }) === 0, 'sem nenhuma validacao, nao sai tag', String(conta({ id: 'n' })));
+    ok(conta(comPlanning) === 1, 'so planning: uma tag');
+    ok(conta(comComite) === 1, 'so comite: uma tag');
+    ok(conta(Object.assign({}, comPlanning, comComite)) === 2,
+       'as duas: duas tags — nenhuma implica a outra');
+
+    /* AS DUAS SE DISTINGUEM, e nao so pelo texto: duas tags iguais lado a lado
+       obrigam a ler cada uma para saber qual e qual, e num card o que se le e
+       a cor. */
+    const duas = SELOM.badges(Object.assign({}, comPlanning, comComite), 'tag');
+    ok(/selo-planning/.test(duas) && /selo-comite/.test(duas),
+       'cada tag tem a sua classe, para a cor poder diferencia-las');
+    ok(/Validado Planning/.test(duas) && /Validado em Comit/.test(duas),
+       'e os textos dizem QUAL validacao e cada uma');
+
+    /* SEM NOME NAO HA SELO — a mesma regra das duas. Um carimbo que diz
+       "validado" sem poder dizer por quem e o que um selo nao pode ser. */
+    ok(!SELOM.comite({ id: 'x', comite: { em: '2026-10-20' } }),
+       'comite sem quem validou NAO vira selo');
+    ok(!SELOM.comite({ id: 'x', oculto: true, comite: { quem: 'A' } }) &&
+       !SELOM.comite({ id: 'x', mesclado_em: 'y', comite: { quem: 'A' } }),
+       'e oculta ou mesclada nao tem selo, como ja valia para a planning');
+
+    /* ── AS TRES TELAS DESENHAM AS DUAS ── */
+    const ADM_S = semComentario(ADMIN), DEV_S = semComentario(DEV), GNT_S = semComentario(GANTT);
+    [['admin.html', ADM_S], ['dev.html', DEV_S], ['gantt.html', GNT_S]].forEach(([n, s]) => {
+      ok(/SELO\.badges\(/.test(s), n + ' desenha as duas tags');
+      ok(/selo-comite/.test(s) && /selo-planning/.test(s),
+         'e ' + n + ' tem o estilo das duas — classe sem CSS nao aparece');
+    });
+
+    /* ── A MARCA DO COMITE E GRAVADA, e atravessa as listas fechadas ──
+       A da planning e DERIVADA (a votacao ficou registrada). Esta e gravada,
+       porque o comite acontece FORA deste sistema: nao ha rastro a derivar. */
+    ok(/function comiteDoForm\(/.test(ADMIN) && /id="m-comite"/.test(ADMIN),
+       'o Admin tem o campo para marcar o comite');
+    ok(/^\s*comite:\s*comiteDoForm\(existing\),/m.test(ADM_S),
+       'e ele entra na lista fechada do save');
+    ok(/^\s*comite:\s*existing\.comite \|\| null,/m.test(GNT_S),
+       'e o Gantt repassa a marca, que nao tem campo la');
+    /* A DATA NAO SE REESCREVE A CADA SAVE: corrigir o nome nao pode mudar
+       quando o comite aconteceu. */
+    const fnCom = semComentario(corpo(ADMIN, 'function comiteDoForm(') || '');
+    ok(/\(antes && antes\.em\) \|\| new Date\(\)/.test(fnCom),
+       'a data do comite e a do primeiro registro, e nao a de cada gravacao');
+    ok(/if \(!quem\) return null;/.test(fnCom),
+       'e sem nome o formulario nao grava marca nenhuma');
   }
 
   let erroPz = null;
