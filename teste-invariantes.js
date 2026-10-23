@@ -20309,6 +20309,87 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a data do comite e a do primeiro registro, e nao a de cada gravacao');
     ok(/if \(!quem\) return null;/.test(fnCom),
        'e sem nome o formulario nao grava marca nenhuma');
+
+    /* ── QUEM PODE MARCAR O COMITE ──
+       "So PM/PO ou Lideranca (Paullymax ou Guilherme Augusto)."
+       Paullymax nao precisa de lista: a conta dele JA E admin. A lista existe
+       para a lideranca que nao e PM/PO — hoje so o Guilherme Augusto. */
+    const QUEM = [
+      ['Fernando (PM/PO)', { login: 'fernando', papel: 'admin' }, true],
+      ['Paullymax (lideranca, ja admin)', { login: 'paullymax.faria', papel: 'admin' }, true],
+      ['Guilherme Augusto (lideranca, dev)', { login: 'guilherme.augusto', papel: 'dev' }, true],
+      /* O OUTRO GUILHERME DEV. Casar por primeiro nome o autorizaria, e
+         ninguem notaria — a marca sairia igual. Por isso a regra e por LOGIN. */
+      ['Guilherme Eloi (outro Guilherme dev)', { login: 'guilherme.oliveira', papel: 'dev' }, false],
+      ['um dev qualquer', { login: 'leite', papel: 'dev' }, false],
+      ['analista', { login: 'x', papel: 'analista' }, false],
+      ['sem identidade', null, false],
+    ];
+    QUEM.forEach(([nome, u, esperado]) => {
+      ok(SELOM.podeComite(u) === esperado,
+         (esperado ? 'pode marcar comite: ' : 'NAO pode marcar comite: ') + nome);
+    });
+
+    /* ── E O SERVIDOR REVERTE QUEM NAO PODE ──
+       A tela nao pode ser a unica trava: ela e so JavaScript numa aba. */
+    const srcPres = corpo(W, 'function preservaComite(');
+    ok(!!srcPres, 'o Worker tem a sua propria guarda da marca');
+    if (srcPres) {
+      const doW = new Function('recebido', 'servidor', 'autorizado',
+        srcPres + '\nreturn preservaComite(recebido, servidor, autorizado);');
+      const antes = { melhorias: [{ id: 'd1', codigo: 'AX-1', comite: null }] };
+      const tentou = () => ({ melhorias: [{ id: 'd1', codigo: 'AX-1',
+                                            comite: { quem: 'Alguem', em: 'x' } }] });
+
+      const semPermissao = tentou();
+      const rev = doW(semPermissao, antes, false);
+      ok(rev.length === 1 && rev[0] === 'AX-1',
+         'quem nao pode tem a marca REVERTIDA, e a resposta diz qual', JSON.stringify(rev));
+      ok(!semPermissao.melhorias[0].comite,
+         'e a marca volta mesmo ao que estava, e nao so e reportada');
+
+      const comPermissao = tentou();
+      ok(doW(comPermissao, antes, true).length === 0 &&
+         !!comPermissao.melhorias[0].comite,
+         'e quem pode marca normalmente');
+
+      /* REENVIAR IGUAL NAO E TENTATIVA. Uma aba antiga remonta a demanda por
+         lista fechada e manda de volta o que leu — tratar isso como tentativa
+         reverteria a marca de quem nao mexeu em nada. */
+      const jaTinha = { melhorias: [{ id: 'd1', codigo: 'AX-1',
+                                      comite: { quem: 'Lucas', em: '2026-10-21' } }] };
+      const igual = JSON.parse(JSON.stringify(jaTinha));
+      ok(doW(igual, jaTinha, false).length === 0 && !!igual.melhorias[0].comite,
+         'e reenviar a MESMA marca nao conta como tentativa');
+    }
+    ok(/preservaComite\(data, antesPub, podeMarcarComite\(_ident\)\)/.test(WC) &&
+       /preservaComite\(data, antesDev, podeMarcarComite\(_ident\)\)/.test(WC),
+       'as duas rotas de gravacao aplicam a guarda');
+    ok(/comite_revertidas: comiteRevPub/.test(WC) && /comite_revertidas: comiteRevDev/.test(WC),
+       'e a resposta devolve o que foi revertido — reverter calado seria pior');
+    /* A CONDICAO, e nao a palavra: trocar o `if` por `if (false)` deixa
+       `resp.comite_revertidas` intacto na linha do toast logo abaixo, e o
+       aviso morre com a invariante verde. So o selo de cache acusou. */
+    ok(/if \(\(resp\.comite_revertidas \|\| \[\]\)\.length\)/.test(ADM_S),
+       'e o Admin avisa, em vez de deixar a caixa ligada e a tag ausente');
+    ok(/function comiteAutoriza\(/.test(ADMIN) && /SELO\.podeComite\(_eu\)/.test(ADM_S),
+       'e o campo nasce desligado para quem nao pode marcar');
+
+    /* MODULO E WORKER CONCORDAM sobre quem pode. */
+    const srcPode = corpo(W, 'function podeMarcarComite(');
+    ok(!!srcPode, 'o Worker tem a sua copia de quem pode marcar');
+    if (srcPode) {
+      const doW = new Function('ident',
+        "const COMITE_LOGINS = ['guilherme.augusto'];\n" +
+        srcPode + '\nreturn podeMarcarComite(ident);');
+      const divergem = QUEM.filter(([nome, u]) => {
+        const ident = u ? { papel: u.papel, usuario: { login: u.login } } : null;
+        return doW(ident) !== SELOM.podeComite(u);
+      });
+      ok(!divergem.length,
+         'modulo e Worker autorizam as MESMAS pessoas',
+         divergem.map(x => x[0]).join(' | '));
+    }
   }
 
   let erroPz = null;

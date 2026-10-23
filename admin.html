@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="1e9a065482">
+<html lang="pt-BR" data-build="d08474559e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1322,7 +1322,7 @@
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
-<script src="selo-validacao.js?v=d59f4d4665"></script>
+<script src="selo-validacao.js?v=619747e847"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
@@ -3395,6 +3395,13 @@ async function saveViaProxy(tentativa = 1) {
         if ((resp.sem_dev || []).length) {
           toast('⚠ Sem desenvolvedor, voltou para Backlog: ' + resp.sem_dev.join(', '), 'err');
         }
+        /* O SERVIDOR REVERTEU A MARCA DO COMITE. So PM/PO ou a lideranca
+           marcam; sem este aviso a pessoa veria a caixa ligada na tela e a
+           tag ausente no card, sem nada explicando. */
+        if ((resp.comite_revertidas || []).length) {
+          toast('🔒 Validado em Comitê é de PM/PO ou liderança — revertido em: ' +
+                resp.comite_revertidas.join(', '), 'err');
+        }
         Object.entries(resp.codigos_projeto || {}).forEach(([id, cod]) => {
           const p = (state.projetos || []).find(x => x.id === id);
           if (p && !p.codigo) p.codigo = cod;
@@ -3664,6 +3671,28 @@ let _mBis = [];
  * por engano — mesma escolha de `bisMostraCaixa`: o que já foi registrado
  * continua no objeto até alguém salvar sem ele, que é um gesto deliberado.
  */
+/** A MARCA DO COMITE SO APARECE EDITAVEL PARA QUEM PODE MARCA-LA.
+ *
+ *  O servidor reverte de qualquer forma — esta e a trava de tela, para a
+ *  pessoa nao preencher um campo que vai ser desfeito. Quem nao pode continua
+ *  VENDO a marca e quem validou: esconder viraria uma demanda que parece nao
+ *  ter passado pelo comite. */
+function comiteAutoriza() {
+  const cx = document.getElementById('m-comite');
+  if (!cx || !window.SELO) return;
+  const pode = SELO.podeComite(_eu);
+  cx.disabled = !pode;
+  ['m-comite-quem', 'm-comite-obs'].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) e.disabled = !pode;
+  });
+  const rot = document.querySelector('.m-comite-check');
+  if (rot) {
+    rot.style.opacity = pode ? '' : '.6';
+    rot.title = pode ? '' : 'Só PM/PO ou liderança marcam a validação em Comitê.';
+  }
+}
+
 function comiteMostra() {
   const cx = document.getElementById('m-comite-caixa');
   if (!cx) return;
@@ -11440,6 +11469,7 @@ function openModalMelhoria(id) {
   const _cq = document.getElementById('m-comite-quando');
   if (_cq) _cq.textContent = (_cmt && _cmt.em)
     ? 'Registrado em ' + uQuando(_cmt.em) : '';
+  comiteAutoriza();
   comiteMostra();
   document.getElementById('m-dados-bi').checked      = !!m?.dados_bi;
   _mBis = BIS.daDemanda(m);

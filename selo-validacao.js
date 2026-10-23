@@ -209,6 +209,38 @@
    *             rastro a derivar; alguém precisa dizer que aconteceu, e por
    *             isso o registro tem nome e data — como a homologação da área.
    */
+  /* ═══ QUEM PODE MARCAR O COMITÊ ═══════════════════════════════════════════
+   *
+   * "Marcação do validado pelo comitê: só PM/PO ou Liderança (Paullymax ou
+   *  Guilherme Augusto)."
+   *
+   * DUAS PORTAS, e a segunda existe porque a primeira não cobre:
+   *
+   *   papel `admin`   é o PM/PO. Paullymax JÁ ENTRA por aqui — a conta dele é
+   *                   admin —, então ele não precisa da lista.
+   *   `COMITE_LOGINS` a liderança que NÃO é PM/PO. Hoje só o Guilherme
+   *                   Augusto, cuja conta é `dev`.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════
+   * POR LOGIN, E NUNCA POR NOME.
+   *
+   * Há DOIS Guilhermes devs na base: `guilherme.augusto` e `guilherme.oliveira`
+   * (Guilherme Eloi). Casar por primeiro nome autorizaria o Eloi a marcar
+   * comitê — e ninguém notaria, porque a marca sairia igual. O login é único
+   * por construção; o nome de exibição não é.
+   */
+  var COMITE_LOGINS = ['guilherme.augusto'];
+
+  /** `u` é `{ login, papel }` — o que as telas têm em `_eu` e o Worker em
+   *  `ident.usuario`. Sem identidade, não autoriza: marcar comitê é uma
+   *  assinatura, e assinatura anônima não é assinatura. */
+  function podeComite(u) {
+    if (!u) return false;
+    if (texto(u.papel).toLowerCase() === 'admin') return true;
+    var l = texto(u.login).toLowerCase();
+    return !!l && COMITE_LOGINS.indexOf(l) >= 0;
+  }
+
   function comite(m) {
     if (!m || m.mesclado_em || m.oculto) return null;
     var c = m.comite;
@@ -327,6 +359,7 @@
 
   raiz.SELO = { de: de, titulo: titulo, badge: badge, grande: grande, dia: dia,
                 comite: comite, tituloComite: tituloComite,
-                badgeComite: badgeComite, badges: badges };
+                badgeComite: badgeComite, badges: badges,
+                podeComite: podeComite, COMITE_LOGINS: COMITE_LOGINS };
   if (typeof module !== 'undefined' && module.exports) module.exports = raiz.SELO;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

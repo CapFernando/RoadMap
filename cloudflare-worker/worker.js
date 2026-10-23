@@ -1698,6 +1698,59 @@ function entrandoEmConcluidoSemHoras(recebido, servidor) {
 }
 
 
+/* ═══ QUEM PODE MARCAR O COMITE ════════════════════════════════════════════
+ *
+ * "Marcacao do validado pelo comite: so PM/PO ou Lideranca (Paullymax ou
+ *  Guilherme Augusto)."
+ *
+ * Copia de `selo-validacao.js` — o Worker nao importa modulo nenhum, e ha
+ * invariante rodando as duas lado a lado.
+ *
+ * POR LOGIN, E NUNCA POR NOME: ha DOIS Guilhermes devs na base,
+ * `guilherme.augusto` e `guilherme.oliveira` (Guilherme Eloi). Casar por
+ * primeiro nome autorizaria o Eloi, e ninguem notaria — a marca sairia igual.
+ *
+ * Paullymax nao esta na lista porque a conta dele JA E admin: ele entra pela
+ * primeira porta. A lista e para a lideranca que nao e PM/PO.
+ */
+const COMITE_LOGINS = ['guilherme.augusto'];
+
+function podeMarcarComite(ident) {
+  if (!ident) return false;
+  if (String(ident.papel || '').toLowerCase() === 'admin') return true;
+  const l = String((ident.usuario && ident.usuario.login) || '').trim().toLowerCase();
+  return !!l && COMITE_LOGINS.includes(l);
+}
+
+/** A MARCA DO COMITE VOLTA AO QUE ESTAVA quando quem gravou nao pode muda-la.
+ *
+ *  REVERTE, E NAO RECUSA A PUBLICACAO INTEIRA. Uma aba aberta desde ontem
+ *  remonta a demanda por lista fechada de campos e reenvia o que leu — recusar
+ *  travaria a publicacao de quem nao tentou marcar nada. Revertendo, o resto
+ *  grava e a resposta DIZ o que foi desfeito: silencio aqui faria a pessoa
+ *  acreditar que marcou.
+ *
+ *  Compara pelo conteudo, e nao por presenca: quem nao mexeu reenvia igual, e
+ *  igual nao e tentativa. */
+function preservaComite(recebido, servidor, autorizado) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const revertidas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    if (!velha) continue;                 // demanda nova: nada a preservar
+    const iguais = JSON.stringify(velha.comite || null) === JSON.stringify(m.comite || null);
+    if (iguais) continue;
+    if (autorizado) continue;
+    if (velha.comite === undefined) delete m.comite;
+    else m.comite = velha.comite;
+    revertidas.push(m.codigo || m.id);
+  }
+  return revertidas;
+}
+
 /* ═══ A HOMOLOGACAO DA AREA ════════════════════════════════════════════════
  *
  * Copia de `homologacao.js` — o Worker nao importa modulo nenhum, e ha
@@ -6509,6 +6562,10 @@ export default {
       preservaAssinaturasSpike(data, antesPub);
       const semHorasPub = entrandoEmConcluidoSemHoras(data, antesPub);
       const semHomologPub = entrandoSemHomologacao(data, antesPub);
+      /* A MARCA DO COMITE e de PM/PO ou da lideranca. Reverte o que quem nao
+         pode tentou mudar, e DIZ na resposta — silencio aqui faria a pessoa
+         acreditar que marcou. Ver `preservaComite`. */
+      const comiteRevPub = preservaComite(data, antesPub, podeMarcarComite(_ident));
       const semSistemaPub = entrandoAlocadaSemSistema(data, antesPub);
       const aprovadoresPub = await spikeAprovadores(env);
       const spikeSemAssPub = entrandoEmConcluidoSpikeSemAssinatura(data, antesPub, aprovadoresPub);
@@ -6640,6 +6697,7 @@ export default {
       // que ninguem sabe explicar de onde veio.
       return json({ ok: true, codigos: codigosMel, codigos_projeto: codigosPrj,
                     sem_dev: semDev, sem_projeto: soltas,
+                    comite_revertidas: comiteRevPub,
                     espelhos_descartados: espelhos,
                     // Diz o que saiu: limpeza silenciosa vira "sumiu um dev da
                     // lista e ninguem sabe por que".
@@ -6712,6 +6770,10 @@ export default {
       // sujaria a trilha com um evento que nao aconteceu.
       const semHorasDev = entrandoEmConcluidoSemHoras(data, antesDev);
       const semHomologDev = entrandoSemHomologacao(data, antesDev);
+      /* A MARCA DO COMITE e de PM/PO ou da lideranca. Reverte o que quem nao
+         pode tentou mudar, e DIZ na resposta — silencio aqui faria a pessoa
+         acreditar que marcou. Ver `preservaComite`. */
+      const comiteRevDev = preservaComite(data, antesDev, podeMarcarComite(_ident));
       const semSistema = entrandoAlocadaSemSistema(data, antesDev);
       /* A HOMOLOGACAO DA AREA. Recusa ANTES de registrar historico, como as
          outras: gravar a trilha de uma publicacao que sera recusada sujaria o
@@ -6813,6 +6875,7 @@ export default {
       // silencio, e a pessoa so descobriria no proximo F5.
       return json({ ok: true, datas_revertidas: datasRevertidas,
                     etapas_revertidas: etapasRevertidas,
+                    comite_revertidas: comiteRevDev,
                     espelhos_descartados: espelhos,
                     devs_removidos: devsForaDev,
                     chaves_preservadas: voltaramDev }, 200, headers);
