@@ -20196,6 +20196,26 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o select tambem');
     ok(/function msHomologRender\(/.test(DEV) && /id="ms-homolog"/.test(DEV),
        'o card do dev tem o formulario de homologacao');
+    /* ── E O ADMIN TAMBEM ──
+       Quem fala com a area nem sempre e o dev, e obrigar o PM/PO a pedir ao
+       dev que registre o que ele mesmo ouviu e o tipo de volta que faz o
+       registro nao acontecer. A aba Entrega dizia "ainda nao foi entregue"
+       justamente na etapa em que a entrega esta sendo conferida. */
+    ok(/function homologHTML\(/.test(ADMIN) && /function homologRegistra\(/.test(ADMIN),
+       'o Admin tem o formulario de homologacao');
+    ok(/if \(sk === 'validacao_area'\) return homologHTML\(m, leitura\);/.test(ADM_C),
+       'e a aba Entrega mostra a homologacao em vez de "ainda nao foi entregue"');
+    ok(/HOMOLOGACAO\.barra\(_alvo, sp/.test(ADM_C),
+       'e o save do Admin consulta a regra antes de mover a etapa');
+    /* O REGISTRO NAO MOVE A DEMANDA, nas duas telas. Mover junto produziria
+       "homologado e enviado" num gesto so, e enviar ao PM/PO e outra decisao. */
+    const regAdm = semComentario(corpo(ADMIN, 'async function homologRegistra(') || '');
+    ok(!/status_planejamento/.test(regAdm),
+       'registrar NAO move a demanda — enviar ao PM/PO e outra decisao');
+    /* E DESFAZ SE A GRAVACAO FALHAR, como `valDecidir`: um "homologado por
+       Fulano" na tela depois de o servidor recusar e a tela mentindo. */
+    ok(/m\.homologacao = antes;/.test(regAdm),
+       'e desfaz o registro quando a gravacao falha');
     ok(/homologacao:\s*existing\.homologacao/.test(ADM_C) &&
        /homologacao:\s*existing\.homologacao/.test(GNT_C),
        'o registro atravessa as listas fechadas do Admin e do Gantt');

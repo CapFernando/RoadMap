@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="1e84aeb0af">
+<html lang="pt-BR" data-build="68afc794c3">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12000,6 +12000,25 @@ async function saveMelhoria() {
     document.getElementById('m-dev').focus();
     return;
   }
+  /* ── A REGRA DA HOMOLOGAÇÃO, TAMBÉM AQUI ──────────────────────────────
+     O servidor recusa de qualquer forma; isto é para a pessoa não chegar lá.
+     Evolução não pula a Validação da área, e sair dela para o PM/PO exige o
+     registro — a mesma regra que o painel do dev consulta, no mesmo módulo.
+     A demanda avaliada é a que está GRAVADA (`_antesDoSalvar`), com o tipo e o
+     solicitante que estão na tela agora: julgar pelo objeto antigo liberaria
+     um atalho para quem acabou de trocar o tipo no formulário. */
+  if (_antesDoSalvar && window.HOMOLOGACAO) {
+    const _alvo = Object.assign({}, _antesDoSalvar, {
+      tipo: tipo, solicitante: document.getElementById('m-solicitante').value.trim(),
+    });
+    const impede = HOMOLOGACAO.barra(_alvo, sp, window.PRAZO && PRAZO.hojeISO());
+    if (impede) {
+      toast('🔒 ' + impede.motivo, 'err');
+      if (impede.campo === 'solicitante') document.getElementById('m-solicitante').focus();
+      else if (impede.campo === 'homologacao') mAba('entrega');
+      return;
+    }
+  }
   // sistema obrigatório apenas para novas demandas; existentes sem tema permanecem como estão
   if (!temaId && !document.getElementById('m-id').value) { toast('Selecione o sistema.', 'err'); return; }
   if (sp === 'negada' && !document.getElementById('m-motivo').value.trim()) {
@@ -13463,6 +13482,13 @@ function entregaHTML(m, opts) {
   const dev = m.dev || '—';
   const quando = v => v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
 
+  /* ── NA VALIDAÇÃO DA ÁREA, A ABA MOSTRA A HOMOLOGAÇÃO ───────────────────
+     Antes ela dizia "ainda não foi entregue" justamente na etapa em que a
+     entrega está sendo conferida — a aba ficava morta no único momento em que
+     havia algo a fazer ali. Quem fala com a área nem sempre é o dev, e o PM/PO
+     precisava do painel dele para registrar o que já tinha acontecido. */
+  if (sk === 'validacao_area') return homologHTML(m, leitura);
+
   if (sk !== 'validacao' && sk !== 'concluido') {
     return '<p class="ent-vazio">Esta demanda ainda não foi entregue.<br>' +
       'Quando o dev finalizar no painel dele, ela chega aqui como <strong>Validação PM/PO</strong> ' +
@@ -13736,6 +13762,96 @@ async function spikeAssinar(assinar) {
 
 // Aprovar fecha a demanda. Rejeitar devolve para Em Andamento com o motivo — o
 // dev precisa saber o que faltou, senao entrega a mesma coisa de novo.
+/* ═══ A HOMOLOGAÇÃO DA ÁREA, NO ADMIN ═════════════════════════════════════
+ *
+ * O painel do dev já tem o formulário; este é o mesmo registro pela outra
+ * porta. Quem fala com a área nem sempre é o dev — e obrigar o PM/PO a pedir
+ * ao dev que registre o que ele mesmo ouviu é o tipo de volta que faz o
+ * registro não acontecer.
+ *
+ * A REGRA É A MESMA de `homologacao.js`. Esta tela não decide nada sozinha:
+ * ela lê o veredito e desenha.
+ */
+function homologHTML(m, leitura) {
+  if (!window.HOMOLOGACAO) return '';
+  const reg = HOMOLOGACAO.registro(m);
+  const hoje = (window.PRAZO && PRAZO.hojeISO()) || '';
+  const dias = HOMOLOGACAO.diasNaArea(m, hoje);
+  const cobra = HOMOLOGACAO.cobraHomologacao(m, hoje);
+  const quem = HOMOLOGACAO.solicitante(m);
+
+  if (reg) {
+    return '<div class="ent-aviso aprovada">✅ <strong>Homologado por ' + esc(reg.quem) +
+      '</strong>' + (reg.em ? ' em ' + esc(new Date(reg.em).toLocaleString('pt-BR',
+        { dateStyle: 'short', timeStyle: 'short' })) : '') + '.</div>' +
+      (reg.obs ? '<div class="ent-aviso">' + esc(reg.obs) + '</div>' : '') +
+      '<p class="ent-vazio">A área conferiu. Mova a demanda para <strong>Validação PM/PO</strong> ' +
+      'pela aba Dados para analisar a entrega.</p>';
+  }
+
+  const cab = cobra
+    ? '<div class="ent-aviso espera">⏳ <strong>Parada há ' + dias + ' dias na área.</strong> ' +
+      'Passou dos ' + HOMOLOGACAO.DIAS_ATE_COBRAR + ' dias combinados — quem homologou?</div>'
+    : '<div class="ent-aviso espera">👁 <strong>Em homologação</strong>' +
+      (dias != null ? ' há ' + dias + ' dia(s)' : '') + '. ' +
+      'Assim que a área conferir, registre aqui.</div>';
+
+  if (leitura) return cab;
+
+  return cab +
+    (quem ? '<p class="ent-vazio" style="margin:0 0 10px">Solicitante: <strong>' +
+      esc(quem) + '</strong> — é quem homologa.</p>'
+          : '<p class="ent-vazio" style="margin:0 0 10px">Esta demanda está <strong>sem ' +
+            'solicitante</strong>. Preencha o campo na aba Dados: é ele quem homologa.</p>') +
+    '<div class="form-group"><label>Quem homologou</label>' +
+      '<input type="text" id="hom-quem" maxlength="120" value="' + esc(quem) + '" ' +
+      'placeholder="Nome de quem conferiu na área" /></div>' +
+    '<div class="form-group"><label>Observação <small style="font-weight:400;color:var(--text3)">' +
+      '(opcional)</small></label>' +
+      '<input type="text" id="hom-obs" maxlength="300" placeholder="O que foi conferido" /></div>' +
+    '<button type="button" class="btn btn-success" onclick="homologRegistra()">' +
+      '✅ Registrar homologação</button>' +
+    '<p class="ent-vazio" style="margin-top:10px">Sem registro, a demanda continua aqui — ' +
+    'ela não anda sozinha.</p>';
+}
+
+/** Grava o registro, SEM mover a demanda.
+ *
+ *  Mover junto seria cômodo e errado: registrar é dizer "a área conferiu", e
+ *  enviar ao PM/PO é outra decisão. Mesma escolha do painel do dev.
+ *
+ *  Desfaz se a gravação falhar, como `valDecidir` — um "homologado por Fulano"
+ *  na tela depois de o servidor recusar é a tela mentindo. */
+async function homologRegistra() {
+  const id = document.getElementById('m-id').value;
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  const campo = document.getElementById('hom-quem');
+  const quem = (campo && campo.value || '').trim();
+  if (!quem) {
+    toast('Informe quem homologou na área.', 'err');
+    if (campo) campo.focus();
+    return;
+  }
+  const antes = m.homologacao;
+  m.homologacao = { quem: quem.slice(0, 120), em: new Date().toISOString(), ok: true,
+                    obs: (document.getElementById('hom-obs').value || '').trim().slice(0, 300) };
+  _dirtyMelhoriaIds.add(id);
+  _pendingEdits = true;
+  renderEntrega(m);
+  renderAll();
+  const okSalvo = await saveViaProxy();
+  if (okSalvo) {
+    toast('✅ Homologação registrada — já pode seguir para o PM/PO.', 'ok');
+    _dirtyMelhoriaIds.delete(id);
+    _pendingEdits = false;
+  } else {
+    m.homologacao = antes;
+    renderEntrega(m);
+    renderAll();
+  }
+}
+
 async function valDecidir(aprovar, obs) {
   const id = document.getElementById('m-id').value;
   const m = state.melhorias.find(x => x.id === id);
