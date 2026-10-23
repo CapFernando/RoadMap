@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="ca2d549e6a">
+<html lang="pt-BR" data-build="4e32b4153c">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -797,6 +797,13 @@
        se le e a cor. Azul segue sendo a planning (o selo circular ja e azul,
        e trocar isso quebraria o reconhecimento); o comite ganha ambar, que
        nenhuma outra marca do card usa. */
+    /* O CHIP DO PROJETO. Roxo, que e a cor que o Admin ja usa para projeto —
+       as tres telas falando da mesma coisa com a mesma cor. `cursor:pointer`
+       porque ele faz algo; sem isso o duplo clique seria um gesto que
+       ninguem descobre. */
+    .card-selo.card-proj { background:#2A1B3D; color:#C9A6F0; border-color:#6B4A9E;
+      cursor:pointer; }
+    .card-selo.card-proj:hover { border-color:#A974F0; }
     .card-selo.selo-planning { background:#0B2E52; color:#9FD0FF; border-color:#2C6EA8; }
     .card-selo.selo-comite   { background:#3A2D12; color:#FFC470; border-color:#B07D28; }
     .card-selo + .card-selo { margin-left:4px; }
@@ -1111,13 +1118,14 @@
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
+<script src="resumo-projeto.js?v=63d219aac1"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
 <script src="links-github.js?v=0108ec6e06"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
-<script src="selo-validacao.js?v=619747e847"></script>
+<script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
 </head>
 <body>
@@ -3094,6 +3102,21 @@ function semanaIndexFor(dataStr, semanas) {
  *  `window.SELO` PODE NAO ESTAR LA: se `selo-validacao.js` falhar em carregar, o
  *  Gantt continua desenhando sem selo nenhum, em vez de quebrar a tela inteira
  *  por causa de uma marca. */
+/** O projeto de um card, aberto pelo chip EP-XXX.
+ *
+ *  O MESMO VISUALIZADOR que o Admin usa no botao "Resumo executivo" do
+ *  projeto — e nao uma tela nova. Ele ja responde "do que se trata": escopo,
+ *  demandas e situacao. Uma segunda tela com a mesma funcao divergiria na
+ *  primeira correcao, que e a razao de `resumo-projeto.js` ser um modulo.
+ *
+ *  `stopPropagation` porque o duplo clique no card ja faz outra coisa: sem
+ *  ele as duas telas abririam juntas, uma por cima da outra. */
+function pjAbrirDoCard(ev, projetoId) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  if (!projetoId || !window.RESUMOPROJETO) return;
+  RESUMOPROJETO.abrir(state, projetoId);
+}
+
 function ganttTemSelo(m) {
   return window.SELO ? !!SELO.de(m) : false;
 }
@@ -4009,6 +4032,17 @@ function renderGantt() {
                 exige a presenca.
                 A regra de QUEM tem selo mora em `selo-validacao.js` — as tres
                 telas usam a mesma, pela razao de sempre. */''}
+          ${/* ── O PROJETO NO CARD, E ELE ABRE O PROJETO ──────────────────────
+            "Cards que tenham o numero do projeto EP-XXX: ao clicar 2x no
+             projeto, abra o card do projeto para avaliar do que se trata."
+            O chip so existia no Admin — aqui o dev via o vinculo apenas
+            abrindo a demanda. DUPLO CLIQUE, e nao clique: um clique
+            simples seria confundido com o inicio de um arraste, e o
+            duplo e o mesmo gesto que o card ja usa. */''}
+          ${(() => { const _pj = m.projeto_id && (state.projetos || []).find(p => p.id === m.projeto_id);
+            return _pj ? `<span class="card-selo card-proj" title="${esc(_pj.nome || '')} — duplo clique abre o projeto"`
+              + ` onmousedown="event.stopPropagation()"`
+              + ` ondblclick="pjAbrirDoCard(event,'${esc(m.projeto_id)}')">🗂 ${esc(_pj.codigo || _pj.nome || '')}</span>` : ''; })()}
           ${window.SELO ? SELO.badges(m, 'card-selo') : ''}
           <span class="card-label">${esc(m.titulo)}</span>
         </div>

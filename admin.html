@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="6ac1a1f0ca">
+<html lang="pt-BR" data-build="5700968046">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -427,6 +427,8 @@
     .pausa-acoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
     .kb-mesc { font-size:10.5px; font-weight:700; color:var(--teal-tx,#7EECD8);
       background:var(--teal-bg,#063D30); border-radius:5px; padding:1px 6px; }
+    .kb-proj.kb-proj-abre { cursor:pointer; }
+    .kb-proj.kb-proj-abre:hover { border-color:#A974F0; }
     .kb-proj { font-size:10.5px; font-weight:700; color:var(--purple-tx,#C9AEFF);
       background:var(--purple-bg,#341A6E); border-radius:5px; padding:1px 6px; }
     .cod-tag { font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
@@ -5009,8 +5011,22 @@ function renderKanban() {
         esc(m.pausa_motivo || '') + '">⏸ Pausada · ' + diasPausadoAgora(m) + 'd</span>');
       const nMesc = mescladasDe(m.id).length;
       if (nMesc) badges.push('<span class="kb-mesc" title="Absorveu ' + nMesc + ' demanda(s)">🔗 +' + nMesc + '</span>');
+      /* ── O CHIP DO PROJETO ABRE O PROJETO ───────────────────────────────
+         "Ao clicar 2x no projeto, abra o card do projeto para ter a visão do
+          projeto e avaliar do que se trata."
+
+         DUPLO CLIQUE, e não clique: o duplo clique no CARD já edita a demanda,
+         e um clique simples no chip seria confundido com o começo de um
+         arraste. O gesto é o mesmo do card — muda só o alvo.
+
+         `stopPropagation` NO DBLCLICK E NO MOUSEDOWN: sem o segundo, o
+         `kbCardMouseDown` do card ainda arma a edição e as duas telas abrem
+         uma por cima da outra. */
       const projDoCard = m.projeto_id ? pjPorId(m.projeto_id) : null;
-      if (projDoCard) badges.push('<span class="kb-proj" title="' + esc(projDoCard.nome || '') + '">🗂 ' +
+      if (projDoCard) badges.push('<span class="kb-proj kb-proj-abre" title="' +
+        esc(projDoCard.nome || '') + ' — duplo clique abre o projeto"' +
+        ' onmousedown="event.stopPropagation()"' +
+        ' ondblclick="pjAbrirDoCard(event, \'' + esc(m.projeto_id) + '\')">🗂 ' +
         esc(projDoCard.codigo || projDoCard.nome || '') + '</span>');
       if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
       if (m.dados_bi) badges.push('<span class="kb-dados" title="Demanda do time de Dados/BI">📊 Dados/BI</span>');
@@ -14449,6 +14465,20 @@ function pjAbrir(id) {
  *  A regra mora em `resumo-projeto.js`, e não aqui: é o mesmo desenho do
  *  `resumo-dev.js`, e pela mesma razão — a tela é onde se confere, o texto
  *  copiado é o que viaja, e os dois têm de sair da MESMA montagem. */
+/** O projeto de um card, aberto pelo chip EP-XXX.
+ *
+ *  O MESMO VISUALIZADOR do botão "Resumo executivo" do projeto — e não uma
+ *  tela nova. Ele já responde "do que se trata": escopo, demandas, situação.
+ *  Uma segunda tela com a mesma função divergiria na primeira correção.
+ *
+ *  `stopPropagation` porque o duplo clique no card edita a demanda: sem ele as
+ *  duas telas abririam juntas, uma por cima da outra. */
+function pjAbrirDoCard(ev, projetoId) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  if (!projetoId || !window.RESUMOPROJETO) return;
+  RESUMOPROJETO.abrir(state, projetoId);
+}
+
 function pjResumoExecutivo() {
   const id = document.getElementById('pj-id').value;
   if (!id) return;

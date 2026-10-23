@@ -20435,6 +20435,71 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }
   }
 
+  /* ═══ O CHIP DO PROJETO ABRE O PROJETO ════════════════════════════════════
+   *
+   * "Cards que tenham o numero do projeto EP-XXX: ao clicar 2x no projeto,
+   *  abra o card do projeto para ter a visao do projeto e avaliar do que se
+   *  trata. Tratar isso a nivel dev, admin, gantt."
+   *
+   * O chip so existia no Admin, e so como etiqueta. No painel do dev e no
+   * Gantt o vinculo com o projeto nao aparecia no card — para saber de que
+   * projeto era a demanda, so abrindo ela.
+   */
+  {
+    sec('O chip EP-XXX abre o projeto, nas tres telas');
+
+    /* ── O TRECHO QUE DESENHA O CHIP, EXECUTADO ──
+       Procurar `kcard-proj` no texto nao prova nada: o `if` pode ter virado
+       `if (false)` e a string continua la. Aqui o fragmento do template e
+       recortado e RODADO, com e sem projeto. */
+    [['dev.html', DEV, 'kcard-proj'], ['gantt.html', GANTT, 'card-proj']].forEach(([nome, src, cls]) => {
+      const i = src.indexOf('const _pj = m.projeto_id');
+      const ini = src.lastIndexOf('${(() =>', i);
+      const fim = src.indexOf('})()}', i);
+      const frag = (i < 0 || ini < 0 || fim < 0) ? '' :
+        src.slice(ini, fim + 5).replace(/^\$\{/, '').replace(/\}$/, '');
+      ok(!!frag, nome + ': o trecho do chip foi isolado');
+      if (!frag) return;
+      const roda = (m) => new Function('m', 'state', 'esc', 'devEsc',
+        'return (' + frag + ');')(
+        m, { projetos: [{ id: 'p1', codigo: 'EP-009', nome: 'Ambiente Controladoria' }] },
+        String, String);
+      const com = String(roda({ projeto_id: 'p1' }));
+      ok(com.includes(cls) && com.includes('EP-009'),
+         nome + ': a demanda com projeto ganha o chip com o codigo');
+      ok(com.includes('pjAbrirDoCard'),
+         nome + ': e o duplo clique abre o projeto');
+      /* `stopPropagation` NO MOUSEDOWN: sem ele o gesto tambem arma a acao do
+         CARD, e as duas telas abrem uma por cima da outra. */
+      ok(/onmousedown="event\.stopPropagation\(\)"/.test(com),
+         nome + ': e o gesto nao vaza para o card');
+      ok(String(roda({})) === '',
+         nome + ': e a demanda SEM projeto nao desenha nada');
+    });
+
+    /* ── O ADMIN, que ja tinha o chip ── */
+    ok(/ondblclick="pjAbrirDoCard\(event/.test(ADMIN) && /kb-proj-abre/.test(ADMIN),
+       'admin.html: o chip que ja existia passou a abrir o projeto');
+
+    /* ── A FUNCAO EXISTE NAS TRES, e abre o MESMO visualizador ──
+       Uma segunda tela com a mesma funcao divergiria na primeira correcao —
+       e e por isso que `resumo-projeto.js` e um modulo. */
+    ['admin.html', 'dev.html', 'gantt.html'].forEach((t) => {
+      const s = lerTela(t);
+      ok(/function pjAbrirDoCard\(/.test(s), t + ' tem a funcao que abre');
+      ok(/RESUMOPROJETO\.abrir\(state, projetoId\)/.test(semComentario(s)),
+         t + ' abre o MESMO visualizador, e nao uma tela propria');
+      ok(/<script src="resumo-projeto\.js\?v=[0-9a-f]{10}"><\/script>/.test(s),
+         t + ' carrega resumo-projeto.js, com o selo de cache');
+    });
+
+    /* O `stopPropagation` TAMBEM NA FUNCAO, e nao so no atributo: o duplo
+       clique no card do Admin edita a demanda, e no dev abre o card. */
+    const fnAbrir = semComentario(corpo(DEV, 'function pjAbrirDoCard(') || '');
+    ok(/ev\.stopPropagation\(\)/.test(fnAbrir) && /ev\.preventDefault\(\)/.test(fnAbrir),
+       'e a funcao segura o evento, para o card nao abrir junto');
+  }
+
   let erroPz = null;
   try { new Function(PRZ); } catch (e) { erroPz = e.message; }
   ok(!erroPz, 'prazo.js sem erro de sintaxe', erroPz || '');
