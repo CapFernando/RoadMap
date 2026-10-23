@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="5700968046">
+<html lang="pt-BR" data-build="7b4e33ad52">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -427,10 +427,23 @@
     .pausa-acoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
     .kb-mesc { font-size:10.5px; font-weight:700; color:var(--teal-tx,#7EECD8);
       background:var(--teal-bg,#063D30); border-radius:5px; padding:1px 6px; }
-    .kb-proj.kb-proj-abre { cursor:pointer; }
-    .kb-proj.kb-proj-abre:hover { border-color:#A974F0; }
+    /* ── O CHIP DO PROJETO SE DISTINGUE POR FORMA, E NAO POR TOM ───────
+       "A cor me confundiu." E confundiu com razao: o chip do SPIKE e roxo
+       preenchido, e eu havia escolhido roxo preenchido para o projeto —
+       dois chips pequenos, da mesma cor, no mesmo card. A base ja tem tres
+       roxos (spike, projeto e debito tecnico) e o espaco de cor esta cheio:
+       ha ate um comentario em `kb-bi` escolhendo ciano "e nao mais um roxo".
+
+       Entao a diferenca e de FORMA: o projeto e o unico CONTORNADO, sem
+       preenchimento. Isso resolve duas coisas de uma vez — separa do spike
+       a um metro de distancia, e diz que ele e o unico que faz algo ao ser
+       clicado. Chip preenchido = etiqueta; chip contornado = acao. */
     .kb-proj { font-size:10.5px; font-weight:700; color:var(--purple-tx,#C9AEFF);
-      background:var(--purple-bg,#341A6E); border-radius:5px; padding:1px 6px; }
+      background:transparent; border:1px dashed #6B4A9E;
+      border-radius:5px; padding:0 5px; }
+    .kb-proj.kb-proj-abre { cursor:pointer; }
+    .kb-proj.kb-proj-abre:hover { background:var(--purple-bg,#341A6E);
+      border-style:solid; border-color:#A974F0; }
     .cod-tag { font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
       color: var(--blue-tx, #9BC8F8); background: var(--blue-bg, #0C3260); border-radius: 4px;
       padding: 1px 5px; margin-right: 6px; letter-spacing: .02em; }

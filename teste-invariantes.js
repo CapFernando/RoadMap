@@ -20477,6 +20477,31 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          nome + ': e a demanda SEM projeto nao desenha nada');
     });
 
+    /* ── E ELE SE DISTINGUE POR FORMA, E NAO POR TOM ──────────────────
+       "A cor me confundiu." O chip do SPIKE e roxo preenchido, e o do projeto
+       era roxo preenchido tambem — dois chips pequenos, mesma cor, mesmo card.
+       A base ja tem TRES roxos (spike, projeto, debito tecnico) e o espaco de
+       cor esta cheio: ha um comentario em `kb-bi` escolhendo ciano "e nao mais
+       um roxo".
+       Entao o projeto e o unico SEM PREENCHIMENTO. Isso separa do spike de
+       longe e diz que ele e o unico que faz algo ao ser clicado. */
+    [['admin.html', ADMIN, '.kb-proj'], ['dev.html', DEV, '.kcard-prazo.kcard-proj'],
+     ['gantt.html', GANTT, '.card-selo.card-proj']].forEach(([nome, src, sel]) => {
+      const i = src.indexOf(sel + ' {');
+      const regra = i < 0 ? '' : src.slice(i, src.indexOf('}', i));
+      ok(/background:\s*transparent/.test(regra),
+         nome + ': o chip do projeto nao tem preenchimento');
+      ok(/border:\s*1px dashed/.test(regra),
+         nome + ': e tem contorno tracejado, que nenhuma outra etiqueta usa');
+      /* O CURSOR PODE ESTAR NA VARIANTE, e nao na regra base. No Admin so o
+         chip CLICAVEL (`.kb-proj-abre`) o recebe — um chip de projeto que um
+         dia aparecesse sem a acao nao deve fingir que e clicavel. Por isso a
+         busca e na familia de regras do seletor, e nao no bloco base. */
+      const familia = src.split(sel.split(' ').pop()).filter(x => /cursor/.test(x.slice(0, 120)));
+      ok(familia.length > 0 && /cursor:\s*pointer/.test(familia[0].slice(0, 160)),
+         nome + ': e o cursor diz que ele faz algo');
+    });
+
     /* ── O ADMIN, que ja tinha o chip ── */
     ok(/ondblclick="pjAbrirDoCard\(event/.test(ADMIN) && /kb-proj-abre/.test(ADMIN),
        'admin.html: o chip que ja existia passou a abrir o projeto');

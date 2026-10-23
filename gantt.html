@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="4e32b4153c">
+<html lang="pt-BR" data-build="edaa1445f8">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -801,9 +801,21 @@
        as tres telas falando da mesma coisa com a mesma cor. `cursor:pointer`
        porque ele faz algo; sem isso o duplo clique seria um gesto que
        ninguem descobre. */
-    .card-selo.card-proj { background:#2A1B3D; color:#C9A6F0; border-color:#6B4A9E;
-      cursor:pointer; }
-    .card-selo.card-proj:hover { border-color:#A974F0; }
+    /* ── O CHIP DO PROJETO SE DISTINGUE POR FORMA, E NAO POR TOM ───────
+       "A cor me confundiu." E confundiu com razao: o chip do SPIKE e roxo
+       preenchido, e eu havia escolhido roxo preenchido para o projeto —
+       dois chips pequenos, da mesma cor, no mesmo card. A base ja tem tres
+       roxos (spike, projeto e debito tecnico) e o espaco de cor esta cheio:
+       ha ate um comentario em `kb-bi` escolhendo ciano "e nao mais um roxo".
+
+       Entao a diferenca e de FORMA: o projeto e o unico CONTORNADO, sem
+       preenchimento. Isso resolve duas coisas de uma vez — separa do spike
+       a um metro de distancia, e diz que ele e o unico que faz algo ao ser
+       clicado. Chip preenchido = etiqueta; chip contornado = acao. */
+    .card-selo.card-proj { background:transparent; color:#C9A6F0;
+      border:1px dashed #6B4A9E; cursor:pointer; }
+    .card-selo.card-proj:hover { background:#2A1B3D; border-style:solid;
+      border-color:#A974F0; }
     .card-selo.selo-planning { background:#0B2E52; color:#9FD0FF; border-color:#2C6EA8; }
     .card-selo.selo-comite   { background:#3A2D12; color:#FFC470; border-color:#B07D28; }
     .card-selo + .card-selo { margin-left:4px; }
