@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="0941ecb928">
+<html lang="pt-BR" data-build="cbd5b8e298">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -599,7 +599,7 @@
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=1f6897d06a"></script>
+<script src="prazo.js?v=7973fa0040"></script>
 <script src="capacidade.js?v=63737a8670"></script>
 <script src="dialogo.js?v=171b484b8c"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
@@ -1584,6 +1584,14 @@ function prazoNivel(m) {
   const sk = getStatusKey(m);
   if (estaPausado(m)) return 'pausada';
   if (sk === 'concluido') return 'feito';
+  /* O RELOGIO PARADO NAO VENCE. A regra mora em `prazo.js` — esta funcao
+     tinha a sua propria ideia de prazo e nao consultava a lista de etapas em
+     que o atraso corre, entao o card dizia "vencida" para uma demanda que a
+     regra do atraso ja considerava fora. Eram duas respostas para a mesma
+     pergunta na mesma tela, e a mais visivel era a errada.
+     `entregue` e um nivel PROPRIO, e nao `ok`: dizer "no prazo" afirmaria algo
+     sobre o cumprimento, e o que houve foi o relogio parar. */
+  if (window.PRAZO && PRAZO.relogioParou(sk)) return 'entregue';
   if (sk === 'negada' || !m.entrega) return 'ok';
   const hoje = hojeISO();
   if (m.entrega < hoje) return 'vencida';
@@ -1592,6 +1600,8 @@ function prazoNivel(m) {
   return 'ok';
 }
 const PRAZO_ROTULO = { feito:'concluída', vencida:'vencida', hoje:'vence hoje',
+                       /* O relogio parou: esta com a area ou com o PM/PO. */
+                       entregue:'em validação',
                        amanha:'vence amanhã', ok:'no prazo' };
 
 // ─── CRONOGRAMA DO DEV (somente leitura) ──────────────────────────────

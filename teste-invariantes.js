@@ -4828,10 +4828,21 @@ ok(/PRAZO\.diasDeAtraso\(maisAntiga, statusKey\(maisAntiga\)/.test(ADMIN),
   try { corre = eval(mC[1]); } catch (e) { ok(false, 'a lista avalia', e.message); return; }
   ok(!corre.includes('validacao'),
      'validacao NAO esta entre as etapas em que o atraso corre', JSON.stringify(corre));
-  /* E `validacao_area` ESTA, pela decisao oposta: ali o dev ainda nao entregou,
-     e o relogio dele nao pode parar enquanto a area nao devolve. */
-  ok(corre.includes('validacao_area'),
-     'mas validacao_area esta — o dev ainda nao entregou', JSON.stringify(corre));
+  /* E `validacao_area` TAMBEM FICA FORA — a decisao foi invertida.
+     "Validacao da area e validacao PM/PO nao pode contar pra vencer."
+
+     Ela corria ate entao, e o medo que a sustentava era concreto: "uma demanda
+     poderia morar meses na area sem nenhum atraso aparecer". O medo continua
+     legitimo; o que mudou foi existir resposta melhor para ele. A etapa ganhou
+     contador proprio (`PRAZO.diasNaArea`) e cobranca aos cinco dias
+     (`homologacao.js`) — a demora na area aparece COMO demora na area, com o
+     nome de quem precisa responder, em vez de virar atraso no nome do dev que
+     ja fez a parte dele.
+
+     Medido na troca: 10 das 15 na area estavam marcadas ATRASADAS. */
+  ok(!corre.includes('validacao_area'),
+     'e validacao_area tambem nao — quem deve a resposta ali e a area',
+     JSON.stringify(corre));
 })();
 ok(/ETAPAS_APOS_O_DEV = \['validacao', 'concluido'\]/.test(PRZ),
    'validacao e conclusao medem pela entrega do dev, e nao por hoje');
@@ -9474,9 +9485,18 @@ sec('Demanda herdada do mes anterior (16 vivas sumiam do Gantt em 01/08)');
      isso de volta — por isso a heranca ganhou lista propria. */
   ok(!P.ETAPAS_QUE_CORREM.includes('validacao'),
      'o ATRASO continua parando na entrega do dev (AX-165)');
-  ok(P.ETAPAS_QUE_HERDAM.length === P.ETAPAS_QUE_CORREM.length + 1 &&
-     P.ETAPAS_QUE_CORREM.every((e) => P.ETAPAS_QUE_HERDAM.includes(e)),
-     'a lista da heranca e a do atraso mais validacao, e nada alem disso',
+  /* A HERANCA E A DO ATRASO MAIS AS DUAS VALIDACOES.
+     Era "mais validacao", quando so ela estava fora do atraso. Com
+     `validacao_area` saindo do atraso tambem, ela caiu desta lista junto —
+     e as duas perguntas sao DIFERENTES: uma demanda parada na area nao
+     atrasa (o dev ja fez a parte dele), mas atravessa a virada do mes como
+     qualquer outra aberta. Sem a correcao, 15 demandas sumiriam da conta de
+     herdadas na virada, em silencio. */
+  ok(P.ETAPAS_QUE_HERDAM.length === P.ETAPAS_QUE_CORREM.length + 2 &&
+     P.ETAPAS_QUE_CORREM.every((e) => P.ETAPAS_QUE_HERDAM.includes(e)) &&
+     P.ETAPAS_QUE_HERDAM.includes('validacao') &&
+     P.ETAPAS_QUE_HERDAM.includes('validacao_area'),
+     'a lista da heranca e a do atraso mais as DUAS validacoes, e nada alem',
      P.ETAPAS_QUE_HERDAM.join(', '));
 
   const ax165 = { entrega: '2026-08-07', status_planejamento: 'validacao',
@@ -20583,6 +20603,66 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const rk = semComentario(corpo(ADMIN, 'function renderKanban(') || '');
     ok(/const desempate = porPrazo;/.test(rk),
        'o Planejado ordena por prazo, como as demais colunas');
+  }
+
+  /* ═══ NENHUMA VALIDACAO CONTA PARA VENCER ════════════════════════════════
+   *
+   * "Validacao da area e validacao PM/PO nao pode contar pra vencer."
+   *
+   * O ATRASO ja parava em `validacao`, mas o CARD nao: `admin.html` e
+   * `dev.html` tinham CADA UM o seu `prazoNivel`, e nenhum consultava a lista
+   * de etapas em que o relogio corre — eles so pulavam concluida, negada e
+   * pausada. Resultado: a regra do atraso dizia "fora" e o card dizia
+   * "vencida", na mesma tela, sobre a mesma demanda. Eram 24 das 74 em
+   * validacao PM/PO.
+   */
+  {
+    sec('O relogio parado nao vence');
+
+    const PZ = require('./prazo.js');
+    ok(PZ.relogioParou('validacao') && PZ.relogioParou('validacao_area'),
+       'as duas validacoes param o relogio');
+    ok(!PZ.relogioParou('em_andamento') && !PZ.relogioParou('planejado') &&
+       !PZ.relogioParou('planning'),
+       'e as etapas com o dev continuam correndo');
+
+    /* ── OS DOIS `prazoNivel`, EXECUTADOS ──
+       Procurar `relogioParou` no texto nao prova nada: a linha pode estar
+       depois da que devolve 'vencida', e ai ela nunca roda. Aqui as duas
+       funcoes sao recortadas e RODADAS com uma demanda vencida em cada etapa. */
+    const ontem = '2026-10-25';
+    [['admin.html', ADMIN, 'function prazoNivel(m) {', 'statusKey'],
+     ['dev.html', DEV, 'function prazoNivel(m) {', 'getStatusKey']].forEach(
+      ([nome, src, ass, nomeEtapa]) => {
+        const fn = corpo(src, ass);
+        ok(!!fn, nome + ': prazoNivel foi isolado');
+        if (!fn) return;
+        const roda = (etapa) => new Function('window', nomeEtapa, 'estaPausado',
+          'hojeISO', 'maisUmDia', 'm',
+          fn + '\nreturn prazoNivel(m);')(
+          { PRAZO: PZ }, () => etapa, () => false, () => '2026-10-26',
+          (d) => '2026-10-27', { entrega: ontem, status_planejamento: etapa });
+        ok(roda('em_andamento') === 'vencida',
+           nome + ': em andamento com prazo passado continua VENCIDA');
+        ok(roda('validacao') === 'entregue',
+           nome + ': em validacao PM/PO nao vence', roda('validacao'));
+        ok(roda('validacao_area') === 'entregue',
+           nome + ': na validacao da area nao vence', roda('validacao_area'));
+      });
+
+    /* `entregue` E UM NIVEL PROPRIO, e nao `ok`: dizer "no prazo" afirmaria
+       algo sobre o cumprimento, e o que houve foi o relogio parar. */
+    ok(/entregue:'em validação'/.test(DEV),
+       'e o nivel novo tem rotulo proprio, em vez de se passar por "no prazo"');
+
+    /* A DEMORA NA AREA NAO SUMIU — ela so deixou de se chamar atraso. O
+       contador e a cobranca de cinco dias e que respondem por ela agora. */
+    const HM = require('./homologacao.js');
+    const parada = { status_planejamento: 'validacao_area', solicitante: 'Ana',
+                     validacao_area_em: '2026-10-18' };
+    ok(HM.cobraHomologacao(parada, '2026-10-26'),
+       'e a demora na area continua visivel, pela cobranca de homologacao',
+       'dias: ' + HM.diasNaArea(parada, '2026-10-26'));
   }
 
   let erroPz = null;

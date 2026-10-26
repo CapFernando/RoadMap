@@ -31,17 +31,29 @@
      `backlog` e `levantar_req` ficam fora: nada foi prometido ainda.
      `validacao` fica fora POR ESTA REGRA: o dev ja entregou.
      `concluido` e `negada` nao atrasam — o que houve ja esta registrado. */
-  /* `validacao_area` CORRE, e `validacao` nao — e a diferenca foi decidida, nao
-     deduzida. Nas duas a demanda esta esperando alguem de fora do dev, mas:
-
-       validacao       o dev ENTREGOU. O relogio dele parou (regra do AX-165).
-       validacao_area  o dev ainda NAO entregou. A area testa ANTES de a solucao
-                       ir para o PM/PO, e so depois disso ela conta como entregue.
-
-     Se as duas ficassem fora, uma demanda poderia morar meses na area sem
-     nenhum atraso aparecer — e o contador de dias da coluna existe justamente
-     porque isso e o risco da etapa nova. */
-  var ETAPAS_QUE_CORREM = ['planning', 'planejado', 'em_andamento', 'validacao_area'];
+  /* ═══ NENHUMA DAS DUAS VALIDACOES CONTA PARA VENCER ══════════════════════
+   *
+   * "Validacao da area e validacao PM/PO nao pode contar pra vencer."
+   *
+   * Nas duas a demanda esta esperando alguem que NAO e o dev. Cobrar prazo de
+   * quem nao esta com a bola e cobrar a pessoa errada:
+   *
+   *   validacao       o dev entregou e o PM/PO analisa (regra do AX-165).
+   *   validacao_area  o dev terminou e a AREA homologa. O que falta ali e a
+   *                   resposta de quem pediu, e nao trabalho do dev.
+   *
+   * `validacao_area` CORRIA ATE AQUI, por uma decisao anterior cujo medo era
+   * concreto: "uma demanda poderia morar meses na area sem nenhum atraso
+   * aparecer". O medo continua legitimo — o que mudou foi existir resposta
+   * melhor para ele. A etapa agora tem CONTADOR PROPRIO (`diasNaArea`) e
+   * COBRANCA aos cinco dias (`homologacao.js`): a demora na area aparece como
+   * demora na area, com o nome de quem precisa responder, em vez de virar
+   * atraso no nome do dev que ja fez a parte dele.
+   *
+   * Medido ao fazer a troca: 10 das 15 na area estavam marcadas ATRASADAS, e
+   * 24 das 74 em validacao PM/PO mostravam "vencida" no card.
+   */
+  var ETAPAS_QUE_CORREM = ['planning', 'planejado', 'em_andamento'];
 
   // Etapas em que o dev JA SAIU DE CENA. O atraso delas e medido pela entrega,
   // e nao pelo dia de hoje nem pela data da validacao.
@@ -59,7 +71,26 @@
      e o relatorio mostrava 5 dias de atraso para quem entregou adiantado. Eram 10
      demandas e 20 dias cobrados de quem cumpriu o combinado. `ETAPAS_QUE_CORREM`
      nao muda. */
-  var ETAPAS_QUE_HERDAM = ETAPAS_QUE_CORREM.concat(['validacao']);
+  /* AS DUAS VALIDACOES SAO ACRESCENTADAS AQUI, e nao herdadas da lista acima.
+     Quando `validacao_area` saiu do atraso, ela saiu TAMBEM desta lista sem
+     ninguem pedir — e as duas perguntas sao diferentes: uma demanda parada na
+     area nao atrasa (o dev ja fez a parte dele), mas ATRAVESSA a virada do mes
+     exatamente como qualquer outra aberta. Sem esta linha, 15 demandas sumiriam
+     da conta de herdadas na virada. */
+  var ETAPAS_QUE_HERDAM = ETAPAS_QUE_CORREM.concat(['validacao_area', 'validacao']);
+
+  /** O RELOGIO PARA NESTA ETAPA? — a pergunta que as telas faziam por conta.
+   *
+   *  `admin.html` e `dev.html` tinham CADA UM o seu `prazoNivel`, e nenhum dos
+   *  dois consultava a lista acima: eles so pulavam concluida, negada e
+   *  pausada. O efeito era o card dizer "vencida" para uma demanda que a regra
+   *  do atraso ja considerava fora — duas respostas para a mesma pergunta, na
+   *  mesma tela, e a mais visivel era a errada.
+   *
+   *  Agora as duas perguntam aqui. */
+  function relogioParou(etapa) {
+    return !ETAPAS_QUE_CORREM.includes(String(etapa || ''));
+  }
 
   function iso(v) {
     return String(v == null ? '' : v).slice(0, 10);
@@ -371,6 +402,7 @@
 
   raiz.PRAZO = {
     ETAPAS_QUE_CORREM: ETAPAS_QUE_CORREM,
+    relogioParou: relogioParou,
     ETAPAS_APOS_O_DEV: ETAPAS_APOS_O_DEV,
     fimDoDev: fimDoDev,
     diasPausados: diasPausados,
