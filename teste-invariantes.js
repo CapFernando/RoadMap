@@ -2072,6 +2072,14 @@ for (const [nome, src, ass] of [
   // a propria variavel, e `getElementById('m-id')` contem "id" dentro de uma
   // string — as duas coisas acusavam variavel que nao existe. O que sobra e codigo.
   const corpoF = corpoDeFuncao(src, ass)
+    /* COMENTARIO DE BLOCO TAMBEM SAI, e nao so o de linha.
+       Isto removia apenas `//`. Um comentario `/* ... *\/` que CITASSE a
+       variavel — como o que explica por que a prioridade deixou de ser
+       calculada, e usa a palavra "prioridade" tres vezes — aparecia antes da
+       declaracao e a invariante acusava "usada antes de declarada" num codigo
+       correto. Alarme falso e pior que alarme nenhum: ele ensina a ignorar o
+       vermelho, e o proximo vermelho pode ser de verdade. */
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/^\s*\/\/.*$/gm, '')
     .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
     .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
@@ -20523,6 +20531,58 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const fnAbrir = semComentario(corpo(DEV, 'function pjAbrirDoCard(') || '');
     ok(/ev\.stopPropagation\(\)/.test(fnAbrir) && /ev\.preventDefault\(\)/.test(fnAbrir),
        'e a funcao segura o evento, para o card nao abrir junto');
+  }
+
+  /* ═══ A MATRIZ GUT/IP SAIU, E TEM DE CONTINUAR FORA ══════════════════════
+   *
+   * "Retirar essa parte do projeto, dash, admin, gantt — nao e mais
+   *  utilizada."
+   *
+   * Ela derivava a prioridade de quatro notas de 1 a 5 (IP = (I+G+U) ÷ E) e
+   * SOBRESCREVIA o campo de prioridade que a pessoa tinha escolhido. Tambem
+   * ordenava o Planejado e pintava um cracha no card.
+   *
+   * ESTA INVARIANTE GUARDA UMA AUSENCIA, e isso e deliberado: codigo removido
+   * volta por acidente — num merge, num copiar-colar de outra tela, ou porque
+   * alguem leu `discovery.priorizacao` na base (os dados ANTIGOS continuam la,
+   * de proposito) e concluiu que a matriz ainda vale. Sem guarda, o retorno
+   * seria silencioso: a prioridade digitada voltaria a ser sobrescrita.
+   *
+   * MEDIDA SEM COMENTARIO, senao a propria explicacao desta remocao — que cita
+   * "matriz GUT/IP" varias vezes — faria a invariante acusar a si mesma.
+   */
+  {
+    sec('A matriz GUT/IP continua fora');
+
+    const MORTOS = ['mCalcGut', 'mToggleGut', 'ipBadge', 'getIP', 'nmCalcIP',
+                    'm-gut', 'm-ipVal', 'm-prio-auto', 'gut-row', 'kb-ip'];
+    [['admin.html', ADMIN], ['index.html', INDEX], ['dev.html', DEV],
+     ['gantt.html', GANTT]].forEach(([nome, src]) => {
+      const s = semComentario(src);
+      const vivos = MORTOS.filter(x => s.includes(x));
+      ok(!vivos.length, nome + ' nao tem mais nenhuma peca da matriz',
+         vivos.join(', '));
+    });
+
+    /* O CAMPO DE PRIORIDADE VOLTOU A VALER SOZINHO. A matriz o sobrescrevia
+       quando a caixa "aplicar a prioridade" estava marcada — e ela nascia
+       marcada. */
+    const sv = semComentario(corpo(ADMIN, 'async function saveMelhoria(') || '');
+    ok(/const prioridade = document\.getElementById\('m-prioridade'\)\.value;/.test(sv),
+       'a prioridade e a do campo, e nada a recalcula');
+    ok(!/priorizacao:/.test(sv),
+       'e o save nao escreve mais o ramo `priorizacao` no discovery');
+    /* MAS `discovery` CONTINUA ATRAVESSANDO. Ele guarda o que o solicitante
+       escreveu no painel publico — impacto, beneficiarios, ganho —, e isso nao
+       tem relacao com a matriz. Tira-lo junto apagaria 277 demandas. */
+    ok(/discovery = existing\.discovery \|\| undefined;/.test(sv),
+       'e o discovery do solicitante continua sendo repassado');
+
+    /* E A ORDENACAO DO PLANEJADO PASSOU A SER POR PRAZO, como as outras
+       colunas — e nao por um numero que ninguem mais atualiza. */
+    const rk = semComentario(corpo(ADMIN, 'function renderKanban(') || '');
+    ok(/const desempate = porPrazo;/.test(rk),
+       'o Planejado ordena por prazo, como as demais colunas');
   }
 
   let erroPz = null;

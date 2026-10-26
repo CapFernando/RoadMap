@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="cb02fe5fe0">
+<html lang="pt-BR" data-build="60ea0edc05">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -616,7 +616,9 @@
       <!-- As quatro secoes seguintes sao vocabulario de produto: requisito
            funcional, regra de negocio, escopo, criterio de aceite em Gherkin.
            Quem abre a solicitacao travava aqui. Ficam recolhidas e OPCIONAIS —
-           nao removidas, porque alimentam a priorizacao e o time preenche depois. -->
+           nao removidas, porque o time de produto as le ao refinar a demanda.
+           (Antes diziam "alimentam a priorizacao": a matriz GUT/IP saiu de uso,
+           e o motivo de elas ficarem passou a ser so o refinamento.) -->
       <details class="nm-avancado">
         <summary>
           <span>Detalhes para o time de produto</span>
@@ -2080,24 +2082,6 @@ function nmCalcGanho() {
   const txt = `${mes.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h/mês (libera ${fte.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} FTE)`;
   out.textContent = '≈ ' + txt + ` — ${h}h/dia × ${p} pessoa(s) × 22 dias`;
   return txt;
-}
-function nmCalcIP() {
-  const I = +document.getElementById('nm-scI').value, G = +document.getElementById('nm-scG').value,
-        U = +document.getElementById('nm-scU').value, E = +document.getElementById('nm-scE').value;
-  document.getElementById('nm-valI').textContent = I;
-  document.getElementById('nm-valG').textContent = G;
-  document.getElementById('nm-valU').textContent = U;
-  document.getElementById('nm-valE').textContent = E;
-  const ip = (I + G + U) / E;
-  document.getElementById('nm-ipVal').textContent = ip.toFixed(2).replace('.', ',');
-  const badge = document.getElementById('nm-ipClasse');
-  const prioEl = document.getElementById('nm-prio-auto');
-  let prio;
-  if (ip >= 4)      { badge.textContent = '🟢 Prioritário'; badge.style.background = '#1E4208'; badge.style.color = '#B2E07A'; prio = 'alta'; }
-  else if (ip >= 2.5){ badge.textContent = '🟡 Avaliar';    badge.style.background = '#3D3600'; badge.style.color = '#FFE14D'; prio = 'media'; }
-  else              { badge.textContent = '🔴 Repensar';    badge.style.background = '#5C0A0A'; badge.style.color = '#F9A0A0'; prio = 'baixa'; }
-  prioEl.textContent = prio.charAt(0).toUpperCase() + prio.slice(1);
-  return { I, G, U, E, ip, prio };
 }
 
 // ── Listas dinâmicas ──

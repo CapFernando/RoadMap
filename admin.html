@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7b4e33ad52">
+<html lang="pt-BR" data-build="d7f52d21e7">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -216,7 +216,6 @@
     .kb-card-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; margin-bottom: 6px; }
     .kb-card-meta { display: flex; flex-wrap: wrap; gap: 5px 10px; font-size: 11px; color: var(--text3); }
     .kb-card-tema { font-size: 11px; color: var(--text3); margin-bottom: 5px; }
-    .kb-ip { font-family: monospace; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
     .kb-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
     .kb-anexo-tag { font-size: 10.5px; color: var(--text3); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
     /* Progresso das subtarefas: mesmo peso dos outros marcadores do card — ele
@@ -562,10 +561,6 @@
     .kb-col[data-col="validacao_area"] .kb-col-head { color: #D8AEF0; }
     .kb-col.drop-target { outline: 2px dashed var(--blue, #3B8FE8); outline-offset: -2px; background: rgba(59,143,232,.06); }
     .kb-col.drop-target .kb-col-head { background: rgba(59,143,232,.10); }
-    .gut-row { display: grid; grid-template-columns: 210px 1fr 34px; gap: 12px; align-items: center; font-size: 13px; color: var(--text2, #C9C6BE); }
-    .gut-row input[type=range] { width: 100%; accent-color: var(--blue, #3B8FE8); }
-    .gut-v { font-family: monospace; font-weight: 700; text-align: center; background: var(--bg3, #252522); border-radius: 6px; padding: 3px 0; color: var(--blue, #3B8FE8); }
-    @media(max-width:600px){ .gut-row { grid-template-columns: 1fr 34px; } .gut-row span:first-child { grid-column: 1/-1; } }
     #m-discovery .disc-sec { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     #m-discovery .disc-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text3); margin-bottom: 8px; }
     #m-discovery .disc-row { font-size: 13px; color: var(--text2, #C9C6BE); margin-bottom: 5px; line-height: 1.5; white-space: pre-wrap; }
@@ -2498,27 +2493,6 @@
         <label>Anexos <small style="font-weight:400;color:var(--text3)">(até 1,5 MB cada)</small></label>
         <input type="file" data-anexo-accept id="m-file" multiple onchange="mAddFiles(this.files)" style="padding:8px;background:var(--bg3)" />
         <div id="m-anexos-edit" style="display:grid;gap:6px;margin-top:8px"></div>
-      </div>
-    </div>
-
-    <!-- Priorização GUT/IP — Backlog / Levantar Req. / Planejado -->
-    <div id="m-gut" style="display:none;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;background:var(--bg3,#161614);">
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">Priorização (matriz GUT/IP)</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Pontue de 1 a 5. Ordena o Planejado do maior para o menor.</div>
-      <div style="display:grid;gap:10px;">
-        <div class="gut-row"><span>Impacto estratégico (I)</span><input type="range" min="1" max="5" value="3" id="m-gI" oninput="mCalcGut()"><span class="gut-v" id="m-gIv">3</span></div>
-        <div class="gut-row"><span>Ganho de produtividade (G)</span><input type="range" min="1" max="5" value="3" id="m-gG" oninput="mCalcGut()"><span class="gut-v" id="m-gGv">3</span></div>
-        <div class="gut-row"><span>Urgência e dependências (U)</span><input type="range" min="1" max="5" value="3" id="m-gU" oninput="mCalcGut()"><span class="gut-v" id="m-gUv">3</span></div>
-        <div class="gut-row"><span>Esforço / complexidade (E)</span><input type="range" min="1" max="5" value="3" id="m-gE" oninput="mCalcGut()"><span class="gut-v" id="m-gEv">3</span></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
-        <span style="font-family:monospace;font-size:12px;color:var(--text3);">IP = (I+G+U) ÷ E</span>
-        <span style="font-family:monospace;font-size:20px;font-weight:700;" id="m-ipVal">—</span>
-        <span id="m-ipClasse" style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;"></span>
-        <span style="font-size:12px;color:var(--text3);">→ Prioridade: <strong id="m-prio-auto" style="color:var(--text);">—</strong></span>
-        <label style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:6px;margin-left:auto;cursor:pointer;">
-          <input type="checkbox" id="m-gut-aplica" checked> aplicar à prioridade
-        </label>
       </div>
     </div>
 
@@ -4652,18 +4626,6 @@ function statusEfetivo(m) {
   return ETAPA.efetiva(m);
 }
 
-function getIP(m) {
-  const p = m.discovery && m.discovery.priorizacao;
-  return (p && typeof p.ip === 'number') ? p.ip : null;
-}
-function ipBadge(ip) {
-  if (ip == null) return '';
-  let bg, cor;
-  if (ip >= 4)       { bg = '#1E4208'; cor = '#B2E07A'; }
-  else if (ip >= 2.5){ bg = '#3D3600'; cor = '#FFE14D'; }
-  else               { bg = '#5C0A0A'; cor = '#F9A0A0'; }
-  return `<span class="kb-ip" style="background:${bg};color:${cor}">IP ${ip.toFixed(1).replace('.',',')}</span>`;
-}
 
 // ── Filtros do Kanban (mesma barra da aba Melhorias) ──
 // As colunas já representam o status, então aqui não há filtro de status.
@@ -4963,16 +4925,13 @@ function renderKanban() {
     // vem a regra propria da etapa.
     const vencida = m => statusEfetivo(m) === 'atrasado';
     const porPrazo = (a, b) => (a.entrega || '9999-99-99').localeCompare(b.entrega || '9999-99-99');
-    const desempate = col.key === 'planejado'
-      ? (a, b) => {
-          // dentro do mesmo grupo, planejado segue por prioridade (IP)
-          const ia = getIP(a), ib = getIP(b);
-          if (ia == null && ib == null) return porPrazo(a, b);
-          if (ia == null) return 1;
-          if (ib == null) return -1;
-          return ib - ia;
-        }
-      : porPrazo;
+    /* TODAS AS COLUNAS ORDENAM POR PRAZO.
+       O Planejado desempatava por IP — a nota da matriz GUT, que saiu de uso.
+       Sem ela o criterio passa a ser o mesmo das outras colunas: o que vence
+       antes aparece antes. Nenhuma demanda muda de coluna; o que muda e a
+       ordem DENTRO do Planejado, e ela deixa de depender de um numero que
+       ninguem mais atualiza. */
+    const desempate = porPrazo;
     items = items.sort((a, b) => {
       const va = vencida(a), vb = vencida(b);
       if (va !== vb) return va ? -1 : 1;      // vencida sobe
@@ -4993,7 +4952,7 @@ function renderKanban() {
       if (m.criado_em) meta.push('🗓 Criada: ' + formatDate((m.criado_em || '').slice(0, 10)));
       if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
       const nAnexos = (m.anexos || []).length;
-      const badges = [ipBadge(getIP(m))];
+      const badges = [];
       // Pontos primeiro: e o numero que decide o que entra na sprint review, e
       // lendo a coluna de cima para baixo ele precisa estar sempre no mesmo lugar.
       // `poker_media` so existe onde houve votacao — sem ela o ponto veio de
@@ -5286,30 +5245,6 @@ function kbAutoSave() {
   }, 900);
 }
 
-// ─── PRIORIZAÇÃO GUT/IP (no modal) ────────────────────────────────
-function mCalcGut() {
-  const I = +document.getElementById('m-gI').value, G = +document.getElementById('m-gG').value,
-        U = +document.getElementById('m-gU').value, E = +document.getElementById('m-gE').value;
-  document.getElementById('m-gIv').textContent = I;
-  document.getElementById('m-gGv').textContent = G;
-  document.getElementById('m-gUv').textContent = U;
-  document.getElementById('m-gEv').textContent = E;
-  const ip = (I + G + U) / E;
-  document.getElementById('m-ipVal').textContent = ip.toFixed(2).replace('.', ',');
-  const badge = document.getElementById('m-ipClasse');
-  const prioEl = document.getElementById('m-prio-auto');
-  let prio;
-  if (ip >= 4)       { badge.textContent = '🟢 Prioritário'; badge.style.background = '#1E4208'; badge.style.color = '#B2E07A'; prio = 'alta'; }
-  else if (ip >= 2.5){ badge.textContent = '🟡 Avaliar';     badge.style.background = '#3D3600'; badge.style.color = '#FFE14D'; prio = 'media'; }
-  else               { badge.textContent = '🔴 Repensar';    badge.style.background = '#5C0A0A'; badge.style.color = '#F9A0A0'; prio = 'baixa'; }
-  prioEl.textContent = prio.charAt(0).toUpperCase() + prio.slice(1);
-  return { I, G, U, E, ip: +ip.toFixed(2), prio };
-}
-function mToggleGut() {
-  const s = document.getElementById('m-status').value;
-  const show = ['backlog','levantar_req','planejado'].includes(s);
-  document.getElementById('m-gut').style.display = show ? 'block' : 'none';
-}
 
 // ─── DISCOVERY (somente leitura) + ANEXOS ─────────────────────────
 function mDataUrlToBlob(dataUrl) {
@@ -11627,15 +11562,6 @@ function openModalMelhoria(id) {
 
   document.getElementById('m-status').value = statusKey(m || {}) || 'backlog';
 
-  // Priorização GUT/IP: carrega valores salvos (ou 3 padrão)
-  const pr = (m && m.discovery && m.discovery.priorizacao) || {};
-  document.getElementById('m-gI').value = pr.I || 3;
-  document.getElementById('m-gG').value = pr.G || 3;
-  document.getElementById('m-gU').value = pr.U || 3;
-  document.getElementById('m-gE').value = pr.E || 3;
-  document.getElementById('m-gut-aplica').checked = true;
-  mCalcGut();
-
   // Discovery + anexos
   renderMDiscovery(m || {});
 
@@ -11688,7 +11614,6 @@ function openModalMelhoria(id) {
 function onStatusChange() {
   const s = document.getElementById('m-status').value;
   document.getElementById('field-negada').style.display = s === 'negada' ? 'block' : 'none';
-  mToggleGut();
 }
 
 function calcHorasPlanejadas(inicio, entrega) {
@@ -12252,14 +12177,17 @@ async function saveMelhoria() {
                'volte e edite a que existe em vez de abrir outra.',
         ok: 'Salvar assim mesmo', cancelar: 'Voltar', perigo: true }))) return;
 
-  // Priorização GUT/IP (Backlog / Levantar Req. / Planejado)
-  let discovery = existing.discovery || undefined;
-  let prioridade = document.getElementById('m-prioridade').value;
-  if (['backlog','levantar_req','planejado'].includes(sp)) {
-    const gut = mCalcGut();
-    discovery = { ...(existing.discovery || {}), priorizacao: { ...(existing.discovery && existing.discovery.priorizacao || {}), I: gut.I, G: gut.G, U: gut.U, E: gut.E, ip: gut.ip } };
-    if (document.getElementById('m-gut-aplica').checked) prioridade = gut.prio;
-  }
+  /* A PRIORIDADE E DIGITADA, e nao mais calculada.
+     A matriz GUT/IP saiu de uso: ela derivava a prioridade de quatro notas de
+     1 a 5 e sobrescrevia o que a pessoa tinha escolhido no campo. Sem ela, o
+     campo de prioridade volta a valer sozinho — que e o que ele sempre
+     pareceu ser para quem o preenchia.
+     `discovery` CONTINUA SENDO REPASSADO: ele guarda o que o solicitante
+     escreveu no painel publico (impacto, beneficiarios, ganho), e isso nao
+     tem relacao com a matriz. O que sai e so o ramo `priorizacao`, que
+     ninguem mais le. */
+  const discovery = existing.discovery || undefined;
+  const prioridade = document.getElementById('m-prioridade').value;
 
   const obj = {
     ...existing,
