@@ -17299,6 +17299,153 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/PREVOO\.REGRAS \|\| \[\]/.test(corpo(ADMIN, 'function etapasQueExigemDevAoEntrar() {') || ''),
        'e `concluido` vem do prevoo.js, e nao de uma segunda lista escrita a mao');
 
+    /* ══ O ARRASTE DO ADMIN CONSULTA A HOMOLOGACAO, COMO O DO DEV JA FAZIA ══
+     *
+     * O modal do Admin chamava `HOMOLOGACAO.barra`; o arraste, nao. E o arraste
+     * e justamente o caminho em que ninguem ve o formulario — foi o que o
+     * comentario do `gestoSemDev` ja dizia ao lado, sobre o responsavel, e a
+     * regra nova entrou sem olhar para ele.
+     *
+     * O preco apareceu em producao: arrastar duas demandas de volta para a
+     * Validacao da area moveu os dois cards na tela e so a publicacao recusou,
+     * com os dois codigos num texto so.
+     *
+     * EXECUTADO, com o modulo DE VERDADE. Um stub que sempre libera faria esta
+     * bateria provar o contrario do que ela existe para provar. */
+    {
+      const DROP = corpo(ADMIN, 'function kbDrop(e, colKey) {') || '';
+      ok(!!DROP, 'o arraste do Admin foi isolado');
+      if (DROP) {
+        const arrasta = (demanda, destino) => {
+          const feito = { moveu: null, recusou: null, abriu: null, salvou: false };
+          const tarefas = [];
+          const amb = {
+            state: { melhorias: [demanda] },
+            gestoSemDev: () => false,
+            pedeHoras: () => false,
+            spikeQuemAssina: () => null,
+            marcaConclusao: () => {},
+            statusEfetivo: (m) => m.status_planejamento,
+            renderKanban: () => {},
+            openModalMelhoria: (id) => { feito.abriu = id; },
+            kbAutoSave: () => { feito.salvou = true; },
+            toast: (t) => { feito.recusou = String(t); },
+            mAba: () => {},
+            onStatusChange: () => {},
+            setTimeout: (fn) => tarefas.push(fn),
+            document: { getElementById: () => ({ value: '', focus() {} }) },
+            STATUS_LABELS: {},
+            SP_TO_STATUS: {},
+            _dirtyMelhoriaIds: new Set(),
+            PREVOO: require('./prevoo.js'),
+            PRAZO: require('./prazo.js'),
+            window: { HOMOLOGACAO: require('./homologacao.js'), PRAZO: require('./prazo.js') },
+            HOMOLOGACAO: require('./homologacao.js'),
+          };
+          const nomes = Object.keys(amb);
+          const fn = new Function(...nomes,
+            'let _kbDragId = ' + JSON.stringify(demanda.id) + ';\n' + DROP + '\n; return kbDrop;'
+          )(...nomes.map(n => amb[n]));
+          fn({ preventDefault() {}, currentTarget: { classList: { remove() {} } } }, destino);
+          tarefas.forEach(t => t());
+          feito.moveu = demanda.status_planejamento;
+          return feito;
+        };
+
+        const semNome = arrasta(
+          { id: 'h1', codigo: 'AX-801', titulo: 'Consultas duplicadas', dev: 'Gabriel',
+            status_planejamento: 'validacao', solicitante: '' }, 'validacao_area');
+        ok(semNome.moveu === 'validacao' && !semNome.salvou,
+           'arrastar para a Validacao da area SEM solicitante nao move o card nem publica',
+           'ficou em ' + semNome.moveu + ', publicou: ' + semNome.salvou);
+        ok(/solicitante/i.test(semNome.recusou || ''),
+           'e diz o que falta, nomeando a demanda', semNome.recusou || '(calou)');
+        ok(semNome.abriu === 'h1', 'e abre o card para resolver', String(semNome.abriu));
+
+        const comNome = arrasta(
+          { id: 'h2', codigo: 'AX-802', titulo: 'Outra', dev: 'Gabriel',
+            status_planejamento: 'validacao', solicitante: 'Marina' }, 'validacao_area');
+        ok(comNome.moveu === 'validacao_area' && comNome.salvou,
+           'e COM solicitante o arraste passa — a regra barra o que falta, nao o gesto',
+           'ficou em ' + comNome.moveu);
+
+        /* A VOLTA PARA ETAPA ANTERIOR NAO PODE SER BARRADA POR ISSO. Devolver
+           ao dev e justamente o que se faz quando a demanda nao esta pronta;
+           exigir solicitante ali prenderia a demanda no PM/PO. */
+        const praTras = arrasta(
+          { id: 'h3', codigo: 'AX-803', titulo: 'Volta', dev: 'Gabriel',
+            status_planejamento: 'validacao', solicitante: '' }, 'em_andamento');
+        ok(praTras.moveu === 'em_andamento' && praTras.salvou,
+           'e devolver ao dev continua livre, sem solicitante nenhum');
+      }
+    }
+
+    /* ══ A RECUSA DO SERVIDOR VIRA JORNADA, E NAO UM TEXTO COM CODIGOS ══════
+     *
+     * O Worker devolve `error: 'homologacao'` com `itens[].campo`. A tela
+     * resolvia o campo por um registro de regras do PREVOO — e a regra da
+     * homologacao mora em `homologacao.js`, nao la. Resultado: a jornada nao
+     * acontecia e sobrava o texto cru, "AX-801: Informe o solicitante. |
+     * AX-805: Informe o solicitante." Dois codigos numa faixa vermelha e
+     * nenhum caminho ate eles. */
+    {
+      ok(/solicitante: 'm-solicitante'/.test(semComentario(ADMIN)),
+         'o campo `solicitante` tem id de tela — sem isso a jornada abre o card e nao aponta nada');
+
+      /* ── TODA ETAPA DO QUADRO TEM NOME ──
+         `validacao_area` nao estava em `STATUS_LABELS`, e toda frase montada
+         com `STATUS_LABELS[sp] || sp` caia no `|| sp`: "Movido para
+         validacao_area — salvando…". A coluna e o seletor ja tinham o nome
+         certo; faltava justamente onde as mensagens o buscam. */
+      const LBL = new Function(
+        (ADMIN.match(/const STATUS_LABELS = \{[\s\S]*?\n\};/) || [''])[0] +
+        '; return STATUS_LABELS;')();
+      const COLS = (ADMIN.match(/key: '([a-z_]+)', label: '([^']+)'/g) || []);
+      const semNomeEtapa = ['backlog', 'planning', 'planejado', 'em_andamento',
+                            'validacao_area', 'validacao', 'concluido', 'negada']
+        .filter(k => !LBL[k]);
+      ok(semNomeEtapa.length === 0,
+         'toda etapa do quadro tem nome na tabela de rotulos',
+         semNomeEtapa.join(', ') || 'nenhuma de fora');
+      ok(LBL.validacao_area === 'Validação da área',
+         'e o nome e o MESMO da coluna e do seletor — dois nomes para a mesma ' +
+         'etapa seria a divergencia de sempre, so que na frase',
+         LBL.validacao_area);
+      ok(COLS.some(s => s.includes('validacao_area') && s.includes('Validação da área')),
+         'a coluna confirma a redacao', String(COLS.filter(s => s.includes('validacao_area'))));
+      const VIAJ = corpo(ADMIN, 'async function saveViaProxy') || '';
+      const semCom = semComentario(VIAJ);
+      ok(/culpado && culpado\.campo/.test(semCom),
+         'o campo vem do ITEM que o servidor mandou, e nao so do registro de regras');
+      /* A CONDICAO TEM DE ACEITAR O ITEM SOZINHO. Exigir `doServidor` mantinha
+         a recusa de homologacao fora da jornada mesmo com o campo em maos — era
+         o defeito, e deixar `culpado.campo` sem relaxar a condicao o manteria. */
+      ok(/\(doServidor \|\| culpado\.campo\)/.test(semCom),
+         'e item com campo basta: nao precisa estar no registro do prevoo');
+      /* EXECUTADO, e nao casado por texto. A primeira versao desta afirmacao
+         procurava `corpo.itens.length` e a frase "e mais" na pagina — e a
+         sabotagem `const aindaFaltam = false && quantasPresas > 1` passou
+         limpa, porque as duas strings continuam la com a conta morta. E a
+         mesma armadilha que ja escapou outras vezes nesta base: condicao
+         neutralizada nao muda o texto do arquivo. */
+      const iQ = VIAJ.indexOf('const quantasPresas =');
+      const fimQ = VIAJ.indexOf(": '';", iQ);
+      const contaTrecho = (iQ >= 0 && fimQ > iQ) ? VIAJ.slice(iQ, fimQ + 5) : '';
+      ok(!!contaTrecho, 'a conta das outras presas foi isolada');
+      if (contaTrecho) {
+        const conta = (itens) => new Function('corpo',
+          contaTrecho + '\n; return aindaFaltam;')({ itens: itens });
+        const tres = conta([{ codigo: 'AX-801' }, { codigo: 'AX-805' }, { codigo: 'AX-809' }]);
+        ok(/2/.test(tres) && tres.includes('AX-805') && tres.includes('AX-809') &&
+           !tres.includes('AX-801'),
+           'a faixa diz quantas OUTRAS esperam o mesmo, e quais — senao consertar ' +
+           'a primeira bate na parede seguinte sem aviso', tres || '(vazio)');
+        ok(conta([{ codigo: 'AX-801' }]) === '',
+           'e com uma so presa nao sobra frase nenhuma', JSON.stringify(conta([{ codigo: 'X' }])));
+        ok(conta([]) === '', 'nem com lista vazia');
+      }
+    }
+
     /* ══ E O GESTO NAO PODE SER MAIS FROUXO QUE A PUBLICACAO ══
      * Gesto que passa e publicacao que recusa e trocar um erro tardio por
      * outro: a pessoa faz, parece que deu certo, e o erro volta no fim. */
@@ -17657,8 +17804,17 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* A ancora deixou de citar UMA recusa: agora o servidor devolve `itens`
        em duas (`sem_sistema` e `sem_responsavel`), e a tela decide qual campo
        abrir pelo `RECUSA_REGRA`. Afirmar a condicao, e nao o nome de uma delas. */
+    /* A CONDICAO FOI ALARGADA, E ESTA AFIRMACAO ACOMPANHOU. Ela exigia
+       `if (doServidor &&`, o que amarrava a jornada ao registro de regras do
+       PREVOO — e deixava de fora exatamente a recusa de homologacao, cuja regra
+       mora em `homologacao.js`. Era o defeito que apareceu na tela: dois
+       codigos numa faixa vermelha e nenhum caminho ate eles.
+       Agora basta o item TRAZER o campo. O `recusaConhecida` continua como
+       segunda opcao, para as recusas que nao carregam campo, e a afirmacao
+       segue grudada no `if (` pelo motivo original: sem isso, um `if (false &&`
+       na frente deixaria o texto intacto e a condicao morta. */
     ok(VIA.indexOf('const doServidor = culpado && culpado.id && recusaConhecida(corpo.error)') >= 0 &&
-       VIA.indexOf('if (doServidor &&') >= 0,
+       VIA.indexOf('if (culpado && culpado.id && (doServidor || culpado.campo) &&') >= 0,
        'e se o servidor recusar mesmo assim, a tela usa o id para levar ate la');
     ok(/sem_sistema: 'sistema'/.test(ADMIN) && /sem_responsavel: 'responsavel'/.test(ADMIN),
        'e sabe traduzir as DUAS recusas em campo — nao so a do sistema');

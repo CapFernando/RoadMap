@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="9439f06e17">
+<html lang="pt-BR" data-build="4d6d3d163b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3491,14 +3491,44 @@ async function saveViaProxy(tentativa = 1, redes = 0) {
          O `itens[].id` existe justamente para isto. */
       const culpado = corpo && Array.isArray(corpo.itens) && corpo.itens[0];
       const doServidor = culpado && culpado.id && recusaConhecida(corpo.error);
-      if (doServidor &&
-          levaAoCampo(culpado.id, { tema: 'm-tema', dev: 'm-dev' }[doServidor.campo],
+      /* ── O CAMPO VEM DO PRÓPRIO ITEM, QUANDO O SERVIDOR O DIZ ──────────────
+       *
+       * `recusaConhecida` resolve o campo por um registro de regras do PREVOO —
+       * e a regra da homologação não mora lá, mora em `homologacao.js`. Com
+       * isso, `error: 'homologacao'` não casava com registro nenhum, a jornada
+       * não acontecia e sobrava o texto cru do servidor. Foi o que apareceu na
+       * tela: "AX-801: Informe o solicitante. | AX-805: Informe o solicitante."
+       * Dois códigos numa faixa vermelha, e nenhum caminho até eles.
+       *
+       * O servidor JÁ MANDA `campo` em cada item — é a fonte certa: é por
+       * demanda, e não depende de um registro que precisa ser lembrado toda vez
+       * que nasce uma regra. O registro continua valendo como segunda opção,
+       * para as recusas que não carregam campo.
+       *
+       * E O NÚMERO DAS OUTRAS VAI JUNTO. A jornada leva a UMA demanda; com
+       * duas ou mais presas, consertar a primeira e publicar bate na parede
+       * seguinte sem aviso. Dizer "e outras 3 esperam o mesmo" é a diferença
+       * entre uma tarefa e uma surpresa repetida. */
+      const campoLogico = (culpado && culpado.campo) ||
+                          (doServidor && doServidor.campo) || '';
+      const ID_DO_CAMPO = { tema: 'm-tema', dev: 'm-dev', solicitante: 'm-solicitante' };
+      const quantasPresas = (corpo && Array.isArray(corpo.itens) && corpo.itens.length) || 0;
+      const aindaFaltam = quantasPresas > 1
+        ? '  (e mais ' + (quantasPresas - 1) + ' na mesma situação: ' +
+          corpo.itens.slice(1).map(x => x.codigo).join(', ') + ')'
+        : '';
+      if (culpado && culpado.id && (doServidor || culpado.campo) &&
+          levaAoCampo(culpado.id, ID_DO_CAMPO[campoLogico],
                       /* Frase de regra que depende da demanda — a do spike diz
                          quem ja assinou — vem montada do SERVIDOR, que tem os
                          dados. Chamar a funcao daqui daria um texto com a conta
                          da tela, que pode estar desatualizada. */
-                      (typeof doServidor.motivo === 'string' && doServidor.motivo) ||
-                      corpo.detail)) {
+                      ((typeof culpado.motivo === 'string' && culpado.motivo) ||
+                       (doServidor && typeof doServidor.motivo === 'string' && doServidor.motivo) ||
+                       corpo.detail) + aindaFaltam)) {
+        // `homologacao` não tem campo no formulário: o registro mora na aba
+        // Entrega, e é para lá que a pessoa precisa ir depois de abrir o card.
+        if (campoLogico === 'homologacao') setTimeout(() => { try { mAba('entrega'); } catch (_) {} }, 320);
         showSaving(false);
         return false;
       }
@@ -3705,6 +3735,12 @@ const STATUS_LABELS = {
   planning:     'Planning',
   planejado:    'Planejado',
   em_andamento: 'Em Andamento',
+  // Faltava, e a etapa existe desde a homologação. Sem a linha, toda frase
+  // montada com `STATUS_LABELS[sp] || sp` caía no `|| sp` e mostrava a CHAVE:
+  // "Movido para validacao_area — salvando…". O nome é o mesmo da coluna e do
+  // seletor, logo abaixo nesta página — inventar um segundo aqui seria a mesma
+  // etapa com dois nomes conforme a frase.
+  validacao_area: 'Validação da área',
   validacao:    'Validação PM/PO',
   concluido:    'Concluído',
   atrasado:     'Atrasado',
@@ -5314,6 +5350,37 @@ function kbDrop(e, colKey) {
       renderKanban();
       openModalMelhoria(id);
       setTimeout(() => { try { mAba('entrega'); } catch (_) {} }, 320);
+      return;
+    }
+  }
+  /* ── E A REGRA DA HOMOLOGAÇÃO TAMBÉM, PELO MESMO MOTIVO DO RESPONSÁVEL ──
+   *
+   * O formulário já consultava `HOMOLOGACAO.barra`; o arraste, não. E o arraste
+   * é justamente o caminho em que a pessoa NÃO vê o formulário — o comentário
+   * do `gestoSemDev` logo acima diz isso com todas as letras, e esta regra
+   * ficou de fora quando entrou.
+   *
+   * O preço apareceu em produção: arrastar duas demandas de volta para a
+   * Validação da área deixou os dois cards mudarem de coluna na tela, e o erro
+   * só surgiu na publicação, como um texto com dois códigos dentro —
+   * "AX-801: Informe o solicitante. | AX-805: Informe o solicitante." Nenhum
+   * dos dois cards voltava sozinho, e não havia por onde começar a resolver.
+   *
+   * Barrando aqui, o card não sai do lugar e a pessoa vai direto ao campo que
+   * falta — a mesma jornada do responsável, que já existia ao lado. */
+  if (window.HOMOLOGACAO) {
+    const impedeHom = HOMOLOGACAO.barra(m, colKey, window.PRAZO && PRAZO.hojeISO());
+    if (impedeHom) {
+      toast('🔒 ' + (m.codigo || m.titulo) + ': ' + impedeHom.motivo, 'err');
+      renderKanban();
+      openModalMelhoria(id);
+      setTimeout(() => {
+        try {
+          document.getElementById('m-status').value = colKey; onStatusChange();
+          if (impedeHom.campo === 'solicitante') document.getElementById('m-solicitante').focus();
+          else if (impedeHom.campo === 'homologacao') mAba('entrega');
+        } catch (_) {}
+      }, 320);
       return;
     }
   }
