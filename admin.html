@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="53da40cfbb">
+<html lang="pt-BR" data-build="3c3d6e819a">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3301,7 +3301,10 @@ function mesclaTemas(doServidor) {
   return out;
 }
 
-async function saveViaProxy(tentativa = 1) {
+/* `tentativa` conta a remontagem por CONFLITO; `redes`, a repeticao por queda de
+   rede. Sao orcamentos separados de proposito: gastar o do conflito numa falha de
+   rede faria a remontagem seguinte — que e a que resolve — nao acontecer. */
+async function saveViaProxy(tentativa = 1, redes = 0) {
   /* Cada tentativa comeca sem explicacao dada. Sem zerar, uma recusa explicada
      calaria a mensagem generica da tentativa SEGUINTE, que pode ter falhado por
      outro motivo — e ai a tela emudece de vez. */
@@ -3427,7 +3430,7 @@ async function saveViaProxy(tentativa = 1) {
       // loop esconderia um problema real.
       if (res.status === 409 && corpo && corpo.error === 'conflito' && tentativa === 1) {
         showSaving(false);
-        return saveViaProxy(2);
+        return saveViaProxy(2, redes);
       }
       /* O SERVIDOR AINDA PODE RECUSAR: outra aba publicou, ou a regra é mais
          nova que esta tela. Quando ele diz QUAL demanda, a tela leva até ela em
@@ -3467,6 +3470,41 @@ async function saveViaProxy(tentativa = 1) {
     showSaving(false);
     return true;
   } catch (e) {
+    /* ═══ QUEDA DE REDE SE REPETE, COMO JA SE REPETIA NO OUTRO CAMINHO ═══════
+     *
+     * "Erro ao publicar: Failed to fetch", de novo. O log ao vivo do Worker
+     * mostrou o que estava acontecendo de verdade, e NAO era o que se supunha:
+     *
+     *     outcome ok | cpu 265ms | wall 6142ms
+     *     publish: 3.46 MB, 1053 demandas, gravacao em 4659ms
+     *
+     * A publicacao ENTROU. O servidor respondeu 200 depois de 6,1 segundos — dos
+     * quais 4,7s sao a gravacao no GitHub — e a conexao do navegador nao chegou
+     * inteira ate o fim. `fetch` so sabe dizer "Failed to fetch", entao a tela
+     * anunciava fracasso de um trabalho que tinha dado certo. E o pior dos dois
+     * erros possiveis: a pessoa refaz o que ja estava salvo.
+     *
+     * Nao era CPU. Essa era a hipotese que vinha sendo carregada — e o numero a
+     * desmente: 265ms, sem excecao, sem `exceededCpu`.
+     *
+     * REPETIR E SEGURO AQUI POR CONSTRUCAO, e nao por sorte: toda tentativa
+     * comeca relendo o servidor e remesclando o estado local por cima. Se a
+     * primeira entrou, a segunda le o resultado dela, nao acha diferenca
+     * nenhuma para registrar e grava um no-op; se nao entrou, grava o que
+     * faltava. Nos dois casos o que a pessoa fez sobrevive.
+     *
+     * O caminho direto ao GitHub (`saveToGitHub`) JA FAZIA ISTO. Quem publica
+     * pelo Worker — que e por onde o time inteiro passa — era o unico sem a
+     * rede de protecao. Dois caminhos de gravacao com resiliencia diferente e a
+     * divergencia de sempre: a copia corrigida e a esquecida. */
+    const quedaDeRede = e instanceof TypeError ||
+                        (e && typeof e.message === 'string' && e.message.includes('fetch'));
+    if (quedaDeRede && redes === 0) {
+      showSaving(false);
+      toast('⚠️ Falha de rede, tentando novamente…', 'err');
+      await new Promise(r => setTimeout(r, 2000));
+      return saveViaProxy(tentativa, redes + 1);
+    }
     /* QUAIS demandas ficaram de fora, e nao so "a publicacao falhou".
        A faixa de erro aqui ja e persistente e o rascunho sobrevive ao F5 —
        o que faltava era o quadro dizer EM QUE CARDS a alteracao nao chegou ao

@@ -39,3 +39,7 @@ node_modules/
 # assumir, um `git add -A` publicaria a configuracao local num repo PUBLICO.
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+.dev.vars*
+!.dev.vars.example
+!.env.example

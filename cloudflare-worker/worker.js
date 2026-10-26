@@ -909,19 +909,54 @@ function registraHistorico(recebido, servidor, quem, origem) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return 0;
   const antigas = new Map((((servidor || {}).melhorias) || []).map(m => [m.id, m]));
   const agora = new Date().toISOString();
+  /* A LISTA E OS COMPARADORES NASCEM UMA VEZ POR PUBLICACAO, e nao uma vez por
+   * campo de cada demanda. Estavam dentro dos dois lacos: 1.047 arrays de 22
+   * strings e 23 mil closures criadas para serem jogadas fora em seguida.
+   *
+   * Ficam AQUI DENTRO, e nao no escopo do modulo, de proposito: `teste-invariantes`
+   * extrai esta funcao e a executa isolada, com `new Function`. Constante de
+   * modulo some nessa travessia — foi exatamente o que aconteceu na primeira
+   * tentativa, e a invariante acusou `HIST_LISTA is not defined`. Uma vez por
+   * publicacao ja e todo o ganho; o escopo de modulo nao acrescentaria nada e
+   * custaria a funcao deixar de se bastar. */
+  const lista = Object.keys(HIST_CAMPOS);
+  // vazio -> vazio nao e mudanca; zero E valor.
+  const vazio = v => v === undefined || v === null || v === '' ||
+                     (Array.isArray(v) && v.length === 0);
+  /* MESMO VALOR? — sem passar pelo JSON quando nao precisa.
+   *
+   * A comparacao rodava `JSON.stringify` nos dois lados, 22 campos por demanda:
+   * 23 mil chamadas por publicacao, 15ms dos 74ms medidos na base de producao.
+   * Quase todos os 22 campos sao escalares — texto, numero, data —, e ali o JSON
+   * so embrulha o valor para desembrulhar na linha seguinte.
+   *
+   * O ATALHO TEM UMA EXCECAO, E ELA IMPORTA. `JSON.stringify` transforma `NaN` e
+   * `Infinity` em `null`, entao PELO JSON um `NaN` e igual a `null` e igual a
+   * outro `NaN` — enquanto `===` diz que `NaN` nao e igual nem a si mesmo.
+   * `horas_realizadas` e `poker_pontos` sao numericos e vem de campo digitado:
+   * um `NaN` na base faria o atalho acusar mudanca a CADA publicacao e encher o
+   * historico de linha fantasma. Numero nao finito volta para o caminho lento, e
+   * assim o rapido e o lento nunca discordam. */
+  const igual = (a, b) => {
+    const ta = typeof a, tb = typeof b;
+    if (ta === 'object' || tb === 'object' || ta === 'function' || tb === 'function') {
+      return JSON.stringify(a) === JSON.stringify(b);
+    }
+    if ((ta === 'number' && !isFinite(a)) || (tb === 'number' && !isFinite(b))) {
+      return JSON.stringify(a) === JSON.stringify(b);
+    }
+    return a === b;
+  };
   let n = 0;
   for (const m of recebido.melhorias) {
     if (!m || !m.id) continue;
     const velha = antigas.get(m.id);
     if (!velha) continue;                 // demanda nova nao tem o que comparar
     const mudancas = [];
-    for (const campo of Object.keys(HIST_CAMPOS)) {
+    for (const campo of lista) {
       const de = velha[campo], para = m[campo];
-      // vazio -> vazio nao e mudanca; zero E valor.
-      const vazio = v => v === undefined || v === null || v === '' ||
-                         (Array.isArray(v) && v.length === 0);
       if (vazio(de) && vazio(para)) continue;
-      if (JSON.stringify(de) === JSON.stringify(para)) continue;
+      if (igual(de, para)) continue;
       mudancas.push({ campo, rotulo: HIST_CAMPOS[campo],
                       de: histValor(de), para: histValor(para),
                       // O tamanho denuncia texto cortado, para ninguem achar que
@@ -2386,12 +2421,37 @@ function atribuiCodigos(data) {
   }
   let novos = 0;
   const vistos = new Set(data.melhorias.map(m => m && m.codigo).filter(Boolean));
+  /* QUANTOS USAM CADA CODIGO, E QUEM CHEGOU PRIMEIRO — contado UMA vez.
+   *
+   * Aqui havia um `filter` e um `find` sobre as melhorias inteiras DENTRO do laco
+   * das melhorias: 1.047 x 1.047, mais de um milhao de comparacoes para responder
+   * "este codigo se repete?". Medido na base de producao, era o trecho mais caro
+   * do publish inteiro — 21ms dos 74ms, mais do que os tres JSON somados.
+   *
+   * A troca nao muda decisao nenhuma. O `filter` original enxergava o array
+   * sendo mutado, entao valia perguntar se precontar mudaria o resultado: nao
+   * muda. Quem e renumerado recebe codigo ACIMA de `maior`, que ja e o maior
+   * existente, entao a renumeracao nunca cria nem desfaz uma duplicata entre os
+   * codigos originais — as duas contagens so podem divergir no numero, nunca no
+   * `> 1`, e o desempate continua sendo o primeiro da ordem original.
+   *
+   * As chaves sao so os codigos que sao STRING, de proposito: a comparacao
+   * original era `x.codigo === atual` com `atual` ja convertido por `String()`,
+   * entao um codigo numerico nunca casava. Guardar o valor cru preserva isso. */
+  const quantos = new Map();
+  const primeiro = new Map();
+  for (const x of data.melhorias) {
+    const c = x && x.codigo;
+    if (typeof c !== 'string' || !c) continue;
+    quantos.set(c, (quantos.get(c) || 0) + 1);
+    if (!primeiro.has(c)) primeiro.set(c, x);
+  }
   for (const m of data.melhorias) {
     if (!m) continue;
     const atual = String(m.codigo || '');
     // Sem codigo, ou com um codigo que outra demanda ja usa (importacao, copia)
-    const duplicado = atual && data.melhorias.filter(x => x && x.codigo === atual).length > 1;
-    if (!atual || (duplicado && vistos.has(atual) && m !== data.melhorias.find(x => x && x.codigo === atual))) {
+    const duplicado = atual && (quantos.get(atual) || 0) > 1;
+    if (!atual || (duplicado && vistos.has(atual) && m !== primeiro.get(atual))) {
       maior += 1;
       m.codigo = 'AX-' + String(maior).padStart(3, '0');
       vistos.add(m.codigo);

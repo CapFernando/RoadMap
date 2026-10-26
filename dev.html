@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="cbd5b8e298">
+<html lang="pt-BR" data-build="d640e31149">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3146,6 +3146,21 @@ async function saveToGitHub(patch, opts = {}) {
       toast('✅ Salvo!','ok');
       return true;
     } catch(e) {
+      /* QUEDA DE REDE SE REPETE — ver a nota longa no `saveViaProxy` do Admin.
+         Em resumo: o log ao vivo mostrou a gravacao TERMINANDO BEM no servidor
+         (outcome ok, 265ms de CPU) depois de 6,1 segundos, e a conexao do
+         navegador nao chegando inteira ate la. `fetch` so sabe dizer "Failed to
+         fetch", e a tela anunciava fracasso de um trabalho que deu certo.
+         Repetir e seguro porque o patch e aplicado sobre uma leitura FRESCA do
+         servidor a cada tentativa, como ja valia para o conflito logo acima. */
+      const quedaDeRede = e instanceof TypeError ||
+                          (e && typeof e.message === 'string' && e.message.includes('fetch'));
+      if (quedaDeRede && !opts._retryRede) {
+        showSaving(false);
+        toast('⚠️ Falha de rede, tentando novamente…','err');
+        await new Promise(r => setTimeout(r, 2000));
+        return saveToGitHub(patch, { ...opts, _retryRede: true });
+      }
       /* A GRAVACAO FALHOU E O CARD CONTINUA NA TELA. Sem esta marca ele fica
          igual a um card gravado, e o unico aviso e um toast de 4 segundos —
          foi assim que uma demanda da Marina existiu so na aba de quem a criou

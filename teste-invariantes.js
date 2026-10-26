@@ -16872,8 +16872,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      Regra que mora em cada chamador e regra que o proximo chamador esquece. */
   sec('Admin: a copia local de quem publica');
   {
-    const VIA = corpo(ADMIN, 'async function saveViaProxy(tentativa = 1) {') || '';
-    const GIT = corpo(ADMIN, 'async function saveToGitHub(attempt = 1) {') || '';
+    /* ANCORADA NO NOME, E NAO NA LISTA DE PARAMETROS. Com a assinatura inteira
+       literal, acrescentar um argumento a `saveViaProxy` fazia `corpo()` devolver
+       vazio e TRES checagens falharem de uma vez — sem que nada do que elas
+       guardam tivesse mudado. Alarme falso ensina a ignorar o vermelho, e aqui
+       ele apontava para o lugar errado: o que esta invariante protege e a copia
+       local, que nao tem nada a ver com quantos argumentos a funcao recebe.
+       `corpo()` acha a chave do corpo adiante quando a assinatura nao a traz. */
+    const VIA = corpo(ADMIN, 'async function saveViaProxy') || '';
+    const GIT = corpo(ADMIN, 'async function saveToGitHub') || '';
     ok(!!VIA && !!GIT, 'os dois caminhos de publicacao foram achados');
 
     /* ── A COPIA E FEITA ANTES DE TENTAR ──
@@ -17116,7 +17123,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      ainda faltava acha-la no quadro. */
   sec('Admin: a jornada leva ao campo, em vez de avisar');
   {
-    const VIA = corpo(ADMIN, 'async function saveViaProxy(tentativa = 1) {') || '';
+    // Ancorada no NOME — ver a nota em 'Admin: a copia local de quem publica'.
+    const VIA = corpo(ADMIN, 'async function saveViaProxy') || '';
     const DEVSAVE = corpo(DEV, 'async function saveToGitHub(patch, opts = {}) {') || '';
 
     /* ══ A REGRA E UMA SO, E NAO UMA POR TELA ══════════════════════════════
@@ -19910,15 +19918,124 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const trecho = iCatch < 0 ? '' : srcSave.slice(iCatch + 12, srcSave.indexOf('return false;', iCatch) + 13);
       ok(!!trecho.trim(), 'o trecho do erro foi isolado');
       if (trecho.trim()) {
-        const marcadas = [];
-        const janela = { NAOPUBLICADA: { marca: (p) => marcadas.push(Object.keys(p)) } };
-        new Function('window', 'NAOPUBLICADA', 'avisaNaoPublicadas', 'toast', 'patch', 'e',
-          trecho.replace(/return false;\s*$/, ''))(
-          janela, janela.NAOPUBLICADA, () => {}, () => {},
-          { 'ax-1': { titulo: 'x' } }, { message: 'Failed to fetch' });
-        ok(marcadas.length === 1 && marcadas[0][0] === 'ax-1',
-           'falhar a gravacao MARCA a demanda do patch', JSON.stringify(marcadas));
+        /* ASSINCRONA, e nao `new Function`. O trecho espera dois segundos antes
+           de repetir, entao ele tem `await` dentro — `new Function` recusa com
+           "await is only valid in async functions" e a invariante morre sem
+           avaliar nada. */
+        const FuncAsync = Object.getPrototypeOf(async function () {}).constructor;
+        const roda = (erro, opts) => {
+          const marcadas = [];
+          const repetiu = [];
+          const janela = { NAOPUBLICADA: { marca: (p) => marcadas.push(Object.keys(p)) } };
+          /* `setTimeout` entra como PARAMETRO, sombreando o global: a espera de
+             dois segundos antes de repetir e certa em producao e so atrasaria a
+             invariante. Aqui ela dispara na hora. */
+          const fn = new FuncAsync('window', 'NAOPUBLICADA', 'avisaNaoPublicadas', 'toast',
+                                   'patch', 'e', 'opts', 'showSaving', 'saveToGitHub',
+                                   'setTimeout',
+                                   trecho.replace(/return false;\s*$/, ''));
+          return fn(janela, janela.NAOPUBLICADA, () => {}, () => {},
+                    { 'ax-1': { titulo: 'x' } }, erro, opts, () => {},
+                    (p, o) => { repetiu.push(o); return true; },
+                    (f) => f())
+            .then(() => ({ marcadas, repetiu }));
+        };
+
+        /* ── QUEDA DE REDE: REPETE ANTES DE DESISTIR ──
+         *
+         * ESTA INVARIANTE GUARDAVA A DECISAO ANTERIOR, e foi reescrita para
+         * guardar a nova. Ela rodava o `catch` com `Failed to fetch` e exigia
+         * que a demanda fosse MARCADA como nao publicada ali mesmo. Era o certo
+         * enquanto nao havia repeticao.
+         *
+         * O log ao vivo do Worker mostrou o que de fato acontece nesse erro:
+         *     outcome ok | cpu 265ms | wall 6142ms
+         * A gravacao TERMINA BEM e a conexao do navegador e que nao volta. Marcar
+         * "nao publicada" ali e anunciar fracasso de um trabalho que deu certo —
+         * e a pessoa refaz o que ja estava salvo.
+         *
+         * Entao: na primeira queda de rede, repete; so marca se a segunda tambem
+         * cair. Erro que NAO e de rede continua marcando de primeira — ali o
+         * servidor respondeu e disse nao. */
+        /* `await`, e NAO `return`: devolver daqui abandonaria as checagens que
+           vem depois neste mesmo bloco — a que confere que o sucesso TIRA a
+           marca e as duas que conferem o cracha no card. Invariante que some em
+           silencio e pior que invariante que falha. */
+        const r1 = await roda({ message: 'Failed to fetch' }, {});
+        ok(r1.repetiu.length === 1 && r1.marcadas.length === 0,
+           'queda de rede REPETE em vez de marcar — a gravacao costuma ter entrado',
+           'repetiu ' + r1.repetiu.length + ', marcou ' + r1.marcadas.length);
+        ok(r1.repetiu.length === 1 && r1.repetiu[0] && r1.repetiu[0]._retryRede === true,
+           'e a repeticao vai marcada, para nao virar laco infinito');
+
+        const r2 = await roda({ message: 'Failed to fetch' }, { _retryRede: true });
+        ok(r2.repetiu.length === 0 && r2.marcadas.length === 1 && r2.marcadas[0][0] === 'ax-1',
+           'caindo DUAS vezes, ai sim a demanda do patch e marcada',
+           JSON.stringify(r2.marcadas));
+
+        const r3 = await roda(new Error('horas_obrigatorias'), {});
+        ok(r3.repetiu.length === 0 && r3.marcadas.length === 1 && r3.marcadas[0][0] === 'ax-1',
+           'recusa do servidor MARCA de primeira — repetir so repetiria a recusa',
+           JSON.stringify(r3.marcadas));
       }
+    }
+
+    /* ── E O MESMO VALE NO ADMIN, QUE E POR ONDE O PM/PO PUBLICA ──
+     *
+     * A resiliencia de rede morava so no `saveToGitHub` do Admin — o caminho
+     * DIRETO ao GitHub, que quase ninguem usa. Quem publica pelo Worker, que e
+     * o time inteiro, nao tinha nenhuma. Dois caminhos de gravacao com regras
+     * diferentes e a divergencia de sempre nesta base: a copia corrigida e a
+     * esquecida.
+     *
+     * EXECUTADA, e nao casada por texto: procurar `saveViaProxy(tentativa,
+     * redes + 1)` na pagina passaria liso com a condicao trocada por `false &&`,
+     * que e exatamente a sabotagem que ja escapou aqui outras vezes. */
+    const VIAP = corpo(ADMIN, 'async function saveViaProxy') || '';
+    const iCatchA = VIAP.indexOf('} catch (e) {');
+    const fimA = VIAP.indexOf("explica('Erro ao publicar: ' + e.message);", iCatchA);
+    const trechoA = (iCatchA < 0 || fimA < 0) ? '' : VIAP.slice(iCatchA + 13, fimA);
+    ok(!!trechoA.trim(), 'o trecho do erro do Admin foi isolado',
+       trechoA ? trechoA.length + ' caracteres' : 'nao achei');
+    if (trechoA.trim()) {
+      const FuncAsyncA = Object.getPrototypeOf(async function () {}).constructor;
+      const rodaA = (erro, redes) => {
+        const marcadas = [];
+        const repetiu = [];
+        const janela = { NAOPUBLICADA: { marca: (p) => marcadas.push(Object.keys(p)) } };
+        const fn = new FuncAsyncA('window', 'NAOPUBLICADA', '_dirtyMelhoriaIds', 'state',
+                                  'rascunhoSalvar', 'document', 'explica', 'toast',
+                                  'showSaving', 'saveViaProxy', 'setTimeout',
+                                  'tentativa', 'redes', 'e', trechoA);
+        return fn(janela, janela.NAOPUBLICADA, new Set(['ax-9']),
+                  { melhorias: [{ id: 'ax-9', titulo: 'x' }] }, () => {},
+                  { getElementById: () => null }, () => {}, () => {}, () => {},
+                  (t, r) => { repetiu.push({ tentativa: t, redes: r }); return true; },
+                  (f) => f(), 1, redes, erro)
+          .then(() => ({ marcadas, repetiu }));
+      };
+
+      const a1 = await rodaA({ message: 'Failed to fetch' }, 0);
+      ok(a1.repetiu.length === 1 && a1.marcadas.length === 0,
+         'no Admin, queda de rede tambem REPETE antes de marcar',
+         'repetiu ' + a1.repetiu.length + ', marcou ' + a1.marcadas.length);
+      /* O ORCAMENTO DO CONFLITO NAO PODE SER GASTO PELA REDE. Sao dois motivos
+         diferentes de repetir: a remontagem por conflito e a que resolve quando
+         outra tela publicou no meio. Se a repeticao de rede avancasse
+         `tentativa`, o conflito seguinte nao teria mais a sua chance. */
+      ok(a1.repetiu[0] && a1.repetiu[0].tentativa === 1 && a1.repetiu[0].redes === 1,
+         'e ela gasta o orcamento DA REDE, nao o do conflito',
+         JSON.stringify(a1.repetiu[0]));
+
+      const a2 = await rodaA({ message: 'Failed to fetch' }, 1);
+      ok(a2.repetiu.length === 0 && a2.marcadas.length === 1,
+         'caindo duas vezes, o Admin marca as demandas pendentes',
+         JSON.stringify(a2.marcadas));
+
+      const a3 = await rodaA(new Error('horas_obrigatorias'), 0);
+      ok(a3.repetiu.length === 0 && a3.marcadas.length === 1,
+         'e recusa do servidor marca de primeira, sem repetir',
+         JSON.stringify(a3.marcadas));
     }
 
     // ── E o sucesso tira a marca, senao o aviso vira ruido permanente ──
@@ -20663,6 +20780,123 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(HM.cobraHomologacao(parada, '2026-10-26'),
        'e a demora na area continua visivel, pela cobranca de homologacao',
        'dias: ' + HM.diasNaArea(parada, '2026-10-26'));
+  }
+
+  /* ═══ O PUBLISH NAO VOLTA A VARRER A BASE INTEIRA POR DEMANDA ════════════
+   *
+   * Medido na base de producao (1.047 demandas, 3,44 MB), o publish gastava
+   * 74ms de CPU. `atribuiCodigos` sozinha levava 21ms — mais do que os TRES
+   * JSON somados — porque perguntava "este codigo se repete?" com um `filter`
+   * sobre as melhorias inteiras DENTRO do laco das melhorias: 1.047 x 1.047.
+   *
+   * E O NUMERO MENTIU NA PRIMEIRA MEDICAO. Uma rodada so dava 29ms para
+   * `carimbaMeses`, que na mediana de sete e 3ms — JIT frio. Sem repetir, a
+   * otimizacao teria ido para a funcao errada.
+   *
+   * ESTA INVARIANTE NAO MEDE TEMPO, de proposito: cronometro em teste e
+   * intermitente, e intermitente ensina a ignorar o vermelho. Ela CONTA as
+   * varreduras. Uma implementacao linear chama `filter`/`find` do array das
+   * melhorias zero vez; a quadratica chama uma vez por demanda. A diferenca
+   * aparece sem relogio nenhum. */
+  {
+    sec('Worker: o publish nao varre a base uma vez por demanda');
+    const fazAtribui = () => new Function(
+      corpo(W, 'function atribuiCodigos(data) {') + '; return atribuiCodigos;')();
+    const atribui = fazAtribui();
+    ok(typeof atribui === 'function', 'atribuiCodigos foi isolada do worker.js');
+
+    // Um array que CONTA quantas varreduras completas sofreu.
+    const espiao = (itens) => {
+      const a = itens.slice();
+      let varreduras = 0;
+      ['filter', 'find', 'findIndex', 'indexOf', 'some', 'includes'].forEach(nome => {
+        const original = Array.prototype[nome];
+        a[nome] = function (...args) { varreduras++; return original.apply(this, args); };
+      });
+      return { a, conta: () => varreduras };
+    };
+
+    /* A AMOSTRA PRECISA TER CODIGO REPETIDO, e a primeira versao desta
+       invariante nao tinha. Com todos distintos, o trecho do DESEMPATE — "qual
+       delas chegou primeiro?" — nunca chega a executar, e uma sabotagem que o
+       devolvia para `data.melhorias.find(...)` dentro do laco passou batida na
+       bateria. Um em cada dez repete, entao os dois trechos rodam. */
+    const gera = (n) => {
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        const num = i % 10 === 0 ? 7 : i + 20;   // os multiplos de 10 brigam pelo AX-007
+        out.push({ id: 'i' + i, codigo: 'AX-' + String(num).padStart(3, '0') });
+      }
+      return out;
+    };
+    const e200 = espiao(gera(200));
+    atribui({ melhorias: e200.a });
+    const e800 = espiao(gera(800));
+    atribui({ melhorias: e800.a });
+    ok(e200.conta() <= 1 && e800.conta() <= 1,
+       'quadruplicar a base NAO quadruplica as varreduras — a contagem de codigos ' +
+       'e feita uma vez so', '200 -> ' + e200.conta() + ' varredura(s), 800 -> ' + e800.conta());
+
+    /* ── E A DECISAO CONTINUA A MESMA ──
+       Otimizacao que muda resultado nao e otimizacao. O primeiro que usa um
+       codigo FICA com ele; os seguintes e que sao renumerados. Inverter isso
+       trocaria o numero de uma demanda ja publicada, que e o identificador que
+       as pessoas usam para falar umas com as outras. */
+    const base = [{ id: 'a', codigo: 'AX-003' }, { id: 'b', codigo: 'AX-003' },
+                  { id: 'c', codigo: 'AX-003' }, { id: 'd', codigo: '' },
+                  { id: 'e', codigo: 'AX-010' }];
+    const dados = { melhorias: JSON.parse(JSON.stringify(base)) };
+    const novos = atribui(dados);
+    const cods = dados.melhorias.map(m => m.codigo);
+    ok(cods[0] === 'AX-003', 'o PRIMEIRO com o codigo repetido fica com ele', cods[0]);
+    ok(cods[1] !== 'AX-003' && cods[2] !== 'AX-003' && cods[1] !== cods[2],
+       'os seguintes sao renumerados, e nao entre si', JSON.stringify(cods));
+    ok(!!cods[3] && cods[3] !== '', 'quem estava sem codigo ganha um', cods[3]);
+    ok(cods[4] === 'AX-010', 'quem nao repetia nao e tocado', cods[4]);
+    ok(new Set(cods).size === cods.length, 'e no fim nenhum codigo se repete',
+       JSON.stringify(cods));
+    ok(novos === 3, 'tres receberam numero novo', String(novos));
+  }
+
+  /* ═══ O ATALHO DA COMPARACAO CONCORDA COM O CAMINHO LENTO ════════════════
+   *
+   * `registraHistorico` comparava os dois lados com `JSON.stringify`, 22 campos
+   * por demanda: 23 mil chamadas por publicacao. Quase todos os campos sao
+   * escalares, e ali o JSON so embrulha para desembrulhar.
+   *
+   * O PERIGO DO ATALHO TEM NOME: `JSON.stringify` vira `NaN` e `Infinity` em
+   * `null`, entao PELO JSON um `NaN` e igual a outro `NaN` — enquanto `===` diz
+   * que nao e igual nem a si mesmo. `horas_realizadas` e `poker_pontos` vem de
+   * campo digitado. Com `===` puro, uma demanda com `NaN` ganharia uma linha de
+   * historico A CADA publicacao, para sempre, dizendo que a hora mudou de nada
+   * para nada. Por isso numero nao finito volta ao caminho lento. */
+  {
+    sec('Worker: o atalho da comparacao de historico nao inventa mudanca');
+    const HC2 = { horas_realizadas: 'horas', poker_pontos: 'pontos', titulo: 'titulo' };
+    const carimba2 = new Function('HIST_CAMPOS', 'histValor', 'HIST_MAX',
+      corpo(W, 'function registraHistorico(recebido, servidor, quem, origem) {') +
+      '; return registraHistorico;')(HC2, v => String(v == null ? '' : v), 60);
+
+    const roda = (campo, de, para) => {
+      const srv = { melhorias: [{ id: 'n1', [campo]: de }] };
+      const rec = { melhorias: [{ id: 'n1', [campo]: para }] };
+      const n = carimba2(rec, srv, 'teste', 'painel');
+      return { n, hist: rec.melhorias[0].historico || [] };
+    };
+
+    ok(roda('horas_realizadas', NaN, NaN).n === 0,
+       'NaN -> NaN nao vira mudanca — com `===` puro viraria, a cada publicacao');
+    ok(roda('poker_pontos', Infinity, Infinity).n === 0, 'Infinity -> Infinity tampouco');
+    ok(roda('horas_realizadas', NaN, null).n === 0,
+       'NaN -> null segue o JSON, que ve os dois como null — o atalho nao pode discordar');
+    ok(roda('horas_realizadas', 5, 5).n === 0, 'numero igual nao vira mudanca');
+    ok(roda('horas_realizadas', 5, 6).n === 1, 'numero diferente vira');
+    ok(roda('horas_realizadas', NaN, 5).n === 1, 'NaN -> numero vira');
+    ok(roda('titulo', 'abc', 'abc').n === 0, 'texto igual nao vira');
+    ok(roda('titulo', 'abc', 'abd').n === 1, 'texto diferente vira');
+    ok(roda('poker_pontos', 5, '5').n === 1,
+       'numero 5 e texto "5" sao DIFERENTES — era assim pelo JSON e segue sendo');
+    ok(roda('titulo', '', undefined).n === 0, 'vazio para vazio nao vira');
   }
 
   let erroPz = null;
