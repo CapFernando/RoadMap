@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7a48d000c5">
+<html lang="pt-BR" data-build="983471ad22">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -892,7 +892,7 @@
           <tr><td><code>descricao</code></td><td>opcional</td><td>o que aconteceu, como reproduzir</td></tr>
           <tr><td><code>status_planejamento</code></td><td>opcional</td><td><code>em_andamento</code> (padr&atilde;o), <code>planejado</code> ou <code>backlog</code></td></tr>
           <tr><td><code>entrega</code></td><td>opcional</td><td><code>AAAA-MM-DD</code></td></tr>
-          <tr><td><code>solicitante</code></td><td>opcional</td><td>quem pediu; em branco fica voc&ecirc;</td></tr>
+          <tr><td><code>solicitante</code></td><td>opcional*</td><td>quem pediu; em branco fica a sua conta. <strong>Obrigat&oacute;rio</strong> quando a demanda nasce sem dono (<code>sem_dono</code> ou <code>"dev": null</code>) &mdash; a&iacute; n&atilde;o h&aacute; conta de onde tirar o nome</td></tr>
         </tbody></table>
       </div>
 
@@ -1192,7 +1192,7 @@
         </select>
       </div>
       <div class="form-group">
-        <label>Quem pediu <small style="font-weight:400;color:var(--text3)">— vazio = você</small></label>
+        <label>Quem pediu <span style="color:var(--red,#E84444)">*</span> <small style="font-weight:400;color:var(--text3)">— é quem confere a entrega</small></label>
         <input type="text" id="n-solicitante" placeholder="Nome de quem reportou" />
       </div>
     </div>
@@ -5843,6 +5843,25 @@ async function saveNewDemand() {
   /* PELO PAINEL, A DEMANDA NASCE COM A DATA DE HOJE — ver `abertura.js`.
      Nem para tras (que a faria sumir do quadro) nem para frente: combinar prazo
      e do planejamento, a mesma separacao que este painel ja mantem na etapa. */
+  /* QUEM PEDIU, NA ABERTURA — e não mais "em branco fica você".
+   *
+   * O campo caía em `currentDev` quando vazio, e isso tinha uma consequência
+   * que não estava à vista: é o SOLICITANTE quem homologa a entrega na
+   * Validação da área. Com o silêncio virando o nome do próprio dev, ele
+   * passava a homologar o próprio trabalho — exatamente o que aquela etapa
+   * existe para impedir.
+   *
+   * Quando o dev É quem pediu, escrever o próprio nome é um gesto, e deixa o
+   * registro verdadeiro em vez de presumido.
+   *
+   * SÓ NA ABERTURA: editar uma demanda antiga sem solicitante continua livre.
+   * São 119 na base, e cobrar na edição prenderia quem só queria corrigir um
+   * texto numa falta que não criou. */
+  if (!editId && !document.getElementById('n-solicitante').value.trim()) {
+    toast('Informe quem pediu: é o solicitante quem confere a entrega.', 'err');
+    document.getElementById('n-solicitante').focus();
+    return;
+  }
   if (!editId) {
     const ab = ABERTURA.checa({ inicio: document.getElementById('n-inicio').value,
                                 entrega: document.getElementById('n-entrega').value },
@@ -5864,8 +5883,11 @@ async function saveNewDemand() {
     descricao: document.getElementById('n-desc').value.trim(),
     dev: existing?.dev || currentDev,
     tipo: existing?.tipo || tipoSel,
-    // Vazio significa "eu mesmo": e o caso do bug que chega direto para o dev.
-    solicitante: document.getElementById('n-solicitante').value.trim() || existing?.solicitante || currentDev,
+    /* O `|| currentDev` SAIU: a abertura agora exige o campo (ver acima), e o
+       silencio virando o nome do dev fazia dele o homologador da propria
+       entrega. Na EDICAO o que ja estava gravado continua valendo — inclusive
+       o vazio das antigas, que nao se inventa aqui. */
+    solicitante: document.getElementById('n-solicitante').value.trim() || existing?.solicitante || '',
     // Marca que nasceu no painel do dev e nao passou por planejamento. O PM/PO
     // precisa distinguir o que ele priorizou do que entrou por fora.
     origem: existing?.origem || 'dev',

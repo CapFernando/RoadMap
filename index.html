@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="432d8630bf">
+<html lang="pt-BR" data-build="5b4daa5383">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -508,8 +508,13 @@
           <label class="nm-f">Resuma em uma linha *
             <input type="text" id="nm-titulo" placeholder="Ex.: Automatizar fechamento de caixa">
           </label>
-          <label class="nm-f">Solicitante (quem pediu) <span class="nm-opc">opcional</span>
-            <input type="text" id="nm-solicitante" placeholder="Nome do solicitante">
+          <!-- OBRIGATORIO desde que a Validacao da area existe: e o solicitante
+               quem homologa a entrega. Era "opcional", com a ajuda "quem pediu,
+               se nao foi voce" — e aqui nao ha "voce": o formulario e anonimo,
+               sem login e sem sessao. Em branco, a demanda nascia sem nenhuma
+               forma de saber a quem voltar. -->
+          <label class="nm-f">Solicitante (quem pediu) *
+            <input type="text" id="nm-solicitante" placeholder="Seu nome, ou de quem pediu">
           </label>
           <label class="nm-f">Sistema / módulo *
             <select id="nm-tema" onchange="catalogoMostraNovo('nm')"></select>
@@ -1944,7 +1949,7 @@ const NM_OBRIGATORIOS = [
 // Dicas por campo: o que uma boa resposta tem. Aparecem no ⓘ ao lado do rótulo.
 const NM_DICAS = {
   'nm-titulo':     'Uma frase curta que alguém entenda sem contexto. Ex.: "Automatizar o fechamento de caixa".',
-  'nm-solicitante':'Quem pediu, se não foi você. Serve para o time voltar e tirar dúvidas.',
+  'nm-solicitante':'Seu nome, ou o de quem pediu. É essa pessoa que o time procura para tirar dúvidas e que confere a entrega no fim.',
   'nm-tema':       'Onde o problema acontece. A lista já vem com os módulos; ' +
                    'se não achar o seu, escolha "+ outro" e escreva.',
   'nm-tipo-issue': 'Erro/Bug é o que já existia e parou de funcionar. Melhoria é algo novo ou melhor.',
@@ -2330,6 +2335,11 @@ async function saveNovaMelhoria() {
   const objetivo = document.getElementById('nm-objetivo').value.trim();
   nmLimpaErros();
   if (!titulo)   { nmFalha('nm-titulo', 'Escreva em uma linha o que você precisa.'); return; }
+  // Quem pediu — o Worker recusa de qualquer forma; isto e para a pessoa nao
+  // descobrir pela recusa. Ver `nascendoSemSolicitante`.
+  if (!document.getElementById('nm-solicitante').value.trim()) {
+    nmFalha('nm-solicitante', 'Diga quem pediu: é essa pessoa que vai conferir a entrega.'); return;
+  }
   const tema = nmResolveTema();
   if (!tema.id)  { nmFalha('nm-tema', 'Escolha o sistema onde isso acontece.'); return; }
   if (!document.getElementById('nm-tipo-issue').value) {

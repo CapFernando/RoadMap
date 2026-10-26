@@ -1930,6 +1930,57 @@ function entrandoAlocadaSemSistema(recebido, servidor) {
   return presos;
 }
 
+/** DEMANDA NOVA SEM SOLICITANTE — recusa.
+ *
+ *  "Deixe o campo solicitante obrigatorio para abertura da task."
+ *
+ *  POR QUE NA ABERTURA, E NAO EM TODA GRAVACAO. O solicitante e quem HOMOLOGA
+ *  na Validacao da area; sem nome, a etapa nao tem dono e o contador de cinco
+ *  dias corre para ninguem. A regra ja existia na entrada daquela etapa
+ *  (`entrandoSemHomologacao`) — e ela chegava tarde: a demanda nascia anonima,
+ *  andava pelo quadro, e so quando alguem a mandava para a area e que o nome
+ *  fazia falta. Sao 119 abertas hoje sem solicitante, e o comentario da regra
+ *  da etapa ja dizia, antes disto existir, que "quem cria uma demanda nova
+ *  informa sempre — essa exigencia vive na abertura". Vive agora.
+ *
+ *  TRAVA NA CRIACAO, E NAO NO ESTADO — mesmo criterio das outras seis guardas.
+ *  So olha melhoria que o servidor ainda nao conhece. Travar por estado faria
+ *  toda gravacao falhar por causa das 119 antigas, e quem so queria corrigir um
+ *  texto ficaria preso a um problema que nao criou.
+ *
+ *  `oculto` e `mesclado_em` ficam de fora: demanda escondida ou fundida em
+ *  outra nao tem homologacao pela frente.
+ *
+ *  O ROTULO SEGUE A LICAO DA IRMA ACIMA: demanda nova NAO TEM CODIGO — ele
+ *  nasce nesta gravacao —, entao `m.codigo || m.id` entregaria o id interno a
+ *  tela, como ja aconteceu em 24/09 ("Escolha o sistema antes de planejar:
+ *  mufxdq9ocnh7k27dbb"). Aqui o nome legivel e o titulo.
+ */
+function nascendoSemSolicitante(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Set();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.add(m.id);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id || m.oculto || m.mesclado_em) continue;
+    if (antes.has(m.id)) continue;                       // ja existia: nao e abertura
+    if (String(m.solicitante || '').trim()) continue;
+    const titulo = String(m.titulo || '').trim();
+    presos.push({
+      id: m.id,
+      codigo: m.codigo || '',
+      titulo: titulo,
+      campo: 'solicitante',
+      rotulo: m.codigo
+        ? m.codigo + (titulo ? ' · ' + titulo.slice(0, 60) : '')
+        : (titulo ? '"' + titulo.slice(0, 60) + '"' : '(demanda sem título)'),
+      motivo: 'Informe quem pediu esta demanda: e o solicitante quem homologa ' +
+              'a entrega na Validacao da area.',
+    });
+  }
+  return presos;
+}
+
 /** A ASSINATURA DE UM TITULO — como duas demandas se reconhecem iguais.
  *
  *  Existe porque nada, em camada nenhuma, impedia criar duas demandas identicas.
@@ -5715,6 +5766,22 @@ export default {
                               'ou mande "dev": null (ou "sem_dono": true) para abrir sem dono.' },
                     400, headers);
       }
+      /* E QUEM PEDIU — ver `nascendoSemSolicitante`.
+       *
+       * Por aqui ja havia resposta na maioria dos casos: `solicitante` cai no
+       * nome da conta que chamou, e abrir uma demanda para si mesmo e o caso
+       * comum de quem automatiza. Quem NAO cai e a abertura `sem_dono`, onde
+       * `devNome` e vazio de proposito — ali a demanda nascia sem nome nenhum.
+       *
+       * A recusa e so nesse canto, entao nada do que ja funciona muda: quem
+       * abre com a propria conta segue sem informar campo nenhum. */
+      if (semDono && !String(body.solicitante || '').trim()) {
+        return json({ error: 'sem_solicitante',
+                      detail: 'Abrindo sem dono, informe "solicitante": e ele quem homologa ' +
+                              'a entrega na Validacao da area, e sem conta de dev nao ha de ' +
+                              'onde tirar o nome.' },
+                    400, headers);
+      }
       const spPedido = ['backlog', 'planejado', 'em_andamento'].includes(body.status_planejamento)
         ? body.status_planejamento : 'em_andamento';
       const sp = semDono ? 'backlog' : spPedido;
@@ -6650,6 +6717,17 @@ export default {
                               '. Sem ele a demanda fica de fora do filtro, do grafico e de ' +
                               'todo relatorio por sistema.' }, 400, headers);
       }
+      // Demanda nova sem quem pediu — ver `nascendoSemSolicitante`.
+      const semSolPub = nascendoSemSolicitante(data, antesPub);
+      if (semSolPub.length) {
+        return json({ error: 'sem_solicitante',
+                      itens: semSolPub,
+                      codigos: semSolPub.map(x => x.codigo || x.titulo),
+                      detail: 'Informe quem pediu: ' +
+                              semSolPub.map(x => x.rotulo).join(', ') +
+                              '. E o solicitante quem homologa a entrega na Validacao da ' +
+                              'area — sem o nome, a etapa nasce sem dono.' }, 400, headers);
+      }
       /* DUAS VIVAS COM O MESMO TITULO NAO ENTRAM. Vem junto das outras guardas,
          antes de `registraHistorico`, para a trilha nao guardar evento de uma
          gravacao que sera recusada. */
@@ -6856,6 +6934,17 @@ export default {
                               '. Sem ele a demanda fica de fora do filtro, do grafico e de ' +
                               'todo relatorio por sistema.' }, 400, headers);
       }
+      // Demanda nova sem quem pediu — ver `nascendoSemSolicitante`.
+      const semSolDev = nascendoSemSolicitante(data, antesDev);
+      if (semSolDev.length) {
+        return json({ error: 'sem_solicitante',
+                      itens: semSolDev,
+                      codigos: semSolDev.map(x => x.codigo || x.titulo),
+                      detail: 'Informe quem pediu: ' +
+                              semSolDev.map(x => x.rotulo).join(', ') +
+                              '. E o solicitante quem homologa a entrega na Validacao da ' +
+                              'area — sem o nome, a etapa nasce sem dono.' }, 400, headers);
+      }
       /* DUAS VIVAS COM O MESMO TITULO NAO ENTRAM. Vem junto das outras guardas,
          antes de `registraHistorico`, para a trilha nao guardar evento de uma
          gravacao que sera recusada. */
@@ -6962,6 +7051,24 @@ export default {
 
     const m = body.melhoria || {};
     if (!m.titulo || !String(m.titulo).trim()) return json({ error: 'Titulo obrigatorio' }, 400, headers);
+    /* QUEM PEDIU — e aqui a exigencia pesa mais que nas outras portas.
+     *
+     * Este formulario e ANONIMO: nao ha login, nao ha sessao, nao ha nada no
+     * pedido que diga quem o enviou. O campo era "opcional" com a ajuda "quem
+     * pediu, se nao foi voce" — mas nao existe "voce" para o servidor cair
+     * dentro. Uma demanda que chegasse por aqui sem o campo nascia sem NENHUMA
+     * forma de descobrir quem a pediu, e e dai que vem a maior parte das 119
+     * sem solicitante na base.
+     *
+     * Nas outras rotas ha sempre um nome por tras da credencial; aqui, nenhum.
+     * Por isso esta e a unica onde a recusa e seca, sem fallback. */
+    if (!String(m.solicitante || '').trim()) {
+      return json({ error: 'sem_solicitante',
+                    campo: 'nm-solicitante',
+                    detail: 'Informe quem pediu esta demanda. E o solicitante quem homologa ' +
+                            'a entrega depois — sem o nome, ninguem sabe a quem voltar.' },
+                  400, headers);
+    }
     if (JSON.stringify(body).length > 5 * 1024 * 1024) return json({ error: 'Conteudo muito grande' }, 413, headers);
 
     // sha via metadata (content vem vazio se >1MB); conteúdo via media type "raw".

@@ -17444,6 +17444,95 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            'e com uma so presa nao sobra frase nenhuma', JSON.stringify(conta([{ codigo: 'X' }])));
         ok(conta([]) === '', 'nem com lista vazia');
       }
+
+      /* ══ E EXISTE PORTA DE SAÍDA PARA A PENDÊNCIA IMPOSSÍVEL ═════════════
+       *
+       * Arrastar para a Validação da área sem solicitante fechava todas as
+       * saídas de uma vez: publicar é recusado (falta o solicitante), voltar
+       * ao PM/PO é recusado (falta o registro de homologação) e as demais
+       * colunas são recusadas ("da Validação da área só se vai para Em
+       * andamento ou para a Validação PM/PO"). Sobrava Em andamento, que é
+       * dado errado.
+       *
+       * E como a pendência mora no rascunho, ela VOLTA no F5 e entra em toda
+       * publicação seguinte — uma demanda presa travava a tela inteira,
+       * inclusive trabalho sem nenhuma relação. Aconteceu em produção com a
+       * AX-801 e a AX-805.
+       *
+       * Executado: desfazer tem de devolver a demanda ao RETRATO DO SERVIDOR e
+       * tirá-la das sujas. Afirmar que a função existe não provaria nada. */
+      const DESF = corpo(ADMIN, 'function desfazerPendentes(ids) {') || '';
+      ok(!!DESF, 'a porta de saida foi isolada');
+      if (DESF) {
+        const rodaDesf = (cenario) => {
+          const amb = {
+            _baseMelhorias: cenario.retratos,
+            state: cenario.state,
+            _dirtyMelhoriaIds: cenario.sujas,
+            window: {},
+            rascunhoSalvar: () => { cenario.regravou = true; },
+            renderKanban: () => {},
+            render: () => {},
+            toast: (t) => { cenario.disse = String(t); },
+            _pendingEdits: true,
+            _kbDirty: true,
+          };
+          const nomes = Object.keys(amb);
+          const fn = new Function(...nomes, DESF + '; return desfazerPendentes;')(
+            ...nomes.map(n => amb[n]));
+          cenario.quantas = fn(cenario.ids);
+          return cenario;
+        };
+
+        const noServidor = { id: 'p1', codigo: 'AX-801', titulo: 'Consultas',
+                             status_planejamento: 'validacao', solicitante: '' };
+        const presa = Object.assign({}, noServidor, { status_planejamento: 'validacao_area' });
+        const c1 = rodaDesf({
+          retratos: new Map([['p1', JSON.stringify(noServidor)]]),
+          state: { melhorias: [presa] }, sujas: new Set(['p1']), ids: ['p1'] });
+        ok(c1.quantas === 1 && c1.state.melhorias[0].status_planejamento === 'validacao',
+           'desfazer devolve a demanda a etapa que o SERVIDOR tem',
+           c1.state.melhorias[0].status_planejamento);
+        ok(c1.sujas.size === 0, 'e ela deixa de ser pendente — senao a proxima publicacao a leva de novo');
+        ok(c1.regravou === true,
+           'e o rascunho e regravado, senao a pendencia voltava no F5 — era assim que a armadilha se mantinha');
+
+        /* SEM RETRATO NAO HA A QUE VOLTAR. Demanda criada nesta aba e nunca
+           publicada nao existe no servidor; "desfazer" para ela significaria
+           APAGAR o que a pessoa escreveu, e isso esta funcao nao faz. */
+        const c2 = rodaDesf({
+          retratos: new Map(),
+          state: { melhorias: [{ id: 'nova', titulo: 'recem digitada' }] },
+          sujas: new Set(['nova']), ids: ['nova'] });
+        ok(c2.quantas === 0 && c2.sujas.has('nova') && c2.state.melhorias.length === 1,
+           'demanda sem retrato no servidor NAO e apagada por desfazer',
+           'sobraram ' + c2.state.melhorias.length);
+
+        /* DESFAZ SO O QUE FOI PEDIDO. Uma recusa cita demandas especificas; as
+           outras pendencias da aba sao trabalho legitimo e nao podem sumir
+           junto. */
+        const outra = { id: 'p2', codigo: 'AX-900', titulo: 'Outra',
+                        status_planejamento: 'em_andamento' };
+        const c3 = rodaDesf({
+          retratos: new Map([['p1', JSON.stringify(noServidor)],
+                             ['p2', JSON.stringify(Object.assign({}, outra,
+                                     { status_planejamento: 'planejado' }))]]),
+          state: { melhorias: [Object.assign({}, presa), outra] },
+          sujas: new Set(['p1', 'p2']), ids: ['p1'] });
+        ok(c3.sujas.has('p2') && c3.state.melhorias[1].status_planejamento === 'em_andamento',
+           'e as outras pendencias da aba continuam intactas');
+      }
+
+      /* E O BOTAO SO APARECE QUANDO O SERVIDOR NOMEIA AS DEMANDAS. Sem `itens`
+         nao ha o que desfazer com precisao, e desfazer no escuro seria pior
+         que a trava. */
+      const semCom2 = semComentario(ADMIN);
+      ok(/_recusadasIds = \(corpo && Array\.isArray\(corpo\.itens\)\)/.test(semCom2),
+         'as recusadas saem da resposta do servidor, e nao de um palpite da tela');
+      ok(/_recusadasIds \|\| \[\]\)\.filter\(id => _dirtyMelhoriaIds\.has\(id\)\)/.test(semCom2),
+         'e so oferece desfazer o que AINDA esta pendente nesta aba');
+      ok(/_recusadasIds = \[\];/.test(corpo(ADMIN, 'async function saveViaProxy') || ''),
+         'e cada tentativa zera a lista — recusa velha nao oferece desfazer o que ja passou');
     }
 
     /* ══ E O GESTO NAO PODE SER MAIS FROUXO QUE A PUBLICACAO ══
@@ -21205,6 +21294,136 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(roda('poker_pontos', 5, '5').n === 1,
        'numero 5 e texto "5" sao DIFERENTES — era assim pelo JSON e segue sendo');
     ok(roda('titulo', '', undefined).n === 0, 'vazio para vazio nao vira');
+  }
+
+  /* ═══ DEMANDA NOVA NASCE COM QUEM PEDIU ══════════════════════════════════
+   *
+   * "Deixe o campo solicitante obrigatorio para abertura da task."
+   *
+   * E o solicitante quem HOMOLOGA na Validacao da area. A regra ja existia na
+   * entrada daquela etapa e chegava tarde: a demanda nascia anonima, andava
+   * pelo quadro, e so quando alguem a mandava para a area e que o nome fazia
+   * falta — e ai nao havia de onde tirar. Sao 119 na base assim.
+   *
+   * SAO QUATRO PORTAS, e uma delas nao tem como adivinhar: o formulario
+   * publico e ANONIMO — sem login, sem sessao, nada no pedido que diga quem
+   * enviou. As outras tres tem um nome por tras da credencial. */
+  {
+    sec('Abertura: demanda nova nasce com quem pediu');
+    const NASCE = new Function(
+      corpo(W, 'function nascendoSemSolicitante(recebido, servidor) {') +
+      '; return nascendoSemSolicitante;')();
+
+    const novaSem = { id: 'n1', titulo: 'Relatorio novo', solicitante: '' };
+    const novaCom = { id: 'n2', titulo: 'Outra', solicitante: 'Marina' };
+    const velhaSem = { id: 'v1', codigo: 'AX-100', titulo: 'Antiga', solicitante: '' };
+
+    ok(NASCE({ melhorias: [novaSem] }, { melhorias: [] }).length === 1,
+       'demanda NOVA sem solicitante e recusada');
+    ok(NASCE({ melhorias: [novaCom] }, { melhorias: [] }).length === 0,
+       'com solicitante, passa');
+    /* A TRAVA E NA CRIACAO, E NAO NO ESTADO — mesmo criterio das outras seis
+       guardas. Travar por estado faria TODA gravacao falhar por causa das 119
+       antigas, e quem so queria corrigir um texto ficaria preso a uma falta que
+       nao criou. Ja aconteceu nesta base, com o sistema. */
+    ok(NASCE({ melhorias: [velhaSem] }, { melhorias: [velhaSem] }).length === 0,
+       'mas a ANTIGA sem solicitante continua podendo ser editada — a trava e na ' +
+       'criacao, e nao no estado');
+    ok(NASCE({ melhorias: [Object.assign({}, velhaSem, { titulo: 'Texto corrigido' })] },
+             { melhorias: [velhaSem] }).length === 0,
+       'inclusive corrigindo o texto dela');
+    ok(NASCE({ melhorias: [{ id: 'o1', titulo: 'Escondida', solicitante: '', oculto: true }] },
+             { melhorias: [] }).length === 0,
+       'demanda oculta nao e cobrada — nao ha homologacao pela frente');
+    ok(NASCE({ melhorias: [{ id: 'm1', titulo: 'Fundida', solicitante: '', mesclado_em: 'x' }] },
+             { melhorias: [] }).length === 0,
+       'nem a que foi fundida em outra');
+    ok(NASCE({ melhorias: [{ id: 'b1', titulo: 'Branco', solicitante: '   ' }] },
+             { melhorias: [] }).length === 1,
+       'espaco em branco nao vale como nome');
+
+    /* O ROTULO E LEGIVEL. Demanda nova NAO TEM CODIGO — ele nasce nesta
+       gravacao —, entao `m.codigo || m.id` entregaria o id interno a tela. Ja
+       aconteceu em 24/09: "Escolha o sistema antes de planejar:
+       mufxdq9ocnh7k27dbb". */
+    const preso = NASCE({ melhorias: [novaSem] }, { melhorias: [] })[0];
+    ok(preso.rotulo.includes('Relatorio novo') && !preso.rotulo.includes('n1'),
+       'e a recusa nomeia a demanda pelo TITULO, porque codigo ela ainda nao tem',
+       preso.rotulo);
+    ok(preso.id === 'n1' && preso.campo === 'solicitante',
+       'levando o id e o campo, para a tela abrir e apontar');
+
+    /* ── AS QUATRO PORTAS ── */
+    const semComW = semComentario(W);
+    ok(/const semSolPub = nascendoSemSolicitante\(data, antesPub\)/.test(semComW),
+       'o publish do Admin consulta a regra');
+    ok(/const semSolDev = nascendoSemSolicitante\(data, antesDev\)/.test(semComW),
+       'o dev-publish tambem');
+    /* O FORMULARIO PUBLICO E O CASO SEM SAIDA: anonimo, sem credencial, sem
+       nada de onde derivar o nome. E a unica porta em que a recusa e seca. */
+    /* AS DUAS GUARDAS ABAIXO SAO EXECUTADAS, e nao casadas por texto. A
+       primeira versao procurava `sem_solicitante` e a condicao na fonte — e
+       `if (false && ...)` deixa as duas strings intactas com a guarda morta.
+       As duas sabotagens passaram limpas na bateria. E a mesma armadilha que ja
+       escapou outras vezes aqui: condicao neutralizada nao muda o arquivo. */
+    const recusou = (bloco, args, nomes) => {
+      if (!bloco) return 'guarda nao encontrada';
+      const fn = new Function(...nomes, 'json', 'headers', bloco + '; return null;');
+      return fn(...args, (b, s) => ({ erro: b && b.error, status: s }), {});
+    };
+
+    const GUARDA_PUB = corpo(W, "if (!String(m.solicitante || '').trim()) {") || '';
+    ok(!!GUARDA_PUB, 'a guarda do formulario publico foi isolada');
+    const pubVazio = recusou(GUARDA_PUB, [{ solicitante: '' }], ['m']);
+    const pubBranco = recusou(GUARDA_PUB, [{ solicitante: '  ' }], ['m']);
+    const pubCheio = recusou(GUARDA_PUB, [{ solicitante: 'Marina' }], ['m']);
+    ok(pubVazio && pubVazio.erro === 'sem_solicitante' && pubVazio.status === 400,
+       'o formulario publico RECUSA sem o campo — ali nao ha credencial de onde tirar o nome',
+       JSON.stringify(pubVazio));
+    ok(pubBranco && pubBranco.erro === 'sem_solicitante', 'inclusive com espaco em branco');
+    ok(pubCheio === null, 'e com o nome preenchido, passa');
+
+    /* A API MANTEM O PADRAO DE SEMPRE para quem abre com a propria conta: o
+       nome cai na conta que chamou, e abrir demanda para si mesmo e o caso
+       comum de quem automatiza. O buraco era a abertura SEM DONO, onde
+       `devNome` e vazio de proposito e nao havia de onde tirar nada. */
+    const GUARDA_API = corpo(W, "if (semDono && !String(body.solicitante || '').trim()) {") || '';
+    ok(!!GUARDA_API, 'a guarda da API foi isolada');
+    const apiSemDono = recusou(GUARDA_API, [true, { solicitante: '' }], ['semDono', 'body']);
+    const apiSemDonoCom = recusou(GUARDA_API, [true, { solicitante: 'Marina' }], ['semDono', 'body']);
+    const apiComDono = recusou(GUARDA_API, [false, { solicitante: '' }], ['semDono', 'body']);
+    ok(apiSemDono && apiSemDono.erro === 'sem_solicitante',
+       'a API recusa a abertura SEM DONO sem quem pediu — nao ha conta de onde tirar o nome',
+       JSON.stringify(apiSemDono));
+    ok(apiSemDonoCom === null, 'com o nome, a abertura sem dono passa');
+    ok(apiComDono === null,
+       'e quem abre com a PROPRIA conta segue sem informar nada — o nome cai na conta, ' +
+       'e nada do que ja funciona muda');
+
+    /* ── E AS TELAS AVISAM ANTES, EM VEZ DE DEIXAR DESCOBRIR PELA RECUSA ── */
+    [['index.html', INDEX, "nmFalha('nm-solicitante'"],
+     ['admin.html', ADMIN, "document.getElementById('m-solicitante').focus()"],
+     ['dev.html', DEV, "document.getElementById('n-solicitante').focus()"],
+     ['gantt.html', GANTT, "document.getElementById('e-solicitante').focus()"]]
+      .forEach(([nome, src, marca]) => {
+        ok(semComentario(src).includes(marca),
+           nome + ' cobra o campo na propria tela, com o cursor nele');
+      });
+    /* SO NA ABERTURA, TAMBEM NAS TELAS. Se alguma cobrasse na edicao, as 119
+       antigas ficariam impossiveis de corrigir por ali. */
+    ok(/!document\.getElementById\('m-id'\)\.value &&\s*\n?\s*!document\.getElementById\('m-solicitante'\)/
+       .test(semComentario(ADMIN)), 'e o Admin so cobra quando nao ha id — ou seja, na criacao');
+    ok(/!editId && !document\.getElementById\('n-solicitante'\)/.test(semComentario(DEV)),
+       'o dev idem');
+    ok(/!editingId && !document\.getElementById\('e-solicitante'\)/.test(semComentario(GANTT)),
+       'e o gantt idem');
+
+    /* O SILENCIO DEIXOU DE VIRAR O NOME DO DEV. O painel caia em `currentDev`
+       quando o campo estava vazio — e ai o dev homologava a propria entrega,
+       que e exatamente o que a Validacao da area existe para impedir. */
+    ok(!/solicitante: document\.getElementById\('n-solicitante'\)\.value\.trim\(\) \|\| existing\?\.solicitante \|\| currentDev/
+        .test(semComentario(DEV)),
+       'e o painel do dev nao preenche mais com o proprio dev quando o campo fica vazio');
   }
 
   let erroPz = null;

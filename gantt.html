@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="9dd7de2a32">
+<html lang="pt-BR" data-build="82e7dcb8c8">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1448,7 +1448,7 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Solicitante</label>
+        <label>Solicitante <span style="color:var(--red,#E84444)">*</span></label>
         <input type="text" id="e-solicitante" placeholder="Nome ou área" />
       </div>
       <div class="form-group">
@@ -4765,6 +4765,16 @@ async function saveTask() {
      ja e passado por construcao e recusar prenderia o historico inteiro.
      A recusa aqui e cortesia; quem impede de verdade e o Worker, porque esta
      tela publica um estado montado no navegador. */
+  /* QUEM PEDIU, NA ABERTURA — ver `nascendoSemSolicitante` no Worker.
+     E o solicitante quem homologa a entrega na Validacao da area; sem nome, a
+     etapa nasce sem dono. SO NA CRIACAO, pela mesma razao da data logo abaixo:
+     sao 119 demandas antigas sem o campo, e cobrar na edicao prenderia quem so
+     queria corrigir um texto numa falta que nao criou. */
+  if (!editingId && !document.getElementById('e-solicitante').value.trim()) {
+    toast('Informe quem pediu: é o solicitante quem homologa a entrega.', 'err');
+    document.getElementById('e-solicitante').focus();
+    return;
+  }
   if (!editingId) {
     const ab = ABERTURA.checa({ inicio: inicio, entrega: fim }, 'admin', PRAZO.hojeISO());
     if (!ab.ok) {

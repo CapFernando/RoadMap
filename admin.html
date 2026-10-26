@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="4d6d3d163b">
+<html lang="pt-BR" data-build="fc2079dcd1">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -2307,8 +2307,8 @@
 
     <div class="form-row">
       <div class="form-group">
-        <label>Solicitante</label>
-        <input type="text" id="m-solicitante" placeholder="Quem solicitou" />
+        <label>Solicitante <span style="color:var(--red,#E84444)">*</span></label>
+        <input type="text" id="m-solicitante" placeholder="Quem pediu — é quem homologa a entrega" />
       </div>
       <div class="form-group">
         <label>Data da solicitação</label>
@@ -3255,6 +3255,55 @@ function camposAlterados(local, baseStr) {
   return patch;
 }
 
+/* ═══ A SAÍDA PARA UMA PENDÊNCIA QUE O SERVIDOR NUNCA VAI ACEITAR ════════
+ *
+ * Arrastar uma demanda para a Validação da área sem solicitante criava uma
+ * ARMADILHA, e ela fechava por completo:
+ *
+ *   publicar        recusado — falta o solicitante
+ *   voltar ao PM/PO recusado — "registre quem homologou antes de enviar"
+ *   outras colunas  recusado — "da Validação da área só se vai para Em
+ *                   andamento ou para a Validação PM/PO"
+ *
+ * Sobrava Em andamento, que é dado errado. E como a pendência fica no
+ * rascunho, ela VOLTA no F5 e entra em toda publicação seguinte: uma demanda
+ * presa travava a tela inteira, inclusive o trabalho que nada tinha a ver.
+ * Foi o que aconteceu com a AX-801 e a AX-805 em produção.
+ *
+ * O arraste agora barra antes de mover, então a armadilha não se arma mais.
+ * Mas quem já está dentro dela precisa de porta, e a regra geral vale para
+ * qualquer recusa que a pessoa não consiga satisfazer: alteração local que o
+ * servidor nunca vai aceitar tem de poder ser DESFEITA, senão ela sequestra
+ * todas as próximas.
+ *
+ * Desfazer é voltar ao retrato do servidor — `_baseMelhorias`, que é a mesma
+ * base do merge por campo. Nada é inventado: a demanda volta a ser o que o
+ * servidor diz que ela é. */
+function desfazerPendentes(ids) {
+  const volta = [];
+  (ids || []).forEach(id => {
+    const retrato = _baseMelhorias && _baseMelhorias.get(id);
+    if (!retrato) return;                     // sem retrato não há a que voltar
+    let doServidor;
+    try { doServidor = JSON.parse(retrato); } catch (_) { return; }
+    const i = (state.melhorias || []).findIndex(m => m.id === id);
+    if (i < 0) return;
+    state.melhorias[i] = doServidor;
+    _dirtyMelhoriaIds.delete(id);
+    if (window.NAOPUBLICADA) NAOPUBLICADA.limpa([id]);
+    volta.push(doServidor.codigo || id);
+  });
+  if (!volta.length) { toast('Não havia o que desfazer.', 'err'); return 0; }
+  // O rascunho tem de perder a pendência também, senão ela volta no F5 — que é
+  // justamente como a armadilha se mantinha.
+  rascunhoSalvar();
+  if (!_dirtyMelhoriaIds.size) { _pendingEdits = false; _kbDirty = false; }
+  try { renderKanban(); } catch (_) {}
+  try { render(); } catch (_) {}
+  toast('Desfeito: ' + volta.join(', ') + ' — como está no servidor.', 'ok');
+  return volta.length;
+}
+
 /* ═══ ANTES DE ALARMAR, PERGUNTA SE ENTROU ═══════════════════════════════
  *
  * "Erro ao publicar: Failed to fetch" — e o log ao vivo do Worker mostrando,
@@ -3357,11 +3406,18 @@ function mesclaTemas(doServidor) {
 /* `tentativa` conta a remontagem por CONFLITO; `redes`, a repeticao por queda de
    rede. Sao orcamentos separados de proposito: gastar o do conflito numa falha de
    rede faria a remontagem seguinte — que e a que resolve — nao acontecer. */
+/* As demandas que o SERVIDOR recusou nomeadamente na última tentativa. Mora
+   fora da função porque quem a lê é a faixa de erro, montada no `catch`, onde a
+   resposta já não existe. Zerada a cada tentativa pela mesma razão que
+   `_jaExpliquei`: recusa velha não pode oferecer desfazer o que já passou. */
+let _recusadasIds = [];
+
 async function saveViaProxy(tentativa = 1, redes = 0) {
   /* Cada tentativa comeca sem explicacao dada. Sem zerar, uma recusa explicada
      calaria a mensagem generica da tentativa SEGUINTE, que pode ter falhado por
      outro motivo — e ai a tela emudece de vez. */
   _jaExpliquei = false;
+  _recusadasIds = [];
   /* ═══ A CÓPIA LOCAL É GARANTIA DESTA FUNÇÃO, E NÃO DE QUEM A CHAMA ═══════
    *
    * O rascunho existia e funcionava — mas só no caminho do modal, que chamava
@@ -3509,6 +3565,11 @@ async function saveViaProxy(tentativa = 1, redes = 0) {
        * duas ou mais presas, consertar a primeira e publicar bate na parede
        * seguinte sem aviso. Dizer "e outras 3 esperam o mesmo" é a diferença
        * entre uma tarefa e uma surpresa repetida. */
+      /* QUAIS O SERVIDOR RECUSOU, para a faixa poder oferecer desfazer. Guardado
+         aqui, onde a resposta ainda está na mão: o `catch` lá embaixo só recebe
+         a mensagem. */
+      _recusadasIds = (corpo && Array.isArray(corpo.itens))
+        ? corpo.itens.map(x => x && x.id).filter(Boolean) : [];
       const campoLogico = (culpado && culpado.campo) ||
                           (doServidor && doServidor.campo) || '';
       const ID_DO_CAMPO = { tema: 'm-tema', dev: 'm-dev', solicitante: 'm-solicitante' };
@@ -3617,7 +3678,32 @@ async function saveViaProxy(tentativa = 1, redes = 0) {
     // Regrava: entre a cópia do início e o erro a tela pode ter mudado.
     rascunhoSalvar();
     const errEl = document.getElementById('save-error');
-    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar de novo.'; errEl.style.display = 'block'; }
+    if (errEl) {
+      errEl.textContent = '⚠️ ' + e.message + ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar de novo.';
+      /* ── E A PORTA DE SAÍDA, QUANDO O SERVIDOR DIZ QUAIS ────────────────
+       *
+       * Ver `desfazerPendentes`. A recusa que a pessoa não consegue satisfazer
+       * sequestra TODA publicação seguinte, porque a pendência volta no F5 e
+       * entra no próximo envio. O botão aparece só quando o servidor nomeia as
+       * demandas — sem `itens` não há o que desfazer com precisão, e desfazer
+       * no escuro seria pior que a trava.
+       *
+       * Construído com elementos, e não com `innerHTML`: os códigos vêm do
+       * servidor e não têm por que virar HTML. */
+      const presas = (_recusadasIds || []).filter(id => _dirtyMelhoriaIds.has(id));
+      if (presas.length) {
+        errEl.appendChild(document.createTextNode(' '));
+        const b = document.createElement('button');
+        b.className = 'btn btn-secondary btn-sm';
+        b.textContent = 'Desfazer ' + (presas.length === 1 ? 'esta mudança'
+                                                           : 'estas ' + presas.length + ' mudanças');
+        b.title = 'Volta ao que está no servidor. Use quando não houver como atender à regra ' +
+                  'agora — enquanto a pendência existir, nenhuma publicação passa.';
+        b.onclick = (ev) => { ev.stopPropagation(); desfazerPendentes(presas); errEl.style.display = 'none'; };
+        errEl.appendChild(b);
+      }
+      errEl.style.display = 'block';
+    }
     // `explica`, e nao `toast`: esta e a razao de verdade. Com `toast` puro, a
     // frase generica de quem chamou entrava por cima e a pessoa ficava sem saber
     // o que impediu de salvar.
@@ -12330,6 +12416,17 @@ async function saveMelhoria() {
   }
   // sistema obrigatório apenas para novas demandas; existentes sem tema permanecem como estão
   if (!temaId && !document.getElementById('m-id').value) { toast('Selecione o sistema.', 'err'); return; }
+  /* QUEM PEDIU — só na ABERTURA, pela mesma razão do sistema logo acima: são
+     119 demandas antigas sem solicitante, e cobrar em toda gravação prenderia
+     quem só queria corrigir um texto numa falta que não criou. O Worker recusa
+     de qualquer forma (`nascendoSemSolicitante`); isto é para a pessoa não
+     descobrir pela recusa, depois de escrever tudo. */
+  if (!document.getElementById('m-id').value &&
+      !document.getElementById('m-solicitante').value.trim()) {
+    toast('Informe quem pediu: é o solicitante quem homologa a entrega.', 'err');
+    document.getElementById('m-solicitante').focus();
+    return;
+  }
   if (sp === 'negada' && !document.getElementById('m-motivo').value.trim()) {
     toast('Informe o motivo da negativa.', 'err'); return;
   }
