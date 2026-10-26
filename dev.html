@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="d640e31149">
+<html lang="pt-BR" data-build="7a48d000c5">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3047,6 +3047,40 @@ function levaAoCampo(id, campo, motivo) {
   return true;
 }
 
+/* ═══ A GRAVACAO ENTROU, MESMO SEM A RESPOSTA TER VOLTADO? ═══════════════
+ *
+ * Ver a nota longa em `publicacaoEntrou`, no admin.html. Em uma linha: o log do
+ * Worker mostrou `outcome ok | wall 6142ms` no mesmo instante em que a tela
+ * dizia "Failed to fetch". `fetch` nao distingue "nao saiu" de "foi, deu certo
+ * e a resposta se perdeu", e a tela vinha escolhendo o palpite caro.
+ *
+ * `patch` e `{ id: { campo: valor } }` — exatamente o que esta tela pediu para
+ * mudar. Entao a prova e direta: rele e confere.
+ *
+ * `status` FICA DE FORA DA COMPARACAO porque ele NAO e o que esta tela mandou:
+ * o Worker o deriva de `status_planejamento` em toda gravacao (ver
+ * SP_PARA_STATUS). Compara-lo acusaria diferenca numa gravacao que entrou
+ * inteira — e o erro cairia para o lado errado, o de mandar refazer.
+ *
+ * Em qualquer duvida, `false`: nao conseguir provar nao e provar o contrario. */
+async function gravacaoEntrou(patch) {
+  const ids = Object.keys(patch || {});
+  if (!ids.length) return false;
+  let srv;
+  try { srv = await lerDados(false); } catch (_) { return false; }
+  const noServidor = new Map(((srv && srv.melhorias) || []).map(m => [m.id, m]));
+  for (const id of ids) {
+    const la = noServidor.get(id);
+    if (!la) return false;
+    const campos = patch[id] || {};
+    for (const campo of Object.keys(campos)) {
+      if (campo === 'status') continue;
+      if (JSON.stringify(la[campo]) !== JSON.stringify(campos[campo])) return false;
+    }
+  }
+  return true;
+}
+
 async function saveToGitHub(patch, opts = {}) {
   // Modo proxy: navegador monta o estado completo e o Worker só grava (leve, sem token)
   if (ADMIN_PROXY_URL) {
@@ -3160,6 +3194,18 @@ async function saveToGitHub(patch, opts = {}) {
         toast('⚠️ Falha de rede, tentando novamente…','err');
         await new Promise(r => setTimeout(r, 2000));
         return saveToGitHub(patch, { ...opts, _retryRede: true });
+      }
+      /* REPETIU E CAIU DE NOVO: ainda assim pode TER ENTRADO. Mesma razao
+         escrita por extenso no `publicacaoEntrou` do Admin — o Worker registrou
+         `outcome ok` enquanto a tela anunciava fracasso. Aqui a conferencia e
+         mais direta: `patch` JA E o mapa de id para campos alterados, entao
+         basta reler e comparar. Conservadora pelo mesmo motivo: dizer "entrou"
+         sem ter entrado apagaria a marca de pendente de um trabalho que ninguem
+         gravou, e esse nao volta. */
+      if (quedaDeRede && await gravacaoEntrou(patch)) {
+        if (window.NAOPUBLICADA) { NAOPUBLICADA.limpa(patch); avisaNaoPublicadas(); }
+        toast('✅ Salvo! (a resposta se perdeu, mas a gravação entrou)','ok');
+        return true;
       }
       /* A GRAVACAO FALHOU E O CARD CONTINUA NA TELA. Sem esta marca ele fica
          igual a um card gravado, e o unico aviso e um toast de 4 segundos —

@@ -19923,22 +19923,25 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            "await is only valid in async functions" e a invariante morre sem
            avaliar nada. */
         const FuncAsync = Object.getPrototypeOf(async function () {}).constructor;
-        const roda = (erro, opts) => {
+        const roda = (erro, opts, entrou) => {
           const marcadas = [];
           const repetiu = [];
-          const janela = { NAOPUBLICADA: { marca: (p) => marcadas.push(Object.keys(p)) } };
+          const limpas = [];
+          const avisos = [];
+          const janela = { NAOPUBLICADA: { marca: (p) => marcadas.push(Object.keys(p)),
+                                           limpa: (p) => limpas.push(Object.keys(p)) } };
           /* `setTimeout` entra como PARAMETRO, sombreando o global: a espera de
              dois segundos antes de repetir e certa em producao e so atrasaria a
              invariante. Aqui ela dispara na hora. */
           const fn = new FuncAsync('window', 'NAOPUBLICADA', 'avisaNaoPublicadas', 'toast',
                                    'patch', 'e', 'opts', 'showSaving', 'saveToGitHub',
-                                   'setTimeout',
+                                   'setTimeout', 'gravacaoEntrou',
                                    trecho.replace(/return false;\s*$/, ''));
-          return fn(janela, janela.NAOPUBLICADA, () => {}, () => {},
+          return fn(janela, janela.NAOPUBLICADA, () => {}, (t) => avisos.push(String(t)),
                     { 'ax-1': { titulo: 'x' } }, erro, opts, () => {},
                     (p, o) => { repetiu.push(o); return true; },
-                    (f) => f())
-            .then(() => ({ marcadas, repetiu }));
+                    (f) => f(), async () => !!entrou)
+            .then(() => ({ marcadas, repetiu, limpas, avisos }));
         };
 
         /* ── QUEDA DE REDE: REPETE ANTES DE DESISTIR ──
@@ -19961,22 +19964,69 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            vem depois neste mesmo bloco — a que confere que o sucesso TIRA a
            marca e as duas que conferem o cracha no card. Invariante que some em
            silencio e pior que invariante que falha. */
-        const r1 = await roda({ message: 'Failed to fetch' }, {});
+        /* O CASO QUE MOTIVOU TUDO: caiu duas vezes, mas ENTROU. Marcar aqui
+           seria anunciar fracasso de um trabalho salvo, e o dev refaria por
+           cima de uma base que ja mudou. */
+        const rOk = await roda({ message: 'Failed to fetch' }, { _retryRede: true }, true);
+        ok(rOk.marcadas.length === 0 && rOk.limpas.length === 1,
+           'no dev, gravacao que ENTROU limpa a marca em vez de acusar falha',
+           'marcou ' + rOk.marcadas.length + ', limpou ' + JSON.stringify(rOk.limpas));
+        ok(rOk.avisos.some(t => /Salvo/i.test(t)),
+           'e o dev ve que salvou', JSON.stringify(rOk.avisos));
+
+        const r1 = await roda({ message: 'Failed to fetch' }, {}, false);
         ok(r1.repetiu.length === 1 && r1.marcadas.length === 0,
            'queda de rede REPETE em vez de marcar — a gravacao costuma ter entrado',
            'repetiu ' + r1.repetiu.length + ', marcou ' + r1.marcadas.length);
         ok(r1.repetiu.length === 1 && r1.repetiu[0] && r1.repetiu[0]._retryRede === true,
            'e a repeticao vai marcada, para nao virar laco infinito');
 
-        const r2 = await roda({ message: 'Failed to fetch' }, { _retryRede: true });
+        const r2 = await roda({ message: 'Failed to fetch' }, { _retryRede: true }, false);
         ok(r2.repetiu.length === 0 && r2.marcadas.length === 1 && r2.marcadas[0][0] === 'ax-1',
            'caindo DUAS vezes, ai sim a demanda do patch e marcada',
            JSON.stringify(r2.marcadas));
 
-        const r3 = await roda(new Error('horas_obrigatorias'), {});
+        const r3 = await roda(new Error('horas_obrigatorias'), {}, false);
         ok(r3.repetiu.length === 0 && r3.marcadas.length === 1 && r3.marcadas[0][0] === 'ax-1',
            'recusa do servidor MARCA de primeira — repetir so repetiria a recusa',
            JSON.stringify(r3.marcadas));
+
+        /* ── E A CONFERENCIA DO DEV ERRA PARA O LADO SEGURO ──
+           Mesma razao do `publicacaoEntrou` do Admin: dizer "entrou" sem ter
+           entrado apaga a marca de pendente de um trabalho que ninguem gravou. */
+        const ENTROUDEV = corpo(DEV, 'async function gravacaoEntrou(patch) {') || '';
+        ok(!!ENTROUDEV, 'a conferencia do dev foi isolada');
+        if (ENTROUDEV) {
+          const FAD = Object.getPrototypeOf(async function () {}).constructor;
+          const confere = (patch, ler) => new FAD('lerDados',
+            ENTROUDEV + '\n; return gravacaoEntrou(' + JSON.stringify(patch) + ');')(ler);
+          const servidor = (ms) => async () => ({ melhorias: ms });
+
+          ok(await confere({}, servidor([])) === false,
+             'patch vazio nao prova nada — e o que nao prova NAO vira sucesso');
+          ok(await confere({ d1: { titulo: 'novo' } },
+                           async () => { throw new TypeError('Failed to fetch'); }) === false,
+             'no dev, releitura que cai tambem vale NAO SEI');
+          ok(await confere({ d1: { titulo: 'novo' } },
+                           servidor([{ id: 'd1', titulo: 'velho' }])) === false,
+             'servidor com o valor ANTIGO: nao entrou');
+          ok(await confere({ d1: { titulo: 'novo' } },
+                           servidor([{ id: 'd1', titulo: 'novo' }])) === true,
+             'servidor com o valor NOVO: entrou');
+          ok(await confere({ d1: { titulo: 'novo' } }, servidor([])) === false,
+             'demanda que nem esta la: nao entrou');
+          ok(await confere({ d1: { titulo: 'novo' }, d2: { horas_realizadas: 4 } },
+                           servidor([{ id: 'd1', titulo: 'novo' },
+                                     { id: 'd2', horas_realizadas: 2 }])) === false,
+             'basta UMA demanda do patch divergir para a resposta ser nao');
+          /* `status` NAO E O QUE A TELA MANDOU: o Worker o deriva de
+             `status_planejamento` em toda gravacao. Compara-lo faria uma
+             gravacao que entrou inteira parecer perdida. */
+          ok(await confere({ d1: { status_planejamento: 'validacao', status: 'iniciada' } },
+                           servidor([{ id: 'd1', status_planejamento: 'validacao',
+                                       status: 'OUTRA COISA' }])) === true,
+             'o `status`, que o servidor deriva sozinho, fica fora da comparacao');
+        }
       }
     }
 
@@ -19999,23 +20049,47 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        trechoA ? trechoA.length + ' caracteres' : 'nao achei');
     if (trechoA.trim()) {
       const FuncAsyncA = Object.getPrototypeOf(async function () {}).constructor;
-      const rodaA = (erro, redes) => {
+      const rodaA = (erro, redes, entrou) => {
         const marcadas = [];
         const repetiu = [];
-        const janela = { NAOPUBLICADA: { marca: (p) => marcadas.push(Object.keys(p)) } };
+        const limpezas = [];
+        const avisos = [];
+        const janela = { NAOPUBLICADA: { marca: (p) => marcadas.push(Object.keys(p)),
+                                         zera: () => limpezas.push('zera') } };
+        const sujas = new Set(['ax-9']);
         const fn = new FuncAsyncA('window', 'NAOPUBLICADA', '_dirtyMelhoriaIds', 'state',
-                                  'rascunhoSalvar', 'document', 'explica', 'toast',
-                                  'showSaving', 'saveViaProxy', 'setTimeout',
-                                  'tentativa', 'redes', 'e', trechoA);
-        return fn(janela, janela.NAOPUBLICADA, new Set(['ax-9']),
+                                  'rascunhoSalvar', 'rascunhoLimpar', 'retratoBase',
+                                  'publicacaoEntrou', '_pollTs', 'document', 'explica',
+                                  'toast', 'showSaving', 'saveViaProxy', 'setTimeout',
+                                  'tentativa', 'redes', 'e',
+                                  '_pendingEdits', '_kbDirty', trechoA);
+        return fn(janela, janela.NAOPUBLICADA, sujas,
                   { melhorias: [{ id: 'ax-9', titulo: 'x' }] }, () => {},
-                  { getElementById: () => null }, () => {}, () => {}, () => {},
+                  () => limpezas.push('rascunho'), () => {},
+                  async () => !!entrou, null,
+                  { getElementById: () => null }, () => {},
+                  (t) => avisos.push(String(t)), () => {},
                   (t, r) => { repetiu.push({ tentativa: t, redes: r }); return true; },
-                  (f) => f(), 1, redes, erro)
-          .then(() => ({ marcadas, repetiu }));
+                  (f) => f(), 1, redes, erro, true, true)
+          .then(() => ({ marcadas, repetiu, limpezas, avisos, sobrou: sujas.size }));
       };
 
-      const a1 = await rodaA({ message: 'Failed to fetch' }, 0);
+      /* ── CAIU DUAS VEZES, MAS ENTROU: A TELA NAO PODE DIZER QUE FALHOU ──
+       *
+       * E o caso que motivou tudo isto. O Worker registrou `outcome ok` e a
+       * tela anunciou fracasso — e quem acredita refaz por cima de uma base que
+       * ja mudou. Executado, e nao casado por texto: trocar `publicacaoEntrou()`
+       * por `false` deixaria a chamada intacta na pagina. */
+      const aOk = await rodaA({ message: 'Failed to fetch' }, 1, true);
+      ok(aOk.marcadas.length === 0 && aOk.limpezas.includes('rascunho') &&
+         aOk.limpezas.includes('zera') && aOk.sobrou === 0,
+         'gravacao que ENTROU e tratada como sucesso, mesmo sem a resposta ter voltado',
+         'marcou ' + aOk.marcadas.length + ', limpou ' + JSON.stringify(aOk.limpezas));
+      ok(aOk.avisos.some(t => /Publicado/i.test(t)),
+         'e a pessoa ve que publicou, em vez de um erro que nao aconteceu',
+         JSON.stringify(aOk.avisos));
+
+      const a1 = await rodaA({ message: 'Failed to fetch' }, 0, false);
       ok(a1.repetiu.length === 1 && a1.marcadas.length === 0,
          'no Admin, queda de rede tambem REPETE antes de marcar',
          'repetiu ' + a1.repetiu.length + ', marcou ' + a1.marcadas.length);
@@ -20027,15 +20101,93 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'e ela gasta o orcamento DA REDE, nao o do conflito',
          JSON.stringify(a1.repetiu[0]));
 
-      const a2 = await rodaA({ message: 'Failed to fetch' }, 1);
+      const a2 = await rodaA({ message: 'Failed to fetch' }, 1, false);
       ok(a2.repetiu.length === 0 && a2.marcadas.length === 1,
          'caindo duas vezes, o Admin marca as demandas pendentes',
          JSON.stringify(a2.marcadas));
 
-      const a3 = await rodaA(new Error('horas_obrigatorias'), 0);
+      const a3 = await rodaA(new Error('horas_obrigatorias'), 0, false);
       ok(a3.repetiu.length === 0 && a3.marcadas.length === 1,
          'e recusa do servidor marca de primeira, sem repetir',
          JSON.stringify(a3.marcadas));
+    }
+
+    /* ── E A PERGUNTA "ENTROU?" ERRA PARA O LADO SEGURO ──
+     *
+     * Esta e a funcao perigosa do conjunto. Dizer "falhou" quando entrou custa
+     * um susto e um retrabalho; dizer "ENTROU" quando nao entrou apaga o
+     * rascunho e as marcas de pendente de um trabalho que ninguem gravou — e
+     * esse nao volta. Entao os casos abaixo cobrem o lado caro primeiro: toda
+     * duvida tem de virar `false`. */
+    {
+      const ENTROU = corpo(ADMIN, 'async function publicacaoEntrou()') || '';
+      const CAMPOS = corpo(ADMIN, 'function camposAlterados(local, baseStr) {') || '';
+      ok(!!ENTROU && !!CAMPOS, 'a conferencia e o comparador de campos foram isolados');
+      if (ENTROU && CAMPOS) {
+        const FA = Object.getPrototypeOf(async function () {}).constructor;
+        const monta = (cenario) => new FA(
+          '_dirtyMelhoriaIds', '_deletedIds', 'state', '_baseMelhorias', 'lerDados',
+          'const semValor = (v) => v === undefined || v === null || v === "" || ' +
+          '(Array.isArray(v) && v.length === 0);\n' + CAMPOS + '\n' + ENTROU +
+          '\n; return publicacaoEntrou();')(
+          cenario.sujas, cenario.apagadas || new Set(), cenario.state,
+          cenario.retratos, cenario.ler);
+
+        const dem = (extra) => Object.assign({ id: 'ax-9', titulo: 'velho', dev: 'Dan' }, extra);
+        const leServidor = (ms) => async () => ({ melhorias: ms });
+
+        const semSujas = await monta({
+          sujas: new Set(), state: { melhorias: [dem()] }, retratos: new Map(),
+          ler: leServidor([dem()]) });
+        ok(semSujas === false,
+           'publicacao sem demanda suja nao da para conferir — e o que nao da para ' +
+           'provar NAO vira sucesso');
+
+        const leituraCaiu = await monta({
+          sujas: new Set(['ax-9']), state: { melhorias: [dem({ titulo: 'novo' })] },
+          retratos: new Map([['ax-9', JSON.stringify(dem())]]),
+          ler: async () => { throw new TypeError('Failed to fetch'); } });
+        ok(leituraCaiu === false, 'se nem a releitura volta, a resposta e NAO SEI, que vale nao');
+
+        const naoChegou = await monta({
+          sujas: new Set(['ax-9']), state: { melhorias: [dem({ titulo: 'novo' })] },
+          retratos: new Map([['ax-9', JSON.stringify(dem())]]),
+          ler: leServidor([dem()]) });
+        ok(naoChegou === false, 'o servidor ainda com o titulo VELHO: nao entrou');
+
+        const chegou = await monta({
+          sujas: new Set(['ax-9']), state: { melhorias: [dem({ titulo: 'novo' })] },
+          retratos: new Map([['ax-9', JSON.stringify(dem())]]),
+          ler: leServidor([dem({ titulo: 'novo' })]) });
+        ok(chegou === true, 'o servidor ja com o titulo NOVO: entrou');
+
+        const sumiu = await monta({
+          sujas: new Set(['ax-9']), state: { melhorias: [dem({ titulo: 'novo' })] },
+          retratos: new Map([['ax-9', JSON.stringify(dem())]]),
+          ler: leServidor([]) });
+        ok(sumiu === false, 'demanda que nem existe no servidor: nao entrou');
+
+        /* DEMANDA NOVA SE CONFERE PELA EXISTENCIA. Ela nao tem retrato, entao
+           `camposAlterados` devolve o objeto inteiro — inclusive `codigo`, que
+           NASCE NO SERVIDOR. Comparar campo a campo acusaria diferenca numa
+           gravacao que deu certo, e a tela gritaria erro com tudo salvo. */
+        const novaLa = await monta({
+          sujas: new Set(['ax-novo']),
+          state: { melhorias: [{ id: 'ax-novo', titulo: 'recem criada' }] },
+          retratos: new Map(),
+          ler: leServidor([{ id: 'ax-novo', titulo: 'recem criada', codigo: 'AX-900',
+                             status: 'recebida' }]) });
+        ok(novaLa === true,
+           'demanda NOVA conta como entrada por existir la — o codigo dela nasce no servidor');
+
+        const apagadaFicou = await monta({
+          sujas: new Set(['ax-9']), apagadas: new Set(['ax-8']),
+          state: { melhorias: [dem({ titulo: 'novo' })] },
+          retratos: new Map([['ax-9', JSON.stringify(dem())]]),
+          ler: leServidor([dem({ titulo: 'novo' }), { id: 'ax-8', titulo: 'deveria ter sumido' }]) });
+        ok(apagadaFicou === false,
+           'o que esta aba apagou e continua no servidor derruba a conferencia inteira');
+      }
     }
 
     // ── E o sucesso tira a marca, senao o aviso vira ruido permanente ──

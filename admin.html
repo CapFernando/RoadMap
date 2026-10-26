@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="3c3d6e819a">
+<html lang="pt-BR" data-build="9439f06e17">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3255,6 +3255,59 @@ function camposAlterados(local, baseStr) {
   return patch;
 }
 
+/* ═══ ANTES DE ALARMAR, PERGUNTA SE ENTROU ═══════════════════════════════
+ *
+ * "Erro ao publicar: Failed to fetch" — e o log ao vivo do Worker mostrando,
+ * no mesmo instante, `outcome ok | cpu 265ms | wall 6142ms` e a linha
+ * `publish: 3.46 MB, 1053 demandas, gravacao em 4659ms`. A gravacao TERMINOU
+ * BEM. O que nao voltou foi a resposta: `fetch` so sabe dizer "Failed to
+ * fetch" e nao distingue "nao saiu daqui" de "foi, deu certo, e a resposta se
+ * perdeu no caminho".
+ *
+ * A TELA ESTAVA ESCOLHENDO O PIOR DOS DOIS PALPITES. Dizer "falhou" quando
+ * entrou faz a pessoa refazer o que ja estava salvo — e refazer por cima de
+ * uma base que mudou e exatamente como se perde trabalho.
+ *
+ * Entao para de palpitar e CONFERE: rele a base e compara, demanda por
+ * demanda, os campos que ESTA aba mudou. A leitura e barata (o Worker a
+ * devolve em streaming, 1 a 7ms de CPU) perto de uma publicacao de 6 segundos.
+ *
+ * CONSERVADORA DE PROPOSITO. Errar para "entrou" e o erro caro: limparia o
+ * rascunho e as marcas de pendente de algo que nao foi gravado. Entao so diz
+ * que sim quando da para provar — qualquer duvida cai no caminho do erro, que
+ * guarda tudo e avisa. Publicacao que nao mexeu em demanda nenhuma (renomear
+ * tema, mexer em projeto) nao tem o que conferir e tambem cai la.
+ *
+ * DEMANDA NOVA SE CONFERE PELA EXISTENCIA, e nao campo a campo: ela nao tem
+ * retrato, entao `camposAlterados` devolveria o objeto inteiro — inclusive o
+ * `codigo` e o `status`, que NASCEM NO SERVIDOR. Comparar isso acusaria
+ * diferenca numa gravacao que deu certo. */
+async function publicacaoEntrou() {
+  if (!_dirtyMelhoriaIds || !_dirtyMelhoriaIds.size) return false;
+  let srv;
+  try { srv = await lerDados(false); } catch (_) { return false; }
+  const noServidor = new Map(((srv && srv.melhorias) || []).map(m => [m.id, m]));
+
+  // O que esta aba apagou tem de ter sumido de la.
+  for (const id of (_deletedIds || new Set())) {
+    if (noServidor.has(id)) return false;
+  }
+
+  for (const id of _dirtyMelhoriaIds) {
+    const local = (state.melhorias || []).find(m => m.id === id);
+    if (!local) continue;                       // sumiu da tela: nao da para conferir
+    const la = noServidor.get(id);
+    if (!la) return false;                      // nem chegou
+    const retrato = _baseMelhorias && _baseMelhorias.get(id);
+    if (!retrato) continue;                     // nova: existir ja prova que entrou
+    const mudou = camposAlterados(local, retrato);
+    for (const campo of Object.keys(mudou)) {
+      if (JSON.stringify(la[campo]) !== JSON.stringify(mudou[campo])) return false;
+    }
+  }
+  return true;
+}
+
 function mesclaMelhorias(serverMelhorias) {
   const localById = new Map(state.melhorias.map(m => [m.id, m]));
   const vistos = new Set();
@@ -3504,6 +3557,19 @@ async function saveViaProxy(tentativa = 1, redes = 0) {
       toast('⚠️ Falha de rede, tentando novamente…', 'err');
       await new Promise(r => setTimeout(r, 2000));
       return saveViaProxy(tentativa, redes + 1);
+    }
+    /* REPETIU E CAIU DE NOVO: ainda assim pode TER ENTRADO. Ver
+       `publicacaoEntrou`. So depois desta pergunta e que a tela tem o direito
+       de dizer que falhou. */
+    if (quedaDeRede && await publicacaoEntrou()) {
+      _pollTs = state.atualizado_em;
+      if (window.NAOPUBLICADA) NAOPUBLICADA.zera();
+      _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase();
+      rascunhoLimpar();
+      const okEl = document.getElementById('save-error'); if (okEl) okEl.style.display = 'none';
+      toast('✅ Publicado! (a resposta se perdeu, mas a gravação entrou)', 'ok');
+      showSaving(false);
+      return true;
     }
     /* QUAIS demandas ficaram de fora, e nao so "a publicacao falhou".
        A faixa de erro aqui ja e persistente e o rascunho sobrevive ao F5 —
