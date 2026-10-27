@@ -17069,7 +17069,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        ele apontava para o lugar errado: o que esta invariante protege e a copia
        local, que nao tem nada a ver com quantos argumentos a funcao recebe.
        `corpo()` acha a chave do corpo adiante quando a assinatura nao a traz. */
-    const VIA = corpo(ADMIN, 'async function saveViaProxy') || '';
+    const VIA = corpo(ADMIN, 'async function publicaAgora') || '';
     const GIT = corpo(ADMIN, 'async function saveToGitHub') || '';
     ok(!!VIA && !!GIT, 'os dois caminhos de publicacao foram achados');
 
@@ -17314,7 +17314,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   sec('Admin: a jornada leva ao campo, em vez de avisar');
   {
     // Ancorada no NOME — ver a nota em 'Admin: a copia local de quem publica'.
-    const VIA = corpo(ADMIN, 'async function saveViaProxy') || '';
+    const VIA = corpo(ADMIN, 'async function publicaAgora') || '';
     const DEVSAVE = corpo(DEV, 'async function saveToGitHub(patch, opts = {}) {') || '';
 
     /* ══ A REGRA E UMA SO, E NAO UMA POR TELA ══════════════════════════════
@@ -17481,8 +17481,124 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o "antes" do modal e a demanda como esta na tela, e nao `null` fixo');
     ok(/if \(aprovar && gestoSemDev\(m, 'concluido', m\.dev\)\)/.test(ADMIN),
        'e aprovar a entrega — o gesto em que nem se escolhe etapa');
-    ok(/levaAoCampo\(id, 'm-dev'/.test(corpo(ADMIN, 'async function valDecidir(aprovar, obs) {') || ''),
+    ok(/levaAoCampo\(id, 'm-dev'/.test(corpo(ADMIN, 'async function valDecidir(aprovar') || ''),
        'e a recusa de aprovar leva ao campo, porque o botao tambem existe no card');
+
+    /* ═══ APROVAR DOIS CARDS SEGUIDOS NAO PODE APROVAR O ERRADO ═════════
+     *
+     * `valDecidirNoCard` apontava o campo escondido `m-id` para o card, chamava
+     * a aprovacao e so devolvia o valor num `finally` — que roda DEPOIS da
+     * publicacao, cerca de sete segundos. Dois cliques dentro dessa janela se
+     * sobrepunham e o `anterior` de um guardava o id do OUTRO: o campo que
+     * decide QUAL demanda aprovar ficava apontando para a errada.
+     *
+     * Nao e lentidao nem susto: e entrega errada aprovada, com carimbo de quem
+     * aprovou e tudo. O id passou a viajar no argumento, e sem estado
+     * compartilhado a sobreposicao deixa de importar.
+     *
+     * EXECUTADO com tres aprovacoes SOBREPOSTAS de proposito — e o unico jeito
+     * de provar: ler o codigo nao mostra uma corrida. */
+    {
+      const NOCARD = corpo(ADMIN, 'async function valDecidirNoCard') || '';
+      ok(!!NOCARD, 'o atalho de aprovar pelo card foi isolado');
+      ok(!/getElementById\('m-id'\)\.value =/.test(semComentario(NOCARD)),
+         'ele NAO escreve mais no campo compartilhado do formulario');
+      if (NOCARD) {
+        const FA2 = Object.getPrototypeOf(async function () {}).constructor;
+        const decididos = [];
+        const campo = { value: '' };
+        const amb = {
+          state: { melhorias: [{ id: 'x1' }, { id: 'x2' }, { id: 'x3' }] },
+          document: { getElementById: () => campo },
+          // Guarda o id que CHEGOU, e demora — como a publicacao real demora.
+          valAprovar: (id) => new Promise(r => setTimeout(() => { decididos.push(id); r(); }, 5)),
+          valRejeitar: (id) => new Promise(r => setTimeout(() => { decididos.push('r:' + id); r(); }, 5)),
+        };
+        const nomes = Object.keys(amb);
+        const fn = new Function(...nomes, NOCARD + '; return valDecidirNoCard;')(
+          ...nomes.map(n => amb[n]));
+        const ev = { stopPropagation() {}, preventDefault() {} };
+        pendentes.push(Promise.all([
+          fn(ev, 'x1', 'aprovar'), fn(ev, 'x2', 'aprovar'), fn(ev, 'x3', 'aprovar'),
+        ]).then(() => {
+          ok(decididos.length === 3 && decididos.includes('x1') &&
+             decididos.includes('x2') && decididos.includes('x3'),
+             'tres aprovacoes sobrepostas atingem as TRES demandas certas, e nao a mesma',
+             JSON.stringify(decididos));
+          ok(campo.value === '',
+             'e o campo do formulario sai limpo — nenhum fluxo deixou o id do outro la',
+             JSON.stringify(campo.value));
+        }));
+      }
+
+      /* ── E QUEM RECEBE O ID TEM DE HONRA-LO ──
+       *
+       * Passar o id adiante nao adianta nada se a funcao do outro lado
+       * continuar lendo o campo do formulario. As duas sabotagens que fazem
+       * exatamente isso escaparam da bateria enquanto so o repasse era medido:
+       * `valDecidirNoCard` ficava impecavel e a demanda errada era aprovada
+       * assim mesmo.
+       *
+       * O TESTE E DIFERENCIAL: o estado tem SO a demanda do campo, e o
+       * argumento aponta para outra. Honrando o argumento, a funcao nao acha
+       * nada e sai calada; lendo o campo, ela acha e segue — e isso aparece. */
+      {
+        const APROVAR = corpo(ADMIN, 'async function valAprovar(idExplicito) {') || '';
+        ok(!!APROVAR, 'a aprovacao foi isolada');
+        if (APROVAR) {
+          /* O DIFERENCIAL E PELO QUE ELA CONFERE. As duas demandas existem; a
+             do ARGUMENTO esta sem `implementacao` e a do CAMPO esta preenchida.
+             Honrando o argumento, a pergunta "aprovar sem descricao?" aparece;
+             lendo o campo, ela nao aparece — e e assim que se ve de qual
+             demanda a funcao esta falando. */
+          const perguntas = [];
+          let recebeu = 'nunca chamou';
+          const amb = {
+            state: { melhorias: [
+              { id: 'doCampo', implementacao: 'tem texto' },
+              { id: 'doArgumento', implementacao: '' },
+            ] },
+            document: { getElementById: () => ({ value: 'doCampo' }) },
+            confirmar: async (o) => { perguntas.push(String((o && o.titulo) || '')); return true; },
+            valDecidir: (ap, obs, id) => { recebeu = id; },
+          };
+          const nomes = Object.keys(amb);
+          const fn = new Function(...nomes, APROVAR + '; return valAprovar;')(
+            ...nomes.map(n => amb[n]));
+          pendentes.push(Promise.resolve(fn('doArgumento')).then(() => {
+            ok(perguntas.some(t => /sem descricao/i.test(t)),
+               'a aprovacao confere a demanda que RECEBEU, e nao a do formulario',
+               JSON.stringify(perguntas));
+            ok(recebeu === 'doArgumento',
+               'e repassa esse mesmo id adiante', JSON.stringify(recebeu));
+          }));
+        }
+
+        const DECIDIR = corpo(ADMIN, 'async function valDecidir(aprovar') || '';
+        ok(!!DECIDIR, 'a decisao foi isolada');
+        if (DECIDIR) {
+          const falou = [];
+          const amb2 = {
+            // SO a demanda do campo existe. Quem honra o argumento nao acha nada.
+            state: { melhorias: [{ id: 'doCampo', horas_realizadas: 0 }] },
+            document: { getElementById: () => ({ value: 'doCampo' }) },
+            toast: (t) => falou.push(String(t)),
+          };
+          const nomes2 = Object.keys(amb2);
+          const fn2 = new Function(...nomes2, DECIDIR + '; return valDecidir;')(
+            ...nomes2.map(n => amb2[n]));
+          pendentes.push(Promise.resolve(fn2(true, undefined, 'doArgumento'))
+            .then(() => {
+              ok(falou.length === 0,
+                 'a decisao usa o id que RECEBEU: nao achando a demanda, ela sai calada ' +
+                 '— lendo o campo, acharia a errada e seguiria',
+                 JSON.stringify(falou));
+            }, () => {
+              ok(false, 'a decisao usa o id que RECEBEU (estourou ao rodar)');
+            }));
+        }
+      }
+    }
 
     /* E A LISTA NAO FOI ESCRITA DE NOVO. Duas listas para a mesma regra foi o
        defeito; corrigir o valor mantendo o desenho traria a proxima. */
@@ -17603,7 +17719,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          LBL.validacao_area);
       ok(COLS.some(s => s.includes('validacao_area') && s.includes('Validação da área')),
          'a coluna confirma a redacao', String(COLS.filter(s => s.includes('validacao_area'))));
-      const VIAJ = corpo(ADMIN, 'async function saveViaProxy') || '';
+      const VIAJ = corpo(ADMIN, 'async function publicaAgora') || '';
       const semCom = semComentario(VIAJ);
       ok(/culpado && culpado\.campo/.test(semCom),
          'o campo vem do ITEM que o servidor mandou, e nao so do registro de regras');
@@ -17721,7 +17837,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'as recusadas saem da resposta do servidor, e nao de um palpite da tela');
       ok(/_recusadasIds \|\| \[\]\)\.filter\(id => _dirtyMelhoriaIds\.has\(id\)\)/.test(semCom2),
          'e so oferece desfazer o que AINDA esta pendente nesta aba');
-      ok(/_recusadasIds = \[\];/.test(corpo(ADMIN, 'async function saveViaProxy') || ''),
+      ok(/_recusadasIds = \[\];/.test(corpo(ADMIN, 'async function publicaAgora') || ''),
          'e cada tentativa zera a lista — recusa velha nao oferece desfazer o que ja passou');
     }
 
@@ -17928,7 +18044,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * Duas causas: a barra nao era redesenhada com o painel, e o desfazer
      * escrevia no objeto CAPTURADO antes do save — mas `saveViaProxy` refaz
      * `state.melhorias` com objetos novos, entao ele podia ja ser um orfao. */
-    const VD = corpo(ADMIN, 'async function valDecidir(aprovar, obs) {') || '';
+    const VD = corpo(ADMIN, 'async function valDecidir(aprovar') || '';
     const desenhosPainel = (VD.match(/renderEntrega\(/g) || []).length;
     const desenhosBarra = (VD.match(/valBarraRender\(/g) || []).length;
     ok(desenhosBarra === desenhosPainel && desenhosBarra >= 2,
@@ -20476,7 +20592,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * EXECUTADA, e nao casada por texto: procurar `saveViaProxy(tentativa,
      * redes + 1)` na pagina passaria liso com a condicao trocada por `false &&`,
      * que e exatamente a sabotagem que ja escapou aqui outras vezes. */
-    const VIAP = corpo(ADMIN, 'async function saveViaProxy') || '';
+    const VIAP = corpo(ADMIN, 'async function publicaAgora') || '';
     const iCatchA = VIAP.indexOf('} catch (e) {');
     const fimA = VIAP.indexOf("explica('Erro ao publicar: ' + e.message);", iCatchA);
     const trechoA = (iCatchA < 0 || fimA < 0) ? '' : VIAP.slice(iCatchA + 13, fimA);
@@ -20495,7 +20611,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         const fn = new FuncAsyncA('window', 'NAOPUBLICADA', '_dirtyMelhoriaIds', 'state',
                                   'rascunhoSalvar', 'rascunhoLimpar', 'retratoBase',
                                   'publicacaoEntrou', '_pollTs', 'document', 'explica',
-                                  'toast', 'showSaving', 'saveViaProxy', 'setTimeout',
+                                  'toast', 'showSaving', 'publicaAgora', 'setTimeout',
                                   'tentativa', 'redes', 'e',
                                   '_pendingEdits', '_kbDirty', trechoA);
         return fn(janela, janela.NAOPUBLICADA, sujas,
@@ -20545,6 +20661,116 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(a3.repetiu.length === 0 && a3.marcadas.length === 1,
          'e recusa do servidor marca de primeira, sem repetir',
          JSON.stringify(a3.marcadas));
+    }
+
+    /* ═══ UMA PUBLICACAO NO AR POR VEZ, E AS SEGUINTES SE FUNDEM ═══════════
+     *
+     * Nao havia trava nenhuma contra publicacoes simultaneas, e cada uma leva
+     * ~7 segundos. Aprovar quatro entregas seguidas no quadro punha quatro no
+     * ar ao mesmo tempo, sobre o MESMO arquivo: elas disputavam o commit,
+     * viravam conflito, cada conflito remontava e publicava de novo — e a
+     * chance de uma conexao cair era multiplicada pelo numero de janelas de
+     * sete segundos abertas em paralelo.
+     *
+     * FUNDIR E CORRETO porque cada publicacao envia o ESTADO INTEIRO e toda
+     * tentativa comeca relendo o servidor: a seguinte carrega tudo o que a
+     * anterior carregaria, mais o que mudou. Nao e atalho, e a consequencia do
+     * formato do payload.
+     *
+     * EXECUTADO, com `publicaAgora` dublada e contada. Procurar a fila no
+     * texto nao provaria fusao nenhuma. */
+    {
+      const FILA = corpo(ADMIN, 'async function saveViaProxy() {') || '';
+      ok(!!FILA, 'a fila de publicacao foi isolada');
+      if (FILA) {
+        const FA = Object.getPrototypeOf(async function () {}).constructor;
+        const monta = (publica) => {
+          const est = { noAr: null, naFila: null, avisos: [] };
+          // `_publicacaoNoAr`/`_publicacaoNaFila` sao reatribuidas dentro, entao
+          // entram como `let` no corpo, e nao como parametro.
+          /* `Function`, e NAO `AsyncFunction`: a fabrica so DEVOLVE a funcao da
+             fila, e uma fabrica assincrona devolveria uma Promise com ela dentro.
+             A funcao devolvida continua sendo `async`, que e o que importa. */
+          const fn = new Function('publicaAgora', 'toast', 'caixa',
+            'let _publicacaoNoAr = null, _publicacaoNaFila = null;\n' +
+            FILA + '\n; caixa.ler = () => ({ noAr: _publicacaoNoAr, naFila: _publicacaoNaFila });' +
+            '\n return saveViaProxy;')(publica, (t) => est.avisos.push(String(t)), est);
+          return { fn, est };
+        };
+
+        // a) rajada de seis cliques
+        let idas = 0;
+        const a = monta(() => { idas++; return new Promise(r => setTimeout(() => r(true), 5)); });
+        /* `await`, e NAO `return`: devolver daqui abandonaria as checagens que
+           vem depois neste mesmo bloco. Invariante que some em silencio e pior
+           que invariante que falha. */
+        const res = await Promise.all([1, 2, 3, 4, 5, 6].map(() => a.fn()));
+        ok(idas === 2,
+           'seis cliques colados viram DUAS idas ao servidor, e nao seis',
+           idas + ' ida(s)');
+        ok(res.every(x => x === true),
+           'e todos os seis recebem o resultado — ninguem fica sem resposta');
+        ok(a.est.avisos.filter(t => /anterior/.test(t)).length === 1,
+           'com UM aviso por fila formada, e nao um por clique',
+           String(a.est.avisos.length));
+        ok(a.est.ler().noAr === null && a.est.ler().naFila === null,
+           'e a fila se esvazia no fim — senao a proxima publicacao esperaria para sempre');
+
+        /* FALHA NAO PODE TRANCAR A FILA. Se a primeira estourar e o estado
+           ficar preso, a tela para de publicar para sempre e nada diz por que —
+           o pior dos defeitos de fila. */
+        let n = 0, idas2 = 0;
+        const b = monta(() => {
+          idas2++; n++;
+          return n === 1 ? Promise.reject(new Error('boom')) : Promise.resolve(true);
+        });
+        const err = await b.fn().then(() => 'nao estourou', (e) => e.message);
+        ok(err === 'boom', 'a falha da publicacao CHEGA a quem chamou', String(err));
+        const depois = await b.fn();
+        ok(depois === true && idas2 === 2,
+           'e depois dela a fila volta a funcionar, em vez de travar calada',
+           idas2 + ' ida(s)');
+        ok(b.est.ler().noAr === null && b.est.ler().naFila === null,
+           'sem deixar nada preso no caminho');
+
+        /* ── E A FALHA COM ALGUEM ESPERANDO ATRAS ──
+         *
+         * O caso que de fato tranca, e que a bateria pegou escapando: nao e a
+         * falha sozinha, e a falha COM FILA. Sem o `catch` no elo, a corrente
+         * rejeita, o `then` que limparia `_publicacaoNaFila` nunca roda, e a
+         * tela para de publicar PARA SEMPRE — calada, porque toda chamada
+         * seguinte recebe a mesma promessa morta.
+         *
+         * A primeira versao desta afirmacao testava a falha isolada e passava
+         * verde com o `catch` removido. */
+        let idas3 = 0, k = 0;
+        let soltaPrimeira;
+        const c = monta(() => {
+          idas3++; k++;
+          if (k === 1) return new Promise((_, rej) => { soltaPrimeira = () => rej(new Error('caiu')); });
+          return Promise.resolve(true);
+        });
+        const primeira = c.fn().catch(() => 'falhou');
+        const atras = c.fn();                 // entra na FILA, atras da que vai falhar
+        soltaPrimeira();
+        const [r1, r2] = await Promise.all([primeira, atras]);
+        ok(r1 === 'falhou' && r2 === true && idas3 === 2,
+           'falhando a primeira, quem estava na FILA ainda publica — a corrente nao pode morrer',
+           'idas ' + idas3 + ', fila devolveu ' + JSON.stringify(r2));
+        ok(c.est.ler().noAr === null && c.est.ler().naFila === null,
+           'e a fila fica limpa depois disso, em vez de travada para sempre',
+           JSON.stringify(c.est.ler()));
+
+        /* AS REPETICOES INTERNAS NAO ENTRAM NA FILA: elas ja estao dentro da
+           propria vez, e enfileirar-se de novo seria esperar a si mesmas para
+           sempre. */
+        const dentro = semComentario(corpo(ADMIN, 'async function publicaAgora') || '');
+        ok(/return publicaAgora\(2, redes\)/.test(dentro) &&
+           /return publicaAgora\(tentativa, redes \+ 1\)/.test(dentro),
+           'o conflito e a queda de rede repetem por fora da fila — senao esperariam a si mesmas');
+        ok(!/saveViaProxy\(/.test(dentro),
+           'e nada dentro da publicacao volta a entrar na fila');
+      }
     }
 
     /* ── E A PERGUNTA "ENTROU?" ERRA PARA O LADO SEGURO ──

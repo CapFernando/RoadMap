@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="5283766f0e">
+<html lang="pt-BR" data-build="fe38810d5a">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3412,7 +3412,48 @@ function mesclaTemas(doServidor) {
    `_jaExpliquei`: recusa velha não pode oferecer desfazer o que já passou. */
 let _recusadasIds = [];
 
-async function saveViaProxy(tentativa = 1, redes = 0) {
+/* ═══ UMA PUBLICAÇÃO NO AR POR VEZ, E AS SEGUINTES SE FUNDEM ═════════════
+ *
+ * Não havia trava nenhuma contra publicações simultâneas, e cada uma leva ~7
+ * segundos: aprovar quatro entregas seguidas no quadro punha quatro no ar ao
+ * mesmo tempo, sobre o MESMO arquivo. Elas disputavam o commit no GitHub, viravam
+ * conflito, cada conflito remontava e publicava de novo — e a chance de uma
+ * conexão cair era multiplicada pelo número de janelas de sete segundos abertas
+ * em paralelo. É o "Falha de rede, tentando novamente…" que não parava de voltar.
+ *
+ * FUNDIR É CORRETO AQUI, E NÃO UM ATALHO: cada publicação envia o ESTADO
+ * INTEIRO, e toda tentativa começa relendo o servidor e remesclando por cima.
+ * Então uma publicação que ainda nem saiu não tem nada a dizer que a seguinte
+ * não diga melhor — a seguinte carrega tudo o que a anterior carregaria, mais o
+ * que mudou nesse meio-tempo. Quatro aprovações viram duas idas, não quatro.
+ *
+ * NO MÁXIMO UMA ESPERANDO. Quem chega enquanto já há uma na fila entra NA
+ * MESMA — e recebe o resultado dela, que é a resposta certa para "a minha
+ * alteração foi publicada?", porque ela publica o estado onde a alteração está.
+ *
+ * AS REPETIÇÕES INTERNAS NÃO PASSAM POR AQUI. O conflito e a queda de rede
+ * chamam `publicaAgora` direto: elas já estão dentro da vez delas, e entrar na
+ * fila de novo seria esperar a si mesmas para sempre. */
+let _publicacaoNoAr = null;
+let _publicacaoNaFila = null;
+
+async function saveViaProxy() {
+  if (!_publicacaoNoAr) {
+    _publicacaoNoAr = publicaAgora().finally(() => { _publicacaoNoAr = null; });
+    return _publicacaoNoAr;
+  }
+  if (!_publicacaoNaFila) {
+    /* O aviso sai UMA vez por fila formada, e não por clique: quem aprovou
+       quatro cards não precisa de quatro avisos iguais. */
+    toast('⏳ Publicando a alteração anterior — esta entra junto.', 'ok');
+    _publicacaoNaFila = _publicacaoNoAr
+      .catch(() => false)
+      .then(() => { _publicacaoNaFila = null; return saveViaProxy(); });
+  }
+  return _publicacaoNaFila;
+}
+
+async function publicaAgora(tentativa = 1, redes = 0) {
   /* Cada tentativa comeca sem explicacao dada. Sem zerar, uma recusa explicada
      calaria a mensagem generica da tentativa SEGUINTE, que pode ter falhado por
      outro motivo — e ai a tela emudece de vez. */
@@ -3539,7 +3580,7 @@ async function saveViaProxy(tentativa = 1, redes = 0) {
       // loop esconderia um problema real.
       if (res.status === 409 && corpo && corpo.error === 'conflito' && tentativa === 1) {
         showSaving(false);
-        return saveViaProxy(2, redes);
+        return publicaAgora(2, redes);
       }
       /* O SERVIDOR AINDA PODE RECUSAR: outra aba publicou, ou a regra é mais
          nova que esta tela. Quando ele diz QUAL demanda, a tela leva até ela em
@@ -3647,7 +3688,7 @@ async function saveViaProxy(tentativa = 1, redes = 0) {
       showSaving(false);
       toast('⚠️ Falha de rede, tentando novamente…', 'err');
       await new Promise(r => setTimeout(r, 2000));
-      return saveViaProxy(tentativa, redes + 1);
+      return publicaAgora(tentativa, redes + 1);
     }
     /* REPETIU E CAIU DE NOVO: ainda assim pode TER ENTRADO. Ver
        `publicacaoEntrou`. So depois desta pergunta e que a tela tem o direito
@@ -13691,17 +13732,14 @@ async function valDecidirNoCard(ev, id, acao) {
   ev.preventDefault();
   const m = (state.melhorias || []).find(x => x.id === id);
   if (!m) return;
-  const campo = document.getElementById('m-id');
-  const anterior = campo ? campo.value : null;
-  // As funcoes de gravacao leem o id do formulario. Aponta para este card,
-  // executa, e devolve o valor — se um card estava aberto, ele nao pode mudar.
-  if (campo) campo.value = id;
-  try {
-    if (acao === 'aprovar') await valAprovar();
-    else await valRejeitar();
-  } finally {
-    if (campo && anterior !== null) campo.value = anterior;
-  }
+  /* O ID VAI NO ARGUMENTO. Aqui ele era escrito no campo `m-id` e devolvido num
+     `finally` — e o `finally` só roda DEPOIS da publicação, que leva cerca de
+     sete segundos. Dois cliques dentro dessa janela se sobrepunham, e o
+     `anterior` de um guardava o id do outro: o campo que decide QUAL demanda
+     aprovar acabava apontando para a errada. Sem escrever no campo, não há
+     estado compartilhado entre os dois fluxos. */
+  if (acao === 'aprovar') await valAprovar(id);
+  else await valRejeitar(id);
 }
 
 
@@ -14265,8 +14303,20 @@ async function homologRegistra() {
   }
 }
 
-async function valDecidir(aprovar, obs) {
-  const id = document.getElementById('m-id').value;
+/* O ID VIAJA COMO ARGUMENTO, e nao pelo campo escondido do formulario.
+ *
+ * `valDecidirNoCard` apontava `m-id` para o card, chamava isto, e so restaurava
+ * o valor no `finally` — DEPOIS da publicacao, que leva cerca de sete segundos.
+ * Dois cliques em "Aprovar" dentro dessa janela se sobrepunham, e o campo que
+ * decide QUAL demanda aprovar ficava apontando para a errada: o segundo fluxo
+ * lia o id que o primeiro ainda nao tinha devolvido.
+ *
+ * Nao e lentidao, e demanda errada aprovada. Com o id no argumento nao ha
+ * estado compartilhado entre os fluxos, e a sobreposicao deixa de importar.
+ * O campo continua valendo para quem chama do modal aberto, onde ele E a
+ * fonte certa. */
+async function valDecidir(aprovar, obs, idExplicito) {
+  const id = idExplicito || document.getElementById('m-id').value;
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   const agora = new Date().toISOString();
@@ -14401,8 +14451,9 @@ async function valDecidir(aprovar, obs) {
   }
 }
 
-async function valAprovar() {
-  const m = state.melhorias.find(x => x.id === document.getElementById('m-id').value);
+async function valAprovar(idExplicito) {
+  const id = idExplicito || document.getElementById('m-id').value;
+  const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
   if (!String(m.implementacao || '').trim() &&
       !(await confirmar({ titulo: 'Aprovar sem descricao?',
@@ -14411,10 +14462,10 @@ async function valAprovar() {
           ok: 'Aprovar mesmo assim', perigo: true }))) return;
   if (!(await confirmar({ titulo: 'Aprovar entrega',
       texto: '"' + (m.titulo || '') + '" passa para Concluido.', ok: 'Aprovar' }))) return;
-  valDecidir(true);
+  return valDecidir(true, undefined, idExplicito);
 }
 
-async function valRejeitar() {
+async function valRejeitar(idExplicito) {
   const obs = await pedirTexto({
     titulo: 'Devolver ao dev',
     texto: 'A demanda volta para Planejado, na fila do dev. Este texto e o que ele vai ler — ' +
@@ -14423,7 +14474,7 @@ async function valRejeitar() {
     placeholder: 'Ex.: o calculo do saldo nao considera estorno; refazer com o caso do print' });
   if (obs === null) return;
   if (!obs.trim()) { toast('Explique o motivo da devolução.', 'err'); return; }
-  valDecidir(false, obs.trim());
+  return valDecidir(false, obs.trim(), idExplicito);
 }
 
 
