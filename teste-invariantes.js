@@ -17837,6 +17837,25 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'as recusadas saem da resposta do servidor, e nao de um palpite da tela');
       ok(/_recusadasIds \|\| \[\]\)\.filter\(id => _dirtyMelhoriaIds\.has\(id\)\)/.test(semCom2),
          'e so oferece desfazer o que AINDA esta pendente nesta aba');
+
+      /* ═══ A CONFERENCIA USA O RETRATO DAS SUJAS, E NAO O CONJUNTO VIVO ═══
+       *
+       * Defeito que a FILA criou: com duas publicacoes encadeadas, a que termina
+       * ANTES limpa `_dirtyMelhoriaIds` — inclusive os ids que a SEGUINTE
+       * carrega. Lendo o conjunto vivo na hora da conferencia, ela nao acharia
+       * nada para conferir, responderia "nao sei", e a tela acusaria erro de uma
+       * gravacao que entrou. O retrato e tirado quando a publicacao COMECA.
+       *
+       * E e o mesmo "Failed to fetch" de sempre na tela — foi assim que o erro
+       * voltou depois de a fila subir. */
+      const PA = semComentario(corpo(ADMIN, 'async function publicaAgora') || '');
+      ok(/const sujasDesteEnvio = new Set\(_dirtyMelhoriaIds\);/.test(PA),
+         'a publicacao tira um retrato das demandas sujas ao COMECAR');
+      ok(/publicacaoEntrou\(sujasDesteEnvio\)/.test(PA),
+         'e e esse retrato que a conferencia usa — nao o conjunto que outra publicacao limpa');
+      const PE = semComentario(corpo(ADMIN, 'async function publicacaoEntrou') || '');
+      ok(/const alvos = sujas && sujas\.size \? sujas : _dirtyMelhoriaIds;/.test(PE),
+         'a conferencia prefere o retrato recebido, e so cai no conjunto vivo sem ele');
       ok(/_recusadasIds = \[\];/.test(corpo(ADMIN, 'async function publicaAgora') || ''),
          'e cada tentativa zera a lista — recusa velha nao oferece desfazer o que ja passou');
     }
@@ -20607,22 +20626,33 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         const avisos = [];
         const janela = { NAOPUBLICADA: { marca: (p) => marcadas.push(Object.keys(p)),
                                          zera: () => limpezas.push('zera') } };
+        /* A FAIXA DE ERRO DE VERDADE, e nao `null`. Com ela nula, todo o trecho
+           que monta a mensagem era pulado — e a sabotagem que tirava o motivo
+           da faixa passou limpa pela bateria. O elemento falso tem o minimo que
+           o codigo toca. */
+        const faixa = { textContent: '', style: {}, filhos: [],
+                        appendChild(x) { this.filhos.push(x); } };
         const sujas = new Set(['ax-9']);
+        /* `sujasDesteEnvio` entra COMO PARAMETRO: ele e declarado no topo de
+           `publicaAgora`, fora do pedaco recortado aqui. E `publicacaoEntrou`
+           devolve `{ ok, motivo }` desde que a faixa passou a dizer POR QUE a
+           conferencia respondeu nao. */
         const fn = new FuncAsyncA('window', 'NAOPUBLICADA', '_dirtyMelhoriaIds', 'state',
                                   'rascunhoSalvar', 'rascunhoLimpar', 'retratoBase',
                                   'publicacaoEntrou', '_pollTs', 'document', 'explica',
                                   'toast', 'showSaving', 'publicaAgora', 'setTimeout',
                                   'tentativa', 'redes', 'e',
-                                  '_pendingEdits', '_kbDirty', trechoA);
+                                  '_pendingEdits', '_kbDirty', 'sujasDesteEnvio', '_recusadasIds', trechoA);
         return fn(janela, janela.NAOPUBLICADA, sujas,
                   { melhorias: [{ id: 'ax-9', titulo: 'x' }] }, () => {},
                   () => limpezas.push('rascunho'), () => {},
-                  async () => !!entrou, null,
-                  { getElementById: () => null }, () => {},
+                  async () => ({ ok: !!entrou, motivo: entrou ? '' : 'nao bateu' }), null,
+                  { getElementById: () => faixa }, () => {},
                   (t) => avisos.push(String(t)), () => {},
                   (t, r) => { repetiu.push({ tentativa: t, redes: r }); return true; },
-                  (f) => f(), 1, redes, erro, true, true)
-          .then(() => ({ marcadas, repetiu, limpezas, avisos, sobrou: sujas.size }));
+                  (f) => f(), 1, redes, erro, true, true, sujas, [])
+          .then(() => ({ marcadas, repetiu, limpezas, avisos, sobrou: sujas.size,
+                         faixa: faixa.textContent }));
       };
 
       /* ── CAIU DUAS VEZES, MAS ENTROU: A TELA NAO PODE DIZER QUE FALHOU ──
@@ -20656,6 +20686,17 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(a2.repetiu.length === 0 && a2.marcadas.length === 1,
          'caindo duas vezes, o Admin marca as demandas pendentes',
          JSON.stringify(a2.marcadas));
+      /* ── E O MOTIVO DA CONFERENCIA CHEGA A FAIXA ──
+       *
+       * "Failed to fetch" sozinho nao distingue "nao saiu" de "foi e a resposta
+       * se perdeu" — e foi o unico texto disponivel em TRES relatos seguidos
+       * deste erro, todos respondidos por deducao. Quando a conferencia diz que
+       * nao entrou, ela sabe POR QUE; essa frase e a diferenca entre um relato
+       * e uma pista. */
+      ok(/Failed to fetch/.test(a2.faixa) && /conferi:/.test(a2.faixa) &&
+         /nao bateu/.test(a2.faixa),
+         'e a faixa mostra o MOTIVO da conferencia junto do erro cru',
+         JSON.stringify(a2.faixa).slice(0, 120));
 
       const a3 = await rodaA(new Error('horas_obrigatorias'), 0, false);
       ok(a3.repetiu.length === 0 && a3.marcadas.length === 1,
@@ -20781,18 +20822,24 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * esse nao volta. Entao os casos abaixo cobrem o lado caro primeiro: toda
      * duvida tem de virar `false`. */
     {
-      const ENTROU = corpo(ADMIN, 'async function publicacaoEntrou()') || '';
+      const ENTROU = corpo(ADMIN, 'async function publicacaoEntrou') || '';
       const CAMPOS = corpo(ADMIN, 'function camposAlterados(local, baseStr) {') || '';
       ok(!!ENTROU && !!CAMPOS, 'a conferencia e o comparador de campos foram isolados');
       if (ENTROU && CAMPOS) {
         const FA = Object.getPrototypeOf(async function () {}).constructor;
+        /* A conferencia passou a devolver `{ ok, motivo }`. O `ok` segue sendo
+           o veredito; o `motivo` e o que faltava para o proximo relato de "deu
+           erro" nao precisar de deducao — tres foram respondidos assim. Por
+           isso ele tambem e cobrado: `motivos` guarda o ultimo. */
+        const motivos = [];
         const monta = (cenario) => new FA(
           '_dirtyMelhoriaIds', '_deletedIds', 'state', '_baseMelhorias', 'lerDados',
           'const semValor = (v) => v === undefined || v === null || v === "" || ' +
           '(Array.isArray(v) && v.length === 0);\n' + CAMPOS + '\n' + ENTROU +
           '\n; return publicacaoEntrou();')(
           cenario.sujas, cenario.apagadas || new Set(), cenario.state,
-          cenario.retratos, cenario.ler);
+          cenario.retratos, cenario.ler)
+          .then((r) => { motivos.push((r && r.motivo) || ''); return !!(r && r.ok); });
 
         const dem = (extra) => Object.assign({ id: 'ax-9', titulo: 'velho', dev: 'Dan' }, extra);
         const leServidor = (ms) => async () => ({ melhorias: ms });
@@ -20840,6 +20887,24 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                              status: 'recebida' }]) });
         ok(novaLa === true,
            'demanda NOVA conta como entrada por existir la — o codigo dela nasce no servidor');
+
+        /* ── TODO "NAO" VEM COM MOTIVO ──
+         *
+         * Era booleana, e "Erro ao publicar: Failed to fetch" era tudo o que
+         * sobrava — para CINCO causas diferentes, que pedem correcoes
+         * diferentes. Tres relatos seguidos deste erro foram respondidos por
+         * deducao porque a tela nao sabia contar o que tinha visto.
+         *
+         * A afirmacao e sobre TODOS os "nao" ja medidos acima, e nao sobre um
+         * caso escolhido: `motivos` acumulou um por cenario. */
+        ok(motivos.length >= 4 && motivos.filter(t => t).length >= 4,
+           'toda recusa da conferencia vem com o motivo escrito',
+           JSON.stringify(motivos.slice(0, 4)));
+        ok(motivos.some(t => /releitura/.test(t)) &&
+           motivos.some(t => /nao chegou ao servidor/.test(t)) &&
+           motivos.some(t => /ainda e o antigo/.test(t)),
+           'e os motivos se DISTINGUEM — releitura caida, demanda ausente e campo velho ' +
+           'pedem correcoes diferentes', JSON.stringify(motivos));
 
         const apagadaFicou = await monta({
           sujas: new Set(['ax-9']), apagadas: new Set(['ax-8']),

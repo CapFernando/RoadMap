@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="fe38810d5a">
+<html lang="pt-BR" data-build="9b5dfd9389">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3331,30 +3331,54 @@ function desfazerPendentes(ids) {
  * retrato, entao `camposAlterados` devolveria o objeto inteiro — inclusive o
  * `codigo` e o `status`, que NASCEM NO SERVIDOR. Comparar isso acusaria
  * diferenca numa gravacao que deu certo. */
-async function publicacaoEntrou() {
-  if (!_dirtyMelhoriaIds || !_dirtyMelhoriaIds.size) return false;
+/* DEVOLVE O MOTIVO, e nao um `sim`/`nao`.
+ *
+ * Enquanto era booleana, "Erro ao publicar: Failed to fetch" era tudo o que
+ * sobrava quando a conferencia dizia nao — e ela diz nao por CINCO razoes
+ * diferentes, que pedem correcoes diferentes. Tres relatos seguidos deste erro
+ * foram respondidos por deducao, porque a tela nao sabia contar o que tinha
+ * visto. Agora conta.
+ *
+ * `sujas` VEM DE FORA, e isso e correcao de um defeito que a fila criou hoje:
+ * lendo `_dirtyMelhoriaIds` na hora da conferencia, uma publicacao que terminou
+ * ANTES ja teria limpado o conjunto — inclusive os ids que ESTA publicacao
+ * carregava. A conferencia entao nao achava nada para conferir, respondia
+ * "nao sei", e a tela gritava erro de uma gravacao que tinha entrado. O
+ * retrato das sujas e tirado quando a publicacao COMECA. */
+async function publicacaoEntrou(sujas) {
+  const alvos = sujas && sujas.size ? sujas : _dirtyMelhoriaIds;
+  if (!alvos || !alvos.size) return { ok: false, motivo: 'nao havia demanda pendente para conferir' };
   let srv;
-  try { srv = await lerDados(false); } catch (_) { return false; }
+  try { srv = await lerDados(false); }
+  catch (_) { return { ok: false, motivo: 'a releitura da base tambem falhou' }; }
   const noServidor = new Map(((srv && srv.melhorias) || []).map(m => [m.id, m]));
 
   // O que esta aba apagou tem de ter sumido de la.
   for (const id of (_deletedIds || new Set())) {
-    if (noServidor.has(id)) return false;
+    if (noServidor.has(id)) {
+      return { ok: false, motivo: 'uma demanda apagada aqui continua no servidor' };
+    }
   }
 
-  for (const id of _dirtyMelhoriaIds) {
+  for (const id of alvos) {
     const local = (state.melhorias || []).find(m => m.id === id);
     if (!local) continue;                       // sumiu da tela: nao da para conferir
     const la = noServidor.get(id);
-    if (!la) return false;                      // nem chegou
+    if (!la) {
+      return { ok: false, motivo: (local.codigo || 'uma demanda') + ' nao chegou ao servidor' };
+    }
     const retrato = _baseMelhorias && _baseMelhorias.get(id);
     if (!retrato) continue;                     // nova: existir ja prova que entrou
     const mudou = camposAlterados(local, retrato);
     for (const campo of Object.keys(mudou)) {
-      if (JSON.stringify(la[campo]) !== JSON.stringify(mudou[campo])) return false;
+      if (JSON.stringify(la[campo]) !== JSON.stringify(mudou[campo])) {
+        return { ok: false,
+                 motivo: (local.codigo || 'uma demanda') + ': o campo "' + campo +
+                         '" no servidor ainda e o antigo' };
+      }
     }
   }
-  return true;
+  return { ok: true, motivo: '' };
 }
 
 function mesclaMelhorias(serverMelhorias) {
@@ -3459,6 +3483,11 @@ async function publicaAgora(tentativa = 1, redes = 0) {
      outro motivo — e ai a tela emudece de vez. */
   _jaExpliquei = false;
   _recusadasIds = [];
+  /* O RETRATO DAS SUJAS, TIRADO AGORA. Com a fila, uma publicacao que termine
+     ANTES desta limpa `_dirtyMelhoriaIds` — inclusive os ids que ESTA carrega.
+     Lendo o conjunto la na frente, a conferencia de "entrou?" nao acharia nada
+     para conferir e a tela acusaria erro de uma gravacao que deu certo. */
+  const sujasDesteEnvio = new Set(_dirtyMelhoriaIds);
   /* ═══ A CÓPIA LOCAL É GARANTIA DESTA FUNÇÃO, E NÃO DE QUEM A CHAMA ═══════
    *
    * O rascunho existia e funcionava — mas só no caminho do modal, que chamava
@@ -3693,7 +3722,9 @@ async function publicaAgora(tentativa = 1, redes = 0) {
     /* REPETIU E CAIU DE NOVO: ainda assim pode TER ENTRADO. Ver
        `publicacaoEntrou`. So depois desta pergunta e que a tela tem o direito
        de dizer que falhou. */
-    if (quedaDeRede && await publicacaoEntrou()) {
+    const entrou = quedaDeRede ? await publicacaoEntrou(sujasDesteEnvio)
+                               : { ok: false, motivo: '' };
+    if (entrou.ok) {
       _pollTs = state.atualizado_em;
       if (window.NAOPUBLICADA) NAOPUBLICADA.zera();
       _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase();
@@ -3720,7 +3751,15 @@ async function publicaAgora(tentativa = 1, redes = 0) {
     rascunhoSalvar();
     const errEl = document.getElementById('save-error');
     if (errEl) {
-      errEl.textContent = '⚠️ ' + e.message + ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar de novo.';
+      /* O MOTIVO DA CONFERÊNCIA VAI NA FAIXA. "Failed to fetch" é tudo o que o
+         `fetch` sabe dizer, e sozinho ele não distingue "não saiu" de "foi e a
+         resposta se perdeu". Quando a conferência diz que NÃO entrou, ela sabe
+         POR QUE — e é essa frase que transforma um relato de "deu erro" numa
+         pista. Três relatos seguidos deste erro foram respondidos por dedução
+         porque a tela não contava o que tinha visto. */
+      errEl.textContent = '⚠️ ' + e.message +
+        (entrou && entrou.motivo ? ' (conferi: ' + entrou.motivo + ')' : '') +
+        ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar de novo.';
       /* ── E A PORTA DE SAÍDA, QUANDO O SERVIDOR DIZ QUAIS ────────────────
        *
        * Ver `desfazerPendentes`. A recusa que a pessoa não consegue satisfazer
