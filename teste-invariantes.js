@@ -14565,6 +14565,196 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e so aparece em projeto que ja existe');
     ok(/<script src="resumo-projeto\.js\?v=/.test(ADMIN), 'e a pagina carrega o modulo');
 
+    /* ═══ A ISSUE DO PROJETO SO E CLICAVEL ONDE A TELA PEDIU ════════════
+     *
+     * "Recebi uma task que esta no Projeto EP-000, preciso clicar no projeto e
+     *  ver (...) as tasks que estao nele, ao clicar na task abrir e eu
+     *  conseguir consultar detalhes (so nao permitir edicao)."
+     *
+     * O MODULO RODA EM TRES TELAS e elas respondem diferente a esse clique: o
+     * Admin abre para editar, o painel do Dev abre em leitura. Por isso o
+     * destino nao mora aqui — a tela passa `aoClicar` e recebe o id.
+     *
+     * E SEM `aoClicar` NADA MUDA. Afordancia de clique onde nada acontece e
+     * pior que nenhuma: a pessoa clica, nao acontece nada, e aprende que a
+     * tela esta quebrada. Executado nos dois modos, e nao lido. */
+    {
+      const est = {
+        projetos: [{ id: 'pjx', codigo: 'EP-000', nome: 'Projeto', aprovacao: 'aprovado' }],
+        temas: [{ id: 't1', nome: 'Infra' }],
+        melhorias: [
+          { id: 'i1', codigo: 'AX-900', titulo: 'Uma', dev: 'Leite', tema_id: 't1',
+            projeto_id: 'pjx', status_planejamento: 'em_andamento' },
+          { id: 'i2', codigo: 'AX-901', titulo: 'Outra', dev: 'Marina', tema_id: 't1',
+            projeto_id: 'pjx', status_planejamento: 'concluido' },
+        ],
+      };
+      const r = RP.montar(est, 'pjx', '2026-10-27');
+      ok(r.total === 2, 'o resumo achou as duas issues do projeto', String(r.total));
+
+      const mudo = RP.html(r, false);
+      ok(!/rxp-click/.test(mudo) && !/data-id=/.test(mudo) && !/role="button"/.test(mudo),
+         'sem `aoClicar`, a lista continua texto — nem classe, nem id, nem papel de botao');
+
+      const vivo = RP.html(r, true);
+      ok((vivo.match(/rxp-click/g) || []).length === 2,
+         'com `aoClicar`, os dois cartoes ficam clicaveis',
+         String((vivo.match(/rxp-click/g) || []).length));
+      ok(/data-id="i1"/.test(vivo) && /data-id="i2"/.test(vivo),
+         'e cada um leva o ID da sua demanda — e por ele que a tela acha o que abrir');
+      /* `role` E `tabindex` JUNTO DO CURSOR. Um `div` clicavel sem eles nao e
+         alcancado por teclado, e esta lista existe para ser percorrida. */
+      ok((vivo.match(/role="button"/g) || []).length === 2 &&
+         (vivo.match(/tabindex="0"/g) || []).length === 2,
+         'e sao alcancaveis por teclado, e nao so pelo mouse');
+      ok(/\.rxp-item\.rxp-click:focus-visible/.test(fs.readFileSync('resumo-projeto.js', 'utf8')),
+         'com anel de foco visivel — sem ele, quem navega por Tab nao sabe onde esta');
+    }
+
+    /* ── QUEM PEDE O CLIQUE E QUEM NAO PEDE ──
+       O painel do Dev pede; Admin e Gantt seguem como sempre foram. Se um dia
+       o Admin quiser, passa o callback dele — e nao mexe no modulo. */
+    /* EXECUTADO, e nao casado por texto: `RESUMOPROJETO.abrir(state, projetoId);
+       if (false) RESUMOPROJETO.abrir(state, projetoId, {` deixa a string intacta
+       com a chamada boa morta — e foi assim que esta sabotagem escapou na
+       primeira rodada da bateria. Aqui a funcao roda e se confere o que o
+       modulo RECEBEU. */
+    {
+      const PJ = corpo(DEV, 'function pjAbrirDoCard(ev, projetoId) {') || '';
+      ok(!!PJ, 'o abridor do projeto no Dev foi isolado');
+      if (PJ) {
+        let recebeu = null, abriuDemanda = null;
+        const amb = {
+          state: { projetos: [{ id: 'pjx', codigo: 'EP-000', nome: 'Projeto' }],
+                   melhorias: [{ id: 'i1', codigo: 'AX-900', titulo: 'Uma' }] },
+          window: { RESUMOPROJETO: {} },
+          RESUMOPROJETO: { abrir: (st, id, op) => { recebeu = { id: id, op: op }; } },
+          verDemanda: (m, o) => { abriuDemanda = { m: m, o: o }; },
+        };
+        const nomes = Object.keys(amb);
+        const fn = new Function(...nomes, PJ + '; return pjAbrirDoCard;')(
+          ...nomes.map(n => amb[n]));
+        fn(null, 'pjx');
+        ok(recebeu && recebeu.id === 'pjx' && recebeu.op &&
+           typeof recebeu.op.aoClicar === 'function',
+           'o painel do Dev abre o resumo PEDINDO o clique nas issues',
+           JSON.stringify(recebeu && Object.keys(recebeu.op || {})));
+        if (recebeu && recebeu.op && recebeu.op.aoClicar) {
+          recebeu.op.aoClicar('i1');
+          ok(abriuDemanda && abriuDemanda.m && abriuDemanda.m.id === 'i1' &&
+             abriuDemanda.o && abriuDemanda.o.por === 'projeto',
+             'e o destino do clique e a CONSULTA, e nao a tela de edicao',
+             JSON.stringify(abriuDemanda && abriuDemanda.o));
+          recebeu.op.aoClicar('nao-existe');
+          ok(true, 'e id desconhecido nao estoura a tela');
+        }
+      }
+    }
+    ok(!/RESUMOPROJETO\.abrir\(state, [a-zA-Z]+, \{/.test(semComentario(GANTT)),
+       'o Gantt nao pediu, e por isso a lista dele nao mudou');
+
+    /* ═══ "DA MESMA FORMA TASKS COM OUTRAS TASKS VINCULADAS" ════════════
+     *
+     * O card do Dev listava as FILHAS e nunca o PAI: quem recebia uma demanda
+     * pendurada em outra nao via "parte de" em lugar nenhum. A relacao existia
+     * na base e so a ponta de cima a enxergava — e a ponta de baixo e justo a
+     * de quem recebe a tarefa pequena e precisa saber de que pacote ela e.
+     *
+     * EXECUTADO: `renderDepSection` e recortada e rodada com os stubs. Procurar
+     * `dep-click` no arquivo nao provaria que a linha certa o recebeu. */
+    {
+      const DEPSEC = corpo(DEV, 'function renderDepSection(m) {') || '';
+      ok(!!DEPSEC, 'a secao de vinculos do Dev foi isolada');
+      if (DEPSEC) {
+        const V = require('./vinculo.js');
+        const base = [
+          { id: 'p1', codigo: 'AX-800', titulo: 'Issue base', dev: 'Leite',
+            status_planejamento: 'planejado' },
+          { id: 'f1', codigo: 'AX-810', titulo: 'Parte um', dev: 'Leite',
+            status_planejamento: 'em_andamento', parent_id: 'p1' },
+          { id: 'f2', codigo: 'AX-811', titulo: 'Parte dois', dev: 'Marina',
+            status_planejamento: 'em_andamento', parent_id: 'p1', vinculo: 'dependencia' },
+        ];
+        const amb = {
+          state: { melhorias: base },
+          VINCULO: V,
+          getStatusKey: (m) => m.status_planejamento,
+          STATUS_LABELS: { planejado: 'Planejado', em_andamento: 'Em Andamento' },
+          formatDate: (d) => d,
+          devEsc: (s) => String(s == null ? '' : s),
+          getDeps: (id) => V.filhosDe(base, id),
+          hasBlockingDep: (id) => V.abertos(base, id).length > 0,
+        };
+        const nomes = Object.keys(amb);
+        const render = new Function(...nomes, DEPSEC + '; return renderDepSection;')(
+          ...nomes.map(n => amb[n]));
+
+        const doPai = render(base[0]);
+        ok(!/dep-pai/.test(doPai), 'a issue base nao diz "parte de" ninguem — ela e o topo');
+        ok((doPai.match(/dep-click/g) || []).length === 2,
+           'e as duas filhas dela viram porta',
+           String((doPai.match(/dep-click/g) || []).length));
+        ok(/data-ver="f1"/.test(doPai) && /data-ver="f2"/.test(doPai),
+           'cada linha levando o id da demanda que abre');
+        ok(/role="button"/.test(doPai) && /tabindex="0"/.test(doPai),
+           'alcancaveis por teclado tambem');
+
+        const daFilha = render(base[1]);
+        ok(/dep-pai/.test(daFilha) && /data-ver="p1"/.test(daFilha),
+           'e A FILHA passa a mostrar de que pacote ela faz parte — era o que faltava');
+        ok(/AX-800/.test(daFilha), 'nomeando a principal pelo codigo', 'ok');
+
+        const semVinculo = render({ id: 'sozinha', titulo: 'Sozinha',
+                                    status_planejamento: 'em_andamento' });
+        ok(!/dep-pai/.test(semVinculo) && !/data-ver=/.test(semVinculo),
+           'demanda sem vinculo nenhum nao ganha linha nenhuma');
+      }
+    }
+
+    /* ═══ "SO NAO PERMITIR EDICAO" ══════════════════════════════════════
+     *
+     * O visualizador ja nascia read-only — o pedido nao foi afrouxa-lo, foi
+     * chegar nele por mais caminhos. Esta afirmacao existe para que o proximo
+     * campo que alguem acrescentar ali nasca sendo leitura: basta um `<input>`
+     * para a promessa virar mentira, e nada mais no codigo avisaria. */
+    {
+      /* O RECORTE VAI ATE O FECHAMENTO DO ELEMENTO, contando as tags.
+         A primeira versao parava no primeiro `</div>` depois de `mv-corpo` — e
+         um `<input>` acrescentado logo DEPOIS dele ficava de fora do pedaco
+         medido. A sabotagem passou limpa: a afirmacao media menos do que
+         dizia medir. */
+      const i = DEV.indexOf('<div id="modal-ver"');
+      let mv = '';
+      if (i >= 0) {
+        const re = /<div\b|<\/div>/g;
+        re.lastIndex = i;
+        let d = 0, achou;
+        while ((achou = re.exec(DEV))) {
+          d += achou[0] === '</div>' ? -1 : 1;
+          if (d === 0) { mv = DEV.slice(i, achou.index + 6); break; }
+        }
+      }
+      ok(!!mv && mv.includes('mv-corpo'),
+         'o modal de consulta foi isolado INTEIRO', mv.length + ' caracteres');
+      ok(!/<input|<textarea|<select/.test(mv),
+         'o modal de consulta nao tem campo de digitacao nenhum',
+         (/<input|<textarea|<select/.exec(mv) || [''])[0]);
+      /* NEM BOTAO QUE GRAVE. O unico botao ali e o de fechar — qualquer outro
+         seria uma acao numa tela que promete nao ter nenhuma. */
+      const botoes = (mv.match(/<button[\s\S]*?>/g) || []);
+      ok(botoes.length === 1 && /modal-close-btn/.test(botoes[0]),
+         'e o unico botao e o de fechar', String(botoes.length) + ' botao(oes)');
+      const VD = corpo(DEV, 'function verDemanda(m, opcoes) {') || '';
+      ok(!!VD, 'a funcao de consulta foi isolada');
+      ok(!/saveToGitHub|_dirtyMelhoriaIds|\.value =/.test(semComentario(VD)),
+         'e ela nao grava nem marca nada como alterado — so monta a leitura');
+      /* ATE NA PROPRIA. Quem edita usa o card do quadro, onde moram as travas
+         de etapa e de entrega; um segundo lugar que grava seria uma segunda
+         resposta para as mesmas regras. */
+      ok(/Consulta apenas/.test(DEV),
+         'e diz isso tambem quando a demanda e sua, em vez de so quando e de outro');
+    }
+
     /* ═══ TEM DE CABER NA TELA ══════════════════════════════════════════
      *
      * "Quero um visual que me permita ver tudo no quadro sem ter a necessidade
@@ -21051,10 +21241,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* ── A FUNCAO EXISTE NAS TRES, e abre o MESMO visualizador ──
        Uma segunda tela com a mesma funcao divergiria na primeira correcao —
        e e por isso que `resumo-projeto.js` e um modulo. */
+    /* A ANCORA ACEITA O TERCEIRO ARGUMENTO. Ela exigia `abrir(state,
+       projetoId)` exatamente, e o painel do Dev passou a mandar tambem o que
+       fazer ao clicar numa issue — `abrir(state, projetoId, { aoClicar })`. O
+       que esta afirmacao protege e a DELEGACAO: as tres telas chamam o mesmo
+       modulo em vez de cada uma montar o seu visualizador. Opcao a mais nao
+       desfaz isso; uma tela montando HTML de projeto por fora, sim. */
     ['admin.html', 'dev.html', 'gantt.html'].forEach((t) => {
       const s = lerTela(t);
       ok(/function pjAbrirDoCard\(/.test(s), t + ' tem a funcao que abre');
-      ok(/RESUMOPROJETO\.abrir\(state, projetoId\)/.test(semComentario(s)),
+      ok(/RESUMOPROJETO\.abrir\(state, projetoId[,)]/.test(semComentario(s)),
          t + ' abre o MESMO visualizador, e nao uma tela propria');
       ok(/<script src="resumo-projeto\.js\?v=[0-9a-f]{10}"><\/script>/.test(s),
          t + ' carrega resumo-projeto.js, com o selo de cache');

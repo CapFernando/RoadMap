@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="983471ad22">
+<html lang="pt-BR" data-build="7264a51f8a">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -581,6 +581,16 @@
     .dep-row:last-of-type { border-bottom:none; }
     .dep-row.dep-done { color:var(--teal-tx); opacity:.7; }
     .dep-row.dep-open { color:var(--amber-tx); }
+    /* A LINHA CLICÁVEL SE ANUNCIA. Sem cursor e sem foco visível ela parece
+       texto, e quem navega por teclado não a alcança. O recuo negativo com
+       padding devolve a área de toque sem empurrar o layout do card. */
+    .dep-row.dep-click { cursor:pointer; margin:0 -6px; padding:4px 6px; border-radius:5px; }
+    .dep-row.dep-click:hover { background:var(--bg4); }
+    .dep-row.dep-click:focus-visible { outline:2px solid var(--blue,#6EA8FF); outline-offset:-2px; }
+    /* A PRINCIPAL APONTA PARA CIMA e não se confunde com as filhas: ela é a
+       outra direção do vínculo, e lê-las como uma lista só inverteria o sentido
+       de quem depende de quem. */
+    .dep-row.dep-pai { color:var(--text2); border-bottom:1px solid var(--border2); margin-bottom:2px; }
     .dep-peso{font-size:10.5px;color:var(--text3);padding:2px 0 0;cursor:help;}
     .dep-blocked-banner { background:var(--red-bg); color:var(--red-tx); border-radius:5px; padding:5px 8px; font-size:11px; margin-top:6px; font-weight:600; }
     .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
@@ -606,7 +616,7 @@
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
-<script src="resumo-projeto.js?v=63d219aac1"></script>
+<script src="resumo-projeto.js?v=7be0944f54"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="busca-demanda.js?v=1380650a7a"></script>
@@ -969,7 +979,12 @@
      formulario de gravacao a um `display:none` de distancia — e o dia em que
      alguem mexesse no CSS, a tela ofereceria salvar o que o servidor recusa.
      Aqui nao ha campo nem botao de gravar: nao ha o que esconder. -->
-<div id="modal-ver" class="modal-overlay" style="display:none">
+<!-- ACIMA DO RESUMO DO PROJETO, de propósito. O overlay do `resumo-projeto.js`
+     vale z-index 800 e os modais desta página valem 200: aberto a partir da
+     lista de issues do projeto, este viria ATRÁS dele e pareceria não ter
+     acontecido nada. 850 o põe na frente e continua abaixo do toast (9000).
+     É um visualizador folha — nada abre em cima dele. -->
+<div id="modal-ver" class="modal-overlay" style="display:none;z-index:850">
   <div class="modal" style="max-width:640px">
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-ver')" aria-label="Fechar">✕</button>
     <h2 id="mv-title">Demanda</h2>
@@ -2719,25 +2734,67 @@ function verDemandaPorNumero() {
     return;
   }
 
-  const m = achado.demanda;
+  verDemanda(achado.demanda, { por: achado.por });
+}
+
+/* ═══ A CONSULTA DE UMA DEMANDA, VENHA DE ONDE VIER ══════════════════════
+ *
+ * "Recebi uma task que está no Projeto EP-000, preciso clicar no projeto e ver
+ *  (...) as tasks que estão nele, ao clicar na task abrir e eu conseguir
+ *  consultar detalhes (só não permitir edição). Da mesma forma tasks com
+ *  outras tasks vinculadas."
+ *
+ * ESTE CORPO JÁ EXISTIA, e só sabia ser alcançado pela busca por número. Ele
+ * nasceu read-only e já avisa quando a demanda é de outra pessoa — era a peça
+ * certa presa atrás de uma porta só. Agora recebe a demanda pronta, e quem a
+ * encontrou (busca, lista do projeto, vínculo) é problema de quem chama.
+ *
+ * NÃO HÁ EXPOSIÇÃO NOVA AQUI, e isso foi conferido antes de ligar os cliques:
+ * o painel já permitia abrir QUALQUER demanda digitando o código em "ver
+ * demanda". O que muda é o caminho até ela, não quem pode vê-la.
+ *
+ * LEITURA, SEMPRE — inclusive na própria. Quem quer editar a sua usa o card no
+ * quadro, que é onde as travas de etapa e de entrega moram. Um segundo lugar
+ * que grava seria uma segunda resposta para as mesmas regras. */
+function verDemanda(m, opcoes) {
+  if (!m) return;
+  const o = opcoes || {};
+  const titulo = document.getElementById('mv-title');
+  const aviso = document.getElementById('mv-aviso');
+  const corpo = document.getElementById('mv-corpo');
   /* A MESMA EXPRESSAO que o Kanban e o cronograma usam para montar a fila.
      Escrever outra aqui seria uma segunda resposta para "e minha?" — e o dia em
      que as duas discordassem, a tela diria que a demanda e sua e o servidor
      recusaria a gravacao (ou o contrario, que e pior). */
   const minha = DEVNOME.eDe(m, currentDev);
+  const achado = { por: o.por || '' };
   titulo.textContent = (m.codigo || 'Demanda') + ' · ' + (m.titulo || '');
 
   /* DE ONDE ELA VEIO, dito quando nao foi pelo codigo. Quem digitou "#157"
-     procurando a issue e recebeu a AX-157 precisa saber que veio outra coisa. */
+     procurando a issue e recebeu a AX-157 precisa saber que veio outra coisa.
+     Vindo da lista de um projeto ou de um vinculo, a origem tambem e dita: o
+     modal e o mesmo, e sem a frase a pessoa perde o fio de onde clicou. */
   const porIssue = achado.por === 'issue';
-  aviso.style.display = (porIssue || !minha) ? 'block' : 'none';
-  aviso.innerHTML = [
-    porIssue ? '<div style="margin-bottom:6px">🔗 Encontrada pela <b>issue ' +
-      escAttr(BUSCA_DEMANDA.numeroDaIssue(m.link_issue)) + '</b> do GitHub, e não pelo código.</div>' : '',
-    !minha ? '<div>👁 Esta demanda está com <b>' + escAttr(m.dev || 'ninguém') +
-      '</b>. Você está vendo em <b>leitura</b> — alterações só quem está com ela.</div>' : '',
-  ].join('');
-  aviso.style.cssText = 'display:' + ((porIssue || !minha) ? 'block' : 'none') +
+  const deOnde = achado.por === 'projeto'
+    ? '<div style="margin-bottom:6px">🗂 Aberta pela lista do projeto <b>' +
+      escAttr(o.rotulo || '') + '</b>. Fechar volta para ele.</div>'
+    : achado.por === 'vinculo'
+    ? '<div style="margin-bottom:6px">🔗 Aberta pelo vínculo com <b>' +
+      escAttr(o.rotulo || '') + '</b>.</div>'
+    : porIssue
+    ? '<div style="margin-bottom:6px">🔗 Encontrada pela <b>issue ' +
+      escAttr(BUSCA_DEMANDA.numeroDaIssue(m.link_issue)) + '</b> do GitHub, e não pelo código.</div>'
+    : '';
+  /* "SÓ NÃO PERMITIR EDIÇÃO" — e a tela diz isso ANTES de a pessoa procurar
+     onde salva. Vale também na PRÓPRIA demanda: este modal nunca grava, e quem
+     vai editar usa o card no quadro, onde moram as travas de etapa e entrega. */
+  const emLeitura = minha
+    ? '<div>👁 Consulta apenas. Para editar, abra o card dela no seu quadro.</div>'
+    : '<div>👁 Esta demanda está com <b>' + escAttr(m.dev || 'ninguém') +
+      '</b>. Você está vendo em <b>leitura</b> — alterações só quem está com ela.</div>';
+  const mostraAviso = !!(deOnde || !minha || achado.por);
+  aviso.innerHTML = [deOnde, mostraAviso ? emLeitura : ''].join('');
+  aviso.style.cssText = 'display:' + (mostraAviso ? 'block' : 'none') +
     ';background:var(--bg4);border:1px solid var(--border2);border-radius:8px;' +
     'padding:10px 12px;margin-bottom:14px;font-size:13px;line-height:1.5;color:var(--text2)';
 
@@ -4299,13 +4356,39 @@ function renderDepSection(m) {
        trava o card e outro que so pertence a ele — ficam indistinguiveis, e a
        pessoa nao entende por que o avanco foi recusado (ou por que nao foi). */
     const trava = VINCULO.bloqueia(d);
-    return `<div class="dep-row ${done?'dep-done':'dep-open'}" title="${trava?'Dependência — trava o avanço deste card até ser concluída':'Vinculada — pertence a este card, não trava nada'}">
+    /* A LINHA ABRE A DEMANDA, EM LEITURA. "Da mesma forma tasks com outras
+       tasks vinculadas." Ela já dizia o título, o dev e a etapa — e parava aí:
+       para saber o que a dependência É, só perguntando a quem está com ela.
+       `stopPropagation` porque esta linha mora dentro do card do quadro, que
+       tem o próprio clique. */
+    return `<div class="dep-row dep-click ${done?'dep-done':'dep-open'}" role="button" tabindex="0"
+      data-ver="${devEsc(d.id)}" data-rotulo="${devEsc(m.codigo || m.titulo || '')}"
+      title="${trava?'Dependência — trava o avanço deste card até ser concluída':'Vinculada — pertence a este card, não trava nada'}. Clique para consultar.">
       <span>${done?'✅':(trava?'⏳':'🔗')}</span>
       <span><strong>${devEsc(d.titulo.substring(0,32))}${d.titulo.length>32?'…':''}</strong></span>
       <span style="color:var(--text3)">· ${devName} · ${dt}</span>
       <span class="kcard-badge badge-${dsk}" style="font-size:10px;">${STATUS_LABELS[dsk]||dsk}</span>
     </div>`;
   }).join('');
+
+  /* ═══ E A PRINCIPAL, QUE FALTAVA ═══════════════════════════════════════
+   *
+   * O card listava as FILHAS e nunca o PAI. Quem recebe uma demanda pendurada
+   * em outra via "parte de" em lugar nenhum: a relação existia na base e só a
+   * ponta de cima a enxergava. É metade da pergunta "o que está vinculado a
+   * isto", e justamente a metade de quem recebe a tarefa pequena. */
+  const pai = m.parent_id ? VINCULO.paiDe(state.melhorias, m) : null;
+  const paiLinha = pai ? (() => {
+    const psk = getStatusKey(pai);
+    return `<div class="dep-row dep-click dep-pai" role="button" tabindex="0"
+      data-ver="${devEsc(pai.id)}" data-rotulo="${devEsc(m.codigo || m.titulo || '')}"
+      title="Esta demanda faz parte de ${devEsc(pai.codigo || pai.titulo || '')}. Clique para consultar.">
+      <span>⬆️</span>
+      <span style="color:var(--text3)">parte de</span>
+      <span><strong>${devEsc((pai.codigo ? pai.codigo + ' · ' : '') + pai.titulo.substring(0,28))}${pai.titulo.length>28?'…':''}</strong></span>
+      <span class="kcard-badge badge-${psk}" style="font-size:10px;">${STATUS_LABELS[psk]||psk}</span>
+    </div>`;
+  })() : '';
   const blocked = hasBlockingDep(m.id);
   const banner = blocked ? `<div class="dep-blocked-banner">🔒 Avanço bloqueado — aguardando dependência</div>` : '';
   const btn = podeVincular
@@ -4319,8 +4402,40 @@ function renderDepSection(m) {
   const pesoLinha = peso
     ? `<div class="dep-peso" title="Soma dos pontos desta demanda e de tudo que depende dela. É leitura: cada vínculo segue contando o próprio ponto nos relatórios.">🧮 ${devEsc(peso)}</div>`
     : '';
-  return `<div class="kcard-dep-section">${rows}${pesoLinha}${banner}${btn}</div>`;
+  return `<div class="kcard-dep-section">${paiLinha}${rows}${pesoLinha}${banner}${btn}</div>`;
 }
+
+/* ═══ UM OUVINTE SÓ, PARA TODA LINHA DE VÍNCULO ═════════════════════════
+ *
+ * Por delegação no `document`, e não um `onclick` por linha: o quadro é
+ * remontado inteiro a cada render, e handler preso em elemento que some é
+ * handler que vaza. Este é ligado uma vez e vale para as linhas de hoje e para
+ * as do próximo render.
+ *
+ * `stopPropagation` porque a linha mora DENTRO do card do quadro, que tem o
+ * próprio clique — sem isso, consultar a dependência também mexeria no card
+ * que a contém. */
+(function ligaCliqueVinculo() {
+  const abre = (alvo) => {
+    const linha = alvo && alvo.closest && alvo.closest('.dep-click');
+    if (!linha) return null;
+    const id = linha.getAttribute('data-ver');
+    const m = (state.melhorias || []).find(x => String(x.id) === String(id));
+    if (!m) return linha;
+    verDemanda(m, { por: 'vinculo', rotulo: linha.getAttribute('data-rotulo') || '' });
+    return linha;
+  };
+  document.addEventListener('click', (ev) => {
+    if (abre(ev.target)) { ev.stopPropagation(); ev.preventDefault(); }
+  }, true);
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ' && ev.key !== 'Spacebar') return;
+    const linha = ev.target && ev.target.closest && ev.target.closest('.dep-click');
+    if (!linha) return;
+    ev.preventDefault(); ev.stopPropagation();
+    abre(ev.target);
+  }, true);
+})();
 
 function openDepModal(parentId, event) {
   if (event) event.stopPropagation();
@@ -5046,7 +5161,19 @@ async function msGrillResponde(veredito) {
 function pjAbrirDoCard(ev, projetoId) {
   if (ev) { ev.stopPropagation(); ev.preventDefault(); }
   if (!projetoId || !window.RESUMOPROJETO) return;
-  RESUMOPROJETO.abrir(state, projetoId);
+  const p = (state.projetos || []).find(x => String(x.id) === String(projetoId));
+  /* AS ISSUES DO PROJETO VIRAM PORTAS. O módulo não sabe o que abrir — ele roda
+     em três telas que respondem diferente —, então quem decide é aqui: no
+     painel do Dev, consulta em leitura.
+     O resumo FICA ABERTO ATRÁS: a pessoa veio para percorrer o projeto, e
+     fechá-lo a cada card a obrigaria a reabrir o projeto a cada issue. */
+  RESUMOPROJETO.abrir(state, projetoId, {
+    aoClicar: (id) => {
+      const m = (state.melhorias || []).find(x => String(x.id) === String(id));
+      if (!m) return;
+      verDemanda(m, { por: 'projeto', rotulo: (p && (p.codigo || p.nome)) || '' });
+    },
+  });
 }
 
 function msProjetoRender(m) {

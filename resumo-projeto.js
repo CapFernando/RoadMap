@@ -246,7 +246,22 @@
     return out.join('\n');
   }
 
-  function html(r) {
+  /* ═══ A ISSUE DA LISTA PODE SER CLICÁVEL, E QUEM DECIDE É A TELA ════════
+   *
+   * "Recebi uma task que está no Projeto EP-000, preciso clicar no projeto e
+   *  ver o conteúdo do projeto e as tasks que estão nele, ao clicar na task
+   *  abrir e eu conseguir consultar detalhes (só não permitir edição)."
+   *
+   * O MÓDULO NÃO SABE O QUE ABRIR, e não pode saber: ele roda em três telas
+   * que respondem a esse clique de formas diferentes — o Admin abre para
+   * editar, o painel do Dev abre em leitura. Pôr o nome de uma função daqui
+   * seria amarrar o módulo a uma página, que é exatamente o que o prefixo
+   * `rxp-` existe para evitar.
+   *
+   * Então a tela passa `aoClicar` e recebe o `id`. Sem ele, a lista fica como
+   * sempre foi: texto, sem cursor de mão e sem foco — porque afordância de
+   * clique onde nada acontece é pior que nenhuma. */
+  function html(r, clicavel) {
     var p = r.projeto;
     var cab = [];
     if (p.status) cab.push(esc(p.status));
@@ -281,7 +296,15 @@
              recurso de ler o resto é informação perdida, não resumida. */
           var sit = x.situacao.rot + ', ' + x.situacao.det;
           var sub = [x.tema, sit, x.periodo, x.dev].filter(Boolean).join('  ·  ');
-          return '<div class="rxp-item ' + cls + '">' +
+          /* `tabindex` E `role` JUNTO DO CURSOR, e não só o cursor: quem navega
+             por teclado não alcança um `div` clicável sem eles, e a lista de
+             issues é justamente onde a pessoa vai querer percorrer várias. */
+          var atrs = clicavel
+            ? ' class="rxp-item rxp-click ' + cls + '" data-id="' + esc(x.id) +
+              '" role="button" tabindex="0"' +
+              ' title="Abrir ' + esc(x.codigo || x.titulo) + ' para consulta"'
+            : ' class="rxp-item ' + cls + '"';
+          return '<div' + atrs + '>' +
             '<div class="rxp-item-topo">' +
             (x.codigo ? '<span class="rxp-cod">' + esc(x.codigo) + '</span>' : '') +
             '<span class="rxp-tit" title="' + esc(x.titulo) + '">' + esc(x.titulo) + '</span>' +
@@ -392,6 +415,12 @@
     '  border-radius:6px;padding:6px 10px;min-width:0;}',
     '.rxp-item.fim{border-left-color:#3EC98E;} .rxp-item.val{border-left-color:#7ED8D8;}',
     '.rxp-item.atr{border-left-color:#F9A0A0;} .rxp-item.and{border-left-color:#FFC861;}',
+    /* O CARTÃO CLICÁVEL SE ANUNCIA, e o foco do teclado aparece. Sem o anel de
+       foco, quem percorre a lista por Tab não sabe onde está — e esta lista
+       existe para ser percorrida. */
+    '.rxp-item.rxp-click{cursor:pointer;transition:background .12s,border-left-color .12s;}',
+    '.rxp-item.rxp-click:hover{background:var(--bg4,#24242E);}',
+    '.rxp-item.rxp-click:focus-visible{outline:2px solid var(--blue,#6EA8FF);outline-offset:2px;}',
     '.rxp-item-topo{display:flex;align-items:baseline;gap:7px;min-width:0;}',
     '.rxp-cod{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;',
     '  color:var(--text3,#8A8A96);flex-shrink:0;}',
@@ -419,9 +448,11 @@
   }
 
   var _ultimo = null;
+  var _aoClicar = null;
 
-  function abrir(estado, projetoId) {
+  function abrir(estado, projetoId, opcoes) {
     garanteCss();
+    _aoClicar = (opcoes && typeof opcoes.aoClicar === 'function') ? opcoes.aoClicar : null;
     _ultimo = montar(estado, projetoId, raiz.PRAZO ? raiz.PRAZO.hojeISO() : '');
     var el = document.getElementById('rxp-overlay');
     if (!el) {
@@ -431,6 +462,33 @@
       /* FECHA CLICANDO FORA, e só fora: o `target === el` evita que um clique
          que começou dentro e terminou na borda feche a tela por acidente. */
       el.addEventListener('click', function (ev) { if (ev.target === el) fechar(); });
+      /* ═══ UM OUVINTE SÓ, NO CONTÊINER ═══════════════════════════════════
+       *
+       * Por delegação, e não um `onclick` por cartão: a lista é remontada por
+       * `innerHTML` a cada abertura, e handler preso em elemento que some é
+       * handler que vaza. Este é ligado UMA vez, na criação do overlay, e vale
+       * para os cartões de hoje e para os da próxima abertura.
+       *
+       * `_aoClicar` é lido na hora do clique, e não capturado aqui: a mesma
+       * página pode abrir o resumo com callback (painel do Dev) e sem ele
+       * (relatório), e quem vale é a última abertura. */
+      el.addEventListener('click', function (ev) {
+        if (!_aoClicar) return;
+        var item = ev.target && ev.target.closest && ev.target.closest('.rxp-click');
+        if (!item || !el.contains(item)) return;
+        var id = item.getAttribute('data-id');
+        if (id) _aoClicar(id);
+      });
+      el.addEventListener('keydown', function (ev) {
+        if (!_aoClicar) return;
+        if (ev.key !== 'Enter' && ev.key !== ' ' && ev.key !== 'Spacebar') return;
+        var item = ev.target && ev.target.closest && ev.target.closest('.rxp-click');
+        if (!item) return;
+        // Espaço rolaria a lista; quem apertou sobre um cartão quis abri-lo.
+        ev.preventDefault();
+        var id = item.getAttribute('data-id');
+        if (id) _aoClicar(id);
+      });
       document.body.appendChild(el);
     }
     el.innerHTML =
@@ -441,7 +499,7 @@
       '<button type="button" class="btn btn-secondary btn-sm" onclick="RESUMOPROJETO.copiar()">📋 Copiar</button>' +
       '<button type="button" class="btn btn-secondary btn-sm" onclick="RESUMOPROJETO.fechar()">Fechar</button>' +
       '</div></div>' +
-      html(_ultimo) +
+      html(_ultimo, !!_aoClicar) +
       '</div>';
     el.style.display = 'flex';
   }
