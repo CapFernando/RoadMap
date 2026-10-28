@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="9b5dfd9389">
+<html lang="pt-BR" data-build="e1f40891f2">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -2297,9 +2297,8 @@
         <select id="m-poker-pontos" onchange="pokerMarcaManual()">
           <option value="">—</option>
           <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-          <option value="5">5</option><option value="8">8</option><option value="13">13</option>
-          <option value="21">21</option><option value="34">34</option>
-          <option value="55">55</option><option value="89">89</option><option value="100">100</option>
+          <option value="5">5</option><option value="8">8</option><option value="12">12</option>
+          <option value="22">22</option>
         </select>
         <div id="m-poker-hint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
       </div>
@@ -12122,8 +12121,10 @@ function parseTemaNome(nome) {
                : { sistema:nome.slice(0,i).trim(), modulo:nome.slice(i+3).trim() };
 }
 // Resolve a seleção em um tema_id; cria o tema se não existir. Vazio → mantém o atual.
-// Mesmo baralho do Planning Poker (POKER_CARTAS no Worker).
-const FIBONACCI = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 100];
+// As cartas numericas do Planning Poker (POKER_CARTAS no Worker, sem `?` e sem o
+// cafe). O nome ficou por historia: a sequencia deixou de ser fibonacci quando o
+// 13 virou 12 e o 21 virou 22, e o topo (34 em diante) saiu do baralho.
+const FIBONACCI = [1, 2, 3, 5, 8, 12, 22];
 
 // Arredonda a média para o fibonacci mais próximo. Só SUGERE: se o campo de
 // pontos já foi preenchido à mão, não sobrescreve a decisão do time.
@@ -13802,9 +13803,11 @@ function votosRender() {
       'ou foi votada antes de o registro de votos existir.</p>';
     return;
   }
-  // A mesa chama a carta 13 de "12+1"; aqui tem de ser o mesmo nome, senao o
-  // historico parece de outra votacao. O valor lido para a conta continua 13.
-  const rotuloVoto = v => (String(v) === '13' ? '12+1' : String(v));
+  // O voto aparece COMO FOI VOTADO. Aqui havia um apelido ("12+1" para a carta
+  // 13), que existia enquanto a mesa chamava a carta assim; com o 12 no baralho,
+  // traduzir o 13 faria duas cartas diferentes aparecerem com o mesmo nome no
+  // historico. Rodada antiga mostra a carta antiga, que e o que de fato rolou.
+  const rotuloVoto = v => String(v);
   const num = v => { const n = parseFloat(String(v.voto).replace(',', '.')); return isFinite(n) ? n : null; };
   const nums = vs.map(num).filter(n => n !== null);
   const min = nums.length ? Math.min(...nums) : null;

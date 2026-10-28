@@ -3810,19 +3810,240 @@ sec('Sessao vencida derruba a tela, e nao o usuario');
      tela + ': e a montagem se marca no fim dela');
 });
 
-sec('A carta 12+1 e um rotulo, e nao um valor');
+sec('O baralho e um so, e ele e o do servidor');
 
-// Trocar o VALOR seria o caminho curto e errado: parseFloat('12+1') devolve 12, e a
-// media da rodada sairia menor sem ninguem perceber.
-ok(/POKER_CARTAS = \['1','2','3','5','8','13'/.test(W),
-   'o baralho do servidor continua com o valor 13');
-ok(/FIBONACCI\s*=\s*\[1, 2, 3, 5, 8, 13/.test(POKER),
-   'e a sugestao continua calculando em cima de 13');
+/* O baralho tem NOVE cartas (1,2,3,5,8,12,22,?,☕) e mora no Worker. A tela tem
+   uma copia para desenhar antes de entrar na sala, e a tela de pontos do Admin e
+   do Gantt oferece as mesmas cartas numericas. Quatro listas, um conteudo: foi
+   por divergirem que o Admin ficou oferecendo pontuacao que o baralho nao
+   produzia. Aqui elas sao conferidas UMA CONTRA A OUTRA, e nao contra um literal
+   escrito neste teste — assim trocar o baralho continua sendo uma edicao so. */
+const BARALHO = (W.match(/const POKER_CARTAS = \[([^\]]+)\]/) || [])[1];
+ok(!!BARALHO, 'o baralho do servidor e uma lista literal, legivel de fora');
+const cartasW = (BARALHO || '').split(',').map(s => s.trim().replace(/^'|'$/g, ''));
+ok(cartasW.join(',') === "1,2,3,5,8,12,22,?,☕",
+   'o baralho e 1,2,3,5,8,12,22,? e cafe — e nao o fibonacci antigo');
+ok(!cartasW.includes('13') && !cartasW.includes('21'),
+   'o 13 e o 21 sairam: viraram 12 e 22');
+
+// A copia da tela desenha o baralho ANTES de entrar na sala. Divergindo, a
+// pessoa veria uma carta que o servidor recusaria ao votar.
+const copiaTela = (POKER.match(/_estado\.cartas\) \|\| \[([^\]]+)\]/) || [])[1];
+ok(!!copiaTela && copiaTela.split(',').map(s => s.trim().replace(/^'|'$/g, '')).join(',') === cartasW.join(','),
+   'a copia da tela e identica ao baralho do servidor');
+
+// As cartas NUMERICAS sao as que viram pontos na demanda: a sugestao da media e o
+// campo de pontos do Admin tem de oferecer exatamente elas.
+const numericas = cartasW.filter(c => /^\d+$/.test(c));
+for (const [nome, src] of [['poker', POKER], ['admin', ADMIN]]) {
+  const fib = (src.match(/const FIBONACCI\s*=\s*\[([^\]]+)\]/) || [])[1];
+  ok(!!fib && fib.split(',').map(s => s.trim()).join(',') === numericas.join(','),
+     nome + ': a sugestao da media calcula em cima das cartas que existem');
+}
+for (const [nome, src, id] of [['admin', ADMIN, 'm-poker-pontos'], ['gantt', GANTT, 'e-poker-pontos'],
+                               ['poker', POKER, 'in-pontos']]) {
+  const sel = src.slice(src.indexOf('id="' + id + '"'));
+  const bloco = sel.slice(0, sel.indexOf('</select>'));
+  // O texto DA OPCAO, e nao o atributo: `<option value="1">1<` tem o digito duas
+  // vezes, e tirar os nao-digitos da linha inteira devolvia "11".
+  const ops = [...bloco.matchAll(/<option[^>]*>\s*(\d+)\s*</g)].map(m => m[1]);
+  ok(ops.join(',') === numericas.join(','),
+     nome + ': o campo de pontos oferece as cartas do baralho, e so elas');
+}
+
+// `?` e cafe nao sao tamanho: parseFloat devolve NaN nos dois e o filtro da media
+// os descarta. Se um deles virasse numero, a media da rodada mudaria calada.
+ok(/const nums = votos\.map\(v => parseFloat\(v\.valor\)\)\.filter\(n => isFinite\(n\)\)/.test(W),
+   'so o que e numero entra na media da rodada');
 ok(/rotuloCartaHTML\(c\)\}<\/button>/.test(POKER) && /votar\('\$\{esc\(c\)\}'\)/.test(POKER),
    'a carta mostra o rotulo e envia o valor');
 ok(/document\.getElementById\('in-pontos'\)[\s\S]{0,200}?iP\.value = fib \|\| '';/.test(POKER) ||
    /if \(!iP\.dataset\.tocado\) iP\.value = fib \|\| '';/.test(POKER),
    'o campo de pontos recebe o numero, e nao o rotulo');
+
+// O historico foi pontuado com o baralho antigo. Sem traduzir na LEITURA, as duas
+// cartas de cima abririam a reuniao sem referencia — parecendo falta de base,
+// quando e so o nome antigo do mesmo degrau. A base nao e reescrita.
+ok(/const POKER_CARTA_ANTIGA = \{ '13': '12', '21': '22' \}/.test(W),
+   'o servidor sabe que o 13 virou 12 e o 21 virou 22');
+ok(/const carta = POKER_CARTA_ANTIGA\[String\(pts\)\] \|\| String\(pts\);/.test(W),
+   'e a referencia le a demanda antiga na gaveta da carta de hoje');
+ok(!/poker_pontos = POKER_CARTA_ANTIGA|m\.poker_pontos = (?:12|22)\b/.test(W),
+   'sem reescrever a pontuacao ja gravada: traduz na leitura, nao na base');
+
+sec('Recarregar a pagina nao pode custar o voto');
+
+/* O F5 cobrava caro em dois lugares diferentes, e os dois foram pagos em reuniao:
+   quem votava perdia o voto (o `pagehide` mandava `poker-sair`, que apaga voto e
+   participante), e quem conduzia zerava a sala inteira (sem o codigo guardado, o
+   F5 caia na tela de senha, e entrar de novo chamava `poker-abrir`). */
+
+ok(/window\.addEventListener\('pagehide', avisarAusencia\)/.test(POKER),
+   'a aba indo embora avisa AUSENCIA, nao saida');
+ok(!/addEventListener\('pagehide', avisarSaida\)/.test(POKER),
+   'e `poker-sair` ficou so para o botao Sair, que apaga o voto de proposito');
+const ausente = W.slice(W.indexOf("body.action === 'poker-ausente'"),
+                        W.indexOf("body.action === 'poker-ausente'") + 600);
+ok(/UPDATE poker_participante SET visto_em/.test(ausente) && !/DELETE/.test(ausente),
+   'ausente so empurra para fora da presenca — nao apaga voto nem participante');
+ok(/'poker-ausente':\s*\{ max:/.test(W), 'e a rota nova entrou no freio de abuso');
+
+// A sala guardada e o que faz o F5 voltar para a mesa em vez da tela de abertura.
+for (const chave of ['pk_codigo', 'pk_facil']) {
+  ok(POKER.includes("sessionStorage.setItem('" + chave + "'"),
+     'a aba guarda ' + chave + ' ao entrar na sala');
+}
+ok(/if \(_codigo && \(_participante \|\| _facilitador\)\) \{ iniciar\(\); return; \}/.test(POKER),
+   'e o boot retoma a sala antes de oferecer qualquer tela de entrada');
+
+// A carta marcada so existe na aba: o servidor nao conta o que eu votei antes de
+// revelar. Guardada com sala e pauta juntas, senao reapareceria na rodada
+// seguinte — e a pessoa entraria na pauta nova achando que ja votou nela.
+ok(/function _chaveVoto\(codigo, melhoria\)/.test(POKER),
+   'o voto guardado e amarrado a sala E a pauta');
+ok(/_meuVoto = cartaMarcada\(_meuVoto, !!\(eu && eu\.votou\), est\.codigo, est\.melhoria_id\);/
+     .test(corpo(POKER, 'function aplicar(')),
+   'e `aplicar` decide a carta marcada por essa regra, e nao por conta propria');
+
+/* E A REGRA E EXECUTADA, contra um sessionStorage de mentira. Ler o codigo nao
+   distingue os dois erros possiveis aqui, que sao opostos: nao repor (o voto
+   some no F5, que e o problema de hoje) e repor demais (a carta reaparece numa
+   rodada que o facilitador acabou de zerar, e a pessoa entra achando que votou). */
+(() => {
+  let caixa = {};
+  const sessionStorage = {
+    getItem: k => (k in caixa ? caixa[k] : null),
+    setItem: (k, v) => { caixa[k] = String(v); },
+    removeItem: k => { delete caixa[k]; },
+  };
+  const V = new Function('sessionStorage',
+    corpo(POKER, 'function _chaveVoto(') + ' ' +
+    corpo(POKER, 'function votoGuardado(') + ' ' +
+    corpo(POKER, 'function guardaVoto(') + ' ' +
+    corpo(POKER, 'function cartaMarcada(') +
+    ' return { votoGuardado, guardaVoto, cartaMarcada };')(sessionStorage);
+
+  // Votei 8 na pauta AX-1 da sala ABC123.
+  V.guardaVoto('ABC123', 'AX-1', '8');
+  // F5: a aba perde `_meuVoto` (entra vazio) e o servidor confirma que votei.
+  ok(V.cartaMarcada('', true, 'ABC123', 'AX-1') === '8',
+     'recarregar no meio da rodada devolve a carta escolhida');
+  // "Votar de novo": o servidor apagou os votos e diz que nao votei.
+  ok(V.cartaMarcada('', false, 'ABC123', 'AX-1') === '',
+     'rodada zerada pelo facilitador nao ressuscita a carta guardada');
+  ok(V.cartaMarcada('8', false, 'ABC123', 'AX-1') === '',
+     'nem quando a aba ainda tinha a carta na memoria');
+  // Proxima demanda: a sala e a mesma, a pauta nao.
+  ok(V.cartaMarcada('', true, 'ABC123', 'AX-2') === '',
+     'a carta de uma pauta nao reaparece na pauta seguinte');
+  // Outra sala, mesmo id de demanda.
+  ok(V.cartaMarcada('', true, 'ZZZ999', 'AX-1') === '',
+     'nem em outra sala');
+  // O que a aba ja tem na memoria tem precedencia sobre o guardado.
+  V.guardaVoto('ABC123', 'AX-1', '8');
+  ok(V.cartaMarcada('22', true, 'ABC123', 'AX-1') === '22',
+     'e o voto recem-trocado vale mais que o guardado');
+  // Guardar vazio limpa: sobrando, o F5 seguinte repoe carta de rodada morta.
+  V.guardaVoto('ABC123', 'AX-1', '');
+  ok(V.cartaMarcada('', true, 'ABC123', 'AX-1') === '',
+     'guardar vazio apaga de verdade');
+  // Aba sem storage (navegacao privada, storage bloqueado): a tela nao pode cair.
+  const Vsem = new Function('sessionStorage',
+    corpo(POKER, 'function _chaveVoto(') + ' ' +
+    corpo(POKER, 'function votoGuardado(') + ' ' +
+    corpo(POKER, 'function guardaVoto(') + ' ' +
+    corpo(POKER, 'function cartaMarcada(') +
+    ' return { guardaVoto, cartaMarcada };')({
+      getItem: () => { throw new Error('bloqueado'); },
+      setItem: () => { throw new Error('bloqueado'); },
+      removeItem: () => { throw new Error('bloqueado'); },
+    });
+  Vsem.guardaVoto('ABC123', 'AX-1', '8');
+  ok(Vsem.cartaMarcada('8', true, 'ABC123', 'AX-1') === '8',
+     'storage bloqueado nao derruba a votacao — so deixa de lembrar');
+})();
+
+// `poker-abrir` zerava a rodada sempre. Com voto na mesa, isso e apagar a reuniao
+// de quem esta votando — e ninguem no Worker sabe que ha gente na sala.
+const abrirSala = W.slice(W.indexOf("body.action === 'poker-abrir'"),
+                          W.indexOf("body.action === 'poker-abrir'") + 2400);
+ok(/SELECT COUNT\(\*\) AS n FROM poker_voto WHERE codigo = \?/.test(abrirSala),
+   'abrir a sala pergunta se ha voto na mesa antes de mexer nela');
+ok(!/DELETE FROM poker_voto/.test(abrirSala),
+   'e nao apaga voto nenhum: para comecar do zero existe o botao Zerar a sala');
+
+/* E OS DOIS TRECHOS DO WORKER SAO EXECUTADOS contra um D1 de mentira.
+   Ler SQL nao prova condicao nem ordem — o que custou caro aqui foi justamente
+   um DELETE que rodava num caminho que ninguem imaginava percorrer. O banco
+   falso so anota o que foi preparado e devolve o que o teste mandar. */
+registra((async () => {
+  const bancoFalso = (resposta) => {
+    const sqls = []; let ultimoBind = null;
+    const db = { prepare(sql) {
+      sqls.push(sql.replace(/\s+/g, ' ').trim());
+      const q = sqls[sqls.length - 1];
+      const enc = {
+        bind: (...a) => { ultimoBind = a; return enc; },
+        first: async () => (resposta ? resposta(q) : null),
+        run:   async () => ({ success: true }),
+        all:   async () => ({ results: [] }),
+      };
+      return enc;
+    } };
+    return { db, sqls, bind: () => ultimoBind };
+  };
+
+  // ── poker-abrir, com e sem voto na mesa ──────────────────────────────────
+  const bloco = W.slice(W.indexOf('if (viva && !body.nova) {'),
+                        W.indexOf('if (viva && !body.nova) {') + 2000);
+  const miolo = bloco.slice(bloco.indexOf('{') + 1,
+                            bloco.indexOf('return json({ ok: true, codigo: viva.codigo }, 200, headers);'));
+  const rodaAbrir = async (nVotos) => {
+    const b = bancoFalso(sql => (/COUNT\(\*\) AS n FROM poker_voto/.test(sql) ? { n: nVotos } : null));
+    await new Function('db', 'viva', 'Number',
+      'return (async () => {' + miolo + '})();')(b.db, { codigo: 'ABC123' }, Number);
+    return b.sqls;
+  };
+
+  let sqls = await rodaAbrir(0);
+  ok(sqls.some(s => /UPDATE poker_sessao SET melhoria_id = ''/.test(s)),
+     'sala sem voto nenhum: zera a pauta, que e o inicio de uma reuniao');
+  sqls = await rodaAbrir(3);
+  ok(!sqls.some(s => /UPDATE poker_sessao/.test(s)),
+     'COM VOTO NA MESA nao tira a pauta — a reuniao esta acontecendo');
+  ok(!sqls.some(s => /DELETE/.test(s)), 'e nao apaga voto nenhum');
+
+  // ── poker-ausente ────────────────────────────────────────────────────────
+  const bAus = W.slice(W.indexOf("if (body.action === 'poker-ausente') {"),
+                       W.indexOf("if (body.action === 'poker-ausente') {") + 900);
+  const mAus = bAus.slice(bAus.indexOf('{') + 1, bAus.lastIndexOf('return json'));
+  const jsonFalso = (o, s) => ({ corpo: o, status: s });
+  const agora = new Date('2026-10-28T12:00:00.000Z');
+  const JANELA = Number((W.match(/const PRESENCA_S\s*=\s*(\d+)/) || [])[1]);
+  const rodaAusente = async (body) => {
+    const b = bancoFalso(null);
+    const r = await new Function('db', 'body', 'codigo', 'agora', 'PRESENCA_S', 'json', 'headers',
+      'return (async () => {' + mAus + '})();')(b.db, body, 'ABC123', agora, JANELA, jsonFalso, {});
+    return { ...b, r };
+  };
+
+  const a1 = await rodaAusente({ participante: 'p-123' });
+  ok(a1.sqls.length === 1 && /^UPDATE poker_participante SET visto_em/.test(a1.sqls[0]),
+     'ausente executa UMA instrucao, e ela e um UPDATE', a1.sqls.join(' | '));
+  ok(!a1.sqls.some(s => /DELETE/.test(s)), 'nenhum DELETE: o voto fica onde esta');
+  const atraso = (agora.getTime() - Date.parse(a1.bind()[0])) / 1000;
+  ok(atraso > JANELA,
+     'o carimbo cai FORA da janela de presenca — some da mesa na batida seguinte',
+     atraso + 's, janela de ' + JANELA + 's');
+  ok(atraso < 2 * 3600,
+     'e nao tao fora que a faxina de 2h o leve junto, apagando o participante', atraso + 's');
+  ok(a1.bind()[1] === 'p-123' && a1.bind()[2] === 'ABC123',
+     'e mexe so no participante daquela sala');
+
+  const a2 = await rodaAusente({});
+  ok(a2.sqls.length === 0 && a2.r && a2.r.status === 400,
+     'sem participante: recusa em 400 sem escrever nada');
+})());
 
 sec('A referencia da carta se refaz sozinha');
 

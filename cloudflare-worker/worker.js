@@ -241,6 +241,10 @@ const LIMITES = {
   'poker-entrar':   { max: 20,  janela: 60 },
   'poker-votar':    { max: 60,  janela: 60 },
   'poker-gravar':   { max: 30,  janela: 60 },
+  // Sai no `pagehide`: uma por recarga de pagina. Folgado porque quem esta
+  // ajustando a tela recarrega varias vezes seguidas, e ser recusado aqui
+  // deixaria o fantasma na mesa.
+  'poker-ausente':  { max: 30,  janela: 60 },
   'poker-fila':     { max: 30,  janela: 60 },
   'temas-publicos': { max: 20,  janela: 60 },
   'anexo-subir':    { max: 20,  janela: 60 },
@@ -2800,10 +2804,32 @@ function pokerCodigo() {
   return c;
 }
 
-// Fibonacci ate 89 + 100 como carta de topo, para demandas grandes ("casa dos
-// 100"). Os valores antigos (21, 34) seguem existindo — trocar 21/34 por 20/40
-// como fazem alguns baralhos invalidaria pontuacoes ja gravadas.
-const POKER_CARTAS = ['1','2','3','5','8','13','21','34','55','89','100','?'];
+/* ═══ O BARALHO DA MESA ════════════════════════════════════════════════════
+ *
+ * Nove cartas: 1, 2, 3, 5, 8, 12, 22, ? e o cafe. O topo saiu (34, 55, 89, 100)
+ * — demanda desse tamanho nao se estima, se fatia — e os dois degraus de cima
+ * foram renomeados: o 13 virou 12 e o 21 virou 22.
+ *
+ * `?` e `☕` NAO SAO NUMERO E NAO ENTRAM NA MEDIA: `parseFloat` devolve NaN nos
+ * dois e o filtro de `pokerEstado` os descarta. O cafe diz "preciso de uma
+ * pausa", o `?` diz "nao sei estimar" — a mesa ve a diferenca, a conta nao.
+ *
+ * ESTA LISTA E A UNICA PORTEIRA DO VOTO (`poker-votar` recusa o que nao esta
+ * aqui) e e ela que a tela recebe para desenhar o baralho. Uma segunda copia na
+ * tela voltaria a divergir: o `cartas` que vai no estado e esta constante.      */
+const POKER_CARTAS = ['1','2','3','5','8','12','22','?','☕'];
+
+/* O QUE O BARALHO ANTIGO VIROU, so para LER o passado.
+ *
+ * A referencia ("costuma levar N dias") e construida das demandas ja concluidas,
+ * e elas foram pontuadas com o baralho velho. Sem esta traducao, as duas cartas
+ * de cima abririam a reuniao sem referencia nenhuma — nao porque falta historico,
+ * mas porque o historico esta guardado com o nome antigo do mesmo degrau.
+ *
+ * NAO SE REESCREVE NADA NA BASE: a demanda continua valendo os 13 pontos que o
+ * time votou na epoca, e o que muda e so a gaveta em que ela e lida. 34 e acima
+ * nao tem para onde ir — a carta deixou de existir — e ficam de fora.           */
+const POKER_CARTA_ANTIGA = { '13': '12', '21': '22' };
 
 // Quantos dias UTEIS existem entre duas datas, contando as duas pontas. Feriado
 // cadastrado nao conta. Datas em texto ISO e aritmetica em UTC: `new Date(iso)` no
@@ -3039,7 +3065,9 @@ function pokerReferencia(data) {
     if (String(m.status_planejamento || '') !== 'concluido') continue;
     const pts = m.poker_pontos;
     if (pts === null || pts === undefined || pts === '') continue;
-    const carta = String(pts);
+    // O valor gravado e o que o time votou; a gaveta em que ele e lido e a carta
+    // de hoje. Ver `POKER_CARTA_ANTIGA`.
+    const carta = POKER_CARTA_ANTIGA[String(pts)] || String(pts);
     if (!POKER_CARTAS.includes(carta)) continue;
     const dias = diasUteis(m.inicio, m.entrega || m.concluido_em, feriados);
     if (dias === null) continue;
@@ -3268,13 +3296,28 @@ export default {
         const viva = await db.prepare(
           'SELECT codigo FROM poker_sessao WHERE expira_em > ? ORDER BY criado_em DESC LIMIT 1').bind(iso).first();
         if (viva && !body.nova) {
-          // Reaproveita a sala, mas ZERA a rodada: abrir a sala e o inicio de uma
-          // reuniao, e a media/pontos da reuniao anterior apareciam preenchidos.
-          // Um refresh de pagina nao passa por aqui (vai direto no poker-estado
-          // com o codigo guardado), entao recarregar no meio de uma votacao nao
-          // perde a rodada em andamento.
-          await db.prepare("UPDATE poker_sessao SET melhoria_id = '', revelado = 0 WHERE codigo = ?").bind(viva.codigo).run();
-          await db.prepare('DELETE FROM poker_voto WHERE codigo = ?').bind(viva.codigo).run();
+          /* Reaproveita a sala. ZERAR A RODADA SO QUANDO NAO HA VOTO NA MESA.
+           *
+           * Zerar aqui existe por um motivo pequeno: abrir a sala e o inicio de
+           * uma reuniao, e a media/pontos da reuniao anterior apareciam
+           * preenchidos. O preco, porem, era enorme — e foi cobrado.
+           *
+           * O comentario antigo dizia que "um refresh de pagina nao passa por
+           * aqui". Isso valia para quem vota, cujo codigo fica guardado; nao
+           * valia para QUEM CONDUZ: o codigo do facilitador nao era guardado em
+           * lugar nenhum, entao o F5 dele caia na tela de senha, e entrar de novo
+           * apagava a votacao em andamento da sala inteira — pauta fora e todos os
+           * votos deletados, com a reuniao acontecendo.
+           *
+           * A tela agora retoma a sala sem passar por aqui (ver `pk_codigo` em
+           * poker.html), e esta trava e a segunda linha: enquanto existir voto na
+           * mesa, abrir a sala nao apaga nada. Para comecar do zero de proposito
+           * existe o botao "Zerar a sala", que pergunta antes.                  */
+          const emVoto = await db.prepare(
+            'SELECT COUNT(*) AS n FROM poker_voto WHERE codigo = ?').bind(viva.codigo).first();
+          if (!emVoto || !Number(emVoto.n)) {
+            await db.prepare("UPDATE poker_sessao SET melhoria_id = '', revelado = 0 WHERE codigo = ?").bind(viva.codigo).run();
+          }
           return json({ ok: true, codigo: viva.codigo }, 200, headers);
         }
         const codigo = pokerCodigo();
@@ -3312,6 +3355,36 @@ export default {
         await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ? AND participante = ?')
           .bind(codigo, (ses && ses.melhoria_id) || '', pid).run();
         await db.prepare('DELETE FROM poker_participante WHERE id = ? AND codigo = ?').bind(pid, codigo).run();
+        return json({ ok: true }, 200, headers);
+      }
+
+      /* ═══ SUMIR DA MESA SEM PERDER O VOTO ═══════════════════════════════════
+       *
+       * A aba fechando e o F5 disparam o MESMO evento no navegador (`pagehide`),
+       * e nao ha como distinguir um do outro. Enquanto a tela mandava `poker-sair`
+       * ali, recarregar a pagina no meio da votacao apagava o voto de quem
+       * recarregou: a tela voltava, o id guardado nao existia mais na sala, a
+       * carta aparecia desmarcada e o voto tinha ido embora do servidor junto.
+       * Perda silenciosa — a media da rodada seguia, com um voto a menos.
+       *
+       * Aqui o participante so e empurrado para FORA DA JANELA DE PRESENCA: ele
+       * aparece esmaecido na mesa na mesma batida do polling, como quem caiu, e o
+       * voto fica. Se era um F5, a proxima batida devolve o sinal de vida e ele
+       * volta a aparecer online — sem nunca ter deixado de contar.
+       *
+       * Sair de proposito continua sendo `poker-sair`, que apaga o voto: quem
+       * clica em Sair esta dizendo que nao quer entrar na media.
+       *
+       * O aviso pode chegar DEPOIS do primeiro sinal da pagina nova — ele sai com
+       * `keepalive`, na corrida de uma aba fechando. Nesse caso a pessoa pisca
+       * esmaecida por uma batida do polling (1,5s) e volta online sozinha. Pisca,
+       * e so: o voto nao e tocado em nenhuma das duas ordens.                   */
+      if (body.action === 'poker-ausente') {
+        const pid = String(body.participante || '');
+        if (!pid) return json({ error: 'participante obrigatorio' }, 400, headers);
+        const fora = new Date(agora.getTime() - (PRESENCA_S + 5) * 1000).toISOString();
+        await db.prepare('UPDATE poker_participante SET visto_em = ? WHERE id = ? AND codigo = ?')
+          .bind(fora, pid, codigo).run();
         return json({ ok: true }, 200, headers);
       }
 

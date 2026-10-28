@@ -1,5 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<!-- `data-build` e recalculado pelo selo a cada publicacao: e o unico jeito de
+     saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
+     Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
+     tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
+<html lang="pt-BR" data-build="e8d0a7057b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -114,11 +118,6 @@
     .carta { width:52px; height:74px; border-radius:9px; display:flex; align-items:center; justify-content:center;
              font-size:22px; font-weight:800; border:2px solid var(--border2); background:var(--bg4); color:var(--text3);
              transition:all .2s; }
-    /* O "+1" da carta 12+1: menor e levantado, como em baralho. Em `em` para
-       servir as tres medidas de carta (baralho, mesa e resultado) com uma regra
-       so — e para o "12" continuar do tamanho dos numeros vizinhos, que e o que
-       mantem a mesa legivel projetada. */
-    .carta-mais { font-size:.58em; vertical-align:.32em; letter-spacing:0; margin-left:1px; }
     .carta.aguardando { border-style:dashed; }
     .carta.votou { background:#123A52; border-color:#2A6E90; color:#123A52; }
     .carta.revelada { background:var(--bg2); border-color:var(--teal); color:var(--teal); }
@@ -161,12 +160,14 @@
     .fila-estrela { color:#E8B62C; margin-right:5px; }
     .fila-item.estrelada { border-left:3px solid #E8B62C; }
     /* A FAIXA APERTADA — 1200 a 1450px, o laptop de 1366.
-       O baralho de 12 cartas precisa de 710px numa linha (50px de carta + 10 de
-       vao). Com o painel em 186 e o vao em 22, sobram 700 nessa largura — dez
-       pixels de falta, e as cartas quebram em duas fileiras. Apertar o painel
-       devolve a linha; o QR cai para 128px, que uma camera de celular a meio
-       metro do monitor ainda le. Abaixo de 1200 nao ha o que apertar: ali sao
-       duas fileiras de seis, e duas fileiras de seis se leem bem. */
+       Esta regra nasceu com o baralho de 12 cartas, que pedia 710px numa linha
+       (50px de carta + 10 de vao) e sobravam 700: dez pixels de falta quebravam
+       as cartas em duas fileiras. COM NOVE CARTAS a conta e 530px, e a linha
+       cabe com folga mesmo sem apertar nada.
+       A regra fica porque o que ela aperta continua fazendo sentido nessa
+       largura — o painel do convite em 160 e o QR em 128px, que uma camera de
+       celular a meio metro do monitor ainda le, deixam mais espaco para a mesa.
+       Se o baralho voltar a crescer, a folga de 170px e o que ele tem. */
     @media (min-width: 821px) and (max-width: 1450px) {
       .votacao-grid { gap:14px; }
       .convite-fixo { width:160px; padding:12px 10px; }
@@ -183,6 +184,16 @@
     }
     .votacao-titulo { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); margin-bottom:12px; text-align:center; }
     .cartas { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+    /* NO TELEFONE, TRES POR TRES — e nao o que a quebra automatica der.
+       Nove cartas numa coluna de 277px caem como 4+4+1: a ultima fica sozinha
+       numa fileira so dela, parecendo sobra. E o telefone nao e caso raro aqui,
+       e o caminho do QR — a maneira como a maioria entra na sala.
+       Em grade de tres colunas as nove formam um quadrado, que e como baralho se
+       espalha na mesa. Cabe ate em 320px sem rolagem lateral (3x50 + 2x10 = 170),
+       e acima de 420 a quebra automatica ja produz 5+4, que e equilibrado. */
+    @media (max-width: 420px) {
+      .cartas { display:grid; grid-template-columns:repeat(3, 50px); justify-content:center; }
+    }
     /* Cartas um pouco menores para o detalhe da demanda caber sem rolagem: a mesa
        ocupava a tela inteira e sobrava espaco nenhum para ler o que se vota. */
     .carta-btn { width:50px; height:70px; border-radius:10px; background:var(--bg3); border:2px solid var(--border2);
@@ -405,8 +416,7 @@
           <label style="font-size:11px;color:var(--text3);display:flex;flex-direction:column;gap:4px">Pontos
             <select id="in-pontos" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit">
               <option value="">—</option><option>1</option><option>2</option><option>3</option>
-              <option>5</option><option>8</option><option>13</option><option>21</option><option>34</option>
-              <option>55</option><option>89</option><option>100</option>
+              <option>5</option><option>8</option><option>12</option><option>22</option>
             </select>
           </label>
           <button class="btn btn-green" onclick="gravarNoCard()" id="btn-gravar">💾 Gravar no card</button>
@@ -559,12 +569,26 @@ const DATA_PATH   = 'data/melhorias.json';
    caminho que a tela do dev passou meses lendo um 404 em silencio. A unica porta
    de leitura e o Worker, via `lerDados`. */
 const POLL_MS     = 1500;
-// Mesmo baralho do Worker (POKER_CARTAS, sem o '?'): usado para sugerir a carta
-// mais proxima da media.
-const FIBONACCI   = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 100];
+// As cartas NUMERICAS do baralho (POKER_CARTAS no Worker, sem o '?' e sem o
+// cafe): usadas para sugerir a carta mais proxima da media. O nome ficou
+// `FIBONACCI` por historia — a sequencia deixou de ser fibonacci quando o 13
+// virou 12 e o 21 virou 22 — e o que importa e que esta lista seja exatamente o
+// que o baralho produz: ela alimenta o campo de pontos que vai para a demanda.
+const FIBONACCI   = [1, 2, 3, 5, 8, 12, 22];
 
 // ─── ESTADO LOCAL ─────────────────────────────────────────────────
-let _codigo      = (new URLSearchParams(location.search).get('s') || '').toUpperCase();
+/* ═══ O QUE PRECISA SOBREVIVER AO F5 ═══════════════════════════════════════
+ *
+ * O codigo da sala NAO era guardado em lugar nenhum. Para quem entrava pelo
+ * link isso passava despercebido, porque o codigo volta na URL (`?s=`); para
+ * QUEM CONDUZ, nao havia URL nem registro, entao recarregar a pagina no meio da
+ * reuniao caia na tela de senha — e entrar de novo chamava `poker-abrir`, que
+ * limpava a pauta e apagava os votos da sala INTEIRA.
+ *
+ * Guardado aqui, o F5 volta direto para a mesa, sem passar pela abertura.
+ * `sessionStorage` e por aba e morre com ela: fechar a aba continua sendo sair.  */
+let _codigo      = (new URLSearchParams(location.search).get('s') || '').toUpperCase()
+                   || (sessionStorage.getItem('pk_codigo') || '').toUpperCase();
 let _participante = sessionStorage.getItem('pk_participante') || '';
 let _nome         = sessionStorage.getItem('pk_nome') || '';
 let _senha        = sessionStorage.getItem('rm_admin_pw') || '';   // compartilhada com Admin/Gantt
@@ -578,7 +602,11 @@ let _token        = sessionStorage.getItem('rm_admin_token') || '';
 // que e o pior momento para parecer que quebrou.
 window.addEventListener('rm-token-novo', (e) => { _token = e.detail || _token; });
 
-let _facilitador  = false;
+// Quem conduz tambem volta como quem conduz depois do F5. A MARCA E SO DA TELA:
+// toda acao de facilitador leva token ou senha e e conferida no servidor, entao
+// forjar esta chave nao da permissao nenhuma — so mostraria botoes que respondem
+// 401. O que ela evita e o facilitador cair na tela de abertura.
+let _facilitador  = sessionStorage.getItem('pk_facil') === '1';
 let _estado       = null;
 let _melhorias    = [];
 // Quanto cada carta costuma custar de prazo. Vem pronta do servidor junto com a
@@ -593,6 +621,47 @@ let _meuVoto      = '';
 // pauta). Serve para descartar respostas de polling que saíram antes da ação.
 let _mutSeq       = 0;
 let _timer        = null;
+
+/* ═══ A CARTA ESCOLHIDA, GUARDADA ATE REVELAR ══════════════════════════════
+ *
+ * O servidor sabe QUE eu votei, mas nao conta a ninguem O QUE eu votei antes de
+ * revelar — e nao pode contar, senao a mesa deixa de ser secreta. Entao a carta
+ * marcada so existia na memoria da aba: qualquer recarga a apagava, e a tela
+ * voltava dizendo "Escolha sua carta" para quem ja tinha escolhido. Quem viu
+ * isso votou de novo, ou achou que o voto tinha sumido.
+ *
+ * Fica guardada COM A SALA E A PAUTA junto. Sem esse par, a carta reapareceria
+ * marcada na demanda seguinte — e a pessoa entraria na rodada nova achando que
+ * ja votou nela.                                                              */
+function _chaveVoto(codigo, melhoria) { return String(codigo || '') + '|' + String(melhoria || ''); }
+
+function votoGuardado(codigo, melhoria) {
+  try {
+    const g = JSON.parse(sessionStorage.getItem('pk_voto') || 'null');
+    return (g && g.k === _chaveVoto(codigo, melhoria)) ? String(g.v || '') : '';
+  } catch (_) { return ''; }
+}
+
+function guardaVoto(codigo, melhoria, valor) {
+  try {
+    if (!valor) sessionStorage.removeItem('pk_voto');
+    else sessionStorage.setItem('pk_voto', JSON.stringify({ k: _chaveVoto(codigo, melhoria), v: valor }));
+  } catch (_) { /* aba sem storage: a tela segue funcionando, so nao lembra */ }
+}
+
+/* QUAL CARTA FICA MARCADA quando um estado novo chega. Fica fora do `aplicar`
+   porque e a regra inteira em quatro linhas — e porque so assim ela pode ser
+   executada num teste, em vez de conferida de olho.
+
+   QUEM MANDA E O SERVIDOR, sempre: ele nao diz O QUE eu votei antes de revelar,
+   mas diz SE eu votei, e e esse sim/nao que decide.
+     • votou e a aba nao lembra  → repoe o que ficou guardado (caso do F5)
+     • nao votou                 → nada marcado, mesmo com valor guardado
+                                   (o facilitador trocou a pauta ou zerou)       */
+function cartaMarcada(local, votou, codigo, melhoria) {
+  if (!votou) return '';
+  return local || votoGuardado(codigo, melhoria);
+}
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -1092,6 +1161,11 @@ async function abrirSessao() {
   _codigo = r.body.codigo;
   _facilitador = true;
   _nome = 'Facilitador';
+  // A sala fica registrada na aba E no endereco. Sem isto, o F5 de quem conduz
+  // voltava para esta mesma tela, e entrar de novo zerava a votacao em andamento.
+  sessionStorage.setItem('pk_codigo', _codigo);
+  sessionStorage.setItem('pk_facil', '1');
+  try { history.replaceState(null, '', location.pathname + '?s=' + encodeURIComponent(_codigo)); } catch (_) {}
   err.textContent = '';
   fechar('ov-facil');
   iniciar();
@@ -1109,6 +1183,9 @@ async function entrar() {
   _codigo = cod; _participante = r.body.participante; _nome = r.body.nome;
   sessionStorage.setItem('pk_participante', _participante);
   sessionStorage.setItem('pk_nome', _nome);
+  // Quem digitou o codigo (em vez de chegar pelo link) nao o tinha na URL: o F5
+  // devolvia a tela de abertura, e a sala parecia ter sumido.
+  sessionStorage.setItem('pk_codigo', _codigo);
   err.textContent = '';
   fechar('ov-entrada');
   iniciar();
@@ -1117,14 +1194,18 @@ async function entrar() {
 async function sair() {
   clearInterval(_timer);
   await avisarSaida();
-  sessionStorage.removeItem('pk_participante');
-  sessionStorage.removeItem('pk_nome');
+  esqueceSala();
   location.href = location.pathname;
 }
 
-// Avisa o servidor que estou saindo. keepalive permite que a requisicao termine
-// mesmo com a aba fechando — sem isso, quem fecha o navegador so desapareceria
-// da mesa quando a janela de presenca expirasse.
+// Tudo o que a aba lembra da sala. Sair de proposito apaga; recarregar, nao.
+function esqueceSala() {
+  ['pk_participante', 'pk_nome', 'pk_codigo', 'pk_facil', 'pk_voto']
+    .forEach(k => sessionStorage.removeItem(k));
+}
+
+// Avisa o servidor que estou saindo DE PROPOSITO: o voto desta rodada sai junto,
+// porque quem sai nao deve entrar na media. Só o botão Sair chama isto.
 function avisarSaida() {
   if (!_participante || !_codigo) return Promise.resolve();
   return fetch(PROXY_URL, {
@@ -1132,7 +1213,30 @@ function avisarSaida() {
     body: JSON.stringify({ action: 'poker-sair', codigo: _codigo, participante: _participante })
   }).catch(() => {});
 }
-window.addEventListener('pagehide', avisarSaida);
+
+/* ═══ FECHAR A ABA E RECARREGAR DISPARAM O MESMO EVENTO ════════════════════
+ *
+ * Aqui ficava `avisarSaida`, e era ele que comia o voto no F5: `pagehide` nao
+ * distingue "estou indo embora" de "estou recarregando", e `poker-sair` apaga o
+ * voto e tira a pessoa da sala. Recarregar no meio da votacao devolvia uma tela
+ * com a carta desmarcada — e o voto tinha mesmo sumido do servidor.
+ *
+ * O aviso agora e `poker-ausente`: empurra para fora da janela de presenca, sem
+ * apagar nada. Quem fechou a aba aparece esmaecido na mesa (e o voto continua
+ * contando, que ja era a regra para quem cai); quem recarregou volta online na
+ * primeira batida do polling, com a carta no lugar.
+ *
+ * `keepalive` porque a aba esta indo embora: sem ele a requisicao morre junto.  */
+function avisarAusencia() {
+  if (!_participante || !_codigo) return;
+  try {
+    fetch(PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ action: 'poker-ausente', codigo: _codigo, participante: _participante })
+    }).catch(() => {});
+  } catch (_) {}
+}
+window.addEventListener('pagehide', avisarAusencia);
 
 // ─── CONVITE ──────────────────────────────────────────────────────
 function linkConvite() { return `${location.origin}${location.pathname}?s=${_codigo}`; }
@@ -1195,28 +1299,22 @@ function copiarCodigo() {
 }
 
 // ─── VOTAÇÃO ──────────────────────────────────────────────────────
-/* ─── O ROTULO DA CARTA, QUE NAO E O VALOR DELA ────────────────────
-   A carta 13 se chama "12+1" na mesa. So o rotulo muda: o valor continua 13 em
-   tudo que e conta — media da rodada, pontos gravados na demanda, historico de
-   votos, somatorio por dev, relatorio.
+/* ─── O ROTULO DA CARTA, QUE HOJE E O PROPRIO VALOR ────────────────
+   Aqui morava a traducao de 13 para "12+1": a mesa chamava a carta pelo apelido
+   e o valor seguia 13 em tudo que e conta. O baralho novo tem o 12 de verdade, e
+   manter o apelido faria DUAS cartas se chamarem "12" na mesma tela — a de valor
+   12 e a de valor 13 do historico.
 
-   Trocar o VALOR seria o caminho curto e errado: `parseFloat('12+1')` devolve 12,
-   e a media da rodada sairia menor sem ninguem perceber.                       */
-const ROTULO_CARTA = { '13': '12+1' };
+   As duas funcoes continuam existindo, e nao sao enfeite: elas sao o unico ponto
+   por onde uma carta vira texto na tela (baralho, mesa, resultado e referencia).
+   Enquanto forem esse ponto unico, um apelido futuro entra em um lugar so — foi
+   por existirem que a troca de hoje coube em duas linhas.                      */
 function rotuloCarta(v) {
-  const s = String(v == null ? '' : v);
-  return ROTULO_CARTA[s] || s;
+  return String(v == null ? '' : v);
 }
 
-// Na carta, o "+1" vai menor e levantado — o "12" fica do tamanho dos outros
-// numeros. Encolher os quatro caracteres por igual para caber tirava justamente o
-// que essa tela precisa ter: ela e projetada numa reuniao e lida de longe.
-//
-// O tamanho e em `em`, entao serve as tres medidas de carta que existem (baralho,
-// mesa e o resultado) sem uma regra para cada.
 function rotuloCartaHTML(v) {
-  const s = String(v == null ? '' : v);
-  return s === '13' ? '12<span class="carta-mais">+1</span>' : esc(s);
+  return esc(rotuloCarta(v));
 }
 
 function fibonacciMaisProximo(media) {
@@ -1231,6 +1329,9 @@ async function votar(valor) {
   const r = await api({ action: 'poker-votar', codigo: _codigo, participante: _participante, valor });
   if (!r.ok) { toast((r.body && r.body.error) || 'Não foi possível votar.', 'err'); return; }
   _meuVoto = valor;
+  // Guarda ANTES do proximo estado chegar: entre o voto e a resposta do polling
+  // cabe um F5, e e exatamente nessa fresta que a carta sumia da tela.
+  guardaVoto(_codigo, _estado && _estado.melhoria_id, valor);
   renderCartas();
   await atualizar();
 }
@@ -1879,6 +1980,12 @@ function refAlterna() { _refAberta = !_refAberta; renderReferencia(); }
 // Texto do hover de UMA carta. Carta sem historico diz isso, em vez de ficar muda:
 // silencio ali se le como "esta carta nao tem referencia", que e outra coisa.
 function refDaCarta(c) {
+  // As duas cartas sem numero nao tem prazo tipico porque nao sao tamanho: elas
+  // nao entram na media (o Worker so soma o que e numero). Dizer "sem entrega
+  // concluida com esta carta" nelas seria mentira por omissao — parece falta de
+  // historico, quando e a carta que significa outra coisa.
+  if (String(c) === '?') return 'Não sei estimar — não entra na média da rodada.';
+  if (String(c) === '☕') return 'Preciso de uma pausa — não entra na média da rodada.';
   const l = ((_referencia && _referencia.linhas) || []).find(x => x.carta === String(c));
   if (!l) return 'Sem entrega concluída com esta carta ainda.';
   if (l.dias == null) {
@@ -1895,10 +2002,13 @@ function refDaCarta(c) {
 }
 
 function renderCartas() {
-  const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','13','21','34','55','89','100','?'];
+  // Quem manda e o baralho que veio no estado (POKER_CARTAS, do Worker, que e
+  // tambem quem recusa voto fora da lista). Esta copia so pinta a tela ANTES de
+  // entrar na sala, com as cartas desabilitadas.
+  const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','12','22','?','☕'];
   const travado = !_estado || _estado.revelado || !_estado.melhoria_id || !_participante;
   document.getElementById('cartas').innerHTML = cartas.map(c =>
-    // O `onclick` manda o VALOR ('13'); o botao mostra o rotulo ('12+1').
+    // O `onclick` manda o VALOR; o botao mostra o rotulo. Ver `rotuloCarta`.
     // O `title` responde a mesma pergunta com o mouse na carta, sem tirar o olho
     // dela — a faixa abaixo serve para a leitura de conjunto.
     `<button class="carta-btn ${_meuVoto === c ? 'sel' : ''}" ${travado ? 'disabled' : ''}
@@ -1915,13 +2025,16 @@ function aplicar(est) {
   if (!est) return;
   _estado = est;
 
-  // O voto guardado aqui é só um espelho — quem manda é o servidor. Quando o
-  // facilitador troca a pauta (ou clica em "Votar de novo"), o servidor apaga os
-  // votos da rodada, mas só a tela DELE limpava o _meuVoto; nos demais a carta
-  // anterior continuava marcada ("Seu voto: 8"), dando a impressão de que já
-  // havia voto e travando a nova votação. Aqui a seleção local cai junto.
+  /* A CARTA MARCADA NA TELA, decidida pelo que o servidor diz. Ela cobre dois
+     casos opostos, e a regra inteira esta em `cartaMarcada`:
+       • o facilitador trocou a pauta ou clicou em "Votar de novo" — o servidor
+         apagou os votos, e a carta anterior tem de cair aqui tambem, senao ela
+         segue marcada ("Seu voto: 8") e trava a votacao nova;
+       • a pessoa recarregou a pagina no meio da rodada — o servidor diz que ela
+         votou, e o valor vem do que a aba guardou.                             */
   const eu = _participante ? est.participantes.find(p => p.id === _participante) : null;
-  if (_meuVoto && !(eu && eu.votou)) _meuVoto = '';
+  _meuVoto = cartaMarcada(_meuVoto, !!(eu && eu.votou), est.codigo, est.melhoria_id);
+  guardaVoto(est.codigo, est.melhoria_id, _meuVoto);
 
   // pauta
   const m = _melhorias.find(x => x.id === est.melhoria_id);
@@ -2029,7 +2142,13 @@ async function atualizar() {
   if (r.status === 404 || r.status === 410) {
     clearInterval(_timer);
     toast(r.status === 410 ? 'Sessão expirada.' : 'Sessão não encontrada.', 'err');
-    abrir('ov-entrada');
+    // A sala guardada morreu: apaga o registro, senao o F5 seguinte tentaria
+    // retomar a mesma sala morta e cairia aqui de novo, em laco.
+    const conduzia = _facilitador;
+    esqueceSala();
+    _codigo = ''; _participante = ''; _facilitador = false; _meuVoto = '';
+    // Quem conduz volta para a abertura da sala; quem vota, para a entrada.
+    abrir(conduzia ? 'ov-facil' : 'ov-entrada');
     return;
   }
   if (seq !== _mutSeq) return;
@@ -2060,7 +2179,11 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 (function boot() {
   renderCartas();   // mostra as cartas (desabilitadas) antes de entrar na sala
   carregarFila();
-  if (_codigo && _participante) { iniciar(); return; }      // já estava votando nesta sessão
+  /* RETOMAR A SALA VEM ANTES DE QUALQUER TELA DE ENTRADA.
+     Vale para quem vota (tem `pk_participante`) e para QUEM CONDUZ (tem
+     `pk_facil`) — e e por este segundo ramo que o F5 do facilitador deixa de
+     passar por `poker-abrir`, que era quem apagava a votacao em andamento. */
+  if (_codigo && (_participante || _facilitador)) { iniciar(); return; }
   if (_codigo) {                                            // chegou pelo link
     // Chegou pelo QR/link: a chave da sala vem na URL, entao o campo fica
     // preenchido e somente leitura — a pessoa so digita o nome.
