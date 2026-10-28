@@ -2806,18 +2806,18 @@ function pokerCodigo() {
 
 /* ═══ O BARALHO DA MESA ════════════════════════════════════════════════════
  *
- * Nove cartas: 1, 2, 3, 5, 8, 12, 22, ? e o cafe. O topo saiu (34, 55, 89, 100)
- * — demanda desse tamanho nao se estima, se fatia — e os dois degraus de cima
+ * Oito cartas: 1, 2, 3, 5, 8, 12, 22 e o `?`. O topo saiu (34, 55, 89, 100) —
+ * demanda desse tamanho nao se estima, se fatia — e os dois degraus de cima
  * foram renomeados: o 13 virou 12 e o 21 virou 22.
  *
- * `?` e `☕` NAO SAO NUMERO E NAO ENTRAM NA MEDIA: `parseFloat` devolve NaN nos
- * dois e o filtro de `pokerEstado` os descarta. O cafe diz "preciso de uma
- * pausa", o `?` diz "nao sei estimar" — a mesa ve a diferenca, a conta nao.
+ * O `?` NAO E NUMERO E NAO ENTRA NA MEDIA: `parseFloat` devolve NaN e o filtro
+ * de `pokerEstado` o descarta. Ele e a unica carta que diz "nao sei estimar", e
+ * e isso que ele tem de continuar dizendo.
  *
  * ESTA LISTA E A UNICA PORTEIRA DO VOTO (`poker-votar` recusa o que nao esta
  * aqui) e e ela que a tela recebe para desenhar o baralho. Uma segunda copia na
  * tela voltaria a divergir: o `cartas` que vai no estado e esta constante.      */
-const POKER_CARTAS = ['1','2','3','5','8','12','22','?','☕'];
+const POKER_CARTAS = ['1','2','3','5','8','12','22','?'];
 
 /* O QUE O BARALHO ANTIGO VIROU, so para LER o passado.
  *

@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="e8d0a7057b">
+<html lang="pt-BR" data-build="cfd8df1e6a">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -162,12 +162,12 @@
     /* A FAIXA APERTADA — 1200 a 1450px, o laptop de 1366.
        Esta regra nasceu com o baralho de 12 cartas, que pedia 710px numa linha
        (50px de carta + 10 de vao) e sobravam 700: dez pixels de falta quebravam
-       as cartas em duas fileiras. COM NOVE CARTAS a conta e 530px, e a linha
+       as cartas em duas fileiras. COM OITO CARTAS a conta e 470px, e a linha
        cabe com folga mesmo sem apertar nada.
        A regra fica porque o que ela aperta continua fazendo sentido nessa
        largura — o painel do convite em 160 e o QR em 128px, que uma camera de
        celular a meio metro do monitor ainda le, deixam mais espaco para a mesa.
-       Se o baralho voltar a crescer, a folga de 170px e o que ele tem. */
+       Se o baralho voltar a crescer, a folga de 230px e o que ele tem. */
     @media (min-width: 821px) and (max-width: 1450px) {
       .votacao-grid { gap:14px; }
       .convite-fixo { width:160px; padding:12px 10px; }
@@ -184,16 +184,13 @@
     }
     .votacao-titulo { font-size:12px; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); margin-bottom:12px; text-align:center; }
     .cartas { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
-    /* NO TELEFONE, TRES POR TRES — e nao o que a quebra automatica der.
-       Nove cartas numa coluna de 277px caem como 4+4+1: a ultima fica sozinha
-       numa fileira so dela, parecendo sobra. E o telefone nao e caso raro aqui,
-       e o caminho do QR — a maneira como a maioria entra na sala.
-       Em grade de tres colunas as nove formam um quadrado, que e como baralho se
-       espalha na mesa. Cabe ate em 320px sem rolagem lateral (3x50 + 2x10 = 170),
-       e acima de 420 a quebra automatica ja produz 5+4, que e equilibrado. */
-    @media (max-width: 420px) {
-      .cartas { display:grid; grid-template-columns:repeat(3, 50px); justify-content:center; }
-    }
+    /* NO TELEFONE A QUEBRA AUTOMATICA BASTA, com oito cartas.
+       Aqui houve uma grade de tres colunas enquanto o baralho tinha nove: a nona
+       caia sozinha numa fileira so dela (4+4+1), parecendo sobra, e o telefone
+       nao e caso raro nesta tela — e o caminho do QR. Com OITO, a coluna de
+       277px do celular comum da 4+4 por conta propria, que e o que a grade
+       existia para conseguir. Uma regra que nao muda mais nada e so uma
+       armadilha para o proximo que mexer no baralho. */
     /* Cartas um pouco menores para o detalhe da demanda caber sem rolagem: a mesa
        ocupava a tela inteira e sobrava espaco nenhum para ler o que se vota. */
     .carta-btn { width:50px; height:70px; border-radius:10px; background:var(--bg3); border:2px solid var(--border2);
@@ -1980,12 +1977,11 @@ function refAlterna() { _refAberta = !_refAberta; renderReferencia(); }
 // Texto do hover de UMA carta. Carta sem historico diz isso, em vez de ficar muda:
 // silencio ali se le como "esta carta nao tem referencia", que e outra coisa.
 function refDaCarta(c) {
-  // As duas cartas sem numero nao tem prazo tipico porque nao sao tamanho: elas
-  // nao entram na media (o Worker so soma o que e numero). Dizer "sem entrega
-  // concluida com esta carta" nelas seria mentira por omissao — parece falta de
-  // historico, quando e a carta que significa outra coisa.
+  // A carta sem numero nao tem prazo tipico porque nao e tamanho: ela nao entra
+  // na media (o Worker so soma o que e numero). Dizer "sem entrega concluida com
+  // esta carta" nela seria mentira por omissao — parece falta de historico,
+  // quando e a carta que significa outra coisa.
   if (String(c) === '?') return 'Não sei estimar — não entra na média da rodada.';
-  if (String(c) === '☕') return 'Preciso de uma pausa — não entra na média da rodada.';
   const l = ((_referencia && _referencia.linhas) || []).find(x => x.carta === String(c));
   if (!l) return 'Sem entrega concluída com esta carta ainda.';
   if (l.dias == null) {
@@ -2005,7 +2001,7 @@ function renderCartas() {
   // Quem manda e o baralho que veio no estado (POKER_CARTAS, do Worker, que e
   // tambem quem recusa voto fora da lista). Esta copia so pinta a tela ANTES de
   // entrar na sala, com as cartas desabilitadas.
-  const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','12','22','?','☕'];
+  const cartas = (_estado && _estado.cartas) || ['1','2','3','5','8','12','22','?'];
   const travado = !_estado || _estado.revelado || !_estado.melhoria_id || !_participante;
   document.getElementById('cartas').innerHTML = cartas.map(c =>
     // O `onclick` manda o VALOR; o botao mostra o rotulo. Ver `rotuloCarta`.

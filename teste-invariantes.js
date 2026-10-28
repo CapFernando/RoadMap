@@ -3812,7 +3812,7 @@ sec('Sessao vencida derruba a tela, e nao o usuario');
 
 sec('O baralho e um so, e ele e o do servidor');
 
-/* O baralho tem NOVE cartas (1,2,3,5,8,12,22,?,☕) e mora no Worker. A tela tem
+/* O baralho tem OITO cartas (1,2,3,5,8,12,22,?) e mora no Worker. A tela tem
    uma copia para desenhar antes de entrar na sala, e a tela de pontos do Admin e
    do Gantt oferece as mesmas cartas numericas. Quatro listas, um conteudo: foi
    por divergirem que o Admin ficou oferecendo pontuacao que o baralho nao
@@ -3821,8 +3821,8 @@ sec('O baralho e um so, e ele e o do servidor');
 const BARALHO = (W.match(/const POKER_CARTAS = \[([^\]]+)\]/) || [])[1];
 ok(!!BARALHO, 'o baralho do servidor e uma lista literal, legivel de fora');
 const cartasW = (BARALHO || '').split(',').map(s => s.trim().replace(/^'|'$/g, ''));
-ok(cartasW.join(',') === "1,2,3,5,8,12,22,?,☕",
-   'o baralho e 1,2,3,5,8,12,22,? e cafe — e nao o fibonacci antigo');
+ok(cartasW.join(',') === "1,2,3,5,8,12,22,?",
+   'o baralho e 1,2,3,5,8,12,22 e ? — e nao o fibonacci antigo');
 ok(!cartasW.includes('13') && !cartasW.includes('21'),
    'o 13 e o 21 sairam: viraram 12 e 22');
 
