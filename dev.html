@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="345427533e">
+<html lang="pt-BR" data-build="c87a1bcf57">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -609,7 +609,7 @@
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=7973fa0040"></script>
+<script src="prazo.js?v=c1149e7924"></script>
 <script src="capacidade.js?v=63737a8670"></script>
 <script src="dialogo.js?v=171b484b8c"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
@@ -626,6 +626,11 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
+<!-- A data prometida ao solicitante faltava NESTE painel, e e ele que ordena
+     pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
+     desempataria por uma data e os do PM/PO por outra. -->
+<script src="entrega-usuario.js?v=1b8aac9457"></script>
+<script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
 
@@ -4190,14 +4195,13 @@ function renderKanban() {
     // Coluna pela etapa GRAVADA. Era statusEfetivo, que deriva 'atrasado' — e
     // como a coluna "Atrasado" foi removida, a demanda vencida nao caia em coluna
     // nenhuma e DESAPARECIA do painel. O atraso agora e cor no card.
-    const cards = items.filter(m => col.maps.includes(getStatusKey(m)))
-      .sort((a, b) => {
-        // ordena por prazo (entrega); sem data vai para o fim; empate por início
-        const ea = a.entrega || a.inicio || '9999-99-99';
-        const eb = b.entrega || b.inicio || '9999-99-99';
-        if (ea !== eb) return ea.localeCompare(eb);
-        return (a.inicio || '9999-99-99').localeCompare(b.inicio || '9999-99-99');
-      });
+    /* A MESMA ORDEM DO QUADRO DO PM/PO — prioridade e depois vencimento, de
+       `ordem-kanban.js`. Aqui era prazo com desempate por inicio, e o §3.2 pede
+       a ordenacao aplicada "ao backlog, às tarefas da sprint e aos painéis dos
+       desenvolvedores": tres telas, uma ordem. */
+    const cards = ORDEMKB.ordena(
+      items.filter(m => col.maps.includes(getStatusKey(m))),
+      window.ENTREGAUSU && ENTREGAUSU.data);
     const cardsHTML = cards.length
       ? cards.map(m => renderCard(m, col.key)).join('')
       : `<div class="empty-col">Nenhuma demanda</div>`;

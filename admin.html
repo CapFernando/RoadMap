@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="e1f40891f2">
+<html lang="pt-BR" data-build="9708582058">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1330,7 +1330,7 @@
   <script src="resumo-projeto.js?v=7be0944f54"></script>
   <script src="fila.js?v=90c9b67421"></script>
 <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=7973fa0040"></script>
+<script src="prazo.js?v=c1149e7924"></script>
 <script src="dialogo.js?v=171b484b8c"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=a6a54ef3d1"></script>
@@ -1350,6 +1350,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
+<script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
 
@@ -5225,24 +5226,18 @@ function renderKanban() {
        dizer por que e a forma mais rapida de alguem concluir que sumiu dado. */
     const totalDaColuna = items.length;
     items = items.filter(m => matchProducao(m, _kbProdCol[col.key] || null));
-    // Vencidas primeiro, da mais antiga para a mais recente: o que ja passou do
-    // prazo e o que precisa de decisao hoje, independentemente da etapa. Depois
-    // vem a regra propria da etapa.
-    const vencida = m => statusEfetivo(m) === 'atrasado';
-    const porPrazo = (a, b) => (a.entrega || '9999-99-99').localeCompare(b.entrega || '9999-99-99');
-    /* TODAS AS COLUNAS ORDENAM POR PRAZO.
-       O Planejado desempatava por IP — a nota da matriz GUT, que saiu de uso.
-       Sem ela o criterio passa a ser o mesmo das outras colunas: o que vence
-       antes aparece antes. Nenhuma demanda muda de coluna; o que muda e a
-       ordem DENTRO do Planejado, e ela deixa de depender de um numero que
-       ninguem mais atualiza. */
-    const desempate = porPrazo;
-    items = items.sort((a, b) => {
-      const va = vencida(a), vb = vencida(b);
-      if (va !== vb) return va ? -1 : 1;      // vencida sobe
-      if (va && vb) return porPrazo(a, b);    // entre vencidas, a mais antiga primeiro
-      return desempate(a, b);
-    });
+    /* A ORDEM VEM DE `ordem-kanban.js` — prioridade, depois vencimento.
+       ───────────────────────────────────────────────────────────────────────
+       AQUI A VENCIDA SUBIA ACIMA DE TUDO, e ela deixou de subir. A regra de
+       novembro ordena por prioridade (Alta, Média, Baixa) e trata o atraso como
+       DESTAQUE, e nao como posicao: "continuarão destacadas em vermelho,
+       independentemente do nível de prioridade".
+       O vermelho continua exatamente onde estava — quem desenha o card nao
+       mudou. O que muda e que uma vencida de prioridade baixa agora aparece
+       depois de uma alta no prazo, onde antes estaria em primeiro.
+       E a ordem passou a ser a MESMA das outras duas telas: o painel do dev
+       desempatava por inicio, esta por prazo, e o §3.2 pede uma so. */
+    items = ORDEMKB.ordena(items, window.ENTREGAUSU && ENTREGAUSU.data);
     const cards = items.map(m => {
       const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
       const meta = [];

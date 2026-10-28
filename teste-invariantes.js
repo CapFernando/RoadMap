@@ -4045,6 +4045,152 @@ registra((async () => {
      'sem participante: recusa em 400 sem escrever nada');
 })());
 
+/* ═══════════════════════════════════════════════════════════════════════
+   REGRAS DE NOVEMBRO — a ordem do quadro sai da prioridade
+
+   "A ordenação padrão deverá seguir esta sequência: Alta, Média, Baixa. Dentro
+    de cada nível, pela data prevista de entrega."
+
+   A escada vivia em DUAS copias (o `PRIO_ORDER` do backlog do Gantt e nenhuma
+   no Admin, que ordenava so por prazo) e cada tela desempatava de um jeito
+   proprio. Agora e `ordem-kanban.js`, e as tres perguntam a ele.             */
+sec('Novembro: a ordem do quadro e a prioridade');
+
+(() => {
+  const KB = require('./ordem-kanban.js');
+  const EU = require('./entrega-usuario.js');
+
+  // AS TRES TELAS PERGUNTAM AO MODULO. Uma que volte a ordenar sozinha faz o
+  // §3.2 ("backlog, sprint e paineis dos desenvolvedores") deixar de valer sem
+  // ninguem perceber: cada tela continua ordenada, so que diferente das outras.
+  for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT]]) {
+    ok(/<script src="ordem-kanban\.js\?v=[a-f0-9]{10}"><\/script>/.test(src),
+       nome + ' carrega ordem-kanban.js com selo de cache');
+    ok(/ORDEMKB\.ordena\(/.test(semComentario(src)),
+       nome + ' ordena pelo modulo');
+  }
+  // E A ESCADA NAO PODE TER FICADO PARA TRAS EM LUGAR NENHUM.
+  for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT]]) {
+    ok(!/PRIO_ORDER/.test(semComentario(src)),
+       nome + ' nao tem mais escada de prioridade propria');
+  }
+
+  /* ── A ORDEM, EXECUTADA ────────────────────────────────────────────────
+     Ler o `sort` nao distingue "Alta primeiro" de "Alta por ultimo": os dois
+     sao um `-` trocado de lado. */
+  const d = (id, prio, usu, ent, cri) =>
+    ({ id, prioridade: prio, entrega_usuario: usu, entrega: ent,
+       inicio: ent ? '2026-11-01' : '', criado_em: cri });
+
+  const lista = [
+    d('baixa-cedo',   'baixa', '2026-11-03', '2026-11-03', '2026-10-01'),
+    d('alta-tarde',   'alta',  '2026-11-20', '2026-11-20', '2026-10-02'),
+    d('alta-cedo',    'alta',  '2026-11-05', '2026-11-05', '2026-10-03'),
+    d('media',        'media', '2026-11-02', '2026-11-02', '2026-10-04'),
+    d('sem-prio',     '',      '2026-11-01', '2026-11-01', '2026-10-05'),
+    d('alta-sem-data','alta',  '',           '',           '2026-10-06'),
+  ];
+  const ordem = KB.ordena(lista, EU.data).map(x => x.id);
+  ok(ordem.join(' ') === 'alta-cedo alta-tarde alta-sem-data media baixa-cedo sem-prio',
+     'Alta > Media > Baixa > sem prioridade, e dentro da faixa o vencimento manda',
+     ordem.join(' '));
+
+  /* A MEDIA VENCE ANTES DA ALTA E MESMO ASSIM FICA DEPOIS. E o criterio 5 da
+     spec sendo subordinado ao 4, e e a parte contraintuitiva: sem este caso,
+     uma implementacao que ordenasse so por data passaria. */
+  ok(ordem.indexOf('alta-tarde') < ordem.indexOf('media'),
+     'a alta de 20/11 vem antes da media de 02/11 — prioridade manda sobre data');
+
+  // SEM PRIORIDADE VAI PARA O FIM, inclusive depois da baixa. Nao e detalhe:
+  // sao 67 das 158 demandas da base, mais do que alta e baixa somadas.
+  ok(ordem[ordem.length - 1] === 'sem-prio',
+     'quem ninguem priorizou fica no fim, onde o PO o encontra');
+  ok(KB.peso({ prioridade: 'inventada' }) === KB.SEM_PRIORIDADE,
+     'grafia desconhecida cai como sem prioridade, e nao no topo');
+
+  /* A ATRASADA NAO SOBE MAIS. No Admin ela subia acima de tudo; a spec trata o
+     atraso como DESTAQUE ("em vermelho, independentemente do nível"), e nao
+     como posicao. Este caso existe para a mudanca ser DELIBERADA: se alguem
+     devolver o "vencida sobe", esta linha cai. */
+  const vencidaBaixa = d('vencida-baixa', 'baixa', '2026-11-01', '2026-11-01', '2026-10-01');
+  const altaNoPrazo  = d('alta-no-prazo', 'alta',  '2026-12-20', '2026-12-20', '2026-10-02');
+  ok(KB.ordena([vencidaBaixa, altaNoPrazo], EU.data)[0].id === 'alta-no-prazo',
+     'a vencida de prioridade baixa NAO sobe acima da alta no prazo');
+
+  /* A ORDEM E TOTAL, e isso e o que impede o card de pular sob o dedo: o Admin
+     redesenha o quadro a cada 30s. Duas demandas identicas em tudo tem de sair
+     sempre na mesma ordem. */
+  const gemeas = [{ id: 'bbb' }, { id: 'aaa' }];
+  ok(KB.ordena(gemeas).map(x => x.id).join() === 'aaa,bbb' &&
+     KB.ordena(gemeas.slice().reverse()).map(x => x.id).join() === 'aaa,bbb',
+     'empate total desempata pelo id — a ordem nao troca entre dois desenhos');
+
+  /* E ORDENAR NAO PODE MEXER NA LISTA DE QUEM CHAMOU: ja houve defeito assim
+     nesta base, com o array usado depois para outra conta.
+
+     A LISTA E NOVA E FORA DE ORDEM DE PROPOSITO. A versao anterior reusava
+     `lista`, que as linhas acima ja tinham passado por `ordena` — e como
+     `ordena` devolve copia, `lista` chegava aqui na ordem original... mas uma
+     sabotagem que ordenasse NO LUGAR teria ordenado `lista` na primeira
+     chamada, e a foto `antes` ja sairia ordenada. A invariante comparava o
+     resultado da sabotagem com ele mesmo e passava verde. Conferido sabotando:
+     era a unica das 19 que nao detectava nada. */
+  const naoMexer = [{ id: 'c3', prioridade: 'baixa' },
+                    { id: 'a1', prioridade: 'alta' },
+                    { id: 'b2', prioridade: 'media' }];
+  const antes = naoMexer.map(x => x.id).join();
+  const saida = KB.ordena(naoMexer, EU.data);
+  ok(naoMexer.map(x => x.id).join() === antes,
+     'ordena devolve copia, sem mexer no original', naoMexer.map(x => x.id).join());
+  ok(saida.map(x => x.id).join() === 'a1,b2,c3',
+     'e a copia sai ordenada — a invariante acima nao passa por lista ja ordenada');
+
+  /* O DESEMPATE E A DATA PROMETIDA AO SOLICITANTE, e ela vem de
+     `entrega-usuario.js` — a mesma que passa a mandar no atraso. Sem o modulo
+     o fallback e a entrega do dev; o que nao pode e haver uma segunda
+     definicao de heranca aqui dentro. */
+  const soDev = { id: 'x', entrega: '2026-11-09', inicio: '2026-11-02' };
+  ok(KB.dataDe(soDev, EU.data) === '2026-11-09',
+     'sem data digitada, o desempate usa a herdada da entrega do dev');
+  ok(KB.dataDe({ id: 'y', entrega: '2026-11-09', inicio: '2026-11-02',
+                 entrega_usuario: '2026-11-14' }, EU.data) === '2026-11-14',
+     'e com data digitada, usa a digitada');
+  ok(KB.dataDe({ id: 'z' }, EU.data) === KB.SEM_DATA,
+     'sem data nenhuma vai para o fim da faixa, e nao para o comeco');
+  ok(!/entrega_usuario/.test(semComentario(lerTela('ordem-kanban.js'))),
+     'o modulo da ordem nao le o campo direto — ele pergunta');
+})();
+
+/* ═══ O HISTORICO COBRE O QUE O PO DECIDE ════════════════════════════════
+   "O sistema deverá manter o histórico de alterações de sprint, prazo,
+    responsável e prioridade."                                              */
+/* ═══ QUEM MEDE PRAZO PRECISA DA DATA PROMETIDA ══════════════════════════
+ *
+ * `prazo.js` resolve `ENTREGAUSU` na chamada e, sem o modulo, volta ao
+ * comportamento de outubro — degradar com seguranca, para nao haver uma segunda
+ * copia da heranca. O preco de degradar e que a falta passa CALADA: a tela
+ * mediria atraso pela entrega do dev e ninguem veria diferenca ate alguem
+ * perguntar por que o mesmo card atrasa num painel e nao no outro.
+ *
+ * Esta invariante e o que torna o silencio impossivel. Ela esta prometida por
+ * escrito dentro de `prazo.js`, e invariante prometida e nao escrita e pior do
+ * que nenhuma: alguem confia nela.                                          */
+sec('Novembro: a tela que mede prazo carrega a data prometida');
+for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT], ['index', INDEX]]) {
+  const temPrazo = /<script src="prazo\.js\?v=/.test(src);
+  const temUsu = /<script src="entrega-usuario\.js\?v=/.test(src);
+  ok(!temPrazo || temUsu,
+     nome + ': carrega prazo.js, entao carrega entrega-usuario.js junto',
+     'prazo=' + temPrazo + ' entrega-usuario=' + temUsu);
+}
+
+sec('Novembro: sprint, prioridade e a data do usuario entram no historico');
+for (const campo of ['sprint', 'prioridade', 'entrega_usuario', 'entrega', 'dev']) {
+  ok(new RegExp('\\n\\s*' + campo + ':\\s*\'').test(W.slice(W.indexOf('const HIST_CAMPOS = {'),
+                                                            W.indexOf('const HIST_MAX'))),
+     'HIST_CAMPOS registra ' + campo);
+}
+
 sec('A referencia da carta se refaz sozinha');
 
 // Ela existe porque o levantamento mostrou que a carta preve PRAZO, e nao horas:
@@ -7560,7 +7706,10 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
   /* SO O TRECHO DO FILTRO: `renderBacklog` inteira escreve no DOM. O corte vai
      do chip de etapa ate o fim do `filter`, que e a decisao sob teste. */
   const ini = rb.indexOf('const etapaChip =');
-  const fim = rb.indexOf('const PRIO_ORDER');
+  // Terminava em `const PRIO_ORDER`, a escada de prioridade que vivia aqui. Ela
+  // foi para `ordem-kanban.js` (a mesma do Admin e do painel do dev), e o corte
+  // passou a terminar na chamada que a substituiu.
+  const fim = rb.indexOf('const sorted = ORDEMKB.ordena(');
   ok(ini > 0 && fim > ini, 'e o trecho que decide quem entra na fila foi isolado');
   if (ini < 0 || fim < ini) return;
 
@@ -10596,19 +10745,78 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!EU.planejada({ inicio: 'ontem', entrega: '2026-09-20' }),
        'data que nao e data nao conta como planejamento');
 
-    /* ADITIVO: as contas de prazo seguem lendo `entrega`, e so ela. Se alguma
-       passar a ler o campo novo, todo numero ja apresentado muda. */
+    /* \u2550\u2550\u2550 O CAMPO DEIXOU DE SER ADITIVO, E SO DE 01/11/2026 EM DIANTE \u2550\u2550\u2550\u2550\u2550\u2550\u2550
+     *
+     * Aqui estava escrito "prazo.js NAO conhece a entrega ao usuario". Era o
+     * contrato de outubro e ele foi substituido: a regra de novembro mede atraso
+     * pela data prometida ao solicitante (\u00a72.2 da especificacao de novembro).
+     *
+     * O QUE A INVARIANTE PROTEGE CONTINUA SENDO O MESMO \u2014 nenhum numero ja
+     * apresentado pode mudar. O que mudou e a forma de garantir isso: antes era
+     * "o campo nao e lido", agora e "o campo so e lido depois do corte".
+     *
+     * \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+     * E A VERSAO ANTERIOR PASSAVA SEM MEDIR. `diasDeAtraso` recebe
+     * (demanda, ETAPA, hoje), e as duas chamadas aqui mandavam a data no lugar
+     * da etapa: '2026-10-01' nao esta em `ETAPAS_QUE_CORREM` nem em
+     * `ETAPAS_APOS_O_DEV`, entao os dois lados devolviam `null` e a comparacao
+     * era `null === null`. Preencher a data do usuario poderia ter mudado tudo
+     * que a invariante dizia vigiar, e ela continuaria verde.                 */
     const PZ = require('./prazo.js');
-    ok(!lerTela('prazo.js').includes('entrega_usuario'),
-       'prazo.js NAO conhece a entrega ao usuario \u2014 o campo e aditivo');
     ok(!lerTela('capacidade.js').includes('entrega_usuario'),
-       'capacidade.js tambem nao');
-    const base = { inicio: '2026-09-01', entrega: '2026-09-20', status_planejamento: 'em_andamento' };
+       'capacidade.js segue sem ler a data do usuario \u2014 capacidade e a janela do DEV');
+
+    // \u2500\u2500 ANTES DO CORTE: a data do usuario nao encosta no prazo \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    const base = { inicio: '2026-09-01', entrega: '2026-09-20' };
     const comUsu = Object.assign({}, base, { entrega_usuario: '2027-01-01' });
-    ok(PZ.diasDeAtraso(base, '2026-10-01') === PZ.diasDeAtraso(comUsu, '2026-10-01'),
-       'e o atraso nao muda ao preencher a data do usuario', String(PZ.diasDeAtraso(comUsu, '2026-10-01')));
+    ok(PZ.diasDeAtraso(base, 'em_andamento', '2026-10-01') === 11,
+       'a demanda de setembro atrasa 11 dias ate 01/10 \u2014 e um numero, e nao null',
+       String(PZ.diasDeAtraso(base, 'em_andamento', '2026-10-01')));
+    ok(PZ.diasDeAtraso(base, 'em_andamento', '2026-10-01') ===
+       PZ.diasDeAtraso(comUsu, 'em_andamento', '2026-10-01'),
+       'e preencher a data do usuario NAO muda esse atraso \u2014 setembro fica como foi apresentado');
     ok(PZ.prazoEfetivo(base, '2026-10-01') === PZ.prazoEfetivo(comUsu, '2026-10-01'),
        'nem o prazo efetivo');
+
+    // \u2500\u2500 DEPOIS DO CORTE: ela passa a mandar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    const nov = { inicio: '2026-11-02', entrega: '2026-11-10' };
+    const novUsu = Object.assign({}, nov, { entrega_usuario: '2026-11-20' });
+    ok(PZ.diasDeAtraso(nov, 'em_andamento', '2026-11-15') === 5,
+       'em novembro, sem data do usuario, o atraso e o de sempre (contra a entrega do dev)',
+       String(PZ.diasDeAtraso(nov, 'em_andamento', '2026-11-15')));
+    ok(PZ.diasDeAtraso(novUsu, 'em_andamento', '2026-11-15') === 0,
+       'com a data do usuario em 20/11, a mesma demanda NAO esta atrasada em 15/11',
+       String(PZ.diasDeAtraso(novUsu, 'em_andamento', '2026-11-15')));
+    ok(PZ.baseDoPrazo(novUsu) === '2026-11-20' && PZ.baseDoPrazo(comUsu) === '2026-09-20',
+       'e a base do prazo troca no corte, demanda a demanda',
+       PZ.baseDoPrazo(novUsu) + ' / ' + PZ.baseDoPrazo(comUsu));
+    ok(PZ.REGRA_NOVA_DESDE === '2026-11-01', 'o corte e 01/11/2026', PZ.REGRA_NOVA_DESDE);
+
+    /* O CORTE OLHA A `entrega` DO DEV, e nao a data do usuario. Se olhasse a do
+       usuario, bastaria prometer janeiro numa demanda de outubro para ela mudar
+       de regua \u2014 e sair do relatorio de outubro medida por outra conta. */
+    const outComNov = { inicio: '2026-10-01', entrega: '2026-10-20', entrega_usuario: '2026-11-30' };
+    ok(PZ.baseDoPrazo(outComNov) === '2026-10-20',
+       'demanda de outubro com promessa em novembro continua medida pela regua de outubro',
+       PZ.baseDoPrazo(outComNov));
+
+    /* SEM A ENTREGA DO DEV, o corte cai na data do usuario: em novembro o PO
+       pode prometer sem fechar a data interna, e essa demanda tem de atrasar. */
+    const soUsu = { entrega_usuario: '2026-11-05' };
+    ok(PZ.diasDeAtraso(soUsu, 'em_andamento', '2026-11-12') === 7,
+       'demanda so com a data do usuario atrasa normalmente',
+       String(PZ.diasDeAtraso(soUsu, 'em_andamento', '2026-11-12')));
+
+    /* E A HERANCA NAO PODE VIRAR UMA SEGUNDA COPIA. `prazo.js` resolve
+       `ENTREGAUSU` na chamada; sem o modulo ele volta ao comportamento de
+       outubro, que e degradar com seguranca. O que nao pode e ele reimplementar
+       a heranca \u2014 e a mesma doenca das quatro copias de `STATUS_ATRASO`. */
+    ok(/require\('\.\/entrega-usuario\.js'\)/.test(lerTela('prazo.js')) &&
+       /raiz\.ENTREGAUSU/.test(lerTela('prazo.js')),
+       'prazo.js PERGUNTA a entrega-usuario.js qual e a data prometida');
+    ok(!/entrega_usuario[\s\S]{0,80}\|\|[\s\S]{0,40}\.entrega\b/.test(
+         lerTela('prazo.js').replace(/\/\*[\s\S]*?\*\//g, '')),
+       'e nao reimplementa a heranca por conta propria');
 
     /* ── O PAINEL PUBLICO ──────────────────────────────────────────────
        "Essa nova data devera aparecer no dash publico de consulta."
@@ -21820,11 +22028,17 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/discovery = existing\.discovery \|\| undefined;/.test(sv),
        'e o discovery do solicitante continua sendo repassado');
 
-    /* E A ORDENACAO DO PLANEJADO PASSOU A SER POR PRAZO, como as outras
-       colunas — e nao por um numero que ninguem mais atualiza. */
+    /* E A ORDENACAO NAO VOLTOU A SER UM NUMERO QUE NINGUEM ATUALIZA.
+       Era `const desempate = porPrazo;` — o Planejado deixando de ordenar pelo
+       IP da matriz. A regra de novembro moveu a ordenacao inteira para
+       `ordem-kanban.js` (prioridade e depois vencimento), e o que esta
+       invariante protege continua valendo: a ordem do quadro nao pode depender
+       de nota de matriz nenhuma. */
     const rk = semComentario(corpo(ADMIN, 'function renderKanban(') || '');
-    ok(/const desempate = porPrazo;/.test(rk),
-       'o Planejado ordena por prazo, como as demais colunas');
+    ok(/ORDEMKB\.ordena\(/.test(rk),
+       'o Kanban do Admin ordena pelo modulo, e nao por conta propria');
+    ok(!/\bIP\b|getIP|porIP/.test(rk),
+       'e nenhuma sobra da matriz voltou para a ordenacao');
   }
 
   /* ═══ NENHUMA VALIDACAO CONTA PARA VENCER ════════════════════════════════

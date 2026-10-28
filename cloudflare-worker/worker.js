@@ -617,6 +617,28 @@ const HIST_CAMPOS = {
   // aparecia no card e o dia dele, em nenhum lugar.
   parent_id:           'dependencia',
   is_dependency:       'e dependencia de outra',
+  /* ═══ A PRIORIDADE E A SPRINT ENTRAM, e faltavam as duas ═══════════════════
+   *
+   * "O sistema deverá manter o histórico de alterações de sprint, prazo,
+   *  responsável e prioridade."
+   *
+   * Prazo (`entrega`) e responsavel (`dev`) ja estavam acima desde sempre. As
+   * outras duas nao, e e justamente nelas que a regra de novembro apoia as
+   * decisoes do PO: a sprint passa a ser ESCOLHIDA por ele, e a prioridade passa
+   * a mandar na ordem do quadro.
+   *
+   * SEM ISTO, "quem tirou esta demanda da sprint?" nao tem resposta. A base tem
+   * 132 demandas com prioridade preenchida e nenhum registro de quando qualquer
+   * uma delas mudou — e o fechamento de sprint vai precisar dizer "esta ja rolou
+   * duas vezes", que e uma frase que so se diz com rastro.
+   *
+   * `entrega_usuario` ENTRA TAMBEM, pelo mesmo motivo e com urgencia maior: a
+   * partir de novembro e ela que define atraso (ver `prazo.js`). Mudar em
+   * silencio a data que decide se alguem esta atrasado e exatamente o que o
+   * historico existe para impedir.                                            */
+  prioridade:          'prioridade',
+  sprint:              'sprint',
+  entrega_usuario:     'entrega ao usuario',
 };
 // Guarda por demanda. Sem teto, um card antigo acumularia centenas de entradas e
 // o arquivo (164 KB hoje) cresceria sem controle — ele e lido inteiro em toda

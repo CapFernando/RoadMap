@@ -190,8 +190,73 @@
    *  devolve os dias parados, e nao os anteriores: pausar depois do prazo estourar
    *  nao desfaz o estouro. Para isso a pausa precisaria comecar no dia em que a
    *  dependencia travou, e nao no dia do clique.                               */
+  /* ═══ A REGRA DE NOVEMBRO — o atraso passa a correr contra a data do USUARIO
+   *
+   * "A data prevista de entrega deverá ser utilizada para identificar atrasos."
+   *
+   * Sao duas datas e elas continuam existindo as duas (ver `entrega-usuario.js`):
+   *   `entrega`          quando o DEV termina — o compromisso interno
+   *   `entrega_usuario`  quando quem PEDIU recebe, depois do PR
+   *
+   * O que muda e QUAL DELAS O RELOGIO PERSEGUE. Ate outubro foi a do dev.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * O CORTE E POR DATA, E ELE E O PONTO INTEIRO DESTA DECISAO.
+   *
+   * Outubro fechou com 678 pontos marcados como atraso, medidos contra a entrega
+   * do dev, e esse numero ja foi apresentado. Trocar a regua para tras
+   * reescreveria setembro e outubro sem ninguem ter mexido em demanda nenhuma —
+   * o mesmo defeito que `mesDoPrazo` documenta logo abaixo, de a ferramenta
+   * mudar o passado sozinha.
+   *
+   * Por isso o corte olha o MES DE COMPROMISSO, e nao o dia de hoje: a demanda
+   * prometida para outubro continua medida pela regua de outubro, hoje e no ano
+   * que vem. So o que foi prometido de 01/11 em diante corre contra a data do
+   * usuario.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * NINGUEM FICA SEM REGUA no caminho do meio. Quem nao tem `entrega_usuario`
+   * digitada HERDA a entrega do dev (regra de `entrega-usuario.js`), entao uma
+   * demanda de novembro com o campo novo ainda vazio e medida exatamente como
+   * era antes. A mudanca so aparece onde alguem PROMETEU uma data diferente.   */
+  var REGRA_NOVA_DESDE = '2026-11-01';
+
+  /** O modulo da entrega ao usuario, resolvido na CHAMADA e nao na carga.
+   *
+   *  Na tela ele e um global que pode ainda nao existir quando este arquivo
+   *  roda; no teste ele e um `require`. Copiar a regra de heranca para ca seria
+   *  o caminho curto e e exatamente o erro que este arquivo existe para nao
+   *  repetir — "qual e a data prometida" tem de ter uma definicao so.
+   *
+   *  Sem o modulo, devolve null e o prazo volta a ser o do dev: degradar para o
+   *  comportamento de outubro e seguro, degradar para uma segunda copia da
+   *  heranca nao e. A invariante cobra que toda tela com `prazo.js` carregue
+   *  tambem `entrega-usuario.js`.                                             */
+  function entregaUsu() {
+    if (raiz.ENTREGAUSU) return raiz.ENTREGAUSU;
+    if (typeof module !== 'undefined' && typeof require === 'function') {
+      try { return require('./entrega-usuario.js'); } catch (e) { return null; }
+    }
+    return null;
+  }
+
+  /** A DATA CONTRA A QUAL O RELOGIO CORRE, antes de qualquer desconto de pausa.
+   *
+   *  O corte le a `entrega` do dev — e so cai na do usuario quando nao ha
+   *  entrega nenhuma. E o mesmo campo que `mesDoPrazo` usa para dizer de que mes
+   *  e o compromisso: se as duas perguntas discordassem, uma demanda poderia
+   *  entrar no relatorio de outubro medida pela regua de novembro.             */
+  function baseDoPrazo(m) {
+    var doDev = iso((m || {}).entrega);
+    var marco = doDev || iso((m || {}).entrega_usuario);
+    if (!ehData(marco) || marco < REGRA_NOVA_DESDE) return doDev;
+    var EU = entregaUsu();
+    var prometida = EU ? iso(EU.data(m)) : '';
+    return ehData(prometida) ? prometida : doDev;
+  }
+
   function prazoEfetivo(m, ref) {
-    var pz = iso((m || {}).entrega);
+    var pz = baseDoPrazo(m);
     if (!ehData(pz)) return '';
     var extra = diasPausados(m, ref);
     if (!extra) return pz;
@@ -212,7 +277,10 @@
    *  do dia. */
   function diasDeAtraso(m, etapa, hoje) {
     if (!m || m.mesclado_em || m.oculto) return null;
-    if (!ehData(iso(m.entrega))) return null;
+    /* A GUARDA PERGUNTA PELA BASE, e nao pela `entrega` crua. Em novembro o PO
+       pode prometer uma data ao solicitante sem fechar a do dev — e com a guarda
+       antiga essa demanda nao atrasaria nunca, calada. */
+    if (!ehData(baseDoPrazo(m))) return null;
     // Pausada nao atrasa: o prazo esta suspenso, nao estourado.
     if (m.pausado_em && !ETAPAS_APOS_O_DEV.includes(etapa)) return null;
 
@@ -407,6 +475,8 @@
     fimDoDev: fimDoDev,
     diasPausados: diasPausados,
     diasNaArea: diasNaArea,
+    REGRA_NOVA_DESDE: REGRA_NOVA_DESDE,
+    baseDoPrazo: baseDoPrazo,
     prazoEfetivo: prazoEfetivo,
     diasDeAtraso: diasDeAtraso,
     estaAtrasada: estaAtrasada,
