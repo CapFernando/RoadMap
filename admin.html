@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7b1ec2e1b0">
+<html lang="pt-BR" data-build="8d61f922fb">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1340,6 +1340,7 @@
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=ff7a669a03"></script>
+<script src="pausa.js?v=06c4b82f84"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="senha.js?v=3965a6f502"></script>
@@ -12381,9 +12382,43 @@ function pausaRenderBloco(m) {
         : '<br>Sem prazo combinado.') +
       '<div class="pausa-acoes"><button type="button" class="btn btn-success btn-sm" onclick="pausaRetomar()">▶ Retomar</button></div>' +
       '</div>';
+  } else if (PAUSA.temPedido(m)) {
+    /* ═══ O PEDIDO DO DEV, PARA DECIDIR ═════════════════════
+     * O que o PM/PO precisa ver antes de dizer sim: quem pediu, quando, por
+     * que — e QUANTO já está esperando, porque a espera entra na pausa.
+     * Aprovar aqui vale DESDE A DATA DO PEDIDO: o número ao lado do botão é
+     * o tamanho do que está sendo aprovado, e não um detalhe. */
+    const ped = PAUSA.pedido(m);
+    const esperando = PAUSA.diasEntre(ped.em, _isoHoje());
+    box.innerHTML = '<div class="pausa-box" style="border-color:var(--amber,#E89C2F)">' +
+      '⏳ <strong>' + esc(ped.por || 'O dev') + ' pediu pausa em ' +
+      esc(formatDate(ped.em)) + '</strong>' +
+      (esperando ? ' <span style="color:var(--text3)">· esperando há ' + esperando +
+                   (esperando === 1 ? ' dia' : ' dias') + '</span>' : '') +
+      '<br><strong>Justificativa:</strong> ' + esc(ped.motivo) +
+      '<br><span style="color:var(--text3)">Aprovando, a pausa vale desde ' +
+      esc(formatDate(ped.em)) +
+      (esperando ? ' — os ' + esperando + (esperando === 1 ? ' dia' : ' dias') +
+                   ' de espera entram na pausa, e não como atraso do dev.' : '.') +
+      '</span>' +
+      '<div class="pausa-acoes">' +
+      '<button type="button" class="btn btn-success btn-sm" onclick="pausaAprovar()">✓ Aprovar pausa</button> ' +
+      '<button type="button" class="btn btn-secondary btn-sm" onclick="pausaRecusar()">✕ Recusar</button>' +
+      '</div></div>';
   } else {
     const jaParou = Number(m.pausa_dias) || 0;
+    /* A ULTIMA RECUSA FICA A VISTA também aqui: sem ela, quem aprova hoje não
+       sabe que um colega já disse não ontem, pelo mesmo motivo. */
+    const recusas = Array.isArray(m.pausa_recusas) ? m.pausa_recusas : [];
+    const ult = recusas[recusas.length - 1];
     box.innerHTML = '<div class="pausa-box">' +
+      (ult
+        ? '<div style="color:var(--red-tx,#F9A0A0);margin-bottom:6px">✕ <strong>Pausa negada em ' +
+          esc(formatDate(ult.em)) + '</strong> por ' + esc(ult.por || '—') + ': ' +
+          esc(ult.motivo || '—') +
+          (recusas.length > 1 ? ' <span style="color:var(--text3)">(' + recusas.length +
+                                ' recusas nesta demanda)</span>' : '') + '</div>'
+        : '') +
       (jaParou ? 'Já ficou <strong>' + jaParou + (jaParou === 1 ? ' dia' : ' dias') + '</strong> pausada no total.<br>' : '') +
       'Travada por algo fora do time? Pause para o prazo não correr.' +
       '<div class="pausa-acoes"><button type="button" class="btn btn-secondary btn-sm" onclick="pausaIniciar()">⏸ Pausar demanda</button></div>' +
@@ -12391,20 +12426,70 @@ function pausaRenderBloco(m) {
   }
 }
 
+/* ═══ O PM/PO PAUSA DIRETO, e nao pede a si mesmo ═════════════════
+ * Quem aprova nao precisa de aprovacao. A justificativa continua obrigatoria —
+ * ela e o que explica, no comite, por que o prazo foi empurrado — e o servidor
+ * a cobra de qualquer forma (`pausandoSemMotivo`). */
 async function pausaIniciar() {
   const id = document.getElementById('m-id').value;
   const m = (state.melhorias || []).find(x => x.id === id);
   if (!m) { toast('Salve a demanda antes de pausar.', 'err'); return; }
-  const motivo = await await pedirTexto({
+  const motivo = await pedirTexto({
     titulo: 'Pausar demanda',
     texto: 'O prazo para de correr enquanto ela estiver pausada, e os dias parados ' +
            'sao somados a entrega ao retomar. O motivo justifica isso depois.',
     multilinha: true, obrigatorio: true, ok: 'Pausar',
     placeholder: 'Ex.: aguardando retorno do banco sobre o layout do arquivo' });
   if (motivo === null) return;
-  if (!motivo.trim()) { toast('O motivo da pausa é obrigatório.', 'err'); return; }
-  aplicarPausa(m, motivo, (_eu && (_eu.nome || _eu.login)) || 'admin');
+  const prob = PAUSA.problemaNoMotivo(motivo);
+  if (prob) { toast(prob, 'err'); return; }
+  const r = PAUSA.pausarComoAdm(m, motivo, (_eu && (_eu.nome || _eu.login)) || 'admin', _isoHoje());
+  if (!r.ok) { toast(r.erro, 'err'); return; }
   await pausaSalvar(m, '⏸ Demanda pausada.');
+}
+
+/** APROVAR O PEDIDO DO DEV. A data gravada e a DO PEDIDO — o servidor recusa
+ *  se chegar diferente (`pausaAprovadaComDataErrada`), porque gravar `hoje`
+ *  aqui devolveria ao dev, calado, os dias que ele passou esperando. */
+async function pausaAprovar() {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) return;
+  const ped = PAUSA.pedido(m);
+  if (!ped) { toast('Nao ha pedido de pausa nesta demanda.', 'err'); return; }
+  const dias = PAUSA.diasEntre(ped.em, _isoHoje());
+  if (!(await confirmar({ titulo: 'Aprovar a pausa',
+      texto: 'A pausa passa a valer desde ' + formatDate(ped.em) + '.' +
+             (dias ? String.fromCharCode(10) + 'Os ' + dias + (dias === 1 ? ' dia' : ' dias') +
+                     ' de espera pela sua resposta entram na pausa, e nao como atraso do dev.'
+                   : '') +
+             String.fromCharCode(10) + 'Motivo: ' + ped.motivo,
+      ok: 'Aprovar' }))) return;
+  const r = PAUSA.aprovar(m, (_eu && (_eu.nome || _eu.login)) || 'admin', _isoHoje());
+  if (!r.ok) { toast(r.erro, 'err'); return; }
+  await pausaSalvar(m, '⏸ Pausa aprovada, desde ' + formatDate(r.desde) + '.');
+}
+
+/** RECUSAR, COM MOTIVO. O motivo e obrigatorio pela mesma razao do pedido: sem
+ *  ele o dev recebe um nao e nao sabe o que fazer diferente — e pede de novo. */
+async function pausaRecusar() {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) return;
+  const ped = PAUSA.pedido(m);
+  if (!ped) { toast('Nao ha pedido de pausa nesta demanda.', 'err'); return; }
+  const motivo = await pedirTexto({
+    titulo: 'Recusar a pausa',
+    texto: 'O dev pediu: ' + String.fromCharCode(34) + ped.motivo + String.fromCharCode(34) +
+           '. Diga por que a demanda deve seguir correndo — e isso que ele vai ler no card.',
+    multilinha: true, obrigatorio: true, ok: 'Recusar',
+    placeholder: 'Ex.: o fornecedor respondeu ontem, da para seguir pelo caminho B' });
+  if (motivo === null) return;
+  const prob = PAUSA.problemaNoMotivo(motivo);
+  if (prob) { toast(prob, 'err'); return; }
+  const r = PAUSA.recusar(m, (_eu && (_eu.nome || _eu.login)) || 'admin', motivo, _isoHoje());
+  if (!r.ok) { toast(r.erro, 'err'); return; }
+  await pausaSalvar(m, 'Pedido de pausa recusado.');
 }
 
 async function pausaRetomar() {
@@ -12647,6 +12732,19 @@ async function saveMelhoria() {
     pausa_por:           existing.pausa_por      || '',
     pausa_dias:          existing.pausa_dias     || 0,
     pausa_historico:     existing.pausa_historico || [],
+    /* OS CAMPOS DA APROVACAO ENTRAM NA LISTA, e e a armadilha de sempre: esta
+       tela monta a demanda por lista FECHADA, entao campo novo que nao for
+       repassado some ao salvar. Aqui doeria em silencio e no pior lugar — um
+       PM/PO abriria um card so para ajustar o titulo e apagaria o pedido de
+       pausa que o dev acabou de mandar, sem nada na tela dizendo isso.
+       `pausa_pedido` repassa `|| null`, e nao `|| {}`: objeto vazio seria um
+       pedido sem data, que `PAUSA.pedido` descarta — mas gravar um objeto onde
+       deveria haver nada polui a base e o historico registra uma mudanca que
+       nao houve. */
+    pausa_pedido:        existing.pausa_pedido   || null,
+    pausa_recusas:       existing.pausa_recusas  || [],
+    pausa_aprovada_por:  existing.pausa_aprovada_por || '',
+    pausa_aprovada_em:   existing.pausa_aprovada_em  || '',
     // O Worker e o dono do historico e o repoe se faltar, mas repassar aqui evita
     // que a copia na tela fique sem ele entre o save e a proxima leitura.
     historico:           existing.historico || [],

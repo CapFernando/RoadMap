@@ -4553,6 +4553,250 @@ sec('A lista do projeto tem respiro e separador');
      'e a lista diz que os cartoes abrem — o cursor de mao so aparece com o mouse em cima');
 })();
 
+/* ═══════════════════════════════════════════════════════════════════════
+   PAUSAR VIROU PEDIDO
+
+   "Toda demanda pausada deverá exigir justificativa e só pausa após aprovação
+    de um dos ADM."
+
+   A justificativa JA era obrigatoria nas tres telas — e so nelas. O servidor
+   nunca checou nada sobre pausa, entao a regra inteira morava onde ela sempre
+   acaba falhando: numa aba antiga, num script, no proximo ajuste de tela.    */
+sec('Novembro: pausar e um pedido, e quem aprova e o PM/PO');
+
+(() => {
+  const P = require('./pausa.js');
+
+  /* ── A JUSTIFICATIVA ── */
+  ok(!!P.problemaNoMotivo(''), 'motivo vazio e recusado');
+  ok(!!P.problemaNoMotivo('   '), 'e so espaco tambem');
+  /* "ok", "x" e "." passam por "obrigatorio" e nao explicam nada dias depois,
+     que e exatamente quando alguem pergunta por que o prazo foi empurrado. */
+  ok(!!P.problemaNoMotivo('ok'), 'motivo curto demais e recusado — "ok" nao explica nada');
+  ok(!P.problemaNoMotivo('aguardando o banco'), 'e um motivo de verdade passa');
+  ok(/\d+ de \d+/.test(P.problemaNoMotivo('ok')),
+     'a recusa diz QUANTO falta, em vez de so dizer nao', P.problemaNoMotivo('ok'));
+
+  /* ── QUEM APROVA ── */
+  ok(P.podeAprovar('admin'), 'PM/PO aprova');
+  ok(!P.podeAprovar('dev') && !P.podeAprovar('analista') && !P.podeAprovar(''),
+     'dev, analista e anonimo nao aprovam');
+
+  /* ── O CICLO, EXECUTADO ──
+     Ler o codigo nao distingue "vale desde o pedido" de "vale desde o sim": as
+     duas sao uma atribuicao de data, e a diferenca e justamente o que o time
+     sentiria no bolso. */
+  const m = { id: 'ax1', codigo: 'AX-1' };
+  ok(P.situacao(m) === 'correndo', 'demanda sem nada esta correndo');
+
+  const ped = P.pedir(m, 'aguardando retorno do banco', 'Marina', '2026-11-02');
+  ok(ped.ok && P.situacao(m) === 'aguardando', 'o pedido do dev NAO pausa nada');
+  ok(!m.pausado_em, 'e `pausado_em` continua vazio enquanto ninguem aprovou');
+  ok(P.pedido(m).em === '2026-11-02' && P.pedido(m).por === 'Marina',
+     'o pedido guarda a data e quem pediu');
+  /* PEDIR POR CIMA DE UM PEDIDO ABERTO REINICIAVA A DATA — e com ela os dias
+     ja esperados. Este caso NASCEU desta invariante: ela aprovou um pedido de
+     02/11 e recebeu uma pausa comecando em 03/11. */
+  const dup = P.pedir(m, 'outro motivo qualquer e completo', 'Marina', '2026-11-03');
+  ok(!dup.ok && /ja existe|Já existe/i.test(dup.erro),
+     'pedir de novo com um pedido aberto e recusado — a data do primeiro nao se perde',
+     dup.erro || '');
+  ok(P.pedido(m).em === '2026-11-02', 'e o pedido original segue intacto', P.pedido(m).em);
+  ok(!P.pedir({ id: 'z' }, 'ok', 'Marina', '2026-11-03').ok,
+     'e motivo curto continua recusado');
+
+  /* ═══ A PAUSA VALE DESDE O PEDIDO, E NAO DESDE O "SIM" ═══════════════════
+     O dev pede na segunda, o PM/PO responde na quarta: os dois dias de espera
+     entram na pausa. Cobrar esses dias do dev seria cobrar dele a agenda de
+     outra pessoa. ESTE E O CASO QUE DEFINE A DECISAO — se ele cair, a regra
+     virou a outra sem ninguem dizer. */
+  const apr = P.aprovar(m, 'Fernando', '2026-11-05');
+  ok(apr.ok && m.pausado_em === '2026-11-02',
+     'aprovada, a pausa vale DESDE O PEDIDO (02/11), e nao desde o sim (05/11)',
+     m.pausado_em);
+  ok(m.pausa_aprovada_em === '2026-11-05' && m.pausa_aprovada_por === 'Fernando',
+     'e as duas datas ficam: a do pedido manda, a do sim explica a diferenca');
+  ok(apr.dias === 3, 'a aprovacao devolve o tamanho do que foi aprovado', String(apr.dias));
+  ok(!P.temPedido(m) && P.situacao(m) === 'pausada',
+     'e o pedido sai da fila depois de decidido');
+  ok(m.pausa_motivo === 'aguardando retorno do banco',
+     'a justificativa do dev vira a justificativa da pausa');
+
+  /* ── A RECUSA FICA REGISTRADA ──
+     Sem registro, o dev pede de novo a mesma coisa e recebe o mesmo nao, e
+     nenhum dos dois lados sabe que ja aconteceu. */
+  const m2 = { id: 'ax2' };
+  P.pedir(m2, 'dependencia externa travada', 'Lucas', '2026-11-02');
+  ok(!P.recusar(m2, 'Fernando', 'nao', '2026-11-03').ok,
+     'recusar tambem exige motivo de verdade');
+  const rec = P.recusar(m2, 'Fernando', 'o fornecedor respondeu ontem', '2026-11-03');
+  ok(rec.ok && !P.temPedido(m2) && !P.estaPausada(m2),
+     'recusado, o pedido sai e a demanda segue correndo');
+  ok(m2.pausa_recusas.length === 1 &&
+     m2.pausa_recusas[0].pedido_motivo === 'dependencia externa travada' &&
+     m2.pausa_recusas[0].motivo === 'o fornecedor respondeu ontem',
+     'e a recusa guarda os DOIS lados — o que se pediu e por que se negou');
+  P.pedir(m2, 'o fornecedor voltou atras', 'Lucas', '2026-11-04');
+  P.recusar(m2, 'Fernando', 'ainda da para seguir pelo caminho B', '2026-11-05');
+  ok(m2.pausa_recusas.length === 2,
+     'recusas se acumulam — e assim que se diz "esta ja foi pedida duas vezes"');
+
+  /* ── O PM/PO PAUSA DIRETO ── */
+  const m3 = { id: 'ax3' };
+  ok(!P.pausarComoAdm(m3, 'x', 'Fernando', '2026-11-02').ok,
+     'nem o PM/PO pausa sem justificativa');
+  const dir = P.pausarComoAdm(m3, 'decisao do comite de parar', 'Fernando', '2026-11-02');
+  ok(dir.ok && m3.pausado_em === '2026-11-02' && m3.pausa_aprovada_por === 'Fernando',
+     'e pausando direto, ela nasce ja aprovada por ele');
+
+  /* ── O DEV DESISTE ──
+     Sem isto, um pedido feito por engano so sairia pedindo a alguem que o
+     negue — e a recusa ficaria registrada como se houvesse discordancia. */
+  const m4 = { id: 'ax4' };
+  P.pedir(m4, 'achei que estava travada', 'Marina', '2026-11-02');
+  ok(P.desistir(m4).ok && !P.temPedido(m4) && !(m4.pausa_recusas || []).length,
+     'cancelar o proprio pedido nao deixa recusa no historico');
+})();
+
+/* ═══ E O SERVIDOR COBRA, EXECUTADO ══════════════════════════════════════ */
+sec('Novembro: o servidor recusa a pausa que nao passou pelo PM/PO');
+
+(() => {
+  const P = require('./pausa.js');
+
+  /* O Worker nao importa arquivo nenhum, entao a regra existe DUAS VEZES — aqui
+     as duas rodam lado a lado, caso por caso. E a mesma disciplina que ja vale
+     para `limpaDevs` contra `dev-nome.js` e para o vinculo contra
+     `vinculo.js`: duplicar e aceito, divergir nao. */
+  const F = new Function(
+    W.slice(W.indexOf('const PAUSA_MIN_MOTIVO'), W.indexOf('function nascendoSemSolicitante')) +
+    ' return { pausandoSemSerAdm, pausandoSemMotivo, pausaAprovadaComDataErrada,' +
+    ' pausaMotivoRuim, PAUSA_MIN_MOTIVO };')();
+
+  ok(F.PAUSA_MIN_MOTIVO === P.MIN_MOTIVO,
+     'o tamanho minimo da justificativa e o mesmo no Worker e no modulo',
+     F.PAUSA_MIN_MOTIVO + ' x ' + P.MIN_MOTIVO);
+
+  const casos = ['', '   ', 'ok', 'x', 'aguardando o banco', 'parado ha dias'];
+  const divergem = casos.filter(c => !!F.pausaMotivoRuim(c) !== !!P.problemaNoMotivo(c));
+  ok(divergem.length === 0,
+     'e as duas copias concordam sobre o que e justificativa, caso por caso',
+     divergem.length ? JSON.stringify(divergem) : casos.length + ' casos conferidos');
+
+  const serv = { melhorias: [{ id: 'a', codigo: 'AX-1' },
+                             { id: 'b', codigo: 'AX-2', pausado_em: '2026-11-01',
+                               pausa_motivo: 'aguardando o banco' },
+                             { id: 'c', codigo: 'AX-3',
+                               pausa_pedido: { em: '2026-11-02', por: 'Marina',
+                                               motivo: 'aguardando o banco' } }] };
+
+  /* ── O PAINEL DO DEV NAO PAUSA ── */
+  const tentou = F.pausandoSemSerAdm(
+    { melhorias: [{ id: 'a', codigo: 'AX-1', pausado_em: '2026-11-03',
+                    pausa_motivo: 'aguardando o banco' }] }, serv);
+  ok(tentou.length === 1 && tentou[0].rotulo === 'AX-1',
+     'dev gravando `pausado_em` e recusado, e a recusa NOMEIA a demanda',
+     JSON.stringify(tentou[0]));
+
+  /* RETOMAR NAO E PAUSAR. Travar a retomada deixaria a demanda presa esperando
+     um PM/PO para voltar a andar — o contrario do que a regra quer. */
+  ok(F.pausandoSemSerAdm({ melhorias: [{ id: 'b', pausado_em: '' }] }, serv).length === 0,
+     'retomar NAO e pausar — o dev continua podendo despausar');
+  /* E REENVIAR O QUE JA ESTAVA tambem nao e tentativa: uma aba aberta desde
+     ontem remonta a demanda e reenvia o que leu. Recusar ali travaria quem nao
+     tentou nada. */
+  ok(F.pausandoSemSerAdm({ melhorias: [{ id: 'b', pausado_em: '2026-11-01' }] }, serv).length === 0,
+     'e reenviar a pausa que ja estava gravada tambem nao');
+
+  /* ── A JUSTIFICATIVA, VENHA DE ONDE VIER ── */
+  const semMot = F.pausandoSemMotivo(
+    { melhorias: [{ id: 'a', codigo: 'AX-1', pausado_em: '2026-11-03', pausa_motivo: 'x' }] }, serv);
+  ok(semMot.length === 1 && /curta demais/.test(semMot[0].motivo),
+     'pausa com justificativa curta e recusada, inclusive vinda do Admin');
+  ok(F.pausandoSemMotivo({ melhorias: [{ id: 'b', pausado_em: '2026-11-01' }] }, serv).length === 0,
+     'e a pausa ANTIGA nao e recobrada — so o que esta sendo pausado agora');
+
+  /* ── A RETROATIVIDADE NAO PODE SE PERDER NO CAMINHO ──
+     Uma tela que gravasse `hoje` ao aprovar devolveria ao dev os dias de
+     espera, calada. O servidor confere contra o pedido que ELE tem. */
+  const errada = F.pausaAprovadaComDataErrada(
+    { melhorias: [{ id: 'c', codigo: 'AX-3', pausado_em: '2026-11-05' }] }, serv);
+  ok(errada.length === 1 && errada[0].pedido_em === '2026-11-02',
+     'aprovar gravando a data de hoje e recusado — a pausa vale desde o pedido',
+     JSON.stringify(errada[0]));
+  ok(F.pausaAprovadaComDataErrada(
+       { melhorias: [{ id: 'c', pausado_em: '2026-11-02' }] }, serv).length === 0,
+     'e com a data do pedido, passa');
+  /* SEM PEDIDO NO SERVIDOR nao ha retroatividade a cobrar: e o PM/PO pausando
+     direto, e ali a data de hoje e a certa. */
+  ok(F.pausaAprovadaComDataErrada(
+       { melhorias: [{ id: 'a', pausado_em: '2026-11-07' }] }, serv).length === 0,
+     'PM/PO pausando direto grava hoje, e isso nao e erro');
+
+  /* ── AS DUAS ROTAS ESTAO LIGADAS ──
+     Escrever a trava e nao chama-la e o modo mais silencioso de nao ter trava. */
+  const devPub = W.slice(W.indexOf("body.action === 'dev-publish'"),
+                         W.indexOf("body.action === 'dev-publish'") + 9000);
+  ok(/pausandoSemSerAdm\(data, antesDev\)/.test(devPub),
+     'dev-publish consulta quem pode pausar');
+  ok(/pausandoSemMotivo\(data, antesDev\)/.test(devPub),
+     'e tambem a justificativa');
+  const pub = W.slice(W.indexOf("body.action === 'publish'"),
+                      W.indexOf("body.action === 'publish'") + 9000);
+  ok(/pausandoSemMotivo\(data, antesPub\)/.test(pub),
+     'publish cobra a justificativa — `publish` ja e restrito a ADM, entao ali ' +
+     'o QUEM esta resolvido por construcao');
+  ok(/pausaAprovadaComDataErrada\(data, antesPub\)/.test(pub),
+     'e confere a retroatividade da aprovacao');
+
+  /* ── O HISTORICO COBRE A DECISAO ── */
+  const hist = W.slice(W.indexOf('const HIST_CAMPOS = {'), W.indexOf('const HIST_MAX'));
+  for (const campo of ['pausa_pedido', 'pausa_motivo', 'pausa_aprovada_por', 'pausado_em']) {
+    ok(new RegExp('\\n\\s*' + campo + ':\\s*\'').test(hist),
+       'HIST_CAMPOS registra ' + campo);
+  }
+})();
+
+/* ═══ E AS TELAS NAO PODEM APAGAR O PEDIDO SEM QUERER ════════════════════ */
+sec('Novembro: salvar um card nao apaga o pedido de pausa');
+
+(() => {
+  for (const [nome, src] of [['admin', ADMIN], ['dev', DEV]]) {
+    ok(/<script src="pausa\.js\?v=[a-f0-9]{10}"><\/script>/.test(src),
+       nome + ' carrega pausa.js com selo de cache');
+  }
+  /* O PAINEL DO DEV PEDE, E SO ISSO. Se ele voltar a gravar `pausado_em`, o
+     servidor recusa — mas a tela ficaria mostrando "pausada" ate a recusa
+     chegar, e a pessoa veria a pausa aparecer e sumir. */
+  const ini = corpo(DEV, 'async function devPausaIniciar() {') || '';
+  ok(!!ini && /PAUSA\.pedir\(/.test(ini) && !/pausado_em/.test(ini),
+     'o painel do dev PEDE, e nao grava `pausado_em` em lugar nenhum');
+  ok(/saveToGitHub\(\{ \[id\]: \{ pausa_pedido: m\.pausa_pedido \} \}\)/.test(ini),
+     'e manda so o pedido no patch');
+
+  /* ═══ A ARMADILHA DA LISTA FECHADA ═══════════════════════════════════════
+   * `saveMelhoria` monta a demanda por lista FECHADA de campos: o que nao for
+   * repassado SOME ao salvar. Aqui doeria no pior lugar — um PM/PO abriria um
+   * card so para ajustar o titulo e apagaria o pedido de pausa que o dev
+   * acabou de mandar, sem nada na tela dizendo isso. Ja aconteceu nesta base
+   * com `projetos` e com as assinaturas do spike. */
+  const sv = corpo(ADMIN, 'async function saveMelhoria() {') || '';
+  for (const campo of ['pausa_pedido', 'pausa_recusas', 'pausa_aprovada_por',
+                       'pausa_aprovada_em', 'pausado_em', 'pausa_motivo']) {
+    ok(new RegExp(campo + ':\\s+existing\\.' + campo).test(sv),
+       'o save do Admin repassa ' + campo + ' — sem isso, salvar o card o apaga');
+  }
+
+  /* A APROVACAO GRAVA A DATA DO PEDIDO. A tela nao pode mandar `_isoHoje()`:
+     o servidor recusaria, e a pessoa levaria um erro sem entender por que. */
+  const apv = corpo(ADMIN, 'async function pausaAprovar() {') || '';
+  ok(!!apv && /PAUSA\.aprovar\(m,/.test(apv),
+     'a aprovacao do Admin passa pelo modulo, e nao grava a data por conta propria');
+  const rec = corpo(ADMIN, 'async function pausaRecusar() {') || '';
+  ok(!!rec && /PAUSA\.problemaNoMotivo\(motivo\)/.test(rec),
+     'e a recusa cobra o motivo com a mesma regra do pedido');
+})();
+
 sec('A referencia da carta se refaz sozinha');
 
 // Ela existe porque o levantamento mostrou que a carta preve PRAZO, e nao horas:

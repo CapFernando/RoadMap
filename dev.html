@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="921f319de2">
+<html lang="pt-BR" data-build="411c190ee2">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -676,6 +676,7 @@
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=ff7a669a03"></script>
+<script src="pausa.js?v=06c4b82f84"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="resumo-projeto.js?v=2e30585cbe"></script>
@@ -2306,32 +2307,95 @@ function devPausaRender(m) {
         : '<br>Sem prazo combinado.') +
       '<div style="margin-top:8px"><button type="button" class="btn btn-sm" ' +
       'style="background:var(--green);color:#fff;border:none" onclick="devPausaRetomar()">▶ Retomar</button></div></div>';
-  } else {
-    box.innerHTML = '<div style="background:var(--bg4);border:1px solid var(--border2);border-radius:8px;' +
-      'padding:10px 12px;font-size:12.5px;color:var(--text2)">' +
-      'Travou por algo fora do seu alcance? Pause para o prazo não correr.' +
+  } else if (PAUSA.temPedido(m)) {
+    /* ═══ O PEDIDO ESTA NA MESA DE ALGUEM ═══════════════════════════════════
+     * Enquanto espera, a demanda CONTINUA CORRENDO — e a tela diz isso, em vez
+     * de deixar a pessoa achar que ja parou. O que ela nao perde sao os dias:
+     * aprovado, o pedido vale desde a data em que foi feito.                */
+    const ped = PAUSA.pedido(m);
+    const esperando = PAUSA.diasEntre(ped.em, _isoHoje());
+    box.innerHTML = '<div style="background:var(--amber-bg,#3A2E12);border:1px solid var(--amber,#E89C2F);' +
+      'border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--text2)">' +
+      '⏳ <strong style="color:var(--text)">Pausa pedida em ' + formatDate(ped.em) + '</strong>' +
+      (esperando ? ' <span style="color:var(--text3)">· aguardando há ' + esperando +
+                   (esperando === 1 ? ' dia' : ' dias') + '</span>' : '') +
+      '<br><strong>Sua justificativa:</strong> ' + escAttr(ped.motivo) +
+      '<br><span style="color:var(--text3)">O prazo segue correndo até um PM/PO aprovar. ' +
+      'Aprovado, a pausa vale desde ' + formatDate(ped.em) + ' — a espera não é cobrada de você.</span>' +
       '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm" ' +
-      'onclick="devPausaIniciar()">⏸ Pausar</button></div></div>';
+      'onclick="devPausaDesistir()">Cancelar o pedido</button></div></div>';
+  } else {
+    /* A ULTIMA RECUSA FICA A VISTA. Sem ela, o dev pede de novo a mesma coisa
+       e recebe o mesmo nao — e nenhum dos dois lados sabe que ja aconteceu. */
+    const recusas = Array.isArray(m.pausa_recusas) ? m.pausa_recusas : [];
+    const ult = recusas[recusas.length - 1];
+    box.innerHTML = '<div style="background:var(--bg4);border:1px solid var(--border2);border-radius:8px;' +
+      'padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--text2)">' +
+      (ult
+        ? '<div style="color:var(--red-tx,#F9A0A0);margin-bottom:6px">✕ <strong>Pausa negada em ' +
+          formatDate(ult.em) + '</strong> por ' + escAttr(ult.por || '—') + ': ' +
+          escAttr(ult.motivo || '—') +
+          (recusas.length > 1 ? ' <span style="color:var(--text3)">(' + recusas.length +
+                                'ª recusa nesta demanda)</span>' : '') + '</div>'
+        : '') +
+      'Travou por algo fora do seu alcance? Peça a pausa — um PM/PO aprova, e o ' +
+      'prazo para de correr desde o dia do pedido.' +
+      '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm" ' +
+      'onclick="devPausaIniciar()">⏸ Pedir pausa</button></div></div>';
   }
 }
 
+/* ═══ O DEV PEDE; QUEM PAUSA E O PM/PO ════════════════════════════════════
+ *
+ * "Toda demanda pausada deverá exigir justificativa e só pausa após aprovação
+ *  de um dos ADM."
+ *
+ * Aqui o botao chamava `aplicarPausa` e gravava `pausado_em` direto. Agora
+ * grava `pausa_pedido` — e o servidor RECUSA um `pausado_em` vindo por este
+ * caminho (`pausandoSemSerAdm`), entao a trava nao depende desta tela estar
+ * certa. A regra mora em `pausa.js`, uma copia so para as duas telas.         */
 async function devPausaIniciar() {
   const id = document.getElementById('ms-id').value;
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
-  const motivo = await await pedirTexto({
-    titulo: 'Pausar demanda',
-    texto: 'O prazo para de correr enquanto ela estiver pausada, e os dias parados ' +
-           'sao somados a entrega ao retomar. O motivo justifica isso depois.',
-    multilinha: true, obrigatorio: true, ok: 'Pausar',
+  const motivo = await pedirTexto({
+    titulo: 'Pedir pausa',
+    texto: 'O pedido vai para o PM/PO. Enquanto ele nao responde o prazo segue ' +
+           'correndo, mas, aprovado, a pausa vale DESDE HOJE — a espera pela ' +
+           'resposta nao e cobrada de voce. A justificativa e o que explica, ' +
+           'semanas depois, por que o prazo foi empurrado.',
+    multilinha: true, obrigatorio: true, ok: 'Pedir pausa',
     placeholder: 'Ex.: aguardando retorno do banco sobre o layout do arquivo' });
   if (motivo === null) return;
-  if (!motivo.trim()) { toast('O motivo da pausa é obrigatório.', 'err'); return; }
-  aplicarPausa(m, motivo, currentDev || 'dev');
+  /* A MESMA REGRA QUE O SERVIDOR USA, perguntada aqui para a recusa chegar
+     ANTES da viagem. Repetir o texto da recusa nesta tela criaria a segunda
+     versao da mensagem — e a do servidor e a que manda. */
+  const prob = PAUSA.problemaNoMotivo(motivo);
+  if (prob) { toast(prob, 'err'); return; }
+  const r = PAUSA.pedir(m, motivo, currentDev || 'dev', _isoHoje());
+  if (!r.ok) { toast(r.erro, 'err'); return; }
   devPausaRender(m);
-  const ok2 = await saveToGitHub({ [id]: { pausado_em:m.pausado_em, pausa_motivo:m.pausa_motivo,
-    pausa_por:m.pausa_por } });
-  toast(ok2 ? '⏸ Demanda pausada.' : 'Não foi possível salvar.', ok2 ? 'ok' : 'err');
+  const ok2 = await saveToGitHub({ [id]: { pausa_pedido: m.pausa_pedido } });
+  toast(ok2 ? '⏳ Pedido enviado ao PM/PO.' : 'Nao foi possivel enviar o pedido.',
+        ok2 ? 'ok' : 'err');
+  renderKanban();
+}
+
+/** DESISTIR DO PROPRIO PEDIDO. Sem isto, um pedido feito por engano so sairia
+ *  pedindo a um PM/PO que o negue — e a recusa ficaria registrada como se
+ *  alguem tivesse discordado. */
+async function devPausaDesistir() {
+  const id = document.getElementById('ms-id').value;
+  const m = state.melhorias.find(x => x.id === id);
+  if (!m) return;
+  if (!(await confirmar({ titulo: 'Cancelar o pedido de pausa',
+      texto: 'O pedido some e a demanda segue como estava. Voce pode pedir de novo depois.',
+      ok: 'Cancelar o pedido' }))) return;
+  const r = PAUSA.desistir(m);
+  if (!r.ok) { toast(r.erro, 'err'); return; }
+  devPausaRender(m);
+  const ok2 = await saveToGitHub({ [id]: { pausa_pedido: null } });
+  toast(ok2 ? 'Pedido cancelado.' : 'Nao foi possivel cancelar.', ok2 ? 'ok' : 'err');
   renderKanban();
 }
 

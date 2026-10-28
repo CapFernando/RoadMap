@@ -639,6 +639,14 @@ const HIST_CAMPOS = {
   prioridade:          'prioridade',
   sprint:              'sprint',
   entrega_usuario:     'entrega ao usuario',
+  /* A PAUSA DEIXOU DE SER UM BOTAO E VIROU UMA DECISAO, e decisao precisa de
+   * rastro. `pausado_em` ja estava acima como 'pausa'; faltavam o pedido, o
+   * motivo e quem aprovou — e sao eles que respondem "quem autorizou empurrar
+   * este prazo, e quando". Sem isso, o comite ve a data andar e nao tem a quem
+   * perguntar. */
+  pausa_pedido:        'pedido de pausa',
+  pausa_motivo:        'motivo da pausa',
+  pausa_aprovada_por:  'pausa aprovada por',
 };
 // Guarda por demanda. Sem teto, um card antigo acumularia centenas de entradas e
 // o arquivo (164 KB hoje) cresceria sem controle — ele e lido inteiro em toda
@@ -1982,6 +1990,120 @@ function entrandoAlocadaSemSistema(recebido, servidor) {
  *  tela, como ja aconteceu em 24/09 ("Escolha o sistema antes de planejar:
  *  mufxdq9ocnh7k27dbb"). Aqui o nome legivel e o titulo.
  */
+/* ═══ PAUSAR E PEDIDO, E A TRAVA E AQUI ═══════════════════════════════════
+ *
+ * "Toda demanda pausada deverá exigir justificativa e só pausa após aprovação
+ *  de um dos ADM."
+ *
+ * A justificativa JA era obrigatoria nas tres telas. O servidor, porem, nunca
+ * checou nada sobre pausa — uma aba antiga, um script, ou um ajuste futuro numa
+ * das telas pausava sem motivo e ninguem notava. E a regra de SEMPRE nesta
+ * base: regra que mora so na tela e regra que ainda vai falhar.
+ *
+ * MESMA REGRA DE `pausa.js`, duplicada aqui de proposito — o Worker nao importa
+ * arquivo nenhum, como ja acontece com `limpaDevs` contra `dev-nome.js` e com o
+ * vinculo contra `vinculo.js`. A invariante "o Worker e o pausa.js concordam"
+ * roda as duas lado a lado, caso por caso, e e ela que impede a divergencia.
+ *
+ * SAO TRES PERGUNTAS DIFERENTES, e por isso tres funcoes:
+ *   QUEM pausou   — `dev-publish` nao pode criar pausa; o painel do dev PEDE.
+ *   COM QUE MOTIVO — vale para todos, ADM incluido.
+ *   DESDE QUANDO  — aprovar um pedido grava a data DO PEDIDO, nao a de hoje.  */
+const PAUSA_MIN_MOTIVO = 10;
+
+function pausaIso(v) {
+  const d = String(v == null ? '' : v).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+}
+
+function pausaMotivoRuim(motivo) {
+  const m = String(motivo == null ? '' : motivo).trim();
+  if (!m) return 'Escreva por que a demanda precisa parar.';
+  if (m.length < PAUSA_MIN_MOTIVO) {
+    return 'A justificativa esta curta demais (' + m.length + ' de ' +
+           PAUSA_MIN_MOTIVO + ' caracteres). Diga o que trava a demanda.';
+  }
+  return '';
+}
+
+function pausaPedidoDe(m) {
+  const p = m && m.pausa_pedido;
+  if (!p || typeof p !== 'object') return null;
+  const em = pausaIso(p.em);
+  if (!em) return null;
+  return { em, por: String(p.por || '').trim(), motivo: String(p.motivo || '').trim() };
+}
+
+/** Indice por id, para as tres travas lerem o servidor do mesmo jeito. */
+function pausaAntes(servidor) {
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  return antes;
+}
+
+/** AS DEMANDAS QUE ESTE ENVIO ESTA PAUSANDO — criando ou mudando o dia.
+ *
+ *  RETOMAR NAO ENTRA: limpar `pausado_em` nao e pausar, e travar a retomada
+ *  deixaria a demanda presa esperando um ADM para voltar a andar, que e o
+ *  contrario do que a regra quer. */
+function pausasDesteEnvio(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = pausaAntes(servidor);
+  const novas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const agora = pausaIso(m.pausado_em);
+    if (!agora) continue;
+    const velho = pausaIso((antes.get(m.id) || {}).pausado_em);
+    if (agora === velho) continue;
+    novas.push({ m, velho, agora, antes: antes.get(m.id) || null });
+  }
+  return novas;
+}
+
+/** O PAINEL DO DEV NAO PAUSA — ele pede. */
+function pausandoSemSerAdm(recebido, servidor) {
+  return pausasDesteEnvio(recebido, servidor).map(({ m, velho, agora }) => ({
+    id: m.id, codigo: m.codigo || '', titulo: String(m.titulo || '').trim(),
+    campo: 'pausa', de: velho, para: agora,
+    rotulo: m.codigo || String(m.titulo || '').trim() || m.id,
+  }));
+}
+
+/** PAUSA SEM JUSTIFICATIVA, venha de onde vier — o ADM tambem escreve o porque. */
+function pausandoSemMotivo(recebido, servidor) {
+  const presos = [];
+  for (const { m } of pausasDesteEnvio(recebido, servidor)) {
+    const ruim = pausaMotivoRuim(m.pausa_motivo);
+    if (!ruim) continue;
+    presos.push({
+      id: m.id, codigo: m.codigo || '', titulo: String(m.titulo || '').trim(),
+      campo: 'pausa_motivo', motivo: ruim,
+      rotulo: m.codigo || String(m.titulo || '').trim() || m.id,
+    });
+  }
+  return presos;
+}
+
+/** A APROVACAO NAO PODE PERDER A RETROATIVIDADE NO CAMINHO.
+ *
+ *  O dev pede na segunda, o ADM aprova na quarta: a pausa vale DESDE A SEGUNDA.
+ *  Uma tela que gravasse `hoje` ali devolveria ao dev os dias de espera —
+ *  calada, e sem ninguem conseguir apontar quando a conta mudou. */
+function pausaAprovadaComDataErrada(recebido, servidor) {
+  const presos = [];
+  for (const { m, agora, antes } of pausasDesteEnvio(recebido, servidor)) {
+    const ped = pausaPedidoDe(antes);
+    if (!ped || agora === ped.em) continue;
+    presos.push({
+      id: m.id, codigo: m.codigo || '', campo: 'pausado_em',
+      pedido_em: ped.em, gravado: agora,
+      rotulo: m.codigo || String(m.titulo || '').trim() || m.id,
+    });
+  }
+  return presos;
+}
+
 function nascendoSemSolicitante(recebido, servidor) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Set();
@@ -6813,6 +6935,34 @@ export default {
                               'todo relatorio por sistema.' }, 400, headers);
       }
       // Demanda nova sem quem pediu — ver `nascendoSemSolicitante`.
+      /* ═══ A PAUSA PELO ADMIN E LEGITIMA, O MOTIVO E COBRADO ═══════════════
+       * `publish` ja e restrito a ADM (ver a guarda de `ehAdmin` no topo desta
+       * rota), entao QUEM pausa aqui esta resolvido por construcao. O que falta
+       * cobrar e COM QUE MOTIVO — e DESDE QUANDO, quando a pausa vem de um
+       * pedido do dev: ali a data tem de ser a do pedido, e nao a de hoje. */
+      const pausaMotivoPub = pausandoSemMotivo(data, antesPub);
+      if (pausaMotivoPub.length) {
+        return json({ error: 'pausa_sem_motivo',
+                      itens: pausaMotivoPub,
+                      codigos: pausaMotivoPub.map(x => x.codigo || x.titulo),
+                      detail: 'Toda pausa precisa de justificativa: ' +
+                              pausaMotivoPub.map(x => x.rotulo + ' — ' + x.motivo).join(' | ') +
+                              ' Ela e o que explica, semanas depois, por que o prazo foi empurrado.' },
+                    400, headers);
+      }
+      const pausaDataPub = pausaAprovadaComDataErrada(data, antesPub);
+      if (pausaDataPub.length) {
+        const p = pausaDataPub[0];
+        return json({ error: 'pausa_data_errada',
+                      itens: pausaDataPub,
+                      codigos: pausaDataPub.map(x => x.codigo),
+                      detail: 'A pausa aprovada vale desde o PEDIDO (' + p.pedido_em +
+                              '), e chegou com ' + p.gravado + ' em ' + p.rotulo +
+                              '. Recarregue a pagina e aprove de novo — os dias de ' +
+                              'espera pela aprovacao sao da pausa, e nao atraso do dev.' },
+                    409, headers);
+      }
+
       const semSolPub = nascendoSemSolicitante(data, antesPub);
       if (semSolPub.length) {
         return json({ error: 'sem_solicitante',
@@ -7030,6 +7180,30 @@ export default {
                               'todo relatorio por sistema.' }, 400, headers);
       }
       // Demanda nova sem quem pediu — ver `nascendoSemSolicitante`.
+      /* ═══ O PAINEL DO DEV PEDE PAUSA, NAO PAUSA ═══════════════════════════
+       * Ele pode mandar `pausa_pedido`; quem grava `pausado_em` e o ADM, pela
+       * tela dele. A recusa NOMEIA a demanda — "algo deu errado" obrigaria a
+       * pessoa a descobrir sozinha qual das dez abertas foi recusada. */
+      const pausaDev = pausandoSemSerAdm(data, antesDev);
+      if (pausaDev.length) {
+        return json({ error: 'pausa_sem_aprovacao',
+                      itens: pausaDev,
+                      codigos: pausaDev.map(x => x.codigo || x.titulo),
+                      detail: 'Pausar agora depende de um PM/PO: ' +
+                              pausaDev.map(x => x.rotulo).join(', ') +
+                              '. Use "Pedir pausa" — o pedido vai com a sua ' +
+                              'justificativa e, se aprovado, a pausa vale desde hoje.' },
+                    403, headers);
+      }
+      const pausaMotivoDev = pausandoSemMotivo(data, antesDev);
+      if (pausaMotivoDev.length) {
+        return json({ error: 'pausa_sem_motivo',
+                      itens: pausaMotivoDev,
+                      codigos: pausaMotivoDev.map(x => x.codigo || x.titulo),
+                      detail: pausaMotivoDev.map(x => x.rotulo + ': ' + x.motivo).join(' | ') },
+                    400, headers);
+      }
+
       const semSolDev = nascendoSemSolicitante(data, antesDev);
       if (semSolDev.length) {
         return json({ error: 'sem_solicitante',
