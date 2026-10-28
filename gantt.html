@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="3e4cade7bc">
+<html lang="pt-BR" data-build="9c01f300cb">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1128,9 +1128,10 @@
 <script src="dialogo.js?v=171b484b8c"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
+<script src="rede-repete.js?v=ff7a669a03"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
-<script src="resumo-projeto.js?v=7be0944f54"></script>
+<script src="resumo-projeto.js?v=2e30585cbe"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -2249,7 +2250,7 @@ async function loadFromGitHub() {
   }
 }
 
-async function saveToGitHub(tentativa = 1) {
+async function saveToGitHub(tentativa = 1, quedas = 0) {
   if (VIEWER_MODE) return;
   showSaving(true);
   try {
@@ -2382,7 +2383,38 @@ async function saveToGitHub(tentativa = 1) {
     // falhou fica agendado para ser refeito assim que a pessoa entrar — sem isso
     // ela reentraria e teria de refazer o arrasto na mao.
     if (_sessaoCaiu) { _refazerAoVoltar = () => saveToGitHub(); }
-    else toast('Erro: ' + e.message, 'err');
+    else {
+      /* ═══ A QUEDA DE REDE PASSA A SER REPETIDA, e aqui ela NAO era ═══════
+       *
+       * 28/10/2026: "houve erro até no gantt ao levar uma task para um dev".
+       * O Admin e o painel do Dev repetiam uma vez; esta tela ia direto para a
+       * mensagem de erro na PRIMEIRA perda de pacote. Levar uma task para um
+       * dev falhava de vez, e o arrasto tinha de ser refeito na mao.
+       *
+       * O log ao vivo do Worker naquele momento: 143 requisicoes, 143 `Ok`,
+       * zero excecao. O pedido morria no caminho, e repetir e o unico remedio.
+       *
+       * REPETIR AQUI E SEGURO pela mesma construcao do Admin: esta funcao
+       * comeca relendo o servidor (`serverData`) e remesclando o estado local
+       * por cima a CADA tentativa — e ja se repetia assim no conflito 409.
+       *
+       * `quedas` E PARAMETRO, e nao variavel de modulo. Com variavel, o
+       * `finally` desta chamada zeraria o contador DENTRO da repeticao — o
+       * `finally` roda antes de o `return` entregar o valor — e a cota nunca
+       * se esgotaria: repeticao infinita contra uma rede ja caida. Como
+       * parametro, cada nivel carrega o proprio numero e a conta fecha.
+       *
+       * Fica separado de `tentativa`, que e do conflito 409: sao dois motivos
+       * diferentes para repetir, e um contador so faria um conflito gastar a
+       * cota da rede. */
+      if (REDEREPETE.ehQueda(e) && REDEREPETE.deveRepetir(quedas)) {
+        showSaving(false);
+        toast(REDEREPETE.aviso(quedas), 'err');
+        await new Promise(r => setTimeout(r, REDEREPETE.espera(quedas)));
+        return saveToGitHub(tentativa, quedas + 1);
+      }
+      toast('Erro: ' + e.message, 'err');
+    }
   } finally {
     showSaving(false);
   }

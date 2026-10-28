@@ -4191,6 +4191,368 @@ for (const campo of ['sprint', 'prioridade', 'entrega_usuario', 'entrega', 'dev'
      'HIST_CAMPOS registra ' + campo);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   QUANDO A REDE CAI, AS TRES TELAS INSISTEM IGUAL
+
+   28/10/2026: "erro ao tentar mover o card" (Admin) e, minutos depois,
+   "houve erro até no gantt ao levar uma task para um dev". O log ao vivo do
+   Worker no mesmo periodo: 143 requisicoes, 143 `Ok`, zero excecao — o pedido
+   morria no caminho, e as gravacoes pararam de chegar por sete minutos.
+
+   O Admin e o Dev repetiam UMA vez, 2s depois; o GANTT NAO REPETIA NADA. Tres
+   telas, tres politicas, e a menos protegida era a que mais doeu.             */
+sec('Rede caida: a politica de repetir e uma so');
+
+(() => {
+  const R = require('./rede-repete.js');
+
+  /* ── O QUE CONTA COMO QUEDA ──
+     `fetch` rejeita com TypeError quando o pedido nao completa. Erro HTTP volta
+     com `res.ok === false` e NAO pode entrar aqui: repetir um 401 so gasta o
+     tempo de quem ja perdeu a sessao. */
+  ok(R.ehQueda(new TypeError('Failed to fetch')),
+     'TypeError do fetch e queda de rede');
+  /* O SAFARI NAO ESCREVE "fetch" NA MENSAGEM: ele rejeita com
+     `TypeError('Load failed')`. Sem o ramo do `instanceof`, a queda de rede no
+     iPhone — que e por onde o time entra pelo QR e pelo celular — nao seria
+     reconhecida, e a gravacao falharia sem nenhuma repeticao.
+     Conferido sabotando: tirar o `instanceof TypeError` passava pela suite
+     inteira enquanto o unico caso testado tinha "fetch" no texto. */
+  ok(R.ehQueda(new TypeError('Load failed')),
+     'e o "Load failed" do Safari tambem — ali a mensagem nao diz fetch');
+  ok(R.ehQueda(new Error('NetworkError when attempting to fetch resource')),
+     'e navegador que rejeita com Error tambem — nem todos usam TypeError');
+  ok(!R.ehQueda(new Error('Sessao expirada. Saia e entre novamente.')),
+     'sessao expirada NAO e queda de rede — repetir repetiria a recusa');
+  ok(!R.ehQueda(new Error('Outra tela publicou ao mesmo tempo. Salve novamente.')),
+     'conflito tambem nao — ele tem repeticao propria');
+  ok(!R.ehQueda(new Error('Gravacao abortada por seguranca: dados locais vazios.')),
+     'nem a trava de seguranca do Gantt, que existe para NAO gravar');
+  ok(!R.ehQueda(null) && !R.ehQueda(undefined), 'e nada nao e queda');
+
+  /* ── A COTA, E O QUE ACONTECE NAS BORDAS ──
+     Uma repeticao 2s depois nao cobria a janela de 28/10, que durou minutos. */
+  ok(R.ESPERAS.length >= 3, 'a cota e de ao menos tres tentativas',
+     R.ESPERAS.length + ' tentativas');
+  ok(R.ESPERAS.every((v, i) => i === 0 || v > R.ESPERAS[i - 1]),
+     'e a espera CRESCE a cada queda — insistir no mesmo ritmo cai na mesma janela',
+     R.ESPERAS.join('ms, ') + 'ms');
+  ok(R.deveRepetir(0) && R.deveRepetir(R.ESPERAS.length - 1),
+     'dentro da cota, repete');
+  ok(!R.deveRepetir(R.ESPERAS.length) && !R.deveRepetir(99),
+     'esgotada a cota, para — rede fora de verdade tem de virar mensagem');
+  /* `undefined` em `setTimeout` dispara NA HORA: a pausa viraria laco apertado
+     contra um servidor ja em apuros. Sabotagem conferida: devolver
+     `ESPERAS[i]` cru passava pela suite inteira antes desta linha. */
+  [0, 1, 2, 3, 50].forEach(n => {
+    ok(typeof R.espera(n) === 'number' && isFinite(R.espera(n)) && R.espera(n) > 0,
+       'a espera para ' + n + ' queda(s) e um numero positivo', String(R.espera(n)));
+  });
+
+  /* ── O AVISO DIZ EM QUAL TENTATIVA ESTA ──
+     Tres toasts identicos parecem a mesma mensagem travada, e a pessoa clica de
+     novo — que era o caminho para duas gravacoes concorrentes. */
+  const avisos = R.ESPERAS.map((_, i) => R.aviso(i));
+  ok(new Set(avisos).size === avisos.length,
+     'cada tentativa tem um aviso diferente do anterior', JSON.stringify(avisos));
+  ok(avisos.every((t, i) => t.includes(String(i + 1)) && t.includes(String(R.ESPERAS.length))),
+     'e cada um diz "N de TOTAL"', avisos[0]);
+
+  /* ── AS TRES TELAS PERGUNTAM AO MODULO ── */
+  for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT]]) {
+    ok(/<script src="rede-repete\.js\?v=[a-f0-9]{10}"><\/script>/.test(src),
+       nome + ' carrega rede-repete.js com selo de cache');
+    ok(/REDEREPETE\.deveRepetir\(/.test(semComentario(src)),
+       nome + ' decide repetir pelo modulo, e nao por conta propria');
+  }
+
+  /* ═══ E NENHUMA ESPERA ESCRITA A MAO SOBROU ══════════════════════════════
+   *
+   * ISTO EXISTE POR UM ERRO MEU, no mesmo dia. Liguei `publicaAgora` ao modulo
+   * e disse que "a politica agora e uma so" — mas o Admin publica por DOIS
+   * caminhos, e o segundo (`saveToGitHub`, direto no GitHub) continuou com a
+   * repeticao unica de 2s. A faixa "Erro ao publicar: Failed to fetch" voltou
+   * com a correcao ja publicada, porque veio por ali.
+   *
+   * Procurar pela POLITICA nao bastava: o terceiro lugar escrevia a MESMA regra
+   * com outras palavras — `redes === 0` num, `attempt === 1` no outro.
+   *
+   * O que NAO muda de nome e a ESPERA: toda repeticao feita a mao precisa de um
+   * numero de milissegundos ao lado de um `setTimeout`. Entao a invariante
+   * cobra que todo `setTimeout` de espera tire o numero do modulo. Um literal
+   * ali e, por definicao, uma politica paralela. */
+  for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT]]) {
+    const limpo = semComentario(src);
+    /* O QUE CARACTERIZA UMA REPETICAO, e nao uma espera qualquer: a pausa e
+       seguida de uma CHAMADA DE VOLTA. `dev.html` tem um `setTimeout(r, 500)`
+       que aguarda o upload de anexo terminar — espera legitima, e nao politica
+       de rede. Sem esta precisao a invariante acusaria o inocente, e invariante
+       que acusa o inocente e desligada na primeira semana. */
+    const esperas = (limpo.match(
+      /await new Promise\(r => setTimeout\(r,[^;]*;\s*return [A-Za-z_$][\w$]*\(/g) || []);
+    const aMao = esperas.filter(t => !/REDEREPETE\.espera\(/.test(t));
+    ok(aMao.length === 0,
+       nome + ': nenhuma espera de repeticao escrita a mao — todas vem do modulo',
+       aMao.join(' | ') || esperas.length + ' repeticao(oes), todas do modulo');
+    ok(esperas.length > 0,
+       nome + ': e existe pelo menos uma repeticao — a invariante acima nao passa a vazio',
+       esperas.length + ' encontrada(s)');
+  }
+  /* E a frase antiga nao pode voltar: ela era o sinal visivel da politica
+     paralela, e e por ela que o terceiro lugar foi encontrado. */
+  for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT]]) {
+    ok(!/toast\('⚠️ Falha de rede, tentando novamente/.test(semComentario(src)),
+       nome + ': o aviso fixo de repeticao unica nao voltou');
+  }
+})();
+
+/* ═══ O GANTT, QUE NAO REPETIA NADA, EXECUTADO ═══════════════════════════ */
+sec('Gantt: levar uma task para um dev sobrevive a queda de rede');
+
+registra((async () => {
+  const SG = corpo(GANTT, 'async function saveToGitHub(tentativa = 1, quedas = 0) {');
+  ok(!!SG && SG.length > 500, 'a gravacao do Gantt foi isolada',
+     SG ? SG.length + ' caracteres' : 'nao achei');
+  if (!SG) return;
+
+  /* `quedas` TEM DE SER PARAMETRO. Com variavel de modulo, o `finally` desta
+     chamada zeraria o contador DENTRO da repeticao — `finally` roda antes de o
+     `return` entregar o valor — e a cota nunca se esgotaria: repeticao infinita
+     contra uma rede ja caida. */
+  ok(/async function saveToGitHub\(tentativa = 1, quedas = 0\)/.test(GANTT),
+     'a contagem de quedas e parametro, e nao variavel de modulo');
+
+  const iCatch = SG.indexOf('} catch(e) {');
+  const trecho = iCatch < 0 ? '' : SG.slice(iCatch + 12, SG.lastIndexOf('} finally {'));
+  ok(!!trecho.trim(), 'o trecho do erro do Gantt foi isolado');
+  if (!trecho.trim()) return;
+
+  const FA = Object.getPrototypeOf(async function () {}).constructor;
+  const roda = (erro, quedas) => {
+    const repetiu = [], avisos = [];
+    const fn = new FA('_sessaoCaiu', '_refazerAoVoltar', 'toast', 'showSaving',
+                      'saveToGitHub', 'setTimeout', 'REDEREPETE', 'e', 'tentativa', 'quedas',
+                      trecho);
+    return fn(false, null, (t) => avisos.push(String(t)), () => {},
+              (t, q) => { repetiu.push({ tentativa: t, quedas: q }); return true; },
+              (f) => f(), require('./rede-repete.js'), erro, 1, quedas)
+      .then(() => ({ repetiu, avisos }));
+  };
+
+  const COTA = require('./rede-repete.js').ESPERAS.length;
+
+  // ── QUEDA DE REDE: REPETE, em vez de desistir no primeiro pacote perdido ──
+  const g1 = await roda(new TypeError('Failed to fetch'), 0);
+  ok(g1.repetiu.length === 1,
+     'queda de rede no Gantt REPETE — antes ela virava "Erro:" de primeira',
+     JSON.stringify(g1.repetiu));
+  ok(g1.repetiu[0] && g1.repetiu[0].quedas === 1,
+     'e a queda e CONTADA; sem isso a repeticao nao termina nunca',
+     JSON.stringify(g1.repetiu[0]));
+  /* O ORCAMENTO DO CONFLITO NAO PODE SER GASTO PELA REDE: a remontagem por 409
+     e a que resolve quando outra tela publicou no meio. */
+  ok(g1.repetiu[0] && g1.repetiu[0].tentativa === 1,
+     'e ela nao gasta o orcamento do conflito 409',
+     JSON.stringify(g1.repetiu[0]));
+  ok(!g1.avisos.some(t => /^Erro:/.test(t)),
+     'e a tela nao anuncia erro enquanto ainda vai tentar',
+     JSON.stringify(g1.avisos));
+
+  // ── AINDA DENTRO DA COTA ──
+  const gMeio = await roda(new TypeError('Failed to fetch'), COTA - 1);
+  ok(gMeio.repetiu.length === 1 && gMeio.repetiu[0].quedas === COTA,
+     'na ultima tentativa da cota ele ainda repete',
+     JSON.stringify(gMeio.repetiu[0]));
+
+  // ── COTA ESGOTADA: ai sim fala em erro ──
+  const gFim = await roda(new TypeError('Failed to fetch'), COTA);
+  ok(gFim.repetiu.length === 0 && gFim.avisos.some(t => /^Erro:/.test(t)),
+     'esgotada a cota, o Gantt avisa — rede fora nao pode virar tela girando',
+     JSON.stringify(gFim.avisos));
+
+  // ── ERRO DO SERVIDOR: nao repete, avisa de primeira ──
+  const gServ = await roda(new Error('Sessao expirada. Saia e entre novamente.'), 0);
+  ok(gServ.repetiu.length === 0 && gServ.avisos.some(t => /Sessao expirada/.test(t)),
+     'recusa do servidor avisa de primeira — repetir so repetiria a recusa',
+     JSON.stringify(gServ.avisos));
+})());
+
+/* ═══════════════════════════════════════════════════════════════════════
+   A DEMANDA EM LEITURA: ficha curta em cima, texto com ar embaixo
+
+   "a visualização do projeto, itens do projeto, respostas das task que estão
+    no projeto não está com bom visual p dev, está muito confuso, sem
+    espaçamento nas respostas."                                              */
+sec('A consulta da demanda tem espacamento');
+
+(() => {
+  const VD = corpo(DEV, 'function verDemanda(m, opcoes) {') || '';
+  ok(!!VD, 'a consulta em leitura foi isolada para ser executada');
+  if (!VD) return;
+
+  /* O `<br>` ERA O DEFEITO. Ele quebra a linha mas COLAPSA a linha em branco
+     entre paragrafos: um texto com titulo, lista e secoes — 37 das 158
+     descricoes da base passam de 300 caracteres, a maior tem 1.555, e 40 tem
+     quebra de linha — virava um bloco cinza so. */
+  ok(!/replace\(\/\\n\/g, '<br>'\)/.test(VD),
+     'o texto longo NAO e mais convertido em <br>');
+
+  const nos = {};
+  const alvo = (id) => (nos[id] = nos[id] ||
+    { id, style: { cssText: '', display: '' }, innerHTML: '', textContent: '' });
+  const amb = {
+    document: { getElementById: alvo },
+    state: { temas: [{ id: 't1', nome: 'Tema X' }] },
+    DEVNOME: { eDe: () => false },
+    currentDev: 'Outro Dev',
+    getStatusKey: () => 'em_andamento',
+    STATUS_LABELS: { em_andamento: 'Em andamento' },
+    window: { PRAZO: { diasDeAtraso: () => null, hojeISO: () => '2026-10-28' },
+              MENSAGERIA: null },
+    PRAZO: { diasDeAtraso: () => null, hojeISO: () => '2026-10-28' },
+    escAttr: (s) => String(s == null ? '' : s)
+      .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])),
+    formatDate: (s) => String(s || '').split('-').reverse().join('/'),
+    discoveryHTMLDev: () => '<div class="disc-sec">DISC</div>',
+    abrirModal: () => {},
+    BUSCA_DEMANDA: { numeroDaIssue: () => '' },
+    renderDetalhe: () => {},
+  };
+  const nomes = Object.keys(amb);
+  const ver = new Function(...nomes, VD + '; return verDemanda;')(...nomes.map(n => amb[n]));
+
+  const TXT = 'Headcount\n\n- Ativos no fechamento.\n\nSLA\n\n- Media de dias.';
+  ver({ id: 'x', codigo: 'AX-900', titulo: 'T', dev: 'Marina', tema_id: 't1',
+        descricao: TXT, resumo_entrega: 'Entregue.', implementacao: 'Rota nova.',
+        inicio: '2026-10-06', entrega: '2026-10-24', poker_pontos: 8 }, {});
+  const html = alvo('mv-corpo').innerHTML;
+
+  ok(/class="mv-ficha"/.test(html), 'a ficha curta e desenhada');
+  ok(!/<br>Headcount|Headcount<br>/.test(html),
+     'o pedido NAO vira <br> — ele vai cru para o pre-wrap');
+  ok(html.indexOf('Headcount\n\n- Ativos') > 0,
+     'e a LINHA EM BRANCO entre os paragrafos chega intacta ao HTML');
+  ok(/mv-bloco-tit">O que foi pedido/.test(html) &&
+     /mv-bloco-tit">Resumo da entrega/.test(html) &&
+     /mv-bloco-tit">Implementação/.test(html),
+     'cada texto longo tem bloco e titulo proprios');
+  ok((html.match(/class="mv-campo"/g) || []).length >= 5,
+     'e os campos curtos ficam na ficha, e nao uma linha cada',
+     (html.match(/class="mv-campo"/g) || []).length + ' campos');
+
+  /* O CSS TEM DE ACOMPANHAR: sem `pre-wrap`, mandar o texto cru so faz as
+     quebras sumirem — fica pior do que com `<br>`. */
+  const CSS_DEV = DEV.slice(0, DEV.indexOf('</style>'));
+  ok(/\.mv-texto\s*\{[^}]*white-space:pre-wrap/.test(CSS_DEV),
+     'e o bloco preserva a linha em branco por CSS, e nao por acaso');
+  ok(/\.mv-texto\s*\{[^}]*line-height:1\.[5-9]/.test(CSS_DEV),
+     'com entrelinha de leitura, e nao a padrao');
+
+  /* O DISCOVERY ENTRA, e sem titulo nosso por fora: ele ja traz o proprio
+     cabecalho, e embrulhar dava dois titulos empilhados dizendo o mesmo —
+     conferido na tela antes de ficar assim. */
+  ok(/class="mv-disc"/.test(html) && /disc-sec/.test(html),
+     'o discovery do solicitante aparece na consulta — era so no card do proprio dev');
+  ok(!/mv-bloco-tit">Discovery/.test(html),
+     'e sem um segundo titulo por cima do que o proprio discovery ja tem');
+
+  // Campo vazio nao vira bloco vazio com titulo orfao.
+  ver({ id: 'y', codigo: 'AX-901', titulo: 'T', dev: '', descricao: '   ' }, {});
+  ok(!/mv-bloco-tit">O que foi pedido/.test(alvo('mv-corpo').innerHTML),
+     'descricao so com espaco nao cria bloco vazio');
+})();
+
+/* ═══ UM CLIQUE EDITA, DOIS LEEM ═════════════════════════════════════════
+   `ondblclick` sozinho no card NAO dispara: o primeiro clique abre o modal,
+   que cobre o card, e o segundo clique cai nele. Medido num banco de provas
+   antes de escrever o codigo — o registro saiu "A: click" e nada mais. Por
+   isso o clique simples espera.                                             */
+sec('No quadro do dev, dois cliques abrem a consulta');
+
+ok(/ondblclick="kcardDuplo\(event,'\$\{m\.id\}'\)"/.test(DEV),
+   'o card do quadro responde ao duplo clique');
+ok(/onclick="kcardClique\(event,'\$\{m\.id\}'\)"/.test(DEV),
+   'e o clique simples passa pelo agendador, e nao direto no modal');
+
+(() => {
+  const CL = corpo(DEV, 'function kcardClique(ev, id) {') || '';
+  const DU = corpo(DEV, 'function kcardDuplo(ev, id) {') || '';
+  const CA = corpo(DEV, 'function kcardCancela() {') || '';
+  ok(!!CL && !!DU && !!CA, 'as tres pecas do clique foram isoladas');
+  if (!CL || !DU || !CA) return;
+
+  let abriuStatus = [], abriuConsulta = [], marcado = 0, desmarcado = 0;
+  const classList = { add: () => { marcado++; }, remove: () => { desmarcado++; } };
+  const amb = {
+    openStatusModal: (id) => abriuStatus.push(id),
+    verDemanda: (m, o) => abriuConsulta.push({ id: m.id, por: o && o.por }),
+    state: { melhorias: [{ id: 'ax1' }] },
+    setTimeout: (fn, ms) => { amb._pend = { fn, ms }; return 1; },
+    clearTimeout: () => { amb._pend = null; },
+  };
+  const nomes = Object.keys(amb).filter(n => n[0] !== '_');
+  const API = new Function(...nomes,
+    'let _kcTimer = null; let _kcAlvo = null;' + CA + CL + DU +
+    '; return { kcardClique, kcardDuplo, kcardCancela };')(...nomes.map(n => amb[n]));
+
+  const ev = { currentTarget: { classList } };
+
+  // ── CLIQUE SIMPLES: nao abre na hora; abre quando o relogio vence ──
+  API.kcardClique(ev, 'ax1');
+  ok(abriuStatus.length === 0, 'o clique simples NAO abre o card na hora');
+  ok(marcado === 1,
+     'mas marca o card no mesmo instante — sem isso o quinto de segundo le-se ' +
+     'como "nao aconteceu nada" e a pessoa clica de novo');
+  ok(amb._pend && amb._pend.ms <= 300 && amb._pend.ms >= 150,
+     'a espera fica abaixo do limiar de duplo clique do navegador e acima do humano',
+     amb._pend && amb._pend.ms + 'ms');
+  amb._pend.fn();
+  ok(abriuStatus.length === 1 && abriuStatus[0] === 'ax1',
+     'e vencido o relogio, o card abre para editar');
+  ok(desmarcado >= 1, 'e a marca sai junto');
+
+  // ── DUPLO CLIQUE: cancela o simples e abre a consulta ──
+  abriuStatus = []; abriuConsulta = []; amb._pend = null;
+  API.kcardClique(ev, 'ax1');          // click 1
+  API.kcardClique(ev, 'ax1');          // click 2 — nao pode reagendar
+  API.kcardDuplo(ev, 'ax1');
+  ok(abriuConsulta.length === 1 && abriuConsulta[0].id === 'ax1',
+     'o duplo clique abre a CONSULTA da demanda');
+  ok(abriuConsulta[0].por === 'quadro',
+     'dizendo que veio do quadro — a frase de leitura muda por isso',
+     abriuConsulta[0].por);
+  ok(amb._pend === null && abriuStatus.length === 0,
+     'e o card de edicao nao sobe por cima 220ms depois');
+  ok(/if \(_kcTimer\) return;/.test(CL),
+     'o segundo clique do par nao reagenda a abertura');
+
+  abriuConsulta = [];
+  API.kcardDuplo(ev, 'nao-existe');
+  ok(abriuConsulta.length === 0, 'e id desconhecido no duplo clique nao quebra nada');
+})();
+
+/* ═══ A LISTA DO PROJETO RESPIRA ═════════════════════════════════════════ */
+sec('A lista do projeto tem respiro e separador');
+
+(() => {
+  // O CSS do modulo e um array de pedacos de string; junta antes de medir.
+  const RP = lerTela('resumo-projeto.js').replace(/',\s*\n\s*'/g, '');
+  ok(/\.rxp-lista\{[^}]*gap:12px/.test(RP), 'o vao entre os cartoes dobrou');
+  ok(/\.rxp-item\{[^}]*padding:11px 13px/.test(RP), 'e o cartao ganhou folga interna');
+  ok(/rxp-item-sub > span \+ span::before\{content:"\\\\00b7"/.test(RP),
+     'os campos da sublinha ganharam separador — sem ele, tema, situacao, prazo ' +
+     'e dev liam-se como uma frase so');
+  ok(/rxp-item\.fim \.rxp-sit\{color:/.test(RP),
+     'e a situacao recebe a cor do estado, como a borda da esquerda');
+  ok(/\.rxp-item-sub\{[^}]*flex-wrap:wrap/.test(RP),
+     'a sublinha QUEBRA em vez de truncar — com o separador ela deixou de caber, ' +
+     'e nome de tema cortado ao meio e pior que uma linha a mais');
+  ok(/\.rxp-resumo\{[^}]*border-top:1px solid/.test(RP),
+     'o resumo da task tem linha de corte separando-o da sublinha');
+  ok(/class="rxp-dica"/.test(lerTela('resumo-projeto.js')),
+     'e a lista diz que os cartoes abrem — o cursor de mao so aparece com o mouse em cima');
+})();
+
 sec('A referencia da carta se refaz sozinha');
 
 // Ela existe porque o levantamento mostrou que a carta preve PRAZO, e nao horas:
@@ -7158,8 +7520,12 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
      'em verde, que nao colide com o azul de planejado');
 
   /* ─── E O DEV: LE, E TEM O ENDPOINT DOCUMENTADO ──────────────── */
-  ok(/linha\('Versao'/.test(DEV), 'o dev ve a versao na demanda');
-  ok(/linha\('Em producao'/.test(DEV), 'e se ela esta no ar');
+  /* Era `linha('Versao'` — a visao em leitura do dev deixou de ser uma linha
+     por campo e passou a ser ficha em grade (`campo(...)`) mais blocos de
+     texto. O QUE A INVARIANTE PROTEGE E O MESMO: que o dev enxergue a versao e
+     se a demanda subiu, sem precisar pedir a ninguem. */
+  ok(/campo\('Versão'/.test(DEV), 'o dev ve a versao na demanda');
+  ok(/campo\('Em produção'/.test(DEV), 'e se ela esta no ar');
   ok(/acao: 'deploy-versao'/.test(DEV),
      'e o endpoint esta na documentacao da API do dev');
   /* O EXEMPLO TEM DE SER UM LOTE. Um exemplo de um item so ensinaria o pipeline
@@ -15052,13 +15418,17 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const PJ = corpo(DEV, 'function pjAbrirDoCard(ev, projetoId) {') || '';
       ok(!!PJ, 'o abridor do projeto no Dev foi isolado');
       if (PJ) {
-        let recebeu = null, abriuDemanda = null;
+        let recebeu = null, abriuDemanda = null, cancelou = 0;
         const amb = {
           state: { projetos: [{ id: 'pjx', codigo: 'EP-000', nome: 'Projeto' }],
                    melhorias: [{ id: 'i1', codigo: 'AX-900', titulo: 'Uma' }] },
           window: { RESUMOPROJETO: {} },
           RESUMOPROJETO: { abrir: (st, id, op) => { recebeu = { id: id, op: op }; } },
           verDemanda: (m, o) => { abriuDemanda = { m: m, o: o }; },
+          /* O CHIP DO PROJETO ABRE COM DUPLO CLIQUE, e o clique que o aciona ja
+             agendou a abertura do card (ver `kcardClique`). Sem cancelar, o modal
+             de status subiria por cima do projeto 220ms depois de ele abrir. */
+          kcardCancela: () => { cancelou++; },
         };
         const nomes = Object.keys(amb);
         const fn = new Function(...nomes, PJ + '; return pjAbrirDoCard;')(
@@ -15068,6 +15438,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
            typeof recebeu.op.aoClicar === 'function',
            'o painel do Dev abre o resumo PEDINDO o clique nas issues',
            JSON.stringify(recebeu && Object.keys(recebeu.op || {})));
+        ok(cancelou === 1,
+           'e cancela a abertura do card que o primeiro clique agendou',
+           cancelou + ' cancelamento(s)');
         if (recebeu && recebeu.op && recebeu.op.aoClicar) {
           recebeu.op.aoClicar('i1');
           ok(abriuDemanda && abriuDemanda.m && abriuDemanda.m.id === 'i1' &&
@@ -20932,14 +21305,17 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           /* `setTimeout` entra como PARAMETRO, sombreando o global: a espera de
              dois segundos antes de repetir e certa em producao e so atrasaria a
              invariante. Aqui ela dispara na hora. */
+          /* `REDEREPETE` entra como o MODULO DE VERDADE, e nao um dublê: a
+             decisao de repetir (e quantas vezes) mora nele agora, e um dublê
+             aqui testaria a politica do teste em vez da do produto. */
           const fn = new FuncAsync('window', 'NAOPUBLICADA', 'avisaNaoPublicadas', 'toast',
                                    'patch', 'e', 'opts', 'showSaving', 'saveToGitHub',
-                                   'setTimeout', 'gravacaoEntrou',
+                                   'setTimeout', 'gravacaoEntrou', 'REDEREPETE',
                                    trecho.replace(/return false;\s*$/, ''));
           return fn(janela, janela.NAOPUBLICADA, () => {}, (t) => avisos.push(String(t)),
                     { 'ax-1': { titulo: 'x' } }, erro, opts, () => {},
                     (p, o) => { repetiu.push(o); return true; },
-                    (f) => f(), async () => !!entrou)
+                    (f) => f(), async () => !!entrou, require('./rede-repete.js'))
             .then(() => ({ marcadas, repetiu, limpas, avisos }));
         };
 
@@ -20956,17 +21332,25 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          * "nao publicada" ali e anunciar fracasso de um trabalho que deu certo —
          * e a pessoa refaz o que ja estava salvo.
          *
-         * Entao: na primeira queda de rede, repete; so marca se a segunda tambem
-         * cair. Erro que NAO e de rede continua marcando de primeira — ali o
-         * servidor respondeu e disse nao. */
+         * Entao: a queda de rede repete enquanto houver cota (`rede-repete.js`),
+         * e so marca quando a cota acaba. Erro que NAO e de rede continua
+         * marcando de primeira — ali o servidor respondeu e disse nao.
+         *
+         * A COTA PASSOU DE UMA PARA TRES EM 28/10/2026, com esperas crescentes.
+         * Uma repeticao dois segundos depois caia dentro da MESMA janela ruim:
+         * naquele dia o Worker registrou 143 requisicoes e 143 `Ok` enquanto as
+         * gravacoes do time nao chegavam nele, por sete minutos seguidos. */
         /* `await`, e NAO `return`: devolver daqui abandonaria as checagens que
            vem depois neste mesmo bloco — a que confere que o sucesso TIRA a
            marca e as duas que conferem o cracha no card. Invariante que some em
            silencio e pior que invariante que falha. */
-        /* O CASO QUE MOTIVOU TUDO: caiu duas vezes, mas ENTROU. Marcar aqui
-           seria anunciar fracasso de um trabalho salvo, e o dev refaria por
+        const COTA = require('./rede-repete.js').ESPERAS.length;
+        ok(COTA >= 2, 'a cota de repeticao e de pelo menos duas', COTA + ' tentativas');
+
+        /* O CASO QUE MOTIVOU TUDO: caiu com a cota esgotada, mas ENTROU. Marcar
+           aqui seria anunciar fracasso de um trabalho salvo, e o dev refaria por
            cima de uma base que ja mudou. */
-        const rOk = await roda({ message: 'Failed to fetch' }, { _retryRede: true }, true);
+        const rOk = await roda({ message: 'Failed to fetch' }, { _quedas: COTA }, true);
         ok(rOk.marcadas.length === 0 && rOk.limpas.length === 1,
            'no dev, gravacao que ENTROU limpa a marca em vez de acusar falha',
            'marcou ' + rOk.marcadas.length + ', limpou ' + JSON.stringify(rOk.limpas));
@@ -20977,12 +21361,28 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         ok(r1.repetiu.length === 1 && r1.marcadas.length === 0,
            'queda de rede REPETE em vez de marcar — a gravacao costuma ter entrado',
            'repetiu ' + r1.repetiu.length + ', marcou ' + r1.marcadas.length);
-        ok(r1.repetiu.length === 1 && r1.repetiu[0] && r1.repetiu[0]._retryRede === true,
-           'e a repeticao vai marcada, para nao virar laco infinito');
+        ok(r1.repetiu.length === 1 && r1.repetiu[0] && r1.repetiu[0]._quedas === 1,
+           'e a repeticao vai CONTADA, para nao virar laco infinito',
+           JSON.stringify(r1.repetiu[0]));
 
-        const r2 = await roda({ message: 'Failed to fetch' }, { _retryRede: true }, false);
+        /* AINDA DENTRO DA COTA: continua repetindo, e o contador anda. Sem este
+           caso, uma cota de um so passaria tao bem quanto a de tres. */
+        const rMeio = await roda({ message: 'Failed to fetch' }, { _quedas: COTA - 1 }, false);
+        ok(rMeio.repetiu.length === 1 && rMeio.repetiu[0]._quedas === COTA &&
+           rMeio.marcadas.length === 0,
+           'na ultima tentativa da cota ele ainda repete, e nao marca',
+           JSON.stringify(rMeio.repetiu[0]));
+
+        /* O AVISO DIZ EM QUAL TENTATIVA ESTA. Tres toasts identicos parecem a
+           mesma mensagem travada, e a pessoa clica de novo — que era o caminho
+           para duas gravacoes concorrentes. */
+        ok(r1.avisos.some(t => /1 de /.test(t)) && rMeio.avisos.some(t => new RegExp(COTA + ' de ').test(t)),
+           'e o aviso numera a tentativa, em vez de repetir a mesma frase',
+           JSON.stringify([r1.avisos[0], rMeio.avisos[0]]));
+
+        const r2 = await roda({ message: 'Failed to fetch' }, { _quedas: COTA }, false);
         ok(r2.repetiu.length === 0 && r2.marcadas.length === 1 && r2.marcadas[0][0] === 'ax-1',
-           'caindo DUAS vezes, ai sim a demanda do patch e marcada',
+           'esgotada a cota, ai sim a demanda do patch e marcada',
            JSON.stringify(r2.marcadas));
 
         const r3 = await roda(new Error('horas_obrigatorias'), {}, false);
@@ -21071,7 +21471,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                                   'publicacaoEntrou', '_pollTs', 'document', 'explica',
                                   'toast', 'showSaving', 'publicaAgora', 'setTimeout',
                                   'tentativa', 'redes', 'e',
-                                  '_pendingEdits', '_kbDirty', 'sujasDesteEnvio', '_recusadasIds', trechoA);
+                                  '_pendingEdits', '_kbDirty', 'sujasDesteEnvio', '_recusadasIds',
+                                  /* O MODULO DE VERDADE, e nao um duble: a decisao de repetir mora
+                                     nele, e um duble testaria a politica do teste. */
+                                  'REDEREPETE', trechoA);
         return fn(janela, janela.NAOPUBLICADA, sujas,
                   { melhorias: [{ id: 'ax-9', titulo: 'x' }] }, () => {},
                   () => limpezas.push('rascunho'), () => {},
@@ -21079,7 +21482,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                   { getElementById: () => faixa }, () => {},
                   (t) => avisos.push(String(t)), () => {},
                   (t, r) => { repetiu.push({ tentativa: t, redes: r }); return true; },
-                  (f) => f(), 1, redes, erro, true, true, sujas, [])
+                  (f) => f(), 1, redes, erro, true, true, sujas, [], require('./rede-repete.js'))
           .then(() => ({ marcadas, repetiu, limpezas, avisos, sobrou: sujas.size,
                          faixa: faixa.textContent }));
       };
@@ -21090,7 +21493,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        * tela anunciou fracasso — e quem acredita refaz por cima de uma base que
        * ja mudou. Executado, e nao casado por texto: trocar `publicacaoEntrou()`
        * por `false` deixaria a chamada intacta na pagina. */
-      const aOk = await rodaA({ message: 'Failed to fetch' }, 1, true);
+      /* COM A COTA JA ESGOTADA: e so ai que a conferencia de "entrou?"
+         acontece. Com `redes` dentro da cota ele repetiria, e esta
+         invariante mediria a repeticao em vez do caso que a motivou. */
+      const COTA_A = require('./rede-repete.js').ESPERAS.length;
+      const aOk = await rodaA({ message: 'Failed to fetch' }, COTA_A, true);
       ok(aOk.marcadas.length === 0 && aOk.limpezas.includes('rascunho') &&
          aOk.limpezas.includes('zera') && aOk.sobrou === 0,
          'gravacao que ENTROU e tratada como sucesso, mesmo sem a resposta ter voltado',
@@ -21111,9 +21518,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'e ela gasta o orcamento DA REDE, nao o do conflito',
          JSON.stringify(a1.repetiu[0]));
 
-      const a2 = await rodaA({ message: 'Failed to fetch' }, 1, false);
+      /* A COTA VEM DO MODULO, e nao de um numero escrito aqui: com o numero,
+         aumentar a cota no produto deixaria esta invariante medindo a cota
+         antiga — verde, e cega. */
+      const aMeio = await rodaA({ message: 'Failed to fetch' }, COTA_A - 1, false);
+      ok(aMeio.repetiu.length === 1 && aMeio.marcadas.length === 0,
+         'na ultima tentativa da cota o Admin ainda repete, e nao marca',
+         JSON.stringify(aMeio.repetiu[0]));
+      const a2 = await rodaA({ message: 'Failed to fetch' }, COTA_A, false);
       ok(a2.repetiu.length === 0 && a2.marcadas.length === 1,
-         'caindo duas vezes, o Admin marca as demandas pendentes',
+         'esgotada a cota, o Admin marca as demandas pendentes',
          JSON.stringify(a2.marcadas));
       /* ── E O MOTIVO DA CONFERENCIA CHEGA A FAIXA ──
        *

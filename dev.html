@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="c87a1bcf57">
+<html lang="pt-BR" data-build="921f319de2">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -595,6 +595,67 @@
     .dep-blocked-banner { background:var(--red-bg); color:var(--red-tx); border-radius:5px; padding:5px 8px; font-size:11px; margin-top:6px; font-weight:600; }
     .btn-dep-open { font-size:11px; padding:4px 10px; background:none; border:1px dashed var(--border2); border-radius:5px; color:var(--text3); cursor:pointer; margin-top:6px; font-family:'Inter',sans-serif; transition:all .15s; }
     .btn-dep-open:hover { border-color:var(--blue); color:var(--blue); }
+
+    /* ═══ A DEMANDA EM LEITURA — a tela de tirar dúvida ════════════════════
+     *
+     * "não está com bom visual p dev, está muito confuso, sem espaçamento nas
+     *  respostas."
+     *
+     * Aqui era UMA LINHA POR CAMPO: rótulo de 120px à esquerda, valor à
+     * direita, borda embaixo. Funciona para "Responsável: Marina"; desmonta no
+     * campo que a pessoa abriu a demanda para ler.
+     *
+     * Medido na base: 37 das 158 descrições passam de 300 caracteres (a maior
+     * tem 1.555) e 40 têm quebra de linha — são documentos, com título, lista e
+     * linha em branco entre as partes. Esse texto caía numa coluna que começa a
+     * 120px, em 13px, sem `line-height` e com as quebras viradas em `<br>`: as
+     * linhas em branco do original sumiam, e o que sobrava era um bloco cinza
+     * encostado na borda. É a isso que "sem espaçamento nas respostas" se
+     * refere.
+     *
+     * A TELA PASSA A TER DUAS NATUREZAS, porque os dados têm duas:
+     *
+     *   A FICHA    o que é de uma palavra — responsável, pontos, datas. Em
+     *              grade, lado a lado. Empilhados um por linha, oito campos
+     *              empurravam o texto para fora da primeira tela.
+     *   OS BLOCOS  o que é texto — pedido, resumo, implementação. Largura
+     *              inteira, título próprio e respiro de leitura.
+     *
+     * `white-space:pre-wrap` É A CORREÇÃO DO ESPAÇAMENTO, e ela é literal: o
+     * parágrafo em branco que a pessoa digitou volta a existir na tela, em vez
+     * de ser engolido pelo `<br>`. */
+    .mv-ficha { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+                gap:11px 18px; background:var(--bg3); border:1px solid var(--border);
+                border-radius:10px; padding:12px 14px; margin-bottom:18px; }
+    .mv-campo { display:flex; flex-direction:column; gap:2px; min-width:0; }
+    .mv-rot { font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+              color:var(--text3); white-space:nowrap; }
+    .mv-val { font-size:13.5px; color:var(--text); overflow-wrap:anywhere; line-height:1.4; }
+    .mv-val.atrasado { color:var(--red-tx,#F9A0A0); }
+
+    .mv-bloco { margin-bottom:18px; }
+    .mv-bloco-tit { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em;
+                    color:var(--text3); margin:0 0 7px; font-weight:700; }
+    /* SEM `max-height` AQUI. O modal já rola; um segundo rolo dentro dele faz a
+       roda do mouse parar no meio do texto e a pessoa achar que acabou. */
+    .mv-texto { font-size:13.5px; line-height:1.7; color:var(--text);
+                background:var(--bg3); border:1px solid var(--border);
+                border-radius:9px; padding:13px 15px; white-space:pre-wrap;
+                overflow-wrap:anywhere; }
+    .mv-links { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+    .mv-link { font-size:12px; padding:5px 11px; border-radius:999px;
+               background:var(--bg3); border:1px solid var(--border2);
+               color:var(--blue); text-decoration:none; }
+    .mv-link:hover { border-color:var(--blue); }
+    /* O discovery traz a própria moldura (`.disc-sec`); aqui só o ar em volta,
+       para ele não encostar no bloco do pedido que vem logo acima. */
+    /* O CARD CLICADO RESPONDE NA HORA, e a abertura é que espera os 220ms do
+       duplo clique (ver `kcardClique`). Sem esta marca, o quinto de segundo lê-se
+       como "não aconteceu nada" e a pessoa clica de novo — virando o duplo
+       clique que ela não queria dar. */
+    .kcard.kcard-abrindo { outline:2px solid var(--blue,#6EA8FF); outline-offset:-1px; }
+    .mv-disc { margin-bottom:18px; }
+    .mv-disc .disc-sec { margin-bottom:0; background:var(--bg3); padding:13px 15px; }
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="etapa-demanda.js?v=710bc19507"></script>
@@ -614,9 +675,10 @@
 <script src="dialogo.js?v=171b484b8c"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
+<script src="rede-repete.js?v=ff7a669a03"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
-<script src="resumo-projeto.js?v=7be0944f54"></script>
+<script src="resumo-projeto.js?v=2e30585cbe"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="busca-demanda.js?v=1380650a7a"></script>
@@ -2811,7 +2873,13 @@ function verDemanda(m, opcoes) {
   /* "SÓ NÃO PERMITIR EDIÇÃO" — e a tela diz isso ANTES de a pessoa procurar
      onde salva. Vale também na PRÓPRIA demanda: este modal nunca grava, e quem
      vai editar usa o card no quadro, onde moram as travas de etapa e entrega. */
-  const emLeitura = minha
+  const emLeitura = achado.por === 'quadro' && minha
+    /* ABERTA DO PROPRIO QUADRO, com dois cliques. Aqui "abra o card no seu
+       quadro" seria absurdo — ela JA esta no quadro dela, e o card se abre com
+       um clique. A frase diz o caminho de volta, em vez de mandar para onde a
+       pessoa ja esta. */
+    ? '<div>👁 Consulta rápida, sem editar. Um clique no card abre para editar.</div>'
+    : minha
     ? '<div>👁 Consulta apenas. Para editar, abra o card dela no seu quadro.</div>'
     : '<div>👁 Esta demanda está com <b>' + escAttr(m.dev || 'ninguém') +
       '</b>. Você está vendo em <b>leitura</b> — alterações só quem está com ela.</div>';
@@ -2821,47 +2889,83 @@ function verDemanda(m, opcoes) {
     ';background:var(--bg4);border:1px solid var(--border2);border-radius:8px;' +
     'padding:10px 12px;margin-bottom:14px;font-size:13px;line-height:1.5;color:var(--text2)';
 
-  const linha = (rot, val) => val
-    ? '<div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">' +
-      '<span style="color:var(--text3);min-width:120px;font-size:13px">' + rot + '</span>' +
-      '<span style="flex:1;font-size:13px">' + val + '</span></div>'
+  /* ── A FICHA: o que é de uma palavra, em grade ───────────────────────────
+     Rótulo em cima, valor embaixo, lado a lado. Um campo por linha empurrava o
+     texto — que é o motivo de a pessoa ter aberto a demanda — para fora da
+     primeira tela. */
+  const campo = (rot, val, cls) => val
+    ? '<div class="mv-campo"><span class="mv-rot">' + rot + '</span>' +
+      '<span class="mv-val' + (cls ? ' ' + cls : '') + '">' + val + '</span></div>'
+    : '';
+
+  /* ── OS BLOCOS: o que é texto, em largura inteira ────────────────────────
+     O conteúdo vai ESCAPADO e cru dentro de `.mv-texto`, que tem
+     `white-space:pre-wrap`. Era `.replace(/\n/g,'<br>')`, e a diferença é toda
+     a queixa: `<br>` quebra a linha mas COLAPSA a linha em branco entre os
+     parágrafos, então um texto com título, lista e seções virava um bloco só. */
+  const bloco = (rot, txt) => String(txt == null ? '' : txt).trim()
+    ? '<section class="mv-bloco"><h4 class="mv-bloco-tit">' + rot + '</h4>' +
+      '<div class="mv-texto">' + escAttr(txt) + '</div></section>'
     : '';
 
   const tema = (state.temas || []).find(t => String(t.id) === String(m.tema_id));
   const sp = getStatusKey(m);
   const atraso = window.PRAZO ? PRAZO.diasDeAtraso(m, sp, PRAZO.hojeISO()) : null;
+  const dt = (v) => v ? escAttr(formatDate(v)) : '';
+
+  /* Os links viram pastilhas numa linha só. Antes cada um ocupava uma linha
+     inteira com a URL inteira escrita — três endereços de GitHub por extenso
+     entre o pedido e o resumo da entrega. */
+  const links = [['link_issue', 'Issue'], ['link_pr', 'Pull request'],
+                 ['link_milestone', 'Milestone']]
+    .filter(([c]) => m[c])
+    .map(([c, rot]) => '<a class="mv-link" href="' + escAttr(m[c]) + '" target="_blank" ' +
+      'rel="noopener">' + rot + ' ↗</a>').join('');
+
+  const disc = (typeof discoveryHTMLDev === 'function') ? discoveryHTMLDev(m) : '';
 
   corpo.innerHTML =
-    linha('Situação', escAttr(STATUS_LABELS[sp] || sp) +
-      (atraso ? ' <span style="color:var(--red)">· ' + atraso + ' dia(s) de atraso</span>' : '')) +
-    linha('Responsável', escAttr(m.dev || '')) +
-    linha('Tema', escAttr(tema ? tema.nome : '')) +
-    linha('Solicitante', escAttr(m.solicitante || '')) +
-    linha('Início', escAttr(m.inicio || '')) +
-    linha('Previsão de entrega', escAttr(m.entrega || '') || '<i style="color:var(--text3)">sem data combinada</i>') +
-    linha('Pontos', m.poker_pontos == null ? '' : String(m.poker_pontos)) +
-    linha('Descrição', escAttr(m.descricao || '').replace(/\n/g, '<br>')) +
-    linha('Resumo da entrega', escAttr(m.resumo_entrega || '').replace(/\n/g, '<br>')) +
-    linha('Implementação', escAttr(m.implementacao || '').replace(/\n/g, '<br>')) +
-    /* VERSAO E PRODUCAO, logo antes das referencias do GitHub — e a mesma
-       pergunta em outra ponta: os links dizem ONDE o codigo esta, e isto diz se
-       ele chegou ao ar. O dev le, e nao edita: quem marca e a esteira
-       (`deploy-versao`) ou o PM/PO pela tela do admin. */
-    linha('Versao', m.versao ? escAttr(m.versao) : '') +
-    linha('Em producao', m.em_producao
-      ? '<span class="d-prod">\u25b2 no ar</span>' +
-        (m.producao_em
-          ? ' <span style="color:var(--text3);font-size:11.5px">desde ' +
-            escAttr(new Date(m.producao_em).toLocaleString('pt-BR',
-              { dateStyle: 'short', timeStyle: 'short' })) +
-            (m.producao_por ? ' \u00b7 ' + escAttr(m.producao_por) : '') + '</span>'
-          : '')
-      : (m.versao ? '<i style="color:var(--text3)">ainda nao</i>' : '')) +
-    [['link_issue', 'Issue'], ['link_pr', 'Pull request'], ['link_milestone', 'Milestone']]
-      .map(([campo, rot]) => m[campo]
-        ? linha(rot, '<a href="' + escAttr(m[campo]) + '" target="_blank" rel="noopener" ' +
-          'style="color:var(--blue)">' + escAttr(m[campo]) + '</a>')
-        : '').join('') +
+    '<div class="mv-ficha">' +
+      campo('Situação', escAttr(STATUS_LABELS[sp] || sp) +
+        (atraso ? ' · ' + atraso + ' dia(s) de atraso' : ''), atraso ? 'atrasado' : '') +
+      campo('Responsável', escAttr(m.dev || '') || '<i style="color:var(--text3)">sem dev</i>') +
+      campo('Solicitante', escAttr(m.solicitante || '') ||
+        '<i style="color:var(--text3)">não informado</i>') +
+      campo('Tema', escAttr(tema ? tema.nome : '')) +
+      campo('Pontos', m.poker_pontos == null ? '' : String(m.poker_pontos)) +
+      campo('Início', dt(m.inicio)) +
+      campo('Previsão de entrega', dt(m.entrega) ||
+        '<i style="color:var(--text3)">sem data combinada</i>') +
+      /* VERSAO E PRODUCAO — os links dizem ONDE o codigo esta, e isto diz se
+         ele chegou ao ar. O dev le, e nao edita: quem marca e a esteira
+         (`deploy-versao`) ou o PM/PO pela tela do admin. */
+      campo('Versão', m.versao ? escAttr(m.versao) : '') +
+      campo('Em produção', m.em_producao
+        ? '<span class="d-prod">▲ no ar</span>' +
+          (m.producao_em
+            ? '<br><span style="color:var(--text3);font-size:11.5px">desde ' +
+              escAttr(new Date(m.producao_em).toLocaleString('pt-BR',
+                { dateStyle: 'short', timeStyle: 'short' })) +
+              (m.producao_por ? ' · ' + escAttr(m.producao_por) : '') + '</span>'
+            : '')
+        : (m.versao ? '<i style="color:var(--text3)">ainda não</i>' : '')) +
+    '</div>' +
+    (links ? '<div class="mv-links">' + links + '</div>' : '') +
+    bloco('O que foi pedido', m.descricao) +
+    /* O DISCOVERY ENTRA AQUI, E ELE FALTAVA. É o que o solicitante escreveu no
+       painel — impacto, dor real, critérios de aceite —, e é literalmente "o
+       assunto" sobre o qual se tira dúvida. O dev já o via no card DELE
+       (`openStatusModal` o desenha desde sempre); na demanda de OUTRA pessoa,
+       aberta pelo projeto, ele sumia — justamente onde a dúvida é maior.
+       MESMA MONTAGEM, uma função só: duas versões divergiriam no primeiro campo
+       novo, como já aconteceu com a etapa e com o prazo. */
+    /* SEM TITULO NOSSO EM VOLTA: `discoveryHTMLDev` ja devolve a secao com o
+       proprio cabecalho ("Discovery (preenchido no painel)") e o proprio quadro.
+       Embrulhar dava DOIS titulos empilhados dizendo a mesma coisa, um dentro do
+       outro — conferido na tela antes de ficar assim. */
+    (disc ? '<div class="mv-disc">' + disc + '</div>' : '') +
+    bloco('Resumo da entrega', m.resumo_entrega) +
+    bloco('Implementação', m.implementacao) +
     /* MENSAGERIA — o registro da demanda, em ordem, com dia e hora.
        Entra aqui, no fim dos detalhes, porque e a continuacao natural da leitura:
        este modal responde "o que e esta demanda", e a Mensageria responde "como
@@ -3267,13 +3371,16 @@ async function saveToGitHub(patch, opts = {}) {
          fetch", e a tela anunciava fracasso de um trabalho que deu certo.
          Repetir e seguro porque o patch e aplicado sobre uma leitura FRESCA do
          servidor a cada tentativa, como ja valia para o conflito logo acima. */
-      const quedaDeRede = e instanceof TypeError ||
-                          (e && typeof e.message === 'string' && e.message.includes('fetch'));
-      if (quedaDeRede && !opts._retryRede) {
+      /* A POLITICA MORA EM `rede-repete.js`: uma repeticao em 2s nao cobria a
+         janela ruim de 28/10, que durou minutos. Era tambem a terceira copia
+         da mesma regra nesta base. */
+      const quedaDeRede = REDEREPETE.ehQueda(e);
+      const quedas = Number(opts._quedas || 0);
+      if (quedaDeRede && REDEREPETE.deveRepetir(quedas)) {
         showSaving(false);
-        toast('⚠️ Falha de rede, tentando novamente…','err');
-        await new Promise(r => setTimeout(r, 2000));
-        return saveToGitHub(patch, { ...opts, _retryRede: true });
+        toast(REDEREPETE.aviso(quedas),'err');
+        await new Promise(r => setTimeout(r, REDEREPETE.espera(quedas)));
+        return saveToGitHub(patch, { ...opts, _quedas: quedas + 1 });
       }
       /* REPETIU E CAIU DE NOVO: ainda assim pode TER ENTRADO. Mesma razao
          escrita por extenso no `publicacaoEntrou` do Admin — o Worker registrou
@@ -4283,7 +4390,8 @@ function renderCard(m, colKey) {
            window.NAOPUBLICADA && NAOPUBLICADA.tem(m.id) ? ' nao-pub-card' : ''}" draggable="true" id="card-${m.id}"
          ondragstart="onDragStart(event,'${m.id}')"
          ondragend="onDragEnd(event)"
-         onclick="openStatusModal('${m.id}')">
+         onclick="kcardClique(event,'${m.id}')"
+         ondblclick="kcardDuplo(event,'${m.id}')">
       ${/* A FAIXA DIZ QUANTAS, O CARD DIZ QUAL. So a faixa nao diz onde olhar,
             e so o card se perde em oito colunas. */''}
       ${window.NAOPUBLICADA && NAOPUBLICADA.tem(m.id)
@@ -5195,8 +5303,62 @@ async function msGrillResponde(veredito) {
  *
  *  `stopPropagation` porque o duplo clique no card ja faz outra coisa: sem
  *  ele as duas telas abririam juntas, uma por cima da outra. */
+/* ═══ UM CLIQUE EDITA, DOIS CLIQUES LEEM ══════════════════════════════════
+ *
+ * "dar 2 cliques na demanda o dev poderá visualizar toda task para tirar
+ *  dúvidas do assunto ou tratativa."
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * `ondblclick` SOZINHO NAO DISPARA AQUI, e isso foi MEDIDO antes de escrever
+ * este codigo. O primeiro clique abre o modal de status, que cobre o card: o
+ * segundo clique cai no modal, o card nunca recebe o par, e o navegador nunca
+ * emite `dblclick`. Montei a pagina com os dois casos lado a lado e o registro
+ * saiu "A: click" e nada mais — `ondblclick` no card seria codigo morto.
+ *
+ * Entao o clique simples ESPERA 220ms para ver se vem o segundo. O preco e
+ * real: abrir o proprio card, que e a acao mais repetida do dia, passa a ter
+ * um quinto de segundo de atraso. Para ele nao parecer travado, o card marca
+ * na hora que foi clicado (`kcard-abrindo`) — o retorno visual acontece em
+ * zero, so a abertura espera.
+ *
+ * 220ms e abaixo do limiar de duplo clique de qualquer navegador (~500ms) e
+ * acima do intervalo de um duplo clique humano, que fica na casa dos 100ms.  */
+let _kcTimer = null;
+let _kcAlvo = null;
+
+/** Cancela a abertura agendada. Chamada tambem de `pjAbrirDoCard`: o chip do
+ *  projeto tem duplo clique proprio, e sem isto o clique que o abre deixaria o
+ *  modal de status agendado para subir por cima dele 220ms depois. */
+function kcardCancela() {
+  if (_kcTimer) { clearTimeout(_kcTimer); _kcTimer = null; }
+  if (_kcAlvo) { _kcAlvo.classList.remove('kcard-abrindo'); _kcAlvo = null; }
+}
+
+function kcardClique(ev, id) {
+  // O segundo clique do duplo nao reagenda: sem esta guarda ele abriria o modal
+  // 220ms depois de o duplo ja ter aberto a consulta, uma tela por cima da outra.
+  if (_kcTimer) return;
+  _kcAlvo = ev && ev.currentTarget;
+  if (_kcAlvo) _kcAlvo.classList.add('kcard-abrindo');
+  _kcTimer = setTimeout(() => {
+    _kcTimer = null;
+    if (_kcAlvo) { _kcAlvo.classList.remove('kcard-abrindo'); _kcAlvo = null; }
+    openStatusModal(id);
+  }, 220);
+}
+
+function kcardDuplo(ev, id) {
+  kcardCancela();
+  const m = (state.melhorias || []).find(x => String(x.id) === String(id));
+  if (!m) return;
+  verDemanda(m, { por: 'quadro' });
+}
+
 function pjAbrirDoCard(ev, projetoId) {
   if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  // O chip tem duplo clique proprio: o clique que o acionou ja agendou a
+  // abertura do card, e ela precisa ser desfeita antes de o projeto subir.
+  kcardCancela();
   if (!projetoId || !window.RESUMOPROJETO) return;
   const p = (state.projetos || []).find(x => String(x.id) === String(projetoId));
   /* AS ISSUES DO PROJETO VIRAM PORTAS. O módulo não sabe o que abrir — ele roda
