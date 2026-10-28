@@ -287,7 +287,11 @@
     var lista = !r.total
       ? '<p class="rxp-vazio">Nenhuma issue vinculada a este projeto ainda. ' +
         'Use a aba <strong>Demandas</strong> do projeto para ligar os cards.</p>'
-      : '<div class="rxp-lista">' + r.issues.map(function (x) {
+      : (clicavel
+          ? '<p class="rxp-dica">👁 Clique em uma demanda para ler o pedido, o ' +
+            'discovery e o que foi entregue — em consulta, sem editar.</p>'
+          : '') +
+        '<div class="rxp-lista">' + r.issues.map(function (x) {
           var cls = x.gravada === 'concluido' ? 'fim'
             : x.gravada === 'validacao' ? 'val'
             : x.efetiva === 'atrasado' ? 'atr' : 'and';
@@ -409,10 +413,17 @@
     /* `auto-fill` E NÃO UM NÚMERO DE COLUNAS: o mínimo de 360px é a largura em
        que o título ainda se lê; quantas cabem é conta do navegador, e ela sai
        certa no monitor largo e no notebook. */
+    /* ═══ O RESPIRO DA LISTA ════════════════════════════════════════════
+     * "está muito confuso, sem espaçamento nas respostas."
+     * Eram cartões de 6px de padding separados por 6px de vão: a grade inteira
+     * lia-se como um bloco de texto corrido, sem onde o olho descansar entre um
+     * item e o seguinte. O vão dobrou e o padding quase: o cartão passou a ter
+     * borda visível de ar, que é o que separa um item do outro sem precisar de
+     * linha divisória nenhuma. */
     '.rxp-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));',
-    '  gap:6px;overflow:auto;min-height:0;align-content:start;}',
+    '  gap:12px;overflow:auto;min-height:0;align-content:start;padding:2px;}',
     '.rxp-item{background:var(--bg3,#1C1C24);border-left:3px solid var(--border2,#3A3A46);',
-    '  border-radius:6px;padding:6px 10px;min-width:0;}',
+    '  border-radius:8px;padding:11px 13px;min-width:0;}',
     '.rxp-item.fim{border-left-color:#3EC98E;} .rxp-item.val{border-left-color:#7ED8D8;}',
     '.rxp-item.atr{border-left-color:#F9A0A0;} .rxp-item.and{border-left-color:#FFC861;}',
     /* O CARTÃO CLICÁVEL SE ANUNCIA, e o foco do teclado aparece. Sem o anel de
@@ -429,13 +440,39 @@
     '.rxp-tit{font-weight:600;font-size:13px;color:var(--text,#EDEDF0);flex:1;min-width:0;',
     '  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
     '.rxp-pts{font-size:10.5px;color:var(--text3,#8A8A96);flex-shrink:0;}',
-    '.rxp-item-sub{display:flex;gap:8px;font-size:11px;color:var(--text3,#8A8A96);',
-    '  margin-top:1px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
-    '.rxp-item-sub span{overflow:hidden;text-overflow:ellipsis;}',
-    '.rxp-item-sub .rxp-prazo{flex-shrink:0;}',
-    '.rxp-resumo{font-size:11.5px;color:var(--text2,#B8B8C4);margin-top:3px;line-height:1.4;',
+    /* ═══ A SUBLINHA PRECISAVA DE SEPARADOR, e nao de mais um vao ══════════
+     * Tema, situacao, prazo e dev saiam na mesma cor e no mesmo tamanho,
+     * separados so por 8px de espaco: lia-se "AxPoint - RH Em validacao,
+     * aguardando o PM/PO 02/10/2026 a 21/10/2026 Joao Siqueira" como UMA frase
+     * sem comeco nem fim. O ponto entre eles diz onde um campo acaba — e ele
+     * entra por CSS, para o HTML continuar sendo so os campos. */
+    /* E ELA QUEBRA, em vez de truncar. Com os separadores a linha passou a nao
+       caber, e o que sobrava era "AxPoint ..." e "Joao Siquei..." — o nome do
+       tema e o do dev cortados ao meio, que e pior do que o amontoado anterior.
+       Quebrar custa uma linha de altura no cartao; truncar custa a informacao.
+       (O TITULO continua numa linha so: ele e a ancora visual da grade, e dois
+       titulos de alturas diferentes desalinham a leitura em coluna.) */
+    '.rxp-item-sub{display:flex;flex-wrap:wrap;row-gap:2px;font-size:11.5px;',
+    '  color:var(--text3,#8A8A96);margin-top:5px;min-width:0;line-height:1.5;}',
+    '.rxp-item-sub > span + span::before{content:"\\00b7";margin:0 7px;',
+    '  color:var(--border2,#3A3A46);}',
+    /* A SITUACAO GANHA A COR DA BORDA do cartao. A borda de 3px dizia o estado
+       e nada mais dizia: com a cor na palavra, "Concluido" e "Em validacao" se
+       distinguem sem o olho ter de achar a listra da esquerda. */
+    '.rxp-item.fim .rxp-sit{color:#3EC98E;} .rxp-item.val .rxp-sit{color:#7ED8D8;}',
+    '.rxp-item.atr .rxp-sit{color:#F9A0A0;} .rxp-item.and .rxp-sit{color:#FFC861;}',
+    /* O RESUMO E A RESPOSTA DA TASK, e era o que mais sofria: 11,5px colado na
+       sublinha, na mesma familia de cinza, sem nada dizendo que ali comeca
+       outra coisa. Agora tem linha de corte, ar em cima e corpo de texto. */
+    '.rxp-resumo{font-size:12px;color:var(--text2,#B8B8C4);margin-top:9px;',
+    '  padding-top:8px;border-top:1px solid var(--border,#2A2A35);line-height:1.55;',
     '  overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;',
     '  -webkit-box-orient:vertical;overflow:hidden;}',
+    /* A DICA DE QUE O CARTAO ABRE. O cursor de mao so aparece quando o mouse ja
+       esta em cima — quem nao passa o mouse nunca descobre que ha o que abrir,
+       e foi assim que a consulta ficou "escondida". */
+    '.rxp-dica{font-size:11.5px;color:var(--text3,#8A8A96);margin:0 0 9px;',
+    '  display:flex;align-items:center;gap:6px;flex-shrink:0;}',
     '.rxp-vazio{font-size:13px;color:var(--text3,#8A8A96);}',
   ].join('\n');
 
