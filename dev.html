@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7264a51f8a">
+<html lang="pt-BR" data-build="345427533e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1025,6 +1025,24 @@
          isso elas são botões, e não mais uma opção do "Mover para" — a lista de
          lá é do fluxo normal, e misturar faria o dev escolher Planning à toa. -->
     <div id="ms-grill" style="display:none"></div>
+    <!-- ── QUEM PEDIU ───────────────────────────────────────────────────────
+         ESTE CAMPO FALTAVA, E ELE TRAVOU O TIME INTEIRO.
+
+         Desde que a Validação da área passou a exigir solicitante, mover uma
+         demanda para lá sem o nome é recusado — com razão: é o solicitante
+         quem homologa, e sem ele a etapa não tem dono. Mas o campo só existia
+         no formulário de demanda NOVA. Numa demanda já aberta — que são 119 sem
+         solicitante na base — o dev lia "informe o solicitante" e não tinha
+         onde informar. Regra que cobra o que a tela não oferece é porta
+         trancada, e foi assim que a esteira parou.
+
+         Fica ANTES de "Mover para", que é o gesto que a cobra: preencher
+         depois de ser recusado é a ordem errada. -->
+    <div class="form-group" id="ms-solicitante-group">
+      <label>Quem pediu <span style="color:var(--red,#E84444)">*</span>
+        <small style="font-weight:400;color:var(--text3)">— é quem homologa na Validação da área</small></label>
+      <input type="text" id="ms-solicitante" placeholder="Nome de quem pediu" />
+    </div>
     <!-- So projetos aprovados entram na lista: pendente e recusado nao aceitam
          demanda, e o Worker solta o vinculo na gravacao. Oferecer aqui faria a
          pessoa vincular e depois ver o vinculo desaparecer sozinho. -->
@@ -4591,7 +4609,19 @@ function onDrop(e, colKey) {
     const impede = HOMOLOGACAO.barra(m, colKey, PRAZO.hojeISO());
     if (impede) {
       toast('🔒 ' + impede.motivo, 'err');
-      if (impede.campo === 'homologacao') openStatusModal(id);
+      /* ABRE O CARD NOS DOIS CASOS, e não só na homologação. Faltando o
+         solicitante, o arraste dizia o que faltava e deixava a pessoa onde
+         estava — sem campo à vista, a recusa virava parede. O card tem os dois
+         campos; abri-lo é o caminho mais curto entre a recusa e o conserto. */
+      if (impede.campo === 'homologacao' || impede.campo === 'solicitante') {
+        openStatusModal(id);
+        if (impede.campo === 'solicitante') {
+          setTimeout(() => {
+            const campo = document.getElementById('ms-solicitante');
+            if (campo) { campo.focus(); campo.scrollIntoView({ block: 'center' }); }
+          }, 220);
+        }
+      }
       return;
     }
   }
@@ -4837,6 +4867,7 @@ function openStatusModal(id, preselect) {
   // Em validacao PM/PO a demanda sai das maos do dev: ele nao pode puxar de
   // volta nem reentregar enquanto o PM/PO analisa. Concluir tambem nunca foi
   // opcao dele — quem fecha e quem valida.
+  msSolicitanteRender(m);
   msProjetoRender(m);
   msGrillRender(m);
   msHomologRender(m);
@@ -5045,6 +5076,8 @@ function onStatusModalChange() {
 // Seletor de projeto no card do dev. Guarda se mexeu, porque updateStatus monta
 // o patch por campo e um vinculo alterado tem de entrar nele.
 let _msProjetoMexido = false;
+// Mesma mecanica do projeto: o campo so vai ao servidor se esta tela o mexeu.
+let _msSolicitanteMexido = false;
 /* ═══ GRILL, NO PAINEL DO DEV ══════════════════════════════════════════════
  *
  * "Onde ele deverá levantar os pontos da task" — ponto, aqui, é dúvida ou
@@ -5174,6 +5207,19 @@ function pjAbrirDoCard(ev, projetoId) {
       verDemanda(m, { por: 'projeto', rotulo: (p && (p.codigo || p.nome)) || '' });
     },
   });
+}
+
+/* QUEM PEDIU, carregado ao abrir o card — e a marca ZERADA junto.
+ *
+ * Sem zerar, a marca vaza de um card para o outro: quem preenche o nome na
+ * AX-100, fecha, e abre a AX-200 mandaria o `solicitante` da segunda também,
+ * sobrescrevendo com o valor que estiver no campo. É a mesma razão pela qual
+ * `_msProjetoMexido` é zerado logo abaixo. */
+function msSolicitanteRender(m) {
+  const campo = document.getElementById('ms-solicitante');
+  if (!campo) return;
+  _msSolicitanteMexido = false;
+  campo.value = (m && m.solicitante) || '';
 }
 
 function msProjetoRender(m) {
@@ -5564,6 +5610,25 @@ async function saveStatus() {
           'Esta etapa não é movida pelo Painel Dev.'), 'err');
     return;
   }
+  /* ═══ O NOME DIGITADO VALE ANTES DA REGRA, E NÃO DEPOIS ═══════════════════
+   *
+   * Este bloco estava ABAIXO da barreira, e a ordem era o defeito: a regra
+   * perguntava pelo solicitante da demanda GRAVADA, não pelo que a pessoa
+   * acabara de escrever no campo ao lado. Quem preenchesse o nome e escolhesse
+   * "Validação da área" no mesmo gesto — que é o gesto natural — era recusado
+   * pelo valor antigo, com o nome certo visível na tela. Preencher, salvar,
+   * reabrir e mover de novo funcionaria; descobrir isso sozinho, não.
+   *
+   * `_msSolicitanteMexido` marca que ESTA tela mexeu, e é só por isso que o
+   * campo entra no patch — ver a nota na montagem dos campos. */
+  const campoSol = document.getElementById('ms-solicitante');
+  if (atual && campoSol) {
+    const novo = campoSol.value.trim();
+    if (novo !== String(atual.solicitante || '').trim()) {
+      atual.solicitante = novo;
+      _msSolicitanteMexido = true;
+    }
+  }
   /* QUARTA BARREIRA, e a do fluxo novo: evolução não pula a Validação da área,
      e sair dela para o PM/PO exige o registro de quem homologou. A regra mora
      em `homologacao.js` e é a MESMA que o arraste e o servidor consultam —
@@ -5575,6 +5640,10 @@ async function saveStatus() {
       if (impede.campo === 'homologacao') {
         const campo = document.getElementById('msh-quem');
         if (campo) { campo.focus(); campo.scrollIntoView({ block: 'center' }); }
+      } else if (impede.campo === 'solicitante') {
+        // O campo existe nesta tela desde que ela passou a poder preenchê-lo.
+        // Sem levar até ele, a recusa seria a mesma porta trancada de antes.
+        if (campoSol) { campoSol.focus(); campoSol.scrollIntoView({ block: 'center' }); }
       }
       return;
     }
@@ -5675,6 +5744,11 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   // Vinculo de projeto entra no patch so se mexeu: mandar sempre sobrescreveria
   // um vinculo feito no Admin entre a leitura desta tela e a gravacao.
   if (_msProjetoMexido) campos.projeto_id = m.projeto_id || '';
+  /* QUEM PEDIU entra pela MESMA regra: so se mexeu nesta tela. Mandar sempre
+     sobrescreveria o nome que o PM/PO tivesse acabado de preencher no Admin —
+     e como o campo nasce vazio em 119 demandas antigas, "sempre" significaria
+     apagar o nome de quem o preencheu enquanto este card estava aberto. */
+  if (_msSolicitanteMexido) campos.solicitante = m.solicitante || '';
   // Subtarefa entra so se mexeu, pelo mesmo motivo do vinculo de projeto: mandar
   // sempre sobrescreveria o que outra tela gravou entre a leitura e o salvamento.
   if (_msSubsMexido) {
