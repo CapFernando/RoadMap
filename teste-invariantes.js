@@ -4119,6 +4119,45 @@ sec('Rede caida: a politica de repetir e uma so');
     ok(/REDEREPETE\.deveRepetir\(/.test(semComentario(src)),
        nome + ' decide repetir pelo modulo, e nao por conta propria');
   }
+
+  /* ═══ E NENHUMA ESPERA ESCRITA A MAO SOBROU ══════════════════════════════
+   *
+   * ISTO EXISTE POR UM ERRO MEU, no mesmo dia. Liguei `publicaAgora` ao modulo
+   * e disse que "a politica agora e uma so" — mas o Admin publica por DOIS
+   * caminhos, e o segundo (`saveToGitHub`, direto no GitHub) continuou com a
+   * repeticao unica de 2s. A faixa "Erro ao publicar: Failed to fetch" voltou
+   * com a correcao ja publicada, porque veio por ali.
+   *
+   * Procurar pela POLITICA nao bastava: o terceiro lugar escrevia a MESMA regra
+   * com outras palavras — `redes === 0` num, `attempt === 1` no outro.
+   *
+   * O que NAO muda de nome e a ESPERA: toda repeticao feita a mao precisa de um
+   * numero de milissegundos ao lado de um `setTimeout`. Entao a invariante
+   * cobra que todo `setTimeout` de espera tire o numero do modulo. Um literal
+   * ali e, por definicao, uma politica paralela. */
+  for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT]]) {
+    const limpo = semComentario(src);
+    /* O QUE CARACTERIZA UMA REPETICAO, e nao uma espera qualquer: a pausa e
+       seguida de uma CHAMADA DE VOLTA. `dev.html` tem um `setTimeout(r, 500)`
+       que aguarda o upload de anexo terminar — espera legitima, e nao politica
+       de rede. Sem esta precisao a invariante acusaria o inocente, e invariante
+       que acusa o inocente e desligada na primeira semana. */
+    const esperas = (limpo.match(
+      /await new Promise\(r => setTimeout\(r,[^;]*;\s*return [A-Za-z_$][\w$]*\(/g) || []);
+    const aMao = esperas.filter(t => !/REDEREPETE\.espera\(/.test(t));
+    ok(aMao.length === 0,
+       nome + ': nenhuma espera de repeticao escrita a mao — todas vem do modulo',
+       aMao.join(' | ') || esperas.length + ' repeticao(oes), todas do modulo');
+    ok(esperas.length > 0,
+       nome + ': e existe pelo menos uma repeticao — a invariante acima nao passa a vazio',
+       esperas.length + ' encontrada(s)');
+  }
+  /* E a frase antiga nao pode voltar: ela era o sinal visivel da politica
+     paralela, e e por ela que o terceiro lugar foi encontrado. */
+  for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT]]) {
+    ok(!/toast\('⚠️ Falha de rede, tentando novamente/.test(semComentario(src)),
+       nome + ': o aviso fixo de repeticao unica nao voltou');
+  }
 })();
 
 /* ═══ O GANTT, QUE NAO REPETIA NADA, EXECUTADO ═══════════════════════════ */

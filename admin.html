@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="77338b7e09">
+<html lang="pt-BR" data-build="ccb5e346a7">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3795,7 +3795,7 @@ async function publicaAgora(tentativa = 1, redes = 0) {
   return false;
 }
 
-async function saveToGitHub(attempt = 1) {
+async function saveToGitHub(attempt = 1, quedas = 0) {
   if (!runtimeToken && ADMIN_PROXY_URL) return saveViaProxy();
   // Mesma garantia do `saveViaProxy` — ver a nota lá. Este é o caminho que o
   // arraste do Kanban usa quando ha token.
@@ -3879,11 +3879,25 @@ async function saveToGitHub(attempt = 1) {
     toast('✅ Publicado!', 'ok');
   } catch (e) {
     showSaving(false);
-    // Retry automático uma vez em caso de falha de rede
-    if (attempt === 1 && (e instanceof TypeError || (e.message && e.message.includes('fetch')))) {
-      toast('⚠️ Falha de rede, tentando novamente…', 'err');
-      await new Promise(r => setTimeout(r, 2000));
-      return saveToGitHub(2);
+    /* ═══ O SEGUNDO CAMINHO DE PUBLICACAO DO ADMIN, e ele ficou para tras ══
+     *
+     * O Admin publica por DOIS caminhos: `publicaAgora` (pelo Worker, que e por
+     * onde o time passa) e este, direto no GitHub com token proprio. Quando a
+     * politica de repetir virou `rede-repete.js`, so o primeiro foi ligado nela
+     * — e este continuou com a repeticao unica de 2s.
+     *
+     * O custo apareceu no mesmo dia: a faixa "Erro ao publicar: Failed to
+     * fetch" voltou com a correcao ja publicada, porque veio por aqui.
+     *
+     * E A LICAO E A DE SEMPRE NESTA BASE: eu disse "a politica agora e uma so"
+     * tendo mudado dois dos tres lugares. Procurar pela POLITICA (`redes === 0`)
+     * achava dois; o terceiro escrevia a mesma regra com outras palavras
+     * (`attempt === 1`), e so aparecia procurando pela MENSAGEM. */
+    const quedaDeRede = REDEREPETE.ehQueda(e);
+    if (quedaDeRede && REDEREPETE.deveRepetir(quedas)) {
+      toast(REDEREPETE.aviso(quedas), 'err');
+      await new Promise(r => setTimeout(r, REDEREPETE.espera(quedas)));
+      return saveToGitHub(attempt, quedas + 1);
     }
     rascunhoSalvar();
     const errEl = document.getElementById('save-error');
