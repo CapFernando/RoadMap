@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="80698e6f1b">
+<html lang="pt-BR" data-build="b45268f564">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -535,6 +535,18 @@
       background:var(--bg3); border:1px solid var(--border); border-radius:7px; }
     .spr-check { cursor:pointer; }
     .spr-nota { margin-left:auto; font-size:12px; }
+    /* A LINHA DAS SPRINTS — anteriores, a atual e as próximas, em ordem. */
+    .spr-linha { display:flex; gap:8px; overflow-x:auto; padding:2px 0 12px; }
+    .spr-card { flex:0 0 auto; min-width:128px; text-align:left; font-family:inherit;
+      background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+      padding:8px 12px; cursor:pointer; color:var(--text); }
+    .spr-card:hover { border-color:var(--border2); }
+    .spr-card.sel { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue); }
+    .spr-card.agora .spr-card-rot::after { content:' · agora'; font-weight:600; color:var(--blue); font-size:11px; }
+    .spr-card-rot { font-size:14px; font-weight:700; }
+    .spr-card-dt { font-size:11px; color:var(--text3); margin:1px 0 6px; }
+    .spr-card-n { font-size:12px; color:var(--text2); margin-top:6px; }
+    .spr-alerta-linha { font-size:12px; color:var(--red-tx,#F9A0A0); margin:-4px 0 10px; }
     .spr-est { font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:6px; }
     .spr-est.montando { color:var(--text3); background:var(--bg4); }
     .spr-est.curso    { color:var(--green-tx,#8FE0A8); background:var(--green-bg,#0E3A1E); }
@@ -1550,7 +1562,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=116dd58ee8"></script>
+<script src="sprint.js?v=4cf1763477"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -1937,9 +1949,17 @@
         </button>
         <div id="spr-resumo" class="ger-summary"></div>
         <div class="ger-bandeja-corpo">
+          <!-- A LINHA DAS SPRINTS (29/10): "não está claro a organização das
+               sprints". O seletor sozinho escondia a sequência — qual é a atual,
+               quais estão montando, quais já fecharam. Cada cartão responde as
+               três coisas, e clicar nele escolhe a sprint de baixo. -->
+          <div id="spr-linha" class="spr-linha"></div>
           <div class="spr-topo">
             <label>Sprint
-              <select id="spr-sel" onchange="renderGerSprint()"></select>
+              <!-- A escolha vai para `_sprSel` ANTES de redesenhar: o desenho
+                   reaplica `_sprSel` ao select, e sem isto a lista voltava
+                   sozinha para a sprint anterior a cada troca. -->
+              <select id="spr-sel" onchange="_sprSel = this.value; renderGerSprint()"></select>
             </label>
             <label class="spr-check"><input type="checkbox" id="spr-so-risco" onchange="renderGerSprint()">
               Só as que estão em risco</label>
@@ -2434,6 +2454,18 @@
           <option value="concluido">Concluído</option>
           <option value="negada">Negada</option>
         </select>
+      </div>
+    </div>
+
+    <!-- A SPRINT, EM TODA TELA DO CARD (29/10). "Sempre trazer a SPRINT que a
+         task faz parte; quando não preenchida, dar opção ao PM/PO de selecionar,
+         com a atual + 5 à frente." Depois da Planning ela é obrigatória — o
+         aviso abaixo diz isso enquanto o campo estiver vazio. -->
+    <div class="form-row">
+      <div class="form-group">
+        <label>Sprint <span id="m-sprint-obrig" style="color:var(--red,#E84444)"></span></label>
+        <select id="m-sprint" onchange="mSprintAviso()"></select>
+        <div id="m-sprint-hint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
       </div>
     </div>
 
@@ -5819,6 +5851,18 @@ function kbDrop(e, colKey) {
     setTimeout(() => { document.getElementById('m-status').value = colKey; onStatusChange(); document.getElementById('m-dev').focus(); }, 320);
     return;
   }
+  /* DEPOIS DA PLANNING, SÓ COM SPRINT (29/10) — a mesma jornada do responsável:
+     o card não sai do lugar, abre já na etapa escolhida e com o campo Sprint em
+     foco. Escolher e salvar é o movimento inteiro. */
+  if (window.SPRINTPO &&
+      SPRINTPO.travaDeAlocacao(m, m.status_planejamento, colKey, window.PRAZO && PRAZO.hojeISO()).trava) {
+    toast('🏃 "' + (m.codigo || m.titulo) + '" precisa de sprint para ir a ' +
+          (STATUS_LABELS[colKey] || colKey) + '.', 'err');
+    renderKanban();
+    openModalMelhoria(id);
+    setTimeout(() => { document.getElementById('m-status').value = colKey; onStatusChange(); document.getElementById('m-sprint').focus(); }, 320);
+    return;
+  }
   /* SPIKE SEM ASSINATURA NAO ARRASTA PARA CONCLUIDO. O arraste e o caminho em
      que a pessoa NAO ve a aba Entrega — sem esta trava ela solta o card, parece
      que concluiu, e o erro so aparece na publicacao. */
@@ -9028,34 +9072,29 @@ async function destaqueAlterna(ev, id) {
    procurar na sprint uma demanda que o servidor não tem — e o repasse é
    justamente o que diz ao dev no que trabalhar.                              */
 
-/** OS MESES OFERECIDOS: o corrente e o seguinte.
+/** AS SPRINTS OFERECIDAS: a atual e as cinco seguintes, sem as fechadas.
  *
- *  Dois e não doze: repassar para abril é planejamento de trimestre, e não é o
- *  que este gesto faz. Dois cobre o caso que existe — "esta fica para a semana
- *  que vem" na virada do mês, que é exatamente quando a lista de um mês só
- *  deixaria o PO sem a sprint de que precisa.                                */
+ *  Seis e não doze: repassar para abril é planejamento de trimestre, e não é o
+ *  que este gesto faz. A lista atravessa a virada do mês sozinha, que é
+ *  exatamente quando "o mês corrente" deixaria o PO sem a sprint de que
+ *  precisa.                                                                  */
 function sprintOpcoes(atual) {
   const hoje = window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10);
-  const ano = +hoje.slice(0, 4), mes = +hoje.slice(5, 7);
   const fer = state.feriados || [];
-  const agora = SPRINTPO.rotuloDeData(hoje, fer);
   const dm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
   const itens = [];
   /* SPRINT FECHADA NÃO É OFERECIDA. Ela continua na tela como registro, mas
      como opção seria um clique que o Worker recusa com 409 — e a pessoa
      descobriria a trava pelo erro, que é o que a lista existe para evitar. */
   const fechadas = SPRINTPO.rotulosFechados(state);
-  [[ano, mes], mes === 12 ? [ano + 1, 1] : [ano, mes + 1]].forEach(([a, mm]) => {
-    SPRINTPO.sprintsDoMes(a, mm, fer).filter(s => !fechadas.includes(s.rotulo)).forEach(s => {
-      /* O RÓTULO CURTO AQUI TAMBÉM, senão o diálogo diria `S2-11-2026` e o
-         card ao lado diria `S2-11` — e a pessoa teria de supor que são a
-         mesma coisa. O `valor` continua INTEIRO: é ele que se grava.
-         O ano não falta: a lista é do mês corrente e do seguinte, em ordem,
-         com as datas ao lado, e o único salto possível é dezembro→janeiro. */
-      itens.push({ valor: s.rotulo, rotulo: SPRINTPO.rotuloCurto(s.rotulo),
-                   nota: dm(s.de) + '–' + dm(s.ate) +
-                         (s.rotulo === agora ? ' · agora' : '') });
-    });
+  /* A ATUAL E AS CINCO SEGUINTES (29/10): "dando sempre a atual + 5 à frente".
+     Era o mês corrente e o seguinte, o que oferecia semanas já passadas e, no
+     fim do mês, quase nada adiante. A lista sai de `sprint.js`, a mesma que o
+     Gantt e o seletor do card usam.
+     O RÓTULO CURTO, e o `valor` INTEIRO: é ele que se grava. */
+  SPRINTPO.proximasSprints(hoje, 5, fer, fechadas).forEach(s => {
+    itens.push({ valor: s.rotulo, rotulo: SPRINTPO.rotuloCurto(s.rotulo),
+                 nota: dm(s.de) + '–' + dm(s.ate) + (s.agora ? ' · agora' : '') });
   });
   /* "TIRAR DA SPRINT" SÓ APARECE PARA QUEM ESTÁ NUMA. Oferecer a opção a uma
      demanda que já está no backlog é um clique que não faz nada — e um botão
@@ -9531,8 +9570,73 @@ function sprintsComDados() {
   });
   const agora = SPRINTPO.rotuloDeData(PRAZO.hojeISO(), state.feriados || []);
   if (agora) vistas[agora] = true;
+  /* AS PRÓXIMAS CINCO TAMBÉM (29/10): a linha das sprints as mostra, e clicar
+     numa sprint vazia que está para começar precisa ter para onde ir. */
+  SPRINTPO.proximasSprints(PRAZO.hojeISO(), 5, state.feriados || [])
+    .forEach(s => { vistas[s.rotulo] = true; });
   const chave = r => r.slice(6, 10) + r.slice(3, 5) + r.slice(1, 2);
   return Object.keys(vistas).sort((a, b) => chave(b).localeCompare(chave(a)));
+}
+
+/* A LINHA DAS SPRINTS: as duas anteriores com registro, a atual e as cinco
+   seguintes, da mais velha para a mais nova — a ordem em que a semana anda.
+   Cada cartão diz o estado e o que tem dentro; o selecionado fica marcado. */
+function renderSprLinha() {
+  const el = document.getElementById('spr-linha');
+  if (!el || !window.SPRINTPO) return;
+  const fer = state.feriados || [];
+  const hoje = PRAZO.hojeISO();
+  const agora = SPRINTPO.rotuloDeData(hoje, fer);
+  const chave = r => r.slice(6, 10) + r.slice(3, 5) + r.slice(1, 2);
+  const antes = sprintsComDados().filter(r => chave(r) < chave(agora))
+    .sort((a, b) => chave(a).localeCompare(chave(b))).slice(-2);
+  const frente = SPRINTPO.proximasSprints(hoje, 5, fer).map(s => s.rotulo);
+  const etapa = m => statusKey(m);
+  const dm = s => s.slice(8, 10) + '/' + s.slice(5, 7);
+  const EST = { montando: ['montando', '✎ Montando'], em_curso: ['curso', '▶ Em curso'],
+                fechada: ['fechada', '🔒 Fechada'] };
+  el.innerHTML = antes.concat(frente).map(r => {
+    const p = SPRINTPO.placarDaSprint(state, r, etapa);
+    const f = SPRINTPO.faixaDaSprint(r, fer);
+    const e = EST[SPRINTPO.situacaoDaSprint(state, r)] || EST.montando;
+    return '<button type="button" class="spr-card' + (r === _sprSel ? ' sel' : '') +
+      (r === agora ? ' agora' : '') + '" onclick="sprLinhaEscolhe(\'' + esc(r) + '\')">' +
+      '<div class="spr-card-rot">' + esc(SPRINTPO.rotuloCurto(r)) + '</div>' +
+      '<div class="spr-card-dt">' + (f ? dm(f.de) + ' a ' + dm(f.ate) : '') + '</div>' +
+      '<span class="spr-est ' + e[0] + '">' + e[1] + '</span>' +
+      '<div class="spr-card-n">' + (p.total
+        ? p.total + (p.total === 1 ? ' demanda' : ' demandas') + ' · ' + p.pontosTotal + ' pts' +
+          (SPRINTPO.situacaoDaSprint(state, r) !== 'montando' ? ' · ' + p.pct + '%' : '')
+        : 'vazia') + '</div>' +
+    '</button>';
+  }).join('');
+  /* O QUE FICOU SEM SPRINT DEPOIS DA PLANNING. A regra de 29/10 trava o
+     MOVIMENTO, e não o estado — então as que já estavam lá antes seguem sem
+     sprint até o PO escolher. Contá-las aqui é o que faz isso acabar. */
+  /* SÓ O QUE AINDA NÃO FOI ENTREGUE. Contando também as que estão em validação,
+     o aviso nascia com mais de 150 nomes — e uma lista que não dá para agir
+     ensina a ignorar a lista. Entregue sem sprint é passado; planejado ou em
+     andamento sem sprint é a semana que o PO ainda pode organizar. */
+  const sem = (state.melhorias || []).filter(m => m && !m.oculto && !ehMesclada(m) &&
+    !SPRINTPO.doPO(m) && ['planejado', 'em_andamento', 'atrasado'].includes(statusKey(m)));
+  const av = document.getElementById('spr-alerta-linha') || (() => {
+    const d = document.createElement('div');
+    d.id = 'spr-alerta-linha'; d.className = 'spr-alerta-linha';
+    el.insertAdjacentElement('afterend', d);
+    return d;
+  })();
+  av.textContent = sem.length
+    ? '⚠ ' + sem.length + (sem.length === 1 ? ' demanda está' : ' demandas estão') +
+      ' depois da Planning sem sprint — ' + sem.slice(0, 6).map(m => m.codigo || m.id).join(', ') +
+      (sem.length > 6 ? '…' : '') + '. Escolha a sprint no card.'
+    : '';
+}
+
+function sprLinhaEscolhe(r) {
+  _sprSel = r;
+  const sel = document.getElementById('spr-sel');
+  if (sel) sel.value = r;
+  renderGerSprint();
 }
 
 function renderGerSprint() {
@@ -9549,6 +9653,7 @@ function renderGerSprint() {
   }
   sel.value = _sprSel;
   _sprSel = sel.value;
+  renderSprLinha();
 
   const etapa = m => statusKey(m);
   const hoje = PRAZO.hojeISO();
@@ -13063,6 +13168,7 @@ function openModalMelhoria(id) {
   selPk.value = m?.poker_pontos != null ? String(m.poker_pontos) : '';
   document.getElementById('m-poker-hint').innerHTML = '';
   document.getElementById('m-solicitante').value     = m?.solicitante      || '';
+  mSprintRender(m);
   document.getElementById('m-data-solicitacao').value= m?.data_solicitacao || '';
   document.getElementById('m-inicio').value          = m?.inicio           || '';
   document.getElementById('m-entrega').value         = m?.entrega          || '';
@@ -13141,6 +13247,8 @@ function openModalMelhoria(id) {
   populateSistemaModulo('m', m?.tema_id);
 
   document.getElementById('m-status').value = statusKey(m || {}) || 'backlog';
+  // O aviso de "obrigatória" depende da etapa, que só chega aqui.
+  mSprintAviso();
 
   // Discovery + anexos
   renderMDiscovery(m || {});
@@ -13194,6 +13302,64 @@ function openModalMelhoria(id) {
 function onStatusChange() {
   const s = document.getElementById('m-status').value;
   document.getElementById('field-negada').style.display = s === 'negada' ? 'block' : 'none';
+  mSprintAviso();
+}
+
+/* ═══ O CAMPO SPRINT DO CARD ════════════════════════════════════════════════
+   "Toda tela do card, sempre trazer a SPRINT que a task faz parte; quando não
+    preenchida, dar opção (PM ou PO) de selecionar, com a atual + 5 à frente."
+
+   As opções são as do chip (`sprintOpcoes`), para os dois caminhos oferecerem
+   a mesma lista. A sprint gravada que já saiu da janela (uma semana passada)
+   continua aparecendo como opção: senão o select abriria vazio e salvar o card
+   tiraria a demanda da sprint sem ninguém pedir.
+
+   SÓ O PM/PO ESCOLHE — pelo papel, como em `SPRINTPO.podeRepassar`. Analista
+   abre o card nesta tela e vê o campo travado, com o motivo. */
+function mSprintRender(m) {
+  const sel = document.getElementById('m-sprint');
+  if (!sel || !window.SPRINTPO) return;
+  const atual = SPRINTPO.doPO(m || {});
+  const fechada = !!atual && SPRINTPO.estaFechada(state, atual);
+  const ops = sprintOpcoes('');
+  const opt = (v, r) => '<option value="' + esc(v) + '">' + esc(r) + '</option>';
+  sel.innerHTML = opt('', '📋 Fora da sprint') +
+    (atual && !ops.some(o => o.valor === atual)
+      ? opt(atual, SPRINTPO.rotuloCurto(atual) + (fechada ? ' · fechada' : ' · anterior')) : '') +
+    ops.map(o => opt(o.valor, o.rotulo + ' · ' + o.nota)).join('');
+  sel.value = atual;
+  const souPO = !_eu || String(_eu.papel || 'admin') === 'admin';
+  // Sprint fechada não entra nem sai: o campo mostra, e não deixa mexer.
+  sel.disabled = !souPO || fechada;
+  sel.title = fechada ? 'Sprint fechada — a demanda não sai mais dela.'
+            : !souPO ? 'Só o PM/PO escolhe a sprint.' : '';
+  mSprintAviso();
+}
+
+function mSprintAviso() {
+  const sel = document.getElementById('m-sprint');
+  const hint = document.getElementById('m-sprint-hint');
+  const obrig = document.getElementById('m-sprint-obrig');
+  if (!sel || !hint || !window.SPRINTPO) return;
+  const etapa = (document.getElementById('m-status') || {}).value || '';
+  const exige = SPRINTPO.posPlanning(etapa);
+  if (obrig) obrig.textContent = exige ? '*' : '';
+  const id = (document.getElementById('m-id') || {}).value;
+  const m = id ? (state.melhorias || []).find(x => x.id === id) : null;
+  if (!sel.value) {
+    hint.style.color = exige ? 'var(--red,#E84444)' : 'var(--text3)';
+    hint.textContent = exige
+      ? 'Obrigatória depois da Planning — escolha a sprint antes de salvar.'
+      : 'No backlog. Escolha a sprint quando ela sair da Planning.';
+    return;
+  }
+  hint.style.color = 'var(--text3)';
+  const n = m && SPRINTPO.doPO(m) === sel.value ? SPRINTPO.pulos(m) : 0;
+  hint.textContent = m && SPRINTPO.doPO(m) === sel.value
+    ? (m.sprint_po_por ? 'Repassada por ' + m.sprint_po_por : 'Repassada') +
+      (m.sprint_po_em ? ' em ' + formatDate(m.sprint_po_em) : '') +
+      (n ? ' · entrou atrasada (' + n + (n === 1 ? ' pulo' : ' pulos') + ')' : '')
+    : 'Vai para ' + SPRINTPO.rotuloCurto(sel.value) + ' ao salvar.';
 }
 
 function calcHorasPlanejadas(inicio, entrega) {
@@ -13998,6 +14164,30 @@ async function saveMelhoria() {
     ...ghLinks,
     criado_em:           existing.criado_em || new Date().toISOString(),
   };
+  /* A SPRINT ESCOLHIDA NO CAMPO DO CARD (29/10) entra pelo MESMO gesto do chip —
+     `repassar`/`retirar` de `sprint.js` —, e não gravando `sprint_po` direto: é
+     ali que o histórico ganha a linha que responde "entrou atrasada", e que a
+     sprint fechada é recusada. Campo intocado não chama nada. */
+  const _spEsc = (document.getElementById('m-sprint') || {}).value || '';
+  if (window.SPRINTPO && _spEsc !== SPRINTPO.doPO(obj)) {
+    const _quemSp = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
+    const _hojeSp = window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10);
+    const rSp = _spEsc ? SPRINTPO.repassar(obj, _spEsc, _quemSp, _hojeSp, { dados: state })
+                       : SPRINTPO.retirar(obj, _quemSp, _hojeSp, { dados: state });
+    if (!rSp.ok) { toast(rSp.erro, 'err'); document.getElementById('m-sprint').focus(); return; }
+  }
+  /* DEPOIS DA PLANNING, SÓ COM SPRINT — a regra de 29/10, também para o PM/PO.
+     O servidor recusa de qualquer forma; isto é para a pessoa saber aqui, com o
+     campo à vista, e não pela recusa depois. */
+  if (window.SPRINTPO) {
+    const _trv = SPRINTPO.travaDeAlocacao(obj, existing.status_planejamento || (id ? '' : 'backlog'),
+                                          sp, window.PRAZO && PRAZO.hojeISO());
+    if (_trv.trava) {
+      toast('🏃 Escolha a sprint: depois da Planning ela é obrigatória.', 'err');
+      document.getElementById('m-sprint').focus();
+      return;
+    }
+  }
   // Depois de montar o objeto: a etapa escolhida no formulario decide se a data de
   // conclusao entra ou sai. Salvar pela aba Dados e o outro caminho que levava a
   // Concluido sem gravar a data.

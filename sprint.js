@@ -402,15 +402,43 @@
    * no Admin justamente para esse dia, e para os seguintes).               */
   var TRAVA_DESDE = '2026-11-01';
 
-  /** Os tipos que começam sem passar pela sprint. */
-  var TIPOS_LIVRES = ['sustentacao'];
+  /* ═══ REVISTO EM 29/10: "SPRINT DEVE SER OBRIGATÓRIA SEMPRE APÓS A PLANNING" ═
+   *
+   * Decisão do Fernando, e ela SUBSTITUI as duas acima:
+   *
+   *   - a porta da Sustentação FECHA. "Vale para todos": no incidente das 2h o
+   *     PM/PO (ou um admin) põe a demanda na sprint atual com um clique antes de
+   *     começar — o seletor oferece a atual em primeiro lugar.
+   *   - a trava deixa de guardar só `em_andamento` e passa a guardar TODA etapa
+   *     depois da Planning. Planejado é onde o PO aloca a semana; entrar ali sem
+   *     sprint é exatamente o "planejado para quando?" que a regra existe para
+   *     não deixar acontecer.
+   *
+   * CONTINUA SENDO MOVIMENTO, e não estado — também decisão dele. Quem já está
+   * depois da Planning sem sprint segue andando: entregar, devolver à área,
+   * concluir. O que trava é ATRAVESSAR a Planning sem sprint. Por isso o caso
+   * "entregar nunca trava" continua valendo: entregar parte de `em_andamento`,
+   * que já está do lado de cá.
+   *
+   * `TIPOS_LIVRES` fica, vazia, porque o Worker repete a lista e há invariante
+   * conferindo as duas cópias: apagar daqui e esquecer lá abriria a porta só no
+   * servidor. */
+  var TIPOS_LIVRES = [];
 
   function tipoLivre(m) {
     return TIPOS_LIVRES.indexOf(txt((m || {}).tipo).toLowerCase()) >= 0;
   }
 
-  /** A ETAPA QUE A TRAVA GUARDA. Uma só, e por isso é uma constante e não uma
-   *  lista: incluir `validacao` aqui prenderia trabalho já feito. */
+  /** AS ETAPAS DEPOIS DA PLANNING — o lado da fronteira que exige sprint.
+   *  `atrasado` entra porque é uma etapa de trabalho em curso, e sair da
+   *  Planning direto para ela seria o mesmo atalho por outro nome. */
+  var ETAPAS_POS_PLANNING = ['planejado', 'em_andamento', 'validacao_area',
+                             'validacao', 'concluido', 'atrasado'];
+
+  function posPlanning(etapa) { return ETAPAS_POS_PLANNING.indexOf(txt(etapa)) >= 0; }
+
+  /** Mantida pelo nome: era a única etapa guardada, e quem lê o código antigo
+   *  procura por ela. A regra agora consulta `ETAPAS_POS_PLANNING`. */
   var ETAPA_TRAVADA = 'em_andamento';
 
   /** A TRAVA PEGOU ESTE MOVIMENTO?
@@ -420,19 +448,49 @@
   function travaDeAlocacao(m, etapaAntes, etapaDepois, hoje) {
     var dia = iso(hoje) || new Date().toISOString().slice(0, 10);
     if (dia < TRAVA_DESDE) return { trava: false };
-    if (txt(etapaDepois) !== ETAPA_TRAVADA) return { trava: false };
-    // JÁ ESTAVA LÁ: não é movimento nenhum, e reexaminar congelaria quem está
-    // no meio do trabalho desde antes da regra existir.
-    if (txt(etapaAntes) === ETAPA_TRAVADA) return { trava: false };
+    if (!posPlanning(etapaDepois)) return { trava: false };
+    /* DUAS FRONTEIRAS, e as duas são movimento:
+         ATRAVESSAR a Planning sem sprint (a regra de 29/10), e
+         COMEÇAR sem sprint (a regra original, que continua valendo).
+       Só a primeira deixaria passar quem já estava em Planejado sem sprint
+       antes da regra — e começar sem sprint é justamente o que a trava nasceu
+       para impedir. Quem já está em andamento não é reexaminado. */
+    var cruza = !posPlanning(etapaAntes);
+    var comeca = txt(etapaDepois) === ETAPA_TRAVADA && txt(etapaAntes) !== ETAPA_TRAVADA;
+    if (!cruza && !comeca) return { trava: false };
     if (tipoLivre(m)) return { trava: false };
     if (doPO(m)) return { trava: false };
     return {
       trava: true,
-      motivo: 'Esta demanda não está em nenhuma sprint. Quem repassa é o PM/PO — ' +
-              'peça o repasse antes de começar. (Demanda de Sustentação começa sem ' +
-              'esperar; esta está como ' +
-              (txt(m && m.tipo) ? '"' + txt(m.tipo) + '"' : 'sem classificação') + '.)',
+      motivo: 'Depois da Planning a demanda precisa estar numa sprint, e esta não ' +
+              'está em nenhuma. Quem escolhe a sprint é o PM/PO — escolha (ou peça) ' +
+              'a sprint antes de mover.',
     };
+  }
+
+  /** A SPRINT ATUAL E AS `n` SEGUINTES, atravessando mês e ano.
+   *
+   *  "Dando sempre a atual + 5 à frente." É a lista do seletor do PM/PO. As que
+   *  já passaram neste mês não entram: repassar para uma semana encerrada é
+   *  registrar um compromisso que não existiu. Fechadas saem — quem chama passa
+   *  `fechadas` (rótulos), porque o módulo não lê a base sozinho. */
+  function proximasSprints(hoje, n, feriados, fechadas) {
+    var dia = iso(hoje) || new Date().toISOString().slice(0, 10);
+    var fora = fechadas || [];
+    var ano = +dia.slice(0, 4), mes = +dia.slice(5, 7);
+    var agora = rotuloDeData(dia, feriados);
+    var lista = [], viuAgora = false;
+    for (var k = 0; k < 4 && lista.length < (n || 0) + 1; k++) {
+      sprintsDoMes(ano, mes, feriados).forEach(function (s) {
+        if (s.rotulo === agora) viuAgora = true;
+        if (!viuAgora || lista.length >= (n || 0) + 1) return;
+        if (fora.indexOf(s.rotulo) >= 0) return;
+        lista.push({ rotulo: s.rotulo, de: s.de, ate: s.ate, dias: s.dias,
+                     agora: s.rotulo === agora });
+      });
+      if (mes === 12) { mes = 1; ano += 1; } else { mes += 1; }
+    }
+    return lista;
   }
 
   /** Quem pode repassar uma demanda para a sprint.
@@ -1168,8 +1226,11 @@
     TRAVA_DESDE: TRAVA_DESDE,
     TIPOS_LIVRES: TIPOS_LIVRES,
     ETAPA_TRAVADA: ETAPA_TRAVADA,
+    ETAPAS_POS_PLANNING: ETAPAS_POS_PLANNING,
+    posPlanning: posPlanning,
     tipoLivre: tipoLivre,
     travaDeAlocacao: travaDeAlocacao,
+    proximasSprints: proximasSprints,
     podeRepassar: podeRepassar,
     repassar: repassar,
     retirar: retirar,

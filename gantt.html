@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="3f8faaa3b5">
+<html lang="pt-BR" data-build="1e40360031">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1152,7 +1152,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=116dd58ee8"></script>
+<script src="sprint.js?v=4cf1763477"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -1369,7 +1369,11 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Sprint</label>
+        <!-- "Semana pelas datas", e não mais "Sprint": desde 29/10 o card tem o
+             campo da SPRINT DO PM/PO logo abaixo do Status, e dois campos com o
+             mesmo nome e respostas diferentes fariam a pessoa escolher um e ler
+             o outro. Este continua só leitura, derivado das datas. -->
+        <label>Semana pelas datas</label>
         <!-- Somente leitura: sai das datas. Editavel, voltaria a divergir — e o
              pedido foi nao precisar preencher. -->
         <input type="text" id="e-sprint" readonly
@@ -1409,7 +1413,7 @@
       </div>
       <div class="form-group">
         <label>Status Planejamento</label>
-        <select id="e-status-plan">
+        <select id="e-status-plan" onchange="gSprintAviso()">
           <option value="backlog">Backlog</option>
           <option value="levantar_req">Levantar Requisitos</option>
           <option value="planning">Planning</option>
@@ -1419,6 +1423,15 @@
           <option value="validacao">Validação PM/PO</option>
           <option value="concluido">Concluído</option>
         </select>
+      </div>
+    </div>
+    <!-- A SPRINT, em toda tela do card (29/10) — a mesma lista do Admin: a
+         atual + 5. Depois da Planning ela é obrigatória. -->
+    <div class="form-row">
+      <div class="form-group">
+        <label>Sprint (PM/PO)</label>
+        <select id="e-sprint-po" onchange="gSprintAviso()"></select>
+        <div id="e-sprint-hint" style="font-size:11px;opacity:.75;margin-top:4px"></div>
       </div>
     </div>
     <div class="form-row">
@@ -2237,7 +2250,12 @@ async function loadFromGitHub() {
 
     // auto-promove: demandas com dev + datas já definidas entram no gantt automaticamente
     state.melhorias.forEach(m => {
-      if (m.dev && (m.inicio || m.entrega) && (!m.status_planejamento || m.status_planejamento === 'backlog')) {
+      if (m.dev && (m.inicio || m.entrega) && (!m.status_planejamento || m.status_planejamento === 'backlog') &&
+          /* Sem sprint ela não sai da Planning (29/10): promover aqui faria a
+             próxima gravação do Gantt ser recusada por um card que ninguém
+             mexeu. Fica no backlog até o PO escolher a sprint. */
+          !(window.SPRINTPO && SPRINTPO.travaDeAlocacao(m, m.status_planejamento || 'backlog',
+                                                        'planejado', window.PRAZO && PRAZO.hojeISO()).trava)) {
         m.status_planejamento = 'planejado';
         m.status = spToStatus('planejado');
       }
@@ -4307,10 +4325,55 @@ function onLayerDragLeave(e) {
 // continuava aparecendo em Planning depois de agendada, o que fazia a fila do
 // poker mostrar de novo o que ja tinha sido estimado.
 const ETAPAS_ANTES_DE_PLANEJADO = ['backlog', 'levantar_req', 'planning'];
+
+/* O CAMPO SPRINT DO CARD — o mesmo desenho do Admin (`mSprintRender`): a atual
+   e as cinco seguintes, sem as fechadas, e a sprint gravada continua como opção
+   mesmo fora da janela, senão salvar o card a tiraria da sprint sozinho. */
+function gSprintRender(m) {
+  const sel = document.getElementById('e-sprint-po');
+  if (!sel || !window.SPRINTPO) return;
+  const hoje = window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10);
+  const fer = state.feriados || [];
+  const atual = SPRINTPO.doPO(m || {});
+  const fechada = !!atual && SPRINTPO.estaFechada(state, atual);
+  const ops = SPRINTPO.proximasSprints(hoje, 5, fer, SPRINTPO.rotulosFechados(state));
+  const dm = s => s.slice(8, 10) + '/' + s.slice(5, 7);
+  const opt = (v, r) => '<option value="' + esc(v) + '">' + esc(r) + '</option>';
+  sel.innerHTML = opt('', '📋 Fora da sprint') +
+    (atual && !ops.some(o => o.rotulo === atual)
+      ? opt(atual, SPRINTPO.rotuloCurto(atual) + (fechada ? ' · fechada' : ' · anterior')) : '') +
+    ops.map(o => opt(o.rotulo, SPRINTPO.rotuloCurto(o.rotulo) + ' · ' + dm(o.de) + '–' +
+                                dm(o.ate) + (o.agora ? ' · agora' : ''))).join('');
+  sel.value = atual;
+  sel.disabled = fechada;
+  sel.title = fechada ? 'Sprint fechada — a demanda não sai mais dela.' : '';
+  gSprintAviso();
+}
+
+function gSprintAviso() {
+  const sel = document.getElementById('e-sprint-po');
+  const hint = document.getElementById('e-sprint-hint');
+  if (!sel || !hint || !window.SPRINTPO) return;
+  const exige = SPRINTPO.posPlanning((document.getElementById('e-status-plan') || {}).value);
+  hint.style.color = !sel.value && exige ? 'var(--red,#E84444)' : '';
+  hint.textContent = sel.value ? ''
+    : exige ? 'Obrigatória depois da Planning — escolha a sprint antes de salvar.'
+            : 'No backlog. Escolha a sprint quando ela sair da Planning.';
+}
 function promoveAoAgendar(m) {
   if (!m) return false;
   const atual = m.status_planejamento || 'backlog';
   if (!ETAPAS_ANTES_DE_PLANEJADO.includes(atual)) return false;
+  /* DEPOIS DA PLANNING, SÓ COM SPRINT (29/10). Agendar não escolhe a sprint —
+     a data diz em que semana CAI, e a sprint é o que o PO DECIDIU (ver o
+     cabeçalho de `sprint.js`). Sem sprint, a demanda fica agendada na etapa em
+     que estava, e a tela diz o que falta: promover aqui faria o Worker recusar a
+     gravação inteira do Gantt por causa deste card. */
+  if (window.SPRINTPO &&
+      SPRINTPO.travaDeAlocacao(m, atual, 'planejado', window.PRAZO && PRAZO.hojeISO()).trava) {
+    toast('Agendada. Para ir a Planejado, escolha a sprint no card — depois da Planning ela é obrigatória.', 'err');
+    return false;
+  }
   m.status_planejamento = 'planejado';
   m.status = spToStatus('planejado');
   return true;
@@ -4448,6 +4511,7 @@ function openModal(id, prefillDev, prefillDate) {
   const _selo = document.getElementById('e-selo');
   if (_selo) _selo.innerHTML = window.SELO ? SELO.grande(m, 132) : '';
   document.getElementById('e-status-plan').value = m?.status_planejamento || 'backlog';
+  gSprintRender(m);
   document.getElementById('e-inicio').value    = m?.inicio || prefillDate || '';
   document.getElementById('e-fim').value       = m?.entrega || prefillDate || '';
   /* SO O VALOR DIGITADO. Pondo a heranca no input, abrir e salvar um card
@@ -4919,6 +4983,25 @@ async function saveTask() {
     const h = document.getElementById('e-horas-real');
     if (h) { h.focus(); h.select(); }
     return;
+  }
+  /* A SPRINT DO CAMPO entra pelo gesto do chip (`repassar`/`retirar`), e não
+     gravando `sprint_po` direto — é ali que o histórico e a sprint fechada são
+     tratados. E depois da Planning ela é obrigatória (29/10). */
+  if (window.SPRINTPO) {
+    const spEsc = (document.getElementById('e-sprint-po') || {}).value || '';
+    const hojeSp = window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10);
+    if (spEsc !== SPRINTPO.doPO(obj)) {
+      const quem = (_gEu && (_gEu.nome || _gEu.login)) || 'PM/PO';
+      const r = spEsc ? SPRINTPO.repassar(obj, spEsc, quem, hojeSp, { dados: state })
+                      : SPRINTPO.retirar(obj, quem, hojeSp, { dados: state });
+      if (!r.ok) { toast(r.erro, 'err'); document.getElementById('e-sprint-po').focus(); return; }
+    }
+    if (SPRINTPO.travaDeAlocacao(obj, existing.status_planejamento || (editingId ? '' : 'backlog'),
+                                 sp, hojeSp).trava) {
+      toast('🏃 Escolha a sprint: depois da Planning ela é obrigatória.', 'err');
+      document.getElementById('e-sprint-po').focus();
+      return;
+    }
   }
   // Mesma regra do Admin: a etapa escolhida aqui tambem leva a Concluido.
   marcaConclusao(obj, sp);

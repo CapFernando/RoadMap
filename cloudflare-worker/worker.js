@@ -1843,11 +1843,19 @@ function travaTipoDemandaExistente(recebido, servidor, papel) {
  *
  * A TELA JA BARRA ANTES, com a mesma mensagem — isto aqui e a rede de baixo.
  */
+/* REVISTO EM 29/10 — "sprint deve ser obrigatoria sempre apos a Planning".
+ * Tres mudancas, todas decisao do Fernando (o porque esta em `sprint.js`):
+ *   - a trava guarda TODA etapa depois da Planning, e nao so `em_andamento`;
+ *   - Sustentacao deixa de passar (a lista abaixo fica vazia, e nao some,
+ *     porque ha invariante conferindo esta copia contra a das telas);
+ *   - vale para TODO papel, e nao so para o dev: e o PM/PO quem escolhe a
+ *     sprint, e a regra e justamente que ele a escolha antes de mover. */
 const TRAVA_ALOCACAO_DESDE = '2026-11-01';
-const TIPOS_LIVRES_DA_SPRINT = ['sustentacao'];
+const TIPOS_LIVRES_DA_SPRINT = [];
+const ETAPAS_POS_PLANNING = ['planejado', 'em_andamento', 'validacao_area',
+                             'validacao', 'concluido', 'atrasado'];
 
 function alocacaoSemSprint(recebido, servidor, papel, hoje) {
-  if (String(papel || '') !== 'dev') return [];
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const dia = String(hoje || hojeBR()).slice(0, 10);
   if (dia < TRAVA_ALOCACAO_DESDE) return [];
@@ -1856,14 +1864,19 @@ function alocacaoSemSprint(recebido, servidor, papel, hoje) {
   const presos = [];
   for (const m of recebido.melhorias) {
     if (!m || !m.id || m.oculto || m.mesclado_em) continue;
-    if (String(m.status_planejamento || '') !== 'em_andamento') continue;
+    const depois = String(m.status_planejamento || '');
+    if (!ETAPAS_POS_PLANNING.includes(depois)) continue;
     const velha = antes.get(m.id);
-    /* JA ESTAVA EM ANDAMENTO: nao ha movimento, e reexaminar o ESTADO
-       congelaria quem esta no meio do trabalho desde antes da regra. Medido na
-       base: 18 em andamento, nenhuma com sprint do PO.
-       Demanda que o servidor nao conhece tambem passa — o dev abre a propria
-       task, e ela nasce em backlog (ver `nasceForaDaSprint`). */
-    if (!velha || String(velha.status_planejamento || '') === 'em_andamento') continue;
+    /* Demanda que o servidor nao conhece passa — o dev abre a propria task, e
+       ela nasce em backlog (ver `nasceForaDaSprint`). */
+    if (!velha) continue;
+    /* SO MOVIMENTO, nunca estado: atravessar a Planning, ou comecar. Quem ja
+       estava do lado de ca segue andando — reexaminar o ESTADO congelaria quem
+       esta no meio do trabalho desde antes da regra. */
+    const antesEt = String(velha.status_planejamento || '');
+    const cruza = !ETAPAS_POS_PLANNING.includes(antesEt);
+    const comeca = depois === 'em_andamento' && antesEt !== 'em_andamento';
+    if (!cruza && !comeca) continue;
     if (TIPOS_LIVRES_DA_SPRINT.includes(String(m.tipo || '').toLowerCase())) continue;
     if (String(m.sprint_po || '').trim()) continue;
     presos.push({ id: m.id, codigo: m.codigo || m.id,
@@ -5470,6 +5483,17 @@ export default {
                                   'demanda-entregar; concluir e do PM/PO.',
                           aceitas: ETAPAS_DEV }, 400, headers);
           }
+          /* A MESMA TRAVA DAS TELAS: atravessar a Planning ou comecar exige
+             sprint. Pela API ela faltava — o dev movia para em_andamento sem
+             sprint por aqui, e a regra so existia nas portas com tela. */
+          const semSprintApi = alocacaoSemSprint(
+            { melhorias: [Object.assign({}, m, { status_planejamento: e })] },
+            { melhorias: [m] }, 'dev');
+          if (semSprintApi.length) {
+            return json({ error: 'fora_da_sprint', codigos: [m.codigo || m.id],
+                          detail: 'Depois da Planning a demanda precisa estar numa sprint. ' +
+                                  'Quem escolhe a sprint e o PM/PO — peca o repasse antes.' }, 403, headers);
+          }
           m.status_planejamento = e; mudou.push('etapa');
         }
         /* ═══ AS DATAS DA TASK ══════════════════════════════════════════
@@ -7425,6 +7449,18 @@ export default {
          acreditar que marcou. Ver `preservaComite`. */
       const comiteRevPub = preservaComite(data, antesPub, podeMarcarComite(_ident));
       const semSistemaPub = entrandoAlocadaSemSistema(data, antesPub);
+      /* DEPOIS DA PLANNING, SO COM SPRINT — tambem para o PM/PO. E ele quem
+         escolhe, e a regra e que escolha ANTES de mover: a tela ja abre o
+         seletor; isto e a rede de baixo. */
+      const semSprintPub = alocacaoSemSprint(data, antesPub, 'admin');
+      if (semSprintPub.length) {
+        return json({ error: 'fora_da_sprint',
+                      codigos: semSprintPub.map(p => p.codigo),
+                      demandas: semSprintPub,
+                      detail: 'Depois da Planning a demanda precisa estar numa sprint (' +
+                              semSprintPub.map(p => p.codigo).join(', ') + '). Escolha a ' +
+                              'sprint no card antes de mover.' }, 403, headers);
+      }
       const aprovadoresPub = await spikeAprovadores(env);
       const spikeSemAssPub = entrandoEmConcluidoSpikeSemAssinatura(data, antesPub, aprovadoresPub);
       if (spikeSemAssPub.length) {
@@ -7696,10 +7732,9 @@ export default {
         return json({ error: 'fora_da_sprint',
                       codigos: semSprint.map(p => p.codigo),
                       demandas: semSprint,
-                      detail: 'Para comecar (' + semSprint.map(p => p.codigo).join(', ') +
-                              ') a demanda precisa estar numa sprint. Quem repassa e o ' +
-                              'PM/PO — peca o repasse antes de comecar. Demanda de ' +
-                              'Sustentacao comeca sem esperar.' }, 403, headers);
+                      detail: 'Depois da Planning a demanda precisa estar numa sprint (' +
+                              semSprint.map(p => p.codigo).join(', ') + '). Quem escolhe a ' +
+                              'sprint e o PM/PO — peca o repasse antes de mover.' }, 403, headers);
       }
       // Entregar sem horas e sem texto e recusado. Aqui a gravacao PARA, ao
       // contrario da trava de datas: la o campo volta ao valor do servidor e o

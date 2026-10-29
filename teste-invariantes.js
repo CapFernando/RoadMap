@@ -23514,8 +23514,26 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const opc = semComentario(corpo(ADMIN, 'function sprintOpcoes(atual) {') || '');
     ok(/if \(atual\) \{[\s\S]{0,200}Tirar da sprint/.test(opc),
        '"Tirar da sprint" so aparece para quem esta numa — botao inerte ensina que o dialogo mente');
-    ok(/SPRINTPO\.sprintsDoMes\(/.test(opc) && !/function sprintDeData/.test(opc),
+    /* 29/10: a lista passou a ser "a atual + 5 a frente", e quem a monta e
+       `proximasSprints` — a mesma do Gantt e do campo do card. */
+    ok(/SPRINTPO\.proximasSprints\(/.test(opc) && !/function sprintDeData/.test(opc),
        'e a lista vem do modulo, em vez de uma segunda conta de semana no Admin');
+    (() => {
+      const px = SP.proximasSprints('2026-10-29', 5);
+      ok(px.length === 6 && px[0].rotulo === SP.sprintCorrente('2026-10-29') && px[0].agora,
+         'a lista do PM/PO e a sprint ATUAL e mais cinco',
+         px.map(s => s.rotulo).join(' '));
+      const vira = SP.proximasSprints('2026-12-28', 5).map(s => s.rotulo);
+      ok(vira.length === 6 && vira[1] === 'S1-01-2027',
+         'e atravessa a virada do ano sozinha', vira.join(' '));
+      const semFech = SP.proximasSprints('2026-10-29', 5, [], ['S1-11-2026']).map(s => s.rotulo);
+      ok(semFech.length === 6 && !semFech.includes('S1-11-2026'),
+         'e pula a sprint fechada, completando a lista com a seguinte', semFech.join(' '));
+      const julho = SP.proximasSprints('2026-07-29', 5).map(s => s.rotulo);
+      ok(julho.every(r => r.slice(6) >= '2026' && (r.slice(3, 5) >= '07' || r.slice(6) > '2026')) &&
+         !julho.includes('S1-07-2026'),
+         'e nao oferece semana que ja passou no mes', julho.join(' '));
+    })();
     /* O DIALOGO DIZ O CURTO E GRAVA O INTEIRO. Rotulo `S2-11-2026` no dialogo
        com `S2-11` no card ao lado obrigaria a pessoa a supor que sao a mesma
        coisa; e `valor` curto gravaria o encurtamento, que e o defeito. */
@@ -23596,12 +23614,20 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!!mLivres && mLivres[1].replace(/'/g, '"') === JSON.stringify(SP.TIPOS_LIVRES),
        'e os MESMOS tipos que passam sem sprint',
        'worker=' + (mLivres ? mLivres[1] : '?') + ' telas=' + JSON.stringify(SP.TIPOS_LIVRES));
+    /* AS ETAPAS DEPOIS DA PLANNING, nas duas copias (29/10). Uma etapa a mais
+       num lado so seria uma trava que a tela mostra e o servidor nao aplica. */
+    const mPos = W.match(/const ETAPAS_POS_PLANNING = (\[[^\]]*\]);/);
+    const posW = mPos ? JSON.parse(mPos[1].replace(/'/g, '"').replace(/\s+/g, '')) : null;
+    ok(!!posW && JSON.stringify(posW) === JSON.stringify(SP.ETAPAS_POS_PLANNING),
+       'e as MESMAS etapas depois da Planning',
+       'worker=' + JSON.stringify(posW) + ' telas=' + JSON.stringify(SP.ETAPAS_POS_PLANNING));
 
-    if (semSprintFn && mTrava && mLivres) {
+    if (semSprintFn && mTrava && mLivres && mPos) {
       const WTRAVA = new Function([
         semSprintFn,
         "const TRAVA_ALOCACAO_DESDE = '" + mTrava[1] + "';",
         'const TIPOS_LIVRES_DA_SPRINT = ' + mLivres[1] + ';',
+        'const ETAPAS_POS_PLANNING = ' + mPos[1] + ';',
         'function hojeBR(){ return "2026-11-03"; }',
         'return alocacaoSemSprint;',
       ].join('\n'))();
@@ -23656,8 +23682,22 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         'dev', dia || '2026-11-03').length > 0;
       ok(roda({ tipo: 'evolucao' }, 'planejado', 'em_andamento'),
          'evolucao sem sprint NAO comeca');
-      ok(!roda({ tipo: 'sustentacao' }, 'planejado', 'em_andamento'),
-         'e sustentacao comeca sem esperar o PM/PO — a porta das 2h da manha');
+      /* REVISTO EM 29/10: "sprint obrigatoria sempre apos a Planning", e "vale
+         para todos". A porta da Sustentacao fechou — o PM/PO poe na sprint
+         atual com um clique no incidente. */
+      ok(roda({ tipo: 'sustentacao' }, 'planejado', 'em_andamento'),
+         'sustentacao tambem espera a sprint — a regra vale para todos (29/10)');
+      ok(roda({ tipo: 'evolucao' }, 'planning', 'planejado'),
+         'SAIR DA PLANNING sem sprint trava, e nao so comecar');
+      ok(roda({}, 'backlog', 'validacao_area'),
+         'e atravessar a Planning por qualquer porta trava junto');
+      ok(!roda({ tipo: 'evolucao', sprint_po: 'S1-11-2026' }, 'planning', 'planejado'),
+         'com sprint escolhida, sai da Planning normalmente');
+      ok(!roda({ tipo: 'evolucao' }, 'planejado', 'validacao_area'),
+         'quem JA estava depois da Planning segue andando — a regra e movimento',
+         'decisao do Fernando: so o movimento, nao o estado');
+      ok(!roda({ tipo: 'evolucao' }, 'planning', 'backlog'),
+         'e voltar para antes da Planning nao pede sprint');
       ok(roda({}, 'planejado', 'em_andamento'),
          'sem classificacao conta como evolucao, e espera',
          '117 das 158 vivas estao assim');
@@ -23669,11 +23709,20 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(!roda({ tipo: 'evolucao' }, 'planejado', 'em_andamento', '2026-10-31') &&
          roda({ tipo: 'evolucao' }, 'planejado', 'em_andamento', '2026-11-01'),
          'a trava nasce em 01/11, e nao antes');
-      ok(!WTRAVA({ melhorias: [{ id: 'x', codigo: 'AX-1', tipo: 'evolucao',
-                                 status_planejamento: 'em_andamento' }] },
-                 { melhorias: [{ id: 'x', status_planejamento: 'planejado' }] },
-                 'admin', '2026-11-03').length,
-         'e ela vale para o papel `dev` — o PM/PO move o que quiser');
+      ok(WTRAVA({ melhorias: [{ id: 'x', codigo: 'AX-1', tipo: 'evolucao',
+                                status_planejamento: 'planejado' }] },
+                { melhorias: [{ id: 'x', status_planejamento: 'planning' }] },
+                'admin', '2026-11-03').length > 0,
+         'e ela vale TAMBEM para o PM/PO — e ele quem escolhe a sprint, antes de mover');
+      /* E A ROTA DO ADMIN A APLICA. Medir a funcao sem medir que ela e chamada
+         no `publish` deixaria a regra so no painel do dev. */
+      const iPub = WC.indexOf("alocacaoSemSprint(data, antesPub, 'admin')");
+      ok(iPub > 0 && /if \(semSprintPub\.length\) \{/.test(WC.slice(iPub, iPub + 200)) &&
+         /error: 'fora_da_sprint'/.test(WC.slice(iPub, iPub + 400)),
+         'o publish do Admin recusa mover sem sprint, com o mesmo codigo de erro');
+      const iApi = WC.indexOf('const semSprintApi = alocacaoSemSprint(');
+      ok(iApi > 0 && /if \(semSprintApi\.length\)/.test(WC.slice(iApi, iApi + 400)),
+         'e a API do dev (demanda-atualizar) tambem — a etapa muda por la');
     }
 
     /* ═══ A CLASSIFICACAO VIROU CHAVE, E CHAVE PRECISA DE TRANCA ═══════════
@@ -23919,7 +23968,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/fechamentoApagado\(data, antesPub\)/.test(WC),
        'e o fechamento nao pode ser apagado por outra porta');
     ok(/rotulosFechados\(state\)/.test(semComentario(opc)) &&
-       /filter\(s => !fechadas\.includes\(s\.rotulo\)\)/.test(semComentario(opc)),
+       /proximasSprints\(hoje, 5, fer, fechadas\)/.test(semComentario(opc)),
        'e o repasse nao OFERECE sprint fechada',
        'oferece-la seria um clique que o Worker recusa com 409');
     ok(/sprints:\s+decoded\.sprints/.test(ADMIN),

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="e87768b765">
+<html lang="pt-BR" data-build="c92a1aae4e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -74,6 +74,34 @@
     /* O dev abre o painel e a primeira pergunta e "o que eu faco agora". Cinco
        numeros respondem antes de ele varrer coluna. */
     .meu-dia { display:none; gap:8px; flex-wrap:wrap; padding:12px 24px 0; }
+    /* O PLACAR DA SPRINT (aba própria). Os blocos repetem o desenho do "meu dia"
+       logo acima, para os números do painel se lerem do mesmo jeito. */
+    #sprint-wrap { padding:16px 24px 32px; }
+    .dsp-topo { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+    .dsp-titulo { font-size:17px; font-weight:700; margin:0; color:var(--text); }
+    .dsp-estado { font-size:12px; color:var(--text3); }
+    .dsp-placar { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+    .dsp-b { background:var(--bg2); border:1px solid var(--border); border-radius:10px;
+      padding:10px 16px; min-width:130px; }
+    .dsp-n { font-size:24px; font-weight:700; color:var(--text); line-height:1.15; }
+    .dsp-r { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+    .dsp-de { font-size:12px; font-weight:400; color:var(--text3); }
+    .dsp-rk { width:100%; border-collapse:collapse; font-size:13px; }
+    .dsp-rk th { text-align:left; font-size:11px; font-weight:600; color:var(--text3);
+      text-transform:uppercase; letter-spacing:.04em; padding:6px 10px;
+      border-bottom:1px solid var(--border); cursor:help; }
+    .dsp-rk td { padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text); }
+    .dsp-rk tr.dsp-eu td { background:var(--bg3); }
+    .dsp-rk tr.dsp-eu .dsp-nome { font-weight:700; color:var(--blue); }
+    .dsp-pos { color:var(--text3); width:36px; }
+    .dsp-barra { display:inline-block; width:80px; height:6px; border-radius:3px;
+      background:var(--bg3); margin-right:8px; vertical-align:middle; overflow:hidden; }
+    .dsp-barra span { display:block; height:100%; background:var(--green,#2BBF6A); }
+    .dsp-nota { font-size:11.5px; color:var(--text3); margin-top:10px; line-height:1.5; }
+    .dsp-vazio { font-size:13px; color:var(--text3); padding:12px 0; }
+    @media (max-width: 640px) {
+      #sprint-wrap { padding:12px 16px 24px; overflow-x:auto; }
+    }
     .md-bloco { background:var(--bg2); border:1px solid var(--border); border-radius:10px;
       padding:8px 14px; min-width:86px; }
     .md-num { font-size:19px; font-weight:700; color:var(--text); line-height:1.15; }
@@ -712,7 +740,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=116dd58ee8"></script>
+<script src="sprint.js?v=4cf1763477"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -909,6 +937,10 @@
 
   <div class="dv-tabs">
     <button class="dv-tab ativa" id="dv-tab-kanban" onclick="devAba('kanban')">Kanban</button>
+    <!-- O PLACAR DA SPRINT GANHOU ABA (29/10): "não percebi as mudanças no
+         painel dev sobre o ranking — falta clareza em mostrar pontuação,
+         quantidade e % da sprint". Ele só existia no Gerencial do Admin. -->
+    <button class="dv-tab" id="dv-tab-sprint" onclick="devAba('sprint')">🏃 Sprint</button>
     <button class="dv-tab" id="dv-tab-gantt" onclick="devAba('gantt')">Cronograma</button>
     <button class="dv-tab" id="dv-tab-projetos" onclick="devAba('projetos')">Projetos</button>
     <button class="dv-tab" id="dv-tab-api" onclick="devAba('api')">Endpoint</button>
@@ -1051,6 +1083,20 @@
     <div id="kanban"></div>
   </div>
 
+  <!-- O PLACAR DA SPRINT, para o time. As contas são as do Gerencial do Admin
+       (`SPRINTPO.placarDaSprint` / `rankingDaSprint`): dois lugares mostrando a
+       mesma semana com números diferentes é o defeito que o módulo existe para
+       evitar. -->
+  <div id="sprint-wrap" style="display:none">
+    <div class="dsp-topo">
+      <h2 class="dsp-titulo">Placar da sprint</h2>
+      <select id="dsp-sel" class="filter-select" onchange="renderSprintDev()"></select>
+      <span id="dsp-estado" class="dsp-estado"></span>
+    </div>
+    <div id="dsp-placar" class="dsp-placar"></div>
+    <div id="dsp-ranking"></div>
+  </div>
+
   <!-- Cronograma do proprio dev: leitura. Quem planeja e o PM/PO no gantt
        principal; aqui o dev ve o que caiu para ele, em linha do tempo. -->
   <div id="gantt-wrap" style="display:none">
@@ -1145,6 +1191,14 @@
 
          Fica ANTES de "Mover para", que é o gesto que a cobra: preencher
          depois de ser recusado é a ordem errada. -->
+    <!-- A SPRINT DA DEMANDA, em toda tela do card (29/10). Aqui só se LÊ: quem
+         escolhe é o PM/PO. Vazia, a linha diz isso — porque depois da Planning
+         ela é obrigatória, e o dev precisa saber a quem pedir antes de tentar
+         mover e ser recusado. -->
+    <div class="form-group" id="ms-sprint-group">
+      <label>Sprint</label>
+      <div id="ms-sprint" style="font-size:13px"></div>
+    </div>
     <div class="form-group" id="ms-solicitante-group">
       <label>Quem pediu <span style="color:var(--red,#E84444)">*</span>
         <small style="font-weight:400;color:var(--text3)">— é quem homologa na Validação da área</small></label>
@@ -2140,8 +2194,11 @@ function ajustaAlturaKanban() {
 }
 
 function devAba(qual) {
-  const kanban = !['gantt', 'api', 'projetos'].includes(qual);
+  const kanban = !['gantt', 'api', 'projetos', 'sprint'].includes(qual);
   document.getElementById('kanban-wrap').style.display = kanban ? '' : 'none';
+  document.getElementById('sprint-wrap').style.display = qual === 'sprint' ? 'block' : 'none';
+  document.getElementById('dv-tab-sprint').classList.toggle('ativa', qual === 'sprint');
+  if (qual === 'sprint') renderSprintDev();
   document.getElementById('gantt-wrap').style.display = qual === 'gantt' ? 'block' : 'none';
   document.getElementById('api-wrap').style.display = qual === 'api' ? 'block' : 'none';
   document.getElementById('projetos-wrap').style.display = qual === 'projetos' ? 'block' : 'none';
@@ -2157,6 +2214,109 @@ function devAba(qual) {
   if (qual === 'api') renderEndpointDoc();
   if (qual === 'projetos') renderProjetosDev();
   try { localStorage.setItem('rm_dev_aba', qual); } catch (_) {}
+}
+
+/* ═══ O PLACAR DA SPRINT NO PAINEL DO DEV ════════════════════════════════════
+ *
+ * "Falta clareza em mostrar pontuação, quantidade e % da sprint." Três números
+ * por pessoa, cada um na sua coluna, e o da pessoa logada destacado:
+ *
+ *   PONTOS    validados pelo PM/PO, de quantos a pessoa tinha na sprint
+ *   ITENS     validados, de quantos ela tinha
+ *   %         itens validados ÷ itens dela — o cumprimento
+ *
+ * As regras do número são as de `sprint.js` e estão explicadas lá: o ponto de
+ * dupla se reparte, o item conta inteiro para os dois (por isso a coluna de
+ * itens pode não somar o total — a tela avisa), e quem saiu da sprint sem
+ * entregar continua no denominador.
+ *
+ * SÓ SPRINT QUE O TIME JÁ PODE VER. Em montagem ela é do PM/PO (ver
+ * `escondidaDoTime`): mostrar o placar dela anteciparia a semana que ele ainda
+ * está decidindo. */
+let _dspSel = '';
+
+function renderSprintDev() {
+  const sel = document.getElementById('dsp-sel');
+  if (!sel || !window.SPRINTPO) return;
+  const fer = state.feriados || [];
+  const hoje = window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10);
+  const agora = SPRINTPO.sprintCorrente(hoje, fer);
+  const vistas = {};
+  (state.melhorias || []).forEach(m => {
+    if (!m || m.oculto || m.mesclado_em) return;
+    SPRINTPO.entradas(m).forEach(e => { if (e.sprint) vistas[e.sprint] = true; });
+    const s = SPRINTPO.doPO(m);
+    if (s) vistas[s] = true;
+  });
+  vistas[agora] = true;
+  const chave = r => r.slice(6, 10) + r.slice(3, 5) + r.slice(1, 2);
+  const lista = Object.keys(vistas)
+    .filter(r => SPRINTPO.rotuloValido(r) && SPRINTPO.situacaoDaSprint(state, r) !== 'montando')
+    .sort((a, b) => chave(b).localeCompare(chave(a)));
+  const titulo = document.getElementById('dsp-placar');
+  const rkEl = document.getElementById('dsp-ranking');
+  const est = document.getElementById('dsp-estado');
+  if (!lista.length) {
+    sel.innerHTML = '';
+    sel.style.display = 'none';
+    if (est) est.textContent = '';
+    titulo.innerHTML = '<div class="dsp-vazio">Nenhuma sprint iniciada ainda. Quando o ' +
+      'PM/PO iniciar a sprint (' + escAttr(SPRINTPO.rotuloCurto(agora)) + '), o placar aparece aqui.</div>';
+    rkEl.innerHTML = '';
+    return;
+  }
+  sel.style.display = '';
+  if (!lista.includes(_dspSel)) _dspSel = lista.includes(agora) ? agora : lista[0];
+  sel.innerHTML = lista.map(r => '<option value="' + escAttr(r) + '">' +
+    escAttr(SPRINTPO.rotuloCurto(r)) + (r === agora ? ' · agora' : '') +
+    (SPRINTPO.estaFechada(state, r) ? ' · fechada' : '') + '</option>').join('');
+  sel.value = _dspSel;
+  _dspSel = sel.value;
+
+  const etapa = m => getStatusKey(m);
+  const p = SPRINTPO.placarDaSprint(state, _dspSel, etapa);
+  const rk = SPRINTPO.rankingDaSprint(state, _dspSel, etapa);
+  const faixa = SPRINTPO.faixaDaSprint(_dspSel, fer);
+  const dm = s => s.slice(8, 10) + '/' + s.slice(5, 7);
+  if (est) {
+    est.textContent = (faixa ? dm(faixa.de) + ' a ' + dm(faixa.ate) + ' · ' : '') +
+      (SPRINTPO.estaFechada(state, _dspSel) ? '🔒 fechada' : '▶ em curso');
+  }
+
+  const bloco = (n, de, rot) => '<div class="dsp-b"><div class="dsp-n">' + n +
+    (de != null ? '<span class="dsp-de"> de ' + de + '</span>' : '') +
+    '</div><div class="dsp-r">' + rot + '</div></div>';
+  titulo.innerHTML = !p.total
+    ? '<div class="dsp-vazio">Nada nesta sprint ainda.</div>'
+    : bloco(p.pontosValidados, p.pontosTotal, 'pontos validados pelo PM/PO') +
+      bloco(p.validados, p.total, 'itens validados pelo PM/PO') +
+      bloco(p.pct + '%', null, 'cumprimento da sprint (itens)') +
+      (p.pctPontos === null ? '' : bloco(p.pctPontos + '%', null, 'cumprimento (pontos)')) +
+      (p.aguardando ? bloco(p.aguardando, null, 'esperando validação') : '');
+
+  const temDupla = rk.some(d => d.dupla);
+  const eu = DEVNOME.norm(currentDev || '');
+  rkEl.innerHTML = !rk.length ? '' :
+    '<table class="dsp-rk"><thead><tr><th>#</th><th>Dev</th>' +
+    '<th title="Pontos das demandas que o PM/PO validou, de todos os pontos da pessoa na sprint">Pontos</th>' +
+    '<th title="Demandas validadas pelo PM/PO, de todas as da pessoa na sprint">Itens</th>' +
+    '<th title="Itens validados ÷ itens da pessoa na sprint">% da sprint</th>' +
+    '<th title="Entregues, esperando o PM/PO validar">Esperando</th>' +
+    '<th>Em curso</th></tr></thead><tbody>' +
+    rk.map((d, i) => '<tr class="' + (eu && DEVNOME.norm(d.nome) === eu ? 'dsp-eu' : '') + '">' +
+      '<td class="dsp-pos">' + (i + 1) + 'º</td>' +
+      '<td class="dsp-nome">' + escAttr(d.nome) + '</td>' +
+      '<td><strong>' + d.pontos + '</strong><span class="dsp-de"> de ' + d.pontosTotal + '</span></td>' +
+      '<td><strong>' + d.validados + '</strong><span class="dsp-de"> de ' + d.total + '</span></td>' +
+      '<td><div class="dsp-barra"><span style="width:' + Math.min(100, d.pct) + '%"></span></div>' +
+        '<strong>' + d.pct + '%</strong></td>' +
+      '<td>' + (d.aguardando || '—') + '</td>' +
+      '<td>' + (d.emCurso || '—') + '</td>' +
+    '</tr>').join('') + '</tbody></table>' +
+    '<div class="dsp-nota">Ordem: itens validados, depois pontos. Só conta o que o PM/PO ' +
+    'validou (Concluído).' + (temDupla ? ' Demanda de dupla conta inteira para os dois na ' +
+    'coluna de itens — por isso ela pode não somar o total; os pontos são repartidos e somam.' : '') +
+    '</div>';
 }
 
 function dgMes(delta) {
@@ -4455,6 +4615,7 @@ function renderKanban() {
   ajustaAlturaKanban();
   // O cronograma le o mesmo state; redesenha junto para os dois nunca divergirem.
   if (document.getElementById('gantt-wrap')?.style.display === 'block') renderDevGantt();
+  if (document.getElementById('sprint-wrap')?.style.display === 'block') renderSprintDev();
   const kanban = document.getElementById('kanban');
   if (!kanban) return;
   /* A ROLAGEM DO QUADRO SOBREVIVE AO REDESENHO.
@@ -5612,6 +5773,20 @@ function msSolicitanteRender(m) {
   if (!campo) return;
   _msSolicitanteMexido = false;
   campo.value = (m && m.solicitante) || '';
+  msSprintRender(m);
+}
+
+/* A SPRINT DO CARD, só leitura — o chip é o mesmo do quadro (`SPRINTPO.badge`),
+   para a pessoa reconhecer o que já vê nos cards. Vazia, diz a quem pedir. */
+function msSprintRender(m) {
+  const el = document.getElementById('ms-sprint');
+  if (!el || !window.SPRINTPO) return;
+  const s = SPRINTPO.doPO(m || {});
+  el.innerHTML = SPRINTPO.badge(m || {}, 'kcard-sprint') +
+    (s ? (m.sprint_po_por ? ' <span style="color:var(--text3)">— repassada por ' +
+                            escAttr(m.sprint_po_por) + '</span>' : '')
+       : ' <span style="color:var(--text3)">— peça ao PM/PO: depois da Planning a ' +
+         'sprint é obrigatória.</span>');
 }
 
 function msProjetoRender(m) {
