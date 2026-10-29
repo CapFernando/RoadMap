@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="0bac2d659f">
+<html lang="pt-BR" data-build="ecb25749ff">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -848,6 +848,17 @@
       background: repeating-linear-gradient(135deg,
         transparent 0 5px, rgba(0,0,0,.18) 5px 10px);
     }
+    /* O CHIP DA SPRINT DO PM/PO, na fila do backlog — as mesmas três cores das
+       outras duas telas. Aqui ele responde a pergunta que esta tela faz o tempo
+       todo: "isto já foi repassado para alguma semana, ou ainda está solto?".
+       Vermelho no atraso, por decisão do Fernando. */
+    .bl-sprint { font-size:10px; font-weight:700; color:var(--green-tx,#8FE0A8);
+      background:var(--green-bg,#0E3A1E); border:1px solid #2E7D4F;
+      border-radius:4px; padding:1px 6px; white-space:nowrap; cursor:help; }
+    .bl-sprint.sp-fora { color:var(--text3); background:transparent;
+      border:1px dashed var(--border); }
+    .bl-sprint.sp-atrasada { color:var(--red-tx,#F9A0A0);
+      background:var(--red-bg,#5C0A0A); border-color:#B5484D; }
     .bl-pausa { font-size:10px; font-weight:700; color:var(--text2);
       background:var(--bg4); border:1px solid var(--border2); border-radius:4px;
       padding:1px 5px; white-space:nowrap; position:relative; z-index:1; }
@@ -1140,7 +1151,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=330a2d16b1"></script>
+<script src="sprint.js?v=f5494b6595"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -2905,6 +2916,10 @@ function renderBacklog() {
       <div class="backlog-card-title">${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}${esc(m.titulo)}</div>
       ${m.descricao ? `<div class="backlog-card-desc">${esc(m.descricao)}</div>` : ''}
       <div class="backlog-card-meta">
+        ${/* A SPRINT DO PM/PO, e não a derivada das datas. Esta fila é de
+              demanda SEM data — a derivada sairia vazia para todas elas, e é
+              justamente aqui que "já foi repassada?" precisa de resposta. */''}
+        ${window.SPRINTPO ? SPRINTPO.badge(m, 'bl-sprint') : ''}
         ${estaPausado(m) ? `<span class="bl-pausa" title="Pausada${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${diasPausadoAgora(m)}d</span>` : ''}
         ${pontuado
           ? `<span title="Pontos do Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:10px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 6px;font-weight:700">🃏 ${m.poker_pontos}</span>`

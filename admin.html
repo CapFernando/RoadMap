@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="f30e837e5e">
+<html lang="pt-BR" data-build="8c781767c0">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -444,22 +444,28 @@
     .kb-proj.kb-proj-abre:hover { background:var(--purple-bg,#341A6E);
       border-style:solid; border-color:#A974F0; }
     /* ═══ O CHIP DA SPRINT ═════════════════════════════════════════════════
-       VERDE para quem está na sprint, APAGADO para quem está no backlog, ÂMBAR
-       para quem entrou atrasada. São três estados e não dois: "fora da sprint"
-       é o estado que a regra nova criou, e um card sem chip nenhum se leria
-       como chip faltando, e não como demanda no backlog.
+       VERDE para quem está na sprint, APAGADO para quem está no backlog,
+       VERMELHO para quem entrou atrasada. São três estados e não dois: "fora
+       da sprint" é o estado que a regra nova criou, e um card sem chip nenhum
+       se leria como chip faltando, e não como demanda no backlog.
 
-       O ÂMBAR NÃO É VERMELHO de propósito. Vermelho neste quadro já significa
-       prazo vencido (`kb-atrasada`), e uma demanda pode rolar de sprint sem
-       estar vencida — duas coisas na mesma cor fariam o olho ler uma pela
-       outra. */
+       O VERMELHO É DECISÃO DO FERNANDO — "atrasos em vermelho". Eu havia posto
+       âmbar para não disputar com o `kb-atraso-tag`, que também é vermelho e
+       significa outra coisa (prazo vencido). Ele é a autoridade sobre o que o
+       quadro deve gritar, e atraso é atraso nas duas leituras.
+
+       O QUE SEPARA OS DOIS continua sendo a FORMA e o lugar: o atraso de prazo
+       é uma FAIXA no topo do card, larga, com "⚠ Atrasada"; a sprint é um CHIP
+       na linha de marcas, com o rótulo dela. Mesma cor, desenhos diferentes —
+       e os dois acesos ao mesmo tempo é informação, não repetição: a demanda
+       furou o prazo E já rolou de semana. */
     .kb-sprint { font-size:10.5px; font-weight:700; color:var(--green-tx,#8FE0A8);
       background:var(--green-bg,#0E3A1E); border:1px solid #2E7D4F;
       border-radius:5px; padding:1px 6px; }
     .kb-sprint.sp-fora { color:var(--text3,#8B8B85); background:transparent;
       border:1px dashed var(--border,#2E2E2B); }
-    .kb-sprint.sp-atrasada { color:var(--amber-tx,#FFC470);
-      background:var(--amber-bg,#43280A); border-color:#9A6B1E; }
+    .kb-sprint.sp-atrasada { color:var(--red-tx,#F9A0A0);
+      background:var(--red-bg,#5C0A0A); border-color:#B5484D; }
     .kb-sprint-abre { cursor:pointer; display:inline-flex; }
     .kb-sprint-abre:hover .kb-sprint { border-style:solid; filter:brightness(1.25); }
     .cod-tag { font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
@@ -1371,7 +1377,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=330a2d16b1"></script>
+<script src="sprint.js?v=f5494b6595"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -8763,7 +8769,12 @@ function sprintOpcoes(atual) {
   const itens = [];
   [[ano, mes], mes === 12 ? [ano + 1, 1] : [ano, mes + 1]].forEach(([a, mm]) => {
     SPRINTPO.sprintsDoMes(a, mm, fer).forEach(s => {
-      itens.push({ valor: s.rotulo, rotulo: s.rotulo,
+      /* O RÓTULO CURTO AQUI TAMBÉM, senão o diálogo diria `S2-11-2026` e o
+         card ao lado diria `S2-11` — e a pessoa teria de supor que são a
+         mesma coisa. O `valor` continua INTEIRO: é ele que se grava.
+         O ano não falta: a lista é do mês corrente e do seguinte, em ordem,
+         com as datas ao lado, e o único salto possível é dezembro→janeiro. */
+      itens.push({ valor: s.rotulo, rotulo: SPRINTPO.rotuloCurto(s.rotulo),
                    nota: dm(s.de) + '–' + dm(s.ate) +
                          (s.rotulo === agora ? ' · agora' : '') });
     });

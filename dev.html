@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a4f264eb8c">
+<html lang="pt-BR" data-build="96a7863268">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -527,8 +527,10 @@
       border-radius:5px; padding:1px 6px; cursor:help; }
     .kcard-sprint.sp-fora { color:var(--text3,#8B8B85); background:transparent;
       border:1px dashed var(--border,#2E2E2B); }
-    .kcard-sprint.sp-atrasada { color:var(--amber-tx,#FFC470);
-      background:var(--amber-bg,#43280A); border-color:#9A6B1E; }
+    /* VERMELHO NO ATRASO, decisão do Fernando — e a mesma cor do quadro do
+       PM/PO, para o dev e ele não lerem o mesmo card de jeitos diferentes. */
+    .kcard-sprint.sp-atrasada { color:var(--red-tx,#F9A0A0);
+      background:var(--red-bg,#5C0A0A); border-color:#B5484D; }
     .kcard-meta  { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; font-size:11px; color:var(--text3); }
     .kcard-meta span { display:flex; align-items:center; gap:3px; }
     .kcard-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; display:inline-block; }
@@ -704,7 +706,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=330a2d16b1"></script>
+<script src="sprint.js?v=f5494b6595"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>

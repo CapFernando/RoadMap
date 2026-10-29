@@ -76,6 +76,28 @@
 
   function rotuloValido(s) { return ROTULO.test(txt(s)); }
 
+  /* ═══ O RÓTULO CURTO — `S1-10`, e só para a TELA ══════════════════════════
+   *
+   * "Add uma marcação na task de qual sprint ela faz parte: S1-10, S2-10…"
+   *
+   * O ANO SAI DA TELA E NUNCA DO DADO. `sprint_po` continua gravando
+   * `S1-10-2026` inteiro, e esta função só encurta na hora de desenhar.
+   *
+   * Guardar `S1-10` seria o defeito de verdade: a primeira sprint de outubro de
+   * 2026 e a de 2027 passariam a ser a MESMA string. Qualquer relatório que
+   * agrupe por sprint somaria os dois anos numa linha só, e "quanto o time
+   * entregou na S1-10" deixaria de ter resposta. É o mesmo tipo de colisão que
+   * o campo antigo já tinha com duas grafias ('S1-08-2026' e 'S1-08-26') —
+   * duas linhas para a mesma sprint —, só que ao contrário: uma linha para
+   * duas sprints, que é pior, porque não dá nem para separar depois.
+   *
+   * O ANO CONTINUA À MÃO no `title` do chip. Quem precisar dele passa o mouse;
+   * quem está varrendo o quadro lê `S1-10` e segue.                          */
+  function rotuloCurto(s) {
+    var t = txt(s);
+    return rotuloValido(t) ? t.slice(0, 5) : t;
+  }
+
   /* ═══ QUAIS SPRINTS EXISTEM NUM MÊS ═══════════════════════════════════════
    *
    * O PO precisa ESCOLHER uma sprint, e para escolher precisa da lista. Ela só
@@ -243,15 +265,19 @@
       return '<span class="' + cls + ' sp-fora" title="Fora da sprint — está no ' +
              'backlog até o PM/PO repassar.">📋 Backlog</span>';
     }
+    /* CURTO NO CHIP, INTEIRO NO `title`. O quadro se lê de relance e o ano é a
+       parte que nunca muda entre dois cards; no `title` ele volta, porque é lá
+       que alguém vai conferir de qual outubro se está falando. */
+    var curto = rotuloCurto(s);
     var n = pulos(m);
     if (!n) {
-      return '<span class="' + cls + '" title="Repassada para a sprint ' + esc(s) +
-             (txt((m || {}).sprint_po_por) ? ' por ' + esc(m.sprint_po_por) : '') +
-             '.">🏃 ' + esc(s) + '</span>';
+      return '<span class="' + cls + '" title="Sprint ' + esc(s) +
+             (txt((m || {}).sprint_po_por) ? ', repassada por ' + esc(m.sprint_po_por) : '') +
+             '.">🏃 ' + esc(curto) + '</span>';
     }
-    return '<span class="' + cls + ' sp-atrasada" title="Entrou atrasada: veio de ' +
-           esc(sprintDeOrigem(m)) + ' e já rolou ' + n +
-           (n === 1 ? ' sprint' : ' sprints') + '.">🏃 ' + esc(s) +
+    return '<span class="' + cls + ' sp-atrasada" title="Sprint ' + esc(s) +
+           ' — ENTROU ATRASADA: veio de ' + esc(sprintDeOrigem(m)) + ' e já rolou ' +
+           n + (n === 1 ? ' sprint' : ' sprints') + '.">🏃 ' + esc(curto) +
            ' · atrasada ' + n + '×</span>';
   }
 
@@ -357,6 +383,7 @@
   var api = {
     ROTULO: ROTULO,
     rotuloValido: rotuloValido,
+    rotuloCurto: rotuloCurto,
     segundaDaSemana: segundaDaSemana,
     diasUteisDoMes: diasUteisDoMes,
     sprintsDoMes: sprintsDoMes,

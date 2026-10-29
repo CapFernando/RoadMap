@@ -23403,6 +23403,72 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o nome de quem repassou e escapado antes de entrar no chip',
        chipSujo.slice(0, 90));
 
+    /* ═══ O ROTULO CURTO E SO DA TELA ══════════════════════════════════════
+     *
+     * "Add uma marcacao na task de qual sprint ela faz parte: S1-10, S2-10…"
+     *
+     * O ANO SAI DO DESENHO E NUNCA DO DADO, e esta e a invariante que segura
+     * isso. Gravar `S1-10` faria a primeira sprint de outubro de 2026 e a de
+     * 2027 virarem a MESMA string: qualquer relatorio que agrupe por sprint
+     * somaria os dois anos numa linha, e nao haveria como separar depois. */
+    ok(SP.rotuloCurto('S1-10-2026') === 'S1-10' &&
+       SP.rotuloCurto('S2-11-2026') === 'S2-11',
+       'o rotulo curto e o que o Fernando pediu — S1-10, S2-11');
+    ok(SP.rotuloCurto('qualquer coisa') === 'qualquer coisa' && SP.rotuloCurto('') === '',
+       'e ele nao mutila o que nao for rotulo de sprint');
+    /* O CURTO NAO E ACEITO COMO VALOR. Se `repassar` o aceitasse, o encurtamento
+       da tela acabaria no banco na primeira vez que alguem copiasse o que le. */
+    ok(!SP.repassar({}, 'S1-10', 'F', '2026-10-05').ok,
+       'e o curto NAO e aceito como valor gravado — ele e so desenho');
+    /* DUAS SPRINTS DE ANOS DIFERENTES DESENHAM IGUAL E NAO SE MISTURAM. */
+    const em2026 = { sprint_po: 'S1-10-2026', sprint_po_historico: [{ sprint: 'S1-10-2026' }] };
+    const em2027 = { sprint_po: 'S1-10-2027', sprint_po_historico: [{ sprint: 'S1-10-2027' }] };
+    ok(SP.rotuloCurto(SP.doPO(em2026)) === SP.rotuloCurto(SP.doPO(em2027)),
+       'S1-10 de 2026 e de 2027 aparecem iguais na tela');
+    ok(SP.naSprint(em2026, 'S1-10-2026') && !SP.naSprint(em2026, 'S1-10-2027'),
+       'e mesmo assim o filtro nao confunde as duas — o dado guardou o ano');
+    /* E O CHIP MOSTRA O CURTO, COM O INTEIRO NO `title`. As duas metades: o
+       quadro se le de relance, e quem precisa do ano passa o mouse. */
+    const chipAno = SP.badge(em2026);
+    ok(/>🏃 S1-10</.test(chipAno), 'o chip desenha o rotulo CURTO',
+       chipAno.slice(chipAno.indexOf('>🏃')));
+    ok(/title="[^"]*S1-10-2026/.test(chipAno),
+       'e o ano continua a um passar de mouse, no title');
+    ok(/title="[^"]*S2-11-2026/.test(chipNa) && /title="[^"]*S3-11-2026/.test(chipAtr),
+       'nos tres estados do chip, e nao so num deles');
+
+    /* ═══ ATRASO EM VERMELHO, NAS TRES TELAS ═══════════════════════════════
+     *
+     * "Atrasos em vermelho." Eu havia posto ambar para nao disputar com o
+     * `kb-atraso-tag`, que tambem e vermelho e significa prazo vencido; o
+     * Fernando decidiu o contrario, e e decisao dele.
+     *
+     * TRES TELAS, UMA COR. Se uma delas ficasse para tras, o dev e o PM/PO
+     * leriam o MESMO card de jeitos diferentes — e foi exatamente assim que a
+     * esteira travou da ultima vez, com uma regra ligada em dois dos tres
+     * caminhos. */
+    for (const [nome, src, classe] of [['admin', ADMIN, 'kb-sprint'],
+                                       ['dev', DEV, 'kcard-sprint'],
+                                       ['gantt', GANTT, 'bl-sprint']]) {
+      const i = semComentario(src).indexOf('.' + classe + '.sp-atrasada');
+      const regra = i < 0 ? '' : semComentario(src).slice(i, i + 170);
+      ok(i >= 0 && /--red/.test(regra) && !/--amber/.test(regra),
+         nome + ': a sprint que entrou atrasada e VERMELHA',
+         regra.replace(/\s+/g, ' ').slice(0, 76));
+    }
+    /* E O VERMELHO DO ATRASO DE PRAZO CONTINUA ONDE ESTAVA. Mesma cor, desenhos
+       diferentes: o prazo e uma FAIXA no topo do card, a sprint e um CHIP na
+       linha de marcas — e os dois acesos juntos sao informacao, nao repeticao. */
+    ok(/kb-atraso-tag[^}]*\{[^}]*(--red|#F9A0A0|#E5484D)/.test(semComentario(ADMIN).replace(/\n/g, ' ')),
+       'e a faixa de prazo vencido segue vermelha, em outro desenho');
+
+    // ── O CHIP CHEGOU NA FILA DO GANTT ─────────────────────────────────────
+    const bkl = semComentario(corpo(GANTT, 'function renderBacklog() {') || '');
+    ok(/SPRINTPO\.badge\(m, 'bl-sprint'\)/.test(bkl),
+       'a fila do backlog do gantt tambem marca a sprint',
+       'e a do PM/PO, nao a derivada: esta fila e de demanda SEM data');
+    ok(/src="sprint\.js\?v=/.test(GANTT), 'e o gantt carrega o modulo');
+
     // ── O GESTO DO PM/PO, NO QUADRO DO ADMIN ───────────────────────────────
     const adc = semComentario(ADMIN);
     ok(/ondblclick="sprintEscolher\(event/.test(adc),
@@ -23428,6 +23494,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        '"Tirar da sprint" so aparece para quem esta numa — botao inerte ensina que o dialogo mente');
     ok(/SPRINTPO\.sprintsDoMes\(/.test(opc) && !/function sprintDeData/.test(opc),
        'e a lista vem do modulo, em vez de uma segunda conta de semana no Admin');
+    /* O DIALOGO DIZ O CURTO E GRAVA O INTEIRO. Rotulo `S2-11-2026` no dialogo
+       com `S2-11` no card ao lado obrigaria a pessoa a supor que sao a mesma
+       coisa; e `valor` curto gravaria o encurtamento, que e o defeito. */
+    ok(/rotulo: SPRINTPO\.rotuloCurto\(s\.rotulo\)/.test(opc),
+       'o dialogo oferece o rotulo curto, como o card mostra');
+    ok(/valor: s\.rotulo,/.test(opc),
+       'e grava o rotulo INTEIRO, com o ano');
 
     // ── O BACKLOG DA SPRINT, NO PAINEL DO DEV ──────────────────────────────
     const dvc = semComentario(DEV);
