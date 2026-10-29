@@ -23384,7 +23384,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                                sprint_po_historico: [{ sprint: 'S2-11-2026' },
                                                      { sprint: 'S3-11-2026' }] });
     ok(/sp-fora/.test(chipFora) && !/sp-fora/.test(chipNa),
-       'o card fora da sprint DIZ que esta no backlog, em vez de ficar sem chip');
+       'o card fora da sprint DIZ que esta fora dela, em vez de ficar sem chip');
+    /* E NAO DIZ "BACKLOG". Visto no quadro montado: BACKLOG e o nome de uma
+       COLUNA nas duas telas, e um card em Em Andamento com esse chip se le
+       como "este card esta na coluna errada". Demanda de Sustentacao vive
+       exatamente assim — comeca sem sprint e fica em Em Andamento. */
+    ok(!/>📋 Backlog</.test(chipFora) && /Fora da sprint/.test(chipFora),
+       'e nao usa a palavra que ja nomeia uma coluna do quadro', chipFora.slice(-40));
     ok(/sp-atrasada/.test(chipAtr) && !/sp-atrasada/.test(chipNa),
        'e quem entrou atrasada aparece diferente de quem entrou na hora');
     ok(/S2-11-2026/.test(chipAtr),

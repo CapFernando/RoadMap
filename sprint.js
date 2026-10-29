@@ -273,8 +273,15 @@
     var s = doPO(m);
     var cls = classe || 'sp-chip';
     if (!s) {
-      return '<span class="' + cls + ' sp-fora" title="Fora da sprint — está no ' +
-             'backlog até o PM/PO repassar.">📋 Backlog</span>';
+      /* "FORA DA SPRINT", E NÃO "BACKLOG". A primeira versão escrevia Backlog,
+         e isso só apareceu olhando o quadro montado: BACKLOG é o nome de uma
+         COLUNA nas duas telas, e um card em "Em Andamento" com um chip escrito
+         "Backlog" se lê como "este card está na coluna errada". O caso é comum
+         e vai ficar mais: demanda de Sustentação começa sem sprint nenhuma
+         (ver `travaDeAlocacao`), então ela vive em Em Andamento com este chip.
+         O chip responde "em que sprint está?", e a resposta é "em nenhuma". */
+      return '<span class="' + cls + ' sp-fora" title="Fora da sprint — o PM/PO ' +
+             'ainda não a repassou para nenhuma semana.">📋 Fora da sprint</span>';
     }
     /* CURTO NO CHIP, INTEIRO NO `title`. O quadro se lê de relance e o ano é a
        parte que nunca muda entre dois cards; no `title` ele volta, porque é lá
