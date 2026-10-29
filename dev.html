@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="b8fc429dcf">
+<html lang="pt-BR" data-build="a4f264eb8c">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -518,6 +518,17 @@
     }
     .kcard-devolucao strong { font-weight:700; }
     .kcard-tema  { font-size:11px; color:var(--text3); margin-bottom:6px; }
+    /* O RODAPÉ DO CARD: a etapa e a sprint, lado a lado. `wrap` porque em
+       coluna estreita os dois chips não cabem na mesma linha, e um chip cortado
+       pela metade é pior que um chip na linha de baixo. */
+    .kcard-rodape { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+    .kcard-sprint { font-size:10px; font-weight:700; color:var(--green-tx,#8FE0A8);
+      background:var(--green-bg,#0E3A1E); border:1px solid #2E7D4F;
+      border-radius:5px; padding:1px 6px; cursor:help; }
+    .kcard-sprint.sp-fora { color:var(--text3,#8B8B85); background:transparent;
+      border:1px dashed var(--border,#2E2E2B); }
+    .kcard-sprint.sp-atrasada { color:var(--amber-tx,#FFC470);
+      background:var(--amber-bg,#43280A); border-color:#9A6B1E; }
     .kcard-meta  { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; font-size:11px; color:var(--text3); }
     .kcard-meta span { display:flex; align-items:center; gap:3px; }
     .kcard-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; display:inline-block; }
@@ -672,7 +683,7 @@
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="capacidade.js?v=e7e1449a7d"></script>
-<script src="dialogo.js?v=171b484b8c"></script>
+<script src="dialogo.js?v=3061e0568f"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=ff7a669a03"></script>
@@ -693,7 +704,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=6d7465e9e8"></script>
+<script src="sprint.js?v=330a2d16b1"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -850,6 +861,25 @@
     <div class="filter-sep"></div>
     <label>Tema:</label>
     <select id="f-tema" class="filter-select" onchange="setTema(this.value)"></select>
+    <!-- O BACKLOG DA SPRINT.
+         "Backlog da sprint ficará disponível para os devs, apenas o que o PO
+          informar que faz parte da SPRINT."
+
+         FILTRO E NAO COLUNA NOVA: o que o PO repassou atravessa todas as
+         etapas — ha demanda da sprint em Planejado, em Andamento e em
+         Validacao ao mesmo tempo. Uma coluna "Sprint" teria de tirar o card da
+         coluna onde ele esta, e ai o quadro deixaria de dizer em que pe esta o
+         trabalho, que e para o que ele serve.
+
+         "Todas" E O PADRAO, de proposito. No dia em que isto subir nenhuma
+         demanda tem sprint do PO — abrir filtrado mostraria um painel VAZIO a
+         todo mundo, e o dev concluiria que perdeu as demandas dele. -->
+    <div class="filter-sep"></div>
+    <label>Sprint:</label>
+    <select id="f-sprint" class="filter-select" onchange="renderKanban()"
+            title="Mostra só o que o PM/PO repassou para a sprint escolhida.">
+      <option value="">Todas</option>
+    </select>
     <div class="filter-sep"></div>
     <button id="f-limpar" class="btn btn-secondary btn-sm" onclick="limparFiltrosDev()">Limpar</button>
     <span id="f-contagem" class="filter-count"></span>
@@ -3268,6 +3298,7 @@ function applyData(data) {
   if (el) el.textContent = `Atualizado em ${dt}`;
   buildAnoFilter();
   buildTemaSelect();
+  buildSprintSelect();
   renderKanban();
   // Abre o card que veio no endereco. So DEPOIS dos dados: antes disso
   // `state.melhorias` esta vazio e o codigo nao acharia nada.
@@ -4120,6 +4151,7 @@ function enterApp() {
   if (banner) banner.style.display = isDevTeste(currentDev) ? 'flex' : 'none';
   buildAnoFilter();
   buildTemaSelect();
+  buildSprintSelect();
   renderKanban();
   if (runtimeToken) loadData(true);
   startPolling();
@@ -4240,6 +4272,7 @@ function switchDevInline(name) {
   document.getElementById('dev-label').textContent = name;
   _temaFilter = null;
   buildTemaSelect();
+  buildSprintSelect();
   renderKanban();
 }
 
@@ -4277,14 +4310,57 @@ function buildTemaSelect() {
     catalogoOpcoesHTML(visiveis, _temaFilter || '', { vazio: false, contagem: conta });
   sel.value = _temaFilter || '';
 }
+/* ═══ A LISTA DE SPRINTS DO DEV ════════════════════════════════════════════
+ *
+ * SO AS SPRINTS QUE TEM DEMANDA DELE, e nao todas as do calendario. O dev nao
+ * planeja sprint — ele trabalha no que foi repassado —, e uma lista com dez
+ * semanas das quais oito estao vazias e dez chances de escolher o nada. Mesma
+ * regra do select de temas logo acima: tema sem demanda deste dev nao entra.
+ *
+ * "FORA DA SPRINT" E UMA OPCAO, e e ela que responde "o que eu tenho que o PO
+ * ainda nao repassou" — inclusive as tasks que o proprio dev abriu, que agora
+ * nascem ali. Sem essa linha o backlog dele ficaria invisivel justamente na
+ * tela em que ele o abre.
+ *
+ * A SPRINT CORRENTE VEM MARCADA no rotulo. Rotulo de sprint e um codigo
+ * ('S2-11-2026'), e nenhum deles se parece com "esta semana" ate alguem contar
+ * as semanas do mes na cabeca.                                               */
+function buildSprintSelect() {
+  const sel = document.getElementById('f-sprint');
+  if (!sel || !window.SPRINTPO) return;
+  const antes = sel.value;
+  const doDev = state.melhorias.filter(m => !m.mesclado_em && !m.oculto &&
+                                            DEVNOME.eDe(m, currentDev));
+  const conta = {};
+  let fora = 0;
+  doDev.forEach(m => {
+    const s = SPRINTPO.doPO(m);
+    if (!s) { fora++; return; }
+    conta[s] = (conta[s] || 0) + 1;
+  });
+  const agora = SPRINTPO.sprintCorrente(
+    window.PRAZO ? PRAZO.hojeISO() : null, state.feriados || []);
+  const rotulos = Object.keys(conta).sort();
+  sel.innerHTML =
+    '<option value="">Todas (' + doDev.length + ')</option>' +
+    rotulos.map(s => '<option value="' + escAttr(s) + '">' + escAttr(s) +
+      (s === agora ? ' · agora' : '') + ' (' + conta[s] + ')</option>').join('') +
+    (fora ? '<option value="__fora__">📋 Fora da sprint (' + fora + ')</option>' : '');
+  /* A ESCOLHA SOBREVIVE AO REDESENHO — a nao ser que a sprint tenha ficado sem
+     demanda nenhuma. Ai ela sai da lista, e manter o valor deixaria o painel
+     vazio sem opcao visivel que explicasse por que. */
+  sel.value = [...rotulos, '__fora__', ''].includes(antes) ? antes : '';
+}
+
 function escAttr(x) { return String(x == null ? '' : x).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
-function setTema(id) { _temaFilter = id || null; buildTemaSelect(); renderKanban(); }
+function setTema(id) { _temaFilter = id || null; buildTemaSelect(); buildSprintSelect(); renderKanban(); }
 
 function limparFiltrosDev() {
   _temaFilter = null;
-  ['f-ano','f-mes','f-tipo','f-tema'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; });
+  ['f-ano','f-mes','f-tipo','f-tema','f-sprint'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; });
   buildTemaSelect();
+  buildSprintSelect();
   renderKanban();
 }
 
@@ -4293,7 +4369,7 @@ function atualizaContagemDev() {
   const doDev = state.melhorias.filter(m => !m.mesclado_em && DEVNOME.eDe(m, currentDev));
   const el = document.getElementById('f-contagem');
   if (el) el.textContent = `Mostrando ${getFiltered().length} de ${doDev.length}`;
-  const ativos = ['f-ano','f-mes','f-tipo','f-tema'].filter(i => (document.getElementById(i)||{}).value).length;
+  const ativos = ['f-ano','f-mes','f-tipo','f-tema','f-sprint'].filter(i => (document.getElementById(i)||{}).value).length;
   const btn = document.getElementById('f-limpar');
   if (btn) {
     btn.textContent = ativos ? `Limpar (${ativos})` : 'Limpar';
@@ -4319,6 +4395,11 @@ function getFiltered() {
     else if (fTipo && m.tipo !== fTipo) return false;
     const sk = getStatusKey(m);
     if (sk === 'negada') return false;
+    /* O BACKLOG DA SPRINT. Vazio mostra tudo; `__fora__` mostra o que o PM/PO
+       ainda não repassou — inclusive as tasks que o próprio dev abriu. */
+    const fSprint = document.getElementById('f-sprint')?.value || '';
+    if (fSprint === '__fora__') { if (!SPRINTPO.foraDaSprint(m)) return false; }
+    else if (fSprint && !SPRINTPO.naSprint(m, fSprint)) return false;
     // Filtro explícito por período
     if (ano || mesN !== null) {
       const ref = m.inicio ? new Date(m.inicio+'T00:00:00') : new Date(m.criado_em);
@@ -4503,7 +4584,17 @@ function renderCard(m, colKey) {
       ${window.DEVOLUCAO ? DEVOLUCAO.faixa(m, 'kcard-devolucao') : ''}
       ${meta.length ? `<div class="kcard-meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>` : ''}
       ${m.descricao ? `<div style="font-size:11px;color:var(--text3);line-height:1.4;margin-bottom:6px;">${devEsc(m.descricao.substring(0,90))}${m.descricao.length>90?'…':''}</div>` : ''}
-      <div>${badge}</div>
+      ${/* A SPRINT, AO LADO DA ETAPA. São as duas perguntas que o dev faz ao
+            olhar um card — "em que pé está" e "é para esta semana?" — e a
+            segunda não tinha resposta no quadro. O chip vem de `sprint.js`,
+            o MESMO que o quadro do PM/PO desenha: escrito duas vezes, o dev e
+            o PO leriam coisas diferentes sobre o mesmo card.
+
+            SEM GESTO AQUI, de propósito. Quem repassa é o PM/PO, e o Worker
+            reverte o dev que tentar — um chip clicável no painel do dev
+            prometeria um poder que ele não tem. */''}
+      <div class="kcard-rodape">${badge}${
+        window.SPRINTPO ? SPRINTPO.badge(m, 'kcard-sprint') : ''}</div>
       ${renderDepSection(m)}
     </div>`;
 }
@@ -6436,6 +6527,7 @@ async function saveTema() {
   closeModal('modal-tema-form');
   renderTemasModal();
   buildTemaSelect();
+  buildSprintSelect();
   buildAnoFilter();
   const ok = await saveToGitHub({}, { temas: state.temas });
   if (!ok) toast('Erro ao salvar tema.', 'err');
@@ -6452,6 +6544,7 @@ async function deleteTema(id) {
   state.temas = state.temas.filter(x => x.id !== id);
   renderTemasModal();
   buildTemaSelect();
+  buildSprintSelect();
   const ok = await saveToGitHub({}, { temas: state.temas });
   if (!ok) toast('Erro ao excluir tema.', 'err');
 }

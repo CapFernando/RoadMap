@@ -50,6 +50,24 @@
     '  border:1px solid var(--border,#2E2E2B); }',
     '.dlg-b.pri { background:var(--blue,#3B8FE8); color:#fff; border:none; font-weight:600; }',
     '.dlg-b.perigo { background:var(--red,#E5484D); color:#fff; border:none; font-weight:600; }',
+    /* A LISTA. Rola quando passa da altura da tela em vez de empurrar os botoes
+       para fora dela — um mes de cinco sprints mais o mes seguinte ja sao dez
+       linhas, e em notebook de 13" isso nao cabe. */
+    '.dlg-lista { max-width:380px; }',
+    '.dlg-opcoes { display:flex; flex-direction:column; gap:6px; margin:4px 0 12px;',
+    '  max-height:min(52vh,360px); overflow-y:auto; }',
+    '.dlg-op { display:flex; align-items:center; gap:9px; width:100%; text-align:left;',
+    '  font-family:inherit; font-size:13.5px; padding:10px 12px; border-radius:8px;',
+    '  cursor:pointer; color:var(--text,#ECEAE2); background:var(--bg3,#1E1E1C);',
+    '  border:1px solid var(--border,#2E2E2B); }',
+    '.dlg-op:hover { border-color:var(--blue,#3B8FE8); }',
+    '.dlg-op:focus-visible { outline:2px solid var(--blue,#3B8FE8); outline-offset:2px; }',
+    '.dlg-op.atual { border-color:var(--blue,#3B8FE8); background:rgba(59,143,232,.10); }',
+    '.dlg-op.perigo { color:var(--red-tx,#F9A0A0); }',
+    '.dlg-op-t { font-weight:600; }',
+    '.dlg-op-n { color:var(--text3,#8B8B85); font-size:11.5px; margin-left:auto; }',
+    '.dlg-op-a { font-size:10.5px; text-transform:uppercase; letter-spacing:.4px;',
+    '  color:var(--blue,#3B8FE8); font-weight:700; margin-left:8px; }',
   ].join('\n');
   document.head.appendChild(css);
 
@@ -211,6 +229,66 @@
         if (e.key === 'Enter') { e.preventDefault(); fecha('ok'); }
       });
       setTimeout(function () { ov.querySelector('#dlg-ok').focus(); }, 10);
+    });
+  };
+
+  /* ═══ ESCOLHER UM ITEM DE UMA LISTA ═══════════════════════════════════════
+   *
+   * Nasceu para o repasse de sprint: o PM/PO precisa apontar UMA sprint entre
+   * oito ou nove, e `escolher3` comporta exatamente tres.
+   *
+   * BOTOES, E NAO UM `<select>` DENTRO DE UM DIALOGO. Com `<select>` o gesto vira
+   * tres passos — abrir, escolher, confirmar — e o terceiro e onde se desiste. A
+   * lista aqui e curta por construcao (as sprints de dois meses), e um clique
+   * resolve. Quando a lista crescer, este e o lugar de pensar em busca; a tela
+   * que chama nao muda.
+   *
+   * O ITEM ATUAL VEM MARCADO. Sem isso o PO nao tem como saber, no momento de
+   * escolher, de onde esta tirando a demanda — e "repassar para a sprint que ela
+   * ja esta" e justamente o clique que `SPRINTPO.repassar` recusa.
+   *
+   * Devolve o `valor` escolhido, ou `null` em Esc / clique fora. `null` e nao ''
+   * porque '' e um valor legitimo aqui: e assim que "Tirar da sprint" se diz. */
+  window.escolherDaLista = function (o) {
+    o = o || {};
+    var itens = o.itens || [];
+    return new Promise(function (resolve) {
+      var ov = document.createElement('div');
+      ov.className = 'dlg-ov';
+      ov.innerHTML =
+        '<div class="dlg-box dlg-lista" role="dialog" aria-modal="true">' +
+          '<h3>' + esc(o.titulo || 'Escolha') + '</h3>' +
+          (o.texto ? '<div class="dlg-sub">' + esc(o.texto) + '</div>' : '') +
+          '<div class="dlg-opcoes">' +
+            itens.map(function (it, i) {
+              var atual = String(it.valor) === String(o.atual);
+              return '<button type="button" class="dlg-op' +
+                (atual ? ' atual' : '') + (it.perigo ? ' perigo' : '') +
+                '" data-i="' + i + '">' +
+                '<span class="dlg-op-t">' + esc(it.rotulo) + '</span>' +
+                (it.nota ? '<span class="dlg-op-n">' + esc(it.nota) + '</span>' : '') +
+                (atual ? '<span class="dlg-op-a">atual</span>' : '') +
+              '</button>';
+            }).join('') +
+          '</div>' +
+          '<div class="dlg-acoes">' +
+            '<button type="button" class="dlg-b sec" id="dlg-cancela">Cancelar</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(ov);
+      var fecha = function (r) { ov.remove(); resolve(r); };
+      [].forEach.call(ov.querySelectorAll('.dlg-op'), function (b) {
+        b.onclick = function () { fecha(itens[+b.dataset.i].valor); };
+      });
+      ov.querySelector('#dlg-cancela').onclick = function () { fecha(null); };
+      ov.addEventListener('click', function (e) { if (e.target === ov) fecha(null); });
+      ov.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); fecha(null); }
+      });
+      setTimeout(function () {
+        var alvo = ov.querySelector('.dlg-op.atual') || ov.querySelector('.dlg-op');
+        if (alvo) alvo.focus();
+      }, 10);
     });
   };
 

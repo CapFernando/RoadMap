@@ -76,6 +76,101 @@
 
   function rotuloValido(s) { return ROTULO.test(txt(s)); }
 
+  /* ═══ QUAIS SPRINTS EXISTEM NUM MÊS ═══════════════════════════════════════
+   *
+   * O PO precisa ESCOLHER uma sprint, e para escolher precisa da lista. Ela só
+   * existia dentro do `gantt.html`, montada por `semanasDoMes` +
+   * `getWorkingDaysOfMonth` + `sprintDeData` — três funções que dependem do
+   * `state` daquela tela.
+   *
+   * REESCREVER A CONTA AQUI SERIA O ERRO CONHECIDO. O comentário do
+   * `sprintDeData` registra o que acontece quando duas contas de semana convivem:
+   * "SETE dos 21 dias úteis de setembro de 2026 davam um rótulo no card que
+   * discordava da coluna logo acima dele (...) Dois números para a mesma sprint,
+   * na mesma tela, e nada dizendo qual acreditar."
+   *
+   * Então a conta vem para cá inteira, e há invariante que roda ESTA e a do
+   * gantt lado a lado, DIA A DIA, por dois anos de calendário. Divergiram em um
+   * dia, o teste acusa.
+   *
+   * SEMANA DE SEGUNDA A DOMINGO, e não índice de semana do calendário: é como o
+   * time fala de semana. Feriado sai dos dias, como no gantt — a sprint que o
+   * contém tem um dia útil a menos, e a capacidade desloca junto.
+   *
+   * A LISTA DE FERIADOS É OPCIONAL, pela mesma razão de `diasUteisNaArea` em
+   * `prazo.js`: quem a tem passa, quem não a tem conta segunda a sexta. Aqui a
+   * diferença é ainda menor — um feriado só muda o RÓTULO se apagar uma semana
+   * inteira do mês, o que exigiria cinco feriados seguidos.                   */
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  /** A SEGUNDA-FEIRA DA SEMANA DE UMA DATA. É a chave que agrupa os dias.
+   *  Em UTC a partir das partes: `new Date('2026-09-08')` volta 07/09 no fuso do
+   *  Brasil, e um dia aqui muda a semana inteira de uma demanda. */
+  function segundaDaSemana(s) {
+    var p = iso(s).split('-');
+    var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    // getUTCDay(): 0 = domingo, e o domingo pertence à semana que COMEÇOU na
+    // segunda anterior — por isso ele volta seis dias, e não zero.
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    return d.toISOString().slice(0, 10);
+  }
+
+  /** Os dias ÚTEIS de um mês (`mes` de 1 a 12), em ISO. */
+  function diasUteisDoMes(ano, mes, feriados) {
+    var fer = {};
+    (feriados || []).forEach(function (f) {
+      fer[iso(f && typeof f === 'object' ? f.data : f)] = true;
+    });
+    var ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+    var out = [];
+    for (var d = 1; d <= ultimo; d++) {
+      var dt = new Date(Date.UTC(ano, mes - 1, d));
+      var dow = dt.getUTCDay();
+      if (dow === 0 || dow === 6) continue;
+      var s = dt.toISOString().slice(0, 10);
+      if (fer[s]) continue;
+      out.push(s);
+    }
+    return out;
+  }
+
+  /** AS SPRINTS DE UM MÊS: `{ rotulo, de, ate, dias }`, em ordem. */
+  function sprintsDoMes(ano, mes, feriados) {
+    var dias = diasUteisDoMes(ano, mes, feriados);
+    var grupos = [], atual = null, chave = '';
+    dias.forEach(function (s) {
+      var k = segundaDaSemana(s);
+      if (k !== chave) { atual = []; grupos.push(atual); chave = k; }
+      atual.push(s);
+    });
+    return grupos.map(function (g, i) {
+      return { rotulo: 'S' + (i + 1) + '-' + pad2(mes) + '-' + ano,
+               de: g[0], ate: g[g.length - 1], dias: g.length };
+    });
+  }
+
+  /** O RÓTULO DA SPRINT EM QUE UMA DATA CAI.
+   *
+   *  O desempate de fim de semana / feriado é o MESMO do gantt: cai na sprint
+   *  que COMEÇA depois dela; se não houver, na última. Uma entrega marcada num
+   *  sábado não pode receber rótulo diferente conforme a tela que a desenha. */
+  function rotuloDeData(s, feriados) {
+    var dia = iso(s);
+    if (!dia) return '';
+    var sp = sprintsDoMes(+dia.slice(0, 4), +dia.slice(5, 7), feriados);
+    if (!sp.length) return '';
+    for (var i = 0; i < sp.length; i++) {
+      if (dia >= sp[i].de && dia <= sp[i].ate) return sp[i].rotulo;
+    }
+    for (var j = 0; j < sp.length; j++) if (sp[j].de > dia) return sp[j].rotulo;
+    return sp[sp.length - 1].rotulo;
+  }
+
+  /** A SPRINT DE HOJE — a que o painel do dev abre por padrão. */
+  function sprintCorrente(hoje, feriados) {
+    return rotuloDeData(iso(hoje) || new Date().toISOString().slice(0, 10), feriados);
+  }
+
   /** A SPRINT EM QUE O PM/PO PÔS ESTA DEMANDA. String vazia = backlog. */
   function doPO(m) {
     var s = txt((m || {}).sprint_po);
@@ -122,6 +217,42 @@
   function sprintDeOrigem(m) {
     var h = historico(m);
     return h.length ? txt(h[0].sprint) : '';
+  }
+
+  function esc(t) {
+    return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  /** O CHIP DA SPRINT, para o card do quadro.
+   *
+   *  MORA AQUI porque as duas telas o desenham — o quadro do PM/PO e o painel do
+   *  dev. Escrito duas vezes, elas divergiriam no dia em que uma ganhasse o
+   *  "entrou atrasada" e a outra não, e aí o dev e o PO leriam coisas diferentes
+   *  sobre o mesmo card. É o mesmo motivo de `DEVOLUCAO.faixa`.
+   *
+   *  BACKLOG TAMBÉM DESENHA, e isso é deliberado. Um card sem chip se lê como
+   *  "esqueceram de pôr o chip", não como "está fora da sprint" — e "fora da
+   *  sprint" é justamente o estado que a regra nova criou e que precisa ser
+   *  visível. Silêncio aqui seria o mesmo defeito do `semPontuar`.             */
+  function badge(m, classe) {
+    var s = doPO(m);
+    var cls = classe || 'sp-chip';
+    if (!s) {
+      return '<span class="' + cls + ' sp-fora" title="Fora da sprint — está no ' +
+             'backlog até o PM/PO repassar.">📋 Backlog</span>';
+    }
+    var n = pulos(m);
+    if (!n) {
+      return '<span class="' + cls + '" title="Repassada para a sprint ' + esc(s) +
+             (txt((m || {}).sprint_po_por) ? ' por ' + esc(m.sprint_po_por) : '') +
+             '.">🏃 ' + esc(s) + '</span>';
+    }
+    return '<span class="' + cls + ' sp-atrasada" title="Entrou atrasada: veio de ' +
+           esc(sprintDeOrigem(m)) + ' e já rolou ' + n +
+           (n === 1 ? ' sprint' : ' sprints') + '.">🏃 ' + esc(s) +
+           ' · atrasada ' + n + '×</span>';
   }
 
   /** Quem pode repassar uma demanda para a sprint.
@@ -226,6 +357,11 @@
   var api = {
     ROTULO: ROTULO,
     rotuloValido: rotuloValido,
+    segundaDaSemana: segundaDaSemana,
+    diasUteisDoMes: diasUteisDoMes,
+    sprintsDoMes: sprintsDoMes,
+    rotuloDeData: rotuloDeData,
+    sprintCorrente: sprintCorrente,
     doPO: doPO,
     foraDaSprint: foraDaSprint,
     naSprint: naSprint,
@@ -234,6 +370,7 @@
     pulos: pulos,
     entrouAtrasada: entrouAtrasada,
     sprintDeOrigem: sprintDeOrigem,
+    badge: badge,
     podeRepassar: podeRepassar,
     repassar: repassar,
     retirar: retirar,

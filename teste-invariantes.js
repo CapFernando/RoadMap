@@ -23295,6 +23295,193 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'mover para a validacao da area tambem carimba a entrega do dev');
     ok(/vindoDaArea/.test(usc) && /spAnterior === 'validacao_area'/.test(usc),
        'e o caminho area -> PM/PO nao recarimba: e a MESMA entrega seguindo');
+
+    /* ═══ O ROTULO DA SPRINT: DUAS CONTAS, UMA RESPOSTA ════════════════════
+     *
+     * `sprint.js` passou a saber calcular o rotulo porque o PM/PO precisa de
+     * uma LISTA para escolher, e ela so existia dentro do `gantt.html`.
+     *
+     * ESTA E A INVARIANTE QUE JUSTIFICA A COPIA. O comentario do `sprintDeData`
+     * registra o que ja aconteceu quando duas contas de semana conviveram:
+     * "SETE dos 21 dias uteis de setembro de 2026 davam um rotulo no card que
+     * discordava da coluna logo acima dele". Entao as duas rodam aqui lado a
+     * lado, DIA A DIA, por dois anos de calendario, com feriados de verdade —
+     * incluindo Carnaval e Sexta-feira Santa, que caem em semanas diferentes a
+     * cada ano e sao onde um desencontro apareceria primeiro. */
+    const FER = ['2026-01-01','2026-02-16','2026-02-17','2026-04-03','2026-04-21',
+                 '2026-05-01','2026-06-04','2026-09-07','2026-10-12','2026-11-02',
+                 '2026-11-15','2026-12-25',
+                 '2027-01-01','2027-02-08','2027-02-09','2027-03-26','2027-04-21',
+                 '2027-05-01','2027-05-27','2027-09-07','2027-10-12','2027-11-02',
+                 '2027-11-15','2027-12-25'];
+    const sprintDoGantt = (() => {
+      const partes = ['function isHoliday(dateStr) {', 'function isWeekend(d) {',
+                      'function toDateStr(d) {', 'function getWorkingDaysOfMonth(year, month) {',
+                      'function semanasDoMes(workDays) {', 'function segundaDaSemanaISO(iso) {',
+                      'function semanaIndexFor(dataStr, semanas) {',
+                      'function sprintDeData(dataStr) {'].map(a => corpo(GANTT, a));
+      if (partes.some(p => !p)) return null;
+      return new Function([
+        'const state = { feriados: ' + JSON.stringify(FER) + ' };',
+        'const feriadoISO = (f) => (f && typeof f === "object" ? f.data : f) || "";',
+      ].concat(partes, ['return sprintDeData;']).join('\n'))();
+    })();
+    ok(!!sprintDoGantt, 'o calculo de sprint do gantt foi extraido para comparacao');
+    if (sprintDoGantt) {
+      const fora = [];
+      for (let t = Date.UTC(2026, 0, 1); t <= Date.UTC(2027, 11, 31); t += 86400000) {
+        const d = new Date(t).toISOString().slice(0, 10);
+        if (sprintDoGantt(d) !== SP.rotuloDeData(d, FER)) {
+          fora.push(d + ' (gantt=' + sprintDoGantt(d) + ' modulo=' + SP.rotuloDeData(d, FER) + ')');
+        }
+      }
+      ok(!fora.length,
+         'o rotulo de sprint do modulo e o do gantt concordam em 730 dias seguidos',
+         fora.length ? fora.length + ' dias divergem, ex.: ' + fora.slice(0, 3).join(' | ') : '');
+    }
+    /* E TODO ROTULO QUE O MODULO GERA PASSA NA PROPRIA VALIDACAO. Senao a lista
+       oferecida ao PO teria opcoes que `repassar` recusaria no clique. */
+    const todosRotulos = [];
+    for (let mm = 1; mm <= 12; mm++) {
+      SP.sprintsDoMes(2026, mm, FER).forEach(s => todosRotulos.push(s.rotulo));
+    }
+    ok(todosRotulos.length >= 48 && todosRotulos.every(r => SP.rotuloValido(r)),
+       'toda sprint oferecida pelo modulo e aceita por quem recebe o repasse',
+       todosRotulos.length + ' rotulos');
+
+    /* ═══ A CHAVE DA SEMANA, MEDIDA DIRETO ════════════════════════════════
+     *
+     * A comparacao dia a dia acima NAO cobre esta funcao, e isso so apareceu
+     * sabotando: troquei a volta para o DOMINGO e nenhuma invariante caiu. O
+     * motivo e que `diasUteisDoMes` so devolve segunda a sexta, e esses cinco
+     * dias caem no mesmo grupo quer a chave seja o domingo anterior, quer seja
+     * a segunda — o agrupamento compara chaves CONSECUTIVAS, e as duas mudam
+     * no mesmo ponto.
+     *
+     * Ela e EXPORTADA, entao o contrato dela e publico mesmo sem consumidor
+     * interno hoje — e e num fim de semana que a diferenca aparece: o domingo
+     * pertence a semana que COMECOU na segunda anterior, e nao a que comeca no
+     * dia seguinte. Quem usar isto para agrupar uma entrega marcada num sabado
+     * depende disso.                                                        */
+    const semanaDe = {
+      '2026-11-02': '2026-11-02',   // segunda: ela mesma
+      '2026-11-06': '2026-11-02',   // sexta
+      '2026-11-07': '2026-11-02',   // sabado — volta, nao avanca
+      '2026-11-08': '2026-11-02',   // domingo — o caso que separa as duas contas
+      '2026-11-09': '2026-11-09',   // segunda seguinte
+    };
+    const erradas = Object.keys(semanaDe)
+      .filter(d => SP.segundaDaSemana(d) !== semanaDe[d]);
+    ok(!erradas.length,
+       'a semana comeca na SEGUNDA, e o fim de semana pertence a que ja passou',
+       erradas.map(d => d + '->' + SP.segundaDaSemana(d)).join(' '));
+
+    // ── O CHIP DIZ OS TRES ESTADOS ─────────────────────────────────────────
+    const chipFora = SP.badge({});
+    const chipNa = SP.badge({ sprint_po: 'S2-11-2026',
+                              sprint_po_historico: [{ sprint: 'S2-11-2026' }] });
+    const chipAtr = SP.badge({ sprint_po: 'S3-11-2026',
+                               sprint_po_historico: [{ sprint: 'S2-11-2026' },
+                                                     { sprint: 'S3-11-2026' }] });
+    ok(/sp-fora/.test(chipFora) && !/sp-fora/.test(chipNa),
+       'o card fora da sprint DIZ que esta no backlog, em vez de ficar sem chip');
+    ok(/sp-atrasada/.test(chipAtr) && !/sp-atrasada/.test(chipNa),
+       'e quem entrou atrasada aparece diferente de quem entrou na hora');
+    ok(/S2-11-2026/.test(chipAtr),
+       'o chip da atrasada diz de ONDE ela veio, e nao so que rolou');
+    /* O CHIP NAO ABRE BURACO DE HTML. Ele recebe `sprint_po_por`, que e texto
+       livre digitado em outra tela — e vai para dentro de um `title`. */
+    /* PROCURA O ESCAPE, E NAO A PALAVRA. A primeira versao exigia que 'onerror'
+       nao aparecesse na saida — e acusou codigo CORRETO: escapado, o texto vira
+       `&lt;img src=x onerror=alert(1)&gt;` dentro do `title`, inerte, e a
+       palavra continua la como texto. O que faz mal e a ASPA que fecha o
+       atributo e o `<` que abre a tag; e isso que se mede. */
+    const chipSujo = SP.badge({ sprint_po: 'S1-11-2026',
+                                sprint_po_por: '"><img src=x onerror=alert(1)>',
+                                sprint_po_historico: [{ sprint: 'S1-11-2026' }] });
+    ok(!/"><|<img/.test(chipSujo) && /&quot;&gt;&lt;img/.test(chipSujo),
+       'e o nome de quem repassou e escapado antes de entrar no chip',
+       chipSujo.slice(0, 90));
+
+    // ── O GESTO DO PM/PO, NO QUADRO DO ADMIN ───────────────────────────────
+    const adc = semComentario(ADMIN);
+    ok(/ondblclick="sprintEscolher\(event/.test(adc),
+       'o chip da sprint abre a escolha com DUPLO clique, como o chip do projeto');
+    ok(/class="kb-sprint-abre"[\s\S]{0,120}onmousedown="event\.stopPropagation\(\)"/.test(adc),
+       'e o mousedown nao chega ao card — senao a edicao abre por cima da escolha');
+    const esc0 = corpo(ADMIN, 'async function sprintEscolher(ev, id) {');
+    const escc = semComentario(esc0 || '');
+    ok(!!esc0 && /if \(escolha === null\) return;/.test(escc),
+       'cancelar a escolha nao mexe na demanda',
+       "e '' continua significando 'tirar da sprint'");
+    /* DESFAZ OS QUATRO CAMPOS, e nao so `sprint_po`. O historico adiantado sobre
+       uma gravacao que nao passou faria a demanda mentir sobre quantas sprints
+       rolou — e e por ele que o fechamento cobra. */
+    for (const campo of ['sprint_po', 'sprint_po_em', 'sprint_po_por', 'sprint_po_historico']) {
+      ok(new RegExp('antes = \\{[\\s\\S]{0,260}' + campo + ':').test(escc),
+         '  o retrato para desfazer guarda ' + campo);
+    }
+    ok(/Object\.assign\(m, antes\)/.test(escc),
+       'e a gravacao que falha devolve a demanda ao que era');
+    const opc = semComentario(corpo(ADMIN, 'function sprintOpcoes(atual) {') || '');
+    ok(/if \(atual\) \{[\s\S]{0,200}Tirar da sprint/.test(opc),
+       '"Tirar da sprint" so aparece para quem esta numa — botao inerte ensina que o dialogo mente');
+    ok(/SPRINTPO\.sprintsDoMes\(/.test(opc) && !/function sprintDeData/.test(opc),
+       'e a lista vem do modulo, em vez de uma segunda conta de semana no Admin');
+
+    // ── O BACKLOG DA SPRINT, NO PAINEL DO DEV ──────────────────────────────
+    const dvc = semComentario(DEV);
+    ok(/id="f-sprint"/.test(dvc), 'o painel do dev tem o filtro de sprint');
+    const gf = semComentario(corpo(DEV, 'function getFiltered() {') || '');
+    ok(/f-sprint/.test(gf) && /SPRINTPO\.naSprint\(/.test(gf),
+       'e ele filtra pelo que o PM/PO repassou, e nao pela sprint derivada da data');
+    ok(/__fora__/.test(gf) && /SPRINTPO\.foraDaSprint\(/.test(gf),
+       'e da para ver o que AINDA NAO foi repassado — onde caem as tasks do proprio dev');
+    /* "TODAS" E O PADRAO. No dia em que isto subir nenhuma demanda tem sprint do
+       PO: abrir filtrado mostraria painel vazio a todo mundo. */
+    ok(/<select id="f-sprint"[\s\S]{0,220}<option value="">Todas<\/option>/.test(DEV),
+       'e a primeira opcao e "Todas" — ninguem abre o painel vazio no dia 1');
+    const lf = semComentario(corpo(DEV, 'function limparFiltrosDev() {') || '');
+    ok(/'f-sprint'/.test(lf), 'o botao Limpar tambem limpa a sprint');
+    const bs = semComentario(corpo(DEV, 'function buildSprintSelect() {') || '');
+    ok(/DEVNOME\.eDe\(m, currentDev\)/.test(bs),
+       'a lista de sprints do dev conta so as demandas dele');
+    ok(/sel\.value = /.test(bs) && /includes\(antes\)/.test(bs),
+       'e a escolha sobrevive ao redesenho de minuto em minuto do painel');
+    /* O DEV NAO REPASSA — quem repassa e o PM/PO, e o Worker reverte o resto.
+       Um chip clicavel aqui prometeria um poder que ele nao tem. */
+    ok(!/kcard-sprint[^>]*onclick/.test(dvc) && !/kcard-sprint[^>]*ondblclick/.test(dvc),
+       'o chip no painel do dev nao oferece gesto nenhum');
+
+    // ── O DIALOGO DE LISTA ─────────────────────────────────────────────────
+    const DLGJS = lerTela('dialogo.js');
+    let erroDlg = null;
+    try { new Function(DLGJS); } catch (e) { erroDlg = e.message; }
+    ok(!erroDlg, 'dialogo.js sem erro de sintaxe', erroDlg || '');
+    const el0 = semComentario(corpo(DLGJS, 'window.escolherDaLista = function (o) {') || '');
+    /* AS TRES SAIDAS, e nao "existe um `fecha(null)` em algum lugar". A
+       primeira versao procurava a presenca da chamada e passou lisa quando
+       sabotei SO o botao Cancelar — sobravam o Esc e o clique fora, e eles
+       bastavam para o regex casar. Aqui cada saida e medida no proprio lugar,
+       e nenhuma delas pode devolver '': string vazia e valor legitimo nesta
+       lista, e e assim que "tirar da sprint" se diz. */
+    const saidas = [
+      ["#dlg-cancela'\\)\\.onclick", 'o botao Cancelar'],
+      ["e\\.target === ov", 'o clique fora'],
+      ["'Escape'", 'o Esc'],
+    ];
+    saidas.forEach(([marca, nome]) => {
+      const i = el0.search(new RegExp(marca));
+      const trecho = i < 0 ? '' : el0.slice(i, i + 170);
+      ok(i >= 0 && /fecha\(null\)/.test(trecho) && !/fecha\(''\)/.test(trecho),
+         nome + ' devolve null, e nao string vazia',
+         trecho.replace(/\s+/g, ' ').slice(0, 80));
+    });
+    ok(/itens\[\+b\.dataset\.i\]\.valor/.test(el0),
+       'e o item escolhido devolve o VALOR dele, e nao o rotulo que a tela mostra');
+    for (const [nome, src] of [['admin', ADMIN], ['dev', DEV]]) {
+      ok(/src="dialogo\.js\?v=/.test(src), nome + ' carrega dialogo.js versionado');
+    }
   }
 
   let erroPz = null;

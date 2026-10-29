@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a5897a0200">
+<html lang="pt-BR" data-build="f30e837e5e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -443,6 +443,25 @@
     .kb-proj.kb-proj-abre { cursor:pointer; }
     .kb-proj.kb-proj-abre:hover { background:var(--purple-bg,#341A6E);
       border-style:solid; border-color:#A974F0; }
+    /* ═══ O CHIP DA SPRINT ═════════════════════════════════════════════════
+       VERDE para quem está na sprint, APAGADO para quem está no backlog, ÂMBAR
+       para quem entrou atrasada. São três estados e não dois: "fora da sprint"
+       é o estado que a regra nova criou, e um card sem chip nenhum se leria
+       como chip faltando, e não como demanda no backlog.
+
+       O ÂMBAR NÃO É VERMELHO de propósito. Vermelho neste quadro já significa
+       prazo vencido (`kb-atrasada`), e uma demanda pode rolar de sprint sem
+       estar vencida — duas coisas na mesma cor fariam o olho ler uma pela
+       outra. */
+    .kb-sprint { font-size:10.5px; font-weight:700; color:var(--green-tx,#8FE0A8);
+      background:var(--green-bg,#0E3A1E); border:1px solid #2E7D4F;
+      border-radius:5px; padding:1px 6px; }
+    .kb-sprint.sp-fora { color:var(--text3,#8B8B85); background:transparent;
+      border:1px dashed var(--border,#2E2E2B); }
+    .kb-sprint.sp-atrasada { color:var(--amber-tx,#FFC470);
+      background:var(--amber-bg,#43280A); border-color:#9A6B1E; }
+    .kb-sprint-abre { cursor:pointer; display:inline-flex; }
+    .kb-sprint-abre:hover .kb-sprint { border-style:solid; filter:brightness(1.25); }
     .cod-tag { font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
       color: var(--blue-tx, #9BC8F8); background: var(--blue-bg, #0C3260); border-radius: 4px;
       padding: 1px 5px; margin-right: 6px; letter-spacing: .02em; }
@@ -1331,7 +1350,7 @@
   <script src="fila.js?v=90c9b67421"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
-<script src="dialogo.js?v=171b484b8c"></script>
+<script src="dialogo.js?v=3061e0568f"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=a6a54ef3d1"></script>
 <script src="capacidade.js?v=e7e1449a7d"></script>
@@ -1352,7 +1371,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=6d7465e9e8"></script>
+<script src="sprint.js?v=330a2d16b1"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -5319,6 +5338,21 @@ function renderKanban() {
         ' onmousedown="event.stopPropagation()"' +
         ' ondblclick="pjAbrirDoCard(event, \'' + esc(m.projeto_id) + '\')">🗂 ' +
         esc(projDoCard.codigo || projDoCard.nome || '') + '</span>');
+      /* ── A SPRINT, E O GESTO DE REPASSAR ────────────────────────────────
+         "Dentro da sprint apenas demandas que o PM/PO repassar."
+
+         DUPLO CLIQUE, e não clique, pelo mesmo motivo do chip do projeto logo
+         acima: o clique simples no card começa um arraste, e o duplo clique no
+         card edita a demanda. O gesto é o mesmo que o PO já usa; muda o alvo.
+
+         `stopPropagation` NO MOUSEDOWN é obrigatório — sem ele o
+         `kbCardMouseDown` ainda arma a edição e as duas telas abrem uma sobre a
+         outra. Já aconteceu com o chip do projeto. */
+      badges.push('<span class="kb-sprint-abre"' +
+        ' onmousedown="event.stopPropagation()"' +
+        ' ondblclick="sprintEscolher(event, \'' + esc(m.id) + '\')"' +
+        ' title="Duplo clique para repassar esta demanda para uma sprint">' +
+        SPRINTPO.badge(m, 'kb-sprint') + '</span>');
       if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
       if (m.dados_bi) badges.push('<span class="kb-dados" title="Demanda do time de Dados/BI">📊 Dados/BI</span>');
       /* OS BIs IMPACTADOS, no card. Um chip com a CONTA e os nomes na dica, e
@@ -8696,6 +8730,101 @@ async function destaqueAlterna(ev, id) {
   _dirtyMelhoriaIds.delete(id);
   _pendingEdits = false;
   toast(m.destaque ? '★ Marcada como destaque da apresentação.' : '☆ Destaque removido.', 'ok');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   O REPASSE PARA A SPRINT — o gesto do PM/PO.
+
+   "Dentro da sprint apenas demandas que o PM/PO repassar. Backlog da sprint
+    ficará disponível para os devs, apenas o que o PO informar que faz parte
+    da SPRINT."
+
+   A REGRA MORA EM `sprint.js` e aqui só se chama. Esta função decide a lista
+   que se oferece e o que acontece quando a gravação falha; o que é um repasse
+   válido, se ele entrou atrasado e o que vai para o histórico é lá.
+
+   O DESENHO É O DO `destaqueAlterna`: muda local, redesenha, grava, e DESFAZ se
+   a gravação não passou. Um chip que aparece verde sem ter gravado faria o dev
+   procurar na sprint uma demanda que o servidor não tem — e o repasse é
+   justamente o que diz ao dev no que trabalhar.                              */
+
+/** OS MESES OFERECIDOS: o corrente e o seguinte.
+ *
+ *  Dois e não doze: repassar para abril é planejamento de trimestre, e não é o
+ *  que este gesto faz. Dois cobre o caso que existe — "esta fica para a semana
+ *  que vem" na virada do mês, que é exatamente quando a lista de um mês só
+ *  deixaria o PO sem a sprint de que precisa.                                */
+function sprintOpcoes(atual) {
+  const hoje = window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10);
+  const ano = +hoje.slice(0, 4), mes = +hoje.slice(5, 7);
+  const fer = state.feriados || [];
+  const agora = SPRINTPO.rotuloDeData(hoje, fer);
+  const dm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+  const itens = [];
+  [[ano, mes], mes === 12 ? [ano + 1, 1] : [ano, mes + 1]].forEach(([a, mm]) => {
+    SPRINTPO.sprintsDoMes(a, mm, fer).forEach(s => {
+      itens.push({ valor: s.rotulo, rotulo: s.rotulo,
+                   nota: dm(s.de) + '–' + dm(s.ate) +
+                         (s.rotulo === agora ? ' · agora' : '') });
+    });
+  });
+  /* "TIRAR DA SPRINT" SÓ APARECE PARA QUEM ESTÁ NUMA. Oferecer a opção a uma
+     demanda que já está no backlog é um clique que não faz nada — e um botão
+     que não faz nada ensina que o diálogo mente. */
+  if (atual) {
+    itens.push({ valor: '', rotulo: '📋 Tirar da sprint',
+                 nota: 'volta para o backlog', perigo: true });
+  }
+  return itens;
+}
+
+async function sprintEscolher(ev, id) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  const m = (state.melhorias || []).find(x => String(x.id) === String(id));
+  if (!m) return;
+  const atual = SPRINTPO.doPO(m);
+  const escolha = await escolherDaLista({
+    titulo: atual ? 'Mover para outra sprint' : 'Repassar para a sprint',
+    texto: (m.codigo ? m.codigo + ' — ' : '') + (m.titulo || ''),
+    itens: sprintOpcoes(atual),
+    atual: atual,
+  });
+  if (escolha === null) return;   // Esc / clique fora. '' é "tirar da sprint".
+
+  /* O RETRATO ANTES, para desfazer. Os quatro campos, e não só `sprint_po`: o
+     histórico é o que responde "entrou atrasada", e deixá-lo adiantado sobre
+     uma gravação que não passou faria a demanda mentir sobre quantas sprints
+     rolou. `repassar` monta um array novo, então guardar a referência basta. */
+  const antes = { sprint_po: m.sprint_po, sprint_po_em: m.sprint_po_em,
+                  sprint_po_por: m.sprint_po_por,
+                  sprint_po_historico: m.sprint_po_historico };
+  const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
+  const hoje = window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10);
+  const r = escolha === '' ? SPRINTPO.retirar(m, quem, hoje)
+                           : SPRINTPO.repassar(m, escolha, quem, hoje);
+  if (!r.ok) { toast(r.erro, 'err'); return; }
+
+  _dirtyMelhoriaIds.add(m.id);
+  _pendingEdits = true;
+  renderAll();
+  const okSalvo = await saveViaProxy();
+  if (!okSalvo) {
+    Object.assign(m, antes);
+    _dirtyMelhoriaIds.delete(m.id);
+    renderAll();
+    avisaFalha('Não consegui salvar o repasse de sprint.');
+    return;
+  }
+  _dirtyMelhoriaIds.delete(m.id);
+  _pendingEdits = false;
+  if (escolha === '') { toast('📋 Voltou para o backlog, fora da sprint.', 'ok'); return; }
+  /* O AVISO DIZ O PULO. Mover um card de sprint é barato de clicar e caro de
+     acumular — se a tela não disser "entrou atrasada" no instante do gesto,
+     ninguém descobre antes do fechamento, que é quando não dá mais para agir. */
+  toast(r.entrouAtrasada
+    ? '🏃 Repassada para ' + escolha + ' — entrou ATRASADA (' + r.pulos +
+      (r.pulos === 1 ? ' pulo' : ' pulos') + ').'
+    : '🏃 Repassada para ' + escolha + '.', 'ok');
 }
 
 function destaqueRenderNoCard(m) {
