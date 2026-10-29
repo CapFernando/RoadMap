@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="31fcdb8405">
+<html lang="pt-BR" data-build="c93b76e6b7">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -528,6 +528,40 @@
        vira duas linhas e a altura da linha dobra — e é a linha mais curta
        (Backlog) que fica torta ao lado das outras. */
     .lote-item .kb-sprint { flex:0 0 auto; white-space:nowrap; }
+    /* ═══ O FECHAMENTO DA SPRINT ═══════════════════════════════════════════ */
+    .fech-placar { display:flex; flex-wrap:wrap; gap:8px; margin:2px 0 12px; }
+    .fp { font-size:12px; font-weight:700; padding:4px 10px; border-radius:7px; }
+    .fp.ok  { color:var(--green-tx,#8FE0A8); background:var(--green-bg,#0E3A1E); }
+    .fp.esp { color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A); cursor:help; }
+    .fp.no  { color:var(--red-tx,#F9A0A0);   background:var(--red-bg,#5C0A0A); }
+    .fech-rot { font-size:12px; color:var(--text2); margin-bottom:6px; }
+    /* CADA ITEM TEM DUAS LINHAS: identificação em cima, decisão embaixo. Tudo
+       numa linha só espremeria o campo de motivo a vinte caracteres — e o
+       motivo é o que mais se digita aqui. */
+    .fech-lista { gap:7px; }
+    .fech-item { background:var(--bg2); border:1px solid var(--border);
+      border-radius:8px; padding:8px 10px; }
+    .fech-item-topo { display:flex; align-items:center; gap:8px; font-size:12.5px;
+      margin-bottom:7px; }
+    .fech-item-baixo { display:flex; gap:7px; }
+    .dlg-ov .fech-box .fech-dest { flex:0 0 auto; min-width:200px; width:auto; }
+    .dlg-ov .fech-box .fech-motivo { flex:1 1 auto; width:auto; padding:7px 10px;
+      font-size:12.5px; font-family:inherit; color:var(--text); background:var(--bg3);
+      border:1px solid var(--border); border-radius:7px; outline:none; box-sizing:border-box; }
+    .dlg-ov .fech-box .fech-motivo:focus { border-color:var(--blue); }
+    .fech-rein { flex:0 0 auto; font-size:10px; font-weight:700; padding:1px 6px;
+      border-radius:4px; color:var(--red-tx,#F9A0A0); background:var(--red-bg,#5C0A0A);
+      white-space:nowrap; }
+    /* O AVISO NA BARRA DO QUADRO. Linha inteira, e não um chip no meio dos
+       filtros: uma sprint por fechar não é um filtro, é uma pendência. */
+    .fb-sprint-pend { flex:1 1 100%; display:flex; align-items:center; gap:8px;
+      margin-top:8px; padding:7px 11px; border-radius:7px; font-size:12.5px;
+      color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A);
+      border:1px solid #9A6B1E; }
+    .fb-sprint-btn { font-family:inherit; font-size:11.5px; font-weight:600;
+      padding:4px 11px; border-radius:6px; cursor:pointer; margin-left:auto;
+      color:#1A1206; background:var(--amber-tx,#FFC470); border:none; }
+    .fb-sprint-btn:hover { filter:brightness(1.12); }
     .lote-vazio { padding:22px; text-align:center; color:var(--text3); font-size:12.5px; }
     .kb-sprint-abre { cursor:pointer; display:inline-flex; }
     .kb-sprint-abre:hover .kb-sprint { border-style:solid; filter:brightness(1.25); }
@@ -1440,7 +1474,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=bb2d03b5c9"></script>
+<script src="sprint.js?v=9d9ac5ca44"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -3237,6 +3271,12 @@ async function loadFromGitHub(silent) {
       feriados:       decoded.feriados        || [],
       ausencias:      decoded.ausencias       || [],
       projetos:       decoded.projetos        || [],
+      /* OS FECHAMENTOS DE SPRINT. Sem esta linha a tela não sabe quais sprints
+         estão fechadas — e aí ela oferece uma sprint fechada no repasse, o
+         Worker recusa com 409, e a pessoa descobre a regra pelo erro.
+         (O registro em si sobreviveria mesmo sem ela, por `preservaChaves` no
+         servidor; o que não sobrevive é a tela saber da trava.) */
+      sprints:        decoded.sprints         || [],
       /* QUEM PODE ASSINAR SPIKE. Vem de rota PROPRIA, e nao junto de `dados`.
          Estava junto, e foi um erro de desenho: `dados` e a rota mais quente que
          existe — toda abertura de tela e o polling de 30s de cada aba — e uma
@@ -5220,7 +5260,33 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
     `</span>` +
     (mesc.length
       ? `<div class="fb-mesc">🔗 ${mesc.length} resultado${mesc.length > 1 ? 's' : ''} fora do quadro: ${mesc.join(' · ')}</div>`
-      : '');
+      : '') +
+    avisoSprintPendente();
+}
+
+/* O AVISO DE SPRINT POR FECHAR.
+ *
+ * "Avisa no quadro, não fecha sozinho" — e a segunda metade é a razão da
+ * primeira: fechar exige destino e motivo por demanda, e máquina nenhuma
+ * escreve "aguardando retorno do Bradesco". O que o sistema pode fazer é não
+ * deixar esquecer.
+ *
+ * MOSTRA A MAIS ANTIGA PRIMEIRO, que é a que pesa: duas semanas por fechar
+ * viram uma pilha, e enterrar a velha no fim da lista é como ela some.      */
+function avisoSprintPendente() {
+  if (!window.SPRINTPO) return '';
+  const pend = SPRINTPO.pendentesDeFechamento(state, PRAZO.hojeISO(),
+                                              state.feriados || [], m => statusKey(m));
+  if (!pend.length) return '';
+  return pend.map(p =>
+    '<div class="fb-sprint-pend">⚠ <strong>' + esc(SPRINTPO.rotuloCurto(p.rotulo)) +
+    '</strong> terminou e não foi fechada · ' +
+    (p.pendentes
+      ? p.pendentes + ' sem destino'
+      : 'nada a decidir') +
+    (p.aguardando ? ' · ' + p.aguardando + ' aguardando você' : '') +
+    ' <button type="button" class="fb-sprint-btn" onclick="sprintFecharAbrir(\'' +
+    esc(p.rotulo) + '\')">Fechar agora</button></div>').join('');
 }
 
 /* A ROLAGEM SOBREVIVE AO REDESENHO.
@@ -8838,8 +8904,12 @@ function sprintOpcoes(atual) {
   const agora = SPRINTPO.rotuloDeData(hoje, fer);
   const dm = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
   const itens = [];
+  /* SPRINT FECHADA NÃO É OFERECIDA. Ela continua na tela como registro, mas
+     como opção seria um clique que o Worker recusa com 409 — e a pessoa
+     descobriria a trava pelo erro, que é o que a lista existe para evitar. */
+  const fechadas = SPRINTPO.rotulosFechados(state);
   [[ano, mes], mes === 12 ? [ano + 1, 1] : [ano, mes + 1]].forEach(([a, mm]) => {
-    SPRINTPO.sprintsDoMes(a, mm, fer).forEach(s => {
+    SPRINTPO.sprintsDoMes(a, mm, fer).filter(s => !fechadas.includes(s.rotulo)).forEach(s => {
       /* O RÓTULO CURTO AQUI TAMBÉM, senão o diálogo diria `S2-11-2026` e o
          card ao lado diria `S2-11` — e a pessoa teria de supor que são a
          mesma coisa. O `valor` continua INTEIRO: é ele que se grava.
@@ -8882,8 +8952,12 @@ async function sprintEscolher(ev, id) {
                   sprint_po_historico: m.sprint_po_historico };
   const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
   const hoje = window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10);
-  const r = escolha === '' ? SPRINTPO.retirar(m, quem, hoje)
-                           : SPRINTPO.repassar(m, escolha, quem, hoje);
+  /* AS FECHADAS VAO JUNTO. Sem elas o modulo nao tem como recusar a entrada
+     numa sprint fechada, e a recusa so chegaria do Worker, em 409 — depois de
+     a tela ja ter mostrado o card na sprint nova. */
+  const _fech = { dados: state };
+  const r = escolha === '' ? SPRINTPO.retirar(m, quem, hoje, _fech)
+                           : SPRINTPO.repassar(m, escolha, quem, hoje, _fech);
   if (!r.ok) { toast(r.erro, 'err'); return; }
 
   _dirtyMelhoriaIds.add(m.id);
@@ -9063,7 +9137,7 @@ async function sprintLoteAplicar(sprint) {
     antes.set(m.id, { sprint_po: m.sprint_po, sprint_po_em: m.sprint_po_em,
                       sprint_po_por: m.sprint_po_por,
                       sprint_po_historico: m.sprint_po_historico });
-    const r = SPRINTPO.repassar(m, alvo, quem, hoje);
+    const r = SPRINTPO.repassar(m, alvo, quem, hoje, { dados: state });
     /* JÁ ESTAVA NESTA SPRINT não é erro do lote — é o caso normal de quem
        marcou "todas" com o filtro desligado. Sai da conta e segue. */
     if (!r.ok) { recusadas.push((m.codigo || m.id)); continue; }
@@ -9102,6 +9176,182 @@ async function sprintLoteAplicar(sprint) {
         (nAtr ? ' — ' + nAtr + (nAtr > 1 ? ' entraram atrasadas' : ' entrou atrasada') : '') +
         (recusadas.length ? ' · ' + recusadas.length +
           (recusadas.length > 1 ? ' já estavam nela' : ' já estava nela') : '') + '.', 'ok');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   O FECHAMENTO DA SPRINT
+
+   Abrir sprint não é ato nenhum: `S2-11` existe porque a semana existe. Encher
+   é ato, e já tem dois gestos. FECHAR é o que faltava.
+
+   O QUE ELE DECIDE, e por isso é um diálogo e não um botão: cada demanda que
+   não entregou precisa de DESTINO e MOTIVO — decisão do Fernando, "uma a uma".
+   Um texto para a sprint inteira vira "semana curta" e não responde a pergunta
+   do comitê, que é sobre uma demanda específica.
+
+   E NÃO TEM VOLTA: fechada não entra nem sai, sem reabertura. Por isso a lista
+   inteira fica à vista antes do clique, com o placar em cima — o preço de
+   fechar por engano é alto demais para um botão solto confirmar.
+
+   O PLACAR É DERIVADO, e nada dele é carimbado. Pela regra retroativa, demanda
+   entregue na quinta e aprovada na terça seguinte entra nos pontos DESTA
+   sprint depois de ela fechada: um carimbo congelaria um número que ainda está
+   assentando. É por isso que "aguardando PM/PO" aparece em separado — aqueles
+   pontos ainda não contam, e vão contar aqui.                               */
+let _fechDecisoes = {};
+let _fechRotulo = '';
+
+function sprintFecharAbrir(rotulo) {
+  _fechRotulo = String(rotulo || '');
+  _fechDecisoes = {};
+  const ov = document.createElement('div');
+  ov.className = 'dlg-ov';
+  ov.id = 'fech-ov';
+  ov.innerHTML =
+    '<div class="dlg-box lote-box fech-box" role="dialog" aria-modal="true">' +
+      '<h3>🔒 Fechar ' + esc(SPRINTPO.rotuloCurto(_fechRotulo)) + '</h3>' +
+      '<div class="dlg-sub">Fechada, a sprint não aceita mais entrada nem saída — e não há como reabrir.</div>' +
+      '<div id="fech-placar" class="fech-placar"></div>' +
+      '<div id="fech-corpo"></div>' +
+      '<div class="dlg-acoes">' +
+        '<button type="button" class="dlg-b sec" id="fech-cancela">Cancelar</button>' +
+        '<button type="button" class="dlg-b perigo" id="fech-ok">Fechar sprint</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  ov.querySelector('#fech-cancela').onclick = () => ov.remove();
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  ov.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); ov.remove(); } });
+  ov.querySelector('#fech-ok').onclick = () => sprintFecharAplicar();
+  sprintFecharRender();
+}
+
+function sprintFecharDecide(id, campo, valor) {
+  if (!_fechDecisoes[id]) _fechDecisoes[id] = { destino: '', motivo: '' };
+  _fechDecisoes[id][campo] = valor;
+  /* SÓ O BOTÃO É REAVALIADO, e não a lista inteira. Redesenhar a cada tecla
+     tiraria o foco do campo de motivo na primeira letra — e o motivo é o que
+     mais se digita nesta tela. */
+  sprintFecharAtualizaBotao();
+}
+
+function sprintFecharPendencias() {
+  const bal = SPRINTPO.balancoDaSprint(state, _fechRotulo, m => statusKey(m));
+  return bal.pendentes.map(m => {
+    const d = _fechDecisoes[m.id] || { destino: '', motivo: '' };
+    return { m, d, erro: SPRINTPO.problemaNoMotivoCarry(d.motivo) };
+  });
+}
+
+function sprintFecharAtualizaBotao() {
+  const btn = document.getElementById('fech-ok');
+  if (!btn) return;
+  const faltam = sprintFecharPendencias().filter(p => p.erro).length;
+  btn.disabled = faltam > 0;
+  btn.textContent = faltam ? 'Faltam ' + faltam + ' motivo' + (faltam > 1 ? 's' : '')
+                           : 'Fechar sprint';
+}
+
+function sprintFecharRender() {
+  const bal = SPRINTPO.balancoDaSprint(state, _fechRotulo, m => statusKey(m));
+  const pts = l => l.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+  const placar = document.getElementById('fech-placar');
+  if (placar) {
+    placar.innerHTML =
+      '<span class="fp ok">✅ ' + bal.entregues.length + ' entregue' +
+        (bal.entregues.length === 1 ? '' : 's') + ' · ' + pts(bal.entregues) + ' pts</span>' +
+      /* AGUARDANDO EM SEPARADO, e com o aviso de que os pontos ainda não
+         contam: somá-los ao entregue mostraria uma sprint melhor do que ela
+         foi, e é exatamente o número que a regra de novembro decidiu segurar. */
+      (bal.aguardando.length
+        ? '<span class="fp esp" title="O dev entregou e o PM/PO ainda não validou. ' +
+          'Estes pontos só entram na conta depois da validação — e entram NESTA sprint, ' +
+          'retroativamente.">⏳ ' + bal.aguardando.length + ' aguardando você · ' +
+          pts(bal.aguardando) + ' pts</span>' : '') +
+      (bal.pendentes.length
+        ? '<span class="fp no">❌ ' + bal.pendentes.length + ' não entregue' +
+          (bal.pendentes.length === 1 ? '' : 's') + ' · ' + pts(bal.pendentes) + ' pts</span>'
+        : '');
+  }
+  const corpo = document.getElementById('fech-corpo');
+  if (!corpo) return;
+  if (!bal.pendentes.length) {
+    corpo.innerHTML = '<div class="lote-vazio">Tudo que entrou nesta sprint saiu dela. ' +
+      'Nada a decidir — pode fechar.</div>';
+    sprintFecharAtualizaBotao();
+    return;
+  }
+  /* O DESTINO OFERECE AS SPRINTS ABERTAS, menos a que está sendo fechada: o
+     módulo recusa "empurrar para a própria sprint", e oferecê-la seria uma
+     opção que só existe para dar erro. */
+  const destinos = sprintOpcoes('').filter(o => o.valor !== _fechRotulo);
+  corpo.innerHTML =
+    '<div class="fech-rot">O que não entregou — diga para onde vai e por quê</div>' +
+    '<div class="lote-lista fech-lista">' +
+    bal.pendentes.map(m => {
+      const d = _fechDecisoes[m.id] || { destino: '', motivo: '' };
+      const n = SPRINTPO.pulos(m);
+      return '<div class="fech-item">' +
+        '<div class="fech-item-topo">' +
+          '<span class="lote-cod">' + esc(m.codigo || '—') + '</span>' +
+          '<span class="lote-tit">' + esc(m.titulo || '') + '</span>' +
+          /* A REINCIDÊNCIA GRITA. Empurrar uma demanda pela terceira vez é
+             decisão diferente de empurrá-la pela primeira, e sem esta marca as
+             duas se parecem no momento do clique. */
+          (n ? '<span class="fech-rein">🔴 ' + (n + 1) + 'ª vez</span>' : '') +
+          (m.dev ? '<span class="lote-dev">' + esc(m.dev) + '</span>' : '') +
+        '</div>' +
+        '<div class="fech-item-baixo">' +
+          '<select class="fech-dest" onchange="sprintFecharDecide(\'' + esc(m.id) + '\',\'destino\',this.value)">' +
+            '<option value="">📋 Voltar ao backlog</option>' +
+            destinos.map(o => '<option value="' + esc(o.valor) + '"' +
+              (d.destino === o.valor ? ' selected' : '') + '>🏃 ' + esc(o.rotulo) +
+              (o.nota ? ' · ' + esc(o.nota) : '') + '</option>').join('') +
+          '</select>' +
+          '<input type="text" class="fech-motivo" placeholder="Por que não entregou?"' +
+            ' value="' + esc(d.motivo) + '"' +
+            ' oninput="sprintFecharDecide(\'' + esc(m.id) + '\',\'motivo\',this.value)">' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  sprintFecharAtualizaBotao();
+}
+
+async function sprintFecharAplicar() {
+  const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
+  const hoje = PRAZO.hojeISO();
+  /* O RETRATO DE TUDO QUE PODE MUDAR: as demandas da sprint e a lista de
+     fechamentos. `fechar` mexe nas duas coisas, e desfazer só metade deixaria
+     a sprint fechada com as demandas onde estavam, ou o contrário. */
+  const bal = SPRINTPO.balancoDaSprint(state, _fechRotulo, m => statusKey(m));
+  const antes = new Map();
+  bal.pendentes.forEach(m => antes.set(m.id, {
+    sprint_po: m.sprint_po, sprint_po_em: m.sprint_po_em,
+    sprint_po_por: m.sprint_po_por, sprint_po_historico: m.sprint_po_historico }));
+  const sprintsAntes = state.sprints;
+
+  const r = SPRINTPO.fechar(state, _fechRotulo, quem, hoje, _fechDecisoes,
+                            m => statusKey(m));
+  if (!r.ok) { toast(r.erro, 'err'); return; }
+
+  bal.pendentes.forEach(m => _dirtyMelhoriaIds.add(m.id));
+  _pendingEdits = true;
+  document.getElementById('fech-ov')?.remove();
+  renderAll();
+  const okSalvo = await saveViaProxy();
+  if (!okSalvo) {
+    bal.pendentes.forEach(m => { Object.assign(m, antes.get(m.id)); _dirtyMelhoriaIds.delete(m.id); });
+    state.sprints = sprintsAntes;
+    renderAll();
+    avisaFalha('Não consegui fechar a sprint. Nada foi alterado.');
+    return;
+  }
+  bal.pendentes.forEach(m => _dirtyMelhoriaIds.delete(m.id));
+  _pendingEdits = false;
+  toast('🔒 ' + SPRINTPO.rotuloCurto(_fechRotulo) + ' fechada · ' + r.entregues +
+        ' entregue' + (r.entregues === 1 ? '' : 's') +
+        (r.aguardando ? ', ' + r.aguardando + ' aguardando você' : '') +
+        (r.fechados ? ', ' + r.fechados + ' com destino novo' : '') + '.', 'ok');
 }
 
 function destaqueRenderNoCard(m) {

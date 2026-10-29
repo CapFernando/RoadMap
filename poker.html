@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="146b29dd8c">
+<html lang="pt-BR" data-build="b877e7c0df">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -327,6 +327,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="tema.js?v=7df38474d4"></script>
+<script src="sprint.js?v=9d9ac5ca44"></script>
 <script src="dialogo.js?v=3061e0568f"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -414,6 +415,22 @@
             <select id="in-pontos" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit">
               <option value="">—</option><option>1</option><option>2</option><option>3</option>
               <option>5</option><option>8</option><option>12</option><option>22</option>
+            </select>
+          </label>
+          <!-- A SPRINT, NO MESMO GESTO DA PONTUAÇÃO.
+               "Após a planning, como selecionar qual sprint?" — aqui, porque
+               pontuar e alocar são a mesma conversa da reunião, e obrigar a
+               trocar de tela entre as duas é como a segunda não acontece.
+
+               SÓ APARECE PARA O PM/PO (`papel === 'admin'`), e isso não é
+               zelo: `facilitadorOk` aceita admin, analista OU a senha
+               compartilhada da sala. Deixar o campo à vista para qualquer
+               facilitador entregaria a alocação a quem tem a senha — a trava
+               do Worker (`travaSprintDoPO`) desfeita por uma porta lateral.
+               O Worker recusa de novo se o pedido chegar forjado. -->
+          <label id="lb-sprint" style="display:none;font-size:11px;color:var(--text3);flex-direction:column;gap:4px">Sprint
+            <select id="in-sprint" style="width:150px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-family:inherit">
+              <option value="">— não repassar —</option>
             </select>
           </label>
           <button class="btn btn-green" onclick="gravarNoCard()" id="btn-gravar">💾 Gravar no card</button>
@@ -604,6 +621,14 @@ window.addEventListener('rm-token-novo', (e) => { _token = e.detail || _token; }
 // forjar esta chave nao da permissao nenhuma — so mostraria botoes que respondem
 // 401. O que ela evita e o facilitador cair na tela de abertura.
 let _facilitador  = sessionStorage.getItem('pk_facil') === '1';
+/* O PAPEL DE QUEM CONDUZ, e ele e diferente de "pode conduzir".
+   `facilitadorOk` no Worker aceita `admin`, `analista` OU a senha compartilhada
+   da sala — entao conduzir a planning nao implica decidir a sprint. So `admin`
+   ve o seletor de sprint; para os outros ele nem existe na tela, e o Worker
+   recusa de qualquer forma se o pedido chegar forjado. */
+let _papel        = sessionStorage.getItem('pk_papel') || '';
+let _feriados     = [];     // sem eles o rotulo da sprint sai errado em 63 dias
+let _sprintsFechadas = [];
 let _estado       = null;
 let _melhorias    = [];
 // Quanto cada carta costuma custar de prazo. Vem pronta do servidor junto com a
@@ -811,7 +836,10 @@ async function carregarFila() {
     /* O CADASTRO DE FRENTES, para a sala saber de qual time e cada demanda.
        Vem cru do Worker e a conta e feita aqui, pelo `pipelines.js` — a mesma
        regra do deck e da tela de contas, e nao uma segunda copia. */
+    _feriados   = (r.body && r.body.feriados) || [];
+    _sprintsFechadas = (r.body && r.body.sprints_fechadas) || [];
     _perfis     = (r.body && r.body.devs_perfil) || {};
+    montaSprintDaMesa();
     renderFila();
     renderReferencia();
     renderRanking();
@@ -1136,6 +1164,8 @@ async function abrirSessao() {
     // Conduzir a votacao grava pontuacao nas demandas: PM/PO e Analista de
     // Requisitos conduzem; dev e consulta seguem apenas votando.
     const papel = rl.body && rl.body.usuario && rl.body.usuario.papel;
+    _papel = String(papel || '');
+    try { sessionStorage.setItem('pk_papel', _papel); } catch (_) {}
     if (papel && !['admin', 'analista'].includes(papel)) {
       err.textContent = 'Sua conta é de ' + papel + ' e não conduz a votação. ' +
                         'Entre como participante em "Vou apenas votar".';
@@ -1441,19 +1471,62 @@ function atualizaBotaoProximo() {
   btn.textContent = restantes > 0 ? `→ Próxima demanda (${restantes})` : '✔ Encerrar rodada';
 }
 
+/* A CAIXA DE SPRINT DA MESA.
+ *
+ * As sprints do mês corrente e do seguinte, menos as fechadas — a mesma lista
+ * do Admin, pelo mesmo módulo. Os FERIADOS vêm do Worker junto da fila: sem
+ * eles o rótulo sai errado em 63 dias de dois anos (maio de 2026 é o pior caso,
+ * com o dia 1º caindo numa sexta feriada que desloca o mês inteiro).
+ *
+ * SÓ PARA `admin`. Para os outros a caixa nem é desenhada.                   */
+function montaSprintDaMesa() {
+  const lb = document.getElementById('lb-sprint');
+  const sel = document.getElementById('in-sprint');
+  if (!lb || !sel || !window.SPRINTPO) return;
+  if (_papel !== 'admin') { lb.style.display = 'none'; return; }
+  lb.style.display = 'flex';
+  const hoje = new Date().toISOString().slice(0, 10);
+  const ano = +hoje.slice(0, 4), mes = +hoje.slice(5, 7);
+  const agora = SPRINTPO.rotuloDeData(hoje, _feriados);
+  const antes = sel.value;
+  const opcoes = [];
+  [[ano, mes], mes === 12 ? [ano + 1, 1] : [ano, mes + 1]].forEach(([a, mm]) => {
+    SPRINTPO.sprintsDoMes(a, mm, _feriados).forEach(s => {
+      if (_sprintsFechadas.indexOf(s.rotulo) >= 0) return;
+      opcoes.push(s.rotulo);
+    });
+  });
+  sel.innerHTML = '<option value="">— não repassar —</option>' +
+    opcoes.map(r => '<option value="' + esc(r) + '">' + esc(SPRINTPO.rotuloCurto(r)) +
+      (r === agora ? ' · agora' : '') + '</option>').join('');
+  /* A ESCOLHA SOBREVIVE à troca de pauta: numa planning a sala pontua seis
+     demandas seguidas para a MESMA sprint, e reescolher a cada uma é o atrito
+     que faz a pessoa parar de usar o campo. */
+  sel.value = opcoes.indexOf(antes) >= 0 ? antes : '';
+}
+
 async function gravarNoCard() {
   const btn = document.getElementById('btn-gravar');
   const media  = document.getElementById('in-media').value;
   const pontos = document.getElementById('in-pontos').value;
   if (!_estado || !_estado.melhoria_id) { toast('Nenhuma demanda em votação.', 'err'); return; }
+  const sprintEl = document.getElementById('in-sprint');
+  const sprint = (_papel === 'admin' && sprintEl) ? sprintEl.value : '';
   btn.disabled = true; btn.textContent = 'Gravando…';
   const r = await api({ action: 'poker-gravar', codigo: _codigo, senha: _senha,
-                        melhoria_id: _estado.melhoria_id, poker_media: media, poker_pontos: pontos });
+                        melhoria_id: _estado.melhoria_id, poker_media: media,
+                        poker_pontos: pontos, sprint_po: sprint });
   btn.disabled = false; btn.textContent = '💾 Gravar no card';
   if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao gravar.', 'err'); return false; }
   // Marca a pauta como gravada para o aviso de "Proxima demanda" saber.
   _gravadoDe = _estado.melhoria_id;
-  toast(`✅ Gravado no card: média ${String(r.body.poker_media).replace('.', ',')} · ${r.body.poker_pontos} pontos`);
+  const b = r.body || {};
+  toast(`✅ Gravado no card: média ${String(b.poker_media).replace('.', ',')} · ${b.poker_pontos} pontos` +
+        (b.sprint_po ? ` · 🏃 ${SPRINTPO.rotuloCurto(b.sprint_po)}` : ''));
+  /* A RECUSA DA SPRINT APARECE SEPARADA, e não engole o aviso dos pontos: a
+     gravação pode ter dado certo pela metade, e "gravei os pontos mas não a
+     sprint" só é dizível se as duas tiverem voz. */
+  if (b.sprint_recusa) toast('🏃 ' + b.sprint_recusa, 'err');
   await carregarFila();
   return true;
 }

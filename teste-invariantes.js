@@ -23746,6 +23746,224 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'esvaziar trinta cards de uma vez nao da para desfazer olhando');
     ok(/sprintLoteAbrir\(\)/.test(semComentario(ADMIN).replace(/\n/g, ' ')),
        'e ha botao para ele na barra do quadro');
+
+    /* ═══ O FECHAMENTO DA SPRINT ══════════════════════════════════════════
+     *
+     * Abrir nao e ato: `S2-11` existe porque a semana existe. Fechar e, e as
+     * tres decisoes do Fernando estao aqui: motivo POR DEMANDA, trava sem
+     * reabertura, e aviso no quadro sem fechar sozinho.                     */
+    const fdados = () => ({ sprints: [], melhorias: [
+      { id: '1', codigo: 'AX-301', sprint_po: 'S2-11-2026',
+        sprint_po_historico: [{ sprint: 'S2-11-2026' }],
+        status_planejamento: 'concluido', poker_pontos: 13 },
+      { id: '2', codigo: 'AX-318', sprint_po: 'S2-11-2026',
+        sprint_po_historico: [{ sprint: 'S2-11-2026' }],
+        status_planejamento: 'validacao', poker_pontos: 8 },
+      { id: '3', codigo: 'AX-322', sprint_po: 'S2-11-2026',
+        sprint_po_historico: [{ sprint: 'S1-11-2026' }, { sprint: 'S2-11-2026' }],
+        status_planejamento: 'em_andamento', poker_pontos: 21 },
+      { id: '4', codigo: 'AX-330', sprint_po: 'S2-11-2026',
+        sprint_po_historico: [{ sprint: 'S2-11-2026' }],
+        status_planejamento: 'planejado', poker_pontos: 5 },
+    ] });
+    const etG = (m) => ETP.gravada(m, '2026-11-16');
+
+    const bal = SP.balancoDaSprint(fdados(), 'S2-11-2026', etG);
+    ok(bal.entregues.length === 1 && bal.aguardando.length === 1 && bal.pendentes.length === 2,
+       'o balanco separa entregue, aguardando o PM/PO e nao entregue',
+       'aguardando e um balde proprio: aqueles pontos ainda nao contam');
+
+    ok(!SP.sprintVencida('S2-11-2026', '2026-11-13', []) &&
+       SP.sprintVencida('S2-11-2026', '2026-11-16', []),
+       'a sprint so vence depois do ultimo dia util dela',
+       'sexta a tarde ela ainda esta correndo');
+
+    /* MOTIVO POR DEMANDA, E A FALTA DELE BARRA O FECHAMENTO INTEIRO. Fechar
+       metade e deixar a sprint aberta seria pior que nao fechar: ninguem
+       saberia onde parou. */
+    const d1 = fdados();
+    const semMotivo = SP.fechar(d1, 'S2-11-2026', 'F', '2026-11-16',
+      { '3': { destino: 'S3-11-2026', motivo: 'x' }, '4': { destino: '', motivo: '' } }, etG);
+    ok(!semMotivo.ok && /AX-322/.test(semMotivo.erro) && /AX-330/.test(semMotivo.erro),
+       'fechar sem motivo e recusado, nomeando CADA demanda que falta');
+    ok(!SP.estaFechada(d1, 'S2-11-2026') && d1.melhorias[2].sprint_po === 'S2-11-2026',
+       'e a recusa nao move nada nem fecha pela metade');
+
+    const d2 = fdados();
+    const fez = SP.fechar(d2, 'S2-11-2026', 'Fernando', '2026-11-16',
+      { '3': { destino: 'S3-11-2026', motivo: 'aguardando retorno do banco' },
+        '4': { destino: '', motivo: 'despriorizada no comite' } }, etG);
+    ok(fez.ok && fez.entregues === 1 && fez.aguardando === 1 && fez.fechados === 2,
+       'o fechamento devolve o que decidiu', JSON.stringify(fez));
+    ok(SP.doPO(d2.melhorias[2]) === 'S3-11-2026' && SP.pulos(d2.melhorias[2]) === 2,
+       'o carry-over entra na proxima sprint E conta o pulo',
+       'passa por `repassar`, e nao escrevendo os campos a mao');
+    ok(SP.historico(d2.melhorias[2]).slice(-1)[0].motivo === 'aguardando retorno do banco',
+       'e o motivo fica no mesmo passo do historico que o pulo que ele explica');
+    /* VOLTAR AO BACKLOG TAMBEM DEIXA RASTRO, e NAO conta como pulo: sair nao e
+       rolar, e conta-lo faria a devolvida aparecer "atrasada 1x" — o contrario
+       do que aconteceu. */
+    ok(SP.foraDaSprint(d2.melhorias[3]) &&
+       SP.historico(d2.melhorias[3]).slice(-1)[0].motivo === 'despriorizada no comite',
+       'a volta ao backlog guarda o motivo no proprio card');
+    ok(SP.pulos(d2.melhorias[3]) === 0 && !SP.entrouAtrasada(d2.melhorias[3]),
+       'e sair da sprint NAO conta como pulo — sair nao e rolar');
+    /* O PLACAR NAO E CARIMBADO. Pela regra retroativa, demanda entregue na
+       quinta e aprovada na terca seguinte entra nos pontos DESTA sprint depois
+       de ela fechada — um carimbo congelaria um numero que ainda assenta. */
+    const reg = SP.fechamentoDe(d2, 'S2-11-2026');
+    ok(!!reg && reg.carry.length === 2 && !('pontos' in reg) && !('entregues' in reg),
+       'o registro guarda o ATO, e nao o placar',
+       Object.keys(reg || {}).join(','));
+
+    // FECHADA E FECHADA: nao entra nem sai, e nao fecha de novo.
+    ok(!SP.repassar({}, 'S2-11-2026', 'F', '2026-11-17', { dados: d2 }).ok,
+       'nada ENTRA numa sprint fechada');
+    ok(!SP.repassar(d2.melhorias[0], 'S3-11-2026', 'F', '2026-11-17', { dados: d2 }).ok,
+       'e nada SAI dela — senao o numero mudaria por subtracao');
+    ok(!SP.retirar(d2.melhorias[0], 'F', '2026-11-17', { dados: d2 }).ok,
+       'inclusive pelo caminho de tirar da sprint');
+    ok(!SP.fechar(d2, 'S2-11-2026', 'F', '2026-11-17', {}, etG).ok,
+       'e ela nao fecha duas vezes');
+    /* SEM `opts` NADA MUDA. As chamadas antigas nao passam a lista de fechadas,
+       e tratar ausencia como "fechada" quebraria todas elas. */
+    ok(SP.repassar({}, 'S2-11-2026', 'F', '2026-11-17').ok,
+       'quem nao informa as fechadas segue como antes — ausencia e "nao sei"');
+
+    // O AVISO: conta o que falta DECIDIR, e some quando a sprint fecha.
+    const d3 = fdados();
+    const pend = SP.pendentesDeFechamento(d3, '2026-11-16', [], etG);
+    ok(pend.length === 1 && pend[0].pendentes === 2 && pend[0].entregues === 1,
+       'o aviso conta o que falta decidir, e nao quantas demandas a sprint teve',
+       JSON.stringify(pend));
+    ok(!SP.pendentesDeFechamento(d3, '2026-11-13', [], etG).length,
+       'e nao aparece antes de a sprint terminar');
+    SP.fechar(d3, 'S2-11-2026', 'F', '2026-11-16',
+      { '3': { destino: '', motivo: 'despriorizada mesmo' },
+        '4': { destino: '', motivo: 'despriorizada mesmo' } }, etG);
+    ok(!SP.pendentesDeFechamento(d3, '2026-11-16', [], etG).length,
+       'e some depois de fechada');
+
+    // ── A TRAVA NO WORKER ──────────────────────────────────────────────────
+    const fFech = corpo(W, 'function mexeuEmSprintFechada(recebido, servidor) {');
+    const fApag = corpo(W, 'function fechamentoApagado(recebido, servidor) {');
+    const fSet  = corpo(W, 'function fechadasNoServidor(servidor) {');
+    ok(!!fFech && !!fApag && !!fSet, 'a trava da sprint fechada existe no Worker');
+    if (fFech && fApag && fSet) {
+      const WF = new Function(fSet + '\n' + fFech + '\n' + fApag +
+        '\nreturn { mexeu: mexeuEmSprintFechada, apagou: fechamentoApagado };')();
+      const srv = { sprints: [{ rotulo: 'S2-11-2026' }],
+                    melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S2-11-2026' },
+                                { id: '2', codigo: 'AX-2', sprint_po: '' }] };
+      ok(WF.mexeu({ melhorias: [{ id: '2', codigo: 'AX-2', sprint_po: 'S2-11-2026' }] }, srv).length === 1,
+         'o Worker recusa ENTRAR numa sprint fechada');
+      ok(WF.mexeu({ melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S3-11-2026' }] }, srv).length === 1,
+         'e recusa SAIR dela');
+      ok(!WF.mexeu({ melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S2-11-2026' }] }, srv).length,
+         'e deixa em paz quem nao mexeu');
+      /* A LISTA DE FECHADAS VEM DO SERVIDOR, E E ISSO QUE FAZ O FECHAMENTO
+         FUNCIONAR: fechar a S2-11 e UM envio que move as nao entregues para a
+         S3-11 E acrescenta a S2-11 as fechadas. Lida do CORPO, a S2-11 ja
+         estaria fechada e o fechamento recusaria a si mesmo. */
+      const servAberto = { sprints: [], melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S2-11-2026' }] };
+      const envioDeFechamento = { sprints: [{ rotulo: 'S2-11-2026' }],
+                                  melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S3-11-2026' }] };
+      ok(!WF.mexeu(envioDeFechamento, servAberto).length,
+         'e o proprio fechamento NAO recusa a si mesmo',
+         'a pergunta e "ja estava fechada ANTES deste pedido?"');
+      // O fechamento nao se desfaz, e omitir a lista nao e apagar.
+      ok(WF.apagou({ sprints: [] }, srv).length === 1,
+         'mandar a lista sem o fechamento e recusado');
+      ok(!WF.apagou({ melhorias: [] }, srv).length,
+         'mas OMITIR a lista nao e apagar — `preservaChaves` a devolve',
+         'senao toda gravacao do Gantt quebraria apos o primeiro fechamento');
+    }
+    const iFech = WC.indexOf('mexeuEmSprintFechada(data, antesPub');
+    ok(iFech > 0, 'a trava e CHAMADA na rota de publicacao do Admin');
+    const trFech = iFech < 0 ? '' : WC.slice(iFech, iFech + 600);
+    /* A GUARDA, E NAO SO A RECUSA. Trocar `if (emFechada.length)` por
+       `if (false)` passava LISO: o `return json(...)` continuava no trecho e o
+       regex casava. E a terceira vez que este mesmo defeito aparece nesta
+       sessao — medir que o codigo da recusa EXISTE nao e medir que ele RODA. */
+    ok(/if \(emFechada\.length\) \{/.test(trFech),
+       'o resultado da trava decide alguma coisa, em vez de ser descartado');
+    ok(/error: 'sprint_fechada'/.test(trFech) && /409, headers/.test(trFech),
+       'e recusa com 409 — mexer numa sprint fechada e deliberado');
+    ok(/fechamentoApagado\(data, antesPub\)/.test(WC),
+       'e o fechamento nao pode ser apagado por outra porta');
+    ok(/rotulosFechados\(state\)/.test(semComentario(opc)) &&
+       /filter\(s => !fechadas\.includes\(s\.rotulo\)\)/.test(semComentario(opc)),
+       'e o repasse nao OFERECE sprint fechada',
+       'oferece-la seria um clique que o Worker recusa com 409');
+    ok(/sprints:\s+decoded\.sprints/.test(ADMIN),
+       'o Admin CARREGA os fechamentos',
+       'o comentario da lista ao lado ja diz: o que a tela nao carrega, ela apaga');
+
+    // ── O DIALOGO DE FECHAMENTO ────────────────────────────────────────────
+    const fa = semComentario(corpo(ADMIN, 'async function sprintFecharAplicar() {') || '');
+    ok(!!fa && /SPRINTPO\.fechar\(/.test(fa),
+       'o Admin fecha pelo modulo, em vez de escrever os campos');
+    ok(/state\.sprints = sprintsAntes/.test(fa) && /Object\.assign\(m, antes\.get\(m\.id\)\)/.test(fa),
+       'e a gravacao que falha desfaz O FECHAMENTO E AS DEMANDAS',
+       'desfazer so metade deixaria a sprint fechada com as demandas onde estavam');
+    const fr = semComentario(corpo(ADMIN, 'function sprintFecharRender() {') || '');
+    /* O SPAN DO ENTREGUE, ISOLADO. A primeira versao procurava a AUSENCIA de
+       uma soma escrita numa ordem — e a sabotagem escreveu na outra ordem e
+       passou lisa. Aqui o trecho do proprio span e recortado e a pergunta fica
+       direta: o numero de entregues menciona `aguardando`? */
+    const iOk = fr.indexOf("fp ok");
+    const spanOk = iOk < 0 ? '' : fr.slice(iOk, fr.indexOf('</span>', iOk));
+    ok(iOk >= 0 && /bal\.entregues\.length/.test(spanOk) && !/aguardando/.test(spanOk),
+       'o placar mostra "aguardando o PM/PO" SEPARADO do entregue',
+       'somar mostraria uma sprint melhor do que ela foi: ' + spanOk.slice(0, 70));
+    ok(/fp esp/.test(fr) && /bal\.aguardando\.length/.test(fr),
+       'e o balde de espera tem lugar proprio no placar');
+    ok(/SPRINTPO\.pulos\(m\)/.test(fr) && /vez</.test(fr),
+       'e a reincidencia grita na hora de decidir o destino');
+    const fb = semComentario(corpo(ADMIN, 'function sprintFecharAtualizaBotao() {') || '');
+    ok(/problemaNoMotivoCarry/.test(semComentario(corpo(ADMIN, 'function sprintFecharPendencias() {') || '')) &&
+       /btn\.disabled = faltam > 0/.test(fb),
+       'o botao de fechar so liga quando todos os motivos estao escritos');
+    const av = semComentario(corpo(ADMIN, 'function avisoSprintPendente() {') || '');
+    ok(/pendentesDeFechamento\(/.test(av) && /sprintFecharAbrir\(/.test(av),
+       'o quadro avisa a sprint por fechar, com o botao ao lado');
+    ok(!/setInterval|fecharAutomatico|autoFechar/.test(av),
+       'e NAO fecha sozinho — maquina nenhuma escreve "aguardando retorno do banco"');
+
+    // ── A SPRINT LOGO DEPOIS DA PLANNING ───────────────────────────────────
+    ok(/src="sprint\.js\?v=/.test(POKER), 'o poker carrega o modulo da sprint');
+    const pg = semComentario(corpo(POKER, 'async function gravarNoCard() {') || '');
+    ok(/sprint_po: sprint/.test(pg) && /_papel === 'admin'/.test(pg),
+       'o poker manda a sprint junto dos pontos, e so quando quem conduz e PM/PO');
+    const pm = semComentario(corpo(POKER, 'function montaSprintDaMesa() {') || '');
+    ok(/if \(_papel !== 'admin'\) \{ lb\.style\.display = 'none'; return; \}/.test(pm),
+       'e a caixa nem aparece para quem nao e PM/PO',
+       'facilitadorOk aceita analista E a senha compartilhada da sala');
+    /* A CHAMADA, e nao a palavra. `_feriados` tambem aparece no calculo da
+       sprint corrente logo acima — trocar so a lista por `[]` deixava a palavra
+       no arquivo e a lista errada na tela. */
+    ok(/sprintsDoMes\(a, mm, _feriados\)/.test(pm),
+       'a lista de sprints da mesa usa os feriados',
+       'sem eles 63 dias de dois anos recebem rotulo errado');
+    ok(/_sprintsFechadas\.indexOf\(s\.rotulo\) >= 0/.test(pm),
+       'e nao oferece sprint fechada');
+    ok(/feriados: feriadosISO\(data\)/.test(W) && /sprints_fechadas:/.test(W),
+       'e o Worker manda as duas listas junto da fila do poker');
+    /* A TRAVA DO POKER E DO SERVIDOR. A tela esconder o campo nao basta: o
+       corpo do pedido e montado no navegador, e `facilitadorOk` deixa entrar
+       quem tem a senha da sala. */
+    const ig = WC.indexOf("body.action === 'poker-gravar'");
+    const trG = ig < 0 ? '' : WC.slice(ig, ig + 6000);
+    ok(/const ehAdmPoker = \(await papelAtual\(\)\) === 'admin';/.test(trG),
+       'e o Worker confere o papel antes de aceitar a sprint pelo poker');
+    /* MESMO CUIDADO: `if (!ehAdmPoker)` trocado por `if (false)` deixava a
+       mensagem de recusa no arquivo e a trava sem efeito. */
+    ok(/if \(!ehAdmPoker\) \{\s*sprintRecusa = 'Repassar para a sprint e do PM\/PO/.test(trG),
+       'quem nao e PM/PO tem a sprint recusada — e a recusa esta ligada ao papel');
+    ok(/sprintRecusa = 'Repassar para a sprint e do PM\/PO/.test(trG) &&
+       /sprint_po: sprintAplicada \|\| null/.test(W),
+       'e os PONTOS entram mesmo assim',
+       'derrubar a gravacao perderia a votacao inteira da sala');
   }
 
   let erroPz = null;

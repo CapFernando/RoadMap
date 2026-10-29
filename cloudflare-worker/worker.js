@@ -1621,6 +1621,79 @@ function travaSprintDoPO(recebido, servidor, papel) {
   return revertidas;
 }
 
+/* ═══ SPRINT FECHADA NAO ENTRA NEM SAI ═════════════════════════════════════
+ *
+ * Decisao do Fernando: "fechada e fechada". O numero apresentado na sexta
+ * continua o mesmo na segunda — e e isso que faz o fechamento valer alguma
+ * coisa. Nao ha reabertura: o botao foi oferecido e recusado.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * A LISTA DE FECHADAS VEM DO SERVIDOR, E NAO DO CORPO. Esta e a linha que faz
+ * o fechamento funcionar.
+ *
+ * Fechar a S2-11 e UM SO envio: ele move as nao entregues para a S3-11 E
+ * acrescenta a S2-11 a lista de fechadas. Se a conferencia lesse a lista que
+ * CHEGOU, a S2-11 ja estaria fechada nela, e os carry-overs do proprio
+ * fechamento seriam recusados — o fechamento recusaria a si mesmo. Lendo a
+ * lista do servidor, a pergunta fica certa: "esta sprint ja estava fechada
+ * ANTES deste pedido?".
+ *
+ * VALE PARA O ADMIN TAMBEM, e e a unica trava destas que vale. As outras
+ * protegem o planejamento de quem executa; esta protege o numero ja
+ * apresentado de quem planeja — inclusive dele mesmo, numa sexta as 18h.
+ *
+ * RECUSA, nao reverte: mexer numa sprint fechada e deliberado, e devolver o
+ * valor em silencio faria a pessoa achar que conseguiu.
+ */
+function fechadasNoServidor(servidor) {
+  return new Set(((servidor && servidor.sprints) || [])
+    .map(s => String((s && s.rotulo) || '')).filter(Boolean));
+}
+
+function mexeuEmSprintFechada(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const fechadas = fechadasNoServidor(servidor);
+  if (!fechadas.size) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    const orig = velha ? String(velha.sprint_po || '') : '';
+    const nova = String(m.sprint_po || '');
+    if (orig === nova) continue;
+    // OS DOIS LADOS: entrar numa fechada, e sair de uma fechada. Conferir so o
+    // destino deixaria a demanda ESCAPAR, e o numero mudaria por subtracao.
+    if (fechadas.has(nova)) {
+      presos.push({ codigo: m.codigo || m.id, sprint: nova, mov: 'entrar' });
+    } else if (fechadas.has(orig)) {
+      presos.push({ codigo: m.codigo || m.id, sprint: orig, mov: 'sair' });
+    }
+  }
+  return presos;
+}
+
+/** O FECHAMENTO NAO SE DESFAZ. Sumir com o registro seria reabrir a sprint por
+ *  outra porta — e reabrir foi justamente o que ficou de fora. */
+function fechamentoApagado(recebido, servidor) {
+  const antes = fechadasNoServidor(servidor);
+  if (!antes.size) return [];
+  /* NAO MANDAR NAO E APAGAR. `preservaChaves` devolve toda chave de topo que
+     o corpo omite — e e assim que uma tela que nunca ouviu falar de `sprints`
+     grava sem destruir a lista. Tratar `undefined` como lista vazia recusaria
+     TODA gravacao do Gantt e do painel do dev a partir do primeiro fechamento,
+     que e o oposto do que esta trava existe para fazer. O que se recusa aqui e
+     mandar a lista COM o fechamento removido dela. */
+  if (!recebido || recebido.sprints === undefined) return [];
+  if (!Array.isArray(recebido.sprints)) {
+    return [...antes];       // trocar a lista por outra coisa apaga tudo
+  }
+  const agora = new Set(recebido.sprints
+    .map(s => String((s && s.rotulo) || '')).filter(Boolean));
+  return [...antes].filter(r => !agora.has(r));
+}
+
 /* ═══ A CLASSIFICACAO VIROU CHAVE, ENTAO ELA GANHOU TRAVA ══════════════════
  *
  * A trava de alocacao logo abaixo deixa Sustentacao comecar sem sprint. Isso
@@ -3869,6 +3942,21 @@ export default {
                       // Vai junto porque este e o unico ponto que ja le o arquivo
                       // inteiro nesta tela: calcular aqui nao custa chamada nenhuma.
                       referencia: pokerReferencia(data),
+                      /* OS FERIADOS, e eles NAO SAO detalhe: `sprint.js` precisa
+                         deles para calcular quais sprints existem, e sem a lista
+                         o rotulo sai errado. MEDIDO em dois anos de calendario:
+                         63 dias recebem rotulo diferente sem os feriados. O pior
+                         caso e maio de 2026 — o dia 1o e sexta E feriado; sem ele
+                         aquela sexta forma uma semana sozinha e desloca a S1
+                         inteira, errando o mes todo.
+                         Vai o CADASTRO e nao a conta pronta, pelo mesmo motivo do
+                         `pipelines` logo abaixo: a regra mora no modulo que a
+                         tela carrega, e o Worker nao importa nada. */
+                      feriados: feriadosISO(data),
+                      /* E as sprints ja fechadas, para a tela nao oferecer uma
+                         que o Worker vai recusar com 409. */
+                      sprints_fechadas: ((data.sprints) || [])
+                        .map(s => String((s && s.rotulo) || '')).filter(Boolean),
                       // Mesmo motivo da referencia: o arquivo ja esta lido aqui.
                       ranking: pokerRanking(data, agora),
                       /* A FRENTE DE CADA PESSOA, para a sala saber de qual time e
@@ -4072,6 +4160,58 @@ export default {
         const antesPoker = JSON.parse(JSON.stringify(alvo));
         alvo.poker_media = media;
         alvo.poker_pontos = pontos;
+        /* ═══ A SPRINT, LOGO DEPOIS DA PONTUACAO ═══════════════════════════
+         *
+         * "Apos a planning, como selecionar qual sprint?" — aqui, no mesmo
+         * gesto que fecha os pontos. Pontuar e alocar sao a mesma conversa da
+         * reuniao, e obrigar a trocar de tela entre as duas e como a segunda
+         * nao acontece.
+         *
+         * SO PARA O PAPEL `admin`, E ISTO NAO E OPCIONAL. `facilitadorOk`
+         * aceita `admin`, `analista` OU A SENHA COMPARTILHADA DA SALA — quem
+         * conduz a planning nao e necessariamente quem decide a sprint. Aceitar
+         * `sprint_po` de qualquer facilitador entregaria a alocacao a quem tem
+         * a senha da sala, desfazendo `travaSprintDoPO` por uma porta lateral.
+         *
+         * SILENCIO EM VEZ DE RECUSA quando nao e admin: a tela nem mostra o
+         * campo para quem nao pode, entao um `sprint_po` chegando aqui de um
+         * analista e pedido forjado — e derrubar a gravacao dos PONTOS por
+         * causa dele perderia a votacao inteira da sala. Os pontos entram, a
+         * sprint nao, e a resposta diz qual foi o caso.
+         *
+         * A REGRA DO REPASSE e repetida aqui porque o Worker nao importa
+         * `sprint.js`. Ha invariante rodando as duas lado a lado.           */
+        let sprintAplicada = '';
+        let sprintRecusa = '';
+        const sprintPedida = String(body.sprint_po || '').trim();
+        if (sprintPedida) {
+          const ehAdmPoker = (await papelAtual()) === 'admin';
+          const fechadasP = new Set(((data.sprints) || [])
+            .map(s => String((s && s.rotulo) || '')).filter(Boolean));
+          if (!ehAdmPoker) {
+            sprintRecusa = 'Repassar para a sprint e do PM/PO. Os pontos foram gravados.';
+          } else if (!/^S\d-\d{2}-\d{4}$/.test(sprintPedida)) {
+            sprintRecusa = 'Sprint invalida. Os pontos foram gravados.';
+          } else if (fechadasP.has(sprintPedida)) {
+            sprintRecusa = 'A sprint ' + sprintPedida + ' esta fechada. Os pontos foram gravados.';
+          } else if (fechadasP.has(String(alvo.sprint_po || ''))) {
+            sprintRecusa = 'Esta demanda esta numa sprint fechada e nao sai mais dela. ' +
+                           'Os pontos foram gravados.';
+          } else if (String(alvo.sprint_po || '') === sprintPedida) {
+            sprintRecusa = 'Ja estava nesta sprint. Os pontos foram gravados.';
+          } else {
+            const hP = Array.isArray(alvo.sprint_po_historico) ? alvo.sprint_po_historico : [];
+            const quemP = (_ident && _ident.usuario &&
+                           (_ident.usuario.nome_demandas || _ident.usuario.nome ||
+                            _ident.usuario.login)) || 'PM/PO';
+            alvo.sprint_po = sprintPedida;
+            alvo.sprint_po_em = hojeBR();
+            alvo.sprint_po_por = String(quemP);
+            alvo.sprint_po_historico = hP.concat(
+              [{ sprint: sprintPedida, em: hojeBR(), por: String(quemP) }]);
+            sprintAplicada = sprintPedida;
+          }
+        }
         /* ── O SELO DE VALIDACAO ────────────────────────────────────────────
            QUEM FECHOU A PONTUACAO, e quando. E o que permite o card dizer, no
            Kanban e no Gantt, que aquela demanda passou pela planning — e por
@@ -4138,6 +4278,12 @@ export default {
         if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
         return json({ ok: true, poker_media: media, poker_pontos: pontos,
                       votos: (alvo.poker_votos || []).length,
+                      /* A SPRINT DIZ O QUE ACONTECEU COM ELA, separada dos
+                         pontos: a gravacao pode ter dado certo pela metade, e
+                         "gravei os pontos mas nao a sprint" so e dizivel se a
+                         resposta separar as duas coisas. */
+                      sprint_po: sprintAplicada || null,
+                      sprint_recusa: sprintRecusa || null,
                       validado_por: alvo.poker_validado_por || null }, 200, headers);
       }
 
@@ -7288,6 +7434,25 @@ export default {
       // e a automatica seria um dado que muda sozinho sem deixar rastro.
       // ANTES de limpaDevs, que LE `devs_removidos`: se a chave nao voltou
       // primeiro, a limpeza decide sem saber quem ja tinha saido do time.
+      /* SPRINT FECHADA NAO ENTRA NEM SAI — e esta e a unica trava que vale
+         PARA O PM/PO. As outras protegem o planejamento de quem executa; esta
+         protege o numero ja apresentado de quem planeja, inclusive dele mesmo.
+         Antes de qualquer normalizacao, porque e uma recusa e nao um conserto. */
+      const emFechada = mexeuEmSprintFechada(data, antesPub);
+      if (emFechada.length) {
+        return json({ error: 'sprint_fechada',
+                      demandas: emFechada,
+                      detail: emFechada.map(p => p.codigo + ' nao pode ' + p.mov +
+                        ' de ' + p.sprint + ': a sprint esta fechada').join('; ') +
+                        '. Sprint fechada nao aceita entrada nem saida.' }, 409, headers);
+      }
+      const desfeitos = fechamentoApagado(data, antesPub);
+      if (desfeitos.length) {
+        return json({ error: 'fechamento_apagado',
+                      sprints: desfeitos,
+                      detail: 'O fechamento de ' + desfeitos.join(', ') +
+                              ' nao pode ser desfeito.' }, 409, headers);
+      }
       const voltaramPub = preservaChaves(data, antesPub);
       const devsForaPub = await limpaDevs(env, data);
       carimbaMeses(data, antesPub, true);

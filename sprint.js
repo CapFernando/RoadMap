@@ -220,11 +220,22 @@
     return Array.isArray(h) ? h.filter(Boolean) : [];
   }
 
+  /** As entradas do histórico que são ENTRADA em sprint.
+   *
+   *  O histórico também guarda as SAÍDAS — a demanda que o fechamento devolveu
+   *  ao backlog entra aqui com `sprint: ''` e o motivo, para a pergunta "por que
+   *  ela saiu?" ter resposta no próprio card. Mas sair não é rolar, e contá-la
+   *  como pulo faria a devolvida ao backlog aparecer "atrasada 1×" — que é
+   *  dizer o contrário do que aconteceu. */
+  function entradas(m) {
+    return historico(m).filter(function (e) { return txt(e && e.sprint) !== ''; });
+  }
+
   /** QUANTAS VEZES A DEMANDA FOI REPASSADA DEPOIS DA PRIMEIRA. Zero para quem
    *  está na sprint em que entrou. */
   function pulos(m) {
-    var h = historico(m);
-    return h.length > 1 ? h.length - 1 : 0;
+    var n = entradas(m).length;
+    return n > 1 ? n - 1 : 0;
   }
 
   /** ENTROU ATRASADA: já esteve em outra sprint antes desta.
@@ -237,7 +248,7 @@
 
   /** A SPRINT EM QUE ELA ENTROU DA PRIMEIRA VEZ — o compromisso original. */
   function sprintDeOrigem(m) {
-    var h = historico(m);
+    var h = entradas(m);
     return h.length ? txt(h[0].sprint) : '';
   }
 
@@ -362,14 +373,243 @@
    *  quem só tem o nome parecido. */
   function podeRepassar(papel) { return txt(papel) === 'admin'; }
 
+  /* ═══ O FECHAMENTO DA SPRINT ══════════════════════════════════════════════
+   *
+   * Abrir uma sprint não é um ato: `S2-11` existe porque a semana existe. Encher
+   * é que é o ato, e ele já tem dois gestos (o chip e o lote). FECHAR é o ato
+   * que faltava, e ele tem consequência — por isso tem registro.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * O QUE FICA GUARDADO, E O QUE NÃO FICA.
+   *
+   * Guarda-se o ATO: quem fechou, quando, e o destino e o motivo de cada
+   * demanda que não entregou.
+   *
+   * NÃO SE GUARDA O PLACAR. A tentação é carimbar "6 entregues, 89 pontos" e
+   * acabou — e isso estaria errado por construção: pela regra retroativa de
+   * novembro, uma demanda entregue na quinta e aprovada pelo PM/PO na terça
+   * seguinte entra nos pontos DESTA sprint depois de ela fechada. O número
+   * continua assentando, e um carimbo o congelaria numa foto que já nasce
+   * desatualizada. O placar é DERIVADO, sempre (ver `capacidade.js`).
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * FECHADA É FECHADA — decisão do Fernando: "não entra nem sai mais".
+   *
+   * `repassar` e `retirar` passam a recusar, e o Worker recusa junto. Não há
+   * reabertura: o botão foi oferecido e recusado, e a ausência dele é o que faz
+   * o número apresentado na sexta continuar o mesmo na segunda.
+   *
+   * O PREÇO ESTÁ DITO: fechar por engano não tem volta pela tela. Por isso o
+   * fechamento é um diálogo com a lista inteira à vista, e não um botão solto.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * O MOTIVO É POR DEMANDA — também decisão dele.
+   *
+   * Um texto para a sprint inteira vira "semana curta" e não responde a
+   * pergunta do comitê, que é sobre UMA demanda: "por que a AX-301 ficou para a
+   * semana seguinte?". O motivo entra no `sprint_po_historico`, junto do pulo
+   * que ele explica.                                                         */
+  var MIN_MOTIVO_CARRY = 8;
+
+  /** Os fechamentos gravados. Lista de `{ rotulo, em, por, carry: [...] }`. */
+  function fechamentos(dados) {
+    var f = (dados || {}).sprints;
+    return Array.isArray(f) ? f.filter(Boolean) : [];
+  }
+
+  function fechamentoDe(dados, rotulo) {
+    var s = txt(rotulo);
+    var achou = null;
+    fechamentos(dados).forEach(function (f) { if (txt(f.rotulo) === s) achou = f; });
+    return achou;
+  }
+
+  function estaFechada(dados, rotulo) { return !!fechamentoDe(dados, rotulo); }
+
+  /** Os rótulos fechados, para quem só precisa da lista. */
+  function rotulosFechados(dados) {
+    return fechamentos(dados).map(function (f) { return txt(f.rotulo); }).filter(Boolean);
+  }
+
+  /** A SPRINT JÁ TERMINOU? Pelo último dia útil dela.
+   *
+   *  É o que decide se o aviso de "falta fechar" aparece. Sexta-feira à tarde a
+   *  sprint ainda está correndo; o aviso é de sábado em diante. */
+  function sprintVencida(rotulo, hoje, feriados) {
+    var r = txt(rotulo);
+    if (!rotuloValido(r)) return false;
+    var mes = +r.slice(3, 5), ano = +r.slice(6, 10);
+    var lista = sprintsDoMes(ano, mes, feriados);
+    var achou = null;
+    lista.forEach(function (s) { if (s.rotulo === r) achou = s; });
+    if (!achou) return false;
+    return (iso(hoje) || new Date().toISOString().slice(0, 10)) > achou.ate;
+  }
+
+  /** AS SPRINTS QUE ESPERAM FECHAMENTO: já terminaram, têm demanda, e ninguém
+   *  fechou. Ordenadas da mais antiga para a mais nova — a mais velha é a que
+   *  pesa, e deixá-la por último seria enterrá-la na lista. */
+  function pendentesDeFechamento(dados, hoje, feriados, etapaDe) {
+    var vistos = {};
+    ((dados || {}).melhorias || []).forEach(function (m) {
+      if (!m || m.oculto || m.mesclado_em) return;
+      var s = doPO(m);
+      if (s) vistos[s] = true;
+    });
+    return Object.keys(vistos)
+      .filter(function (s) {
+        return sprintVencida(s, hoje, feriados) && !estaFechada(dados, s);
+      })
+      .map(function (s) {
+        /* O AVISO CONTA O QUE FALTA DECIDIR, e não quantas demandas a sprint
+           teve. "S2-11 não foi fechada · 12 demandas" assusta à toa quando
+           nove delas entregaram; o número que importa é o das que precisam de
+           destino e motivo, porque é esse o trabalho que o botão pede. */
+        var b = balancoDaSprint(dados, s, etapaDe);
+        return { rotulo: s, pendentes: b.pendentes.length,
+                 entregues: b.entregues.length, aguardando: b.aguardando.length };
+      })
+      .sort(function (a, b) { return chaveOrdem(a.rotulo) < chaveOrdem(b.rotulo) ? -1 : 1; });
+  }
+
+  /** `S2-11-2026` → `2026-11-2`, que ordena como texto.
+   *  Comparar os rótulos crus poria `S1-01-2027` antes de `S5-12-2026`. */
+  function chaveOrdem(r) {
+    var s = txt(r);
+    return rotuloValido(s) ? s.slice(6, 10) + '-' + s.slice(3, 5) + '-' + s.slice(1, 2) : s;
+  }
+
+  /** O QUE SOBROU NA SPRINT — o que o fechamento precisa decidir.
+   *
+   *  `entregues` são as concluídas pelo PM/PO; `aguardando` o dev já entregou e
+   *  falta a validação (os pontos delas ainda não contam — ver `capacidade.js`);
+   *  `pendentes` é o que não saiu e precisa de destino e motivo.               */
+  function balancoDaSprint(dados, rotulo, etapaDe) {
+    var saida = { entregues: [], aguardando: [], pendentes: [] };
+    ((dados || {}).melhorias || []).forEach(function (m) {
+      if (!m || m.oculto || m.mesclado_em) return;
+      if (!naSprint(m, rotulo)) return;
+      var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (e === 'concluido') saida.entregues.push(m);
+      else if (e === 'validacao' || e === 'validacao_area') saida.aguardando.push(m);
+      else if (e !== 'negada') saida.pendentes.push(m);
+    });
+    return saida;
+  }
+
+  function problemaNoMotivoCarry(txtMotivo) {
+    var t = txt(txtMotivo);
+    if (!t) return 'Escreva por que ela não entregou.';
+    if (t.length < MIN_MOTIVO_CARRY) {
+      return 'Diga em poucas palavras o que aconteceu (ao menos ' +
+             MIN_MOTIVO_CARRY + ' caracteres).';
+    }
+    return '';
+  }
+
+  /** FECHA A SPRINT.
+   *
+   *  `decisoes` é `{ [id]: { destino, motivo } }` — `destino` é o rótulo da
+   *  próxima sprint ou `''` para devolver ao backlog.
+   *
+   *  CONFERE TUDO ANTES DE MEXER EM QUALQUER COISA. Uma decisão sem motivo no
+   *  meio da lista deixaria metade das demandas movidas e a sprint aberta, e
+   *  ninguém saberia onde parou. */
+  function fechar(dados, rotulo, quem, hoje, decisoes, etapaDe) {
+    var r = txt(rotulo);
+    if (!rotuloValido(r)) return { ok: false, erro: 'Sprint inválida.' };
+    if (estaFechada(dados, r)) {
+      return { ok: false, erro: 'A sprint ' + rotuloCurto(r) + ' já foi fechada.' };
+    }
+    var bal = balancoDaSprint(dados, r, etapaDe);
+    var dec = decisoes || {};
+    var erros = [];
+    bal.pendentes.forEach(function (m) {
+      var d = dec[m.id] || {};
+      var destino = txt(d.destino);
+      if (destino && !rotuloValido(destino)) {
+        erros.push((m.codigo || m.id) + ': destino inválido.');
+        return;
+      }
+      if (destino === r) {
+        erros.push((m.codigo || m.id) + ': não dá para empurrar para a própria sprint.');
+        return;
+      }
+      if (destino && estaFechada(dados, destino)) {
+        erros.push((m.codigo || m.id) + ': ' + rotuloCurto(destino) + ' já está fechada.');
+        return;
+      }
+      var p = problemaNoMotivoCarry(d.motivo);
+      if (p) erros.push((m.codigo || m.id) + ': ' + p);
+    });
+    if (erros.length) return { ok: false, erro: erros.join('\n'), erros: erros };
+
+    var carry = [];
+    bal.pendentes.forEach(function (m) {
+      var d = dec[m.id] || {};
+      var destino = txt(d.destino);
+      var motivo = txt(d.motivo);
+      /* MOVE PELO CAMINHO NORMAL, e não escrevendo os campos aqui: é
+         `repassar` quem conta o pulo e monta o histórico, e é por ele que a
+         demanda "entra atrasada". Uma segunda escrita destes campos seria a
+         chance de o pulo deixar de ser contado justamente no fechamento, que é
+         onde ele importa.
+         `fechando: true` passa por cima da trava da sprint que está sendo
+         fechada AGORA — ela só vira fechada ao fim desta função. */
+      if (destino) {
+        repassar(m, destino, quem, hoje, { fechadas: [] });
+      } else {
+        /* A VOLTA AO BACKLOG TAMBÉM É REGISTRADA, com `sprint: ''`. Sem esta
+           linha o motivo existiria só no registro da sprint, e "por que a
+           AX-330 saiu?" não teria resposta olhando o card — que é onde a
+           pergunta é feita. `entradas()` ignora esta linha na conta de pulos:
+           sair não é rolar. */
+        m.sprint_po = '';
+        m.sprint_po_em = iso(hoje);
+        m.sprint_po_por = txt(quem);
+        m.sprint_po_historico = historico(m).concat(
+          [{ sprint: '', de: r, em: iso(hoje), por: txt(quem), motivo: motivo }]);
+      }
+      /* O MOTIVO ENTRA NO ÚLTIMO PASSO DO HISTÓRICO — junto do pulo que ele
+         explica. Guardado só à parte, "por que rolou" e "quando rolou" seriam
+         duas listas para casar na mão. */
+      var h = historico(m);
+      if (destino && h.length) h[h.length - 1].motivo = motivo;
+      carry.push({ id: m.id, codigo: m.codigo || m.id,
+                   destino: destino, motivo: motivo,
+                   pulos: pulos(m) });
+    });
+
+    if (!Array.isArray(dados.sprints)) dados.sprints = [];
+    dados.sprints.push({ rotulo: r, em: iso(hoje), por: txt(quem), carry: carry });
+    return { ok: true, fechados: carry.length,
+             entregues: bal.entregues.length, aguardando: bal.aguardando.length };
+  }
+
   /* ═══ OS ATOS ══════════════════════════════════════════════════════════════
    *
    * Devolvem `{ ok, erro }` e MEXEM NA DEMANDA só quando `ok`. O formato é o
    * mesmo do `pausa.js` porque as duas telas que chamam os dois já sabem lê-lo.
    */
 
+  /** AS SPRINTS FECHADAS que o chamador conhece.
+   *
+   *  `opts` aceita `{ fechadas: ['S1-11-2026', …] }` OU os dados inteiros em
+   *  `{ dados }` — as duas telas têm uma coisa ou a outra à mão, e obrigar a
+   *  converter antes de chamar seria convidar a conversão a ser esquecida
+   *  justamente na chamada que precisa da trava.
+   *
+   *  AUSENTE SIGNIFICA "NÃO SEI", e não "nenhuma". A trava de verdade é do
+   *  Worker; aqui ela é a cortesia de não deixar a pessoa tentar. */
+  function fechadasDe(opts) {
+    var o = opts || {};
+    if (Array.isArray(o.fechadas)) return o.fechadas.map(txt);
+    if (o.dados) return rotulosFechados(o.dados);
+    return [];
+  }
+
   /** O PM/PO REPASSA a demanda para uma sprint. */
-  function repassar(m, sprint, quem, hoje) {
+  function repassar(m, sprint, quem, hoje, opts) {
     if (!m) return { ok: false, erro: 'Demanda não encontrada.' };
     var s = txt(sprint);
     if (!rotuloValido(s)) {
@@ -377,6 +617,18 @@
     }
     if (doPO(m) === s) {
       return { ok: false, erro: 'Esta demanda já está na sprint ' + s + '.' };
+    }
+    /* NEM ENTRA NEM SAI DE SPRINT FECHADA — os dois lados do movimento.
+       Checar só o destino deixaria a demanda ESCAPAR de uma sprint fechada, e
+       o número que foi apresentado mudaria por subtração em vez de soma. */
+    var fech = fechadasDe(opts);
+    if (fech.indexOf(s) >= 0) {
+      return { ok: false, erro: 'A sprint ' + rotuloCurto(s) + ' está fechada. ' +
+                                'Escolha uma sprint aberta.' };
+    }
+    if (fech.indexOf(doPO(m)) >= 0) {
+      return { ok: false, erro: 'Esta demanda está em ' + rotuloCurto(doPO(m)) +
+                                ', que já foi fechada — ela não sai mais de lá.' };
     }
     var h = historico(m).slice();
     h.push({ sprint: s, em: iso(hoje), por: txt(quem) });
@@ -392,10 +644,14 @@
    *  O HISTÓRICO NÃO É APAGADO. Tirar da sprint não desfaz as sprints em que ela
    *  esteve, e apagar faria uma demanda que rolou três semanas voltar a parecer
    *  nova na próxima vez que entrasse. É o mesmo cuidado do `pausa_historico`. */
-  function retirar(m, quem, hoje) {
+  function retirar(m, quem, hoje, opts) {
     if (!m) return { ok: false, erro: 'Demanda não encontrada.' };
     if (foraDaSprint(m)) {
       return { ok: false, erro: 'Esta demanda já está fora da sprint.' };
+    }
+    if (fechadasDe(opts).indexOf(doPO(m)) >= 0) {
+      return { ok: false, erro: 'Esta demanda está em ' + rotuloCurto(doPO(m)) +
+                                ', que já foi fechada — ela não sai mais de lá.' };
     }
     m.sprint_po = '';
     m.sprint_po_em = iso(hoje);
@@ -468,10 +724,21 @@
     naSprint: naSprint,
     daSprint: daSprint,
     historico: historico,
+    entradas: entradas,
     pulos: pulos,
     entrouAtrasada: entrouAtrasada,
     sprintDeOrigem: sprintDeOrigem,
     badge: badge,
+    MIN_MOTIVO_CARRY: MIN_MOTIVO_CARRY,
+    fechamentos: fechamentos,
+    fechamentoDe: fechamentoDe,
+    estaFechada: estaFechada,
+    rotulosFechados: rotulosFechados,
+    sprintVencida: sprintVencida,
+    pendentesDeFechamento: pendentesDeFechamento,
+    balancoDaSprint: balancoDaSprint,
+    problemaNoMotivoCarry: problemaNoMotivoCarry,
+    fechar: fechar,
     TRAVA_DESDE: TRAVA_DESDE,
     TIPOS_LIVRES: TIPOS_LIVRES,
     ETAPA_TRAVADA: ETAPA_TRAVADA,
