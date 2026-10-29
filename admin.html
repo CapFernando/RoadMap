@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="ceb76ee764">
+<html lang="pt-BR" data-build="80698e6f1b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1532,14 +1532,15 @@
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=a6a54ef3d1"></script>
 <script src="capacidade.js?v=e7e1449a7d"></script>
-<script src="apresentacao.js?v=6da179e50d"></script>
-<script src="relatorio-ppt.js?v=15951846b0"></script>
+<script src="apresentacao.js?v=f5b07694a5"></script>
+<script src="relatorio-ppt.js?v=23ef77d815"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=ff7a669a03"></script>
 <script src="pausa.js?v=06c4b82f84"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
+<script src="colaboradores.js?v=c94edfa2e2"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="modelo-descricao.js?v=b8fbe1a51e"></script>
@@ -1549,7 +1550,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=f274c8d29d"></script>
+<script src="sprint.js?v=116dd58ee8"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -1813,8 +1814,13 @@
               <label>Escala</label>
               <select id="ap-rp-escala" onchange="apRpTrocaEscala()">
                 <option value="mes">Mês (fechamento)</option>
-                <option value="semana">Semana (reunião)</option>
+                <option value="sprint">Sprint (do PM/PO)</option>
+                <option value="semana">Semana (calendário)</option>
               </select>
+            </div>
+            <div id="ap-rp-grupo-sprint" style="display:none">
+              <label>Sprint</label>
+              <select id="ap-rp-sprint" onchange="relPptPrevia()"></select>
             </div>
             <div id="ap-rp-grupo-mes">
               <label>Mês</label>
@@ -2157,8 +2163,18 @@
           <label>Escala</label>
           <select id="rel-escala" onchange="relTrocaEscala()">
             <option value="mes">Mês (fechamento)</option>
-            <option value="semana">Semana (reunião)</option>
+            <option value="sprint">Sprint (do PM/PO)</option>
+            <option value="semana">Semana (calendário)</option>
           </select>
+        </div>
+        <!-- SPRINT E SEMANA SÃO COISAS DIFERENTES, e por isso são duas opções.
+             Elas coincidem no calendário hoje, mas a sprint tem DONO: é o que o
+             PM/PO repassou, e o relatório dela traz o placar e o ranking que a
+             semana não tem. Juntar as duas faria "a semana" responder por uma
+             decisão que ninguém tomou. -->
+        <div class="ger-filter-group" id="rel-grupo-sprint" style="display:none">
+          <label>Sprint</label>
+          <select id="rel-sprint" onchange="renderRelatorios()"></select>
         </div>
         <div class="ger-filter-group" id="rel-grupo-mes">
           <label>Mês</label>
@@ -2201,6 +2217,13 @@
       </div>
 
       <div id="rel-periodo-info" style="font-size:12px;color:var(--text3);margin:-12px 0 18px"></div>
+
+      <!-- O PLACAR DA SPRINT, só na escala de sprint.
+           O mês e a semana não têm placar porque não têm compromisso: ninguém
+           "repassou" demandas para o mês de novembro. A sprint tem — e é por
+           isso que ela merece um bloco que as outras duas escalas não têm,
+           em vez de os três períodos fingirem ser a mesma coisa. -->
+      <div id="rel-sprint-box" style="display:none;margin-bottom:22px"></div>
 
       <!-- COMO O TIME ANDOU. Vem antes da lista de entregas de proposito: a
            diretoria pergunta "o mes foi bom?" antes de "o que saiu?", e uma lista
@@ -7792,17 +7815,26 @@ function apModoTrocou() {
 /** A janela do deck de assunto — dos seletores DELE, pela mesma `janelaDe`. */
 function apJanelaDeck() {
   const e = document.getElementById('ap-rp-escala');
-  const escala = e && e.value === 'semana' ? 'semana' : 'mes';
-  const sel = document.getElementById(escala === 'semana' ? 'ap-rp-semana' : 'ap-rp-mes');
+  const v = e && e.value;
+  const escala = (v === 'semana' || v === 'sprint') ? v : 'mes';
+  if (escala === 'sprint') relMontaSprints('ap-rp-sprint');
+  const id = escala === 'semana' ? 'ap-rp-semana'
+           : escala === 'sprint' ? 'ap-rp-sprint' : 'ap-rp-mes';
+  const sel = document.getElementById(id);
   return janelaDe(escala, (sel && sel.value) || '');
 }
 
 function apRpTrocaEscala() {
-  const ehSemana = (document.getElementById('ap-rp-escala') || {}).value === 'semana';
-  const gm = document.getElementById('ap-rp-grupo-mes');
-  const gs = document.getElementById('ap-rp-grupo-semana');
-  if (gm) gm.style.display = ehSemana ? 'none' : '';
-  if (gs) gs.style.display = ehSemana ? '' : 'none';
+  // Mesma regra de tres estados do `relTrocaEscala` — ver o comentario de la.
+  const v = (document.getElementById('ap-rp-escala') || {}).value;
+  const e = (v === 'semana' || v === 'sprint') ? v : 'mes';
+  const mostra = (id, quando) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = e === quando ? '' : 'none';
+  };
+  mostra('ap-rp-grupo-mes', 'mes');
+  mostra('ap-rp-grupo-sprint', 'sprint');
+  mostra('ap-rp-grupo-semana', 'semana');
   relPptPrevia();
 }
 
@@ -10842,7 +10874,29 @@ function relRaizDe(m) {
 /** A escala escolhida. `mes` é o padrão: fechamento é a conversa da diretoria. */
 function relEscala() {
   const el = document.getElementById('rel-escala');
-  return el && el.value === 'semana' ? 'semana' : 'mes';
+  const v = el && el.value;
+  return (v === 'semana' || v === 'sprint') ? v : 'mes';
+}
+
+/** AS SPRINTS OFERECIDAS NO RELATORIO: as que tem demanda, mais a corrente.
+ *
+ *  Reaproveita `sprintsComDados` do Gerencial — a lista e a mesma pergunta, e
+ *  duas listas divergiriam no dia em que uma ganhasse a sprint corrente e a
+ *  outra nao. O seletor so e montado uma vez; trocar o conteudo a cada render
+ *  perderia a escolha da pessoa no meio da leitura. */
+function relMontaSprints(idSel) {
+  const sel = document.getElementById(idSel);
+  if (!sel || !window.SPRINTPO) return;
+  const lista = sprintsComDados();
+  const marca = lista.map(r => r).join('|');
+  if (sel.dataset.marca === marca) return;
+  const agora = SPRINTPO.rotuloDeData(PRAZO.hojeISO(), state.feriados || []);
+  const anterior = sel.value;
+  sel.innerHTML = lista.map(r => '<option value="' + esc(r) + '">' +
+    esc(SPRINTPO.rotuloCurto(r)) + (r === agora ? '  · agora' : '') +
+    (SPRINTPO.estaFechada(state, r) ? '  · fechada' : '') + '</option>').join('');
+  sel.dataset.marca = marca;
+  sel.value = lista.includes(anterior) ? anterior : (lista.includes(agora) ? agora : lista[0] || '');
 }
 
 /** O sistema filtrado, ou '' para todos.
@@ -10883,6 +10937,40 @@ function relTemaFiltroNome() {
  * semana. Vazio cai no período corrente, que é o que os dois seletores trazem
  * marcado quando a tela abre. */
 function janelaDe(escala, valor) {
+  /* ═══ A SPRINT COMO ESCALA ═════════════════════════════════════════════════
+   *
+   * Entra AQUI e não em cada tela porque `janelaDe` é a conta que a aba
+   * Relatórios e o deck de assunto já dividem — somar a escala nos dois lugares
+   * faria o relatório e o PPT discordarem sobre o mesmo período, que é o
+   * acidente que esta função existe para evitar.
+   *
+   * NÃO É A SEMANA DO CALENDÁRIO. Elas coincidem hoje porque as sprints são
+   * semanas de segunda a sexta, mas a sprint tem dono: ela é o que o PM/PO
+   * repassou, e a comparação com "a anterior" atravessa a virada do mês. O
+   * rótulo diz as duas coisas — o nome da sprint e as datas dela —, porque
+   * "S3-11" sozinho não diz a ninguém de que dias se está falando.
+   *
+   * A FAIXA É A DOS DIAS ÚTEIS DA SPRINT, e não de segunda a domingo: é a
+   * mesma faixa que o placar usa, e duas definições fariam o relatório contar
+   * uma entrega de sábado que o placar não conta.                           */
+  if (escala === 'sprint') {
+    const fer = (window.state && state.feriados) || [];
+    const r = String(valor || '') ||
+      (window.SPRINTPO ? SPRINTPO.sprintCorrente(PRAZO.hojeISO(), fer) : '');
+    const f = window.SPRINTPO ? SPRINTPO.faixaDaSprint(r, fer) : null;
+    if (!f) return janelaDe('semana', '');      // sprint inválida: cai na semana
+    const ant = SPRINTPO.sprintAnterior(r, fer);
+    const fa = ant ? SPRINTPO.faixaDaSprint(ant, fer) : null;
+    const curto = SPRINTPO.rotuloCurto(r);
+    return { escala: 'sprint', sprint: r, de: f.de, ate: f.ate,
+             deAnt: fa ? fa.de : f.de, ateAnt: fa ? fa.ate : f.de,
+             rot: curto + ' (' + formatDate(f.de) + ' a ' + formatDate(f.ate) + ')',
+             rotAnt: ant
+               ? SPRINTPO.rotuloCurto(ant) + ' (' + formatDate(fa.de) + ' a ' +
+                 formatDate(fa.ate) + ')'
+               : 'sprint anterior',
+             curto: 'sprint' };
+  }
   if (escala === 'semana') {
     const ini = valor ? new Date(valor + 'T00:00:00') : segundaDa(new Date());
     const de = iso(ini), ate = iso(maisDias(ini, 6));
@@ -10911,7 +10999,9 @@ function janelaDe(escala, valor) {
 /** A janela da ABA Relatórios — a mesma conta, lendo os seletores dela. */
 function relJanela() {
   const escala = relEscala();
-  const sel = document.getElementById(escala === 'semana' ? 'rel-semana' : 'rel-mes');
+  if (escala === 'sprint') relMontaSprints('rel-sprint');
+  const id = escala === 'semana' ? 'rel-semana' : escala === 'sprint' ? 'rel-sprint' : 'rel-mes';
+  const sel = document.getElementById(id);
   return janelaDe(escala, (sel && sel.value) || '');
 }
 
@@ -10959,11 +11049,17 @@ function relInitControles() {
 }
 
 function relTrocaEscala() {
-  const ehSemana = relEscala() === 'semana';
-  const gm = document.getElementById('rel-grupo-mes');
-  const gs = document.getElementById('rel-grupo-semana');
-  if (gm) gm.style.display = ehSemana ? 'none' : '';
-  if (gs) gs.style.display = ehSemana ? '' : 'none';
+  /* TRES ESCALAS, UM GRUPO VISIVEL. Com `ehSemana` booleano, a sprint mostrava
+     o seletor de MES junto do dela — dois periodos na barra e nenhum dizendo
+     qual vale. */
+  const e = relEscala();
+  const mostra = (id, quando) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = e === quando ? '' : 'none';
+  };
+  mostra('rel-grupo-mes', 'mes');
+  mostra('rel-grupo-sprint', 'sprint');
+  mostra('rel-grupo-semana', 'semana');
   renderRelatorios();
 }
 
@@ -11524,6 +11620,37 @@ function relPptEscopos(j) {
 }
 
 /** O objeto que o `relatorio-ppt.js` desenha. */
+/** O PLACAR DA SPRINT NO FORMATO DO DECK — `null` fora da escala de sprint.
+ *
+ *  `null` E NAO UM OBJETO VAZIO: o deck decide se desenha o slide perguntando
+ *  "tem sprint?", e um objeto com zeros faria um slide de zeros aparecer em
+ *  todo deck mensal. */
+function relPptSprint(j) {
+  if (!j || j.escala !== 'sprint' || !window.SPRINTPO) return null;
+  const etapa = m => statusKey(m);
+  const p = SPRINTPO.placarDaSprint(state, j.sprint, etapa);
+  if (!p.total) return null;
+  const rk = SPRINTPO.rankingDaSprint(state, j.sprint, etapa);
+  const ac = SPRINTPO.acompanhamentoDaSprint(state, j.sprint, etapa,
+                                             PRAZO.hojeISO(), window.PRAZO);
+  const sit = SPRINTPO.situacaoDaSprint(state, j.sprint);
+  const ROT = { montando: 'ainda em montagem', em_curso: 'em curso', fechada: 'fechada' };
+  return {
+    rotulo: SPRINTPO.rotuloCurto(j.sprint),
+    sub: j.rot.replace(/^\S+\s*/, '').replace(/^\(|\)$/g, '') + '  ·  ' + ROT[sit],
+    total: p.total, validados: p.validados, aguardando: p.aguardando, saiu: p.saiu,
+    pontosTotal: p.pontosTotal, pontosValidados: p.pontosValidados,
+    pct: p.pct, pctPontos: p.pctPontos,
+    temDupla: rk.some(d => d.dupla),
+    ranking: rk.map(d => ({ nome: d.nome, validados: d.validados, total: d.total,
+                            pontos: d.pontos, pct: d.pct })),
+    risco: ac.filter(x => x.riscos.length).map(x => ({
+      codigo: x.m.codigo || x.m.id, titulo: x.m.titulo || '',
+      motivos: x.riscos.map(r => r.texto).join(' · '),
+    })),
+  };
+}
+
 function relPptDados(escopo, j, comBacklog) {
   const base = {
     periodo: j.rot, subtitulo: 'Audax Capital · Tecnologia',
@@ -11533,6 +11660,11 @@ function relPptDados(escopo, j, comBacklog) {
        como se fosse a do AXCred — e e o tipo de erro que ninguem confere,
        porque o numero simplesmente parece grande. */
     backlog: comBacklog ? relBacklogDe(escopo) : null,
+    /* O PLACAR DA SPRINT VAI PARA O DECK PRONTO. O `relatorio-ppt.js` nao sabe
+       o que e uma sprint e nao deve saber: a conta do denominador tem a
+       sutileza de contar quem SAIU, e ela nao pode viver em dois lugares. Aqui
+       ela e a mesma chamada que o Gerencial e a aba fazem. */
+    sprint: relPptSprint(j),
   };
   if (escopo) {
     const t = relPptAssunto(escopo, j);
@@ -11565,7 +11697,11 @@ function relPptNomeArquivo(escopo, j) {
   const limpa = t => String(t || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
-  const quando = j.escala === 'semana' ? j.de : j.de.slice(0, 7);
+  /* O NOME DO ARQUIVO DIZ QUAL SPRINT. Com `j.de.slice(0,7)` sairiam cinco
+     arquivos chamados `...-2026-11.pptx` numa pasta só, e o de terça
+     sobrescreveria o da semana passada no download. */
+  const quando = j.escala === 'sprint' ? limpa(SPRINTPO.rotuloCurto(j.sprint))
+               : j.escala === 'semana' ? j.de : j.de.slice(0, 7);
   return 'relatorio-' + (escopo ? limpa(escopo) : 'consolidado') + '-' + quando + '.pptx';
 }
 
@@ -11909,6 +12045,7 @@ function renderRelatorios() {
   relInitSemanas();
   relInitControles();
   const { A, B, C, D, janela, entregues, andamento, semDataConcluidos } = relDados();
+  relRenderSprint(janela);
   relRenderAndou(janela);
   relRenderTemas(janela);
   relRenderOQueVem();
@@ -11931,11 +12068,20 @@ function renderRelatorios() {
         entregues.filter(m => String(m.resumo_entrega || '').trim()).length} de ${
         entregues.length}</b> entregas têm a frase curta — as demais mostram o aviso.</span>`
     : '';
-  document.getElementById('rel-periodo-info').innerHTML = (janela.escala === 'mes'
-    ? `Fechamento de <b>${janela.rot}</b>, comparado com <b>${janela.rotAnt}</b>. ` +
-      `Todos os blocos abaixo são deste mês.`
-    : `Semana de <b>${formatDate(A)} a ${formatDate(B)}</b>, comparada com a ` +
-      `${janela.rotAnt}. Todos os blocos abaixo são desta semana.`) + filtroTxt + covTxt;
+  /* A LINHA DE CONTEXTO DIZ A ESCALA COM AS PALAVRAS DELA. "Semana de 16/11 a
+     20/11" para uma SPRINT seria verdade sobre as datas e mentira sobre o que
+     se está lendo — a sprint é o que o PM/PO repassou, e é esse compromisso
+     que o placar acima cobra. */
+  document.getElementById('rel-periodo-info').innerHTML = (
+    janela.escala === 'mes'
+      ? `Fechamento de <b>${janela.rot}</b>, comparado com <b>${janela.rotAnt}</b>. ` +
+        `Todos os blocos abaixo são deste mês.`
+    : janela.escala === 'sprint'
+      ? `Sprint <b>${janela.rot}</b>, comparada com <b>${janela.rotAnt}</b>. ` +
+        `Os blocos abaixo cobrem os dias da sprint; o placar acima cobre o que ` +
+        `foi repassado para ela.`
+      : `Semana de <b>${formatDate(A)} a ${formatDate(B)}</b>, comparada com a ` +
+        `${janela.rotAnt}. Todos os blocos abaixo são desta semana.`) + filtroTxt + covTxt;
 
   document.getElementById('rel-ent-titulo').innerHTML =
     `✅ Entregues <span class="rel-per">${formatDate(C)} a ${formatDate(D)}</span>`;
@@ -11961,6 +12107,75 @@ function renderRelatorios() {
   document.getElementById('rel-andamento').innerHTML = andamento.length
     ? relAgrupadoHTML(andamento, 'andamento')
     : vazio(`Nenhuma demanda em desenvolvimento entre ${formatDate(A)} e ${formatDate(B)}.`);
+}
+
+/** O PLACAR DA SPRINT NO RELATÓRIO — o mesmo do Gerencial, em forma de ata.
+ *
+ *  AS CONTAS SÃO AS MESMAS, de `sprint.js`. O relatório é para LER e COPIAR
+ *  (há um "Copiar tudo" nesta aba) e o Gerencial é para operar — o que muda é
+ *  a forma, nunca o número. Dois números diferentes para a mesma sprint em
+ *  duas abas do mesmo sistema é o defeito que esta base passa a vida
+ *  consertando.
+ *
+ *  SÓ APARECE NA ESCALA DE SPRINT: mês e semana não têm compromisso que possa
+ *  ser cumprido ou furado — ninguém repassa demandas para "novembro".       */
+function relRenderSprint(j) {
+  const box = document.getElementById('rel-sprint-box');
+  if (!box) return;
+  if (!j || j.escala !== 'sprint' || !window.SPRINTPO) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  const etapa = m => statusKey(m);
+  const p = SPRINTPO.placarDaSprint(state, j.sprint, etapa);
+  if (!p.total) {
+    box.innerHTML = '<div class="ger-empty-box">Nenhuma demanda foi repassada para ' +
+      esc(SPRINTPO.rotuloCurto(j.sprint)) + '.</div>';
+    return;
+  }
+  const rk = SPRINTPO.rankingDaSprint(state, j.sprint, etapa);
+  const ac = SPRINTPO.acompanhamentoDaSprint(state, j.sprint, etapa, PRAZO.hojeISO(), window.PRAZO);
+  const risco = ac.filter(x => x.riscos.length);
+  const sit = SPRINTPO.situacaoDaSprint(state, j.sprint);
+  const SIT_ROT = { montando: '✎ Montando', em_curso: '▶ Em curso', fechada: '🔒 Fechada' };
+  box.innerHTML =
+    '<div class="ger-section-title"><span>🏃 ' + esc(SPRINTPO.rotuloCurto(j.sprint)) +
+      '</span><span class="ger-section-hint">' + esc(SIT_ROT[sit]) + ' · ' +
+      esc(j.rot.replace(/^\S+\s*/, '')) + '</span></div>' +
+    '<div class="spr-placar">' +
+      '<div class="spr-b pts"><div class="spr-b-n">' + p.pontosValidados + ' / ' +
+        p.pontosTotal + '</div><div class="spr-b-r">pontos validados</div></div>' +
+      '<div class="spr-b val"><div class="spr-b-n">' + p.validados + ' / ' + p.total +
+        '</div><div class="spr-b-r">itens validados pelo PM/PO</div></div>' +
+      '<div class="spr-b pct"><div class="spr-b-n">' + p.pct +
+        '%</div><div class="spr-b-r">cumprimento (por item)</div></div>' +
+      (p.pctPontos === null ? '' :
+        '<div class="spr-b pctp"><div class="spr-b-n">' + p.pctPontos +
+        '%</div><div class="spr-b-r">cumprimento (por ponto)</div></div>') +
+      (p.aguardando ? '<div class="spr-b esp"><div class="spr-b-n">' + p.aguardando +
+        '</div><div class="spr-b-r">esperando o PM/PO validar</div></div>' : '') +
+      (p.saiu ? '<div class="spr-b sai"><div class="spr-b-n">' + p.saiu +
+        '</div><div class="spr-b-r">saíram sem entregar</div></div>' : '') +
+    '</div>' +
+    '<table class="spr-rk"><thead><tr><th>Dev</th><th>Validados</th><th>Pontos</th>' +
+      '<th>Cumprimento</th></tr></thead><tbody>' +
+      rk.map(d => '<tr><td class="spr-rk-nome">' + esc(d.nome) + '</td>' +
+        '<td><strong>' + d.validados + '</strong> <span class="spr-de">de ' + d.total + '</span></td>' +
+        '<td><strong>' + d.pontos + '</strong> <span class="spr-de">de ' + d.pontosTotal + '</span></td>' +
+        '<td>' + d.pct + '%</td></tr>').join('') +
+    '</tbody></table>' +
+    /* O RISCO ENTRA NO RELATÓRIO porque é o que se leva para a reunião: a
+       lista do que entregou já está abaixo, e o que AINDA PODE não entregar é
+       a única parte acionável antes de a sprint acabar. */
+    (risco.length
+      ? '<div class="spr-tit">⚠ Em risco de não entregar (' + risco.length + ')</div>' +
+        '<div class="spr-lista">' + risco.map(x =>
+          '<div class="spr-item risco"><span class="lote-cod">' +
+          esc(x.m.codigo || '—') + '</span><span class="spr-tit-d">' +
+          esc(x.m.titulo || '') + '</span>' +
+          (x.m.dev ? '<span class="lote-dev">' + esc(x.m.dev) + '</span>' : '') +
+          '<span class="spr-riscos">' + x.riscos.map(r =>
+            '<span class="spr-r r-' + esc(r.chave) + '">' + esc(r.texto) + '</span>').join('') +
+          '</span></div>').join('') + '</div>'
+      : '');
 }
 
 /** COMO O TIME ANDOU — os cartões, com a comparação dentro de cada um. */
@@ -12357,9 +12572,32 @@ function relTexto(secao) {
   if (!secao) {
     partes.push(janela.escala === 'mes'
       ? 'FECHAMENTO DE ' + String(janela.rot).toUpperCase()
+      : janela.escala === 'sprint'
+      ? 'SPRINT ' + String(janela.rot).toUpperCase()
       : 'REUNIÃO DE ' + formatDate(A) + ' A ' + formatDate(B));
     const sisNome = relTemaFiltroNome();
     if (sisNome) partes.push('Sistema: ' + sisNome);
+    /* O PLACAR ENTRA NA ATA, e não só na tela. O "Copiar tudo" é o que vira o
+       registro da reunião — uma ata de sprint sem o cumprimento obrigaria quem
+       a lê depois a abrir o sistema para saber se a semana fechou. */
+    const spAta = relPptSprint(janela);
+    if (spAta) {
+      partes.push('');
+      partes.push('PLACAR DA SPRINT — ' + spAta.rotulo + ' (' + spAta.sub + ')');
+      partes.push('  Validados pelo PM/PO: ' + spAta.validados + ' de ' + spAta.total +
+                  '   (' + spAta.pct + '% por item' +
+                  (spAta.pctPontos === null ? '' : ', ' + spAta.pctPontos + '% por ponto') + ')');
+      partes.push('  Pontos:               ' + spAta.pontosValidados + ' de ' + spAta.pontosTotal);
+      if (spAta.aguardando) partes.push('  Esperando validacao:  ' + spAta.aguardando);
+      if (spAta.saiu) partes.push('  Sairam sem entregar:  ' + spAta.saiu);
+      spAta.ranking.forEach(d => partes.push('    - ' + d.nome + ': ' + d.validados +
+        ' de ' + d.total + ' (' + d.pct + '%), ' + d.pontos + ' pt'));
+      if (spAta.risco.length) {
+        partes.push('  EM RISCO DE NAO ENTREGAR (' + spAta.risco.length + '):');
+        spAta.risco.forEach(r => partes.push('    - ' + r.codigo + ' ' + r.titulo +
+                                             ' — ' + r.motivos));
+      }
+    }
     // COMO O TIME ANDOU vai no topo da ata, pela mesma razao que vai no topo da
     // tela: quem le pergunta "foi bom?" antes de "o que saiu?".
     const r = relComoAndou(janela);
@@ -13646,6 +13884,11 @@ async function saveMelhoria() {
     prioridade:          prioridade,
     discovery:           discovery,
     solicitante:         document.getElementById('m-solicitante').value.trim(),
+    // O endereco de quem pediu, para o aviso pelo AXCred. Vazio quando o nome
+    // nao e de um colaborador do WorkOS — ver `colaboradores.js`.
+    solicitante_email:   window.COLABORADORES
+                           ? COLABORADORES.emailPara(document.getElementById('m-solicitante').value, existing)
+                           : (existing.solicitante_email || ''),
     data_solicitacao:    document.getElementById('m-data-solicitacao').value,
     inicio:              document.getElementById('m-inicio').value,
     entrega:             document.getElementById('m-entrega').value,
@@ -16498,6 +16741,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ligaZonaAnexo('m-file', mAddFiles);
   if (typeof ligaZonaAnexo === 'function' && typeof pjAddFiles === 'function')
     ligaZonaAnexo('pj-file', pjAddFiles);
+  // Solicitante sugere os colaboradores do WorkOS — ver `colaboradores.js`.
+  if (window.COLABORADORES)
+    COLABORADORES.ligar(document.getElementById('m-solicitante'), ADMIN_PROXY_URL, credenciaisLeitura);
 });
 </script>
 </body>

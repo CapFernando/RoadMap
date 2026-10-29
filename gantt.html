@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="fa9541c226">
+<html lang="pt-BR" data-build="3f8faaa3b5">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1142,6 +1142,7 @@
 <script src="rede-repete.js?v=ff7a669a03"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
+<script src="colaboradores.js?v=c94edfa2e2"></script>
 <script src="resumo-projeto.js?v=2e30585cbe"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -1151,7 +1152,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=f274c8d29d"></script>
+<script src="sprint.js?v=116dd58ee8"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -4849,6 +4850,10 @@ async function saveTask() {
     criado_em:          existing.criado_em || new Date().toISOString(),
     prioridade:         document.getElementById('e-prio').value,
     solicitante:        document.getElementById('e-solicitante').value.trim(),
+    // O endereco de quem pediu, para o aviso pelo AXCred — ver `colaboradores.js`.
+    solicitante_email:  window.COLABORADORES
+                          ? COLABORADORES.emailPara(document.getElementById('e-solicitante').value, existing)
+                          : (existing.solicitante_email || ''),
     data_solicitacao:   document.getElementById('e-data-solic').value,
     // Derivada das datas, nao lida do campo: o campo e so espelho. Assim uma
     // demanda que muda de data muda de sprint junto, sem ninguem lembrar disso.
@@ -6082,6 +6087,9 @@ function showSaving(on) {
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof ligaZonaAnexo === 'function' && typeof gAddFiles === 'function')
     ligaZonaAnexo('e-file', gAddFiles);
+  // Solicitante sugere os colaboradores do WorkOS — ver `colaboradores.js`.
+  if (window.COLABORADORES)
+    COLABORADORES.ligar(document.getElementById('e-solicitante'), PROXY_URL, credenciaisLeitura);
 });
 
 /* O NUMERO DA VERSAO DESTA TELA, para comparar com a publicada sem perguntar

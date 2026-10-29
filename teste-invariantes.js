@@ -9725,11 +9725,27 @@ ok(/limiteForte: CAPI\.PONTOS_SPRINT_FORTE/.test(ADMIN),
    filtro por sistema para prestar conta por area.                             */
 sec('Relatorios: a visao de diretoria');
 
-// DUAS ESCALAS: mes (fechamento, o padrao) e semana (reuniao).
+// TRES ESCALAS: mes (fechamento, o padrao), sprint (do PM/PO) e semana.
 ok(/id="rel-escala"/.test(ADMIN) && /function relJanela\(\)/.test(ADMIN),
    'existe a escala e a janela que ela define');
-ok(/el && el\.value === 'semana' \? 'semana' : 'mes'/.test(ADMIN),
-   'o mes e o padrao — fechamento e a conversa da diretoria');
+/* O PADRAO E EXECUTADO, e nao procurado no texto.
+ *
+ * A versao antiga casava com a expressao exata `el.value === 'semana' ?
+ * 'semana' : 'mes'` — e caiu na primeira mudanca LEGITIMA da funcao, quando a
+ * escala de sprint entrou. Texto que descreve a forma obriga a reescrever a
+ * invariante a cada refatoracao, e invariante reescrita sob pressao e
+ * invariante afrouxada. O que importa e o COMPORTAMENTO: sem escolha, mes. */
+(() => {
+  const re = corpo(ADMIN, 'function relEscala() {');
+  if (!re) { ok(false, 'relEscala foi encontrada'); return; }
+  const f = new Function('document', re + '\nreturn relEscala;');
+  const comValor = (v) => f({ getElementById: () => (v === null ? null : { value: v }) })();
+  ok(comValor(null) === 'mes' && comValor('') === 'mes' && comValor('qualquer') === 'mes',
+     'o mes e o padrao — fechamento e a conversa da diretoria',
+     'sem seletor, com vazio e com lixo');
+  ok(comValor('semana') === 'semana' && comValor('sprint') === 'sprint',
+     'e as outras duas escalas sao respeitadas quando escolhidas');
+})();
 
 /* UMA JANELA SO, EM QUALQUER ESCALA: A QUE FOI FILTRADA.
    Havia duas. Na semana, "Entregues" olhava a semana ANTERIOR a escolhida — a
@@ -24214,6 +24230,149 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/kcard-pool/.test(rc) && /SPRINTPO\.naPoolDoTime\(state, m\)/.test(rc),
        'e o card sem dono diz que esta sem dono',
        'senao dois devs comecam a mesma coisa');
+
+    /* ═══ A SPRINT NOS RELATORIOS E NO DECK ═══════════════════════════════
+     *
+     * A ESCALA ENTRA NO `janelaDe`, que a aba Relatorios e o deck JA DIVIDEM.
+     * Somar a escala nos dois lugares faria o relatorio e o PPT discordarem
+     * sobre o mesmo periodo — e e esse acidente que aquela funcao existe para
+     * evitar.                                                               */
+    const jd = corpo(ADMIN, 'function janelaDe(escala, valor) {');
+    ok(!!jd && /escala === 'sprint'/.test(semComentario(jd)),
+       'a escala de sprint mora no `janelaDe`, que a aba e o deck dividem');
+    ok(/relJanela\(\)/.test(ADMIN) && /apJanelaDeck\(\)/.test(ADMIN) &&
+       (semComentario(ADMIN).match(/janelaDe\(escala, \(sel && sel\.value\) \|\| ''\)/g) || []).length === 2,
+       'e as duas telas continuam entrando por ela');
+    const rj = semComentario(corpo(ADMIN, 'function relJanela() {') || '');
+    const aj = semComentario(corpo(ADMIN, 'function apJanelaDeck() {') || '');
+    ok(/rel-sprint/.test(rj) && /ap-rp-sprint/.test(aj),
+       'cada uma le o proprio seletor de sprint');
+
+    /* A SPRINT ANTERIOR ATRAVESSA O MES E O ANO. Nao e `S(n-1)`: a anterior a
+       `S1-01-2027` e a ULTIMA de dezembro de 2026, e decrementar o indice
+       daria `S0-01-2027`, que nao existe. Quebraria duas vezes por ano. */
+    ok(SP.sprintAnterior('S3-11-2026', FER) === 'S2-11-2026',
+       'a sprint anterior, dentro do mes');
+    ok(SP.sprintAnterior('S1-11-2026', FER) === 'S5-10-2026',
+       'e na virada do mes ela volta para a ultima do anterior');
+    ok(SP.sprintAnterior('S1-01-2027', FER) === 'S5-12-2026',
+       'inclusive na virada do ANO, que e onde o indice erraria por doze meses');
+    ok(SP.sprintAnterior('lixo', FER) === '',
+       'e rotulo invalido devolve vazio em vez de inventar');
+    /* ═══ ROTULO MALFORMADO NAO DERRUBA A TELA ════════════════════════════
+     *
+     * ACHADO SABOTANDO. A sabotagem tirou a guarda de `sprintAnterior`; fui
+     * procurar uma entrada que a exercitasse e descobri que `S9-99-9999`
+     * PASSAVA no validador — o regex conferia a FORMA (`\d{2}` no mes) e nao o
+     * VALOR. Mes 99 faz `Date.UTC(ano, 98, 0)` virar data impossivel, e
+     * `toISOString` lanca `RangeError` dentro de `sprintsDoMes`: todo lugar
+     * que monta a lista morre junto, sem erro apontando a causa.
+     *
+     * E ERA ALCANCAVEL: `sprint_po` e gravado depois de passar por este mesmo
+     * regex, no modulo e no Worker — um pedido forjado entrava na base e
+     * quebrava o Admin, o Gantt e o painel do dev de todo mundo. */
+    for (const ruim of ['S9-99-9999', 'S0-01-2026', 'S6-01-2026', 'S1-00-2026', 'S1-13-2026']) {
+      ok(!SP.rotuloValido(ruim), 'rotulo impossivel e recusado: ' + ruim);
+    }
+    ok(SP.rotuloValido('S1-01-2026') && SP.rotuloValido('S5-12-2027'),
+       'e os rotulos reais continuam passando');
+    /* TODOS OS QUE O PROPRIO MODULO GERA, nos doze meses: se a regua apertasse
+       demais, a lista oferecida ao PO teria opcao que `repassar` recusa. */
+    let gerados = 0, recusados = [];
+    for (let mm = 1; mm <= 12; mm++) {
+      SP.sprintsDoMes(2026, mm, FER).forEach(s => {
+        gerados++;
+        if (!SP.rotuloValido(s.rotulo)) recusados.push(s.rotulo);
+      });
+    }
+    ok(gerados >= 48 && !recusados.length,
+       'e a regua nova nao recusa nenhum dos ' + gerados + ' rotulos que o modulo gera',
+       recusados.join(' '));
+    /* E NADA LANCA, nem quando o chamador insiste. `diasUteisDoMes` e
+       exportada; um mes fora de 1..12 tem de devolver vazio, e nao explodir. */
+    let lancou = '';
+    try {
+      SP.sprintAnterior('S9-99-9999', FER);
+      SP.rotuloDeData('9999-99-99', FER);
+      SP.sprintsDoMes(2026, 99, FER);
+      SP.diasUteisDoMes(NaN, NaN, FER);
+    } catch (e) { lancou = e.message; }
+    ok(!lancou, 'e rotulo impossivel nao DERRUBA a tela — devolve vazio', lancou);
+    /* O WORKER TEM A MESMA REGUA. Ele nao importa o modulo; a copia de la
+       aceitando `\\d{2}` deixaria o rotulo impossivel entrar na base por uma
+       porta e quebrar as telas pela outra. */
+    ok(/\^S\[1-5\]-\(0\[1-9\]\|1\[0-2\]\)-\\d\{4\}\$/.test(W),
+       'e o Worker confere o mes e o indice pela MESMA regua',
+       (W.match(/\^S[^/]*\$/) || ['?'])[0]);
+    /* A FAIXA E A DOS DIAS UTEIS, a mesma do placar: duas definicoes fariam o
+       relatorio contar uma entrega de sabado que o placar nao conta. */
+    const fx = SP.faixaDaSprint('S2-11-2026', FER);
+    ok(fx && fx.de === '2026-11-09' && fx.ate === '2026-11-13',
+       'e a faixa da sprint e a dos dias uteis dela', JSON.stringify(fx));
+
+    /* O PADRAO DO SELETOR NAO MUDOU. Mes continua sendo a conversa da
+       diretoria — ha invariante propria executando `relEscala`, e esta so
+       confere que a sprint NAO virou o padrao por acidente. */
+    ok(/<option value="mes">/.test(ADMIN) &&
+       ADMIN.indexOf('<option value="mes">') < ADMIN.indexOf('<option value="sprint">'),
+       'e o mes continua sendo a primeira opcao da escala');
+
+    /* ── O BLOCO DO RELATORIO ───────────────────────────────────────────── */
+    const rs = semComentario(corpo(ADMIN, 'function relRenderSprint(j) {') || '');
+    ok(/j\.escala !== 'sprint'/.test(rs) && /style\.display = 'none'/.test(rs),
+       'o placar so aparece na escala de sprint',
+       'mes e semana nao tem compromisso: ninguem repassa demandas para novembro');
+    ok(/SPRINTPO\.placarDaSprint\(/.test(rs) && /SPRINTPO\.rankingDaSprint\(/.test(rs),
+       'e ele usa as MESMAS contas do Gerencial',
+       'dois numeros para a mesma sprint em duas abas e o defeito classico desta base');
+    const rt = semComentario(corpo(ADMIN, 'function relTexto(secao) {') || '');
+    ok(/SPRINT ' \+ String\(janela\.rot\)\.toUpperCase\(\)/.test(rt),
+       'a ata diz a escala — "REUNIAO DE 16/11 A 20/11" para uma sprint mentiria');
+    ok(/relPptSprint\(janela\)/.test(rt) && /PLACAR DA SPRINT/.test(rt),
+       'e o "Copiar tudo" leva o placar junto',
+       'a ata e o registro: sem o cumprimento, quem a le depois abre o sistema');
+
+    /* ── O DECK ─────────────────────────────────────────────────────────── */
+    const PPT = lerTela('relatorio-ppt.js');
+    let erroPpt = null;
+    try { new Function(PPT); } catch (e) { erroPpt = e.message; }
+    ok(!erroPpt, 'relatorio-ppt.js sem erro de sintaxe', erroPpt || '');
+    const ss = semComentario(corpo(PPT, 'function slideSprint(pptx, d, pagina) {') || '');
+    ok(!!ss, 'o deck tem o slide da sprint');
+    ok(/if \(!sp \|\| !sp\.total\) return null;/.test(ss),
+       'que nao sai quando nao ha sprint — deck mensal nao ganha slide de zeros');
+    ok(/if \(slideSprint\(pptx, d, p \+ 1\)\) p \+= 1;/.test(semComentario(PPT)),
+       'e ele e CHAMADO, logo depois da capa');
+    ok(semComentario(PPT).indexOf('slideSprint(pptx, d, p + 1)') <
+       semComentario(PPT).indexOf("if (d.escopo === 'consolidado')"),
+       'antes de qualquer numero de entrega — a sala pergunta "cumpriu?" primeiro');
+    /* AS BARRAS DE PERCENTUAL PRECISAM DE TETO FIXO. Escalando pela maior, um
+       time cujo melhor dev fez 50% teria a barra dele CHEIA na parede. */
+    ok(/maximo: 100/.test(ss), 'o ranking do slide usa teto de 100%');
+    const br = semComentario(corpo(PPT, 'function barrasRanking(pptx, s, cfg) {') || '');
+    ok(/n0\(cfg\.maximo\) \|\| itens\.reduce/.test(br),
+       'e `barrasRanking` honra o teto quando ele vem',
+       'sem isso o `maximo: 100` seria decoracao');
+    const rps = semComentario(corpo(ADMIN, 'function relPptSprint(j) {') || '');
+    ok(/return null;/.test(rps) && /j\.escala !== 'sprint'/.test(rps),
+       'o deck recebe `null` fora da escala de sprint, e nao um objeto de zeros');
+    ok(/SPRINTPO\.placarDaSprint\(/.test(rps),
+       'e os numeros do deck saem do modulo, nao de uma terceira conta');
+    const nm = semComentario(corpo(ADMIN, 'function relPptNomeArquivo(escopo, j) {') || '');
+    ok(/j\.escala === 'sprint'/.test(nm),
+       'o nome do arquivo diz QUAL sprint',
+       'cinco decks chamados ...-2026-11.pptx se sobrescrevem na pasta de downloads');
+    /* O SLIDE DA FILA NAO PODE SE CHAMAR "O MES" NUM DECK DE SPRINT. Visto
+       montando o deck de verdade: a conta da fila vale para qualquer periodo,
+       mas o titulo era fixo e dizia a sala que ela olhava novembro inteiro.
+       Numero certo com rotulo errado e a forma mais cara de errar numa parede. */
+    const pan = semComentario(corpo(PPT, 'function slidePanorama(pptx, d, t, pagina) {') || '');
+    ok(/titulo: d\.sprint \? 'A SPRINT' : 'O MÊS'/.test(pan),
+       'o slide da fila muda de titulo no deck de sprint');
+    const APRE = lerTela('apresentacao.js');
+    ok(/cabecalhoEm\(s, pptx, d\.titulo \|\| 'O MÊS'/.test(APRE),
+       'e `slideMes` aceita o titulo de quem chama, mantendo o padrao do modelo',
+       'aditivo: o deck mensal nao passa nada e continua "O MÊS"');
   }
 
   let erroPz = null;

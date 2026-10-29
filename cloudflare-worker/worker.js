@@ -6,6 +6,9 @@
 //   • ADMIN_SENHA  → senha do Admin (valida login e publicação)
 //   • VIEW_SENHA   → (opcional) senha de leitura; criar ATIVA a trava
 //   • VIEW_CHAVE   → (opcional) chave do Link de Visualização
+//   • WORKOS_EMAIL, WORKOS_SENHA → (opcional) conta de serviço do WorkOS que
+//                    lê a lista de colaboradores (campo Solicitante). Junto da
+//                    variável WORKOS_URL; sem os três, o campo segue texto livre.
 //
 // Variável opcional:
 //   • DATA_REPO    → repositório do JSON; ausente = 'RoadMap' (o atual)
@@ -254,6 +257,8 @@ const LIMITES = {
   'recuperar':      { max: 5,   janela: 60 },
   'usuarios':       { max: 40,  janela: 60 },
   'quem-sou':       { max: 60,  janela: 60 },
+  // Uma por pagina aberta: a tela pede a lista ao carregar e guarda.
+  'colaboradores':  { max: 20,  janela: 60 },
   'demanda-nova':   { max: 20,  janela: 60 },   // abertura por HTTP: 20/min por IP
   'projeto-novo':   { max: 10,  janela: 60 },
   'poker-editar':      { max: 30, janela: 60 },
@@ -1575,9 +1580,88 @@ function travaSolicitantePreenchido(recebido, servidor, papel) {
     if (!orig) continue;                       // vazio: o dev pode preencher
     if (String(m.solicitante || '').trim() === orig) continue;
     m.solicitante = velha.solicitante;
+    // O e-mail volta junto: e o endereco DESTE nome, e o aviso pelo AXCred
+    // chegaria a quem o dev escreveu, e nao a quem pediu.
+    m.solicitante_email = velha.solicitante_email || '';
     revertidas.push((m.codigo || m.id) + '.solicitante');
   }
   return revertidas;
+}
+
+/* ═══ OS COLABORADORES, LIDOS DO WORKOS ═══════════════════════════════════
+ *
+ * "Trazer como selecao na parte Solicitante da task (...) por tras deixar o
+ *  nome gravado com seu e-mail. Esses dados serao utilizados posteriormente
+ *  para o push de mensagem no AXCred."
+ *
+ * A FONTE E O WORKOS, que ja tem o cadastro de todo colaborador ativo. A lista
+ * sai de `/api/accounts/users/for_select/` com o JWT de uma conta do WorkOS
+ * (WORKOS_EMAIL/WORKOS_SENHA, secrets) — a tela nunca ve essa credencial. A
+ * conta precisa da permissao `user_management_users.view` (ou
+ * `devices_main.view`) no WorkOS: sem ela o
+ * endpoint nao da erro, devolve LISTA VAZIA, e e por isso que vazio aqui vira
+ * aviso, e nao "a Audax nao tem ninguem".
+ *
+ * SO NOME E E-MAIL SAEM DAQUI. O WorkOS manda CPF, papeis e empresa junto; nada
+ * disso serve ao campo, e o que nao sai nao vaza.
+ *
+ * "NAO CONSEGUI OLHAR" NAO E LISTA VAZIA, a mesma regra do `procuraNoGit`:
+ * `consultado: false` com o motivo. A tela cai no texto livre de sempre.
+ *
+ * CACHE POR ISOLATE, 30 minutos. Colaborador novo leva no maximo isso para
+ * aparecer, e cada pagina aberta nao vira um login no WorkOS. Falha nao e
+ * guardada: a proxima chamada tenta de novo.
+ */
+const COLAB_TTL_MS = 30 * 60 * 1000;
+let _colabCache = null;
+
+async function colaboradoresWorkos(env) {
+  // Aceita o endereco com ou sem o `/api` do fim — as rotas abaixo ja o trazem.
+  const base = String(env.WORKOS_URL || '').trim().replace(/\/+$/, '').replace(/\/api$/i, '');
+  const usuario = String(env.WORKOS_EMAIL || '').trim();
+  const senha = String(env.WORKOS_SENHA || '');
+  if (!base || !usuario || !senha) {
+    return { colaboradores: [], consultado: false,
+             motivo: 'WORKOS_URL, WORKOS_EMAIL ou WORKOS_SENHA nao configurados no Worker' };
+  }
+  if (_colabCache && Date.now() - _colabCache.em < COLAB_TTL_MS) {
+    return { colaboradores: _colabCache.lista, consultado: true };
+  }
+  try {
+    const tok = await fetch(base + '/api/token/', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: usuario, password: senha }),
+    });
+    if (!tok.ok) return { colaboradores: [], consultado: false, motivo: 'login no WorkOS: HTTP ' + tok.status };
+    const access = (await tok.json()).access;
+    const r = await fetch(base + '/api/accounts/users/for_select/', {
+      headers: { Authorization: 'Bearer ' + access, Accept: 'application/json' },
+    });
+    if (!r.ok) return { colaboradores: [], consultado: false, motivo: 'lista do WorkOS: HTTP ' + r.status };
+    const bruto = await r.json();
+    const vistos = new Set();
+    const lista = [];
+    for (const u of (Array.isArray(bruto) ? bruto : [])) {
+      const email = String((u && u.email) || '').trim().toLowerCase();
+      // O dono da credencial FICA na lista: a conta e de uma pessoa, e ela
+      // tambem pede demanda.
+      if (!email || u.is_active === false || vistos.has(email)) continue;
+      const nome = String(u.get_full_name || [u.first_name, u.last_name].filter(Boolean).join(' ')).trim();
+      if (!nome) continue;
+      vistos.add(email);
+      lista.push({ nome, email });
+    }
+    if (!lista.length) {
+      return { colaboradores: [], consultado: false,
+               motivo: 'o WorkOS devolveu lista vazia — confira se a conta de WORKOS_EMAIL tem ' +
+                       'a permissao user_management_users.view' };
+    }
+    lista.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    _colabCache = { em: Date.now(), lista };
+    return { colaboradores: lista, consultado: true };
+  } catch (e) {
+    return { colaboradores: [], consultado: false, motivo: 'WorkOS inacessivel: ' + String(e && e.message || e) };
+  }
 }
 
 /* ═══ A SPRINT E DO PM/PO ══════════════════════════════════════════════════
@@ -4202,7 +4286,12 @@ export default {
             .map(s => String(s.rotulo || '')).filter(Boolean));
           if (!ehAdmPoker) {
             sprintRecusa = 'Repassar para a sprint e do PM/PO. Os pontos foram gravados.';
-          } else if (!/^S\d-\d{2}-\d{4}$/.test(sprintPedida)) {
+          /* O MESMO REGUA DO `sprint.js`, e ele CONFERE o mes e o indice.
+             Era `\d{2}` para o mes, que aceita `S9-99-9999` — e esse rotulo
+             passava por aqui, entrava na base e derrubava toda tela que monta
+             a lista de sprints (`Date.UTC(ano, 98, 0)` e data impossivel, e
+             `toISOString` lanca). Achado sabotando o modulo. */
+          } else if (!/^S[1-5]-(0[1-9]|1[0-2])-\d{4}$/.test(sprintPedida)) {
             sprintRecusa = 'Sprint invalida. Os pontos foram gravados.';
           } else if (fechadasP.has(sprintPedida)) {
             sprintRecusa = 'A sprint ' + sprintPedida + ' esta fechada. Os pontos foram gravados.';
@@ -6916,6 +7005,17 @@ export default {
         } catch (_) { nomes = []; }
       }
       return json({ ok: true, nomes }, 200, headers);
+    }
+
+    /* OS COLABORADORES DA AUDAX, para o campo Solicitante sugerir enquanto se
+       digita e gravar o e-mail junto do nome. So quem edita demanda pede: a
+       lista tem o e-mail de todo mundo, e o link de consulta nao precisa dela.
+       Rota propria pelo mesmo motivo do `devs-inativos`: falha aqui nao pode
+       derrubar a leitura da base. */
+    if (body.action === 'colaboradores') {
+      if (!(await ehDev())) return json({ error: 'credencial' }, 401, headers);
+      const c = await colaboradoresWorkos(env);
+      return json(Object.assign({ ok: true }, c), 200, headers);
     }
 
     /* QUEM PODE ASSINAR SPIKE. Rota propria, e nao um extra do `dados`: a tela

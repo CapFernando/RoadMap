@@ -57,6 +57,12 @@ DATA_REPO = "RoadMap-dados"
 # nao podem parecer a mesma coisa para quem decide se cria uma demanda.
 CODE_REPO = "audaxcapitalsa/AXCRED-DJANGO"
 
+# Lista de colaboradores do campo Solicitante (ver `colaboradoresWorkos`).
+# WORKOS_URL e o endereco da API do WorkOS (com ou sem o /api do fim); o login
+# vai como secret (`wrangler secret put WORKOS_EMAIL` e `WORKOS_SENHA`). Sem os
+# dois secrets, o campo segue como texto livre.
+WORKOS_URL = "https://workos.audaxcapitalsa.com.br/api"
+
 # Anexos das demandas. Antes viviam como base64 dentro do proprio JSON e
 # representavam 1,53 MB de um arquivo de 1,64 MB — 93% do peso da base, baixado
 # inteiro em toda leitura. Aqui ficam fora do JSON, que passa a guardar so a

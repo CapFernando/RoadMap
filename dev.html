@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="0d920c32a6">
+<html lang="pt-BR" data-build="e87768b765">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -697,6 +697,7 @@
 <script src="pausa.js?v=06c4b82f84"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
+<script src="colaboradores.js?v=c94edfa2e2"></script>
 <script src="resumo-projeto.js?v=2e30585cbe"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -711,7 +712,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=f274c8d29d"></script>
+<script src="sprint.js?v=116dd58ee8"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -6016,6 +6017,8 @@ async function saveStatus() {
   if (atual && campoSol) {
     const novo = campoSol.value.trim();
     if (novo !== String(atual.solicitante || '').trim()) {
+      // Antes de trocar o nome: `emailPara` compara com o nome gravado.
+      atual.solicitante_email = window.COLABORADORES ? COLABORADORES.emailPara(novo, atual) : '';
       atual.solicitante = novo;
       _msSolicitanteMexido = true;
     }
@@ -6163,7 +6166,10 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
      sobrescreveria o nome que o PM/PO tivesse acabado de preencher no Admin —
      e como o campo nasce vazio em 119 demandas antigas, "sempre" significaria
      apagar o nome de quem o preencheu enquanto este card estava aberto. */
-  if (_msSolicitanteMexido) campos.solicitante = m.solicitante || '';
+  if (_msSolicitanteMexido) {
+    campos.solicitante = m.solicitante || '';
+    campos.solicitante_email = m.solicitante_email || '';
+  }
   // Subtarefa entra so se mexeu, pelo mesmo motivo do vinculo de projeto: mandar
   // sempre sobrescreveria o que outra tela gravou entre a leitura e o salvamento.
   if (_msSubsMexido) {
@@ -6504,6 +6510,11 @@ async function saveNewDemand() {
        entrega. Na EDICAO o que ja estava gravado continua valendo — inclusive
        o vazio das antigas, que nao se inventa aqui. */
     solicitante: document.getElementById('n-solicitante').value.trim() || existing?.solicitante || '',
+    // O endereco de quem pediu, para o aviso pelo AXCred — ver `colaboradores.js`.
+    solicitante_email: window.COLABORADORES
+      ? COLABORADORES.emailPara(document.getElementById('n-solicitante').value.trim() ||
+                                existing?.solicitante || '', existing)
+      : (existing?.solicitante_email || ''),
     // Marca que nasceu no painel do dev e nao passou por planejamento. O PM/PO
     // precisa distinguir o que ele priorizou do que entrou por fora.
     origem: existing?.origem || 'dev',
@@ -6756,6 +6767,11 @@ document.addEventListener('DOMContentLoaded', () => {
     ligaZonaAnexo('ms-file', msAddFiles);
   if (typeof ligaZonaAnexo === 'function' && typeof nAddFiles === 'function')
     ligaZonaAnexo('n-file', nAddFiles);
+  // Solicitante sugere os colaboradores do WorkOS — ver `colaboradores.js`.
+  if (window.COLABORADORES) {
+    ['ms-solicitante', 'n-solicitante'].forEach(id =>
+      COLABORADORES.ligar(document.getElementById(id), ADMIN_PROXY_URL, credenciaisLeitura));
+  }
 });
 
 /* O NUMERO DA VERSAO DESTA TELA, para comparar com a publicada sem perguntar

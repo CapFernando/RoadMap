@@ -139,7 +139,13 @@
     var K = kit(), C = K.cores;
     var itens = cfg.itens || [];
     if (!itens.length) return;
-    var max = itens.reduce(function (mx, i) { return Math.max(mx, n0(i.valor)); }, 1);
+    /* `maximo` FIXA O TETO, e ele existe para as series em PERCENTUAL.
+       Escalar pela maior barra e o certo para pontos — "quem puxou o periodo"
+       e uma comparacao entre eles. Para cumprimento nao e: com o melhor em
+       50%, a barra dele sairia CHEIA na parede, e a sala leria metade da
+       sprint como sprint fechada. Quem nao passa `maximo` continua como
+       sempre. */
+    var max = n0(cfg.maximo) || itens.reduce(function (mx, i) { return Math.max(mx, n0(i.valor)); }, 1);
     var wNome = cfg.wNome || 2.35, vao = 0.12, wVal = 0.72, wLado = cfg.wLado || 0.95;
     var xBarra = cfg.x + wNome + vao;
     var wBarra = cfg.w - wNome - vao - wVal - wLado - 0.1;
@@ -265,6 +271,9 @@
      * que é onde o modelo a põe. Nenhum número sumiu. */
     return K.slideMes(pptx, {
       periodo: t.periodo,
+      /* NUM DECK DE SPRINT O TITULO NAO PODE SER "O MES". A conta da fila vale
+         para qualquer periodo; o rotulo e que precisa dizer qual. */
+      titulo: d.sprint ? 'A SPRINT' : 'O MÊS',
       sub: t.raiz ? t.raiz + '  ·  backlog, o que entrou e o que saiu'
                   : 'backlog, o que entrou e o que saiu',
       fluxo: t.fluxo || {},
@@ -590,6 +599,91 @@
     return s;
   }
 
+  /* ═══ O SLIDE DA SPRINT ═══════════════════════════════════════════════════
+   *
+   * So existe quando o deck e de uma SPRINT. Mes e semana nao tem placar porque
+   * nao tem compromisso: ninguem "repassou" demandas para novembro. A sprint
+   * tem — e e esse compromisso que o slide cobra.
+   *
+   * VEM LOGO DEPOIS DA CAPA, antes de qualquer numero de entrega. A sala
+   * pergunta "a sprint cumpriu?" antes de "o que saiu nela", e os slides
+   * seguintes ja respondem a segunda.
+   *
+   * OS NUMEROS VEM PRONTOS de `sprint.js`, pelo `relPptDados` — este arquivo
+   * nao sabe o que e uma sprint, e nao deve saber: a conta do denominador tem
+   * uma sutileza (quem SAIU continua contando) que nao pode viver em dois
+   * lugares.                                                                 */
+  function slideSprint(pptx, d, pagina) {
+    var sp = d.sprint;
+    if (!sp || !sp.total) return null;
+    var K = kit(), C = K.cores;
+    var s = K.slideTitulo(pptx, 'A sprint ' + sp.rotulo, sp.sub, pagina, d.periodo);
+
+    /* QUATRO CARTOES, e o do "saiu sem entregar" so aparece quando ha. Um
+       cartao com zero ocupa o mesmo espaco e diz menos que a ausencia dele. */
+    var cartoes = [
+      { rot: 'PONTOS VALIDADOS', val: fmt(sp.pontosValidados) + ' / ' + fmt(sp.pontosTotal),
+        cor: C.verde, nota: 'concluidos pelo PM/PO' },
+      { rot: 'ITENS VALIDADOS', val: fmt(sp.validados) + ' / ' + fmt(sp.total),
+        cor: C.verde, nota: 'sobre tudo que passou pela sprint' },
+      { rot: 'CUMPRIMENTO', val: sp.pct + '%',
+        cor: sp.pct >= 80 ? C.verde : sp.pct >= 50 ? C.ambar : C.vermelho,
+        nota: 'por item' + (sp.pctPontos === null ? '' : '  ·  ' + sp.pctPontos + '% por ponto') },
+    ];
+    if (sp.aguardando) {
+      cartoes.push({ rot: 'ESPERANDO O PM/PO', val: fmt(sp.aguardando), cor: C.ambar,
+                     nota: 'entregues, falta validar' });
+    }
+    if (sp.saiu) {
+      cartoes.push({ rot: 'SAIRAM SEM ENTREGAR', val: fmt(sp.saiu), cor: C.vermelho,
+                     nota: 'rolaram ou voltaram ao backlog' });
+    }
+    var w = (LARG - (cartoes.length - 1) * 0.18) / cartoes.length;
+    cartoes.forEach(function (c, i) {
+      K.cartaoKpi(pptx, s, { x: MARGEM + i * (w + 0.18), y: 1.46, w: w, h: 0.9,
+                             rot: c.rot, val: c.val, cor: c.cor, nota: c.nota,
+                             corpo: cartoes.length > 4 ? 20 : 23 });
+    });
+
+    /* O RANKING POR PESSOA, em barras de CUMPRIMENTO e nao de volume: o deck
+       ja tem o volume nos cartoes, e a pergunta que sobra e "quem fechou o que
+       pegou". O lado direito leva os pontos, para a barra nao esconder que
+       100% de uma demanda pequena nao e 60% de cinco grandes. */
+    var rk = (sp.ranking || []).slice(0, 8);
+    if (rk.length) {
+      s.addText('POR PESSOA' + (sp.temDupla ? '  ·  demanda de dupla conta para os dois' : ''),
+        { x: MARGEM, y: 2.56, w: LARG, h: 0.22, fontSize: 9, bold: true,
+          color: C.fraco, charSpacing: 1.2 });
+      barrasRanking(pptx, s, {
+        x: MARGEM, y: 2.84, w: LARG, alt: Math.min(0.34, 1.9 / rk.length),
+        itens: rk.map(function (p) {
+          return { nome: p.nome, valor: p.pct,
+                   cor: p.pct >= 80 ? K.significado.cumprido
+                      : p.pct >= 50 ? K.significado.atencao : K.significado.categoria2,
+                   lado: fmt(p.validados) + '/' + fmt(p.total) + '  ·  ' + fmt(p.pontos) + ' pt' };
+        }), unidade: '%', wNome: 2.2, corteNome: 28, maximo: 100 });
+    }
+
+    /* O RISCO FECHA O SLIDE porque e a unica parte acionavel: o resto ja
+       aconteceu. Tres linhas, as mais arriscadas — uma lista de quinze numa
+       parede nao se le, e a sala pede a lista inteira quando quer. */
+    if ((sp.risco || []).length) {
+      var y0 = rk.length ? 4.22 : 2.72;
+      s.addText('EM RISCO DE NAO ENTREGAR  ·  ' + sp.risco.length +
+                (sp.risco.length > 3 ? '  (as 3 maiores)' : ''),
+        { x: MARGEM, y: y0, w: LARG, h: 0.22, fontSize: 9, bold: true,
+          color: C.vermelho, charSpacing: 1.2 });
+      sp.risco.slice(0, 3).forEach(function (r, i) {
+        linhaFila(pptx, s, {
+          x: MARGEM, y: y0 + 0.28 + i * 0.34, w: LARG, h: 0.3, cor: C.vermelho,
+          cod: r.codigo, titulo: r.titulo, corte: 52,
+          dir: K.corta(r.motivos, K.cabemChars(2.4, 9)), corDir: C.vermelho });
+      });
+    }
+    K.rodape(s, d.periodo, pagina);
+    return s;
+  }
+
   /* ═══ OS DOIS DECKS ══════════════════════════════════════════════════════ */
 
   async function montaDeck(d) {
@@ -608,6 +702,10 @@
     });
 
     var p = 0;
+    /* A SPRINT VEM LOGO DEPOIS DA CAPA, nos DOIS decks. A sala pergunta "a
+       sprint cumpriu?" antes de "o que saiu nela" — e vale igual para o deck
+       consolidado e para o de um assunto, porque o compromisso e o mesmo. */
+    if (slideSprint(pptx, d, p + 1)) p += 1;
     if (d.escopo === 'consolidado') {
       if (slideFrentes(pptx, d, d.geral, p + 1)) p += 1;
       slidePanorama(pptx, d, d.geral, ++p);

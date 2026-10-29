@@ -66,7 +66,23 @@
      ONZE preenchimentos à mão já tinha duas grafias na base ('S1-08-2026' e
      'S1-08-26'), que são duas linhas para a mesma sprint em qualquer relatório.
      O campo novo nasce fechado para esse defeito não nascer junto. */
-  var ROTULO = /^S\d-\d{2}-\d{4}$/;
+  /* ═══ E O MÊS E O ÍNDICE SÃO CONFERIDOS, não só a forma ═══════════════════
+   *
+   * Era `/^S\d-\d{2}-\d{4}$/`, que aceita `S9-99-9999`. ACHADO SABOTANDO: a
+   * sabotagem tirou a guarda de `sprintAnterior` e eu fui procurar um rótulo
+   * que a exercitasse — e descobri que um rótulo MALFORMADO passava no
+   * validador e DERRUBAVA a tela: mês 99 faz `Date.UTC(ano, 98, 0)` virar uma
+   * data impossível, e `toISOString` lança `RangeError` dentro de
+   * `sprintsDoMes`. Todo lugar que monta a lista de sprints morre junto.
+   *
+   * E ISSO ERA ALCANÇÁVEL: `sprint_po` é gravado depois de passar por este
+   * mesmo regex (no módulo e no Worker), então um pedido forjado com
+   * `S9-99-9999` entrava na base e quebrava o Admin, o Gantt e o painel do dev
+   * de todo mundo — sem erro nenhum apontando a causa.
+   *
+   * O índice vai até 5 porque um mês cabe em cinco segundas-feiras, e não em
+   * seis (está medido no comentário de `semanasDoMes`, no gantt). */
+  var ROTULO = /^S[1-5]-(0[1-9]|1[0-2])-\d{4}$/;
 
   function txt(v) { return String(v == null ? '' : v).trim(); }
   function iso(v) {
@@ -139,6 +155,11 @@
 
   /** Os dias ÚTEIS de um mês (`mes` de 1 a 12), em ISO. */
   function diasUteisDoMes(ano, mes, feriados) {
+    /* CINTO ALÉM DO SUSPENSÓRIO. O regex acima já barra mês fora de 1–12, mas
+       esta função é exportada e um chamador futuro pode passar qualquer coisa —
+       e o preço de não conferir é `toISOString` lançando `RangeError` no meio
+       de um render, que derruba a tela inteira em vez de devolver nada. */
+    if (!isFinite(ano) || !isFinite(mes) || mes < 1 || mes > 12) return [];
     var fer = {};
     (feriados || []).forEach(function (f) {
       fer[iso(f && typeof f === 'object' ? f.data : f)] = true;
@@ -186,6 +207,47 @@
     }
     for (var j = 0; j < sp.length; j++) if (sp[j].de > dia) return sp[j].rotulo;
     return sp[sp.length - 1].rotulo;
+  }
+
+  /** A FAIXA DE DATAS DE UMA SPRINT: `{ de, ate }`, ou `null`. */
+  function faixaDaSprint(rotulo, feriados) {
+    var r = txt(rotulo);
+    if (!rotuloValido(r)) return null;
+    var achou = null;
+    sprintsDoMes(+r.slice(6, 10), +r.slice(3, 5), feriados).forEach(function (s) {
+      if (s.rotulo === r) achou = { de: s.de, ate: s.ate };
+    });
+    return achou;
+  }
+
+  /** A SPRINT ANTERIOR A ESTA, atravessando a virada do mês e do ano.
+   *
+   *  NÃO É `S(n-1)`: a anterior à `S1-01-2027` é a última de dezembro de 2026, e
+   *  decrementar o índice daria `S0-01-2027`, que não existe. A conta vai ao
+   *  calendário do mês anterior e pega a última sprint dele — que é a única
+   *  forma de a comparação "contra a sprint passada" não quebrar duas vezes por
+   *  ano. */
+  /*  SEM GUARDA DE `rotuloValido` AQUI, e isso é deliberado — leia antes de
+   *  "corrigir". Ela existia, e a sabotagem provou que era decoração: removi o
+   *  ramo e NENHUMA invariante mudou de resultado.
+   *
+   *  O motivo é que a proteção de verdade mora em `diasUteisDoMes`, que recusa
+   *  mês fora de 1–12 e devolve lista vazia. Qualquer rótulo torto chega lá
+   *  pelas duas pontas desta função e sai como `''` de qualquer jeito — com a
+   *  vantagem de proteger TODOS os chamadores, e não só este.
+   *
+   *  Ramo que não altera saída ensina a regra errada a quem lê depois.       */
+  function sprintAnterior(rotulo, feriados) {
+    var r = txt(rotulo);
+    var n = +r.slice(1, 2), mes = +r.slice(3, 5), ano = +r.slice(6, 10);
+    if (n > 1) {
+      var mesmas = sprintsDoMes(ano, mes, feriados);
+      return mesmas[n - 2] ? mesmas[n - 2].rotulo : '';
+    }
+    var pm = mes === 1 ? 12 : mes - 1;
+    var pa = mes === 1 ? ano - 1 : ano;
+    var antes = sprintsDoMes(pa, pm, feriados);
+    return antes.length ? antes[antes.length - 1].rotulo : '';
   }
 
   /** A SPRINT DE HOJE — a que o painel do dev abre por padrão. */
@@ -1067,6 +1129,8 @@
     diasUteisDoMes: diasUteisDoMes,
     sprintsDoMes: sprintsDoMes,
     rotuloDeData: rotuloDeData,
+    faixaDaSprint: faixaDaSprint,
+    sprintAnterior: sprintAnterior,
     sprintCorrente: sprintCorrente,
     doPO: doPO,
     foraDaSprint: foraDaSprint,

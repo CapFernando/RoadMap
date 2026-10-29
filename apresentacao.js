@@ -2452,7 +2452,14 @@
        vê números diferentes e conclui que um dos dois está errado — e os dois
        estão certos, medindo coisas diferentes. Um mede o mês como ele foi
        apurado no fechamento; o outro, a base de hoje. */
-    cabecalhoEm(s, pptx, 'O MÊS', d.sub || 'backlog, o que entrou e o que saiu', d.periodo,
+    /* O TÍTULO PODE SER DITO POR QUEM CHAMA, e o padrão continua o do modelo —
+       a mesma regra do subtítulo logo acima. Nasceu do deck de SPRINT: este
+       slide é a conta da fila, que vale para qualquer período, mas o título
+       fixo "O MÊS" aparecia num deck de cinco dias dizendo à sala que ela
+       estava olhando novembro inteiro. O número estava certo e o rótulo,
+       errado — que é a forma mais cara de estar errado numa parede. */
+    cabecalhoEm(s, pptx, d.titulo || 'O MÊS',
+                d.sub || 'backlog, o que entrou e o que saiu', d.periodo,
                 f.corte
                   ? (f.congelado ? 'congelado em ' : (f.emCurso ? 'posição de ' : 'fechamento em ')) + f.corte
                   : '');
