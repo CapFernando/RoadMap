@@ -23858,7 +23858,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     if (fFech && fApag && fSet) {
       const WF = new Function(fSet + '\n' + fFech + '\n' + fApag +
         '\nreturn { mexeu: mexeuEmSprintFechada, apagou: fechamentoApagado };')();
-      const srv = { sprints: [{ rotulo: 'S2-11-2026' }],
+      /* O FIXTURE PRECISA DO CARIMBO DE FECHAMENTO. `dados.sprints` passou a
+         guardar TAMBEM o inicio da sprint, entao "existe entrada" deixou de
+         significar "fechada" — fechada e quem tem `em`. Esta invariante pegou
+         a mudanca: com a entrada sem carimbo, o Worker (corretamente) nao
+         travava mais nada, e as tres asserções caíram de uma vez. */
+      const srv = { sprints: [{ rotulo: 'S2-11-2026', em: '2026-11-16', por: 'F' }],
                     melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S2-11-2026' },
                                 { id: '2', codigo: 'AX-2', sprint_po: '' }] };
       ok(WF.mexeu({ melhorias: [{ id: '2', codigo: 'AX-2', sprint_po: 'S2-11-2026' }] }, srv).length === 1,
@@ -23872,7 +23877,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          S3-11 E acrescenta a S2-11 as fechadas. Lida do CORPO, a S2-11 ja
          estaria fechada e o fechamento recusaria a si mesmo. */
       const servAberto = { sprints: [], melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S2-11-2026' }] };
-      const envioDeFechamento = { sprints: [{ rotulo: 'S2-11-2026' }],
+      const envioDeFechamento = { sprints: [{ rotulo: 'S2-11-2026', em: '2026-11-16' }],
                                   melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S3-11-2026' }] };
       ok(!WF.mexeu(envioDeFechamento, servAberto).length,
          'e o proprio fechamento NAO recusa a si mesmo',
@@ -23970,6 +23975,245 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        /sprint_po: sprintAplicada \|\| null/.test(W),
        'e os PONTOS entram mesmo assim',
        'derrubar a gravacao perderia a votacao inteira da sala');
+
+    /* ═══ O PLACAR, O RANKING E O RISCO ═══════════════════════════════════
+     *
+     * "Mostre a pontuacao, qt de itens validados PM/PO e o % de cumprimento de
+     *  toda SPRINT. A contagem deve ser feita sobre todas as tasks que estao na
+     *  sprint; caso entre, somar."                                           */
+    const SA = 'S2-11-2026', SB = 'S3-11-2026';
+    const hs = (...ss) => ss.map(x => ({ sprint: x, em: '2026-11-09', por: 'F' }));
+    const dPlacar = () => ({ sprints: [], melhorias: [
+      /* VENCIDA E CONCLUIDA. O prazo estourou, mas ela SAIU — e card que ja
+         entregou nao tem risco de nao entregar. Sem a data aqui, tirar a
+         guarda de `acompanhamentoDaSprint` nao mudava nada e a sabotagem
+         passava lisa. */
+      /* ROLOU DA S1 E ENTREGOU NA S2. Ela e VALIDADA aqui, e tem um sinal de
+         risco de verdade (`rolou`) — e e isso que faz a guarda de
+         `acompanhamentoDaSprint` importar. Com a primeira versao do fixture a
+         validada nao tinha sinal nenhum, e tirar a guarda nao mudava nada:
+         a sabotagem passava lisa. */
+      { id: '1', codigo: 'AX-301', dev: 'Ana', poker_pontos: 13, entrega: '2026-11-10',
+        status_planejamento: 'concluido', sprint_po: SA,
+        sprint_po_historico: hs('S1-11-2026', SA) },
+      { id: '2', codigo: 'AX-305', dev: 'Ana', poker_pontos: 8,
+        status_planejamento: 'concluido', sprint_po: SA, sprint_po_historico: hs(SA) },
+      { id: '3', codigo: 'AX-318', dev: 'Murillo', poker_pontos: 21,
+        status_planejamento: 'validacao', sprint_po: SA, sprint_po_historico: hs(SA) },
+      { id: '4', codigo: 'AX-322', dev: 'Ana', poker_pontos: 13, entrega: '2026-11-10',
+        status_planejamento: 'em_andamento', sprint_po: SA,
+        sprint_po_historico: hs('S1-11-2026', SA) },
+      { id: '5', codigo: 'AX-330', dev: 'Murillo', poker_pontos: 0, entrega: '2026-11-13',
+        status_planejamento: 'planejado', sprint_po: SA, sprint_po_historico: hs(SA) },
+      /* ROLOU PARA A S3: saiu da S2 sem entregar. */
+      { id: '6', codigo: 'AX-340', dev: 'Ana / Murillo', poker_pontos: 34,
+        status_planejamento: 'em_andamento', sprint_po: SB,
+        sprint_po_historico: hs(SA, SB) },
+      { id: '7', codigo: 'AX-350', dev: 'Ana', poker_pontos: 5,
+        status_planejamento: 'negada', sprint_po: SA, sprint_po_historico: hs(SA) },
+      /* ROLOU E FOI CONCLUIDA LA. O fixture nao tinha este caso, e sem ele uma
+         sabotagem que contasse como entrega da S2 toda concluida — inclusive a
+         que so saiu na S3 — passava lisa. A entrega foi da sprint seguinte;
+         conta-la aqui premiaria o atraso. */
+      { id: '9', codigo: 'AX-370', dev: 'Murillo', poker_pontos: 2,
+        status_planejamento: 'concluido', sprint_po: SB,
+        sprint_po_historico: hs(SA, SB) },
+      /* UM DEV COM MENOS ITENS E MAIS ENTREGA. Sem ele, quem tem mais itens
+         tambem tem mais validados, e ordenar por volume ou por entrega dava a
+         mesma lista — a sabotagem da ordem passava lisa. */
+      { id: '10', codigo: 'AX-380', dev: 'Carlos', poker_pontos: 1,
+        status_planejamento: 'concluido', sprint_po: SA, sprint_po_historico: hs(SA) },
+    ] });
+    const pl = SP.placarDaSprint(dPlacar(), SA, etG);
+    /* O DENOMINADOR VEM DO HISTORICO. Se viesse do campo `sprint_po`, a AX-340
+       — que rolou para a S3 — sumiria da conta da S2, e a sprint que a perdeu
+       ficaria com o percentual MELHOR por ter falhado. Depois do fechamento,
+       que tira TODAS as nao entregues, toda sprint marcaria 100%. */
+    ok(pl.total === 8 && pl.saiu === 2,
+       'o placar conta quem SAIU da sprint sem entregar',
+       'total=' + pl.total + ' saiu=' + pl.saiu + ' (a negada fica de fora)');
+    ok(pl.validados === 3 && pl.aguardando === 1 && pl.emCurso === 2,
+       'e separa validado pelo PM/PO, esperando validacao e em curso');
+    /* A AX-370 ROLOU E FOI CONCLUIDA NA S3: ela conta no total da S2 e NAO
+       entre os validados dela. A entrega foi da sprint seguinte. */
+    ok(!pl.itens.validados.some(m => m.codigo === 'AX-370') &&
+       pl.itens.saiu.some(m => m.codigo === 'AX-370'),
+       'e a concluida DEPOIS de rolar nao vira entrega da sprint que a perdeu');
+    ok(pl.pontosValidados === 22 && pl.pontosTotal === 92,
+       'a pontuacao e a dos validados aqui, sobre tudo que passou',
+       pl.pct + '% · ' + pl.pontosValidados + '/' + pl.pontosTotal);
+    ok(pl.pctPontos === 24,
+       'e ha o percentual por PONTO ao lado, que pesa o tamanho',
+       'por item ' + pl.pct + '%, por ponto ' + pl.pctPontos + '%');
+    ok(SP.placarDaSprint({ sprints: [], melhorias: [
+         { id: 'x', sprint_po: SA, sprint_po_historico: hs(SA),
+           status_planejamento: 'planejado' }] }, SA, etG).pctPontos === null,
+       'sem pontuacao nenhuma o percentual por ponto e null, e nao zero',
+       'zero afirmaria que nada saiu; a verdade e que nao da para medir');
+    /* "CASO ENTRE, SOMAR": quem o PO empurra para dentro no meio da semana
+       entra no denominador — nao da para melhorar o percentual escolhendo a
+       hora de alocar. */
+    const dTarde = dPlacar();
+    dTarde.melhorias.push({ id: '8', codigo: 'AX-360', dev: 'Ana', poker_pontos: 2,
+      status_planejamento: 'planejado', sprint_po: SA, sprint_po_historico: hs(SA) });
+    ok(SP.placarDaSprint(dTarde, SA, etG).total === 9,
+       'demanda que entra depois SOMA no total da sprint');
+
+    const rk = SP.rankingDaSprint(dPlacar(), SA, etG);
+    const ana = rk.find(d => d.nome === 'Ana');
+    const mur = rk.find(d => d.nome === 'Murillo');
+    ok(!!ana && ana.validados === 2 && ana.total === 4,
+       'o ranking conta o item INTEIRO para cada dev da dupla',
+       '"Ana validou 2,5 itens" nao quer dizer nada');
+    /* A COLUNA INTEIRA, e nao duas linhas dela: o fixture ganhou um terceiro
+       dev, e somar so os dois primeiros deixaria a conta errada por um ponto
+       sem ninguem notar. */
+    const somaPts = rk.reduce((t, d) => t + d.pontosTotal, 0);
+    ok(somaPts === pl.pontosTotal,
+       'mas o PONTO e repartido, e a coluna de pontos FECHA com o total',
+       rk.map(d => d.nome + '=' + d.pontosTotal).join(' + ') + ' = ' + pl.pontosTotal);
+    ok(rk.reduce((t, d) => t + d.total, 0) > pl.total,
+       'enquanto a coluna de ITENS nao fecha — e de proposito, pela dupla',
+       rk.map(d => d.nome + '=' + d.total).join(' + ') + ' > ' + pl.total);
+    ok(ana.dupla === true,
+       'e o ranking avisa que ha dupla, para a tela explicar por que os itens nao somam');
+    /* CARLOS TEM UM ITEM E UM VALIDADO; MURILLO TEM QUATRO E NENHUM. Ordenar
+       por volume poria Murillo na frente — e o ranking e de ENTREGA. */
+    const iCarlos = rk.findIndex(d => d.nome === 'Carlos');
+    const iMurillo = rk.findIndex(d => d.nome === 'Murillo');
+    ok(rk[0].nome === 'Ana' && iCarlos >= 0 && iCarlos < iMurillo,
+       'a ordem e por entregue — validado pelo PM/PO, e nao por volume em curso',
+       rk.map(d => d.nome + ':' + d.validados + '/' + d.total).join(' '));
+
+    /* ── O RISCO ────────────────────────────────────────────────────────── */
+    const ac = SP.acompanhamentoDaSprint(dPlacar(), SA, etG, '2026-11-16', PZ);
+    const porCod = {};
+    ac.forEach(x => { porCod[x.m.codigo] = x; });
+    /* TODA A LISTA, e nao so as pontas. Comparar o primeiro com o ultimo
+       passava mesmo sem ordenacao nenhuma: a ordem de desempate ja poe a
+       negada no fim. */
+    const foraDeOrdem = ac.filter((x, i) => i && ac[i - 1].riscos.length < x.riscos.length);
+    ok(!foraDeOrdem.length,
+       'a lista traz o que esta em risco primeiro, do mais arriscado ao menos',
+       ac.map(x => x.m.codigo + ':' + x.riscos.length).join(' '));
+    ok(porCod['AX-322'].riscos.some(r => r.chave === 'rolou'),
+       'quem ja rolou de sprint acende — e o sinal mais forte que existe aqui');
+    ok(porCod['AX-330'].riscos.some(r => r.chave === 'nao_comecou') &&
+       porCod['AX-330'].riscos.some(r => r.chave === 'sem_pontos'),
+       'e um card pode acender por mais de um motivo, cada um com nome');
+    /* QUEM JA ENTREGOU NAO TEM RISCO DE NAO ENTREGAR. Acender "prazo vencido"
+       num card concluido e ruido sobre fato consumado — e ruido numa lista de
+       risco ensina a ignorar a lista. */
+    ok(SP.pulos(porCod['AX-301'].m) === 1 && !porCod['AX-301'].riscos.length &&
+       !porCod['AX-350'].riscos.length,
+       'validada e negada nao entram na lista de risco',
+       'a AX-301 rolou da S1 e entregou aqui: tem o sinal, e nao acende');
+    ok(porCod['AX-301'].situacao === 'validado' &&
+       porCod['AX-318'].situacao === 'aguardando' &&
+       porCod['AX-340'].situacao === 'saiu',
+       'e cada uma diz em que situacao esta dentro da sprint');
+
+    /* ═══ O CICLO: MONTANDO → EM CURSO → FECHADA ══════════════════════════
+     *
+     * "Quando eu iniciar a sprint as demandas ficarao disponiveis para o time,
+     *  o que nao estiver com nome alocado ficara disponivel no backlog."    */
+    const dCiclo = { sprints: [], melhorias: [
+      { id: 'a', codigo: 'AX-1', dev: 'Ana', sprint_po: SA, sprint_po_historico: hs(SA),
+        status_planejamento: 'planejado', poker_pontos: 5 },
+      { id: 'b', codigo: 'AX-2', dev: '', sprint_po: SA, sprint_po_historico: hs(SA),
+        status_planejamento: 'planejado', poker_pontos: 8 },
+      { id: 'c', codigo: 'AX-3', dev: 'Ana', status_planejamento: 'em_andamento',
+        tipo: 'sustentacao', poker_pontos: 3 },
+    ] };
+    ok(SP.situacaoDaSprint(dCiclo, SA) === 'montando',
+       'sprint sem registro esta MONTANDO — e e assim que toda a base esta hoje');
+    ok(SP.escondidaDoTime(dCiclo, dCiclo.melhorias[0]) &&
+       SP.escondidaDoTime(dCiclo, dCiclo.melhorias[1]),
+       'e o que esta nela nao aparece para o time');
+    /* FORA DE SPRINT NUNCA SE ESCONDE: Sustentacao comeca sem sprint, e o
+       backlog do dev e o lugar dela. */
+    ok(!SP.escondidaDoTime(dCiclo, dCiclo.melhorias[2]),
+       'mas o que esta FORA de sprint continua visivel — e o backlog do dev');
+    ok(!dCiclo.melhorias.some(m => SP.naPoolDoTime(dCiclo, m)),
+       'e nada vai para o backlog do time antes de a sprint comecar');
+
+    const ini = SP.iniciar(dCiclo, SA, 'Fernando', '2026-11-09');
+    ok(ini.ok && ini.demandas === 2 && ini.semDev === 1,
+       'iniciar diz quantas vao e quantas estao sem dono',
+       'descobrir isso depois, pelo dev perguntando, e o que a confirmacao evita');
+    ok(SP.situacaoDaSprint(dCiclo, SA) === 'em_curso' &&
+       !SP.escondidaDoTime(dCiclo, dCiclo.melhorias[0]),
+       'iniciada, as demandas aparecem para o time');
+    ok(SP.naPoolDoTime(dCiclo, dCiclo.melhorias[1]) &&
+       !SP.naPoolDoTime(dCiclo, dCiclo.melhorias[0]),
+       'e a que nao tem dono vai para o backlog de TODOS — a que tem, nao');
+    ok(!SP.iniciar(dCiclo, SA, 'F', '2026-11-10').ok, 'e ela nao inicia duas vezes');
+
+    /* INICIAR NAO E FECHAR, e esta e a invariante que paga o preco da mudanca.
+       `dados.sprints` guardava so fechamentos, e "existe entrada" era o mesmo
+       que "fechada". Com o inicio escrevendo ali, sem o carimbo `em` a sprint
+       inteira seria travada no dia em que comecasse. */
+    ok(!SP.estaFechada(dCiclo, SA) && SP.estaIniciada(dCiclo, SA),
+       'sprint EM CURSO nao e sprint fechada');
+    ok(SP.repassar({}, SA, 'F', '2026-11-10', { dados: dCiclo }).ok,
+       'e repassar para uma sprint em curso continua funcionando');
+    ok(!SP.rotulosFechados(dCiclo).length,
+       'e ela nao aparece na lista de fechadas');
+    /* O MESMO DOS DOIS LADOS. O Worker tem a propria copia da leitura. */
+    if (fFech && fApag && fSet) {
+      const WF2 = new Function(fSet + '\n' + fFech + '\n' + fApag +
+        '\nreturn { mexeu: mexeuEmSprintFechada };')();
+      const srvEmCurso = { sprints: [{ rotulo: SA, iniciada_em: '2026-11-09' }],
+                           melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: SA }] };
+      ok(!WF2.mexeu({ melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: SB }] },
+                    srvEmCurso).length,
+         'e o Worker tambem nao confunde iniciada com fechada');
+    }
+    ok(/filter\(s => s && String\(s\.em \|\| ''\)\.trim\(\)\)/.test(WC),
+       'o Worker le o carimbo `em` para decidir o que esta fechado');
+    ok((WC.match(/String\(s\.em \|\| ''\)\.trim\(\)/g) || []).length >= 4,
+       'nos QUATRO lugares que leem a lista de sprints',
+       'um deles de fora e uma sprint em curso tratada como fechada');
+
+    const dFecha = { sprints: [], melhorias: [{ id: 'a', codigo: 'AX-1', dev: 'Ana',
+      sprint_po: SA, sprint_po_historico: hs(SA), status_planejamento: 'planejado',
+      poker_pontos: 5 }] };
+    SP.iniciar(dFecha, SA, 'Fernando', '2026-11-09');
+    SP.fechar(dFecha, SA, 'Fernando', '2026-11-16',
+      { a: { destino: '', motivo: 'despriorizada agora' } }, etG);
+    ok(dFecha.sprints.length === 1 && dFecha.sprints[0].iniciada_por === 'Fernando' &&
+       dFecha.sprints[0].em === '2026-11-16',
+       'fechar escreve no MESMO registro que o inicio criou',
+       'duas entradas para a mesma semana perderiam quem a iniciou');
+
+    // ── A TELA ─────────────────────────────────────────────────────────────
+    const gs = semComentario(corpo(ADMIN, 'function renderGerSprint() {') || '');
+    ok(/SPRINTPO\.placarDaSprint\(/.test(gs) && /SPRINTPO\.rankingDaSprint\(/.test(gs) &&
+       /SPRINTPO\.acompanhamentoDaSprint\(/.test(gs),
+       'o gerencial desenha, e as contas todas vem do modulo',
+       'uma segunda conta aqui faria o gerencial discordar do fechamento');
+    ok(/spr-so-risco/.test(gs), 'e ha o filtro de "so as que estao em risco"');
+    const si = semComentario(corpo(ADMIN, 'async function sprintIniciar() {') || '');
+    ok(/SPRINTPO\.iniciar\(/.test(si) && /state\.sprints = antes/.test(si),
+       'iniciar passa pelo modulo e desfaz se a gravacao falhar');
+    ok(/const ok = await confirmar\(\{/.test(si) && /if \(!ok\) return;/.test(si) &&
+       /semDev\.length/.test(si),
+       'e confirma antes, dizendo quantas estao sem dono',
+       'medir a palavra deixava passar um `const ok = true` com o dialogo ao lado');
+    const gf2 = semComentario(corpo(DEV, 'function getFiltered() {') || '');
+    ok(/SPRINTPO\.escondidaDoTime\(state, m\)/.test(gf2),
+       'o painel do dev esconde a sprint que o PO ainda monta');
+    ok(/SPRINTPO\.naPoolDoTime\(state, m\)/.test(gf2) && /!meu && !doTime/.test(gf2),
+       'e mostra para TODOS o que esta na sprint sem dono');
+    ok(/state\.sprints = data\.sprints/.test(DEV),
+       'e o painel do dev CARREGA os registros de sprint');
+    /* DENTRO DO `renderCard`, e nao no arquivo inteiro: a classe tambem
+       aparece no CSS, entao procurar no arquivo todo passava mesmo com o chip
+       removido do card. */
+    const rc = semComentario(corpo(DEV, 'function renderCard(m, colKey) {') || '');
+    ok(/kcard-pool/.test(rc) && /SPRINTPO\.naPoolDoTime\(state, m\)/.test(rc),
+       'e o card sem dono diz que esta sem dono',
+       'senao dois devs comecam a mesma coisa');
   }
 
   let erroPz = null;

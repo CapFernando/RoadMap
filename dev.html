@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="03fafb2b3f">
+<html lang="pt-BR" data-build="0d920c32a6">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -531,6 +531,11 @@
        PM/PO, para o dev e ele não lerem o mesmo card de jeitos diferentes. */
     .kcard-sprint.sp-atrasada { color:var(--red-tx,#F9A0A0);
       background:var(--red-bg,#5C0A0A); border-color:#B5484D; }
+    /* SEM DONO, EM CIANO: não é um estado da sprint (verde/vermelho/apagado),
+       é um convite. Cor própria para não ser lido como mais um grau do mesmo. */
+    .kcard-pool { font-size:10px; font-weight:700; color:var(--cyan-tx,#8AD5F0);
+      background:var(--cyan-bg,#123A52); border:1px solid #2E6E88;
+      border-radius:5px; padding:1px 6px; cursor:help; }
     .kcard-meta  { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; font-size:11px; color:var(--text3); }
     .kcard-meta span { display:flex; align-items:center; gap:3px; }
     .kcard-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; display:inline-block; }
@@ -706,7 +711,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=3c2fc41682"></script>
+<script src="sprint.js?v=f274c8d29d"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -3586,6 +3591,10 @@ async function reloadDevList() {
       state.melhorias = data.melhorias || [];
       state.desenvolvedores = data.desenvolvedores || [];
       state.feriados = data.feriados || [];
+      /* OS REGISTROS DE SPRINT. Sem eles o painel não sabe quais sprints já
+         começaram — e a regra "a sprint que o PO ainda monta não aparece para
+         o time" ficaria sem como ser aplicada deste lado. */
+      state.sprints = data.sprints || [];
       _pollTs = data.atualizado_em || null;
     }
   } catch(_) {}
@@ -4390,7 +4399,20 @@ function getFiltered() {
   return state.melhorias.filter(m => {
     // Mesclada saiu do fluxo: o dev trata pela demanda principal.
     if (m.mesclado_em) return false;
-    if (!DEVNOME.eDe(m, currentDev)) return false;
+    /* ═══ A SPRINT QUE O PO AINDA MONTA NÃO APARECE ════════════════════════
+       "Quando eu iniciar a sprint as demandas ficarão disponíveis para o
+        time." Antes disso ele está montando, e o painel mostrando a montagem
+       faria o quadro do dev mudar de forma sozinho várias vezes por dia.
+       Fora de sprint nunca se esconde — é o backlog dele, e é onde Sustentação
+       vive. */
+    if (window.SPRINTPO && SPRINTPO.escondidaDoTime(state, m)) return false;
+    /* ═══ E O QUE NÃO TEM DONO FICA DISPONÍVEL PARA TODOS ══════════════════
+       "O que não estiver com nome alocado ficará disponível no backlog dos
+        devs." É trabalho já combinado para a semana que ninguém pegou — some
+       do painel de todo mundo se a lista continuar sendo só "as minhas". */
+    const meu = DEVNOME.eDe(m, currentDev);
+    const doTime = !!(window.SPRINTPO && SPRINTPO.naPoolDoTime(state, m));
+    if (!meu && !doTime) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     const fTipo = document.getElementById('f-tipo')?.value || '';
     if (fTipo === '__sem_tipo__') { if (m.tipo) return false; }
@@ -4595,8 +4617,14 @@ function renderCard(m, colKey) {
             SEM GESTO AQUI, de propósito. Quem repassa é o PM/PO, e o Worker
             reverte o dev que tentar — um chip clicável no painel do dev
             prometeria um poder que ele não tem. */''}
+      ${/* A DEMANDA SEM DONO DA SPRINT EM CURSO. Ela aparece para todo mundo,
+            então precisa dizer por que está aqui — senão o dev lê como se
+            tivesse sido alocada a ele e dois começam a mesma coisa. */''}
       <div class="kcard-rodape">${badge}${
-        window.SPRINTPO ? SPRINTPO.badge(m, 'kcard-sprint') : ''}</div>
+        window.SPRINTPO ? SPRINTPO.badge(m, 'kcard-sprint') : ''}${
+        (window.SPRINTPO && SPRINTPO.naPoolDoTime(state, m))
+          ? '<span class="kcard-pool" title="Está na sprint e ainda não tem dono. Qualquer um do time pode pegar — avise antes de começar.">🙌 sem dono</span>'
+          : ''}</div>
       ${renderDepSection(m)}
     </div>`;
 }

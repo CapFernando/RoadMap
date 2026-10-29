@@ -418,24 +418,128 @@
    * que ele explica.                                                         */
   var MIN_MOTIVO_CARRY = 8;
 
-  /** Os fechamentos gravados. Lista de `{ rotulo, em, por, carry: [...] }`. */
-  function fechamentos(dados) {
+  /* ═══ O CICLO DA SPRINT: MONTANDO → EM CURSO → FECHADA ════════════════════
+   *
+   * "Em adm a etapa Planejado servirá para eu alocar as demandas selecionando a
+   *  sprint que ela fará parte. QUANDO EU INICIAR A SPRINT as demandas ficarão
+   *  disponíveis para o time."
+   *
+   * EU TINHA DITO QUE ABRIR NÃO ERA ATO, e estava errado. A sprint existe no
+   * calendário, sim — mas ENCHER e DISPONIBILIZAR são dois momentos, e separá-
+   * los é o que permite montar a semana com calma sem o time ver a montagem
+   * mudando de forma debaixo dele. O PO aloca em Planejado, confere, e só então
+   * inicia.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * UM REGISTRO POR SPRINT, com os dois carimbos — e isto PRECISOU de cuidado.
+   *
+   * `dados.sprints` já existia e guardava só fechamentos; `estaFechada` era
+   * "existe entrada para esta sprint". Acrescentar uma entrada no INÍCIO faria
+   * toda sprint iniciada ser lida como FECHADA, e a trava do fechamento
+   * barraria a semana inteira no dia em que ela começasse.
+   *
+   * Então a pergunta deixou de ser "existe entrada?" e passou a ser "a entrada
+   * tem o carimbo de fechamento (`em`)?". O Worker foi corrigido junto, e há
+   * invariante medindo os dois lados.
+   *
+   * MONTANDO é o estado SEM registro nenhum, e é onde está toda a base hoje —
+   * nenhuma migração, e nada aparece para o time antes de alguém decidir.   */
+
+  /** O registro da sprint: `{ rotulo, iniciada_em, iniciada_por, em, por, carry }`.
+   *  `null` enquanto ninguém iniciou nem fechou. */
+  function registros(dados) {
     var f = (dados || {}).sprints;
     return Array.isArray(f) ? f.filter(Boolean) : [];
   }
 
-  function fechamentoDe(dados, rotulo) {
+  function registroDe(dados, rotulo) {
     var s = txt(rotulo);
     var achou = null;
-    fechamentos(dados).forEach(function (f) { if (txt(f.rotulo) === s) achou = f; });
+    registros(dados).forEach(function (f) { if (txt(f.rotulo) === s) achou = f; });
     return achou;
+  }
+
+  /* `fechamentos`/`fechamentoDe` continuam, com o sentido ESTRITO: só o que
+     tem carimbo de fechamento. Quem perguntava por eles queria isso. */
+  function fechamentos(dados) {
+    return registros(dados).filter(function (f) { return !!iso(f.em); });
+  }
+
+  function fechamentoDe(dados, rotulo) {
+    var r = registroDe(dados, rotulo);
+    return (r && iso(r.em)) ? r : null;
   }
 
   function estaFechada(dados, rotulo) { return !!fechamentoDe(dados, rotulo); }
 
+  /** A SPRINT JÁ FOI INICIADA? É isto que libera as demandas para o time.
+   *  Fechada conta como iniciada: ela correu e acabou. */
+  function estaIniciada(dados, rotulo) {
+    var r = registroDe(dados, rotulo);
+    return !!(r && (iso(r.iniciada_em) || iso(r.em)));
+  }
+
+  /** `montando` | `em_curso` | `fechada`. */
+  function situacaoDaSprint(dados, rotulo) {
+    if (estaFechada(dados, rotulo)) return 'fechada';
+    if (estaIniciada(dados, rotulo)) return 'em_curso';
+    return 'montando';
+  }
+
+  /** O PM/PO INICIA a sprint: daqui em diante o time a enxerga. */
+  function iniciar(dados, rotulo, quem, hoje) {
+    var r = txt(rotulo);
+    if (!rotuloValido(r)) return { ok: false, erro: 'Sprint inválida.' };
+    if (estaFechada(dados, r)) {
+      return { ok: false, erro: 'A sprint ' + rotuloCurto(r) + ' já foi fechada.' };
+    }
+    if (estaIniciada(dados, r)) {
+      return { ok: false, erro: 'A sprint ' + rotuloCurto(r) + ' já está em curso.' };
+    }
+    if (!Array.isArray(dados.sprints)) dados.sprints = [];
+    var reg = registroDe(dados, r);
+    if (!reg) { reg = { rotulo: r }; dados.sprints.push(reg); }
+    reg.iniciada_em = iso(hoje);
+    reg.iniciada_por = txt(quem);
+    var dem = demandasDaSprint(dados, r);
+    return { ok: true, demandas: dem.length,
+             semDev: dem.filter(function (m) { return !txt(m.dev); }).length };
+  }
+
   /** Os rótulos fechados, para quem só precisa da lista. */
   function rotulosFechados(dados) {
     return fechamentos(dados).map(function (f) { return txt(f.rotulo); }).filter(Boolean);
+  }
+
+  /* ═══ O QUE O TIME VÊ ══════════════════════════════════════════════════════
+   *
+   * "Quando eu iniciar a sprint as demandas ficarão disponíveis para o time, o
+   *  que não estiver com nome alocado ficará disponível no backlog dos devs."
+   *
+   * DUAS REGRAS, e elas respondem perguntas diferentes:
+   *
+   * `escondidaDoTime`  a demanda está numa sprint que o PO ainda MONTA. Ela
+   *                    some do painel do dev até a sprint começar — é o ponto
+   *                    inteiro de separar montar de iniciar.
+   *
+   * `naPoolDoTime`     a demanda está numa sprint EM CURSO e sem dono. Ela
+   *                    aparece para TODO MUNDO, e não só para quem tem o nome
+   *                    nela: é trabalho combinado que ainda não foi pego.
+   *
+   * FORA DE SPRINT NUNCA SE ESCONDE. Sustentação começa sem sprint (ver
+   * `travaDeAlocacao`), e o backlog do dev é o lugar dela — esconder o que não
+   * está em sprint nenhuma apagaria metade do painel.                       */
+  function escondidaDoTime(dados, m) {
+    var s = doPO(m);
+    if (!s) return false;
+    return situacaoDaSprint(dados, s) === 'montando';
+  }
+
+  function naPoolDoTime(dados, m) {
+    var s = doPO(m);
+    if (!s) return false;
+    if (txt((m || {}).dev)) return false;
+    return situacaoDaSprint(dados, s) === 'em_curso';
   }
 
   /** A SPRINT JÁ TERMINOU? Pelo último dia útil dela.
@@ -587,10 +691,248 @@
                    pulos: pulos(m) });
     });
 
+    /* ESCREVE NO REGISTRO QUE JÁ EXISTE, se a sprint foi iniciada. Empurrar uma
+       segunda entrada com o mesmo rótulo deixaria duas verdades sobre a mesma
+       semana, e `registroDe` devolveria a última — perdendo quem a iniciou. */
     if (!Array.isArray(dados.sprints)) dados.sprints = [];
-    dados.sprints.push({ rotulo: r, em: iso(hoje), por: txt(quem), carry: carry });
+    var reg = registroDe(dados, r);
+    if (!reg) { reg = { rotulo: r }; dados.sprints.push(reg); }
+    reg.em = iso(hoje);
+    reg.por = txt(quem);
+    reg.carry = carry;
     return { ok: true, fechados: carry.length,
              entregues: bal.entregues.length, aguardando: bal.aguardando.length };
+  }
+
+  /* ═══ O PLACAR DA SPRINT ══════════════════════════════════════════════════
+   *
+   * "Mostre a pontuação, qt de itens validados PM/PO e o % de cumprimento de
+   *  toda SPRINT. A contagem deve ser feita sobre todas as tasks que estão na
+   *  sprint; caso entre, somar."
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * O DENOMINADOR VEM DO HISTÓRICO, E NÃO DO CAMPO `sprint_po`. É a decisão
+   * que faz o número ser verdade.
+   *
+   * O FECHAMENTO TIRA DA SPRINT quem não entregou — é o carry-over. Contando
+   * pelo campo atual, toda sprint fechada marcaria 100% por construção: o que
+   * falhou já não está lá para ser contado. O placar diria que a semana foi
+   * perfeita exatamente porque ela não foi.
+   *
+   * `sprint_po_historico` guarda cada entrada, então "esteve nesta sprint" é
+   * uma pergunta respondível para sempre. E ela também atende o "caso entre,
+   * somar": demanda que o PO empurra para dentro na quarta-feira entra no
+   * denominador da mesma forma — não dá para melhorar o percentual escolhendo
+   * a hora de alocar.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * O NUMERADOR É "CONCLUÍDA E AINDA AQUI".
+   *
+   * Demanda que rolou para a S3 e foi concluída lá não é entrega da S2 — ela é
+   * justamente o que a S2 deixou de fazer. Então sair da sprint sem concluir
+   * conta no denominador e nunca no numerador, que é o que transforma o pulo em
+   * custo visível em vez de um card que some.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * DOIS PERCENTUAIS, E ISSO É DELIBERADO.
+   *
+   * O Fernando pediu a contagem por TASK, e é ela que manda — `pct`. Mas duas
+   * entregas de 34 pontos com oito ajustes de 1 ponto pendentes dariam 20%
+   * numa semana em que quase todo o trabalho saiu. `pctPontos` fica ao lado
+   * como leitura, e a tela diz qual é qual. É a mesma razão pela qual
+   * `capacidade.js` mostra o rótulo em pontos quando o percentual estouraria.
+   *
+   * SEM PONTUAÇÃO, `pctPontos` É `null` e não zero: zero afirmaria que nada
+   * saiu, quando a verdade é que não dá para medir em pontos.               */
+
+  /** Esta demanda esteve nesta sprint, alguma vez? */
+  function esteveNaSprint(m, rotulo) {
+    var s = txt(rotulo);
+    if (!s) return false;
+    if (doPO(m) === s) return true;
+    return entradas(m).some(function (e) { return txt(e.sprint) === s; });
+  }
+
+  /** TODAS AS DEMANDAS QUE PASSARAM POR ESTA SPRINT. */
+  function demandasDaSprint(dados, rotulo) {
+    return ((dados || {}).melhorias || []).filter(function (m) {
+      return m && !m.oculto && !m.mesclado_em && esteveNaSprint(m, rotulo);
+    });
+  }
+
+  function pontosDe(m) {
+    var n = Number((m || {}).poker_pontos);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  /** O PLACAR. */
+  function placarDaSprint(dados, rotulo, etapaDe) {
+    var r = txt(rotulo);
+    var lista = demandasDaSprint(dados, r);
+    var p = { rotulo: r, total: 0, validados: 0, aguardando: 0, emCurso: 0, saiu: 0,
+              pontosTotal: 0, pontosValidados: 0, pontosAguardando: 0,
+              semPontuacao: 0, pct: 0, pctPontos: null,
+              itens: { validados: [], aguardando: [], emCurso: [], saiu: [] } };
+    lista.forEach(function (m) {
+      var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (e === 'negada') return;          // recusada nao e compromisso da sprint
+      var pts = pontosDe(m);
+      p.total += 1;
+      p.pontosTotal += pts;
+      if (!pts) p.semPontuacao += 1;
+      var aqui = doPO(m) === r;
+      if (aqui && e === 'concluido') {
+        p.validados += 1; p.pontosValidados += pts; p.itens.validados.push(m);
+      } else if (aqui && (e === 'validacao' || e === 'validacao_area')) {
+        p.aguardando += 1; p.pontosAguardando += pts; p.itens.aguardando.push(m);
+      } else if (aqui) {
+        p.emCurso += 1; p.itens.emCurso.push(m);
+      } else {
+        /* SAIU SEM CONCLUIR AQUI. Inclui a concluida DEPOIS de rolar: a entrega
+           foi da sprint seguinte, e contá-la aqui premiaria o atraso. */
+        p.saiu += 1; p.itens.saiu.push(m);
+      }
+    });
+    p.pct = p.total ? Math.round(p.validados / p.total * 100) : 0;
+    p.pctPontos = p.pontosTotal
+      ? Math.round(p.pontosValidados / p.pontosTotal * 100) : null;
+    return p;
+  }
+
+  /** O MESMO PLACAR, POR PESSOA — o ranking da sprint.
+   *
+   *  ═════════════════════════════════════════════════════════════════════════
+   *  PONTO DIVIDIDO, ITEM INTEIRO — e as duas metades têm razões diferentes.
+   *
+   *  O PONTO mede VOLUME DE TRABALHO, e volume se reparte: 34 pontos feitos a
+   *  dois são 17 para cada, e contar 34 para os dois faria a soma da coluna
+   *  estourar o total da sprint. É a mesma regra de `capacidade.porDev`.
+   *
+   *  O ITEM NÃO SE REPARTE. "Ana validou 2,5 itens" não quer dizer nada, e
+   *  arredondar cada lado é pior do que parece: MEDIDO numa sprint de 6
+   *  demandas com uma de dupla, as duas metades viravam 1 e 1 e a coluna somava
+   *  SETE. A precisão era falsa e o número, errado.
+   *
+   *  Então a demanda de dupla conta INTEIRA para cada um, e a coluna deixa de
+   *  ser uma partição — é "em quantas a pessoa atuou". A tela diz isso com
+   *  todas as letras, porque uma coluna que não soma o total precisa avisar.
+   *
+   *  ORDENA POR VALIDADOS e depois por pontos: é um ranking de entrega, e
+   *  entregue é o que o PM/PO concluiu. Empate vai para o nome, para a lista
+   *  não dançar a cada redesenho. */
+  function rankingDaSprint(dados, rotulo, etapaDe) {
+    var r = txt(rotulo);
+    var acc = {};
+    var pega = function (nome) {
+      if (!acc[nome]) {
+        acc[nome] = { nome: nome, total: 0, validados: 0, aguardando: 0,
+                      emCurso: 0, saiu: 0, pontos: 0, pontosTotal: 0 };
+      }
+      return acc[nome];
+    };
+    demandasDaSprint(dados, r).forEach(function (m) {
+      var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (e === 'negada') return;
+      var nomes = txt(m.dev).split('/').map(function (x) { return x.trim(); }).filter(Boolean);
+      if (!nomes.length) nomes = ['(sem dev)'];
+      var q = nomes.length;
+      var pts = pontosDe(m);
+      var aqui = doPO(m) === r;
+      nomes.forEach(function (nome) {
+        var a = pega(nome);
+        a.total += 1;                      // item inteiro — ver o cabeçalho
+        a.pontosTotal += pts / q;          // ponto repartido
+        if (aqui && e === 'concluido') { a.validados += 1; a.pontos += pts / q; }
+        else if (aqui && (e === 'validacao' || e === 'validacao_area')) a.aguardando += 1;
+        else if (aqui) a.emCurso += 1;
+        else a.saiu += 1;
+        if (q > 1) a.dupla = true;         // a tela avisa por que a coluna não soma
+      });
+    });
+    return Object.keys(acc).map(function (n) {
+      var a = acc[n];
+      return { nome: a.nome, total: a.total, validados: a.validados,
+               aguardando: a.aguardando, emCurso: a.emCurso,
+               saiu: a.saiu, pontos: Math.round(a.pontos),
+               pontosTotal: Math.round(a.pontosTotal), dupla: !!a.dupla,
+               pct: a.total ? Math.round(a.validados / a.total * 100) : 0 };
+    }).sort(function (x, y) {
+      return y.validados - x.validados || y.pontos - x.pontos ||
+             x.nome.localeCompare(y.nome, 'pt-BR');
+    });
+  }
+
+  /* ═══ O QUE ESTÁ EM RISCO DE NÃO ENTREGAR ══════════════════════════════════
+   *
+   * "Deixar um campo para visualizarem todas as demandas da sprint, assim
+   *  poderão acompanhar as que têm risco de não serem entregues."
+   *
+   * Os sinais são FATOS DO CARD, e não um palpite ponderado. Uma nota de risco
+   * de 0 a 100 parece mais sofisticada e é pior: ninguém sabe o que fazer com
+   * "risco 62". Cada sinal aqui nomeia o que está errado, que é o que permite
+   * agir — e um card pode acender por mais de um.
+   *
+   * ORDEM: o que já estourou vem antes do que vai estourar.                 */
+  function riscosDaDemanda(m, rotulo, hoje, prazoApi) {
+    var fora = [];
+    var dia = iso(hoje) || new Date().toISOString().slice(0, 10);
+    var P = prazoApi || raiz.PRAZO;
+
+    if (txt((m || {}).pausado_em)) {
+      fora.push({ chave: 'pausada', texto: 'Pausada' });
+    }
+    if (P && typeof P.estaAtrasada === 'function' &&
+        P.estaAtrasada(m, txt((m || {}).status_planejamento), dia)) {
+      var d = (typeof P.diasDeAtraso === 'function')
+        ? P.diasDeAtraso(m, txt(m.status_planejamento), dia) : null;
+      fora.push({ chave: 'vencida', texto: 'Prazo vencido' + (d ? ' há ' + d + 'd' : '') });
+    }
+    /* JÁ ROLOU ANTES. É o sinal mais forte que existe aqui: a demanda que
+       atravessou uma sprint sem entregar costuma atravessar a seguinte, e esse
+       é justamente o padrão que o fechamento com motivo existe para expor. */
+    var n = pulos(m);
+    if (n) {
+      fora.push({ chave: 'rolou', texto: 'Já rolou ' + n + (n > 1 ? ' sprints' : ' sprint') });
+    }
+    /* A ÁREA ESTOUROU O PRAZO DELA. Não é risco do dev — é bola parada do
+       outro lado, e quem olha a sprint precisa saber a quem cobrar. */
+    if (P && typeof P.areaVenceu === 'function' && P.areaVenceu(m, dia)) {
+      fora.push({ chave: 'area', texto: 'Parada na área além do prazo' });
+    }
+    /* NÃO COMEÇOU. Só conta depois que a sprint começou — antes disso "não
+       começou" é o estado normal de tudo. */
+    var e = txt((m || {}).status_planejamento);
+    if (e === 'backlog' || e === 'planning' || e === 'levantar_req' || e === 'planejado') {
+      fora.push({ chave: 'nao_comecou', texto: 'Ainda não começou' });
+    }
+    if (!pontosDe(m)) {
+      fora.push({ chave: 'sem_pontos', texto: 'Sem pontuação' });
+    }
+    return fora;
+  }
+
+  /** As demandas da sprint com os riscos de cada uma, as de risco primeiro. */
+  function acompanhamentoDaSprint(dados, rotulo, etapaDe, hoje, prazoApi) {
+    var r = txt(rotulo);
+    return demandasDaSprint(dados, r).map(function (m) {
+      var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      var aqui = doPO(m) === r;
+      var situacao = !aqui ? 'saiu'
+        : e === 'concluido' ? 'validado'
+        : (e === 'validacao' || e === 'validacao_area') ? 'aguardando'
+        : e === 'negada' ? 'negada' : 'em_curso';
+      /* QUEM JÁ ENTREGOU NÃO TEM RISCO DE NÃO ENTREGAR. Acender "prazo
+         vencido" num card concluído é ruído sobre fato consumado — e ruído
+         numa lista de risco ensina a ignorar a lista. */
+      var riscos = (situacao === 'validado' || situacao === 'negada')
+        ? [] : riscosDaDemanda(m, r, hoje, prazoApi);
+      return { m: m, situacao: situacao, riscos: riscos, pontos: pontosDe(m) };
+    }).sort(function (a, b) {
+      if (a.riscos.length !== b.riscos.length) return b.riscos.length - a.riscos.length;
+      var ordem = { em_curso: 0, aguardando: 1, saiu: 2, validado: 3, negada: 4 };
+      if (ordem[a.situacao] !== ordem[b.situacao]) return ordem[a.situacao] - ordem[b.situacao];
+      return b.pontos - a.pontos;
+    });
   }
 
   /* ═══ OS ATOS ══════════════════════════════════════════════════════════════
@@ -737,13 +1079,26 @@
     sprintDeOrigem: sprintDeOrigem,
     badge: badge,
     MIN_MOTIVO_CARRY: MIN_MOTIVO_CARRY,
+    registros: registros,
+    registroDe: registroDe,
     fechamentos: fechamentos,
     fechamentoDe: fechamentoDe,
     estaFechada: estaFechada,
+    estaIniciada: estaIniciada,
+    situacaoDaSprint: situacaoDaSprint,
+    iniciar: iniciar,
+    escondidaDoTime: escondidaDoTime,
+    naPoolDoTime: naPoolDoTime,
     rotulosFechados: rotulosFechados,
     sprintVencida: sprintVencida,
     pendentesDeFechamento: pendentesDeFechamento,
     balancoDaSprint: balancoDaSprint,
+    esteveNaSprint: esteveNaSprint,
+    demandasDaSprint: demandasDaSprint,
+    placarDaSprint: placarDaSprint,
+    rankingDaSprint: rankingDaSprint,
+    riscosDaDemanda: riscosDaDemanda,
+    acompanhamentoDaSprint: acompanhamentoDaSprint,
     problemaNoMotivoCarry: problemaNoMotivoCarry,
     fechar: fechar,
     TRAVA_DESDE: TRAVA_DESDE,

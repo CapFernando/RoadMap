@@ -1645,9 +1645,15 @@ function travaSprintDoPO(recebido, servidor, papel) {
  * RECUSA, nao reverte: mexer numa sprint fechada e deliberado, e devolver o
  * valor em silencio faria a pessoa achar que conseguiu.
  */
+/* O REGISTRO DA SPRINT GANHOU DOIS CARIMBOS, e esta funcao precisou saber a
+ * diferenca. `dados.sprints` guardava so fechamentos, e "existe entrada" era o
+ * mesmo que "esta fechada". Agora o INICIO tambem escreve ali — e sem este
+ * filtro toda sprint iniciada seria lida como fechada, travando a semana no dia
+ * em que ela comecasse. Fechada e quem tem o carimbo `em`. */
 function fechadasNoServidor(servidor) {
   return new Set(((servidor && servidor.sprints) || [])
-    .map(s => String((s && s.rotulo) || '')).filter(Boolean));
+    .filter(s => s && String(s.em || '').trim())
+    .map(s => String(s.rotulo || '')).filter(Boolean));
 }
 
 function mexeuEmSprintFechada(recebido, servidor) {
@@ -1689,8 +1695,12 @@ function fechamentoApagado(recebido, servidor) {
   if (!Array.isArray(recebido.sprints)) {
     return [...antes];       // trocar a lista por outra coisa apaga tudo
   }
+  /* AQUI TAMBEM SO O QUE TEM CARIMBO DE FECHAMENTO: um registro que perdeu o
+     `em` e voltou a ser so "iniciada" e uma sprint REABERTA por outra porta —
+     e reabrir foi justamente o que ficou de fora. */
   const agora = new Set(recebido.sprints
-    .map(s => String((s && s.rotulo) || '')).filter(Boolean));
+    .filter(s => s && String(s.em || '').trim())
+    .map(s => String(s.rotulo || '')).filter(Boolean));
   return [...antes].filter(r => !agora.has(r));
 }
 
@@ -3956,7 +3966,8 @@ export default {
                       /* E as sprints ja fechadas, para a tela nao oferecer uma
                          que o Worker vai recusar com 409. */
                       sprints_fechadas: ((data.sprints) || [])
-                        .map(s => String((s && s.rotulo) || '')).filter(Boolean),
+                        .filter(s => s && String(s.em || '').trim())
+                        .map(s => String(s.rotulo || '')).filter(Boolean),
                       // Mesmo motivo da referencia: o arquivo ja esta lido aqui.
                       ranking: pokerRanking(data, agora),
                       /* A FRENTE DE CADA PESSOA, para a sala saber de qual time e
@@ -4187,7 +4198,8 @@ export default {
         if (sprintPedida) {
           const ehAdmPoker = (await papelAtual()) === 'admin';
           const fechadasP = new Set(((data.sprints) || [])
-            .map(s => String((s && s.rotulo) || '')).filter(Boolean));
+            .filter(s => s && String(s.em || '').trim())
+            .map(s => String(s.rotulo || '')).filter(Boolean));
           if (!ehAdmPoker) {
             sprintRecusa = 'Repassar para a sprint e do PM/PO. Os pontos foram gravados.';
           } else if (!/^S\d-\d{2}-\d{4}$/.test(sprintPedida)) {

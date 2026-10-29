@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="44e351e9cc">
+<html lang="pt-BR" data-build="ceb76ee764">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -528,6 +528,81 @@
        vira duas linhas e a altura da linha dobra — e é a linha mais curta
        (Backlog) que fica torta ao lado das outras. */
     .lote-item .kb-sprint { flex:0 0 auto; white-space:nowrap; }
+    /* ═══ A SPRINT NO GERENCIAL ════════════════════════════════════════════ */
+    .spr-topo { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
+    .spr-topo label { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text2); }
+    .spr-topo select { padding:7px 10px; font-size:13px; font-family:inherit; color:var(--text);
+      background:var(--bg3); border:1px solid var(--border); border-radius:7px; }
+    .spr-check { cursor:pointer; }
+    .spr-nota { margin-left:auto; font-size:12px; }
+    .spr-est { font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:6px; }
+    .spr-est.montando { color:var(--text3); background:var(--bg4); }
+    .spr-est.curso    { color:var(--green-tx,#8FE0A8); background:var(--green-bg,#0E3A1E); }
+    .spr-est.fechada  { color:var(--text2); background:var(--bg4); }
+    .spr-acao { margin-left:7px; font-family:inherit; font-size:11.5px; font-weight:600;
+      padding:4px 11px; border-radius:6px; cursor:pointer; color:var(--text2);
+      background:none; border:1px solid var(--border); }
+    .spr-acao:hover { border-color:var(--blue); color:var(--text); }
+    .spr-acao.inicia { color:#07210F; background:var(--green-tx,#8FE0A8); border:none; }
+    .spr-acao.inicia:hover { filter:brightness(1.1); }
+    .spr-alerta { color:var(--amber-tx,#FFC470); font-weight:700; }
+    .spr-ok { color:var(--green-tx,#8FE0A8); font-weight:700; }
+    .spr-fechada { color:var(--text3); }
+    /* O PLACAR. `auto-fit` e nao colunas fixas: sao quatro blocos sempre e mais
+       dois que so aparecem quando ha o que dizer — grade fixa deixaria buracos
+       nas sprints limpas. */
+    .spr-placar { display:grid; gap:10px; margin-bottom:18px;
+      grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
+    .spr-b { padding:12px 14px; border-radius:9px; background:var(--bg3);
+      border:1px solid var(--border); cursor:help; }
+    .spr-b-n { font-size:21px; font-weight:700; line-height:1.15; }
+    .spr-b-r { font-size:11px; color:var(--text3); margin-top:3px; line-height:1.35; }
+    .spr-b.pts  .spr-b-n { color:var(--blue-tx,#9BC8F8); }
+    .spr-b.val  .spr-b-n { color:var(--green-tx,#8FE0A8); }
+    .spr-b.pct  .spr-b-n { color:var(--text); }
+    .spr-b.pctp .spr-b-n { color:var(--text2); }
+    .spr-b.esp  .spr-b-n { color:var(--amber-tx,#FFC470); }
+    .spr-b.sai  .spr-b-n { color:var(--red-tx,#F9A0A0); }
+    .spr-tit { font-size:12.5px; font-weight:600; color:var(--text2); margin:16px 0 8px; }
+    .spr-dica { font-weight:400; color:var(--text3); font-size:11.5px; }
+    .spr-rk { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .spr-rk th { text-align:left; font-size:11px; font-weight:600; color:var(--text3);
+      padding:6px 9px; border-bottom:1px solid var(--border); }
+    .spr-rk td { padding:8px 9px; border-bottom:1px solid var(--bg3); vertical-align:middle; }
+    .spr-rk-nome { font-weight:600; }
+    .spr-de { color:var(--text3); font-size:11px; }
+    .spr-saiu { color:var(--red-tx,#F9A0A0); font-weight:700; }
+    .spr-barra { display:inline-block; width:74px; height:6px; border-radius:3px;
+      background:var(--bg4); overflow:hidden; vertical-align:middle; }
+    .spr-barra span { display:block; height:100%; background:var(--green-tx,#8FE0A8); }
+    .spr-pct { margin-left:7px; font-size:11.5px; color:var(--text2); }
+    .spr-lista { display:flex; flex-direction:column; gap:4px; }
+    .spr-item { display:flex; align-items:center; gap:9px; padding:7px 10px;
+      border-radius:7px; background:var(--bg3); font-size:12.5px; cursor:pointer;
+      border-left:3px solid transparent; }
+    .spr-item:hover { background:var(--bg4); }
+    /* A BORDA ESQUERDA MARCA O RISCO. Pintar a linha inteira de vermelho num
+       quadro que ja usa vermelho para prazo vencido tornaria as duas coisas
+       indistinguiveis; a borda diz "olhe aqui" sem disputar. */
+    .spr-item.risco { border-left-color:var(--amber-tx,#FFC470); }
+    .spr-sit { flex:0 0 auto; font-size:10.5px; font-weight:700; padding:1px 7px;
+      border-radius:4px; white-space:nowrap; }
+    .spr-sit[data-s="validado"]   { color:var(--green-tx,#8FE0A8); background:var(--green-bg,#0E3A1E); }
+    .spr-sit[data-s="aguardando"] { color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A); }
+    .spr-sit[data-s="em_curso"]   { color:var(--blue-tx,#9BC8F8); background:var(--blue-bg,#0C3260); }
+    .spr-sit[data-s="saiu"]       { color:var(--red-tx,#F9A0A0); background:var(--red-bg,#5C0A0A); }
+    .spr-sit[data-s="negada"]     { color:var(--text3); background:var(--bg4); }
+    .spr-tit-d { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; }
+    .spr-pts { flex:0 0 auto; font-size:11px; color:var(--text3); }
+    .spr-riscos { flex:0 0 auto; display:flex; gap:4px; flex-wrap:wrap; }
+    .spr-r { font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px;
+      white-space:nowrap; color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A); }
+    /* O QUE JA ESTOUROU em vermelho; o que AINDA PODE dar certo em ambar. */
+    .spr-r.r-vencida, .spr-r.r-rolou, .spr-r.r-area {
+      color:var(--red-tx,#F9A0A0); background:var(--red-bg,#5C0A0A); }
+    .spr-r.r-sem_pontos { color:var(--text3); background:var(--bg4); }
+    .spr-vazio { padding:18px; text-align:center; color:var(--text3); font-size:12.5px; }
     /* ═══ O FECHAMENTO DA SPRINT ═══════════════════════════════════════════ */
     .fech-placar { display:flex; flex-wrap:wrap; gap:8px; margin:2px 0 12px; }
     .fp { font-size:12px; font-weight:700; padding:4px 10px; border-radius:7px; }
@@ -1474,7 +1549,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=3c2fc41682"></script>
+<script src="sprint.js?v=f274c8d29d"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -1840,6 +1915,36 @@
         <div id="ger-dev-wrap" style="position:relative"><canvas id="ger-chart-dev"></canvas></div>
         <div class="ger-legend" id="ger-dev-leg"></div>
       </div>
+
+      <!-- ═══ A SPRINT ════════════════════════════════════════════════════
+           VEM PRIMEIRO porque é o período de decisão do dia a dia: o mês
+           responde ao comitê, a sprint responde à segunda-feira. E tem
+           SELETOR PRÓPRIO, separado do mês lá em cima — uma sprint atravessa
+           a virada do mês, e amarrá-la ao filtro mensal faria a semana de
+           30/11 a 04/12 desaparecer dos dois lados. -->
+      <div class="ger-section-sep"></div>
+      <section class="ger-bandeja" data-bandeja="sprint">
+        <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('sprint')" aria-expanded="true">
+          <span><span class="ger-bandeja-seta">▶</span>🏃 Sprint</span>
+          <span class="ger-section-hint">pontuação, validados pelo PM/PO e cumprimento — e o que está em risco</span>
+          <span class="ger-bandeja-acao">recolher</span>
+        </button>
+        <div id="spr-resumo" class="ger-summary"></div>
+        <div class="ger-bandeja-corpo">
+          <div class="spr-topo">
+            <label>Sprint
+              <select id="spr-sel" onchange="renderGerSprint()"></select>
+            </label>
+            <label class="spr-check"><input type="checkbox" id="spr-so-risco" onchange="renderGerSprint()">
+              Só as que estão em risco</label>
+            <span id="spr-estado"></span>
+            <span class="spr-nota" id="spr-nota"></span>
+          </div>
+          <div id="spr-placar" class="spr-placar"></div>
+          <div id="spr-ranking"></div>
+          <div id="spr-lista"></div>
+        </div>
+      </section>
 
       <div class="ger-section-sep"></div>
       <section class="ger-bandeja" data-bandeja="sempontos">
@@ -9366,6 +9471,234 @@ function destaqueRenderNoCard(m) {
     : 'Marcar como destaque da apresentação';
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   A SPRINT NO GERENCIAL
+
+   "Mostre a pontuação, qt de itens validados PM/PO e o % de cumprimento de toda
+    SPRINT. (...) Deixar um campo para visualizarem todas as demandas da sprint,
+    assim poderão acompanhar as que têm risco de não serem entregues."
+
+   TODAS AS CONTAS VÊM DE `sprint.js`. Esta função escolhe a sprint, desenha e
+   mais nada — a regra de quem conta no denominador é a mesma que o fechamento
+   usa, e uma segunda conta aqui faria o gerencial discordar do fechamento sobre
+   a mesma semana.                                                            */
+let _sprSel = '';
+
+/** As sprints que EXISTEM nos dados, e não as do calendário.
+ *
+ *  Oferecer as 12 do ano daria onze opções vazias; a lista é o que o PO
+ *  efetivamente usou, mais a corrente (que pode ainda não ter nada dentro e é
+ *  justamente a que ele quer ver na segunda-feira). */
+function sprintsComDados() {
+  const vistas = {};
+  (state.melhorias || []).forEach(m => {
+    if (!m || m.oculto || ehMesclada(m)) return;
+    SPRINTPO.entradas(m).forEach(e => { if (e.sprint) vistas[e.sprint] = true; });
+    const s = SPRINTPO.doPO(m);
+    if (s) vistas[s] = true;
+  });
+  const agora = SPRINTPO.rotuloDeData(PRAZO.hojeISO(), state.feriados || []);
+  if (agora) vistas[agora] = true;
+  const chave = r => r.slice(6, 10) + r.slice(3, 5) + r.slice(1, 2);
+  return Object.keys(vistas).sort((a, b) => chave(b).localeCompare(chave(a)));
+}
+
+function renderGerSprint() {
+  const sel = document.getElementById('spr-sel');
+  if (!sel || !window.SPRINTPO) return;
+  const lista = sprintsComDados();
+  const agora = SPRINTPO.rotuloDeData(PRAZO.hojeISO(), state.feriados || []);
+  if (!lista.includes(_sprSel)) _sprSel = lista.includes(agora) ? agora : (lista[0] || '');
+  if (sel.dataset.pronto !== '1' || sel.options.length !== lista.length) {
+    sel.innerHTML = lista.map(r => '<option value="' + esc(r) + '">' +
+      esc(SPRINTPO.rotuloCurto(r)) + (r === agora ? ' · agora' : '') +
+      (SPRINTPO.estaFechada(state, r) ? ' · fechada' : '') + '</option>').join('');
+    sel.dataset.pronto = '1';
+  }
+  sel.value = _sprSel;
+  _sprSel = sel.value;
+
+  const etapa = m => statusKey(m);
+  const hoje = PRAZO.hojeISO();
+  const p = SPRINTPO.placarDaSprint(state, _sprSel, etapa);
+  const fech = SPRINTPO.fechamentoDe(state, _sprSel);
+  const sit = SPRINTPO.situacaoDaSprint(state, _sprSel);
+
+  /* ── MONTANDO / EM CURSO / FECHADA ──────────────────────────────────────
+     O estado precisa estar à vista ao lado do seletor: "montando" significa
+     que o TIME AINDA NÃO VÊ nada disso, e é a diferença entre o PO achar que
+     já repassou e o dev não ter recebido. */
+  const est = document.getElementById('spr-estado');
+  if (est) {
+    const reg = SPRINTPO.registroDe(state, _sprSel);
+    if (sit === 'fechada') {
+      est.innerHTML = '<span class="spr-est fechada">🔒 Fechada em ' +
+        esc(formatDate(fech.em)) + (fech.por ? ' por ' + esc(fech.por) : '') + '</span>';
+    } else if (sit === 'em_curso') {
+      est.innerHTML = '<span class="spr-est curso">▶ Em curso desde ' +
+        esc(formatDate(reg.iniciada_em)) + '</span>' +
+        (SPRINTPO.sprintVencida(_sprSel, hoje, state.feriados || [])
+          ? '<button type="button" class="spr-acao" onclick="sprintFecharAbrir(\'' +
+            esc(_sprSel) + '\')">Fechar sprint</button>' : '');
+    } else {
+      est.innerHTML = '<span class="spr-est montando">✎ Montando — o time ainda não vê</span>' +
+        (p.total ? '<button type="button" class="spr-acao inicia" onclick="sprintIniciar()">' +
+                   '▶ Iniciar sprint</button>' : '');
+    }
+  }
+
+  /* O RESUMO FICA FORA DO CORPO QUE RECOLHE — é a resposta da seção, e a
+     pessoa precisa dela mesmo com a bandeja fechada. Mesma regra das outras. */
+  const res = document.getElementById('spr-resumo');
+  if (res) {
+    res.innerHTML = p.total
+      ? '<strong>' + esc(SPRINTPO.rotuloCurto(_sprSel)) + '</strong> · ' +
+        p.validados + ' de ' + p.total + ' validada' + (p.validados === 1 ? '' : 's') +
+        ' pelo PM/PO (' + p.pct + '%) · ' + p.pontosValidados + ' de ' +
+        p.pontosTotal + ' pts' +
+        (fech ? ' · <span class="spr-fechada">🔒 fechada em ' +
+                esc(formatDate(fech.em)) + '</span>' : '')
+      : 'Nada nesta sprint ainda — o PM/PO repassa pelo quadro ou pelo “Sprint em lote”.';
+  }
+
+  const placar = document.getElementById('spr-placar');
+  if (placar) {
+    const bloco = (cls, n, rot, dica) =>
+      '<div class="spr-b ' + cls + '" title="' + esc(dica) + '">' +
+      '<div class="spr-b-n">' + n + '</div><div class="spr-b-r">' + esc(rot) + '</div></div>';
+    placar.innerHTML = !p.total ? '' :
+      bloco('pts', p.pontosValidados + ' / ' + p.pontosTotal, 'pontos validados',
+            'Pontos das demandas que o PM/PO concluiu, sobre os pontos de tudo que passou por esta sprint.') +
+      bloco('val', p.validados + ' / ' + p.total, 'itens validados pelo PM/PO',
+            'Itens concluídos pelo PM/PO. O total inclui o que entrou no meio da sprint e o que saiu sem entregar.') +
+      /* O PERCENTUAL POR ITEM É O PRINCIPAL — foi assim que o Fernando pediu
+         ("a contagem deve ser feita sobre todas as tasks"). O de pontos vem ao
+         lado porque duas entregas grandes com oito ajustes pendentes dariam
+         20% numa semana em que quase todo o trabalho saiu. */
+      bloco('pct', p.pct + '%', 'cumprimento (por item)',
+            'Validadas pelo PM/PO dividido por tudo que passou pela sprint.') +
+      (p.pctPontos === null ? '' :
+        bloco('pctp', p.pctPontos + '%', 'cumprimento (por ponto)',
+              'A mesma conta, pesando o tamanho de cada demanda.')) +
+      (p.aguardando ? bloco('esp', p.aguardando, 'esperando você validar',
+        'O dev entregou e falta a sua validação. Estes pontos entram nesta sprint quando você validar — retroativamente.') : '') +
+      (p.saiu ? bloco('sai', p.saiu, 'saíram sem entregar',
+        'Rolaram para outra sprint ou voltaram ao backlog. Continuam no total desta sprint: foi aqui que elas falharam.') : '');
+  }
+
+  /* ── O RANKING ────────────────────────────────────────────────────────── */
+  const rkEl = document.getElementById('spr-ranking');
+  const rk = SPRINTPO.rankingDaSprint(state, _sprSel, etapa);
+  if (rkEl) {
+    const temDupla = rk.some(d => d.dupla);
+    rkEl.innerHTML = !rk.length ? '' :
+      '<div class="spr-tit">Por pessoa' +
+      (temDupla ? '<span class="spr-dica"> — demanda de dupla conta para os dois, ' +
+        'então a coluna de itens não soma o total da sprint; os pontos somam</span>' : '') +
+      '</div>' +
+      '<table class="spr-rk"><thead><tr><th>Dev</th><th>Validados</th>' +
+      '<th>Pontos</th><th>Cumprimento</th><th>Esperando</th><th>Em curso</th>' +
+      '<th>Saíram</th></tr></thead><tbody>' +
+      rk.map(d => '<tr>' +
+        '<td class="spr-rk-nome">' + esc(d.nome) + '</td>' +
+        '<td><strong>' + d.validados + '</strong> <span class="spr-de">de ' + d.total + '</span></td>' +
+        '<td><strong>' + d.pontos + '</strong> <span class="spr-de">de ' + d.pontosTotal + '</span></td>' +
+        '<td><div class="spr-barra"><span style="width:' + Math.min(100, d.pct) + '%"></span></div>' +
+          '<span class="spr-pct">' + d.pct + '%</span></td>' +
+        '<td>' + (d.aguardando || '—') + '</td>' +
+        '<td>' + (d.emCurso || '—') + '</td>' +
+        '<td class="' + (d.saiu ? 'spr-saiu' : '') + '">' + (d.saiu || '—') + '</td>' +
+      '</tr>').join('') + '</tbody></table>';
+  }
+
+  /* ── TODAS AS DEMANDAS, COM O RISCO ───────────────────────────────────── */
+  const soRisco = !!document.getElementById('spr-so-risco')?.checked;
+  const acomp = SPRINTPO.acompanhamentoDaSprint(state, _sprSel, etapa, hoje, window.PRAZO);
+  const emRisco = acomp.filter(x => x.riscos.length);
+  const nota = document.getElementById('spr-nota');
+  if (nota) {
+    nota.innerHTML = !acomp.length ? '' : emRisco.length
+      ? '<span class="spr-alerta">⚠ ' + emRisco.length + ' em risco</span> de ' + acomp.length
+      : '<span class="spr-ok">✓ nenhuma em risco</span>';
+  }
+  const SIT = { validado: ['✅', 'Validado'], aguardando: ['⏳', 'Esperando você'],
+                em_curso: ['🔧', 'Em curso'], saiu: ['↪', 'Saiu da sprint'],
+                negada: ['✕', 'Negada'] };
+  const lst = document.getElementById('spr-lista');
+  const mostrar = soRisco ? emRisco : acomp;
+  if (lst) {
+    lst.innerHTML = !acomp.length
+      ? '<div class="spr-vazio">Nenhuma demanda nesta sprint.</div>'
+      : !mostrar.length
+        ? '<div class="spr-vazio">Nenhuma em risco nesta sprint.</div>'
+        : '<div class="spr-tit">Demandas da sprint</div>' +
+          '<div class="spr-lista">' + mostrar.map(x => {
+            const m = x.m;
+            const s = SIT[x.situacao] || ['•', x.situacao];
+            return '<div class="spr-item' + (x.riscos.length ? ' risco' : '') + '"' +
+              ' onmousedown="event.stopPropagation()"' +
+              ' ondblclick="openModalMelhoria(\'' + esc(m.id) + '\')"' +
+              ' title="Duplo clique abre a demanda">' +
+              '<span class="spr-sit" data-s="' + esc(x.situacao) + '">' + s[0] + ' ' + esc(s[1]) + '</span>' +
+              '<span class="lote-cod">' + esc(m.codigo || '—') + '</span>' +
+              '<span class="spr-tit-d">' + esc(m.titulo || '') + '</span>' +
+              (x.pontos ? '<span class="spr-pts">' + x.pontos + ' pts</span>' : '') +
+              (m.dev ? '<span class="lote-dev">' + esc(m.dev) + '</span>' : '') +
+              (x.riscos.length
+                ? '<span class="spr-riscos">' + x.riscos.map(r =>
+                    '<span class="spr-r r-' + esc(r.chave) + '">' + esc(r.texto) + '</span>').join('') + '</span>'
+                : '') +
+            '</div>';
+          }).join('') + '</div>';
+  }
+}
+
+/** INICIAR A SPRINT — o ato que entrega a semana ao time.
+ *
+ *  "Quando eu iniciar a sprint as demandas ficarão disponíveis para o time, o
+ *   que não estiver com nome alocado ficará disponível no backlog dos devs."
+ *
+ *  CONFIRMA ANTES, dizendo quantas vão e quantas estão sem dono: iniciar é o
+ *  momento em que o PO descobre que esqueceu de alocar três — e descobrir isso
+ *  depois, pelo dev perguntando, é o que esta confirmação evita. Não é um ato
+ *  irreversível como o fechamento, mas é o que o time passa a ver. */
+async function sprintIniciar() {
+  const r = _sprSel;
+  if (!r) return;
+  const dem = SPRINTPO.demandasDaSprint(state, r);
+  const semDev = dem.filter(m => !String(m.dev || '').trim());
+  const ok = await confirmar({
+    titulo: '▶ Iniciar ' + SPRINTPO.rotuloCurto(r) + '?',
+    texto: dem.length + (dem.length === 1 ? ' demanda passa' : ' demandas passam') +
+           ' a aparecer no painel do time.' +
+           (semDev.length
+             ? '\n\n' + semDev.length + (semDev.length === 1 ? ' está' : ' estão') +
+               ' sem dono (' + semDev.map(m => m.codigo || m.id).join(', ') +
+               ') e ' + (semDev.length === 1 ? 'vai aparecer' : 'vão aparecer') +
+               ' no backlog de todos os devs, para quem pegar primeiro.'
+             : '\n\nTodas já têm dev alocado.'),
+    ok: 'Iniciar',
+  });
+  if (!ok) return;
+  const antes = state.sprints;
+  const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
+  const res = SPRINTPO.iniciar(state, r, quem, PRAZO.hojeISO());
+  if (!res.ok) { toast(res.erro, 'err'); return; }
+  _pendingEdits = true;
+  renderAll();
+  const salvou = await saveViaProxy();
+  if (!salvou) {
+    state.sprints = antes;
+    renderAll();
+    avisaFalha('Não consegui iniciar a sprint. Nada foi alterado.');
+    return;
+  }
+  _pendingEdits = false;
+  toast('▶ ' + SPRINTPO.rotuloCurto(r) + ' em curso · ' + res.demandas +
+        (res.demandas === 1 ? ' demanda liberada' : ' demandas liberadas') +
+        (res.semDev ? ', ' + res.semDev + ' sem dono no backlog do time' : '') + '.', 'ok');
+}
+
 function renderGerSemPontos() {
   const resumo = document.getElementById('sp-resumo');
   const lista = document.getElementById('sp-lista');
@@ -9632,6 +9965,9 @@ function renderGerencial() {
   const mes = parseInt(document.getElementById('ger-mes').value);
   const ano = parseInt(document.getElementById('ger-ano').value);
 
+  // A SPRINT VEM PRIMEIRO: e o periodo da decisao diaria. O mes responde ao
+  // comite; a sprint responde a segunda-feira.
+  renderGerSprint();
   renderGerSemPontos();
   // O cumprimento vem ANTES do prazo porque responde primeiro: o mes entregou o
   // que prometeu? "No prazo" e a pergunta seguinte, sobre o que saiu.
