@@ -74,6 +74,49 @@
    *  `ETAPAS_ALOCADA` acima: alocado e entregue são perguntas diferentes. */
   var ETAPAS_ENTREGUE = ['validacao', 'concluido'];
 
+  /* ═══ A REGRA DE NOVEMBRO — o ponto só entra DEPOIS do PM/PO ════════════════
+   *
+   * "A partir da conclusão do PO, a pontuação deverá contar retroativa. (...)
+   *  os pontos contarão a partir da entrada, porém só entra os pontos após a
+   *  validação."
+   *
+   * São DUAS afirmações, e elas puxam para lados opostos de propósito:
+   *
+   *   QUANDO O PONTO ENTRA  — na conclusão do PM/PO, e não na entrega do dev.
+   *   EM QUE SPRINT ELE CAI — na da ENTREGA, retroativamente.
+   *
+   * A segunda metade já estava feita: `diaDaEntrega` ancora em `entregue_em`, e
+   * o comentário dela diz por quê ("contar pela aprovação jogaria para a semana
+   * seguinte tudo que ficou parado em validação"). O que muda é a PRIMEIRA: até
+   * aqui `validacao` contava como entregue, pelo mesmo raciocínio do prazo — a
+   * espera do PM/PO não é do dev.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * POR QUE A MUDANÇA É DATADA, E NÃO UMA TROCA NA LISTA ACIMA.
+   *
+   * Tirar `validacao` de `ETAPAS_ENTREGUE` e pronto apagaria pontos de meses JÁ
+   * APRESENTADOS: toda demanda entregue em setembro e ainda parada no PM/PO
+   * perderia os pontos dela no relatório de setembro, retroativamente. É
+   * exatamente o defeito que o cabeçalho deste arquivo descreve sobre a
+   * repontuação — "o relatório passaria a dizer que você havia prometido 55
+   * desde o início". O passado não se reescreve por mudança de regra.
+   *
+   * O CORTE É PELO DIA DA ENTREGA, e não por `hoje`: é ele que diz a que mês
+   * aquele ponto pertence, e é o mesmo dia que decide em que sprint ele cai.
+   * Entregue em outubro, regra de outubro; entregue em novembro, regra nova.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * E O QUE ESTÁ ESPERANDO NÃO SOME EM SILÊNCIO — ver `aguardando`.          */
+  var REGRA_PONTOS_DESDE = '2026-11-01';
+
+  /** As etapas em que o dev JÁ ENTREGOU e o ponto ainda não foi liberado.
+   *
+   *  As duas, porque o Fernando descreveu a entrega assim: "a partir do momento
+   *  que o dev entrega uma demanda, ela vai para validação da área ou validação
+   *  PM/PO". Os dois destinos são pós-entrega; o que falta nos dois é a
+   *  conclusão do PM/PO, que é quem libera o ponto. */
+  var ETAPAS_ESPERANDO = ['validacao_area', 'validacao'];
+
   function num(v) {
     var n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : 0;
@@ -121,7 +164,42 @@
    *  trabalho foi feito". Conta desde a entrega do dev, e não desde a aprovação:
    *  a demanda que está com o PM/PO já saiu da mão de quem fez. */
   function entregues(m) {
-    if (!viva(m) || !ETAPAS_ENTREGUE.includes(etapaDe(m))) return 0;
+    if (!viva(m) || !liberaPontos(m, etapaDe(m))) return 0;
+    return num(m.poker_pontos);
+  }
+
+  /** ESTA DEMANDA SEGUE A REGRA NOVA? Pelo DIA DA ENTREGA — ver
+   *  `REGRA_PONTOS_DESDE`. Sem dia de entrega não há o que classificar: a
+   *  demanda ainda não entregou, e nenhuma das duas regras tem o que dizer. */
+  function regraNova(m) {
+    var d = diaDaEntrega(m);
+    return !!d && d >= REGRA_PONTOS_DESDE;
+  }
+
+  /** O PONTO JÁ PODE SER CONTADO? */
+  function liberaPontos(m, etapa) {
+    if (regraNova(m)) return etapa === 'concluido';
+    return ETAPAS_ENTREGUE.includes(etapa);
+  }
+
+  /** OS PONTOS QUE O DEV ENTREGOU E O PM/PO AINDA NÃO LIBEROU.
+   *
+   *  Existe pelo mesmo motivo que `semPontuacao`: o número que falta é o próprio
+   *  recado. Sem isto, a sprint em que o dev fechou 90 pontos e o PM/PO não
+   *  validou nenhum apareceria como uma semana de zero — e a conclusão errada
+   *  seria "o dev não produziu", quando a fila está do outro lado.
+   *
+   *  ELE NÃO SOMA COM `entregues`, e nunca deve somar: são respostas a perguntas
+   *  diferentes ("quanto saiu" e "quanto está parado esperando resposta"), e
+   *  juntá-los devolveria exatamente o número que a regra nova decidiu não
+   *  contar ainda.
+   *
+   *  Só para a regra nova. Na regra velha `validacao` JÁ conta como entregue —
+   *  contar o mesmo ponto nos dois baldes mostraria o setembro de alguém com o
+   *  dobro do tamanho. */
+  function aguardando(m) {
+    if (!viva(m) || !regraNova(m)) return 0;
+    if (!ETAPAS_ESPERANDO.includes(etapaDe(m))) return 0;
     return num(m.poker_pontos);
   }
 
@@ -265,8 +343,8 @@
     var acc = {};
     var pega = function (nome) {
       if (!acc[nome]) {
-        acc[nome] = { nome: nome, plan: 0, entregue: 0,
-                      qtdPlan: 0, qtdEntregue: 0, semPontuar: 0 };
+        acc[nome] = { nome: nome, plan: 0, entregue: 0, aguardando: 0,
+                      qtdPlan: 0, qtdEntregue: 0, qtdAguardando: 0, semPontuar: 0 };
       }
       return acc[nome];
     };
@@ -280,6 +358,7 @@
 
       var p = planejados(m);
       var e = entregues(m);
+      var ag = aguardando(m);
       var noPlano = dentro(diaDoPlano(m));
       var naEntrega = dentro(diaDaEntrega(m));
 
@@ -290,6 +369,7 @@
           if (semPontuacao(m)) a.semPontuar += 1 / q;
         }
         if (naEntrega && e) { a.entregue += e / q; a.qtdEntregue += 1 / q; }
+        if (naEntrega && ag) { a.aguardando += ag / q; a.qtdAguardando += 1 / q; }
       });
     });
 
@@ -299,8 +379,10 @@
         nome: a.nome,
         plan: Math.round(a.plan),
         entregue: Math.round(a.entregue),
+        aguardando: Math.round(a.aguardando),
         qtdPlan: Math.round(a.qtdPlan),
         qtdEntregue: Math.round(a.qtdEntregue),
+        qtdAguardando: Math.round(a.qtdAguardando),
         semPontuar: Math.round(a.semPontuar),
         /* O PERCENTUAL SÓ EXISTE COM PLANO. Sem planejado, "entregou 40 pontos"
            não tem denominador — e devolver 0% ou 100% ali seria inventar uma
@@ -323,7 +405,7 @@
    *  desenha a régua. */
   function porFaixa(lista, faixas) {
     return (faixas || []).map(function (f) {
-      var plan = 0, entregue = 0, semPontuar = 0;
+      var plan = 0, entregue = 0, espera = 0, semPontuar = 0;
       (lista || []).forEach(function (m) {
         if (!viva(m)) return;
         var d1 = diaDoPlano(m), d2 = diaDaEntrega(m);
@@ -331,10 +413,14 @@
           plan += planejados(m);
           if (semPontuacao(m)) semPontuar += 1;
         }
-        if (d2 >= f.de && d2 <= f.ate) entregue += entregues(m);
+        if (d2 >= f.de && d2 <= f.ate) {
+          entregue += entregues(m);
+          espera += aguardando(m);
+        }
       });
       return { de: f.de, ate: f.ate, plan: Math.round(plan),
-               entregue: Math.round(entregue), semPontuar: semPontuar };
+               entregue: Math.round(entregue), aguardando: Math.round(espera),
+               semPontuar: semPontuar };
     });
   }
 
@@ -364,6 +450,11 @@
     rolagens: rolagens,
     ETAPAS_ALOCADA: ETAPAS_ALOCADA,
     ETAPAS_ENTREGUE: ETAPAS_ENTREGUE,
+    ETAPAS_ESPERANDO: ETAPAS_ESPERANDO,
+    REGRA_PONTOS_DESDE: REGRA_PONTOS_DESDE,
+    regraNova: regraNova,
+    liberaPontos: liberaPontos,
+    aguardando: aguardando,
     planejados: planejados,
     entregues: entregues,
     semPontuacao: semPontuacao,

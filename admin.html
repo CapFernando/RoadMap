@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="8d61f922fb">
+<html lang="pt-BR" data-build="a5897a0200">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1330,11 +1330,11 @@
   <script src="resumo-projeto.js?v=2e30585cbe"></script>
   <script src="fila.js?v=90c9b67421"></script>
 <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=c1149e7924"></script>
+<script src="prazo.js?v=88870a48ae"></script>
 <script src="dialogo.js?v=171b484b8c"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=a6a54ef3d1"></script>
-<script src="capacidade.js?v=63737a8670"></script>
+<script src="capacidade.js?v=e7e1449a7d"></script>
 <script src="apresentacao.js?v=6da179e50d"></script>
 <script src="relatorio-ppt.js?v=15951846b0"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
@@ -1352,6 +1352,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
+<script src="sprint.js?v=6d7465e9e8"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -12726,6 +12727,15 @@ async function saveMelhoria() {
     /* O OBJETO INTEIRO, e nao so a marca: o veredito do dev e as duvidas dele
        moram aqui. Gravar so o booleano apagaria o que ele escreveu. */
     grill:               _mGrill || existing.grill || {},
+    /* A SPRINT DO PM/PO não tem campo neste formulário — ela é repassada pelo
+       gesto próprio (ver `sprint.js`). Sem estas quatro linhas, salvar qualquer
+       outro campo do card tiraria a demanda da sprint em silêncio: é a mesma
+       armadilha da lista fechada que já custou `projetos`, as assinaturas do
+       spike e o pedido de pausa nesta mesma função. */
+    sprint_po:           existing.sprint_po           || '',
+    sprint_po_em:        existing.sprint_po_em        || '',
+    sprint_po_por:       existing.sprint_po_por       || '',
+    sprint_po_historico: existing.sprint_po_historico || [],
     // Pausa nao tem campo no formulario: sem repassar, salvar apagaria a pausa.
     pausado_em:          existing.pausado_em     || '',
     pausa_motivo:        existing.pausa_motivo   || '',

@@ -5820,15 +5820,64 @@ ok(/PRAZO\.diasDeAtraso\(maisAntiga, statusKey\(maisAntiga\)/.test(ADMIN),
 ok(/ETAPAS_APOS_O_DEV = \['validacao', 'concluido'\]/.test(PRZ),
    'validacao e conclusao medem pela entrega do dev, e nao por hoje');
 
-// `entregue_em` e gravado ao ENTRAR em validacao — e por isso ele responde
-// "quando o dev terminou" sem depender de o PM ter validado.
-ok(/if \(colKey === 'validacao'\) \{\s*m\.entregue_em = new Date\(\)\.toISOString\(\);/.test(DEV),
-   'entregue_em e gravado no instante em que a demanda entra em validacao');
-/* REPROVADA CONTA A ULTIMA ENTREGA. AX-165: entregue 03/08 (prazo 07/08),
-   reprovada 06/08, entregue de novo 11/08 — atraso de 4 dias, e nao zero. Guardar
-   a primeira data faria uma demanda REPROVADA aparecer no prazo no relatorio. */
-ok(!/colKey === 'validacao' && !m\.entregue_em/.test(DEV),
-   'e entregar DE NOVO depois de reprovada sobrescreve a data');
+/* ═══ O CARIMBO DA ENTREGA, EXECUTADO ═══════════════════════════════════════
+ *
+ * `entregue_em` responde "quando o dev terminou" sem depender de o PM ter
+ * validado, e e ele que ancora o atraso E a sprint em que o ponto cai.
+ *
+ * ISTO ERA DUAS BUSCAS DE TEXTO, e elas quebraram na primeira mudanca legitima
+ * da regra — quando a validacao da area passou a carimbar tambem. Buscar a FORMA
+ * do `if` obriga a reescrever a invariante a cada refatoracao, e uma invariante
+ * reescrita sob pressao e uma invariante afrouxada. Agora o bloco e EXTRAIDO e
+ * RODADO contra os casos que importam; a forma pode mudar a vontade, o
+ * comportamento nao.                                                          */
+(() => {
+  const us = corpo(DEV, 'async function updateStatus(id, colKey, horasRealizadas, implementacao) {');
+  const i = us ? us.indexOf('const agoraISO') : -1;
+  const j = us ? us.indexOf('// Espera o anexo') : -1;
+  if (i < 0 || j < 0 || j <= i) {
+    ok(false, 'o bloco que carimba a entrega foi encontrado no painel do dev');
+    return;
+  }
+  const carimba = new Function('m', 'colKey', 'spAnterior',
+                               us.slice(i, j) + '\nreturn m.entregue_em;');
+  const roda = (de, para, tinha) => {
+    const m = tinha ? { entregue_em: tinha } : {};
+    return carimba(m, para, de);
+  };
+  const VELHO = '2026-08-03T12:00:00.000Z';
+
+  ok(roda('em_andamento', 'validacao', '') !== '',
+     'entregue_em e gravado no instante em que a demanda entra em validacao');
+
+  /* REPROVADA CONTA A ULTIMA ENTREGA. AX-165: entregue 03/08 (prazo 07/08),
+     reprovada 06/08, entregue de novo 11/08 — atraso de 4 dias, e nao zero.
+     Guardar a primeira data faria uma demanda REPROVADA aparecer no prazo. */
+  ok(roda('em_andamento', 'validacao', VELHO) !== VELHO,
+     'e entregar DE NOVO depois de reprovada sobrescreve a data');
+
+  /* A AREA TAMBEM E ENTREGA: "a partir do momento que o dev entrega, ela vai
+     para validacao da area OU validacao PM/PO". Os dois destinos carimbam. */
+  ok(roda('em_andamento', 'validacao_area', '') !== '',
+     'e mover para a validacao da area carimba igual');
+  ok(roda('em_andamento', 'validacao_area', VELHO) !== VELHO,
+     'inclusive na reentrega depois de a area devolver');
+
+  /* MAS AVANCAR DA AREA PARA O PM/PO NAO E ENTREGAR DE NOVO. Recarimbar ali
+     jogaria o ponto para a sprint em que a area respondeu — ate uma semana
+     depois —, e e justamente contra quem entregou no dia. */
+  ok(roda('validacao_area', 'validacao', VELHO) === VELHO,
+     'area -> PM/PO preserva a data: e a MESMA entrega seguindo adiante');
+  ok(roda('validacao_area', 'validacao', '') !== '',
+     'e sem data nenhuma ela ainda e carimbada, em vez de ficar vazia');
+
+  /* CONCLUIR DIRETO tambem encerra o prazo, mas sem sobrescrever quem ja tem
+     data: uma reabertura seguida de conclusao empurraria a entrega para frente. */
+  ok(roda('em_andamento', 'concluido', '') !== '',
+     'concluir direto, sem passar por validacao, tambem carimba');
+  ok(roda('validacao', 'concluido', VELHO) === VELHO,
+     'e concluir NAO sobrescreve a entrega que ja estava registrada');
+})();
 /* ANCORADO NA ROTA, e nao num literal.
    Isto procurava `m.status_planejamento = 'validacao'` e media 400 caracteres
    adiante. Quando o destino da entrega passou a depender do tipo — evolucao
@@ -23004,6 +23053,248 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!/solicitante: document\.getElementById\('n-solicitante'\)\.value\.trim\(\) \|\| existing\?\.solicitante \|\| currentDev/
         .test(semComentario(DEV)),
        'e o painel do dev nao preenche mais com o proprio dev quando o campo fica vazio');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     AS REGRAS DE NOVEMBRO: O PONTO ESPERA O PM/PO, E A SPRINT E DELE
+
+     Tudo aqui e EXECUTADO. Uma invariante que so procurasse `'concluido'` numa
+     lista passaria com a regra invertida — foi assim que a primeira versao da
+     invariante do `prazo.js` nesta mesma safra de novembro "passou" sem medir
+     nada: ela chamava `diasDeAtraso(base, '2026-10-01')` pondo a data onde vai a
+     ETAPA, e os dois lados devolviam `null`.                                 */
+  sec('novembro: pontuacao, sprint do PO e o prazo da area');
+  {
+    const SPJS = fs.readFileSync('sprint.js', 'utf8');
+    const SP = require('./sprint.js');
+    const ETP = require('./etapa-demanda.js');
+    const PZ = require('./prazo.js');
+
+    let erroSp = null;
+    try { new Function(SPJS); } catch (e) { erroSp = e.message; }
+    ok(!erroSp, 'sprint.js sem erro de sintaxe', erroSp || '');
+
+    // ── O PONTO SO ENTRA DEPOIS DO PM/PO, E O PASSADO NAO MUDA ──────────────
+    const pt = (etapa, dia) => ({ poker_pontos: 13, status_planejamento: etapa,
+                                  entregue_em: dia });
+    const outVal = pt('validacao', '2026-10-20');
+    const novVal = pt('validacao', '2026-11-05');
+    const novArea = pt('validacao_area', '2026-11-05');
+    const novFim = pt('concluido', '2026-11-05');
+
+    ok(CAPI.entregues(outVal) === 13,
+       'entrega de OUTUBRO parada em validacao continua contando',
+       'mudar isso apagaria pontos de meses ja apresentados');
+    ok(CAPI.entregues(novVal) === 0 && CAPI.aguardando(novVal) === 13,
+       'entrega de NOVEMBRO parada em validacao nao conta — e aparece como aguardando');
+    ok(CAPI.entregues(novArea) === 0 && CAPI.aguardando(novArea) === 13,
+       'o mesmo vale para a validacao da area');
+    ok(CAPI.entregues(novFim) === 13 && CAPI.aguardando(novFim) === 0,
+       'concluida pelo PM/PO o ponto entra, e sai do balde de espera');
+
+    /* O MESMO PONTO NUNCA ESTA NOS DOIS BALDES. Somar os dois e a leitura
+       errada que a tela pode fazer; o que nao pode e a conta PERMITIR a soma. */
+    const todosOsCasos = [outVal, pt('concluido', '2026-10-20'), novVal, novArea, novFim,
+                          pt('em_andamento', ''), pt('validacao', '')];
+    ok(todosOsCasos.every(m => !(CAPI.entregues(m) && CAPI.aguardando(m))),
+       'nenhum caso cai em "entregue" e "aguardando" ao mesmo tempo');
+
+    /* E A ANCORA CONTINUA SENDO O DIA DA ENTREGA — e a metade "retroativa" da
+       regra. Se `diaDaEntrega` passasse a ler a conclusao, o ponto cairia na
+       sprint em que o PM/PO respondeu, e nao na que o dev entregou. */
+    ok(CAPI.diaDaEntrega({ entregue_em: '2026-11-05', concluido_em: '2026-11-20' })
+         === '2026-11-05',
+       'o ponto cai na sprint da ENTREGA, e nao na da aprovacao');
+
+    // ── A TASK DO DEV NASCE NO BACKLOG, E CONTINUA LA ───────────────────────
+    /* MEDIDO CONTRA `etapa-demanda.js`, e nao conferindo o campo gravado: a
+       armadilha e que `backlog` COM `inicio` no passado vira `em_andamento` na
+       leitura. Uma invariante que olhasse so `status_planejamento === 'backlog'`
+       daria OK para uma task que o quadro desenha em Em Andamento. */
+    /* PASSA UM `inicio` DE PROPOSITO. A primeira versao desta invariante criava
+       a task sem data nenhuma — e ai `o.inicio = ''` dentro do modulo nao tinha
+       o que apagar: removi a linha inteira numa sabotagem e NADA falhou. A regra
+       que se quer proteger e "o modulo tira a data que vier", e para medir isso
+       a data tem de vir. */
+    const nova = SP.nasceForaDaSprint({ id: 'x', titulo: 't', entrega: '2026-11-30',
+                                        inicio: '2026-11-09', sprint: 'S2-11-2026' });
+    ok(nova.inicio === '' && nova.sprint === '',
+       'nasceForaDaSprint TIRA a data de inicio e a sprint derivada que vierem',
+       'inicio=' + JSON.stringify(nova.inicio) + ' sprint=' + JSON.stringify(nova.sprint));
+    ok(ETP.gravada(nova, '2026-11-09') === 'backlog',
+       'task aberta pelo dev FICA em backlog para quem le a etapa',
+       'veio: ' + ETP.gravada(nova, '2026-11-09'));
+    ok(SP.foraDaSprint(nova), 'e ela nasce fora de qualquer sprint');
+    ok(ETP.gravada(Object.assign({}, nova, { inicio: '2026-11-09' }), '2026-11-09')
+         === 'em_andamento',
+       'e a armadilha e real: com `inicio` ela sairia do backlog sozinha');
+
+    // ── A SPRINT E UM ATO, E O ATO FICA REGISTRADO ──────────────────────────
+    const dm = {};
+    const r1 = SP.repassar(dm, 'S1-11-2026', 'Fernando', '2026-11-02');
+    const r2 = SP.repassar(dm, 'S2-11-2026', 'Fernando', '2026-11-09');
+    ok(r1.ok && !r1.entrouAtrasada, 'o primeiro repasse nao entra atrasado');
+    ok(r2.ok && r2.entrouAtrasada && SP.pulos(dm) === 1,
+       'pular para a sprint seguinte entra ATRASADA, e o pulo fica contado');
+    ok(SP.sprintDeOrigem(dm) === 'S1-11-2026',
+       'e a sprint de origem — o compromisso que foi furado — continua sabida');
+    ok(!SP.repassar({}, 'S1-11-26', 'F', '2026-11-02').ok,
+       'rotulo fora do formato e recusado',
+       'a base ja teve duas grafias para a mesma sprint no campo antigo');
+    ok(!SP.repassar(dm, 'S2-11-2026', 'F', '2026-11-10').ok,
+       'repassar para a sprint em que ela ja esta nao cria pulo falso');
+    SP.retirar(dm, 'Fernando', '2026-11-10');
+    ok(SP.foraDaSprint(dm) && SP.historico(dm).length === 2,
+       'tirar da sprint volta para o backlog SEM apagar por onde ela passou');
+
+    // ── OS CINCO DIAS UTEIS DA AREA: A TELA E O WORKER CONCORDAM ────────────
+    const promove = corpo(W, 'function promoveAreaVencida(data, hoje) {');
+    const feriadosFn = corpo(W, 'function feriadosISO(data) {');
+    const diasUteisFn = corpo(W, 'function diasUteis(de, ate, feriados) {');
+    ok(!!promove && !!feriadosFn && !!diasUteisFn,
+       'as tres funcoes do prazo da area existem no Worker');
+    /* O NUMERO SAI DO CODIGO, E NAO DO TESTE. A primeira versao injetava
+       `const DIAS_UTEIS_NA_AREA = 5` no harness — entao a sabotagem que trocava
+       o prazo do Worker para TRES dias passava lisa: eu media a minha constante,
+       nao a dele. E o mesmo defeito que ja apareceu nesta sessao na invariante
+       do `ordena`, e ele so aparece sabotando. */
+    const mDias = W.match(/const DIAS_UTEIS_NA_AREA = (\d+);/);
+    ok(!!mDias && Number(mDias[1]) === PZ.DIAS_UTEIS_NA_AREA,
+       'o Worker e as telas combinam o MESMO prazo para a area',
+       'worker=' + (mDias ? mDias[1] : '?') + ' telas=' + PZ.DIAS_UTEIS_NA_AREA);
+    if (promove && feriadosFn && diasUteisFn && mDias) {
+      const WAREA = new Function([
+        feriadosFn, diasUteisFn, promove,
+        'const DIAS_UTEIS_NA_AREA = ' + mDias[1] + ';',
+        'function hojeBR(){ return "2026-11-09"; }',
+        'return promoveAreaVencida;',
+      ].join('\n'))();
+
+      /* OS DOIS LADOS, CASO A CASO. O Worker e a tela tem a MESMA conta escrita
+         duas vezes (ele nao importa `prazo.js` — ver o cabecalho dele), e e
+         exatamente esse tipo de copia que diverge calada. Sem feriado, elas tem
+         de dar a mesma resposta em todos os dias da janela. */
+      let divergiu = [];
+      for (const desde of ['2026-11-02', '2026-11-03', '2026-11-05', '2026-11-06']) {
+        for (const ref of ['2026-11-06', '2026-11-09', '2026-11-10', '2026-11-12', '2026-11-13']) {
+          const card = { id: 'c', status_planejamento: 'validacao_area',
+                         validacao_area_em: desde, entregue_em: desde + 'T10:00:00.000Z' };
+          const daTela = PZ.areaVenceu(card, ref, []);
+          const doWorker = WAREA({ feriados: [], melhorias: [card] }, ref).length > 0;
+          if (daTela !== doWorker) divergiu.push(desde + '->' + ref);
+        }
+      }
+      ok(!divergiu.length,
+         'a tela e o Worker dizem o mesmo sobre o vencimento da area',
+         divergiu.length ? 'divergiram em ' + divergiu.join(', ') : '');
+
+      /* A PROMOCAO NAO RECARIMBA A ENTREGA. Se carimbasse, o ponto cairia na
+         sprint em que a AREA deixou o prazo estourar — o contrario exato da
+         regra retroativa, e justamente contra quem entregou no dia. */
+      const antigo = { id: 'c', codigo: 'AX-9', status_planejamento: 'validacao_area',
+                       validacao_area_em: '2026-11-02',
+                       entregue_em: '2026-11-02T10:00:00.000Z' };
+      const movidas = WAREA({ feriados: [], melhorias: [antigo] }, '2026-11-09');
+      ok(movidas.length === 1 && antigo.status_planejamento === 'validacao',
+         'passados os cinco dias uteis a demanda vai sozinha para o PM/PO');
+      ok(antigo.entregue_em === '2026-11-02T10:00:00.000Z',
+         'e a data da entrega do dev NAO e recarimbada pela promocao');
+
+      /* QUEM NAO ESTA NA AREA NAO E TOCADO, e oculta tambem nao: uma demanda
+         arquivada com carimbo velho reapareceria no PM/PO sem ninguem pedir. */
+      const fora = { id: 'f', status_planejamento: 'em_andamento', validacao_area_em: '2026-01-01' };
+      const oculta = { id: 'o', oculto: true, status_planejamento: 'validacao_area',
+                       validacao_area_em: '2026-01-01' };
+      WAREA({ feriados: [], melhorias: [fora, oculta] }, '2026-11-09');
+      ok(fora.status_planejamento === 'em_andamento' &&
+         oculta.status_planejamento === 'validacao_area',
+         'quem nao esta na area, e quem esta oculto, nao sao promovidos');
+    }
+
+    /* A ORDEM DAS DUAS CHAMADAS. `carimbaAreaValidacao` e quem LIMPA o carimbo
+       de quem saiu da etapa — promover depois dele deixaria o card no PM/PO
+       ainda dizendo "ha 6 dias na area". E tem de valer nas DUAS rotas. */
+    const trechos = WC.split('promoveAreaVencida(data)');
+    ok(trechos.length === 3, 'as duas rotas de gravacao promovem a area vencida',
+       'encontradas: ' + (trechos.length - 1));
+    for (let i = 1; i < trechos.length; i++) {
+      const depois = trechos[i].slice(0, 400);
+      ok(/carimbaAreaValidacao\(data,/.test(depois),
+         '  e a promocao vem ANTES de carimbaAreaValidacao na rota ' + i);
+    }
+
+    // ── QUEM PEDIU: PREENCHER PODE, TROCAR NAO ──────────────────────────────
+    const travaSol = corpo(W, 'function travaSolicitantePreenchido(recebido, servidor, papel) {');
+    ok(!!travaSol, 'a trava do solicitante existe no Worker');
+    if (travaSol) {
+      const F = new Function(travaSol + '\nreturn travaSolicitantePreenchido;')();
+      const srv = { melhorias: [{ id: '1', codigo: 'AX-1', solicitante: '' },
+                                { id: '2', codigo: 'AX-2', solicitante: 'Marina' }] };
+      const vindo = { melhorias: [{ id: '1', codigo: 'AX-1', solicitante: 'Joana' },
+                                  { id: '2', codigo: 'AX-2', solicitante: 'Outro' }] };
+      const rev = F(vindo, srv, 'dev');
+      ok(vindo.melhorias[0].solicitante === 'Joana',
+         'o dev PREENCHE o solicitante quando o campo esta vazio');
+      ok(vindo.melhorias[1].solicitante === 'Marina' && rev.length === 1,
+         'e nao troca o nome que ja estava la — e o solicitante quem homologa');
+      const doAdm = { melhorias: [{ id: '2', codigo: 'AX-2', solicitante: 'Outro' }] };
+      F(doAdm, srv, 'admin');
+      ok(doAdm.melhorias[0].solicitante === 'Outro',
+         'o PM/PO continua corrigindo o nome pelo Admin');
+    }
+
+    // ── A SPRINT SO ENTRA PELA MAO DO PM/PO ─────────────────────────────────
+    const travaSp = corpo(W, 'function travaSprintDoPO(recebido, servidor, papel) {');
+    ok(!!travaSp, 'a trava da sprint do PO existe no Worker');
+    if (travaSp) {
+      const F = new Function(travaSp + '\nreturn travaSprintDoPO;')();
+      const srv = { melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S1-11-2026',
+                                  sprint_po_historico: [{ sprint: 'S1-11-2026' }] }] };
+      const vindo = { melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S2-11-2026',
+                                    sprint_po_historico: [] },
+                                  { id: 'nova', sprint_po: 'S2-11-2026' }] };
+      F(vindo, srv, 'dev');
+      ok(vindo.melhorias[0].sprint_po === 'S1-11-2026' &&
+         vindo.melhorias[0].sprint_po_historico.length === 1,
+         'o dev nao move a demanda de sprint — e o historico volta inteiro junto');
+      ok(vindo.melhorias[1].sprint_po === '',
+         'e task nova nao nasce dentro da sprint');
+      const doPO = { melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S2-11-2026' }] };
+      ok(F(doPO, srv, 'admin').length === 0 && doPO.melhorias[0].sprint_po === 'S2-11-2026',
+         'e o PM/PO repassa sem obstaculo');
+    }
+
+    // ── O QUE NAO TEM CAMPO NO FORMULARIO SOME SEM UMA LINHA ────────────────
+    /* A armadilha da lista fechada, que nesta base ja custou `projetos`, as
+       assinaturas do spike e o pedido de pausa. Salvar um card pelo Admin ou
+       mover uma data pelo gantt nao pode tirar a demanda da sprint. */
+    for (const [nome, src] of [['admin', ADMIN], ['gantt', GANTT]]) {
+      ok(/sprint_po:\s*existing\.sprint_po/.test(semComentario(src)) &&
+         /sprint_po_historico:\s*existing\.sprint_po_historico/.test(semComentario(src)),
+         nome + ' repassa a sprint do PO ao gravar, em vez de apaga-la');
+    }
+    ok(/sprint_po:\s+'sprint do PM\/PO'/.test(W) && /solicitante:\s+'solicitante'/.test(W),
+       'a sprint do PO e o solicitante entram no historico de alteracoes');
+
+    // ── A TASK DO DEV, NA TELA ──────────────────────────────────────────────
+    const nd = corpo(DEV, 'async function saveNewDep() {');
+    ok(!!nd && /SPRINTPO\.nasceForaDaSprint\(/.test(semComentario(nd)),
+       'o painel do dev abre a task pela regra compartilhada');
+    ok(!!nd && !/status_planejamento:\s*'em_andamento'/.test(semComentario(nd)),
+       'e ela nao nasce mais em Em Andamento');
+    ok(!!nd && !/inicio:\s*new Date\(\)/.test(semComentario(nd)),
+       'nem com data de inicio, que a tiraria do backlog na leitura seguinte');
+    for (const [nome, src] of [['admin', ADMIN], ['dev', DEV], ['gantt', GANTT]]) {
+      ok(/src="sprint\.js\?v=/.test(src), nome + ' carrega sprint.js versionado');
+    }
+
+    // ── A AREA TAMBEM E ENTREGA, E AVANCAR DELA NAO E ENTREGAR DE NOVO ──────
+    const us = corpo(DEV, 'async function updateStatus(id, colKey, horasRealizadas, implementacao) {');
+    const usc = semComentario(us || '');
+    ok(/colKey === 'validacao_area'/.test(usc) && /m\.entregue_em = agoraISO/.test(usc),
+       'mover para a validacao da area tambem carimba a entrega do dev');
+    ok(/vindoDaArea/.test(usc) && /spAnterior === 'validacao_area'/.test(usc),
+       'e o caminho area -> PM/PO nao recarimba: e a MESMA entrega seguindo');
   }
 
   let erroPz = null;

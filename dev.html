@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="411c190ee2">
+<html lang="pt-BR" data-build="b8fc429dcf">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -670,8 +670,8 @@
   <script src="vinculo.js?v=56499cb6e1"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
-<script src="prazo.js?v=c1149e7924"></script>
-<script src="capacidade.js?v=63737a8670"></script>
+<script src="prazo.js?v=88870a48ae"></script>
+<script src="capacidade.js?v=e7e1449a7d"></script>
 <script src="dialogo.js?v=171b484b8c"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
@@ -693,6 +693,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
+<script src="sprint.js?v=6d7465e9e8"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -4687,14 +4688,25 @@ async function saveNewDep() {
   if (!dev)    { toast('Selecione o responsável.', 'err'); return; }
   const parent = state.melhorias.find(m => m.id === parentId);
   if (!parent) return;
-  const newDep = {
+  /* ═══ NASCE NO BACKLOG, FORA DA SPRINT ═══════════════════════════════════
+   *
+   * "Toda task aberta pelo dev deverá cair em backlog fora da sprint; dentro da
+   *  sprint apenas demandas que o PM/PO repassar."
+   *
+   * Ela nascia em `em_andamento` com `inicio` de hoje — isto é, já dentro da
+   * sprint corrente e já contando como trabalho em curso, sem ninguém ter
+   * decidido nada. `SPRINTPO.nasceForaDaSprint` põe os quatro campos que isso
+   * exige (etapa, status, sprint do PO e `inicio` VAZIO) num lugar só, porque o
+   * endpoint abre task pela mesma regra e dois literais divergiriam.
+   *
+   * O `inicio` vazio não é zelo: `etapa-demanda.js` promove backlog com início
+   * no passado para `em_andamento`, e com a data de hoje a task sairia do
+   * backlog no mesmo instante em que entrasse. Medido antes de escrever isto. */
+  const newDep = SPRINTPO.nasceForaDaSprint({
     id: uid(), titulo, descricao: desc, dev,
     tema_id: parent.tema_id,
     tipo: parent.tipo || '',   // dependência herda a classificação do card pai
-    inicio: new Date().toISOString().slice(0,10),
     entrega,
-    status: 'iniciada',
-    status_planejamento: 'em_andamento',
     parent_id: parentId,
     /* `is_dependency` É O TIPO DO ELO, e não "existe elo" — `parent_id` já diz
        isso. `true` trava o card principal; `false` só pendura. Gravar sempre
@@ -4702,7 +4714,7 @@ async function saveNewDep() {
     is_dependency: depTipoEscolhido() === 'dependencia',
     horas_realizadas: 0,
     criado_em: new Date().toISOString(),
-  };
+  });
   state.melhorias.push(newDep);
   closeModal('modal-dep');
   renderKanban();
@@ -5953,10 +5965,27 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
      Concluir DIRETO, sem passar por Validacao, tambem encerra o prazo — e ai a
      data e gravada e nao deduzida, senao uma reabertura posterior a sobrescreveria
      com um dia mais tarde. */
-  if (colKey === 'validacao') {
-    m.entregue_em = new Date().toISOString();
+  /* A VALIDACAO DA AREA TAMBEM E ENTREGA, e esta linha e nova.
+     "A partir do momento que o dev entrega uma demanda, ela vai para validacao
+     da area OU validacao PM/PO" — os dois destinos sao pos-entrega, e ate aqui
+     so o segundo carimbava. A demanda que passava pela area chegava ao PM/PO com
+     `entregue_em` do dia em que SAIU da area, e nao do dia em que o dev a
+     entregou: ate uma semana de diferenca, e e essa data que decide em que
+     sprint o ponto cai (ver `diaDaEntrega` em capacidade.js).
+
+     E POR ISSO O CAMINHO AREA -> PM/PO NAO RECARIMBA. Avancar da area para o
+     PM/PO e a MESMA entrega seguindo adiante, nao uma nova — recarimbar ali
+     desfaria justamente a correcao acima. Quem recarimba e a reentrega depois de
+     uma devolucao, e essa continua recarimbando: voltar para `em_andamento` e
+     entregar de novo passa por um dos dois primeiros ramos. */
+  const agoraISO = new Date().toISOString();
+  const vindoDaArea = spAnterior === 'validacao_area';
+  if (colKey === 'validacao_area') {
+    m.entregue_em = agoraISO;
+  } else if (colKey === 'validacao' && (!vindoDaArea || !m.entregue_em)) {
+    m.entregue_em = agoraISO;
   } else if (colKey === 'concluido' && !m.entregue_em) {
-    m.entregue_em = new Date().toISOString();
+    m.entregue_em = agoraISO;
   }
   // Espera o anexo terminar: mover para Validacao com o envio no ar deixaria o
   // print de fora justamente na entrega.

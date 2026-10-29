@@ -166,6 +166,87 @@
     return Math.round((d(r) - d(e)) / 86400000);
   }
 
+  /* ═══ A AREA TEM PRAZO — e esgotado ele a demanda SEGUE ═════════════════════
+   *
+   * "Quando estiver em validacao da area, apos 5 dias uteis a demanda devera ir
+   *  para validacao PM/PO."
+   *
+   * O contador ja existia (`diasNaArea`, logo acima) e so olhava. Ele nasceu do
+   * pedido "preciso de um contador de tempo (dias) que a demanda esta nessa
+   * etapa" — e um contador sem consequencia e o mesmo que nao ter contador: a
+   * demanda fica na area ate alguem lembrar dela.
+   *
+   * DIAS UTEIS, E NAO CORRIDOS, e e por isso que esta e uma funcao nova em vez
+   * de uma comparacao sobre `diasNaArea`. Cinco dias corridos a partir de uma
+   * quinta-feira vencem na terca seguinte, dando a area TRES dias uteis para
+   * responder; a partir de uma segunda, vencem no sabado, dando CINCO. O mesmo
+   * prazo escrito valeria coisas diferentes conforme o dia da semana em que o
+   * dev entregasse — e quem entrega nao escolhe isso.
+   *
+   * CONTA A PARTIR DO DIA SEGUINTE ao carimbo. O dia em que o card chega na area
+   * ja esta correndo quando ele chega; conta-lo inteiro cobraria da area um dia
+   * que ela recebeu pela metade.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * OS FERIADOS SAO OPCIONAIS, E QUEM PROMOVE E O SERVIDOR.
+   *
+   * A lista de feriados mora no `gantt.html` e no Worker; as outras telas nao a
+   * tem. Sem ela a conta e "segunda a sexta", e um feriado dentro da janela faz
+   * a tela mostrar o vencimento um dia antes do que o servidor aplica.
+   *
+   * ISSO E TOLERAVEL PORQUE A TELA SO MOSTRA. Quem MOVE a demanda e o Worker, num
+   * passo so, com a lista dele — exatamente como `carimbaAreaValidacao`, que
+   * tambem nasce da transicao que so o servidor ve. Se a promocao fosse feita
+   * pela tela, essa diferenca de um dia viraria duas telas discordando sobre
+   * onde o card esta, que e o defeito que o `etapa-demanda.js` inteiro existe
+   * para nao deixar acontecer de novo.                                        */
+  var DIAS_UTEIS_NA_AREA = 5;
+
+  /** DIAS UTEIS JA GASTOS NA AREA. `null` sem carimbo — mesma razao de
+   *  `diasNaArea`: zero se le como "chegou hoje", e nao como "nao sei". */
+  function diasUteisNaArea(m, ref, feriados) {
+    var e = iso((m || {}).validacao_area_em);
+    if (!ehData(e)) return null;
+    var r = iso(ref || hojeISO());
+    if (!ehData(r) || r <= e) return 0;
+    var fer = {};
+    (feriados || []).forEach(function (f) { fer[iso(f)] = true; });
+    var p = e.split('-');
+    var cur = Date.UTC(+p[0], +p[1] - 1, +p[2]);
+    var q = r.split('-');
+    var fim = Date.UTC(+q[0], +q[1] - 1, +q[2]);
+    var n = 0;
+    /* TETO DE VOLTAS, e nao `while (cur <= fim)` solto. Uma data corrompida no
+       campo (ano 1970, que ja apareceu nesta base vindo de importacao) faria
+       este laco rodar vinte mil vezes dentro do `render` de cada card. */
+    for (var i = 0; i < 400; i++) {
+      cur += 86400000;
+      if (cur > fim) break;
+      var dia = new Date(cur);
+      var dow = dia.getUTCDay();
+      if (dow === 0 || dow === 6) continue;
+      if (fer[dia.toISOString().slice(0, 10)]) continue;
+      n += 1;
+    }
+    return n;
+  }
+
+  /** A AREA ESTOUROU O PRAZO? So faz sentido para quem esta LA — perguntar de
+   *  uma demanda que ja saiu devolveria `true` para sempre, porque o carimbo
+   *  so e limpo pelo servidor na transicao. */
+  function areaVenceu(m, ref, feriados) {
+    if (String((m || {}).status_planejamento || '') !== 'validacao_area') return false;
+    var n = diasUteisNaArea(m, ref, feriados);
+    return n !== null && n >= DIAS_UTEIS_NA_AREA;
+  }
+
+  /** QUANTOS DIAS UTEIS AINDA RESTAM. `null` sem carimbo; nunca negativo. */
+  function diasRestantesNaArea(m, ref, feriados) {
+    var n = diasUteisNaArea(m, ref, feriados);
+    if (n === null) return null;
+    return Math.max(0, DIAS_UTEIS_NA_AREA - n);
+  }
+
   /** O PRAZO QUE VALE — o combinado, esticado pelos dias em que a demanda esteve
    *  parada por algo fora do alcance de quem faz.
    *
@@ -470,6 +551,10 @@
 
   raiz.PRAZO = {
     ETAPAS_QUE_CORREM: ETAPAS_QUE_CORREM,
+    DIAS_UTEIS_NA_AREA: DIAS_UTEIS_NA_AREA,
+    diasUteisNaArea: diasUteisNaArea,
+    diasRestantesNaArea: diasRestantesNaArea,
+    areaVenceu: areaVenceu,
     relogioParou: relogioParou,
     ETAPAS_APOS_O_DEV: ETAPAS_APOS_O_DEV,
     fimDoDev: fimDoDev,

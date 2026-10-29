@@ -638,6 +638,16 @@ const HIST_CAMPOS = {
    * historico existe para impedir.                                            */
   prioridade:          'prioridade',
   sprint:              'sprint',
+  /* A SPRINT QUE O PO ESCOLHEU, ao lado da derivada e nao no lugar dela. Sao
+   * duas perguntas diferentes (ver `sprint.js`): `sprint` e "em que semana cai a
+   * data", `sprint_po` e "para que sprint o PO repassou". O fechamento vai
+   * precisar dizer "esta ja rolou duas vezes", e e esta a linha que responde.
+   *
+   * O SOLICITANTE ENTRA JUNTO porque ele passou a ter trava: o dev preenche
+   * quando esta vazio e nao troca o que ja existe. Trava sem rastro e trava que
+   * ninguem consegue auditar — e e o solicitante quem homologa a entrega. */
+  sprint_po:           'sprint do PM/PO',
+  solicitante:         'solicitante',
   entrega_usuario:     'entrega ao usuario',
   /* A PAUSA DEIXOU DE SER UM BOTAO E VIROU UMA DECISAO, e decisao precisa de
    * rastro. `pausado_em` ja estava acima como 'pausa'; faltavam o pedido, o
@@ -1447,6 +1457,162 @@ function carimbaAreaValidacao(recebido, servidor) {
     if (m.validacao_area_em) { m.validacao_area_em = ''; n += 1; }
   }
   return n;
+}
+
+/* ═══ A AREA TEM CINCO DIAS UTEIS, E DEPOIS DISSO A DEMANDA SEGUE ══════════
+ *
+ * "Quando estiver em validacao da area, apos 5 dias uteis a demanda devera ir
+ *  para validacao PM/PO."
+ *
+ * O contador ja existia e so olhava — `carimbaAreaValidacao`, logo acima, poe
+ * `validacao_area_em` para a tela dizer "ha N dias na area". Um contador sem
+ * consequencia e o mesmo que nao ter contador: o card fica la ate alguem
+ * lembrar dele, e ninguem lembra.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * POR QUE O SERVIDOR, E POR QUE AQUI.
+ *
+ * NAO HA CRON NESTE WORKER. A promocao acontece na proxima gravacao que passar
+ * por aqui — e passa muitas por dia —, o que significa que uma demanda pode
+ * ficar algumas horas alem dos cinco dias. E o preco de nao ter agendador, e e
+ * barato: o que a regra impede e o card esquecido por SEMANAS.
+ *
+ * E NAO PODE SER A TELA. `prazo.js` tem a mesma conta (`areaVenceu`) para
+ * MOSTRAR o vencimento, e o comentario dela registra o motivo da separacao: as
+ * telas nao carregam a lista de feriados, entao elas erram por um dia quando ha
+ * feriado na janela. Tela que erra por um dia e um rotulo impreciso; tela que
+ * MOVE o card errando por um dia sao duas telas discordando sobre onde a demanda
+ * esta — que e o defeito que o `etapa-demanda.js` inteiro existe para nao deixar
+ * acontecer de novo.
+ *
+ * RODA ANTES DE `carimbaAreaValidacao`, de proposito: a demanda sai da etapa
+ * aqui, e e aquele passo que limpa o carimbo de quem saiu. Invertido, a demanda
+ * promovida ficaria com `validacao_area_em` de uma etapa em que nao esta mais, e
+ * a tela diria "ha 6 dias na area" para um card que esta no PM/PO.
+ *
+ * NAO MEXE EM `entregue_em`. A entrega ja aconteceu quando o dev mandou o card
+ * para a area; esta funcao so avanca a fila. Carimbar aqui jogaria o ponto para
+ * a sprint em que a area deixou o prazo estourar, que e o contrario do que a
+ * regra retroativa de novembro decidiu (ver `capacidade.js`).
+ *
+ * `status` NAO E TOCADO porque o Worker nao mexe nesse campo em lugar nenhum —
+ * `etapa-demanda.js` le `status_planejamento` primeiro e so cai no legado quando
+ * o campo novo falta. Mexer num campo que nenhuma outra rota daqui escreve seria
+ * a unica excecao, e excecao e o que diverge depois.
+ */
+const DIAS_UTEIS_NA_AREA = 5;
+
+function promoveAreaVencida(data, hoje) {
+  if (!data || !Array.isArray(data.melhorias)) return [];
+  const feriados = new Set(feriadosISO(data));
+  const ref = hoje || hojeBR();
+  const movidas = [];
+  for (const m of data.melhorias) {
+    if (!m || m.oculto || m.mesclado_em) continue;
+    if (String(m.status_planejamento || '') !== 'validacao_area') continue;
+    const de = String(m.validacao_area_em || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(de)) continue;
+    /* A CONTAGEM COMECA NO DIA SEGUINTE. O dia em que o card chega na area ja
+       esta correndo quando ele chega; cobrar dela um dia que recebeu pela metade
+       encurtaria o prazo escrito em um dia inteiro.
+
+       REUSA `diasUteis`, que conta as DUAS pontas — por isso o inicio e o dia
+       seguinte, e nao o carimbo. Uma segunda implementacao de "quantos dias
+       uteis cabem aqui" e exatamente como o rotulo do card e a regua de pontos
+       passaram quatro dias discordando sobre a semana de setembro. */
+    const seguinte = new Date(Date.parse(de + 'T00:00:00Z') + 86400000)
+      .toISOString().slice(0, 10);
+    if (seguinte > ref) continue;
+    const n = diasUteis(seguinte, ref, feriados);
+    if (n === null || n < DIAS_UTEIS_NA_AREA) continue;
+    m.status_planejamento = 'validacao';
+    movidas.push({ id: m.id, codigo: m.codigo || m.id, dias_uteis: n, desde: de });
+  }
+  return movidas;
+}
+
+/* ═══ QUEM PEDIU: PREENCHER PODE, TROCAR NAO ═══════════════════════════════
+ *
+ * "O campo solicitante, caso esteja vazio, podera ser preenchido pelo dev."
+ *
+ * E A MESMA LINHA QUE AS DATAS JA SEGUEM na rota de API — "INCLUIR NAO E EDITAR
+ * (...) campo VAZIO nao e compromisso nenhum: nao ha o que desfazer, e preencher
+ * e completar o registro". Aqui ela faltava inteira: o `dev-publish` recebe o
+ * estado montado no navegador e gravava o `solicitante` que viesse, qualquer que
+ * fosse o anterior.
+ *
+ * E ISSO IMPORTA PORQUE O SOLICITANTE HOMOLOGA. A Validacao da area exige o
+ * nome, e e a esse nome que a demanda volta. Trocar quem pediu depois da
+ * abertura troca quem responde pela entrega — e sao 119 demandas antigas com o
+ * campo vazio justamente esperando que alguem o preencha, que e o caso que a
+ * regra libera.
+ *
+ * REVERTE, NAO RECUSA, pelo mesmo desenho de `travaDatasComprometidas`: o dev
+ * costuma estar salvando outra coisa (horas, anexo, texto da entrega), e
+ * derrubar a gravacao inteira por um campo que ele talvez nem tenha tocado
+ * perderia o trabalho dele por um erro que nao e dele.
+ *
+ * VALE SO PARA O PAPEL `dev`. O PM/PO corrige o nome pelo Admin, e e dele a
+ * decisao de quem homologa.
+ */
+function travaSolicitantePreenchido(recebido, servidor, papel) {
+  if (String(papel || '') !== 'dev') return [];
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const revertidas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    if (!velha) continue;
+    const orig = String(velha.solicitante || '').trim();
+    if (!orig) continue;                       // vazio: o dev pode preencher
+    if (String(m.solicitante || '').trim() === orig) continue;
+    m.solicitante = velha.solicitante;
+    revertidas.push((m.codigo || m.id) + '.solicitante');
+  }
+  return revertidas;
+}
+
+/* ═══ A SPRINT E DO PM/PO ══════════════════════════════════════════════════
+ *
+ * "Dentro da sprint apenas demandas que o PM/PO repassar."
+ *
+ * `sprint_po` e o campo CARIMBADO que diz em que sprint o PO pos a demanda (ver
+ * `sprint.js`). Vazio e backlog, e e assim que toda demanda da base esta hoje.
+ *
+ * REVERTE PELO MESMO DESENHO das duas travas acima — e a trava precisa existir
+ * AQUI e nao so na tela porque o `dev-publish` grava o estado inteiro montado no
+ * navegador: foi um caminho de tela (o arraste no Kanban) que deixou a AX-179
+ * chegar em Validacao sem horas.
+ *
+ * TASK NOVA DO DEV TAMBEM CAI AQUI. Demanda que o servidor nunca viu nao tem
+ * `velha` para comparar — e nesse caso qualquer `sprint_po` preenchido e uma
+ * task nascendo dentro da sprint, que e o que a regra proibe. Zerar e o certo:
+ * ela nasce no backlog e o PO a repassa quando decidir.
+ */
+function travaSprintDoPO(recebido, servidor, papel) {
+  if (String(papel || '') === 'admin') return [];
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const revertidas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    const orig = velha ? String(velha.sprint_po || '') : '';
+    if (String(m.sprint_po || '') === orig) continue;
+    m.sprint_po = orig;
+    if (velha) {
+      m.sprint_po_em = velha.sprint_po_em || '';
+      m.sprint_po_por = velha.sprint_po_por || '';
+      m.sprint_po_historico = velha.sprint_po_historico || [];
+    } else {
+      m.sprint_po_em = ''; m.sprint_po_por = ''; m.sprint_po_historico = [];
+    }
+    revertidas.push((m.codigo || m.id) + '.sprint_po');
+  }
+  return revertidas;
 }
 
 // Comparacao por STRING ISO, nunca por objeto Date: `new Date('2026-08-06')` e
@@ -7035,6 +7201,13 @@ export default {
       const voltaramPub = preservaChaves(data, antesPub);
       const devsForaPub = await limpaDevs(env, data);
       carimbaMeses(data, antesPub, true);
+      /* A AREA ESTOUROU OS CINCO DIAS UTEIS: a demanda segue para o PM/PO.
+         ANTES de `carimbaAreaValidacao`, que e quem limpa o carimbo de quem saiu
+         da etapa — invertido, o card promovido ficaria mostrando "ha 6 dias na
+         area" ja estando no PM/PO. E antes do historico, pelo mesmo motivo do
+         carimbo do mes: a promocao vira linha no card em vez de uma etapa que
+         muda sozinha sem rastro. */
+      promoveAreaVencida(data);
       // ANTES do historico, como o carimbo do mes: assim a entrada na area
       // tambem vira linha no card, e nao um campo que muda sozinho sem rastro.
       carimbaAreaValidacao(data, antesPub);
@@ -7135,6 +7308,13 @@ export default {
          e admin entram por esta rota e para eles mover para Planning e trabalho. */
       const etapasRevertidas = (await papelAtual()) === 'dev'
         ? travaEtapaDoDev(data, antesDev) : [];
+      /* QUEM PEDIU e A SPRINT DO PO, pelo mesmo desenho: o valor do servidor
+         vence e o resto da gravacao segue. O papel e lido uma vez e passado para
+         as duas — `papelAtual()` e `await`, e chama-lo dentro de um laco por
+         demanda seria uma ida de rede por card. */
+      const _papelDev = await papelAtual();
+      const solicitantesRevertidos = travaSolicitantePreenchido(data, antesDev, _papelDev);
+      const sprintsRevertidas = travaSprintDoPO(data, antesDev, _papelDev);
       // Entregar sem horas e sem texto e recusado. Aqui a gravacao PARA, ao
       // contrario da trava de datas: la o campo volta ao valor do servidor e o
       // resto segue; aqui nao ha valor anterior para restaurar — a demanda estaria
@@ -7264,6 +7444,10 @@ export default {
       const voltaramDev = preservaChaves(data, antesDev);
       const devsForaDev = await limpaDevs(env, data);
       carimbaMeses(data, antesDev, false);
+      // Os cinco dias uteis da area valem nas DUAS rotas. O painel do dev e o
+      // que mais grava no dia a dia — deixar a promocao so no Admin faria o
+      // prazo da area depender de o PM/PO publicar alguma coisa.
+      promoveAreaVencida(data);
       // O dev e quem mais vai mover o card para a area — sem esta linha o
       // carimbo so nasceria quando o PM/PO publicasse pelo Admin.
       carimbaAreaValidacao(data, antesDev);
@@ -7293,6 +7477,8 @@ export default {
       // silencio, e a pessoa so descobriria no proximo F5.
       return json({ ok: true, datas_revertidas: datasRevertidas,
                     etapas_revertidas: etapasRevertidas,
+                    solicitantes_revertidos: solicitantesRevertidos,
+                    sprints_revertidas: sprintsRevertidas,
                     comite_revertidas: comiteRevDev,
                     espelhos_descartados: espelhos,
                     devs_removidos: devsForaDev,
