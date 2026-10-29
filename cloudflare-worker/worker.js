@@ -648,6 +648,12 @@ const HIST_CAMPOS = {
    * ninguem consegue auditar — e e o solicitante quem homologa a entrega. */
   sprint_po:           'sprint do PM/PO',
   solicitante:         'solicitante',
+  /* A CLASSIFICACAO ENTRA NO HISTORICO porque ela virou CHAVE: Sustentacao
+   * comeca sem passar pela sprint (ver `alocacaoSemSprint`). Campo que decide
+   * quem driba uma trava nao pode mudar sem rastro — e sao 117 demandas sem
+   * classificacao nenhuma esperando ser preenchidas, o que significa muita
+   * mudanca legitima acontecendo neste campo a partir de agora. */
+  tipo:                'classificacao',
   entrega_usuario:     'entrega ao usuario',
   /* A PAUSA DEIXOU DE SER UM BOTAO E VIROU UMA DECISAO, e decisao precisa de
    * rastro. `pausado_em` ja estava acima como 'pausa'; faltavam o pedido, o
@@ -1613,6 +1619,90 @@ function travaSprintDoPO(recebido, servidor, papel) {
     revertidas.push((m.codigo || m.id) + '.sprint_po');
   }
   return revertidas;
+}
+
+/* ═══ A CLASSIFICACAO VIROU CHAVE, ENTAO ELA GANHOU TRAVA ══════════════════
+ *
+ * A trava de alocacao logo abaixo deixa Sustentacao comecar sem sprint. Isso
+ * faz do `tipo` uma CHAVE — e chave sem tranca e decoracao: bastaria trocar
+ * `evolucao` por `sustentacao` no estado que o navegador monta para a trava
+ * abrir de dentro. E o mesmo buraco que as datas tinham antes de
+ * `travaDatasComprometidas`, e o comentario daquela registra a razao com todas
+ * as letras: "o `dev-publish` recebe o estado inteiro montado no navegador e
+ * grava o que recebe".
+ *
+ * CRIAR ESCOLHENDO, PODE. O formulario do painel do dev pergunta o tipo na
+ * abertura, e e assim que um incidente nasce as 2h da manha — escolhendo
+ * Sustentacao. O que nao pode e RECLASSIFICAR o que ja existe: "incluir nao e
+ * editar", a mesma linha do solicitante e das datas.
+ *
+ * VALE SO PARA O PAPEL `dev`. Quem classifica demanda e o PM/PO, pelo Admin.
+ */
+function travaTipoDemandaExistente(recebido, servidor, papel) {
+  if (String(papel || '') !== 'dev') return [];
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const revertidas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    if (!velha) continue;                       // demanda nova: o dev escolhe
+    const orig = String(velha.tipo || '');
+    if (String(m.tipo || '') === orig) continue;
+    /* VAZIO PODE SER PREENCHIDO. Sao 117 das 158 vivas sem classificacao
+       nenhuma, e deixar o dev completar o registro e o caso que a regra do
+       solicitante ja resolveu do mesmo jeito. O que nao pode e TROCAR. */
+    if (!orig) continue;
+    m.tipo = velha.tipo;
+    revertidas.push((m.codigo || m.id) + '.tipo');
+  }
+  return revertidas;
+}
+
+/* ═══ A TRAVA DE ALOCACAO — comecar exige estar na sprint ══════════════════
+ *
+ * A regra inteira, com o porque de cada ramo, mora em `sprint.js`. Aqui ela e
+ * repetida porque o Worker nao importa arquivo nenhum, e ha invariante rodando
+ * as duas copias lado a lado, caso a caso.
+ *
+ * RECUSA, E NAO REVERTE — e esta e a diferenca em relacao as travas acima.
+ * Nelas ha um valor anterior que faz sentido restaurar (a data combinada, o
+ * nome de quem pediu, a sprint). Aqui nao ha: o dev esta PEDINDO para comecar,
+ * e devolver o card para Planejado em silencio o faria tentar de novo sem
+ * nunca descobrir por que o card volta sozinho. E o desenho de
+ * `entrandoEmValidacaoSemEntrega`, pelo mesmo motivo que aquele registra: "a
+ * demanda estaria entrando num estado que nao se sustenta".
+ *
+ * A TELA JA BARRA ANTES, com a mesma mensagem — isto aqui e a rede de baixo.
+ */
+const TRAVA_ALOCACAO_DESDE = '2026-11-01';
+const TIPOS_LIVRES_DA_SPRINT = ['sustentacao'];
+
+function alocacaoSemSprint(recebido, servidor, papel, hoje) {
+  if (String(papel || '') !== 'dev') return [];
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const dia = String(hoje || hojeBR()).slice(0, 10);
+  if (dia < TRAVA_ALOCACAO_DESDE) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id || m.oculto || m.mesclado_em) continue;
+    if (String(m.status_planejamento || '') !== 'em_andamento') continue;
+    const velha = antes.get(m.id);
+    /* JA ESTAVA EM ANDAMENTO: nao ha movimento, e reexaminar o ESTADO
+       congelaria quem esta no meio do trabalho desde antes da regra. Medido na
+       base: 18 em andamento, nenhuma com sprint do PO.
+       Demanda que o servidor nao conhece tambem passa — o dev abre a propria
+       task, e ela nasce em backlog (ver `nasceForaDaSprint`). */
+    if (!velha || String(velha.status_planejamento || '') === 'em_andamento') continue;
+    if (TIPOS_LIVRES_DA_SPRINT.includes(String(m.tipo || '').toLowerCase())) continue;
+    if (String(m.sprint_po || '').trim()) continue;
+    presos.push({ id: m.id, codigo: m.codigo || m.id,
+                  tipo: String(m.tipo || '') || '(sem classificacao)' });
+  }
+  return presos;
 }
 
 // Comparacao por STRING ISO, nunca por objeto Date: `new Date('2026-08-06')` e
@@ -7315,6 +7405,25 @@ export default {
       const _papelDev = await papelAtual();
       const solicitantesRevertidos = travaSolicitantePreenchido(data, antesDev, _papelDev);
       const sprintsRevertidas = travaSprintDoPO(data, antesDev, _papelDev);
+      /* A CLASSIFICACAO ANTES DA TRAVA DE ALOCACAO, e a ordem e obrigatoria:
+         a trava le `m.tipo` para decidir se Sustentacao passa. Invertido, um
+         `evolucao` reclassificado no caminho seria lido como Sustentacao e a
+         porta abriria de dentro, antes de a reversao desfazer a troca. */
+      const tiposRevertidos = travaTipoDemandaExistente(data, antesDev, _papelDev);
+      /* COMECAR EXIGE ESTAR NA SPRINT. Aqui a gravacao PARA, ao contrario das
+         travas acima: nao ha valor anterior que faca sentido restaurar — o dev
+         esta pedindo para comecar, e devolver o card em silencio o faria
+         tentar de novo sem descobrir por que ele volta sozinho. */
+      const semSprint = alocacaoSemSprint(data, antesDev, _papelDev);
+      if (semSprint.length) {
+        return json({ error: 'fora_da_sprint',
+                      codigos: semSprint.map(p => p.codigo),
+                      demandas: semSprint,
+                      detail: 'Para comecar (' + semSprint.map(p => p.codigo).join(', ') +
+                              ') a demanda precisa estar numa sprint. Quem repassa e o ' +
+                              'PM/PO — peca o repasse antes de comecar. Demanda de ' +
+                              'Sustentacao comeca sem esperar.' }, 403, headers);
+      }
       // Entregar sem horas e sem texto e recusado. Aqui a gravacao PARA, ao
       // contrario da trava de datas: la o campo volta ao valor do servidor e o
       // resto segue; aqui nao ha valor anterior para restaurar — a demanda estaria
@@ -7479,6 +7588,7 @@ export default {
                     etapas_revertidas: etapasRevertidas,
                     solicitantes_revertidos: solicitantesRevertidos,
                     sprints_revertidas: sprintsRevertidas,
+                    tipos_revertidos: tiposRevertidos,
                     comite_revertidas: comiteRevDev,
                     espelhos_descartados: espelhos,
                     devs_removidos: devsForaDev,

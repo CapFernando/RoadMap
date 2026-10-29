@@ -281,6 +281,80 @@
            ' · atrasada ' + n + '×</span>';
   }
 
+  /* ═══ A TRAVA DE ALOCAÇÃO — começar exige estar na sprint ═════════════════
+   *
+   * "Dentro da sprint apenas demandas que o PM/PO repassar."
+   *
+   * METADE DISSO JÁ ESTAVA FEITA, e vale separar porque muda o tamanho da
+   * regra que falta:
+   *
+   *   pôr demanda numa sprint      → já travado (`travaSprintDoPO`, no Worker)
+   *   mover para Planning/Planejado → já travado (`travaEtapaDoDev`)
+   *   COMEÇAR o que o PO não liberou → é o que esta trava fecha
+   *
+   * É UMA TRANSIÇÃO SÓ: a entrada em `em_andamento`. Entregar nunca trava —
+   * se o dev já está no trabalho, impedir a entrega deixa o trabalho preso sem
+   * ninguém ganhar nada. E demanda que JÁ ESTÁ em andamento nunca é
+   * reexaminada: a trava olha o movimento, e não o estado. Medido na base (158
+   * vivas): 18 estão em andamento e NENHUMA tem sprint do PO — reexaminar o
+   * estado congelaria as 18 no dia em que a regra subisse.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * SUSTENTAÇÃO PASSA, EVOLUÇÃO NÃO — decisão do Fernando.
+   *
+   * É a porta para o caso que toda trava de alocação encontra: bug em produção
+   * às 2h, com o PM/PO dormindo. Sustentação começa sozinha; evolução espera.
+   *
+   * SEM TIPO CONTA COMO EVOLUÇÃO, e isso importa mais do que parece: 117 das
+   * 158 demandas vivas não têm tipo nenhum (e 39 das 70 abertas). A porta só
+   * abre para quem foi classificado — e é justamente por isso que ela não vira
+   * um caminho de fuga largo. Quem precisa dela às 2h abre a demanda do
+   * incidente escolhendo Sustentação, que é como um incidente nasce de verdade.
+   *
+   * E O TIPO PRECISOU DE TRAVA PRÓPRIA no Worker, senão esta aqui seria
+   * decoração: o `dev-publish` recebe o estado inteiro montado no navegador, e
+   * trocar `evolucao` por `sustentacao` no caminho abriria a porta de dentro.
+   * É o mesmo buraco que as datas tinham antes de `travaDatasComprometidas`.
+   *
+   * ───────────────────────────────────────────────────────────────────────────
+   * DATADA, como as outras regras de novembro. Antes de 01/11 ela não existe —
+   * e o PM/PO passa o backlog para as sprints antes disso (há repasse em lote
+   * no Admin justamente para esse dia, e para os seguintes).               */
+  var TRAVA_DESDE = '2026-11-01';
+
+  /** Os tipos que começam sem passar pela sprint. */
+  var TIPOS_LIVRES = ['sustentacao'];
+
+  function tipoLivre(m) {
+    return TIPOS_LIVRES.indexOf(txt((m || {}).tipo).toLowerCase()) >= 0;
+  }
+
+  /** A ETAPA QUE A TRAVA GUARDA. Uma só, e por isso é uma constante e não uma
+   *  lista: incluir `validacao` aqui prenderia trabalho já feito. */
+  var ETAPA_TRAVADA = 'em_andamento';
+
+  /** A TRAVA PEGOU ESTE MOVIMENTO?
+   *
+   *  Devolve `{ trava, motivo }`. `trava: false` é o caminho normal — a função
+   *  é chamada em TODA gravação do painel do dev, e o caso comum é passar.     */
+  function travaDeAlocacao(m, etapaAntes, etapaDepois, hoje) {
+    var dia = iso(hoje) || new Date().toISOString().slice(0, 10);
+    if (dia < TRAVA_DESDE) return { trava: false };
+    if (txt(etapaDepois) !== ETAPA_TRAVADA) return { trava: false };
+    // JÁ ESTAVA LÁ: não é movimento nenhum, e reexaminar congelaria quem está
+    // no meio do trabalho desde antes da regra existir.
+    if (txt(etapaAntes) === ETAPA_TRAVADA) return { trava: false };
+    if (tipoLivre(m)) return { trava: false };
+    if (doPO(m)) return { trava: false };
+    return {
+      trava: true,
+      motivo: 'Esta demanda não está em nenhuma sprint. Quem repassa é o PM/PO — ' +
+              'peça o repasse antes de começar. (Demanda de Sustentação começa sem ' +
+              'esperar; esta está como ' +
+              (txt(m && m.tipo) ? '"' + txt(m.tipo) + '"' : 'sem classificação') + '.)',
+    };
+  }
+
   /** Quem pode repassar uma demanda para a sprint.
    *
    *  PELO PAPEL, e nunca pelo nome. É a mesma trava do Validado em Comitê, e ela
@@ -398,6 +472,11 @@
     entrouAtrasada: entrouAtrasada,
     sprintDeOrigem: sprintDeOrigem,
     badge: badge,
+    TRAVA_DESDE: TRAVA_DESDE,
+    TIPOS_LIVRES: TIPOS_LIVRES,
+    ETAPA_TRAVADA: ETAPA_TRAVADA,
+    tipoLivre: tipoLivre,
+    travaDeAlocacao: travaDeAlocacao,
     podeRepassar: podeRepassar,
     repassar: repassar,
     retirar: retirar,

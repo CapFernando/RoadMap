@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="96a7863268">
+<html lang="pt-BR" data-build="6ce8acd8b9">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -706,7 +706,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=f5494b6595"></script>
+<script src="sprint.js?v=bb2d03b5c9"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -4834,12 +4834,40 @@ function onDragEnd(e) {
   document.getElementById('kanban')?.classList.remove('dragging-active');
 }
 
+/* ═══ A TRAVA DE ALOCAÇÃO, DESTE LADO ══════════════════════════════════════
+ *
+ * "Dentro da sprint apenas demandas que o PM/PO repassar."
+ *
+ * Devolve o MOTIVO (string) quando o movimento é barrado, e '' quando passa —
+ * o formato do `HOMOLOGACAO.barra`, que as duas chamadas aqui já sabem ler.
+ *
+ * A REGRA NÃO MORA AQUI. `SPRINTPO.travaDeAlocacao` decide, e o Worker tem a
+ * terceira cópia (ele não importa arquivo nenhum). Há invariante rodando a
+ * daqui e a de lá lado a lado, caso a caso — é a mesma precaução do resto.
+ *
+ * E A TELA NÃO É A ÚLTIMA PALAVRA: o `dev-publish` recusa de novo, com 403. O
+ * arraste no Kanban já foi a porta dos fundos três vezes nesta base (AX-096,
+ * AX-127, AX-211), e a trava de datas existe porque o painel manda o estado
+ * inteiro montado no navegador.                                             */
+function travaSprintBarra(id, colKey) {
+  if (!window.SPRINTPO || !id) return '';
+  const m = state.melhorias.find(x => String(x.id) === String(id));
+  if (!m) return '';
+  const r = SPRINTPO.travaDeAlocacao(m, getStatusKey(m), colKey,
+                                     window.PRAZO ? PRAZO.hojeISO() : null);
+  return r.trava ? r.motivo : '';
+}
+
 function onDragOver(e, colKey) {
   e.preventDefault();
   /* A COLUNA PROIBIDA MOSTRA QUE E PROIBIDA ANTES DO SOLTA. Deixar ela acender
      igual as outras e convidar o gesto para depois recusar com um toast — o dev
      descobre a regra errando. Com o cursor de "nao permitido" ele descobre antes. */
-  const podeSoltar = ETAPAS_DO_DEV.includes(colKey);
+  /* E A TRAVA DE ALOCAÇÃO ENTRA AQUI PELA MESMA RAZÃO. Começar exige estar na
+     sprint (Sustentação passa) — deixar a coluna acender e recusar no solta
+     ensinaria a regra pelo erro, que é exatamente o que o comentário acima diz
+     para não fazer. A regra mora em `sprint.js`; aqui só se pergunta. */
+  const podeSoltar = ETAPAS_DO_DEV.includes(colKey) && !travaSprintBarra(dragId, colKey);
   e.dataTransfer.dropEffect = podeSoltar ? 'move' : 'none';
   const col = document.getElementById('col-'+colKey);
   if (col && !col.classList.contains(podeSoltar ? 'drag-over' : 'drag-block')) {
@@ -6028,6 +6056,13 @@ async function saveStatus() {
 async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   const m = state.melhorias.find(x => x.id === id);
   if (!m) return;
+  /* A TRAVA DE ALOCAÇÃO, NO FUNIL. Aqui e não só no `onDrop`: o modal de
+     status chega por outro caminho, e as duas portas já divergiram nesta base —
+     foi assim que a AX-179 entrou em Validação sem horas, pelo arraste,
+     enquanto o select exigia. Antes da atualização otimista, senão o card pula
+     para a coluna e volta sozinho. */
+  const barrado = travaSprintBarra(id, colKey);
+  if (barrado) { toast('🔒 ' + barrado, 'err'); return; }
   const spAnterior = m.status_planejamento;
   const stAnterior = m.status;
   const hrAnterior = m.horas_realizadas;

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="8c781767c0">
+<html lang="pt-BR" data-build="31fcdb8405">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -466,6 +466,69 @@
       border:1px dashed var(--border,#2E2E2B); }
     .kb-sprint.sp-atrasada { color:var(--red-tx,#F9A0A0);
       background:var(--red-bg,#5C0A0A); border-color:#B5484D; }
+    /* ═══ O DIÁLOGO DO REPASSE EM LOTE ═════════════════════════════════════
+       Mais largo que os outros diálogos porque cada linha carrega cinco coisas
+       (código, título, prioridade, dev, sprint atual) — e é a sprint atual que
+       diz se marcar aquela linha vai causar um pulo. */
+    /* A ESPECIFICIDADE PRECISA GANHAR DE `.dlg-box`, que fixa 440px. Aquela
+       regra vem do `<style>` que o `dialogo.js` injeta no `<head>` em tempo de
+       carga — ou seja, DEPOIS desta folha —, e empate de especificidade é
+       decidido pela ordem. Medido no navegador: com `.lote-box` sozinho a
+       caixa saía com 440px e o título das demandas era cortado em oito
+       caracteres. Dois seletores em vez de um, e a ordem deixa de importar. */
+    .dlg-ov .dlg-box.lote-box { max-width:760px; }
+    .lote-topo { display:flex; gap:8px; margin-bottom:9px; }
+    .lote-sel { flex:0 0 auto; min-width:220px; }
+    .lote-busca { flex:1 1 auto; }
+    /* `.dlg-box input` do dialogo.js manda `width:100%`, o que faria a busca
+       empurrar o select para a linha de baixo. Mesma razão de dois seletores. */
+    .dlg-ov .lote-box select, .dlg-ov .lote-box input[type="search"] { width:auto;
+      padding:8px 10px; font-size:13px;
+      font-family:inherit; color:var(--text); background:var(--bg3);
+      border:1px solid var(--border); border-radius:7px; outline:none; box-sizing:border-box; }
+    .lote-box select:focus, .lote-box input[type="search"]:focus { border-color:var(--blue); }
+    /* O CHECKBOX PRECISA SER DESFEITO. `.dlg-box input` (do `dialogo.js`) manda
+       `width:100%` e `padding:9px 11px` em TODO input — e isso alcança a caixa
+       de marcar. Medido no navegador: a caixa ocupava a largura inteira da
+       linha e empurrava código, título e sprint para a direita, com o título
+       cortado em dez caracteres numa caixa de 760px. A regra de lá nasceu para
+       campo de texto; aqui ela precisa ser dita de novo ao contrário. */
+    .dlg-ov .lote-box input[type="checkbox"] { width:auto; flex:0 0 auto;
+      margin:0; padding:0; }
+    .lote-check { display:flex; align-items:center; gap:7px; font-size:12.5px;
+      color:var(--text2); margin-bottom:9px; cursor:pointer; }
+    .lote-acoes-sel { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+    .lote-mini { font-family:inherit; font-size:11.5px; padding:4px 9px; border-radius:6px;
+      cursor:pointer; background:none; color:var(--text2); border:1px solid var(--border); }
+    .lote-mini:hover { border-color:var(--blue); color:var(--text); }
+    .lote-conta { margin-left:auto; font-size:11.5px; color:var(--text3); }
+    /* ROLA, e não cresce: quarenta linhas empurrariam os botões para fora da
+       tela, e o botão que some é o botão que nunca foi clicado. */
+    .lote-lista { max-height:min(46vh,340px); overflow-y:auto; display:flex;
+      flex-direction:column; gap:3px; border:1px solid var(--border);
+      border-radius:8px; padding:5px; background:var(--bg3); }
+    .lote-item { display:flex; align-items:center; gap:8px; padding:6px 8px;
+      border-radius:6px; cursor:pointer; font-size:12.5px; }
+    .lote-item:hover { background:var(--bg4); }
+    .lote-item.on { background:rgba(59,143,232,.12); }
+    .lote-cod { font-family:ui-monospace,monospace; font-size:11px; font-weight:700;
+      color:var(--blue-tx,#9BC8F8); flex:0 0 auto; }
+    /* O TÍTULO ENCOLHE E CORTA; o resto da linha não. Sem `min-width:0` o flex
+       se recusa a encolher o texto e empurra a sprint para fora da caixa —
+       que é justamente a informação que decide o clique. */
+    .lote-tit { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; color:var(--text); }
+    .lote-prio { flex:0 0 auto; font-size:10px; font-weight:700; text-transform:uppercase;
+      letter-spacing:.3px; padding:1px 6px; border-radius:4px; }
+    .lote-prio.pr-alta  { color:var(--red-tx,#F9A0A0);   background:var(--red-bg,#5C0A0A); }
+    .lote-prio.pr-media { color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A); }
+    .lote-prio.pr-baixa { color:var(--text3);            background:var(--bg4); }
+    .lote-dev { flex:0 0 auto; font-size:11px; color:var(--text3); }
+    /* O CHIP NÃO QUEBRA EM DUAS LINHAS. Sem isto, "🏃 S2-11 · atrasada 1×"
+       vira duas linhas e a altura da linha dobra — e é a linha mais curta
+       (Backlog) que fica torta ao lado das outras. */
+    .lote-item .kb-sprint { flex:0 0 auto; white-space:nowrap; }
+    .lote-vazio { padding:22px; text-align:center; color:var(--text3); font-size:12.5px; }
     .kb-sprint-abre { cursor:pointer; display:inline-flex; }
     .kb-sprint-abre:hover .kb-sprint { border-style:solid; filter:brightness(1.25); }
     .cod-tag { font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
@@ -1377,7 +1440,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=f5494b6595"></script>
+<script src="sprint.js?v=bb2d03b5c9"></script>
 <script src="ordem-kanban.js?v=c110030875"></script>
 </head>
 <body>
@@ -5135,6 +5198,14 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
     fbGroup('BI impactado', _kbBi, opcoesBi(), 'setKbBi') +
     fbBusca('kb-busca', _kbBusca, 'setBuscaKb') +
     botaoLimpar('limparFiltrosKb', ativos) +
+    /* O REPASSE EM LOTE fica na barra do quadro porque é daqui que se olha o
+       que falta alocar. Card a card seriam 41 diálogos no dia da virada — e
+       depois dela continua servindo, que foi o pedido: "poderei alimentar a
+       sprint quando necessário". */
+    '<div class="ger-filter-group"><label>&nbsp;</label>' +
+    '<button type="button" class="btn btn-secondary btn-sm" onclick="sprintLoteAbrir()"' +
+    ' title="Repassar várias demandas para uma sprint de uma vez">🏃 Sprint em lote</button>' +
+    '</div>' +
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}` +
     /* COM BUSCA ATIVA A TELA DIZ QUE O PERIODO FOI IGNORADO. Sem isso, quem
        busca "concluídas: este mês" no alto e ve um card de julho no quadro
@@ -8836,6 +8907,201 @@ async function sprintEscolher(ev, id) {
     ? '🏃 Repassada para ' + escolha + ' — entrou ATRASADA (' + r.pulos +
       (r.pulos === 1 ? ' pulo' : ' pulos') + ').'
     : '🏃 Repassada para ' + escolha + '.', 'ok');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   O REPASSE EM LOTE — "poderei alimentar a sprint quando necessário"
+
+   Nasceu para o dia da virada: 41 demandas planejadas sem sprint, e card a card
+   seriam 41 diálogos. Mas NÃO é um script de migração — foi pedido como recurso
+   permanente, e é o que toda semana de planejamento vai usar.
+
+   ───────────────────────────────────────────────────────────────────────────
+   SÓ ATRIBUI; NÃO TIRA DA SPRINT.
+
+   Esvaziar em lote é o gesto que não dá para desfazer olhando: trinta cards
+   saem da sprint e não há como saber, depois, quais estavam lá. Tirar continua
+   card a card, onde a pessoa vê o que está tirando. O lote resolve o caso
+   volumoso, que é o de ENTRADA.
+
+   ───────────────────────────────────────────────────────────────────────────
+   UMA GRAVAÇÃO SÓ para o lote inteiro, e é esse o ponto: trinta gravações
+   seriam trinta idas ao GitHub, trinta chances de a corrida de `sha` acusar
+   conflito, e um lote pela metade sem ninguém saber onde parou.
+
+   E O DESFAZER É DO LOTE INTEIRO. Se a gravação não passar, TODAS voltam —
+   guardar o retrato de cada uma antes de mexer é o que permite isso.      */
+let _loteSel = new Set();
+let _loteBusca = '';
+let _loteSoFora = true;
+
+/** As candidatas: tudo que ainda está em aberto.
+ *
+ *  ABERTAS E NÃO "o que está no quadro": o recorte do quadro tem oito filtros e
+ *  um período padrão que ninguém escolheu (ver o comentário de `renderKanban`
+ *  sobre o "Concluídas: Este mês"). Um lote que herdasse isso repassaria menos
+ *  do que a pessoa pensa estar repassando, e ela não teria como notar. */
+function sprintLoteCandidatas() {
+  const q = _loteBusca.trim().toLowerCase();
+  return ORDEMKB.ordena(
+    (state.melhorias || []).filter(m => {
+      if (!m || m.oculto || ehMesclada(m)) return false;
+      if (!ETAPA.aberta(m, PRAZO.hojeISO())) return false;
+      if (_loteSoFora && SPRINTPO.doPO(m)) return false;
+      if (!q) return true;
+      return (String(m.codigo || '') + ' ' + String(m.titulo || '') + ' ' +
+              String(m.dev || '')).toLowerCase().includes(q);
+    }),
+    window.ENTREGAUSU && ENTREGAUSU.data);
+}
+
+function sprintLoteAbrir() {
+  _loteSel = new Set();
+  _loteBusca = '';
+  _loteSoFora = true;
+  const ov = document.createElement('div');
+  ov.className = 'dlg-ov';
+  ov.id = 'lote-ov';
+  ov.innerHTML =
+    '<div class="dlg-box lote-box" role="dialog" aria-modal="true">' +
+      '<h3>🏃 Repassar para a sprint</h3>' +
+      '<div class="dlg-sub">Escolha a sprint e marque as demandas. Uma gravação só para o lote inteiro.</div>' +
+      '<div class="lote-topo">' +
+        '<select id="lote-sprint" class="lote-sel"></select>' +
+        '<input type="search" id="lote-busca" class="lote-busca" placeholder="Filtrar por código, título ou dev…">' +
+      '</div>' +
+      '<label class="lote-check"><input type="checkbox" id="lote-sofora" checked> ' +
+        'Só as que estão fora de sprint</label>' +
+      '<div class="lote-acoes-sel">' +
+        '<button type="button" class="lote-mini" id="lote-todas">Marcar todas</button>' +
+        '<button type="button" class="lote-mini" id="lote-nenhuma">Desmarcar</button>' +
+        '<span class="lote-conta" id="lote-conta"></span>' +
+      '</div>' +
+      '<div class="lote-lista" id="lote-lista"></div>' +
+      '<div class="dlg-acoes">' +
+        '<button type="button" class="dlg-b sec" id="lote-cancela">Cancelar</button>' +
+        '<button type="button" class="dlg-b pri" id="lote-ok" disabled>Repassar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+
+  /* A LISTA DE SPRINTS É A MESMA do repasse card a card — `sprintOpcoes('')`,
+     sem o "Tirar da sprint" (o '' do argumento garante que ele não entra). */
+  const sel = ov.querySelector('#lote-sprint');
+  sel.innerHTML = sprintOpcoes('').map(o =>
+    '<option value="' + esc(o.valor) + '">' + esc(o.rotulo) +
+    (o.nota ? '  ·  ' + esc(o.nota) : '') + '</option>').join('');
+  const agora = SPRINTPO.rotuloDeData(PRAZO.hojeISO(), state.feriados || []);
+  if ([...sel.options].some(o => o.value === agora)) sel.value = agora;
+
+  const fecha = () => ov.remove();
+  ov.querySelector('#lote-cancela').onclick = fecha;
+  ov.addEventListener('click', e => { if (e.target === ov) fecha(); });
+  ov.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); fecha(); } });
+  ov.querySelector('#lote-busca').oninput = e => { _loteBusca = e.target.value; sprintLoteLista(); };
+  ov.querySelector('#lote-sofora').onchange = e => { _loteSoFora = e.target.checked; sprintLoteLista(); };
+  ov.querySelector('#lote-todas').onclick = () => {
+    sprintLoteCandidatas().forEach(m => _loteSel.add(m.id)); sprintLoteLista();
+  };
+  ov.querySelector('#lote-nenhuma').onclick = () => { _loteSel.clear(); sprintLoteLista(); };
+  ov.querySelector('#lote-ok').onclick = () => sprintLoteAplicar(sel.value);
+  sprintLoteLista();
+  setTimeout(() => sel.focus(), 10);
+}
+
+function sprintLoteMarca(id) {
+  if (_loteSel.has(id)) _loteSel.delete(id); else _loteSel.add(id);
+  sprintLoteLista();
+}
+
+function sprintLoteLista() {
+  const el = document.getElementById('lote-lista');
+  if (!el) return;
+  const lista = sprintLoteCandidatas();
+  /* A SELEÇÃO SOBREVIVE AO FILTRO. Marcar dez, digitar na busca e perder as
+     dez seria o jeito mais rápido de a pessoa desistir do lote — e ela só
+     descobriria o sumiço depois de gravar. O contador diz o total marcado,
+     inclusive o que está escondido pelo filtro no momento. */
+  el.innerHTML = lista.length
+    ? lista.map(m => {
+        const marcado = _loteSel.has(m.id);
+        const prio = String(m.prioridade || '').toLowerCase();
+        return '<label class="lote-item' + (marcado ? ' on' : '') + '">' +
+          '<input type="checkbox"' + (marcado ? ' checked' : '') +
+          ' onchange="sprintLoteMarca(\'' + esc(m.id) + '\')">' +
+          '<span class="lote-cod">' + esc(m.codigo || '—') + '</span>' +
+          '<span class="lote-tit">' + esc(m.titulo || '') + '</span>' +
+          (prio ? '<span class="lote-prio pr-' + esc(prio) + '">' + esc(prio) + '</span>' : '') +
+          (m.dev ? '<span class="lote-dev">' + esc(m.dev) + '</span>' : '') +
+          SPRINTPO.badge(m, 'kb-sprint') +
+        '</label>';
+      }).join('')
+    : '<div class="lote-vazio">Nada aqui com esse filtro.</div>';
+  const n = _loteSel.size;
+  const conta = document.getElementById('lote-conta');
+  if (conta) conta.textContent = n ? n + (n === 1 ? ' marcada' : ' marcadas') : 'nenhuma marcada';
+  const ok = document.getElementById('lote-ok');
+  if (ok) { ok.disabled = !n; ok.textContent = n ? 'Repassar ' + n : 'Repassar'; }
+}
+
+async function sprintLoteAplicar(sprint) {
+  const alvo = String(sprint || '');
+  if (!SPRINTPO.rotuloValido(alvo)) { toast('Escolha uma sprint.', 'err'); return; }
+  const ids = [..._loteSel];
+  const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
+  const hoje = PRAZO.hojeISO();
+
+  /* O RETRATO DE TODAS, ANTES DE MEXER EM QUALQUER UMA. Guardar enquanto
+     aplica deixaria o desfazer pela metade se a lista tivesse um caso que
+     `repassar` recusa no meio. */
+  const antes = new Map();
+  const mexidas = [];
+  const recusadas = [];
+  for (const id of ids) {
+    const m = (state.melhorias || []).find(x => String(x.id) === String(id));
+    if (!m) continue;
+    antes.set(m.id, { sprint_po: m.sprint_po, sprint_po_em: m.sprint_po_em,
+                      sprint_po_por: m.sprint_po_por,
+                      sprint_po_historico: m.sprint_po_historico });
+    const r = SPRINTPO.repassar(m, alvo, quem, hoje);
+    /* JÁ ESTAVA NESTA SPRINT não é erro do lote — é o caso normal de quem
+       marcou "todas" com o filtro desligado. Sai da conta e segue. */
+    if (!r.ok) { recusadas.push((m.codigo || m.id)); continue; }
+    mexidas.push({ m, atrasada: r.entrouAtrasada });
+  }
+  if (!mexidas.length) {
+    toast(recusadas.length ? 'Nada a repassar: já estavam nesta sprint.'
+                           : 'Nada a repassar.', 'err');
+    return;
+  }
+  mexidas.forEach(({ m }) => _dirtyMelhoriaIds.add(m.id));
+  _pendingEdits = true;
+  document.getElementById('lote-ov')?.remove();
+  renderAll();
+  const okSalvo = await saveViaProxy();
+  if (!okSalvo) {
+    // O LOTE INTEIRO VOLTA. Metade repassada e metade não, sem ninguém saber
+    // qual metade, é pior que nada ter acontecido.
+    mexidas.forEach(({ m }) => {
+      Object.assign(m, antes.get(m.id));
+      _dirtyMelhoriaIds.delete(m.id);
+    });
+    renderAll();
+    avisaFalha('Não consegui salvar o repasse em lote. Nada foi alterado.');
+    return;
+  }
+  mexidas.forEach(({ m }) => _dirtyMelhoriaIds.delete(m.id));
+  _pendingEdits = false;
+  /* O AVISO DIZ QUANTAS ENTRARAM ATRASADAS, e não só quantas foram. Repassar
+     trinta de uma vez é o gesto em que o pulo some: sem este número ninguém
+     descobre, no lote, que oito delas já rolaram de semana. */
+  const nAtr = mexidas.filter(x => x.atrasada).length;
+  const n = mexidas.length;
+  toast('🏃 ' + n + (n > 1 ? ' repassadas' : ' repassada') +
+        ' para ' + SPRINTPO.rotuloCurto(alvo) +
+        (nAtr ? ' — ' + nAtr + (nAtr > 1 ? ' entraram atrasadas' : ' entrou atrasada') : '') +
+        (recusadas.length ? ' · ' + recusadas.length +
+          (recusadas.length > 1 ? ' já estavam nela' : ' já estava nela') : '') + '.', 'ok');
 }
 
 function destaqueRenderNoCard(m) {

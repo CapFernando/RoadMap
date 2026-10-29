@@ -23555,6 +23555,197 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     for (const [nome, src] of [['admin', ADMIN], ['dev', DEV]]) {
       ok(/src="dialogo\.js\?v=/.test(src), nome + ' carrega dialogo.js versionado');
     }
+
+    /* ═══ A TRAVA DE ALOCAÇÃO ══════════════════════════════════════════════
+     *
+     * "Sustentacao passa, evolucao nao" — decisao do Fernando.
+     *
+     * AS DUAS COPIAS, CASO A CASO. A regra mora em `sprint.js` e o Worker a
+     * repete (ele nao importa arquivo nenhum). Copia que nao e conferida lado a
+     * lado e copia que diverge calada — e aqui a divergencia seria uma trava
+     * que a tela mostra e o servidor nao aplica, ou o contrario.             */
+    const semSprintFn = corpo(W, 'function alocacaoSemSprint(recebido, servidor, papel, hoje) {');
+    ok(!!semSprintFn, 'a trava de alocacao existe no Worker');
+    const mTrava = W.match(/const TRAVA_ALOCACAO_DESDE = '([\d-]+)';/);
+    const mLivres = W.match(/const TIPOS_LIVRES_DA_SPRINT = (\[[^\]]*\]);/);
+    ok(!!mTrava && mTrava[1] === SP.TRAVA_DESDE,
+       'o Worker e as telas combinam a MESMA data de virada',
+       'worker=' + (mTrava ? mTrava[1] : '?') + ' telas=' + SP.TRAVA_DESDE);
+    ok(!!mLivres && mLivres[1].replace(/'/g, '"') === JSON.stringify(SP.TIPOS_LIVRES),
+       'e os MESMOS tipos que passam sem sprint',
+       'worker=' + (mLivres ? mLivres[1] : '?') + ' telas=' + JSON.stringify(SP.TIPOS_LIVRES));
+
+    if (semSprintFn && mTrava && mLivres) {
+      const WTRAVA = new Function([
+        semSprintFn,
+        "const TRAVA_ALOCACAO_DESDE = '" + mTrava[1] + "';",
+        'const TIPOS_LIVRES_DA_SPRINT = ' + mLivres[1] + ';',
+        'function hojeBR(){ return "2026-11-03"; }',
+        'return alocacaoSemSprint;',
+      ].join('\n'))();
+      const casos = [
+        ['evolucao sem sprint, comecando', { tipo: 'evolucao' }, 'planejado', 'em_andamento'],
+        ['sustentacao sem sprint',         { tipo: 'sustentacao' }, 'planejado', 'em_andamento'],
+        ['SUSTENTACAO maiuscula',          { tipo: 'SUSTENTACAO' }, 'planejado', 'em_andamento'],
+        ['sem tipo',                       {}, 'planejado', 'em_andamento'],
+        ['evolucao COM sprint',            { tipo: 'evolucao', sprint_po: 'S1-11-2026' }, 'planejado', 'em_andamento'],
+        ['ja estava em andamento',         { tipo: 'evolucao' }, 'em_andamento', 'em_andamento'],
+        ['entregando para a area',         { tipo: 'evolucao' }, 'em_andamento', 'validacao_area'],
+        ['entregando para o PM/PO',        { tipo: 'evolucao' }, 'em_andamento', 'validacao'],
+        /* DA AREA PARA O PM/PO, e este caso nao estava aqui. Os dois de cima
+           partem de `em_andamento`, e a guarda do "ja estava em andamento"
+           devolve `false` antes de a regra da ETAPA DE DESTINO ser consultada —
+           entao uma sabotagem que fizesse ENTREGAR travar passava lisa por tras
+           dela. Descoberto sabotando: so um caminho de entrega que NAO parte de
+           `em_andamento` exercita aquele ramo. */
+        ['da area para o PM/PO',           { tipo: 'evolucao' }, 'validacao_area', 'validacao'],
+        ['voltando para planejado',        { tipo: 'evolucao' }, 'em_andamento', 'planejado'],
+        ['do backlog direto para validacao', { tipo: 'evolucao' }, 'backlog', 'validacao'],
+      ];
+      /* OS DOIS LADOS DA VIRADA. A comparacao rodava so em 03/11, depois do
+         corte — entao o ramo da DATA da tela nunca era exercitado, e apagar
+         `if (dia < TRAVA_DESDE)` de `sprint.js` passava liso. */
+      const fora = [];
+      ['2026-10-31', '2026-11-03'].forEach(dia => {
+        casos.forEach(([t, base, antes, depois]) => {
+          const m = Object.assign({ id: 'x', codigo: 'AX-1' }, base, { status_planejamento: depois });
+          const velha = Object.assign({ id: 'x' }, base, { status_planejamento: antes });
+          const doWorker = WTRAVA({ melhorias: [m] }, { melhorias: [velha] }, 'dev', dia).length > 0;
+          const daTela = SP.travaDeAlocacao(base, antes, depois, dia).trava;
+          if (doWorker !== daTela) {
+            fora.push(dia + ' ' + t + ' (worker=' + doWorker + ' tela=' + daTela + ')');
+          }
+        });
+      });
+      ok(!fora.length,
+         'a tela e o Worker travam exatamente os mesmos movimentos, antes e depois da virada',
+         fora.join(' | '));
+      /* E A TELA TEM MESMO UM RAMO DE DATA. A comparacao acima so prova que as
+         duas concordam; se as DUAS perdessem o corte, elas concordariam em
+         travar tudo desde sempre — e outubro quebraria junto. */
+      ok(!SP.travaDeAlocacao({ tipo: 'evolucao' }, 'planejado', 'em_andamento', '2026-10-31').trava &&
+         SP.travaDeAlocacao({ tipo: 'evolucao' }, 'planejado', 'em_andamento', '2026-11-01').trava,
+         'e a regra da TELA nasce em 01/11, e nao antes');
+
+      // Os casos que a regra TEM de pegar e soltar, afirmados um a um.
+      const roda = (base, antes, depois, dia) => WTRAVA(
+        { melhorias: [Object.assign({ id: 'x', codigo: 'AX-1' }, base, { status_planejamento: depois })] },
+        { melhorias: [Object.assign({ id: 'x' }, base, { status_planejamento: antes })] },
+        'dev', dia || '2026-11-03').length > 0;
+      ok(roda({ tipo: 'evolucao' }, 'planejado', 'em_andamento'),
+         'evolucao sem sprint NAO comeca');
+      ok(!roda({ tipo: 'sustentacao' }, 'planejado', 'em_andamento'),
+         'e sustentacao comeca sem esperar o PM/PO — a porta das 2h da manha');
+      ok(roda({}, 'planejado', 'em_andamento'),
+         'sem classificacao conta como evolucao, e espera',
+         '117 das 158 vivas estao assim');
+      ok(!roda({ tipo: 'evolucao' }, 'em_andamento', 'validacao'),
+         'ENTREGAR nunca trava — prender trabalho feito nao devolve nada a ninguem');
+      ok(!roda({ tipo: 'evolucao' }, 'em_andamento', 'em_andamento'),
+         'e quem JA estava em andamento nao e reexaminada',
+         'medido na base: 18 em andamento, nenhuma com sprint do PO');
+      ok(!roda({ tipo: 'evolucao' }, 'planejado', 'em_andamento', '2026-10-31') &&
+         roda({ tipo: 'evolucao' }, 'planejado', 'em_andamento', '2026-11-01'),
+         'a trava nasce em 01/11, e nao antes');
+      ok(!WTRAVA({ melhorias: [{ id: 'x', codigo: 'AX-1', tipo: 'evolucao',
+                                 status_planejamento: 'em_andamento' }] },
+                 { melhorias: [{ id: 'x', status_planejamento: 'planejado' }] },
+                 'admin', '2026-11-03').length,
+         'e ela vale para o papel `dev` — o PM/PO move o que quiser');
+    }
+
+    /* ═══ A CLASSIFICACAO VIROU CHAVE, E CHAVE PRECISA DE TRANCA ═══════════
+     *
+     * Sustentacao driba a trava. Sem guarda no `tipo`, bastaria trocar
+     * `evolucao` por `sustentacao` no estado que o navegador monta — a trava
+     * abriria de dentro, e seria o mesmo buraco que as datas tinham. */
+    /* ═══ E ELA ESTA LIGADA NA RECUSA ═════════════════════════════════════
+     *
+     * Esta e a invariante que faltava, e a sabotagem a encontrou: trocar
+     * `if (semSprint.length)` por `if (false)` passava LISO. Toda a regra
+     * continuava escrita, conferida contra a tela, com data e tipos batendo —
+     * e simplesmente nao era aplicada. Invariante que mede uma funcao sem medir
+     * se ela e CHAMADA deixa a rota ser codigo morto, que e exatamente como o
+     * `demanda-procurar` subiu inteiro para producao sem nunca rodar. */
+    const iChamada = WC.indexOf('alocacaoSemSprint(data, antesDev');
+    const trechoRecusa = iChamada < 0 ? '' : WC.slice(iChamada, iChamada + 700);
+    ok(iChamada > 0, 'a trava de alocacao e CHAMADA na rota do painel do dev');
+    ok(/if \(semSprint\.length\) \{/.test(trechoRecusa),
+       'e o resultado dela decide alguma coisa, em vez de ser descartado');
+    ok(/error: 'fora_da_sprint'/.test(trechoRecusa) && /\}, 403, headers\)/.test(trechoRecusa),
+       'a gravacao e RECUSADA com 403 e motivo, e nao revertida em silencio',
+       'aqui nao ha valor anterior que faca sentido restaurar');
+    ok(/codigos: semSprint\.map/.test(trechoRecusa),
+       'e a recusa NOMEIA as demandas presas');
+
+    const travaTipo = corpo(W, 'function travaTipoDemandaExistente(recebido, servidor, papel) {');
+    ok(!!travaTipo, 'a trava da classificacao existe no Worker');
+    if (travaTipo) {
+      const F = new Function(travaTipo + '\nreturn travaTipoDemandaExistente;')();
+      const srv = { melhorias: [{ id: '1', codigo: 'AX-1', tipo: 'evolucao' },
+                                { id: '2', codigo: 'AX-2', tipo: '' }] };
+      const vindo = { melhorias: [{ id: '1', codigo: 'AX-1', tipo: 'sustentacao' },
+                                  { id: '2', codigo: 'AX-2', tipo: 'sustentacao' },
+                                  { id: 'nova', tipo: 'sustentacao' }] };
+      F(vindo, srv, 'dev');
+      ok(vindo.melhorias[0].tipo === 'evolucao',
+         'o dev NAO reclassifica evolucao como sustentacao',
+         'seria abrir a trava de alocacao por dentro');
+      ok(vindo.melhorias[1].tipo === 'sustentacao',
+         'mas PREENCHE a classificacao que estava vazia — incluir nao e editar');
+      ok(vindo.melhorias[2].tipo === 'sustentacao',
+         'e escolhe o tipo ao ABRIR a demanda, que e como um incidente nasce');
+      const adm = { melhorias: [{ id: '1', codigo: 'AX-1', tipo: 'sustentacao' }] };
+      F(adm, srv, 'admin');
+      ok(adm.melhorias[0].tipo === 'sustentacao', 'e o PM/PO classifica pelo Admin');
+    }
+    ok(/tipo:\s+'classificacao'/.test(W),
+       'e a classificacao entra no historico — campo que driba trava nao muda sem rastro');
+    /* A ORDEM DAS DUAS. A trava le `m.tipo`; se a reclassificacao fosse
+       desfeita DEPOIS, o `sustentacao` forjado ja teria aberto a porta. */
+    const iTipo = WC.indexOf('travaTipoDemandaExistente(data, antesDev');
+    const iAloc = WC.indexOf('alocacaoSemSprint(data, antesDev');
+    ok(iTipo > 0 && iAloc > iTipo,
+       'e a reclassificacao e desfeita ANTES de a trava ler o tipo');
+
+    // ── A TRAVA, NO PAINEL DO DEV ──────────────────────────────────────────
+    const tb = semComentario(corpo(DEV, 'function travaSprintBarra(id, colKey) {') || '');
+    ok(/SPRINTPO\.travaDeAlocacao\(/.test(tb),
+       'o painel do dev pergunta a regra ao modulo, em vez de reescreve-la');
+    const doo = semComentario(corpo(DEV, 'function onDragOver(e, colKey) {') || '');
+    ok(/travaSprintBarra\(dragId, colKey\)/.test(doo),
+       'a coluna recusa ANTES do solta — senao o dev descobre a regra errando');
+    const upd = semComentario(corpo(DEV, 'async function updateStatus(id, colKey, horasRealizadas, implementacao) {') || '');
+    ok(/travaSprintBarra\(id, colKey\)/.test(upd),
+       'e o funil tambem barra: o modal chega por outro caminho que o arraste');
+    /* ANTES DA ATUALIZACAO OTIMISTA. Depois dela o card pularia para a coluna e
+       voltaria sozinho, que e o efeito que a recusa existe para evitar. */
+    ok(upd.indexOf('travaSprintBarra') < upd.indexOf('m.status_planejamento = colKey'),
+       'e barra ANTES de mexer no card, para ele nao pular e voltar');
+
+    // ── O REPASSE EM LOTE ──────────────────────────────────────────────────
+    const lote = semComentario(corpo(ADMIN, 'async function sprintLoteAplicar(sprint) {') || '');
+    ok(!!lote, 'o repasse em lote existe no Admin');
+    ok((lote.match(/saveViaProxy\(\)/g) || []).length === 1,
+       'UMA gravacao para o lote inteiro, e nao uma por demanda',
+       'trinta gravacoes seriam trinta chances de corrida de sha');
+    ok(/antes\.set\(m\.id,/.test(lote) && lote.indexOf('antes.set') < lote.indexOf('SPRINTPO.repassar'),
+       'o retrato de cada uma e guardado ANTES de mexer em qualquer uma');
+    ok(/Object\.assign\(m, antes\.get\(m\.id\)\)/.test(lote),
+       'e a gravacao que falha desfaz o LOTE INTEIRO',
+       'metade repassada sem ninguem saber qual metade e pior que nada');
+    ok(/if \(!r\.ok\) \{ recusadas\.push/.test(lote),
+       'ja estar na sprint nao derruba o lote — sai da conta e segue');
+    const cand = semComentario(corpo(ADMIN, 'function sprintLoteCandidatas() {') || '');
+    ok(/ETAPA\.aberta\(/.test(cand) && !/_kbPeriodo|_kbTema|_kbDev/.test(cand),
+       'o lote parte das ABERTAS, e nao do recorte filtrado do quadro',
+       'o quadro tem um periodo padrao que ninguem escolheu');
+    const aplic = semComentario(corpo(ADMIN, 'function sprintLoteAbrir() {') || '');
+    ok(/sprintOpcoes\(''\)/.test(aplic),
+       'e o lote SO atribui: sem "Tirar da sprint" na lista',
+       'esvaziar trinta cards de uma vez nao da para desfazer olhando');
+    ok(/sprintLoteAbrir\(\)/.test(semComentario(ADMIN).replace(/\n/g, ' ')),
+       'e ha botao para ele na barra do quadro');
   }
 
   let erroPz = null;
