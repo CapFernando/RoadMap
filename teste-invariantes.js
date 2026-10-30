@@ -24714,6 +24714,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // -- REPASSAR PREENCHE A ENTREGA AO USUARIO COM A SEGUNDA SEGUINTE A SPRINT --
+    {
+      ok(SP.entregaDaSprint('S1-11-2026', []) === '2026-11-09' && SP.entregaDaSprint('S1-11-2026', ['2026-11-09']) === '2026-11-10',
+         'a entrega da S1-11 e a segunda 09/11 (feriado na segunda empurra para o proximo dia util)');
+      ok(SP.sprintDaEntrega(SP.entregaDaSprint('S2-11-2026', []), []) === 'S2-11-2026',
+         'e a data volta para a mesma sprint pela regra da segunda');
+      const mR = { id: 'r1', entrega_usuario: '2026-10-01' };
+      SP.repassar(mR, 'S1-11-2026', 'PO', '2026-10-30', { dados: { feriados: [], sprints: [] } });
+      ok(mR.entrega_usuario === '2026-11-09',
+         'repassar para a sprint preenche a entrega ao usuario de todo item com a segunda seguinte');
+      ok(/'sprint_po_historico', 'entrega_usuario',/.test(ADMIN) && (ADMIN.match(/entrega_usuario: m\.entrega_usuario/g) || []).length >= 3,
+         'e o desfazer das telas guarda a entrega junto com a sprint');
+    }
     // -- NAO EXISTE "NAO CLASSIFICADO": quem nao tem frente e Desenvolvimento --
     {
       const PIPN = (() => { const g = {}; new Function('globalThis', lerTela('pipelines.js'))(g); return g.PIPELINES; })();

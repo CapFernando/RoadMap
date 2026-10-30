@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="3433b8da92">
+<html lang="pt-BR" data-build="db02ba5cf3">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1584,7 +1584,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=f29abe2d42"></script>
+<script src="sprint.js?v=c0c46daaf4"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -9197,7 +9197,9 @@ async function sprintEscolher(ev, id) {
      rolou. `repassar` monta um array novo, então guardar a referência basta. */
   const antes = { sprint_po: m.sprint_po, sprint_po_em: m.sprint_po_em,
                   sprint_po_por: m.sprint_po_por,
-                  sprint_po_historico: m.sprint_po_historico };
+                  sprint_po_historico: m.sprint_po_historico,
+                  // o repasse tambem preenche a entrega ao usuario (`SPRINTPO.entregaDaSprint`)
+                  entrega_usuario: m.entrega_usuario };
   const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
   const hoje = window.PRAZO ? PRAZO.hojeISO() : new Date().toISOString().slice(0, 10);
   /* AS FECHADAS VAO JUNTO. Sem elas o modulo nao tem como recusar a entrada
@@ -9313,7 +9315,7 @@ function sprintLoteAbrir() {
   ov.innerHTML =
     '<div class="dlg-box lote-box" role="dialog" aria-modal="true">' +
       '<h3>🏃 Repassar para a sprint</h3>' +
-      '<div class="dlg-sub">Escolha a sprint e marque as demandas. Uma gravação só para o lote inteiro.</div>' +
+      '<div class="dlg-sub">Escolha a sprint e marque as demandas. Uma gravação só para o lote inteiro. A entrega ao usuário de todas vai para a segunda seguinte à sprint.</div>' +
       '<div class="lote-topo">' +
         '<select id="lote-sprint" class="lote-sel"></select>' +
         '<input type="search" id="lote-busca" class="lote-busca" placeholder="Filtrar por código, título ou dev…">' +
@@ -9425,7 +9427,8 @@ async function sprintLoteAplicar(sprint) {
     if (!m) continue;
     antes.set(m.id, { sprint_po: m.sprint_po, sprint_po_em: m.sprint_po_em,
                       sprint_po_por: m.sprint_po_por,
-                      sprint_po_historico: m.sprint_po_historico });
+                      sprint_po_historico: m.sprint_po_historico,
+                      entrega_usuario: m.entrega_usuario });
     const r = SPRINTPO.repassar(m, alvo, quem, hoje, { dados: state });
     /* JÁ ESTAVA NESTA SPRINT não é erro do lote — é o caso normal de quem
        marcou "todas" com o filtro desligado. Sai da conta e segue. */
@@ -9624,7 +9627,8 @@ async function sprintFecharAplicar() {
   const antes = new Map();
   bal.pendentes.forEach(m => antes.set(m.id, {
     sprint_po: m.sprint_po, sprint_po_em: m.sprint_po_em,
-    sprint_po_por: m.sprint_po_por, sprint_po_historico: m.sprint_po_historico }));
+    sprint_po_por: m.sprint_po_por, sprint_po_historico: m.sprint_po_historico,
+    entrega_usuario: m.entrega_usuario }));
   const sprintsAntes = state.sprints;
 
   const r = SPRINTPO.fechar(state, _fechRotulo, quem, hoje, _fechDecisoes,
@@ -10034,7 +10038,7 @@ async function sprintIniciar() {
   const antes = JSON.parse(JSON.stringify(state.sprints || []));
   /* O RETRATO DAS VENCIDAS, para desfazer se a gravação falhar: iniciar agora
      mexe nelas (sprint, histórico e prioridade), e não só no registro. */
-  const CAMPOS_VENC = ['sprint_po', 'sprint_po_em', 'sprint_po_por', 'sprint_po_historico',
+  const CAMPOS_VENC = ['sprint_po', 'sprint_po_em', 'sprint_po_por', 'sprint_po_historico', 'entrega_usuario',
                        'prioridade', 'sprint_prioritaria'];
   const retrato = mexidas.map(m => [m, JSON.parse(JSON.stringify(
     CAMPOS_VENC.reduce((o, k) => (o[k] = m[k] === undefined ? null : m[k], o), {})))]);

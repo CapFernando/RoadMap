@@ -1515,6 +1515,39 @@
     return [];
   }
 
+  /* ═══ A ENTREGA DA SPRINT ══════════════════════════════════════════════════
+   *
+   * "Quando repassar as tasks para sprint a data de entrega deverá ser
+   *  preenchida para todos os itens, sempre para a próxima segunda — nesse caso
+   *  da sprint S1-11 (09/11/2026)."
+   *
+   * A sprint vai de segunda a sexta e entrega ao usuário na SEGUNDA SEGUINTE —
+   * o avesso exato de `sprintDaEntrega`. Segunda feriado empurra para o próximo
+   * dia útil: entregar num feriado é data que ninguém cumpre.               */
+  function entregaDaSprint(rotulo, feriados) {
+    var faixa = faixaDaSprint(rotulo, feriados);
+    if (!faixa) return '';
+    var fer = {};
+    (feriados || []).forEach(function (f) {
+      fer[iso(f && typeof f === 'object' ? f.data : f)] = true;
+    });
+    var d = new Date(segundaDaSemana(faixa.de) + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 7);
+    for (var i = 0; i < 10; i++) {
+      var dia = d.toISOString().slice(0, 10);
+      var dow = d.getUTCDay();
+      if (dow !== 0 && dow !== 6 && !fer[dia]) return dia;
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return '';
+  }
+
+  function feriadosDe(opts) {
+    var o = opts || {};
+    if (Array.isArray(o.feriados)) return o.feriados;
+    return (o.dados && Array.isArray(o.dados.feriados)) ? o.dados.feriados : [];
+  }
+
   /** O PM/PO REPASSA a demanda para uma sprint. */
   function repassar(m, sprint, quem, hoje, opts) {
     if (!m) return { ok: false, erro: 'Demanda não encontrada.' };
@@ -1543,7 +1576,10 @@
     m.sprint_po_em = iso(hoje);
     m.sprint_po_por = txt(quem);
     m.sprint_po_historico = h;
-    return { ok: true, entrouAtrasada: h.length > 1, pulos: h.length - 1 };
+    // A entrega ao usuário vai para a segunda depois da sprint — ver `entregaDaSprint`.
+    var ent = entregaDaSprint(s, feriadosDe(opts));
+    if (ent) m.entrega_usuario = ent;
+    return { ok: true, entrouAtrasada: h.length > 1, pulos: h.length - 1, entrega: ent };
   }
 
   /** O PM/PO TIRA a demanda da sprint — ela volta para o backlog.
@@ -1630,6 +1666,7 @@
     capacidadePorTrilha: capacidadePorTrilha,
     sprintSeguinte: sprintSeguinte,
     sprintDaEntrega: sprintDaEntrega,
+    entregaDaSprint: entregaDaSprint,
     backlogDaSprint: backlogDaSprint,
     trilhaDe: trilhaDe,
     daTrilha: daTrilha,
