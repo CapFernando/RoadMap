@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="b45268f564">
+<html lang="pt-BR" data-build="aafdab8f8c">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -535,6 +535,16 @@
       background:var(--bg3); border:1px solid var(--border); border-radius:7px; }
     .spr-check { cursor:pointer; }
     .spr-nota { margin-left:auto; font-size:12px; }
+    .spr-trilhas { display:flex; gap:6px; flex-wrap:wrap; }
+    .spr-trilha { padding:6px 11px; font-size:12.5px; font-family:inherit; cursor:pointer;
+      color:var(--text2); background:var(--bg3); border:1px solid var(--border); border-radius:7px; }
+    .spr-trilha.on { color:var(--text); border-color:var(--accent, #4C8DFF); font-weight:600; }
+    .spr-prio { font-size:10.5px; font-weight:700; color:#E8A33D; white-space:nowrap; }
+    .spr-bk-grupo { margin:6px 0 12px; }
+    .spr-bk-dev { font-size:12.5px; font-weight:600; color:var(--text2); margin:4px 0 6px; }
+    .spr-bk-dev.sem { color:#E8A33D; }
+    .spr-bk-sel { padding:4px 6px; font-size:12px; font-family:inherit; color:var(--text);
+      background:var(--bg3); border:1px solid var(--border); border-radius:6px; margin-left:auto; }
     /* A LINHA DAS SPRINTS — anteriores, a atual e as próximas, em ordem. */
     .spr-linha { display:flex; gap:8px; overflow-x:auto; padding:2px 0 12px; }
     .spr-card { flex:0 0 auto; min-width:128px; text-align:left; font-family:inherit;
@@ -1562,8 +1572,8 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=4cf1763477"></script>
-<script src="ordem-kanban.js?v=c110030875"></script>
+<script src="sprint.js?v=57aff8a10e"></script>
+<script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
 
@@ -1961,6 +1971,8 @@
                    sozinha para a sprint anterior a cada troca. -->
               <select id="spr-sel" onchange="_sprSel = this.value; renderGerSprint()"></select>
             </label>
+            <!-- Cada trilha tem a sua conta: Tecnologia, Dados/BI e Sales Ops. -->
+            <span id="spr-trilhas" class="spr-trilhas"></span>
             <label class="spr-check"><input type="checkbox" id="spr-so-risco" onchange="renderGerSprint()">
               Só as que estão em risco</label>
             <span id="spr-estado"></span>
@@ -1968,6 +1980,8 @@
           </div>
           <div id="spr-placar" class="spr-placar"></div>
           <div id="spr-ranking"></div>
+          <!-- O BACKLOG DA SPRINT: o que ainda não começou, para o PM/PO direcionar. -->
+          <div id="spr-backlog"></div>
           <div id="spr-lista"></div>
         </div>
       </section>
@@ -2404,9 +2418,18 @@
       <label class="tag-dados"
              title="Marque quando a demanda for do time de Dados/BI. A marca aparece no card do Kanban e na fila da sala do Planning Poker.">
         <input type="checkbox" id="m-dados-bi" style="width:auto;margin:0"
-               onchange="bisMostraCaixa()" />
+               onchange="if (this.checked) document.getElementById('m-sales-ops').checked = false; bisMostraCaixa()" />
         📊 <strong>Dados / BI</strong>
-        <span style="font-size:12px;opacity:.75">— demanda do time de Dados</span>
+        <span style="font-size:12px;opacity:.75">— demanda do time de Dados · sprint contabilizada à parte</span>
+      </label>
+      <!-- SALES OPS: a segunda trilha com conta propria na sprint. Exclusiva com
+           Dados/BI — cada demanda conta em um placar so (`SPRINTPO.trilhaDe`). -->
+      <label class="tag-dados" style="margin-top:8px"
+             title="Marque quando a demanda for de Sales Ops. A sprint dela é contabilizada à parte, no placar de Sales Ops.">
+        <input type="checkbox" id="m-sales-ops" style="width:auto;margin:0"
+               onchange="if (this.checked) { document.getElementById('m-dados-bi').checked = false; bisMostraCaixa(); }" />
+        📈 <strong>Sales Ops</strong>
+        <span style="font-size:12px;opacity:.75">— demanda de Sales Ops · sprint contabilizada à parte</span>
       </label>
       <!-- OS BIs IMPACTADOS, presos a marca acima.
            "Escolho o assunto BI apenas — devo conseguir informar quais BIs
@@ -4523,6 +4546,7 @@ function refRemove(i) {
    decidiu que e de Dados, ou decidiu que nao e. */
 function matchDados(m, filtro) {
   if (!filtro) return true;
+  if (filtro === 'sales') return !!(m && m.sales_ops && !m.dados_bi);
   return filtro === 'dados' ? !!(m && m.dados_bi) : !(m && m.dados_bi);
 }
 
@@ -4553,6 +4577,8 @@ function opcoesDados() {
   return [
     { key: '', label: 'Todos', n: state.melhorias.length },
     { key: 'dados', label: '📊 Dados/BI', n },
+    { key: 'sales', label: '📈 Sales Ops',
+      n: state.melhorias.filter(m => !ehMesclada(m) && m.sales_ops && !m.dados_bi).length },
     { key: 'fora', label: 'Fora de Dados',
       n: state.melhorias.filter(m => !ehMesclada(m) && !m.dados_bi).length },
   ];
@@ -5658,6 +5684,9 @@ function renderKanban() {
         SPRINTPO.badge(m, 'kb-sprint') + '</span>');
       if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
       if (m.dados_bi) badges.push('<span class="kb-dados" title="Demanda do time de Dados/BI">📊 Dados/BI</span>');
+      else if (m.sales_ops) badges.push('<span class="kb-dados" title="Demanda de Sales Ops — sprint contabilizada à parte">📈 Sales Ops</span>');
+      if (SPRINTPO.ehPrioritariaDaSprint(m)) badges.push('<span class="kb-debito" title="Vencida no início da ' +
+        esc(SPRINTPO.rotuloCurto(m.sprint_prioritaria.sprint)) + ' — entrou na sprint como prioritária">⚡ Prioritária</span>');
       /* OS BIs IMPACTADOS, no card. Um chip com a CONTA e os nomes na dica, e
          nao um chip por BI: uma demanda que atinge seis BIs encheria o card de
          marcas e empurraria o titulo, que e o que se le primeiro. */
@@ -5843,7 +5872,7 @@ function kbDrop(e, colKey) {
      o responsavel. Barra aqui, abre o card e leva ao campo.
      `gestoSemDev` no lugar de `exigeDev` porque o arraste e uma TRANSICAO por
      construcao, e `concluido` precisa entrar: encerrar sem dono era o furo. */
-  if (gestoSemDev(m, colKey, m.dev)) {
+  if (gestoSemDev(m, colKey, m.dev, m.sprint_po)) {
     toast('"' + (m.codigo || m.titulo) + '" precisa de desenvolvedor para ir a ' +
           (STATUS_LABELS[colKey] || colKey) + '.', 'err');
     renderKanban();
@@ -9554,6 +9583,20 @@ function destaqueRenderNoCard(m) {
    usa, e uma segunda conta aqui faria o gerencial discordar do fechamento sobre
    a mesma semana.                                                            */
 let _sprSel = '';
+/* A TRILHA DO PLACAR. Tecnologia por padrão: Dados/BI e Sales Ops têm conta
+   própria e só aparecem quando escolhidas. Vale para o placar, o ranking, a
+   lista, a linha das sprints e o relatório — os cinco leem `_sprTrilha`. */
+let _sprTrilha = 'tecnologia';
+
+/** O seletor de trilha, com a quantidade de demandas de cada uma na sprint. */
+function sprTrilhaHtml(rotulo) {
+  return SPRINTPO.TRILHAS.map(t => {
+    const n = rotulo ? SPRINTPO.demandasDaSprint(state, rotulo, t.k).length : 0;
+    return '<button type="button" class="spr-trilha' + (t.k === _sprTrilha ? ' on' : '') + '"' +
+      ' onclick="_sprTrilha = \'' + t.k + '\'; renderGerSprint()">' +
+      t.icone + ' ' + esc(t.nome) + ' <span class="spr-de">' + n + '</span></button>';
+  }).join('');
+}
 
 /** As sprints que EXISTEM nos dados, e não as do calendário.
  *
@@ -9596,7 +9639,7 @@ function renderSprLinha() {
   const EST = { montando: ['montando', '✎ Montando'], em_curso: ['curso', '▶ Em curso'],
                 fechada: ['fechada', '🔒 Fechada'] };
   el.innerHTML = antes.concat(frente).map(r => {
-    const p = SPRINTPO.placarDaSprint(state, r, etapa);
+    const p = SPRINTPO.placarDaSprint(state, r, etapa, _sprTrilha);
     const f = SPRINTPO.faixaDaSprint(r, fer);
     const e = EST[SPRINTPO.situacaoDaSprint(state, r)] || EST.montando;
     return '<button type="button" class="spr-card' + (r === _sprSel ? ' sel' : '') +
@@ -9657,7 +9700,9 @@ function renderGerSprint() {
 
   const etapa = m => statusKey(m);
   const hoje = PRAZO.hojeISO();
-  const p = SPRINTPO.placarDaSprint(state, _sprSel, etapa);
+  const trEl = document.getElementById('spr-trilhas');
+  if (trEl) trEl.innerHTML = sprTrilhaHtml(_sprSel);
+  const p = SPRINTPO.placarDaSprint(state, _sprSel, etapa, _sprTrilha);
   const fech = SPRINTPO.fechamentoDe(state, _sprSel);
   const sit = SPRINTPO.situacaoDaSprint(state, _sprSel);
 
@@ -9679,7 +9724,9 @@ function renderGerSprint() {
             esc(_sprSel) + '\')">Fechar sprint</button>' : '');
     } else {
       est.innerHTML = '<span class="spr-est montando">✎ Montando — o time ainda não vê</span>' +
-        (p.total ? '<button type="button" class="spr-acao inicia" onclick="sprintIniciar()">' +
+        /* O BOTÃO OLHA A SPRINT INTEIRA, e não a trilha escolhida: iniciar vale
+           para os três times de uma vez. */
+        (SPRINTPO.demandasDaSprint(state, _sprSel).length ? '<button type="button" class="spr-acao inicia" onclick="sprintIniciar()">' +
                    '▶ Iniciar sprint</button>' : '');
     }
   }
@@ -9725,7 +9772,7 @@ function renderGerSprint() {
 
   /* ── O RANKING ────────────────────────────────────────────────────────── */
   const rkEl = document.getElementById('spr-ranking');
-  const rk = SPRINTPO.rankingDaSprint(state, _sprSel, etapa);
+  const rk = SPRINTPO.rankingDaSprint(state, _sprSel, etapa, _sprTrilha);
   if (rkEl) {
     const temDupla = rk.some(d => d.dupla);
     rkEl.innerHTML = !rk.length ? '' :
@@ -9748,9 +9795,45 @@ function renderGerSprint() {
       '</tr>').join('') + '</tbody></table>';
   }
 
+  /* ── O BACKLOG DA SPRINT ────────────────────────────────────────────────
+     "Necessito visualizar backlog da sprint para eu poder direcionar." O que
+     está na sprint e ainda não começou, agrupado por dev — sem dev primeiro,
+     que é o que falta direcionar. O seletor grava o dev na hora. */
+  const bkEl = document.getElementById('spr-backlog');
+  if (bkEl) {
+    const bk = SPRINTPO.backlogDaSprint(state, _sprSel, etapa, _sprTrilha);
+    const nBk = bk.reduce((t, g) => t + g.itens.length, 0);
+    const devs = devsDisponiveis();
+    const ETQ = { backlog: 'Backlog', levantar_req: 'Levantar req.', planning: 'Planning',
+                  planejado: 'Planejado' };
+    bkEl.innerHTML = !nBk ? '' :
+      '<div class="spr-tit">Backlog da sprint <span class="spr-dica">— ' + nBk +
+      (nBk === 1 ? ' demanda ainda não começou' : ' demandas ainda não começaram') +
+      '. O que está antes de Planejado já aparece para o time, com a sprint marcada.</span></div>' +
+      bk.map(g => '<div class="spr-bk-grupo">' +
+        '<div class="spr-bk-dev' + (g.dev ? '' : ' sem') + '">' +
+          (g.dev ? esc(g.dev) : '⚠ Sem dev — para direcionar') + ' · ' + g.itens.length + '</div>' +
+        '<div class="spr-lista">' + g.itens.map(x => {
+          const m = x.m;
+          return '<div class="spr-item" onmousedown="event.stopPropagation()"' +
+            ' ondblclick="openModalMelhoria(\'' + esc(m.id) + '\')" title="Duplo clique abre a demanda">' +
+            '<span class="spr-sit">' + esc(ETQ[x.etapa] || x.etapa) + '</span>' +
+            '<span class="lote-cod">' + esc(m.codigo || '—') + '</span>' +
+            (x.prioritaria ? '<span class="spr-prio">⚡ Prioritária</span>' : '') +
+            '<span class="spr-tit-d">' + esc(m.titulo || '') + '</span>' +
+            (SPRINTPO.pontosDe(m) ? '<span class="spr-pts">' + SPRINTPO.pontosDe(m) + ' pts</span>' : '') +
+            '<select class="spr-bk-sel" title="Direcionar para um dev"' +
+            ' onmousedown="event.stopPropagation()" ondblclick="event.stopPropagation()"' +
+            ' onchange="sprDirecionar(\'' + esc(m.id) + '\', this.value)">' +
+            '<option value="">' + (g.dev ? 'Trocar dev…' : 'Direcionar para…') + '</option>' +
+            devs.filter(d => d !== g.dev).map(d => '<option value="' + esc(d) + '">' + esc(d) + '</option>').join('') +
+            '</select></div>';
+        }).join('') + '</div></div>').join('');
+  }
+
   /* ── TODAS AS DEMANDAS, COM O RISCO ───────────────────────────────────── */
   const soRisco = !!document.getElementById('spr-so-risco')?.checked;
-  const acomp = SPRINTPO.acompanhamentoDaSprint(state, _sprSel, etapa, hoje, window.PRAZO);
+  const acomp = SPRINTPO.acompanhamentoDaSprint(state, _sprSel, etapa, hoje, window.PRAZO, _sprTrilha);
   const emRisco = acomp.filter(x => x.riscos.length);
   const nota = document.getElementById('spr-nota');
   if (nota) {
@@ -9778,6 +9861,7 @@ function renderGerSprint() {
               ' title="Duplo clique abre a demanda">' +
               '<span class="spr-sit" data-s="' + esc(x.situacao) + '">' + s[0] + ' ' + esc(s[1]) + '</span>' +
               '<span class="lote-cod">' + esc(m.codigo || '—') + '</span>' +
+              (x.prioritaria ? '<span class="spr-prio" title="Vencida no início da sprint — entrou como prioritária">⚡ Prioritária</span>' : '') +
               '<span class="spr-tit-d">' + esc(m.titulo || '') + '</span>' +
               (x.pontos ? '<span class="spr-pts">' + x.pontos + ' pts</span>' : '') +
               (m.dev ? '<span class="lote-dev">' + esc(m.dev) + '</span>' : '') +
@@ -9788,6 +9872,28 @@ function renderGerSprint() {
             '</div>';
           }).join('') + '</div>';
   }
+}
+
+/** DIRECIONAR: grava o dev escolhido no backlog da sprint. Desfaz se a
+ *  gravação falhar — a tela não pode mostrar um dono que o servidor recusou. */
+async function sprDirecionar(id, nome) {
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m || !nome) return;
+  const antes = m.dev || '';
+  m.dev = nome;
+  _dirtyMelhoriaIds.add(m.id);
+  _pendingEdits = true;
+  renderAll();
+  const ok = await saveViaProxy();
+  _dirtyMelhoriaIds.delete(m.id);
+  if (!ok) {
+    m.dev = antes;
+    renderAll();
+    avisaFalha('Não consegui direcionar ' + (m.codigo || 'a demanda') + '.');
+    return;
+  }
+  _pendingEdits = false;
+  toast('👤 ' + (m.codigo || 'Demanda') + ' direcionada para ' + nome + '.', 'ok');
 }
 
 /** INICIAR A SPRINT — o ato que entrega a semana ao time.
@@ -9804,6 +9910,10 @@ async function sprintIniciar() {
   if (!r) return;
   const dem = SPRINTPO.demandasDaSprint(state, r);
   const semDev = dem.filter(m => !String(m.dev || '').trim());
+  /* AS VENCIDAS QUE VÃO SER PUXADAS, à vista antes de confirmar: iniciar muda a
+     sprint e a prioridade delas, e o PO precisa ver quais são. */
+  const optsIni = { prazo: window.PRAZO, etapaDe: m => statusKey(m) };
+  const venc = SPRINTPO.vencidasParaPriorizar(state, r, PRAZO.hojeISO(), optsIni);
   const ok = await confirmar({
     titulo: '▶ Iniciar ' + SPRINTPO.rotuloCurto(r) + '?',
     texto: dem.length + (dem.length === 1 ? ' demanda passa' : ' demandas passam') +
@@ -9813,19 +9923,31 @@ async function sprintIniciar() {
                ' sem dono (' + semDev.map(m => m.codigo || m.id).join(', ') +
                ') e ' + (semDev.length === 1 ? 'vai aparecer' : 'vão aparecer') +
                ' no backlog de todos os devs, para quem pegar primeiro.'
-             : '\n\nTodas já têm dev alocado.'),
+             : '\n\nTodas já têm dev alocado.') +
+           (venc.length
+             ? '\n\n⚡ ' + venc.length + (venc.length === 1 ? ' demanda alocada está vencida e entra' : ' demandas alocadas estão vencidas e entram') +
+               ' nesta sprint como prioritária (prioridade Alta): ' + venc.map(m => m.codigo || m.id).join(', ') + '.'
+             : ''),
     ok: 'Iniciar',
   });
   if (!ok) return;
-  const antes = state.sprints;
+  const antes = JSON.parse(JSON.stringify(state.sprints || []));
+  /* O RETRATO DAS VENCIDAS, para desfazer se a gravação falhar: iniciar agora
+     mexe nelas (sprint, histórico e prioridade), e não só no registro. */
+  const CAMPOS_VENC = ['sprint_po', 'sprint_po_em', 'sprint_po_por', 'sprint_po_historico',
+                       'prioridade', 'sprint_prioritaria'];
+  const retrato = venc.map(m => [m, JSON.parse(JSON.stringify(
+    CAMPOS_VENC.reduce((o, k) => (o[k] = m[k] === undefined ? null : m[k], o), {})))]);
   const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
-  const res = SPRINTPO.iniciar(state, r, quem, PRAZO.hojeISO());
+  const res = SPRINTPO.iniciar(state, r, quem, PRAZO.hojeISO(), optsIni);
   if (!res.ok) { toast(res.erro, 'err'); return; }
+  venc.forEach(m => _dirtyMelhoriaIds.add(m.id));
   _pendingEdits = true;
   renderAll();
   const salvou = await saveViaProxy();
   if (!salvou) {
     state.sprints = antes;
+    retrato.forEach(([m, o]) => { Object.assign(m, o); _dirtyMelhoriaIds.delete(m.id); });
     renderAll();
     avisaFalha('Não consegui iniciar a sprint. Nada foi alterado.');
     return;
@@ -9833,7 +9955,11 @@ async function sprintIniciar() {
   _pendingEdits = false;
   toast('▶ ' + SPRINTPO.rotuloCurto(r) + ' em curso · ' + res.demandas +
         (res.demandas === 1 ? ' demanda liberada' : ' demandas liberadas') +
-        (res.semDev ? ', ' + res.semDev + ' sem dono no backlog do time' : '') + '.', 'ok');
+        (res.semDev ? ', ' + res.semDev + ' sem dono no backlog do time' : '') +
+        (res.prioritarias.length ? ', ⚡ ' + res.prioritarias.length + ' vencida' +
+          (res.prioritarias.length === 1 ? ' entrou' : 's entraram') + ' como prioritária' +
+          (res.prioritarias.length === 1 ? '' : 's') : '') + '.', 'ok');
+  venc.forEach(m => _dirtyMelhoriaIds.delete(m.id));
 }
 
 function renderGerSemPontos() {
@@ -11733,15 +11859,16 @@ function relPptEscopos(j) {
 function relPptSprint(j) {
   if (!j || j.escala !== 'sprint' || !window.SPRINTPO) return null;
   const etapa = m => statusKey(m);
-  const p = SPRINTPO.placarDaSprint(state, j.sprint, etapa);
+  const p = SPRINTPO.placarDaSprint(state, j.sprint, etapa, _sprTrilha);
   if (!p.total) return null;
-  const rk = SPRINTPO.rankingDaSprint(state, j.sprint, etapa);
+  const rk = SPRINTPO.rankingDaSprint(state, j.sprint, etapa, _sprTrilha);
   const ac = SPRINTPO.acompanhamentoDaSprint(state, j.sprint, etapa,
-                                             PRAZO.hojeISO(), window.PRAZO);
+                                             PRAZO.hojeISO(), window.PRAZO, _sprTrilha);
   const sit = SPRINTPO.situacaoDaSprint(state, j.sprint);
   const ROT = { montando: 'ainda em montagem', em_curso: 'em curso', fechada: 'fechada' };
   return {
-    rotulo: SPRINTPO.rotuloCurto(j.sprint),
+    rotulo: SPRINTPO.rotuloCurto(j.sprint) +
+            (_sprTrilha === 'tecnologia' ? '' : ' · ' + (SPRINTPO.TRILHAS.find(t => t.k === _sprTrilha) || {}).nome),
     sub: j.rot.replace(/^\S+\s*/, '').replace(/^\(|\)$/g, '') + '  ·  ' + ROT[sit],
     total: p.total, validados: p.validados, aguardando: p.aguardando, saiu: p.saiu,
     pontosTotal: p.pontosTotal, pontosValidados: p.pontosValidados,
@@ -12230,14 +12357,14 @@ function relRenderSprint(j) {
   if (!j || j.escala !== 'sprint' || !window.SPRINTPO) { box.style.display = 'none'; return; }
   box.style.display = '';
   const etapa = m => statusKey(m);
-  const p = SPRINTPO.placarDaSprint(state, j.sprint, etapa);
+  const p = SPRINTPO.placarDaSprint(state, j.sprint, etapa, _sprTrilha);
   if (!p.total) {
     box.innerHTML = '<div class="ger-empty-box">Nenhuma demanda foi repassada para ' +
       esc(SPRINTPO.rotuloCurto(j.sprint)) + '.</div>';
     return;
   }
-  const rk = SPRINTPO.rankingDaSprint(state, j.sprint, etapa);
-  const ac = SPRINTPO.acompanhamentoDaSprint(state, j.sprint, etapa, PRAZO.hojeISO(), window.PRAZO);
+  const rk = SPRINTPO.rankingDaSprint(state, j.sprint, etapa, _sprTrilha);
+  const ac = SPRINTPO.acompanhamentoDaSprint(state, j.sprint, etapa, PRAZO.hojeISO(), window.PRAZO, _sprTrilha);
   const risco = ac.filter(x => x.riscos.length);
   const sit = SPRINTPO.situacaoDaSprint(state, j.sprint);
   const SIT_ROT = { montando: '✎ Montando', em_curso: '▶ Em curso', fechada: '🔒 Fechada' };
@@ -13196,6 +13323,7 @@ function openModalMelhoria(id) {
   comiteAutoriza();
   comiteMostra();
   document.getElementById('m-dados-bi').checked      = !!m?.dados_bi;
+  document.getElementById('m-sales-ops').checked     = !m?.dados_bi && !!m?.sales_ops;
   _mBis = BIS.daDemanda(m);
   bisRender();
   // Card novo abre com a lista vazia; sem esta linha ela viria com os links do
@@ -13655,8 +13783,10 @@ function exigeDevAoEntrar(sp) { return etapasQueExigemDevAoEntrar().includes(sp)
  * estava numa etapa que exige dono, sem dono?" — e uma parada em Validacao sem
  * dono respondia que sim, entao encerra-la passava. Que e exatamente o gesto
  * que se pediu para impedir. A prova caso a caso pegou. */
-function gestoSemDev(velha, destino, dev) {
+function gestoSemDev(velha, destino, dev, sprint) {
   if (String(dev || '').trim()) return false;
+  // Planejado com sprint marcada fica sem dono de propósito — ver `SPRINTPO.dispensaDev`.
+  if (window.SPRINTPO && SPRINTPO.dispensaDev(destino, sprint)) return false;
   if (exigeDev(destino)) return true;                 // por estado
   if (destino !== 'concluido') return false;
   return String((velha || {}).status_planejamento || '') !== 'concluido';
@@ -13965,7 +14095,8 @@ async function saveMelhoria() {
   const _idEdit = document.getElementById('m-id').value;
   const _antesDoSalvar = _idEdit
     ? (state.melhorias || []).find(x => x.id === _idEdit) : null;
-  if (gestoSemDev(_antesDoSalvar, sp, devSel)) {
+  if (gestoSemDev(_antesDoSalvar, sp, devSel,
+                  (document.getElementById('m-sprint') || {}).value || '')) {
     toast('Escolha o desenvolvedor: ' + (STATUS_LABELS[sp] || sp) + ' exige responsável.', 'err');
     document.getElementById('m-dev').focus();
     return;
@@ -14087,6 +14218,12 @@ async function saveMelhoria() {
     // Na lista fechada pelo mesmo motivo de todos os outros: fora dela, salvar
     // pela aba Dados APAGARIA a marca do time de Dados em toda demanda.
     dados_bi:            document.getElementById('m-dados-bi').checked,
+    // Mesma razao: a marca de Sales Ops separa a conta da sprint (`SPRINTPO.trilhaDe`).
+    sales_ops:           document.getElementById('m-sales-ops').checked,
+    /* A MARCA DE PRIORITARIA NASCE NO INICIO DA SPRINT (`SPRINTPO.iniciar`), e
+       nao neste formulario. Repassar o que existe evita que salvar qualquer
+       outro campo a apague — a armadilha de sempre da lista fechada. */
+    sprint_prioritaria:  existing.sprint_prioritaria || null,
     /* A LISTA VEM DO ESTADO DA TELA, e nao do campo de texto: o campo e so a
        porta de entrada, e o que vale sao as marcas ja incluidas. Na lista
        fechada pelo mesmo motivo de todas as outras — fora dela, salvar pela aba
@@ -15587,6 +15724,7 @@ function entregaHTML(m, opts) {
   if (m.concluido_em) meta.push('<span>Concluída em: <strong>' + esc(formatDate(m.concluido_em)) + '</strong></span>');
   if (m.debito_tecnico) meta.push('<span><strong>🧱 Débito técnico</strong></span>');
   if (m.dados_bi) meta.push('<span><strong>📊 Dados / BI</strong></span>');
+  else if (m.sales_ops) meta.push('<span><strong>📈 Sales Ops</strong></span>');
   const _biM = BIS.daDemanda(m);
   if (_biM.length) meta.push('<span><strong>📈 BIs:</strong> ' + esc(_biM.join(' · ')) + '</span>');
   if (m.sprint) meta.push('<span>Sprint: <strong>' + esc(m.sprint) + '</strong></span>');

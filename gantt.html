@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="1e40360031">
+<html lang="pt-BR" data-build="52e0fc3819">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -255,6 +255,30 @@
     .ind-chip.active-filter { outline: 2px solid rgba(255,255,255,0.3); outline-offset: 1px; }
 
     /* ── FILTER BAR ── */
+    /* ═══ A CAPACIDADE DA SPRINT, POR FRENTE ════════════════════════════════ */
+    .capsp { margin:0 16px 10px; background:var(--bg2); border:1px solid var(--border);
+      border-radius:10px; }
+    .capsp > summary { cursor:pointer; padding:9px 14px; font-size:13px; font-weight:600;
+      color:var(--text); list-style:none; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .capsp > summary::-webkit-details-marker { display:none; }
+    .capsp-res { font-weight:400; font-size:12px; color:var(--text2); }
+    .capsp-corpo { padding:4px 14px 12px; }
+    .capsp-topo { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text2); margin-bottom:8px; }
+    .capsp-topo select { padding:5px 8px; font-size:12.5px; font-family:inherit; color:var(--text);
+      background:var(--bg3); border:1px solid var(--border); border-radius:6px; }
+    .capsp-tab { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .capsp-tab th { text-align:left; font-weight:600; color:var(--text3); padding:5px 8px;
+      border-bottom:1px solid var(--border); }
+    .capsp-tab td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+    .capsp-barra { display:inline-block; width:110px; height:7px; background:var(--bg4);
+      border-radius:4px; overflow:hidden; vertical-align:middle; margin-right:6px; }
+    .capsp-barra span { display:block; height:100%; background:#22C55E; }
+    .capsp-barra span.cheia { background:#E8A33D; }
+    .capsp-barra span.over { background:#E84444; }
+    .capsp-over { color:#E84444; font-weight:600; }
+    .capsp-sug { font-size:12px; color:var(--text2); }
+    .capsp-sug a { color:var(--text); cursor:pointer; text-decoration:underline dotted; margin-right:6px; }
+    .capsp-nota { font-size:11.5px; color:var(--text3); margin-top:8px; }
     .filter-bar {
       background: var(--bg2); border-bottom: 1px solid var(--border);
       padding: 8px 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
@@ -1152,8 +1176,8 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=4cf1763477"></script>
-<script src="ordem-kanban.js?v=c110030875"></script>
+<script src="sprint.js?v=57aff8a10e"></script>
+<script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
 
@@ -1282,6 +1306,19 @@
     <span id="f-contagem" class="filter-count"></span>
   </div>
 
+  <!-- A CAPACIDADE DA SPRINT: 30 pontos por dev, por frente, contra o que esta
+       alocado na sprint — e a sugestao do que passar para a seguinte. -->
+  <details class="capsp" id="capsp" open>
+    <summary>🧮 Capacidade da sprint <span class="capsp-res" id="capsp-res"></span></summary>
+    <div class="capsp-corpo">
+      <div class="capsp-topo">Sprint
+        <select id="capsp-sel" onchange="_capSel = this.value; renderCapSprint()"></select>
+        <span>· cada dev = 30 pontos por sprint</span>
+      </div>
+      <div id="capsp-tab"></div>
+    </div>
+  </details>
+
   <div class="main-layout">
     <div class="backlog-sidebar">
       <div class="backlog-header">
@@ -1333,9 +1370,18 @@
     <div class="form-group">
       <label class="tag-dados"
              title="Marque quando a demanda for do time de Dados/BI. A marca aparece no card do Kanban e na fila da sala do Planning Poker.">
-        <input type="checkbox" id="e-dados-bi" style="width:auto;margin:0" />
+        <input type="checkbox" id="e-dados-bi" style="width:auto;margin:0"
+               onchange="if (this.checked) document.getElementById('e-sales-ops').checked = false" />
         📊 <strong>Dados / BI</strong>
-        <span style="font-size:12px;opacity:.75">— demanda do time de Dados</span>
+        <span style="font-size:12px;opacity:.75">— demanda do time de Dados · sprint contabilizada à parte</span>
+      </label>
+      <!-- SALES OPS: exclusiva com Dados/BI — cada demanda conta em um placar so. -->
+      <label class="tag-dados" style="margin-top:8px"
+             title="Marque quando a demanda for de Sales Ops. A sprint dela é contabilizada à parte.">
+        <input type="checkbox" id="e-sales-ops" style="width:auto;margin:0"
+               onchange="if (this.checked) document.getElementById('e-dados-bi').checked = false" />
+        📈 <strong>Sales Ops</strong>
+        <span style="font-size:12px;opacity:.75">— demanda de Sales Ops · sprint contabilizada à parte</span>
       </label>
     </div>
     <div class="form-group">
@@ -2626,8 +2672,80 @@ function atualizaContagemGantt() {
 function renderAll() {
   renderFilters();
   renderIndicators();
+  renderCapSprint();
   renderBacklog();
   renderGantt();
+}
+
+/* ═══ A CAPACIDADE DA SPRINT, POR FRENTE ════════════════════════════════════
+   "Cada dev recebe 30 pontos; multiplique pela quantidade de pessoas para ter
+    nocao da capacidade da sprint. Isso ira sugerir alocar demandas para a
+    proxima sprint." A CONTA MORA EM `sprint.js` (`capacidadeDaSprint`); esta
+   tela escolhe a sprint, injeta a frente de cada um e desenha. */
+let _capSel = '';
+
+/** Quem conta na capacidade: o time cadastrado, sem quem saiu. */
+function capDevsAtivos() {
+  const fora = new Set([...(state.devs_removidos || []), ...(state.devs_inativos || [])]
+    .map(n => String(n).trim().toLowerCase()));
+  return (state.desenvolvedores || []).filter(n => !fora.has(String(n).trim().toLowerCase()));
+}
+
+function renderCapSprint() {
+  const tab = document.getElementById('capsp-tab');
+  const sel = document.getElementById('capsp-sel');
+  if (!tab || !sel || !window.SPRINTPO || !window.PIPELINES) return;
+  const fer = state.feriados || [];
+  const hoje = new Date().toISOString().slice(0, 10);
+  const opcoes = SPRINTPO.proximasSprints(hoje, 5, fer).map(x => x.rotulo);
+  if (!opcoes.includes(_capSel)) _capSel = opcoes[0] || '';
+  sel.innerHTML = opcoes.map((r, i) => '<option value="' + r + '">' + SPRINTPO.rotuloCurto(r) +
+    (i === 0 ? ' · atual' : '') + '</option>').join('');
+  sel.value = _capSel;
+  const eq = SPRINTPO.capacidadeDaSprint(state, _capSel, {
+    devs: capDevsAtivos(),
+    frenteDoDev: n => PIPELINES.doDev(n, state.devs_perfil),
+    frenteDe: m => frenteDaDemanda(m),
+    semFrente: PIPELINES.NAO_CLASSIFICADO,
+    etapaDe: m => spEfetivo(m),
+    compara: window.ORDEMKB
+      ? (a, b) => ORDEMKB.compara(a, b, window.ENTREGAUSU ? ENTREGAUSU.data : null) : undefined,
+  });
+  const prox = SPRINTPO.sprintSeguinte(_capSel, fer);
+  const cap = eq.reduce((t, e) => t + e.capacidade, 0);
+  const aloc = Math.round(eq.reduce((t, e) => t + e.alocado, 0));
+  const nOver = eq.filter(e => e.capacidade && e.alocado > e.capacidade).length;
+  const res = document.getElementById('capsp-res');
+  if (res) res.innerHTML = SPRINTPO.rotuloCurto(_capSel) + ' · ' + aloc + ' de ' + cap + ' pts' +
+    (nOver ? ' · <span class="capsp-over">⚠ ' + nOver + (nOver === 1 ? ' frente acima' : ' frentes acima') +
+      ' da capacidade</span>' : '');
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  tab.innerHTML = '<table class="capsp-tab"><thead><tr><th>Frente</th><th>Pessoas</th>' +
+    '<th>Capacidade</th><th>Alocado na sprint</th><th>Saldo</th><th>Sugestão</th></tr></thead><tbody>' +
+    eq.map(e => {
+      const pct = e.pct == null ? 0 : e.pct;
+      const cls = e.pct == null ? '' : pct > 100 ? 'over' : pct >= 85 ? 'cheia' : '';
+      const sug = e.sugeridas.length
+        ? '<span class="capsp-sug">Mover para <b>' + esc(SPRINTPO.rotuloCurto(prox)) + '</b>: ' +
+          e.sugeridas.map(m => '<a onclick="openModal(\'' + esc(m.id) + '\')" title="' + esc(m.titulo || '') + '">' +
+            esc(m.codigo || m.id) + ' (' + SPRINTPO.pontosDe(m) + ' pt)</a>').join('') + '</span>'
+        : !e.capacidade && e.alocado
+          ? '<span class="capsp-sug">Sem pessoas cadastradas nesta frente — classifique o dev</span>'
+          : e.saldo > 0 && e.capacidade
+            ? '<span class="capsp-sug">Cabe mais ' + e.saldo + ' pt</span>' : '—';
+      return '<tr><td><b>' + esc(e.frente) + '</b></td>' +
+        '<td title="' + esc(e.pessoas.join(', ')) + '">' + e.pessoas.length + '</td>' +
+        '<td>' + e.pessoas.length + ' × 30 = <b>' + e.capacidade + '</b> pt</td>' +
+        '<td><span class="capsp-barra"><span class="' + cls + '" style="width:' + Math.min(100, pct) + '%"></span></span>' +
+          '<b>' + e.alocado + '</b> pt' + (e.pct != null ? ' (' + pct + '%)' : '') +
+          (e.semPontos ? ' <span class="capsp-sug" title="Sem pontuação: o alocado está menor do que é">· ' + e.semPontos + ' sem pontos</span>' : '') + '</td>' +
+        '<td class="' + (e.saldo < 0 ? 'capsp-over' : '') + '">' + (e.capacidade ? e.saldo + ' pt' : '—') + '</td>' +
+        '<td>' + sug + '</td></tr>';
+    }).join('') + '</tbody></table>' +
+    '<div class="capsp-nota">Alocado = pontos do Planning Poker das demandas repassadas para esta sprint; ' +
+    'demanda de dupla divide os pontos entre as frentes das duas pessoas. A sugestão só considera o que ' +
+    'ainda não começou e tira primeiro a de prioridade mais baixa e prazo mais distante — ' +
+    'quem move é o PM/PO, pelo campo Sprint do card.</div>';
 }
 
 function renderFilters() {
@@ -4503,6 +4621,7 @@ function openModal(id, prefillDev, prefillDate) {
   selPts.value = valPts;
   document.getElementById('e-debito').checked = !!(m && m.debito_tecnico);
   document.getElementById('e-dados-bi').checked = !!(m && m.dados_bi);
+  document.getElementById('e-sales-ops').checked = !!(m && !m.dados_bi && m.sales_ops);
   document.getElementById('e-poker-media').textContent =
     (m && m.poker_media != null) ? '— média ' + String(m.poker_media).replace('.', ',') : '';
   /* O CARIMBO. `SELO.grande` devolve string vazia quando a demanda nao passou
@@ -4857,7 +4976,9 @@ async function saveTask() {
      a consequência depende dela. */
   if (!(await gConfirmaRetroativo(inicio, fim, sp))) return;
   const devSel = document.getElementById('e-dev').value.trim();
-  if (exigeDev(sp) && !devSel) {
+  // Planejado com sprint marcada fica sem dono de propósito — ver `SPRINTPO.dispensaDev`.
+  if (exigeDev(sp) && !devSel &&
+      !(window.SPRINTPO && SPRINTPO.dispensaDev(sp, (document.getElementById('e-sprint-po') || {}).value || ''))) {
     const rot = { planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação PM/PO' }[sp] || sp;
     toast('Escolha o desenvolvedor: ' + rot + ' exige responsável.', 'err');
     document.getElementById('e-dev').focus();
@@ -4954,6 +5075,11 @@ async function saveTask() {
     comite:             existing.comite || null,
     debito_tecnico:     document.getElementById('e-debito').checked,
     dados_bi:           document.getElementById('e-dados-bi').checked,
+    // A trilha de Sales Ops separa a conta da sprint (`SPRINTPO.trilhaDe`).
+    sales_ops:          document.getElementById('e-sales-ops').checked,
+    /* A marca de prioritaria nasce no inicio da sprint (Admin). Sem esta linha,
+       salvar aqui a apagaria — a armadilha de sempre da lista fechada. */
+    sprint_prioritaria: existing.sprint_prioritaria || null,
     /* ESTA TELA TEM A MARCA DADOS/BI, MAS NAO TEM A LISTA DE BIs NEM A DE LINKS
        — e a lista de campos e FECHADA. Sem estas duas linhas, abrir uma demanda
        aqui e salvar apagava os BIs impactados e os links de referencia que

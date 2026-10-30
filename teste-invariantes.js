@@ -18653,7 +18653,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       corpo(ADMIN, 'function exigeDev(sp) {') + '\n' +
       corpo(ADMIN, 'function etapasQueExigemDevAoEntrar() {') + '\n' +
       corpo(ADMIN, 'function exigeDevAoEntrar(sp) {') + '\n' +
-      corpo(ADMIN, 'function gestoSemDev(velha, destino, dev) {') +
+      corpo(ADMIN, 'function gestoSemDev(velha, destino, dev, sprint) {') +
       '; return gestoSemDev;')({ PREVOO: PREVOO }, PREVOO);
 
     ok(gesto({ status_planejamento: 'validacao', dev: '' }, 'concluido', ''),
@@ -18684,15 +18684,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* A PRIMEIRA VERSAO ERRAVA JUSTO O CASO DO RELATO: ela perguntava "ja
        estava numa etapa que exige dono, sem dono?", e uma parada em Validacao
        sem dono respondia que sim. A escapatoria tem de ser pelo DESTINO. */
-    const GST = corpo(ADMIN, 'function gestoSemDev(velha, destino, dev) {') || '';
+    const GST = corpo(ADMIN, 'function gestoSemDev(velha, destino, dev, sprint) {') || '';
     ok(/!== 'concluido'/.test(GST) && !/exigeDevAoEntrar\(antes\)/.test(GST),
        'e a escapatoria olha o destino, e nao "estava numa etapa qualquer que exige dono"');
 
     /* OS TRES GESTOS USAM ESTA FUNCAO, e nenhum ficou com o `exigeDev` velho —
        que e o que deixava `concluido` de fora. */
-    ok(/if \(gestoSemDev\(m, colKey, m\.dev\)\)/.test(ADMIN),
+    ok(/if \(gestoSemDev\(m, colKey, m\.dev, m\.sprint_po\)\)/.test(ADMIN),
        'o arraste usa a regra nova');
-    ok(/if \(gestoSemDev\(_antesDoSalvar, sp, devSel\)\)/.test(ADMIN),
+    ok(/if \(gestoSemDev\(_antesDoSalvar, sp, devSel,\s/.test(ADMIN),
        'o modal tambem');
     /* E O `antes` DO MODAL SAI DO ESTADO, e nao e `null` fixo. Com `null` a
        regra passa a barrar por estado sem parecer que mudou — a chamada
@@ -24533,6 +24533,149 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/cabecalhoEm\(s, pptx, d\.titulo \|\| 'O MÊS'/.test(APRE),
        'e `slideMes` aceita o titulo de quem chama, mantendo o padrao do modelo',
        'aditivo: o deck mensal nao passa nada e continua "O MÊS"');
+  }
+
+  /* ═══ NOVEMBRO: CADA TRILHA COM A SUA CONTA, AS VENCIDAS PRIORITÁRIAS E O
+   *     BACKLOG DA SPRINT À VISTA (30/10/2026) ══════════════════════════════
+   *
+   * "Itens marcados com DADOS/BI deverão ter sua sprint contabilizada a parte.
+   *  Da mesma forma criar uma nova marcação para SALES OPS."
+   * "Ao dar início, itens já alocados vencidos entrarão no backlog da sprint
+   *  como prioritários."
+   * "Necessito visualizar backlog da sprint para eu poder direcionar. Poderá
+   *  ser visível p/ time, quando em backlog, porém marcado a sprint." — e o dev
+   *  não pode ser obrigatório nesse caso. */
+  sec('novembro: trilhas da sprint, vencidas prioritarias e backlog da sprint');
+  {
+    const SP = require('./sprint.js');
+    const S1 = 'S1-11-2026', S4 = 'S4-10-2026', S2 = 'S2-11-2026';
+    const P = { estaAtrasada: (m, e, d) => !!m.entrega && m.entrega < d };
+    const base = () => ({ sprints: [], melhorias: [
+      { id: 'a', codigo: 'AX-1', dev: 'Ana', status_planejamento: 'em_andamento',
+        entrega: '2026-10-20', prioridade: 'baixa', sprint_po: S4,
+        sprint_po_historico: [{ sprint: S4, em: '2026-10-19', por: 'PO' }] },
+      { id: 'b', codigo: 'AX-2', dev: '', status_planejamento: 'backlog', entrega: '2026-10-20' },
+      { id: 'c', codigo: 'AX-3', dev: 'Bia', status_planejamento: 'concluido', entrega: '2026-10-20' },
+      { id: 'd', codigo: 'AX-4', dev: 'Bia', status_planejamento: 'planejado', entrega: '2026-12-20',
+        sprint_po: S1, dados_bi: true, poker_pontos: 5, sprint_po_historico: [{ sprint: S1 }] },
+      { id: 'e', codigo: 'AX-5', dev: 'Caio', status_planejamento: 'planejado', entrega: '2026-12-20',
+        sprint_po: S1, sales_ops: true, poker_pontos: 3, sprint_po_historico: [{ sprint: S1 }] },
+      { id: 'f', codigo: 'AX-6', dev: 'Caio', status_planejamento: 'atrasado', entrega: '2026-10-01',
+        sprint_po: S2, sprint_po_historico: [{ sprint: S2 }] },
+      { id: 'g', codigo: 'AX-7', dev: '', status_planejamento: 'backlog', sprint_po: S1,
+        sprint_po_historico: [{ sprint: S1 }] },
+    ] });
+
+    // ── A TRILHA ──────────────────────────────────────────────────────────
+    ok(SP.trilhaDe({}) === 'tecnologia' && SP.trilhaDe({ dados_bi: true }) === 'dados_bi' &&
+       SP.trilhaDe({ sales_ops: true }) === 'sales_ops',
+       'cada demanda cai em uma trilha: tecnologia, dados_bi ou sales_ops');
+    ok(SP.trilhaDe({ dados_bi: true, sales_ops: true }) === 'dados_bi',
+       'com as duas marcas, Dados/BI vence — uma trilha por demanda');
+    const d0 = base();
+    const tot = t => SP.placarDaSprint(d0, S1, null, t).total;
+    ok(tot('dados_bi') === 1 && tot('sales_ops') === 1 && tot('tecnologia') === 1,
+       'o placar de cada trilha so conta as demandas dela',
+       ['tecnologia', 'dados_bi', 'sales_ops'].map(t => t + '=' + tot(t)).join(' '));
+    ok(tot('') === tot('tecnologia') + tot('dados_bi') + tot('sales_ops'),
+       'e sem trilha conta tudo, como antes — o recorte e de quem consulta, nao do denominador');
+    ok(SP.rankingDaSprint(d0, S1, null, 'sales_ops').map(r => r.nome).join() === 'Caio',
+       'o ranking tambem respeita a trilha');
+    ok(SP.acompanhamentoDaSprint(d0, S1, null, '2026-11-02', P, 'dados_bi').length === 1,
+       'e a lista de risco');
+
+    // ── AS VENCIDAS ENTRAM COMO PRIORITARIAS ──────────────────────────────
+    const d1 = base();
+    const venc = SP.vencidasParaPriorizar(d1, S1, '2026-11-02', { prazo: P }).map(m => m.codigo);
+    ok(venc.join() === 'AX-1',
+       'so a vencida COM dev, depois da Planning e nao entregue e puxada', venc.join());
+    ok(!venc.includes('AX-6'),
+       'a que esta numa sprint POSTERIOR fica onde esta — alguem a empurrou de proposito');
+    const ini = SP.iniciar(d1, S1, 'Fernando', '2026-11-02', { prazo: P });
+    const a = d1.melhorias[0];
+    ok(ini.ok && ini.prioritarias.join() === 'AX-1' && a.sprint_po === S1,
+       'iniciar puxa a vencida para a sprint', JSON.stringify(ini));
+    ok(a.sprint_po_historico.length === 2 && SP.pulos(a) === 1,
+       'pela `repassar`: a linha do historico entra (o denominador) e o pulo e contado');
+    ok(a.prioridade === 'alta' && a.sprint_prioritaria &&
+       a.sprint_prioritaria.prioridade_antes === 'baixa' && a.sprint_prioritaria.sprint === S1,
+       'prioritaria e prioridade Alta, guardando a de antes — a ordem do quadro continua por prioridade');
+    ok(ini.demandas === 4 && ini.semDev === 1,
+       'e o retorno conta a sprint ja com a puxada');
+    const ac = SP.acompanhamentoDaSprint(d1, S1, null, '2026-11-02', P);
+    ok(ac[0].m.codigo === 'AX-1' && ac[0].prioritaria,
+       'a prioritaria vem primeiro na lista da sprint');
+    ok(SP.iniciar(d1, S1, 'Fernando', '2026-11-02', { prazo: P }).ok === false,
+       'e iniciar duas vezes continua recusado');
+    const d2 = base();
+    ok(SP.iniciar(d2, S1, 'Fernando', '2026-11-02').prioritarias.length === 0,
+       'sem a regra de prazo injetada nada e puxado — melhor nao puxar do que puxar errado');
+
+    // ── O BACKLOG DA SPRINT A VISTA ───────────────────────────────────────
+    const d3 = base();
+    const g = d3.melhorias[6];
+    ok(SP.naVitrine(g) && !SP.escondidaDoTime(d3, g),
+       'com sprint marcada e ainda em backlog, o time ve — mesmo com a sprint montando');
+    ok(SP.escondidaDoTime(d3, d3.melhorias[3]),
+       'mas o que o PO alocou em Planejado continua escondido ate iniciar');
+    ok(!SP.naVitrine(d3.melhorias[1]),
+       'e backlog sem sprint nao e vitrine: e o backlog de sempre');
+    const bk = SP.backlogDaSprint(d3, S1);
+    ok(bk[0].dev === '' && bk[0].itens[0].m.codigo === 'AX-7',
+       'o backlog da sprint mostra primeiro o que esta sem dev — o que falta direcionar');
+    ok(SP.dispensaDev('planejado', S1) && !SP.dispensaDev('planejado', '') &&
+       !SP.dispensaDev('em_andamento', S1),
+       'Planejado com sprint dispensa o dev; sem sprint, ou depois de comecar, nao');
+
+    // ── AS TELAS E O SERVIDOR ─────────────────────────────────────────────
+    ok(/m-sales-ops/.test(ADMIN) && /sales_ops:\s+document\.getElementById\('m-sales-ops'\)/.test(ADMIN),
+       'o Admin tem a marca Sales Ops e a grava na lista fechada');
+    ok(/sales_ops:\s+document\.getElementById\('e-sales-ops'\)/.test(GANTT),
+       'o Gantt tambem');
+    ok(/sprint_prioritaria:\s+existing\.sprint_prioritaria/.test(ADMIN) &&
+       /sprint_prioritaria:\s+existing\.sprint_prioritaria/.test(GANTT),
+       'e as duas repassam a marca de prioritaria — fora da lista fechada, salvar a apagaria');
+    ok(/SPRINTPO\.placarDaSprint\(state, _sprSel, etapa, _sprTrilha\)/.test(ADMIN) &&
+       /SPRINTPO\.placarDaSprint\(state, _dspSel, etapa, trilha\)/.test(DEV),
+       'o placar do Admin e o do dev consultam pela trilha escolhida');
+    ok(/SPRINTPO\.iniciar\(state, r, quem, PRAZO\.hojeISO\(\), optsIni\)/.test(ADMIN),
+       'o Admin inicia passando a regra de prazo, para as vencidas entrarem');
+    ok(/SPRINTPO\.naVitrine\(m, getStatusKey\(m\)\)/.test(DEV),
+       'o painel do dev mostra a vitrine');
+    const WKS = lerTela('cloudflare-worker/worker.js');
+    ok(/sales_ops: body\.sales_ops === true && body\.dados_bi !== true/.test(WKS),
+       'a API de criacao aceita Sales Ops, exclusiva com Dados/BI');
+    ok(/m\.status_planejamento === 'planejado' &&\s*\n?\s*\/\^S\[1-5\]/.test(WKS),
+       'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
+    ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
+       'quem nao e PM/PO nao muda a marca de prioritaria');
+
+    // ── A CAPACIDADE DA SPRINT, POR FRENTE (30 pontos por dev) ─────────────
+    const OK_ = require('./ordem-kanban.js');
+    const dCap = { melhorias: [
+      { id: 1, codigo: 'C1', dev: 'Ana', sprint_po: S1, poker_pontos: 20, status_planejamento: 'planejado', prioridade: 'alta' },
+      { id: 2, codigo: 'C2', dev: 'Ana', sprint_po: S1, poker_pontos: 13, status_planejamento: 'planejado', prioridade: 'baixa' },
+      { id: 3, codigo: 'C3', dev: 'Ana', sprint_po: S1, poker_pontos: 8, status_planejamento: 'em_andamento' },
+      { id: 4, codigo: 'C4', dev: 'Ana / Bia', sprint_po: S1, poker_pontos: 10, status_planejamento: 'planejado' },
+    ] };
+    const cap = SP.capacidadeDaSprint(dCap, S1, { devs: ['Ana', 'Bia', 'Caio'],
+      frenteDoDev: n => n === 'Caio' ? 'Dados' : 'Dev', compara: OK_.compara });
+    const dev_ = cap.find(e => e.frente === 'Dev'), dad_ = cap.find(e => e.frente === 'Dados');
+    ok(dev_.capacidade === 60 && dad_.capacidade === 30,
+       'capacidade da frente = 30 pontos x pessoas da frente');
+    ok(dev_.alocado === 51,
+       'o alocado soma os pontos do poker das demandas da sprint', String(dev_.alocado));
+    const cap1 = SP.capacidadeDaSprint(dCap, S1, { devs: ['Ana'], frenteDoDev: () => 'Dev',
+      compara: OK_.compara });
+    ok(cap1[0].sugeridas.map(m => m.codigo).join() === 'C4,C2',
+       'acima da capacidade, sugere do fim da ordem do quadro: sem prioridade, depois a baixa',
+       cap1[0].sugeridas.map(m => m.codigo).join());
+    ok(!cap1[0].sugeridas.some(m => m.codigo === 'C3'),
+       'e nunca sugere mover o que ja comecou');
+    ok(SP.sprintSeguinte(S1, []) === 'S2-11-2026',
+       'a sugestao aponta para a sprint seguinte do calendario');
+    ok(/renderCapSprint\(\);/.test(GANTT) && /SPRINTPO\.capacidadeDaSprint\(state, _capSel/.test(GANTT),
+       'o Gantt desenha a capacidade pela conta do modulo');
   }
 
   let erroPz = null;

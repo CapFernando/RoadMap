@@ -261,6 +261,39 @@
     return rotuloValido(s) ? s : '';
   }
 
+  /* ═══ A TRILHA: CADA TIME COM A SUA CONTA ═════════════════════════════════
+   *
+   * "Itens marcados com DADOS/BI deverão ter sua sprint contabilizada a parte.
+   *  Da mesma forma criar uma nova marcação para SALES OPS e ao marcar a
+   *  contabilização da sprint será a parte."
+   *
+   * A SPRINT É UMA SÓ — calendário, início e fechamento valem para todos. O que
+   * se separa é a CONTA: o placar, o ranking e a lista de risco de cada trilha
+   * só enxergam as demandas dela. Por isso a trilha é um RECORTE de quem
+   * consulta (`demandasDaSprint(dados, r, trilha)`), e não uma mudança em quem
+   * conta: o denominador continua vindo do histórico, como sempre.
+   *
+   * UMA TRILHA POR DEMANDA. As telas tratam as duas marcas como exclusivas;
+   * se uma demanda antiga chegar com as duas, Dados/BI vence, porque é a marca
+   * mais antiga e a que o time de Dados já acompanha.                        */
+  var TRILHAS = [
+    { k: 'tecnologia', nome: 'Tecnologia', icone: '💻' },
+    { k: 'dados_bi', nome: 'Dados/BI', icone: '📊' },
+    { k: 'sales_ops', nome: 'Sales Ops', icone: '📈' },
+  ];
+
+  function trilhaDe(m) {
+    if (m && m.dados_bi) return 'dados_bi';
+    if (m && m.sales_ops) return 'sales_ops';
+    return 'tecnologia';
+  }
+
+  /** `trilha` vazia ou ausente = todas, o comportamento de sempre. */
+  function daTrilha(m, trilha) {
+    var t = txt(trilha);
+    return !t || trilhaDe(m) === t;
+  }
+
   /** Está fora de qualquer sprint — é o estado em que toda demanda começa, e o
    *  estado em que toda task aberta pelo dev tem de nascer. */
   function foraDaSprint(m) { return doPO(m) === ''; }
@@ -606,8 +639,59 @@
     return 'montando';
   }
 
-  /** O PM/PO INICIA a sprint: daqui em diante o time a enxerga. */
-  function iniciar(dados, rotulo, quem, hoje) {
+  /* ═══ AS VENCIDAS ENTRAM COMO PRIORITÁRIAS ═════════════════════════════════
+   *
+   * "Ao dar início, itens já alocados vencidos entrarão no backlog da sprint
+   *  como prioritários."
+   *
+   * QUEM ENTRA: tem dev, já passou da Planning, ainda não foi entregue (nem
+   * validação, nem concluída) e o prazo venceu — a mesma regra de atraso das
+   * telas (`PRAZO.estaAtrasada`), injetada para não existir uma segunda.
+   * Demanda que já está numa sprint POSTERIOR a esta fica onde está: alguém a
+   * empurrou para a frente de propósito.
+   *
+   * ENTRAR É `repassar`, nunca escrever o campo: é ele que grava a linha do
+   * histórico (o denominador do placar), conta o pulo ("entrou atrasada") e
+   * recusa sprint fechada — o mesmo motivo de `fechar` usá-lo no carry-over.
+   *
+   * PRIORITÁRIA É A PRIORIDADE ALTA, e não uma posição nova no quadro. A ordem
+   * das três telas é por prioridade (`ordem-kanban.js`) e o atraso é destaque,
+   * não posição; subir a prioridade no ato de iniciar respeita as duas regras.
+   * A prioridade de antes fica guardada em `sprint_prioritaria`, com a sprint,
+   * para o card dizer por que subiu.                                         */
+  var ETAPAS_VENCIVEIS = ['planejado', 'em_andamento', 'atrasado'];
+
+  function vencidasParaPriorizar(dados, rotulo, hoje, opts) {
+    var r = txt(rotulo);
+    var o = opts || {};
+    // Só a regra que o chamador passou: puxar com uma regra adivinhada mexe
+    // na prioridade de quem não devia.
+    var P = o.prazo;
+    var etapaDe = o.etapaDe;
+    var dia = iso(hoje) || new Date().toISOString().slice(0, 10);
+    if (!P || typeof P.estaAtrasada !== 'function') return [];
+    return ((dados || {}).melhorias || []).filter(function (m) {
+      if (!m || m.oculto || m.mesclado_em || !txt(m.dev)) return false;
+      var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (ETAPAS_VENCIVEIS.indexOf(e) < 0) return false;
+      if (!P.estaAtrasada(m, e, dia)) return false;
+      var s = doPO(m);
+      return !s || s === r || chaveOrdem(s) < chaveOrdem(r);
+    });
+  }
+
+  function ehPrioritariaDaSprint(m, rotulo) {
+    var p = (m || {}).sprint_prioritaria;
+    return !!(p && txt(p.sprint) && (!rotulo || txt(p.sprint) === txt(rotulo)));
+  }
+
+  /** O PM/PO INICIA a sprint: daqui em diante o time a enxerga.
+   *
+   *  `opts`: `{ prazo, etapaDe }` para puxar as vencidas (ver acima). Sem
+   *  `prazo` disponível nada é puxado — melhor não puxar do que puxar errado.
+   *  O retorno ganha `prioritarias` (códigos); `demandas` e `semDev` passam a
+   *  contar a sprint JÁ com as puxadas, que é o que o time vai ver. */
+  function iniciar(dados, rotulo, quem, hoje, opts) {
     var r = txt(rotulo);
     if (!rotuloValido(r)) return { ok: false, erro: 'Sprint inválida.' };
     if (estaFechada(dados, r)) {
@@ -616,14 +700,28 @@
     if (estaIniciada(dados, r)) {
       return { ok: false, erro: 'A sprint ' + rotuloCurto(r) + ' já está em curso.' };
     }
+    var dia = iso(hoje);
+    var puxadas = [];
+    vencidasParaPriorizar(dados, r, hoje, opts).forEach(function (m) {
+      if (doPO(m) !== r) {
+        var rp = repassar(m, r, quem, hoje, { dados: dados });
+        if (!rp.ok) return;              // em sprint fechada: fica onde está
+      }
+      m.sprint_prioritaria = { sprint: r, em: dia, por: txt(quem),
+                               prioridade_antes: txt(m.prioridade) };
+      m.prioridade = 'alta';
+      puxadas.push(m.codigo || m.id);
+    });
     if (!Array.isArray(dados.sprints)) dados.sprints = [];
     var reg = registroDe(dados, r);
     if (!reg) { reg = { rotulo: r }; dados.sprints.push(reg); }
-    reg.iniciada_em = iso(hoje);
+    reg.iniciada_em = dia;
     reg.iniciada_por = txt(quem);
+    if (puxadas.length) reg.prioritarias = puxadas.slice();
     var dem = demandasDaSprint(dados, r);
     return { ok: true, demandas: dem.length,
-             semDev: dem.filter(function (m) { return !txt(m.dev); }).length };
+             semDev: dem.filter(function (m) { return !txt(m.dev); }).length,
+             prioritarias: puxadas };
   }
 
   /** Os rótulos fechados, para quem só precisa da lista. */
@@ -652,7 +750,157 @@
   function escondidaDoTime(dados, m) {
     var s = doPO(m);
     if (!s) return false;
+    if (naVitrine(m)) return false;
     return situacaoDaSprint(dados, s) === 'montando';
+  }
+
+  /* ═══ A VITRINE: O BACKLOG DA SPRINT À VISTA ═══════════════════════════════
+   *
+   * "Necessito visualizar backlog da sprint para eu poder direcionar. Poderá
+   *  ser visível p/ time, quando em backlog, porém marcado a sprint."
+   *
+   * A demanda que tem sprint marcada e AINDA ESTÁ ANTES DE PLANEJADO (backlog,
+   * levantar requisito, planning) aparece para o time inteiro, com o chip da
+   * sprint — mesmo com a sprint em montagem. É vitrine, não compromisso: o que
+   * o PO alocou em Planejado continua escondido até ele iniciar, que é o ponto
+   * de separar montar de iniciar.                                           */
+  var ETAPAS_VITRINE = ['backlog', 'levantar_req', 'planning'];
+
+  function naVitrine(m, etapa) {
+    if (!doPO(m)) return false;
+    var e = txt(etapa != null ? etapa : (m || {}).status_planejamento);
+    return ETAPAS_VITRINE.indexOf(e) >= 0;
+  }
+
+  /** PLANEJADO NA SPRINT NÃO EXIGE DEV.
+   *
+   *  "Nesse último caso, o dev não pode ser obrigatório." A demanda em
+   *  Planejado com sprint marcada é trabalho combinado para a semana que
+   *  ainda não tem dono — vai para o backlog do time quando a sprint começar
+   *  (`naPoolDoTime`). Exigir o dev aqui obrigaria o PO a inventar um dono.
+   *  De Em andamento em diante o dev continua obrigatório: ali alguém já pegou. */
+  function dispensaDev(etapa, sprint) {
+    return txt(etapa) === 'planejado' && rotuloValido(sprint);
+  }
+
+  /* ═══ A CAPACIDADE DA SPRINT, POR FRENTE ═══════════════════════════════════
+   *
+   * "Faça um cálculo para cada divisão de times (cada dev recebe 30 pontos),
+   *  multiplique pela quantidade de pessoas para ter noção da capacidade da
+   *  sprint. Isso irá sugerir alocar demandas para a próxima sprint."
+   *
+   * A DIVISÃO É A FRENTE (`pipelines.js`): é o cadastro que diz de que time
+   * cada pessoa é, e a demanda herda a frente de quem a faz — ou da marca
+   * Dados/BI. Tudo entra injetado (`frenteDoDev`, `frenteDe`), para não
+   * existir uma segunda definição de "de que time é".
+   *
+   * O ALOCADO é a soma dos pontos do poker das demandas que estão NESTA sprint
+   * (`sprint_po`), com o ponto de dupla repartido entre as frentes das duas
+   * pessoas — a mesma regra do ranking. Negada não ocupa capacidade.
+   *
+   * A SUGESTÃO só olha o que ainda não começou (backlog até planejado) e tira
+   * do FIM da ordem do quadro (`compara`, de `ordem-kanban.js`): prioridade
+   * mais baixa e prazo mais longe saem primeiro, até caber.                 */
+  var PONTOS_POR_DEV = 30;
+  var ETAPAS_MOVIVEIS = ['backlog', 'levantar_req', 'planning', 'planejado'];
+
+  function capacidadeDaSprint(dados, rotulo, o) {
+    var r = txt(rotulo);
+    var opt = o || {};
+    var porDev = Number(opt.pontosPorDev) > 0 ? Number(opt.pontosPorDev) : PONTOS_POR_DEV;
+    var etapaDe = opt.etapaDe;
+    var fDev = opt.frenteDoDev || function () { return ''; };
+    var fDem = opt.frenteDe || function () { return ''; };
+    var SEM = opt.semFrente || 'Não classificado';
+    var eq = {};
+    var pega = function (f) {
+      var k = f || SEM;
+      if (!eq[k]) eq[k] = { frente: k, pessoas: [], capacidade: 0, alocado: 0, itens: [] };
+      return eq[k];
+    };
+    (opt.devs || []).forEach(function (nome) {
+      var e = pega(fDev(nome));
+      if (e.pessoas.indexOf(nome) < 0) { e.pessoas.push(nome); e.capacidade += porDev; }
+    });
+    ((dados || {}).melhorias || []).forEach(function (m) {
+      if (!m || m.oculto || m.mesclado_em || !naSprint(m, r)) return;
+      var et = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (et === 'negada') return;
+      var pts = pontosDe(m);
+      var nomes = txt(m.dev).split('/').map(function (x) { return x.trim(); }).filter(Boolean);
+      var partes = nomes.length
+        ? nomes.map(function (n) { return fDev(n) || fDem(m); })
+        : [fDem(m)];
+      partes.forEach(function (f) {
+        var e = pega(f);
+        e.alocado += pts / partes.length;
+        if (e.itens.indexOf(m) < 0) e.itens.push(m);
+      });
+    });
+    var ordem = opt.compara || function (a, b) { return pontosDe(a) - pontosDe(b); };
+    return Object.keys(eq).map(function (k) {
+      var e = eq[k];
+      e.alocado = Math.round(e.alocado * 10) / 10;
+      e.saldo = Math.round((e.capacidade - e.alocado) * 10) / 10;
+      e.pct = e.capacidade ? Math.round(e.alocado / e.capacidade * 100) : null;
+      e.semPontos = e.itens.filter(function (m) { return !pontosDe(m); }).length;
+      e.sugeridas = [];
+      if (e.capacidade && e.alocado > e.capacidade) {
+        var falta = e.alocado - e.capacidade;
+        var moviveis = e.itens.filter(function (m) {
+          var et = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+          return ETAPAS_MOVIVEIS.indexOf(et) >= 0 && pontosDe(m) > 0 &&
+                 !ehPrioritariaDaSprint(m, r);
+        }).slice().sort(ordem).reverse();
+        for (var i = 0; i < moviveis.length && falta > 0; i++) {
+          e.sugeridas.push(moviveis[i]);
+          falta -= pontosDe(moviveis[i]);
+        }
+      }
+      return e;
+    }).sort(function (a, b) {
+      if ((a.frente === SEM) !== (b.frente === SEM)) return a.frente === SEM ? 1 : -1;
+      return a.frente.localeCompare(b.frente, 'pt-BR');
+    });
+  }
+
+  /** A sprint seguinte a esta, pelo calendário — para onde vai a sugestão. */
+  function sprintSeguinte(rotulo, feriados) {
+    var r = txt(rotulo);
+    if (!rotuloValido(r)) return '';
+    var faixa = faixaDaSprint(r, feriados);
+    if (!faixa) return '';
+    var d = new Date(faixa.ate + 'T12:00:00');
+    for (var i = 0; i < 10; i++) {
+      d.setDate(d.getDate() + 1);
+      var s = rotuloDeData(d.toISOString().slice(0, 10), feriados);
+      if (s && s !== r) return s;
+    }
+    return '';
+  }
+
+  /** O BACKLOG DA SPRINT para o PO direcionar: o que está nela e ainda não
+   *  começou, agrupado por dev ("" = sem dev). Prioritárias primeiro. */
+  function backlogDaSprint(dados, rotulo, etapaDe, trilha) {
+    var r = txt(rotulo);
+    var grupos = {};
+    ((dados || {}).melhorias || []).forEach(function (m) {
+      if (!m || m.oculto || m.mesclado_em || !naSprint(m, r) || !daTrilha(m, trilha)) return;
+      var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (ETAPAS_VITRINE.indexOf(e) < 0 && e !== 'planejado') return;
+      var k = txt(m.dev);
+      (grupos[k] = grupos[k] || []).push({ m: m, etapa: e,
+                                           prioritaria: ehPrioritariaDaSprint(m, r) });
+    });
+    return Object.keys(grupos).sort(function (a, b) {
+      if (!a !== !b) return a ? 1 : -1;          // sem dev primeiro: é o que direcionar
+      return a.localeCompare(b, 'pt-BR');
+    }).map(function (k) {
+      return { dev: k, itens: grupos[k].sort(function (x, y) {
+        if (x.prioritaria !== y.prioritaria) return x.prioritaria ? -1 : 1;
+        return pontosDe(y.m) - pontosDe(x.m);
+      }) };
+    });
   }
 
   function naPoolDoTime(dados, m) {
@@ -873,10 +1121,11 @@
     return entradas(m).some(function (e) { return txt(e.sprint) === s; });
   }
 
-  /** TODAS AS DEMANDAS QUE PASSARAM POR ESTA SPRINT. */
-  function demandasDaSprint(dados, rotulo) {
+  /** TODAS AS DEMANDAS QUE PASSARAM POR ESTA SPRINT — de uma trilha, se pedida. */
+  function demandasDaSprint(dados, rotulo, trilha) {
     return ((dados || {}).melhorias || []).filter(function (m) {
-      return m && !m.oculto && !m.mesclado_em && esteveNaSprint(m, rotulo);
+      return m && !m.oculto && !m.mesclado_em && esteveNaSprint(m, rotulo) &&
+             daTrilha(m, trilha);
     });
   }
 
@@ -886,10 +1135,10 @@
   }
 
   /** O PLACAR. */
-  function placarDaSprint(dados, rotulo, etapaDe) {
+  function placarDaSprint(dados, rotulo, etapaDe, trilha) {
     var r = txt(rotulo);
-    var lista = demandasDaSprint(dados, r);
-    var p = { rotulo: r, total: 0, validados: 0, aguardando: 0, emCurso: 0, saiu: 0,
+    var lista = demandasDaSprint(dados, r, trilha);
+    var p = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, emCurso: 0, saiu: 0,
               pontosTotal: 0, pontosValidados: 0, pontosAguardando: 0,
               semPontuacao: 0, pct: 0, pctPontos: null,
               itens: { validados: [], aguardando: [], emCurso: [], saiu: [] } };
@@ -940,7 +1189,7 @@
    *  ORDENA POR VALIDADOS e depois por pontos: é um ranking de entrega, e
    *  entregue é o que o PM/PO concluiu. Empate vai para o nome, para a lista
    *  não dançar a cada redesenho. */
-  function rankingDaSprint(dados, rotulo, etapaDe) {
+  function rankingDaSprint(dados, rotulo, etapaDe, trilha) {
     var r = txt(rotulo);
     var acc = {};
     var pega = function (nome) {
@@ -950,7 +1199,7 @@
       }
       return acc[nome];
     };
-    demandasDaSprint(dados, r).forEach(function (m) {
+    demandasDaSprint(dados, r, trilha).forEach(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
       if (e === 'negada') return;
       var nomes = txt(m.dev).split('/').map(function (x) { return x.trim(); }).filter(Boolean);
@@ -1032,9 +1281,9 @@
   }
 
   /** As demandas da sprint com os riscos de cada uma, as de risco primeiro. */
-  function acompanhamentoDaSprint(dados, rotulo, etapaDe, hoje, prazoApi) {
+  function acompanhamentoDaSprint(dados, rotulo, etapaDe, hoje, prazoApi, trilha) {
     var r = txt(rotulo);
-    return demandasDaSprint(dados, r).map(function (m) {
+    return demandasDaSprint(dados, r, trilha).map(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
       var aqui = doPO(m) === r;
       var situacao = !aqui ? 'saiu'
@@ -1046,8 +1295,11 @@
          numa lista de risco ensina a ignorar a lista. */
       var riscos = (situacao === 'validado' || situacao === 'negada')
         ? [] : riscosDaDemanda(m, r, hoje, prazoApi);
-      return { m: m, situacao: situacao, riscos: riscos, pontos: pontosDe(m) };
+      return { m: m, situacao: situacao, riscos: riscos, pontos: pontosDe(m),
+               prioritaria: aqui && ehPrioritariaDaSprint(m, r) };
     }).sort(function (a, b) {
+      // a vencida puxada no início vem primeiro: foi o que o PM/PO priorizou
+      if (a.prioritaria !== b.prioritaria) return a.prioritaria ? -1 : 1;
       if (a.riscos.length !== b.riscos.length) return b.riscos.length - a.riscos.length;
       var ordem = { em_curso: 0, aguardando: 1, saiu: 2, validado: 3, negada: 4 };
       if (ordem[a.situacao] !== ordem[b.situacao]) return ordem[a.situacao] - ordem[b.situacao];
@@ -1180,6 +1432,18 @@
   }
 
   var api = {
+    TRILHAS: TRILHAS,
+    naVitrine: naVitrine,
+    dispensaDev: dispensaDev,
+    pontosDe: pontosDe,
+    PONTOS_POR_DEV: PONTOS_POR_DEV,
+    capacidadeDaSprint: capacidadeDaSprint,
+    sprintSeguinte: sprintSeguinte,
+    backlogDaSprint: backlogDaSprint,
+    trilhaDe: trilhaDe,
+    daTrilha: daTrilha,
+    vencidasParaPriorizar: vencidasParaPriorizar,
+    ehPrioritariaDaSprint: ehPrioritariaDaSprint,
     ROTULO: ROTULO,
     rotuloValido: rotuloValido,
     rotuloCurto: rotuloCurto,

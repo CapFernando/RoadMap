@@ -24,6 +24,13 @@
  * A cor nao muda: quem desenha o card continua marcando a vencida em vermelho.
  * Este arquivo nao sabe de cor nenhuma, so de ordem.
  *
+ * O INICIO DA SPRINT E A EXCECAO DECLARADA, e ela passa POR esta regra, nao por
+ * cima. "Ao dar inicio, itens ja alocados vencidos entrarao no backlog da sprint
+ * como prioritarios" (30/10/2026): `SPRINTPO.iniciar` sobe a PRIORIDADE delas
+ * para alta, no ato, guardando a anterior em `sprint_prioritaria`. A ordem aqui
+ * continua sendo so prioridade e prazo — o atraso segue sem dar posicao sozinho;
+ * quem deu a posicao foi o PO, ao iniciar.
+ *
  * ───────────────────────────────────────────────────────────────────────────
  * SEM PRIORIDADE VAI PARA O FIM, e a spec nao fala desse caso.
  *

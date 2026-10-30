@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="c92a1aae4e">
+<html lang="pt-BR" data-build="da1b5ea46a">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -740,8 +740,8 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=4cf1763477"></script>
-<script src="ordem-kanban.js?v=c110030875"></script>
+<script src="sprint.js?v=57aff8a10e"></script>
+<script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
 
@@ -1091,6 +1091,12 @@
     <div class="dsp-topo">
       <h2 class="dsp-titulo">Placar da sprint</h2>
       <select id="dsp-sel" class="filter-select" onchange="renderSprintDev()"></select>
+      <!-- Cada trilha tem a sua conta: Tecnologia, Dados/BI e Sales Ops. -->
+      <select id="dsp-trilha" class="filter-select" onchange="renderSprintDev()">
+        <option value="tecnologia">💻 Tecnologia</option>
+        <option value="dados_bi">📊 Dados/BI</option>
+        <option value="sales_ops">📈 Sales Ops</option>
+      </select>
       <span id="dsp-estado" class="dsp-estado"></span>
     </div>
     <div id="dsp-placar" class="dsp-placar"></div>
@@ -2274,8 +2280,9 @@ function renderSprintDev() {
   _dspSel = sel.value;
 
   const etapa = m => getStatusKey(m);
-  const p = SPRINTPO.placarDaSprint(state, _dspSel, etapa);
-  const rk = SPRINTPO.rankingDaSprint(state, _dspSel, etapa);
+  const trilha = document.getElementById('dsp-trilha')?.value || 'tecnologia';
+  const p = SPRINTPO.placarDaSprint(state, _dspSel, etapa, trilha);
+  const rk = SPRINTPO.rankingDaSprint(state, _dspSel, etapa, trilha);
   const faixa = SPRINTPO.faixaDaSprint(_dspSel, fer);
   const dm = s => s.slice(8, 10) + '/' + s.slice(5, 7);
   if (est) {
@@ -4572,7 +4579,10 @@ function getFiltered() {
         devs." É trabalho já combinado para a semana que ninguém pegou — some
        do painel de todo mundo se a lista continuar sendo só "as minhas". */
     const meu = DEVNOME.eDe(m, currentDev);
-    const doTime = !!(window.SPRINTPO && SPRINTPO.naPoolDoTime(state, m));
+    /* A VITRINE: com sprint marcada e ainda antes de Planejado, todo o time ve
+       (`SPRINTPO.naVitrine`) — o chip da sprint diz para qual semana ela vai. */
+    const doTime = !!(window.SPRINTPO && (SPRINTPO.naPoolDoTime(state, m) ||
+                                          SPRINTPO.naVitrine(m, getStatusKey(m))));
     if (!meu && !doTime) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     const fTipo = document.getElementById('f-tipo')?.value || '';
@@ -4786,6 +4796,9 @@ function renderCard(m, colKey) {
         window.SPRINTPO ? SPRINTPO.badge(m, 'kcard-sprint') : ''}${
         (window.SPRINTPO && SPRINTPO.naPoolDoTime(state, m))
           ? '<span class="kcard-pool" title="Está na sprint e ainda não tem dono. Qualquer um do time pode pegar — avise antes de começar.">🙌 sem dono</span>'
+          : ''}${
+        (window.SPRINTPO && SPRINTPO.ehPrioritariaDaSprint(m, m.sprint_po))
+          ? '<span class="kcard-pool" title="Estava vencida no início da sprint e entrou como prioritária.">⚡ prioritária</span>'
           : ''}</div>
       ${renderDepSection(m)}
     </div>`;
@@ -5353,7 +5366,8 @@ function openStatusModal(id, preselect) {
     ${m.entrega && !estaPausado(m) ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
     ${estaPausado(m) ? `<div class="modal-info-row"><span>Entrega:</span><strong style="color:var(--text3)">oculta enquanto pausada</strong></div>` : ''}
     ${m.debito_tecnico ? `<div class="modal-info-row"><span>Débito técnico:</span><strong>🧱 Sim</strong></div>` : ''}
-    ${m.dados_bi ? `<div class="modal-info-row"><span>Time:</span><strong>📊 Dados / BI</strong></div>` : ''}
+    ${m.dados_bi ? `<div class="modal-info-row"><span>Time:</span><strong>📊 Dados / BI</strong></div>`
+      : m.sales_ops ? `<div class="modal-info-row"><span>Time:</span><strong>📈 Sales Ops</strong></div>` : ''}
     ${BIS.daDemanda(m).length ? `<div class="modal-info-row"><span>BIs impactados:</span><strong>📈 ${devEsc(BIS.daDemanda(m).join(' · '))}</strong></div>` : ''}
     ${mescladasDev(m)}
     ${m.concluido_em ? `<div class="modal-info-row"><span>Concluída em:</span><strong>${formatDate(m.concluido_em)}</strong></div>` : ''}

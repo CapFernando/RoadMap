@@ -1690,6 +1690,13 @@ function travaSprintDoPO(recebido, servidor, papel) {
   for (const m of recebido.melhorias) {
     if (!m || !m.id) continue;
     const velha = antes.get(m.id);
+    /* A MARCA DE PRIORITARIA e do PM/PO pelo mesmo motivo da sprint: ela nasce
+       no inicio da sprint (`SPRINTPO.iniciar`). Quem nao e admin nao a muda. */
+    const prioOrig = velha ? (velha.sprint_prioritaria || null) : null;
+    if (JSON.stringify(m.sprint_prioritaria || null) !== JSON.stringify(prioOrig)) {
+      m.sprint_prioritaria = prioOrig;
+      revertidas.push((m.codigo || m.id) + '.sprint_prioritaria');
+    }
     const orig = velha ? String(velha.sprint_po || '') : '';
     if (String(m.sprint_po || '') === orig) continue;
     m.sprint_po = orig;
@@ -3038,6 +3045,11 @@ function corrigeSemDev(data) {
   const ajustados = [];
   for (const m of (data.melhorias || [])) {
     if (!m || m.mesclado_em) continue;
+    /* PLANEJADO NA SPRINT FICA SEM DONO DE PROPOSITO: e o backlog da sprint, que
+       o time pega quando ela comecar (`SPRINTPO.dispensaDev` / `naPoolDoTime`).
+       Rebaixar para backlog tiraria a demanda da sprint que o PO montou. */
+    if (m.status_planejamento === 'planejado' &&
+        /^S[1-5]-(0[1-9]|1[0-2])-\d{4}$/.test(String(m.sprint_po || ''))) continue;
     if (ETAPAS.includes(m.status_planejamento) && !String(m.dev || '').trim()) {
       m.status_planejamento = 'backlog';
       m.status = 'recebida';
@@ -4014,6 +4026,7 @@ export default {
              nunca ver a marca — e a sala e metade do motivo pelo qual ela
              existe, porque e la que o time de Dados e acompanhado. */
           dados_bi: !!m.dados_bi,
+          sales_ops: !!m.sales_ops,
           /* OS BIs IMPACTADOS NA MESA. Quem estima uma demanda de Dados precisa
              saber quantos paineis ela encosta — e a diferenca entre 3 e 13
              pontos, e e justamente o que a sala discute. */
@@ -4960,6 +4973,8 @@ export default {
       // Mesma razao do `enxuta` do poker: lista fechada, e o painel do dev
       // tambem mostra de qual time a demanda e.
       dados_bi: !!m.dados_bi,
+      sales_ops: !!m.sales_ops,
+      sprint_prioritaria: m.sprint_prioritaria || null,
       bis_impactados: bisDaDemanda(m),
     });
 
@@ -6581,6 +6596,8 @@ export default {
         debito_tecnico: body.debito_tecnico === true,
         spike: body.spike === true,
         dados_bi: body.dados_bi === true,
+        // exclusiva com Dados/BI: cada demanda conta em um placar de sprint so
+        sales_ops: body.sales_ops === true && body.dados_bi !== true,
         bis_impactados: bisDaDemanda(body),
         subtarefas: subtarefasDoPedido(body.subtarefas),
         links: linksDaDemanda(body),
