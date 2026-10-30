@@ -704,6 +704,30 @@
     });
   }
 
+  /* ═══ AS PAUSADAS TRANSBORDAM ══════════════════════════════════════════════
+   *
+   * "Na virada tudo que estiver pausado deverá ser transbordado para nova
+   *  sprint também (principalmente nessa primeira virada)."
+   *
+   * QUEM ENTRA: pausada (`pausado_em`) que ainda não foi entregue — nem
+   * validação, nem concluída, nem negada —, em qualquer etapa, com ou sem dev.
+   * Não muda a prioridade (isso é das vencidas) nem tira a pausa: ela entra na
+   * sprint para não sumir do compromisso da semana enquanto espera o terceiro.
+   * Mesma regra das vencidas para sprint POSTERIOR: fica onde está.         */
+  var ETAPAS_ENTREGUES = ['concluido', 'negada', 'validacao', 'validacao_area'];
+
+  function pausadasParaTransbordar(dados, rotulo, opts) {
+    var r = txt(rotulo);
+    var etapaDe = (opts || {}).etapaDe;
+    return ((dados || {}).melhorias || []).filter(function (m) {
+      if (!m || m.oculto || m.mesclado_em || !txt(m.pausado_em)) return false;
+      var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (ETAPAS_ENTREGUES.indexOf(e) >= 0) return false;
+      var s = doPO(m);
+      return s !== r && (!s || chaveOrdem(s) < chaveOrdem(r));
+    });
+  }
+
   function ehPrioritariaDaSprint(m, rotulo) {
     var p = (m || {}).sprint_prioritaria;
     return !!(p && txt(p.sprint) && (!rotulo || txt(p.sprint) === txt(rotulo)));
@@ -736,16 +760,24 @@
       m.prioridade = 'alta';
       puxadas.push(m.codigo || m.id);
     });
+    // As pausadas depois das vencidas: uma que já entrou acima não repete.
+    var transbordadas = [];
+    pausadasParaTransbordar(dados, r, opts).forEach(function (m) {
+      if (doPO(m) === r) return;
+      var rp = repassar(m, r, quem, hoje, { dados: dados });
+      if (rp.ok) transbordadas.push(m.codigo || m.id);
+    });
     if (!Array.isArray(dados.sprints)) dados.sprints = [];
     var reg = registroDe(dados, r);
     if (!reg) { reg = { rotulo: r }; dados.sprints.push(reg); }
     reg.iniciada_em = dia;
     reg.iniciada_por = txt(quem);
     if (puxadas.length) reg.prioritarias = puxadas.slice();
+    if (transbordadas.length) reg.pausadas = transbordadas.slice();
     var dem = demandasDaSprint(dados, r);
     return { ok: true, demandas: dem.length,
              semDev: dem.filter(function (m) { return !txt(m.dev); }).length,
-             prioritarias: puxadas };
+             prioritarias: puxadas, pausadas: transbordadas };
   }
 
   /** Os rótulos fechados, para quem só precisa da lista. */
@@ -1484,6 +1516,7 @@
     trilhaDe: trilhaDe,
     daTrilha: daTrilha,
     vencidasParaPriorizar: vencidasParaPriorizar,
+    pausadasParaTransbordar: pausadasParaTransbordar,
     ehPrioritariaDaSprint: ehPrioritariaDaSprint,
     ROTULO: ROTULO,
     rotuloValido: rotuloValido,

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="3ac1f436a4">
+<html lang="pt-BR" data-build="7e26ddedde">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1577,7 +1577,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=b4b6d4196d"></script>
+<script src="sprint.js?v=62340c6c83"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -9443,6 +9443,14 @@ let _fechRotulo = '';
 function sprintFecharAbrir(rotulo) {
   _fechRotulo = String(rotulo || '');
   _fechDecisoes = {};
+  /* A PAUSADA JÁ VEM DECIDIDA: transborda para a sprint seguinte, com a pausa
+     como motivo ("na virada tudo que estiver pausado deverá ser transbordado").
+     O PO ainda pode trocar — o campo só nasce preenchido. */
+  const _seg = SPRINTPO.sprintSeguinte(_fechRotulo, state.feriados || []);
+  SPRINTPO.balancoDaSprint(state, _fechRotulo, m => statusKey(m)).pendentes
+    .filter(m => estaPausado(m))
+    .forEach(m => { _fechDecisoes[m.id] = { destino: _seg,
+      motivo: ('Pausada' + (m.pausa_motivo ? ': ' + m.pausa_motivo : ' aguardando terceiro')).slice(0, 300) }; });
   const ov = document.createElement('div');
   ov.className = 'dlg-ov';
   ov.id = 'fech-ov';
@@ -9948,6 +9956,10 @@ async function sprintIniciar() {
      sprint e a prioridade delas, e o PO precisa ver quais são. */
   const optsIni = { prazo: window.PRAZO, etapaDe: m => statusKey(m) };
   const venc = SPRINTPO.vencidasParaPriorizar(state, r, PRAZO.hojeISO(), optsIni);
+  // E AS PAUSADAS, que transbordam para a sprint (sem mudar prioridade nem pausa).
+  const vencIds = new Set(venc.map(m => m.id));
+  const paus = SPRINTPO.pausadasParaTransbordar(state, r, optsIni).filter(m => !vencIds.has(m.id));
+  const mexidas = venc.concat(paus);
   const ok = await confirmar({
     titulo: '▶ Iniciar ' + SPRINTPO.rotuloCurto(r) + '?',
     texto: dem.length + (dem.length === 1 ? ' demanda passa' : ' demandas passam') +
@@ -9961,6 +9973,10 @@ async function sprintIniciar() {
            (venc.length
              ? '\n\n⚡ ' + venc.length + (venc.length === 1 ? ' demanda alocada está vencida e entra' : ' demandas alocadas estão vencidas e entram') +
                ' nesta sprint como prioritária (prioridade Alta): ' + venc.map(m => m.codigo || m.id).join(', ') + '.'
+             : '') +
+           (paus.length
+             ? '\n\n⏸ ' + paus.length + (paus.length === 1 ? ' demanda pausada transborda' : ' demandas pausadas transbordam') +
+               ' para esta sprint (continuam pausadas): ' + paus.map(m => m.codigo || m.id).join(', ') + '.'
              : ''),
     ok: 'Iniciar',
   });
@@ -9970,12 +9986,12 @@ async function sprintIniciar() {
      mexe nelas (sprint, histórico e prioridade), e não só no registro. */
   const CAMPOS_VENC = ['sprint_po', 'sprint_po_em', 'sprint_po_por', 'sprint_po_historico',
                        'prioridade', 'sprint_prioritaria'];
-  const retrato = venc.map(m => [m, JSON.parse(JSON.stringify(
+  const retrato = mexidas.map(m => [m, JSON.parse(JSON.stringify(
     CAMPOS_VENC.reduce((o, k) => (o[k] = m[k] === undefined ? null : m[k], o), {})))]);
   const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
   const res = SPRINTPO.iniciar(state, r, quem, PRAZO.hojeISO(), optsIni);
   if (!res.ok) { toast(res.erro, 'err'); return; }
-  venc.forEach(m => _dirtyMelhoriaIds.add(m.id));
+  mexidas.forEach(m => _dirtyMelhoriaIds.add(m.id));
   _pendingEdits = true;
   renderAll();
   const salvou = await saveViaProxy();
@@ -9992,8 +10008,10 @@ async function sprintIniciar() {
         (res.semDev ? ', ' + res.semDev + ' sem dono no backlog do time' : '') +
         (res.prioritarias.length ? ', ⚡ ' + res.prioritarias.length + ' vencida' +
           (res.prioritarias.length === 1 ? ' entrou' : 's entraram') + ' como prioritária' +
-          (res.prioritarias.length === 1 ? '' : 's') : '') + '.', 'ok');
-  venc.forEach(m => _dirtyMelhoriaIds.delete(m.id));
+          (res.prioritarias.length === 1 ? '' : 's') : '') +
+        (res.pausadas.length ? ', ⏸ ' + res.pausadas.length + ' pausada' +
+          (res.pausadas.length === 1 ? ' transbordou' : 's transbordaram') : '') + '.', 'ok');
+  mexidas.forEach(m => _dirtyMelhoriaIds.delete(m.id));
 }
 
 function renderGerSemPontos() {

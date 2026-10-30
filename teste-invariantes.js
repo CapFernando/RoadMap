@@ -24637,6 +24637,28 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a prioritaria vem primeiro na lista da sprint');
     ok(SP.iniciar(d1, S1, 'Fernando', '2026-11-02', { prazo: P }).ok === false,
        'e iniciar duas vezes continua recusado');
+    // ── AS PAUSADAS TRANSBORDAM ───────────────────────────────────────────
+    const dP = { sprints: [], melhorias: [
+      { id: 'p1', codigo: 'AX-P1', dev: '', status_planejamento: 'backlog', pausado_em: '2026-10-01', prioridade: 'baixa' },
+      { id: 'p2', codigo: 'AX-P2', dev: 'Ana', status_planejamento: 'em_andamento', pausado_em: '2026-10-01',
+        sprint_po: S4, sprint_po_historico: [{ sprint: S4 }] },
+      { id: 'p3', codigo: 'AX-P3', dev: 'Ana', status_planejamento: 'validacao', pausado_em: '2026-10-01' },
+      { id: 'p4', codigo: 'AX-P4', dev: 'Ana', status_planejamento: 'planejado', pausado_em: '2026-10-01',
+        sprint_po: S2, sprint_po_historico: [{ sprint: S2 }] },
+    ] };
+    const iniP = SP.iniciar(dP, S1, 'Fernando', '2026-11-02');
+    ok(iniP.pausadas.join() === 'AX-P1,AX-P2',
+       'na virada, a pausada nao entregue transborda para a sprint — com ou sem dev, em qualquer etapa',
+       iniP.pausadas.join());
+    ok(!iniP.pausadas.includes('AX-P3') && !iniP.pausadas.includes('AX-P4'),
+       'a ja entregue nao entra, e a que esta numa sprint posterior fica onde esta');
+    ok(dP.melhorias[1].sprint_po_historico.length === 2 && dP.melhorias[0].prioridade === 'baixa' &&
+       !!dP.melhorias[0].pausado_em,
+       'entra pela repassar (historico e pulo), sem mudar prioridade nem tirar a pausa');
+    ok(/SPRINTPO\.pausadasParaTransbordar\(state, r, optsIni\)/.test(ADMIN) &&
+       /estaPausado\(m\)\)\s*\.forEach\(m => \{ _fechDecisoes\[m\.id\] = \{ destino: _seg,/.test(ADMIN),
+       'o Admin mostra as pausadas antes de iniciar, e no fechamento ja as manda para a sprint seguinte');
+
     const d2 = base();
     ok(SP.iniciar(d2, S1, 'Fernando', '2026-11-02').prioritarias.length === 0,
        'sem a regra de prazo injetada nada e puxado — melhor nao puxar do que puxar errado');
