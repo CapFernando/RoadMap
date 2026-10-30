@@ -2280,7 +2280,9 @@ ok(!/Math\.floor/.test(spCod) && !/\/ 5\b/.test(spCod),
    'sem bloco de cinco dias: a fronteira da sprint e a segunda-feira');
 ok(!/!d\.holiday/.test(spCod),
    'e nao filtra feriado de novo — quem faz isso e `semanasDoMes`, num lugar so');
-ok(/sprint:\s*sprintDeData\(inicio\)/.test(GANTT),
+// Desde 30/10/2026 a data do usuario manda (`sprintPorDatas`, segunda -> semana
+// anterior); continua saindo das DATAS, nunca do campo digitado.
+ok(/sprint:\s*sprint(?:DeData\(inicio\)|PorDatas\(inicio, fim,)/.test(GANTT),
    'ao salvar, a sprint sai da DATA e nao do campo digitado');
 
 /* E QUEM LE TAMBEM DERIVA. O campo `sprint` gravado e uma FOTO do que a regra
@@ -24709,6 +24711,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // -- A SPRINT PELA DATA DO USUARIO: segunda -> semana anterior --------
+    ok(SP.sprintDaEntrega('2026-11-09', []) === 'S1-11-2026' && SP.sprintDaEntrega('2026-11-10', []) === 'S2-11-2026',
+       'data do usuario na segunda pertence a sprint da semana anterior; terca ja e a propria semana');
+    ok(SP.sprintDaEntrega('2026-11-23', ['2026-11-20']) === 'S3-11-2026',
+       'e a segunda depois de uma sexta de feriado volta para a quinta, na mesma sprint');
+    ok(/function sprintDaDemanda\(m\) \{[\s\S]{0,200}sprintPorDatas\(m\.inicio, m\.entrega, usu\)/.test(GANTT) &&
+       /gantt-sprint-row/.test(GANTT),
+       'o Gantt classifica a demanda pela data do usuario e mostra a faixa das sprints por semana');
     // ── A VITRINE E O SEM DONO SAO DO TIME DA MESMA FRENTE ─────────────────
     ok(/<script src="pipelines\.js\?v=/.test(DEV) && /SPRINTPO\.naVitrine\(m, getStatusKey\(m\)\)\)\) &&\s*doMeuTime\(m\)/.test(DEV),
        'o painel do dev so mostra vitrine e sem dono do proprio time (as do Auto nao vao para Dados)');

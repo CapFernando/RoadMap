@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="2f48edeefa">
+<html lang="pt-BR" data-build="f4807fc4b6">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -393,6 +393,16 @@
       font-size: 11px; color: var(--text2);
     }
     .day-cell-header.weekend  { display: none; }
+    /* A faixa das sprints, acima dos dias. */
+    .gantt-sprint-row { top: 0; z-index: 21; }
+    .gantt-sprint-row + .gantt-header-row { top: 27px; }
+    .gantt-sprint-row .gantt-corner { padding: 5px 12px; font-size: 10.5px; align-items: center; }
+    .gsp-cell { flex-shrink: 0; box-sizing: border-box; padding: 5px 8px; font-size: 11px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+      border-right: 2px solid var(--border2, #444); border-bottom: 3px solid var(--sp-cor);
+      color: var(--sp-cor); }
+    .gsp-cell span { color: var(--text3); font-size: 10.5px; }
+    .gsp-cell.on, .gsp-cell:hover { background: color-mix(in srgb, var(--sp-cor) 16%, transparent); }
     .day-cell-header.holiday  { color: var(--text3); background: rgba(255,60,60,0.05); }
     
     .day-cell-header .day-num { font-size: 14px; font-weight: 600; display: block; }
@@ -1181,7 +1191,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=62340c6c83"></script>
+<script src="sprint.js?v=cbbd1340b8"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -2581,6 +2591,14 @@ const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
 const DAY_ABBR    = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
 // ── FILTERS ───────────────────────────────────────────────────────────────
+/** Clique na faixa: filtra pela sprint (data do usuario); de novo, limpa. */
+function gFiltraSemana(curto) {
+  const el = document.getElementById('f-sprint');
+  if (!el) return;
+  el.value = el.value.trim().toLowerCase() === String(curto).toLowerCase() ? '' : curto;
+  applyFilters();
+}
+
 function applyFilters() {
   filters.tipo     = document.getElementById('f-tipo').value;
   filters.tema     = document.getElementById('f-tema').value;
@@ -3192,12 +3210,26 @@ function atualizaSprintCampo() {
   if (!el) return;
   const ini = (document.getElementById('e-inicio') || {}).value || '';
   const fim = (document.getElementById('e-fim') || {}).value || '';
-  el.value = sprintDeData(ini) || sprintDeData(fim) || '';
+  const usu = (document.getElementById('e-entrega-usuario') || {}).value || fim;
+  el.value = sprintPorDatas(ini, fim, usu);
+}
+
+/* A SPRINT DA DEMANDA PELA DATA DO USUARIO (30/10/2026): "tudo que for datado
+   na segunda faz parte da sprint da semana anterior (seg a sexta — entrega
+   proxima segunda)". A regra mora em `SPRINTPO.sprintDaEntrega`; sem data do
+   usuario (nem herdada), vale a de sempre — inicio, depois fim. */
+function sprintPorDatas(inicio, fim, usuario) {
+  if (usuario && window.SPRINTPO) {
+    const r = SPRINTPO.sprintDaEntrega(usuario, state.feriados || []);
+    if (r) return r;
+  }
+  return sprintDeData(inicio) || sprintDeData(fim) || '';
 }
 
 function sprintDaDemanda(m) {
   if (!m) return '';
-  return sprintDeData(m.inicio) || sprintDeData(m.entrega) || '';
+  const usu = window.ENTREGAUSU ? ENTREGAUSU.data(m) : (m.entrega_usuario || '');
+  return sprintPorDatas(m.inicio, m.entrega, usu);
 }
 
 // ── GANTT ─────────────────────────────────────────────────────────────────
@@ -3879,6 +3911,31 @@ function renderGantt() {
 
   // build HTML
   let html = '';
+
+  /* A FAIXA DAS SPRINTS — cada semana (seg a sex) com o rotulo e a cor da
+     sprint, e a segunda da entrega ao lado. Clicar filtra o quadro pelas
+     demandas daquela sprint pela data do usuario (o campo Semana). */
+  if (window.SPRINTPO && workDays.length) {
+    const grupos = [];
+    workDays.forEach(d => {
+      const k = segundaDaSemanaISO(d.str);
+      const g = grupos[grupos.length - 1];
+      if (g && g.k === k) g.n++; else grupos.push({ k, n: 1, primeiro: d.str });
+    });
+    html += `<div class="gantt-header-row gantt-sprint-row"><div class="gantt-corner">Sprint · entrega</div>`;
+    grupos.forEach(g => {
+      const rot = SPRINTPO.rotuloDeData(g.primeiro, state.feriados || []);
+      const cor = SPRINTPO.corDaSprint(rot) || 'var(--text3)';
+      const seg = new Date(g.k + 'T12:00:00Z'); seg.setUTCDate(seg.getUTCDate() + 7);
+      const ent = String(seg.getUTCDate()).padStart(2, '0') + '/' + String(seg.getUTCMonth() + 1).padStart(2, '0');
+      const curto = SPRINTPO.rotuloCurto(rot);
+      const on = filters.sprint && filters.sprint === curto.toLowerCase();
+      html += `<div class="gsp-cell${on ? ' on' : ''}" style="width:calc(var(--day-w) * ${g.n});--sp-cor:${cor}"`
+        + ` title="${curto}: trabalho de seg a sex, entrega ao usuário na segunda ${ent}. Clique para ver só as demandas desta sprint."`
+        + ` onclick="gFiltraSemana('${curto}')"><b>${curto}</b> <span>→ entrega ${ent}</span></div>`;
+    });
+    html += `</div>`;
+  }
 
   // Header row
   html += `<div class="gantt-header-row">`;
@@ -5074,7 +5131,8 @@ async function saveTask() {
     data_solicitacao:   document.getElementById('e-data-solic').value,
     // Derivada das datas, nao lida do campo: o campo e so espelho. Assim uma
     // demanda que muda de data muda de sprint junto, sem ninguem lembrar disso.
-    sprint:             sprintDeData(inicio) || sprintDeData(fim) || '',
+    sprint:             sprintPorDatas(inicio, fim,
+                          (document.getElementById('e-entrega-usuario') || {}).value || fim),
     /* A SPRINT DO PM/PO é OUTRA COISA, e é por isso que ela aparece logo abaixo
        da derivada em vez de substituí-la: aquela é "em que semana cai a data",
        esta é "para que sprint o PO repassou" (ver `sprint.js`). Sem repassar

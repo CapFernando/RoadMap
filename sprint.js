@@ -934,6 +934,33 @@
     });
   }
 
+  /* ═══ A SPRINT PELA DATA DO USUÁRIO ════════════════════════════════════════
+   *
+   * "Sempre vou pôr a data do usuário após o fechamento da sprint, ou seja,
+   *  tudo que for datado na segunda, a demanda faz parte da sprint da semana
+   *  anterior (seg a sexta — entrega próxima segunda)."
+   *
+   * A DATA DO USUÁRIO É O DIA SEGUINTE AO FIM DO TRABALHO. A sprint dela é a
+   * do DIA ÚTIL ANTERIOR: segunda → sexta da semana passada; terça a sexta →
+   * a própria semana. Feriado e fim de semana são pulados — a segunda depois de
+   * uma sexta de feriado volta para a quinta.                               */
+  function sprintDaEntrega(dataUsuario, feriados) {
+    var s = iso(dataUsuario);
+    if (!s) return '';
+    var fer = {};
+    (feriados || []).forEach(function (f) {
+      fer[iso(f && typeof f === 'object' ? f.data : f)] = true;
+    });
+    var d = new Date(s + 'T12:00:00Z');
+    for (var i = 0; i < 15; i++) {
+      d.setUTCDate(d.getUTCDate() - 1);
+      var dow = d.getUTCDay();
+      var dia = d.toISOString().slice(0, 10);
+      if (dow !== 0 && dow !== 6 && !fer[dia]) return rotuloDeData(dia, feriados);
+    }
+    return '';
+  }
+
   /** A sprint seguinte a esta, pelo calendário — para onde vai a sugestão. */
   function sprintSeguinte(rotulo, feriados) {
     var r = txt(rotulo);
@@ -1512,6 +1539,7 @@
     PONTOS_POR_DEV: PONTOS_POR_DEV,
     capacidadeDaSprint: capacidadeDaSprint,
     sprintSeguinte: sprintSeguinte,
+    sprintDaEntrega: sprintDaEntrega,
     backlogDaSprint: backlogDaSprint,
     trilhaDe: trilhaDe,
     daTrilha: daTrilha,
