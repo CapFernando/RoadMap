@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="82819fe5dd">
+<html lang="pt-BR" data-build="d3f3a6ef9f">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -4938,12 +4938,13 @@ function renderMelToolbar() {
   const ativos = [_filtroStatus, _filtroTema, _filtroDev, _filtroPrazo, _filtroTipo,
                   _filtroProd, _filtroSprint, _buscaMel].filter(Boolean).length;
   el.innerHTML =
+    // A SPRINT PRIMEIRO: e o recorte mais usado na semana de planejamento.
+    fbGroup('Sprint', _filtroSprint, opcoesSprintKb(), 'setFiltroSprint') +
     fbGroup('Tipo',  _filtroTipo,  opcoesTipo(),  'setFiltroTipo') +
     fbGroupHTML('Tema', temaOpcoesHTML(_filtroTema), 'setFiltroTema') +
     fbGroup('Dev',   _filtroDev,   opcoesDev(),   'setFiltroDev') +
     fbGroup('Prazo', _filtroPrazo, opcoesPrazo(), 'setFiltroPrazo') +
     fbGroup('Produção', _filtroProd, opcoesProducao(), 'setFiltroProd') +
-    fbGroup('Sprint', _filtroSprint, opcoesSprintKb(), 'setFiltroSprint') +
     fbBusca('mel-busca', _buscaMel, 'setBuscaMel') +
     botaoLimpar('limparFiltrosMel', ativos) +
     `<span class="fb-count" id="mel-contagem"></span>`;
@@ -5452,13 +5453,13 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
        o "Limpar" diz que nao ha filtro, e conclui que sumiu dado. */
     Object.keys(_kbProdCol).length;
   el.innerHTML =
+    fbGroup('Sprint', _kbSprint, opcoesSprintKb(), 'setKbSprint') +
     fbGroup('Tipo',    _kbTipo,    opcoesTipo(),    'setKbTipo') +
     fbGroupHTML('Tema', temaOpcoesHTML(_kbTema), 'setKbTema') +
     fbGroup('Dev',     _kbDev,     opcoesDev(),     'setKbDev') +
     fbGroup('Prazo',   _kbPrazo,   opcoesPrazo(),   'setKbPrazo') +
     fbGroup('Concluídas', _kbPeriodo, opcoesPeriodo(), 'setKbPeriodo') +
     fbGroup('Produção', _kbProd, opcoesProducao(), 'setKbProd') +
-    fbGroup('Sprint', _kbSprint, opcoesSprintKb(), 'setKbSprint') +
     fbGroup('Dados/BI', _kbDados, opcoesDados(), 'setKbDados') +
     fbGroup('BI impactado', _kbBi, opcoesBi(), 'setKbBi') +
     fbBusca('kb-busca', _kbBusca, 'setBuscaKb') +
