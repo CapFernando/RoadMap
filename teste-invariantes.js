@@ -24709,6 +24709,21 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // ── A VITRINE E O SEM DONO SAO DO TIME DA MESMA FRENTE ─────────────────
+    ok(/<script src="pipelines\.js\?v=/.test(DEV) && /SPRINTPO\.naVitrine\(m, getStatusKey\(m\)\)\)\) &&\s*doMeuTime\(m\)/.test(DEV),
+       'o painel do dev so mostra vitrine e sem dono do proprio time (as do Auto nao vao para Dados)');
+    {
+      const PIPE_ = (() => { const g = {}; new Function('globalThis', lerTela('pipelines.js'))(g); return g.PIPELINES; })();
+      const fnTime = new Function('PIPELINES', 'currentDev', 'state', 'window',
+        corpo(DEV, 'function doMeuTime(m) {') + '; return doMeuTime;');
+      const ver = (quem, m) => fnTime(PIPE_, quem, {}, { PIPELINES: PIPE_ })(m);
+      ok(!ver('Marina', { dev: 'Lucas Santos' }) && ver('Gabriel Fernandes', { dev: 'Lucas Santos' }),
+         'a task do Lucas (Desenvolvimento) aparece para o time de Desenvolvimento e nao para Dados');
+      ok(ver('Marina', { dados_bi: true }) && !ver('Gabriel Fernandes', { dados_bi: true }),
+         'a marcada Dados/BI so para Dados');
+      ok(!ver('Marina', { dev: '' }) && ver('Gabriel Fernandes', { dev: '' }),
+         'e a sem frente, para quem nao e de Dados');
+    }
     // ── HORAS AO MANDAR PARA A VALIDACAO DA AREA (e ao PM/PO) ──────────────
     const fnEnt = new Function(corpo(WKS, 'function entrandoEmValidacaoSemEntrega(') + '; return entrandoEmValidacaoSemEntrega;')();
     const serv = { melhorias: [{ id: 'h1', status_planejamento: 'em_andamento' }, { id: 'h2', status_planejamento: 'em_andamento' },

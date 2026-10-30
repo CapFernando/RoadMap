@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="8f145e4167">
+<html lang="pt-BR" data-build="d28c3f1ebf">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -744,6 +744,9 @@
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
 <script src="sprint.js?v=62340c6c83"></script>
+<!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
+     sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
+<script src="pipelines.js?v=a6a54ef3d1"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -4560,6 +4563,25 @@ function atualizaContagemDev() {
   }
 }
 
+/* O TIME DE QUEM OLHA (30/10/2026): "tasks do Auto estão aparecendo para o time
+   de DADOS, não deveria". A vitrine e o backlog sem dono da sprint eram de TODO
+   o time; agora só da mesma frente (`pipelines.js`, cadastro e depois semente).
+   - mesma frente: aparece;
+   - demanda marcada Dados/BI: só para quem é de Dados;
+   - demanda sem frente (sem dev e sem marca): para quem não é de Dados;
+   - quem olha sem frente conhecida vê tudo, como antes — esconder trabalho de
+     quem o cadastro não alcança é o defeito que tirou o Crisley do deck. */
+function doMeuTime(m) {
+  if (!window.PIPELINES) return true;
+  const fu = PIPELINES.doDev(currentDev || '', state.devs_perfil);
+  if (!fu) return true;
+  const DADOS = PIPELINES.FRENTE_DADOS;
+  if (m && m.dados_bi) return fu === DADOS;
+  const fd = PIPELINES.daDemanda(m, state.devs_perfil);
+  if (fd === PIPELINES.NAO_CLASSIFICADO) return fu !== DADOS;
+  return fd === fu;
+}
+
 function getFiltered() {
   const ano = document.getElementById('f-ano')?.value || '';
   const mes = document.getElementById('f-mes')?.value;
@@ -4585,7 +4607,8 @@ function getFiltered() {
     /* A VITRINE: com sprint marcada e ainda antes de Planejado, todo o time ve
        (`SPRINTPO.naVitrine`) — o chip da sprint diz para qual semana ela vai. */
     const doTime = !!(window.SPRINTPO && (SPRINTPO.naPoolDoTime(state, m) ||
-                                          SPRINTPO.naVitrine(m, getStatusKey(m))));
+                                          SPRINTPO.naVitrine(m, getStatusKey(m)))) &&
+                   doMeuTime(m);
     if (!meu && !doTime) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     const fTipo = document.getElementById('f-tipo')?.value || '';
