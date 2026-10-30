@@ -24714,6 +24714,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // -- REPASSE EM LOTE POR GRUPO: pontuadas em Planning, atrasadas da sprint atual, pausadas --
+    ok(/k: 'planning'/.test(ADMIN) && /k: 'atrasadas'/.test(ADMIN) && /k: 'pausadas'/.test(ADMIN) &&
+       /LOTE_GRUPOS\.some\(g => _loteGrupos\.has\(g\.k\) && g\.casa\(m\)\)/.test(ADMIN),
+       'o repasse em lote filtra pelos grupos marcados (um, dois ou os tres), em uniao');
     // -- A VINCULADA HERDA A ABERTURA DA PRINCIPAL --------------------------
     {
       const WV = WKS.replace(/export default \{[\s\S]*$/, '');
@@ -24804,8 +24808,25 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e nunca sugere mover o que ja comecou');
     ok(SP.sprintSeguinte(S1, []) === 'S2-11-2026',
        'a sugestao aponta para a sprint seguinte do calendario');
-    ok(/renderCapSprint\(\);/.test(GANTT) && /SPRINTPO\.capacidadeDaSprint\(state, _capSel/.test(GANTT),
+    ok(/renderCapSprint\(\);/.test(GANTT) && /SPRINTPO\.capacidadePorTrilha\(state, _capSel/.test(GANTT),
        'o Gantt desenha a capacidade pela conta do modulo');
+    {
+      const dT = { melhorias: [
+        { id: 1, dev: 'Ana', sprint_po: S1, poker_pontos: 20, status_planejamento: 'planejado' },
+        { id: 2, dev: 'Rita', sprint_po: S1, poker_pontos: 5, status_planejamento: 'planejado' },
+        { id: 3, dev: 'Marina', dados_bi: true, sprint_po: S1, poker_pontos: 8, status_planejamento: 'planejado' },
+        { id: 4, dev: '', sales_ops: true, sprint_po: S1, poker_pontos: 3, status_planejamento: 'backlog' } ] };
+      const FR = { Ana: 'Desenvolvimento', Rita: 'Automação & RPA', Marina: 'Dados & Power BI' };
+      const gT = SP.capacidadePorTrilha(dT, S1, { devs: ['Ana', 'Rita', 'Marina'], frenteDoDev: n => FR[n] || '',
+        frenteDados: 'Dados & Power BI' });
+      ok(gT.map(g => g.nome).join() === 'Desenvolvimento,Dados/BI,Sales Ops',
+         'a capacidade tem tres grupos: Desenvolvimento (geral), Dados/BI e Sales Ops');
+      ok(gT[0].capacidade === 60 && gT[0].alocado === 25 && gT[1].capacidade === 30 && gT[1].alocado === 8 &&
+         gT[2].alocado === 3,
+         'Desenvolvimento soma as frentes de quem nao e de Dados; a demanda cai no grupo pela marca dela');
+      ok(gT[0].frentes.map(f => f.frente).join() === 'Automação & RPA,Desenvolvimento',
+         'e Desenvolvimento abre por frente (Automacao & RPA, IA...)');
+    }
 
     // ── A COR DE CADA SPRINT, NO ADMIN E NO GANTT ─────────────────────────
     const seis = SP.proximasSprints('2026-11-02', 5, []).map(x => SP.corDaSprint(x.rotulo));

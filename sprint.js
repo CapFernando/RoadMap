@@ -934,6 +934,95 @@
     });
   }
 
+  /* ═══ A CAPACIDADE POR TRILHA, COM DESENVOLVIMENTO ABERTO POR FRENTE ════════
+   *
+   * "Preciso ter por Desenvolvimento (engloba geral), Dados/BI e Sales apenas.
+   *  Em Desenvolvimento eu terei a quebra (Automação e RPA, IA...)."
+   *
+   * TRÊS GRUPOS, OS MESMOS DA CONTA DA SPRINT (`TRILHAS`): a demanda cai pelo
+   * que ela É (`trilhaDe`: marca Dados/BI, marca Sales Ops, ou nenhuma =
+   * Desenvolvimento); a pessoa cai pela frente do cadastro (`frenteDoDev`) —
+   * a de Dados no grupo Dados/BI, a de Sales no Sales Ops, todas as outras no
+   * Desenvolvimento. Dentro de Desenvolvimento, as linhas são as frentes de
+   * quem faz (a demanda sem dev entra em "sem frente").
+   *
+   * A SUGESTÃO É DO GRUPO, e não da frente: é o grupo que tem capacidade
+   * combinada, e mover entre frentes do mesmo grupo não libera nada.         */
+  function capacidadePorTrilha(dados, rotulo, o) {
+    var r = txt(rotulo);
+    var opt = o || {};
+    var porDev = Number(opt.pontosPorDev) > 0 ? Number(opt.pontosPorDev) : PONTOS_POR_DEV;
+    var etapaDe = opt.etapaDe;
+    var fDev = opt.frenteDoDev || function () { return ''; };
+    var DADOS = txt(opt.frenteDados), SALES = txt(opt.frenteSales);
+    var SEM = opt.semFrente || 'Não classificado';
+    var grupoDaPessoa = function (n) {
+      var f = fDev(n);
+      return f && f === DADOS ? 'dados_bi' : f && f === SALES ? 'sales_ops' : 'tecnologia';
+    };
+    var grupos = {};
+    TRILHAS.forEach(function (t) {
+      grupos[t.k] = { k: t.k, nome: t.k === 'tecnologia' ? 'Desenvolvimento' : t.nome, icone: t.icone,
+                      pessoas: [], capacidade: 0, alocado: 0, itens: [], frentes: {} };
+    });
+    var frente = function (g, nome) {
+      var k = nome || SEM;
+      if (!g.frentes[k]) g.frentes[k] = { frente: k, pessoas: [], capacidade: 0, alocado: 0, itens: [] };
+      return g.frentes[k];
+    };
+    (opt.devs || []).forEach(function (n) {
+      var g = grupos[grupoDaPessoa(n)];
+      if (g.pessoas.indexOf(n) >= 0) return;
+      g.pessoas.push(n); g.capacidade += porDev;
+      if (g.k === 'tecnologia') { var f = frente(g, fDev(n)); f.pessoas.push(n); f.capacidade += porDev; }
+    });
+    ((dados || {}).melhorias || []).forEach(function (m) {
+      if (!m || m.oculto || m.mesclado_em || !naSprint(m, r)) return;
+      var et = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (et === 'negada') return;
+      var g = grupos[trilhaDe(m)];
+      var pts = pontosDe(m);
+      g.alocado += pts; g.itens.push(m);
+      if (g.k !== 'tecnologia') return;
+      var nomes = txt(m.dev).split('/').map(function (x) { return x.trim(); }).filter(Boolean);
+      var fs = nomes.length ? nomes.map(function (n) { return fDev(n); }) : [''];
+      fs.forEach(function (fn) {
+        var f = frente(g, fn);
+        f.alocado += pts / fs.length;
+        if (f.itens.indexOf(m) < 0) f.itens.push(m);
+      });
+    });
+    var ordem = opt.compara || function (a, b) { return pontosDe(a) - pontosDe(b); };
+    var fecha = function (e) {
+      e.alocado = Math.round(e.alocado * 10) / 10;
+      e.saldo = Math.round((e.capacidade - e.alocado) * 10) / 10;
+      e.pct = e.capacidade ? Math.round(e.alocado / e.capacidade * 100) : null;
+      e.semPontos = e.itens.filter(function (m) { return !pontosDe(m); }).length;
+      return e;
+    };
+    return TRILHAS.map(function (t) {
+      var g = fecha(grupos[t.k]);
+      g.sugeridas = [];
+      if (g.capacidade && g.alocado > g.capacidade) {
+        var falta = g.alocado - g.capacidade;
+        var moviveis = g.itens.filter(function (m) {
+          var et = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+          return ETAPAS_MOVIVEIS.indexOf(et) >= 0 && pontosDe(m) > 0 && !ehPrioritariaDaSprint(m, r);
+        }).slice().sort(ordem).reverse();
+        for (var i = 0; i < moviveis.length && falta > 0; i++) {
+          g.sugeridas.push(moviveis[i]);
+          falta -= pontosDe(moviveis[i]);
+        }
+      }
+      g.frentes = Object.keys(g.frentes).map(function (k) { return fecha(g.frentes[k]); })
+        .sort(function (a, b) {
+          if ((a.frente === SEM) !== (b.frente === SEM)) return a.frente === SEM ? 1 : -1;
+          return a.frente.localeCompare(b.frente, 'pt-BR');
+        });
+      return g;
+    });
+  }
+
   /* ═══ A SPRINT PELA DATA DO USUÁRIO ════════════════════════════════════════
    *
    * "Sempre vou pôr a data do usuário após o fechamento da sprint, ou seja,
@@ -1538,6 +1627,7 @@
     pontosDe: pontosDe,
     PONTOS_POR_DEV: PONTOS_POR_DEV,
     capacidadeDaSprint: capacidadeDaSprint,
+    capacidadePorTrilha: capacidadePorTrilha,
     sprintSeguinte: sprintSeguinte,
     sprintDaEntrega: sprintDaEntrega,
     backlogDaSprint: backlogDaSprint,

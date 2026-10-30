@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7e8f8724ff">
+<html lang="pt-BR" data-build="82819fe5dd">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -497,6 +497,13 @@
       margin:0; padding:0; }
     .lote-check { display:flex; align-items:center; gap:7px; font-size:12.5px;
       color:var(--text2); margin-bottom:9px; cursor:pointer; }
+    .lote-grupos { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:8px 0 6px; }
+    .lote-g-rot { font-size:12px; color:var(--text3); }
+    .lote-g { padding:5px 10px; font-size:12px; font-family:inherit; cursor:pointer; color:var(--text2);
+      background:var(--bg3); border:1px solid var(--border); border-radius:14px; }
+    .lote-g.on { color:var(--text); border-color:var(--blue,#4C8DFF);
+      background:color-mix(in srgb, var(--blue,#4C8DFF) 16%, transparent); font-weight:600; }
+    .lote-gtag { font-size:12px; flex:0 0 auto; }
     .lote-acoes-sel { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
     .lote-mini { font-family:inherit; font-size:11.5px; padding:4px 9px; border-radius:6px;
       cursor:pointer; background:none; color:var(--text2); border:1px solid var(--border); }
@@ -1577,7 +1584,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=cbbd1340b8"></script>
+<script src="sprint.js?v=de1e9377e3"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -9247,6 +9254,26 @@ async function sprintEscolher(ev, id) {
 let _loteSel = new Set();
 let _loteBusca = '';
 let _loteSoFora = true;
+/* OS GRUPOS DO LOTE (30/10/2026): "escolher entre o que esta pontuado em
+   planning, atrasado na sprint atual e pausado, podendo escolher um ou outro
+   ou todos". Vazio = sem recorte por grupo (o comportamento de antes). */
+let _loteGrupos = new Set();
+const LOTE_GRUPOS = [
+  { k: 'planning', rot: '🃏 Pontuadas em Planning',
+    casa: m => statusKey(m) === 'planning' && SPRINTPO.pontosDe(m) > 0 },
+  { k: 'atrasadas', rot: '⏰ Atrasadas da sprint atual',
+    casa: m => {
+      const atual = SPRINTPO.rotuloDeData(PRAZO.hojeISO(), state.feriados || []);
+      // o atraso vem da etapa efetiva (`statusKey` → `ETAPA.efetiva`), a regra unica
+      return SPRINTPO.naSprint(m, atual) && statusKey(m) === 'atrasado';
+    } },
+  { k: 'pausadas', rot: '⏸ Pausadas', casa: m => estaPausado(m) },
+];
+function loteGruposDe(m) { return LOTE_GRUPOS.filter(g => g.casa(m)); }
+function sprintLoteGrupo(k) {
+  if (_loteGrupos.has(k)) _loteGrupos.delete(k); else _loteGrupos.add(k);
+  sprintLoteLista();
+}
 
 /** As candidatas: tudo que ainda está em aberto.
  *
@@ -9260,7 +9287,12 @@ function sprintLoteCandidatas() {
     (state.melhorias || []).filter(m => {
       if (!m || m.oculto || ehMesclada(m)) return false;
       if (!ETAPA.aberta(m, PRAZO.hojeISO())) return false;
-      if (_loteSoFora && SPRINTPO.doPO(m)) return false;
+      /* COM GRUPO ESCOLHIDO, o grupo manda: a uniao dos marcados. O "so fora de
+         sprint" sai do caminho — a atrasada da sprint atual JA tem sprint, e
+         escondê-la anularia o grupo. */
+      if (_loteGrupos.size) {
+        if (!LOTE_GRUPOS.some(g => _loteGrupos.has(g.k) && g.casa(m))) return false;
+      } else if (_loteSoFora && SPRINTPO.doPO(m)) return false;
       if (!q) return true;
       return (String(m.codigo || '') + ' ' + String(m.titulo || '') + ' ' +
               String(m.dev || '')).toLowerCase().includes(q);
@@ -9272,6 +9304,7 @@ function sprintLoteAbrir() {
   _loteSel = new Set();
   _loteBusca = '';
   _loteSoFora = true;
+  _loteGrupos = new Set();
   const ov = document.createElement('div');
   ov.className = 'dlg-ov';
   ov.id = 'lote-ov';
@@ -9283,7 +9316,8 @@ function sprintLoteAbrir() {
         '<select id="lote-sprint" class="lote-sel"></select>' +
         '<input type="search" id="lote-busca" class="lote-busca" placeholder="Filtrar por código, título ou dev…">' +
       '</div>' +
-      '<label class="lote-check"><input type="checkbox" id="lote-sofora" checked> ' +
+      '<div class="lote-grupos" id="lote-grupos"></div>' +
+      '<label class="lote-check" id="lote-sofora-rot"><input type="checkbox" id="lote-sofora" checked> ' +
         'Só as que estão fora de sprint</label>' +
       '<div class="lote-acoes-sel">' +
         '<button type="button" class="lote-mini" id="lote-todas">Marcar todas</button>' +
@@ -9331,6 +9365,18 @@ function sprintLoteLista() {
   const el = document.getElementById('lote-lista');
   if (!el) return;
   const lista = sprintLoteCandidatas();
+  // os grupos, com quantas abertas cabem em cada um
+  const gEl = document.getElementById('lote-grupos');
+  if (gEl) {
+    const abertas = (state.melhorias || []).filter(m => m && !m.oculto && !ehMesclada(m) &&
+      ETAPA.aberta(m, PRAZO.hojeISO()));
+    gEl.innerHTML = '<span class="lote-g-rot">Mostrar:</span>' + LOTE_GRUPOS.map(g =>
+      '<button type="button" class="lote-g' + (_loteGrupos.has(g.k) ? ' on' : '') + '"' +
+      ' onclick="sprintLoteGrupo(\'' + g.k + '\')">' + g.rot + ' <b>' +
+      abertas.filter(g.casa).length + '</b></button>').join('');
+  }
+  const soRot = document.getElementById('lote-sofora-rot');
+  if (soRot) soRot.style.opacity = _loteGrupos.size ? '.45' : '';
   /* A SELEÇÃO SOBREVIVE AO FILTRO. Marcar dez, digitar na busca e perder as
      dez seria o jeito mais rápido de a pessoa desistir do lote — e ela só
      descobriria o sumiço depois de gravar. O contador diz o total marcado,
@@ -9346,6 +9392,8 @@ function sprintLoteLista() {
           '<span class="lote-tit">' + esc(m.titulo || '') + '</span>' +
           (prio ? '<span class="lote-prio pr-' + esc(prio) + '">' + esc(prio) + '</span>' : '') +
           (m.dev ? '<span class="lote-dev">' + esc(m.dev) + '</span>' : '') +
+          loteGruposDe(m).map(g => '<span class="lote-gtag" title="' + esc(g.rot) + '">' +
+            g.rot.split(' ')[0] + '</span>').join('') +
           SPRINTPO.badge(m, 'kb-sprint') +
         '</label>';
       }).join('')

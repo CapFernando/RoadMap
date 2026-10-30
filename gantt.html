@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="f4807fc4b6">
+<html lang="pt-BR" data-build="2ed86b4f6c">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -279,6 +279,8 @@
     .capsp-sug { font-size:12px; color:var(--text2); }
     .capsp-sug a { color:var(--text); cursor:pointer; text-decoration:underline dotted; margin-right:6px; }
     .capsp-nota { font-size:11.5px; color:var(--text3); margin-top:8px; }
+    .capsp-tab tr.capsp-grupo td { background: var(--bg3); }
+    .capsp-sub { padding-left: 14px; color: var(--text2); }
     .filter-bar {
       background: var(--bg2); border-bottom: 1px solid var(--border);
       padding: 8px 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
@@ -1191,7 +1193,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=cbbd1340b8"></script>
+<script src="sprint.js?v=de1e9377e3"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -2734,49 +2736,61 @@ function renderCapSprint() {
   sel.innerHTML = opcoes.map((r, i) => '<option value="' + r + '">' + SPRINTPO.rotuloCurto(r) +
     (i === 0 ? ' · atual' : '') + '</option>').join('');
   sel.value = _capSel;
-  const eq = SPRINTPO.capacidadeDaSprint(state, _capSel, {
+  /* TRES GRUPOS (Desenvolvimento geral, Dados/BI, Sales Ops), com
+     Desenvolvimento aberto por frente — ver `SPRINTPO.capacidadePorTrilha`. */
+  const grupos = SPRINTPO.capacidadePorTrilha(state, _capSel, {
     devs: capDevsAtivos(),
     frenteDoDev: n => PIPELINES.doDev(n, state.devs_perfil),
-    frenteDe: m => frenteDaDemanda(m),
+    frenteDados: PIPELINES.FRENTE_DADOS,
+    frenteSales: 'Sales Ops',
     semFrente: PIPELINES.NAO_CLASSIFICADO,
     etapaDe: m => spEfetivo(m),
     compara: window.ORDEMKB
       ? (a, b) => ORDEMKB.compara(a, b, window.ENTREGAUSU ? ENTREGAUSU.data : null) : undefined,
   });
   const prox = SPRINTPO.sprintSeguinte(_capSel, fer);
-  const cap = eq.reduce((t, e) => t + e.capacidade, 0);
-  const aloc = Math.round(eq.reduce((t, e) => t + e.alocado, 0));
-  const nOver = eq.filter(e => e.capacidade && e.alocado > e.capacidade).length;
+  const cap = grupos.reduce((t, e) => t + e.capacidade, 0);
+  const aloc = Math.round(grupos.reduce((t, e) => t + e.alocado, 0));
+  const nOver = grupos.filter(e => e.capacidade && e.alocado > e.capacidade).length;
   const res = document.getElementById('capsp-res');
   if (res) res.innerHTML = SPRINTPO.rotuloCurto(_capSel) + ' · ' + aloc + ' de ' + cap + ' pts' +
-    (nOver ? ' · <span class="capsp-over">⚠ ' + nOver + (nOver === 1 ? ' frente acima' : ' frentes acima') +
+    (nOver ? ' · <span class="capsp-over">⚠ ' + nOver + (nOver === 1 ? ' grupo acima' : ' grupos acima') +
       ' da capacidade</span>' : '');
   const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  tab.innerHTML = '<table class="capsp-tab"><thead><tr><th>Frente</th><th>Pessoas</th>' +
+  const barra = e => {
+    const pct = e.pct == null ? 0 : e.pct;
+    const cls = e.pct == null ? '' : pct > 100 ? 'over' : pct >= 85 ? 'cheia' : '';
+    return '<span class="capsp-barra"><span class="' + cls + '" style="width:' + Math.min(100, pct) + '%"></span></span>' +
+      '<b>' + e.alocado + '</b> pt' + (e.pct != null ? ' (' + pct + '%)' : '') +
+      (e.semPontos ? ' <span class="capsp-sug" title="Sem pontuação: o alocado está menor do que é">· ' + e.semPontos + ' sem pontos</span>' : '');
+  };
+  const linha = (e, nome, cls, sug) =>
+    '<tr class="' + cls + '"><td>' + nome + '</td>' +
+    '<td title="' + esc(e.pessoas.join(', ')) + '">' + e.pessoas.length + '</td>' +
+    '<td>' + e.pessoas.length + ' × 30 = <b>' + e.capacidade + '</b> pt</td>' +
+    '<td>' + barra(e) + '</td>' +
+    '<td class="' + (e.saldo < 0 ? 'capsp-over' : '') + '">' + (e.capacidade ? e.saldo + ' pt' : '—') + '</td>' +
+    '<td>' + sug + '</td></tr>';
+  tab.innerHTML = '<table class="capsp-tab"><thead><tr><th>Grupo / frente</th><th>Pessoas</th>' +
     '<th>Capacidade</th><th>Alocado na sprint</th><th>Saldo</th><th>Sugestão</th></tr></thead><tbody>' +
-    eq.map(e => {
-      const pct = e.pct == null ? 0 : e.pct;
-      const cls = e.pct == null ? '' : pct > 100 ? 'over' : pct >= 85 ? 'cheia' : '';
-      const sug = e.sugeridas.length
+    grupos.map(g => {
+      const sug = g.sugeridas.length
         ? '<span class="capsp-sug">Mover para <b>' + esc(SPRINTPO.rotuloCurto(prox)) + '</b>: ' +
-          e.sugeridas.map(m => '<a onclick="openModal(\'' + esc(m.id) + '\')" title="' + esc(m.titulo || '') + '">' +
+          g.sugeridas.map(m => '<a onclick="openModal(\'' + esc(m.id) + '\')" title="' + esc(m.titulo || '') + '">' +
             esc(m.codigo || m.id) + ' (' + SPRINTPO.pontosDe(m) + ' pt)</a>').join('') + '</span>'
-        : !e.capacidade && e.alocado
-          ? '<span class="capsp-sug">Sem pessoas cadastradas nesta frente — classifique o dev</span>'
-          : e.saldo > 0 && e.capacidade
-            ? '<span class="capsp-sug">Cabe mais ' + e.saldo + ' pt</span>' : '—';
-      return '<tr><td><b>' + esc(e.frente) + '</b></td>' +
-        '<td title="' + esc(e.pessoas.join(', ')) + '">' + e.pessoas.length + '</td>' +
-        '<td>' + e.pessoas.length + ' × 30 = <b>' + e.capacidade + '</b> pt</td>' +
-        '<td><span class="capsp-barra"><span class="' + cls + '" style="width:' + Math.min(100, pct) + '%"></span></span>' +
-          '<b>' + e.alocado + '</b> pt' + (e.pct != null ? ' (' + pct + '%)' : '') +
-          (e.semPontos ? ' <span class="capsp-sug" title="Sem pontuação: o alocado está menor do que é">· ' + e.semPontos + ' sem pontos</span>' : '') + '</td>' +
-        '<td class="' + (e.saldo < 0 ? 'capsp-over' : '') + '">' + (e.capacidade ? e.saldo + ' pt' : '—') + '</td>' +
-        '<td>' + sug + '</td></tr>';
+        : !g.capacidade && g.alocado
+          ? '<span class="capsp-sug">Sem pessoas cadastradas neste grupo</span>'
+          : g.saldo > 0 && g.capacidade ? '<span class="capsp-sug">Cabe mais ' + g.saldo + ' pt</span>' : '—';
+      const subs = g.k === 'tecnologia'
+        ? g.frentes.map(f => linha(f, '<span class="capsp-sub">↳ ' + esc(f.frente) + '</span>', 'capsp-frente',
+            f.saldo > 0 && f.capacidade ? '<span class="capsp-sug">cabe ' + f.saldo + ' pt</span>' : '')).join('')
+        : '';
+      return linha(g, '<b>' + g.icone + ' ' + esc(g.nome) + '</b>' +
+        (g.k === 'tecnologia' ? ' <span class="capsp-sug">(geral)</span>' : ''), 'capsp-grupo', sug) + subs;
     }).join('') + '</tbody></table>' +
-    '<div class="capsp-nota">Alocado = pontos do Planning Poker das demandas repassadas para esta sprint; ' +
-    'demanda de dupla divide os pontos entre as frentes das duas pessoas. A sugestão só considera o que ' +
-    'ainda não começou e tira primeiro a de prioridade mais baixa e prazo mais distante — ' +
+    '<div class="capsp-nota">Grupo pela marca da demanda (Dados/BI, Sales Ops ou nenhuma = Desenvolvimento) e pessoas pela frente do cadastro; ' +
+    'Desenvolvimento abre por frente de quem faz. Alocado = pontos do Planning Poker das demandas repassadas para esta sprint. ' +
+    'A sugestão é do grupo, só considera o que ainda não começou e tira primeiro a de prioridade mais baixa e prazo mais distante — ' +
     'quem move é o PM/PO, pelo campo Sprint do card.</div>';
 }
 
