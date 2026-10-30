@@ -3539,10 +3539,16 @@ function nomeNaDemanda(ident) {
  * Aceita AX-### solto porque o anexo pode ter sido subido antes de a demanda
  * receber o codigo; e recusa anexo sem chave, que e o antigo guardado em base64
  * dentro do proprio JSON e nao tem o que buscar no R2.                        */
+/* A COPIA DA REGRA DO REQUISITO. A tela tem a outra (`ehRequisito`, em
+ * poker.html) e ha invariante rodando as duas lado a lado, caso a caso.
+ *
+ * O PDF ENTROU com as imagens: a lista e a mesma do `INLINE` do
+ * `anexo-tipos.js` — "formatos que o navegador desenha sem executar script".
+ * SVG continua fora la, e por isso fica fora aqui. */
 function pokerEhRequisito(a, m) {
   if (!a || !a.chave) return false;
   const nome = String(a.nome || '');
-  if (!/\.(png|jpe?g|webp|gif)$/i.test(nome)) return false;
+  if (!/\.(png|jpe?g|webp|gif|pdf)$/i.test(nome)) return false;
   const cod = String((m || {}).codigo || '').trim().toUpperCase();
   const doNome = (nome.match(/^\s*(AX-\d+)/i) || [])[1];
   if (!doNome) return false;
@@ -4175,12 +4181,26 @@ export default {
 
         const objR = await env.ANEXOS.get(chaveR);
         if (!objR) return json({ error: 'anexo nao encontrado' }, 404, headers);
-        /* SO IMAGEM SAI POR AQUI. O nome ja foi conferido, mas o tipo gravado e
-           que manda no navegador: um `.png` com SVG dentro renderizaria script na
-           origem do Worker, e esta rota alcanca gente sem credencial. */
+        /* SO O QUE O NAVEGADOR DESENHA SAI POR AQUI, e a lista e EXPLICITA. O
+           nome ja foi conferido, mas o tipo gravado e que manda no navegador:
+           um `.png` com SVG dentro renderizaria script na origem do Worker, e
+           esta rota alcanca gente sem credencial.
+
+           O PDF ENTROU NA LISTA a pedido ("ler tambem o documento em PDF
+           quando segue a mesma regra AX-XXX.PDF"), e NAO e afrouxamento: e
+           exatamente o `INLINE` do `anexo-tipos.js`, a politica que esta base
+           ja aplica — o Admin abre PDF anexado por ela desde sempre, e o
+           comentario de la o classifica como formato que "o navegador desenha
+           sem executar script". SVG continua fora, pelo mesmo motivo de la.
+
+           LISTA, E NUNCA UM `startsWith('image/')` OU CURINGA: e a largura
+           desta porta que decide o que gente sem credencial recebe inline. */
         const tipoR = String((objR.httpMetadata && objR.httpMetadata.contentType) || '').toLowerCase();
-        const IMAGENS = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-        if (!IMAGENS.includes(tipoR)) return json({ error: 'requisito nao e imagem' }, 415, headers);
+        const NA_PAUTA = ['image/png', 'image/jpeg', 'image/gif', 'image/webp',
+                          'application/pdf'];
+        if (!NA_PAUTA.includes(tipoR)) {
+          return json({ error: 'requisito nao e imagem nem PDF' }, 415, headers);
+        }
         return new Response(objR.body, {
           status: 200,
           headers: {

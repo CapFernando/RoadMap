@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="6562e16bb6">
+<html lang="pt-BR" data-build="a452c96aea">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -242,6 +242,26 @@
     .pd-req-quadro { border:1px solid var(--border); border-radius:8px; background:var(--bg3);
       min-height:60px; max-height:340px; overflow:auto; text-align:center; padding:4px; }
     .pd-req-img { max-width:100%; display:block; margin:0 auto; cursor:zoom-in; }
+    /* O VISOR DE PDF NA PAUTA. Altura fixa e não `auto`: um `iframe` sem altura
+       colapsa para 150px por padrão do navegador, e meia página de requisito é
+       pior que nenhuma. Os 330px cabem dentro dos 340 do quadro, deixando a
+       borda à mostra para a moldura não parecer um buraco na tela. */
+    /* 290px, E NAO 330: o quadro tem 340 de teto e rola. Com a moldura em 330
+       o botao de reserva caia ABAIXO da dobra do quadro — ou seja, ficava
+       escondido atras de uma rolagem exatamente no caso em que ele existe,
+       que e a moldura nao renderizar. Visto na prova: PDF que nao desenha
+       mostra um retangulo cinza e nada mais. Agora os dois cabem juntos. */
+    .pd-req-pdf { width:100%; height:290px; border:0; border-radius:6px;
+      background:#fff; display:block; }
+    .pd-req-alt { display:block; width:100%; margin-top:6px; padding:7px 10px;
+      font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;
+      color:var(--text2); background:var(--bg2); border:1px solid var(--border);
+      border-radius:6px; }
+    .pd-req-alt:hover { color:var(--text); border-color:var(--azul,#3B8FE8); }
+    /* AMPLIADO, O PDF OCUPA A TELA. `height:100%` com o pai em flex basta — o
+       visor traz a própria rolagem, então não há o modo `real` da imagem. */
+    .req-lupa-pdf { width:100%; height:100%; border:0; border-radius:6px;
+      background:#fff; box-shadow:0 12px 48px rgba(0,0,0,.6); cursor:default; }
     .pd-req-msg { font-size:12px; color:var(--text3); padding:18px 12px; text-align:center; }
     /* A lupa fica POR CIMA da sala, e nao no lugar dela: a votacao continua atras. */
     .req-lupa { position:fixed; inset:0; z-index:9000; background:rgba(4,8,18,.92);
@@ -1814,10 +1834,38 @@ function renderDetalhe(m) {
    Aceita o codigo da propria demanda e tambem AX-### solto: o anexo pode ter sido
    subido antes de a demanda receber o codigo, e recusar por isso deixaria a
    imagem escondida sem que ninguem entendesse o motivo.                        */
+/* AS EXTENSOES QUE VIRAM REQUISITO.
+ *
+ * E a mesma lista do `INLINE` do `anexo-tipos.js` — "formatos que o navegador
+ * desenha sem executar script". Nao e coincidencia: requisito e justamente o
+ * anexo que a sala LE na pauta, e ler sem baixar e exatamente o que `INLINE`
+ * define. SVG continua de fora la, e por isso fica de fora aqui.
+ *
+ * ESCRITA POR EXTENSO, e nao perguntada ao modulo em tempo de execucao: o
+ * Worker tem a copia desta mesma regra (`pokerEhRequisito`) e nao importa
+ * arquivo nenhum. Duas listas literais sao comparaveis lado a lado por
+ * invariante; uma literal e uma delegada nao sao. Ha invariante conferindo
+ * que esta lista e o `INLINE` continuam dizendo a mesma coisa.
+ *
+ * O PDF ENTROU DEPOIS, a pedido: "ler tambem o documento em PDF quando segue a
+ * mesma regra AX-XXX.PDF". O que o impedia nao era seguranca — o Admin ja abre
+ * PDF anexado por esta mesma politica — e sim o quadro da pauta, que so sabia
+ * desenhar imagem. Agora ele sabe desenhar os dois (ver `carregaRequisito`).
+ *
+ * A LISTA FICA DENTRO DA FUNCAO, e nao numa constante ao lado: a invariante que
+ * compara esta regra com a do Worker EXTRAI o corpo e o executa isolado, e uma
+ * constante de fora viraria `ReferenceError` ali — o teste morria em vez de
+ * medir. (Aconteceu: foi assim que esta linha voltou para dentro.) */
+
+/** O requisito e PDF? Decide como o quadro desenha e como a lupa amplia. */
+function requisitoEhPdf(a) {
+  return /\.pdf$/i.test(String((a || {}).nome || ''));
+}
+
 function ehRequisito(a, m) {
   if (!a || a.inline || !a.chave) return false;   // inline nao tem como baixar
   const nome = String(a.nome || '');
-  if (!/\.(png|jpe?g|webp|gif)$/i.test(nome)) return false;
+  if (!/\.(png|jpe?g|webp|gif|pdf)$/i.test(nome)) return false;
   const cod = String((m || {}).codigo || '').trim().toUpperCase();
   const doNome = (nome.match(/^\s*(AX-\d+)/i) || [])[1];
   if (!doNome) return false;
@@ -1844,6 +1892,9 @@ function montaRequisito(a, i) {
    inteiro passaria a puxar o mesmo arquivo em loop.                            */
 const _reqCache = new Map();
 let _reqUrl = '';
+/* O QUE ESTA CARREGADO: imagem ou PDF. A lupa precisa saber ANTES de montar,
+   e o nome do anexo nao esta ao alcance dela — ela e chamada do `onclick`. */
+let _reqPdf = false;
 
 /* AMPLIAR SEM SAIR DA SALA.
    A primeira versao abria o print em outra aba, e isso tira a pessoa da votacao:
@@ -1858,6 +1909,32 @@ function ampliaRequisito() {
   const dica = document.createElement('div');
   dica.className = 'req-lupa-dica';
   cx.appendChild(dica);
+
+  /* O PDF AMPLIA NUMA MOLDURA, e sem o alterna-zoom da imagem.
+   *
+   * O visor de PDF do navegador JA TEM zoom, rolagem e paginas proprios — pôr
+   * o nosso por cima daria dois zooms disputando o mesmo toque, e o de baixo
+   * ganharia só às vezes. Aqui a lupa faz uma coisa só: dar a tela inteira ao
+   * visor, que é o que falta num quadro de 300px de altura.
+   *
+   * E O CLIQUE DE FORA CONTINUA FECHANDO — mas o de DENTRO nao pode fechar,
+   * senão virar a página do PDF fecharia a lupa. Por isso o `stopPropagation`
+   * na moldura, que a imagem resolve de outro jeito logo abaixo. */
+  if (_reqPdf) {
+    dica.textContent = 'use o visor do navegador para rolar e ampliar · Esc ou fora para voltar';
+    const fr = document.createElement('iframe');
+    fr.className = 'req-lupa-pdf';
+    fr.title = 'Requisito ampliado';
+    fr.src = _reqUrl;
+    fr.onclick = (e) => e.stopPropagation();
+    cx.appendChild(fr);
+    cx.onclick = fechaRequisito;
+    document.body.appendChild(cx);
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', escFechaRequisito);
+    return;
+  }
+
   const img = document.createElement('img');
   img.src = _reqUrl;
   img.alt = 'Requisito ampliado';
@@ -1897,19 +1974,49 @@ function escFechaRequisito(e) { if (e.key === 'Escape') fechaRequisito(); }
 async function carregaRequisito(a) {
   const quadro = document.getElementById('pd-req-quadro');
   if (!quadro || !a || !a.chave) return;
+  const ehPdf = requisitoEhPdf(a);
   const mostra = (url) => {
     if (!quadro.isConnected) return;   // a pauta virou enquanto a imagem vinha
     quadro.innerHTML = '';
-    const img = document.createElement('img');
-    img.className = 'pd-req-img';
-    img.alt = 'Requisito ' + (a.nome || '');
-    img.src = url;
-    // Clicar amplia SEM SAIR DA SALA: abrir noutra aba tira a pessoa da votacao,
-    // e quem sai perde a mesa, o cronometro e a propria carta.
-    img.title = 'Clique para ver maior';
-    img.onclick = ampliaRequisito;
-    quadro.appendChild(img);
+    if (ehPdf) {
+      /* O PDF DESENHA NUM `iframe`, e nao num `img`.
+       *
+       * `<embed>` e `<object>` dariam o mesmo visor, mas falham em silencio
+       * quando o navegador nao tem visor de PDF: ficam com um retangulo vazio
+       * e nada diz o que houve. O `iframe` permite por o recado de reserva
+       * DENTRO dele para esse caso — e no iPhone, onde o visor em moldura e
+       * historicamente irregular, o recado e o unico caminho que sobra.
+       *
+       * O BLOB VEM COM `application/pdf` do Worker (ver `NA_TELA` la), que e o
+       * que faz o navegador abrir o visor em vez de baixar. */
+      const fr = document.createElement('iframe');
+      fr.className = 'pd-req-pdf';
+      fr.title = 'Requisito ' + (a.nome || '');
+      fr.src = url;
+      quadro.appendChild(fr);
+      /* E UM CAMINHO DE RESERVA SEMPRE A VISTA, abaixo do visor. Quem estiver
+         num navegador sem visor de PDF ve o quadro vazio e nao tem como saber
+         que ha o que ler; este botao e a resposta. Ele AMPLIA, nao abre outra
+         aba — sair da sala custa a mesa, o cronometro e a propria carta. */
+      const alt = document.createElement('button');
+      alt.type = 'button';
+      alt.className = 'pd-req-alt';
+      alt.textContent = '⤢ Ver o PDF em tela cheia';
+      alt.onclick = ampliaRequisito;
+      quadro.appendChild(alt);
+    } else {
+      const img = document.createElement('img');
+      img.className = 'pd-req-img';
+      img.alt = 'Requisito ' + (a.nome || '');
+      img.src = url;
+      // Clicar amplia SEM SAIR DA SALA: abrir noutra aba tira a pessoa da votacao,
+      // e quem sai perde a mesa, o cronometro e a propria carta.
+      img.title = 'Clique para ver maior';
+      img.onclick = ampliaRequisito;
+      quadro.appendChild(img);
+    }
     _reqUrl = url;
+    _reqPdf = ehPdf;
   };
   if (_reqCache.has(a.chave)) { mostra(_reqCache.get(a.chave)); return; }
   const recado = (t) => { if (quadro.isConnected) quadro.innerHTML =

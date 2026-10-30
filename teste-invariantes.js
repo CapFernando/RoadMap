@@ -3118,7 +3118,20 @@ ok((INDEX.match(/temaCasaRaiz\(m\)/g) || []).length >= 2,
     [{ nome: 'AX-218.jpeg', chave: 'a/x' }, { codigo: 'AX-218' }, true, 'jpeg tambem'],
     [{ nome: 'AX-219.png', chave: 'a/x' }, { codigo: 'AX-218' }, false, 'print de OUTRA demanda nao passa'],
     [{ nome: 'print.png', chave: 'a/x' }, { codigo: 'AX-218' }, false,  'print sem codigo no nome nao passa'],
-    [{ nome: 'AX-218.pdf', chave: 'a/x' }, { codigo: 'AX-218' }, false, 'pdf nao e requisito'],
+    /* O PDF PASSOU A SER REQUISITO, a pedido do Fernando: "ler tambem o
+       documento em PDF quando segue a mesma regra AX-XXX.PDF". Nao e
+       afrouxamento de seguranca — e a mesma lista `INLINE` do `anexo-tipos.js`,
+       que esta base ja aplica para abrir anexo no Admin. O que impedia era o
+       quadro da pauta, que so sabia desenhar imagem. */
+    [{ nome: 'AX-218.pdf', chave: 'a/x' }, { codigo: 'AX-218' }, true,  'pdf com a convencao e requisito'],
+    [{ nome: 'AX-218.PDF', chave: 'a/x' }, { codigo: 'AX-218' }, true,  'pdf em caixa alta tambem'],
+    [{ nome: 'AX-219.pdf', chave: 'a/x' }, { codigo: 'AX-218' }, false, 'pdf de OUTRA demanda nao passa'],
+    [{ nome: 'requisito.pdf', chave: 'a/x' }, { codigo: 'AX-218' }, false, 'pdf sem codigo no nome nao passa'],
+    /* O QUE CONTINUA FORA, e e o que importa guardar: SVG executa script, e o
+       `INLINE` do `anexo-tipos.js` o deixa de fora de proposito. */
+    [{ nome: 'AX-218.svg', chave: 'a/x' }, { codigo: 'AX-218' }, false, 'svg NAO e requisito — ele executa script'],
+    [{ nome: 'AX-218.html', chave: 'a/x' }, { codigo: 'AX-218' }, false, 'html idem'],
+    [{ nome: 'AX-218.docx', chave: 'a/x' }, { codigo: 'AX-218' }, false, 'e formato que so baixa nao vira requisito'],
     [{ nome: 'AX-218.png', chave: '' }, { codigo: 'AX-218' }, false,    'anexo sem chave nao tem o que buscar'],
     [{ nome: 'AX-218.png', chave: 'a/x' }, { codigo: '' }, true,        'demanda ainda sem codigo aceita AX-### solto'],
     [null, { codigo: 'AX-218' }, false, 'anexo nulo'],
@@ -3156,8 +3169,19 @@ ok((INDEX.match(/temaCasaRaiz\(m\)/g) || []).length >= 2,
   ok(/pokerEhRequisito\(anexoR, emPautaR\)/.test(rota),
      'e ainda tem de passar na regra do requisito');
   ok(/\^a\\\/\[a-z0-9-\]\+\$/.test(rota), 'a chave e conferida no formato');
-  ok(/IMAGENS\.includes\(tipoR\)/.test(rota) && !/application\/pdf/.test(rota),
-     'so sai imagem: esta rota alcanca gente sem credencial');
+  /* A LARGURA DESTA PORTA e o que decide o que gente SEM CREDENCIAL recebe
+     inline. O PDF entrou junto com as imagens, e a lista continua EXPLICITA —
+     o que nao pode voltar e um curinga. */
+  ok(/NA_PAUTA\.includes\(tipoR\)/.test(rota),
+     'o tipo gravado e conferido contra uma lista, e nao contra um padrao');
+  ok(/'application\/pdf'/.test(rota) && /'image\/png'/.test(rota),
+     'e a lista e imagem + PDF — o mesmo INLINE do anexo-tipos.js');
+  /* SEM COMENTARIO, e este detalhe ja mordeu agora: o proprio comentario da
+     rota EXPLICA o ataque do ".png com SVG dentro", e procurar a palavra no
+     texto cru acusava o codigo correto pela explicacao dele. */
+  const rotaCod = semComentario(rota);
+  ok(!/startsWith\(/.test(rotaCod) && !/svg/i.test(rotaCod),
+     'nunca por prefixo nem com SVG: um .png com SVG dentro rodaria script aqui');
   ok(/nosniff/.test(rota), 'e o navegador nao adivinha o tipo');
 
   /* A PORTEIRA DO FACILITADOR FICA DEPOIS. Quem vota nao conduz: se a rota
@@ -6132,11 +6156,98 @@ sec('Requisito no Planning Poker');
      'o requisito de OUTRA demanda nao entra na pauta desta');
   ok(eh(anexo('print da tela.png'), { codigo: 'AX-218' }) === false,
      'print anexado sem a convencao continua sendo anexo comum');
-  ok(eh(anexo('AX-218.pdf'), { codigo: 'AX-218' }) === false,
-     'pdf nao vira imagem na pauta — o quadro so sabe desenhar imagem');
+  ok(eh(anexo('AX-218.pdf'), { codigo: 'AX-218' }) === true,
+     'pdf com a convencao e requisito — o quadro aprendeu a desenhar os dois');
+  ok(eh(anexo('AX-218.svg'), { codigo: 'AX-218' }) === false &&
+     eh(anexo('AX-218.docx'), { codigo: 'AX-218' }) === false,
+     'mas svg e docx nao: a lista e a do INLINE, que exclui o que executa script');
   ok(eh(anexo('AX-218.PNG', { inline: true }), { codigo: 'AX-218' }) === false &&
      eh({ nome: 'AX-218.PNG' }, { codigo: 'AX-218' }) === false,
      'anexo antigo, sem chave, nao promete uma imagem que nao da para baixar');
+
+  /* ═══ A LISTA DO REQUISITO E A DO `INLINE` ════════════════════════════════
+   *
+   * Requisito e o anexo que a sala LE na pauta, e ler sem baixar e exatamente o
+   * que o `INLINE` do `anexo-tipos.js` define — "formatos que o navegador
+   * desenha sem executar script". As duas listas tem de dizer a mesma coisa.
+   *
+   * Isto nao e preciosismo: o dia em que alguem acrescentar um formato ao
+   * `INLINE` sem lembrar do poker, a pauta deixa de mostrar um requisito que o
+   * Admin abre — e ninguem liga uma coisa a outra. E o inverso e pior: um
+   * formato que SAI do `INLINE` por ser perigoso continuaria entrando aqui. */
+  const ANEX = require('./anexo-tipos.js');
+  const doInline = Object.keys(ANEX.INLINE).sort();
+  const aceitas = doInline.filter(e => eh(anexo('AX-218.' + e), { codigo: 'AX-218' }));
+  ok(aceitas.length === doInline.length,
+     'todo formato que o navegador desenha pode ser requisito',
+     'INLINE = ' + doInline.join(',') + ' · aceitos = ' + aceitas.join(','));
+  const deBaixa = Object.keys(ANEX.BAIXA);
+  const vazaram = deBaixa.filter(e => eh(anexo('AX-218.' + e), { codigo: 'AX-218' }));
+  ok(!vazaram.length,
+     'e nenhum formato que so BAIXA vira requisito',
+     vazaram.length ? 'vazaram: ' + vazaram.join(',') : 'svg, html, docx e os demais fora');
+})();
+
+/* ═══ O QUADRO DESENHA OS DOIS, E DE JEITOS DIFERENTES ══════════════════════
+ *
+ * "Ajuste o poker para ler da mesma forma que le o png; ler tambem o documento
+ *  em PDF quando segue a mesma regra AX-XXX.PDF."
+ *
+ * O que impedia o PDF nunca foi seguranca — o `INLINE` ja o listava e o Admin
+ * ja o abria. Era o quadro da pauta, que so sabia pôr `<img>`. */
+(function () {
+  const carrega = semComentario(corpo(POKER, 'async function carregaRequisito(') || '');
+  ok(/requisitoEhPdf\(a\)/.test(carrega),
+     'o quadro pergunta se o requisito e PDF antes de desenhar');
+  ok(/createElement\('iframe'\)/.test(carrega) && /createElement\('img'\)/.test(carrega),
+     'e tem os dois caminhos: moldura para o PDF, imagem para o print');
+  /* `<img src=pdf>` NAO DESENHA NADA. Se o ramo do PDF cair no `img`, o quadro
+     fica em branco e nada diz que havia o que ler — pior que nao mostrar. */
+  /* A CONDICAO, E DEPOIS A FORMA DO RAMO. Medir so a forma passava liso com
+     `if (ehPdf)` trocado por `if (false)`: o ramo continuava escrito, intacto e
+     inalcancavel, e o PDF caia no `img` — quadro branco e nada dizendo por que.
+     E a terceira vez nesta sessao que medir o corpo sem medir a guarda engana. */
+  const iIf = carrega.indexOf('if (ehPdf) {');
+  ok(iIf >= 0, 'o desenho do PDF e CONDICIONADO a ele ser PDF',
+     'ramo inalcancavel desenha um quadro vazio sem dizer por que');
+  const bloco = iIf < 0 ? '' : carrega.slice(iIf, carrega.indexOf('} else {', iIf));
+  ok(bloco && /iframe/.test(bloco) && !/createElement\('img'\)/.test(bloco),
+     'o ramo do PDF nao cai num `img`, que desenharia um quadro vazio');
+  /* O CAMINHO DE RESERVA. Navegador sem visor de PDF mostra moldura vazia, e
+     no iPhone isso e comum — sem um botao a vista, a pessoa nao tem como saber
+     que havia requisito. */
+  ok(/pd-req-alt/.test(carrega) && /ampliaRequisito/.test(carrega),
+     'e ha um caminho de reserva a vista quando a moldura nao renderiza');
+  /* ALTURA EXPLICITA, E QUE DEIXA O BOTAO A VISTA.
+   *
+   * Duas coisas numa so. `iframe` sem altura colapsa em 150px — meia pagina de
+   * requisito e pior que nenhuma. E a altura nao pode encher o quadro: ele tem
+   * teto de 340px e ROLA, entao uma moldura de 330 empurrava o botao de reserva
+   * para baixo da dobra — escondido atras de uma rolagem exatamente no caso em
+   * que ele existe, que e a moldura nao renderizar. Visto na prova. */
+  const mAlt = POKER.match(/\.pd-req-pdf \{[^}]*height:(\d+)px/);
+  const mTeto = POKER.match(/\.pd-req-quadro \{[^}]*max-height:(\d+)px/);
+  ok(!!mAlt, 'a moldura tem altura explicita — `iframe` sem altura colapsa em 150px');
+  ok(!!mAlt && !!mTeto && (+mAlt[1]) + 40 <= (+mTeto[1]),
+     'e ela deixa o botao de reserva caber no quadro, sem rolagem',
+     'moldura ' + (mAlt ? mAlt[1] : '?') + 'px dentro de ' + (mTeto ? mTeto[1] : '?') + 'px');
+
+  const lupa = semComentario(corpo(POKER, 'function ampliaRequisito(') || '');
+  ok(/_reqPdf/.test(lupa) && /req-lupa-pdf/.test(lupa),
+     'a lupa tambem conhece os dois');
+  /* O VISOR DO NAVEGADOR JA TEM ZOOM. Pôr o nosso por cima daria dois zooms
+     disputando o mesmo toque — e o `real` e justamente o nosso. */
+  const iLupaPdf = lupa.indexOf('_reqPdf');
+  const blocoLupa = iLupaPdf < 0 ? '' : lupa.slice(iLupaPdf, lupa.indexOf('return;', iLupaPdf));
+  ok(blocoLupa && !/classList\.toggle\('real'\)/.test(blocoLupa),
+     'e o PDF ampliado nao ganha o alterna-zoom da imagem');
+  /* VIRAR PAGINA NAO PODE FECHAR A LUPA. O clique de fora fecha; o de dentro,
+     nao — senao o primeiro toque no visor tira a pessoa do requisito. */
+  ok(/fr\.onclick = \(e\) => e\.stopPropagation\(\)/.test(blocoLupa),
+     'clicar DENTRO do PDF nao fecha a lupa — so o clique de fora');
+  // E nenhum dos dois caminhos abre outra aba: sair da sala custa a votacao.
+  ok(!/window\.open/.test(lupa) && !/window\.open/.test(carrega),
+     'nem o PDF tira ninguem da sala');
 })();
 
 /* AMPLIAR NAO PODE TIRAR NINGUEM DA SALA. Abrir noutra aba faz a pessoa perder a
