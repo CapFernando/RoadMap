@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="52e0fc3819">
+<html lang="pt-BR" data-build="6cac13931f">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -879,6 +879,11 @@
     .bl-sprint { font-size:10px; font-weight:700; color:var(--green-tx,#8FE0A8);
       background:var(--green-bg,#0E3A1E); border:1px solid #2E7D4F;
       border-radius:4px; padding:1px 6px; white-space:nowrap; cursor:help; }
+    /* A COR DA SPRINT (`SPRINTPO.corDaSprint`): o chip e a faixa do card. A
+       atrasada mantém o texto vermelho — a cor só marca a borda. */
+    .sp-cor { border-color: var(--sp-cor) !important; }
+    .sp-cor:not(.sp-atrasada) { color: var(--sp-cor) !important; }
+    .gantt-card.gcard-comsprint { box-shadow: inset 4px 0 0 var(--sp-cor); }
     .bl-sprint.sp-fora { color:var(--text3); background:transparent;
       border:1px dashed var(--border); }
     .bl-sprint.sp-atrasada { color:var(--red-tx,#F9A0A0);
@@ -1176,7 +1181,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=57aff8a10e"></script>
+<script src="sprint.js?v=b4b6d4196d"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -1297,7 +1302,11 @@
       <option value="baixa">Baixa</option>
     </select>
     <div class="filter-divider"></div>
+    <!-- A SPRINT DO PO (`sprint_po`), com a cor de cada uma. O campo de texto ao
+         lado continua sendo a SEMANA deduzida das datas. -->
     <label>Sprint</label>
+    <select id="f-sprint-po" onchange="applyFilters()"></select>
+    <label>Semana</label>
     <input type="text" id="f-sprint" placeholder="ex: S1" oninput="applyFilters()" style="max-width:80px" />
     <div class="filter-divider"></div>
     <!-- Status fica só nos chips acima: um select aqui filtrava o mesmo campo e,
@@ -2579,6 +2588,7 @@ function applyFilters() {
   filters.frente   = document.getElementById('f-frente').value;
   filters.prio     = document.getElementById('f-prio').value;
   filters.sprint   = document.getElementById('f-sprint').value.trim().toLowerCase();
+  filters.sprintPo = (document.getElementById('f-sprint-po') || {}).value || '';
   renderGantt();
 }
 
@@ -2602,6 +2612,9 @@ function matchesFilters(m) {
      `|| m.sprint` cobre a demanda que perdeu as datas: ali o texto guardado e a
      unica resposta que existe. */
   if (filters.sprint && !(sprintDaDemanda(m) || m.sprint || '').toLowerCase().includes(filters.sprint)) return false;
+  if (filters.sprintPo && window.SPRINTPO) {
+    if (filters.sprintPo === '__fora__' ? !SPRINTPO.foraDaSprint(m) : !SPRINTPO.naSprint(m, filters.sprintPo)) return false;
+  }
   // Pausado e estado paralelo a etapa, nao um valor dela — daí o caso proprio.
   if (filters.indicator === '__pausado__') { if (!estaPausado(m)) return false; }
   // Herdada tambem e paralelo: a demanda continua em 'em andamento' ou
@@ -2619,7 +2632,8 @@ function matchesFilters(m) {
 }
 
 function limparFiltrosGantt() {
-  filters.tipo = ''; filters.tema = ''; filters.dev = ''; filters.prio = ''; filters.sprint = '';
+  filters.tipo = ''; filters.tema = ''; filters.dev = ''; filters.prio = ''; filters.sprint = ''; filters.sprintPo = '';
+  if (document.getElementById('f-sprint-po')) document.getElementById('f-sprint-po').value = '';
   filters.indicator = ''; filters.frente = '';
   document.getElementById('f-tipo').value   = '';
   document.getElementById('f-tema').value   = '';
@@ -2658,7 +2672,7 @@ function atualizaContagemGantt() {
     }
   }
 
-  const ativos = [filters.tipo, filters.tema, filters.prio, filters.sprint, filters.indicator].filter(Boolean).length
+  const ativos = [filters.tipo, filters.tema, filters.prio, filters.sprint, filters.sprintPo, filters.indicator].filter(Boolean).length
                + (filters.dev && filters.dev !== '__all__' ? 1 : 0);
   const btn = document.getElementById('f-limpar');
   if (btn) {
@@ -2753,6 +2767,23 @@ function renderFilters() {
   const ft = document.getElementById('f-tema');
   const fv = ft ? ft.value : '';
   catalogoLigaFiltro(ft, state.temas || [], fv, 'Todos os sistemas');
+
+  // sprint do PO: as que tem demanda, mais a atual e as proximas, com a cor
+  const fsp = document.getElementById('f-sprint-po');
+  if (fsp && window.SPRINTPO) {
+    const v = fsp.value;
+    const vivas = (state.melhorias || []).filter(m => m && !m.oculto && !m.mesclado_em);
+    const chave = r => r.slice(6, 10) + r.slice(3, 5) + r.slice(1, 2);
+    const set = new Set(vivas.map(m => SPRINTPO.doPO(m)).filter(Boolean));
+    SPRINTPO.proximasSprints(new Date().toISOString().slice(0, 10), 5, state.feriados || [])
+      .forEach(x => set.add(x.rotulo));
+    fsp.innerHTML = '<option value="">Todas</option>' +
+      '<option value="__fora__">Fora da sprint (' + vivas.filter(m => SPRINTPO.foraDaSprint(m)).length + ')</option>' +
+      [...set].sort((a, b) => chave(a).localeCompare(chave(b))).map(r =>
+        '<option value="' + r + '" style="color:' + SPRINTPO.corDaSprint(r) + '">● ' + SPRINTPO.rotuloCurto(r) +
+        ' (' + vivas.filter(m => SPRINTPO.naSprint(m, r)).length + ')</option>').join('');
+    fsp.value = v;
+  }
 
   // dev
   const fd = document.getElementById('f-dev');
@@ -4198,8 +4229,9 @@ function renderGantt() {
       const foiDireto = window.ABERTURA ? ABERTURA.foiDireto(m) : false;
       const viaApi = foiDireto && ABERTURA.viaEndpoint(m);
       const viaPainel = foiDireto && ABERTURA.viaPainelDev(m);
-      html += `<div class="gantt-card gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}${ehGrupo ? ' gcard-agrupador' : ''}${paiNaTela ? ' gcard-parte' : ''}${viaApi ? ' gcard-api' : ''}${viaPainel ? ' gcard-painel' : ''}"
-        style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px"
+      const _spEst = window.SPRINTPO ? SPRINTPO.estiloSprint(m) : '';
+      html += `<div class="gantt-card${_spEst ? ' gcard-comsprint' : ''} gcard-${sp}${pausada ? ' gcard-pausada' : ''}${herdada ? ' gcard-herdada' : ''}${ehGrupo ? ' gcard-agrupador' : ''}${paiNaTela ? ' gcard-parte' : ''}${viaApi ? ' gcard-api' : ''}${viaPainel ? ' gcard-painel' : ''}"
+        style="left:${left}px;top:${top}px;width:${width}px;height:${cardH}px;${_spEst}"
         data-id="${m.id}"
         draggable="true"
         ondragstart="onCardDragStart(event,'${m.id}')"

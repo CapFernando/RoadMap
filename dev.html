@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="da1b5ea46a">
+<html lang="pt-BR" data-build="50cca83b73">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -550,6 +550,9 @@
        coluna estreita os dois chips não cabem na mesma linha, e um chip cortado
        pela metade é pior que um chip na linha de baixo. */
     .kcard-rodape { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+    /* A COR DA SPRINT (`SPRINTPO.corDaSprint`), a mesma do Admin e do Gantt. */
+    .sp-cor { border-color: var(--sp-cor) !important; }
+    .sp-cor:not(.sp-atrasada) { color: var(--sp-cor) !important; }
     .kcard-sprint { font-size:10px; font-weight:700; color:var(--green-tx,#8FE0A8);
       background:var(--green-bg,#0E3A1E); border:1px solid #2E7D4F;
       border-radius:5px; padding:1px 6px; cursor:help; }
@@ -740,7 +743,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=57aff8a10e"></script>
+<script src="sprint.js?v=b4b6d4196d"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>

@@ -353,6 +353,30 @@
     });
   }
 
+  /* ═══ A COR DA SPRINT ══════════════════════════════════════════════════════
+   *
+   * "Em admin e gantt preciso ter uma diferenciação de itens por sprint."
+   *
+   * SEIS CORES EM RODÍZIO PELA ORDEM DO CALENDÁRIO, e não uma por S1…S5: com
+   * cinco, a S5 de um mês e a S1 do seguinte podiam sair iguais lado a lado; com
+   * seis e o índice corrido (ano, mês, semana), duas sprints vizinhas nunca
+   * repetem — e o horizonte que o PO olha (a atual e as cinco seguintes) cabe
+   * inteiro sem repetir.                                                     */
+  var CORES_SPRINT = ['#22C55E', '#3B82F6', '#E8A33D', '#A855F7', '#EC4899', '#14B8A6'];
+
+  function corDaSprint(rotulo) {
+    var r = txt(rotulo);
+    if (!rotuloValido(r)) return '';
+    var i = ((+r.slice(6, 10)) * 12 + (+r.slice(3, 5))) * 5 + (+r.slice(1, 2));
+    return CORES_SPRINT[i % CORES_SPRINT.length];
+  }
+
+  /** O `style` que pinta o card com a cor da sprint dele (`--sp-cor`). */
+  function estiloSprint(m) {
+    var c = corDaSprint(doPO(m));
+    return c ? '--sp-cor:' + c + ';' : '';
+  }
+
   /** O CHIP DA SPRINT, para o card do quadro.
    *
    *  MORA AQUI porque as duas telas o desenham — o quadro do PM/PO e o painel do
@@ -384,11 +408,11 @@
     var curto = rotuloCurto(s);
     var n = pulos(m);
     if (!n) {
-      return '<span class="' + cls + '" title="Sprint ' + esc(s) +
+      return '<span class="' + cls + ' sp-cor" style="' + estiloSprint(m) + '" title="Sprint ' + esc(s) +
              (txt((m || {}).sprint_po_por) ? ', repassada por ' + esc(m.sprint_po_por) : '') +
              '.">🏃 ' + esc(curto) + '</span>';
     }
-    return '<span class="' + cls + ' sp-atrasada" title="Sprint ' + esc(s) +
+    return '<span class="' + cls + ' sp-atrasada sp-cor" style="' + estiloSprint(m) + '" title="Sprint ' + esc(s) +
            ' — ENTROU ATRASADA: veio de ' + esc(sprintDeOrigem(m)) + ' e já rolou ' +
            n + (n === 1 ? ' sprint' : ' sprints') + '.">🏃 ' + esc(curto) +
            ' · atrasada ' + n + '×</span>';
@@ -751,6 +775,18 @@
     var s = doPO(m);
     if (!s) return false;
     if (naVitrine(m)) return false;
+    /* COM DEV, NUNCA SE ESCONDE (30/10/2026). "AX-1151 não está visível para
+       Marina. Sprint eu preciso enxergar as atuais e as que vão entrar na
+       S1-11, não mude o comportamento." A demanda dela estava em Planejado na
+       S1-11, ainda montando, com prazo para hoje — e sumiu do painel de quem
+       tinha de entregá-la. Esconder a MONTAGEM vale para o que não tem dono;
+       o trabalho já alocado a alguém aparece para essa pessoa, com o chip da
+       sprint dizendo para qual semana vai. Iniciar continua sendo o que leva
+       o sem-dono ao backlog do time (`naPoolDoTime`).
+       É TRANSIÇÃO, COM DATA DE FIM: "após o fechamento da S1-11 essa regra de
+       visualização vem à tona". Fechada a S1-11, a montagem volta a esconder
+       também o que tem dev — sem ninguém precisar lembrar de desligar nada. */
+    if (txt((m || {}).dev) && !estaFechada(dados, VISAO_PLENA_ATE)) return false;
     return situacaoDaSprint(dados, s) === 'montando';
   }
 
@@ -765,6 +801,8 @@
    * o PO alocou em Planejado continua escondido até ele iniciar, que é o ponto
    * de separar montar de iniciar.                                           */
   var ETAPAS_VITRINE = ['backlog', 'levantar_req', 'planning'];
+  /** Até esta sprint FECHAR, o que tem dev não se esconde na montagem. */
+  var VISAO_PLENA_ATE = 'S1-11-2026';
 
   function naVitrine(m, etapa) {
     if (!doPO(m)) return false;
@@ -1433,6 +1471,9 @@
 
   var api = {
     TRILHAS: TRILHAS,
+    CORES_SPRINT: CORES_SPRINT,
+    corDaSprint: corDaSprint,
+    estiloSprint: estiloSprint,
     naVitrine: naVitrine,
     dispensaDev: dispensaDev,
     pontosDe: pontosDe,

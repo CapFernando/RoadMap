@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="aafdab8f8c">
+<html lang="pt-BR" data-build="3ac1f436a4">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -660,6 +660,11 @@
       color:#1A1206; background:var(--amber-tx,#FFC470); border:none; }
     .fb-sprint-btn:hover { filter:brightness(1.12); }
     .lote-vazio { padding:22px; text-align:center; color:var(--text3); font-size:12.5px; }
+    /* A COR DA SPRINT (`SPRINTPO.corDaSprint`): o chip e a faixa do card. A
+       atrasada mantém o texto vermelho — a cor só marca a borda. */
+    .sp-cor { border-color: var(--sp-cor) !important; }
+    .sp-cor:not(.sp-atrasada) { color: var(--sp-cor) !important; }
+    .kb-card.kb-comsprint, .card.card-comsprint { box-shadow: inset 4px 0 0 var(--sp-cor); }
     .kb-sprint-abre { cursor:pointer; display:inline-flex; }
     .kb-sprint-abre:hover .kb-sprint { border-style:solid; filter:brightness(1.25); }
     .cod-tag { font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
@@ -1572,7 +1577,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=57aff8a10e"></script>
+<script src="sprint.js?v=b4b6d4196d"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -4260,6 +4265,7 @@ let _filtroPrazo  = null; // null|'vencidas'|'semana'|'mes'|'sem_data'
 let _filtroDev    = null; // null|nome do dev|SEM_DEV
 let _filtroTipo   = null; // null|'sustentacao'|'evolucao'|SEM_TIPO
 let _filtroProd   = null; // null|'falta_subir'|'no_ar'
+let _filtroSprint = null; // null|'__fora__'|rotulo da sprint do PO
 let _buscaMel     = '';   // texto livre: título, descrição, dev, solicitante
 
 // Demanda "em aberto" (relevante para prazos): exclui concluída/negada
@@ -4908,12 +4914,13 @@ function setFiltroDev(v)    { _filtroDev    = vazioNulo(v); renderMelToolbar(); 
 function setFiltroPrazo(v)  { _filtroPrazo  = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroTipo(v)   { _filtroTipo   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroProd(v)   { _filtroProd   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
+function setFiltroSprint(v) { _filtroSprint = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setBuscaMel(v) {
   _buscaMel = v || '';
   comFocoPreservado('mel-toolbar', () => { renderMelToolbar(); renderMelhorias(); });
 }
 function limparFiltrosMel() {
-  _filtroStatus = _filtroTema = _filtroDev = _filtroPrazo = _filtroTipo = _filtroProd = null;
+  _filtroStatus = _filtroTema = _filtroDev = _filtroPrazo = _filtroTipo = _filtroSprint = _filtroProd = null;
   _buscaMel = '';
   renderStatusFilters(); renderMelToolbar(); renderMelhorias();
 }
@@ -4922,13 +4929,14 @@ function renderMelToolbar() {
   const el = document.getElementById('mel-toolbar');
   if (!el) return;
   const ativos = [_filtroStatus, _filtroTema, _filtroDev, _filtroPrazo, _filtroTipo,
-                  _filtroProd, _buscaMel].filter(Boolean).length;
+                  _filtroProd, _filtroSprint, _buscaMel].filter(Boolean).length;
   el.innerHTML =
     fbGroup('Tipo',  _filtroTipo,  opcoesTipo(),  'setFiltroTipo') +
     fbGroupHTML('Tema', temaOpcoesHTML(_filtroTema), 'setFiltroTema') +
     fbGroup('Dev',   _filtroDev,   opcoesDev(),   'setFiltroDev') +
     fbGroup('Prazo', _filtroPrazo, opcoesPrazo(), 'setFiltroPrazo') +
     fbGroup('Produção', _filtroProd, opcoesProducao(), 'setFiltroProd') +
+    fbGroup('Sprint', _filtroSprint, opcoesSprintKb(), 'setFiltroSprint') +
     fbBusca('mel-busca', _buscaMel, 'setBuscaMel') +
     botaoLimpar('limparFiltrosMel', ativos) +
     `<span class="fb-count" id="mel-contagem"></span>`;
@@ -5021,7 +5029,7 @@ function renderMelhorias() {
        E o mesmo defeito que a busca teve — "filtro invisivel ganhando da busca",
        o relato que virou o commit dfdaee4. La foi o periodo derrubando o termo
        digitado; aqui seria o padrao derrubando o filtro escolhido. */
-    if (!_filtroStatus && !_filtroPrazo && !_filtroProd && !_buscaMel &&
+    if (!_filtroStatus && !_filtroPrazo && !_filtroProd && !_filtroSprint && !_buscaMel &&
         HIDDEN_BY_DEFAULT.includes(sk)) return false;
     return (!_filtroStatus || sk === _filtroStatus) &&
            (!_filtroTema   || catalogoCasa(m.tema_id, _filtroTema, state.temas)) &&
@@ -5029,6 +5037,7 @@ function renderMelhorias() {
            matchDev(m, _filtroDev) &&
            matchTipo(m, _filtroTipo) &&
            matchProducao(m, _filtroProd) &&
+           matchSprintKb(m, _filtroSprint) &&
            matchBusca(m, _buscaMel);
   });
   atualizaContagemMel(lista.length);
@@ -5129,10 +5138,12 @@ function renderMelhorias() {
       const pausaBadge = estaPausado(m)
         ? `<span class="kb-pausa" title="${esc(m.pausa_motivo || '')}">⏸ Pausada · ${diasPausadoAgora(m)}d</span>`
         : '';
-      return `<div class="card${estaPausado(m) ? ' card-pausada' : ''}">
+      // A SPRINT NA LISTA: o chip colorido e a faixa do card, como no Kanban.
+      const _spEstL = SPRINTPO.estiloSprint(m);
+      return `<div class="card${estaPausado(m) ? ' card-pausada' : ''}${_spEstL ? ' card-comsprint' : ''}" style="${_spEstL}">
         <div class="card-info">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <div class="card-nome">${esc(m.titulo)}</div>${badge}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}${pesoBadge}${prodBadge}
+            <div class="card-nome">${esc(m.titulo)}</div>${badge}${SPRINTPO.doPO(m) ? SPRINTPO.badge(m, 'kb-sprint') : ''}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}${pesoBadge}${prodBadge}
           </div>
           ${sub ? `<div class="card-sub">${sub}</div>` : ''}
           ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${esc(m.descricao.substring(0,120))}${m.descricao.length>120?'…':''}</div>` : ''}
@@ -5221,6 +5232,9 @@ let _kbDev   = null;
 let _kbPrazo = null;
 let _kbTipo  = null;
 let _kbDados = null;
+/* O FILTRO DA SPRINT: '' todas, '__fora__' fora de sprint, ou o rotulo. Le
+   `sprint_po` (a escolha do PO), e nao a semana deduzida das datas. */
+let _kbSprint = null;
 let _kbBi    = null;
 let _kbProd  = null;       // null|'falta_subir'|'no_ar' — ver PRODUCAO_BUCKETS
 /* ─── O FILTRO DE PRODUCAO DE CADA COLUNA ─────────────────────────────────
@@ -5273,6 +5287,23 @@ function setKbDev(v)   { _kbDev   = vazioNulo(v); renderKanban(); }
 function setKbPrazo(v) { _kbPrazo = vazioNulo(v); renderKanban(); }
 function setKbTipo(v)  { _kbTipo  = vazioNulo(v); renderKanban(); }
 function setKbDados(v) { _kbDados = vazioNulo(v); renderKanban(); }
+function setKbSprint(v) { _kbSprint = vazioNulo(v); renderKanban(); }
+function matchSprintKb(m, f) {
+  if (!f) return true;
+  if (f === '__fora__') return SPRINTPO.foraDaSprint(m);
+  return SPRINTPO.naSprint(m, f);
+}
+/** As sprints que têm demanda, mais a atual e as próximas, em ordem. */
+function opcoesSprintKb() {
+  const vivas = state.melhorias.filter(m => !ehMesclada(m));
+  const chave = r => r.slice(6, 10) + r.slice(3, 5) + r.slice(1, 2);
+  const set = new Set(vivas.map(m => SPRINTPO.doPO(m)).filter(Boolean));
+  SPRINTPO.proximasSprints(PRAZO.hojeISO(), 5, state.feriados || []).forEach(x => set.add(x.rotulo));
+  return [{ key: '', label: 'Todas', n: vivas.length },
+          { key: '__fora__', label: 'Fora da sprint', n: vivas.filter(m => SPRINTPO.foraDaSprint(m)).length }]
+    .concat([...set].sort((a, b) => chave(a).localeCompare(chave(b))).map(r => ({
+      key: r, label: '● ' + SPRINTPO.rotuloCurto(r), n: vivas.filter(m => SPRINTPO.naSprint(m, r)).length })));
+}
 function setKbBi(v)    { _kbBi    = vazioNulo(v); renderKanban(); }
 function setKbProd(v)  { _kbProd  = vazioNulo(v); renderKanban(); }
 function setBuscaKb(v) {
@@ -5420,6 +5451,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
     fbGroup('Prazo',   _kbPrazo,   opcoesPrazo(),   'setKbPrazo') +
     fbGroup('Concluídas', _kbPeriodo, opcoesPeriodo(), 'setKbPeriodo') +
     fbGroup('Produção', _kbProd, opcoesProducao(), 'setKbProd') +
+    fbGroup('Sprint', _kbSprint, opcoesSprintKb(), 'setKbSprint') +
     fbGroup('Dados/BI', _kbDados, opcoesDados(), 'setKbDados') +
     fbGroup('BI impactado', _kbBi, opcoesBi(), 'setKbBi') +
     fbBusca('kb-busca', _kbBusca, 'setBuscaKb') +
@@ -5561,6 +5593,7 @@ function renderKanban() {
     matchPrazo(m, _kbPrazo) &&
     matchTipo(m, _kbTipo) &&
     matchDados(m, _kbDados) &&
+    matchSprintKb(m, _kbSprint) &&
     matchBi(m, _kbBi) &&
     matchProducao(m, _kbProd) &&
     /* O FILTRO DE PRODUCAO VENCE O PERIODO, e sem isto ele nasceria quebrado.
@@ -5743,8 +5776,9 @@ function renderKanban() {
       const diasAtraso = window.PRAZO
         ? (PRAZO.diasDeAtraso(m, statusKey(m), PRAZO.hojeISO()) || 0) : 0;
       const naoPub = !!(window.NAOPUBLICADA && NAOPUBLICADA.tem(m.id));
+      const _spEst = SPRINTPO.estiloSprint(m);
       return `<div class="kb-card${atrasada ? ' kb-atrasada' : ''} kb-prazo-${nivelPrazo}${
-          naoPub ? ' kb-naopub' : ''}" draggable="true"
+          naoPub ? ' kb-naopub' : ''}${_spEst ? ' kb-comsprint' : ''}" style="${_spEst}" draggable="true"
         ondragstart="kbDragStart(event,'${m.id}')" ondragend="kbDragEnd(event)"
         onmousedown="kbCardMouseDown(event,'${m.id}')"
         title="${naoPub ? 'Alteração NÃO publicada — só existe nesta tela · ' : ''}${atrasada ? 'Entrega vencida · ' : ''}Arraste para mover · duplo clique para editar">

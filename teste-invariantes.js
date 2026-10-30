@@ -8684,8 +8684,11 @@ ok(!/const pts = \(Number\(m\.poker_pontos\) \|\| 0\) \/ devs\.length;[\s\S]{0,2
        procurar texto nele. (Sem crases: ver a nota logo acima. Eu acabei de
        errar isto escrevendo este comentario.) */
     const matchDados = () => true, matchBi = () => true;
+    /* matchSprintKb (o filtro da sprint) entrou do mesmo jeito, e e por isso
+       que tem stub aqui. Sem crases, pela razao das notas acima. */
+    const matchSprintKb = () => true;
     const _kbTema = null, _kbDev = null, _kbPrazo = null, _kbTipo = null, _kbProd = null;
-    const _kbDados = null, _kbBi = null;
+    const _kbDados = null, _kbBi = null, _kbSprint = null;
     ${trecho}
     return { base, mescladasAchadas };
   `)({ melhorias }, busca, periodo);
@@ -12483,6 +12486,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       'matchDev', 'matchTipo', 'matchBusca', 'state',
       '_filtroStatus', '_filtroTema', '_filtroDev', '_filtroPrazo', '_filtroTipo',
       '_filtroProd', '_buscaMel',
+      // o filtro da sprint entrou na cadeia da lista depois deste bloco
+      'matchSprintKb', '_filtroSprint',
       corpo(ADMIN, 'function matchProducao(') + '\n' +
       cadeia.slice(i, j + 3) + '\nreturn lista;');
 
@@ -12496,7 +12501,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const roda = (prod) => filtro(
       () => false, (m) => ETP.efetiva(m), (m) => ETP.gravada(m), () => true,
       () => true, () => true, () => true, () => true, { melhorias: base, temas: [] },
-      null, null, null, null, null, prod, '').map(m => m.id);
+      null, null, null, null, null, prod, '', () => true, null).map(m => m.id);
 
     ok(JSON.stringify(roda(null)) === JSON.stringify(['d']),
        'sem filtro, as concluidas seguem escondidas \u2014 a higiene da lista nao muda',
@@ -12531,6 +12536,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       // EXECUTA o trecho real, a dependencia nova estourou aqui — que e o aviso
       // funcionando, e nao um teste velho atrapalhando.
       'matchDados', '_kbDados', 'matchBi', '_kbBi',
+      // matchSprintKb/_kbSprint (filtro da sprint) entraram do mesmo jeito.
+      'matchSprintKb', '_kbSprint',
       corpo(ADMIN, 'function matchProducao(') + '\n' + rk.slice(iCad, jCad) +
       '\nreturn base;');
     const baseKb = [
@@ -12558,7 +12565,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const rodaKb = (prod, busca) => cadeiaKb(
       { melhorias: baseKb }, () => false, () => true, () => true, () => true, () => true,
       periodoKb, (m) => ETP.gravada(m), null, null, null, null, prod, busca || '', 'mes_atual',
-      () => true, null, () => true, null
+      () => true, null, () => true, null, () => true, null
     ).map(m => m.codigo);
 
     ok(JSON.stringify(rodaKb(null)) === JSON.stringify(['AX-191', 'AX-254', 'AX-081']),
@@ -24303,9 +24310,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ] };
     ok(SP.situacaoDaSprint(dCiclo, SA) === 'montando',
        'sprint sem registro esta MONTANDO — e e assim que toda a base esta hoje');
-    ok(SP.escondidaDoTime(dCiclo, dCiclo.melhorias[0]) &&
+    /* MUDOU EM 30/10/2026, por decisao do Fernando ("AX-1151 nao esta visivel
+       para Marina ... preciso enxergar as atuais e as que vao entrar na S1-11"):
+       com dev, a demanda aparece para a pessoa mesmo com a sprint montando. O
+       que continua escondido e o SEM DONO alocado em Planejado. */
+    ok(!SP.escondidaDoTime(dCiclo, dCiclo.melhorias[0]) &&
        SP.escondidaDoTime(dCiclo, dCiclo.melhorias[1]),
-       'e o que esta nela nao aparece para o time');
+       'na montagem (ate fechar a S1-11), o que tem dev aparece; o sem dono em Planejado nao');
     /* FORA DE SPRINT NUNCA SE ESCONDE: Sustentacao comeca sem sprint, e o
        backlog do dev e o lugar dela. */
     ok(!SP.escondidaDoTime(dCiclo, dCiclo.melhorias[2]),
@@ -24461,9 +24472,28 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* O WORKER TEM A MESMA REGUA. Ele nao importa o modulo; a copia de la
        aceitando `\\d{2}` deixaria o rotulo impossivel entrar na base por uma
        porta e quebrar as telas pela outra. */
-    ok(/\^S\[1-5\]-\(0\[1-9\]\|1\[0-2\]\)-\\d\{4\}\$/.test(W),
-       'e o Worker confere o mes e o indice pela MESMA regua',
-       (W.match(/\^S[^/]*\$/) || ['?'])[0]);
+    /* NENHUMA REGUA FROUXA EM LUGAR NENHUM, e a forma negativa e o que importa.
+     *
+     * A versao antiga era "existe a regua apertada em algum ponto do Worker" — e
+     * isso ENVELHECEU MAL: hoje ha DOIS lugares que validam rotulo de sprint, e
+     * sabotar um deles deixava o outro casando com o regex, dando "passou liso".
+     * Afirmar que a frouxa NAO EXISTE pega qualquer um dos lugares, e os
+     * proximos tambem.
+     *
+     * A frouxa (`\d{2}` no mes) aceita `S9-99-9999`, que entra na base e derruba
+     * toda tela que monta a lista de sprints com `RangeError`. */
+    /* SEM COMENTARIO, pela terceira vez nesta sessao: o comentario que EXPLICA
+       a regua antiga contem a regua antiga, e contar o texto cru acusa o codigo
+       correto pela explicacao dele. */
+    const frouxas = (f) => (semComentario(f).match(/\^S\\d-\\d\{2\}-/g) || []).length;
+    const nSp = frouxas(lerTela('sprint.js'));
+    ok(!frouxas(W) && !nSp,
+       'nao sobrou nenhuma regua frouxa de rotulo de sprint',
+       'worker=' + frouxas(W) + ' sprint.js=' + nSp);
+    const apertadas = (W.match(/\^S\[1-5\]-\(0\[1-9\]\|1\[0-2\]\)-\\d\{4\}\$/g) || []).length;
+    ok(apertadas >= 1,
+       'e o Worker confere o mes e o indice pela MESMA regua, em ' + apertadas +
+       (apertadas === 1 ? ' lugar' : ' lugares'));
     /* A FAIXA E A DOS DIAS UTEIS, a mesma do placar: duas definicoes fariam o
        relatorio contar uma entrega de sabado que o placar nao conta. */
     const fx = SP.faixaDaSprint('S2-11-2026', FER);
@@ -24616,8 +24646,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const g = d3.melhorias[6];
     ok(SP.naVitrine(g) && !SP.escondidaDoTime(d3, g),
        'com sprint marcada e ainda em backlog, o time ve — mesmo com a sprint montando');
-    ok(SP.escondidaDoTime(d3, d3.melhorias[3]),
-       'mas o que o PO alocou em Planejado continua escondido ate iniciar');
+    ok(SP.escondidaDoTime(d3, { sprint_po: S1, dev: '', status_planejamento: 'planejado' }),
+       'mas o sem dono que o PO alocou em Planejado continua escondido ate iniciar');
+    ok(!SP.escondidaDoTime(d3, d3.melhorias[3]),
+       'e o que tem dev aparece para ele mesmo com a sprint montando (o caso da AX-1151)');
+    const dPos = { sprints: [{ rotulo: 'S1-11-2026', iniciada_em: '2026-11-02', em: '2026-11-06' }],
+                   melhorias: [] };
+    ok(SP.escondidaDoTime(dPos, { sprint_po: 'S2-11-2026', dev: 'Ana', status_planejamento: 'planejado' }),
+       'fechada a S1-11, a montagem volta a esconder tambem o que tem dev — a transicao tem fim');
     ok(!SP.naVitrine(d3.melhorias[1]),
        'e backlog sem sprint nao e vitrine: e o backlog de sempre');
     const bk = SP.backlogDaSprint(d3, S1);
@@ -24676,6 +24712,20 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'a sugestao aponta para a sprint seguinte do calendario');
     ok(/renderCapSprint\(\);/.test(GANTT) && /SPRINTPO\.capacidadeDaSprint\(state, _capSel/.test(GANTT),
        'o Gantt desenha a capacidade pela conta do modulo');
+
+    // ── A COR DE CADA SPRINT, NO ADMIN E NO GANTT ─────────────────────────
+    const seis = SP.proximasSprints('2026-11-02', 5, []).map(x => SP.corDaSprint(x.rotulo));
+    ok(new Set(seis).size === seis.length,
+       'a atual e as cinco seguintes tem cores diferentes', seis.join(' '));
+    ok(SP.corDaSprint('S5-11-2026') !== SP.corDaSprint('S1-12-2026'),
+       'e a virada do mes nao repete cor entre vizinhas');
+    ok(/sp-cor/.test(SP.badge({ sprint_po: S1 })) && !/sp-cor/.test(SP.badge({})),
+       'o chip da sprint leva a cor; o "fora da sprint" nao');
+    ok(/kb-comsprint/.test(ADMIN) && /matchSprintKb\(m, _kbSprint\)/.test(ADMIN),
+       'o Admin pinta o card pela sprint e filtra por ela');
+    ok(/gcard-comsprint/.test(GANTT) && /id="f-sprint-po"/.test(GANTT) &&
+       /SPRINTPO\.naSprint\(m, filters\.sprintPo\)/.test(GANTT),
+       'o Gantt tambem');
   }
 
   let erroPz = null;
