@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="2dbb7bced9">
+<html lang="pt-BR" data-build="1effdf71ce">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -347,13 +347,13 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="sprint.js?v=de1e9377e3"></script>
+<script src="sprint.js?v=f29abe2d42"></script>
 <script src="dialogo.js?v=3061e0568f"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <!-- A frente de trabalho de cada pessoa. A sala mostra de qual time e a demanda
      em pauta, e a regra vem do mesmo arquivo que o deck e a tela de contas usam. -->
-<script src="pipelines.js?v=a6a54ef3d1"></script>
+<script src="pipelines.js?v=2374e11d52"></script>
 <script src="anexo-tipos.js?v=f38cdc110c"></script>
 </head>
 <body>
@@ -1069,8 +1069,8 @@ function renderFilaFrentes(naPlanning) {
     const f = frenteDaDemanda(m);
     conta[f] = (conta[f] || 0) + 1;
   });
-  const ordem = PIPELINES.nomes.concat([PIPELINES.NAO_CLASSIFICADO])
-    .filter(nome => conta[nome]);
+  // Sem "Nao classificado": quem nao tem frente e Desenvolvimento (pipelines.js).
+  const ordem = PIPELINES.nomes.filter(nome => conta[nome]);
   /* AS MARCADAS VEM PRIMEIRO, logo abaixo de "todas". É a pergunta que o
      Fernando faz na planning — "o que o time de Dados marcou?" — e ela não
      pode ficar no fim de uma lista de frentes deduzidas. */
@@ -1115,7 +1115,7 @@ function frentePill(m) {
      filtro passou a olhar tambem a marca. Duas respostas para "de qual frente
      e esta demanda" na mesma tela. */
   const frente = PIPELINES.daDemanda(m, _perfis);
-  if (!frente || frente === PIPELINES.NAO_CLASSIFICADO) return '';
+  if (!frente) return '';
   return '<span class="pill frente" style="background:#' + PIPELINES.cor(frente) +
          '22;color:#' + PIPELINES.cor(frente) + ';border:1px solid #' +
          PIPELINES.cor(frente) + '55">' + esc(frente) + '</span>';

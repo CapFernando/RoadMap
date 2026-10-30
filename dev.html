@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="ea7f910046">
+<html lang="pt-BR" data-build="0d13055e9e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -743,10 +743,10 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=de1e9377e3"></script>
+<script src="sprint.js?v=f29abe2d42"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
-<script src="pipelines.js?v=a6a54ef3d1"></script>
+<script src="pipelines.js?v=2374e11d52"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -4578,14 +4578,15 @@ function atualizaContagemDev() {
    - quem olha sem frente conhecida vê tudo, como antes — esconder trabalho de
      quem o cadastro não alcança é o defeito que tirou o Crisley do deck. */
 function doMeuTime(m) {
-  if (!window.PIPELINES) return true;
-  const fu = PIPELINES.doDev(currentDev || '', state.devs_perfil);
-  if (!fu) return true;
+  if (!window.PIPELINES || !String(currentDev || '').trim()) return true;
+  /* POR GRUPO, como a capacidade: Dados/BI de um lado, Desenvolvimento (geral,
+     com IA, RPA e quem nao tem frente) do outro. Sales Ops nao tem time no
+     cadastro: aparece para quem nao e de Dados. */
   const DADOS = PIPELINES.FRENTE_DADOS;
-  if (m && m.dados_bi) return fu === DADOS;
-  const fd = PIPELINES.daDemanda(m, state.devs_perfil);
-  if (fd === PIPELINES.NAO_CLASSIFICADO) return fu !== DADOS;
-  return fd === fu;
+  const souDados = PIPELINES.doDev(currentDev, state.devs_perfil) === DADOS;
+  const demDados = !!(m && m.dados_bi) ||
+    (!(m && m.sales_ops) && PIPELINES.daDemanda(m, state.devs_perfil) === DADOS);
+  return souDados ? demDados : !demDados;
 }
 
 function getFiltered() {

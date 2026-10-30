@@ -5492,7 +5492,7 @@ ok(/'devs_perfil'/.test(ADMIN.slice(ADMIN.indexOf('MEUS_CAMPOS'), ADMIN.indexOf(
 // Quem esta sem frente APARECE. Sumir e pior: em agosto sao 48h que sairiam da
 // conta sem ninguem notar.
 ok(/NAO_CLASSIFICADO/.test(PIPE) && /NAO_CLASSIFICADO/.test(ADMIN),
-   'quem esta sem frente vira "Nao classificado", e nao desaparece');
+   'quem esta sem frente cai numa frente (desde 30/10/2026, Desenvolvimento), e nao desaparece');
 
 sec('O planejado do deck cabe na capacidade do time');
 
@@ -21016,7 +21016,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(PIPE.daDemanda({ dev: 'João Siqueira' }, {}) === 'Desenvolvimento',
        'e nao arrasta todo mundo para Dados');
     ok(PIPE.daDemanda({ dev: '' }, {}) === PIPE.NAO_CLASSIFICADO,
-       'sem marca e sem dev fica em "Nao classificado", e nao some do filtro');
+       'sem marca e sem dev fica na frente padrao (Desenvolvimento), e nao some do filtro');
     /* O CADASTRO AINDA VENCE A SEMENTE no caminho do dev — a marca entrou
        ANTES dessa decisao, e nao no lugar dela. */
     ok(PIPE.daDemanda({ dev: 'Leite' }, { Leite: { pipeline: 'IA & Vibe coding' } })
@@ -24714,6 +24714,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // -- NAO EXISTE "NAO CLASSIFICADO": quem nao tem frente e Desenvolvimento --
+    {
+      const PIPN = (() => { const g = {}; new Function('globalThis', lerTela('pipelines.js'))(g); return g.PIPELINES; })();
+      ok(PIPN.NAO_CLASSIFICADO === 'Desenvolvimento' && PIPN.daDemanda({ dev: 'Fulano Sem Cadastro' }, {}) === 'Desenvolvimento' &&
+         PIPN.daDemanda({ dev: '' }, {}) === 'Desenvolvimento',
+         'sem frente no cadastro, a pessoa e a demanda entram em Desenvolvimento (Fernando, 30/10/2026)');
+      ok(!/concat\(\[(?:api|PIPELINES)\.NAO_CLASSIFICADO\]\)/.test(ADMIN + lerTela('poker.html')) &&
+         !/naoClass/.test(GANTT),
+         'e nenhuma lista ou filtro acrescenta um balde "Nao classificado"');
+    }
     // -- REPASSE EM LOTE POR GRUPO: pontuadas em Planning, atrasadas da sprint atual, pausadas --
     ok(/k: 'planning'/.test(ADMIN) && /k: 'atrasadas'/.test(ADMIN) && /k: 'pausadas'/.test(ADMIN) &&
        /LOTE_GRUPOS\.some\(g => _loteGrupos\.has\(g\.k\) && g\.casa\(m\)\)/.test(ADMIN),
@@ -24824,8 +24834,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       ok(gT[0].capacidade === 60 && gT[0].alocado === 25 && gT[1].capacidade === 30 && gT[1].alocado === 8 &&
          gT[2].alocado === 3,
          'Desenvolvimento soma as frentes de quem nao e de Dados; a demanda cai no grupo pela marca dela');
-      ok(gT[0].frentes.map(f => f.frente).join() === 'Automação & RPA,Desenvolvimento',
-         'e Desenvolvimento abre por frente (Automacao & RPA, IA...)');
+      ok(gT[0].frentes.map(f => f.frente).join() === 'Desenvolvimento,Automação & RPA',
+         'e Desenvolvimento abre por frente, com a frente geral primeiro (depois Automacao & RPA, IA...)');
     }
 
     // ── A COR DE CADA SPRINT, NO ADMIN E NO GANTT ─────────────────────────

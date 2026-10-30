@@ -881,7 +881,7 @@
     var etapaDe = opt.etapaDe;
     var fDev = opt.frenteDoDev || function () { return ''; };
     var fDem = opt.frenteDe || function () { return ''; };
-    var SEM = opt.semFrente || 'Não classificado';
+    var SEM = opt.semFrente || 'Desenvolvimento';
     var eq = {};
     var pega = function (f) {
       var k = f || SEM;
@@ -929,7 +929,7 @@
       }
       return e;
     }).sort(function (a, b) {
-      if ((a.frente === SEM) !== (b.frente === SEM)) return a.frente === SEM ? 1 : -1;
+      if ((a.frente === SEM) !== (b.frente === SEM)) return a.frente === SEM ? -1 : 1;   // a frente geral primeiro
       return a.frente.localeCompare(b.frente, 'pt-BR');
     });
   }
@@ -955,7 +955,7 @@
     var etapaDe = opt.etapaDe;
     var fDev = opt.frenteDoDev || function () { return ''; };
     var DADOS = txt(opt.frenteDados), SALES = txt(opt.frenteSales);
-    var SEM = opt.semFrente || 'Não classificado';
+    var SEM = opt.semFrente || 'Desenvolvimento';
     var grupoDaPessoa = function (n) {
       var f = fDev(n);
       return f && f === DADOS ? 'dados_bi' : f && f === SALES ? 'sales_ops' : 'tecnologia';
@@ -1016,7 +1016,7 @@
       }
       g.frentes = Object.keys(g.frentes).map(function (k) { return fecha(g.frentes[k]); })
         .sort(function (a, b) {
-          if ((a.frente === SEM) !== (b.frente === SEM)) return a.frente === SEM ? 1 : -1;
+          if ((a.frente === SEM) !== (b.frente === SEM)) return a.frente === SEM ? -1 : 1;   // a frente geral primeiro
           return a.frente.localeCompare(b.frente, 'pt-BR');
         });
       return g;

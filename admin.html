@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="d3f3a6ef9f">
+<html lang="pt-BR" data-build="3433b8da92">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1564,7 +1564,7 @@
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="dialogo.js?v=3061e0568f"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
-<script src="pipelines.js?v=a6a54ef3d1"></script>
+<script src="pipelines.js?v=2374e11d52"></script>
 <script src="capacidade.js?v=e7e1449a7d"></script>
 <script src="apresentacao.js?v=f5b07694a5"></script>
 <script src="relatorio-ppt.js?v=23ef77d815"></script>
@@ -1584,7 +1584,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=de1e9377e3"></script>
+<script src="sprint.js?v=f29abe2d42"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -7755,7 +7755,8 @@ function apresPipelines(conc, de, ate) {
   // Ordem FIXA, a mesma do painel aprovado — e não por volume. Frente que sobe e
   // desce de posição a cada mês obriga a sala a reler a legenda todo mês; com a
   // ordem fixa, a comparação com o deck anterior é direta.
-  const ordem = api.nomes.concat([api.NAO_CLASSIFICADO]);
+  // Sem "Nao classificado": quem nao tem frente cai em Desenvolvimento (pipelines.js).
+  const ordem = api.nomes;
   const itens = ordem
     .filter(n => acc[n])
     .map(n => {

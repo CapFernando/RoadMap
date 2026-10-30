@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="2ed86b4f6c">
+<html lang="pt-BR" data-build="d6810f4935">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1171,7 +1171,7 @@
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <!-- A frente de trabalho de cada pessoa, para o filtro de frente do quadro. -->
-  <script src="pipelines.js?v=a6a54ef3d1"></script>
+  <script src="pipelines.js?v=2374e11d52"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
@@ -1193,7 +1193,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=de1e9377e3"></script>
+<script src="sprint.js?v=f29abe2d42"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -2841,13 +2841,11 @@ function renderFilters() {
     const fvv = ff.value;
     const vivas = (state.melhorias || []).filter(m => m && !m.oculto && !m.mesclado_em);
     const conta = (nome) => vivas.filter(m => frenteDaDemanda(m) === nome).length;
-    const naoClass = PIPELINES.NAO_CLASSIFICADO;
+    // Sem "Nao classificado": quem nao tem frente e Desenvolvimento (pipelines.js).
     ff.innerHTML = `<option value="">Todas as frentes</option>` +
       PIPELINES.nomes.map(nome =>
         `<option value="${nome}" ${fvv === nome ? 'selected' : ''}>${nome} (${conta(nome)})</option>`
-      ).join('') +
-      `<option value="${naoClass}" ${fvv === naoClass ? 'selected' : ''}>` +
-      `${naoClass} (${conta(naoClass)})</option>`;
+      ).join('');
   }
 }
 

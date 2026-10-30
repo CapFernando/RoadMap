@@ -242,7 +242,17 @@
       .filter(Boolean);
   }
 
-  var NAO_CLASSIFICADO = 'Não classificado';
+  /* NÃO EXISTE MAIS "NÃO CLASSIFICADO" (30/10/2026). "O que é não classificado?
+     Não posso ter isso no sistema; não classificado deve entrar para
+     Desenvolvimento." Quem não tem frente no cadastro nem na semente, e a
+     demanda sem dev e sem marca, são de DESENVOLVIMENTO — a frente geral.
+     O nome `NAO_CLASSIFICADO` continua exportado porque as telas o usam como
+     "a frente de quem não tem outra" (`doDev(n) || NAO_CLASSIFICADO`); o
+     VALOR passou a ser a frente padrão, e é isso que faz a regra valer em todo
+     lugar de uma vez. Para ver quem está sem cadastro, o lugar é o Gerenciar
+     Devs, não um balde no slide. */
+  var FRENTE_PADRAO = (PIPELINES.filter(function (p) { return p.k === 'dev'; })[0] || {}).nome || 'Desenvolvimento';
+  var NAO_CLASSIFICADO = FRENTE_PADRAO;
   // O nome vem da LISTA, e não de um literal solto: se a frente for renomeada,
   // a marca `dados_bi` continua resolvendo para ela sem ninguém lembrar daqui.
   var FRENTE_DADOS = (PIPELINES.filter(function (p) { return p.k === 'dados'; })[0] || {}).nome || '';
@@ -287,6 +297,7 @@
       return achou ? achou.cor : '9A968C';
     },
     NAO_CLASSIFICADO: NAO_CLASSIFICADO,
+    FRENTE_PADRAO: FRENTE_PADRAO,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = raiz.PIPELINES;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
