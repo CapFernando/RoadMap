@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="f14554dcfb">
+<html lang="pt-BR" data-build="a3f82e963b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -2978,6 +2978,12 @@ async function tentarPublicarDeNovo() {
   }
   let ok = 0;
   for (const i of itens) {
+    /* A PENDENTE QUE NASCEU SEM SOLICITANTE (a dependência antes da correção de
+       30/10/2026) seria recusada de novo do mesmo jeito: completa com quem está
+       reenviando, que é quem a abriu. */
+    if (i.patch && !String(i.patch.solicitante || '').trim() && String(currentDev || '').trim()) {
+      i.patch.solicitante = String(currentDev).trim();
+    }
     if (await saveToGitHub({ [i.id]: i.patch })) ok++;
   }
   toast(ok === itens.length ? '✅ Tudo gravado.'
@@ -5000,6 +5006,11 @@ function depTipoMudou() {
   if (bt)  bt.textContent = dep ? 'Abrir dependência' : 'Vincular';
 }
 
+/** O solicitante de uma dependência: quem a abre, ou o do card principal. */
+function solicitanteDaDependencia(parent) {
+  return String(currentDev || '').trim() || String((parent || {}).solicitante || '').trim();
+}
+
 async function saveNewDep() {
   const parentId = document.getElementById('dep-parent-id').value;
   const titulo   = document.getElementById('dep-titulo').value.trim();
@@ -5036,6 +5047,15 @@ async function saveNewDep() {
     is_dependency: depTipoEscolhido() === 'dependencia',
     horas_realizadas: 0,
     criado_em: new Date().toISOString(),
+    /* QUEM PEDIU É QUEM VINCULOU (30/10/2026). O servidor recusa demanda nova
+       sem solicitante (`nascendoSemSolicitante`), e este caminho não mandava
+       nenhum: toda dependência aberta pelo painel voltava "0 de 1 gravadas".
+       Quem abre a dependência é quem espera por ela e homologa a entrega; sem
+       conta conhecida, herda o solicitante do card principal. */
+    solicitante: solicitanteDaDependencia(parent),
+    solicitante_email: window.COLABORADORES
+      ? COLABORADORES.emailPara(solicitanteDaDependencia(parent), null)
+      : '',
   });
   state.melhorias.push(newDep);
   closeModal('modal-dep');

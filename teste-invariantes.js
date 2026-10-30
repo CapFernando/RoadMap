@@ -24711,6 +24711,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // -- A DEPENDENCIA ABERTA PELO PAINEL NASCE COM SOLICITANTE ------------
+    // Toda dependencia voltava "0 de 1 gravadas": o servidor recusa demanda nova
+    // sem solicitante (nascendoSemSolicitante) e saveNewDep nao mandava nenhum.
+    ok(/solicitante: solicitanteDaDependencia\(parent\)/.test(corpo(DEV, 'async function saveNewDep() {') || ''),
+       'a dependencia aberta no painel do dev nasce com solicitante (quem vinculou)');
+    ok(/i\.patch\.solicitante = String\(currentDev\)\.trim\(\)/.test(DEV),
+       'e o reenvio da pendente sem solicitante completa com quem reenvia');
     // -- A SPRINT PELA DATA DO USUARIO: segunda -> semana anterior --------
     ok(SP.sprintDaEntrega('2026-11-09', []) === 'S1-11-2026' && SP.sprintDaEntrega('2026-11-10', []) === 'S2-11-2026',
        'data do usuario na segunda pertence a sprint da semana anterior; terca ja e a propria semana');
