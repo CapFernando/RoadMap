@@ -23077,7 +23077,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
    * enviou. As outras tres tem um nome por tras da credencial. */
   {
     sec('Abertura: demanda nova nasce com quem pediu');
+    // `ehVinculadaAConhecida` entrou em 30/10/2026: a vinculada a uma principal
+    // conhecida herda a abertura dela (ver o bloco de novembro).
     const NASCE = new Function(
+      corpo(W, 'function ehVinculadaAConhecida(m, conhecidas) {') + '\n' +
       corpo(W, 'function nascendoSemSolicitante(recebido, servidor) {') +
       '; return nascendoSemSolicitante;')();
 
@@ -24711,6 +24714,25 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // -- A VINCULADA HERDA A ABERTURA DA PRINCIPAL --------------------------
+    {
+      const WV = WKS.replace(/export default \{[\s\S]*$/, '');
+      const fv = new Function(WV + '; return { aberturasRetroativas, nascendoSemSolicitante };')();
+      const servV = { melhorias: [{ id: 'pai', codigo: 'AX-1059', titulo: 'Principal', solicitante: 'Eric' }] };
+      const recV = { melhorias: servV.melhorias.concat([
+        { id: 'filha', titulo: 'Aguardando motivos', parent_id: 'pai', entrega: '2026-11-03', dev: 'Eric Silva' },
+        { id: 'solta', titulo: 'Avulsa', entrega: '2026-11-03', dev: 'Eric Silva' },
+        { id: 'falsa', titulo: 'Pai inventado', parent_id: 'nao-existe', entrega: '2026-11-03' } ]) };
+      const retroV = fv.aberturasRetroativas(recV, servV, 'dev', '2026-10-30').map(x => x.codigo);
+      const solV = fv.nascendoSemSolicitante(recV, servV).map(x => x.titulo);
+      ok(!retroV.includes('Aguardando motivos') && !solV.includes('Aguardando motivos'),
+         'a vinculada a uma principal conhecida nao cobra de novo solicitante nem data de abertura',
+         retroV.join() + ' | ' + solV.join());
+      ok(retroV.includes('Avulsa') && solV.includes('Avulsa'),
+         'a demanda avulsa continua com as duas exigencias');
+      ok(retroV.includes('Pai inventado') && solV.includes('Pai inventado'),
+         'e parent_id que o servidor nao conhece nao abre a porta');
+    }
     // -- A DEPENDENCIA ABERTA PELO PAINEL NASCE COM SOLICITANTE ------------
     // Toda dependencia voltava "0 de 1 gravadas": o servidor recusa demanda nova
     // sem solicitante (nascendoSemSolicitante) e saveNewDep nao mandava nenhum.

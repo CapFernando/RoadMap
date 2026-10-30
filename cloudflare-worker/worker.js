@@ -2092,6 +2092,20 @@ function abertCheca(dados, origem, hoje) {
  *
  * NOVA E A QUE O SERVIDOR NAO CONHECE — o mesmo criterio de `travaEtapaDoDev`.
  * Olhar `criado_em` nao serviria: ele vem do cliente. */
+/* A VINCULADA HERDA A ABERTURA DA PRINCIPAL (30/10/2026).
+ *
+ * "O vinculo nao deve ter essas exigencias uma vez que a principal ja tem."
+ * Demanda NOVA com `parent_id` apontando para uma demanda que o servidor ja
+ * conhece e uma parte de algo que ja foi aberto — com solicitante e com a regra
+ * de data cumpridas na principal. Cobrar de novo travava o "Vincular demanda"
+ * do painel do dev: a Emilly nao conseguia pendurar a dependencia na AX-1059
+ * (primeiro pelo solicitante, depois pela entrega em 03/11).
+ * So vale com a principal CONHECIDA: `parent_id` inventado nao abre a porta. */
+function ehVinculadaAConhecida(m, conhecidas) {
+  const pai = String((m && (m.parent_id || m.depende_de)) || '').trim();
+  return !!pai && conhecidas.has(pai);
+}
+
 function aberturasRetroativas(recebido, servidor, origem, hoje) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const conhecidas = new Set();
@@ -2099,6 +2113,7 @@ function aberturasRetroativas(recebido, servidor, origem, hoje) {
   const presas = [];
   for (const m of recebido.melhorias) {
     if (!m || !m.id || conhecidas.has(m.id)) continue;
+    if (ehVinculadaAConhecida(m, conhecidas)) continue;   // a principal ja cumpriu
     const r = abertCheca(m, origem, hoje);
     if (!r.ok) presas.push({ codigo: m.codigo || m.titulo || m.id, campo: r.campo, erro: r.erro });
   }
@@ -2559,6 +2574,7 @@ function nascendoSemSolicitante(recebido, servidor) {
   for (const m of recebido.melhorias) {
     if (!m || !m.id || m.oculto || m.mesclado_em) continue;
     if (antes.has(m.id)) continue;                       // ja existia: nao e abertura
+    if (ehVinculadaAConhecida(m, antes)) continue;       // herda o da principal
     if (String(m.solicitante || '').trim()) continue;
     const titulo = String(m.titulo || '').trim();
     presos.push({
