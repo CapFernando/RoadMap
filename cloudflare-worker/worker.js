@@ -2175,13 +2175,17 @@ function entrandoEmValidacaoSemEntrega(recebido, servidor) {
   for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
   const presos = [];
   for (const m of recebido.melhorias) {
-    if (!m || String(m.status_planejamento || '') !== 'validacao') continue;
+    const etapa = String((m && m.status_planejamento) || '');
+    /* A VALIDACAO DA AREA TAMBEM (30/10/2026): "quando o dev marcar validacao da
+       area ou pm/po exigir o lancamento das horas". Na area so as horas; o
+       texto continua cobrado na entrega ao PM/PO. */
+    if (!m || (etapa !== 'validacao' && etapa !== 'validacao_area')) continue;
     const velha = antes.get(m.id);
     if (!velha) continue;                                        // demanda nova
-    if (String(velha.status_planejamento || '') === 'validacao') continue;  // ja estava
+    if (String(velha.status_planejamento || '') === etapa) continue;  // ja estava
     const h = Number(m.horas_realizadas);
     const t = String(m.implementacao || '').trim();
-    if (!Number.isFinite(h) || h <= 0 || !t) presos.push(m.codigo || m.id);
+    if (!Number.isFinite(h) || h <= 0 || (etapa === 'validacao' && !t)) presos.push(m.codigo || m.id);
   }
   return presos;
 }

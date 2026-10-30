@@ -2020,7 +2020,7 @@ sec('Entregar exige horas e texto — por todos os caminhos');
 // e, quando o fluxo mudou para o dev ENTREGAR em vez de concluir, 'validacao' caiu
 // no caminho que nao pede nada. O dev via na tela as horas que digitou — e que
 // nunca foram enviadas — e o PM/PO abria o card vazio.
-ok(/const ETAPAS_EXIGEM_ENTREGA = \['validacao', 'concluido'\]/.test(DEV),
+ok(/const ETAPAS_EXIGEM_ENTREGA = \['validacao', 'concluido', 'validacao_area'\]/.test(DEV),
    'as etapas que exigem entrega estao numa lista, nao espalhadas');
 ok(/ETAPAS_EXIGEM_ENTREGA\.includes\(colKey\)/.test(DEV),
    'o ARRASTE tambem pede horas e texto (era o furo)');
@@ -2030,7 +2030,9 @@ ok(!DEV.includes("if (colKey === 'concluido') {"),
 const semEnt = corpo(W, 'function entrandoEmValidacaoSemEntrega(');
 ok(!!semEnt, 'o servidor tem a trava de entrega incompleta');
 ok(!!semEnt && /if \(!velha\) continue;/.test(semEnt), 'demanda nova nao e travada');
-ok(!!semEnt && /=== 'validacao'\) continue;/.test(semEnt), 'quem JA estava em validacao passa');
+// Desde 30/10/2026 a trava cobre tambem a Validacao da area; "ja estava" passa a
+// ser "ja estava NESTA mesma etapa" (`etapa`).
+ok(!!semEnt && /=== (?:'validacao'|etapa)\) continue;/.test(semEnt), 'quem JA estava em validacao passa');
 ok(!!semEnt && /String\(m\.implementacao \|\| ''\)\.trim\(\)/.test(semEnt),
    'cobra o texto, e nao so as horas');
 ok(/entrandoEmValidacaoSemEntrega\(data, antesDev\)/.test(W), 'dev-publish aplica a trava');
@@ -24707,6 +24709,22 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // ── HORAS AO MANDAR PARA A VALIDACAO DA AREA (e ao PM/PO) ──────────────
+    const fnEnt = new Function(corpo(WKS, 'function entrandoEmValidacaoSemEntrega(') + '; return entrandoEmValidacaoSemEntrega;')();
+    const serv = { melhorias: [{ id: 'h1', status_planejamento: 'em_andamento' }, { id: 'h2', status_planejamento: 'em_andamento' },
+                               { id: 'h3', status_planejamento: 'validacao_area', horas_realizadas: 4 }] };
+    const rec = { melhorias: [
+      { id: 'h1', codigo: 'AX-H1', status_planejamento: 'validacao_area', horas_realizadas: 0 },
+      { id: 'h2', codigo: 'AX-H2', status_planejamento: 'validacao_area', horas_realizadas: 3 },
+      { id: 'h3', codigo: 'AX-H3', status_planejamento: 'validacao', horas_realizadas: 4, implementacao: '' } ] };
+    const presosH = fnEnt(rec, serv);
+    ok(presosH.includes('AX-H1') && !presosH.includes('AX-H2'),
+       'o servidor recusa mandar para a Validacao da area sem horas — com horas passa, sem exigir texto',
+       presosH.join());
+    ok(presosH.includes('AX-H3'),
+       'e a entrega ao PM/PO continua exigindo horas E o texto');
+    ok(/newColKey === 'validacao_area'\) \{\s*const horas/.test(DEV),
+       'o modal do dev pede as horas ao mandar para a area');
 
     // ── A CAPACIDADE DA SPRINT, POR FRENTE (30 pontos por dev) ─────────────
     const OK_ = require('./ordem-kanban.js');

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="78b1a91d41">
+<html lang="pt-BR" data-build="8f145e4167">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -5160,9 +5160,11 @@ function onDrop(e, colKey) {
   }, 0);
 }
 
-// Etapas em que a demanda sai das maos do dev: as duas exigem horas e o texto da
-// entrega, porque e o que o PM/PO le para validar e o que alimenta o relatorio.
-const ETAPAS_EXIGEM_ENTREGA = ['validacao', 'concluido'];
+// Etapas em que a demanda sai das maos do dev: exigem as horas (e, no PM/PO e
+// na conclusao, o texto da entrega), porque e o que o PM/PO le para validar e o
+// que alimenta o relatorio. A Validacao da area entrou em 30/10/2026: "quando o
+// dev marcar validacao da area ou pm/po exigir o lancamento das horas".
+const ETAPAS_EXIGEM_ENTREGA = ['validacao', 'concluido', 'validacao_area'];
 
 /* AS ETAPAS QUE O DEV MOVE. Tres, e a mesma lista que o Worker aplica.
  *
@@ -5576,7 +5578,9 @@ function onStatusModalChange() {
   // A entrega e o momento de cobrar horas e descricao — nao mais a conclusao,
   // que agora e decisao do PM/PO.
   const isConcluido = document.getElementById('ms-status').value === 'validacao';
-  document.getElementById('ms-horas-group').style.display = isConcluido ? 'block' : 'none';
+  // As horas tambem na Validacao da area — ver ETAPAS_EXIGEM_ENTREGA.
+  const pedeHoras = isConcluido || document.getElementById('ms-status').value === 'validacao_area';
+  document.getElementById('ms-horas-group').style.display = pedeHoras ? 'block' : 'none';
   if (isConcluido) {
     const id = document.getElementById('ms-id').value;
     const m = state.melhorias.find(x => x.id === id);
@@ -6252,6 +6256,20 @@ async function saveStatus() {
   if (checkDepBlock(id, newColKey)) {
     const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
     toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
+    return;
+  }
+  /* MANDAR PARA A AREA TAMBEM EXIGE AS HORAS (30/10/2026). O texto continua
+     opcional aqui — ele e cobrado na entrega ao PM/PO, logo abaixo. */
+  if (newColKey === 'validacao_area') {
+    const horas = parseFloat(document.getElementById('ms-horas').value);
+    if (!horas || horas <= 0) {
+      toast('Informe as horas trabalhadas para mandar à Validação da área.', 'err');
+      document.getElementById('ms-horas').focus();
+      return;
+    }
+    const impl = document.getElementById('ms-implementacao').value.trim();
+    closeModal('modal-status');
+    await updateStatus(id, newColKey, horas, impl || undefined);
     return;
   }
   if (newColKey === 'validacao') {
