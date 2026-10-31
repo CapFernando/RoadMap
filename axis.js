@@ -68,7 +68,32 @@
     undo: 'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',
     upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',
     user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0',
-    users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7M18 14a6 6 0 0 1 4 7'
+    users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7M18 14a6 6 0 0 1 4 7',
+    ban: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM5.6 5.6l12.8 12.8',
+    calc: 'M6 3h12v18H6zM9 7h6M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01',
+    circle: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z',
+    clipboard: 'M9 3h6v3H9zM8 4.5H6V21h12V4.5h-2',
+    download: 'M12 4v12M7 11l5 5 5-5M4 20h16',
+    edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
+    file: 'M6 3h8l4 4v14H6zM14 3v4h4',
+    image: 'M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01',
+    inbox: 'M3 13h5l1 3h6l1-3h5M5 5h14l2 8v6H3v-6z',
+    medal: 'M12 13a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM8 3l3 7M16 3l-3 7M8 3h8',
+    message: 'M4 5h16v11H9l-5 4z',
+    pin: 'M12 17v5M8 3h8l-1 6 3 4H6l3-4z',
+    plus: 'M12 5v14M5 12h14',
+    present: 'M3 4h18M5 4v11h14V4M12 15v5M8 21l4-1 4 1',
+    printer: 'M7 9V3h10v6M7 17H4V9h16v8h-3M7 14h10v7H7z',
+    save: 'M5 3h11l3 3v15H5zM8 3v5h7V3M8 14h8v7H8z',
+    tag: 'M3 12V3h9l9 9-9 9zM7.5 7.5h.01',
+    target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2z',
+    trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
+    trend: 'M3 17l6-6 4 4 8-8M14 7h7v7',
+    trophy: 'M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M10 17h4',
+    unlock: 'M6 11h12v10H6zM8 11V7a4 4 0 0 1 7.5-2',
+    wrench: 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z',
+    x: 'M6 6l12 12M18 6 6 18',
+    zap: 'M13 2 4 14h7l-1 8 9-12h-7z'
   };
 
   /* O SVG sai como TEXTO, e nao como no do DOM: as telas montam HTML por
@@ -80,6 +105,30 @@
     return '<svg class="ax-ico" viewBox="0 0 24 24" width="' + t + '" height="' + t +
       '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"' +
       ' stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="' + d + '"/></svg>';
+  }
+
+  /* ICONE POR CLASSE: <i class="axi axi-trash"></i>.
+     O traco vira mascara CSS e a cor vem do texto (currentColor). E o que
+     substitui o emoji: cabe no HTML estatico E nas template strings, sem
+     depender de JS no ponto de uso. As regras saem desta mesma lista de
+     ICONES — uma fonte so; e sao injetadas aqui, no <head>, antes do primeiro
+     desenho, porque este arquivo carrega sincrono logo apos o tema.js.
+     A mascara e data: URI, e nao arquivo, para funcionar tambem em file://.
+     NAO use .axi em conteudo que vira imagem (html2canvas) ou PPT: mascara
+     nao e desenhada la — ali o emoji sai sem substituto. */
+  function cssIcones() {
+    var r = ['.axi{display:inline-block;width:1.15em;height:1.15em;flex-shrink:0;' +
+      'vertical-align:-0.2em;background-color:currentColor;' +
+      '-webkit-mask:var(--axi) center/contain no-repeat;mask:var(--axi) center/contain no-repeat}',
+      /* Ponto de status (substitui as bolinhas coloridas): cor por --c. */
+      '.axi-dot{display:inline-block;width:.62em;height:.62em;border-radius:50%;' +
+      'background:var(--c,currentColor);vertical-align:.05em;flex-shrink:0}'];
+    Object.keys(ICONES).forEach(function (n) {
+      var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' " +
+        "stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='" + ICONES[n] + "'/></svg>";
+      r.push('.axi-' + n + '{--axi:url("data:image/svg+xml,' + encodeURIComponent(svg) + '")}');
+    });
+    return r.join('\n');
   }
 
   // ── O menu ────────────────────────────────────────────────────────────
@@ -292,9 +341,15 @@
     if (nav) nav.innerHTML = htmlMenu();
   }
 
-  var AXIS = { icone: icone, ICONES: ICONES, MENU: MENU, atualizarMenu: atualizar, marcar: marcar };
+  var AXIS = { icone: icone, ICONES: ICONES, cssIcones: cssIcones, MENU: MENU, atualizarMenu: atualizar, marcar: marcar };
   if (typeof window !== 'undefined') {
     window.AXIS = AXIS;
+    if (!document.getElementById('axis-icones')) {
+      var st = document.createElement('style');
+      st.id = 'axis-icones';
+      st.textContent = cssIcones();
+      (document.head || document.documentElement).appendChild(st);
+    }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
     else iniciar();
   }
