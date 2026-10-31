@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="3b9ca2e7cb">
+<html lang="pt-BR" data-build="50a9cd1e95">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex, nofollow, noarchive" />
   <title>RoadMap de Melhorias — Audax Capital</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <!-- Turnstile: captcha invisivel da Cloudflare no formulario publico. O envio de
        demanda e a UNICA gravacao sem autenticacao do sistema — sem isto um script
        cria demandas em massa (o limite de 6/min por IP apenas atrasa). -->
@@ -69,7 +69,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Inter', sans-serif;
+      font-family: var(--font-ui);
       font-size: 16px;
       line-height: 1.6;
       min-height: 100vh;
@@ -159,7 +159,7 @@
       border-radius: 20px;
       font-size: 13px;
       font-weight: 500;
-      font-family: 'Inter', sans-serif;
+      font-family: var(--font-ui);
       border: 1px solid var(--border);
       background: var(--bg3);
       color: var(--text2);
@@ -189,7 +189,7 @@
       padding: 6px 12px;
       border-radius: 20px;
       font-size: 13px;
-      font-family: 'Inter', sans-serif;
+      font-family: var(--font-ui);
       border: 1px solid var(--border);
       background: var(--bg3);
       color: var(--text2);
@@ -341,7 +341,8 @@
 
 
   </style>
-  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
+  <link rel="stylesheet" href="tema.css?v=fe39988eec">
+  <link rel="stylesheet" href="axis.css?v=be075d47f8">
   <script src="etapa-demanda.js?v=710bc19507"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
@@ -1675,7 +1676,7 @@ function buildReportHTML() {
     </div>`;
   }).join('');
 
-  return `<div id="export-canvas" style="background:#0E0E0D;color:#ECEAE2;font-family:'Inter',sans-serif;padding:32px;min-width:800px;width:800px;">
+  return `<div id="export-canvas" style="background:#0E0E0D;color:#ECEAE2;font-family:var(--font-ui);padding:32px;min-width:800px;width:800px;">
     <div style="border-bottom:1px solid #2E2E2B;padding-bottom:20px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;">
       <div>
         <div style="font-size:20px;font-weight:700;color:#ECEAE2;margin-bottom:4px;">🗺️ RoadMap de Melhorias</div>

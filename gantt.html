@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="f2dc393ff3">
+<html lang="pt-BR" data-build="1462664709">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,7 +9,7 @@
   <meta name="robots" content="noindex, nofollow, noarchive" />
   <title>Planejamento — RoadMap de Melhorias</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,7 +55,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Inter', sans-serif;
+      font-family: var(--font-ui);
       font-size: 14px;
       line-height: 1.5;
       min-height: 100vh;
@@ -78,13 +78,13 @@
       width: 100%; padding: 12px 14px;
       background: var(--bg3); border: 1px solid var(--border);
       border-radius: var(--radius); color: var(--text);
-      font-size: 16px; font-family: 'Inter', sans-serif;
+      font-size: 16px; font-family: var(--font-ui);
       outline: none; margin-bottom: 14px; letter-spacing: 2px;
     }
     .login-box input:focus { border-color: var(--blue); }
     .login-box button {
       width: 100%; padding: 13px; background: var(--blue); color: #fff;
-      font-size: 16px; font-weight: 600; font-family: 'Inter', sans-serif;
+      font-size: 16px; font-weight: 600; font-family: var(--font-ui);
       border: none; border-radius: var(--radius); cursor: pointer;
     }
     .login-box button:hover { opacity: 0.9; }
@@ -118,7 +118,7 @@
     .btn {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 8px 14px; border-radius: var(--radius);
-      font-size: 13px; font-weight: 500; font-family: 'Inter', sans-serif;
+      font-size: 13px; font-weight: 500; font-family: var(--font-ui);
       cursor: pointer; border: none; transition: opacity 0.15s; white-space: nowrap;
     }
     .btn:hover { opacity: 0.85; }
@@ -289,7 +289,7 @@
     .filter-bar select, .filter-bar input[type="text"] {
       padding: 5px 10px; background: var(--bg3); border: 1px solid var(--border);
       border-radius: var(--radius); color: var(--text); font-size: 12px;
-      font-family: 'Inter', sans-serif; outline: none; min-width: 120px;
+      font-family: var(--font-ui); outline: none; min-width: 120px;
     }
     .filter-bar select:focus, .filter-bar input:focus { border-color: var(--blue); }
     .filter-bar select option { background: var(--bg3); }
@@ -318,7 +318,7 @@
     .backlog-search {
       width: 100%; padding: 6px 10px; font-size: 12px;
       background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); font-family: 'Inter', sans-serif;
+      border-radius: 6px; color: var(--text); font-family: var(--font-ui);
       outline: none;
     }
     .backlog-search:focus { border-color: var(--blue); }
@@ -1123,7 +1123,7 @@
       width: 100%; padding: 10px 13px;
       background: var(--bg3); border: 1px solid var(--border);
       border-radius: var(--radius); color: var(--text);
-      font-size: 14px; font-family: 'Inter', sans-serif;
+      font-size: 14px; font-family: var(--font-ui);
       outline: none; resize: vertical;
     }
     .form-group input:focus,
@@ -1165,7 +1165,8 @@
     .delete-btn { background: var(--red); color: #fff; }
     .delete-btn:hover { opacity: 0.85; }
   </style>
-  <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
+  <link rel="stylesheet" href="tema.css?v=fe39988eec">
+  <link rel="stylesheet" href="axis.css?v=be075d47f8">
   <script src="etapa-demanda.js?v=710bc19507"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
@@ -1642,7 +1643,7 @@
     <h2>Gerenciar Devs</h2>
     <div id="devs-list" style="margin-bottom:14px"></div>
     <div style="display:flex;gap:8px">
-      <input type="text" id="new-dev-name" placeholder="Nome do dev" style="flex:1;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'Inter',sans-serif;outline:none;font-size:14px" onkeydown="if(event.key==='Enter')addDev()" />
+      <input type="text" id="new-dev-name" placeholder="Nome do dev" style="flex:1;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font-ui);outline:none;font-size:14px" onkeydown="if(event.key==='Enter')addDev()" />
       <button class="btn btn-primary" onclick="addDev()">Adicionar</button>
     </div>
 

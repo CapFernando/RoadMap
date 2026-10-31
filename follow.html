@@ -8,7 +8,7 @@
        acesso: a trava de verdade e o `exigePapel(admin)` no Worker. -->
   <meta name="robots" content="noindex, nofollow, noarchive" />
   <title>Acompanhamentos — RoadMap</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -24,7 +24,7 @@
          gantt. O valor aqui e so o ponto de partida. */
       --nome-w:190px; --dia-w:38px; --faixa-h:26px;
     }
-    body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif;
+    body { background:var(--bg); color:var(--text); font-family:var(--font-ui);
       font-size:15px; line-height:1.6; min-height:100vh; }
 
     /* ── ENTRADA ── */
@@ -158,6 +158,8 @@
       font-size:13px; display:none; z-index:200; }
     #salvando.on { display:block; }
   </style>
+  <link rel="stylesheet" href="tema.css?v=fe39988eec">
+  <link rel="stylesheet" href="axis.css?v=be075d47f8">
 </head>
 <body>
 
@@ -490,7 +492,7 @@ function diasDoMes(ano, mes) {
  * e o acompanhamento de baixo ficaria invisivel — de novo o desaparecimento
  * silencioso, que e o defeito que esta base mais repete.
  *
- * A largura e ESTIMADA (media do Inter 11.5px semibold ~6.1px por caractere mais
+ * A largura e ESTIMADA (media medida com a Inter 11.5px semibold — a Manrope do AXIS tem largura parecida ~6.1px por caractere mais
  * o enfeite). Estimativa erra alguns pixels; errar para MAIS e o lado seguro,
  * porque sobra espaco em vez de encostar.
  *

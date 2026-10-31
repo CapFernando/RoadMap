@@ -1,0 +1,165 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   AXIS — design system compartilhado pelas telas.
+
+   A identidade nova (EP-013) entra por TOKEN, e nao reescrevendo cada tela.
+   As telas foram escritas cada uma com o seu :root, mas todas falam o mesmo
+   vocabulario (--bg, --bg2, --text, --blue...). Este arquivo faz duas coisas:
+
+   1. Declara os tokens do AXIS (--sf, --tx, --ac...) nos dois temas.
+   2. Reaponta o vocabulario antigo para eles, num seletor `html:root`
+      (especificidade 0,1,1). Isso vence o `:root` de cada pagina (0,1,0) sem
+      depender da ordem dos arquivos, e perde para `:root[data-tema="claro"]`
+      (0,2,0) — por isso o bloco claro do tema.css NAO pode mais redeclarar
+      a paleta geral, so as cores especiais (podio, pausado).
+
+   O acento e whitelabel: tudo o que e "cor da marca" sai de --ac e dos seus
+   tons, gerados da cor #FF6B1A pela mesma formula do theme.js do AXIS
+   (claro 18% para branco, texto 30%/38%, hover 52%, escuro 20% para preto).
+   Para trocar a cor, recalcule os tons e troque so os --ac-*.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Tokens do AXIS · escuro (padrao) ──────────────────────────────────── */
+:root {
+  --ac:    #FF6B1A;
+  --ac-l:  #FF8643;
+  --ac-t:  #FF975F;
+  --ac-h:  #FFB891;
+  --ac-d:  #CC5615;
+  --ac-xl: #FFDECD;
+  --on-ac: #FFFFFF;
+  --ac-rgb: 255,107,26;
+
+  --bg-top: #0A1428;
+  --bg0:    #05070C;
+  --side:   #04060B;
+  --sf-rgb: 13,22,42;
+  --sf:     #0D162A;
+  --sf2:    #0F1A30;
+  --sf2b:   #0F1A2F;
+  --sf3:    #0B1323;
+  --sf4:    #13203A;
+  --sf5:    #16243F;
+  --track:  #1C2A45;
+  --bd:     #18243D;
+  --bd2:    #22314F;
+  --bd3:    #111B30;
+  --bd4:    #2A3A5C;
+  --tx:     #F3F6FB;
+  --tx-hi:  #FFFFFF;
+  --tx2:    #C9D3E3;
+  --tx2b:   #DCE3EE;
+  --tx3:    #8C9AB3;
+  --tx4:    #5F6E88;
+  --tx5:    #3E4C66;
+
+  /* Estados. Cada um tem a cor cheia (borda, barra, ponto) e o tom de TEXTO,
+     que e o que vai em cima de fundo — a cor cheia como texto pequeno nao
+     passa no contraste. O fundo do chip e a cor a 14% (DOC-18 §18.4). */
+  --ok: #22C55E;  --ok-t: #4ADE80;  --ok-rgb: 34,197,94;   --ok-xl: #BDF5D0;
+  --in: #4C8DFF;  --in-t: #8CB4FF;  --in-rgb: 76,141,255;  --in-xl: #C7D8FF;
+  --wn: #F5B83D;  --wn-t: #F5D58A;  --wn-rgb: 245,184,61;  --wn-c: #F5B83D;
+  --dg: #F04B4B;  --dg-t: #FF9A9A;  --dg-rgb: 240,75,75;
+  --pu: #8B5CF6;  --pu-t: #C4B5FD;  --pu-rgb: 139,92,246;
+  --tl: #2DD4BF;  --tl-t: #99F6E4;  --tl-rgb: 45,212,191;
+
+  --shadow: rgba(0,0,0,0.45);
+  --overlay: rgba(3,5,10,0.66);
+
+  --font-ui:    'Manrope', 'Segoe UI', system-ui, sans-serif;
+  --font-title: 'Montserrat', 'Manrope', sans-serif;
+  --font-mono:  'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+}
+
+/* ── Tokens do AXIS · claro ────────────────────────────────────────────── */
+:root[data-tema="claro"] {
+  --ac-t:  #9E4210;
+  --ac-h:  #7A330C;
+  --ac-xl: #61290A;
+
+  --bg-top: #F6F8FB;
+  --bg0:    #ECF0F5;
+  --side:   #FFFFFF;
+  --sf-rgb: 255,255,255;
+  --sf:     #FFFFFF;
+  --sf2:    #F2F5F9;
+  --sf2b:   #FFFFFF;
+  --sf3:    #FFFFFF;
+  --sf4:    #E7ECF3;
+  --sf5:    #E2E8F0;
+  --track:  #E3E8F0;
+  --bd:     #E1E6EE;
+  --bd2:    #CFD7E3;
+  --bd3:    #EDF1F6;
+  --bd4:    #C5CEDB;
+  --tx:     #0B1220;
+  --tx-hi:  #0B1220;
+  --tx2:    #334155;
+  --tx2b:   #1E293B;
+  --tx3:    #5B6B85;
+  --tx4:    #7C8AA0;
+  --tx5:    #A9B4C4;
+
+  --ok: #16A34A;  --ok-t: #15803D;  --ok-rgb: 22,163,74;   --ok-xl: #166534;
+  --in: #2563EB;  --in-t: #1D4ED8;  --in-rgb: 37,99,235;   --in-xl: #1E40AF;
+  --wn: #D97706;  --wn-t: #8A5A00;  --wn-rgb: 217,119,6;   --wn-c: #B45309;
+  --dg: #DC2626;  --dg-t: #C62828;  --dg-rgb: 220,38,38;
+  --pu: #7C3AED;  --pu-t: #6D28D9;  --pu-rgb: 124,58,237;
+  --tl: #0D9488;  --tl-t: #0F766E;  --tl-rgb: 13,148,136;
+
+  --shadow: rgba(15,23,42,0.12);
+  --overlay: rgba(15,23,42,0.42);
+}
+
+/* ── O vocabulario antigo, reapontado ──────────────────────────────────── */
+html:root {
+  --bg:   var(--bg0);
+  --bg1:  var(--bg0);   /* so o importar usa, e como fundo da pagina */
+  --bg2:  var(--sf);
+  --bg3:  var(--sf4);
+  --bg4:  var(--sf5);
+  --card: var(--sf2);
+  --nm-sec-bg: var(--sf3);
+
+  --border:  var(--bd);
+  --border2: var(--bd2);
+
+  --text:  var(--tx);
+  --text1: var(--tx);
+  --text2: var(--tx2);
+  --text3: var(--tx3);
+
+  --blue:   var(--in);  --blue-bg:   rgba(var(--in-rgb),.14);  --blue-tx:   var(--in-t);
+  --green:  var(--ok);  --green-bg:  rgba(var(--ok-rgb),.14);  --green-tx:  var(--ok-t);
+  --amber:  var(--wn);  --amber-bg:  rgba(var(--wn-rgb),.14);  --amber-tx:  var(--wn-t);
+  --red:    var(--dg);  --red-bg:    rgba(var(--dg-rgb),.14);  --red-tx:    var(--dg-t);
+  --purple: var(--pu);  --purple-bg: rgba(var(--pu-rgb),.16);  --purple-tx: var(--pu-t);
+  --teal:   var(--tl);  --teal-bg:   rgba(var(--tl-rgb),.14);  --teal-tx:   var(--tl-t);
+  --yellow: var(--wn);
+
+  /* O "acento" do importar era roxo; no AXIS o acento e a cor da marca. */
+  --accent:  var(--ac);
+  --accent2: var(--ac-l);
+}
+/* No claro a secao do formulario precisa destoar do modal branco. */
+html:root[data-tema="claro"] { --nm-sec-bg: var(--sf2); }
+
+/* ── Base ──────────────────────────────────────────────────────────────── */
+html body {
+  font-family: var(--font-ui);
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg0) 60%) fixed;
+  background-color: var(--bg0);
+  color: var(--tx);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font-family: inherit; }
+code, kbd, samp, pre { font-family: var(--font-mono); }
+::selection { background: rgba(var(--ac-rgb), .32); }
+/* So o link solto: <a class="btn"> e aba-link tem cor propria. */
+a:not([class]) { color: var(--ac-t); }
+a:not([class]):hover { color: var(--ac-h); }
+
+/* Foco visivel em tudo que e operavel por teclado (DOC-18 §18.5). */
+:focus-visible { outline: 2px solid rgba(var(--ac-rgb), .7); outline-offset: 2px; }
+
+/* Barra de rolagem discreta, no tom do painel. */
+* { scrollbar-color: var(--bd4) transparent; }
