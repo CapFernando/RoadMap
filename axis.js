@@ -134,9 +134,15 @@
   // ── O menu ────────────────────────────────────────────────────────────
   // `aba` = aba do admin.html. `papeis` = quem ve o item.
   var A = ['admin'], AD = ['admin', 'dev'];
+  /* AS TELAS ANTIGAS VIRARAM O EDITOR. A navegacao do dia a dia mora no app
+     novo (axis.html); aqui o menu leva de volta a ele e, abaixo, as abas e
+     telas onde ainda se grava (o "Editar" do app novo cai nelas). */
   var MENU = [
-    { grupo: 'Trabalho', itens: [
-      { id: 'dev',        rotulo: 'Meu painel',     ico: 'home',     href: 'dev.html',     papeis: AD },
+    { grupo: 'AXIS', itens: [
+      { id: 'axis',       rotulo: 'Voltar ao AXIS', ico: 'home',     href: 'axis.html#inicio', papeis: ['admin', 'dev', 'consulta'] }
+    ] },
+    { grupo: 'Editor', itens: [
+      { id: 'dev',        rotulo: 'Meu painel',     ico: 'user',     href: 'dev.html',     papeis: AD },
       { id: 'melhorias',  rotulo: 'Backlog',        ico: 'menu',     aba: 'melhorias',     papeis: A },
       { id: 'kanban',     rotulo: 'Quadro',         ico: 'board',    aba: 'kanban',        papeis: A },
       { id: 'gantt',      rotulo: 'Planejamento',   ico: 'calendar', href: 'gantt.html',   papeis: AD },
@@ -207,7 +213,7 @@
 
   function htmlMenu() {
     var meu = papel(), ativo = itemAtivo();
-    var h = '<a class="axis-sb-logo" href="' + (meu === 'admin' ? 'admin.html' : 'dev.html') + '" aria-label="AXIS — início">' +
+    var h = '<a class="axis-sb-logo" href="axis.html#inicio" aria-label="AXIS — início">' +
       '<span class="axis-sb-mark"><img src="axis/marca/axis-leao-branco.png" alt=""></span>' +
       '<span class="axis-sb-word">AX<i>IS</i></span></a>';
     MENU.forEach(function (g) {

@@ -483,7 +483,9 @@
     return !t.papeis || t.papeis.indexOf(APP.papel) >= 0;
   }
 
-  function desenhar() {
+  /* `manterRolagem`: redesenho pedido por filtro da propria tela nao volta a
+     pagina para o topo; so a troca de rota volta. */
+  function desenhar(manterRolagem) {
     if (!raizEl) return;
     lerSessao();
     if (!APP.token) { desenharLogin(); return; }
@@ -545,7 +547,7 @@
       vista.innerHTML = vazio('alert', 'Esta tela não conseguiu ser desenhada', String(e && e.message || e),
         '<button class="btn" type="button" onclick="location.reload()">Recarregar</button>');
     }
-    window.scrollTo(0, 0);
+    if (manterRolagem !== true) window.scrollTo(0, 0);
   }
 
   function ctx(r) {
@@ -597,7 +599,7 @@
     document.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K') && APP.D) { e.preventDefault(); abrirBusca(); }
     });
-    window.addEventListener('hashchange', desenhar);
+    window.addEventListener('hashchange', function () { desenhar(); });
     // Volta a ler a base quando a aba volta ao foco depois de um minuto: quem
     // editou no admin e voltou ve a mudanca sem recarregar.
     window.addEventListener('focus', function () {
