@@ -24889,6 +24889,76 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   try { new Function(PIPE); } catch (e) { erroP = e.message; }
   ok(!erroP, 'pipelines.js sem erro de sintaxe', erroP || '');
 
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('Gravacao do app AXIS (gravacao.js): o patch muda SO o que pede');
+
+  /* O APP NOVO GRAVA POR PATCH sobre a base fresca, como o painel do dev. A
+     garantia que importa e a mesma do `camposAlterados` do admin: o que a acao
+     nao tocou continua sendo o do servidor. Aqui a funcao do ADMIN e executada
+     sobre o resultado do `aplicar` — se o diff dela der algo alem do patch, o
+     `aplicar` esta mexendo onde nao devia. */
+  (() => {
+    const G = require('./gravacao.js');
+    const DIFF = corpo(ADMIN, 'function camposAlterados(local, baseStr) {') || '';
+    const SEMVALOR = (ADMIN.match(/const semValor = [^\n]+/) || [''])[0];
+    const diffAdmin = new Function(SEMVALOR + '\n' + DIFF + '\nreturn camposAlterados;')();
+    const base = { atualizado_em: 't0', temas: [{ id: 't1' }], melhorias: [
+      { id: 'a', titulo: 'A', status_planejamento: 'em_andamento', dev: 'Ana', entrega: '2026-11-05', anexos: [{ nome: 'x' }] },
+      { id: 'b', titulo: 'B', status_planejamento: 'backlog' },
+    ] };
+    const copia = JSON.stringify(base);
+    const patch = { a: { status_planejamento: 'validacao', entrega: undefined } };
+    const depois = G.aplicar(base, patch);
+    const a2 = depois.melhorias.find(m => m.id === 'a');
+    ok(JSON.stringify(base) === copia, 'aplicar nao altera a base recebida');
+    ok(a2.status_planejamento === 'validacao' && !('entrega' in a2) && a2.dev === 'Ana' &&
+       a2.anexos.length === 1, 'o campo do patch muda, undefined apaga, o resto fica o do servidor');
+    const d = diffAdmin(a2, JSON.stringify(base.melhorias[0]));
+    ok(Object.keys(d).sort().join() === 'entrega,status_planejamento',
+       'o camposAlterados do admin ve exatamente o patch, nada alem', Object.keys(d).join());
+    ok(depois.melhorias.find(m => m.id === 'b') === base.melhorias[1],
+       'demanda fora do patch e a mesma do servidor');
+    // Demanda nova: so com id e titulo — patch de campo solto nao vira demanda.
+    const comNova = G.aplicar(base, { n1: { id: 'n1', titulo: 'Nova', status_planejamento: 'backlog' }, x9: { dev: 'Ana' } });
+    ok(comNova.melhorias.some(m => m.id === 'n1') && !comNova.melhorias.some(m => m.id === 'x9'),
+       'demanda nova entra; patch de demanda que sumiu nao cria fantasma');
+    ok(G.orfaos(base, { x9: { dev: 'Ana' }, a: { dev: 'Bia' } }).join() === 'x9',
+       'e o patch orfao e apontado para a tela avisar');
+    ok(G.aplicar(base, {}, { temas: [] }).temas.length === 0, 'chave do topo troca pelo raizPatch');
+
+    // SABOTAGEM: um aplicar que grava undefined em vez de apagar seria pego.
+    const sabotado = (b, pt) => ({ ...b, melhorias: b.melhorias.map(m => pt[m.id] ? { ...m, ...pt[m.id] } : m) });
+    const s2 = sabotado(base, patch).melhorias.find(m => m.id === 'a');
+    ok('entrega' in s2, 'a sabotagem (spread que nao apaga) deixaria a chave — e a invariante acima acusaria');
+
+    // O fluxo: 409 conflito refaz UMA vez a partir de nova leitura; erro volta com os itens.
+    let leituras = 0, envios = 0;
+    const fluxo = G.gravar({
+      papel: 'dev', patch: { a: { status_planejamento: 'validacao' } }, semPrevoo: true,
+      ler: async () => { leituras++; return JSON.parse(copia); },
+      enviar: async (c) => { envios++; return envios === 1 ? { status: 409, corpo: { error: 'conflito' } } : { status: 200, corpo: { ok: true } }; },
+    }).then(r => {
+      ok(r.ok && leituras === 2 && envios === 2, 'conflito: rele a base e reenvia uma vez', leituras + '/' + envios);
+    });
+    registra(fluxo);
+    let envia2 = 0;
+    registra(G.gravar({
+      papel: 'admin', patch: { a: { dev: 'Bia' } }, semPrevoo: true,
+      ler: async () => JSON.parse(copia),
+      enviar: async (c) => { envia2++; return { status: 409, corpo: { error: 'conflito' } }; },
+    }).then(r => ok(!r.ok && envia2 === 2, 'e nao fica em laco: o segundo conflito volta como erro')));
+    let acao = '';
+    registra(G.gravar({
+      papel: 'admin', patch: { a: { dev: 'Bia' } }, semPrevoo: true,
+      ler: async () => JSON.parse(copia),
+      enviar: async (c) => { acao = c.action + '|' + c.base; return { status: 200, corpo: {} }; },
+    }).then(() => ok(acao === 'publish|t0', 'admin grava por publish com a versao lida como base', acao)));
+    registra(G.gravar({
+      papel: 'dev', patch: { a: { dev: 'Bia' } },
+      ler: async () => ({ melhorias: [] }), enviar: async () => ({ status: 200, corpo: {} }),
+    }).then(r => ok(!r.ok && /vazia/.test(r.erro), 'leitura vazia aborta a gravacao')));
+  })();
+
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao

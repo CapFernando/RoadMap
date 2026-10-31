@@ -149,6 +149,56 @@
     return j;
   }
 
+  // ── Gravar (gravacao.js) ──────────────────────────────────────────────
+  /* `gravar(patch, opts)`: patch = { id: { campo: valor } } (undefined apaga o
+     campo); opts.raiz troca chaves do topo (temas, projetos, ausencias...);
+     opts.ok = frase do aviso de sucesso. Le a base fresca, aplica, confere o
+     pre-voo, envia por publish (admin) ou dev-publish (dev) e, gravando, rele
+     a base e redesenha. Devolve o resultado do GRAVACAO.gravar. */
+  var _gravando = Promise.resolve();
+  function gravar(patch, opts) {
+    var o = opts || {};
+    // Uma gravacao por vez: duas acoes rapidas leriam a mesma base e a segunda
+    // desfaria a primeira no servidor. A fila e a mesma ideia do saveViaProxy.
+    var vez = _gravando.then(function () { return gravarAgora(patch, o); });
+    _gravando = vez.catch(function () {});
+    return vez;
+  }
+  async function gravarAgora(patch, o) {
+    if (!raiz.GRAVACAO) throw new Error('gravacao.js nao carregado');
+    if (APP.papel !== 'admin' && APP.papel !== 'dev') { toast('Seu perfil é só de leitura.', 'erro'); return { ok: false }; }
+    var r;
+    try {
+      r = await raiz.GRAVACAO.gravar({
+        papel: APP.papel, patch: patch, raiz: o.raiz, semPrevoo: !!o.semPrevoo,
+        credenciais: APP.token ? { token: APP.token } : {},
+        ler: function () { return api('dados'); },
+        enviar: async function (corpo, replacer) {
+          var res = await fetch(WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify(corpo, replacer) });
+          var j = await res.json().catch(function () { return {}; });
+          return { status: res.status, corpo: j };
+        }
+      });
+    } catch (e) {
+      r = { ok: false, erro: 'Sem conexão com o servidor: ' + (e.message || e) };
+    }
+    if (r.ok) {
+      APP.D = r.base;
+      try { await carregar(); } catch (_) {}
+      desenhar(true);
+      if (o.ok !== false) toast(o.ok || 'Salvo.');
+      var rs = r.resp || {};
+      if ((rs.sem_dev || []).length) toast('Sem desenvolvedor, voltou para Backlog: ' + rs.sem_dev.join(', '), 'erro');
+      if ((rs.comite_revertidas || []).length) toast('Validado em Comitê é de PM/PO ou liderança — revertido em: ' + rs.comite_revertidas.join(', '), 'erro');
+    } else {
+      var msg = r.status === 401 ? 'Sessão expirada — saia e entre de novo.' : (r.erro || 'Não foi possível salvar.');
+      if (r.itens && r.itens.length > 1) msg += ' (e mais ' + (r.itens.length - 1) + ': ' + r.itens.slice(1).map(function (x) { return x.codigo; }).join(', ') + ')';
+      toast(msg, 'erro');
+    }
+    return r;
+  }
+
   // ── Leituras sobre a base (todas pelos modulos de regra) ──────────────
   function hoje() { return hojeISO(); }
   function visiveis() {
@@ -617,7 +667,7 @@
     pontosDe: pontosDe, devsDe: devsDe, tema: tema, caminho: caminho, projeto: projeto, sprintAtual: sprintAtual,
     porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode,
     ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, av: av, cod: cod, hrefItem: hrefItem, hrefEditar: hrefEditar,
-    prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); }
+    prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); }
   };
 
   var AXIS_APP = { tela: tela, H: H, APP: APP, desenhar: desenhar, notificacoes: notificacoes, MENU: MENU, abrirBusca: abrirBusca, WORKER: WORKER };
