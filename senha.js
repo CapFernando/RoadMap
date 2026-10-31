@@ -190,12 +190,12 @@
     function tique() {
       var resta = Math.max(0, Math.round((fim - Date.now()) / 1000));
       var mm = Math.floor(resta / 60), ss = resta % 60;
-      relogio.textContent = '⏱ ' + mm + ':' + (ss < 10 ? '0' : '') + ss +
+      relogio.textContent = mm + ':' + (ss < 10 ? '0' : '') + ss +
                             ' para definir a nova senha';
       relogio.style.color = resta <= 60 ? 'var(--red-tx,#F9A0A0)' : 'var(--text3,#8B8B85)';
       if (resta <= 0) {
         clearInterval(timer);
-        relogio.textContent = '⏱ tempo esgotado — tente salvar; se nao valer mais, ' +
+        relogio.textContent = 'Tempo esgotado — tente salvar; se nao valer mais, ' +
                               'o servidor avisa e voce pede de novo';
       }
     }

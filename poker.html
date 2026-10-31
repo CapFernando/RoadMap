@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="7c3948d7ef">
+<html lang="pt-BR" data-build="bf4e58701e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -87,10 +87,10 @@
            font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; border:none; transition:opacity .15s; }
     .btn:hover:not(:disabled) { opacity:.85; }
     .btn:disabled { opacity:.35; cursor:not-allowed; }
-    .btn-primary { background:var(--blue); color:#fff; }
+    .btn-primary { background:var(--blue); color:var(--on-ac); }
     .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
     .btn-ghost { background:transparent; color:var(--text2); border:1px solid var(--border); }
-    .btn-green { background:var(--green); color:#fff; }
+    .btn-green { background:var(--green); color:var(--on-ac); }
     .btn-sm { padding:6px 11px; font-size:12px; }
 
     .codigo-box { display:flex; align-items:center; gap:8px; background:var(--bg3); border:1px solid var(--border2);
@@ -120,7 +120,8 @@
              font-size:22px; font-weight:800; border:2px solid var(--border2); background:var(--bg4); color:var(--text3);
              transition:all .2s; }
     .carta.aguardando { border-style:dashed; }
-    .carta.votou { background:#123A52; border-color:#2A6E90; color:#123A52; }
+    /* Carta virada: o valor existe no DOM, mas nao aparece ate a revelacao. */
+    .carta.votou { background:var(--blue-bg); border-color:rgba(var(--in-rgb),.45); color:transparent; }
     .carta.revelada { background:var(--bg2); border-color:var(--teal); color:var(--teal); }
 
     .resultado { margin-top:22px; text-align:center; }
@@ -148,7 +149,7 @@
        claro sobre fundo escuro inverte o contraste que o leitor espera. */
     .cf-qr { background:#fff; padding:8px; border-radius:9px; line-height:0; }
     .cf-qr svg { display:block; width:150px; height:150px; }
-    .cf-vazio { font-size:11px; color:#555; padding:14px 6px; line-height:1.4; }
+    .cf-vazio { font-size:11px; color:var(--text3); padding:14px 6px; line-height:1.4; }
     .cf-codigo { font-family:ui-monospace,Consolas,monospace; font-size:19px; font-weight:700;
                  letter-spacing:.14em; color:var(--teal,#2BBFA0); background:none;
                  border:0; padding:0; cursor:pointer; }
@@ -158,8 +159,8 @@
     .cf-link:hover { color:var(--text2); }
     /* A ESTRELA NA FILA: a ordem tem de ter explicacao visivel, senao o topo
        parece arbitrario para quem nao marcou. */
-    .fila-estrela { color:#E8B62C; margin-right:5px; }
-    .fila-item.estrelada { border-left:3px solid #E8B62C; }
+    .fila-estrela { color:var(--amber); margin-right:5px; }
+    .fila-item.estrelada { border-left:3px solid var(--amber); }
     /* A FAIXA APERTADA — 1200 a 1450px, o laptop de 1366.
        Esta regra nasceu com o baralho de 12 cartas, que pedia 710px numa linha
        (50px de carta + 10 de vao) e sobravam 700: dez pixels de falta quebravam
@@ -197,7 +198,7 @@
     .carta-btn { width:50px; height:70px; border-radius:10px; background:var(--bg3); border:2px solid var(--border2);
                  color:var(--text); font-size:19px; font-weight:800; font-family:inherit; cursor:pointer; transition:all .15s; }
     .carta-btn:hover:not(:disabled) { transform:translateY(-4px); border-color:var(--blue); }
-    .carta-btn.sel { background:var(--blue); border-color:var(--blue); color:#fff; transform:translateY(-6px); }
+    .carta-btn.sel { background:var(--ac); border-color:var(--ac); color:var(--on-ac); transform:translateY(-6px); }
     .carta-btn:disabled { opacity:.3; cursor:not-allowed; }
 
     /* ── REFERENCIA DA CARTA ── */
@@ -316,21 +317,21 @@
     .fila-item { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:11px 13px;
                  margin-bottom:8px; cursor:pointer; transition:border-color .15s; }
     .fila-item:hover { border-color:var(--border2); }
-    .fila-item.ativa { border-color:var(--teal); background:#0E3A3A22; }
+    .fila-item.ativa { border-color:var(--teal); background:rgba(var(--tl-rgb),.08); }
     .fila-item-titulo { font-size:13px; font-weight:600; line-height:1.35; }
     .fila-item-meta { font-size:11px; color:var(--text3); margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; }
     .pill { font-size:10px; border-radius:4px; padding:1px 6px; background:var(--bg4); color:var(--text2); }
-    .pill.pontos { background:#123A52; color:#8AD5F0; }
+    .pill.pontos { background:var(--blue-bg); color:var(--blue-tx); }
     /* A marca do time de Dados, na mesma cor que o Kanban usa — quem passa do
        quadro para a sala reconhece a demanda sem reler o titulo. */
-    .pill.dados { background:#06363F; color:#7FD8E8; border:1px solid #10697C; font-weight:700; }
+    .pill.dados { background:var(--teal-bg); color:var(--teal-tx); border:1px solid rgba(var(--tl-rgb),.4); font-weight:700; }
     /* A frente usa a COR DA PROPRIA FRENTE, vinda de `pipelines.js` — as mesmas
        quatro cores do deck. Quem viu o slide reconhece o time na mesa. */
     .pill.frente { font-weight:700; }
     .fila-vazia { color:var(--text3); font-size:13px; font-style:italic; padding:8px 0; }
 
     /* ── ACESSO / MODAL ── */
-    .overlay { position:fixed; inset:0; background:#000000CC; display:none; align-items:center; justify-content:center; z-index:100; padding:20px; }
+    .overlay { position:fixed; inset:0; background:var(--overlay); display:none; align-items:center; justify-content:center; z-index:100; padding:20px; }
     .overlay.open { display:flex; }
     .card-modal { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:26px; max-width:420px; width:100%; }
     .card-modal h2 { font-size:18px; margin-bottom:6px; }
@@ -350,9 +351,9 @@
   <link rel="stylesheet" href="axis.css?v=d413ccd898">
   <script src="tema.js?v=5d9c25fd66"></script>
 <script src="axis.js?v=d28df3fc4b"></script>
-<script src="sprint.js?v=c0c46daaf4"></script>
+<script src="sprint.js?v=495432df68"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
-<script src="senha.js?v=8ce4f87e46"></script>
+<script src="senha.js?v=ae10842c4b"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <!-- A frente de trabalho de cada pessoa. A sala mostra de qual time e a demanda
      em pauta, e a regra vem do mesmo arquivo que o deck e a tela de contas usam. -->
@@ -364,7 +365,7 @@
 <header>
   <div class="h-left">
     <a href="admin.html" class="btn btn-ghost btn-sm">← Admin</a>
-    <h1>🃏 Planning Poker</h1>
+    <h1><i class="axi axi-cards"></i> Planning Poker</h1>
     <div class="codigo-box" id="codigo-box" style="display:none">
       <span style="font-size:11px;color:var(--text3);text-transform:uppercase">Sala</span>
       <span class="codigo" id="codigo-txt">—</span>
@@ -372,7 +373,7 @@
   </div>
   <div class="h-right">
     <span id="quem" style="font-size:12px;color:var(--text3)"></span>
-    <button class="btn btn-secondary btn-sm" id="btn-convite" onclick="abrirConvite()" style="display:none">🔗 Convidar</button>
+    <button class="btn btn-secondary btn-sm" id="btn-convite" onclick="abrirConvite()" style="display:none"><i class="axi axi-link"></i> Convidar</button>
     <button class="btn btn-ghost btn-sm" onclick="abrirTrocaSenha()" title="Alterar a senha da sua conta">Minha senha</button>
     <button class="btn btn-ghost btn-sm" onclick="sair()">Sair</button>
   </div>
@@ -414,8 +415,8 @@
       <div class="pauta-det" id="pauta-det" style="display:none"></div>
       <!-- Acoes sobre a demanda, durante a reuniao. So o facilitador ve. -->
       <div class="pauta-acoes" id="pauta-acoes" style="display:none">
-        <button class="btn btn-secondary btn-sm" onclick="abrirComplemento()">✏️ Complementar / anexar</button>
-        <button class="btn btn-danger btn-sm" onclick="negarDemanda()">🚫 Negar demanda</button>
+        <button class="btn btn-secondary btn-sm" onclick="abrirComplemento()"><i class="axi axi-edit"></i> Complementar / anexar</button>
+        <button class="btn btn-danger btn-sm" onclick="negarDemanda()"><i class="axi axi-ban"></i> Negar demanda</button>
       </div>
     </div>
 
@@ -456,7 +457,7 @@
               <option value="">— não repassar —</option>
             </select>
           </label>
-          <button class="btn btn-green" onclick="gravarNoCard()" id="btn-gravar">💾 Gravar no card</button>
+          <button class="btn btn-green" onclick="gravarNoCard()" id="btn-gravar"><i class="axi axi-save"></i> Gravar no card</button>
           <button class="btn btn-secondary" onclick="proximaDemanda()" id="btn-proximo">→ Próxima demanda</button>
         </div>
       </div>
@@ -486,9 +487,9 @@
                consultada no segundo em que a pessoa escolhe a carta. -->
           <div class="referencia" id="referencia"></div>
           <div style="text-align:center;margin-top:18px;display:none" id="controles">
-            <button class="btn btn-primary" onclick="revelar()" id="btn-revelar">👁 Voto finalizado — revelar</button>
-            <button class="btn btn-secondary" onclick="revotar()" id="btn-revotar">↻ Votar de novo</button>
-            <button class="btn btn-secondary" onclick="zerarValores()" id="btn-zerar" title="Sai da pauta, esconde o resultado e apaga os votos da sala">⌫ Zerar valores</button>
+            <button class="btn btn-primary" onclick="revelar()" id="btn-revelar"><i class="axi axi-eye"></i> Voto finalizado — revelar</button>
+            <button class="btn btn-secondary" onclick="revotar()" id="btn-revotar"><i class="axi axi-refresh"></i> Votar de novo</button>
+            <button class="btn btn-secondary" onclick="zerarValores()" id="btn-zerar" title="Sai da pauta, esconde o resultado e apaga os votos da sala"><i class="axi axi-trash"></i> Zerar valores</button>
           </div>
         </div>
       </div>
@@ -581,8 +582,8 @@
     <div id="conv-qr" style="text-align:center;margin-bottom:14px"></div>
     <div class="link-box" id="conv-link">—</div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button class="btn btn-secondary btn-sm" onclick="copiarLink()">📋 Copiar link</button>
-      <button class="btn btn-secondary btn-sm" onclick="copiarCodigo()">📋 Copiar código</button>
+      <button class="btn btn-secondary btn-sm" onclick="copiarLink()"><i class="axi axi-clipboard"></i> Copiar link</button>
+      <button class="btn btn-secondary btn-sm" onclick="copiarCodigo()"><i class="axi axi-clipboard"></i> Copiar código</button>
     </div>
     <div style="text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">
       <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Código da sala</div>
@@ -714,9 +715,12 @@ let _toastTimer;
 function toast(msg, tipo = 'ok') {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.style.background = tipo === 'err' ? '#5C0A0A' : '#1E4208';
-  el.style.color      = tipo === 'err' ? '#F9A0A0' : '#B2E07A';
-  el.style.border     = `1px solid ${tipo === 'err' ? '#7A1A1A' : '#2E5A10'}`;
+  /* O tom de estado e translucido (14%): a camada --bg2 embaixo deixa o toast
+     opaco por cima do conteudo. */
+  el.style.background = tipo === 'err' ? 'linear-gradient(var(--red-bg),var(--red-bg)) var(--bg2)'
+                                       : 'linear-gradient(var(--green-bg),var(--green-bg)) var(--bg2)';
+  el.style.color      = tipo === 'err' ? 'var(--red-tx)' : 'var(--green-tx)';
+  el.style.border     = `1px solid ${tipo === 'err' ? 'rgba(var(--dg-rgb),.4)' : 'rgba(var(--ok-rgb),.4)'}`;
   el.style.opacity = '1';
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.style.opacity = '0', 4000);
@@ -1081,7 +1085,7 @@ function renderFilaFrentes(naPlanning) {
   sel.innerHTML = `<option value="">Todas as frentes (${naPlanning.length})</option>` +
     (marcadas ? `<option value="${FILA_MARCADAS}"` +
       `${_filaFrente === FILA_MARCADAS ? ' selected' : ''}>` +
-      `📊 Dados/BI — marcadas (${marcadas})</option>` : '') +
+      `Dados/BI — marcadas (${marcadas})</option>` : '') +
     ordem.map(nome => `<option value="${esc(nome)}"${_filaFrente === nome ? ' selected' : ''}>` +
       `${esc(nome)} (${conta[nome]})</option>`).join('');
   // A opção escolhida pode ter esvaziado entre dois polls — o select volta
@@ -1146,15 +1150,17 @@ function renderFila() {
   }
   const atual = _estado ? _estado.melhoria_id : '';
   el.innerHTML = lista.map(m => {
-    const tipo = m.tipo === 'sustentacao' ? '🔧 Sustentação' : m.tipo === 'evolucao' ? '🚀 Evolução' : '⚪ Sem tipo';
-    const pts  = m.poker_pontos != null ? `<span class="pill pontos">🃏 ${m.poker_pontos}</span>` : '';
+    const tipo = m.tipo === 'sustentacao' ? '<i class="axi axi-wrench"></i> Sustentação'
+               : m.tipo === 'evolucao' ? '<i class="axi axi-rocket"></i> Evolução'
+               : '<span class="axi-dot" style="--c:var(--text3)"></span> Sem tipo';
+    const pts  = m.poker_pontos != null ? `<span class="pill pontos"><i class="axi axi-cards"></i> ${m.poker_pontos}</span>` : '';
     const acao = _facilitador ? `onclick="porEmPauta('${esc(m.id)}')"` : '';
     return `<div class="fila-item ${m.id === atual ? 'ativa' : ''}${m.destaque ? ' estrelada' : ''}" ${acao} title="${_facilitador ? 'Clique para votar esta demanda' : ''}">
       <div class="fila-item-titulo">${m.destaque ? '<span class="fila-estrela" title="Prioridade para estimativa">★</span>' : ''}${esc(m.titulo || '(sem título)')}</div>
       <div class="fila-item-meta">
         <span class="pill">${tipo}</span>
         ${frentePill(m)}
-        ${m.dados_bi ? `<span class="pill dados">📊 Dados/BI</span>` : ''}
+        ${m.dados_bi ? `<span class="pill dados"><i class="axi axi-chart"></i> Dados/BI</span>` : ''}
         ${m.dev ? `<span class="pill">${esc(m.dev)}</span>` : ''}
         ${pts}
       </div>
@@ -1339,7 +1345,7 @@ function abrirConvite() {
 }
 function copiarLink() {
   navigator.clipboard.writeText(linkConvite())
-    .then(() => toast('🔗 Link copiado.'))
+    .then(() => toast('Link copiado.'))
     .catch(() => pedirTexto({ titulo: 'Copie o link', valor: linkConvite(), ok: 'Fechar' }));
 }
 function copiarCodigo() {
@@ -1491,7 +1497,7 @@ function atualizaBotaoProximo() {
   const atual = _estado ? _estado.melhoria_id : '';
   const idx = fila.findIndex(m => m.id === atual);
   const restantes = idx >= 0 ? fila.length - idx - 1 : fila.length;
-  btn.textContent = restantes > 0 ? `→ Próxima demanda (${restantes})` : '✔ Encerrar rodada';
+  btn.textContent = restantes > 0 ? `→ Próxima demanda (${restantes})` : 'Encerrar rodada';
 }
 
 /* A CAIXA DE SPRINT DA MESA.
@@ -1539,17 +1545,17 @@ async function gravarNoCard() {
   const r = await api({ action: 'poker-gravar', codigo: _codigo, senha: _senha,
                         melhoria_id: _estado.melhoria_id, poker_media: media,
                         poker_pontos: pontos, sprint_po: sprint });
-  btn.disabled = false; btn.textContent = '💾 Gravar no card';
+  btn.disabled = false; btn.innerHTML = '<i class="axi axi-save"></i> Gravar no card';
   if (!r.ok) { toast((r.body && r.body.error) || 'Falha ao gravar.', 'err'); return false; }
   // Marca a pauta como gravada para o aviso de "Proxima demanda" saber.
   _gravadoDe = _estado.melhoria_id;
   const b = r.body || {};
-  toast(`✅ Gravado no card: média ${String(b.poker_media).replace('.', ',')} · ${b.poker_pontos} pontos` +
-        (b.sprint_po ? ` · 🏃 ${SPRINTPO.rotuloCurto(b.sprint_po)}` : ''));
+  toast(`Gravado no card: média ${String(b.poker_media).replace('.', ',')} · ${b.poker_pontos} pontos` +
+        (b.sprint_po ? ` · ${SPRINTPO.rotuloCurto(b.sprint_po)}` : ''));
   /* A RECUSA DA SPRINT APARECE SEPARADA, e não engole o aviso dos pontos: a
      gravação pode ter dado certo pela metade, e "gravei os pontos mas não a
      sprint" só é dizível se as duas tiverem voz. */
-  if (b.sprint_recusa) toast('🏃 ' + b.sprint_recusa, 'err');
+  if (b.sprint_recusa) toast(b.sprint_recusa, 'err');
   await carregarFila();
   return true;
 }
@@ -1684,7 +1690,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       _complAnexos.push({ nome: arq.name, chave: r.body.chave,
                           tipo: arq.type, tamanho: arq.size });
-      lista.innerHTML = _complAnexos.map(a => '📎 ' + esc(a.nome)).join('<br>');
+      lista.innerHTML = _complAnexos.map(a => '<i class="axi axi-clip"></i> ' + esc(a.nome)).join('<br>');
     }
     inp.value = '';
   });
@@ -1790,9 +1796,9 @@ function renderDetalhe(m) {
   const anexosHTML = outros.length
     ? '<div class="pd-linha"><span class="pd-rot">Anexos</span><span class="pd-anexos">' +
       outros.map(({ a, i }) => a.inline
-        ? '<span class="pd-anexo morto" title="Anexo antigo, guardado dentro do arquivo: abra pelo Admin">📎 ' +
+        ? '<span class="pd-anexo morto" title="Anexo antigo, guardado dentro do arquivo: abra pelo Admin"><i class="axi axi-clip"></i> ' +
           esc(a.nome) + ' <small>(abra pelo Admin)</small></span>'
-        : '<button type="button" class="pd-anexo" onclick="abrirAnexoPauta(' + i + ')">📎 ' +
+        : '<button type="button" class="pd-anexo" onclick="abrirAnexoPauta(' + i + ')"><i class="axi axi-clip"></i> ' +
           esc(a.nome) + (a.tamanho ? ' <small>(' + Math.round(a.tamanho / 1024) + ' KB)</small>' : '') +
           '</button>').join('') +
       '</span></div>'
@@ -1809,7 +1815,7 @@ function renderDetalhe(m) {
       : '') +
     (m.dados_bi
       ? '<div class="pd-linha"><span class="pd-rot">Time</span>' +
-        '<span class="pill dados">📊 Dados / BI</span></div>'
+        '<span class="pill dados"><i class="axi axi-chart"></i> Dados / BI</span></div>'
       : '') +
     linha('Tema', nomeTema(m.tema_id)) +
     linha('Solicitante', m.solicitante) +
@@ -2269,7 +2275,7 @@ function aplicar(est) {
       const off = p.online === false;
       return `<div class="seat" style="${off ? 'opacity:.45' : ''}" title="${off ? esc(p.nome) + ' — desconectado' : esc(p.nome)}">
         <div class="carta ${cls}">${txt}</div>
-        <div class="seat-nome">${off ? '⚠ ' : ''}${esc(p.nome)}</div>
+        <div class="seat-nome">${off ? '<i class="axi axi-alert"></i> ' : ''}${esc(p.nome)}</div>
       </div>`;
     }).join('');
   }

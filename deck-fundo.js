@@ -24,7 +24,18 @@
  * número desenhado por cima mantém a razão que ele teria sobre o fundo liso.
  * Há invariante medindo isso.
  *
- * E ELE NÃO ENTRA NA CAPA, que já tem a imagem dela. */
+ * E ELE NÃO ENTRA NA CAPA, que já tem a imagem dela.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NO AXIS O FUNDO GANHOU O DEGRADE DA TELA: o marinho mais aberto no alto
+ * (`topo`) descendo para o profundo (`fundo`) ate 60% da altura, como o
+ * `linear-gradient(180deg, --bg-top 0%, --bg0 60%)` do `axis.css`.
+ *
+ * O DEGRADE OBRIGOU A CURVA A SOMAR, e nao a ter uma cor so. Com uma cor fixa,
+ * a mesma linha seria textura num ponto e risco claro (ou escuro) no outro. Ela
+ * agora e desenhada em modo `lighter`: o traco SOMA `realce` a cor que estiver
+ * embaixo, e em qualquer altura a curva fica a mesma distancia do fundo local —
+ * exatamente o `clareia(local, realce)` que a suite mede, nas duas pontas. */
 (function (raiz) {
   'use strict';
 
@@ -94,6 +105,12 @@
     return 'rgb(' + r + ',' + g + ',' + b + ')';
   }
 
+  /* QUANTO A CURVA CLAREIA O FUNDO. Era 16 sobre o fundo liso; com o degrade a
+     ponta clara (#0A1428) ficou mais perto dos dados, e 12 e o que mantem todo
+     dado acima de 4,5:1 sobre a curva ali — medido na suite pela mesma
+     constante, e nao por um numero copiado. */
+  var REALCE = 12;
+
   var _cache = null;
 
   /* GERA UMA VEZ POR SESSÃO. São vinte slides pedindo o mesmo fundo; desenhar
@@ -101,18 +118,26 @@
      ficaria com vinte cópias do mesmo PNG. */
   function png(cfg) {
     var o = cfg || {};
-    var fundo = '#' + String(o.fundo || '070B16').replace('#', '');
-    if (_cache && _cache.fundo === fundo) return _cache.dado;
+    var fundo = '#' + String(o.fundo || '05070C').replace('#', '');
+    // Sem `topo`, o fundo sai liso como antes: o degrade e pedido, e nao suposto.
+    var topo = '#' + String(o.topo || fundo).replace('#', '');
+    if (_cache && _cache.fundo === fundo && _cache.topo === topo) return _cache.dado;
     if (typeof document === 'undefined') return null;
 
     var L = o.largura || 1920, A = o.altura || 1081;   // 16:9 do slide
     var cv = document.createElement('canvas');
     cv.width = L; cv.height = A;
     var ctx = cv.getContext('2d');
-    ctx.fillStyle = fundo;
+    var degrade = ctx.createLinearGradient(0, 0, 0, A);
+    degrade.addColorStop(0, topo);
+    degrade.addColorStop(0.6, fundo);
+    degrade.addColorStop(1, fundo);
+    ctx.fillStyle = degrade;
     ctx.fillRect(0, 0, L, A);
 
-    ctx.strokeStyle = clareia(fundo, o.realce || 16);
+    // SOMA, e nao pinta: ver o cabecalho do arquivo.
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = clareia('#000000', o.realce || REALCE);
     ctx.lineWidth = o.espessura || 1.6;
     /* DEZESSEIS NÍVEIS entre −2 e 2. Menos que isso deixa espaços grandes de
        nada; mais transforma a textura em hachura, que é ruído e disputa com o
@@ -123,11 +148,11 @@
     }
 
     var dado = cv.toDataURL('image/png');
-    _cache = { fundo: fundo, dado: dado };
+    _cache = { fundo: fundo, topo: topo, dado: dado };
     return dado;
   }
 
-  var api = { png: png, relevo: relevo, clareia: clareia };
+  var api = { png: png, relevo: relevo, clareia: clareia, REALCE: REALCE };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.DECKFUNDO = api;
 }(typeof window !== 'undefined' ? window : this));

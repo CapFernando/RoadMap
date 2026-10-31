@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="4af50b7ac4">
+<html lang="pt-BR" data-build="2efdcbe206">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -87,7 +87,7 @@
       width: 100%;
       padding: 13px;
       background: var(--blue);
-      color: #fff;
+      color: var(--on-ac);
       font-size: 16px;
       font-weight: 600;
       font-family: var(--font-ui);
@@ -134,10 +134,10 @@
       transition: opacity 0.15s;
     }
     .btn:hover { opacity: 0.85; }
-    .btn-primary   { background: var(--blue);  color: #fff; }
+    .btn-primary   { background: var(--blue);  color: var(--on-ac); }
     .btn-secondary { background: var(--bg3);   color: var(--text); border: 1px solid var(--border); }
-    .btn-danger    { background: var(--red);   color: #fff; }
-    .btn-success   { background: var(--green); color: #fff; }
+    .btn-danger    { background: var(--red);   color: var(--on-ac); }
+    .btn-success   { background: var(--green); color: var(--on-ac); }
     .btn-sm { padding: 6px 12px; font-size: 13px; }
 
     /* MAIN */
@@ -192,28 +192,28 @@
     #tab-kanban.active { width: calc(100vw - 48px); position: relative; left: 50%; transform: translateX(-50%); }
     .kb-board { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; align-items: flex-start; }
     /* colunas dividem o espaço disponível; só rolam na horizontal se a tela for estreita */
-    .kb-col { flex: 1 1 0; min-width: 138px; background: var(--bg2, #161614); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 210px); }
-    .kb-col-head { padding: 10px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg2, #161614); border-radius: 10px 10px 0 0; }
+    .kb-col { flex: 1 1 0; min-width: 138px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; max-height: calc(100vh - 210px); }
+    .kb-col-head { padding: 10px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg2); border-radius: 10px 10px 0 0; }
     /* O contador e botao: abre o filtro de producao daquela coluna.
        `min-height:22px` em vez dos 16px que o texto pediria — alvo de clique
        pequeno demais num cabecalho e onde se erra a mira. */
-    .kb-col-head .kb-count { font-size: 11px; font-weight: 600; background: var(--bg3, #252522); color: var(--text3); border-radius: 10px; padding: 2px 8px; min-height: 22px; border: 1px solid transparent; font-family: inherit; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
-    .kb-col-head .kb-count:hover { background: var(--border, #3A3A36); color: var(--text); }
+    .kb-col-head .kb-count { font-size: 11px; font-weight: 600; background: var(--bg3); color: var(--text3); border-radius: 10px; padding: 2px 8px; min-height: 22px; border: 1px solid transparent; font-family: inherit; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+    .kb-col-head .kb-count:hover { background: var(--border); color: var(--text); }
     /* Filtro ligado: verde, como tudo que e leitura boa nesta casa — e com
        borda, para nao depender so da cor. */
-    .kb-col-head .kb-count.filtrado { background: var(--green-bg, #1E4208); color: var(--green-tx, #B2E07A); border-color: var(--green-tx, #B2E07A); }
-    .kb-col-head .kb-count:focus-visible { outline: 2px solid var(--amber, #FBBF24); outline-offset: 2px; }
-    .kb-prod-menu { position: absolute; z-index: 1000; background: var(--bg2, #161614); border: 1px solid var(--border2, #3A3A36); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.45); display: flex; flex-direction: column; min-width: 152px; }
-    .kb-prod-item { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text2, #C9C9C4); font-size: 12px; font-family: inherit; padding: 7px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
-    .kb-prod-item:hover { background: var(--bg3, #252522); color: var(--text); }
-    .kb-prod-item.on { color: var(--green-tx, #B2E07A); font-weight: 600; }
-    .kb-prod-item:focus-visible { outline: 2px solid var(--amber, #FBBF24); outline-offset: -2px; }
+    .kb-col-head .kb-count.filtrado { background: var(--green-bg); color: var(--green-tx); border-color: var(--green-tx); }
+    .kb-col-head .kb-count:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+    .kb-prod-menu { position: absolute; z-index: 1000; background: var(--bg2); border: 1px solid var(--border2); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.45); display: flex; flex-direction: column; min-width: 152px; }
+    .kb-prod-item { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text2); font-size: 12px; font-family: inherit; padding: 7px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+    .kb-prod-item:hover { background: var(--bg3); color: var(--text); }
+    .kb-prod-item.on { color: var(--green-tx); font-weight: 600; }
+    .kb-prod-item:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
     .kb-col-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
     /* position:relative para a estrela poder ancorar no canto sem entrar no fluxo
        do titulo — dentro dele, ela mudaria a altura de todos os cards.
        padding-right maior para o titulo nao passar por baixo dela. */
-    .kb-card { position: relative; background: var(--card, #1E1E1C); border: 1px solid var(--border); border-radius: 8px; padding: 10px 26px 10px 11px; cursor: pointer; transition: border-color .12s, transform .12s; user-select: none; }
-    .kb-card:hover { border-color: var(--border2, #3A3A36); transform: translateY(-1px); }
+    .kb-card { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 26px 10px 11px; cursor: pointer; transition: border-color .12s, transform .12s; user-select: none; }
+    .kb-card:hover { border-color: var(--border2); transform: translateY(-1px); }
     .kb-card-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35; margin-bottom: 6px; }
     .kb-card-meta { display: flex; flex-wrap: wrap; gap: 5px 10px; font-size: 11px; color: var(--text3); }
     .kb-card-tema { font-size: 11px; color: var(--text3); margin-bottom: 5px; }
@@ -232,7 +232,7 @@
       background:var(--bg3); border:1px solid var(--border); border-radius:7px;
       padding:6px 10px; }
     .m-sub-mk { flex-shrink:0; width:13px; font-weight:700; }
-    .m-sub.fez .m-sub-mk { color:var(--green-tx,#B2E07A); }
+    .m-sub.fez .m-sub-mk { color:var(--green-tx); }
     .m-sub.falta .m-sub-mk { color:var(--text3); }
     .m-sub-tit { flex:1; min-width:0; color:var(--text); overflow-wrap:anywhere; }
     /* FEITA NAO E RISCADA AQUI. No painel do dev o risco marca o que ele acabou
@@ -252,7 +252,7 @@
     .pj-card:hover { border-color:var(--border2); transform:translateY(-1px); }
     .pj-card-topo { display:flex; align-items:flex-start; gap:10px; }
     .pj-cod { font-family:ui-monospace,monospace; font-size:11px; font-weight:700;
-      color:var(--purple-tx,#C9AEFF); background:var(--purple-bg,#341A6E); border-radius:5px;
+      color:var(--purple-tx); background:var(--purple-bg); border-radius:5px;
       padding:2px 7px; white-space:nowrap; }
     .pj-nome { font-size:15px; font-weight:700; color:var(--text); line-height:1.35; flex:1; }
     .pj-desc { font-size:13px; color:var(--text2); line-height:1.55; display:-webkit-box;
@@ -264,28 +264,28 @@
       font-size:12px; color:var(--text3); }
     .pj-rodape strong { color:var(--text2); font-weight:600; }
     .pj-status { font-size:11px; font-weight:700; border-radius:20px; padding:2px 9px; }
-    .pj-status.planejado   { background:var(--blue-bg,#0C3260);  color:var(--blue-tx,#9BC8F8); }
-    .pj-status.em_andamento{ background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
+    .pj-status.planejado   { background:var(--blue-bg);  color:var(--blue-tx); }
+    .pj-status.em_andamento{ background:var(--amber-bg); color:var(--amber-tx); }
     .pj-status.pausado     { background:var(--bg4);              color:var(--text2); }
-    .pj-status.concluido   { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
+    .pj-status.concluido   { background:var(--green-bg); color:var(--green-tx); }
     /* Aprovacao de projeto proposto por dev. */
     .pj-aprov { font-size:11px; font-weight:700; border-radius:20px; padding:2px 9px; white-space:nowrap; }
-    .pj-aprov.pend { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
-    .pj-aprov.rec  { background:var(--red-bg,#4A1D1D);   color:var(--red-tx,#F9A0A0); }
+    .pj-aprov.pend { background:var(--amber-bg); color:var(--amber-tx); }
+    .pj-aprov.rec  { background:var(--red-bg);   color:var(--red-tx); }
     .pj-proposta { font-size:12px; line-height:1.6; color:var(--text3); margin:6px 0 2px; }
     .pj-aprov-box { border-radius:10px; padding:13px 15px; font-size:13px; line-height:1.7; }
     .pj-aprov-box strong { font-weight:700; }
-    .pj-aprov-box.pend { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
-    .pj-aprov-box.rec  { background:var(--red-bg,#4A1D1D);   color:var(--red-tx,#F9A0A0); }
-    .pj-aprov-box.ok   { background:var(--green-bg,#1E4208); color:var(--green-tx,#A8E081); }
+    .pj-aprov-box.pend { background:var(--amber-bg); color:var(--amber-tx); }
+    .pj-aprov-box.rec  { background:var(--red-bg);   color:var(--red-tx); }
+    .pj-aprov-box.ok   { background:var(--green-bg); color:var(--green-tx); }
     .pj-aprov-acoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:11px; }
     .pj-card.pj-pendente { border-color:var(--amber); }
     .pj-card.pj-recusado { opacity:.6; }
     .pj-vazio { font-size:13px; color:var(--text3); line-height:1.6; margin:0; }
     /* alerta: o que o projeto precisa que alguem olhe */
     .pj-alerta { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700;
-      background:var(--red-bg,#3A1414); color:var(--red-tx,#F9A0A0); border-radius:5px; padding:2px 7px; }
-    .pj-alerta.ok { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
+      background:var(--red-bg); color:var(--red-tx); border-radius:5px; padding:2px 7px; }
+    .pj-alerta.ok { background:var(--green-bg); color:var(--green-tx); }
     /* demandas dentro do projeto */
     .pj-item { display:flex; align-items:center; gap:10px; background:var(--bg3);
       border:1px solid var(--border); border-radius:9px; padding:10px 12px; }
@@ -295,7 +295,7 @@
        "Adicionar" e não abrem nada. */
     .pj-item-clic { cursor:pointer; transition:border-color .12s, background .12s; }
     .pj-item-clic:hover { border-color:var(--blue); background:var(--bg4); }
-    .pj-item-clic:hover .pj-item-nome { color:var(--blue-tx,#9BC8F8); }
+    .pj-item-clic:hover .pj-item-nome { color:var(--blue-tx); }
     .pj-item-nome { flex:1; min-width:0; font-size:13px; color:var(--text); }
     .pj-item-sub { font-size:11.5px; color:var(--text3); margin-top:2px; }
     .pj-busca { width:100%; box-sizing:border-box; }
@@ -314,11 +314,11 @@
     .m-grill-selo { display:inline-block; font-size:10.5px; font-weight:700;
       border-radius:20px; padding:1px 9px; margin-right:7px;
       text-transform:uppercase; letter-spacing:.04em; }
-    .m-grill-selo.pendente { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
-    .m-grill-selo.ok       { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
-    .m-grill-selo.duvida   { background:var(--blue-bg,#0C3260);  color:var(--blue-tx,#9BC8F8); }
+    .m-grill-selo.pendente { background:var(--amber-bg); color:var(--amber-tx); }
+    .m-grill-selo.ok       { background:var(--green-bg); color:var(--green-tx); }
+    .m-grill-selo.duvida   { background:var(--blue-bg);  color:var(--blue-tx); }
     .m-grill-ponto { background:var(--bg3); border:1px solid var(--border);
-      border-left:3px solid var(--blue,#3B8FE8); border-radius:7px;
+      border-left:3px solid var(--blue); border-radius:7px;
       padding:8px 11px; margin-top:6px; }
     .m-grill-ponto-txt { font-size:13.5px; color:var(--text); line-height:1.5;
       white-space:pre-wrap; overflow-wrap:anywhere; }
@@ -353,7 +353,7 @@
     }
     /* Barra de decisao da entrega, acima das abas do card. */
     .val-barra { align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
-      background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470);
+      background:var(--amber-bg); color:var(--amber-tx);
       border-radius:10px; padding:11px 14px; margin:0 0 16px; font-size:13px; line-height:1.6; }
     .val-barra-acoes { display:flex; gap:8px; flex-wrap:wrap; }
     /* Atalho no card do Kanban: decidir sem abrir o card. */
@@ -361,12 +361,12 @@
     .kb-val button { flex:1; font-size:11px; font-weight:700; border-radius:6px;
       padding:5px 4px; cursor:pointer; font-family:inherit; border:1px solid transparent;
       white-space:nowrap; }
-    .kb-val-ok { background:var(--green-bg,#1E4208); color:var(--green-tx,#A8E081);
+    .kb-val-ok { background:var(--green-bg); color:var(--green-tx);
       border-color:var(--green) !important; }
-    .kb-val-no { background:var(--red-bg,#4A1D1D); color:var(--red-tx,#F9A0A0);
+    .kb-val-no { background:var(--red-bg); color:var(--red-tx);
       border-color:var(--red) !important; }
     .kb-val button:hover { filter:brightness(1.18); }
-    .poker-aplicar { background:var(--blue-bg,#0C3260); color:var(--blue-tx,#9BC8F8);
+    .poker-aplicar { background:var(--blue-bg); color:var(--blue-tx);
       border:1px solid var(--blue); border-radius:5px; padding:2px 8px;
       font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; }
     .poker-aplicar:hover { filter:brightness(1.15); }
@@ -374,8 +374,8 @@
        o vermelho de atrasada: e informacao, nao alerta. O sufixo ≈ e a borda
        tracejada marcam o ponto que veio de estimativa de duracao e nao de votacao
        — ponto por duracao premia demora, e ler os dois como iguais engana. */
-    .kb-pts { font-size:10.5px; font-weight:700; color:var(--teal-tx,#7ED8D8);
-      background:var(--teal-bg,#0E3A3A); border:1px solid #1A6060;
+    .kb-pts { font-size:10.5px; font-weight:700; color:var(--teal-tx);
+      background:var(--teal-bg); border:1px solid rgba(var(--tl-rgb),.4);
       border-radius:5px; padding:1px 6px; }
     .kb-pts.estimado { border-style:dashed; opacity:.85; }
     /* O selo de validacao. Azul: verde ja e 'concluido' e ambar e 'sem
@@ -387,16 +387,16 @@
        se le e a cor. Azul segue sendo a planning (o selo circular ja e azul,
        e trocar isso quebraria o reconhecimento); o comite ganha ambar, que
        nenhuma outra marca do card usa. */
-    .kb-selo.selo-planning { background:#0B2E52; color:#9FD0FF; border-color:#2C6EA8; }
-    .kb-selo.selo-comite   { background:#3A2D12; color:#FFC470; border-color:#B07D28; }
+    .kb-selo.selo-planning { background:var(--blue-bg); color:var(--blue-tx); border-color:rgba(var(--in-rgb),.4); }
+    .kb-selo.selo-comite   { background:var(--amber-bg); color:var(--amber-tx); border-color:rgba(var(--wn-rgb),.4); }
     .kb-selo + .kb-selo { margin-left:4px; }
     .kb-selo {
       font-size:10px; font-weight:700; border-radius:4px; padding:1px 6px;
       background:var(--selo-bg,#C6CBD4); color:var(--selo-tx,#0A0A0A);
       border:1px solid var(--selo-bd,#7C838F); white-space:nowrap; cursor:help;
     }
-    .kb-sempt { font-size:10.5px; font-weight:700; color:var(--amber-tx,#FFC470);
-      background:var(--amber-bg,#4A2800); border:1px solid var(--amber);
+    .kb-sempt { font-size:10.5px; font-weight:700; color:var(--amber-tx);
+      background:var(--amber-bg); border:1px solid var(--amber);
       border-radius:5px; padding:1px 6px; }
 
     /* A FAIXA DA DEVOLUCAO. Vermelha porque e recusa, e nao aviso: no Kanban ela
@@ -406,8 +406,8 @@
        muda com a tela, e ainda arriscaria partir palavra no meio. */
     .kb-devolucao {
       font-size:11px; line-height:1.45; margin-bottom:6px;
-      background:var(--red-bg,#3A0C0C); color:var(--red-tx,#F5A3A3);
-      border-left:3px solid var(--red,#C81E1E); border-radius:4px;
+      background:var(--red-bg); color:var(--red-tx);
+      border-left:3px solid var(--red); border-radius:4px;
       padding:5px 7px;
       display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
       overflow:hidden; word-break:break-word;
@@ -416,17 +416,17 @@
     /* O qualificador do rotulo: "(fim do dev)" e "(pos-PR)". Sem ele os dois
        campos se chamam "entrega" e a pessoa escolhe pelo acaso. */
     .eu-sub { font-weight:400; color:var(--text3); font-size:11px; }
-    .kb-pausa { font-size:10.5px; font-weight:700; color:var(--rose-tx,#F2A0DA);
-      background:var(--rose-bg,#48123F); border:1px solid var(--rose-bd,#93257F);
+    .kb-pausa { font-size:10.5px; font-weight:700; color:var(--rose-tx);
+      background:var(--rose-bg); border:1px solid var(--rose-bd);
       border-radius:5px; padding:1px 6px; }
-    .kb-card.kb-prazo-pausada { border-left:3px solid var(--rose,#D948B8); opacity:.86; }
+    .kb-card.kb-prazo-pausada { border-left:3px solid var(--rose); opacity:.86; }
     /* Bloco da pausa dentro do card. */
     .pausa-box { background:var(--bg4); border:1px solid var(--border2); border-radius:10px;
       padding:12px 14px; font-size:13px; line-height:1.6; color:var(--text2); }
     .pausa-box strong { color:var(--text); }
     .pausa-acoes { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-    .kb-mesc { font-size:10.5px; font-weight:700; color:var(--teal-tx,#7EECD8);
-      background:var(--teal-bg,#063D30); border-radius:5px; padding:1px 6px; }
+    .kb-mesc { font-size:10.5px; font-weight:700; color:var(--teal-tx);
+      background:var(--teal-bg); border-radius:5px; padding:1px 6px; }
     /* ── O CHIP DO PROJETO SE DISTINGUE POR FORMA, E NAO POR TOM ───────
        "A cor me confundiu." E confundiu com razao: o chip do SPIKE e roxo
        preenchido, e eu havia escolhido roxo preenchido para o projeto —
@@ -438,12 +438,12 @@
        preenchimento. Isso resolve duas coisas de uma vez — separa do spike
        a um metro de distancia, e diz que ele e o unico que faz algo ao ser
        clicado. Chip preenchido = etiqueta; chip contornado = acao. */
-    .kb-proj { font-size:10.5px; font-weight:700; color:var(--purple-tx,#C9AEFF);
-      background:transparent; border:1px dashed #6B4A9E;
+    .kb-proj { font-size:10.5px; font-weight:700; color:var(--purple-tx);
+      background:transparent; border:1px dashed rgba(var(--pu-rgb),.5);
       border-radius:5px; padding:0 5px; }
     .kb-proj.kb-proj-abre { cursor:pointer; }
-    .kb-proj.kb-proj-abre:hover { background:var(--purple-bg,#341A6E);
-      border-style:solid; border-color:#A974F0; }
+    .kb-proj.kb-proj-abre:hover { background:var(--purple-bg);
+      border-style:solid; border-color:var(--purple); }
     /* ═══ O CHIP DA SPRINT ═════════════════════════════════════════════════
        VERDE para quem está na sprint, APAGADO para quem está no backlog,
        VERMELHO para quem entrou atrasada. São três estados e não dois: "fora
@@ -460,13 +460,13 @@
        na linha de marcas, com o rótulo dela. Mesma cor, desenhos diferentes —
        e os dois acesos ao mesmo tempo é informação, não repetição: a demanda
        furou o prazo E já rolou de semana. */
-    .kb-sprint { font-size:10.5px; font-weight:700; color:var(--green-tx,#8FE0A8);
-      background:var(--green-bg,#0E3A1E); border:1px solid #2E7D4F;
+    .kb-sprint { font-size:10.5px; font-weight:700; color:var(--green-tx);
+      background:var(--green-bg); border:1px solid rgba(var(--ok-rgb),.4);
       border-radius:5px; padding:1px 6px; }
-    .kb-sprint.sp-fora { color:var(--text3,#8B8B85); background:transparent;
-      border:1px dashed var(--border,#2E2E2B); }
-    .kb-sprint.sp-atrasada { color:var(--red-tx,#F9A0A0);
-      background:var(--red-bg,#5C0A0A); border-color:#B5484D; }
+    .kb-sprint.sp-fora { color:var(--text3); background:transparent;
+      border:1px dashed var(--border); }
+    .kb-sprint.sp-atrasada { color:var(--red-tx);
+      background:var(--red-bg); border-color:rgba(var(--dg-rgb),.4); }
     /* ═══ O DIÁLOGO DO REPASSE EM LOTE ═════════════════════════════════════
        Mais largo que os outros diálogos porque cada linha carrega cinco coisas
        (código, título, prioridade, dev, sprint atual) — e é a sprint atual que
@@ -502,8 +502,8 @@
     .lote-g-rot { font-size:12px; color:var(--text3); }
     .lote-g { padding:5px 10px; font-size:12px; font-family:inherit; cursor:pointer; color:var(--text2);
       background:var(--bg3); border:1px solid var(--border); border-radius:14px; }
-    .lote-g.on { color:var(--text); border-color:var(--blue,#4C8DFF);
-      background:color-mix(in srgb, var(--blue,#4C8DFF) 16%, transparent); font-weight:600; }
+    .lote-g.on { color:var(--text); border-color:var(--blue);
+      background:color-mix(in srgb, var(--blue) 16%, transparent); font-weight:600; }
     .lote-gtag { font-size:12px; flex:0 0 auto; }
     .lote-acoes-sel { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
     .lote-mini { font-family:inherit; font-size:11.5px; padding:4px 9px; border-radius:6px;
@@ -518,9 +518,9 @@
     .lote-item { display:flex; align-items:center; gap:8px; padding:6px 8px;
       border-radius:6px; cursor:pointer; font-size:12.5px; }
     .lote-item:hover { background:var(--bg4); }
-    .lote-item.on { background:rgba(59,143,232,.12); }
+    .lote-item.on { background:rgba(var(--in-rgb),.12); }
     .lote-cod { font-family:ui-monospace,monospace; font-size:11px; font-weight:700;
-      color:var(--blue-tx,#9BC8F8); flex:0 0 auto; }
+      color:var(--blue-tx); flex:0 0 auto; }
     /* O TÍTULO ENCOLHE E CORTA; o resto da linha não. Sem `min-width:0` o flex
        se recusa a encolher o texto e empurra a sprint para fora da caixa —
        que é justamente a informação que decide o clique. */
@@ -528,8 +528,8 @@
       white-space:nowrap; color:var(--text); }
     .lote-prio { flex:0 0 auto; font-size:10px; font-weight:700; text-transform:uppercase;
       letter-spacing:.3px; padding:1px 6px; border-radius:4px; }
-    .lote-prio.pr-alta  { color:var(--red-tx,#F9A0A0);   background:var(--red-bg,#5C0A0A); }
-    .lote-prio.pr-media { color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A); }
+    .lote-prio.pr-alta  { color:var(--red-tx);   background:var(--red-bg); }
+    .lote-prio.pr-media { color:var(--amber-tx); background:var(--amber-bg); }
     .lote-prio.pr-baixa { color:var(--text3);            background:var(--bg4); }
     .lote-dev { flex:0 0 auto; font-size:11px; color:var(--text3); }
     /* O CHIP NÃO QUEBRA EM DUAS LINHAS. Sem isto, "🏃 S2-11 · atrasada 1×"
@@ -546,11 +546,11 @@
     .spr-trilhas { display:flex; gap:6px; flex-wrap:wrap; }
     .spr-trilha { padding:6px 11px; font-size:12.5px; font-family:inherit; cursor:pointer;
       color:var(--text2); background:var(--bg3); border:1px solid var(--border); border-radius:7px; }
-    .spr-trilha.on { color:var(--text); border-color:var(--accent, #4C8DFF); font-weight:600; }
-    .spr-prio { font-size:10.5px; font-weight:700; color:#E8A33D; white-space:nowrap; }
+    .spr-trilha.on { color:var(--text); border-color:var(--accent); font-weight:600; }
+    .spr-prio { font-size:10.5px; font-weight:700; color:var(--amber-tx); white-space:nowrap; }
     .spr-bk-grupo { margin:6px 0 12px; }
     .spr-bk-dev { font-size:12.5px; font-weight:600; color:var(--text2); margin:4px 0 6px; }
-    .spr-bk-dev.sem { color:#E8A33D; }
+    .spr-bk-dev.sem { color:var(--amber-tx); }
     .spr-bk-sel { padding:4px 6px; font-size:12px; font-family:inherit; color:var(--text);
       background:var(--bg3); border:1px solid var(--border); border-radius:6px; margin-left:auto; }
     /* A LINHA DAS SPRINTS — anteriores, a atual e as próximas, em ordem. */
@@ -564,19 +564,19 @@
     .spr-card-rot { font-size:14px; font-weight:700; }
     .spr-card-dt { font-size:11px; color:var(--text3); margin:1px 0 6px; }
     .spr-card-n { font-size:12px; color:var(--text2); margin-top:6px; }
-    .spr-alerta-linha { font-size:12px; color:var(--red-tx,#F9A0A0); margin:-4px 0 10px; }
+    .spr-alerta-linha { font-size:12px; color:var(--red-tx); margin:-4px 0 10px; }
     .spr-est { font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:6px; }
     .spr-est.montando { color:var(--text3); background:var(--bg4); }
-    .spr-est.curso    { color:var(--green-tx,#8FE0A8); background:var(--green-bg,#0E3A1E); }
+    .spr-est.curso    { color:var(--green-tx); background:var(--green-bg); }
     .spr-est.fechada  { color:var(--text2); background:var(--bg4); }
     .spr-acao { margin-left:7px; font-family:inherit; font-size:11.5px; font-weight:600;
       padding:4px 11px; border-radius:6px; cursor:pointer; color:var(--text2);
       background:none; border:1px solid var(--border); }
     .spr-acao:hover { border-color:var(--blue); color:var(--text); }
-    .spr-acao.inicia { color:#07210F; background:var(--green-tx,#8FE0A8); border:none; }
+    .spr-acao.inicia { color:var(--bg); background:var(--green-tx); border:none; }
     .spr-acao.inicia:hover { filter:brightness(1.1); }
-    .spr-alerta { color:var(--amber-tx,#FFC470); font-weight:700; }
-    .spr-ok { color:var(--green-tx,#8FE0A8); font-weight:700; }
+    .spr-alerta { color:var(--amber-tx); font-weight:700; }
+    .spr-ok { color:var(--green-tx); font-weight:700; }
     .spr-fechada { color:var(--text3); }
     /* O PLACAR. `auto-fit` e nao colunas fixas: sao quatro blocos sempre e mais
        dois que so aparecem quando ha o que dizer — grade fixa deixaria buracos
@@ -587,12 +587,12 @@
       border:1px solid var(--border); cursor:help; }
     .spr-b-n { font-size:21px; font-weight:700; line-height:1.15; }
     .spr-b-r { font-size:11px; color:var(--text3); margin-top:3px; line-height:1.35; }
-    .spr-b.pts  .spr-b-n { color:var(--blue-tx,#9BC8F8); }
-    .spr-b.val  .spr-b-n { color:var(--green-tx,#8FE0A8); }
+    .spr-b.pts  .spr-b-n { color:var(--blue-tx); }
+    .spr-b.val  .spr-b-n { color:var(--green-tx); }
     .spr-b.pct  .spr-b-n { color:var(--text); }
     .spr-b.pctp .spr-b-n { color:var(--text2); }
-    .spr-b.esp  .spr-b-n { color:var(--amber-tx,#FFC470); }
-    .spr-b.sai  .spr-b-n { color:var(--red-tx,#F9A0A0); }
+    .spr-b.esp  .spr-b-n { color:var(--amber-tx); }
+    .spr-b.sai  .spr-b-n { color:var(--red-tx); }
     .spr-tit { font-size:12.5px; font-weight:600; color:var(--text2); margin:16px 0 8px; }
     .spr-dica { font-weight:400; color:var(--text3); font-size:11.5px; }
     .spr-rk { width:100%; border-collapse:collapse; font-size:12.5px; }
@@ -601,10 +601,10 @@
     .spr-rk td { padding:8px 9px; border-bottom:1px solid var(--bg3); vertical-align:middle; }
     .spr-rk-nome { font-weight:600; }
     .spr-de { color:var(--text3); font-size:11px; }
-    .spr-saiu { color:var(--red-tx,#F9A0A0); font-weight:700; }
+    .spr-saiu { color:var(--red-tx); font-weight:700; }
     .spr-barra { display:inline-block; width:74px; height:6px; border-radius:3px;
       background:var(--bg4); overflow:hidden; vertical-align:middle; }
-    .spr-barra span { display:block; height:100%; background:var(--green-tx,#8FE0A8); }
+    .spr-barra span { display:block; height:100%; background:var(--green-tx); }
     .spr-pct { margin-left:7px; font-size:11.5px; color:var(--text2); }
     .spr-lista { display:flex; flex-direction:column; gap:4px; }
     .spr-item { display:flex; align-items:center; gap:9px; padding:7px 10px;
@@ -614,31 +614,31 @@
     /* A BORDA ESQUERDA MARCA O RISCO. Pintar a linha inteira de vermelho num
        quadro que ja usa vermelho para prazo vencido tornaria as duas coisas
        indistinguiveis; a borda diz "olhe aqui" sem disputar. */
-    .spr-item.risco { border-left-color:var(--amber-tx,#FFC470); }
+    .spr-item.risco { border-left-color:var(--amber-tx); }
     .spr-sit { flex:0 0 auto; font-size:10.5px; font-weight:700; padding:1px 7px;
       border-radius:4px; white-space:nowrap; }
-    .spr-sit[data-s="validado"]   { color:var(--green-tx,#8FE0A8); background:var(--green-bg,#0E3A1E); }
-    .spr-sit[data-s="aguardando"] { color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A); }
-    .spr-sit[data-s="em_curso"]   { color:var(--blue-tx,#9BC8F8); background:var(--blue-bg,#0C3260); }
-    .spr-sit[data-s="saiu"]       { color:var(--red-tx,#F9A0A0); background:var(--red-bg,#5C0A0A); }
+    .spr-sit[data-s="validado"]   { color:var(--green-tx); background:var(--green-bg); }
+    .spr-sit[data-s="aguardando"] { color:var(--amber-tx); background:var(--amber-bg); }
+    .spr-sit[data-s="em_curso"]   { color:var(--blue-tx); background:var(--blue-bg); }
+    .spr-sit[data-s="saiu"]       { color:var(--red-tx); background:var(--red-bg); }
     .spr-sit[data-s="negada"]     { color:var(--text3); background:var(--bg4); }
     .spr-tit-d { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; }
     .spr-pts { flex:0 0 auto; font-size:11px; color:var(--text3); }
     .spr-riscos { flex:0 0 auto; display:flex; gap:4px; flex-wrap:wrap; }
     .spr-r { font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px;
-      white-space:nowrap; color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A); }
+      white-space:nowrap; color:var(--amber-tx); background:var(--amber-bg); }
     /* O QUE JA ESTOUROU em vermelho; o que AINDA PODE dar certo em ambar. */
     .spr-r.r-vencida, .spr-r.r-rolou, .spr-r.r-area {
-      color:var(--red-tx,#F9A0A0); background:var(--red-bg,#5C0A0A); }
+      color:var(--red-tx); background:var(--red-bg); }
     .spr-r.r-sem_pontos { color:var(--text3); background:var(--bg4); }
     .spr-vazio { padding:18px; text-align:center; color:var(--text3); font-size:12.5px; }
     /* ═══ O FECHAMENTO DA SPRINT ═══════════════════════════════════════════ */
     .fech-placar { display:flex; flex-wrap:wrap; gap:8px; margin:2px 0 12px; }
     .fp { font-size:12px; font-weight:700; padding:4px 10px; border-radius:7px; }
-    .fp.ok  { color:var(--green-tx,#8FE0A8); background:var(--green-bg,#0E3A1E); }
-    .fp.esp { color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A); cursor:help; }
-    .fp.no  { color:var(--red-tx,#F9A0A0);   background:var(--red-bg,#5C0A0A); }
+    .fp.ok  { color:var(--green-tx); background:var(--green-bg); }
+    .fp.esp { color:var(--amber-tx); background:var(--amber-bg); cursor:help; }
+    .fp.no  { color:var(--red-tx);   background:var(--red-bg); }
     .fech-rot { font-size:12px; color:var(--text2); margin-bottom:6px; }
     /* CADA ITEM TEM DUAS LINHAS: identificação em cima, decisão embaixo. Tudo
        numa linha só espremeria o campo de motivo a vinte caracteres — e o
@@ -655,17 +655,17 @@
       border:1px solid var(--border); border-radius:7px; outline:none; box-sizing:border-box; }
     .dlg-ov .fech-box .fech-motivo:focus { border-color:var(--blue); }
     .fech-rein { flex:0 0 auto; font-size:10px; font-weight:700; padding:1px 6px;
-      border-radius:4px; color:var(--red-tx,#F9A0A0); background:var(--red-bg,#5C0A0A);
+      border-radius:4px; color:var(--red-tx); background:var(--red-bg);
       white-space:nowrap; }
     /* O AVISO NA BARRA DO QUADRO. Linha inteira, e não um chip no meio dos
        filtros: uma sprint por fechar não é um filtro, é uma pendência. */
     .fb-sprint-pend { flex:1 1 100%; display:flex; align-items:center; gap:8px;
       margin-top:8px; padding:7px 11px; border-radius:7px; font-size:12.5px;
-      color:var(--amber-tx,#FFC470); background:var(--amber-bg,#43280A);
-      border:1px solid #9A6B1E; }
+      color:var(--amber-tx); background:var(--amber-bg);
+      border:1px solid rgba(var(--wn-rgb),.4); }
     .fb-sprint-btn { font-family:inherit; font-size:11.5px; font-weight:600;
       padding:4px 11px; border-radius:6px; cursor:pointer; margin-left:auto;
-      color:#1A1206; background:var(--amber-tx,#FFC470); border:none; }
+      color:var(--bg); background:var(--amber-tx); border:none; }
     .fb-sprint-btn:hover { filter:brightness(1.12); }
     .lote-vazio { padding:22px; text-align:center; color:var(--text3); font-size:12.5px; }
     /* A COR DA SPRINT (`SPRINTPO.corDaSprint`): o chip e a faixa do card. A
@@ -676,25 +676,25 @@
     .kb-sprint-abre { cursor:pointer; display:inline-flex; }
     .kb-sprint-abre:hover .kb-sprint { border-style:solid; filter:brightness(1.25); }
     .cod-tag { font-family: ui-monospace, monospace; font-size: 10.5px; font-weight: 700;
-      color: var(--blue-tx, #9BC8F8); background: var(--blue-bg, #0C3260); border-radius: 4px;
+      color: var(--blue-tx); background: var(--blue-bg); border-radius: 4px;
       padding: 1px 5px; margin-right: 6px; letter-spacing: .02em; }
-    .kb-debito { font-size: 10.5px; font-weight: 700; background: var(--purple-bg, #341A6E);
-      color: var(--purple-tx, #C9AEFF); border-radius: 5px; padding: 1px 6px; }
+    .kb-debito { font-size: 10.5px; font-weight: 700; background: var(--purple-bg);
+      color: var(--purple-tx); border-radius: 5px; padding: 1px 6px; }
     /* DADOS/BI EM CIANO, e nao em mais um roxo: `kb-proj` e `kb-debito` ja sao
        roxos, e tres marcas da mesma cor no mesmo card viram uma mancha so —
        quem varre o quadro atras do time de Dados precisa achar pela cor. */
     /* A marca de um BI no formulario. Botao de tirar DENTRO do chip: o alvo de
        clique fica junto do nome que ele remove. */
     .bi-chip { display:inline-flex; align-items:center; gap:5px; font-size:11.5px;
-      font-weight:600; background:var(--cyan-bg, #06363F); color:var(--cyan-tx, #7FD8E8);
-      border:1px solid var(--cyan-bd, #10697C); border-radius:5px; padding:2px 5px 2px 7px; }
+      font-weight:600; background:var(--teal-bg); color:var(--teal-tx);
+      border:1px solid rgba(var(--tl-rgb),.4); border-radius:5px; padding:2px 5px 2px 7px; }
     .bi-chip button { background:none; border:0; color:inherit; cursor:pointer;
       font-size:14px; line-height:1; padding:0 2px; opacity:.7; }
     .bi-chip button:hover { opacity:1; }
-    .kb-bi { font-size: 10.5px; font-weight: 700; background: var(--cyan-bg, #06363F);
-      color: var(--cyan-tx, #7FD8E8); border-radius: 5px; padding: 1px 6px; cursor: help; }
-    .kb-dados { font-size: 10.5px; font-weight: 700; background: var(--cyan-bg, #06363F);
-      color: var(--cyan-tx, #7FD8E8); border: 1px solid var(--cyan-bd, #10697C);
+    .kb-bi { font-size: 10.5px; font-weight: 700; background: var(--teal-bg);
+      color: var(--teal-tx); border-radius: 5px; padding: 1px 6px; cursor: help; }
+    .kb-dados { font-size: 10.5px; font-weight: 700; background: var(--teal-bg);
+      color: var(--teal-tx); border: 1px solid rgba(var(--tl-rgb),.4);
       border-radius: 5px; padding: 1px 6px; }
     /* A ETIQUETA LIGADA PRECISA PARECER LIGADA. Caixa marcada dentro de uma
        caixa cinza se le como desmarcada de relance, e esta e a marca que decide
@@ -702,8 +702,8 @@
     .tag-dados { display:flex; align-items:center; gap:8px; font-weight:400; cursor:pointer;
       background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
       padding:11px 12px; font-size:14px; transition:background .12s, border-color .12s; }
-    .tag-dados:has(input:checked) { background: var(--cyan-bg, #06363F);
-      border-color: var(--cyan-bd, #10697C); color: var(--cyan-tx, #7FD8E8); }
+    .tag-dados:has(input:checked) { background: var(--teal-bg);
+      border-color: rgba(var(--tl-rgb),.4); color: var(--teal-tx); }
     .kb-col-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 14px 4px; opacity: .6; }
     .kb-card.dragging { opacity: .4; }
     /* Abas dentro do card: os dados e a validacao da entrega sao duas conversas
@@ -713,9 +713,11 @@
       background:none; border:none; border-bottom:2px solid transparent; cursor:pointer;
       font-family:var(--font-ui); display:inline-flex; align-items:center; gap:7px; }
     .mtab:hover { color:var(--text); }
-    .mtab.ativa { color:var(--text); border-bottom-color:var(--blue); }
+    .mtab.ativa { color:var(--text); border-bottom-color:var(--ac); }
     .mtab-sino { font-size:10.5px; font-weight:700; background:var(--amber);
-      color:#1A1917; border-radius:20px; padding:1px 7px; }
+      /* Escuro fixo, e nao var(--bg): o ambar e claro nos dois temas, e o --bg
+         do tema claro e quase branco (3:1 sobre o ambar). */
+      color:#05070C; border-radius:20px; padding:1px 7px; }
     .ent-bloco { background:var(--bg3); border:1px solid var(--border); border-radius:10px;
       padding:16px 18px; margin-bottom:14px; }
     .ent-bloco h4 { margin:0 0 10px; font-size:13px; font-weight:700; color:var(--text2);
@@ -726,7 +728,7 @@
     .ent-linha strong { color:var(--text); font-weight:600; }
     /* Codigo clicavel: leva direto ao card, que e onde se pontua. */
     .sp-chip { font-family:ui-monospace,Consolas,monospace; font-size:11px;
-      font-weight:700; color:var(--amber-tx,#FFC470); background:var(--amber-bg,#4A2800);
+      font-weight:700; color:var(--amber-tx); background:var(--amber-bg);
       border:1px solid var(--amber); border-radius:5px; padding:2px 7px;
       margin:0 4px 4px 0; cursor:pointer; }
     .sp-chip:hover { filter:brightness(1.2); }
@@ -734,9 +736,9 @@
     .ent-acoes { display:flex; gap:10px; flex-wrap:wrap; margin-top:4px; }
     .ent-aviso { font-size:13px; line-height:1.6; border-radius:10px; padding:12px 14px;
       margin-bottom:14px; }
-    .ent-aviso.espera { background:var(--amber-bg, #3A2A08); color:var(--amber-tx, #FFD79A); }
-    .ent-aviso.aprovada { background:var(--green-bg, #17300A); color:var(--green-tx, #B2E07A); }
-    .ent-aviso.rejeitada { background:var(--red-bg, #3A1414); color:var(--red-tx, #F9A0A0); }
+    .ent-aviso.espera { background:var(--amber-bg); color:var(--amber-tx); }
+    .ent-aviso.aprovada { background:var(--green-bg); color:var(--green-tx); }
+    .ent-aviso.rejeitada { background:var(--red-bg); color:var(--red-tx); }
     /* A caixa do backlog no modal do deck. O rotulo inteiro e clicavel — alvo de
        12px so no quadradinho e o tipo de alvo que se erra com o mouse. */
     .rp-caixa { display:flex; gap:10px; align-items:flex-start; cursor:pointer;
@@ -756,24 +758,24 @@
        inteira, inclusive quando ela disser algo que importa. */
     .ent-aviso.no-ar, .ent-aviso.fora-ar {
       background:var(--bg3); border-left:3px solid var(--border2); color:var(--text2); }
-    .ent-aviso.no-ar { border-left-color:var(--green, #5EA832); }
-    .ent-aviso.no-ar strong { color:var(--green-tx, #B2E07A); }
+    .ent-aviso.no-ar { border-left-color:var(--green); }
+    .ent-aviso.no-ar strong { color:var(--green-tx); }
     .ent-aviso.fora-ar strong { color:var(--text); }
     /* Aviso no topo do admin: entregas esperando validacao. */
-    .val-banner { display:none; align-items:center; gap:12px; background:var(--amber-bg, #3A2A08);
-      color:var(--amber-tx, #FFD79A); border:1px solid var(--amber); border-radius:10px;
+    .val-banner { display:none; align-items:center; gap:12px; background:var(--amber-bg);
+      color:var(--amber-tx); border:1px solid var(--amber); border-radius:10px;
       padding:11px 16px; font-size:14px; margin-bottom:16px; }
     /* Vermelho e para prazo vencido: o que ja falhou, nao o que esta por vir.
        Se tudo virasse vermelho, o vermelho pararia de significar alguma coisa. */
-    .val-banner.risco { background:var(--red-bg, #3A1414); color:var(--red-tx, #F9A0A0);
+    .val-banner.risco { background:var(--red-bg); color:var(--red-tx);
       border-color:var(--red); }
     /* Atraso deixou de ser coluna: e condicao, e aparece no proprio card, sem
        tirar a demanda da etapa em que ela esta. */
     .kb-card.kb-atrasada { border-color: var(--red); border-left: 3px solid var(--red); }
     /* AMBAR E NAO VERMELHO: vermelho ja e o atraso, e duas emergencias da mesma
        cor viram uma so. A mensagem aqui e outra — "isto nao existe no servidor". */
-    .kb-card.kb-naopub { outline: 2px dashed var(--amber, #B07D28); outline-offset: -2px; }
-    .kb-naopub-tag { display:inline-block; background: var(--amber, #B07D28); color:#20160a;
+    .kb-card.kb-naopub { outline: 2px dashed var(--amber); outline-offset: -2px; }
+    .kb-naopub-tag { display:inline-block; background: var(--amber); color:#05070C;
       border-radius:5px; padding:1px 6px; font-size:10px; font-weight:800;
       letter-spacing:.3px; margin-bottom:5px; }
     /* Prazo: amarelo um dia antes, vermelho no dia. A borda e o que o olho pega
@@ -782,20 +784,20 @@
     .kb-card.kb-prazo-hoje   { border-left: 3px solid var(--red); }
     .kb-prazo-tag { font-size: 10.5px; font-weight: 700; border-radius: 4px; padding: 1px 6px;
       display: inline-block; margin-bottom: 5px; }
-    .kb-prazo-tag.amanha { background: var(--amber-bg, #4A2800); color: var(--amber-tx, #FFC470); }
-    .kb-prazo-tag.hoje   { background: var(--red-bg, #3A1414);   color: var(--red-tx, #F9A0A0); }
-    .kb-atraso-tag { font-size: 10.5px; font-weight: 700; color: var(--red-tx, #F9A0A0);
-      background: var(--red-bg, #3A1414); border-radius: 4px; padding: 1px 6px;
+    .kb-prazo-tag.amanha { background: var(--amber-bg); color: var(--amber-tx); }
+    .kb-prazo-tag.hoje   { background: var(--red-bg);   color: var(--red-tx); }
+    .kb-atraso-tag { font-size: 10.5px; font-weight: 700; color: var(--red-tx);
+      background: var(--red-bg); border-radius: 4px; padding: 1px 6px;
       display: inline-block; margin-bottom: 5px; }
     /* Coluna de validacao: e onde a acao do PM/PO fica esperando. */
     .kb-col[data-col="validacao"] .kb-col-head { color: var(--amber); }
     /* E a da area, onde a acao e de QUEM PEDIU — por isso cor propria. */
-    .kb-col[data-col="validacao_area"] .kb-col-head { color: #D8AEF0; }
-    .kb-col.drop-target { outline: 2px dashed var(--blue, #3B8FE8); outline-offset: -2px; background: rgba(59,143,232,.06); }
-    .kb-col.drop-target .kb-col-head { background: rgba(59,143,232,.10); }
+    .kb-col[data-col="validacao_area"] .kb-col-head { color: var(--purple-tx); }
+    .kb-col.drop-target { outline: 2px dashed var(--blue); outline-offset: -2px; background: rgba(var(--in-rgb),.06); }
+    .kb-col.drop-target .kb-col-head { background: rgba(var(--in-rgb),.10); }
     #m-discovery .disc-sec { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
     #m-discovery .disc-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text3); margin-bottom: 8px; }
-    #m-discovery .disc-row { font-size: 13px; color: var(--text2, #C9C6BE); margin-bottom: 5px; line-height: 1.5; white-space: pre-wrap; }
+    #m-discovery .disc-row { font-size: 13px; color: var(--text2); margin-bottom: 5px; line-height: 1.5; white-space: pre-wrap; }
     #m-discovery .disc-row b { color: var(--text); }
     #m-discovery a.anexo { display: inline-block; color: var(--blue); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; font-size: 12px; margin: 3px 5px 0 0; }
     #m-discovery a.anexo:hover { text-decoration: underline; }
@@ -805,7 +807,7 @@
     .ger-congelado{display:inline-flex;align-items:center;gap:6px;font-size:12px;
   background:var(--bg3);color:var(--text2);border:1px solid var(--border);
   border-radius:6px;padding:5px 10px;cursor:help;}
-.ger-congelado.viva{background:#3A2A05;color:#FFC861;border-color:#7A5A12;}
+.ger-congelado.viva{background:var(--amber-bg);color:var(--amber-tx);border-color:rgba(var(--wn-rgb),.4);}
 .ger-filter-group { display:flex; flex-direction:column; gap:4px; }
     .ger-filter-group label { font-size:12px; color:var(--text2); }
     .ger-filter-group select {
@@ -833,7 +835,7 @@
        Par `--green-bg`/`--green-tx`, que existe nos dois temas com contraste. */
     .kb-prod {
       font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px;
-      background:var(--green-bg, #1E4208); color:var(--green-tx, #B2E07A);
+      background:var(--green-bg); color:var(--green-tx);
       white-space:nowrap; cursor:help;
     }
     /* Quando e quem marcou. Texto, e nao campo: nao se digita a data da subida. */
@@ -860,8 +862,8 @@
     .ger-cob-item { display:inline-flex; align-items:center; gap:6px;
       padding:3px 10px; border-radius:999px; border:1px solid var(--border); }
     .ger-cob-item b { font-size:15px; }
-    .ger-cob-planning { background:#0B2E52; color:#9FD0FF; border-color:#2C6EA8; }
-    .ger-cob-comite   { background:#3A2D12; color:#FFC470; border-color:#B07D28; }
+    .ger-cob-planning { background:var(--blue-bg); color:var(--blue-tx); border-color:rgba(var(--in-rgb),.4); }
+    .ger-cob-comite   { background:var(--amber-bg); color:var(--amber-tx); border-color:rgba(var(--wn-rgb),.4); }
     .ger-cob-sem      { color:var(--text3); }
     .ger-cob-nota { color:var(--text3); font-size:12px; flex-basis:100%; margin-top:2px; }
     .ger-kpi {
@@ -895,8 +897,8 @@
       font-size:15px; line-height:1; cursor:pointer; color:var(--text3); padding:2px;
       opacity:.35; transition:opacity .12s,color .12s; }
     .kb-card:hover .kb-estrela { opacity:.8; }
-    .kb-estrela.on { color:var(--amber-tx,#FFC470); opacity:1; }
-    .kb-estrela:hover { opacity:1; color:var(--amber-tx,#FFC470); }
+    .kb-estrela.on { color:var(--amber-tx); opacity:1; }
+    .kb-estrela:hover { opacity:1; color:var(--amber-tx); }
     /* ── EXCLUIR NO CARD, e por que ele se esconde ─────────────────────────
        O Kanban e uma tela de ARRASTAR. Um botao de exclusao permanente fica a
        um clique de distancia do gesto que a pessoa faz o dia inteiro, e a acao
@@ -944,16 +946,16 @@
       border-radius:999px; padding:5px 13px; font-size:12.5px; cursor:pointer;
       font-family:inherit; transition:background .12s,color .12s,border-color .12s; }
     .pm-aba:hover { color:var(--text); }
-    .pm-aba.ativa { background:var(--blue); border-color:var(--blue); color:#0E0E0D; font-weight:600; }
+    .pm-aba.ativa { background:var(--blue); border-color:var(--blue); color:var(--bg); font-weight:600; }
     .pm-etapa { display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:7px; }
     .pm-nota { font-size:11.5px; color:var(--text3); line-height:1.55; margin-top:12px; }
     /* Botao com NOME, e nao estrela solta: "★" pedia explicacao, "DEV-AXCred" nao. */
     .us-axcred { background:var(--bg3); border:1px solid var(--border); border-radius:999px;
       cursor:pointer; font-size:11.5px; font-weight:700; letter-spacing:.02em; padding:5px 11px;
       color:var(--text3); font-family:inherit; white-space:nowrap; transition:all .12s; }
-    .us-axcred:hover { color:var(--text); border-color:var(--amber-tx,#FFC470); }
-    .us-axcred.on { color:#0E0E0D; background:var(--amber-tx,#FFC470);
-      border-color:var(--amber-tx,#FFC470); }
+    .us-axcred:hover { color:var(--text); border-color:var(--amber-tx); }
+    .us-axcred.on { color:var(--bg); background:var(--amber-tx);
+      border-color:var(--amber-tx); }
     /* A frente cabe em uma linha: nome de pipeline e comprido ("Dados &
        Inteligencia") e sem largura minima a coluna espremia o texto ate uma
        palavra por linha. */
@@ -999,7 +1001,7 @@
        que cresce sem fim esconde o botao de gerar. */
     .ap-lista { max-height:230px; overflow-y:auto; display:flex; flex-direction:column;
       gap:6px; border:1px solid var(--border); border-radius:8px; padding:10px; }
-    .ap-lista .ap-cod { font-size:11px; color:var(--blue-tx,#9BC8F8); font-weight:700; }
+    .ap-lista .ap-cod { font-size:11px; color:var(--blue-tx); font-weight:700; }
     /* Bandeja: o titulo vira gatilho de largura inteira e a seta gira. O RESUMO
        (ger-summary) fica FORA do que recolhe — e a resposta da secao. */
     .ger-bandeja > .ger-section-title { width:100%; background:none; border:none;
@@ -1013,10 +1015,10 @@
     .ger-bandeja:not(.aberta) .ger-bandeja-corpo { display:none; }
     /* Periodo dentro do titulo da secao: e a informacao que faltava para o
        relatorio nao parecer contraditorio. */
-    .rel-per { font-size:12px; font-weight:600; color:var(--blue-tx,#9BC8F8);
-      background:var(--blue-bg,#0C3260); border-radius:5px; padding:2px 8px;
+    .rel-per { font-size:12px; font-weight:600; color:var(--blue-tx);
+      background:var(--blue-bg); border-radius:5px; padding:2px 8px;
       margin-left:8px; letter-spacing:0; text-transform:none; white-space:nowrap; }
-    .rel-falta { color:var(--amber-tx,#FFC470); cursor:help; }
+    .rel-falta { color:var(--amber-tx); cursor:help; }
     /* Entradas do mes: total, quebra por tema e por classificacao. */
     .ent-tab { width:100%; border-collapse:separate; border-spacing:0 6px; font-size:14px; }
     .ent-tab th { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase;
@@ -1034,8 +1036,8 @@
     .ent-barra i.sust { background:var(--amber); }
     .ent-barra i.evo  { background:var(--blue); }
     .ent-pin { font-size:11px; font-weight:700; border-radius:20px; padding:1px 8px; white-space:nowrap; }
-    .ent-pin.sust { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
-    .ent-pin.evo  { background:var(--blue-bg,#0C3260);  color:var(--blue-tx,#9BC8F8); }
+    .ent-pin.sust { background:var(--amber-bg); color:var(--amber-tx); }
+    .ent-pin.evo  { background:var(--blue-bg);  color:var(--blue-tx); }
     .ent-pin.sem  { background:var(--bg4); color:var(--text2); }
     .ent-vazio { font-size:13px; color:var(--text3); line-height:1.6; margin:0; }
     /* Relatórios */
@@ -1050,8 +1052,8 @@
        nao diz se melhorou, e obrigar a pessoa a lembrar do mes passado e o que faz
        a reuniao virar consulta ao histórico. */
     .rel-delta { font-size:11px; font-weight:600; margin-top:3px; display:block; }
-    .rel-delta.sobe { color:var(--green-tx,#3EC98E); }
-    .rel-delta.cai  { color:var(--red-tx,#F9A0A0); }
+    .rel-delta.sobe { color:var(--green-tx); }
+    .rel-delta.cai  { color:var(--red-tx); }
     .rel-delta.igual{ color:var(--text3); }
 
     /* ONDE A CAPACIDADE FOI: barra horizontal, uma cor.
@@ -1064,7 +1066,7 @@
       text-overflow:ellipsis; white-space:nowrap; }
     .rel-tema-barra { height:6px; background:var(--bg3); border-radius:3px; overflow:hidden;
       margin-top:4px; }
-    .rel-tema-fill { height:100%; background:var(--blue,#4C9AFF); border-radius:3px; }
+    .rel-tema-fill { height:100%; background:var(--blue); border-radius:3px; }
     .rel-tema-num { font-size:13px; text-align:right; color:var(--text2);
       font-variant-numeric:tabular-nums; }
     .rel-tema-pct { font-size:11.5px; text-align:right; color:var(--text3);
@@ -1088,7 +1090,7 @@
     .rel-vem-tema { color:var(--text3); font-size:11.5px; overflow:hidden;
       text-overflow:ellipsis; white-space:nowrap; }
     .rel-vem-pt { text-align:right; color:var(--text2); font-variant-numeric:tabular-nums; }
-    .rel-vem-sem { color:var(--amber-tx,#FFC470); }
+    .rel-vem-sem { color:var(--amber-tx); }
     @media (max-width: 820px) {
       /* Em tela estreita o tema sai e sobram codigo, titulo e pontos: e o que
          responde a pergunta. */
@@ -1119,7 +1121,7 @@
     .rel-grupo-head:hover { color:var(--text); border-bottom-color:var(--text3); }
     /* O foco de teclado tem de ser VISIVEL: sem isso o botao existe para o leitor
        de tela e desaparece para quem navega com Tab. */
-    .rel-grupo-head:focus-visible { outline:2px solid var(--blue,#4C9AFF);
+    .rel-grupo-head:focus-visible { outline:2px solid var(--blue);
       outline-offset:2px; border-radius:3px; }
     .rel-grupo-seta { flex:0 0 auto; font-size:10px; letter-spacing:0; }
     .rel-grupo-nome { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
@@ -1146,8 +1148,8 @@
       text-align:left; cursor:pointer; display:flex; align-items:baseline;
       gap:7px; line-height:1.35; width:100%;
     }
-    .rel-card-titulo:hover { color:var(--blue,#3B8FE8); }
-    .rel-card-titulo:focus-visible { outline:2px solid var(--amber,#E89C2F); outline-offset:3px; border-radius:4px; }
+    .rel-card-titulo:hover { color:var(--blue); }
+    .rel-card-titulo:focus-visible { outline:2px solid var(--amber); outline-offset:3px; border-radius:4px; }
     .rel-card-seta { color:var(--text3); font-size:11px; flex-shrink:0; }
     /* O detalhe herda o `.ent-*` do modal — e o MESMO HTML, por construcao. Aqui
        so se dá o respiro que separa o detalhe do resumo logo acima. */
@@ -1163,28 +1165,28 @@
        nas duas telas. Com --blue: 4,99:1 no escuro, 5,10:1 no claro. */
     .anexo-link { display:inline-flex; align-items:center; gap:4px; color:var(--blue); text-decoration:none; border:1px solid var(--border); border-radius:6px; padding:4px 9px; font-size:12px; }
     .anexo-link:hover { text-decoration:underline; }
-    .anexo-link:focus-visible { outline:2px solid var(--amber,#E89C2F); outline-offset:2px; }
+    .anexo-link:focus-visible { outline:2px solid var(--amber); outline-offset:2px; }
     /* O build fica discreto: e diagnostico, e nao informacao do dia a dia.
        Mas tem de estar na tela, e nao escondido no console — quem precisa
        dele esta justamente sem saber se a tela e a nova. */
     #build-selo { font-size:10px; color:var(--text3); opacity:.6; margin-left:8px;
                   font-family:ui-monospace,monospace; letter-spacing:.02em; }
     /* ─── SPIKE: as tres assinaturas ─────────────────────────────────────── */
-    .kb-spike { font-size:11px; background:var(--purple-bg,#2A1F4A); color:var(--purple-tx,#C4AEF5); border-radius:4px; padding:2px 7px; font-weight:700; white-space:nowrap; }
-    .kb-spike.ok { background:var(--green-bg,#1E4208); color:var(--green-tx,#B2E07A); }
-    .spike-bloco { border-left:3px solid var(--purple,#9B6FE8); }
-    .spike-bloco.completo { border-left-color:var(--green,#5EA832); }
+    .kb-spike { font-size:11px; background:var(--purple-bg); color:var(--purple-tx); border-radius:4px; padding:2px 7px; font-weight:700; white-space:nowrap; }
+    .kb-spike.ok { background:var(--green-bg); color:var(--green-tx); }
+    .spike-bloco { border-left:3px solid var(--purple); }
+    .spike-bloco.completo { border-left-color:var(--green); }
     .spike-linha { display:flex; align-items:center; gap:10px; padding:6px 0; font-size:13px; color:var(--text2); border-bottom:1px solid var(--border); }
     .spike-linha:last-of-type { border-bottom:0; }
     .spike-linha.ok .spike-nome { color:var(--text); font-weight:600; }
     .spike-mk { width:18px; flex-shrink:0; }
     .spike-nome { flex:1; }
     .spike-em { font-size:11px; color:var(--text3); white-space:nowrap; }
-    .spike-aviso { font-size:12px; color:var(--amber-tx,#FFE14D); margin:8px 0 0; }
-    .spike-aviso.ok { color:var(--green-tx,#B2E07A); }
+    .spike-aviso { font-size:12px; color:var(--amber-tx); margin:8px 0 0; }
+    .spike-aviso.ok { color:var(--green-tx); }
     .us-spike { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); cursor:pointer; white-space:nowrap; }
     .us-spike input { width:auto; margin:0; }
-    .rel-pts { font-size:11px; background:#123A52; color:#8AD5F0; border-radius:4px; padding:2px 7px; font-weight:700; white-space:nowrap; }
+    .rel-pts { font-size:11px; background:var(--blue-bg); color:var(--blue-tx); border-radius:4px; padding:2px 7px; font-weight:700; white-space:nowrap; }
     .rel-card-meta { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--text2); margin-bottom:8px; }
     .rel-card-meta b { color:var(--text); }
     .rel-atraso { color:var(--red); font-weight:600; }
@@ -1192,7 +1194,7 @@
       font-size:13px; color:var(--text2); line-height:1.55; white-space:pre-wrap;
       border-left:2px solid var(--border2); padding-left:10px;
     }
-    .rel-impl-falta { color:var(--amber-tx,#FFE14D); border-left-color:var(--amber,#E89C2F); font-size:12px; }
+    .rel-impl-falta { color:var(--amber-tx); border-left-color:var(--amber); font-size:12px; }
     /* A cobertura do resumo na linha de contexto: informa sem disputar com o
        periodo, que e o que a pessoa le primeiro ali. */
     .rel-cobertura { color:var(--text3); }
@@ -1205,7 +1207,7 @@
       gap:16px; flex-wrap:wrap; margin-bottom:10px; }
     .ger-cap-sub { color:var(--text3); font-size:12px; font-weight:400; }
     .ger-cap-tot { font-size:13px; color:var(--text2); font-variant-numeric:tabular-nums; }
-    .ger-cap-feito { color:var(--green-tx,#3EC98E); }
+    .ger-cap-feito { color:var(--green-tx); }
     .ger-cap-lista { display:grid; gap:5px; }
     .ger-cap-linha { display:grid;
       grid-template-columns:150px 1fr 48px 48px 46px 40px; align-items:center; gap:10px; }
@@ -1216,13 +1218,13 @@
     .ger-cap-b { position:absolute; left:0; border-radius:4px; }
     /* A do plano ocupa a faixa inteira e fica atras; a do entregue e mais fina e
        vem na frente — a leitura e "quanto do plano se encheu". */
-    .ger-cap-b-plan { top:0; height:14px; background:var(--blue,#4C9AFF); opacity:.32; }
-    .ger-cap-b-feito { top:3px; height:8px; background:var(--green,#3EC98E); }
+    .ger-cap-b-plan { top:0; height:14px; background:var(--blue); opacity:.32; }
+    .ger-cap-b-feito { top:3px; height:8px; background:var(--green); }
     .ger-cap-num { font-size:13px; text-align:right; font-variant-numeric:tabular-nums;
       color:var(--text2); }
     .ger-cap-pct { font-size:12px; text-align:right; color:var(--text3);
       font-variant-numeric:tabular-nums; }
-    .ger-cap-alerta { font-size:11px; color:var(--amber-tx,#FFC470); text-align:right; }
+    .ger-cap-alerta { font-size:11px; color:var(--amber-tx); text-align:right; }
     .ger-cap-nota { font-size:11.5px; color:var(--text3); line-height:1.55; margin-top:10px; }
     @media (max-width: 720px) {
       /* Em tela estreita a barra sai e sobram os numeros: eles respondem a
@@ -1315,12 +1317,12 @@
     .sf-btn:hover { border-color: var(--border2); color: var(--text); }
     .sf-btn.active { border-color: transparent; }
     .sf-btn.all.active   { background: var(--bg4); color: var(--text); border-color: var(--border2); }
-    .sf-btn.recebida.active    { background:#0C3260; color:#9BC8F8; border-color:#1a5080; }
-    .sf-btn.refinamento.active { background:#341A6E; color:#C9AEFF; border-color:#5030A0; }
-    .sf-btn.regra.active       { background:#063D30; color:#7EECD8; border-color:#0A6050; }
-    .sf-btn.estimada.active    { background:#5C3608; color:#F9C97A; border-color:#8C5010; }
-    .sf-btn.iniciada.active    { background:#1E4208; color:#B2E07A; border-color:#306010; }
-    .sf-btn.negada.active      { background:#5C0A0A; color:#F9A0A0; border-color:#8C1010; }
+    .sf-btn.recebida.active    { background:var(--blue-bg); color:var(--blue-tx); border-color:rgba(var(--in-rgb),.4); }
+    .sf-btn.refinamento.active { background:var(--purple-bg); color:var(--purple-tx); border-color:rgba(var(--pu-rgb),.4); }
+    .sf-btn.regra.active       { background:var(--teal-bg); color:var(--teal-tx); border-color:rgba(var(--tl-rgb),.4); }
+    .sf-btn.estimada.active    { background:var(--amber-bg); color:var(--amber-tx); border-color:rgba(var(--wn-rgb),.4); }
+    .sf-btn.iniciada.active    { background:var(--green-bg); color:var(--green-tx); border-color:rgba(var(--ok-rgb),.4); }
+    .sf-btn.negada.active      { background:var(--red-bg); color:var(--red-tx); border-color:rgba(var(--dg-rgb),.4); }
 
     /* CARDS DE LISTA */
     /* A frase de apoio substitui o titulo que repetia o nome da aba. Ela ocupa
@@ -1398,14 +1400,14 @@
     .vt-resumo { display:flex; gap:14px; flex-wrap:wrap; align-items:center;
       font-size:12.5px; color:var(--text2); margin-bottom:4px; }
     .vt-resumo b { color:var(--text); }
-    .vt-alerta { color:var(--amber-tx,#FFC470); }
+    .vt-alerta { color:var(--amber-tx); }
     .vt-tabela td.vt-voto { font-size:15px; font-weight:700; text-align:right;
       font-variant-numeric:tabular-nums; width:80px; }
     /* Extremos marcados so quando houve divergencia. Verde no menor e ambar no
        maior: nao e erro, e leitura diferente — e o menor costuma ser quem ja fez
        algo parecido. */
-    .vt-tabela tr.vt-min td.vt-voto { color:var(--green,#3EC98E); }
-    .vt-tabela tr.vt-max td.vt-voto { color:var(--amber-tx,#FFC470); }
+    .vt-tabela tr.vt-min td.vt-voto { color:var(--green); }
+    .vt-tabela tr.vt-max td.vt-voto { color:var(--amber-tx); }
     .vt-tag { font-size:10px; font-weight:700; text-transform:uppercase;
       letter-spacing:.04em; color:var(--text3); margin-left:6px; }
     /* Conta de dev que nao alcanca demanda nenhuma: e a pessoa que abre a API e
@@ -1419,10 +1421,10 @@
     .us-acoes { display:inline-flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 
     .us-tag { display:inline-block; font-size:11px; font-weight:700; border-radius:20px; padding:2px 9px; }
-    .us-tag-admin    { background:#341A6E; color:#C9AEFF; }
-    .us-tag-dev      { background:#0C3260; color:#9BC8F8; }
-    .us-tag-consulta { background:#252522; color:#A8A49A; }
-    .us-tag-off      { background:#3A1414; color:#F9A0A0; }
+    .us-tag-admin    { background:var(--purple-bg); color:var(--purple-tx); }
+    .us-tag-dev      { background:var(--blue-bg); color:var(--blue-tx); }
+    .us-tag-consulta { background:var(--bg4); color:var(--text2); }
+    .us-tag-off      { background:var(--red-bg); color:var(--red-tx); }
 
     /* Pendencias precisam saltar aos olhos: sao acao a tomar, nao informacao.
        Sem cor fixa: o #FFD166 que estava aqui dava 1.31:1 sobre fundo claro,
@@ -1436,24 +1438,24 @@
       .us-form { grid-template-columns:1fr; }
     }
     .badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
-    .badge-backlog      { background:#1A2A3A; color:#6A9AC8; }
-    .badge-levantar_req { background:#2A1A4E; color:#C9AEFF; }
-    .badge-planejado    { background:#0C3260; color:#9BC8F8; }
-    .badge-em_andamento{ background:#3D3600; color:#FFE14D; }
-    .badge-planning    { background:#0E3A3A; color:#7ED8D8; }
-    .badge-concluido   { background:#063D30; color:#7EECD8; }
-    .badge-atrasado    { background:#5C0A0A; color:#F9A0A0; }
-    .badge-validacao   { background:var(--amber-bg, #4A2800); color:var(--amber-tx, #FFC470); }
-    .sf-btn.validacao.active { background:var(--amber-bg, #4A2800); color:var(--amber-tx, #FFC470); border-color:var(--amber); }
+    .badge-backlog      { background:var(--bg3); color:var(--text2); }
+    .badge-levantar_req { background:var(--purple-bg); color:var(--purple-tx); }
+    .badge-planejado    { background:var(--blue-bg); color:var(--blue-tx); }
+    .badge-em_andamento{ background:var(--amber-bg); color:var(--amber-tx); }
+    .badge-planning    { background:var(--teal-bg); color:var(--teal-tx); }
+    .badge-concluido   { background:var(--teal-bg); color:var(--teal-tx); }
+    .badge-atrasado    { background:var(--red-bg); color:var(--red-tx); }
+    .badge-validacao   { background:var(--amber-bg); color:var(--amber-tx); }
+    .sf-btn.validacao.active { background:var(--amber-bg); color:var(--amber-tx); border-color:var(--amber); }
     /* Validacao da AREA em roxo, e nao no ambar da validacao do PM/PO: duas
        etapas vizinhas da mesma cor se leem como uma so, e a pergunta "parou na
        area ou no PM/PO?" e justamente a que a etapa nova existe para responder. */
-    .badge-validacao_area { background:#2E1540; color:#D8AEF0; }
-    .sf-btn.validacao_area.active { background:#2E1540; color:#D8AEF0; border-color:#7B4A9C; }
-    .kb-area-tag { font-size: 10.5px; font-weight: 700; color: #D8AEF0;
-      background: #2E1540; border: 1px solid #7B4A9C; border-radius: 4px;
+    .badge-validacao_area { background:var(--purple-bg); color:var(--purple-tx); }
+    .sf-btn.validacao_area.active { background:var(--purple-bg); color:var(--purple-tx); border-color:rgba(var(--pu-rgb),.4); }
+    .kb-area-tag { font-size: 10.5px; font-weight: 700; color: var(--purple-tx);
+      background: var(--purple-bg); border: 1px solid rgba(var(--pu-rgb),.4); border-radius: 4px;
       padding: 1px 6px; cursor: help; }
-    .badge-negada      { background:#5C0A0A; color:#F9A0A0; }
+    .badge-negada      { background:var(--red-bg); color:var(--red-tx); }
 
     /* MODAL */
     .modal-overlay {
@@ -1556,11 +1558,11 @@
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="prevoo.js?v=ab2758c54c"></script>
-  <script src="deck-grafico.js?v=30e803d757"></script>
-  <script src="deck-fundo.js?v=050a7db483"></script>
+  <script src="deck-grafico.js?v=e976ac3777"></script>
+  <script src="deck-fundo.js?v=3c4f91ef7c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
-  <script src="resumo-projeto.js?v=2e30585cbe"></script>
+  <script src="resumo-projeto.js?v=5f25c0c2ff"></script>
   <script src="fila.js?v=90c9b67421"></script>
 <script src="tema.js?v=5d9c25fd66"></script>
 <script src="axis.js?v=d28df3fc4b"></script>
@@ -1569,25 +1571,25 @@
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
 <script src="capacidade.js?v=e7e1449a7d"></script>
-<script src="apresentacao.js?v=a45dfaebcb"></script>
-<script src="relatorio-ppt.js?v=0e3f5d97ed"></script>
+<script src="apresentacao.js?v=2b32dc2ac1"></script>
+<script src="relatorio-ppt.js?v=867129faa4"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
-<script src="rede-repete.js?v=ff7a669a03"></script>
+<script src="rede-repete.js?v=4daaef730c"></script>
 <script src="pausa.js?v=06c4b82f84"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="colaboradores.js?v=c94edfa2e2"></script>
-<script src="senha.js?v=8ce4f87e46"></script>
+<script src="senha.js?v=ae10842c4b"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
-<script src="modelo-descricao.js?v=b8fbe1a51e"></script>
-<script src="links-github.js?v=0108ec6e06"></script>
+<script src="modelo-descricao.js?v=82c7923cdc"></script>
+<script src="links-github.js?v=5ebb0e63ab"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
-<script src="mensageria-abrir.js?v=aa283f3dc4"></script>
-<script src="selo-validacao.js?v=6fcec3ad51"></script>
+<script src="mensageria-abrir.js?v=2b19b49af3"></script>
+<script src="selo-validacao.js?v=0b6fdb5439"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=c0c46daaf4"></script>
+<script src="sprint.js?v=495432df68"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -1598,13 +1600,13 @@
     <span class="axis-login-logo axis-logo" role="img" aria-label="AXIS"></span>
     <h2>Área administrativa</h2>
     <p>Todas as demandas da tecnologia em um só eixo.</p>
-    <div id="sem-token-aviso" style="display:none;background:#5C3608;color:#F9C97A;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px;line-height:1.5;">
-      🔗 Primeiro acesso neste dispositivo.<br>Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de entrar.
+    <div id="sem-token-aviso" style="display:none;background:var(--amber-bg);color:var(--amber-tx);border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px;line-height:1.5;">
+      <i class="axi axi-link"></i> Primeiro acesso neste dispositivo.<br>Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de entrar.
     </div>
     <input type="text" id="usuario-input" placeholder="Usuário ou e-mail" autocomplete="username"
            onkeydown="if(event.key==='Enter')document.getElementById('senha-input').focus()" />
     <input type="password" id="senha-input" placeholder="Sua senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
-    <div style="font-size:12px;color:#8B92A0;margin:-4px 0 10px;line-height:1.5">
+    <div style="font-size:12px;color:var(--text3);margin:-4px 0 10px;line-height:1.5">
       Serve o usuário ou o e-mail — o que você tiver.<br>
       Ainda não tem conta? Deixe em branco e use a senha geral de admin.
     </div>
@@ -1632,33 +1634,33 @@
       <!-- Links, nao botoes: com <button onclick="window.open"> o meio-clique e o
            Ctrl+clique nao abrem em nova aba, e quem trabalha com varias telas
            abertas perde o gesto que usa mais. As outras telas ja usavam <a>. -->
-      <a href="gantt.html" class="btn btn-secondary btn-sm">📅 Planejamento</a>
-      <a href="poker.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">🃏 Planning Poker</a>
-      <a href="dev.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">🗂 Painel Dev</a>
+      <a href="gantt.html" class="btn btn-secondary btn-sm"><i class="axi axi-calendar"></i> Planejamento</a>
+      <a href="poker.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener"><i class="axi axi-cards"></i> Planning Poker</a>
+      <a href="dev.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener"><i class="axi axi-folder"></i> Painel Dev</a>
       <!-- A agenda de cobranca. Entra aqui, e nao numa aba interna, porque nao e
            demanda: nao tem etapa, nao tem dev, nao alimenta relatorio nenhum.
            Misturar as duas coisas na mesma tela faria "o que o time esta
            fazendo" e "o que eu estou cobrando de fora" parecerem a mesma lista. -->
-      <a href="follow.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">📌 Acompanhamentos</a>
+      <a href="follow.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener"><i class="axi axi-pin"></i> Acompanhamentos</a>
       <a href="index.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">Ver painel público</a>
-      <button class="btn btn-success btn-sm" onclick="saveToGitHub()">💾 Publicar alterações</button>
+      <button class="btn btn-success btn-sm" onclick="saveToGitHub()"><i class="axi axi-save"></i> Publicar alterações</button>
       <button class="btn btn-secondary btn-sm" onclick="abrirTrocaSenha()" title="Alterar a senha da sua conta">Minha senha</button>
       <button class="btn btn-secondary btn-sm" onclick="doLogout()">Sair</button>
     </div>
   </header>
-  <div id="save-error" style="display:none;background:#5C0A0A;color:#F9A0A0;border-bottom:1px solid #8C1010;padding:10px 24px;font-size:13px;cursor:pointer" onclick="this.style.display='none'">
-    ⚠️ Erro ao publicar — clique aqui para fechar
+  <div id="save-error" style="display:none;background:var(--red-bg);color:var(--red-tx);border-bottom:1px solid rgba(var(--dg-rgb),.4);padding:10px 24px;font-size:13px;cursor:pointer" onclick="this.style.display='none'">
+    <i class="axi axi-alert"></i> Erro ao publicar — clique aqui para fechar
   </div>
   <!-- Faixa de NAO PUBLICADO. Existe porque o aviso de falha era um toast de 3,5
        segundos: quem olhava para o lado nao via, fechava a aba e perdia o card —
        ele so existia na memoria da pagina. -->
-  <div id="pend-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:#3D1A1A;color:#F9A0A0;border-bottom:1px solid #6B2D2D;padding:10px 24px;font-size:13px">
-    <span id="pend-texto">⚠️ Há alterações que ainda NÃO foram publicadas.</span>
+  <div id="pend-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:var(--red-bg);color:var(--red-tx);border-bottom:1px solid rgba(var(--dg-rgb),.4);padding:10px 24px;font-size:13px">
+    <i class="axi axi-alert"></i><span id="pend-texto">Há alterações que ainda NÃO foram publicadas.</span>
     <button class="btn btn-primary btn-sm" onclick="publicarPendentes()">Publicar agora</button>
-    <span style="color:#C98080;font-size:12px">Elas estão guardadas neste navegador e voltam se você reabrir a tela.</span>
+    <span style="color:var(--red-tx);font-size:12px">Elas estão guardadas neste navegador e voltam se você reabrir a tela.</span>
   </div>
-  <div id="stale-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:#3D3600;color:#FFE14D;border-bottom:1px solid #6B5F00;padding:10px 24px;font-size:13px">
-    <span>🔄 Há alterações mais novas no servidor (feitas no Planejamento, no Painel Dev ou por outra pessoa). Esta tela está mostrando uma versão anterior.</span>
+  <div id="stale-banner" style="display:none;align-items:center;gap:14px;flex-wrap:wrap;background:var(--amber-bg);color:var(--amber-tx);border-bottom:1px solid rgba(var(--wn-rgb),.4);padding:10px 24px;font-size:13px">
+    <span><i class="axi axi-refresh"></i> Há alterações mais novas no servidor (feitas no Planejamento, no Painel Dev ou por outra pessoa). Esta tela está mostrando uma versão anterior.</span>
     <button class="btn btn-secondary btn-sm" onclick="recarregarDoServidor()">Atualizar agora</button>
     <button class="btn btn-secondary btn-sm" onclick="avisaDesatualizado(false)">Depois</button>
   </div>
@@ -1761,7 +1763,7 @@
         <select id="mes-mes" onchange="renderMes()"></select>
         <select id="mes-ano" onchange="renderMes()"></select>
         <button class="btn btn-secondary btn-sm" onclick="mesFecharAbrir()"
-                style="margin-left:auto">📦 Fechar o mês</button>
+                style="margin-left:auto"><i class="axi axi-package"></i> Fechar o mês</button>
       </div>
       <div id="mes-resumo" class="ger-summary"></div>
       <div id="mes-corpo"></div>
@@ -1786,7 +1788,7 @@
     <div id="modal-apres" class="modal-overlay" style="display:none">
       <div class="modal" style="max-width:720px">
         <button type="button" class="modal-close-btn" onclick="closeModal('modal-apres')" aria-label="Fechar">✕</button>
-        <h2>📊 Apresentação executiva</h2>
+        <h2><i class="axi axi-chart"></i> Apresentação executiva</h2>
 
         <!-- OS DOIS DECKS, NUM LUGAR SÓ.
              "Em admin, gerencial e relatorios tenho possibilidade de imprimir
@@ -1926,14 +1928,14 @@
           <select id="ger-ano"></select>
         </div>
         <button class="btn btn-primary" onclick="renderGerencial()">Atualizar</button>
-        <a href="projetos.html" class="btn btn-secondary" target="_blank">📁 Projetos por Tema</a>
+        <a href="projetos.html" class="btn btn-secondary" target="_blank"><i class="axi axi-folder"></i> Projetos por Tema</a>
         <button class="btn btn-secondary" onclick="apresAbrir()"
-                title="Monta um .pptx executivo com o que você escolher">📊 Apresentação</button>
+                title="Monta um .pptx executivo com o que você escolher"><i class="axi axi-chart"></i> Apresentação</button>
         <!-- A BASE EM CSV fica ao lado do gerador do deck, e não numa aba de
              exportação: os dois respondem à mesma pergunta ("o fechamento deste
              mês"), e o período dos dois é o mesmo filtro logo acima. -->
         <button class="btn btn-secondary" id="ger-csv-btn" onclick="baixarCsvDoMes()"
-                title="Uma linha por demanda × pessoa, com pontos, horas, prazo, frente e projeto — para abrir no Excel ou mandar para alguém">📥 Base do mês (CSV)</button>
+                title="Uma linha por demanda × pessoa, com pontos, horas, prazo, frente e projeto — para abrir no Excel ou mandar para alguém"><i class="axi axi-download"></i> Base do mês (CSV)</button>
         <!-- O CADEADO FICA AO LADO DO BOTAO QUE GERA O DECK, e nao numa aba de
              configuracao: a pergunta "este mes ja esta fechado?" se faz no
              momento de apresentar, e uma marca que mora longe do gerador nao e
@@ -1969,7 +1971,7 @@
       <div class="ger-section-sep"></div>
       <section class="ger-bandeja" data-bandeja="sprint">
         <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('sprint')" aria-expanded="true">
-          <span><span class="ger-bandeja-seta">▶</span>🏃 Sprint</span>
+          <span><span class="ger-bandeja-seta">▶</span><i class="axi axi-refresh"></i> Sprint</span>
           <span class="ger-section-hint">pontuação, validados pelo PM/PO e cumprimento — e o que está em risco</span>
           <span class="ger-bandeja-acao">recolher</span>
         </button>
@@ -2005,7 +2007,7 @@
       <div class="ger-section-sep"></div>
       <section class="ger-bandeja" data-bandeja="sempontos">
         <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('sempontos')" aria-expanded="true">
-          <span><span class="ger-bandeja-seta">▶</span>🃏 Comprometidas sem pontuação</span>
+          <span><span class="ger-bandeja-seta">▶</span><i class="axi axi-cards"></i> Comprometidas sem pontuação</span>
           <span class="ger-section-hint">de Planejado em diante, sem pontos do Planning Poker</span>
           <span class="ger-bandeja-acao">recolher</span>
         </button>
@@ -2017,7 +2019,7 @@
       <div class="ger-section-sep"></div>
       <section class="ger-bandeja" data-bandeja="pm">
         <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('pm')" aria-expanded="true">
-          <span><span class="ger-bandeja-seta">▶</span>🧭 Trabalho do PM/PO</span>
+          <span><span class="ger-bandeja-seta">▶</span><i class="axi axi-globe"></i> Trabalho do PM/PO</span>
           <span class="ger-section-hint">o que passou por Backlog, Requisitos, Planning e Validação</span>
           <span class="ger-bandeja-acao">recolher</span>
         </button>
@@ -2035,7 +2037,7 @@
       <div class="ger-section-sep"></div>
       <section class="ger-bandeja" data-bandeja="cumpri">
         <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('cumpri')" aria-expanded="true">
-          <span><span class="ger-bandeja-seta">▶</span>📦 Cumprimento do mês</span>
+          <span><span class="ger-bandeja-seta">▶</span><i class="axi axi-package"></i> Cumprimento do mês</span>
           <span class="ger-section-hint">o que o mês prometeu, o que entregou e o que transbordou</span>
           <span class="ger-bandeja-acao">recolher</span>
         </button>
@@ -2046,7 +2048,7 @@
       <div class="ger-section-sep"></div>
       <section class="ger-bandeja" data-bandeja="prazo">
         <button type="button" class="ger-section-title" onclick="gerBandejaAlterna('prazo')" aria-expanded="true">
-          <span><span class="ger-bandeja-seta">▶</span>⏱ Entregas no prazo</span>
+          <span><span class="ger-bandeja-seta">▶</span><i class="axi axi-clock"></i> Entregas no prazo</span>
           <span class="ger-section-hint">concluídas no mês filtrado, pela data de conclusão</span>
           <span class="ger-bandeja-acao">recolher</span>
         </button>
@@ -2065,7 +2067,7 @@
 
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
-        🃏 Pontos do Planning Poker
+        <span><i class="axi axi-cards"></i> Pontos do Planning Poker</span>
         <span class="ger-section-hint">semana = bloco de 5 dias úteis; card contado pela data de entrega (ou início)</span>
       </div>
       <div id="ger-pts-summary" class="ger-summary"></div>
@@ -2256,13 +2258,13 @@
           </select>
         </div>
         <button class="btn btn-secondary" onclick="renderRelatorios()">Atualizar</button>
-        <button class="btn btn-primary" onclick="copiarRelatorio()">📋 Copiar tudo</button>
+        <button class="btn btn-primary" onclick="copiarRelatorio()"><i class="axi axi-clipboard"></i> Copiar tudo</button>
         <!-- O BOTÃO DA APRESENTAÇÃO SAIU DAQUI, e a linha que ficou no lugar não
              é decoração: quem usava este botão vai procurá-lo, e "sumiu" é a
              pior resposta possível. Ela diz para onde ele foi, e não é um
              segundo gerador — é uma frase. -->
         <span class="ger-section-hint" style="align-self:center">
-          📊 A apresentação deste assunto agora sai na aba <strong>Gerencial</strong>,
+          <i class="axi axi-chart"></i> A apresentação deste assunto agora sai na aba <strong>Gerencial</strong>,
           junto com a do fechamento.</span>
       </div>
 
@@ -2279,7 +2281,7 @@
            diretoria pergunta "o mes foi bom?" antes de "o que saiu?", e uma lista
            de trinta cards sem esse resumo obriga a pessoa a somar de cabeca. -->
       <div class="ger-section-title">
-        <span>📊 Como o time andou</span>
+        <span><i class="axi axi-chart"></i> Como o time andou</span>
         <span class="ger-section-hint" id="rel-andou-hint"></span>
       </div>
       <div id="rel-andou" class="ger-summary" style="margin-bottom:10px"></div>
@@ -2287,24 +2289,24 @@
 
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
-        <span>🎯 Onde a capacidade foi</span>
+        <span><i class="axi axi-target"></i> Onde a capacidade foi</span>
         <span class="ger-section-hint" id="rel-temas-hint"></span>
       </div>
       <div id="rel-temas"></div>
 
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
-        <span id="rel-ent-titulo">✅ Entregues</span>
+        <span id="rel-ent-titulo"><i class="axi axi-check"></i> Entregues</span>
         <span class="ger-section-hint" id="rel-ent-hint"></span>
-        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('entregues')" style="margin-left:auto">📋 Copiar</button>
+        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('entregues')" style="margin-left:auto"><i class="axi axi-clipboard"></i> Copiar</button>
       </div>
       <div id="rel-entregues"></div>
 
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
-        <span id="rel-dev-titulo">🚧 Em desenvolvimento</span>
+        <span id="rel-dev-titulo"><i class="axi axi-alert"></i> Em desenvolvimento</span>
         <span class="ger-section-hint" id="rel-dev-hint"></span>
-        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('andamento')" style="margin-left:auto">📋 Copiar</button>
+        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('andamento')" style="margin-left:auto"><i class="axi axi-clipboard"></i> Copiar</button>
       </div>
       <div id="rel-andamento"></div>
 
@@ -2314,9 +2316,9 @@
            para o time, o outro e decisao de quem planeja. -->
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
-        <span>🔭 O que vem</span>
+        <span><i class="axi axi-eye"></i> O que vem</span>
         <span class="ger-section-hint" id="rel-vem-hint"></span>
-        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('vem')" style="margin-left:auto">📋 Copiar</button>
+        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('vem')" style="margin-left:auto"><i class="axi axi-clipboard"></i> Copiar</button>
       </div>
       <div id="rel-vem"></div>
 
@@ -2327,9 +2329,9 @@
            urgente. -->
       <div class="ger-section-sep"></div>
       <div class="ger-section-title">
-        <span>📥 Backlog</span>
+        <span><i class="axi axi-download"></i> Backlog</span>
         <span class="ger-section-hint" id="rel-bkl-hint"></span>
-        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('backlog')" style="margin-left:auto">📋 Copiar</button>
+        <button class="btn btn-secondary btn-sm" onclick="copiarRelatorio('backlog')" style="margin-left:auto"><i class="axi axi-clipboard"></i> Copiar</button>
       </div>
       <div id="rel-bkl"></div>
     </div>
@@ -2343,7 +2345,7 @@
     <h2 id="modal-melhoria-title">Nova issue</h2>
     <button type="button" id="m-codigo" onclick="copiarCodigo(event)" title="Clique para copiar o código · Shift+clique copia o link deste card"
             style="display:none;font-family:ui-monospace,monospace;font-size:12px;font-weight:700;
-                   color:var(--blue-tx,#9BC8F8);background:var(--blue-bg,#0C3260);border:none;
+                   color:var(--blue-tx);background:var(--blue-bg);border:none;
                    border-radius:5px;padding:3px 9px;margin:-8px 0 14px;cursor:pointer"></button>
     <button type="button" id="m-estrela" onclick="destaqueAlterna(event, document.getElementById('m-id').value)"
             style="display:none;background:none;border:none;font-size:19px;cursor:pointer;
@@ -2411,7 +2413,7 @@
       <div id="m-msg-linha" style="display:none;margin-top:8px">
         <button type="button" id="m-btn-msg" onclick="admAbreMensageria()"
                 class="btn btn-secondary btn-sm"
-                title="Histórico e mensagens desta demanda">💬 Mensageria</button>
+                title="Histórico e mensagens desta demanda"><i class="axi axi-message"></i> Mensageria</button>
         <!-- UMA FRASE, e nao uma lista de itens.
              O texto anterior era "criacao, ida para o dev, dependencias e
              mensagens — com dia e hora": uma enumeracao sem verbo, que nao dizia
@@ -2435,7 +2437,7 @@
              title="Marque quando a demanda for do time de Dados/BI. A marca aparece no card do Kanban e na fila da sala do Planning Poker.">
         <input type="checkbox" id="m-dados-bi" style="width:auto;margin:0"
                onchange="if (this.checked) document.getElementById('m-sales-ops').checked = false; bisMostraCaixa()" />
-        📊 <strong>Dados / BI</strong>
+        <i class="axi axi-chart"></i> <strong>Dados / BI</strong>
         <span style="font-size:12px;opacity:.75">— demanda do time de Dados · sprint contabilizada à parte</span>
       </label>
       <!-- SALES OPS: a segunda trilha com conta propria na sprint. Exclusiva com
@@ -2444,7 +2446,7 @@
              title="Marque quando a demanda for de Sales Ops. A sprint dela é contabilizada à parte, no placar de Sales Ops.">
         <input type="checkbox" id="m-sales-ops" style="width:auto;margin:0"
                onchange="if (this.checked) { document.getElementById('m-dados-bi').checked = false; bisMostraCaixa(); }" />
-        📈 <strong>Sales Ops</strong>
+        <i class="axi axi-trend"></i> <strong>Sales Ops</strong>
         <span style="font-size:12px;opacity:.75">— demanda de Sales Ops · sprint contabilizada à parte</span>
       </label>
       <!-- OS BIs IMPACTADOS, presos a marca acima.
@@ -2502,7 +2504,7 @@
          aviso abaixo diz isso enquanto o campo estiver vazio. -->
     <div class="form-row">
       <div class="form-group">
-        <label>Sprint <span id="m-sprint-obrig" style="color:var(--red,#E84444)"></span></label>
+        <label>Sprint <span id="m-sprint-obrig" style="color:var(--red)"></span></label>
         <select id="m-sprint" onchange="mSprintAviso()"></select>
         <div id="m-sprint-hint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
       </div>
@@ -2537,24 +2539,24 @@
         <label>Prioridade</label>
         <select id="m-prioridade">
           <option value="">— Sem prioridade —</option>
-          <option value="alta">🔴 Alta</option>
-          <option value="media">🟡 Média</option>
-          <option value="baixa">🟢 Baixa</option>
+          <option value="alta">Alta</option>
+          <option value="media">Média</option>
+          <option value="baixa">Baixa</option>
         </select>
       </div>
       <div class="form-group">
         <label>Tipo *</label>
         <select id="m-tipo">
           <option value="">— Selecione —</option>
-          <option value="sustentacao">🔧 Sustentação</option>
-          <option value="evolucao">🚀 Evolução</option>
+          <option value="sustentacao">Sustentação</option>
+          <option value="evolucao">Evolução</option>
         </select>
       </div>
       <div class="form-group" style="grid-column:1/-1">
         <div id="m-pausa" style="display:none;margin-bottom:10px"></div>
         <div id="m-mescladas" style="display:none;margin-bottom:10px"></div>
         <button type="button" class="btn btn-secondary btn-sm" id="m-btn-mesclar"
-                onclick="mescAbrirBusca()" style="display:none">🔗 Mesclar outra demanda nesta</button>
+                onclick="mescAbrirBusca()" style="display:none"><i class="axi axi-link"></i> Mesclar outra demanda nesta</button>
 
       </div>
       <div class="form-group">
@@ -2567,7 +2569,7 @@
                       background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);
                       padding:11px 12px;font-size:14px">
           <input type="checkbox" id="m-debito" style="width:auto;margin:0" />
-          🧱 Débito técnico
+          <i class="axi axi-package"></i> Débito técnico
         </label>
         <!-- ── VALIDADO EM COMITÊ ────────────────────────────────────────────
              A OUTRA validação, e não a mesma com outro nome. A da planning é
@@ -2582,7 +2584,7 @@
                       cursor:pointer;background:var(--bg3);border:1px solid var(--border);
                       border-radius:var(--radius);padding:11px 12px;font-size:14px;margin-top:8px">
           <input type="checkbox" id="m-comite" style="width:auto;margin:0" onchange="comiteMostra()" />
-          🏛 Validado em Comitê
+          <i class="axi axi-shield"></i> Validado em Comitê
         </label>
         <div id="m-comite-caixa" style="display:none;margin-top:8px;background:var(--bg3);
              border:1px solid var(--border);border-radius:var(--radius);padding:11px 12px">
@@ -2605,7 +2607,7 @@
                       padding:11px 12px;font-size:14px;margin-top:8px"
                title="Spike só conclui com 3 aprovações — a decisão é assinada antes de virar backlog.">
           <input type="checkbox" id="m-spike" style="width:auto;margin:0" onchange="renderEntrega(mAtual())" />
-          🔬 Spike <span style="color:var(--text3);font-size:12px">(exige 3 aprovações para concluir)</span>
+          <i class="axi axi-search"></i> Spike <span style="color:var(--text3);font-size:12px">(exige 3 aprovações para concluir)</span>
         </label>
       </div>
     </div>
@@ -2631,7 +2633,7 @@
 
     <div class="form-row">
       <div class="form-group">
-        <label>Solicitante <span style="color:var(--red,#E84444)">*</span></label>
+        <label>Solicitante <span style="color:var(--red)">*</span></label>
         <input type="text" id="m-solicitante" placeholder="Quem pediu — é quem homologa a entrega" />
       </div>
       <div class="form-group">
@@ -2864,7 +2866,7 @@
     <h2 id="pj-modal-title">Novo projeto</h2>
     <button type="button" id="pj-modal-cod" onclick="pjCopiarCodigo()" title="Clique para copiar"
             style="display:none;font-family:ui-monospace,monospace;font-size:12px;font-weight:700;
-                   color:var(--purple-tx,#C9AEFF);background:var(--purple-bg,#341A6E);border:none;
+                   color:var(--purple-tx);background:var(--purple-bg);border:none;
                    border-radius:5px;padding:3px 9px;margin:-8px 0 14px;cursor:pointer"></button>
     <!-- O RESUMO FICA NO TOPO, ao lado do codigo, e nao no rodape com Salvar.
          Ele nao grava nada — e leitura —, e um botao de leitura entre os de
@@ -2872,7 +2874,7 @@
     <button type="button" class="btn btn-secondary btn-sm" id="pj-resumo-btn"
             onclick="pjResumoExecutivo()" style="display:none;margin:-8px 0 14px 8px"
             title="Resumo executivo: as issues do projeto, títulos, datas e o que já saiu — pronto para copiar">
-      📄 Resumo executivo
+      <i class="axi axi-file"></i> Resumo executivo
     </button>
     <input type="hidden" id="pj-id" />
     <!-- Decisao do PM/PO sobre proposta de dev. Fica ANTES das abas: e a
@@ -3799,7 +3801,7 @@ async function saveViaProxy() {
   if (!_publicacaoNaFila) {
     /* O aviso sai UMA vez por fila formada, e não por clique: quem aprovou
        quatro cards não precisa de quatro avisos iguais. */
-    toast('⏳ Publicando a alteração anterior — esta entra junto.', 'ok');
+    toast('Publicando a alteração anterior — esta entra junto.', 'ok');
     _publicacaoNaFila = _publicacaoNoAr
       .catch(() => false)
       .then(() => { _publicacaoNaFila = null; return saveViaProxy(); });
@@ -3915,13 +3917,13 @@ async function publicaAgora(tentativa = 1, redes = 0) {
         // O Worker devolve para 'backlog' quem estava em etapa com trabalho sem
         // responsavel. Silenciar isso deixaria a pessoa achando que salvou.
         if ((resp.sem_dev || []).length) {
-          toast('⚠ Sem desenvolvedor, voltou para Backlog: ' + resp.sem_dev.join(', '), 'err');
+          toast('Sem desenvolvedor, voltou para Backlog: ' + resp.sem_dev.join(', '), 'err');
         }
         /* O SERVIDOR REVERTEU A MARCA DO COMITE. So PM/PO ou a lideranca
            marcam; sem este aviso a pessoa veria a caixa ligada na tela e a
            tag ausente no card, sem nada explicando. */
         if ((resp.comite_revertidas || []).length) {
-          toast('🔒 Validado em Comitê é de PM/PO ou liderança — revertido em: ' +
+          toast('Validado em Comitê é de PM/PO ou liderança — revertido em: ' +
                 resp.comite_revertidas.join(', '), 'err');
         }
         Object.entries(resp.codigos_projeto || {}).forEach(([id, cod]) => {
@@ -4010,7 +4012,7 @@ async function publicaAgora(tentativa = 1, redes = 0) {
     // próxima abertura da tela avisar sobre pendência que não existe mais.
     rascunhoLimpar();
     const errEl = document.getElementById('save-error'); if (errEl) errEl.style.display = 'none';
-    toast('✅ Publicado!', 'ok');
+    toast('Publicado!', 'ok');
     showSaving(false);
     return true;
   } catch (e) {
@@ -4062,7 +4064,7 @@ async function publicaAgora(tentativa = 1, redes = 0) {
       _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase();
       rascunhoLimpar();
       const okEl = document.getElementById('save-error'); if (okEl) okEl.style.display = 'none';
-      toast('✅ Publicado! (a resposta se perdeu, mas a gravação entrou)', 'ok');
+      toast('Publicado! (a resposta se perdeu, mas a gravação entrou)', 'ok');
       showSaving(false);
       return true;
     }
@@ -4089,7 +4091,7 @@ async function publicaAgora(tentativa = 1, redes = 0) {
          POR QUE — e é essa frase que transforma um relato de "deu erro" numa
          pista. Três relatos seguidos deste erro foram respondidos por dedução
          porque a tela não contava o que tinha visto. */
-      errEl.textContent = '⚠️ ' + e.message +
+      errEl.textContent = e.message +
         (entrou && entrou.motivo ? ' (conferi: ' + entrou.motivo + ')' : '') +
         ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar de novo.';
       /* ── E A PORTA DE SAÍDA, QUANDO O SERVIDOR DIZ QUAIS ────────────────
@@ -4206,7 +4208,7 @@ async function saveToGitHub(attempt = 1, quedas = 0) {
     fileSha = data.content.sha;
     _pendingEdits = false; _kbDirty = false; _dirtyMelhoriaIds.clear(); retratoBase(); // tudo publicado
     rascunhoLimpar();
-    toast('✅ Publicado!', 'ok');
+    toast('Publicado!', 'ok');
   } catch (e) {
     showSaving(false);
     /* ═══ O SEGUNDO CAMINHO DE PUBLICACAO DO ADMIN, e ele ficou para tras ══
@@ -4231,7 +4233,7 @@ async function saveToGitHub(attempt = 1, quedas = 0) {
     }
     rascunhoSalvar();
     const errEl = document.getElementById('save-error');
-    if (errEl) { errEl.textContent = '⚠️ ' + e.message + ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar novamente.'; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = e.message + ' — sua alteração está guardada neste navegador e volta se você recarregar. Tente publicar novamente.'; errEl.style.display = 'block'; }
     // Mesma razao do `saveViaProxy`: esta frase diz POR QUE, e nao pode ser
     // apagada pela generica de quem chamou.
     explica('Erro ao publicar: ' + e.message);
@@ -4307,7 +4309,10 @@ const SEM_DEV = '__sem_dev__';
 // Demandas criadas antes deste campo não têm tipo; ficam como "Sem tipo" até
 // serem classificadas, em vez de receberem um palpite.
 const SEM_TIPO = '__sem_tipo__';
-const TIPO_LABELS = { sustentacao: '🔧 Sustentação', evolucao: '🚀 Evolução' };
+/* O rotulo e texto puro porque tambem vai para <option>; o icone entra so
+   onde o tipo e desenhado em HTML (TIPO_ICONE). */
+const TIPO_LABELS = { sustentacao: 'Sustentação', evolucao: 'Evolução' };
+const TIPO_ICONE = { sustentacao: 'wrench', evolucao: 'rocket' };
 
 function matchTipo(m, filtro) {
   if (!filtro) return true;
@@ -4372,8 +4377,8 @@ function coberturaRender(lista) {
   cx.innerHTML =
     '<span class="ger-cob-tit">Validação das ' + c.total +
       (c.total === 1 ? ' entrega' : ' entregas') + ' do mês</span>' +
-    item('ger-cob-planning', '✔', 'Planning', c.planning) +
-    item('ger-cob-comite', '🏛', 'Comitê', c.comite) +
+    item('ger-cob-planning', '<i class="axi axi-check"></i>', 'Planning', c.planning) +
+    item('ger-cob-comite', '<i class="axi axi-shield"></i>', 'Comitê', c.comite) +
     item('ger-cob-sem', '—', 'sem validação', c.nenhuma) +
     (c.ambas ? '<span class="ger-cob-nota">' + c.ambas +
       (c.ambas === 1 ? ' passou' : ' passaram') + ' pelos dois fóruns — por isso os ' +
@@ -4435,7 +4440,7 @@ function bisRender() {
   if (!chips || !lista) return;
   chips.innerHTML = _mBis.length
     ? _mBis.map((nome, i) =>
-        '<span class="bi-chip">📈 ' + esc(nome) +
+        '<span class="bi-chip"><i class="axi axi-trend"></i> ' + esc(nome) +
         '<button type="button" title="Tirar este BI" onclick="bisRemove(' + i + ')">×</button></span>'
       ).join('')
     : '<span style="font-size:12px;color:var(--text3)">Nenhum BI marcado ainda.</span>';
@@ -4498,7 +4503,7 @@ function refRender() {
   cx.innerHTML = _mRefs.map((r, i) =>
     '<div style="display:flex;align-items:center;gap:8px;background:var(--bg3);' +
       'border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px">' +
-      '<span style="flex:0 0 auto">🔗</span>' +
+      '<span style="flex:0 0 auto"><i class="axi axi-link"></i></span>' +
       '<div style="flex:1;min-width:0">' +
         '<div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
           esc(r.descricao) + '</div>' +
@@ -4576,7 +4581,7 @@ function opcoesBi() {
   const cat = BIS.catalogo(state.melhorias);
   const comBi = state.melhorias.filter(m => !ehMesclada(m) && BIS.daDemanda(m).length).length;
   return [{ key: '', label: 'Todos', n: state.melhorias.length }]
-    .concat(cat.map(b => ({ key: b.nome, label: '📈 ' + b.nome, n: b.qtd })))
+    .concat(cat.map(b => ({ key: b.nome, label: b.nome, n: b.qtd })))
     /* "Sem BI" no fim, e so quando ha algum BI marcado na base: numa base sem
        nenhum BI a opcao devolveria tudo e so ocuparia espaco na barra. */
     .concat(comBi ? [{ key: '__sem__', label: 'Sem BI marcado',
@@ -4593,8 +4598,8 @@ function opcoesDados() {
   const n = state.melhorias.filter(m => !ehMesclada(m) && m.dados_bi).length;
   return [
     { key: '', label: 'Todos', n: state.melhorias.length },
-    { key: 'dados', label: '📊 Dados/BI', n },
-    { key: 'sales', label: '📈 Sales Ops',
+    { key: 'dados', label: 'Dados/BI', n },
+    { key: 'sales', label: 'Sales Ops',
       n: state.melhorias.filter(m => !ehMesclada(m) && m.sales_ops && !m.dados_bi).length },
     { key: 'fora', label: 'Fora de Dados',
       n: state.melhorias.filter(m => !ehMesclada(m) && !m.dados_bi).length },
@@ -4608,7 +4613,7 @@ function opcoesTipo() {
     key: k, label: TIPO_LABELS[k],
     n: state.melhorias.filter(m => m.tipo === k).length,
   }));
-  if (semTipo) lista.push({ key: SEM_TIPO, label: '⚪ Sem tipo', n: semTipo });
+  if (semTipo) lista.push({ key: SEM_TIPO, label: 'Sem tipo', n: semTipo });
   return lista;
 }
 
@@ -4670,10 +4675,10 @@ function matchProducao(m, filtro) {
 
 const PRAZO_BUCKETS = [
   { key: '',         label: 'Geral' },
-  { key: 'vencidas', label: '🔴 Vencidas' },
-  { key: 'semana',   label: '🟠 Vencem na semana' },
-  { key: 'mes',      label: '🟡 Vencem no mês' },
-  { key: 'sem_data', label: '⚪ Sem data' },
+  { key: 'vencidas', label: 'Vencidas' },
+  { key: 'semana',   label: 'Vencem na semana' },
+  { key: 'mes',      label: 'Vencem no mês' },
+  { key: 'sem_data', label: 'Sem data' },
 ];
 
 // ── HIGIENE DO KANBAN: concluído/negada de meses passados fica oculto por
@@ -4855,7 +4860,7 @@ function opcoesDev() {
       n: state.melhorias.filter(m => kbSplitDevs(m.dev).includes(d)).length,
     })),
   ];
-  if (semDev) lista.push({ key: SEM_DEV, label: '⚪ Sem dev', n: semDev });
+  if (semDev) lista.push({ key: SEM_DEV, label: 'Sem dev', n: semDev });
   return lista;
 }
 function opcoesProducao() {
@@ -5094,10 +5099,10 @@ function renderMelhorias() {
       const badge = `<span class="badge badge-${sk}">${STATUS_LABELS[sk]||sk}</span>`;
       // Tipo ao lado do status; quem ainda não tem fica sem badge (não inventa)
       const pokerBadge = m.poker_pontos != null
-        ? `<span title="Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:11px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 7px;">🃏 ${m.poker_pontos}</span>`
+        ? `<span title="Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:11px;background:var(--blue-bg);color:var(--blue-tx);border-radius:4px;padding:2px 7px;"><i class="axi axi-cards"></i> ${m.poker_pontos}</span>`
         : '';
       const tipoBadge = m.tipo && TIPO_LABELS[m.tipo]
-        ? `<span style="font-size:11px;background:var(--bg4);color:var(--text2);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;">${TIPO_LABELS[m.tipo]}</span>`
+        ? `<span style="font-size:11px;background:var(--bg4);color:var(--text2);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;"><i class="axi axi-${TIPO_ICONE[m.tipo]}"></i> ${TIPO_LABELS[m.tipo]}</span>`
         : '';
       let sub = '';
       if (m.dev) sub += m.dev;
@@ -5110,9 +5115,9 @@ function renderMelhorias() {
           // Tokens, nao hex: #F9A0A0 e #FFB84D sao claros e davam 1.99:1 sobre
           // fundo claro. Os pares -tx escurecem no tema claro.
           if (estaPausado(m)) { cor = 'color:var(--text3)'; tag = ' (pausada)'; }
-          else if (dias < 0)  { cor = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
-          else if (dias === 0){ cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ' (vence hoje)'; }
-          else if (dias <= 7) { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ` (em ${dias}d)`; }
+          else if (dias < 0)  { cor = 'color:var(--red-tx);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
+          else if (dias === 0){ cor = 'color:var(--amber-tx);font-weight:600'; tag = ' (vence hoje)'; }
+          else if (dias <= 7) { cor = 'color:var(--amber-tx);font-weight:600'; tag = ` (em ${dias}d)`; }
         }
         sub += (sub ? ' · ' : '') + `<span style="${cor}">Entrega: ${formatDate(m.entrega)}${tag}</span>`;
       }
@@ -5131,24 +5136,24 @@ function renderMelhorias() {
          codigo entra junto — e por ele que se acha o card sem depender do
          titulo. (Igual ao dev.html, que ja fazia assim.) */
       const parentBadge = parentM
-        ? `<span title="${esc((parentM.codigo ? parentM.codigo + ' · ' : '') + parentM.titulo)}" style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;cursor:help;">🔗 Dep. de: ${esc(parentM.codigo || '')} ${esc(parentM.titulo.substring(0,30))}${parentM.titulo.length > 30 ? '…' : ''}</span>`
+        ? `<span title="${esc((parentM.codigo ? parentM.codigo + ' · ' : '') + parentM.titulo)}" style="font-size:11px;background:var(--purple-bg);color:var(--purple-tx);border-radius:4px;padding:2px 7px;cursor:help;"><i class="axi axi-link"></i> Dep. de: ${esc(parentM.codigo || '')} ${esc(parentM.titulo.substring(0,30))}${parentM.titulo.length > 30 ? '…' : ''}</span>`
         : '';
       // Dependências abertas deste card
       const depCount = VINCULO.abertos(state.melhorias, m.id).length;
       const depBadge = depCount > 0
-        ? `<span style="font-size:11px;background:#5C0A0A;color:#F9A0A0;border-radius:4px;padding:2px 7px;">⏳ ${depCount} dep. aberta${depCount>1?'s':''}</span>`
+        ? `<span style="font-size:11px;background:var(--red-bg);color:var(--red-tx);border-radius:4px;padding:2px 7px;"><i class="axi axi-hourglass"></i> ${depCount} dep. aberta${depCount>1?'s':''}</span>`
         : '';
       /* A SOMA DA ÁRVORE NO CARD DA PRINCIPAL. Sem ela o card diz "8 pts" e a
          demanda custa 24 — e o número menor é o que vai para a cabeça de quem
          está priorizando a lista. Só aparece onde há vínculo. */
       const pesoTxt = VINCULO.frase(state.melhorias, m);
       const pesoBadge = pesoTxt
-        ? `<span title="Soma dos pontos desta demanda e de tudo que depende dela. Cada vínculo continua contando o próprio ponto nos relatórios — este total é leitura, não é campo." style="font-size:11px;background:var(--bg3);color:var(--text3);border-radius:4px;padding:2px 7px;cursor:help;">🧮 ${esc(pesoTxt)}</span>`
+        ? `<span title="Soma dos pontos desta demanda e de tudo que depende dela. Cada vínculo continua contando o próprio ponto nos relatórios — este total é leitura, não é campo." style="font-size:11px;background:var(--bg3);color:var(--text3);border-radius:4px;padding:2px 7px;cursor:help;"><i class="axi axi-calc"></i> ${esc(pesoTxt)}</span>`
         : '';
       // Selo na linha do titulo: "(pausada)" no fim da data passava batido para
       // quem varre a lista de cima a baixo.
       const pausaBadge = estaPausado(m)
-        ? `<span class="kb-pausa" title="${esc(m.pausa_motivo || '')}">⏸ Pausada · ${diasPausadoAgora(m)}d</span>`
+        ? `<span class="kb-pausa" title="${esc(m.pausa_motivo || '')}"><i class="axi axi-pause"></i> Pausada · ${diasPausadoAgora(m)}d</span>`
         : '';
       // A SPRINT NA LISTA: o chip colorido e a faixa do card, como no Kanban.
       const _spEstL = SPRINTPO.estiloSprint(m);
@@ -5260,12 +5265,15 @@ let _kbProd  = null;       // null|'falta_subir'|'no_ar' — ver PRODUCAO_BUCKET
 
    Por isso guarda um valor POR COLUNA, e nao um so: filtrar Validacao por "no
    ar" nao tem por que mexer em Concluido, e um valor unico forcaria isso. */
+/* `label` e texto puro (vai para `title` e `aria-label`); `marca` e HTML fixo
+   desta lista — caractere tipografico ou o icone da pausa — e entra sem escape
+   no menu e no contador. */
 const KB_PROD_COL = [
-  { key: '',        label: 'Tudo',              marca: '' },
-  { key: 'no_ar',   label: '▲ No ar',      marca: '▲' },
-  { key: 'fora_ar', label: '△ Fora do ar', marca: '△' },
+  { key: '',        label: 'Tudo',       marca: '' },
+  { key: 'no_ar',   label: 'No ar',      marca: '▲' },
+  { key: 'fora_ar', label: 'Fora do ar', marca: '△' },
   // Outro eixo que os dois acima — ver a nota em `matchProducao`.
-  { key: 'pausado', label: '⏸ Em pausa',   marca: '⏸' },
+  { key: 'pausado', label: 'Em pausa',   marca: '<i class="axi axi-pause"></i>' },
 ];
 let _kbProdCol = {};       // { [coluna]: '' | 'no_ar' | 'fora_ar' }
 let _kbBusca = '';         // texto livre: título, descrição, dev, solicitante
@@ -5380,7 +5388,7 @@ function kbProdMenu(ev, coluna) {
     return '<button type="button" role="menuitemradio" aria-checked="' + on + '"' +
       ' class="kb-prod-item' + (on ? ' on' : '') + '"' +
       ' onclick="kbProdEscolhe(\'' + coluna + '\',\'' + o.key + '\')">' +
-      (on ? '●' : '○') + ' ' + o.label + '</button>';
+      (on ? '●' : '○') + ' ' + (o.marca ? o.marca + ' ' : '') + esc(o.label) + '</button>';
   }).join('');
   document.body.appendChild(menu);
 
@@ -5417,10 +5425,10 @@ function kbContadorHTML(col, exibidas, total) {
        "tudo, no ar ou fora do ar" e ficou errada no dia em que a pausa entrou —
        texto que enumera uma lista envelhece com ela. */
     : 'Filtrar ' + col.label + ': ' +
-      KB_PROD_COL.map(o => o.label.replace(/^[▲△⏸]\s*/, '')).join(', ') + '.';
+      KB_PROD_COL.map(o => o.label).join(', ') + '.';
   return '<button type="button" class="kb-count' + (f ? ' filtrado' : '') + '"' +
     ' aria-haspopup="menu" aria-label="' + esc(titulo) + '" title="' + esc(titulo) + '"' +
-    ' onclick="kbProdMenu(event,\'' + col.key + '\')">' + esc(rotulo) + '</button>';
+    ' onclick="kbProdMenu(event,\'' + col.key + '\')">' + rotulo + '</button>';
 }
 
 function kbProdEscolhe(coluna, valor) {
@@ -5474,7 +5482,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
        sprint quando necessário". */
     '<div class="ger-filter-group"><label>&nbsp;</label>' +
     '<button type="button" class="btn btn-secondary btn-sm" onclick="sprintLoteAbrir()"' +
-    ' title="Repassar várias demandas para uma sprint de uma vez">🏃 Sprint em lote</button>' +
+    ' title="Repassar várias demandas para uma sprint de uma vez"><i class="axi axi-refresh"></i> Sprint em lote</button>' +
     '</div>' +
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}` +
     /* COM BUSCA ATIVA A TELA DIZ QUE O PERIODO FOI IGNORADO. Sem isso, quem
@@ -5489,7 +5497,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
       ? ' · <span class="fb-nota">produção em todos os períodos</span>' : '') +
     `</span>` +
     (mesc.length
-      ? `<div class="fb-mesc">🔗 ${mesc.length} resultado${mesc.length > 1 ? 's' : ''} fora do quadro: ${mesc.join(' · ')}</div>`
+      ? `<div class="fb-mesc"><i class="axi axi-link"></i> ${mesc.length} resultado${mesc.length > 1 ? 's' : ''} fora do quadro: ${mesc.join(' · ')}</div>`
       : '') +
     avisoSprintPendente();
 }
@@ -5509,7 +5517,7 @@ function avisoSprintPendente() {
                                               state.feriados || [], m => statusKey(m));
   if (!pend.length) return '';
   return pend.map(p =>
-    '<div class="fb-sprint-pend">⚠ <strong>' + esc(SPRINTPO.rotuloCurto(p.rotulo)) +
+    '<div class="fb-sprint-pend"><i class="axi axi-alert"></i> <strong>' + esc(SPRINTPO.rotuloCurto(p.rotulo)) +
     '</strong> terminou e não foi fechada · ' +
     (p.pendentes
       ? p.pendentes + ' sem destino'
@@ -5653,16 +5661,17 @@ function renderKanban() {
     const cards = items.map(m => {
       const tema = state.temas.find(t => t.id === m.tema_id)?.nome || '';
       const meta = [];
-      if (m.dev) meta.push('👤 ' + m.dev);
+      /* Cada item e [icone, texto]: o texto vai escapado, o icone e HTML. */
+      if (m.dev) meta.push(['user', m.dev]);
       /* O SOLICITANTE NO CARD. Ele deixou de ser um dado de cadastro: e ele
          quem homologa na Validacao da area, e saber QUEM antes de abrir o
          card e o que permite planejar a conversa. Sem nome, o card diz isso
          em vez de ficar calado — a demanda nao avanca sem ele. */
       meta.push(String(m.solicitante || '').trim()
-        ? '🙋 ' + m.solicitante
-        : '🙋 sem solicitante');
-      if (m.criado_em) meta.push('🗓 Criada: ' + formatDate((m.criado_em || '').slice(0, 10)));
-      if (m.entrega) meta.push('🏁 ' + formatDate(m.entrega));
+        ? ['user', m.solicitante]
+        : ['user', 'sem solicitante']);
+      if (m.criado_em) meta.push(['calendar', 'Criada: ' + formatDate((m.criado_em || '').slice(0, 10))]);
+      if (m.entrega) meta.push(['flag', formatDate(m.entrega)]);
       const nAnexos = (m.anexos || []).length;
       const badges = [];
       // Pontos primeiro: e o numero que decide o que entra na sprint review, e
@@ -5676,7 +5685,7 @@ function renderKanban() {
           (votado
             ? 'Pontuada no Planning Poker (média ' + esc(String(m.poker_media)) + ').'
             : 'Pontos por estimativa de duração — esta demanda não passou pelo Planning Poker.') +
-          '">🃏 ' + ptsCard + ' pts' + (votado ? '' : ' ≈') + '</span>');
+          '"><i class="axi axi-cards"></i> ' + ptsCard + ' pts' + (votado ? '' : ' ≈') + '</span>');
       }
       /* O SELO DE VALIDACAO — passou pela planning, e por quem.
          VEM LOGO DEPOIS DOS PONTOS, e antes de tudo o mais: os dois falam da
@@ -5690,11 +5699,11 @@ function renderKanban() {
       if (window.SELO) { const _sl = SELO.badges(m, 'kb-selo'); if (_sl) badges.push(_sl); }
       if (semPontuacao(m)) badges.push('<span class="kb-sempt" title="' +
         'Comprometida com data sem ter passado pelo Planning Poker: a estimativa ' +
-        'nao existe. Pontue na reuniao ou pelo card.">🃏 sem pontos</span>');
+        'nao existe. Pontue na reuniao ou pelo card."><i class="axi axi-cards"></i> sem pontos</span>');
       if (estaPausado(m)) badges.push('<span class="kb-pausa" title="' +
-        esc(m.pausa_motivo || '') + '">⏸ Pausada · ' + diasPausadoAgora(m) + 'd</span>');
+        esc(m.pausa_motivo || '') + '"><i class="axi axi-pause"></i> Pausada · ' + diasPausadoAgora(m) + 'd</span>');
       const nMesc = mescladasDe(m.id).length;
-      if (nMesc) badges.push('<span class="kb-mesc" title="Absorveu ' + nMesc + ' demanda(s)">🔗 +' + nMesc + '</span>');
+      if (nMesc) badges.push('<span class="kb-mesc" title="Absorveu ' + nMesc + ' demanda(s)"><i class="axi axi-link"></i> +' + nMesc + '</span>');
       /* ── O CHIP DO PROJETO ABRE O PROJETO ───────────────────────────────
          "Ao clicar 2x no projeto, abra o card do projeto para ter a visão do
           projeto e avaliar do que se trata."
@@ -5710,7 +5719,7 @@ function renderKanban() {
       if (projDoCard) badges.push('<span class="kb-proj kb-proj-abre" title="' +
         esc(projDoCard.nome || '') + ' — duplo clique abre o projeto"' +
         ' onmousedown="event.stopPropagation()"' +
-        ' ondblclick="pjAbrirDoCard(event, \'' + esc(m.projeto_id) + '\')">🗂 ' +
+        ' ondblclick="pjAbrirDoCard(event, \'' + esc(m.projeto_id) + '\')"><i class="axi axi-folder"></i> ' +
         esc(projDoCard.codigo || projDoCard.nome || '') + '</span>');
       /* ── A SPRINT, E O GESTO DE REPASSAR ────────────────────────────────
          "Dentro da sprint apenas demandas que o PM/PO repassar."
@@ -5727,17 +5736,17 @@ function renderKanban() {
         ' ondblclick="sprintEscolher(event, \'' + esc(m.id) + '\')"' +
         ' title="Duplo clique para repassar esta demanda para uma sprint">' +
         SPRINTPO.badge(m, 'kb-sprint') + '</span>');
-      if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
-      if (m.dados_bi) badges.push('<span class="kb-dados" title="Demanda do time de Dados/BI">📊 Dados/BI</span>');
-      else if (m.sales_ops) badges.push('<span class="kb-dados" title="Demanda de Sales Ops — sprint contabilizada à parte">📈 Sales Ops</span>');
+      if (m.debito_tecnico) badges.push('<span class="kb-debito"><i class="axi axi-package"></i> Déb. técnico</span>');
+      if (m.dados_bi) badges.push('<span class="kb-dados" title="Demanda do time de Dados/BI"><i class="axi axi-chart"></i> Dados/BI</span>');
+      else if (m.sales_ops) badges.push('<span class="kb-dados" title="Demanda de Sales Ops — sprint contabilizada à parte"><i class="axi axi-trend"></i> Sales Ops</span>');
       if (SPRINTPO.ehPrioritariaDaSprint(m)) badges.push('<span class="kb-debito" title="Vencida no início da ' +
-        esc(SPRINTPO.rotuloCurto(m.sprint_prioritaria.sprint)) + ' — entrou na sprint como prioritária">⚡ Prioritária</span>');
+        esc(SPRINTPO.rotuloCurto(m.sprint_prioritaria.sprint)) + ' — entrou na sprint como prioritária"><i class="axi axi-zap"></i> Prioritária</span>');
       /* OS BIs IMPACTADOS, no card. Um chip com a CONTA e os nomes na dica, e
          nao um chip por BI: uma demanda que atinge seis BIs encheria o card de
          marcas e empurraria o titulo, que e o que se le primeiro. */
       const _bis = BIS.daDemanda(m);
       if (_bis.length) badges.push('<span class="kb-bi" title="BIs impactados: ' +
-        esc(_bis.join(' · ')) + '">📈 ' +
+        esc(_bis.join(' · ')) + '"><i class="axi axi-trend"></i> ' +
         (_bis.length === 1 ? esc(_bis[0]) : _bis.length + ' BIs') + '</span>');
       /* HA QUANTOS DIAS A BOLA ESTA COM A AREA. A conta vem do `prazo.js`, a
          mesma que o painel do dev mostra — duas contas a mao divergiriam na
@@ -5746,7 +5755,7 @@ function renderKanban() {
       const _dAr = (window.PRAZO && PRAZO.diasNaArea) ? PRAZO.diasNaArea(m) : null;
       if (_dAr != null) badges.push('<span class="kb-area-tag" title="' +
         'Esperando a área conferir. O prazo do dev continua correndo enquanto isso.">' +
-        '👁 Área · ' + _dAr + 'd</span>');
+        '<i class="axi axi-eye"></i> Área · ' + _dAr + 'd</span>');
       /* O SELO DIZ QUANTAS ASSINATURAS FALTAM, e nao so "spike". Quem olha o
          quadro quer saber o que impede de fechar, e esse numero e a resposta. */
       if (m.spike) {
@@ -5756,14 +5765,14 @@ function renderKanban() {
            pior que nao dizer nada: quem le o quadro vai cobrar assinatura de
            quem ja assinou. */
         if (!_quem || !window.PREVOO) {
-          badges.push('<span class="kb-spike" title="Spike — conferindo as aprovações…">🔬 …</span>');
+          badges.push('<span class="kb-spike" title="Spike — conferindo as aprovações…"><i class="axi axi-search"></i> …</span>');
         } else {
           const _v = PREVOO.assinaturasValidas(m, _quem).length;
           badges.push('<span class="kb-spike' + (_v >= _min ? ' ok' : '') +
-            '" title="Spike: ' + _v + ' de ' + _min + ' aprovações">🔬 ' + _v + '/' + _min + '</span>');
+            '" title="Spike: ' + _v + ' de ' + _min + ' aprovações"><i class="axi axi-search"></i> ' + _v + '/' + _min + '</span>');
         }
       }
-      if (nAnexos) badges.push(`<span class="kb-anexo-tag">📎 ${nAnexos}</span>`);
+      if (nAnexos) badges.push(`<span class="kb-anexo-tag"><i class="axi axi-clip"></i> ${nAnexos}</span>`);
       /* O PROGRESSO DAS SUBTAREFAS, para quem acompanha e nao executa.
          O dev quebra a demanda em passos no painel dele; sem trazer isso para ca,
          o PM/PO continua com "em andamento" como unica resposta a pergunta "como
@@ -5796,24 +5805,24 @@ function renderKanban() {
         title="${naoPub ? 'Alteração NÃO publicada — só existe nesta tela · ' : ''}${atrasada ? 'Entrega vencida · ' : ''}Arraste para mover · duplo clique para editar">
         ${/* A FAIXA DE ERRO DIZ QUE FALHOU; O CARD DIZ ONDE. Sem isto, quem nao
               reparou na faixa segue movendo cards que ninguem mais enxerga. */''}
-        ${naoPub ? '<div class="kb-naopub-tag">⚠ Não publicada</div>' : ''}
-        ${atrasada ? `<div class="kb-atraso-tag">⚠ Atrasada${diasAtraso > 0 ? ' · ' + diasAtraso + 'd' : ''}</div>` : ''}
-        ${nivelPrazo === 'hoje' ? '<div class="kb-prazo-tag hoje">⚠ Vence hoje</div>' : ''}
-        ${nivelPrazo === 'amanha' ? '<div class="kb-prazo-tag amanha">⏰ Vence amanhã</div>' : ''}
+        ${naoPub ? '<div class="kb-naopub-tag"><i class="axi axi-alert"></i> Não publicada</div>' : ''}
+        ${atrasada ? `<div class="kb-atraso-tag"><i class="axi axi-alert"></i> Atrasada${diasAtraso > 0 ? ' · ' + diasAtraso + 'd' : ''}</div>` : ''}
+        ${nivelPrazo === 'hoje' ? '<div class="kb-prazo-tag hoje"><i class="axi axi-alert"></i> Vence hoje</div>' : ''}
+        ${nivelPrazo === 'amanha' ? '<div class="kb-prazo-tag amanha"><i class="axi axi-clock"></i> Vence amanhã</div>' : ''}
         <button type="button" class="kb-estrela${m.destaque ? ' on' : ''}"
           onclick="destaqueAlterna(event,'${m.id}')"
           title="${m.destaque ? 'É destaque — sai na apresentação. Clique para desmarcar.' : 'Marcar como destaque da apresentação'}">${m.destaque ? '★' : '☆'}</button>
         <button type="button" class="kb-excluir"
           onclick="kbExcluir(event,'${m.id}')"
-          title="Excluir esta demanda. Não há como desfazer.">🗑</button>
+          title="Excluir esta demanda. Não há como desfazer."><i class="axi axi-trash"></i></button>
         <div class="kb-card-title">${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}${esc(m.titulo)}</div>
         ${tema ? `<div class="kb-card-tema">${esc(tema)}</div>` : ''}
         ${window.DEVOLUCAO ? DEVOLUCAO.faixa(m, 'kb-devolucao') : ''}
-        ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span>${esc(x)}</span>`).join('')}</div>` : ''}
+        ${meta.length ? `<div class="kb-card-meta">${meta.map(x=>`<span><i class="axi axi-${x[0]}"></i> ${esc(x[1])}</span>`).join('')}</div>` : ''}
         ${badges.filter(Boolean).length ? `<div class="kb-badges">${badges.join('')}</div>` : ''}
         ${statusKey(m) === 'validacao' ? `<div class="kb-val">
           <button type="button" class="kb-val-ok" onclick="valDecidirNoCard(event,'${m.id}','aprovar')"
-            title="Aprovar a entrega e concluir">✅ Aprovar</button>
+            title="Aprovar a entrega e concluir"><i class="axi axi-check"></i> Aprovar</button>
           <button type="button" class="kb-val-no" onclick="valDecidirNoCard(event,'${m.id}','devolver')"
             title="Devolver ao dev com o motivo">↩ Devolver</button>
         </div>` : ''}
@@ -5931,7 +5940,7 @@ function kbDrop(e, colKey) {
      foco. Escolher e salvar é o movimento inteiro. */
   if (window.SPRINTPO &&
       SPRINTPO.travaDeAlocacao(m, m.status_planejamento, colKey, window.PRAZO && PRAZO.hojeISO()).trava) {
-    toast('🏃 "' + (m.codigo || m.titulo) + '" precisa de sprint para ir a ' +
+    toast('"' + (m.codigo || m.titulo) + '" precisa de sprint para ir a ' +
           (STATUS_LABELS[colKey] || colKey) + '.', 'err');
     renderKanban();
     openModalMelhoria(id);
@@ -5974,7 +5983,7 @@ function kbDrop(e, colKey) {
   if (window.HOMOLOGACAO) {
     const impedeHom = HOMOLOGACAO.barra(m, colKey, window.PRAZO && PRAZO.hojeISO());
     if (impedeHom) {
-      toast('🔒 ' + (m.codigo || m.titulo) + ': ' + impedeHom.motivo, 'err');
+      toast((m.codigo || m.titulo) + ': ' + impedeHom.motivo, 'err');
       renderKanban();
       openModalMelhoria(id);
       setTimeout(() => {
@@ -6141,8 +6150,8 @@ function mRenderAnexosEdit() {
   el.innerHTML = _mAnexos.map((a, i) => {
     const kb = a.tamanho ? ` <span style="color:var(--text3)">(${(a.tamanho/1024).toFixed(0)} KB)</span>` : '';
     return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:5px 9px">
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${esc(a.nome)}${kb}</span>
-      <a href="#" style="color:#9BC8F8;text-decoration:none" onclick="mPreviewAnexoEdit(${i});return false;">ver</a>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><i class="axi axi-clip"></i> ${esc(a.nome)}${kb}</span>
+      <a href="#" style="color:var(--blue-tx);text-decoration:none" onclick="mPreviewAnexoEdit(${i});return false;">ver</a>
       <button type="button" style="color:var(--red);background:none;border:none;cursor:pointer;font-size:14px" onclick="mRemoveAnexoEdit(${i})" title="Remover">✕</button>
     </div>`;
   }).join('');
@@ -6197,7 +6206,7 @@ function renderMDiscovery(m) {
     if (rows.length) html += `<div class="disc-sec"><div class="disc-h">Discovery (preenchido no painel)</div>${rows.join('')}</div>`;
   }
   if (anexos.length) {
-    html += `<div class="disc-sec"><div class="disc-h">Anexos</div>${anexos.map((a, i) => `<a href="#" class="anexo" onclick="mViewAnexo('${m.id}',${i});return false;">📎 ${esc(a.nome)}</a>`).join('')}</div>`;
+    html += `<div class="disc-sec"><div class="disc-h">Anexos</div>${anexos.map((a, i) => `<a href="#" class="anexo" onclick="mViewAnexo('${m.id}',${i});return false;"><i class="axi axi-clip"></i> ${esc(a.nome)}</a>`).join('')}</div>`;
   }
   el.innerHTML = html;
   el.style.display = html ? 'block' : 'none';
@@ -6212,7 +6221,7 @@ function populateDevSelect(currentVal) {
   sel.innerHTML =
     '<option value="">— Nenhum —</option>' +
     devs.map(d => `<option value="${d}" ${currentVal===d?'selected':''}>${d}</option>`).join('') +
-    '<option value="__manual__" ' + (isMultiple?'selected':'') + '>✏ Múltiplos / outro...</option>';
+    '<option value="__manual__" ' + (isMultiple?'selected':'') + '>Múltiplos / outro...</option>';
   if (isMultiple) {
     manual.style.display = 'block';
     manual.value = currentVal;
@@ -6681,7 +6690,7 @@ function entregaUsuRender(m) {
     entrega_usuario: document.getElementById('m-entrega-usuario')?.value || '',
   };
   const aviso = ENTREGAUSU.alerta(vivo);
-  if (aviso) { hint.innerHTML = '<span style="color:var(--red-tx,#F5A3A3)">⚠ ' + esc(aviso) + '</span>'; return; }
+  if (aviso) { hint.innerHTML = '<span style="color:var(--red-tx)"><i class="axi axi-alert"></i> ' + esc(aviso) + '</span>'; return; }
   const valor = ENTREGAUSU.data(vivo);
   if (!valor) {
     hint.textContent = vivo.entrega
@@ -6804,11 +6813,11 @@ function renderMes() {
   resumo.innerHTML =
     kpi(inicio.length, 'Comprometidas', 'desde o início do mês') +
     kpi(meio.length, 'Entraram depois', meio.length ? 'somadas ao longo do mês' : '—',
-        meio.length ? 'var(--amber-tx,#FFC470)' : '') +
+        meio.length ? 'var(--amber-tx)' : '') +
     kpi(entregues.length, 'Entregues', 'concluídas dentro do mês', entregues.length ? 'var(--green)' : '') +
     kpi(pct === null ? '—' : pct + '%', 'Cumprimento',
         base ? 'do que foi comprometido no início' : 'nada comprometido no início',
-        pct === null ? '' : (pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)'));
+        pct === null ? '' : (pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber-tx)' : 'var(--red)'));
 
   if (!itens.length) {
     corpo.innerHTML = '<p class="ent-vazio">Nenhuma demanda alocada em ' +
@@ -6904,7 +6913,7 @@ async function mesFecharAbrir() {
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) { toast('Não consegui fechar: ' + (j.detail || j.error || res.status), 'err'); return; }
-    toast('📦 ' + (j.roladas || []).length + ' demanda(s) roladas para ' + prox + '.', 'ok');
+    toast((j.roladas || []).length + ' demanda(s) roladas para ' + prox + '.', 'ok');
     await loadFromGitHub(true);
     renderMes();
   } catch (e) {
@@ -6946,8 +6955,8 @@ function mesSomaLocal(iso, n) {
 const PM_FUNIS = [
   { k: 'backlog',      rot: 'Backlog (recepção)', curto: 'Backlog',   cor: 'var(--text3)' },
   { k: 'levantar_req', rot: 'Levantar Requisitos', curto: 'Requisitos', cor: 'var(--blue)' },
-  { k: 'planning',     rot: 'Planning',            curto: 'Planning',  cor: 'var(--roxo,#C9AEFF)' },
-  { k: 'validacao',    rot: 'Validação PM/PO',     curto: 'Validação', cor: 'var(--amber-tx,#FFC470)' },
+  { k: 'planning',     rot: 'Planning',            curto: 'Planning',  cor: 'var(--purple-tx)' },
+  { k: 'validacao',    rot: 'Validação PM/PO',     curto: 'Validação', cor: 'var(--amber-tx)' },
 ];
 
 let _pmAba = 'funil';
@@ -7117,7 +7126,7 @@ function renderGerPM(ano, mes) {
     kpi(f.despachadas, 'Despachadas', 'saíram do Planning para Planejado',
         f.despachadas ? 'var(--green)' : '') +
     kpi(val ? val.saiu : 0, 'Validações', 'entregas julgadas no mês',
-        val && val.saiu ? 'var(--amber-tx,#FFC470)' : '') +
+        val && val.saiu ? 'var(--amber-tx)' : '') +
     kpi(pmDur(f.mediana), 'Jornada',
         f.jornadaN ? 'mediana da chegada ao despacho (' + f.jornadaN + ')' : 'nada despachado no mês');
 
@@ -7246,9 +7255,9 @@ function renderGerCumprimento(ano, mes) {
   resumo.innerHTML =
     kpi(pct === null ? '—' : pct + '%', 'Cumprimento',
         inicio.length ? entrInicio + ' de ' + inicio.length + ' comprometidas' : 'nada comprometido no início',
-        pct === null ? '' : (pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)')) +
+        pct === null ? '' : (pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber-tx)' : 'var(--red)')) +
     kpi(meio.length, 'Entraram no meio', meio.length ? 'fora do combinado no dia 1' : '—',
-        meio.length ? 'var(--amber-tx,#FFC470)' : '') +
+        meio.length ? 'var(--amber-tx)' : '') +
     kpi(transb.length, 'Transbordou', transb.length ? 'seguiu para o mês seguinte' : 'nada ficou',
         transb.length ? 'var(--red)' : 'var(--green)') +
     kpi(itens.length, 'No mês', 'total que passou por ele');
@@ -7280,7 +7289,7 @@ function renderGerCumprimento(ano, mes) {
                     String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
     .map(d => {
       const p = d.comp ? Math.round(d.entregue / (d.comp + d.meio) * 100) : null;
-      const cor = p === null ? '' : (p >= 80 ? 'var(--green)' : p >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)');
+      const cor = p === null ? '' : (p >= 80 ? 'var(--green)' : p >= 50 ? 'var(--amber-tx)' : 'var(--red)');
       return '<tr><td><div class="us-nome">' + esc(d.nome) + '</div></td>' +
         '<td class="pz-num">' + d.comp + '</td>' +
         '<td class="pz-num">' + (d.meio || '—') + '</td>' +
@@ -7351,7 +7360,7 @@ function renderGerPrazo(ano, mes) {
   resumo.innerHTML =
     kpi(pct === null ? '—' : pct + '%', 'No prazo',
         medidas ? noPrazo.length + ' de ' + medidas + ' medidas' : 'nada medível no mês',
-        pct === null ? '' : (pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)')) +
+        pct === null ? '' : (pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber-tx)' : 'var(--red)')) +
     kpi(atraso.length, 'Com atraso',
         atraso.length ? 'média de ' + diasMedio + (diasMedio === 1 ? ' dia' : ' dias') : '—',
         atraso.length ? 'var(--red)' : '') +
@@ -7386,7 +7395,7 @@ function renderGerPrazo(ano, mes) {
     .map(d => {
       const tot = d.prazo + d.atraso;
       const p = Math.round(d.prazo / tot * 100);
-      const cor = p >= 80 ? 'var(--green)' : p >= 50 ? 'var(--amber-tx,#FFC470)' : 'var(--red)';
+      const cor = p >= 80 ? 'var(--green)' : p >= 50 ? 'var(--amber-tx)' : 'var(--red)';
       return '<tr><td><div class="us-nome">' + esc(d.nome) + '</div></td>' +
         '<td class="pz-num">' + d.prazo + '</td>' +
         '<td class="pz-num">' + (d.atraso || '—') + '</td>' +
@@ -7572,7 +7581,7 @@ function apSecoesPreset(qual) {
    mas nao estar escrito em lugar nenhum fazia a soma da grade nao bater com o
    arquivo, e quem conferia procurava o erro na grade. */
 const AP_SEMPRE = 'Além da grade, sempre entram: a capa, um slide por destaque ' +
-  'marcado com ⭐ e o slide final com a sua mensagem.';
+  'marcado com ★ e o slide final com a sua mensagem.';
 
 
 // Time e areas para o deck. Tudo agregado: nenhum slide por pessoa, porque em
@@ -7860,7 +7869,7 @@ function apresAbrir() {
     ? cand.map(m =>
         '<label><input type="checkbox" class="ap-dest" value="' + esc(m.id) + '"' +
         (m.destaque ? ' checked' : '') + '> ' +
-        '<span>' + (m.destaque ? '<span style="color:var(--amber-tx,#FFC470)">★</span> ' : '') +
+        '<span>' + (m.destaque ? '<span style="color:var(--amber-tx)">★</span> ' : '') +
         '<span class="ap-cod">' + esc(m.codigo || '') + '</span> ' + esc(m.titulo || '') +
         (m.poker_pontos ? ' <span style="color:var(--text3)">· ' + esc(String(m.poker_pontos)) +
           ' pts</span>' : '') +
@@ -7924,7 +7933,7 @@ function apModoTrocou() {
     per.style.display = assunto ? 'none' : '';
     if (!assunto) {
       const { mes, ano } = apresMesAno();
-      per.innerHTML = '📅 <strong>' + esc(apresentacaoMesNome(mes - 1)) + ' de ' + ano +
+      per.innerHTML = '<i class="axi axi-calendar"></i> <strong>' + esc(apresentacaoMesNome(mes - 1)) + ' de ' + ano +
         '</strong> <span style="color:var(--text3)">· mude no filtro da aba para ' +
         'trocar o período</span>';
     }
@@ -8871,14 +8880,14 @@ async function apresGerar(opts) {
         })
       : apuracao;
     if (cong) {
-      toast('🔒 Deck gerado da apuração congelada em ' +
+      toast('Deck gerado da apuração congelada em ' +
             formatDate(String(cong.congelado_em).slice(0, 10)) + '.', 'ok');
     }
     const pptx = await apresentacaoMontaDeck(dados);
 
     const nome = 'roadmap-' + String(ano) + '-' + String(mes).padStart(2, '0') + '.pptx';
     await pptx.writeFile({ fileName: nome });
-    toast('📊 ' + nome + ' gerado.', 'ok');
+    toast(nome + ' gerado.', 'ok');
     closeModal('modal-apres');
   } catch (e) {
     /* NO MODO APURAÇÃO O ERRO SOBE, em vez de virar um toast verde-claro.
@@ -8968,19 +8977,19 @@ function fechaRender() {
   if (f) {
     marca.style.display = '';
     marca.className = 'ger-congelado';
-    marca.innerHTML = '🔒 <strong>congelado</strong> em ' +
+    marca.innerHTML = '<i class="axi axi-lock"></i> <strong>congelado</strong> em ' +
       formatDate(String(f.congelado_em).slice(0, 10)) +
       (f.por ? ' por ' + esc(f.por) : '');
     marca.title = 'O deck deste mês sai da apuração congelada, e não da base de ' +
                   'hoje. É por isso que ele não muda mais.' +
                   (f.nota ? '\n\n' + f.nota : '');
     btn.style.display = '';
-    btn.textContent = '🔓 Descongelar';
+    btn.textContent = 'Descongelar';
     btn.title = 'Volta a calcular da base viva — os números podem mudar.';
     return;
   }
   btn.style.display = '';
-  btn.textContent = '🔒 Congelar mês';
+  btn.textContent = 'Congelar mês';
   if (emCurso) {
     /* MÊS EM CURSO NÃO CONGELA, e a tela diz isso ANTES do clique. Congelar
        agosto no dia 12 gravaria meio mês como se fosse o fechamento, e o número
@@ -8991,7 +9000,7 @@ function fechaRender() {
                 'gravaria meio mês como se fosse o fechamento.';
     marca.style.display = '';
     marca.className = 'ger-congelado viva';
-    marca.innerHTML = '⏳ mês em curso — os números ainda se mexem';
+    marca.innerHTML = '<i class="axi axi-hourglass"></i> mês em curso — os números ainda se mexem';
     marca.title = 'Enquanto o mês corre, cada entrega validada muda este deck. ' +
                   'Depois que ele terminar, congele para a apresentação parar de mudar.';
     return;
@@ -9000,7 +9009,7 @@ function fechaRender() {
   btn.title = 'Grava a apuração deste mês. O deck passa a sair dela, e para de mudar.';
   marca.style.display = '';
   marca.className = 'ger-congelado viva';
-  marca.innerHTML = '⚠ não congelado — o deck recalcula da base de hoje';
+  marca.innerHTML = '<i class="axi axi-alert"></i> não congelado — o deck recalcula da base de hoje';
   marca.title = 'Cada entrega validada com data deste mês, cada hora lançada e ' +
                 'cada troca de frente muda este deck. Congele para ele parar.';
 }
@@ -9044,7 +9053,7 @@ async function fechaCongelar(iso) {
       toast('Não consegui congelar: ' + (j.detail || j.error || r.status), 'err');
       return;
     }
-    toast('🔒 ' + nome + ' congelado (' + (j.tamanho_kb || '?') + ' KB).', 'ok');
+    toast(nome + ' congelado (' + (j.tamanho_kb || '?') + ' KB).', 'ok');
     await fechaCarregar();
   } catch (e) {
     toast('Não consegui congelar: ' + e.message, 'err');
@@ -9072,7 +9081,7 @@ async function fechaDescongelar(iso) {
       toast('Não consegui descongelar: ' + (j.detail || j.error || r.status), 'err');
       return;
     }
-    toast('🔓 ' + nome + ' descongelado.', 'ok');
+    toast(nome + ' descongelado.', 'ok');
     await fechaCarregar();
   } catch (e) {
     toast('Não consegui descongelar: ' + e.message, 'err');
@@ -9176,7 +9185,7 @@ function sprintOpcoes(atual) {
      demanda que já está no backlog é um clique que não faz nada — e um botão
      que não faz nada ensina que o diálogo mente. */
   if (atual) {
-    itens.push({ valor: '', rotulo: '📋 Tirar da sprint',
+    itens.push({ valor: '', rotulo: 'Tirar da sprint',
                  nota: 'volta para o backlog', perigo: true });
   }
   return itens;
@@ -9227,14 +9236,14 @@ async function sprintEscolher(ev, id) {
   }
   _dirtyMelhoriaIds.delete(m.id);
   _pendingEdits = false;
-  if (escolha === '') { toast('📋 Voltou para o backlog, fora da sprint.', 'ok'); return; }
+  if (escolha === '') { toast('Voltou para o backlog, fora da sprint.', 'ok'); return; }
   /* O AVISO DIZ O PULO. Mover um card de sprint é barato de clicar e caro de
      acumular — se a tela não disser "entrou atrasada" no instante do gesto,
      ninguém descobre antes do fechamento, que é quando não dá mais para agir. */
   toast(r.entrouAtrasada
-    ? '🏃 Repassada para ' + escolha + ' — entrou ATRASADA (' + r.pulos +
+    ? 'Repassada para ' + escolha + ' — entrou ATRASADA (' + r.pulos +
       (r.pulos === 1 ? ' pulo' : ' pulos') + ').'
-    : '🏃 Repassada para ' + escolha + '.', 'ok');
+    : 'Repassada para ' + escolha + '.', 'ok');
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -9267,15 +9276,16 @@ let _loteSoFora = true;
    ou todos". Vazio = sem recorte por grupo (o comportamento de antes). */
 let _loteGrupos = new Set();
 const LOTE_GRUPOS = [
-  { k: 'planning', rot: '🃏 Pontuadas em Planning',
+  /* `rot` e texto puro (vai para `title`); o icone e `ico`. */
+  { k: 'planning', rot: 'Pontuadas em Planning', ico: 'cards',
     casa: m => statusKey(m) === 'planning' && SPRINTPO.pontosDe(m) > 0 },
-  { k: 'atrasadas', rot: '⏰ Atrasadas da sprint atual',
+  { k: 'atrasadas', rot: 'Atrasadas da sprint atual', ico: 'clock',
     casa: m => {
       const atual = SPRINTPO.rotuloDeData(PRAZO.hojeISO(), state.feriados || []);
       // o atraso vem da etapa efetiva (`statusKey` → `ETAPA.efetiva`), a regra unica
       return SPRINTPO.naSprint(m, atual) && statusKey(m) === 'atrasado';
     } },
-  { k: 'pausadas', rot: '⏸ Pausadas', casa: m => estaPausado(m) },
+  { k: 'pausadas', rot: 'Pausadas', ico: 'pause', casa: m => estaPausado(m) },
 ];
 function loteGruposDe(m) { return LOTE_GRUPOS.filter(g => g.casa(m)); }
 function sprintLoteGrupo(k) {
@@ -9318,7 +9328,7 @@ function sprintLoteAbrir() {
   ov.id = 'lote-ov';
   ov.innerHTML =
     '<div class="dlg-box lote-box" role="dialog" aria-modal="true">' +
-      '<h3>🏃 Repassar para a sprint</h3>' +
+      '<h3><i class="axi axi-refresh"></i> Repassar para a sprint</h3>' +
       '<div class="dlg-sub">Escolha a sprint e marque as demandas. Uma gravação só para o lote inteiro. A entrega ao usuário de todas vai para a segunda seguinte à sprint.</div>' +
       '<div class="lote-topo">' +
         '<select id="lote-sprint" class="lote-sel"></select>' +
@@ -9380,7 +9390,8 @@ function sprintLoteLista() {
       ETAPA.aberta(m, PRAZO.hojeISO()));
     gEl.innerHTML = '<span class="lote-g-rot">Mostrar:</span>' + LOTE_GRUPOS.map(g =>
       '<button type="button" class="lote-g' + (_loteGrupos.has(g.k) ? ' on' : '') + '"' +
-      ' onclick="sprintLoteGrupo(\'' + g.k + '\')">' + g.rot + ' <b>' +
+      ' onclick="sprintLoteGrupo(\'' + g.k + '\')"><i class="axi axi-' + g.ico + '"></i> ' +
+      g.rot + ' <b>' +
       abertas.filter(g.casa).length + '</b></button>').join('');
   }
   const soRot = document.getElementById('lote-sofora-rot');
@@ -9401,7 +9412,7 @@ function sprintLoteLista() {
           (prio ? '<span class="lote-prio pr-' + esc(prio) + '">' + esc(prio) + '</span>' : '') +
           (m.dev ? '<span class="lote-dev">' + esc(m.dev) + '</span>' : '') +
           loteGruposDe(m).map(g => '<span class="lote-gtag" title="' + esc(g.rot) + '">' +
-            g.rot.split(' ')[0] + '</span>').join('') +
+            '<i class="axi axi-' + g.ico + '"></i></span>').join('') +
           SPRINTPO.badge(m, 'kb-sprint') +
         '</label>';
       }).join('')
@@ -9467,7 +9478,7 @@ async function sprintLoteAplicar(sprint) {
      descobre, no lote, que oito delas já rolaram de semana. */
   const nAtr = mexidas.filter(x => x.atrasada).length;
   const n = mexidas.length;
-  toast('🏃 ' + n + (n > 1 ? ' repassadas' : ' repassada') +
+  toast(n + (n > 1 ? ' repassadas' : ' repassada') +
         ' para ' + SPRINTPO.rotuloCurto(alvo) +
         (nAtr ? ' — ' + nAtr + (nAtr > 1 ? ' entraram atrasadas' : ' entrou atrasada') : '') +
         (recusadas.length ? ' · ' + recusadas.length +
@@ -9513,7 +9524,7 @@ function sprintFecharAbrir(rotulo) {
   ov.id = 'fech-ov';
   ov.innerHTML =
     '<div class="dlg-box lote-box fech-box" role="dialog" aria-modal="true">' +
-      '<h3>🔒 Fechar ' + esc(SPRINTPO.rotuloCurto(_fechRotulo)) + '</h3>' +
+      '<h3><i class="axi axi-lock"></i> Fechar ' + esc(SPRINTPO.rotuloCurto(_fechRotulo)) + '</h3>' +
       '<div class="dlg-sub">Fechada, a sprint não aceita mais entrada nem saída — e não há como reabrir.</div>' +
       '<div id="fech-placar" class="fech-placar"></div>' +
       '<div id="fech-corpo"></div>' +
@@ -9562,7 +9573,7 @@ function sprintFecharRender() {
   const placar = document.getElementById('fech-placar');
   if (placar) {
     placar.innerHTML =
-      '<span class="fp ok">✅ ' + bal.entregues.length + ' entregue' +
+      '<span class="fp ok"><i class="axi axi-check"></i> ' + bal.entregues.length + ' entregue' +
         (bal.entregues.length === 1 ? '' : 's') + ' · ' + pts(bal.entregues) + ' pts</span>' +
       /* AGUARDANDO EM SEPARADO, e com o aviso de que os pontos ainda não
          contam: somá-los ao entregue mostraria uma sprint melhor do que ela
@@ -9570,10 +9581,10 @@ function sprintFecharRender() {
       (bal.aguardando.length
         ? '<span class="fp esp" title="O dev entregou e o PM/PO ainda não validou. ' +
           'Estes pontos só entram na conta depois da validação — e entram NESTA sprint, ' +
-          'retroativamente.">⏳ ' + bal.aguardando.length + ' aguardando você · ' +
+          'retroativamente."><i class="axi axi-hourglass"></i> ' + bal.aguardando.length + ' aguardando você · ' +
           pts(bal.aguardando) + ' pts</span>' : '') +
       (bal.pendentes.length
-        ? '<span class="fp no">❌ ' + bal.pendentes.length + ' não entregue' +
+        ? '<span class="fp no"><i class="axi axi-ban"></i> ' + bal.pendentes.length + ' não entregue' +
           (bal.pendentes.length === 1 ? '' : 's') + ' · ' + pts(bal.pendentes) + ' pts</span>'
         : '');
   }
@@ -9602,14 +9613,14 @@ function sprintFecharRender() {
           /* A REINCIDÊNCIA GRITA. Empurrar uma demanda pela terceira vez é
              decisão diferente de empurrá-la pela primeira, e sem esta marca as
              duas se parecem no momento do clique. */
-          (n ? '<span class="fech-rein">🔴 ' + (n + 1) + 'ª vez</span>' : '') +
+          (n ? '<span class="fech-rein"><span class="axi-dot" style="--c:var(--red)"></span> ' + (n + 1) + 'ª vez</span>' : '') +
           (m.dev ? '<span class="lote-dev">' + esc(m.dev) + '</span>' : '') +
         '</div>' +
         '<div class="fech-item-baixo">' +
           '<select class="fech-dest" onchange="sprintFecharDecide(\'' + esc(m.id) + '\',\'destino\',this.value)">' +
-            '<option value="">📋 Voltar ao backlog</option>' +
+            '<option value="">Voltar ao backlog</option>' +
             destinos.map(o => '<option value="' + esc(o.valor) + '"' +
-              (d.destino === o.valor ? ' selected' : '') + '>🏃 ' + esc(o.rotulo) +
+              (d.destino === o.valor ? ' selected' : '') + '>' + esc(o.rotulo) +
               (o.nota ? ' · ' + esc(o.nota) : '') + '</option>').join('') +
           '</select>' +
           '<input type="text" class="fech-motivo" placeholder="Por que não entregou?"' +
@@ -9653,7 +9664,7 @@ async function sprintFecharAplicar() {
   }
   bal.pendentes.forEach(m => _dirtyMelhoriaIds.delete(m.id));
   _pendingEdits = false;
-  toast('🔒 ' + SPRINTPO.rotuloCurto(_fechRotulo) + ' fechada · ' + r.entregues +
+  toast(SPRINTPO.rotuloCurto(_fechRotulo) + ' fechada · ' + r.entregues +
         ' entregue' + (r.entregues === 1 ? '' : 's') +
         (r.aguardando ? ', ' + r.aguardando + ' aguardando você' : '') +
         (r.fechados ? ', ' + r.fechados + ' com destino novo' : '') + '.', 'ok');
@@ -9665,7 +9676,7 @@ function destaqueRenderNoCard(m) {
   if (!m || !m.id) { b.style.display = 'none'; return; }
   b.style.display = 'inline-block';
   b.textContent = m.destaque ? '★' : '☆';
-  b.style.color = m.destaque ? 'var(--amber-tx,#FFC470)' : 'var(--text3)';
+  b.style.color = m.destaque ? 'var(--amber-tx)' : 'var(--text3)';
   b.title = m.destaque
     ? 'É destaque — sai na apresentação. Clique para desmarcar.'
     : 'Marcar como destaque da apresentação';
@@ -9736,8 +9747,8 @@ function renderSprLinha() {
   const frente = SPRINTPO.proximasSprints(hoje, 5, fer).map(s => s.rotulo);
   const etapa = m => statusKey(m);
   const dm = s => s.slice(8, 10) + '/' + s.slice(5, 7);
-  const EST = { montando: ['montando', '✎ Montando'], em_curso: ['curso', '▶ Em curso'],
-                fechada: ['fechada', '🔒 Fechada'] };
+  const EST = { montando: ['montando', '<i class="axi axi-edit"></i> Montando'], em_curso: ['curso', '▶ Em curso'],
+                fechada: ['fechada', '<i class="axi axi-lock"></i> Fechada'] };
   el.innerHTML = antes.concat(frente).map(r => {
     const p = SPRINTPO.placarDaSprint(state, r, etapa, _sprTrilha);
     const f = SPRINTPO.faixaDaSprint(r, fer);
@@ -9769,7 +9780,7 @@ function renderSprLinha() {
     return d;
   })();
   av.textContent = sem.length
-    ? '⚠ ' + sem.length + (sem.length === 1 ? ' demanda está' : ' demandas estão') +
+    ? sem.length + (sem.length === 1 ? ' demanda está' : ' demandas estão') +
       ' depois da Planning sem sprint — ' + sem.slice(0, 6).map(m => m.codigo || m.id).join(', ') +
       (sem.length > 6 ? '…' : '') + '. Escolha a sprint no card.'
     : '';
@@ -9814,7 +9825,7 @@ function renderGerSprint() {
   if (est) {
     const reg = SPRINTPO.registroDe(state, _sprSel);
     if (sit === 'fechada') {
-      est.innerHTML = '<span class="spr-est fechada">🔒 Fechada em ' +
+      est.innerHTML = '<span class="spr-est fechada"><i class="axi axi-lock"></i> Fechada em ' +
         esc(formatDate(fech.em)) + (fech.por ? ' por ' + esc(fech.por) : '') + '</span>';
     } else if (sit === 'em_curso') {
       est.innerHTML = '<span class="spr-est curso">▶ Em curso desde ' +
@@ -9823,7 +9834,7 @@ function renderGerSprint() {
           ? '<button type="button" class="spr-acao" onclick="sprintFecharAbrir(\'' +
             esc(_sprSel) + '\')">Fechar sprint</button>' : '');
     } else {
-      est.innerHTML = '<span class="spr-est montando">✎ Montando — o time ainda não vê</span>' +
+      est.innerHTML = '<span class="spr-est montando"><i class="axi axi-edit"></i> Montando — o time ainda não vê</span>' +
         /* O BOTÃO OLHA A SPRINT INTEIRA, e não a trilha escolhida: iniciar vale
            para os três times de uma vez. */
         (SPRINTPO.demandasDaSprint(state, _sprSel).length ? '<button type="button" class="spr-acao inicia" onclick="sprintIniciar()">' +
@@ -9840,7 +9851,7 @@ function renderGerSprint() {
         p.validados + ' de ' + p.total + ' validada' + (p.validados === 1 ? '' : 's') +
         ' pelo PM/PO (' + p.pct + '%) · ' + p.pontosValidados + ' de ' +
         p.pontosTotal + ' pts' +
-        (fech ? ' · <span class="spr-fechada">🔒 fechada em ' +
+        (fech ? ' · <span class="spr-fechada"><i class="axi axi-lock"></i> fechada em ' +
                 esc(formatDate(fech.em)) + '</span>' : '')
       : 'Nada nesta sprint ainda — o PM/PO repassa pelo quadro ou pelo “Sprint em lote”.';
   }
@@ -9912,14 +9923,14 @@ function renderGerSprint() {
       '. O que está antes de Planejado já aparece para o time, com a sprint marcada.</span></div>' +
       bk.map(g => '<div class="spr-bk-grupo">' +
         '<div class="spr-bk-dev' + (g.dev ? '' : ' sem') + '">' +
-          (g.dev ? esc(g.dev) : '⚠ Sem dev — para direcionar') + ' · ' + g.itens.length + '</div>' +
+          (g.dev ? esc(g.dev) : '<i class="axi axi-alert"></i> Sem dev — para direcionar') + ' · ' + g.itens.length + '</div>' +
         '<div class="spr-lista">' + g.itens.map(x => {
           const m = x.m;
           return '<div class="spr-item" onmousedown="event.stopPropagation()"' +
             ' ondblclick="openModalMelhoria(\'' + esc(m.id) + '\')" title="Duplo clique abre a demanda">' +
             '<span class="spr-sit">' + esc(ETQ[x.etapa] || x.etapa) + '</span>' +
             '<span class="lote-cod">' + esc(m.codigo || '—') + '</span>' +
-            (x.prioritaria ? '<span class="spr-prio">⚡ Prioritária</span>' : '') +
+            (x.prioritaria ? '<span class="spr-prio"><i class="axi axi-zap"></i> Prioritária</span>' : '') +
             '<span class="spr-tit-d">' + esc(m.titulo || '') + '</span>' +
             (SPRINTPO.pontosDe(m) ? '<span class="spr-pts">' + SPRINTPO.pontosDe(m) + ' pts</span>' : '') +
             '<select class="spr-bk-sel" title="Direcionar para um dev"' +
@@ -9938,11 +9949,12 @@ function renderGerSprint() {
   const nota = document.getElementById('spr-nota');
   if (nota) {
     nota.innerHTML = !acomp.length ? '' : emRisco.length
-      ? '<span class="spr-alerta">⚠ ' + emRisco.length + ' em risco</span> de ' + acomp.length
+      ? '<span class="spr-alerta"><i class="axi axi-alert"></i> ' + emRisco.length + ' em risco</span> de ' + acomp.length
       : '<span class="spr-ok">✓ nenhuma em risco</span>';
   }
-  const SIT = { validado: ['✅', 'Validado'], aguardando: ['⏳', 'Esperando você'],
-                em_curso: ['🔧', 'Em curso'], saiu: ['↪', 'Saiu da sprint'],
+  const SIT = { validado: ['<i class="axi axi-check"></i>', 'Validado'],
+                aguardando: ['<i class="axi axi-hourglass"></i>', 'Esperando você'],
+                em_curso: ['<i class="axi axi-wrench"></i>', 'Em curso'], saiu: ['↪', 'Saiu da sprint'],
                 negada: ['✕', 'Negada'] };
   const lst = document.getElementById('spr-lista');
   const mostrar = soRisco ? emRisco : acomp;
@@ -9961,7 +9973,7 @@ function renderGerSprint() {
               ' title="Duplo clique abre a demanda">' +
               '<span class="spr-sit" data-s="' + esc(x.situacao) + '">' + s[0] + ' ' + esc(s[1]) + '</span>' +
               '<span class="lote-cod">' + esc(m.codigo || '—') + '</span>' +
-              (x.prioritaria ? '<span class="spr-prio" title="Vencida no início da sprint — entrou como prioritária">⚡ Prioritária</span>' : '') +
+              (x.prioritaria ? '<span class="spr-prio" title="Vencida no início da sprint — entrou como prioritária"><i class="axi axi-zap"></i> Prioritária</span>' : '') +
               '<span class="spr-tit-d">' + esc(m.titulo || '') + '</span>' +
               (x.pontos ? '<span class="spr-pts">' + x.pontos + ' pts</span>' : '') +
               (m.dev ? '<span class="lote-dev">' + esc(m.dev) + '</span>' : '') +
@@ -9993,7 +10005,7 @@ async function sprDirecionar(id, nome) {
     return;
   }
   _pendingEdits = false;
-  toast('👤 ' + (m.codigo || 'Demanda') + ' direcionada para ' + nome + '.', 'ok');
+  toast((m.codigo || 'Demanda') + ' direcionada para ' + nome + '.', 'ok');
 }
 
 /** INICIAR A SPRINT — o ato que entrega a semana ao time.
@@ -10029,11 +10041,11 @@ async function sprintIniciar() {
                ' no backlog de todos os devs, para quem pegar primeiro.'
              : '\n\nTodas já têm dev alocado.') +
            (venc.length
-             ? '\n\n⚡ ' + venc.length + (venc.length === 1 ? ' demanda alocada está vencida e entra' : ' demandas alocadas estão vencidas e entram') +
+             ? '\n\n' + venc.length + (venc.length === 1 ? ' demanda alocada está vencida e entra' : ' demandas alocadas estão vencidas e entram') +
                ' nesta sprint como prioritária (prioridade Alta): ' + venc.map(m => m.codigo || m.id).join(', ') + '.'
              : '') +
            (paus.length
-             ? '\n\n⏸ ' + paus.length + (paus.length === 1 ? ' demanda pausada transborda' : ' demandas pausadas transbordam') +
+             ? '\n\n' + paus.length + (paus.length === 1 ? ' demanda pausada transborda' : ' demandas pausadas transbordam') +
                ' para esta sprint (continuam pausadas): ' + paus.map(m => m.codigo || m.id).join(', ') + '.'
              : ''),
     ok: 'Iniciar',
@@ -10064,10 +10076,10 @@ async function sprintIniciar() {
   toast('▶ ' + SPRINTPO.rotuloCurto(r) + ' em curso · ' + res.demandas +
         (res.demandas === 1 ? ' demanda liberada' : ' demandas liberadas') +
         (res.semDev ? ', ' + res.semDev + ' sem dono no backlog do time' : '') +
-        (res.prioritarias.length ? ', ⚡ ' + res.prioritarias.length + ' vencida' +
+        (res.prioritarias.length ? ', ' + res.prioritarias.length + ' vencida' +
           (res.prioritarias.length === 1 ? ' entrou' : 's entraram') + ' como prioritária' +
           (res.prioritarias.length === 1 ? '' : 's') : '') +
-        (res.pausadas.length ? ', ⏸ ' + res.pausadas.length + ' pausada' +
+        (res.pausadas.length ? ', ' + res.pausadas.length + ' pausada' +
           (res.pausadas.length === 1 ? ' transbordou' : 's transbordaram') : '') + '.', 'ok');
   mexidas.forEach(m => _dirtyMelhoriaIds.delete(m.id));
 }
@@ -10771,8 +10783,8 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
   // aviso nomeado, e nao linha anonima na tabela por dev.
   const semDono = itens.filter(m => !String(m.dev || '').trim());
   const semDonoPts = semDono.reduce((s, m) => s + Number(m.poker_pontos), 0);
-  const avisoSemDono = semDono.length ? `<div class="ger-empty-box" style="grid-column:1/-1;text-align:left;border-color:var(--amber,#E89C2F)">
-    <b style="color:var(--text)">⚠ ${semDono.length} demanda${semDono.length!==1?'s':''} pontuada${semDono.length!==1?'s':''} sem responsável (${semDonoPts} pt)</b><br>
+  const avisoSemDono = semDono.length ? `<div class="ger-empty-box" style="grid-column:1/-1;text-align:left;border-color:var(--amber)">
+    <b style="color:var(--text)"><i class="axi axi-alert"></i> ${semDono.length} demanda${semDono.length!==1?'s':''} pontuada${semDono.length!==1?'s':''} sem responsável (${semDonoPts} pt)</b><br>
     Elas contam nos totais do período, mas não aparecem na tabela por dev — não há
     a quem atribuir. De <b>Planejado</b> em diante isso não acontece: o servidor
     devolve para o Backlog quem chegar lá sem dono.
@@ -10780,8 +10792,8 @@ function renderGerPontos(ano, mes, temaMap, splitDevs) {
       `<div style="color:var(--text2);margin-bottom:3px">• <span class="cod-tag">${esc(m.codigo || '')}</span> ${esc(m.titulo || '(sem título)')} — <b style="color:var(--text)">${m.poker_pontos} pt</b> · ${esc(etapaRotulo(m))}</div>`
     ).join('')}</div>
   </div>` : '';
-  const avisoSemData = semData.length ? `<div class="ger-empty-box" style="grid-column:1/-1;text-align:left;border-color:var(--amber,#E89C2F)">
-    <b style="color:var(--text)">⚠ ${semData.length} demanda${semData.length!==1?'s':''} pontuada${semData.length!==1?'s':''} sem data de início/entrega (${semDataPts} pt)</b><br>
+  const avisoSemData = semData.length ? `<div class="ger-empty-box" style="grid-column:1/-1;text-align:left;border-color:var(--amber)">
+    <b style="color:var(--text)"><i class="axi axi-alert"></i> ${semData.length} demanda${semData.length!==1?'s':''} pontuada${semData.length!==1?'s':''} sem data de início/entrega (${semDataPts} pt)</b><br>
     Sem data não é possível dizer a que semana ou mês pertencem, então não entram
     na distribuição acima. Preencha início/entrega no card para que passem a contar.
     <div style="margin-top:10px">${semData.map(m =>
@@ -11198,7 +11210,7 @@ async function baixarCsvDoMes() {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
     const demandas = new Set(linhas.map(l => l.demanda_id)).size;
-    toast('📥 ' + nome + ': ' + demandas + ' demandas em ' + linhas.length + ' linhas.', 'ok');
+    toast(nome + ': ' + demandas + ' demandas em ' + linhas.length + ' linhas.', 'ok');
   } catch (e) {
     toast('Não consegui gerar o CSV: ' + e.message, 'err');
   } finally {
@@ -12141,7 +12153,7 @@ async function relPptGerar() {
     const pptx = await relatorioPptMonta(relPptDados(escopo, j, relPptQuerBacklog()));
     const nome = relPptNomeArquivo(escopo, j);
     await pptx.writeFile({ fileName: nome });
-    toast('📊 ' + nome + ' gerado.', 'ok');
+    toast(nome + ' gerado.', 'ok');
     closeModal('modal-apres');
   } catch (e) {
     toast('Não consegui gerar: ' + e.message, 'err');
@@ -12231,25 +12243,25 @@ function relSaidaHTML(m) {
   const saiu = window.CAPACIDADE.diaDaEntrega(m);
   if (!saiu) {
     return '<span class="rel-sem-data" title="Sem data de entrega registrada: a demanda fica ' +
-           'fora de qualquer fechamento por período.">✅ Entregue: <b>sem data</b></span>';
+           'fora de qualquer fechamento por período."><i class="axi axi-check"></i> Entregue: <b>sem data</b></span>';
   }
   const dia = formatDate(saiu);
   // Sem prazo cadastrado nao ha combinado para comparar — e dizer isso e melhor
   // que deixar a linha sem marca, que se confunde com "cumpriu".
   if (!m.entrega) {
-    return '<span>✅ Entregue: ' + dia + ' <span class="rel-sp" ' +
+    return '<span><i class="axi axi-check"></i> Entregue: ' + dia + ' <span class="rel-sp" ' +
            'title="Sem prazo cadastrado — não há combinado para comparar.">sem prazo</span></span>';
   }
   const atraso = window.PRAZO ? PRAZO.diasDeAtraso(m, statusKey(m), PRAZO.hojeISO()) : null;
   const pz = window.PRAZO ? PRAZO.prazoEfetivo(m, saiu) : m.entrega;
   if (atraso === null) {
-    return '<span>✅ Entregue: ' + dia + ' <span class="rel-sp">prazo ' + formatDate(pz) + '</span></span>';
+    return '<span><i class="axi axi-check"></i> Entregue: ' + dia + ' <span class="rel-sp">prazo ' + formatDate(pz) + '</span></span>';
   }
   if (atraso <= 0) {
-    return '<span>✅ Entregue: ' + dia + ' <span class="rel-no-prazo" title="Prazo era ' +
+    return '<span><i class="axi axi-check"></i> Entregue: ' + dia + ' <span class="rel-no-prazo" title="Prazo era ' +
            formatDate(pz) + '.">no prazo</span></span>';
   }
-  return '<span>✅ Entregue: ' + dia + ' <span class="rel-atraso">' + atraso +
+  return '<span><i class="axi axi-check"></i> Entregue: ' + dia + ' <span class="rel-atraso">' + atraso +
          (atraso === 1 ? ' dia' : ' dias') + ' após o prazo (' + formatDate(pz) + ')</span></span>';
 }
 
@@ -12325,13 +12337,13 @@ function relCardHTML(m, modo) {
         ${m.codigo ? `<span class="cod-tag">${esc(m.codigo)}</span>` : ''}
         ${esc(m.titulo || '(sem título)')}
       </button>
-      ${m.poker_pontos != null ? `<span class="rel-pts" title="Pontos do Planning Poker">🃏 ${m.poker_pontos}</span>` : ''}
+      ${m.poker_pontos != null ? `<span class="rel-pts" title="Pontos do Planning Poker"><i class="axi axi-cards"></i> ${m.poker_pontos}</span>` : ''}
     </div>
     <div class="rel-card-meta">
       <span><b>${esc(sm.completo)}</b></span>
-      ${m.dev ? `<span>👤 ${esc(m.dev)}</span>` : ''}
+      ${m.dev ? `<span><i class="axi axi-user"></i> ${esc(m.dev)}</span>` : ''}
       ${modo === 'andamento'
-        ? `<span class="${atrasado ? 'rel-atraso' : ''}">📅 Prazo: ${prazo}${atrasado ? ' (atrasado)' : ''}</span>`
+        ? `<span class="${atrasado ? 'rel-atraso' : ''}"><i class="axi axi-calendar"></i> Prazo: ${prazo}${atrasado ? ' (atrasado)' : ''}</span>`
         : relSaidaHTML(m)}
     </div>
     ${modo === 'entregues'
@@ -12342,8 +12354,8 @@ function relCardHTML(m, modo) {
              filtro em "só o resumo", o texto completo pode estar lá inteiro —
              o que falta é a frase curta, e é ela que se pede. */
           : (soResumo && String(m.implementacao || '').trim()
-              ? `<div class="rel-impl rel-impl-falta">✎ Sem resumo da entrega — o texto completo existe. Peça a frase curta ao dev, ou troque o filtro acima.</div>`
-              : `<div class="rel-impl rel-impl-falta">⚠ O dev ainda não descreveu o que foi implementado — pedir no Painel Dev ao concluir.</div>`))
+              ? `<div class="rel-impl rel-impl-falta"><i class="axi axi-edit"></i> Sem resumo da entrega — o texto completo existe. Peça a frase curta ao dev, ou troque o filtro acima.</div>`
+              : `<div class="rel-impl rel-impl-falta"><i class="axi axi-alert"></i> O dev ainda não descreveu o que foi implementado — pedir no Painel Dev ao concluir.</div>`))
       : (impl ? `<div class="rel-impl">${esc(impl)}</div>` : '')}
     <div class="rel-detalhe"${aberto ? ' data-pronto="1"' : ' hidden'}>${
       aberto ? entregaHTML(m, { leitura: true }) : ''}</div>
@@ -12426,9 +12438,9 @@ function renderRelatorios() {
         `${janela.rotAnt}. Todos os blocos abaixo são desta semana.`) + filtroTxt + covTxt;
 
   document.getElementById('rel-ent-titulo').innerHTML =
-    `✅ Entregues <span class="rel-per">${formatDate(C)} a ${formatDate(D)}</span>`;
+    `<i class="axi axi-check"></i> Entregues <span class="rel-per">${formatDate(C)} a ${formatDate(D)}</span>`;
   document.getElementById('rel-dev-titulo').innerHTML =
-    `🚧 Em desenvolvimento <span class="rel-per">${formatDate(A)} a ${formatDate(B)}</span>`;
+    `<i class="axi axi-alert"></i> Em desenvolvimento <span class="rel-per">${formatDate(A)} a ${formatDate(B)}</span>`;
 
   document.getElementById('rel-ent-hint').innerHTML =
     `${entregues.length} demanda${entregues.length!==1?'s':''}` +
@@ -12436,7 +12448,7 @@ function renderRelatorios() {
     // subtotal. Antes vinha na mesma frase e parecia parte da contagem.
     (semDataConcluidos
       ? ` · <span class="rel-falta" title="Sem data de conclusão não há como afirmar em que semana saiu. `
-        + `Aprove a entrega pela aba Entrega para a data ser gravada.">⚠ ${semDataConcluidos} concluída${semDataConcluidos!==1?'s':''} sem data ` +
+        + `Aprove a entrega pela aba Entrega para a data ser gravada."><i class="axi axi-alert"></i> ${semDataConcluidos} concluída${semDataConcluidos!==1?'s':''} sem data ` +
         `${semDataConcluidos!==1?'ficam':'fica'} fora</span>`
       : '');
   document.getElementById('rel-dev-hint').textContent =
@@ -12477,10 +12489,11 @@ function relRenderSprint(j) {
   const ac = SPRINTPO.acompanhamentoDaSprint(state, j.sprint, etapa, PRAZO.hojeISO(), window.PRAZO, _sprTrilha);
   const risco = ac.filter(x => x.riscos.length);
   const sit = SPRINTPO.situacaoDaSprint(state, j.sprint);
-  const SIT_ROT = { montando: '✎ Montando', em_curso: '▶ Em curso', fechada: '🔒 Fechada' };
+  const SIT_ROT = { montando: '<i class="axi axi-edit"></i> Montando', em_curso: '▶ Em curso',
+                    fechada: '<i class="axi axi-lock"></i> Fechada' };
   box.innerHTML =
-    '<div class="ger-section-title"><span>🏃 ' + esc(SPRINTPO.rotuloCurto(j.sprint)) +
-      '</span><span class="ger-section-hint">' + esc(SIT_ROT[sit]) + ' · ' +
+    '<div class="ger-section-title"><span><i class="axi axi-refresh"></i> ' + esc(SPRINTPO.rotuloCurto(j.sprint)) +
+      '</span><span class="ger-section-hint">' + (SIT_ROT[sit] || esc(sit)) + ' · ' +
       esc(j.rot.replace(/^\S+\s*/, '')) + '</span></div>' +
     '<div class="spr-placar">' +
       '<div class="spr-b pts"><div class="spr-b-n">' + p.pontosValidados + ' / ' +
@@ -12508,7 +12521,7 @@ function relRenderSprint(j) {
        lista do que entregou já está abaixo, e o que AINDA PODE não entregar é
        a única parte acionável antes de a sprint acabar. */
     (risco.length
-      ? '<div class="spr-tit">⚠ Em risco de não entregar (' + risco.length + ')</div>' +
+      ? '<div class="spr-tit"><i class="axi axi-alert"></i> Em risco de não entregar (' + risco.length + ')</div>' +
         '<div class="spr-lista">' + risco.map(x =>
           '<div class="spr-item risco"><span class="lote-cod">' +
           esc(x.m.codigo || '—') + '</span><span class="spr-tit-d">' +
@@ -12675,7 +12688,7 @@ function relRenderBacklog() {
           ? '<span class="rel-vem-sem" title="sem data de criação registrada">—</span>'
           : '<span title="parada desde ' + esc(formatDate(x.criado)) + '">' +
             x.dias + 'd</span>') +
-        (x.pts ? ' <span style="color:var(--blue-tx,#9BC8F8)">' + x.pts + ' pt</span>' : '') +
+        (x.pts ? ' <span style="color:var(--blue-tx)">' + x.pts + ' pt</span>' : '') +
       '</div>' +
     '</div>').join('');
 
@@ -13226,10 +13239,10 @@ function renderTemasPadrao() {
   const qtd = (t) => (state.melhorias || []).filter(m => String(m.tema_id) === String(t.id)).length;
 
   el.innerHTML =
-    '<div style="border:1px solid var(--amber,#E89C2F);border-radius:12px;padding:14px 16px;' +
-    'background:var(--amber-bg,#3A2A08)">' +
-    '<div style="font-size:13.5px;font-weight:700;color:var(--amber-tx,#FFD79A);margin-bottom:4px">' +
-    '⚠ ' + achados.length + (achados.length === 1 ? ' tema fora do padrão' : ' temas fora do padrão') +
+    '<div style="border:1px solid var(--amber);border-radius:12px;padding:14px 16px;' +
+    'background:var(--amber-bg)">' +
+    '<div style="font-size:13.5px;font-weight:700;color:var(--amber-tx);margin-bottom:4px">' +
+    '<i class="axi axi-alert"></i> ' + achados.length + (achados.length === 1 ? ' tema fora do padrão' : ' temas fora do padrão') +
     '</div>' +
     '<p style="font-size:12px;color:var(--text2);line-height:1.55;margin-bottom:10px;max-width:74ch">' +
     'Nome fora do padrão quebra o filtro por sistema: quem filtra por um não vê o outro, ' +
@@ -13357,7 +13370,7 @@ function mResumoConta() {
   alvo.textContent = restam === 0
     ? 'limite de ' + teto + ' caracteres atingido — cabe em 5 linhas'
     : 'restam ' + restam + ' de ' + teto + ' caracteres';
-  alvo.style.color = restam <= 30 ? 'var(--amber-tx, #FFC470)' : 'var(--text3)';
+  alvo.style.color = restam <= 30 ? 'var(--amber-tx)' : 'var(--text3)';
 }
 
 function openModalMelhoria(id) {
@@ -13498,8 +13511,8 @@ function openModalMelhoria(id) {
   let depHTML = '';
   if (m?.parent_id) {
     const par = state.melhorias.find(x => x.id === m.parent_id);
-    depHTML += `<div style="background:#341A6E33;border:1px solid #9B6FE855;border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px;">
-      🔗 <strong>Dependência de:</strong> ${esc(par ? par.titulo : '(card removido)')}
+    depHTML += `<div style="background:var(--purple-bg);border:1px solid rgba(var(--pu-rgb),.33);border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px;">
+      <i class="axi axi-link"></i> <strong>Dependência de:</strong> ${esc(par ? par.titulo : '(card removido)')}
     </div>`;
   }
   const childDeps = m ? VINCULO.filhosDe(state.melhorias, m.id) : [];
@@ -13512,14 +13525,14 @@ function openModalMelhoria(id) {
     depHTML += `<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;font-size:13px;">
       <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;">
         <span style="font-weight:600;">Dependências deste card:</span>
-        ${pesoTxt ? `<span style="color:var(--text3);font-size:12px;">🧮 ${esc(pesoTxt)}</span>` : ''}
+        ${pesoTxt ? `<span style="color:var(--text3);font-size:12px;"><i class="axi axi-calc"></i> ${esc(pesoTxt)}</span>` : ''}
       </div>
       ${childDeps.map(d => {
         const dsk = statusKey(d);
         const done = dsk === 'concluido';
         const trava = VINCULO.bloqueia(d);
         return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;" title="${trava?'Dependência — trava o avanço':'Vinculada — pertence a este card, não trava'}">
-          <span>${done?'✅':(trava?'⏳':'🔗')}</span>
+          <span><i class="axi axi-${done ? 'check' : (trava ? 'hourglass' : 'link')}"></i></span>
           <span style="flex:1">${esc(d.titulo)}</span>
           <span style="color:var(--text3);font-size:12px;">${esc(d.dev||'—')}</span>
           <span style="color:var(--text3);font-size:12px;">${d.entrega?formatDate(d.entrega):''}</span>
@@ -13561,7 +13574,7 @@ function mSprintRender(m) {
   const fechada = !!atual && SPRINTPO.estaFechada(state, atual);
   const ops = sprintOpcoes('');
   const opt = (v, r) => '<option value="' + esc(v) + '">' + esc(r) + '</option>';
-  sel.innerHTML = opt('', '📋 Fora da sprint') +
+  sel.innerHTML = opt('', 'Fora da sprint') +
     (atual && !ops.some(o => o.valor === atual)
       ? opt(atual, SPRINTPO.rotuloCurto(atual) + (fechada ? ' · fechada' : ' · anterior')) : '') +
     ops.map(o => opt(o.valor, o.rotulo + ' · ' + o.nota)).join('');
@@ -13585,7 +13598,7 @@ function mSprintAviso() {
   const id = (document.getElementById('m-id') || {}).value;
   const m = id ? (state.melhorias || []).find(x => x.id === id) : null;
   if (!sel.value) {
-    hint.style.color = exige ? 'var(--red,#E84444)' : 'var(--text3)';
+    hint.style.color = exige ? 'var(--red)' : 'var(--text3)';
     hint.textContent = exige
       ? 'Obrigatória depois da Planning — escolha a sprint antes de salvar.'
       : 'No backlog. Escolha a sprint quando ela sair da Planning.';
@@ -13707,7 +13720,7 @@ function mSubsRender(m) {
   const p = SUBTAREFA.progresso(subs);
   if (prog) {
     prog.textContent = p.feitas + ' de ' + p.total + '  ·  ' + p.pct + '%';
-    prog.style.color = p.pct === 100 ? 'var(--green-tx, #B2E07A)' : 'var(--text3)';
+    prog.style.color = p.pct === 100 ? 'var(--green-tx)' : 'var(--text3)';
   }
 
   /* AS HORAS SÓ APARECEM QUANDO ALGUÉM LANÇOU. `horasTotal` devolve `null`
@@ -14002,7 +14015,7 @@ function pausaRenderBloco(m) {
   box.style.display = 'block';
   if (estaPausado(m)) {
     const d = diasPausadoAgora(m);
-    box.innerHTML = '<div class="pausa-box">⏸ <strong>Pausada há ' + d +
+    box.innerHTML = '<div class="pausa-box"><i class="axi axi-pause"></i> <strong>Pausada há ' + d +
       (d === 1 ? ' dia' : ' dias') + '</strong>, desde ' + esc(formatDate(m.pausado_em)) +
       (m.pausa_por ? ' por ' + esc(m.pausa_por) : '') + '.' +
       '<br><strong>Motivo:</strong> ' + esc(m.pausa_motivo || '—') +
@@ -14027,8 +14040,8 @@ function pausaRenderBloco(m) {
      * o tamanho do que está sendo aprovado, e não um detalhe. */
     const ped = PAUSA.pedido(m);
     const esperando = PAUSA.diasEntre(ped.em, _isoHoje());
-    box.innerHTML = '<div class="pausa-box" style="border-color:var(--amber,#E89C2F)">' +
-      '⏳ <strong>' + esc(ped.por || 'O dev') + ' pediu pausa em ' +
+    box.innerHTML = '<div class="pausa-box" style="border-color:var(--amber)">' +
+      '<i class="axi axi-hourglass"></i> <strong>' + esc(ped.por || 'O dev') + ' pediu pausa em ' +
       esc(formatDate(ped.em)) + '</strong>' +
       (esperando ? ' <span style="color:var(--text3)">· esperando há ' + esperando +
                    (esperando === 1 ? ' dia' : ' dias') + '</span>' : '') +
@@ -14050,7 +14063,7 @@ function pausaRenderBloco(m) {
     const ult = recusas[recusas.length - 1];
     box.innerHTML = '<div class="pausa-box">' +
       (ult
-        ? '<div style="color:var(--red-tx,#F9A0A0);margin-bottom:6px">✕ <strong>Pausa negada em ' +
+        ? '<div style="color:var(--red-tx);margin-bottom:6px">✕ <strong>Pausa negada em ' +
           esc(formatDate(ult.em)) + '</strong> por ' + esc(ult.por || '—') + ': ' +
           esc(ult.motivo || '—') +
           (recusas.length > 1 ? ' <span style="color:var(--text3)">(' + recusas.length +
@@ -14058,7 +14071,7 @@ function pausaRenderBloco(m) {
         : '') +
       (jaParou ? 'Já ficou <strong>' + jaParou + (jaParou === 1 ? ' dia' : ' dias') + '</strong> pausada no total.<br>' : '') +
       'Travada por algo fora do time? Pause para o prazo não correr.' +
-      '<div class="pausa-acoes"><button type="button" class="btn btn-secondary btn-sm" onclick="pausaIniciar()">⏸ Pausar demanda</button></div>' +
+      '<div class="pausa-acoes"><button type="button" class="btn btn-secondary btn-sm" onclick="pausaIniciar()"><i class="axi axi-pause"></i> Pausar demanda</button></div>' +
       '</div>';
   }
 }
@@ -14082,7 +14095,7 @@ async function pausaIniciar() {
   if (prob) { toast(prob, 'err'); return; }
   const r = PAUSA.pausarComoAdm(m, motivo, (_eu && (_eu.nome || _eu.login)) || 'admin', _isoHoje());
   if (!r.ok) { toast(r.erro, 'err'); return; }
-  await pausaSalvar(m, '⏸ Demanda pausada.');
+  await pausaSalvar(m, 'Demanda pausada.');
 }
 
 /** APROVAR O PEDIDO DO DEV. A data gravada e a DO PEDIDO — o servidor recusa
@@ -14104,7 +14117,7 @@ async function pausaAprovar() {
       ok: 'Aprovar' }))) return;
   const r = PAUSA.aprovar(m, (_eu && (_eu.nome || _eu.login)) || 'admin', _isoHoje());
   if (!r.ok) { toast(r.erro, 'err'); return; }
-  await pausaSalvar(m, '⏸ Pausa aprovada, desde ' + formatDate(r.desde) + '.');
+  await pausaSalvar(m, 'Pausa aprovada, desde ' + formatDate(r.desde) + '.');
 }
 
 /** RECUSAR, COM MOTIVO. O motivo e obrigatorio pela mesma razao do pedido: sem
@@ -14224,7 +14237,7 @@ async function saveMelhoria() {
     });
     const impede = HOMOLOGACAO.barra(_alvo, sp, window.PRAZO && PRAZO.hojeISO());
     if (impede) {
-      toast('🔒 ' + impede.motivo, 'err');
+      toast(impede.motivo, 'err');
       if (impede.campo === 'solicitante') document.getElementById('m-solicitante').focus();
       else if (impede.campo === 'homologacao') mAba('entrega');
       return;
@@ -14430,7 +14443,7 @@ async function saveMelhoria() {
     const _trv = SPRINTPO.travaDeAlocacao(obj, existing.status_planejamento || (id ? '' : 'backlog'),
                                           sp, window.PRAZO && PRAZO.hojeISO());
     if (_trv.trava) {
-      toast('🏃 Escolha a sprint: depois da Planning ela é obrigatória.', 'err');
+      toast('Escolha a sprint: depois da Planning ela é obrigatória.', 'err');
       document.getElementById('m-sprint').focus();
       return;
     }
@@ -14660,7 +14673,7 @@ function levaAoCampo(id, campo, motivo) {
     try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
     try { el.focus(); } catch (_) {}
     const antes = el.style.boxShadow;
-    el.style.boxShadow = '0 0 0 3px var(--amber, #FBBF24)';
+    el.style.boxShadow = '0 0 0 3px var(--amber)';
     setTimeout(() => { el.style.boxShadow = antes; }, 2600);
   }, 120);
   if (motivo) toast(motivo, 'err');
@@ -14810,8 +14823,8 @@ function bannerPendentes() {
   const t = document.getElementById('pend-texto');
   if (t) {
     t.textContent = n
-      ? '⚠️ ' + n + ' demanda(s) ainda NÃO publicadas no servidor.'
-      : '⚠️ Há alterações que ainda NÃO foram publicadas.';
+      ? n + ' demanda(s) ainda NÃO publicadas no servidor.'
+      : 'Há alterações que ainda NÃO foram publicadas.';
   }
 }
 
@@ -15523,7 +15536,7 @@ async function copiarCodigo(ev) {
     : t;
   try {
     await navigator.clipboard.writeText(txt);
-    toast('📋 ' + (comLink ? 'link do card copiado' : t + ' copiado') + '.', 'ok');
+    toast((comLink ? 'Link do card copiado' : t + ' copiado') + '.', 'ok');
   } catch (_) {
     // Sem area de transferencia (contexto nao seguro, permissao negada): mostra o
     // texto selecionavel em vez de so dizer que nao deu.
@@ -15547,10 +15560,10 @@ function valBarraRender(m) {
     box.style.display = 'none'; box.innerHTML = ''; return;
   }
   box.style.display = 'flex';
-  box.innerHTML = '<span class="val-barra-txt">⏳ <strong>Aguardando sua validação</strong>' +
+  box.innerHTML = '<span class="val-barra-txt"><i class="axi axi-hourglass"></i> <strong>Aguardando sua validação</strong>' +
     (m.entregue_em ? ' · entregue em ' + esc(formatDate(m.entregue_em)) : '') + '</span>' +
     '<span class="val-barra-acoes">' +
-      '<button type="button" class="btn btn-success btn-sm" onclick="valAprovar()">✅ Aprovar entrega</button>' +
+      '<button type="button" class="btn btn-success btn-sm" onclick="valAprovar()"><i class="axi axi-check"></i> Aprovar entrega</button>' +
       '<button type="button" class="btn btn-danger btn-sm" onclick="valRejeitar()">↩ Devolver ao dev</button>' +
     '</span>';
 }
@@ -15626,7 +15639,7 @@ function votosRender() {
     (m.poker_media != null ? '<span>Média <b>' + esc(String(m.poker_media).replace('.', ',')) + '</b></span>' : '') +
     (m.poker_pontos != null ? '<span>Gravado <b>' + esc(String(m.poker_pontos)) + ' pts</b></span>' : '') +
     '<span>' + vs.length + ' voto(s)</span>' +
-    (espalhou ? '<span class="vt-alerta">⚠ de ' + min + ' a ' + max +
+    (espalhou ? '<span class="vt-alerta"><i class="axi axi-alert"></i> de ' + min + ' a ' + max +
                 ' — leituras diferentes da mesma demanda</span>' : '') +
     '</div>';
 
@@ -15702,8 +15715,8 @@ function renderValBanner() {
   el.style.display = n ? 'flex' : 'none';
   if (n) {
     document.getElementById('val-banner-texto').innerHTML = n === 1
-      ? '📋 <strong>1 entrega</strong> aguardando sua validação.'
-      : '📋 <strong>' + n + ' entregas</strong> aguardando sua validação.';
+      ? '<i class="axi axi-clipboard"></i> <strong>1 entrega</strong> aguardando sua validação.'
+      : '<i class="axi axi-clipboard"></i> <strong>' + n + ' entregas</strong> aguardando sua validação.';
   }
 }
 
@@ -15725,7 +15738,7 @@ function renderRiscoBanner() {
   const dias = maisAntiga && window.PRAZO
     ? (PRAZO.diasDeAtraso(maisAntiga, statusKey(maisAntiga), PRAZO.hojeISO()) || 0) : 0;
   document.getElementById('risco-banner-texto').innerHTML =
-    '⚠ <strong>' + atrasadas.length + (atrasadas.length === 1 ? ' demanda' : ' demandas') +
+    '<i class="axi axi-alert"></i> <strong>' + atrasadas.length + (atrasadas.length === 1 ? ' demanda' : ' demandas') +
     ' com prazo vencido</strong>' +
     (emProjeto ? ' · ' + emProjeto + ' em projeto' : '') +
     (dias > 0 ? ' · a mais antiga há ' + dias + ' dia' + (dias > 1 ? 's' : '') : '');
@@ -15783,13 +15796,13 @@ function entregaHTML(m, opts) {
   let topo = '';
   if (sk === 'validacao') {
     topo = leitura
-      ? '<div class="ent-aviso espera">⏳ <strong>Ainda não validada.</strong>' +
+      ? '<div class="ent-aviso espera"><i class="axi axi-hourglass"></i> <strong>Ainda não validada.</strong>' +
         (m.entregue_em ? ' Entregue em ' + esc(quando(m.entregue_em)) + '.' : '') + '</div>'
-      : '<div class="ent-aviso espera">⏳ <strong>Aguardando sua validação.</strong> ' +
+      : '<div class="ent-aviso espera"><i class="axi axi-hourglass"></i> <strong>Aguardando sua validação.</strong> ' +
         'Confira o que foi implementado e aprove, ou devolva ao dev explicando o que falta.' +
         (m.entregue_em ? '<br>Entregue em ' + esc(quando(m.entregue_em)) : '') + '</div>';
   } else if (m.validado_em) {
-    topo = '<div class="ent-aviso aprovada">✅ <strong>Entrega aprovada</strong>' +
+    topo = '<div class="ent-aviso aprovada"><i class="axi axi-check"></i> <strong>Entrega aprovada</strong>' +
       (m.validado_por ? ' por ' + esc(m.validado_por) : '') +
       ' em ' + esc(quando(m.validado_em)) + '.</div>';
   }
@@ -15832,11 +15845,11 @@ function entregaHTML(m, opts) {
   if (m.horas_realizadas) meta.push('<span>Horas: <strong>' + esc(String(m.horas_realizadas)) + 'h</strong></span>');
   if (m.entrega) meta.push('<span>Prazo: <strong>' + esc(formatDate(m.entrega)) + '</strong></span>');
   if (m.concluido_em) meta.push('<span>Concluída em: <strong>' + esc(formatDate(m.concluido_em)) + '</strong></span>');
-  if (m.debito_tecnico) meta.push('<span><strong>🧱 Débito técnico</strong></span>');
-  if (m.dados_bi) meta.push('<span><strong>📊 Dados / BI</strong></span>');
-  else if (m.sales_ops) meta.push('<span><strong>📈 Sales Ops</strong></span>');
+  if (m.debito_tecnico) meta.push('<span><strong><i class="axi axi-package"></i> Débito técnico</strong></span>');
+  if (m.dados_bi) meta.push('<span><strong><i class="axi axi-chart"></i> Dados / BI</strong></span>');
+  else if (m.sales_ops) meta.push('<span><strong><i class="axi axi-trend"></i> Sales Ops</strong></span>');
   const _biM = BIS.daDemanda(m);
-  if (_biM.length) meta.push('<span><strong>📈 BIs:</strong> ' + esc(_biM.join(' · ')) + '</span>');
+  if (_biM.length) meta.push('<span><strong><i class="axi axi-trend"></i> BIs:</strong> ' + esc(_biM.join(' · ')) + '</span>');
   if (m.sprint) meta.push('<span>Sprint: <strong>' + esc(m.sprint) + '</strong></span>');
 
   /* O LINK DO ANEXO LEVA O ID DA DEMANDA.
@@ -15847,7 +15860,7 @@ function entregaHTML(m, opts) {
     ? '<div class="ent-bloco"><h4>Anexos</h4><div style="display:grid;gap:6px">' +
         (m.anexos || []).map((a, i) =>
           '<a href="#" class="anexo-link" onclick="abrirAnexoIdx(' + i +
-          ',\'' + esc(m.id || '') + '\');return false">📎 ' +
+          ',\'' + esc(m.id || '') + '\');return false"><i class="axi axi-clip"></i> ' +
           esc(a.nome || 'arquivo') + '</a>').join('') +
       '</div></div>'
     : '';
@@ -15865,7 +15878,7 @@ function entregaHTML(m, opts) {
        chegou a recusar uma aprovacao valida. Dizer que esta conferindo e o
        unico texto honesto enquanto nao se sabe. */
     spikeBloco = '<div class="ent-bloco spike-bloco pendente">' +
-      '<h4>🔬 Spike</h4><p class="ent-vazio">Conferindo as aprovações…</p></div>';
+      '<h4><i class="axi axi-search"></i> Spike</h4><p class="ent-vazio">Conferindo as aprovações…</p></div>';
   } else if (m.spike) {
     const podem = spikeQuemAssina() || [];
     const valem = window.PREVOO ? PREVOO.assinaturasValidas(m, podem) : [];
@@ -15878,7 +15891,7 @@ function entregaHTML(m, opts) {
     const linhas = podem.map(a => {
       const s = assinou(a.login);
       return '<div class="spike-linha' + (s ? ' ok' : '') + '">' +
-        '<span class="spike-mk">' + (s ? '✅' : '⬚') + '</span>' +
+        '<span class="spike-mk">' + (s ? '<i class="axi axi-check"></i>' : '⬚') + '</span>' +
         '<span class="spike-nome">' + esc(a.nome || a.login) + '</span>' +
         (s ? '<span class="spike-em">' + esc(quando(s.em)) + '</span>'
            : '<span class="spike-em">aguardando</span>') +
@@ -15887,7 +15900,7 @@ function entregaHTML(m, opts) {
     const faltam = Math.max(0, minimo - valem.length);
     spikeBloco =
       '<div class="ent-bloco spike-bloco' + (faltam ? ' pendente' : ' completo') + '">' +
-        '<h4>🔬 Spike · ' + valem.length + ' de ' + minimo + ' aprovações</h4>' +
+        '<h4><i class="axi axi-search"></i> Spike · ' + valem.length + ' de ' + minimo + ' aprovações</h4>' +
         (podem.length < minimo
           ? '<p class="ent-vazio">Só ' + podem.length + ' pessoa(s) marcada(s) como ' +
             'aprovadora de spike, e são necessárias ' + minimo + '. Um admin habilita ' +
@@ -15901,7 +15914,7 @@ function entregaHTML(m, opts) {
           : '<div class="ent-acoes">' +
               (jaAssinei
                 ? '<button class="btn btn-secondary" onclick="spikeAssinar(false)">↩ Retirar minha aprovação</button>'
-                : '<button class="btn btn-success" onclick="spikeAssinar(true)">✍ Aprovar como ' +
+                : '<button class="btn btn-success" onclick="spikeAssinar(true)"><i class="axi axi-edit"></i> Aprovar como ' +
                   esc((_eu && (_eu.nome || _eu.login)) || '') + '</button>') +
             '</div>') +
       '</div>';
@@ -15910,7 +15923,7 @@ function entregaHTML(m, opts) {
   // Sem botao de decidir em modo leitura — ver a nota da assinatura.
   const acoes = (sk === 'validacao' && !leitura)
     ? '<div class="ent-acoes">' +
-        '<button class="btn btn-success" onclick="valAprovar()">✅ Aprovar entrega</button>' +
+        '<button class="btn btn-success" onclick="valAprovar()"><i class="axi axi-check"></i> Aprovar entrega</button>' +
         '<button class="btn btn-danger" onclick="valRejeitar()">↩ Devolver ao dev</button>' +
       '</div>'
     : '';
@@ -16037,7 +16050,7 @@ async function spikeAssinar(assinar) {
     if (atual) renderEntrega(atual);
     const faltam = (corpo && corpo.faltam) || 0;
     toast(assinar
-      ? (faltam ? '✍ Aprovado. Ainda faltam ' + faltam + '.' : '✍ Aprovado — o spike já pode concluir.')
+      ? (faltam ? 'Aprovado. Ainda faltam ' + faltam + '.' : 'Aprovado — o spike já pode concluir.')
       : '↩ Sua aprovação foi retirada.', 'ok');
   } catch (e) {
     toast('Falha ao registrar a aprovação: ' + e.message, 'err');
@@ -16067,7 +16080,7 @@ function homologHTML(m, leitura) {
   const quem = HOMOLOGACAO.solicitante(m);
 
   if (reg) {
-    return '<div class="ent-aviso aprovada">✅ <strong>Homologado por ' + esc(reg.quem) +
+    return '<div class="ent-aviso aprovada"><i class="axi axi-check"></i> <strong>Homologado por ' + esc(reg.quem) +
       '</strong>' + (reg.em ? ' em ' + esc(new Date(reg.em).toLocaleString('pt-BR',
         { dateStyle: 'short', timeStyle: 'short' })) : '') + '.</div>' +
       (reg.obs ? '<div class="ent-aviso">' + esc(reg.obs) + '</div>' : '') +
@@ -16076,9 +16089,9 @@ function homologHTML(m, leitura) {
   }
 
   const cab = cobra
-    ? '<div class="ent-aviso espera">⏳ <strong>Parada há ' + dias + ' dias na área.</strong> ' +
+    ? '<div class="ent-aviso espera"><i class="axi axi-hourglass"></i> <strong>Parada há ' + dias + ' dias na área.</strong> ' +
       'Passou dos ' + HOMOLOGACAO.DIAS_ATE_COBRAR + ' dias combinados — quem homologou?</div>'
-    : '<div class="ent-aviso espera">👁 <strong>Em homologação</strong>' +
+    : '<div class="ent-aviso espera"><i class="axi axi-eye"></i> <strong>Em homologação</strong>' +
       (dias != null ? ' há ' + dias + ' dia(s)' : '') + '. ' +
       'Assim que a área conferir, registre aqui.</div>';
 
@@ -16096,7 +16109,7 @@ function homologHTML(m, leitura) {
       '(opcional)</small></label>' +
       '<input type="text" id="hom-obs" maxlength="300" placeholder="O que foi conferido" /></div>' +
     '<button type="button" class="btn btn-success" onclick="homologRegistra()">' +
-      '✅ Registrar homologação</button>' +
+      '<i class="axi axi-check"></i> Registrar homologação</button>' +
     '<p class="ent-vazio" style="margin-top:10px">Sem registro, a demanda continua aqui — ' +
     'ela não anda sozinha.</p>';
 }
@@ -16128,7 +16141,7 @@ async function homologRegistra() {
   renderAll();
   const okSalvo = await saveViaProxy();
   if (okSalvo) {
-    toast('✅ Homologação registrada — já pode seguir para o PM/PO.', 'ok');
+    toast('Homologação registrada — já pode seguir para o PM/PO.', 'ok');
     _dirtyMelhoriaIds.delete(id);
     _pendingEdits = false;
   } else {
@@ -16250,7 +16263,7 @@ async function valDecidir(aprovar, obs, idExplicito) {
   renderValBanner();
   const okSalvo = await saveViaProxy();
   if (okSalvo) {
-    toast(aprovar ? '✅ Entrega aprovada — demanda concluída.'
+    toast(aprovar ? 'Entrega aprovada — demanda concluída.'
                   : '↩ Devolvida ao dev — voltou para Planejado.', 'ok');
     _dirtyMelhoriaIds.delete(id);
     _pendingEdits = false;
@@ -16376,7 +16389,7 @@ function pjAprovRender(p) {
   }
   // pendente
   const nome = esc(p.solicitado_por || '—');
-  box.innerHTML = '<div class="pj-aprov-box pend">⏳ <strong>Aguardando sua validação</strong>' +
+  box.innerHTML = '<div class="pj-aprov-box pend"><i class="axi axi-hourglass"></i> <strong>Aguardando sua validação</strong>' +
     '<br>Proposto por ' + nome + (p.criado_em ? ' em ' + esc(formatDate(p.criado_em)) : '') + '.' +
     (p.justificativa ? '<br><strong>Justificativa:</strong> ' + esc(p.justificativa) : '') +
     '<br>Enquanto não decidir, ninguém pode vincular demandas a ele.' +
@@ -16458,8 +16471,8 @@ function pjCardHTML(p) {
   const st = PJ_STATUS[p.status] ? p.status : 'planejado';
   // Alerta: o projeto pede atencao quando tem demanda vencida ou entrega esperando
   const alertas = [];
-  if (r.atrasadas) alertas.push('<span class="pj-alerta">⚠ ' + r.atrasadas + ' atrasada' + (r.atrasadas > 1 ? 's' : '') + '</span>');
-  if (r.validando) alertas.push('<span class="pj-alerta">📋 ' + r.validando + ' p/ validar</span>');
+  if (r.atrasadas) alertas.push('<span class="pj-alerta"><i class="axi axi-alert"></i> ' + r.atrasadas + ' atrasada' + (r.atrasadas > 1 ? 's' : '') + '</span>');
+  if (r.validando) alertas.push('<span class="pj-alerta"><i class="axi axi-clipboard"></i> ' + r.validando + ' p/ validar</span>');
   if (!alertas.length && r.total) alertas.push('<span class="pj-alerta ok">✓ em dia</span>');
   const cls = 'pj-card' + (pjPendente(p) ? ' pj-pendente' : '') + (pjRecusado(p) ? ' pj-recusado' : '');
   return '<div class="' + cls + '" onclick="pjAbrir(' + JSON.stringify(p.id).replace(/"/g, '&quot;') + ')">' +
@@ -16469,7 +16482,7 @@ function pjCardHTML(p) {
       (pjAprovado(p)
         ? '<span class="pj-status ' + st + '">' + PJ_STATUS[st] + '</span>'
         : '<span class="pj-aprov ' + (pjPendente(p) ? 'pend' : 'rec') + '">' +
-          (pjPendente(p) ? '⏳ Aguardando você' : '✕ Recusado') + '</span>') +
+          (pjPendente(p) ? '<i class="axi axi-hourglass"></i> Aguardando você' : '✕ Recusado') + '</span>') +
     '</div>' +
     (pjPendente(p)
       ? '<div class="pj-proposta">Proposto por <strong>' + esc(p.solicitado_por || '—') +
@@ -16480,8 +16493,8 @@ function pjCardHTML(p) {
     '<div class="pj-rodape">' +
       '<span><strong>' + r.feitas + '/' + r.total + '</strong> concluídas</span>' +
       '<span>' + r.pct + '%</span>' +
-      (p.responsavel ? '<span>👤 ' + esc(p.responsavel) + '</span>' : '') +
-      (p.fim ? '<span>🏁 ' + esc(formatDate(p.fim)) + '</span>' : '') +
+      (p.responsavel ? '<span><i class="axi axi-user"></i> ' + esc(p.responsavel) + '</span>' : '') +
+      (p.fim ? '<span><i class="axi axi-flag"></i> ' + esc(formatDate(p.fim)) + '</span>' : '') +
       '<span style="margin-left:auto">' + alertas.join(' ') + '</span>' +
     '</div>' +
   '</div>';
@@ -16583,7 +16596,7 @@ function pjResumoExecutivo() {
 function pjCopiarCodigo() {
   const t = document.getElementById('pj-modal-cod').textContent;
   navigator.clipboard.writeText(t)
-    .then(() => toast('📋 ' + t + ' copiado.', 'ok'))
+    .then(() => toast(t + ' copiado.', 'ok'))
     .catch(() => toast('Não consegui copiar.', 'err'));
 }
 
@@ -16610,7 +16623,7 @@ async function pjAddFiles(files) {
 function pjRenderAnexos() {
   const box = document.getElementById('pj-anexos');
   box.innerHTML = _pjAnexos.map((a, i) =>
-    '<div class="pj-item"><span class="pj-item-nome">📎 ' + esc(a.nome || 'arquivo') + '</span>' +
+    '<div class="pj-item"><span class="pj-item-nome"><i class="axi axi-clip"></i> ' + esc(a.nome || 'arquivo') + '</span>' +
     '<button class="btn btn-secondary btn-sm" onclick="pjVerAnexo(' + i + ')">Abrir</button>' +
     '<button class="btn btn-danger btn-sm" onclick="pjRemoveAnexo(' + i + ')">Remover</button></div>').join('');
 }
@@ -16885,7 +16898,7 @@ function mescRenderBloco(m) {
   if (m && ehMesclada(m)) {
     const pai = (state.melhorias || []).find(x => x.id === mescladaEm(m));
     box.style.display = 'block';
-    box.innerHTML = '<div class="ent-aviso rejeitada">🔗 <strong>Esta demanda foi mesclada</strong>' +
+    box.innerHTML = '<div class="ent-aviso rejeitada"><i class="axi axi-link"></i> <strong>Esta demanda foi mesclada</strong>' +
       (pai ? ' em <strong>' + esc(pai.codigo || '') + ' · ' + esc(pai.titulo) + '</strong>' : '') +
       (m.mesclado_data ? '<br>Em ' + esc(new Date(m.mesclado_data).toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' })) : '') +
       (m.mesclado_por ? ' por ' + esc(m.mesclado_por) : '') +
@@ -16928,7 +16941,7 @@ function mescVer(id) {
   const anexos = (m.anexos || []).length
     ? '<div class="ent-bloco"><h4>Anexos</h4><div style="display:grid;gap:6px">' +
       (m.anexos || []).map((a, i) => '<a href="#" class="anexo-link" onclick="mescAnexo(' +
-        JSON.stringify(id).replace(/"/g, '&quot;') + ',' + i + ');return false">📎 ' +
+        JSON.stringify(id).replace(/"/g, '&quot;') + ',' + i + ');return false"><i class="axi axi-clip"></i> ' +
         esc(a.nome || 'arquivo') + '</a>').join('') + '</div></div>'
     : '';
   document.getElementById('mesc-ver-titulo').textContent =
@@ -16998,7 +17011,7 @@ async function mescConfirmar(idFilha) {
   const okSalvo = await saveViaProxy();
   if (okSalvo) {
     _dirtyMelhoriaIds.clear(); _pendingEdits = false;
-    toast('🔗 ' + (filha.codigo || '') + ' mesclada em ' + (pai.codigo || '') + '.', 'ok');
+    toast((filha.codigo || '') + ' mesclada em ' + (pai.codigo || '') + '.', 'ok');
     mescRenderBloco(pai); renderAll();
   } else avisaFalha('Não foi possível salvar a mesclagem.');
 }

@@ -5730,8 +5730,10 @@ sec('O slide das frentes cabe no slide');
    Era um preto neutro; virou o azul-quase-preto daquele quadro. Nenhum slide
    escreve cor na mao — e essa regra que faz a troca valer no deck todo em vez de
    nos slides que alguem lembrou de atualizar. */
-ok(/fundo:\s*'070B16'/.test(APRES), 'o fundo do deck e o azul do painel');
-ok(/borda:\s*'223052'/.test(APRES), 'e existe a cor de borda dos cartoes');
+/* A PALETA PASSOU A SER A DO AXIS: o fundo e o marinho profundo dele e a borda,
+   a dele. A regra continua a mesma — um valor declarado num lugar so. */
+ok(/fundo:\s*'05070C'/.test(APRES), 'o fundo do deck e o marinho do AXIS');
+ok(/borda:\s*'18243D'/.test(APRES), 'e existe a cor de borda dos cartoes');
 (() => {
   // Cor escrita direto no slide, fora do objeto C: cada uma dessas e um lugar que
   // a proxima troca de paleta vai esquecer.
@@ -9393,7 +9395,7 @@ ok(CAP.SPRINTS_PARA_ALERTA === 2, 'o alerta comeca acima de duas sprints');
    esta na sprint sem ter passado. Uma sprint de 60 pontos toda estimada por fora
    era indistinguivel de uma de 60 votados em reuniao.                          */
 (() => {
-  ok(/🃏 <b>\$\{pontosTotal\}<\/b> pt planejados/.test(GANTT),
+  ok(/<i class="axi axi-cards"><\/i> <b>\$\{pontosTotal\}<\/b> pt planejados/.test(GANTT),
      'a primeira linha e o cruzamento: planejado x entregue');
   ok(/cq-r"[^>]*>Valid\.<\/span>/.test(GANTT) &&
      /cq-r"[^>]*>S\/plan<\/span>/.test(GANTT) &&
@@ -17199,14 +17201,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const m = String(css).match(/(\d+),\s*(\d+),\s*(\d+)/);
       return m ? [m[1], m[2], m[3]].map(v => Number(v).toString(16).padStart(2, '0')).join('') : '';
     };
-    const curva = rgbHex(DF.clareia('070B16', 16));
-    ok(!!curva, 'a cor da curva e derivada do fundo', '#' + curva);
+    /* NO AXIS O FUNDO E UM DEGRADE (#0A1428 no alto, #05070C embaixo), e a
+       curva SOMA o realce a cor local. Entao ha duas curvas a medir, uma em cada
+       ponta — e o realce e o do modulo, e nao um numero copiado aqui. */
+    const PONTAS = ['05070C', '0A1428'];
+    const curvas = PONTAS.map(f => rgbHex(DF.clareia(f, DF.REALCE)));
+    ok(curvas.every(Boolean), 'a cor da curva e derivada do fundo',
+       curvas.map(c => '#' + c).join(' / '));
 
     /* ── E ELA E TEXTURA, E NAO FORMA ──
        `trend-emphasis` do padrao citado diz para nao por textura por cima do
        dado. Este fundo respeita por CONTRASTE: a curva fica perto demais do
        fundo para competir com qualquer coisa. */
-    const rCurva = razao(curva, '070B16');
+    const rCurva = Math.max(...PONTAS.map((f, i) => razao(curvas[i], f)));
     ok(rCurva < 1.3,
        'a curva fica abaixo de 1,3:1 do fundo — visivel como textura, invisivel ' +
        'como forma', rCurva.toFixed(3) + ':1');
@@ -17214,11 +17221,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* ── E O DADO POR CIMA DELA NAO PERDE LEGIBILIDADE ──
        E a unica pergunta que importa: a textura pode existir se ela nao empurra
        nenhum numero abaixo do minimo. Medido no PIOR caso, que e o dado sobre a
-       propria linha. */
+       propria linha — e na ponta clara do degrade. As cores sao as da paleta do
+       modulo, para a lista nao envelhecer na proxima troca. */
     const ruins = [];
-    ['FFFFFF', '4ADE80', 'F87171', '60A5FA', 'FBBF24', 'A78BFA', '8792AD'].forEach(c => {
-      const r = razao(c, curva);
-      if (r < 4.5) ruins.push('#' + c + ' = ' + r.toFixed(2));
+    ['texto', 'verde', 'vermelho', 'azul', 'ambar', 'roxo', 'fraco'].forEach(k => {
+      const c = require('./deck-grafico.js').COR[k];
+      curvas.forEach(cv => {
+        const r = razao(c, cv);
+        if (r < 4.5) ruins.push(k + ' #' + c + ' = ' + r.toFixed(2));
+      });
     });
     ok(ruins.length === 0,
        'e todo dado sobre a CURVA continua acima de 4.5:1 — a textura nao custa ' +
@@ -17251,7 +17262,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        Sao vinte slides pedindo o mesmo fundo. Sem cache, o .pptx levaria vinte
        copias do mesmo PNG. */
     ok(/var _cache = null;/.test(fs.readFileSync('deck-fundo.js', 'utf8')) &&
-       /if \(_cache && _cache\.fundo === fundo\) return _cache\.dado;/
+       /if \(_cache && _cache\.fundo === fundo && _cache\.topo === topo\) return _cache\.dado;/
          .test(fs.readFileSync('deck-fundo.js', 'utf8')),
        'o PNG e gerado uma vez por deck, e nao por slide');
 
@@ -17852,9 +17863,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * invariante: a funcao roda com um dubla de pptxgenjs e o desenho inteiro e
      * medido. */
     const deps = {
-      C: { fundo: '070B16', fundo2: '0E1428', fundo3: '141C36', borda: '223052',
-           texto: 'FFFFFF', fraco: '8792AD', azul: '60A5FA', verde: '4ADE80',
-           vermelho: 'F87171', ambar: 'FBBF24', ouro: 'FCD34D', prata: 'CBD5E1',
+      C: { fundo: '05070C', fundo2: '0D162A', fundo3: '13203A', borda: '18243D',
+           texto: 'F3F6FB', fraco: '8C9AB3', azul: '4C8DFF', verde: '22C55E',
+           vermelho: 'F25252', ambar: 'F5B83D', ouro: 'FCD34D', prata: 'CBD5E1',
            bronze: 'D8A07A' },
       DECKG: require('./deck-grafico.js'),
     };
@@ -19676,9 +19687,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          titulo(limpo));
       ok(KB.every(o => !o.label || titulo(limpo).includes(o.label.replace(/^[▲△⏸]\s*/, ''))),
          'e nenhuma opcao fica de fora dele');
-      ok(/⏸/.test(rotulo(filtrado)) && /5\/31/.test(rotulo(filtrado)),
+      ok(/<i class="axi axi-pause"><\/i> 5\/31<\/button>/.test(filtrado),
          'e com a pausa ligada o contador mostra a marca e o recorte',
-         rotulo(filtrado));
+         filtrado.slice(filtrado.lastIndexOf('">') + 2));
       ok(/class="kb-count filtrado"/.test(filtrado) && !/filtrado/.test(limpo),
          'e se declara filtrado, para a coluna recortada nao parecer vazia');
       ok(KB.filter(o => o.key).every(o => o.marca),
@@ -20080,7 +20091,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
 
     /* E A TELA NAO INVENTA UM NUMERO ENQUANTO NAO SABE. "0/3" num spike
        assinado faz quem le o quadro cobrar assinatura de quem ja assinou. */
-    ok(/Conferindo as aprovações/.test(ADMIN) && /🔬 …/.test(ADMIN),
+    ok(/Conferindo as aprovações/.test(ADMIN) && /<i class="axi axi-search"><\/i> …/.test(ADMIN),
        'o selo e o painel dizem que estao conferindo, em vez de mostrar 0 de 3');
     /* E TENTA DE NOVO. Desistir calado na primeira falha deixava a tela cega
        pelo resto da sessao. */
@@ -23530,7 +23541,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        COLUNA nas duas telas, e um card em Em Andamento com esse chip se le
        como "este card esta na coluna errada". Demanda de Sustentacao vive
        exatamente assim — comeca sem sprint e fica em Em Andamento. */
-    ok(!/>📋 Backlog</.test(chipFora) && /Fora da sprint/.test(chipFora),
+    ok(!/Backlog</.test(chipFora) && /Fora da sprint/.test(chipFora),
        'e nao usa a palavra que ja nomeia uma coluna do quadro', chipFora.slice(-40));
     ok(/sp-atrasada/.test(chipAtr) && !/sp-atrasada/.test(chipNa),
        'e quem entrou atrasada aparece diferente de quem entrou na hora');
@@ -23542,11 +23553,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        nao aparecesse na saida — e acusou codigo CORRETO: escapado, o texto vira
        `&lt;img src=x onerror=alert(1)&gt;` dentro do `title`, inerte, e a
        palavra continua la como texto. O que faz mal e a ASPA que fecha o
-       atributo e o `<` que abre a tag; e isso que se mede. */
+       atributo e o `<` que abre a tag; e isso que se mede.
+       O icone (`<i class="axi ..."></i>`) e marcacao do proprio chip, logo
+       apos o `title`: sai antes da busca, e qualquer outra tag depois de uma
+       aspa continua acusando. */
     const chipSujo = SP.badge({ sprint_po: 'S1-11-2026',
                                 sprint_po_por: '"><img src=x onerror=alert(1)>',
                                 sprint_po_historico: [{ sprint: 'S1-11-2026' }] });
-    ok(!/"><|<img/.test(chipSujo) && /&quot;&gt;&lt;img/.test(chipSujo),
+    ok(!/"><|<img/.test(chipSujo.replace(/<i class="axi [\w-]+"><\/i>/g, '')) &&
+       /&quot;&gt;&lt;img/.test(chipSujo),
        'e o nome de quem repassou e escapado antes de entrar no chip',
        chipSujo.slice(0, 90));
 
@@ -23577,8 +23592,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* E O CHIP MOSTRA O CURTO, COM O INTEIRO NO `title`. As duas metades: o
        quadro se le de relance, e quem precisa do ano passa o mouse. */
     const chipAno = SP.badge(em2026);
-    ok(/>🏃 S1-10</.test(chipAno), 'o chip desenha o rotulo CURTO',
-       chipAno.slice(chipAno.indexOf('>🏃')));
+    ok(/axi-refresh"><\/i> S1-10</.test(chipAno), 'o chip desenha o rotulo CURTO',
+       chipAno.slice(chipAno.indexOf('axi-refresh')));
     ok(/title="[^"]*S1-10-2026/.test(chipAno),
        'e o ano continua a um passar de mouse, no title');
     ok(/title="[^"]*S2-11-2026/.test(chipNa) && /title="[^"]*S3-11-2026/.test(chipAtr),

@@ -288,7 +288,7 @@
       ? '<p class="rxp-vazio">Nenhuma issue vinculada a este projeto ainda. ' +
         'Use a aba <strong>Demandas</strong> do projeto para ligar os cards.</p>'
       : (clicavel
-          ? '<p class="rxp-dica">👁 Clique em uma demanda para ler o pedido, o ' +
+          ? '<p class="rxp-dica"><i class="axi axi-eye"></i> Clique em uma demanda para ler o pedido, o ' +
             'discovery e o que foi entregue — em consulta, sem editar.</p>'
           : '') +
         '<div class="rxp-lista">' + r.issues.map(function (x) {
@@ -317,7 +317,7 @@
             '<div class="rxp-item-sub" title="' + esc(sub) + '">' +
             (x.tema ? '<span class="rxp-tema">' + esc(x.tema) + '</span>' : '') +
             '<span class="rxp-sit">' + esc(sit) + '</span>' +
-            (x.periodo ? '<span class="rxp-prazo">📅 ' + esc(x.periodo) + '</span>' : '') +
+            (x.periodo ? '<span class="rxp-prazo"><i class="axi axi-calendar"></i> ' + esc(x.periodo) + '</span>' : '') +
             (x.dev ? '<span class="rxp-dev">' + esc(x.dev) + '</span>' : '') +
             '</div>' +
             (x.resumo ? '<div class="rxp-resumo" title="' + esc(x.resumo) + '">' +
@@ -381,7 +381,7 @@
        dele não pode depender do reset dela. Foi assim que o prefixo `rp-`
        quebrou esta mesma tela. */
     '.rxp-overlay,.rxp-overlay *{box-sizing:border-box;}',
-    '.rxp-overlay{position:fixed;inset:0;background:#000A;z-index:800;display:flex;',
+    '.rxp-overlay{position:fixed;inset:0;background:var(--overlay);z-index:800;display:flex;',
     '  align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto;}',
     '.rxp-caixa{background:var(--bg2,#14141A);border:1px solid var(--border,#2A2A32);',
     '  border-radius:12px;max-width:1120px;width:100%;padding:18px 20px;',
@@ -391,8 +391,8 @@
     '.rxp-cab{margin-bottom:10px;flex-shrink:0;min-width:0;}',
     '.rxp-nome{font-size:17px;font-weight:800;color:var(--text,#EDEDF0);line-height:1.3;',
     '  overflow-wrap:anywhere;}',
-    '.rxp-cod-proj{font-family:ui-monospace,monospace;font-size:12px;color:#C9AEFF;',
-    '  background:#341A6E;border-radius:5px;padding:2px 7px;margin-right:6px;}',
+    '.rxp-cod-proj{font-family:ui-monospace,monospace;font-size:12px;color:var(--purple-tx);',
+    '  background:var(--purple-bg);border-radius:5px;padding:2px 7px;margin-right:6px;}',
     '.rxp-meta{font-size:12px;color:var(--text3,#8A8A96);margin-top:3px;}',
     /* DUAS LINHAS, E O RESTO NO `title`. Uma descrição de projeto com URL colada
        ocupava sete linhas do alto da caixa — altura que as issues precisam. */
@@ -404,11 +404,11 @@
     '  padding:6px 10px;}',
     '.rxp-kpi b{display:block;font-size:18px;line-height:1.15;}',
     '.rxp-kpi span{font-size:10.5px;color:var(--text3,#8A8A96);}',
-    '.rxp-kpi.fim b{color:#3EC98E;} .rxp-kpi.val b{color:#7ED8D8;}',
-    '.rxp-kpi.atr b{color:#F9A0A0;} .rxp-kpi.tot b{color:var(--text,#EDEDF0);}',
+    '.rxp-kpi.fim b{color:var(--green);} .rxp-kpi.val b{color:var(--teal-tx);}',
+    '.rxp-kpi.atr b{color:var(--red-tx);} .rxp-kpi.tot b{color:var(--text,#EDEDF0);}',
     '.rxp-barra{height:5px;background:var(--bg4,#24242E);border-radius:3px;overflow:hidden;',
     '  flex-shrink:0;}',
-    '.rxp-barra-fill{height:100%;background:#3EC98E;}',
+    '.rxp-barra-fill{height:100%;background:var(--green);}',
     '.rxp-barra-txt{font-size:11px;color:var(--text3,#8A8A96);margin:4px 0 8px;flex-shrink:0;}',
     /* `auto-fill` E NÃO UM NÚMERO DE COLUNAS: o mínimo de 360px é a largura em
        que o título ainda se lê; quantas cabem é conta do navegador, e ela sai
@@ -424,8 +424,8 @@
     '  gap:12px;overflow:auto;min-height:0;align-content:start;padding:2px;}',
     '.rxp-item{background:var(--bg3,#1C1C24);border-left:3px solid var(--border2,#3A3A46);',
     '  border-radius:8px;padding:11px 13px;min-width:0;}',
-    '.rxp-item.fim{border-left-color:#3EC98E;} .rxp-item.val{border-left-color:#7ED8D8;}',
-    '.rxp-item.atr{border-left-color:#F9A0A0;} .rxp-item.and{border-left-color:#FFC861;}',
+    '.rxp-item.fim{border-left-color:var(--green);} .rxp-item.val{border-left-color:var(--teal-tx);}',
+    '.rxp-item.atr{border-left-color:var(--red-tx);} .rxp-item.and{border-left-color:var(--amber-tx);}',
     /* O CARTÃO CLICÁVEL SE ANUNCIA, e o foco do teclado aparece. Sem o anel de
        foco, quem percorre a lista por Tab não sabe onde está — e esta lista
        existe para ser percorrida. */
@@ -459,8 +459,8 @@
     /* A SITUACAO GANHA A COR DA BORDA do cartao. A borda de 3px dizia o estado
        e nada mais dizia: com a cor na palavra, "Concluido" e "Em validacao" se
        distinguem sem o olho ter de achar a listra da esquerda. */
-    '.rxp-item.fim .rxp-sit{color:#3EC98E;} .rxp-item.val .rxp-sit{color:#7ED8D8;}',
-    '.rxp-item.atr .rxp-sit{color:#F9A0A0;} .rxp-item.and .rxp-sit{color:#FFC861;}',
+    '.rxp-item.fim .rxp-sit{color:var(--green);} .rxp-item.val .rxp-sit{color:var(--teal-tx);}',
+    '.rxp-item.atr .rxp-sit{color:var(--red-tx);} .rxp-item.and .rxp-sit{color:var(--amber-tx);}',
     /* O RESUMO E A RESPOSTA DA TASK, e era o que mais sofria: 11,5px colado na
        sublinha, na mesma familia de cinza, sem nada dizendo que ali comeca
        outra coisa. Agora tem linha de corte, ar em cima e corpo de texto. */
@@ -533,7 +533,7 @@
       '<div class="rxp-topo">' +
       '<div style="font-size:12px;color:var(--text3,#8A8A96)">RESUMO EXECUTIVO DO PROJETO</div>' +
       '<div class="rxp-topo-acoes">' +
-      '<button type="button" class="btn btn-secondary btn-sm" onclick="RESUMOPROJETO.copiar()">📋 Copiar</button>' +
+      '<button type="button" class="btn btn-secondary btn-sm" onclick="RESUMOPROJETO.copiar()"><i class="axi axi-clipboard"></i> Copiar</button>' +
       '<button type="button" class="btn btn-secondary btn-sm" onclick="RESUMOPROJETO.fechar()">Fechar</button>' +
       '</div></div>' +
       html(_ultimo, !!_aoClicar) +
@@ -550,7 +550,7 @@
     if (!_ultimo) return;
     var t = texto(_ultimo);
     navigator.clipboard.writeText(t)
-      .then(function () { if (raiz.toast) raiz.toast('📋 Resumo copiado.', 'ok'); })
+      .then(function () { if (raiz.toast) raiz.toast('Resumo copiado.', 'ok'); })
       .catch(function () { if (raiz.toast) raiz.toast('Não consegui copiar.', 'err'); });
   }
 

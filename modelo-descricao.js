@@ -187,7 +187,7 @@
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'md-btn';
-    btn.textContent = '📋 Usar modelo';
+    btn.textContent = 'Usar modelo';
     btn.title = 'Insere o padrão de especificação com as seções obrigatórias.';
     btn.onclick = function () { inserir(el); atualiza(); };
     var aviso = document.createElement('span');

@@ -38,7 +38,7 @@
       border:1px solid var(--border); border-radius:var(--radius); color:var(--text);
       font-family:inherit; font-size:14px; outline:none; }
     .gate-box input:focus { border-color:var(--blue); }
-    .gate-box button { width:100%; padding:13px; background:var(--blue); color:#fff; border:none;
+    .gate-box button { width:100%; padding:13px; background:linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%); color:var(--on-ac); border:none;
       border-radius:var(--radius); font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; }
     .gate-erro { color:var(--red); font-size:13px; min-height:19px; margin-top:6px; }
 
@@ -52,7 +52,8 @@
       font-size:13.5px; font-weight:600; font-family:inherit; cursor:pointer; border:none;
       text-decoration:none; transition:opacity .15s; }
     .btn:hover { opacity:.85; }
-    .btn-1 { background:var(--blue); color:#fff; }
+    /* Principal no padrao AXIS: o axis.css cobre .btn-primary, nao esta classe. */
+    .btn-1 { background:linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%); color:var(--on-ac); }
     .btn-2 { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
     .btn-perigo { background:transparent; color:var(--red); border:1px solid var(--red); }
     .mes-nav { display:flex; align-items:center; gap:6px; }
@@ -91,7 +92,7 @@
        um retorno marcado para sabado existe. Escondendo a coluna, o chip nao teria
        onde pousar e o acompanhamento sumiria da tela — que e o defeito que o
        painel do dev acabou de ter, por outro caminho. */
-    .tl-dia.fds, .tl-cel.fds { background:#00000033; }
+    .tl-dia.fds, .tl-cel.fds { background:var(--bg); }
     .tl-dia.hoje { background:var(--amber); color:#1A1A18; }
     .tl-dia.hoje b { color:#1A1A18; }
     .tl-linha { border-top:1px solid var(--border); position:relative; }
@@ -118,8 +119,8 @@
        apontaria para um dia varios dias antes do retorno — pior do que nao ter
        ponto, porque estaria dizendo a data errada com confianca. */
     .fw.vira { flex-direction:row-reverse; padding:0 7px 0 9px; }
-    .fw.venc { background:#3A1414; color:#FFB4B4; } .fw.venc .pt { background:var(--red); }
-    .fw.hoje { background:#3A2A10; color:#FFD79A; } .fw.hoje .pt { background:var(--amber); }
+    .fw.venc { background:var(--red-bg); color:var(--red-tx); } .fw.venc .pt { background:var(--red); }
+    .fw.hoje { background:var(--amber-bg); color:var(--amber-tx); } .fw.hoje .pt { background:var(--amber); }
     .fw.feito { background:var(--bg3); color:var(--text3); }
     .fw.feito .pt { background:var(--green); }
     .fw.feito .tx { text-decoration:line-through; }
@@ -127,7 +128,7 @@
     .tl-vazio p { margin-bottom:12px; }
 
     /* ── MODAL ── */
-    .mod { display:none; position:fixed; inset:0; background:#000000BB; z-index:100;
+    .mod { display:none; position:fixed; inset:0; background:var(--overlay); z-index:100;
       align-items:center; justify-content:center; padding:20px; }
     .mod.on { display:flex; }
     .mod-cx { background:var(--bg2); border:1px solid var(--border); border-radius:16px;

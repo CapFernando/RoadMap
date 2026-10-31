@@ -37,6 +37,40 @@
      Trocar os VALORES e manter os nomes muda o deck inteiro de uma vez: nenhum
      slide fica com a paleta antiga por esquecimento, porque nenhum slide escreve
      cor na mão. */
+  /* A PALETA AGORA E A DO AXIS, e foi exatamente a troca que o paragrafo acima
+     prometia: os nomes ficaram, os valores mudaram, e o deck inteiro seguiu.
+
+     O QUE CADA NOME VIROU:
+       fundo / topo     o marinho profundo do AXIS (#05070C embaixo, #0A1428 no
+                        alto) — o degrade e desenhado pelo `deck-fundo.js`
+       fundo2 / fundo3  os paineis (#0D162A cartao, #13203A trilho)
+       borda            a borda do AXIS (#18243D)
+       texto / fraco    os textos do AXIS (#F3F6FB e #8C9AB3)
+       verde/azul/ambar os estados ok, info e atencao do AXIS, sem ajuste
+       laranja          o acento da marca. SO MOLDURA (a faixa da capa simples,
+                        o traco sob o titulo): ele nao entra em dado, porque a
+                        tabela de significado abaixo ja tem as cinco cores dela,
+                        e uma sexta com cara de "atencao" confundiria o ambar.
+
+     DOIS DESVIOS DO TOKEN, ambos para manter o contraste que a suite mede (todo
+     dado >= 4,5:1 sobre os tres fundos):
+       vermelho  o perigo do AXIS (#F04B4B) da 4,49:1 sobre o trilho #13203A —
+                 um centesimo abaixo. Sai um passo mais claro (#F25252, 4,71:1),
+                 o que a olho e a mesma cor.
+       roxo      o #8B5CF6 do AXIS da 3,8:1; vai o tom de texto dele (#C4B5FD).
+                 Hoje nenhum slide usa o roxo (ver "O QUE SAIU" abaixo), mas a
+                 cor declarada continua medida.
+
+     `apagado` E NOVO, e existe porque o estado vazio do deck de um assunto
+     ("nada nesta fila", "nenhuma entrega com data") era escrito na cor da BORDA.
+     Na paleta antiga isso dava 1,4:1 — ja quase invisivel —, e com a borda do
+     AXIS cairia para 1,25:1: texto que existe no arquivo e nao na parede. O
+     tom apagado do AXIS (#5F6E88, 3,9:1) continua recuado em relacao ao dado,
+     que e a intencao, e se le.
+
+     A FONTE NAO MUDOU. O AXIS usa Montserrat/Manrope, e o .pptx abre em maquina
+     que nao tem nenhuma das duas — o PowerPoint trocaria por outra mais larga e
+     o titulo calculado da capa voltaria a quebrar (ver `slideCapa`). */
   /* A GRAMÁTICA DOS GRÁFICOS mora em `deck-grafico.js`: o delta com três canais,
      a barra, a legenda e o número em pt-BR. Alias local, e não `window.DECKG`
      em cada chamada — assim o varredor de órfãs enxerga a declaração, que é o
@@ -49,17 +83,21 @@
   var DECKG = (typeof window !== 'undefined') ? window.DECKG : require('./deck-grafico.js');
 
   var C = {
-    fundo:   '070B16',   // o azul-quase-preto do painel
-    fundo2:  '0E1428',   // superfície dos cartões
-    fundo3:  '141C36',   // trilho de barra / cartão inativo
-    borda:   '223052',   // a borda fina que separa cartão de fundo
-    texto:   'FFFFFF',
-    fraco:   '8792AD',
-    azul:    '60A5FA',
-    verde:   '4ADE80',
-    vermelho:'F87171',
-    ambar:   'FBBF24',
-    roxo:    'A78BFA',
+    fundo:   '05070C',   // o marinho profundo do AXIS (pe do degrade)
+    topo:    '0A1428',   // o alto do degrade do fundo
+    fundo2:  '0D162A',   // superfície dos cartões
+    fundo3:  '13203A',   // trilho de barra / cartão inativo
+    borda:   '18243D',   // a borda fina que separa cartão de fundo
+    texto:   'F3F6FB',
+    fraco:   '8C9AB3',
+    apagado: '5F6E88',   // estado vazio ("nada nesta fila") — ver abaixo
+    azul:    '4C8DFF',
+    verde:   '22C55E',
+    vermelho:'F25252',   // perigo do AXIS um passo mais claro (ver acima)
+    ambar:   'F5B83D',
+    roxo:    'C4B5FD',
+    laranja: 'FF6B1A',   // acento da marca — so moldura, nunca dado
+    laranjaClaro: 'FF8643',
     ouro:    'FCD34D',   // 1º lugar do ranking
     prata:   'CBD5E1',
     bronze:  'D8A07A',
@@ -254,7 +292,7 @@
      * desenho — o PNG é gerado uma vez por deck e reusado —, e é melhor que uma
      * exceção: o dia em que a capa perder a imagem, ela cai no fundo certo. */
     var fundo = (typeof window !== 'undefined' && window.DECKFUNDO)
-      ? window.DECKFUNDO.png({ fundo: C.fundo }) : null;
+      ? window.DECKFUNDO.png({ fundo: C.fundo, topo: C.topo }) : null;
     if (fundo) s.addImage({ data: fundo, x: 0, y: 0, w: 10, h: 5.63 });
 
     return s;
@@ -347,11 +385,12 @@
   // A capa antiga, guardada como plano B.
   function slideCapaSimples(pptx, cfg) {
     var s = slideBase(pptx);
-    s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.azul } });
+    // A faixa e o periodo sao moldura, e nao dado: vao no laranja da marca.
+    s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.laranja } });
     s.addText(cfg.titulo || 'AXIS', {
       x: 0.7, y: 1.7, w: 8.8, h: 0.9, fontSize: 40, bold: true, color: C.texto });
     s.addText(cfg.periodo, {
-      x: 0.7, y: 2.6, w: 8.8, h: 0.5, fontSize: 22, color: C.azul });
+      x: 0.7, y: 2.6, w: 8.8, h: 0.5, fontSize: 22, color: C.laranjaClaro });
     if (cfg.subtitulo) {
       s.addText(cfg.subtitulo, {
         x: 0.7, y: 3.25, w: 8.8, h: 1.0, fontSize: 15, color: C.fraco, lineSpacingMultiple: 1.3 });
@@ -615,6 +654,13 @@
     }
     s.addShape(pptx.ShapeType.rect, {
       x: 0.5, y: 1.02, w: 9.0, h: 0.012, fill: { color: C.borda }, line: { type: 'none' } });
+    /* O TRACO LARANJA NO COMECO DA REGUA e a assinatura do AXIS no cabecalho:
+       a unica presenca do acento da marca nos slides de conteudo, e ela fica na
+       moldura, longe de qualquer numero. Comeca em 1,005" e nao em 1,00":
+       o subtitulo termina exatamente em 1,00", e encostar nele faria o traco
+       parecer sublinhado da segunda linha. */
+    s.addShape(pptx.ShapeType.rect, {
+      x: 0.5, y: 1.005, w: 0.6, h: 0.03, fill: { color: C.laranja }, line: { type: 'none' } });
     return s;
   }
 
@@ -3262,7 +3308,7 @@
     if (d.mensagem || (d.frentesAtraso || []).length) {
       cena(function (p) {
       var sm = slideBase(pptx);
-      sm.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.azul } });
+      sm.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.laranja } });
       if (d.mensagem) {
         sm.addText(d.mensagem, { x: 0.9, y: 1.3, w: 8.4, h: 1.7, fontSize: 24,
                                  color: C.texto, lineSpacingMultiple: 1.35 });

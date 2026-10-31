@@ -95,7 +95,7 @@
    *  que algo anda, e sabe quanto falta. */
   function aviso(quedas) {
     var n = Number(quedas || 0) + 1;
-    return '⚠️ Falha de rede — tentando de novo (' + n + ' de ' +
+    return 'Falha de rede — tentando de novo (' + n + ' de ' +
            ESPERAS.length + ')…';
   }
 

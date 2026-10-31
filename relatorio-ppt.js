@@ -404,7 +404,7 @@
       cabecColuna(pptx, s, col.x, 1.62, wCol, col.cor, col.nome, col.sub);
       if (!col.lista.length) {
         s.addText('nada nesta fila', { x: col.x, y: 2.3, w: wCol, h: 0.26,
-                                       fontSize: 10, color: C.borda });
+                                       fontSize: 10, color: C.apagado });
         return;
       }
       var TETO = 7, vis = col.lista.slice(0, TETO);
@@ -588,7 +588,7 @@
       });
     } else {
       s.addText('nenhuma entrega com data no período', {
-        x: MARGEM, y: 2.84, w: LARG, h: 0.3, fontSize: 10.5, color: C.borda });
+        x: MARGEM, y: 2.84, w: LARG, h: 0.3, fontSize: 10.5, color: C.apagado });
     }
 
     /* A FILA FECHA O SLIDE. Sem ela, o resumo conta só o que saiu — e o assunto

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="bcbf0b8973">
+<html lang="pt-BR" data-build="5bd64db6e2">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -97,7 +97,7 @@
     .dsp-pos { color:var(--text3); width:36px; }
     .dsp-barra { display:inline-block; width:80px; height:6px; border-radius:3px;
       background:var(--bg3); margin-right:8px; vertical-align:middle; overflow:hidden; }
-    .dsp-barra span { display:block; height:100%; background:var(--green,#2BBF6A); }
+    .dsp-barra span { display:block; height:100%; background:var(--green); }
     .dsp-nota { font-size:11.5px; color:var(--text3); margin-top:10px; line-height:1.5; }
     .dsp-vazio { font-size:13px; color:var(--text3); padding:12px 0; }
     @media (max-width: 640px) {
@@ -134,15 +134,15 @@
        pessoa, entao ele muda o contorno do card inteiro — e some assim que ela
        responde. */
     .kcard-grill { display:block; font-size:11px; font-weight:800; letter-spacing:.03em;
-      background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470);
+      background:var(--amber-bg); color:var(--amber-tx);
       border-radius:6px; padding:3px 8px; margin:0 0 7px; cursor:pointer; }
-    .kcard.kcard-grill-on { border-color:var(--amber,#E89C2F); box-shadow:0 0 0 1px var(--amber,#E89C2F); }
+    .kcard.kcard-grill-on { border-color:var(--amber); box-shadow:0 0 0 1px var(--amber); }
     /* O bloco no modal. Ambar de novo, e no topo: e a unica coisa desta tela
        que alguem esta esperando. */
-    .ms-grill { background:var(--bg3); border:1px solid var(--amber,#E89C2F);
-      border-left:4px solid var(--amber,#E89C2F); border-radius:9px;
+    .ms-grill { background:var(--bg3); border:1px solid var(--amber);
+      border-left:4px solid var(--amber); border-radius:9px;
       padding:13px 15px; margin-bottom:14px; }
-    .ms-grill.respondido { border-color:var(--border); border-left-color:var(--border2,#3A3A36); }
+    .ms-grill.respondido { border-color:var(--border); border-left-color:var(--border2); }
     .ms-grill-tit { font-size:14px; font-weight:700; color:var(--text); margin-bottom:6px; }
     .ms-grill-txt { font-size:12.5px; color:var(--text2); line-height:1.55; margin-bottom:10px; }
     .ms-grill textarea { width:100%; box-sizing:border-box; font-family:inherit;
@@ -161,7 +161,7 @@
        competir com o titulo do card, que e o que a pessoa procura primeiro. */
     .kcard-sub { display:flex; align-items:center; gap:6px; margin:6px 0 2px; }
     .kcard-sub-trilho { flex:1; height:4px; background:var(--bg3); border-radius:3px; overflow:hidden; }
-    .kcard-sub-barra { height:100%; background:var(--green,#3EC98E); border-radius:3px; transition:width .2s; }
+    .kcard-sub-barra { height:100%; background:var(--green); border-radius:3px; transition:width .2s; }
     .kcard-sub-num { font-size:10.5px; color:var(--text3); font-variant-numeric:tabular-nums; }
     /* O selo de validacao. Azul: verde ja e etapa concluida e ambar e 'sem
        pontuacao' logo acima — reusar um deles faria o selo ser lido como estado.
@@ -187,20 +187,20 @@
        preenchimento. Isso resolve duas coisas de uma vez — separa do spike
        a um metro de distancia, e diz que ele e o unico que faz algo ao ser
        clicado. Chip preenchido = etiqueta; chip contornado = acao. */
-    .kcard-prazo.kcard-proj { background:transparent; color:#C9A6F0;
-      border:1px dashed #6B4A9E; cursor:pointer; }
-    .kcard-prazo.kcard-proj:hover { background:#2A1B3D; border-style:solid;
-      border-color:#A974F0; }
-    .kcard-prazo.selo.selo-planning { background:#0B2E52; color:#9FD0FF; border-color:#2C6EA8; }
-    .kcard-prazo.selo.selo-comite   { background:#3A2D12; color:#FFC470; border-color:#B07D28; }
+    .kcard-prazo.kcard-proj { background:transparent; color:var(--purple-tx);
+      border:1px dashed rgba(var(--pu-rgb),.45); cursor:pointer; }
+    .kcard-prazo.kcard-proj:hover { background:var(--purple-bg); border-style:solid;
+      border-color:var(--purple); }
+    .kcard-prazo.selo.selo-planning { background:var(--blue-bg); color:var(--blue-tx); border-color:rgba(var(--in-rgb),.45); }
+    .kcard-prazo.selo.selo-comite   { background:var(--amber-bg); color:var(--amber-tx); border-color:rgba(var(--wn-rgb),.45); }
     .kcard-prazo.selo { background:var(--selo-bg,#C6CBD4); color:var(--selo-tx,#0A0A0A);
       border:1px solid var(--selo-bd,#7C838F); cursor:help; }
     .kcard-prazo.pausada { background:var(--rose-bg,#48123F); color:var(--rose-tx,#F2A0DA);
       border:1px solid var(--rose-bd,#93257F); }
     /* O contador da area, no mesmo roxo da coluna — o selo e a coluna tem de se
        reconhecer, senao o card parece marcado por outra coisa. */
-    .kcard-prazo.area { background:#2E1540; color:#D8AEF0;
-      border:1px solid #7B4A9C; cursor:help; }
+    .kcard-prazo.area { background:var(--purple-bg); color:var(--purple-tx);
+      border:1px solid rgba(var(--pu-rgb),.45); cursor:help; }
     /* Area de anexo da nova demanda. A dica de colar fica DENTRO da area para
        quem nunca colou descobrir que da. */
     .an-item { display:flex; align-items:center; gap:8px; background:var(--bg3);
@@ -225,7 +225,7 @@
     .prod-meus { display:flex; gap:11px; align-items:center; white-space:nowrap; }
     .prod-meus b { color:var(--text); font-size:14.5px; font-weight:700; }
     .prod-meus span { color:var(--text2); }
-    .prod-aviso { color:var(--amber-tx,#FFC470); cursor:help; font-size:11.5px; }
+    .prod-aviso { color:var(--amber-tx); cursor:help; font-size:11.5px; }
     .prod-podio { display:flex; gap:6px; align-items:center; flex-wrap:wrap;
       padding-left:10px; border-left:1px solid var(--border); }
     /* O chip do podio mora em tema.css: o Planejamento usa o MESMO chip, e manter
@@ -236,8 +236,8 @@
     /* Verde no ENTREGUE, pelo mesmo padrao do deck: verde e "o resultado
        desejado aconteceu", e aqui aconteceu. Ambar no que falta pontuar, porque e
        atencao e nao erro — da para pontuar depois. */
-    .prod-feito { color: var(--green-tx, #3EC98E); }
-    .prod-sem-pontuar { color: var(--amber-tx, #FFC470); }
+    .prod-feito { color: var(--green-tx); }
+    .prod-sem-pontuar { color: var(--amber-tx); }
     .prod-vazio { color:var(--text3); }
     .dv-tab { padding:11px 16px; font-size:14.5px; font-weight:500; color:var(--text2);
       background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-1px;
@@ -259,14 +259,14 @@
     .dp-card.rec  { opacity:.62; }
     .dp-card-topo { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
     .dp-cod { font-family:ui-monospace,Consolas,monospace; font-size:11px; font-weight:700;
-      color:var(--purple-tx,#C9AEFF); background:var(--purple-bg,#341A6E);
+      color:var(--purple-tx); background:var(--purple-bg);
       border-radius:5px; padding:2px 7px; }
     .dp-nome { font-size:14.5px; font-weight:600; color:var(--text); }
     .dp-cont { margin-left:auto; font-size:12px; color:var(--text3); white-space:nowrap; }
     .dp-desc { font-size:13px; line-height:1.6; color:var(--text2); margin-top:7px; }
     .dp-faixa { font-size:12.5px; line-height:1.6; border-radius:8px; padding:8px 11px; margin-top:10px; }
-    .dp-faixa.pend { background:var(--amber-bg,#4A2800); color:var(--amber-tx,#FFC470); }
-    .dp-faixa.rec  { background:var(--red-bg,#4A1D1D);   color:var(--red-tx,#F9A0A0); }
+    .dp-faixa.pend { background:var(--amber-bg); color:var(--amber-tx); }
+    .dp-faixa.rec  { background:var(--red-bg);   color:var(--red-tx); }
     .dp-rod { font-size:12px; color:var(--text3); margin-top:9px; }
     /* AS DEMANDAS DENTRO DO CARD DE PROJETO. Recolhidas por padrao: o maior
        projeto da base tem 21, e sete cards abertos de uma vez viram parede. */
@@ -294,8 +294,8 @@
       color:var(--text2); border-radius:7px; padding:4px 9px; cursor:pointer;
       font-family:inherit; }
     .dp-anexo:hover { border-color:var(--blue); color:var(--text); }
-    .dp-erro { font-size:13px; line-height:1.6; color:var(--red-tx,#F9A0A0);
-      background:var(--red-bg,#4A1D1D); border-radius:8px; padding:10px 12px; margin-bottom:14px; }
+    .dp-erro { font-size:13px; line-height:1.6; color:var(--red-tx);
+      background:var(--red-bg); border-radius:8px; padding:10px 12px; margin-bottom:14px; }
     /* Documentacao do endpoint. Texto tecnico, mas para quem esta com pressa:
        dois blocos copiaveis primeiro, referencia depois. */
     .ep-doc { max-width:840px; margin:0 24px 40px; }
@@ -330,10 +330,10 @@
     .ep-fn { margin-bottom:16px; }
     .ep-fn-topo { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; margin-bottom:7px; }
     .ep-fn-topo span { font-size:13px; line-height:1.6; color:var(--text2); flex:1; min-width:240px; }
-    .ep-fn-acao { background:var(--purple-bg,#341A6E); color:var(--purple-tx,#C9AEFF);
+    .ep-fn-acao { background:var(--purple-bg); color:var(--purple-tx);
       font-size:12px; font-weight:700; padding:2px 8px; border-radius:5px; white-space:nowrap; }
-    .ep-aviso { font-size:13px; line-height:1.7; color:var(--amber-tx,#FFC470);
-      background:var(--amber-bg,#4A2800); border-radius:10px; padding:13px 15px; margin:30px 0 0; }
+    .ep-aviso { font-size:13px; line-height:1.7; color:var(--amber-tx);
+      background:var(--amber-bg); border-radius:10px; padding:13px 15px; margin:30px 0 0; }
 
     /* Cronograma do dev. Uma linha por demanda — nao por pessoa, porque aqui
        so existe uma pessoa. */
@@ -371,7 +371,7 @@
     .dg-faixa { position:relative; flex:1; display:flex; }
     .dg-dia { width:34px; flex-shrink:0; border-right:1px solid var(--border); }
     .dg-dia.fds { background:rgba(128,128,128,.07); }
-    .dg-dia.hoje { background:rgba(59,143,232,.12); box-shadow:inset 2px 0 0 var(--blue); }
+    .dg-dia.hoje { background:rgba(var(--in-rgb),.12); box-shadow:inset 2px 0 0 var(--blue); }
     .dg-cab { display:flex; align-items:stretch; border-top:1px solid var(--border); }
     .dg-cab .dg-rot { background:var(--bg2); font-size:11px; font-weight:700; color:var(--text3);
       text-transform:uppercase; letter-spacing:.05em; display:flex; align-items:center; }
@@ -380,7 +380,7 @@
     .dg-cab-dia .n { display:block; font-size:12.5px; font-weight:600; color:var(--text2); }
     .dg-cab-dia .s { display:block; font-size:9.5px; color:var(--text3); text-transform:uppercase; }
     .dg-cab-dia.hoje .n, .dg-cab-dia.hoje .s { color:var(--blue); font-weight:700; }
-    .dg-cab-dia.hoje { background:rgba(59,143,232,.14); box-shadow:inset 2px 0 0 var(--blue); }
+    .dg-cab-dia.hoje { background:rgba(var(--in-rgb),.14); box-shadow:inset 2px 0 0 var(--blue); }
     .dg-barra { position:absolute; top:7px; height:24px; border-radius:6px; display:flex;
       align-items:center; padding:0 8px; font-size:11.5px; font-weight:600; color:#fff;
       white-space:nowrap; overflow:hidden; }
@@ -406,15 +406,15 @@
        Roxo, que e a cor da coluna "Validacao da area": o bloco e a mesma etapa
        vista de dentro do card. Ambar quando passa dos cinco dias — ali ele
        deixa de ser um campo disponivel e vira uma cobranca. */
-    .ms-homolog { background:var(--bg3,#161614); border:1px solid #B06FD4;
-      border-left:3px solid #B06FD4; border-radius:8px; padding:11px 13px;
+    .ms-homolog { background:var(--bg3); border:1px solid var(--purple);
+      border-left:3px solid var(--purple); border-radius:8px; padding:11px 13px;
       margin-bottom:12px; font-size:13px; line-height:1.55; }
-    .ms-homolog.cobrando { border-color:var(--amber,#B07D28);
-      border-left-color:var(--amber,#B07D28); background:var(--amber-bg,#3a2d12); }
-    .ms-homolog.ok { border-color:var(--green,#3EC98E); border-left-color:var(--green,#3EC98E); }
+    .ms-homolog.cobrando { border-color:var(--amber);
+      border-left-color:var(--amber); background:var(--amber-bg); }
+    .ms-homolog.ok { border-color:var(--green); border-left-color:var(--green); }
     .msh-tit { font-weight:700; margin-bottom:3px; }
-    .ms-homolog.cobrando .msh-tit { color:var(--amber-tx,#FFC470); }
-    .ms-homolog.ok .msh-tit { color:var(--green,#3EC98E); }
+    .ms-homolog.cobrando .msh-tit { color:var(--amber-tx); }
+    .ms-homolog.ok .msh-tit { color:var(--green); }
     .msh-sub { color:var(--text2); margin-bottom:9px; }
     .msh-obs { color:var(--text2); font-style:italic; margin-bottom:4px; }
     .msh-f { display:block; font-size:12px; color:var(--text3); margin-bottom:8px; }
@@ -426,17 +426,17 @@
        Ambar e nao vermelho: vermelho ja e o atraso, e duas emergencias da
        mesma cor viram uma so. Aqui a mensagem e outra — "isto nao existe no
        servidor" —, e ela tem acao propria. */
-    .nao-pub { display:none; background:var(--amber-bg,#3a2d12); color:var(--amber-tx,#FFC470);
-      border-bottom:1px solid var(--amber,#B07D28); padding:10px 24px;
+    .nao-pub { display:none; background:var(--amber-bg); color:var(--amber-tx);
+      border-bottom:1px solid var(--amber); padding:10px 24px;
       font-size:13.5px; line-height:1.55; }
-    .nao-pub b { color:#FFE0A8; }
+    .nao-pub b { color:var(--amber-tx); }
     .nao-pub ul { margin:6px 0 0; padding-left:20px; }
-    .nao-pub button { background:var(--amber,#B07D28); color:#20160a; border:0; border-radius:8px;
+    .nao-pub button { background:var(--amber); color:#20160a; border:0; border-radius:8px;
       padding:6px 14px; font-size:13px; font-weight:700; cursor:pointer;
       font-family:var(--font-ui); margin-top:8px; }
     /* O card tambem se marca: a faixa diz QUANTAS, o card diz QUAL. */
-    .kcard.nao-pub-card { outline:2px dashed var(--amber,#B07D28); outline-offset:-2px; }
-    .kcard-naopub { display:inline-block; background:var(--amber,#B07D28); color:#20160a;
+    .kcard.nao-pub-card { outline:2px dashed var(--amber); outline-offset:-2px; }
+    .kcard-naopub { display:inline-block; background:var(--amber); color:#20160a;
       border-radius:5px; padding:1px 6px; font-size:10px; font-weight:800;
       letter-spacing:.3px; margin-bottom:4px; }
     .login-dica { font-size:12px; color:var(--text3); line-height:1.5; text-align:left; margin:-2px 0 12px; }
@@ -462,7 +462,7 @@
     .dev-switcher { position:relative; display:flex; align-items:center; gap:6px; background:var(--blue-bg); color:var(--blue-tx); border-radius:20px; padding:4px 12px; font-size:13px; font-weight:600; cursor:pointer; user-select:none; }
     .dev-switcher:hover { opacity:.85; }
     .dev-switcher-arrow { font-size:11px; opacity:.7; }
-    .dev-dropdown { display:none; position:absolute; top:calc(100% + 8px); left:0; min-width:180px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 8px 24px #0008; z-index:200; overflow:hidden; }
+    .dev-dropdown { display:none; position:absolute; top:calc(100% + 8px); left:0; min-width:180px; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 8px 24px var(--shadow); z-index:200; overflow:hidden; }
     .dev-dropdown.open { display:block; }
     .dev-dropdown-item { padding:10px 14px; font-size:13px; color:var(--text); cursor:pointer; transition:background .1s; white-space:nowrap; }
     .dev-dropdown-item:hover { background:var(--bg3); }
@@ -472,7 +472,7 @@
     /* text-decoration:none porque .btn agora veste tambem <a> de navegacao. */
     .btn { text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; font-family:var(--font-ui); cursor:pointer; border:none; transition:opacity .15s; }
     .btn:hover { opacity:.85; }
-    .btn-primary   { background:var(--blue);  color:#fff; }
+    .btn-primary   { background:var(--blue);  color:var(--on-ac); }
     .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
     .btn-success   { background:var(--green); color:#fff; }
     .btn-sm { padding:5px 11px; font-size:12px; }
@@ -517,7 +517,12 @@
     /* Coluna que o dev nao move: aparece recusada durante o arraste, em vez de
        acender como as outras e recusar depois do gesto. */
     .col.drag-block { opacity:.45; }
-    .col.drag-block .col-header-label::after { content:' 🔒'; }
+    /* O cadeado e o icone do AXIS, e nao emoji: o rotulo carrega `axi-lock`, que
+       so declara a mascara (--axi), e o ::after a desenha na cor do texto. */
+    .col.drag-block .col-header-label::after { content:''; display:inline-block;
+      width:1.1em; height:1.1em; margin-left:.35em; vertical-align:-.2em;
+      background-color:currentColor; -webkit-mask:var(--axi) center/contain no-repeat;
+      mask:var(--axi) center/contain no-repeat; }
 
     /* ── CARD ── */
     .kcard {
@@ -539,8 +544,8 @@
        muda com a tela, e ainda arriscaria partir palavra no meio. */
     .kcard-devolucao {
       font-size:11px; line-height:1.45; margin-bottom:6px;
-      background:var(--red-bg,#3A0C0C); color:var(--red-tx,#F5A3A3);
-      border-left:3px solid var(--red,#C81E1E); border-radius:4px;
+      background:var(--red-bg); color:var(--red-tx);
+      border-left:3px solid var(--red); border-radius:4px;
       padding:5px 7px;
       display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
       overflow:hidden; word-break:break-word;
@@ -554,29 +559,29 @@
     /* A COR DA SPRINT (`SPRINTPO.corDaSprint`), a mesma do Admin e do Gantt. */
     .sp-cor { border-color: var(--sp-cor) !important; }
     .sp-cor:not(.sp-atrasada) { color: var(--sp-cor) !important; }
-    .kcard-sprint { font-size:10px; font-weight:700; color:var(--green-tx,#8FE0A8);
-      background:var(--green-bg,#0E3A1E); border:1px solid #2E7D4F;
+    .kcard-sprint { font-size:10px; font-weight:700; color:var(--green-tx);
+      background:var(--green-bg); border:1px solid rgba(var(--ok-rgb),.45);
       border-radius:5px; padding:1px 6px; cursor:help; }
-    .kcard-sprint.sp-fora { color:var(--text3,#8B8B85); background:transparent;
-      border:1px dashed var(--border,#2E2E2B); }
+    .kcard-sprint.sp-fora { color:var(--text3); background:transparent;
+      border:1px dashed var(--border); }
     /* VERMELHO NO ATRASO, decisão do Fernando — e a mesma cor do quadro do
        PM/PO, para o dev e ele não lerem o mesmo card de jeitos diferentes. */
-    .kcard-sprint.sp-atrasada { color:var(--red-tx,#F9A0A0);
-      background:var(--red-bg,#5C0A0A); border-color:#B5484D; }
+    .kcard-sprint.sp-atrasada { color:var(--red-tx);
+      background:var(--red-bg); border-color:rgba(var(--dg-rgb),.45); }
     /* SEM DONO, EM CIANO: não é um estado da sprint (verde/vermelho/apagado),
        é um convite. Cor própria para não ser lido como mais um grau do mesmo. */
-    .kcard-pool { font-size:10px; font-weight:700; color:var(--cyan-tx,#8AD5F0);
-      background:var(--cyan-bg,#123A52); border:1px solid #2E6E88;
+    .kcard-pool { font-size:10px; font-weight:700; color:var(--teal-tx);
+      background:var(--teal-bg); border:1px solid rgba(var(--tl-rgb),.45);
       border-radius:5px; padding:1px 6px; cursor:help; }
     .kcard-meta  { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; font-size:11px; color:var(--text3); }
     .kcard-meta span { display:flex; align-items:center; gap:3px; }
     .kcard-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; display:inline-block; }
     .kcard-actions { display:flex; gap:6px; margin-top:8px; border-top:1px solid var(--border); padding-top:8px; }
 
-    .badge-backlog      { background:#0C326022; color:var(--blue-tx); }
+    .badge-backlog      { background:rgba(var(--in-rgb),.07); color:var(--blue-tx); }
     .badge-levantar_req { background:var(--purple-bg); color:var(--purple-tx); }
     .badge-planejado    { background:var(--blue-bg);   color:var(--blue-tx); }
-    .badge-em_andamento { background:#3D3600;  color:#FFE14D; }
+    .badge-em_andamento { background:var(--amber-bg);  color:var(--amber-tx); }
     .badge-planning     { background:var(--amber-bg);  color:var(--amber-tx); }
     .badge-atrasado     { background:var(--red-bg);    color:var(--red-tx); }
     .badge-validacao    { background:var(--amber-bg);  color:var(--amber-tx); }
@@ -622,7 +627,7 @@
     /* NO AR. Verde, e nao azul: azul ja e etapa nesta tela. */
     .d-prod {
       font-size:11px; font-weight:700; padding:1px 6px; border-radius:4px;
-      background:var(--green-bg, #1E4208); color:var(--green-tx, #B2E07A);
+      background:var(--green-bg); color:var(--green-tx);
       white-space:nowrap;
     }
     .kcard-parent-info { font-size:11px; color:var(--purple-tx); background:var(--purple-bg); border-radius:4px; padding:3px 8px; margin-bottom:6px; display:inline-block; }
@@ -636,7 +641,7 @@
        padding devolve a área de toque sem empurrar o layout do card. */
     .dep-row.dep-click { cursor:pointer; margin:0 -6px; padding:4px 6px; border-radius:5px; }
     .dep-row.dep-click:hover { background:var(--bg4); }
-    .dep-row.dep-click:focus-visible { outline:2px solid var(--blue,#6EA8FF); outline-offset:-2px; }
+    .dep-row.dep-click:focus-visible { outline:2px solid var(--blue); outline-offset:-2px; }
     /* A PRINCIPAL APONTA PARA CIMA e não se confunde com as filhas: ela é a
        outra direção do vínculo, e lê-las como uma lista só inverteria o sentido
        de quem depende de quem. */
@@ -681,7 +686,7 @@
     .mv-rot { font-size:10px; text-transform:uppercase; letter-spacing:.06em;
               color:var(--text3); white-space:nowrap; }
     .mv-val { font-size:13.5px; color:var(--text); overflow-wrap:anywhere; line-height:1.4; }
-    .mv-val.atrasado { color:var(--red-tx,#F9A0A0); }
+    .mv-val.atrasado { color:var(--red-tx); }
 
     .mv-bloco { margin-bottom:18px; }
     .mv-bloco-tit { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em;
@@ -703,7 +708,7 @@
        duplo clique (ver `kcardClique`). Sem esta marca, o quinto de segundo lê-se
        como "não aconteceu nada" e a pessoa clica de novo — virando o duplo
        clique que ela não queria dar. */
-    .kcard.kcard-abrindo { outline:2px solid var(--blue,#6EA8FF); outline-offset:-1px; }
+    .kcard.kcard-abrindo { outline:2px solid var(--blue); outline-offset:-1px; }
     .mv-disc { margin-bottom:18px; }
     .mv-disc .disc-sec { margin-bottom:0; background:var(--bg3); padding:13px 15px; }
   </style>
@@ -719,7 +724,7 @@
   <script src="prevoo.js?v=ab2758c54c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
-<script src="resumo-dev.js?v=bbb3cfc8d6"></script>
+<script src="resumo-dev.js?v=d113e5ce31"></script>
 <script src="tema.js?v=5d9c25fd66"></script>
 <script src="axis.js?v=d28df3fc4b"></script>
 <script src="prazo.js?v=88870a48ae"></script>
@@ -727,26 +732,26 @@
 <script src="dialogo.js?v=9e20f6c47f"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
-<script src="rede-repete.js?v=ff7a669a03"></script>
+<script src="rede-repete.js?v=4daaef730c"></script>
 <script src="pausa.js?v=06c4b82f84"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="colaboradores.js?v=c94edfa2e2"></script>
-<script src="resumo-projeto.js?v=2e30585cbe"></script>
-<script src="senha.js?v=8ce4f87e46"></script>
+<script src="resumo-projeto.js?v=5f25c0c2ff"></script>
+<script src="senha.js?v=ae10842c4b"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="busca-demanda.js?v=1380650a7a"></script>
-<script src="modelo-descricao.js?v=b8fbe1a51e"></script>
-<script src="links-github.js?v=0108ec6e06"></script>
+<script src="modelo-descricao.js?v=82c7923cdc"></script>
+<script src="links-github.js?v=5ebb0e63ab"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
-<script src="mensageria-abrir.js?v=aa283f3dc4"></script>
-<script src="selo-validacao.js?v=6fcec3ad51"></script>
+<script src="mensageria-abrir.js?v=2b19b49af3"></script>
+<script src="selo-validacao.js?v=0b6fdb5439"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <!-- A data prometida ao solicitante faltava NESTE painel, e e ele que ordena
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=c0c46daaf4"></script>
+<script src="sprint.js?v=495432df68"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
 <script src="pipelines.js?v=2374e11d52"></script>
@@ -836,12 +841,12 @@
     <div id="step-dev" style="display:none">
       <p id="dev-titulo">Selecione seu nome</p>
       <div id="login-aviso" class="login-aviso">
-        🔗 Primeiro acesso neste dispositivo. Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de continuar.
+        <i class="axi axi-link"></i> Primeiro acesso neste dispositivo. Solicite o <strong>link de acesso</strong> ao administrador e abra-o antes de continuar.
       </div>
       <div id="dev-grid" class="dev-grid">
         <div style="color:var(--text3);font-size:13px;padding:20px;grid-column:1/-1;">Carregando devs…</div>
       </div>
-      <button onclick="reloadDevList()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;margin-top:4px;text-decoration:underline;">↻ Atualizar lista</button>
+      <button onclick="reloadDevList()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;margin-top:4px;text-decoration:underline;"><i class="axi axi-refresh"></i> Atualizar lista</button>
       <div class="login-error" id="login-error"></div>
     </div>
   </div>
@@ -850,9 +855,9 @@
 <!-- ─── APP ──────────────────────────────────────── -->
 <div id="dev-app" style="display:none">
   <!-- Banner visível apenas para dev "Teste" -->
-  <div id="banner-teste" style="display:none;align-items:center;gap:12px;background:#3d1a1a;border-bottom:1px solid #6b2d2d;padding:10px 24px;font-size:13px;color:#F9A0A0;">
-    <span>⚠️ <strong>Conta de teste detectada.</strong> Todos os dados abaixo são de demonstração.</span>
-    <button onclick="limparDadosTeste()" style="margin-left:auto;background:#6b2d2d;color:#F9A0A0;border:1px solid #a04040;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font-ui);">🗑️ Apagar todos os dados de Teste</button>
+  <div id="banner-teste" style="display:none;align-items:center;gap:12px;background:var(--red-bg);border-bottom:1px solid rgba(var(--dg-rgb),.4);padding:10px 24px;font-size:13px;color:var(--red-tx);">
+    <span><i class="axi axi-alert"></i> <strong>Conta de teste detectada.</strong> Todos os dados abaixo são de demonstração.</span>
+    <button onclick="limparDadosTeste()" style="margin-left:auto;background:var(--red-bg);color:var(--red-tx);border:1px solid rgba(var(--dg-rgb),.45);border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font-ui);"><i class="axi axi-trash"></i> Apagar todos os dados de Teste</button>
   </div>
   <!-- A GRAVACAO FALHOU E O CARD CONTINUA NA TELA. Fica ACIMA de tudo, e so
        sai quando a demanda chega ao servidor — um toast de 4 segundos nao da
@@ -862,7 +867,7 @@
   <div class="meu-dia" id="meu-dia"></div>
   <header>
     <div class="header-left">
-      <h1>🗂️ Meu Painel</h1><span id="build-selo" title="Versão desta tela. Se não bater com a publicada, o navegador está servindo uma cópia antiga: Ctrl+Shift+R."></span>
+      <h1><i class="axi axi-folder"></i> Meu Painel</h1><span id="build-selo" title="Versão desta tela. Se não bater com a publicada, o navegador está servindo uma cópia antiga: Ctrl+Shift+R."></span>
       <div class="dev-switcher" id="dev-switcher" onclick="toggleDevDropdown(event)">
         <span id="dev-label">—</span>
         <span class="dev-switcher-arrow">▾</span>
@@ -873,8 +878,8 @@
       <span id="ultima-atualizacao" style="font-size:12px;color:var(--text3);">—</span>
       <button class="btn btn-primary btn-sm" onclick="openNewModal()">+ Nova demanda</button>
       <!-- Link, nao botao: ver o comentario equivalente no admin.html. -->
-      <a href="poker.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">🃏 Planning Poker</a>
-      <button class="btn btn-secondary btn-sm" onclick="forceRefresh()">↻ Atualizar</button>
+      <a href="poker.html" class="btn btn-secondary btn-sm" target="_blank" rel="noopener"><i class="axi axi-cards"></i> Planning Poker</a>
+      <button class="btn btn-secondary btn-sm" onclick="forceRefresh()"><i class="axi axi-refresh"></i> Atualizar</button>
       <!-- Nao existia botao de sair. Com a credencial vencida, o painel continuava
            aberto (o "esta logado" saia do sessionStorage, nao do servidor) e toda
            gravacao falhava, sem caminho de volta a nao ser limpar o navegador. -->
@@ -900,9 +905,9 @@
     <label>Tipo:</label>
     <select id="f-tipo" onchange="renderKanban()">
       <option value="">Todos</option>
-      <option value="sustentacao">🔧 Sustentação</option>
-      <option value="evolucao">🚀 Evolução</option>
-      <option value="__sem_tipo__">⚪ Sem tipo</option>
+      <option value="sustentacao">Sustentação</option>
+      <option value="evolucao">Evolução</option>
+      <option value="__sem_tipo__">Sem tipo</option>
     </select>
     <div class="filter-sep"></div>
     <label>Tema:</label>
@@ -950,7 +955,7 @@
     <!-- O PLACAR DA SPRINT GANHOU ABA (29/10): "não percebi as mudanças no
          painel dev sobre o ranking — falta clareza em mostrar pontuação,
          quantidade e % da sprint". Ele só existia no Gerencial do Admin. -->
-    <button class="dv-tab" id="dv-tab-sprint" onclick="devAba('sprint')">🏃 Sprint</button>
+    <button class="dv-tab" id="dv-tab-sprint" onclick="devAba('sprint')"><i class="axi axi-refresh"></i> Sprint</button>
     <button class="dv-tab" id="dv-tab-gantt" onclick="devAba('gantt')">Cronograma</button>
     <button class="dv-tab" id="dv-tab-projetos" onclick="devAba('projetos')">Projetos</button>
     <button class="dv-tab" id="dv-tab-api" onclick="devAba('api')">Endpoint</button>
@@ -1080,7 +1085,7 @@
         <div id="ep-temas" class="ep-temas"></div>
       </div>
 
-      <p class="ep-aviso">&#9888;&#65039; <strong>Nada aqui conclui demanda.</strong> O m&aacute;ximo
+      <p class="ep-aviso"><i class="axi axi-alert"></i> <strong>Nada aqui conclui demanda.</strong> O m&aacute;ximo
         que a API faz &eacute; entregar para valida&ccedil;&atilde;o — quem fecha &eacute; o PM/PO, na tela dele.
         <code>etapa</code> vai at&eacute; <code>em_andamento</code>, e enquanto a demanda estiver
         aguardando valida&ccedil;&atilde;o ela fica congelada: qualquer altera&ccedil;&atilde;o responde
@@ -1103,9 +1108,9 @@
       <select id="dsp-sel" class="filter-select" onchange="renderSprintDev()"></select>
       <!-- Cada trilha tem a sua conta: Tecnologia, Dados/BI e Sales Ops. -->
       <select id="dsp-trilha" class="filter-select" onchange="renderSprintDev()">
-        <option value="tecnologia">💻 Tecnologia</option>
-        <option value="dados_bi">📊 Dados/BI</option>
-        <option value="sales_ops">📈 Sales Ops</option>
+        <option value="tecnologia">Tecnologia</option>
+        <option value="dados_bi">Dados/BI</option>
+        <option value="sales_ops">Sales Ops</option>
       </select>
       <span id="dsp-estado" class="dsp-estado"></span>
     </div>
@@ -1128,7 +1133,7 @@
       <button class="dg-nav" style="width:auto;padding:0 12px;font-size:12.5px"
         onclick="RESUMODEV.abrir(state, currentDev, { proprio: true })"
         title="Resumo do que está na sua mão — atrasado, em andamento e em validação, com texto pronto para o grupo">
-        📋 Meu resumo</button>
+        <i class="axi axi-clipboard"></i> Meu resumo</button>
       <span class="dg-legenda">
         <i class="dg-chip ok"></i> no prazo
         <i class="dg-chip amanha"></i> vence amanhã
@@ -1216,7 +1221,7 @@
       <div id="ms-sprint" style="font-size:13px"></div>
     </div>
     <div class="form-group" id="ms-solicitante-group">
-      <label>Quem pediu <span style="color:var(--red,#E84444)">*</span>
+      <label>Quem pediu <span style="color:var(--red)">*</span>
         <small style="font-weight:400;color:var(--text3)">— é quem homologa na Validação da área</small></label>
       <input type="text" id="ms-solicitante" placeholder="Nome de quem pediu" />
     </div>
@@ -1327,7 +1332,7 @@
       <div id="ms-anexos-edit" style="display:grid;gap:6px;margin-top:8px"></div>
     </div>
     <div class="form-actions">
-      <button class="btn btn-secondary" onclick="openEditDemand(document.getElementById('ms-id').value)" style="margin-right:auto">✏️ Editar demanda</button>
+      <button class="btn btn-secondary" onclick="openEditDemand(document.getElementById('ms-id').value)" style="margin-right:auto"><i class="axi axi-edit"></i> Editar demanda</button>
       <!-- Aparece quando a demanda esta com o PM/PO: nao muda etapa, so grava o
            texto e as horas. Sem ele, quem escrevia a descricao durante a validacao
            nao tinha como salvar e perdia o que digitou ao fechar o card. -->
@@ -1381,8 +1386,8 @@
       </div>
     </div>
     <!-- Explica o cadeado. Campo desabilitado sem motivo vira chamado. -->
-    <div id="n-datas-nota" style="display:none;font-size:12px;color:var(--amber-tx,#FFC470);
-         background:var(--amber-bg,#2E2408);border-radius:6px;padding:7px 10px;margin:-4px 0 12px"></div>
+    <div id="n-datas-nota" style="display:none;font-size:12px;color:var(--amber-tx);
+         background:var(--amber-bg);border-radius:6px;padding:7px 10px;margin:-4px 0 12px"></div>
     <div class="form-row">
       <!-- Projeto: so os aprovados. Escolher um manda a demanda para o Backlog, que
            e a esteira certa — ela precisa passar pelo planning antes de ter data. -->
@@ -1390,19 +1395,19 @@
         <label>Projeto <small style="font-weight:400;color:var(--text3)">(opcional)</small></label>
         <select id="n-projeto" onchange="nProjetoMudou()"></select>
         <div id="n-projeto-aviso" style="display:none;font-size:12px;line-height:1.6;
-           color:var(--amber-tx,#FFC470);background:var(--amber-bg,#4A2800);
+           color:var(--amber-tx);background:var(--amber-bg);
            border-radius:8px;padding:9px 11px;margin-top:7px"></div>
     </div>
       <div class="form-group">
         <label>É problema ou melhoria? *</label>
         <select id="n-tipo">
           <option value="">— Selecione —</option>
-          <option value="sustentacao">🔧 Sustentação (Erro/Bug)</option>
-          <option value="evolucao">🚀 Evolução (Melhoria)</option>
+          <option value="sustentacao">Sustentação (Erro/Bug)</option>
+          <option value="evolucao">Evolução (Melhoria)</option>
         </select>
       </div>
       <div class="form-group">
-        <label>Quem pediu <span style="color:var(--red,#E84444)">*</span> <small style="font-weight:400;color:var(--text3)">— é quem confere a entrega</small></label>
+        <label>Quem pediu <span style="color:var(--red)">*</span> <small style="font-weight:400;color:var(--text3)">— é quem confere a entrega</small></label>
         <input type="text" id="n-solicitante" placeholder="Nome de quem reportou" />
       </div>
     </div>
@@ -1436,7 +1441,7 @@
   <div class="modal" style="max-width:460px;">
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-temas')" aria-label="Fechar">✕</button>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-right:36px;">
-      <h2 style="margin:0;">🏷 Temas</h2>
+      <h2 style="margin:0;"><i class="axi axi-tag"></i> Temas</h2>
       <button class="btn btn-primary btn-sm" onclick="openTemaForm()">+ Novo tema</button>
     </div>
     <div id="temas-list-modal"></div>
@@ -1467,7 +1472,7 @@
 <div id="modal-dep" class="modal-overlay" style="display:none">
   <div class="modal">
     <button type="button" class="modal-close-btn" onclick="closeModal('modal-dep')" aria-label="Fechar">✕</button>
-    <h2>🔗 Vincular demanda</h2>
+    <h2><i class="axi axi-link"></i> Vincular demanda</h2>
     <input type="hidden" id="dep-parent-id" />
     <div style="background:var(--bg3);border-radius:8px;padding:10px 14px;margin-bottom:16px;">
       <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Demanda principal</div>
@@ -1484,12 +1489,12 @@
       <div style="display:flex;flex-direction:column;gap:6px;">
         <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-weight:400;">
           <input type="radio" name="dep-tipo" value="parte" checked onchange="depTipoMudou()" style="margin-top:3px;" />
-          <span>🔗 <strong>Vinculada</strong> — faz parte deste card e soma pontos nele.
+          <span><i class="axi axi-link"></i> <strong>Vinculada</strong> — faz parte deste card e soma pontos nele.
             <span style="color:var(--text3)">Não trava o avanço.</span></span>
         </label>
         <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-weight:400;">
           <input type="radio" name="dep-tipo" value="dependencia" onchange="depTipoMudou()" style="margin-top:3px;" />
-          <span>⏳ <strong>Dependência</strong> — este card não avança enquanto ela estiver aberta.</span>
+          <span><i class="axi axi-hourglass"></i> <strong>Dependência</strong> — este card não avança enquanto ela estiver aberta.</span>
         </label>
       </div>
     </div>
@@ -1650,7 +1655,7 @@ function anexosHTMLDev(m) {
   if (!anexos.length) return '';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${
     anexos.map((a, i) =>
-      `<a href="#" onclick="devViewAnexo('${devEsc(m.id)}',${i});return false;" style="display:inline-flex;align-items:center;gap:4px;color:#9BC8F8;text-decoration:none;border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-size:12px;">📎 ${devEsc(a.nome)}</a>`
+      `<a href="#" onclick="devViewAnexo('${devEsc(m.id)}',${i});return false;" style="display:inline-flex;align-items:center;gap:4px;color:var(--blue-tx);text-decoration:none;border:1px solid var(--border);border-radius:6px;padding:4px 9px;font-size:12px;"><i class="axi axi-clip"></i> ${devEsc(a.nome)}</a>`
     ).join('')
   }</div>`;
 }
@@ -1666,9 +1671,9 @@ function linksHTMLDev(m) {
   return `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">${
     links.map(r =>
       `<a href="${devEsc(r.url)}" target="_blank" rel="noopener noreferrer" title="${devEsc(r.url)}" ` +
-      `style="display:inline-flex;align-items:center;gap:6px;color:#9BC8F8;text-decoration:none;` +
+      `style="display:inline-flex;align-items:center;gap:6px;color:var(--blue-tx);text-decoration:none;` +
       `border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:12px;` +
-      `overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔗 ${devEsc(r.descricao)}</a>`
+      `overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><i class="axi axi-link"></i> ${devEsc(r.descricao)}</a>`
     ).join('')
   }</div>`;
 }
@@ -2117,11 +2122,11 @@ function renderProjetosDev() {
          `criado_em`. Um indice guardado no `onclick` abre o anexo de outro
          projeto assim que a lista se reordenar. */
       anexos.map((a, ai) => '<button type="button" class="dp-anexo" ' +
-        'onclick="devProjetoAnexo(\'' + escAttr(p.id) + '\',' + ai + ')">📎 ' +
+        'onclick="devProjetoAnexo(\'' + escAttr(p.id) + '\',' + ai + ')"><i class="axi axi-clip"></i> ' +
         escAttr(a.nome || 'anexo') + '</button>').join('') + '</div>' : '';
     let faixa = '';
     if (dpPendente(p)) {
-      faixa = '<div class="dp-faixa pend">⏳ Aguardando validação do PM/PO' +
+      faixa = '<div class="dp-faixa pend"><i class="axi axi-hourglass"></i> Aguardando validação do PM/PO' +
         (meu(p) ? ' — sua proposta' : '') + '. Ainda não aceita demandas.</div>';
     } else if (dpRecusado(p)) {
       faixa = '<div class="dp-faixa rec">✕ Recusado' +
@@ -2297,7 +2302,7 @@ function renderSprintDev() {
   const dm = s => s.slice(8, 10) + '/' + s.slice(5, 7);
   if (est) {
     est.textContent = (faixa ? dm(faixa.de) + ' a ' + dm(faixa.ate) + ' · ' : '') +
-      (SPRINTPO.estaFechada(state, _dspSel) ? '🔒 fechada' : '▶ em curso');
+      (SPRINTPO.estaFechada(state, _dspSel) ? 'fechada' : '▶ em curso');
   }
 
   const bloco = (n, de, rot) => '<div class="dsp-b"><div class="dsp-n">' + n +
@@ -2510,7 +2515,7 @@ function devPausaRender(m) {
     const d = diasPausadoAgora(m);
     box.innerHTML = '<div style="background:var(--bg4);border:1px solid var(--border2);border-radius:8px;' +
       'padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--text2)">' +
-      '⏸ <strong style="color:var(--text)">Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
+      '<i class="axi axi-pause"></i> <strong style="color:var(--text)">Pausada há ' + d + (d===1?' dia':' dias') + '</strong>' +
       '<br><strong>Motivo:</strong> ' + escAttr(m.pausa_motivo || '—') +
       /* A DATA ANDA, E A PESSOA VE. Antes a entrega ficava ESCONDIDA durante a
          pausa e o card mostrava a data original: quem pausou em 11/08 uma demanda
@@ -2521,8 +2526,8 @@ function devPausaRender(m) {
           ' <span style="color:var(--text3)">(combinado ' + formatDate(m.entrega) +
           ', esticado nos ' + d + (d === 1 ? ' dia' : ' dias') + ' de pausa)</span>'
         : '<br>Sem prazo combinado.') +
-      '<div style="margin-top:8px"><button type="button" class="btn btn-sm" ' +
-      'style="background:var(--green);color:#fff;border:none" onclick="devPausaRetomar()">▶ Retomar</button></div></div>';
+      '<div style="margin-top:8px"><button type="button" class="btn btn-success btn-sm" ' +
+      'onclick="devPausaRetomar()">▶ Retomar</button></div></div>';
   } else if (PAUSA.temPedido(m)) {
     /* ═══ O PEDIDO ESTA NA MESA DE ALGUEM ═══════════════════════════════════
      * Enquanto espera, a demanda CONTINUA CORRENDO — e a tela diz isso, em vez
@@ -2530,9 +2535,9 @@ function devPausaRender(m) {
      * aprovado, o pedido vale desde a data em que foi feito.                */
     const ped = PAUSA.pedido(m);
     const esperando = PAUSA.diasEntre(ped.em, _isoHoje());
-    box.innerHTML = '<div style="background:var(--amber-bg,#3A2E12);border:1px solid var(--amber,#E89C2F);' +
+    box.innerHTML = '<div style="background:var(--amber-bg);border:1px solid var(--amber);' +
       'border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--text2)">' +
-      '⏳ <strong style="color:var(--text)">Pausa pedida em ' + formatDate(ped.em) + '</strong>' +
+      '<i class="axi axi-hourglass"></i> <strong style="color:var(--text)">Pausa pedida em ' + formatDate(ped.em) + '</strong>' +
       (esperando ? ' <span style="color:var(--text3)">· aguardando há ' + esperando +
                    (esperando === 1 ? ' dia' : ' dias') + '</span>' : '') +
       '<br><strong>Sua justificativa:</strong> ' + escAttr(ped.motivo) +
@@ -2548,7 +2553,7 @@ function devPausaRender(m) {
     box.innerHTML = '<div style="background:var(--bg4);border:1px solid var(--border2);border-radius:8px;' +
       'padding:10px 12px;font-size:12.5px;line-height:1.6;color:var(--text2)">' +
       (ult
-        ? '<div style="color:var(--red-tx,#F9A0A0);margin-bottom:6px">✕ <strong>Pausa negada em ' +
+        ? '<div style="color:var(--red-tx);margin-bottom:6px">✕ <strong>Pausa negada em ' +
           formatDate(ult.em) + '</strong> por ' + escAttr(ult.por || '—') + ': ' +
           escAttr(ult.motivo || '—') +
           (recusas.length > 1 ? ' <span style="color:var(--text3)">(' + recusas.length +
@@ -2557,7 +2562,7 @@ function devPausaRender(m) {
       'Travou por algo fora do seu alcance? Peça a pausa — um PM/PO aprova, e o ' +
       'prazo para de correr desde o dia do pedido.' +
       '<div style="margin-top:8px"><button type="button" class="btn btn-secondary btn-sm" ' +
-      'onclick="devPausaIniciar()">⏸ Pedir pausa</button></div></div>';
+      'onclick="devPausaIniciar()"><i class="axi axi-pause"></i> Pedir pausa</button></div></div>';
   }
 }
 
@@ -2592,7 +2597,7 @@ async function devPausaIniciar() {
   if (!r.ok) { toast(r.erro, 'err'); return; }
   devPausaRender(m);
   const ok2 = await saveToGitHub({ [id]: { pausa_pedido: m.pausa_pedido } });
-  toast(ok2 ? '⏳ Pedido enviado ao PM/PO.' : 'Nao foi possivel enviar o pedido.',
+  toast(ok2 ? 'Pedido enviado ao PM/PO.' : 'Nao foi possivel enviar o pedido.',
         ok2 ? 'ok' : 'err');
   renderKanban();
 }
@@ -2759,9 +2764,9 @@ function renderProdutividade() {
      O percentual so aparece com plano — sem denominador, "40 pontos" nao diz se
      a semana foi boa, e um 0% ali seria inventar uma referencia que nao existe. */
   document.getElementById('prod-meus').innerHTML = eu
-    ? '<span>✅ <b>' + eu.issues + '</b> issue' + (eu.issues !== 1 ? 's' : '') + '</span>' +
+    ? '<span><i class="axi axi-check"></i> <b>' + eu.issues + '</b> issue' + (eu.issues !== 1 ? 's' : '') + '</span>' +
       (temPontos || eu.plan
-        ? '<span title="Planejado: pontos das demandas com prazo neste período. Entregue: pontos que você tirou da mão, contados na data em que entregou — não na da aprovação.">🃏 <b>' +
+        ? '<span title="Planejado: pontos das demandas com prazo neste período. Entregue: pontos que você tirou da mão, contados na data em que entregou — não na da aprovação."><i class="axi axi-cards"></i> <b>' +
           prodNum(eu.plan) + '</b> pt planejados · <b class="prod-feito">' +
           prodNum(eu.pontos) + '</b> entregues' +
           (eu.pct != null ? ' (' + eu.pct + '%)' : '') + '</span>'
@@ -2797,11 +2802,11 @@ function renderProdutividade() {
     dicas.push('Nenhuma entrega deste período recebeu pontos no Planning Poker, ' +
                'então a ordem do pódio segue a quantidade de issues.');
   }
-  av.innerHTML = partes.length ? '⚠ ' + partes.join(' · ') : '';
+  av.innerHTML = partes.length ? '<i class="axi axi-alert"></i> ' + partes.join(' · ') : '';
   // Uma frase por assunto: o texto corrido de antes era longo e nao se lia.
   av.title = dicas.join(String.fromCharCode(10) + String.fromCharCode(10));
 
-  const MEDALHAS = ['🥇', '🥈', '🥉'];
+  const MEDALHAS = ['<i class="axi axi-medal"></i>', '<i class="axi axi-medal"></i>', '<i class="axi axi-medal"></i>'];
   const podio = document.getElementById('prod-podio');
   if (!rank.length) {
     podio.innerHTML = '<span class="prod-vazio">Sem entregas aprovadas neste período — o pódio aparece quando houver.</span>';
@@ -2899,7 +2904,7 @@ function msHomologRender(m) {
 
   if (reg) {
     cx.innerHTML =
-      '<div class="msh-tit">✅ Homologado por <strong>' + devEsc(reg.quem) + '</strong></div>' +
+      '<div class="msh-tit"><i class="axi axi-check"></i> Homologado por <strong>' + devEsc(reg.quem) + '</strong></div>' +
       (reg.obs ? '<div class="msh-obs">' + devEsc(reg.obs) + '</div>' : '') +
       '<div class="msh-sub">Pode seguir para a Validação PM/PO.</div>';
     return;
@@ -2907,7 +2912,7 @@ function msHomologRender(m) {
 
   const quemSugerido = HOMOLOGACAO.solicitante(m);
   cx.innerHTML =
-    '<div class="msh-tit">' + (cobra ? '⏳ Parada há ' + dias + ' dias na área' : '👁 Em homologação') +
+    '<div class="msh-tit">' + (cobra ? '<i class="axi axi-hourglass"></i> Parada há ' + dias + ' dias na área' : '<i class="axi axi-eye"></i> Em homologação') +
       (dias != null && !cobra ? ' · ' + dias + ' dia(s)' : '') + '</div>' +
     '<div class="msh-sub">' + (cobra
       ? 'Passou dos ' + HOMOLOGACAO.DIAS_ATE_COBRAR + ' dias. Quem homologou?'
@@ -2920,7 +2925,7 @@ function msHomologRender(m) {
     '<label class="msh-f">Observação <span class="msh-opt">(opcional)</span>' +
       '<input type="text" id="msh-obs" maxlength="300" placeholder="O que foi conferido" /></label>' +
     '<button type="button" class="btn btn-primary btn-sm" onclick="msHomologRegistra()">' +
-      '✅ Registrar homologação</button>' +
+      '<i class="axi axi-check"></i> Registrar homologação</button>' +
     '<div class="msh-nota">Sem registro, a demanda continua aqui — ela não anda sozinha.</div>';
 }
 
@@ -2957,7 +2962,7 @@ function avisaNaoPublicadas() {
   const n = itens.length;
   el.style.display = 'block';
   el.innerHTML =
-    '⚠️ <b>' + n + (n === 1 ? ' demanda não foi gravada' : ' demandas não foram gravadas') +
+    '<i class="axi axi-alert"></i> <b>' + n + (n === 1 ? ' demanda não foi gravada' : ' demandas não foram gravadas') +
     ' no servidor.</b> ' +
     'Ela' + (n === 1 ? '' : 's') + ' aparece' + (n === 1 ? '' : 'm') +
     ' aqui na sua tela e <b>não existe' + (n === 1 ? '' : 'm') +
@@ -2990,7 +2995,7 @@ async function tentarPublicarDeNovo() {
     }
     if (await saveToGitHub({ [i.id]: i.patch })) ok++;
   }
-  toast(ok === itens.length ? '✅ Tudo gravado.'
+  toast(ok === itens.length ? 'Tudo gravado.'
         : ok + ' de ' + itens.length + ' gravadas. O resto continua pendente.',
         ok === itens.length ? 'ok' : 'err');
   avisaNaoPublicadas();
@@ -3015,13 +3020,18 @@ function renderRiscoDev() {
     JSON.stringify(m.id).replace(/"/g, '&quot;') + ')">' +
     escAttr((m.codigo ? m.codigo + ' ' : '') + (m.titulo || '')) + '</button>';
 
-  el.innerHTML = '⚠ <strong>' + minhas.length +
+  /* A FRASE VAI INTEIRA NUM <div>. A faixa e flex em coluna, e cada no solto
+     dentro dela (icone, texto, cada link, cada " · ") virava uma linha propria.
+     Embrulhada, ela corre como texto; o aviso dos filtros e o segundo bloco, e o
+     espaco entre os dois e o `gap` da faixa. */
+  el.innerHTML = '<div><i class="axi axi-alert"></i> <strong>' + minhas.length +
     (minhas.length === 1 ? ' demanda sua está com o prazo vencido' : ' demandas suas estão com o prazo vencido') +
     ':</strong> ' + minhas.slice(0, 3).map(link).join(' · ') +
     (minhas.length > 3 ? ' <span style="opacity:.8">e mais ' + (minhas.length - 3) + '</span>' : '') +
+    '</div>' +
     (escondidas.length
-      ? '<div style="margin-top:6px;font-size:12.5px;opacity:.95">' +
-        '🔍 <strong>' + escondidas.length + (escondidas.length === 1 ? ' está' : ' estão') +
+      ? '<div style="font-size:12.5px;opacity:.95">' +
+        '<i class="axi axi-search"></i> <strong>' + escondidas.length + (escondidas.length === 1 ? ' está' : ' estão') +
         ' escondida' + (escondidas.length > 1 ? 's' : '') + ' pelos filtros ativos.</strong> ' +
         '<button type="button" class="risco-link" onclick="limparFiltrosDev()">limpar os filtros</button>' +
         '</div>'
@@ -3049,7 +3059,7 @@ function mescladasDev(m) {
   const filhas = (state.melhorias || []).filter(x => x.mesclado_em === m.id);
   if (!filhas.length) return '';
   return '<div style="background:var(--teal-bg);border-radius:8px;padding:10px 12px;margin:8px 0;font-size:12.5px;line-height:1.6">' +
-    '<strong style="color:var(--teal-tx)">🔗 Esta demanda absorveu ' + filhas.length + ' pedido' +
+    '<strong style="color:var(--teal-tx)"><i class="axi axi-link"></i> Esta demanda absorveu ' + filhas.length + ' pedido' +
     (filhas.length > 1 ? 's' : '') + ':</strong>' +
     filhas.map(f => '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">' +
       '<strong>' + escAttr(f.codigo || '') + '</strong> ' + escAttr(f.titulo || '') +
@@ -3147,13 +3157,13 @@ function verDemanda(m, opcoes) {
      modal e o mesmo, e sem a frase a pessoa perde o fio de onde clicou. */
   const porIssue = achado.por === 'issue';
   const deOnde = achado.por === 'projeto'
-    ? '<div style="margin-bottom:6px">🗂 Aberta pela lista do projeto <b>' +
+    ? '<div style="margin-bottom:6px"><i class="axi axi-folder"></i> Aberta pela lista do projeto <b>' +
       escAttr(o.rotulo || '') + '</b>. Fechar volta para ele.</div>'
     : achado.por === 'vinculo'
-    ? '<div style="margin-bottom:6px">🔗 Aberta pelo vínculo com <b>' +
+    ? '<div style="margin-bottom:6px"><i class="axi axi-link"></i> Aberta pelo vínculo com <b>' +
       escAttr(o.rotulo || '') + '</b>.</div>'
     : porIssue
-    ? '<div style="margin-bottom:6px">🔗 Encontrada pela <b>issue ' +
+    ? '<div style="margin-bottom:6px"><i class="axi axi-link"></i> Encontrada pela <b>issue ' +
       escAttr(BUSCA_DEMANDA.numeroDaIssue(m.link_issue)) + '</b> do GitHub, e não pelo código.</div>'
     : '';
   /* "SÓ NÃO PERMITIR EDIÇÃO" — e a tela diz isso ANTES de a pessoa procurar
@@ -3164,10 +3174,10 @@ function verDemanda(m, opcoes) {
        quadro" seria absurdo — ela JA esta no quadro dela, e o card se abre com
        um clique. A frase diz o caminho de volta, em vez de mandar para onde a
        pessoa ja esta. */
-    ? '<div>👁 Consulta rápida, sem editar. Um clique no card abre para editar.</div>'
+    ? '<div><i class="axi axi-eye"></i> Consulta rápida, sem editar. Um clique no card abre para editar.</div>'
     : minha
-    ? '<div>👁 Consulta apenas. Para editar, abra o card dela no seu quadro.</div>'
-    : '<div>👁 Esta demanda está com <b>' + escAttr(m.dev || 'ninguém') +
+    ? '<div><i class="axi axi-eye"></i> Consulta apenas. Para editar, abra o card dela no seu quadro.</div>'
+    : '<div><i class="axi axi-eye"></i> Esta demanda está com <b>' + escAttr(m.dev || 'ninguém') +
       '</b>. Você está vendo em <b>leitura</b> — alterações só quem está com ela.</div>';
   const mostraAviso = !!(deOnde || !minha || achado.por);
   aviso.innerHTML = [deOnde, mostraAviso ? emLeitura : ''].join('');
@@ -3317,10 +3327,10 @@ const COLUMNS = [
      CINZA, e não mais uma cor: as seis colunas seguintes já contam uma história
      de progresso em cor. O balde de entrada não é um estágio desse caminho —
      é o que ainda não entrou nele. */
-  { key:'backlog',      label:'Backlog',      color:'#7C8698', maps:['backlog'] },
-  { key:'planning',     label:'Planning',     color:'#2BBFA0', maps:['planning'] },
-  { key:'planejado',    label:'Planejado',    color:'#3B8FE8', maps:['levantar_req','planejado'] },
-  { key:'em_andamento', label:'Em Andamento', color:'#5EA832', maps:['em_andamento'] },
+  { key:'backlog',      label:'Backlog',      color:'var(--text3)', maps:['backlog'] },
+  { key:'planning',     label:'Planning',     color:'var(--teal)', maps:['planning'] },
+  { key:'planejado',    label:'Planejado',    color:'var(--blue)', maps:['levantar_req','planejado'] },
+  { key:'em_andamento', label:'Em Andamento', color:'var(--green)', maps:['em_andamento'] },
   /* A AREA TESTA ANTES DO PM/PO. O card fica aqui enquanto quem pediu confere a
      solucao; so depois ele vai para Validacao PM/PO, e so la conta como
      entregue (ver `ETAPAS_ENTREGUE` em capacidade.js).
@@ -3329,9 +3339,9 @@ const COLUMNS = [
      vizinhas da mesma cor se leem como uma so quando o quadro esta cheio, e a
      pergunta "parou na area ou no PM/PO?" e justamente a que esta coluna
      existe para responder. */
-  { key:'validacao_area', label:'Validação da área', color:'#B06FD4', maps:['validacao_area'] },
-  { key:'validacao',    label:'Em validação',  color:'#E89C2F', maps:['validacao'] },
-  { key:'concluido',    label:'Concluído',    color:'#2BBFA0', maps:['concluido'] },
+  { key:'validacao_area', label:'Validação da área', color:'var(--purple)', maps:['validacao_area'] },
+  { key:'validacao',    label:'Em validação',  color:'var(--amber)', maps:['validacao'] },
+  { key:'concluido',    label:'Concluído',    color:'var(--teal)', maps:['concluido'] },
 ];
 
 // ─── LOAD / SAVE ─────────────────────────────────────────────────
@@ -3511,7 +3521,7 @@ function levaAoCampo(id, campo, motivo) {
     try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
     try { el.focus(); } catch (_) {}
     const antes = el.style.boxShadow;
-    el.style.boxShadow = '0 0 0 3px var(--amber, #FBBF24)';
+    el.style.boxShadow = '0 0 0 3px var(--amber)';
     setTimeout(() => { el.style.boxShadow = antes; }, 2600);
   }, 120);
   if (motivo) toast(motivo, 'err');
@@ -3648,7 +3658,7 @@ async function saveToGitHub(patch, opts = {}) {
          `nao-publicada.js` — gravar a demanda A nao prova nada sobre a B que
          falhou antes. */
       if (window.NAOPUBLICADA) { NAOPUBLICADA.limpa(patch); avisaNaoPublicadas(); }
-      toast('✅ Salvo!','ok');
+      toast('Salvo!','ok');
       return true;
     } catch(e) {
       /* QUEDA DE REDE SE REPETE — ver a nota longa no `saveViaProxy` do Admin.
@@ -3678,7 +3688,7 @@ async function saveToGitHub(patch, opts = {}) {
          gravou, e esse nao volta. */
       if (quedaDeRede && await gravacaoEntrou(patch)) {
         if (window.NAOPUBLICADA) { NAOPUBLICADA.limpa(patch); avisaNaoPublicadas(); }
-        toast('✅ Salvo! (a resposta se perdeu, mas a gravação entrou)','ok');
+        toast('Salvo! (a resposta se perdeu, mas a gravação entrou)','ok');
         return true;
       }
       /* A GRAVACAO FALHOU E O CARD CONTINUA NA TELA. Sem esta marca ele fica
@@ -3736,7 +3746,7 @@ async function saveToGitHub(patch, opts = {}) {
     const saved = await res.json();
     fileSha = saved.content.sha;
     applyData(merged);
-    toast('✅ Salvo!','ok');
+    toast('Salvo!','ok');
     return true;
   } catch(e) {
     toast('Erro ao salvar: ' + e.message,'err');
@@ -3788,7 +3798,7 @@ async function reloadDevList() {
     return;
   }
   grid.innerHTML = devs.map(d =>
-    `<button class="dev-btn" onclick="selectDev('${d.replace(/'/g,"\\'")}')">👤 ${d}</button>`
+    `<button class="dev-btn" onclick="selectDev('${d.replace(/'/g,"\\'")}')"><i class="axi axi-user"></i> ${d}</button>`
   ).join('');
 }
 
@@ -3966,7 +3976,7 @@ async function fazerCadastro() {
     }
     const emailMostrar = email.replace(/[&<>"]/g, '');
     ['cad-nome', 'cad-email', 'cad-senha'].forEach(i => { document.getElementById(i).value = ''; });
-    okEl.innerHTML = '✅ <strong>Cadastro enviado.</strong><br>Avise um administrador para liberar ' +
+    okEl.innerHTML = '<i class="axi axi-check"></i> <strong>Cadastro enviado.</strong><br>Avise um administrador para liberar ' +
       'seu acesso. Depois entre com <strong>' + emailMostrar + '</strong> e a senha que você acabou ' +
       'de escolher.';
     okEl.style.display = 'block';
@@ -3995,7 +4005,7 @@ async function pedirRecuperacao() {
       return;
     }
     document.getElementById('rec-quem').value = '';
-    okEl.innerHTML = '✅ <strong>Pedido registrado.</strong><br>Um administrador vai gerar uma senha ' +
+    okEl.innerHTML = '<i class="axi axi-check"></i> <strong>Pedido registrado.</strong><br>Um administrador vai gerar uma senha ' +
       'nova e entregar a você.';
     okEl.style.display = 'block';
   } catch (_) {
@@ -4393,7 +4403,7 @@ async function limparDadosTeste() {
       body: JSON.stringify({ message: 'chore: remove dados dev Teste', content: b64, sha: shaJson.sha })
     });
     if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Erro ao salvar'); }
-    toast('✅ Dados do dev Teste removidos com sucesso!', 'ok');
+    toast('Dados do dev Teste removidos com sucesso!', 'ok');
     renderKanban();
   } catch(e) {
     toast('Erro: ' + e.message, 'err');
@@ -4445,18 +4455,18 @@ function buildDevDropdown() {
     // Sem ela, um palpite errado nao teria correcao a nao ser abrir chamado com o
     // admin — e um automatismo sem saida e pior que a pergunta que ele substituiu.
     dd.innerHTML =
-      `<div class="dev-dropdown-item" onclick="corrigirVinculo()">👤 Não são as minhas demandas</div>` +
+      `<div class="dev-dropdown-item" onclick="corrigirVinculo()"><i class="axi axi-user"></i> Não são as minhas demandas</div>` +
       `<div class="dev-dropdown-sep"></div>` +
-      `<div class="dev-dropdown-item" onclick="abrirTrocaSenha()">🔑 Minha senha</div>` +
-      `<div class="dev-dropdown-item" onclick="sairDev()">🚪 Sair da conta</div>`;
+      `<div class="dev-dropdown-item" onclick="abrirTrocaSenha()"><i class="axi axi-key"></i> Minha senha</div>` +
+      `<div class="dev-dropdown-item" onclick="sairDev()"><i class="axi axi-logout"></i> Sair da conta</div>`;
     return;
   }
   // "Tela de selecao" troca de nome mantendo a credencial; "Sair" encerra a
   // sessao. Sao coisas diferentes e antes so a primeira existia.
   dd.innerHTML = items + `<div class="dev-dropdown-sep"></div>` +
-    `<div class="dev-dropdown-item" onclick="trocarDev()">🔄 Trocar de dev (mantém a sessão)</div>` +
-    `<div class="dev-dropdown-item" onclick="abrirTrocaSenha()">🔑 Minha senha</div>` +
-    `<div class="dev-dropdown-item" onclick="sairDev()">🚪 Sair da conta</div>`;
+    `<div class="dev-dropdown-item" onclick="trocarDev()"><i class="axi axi-refresh"></i> Trocar de dev (mantém a sessão)</div>` +
+    `<div class="dev-dropdown-item" onclick="abrirTrocaSenha()"><i class="axi axi-key"></i> Minha senha</div>` +
+    `<div class="dev-dropdown-item" onclick="sairDev()"><i class="axi axi-logout"></i> Sair da conta</div>`;
 }
 
 function switchDevInline(name) {
@@ -4540,7 +4550,7 @@ function buildSprintSelect() {
     '<option value="">Todas (' + doDev.length + ')</option>' +
     rotulos.map(s => '<option value="' + escAttr(s) + '">' + escAttr(s) +
       (s === agora ? ' · agora' : '') + ' (' + conta[s] + ')</option>').join('') +
-    (fora ? '<option value="__fora__">📋 Fora da sprint (' + fora + ')</option>' : '');
+    (fora ? '<option value="__fora__">Fora da sprint (' + fora + ')</option>' : '');
   /* A ESCOLHA SOBREVIVE AO REDESENHO — a nao ser que a sprint tenha ficado sem
      demanda nenhuma. Ai ela sai da lista, e manter o valor deixaria o painel
      vazio sem opcao visivel que explicasse por que. */
@@ -4696,7 +4706,7 @@ function renderKanban() {
            ondragover="onDragOver(event,'${col.key}')" ondrop="onDrop(event,'${col.key}')" ondragleave="onDragLeave(event,'${col.key}')">
         <div class="col-header">
           <span class="col-header-dot"></span>
-          <span class="col-header-label">${col.label}</span>
+          <span class="col-header-label axi-lock">${col.label}</span>
           <span class="col-header-count">${cards.length}</span>
         </div>
         <div class="col-cards" id="cards-${col.key}">
@@ -4733,11 +4743,11 @@ function renderCard(m, colKey) {
      card e o que permite planejar a conversa. Sem nome, o card diz isso
      em vez de ficar calado — a demanda nao avanca sem ele. */
   meta.push(String(m.solicitante || '').trim()
-    ? `🙋 ${devEsc(m.solicitante)}`
-    : '🙋 sem solicitante');
-  if (m.inicio)  meta.push(`📅 ${formatDate(m.inicio)}`);
-  if (m.entrega) meta.push(`🏁 ${formatDate(m.entrega)}`);
-  if (m.estimativa) meta.push(`⏱ ${devEsc(m.estimativa)}`);
+    ? `<i class="axi axi-user"></i> ${devEsc(m.solicitante)}`
+    : '<i class="axi axi-user"></i> sem solicitante');
+  if (m.inicio)  meta.push(`<i class="axi axi-calendar"></i> ${formatDate(m.inicio)}`);
+  if (m.entrega) meta.push(`<i class="axi axi-flag"></i> ${formatDate(m.entrega)}`);
+  if (m.estimativa) meta.push(`<i class="axi axi-clock"></i> ${devEsc(m.estimativa)}`);
   // Parent info (este card é dependência de outro)
   const parent = m.parent_id ? state.melhorias.find(x => x.id === m.parent_id) : null;
   /* O CODIGO ENTRA JUNTO, e o titulo inteiro fica no `title`. O titulo aqui e
@@ -4745,7 +4755,7 @@ function renderCard(m, colKey) {
      busca pode nao achar nada — o codigo acha sempre, e o tooltip mostra o que
      foi cortado. */
   const parentInfo = parent
-    ? `<div class="kcard-parent-info" title="${devEsc((parent.codigo ? parent.codigo + ' · ' : '') + parent.titulo)}">🔗 Dep. de: ${devEsc(parent.codigo || '')} ${devEsc(parent.titulo.substring(0,38))}${parent.titulo.length>38?'…':''}</div>`
+    ? `<div class="kcard-parent-info" title="${devEsc((parent.codigo ? parent.codigo + ' · ' : '') + parent.titulo)}"><i class="axi axi-link"></i> Dep. de: ${devEsc(parent.codigo || '')} ${devEsc(parent.titulo.substring(0,38))}${parent.titulo.length>38?'…':''}</div>`
     : '';
   /* ═══ O VISUAL DE GRILL ═════════════════════════════════════════════
    *
@@ -4762,7 +4772,7 @@ function renderCard(m, colKey) {
   const grillEst = window.GRILL ? GRILL.estado(m) : 'nao';
   const grillFaixa = grillEst === 'pendente'
     ? '<div class="kcard-grill" title="O PM/PO pediu seu parecer antes de esta ' +
-      'demanda entrar no planejamento. Abra e responda.">🔥 Grill — dê seu parecer</div>'
+      'demanda entrar no planejamento. Abra e responda."><i class="axi axi-flame"></i> Grill — dê seu parecer</div>'
     : '';
   return `
     <div class="kcard prazo-${prazoNivel(m)}${grillEst === 'pendente' ? ' kcard-grill-on' : ''}${
@@ -4775,19 +4785,19 @@ function renderCard(m, colKey) {
             e so o card se perde em oito colunas. */''}
       ${window.NAOPUBLICADA && NAOPUBLICADA.tem(m.id)
         ? '<div class="kcard-naopub" title="A gravação falhou. Esta demanda só existe nesta tela — ' +
-          'ela some se você recarregar a página, e ninguém mais a enxerga.">⚠ NÃO GRAVADA</div>' : ''}
+          'ela some se você recarregar a página, e ninguém mais a enxerga."><i class="axi axi-alert"></i> NÃO GRAVADA</div>' : ''}
       ${grillFaixa}
       ${parentInfo}
-      ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
-      ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
-      ${semPontuacao(m) ? `<div class="kcard-prazo sempt" title="Sem pontos do Planning Poker: a data foi combinada sem estimativa de tamanho.">🃏 sem pontuação</div>` : ''}
+      ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}"><i class="axi axi-pause"></i> Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
+      ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'<i class="axi axi-alert"></i> vence hoje':'<i class="axi axi-clock"></i> vence amanhã'}</div>` : ''}
+      ${semPontuacao(m) ? `<div class="kcard-prazo sempt" title="Sem pontos do Planning Poker: a data foi combinada sem estimativa de tamanho."><i class="axi axi-cards"></i> sem pontuação</div>` : ''}
       ${/* O CONTADOR DA AREA. Foi o pedido junto com a coluna, e e o motivo dela:
             demanda parada esperando a area nao aparece em lugar nenhum hoje, e o
             atraso do dev continua correndo enquanto isso. O numero diz ha quanto
             tempo a bola esta do outro lado.
             `diasNaArea` devolve `null` quando nao ha carimbo — e ai a linha nao
             aparece, em vez de dizer "0 dias" para algo parado ha um mes. */''}
-      ${diasNaAreaAgora(m) != null ? `<div class="kcard-prazo area" title="Esperando a área conferir desde ${devEsc(formatDate(m.validacao_area_em))}. O prazo do dev continua correndo.">👁 Na área há ${diasNaAreaAgora(m)} dia(s)</div>` : ''}
+      ${diasNaAreaAgora(m) != null ? `<div class="kcard-prazo area" title="Esperando a área conferir desde ${devEsc(formatDate(m.validacao_area_em))}. O prazo do dev continua correndo."><i class="axi axi-eye"></i> Na área há ${diasNaAreaAgora(m)} dia(s)</div>` : ''}
       ${/* O SELO DE VALIDACAO — passou pela planning, e por quem.
             E o AVESSO da linha acima: uma diz "ninguem estimou", a outra diz
             "foi fechada em reuniao". As duas nunca aparecem juntas, porque
@@ -4804,7 +4814,7 @@ function renderCard(m, colKey) {
       ${(() => { const _pj = m.projeto_id && (state.projetos || []).find(p => p.id === m.projeto_id);
         return _pj ? `<div class="kcard-prazo kcard-proj" title="${devEsc(_pj.nome || '')} — duplo clique abre o projeto"`
           + ` onmousedown="event.stopPropagation()" ondragstart="event.preventDefault()"`
-          + ` ondblclick="pjAbrirDoCard(event,'${devEsc(m.projeto_id)}')">🗂 ${devEsc(_pj.codigo || _pj.nome || '')}</div>` : ''; })()}
+          + ` ondblclick="pjAbrirDoCard(event,'${devEsc(m.projeto_id)}')"><i class="axi axi-folder"></i> ${devEsc(_pj.codigo || _pj.nome || '')}</div>` : ''; })()}
       ${window.SELO ? SELO.badges(m, 'kcard-prazo selo') : ''}
       ${progressoHTML}
       <div class="kcard-title">${m.codigo ? `<span class="kcard-cod">${devEsc(m.codigo)}</span>` : ''}${devEsc(m.titulo)}</div>
@@ -4832,10 +4842,10 @@ function renderCard(m, colKey) {
       <div class="kcard-rodape">${badge}${
         window.SPRINTPO ? SPRINTPO.badge(m, 'kcard-sprint') : ''}${
         (window.SPRINTPO && SPRINTPO.naPoolDoTime(state, m))
-          ? '<span class="kcard-pool" title="Está na sprint e ainda não tem dono. Qualquer um do time pode pegar — avise antes de começar.">🙌 sem dono</span>'
+          ? '<span class="kcard-pool" title="Está na sprint e ainda não tem dono. Qualquer um do time pode pegar — avise antes de começar."><i class="axi axi-users"></i> sem dono</span>'
           : ''}${
         (window.SPRINTPO && SPRINTPO.ehPrioritariaDaSprint(m, m.sprint_po))
-          ? '<span class="kcard-pool" title="Estava vencida no início da sprint e entrou como prioritária.">⚡ prioritária</span>'
+          ? '<span class="kcard-pool" title="Estava vencida no início da sprint e entrou como prioritária."><i class="axi axi-zap"></i> prioritária</span>'
           : ''}</div>
       ${renderDepSection(m)}
     </div>`;
@@ -4892,7 +4902,7 @@ function renderDepSection(m) {
     return `<div class="dep-row dep-click ${done?'dep-done':'dep-open'}" role="button" tabindex="0"
       data-ver="${devEsc(d.id)}" data-rotulo="${devEsc(m.codigo || m.titulo || '')}"
       title="${trava?'Dependência — trava o avanço deste card até ser concluída':'Vinculada — pertence a este card, não trava nada'}. Clique para consultar.">
-      <span>${done?'✅':(trava?'⏳':'🔗')}</span>
+      <span>${done?'<i class="axi axi-check"></i>':(trava?'<i class="axi axi-hourglass"></i>':'<i class="axi axi-link"></i>')}</span>
       <span><strong>${devEsc(d.titulo.substring(0,32))}${d.titulo.length>32?'…':''}</strong></span>
       <span style="color:var(--text3)">· ${devName} · ${dt}</span>
       <span class="kcard-badge badge-${dsk}" style="font-size:10px;">${STATUS_LABELS[dsk]||dsk}</span>
@@ -4911,16 +4921,16 @@ function renderDepSection(m) {
     return `<div class="dep-row dep-click dep-pai" role="button" tabindex="0"
       data-ver="${devEsc(pai.id)}" data-rotulo="${devEsc(m.codigo || m.titulo || '')}"
       title="Esta demanda faz parte de ${devEsc(pai.codigo || pai.titulo || '')}. Clique para consultar.">
-      <span>⬆️</span>
+      <span>↑</span>
       <span style="color:var(--text3)">parte de</span>
       <span><strong>${devEsc((pai.codigo ? pai.codigo + ' · ' : '') + pai.titulo.substring(0,28))}${pai.titulo.length>28?'…':''}</strong></span>
       <span class="kcard-badge badge-${psk}" style="font-size:10px;">${STATUS_LABELS[psk]||psk}</span>
     </div>`;
   })() : '';
   const blocked = hasBlockingDep(m.id);
-  const banner = blocked ? `<div class="dep-blocked-banner">🔒 Avanço bloqueado — aguardando dependência</div>` : '';
+  const banner = blocked ? `<div class="dep-blocked-banner"><i class="axi axi-lock"></i> Avanço bloqueado — aguardando dependência</div>` : '';
   const btn = podeVincular
-    ? `<button class="btn-dep-open" onclick="openDepModal('${m.id}',event)">🔗 + Vincular demanda</button>`
+    ? `<button class="btn-dep-open" onclick="openDepModal('${m.id}',event)"><i class="axi axi-link"></i> + Vincular demanda</button>`
     : '';
   /* QUANTO CUSTA A ÁRVORE INTEIRA. O card mostra o ponto DESTA demanda, e quem
      abriu quatro dependências debaixo dela está olhando para o número errado na
@@ -4928,7 +4938,7 @@ function renderDepSection(m) {
      a mesma que o admin, o gantt e a API usam. */
   const peso = VINCULO.frase(state.melhorias, m);
   const pesoLinha = peso
-    ? `<div class="dep-peso" title="Soma dos pontos desta demanda e de tudo que depende dela. É leitura: cada vínculo segue contando o próprio ponto nos relatórios.">🧮 ${devEsc(peso)}</div>`
+    ? `<div class="dep-peso" title="Soma dos pontos desta demanda e de tudo que depende dela. É leitura: cada vínculo segue contando o próprio ponto nos relatórios."><i class="axi axi-calc"></i> ${devEsc(peso)}</div>`
     : '';
   return `<div class="kcard-dep-section">${paiLinha}${rows}${pesoLinha}${banner}${btn}</div>`;
 }
@@ -5159,7 +5169,7 @@ function onDrop(e, colKey) {
      ficava com valor vazio e a demanda era gravada SEM etapa nenhuma, sumindo de
      todas as colunas. Aconteceu tres vezes: AX-096, AX-127 e AX-211. */
   if (!ETAPAS_DO_DEV.includes(colKey)) {
-    toast('🔒 ' + (COLUNAS_BLOQUEADAS_MSG[colKey] || 'Esta coluna não é movida pelo Painel Dev.'), 'err');
+    toast((COLUNAS_BLOQUEADAS_MSG[colKey] || 'Esta coluna não é movida pelo Painel Dev.'), 'err');
     return;
   }
   /* ── A REGRA DA HOMOLOGAÇÃO VALE NO ARRASTE TAMBÉM ────────────────────
@@ -5171,7 +5181,7 @@ function onDrop(e, colKey) {
   if (window.HOMOLOGACAO) {
     const impede = HOMOLOGACAO.barra(m, colKey, PRAZO.hojeISO());
     if (impede) {
-      toast('🔒 ' + impede.motivo, 'err');
+      toast(impede.motivo, 'err');
       /* ABRE O CARD NOS DOIS CASOS, e não só na homologação. Faltando o
          solicitante, o arraste dizia o que faltava e deixava a pessoa onde
          estava — sem campo à vista, a recusa virava parede. O card tem os dois
@@ -5192,7 +5202,7 @@ function onDrop(e, colKey) {
   setTimeout(() => {
     if (checkDepBlock(id, colKey)) {
       const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
-      toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
+      toast(`Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
       return;
     }
     // ENTREGAR EXIGE HORAS E TEXTO, e o arraste nao pode ser a porta dos fundos.
@@ -5382,7 +5392,7 @@ function msModoLeitura(m) {
       const t = document.getElementById('ms-title');
       t.parentNode.insertBefore(aviso, t.nextSibling);
     }
-    aviso.textContent = '👁 Demanda de ' + (m.dev || '—') + ' — aberta para leitura.';
+    aviso.textContent = 'Demanda de ' + (m.dev || '—') + ' — aberta para leitura.';
     aviso.style.display = '';
   } else if (aviso) { aviso.style.display = 'none'; }
 }
@@ -5402,7 +5412,7 @@ function openStatusModal(id, preselect) {
       ${deps.map(d => {
         const dsk = getStatusKey(d);
         return `<div style="font-size:12px;margin-bottom:4px;display:flex;gap:6px;align-items:center;">
-          <span>${dsk==='concluido'?'✅':'⏳'}</span>
+          <span>${dsk==='concluido'?'<i class="axi axi-check"></i>':'<i class="axi axi-hourglass"></i>'}</span>
           <span style="flex:1">${devEsc(d.titulo)}</span>
           <span style="color:var(--text3)">${devEsc(d.dev||'—')}</span>
           <span style="color:var(--text3)">${d.entrega?formatDate(d.entrega):''}</span>
@@ -5413,15 +5423,15 @@ function openStatusModal(id, preselect) {
   document.getElementById('ms-info').innerHTML = `
     ${m.codigo ? `<div class="modal-info-row"><span>Código:</span><strong style="font-family:ui-monospace,monospace">${devEsc(m.codigo)}</strong></div>` : ''}
     <div class="modal-info-row"><span>Tema:</span><strong>${tema}</strong></div>
-    ${m.tipo ? `<div class="modal-info-row"><span>Classificação:</span><strong>${m.tipo === 'sustentacao' ? '🔧 Sustentação' : m.tipo === 'evolucao' ? '🚀 Evolução' : devEsc(m.tipo)}</strong></div>` : ''}
+    ${m.tipo ? `<div class="modal-info-row"><span>Classificação:</span><strong>${m.tipo === 'sustentacao' ? '<i class="axi axi-wrench"></i> Sustentação' : m.tipo === 'evolucao' ? '<i class="axi axi-rocket"></i> Evolução' : devEsc(m.tipo)}</strong></div>` : ''}
     ${m.dev ? `<div class="modal-info-row"><span>Dev:</span><strong>${devEsc(m.dev)}</strong></div>` : ''}
     ${m.inicio ? `<div class="modal-info-row"><span>Início:</span><strong>${formatDate(m.inicio)}</strong></div>` : ''}
     ${m.entrega && !estaPausado(m) ? `<div class="modal-info-row"><span>Entrega:</span><strong>${formatDate(m.entrega)}</strong></div>` : ''}
     ${estaPausado(m) ? `<div class="modal-info-row"><span>Entrega:</span><strong style="color:var(--text3)">oculta enquanto pausada</strong></div>` : ''}
-    ${m.debito_tecnico ? `<div class="modal-info-row"><span>Débito técnico:</span><strong>🧱 Sim</strong></div>` : ''}
-    ${m.dados_bi ? `<div class="modal-info-row"><span>Time:</span><strong>📊 Dados / BI</strong></div>`
-      : m.sales_ops ? `<div class="modal-info-row"><span>Time:</span><strong>📈 Sales Ops</strong></div>` : ''}
-    ${BIS.daDemanda(m).length ? `<div class="modal-info-row"><span>BIs impactados:</span><strong>📈 ${devEsc(BIS.daDemanda(m).join(' · '))}</strong></div>` : ''}
+    ${m.debito_tecnico ? `<div class="modal-info-row"><span>Débito técnico:</span><strong><i class="axi axi-package"></i> Sim</strong></div>` : ''}
+    ${m.dados_bi ? `<div class="modal-info-row"><span>Time:</span><strong><i class="axi axi-chart"></i> Dados / BI</strong></div>`
+      : m.sales_ops ? `<div class="modal-info-row"><span>Time:</span><strong><i class="axi axi-trend"></i> Sales Ops</strong></div>` : ''}
+    ${BIS.daDemanda(m).length ? `<div class="modal-info-row"><span>BIs impactados:</span><strong><i class="axi axi-trend"></i> ${devEsc(BIS.daDemanda(m).join(' · '))}</strong></div>` : ''}
     ${mescladasDev(m)}
     ${m.concluido_em ? `<div class="modal-info-row"><span>Concluída em:</span><strong>${formatDate(m.concluido_em)}</strong></div>` : ''}
     ${m.descricao ? `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">${devEsc(m.descricao)}</div>` : ''}
@@ -5447,11 +5457,11 @@ function openStatusModal(id, preselect) {
     // Antes o texto dizia "nao pode ser alterada" e o botao de salvar desaparecia:
     // quem escrevia a descricao durante a validacao perdia tudo ao fechar o card.
     trava.innerHTML = emValidacao
-      ? '🔒 <strong>Aguardando validação do PM/PO.</strong> Você ainda pode corrigir as horas ' +
+      ? '<i class="axi axi-lock"></i> <strong>Aguardando validação do PM/PO.</strong> Você ainda pode corrigir as horas ' +
         'e o texto do que foi implementado — use <strong>Salvar texto da entrega</strong>. ' +
         'O que não muda aqui é a etapa: quem conclui é o PM/PO. Se algo estiver errado no ' +
         'escopo, fale com ele — se devolver, a demanda volta para Planejado com o motivo.'
-      : '🔒 <strong>Concluída e validada.</strong> Não há mais o que alterar por aqui.';
+      : '<i class="axi axi-lock"></i> <strong>Concluída e validada.</strong> Não há mais o que alterar por aqui.';
   }
   if (grupo) grupo.style.display = (emValidacao || jaConcluida) ? 'none' : '';
   // Com o PM/PO, nem o vinculo de projeto se mexe: a demanda esta congelada.
@@ -5615,8 +5625,8 @@ function msRenderAnexosEdit() {
   el.innerHTML = _msAnexos.map((a, i) => {
     const kb = a.tamanho ? ` <span style="color:var(--text3)">(${(a.tamanho/1024).toFixed(0)} KB)</span>` : '';
     return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:5px 9px">
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📎 ${devEsc(a.nome)}${kb}</span>
-      <a href="#" style="color:#9BC8F8;text-decoration:none" onclick="msPreviewAnexo(${i});return false;">ver</a>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><i class="axi axi-clip"></i> ${devEsc(a.nome)}${kb}</span>
+      <a href="#" style="color:var(--blue-tx);text-decoration:none" onclick="msPreviewAnexo(${i});return false;">ver</a>
       <button type="button" style="color:var(--red);background:none;border:none;cursor:pointer;font-size:14px" onclick="msRemoveAnexo(${i})" title="Remover">✕</button>
     </div>`;
   }).join('');
@@ -5635,8 +5645,8 @@ function onStatusModalChange() {
     const hp = calcHorasPlanejadas(m?.inicio, m?.entrega);
     const planEl = document.getElementById('ms-horas-plan');
     planEl.textContent = hp !== null
-      ? `⏱ Horas planejadas (dias úteis × 8h): ${hp}h`
-      : '⚠️ Sem datas de início/entrega — horas planejadas não calculadas.';
+      ? `Horas planejadas (dias úteis × 8h): ${hp}h`
+      : 'Sem datas de início/entrega — horas planejadas não calculadas.';
   }
 }
 
@@ -5678,7 +5688,7 @@ function msGrillRender(m) {
 
   if (est !== 'pendente') {
     cx.innerHTML = '<div class="ms-grill respondido">' +
-      '<div class="ms-grill-tit">🔥 Grill — ' +
+      '<div class="ms-grill-tit"><i class="axi axi-flame"></i> Grill — ' +
       (est === 'ok' ? 'você respondeu que entendeu' : 'você devolveu com dúvidas') +
       '</div>' + jaPerguntou + '</div>';
     return;
@@ -5686,7 +5696,7 @@ function msGrillRender(m) {
 
   cx.innerHTML =
     '<div class="ms-grill">' +
-    '<div class="ms-grill-tit">🔥 Grill — dê seu parecer antes do planejamento</div>' +
+    '<div class="ms-grill-tit"><i class="axi axi-flame"></i> Grill — dê seu parecer antes do planejamento</div>' +
     '<div class="ms-grill-txt">Leia a demanda acima. Se faltar alguma coisa para você ' +
     'conseguir estimar e executar, escreva os pontos — <b>uma dúvida por linha</b>. ' +
     'Ela volta para Levantar Requisitos com o que você perguntou. Se estiver claro, ' +
@@ -5745,8 +5755,8 @@ async function msGrillResponde(veredito) {
   closeModal('modal-status');
   renderKanban();
   toast(veredito === 'ok'
-    ? '🔥 Parecer registrado — a demanda seguiu para o Planning.'
-    : '🔥 ' + pontos.length + (pontos.length === 1 ? ' dúvida enviada' : ' dúvidas enviadas') +
+    ? 'Parecer registrado — a demanda seguiu para o Planning.'
+    : pontos.length + (pontos.length === 1 ? ' dúvida enviada' : ' dúvidas enviadas') +
       ' — a demanda voltou para Levantar Requisitos.', 'ok');
 }
 
@@ -5923,7 +5933,7 @@ function msSubRender(m) {
   const alvo = document.getElementById('ms-sub-progresso');
   if (alvo) {
     alvo.textContent = p.total ? p.feitas + ' de ' + p.total + '  ·  ' + p.pct + '%' : '';
-    alvo.style.color = p.pct === 100 ? 'var(--green-tx, #3EC98E)' : 'var(--text3)';
+    alvo.style.color = p.pct === 100 ? 'var(--green-tx)' : 'var(--text3)';
   }
   msSubAplicaTotal();
   if (!_msSubs.length) {
@@ -6021,7 +6031,7 @@ function msResumoConta() {
   alvo.textContent = restam === 0
     ? 'limite de ' + teto + ' caracteres atingido — cabe em 5 linhas'
     : 'restam ' + restam + ' de ' + teto + ' caracteres';
-  alvo.style.color = restam <= 30 ? 'var(--amber-tx, #FFC470)' : 'var(--text3)';
+  alvo.style.color = restam <= 30 ? 'var(--amber-tx)' : 'var(--text3)';
 }
 
 function msSubHoras(i, v) {
@@ -6242,7 +6252,7 @@ async function saveStatus() {
      Aqui a etapa que sai da tela e conferida contra a mesma lista de sempre — e a
      escolha vazia passa porque ela justamente nao move nada. */
   if (escolhido && !ETAPAS_DO_DEV.includes(escolhido)) {
-    toast('🔒 ' + (COLUNAS_BLOQUEADAS_MSG[escolhido] ||
+    toast((COLUNAS_BLOQUEADAS_MSG[escolhido] ||
           'Esta etapa não é movida pelo Painel Dev.'), 'err');
     return;
   }
@@ -6274,7 +6284,7 @@ async function saveStatus() {
   if (escolhido && atual && window.HOMOLOGACAO) {
     const impede = HOMOLOGACAO.barra(atual, escolhido, PRAZO.hojeISO());
     if (impede) {
-      toast('🔒 ' + impede.motivo, 'err');
+      toast(impede.motivo, 'err');
       if (impede.campo === 'homologacao') {
         const campo = document.getElementById('msh-quem');
         if (campo) { campo.focus(); campo.scrollIntoView({ block: 'center' }); }
@@ -6303,7 +6313,7 @@ async function saveStatus() {
   // Bloqueio por dependência
   if (checkDepBlock(id, newColKey)) {
     const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
-    toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
+    toast(`Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
     return;
   }
   /* MANDAR PARA A AREA TAMBEM EXIGE AS HORAS (30/10/2026). O texto continua
@@ -6333,7 +6343,7 @@ async function saveStatus() {
     }
     closeModal('modal-status');
     await updateStatus(id, newColKey, horas, impl);
-    toast('📋 Entregue para validação do PM/PO.', 'ok');
+    toast('Entregue para validação do PM/PO.', 'ok');
   } else {
     // Fora da conclusão o texto é opcional, mas se já existir não se perde
     const impl = document.getElementById('ms-implementacao').value.trim();
@@ -6351,7 +6361,7 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
      enquanto o select exigia. Antes da atualização otimista, senão o card pula
      para a coluna e volta sozinho. */
   const barrado = travaSprintBarra(id, colKey);
-  if (barrado) { toast('🔒 ' + barrado, 'err'); return; }
+  if (barrado) { toast(barrado, 'err'); return; }
   const spAnterior = m.status_planejamento;
   const stAnterior = m.status;
   const hrAnterior = m.horas_realizadas;
@@ -6521,7 +6531,7 @@ function travaDatasNoCard(m) {
   if (nota) {
     nota.style.display = trava ? 'block' : 'none';
     nota.textContent = trava
-      ? '🔒 Datas definidas no Planejamento a partir de Planejado. Precisa mudar? Fale com o PM/PO.'
+      ? 'Datas definidas no Planejamento a partir de Planejado. Precisa mudar? Fale com o PM/PO.'
       : '';
   }
 }
@@ -6659,7 +6669,7 @@ function nRenderAnexos() {
   if (!_nAnexos.length) { box.innerHTML = ''; return; }
   box.innerHTML = _nAnexos.map((a, i) =>
     '<div class="an-item"><span class="an-nome">' +
-    (String(a.tipo || '').startsWith('image/') ? '🖼 ' : '📄 ') + devEsc(a.nome || 'arquivo') +
+    (String(a.tipo || '').startsWith('image/') ? '<i class="axi axi-image"></i> ' : '<i class="axi axi-file"></i> ') + devEsc(a.nome || 'arquivo') +
     '</span><button type="button" class="an-x" onclick="nRemoveAnexo(' + i +
     ')" title="Remover">✕</button></div>').join('');
 }
@@ -6985,9 +6995,13 @@ let _toastTimer;
 function toast(msg, type='ok') {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.style.background = type==='err' ? '#5C0A0A' : '#1E4208';
-  el.style.color       = type==='err' ? '#F9A0A0' : '#B2E07A';
-  el.style.border      = `1px solid ${type==='err'?'#7A1A1A':'#2E5A10'}`;
+  // O -bg do AXIS e translucido (14%), e o toast flutua sobre o quadro: o tom vai
+  // por cima de um fundo opaco, senao o texto do card aparece atras da mensagem.
+  el.style.background = type==='err'
+    ? 'linear-gradient(var(--red-bg),var(--red-bg)), var(--sf3)'
+    : 'linear-gradient(var(--green-bg),var(--green-bg)), var(--sf3)';
+  el.style.color       = type==='err' ? 'var(--red-tx)' : 'var(--green-tx)';
+  el.style.border      = `1px solid ${type==='err'?'rgba(var(--dg-rgb),.45)':'rgba(var(--ok-rgb),.45)'}`;
   el.style.opacity = '1';
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => { el.style.opacity='0'; }, 4000);
