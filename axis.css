@@ -347,8 +347,8 @@ body.axis-com-menu:has(#login-screen:not([style*="none"])) .axis-sb { display: n
 /* Com o menu, os atalhos de navegacao do cabecalho e a regua de abas do admin
    viram redundantes: os mesmos destinos estao no menu. Somem so do olho — o
    HTML continua la, e `switchTab` continua procurando a aba na regua. */
-body.axis-com-menu .header-right > a.btn[href$=".html"],
-body.axis-com-menu .header-right > a.btn[href*=".html?"],
+body.axis-com-menu header a.btn[href$=".html"],
+body.axis-com-menu header a.btn[href*=".html?"],
 body.axis-com-menu #admin-app > main > .tabs { display: none; }
 
 /* O Kanban do admin estica com 100vw para sair do limite do <main>. Com o
@@ -388,7 +388,7 @@ html .login-box {
 }
 html .login-box h2 { font-family: var(--font-title); font-size: 22px; font-weight: 800; }
 html .login-box p { color: var(--tx3); }
-html .login-box > button, html #btn-entrar {
+html .login-box > button:not(.login-esqueci), html #btn-entrar {
   background: linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%);
   color: var(--on-ac); font-weight: 700; border-radius: 11px;
   box-shadow: 0 8px 22px rgba(var(--ac-rgb), .3);
@@ -409,3 +409,25 @@ html .tema-btn {
   background: var(--sf2b); border: 1px solid var(--bd2); color: var(--tx2);
 }
 html .tema-btn:hover { color: var(--tx); border-color: var(--bd4); }
+
+/* "Esqueci minha senha" e link de texto, e nao segundo botao principal. */
+html .login-box .login-esqueci {
+  background: none; border: 0; box-shadow: none; color: var(--ac-t);
+  font-size: 13px; font-weight: 600; padding: 6px; margin-top: 4px; width: auto;
+}
+html .login-box .login-esqueci:hover { color: var(--ac-h); }
+
+/* Codigo da demanda (AX-123): mono do AXIS e nunca quebrado no hifen. */
+html .cod-tag { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+
+/* Abas do painel do dev, no mesmo desenho das abas do AXIS. */
+html .dv-tab { color: var(--tx3); font-size: 13.5px; font-weight: 600; border-radius: 0; }
+html .dv-tab:hover { color: var(--tx); background: transparent; }
+html .dv-tab.ativa { color: var(--tx); border-bottom-color: var(--ac); font-weight: 800; }
+
+/* Com o menu ao lado, as oito colunas do Kanban dividiam 1150 px e o titulo
+   vazava do card. Coluna com largura minima legivel; o quadro rola na
+   horizontal (o .kb-board ja tem overflow-x), como o Quadro do prototipo. */
+html .kb-col { min-width: 208px; }
+html .kb-card-title { overflow-wrap: anywhere; }
+html .login-box .login-esqueci { display: block; margin: 8px auto 0; }
