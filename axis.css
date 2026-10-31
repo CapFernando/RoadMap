@@ -163,3 +163,111 @@ a:not([class]):hover { color: var(--ac-h); }
 
 /* Barra de rolagem discreta, no tom do painel. */
 * { scrollbar-color: var(--bd4) transparent; }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   COMPONENTES
+   Medidas do DOC-18 §18.4 e do CSS do prototipo (prototipo/fonte/Sidebar).
+   Prefixo `html` em tudo: soma 0,0,1 e vence a regra de mesma classe que cada
+   pagina declara no proprio <style>, sem depender da ordem dos arquivos. O
+   que uma pagina escreveu com seletor MAIS especifico continua valendo — e
+   de proposito: e la que mora o desenho proprio de cada tela.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── Titulos ───────────────────────────────────────────────────────────── */
+html h1, html h2 { font-family: var(--font-title); letter-spacing: -0.01em; }
+html h1 { font-weight: 800; }
+html h2 { font-weight: 700; }
+
+/* ── Botoes ────────────────────────────────────────────────────────────── */
+html .btn {
+  min-height: 38px; padding: 0 16px; border-radius: 11px;
+  font-size: 13px; font-weight: 600; line-height: 1.2;
+  justify-content: center;
+  transition: background .15s, border-color .15s, box-shadow .15s, filter .15s;
+}
+html .btn:hover { opacity: 1; filter: brightness(1.08); }
+html .btn:disabled, html .btn[disabled] { opacity: .5; filter: none; cursor: not-allowed; }
+html .btn-sm { min-height: 32px; padding: 0 12px; border-radius: 9px; font-size: 12.5px; }
+
+/* Principal: gradiente do acento, texto pela cor de contraste do acento.
+   !important porque alguns destes botoes tem `style` inline no HTML, e inline
+   vence qualquer folha de estilo. */
+html .btn-primary, html .btn-green,
+html #nm-save-btn, html #btn-nova-melhoria {
+  background: linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%) !important;
+  color: var(--on-ac) !important;
+  border: 0 !important;
+  font-weight: 700;
+  box-shadow: 0 8px 22px rgba(var(--ac-rgb), .26);
+}
+html .btn-secondary, html .btn-ghost, html .btn-2 {
+  background: var(--sf2b); color: var(--tx); border: 1px solid var(--bd2);
+}
+html .btn-secondary:hover, html .btn-ghost:hover, html .btn-2:hover {
+  background: var(--sf4); border-color: var(--bd4); filter: none;
+}
+/* Sucesso cheio: verde do estado com texto escuro (7:1 nos dois temas). */
+html .btn-success {
+  background: linear-gradient(180deg, #2BD46A 0%, #16A34A 100%) !important;
+  color: #05070C !important; border: 0 !important; font-weight: 700;
+}
+/* Perigo e tonal, como o chip: vermelho cheio gritava mais que o principal. */
+html .btn-danger, html .btn-perigo {
+  background: rgba(var(--dg-rgb), .14) !important;
+  color: var(--dg-t) !important;
+  border: 1px solid rgba(var(--dg-rgb), .45) !important;
+}
+html .btn-danger:hover, html .btn-perigo:hover { background: rgba(var(--dg-rgb), .22) !important; }
+
+/* ── Abas ──────────────────────────────────────────────────────────────── */
+html .tabs { border-bottom-color: var(--bd); gap: 4px; }
+html .tab {
+  color: var(--tx3); font-size: 13.5px; font-weight: 600;
+  border-radius: 0; padding: 11px 14px;
+}
+html .tab:hover { color: var(--tx); background: transparent; }
+html .tab.active { color: var(--tx); border-bottom-color: var(--ac); font-weight: 800; }
+
+/* ── Cabecalho das telas ───────────────────────────────────────────────── */
+html body > header, html #admin-app > header, html .header {
+  background: rgba(var(--sf-rgb), .55);
+  border-bottom: 1px solid var(--bd3);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+html .header-left h1 { font-size: 20px; }
+html .header-left p { color: var(--tx3); }
+
+/* ── Campos ────────────────────────────────────────────────────────────── */
+html input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):focus,
+html select:focus, html textarea:focus {
+  border-color: rgba(var(--ac-rgb), .65);
+  box-shadow: 0 0 0 3px rgba(var(--ac-rgb), .14);
+  outline: none;
+}
+html input[type="checkbox"], html input[type="radio"], html input[type="range"] { accent-color: var(--ac); }
+
+/* ── Modal ─────────────────────────────────────────────────────────────── */
+html .modal-overlay, html .overlay {
+  background: var(--overlay);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+html .modal, html .card-modal {
+  background: var(--sf3); border: 1px solid var(--bd2);
+  border-radius: 20px; box-shadow: 0 30px 80px var(--shadow);
+}
+html .modal h2, html .modal h3 { font-family: var(--font-title); }
+
+/* ── Codigos (AX-, CH-) e numeros tabulares ────────────────────────────── */
+html .kcard-cod, html .kb-card-cod, html .codigo, html .cod { font-family: var(--font-mono); font-weight: 500; }
+/* Os dialogos de dialogo.js e senha.js injetam o proprio <style> no <head>,
+   DEPOIS deste arquivo; o prefixo `html` e o que faz estas regras valerem. */
+html .dlg-ov, html .sn-ov {
+  background: var(--overlay);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+html .dlg-box, html .sn-box {
+  background: var(--sf3); border-color: var(--bd2);
+  border-radius: 20px; padding: 24px; box-shadow: 0 30px 80px var(--shadow);
+}
+html .dlg-box h3, html .sn-box h3 { font-family: var(--font-title); font-weight: 700; }
+html .dlg-b, html .sn-b { border-radius: 11px; min-height: 38px; }
