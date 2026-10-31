@@ -322,7 +322,7 @@
 
   // Telas que nao recebem o menu: o painel publico (sem login de equipe) e a
   // mensageria, que abre por demanda e nao e destino de navegacao.
-  var SEM_MENU = ['index.html', 'mensageria.html'];
+  var SEM_MENU = ['index.html', 'mensageria.html', 'axis.html'];
 
   function iniciar() {
     if (SEM_MENU.indexOf(pagina()) >= 0) return;
