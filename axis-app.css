@@ -81,7 +81,7 @@
 @container app (max-width: 760px){
 .axa .main{padding:12px 14px 32px !important;gap:14px !important}
 .axa .main [style*="grid-template-columns"]:not([style*="overflow-x: auto"] *),.axa .dlg [style*="grid-template-columns"]:not([style*="overflow-x: auto"] *){grid-template-columns:minmax(0,1fr) !important}
-.axa .main [style*="repeat(4,.axa minmax"]:not([style*="overflow-x: auto"] *),.axa .main [style*="repeat(5,.axa minmax"]:not([style*="overflow-x: auto"] *),.axa .main [style*="repeat(6,.axa minmax"]:not([style*="overflow-x: auto"] *),.axa .dlg [style*="repeat(4,.axa "]:not([style*="overflow-x: auto"] *){grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+.axa .main [style*="repeat(4, minmax"]:not([style*="overflow-x: auto"] *),.axa .main [style*="repeat(5, minmax"]:not([style*="overflow-x: auto"] *),.axa .main [style*="repeat(6, minmax"]:not([style*="overflow-x: auto"] *),.axa .dlg [style*="repeat(4, "]:not([style*="overflow-x: auto"] *){grid-template-columns:repeat(2,minmax(0,1fr)) !important}
 .axa .main [style*="overflow-x: auto"] [style*="grid-template-columns"]{min-width:760px}
 .axa .tbl{display:block;overflow-x:auto}
 .axa .h1{font-size:22px !important;line-height:28px !important}
@@ -146,10 +146,10 @@
 .axa .dotc { width: 8px; height: 8px; border-radius: 4px; display: inline-block; flex-shrink: 0; }
 
 /* Indicadores (KPI) com destaque de estado na borda. */
-.axa .k.ac { border-color: rgba(var(--ac-rgb), .45); }
-.axa .k.dg { border-color: rgba(var(--dg-rgb), .45); }
-.axa .k.ok { border-color: rgba(var(--ok-rgb), .4); }
-.axa .k.in { border-color: rgba(var(--in-rgb), .4); }
+.axa .k.k-ac { border-color: rgba(var(--ac-rgb), .45); }
+.axa .k.k-dg { border-color: rgba(var(--dg-rgb), .45); }
+.axa .k.k-ok { border-color: rgba(var(--ok-rgb), .4); }
+.axa .k.k-in { border-color: rgba(var(--in-rgb), .4); }
 .axa .k.click { cursor: pointer; }
 .axa .k.click:hover { border-color: var(--bd4); }
 
@@ -165,7 +165,7 @@
 /* ── Estados da interface (prancha Estados) ───────────────────────────── */
 .axa .est { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center;
   padding: 48px 20px; color: var(--tx3); font-size: 13px; }
-.axa .est .axi { font-size: 28px; color: var(--tx4); }
+.axa .est > .axi { font-size: 28px; color: var(--tx4); }
 .axa .est b { color: var(--tx); font-size: 15px; }
 .axa .sk { background: linear-gradient(90deg, var(--sf2) 0%, var(--sf4) 50%, var(--sf2) 100%); background-size: 200% 100%;
   animation: ax-sk 1.2s ease-in-out infinite; border-radius: 10px; }
@@ -220,3 +220,8 @@
 .axa .pg { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
 .axa .pg > i { display: block; height: 100%; border-radius: 3px; background: var(--ac); }
 .axa .pg > i.ok { background: var(--ok); } .axa .pg > i.wn { background: var(--wn); } .axa .pg > i.dg { background: var(--dg); }
+/* No celular o menu vira faixa no topo (container query do prototipo): a
+   altura de tela inteira do modo lateral deixava um vao enorme acima do conteudo. */
+@container app (max-width: 760px) {
+  .axa .sb { position: static; height: auto; overflow-y: visible; }
+}

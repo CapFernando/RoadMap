@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="3415ce0dec">
+<html lang="pt-BR" data-build="f9d38b7098">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -5324,6 +5324,12 @@ function rotaDemanda() {
 // na tela, e recusar deixaria quem recebeu o link com uma pagina que nao explica
 // por que nao abriu. O proprio card mostra de quem e.
 function rotaAbrirDaURL() {
+  // `#novo` e o "+ Nova demanda" da barra do AXIS (mesmo formulario do topo).
+  if (String(location.hash || '').toLowerCase() === '#novo') {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
+    openNewModal();
+    return true;
+  }
   const m = rotaDemanda();
   if (!m) return false;
   openStatusModal(m.id);

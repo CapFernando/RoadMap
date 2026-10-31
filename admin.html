@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="4044199d35">
+<html lang="pt-BR" data-build="2e35ac7605">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13346,6 +13346,13 @@ function rotaDemanda() {
 // Abre o card que veio na URL. Chamado depois de carregar os dados e a cada
 // mudanca do hash (alguem edita o endereco ou clica num link interno).
 function rotaAbrirDaURL() {
+  // `#novo` e o "+ Novo" da barra do AXIS: abre o formulario de demanda nova e
+  // limpa o endereco, para um recarregar nao abrir outro formulario.
+  if (String(location.hash || '').toLowerCase() === '#novo') {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
+    openModalMelhoria();
+    return true;
+  }
   const m = rotaDemanda();
   if (!m) return false;
   openModalMelhoria(m.id);

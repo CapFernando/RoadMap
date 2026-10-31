@@ -232,25 +232,41 @@
   }
   function cod(m) { return '<span class="code">' + esc(m.codigo || '—') + '</span>'; }
   function hrefItem(m) { return '#item/' + encodeURIComponent(m.codigo || m.id); }
-  /** O editor de sempre, ja logado: admin.html abre o card pelo hash. */
-  function hrefEditar(m) { return APP.papel === 'admin' ? 'admin.html#' + encodeURIComponent(m.codigo || '') : 'dev.html'; }
+  /** O editor de sempre, ja logado: admin.html e dev.html abrem o card pelo hash. */
+  function hrefEditar(m) { return (APP.papel === 'admin' ? 'admin.html#' : 'dev.html#') + encodeURIComponent(m.codigo || ''); }
   /** Prazo em texto curto, com a cor que o prototipo usa (vermelho = atrasado ou hoje). */
   function prazoTxt(m) {
     if (pausada(m)) return { txt: 'prazo suspenso', cor: 'var(--tx3)' };
+    var col = colunaDe(m);
+    // Ja entregue pelo dev: o que importa e QUANDO entregou, e nao um atraso
+    // congelado. "Atrasada" so vale quando a etapa efetiva diz atrasado — a
+    // mesma leitura do banner do admin e do chip de etapa.
+    if (col === 'validacao_area' || col === 'validacao' || col === 'concluido') {
+      var fim = raiz.PRAZO && raiz.PRAZO.fimDoDev ? raiz.PRAZO.fimDoDev(m) : '';
+      return fim ? { txt: (col === 'concluido' ? 'concluído ' : 'entregue ') + dm(fim), cor: 'var(--tx2)' } : { txt: '—', cor: 'var(--tx4)' };
+    }
     var pz = prazoDe(m);
     if (!pz) return { txt: '—', cor: 'var(--tx4)' };
     var a = atrasoDe(m);
-    if (a && a > 0) return { txt: 'atrasada ' + a + 'd', cor: 'var(--dg-t)' };
+    if (etapaDe(m) === 'atrasado') return { txt: a > 0 ? 'atrasada ' + a + 'd' : 'atrasada', cor: 'var(--dg-t)' };
     var d = dias(hoje(), pz);
     if (d === 0) return { txt: 'vence hoje', cor: 'var(--dg-t)' };
     if (d === 1) return { txt: 'amanhã', cor: 'var(--wn-t)' };
     return { txt: dm(pz), cor: 'var(--tx2)' };
   }
+  /** Link para uma aba do admin (melhorias, kanban, temas, projetos, mes,
+      gerencial, relatorios, usuarios), com o icone de "sai do app". */
+  function linkAdmin(aba, rotulo, cls) {
+    return '<a class="' + (cls || 'btn') + '" href="admin.html" data-admin-aba="' + esc(aba) + '" title="Abre no editor (admin)">' +
+      esc(rotulo) + ' ' + ico('external', 'style="font-size:12px;opacity:.7"') + '</a>';
+  }
   function vazio(icone, titulo, texto, acao) {
     return '<div class="est">' + ico(icone || 'info') + '<b>' + esc(titulo) + '</b>' + (texto ? '<span>' + esc(texto) + '</span>' : '') + (acao || '') + '</div>';
   }
   function kpi(rot, valor, nota, cls, href) {
-    return '<' + (href ? 'a href="' + href + '"' : 'div') + ' class="k' + (cls ? ' ' + cls : '') + (href ? ' click' : '') + '" style="text-decoration:none;color:inherit">' +
+    // Estados com prefixo k-: `.in` sozinho e a classe do campo de formulario.
+    var est = String(cls || '').split(/\s+/).filter(Boolean).map(function (c) { return 'k-' + c.replace(/^k-/, ''); }).join(' ');
+    return '<' + (href ? 'a href="' + href + '"' : 'div') + ' class="k' + (est ? ' ' + est : '') + (href ? ' click' : '') + '" style="text-decoration:none;color:inherit">' +
       '<span class="kl">' + rot + '</span><span class="kv">' + valor + '</span>' +
       (nota ? '<span style="font-size:12.5px;color:var(--tx3)">' + nota + '</span>' : '') + '</' + (href ? 'a' : 'div') + '>';
   }
@@ -353,16 +369,21 @@
     if (APP.papel === 'admin') {
       var val = vs.filter(function (m) { return colunaDe(m) === 'validacao'; });
       if (val.length) lista.push({ ico: 'check', cor: 'var(--wn-t)', txt: '<b>' + plural(val.length, 'entrega', 'entregas') + '</b> aguardando sua validação', href: '#backlog/validacao' });
-      var atr = vs.filter(function (m) { var a = atrasoDe(m); return a && a > 0; });
+      // Mesma leitura do banner do admin: etapa efetiva 'atrasado'. `diasDeAtraso`
+      // segue positivo (congelado) para o que ja foi entregue, e contaria a mais.
+      var atr = vs.filter(function (m) { return etapaDe(m) === 'atrasado'; });
       if (atr.length) lista.push({ ico: 'alert', cor: 'var(--dg-t)', txt: '<b>' + plural(atr.length, 'demanda', 'demandas') + '</b> com prazo vencido', href: '#backlog/vencido' });
-      var pend = raiz.SPRINTPO && raiz.SPRINTPO.pendentesDeFechamento ? (raiz.SPRINTPO.pendentesDeFechamento(APP.D, hoje()) || []) : [];
+      var pend = raiz.SPRINTPO && raiz.SPRINTPO.pendentesDeFechamento ? (raiz.SPRINTPO.pendentesDeFechamento(APP.D, hoje(), (APP.D || {}).feriados || [], colunaDe) || []) : [];
       if (pend.length) lista.push({ ico: 'refresh', cor: 'var(--wn-t)', txt: '<b>' + plural(pend.length, 'sprint terminou', 'sprints terminaram') + '</b> e não ' + (pend.length === 1 ? 'foi fechada' : 'foram fechadas'), href: '#sprints/encerrar' });
     }
     if (APP.papel === 'dev') {
       var minhas = vs.filter(minha);
-      var meuAtr = minhas.filter(function (m) { var a = atrasoDe(m); return a && a > 0; });
+      var meuAtr = minhas.filter(function (m) { return etapaDe(m) === 'atrasado'; });
       if (meuAtr.length) lista.push({ ico: 'alert', cor: 'var(--dg-t)', txt: '<b>' + plural(meuAtr.length, 'demanda sua', 'demandas suas') + '</b> com prazo vencido', href: '#inicio/meu' });
-      var hojeV = minhas.filter(function (m) { return prazoDe(m) === hoje() && !pausada(m); });
+      // Mesma regra do Inicio: relogio parado (validacao, concluida) nao vence.
+      var hojeV = minhas.filter(function (m) {
+        return prazoDe(m) === hoje() && !pausada(m) && !(raiz.PRAZO && raiz.PRAZO.relogioParou && raiz.PRAZO.relogioParou(colunaDe(m)));
+      });
       if (hojeV.length) lista.push({ ico: 'clock', cor: 'var(--wn-t)', txt: '<b>' + plural(hojeV.length, 'demanda vence', 'demandas vencem') + '</b> hoje', href: '#inicio/meu' });
       var dev = minhas.filter(function (m) { return raiz.DEVOLUCAO && raiz.DEVOLUCAO.houve && raiz.DEVOLUCAO.houve(m) && colunaDe(m) === 'em_andamento'; });
       if (dev.length) lista.push({ ico: 'undo', cor: 'var(--wn-t)', txt: '<b>' + plural(dev.length, 'demanda devolvida', 'demandas devolvidas') + '</b> para ajuste', href: '#inicio/meu' });
@@ -488,7 +509,7 @@
     var ativoMenu = FORA_DO_MENU[r.tela] != null ? FORA_DO_MENU[r.tela] : r.tela;
     var nN = notificacoes();
     var abasHtml = '';
-    if (t && t.abasDe) abas = t.abasDe(r) || abas;
+    if (t && t.abasDe) abas = (t.abasDe(r) || abas).filter(function (a) { return !a.papeis || a.papeis.indexOf(APP.papel) >= 0; });
     if (abas.length) {
       abasHtml = '<nav class="tabs" aria-label="Seções">' + abas.map(function (a) {
         var on = a.id === r.aba;
@@ -568,6 +589,10 @@
         if (acao === 'ntf') { abrirNotificacoes(a); return; }
       }
       if (!e.target.closest('.ntf, [data-acao="ntf"]')) { var n = document.querySelector('.ntf'); if (n) n.remove(); }
+      // <a href="admin.html" data-admin-aba="mes">: o admin abre na aba pedida.
+      // Usa a mesma chave que o admin ja le ao carregar (`restoreLastTab`).
+      var aa = e.target.closest('[data-admin-aba]');
+      if (aa) { try { localStorage.setItem('rm_admin_tab', aa.getAttribute('data-admin-aba')); } catch (_) {} }
     });
     document.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K') && APP.D) { e.preventDefault(); abrirBusca(); }
@@ -590,10 +615,10 @@
     pontosDe: pontosDe, devsDe: devsDe, tema: tema, caminho: caminho, projeto: projeto, sprintAtual: sprintAtual,
     porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode,
     ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, av: av, cod: cod, hrefItem: hrefItem, hrefEditar: hrefEditar,
-    prazoTxt: prazoTxt, vazio: vazio, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); }
+    prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); }
   };
 
-  var AXIS_APP = { tela: tela, H: H, APP: APP, desenhar: desenhar, notificacoes: notificacoes, MENU: MENU };
+  var AXIS_APP = { tela: tela, H: H, APP: APP, desenhar: desenhar, notificacoes: notificacoes, MENU: MENU, abrirBusca: abrirBusca, WORKER: WORKER };
   raiz.AXIS_APP = AXIS_APP;
   if (typeof document !== 'undefined' && document.getElementById) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ligar); else ligar();
