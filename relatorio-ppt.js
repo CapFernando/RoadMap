@@ -691,7 +691,7 @@
     await K.carregaLib();
     var pptx = new window.PptxGenJS();
     pptx.layout = 'LAYOUT_16x9';
-    pptx.author = 'Roadmap de Melhorias';
+    pptx.author = 'AXIS';
     pptx.title = d.tituloCapa + ' — ' + d.periodo;
 
     K.slideCapa(pptx, {

@@ -271,3 +271,141 @@ html .dlg-box, html .sn-box {
 }
 html .dlg-box h3, html .sn-box h3 { font-family: var(--font-title); font-weight: 700; }
 html .dlg-b, html .sn-b { border-radius: 11px; min-height: 38px; }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   CASCA: MENU LATERAL (axis.js monta; DOC-18 §18.4, 248 px)
+   ═════════════════════════════════════════════════════════════════════════ */
+.ax-ico { vertical-align: -0.2em; flex-shrink: 0; }
+
+.axis-sb {
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 900;
+  width: 248px; box-sizing: border-box; padding: 22px 14px 14px;
+  display: flex; flex-direction: column; gap: 16px; overflow-y: auto;
+  background: var(--side); border-right: 1px solid var(--bd3);
+  font-family: var(--font-ui); color: var(--tx2);
+  scrollbar-width: none;
+}
+.axis-sb::-webkit-scrollbar { display: none; }
+.axis-sb-logo { display: flex; align-items: center; gap: 12px; padding: 0 8px; text-decoration: none; }
+.axis-sb-mark {
+  width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(150deg, var(--ac-l) 0%, var(--ac) 45%, var(--ac-d) 100%);
+  box-shadow: 0 8px 22px rgba(var(--ac-rgb), .35);
+}
+.axis-sb-mark img { width: 25px; height: auto; display: block; }
+.axis-sb-word {
+  font-family: var(--font-title); font-weight: 800; font-size: 22px;
+  letter-spacing: -0.02em; color: var(--tx);
+}
+.axis-sb-word i { font-style: normal; color: var(--ac); }
+.axis-sb-grp { display: flex; flex-direction: column; gap: 2px; }
+.axis-sb-lab {
+  padding: 0 12px 6px; font-size: 10px; font-weight: 800;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--tx4);
+}
+.axis-sb-it {
+  display: flex; align-items: center; gap: 11px; height: 34px; padding: 0 12px;
+  border-radius: 9px; text-decoration: none; font-size: 13px; font-weight: 500;
+  color: var(--tx2); transition: background .12s, color .12s;
+}
+.axis-sb-it .ax-ico { color: var(--tx3); }
+.axis-sb-it:hover { background: var(--sf2); color: var(--tx); }
+.axis-sb-it.on {
+  background: linear-gradient(90deg, rgba(var(--ac-rgb), .22) 0%, rgba(var(--ac-rgb), .04) 100%);
+  box-shadow: inset 0 0 0 1px rgba(var(--ac-rgb), .28);
+  color: var(--tx-hi); font-weight: 700;
+}
+.axis-sb-it.on .ax-ico { color: var(--ac-t); }
+.axis-sb-t { flex: 1; white-space: nowrap; }
+.axis-sb-user {
+  margin-top: auto; display: flex; align-items: center; gap: 11px; padding: 11px;
+  border-radius: 12px; background: var(--sf3); border: 1px solid var(--bd); color: var(--tx);
+}
+.axis-sb-av {
+  width: 34px; height: 34px; border-radius: 17px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ac); color: var(--on-ac); font-size: 12px; font-weight: 800;
+}
+.axis-sb-quem { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.3; }
+.axis-sb-quem b { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.axis-sb-quem small { font-size: 11.5px; color: var(--tx3); }
+.axis-sb-sair {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid var(--bd2); color: var(--tx3);
+}
+.axis-sb-sair:hover { color: var(--dg-t); border-color: rgba(var(--dg-rgb), .45); }
+
+/* O conteudo da tela anda para a direita do menu. */
+body.axis-com-menu { padding-left: 248px; }
+
+/* Durante o login nao ha menu: ele ofereceria telas que ainda nao abrem. */
+body.axis-com-menu:has(#login-screen:not([style*="none"])) { padding-left: 0; }
+body.axis-com-menu:has(#login-screen:not([style*="none"])) .axis-sb { display: none; }
+
+/* Com o menu, os atalhos de navegacao do cabecalho e a regua de abas do admin
+   viram redundantes: os mesmos destinos estao no menu. Somem so do olho — o
+   HTML continua la, e `switchTab` continua procurando a aba na regua. */
+body.axis-com-menu .header-right > a.btn[href$=".html"],
+body.axis-com-menu .header-right > a.btn[href*=".html?"],
+body.axis-com-menu #admin-app > main > .tabs { display: none; }
+
+/* O Kanban do admin estica com 100vw para sair do limite do <main>. Com o
+   menu ao lado, 100vw passa da tela: a conta desconta o menu. */
+body.axis-com-menu #tab-kanban.active { width: calc(100vw - 248px - 48px); }
+
+/* ── Celular: o menu vira uma faixa no topo (prototipo, < 760 px) ────── */
+@media (max-width: 760px) {
+  .axis-sb {
+    position: sticky; bottom: auto; width: 100%; height: auto;
+    flex-direction: row; align-items: center; gap: 6px;
+    padding: 10px 12px; overflow-x: auto; overflow-y: hidden;
+    border-right: 0; border-bottom: 1px solid var(--bd);
+  }
+  .axis-sb .axis-sb-lab, .axis-sb .axis-sb-word, .axis-sb .axis-sb-quem { display: none; }
+  .axis-sb .axis-sb-grp { flex-direction: row; gap: 4px; }
+  .axis-sb .axis-sb-it { flex-shrink: 0; height: 36px; padding: 0 10px; }
+  .axis-sb .axis-sb-mark { width: 34px; height: 34px; }
+  .axis-sb .axis-sb-user { margin: 0; padding: 0; border: 0; background: none; }
+  .axis-sb .axis-sb-av { display: none; }
+  body.axis-com-menu { padding-left: 0; }
+  body.axis-com-menu #tab-kanban.active { width: calc(100vw - 24px); }
+}
+
+/* ── Marca nas telas de entrada e no painel publico ───────────────────── */
+/* A logo e fundo, e nao <img>: o tema claro troca a versao branca pela
+   marinho, e `content: url()` num <img> nao funciona no Firefox. */
+.axis-logo {
+  display: inline-block; aspect-ratio: 1490 / 392;
+  background: url("axis/marca/axis-logo-duo.png") left center / contain no-repeat;
+}
+:root[data-tema="claro"] .axis-logo { background-image: url("axis/marca/axis-logo-navy-crop.png"); }
+.axis-login-logo { display: block; height: 30px; margin: 0 auto 22px; }
+html .login-box {
+  background: rgba(var(--sf-rgb), .78); border: 1px solid var(--bd2);
+  border-radius: 20px; box-shadow: 0 30px 80px var(--shadow);
+}
+html .login-box h2 { font-family: var(--font-title); font-size: 22px; font-weight: 800; }
+html .login-box p { color: var(--tx3); }
+html .login-box > button, html #btn-entrar {
+  background: linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%);
+  color: var(--on-ac); font-weight: 700; border-radius: 11px;
+  box-shadow: 0 8px 22px rgba(var(--ac-rgb), .3);
+}
+html .login-box input { background: var(--sf3); border-color: var(--bd2); border-radius: 11px; letter-spacing: normal; }
+/* As telas de entrada ganham o brilho do acento no canto, como no prototipo. */
+html #login-screen {
+  background:
+    radial-gradient(60% 50% at 85% 100%, rgba(var(--ac-rgb), .16) 0%, transparent 70%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg0) 70%);
+}
+.axis-head-logo { height: 22px; vertical-align: -3px; margin-right: 12px; }
+.axis-head-t { font-family: var(--font-title); }
+
+/* Botao de tema (tema.js) no padrao dos icones da barra do topo. */
+html .tema-btn {
+  width: 38px; height: 38px; border-radius: 11px;
+  background: var(--sf2b); border: 1px solid var(--bd2); color: var(--tx2);
+}
+html .tema-btn:hover { color: var(--tx); border-color: var(--bd4); }

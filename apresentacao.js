@@ -348,7 +348,7 @@
   function slideCapaSimples(pptx, cfg) {
     var s = slideBase(pptx);
     s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.12, h: 5.63, fill: { color: C.azul } });
-    s.addText(cfg.titulo || 'Roadmap de Melhorias', {
+    s.addText(cfg.titulo || 'AXIS', {
       x: 0.7, y: 1.7, w: 8.8, h: 0.9, fontSize: 40, bold: true, color: C.texto });
     s.addText(cfg.periodo, {
       x: 0.7, y: 2.6, w: 8.8, h: 0.5, fontSize: 22, color: C.azul });
@@ -2985,7 +2985,7 @@
     await carregaLib();
     var pptx = new window.PptxGenJS();
     pptx.layout = 'LAYOUT_16x9';
-    pptx.author = 'Roadmap de Melhorias';
+    pptx.author = 'AXIS';
     pptx.title = d.titulo + ' — ' + d.periodo;
 
     slideCapa(pptx, d);
