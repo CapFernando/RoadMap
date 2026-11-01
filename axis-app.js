@@ -98,7 +98,7 @@
   function gravarSessao(token, usuario) {
     try {
       sessionStorage.setItem('rm_eu', JSON.stringify(usuario || {}));
-      if ((usuario || {}).papel === 'dev') {
+      if ((usuario || {}).papel !== 'admin') {
         sessionStorage.setItem('rm_dev_token', token);
         sessionStorage.setItem('rm_dev_authed', '1');
       } else {
@@ -166,7 +166,7 @@
   }
   async function gravarAgora(patch, o) {
     if (!raiz.GRAVACAO) throw new Error('gravacao.js nao carregado');
-    if (APP.papel !== 'admin' && APP.papel !== 'dev') { toast('Seu perfil é só de leitura.', 'erro'); return { ok: false }; }
+    if (['admin', 'analista', 'dev'].indexOf(APP.papel) < 0) { toast('Seu perfil é só de leitura.', 'erro'); return { ok: false }; }
     var r;
     try {
       r = await raiz.GRAVACAO.gravar({
@@ -249,8 +249,10 @@
   function pode(acao) {
     var p = APP.papel;
     var M = {
-      editar: ['admin'], validar: ['admin'], configurar: ['admin'], gerencial: ['admin', 'consulta'],
-      fechar: ['admin'], trabalho: ['admin', 'dev'], acompanhar: ['admin']
+      editar: ['admin', 'analista'], validar: ['admin'], configurar: ['admin'], gerencial: ['admin', 'consulta'],
+      fechar: ['admin'], trabalho: ['admin', 'analista', 'dev'], acompanhar: ['admin'],
+      // Analista de requisitos (worker: NIVEL 3): conduz o Poker, edita, nega e anexa.
+      facilitar: ['admin', 'analista'], negar: ['admin', 'analista'], gravar: ['admin', 'analista', 'dev']
     };
     return (M[acao] || []).indexOf(p) >= 0;
   }
@@ -348,7 +350,7 @@
   function ir(rota) { location.hash = rota; }
 
   // ── O menu (DOC-17 §17.1), filtrado pelo perfil (DOC-04) ──────────────
-  var A = ['admin'], AD = ['admin', 'dev'], ADC = ['admin', 'dev', 'consulta'], AC = ['admin', 'consulta'];
+  var A = ['admin'], AD = ['admin', 'analista', 'dev'], ADC = ['admin', 'analista', 'dev', 'consulta'], AC = ['admin', 'consulta'];
   var MENU = [
     { grupo: 'Trabalho', itens: [
       { id: 'inicio',   rotulo: 'Início',         ico: 'home',     papeis: ADC },
@@ -356,10 +358,10 @@
       { id: 'backlog',  rotulo: 'Backlog',        ico: 'menu',     papeis: AD, badge: 'backlog' },
       { id: 'sprints',  rotulo: 'Sprints',        ico: 'refresh',  papeis: AD },
       { id: 'projetos', rotulo: 'Projetos',       ico: 'package',  papeis: ADC },
-      { id: 'poker',    rotulo: 'Planning Poker', ico: 'cards',    papeis: AD, href: 'poker.html' }
+      { id: 'poker',    rotulo: 'Planning Poker', ico: 'cards',    papeis: AD }
     ] },
     { grupo: 'Acompanhamento', itens: [
-      { id: 'follow',   rotulo: 'Acompanhamentos', ico: 'flag',    papeis: A, href: 'follow.html' },
+      { id: 'acompanhamentos', rotulo: 'Acompanhamentos', ico: 'flag', papeis: A },
       { id: 'publico',  rotulo: 'Painel público',  ico: 'globe',   papeis: ADC, href: 'index.html' }
     ] },
     { grupo: 'Análises', itens: [
@@ -370,7 +372,7 @@
   ];
   var RODAPE = [{ id: 'configuracoes', rotulo: 'Configurações', ico: 'key', papeis: A }];
   // Telas que existem mas nao estao no menu: chega-se a elas por link.
-  var FORA_DO_MENU = { item: 'quadro', projeto: 'projetos', conta: '' };
+  var FORA_DO_MENU = { item: 'quadro', projeto: 'projetos', conta: '', planejamento: 'sprints', importar: 'backlog', api: '' };
 
   function itemVisivel(it) { return it.papeis.indexOf(APP.papel) >= 0; }
 
@@ -384,7 +386,7 @@
   function htmlMenu(ativo) {
     var e = APP.eu || {};
     var nome = e.nome || e.login || 'Minha conta';
-    var rotPapel = { admin: 'PM/PO · Admin', dev: 'Dev', consulta: 'Consulta' }[APP.papel] || '';
+    var rotPapel = { admin: 'PM/PO · Admin', analista: 'Analista de requisitos', dev: 'Dev', consulta: 'Consulta' }[APP.papel] || '';
     var item = function (it) {
       var href = it.href || ('#' + it.id);
       var b = it.badge ? contagemBadge(it.badge) : 0;
@@ -570,8 +572,7 @@
           esc(a.rotulo) + (a.n != null ? '<span class="n">' + a.n + '</span>' : '') + '</a>';
       }).join('') + '</nav>';
     }
-    var novo = APP.papel === 'admin' ? '<a class="btnp" href="admin.html#novo">+ Novo</a>'
-             : APP.papel === 'dev' ? '<a class="btnp" href="dev.html#novo">+ Nova demanda</a>' : '';
+    var novo = pode('gravar') ? '<button type="button" class="btnp" data-acao="novo">+ Nova demanda</button>' : '';
     raizEl.innerHTML =
       '<div class="app"><nav class="sb" aria-label="Menu principal">' + htmlMenu(ativoMenu) + '</nav>' +
       '<main class="main"><div class="topbar">' +
@@ -639,6 +640,12 @@
         if (acao === 'busca') { abrirBusca(); return; }
         if (acao === 'tema') { if (raiz.temaAlternar) raiz.temaAlternar(); desenhar(); return; }
         if (acao === 'ntf') { abrirNotificacoes(a); return; }
+        // "+ Novo": o formulario do app (axis-form-demanda.js); sem ele, o de sempre.
+        if (acao === 'novo') {
+          if (raiz.AXIS_FORM && raiz.AXIS_FORM.abrir) raiz.AXIS_FORM.abrir(null);
+          else location.href = APP.papel === 'admin' ? 'admin.html#novo' : 'dev.html#novo';
+          return;
+        }
       }
       if (!e.target.closest('.ntf, [data-acao="ntf"]')) { var n = document.querySelector('.ntf'); if (n) n.remove(); }
       // <a href="admin.html" data-admin-aba="mes">: o admin abre na aba pedida.
