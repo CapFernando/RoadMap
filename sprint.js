@@ -514,9 +514,19 @@
        para impedir. Quem já está em andamento não é reexaminado. */
     var cruza = !posPlanning(etapaAntes);
     var comeca = txt(etapaDepois) === ETAPA_TRAVADA && txt(etapaAntes) !== ETAPA_TRAVADA;
-    if (!cruza && !comeca) return { trava: false };
+    /* A TERCEIRA FRONTEIRA (02/11/2026): CONCLUIR. "Sprint passa a ser
+       obrigatória para fechar, e apenas eu posso colocar. Bloqueante." Quem
+       chega em Concluído sem sprint fica fora de toda conta de sprint — é o que
+       fez a S5-10 fechar com 1 entrega numa semana de 141. */
+    var conclui = txt(etapaDepois) === 'concluido' && txt(etapaAntes) !== 'concluido';
+    if (!cruza && !comeca && !conclui) return { trava: false };
     if (tipoLivre(m)) return { trava: false };
     if (doPO(m)) return { trava: false };
+    if (conclui && !cruza && !comeca) {
+      return { trava: true,
+               motivo: 'Para concluir, a demanda precisa estar numa sprint, e esta não está ' +
+                       'em nenhuma. Só o PM/PO marca a sprint — marque (ou peça) antes de concluir.' };
+    }
     return {
       trava: true,
       motivo: 'Depois da Planning a demanda precisa estar numa sprint, e esta não ' +

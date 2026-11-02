@@ -1930,7 +1930,10 @@ function alocacaoSemSprint(recebido, servidor, papel, hoje) {
     const antesEt = String(velha.status_planejamento || '');
     const cruza = !ETAPAS_POS_PLANNING.includes(antesEt);
     const comeca = depois === 'em_andamento' && antesEt !== 'em_andamento';
-    if (!cruza && !comeca) continue;
+    /* CONCLUIR TAMBEM EXIGE SPRINT (02/11/2026) — bloqueante, em toda porta.
+       Concluida sem sprint fica fora de toda conta de sprint. */
+    const conclui = depois === 'concluido' && antesEt !== 'concluido';
+    if (!cruza && !comeca && !conclui) continue;
     if (TIPOS_LIVRES_DA_SPRINT.includes(String(m.tipo || '').toLowerCase())) continue;
     if (String(m.sprint_po || '').trim()) continue;
     presos.push({ id: m.id, codigo: m.codigo || m.id,

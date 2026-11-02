@@ -24720,6 +24720,25 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // -- CONCLUIR EXIGE SPRINT (bloqueante, tela e servidor) -----------------
+    {
+      const semS = { tipo: 'evolucao', status_planejamento: 'validacao' };
+      ok(SP.travaDeAlocacao(semS, 'validacao', 'concluido', '2026-11-02').trava &&
+         !SP.travaDeAlocacao(Object.assign({ sprint_po: 'S1-11-2026' }, semS), 'validacao', 'concluido', '2026-11-02').trava,
+         'concluir sem sprint trava; com sprint passa');
+      ok(!SP.travaDeAlocacao(semS, 'validacao_area', 'validacao', '2026-11-02').trava,
+         'e ENTREGAR (ir para a validacao) continua sem travar');
+      const WCo = WKS.replace(/export default \{[\s\S]*$/, '');
+      const fco = new Function(WCo + '; return alocacaoSemSprint;')();
+      const presoC = fco({ melhorias: [{ id: 'c', codigo: 'AX-C', tipo: 'evolucao', status_planejamento: 'concluido' }] },
+                         { melhorias: [{ id: 'c', status_planejamento: 'validacao' }] }, 'admin', '2026-11-02');
+      ok(presoC.length === 1, 'o servidor recusa concluir sem sprint, inclusive para o PM/PO');
+      ok(/SPRINTPO\.travaDeAlocacao\(m, m\.status_planejamento, 'concluido'/.test(ADMIN),
+         'e o botao Aprovar da validacao passa pela mesma trava');
+    }
+    // -- INICIAR E FECHAR SPRINT CHEGAM AO SERVIDOR --------------------------
+    ok(/const MEUS_CAMPOS = \[[^\]]*'sprints'/.test(ADMIN),
+       'o Admin envia a lista de sprints que ele mudou (iniciar/fechar) — antes a trocava pela do servidor e o fechamento sumia');
     // -- SO O DONO DA SPRINT (o Fernando) MARCA SPRINT; QUEM NAO E, SO ABRE NO BACKLOG --
     {
       const WD = WKS.replace(/export default \{[\s\S]*$/, '');

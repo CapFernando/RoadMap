@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="6dd5ff3287">
+<html lang="pt-BR" data-build="98994809c1">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1584,7 +1584,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=45657b6f08"></script>
+<script src="sprint.js?v=1ebc8f82aa"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -3882,9 +3882,15 @@ async function publicaAgora(tentativa = 1, redes = 0) {
     // linhas acima — e a marcacao recem-feita era apagada ANTES de ser enviada.
     // Era por isso que a flag DEV-AXCred "nao ficava salva": ela nunca chegava a
     // sair da tela.
+    //
+    // `sprints` TAMBEM (02/11/2026). Iniciar e fechar a sprint mexem em
+    // `state.sprints`, e o laco abaixo trocava a lista pela do servidor ANTES de
+    // enviar: a S5-10 foi "fechada" e voltou a pedir fechamento, e iniciar a S1-11
+    // teria o mesmo destino. Quem pode mexer nela e o dono da sprint — o Worker
+    // devolve a lista do servidor quando quem grava nao e (`ehDonoDaSprint`).
     const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'devs_perfil',
                          'devs_removidos', 'feriados',
-                         'ausencias', 'projetos', 'atualizado_em'];
+                         'ausencias', 'projetos', 'sprints', 'atualizado_em'];
     Object.keys(server || {}).forEach(k => {
       if (!MEUS_CAMPOS.includes(k)) state[k] = server[k];
     });
@@ -16197,6 +16203,15 @@ async function valDecidir(aprovar, obs, idExplicito) {
             (faltam === 1 ? 'Falta 1' : 'Faltam ' + faltam) +
             (nomes.length ? ' — ' + nomes.join(', ') : '') + '.', 'err');
       try { mAba('entrega'); } catch (_) {}
+      return;
+    }
+  }
+  /* APROVAR E CONCLUIR, e concluir exige sprint (02/11/2026) — a mesma regra do
+     arraste e do modal (`SPRINTPO.travaDeAlocacao`); o servidor recusa igual. */
+  if (aprovar && window.SPRINTPO) {
+    const trvA = SPRINTPO.travaDeAlocacao(m, m.status_planejamento, 'concluido', PRAZO.hojeISO());
+    if (trvA.trava) {
+      levaAoCampo(id, 'm-sprint', trvA.motivo);
       return;
     }
   }
