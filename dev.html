@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="b180a11f26">
+<html lang="pt-BR" data-build="01466c60ed">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -743,7 +743,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=c0c46daaf4"></script>
+<script src="sprint.js?v=45657b6f08"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
 <script src="pipelines.js?v=2374e11d52"></script>
@@ -6311,9 +6311,16 @@ async function saveStatus() {
       document.getElementById('ms-horas').focus();
       return;
     }
+    /* E O TEXTO TAMBEM (02/11/2026): vencidos os 5 dias uteis da area, a demanda
+       vai sozinha para o PM/PO — o que ele le precisa estar preenchido aqui. */
     const impl = document.getElementById('ms-implementacao').value.trim();
+    if (!impl) {
+      toast('Descreva o que foi implementado — a área e o PM/PO validam por este texto.', 'err');
+      document.getElementById('ms-implementacao').focus();
+      return;
+    }
     closeModal('modal-status');
-    await updateStatus(id, newColKey, horas, impl || undefined);
+    await updateStatus(id, newColKey, horas, impl);
     return;
   }
   if (newColKey === 'validacao') {
@@ -6493,7 +6500,8 @@ function nProjetoMudou() {
         'dimensionada no planning junto das outras do mesmo projeto. Depois disso ela ' +
         'aparece na aba Projetos com a pontuação.';
   } else {
-    if (etapa) etapa.disabled = false;
+    // Demanda NOVA fica travada no Backlog (02/11/2026); so a edicao libera a etapa.
+    if (etapa) etapa.disabled = !editando;
     aviso.style.display = 'none';
   }
 }
@@ -6538,7 +6546,9 @@ function openNewModal() {
   document.getElementById('n-file').value = '';
   nRenderAnexos();
   resetStatusOptions();
-  document.getElementById('n-status').value = 'planejado';
+  // Demanda nova nasce no Backlog e o campo fica travado (ver `saveNewDemand`).
+  document.getElementById('n-status').value = 'backlog';
+  document.getElementById('n-status').disabled = true;
   // Projeto: lista os aprovados e reabilita a etapa, caso a abertura anterior a
   // tenha travado em Backlog por ter projeto escolhido.
   document.getElementById('n-projeto').value = '';
@@ -6587,6 +6597,7 @@ function openEditDemand(id) {
     sel.innerHTML += `<option value="${sk}">${STATUS_LABELS[sk] || sk}</option>`;
   }
   sel.value = sk;
+  sel.disabled = false;   // a trava do Backlog e so da demanda nova
   // O projeto do card, e a lista para trocar. Sem isto o campo abria vazio mesmo em
   // demanda vinculada, e quem olhasse concluiria que o vinculo nao existe.
   nPopulaProjetos();
@@ -6749,7 +6760,10 @@ async function saveNewDemand() {
       return;
     }
   }
-  const sp = document.getElementById('n-status').value;
+  /* DEMANDA NOVA SÓ NASCE NO BACKLOG (02/11/2026): "qualquer dev só consegue
+     abrir demanda para cair no backlog". A edição segue as regras de sempre;
+     o servidor força o mesmo (`nascendoForaDoBacklog`). */
+  const sp = editId ? document.getElementById('n-status').value : 'backlog';
   // DELEGA — ver `STATUS_POR_ETAPA`. Esta copia nao tinha `levantar_req`.
   const obj = {
     ...(existing || {}),

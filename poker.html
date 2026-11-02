@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="30bb2fce9b">
+<html lang="pt-BR" data-build="0307e33061">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -347,7 +347,7 @@
   </style>
   <link rel="stylesheet" href="tema.css?v=4e09a93cc2">
   <script src="tema.js?v=7df38474d4"></script>
-<script src="sprint.js?v=c0c46daaf4"></script>
+<script src="sprint.js?v=45657b6f08"></script>
 <script src="dialogo.js?v=3061e0568f"></script>
 <script src="senha.js?v=3965a6f502"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
@@ -647,6 +647,13 @@ let _facilitador  = sessionStorage.getItem('pk_facil') === '1';
    ve o seletor de sprint; para os outros ele nem existe na tela, e o Worker
    recusa de qualquer forma se o pedido chegar forjado. */
 let _papel        = sessionStorage.getItem('pk_papel') || '';
+// O login de quem conduz: so o DONO da sprint escolhe a sprint na mesa
+// (`SPRINTPO.ehDonoDaSprint`, 02/11/2026) — o papel admin e de varias pessoas.
+let _pkLogin      = sessionStorage.getItem('pk_login') || '';
+function pkDonoDaSprint() {
+  return _papel === 'admin' && !!_pkLogin && !!window.SPRINTPO &&
+         SPRINTPO.ehDonoDaSprint({ papel: _papel, login: _pkLogin });
+}
 let _feriados     = [];     // sem eles o rotulo da sprint sai errado em 63 dias
 let _sprintsFechadas = [];
 let _estado       = null;
@@ -1186,6 +1193,8 @@ async function abrirSessao() {
     const papel = rl.body && rl.body.usuario && rl.body.usuario.papel;
     _papel = String(papel || '');
     try { sessionStorage.setItem('pk_papel', _papel); } catch (_) {}
+    _pkLogin = String((rl.body && rl.body.usuario && rl.body.usuario.login) || '');
+    try { sessionStorage.setItem('pk_login', _pkLogin); } catch (_) {}
     if (papel && !['admin', 'analista'].includes(papel)) {
       err.textContent = 'Sua conta é de ' + papel + ' e não conduz a votação. ' +
                         'Entre como participante em "Vou apenas votar".';
@@ -1503,7 +1512,7 @@ function montaSprintDaMesa() {
   const lb = document.getElementById('lb-sprint');
   const sel = document.getElementById('in-sprint');
   if (!lb || !sel || !window.SPRINTPO) return;
-  if (_papel !== 'admin') { lb.style.display = 'none'; return; }
+  if (!pkDonoDaSprint()) { lb.style.display = 'none'; return; }
   lb.style.display = 'flex';
   const hoje = new Date().toISOString().slice(0, 10);
   const ano = +hoje.slice(0, 4), mes = +hoje.slice(5, 7);
@@ -1531,7 +1540,7 @@ async function gravarNoCard() {
   const pontos = document.getElementById('in-pontos').value;
   if (!_estado || !_estado.melhoria_id) { toast('Nenhuma demanda em votação.', 'err'); return; }
   const sprintEl = document.getElementById('in-sprint');
-  const sprint = (_papel === 'admin' && sprintEl) ? sprintEl.value : '';
+  const sprint = (pkDonoDaSprint() && sprintEl) ? sprintEl.value : '';
   btn.disabled = true; btn.textContent = 'Gravando…';
   const r = await api({ action: 'poker-gravar', codigo: _codigo, senha: _senha,
                         melhoria_id: _estado.melhoria_id, poker_media: media,

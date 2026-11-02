@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="f2dc393ff3">
+<html lang="pt-BR" data-build="de2c4c9659">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1193,7 +1193,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=c0c46daaf4"></script>
+<script src="sprint.js?v=45657b6f08"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -4564,7 +4564,10 @@ function gSprintRender(m) {
     ops.map(o => opt(o.rotulo, SPRINTPO.rotuloCurto(o.rotulo) + ' · ' + dm(o.de) + '–' +
                                 dm(o.ate) + (o.agora ? ' · agora' : ''))).join('');
   sel.value = atual;
-  sel.disabled = fechada;
+  // So o dono da sprint escolhe (`SPRINTPO.ehDonoDaSprint`, 02/11/2026).
+  const donoSp = SPRINTPO.ehDonoDaSprint(typeof _gEu !== 'undefined' ? _gEu : null);
+  sel.disabled = fechada || !donoSp;
+  sel.title = !donoSp ? 'Só o Fernando (PM/PO) escolhe a sprint.' : '';
   sel.title = fechada ? 'Sprint fechada — a demanda não sai mais dela.' : '';
   gSprintAviso();
 }
@@ -5072,7 +5075,12 @@ async function saveTask() {
   const fim    = document.getElementById('e-fim').value;
   if (inicio && fim && fim < inicio) { toast('Data fim deve ser >= data início.', 'err'); return; }
 
-  const sp = document.getElementById('e-status-plan').value;
+  let sp = document.getElementById('e-status-plan').value;
+  /* QUEM NAO E DONO DA SPRINT SO ABRE NO BACKLOG (02/11/2026) — demanda nova. */
+  if (!editingId && window.SPRINTPO && !SPRINTPO.ehDonoDaSprint(typeof _gEu !== 'undefined' ? _gEu : null) && sp !== 'backlog') {
+    sp = 'backlog';
+    toast('Demanda aberta no Backlog — só o PM/PO coloca em outra etapa e na sprint.', 'ok');
+  }
   /* O AVISO VEM ANTES de qualquer gravação, e depois de a etapa ser conhecida:
      a consequência depende dela. */
   if (!(await gConfirmaRetroativo(inicio, fim, sp))) return;

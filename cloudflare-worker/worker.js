@@ -1681,8 +1681,55 @@ async function colaboradoresWorkos(env) {
  * task nascendo dentro da sprint, que e o que a regra proibe. Zerar e o certo:
  * ela nasce no backlog e o PO a repassa quando decidir.
  */
+/* ═══ O DONO DA SPRINT (02/11/2026) ════════════════════════════════════════
+ *
+ * "A partir de agora, qualquer dev so consegue abrir demanda para cair no
+ *  backlog. Fica bloqueado lancar via painel ou via API o lancamento direto.
+ *  Somente eu consigo marcar a sprint que a demanda fara parte, assim passo a
+ *  ter controle do que entra e sai da sprint."
+ *
+ * POR CONTA, E NAO POR PAPEL. O papel `admin` hoje e de oito pessoas — varios
+ * sao devs. "Somente eu" nao cabe nele. O dono e a CONTA do Fernando (login
+ * `fernando`) e a senha administrativa compartilhada, que nao tem pessoa por
+ * tras e e o caminho das automacoes do PM/PO. Nova pessoa com esse poder entra
+ * nesta lista, de proposito, e nao por ganhar um papel.
+ *
+ * Quem NAO e dono: cria demanda sempre no backlog e fora de sprint; nao repassa,
+ * nao tira, nao marca prioritaria e nao inicia/fecha sprint. As tentativas sao
+ * REVERTIDAS (o resto da gravacao segue) e a resposta diz o que voltou. */
+const SPRINT_DONOS = ['fernando'];
+
+function ehDonoDaSprint(ident) {
+  if (!ident || String(ident.papel || '') !== 'admin') return false;
+  if (!ident.usuario) return true;                 // senha administrativa
+  const l = String(ident.usuario.login || '').trim().toLowerCase();
+  return !!l && SPRINT_DONOS.includes(l);
+}
+
+/* QUEM NAO E DONO SO ABRE NO BACKLOG. Demanda que o servidor nunca viu, vinda
+ * de quem nao e dono, nasce em `backlog`, sem `inicio` (backlog com inicio no
+ * passado vira "em andamento" por `etapa-demanda.js`) e fora de sprint — a
+ * sprint ja e zerada por `travaSprintDoPO`. */
+function nascendoForaDoBacklog(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Set();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.add(m.id);
+  const ajustadas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id || antes.has(m.id)) continue;
+    if (String(m.status_planejamento || '') === 'backlog' && !String(m.inicio || '').trim()) continue;
+    m.status_planejamento = 'backlog';
+    m.status = 'recebida';
+    m.inicio = '';
+    ajustadas.push(m.codigo || m.titulo || m.id);
+  }
+  return ajustadas;
+}
+
 function travaSprintDoPO(recebido, servidor, papel) {
-  if (String(papel || '') === 'admin') return [];
+  // `true` = dono da sprint (ver `ehDonoDaSprint`); a string 'admin' segue
+  // valendo para quem chama pelo papel.
+  if (papel === true || String(papel || '') === 'admin') return [];
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Map();
   for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
@@ -2200,7 +2247,11 @@ function entrandoEmValidacaoSemEntrega(recebido, servidor) {
     if (String(velha.status_planejamento || '') === etapa) continue;  // ja estava
     const h = Number(m.horas_realizadas);
     const t = String(m.implementacao || '').trim();
-    if (!Number.isFinite(h) || h <= 0 || (etapa === 'validacao' && !t)) presos.push(m.codigo || m.id);
+    /* O TEXTO TAMBEM NA AREA (02/11/2026): "o que e obrigatorio devera ser
+       preenchido na validacao da area". A area tem 5 dias uteis e, vencidos, a
+       demanda segue sozinha para o PM/PO (`promoveAreaVencida`) — sem passar de
+       novo por esta porta. Entao o que o PM/PO precisa ler entra aqui. */
+    if (!Number.isFinite(h) || h <= 0 || !t) presos.push(m.codigo || m.id);
   }
   return presos;
 }
@@ -4346,7 +4397,8 @@ export default {
         let sprintRecusa = '';
         const sprintPedida = String(body.sprint_po || '').trim();
         if (sprintPedida) {
-          const ehAdmPoker = (await papelAtual()) === 'admin';
+          await papelAtual();
+          const ehAdmPoker = ehDonoDaSprint(_ident);   // o dono da sprint, e nao o papel
           const fechadasP = new Set(((data.sprints) || [])
             .filter(s => s && String(s.em || '').trim())
             .map(s => String(s.rotulo || '')).filter(Boolean));
@@ -4434,6 +4486,7 @@ export default {
         registraHistorico(data, { melhorias: [antesPoker] },
                           (_ident && _ident.usuario && _ident.usuario.nome) || 'facilitador',
                           'planning poker');
+        promoveAreaVencida(data);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
         data.atualizado_em = iso;
         const risco = gravacaoSuspeita(data, file.size || 0);
         if (risco) return json({ error: risco }, 409, headers);
@@ -4493,6 +4546,7 @@ export default {
           alvoE.anexos = (alvoE.anexos || []).concat(novosAnexos);
         }
         registraHistorico(dataE, { melhorias: [antesE] }, quemE, 'planning poker');
+        promoveAreaVencida(dataE);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
         dataE.atualizado_em = iso;
         const riscoE = gravacaoSuspeita(dataE, fileE.size || 0);
         if (riscoE) return json({ error: riscoE }, 409, headers);
@@ -4550,6 +4604,7 @@ export default {
         await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ?')
           .bind(codigo, mid).run();
         registraHistorico(dataN, { melhorias: [antesN] }, quemN, 'planning poker');
+        promoveAreaVencida(dataN);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
         dataN.atualizado_em = iso;
         const riscoN = gravacaoSuspeita(dataN, fileN.size || 0);
         if (riscoN) return json({ error: riscoN }, 409, headers);
@@ -4645,6 +4700,7 @@ export default {
       const entradaM = { em: agoraM, quem: quemM, texto };
       if (mencoes.length) entradaM.mencoes = mencoes;
       alvoM.mensagens = anteriorM.concat([entradaM]).slice(-MSG_MAX);
+      promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       dataM.atualizado_em = agoraM;
 
       const riscoM = gravacaoSuspeita(dataM, fileM.size || 0);
@@ -5862,6 +5918,7 @@ export default {
       registraHistorico(atual, base, eu || ident.papel, 'api');
       atribuiCodigos(atual);
       corrigeProjetoInvalido(atual);
+      promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       atual.atualizado_em = new Date().toISOString();
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -6040,6 +6097,7 @@ export default {
       }
 
       registraHistorico(atual, base, quem, 'deploy');
+      promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       atual.atualizado_em = agora;
       const versoes = [...new Set(pedidos.map(p => p.ver).filter(Boolean))];
       const msg = 'deploy: ' + mexidas + ' demanda(s)' +
@@ -6398,6 +6456,7 @@ export default {
       };
       atual.projetos.push(novo);
       atribuiCodigosProjeto(atual);
+      promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -6583,7 +6642,10 @@ export default {
       }
       const spPedido = ['backlog', 'planejado', 'em_andamento'].includes(body.status_planejamento)
         ? body.status_planejamento : 'em_andamento';
-      const sp = semDono ? 'backlog' : spPedido;
+      /* QUEM NAO E DONO DA SPRINT ABRE NO BACKLOG (02/11/2026), mesmo pedindo
+         outra etapa — e sem `inicio`, que no backlog viraria "em andamento". */
+      const donoNova = ehDonoDaSprint(perm.ident);
+      const sp = (semDono || !donoNova) ? 'backlog' : spPedido;
       const agora = new Date().toISOString();
       const nova = {
         id: 'ep-' + Date.now().toString(36) + '-' + crypto.randomUUID().slice(0, 6),
@@ -6597,7 +6659,7 @@ export default {
         origem: 'endpoint',
         status_planejamento: sp,
         status: sp === 'backlog' ? 'recebida' : (sp === 'planejado' ? 'estimada' : 'iniciada'),
-        inicio: /^\d{4}-\d{2}-\d{2}$/.test(String(body.inicio || '')) ? body.inicio : '',
+        inicio: (sp !== 'backlog' && /^\d{4}-\d{2}-\d{2}$/.test(String(body.inicio || ''))) ? body.inicio : '',
         entrega: /^\d{4}-\d{2}-\d{2}$/.test(String(body.entrega || '')) ? body.entrega : '',
         /* ═══ OS CAMPOS LIBERADOS NA CRIACAO ═════════════════════════════
          * Todos passam pela MESMA limpeza das telas: `limpaTexto` no que e
@@ -6689,6 +6751,7 @@ export default {
       atual.melhorias.push(nova);
       atribuiCodigos(atual);
       corrigeSemDev(atual);
+      promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -6702,6 +6765,11 @@ export default {
       const salva = atual.melhorias.find(m => m.id === nova.id);
       return json({ ok: true, codigo: salva.codigo, id: salva.id,
                     status_planejamento: salva.status_planejamento, dev: salva.dev,
+                    // Diz quando a etapa pedida foi trocada pelo backlog (quem nao e
+                    // dono da sprint so abre no backlog — ver `ehDonoDaSprint`).
+                    ...((!donoNova && !semDono && spPedido !== 'backlog')
+                      ? { aviso: 'Demanda aberta no backlog: so o PM/PO coloca demanda em ' +
+                                 'outra etapa e na sprint.' } : {}),
                     /* O VINCULO VOLTA NA RESPOSTA, com o CODIGO da principal. Sem
                        isto quem chama grava `parent_id` e nao tem como saber se
                        pegou a demanda certa — mandou "42", e "42" casa com AX-042
@@ -6852,6 +6920,7 @@ export default {
 
       const quemM = (await papelAtual()) || 'admin';
       registraHistorico(dataM, JSON.parse(textoM), quemM, 'fechamento do mes');
+      promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       dataM.atualizado_em = new Date().toISOString();
       const putM = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -7159,6 +7228,7 @@ export default {
           em: new Date().toISOString(),
         }]);
       }
+      promoveAreaVencida(atualS);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       atualS.atualizado_em = new Date().toISOString();
       const putS = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -7509,6 +7579,13 @@ export default {
       /* DEPOIS DA PLANNING, SO COM SPRINT — tambem para o PM/PO. E ele quem
          escolhe, e a regra e que escolha ANTES de mover: a tela ja abre o
          seletor; isto e a rede de baixo. */
+      /* O PUBLISH TAMBEM PASSA PELO DONO. Ele e do papel admin, que hoje e de
+         oito pessoas: sem isto, qualquer uma delas repassava, iniciava e
+         fechava sprint pelo Admin ou pelo Gantt. */
+      const _donoPub = ehDonoDaSprint(_ident);
+      const sprintsRevPub = travaSprintDoPO(data, antesPub, _donoPub);
+      const nascidasNoBacklogPub = _donoPub ? [] : nascendoForaDoBacklog(data, antesPub);
+      if (!_donoPub) data.sprints = (antesPub && antesPub.sprints) || [];
       const semSprintPub = alocacaoSemSprint(data, antesPub, 'admin');
       if (semSprintPub.length) {
         return json({ error: 'fora_da_sprint',
@@ -7714,6 +7791,9 @@ export default {
       return json({ ok: true, codigos: codigosMel, codigos_projeto: codigosPrj,
                     sem_dev: semDev, sem_projeto: soltas,
                     comite_revertidas: comiteRevPub,
+                    // so o dono da sprint repassa e cria fora do backlog (`ehDonoDaSprint`)
+                    sprints_revertidas: sprintsRevPub,
+                    nascidas_no_backlog: nascidasNoBacklogPub,
                     espelhos_descartados: espelhos,
                     // Diz o que saiu: limpeza silenciosa vira "sumiu um dev da
                     // lista e ninguem sabe por que".
@@ -7774,7 +7854,9 @@ export default {
          demanda seria uma ida de rede por card. */
       const _papelDev = await papelAtual();
       const solicitantesRevertidos = travaSolicitantePreenchido(data, antesDev, _papelDev);
-      const sprintsRevertidas = travaSprintDoPO(data, antesDev, _papelDev);
+      const _donoDev = ehDonoDaSprint(_ident);
+      const sprintsRevertidas = travaSprintDoPO(data, antesDev, _donoDev);
+      const nascidasNoBacklogDev = _donoDev ? [] : nascendoForaDoBacklog(data, antesDev);
       /* A CLASSIFICACAO ANTES DA TRAVA DE ALOCACAO, e a ordem e obrigatoria:
          a trava le `m.tipo` para decidir se Sustentacao passa. Invertido, um
          `evolucao` reclassificado no caminho seria lido como Sustentacao e a
@@ -7957,6 +8039,7 @@ export default {
                     etapas_revertidas: etapasRevertidas,
                     solicitantes_revertidos: solicitantesRevertidos,
                     sprints_revertidas: sprintsRevertidas,
+                    nascidas_no_backlog: nascidasNoBacklogDev,
                     tipos_revertidos: tiposRevertidos,
                     comite_revertidas: comiteRevDev,
                     espelhos_descartados: espelhos,

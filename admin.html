@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="db02ba5cf3">
+<html lang="pt-BR" data-build="6dd5ff3287">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1584,7 +1584,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=c0c46daaf4"></script>
+<script src="sprint.js?v=45657b6f08"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -9180,6 +9180,7 @@ function sprintOpcoes(atual) {
 
 async function sprintEscolher(ev, id) {
   if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'err'); return; }
   const m = (state.melhorias || []).find(x => String(x.id) === String(id));
   if (!m) return;
   const atual = SPRINTPO.doPO(m);
@@ -9305,6 +9306,7 @@ function sprintLoteCandidatas() {
 }
 
 function sprintLoteAbrir() {
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'err'); return; }
   _loteSel = new Set();
   _loteBusca = '';
   _loteSoFora = true;
@@ -9494,6 +9496,7 @@ let _fechDecisoes = {};
 let _fechRotulo = '';
 
 function sprintFecharAbrir(rotulo) {
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) fecha a sprint.', 'err'); return; }
   _fechRotulo = String(rotulo || '');
   _fechDecisoes = {};
   /* A PAUSADA JÁ VEM DECIDIDA: transborda para a sprint seguinte, com a pausa
@@ -10002,6 +10005,7 @@ async function sprDirecionar(id, nome) {
  *  depois, pelo dev perguntando, é o que esta confirmação evita. Não é um ato
  *  irreversível como o fechamento, mas é o que o time passa a ver. */
 async function sprintIniciar() {
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) inicia a sprint.', 'err'); return; }
   const r = _sprSel;
   if (!r) return;
   const dem = SPRINTPO.demandasDaSprint(state, r);
@@ -13562,11 +13566,12 @@ function mSprintRender(m) {
       ? opt(atual, SPRINTPO.rotuloCurto(atual) + (fechada ? ' · fechada' : ' · anterior')) : '') +
     ops.map(o => opt(o.valor, o.rotulo + ' · ' + o.nota)).join('');
   sel.value = atual;
-  const souPO = !_eu || String(_eu.papel || 'admin') === 'admin';
+  // O dono da sprint, por conta — ver `SPRINTPO.ehDonoDaSprint` (02/11/2026).
+  const souPO = SPRINTPO.ehDonoDaSprint(_eu);
   // Sprint fechada não entra nem sai: o campo mostra, e não deixa mexer.
   sel.disabled = !souPO || fechada;
   sel.title = fechada ? 'Sprint fechada — a demanda não sai mais dela.'
-            : !souPO ? 'Só o PM/PO escolhe a sprint.' : '';
+            : !souPO ? 'Só o Fernando (PM/PO) escolhe a sprint.' : '';
   mSprintAviso();
 }
 
@@ -14180,7 +14185,13 @@ async function saveMelhoria() {
   if (btnSalvar && btnSalvar.disabled) return;
   const titulo = document.getElementById('m-titulo').value.trim();
   const temaId = resolveTemaSelecao('m', document.getElementById('m-id').value ? (state.melhorias.find(x => x.id === document.getElementById('m-id').value)||{}).tema_id : '');
-  const sp     = document.getElementById('m-status').value; // agora é o status_planejamento
+  let sp       = document.getElementById('m-status').value; // agora é o status_planejamento
+  /* QUEM NÃO É DONO DA SPRINT SÓ ABRE NO BACKLOG (02/11/2026). Demanda NOVA;
+     a edição segue as regras de sempre. O servidor faz o mesmo. */
+  if (!document.getElementById('m-id').value && !SPRINTPO.ehDonoDaSprint(_eu) && sp !== 'backlog') {
+    sp = 'backlog';
+    toast('Demanda aberta no Backlog — só o PM/PO coloca em outra etapa e na sprint.', 'ok');
+  }
   const tipo   = document.getElementById('m-tipo').value;
   if (!titulo) { toast('Informe o título.', 'err'); return; }
   if (!tipo) { toast('Selecione o tipo: Sustentação ou Evolução.', 'err'); return; }

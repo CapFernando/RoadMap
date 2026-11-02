@@ -1548,6 +1548,18 @@
     return (o.dados && Array.isArray(o.dados.feriados)) ? o.dados.feriados : [];
   }
 
+  /* O DONO DA SPRINT (02/11/2026) — espelho de `ehDonoDaSprint` do Worker.
+   * "Somente eu consigo marcar a sprint que a demanda fará parte." Por CONTA
+   * (login), e não pelo papel admin, que é de oito pessoas. `eu` ausente é a
+   * senha administrativa compartilhada. A trava de verdade é do servidor; aqui
+   * é a cortesia de não oferecer o gesto a quem não pode. */
+  var SPRINT_DONOS = ['fernando'];
+  function ehDonoDaSprint(eu) {
+    if (!eu) return true;
+    if (txt(eu.papel) !== 'admin') return false;
+    return SPRINT_DONOS.indexOf(txt(eu.login).toLowerCase()) >= 0;
+  }
+
   /** O PM/PO REPASSA a demanda para uma sprint. */
   function repassar(m, sprint, quem, hoje, opts) {
     if (!m) return { ok: false, erro: 'Demanda não encontrada.' };
@@ -1725,6 +1737,8 @@
     travaDeAlocacao: travaDeAlocacao,
     proximasSprints: proximasSprints,
     podeRepassar: podeRepassar,
+    SPRINT_DONOS: SPRINT_DONOS,
+    ehDonoDaSprint: ehDonoDaSprint,
     repassar: repassar,
     retirar: retirar,
     nasceForaDaSprint: nasceForaDaSprint,

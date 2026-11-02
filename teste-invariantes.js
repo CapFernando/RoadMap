@@ -21211,8 +21211,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        existente comecaria a abrir demanda orfa sem ter mudado nada. */
     ok(!/body\.dev == null/.test(rota) && !/!body\.dev\b/.test(rota),
        'e OMITIR o campo continua herdando a conta — so `null` significa sem dono');
-    ok(/const sp = semDono \? 'backlog' : spPedido;/.test(rota),
-       'sem dono a demanda nasce em Backlog, e nao e movida em silencio depois');
+    // Desde 02/11/2026 quem nao e dono da sprint tambem so abre no Backlog.
+    ok(/const sp = \(semDono \|\| !donoNova\) \? 'backlog' : spPedido;/.test(rota),
+       'sem dono (ou aberta por quem nao e dono da sprint) a demanda nasce em Backlog, e nao e movida em silencio depois');
 
     /* ── Os tres bloqueados, EXECUTADOS ──────────────────────────────────
        Procurar `error: 'campo_bloqueado'` no texto nao prova nada: trocar a
@@ -23355,9 +23356,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* A ORDEM DAS DUAS CHAMADAS. `carimbaAreaValidacao` e quem LIMPA o carimbo
        de quem saiu da etapa — promover depois dele deixaria o card no PM/PO
        ainda dizendo "ha 6 dias na area". E tem de valer nas DUAS rotas. */
-    const trechos = WC.split('promoveAreaVencida(data)');
+    // As duas rotas que gravam o estado inteiro (publish e dev-publish) chamam
+    // na linha propria, antes de carimbar; desde 02/11/2026 as outras rotas que
+    // gravam a base tambem promovem (linha com comentario), sem o carimbo.
+    const trechos = WC.split('promoveAreaVencida(data);\n');
     ok(trechos.length === 3, 'as duas rotas de gravacao promovem a area vencida',
        'encontradas: ' + (trechos.length - 1));
+    ok((WC.match(/promoveAreaVencida\(\w+\);   \/\/ 5 dias uteis na area/g) || []).length >= 9,
+       'e toda outra rota que grava a base tambem promove a area vencida (nao ha agendador no plano Free)');
     for (let i = 1; i < trechos.length; i++) {
       const depois = trechos[i].slice(0, 400);
       ok(/carimbaAreaValidacao\(data,/.test(depois),
@@ -24134,11 +24140,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     // ── A SPRINT LOGO DEPOIS DA PLANNING ───────────────────────────────────
     ok(/src="sprint\.js\?v=/.test(POKER), 'o poker carrega o modulo da sprint');
     const pg = semComentario(corpo(POKER, 'async function gravarNoCard() {') || '');
-    ok(/sprint_po: sprint/.test(pg) && /_papel === 'admin'/.test(pg),
-       'o poker manda a sprint junto dos pontos, e so quando quem conduz e PM/PO');
+    ok(/sprint_po: sprint/.test(pg) && /pkDonoDaSprint\(\)/.test(pg),
+       'o poker manda a sprint junto dos pontos, e so quando quem conduz e o dono da sprint');
     const pm = semComentario(corpo(POKER, 'function montaSprintDaMesa() {') || '');
-    ok(/if \(_papel !== 'admin'\) \{ lb\.style\.display = 'none'; return; \}/.test(pm),
-       'e a caixa nem aparece para quem nao e PM/PO',
+    ok(/if \(!pkDonoDaSprint\(\)\) \{ lb\.style\.display = 'none'; return; \}/.test(pm),
+       'e a caixa nem aparece para quem nao e o dono da sprint',
        'facilitadorOk aceita analista E a senha compartilhada da sala');
     /* A CHAMADA, e nao a palavra. `_feriados` tambem aparece no calculo da
        sprint corrente logo acima — trocar so a lista por `[]` deixava a palavra
@@ -24155,8 +24161,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        quem tem a senha da sala. */
     const ig = WC.indexOf("body.action === 'poker-gravar'");
     const trG = ig < 0 ? '' : WC.slice(ig, ig + 6000);
-    ok(/const ehAdmPoker = \(await papelAtual\(\)\) === 'admin';/.test(trG),
-       'e o Worker confere o papel antes de aceitar a sprint pelo poker');
+    ok(/const ehAdmPoker = ehDonoDaSprint\(_ident\);/.test(trG),
+       'e o Worker confere o dono da sprint antes de aceitar a sprint pelo poker');
     /* MESMO CUIDADO: `if (!ehAdmPoker)` trocado por `if (false)` deixava a
        mensagem de recusa no arquivo e a trava sem efeito. */
     ok(/if \(!ehAdmPoker\) \{\s*sprintRecusa = 'Repassar para a sprint e do PM\/PO/.test(trG),
@@ -24714,6 +24720,43 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // -- SO O DONO DA SPRINT (o Fernando) MARCA SPRINT; QUEM NAO E, SO ABRE NO BACKLOG --
+    {
+      const WD = WKS.replace(/export default \{[\s\S]*$/, '');
+      const fd = new Function(WD + '; return { ehDonoDaSprint, nascendoForaDoBacklog, travaSprintDoPO };')();
+      const fern = { papel: 'admin', usuario: { login: 'fernando' } };
+      const joao = { papel: 'admin', usuario: { login: 'joao.siqueira' } };
+      const dev = { papel: 'dev', usuario: { login: 'lucas' } };
+      ok(fd.ehDonoDaSprint(fern) && fd.ehDonoDaSprint({ papel: 'admin', usuario: null }) &&
+         !fd.ehDonoDaSprint(joao) && !fd.ehDonoDaSprint(dev),
+         'o dono da sprint e a CONTA do Fernando (e a senha administrativa), nao o papel admin');
+      const servD = { melhorias: [{ id: 'v', codigo: 'AX-1', sprint_po: '' }] };
+      const recD = () => ({ melhorias: [
+        { id: 'v', codigo: 'AX-1', sprint_po: 'S1-11-2026', sprint_po_historico: [{ sprint: 'S1-11-2026' }] },
+        { id: 'n', titulo: 'Nova', status_planejamento: 'em_andamento', inicio: '2026-11-02', sprint_po: 'S1-11-2026' } ] });
+      const rJ = recD();
+      fd.travaSprintDoPO(rJ, servD, fd.ehDonoDaSprint(joao));
+      const nasc = fd.nascendoForaDoBacklog(rJ, servD);
+      ok(rJ.melhorias[0].sprint_po === '' && rJ.melhorias[1].sprint_po === '',
+         'admin que nao e dono nao repassa nem cria dentro da sprint — volta ao que estava');
+      ok(nasc.length === 1 && rJ.melhorias[1].status_planejamento === 'backlog' && rJ.melhorias[1].inicio === '',
+         'e a demanda que ele cria nasce no Backlog, sem inicio');
+      const rF = recD();
+      ok(fd.travaSprintDoPO(rF, servD, fd.ehDonoDaSprint(fern)).length === 0 && rF.melhorias[0].sprint_po === 'S1-11-2026',
+         'o Fernando repassa normalmente');
+      ok(/const _donoPub = ehDonoDaSprint\(_ident\);/.test(WKS) && /if \(!_donoPub\) data\.sprints = /.test(WKS),
+         'o publish (Admin e Gantt) passa pelo dono, inclusive iniciar e fechar sprint');
+      ok(/const _donoDev = ehDonoDaSprint\(_ident\);/.test(WKS) && /nascendoForaDoBacklog\(data, antesDev\)/.test(WKS),
+         'o painel do dev tambem');
+      ok(/const sp = \(semDono \|\| !donoNova\) \? 'backlog' : spPedido;/.test(WKS),
+         'e a API de criacao abre no Backlog para quem nao e dono');
+      ok(SP.ehDonoDaSprint({ papel: 'admin', login: 'fernando' }) && !SP.ehDonoDaSprint({ papel: 'admin', login: 'joao.siqueira' }) &&
+         /SPRINTPO\.ehDonoDaSprint\(_eu\)/.test(ADMIN) && /SPRINTPO\.ehDonoDaSprint\(/.test(GANTT) &&
+         /pkDonoDaSprint\(\)/.test(lerTela('poker.html')),
+         'as telas usam a mesma regra para oferecer (ou nao) o gesto de sprint');
+      ok(/editId \? document\.getElementById\('n-status'\)\.value : 'backlog'/.test(DEV),
+         'e o painel do dev cria demanda sempre no Backlog');
+    }
     // -- REPASSAR PREENCHE A ENTREGA AO USUARIO COM A SEGUNDA SEGUINTE A SPRINT --
     {
       ok(SP.entregaDaSprint('S1-11-2026', []) === '2026-11-09' && SP.entregaDaSprint('S1-11-2026', ['2026-11-09']) === '2026-11-10',
@@ -24799,9 +24842,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       { id: 'h2', codigo: 'AX-H2', status_planejamento: 'validacao_area', horas_realizadas: 3 },
       { id: 'h3', codigo: 'AX-H3', status_planejamento: 'validacao', horas_realizadas: 4, implementacao: '' } ] };
     const presosH = fnEnt(rec, serv);
-    ok(presosH.includes('AX-H1') && !presosH.includes('AX-H2'),
-       'o servidor recusa mandar para a Validacao da area sem horas — com horas passa, sem exigir texto',
-       presosH.join());
+    // Desde 02/11/2026 a area exige horas E texto (o que e obrigatorio entra na area).
+      ok(presosH.includes('AX-H1') && presosH.includes('AX-H2'),
+         'o servidor recusa mandar para a Validacao da area sem horas ou sem o texto do que foi feito',
+         presosH.join());
     ok(presosH.includes('AX-H3'),
        'e a entrega ao PM/PO continua exigindo horas E o texto');
     ok(/newColKey === 'validacao_area'\) \{\s*const horas/.test(DEV),
