@@ -1932,7 +1932,13 @@ function alocacaoSemSprint(recebido, servidor, papel, hoje) {
     const comeca = depois === 'em_andamento' && antesEt !== 'em_andamento';
     /* CONCLUIR TAMBEM EXIGE SPRINT (02/11/2026) — bloqueante, em toda porta.
        Concluida sem sprint fica fora de toda conta de sprint. */
-    const conclui = depois === 'concluido' && antesEt !== 'concluido';
+    /* ...mas so para o que o dev ENTREGOU a partir do inicio da S1-11 (03/11/2026):
+       o que chegou a validacao antes tem a sprint ja fechada, que nao aceita
+       entrada, e por na S1-11 so para concluir contaria na semana errada. Mesma
+       regra de `SPRINTPO.entregueNoRegime`. */
+    const entregaEm = String(m.entregue_em || m.validacao_area_em || '').slice(0, 10);
+    const conclui = depois === 'concluido' && antesEt !== 'concluido' &&
+                    /^\d{4}-\d{2}-\d{2}$/.test(entregaEm) && entregaEm >= '2026-11-02';
     if (!cruza && !comeca && !conclui) continue;
     if (TIPOS_LIVRES_DA_SPRINT.includes(String(m.tipo || '').toLowerCase())) continue;
     if (String(m.sprint_po || '').trim()) continue;

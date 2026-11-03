@@ -24722,7 +24722,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'quem nao e PM/PO nao muda a marca de prioritaria');
     // -- CONCLUIR EXIGE SPRINT (bloqueante, tela e servidor) -----------------
     {
-      const semS = { tipo: 'evolucao', status_planejamento: 'validacao' };
+      // entregue a partir de 02/11 (regime de sprint); antes disso conclui sem sprint
+      const semS = { tipo: 'evolucao', status_planejamento: 'validacao', entregue_em: '2026-11-03' };
       ok(SP.travaDeAlocacao(semS, 'validacao', 'concluido', '2026-11-02').trava &&
          !SP.travaDeAlocacao(Object.assign({ sprint_po: 'S1-11-2026' }, semS), 'validacao', 'concluido', '2026-11-02').trava,
          'concluir sem sprint trava; com sprint passa');
@@ -24730,9 +24731,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'e ENTREGAR (ir para a validacao) continua sem travar');
       const WCo = WKS.replace(/export default \{[\s\S]*$/, '');
       const fco = new Function(WCo + '; return alocacaoSemSprint;')();
-      const presoC = fco({ melhorias: [{ id: 'c', codigo: 'AX-C', tipo: 'evolucao', status_planejamento: 'concluido' }] },
+      const presoC = fco({ melhorias: [{ id: 'c', codigo: 'AX-C', tipo: 'evolucao', status_planejamento: 'concluido', entregue_em: '2026-11-03' }] },
                          { melhorias: [{ id: 'c', status_planejamento: 'validacao' }] }, 'admin', '2026-11-02');
       ok(presoC.length === 1, 'o servidor recusa concluir sem sprint, inclusive para o PM/PO');
+      const velhaV = { tipo: 'evolucao', status_planejamento: 'validacao', entregue_em: '2026-10-31' };
+      ok(!SP.travaDeAlocacao(velhaV, 'validacao', 'concluido', '2026-11-03').trava &&
+         !SP.travaDeAlocacao({ tipo: 'evolucao', status_planejamento: 'validacao' }, 'validacao', 'concluido', '2026-11-03').trava,
+         'o que chegou a validacao antes da S1-11 (ou sem data de entrega) conclui sem sprint — a sprint dele ja fechou');
+      ok(fco({ melhorias: [{ id: 'v', codigo: 'AX-V', tipo: 'evolucao', status_planejamento: 'concluido', entregue_em: '2026-10-31' }] },
+             { melhorias: [{ id: 'v', status_planejamento: 'validacao' }] }, 'admin', '2026-11-03').length === 0,
+         'e o servidor aceita igual');
       ok(/SPRINTPO\.travaDeAlocacao\(m, m\.status_planejamento, 'concluido'/.test(ADMIN),
          'e o botao Aprovar da validacao passa pela mesma trava');
     }
