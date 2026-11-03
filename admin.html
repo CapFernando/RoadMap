@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="62e63d5629">
+<html lang="pt-BR" data-build="8ccebf7437">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1639,7 +1639,7 @@
 <script src="capacidade.js?v=e7e1449a7d"></script>
 <script src="apresentacao.js?v=d1432be37a"></script>
 <script src="relatorio-ppt.js?v=b4db2e69eb"></script>
-<script src="aprovacao-ppt.js?v=742d5eda49"></script>
+<script src="aprovacao-ppt.js?v=fbb42677c3"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="historico-cliente.js?v=2b0fcaf502"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
@@ -5750,7 +5750,7 @@ async function imprimirAprovacaoReq(botao) {
   const rot = botao ? botao.textContent : '';
   if (botao) { botao.disabled = true; botao.textContent = '⏳ Gerando…'; }
   try {
-    const r = await APROVACAOPPT.gera(ms);
+    const r = await APROVACAOPPT.gera(ms, { temas: state.temas || [] });
     toast('🖨 PPT gerado: ' + r.demandas + ' demanda(s) em aprovação de requisitos.', 'ok');
   } catch (e) {
     toast('Não foi possível gerar o PPT: ' + ((e && e.message) || e), 'err');

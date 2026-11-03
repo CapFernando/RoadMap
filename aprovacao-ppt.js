@@ -129,14 +129,23 @@
       s.addText(RODAPE, { x: 0.5, y: 7.05, w: 12, h: 0.3, fontFace: 'Calibri', fontSize: 10, color: MUTED, margin: 0 });
 
       // ── A folha de decisao ──
-      var COLS = [1.0, 3.75, 1.6, 1.15, 1.0, 1.0, 1.0, 1.8];   // = 12,3
-      var CAB = ['Código', 'Título', 'Solicitante', 'Tipo', 'Prioridade', 'Impacto', 'Urgência', 'Decisão'];
+      var COLS = [1.0, 2.0, 2.8, 1.3, 0.95, 0.95, 0.85, 0.85, 1.6];   // = 12,3
+      var CAB = ['Código', 'Sistema/Módulo', 'Título', 'Solicitante', 'Tipo', 'Prioridade', 'Impacto', 'Urgência', 'Decisão'];
       var cabecalho = CAB.map(function (t, i) {
-        return celula(t, { bold: true, color: 'FFFFFF', fill: { color: NAVY }, align: i >= 3 ? 'center' : 'left' });
+        return celula(t, { bold: true, color: 'FFFFFF', fill: { color: NAVY }, align: i >= 4 ? 'center' : 'left' });
       });
+      /* O SISTEMA/MODULO SAI DO TEMA: "AXCred - Operacoes" vira "AXCred › Operacoes".
+         Quem chama manda os temas em `opcoes.temas`. */
+      var temas = {};
+      (o.temas || []).forEach(function (t) { if (t && t.id) temas[t.id] = txt(t.nome); });
+      var sistemaModulo = function (m) {
+        var n = temas[m.tema_id];
+        return n ? n.split(' - ').map(txt).filter(Boolean).join(' › ') : '';
+      };
       var Y0 = 1.15, YMAX = 6.8;
       var altura = function (m) {
-        var l = Math.max(1, Math.ceil(txt(m.titulo).length / 52), Math.ceil(txt(m.solicitante).length / 20));
+        var l = Math.max(1, Math.ceil(txt(m.titulo).length / 38), Math.ceil(txt(m.solicitante).length / 17),
+                         Math.ceil(sistemaModulo(m).length / 26));
         return l * 0.22 + 0.16;
       };
       var paginas = [], rows = null, y = 0, idx = 0;
@@ -150,6 +159,7 @@
         var com = function (o2) { var r = {}; for (var k in base) r[k] = base[k]; for (var k2 in o2) r[k2] = o2[k2]; return r; };
         rows.push([
           celula(txt(m.codigo) || '—', com({ bold: true })),
+          celula(sistemaModulo(m) || 'Sem tema', com(sistemaModulo(m) ? {} : { italic: true, color: MUTED })),
           celula(txt(m.titulo), base),
           celula(txt(m.solicitante) || 'A definir', com(txt(m.solicitante) ? {} : { italic: true, color: MUTED })),
           celula(TIPO[txt(m.tipo)] || 'A definir',
