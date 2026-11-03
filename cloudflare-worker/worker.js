@@ -694,7 +694,7 @@ const HIST_MAX = 25;
  *           e copiada para o D1 pela rota `historico-importar`.
  *   false → a base deixa de levar historico: a primeira gravacao o retira.
  * Desligar antes de a copia estar conferida apagaria a trilha. */
-const HIST_NA_BASE = true;
+const HIST_NA_BASE = false;
 
 // ─── VINCULO: A TAREFA PRINCIPAL E O QUE PENDURA NELA ────────────────────
 //
