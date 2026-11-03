@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="12a4fe592c">
+<html lang="pt-BR" data-build="62e63d5629">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1639,6 +1639,7 @@
 <script src="capacidade.js?v=e7e1449a7d"></script>
 <script src="apresentacao.js?v=d1432be37a"></script>
 <script src="relatorio-ppt.js?v=b4db2e69eb"></script>
+<script src="aprovacao-ppt.js?v=742d5eda49"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="historico-cliente.js?v=2b0fcaf502"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
@@ -5741,6 +5742,23 @@ function kbProdEscolhe(coluna, valor) {
   if (botao) botao.focus();
 }
 
+/* IMPRIMIR — EM APROVACAO DE REQUISITOS. Todas as demandas da etapa, e nao so
+   as do recorte do quadro: a folha e para decidir a etapa inteira. */
+async function imprimirAprovacaoReq(botao) {
+  const ms = (state.melhorias || []).filter(m => !ehMesclada(m) && !m.oculto && statusKey(m) === 'levantar_req');
+  if (!window.APROVACAOPPT) { toast('O gerador do PPT não carregou. Recarregue a página (Ctrl+F5).', 'err'); return; }
+  const rot = botao ? botao.textContent : '';
+  if (botao) { botao.disabled = true; botao.textContent = '⏳ Gerando…'; }
+  try {
+    const r = await APROVACAOPPT.gera(ms);
+    toast('🖨 PPT gerado: ' + r.demandas + ' demanda(s) em aprovação de requisitos.', 'ok');
+  } catch (e) {
+    toast('Não foi possível gerar o PPT: ' + ((e && e.message) || e), 'err');
+  } finally {
+    if (botao) { botao.disabled = false; botao.textContent = rot; }
+  }
+}
+
 function renderKbToolbar(exibidas, mescladasAchadas) {
   const el = document.getElementById('kb-toolbar');
   if (!el) return;
@@ -5780,6 +5798,12 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
     '<div class="ger-filter-group"><label>&nbsp;</label>' +
     '<button type="button" class="btn btn-secondary btn-sm" onclick="sprintLoteAbrir()"' +
     ' title="Repassar várias demandas para uma sprint de uma vez">🏃 Sprint em lote</button>' +
+    '</div>' +
+    /* A FOLHA DE DECISAO DA ETAPA — ver `aprovacao-ppt.js`. */
+    '<div class="ger-filter-group"><label>&nbsp;</label>' +
+    '<button type="button" class="btn btn-secondary btn-sm" onclick="imprimirAprovacaoReq(this)"' +
+    ' title="Gera o PPT das demandas em Em aprovação de requisitos, para decidir se seguem para a sprint">' +
+    '🖨 Imprimir - Em aprovação de requisitos</button>' +
     '</div>' +
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}` +
     /* COM BUSCA ATIVA A TELA DIZ QUE O PERIODO FOI IGNORADO. Sem isso, quem
