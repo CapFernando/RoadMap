@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="2a2739854b">
+<html lang="pt-BR" data-build="b96d0da9f6">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -532,6 +532,10 @@
     .cap-rolou-alerta { color: var(--amber-tx, #FFC470); display: block; white-space: normal;
       line-height: 1.4; }
     .cap-text { font-size: 10px; color: var(--text3); white-space: nowrap; }
+    /* O ALERTA DE "ROLOU DE SPRINT" QUEBRA LINHA. A regra dele (acima) pedia
+       `white-space: normal`, mas `.cap-text` vem depois com a mesma forca e
+       ganhava: a lista de codigos saia numa linha so e invadia o quadro. */
+    .cap-text.cap-rolou-alerta { white-space: normal; overflow-wrap: anywhere; }
     /* Os pontos por semana quebram linha em vez de serem cortados: com a pontuacao
        retroativa os numeros passaram de 2 para 3 digitos e o total ("Tot 5...")
        ficava fora da coluna de 230px, que e a informacao que mais interessa. */

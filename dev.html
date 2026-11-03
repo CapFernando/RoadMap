@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="1ef1dc42b5">
+<html lang="pt-BR" data-build="c0fc52eaee">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -568,6 +568,16 @@
       background:var(--cyan-bg,#123A52); border:1px solid #2E6E88;
       border-radius:5px; padding:1px 6px; cursor:help; }
     .kcard-meta  { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; font-size:11px; color:var(--text3); }
+    /* FILA x NO SEU NOME (03/11/2026): "deixe mais claro o que é fila e o que
+       está no nome da pessoa. Os devs estão se confundindo." O card que NÃO é
+       do dev ganha borda tracejada, fundo apagado e uma faixa no topo dizendo
+       de quem é; o que é dele ganha a marca "no seu nome". */
+    .kcard.kcard-fila { border-style:dashed; border-color:#2E6E88; background:rgba(18,58,82,.25); }
+    .kcard-dono { font-size:10px; font-weight:700; letter-spacing:.3px; text-transform:uppercase;
+      border-radius:5px; padding:3px 7px; margin:-2px 0 8px; display:inline-block; }
+    .kcard-dono.fila { color:var(--cyan-tx,#8AD5F0); background:var(--cyan-bg,#123A52); border:1px solid #2E6E88; }
+    .kcard-dono.outro { color:var(--text2); background:var(--bg3); border:1px dashed var(--border2,#555); }
+    .kcard-dono.meu { color:var(--green-tx,#8FE0A8); background:rgba(46,139,87,.15); border:1px solid rgba(46,139,87,.5); }
     .kcard-meta span { display:flex; align-items:center; gap:3px; }
     .kcard-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; display:inline-block; }
     .kcard-actions { display:flex; gap:6px; margin-top:8px; border-top:1px solid var(--border); padding-top:8px; }
@@ -921,6 +931,17 @@
     <select id="f-sprint" class="filter-select" onchange="renderKanban()"
             title="Mostra só o que o PM/PO repassou para a sprint escolhida.">
       <option value="">Todas</option>
+    </select>
+    <div class="filter-sep"></div>
+    <!-- O QUE E SEU E O QUE E FILA. "No meu nome" = demandas com o seu nome no
+         responsavel; "Fila do time" = sem dono (qualquer um pode pegar) ou
+         do time a caminho da sprint, com outra pessoa. -->
+    <label>Mostrar:</label>
+    <select id="f-dono" class="filter-select" onchange="renderKanban()"
+            title="Separa as demandas no seu nome das que estão na fila do time.">
+      <option value="">No meu nome + fila do time</option>
+      <option value="meu">👤 Só no meu nome</option>
+      <option value="fila">📥 Só a fila do time</option>
     </select>
     <div class="filter-sep"></div>
     <button id="f-limpar" class="btn btn-secondary btn-sm" onclick="limparFiltrosDev()">Limpar</button>
@@ -4617,6 +4638,9 @@ function getFiltered() {
                                           SPRINTPO.naVitrine(m, getStatusKey(m)))) &&
                    doMeuTime(m);
     if (!meu && !doTime) return false;
+    const fDono = document.getElementById('f-dono')?.value || '';
+    if (fDono === 'meu' && !meu) return false;
+    if (fDono === 'fila' && meu) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     const fTipo = document.getElementById('f-tipo')?.value || '';
     if (fTipo === '__sem_tipo__') { if (m.tipo) return false; }
@@ -4761,7 +4785,7 @@ function renderCard(m, colKey) {
       'demanda entrar no planejamento. Abra e responda.">🔥 Grill — dê seu parecer</div>'
     : '';
   return `
-    <div class="kcard prazo-${prazoNivel(m)}${grillEst === 'pendente' ? ' kcard-grill-on' : ''}${
+    <div class="kcard prazo-${prazoNivel(m)}${DEVNOME.eDe(m, currentDev) ? '' : ' kcard-fila'}${grillEst === 'pendente' ? ' kcard-grill-on' : ''}${
            window.NAOPUBLICADA && NAOPUBLICADA.tem(m.id) ? ' nao-pub-card' : ''}" draggable="true" id="card-${m.id}"
          ondragstart="onDragStart(event,'${m.id}')"
          ondragend="onDragEnd(event)"
@@ -4773,6 +4797,12 @@ function renderCard(m, colKey) {
         ? '<div class="kcard-naopub" title="A gravação falhou. Esta demanda só existe nesta tela — ' +
           'ela some se você recarregar a página, e ninguém mais a enxerga.">⚠ NÃO GRAVADA</div>' : ''}
       ${grillFaixa}
+      ${/* DE QUEM E — ver a nota de `.kcard-fila`. */''}
+      ${DEVNOME.eDe(m, currentDev)
+        ? '<div class="kcard-dono meu" title="Esta demanda está no seu nome: você é o responsável.">👤 No seu nome</div>'
+        : String(m.dev || '').trim()
+          ? '<div class="kcard-dono outro" title="Não está no seu nome — aparece para o time porque está na sprint. Quem responde é ' + escAttr(m.dev) + '.">👥 Do time · com ' + escAttr(m.dev) + '</div>'
+          : '<div class="kcard-dono fila" title="Fila do time: está na sprint e ainda não tem dono. Qualquer um pode pegar — combine antes de começar.">📥 Fila do time · sem dono</div>'}
       ${parentInfo}
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}
