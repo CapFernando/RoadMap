@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="9c010caf67">
+<html lang="pt-BR" data-build="7a1ca993d3">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -259,8 +259,12 @@
     .pj-and-entrega em { color:var(--text3); font-size:12px; }
     .pj-and-entrega.venc strong { color:var(--red-tx,#F9A0A0); }
     .pj-and-entrega.sem { color:var(--text3); }
-    .pj-and-cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-    @media (max-width:800px) { .pj-and-cols { grid-template-columns:1fr; } }
+    .pj-and-cols { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+    @media (max-width:1200px) { .pj-and-cols { grid-template-columns:1fr; } }
+    .pj-and-etapa { flex:0 0 auto; font-size:10.5px; color:var(--amber-tx,#FFC470);
+      border:1px solid currentColor; border-radius:4px; padding:0 5px; }
+    .pj-and-usu { display:inline-flex; align-items:baseline; gap:6px; }
+    .pj-and-sp.sem { color:var(--text3); border-color:transparent; }
     .pj-and-col { background:var(--bg3); border-radius:10px; padding:10px 12px; min-width:0; }
     .pj-and-col-tit { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
       color:var(--text2); margin-bottom:6px; }
@@ -16995,6 +16999,13 @@ function pjEmAndamento(p) {
   return pjAprovado(p) && pjDemandas(p.id).some(pjNaSprintAtualOuFutura);
 }
 
+/* "Diferencie planejado e em andamento": o trabalho comecado (em andamento e
+   as validacoes, que ja tem entrega do dev) separado do que ainda vai comecar
+   (planejado e, com data, Planning, requisitos e Backlog). */
+const PJ_EM_ANDAMENTO = ['em_andamento', 'validacao_area', 'validacao'];
+const PJ_ETAPA_ROT = { validacao_area: 'Val. área', validacao: 'Val. PM/PO',
+                       planning: 'Planning', levantar_req: 'Aprov. req.', backlog: 'Backlog' };
+
 function pjAndamentoHTML(p) {
   const ms = pjDemandas(p.id).filter(m => !ehMesclada(m));
   const hoje = PRAZO.hojeISO();
@@ -17030,15 +17041,22 @@ function pjAndamentoHTML(p) {
     const abre = '<li onclick="openModalMelhoria(' + JSON.stringify(m.id).replace(/"/g, '&quot;') + ')"' +
       ' title="' + esc((m.codigo ? m.codigo + ' · ' : '') + m.titulo) + '">';
     const tit = '<span class="pj-and-tit">' + (m.codigo ? '<b>' + esc(m.codigo) + '</b> ' : '') + esc(m.titulo || '') + '</span>';
-    if (tipo !== 'plan') return abre + dataCel(x.data, false, 'Concluída em') + tit + '</li>';
-    return abre + dataCel(x.dev, x.dev && x.dev < hoje, 'Entrega do dev') + tit +
-      (sp ? '<span class="pj-and-sp">' + esc(SPRINTPO.rotuloCurto(sp)) + '</span>' : '') +
-      '<span class="pj-and-usu">' + dataCel(x.usu, x.usu && x.usu < hoje, 'Entrega ao usuário') + '</span>' +
+    if (tipo === 'feita') return abre + dataCel(x.data, false, 'Concluída em') + tit + '</li>';
+    /* A ETAPA SO APARECE QUANDO NAO E A DA COLUNA: em "Em andamento" a que esta
+       em validacao, em "Planejado" a que ainda esta em Planning ou Backlog. */
+    const et = statusKey(m);
+    const tag = et !== tipo && PJ_ETAPA_ROT[et]
+      ? '<span class="pj-and-etapa">' + PJ_ETAPA_ROT[et] + '</span>' : '';
+    // A DATA NA FRENTE DA SPRINT: entrega ao usuario e, colada nela, a sprint.
+    return abre + dataCel(x.dev, x.dev && x.dev < hoje, 'Entrega do dev') + tit + tag +
+      '<span class="pj-and-usu">' + dataCel(x.usu, x.usu && x.usu < hoje, 'Entrega ao usuário') +
+        (sp ? '<span class="pj-and-sp">' + esc(SPRINTPO.rotuloCurto(sp)) + '</span>'
+            : '<span class="pj-and-sp sem" title="Fora de sprint">—</span>') + '</span>' +
       '</li>';
   };
-  const cab = tipo => tipo === 'plan'
-    ? '<div class="pj-and-cab"><span>Entrega dev</span><span>Demanda</span><span>Entrega usuário</span></div>'
-    : '<div class="pj-and-cab"><span>Concluída em</span><span>Demanda</span></div>';
+  const cab = tipo => tipo === 'feita'
+    ? '<div class="pj-and-cab"><span>Concluída em</span><span>Demanda</span></div>'
+    : '<div class="pj-and-cab"><span>Entrega dev</span><span>Demanda</span><span>Entrega usuário · Sprint</span></div>';
   const coluna = (titulo, itens, tipo, vazio) =>
     '<div class="pj-and-col"><div class="pj-and-col-tit">' + titulo + ' <span>(' + itens.length + ')</span></div>' +
     (itens.length ? cab(tipo) + '<ul>' + itens.map(x => linha(x, tipo)).join('') + '</ul>'
@@ -17055,7 +17073,10 @@ function pjAndamentoHTML(p) {
     '</div>' +
     '<div class="pj-and-cols">' +
       coluna('✅ Feitas', feitas, 'feita', 'Nenhuma concluída com data.') +
-      coluna('📅 Planejadas', planejadas, 'plan', 'Nenhuma planejada com data.') +
+      coluna('🚧 Em andamento', planejadas.filter(x => PJ_EM_ANDAMENTO.includes(statusKey(x.m))),
+             'em_andamento', 'Nada em andamento com data.') +
+      coluna('📅 Planejado', planejadas.filter(x => !PJ_EM_ANDAMENTO.includes(statusKey(x.m))),
+             'planejado', 'Nada planejado com data.') +
     '</div>' +
   '</div>';
 }
