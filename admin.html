@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="6057c2ea19">
+<html lang="pt-BR" data-build="4abbf68502">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -818,6 +818,29 @@
     .filter-bar select { padding:6px 10px; font-size:13px; max-width:230px; }
     .filter-bar label { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text3); }
     .filter-bar .fb-count { font-size:12px; color:var(--text3); margin-left:auto; white-space:nowrap; }
+    /* O FILTRO DE VARIAS SPRINTS: botao com cara de select + lista de caixas. */
+    .fb-multi { position:relative; }
+    .fb-multi-btn {
+      background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); padding:6px 10px; font-size:13px; font-family:inherit; cursor:pointer;
+      min-width:150px; max-width:230px; text-align:left; display:flex; align-items:center; gap:8px;
+    }
+    .fb-multi-btn span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .fb-multi-btn:focus, .fb-multi.aberto .fb-multi-btn { border-color:var(--blue); outline:none; }
+    .fb-multi-pop {
+      display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:60; min-width:240px;
+      max-height:340px; overflow-y:auto; background:var(--bg2); border:1px solid var(--border);
+      border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.35); padding:6px;
+    }
+    .fb-multi.aberto .fb-multi-pop { display:block; }
+    .filter-bar .fb-multi-pop label {
+      display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer;
+      font-size:13px; text-transform:none; letter-spacing:0; color:var(--text);
+    }
+    .fb-multi-pop label:hover { background:var(--bg3); }
+    .fb-multi-pop label.fb-multi-todas { font-weight:600; border-bottom:1px solid var(--border);
+      border-radius:6px 6px 0 0; margin-bottom:4px; }
+    .fb-multi-pop .fb-multi-n { margin-left:auto; color:var(--text3); font-size:12px; }
     .filter-bar input[type="text"].fb-busca {
       background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
       color:var(--text); padding:6px 10px; font-size:13px; font-family:inherit; outline:none; min-width:190px;
@@ -4310,7 +4333,7 @@ let _filtroPrazo  = null; // null|'vencidas'|'semana'|'mes'|'sem_data'
 let _filtroDev    = null; // null|nome do dev|SEM_DEV
 let _filtroTipo   = null; // null|'sustentacao'|'evolucao'|SEM_TIPO
 let _filtroProd   = null; // null|'falta_subir'|'no_ar'
-let _filtroSprint = null; // null|'__fora__'|rotulo da sprint do PO
+let _filtroSprint = null; // null (todas) | lista de chaves: '__fora__' e/ou rotulos da sprint do PO
 let _buscaMel     = '';   // texto livre: título, descrição, dev, solicitante
 
 // Demanda "em aberto" (relevante para prazos): exclui concluída/negada
@@ -4834,6 +4857,61 @@ function fbGroup(label, valor, opcoes, handler) {
   </div>`;
 }
 
+/* O FILTRO DE VARIAS ESCOLHAS (hoje: a sprint).
+   "Preciso selecionar qual sprint quero e ter opcao de selecionar todas."
+   O `<select>` so escolhe uma; aqui sao caixas. O valor e `null` (todas) ou
+   uma lista de chaves — e lista vazia VOLTA a ser `null`: desmarcar tudo e
+   nao querer filtro, e um quadro vazio so faria a pessoa achar que sumiu dado.
+   A barra e redesenhada a cada clique, entao o aberto/fechado mora em
+   `_fbMultiAberto` para a lista nao fechar no meio da escolha. */
+let _fbMultiAberto = null;
+function fbMulti(id, label, valor, opcoes, handler) {
+  const sel = Array.isArray(valor) ? valor : (valor ? [valor] : []);
+  const todas = opcoes.find(o => o.key === '');
+  const itens = opcoes.filter(o => o.key !== '');
+  const resumo = !sel.length
+    ? (todas ? todas.label + (todas.n === undefined ? '' : ` (${todas.n})`) : 'Todas')
+    : sel.length <= 3
+      ? sel.map(k => (itens.find(o => String(o.key) === String(k)) || { label: k }).label
+          .replace(/^● /, '')).join(' + ')
+      : sel.length + ' selecionadas';
+  const caixa = (o, marcado, classe, acao) =>
+    `<label${classe ? ' class="' + classe + '"' : ''}><input type="checkbox"${marcado ? ' checked' : ''}` +
+    ` onchange="${acao}"> ${esc(o.label)}` +
+    (o.n === undefined ? '' : `<span class="fb-multi-n">${o.n}</span>`) + '</label>';
+  return `<div class="ger-filter-group fb-multi${_fbMultiAberto === id ? ' aberto' : ''}" id="${id}">
+    <label>${esc(label)}</label>
+    <button type="button" class="fb-multi-btn" aria-haspopup="true"
+      aria-expanded="${_fbMultiAberto === id}" onclick="fbMultiAbre('${id}', event)">
+      <span>${esc(resumo)}</span>▾</button>
+    <div class="fb-multi-pop" onclick="event.stopPropagation()">` +
+      caixa(todas || { label: 'Todas' }, !sel.length, 'fb-multi-todas', `${handler}(null)`) +
+      itens.map(o => {
+        const on = sel.some(k => String(k) === String(o.key));
+        const prox = on ? sel.filter(k => String(k) !== String(o.key)) : sel.concat([o.key]);
+        return caixa(o, on, '', `${handler}(${esc(JSON.stringify(prox.length ? prox : null))})`);
+      }).join('') +
+    `</div>
+  </div>`;
+}
+function fbMultiAbre(id, ev) {
+  if (ev) ev.stopPropagation();
+  _fbMultiAberto = _fbMultiAberto === id ? null : id;
+  document.querySelectorAll('.fb-multi').forEach(el => {
+    const on = el.id === _fbMultiAberto;
+    el.classList.toggle('aberto', on);
+    const b = el.querySelector('.fb-multi-btn');
+    if (b) b.setAttribute('aria-expanded', on);
+  });
+}
+// Clique fora ou Escape fecha a lista.
+document.addEventListener('click', e => {
+  if (_fbMultiAberto && !e.target.closest('.fb-multi')) fbMultiAbre(null);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && _fbMultiAberto) fbMultiAbre(null);
+});
+
 /* O MESMO INVOLUCRO DO `fbGroup`, com as opcoes ja montadas por fora.
    O `fbGroup` monta `<option>` a partir de uma lista chapada, e a arvore de
    temas precisa de `<optgroup>` e recuo — coisas que uma lista de
@@ -4959,7 +5037,7 @@ function setFiltroDev(v)    { _filtroDev    = vazioNulo(v); renderMelToolbar(); 
 function setFiltroPrazo(v)  { _filtroPrazo  = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroTipo(v)   { _filtroTipo   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroProd(v)   { _filtroProd   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
-function setFiltroSprint(v) { _filtroSprint = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
+function setFiltroSprint(v) { _filtroSprint = listaOuNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setBuscaMel(v) {
   _buscaMel = v || '';
   comFocoPreservado('mel-toolbar', () => { renderMelToolbar(); renderMelhorias(); });
@@ -4977,7 +5055,7 @@ function renderMelToolbar() {
                   _filtroProd, _filtroSprint, _buscaMel].filter(Boolean).length;
   el.innerHTML =
     // A SPRINT PRIMEIRO: e o recorte mais usado na semana de planejamento.
-    fbGroup('Sprint', _filtroSprint, opcoesSprintKb(), 'setFiltroSprint') +
+    fbMulti('fbm-mel-sprint', 'Sprint', _filtroSprint, opcoesSprintKb(), 'setFiltroSprint') +
     fbGroup('Tipo',  _filtroTipo,  opcoesTipo(),  'setFiltroTipo') +
     fbGroupHTML('Tema', temaOpcoesHTML(_filtroTema), 'setFiltroTema') +
     fbGroup('Dev',   _filtroDev,   opcoesDev(),   'setFiltroDev') +
@@ -5278,8 +5356,9 @@ let _kbDev   = null;
 let _kbPrazo = null;
 let _kbTipo  = null;
 let _kbDados = null;
-/* O FILTRO DA SPRINT: '' todas, '__fora__' fora de sprint, ou o rotulo. Le
-   `sprint_po` (a escolha do PO), e nao a semana deduzida das datas. */
+/* O FILTRO DA SPRINT: null todas, ou uma lista com '__fora__' e/ou rotulos —
+   varias sprints de uma vez. Le `sprint_po` (a escolha do PO), e nao a semana
+   deduzida das datas. */
 let _kbSprint = null;
 let _kbBi    = null;
 let _kbProd  = null;       // null|'falta_subir'|'no_ar' — ver PRODUCAO_BUCKETS
@@ -5333,9 +5412,16 @@ function setKbDev(v)   { _kbDev   = vazioNulo(v); renderKanban(); }
 function setKbPrazo(v) { _kbPrazo = vazioNulo(v); renderKanban(); }
 function setKbTipo(v)  { _kbTipo  = vazioNulo(v); renderKanban(); }
 function setKbDados(v) { _kbDados = vazioNulo(v); renderKanban(); }
-function setKbSprint(v) { _kbSprint = vazioNulo(v); renderKanban(); }
+function setKbSprint(v) { _kbSprint = listaOuNulo(v); renderKanban(); }
+/** Lista vazia ou '' vira null (= todas); uma chave solta vira lista de uma. */
+function listaOuNulo(v) {
+  const l = (Array.isArray(v) ? v : (v ? [v] : [])).filter(Boolean);
+  return l.length ? l : null;
+}
 function matchSprintKb(m, f) {
-  if (!f) return true;
+  if (!f || (Array.isArray(f) && !f.length)) return true;
+  // VARIAS SPRINTS: basta estar em uma delas.
+  if (Array.isArray(f)) return f.some(k => matchSprintKb(m, k));
   if (f === '__fora__') return SPRINTPO.foraDaSprint(m);
   return SPRINTPO.naSprint(m, f);
 }
@@ -5346,7 +5432,7 @@ function opcoesSprintKb() {
   const set = new Set(vivas.map(m => SPRINTPO.doPO(m)).filter(Boolean));
   SPRINTPO.proximasSprints(PRAZO.hojeISO(), 5, state.feriados || []).forEach(x => set.add(x.rotulo));
   return [{ key: '', label: 'Todas', n: vivas.length },
-          { key: '__fora__', label: 'Fora da sprint', n: vivas.filter(m => SPRINTPO.foraDaSprint(m)).length }]
+          { key: '__fora__', label: 'Sem sprint', n: vivas.filter(m => SPRINTPO.foraDaSprint(m)).length }]
     .concat([...set].sort((a, b) => chave(a).localeCompare(chave(b))).map(r => ({
       key: r, label: '● ' + SPRINTPO.rotuloCurto(r), n: vivas.filter(m => SPRINTPO.naSprint(m, r)).length })));
 }
@@ -5358,7 +5444,7 @@ function setBuscaKb(v) {
 }
 function setKbPeriodo(v) { _kbPeriodo = v || 'mes_atual'; renderKanban(); }
 function limparFiltrosKb() {
-  _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = _kbDados = _kbBi = null;
+  _kbSprint = _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = _kbDados = _kbBi = null;
   // O da coluna entra aqui tambem: ele conta no "Limpar (n)", e um filtro que
   // conta mas nao limpa deixa o botao mentindo sobre o que acabou de fazer.
   _kbProdCol = {};
@@ -5483,7 +5569,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
   });
   // 'mes_atual' é o padrão de higiene, não uma escolha explícita — só conta
   // como filtro "ativo" quando alguém pede para ver mais (3 meses/tudo).
-  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbDados, _kbBi, _kbBusca,
+  const ativos = [_kbSprint, _kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbDados, _kbBi, _kbBusca,
                   _kbPeriodo !== 'mes_atual' ? _kbPeriodo : null].filter(Boolean).length +
     /* CADA COLUNA FILTRADA CONTA UMA. Sem isto, o filtro do contador seria o
        segundo "filtro invisivel na conta" desta tela — o primeiro foi o periodo,
@@ -5491,7 +5577,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
        o "Limpar" diz que nao ha filtro, e conclui que sumiu dado. */
     Object.keys(_kbProdCol).length;
   el.innerHTML =
-    fbGroup('Sprint', _kbSprint, opcoesSprintKb(), 'setKbSprint') +
+    fbMulti('fbm-kb-sprint', 'Sprint', _kbSprint, opcoesSprintKb(), 'setKbSprint') +
     fbGroup('Tipo',    _kbTipo,    opcoesTipo(),    'setKbTipo') +
     fbGroupHTML('Tema', temaOpcoesHTML(_kbTema), 'setKbTema') +
     fbGroup('Dev',     _kbDev,     opcoesDev(),     'setKbDev') +
