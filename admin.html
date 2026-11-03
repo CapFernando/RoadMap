@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="7a1ca993d3">
+<html lang="pt-BR" data-build="12a4fe592c">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -17050,7 +17050,8 @@ function pjAndamentoHTML(p) {
     // A DATA NA FRENTE DA SPRINT: entrega ao usuario e, colada nela, a sprint.
     return abre + dataCel(x.dev, x.dev && x.dev < hoje, 'Entrega do dev') + tit + tag +
       '<span class="pj-and-usu">' + dataCel(x.usu, x.usu && x.usu < hoje, 'Entrega ao usuário') +
-        (sp ? '<span class="pj-and-sp">' + esc(SPRINTPO.rotuloCurto(sp)) + '</span>'
+        // O CHIP PADRAO DA SPRINT, com a cor dela — o mesmo do Kanban e da lista.
+        (sp ? SPRINTPO.badge(m, 'kb-sprint')
             : '<span class="pj-and-sp sem" title="Fora de sprint">—</span>') + '</span>' +
       '</li>';
   };
