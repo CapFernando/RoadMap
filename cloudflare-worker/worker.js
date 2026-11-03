@@ -2823,6 +2823,31 @@ function criandoTituloRepetido(recebido, servidor) {
 //
 // Sem esta guarda sobra o que sobrou na base: AX-079, concluida sem dev desde a
 // carga inicial, invisivel em todo relatorio por pessoa.
+/* COMECAR SEM DONO, PELO PAINEL DO DEV (03/11/2026). A Marina puxou a AX-1144
+   da fila do time para Em andamento e ela sumiu: a etapa mudou, o responsavel
+   ficou vazio, e demanda em andamento sem dono nao esta na fila (que e de quem
+   ainda nao comecou) nem no nome de ninguem. A tela agora grava o nome de quem
+   moveu; esta guarda pega o que escapar (tela em cache, corpo montado a mao).
+   So a TRANSICAO: o que ja estava assim no servidor nao trava a gravacao de
+   outra coisa. */
+function entrandoNoTrabalhoSemDev(recebido, servidor) {
+  const ETAPAS = ['em_andamento', 'validacao_area', 'validacao'];
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !ETAPAS.includes(String(m.status_planejamento || ''))) continue;
+    if (String(m.dev || '').trim()) continue;
+    const velha = antes.get(m.id);
+    if (velha && String(velha.status_planejamento || '') === String(m.status_planejamento || '')) continue;
+    const titulo = String(m.titulo || '').trim();
+    presos.push({ id: m.id || '', codigo: m.codigo || '', titulo: titulo,
+                  rotulo: (m.codigo || '') + (titulo ? ' · ' + titulo.slice(0, 60) : '') });
+  }
+  return presos;
+}
+
 function entrandoEmConcluidoSemDev(recebido, servidor) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Map();
@@ -7995,6 +8020,16 @@ export default {
                               semDevDev.map(x => x.rotulo).join(', ') +
                               '. De Planejado em diante toda demanda tem dono — sem ele a '  +
                               'entrega não entra em nenhum relatório por pessoa.' },
+                    400, headers);
+      }
+      const comecaSemDev = entrandoNoTrabalhoSemDev(data, antesDev);
+      if (comecaSemDev.length) {
+        return json({ error: 'comecar_sem_dono',
+                      itens: comecaSemDev,
+                      codigos: comecaSemDev.map(x => x.codigo || x.titulo),
+                      detail: 'Sem responsável: ' + comecaSemDev.map(x => x.rotulo).join(', ') +
+                              '. Quem tira a demanda da fila passa a ser o dono — recarregue o ' +
+                              'painel (Ctrl+F5) e mova de novo, que o seu nome entra junto.' },
                     400, headers);
       }
       if (semHorasDev.length) {

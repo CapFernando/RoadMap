@@ -24731,6 +24731,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'e ENTREGAR (ir para a validacao) continua sem travar');
       const WCo = WKS.replace(/export default \{[\s\S]*$/, '');
       const fco = new Function(WCo + '; return alocacaoSemSprint;')();
+      // QUEM PEGA DA FILA VIRA DONO (AX-1144 sumiu do painel da Marina)
+      const fsd = new Function(WCo + '; return entrandoNoTrabalhoSemDev;')();
+      ok(fsd({ melhorias: [{ id: 'f', codigo: 'AX-F', status_planejamento: 'em_andamento', dev: '' }] },
+             { melhorias: [{ id: 'f', status_planejamento: 'planning' }] }).length === 1 &&
+         fsd({ melhorias: [{ id: 'f', status_planejamento: 'em_andamento', dev: 'Marina' }] },
+             { melhorias: [{ id: 'f', status_planejamento: 'planning' }] }).length === 0 &&
+         fsd({ melhorias: [{ id: 'f', status_planejamento: 'em_andamento', dev: '' }] },
+             { melhorias: [{ id: 'f', status_planejamento: 'em_andamento' }] }).length === 0,
+         'comecar sem dono e recusado no dev-publish; com dono passa; o que ja estava assim nao trava');
+      ok(/entrandoNoTrabalhoSemDev\(data, antesDev\)/.test(WKS), 'a guarda esta ligada no dev-publish');
+      ok(/const assumiu = ETAPAS_DO_DEV\.includes\(colKey\) && !String\(m\.dev \|\| ''\)\.trim\(\) && !!currentDev;/.test(DEV) &&
+         /if \(assumiu\) campos\.dev = m\.dev;/.test(DEV),
+         'o painel dev grava o nome de quem tirou a demanda da fila');
       const presoC = fco({ melhorias: [{ id: 'c', codigo: 'AX-C', tipo: 'evolucao', status_planejamento: 'concluido', entregue_em: '2026-11-03' }] },
                          { melhorias: [{ id: 'c', status_planejamento: 'validacao' }] }, 'admin', '2026-11-02');
       ok(presoC.length === 1, 'o servidor recusa concluir sem sprint, inclusive para o PM/PO');

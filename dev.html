@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="665a8474ce">
+<html lang="pt-BR" data-build="3c9214a635">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -6391,6 +6391,14 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   const implAnterior = m.implementacao;
   const projAnterior = m.projeto_id;
   const anexosAnterior = m.anexos;
+  const devAnterior = m.dev;
+  /* QUEM PEGA DA FILA VIRA O DONO (03/11/2026). A Marina puxou a AX-1144 da
+     fila do time para Em andamento e ela sumiu: a etapa mudou, o responsável
+     ficou vazio, e demanda em andamento sem dono não está na fila (que é de
+     quem ainda não começou) nem no nome de ninguém. Começar é pegar — o nome
+     de quem moveu entra junto. O `dev-publish` recusa o caso que escapar. */
+  const assumiu = ETAPAS_DO_DEV.includes(colKey) && !String(m.dev || '').trim() && !!currentDev;
+  if (assumiu) m.dev = currentDev;
   // DELEGA — ver `STATUS_POR_ETAPA`, que era escrito duas vezes.
   // Atualiza localmente (otimista)
   m.status_planejamento = colKey;
@@ -6447,6 +6455,7 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   Object.assign(m, ghLinks);
   const campos = Object.assign({ status_planejamento: colKey, status: m.status,
                    horas_realizadas: m.horas_realizadas || 0 }, ghLinks);
+  if (assumiu) campos.dev = m.dev;
   if (m.entregue_em) campos.entregue_em = m.entregue_em;
   if (implementacao !== undefined) campos.implementacao = implementacao;
   if (_msAnexosMexidos) campos.anexos = _msAnexos;
@@ -6475,8 +6484,10 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
     m.implementacao = implAnterior;
     m.anexos = anexosAnterior;
     m.projeto_id = projAnterior;
+    m.dev = devAnterior;
     renderKanban();
   } else {
+    if (assumiu) toast('👤 ' + (m.codigo || 'Demanda') + ' agora está no seu nome.', 'ok');
     _msAnexosMexidos = false;
     _msProjetoMexido = false;
   }
