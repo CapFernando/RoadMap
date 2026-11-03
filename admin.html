@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="b5dd673329">
+<html lang="pt-BR" data-build="a046c7e73c">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -5189,26 +5189,21 @@ function renderMelhorias() {
     return (a.titulo || '').localeCompare(b.titulo || '');
   });
   // Group by tema
-  const temaOrder = state.temas.map(t => t.id);
   const groups = {};
   sorted.forEach(m => {
     const key = m.tema_id || '__sem_tema__';
     if (!groups[key]) groups[key] = [];
     groups[key].push(m);
   });
-  // Urgência do tema = entrega mais próxima/vencida entre suas demandas em aberto
-  function grupoUrgencia(key) {
-    const comData = groups[key].filter(m => m.entrega && isDemandaAberta(m));
-    if (!comData.length) return Infinity;
-    return Math.min(...comData.map(m => new Date(m.entrega + 'T00:00:00').getTime()));
-  }
   const groupKeys = Object.keys(groups).sort((a, b) => {
     if (a === '__sem_tema__') return 1;
     if (b === '__sem_tema__') return -1;
-    const ua = grupoUrgencia(a), ub = grupoUrgencia(b);
-    if (ua !== ub) return ua - ub; // tema mais urgente primeiro
-    const ia = temaOrder.indexOf(a), ib = temaOrder.indexOf(b);
-    return (ia === -1 ? 9999 : ia) - (ib === -1 ? 9999 : ib);
+    /* PELO NOME DO TEMA, e nao mais pelo mais urgente (03/11/2026): "ordenando
+       pelos temas". Em ordem alfabetica os sistemas ficam juntos (AXCred - ...),
+       e o mesmo tema esta sempre no mesmo lugar da lista. A urgencia continua
+       visivel em cada linha, pelas datas de entrega. */
+    const na = state.temas.find(t => t.id === a)?.nome || '', nb = state.temas.find(t => t.id === b)?.nome || '';
+    return na.localeCompare(nb, 'pt-BR', { sensitivity: 'base' });
   });
   el.innerHTML = groupKeys.map(tKey => {
     const temaNome = tKey === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === tKey)?.nome || '—');
@@ -5222,8 +5217,10 @@ function renderMelhorias() {
       const tipoBadge = m.tipo && TIPO_LABELS[m.tipo]
         ? `<span style="font-size:11px;background:var(--bg4);color:var(--text2);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;">${TIPO_LABELS[m.tipo]}</span>`
         : '';
-      let sub = '';
-      if (m.dev) sub += m.dev;
+      /* COM QUEM ESTA, dito com todas as letras — o nome solto nao deixava claro
+         se era o dev ou o solicitante. */
+      let sub = m.dev ? `👤 Com: <strong>${esc(m.dev)}</strong>`
+                      : '<span style="color:var(--text3)">👤 Sem responsável</span>';
       if (m.entrega) {
         let cor = '', tag = '';
         if (isDemandaAberta(m)) {
@@ -5237,7 +5234,22 @@ function renderMelhorias() {
           else if (dias === 0){ cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ' (vence hoje)'; }
           else if (dias <= 7) { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ` (em ${dias}d)`; }
         }
-        sub += (sub ? ' · ' : '') + `<span style="${cor}">Entrega: ${formatDate(m.entrega)}${tag}</span>`;
+        sub += (sub ? ' · ' : '') + `<span style="${cor}">Entrega dev: ${formatDate(m.entrega)}${tag}</span>`;
+      }
+      /* A DATA PROMETIDA AO USUARIO, ao lado da do dev. E a que o solicitante
+         cobra; vencida so conta enquanto a demanda esta aberta. */
+      if (m.entrega_usuario) {
+        let corU = '', tagU = '';
+        if (isDemandaAberta(m)) {
+          const hojeU = new Date(); hojeU.setHours(0,0,0,0);
+          const diasU = Math.round((new Date(m.entrega_usuario + 'T00:00:00') - hojeU) / 86400000);
+          if (diasU < 0)       { corU = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tagU = ` (vencida há ${-diasU}d)`; }
+          else if (diasU === 0){ corU = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tagU = ' (vence hoje)'; }
+          else if (diasU <= 7) { corU = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tagU = ` (em ${diasU}d)`; }
+        }
+        sub += ' · ' + `<span style="${corU}">📅 Entrega usuário: ${formatDate(m.entrega_usuario)}${tagU}</span>`;
+      } else {
+        sub += ' · <span style="color:var(--text3)">📅 Entrega usuário: a definir</span>';
       }
       /* NO AR — a marca que responde "isso ja chegou ao usuario?".
          Ela e a razao de o campo existir: sem marca no cartao, saber que a
