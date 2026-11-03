@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="e8969a1e7a">
+<html lang="pt-BR" data-build="e9db776a9c">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -245,6 +245,53 @@
     .pj-topo h3 { margin:0; font-size:17px; font-weight:700; }
     .pj-hint { font-size:13px; color:var(--text2); line-height:1.55; margin:0 0 18px; max-width:76ch; }
     .pj-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+    /* Entregas por sprint: o quadro executivo. */
+    .es-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin:6px 0 14px; }
+    .es-kpi { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; }
+    .es-kpi-v { font-size:28px; font-weight:800; color:var(--text); line-height:1.1; font-variant-numeric:tabular-nums; }
+    .es-kpi-r { font-size:12px; color:var(--text2); margin-top:2px; }
+    .es-kpi-s { font-size:11px; color:var(--text3); margin-top:2px; }
+    .es-kpi.ok .es-kpi-v { color:var(--green-tx,#8FE0A8); }
+    .es-kpi.val .es-kpi-v { color:var(--amber-tx,#FFC470); }
+    .es-kpi.and .es-kpi-v { color:#7FB2F0; }
+    .es-kpi.venc .es-kpi-v { color:var(--red-tx,#F9A0A0); }
+    .es-projs { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:16px; }
+    .es-projs-tit { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text2); margin-right:4px; }
+    .es-proj { font-size:12.5px; background:#2A1F4D; color:#D9C8FF; border:1px solid #4B3A86; border-radius:999px; padding:3px 10px; }
+    .es-proj b { color:#C9AEFF; }
+    .es-proj em { font-style:normal; color:#9E8FD0; margin-left:4px; }
+    .es-projs-sem { font-size:12px; color:var(--text3); }
+    .es-quadro { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:14px; align-items:start; }
+    .es-card { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:12px; }
+    .es-card-topo { display:flex; align-items:baseline; gap:8px; margin-bottom:6px; }
+    .es-card-nome { font-weight:700; font-size:14px; color:var(--text); flex:1; }
+    .es-card-n { font-size:12px; color:var(--text3); white-space:nowrap; }
+    .es-barra { height:5px; background:var(--bg4,rgba(255,255,255,.08)); border-radius:99px; overflow:hidden; margin-bottom:10px; }
+    .es-barra i { display:block; height:100%; background:var(--green,#3FB950); }
+    .es-item { background:var(--bg3); border:1px solid var(--border); border-left-width:3px; border-radius:9px;
+      padding:8px 10px; margin-top:8px; cursor:pointer; }
+    .es-item:hover { border-color:var(--border2,#555); }
+    .es-item.es-entregue { border-left-color:#3FB950; }
+    .es-item.es-validacao { border-left-color:#E8A33D; }
+    .es-item.es-andamento { border-left-color:#3B82F6; }
+    .es-item.es-iniciar { border-left-color:#6B7686; }
+    .es-item.es-negada { border-left-color:#8B3A3A; opacity:.7; }
+    .es-item-top { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+    .es-etapa { font-size:11px; font-weight:700; border-radius:4px; padding:1px 6px; }
+    .es-etapa.es-entregue { background:#16351F; color:#8FE0A8; }
+    .es-etapa.es-validacao { background:#3A2A05; color:#FFC861; }
+    .es-etapa.es-andamento { background:#14284A; color:#9CC3F5; }
+    .es-etapa.es-iniciar { background:var(--bg4,#2A2A2A); color:var(--text2); }
+    .es-etapa.es-negada { background:#3A1414; color:#F9A0A0; }
+    .es-cod { font-family:monospace; font-size:11.5px; color:var(--text3); }
+    .es-pts { margin-left:auto; font-size:11px; color:#8AD5F0; }
+    .es-item-tit { font-size:13.5px; font-weight:600; color:var(--text); margin:4px 0; line-height:1.3;
+      display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .es-item-meta { display:flex; flex-wrap:wrap; gap:4px 12px; font-size:12px; color:var(--text2); }
+    .es-venc { color:var(--red-tx,#F9A0A0); font-weight:700; }
+    .es-mudo { color:var(--text3); }
+    .es-item-proj { margin-top:6px; font-size:11.5px; color:#D9C8FF; background:#2A1F4D; border:1px solid #4B3A86;
+      border-radius:6px; padding:2px 7px; display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     /* Projetos em andamento: seletor e a linha do tempo de cada projeto. */
     .pj-visao { display:inline-flex; gap:4px; background:var(--bg3); border:1px solid var(--border);
       border-radius:10px; padding:3px; margin-bottom:12px; }
@@ -2185,8 +2232,9 @@
         <h3>Entregas por sprint</h3>
         <span class="us-conta" id="es-conta">0</span>
       </div>
-      <p class="pj-hint">As demandas que o PM/PO pôs na sprint escolhida, agrupadas por tema, com quem
-        está cada uma e as datas de entrega do dev e ao usuário.</p>
+      <p class="pj-hint">Quadro executivo da sprint escolhida: os números, os projetos que ela move e as
+        demandas por tema, com quem está cada uma, a entrega ao usuário e o projeto de que faz parte.
+        Clique numa demanda para abri-la.</p>
       <div class="filter-bar" style="display:flex;flex-wrap:wrap;align-items:flex-end">
         <div class="ger-filter-group">
           <label>Sprint</label>
@@ -5205,18 +5253,6 @@ function renderAll() {
  * Abre na sprint de hoje. */
 let _esSprint = '';
 
-function esDataHTML(rotulo, data, aberta) {
-  if (!data) return `<span style="color:var(--text3)">${rotulo}: a definir</span>`;
-  let cor = '', tag = '';
-  if (aberta) {
-    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const dias = Math.round((new Date(data + 'T00:00:00') - hoje) / 86400000);
-    if (dias < 0)        { cor = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
-    else if (dias === 0) { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ' (vence hoje)'; }
-    else if (dias <= 7)  { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ` (em ${dias}d)`; }
-  }
-  return `<span style="${cor}">${rotulo}: ${formatDate(data)}${tag}</span>`;
-}
 
 function renderEntregasSprint() {
   const sel = document.getElementById('es-sprint');
@@ -5234,18 +5270,77 @@ function renderEntregasSprint() {
 
   const ms = (state.melhorias || []).filter(m => !ehMesclada(m) && SPRINTPO.naSprint(m, _esSprint));
   document.getElementById('es-conta').textContent = ms.length;
-  const feitas = ms.filter(m => statusKey(m) === 'concluido').length;
-  const negadas = ms.filter(m => statusKey(m) === 'negada').length;
-  const pontos = ms.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
-  document.getElementById('es-resumo').textContent = ms.length
-    ? `${ms.length} demanda(s) · ${feitas} concluída(s) · ${ms.length - feitas - negadas} em aberto` +
-      (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${pontos} pts`
-    : '';
+  document.getElementById('es-resumo').textContent = '';
   if (!ms.length) {
     box.innerHTML = '<div class="empty">Nenhuma demanda nesta sprint.</div>';
     return;
   }
 
+  /* ═══ O QUADRO EXECUTIVO (03/11/2026) ═══════════════════════════════════
+     "As entregas por sprint podem ser melhores, em quadro, por temas. Preciso
+      prestar conta para diretoria, entao gere um quadro executivo e marque os
+      projetos caso a task tenha algum, para sinalizar de qual entrega faz parte."
+
+     TRES ANDARES: os numeros da sprint, os projetos que ela move e o quadro
+     por tema. A etapa de cada demanda cai em quatro grupos que a diretoria le
+     sem legenda — entregue, em validacao, em andamento, a iniciar. */
+  const hoje = PRAZO.hojeISO();
+  const grupoDe = m => {
+    const k = statusKey(m);
+    if (k === 'concluido') return 'entregue';
+    if (k === 'negada') return 'negada';
+    if (k === 'validacao_area' || k === 'validacao') return 'validacao';
+    if (k === 'em_andamento') return 'andamento';
+    return 'iniciar';
+  };
+  const G = {
+    entregue:  { rot: 'Entregue',     ico: '✅', ordem: 3 },
+    validacao: { rot: 'Em validação', ico: '🔎', ordem: 1 },
+    andamento: { rot: 'Em andamento', ico: '🚧', ordem: 0 },
+    iniciar:   { rot: 'A iniciar',    ico: '📅', ordem: 2 },
+    negada:    { rot: 'Negada',       ico: '⛔', ordem: 4 },
+  };
+  const conta = g => ms.filter(m => grupoDe(m) === g).length;
+  const validas = ms.filter(m => grupoDe(m) !== 'negada');
+  const entregues = conta('entregue');
+  const pct = validas.length ? Math.round(entregues / validas.length * 100) : 0;
+  const pts = m => Number(m.poker_pontos) || 0;
+  const ptsTotal = validas.reduce((t, m) => t + pts(m), 0);
+  const ptsFeitos = validas.filter(m => grupoDe(m) === 'entregue').reduce((t, m) => t + pts(m), 0);
+  const vencida = m => grupoDe(m) !== 'entregue' && grupoDe(m) !== 'negada' &&
+                       /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje;
+  const nVenc = ms.filter(vencida).length;
+
+  const kpi = (valor, rot, cls, sub) =>
+    `<div class="es-kpi ${cls || ''}"><div class="es-kpi-v">${valor}</div>` +
+    `<div class="es-kpi-r">${rot}</div>${sub ? `<div class="es-kpi-s">${sub}</div>` : ''}</div>`;
+  const kpis = '<div class="es-kpis">' +
+    kpi(ms.length, 'demandas na sprint', '', conta('negada') ? conta('negada') + ' negada(s)' : '') +
+    kpi(pct + '%', 'entregue', 'ok', entregues + ' de ' + validas.length) +
+    kpi(conta('validacao'), 'em validação', 'val') +
+    kpi(conta('andamento'), 'em andamento', 'and') +
+    kpi(conta('iniciar'), 'a iniciar', '') +
+    kpi(ptsFeitos + '/' + ptsTotal, 'pontos entregues', '') +
+    kpi(nVenc, 'com entrega vencida', nVenc ? 'venc' : '') +
+    '</div>';
+
+  // ── Os projetos que a sprint move ──
+  const projeto = id => (state.projetos || []).find(p => p.id === id);
+  const porProj = {};
+  ms.forEach(m => { if (m.projeto_id && projeto(m.projeto_id)) (porProj[m.projeto_id] = porProj[m.projeto_id] || []).push(m); });
+  const projHTML = Object.keys(porProj).length
+    ? '<div class="es-projs"><span class="es-projs-tit">📁 Projetos nesta sprint</span>' +
+      Object.keys(porProj).sort((a, b) => porProj[b].length - porProj[a].length).map(id => {
+        const p = projeto(id), l = porProj[id];
+        const feitas = l.filter(m => grupoDe(m) === 'entregue').length;
+        return `<span class="es-proj" title="${esc(p.nome || '')}">` +
+          `${p.codigo ? '<b>' + esc(p.codigo) + '</b> ' : ''}${esc(p.nome || '')}` +
+          ` <em>${feitas}/${l.length}</em></span>`;
+      }).join('') +
+      `<span class="es-projs-sem">${ms.filter(m => !m.projeto_id || !projeto(m.projeto_id)).length} fora de projeto</span></div>`
+    : '';
+
+  // ── O quadro por tema ──
   const grupos = {};
   ms.forEach(m => { const k = m.tema_id || '__sem_tema__'; (grupos[k] = grupos[k] || []).push(m); });
   const nomeTema = k => k === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === k)?.nome || '—');
@@ -5254,36 +5349,42 @@ function renderEntregasSprint() {
     if (b === '__sem_tema__') return -1;
     return nomeTema(a).localeCompare(nomeTema(b), 'pt-BR', { sensitivity: 'base' });
   });
-  // Dentro do tema: pela entrega ao usuario (ou do dev), sem data no fim.
-  const dataDe = m => m.entrega_usuario || m.entrega || '9999';
-
-  box.innerHTML = chaves.map(k => {
-    const linhas = grupos[k].sort((a, b) => dataDe(a).localeCompare(dataDe(b)) ||
-                                            (a.titulo || '').localeCompare(b.titulo || ''))
-      .map(m => {
-        const sk = statusEfetivo(m);
-        const aberta = isDemandaAberta(m);
-        const com = m.dev ? `👤 Com: <strong>${esc(m.dev)}</strong>`
-                          : '<span style="color:var(--text3)">👤 Sem responsável</span>';
-        return `<div class="card" style="cursor:pointer" onclick="openModalMelhoria('${m.id}')">
-          <div class="card-info">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-              ${m.codigo ? `<span class="kb-cod" style="font-family:monospace;font-size:12px;color:var(--text3)">${esc(m.codigo)}</span>` : ''}
-              <div class="card-nome">${esc(m.titulo)}</div>
-              <span class="badge badge-${sk}">${STATUS_LABELS[sk] || sk}</span>
-              ${m.poker_pontos != null ? `<span style="font-size:11px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 7px;">🃏 ${m.poker_pontos}</span>` : ''}
-            </div>
-            <div class="card-sub">${com} · ${esDataHTML('Entrega dev', m.entrega, aberta)} · ` +
-              `📅 ${esDataHTML('Entrega usuário', m.entrega_usuario, aberta)}` +
-              `${statusKey(m) === 'concluido' && m.concluido_em ? ' · ✅ Concluída em ' + formatDate(String(m.concluido_em).slice(0, 10)) : ''}</div>
-          </div>
-        </div>`;
-      }).join('');
-    return `<div style="margin-bottom:18px;">
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;">${esc(nomeTema(k))} <span style="font-weight:400;opacity:.7;">(${grupos[k].length})</span></div>
-      ${linhas}
+  const cartoes = chaves.map(k => {
+    const lista = grupos[k].slice().sort((a, b) =>
+      G[grupoDe(a)].ordem - G[grupoDe(b)].ordem ||
+      String(a.entrega_usuario || '9999').localeCompare(String(b.entrega_usuario || '9999')) ||
+      String(a.codigo || '').localeCompare(String(b.codigo || ''), 'pt-BR', { numeric: true }));
+    const val = lista.filter(m => grupoDe(m) !== 'negada');
+    const ok = val.filter(m => grupoDe(m) === 'entregue').length;
+    const p = val.length ? Math.round(ok / val.length * 100) : 0;
+    const itens = lista.map(m => {
+      const g = grupoDe(m), pj = m.projeto_id ? projeto(m.projeto_id) : null;
+      const venc = vencida(m);
+      return `<div class="es-item es-${g}" onclick="openModalMelhoria('${m.id}')" title="${esc((m.codigo ? m.codigo + ' · ' : '') + m.titulo)}">
+        <div class="es-item-top">
+          <span class="es-etapa es-${g}">${G[g].ico} ${G[g].rot}</span>
+          ${m.codigo ? `<span class="es-cod">${esc(m.codigo)}</span>` : ''}
+          ${m.poker_pontos != null ? `<span class="es-pts">${m.poker_pontos} pts</span>` : ''}
+        </div>
+        <div class="es-item-tit">${esc(m.titulo || '')}</div>
+        <div class="es-item-meta">
+          <span>${m.dev ? '👤 ' + esc(m.dev) : '<span class="es-mudo">👤 Sem responsável</span>'}</span>
+          <span class="${venc ? 'es-venc' : ''}">📅 ${m.entrega_usuario ? formatDate(m.entrega_usuario) + (venc ? ' · vencida' : '') : '<span class="es-mudo">a definir</span>'}</span>
+        </div>
+        ${pj ? `<div class="es-item-proj" title="Faz parte do projeto ${esc(pj.nome || '')}">📁 ${pj.codigo ? esc(pj.codigo) + ' · ' : ''}${esc(pj.nome || '')}</div>` : ''}
+      </div>`;
+    }).join('');
+    return `<div class="es-card">
+      <div class="es-card-topo">
+        <span class="es-card-nome">${esc(nomeTema(k))}</span>
+        <span class="es-card-n">${ok}/${val.length} entregues</span>
+      </div>
+      <div class="es-barra"><i style="width:${p}%"></i></div>
+      ${itens}
     </div>`;
   }).join('');
+
+  box.innerHTML = kpis + projHTML + '<div class="es-quadro">' + cartoes + '</div>';
 }
 
 function renderTemas() {
