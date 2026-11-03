@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="06cfaeba92">
+<html lang="pt-BR" data-build="6330fc2700">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1727,6 +1727,7 @@
       <div class="tab" onclick="switchTab('gerencial')">Gerencial</div>
       <div class="tab" onclick="switchTab('relatorios')">Relatórios</div>
       <div class="tab" onclick="switchTab('usuarios')">Usuários</div>
+      <div class="tab" onclick="switchTab('entregas')">Entregas por sprint</div>
       <a href="importar.html" class="tab tab-externa" style="text-decoration:none">Importar ↗</a>
     </div>
 
@@ -2159,6 +2160,24 @@
       <!-- Diz de onde vem a hora. Numero aproximado sem aviso e lido como medicao,
            e foi assim que "1554h" chegou a um slide de diretoria. -->
       <p class="ger-legenda" id="ger-legenda"></p>
+    </div>
+
+    <!-- ABA ENTREGAS POR SPRINT — o que cada sprint entrega, por tema -->
+    <div class="tab-content" id="tab-entregas">
+      <div class="pj-topo">
+        <h3>Entregas por sprint</h3>
+        <span class="us-conta" id="es-conta">0</span>
+      </div>
+      <p class="pj-hint">As demandas que o PM/PO pôs na sprint escolhida, agrupadas por tema, com quem
+        está cada uma e as datas de entrega do dev e ao usuário.</p>
+      <div class="filter-bar" style="display:flex;flex-wrap:wrap;align-items:flex-end">
+        <div class="ger-filter-group">
+          <label>Sprint</label>
+          <select id="es-sprint" onchange="_esSprint = this.value; renderEntregasSprint()"></select>
+        </div>
+        <span class="fb-count" id="es-resumo"></span>
+      </div>
+      <div id="es-lista"></div>
     </div>
 
     <!-- ABA RELATÓRIOS — apoio à reunião de comitê de produto -->
@@ -5151,8 +5170,103 @@ function renderAll() {
   renderTemas(); renderStatusFilters(); renderMelToolbar(); renderMelhorias();
   renderRiscoBanner(); renderValBanner();
   if (document.getElementById('tab-kanban')?.classList.contains('active')) renderKanban();
+  if (document.getElementById('tab-entregas')?.classList.contains('active')) renderEntregasSprint();
   bannerPendentes();
   if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: y });
+}
+
+/* ═══ ENTREGAS POR SPRINT (03/11/2026) ═══════════════════════════════════════
+ *
+ * "Crie uma nova aba, entregas por sprint. Ali quero a mesma logica que criamos
+ *  agora, com temas e suas respectivas datas e com quem esta. Preciso que seja
+ *  possivel escolher a sprint para ter o resultado."
+ *
+ * A MESMA LOGICA DA ABA MELHORIAS: grupos por tema em ordem alfabetica, e em
+ * cada linha "Com: <dev>", a entrega do dev e a entrega ao usuario. A sprint e
+ * a do PO (`sprint_po`), a mesma do Kanban e do painel do dev. Concluidas e
+ * negadas entram: e a lista do que a sprint ENTREGA, e nao so do que falta.
+ * Abre na sprint de hoje. */
+let _esSprint = '';
+
+function esDataHTML(rotulo, data, aberta) {
+  if (!data) return `<span style="color:var(--text3)">${rotulo}: a definir</span>`;
+  let cor = '', tag = '';
+  if (aberta) {
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const dias = Math.round((new Date(data + 'T00:00:00') - hoje) / 86400000);
+    if (dias < 0)        { cor = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
+    else if (dias === 0) { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ' (vence hoje)'; }
+    else if (dias <= 7)  { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ` (em ${dias}d)`; }
+  }
+  return `<span style="${cor}">${rotulo}: ${formatDate(data)}${tag}</span>`;
+}
+
+function renderEntregasSprint() {
+  const sel = document.getElementById('es-sprint');
+  const box = document.getElementById('es-lista');
+  if (!sel || !box) return;
+  // As opcoes sao as do filtro do Kanban, sem "Todas" e sem "Sem sprint".
+  const opcoes = opcoesSprintKb().filter(o => o.key && o.key !== '__fora__');
+  const atual = SPRINTPO.sprintCorrente(PRAZO.hojeISO(), state.feriados || []);
+  if (!_esSprint || !opcoes.some(o => o.key === _esSprint)) {
+    _esSprint = opcoes.some(o => o.key === atual) ? atual : (opcoes[0] ? opcoes[0].key : '');
+  }
+  sel.innerHTML = opcoes.map(o =>
+    `<option value="${esc(o.key)}"${o.key === _esSprint ? ' selected' : ''}>` +
+    `${esc(o.label.replace(/^● /, ''))}${o.key === atual ? ' (atual)' : ''} (${o.n})</option>`).join('');
+
+  const ms = (state.melhorias || []).filter(m => !ehMesclada(m) && SPRINTPO.naSprint(m, _esSprint));
+  document.getElementById('es-conta').textContent = ms.length;
+  const feitas = ms.filter(m => statusKey(m) === 'concluido').length;
+  const negadas = ms.filter(m => statusKey(m) === 'negada').length;
+  const pontos = ms.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+  document.getElementById('es-resumo').textContent = ms.length
+    ? `${ms.length} demanda(s) · ${feitas} concluída(s) · ${ms.length - feitas - negadas} em aberto` +
+      (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${pontos} pts`
+    : '';
+  if (!ms.length) {
+    box.innerHTML = '<div class="empty">Nenhuma demanda nesta sprint.</div>';
+    return;
+  }
+
+  const grupos = {};
+  ms.forEach(m => { const k = m.tema_id || '__sem_tema__'; (grupos[k] = grupos[k] || []).push(m); });
+  const nomeTema = k => k === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === k)?.nome || '—');
+  const chaves = Object.keys(grupos).sort((a, b) => {
+    if (a === '__sem_tema__') return 1;
+    if (b === '__sem_tema__') return -1;
+    return nomeTema(a).localeCompare(nomeTema(b), 'pt-BR', { sensitivity: 'base' });
+  });
+  // Dentro do tema: pela entrega ao usuario (ou do dev), sem data no fim.
+  const dataDe = m => m.entrega_usuario || m.entrega || '9999';
+
+  box.innerHTML = chaves.map(k => {
+    const linhas = grupos[k].sort((a, b) => dataDe(a).localeCompare(dataDe(b)) ||
+                                            (a.titulo || '').localeCompare(b.titulo || ''))
+      .map(m => {
+        const sk = statusEfetivo(m);
+        const aberta = isDemandaAberta(m);
+        const com = m.dev ? `👤 Com: <strong>${esc(m.dev)}</strong>`
+                          : '<span style="color:var(--text3)">👤 Sem responsável</span>';
+        return `<div class="card" style="cursor:pointer" onclick="openModalMelhoria('${m.id}')">
+          <div class="card-info">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+              ${m.codigo ? `<span class="kb-cod" style="font-family:monospace;font-size:12px;color:var(--text3)">${esc(m.codigo)}</span>` : ''}
+              <div class="card-nome">${esc(m.titulo)}</div>
+              <span class="badge badge-${sk}">${STATUS_LABELS[sk] || sk}</span>
+              ${m.poker_pontos != null ? `<span style="font-size:11px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 7px;">🃏 ${m.poker_pontos}</span>` : ''}
+            </div>
+            <div class="card-sub">${com} · ${esDataHTML('Entrega dev', m.entrega, aberta)} · ` +
+              `📅 ${esDataHTML('Entrega usuário', m.entrega_usuario, aberta)}` +
+              `${statusKey(m) === 'concluido' && m.concluido_em ? ' · ✅ Concluída em ' + formatDate(String(m.concluido_em).slice(0, 10)) : ''}</div>
+          </div>
+        </div>`;
+      }).join('');
+    return `<div style="margin-bottom:18px;">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;">${esc(nomeTema(k))} <span style="font-weight:400;opacity:.7;">(${grupos[k].length})</span></div>
+      ${linhas}
+    </div>`;
+  }).join('');
 }
 
 function renderTemas() {
@@ -5371,6 +5485,7 @@ function switchTab(name, el) {
   }
   if (name === 'relatorios') renderRelatorios();
   if (name === 'usuarios') renderUsuarios();
+  if (name === 'entregas') renderEntregasSprint();
   if (name === 'projetos') renderProjetos();
   renderValBanner();
   renderRiscoBanner();
