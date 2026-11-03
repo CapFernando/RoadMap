@@ -3,7 +3,7 @@
      saber, de olhada, se o navegador esta servindo uma copia antiga desta tela.
      Faltava justamente aqui, e esta e a tela que o time inteiro abre ao mesmo
      tempo numa reuniao — onde descobrir tarde custa a reuniao. -->
-<html lang="pt-BR" data-build="1318ffbba7">
+<html lang="pt-BR" data-build="66373b0cb6">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1037,10 +1037,38 @@ function setFilaFrente(v) {
   renderFila();
 }
 
+/* ═══ O QUE JA FOI VOTADO SAI DA FILA (03/11/2026) ═════════════════════════
+ *
+ * "Em poker, tudo que ja foi votado nao constar na lista (manter apenas as que
+ *  foram votadas no dia)."
+ *
+ * Votada = tem `poker_votado_em` (gravado pelo "Gravar no card"). Fica na lista
+ * so se a data, no fuso de Sao Paulo, for a de hoje: e o que a reuniao acabou de
+ * decidir e ainda pode querer rever. Pontos sem data de votacao (postos a mao)
+ * tambem contam como ja estimados. A demanda EM PAUTA nunca sai. */
+function pkHoje() {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+}
+function pkDiaDaVotacao(m) {
+  const s = String((m && m.poker_votado_em) || '');
+  if (!s) return '';
+  const d = new Date(s);
+  return isNaN(d) ? s.slice(0, 10) : d.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+}
+function pkJaVotadaAntes(m) {
+  const dia = pkDiaDaVotacao(m);
+  if (dia) return dia !== pkHoje();
+  return m && m.poker_pontos != null;
+}
+function pkNaFila(m) {
+  const atual = _estado ? _estado.melhoria_id : '';
+  return (m.status_planejamento || '') === 'planning' && (m.id === atual || !pkJaVotadaAntes(m));
+}
+
 function filaPlanning() {
   const atual = _estado ? _estado.melhoria_id : '';
   return _melhorias
-    .filter(m => (m.status_planejamento || '') === 'planning')
+    .filter(pkNaFila)
     /* A DEMANDA EM PAUTA NUNCA É FILTRADA FORA. Sem esta linha, recortar por
        Dados enquanto se vota uma de Desenvolvimento tirava da tela justamente
        o card que está sendo votado — e as cartas continuariam abertas, sem
@@ -1132,12 +1160,15 @@ function renderFila() {
   /* O TOTAL DA PLANNING E O RECORTE SAO CONTAS DIFERENTES, e as duas aparecem.
      "3 de 29 demandas" diz que o filtro está ligado; só "3" faria quem chega
      depois achar que a pauta encolheu. */
-  const naPlanning = _melhorias.filter(m => (m.status_planejamento || '') === 'planning');
+  const naPlanning = _melhorias.filter(pkNaFila);
+  // As ja votadas em outro dia nao aparecem; a contagem diz quantas sairam.
+  const votadasAntes = _melhorias.filter(m => (m.status_planejamento || '') === 'planning' && !pkNaFila(m)).length;
   renderFilaFrentes(naPlanning);
   const lista = filaPlanning();
-  document.getElementById('fila-count').textContent = _filaFrente
+  document.getElementById('fila-count').textContent = (_filaFrente
     ? `${lista.length} de ${naPlanning.length} demanda(s)`
-    : `${lista.length} demanda(s)`;
+    : `${lista.length} demanda(s)`) +
+    (votadasAntes ? ` · ${votadasAntes} já votada(s) antes de hoje fora da lista` : '');
   const el = document.getElementById('fila-lista');
   if (!lista.length) {
     el.innerHTML = _filaFrente

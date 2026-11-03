@@ -4321,6 +4321,8 @@ async function rotear(request, env, _histFila) {
           id: m.id, titulo: m.titulo || '', dev: m.dev || '', tipo: m.tipo || '',
           tema_id: m.tema_id || '', poker_pontos: m.poker_pontos ?? null,
           poker_media: m.poker_media ?? null, status_planejamento: m.status_planejamento || '',
+          // Quando foi votada: a mesa so mostra o que ainda nao foi, ou foi hoje.
+          poker_votado_em: m.poker_votado_em || '',
           codigo: m.codigo || '', descricao: m.descricao || '',
           solicitante: m.solicitante || '', entrega: m.entrega || '',
           criado_em: m.criado_em || '', debito_tecnico: !!m.debito_tecnico,

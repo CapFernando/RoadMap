@@ -887,9 +887,31 @@ sec('Planning Poker: estrela no topo, e o convite na tela');
   /* `FILA_MARCADAS` entrou junto com o recorte pela MARCA, separado do recorte
      pela frente deduzida. Mais uma dependencia que estourou aqui porque este
      bloco executa a funcao de verdade. */
+  /* `pkNaFila` (e as tres que ela usa) entrou quando a fila passou a esconder o
+     que ja foi votado em outro dia — vai junto, pelo mesmo motivo dos stubs. */
+  const PK = ['function pkHoje(', 'function pkDiaDaVotacao(', 'function pkJaVotadaAntes(',
+              'function pkNaFila('].map(a => corpo(POKER, a)).join('\n');
   const F = new Function('_melhorias', '_estado', '_filaFrente', 'frenteDaDemanda',
     'FILA_MARCADAS',
-    corpo(POKER, 'function filaPlanning(') + ' return filaPlanning;');
+    PK + '\n' + corpo(POKER, 'function filaPlanning(') + ' return filaPlanning;');
+
+  /* ── O QUE JA FOI VOTADO SAI DA FILA, MENOS O DE HOJE (03/11/2026) ── */
+  {
+    const agora = new Date().toISOString();
+    const ontem = new Date(Date.now() - 2 * 86400000).toISOString();
+    const ms = [
+      { id: 'nova', status_planejamento: 'planning' },
+      { id: 'hoje', status_planejamento: 'planning', poker_pontos: 5, poker_votado_em: agora },
+      { id: 'antes', status_planejamento: 'planning', poker_pontos: 8, poker_votado_em: ontem },
+      { id: 'mao', status_planejamento: 'planning', poker_pontos: 3 },
+    ];
+    const ids = F(ms, null, '', () => '', '__m__')().map(m => m.id).join(',');
+    ok(ids === 'nova,hoje', 'a fila do poker so mostra o nao votado e o votado HOJE', ids);
+    const emPauta = F(ms, { melhoria_id: 'antes' }, '', () => '', '__m__')().map(m => m.id);
+    ok(emPauta.includes('antes'), 'mas a demanda EM PAUTA nunca sai, mesmo votada antes');
+    ok(/poker_votado_em: m\.poker_votado_em \|\| ''/.test(enx),
+       'o worker manda `poker_votado_em` para a tela do poker');
+  }
   /* OS IDS ESTAO FORA DE ORDEM ALFABETICA DE PROPOSITO. Com 'a','b','c','d' o
      desempate por indice e o desempate por id davam o mesmo resultado, e a
      sabotagem que trocava um pelo outro passava lisa — o teste nao media a
