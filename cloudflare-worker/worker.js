@@ -282,6 +282,8 @@ const LIMITES = {
   // tudo em loop. Nao substitui a trava de leitura (VIEW_SENHA) — apenas encarece
   // a coleta em massa enquanto ela nao estiver ligada.
   'dados':          { max: 40,  janela: 60 },
+  'historico':      { max: 40,  janela: 60 },
+  'historico-importar': { max: 30, janela: 60 },
   // poker-estado fica de fora: o painel faz polling a cada 1,5s (~40/min por pessoa)
 };
 
@@ -675,6 +677,24 @@ const HIST_CAMPOS = {
 // o arquivo (164 KB hoje) cresceria sem controle — ele e lido inteiro em toda
 // abertura de tela.
 const HIST_MAX = 25;
+/* ═══ O HISTORICO SAI DA BASE E VAI PARA O D1 (03/11/2026) ════════════════════
+ *
+ * "Worker exceeded CPU time limit" em toda publicacao: a base chegou a 4,3 MB e
+ * cada gravacao le, compara e regrava o arquivo inteiro. O historico e 1,6 MB
+ * disso — e, por ser milhares de objetos pequenos, e a parte mais cara de ler:
+ * sem ele, o `JSON.parse` da base cai de 17,5 ms para 6,9 ms (medido).
+ *
+ * Ele passa a morar na tabela `historico_demanda` do D1, uma linha por demanda.
+ * Gravar vira acrescentar as entradas novas das poucas demandas que mudaram, e
+ * as telas buscam a trilha em `historico` e a recolocam em `m.historico` — as
+ * contas que leem dali (funil, rolagens, selo da planning, origem) nao mudam.
+ *
+ * A VIRADA E EM DUAS ETAPAS, e esta chave e a fronteira entre elas:
+ *   true  → grava nos DOIS lugares (base e D1). Enquanto isso, a trilha antiga
+ *           e copiada para o D1 pela rota `historico-importar`.
+ *   false → a base deixa de levar historico: a primeira gravacao o retira.
+ * Desligar antes de a copia estar conferida apagaria a trilha. */
+const HIST_NA_BASE = true;
 
 // ─── VINCULO: A TAREFA PRINCIPAL E O QUE PENDURA NELA ────────────────────
 //
@@ -1040,12 +1060,94 @@ function registraHistorico(recebido, servidor, quem, origem) {
                       mudancas };
     if (anexosAntes !== anexosDepois) entrada.anexos = anexosAntes + ' -> ' + anexosDepois;
     m.historico = anterior.concat([entrada]).slice(-HIST_MAX);
+    /* A ENTRADA NOVA VAI TAMBEM PARA O D1 — so ela, e nao a trilha inteira.
+       Fica numa propriedade NAO enumeravel: nao entra no `JSON.stringify` da
+       base, e `limpaEspelhos` (que tira as chaves com `_`) nao a ve. Quem a
+       recolhe e `textoDaBase`, no momento de gravar. */
+    if (!Array.isArray(recebido.__histNovos)) {
+      Object.defineProperty(recebido, '__histNovos', { value: [], enumerable: false, writable: true });
+    }
+    recebido.__histNovos.push({ id: m.id, entrada });
     n += mudancas.length;
   }
   return n;
 }
 
 
+
+/* O TEXTO QUE VAI PARA O ARQUIVO. Toda gravacao da base passa por aqui, e e
+   aqui que (1) as entradas novas do historico sao recolhidas para a fila do D1
+   e (2), depois da virada, o historico sai do objeto antes de virar texto.
+   Ver HIST_NA_BASE. */
+function textoDaBaseFila(data, fila) {
+  if (data && Array.isArray(data.__histNovos) && fila) {
+    data.__histNovos.forEach(x => fila.push(x));
+    data.__histNovos = [];
+  }
+  if (!HIST_NA_BASE && data && Array.isArray(data.melhorias)) {
+    for (const m of data.melhorias) { if (m && 'historico' in m) delete m.historico; }
+  }
+  return JSON.stringify(data);
+}
+
+/* Junta duas trilhas sem repetir evento: a mesma entrada pode chegar pela copia
+   e pela gravacao dupla. A chave e quando, quem e de onde. */
+function mesclaHist(a, b) {
+  const vistos = new Set(), fora = [];
+  (Array.isArray(a) ? a : []).concat(Array.isArray(b) ? b : []).forEach(e => {
+    if (!e || typeof e !== 'object') return;
+    const k = String(e.em || '') + '|' + String(e.quem || '') + '|' + String(e.origem || '');
+    if (vistos.has(k)) return;
+    vistos.add(k); fora.push(e);
+  });
+  fora.sort((x, y) => String(x.em || '').localeCompare(String(y.em || '')));
+  return fora.slice(-HIST_MAX);
+}
+
+let _criouHistorico = false;
+async function historicoTabela(db) {
+  if (_criouHistorico) return;
+  await db.prepare('CREATE TABLE IF NOT EXISTS historico_demanda ' +
+    '(id TEXT PRIMARY KEY, hist TEXT NOT NULL, atualizado_em TEXT)').run();
+  _criouHistorico = true;
+}
+
+/** Acrescenta entradas (`[{id, entrada}]` ou `{id: [entradas]}`) a trilha de
+ *  cada demanda no D1. Le so as linhas das demandas tocadas. */
+async function guardaHistorico(env, novos) {
+  const db = env && env.POKER_DB;
+  if (!db) return 0;
+  const porId = new Map();
+  if (Array.isArray(novos)) {
+    novos.forEach(x => {
+      if (!x || !x.id || !x.entrada) return;
+      if (!porId.has(x.id)) porId.set(x.id, []);
+      porId.get(x.id).push(x.entrada);
+    });
+  } else if (novos && typeof novos === 'object') {
+    Object.keys(novos).forEach(id => { if (id && Array.isArray(novos[id])) porId.set(id, novos[id]); });
+  }
+  if (!porId.size) return 0;
+  await historicoTabela(db);
+  const ids = [...porId.keys()];
+  const atuais = new Map();
+  for (let i = 0; i < ids.length; i += 50) {
+    const lote = ids.slice(i, i + 50);
+    const r = await db.prepare('SELECT id, hist FROM historico_demanda WHERE id IN (' +
+      lote.map(() => '?').join(',') + ')').bind(...lote).all();
+    ((r && r.results) || []).forEach(x => atuais.set(x.id, x.hist));
+  }
+  const agora = new Date().toISOString();
+  const stmts = ids.map(id => {
+    let ant = [];
+    try { ant = JSON.parse(atuais.get(id) || '[]'); } catch (_) { ant = []; }
+    return db.prepare('INSERT INTO historico_demanda (id, hist, atualizado_em) VALUES (?, ?, ?) ' +
+      'ON CONFLICT(id) DO UPDATE SET hist = excluded.hist, atualizado_em = excluded.atualizado_em')
+      .bind(id, JSON.stringify(mesclaHist(ant, porId.get(id))), agora);
+  });
+  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+  return ids.length;
+}
 
 // ─── EXIGENCIA DE PAPEL ───────────────────────────────────────────────
 // Quatro rotas repetiam este trecho: chamar identifica, conferir o papel na mao e
@@ -3901,7 +4003,22 @@ async function pokerEstado(db, codigo) {
 }
 
 export default {
+  /* A FILA DO HISTORICO E POR REQUISICAO. As rotas recolhem as entradas novas
+     ao gravar (`textoDaBase`); elas so vao para o D1 se a rota terminou bem —
+     gravacao recusada ou com conflito nao deixa evento que nao aconteceu. */
   async fetch(request, env) {
+    const _histFila = [];
+    const resp = await rotear(request, env, _histFila);
+    if (_histFila.length && resp && resp.status >= 200 && resp.status < 300) {
+      try { await guardaHistorico(env, _histFila); }
+      catch (e) { console.log('historico: ' + ((e && e.message) || e)); }
+    }
+    return resp;
+  },
+};
+
+async function rotear(request, env, _histFila) {
+    const textoDaBase = (d) => textoDaBaseFila(d, _histFila);
     const headers = corsHeaders();
     /* ═══ NADA SAI DAQUI SEM CABECALHO CORS ════════════════════════════════
      *
@@ -4585,7 +4702,7 @@ export default {
         const putRes = await gh('contents/' + FILE_PATH, {
           method: 'PUT',
           body: JSON.stringify({ message: 'chore: planning poker - ' + String(alvo.titulo || mid).slice(0, 60),
-                                 content: toB64(JSON.stringify(data)), sha: file.sha }),
+                                 content: toB64(textoDaBase(data)), sha: file.sha }),
         });
         if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
         return json({ ok: true, poker_media: media, poker_pontos: pontos,
@@ -4646,7 +4763,7 @@ export default {
         const putE = await gh('contents/' + FILE_PATH, {
           method: 'PUT',
           body: JSON.stringify({ message: 'chore: planning complementa ' + (alvoE.codigo || mid),
-                                 content: toB64(JSON.stringify(dataE)), sha: fileE.sha }),
+                                 content: toB64(textoDaBase(dataE)), sha: fileE.sha }),
         });
         if (!putE.ok) { const e = await putE.text(); return json({ error: 'Falha ao salvar', detail: e.slice(0, 200) }, 502, headers); }
         return json({ ok: true, descricao: alvoE.descricao,
@@ -4705,7 +4822,7 @@ export default {
         const putN = await gh('contents/' + FILE_PATH, {
           method: 'PUT',
           body: JSON.stringify({ message: 'chore: planning nega ' + (alvoN.codigo || mid),
-                                 content: toB64(JSON.stringify(dataN)), sha: fileN.sha }),
+                                 content: toB64(textoDaBase(dataN)), sha: fileN.sha }),
         });
         if (!putN.ok) { const e = await putN.text(); return json({ error: 'Falha ao salvar', detail: e.slice(0, 200) }, 502, headers); }
         return json({ ok: true, codigo: alvoN.codigo || '',
@@ -4804,7 +4921,7 @@ export default {
         method: 'PUT',
         body: JSON.stringify({
           message: 'chore: mensageria ' + (alvoM.codigo || mid),
-          content: toB64(JSON.stringify(dataM)), sha: fileM.sha }),
+          content: toB64(textoDaBase(dataM)), sha: fileM.sha }),
       });
       if (!putM.ok) {
         const e = await putM.text();
@@ -6030,7 +6147,7 @@ export default {
       atual.atualizado_em = new Date().toISOString();
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
-        body: JSON.stringify({ message: msg, content: toB64(JSON.stringify(atual)), sha: file.sha }),
+        body: JSON.stringify({ message: msg, content: toB64(textoDaBase(atual)), sha: file.sha }),
       });
       if (!put.ok) {
         const t = await put.text();
@@ -6214,7 +6331,7 @@ export default {
                   ' por ' + quem;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
-        body: JSON.stringify({ message: msg, content: toB64(JSON.stringify(atual)),
+        body: JSON.stringify({ message: msg, content: toB64(textoDaBase(atual)),
                                sha: file.sha }),
       });
       if (!put.ok) {
@@ -6571,7 +6688,7 @@ export default {
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
         body: JSON.stringify({ message: 'chore: projeto proposto por ' + quem,
-                               content: toB64(JSON.stringify(atual)), sha: file.sha }),
+                               content: toB64(textoDaBase(atual)), sha: file.sha }),
       });
       if (!put.ok) {
         const t = await put.text();
@@ -6870,7 +6987,7 @@ export default {
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
         body: JSON.stringify({ message: 'chore: demanda aberta por ' + devNome + ' (endpoint)',
-                               content: toB64(JSON.stringify(atual)), sha: file.sha }),
+                               content: toB64(textoDaBase(atual)), sha: file.sha }),
       });
       if (!put.ok) {
         const t = await put.text();
@@ -7045,7 +7162,7 @@ export default {
         method: 'PUT',
         body: JSON.stringify({ message: 'chore: fecha ' + mesDe + ' e rola ' + roladas.length +
                                         ' para ' + mesPara,
-                               content: toB64(JSON.stringify(dataM)), sha: fileM.sha }),
+                               content: toB64(textoDaBase(dataM)), sha: fileM.sha }),
       });
       if (!putM.ok) { const e = await putM.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
       return json({ ok: true, roladas, mes: mesDe, para: mesPara,
@@ -7355,7 +7472,7 @@ export default {
         body: JSON.stringify({
           message: 'chore: spike ' + (retirar ? 'assinatura retirada' : 'assinada') +
                    ' por ' + uS.login,
-          content: toB64(JSON.stringify(atualS)), sha: fileS.sha }),
+          content: toB64(textoDaBase(atualS)), sha: fileS.sha }),
       });
       if (!putS.ok) {
         return json({ error: 'Falha ao salvar', detail: await putS.text() }, 502, headers);
@@ -7647,6 +7764,32 @@ export default {
       });
     }
 
+    /* ═══ A TRILHA DAS DEMANDAS, DO D1 ═══════════════════════════════════════
+     * Mesma credencial de `dados`. A resposta e montada colando os textos das
+     * linhas — nada e parseado aqui: `{ "itens": { "<id>": [entradas] } }`. */
+    if (body.action === 'historico') {
+      if (!(await leituraLiberadaAsync(body))) return json({ error: 'credencial' }, 401, headers);
+      if (!env.POKER_DB) return json({ itens: {} }, 200, headers);
+      await historicoTabela(env.POKER_DB);
+      const rh = await env.POKER_DB.prepare('SELECT id, hist FROM historico_demanda').all();
+      const partes = ((rh && rh.results) || []).map(x => JSON.stringify(x.id) + ':' + (x.hist || '[]'));
+      return new Response('{"itens":{' + partes.join(',') + '}}', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
+      });
+    }
+
+    /* A COPIA DA TRILHA ANTIGA PARA O D1, em lotes, pelo admin. Junta com o que
+       ja estiver la (a gravacao dupla pode ter chegado antes), sem repetir. */
+    if (body.action === 'historico-importar') {
+      if (!(await ehAdmin())) return json({ error: 'senha' }, 401, headers);
+      const itens = body.itens && typeof body.itens === 'object' ? body.itens : null;
+      if (!itens || Array.isArray(itens)) return json({ error: 'itens invalidos' }, 400, headers);
+      if (Object.keys(itens).length > 300) return json({ error: 'lote grande', detail: 'Ate 300 demandas por lote.' }, 413, headers);
+      const n = await guardaHistorico(env, itens);
+      return json({ ok: true, demandas: n }, 200, headers);
+    }
+
     // ── Login do Admin ──
     if (body.action === 'auth') {
       if (senhaOk(body.senha)) return json({ ok: true }, 200, headers);
@@ -7889,7 +8032,7 @@ export default {
          CPU que falta nesta conta. O tempo gasto aqui vai para o log: com o
          numero na mao da para saber se ainda falta cortar, e onde. */
       const t0 = Date.now();
-      const corpoFinal = JSON.stringify(data);
+      const corpoFinal = textoDaBase(data);
       const gravou = await gravaTexto(gh, FILE_PATH, corpoFinal,
         'chore: admin publica ' + new Date().toISOString());
       console.log('publish: ' + (corpoFinal.length / 1048576).toFixed(2) + ' MB, ' +
@@ -8161,7 +8304,7 @@ export default {
       corrigeProjetoInvalido(data);
       data.atualizado_em = new Date().toISOString();
       // Mesma gravacao sem base64 do `publish` — ver `gravaTexto`.
-      const gravouDev = await gravaTexto(gh, FILE_PATH, JSON.stringify(data),
+      const gravouDev = await gravaTexto(gh, FILE_PATH, textoDaBase(data),
         'chore: dev atualiza ' + new Date().toISOString());
       /* CORRIDA NO RAMO vira CONFLITO, e nao 502. `gravaTexto` marca quando o
          GitHub recusou por "not a fast forward": outra gravacao entrou na
@@ -8285,7 +8428,7 @@ export default {
 
     const putRes = await gh('contents/' + FILE_PATH, {
       method: 'PUT',
-      body: JSON.stringify({ message: 'feat: nova sugestao (publico) - ' + nova.titulo, content: toB64(JSON.stringify(data)), sha: file.sha }),
+      body: JSON.stringify({ message: 'feat: nova sugestao (publico) - ' + nova.titulo, content: toB64(textoDaBase(data)), sha: file.sha }),
     });
     if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
     // Devolve o codigo: quem abriu precisa saber o numero para acompanhar.
@@ -8297,5 +8440,4 @@ export default {
       return json({ error: 'erro_interno',
                     detail: String((e && e.message) || e) }, 500, headers);
     }
-  },
-};
+}

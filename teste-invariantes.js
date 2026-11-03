@@ -21654,11 +21654,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        passar a ler `historico` do que chegou, o envio magro vira perda de
        dado — silenciosa, porque nada falha. */
     const leituras = (WC.match(/\.historico\b/g) || []).length;
+    /* `textoDaBaseFila` tambem aparece, mas so para APAGAR a trilha do objeto
+       na hora de gravar, depois da virada para o D1 (HIST_NA_BASE). Apagar nao
+       le o corpo — e a invariante abaixo confere que la so ha `delete`. */
+    const noTexto = semComentario(corpo(W, 'function textoDaBaseFila(') || '');
     const noReata = (semComentario(corpo(W, 'function registraHistorico(') || '')
-                     .match(/\.historico\b/g) || []).length;
+                     .match(/\.historico\b/g) || []).length +
+                    (noTexto.match(/\.historico\b/g) || []).length;
     ok(leituras === noReata,
        'so `registraHistorico` toca em `historico`, e so do lado do servidor',
-       leituras + ' no Worker, ' + noReata + ' dentro de registraHistorico');
+       leituras + ' no Worker, ' + noReata + ' dentro de registraHistorico/textoDaBaseFila');
+    ok((noTexto.match(/\.historico\b/g) || []).length ===
+       (noTexto.match(/delete m\.historico\b/g) || []).length,
+       '`textoDaBaseFila` so apaga a trilha, nunca a le');
     ok(/const anterior = Array\.isArray\(velha\.historico\)/.test(WC),
        'e a trilha vem de `velha` (o arquivo gravado), nunca de `m` (o corpo)');
   }
@@ -24979,6 +24987,74 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/gcard-comsprint/.test(GANTT) && /id="f-sprint-po"/.test(GANTT) &&
        /SPRINTPO\.naSprint\(m, filters\.sprintPo\)/.test(GANTT),
        'o Gantt tambem');
+  }
+
+  /* ═══ O HISTORICO NO D1 (03/11/2026) ═════════════════════════════════════
+     A base passou de 4,3 MB e o Worker estourava CPU em toda publicacao; a
+     trilha (1,6 MB) foi para o D1. Executa as pecas de verdade. */
+  {
+    const HC = fs.readFileSync('historico-cliente.js', 'utf8');
+    const textoFn = corpo(W, 'function textoDaBaseFila(');
+    const mesclaFn = corpo(W, 'function mesclaHist(');
+    const mk = (flag) => new Function('const HIST_MAX = 25; const HIST_NA_BASE = ' + flag + ';\n' +
+      textoFn + '\n' + mesclaFn + '\nreturn { textoDaBaseFila, mesclaHist };')();
+    const v1 = mk('true'), v2 = mk('false');
+
+    const dado = () => {
+      const d = { melhorias: [{ id: 'a', historico: [{ em: '1' }] }, { id: 'b' }] };
+      Object.defineProperty(d, '__histNovos', { value: [{ id: 'a', entrada: { em: '2' } }], enumerable: false, writable: true });
+      return d;
+    };
+    let fila = [], d = dado();
+    let txt = v1.textoDaBaseFila(d, fila);
+    ok(fila.length === 1 && fila[0].id === 'a' && !/__histNovos/.test(txt) && /"historico"/.test(txt),
+       'gravacao dupla: a entrada nova vai para a fila, e a base continua com a trilha');
+    v1.textoDaBaseFila(d, fila);
+    ok(fila.length === 1, 'gravar duas vezes o mesmo objeto nao repete a entrada na fila');
+    fila = []; d = dado(); txt = v2.textoDaBaseFila(d, fila);
+    ok(fila.length === 1 && !/"historico"/.test(txt), 'depois da virada a base sai sem historico');
+
+    const a = [{ em: '2026-01-01', quem: 'x', origem: 'p' }, { em: '2026-01-03', quem: 'x', origem: 'p' }];
+    const m = v1.mesclaHist(a, [{ em: '2026-01-02', quem: 'y', origem: 'api' }, a[1]]);
+    ok(m.length === 3 && m.map(e => e.em).join() === '2026-01-01,2026-01-02,2026-01-03',
+       'mesclaHist junta sem repetir e em ordem de data');
+    ok(v1.mesclaHist(Array.from({ length: 40 }, (_, i) => ({ em: String(1000 + i) })), []).length === 25,
+       'e respeita o limite de 25 entradas');
+
+    ok(/const HIST_NA_BASE = (true|false);/.test(W), 'a chave da virada existe no Worker');
+    const putsBase = (W.match(/gh\('contents\/' \+ FILE_PATH, \{/g) || []).length;
+    const putsTexto = (W.match(/toB64\(textoDaBase\(/g) || []).length;
+    ok(putsBase === putsTexto && /gravaTexto\(gh, FILE_PATH, corpoFinal/.test(W) &&
+       /const corpoFinal = textoDaBase\(data\)/.test(W) && /gravaTexto\(gh, FILE_PATH, textoDaBase\(data\)/.test(W),
+       'TODA gravacao da base passa por textoDaBase', putsBase + ' PUTs, ' + putsTexto + ' com textoDaBase');
+    ok(/if \(_histFila\.length && resp && resp\.status >= 200 && resp\.status < 300\)/.test(W),
+       'a fila so vai para o D1 quando a rota terminou bem');
+
+    const HCx = new Function('module', HC + '\nreturn module.exports;')({ exports: {} });
+    const base = () => ({ atualizado_em: 'v1', melhorias: [{ id: 'a' }, { id: 'b' }] });
+    ok(HCx.baseTemTrilha({ melhorias: [{ id: 'a', historico: [] }] }) && !HCx.baseTemTrilha(base()),
+       'a tela reconhece base com e sem trilha');
+    let chamadas = 0;
+    const fetchAntes = global.fetch;
+    global.fetch = async () => { chamadas++; return { ok: true, json: async () => ({ itens: { a: [{ em: '1' }] } }) }; };
+    pendentes.push((async () => {
+      const d1 = await HCx.hidrata(base(), 'u', {});
+      const d2 = await HCx.hidrata(base(), 'u', {});
+      const comTrilha = await HCx.hidrata({ atualizado_em: 'v1', melhorias: [{ id: 'a', historico: [{ em: 'x' }] }] }, 'u', {});
+      global.fetch = fetchAntes;
+      ok(d1.melhorias[0].historico.length === 1 && Array.isArray(d1.melhorias[1].historico) &&
+         d1.melhorias[1].historico.length === 0,
+         'hidrata recoloca a trilha em m.historico (e [] onde nao ha)');
+      ok(chamadas === 1 && d2.melhorias[0].historico.length === 1,
+         'uma busca por versao da base: o polling nao repete');
+      ok(comTrilha.melhorias[0].historico[0].em === 'x' && chamadas === 1,
+         'base que ainda traz a trilha nao dispara busca nem e sobrescrita');
+    })());
+    ok(/HISTCLIENTE\.hidrata\(d, ADMIN_PROXY_URL, credenciaisLeitura\(\)\)/.test(ADMIN) &&
+       /HISTCLIENTE\.hidrata\(d, PROXY_URL, credenciaisLeitura\(\)\)/.test(GANTT) &&
+       /<script src="historico-cliente\.js\?v=[0-9a-f]{10}"><\/script>/.test(ADMIN) &&
+       /<script src="historico-cliente\.js\?v=[0-9a-f]{10}"><\/script>/.test(GANTT),
+       'Admin e Gantt hidratam a trilha no lerDados, com o selo de cache');
   }
 
   let erroPz = null;

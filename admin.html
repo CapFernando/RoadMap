@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="4abbf68502">
+<html lang="pt-BR" data-build="a51da3ccb0">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1593,6 +1593,7 @@
 <script src="apresentacao.js?v=d1432be37a"></script>
 <script src="relatorio-ppt.js?v=b4db2e69eb"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
+<script src="historico-cliente.js?v=2b0fcaf502"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=ff7a669a03"></script>
 <script src="pausa.js?v=06c4b82f84"></script>
@@ -3424,7 +3425,11 @@ async function lerDados(permitirCache, jaTentou) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'dados' }, credenciaisLeitura()))
     });
-    if (r.ok) return await r.json();
+    // A trilha das demandas vem do D1 quando a base nao a traz — ver historico-cliente.js.
+    if (r.ok) {
+      const d = await r.json();
+      return window.HISTCLIENTE ? await HISTCLIENTE.hidrata(d, ADMIN_PROXY_URL, credenciaisLeitura()) : d;
+    }
     /* O `detail` do servidor e a frase mais util que existe aqui: e ele que diz
        "Muitas requisicoes. Aguarde um minuto" num 429, e ninguem adivinha isso
        de um "nao foi possivel". */
