@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a51da3ccb0">
+<html lang="pt-BR" data-build="b5dd673329">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3910,6 +3910,12 @@ async function publicaAgora(tentativa = 1, redes = 0) {
     const baseVersao = server.atualizado_em || null;
     state.temas = mesclaTemas(server.temas);
     state.melhorias = mesclaMelhorias(server.melhorias);
+    /* VOLTOU AO BACKLOG, SAI SEM DATA DE INICIO — a mesma regra do Worker
+       (`tiraInicioDoBacklog`). Feita aqui tambem para o card ir para a coluna
+       certa ja nesta tela: Backlog com inicio e desenhado em Em andamento. */
+    state.melhorias.forEach(m => {
+      if (m && m.status_planejamento === 'backlog' && String(m.inicio || '').trim()) m.inicio = '';
+    });
     // `devs_perfil` funde por CHAVE, e nao por substituicao: o Planejamento tambem
     // edita esse mapa, e trocar o objeto inteiro faria a marcacao de quem publicou
     // primeiro sumir sem aviso. Local vence no proprio nome; o resto vem do servidor.

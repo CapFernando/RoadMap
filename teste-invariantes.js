@@ -24989,6 +24989,29 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'o Gantt tambem');
   }
 
+  /* ═══ VOLTAR AO BACKLOG TIRA A DATA DE INICIO (03/11/2026) ═══════════════
+     AX-879: gravada em Backlog, desenhada em Em andamento pelo `inicio`. */
+  {
+    const tira = new Function(corpo(W, 'function tiraInicioDoBacklog(') + '\nreturn tiraInicioDoBacklog;')();
+    const ETx = require('./etapa-demanda.js');
+    const d = { melhorias: [
+      { id: 'a', status_planejamento: 'backlog', inicio: '2026-10-27' },
+      { id: 'b', status_planejamento: 'planejado', inicio: '2026-10-27' },
+    ] };
+    ok(ETx.gravada(d.melhorias[0], '2026-11-03') === 'em_andamento',
+       'o caso da AX-879 e real: Backlog com inicio e lido como Em andamento');
+    const n = tira(d);
+    ok(n === 1 && d.melhorias[0].inicio === '' && d.melhorias[1].inicio === '2026-10-27',
+       'tiraInicioDoBacklog tira a data so de quem esta no Backlog');
+    ok(ETx.gravada(d.melhorias[0], '2026-11-03') === 'backlog',
+       'e a demanda passa a ser lida no Backlog, onde foi posta');
+    ok((W.match(/tiraInicioDoBacklog\(\w+\);/g) || []).length ===
+       (W.match(/carimbaCasoDeUso\(\w+\);/g) || []).length,
+       'a regra roda em toda porta de gravacao (ao lado do caso de uso)');
+    ok(/m\.status_planejamento === 'backlog' && String\(m\.inicio \|\| ''\)\.trim\(\)\) m\.inicio = ''/.test(ADMIN),
+       'e o Admin aplica o mesmo na publicacao, para o card mudar de coluna na hora');
+  }
+
   /* ═══ O HISTORICO NO D1 (03/11/2026) ═════════════════════════════════════
      A base passou de 4,3 MB e o Worker estourava CPU em toda publicacao; a
      trilha (1,6 MB) foi para o D1. Executa as pecas de verdade. */

@@ -1642,6 +1642,32 @@ function normNivel(v, lista) {
 function normImpacto(v)  { return normNivel(v, ['baixo', 'medio', 'alto']); }
 function normUrgencia(v) { return normNivel(v, ['baixa', 'media', 'alta']); }
 
+/* ═══ QUEM VOLTA PARA O BACKLOG PERDE A DATA DE INICIO (03/11/2026) ════════
+ *
+ * "Nao consigo voltar demanda p/ backlog, aparece que deu certo, porem a
+ *  demanda nao retorna" — AX-878 e AX-879, de Planejado para Backlog.
+ *
+ * A gravacao entrou; quem desfazia era a LEITURA. Em `etapa-demanda.js`, Backlog
+ * com `inicio` no passado e trabalho comecado (`gravada` devolve em_andamento —
+ * regra de proposito, fixada nas invariantes). As duas guardavam o inicio de
+ * quando estavam planejadas e continuavam desenhadas em Em andamento.
+ *
+ * Quem NASCE no Backlog ja perdia a data (`nascendoForaDoBacklog`); faltava quem
+ * VOLTA. Fica aqui, ao lado do caso de uso, porque roda nas mesmas portas de
+ * gravacao. Sem olhar a base: Backlog com inicio nunca e mostrado como Backlog,
+ * entao tirar a data so faz a demanda aparecer onde foi posta. */
+function tiraInicioDoBacklog(data) {
+  if (!data || !Array.isArray(data.melhorias)) return 0;
+  let n = 0;
+  for (const m of data.melhorias) {
+    if (m && m.status_planejamento === 'backlog' && String(m.inicio || '').trim()) {
+      m.inicio = '';
+      n += 1;
+    }
+  }
+  return n;
+}
+
 function carimbaCasoDeUso(data, agora) {
   if (!data || !Array.isArray(data.melhorias)) return [];
   const quando = agora || new Date().toISOString();
@@ -4696,6 +4722,7 @@ async function rotear(request, env, _histFila) {
                           'planning poker');
         promoveAreaVencida(data);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
         carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+        tiraInicioDoBacklog(data);   // voltou ao Backlog: sem data de inicio
         data.atualizado_em = iso;
         const risco = gravacaoSuspeita(data, file.size || 0);
         if (risco) return json({ error: risco }, 409, headers);
@@ -4757,6 +4784,7 @@ async function rotear(request, env, _histFila) {
         registraHistorico(dataE, { melhorias: [antesE] }, quemE, 'planning poker');
         promoveAreaVencida(dataE);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
         carimbaCasoDeUso(dataE);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+        tiraInicioDoBacklog(dataE);   // voltou ao Backlog: sem data de inicio
         dataE.atualizado_em = iso;
         const riscoE = gravacaoSuspeita(dataE, fileE.size || 0);
         if (riscoE) return json({ error: riscoE }, 409, headers);
@@ -4816,6 +4844,7 @@ async function rotear(request, env, _histFila) {
         registraHistorico(dataN, { melhorias: [antesN] }, quemN, 'planning poker');
         promoveAreaVencida(dataN);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
         carimbaCasoDeUso(dataN);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+        tiraInicioDoBacklog(dataN);   // voltou ao Backlog: sem data de inicio
         dataN.atualizado_em = iso;
         const riscoN = gravacaoSuspeita(dataN, fileN.size || 0);
         if (riscoN) return json({ error: riscoN }, 409, headers);
@@ -4913,6 +4942,7 @@ async function rotear(request, env, _histFila) {
       alvoM.mensagens = anteriorM.concat([entradaM]).slice(-MSG_MAX);
       promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(dataM);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(dataM);   // voltou ao Backlog: sem data de inicio
       dataM.atualizado_em = agoraM;
 
       const riscoM = gravacaoSuspeita(dataM, fileM.size || 0);
@@ -6144,6 +6174,7 @@ async function rotear(request, env, _histFila) {
       corrigeProjetoInvalido(atual);
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
       atual.atualizado_em = new Date().toISOString();
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -6324,6 +6355,7 @@ async function rotear(request, env, _histFila) {
       registraHistorico(atual, base, quem, 'deploy');
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
       atual.atualizado_em = agora;
       const versoes = [...new Set(pedidos.map(p => p.ver).filter(Boolean))];
       const msg = 'deploy: ' + mexidas + ' demanda(s)' +
@@ -6684,6 +6716,7 @@ async function rotear(request, env, _histFila) {
       atribuiCodigosProjeto(atual);
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -6983,6 +7016,7 @@ async function rotear(request, env, _histFila) {
       corrigeSemDev(atual);
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -7157,6 +7191,7 @@ async function rotear(request, env, _histFila) {
       registraHistorico(dataM, JSON.parse(textoM), quemM, 'fechamento do mes');
       promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(dataM);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(dataM);   // voltou ao Backlog: sem data de inicio
       dataM.atualizado_em = new Date().toISOString();
       const putM = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -7466,6 +7501,7 @@ async function rotear(request, env, _histFila) {
       }
       promoveAreaVencida(atualS);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atualS);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atualS);   // voltou ao Backlog: sem data de inicio
       atualS.atualizado_em = new Date().toISOString();
       const putS = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -8009,6 +8045,7 @@ async function rotear(request, env, _histFila) {
          muda sozinha sem rastro. */
       promoveAreaVencida(data);
       carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(data);   // voltou ao Backlog: sem data de inicio
       // ANTES do historico, como o carimbo do mes: assim a entrada na area
       // tambem vira linha no card, e nao um campo que muda sozinho sem rastro.
       carimbaAreaValidacao(data, antesPub);
@@ -8292,6 +8329,7 @@ async function rotear(request, env, _histFila) {
       // prazo da area depender de o PM/PO publicar alguma coisa.
       promoveAreaVencida(data);
       carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(data);   // voltou ao Backlog: sem data de inicio
       // O dev e quem mais vai mover o card para a area — sem esta linha o
       // carimbo so nasceria quando o PM/PO publicasse pelo Admin.
       carimbaAreaValidacao(data, antesDev);
