@@ -454,7 +454,7 @@
     var K = kit(), C = K.cores;
     var s = K.slideTitulo(pptx, 'Backlog',
       fmt(b.total) + ' ' + plural(b.total, 'demanda', 'demandas') +
-      ' sem data combinada \u2014 Backlog e Levantar Requisitos.' +
+      ' sem data combinada \u2014 Backlog e Em aprovação de requisitos.' +
       (b.maisVelha != null ? '  A mais antiga espera h\u00e1 ' + fmt(b.maisVelha) + ' dias.' : ''),
       pagina, t.periodo);
 

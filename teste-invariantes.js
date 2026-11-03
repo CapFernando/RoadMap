@@ -24741,6 +24741,37 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
              { melhorias: [{ id: 'f', status_planejamento: 'em_andamento' }] }).length === 0,
          'comecar sem dono e recusado no dev-publish; com dono passa; o que ja estava assim nao trava');
       ok(/entrandoNoTrabalhoSemDev\(data, antesDev\)/.test(WKS), 'a guarda esta ligada no dev-publish');
+      // EM APROVACAO DE REQUISITOS: o caso de uso nasce na entrada (03/11/2026)
+      const fcu = new Function(WCo + '; return carimbaCasoDeUso;')();
+      const dcu = { melhorias: [{ id: 'r', status_planejamento: 'levantar_req', impacto: 'Médio', urgencia: 'ALTA' },
+                                { id: 'b', status_planejamento: 'backlog', impacto: 'xyz' }] };
+      fcu(dcu, '2026-11-03T12:00:00Z');
+      const cu1 = dcu.melhorias[0].caso_uso;
+      ok(cu1 && cu1.status === 'a_enviar' && !dcu.melhorias[1].caso_uso,
+         'entrar em Em aprovacao de requisitos abre o caso de uso; fora dela, nao');
+      ok(dcu.melhorias[0].impacto === 'medio' && dcu.melhorias[0].urgencia === 'alta' && dcu.melhorias[1].impacto === '',
+         'impacto e urgencia sao normalizados; valor fora da lista vira vazio');
+      cu1.status = 'aprovado';
+      fcu(dcu, '2026-11-03T13:00:00Z');
+      ok(dcu.melhorias[0].caso_uso.status === 'aprovado', 'gravar de novo na etapa nao reabre o caso de uso');
+      dcu.melhorias[0].status_planejamento = 'planning'; fcu(dcu, '2026-11-04T10:00:00Z');
+      ok(dcu.melhorias[0].caso_uso.saiu_em === '2026-11-04T10:00:00Z', 'sair da etapa fecha o caso de uso');
+      dcu.melhorias[0].status_planejamento = 'levantar_req'; fcu(dcu, '2026-11-05T10:00:00Z');
+      ok(dcu.melhorias[0].caso_uso.status === 'a_enviar' &&
+         dcu.melhorias[0].caso_uso.ciclos_anteriores.length === 1 &&
+         dcu.melhorias[0].caso_uso.ciclos_anteriores[0].status === 'aprovado',
+         'voltar para a etapa abre um ciclo novo e guarda o anterior');
+      ok((WKS.match(/^\s+carimbaCasoDeUso\(\w+\);/gm) || []).length ===
+         (WKS.match(/^\s+promoveAreaVencida\(\w+\);/gm) || []).length,
+         'o caso de uso e carimbado em toda rota de gravacao');
+      ok(/const _casoAntes = new Map/.test(WKS), 'o painel dev nao altera o caso de uso (o servidor vence)');
+      const RQ = require('./requisitos.js');
+      ok(RQ.ROTULO === 'Em aprovação de requisitos' && !/Levantar Requisitos/.test(ADMIN + DEV),
+         'a etapa se chama "Em aprovação de requisitos" nas telas');
+      ok(/caso de uso/i.test(RQ.casoDeUso({ titulo: 'x' }, {})) &&
+         /FLUXO PRINCIPAL/.test(RQ.casoDeUso({ titulo: 'x' }, {})), 'o modulo monta o texto do caso de uso');
+      ok(/Informe o impacto e a urgência/.test(ADMIN) && /Informe o impacto e a urgência/.test(DEV),
+         'admin e painel dev exigem impacto e urgencia na abertura');
       ok(/const assumiu = ETAPAS_DO_DEV\.includes\(colKey\) && !String\(m\.dev \|\| ''\)\.trim\(\) && !!currentDev;/.test(DEV) &&
          /if \(assumiu\) campos\.dev = m\.dev;/.test(DEV),
          'o painel dev grava o nome de quem tirou a demanda da fila');

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="bc3324825e">
+<html lang="pt-BR" data-build="6057c2ea19">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1550,7 +1550,7 @@
   <!-- Links de referencia da demanda: descricao + endereco, varios. A regra do
        esquema aceito mora la — `javascript:` num href e execucao de script. -->
   <script src="referencia.js?v=1750882d31"></script>
-  <script src="grill.js?v=c85bb8b63f"></script>
+  <script src="grill.js?v=cffd670be6"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="prevoo.js?v=ab2758c54c"></script>
@@ -1564,10 +1564,11 @@
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="dialogo.js?v=3061e0568f"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
+<script src="requisitos.js?v=1987238fe2"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
 <script src="capacidade.js?v=e7e1449a7d"></script>
-<script src="apresentacao.js?v=f5b07694a5"></script>
-<script src="relatorio-ppt.js?v=23ef77d815"></script>
+<script src="apresentacao.js?v=d1432be37a"></script>
+<script src="relatorio-ppt.js?v=b4db2e69eb"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=ff7a669a03"></script>
@@ -1887,8 +1888,8 @@
               <input type="checkbox" id="rp-backlog" onchange="relPptBacklogMarcou()" />
               <span>
                 <strong>Incluir o backlog</strong>
-                <small>Um slide a mais, com o que está parado em Backlog e Levantar
-                Requisitos — o que ainda não foi prometido a ninguém.</small>
+                <small>Um slide a mais, com o que está parado em Backlog e Em aprovação
+                de requisitos — o que ainda não foi prometido a ninguém.</small>
               </span>
             </label>
           </div>
@@ -2480,7 +2481,7 @@
         <label>Status *</label>
         <select id="m-status" onchange="onStatusChange()">
           <option value="backlog">Backlog</option>
-          <option value="levantar_req">Levantar Requisitos</option>
+          <option value="levantar_req">Em aprovação de requisitos</option>
           <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em Andamento</option>
@@ -2509,7 +2510,7 @@
 
          Fica logo abaixo do Status porque é do Status que ela trata: o veredito
          do dev MOVE a demanda — "entendi" leva para Planning, "tenho dúvidas"
-         leva para Levantar Requisitos. Pôr isto num canto do formulário faria a
+         leva para Em aprovação de requisitos. Pôr isto num canto do formulário faria a
          marca parecer um rótulo, e ela é um pedido de decisão.
 
          O bloco cresce quando há dúvidas: aí ele deixa de ser um interruptor e
@@ -2545,6 +2546,37 @@
           <option value="sustentacao">🔧 Sustentação</option>
           <option value="evolucao">🚀 Evolução</option>
         </select>
+      </div>
+      <!-- IMPACTO E URGÊNCIA (03/11/2026): pedidos na abertura, seguem a demanda
+           pela esteira inteira. Não calculam a prioridade — ver `requisitos.js`. -->
+      <div class="form-group">
+        <label>Impacto *</label>
+        <select id="m-impacto"></select>
+      </div>
+      <div class="form-group">
+        <label>Urgência *</label>
+        <select id="m-urgencia"></select>
+      </div>
+      <!-- O CASO DE USO de "Em aprovação de requisitos": aparece quando a demanda
+           está na etapa (ou já teve um). Texto montado da demanda, ajustável;
+           o PM/PO envia ao usuário e registra a resposta aqui. -->
+      <div class="form-group" id="m-caso-uso" style="grid-column:1/-1;display:none">
+        <div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--bg3)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <strong>📄 Caso de uso para aprovação do usuário</strong>
+            <span id="m-cu-estado" style="font-size:12px;font-weight:700"></span>
+          </div>
+          <textarea id="m-cu-texto" rows="12" style="font-family:monospace;font-size:12px;width:100%"></textarea>
+          <div id="m-cu-info" style="font-size:12px;color:var(--text3);margin:6px 0"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuGerar()" title="Monta de novo a partir da demanda como está agora">🔄 Gerar de novo</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuCopiar()">📋 Copiar</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuImprimir()">🖨️ Imprimir / PDF</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('enviado')">📨 Marquei como enviado</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('aprovado')">✅ Usuário aprovou</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('ajustes')">✏️ Usuário pediu ajustes</button>
+          </div>
+        </div>
       </div>
       <div class="form-group" style="grid-column:1/-1">
         <div id="m-pausa" style="display:none;margin-bottom:10px"></div>
@@ -4245,7 +4277,7 @@ async function saveToGitHub(attempt = 1, quedas = 0) {
 // ─── RENDER ───────────────────────────────────────────────────────
 const STATUS_LABELS = {
   backlog:      'Backlog',
-  levantar_req: 'Levantar Requisitos',
+  levantar_req: 'Em aprovação de requisitos',
   planning:     'Planning',
   planejado:    'Planejado',
   em_andamento: 'Em Andamento',
@@ -4969,7 +5001,7 @@ function renderStatusFilters() {
   const todos = [
     { key: null,          label: 'Todos',        cls: 'all' },
     { key: 'backlog',      label: 'Backlog',              cls: 'backlog' },
-    { key: 'levantar_req', label: 'Levantar Requisitos', cls: 'levantar_req' },
+    { key: 'levantar_req', label: 'Em aprovação de requisitos', cls: 'levantar_req' },
     { key: 'planning',     label: 'Planning',             cls: 'planning' },
     { key: 'planejado',    label: 'Planejado',            cls: 'planejado' },
     { key: 'em_andamento',label: 'Em Andamento',  cls: 'em_andamento' },
@@ -5157,7 +5189,7 @@ function renderMelhorias() {
       return `<div class="card${estaPausado(m) ? ' card-pausada' : ''}${_spEstL ? ' card-comsprint' : ''}" style="${_spEstL}">
         <div class="card-info">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <div class="card-nome">${esc(m.titulo)}</div>${badge}${SPRINTPO.doPO(m) ? SPRINTPO.badge(m, 'kb-sprint') : ''}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}${pesoBadge}${prodBadge}
+            <div class="card-nome">${esc(m.titulo)}</div>${badge}${SPRINTPO.doPO(m) ? SPRINTPO.badge(m, 'kb-sprint') : ''}${window.REQUISITOS ? REQUISITOS.chips(m) : ''}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}${pesoBadge}${prodBadge}
           </div>
           ${sub ? `<div class="card-sub">${sub}</div>` : ''}
           ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${esc(m.descricao.substring(0,120))}${m.descricao.length>120?'…':''}</div>` : ''}
@@ -5227,7 +5259,7 @@ function restoreLastTab() {
 // Agora o card fica na etapa dele e ganha marca vermelha.
 const KB_COLS = [
   { key:'backlog',      label:'Backlog' },
-  { key:'levantar_req', label:'Levantar Requisitos' },
+  { key:'levantar_req', label:'Em aprovação de requisitos' },
   { key:'planning',     label:'Planning' },
   { key:'planejado',    label:'Planejado' },
   { key:'em_andamento', label:'Em Andamento' },
@@ -5730,6 +5762,18 @@ function renderKanban() {
         ' title="Duplo clique para repassar esta demanda para uma sprint">' +
         SPRINTPO.badge(m, 'kb-sprint') + '</span>');
       if (m.debito_tecnico) badges.push('<span class="kb-debito">🧱 Déb. técnico</span>');
+      // Impacto e urgência seguem a demanda pela esteira (`requisitos.js`).
+      if (window.REQUISITOS) {
+        const _req = REQUISITOS.chips(m);
+        if (_req) badges.push(_req);
+        // Na etapa e ainda sem o carimbo do Worker (antes da primeira gravação): a enviar.
+        const _cu = REQUISITOS.estado(m) || (m.status_planejamento === REQUISITOS.ETAPA ? 'a_enviar' : '');
+        if (_cu && m.status_planejamento === REQUISITOS.ETAPA) {
+          badges.push('<span class="kb-debito" title="Caso de uso: ' + esc(REQUISITOS.ESTADOS[_cu]) + '">📄 ' +
+            esc({ a_enviar: 'Caso de uso a enviar', enviado: 'Aguardando aprovação',
+                  aprovado: 'Requisitos aprovados', ajustes: 'Usuário pediu ajustes' }[_cu]) + '</span>');
+        }
+      }
       if (m.dados_bi) badges.push('<span class="kb-dados" title="Demanda do time de Dados/BI">📊 Dados/BI</span>');
       else if (m.sales_ops) badges.push('<span class="kb-dados" title="Demanda de Sales Ops — sprint contabilizada à parte">📈 Sales Ops</span>');
       if (SPRINTPO.ehPrioritariaDaSprint(m)) badges.push('<span class="kb-debito" title="Vencida no início da ' +
@@ -6947,7 +6991,7 @@ function mesSomaLocal(iso, n) {
 
 const PM_FUNIS = [
   { k: 'backlog',      rot: 'Backlog (recepção)', curto: 'Backlog',   cor: 'var(--text3)' },
-  { k: 'levantar_req', rot: 'Levantar Requisitos', curto: 'Requisitos', cor: 'var(--blue)' },
+  { k: 'levantar_req', rot: 'Em aprovação de requisitos', curto: 'Aprov. req.', cor: 'var(--blue)' },
   { k: 'planning',     rot: 'Planning',            curto: 'Planning',  cor: 'var(--roxo,#C9AEFF)' },
   { k: 'validacao',    rot: 'Validação PM/PO',     curto: 'Validação', cor: 'var(--amber-tx,#FFC470)' },
 ];
@@ -9909,7 +9953,7 @@ function renderGerSprint() {
     const bk = SPRINTPO.backlogDaSprint(state, _sprSel, etapa, _sprTrilha);
     const nBk = bk.reduce((t, g) => t + g.itens.length, 0);
     const devs = devsDisponiveis();
-    const ETQ = { backlog: 'Backlog', levantar_req: 'Levantar req.', planning: 'Planning',
+    const ETQ = { backlog: 'Backlog', levantar_req: 'Aprov. requisitos', planning: 'Planning',
                   planejado: 'Planejado' };
     bkEl.innerHTML = !nBk ? '' :
       '<div class="spr-tit">Backlog da sprint <span class="spr-dica">— ' + nBk +
@@ -10359,7 +10403,7 @@ function renderGerencial() {
   renderGerEntradas(ano, mes);
 
   const STATUS_LABEL = {
-    backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado',
+    backlog:'Backlog', levantar_req:'Aprov. requisitos', planning:'Planning', planejado:'Planejado',
     em_andamento:'Em Andamento', validacao:'Validação PM/PO', concluido:'Concluído',
     atrasado:'Atrasado', negada:'Negada'
   };
@@ -12695,8 +12739,8 @@ function relRenderBacklog() {
   box.innerHTML = '<div class="rel-vem-grupo">' +
     '<div class="rel-vem-head"><span class="rel-vem-tit">Nada foi prometido</span>' +
       '<span class="rel-vem-tot">' + esc(resumo) + '</span></div>' +
-    '<p class="rel-vem-por">Etapas <strong>Backlog</strong> e <strong>Levantar ' +
-      'Requisitos</strong>: ninguém combinou data para nenhuma delas. As que já ' +
+    '<p class="rel-vem-por">Etapas <strong>Backlog</strong> e <strong>Em aprovação ' +
+      'de requisitos</strong>: ninguém combinou data para nenhuma delas. As que já ' +
       'têm pontuação aparecem também em “Pontuadas, falta planejar” acima — são a ' +
       'mesma demanda respondendo a duas perguntas, e não devem ser somadas.</p>' +
     linhas + '</div>';
@@ -13019,7 +13063,7 @@ function relTexto(secao) {
       if (partes.length) partes.push('');
       partes.push('BACKLOG (na data desta ata) — ' + b.total +
         (b.pontos ? ' · ' + b.pontos + ' pt ja estimados' : ''));
-      partes.push('  Etapas Backlog e Levantar Requisitos: sem data combinada.' +
+      partes.push('  Etapas Backlog e Em aprovação de requisitos: sem data combinada.' +
         (b.maisVelha != null ? ' A mais antiga espera ha ' + b.maisVelha + ' dias.' : ''));
       b.itens.forEach(x => partes.push('    ' + (x.codigo || '—').padEnd(9) +
         (x.dias == null ? '   —  ' : String(x.dias).padStart(4) + 'd ') +
@@ -13366,6 +13410,97 @@ function mResumoConta() {
   alvo.style.color = restam <= 30 ? 'var(--amber-tx, #FFC470)' : 'var(--text3)';
 }
 
+/* ─── O CASO DE USO NO CARD (Em aprovação de requisitos) ────────────────
+   O Worker abre o `caso_uso` quando a demanda entra na etapa; aqui ele é
+   escrito, enviado e respondido. `_cuEdit` é a cópia em edição — só vai para
+   a gravação junto com o resto do card, no Salvar. */
+let _cuEdit = null;
+function cuRender(m) {
+  _cuEdit = null;
+  const box = document.getElementById('m-caso-uso');
+  if (!box) return;
+  const naEtapa = (m?.status_planejamento || '') === REQUISITOS.ETAPA;
+  const c = m && m.caso_uso && typeof m.caso_uso === 'object' ? m.caso_uso : null;
+  box.style.display = (m && (naEtapa || c)) ? '' : 'none';
+  if (!m || (!naEtapa && !c)) return;
+  document.getElementById('m-cu-texto').value = (c && c.texto) || cuTextoNovo(m);
+  cuPintaEstado(c || { status: 'a_enviar' });
+}
+function cuTextoNovo(m) {
+  const tema = (state.temas || []).find(t => t.id === m.tema_id);
+  return REQUISITOS.casoDeUso(m, { tema: tema && tema.nome, hoje: PRAZO.hojeISO() });
+}
+function cuPintaEstado(c) {
+  const st = REQUISITOS.ESTADOS[c.status] ? c.status : 'a_enviar';
+  const cor = { a_enviar: 'var(--amber-tx,#FFC470)', enviado: 'var(--blue-tx,#9BC8F8)',
+                aprovado: 'var(--green-tx,#8FE0A8)', ajustes: 'var(--red-tx,#F9A0A0)' }[st];
+  const el = document.getElementById('m-cu-estado');
+  el.textContent = REQUISITOS.ESTADOS[st]; el.style.color = cor;
+  const q = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  document.getElementById('m-cu-info').textContent = [
+    c.gerado_em ? 'Entrou na etapa em ' + q(c.gerado_em) : '',
+    c.enviado_em ? 'enviado em ' + q(c.enviado_em) + (c.enviado_por ? ' por ' + c.enviado_por : '') : '',
+    c.respondido_em ? 'resposta em ' + q(c.respondido_em) + (c.respondido_por ? ' (' + c.respondido_por + ')' : '') : '',
+    c.resposta ? 'Ajustes: ' + c.resposta : '',
+  ].filter(Boolean).join(' · ');
+}
+function cuDemandaNaTela() {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id) || {};
+  return Object.assign({}, m, {
+    titulo: document.getElementById('m-titulo').value,
+    descricao: document.getElementById('m-descricao').value,
+    solicitante: document.getElementById('m-solicitante').value,
+    impacto: document.getElementById('m-impacto').value,
+    urgencia: document.getElementById('m-urgencia').value,
+    dev: getDevValue(),
+  });
+}
+function cuGerar() { document.getElementById('m-cu-texto').value = cuTextoNovo(cuDemandaNaTela()); }
+async function cuCopiar() {
+  try {
+    await navigator.clipboard.writeText(document.getElementById('m-cu-texto').value);
+    toast('Caso de uso copiado.', 'ok');
+  } catch (_) {
+    document.getElementById('m-cu-texto').select();
+    toast('Selecionei o texto: copie com Ctrl+C.', 'ok');
+  }
+}
+function cuImprimir() {
+  const m = cuDemandaNaTela();
+  const w = window.open('', '_blank');
+  if (!w) { toast('O navegador bloqueou a janela: libere pop-ups para imprimir.', 'err'); return; }
+  w.document.write(REQUISITOS.paginaImpressao(document.getElementById('m-cu-texto').value,
+    'Caso de uso ' + (m.codigo || '')));
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+}
+async function cuMarcar(st) {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) { toast('Salve a demanda antes.', 'err'); return; }
+  const base = Object.assign({ status: 'a_enviar', gerado_em: '' }, _cuEdit || m.caso_uso || {});
+  const agora = new Date().toISOString();
+  const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
+  if (st === 'enviado') {
+    Object.assign(base, { status: 'enviado', texto: document.getElementById('m-cu-texto').value,
+                          enviado_em: agora, enviado_por: quem });
+  } else {
+    const resp = st === 'ajustes'
+      ? await pedirTexto({ titulo: 'O que o usuário pediu para ajustar?', multilinha: true,
+                           obrigatorio: true, ok: 'Registrar' })
+      : await pedirTexto({ titulo: 'Quem aprovou? (nome do usuário)', obrigatorio: true,
+                           ok: 'Registrar', valor: m.solicitante || '' });
+    if (resp == null) return;
+    if (!base.texto) base.texto = document.getElementById('m-cu-texto').value;
+    Object.assign(base, { status: st, respondido_em: agora,
+                          respondido_por: st === 'aprovado' ? String(resp).trim() : (m.solicitante || ''),
+                          resposta: st === 'ajustes' ? String(resp).trim() : '' });
+  }
+  _cuEdit = base;
+  cuPintaEstado(base);
+  toast('Registrado no card — clique em Salvar para gravar.', 'ok');
+}
+
 function openModalMelhoria(id) {
   const m = id ? state.melhorias.find(x => x.id === id) : null;
   document.getElementById('modal-melhoria-title').textContent = m ? 'Editar issue' : 'Nova issue';
@@ -13399,6 +13534,9 @@ function openModalMelhoria(id) {
   populateDevSelect(m?.dev || '');
   document.getElementById('m-prioridade').value      = m?.prioridade       || '';
   document.getElementById('m-tipo').value            = m?.tipo            || '';
+  document.getElementById('m-impacto').innerHTML      = REQUISITOS.opcoes('impacto', m?.impacto);
+  document.getElementById('m-urgencia').innerHTML     = REQUISITOS.opcoes('urgencia', m?.urgencia);
+  cuRender(m);
   document.getElementById('m-poker-media').value      = m?.poker_media != null ? m.poker_media : '';
   // Abrir outro card zera a marca: "escolhi na mao" vale para o card que estava
   // aberto, nao para o proximo.
@@ -13658,7 +13796,7 @@ function mGrillRender(m) {
     est.innerHTML = selo('pendente', 'aguardando o dev') +
       'Aparece no painel dele com o visual de Grill. Ele responde ' +
       '<b>entendi</b> — e a demanda vai para Planning — ou <b>tenho dúvidas</b>, ' +
-      'e ela vai para Levantar Requisitos com os pontos escritos aqui embaixo.';
+      'e ela vai para Em aprovação de requisitos com os pontos escritos aqui embaixo.';
   } else if (e === 'ok') {
     est.innerHTML = selo('ok', 'entendido') +
       'O dev leu e não tem dúvida' + (g.respondido_por ? ' — ' + esc(g.respondido_por) : '') + '.';
@@ -14201,6 +14339,14 @@ async function saveMelhoria() {
   const tipo   = document.getElementById('m-tipo').value;
   if (!titulo) { toast('Informe o título.', 'err'); return; }
   if (!tipo) { toast('Selecione o tipo: Sustentação ou Evolução.', 'err'); return; }
+  /* IMPACTO E URGÊNCIA SÃO DA ABERTURA, e só dela: as demandas antigas não os
+     têm, e cobrar em toda gravação prenderia quem só corrige um texto. */
+  if (!document.getElementById('m-id').value &&
+      (!document.getElementById('m-impacto').value || !document.getElementById('m-urgencia').value)) {
+    toast('Informe o impacto e a urgência da demanda.', 'err');
+    document.getElementById(document.getElementById('m-impacto').value ? 'm-urgencia' : 'm-impacto').focus();
+    return;
+  }
   // O modelo NAO bloqueia a gravacao. Ele bloqueava, e atrapalhou: abrir uma task
   // exigia preencher seis secoes antes de gravar qualquer coisa, inclusive quando a
   // pessoa so queria registrar a demanda e detalhar depois. Bloqueio aqui e so para
@@ -14302,6 +14448,11 @@ async function saveMelhoria() {
     estimativa:          existing.estimativa || '',
     dev:                 getDevValue(),
     prioridade:          prioridade,
+    impacto:             document.getElementById('m-impacto').value,
+    urgencia:            document.getElementById('m-urgencia').value,
+    /* O CASO DE USO vem do painel (`_cuEdit`), que guarda o que foi enviado e
+       a resposta; sem mexer, repassa o que existe — o Worker abre e fecha. */
+    caso_uso:            _cuEdit || existing.caso_uso || undefined,
     discovery:           discovery,
     solicitante:         document.getElementById('m-solicitante').value.trim(),
     // O endereco de quem pediu, para o aviso pelo AXCred. Vazio quando o nome
@@ -16465,7 +16616,7 @@ async function pjAprovSalvar(p, msg) {
 // A marca existe para isso aparecer no card, em vez de sair no relatorio do mes
 // como capacidade que nunca foi medida.
 //
-// Backlog, Levantar Requisitos e Planning ficam de fora de proposito: nessas
+// Backlog, Em aprovação de requisitos e Planning ficam de fora de proposito: nessas
 // etapas a demanda ainda nao foi estimada porque ainda nao chegou a hora.
 const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao_area',
                               'validacao', 'concluido'];

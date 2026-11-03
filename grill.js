@@ -148,7 +148,7 @@
                em: new Date().toISOString(), por: String(quem || '') };
     }).filter(function (p) { return p.texto !== ''; });
     /* DÚVIDA SEM PONTO NENHUM NÃO É DÚVIDA. Quem chama já deveria ter barrado,
-       mas deixar passar gravaria uma demanda em Levantar Req. sem uma linha
+       mas deixar passar gravaria uma demanda em Aprov. requisitos sem uma linha
        dizendo o que falta — que é o pior estado possível para quem vai ler. */
     if (veredito === 'duvida' && !novos.length && !g.pontos.length) return '';
     m.grill = { marcado: true, marcado_em: g.marcado_em, marcado_por: g.marcado_por,

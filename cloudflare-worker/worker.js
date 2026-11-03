@@ -642,6 +642,8 @@ const HIST_CAMPOS = {
    * silencio a data que decide se alguem esta atrasado e exatamente o que o
    * historico existe para impedir.                                            */
   prioridade:          'prioridade',
+  impacto:             'impacto',
+  urgencia:            'urgencia',
   sprint:              'sprint',
   /* A SPRINT QUE O PO ESCOLHEU, ao lado da derivada e nao no lugar dela. Sao
    * duas perguntas diferentes (ver `sprint.js`): `sprint` e "em que semana cai a
@@ -1511,6 +1513,59 @@ function carimbaAreaValidacao(recebido, servidor) {
  * o campo novo falta. Mexer num campo que nenhuma outra rota daqui escreve seria
  * a unica excecao, e excecao e o que diverge depois.
  */
+/* ═══ EM APROVACAO DE REQUISITOS: O CASO DE USO NASCE NA ENTRADA ═══════════
+ *
+ * "Toda demanda que cair nessa etapa, o sistema devera gerar um fluxo de caso
+ *  de uso para o usuario aprovar (por hora eu enviarei manual)."  (03/11/2026)
+ *
+ * A etapa e `levantar_req` (so o NOME mudou — ver `requisitos.js`). Aqui, e
+ * nao na tela, porque a demanda chega nela por varias portas: Admin, Gantt,
+ * o "tenho duvidas" do grill no painel dev, a API. O Worker e o unico ponto por
+ * onde todas passam.
+ *
+ * SEM ESTADO ANTERIOR: a entrada se reconhece pelo proprio campo. Na etapa sem
+ * `caso_uso` aberto -> abre um (a_enviar). Fora dela com um aberto -> fecha
+ * (`saiu_em`). Voltar para a etapa depois abre um ciclo novo, guardando o
+ * anterior em `ciclos_anteriores` — o que foi aprovado antes nao some.
+ *
+ * O TEXTO NAO E ESCRITO AQUI: a tela monta com os dados de agora e grava o que
+ * foi ENVIADO. Impacto e urgencia sao normalizados aqui tambem — o que vier
+ * fora das tres opcoes vira vazio, nao um quarto valor. */
+const CASO_USO_ESTADOS = ['a_enviar', 'enviado', 'aprovado', 'ajustes'];
+function normNivel(v, lista) {
+  const s = String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  if (!s) return '';
+  return lista.find(x => x === s || x.slice(0, 3) === s.slice(0, 3)) || '';
+}
+function normImpacto(v)  { return normNivel(v, ['baixo', 'medio', 'alto']); }
+function normUrgencia(v) { return normNivel(v, ['baixa', 'media', 'alta']); }
+
+function carimbaCasoDeUso(data, agora) {
+  if (!data || !Array.isArray(data.melhorias)) return [];
+  const quando = agora || new Date().toISOString();
+  const abertos = [];
+  for (const m of data.melhorias) {
+    if (!m) continue;
+    if (m.impacto !== undefined)  m.impacto  = normImpacto(m.impacto);
+    if (m.urgencia !== undefined) m.urgencia = normUrgencia(m.urgencia);
+    if (m.oculto || m.mesclado_em) continue;
+    const c = (m.caso_uso && typeof m.caso_uso === 'object') ? m.caso_uso : null;
+    if (c && !CASO_USO_ESTADOS.includes(c.status)) c.status = 'a_enviar';
+    const naEtapa = String(m.status_planejamento || '') === 'levantar_req';
+    if (naEtapa && (!c || c.saiu_em)) {
+      const ant = c ? (Array.isArray(c.ciclos_anteriores) ? c.ciclos_anteriores : [])
+        .concat([Object.assign({}, c, { ciclos_anteriores: undefined })]).slice(-10) : [];
+      m.caso_uso = { status: 'a_enviar', gerado_em: quando, texto: '',
+                     enviado_em: '', enviado_por: '', respondido_em: '', respondido_por: '',
+                     resposta: '', saiu_em: '', ciclos_anteriores: ant };
+      abertos.push(m.codigo || m.id);
+    } else if (!naEtapa && c && !c.saiu_em) {
+      c.saiu_em = quando;
+    }
+  }
+  return abertos;
+}
+
 const DIAS_UTEIS_NA_AREA = 5;
 
 function promoveAreaVencida(data, hoje) {
@@ -4132,6 +4187,8 @@ export default {
              existe, porque e la que o time de Dados e acompanhado. */
           dados_bi: !!m.dados_bi,
           sales_ops: !!m.sales_ops,
+          // impacto e urgencia seguem a demanda pela esteira, a mesa inclusive
+          impacto: m.impacto || '', urgencia: m.urgencia || '',
           /* OS BIs IMPACTADOS NA MESA. Quem estima uma demanda de Dados precisa
              saber quantos paineis ela encosta — e a diferenca entre 3 e 13
              pontos, e e justamente o que a sala discute. */
@@ -4521,6 +4578,7 @@ export default {
                           (_ident && _ident.usuario && _ident.usuario.nome) || 'facilitador',
                           'planning poker');
         promoveAreaVencida(data);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+        carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
         data.atualizado_em = iso;
         const risco = gravacaoSuspeita(data, file.size || 0);
         if (risco) return json({ error: risco }, 409, headers);
@@ -4581,6 +4639,7 @@ export default {
         }
         registraHistorico(dataE, { melhorias: [antesE] }, quemE, 'planning poker');
         promoveAreaVencida(dataE);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+        carimbaCasoDeUso(dataE);   // entrou em Em aprovacao de requisitos: abre o caso de uso
         dataE.atualizado_em = iso;
         const riscoE = gravacaoSuspeita(dataE, fileE.size || 0);
         if (riscoE) return json({ error: riscoE }, 409, headers);
@@ -4639,6 +4698,7 @@ export default {
           .bind(codigo, mid).run();
         registraHistorico(dataN, { melhorias: [antesN] }, quemN, 'planning poker');
         promoveAreaVencida(dataN);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+        carimbaCasoDeUso(dataN);   // entrou em Em aprovacao de requisitos: abre o caso de uso
         dataN.atualizado_em = iso;
         const riscoN = gravacaoSuspeita(dataN, fileN.size || 0);
         if (riscoN) return json({ error: riscoN }, 409, headers);
@@ -4735,6 +4795,7 @@ export default {
       if (mencoes.length) entradaM.mencoes = mencoes;
       alvoM.mensagens = anteriorM.concat([entradaM]).slice(-MSG_MAX);
       promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(dataM);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       dataM.atualizado_em = agoraM;
 
       const riscoM = gravacaoSuspeita(dataM, fileM.size || 0);
@@ -5085,6 +5146,8 @@ export default {
       dados_bi: !!m.dados_bi,
       sales_ops: !!m.sales_ops,
       sprint_prioritaria: m.sprint_prioritaria || null,
+      impacto: m.impacto || '', urgencia: m.urgencia || '',
+      caso_uso_status: (m.caso_uso && m.caso_uso.status) || '',
       bis_impactados: bisDaDemanda(m),
     });
 
@@ -5612,6 +5675,16 @@ export default {
         if (body.anexos !== undefined) {
           m.anexos = anexosDoPedido(body.anexos); mudou.push('anexos');
         }
+        // Impacto e urgencia: so os tres valores de cada; outro valor e recusado.
+        for (const [campo, norm] of [['impacto', normImpacto], ['urgencia', normUrgencia]]) {
+          if (body[campo] === undefined) continue;
+          const v = norm(body[campo]);
+          if (!v && String(body[campo] || '').trim()) {
+            return json({ error: campo, detail: campo === 'impacto'
+              ? 'Impacto: baixo, medio ou alto.' : 'Urgencia: baixa, media ou alta.' }, 400, headers);
+          }
+          m[campo] = v; mudou.push(campo);
+        }
         if (body.horas_realizadas !== undefined) {
           const h = Number(body.horas_realizadas);
           if (!Number.isFinite(h) || h < 0) {
@@ -5953,6 +6026,7 @@ export default {
       atribuiCodigos(atual);
       corrigeProjetoInvalido(atual);
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       atual.atualizado_em = new Date().toISOString();
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -6132,6 +6206,7 @@ export default {
 
       registraHistorico(atual, base, quem, 'deploy');
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       atual.atualizado_em = agora;
       const versoes = [...new Set(pedidos.map(p => p.ver).filter(Boolean))];
       const msg = 'deploy: ' + mexidas + ' demanda(s)' +
@@ -6491,6 +6566,7 @@ export default {
       atual.projetos.push(novo);
       atribuiCodigosProjeto(atual);
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -6703,6 +6779,9 @@ export default {
          * dentro do Admin. */
         prioridade: ['alta', 'media', 'baixa'].includes(String(body.prioridade || ''))
           ? body.prioridade : '',
+        // Impacto e urgencia da abertura (03/11/2026) — ver `carimbaCasoDeUso`.
+        impacto: normImpacto(body.impacto),
+        urgencia: normUrgencia(body.urgencia),
         estimativa: '',
         estimativa_horas: Number(body.estimativa_horas) > 0 ? Number(body.estimativa_horas) : 0,
         horas_realizadas: Number(body.horas_realizadas) > 0 ? Number(body.horas_realizadas) : 0,
@@ -6786,6 +6865,7 @@ export default {
       atribuiCodigos(atual);
       corrigeSemDev(atual);
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -6804,6 +6884,10 @@ export default {
                     ...((!donoNova && !semDono && spPedido !== 'backlog')
                       ? { aviso: 'Demanda aberta no backlog: so o PM/PO coloca demanda em ' +
                                  'outra etapa e na sprint.' } : {}),
+                    impacto: salva.impacto || '', urgencia: salva.urgencia || '',
+                    ...((!salva.impacto || !salva.urgencia)
+                      ? { aviso_classificacao: 'Informe impacto (baixo|medio|alto) e urgencia ' +
+                          '(baixa|media|alta) na abertura: eles seguem a demanda pela esteira.' } : {}),
                     /* O VINCULO VOLTA NA RESPOSTA, com o CODIGO da principal. Sem
                        isto quem chama grava `parent_id` e nao tem como saber se
                        pegou a demanda certa — mandou "42", e "42" casa com AX-042
@@ -6955,6 +7039,7 @@ export default {
       const quemM = (await papelAtual()) || 'admin';
       registraHistorico(dataM, JSON.parse(textoM), quemM, 'fechamento do mes');
       promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(dataM);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       dataM.atualizado_em = new Date().toISOString();
       const putM = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -7263,6 +7348,7 @@ export default {
         }]);
       }
       promoveAreaVencida(atualS);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atualS);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       atualS.atualizado_em = new Date().toISOString();
       const putS = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -7779,6 +7865,7 @@ export default {
          carimbo do mes: a promocao vira linha no card em vez de uma etapa que
          muda sozinha sem rastro. */
       promoveAreaVencida(data);
+      carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       // ANTES do historico, como o carimbo do mes: assim a entrada na area
       // tambem vira linha no card, e nao um campo que muda sozinho sem rastro.
       carimbaAreaValidacao(data, antesPub);
@@ -7890,6 +7977,15 @@ export default {
       const solicitantesRevertidos = travaSolicitantePreenchido(data, antesDev, _papelDev);
       const _donoDev = ehDonoDaSprint(_ident);
       const sprintsRevertidas = travaSprintDoPO(data, antesDev, _donoDev);
+      /* O CASO DE USO E DO PM/PO: quem envia ao usuario e registra a aprovacao.
+         O painel dev nao tem tela para ele; o valor do servidor vence, para
+         "aprovado" nao poder nascer de um corpo montado a mao. */
+      const _casoAntes = new Map((antesDev.melhorias || []).filter(x => x && x.id).map(x => [x.id, x.caso_uso]));
+      for (const m of data.melhorias) {
+        if (!m || !_casoAntes.has(m.id)) continue;
+        const c = _casoAntes.get(m.id);
+        if (c === undefined) delete m.caso_uso; else m.caso_uso = c;
+      }
       const nascidasNoBacklogDev = _donoDev ? [] : nascendoForaDoBacklog(data, antesDev);
       /* A CLASSIFICACAO ANTES DA TRAVA DE ALOCACAO, e a ordem e obrigatoria:
          a trava le `m.tipo` para decidir se Sustentacao passa. Invertido, um
@@ -8052,6 +8148,7 @@ export default {
       // que mais grava no dia a dia — deixar a promocao so no Admin faria o
       // prazo da area depender de o PM/PO publicar alguma coisa.
       promoveAreaVencida(data);
+      carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       // O dev e quem mais vai mover o card para a area — sem esta linha o
       // carimbo so nasceria quando o PM/PO publicasse pelo Admin.
       carimbaAreaValidacao(data, antesDev);
@@ -8166,6 +8263,8 @@ export default {
       tema_id: temaId,
       tipo: tipo,
       solicitante: limpaTexto(m.solicitante, 120),
+      impacto: normImpacto(m.impacto),
+      urgencia: normUrgencia(m.urgencia),
       discovery: m.discovery ? limpaProfundo(m.discovery, 0) : undefined,
       anexos: sanitizaAnexos(m.anexos),
       id: uid(),

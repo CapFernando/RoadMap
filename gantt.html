@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="c2eca44fd6">
+<html lang="pt-BR" data-build="4b3efc79d8">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -186,7 +186,7 @@
     .ind-chip.validacao      { background:#4A2800; border-color:#8A5000; color:#FFC470; }
     /* Magenta e nao rose avermelhado: 'Atrasado' e vermelho, e num chip deste
        tamanho um rose vizinho do vermelho se confunde com ele a um metro da tela.
-       Magenta tambem nao colide com o purpura de 'Levantar Req.' (#C9AEFF). */
+       Magenta tambem nao colide com o purpura de 'Aprov. requisitos' (#C9AEFF). */
     .ind-chip.pausado        { background:#48123F; border-color:#93257F; color:#F2A0DA; }
     /* MES PASSADO — BRANCO COM AS MESMAS LISTRAS PRETAS do 'Atrasado', e o corpo
        branco e o que separa os dois. Era rosa choque, e o rosa ficava colado no
@@ -1175,6 +1175,7 @@
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <!-- A frente de trabalho de cada pessoa, para o filtro de frente do quadro. -->
+  <script src="requisitos.js?v=1987238fe2"></script>
   <script src="pipelines.js?v=2374e11d52"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
@@ -1437,6 +1438,16 @@
           <option value="evolucao">🚀 Evolução</option>
         </select>
       </div>
+      <!-- IMPACTO E URGÊNCIA (03/11/2026): pedidos na abertura, seguem a demanda
+           pela esteira inteira — ver `requisitos.js`. -->
+      <div class="form-group">
+        <label>Impacto *</label>
+        <select id="e-impacto"></select>
+      </div>
+      <div class="form-group">
+        <label>Urgência *</label>
+        <select id="e-urgencia"></select>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -1486,7 +1497,7 @@
         <label>Status Planejamento</label>
         <select id="e-status-plan" onchange="gSprintAviso()">
           <option value="backlog">Backlog</option>
-          <option value="levantar_req">Levantar Requisitos</option>
+          <option value="levantar_req">Em aprovação de requisitos</option>
           <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em andamento</option>
@@ -2916,7 +2927,7 @@ function spEfetivo(m) {
 /* OS ROTULOS DAS ETAPAS, num lugar so. Estavam dentro de `renderIndicators`, e a
    fila lateral passou a precisar dos mesmos nomes para dizer de que etapa ela
    esta falando. Duas listas divergiriam no dia em que uma etapa fosse renomeada. */
-const ETAPA_LABELS = { backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação', concluido:'Concluído', atrasado:'Atrasado' };
+const ETAPA_LABELS = { backlog:'Backlog', levantar_req:'Aprov. requisitos', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação', concluido:'Concluído', atrasado:'Atrasado' };
 
 function renderIndicators() {
   const visible = state.melhorias.filter(m => !m.oculto);
@@ -3122,6 +3133,7 @@ function renderBacklog() {
               demanda SEM data — a derivada sairia vazia para todas elas, e é
               justamente aqui que "já foi repassada?" precisa de resposta. */''}
         ${window.SPRINTPO ? SPRINTPO.badge(m, 'bl-sprint') : ''}
+        ${window.REQUISITOS ? REQUISITOS.chips(m) : ''}
         ${estaPausado(m) ? `<span class="bl-pausa" title="Pausada${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}">⏸ ${diasPausadoAgora(m)}d</span>` : ''}
         ${pontuado
           ? `<span title="Pontos do Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:10px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 6px;font-weight:700">🃏 ${m.poker_pontos}</span>`
@@ -4710,6 +4722,8 @@ function openModal(id, prefillDev, prefillDate) {
   renderDiscoveryGantt(m);
   document.getElementById('e-prio').value      = m?.prioridade || '';
   document.getElementById('e-tipo').value      = m?.tipo || '';
+  document.getElementById('e-impacto').innerHTML  = REQUISITOS.opcoes('impacto', m?.impacto);
+  document.getElementById('e-urgencia').innerHTML = REQUISITOS.opcoes('urgencia', m?.urgencia);
   document.getElementById('e-sprint').value    = m?.sprint || '';
   // Pontos: o gantt mostrava o valor no card da fila mas nao tinha onde digitar.
   // Se a demanda tiver um valor antigo fora do baralho, acrescenta a opcao para
@@ -5074,6 +5088,13 @@ async function saveTask() {
   if (!titulo) { toast('Informe o título.', 'err'); return; }
   const tipo = document.getElementById('e-tipo').value;
   if (!tipo) { toast('Selecione o tipo: Sustentação ou Evolução.', 'err'); return; }
+  // Impacto e urgência: obrigatórios na abertura (as antigas não os têm).
+  const impacto = document.getElementById('e-impacto').value;
+  const urgencia = document.getElementById('e-urgencia').value;
+  if (!editingId && (!impacto || !urgencia)) {
+    toast('Informe o impacto e a urgência da demanda.', 'err');
+    document.getElementById(impacto ? 'e-urgencia' : 'e-impacto').focus(); return;
+  }
 
   const inicio = document.getElementById('e-inicio').value;
   const fim    = document.getElementById('e-fim').value;
@@ -5138,6 +5159,8 @@ async function saveTask() {
     descricao:          document.getElementById('e-descricao').value.trim(),
     tema_id:            temaId,
     tipo:               tipo,
+    impacto:            impacto,
+    urgencia:           urgencia,
     status:             spToStatus(sp),
     dev:                document.getElementById('e-dev').value,
     inicio:             inicio,

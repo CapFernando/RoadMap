@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="3c9214a635">
+<html lang="pt-BR" data-build="b76284344e">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -721,7 +721,7 @@
   <script src="subtarefa.js?v=23179d9523"></script>
   <script src="bis.js?v=735ed4e46d"></script>
   <script src="referencia.js?v=1750882d31"></script>
-  <script src="grill.js?v=c85bb8b63f"></script>
+  <script src="grill.js?v=cffd670be6"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="prevoo.js?v=ab2758c54c"></script>
@@ -756,6 +756,7 @@
 <script src="sprint.js?v=ecd63fa9f5"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
+<script src="requisitos.js?v=1987238fe2"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
@@ -1207,7 +1208,7 @@
          formulário faria o dev responder na semana seguinte.
 
          AS DUAS SAÍDAS SÃO O DESTINO: "entendi" manda para Planning, "tenho
-         dúvidas" manda para Levantar Requisitos com os pontos escritos. Por
+         dúvidas" manda para Em aprovação de requisitos com os pontos escritos. Por
          isso elas são botões, e não mais uma opção do "Mover para" — a lista de
          lá é do fluxo normal, e misturar faria o dev escolher Planning à toa. -->
     <div id="ms-grill" style="display:none"></div>
@@ -1417,6 +1418,16 @@
           <option value="sustentacao">🔧 Sustentação (Erro/Bug)</option>
           <option value="evolucao">🚀 Evolução (Melhoria)</option>
         </select>
+      </div>
+      <!-- IMPACTO E URGÊNCIA (03/11/2026): pedidos na abertura, seguem a demanda
+           pela esteira inteira — ver `requisitos.js`. -->
+      <div class="form-group">
+        <label>Impacto *</label>
+        <select id="n-impacto"></select>
+      </div>
+      <div class="form-group">
+        <label>Urgência *</label>
+        <select id="n-urgencia"></select>
       </div>
       <div class="form-group">
         <label>Quem pediu <span style="color:var(--red,#E84444)">*</span> <small style="font-weight:400;color:var(--text3)">— é quem confere a entrega</small></label>
@@ -2743,7 +2754,7 @@ const prodNum = n => Number.isInteger(n) ? String(n) : String(Math.round(n * 10)
 // A marca existe para isso aparecer no card, em vez de sair no relatorio do mes
 // como capacidade que nunca foi medida.
 //
-// Backlog, Levantar Requisitos e Planning ficam de fora de proposito: nessas
+// Backlog, Em aprovação de requisitos e Planning ficam de fora de proposito: nessas
 // etapas a demanda ainda nao foi estimada porque ainda nao chegou a hora.
 const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao_area',
                               'validacao', 'concluido'];
@@ -3305,7 +3316,7 @@ const STATUS_POR_ETAPA = {
 const statusDaEtapa = (e) => STATUS_POR_ETAPA[e] || 'recebida';
 
 const STATUS_LABELS = {
-  backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
+  backlog:'Backlog', levantar_req:'Aprov. requisitos', planejado:'Planejado',
   planning:'Planning', em_andamento:'Em Andamento',
   validacao_area:'Validação da área', validacao:'Em validação',
   concluido:'Concluído', atrasado:'Atrasado', negada:'Negada'
@@ -4857,6 +4868,7 @@ function renderCard(m, colKey) {
             tivesse sido alocada a ele e dois começam a mesma coisa. */''}
       <div class="kcard-rodape">${badge}${
         window.SPRINTPO ? SPRINTPO.badge(m, 'kcard-sprint') : ''}${
+        window.REQUISITOS ? REQUISITOS.chips(m) : ''}${
         (window.SPRINTPO && SPRINTPO.naPoolDoTime(state, m))
           ? '<span class="kcard-pool" title="Está na sprint e ainda não tem dono. Qualquer um do time pode pegar — avise antes de começar.">🙌 sem dono</span>'
           : ''}${
@@ -5070,6 +5082,9 @@ async function saveNewDep() {
     id: uid(), titulo, descricao: desc, dev,
     tema_id: parent.tema_id,
     tipo: parent.tipo || '',   // dependência herda a classificação do card pai
+    // ...e o impacto e a urgência: o vínculo não tem exigências próprias.
+    impacto: parent.impacto || '',
+    urgencia: parent.urgencia || '',
     entrega,
     parent_id: parentId,
     /* `is_dependency` É O TIPO DO ELO, e não "existe elo" — `parent_id` já diz
@@ -5679,7 +5694,7 @@ let _msSolicitanteMexido = false;
  *
  * DUAS SAÍDAS, E CADA UMA É UM DESTINO:
  *   ENTENDI       → Planning
- *   TENHO DÚVIDAS → Levantar Requisitos, com os pontos escritos
+ *   TENHO DÚVIDAS → Em aprovação de requisitos, com os pontos escritos
  *
  * São BOTÕES, e não opções do "Mover para". A lista de lá é do fluxo normal do
  * dev (começar, entregar); pôr Planning nela faria qualquer demanda poder ir
@@ -5715,13 +5730,13 @@ function msGrillRender(m) {
     '<div class="ms-grill-tit">🔥 Grill — dê seu parecer antes do planejamento</div>' +
     '<div class="ms-grill-txt">Leia a demanda acima. Se faltar alguma coisa para você ' +
     'conseguir estimar e executar, escreva os pontos — <b>uma dúvida por linha</b>. ' +
-    'Ela volta para Levantar Requisitos com o que você perguntou. Se estiver claro, ' +
+    'Ela volta para Em aprovação de requisitos com o que você perguntou. Se estiver claro, ' +
     'ela segue para o Planning.</div>' +
     jaPerguntou +
     '<textarea id="ms-grill-pontos" rows="3" placeholder="Ex.: De onde vem o valor do limite?&#10;O que acontece quando o cedente tem dois contratos?"></textarea>' +
     '<div class="ms-grill-acoes">' +
     '<button type="button" class="btn btn-secondary btn-sm" onclick="msGrillResponde(\'duvida\')">' +
-    'Tenho dúvidas → Levantar Req.</button>' +
+    'Tenho dúvidas → Aprov. requisitos</button>' +
     '<button type="button" class="btn btn-primary btn-sm" onclick="msGrillResponde(\'ok\')">' +
     'Entendi → Planning</button>' +
     '</div></div>';
@@ -5773,7 +5788,7 @@ async function msGrillResponde(veredito) {
   toast(veredito === 'ok'
     ? '🔥 Parecer registrado — a demanda seguiu para o Planning.'
     : '🔥 ' + pontos.length + (pontos.length === 1 ? ' dúvida enviada' : ' dúvidas enviadas') +
-      ' — a demanda voltou para Levantar Requisitos.', 'ok');
+      ' — a demanda voltou para Em aprovação de requisitos.', 'ok');
 }
 
 /** O projeto de um card, aberto pelo chip EP-XXX.
@@ -6526,7 +6541,7 @@ function nProjetoMudou() {
   // escolhido — regra certa para demanda NOVA (demanda de projeto e dimensionada no
   // planning junto das outras), e errada para demanda que ja esta andando.
   //
-  // Foi o que tirou AX-195 de Levantar Requisitos as 16:52 de 17/08: quem vinculou
+  // Foi o que tirou AX-195 de Em aprovação de requisitos as 16:52 de 17/08: quem vinculou
   // ao EP-003 nao pediu para voltar ao Backlog, e o campo ficava desabilitado, sem
   // como corrigir na mesma tela. A demanda "sumiu" da coluna onde estava.
   const editando = !!(document.getElementById('n-id') || {}).value;
@@ -6582,6 +6597,8 @@ function openNewModal() {
   document.getElementById('n-entrega').value = '';
   travaDatasNoCard(null);   // demanda nova: datas liberadas
   document.getElementById('n-tipo').value = '';
+  document.getElementById('n-impacto').innerHTML = REQUISITOS.opcoes('impacto', '');
+  document.getElementById('n-urgencia').innerHTML = REQUISITOS.opcoes('urgencia', '');
   document.getElementById('n-solicitante').value = '';
   _nAnexos = [];
   document.getElementById('n-file').value = '';
@@ -6754,6 +6771,12 @@ async function saveNewDemand() {
   const tipoSel = document.getElementById('n-tipo').value;
   if (!tipoSel) { toast('Diga se é problema (Erro/Bug) ou melhoria.','err');
                   document.getElementById('n-tipo').focus(); return; }
+  const impSel = document.getElementById('n-impacto').value;
+  const urgSel = document.getElementById('n-urgencia').value;
+  if (!existing && (!impSel || !urgSel)) {
+    toast('Informe o impacto e a urgência da demanda.', 'err');
+    document.getElementById(impSel ? 'n-urgencia' : 'n-impacto').focus(); return;
+  }
   // O modelo nao bloqueia: ver o comentario equivalente no admin.html. Aqui pesa
   // mais ainda — quem abre a demanda pelo painel dev costuma estar no meio de outra
   // coisa, e travar o registro faz a demanda nao ser aberta.
@@ -6814,6 +6837,8 @@ async function saveNewDemand() {
     descricao: document.getElementById('n-desc').value.trim(),
     dev: existing?.dev || currentDev,
     tipo: existing?.tipo || tipoSel,
+    impacto: impSel || existing?.impacto || '',
+    urgencia: urgSel || existing?.urgencia || '',
     /* O `|| currentDev` SAIU: a abertura agora exige o campo (ver acima), e o
        silencio virando o nome do dev fazia dele o homologador da propria
        entrega. Na EDICAO o que ja estava gravado continua valendo — inclusive
