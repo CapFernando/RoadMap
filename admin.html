@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="8ccebf7437">
+<html lang="pt-BR" data-build="e8969a1e7a">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -285,6 +285,7 @@
     .pj-and-cab { display:flex; gap:8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
       color:var(--text3); padding:0 4px 4px; border-bottom:1px solid var(--border); }
     .pj-and-cab span:first-child { flex:0 0 88px; }
+    .pj-and-cab span.pj-and-cab-dem { flex:1; }
     .pj-and-cab span:nth-child(2) { flex:1; }
     .pj-and-cab span:nth-child(3) { flex:0 0 auto; }
     .pj-and-col li .pj-and-data { flex:0 0 88px; }
@@ -1640,6 +1641,7 @@
 <script src="apresentacao.js?v=d1432be37a"></script>
 <script src="relatorio-ppt.js?v=b4db2e69eb"></script>
 <script src="aprovacao-ppt.js?v=fbb42677c3"></script>
+<script src="projetos-ppt.js?v=b053dd2816"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="historico-cliente.js?v=2b0fcaf502"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
@@ -16982,7 +16984,12 @@ function renderProjetos() {
     '<button type="button" class="' + (_pjVisao === 'andamento' ? 'on' : '') + '" onclick="pjVisao(\'andamento\')">' +
       '🚧 Em andamento (' + andamento.length + ')</button>' +
     '<button type="button" class="' + (_pjVisao === 'todos' ? 'on' : '') + '" onclick="pjVisao(\'todos\')">' +
-      'Todos (' + ps.length + ')</button></div>';
+      'Todos (' + ps.length + ')</button></div>' +
+    (andamento.length
+      ? '<button type="button" class="btn btn-secondary btn-sm" style="margin-left:10px;vertical-align:top"' +
+        ' onclick="imprimirProjetosAndamento(this)" title="Gera o PPT dos projetos em andamento">' +
+        '🖨 Imprimir - Projetos em andamento</button>'
+      : '');
   if (_pjVisao === 'andamento') {
     box.innerHTML = seletor + (andamento.length
       ? '<p class="pj-hint">Projetos com demanda aberta na sprint atual (' +
@@ -17030,35 +17037,44 @@ const PJ_EM_ANDAMENTO = ['em_andamento', 'validacao_area', 'validacao'];
 const PJ_ETAPA_ROT = { validacao_area: 'Val. área', validacao: 'Val. PM/PO',
                        planning: 'Planning', levantar_req: 'Aprov. req.', backlog: 'Backlog' };
 
-function pjAndamentoHTML(p) {
+/* OS DADOS DE UM PROJETO EM ANDAMENTO — a tela e o PPT leem DAQUI, e nao cada
+   um a sua conta: um projeto impresso com numeros diferentes dos da tela seria
+   o slide perdendo a credibilidade da tela.
+   Feita entra pela data de conclusao. Aberta entra se tem alguma data de
+   entrega; a que aparece e a do USUARIO ("retire a coluna entrega dev"), e a do
+   dev so desempata a ordem e decide se ela entra. */
+function pjAndamentoDados(p) {
   const ms = pjDemandas(p.id).filter(m => !ehMesclada(m));
-  const hoje = PRAZO.hojeISO();
+  const ehDia = v => /^\d{4}-\d{2}-\d{2}$/.test(v);
   const feitas = ms.filter(m => statusKey(m) === 'concluido')
     .map(m => ({ m, data: String(m.concluido_em || m.entregue_em || '').slice(0, 10) }))
-    .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x.data))
+    .filter(x => ehDia(x.data))
     .sort((a, b) => b.data.localeCompare(a.data));
-  /* PLANEJADA: a data da ESQUERDA e a entrega do dev; a da DIREITA, a entrega
-     ao usuario ("aqui preciso da data de entrega"). Entra com qualquer uma das
-     duas; a ordem e pela do usuario, que e a que se cobra. */
-  const ehDia = v => /^\d{4}-\d{2}-\d{2}$/.test(v);
-  const planejadas = ms.filter(pjAberta)
+  const abertas = ms.filter(pjAberta)
     .map(m => ({ m, dev: String(m.entrega || '').slice(0, 10), usu: String(m.entrega_usuario || '').slice(0, 10) }))
     .filter(x => ehDia(x.dev) || ehDia(x.usu))
-    .map(x => ({ ...x, data: ehDia(x.usu) ? x.usu : x.dev }))
-    .sort((a, b) => a.data.localeCompare(b.data));
-
-  // A ENTREGA DO PROJETO: a data dele, se o PM a pos; senao a ultima planejada.
+    .sort((a, b) => (a.usu || '9999').localeCompare(b.usu || '9999') || (a.dev || '').localeCompare(b.dev || ''));
+  const andamento = abertas.filter(x => PJ_EM_ANDAMENTO.includes(statusKey(x.m)));
+  const planejado = abertas.filter(x => !PJ_EM_ANDAMENTO.includes(statusKey(x.m)));
+  // A ENTREGA DO PROJETO: a data dele, se o PM a pos; senao a ultima ao usuario.
   let entrega = '', fonte = '';
-  if (/^\d{4}-\d{2}-\d{2}/.test(String(p.fim || ''))) { entrega = String(p.fim).slice(0, 10); fonte = 'data do projeto'; }
-  else if (planejadas.length) { entrega = planejadas[planejadas.length - 1].data; fonte = 'última entrega planejada'; }
-  const entregaHTML = entrega
-    ? '<span class="pj-and-entrega' + (entrega < hoje ? ' venc' : '') + '">🏁 Entrega: <strong>' +
-      esc(formatDate(entrega)) + '</strong> <em>(' + fonte + ')</em></span>'
+  const usus = abertas.map(x => x.usu).filter(ehDia).sort();
+  if (ehDia(String(p.fim || '').slice(0, 10))) { entrega = String(p.fim).slice(0, 10); fonte = 'data do projeto'; }
+  else if (usus.length) { entrega = usus[usus.length - 1]; fonte = 'última entrega planejada'; }
+  return { feitas, andamento, planejado, entrega, fonte,
+           naSprint: ms.filter(pjNaSprintAtualOuFutura).length };
+}
+
+function pjAndamentoHTML(p) {
+  const d = pjAndamentoDados(p);
+  const hoje = PRAZO.hojeISO();
+  const entregaHTML = d.entrega
+    ? '<span class="pj-and-entrega' + (d.entrega < hoje ? ' venc' : '') + '">🏁 Entrega: <strong>' +
+      esc(formatDate(d.entrega)) + '</strong> <em>(' + d.fonte + ')</em></span>'
     : '<span class="pj-and-entrega sem">🏁 Entrega: a definir</span>';
 
-  const ehDiaP = ehDia;
-  const dataCel = (d, venc, dica) => ehDiaP(d)
-    ? '<span class="pj-and-data' + (venc ? ' venc' : '') + '" title="' + dica + '">' + esc(formatDate(d)) + '</span>'
+  const dataCel = (v, venc, dica) => /^\d{4}-\d{2}-\d{2}$/.test(v)
+    ? '<span class="pj-and-data' + (venc ? ' venc' : '') + '" title="' + dica + '">' + esc(formatDate(v)) + '</span>'
     : '<span class="pj-and-data sem" title="' + dica + '">—</span>';
   const linha = (x, tipo) => {
     const m = x.m, sp = SPRINTPO.doPO(m);
@@ -17072,7 +17088,7 @@ function pjAndamentoHTML(p) {
     const tag = et !== tipo && PJ_ETAPA_ROT[et]
       ? '<span class="pj-and-etapa">' + PJ_ETAPA_ROT[et] + '</span>' : '';
     // A DATA NA FRENTE DA SPRINT: entrega ao usuario e, colada nela, a sprint.
-    return abre + dataCel(x.dev, x.dev && x.dev < hoje, 'Entrega do dev') + tit + tag +
+    return abre + tit + tag +
       '<span class="pj-and-usu">' + dataCel(x.usu, x.usu && x.usu < hoje, 'Entrega ao usuário') +
         // O CHIP PADRAO DA SPRINT, com a cor dela — o mesmo do Kanban e da lista.
         (sp ? SPRINTPO.badge(m, 'kb-sprint')
@@ -17081,29 +17097,60 @@ function pjAndamentoHTML(p) {
   };
   const cab = tipo => tipo === 'feita'
     ? '<div class="pj-and-cab"><span>Concluída em</span><span>Demanda</span></div>'
-    : '<div class="pj-and-cab"><span>Entrega dev</span><span>Demanda</span><span>Entrega usuário · Sprint</span></div>';
+    : '<div class="pj-and-cab"><span class="pj-and-cab-dem">Demanda</span><span>Entrega usuário · Sprint</span></div>';
   const coluna = (titulo, itens, tipo, vazio) =>
     '<div class="pj-and-col"><div class="pj-and-col-tit">' + titulo + ' <span>(' + itens.length + ')</span></div>' +
     (itens.length ? cab(tipo) + '<ul>' + itens.map(x => linha(x, tipo)).join('') + '</ul>'
                   : '<p class="pj-and-vazio">' + vazio + '</p>') + '</div>';
 
-  const naSprint = ms.filter(pjNaSprintAtualOuFutura).length;
   return '<div class="pj-and">' +
     '<div class="pj-and-topo" onclick="pjAbrir(' + JSON.stringify(p.id).replace(/"/g, '&quot;') + ')">' +
       (p.codigo ? '<span class="pj-cod">' + esc(p.codigo) + '</span>' : '') +
       '<span class="pj-nome">' + esc(p.nome || '(sem nome)') + '</span>' +
       (p.responsavel ? '<span class="pj-and-resp">👤 ' + esc(p.responsavel) + '</span>' : '') +
-      '<span class="pj-and-nsp">🏃 ' + naSprint + ' na sprint atual/próximas</span>' +
+      '<span class="pj-and-nsp">🏃 ' + d.naSprint + ' na sprint atual/próximas</span>' +
       entregaHTML +
     '</div>' +
     '<div class="pj-and-cols">' +
-      coluna('✅ Feitas', feitas, 'feita', 'Nenhuma concluída com data.') +
-      coluna('🚧 Em andamento', planejadas.filter(x => PJ_EM_ANDAMENTO.includes(statusKey(x.m))),
-             'em_andamento', 'Nada em andamento com data.') +
-      coluna('📅 Planejado', planejadas.filter(x => !PJ_EM_ANDAMENTO.includes(statusKey(x.m))),
-             'planejado', 'Nada planejado com data.') +
+      coluna('✅ Feitas', d.feitas, 'feita', 'Nenhuma concluída com data.') +
+      coluna('🚧 Em andamento', d.andamento, 'em_andamento', 'Nada em andamento com data.') +
+      coluna('📅 Planejado', d.planejado, 'planejado', 'Nada planejado com data.') +
     '</div>' +
   '</div>';
+}
+
+/* IMPRIMIR — PROJETOS EM ANDAMENTO. Mesmo estilo da folha de aprovacao de
+   requisitos (`projetos-ppt.js`), com os mesmos dados desta tela. */
+async function imprimirProjetosAndamento(botao) {
+  if (!window.PROJETOSPPT) { toast('O gerador do PPT não carregou. Recarregue a página (Ctrl+F5).', 'err'); return; }
+  const temaNome = {};
+  (state.temas || []).forEach(t => { temaNome[t.id] = t.nome || ''; });
+  const sm = m => (temaNome[m.tema_id] || '').split(' - ').map(s => s.trim()).filter(Boolean).join(' › ');
+  const linha = (x, data) => {
+    const sp = SPRINTPO.doPO(x.m);
+    return { codigo: x.m.codigo || '', titulo: x.m.titulo || '', sistema: sm(x.m),
+             etapa: STATUS_LABELS[statusKey(x.m)] || statusKey(x.m), data,
+             sprint: sp ? SPRINTPO.rotuloCurto(sp) : '',
+             cor: sp && SPRINTPO.corDaSprint ? (SPRINTPO.corDaSprint(sp) || '') : '' };
+  };
+  const projetos = pjLista().filter(pjEmAndamento).map(p => {
+    const d = pjAndamentoDados(p);
+    return { codigo: p.codigo || '', nome: p.nome || '', responsavel: p.responsavel || '',
+             entrega: d.entrega, fonte: d.fonte, naSprint: d.naSprint,
+             feitas: d.feitas.map(x => linha(x, x.data)),
+             andamento: d.andamento.map(x => linha(x, x.usu)),
+             planejado: d.planejado.map(x => linha(x, x.usu)) };
+  });
+  const rot = botao ? botao.textContent : '';
+  if (botao) { botao.disabled = true; botao.textContent = '⏳ Gerando…'; }
+  try {
+    const r = await PROJETOSPPT.gera(projetos, { hoje: PRAZO.hojeISO(), sprint: SPRINTPO.rotuloCurto(pjSprintAtual()) });
+    toast('🖨 PPT gerado: ' + r.projetos + ' projeto(s) em andamento.', 'ok');
+  } catch (e) {
+    toast('Não foi possível gerar o PPT: ' + ((e && e.message) || e), 'err');
+  } finally {
+    if (botao) { botao.disabled = false; botao.textContent = rot; }
+  }
 }
 
 function pjAba(qual) {
