@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="6330fc2700">
+<html lang="pt-BR" data-build="9c010caf67">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -278,6 +278,16 @@
       border:1px solid currentColor; border-radius:4px; padding:0 5px; }
     .pj-and-qual { color:var(--text3); }
     .pj-and-vazio { font-size:12px; color:var(--text3); margin:4px 0; }
+    .pj-and-cab { display:flex; gap:8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+      color:var(--text3); padding:0 4px 4px; border-bottom:1px solid var(--border); }
+    .pj-and-cab span:first-child { flex:0 0 88px; }
+    .pj-and-cab span:nth-child(2) { flex:1; }
+    .pj-and-cab span:nth-child(3) { flex:0 0 auto; }
+    .pj-and-col li .pj-and-data { flex:0 0 88px; }
+    .pj-and-data.sem { color:var(--text3); font-weight:400; }
+    .pj-and-usu { flex:0 0 auto; }
+    .pj-and-usu .pj-and-data { color:var(--text); }
+    .pj-and-usu .pj-and-data.venc { color:var(--red-tx,#F9A0A0); }
     .pj-card { background:var(--bg2); border:1px solid var(--border); border-radius:14px;
       padding:18px 20px; display:flex; flex-direction:column; gap:12px; cursor:pointer;
       transition:border-color .12s, transform .12s; }
@@ -16992,10 +17002,14 @@ function pjAndamentoHTML(p) {
     .map(m => ({ m, data: String(m.concluido_em || m.entregue_em || '').slice(0, 10) }))
     .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x.data))
     .sort((a, b) => b.data.localeCompare(a.data));
+  /* PLANEJADA: a data da ESQUERDA e a entrega do dev; a da DIREITA, a entrega
+     ao usuario ("aqui preciso da data de entrega"). Entra com qualquer uma das
+     duas; a ordem e pela do usuario, que e a que se cobra. */
+  const ehDia = v => /^\d{4}-\d{2}-\d{2}$/.test(v);
   const planejadas = ms.filter(pjAberta)
-    .map(m => ({ m, data: String(m.entrega_usuario || m.entrega || '').slice(0, 10),
-                 qual: m.entrega_usuario ? 'usuário' : 'dev' }))
-    .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x.data))
+    .map(m => ({ m, dev: String(m.entrega || '').slice(0, 10), usu: String(m.entrega_usuario || '').slice(0, 10) }))
+    .filter(x => ehDia(x.dev) || ehDia(x.usu))
+    .map(x => ({ ...x, data: ehDia(x.usu) ? x.usu : x.dev }))
     .sort((a, b) => a.data.localeCompare(b.data));
 
   // A ENTREGA DO PROJETO: a data dele, se o PM a pos; senao a ultima planejada.
@@ -17007,22 +17021,27 @@ function pjAndamentoHTML(p) {
       esc(formatDate(entrega)) + '</strong> <em>(' + fonte + ')</em></span>'
     : '<span class="pj-and-entrega sem">🏁 Entrega: a definir</span>';
 
+  const ehDiaP = ehDia;
+  const dataCel = (d, venc, dica) => ehDiaP(d)
+    ? '<span class="pj-and-data' + (venc ? ' venc' : '') + '" title="' + dica + '">' + esc(formatDate(d)) + '</span>'
+    : '<span class="pj-and-data sem" title="' + dica + '">—</span>';
   const linha = (x, tipo) => {
     const m = x.m, sp = SPRINTPO.doPO(m);
-    const venc = tipo === 'plan' && x.data < hoje;
-    return '<li onclick="openModalMelhoria(' + JSON.stringify(m.id).replace(/"/g, '&quot;') + ')"' +
-      ' title="' + esc((m.codigo ? m.codigo + ' · ' : '') + m.titulo) + '">' +
-      '<span class="pj-and-data' + (venc ? ' venc' : '') + '">' + esc(formatDate(x.data)) + '</span>' +
-      '<span class="pj-and-tit">' + (m.codigo ? '<b>' + esc(m.codigo) + '</b> ' : '') + esc(m.titulo || '') + '</span>' +
-      (tipo === 'plan'
-        ? (sp ? '<span class="pj-and-sp">' + esc(SPRINTPO.rotuloCurto(sp)) + '</span>' : '') +
-          (x.qual === 'dev' ? '<span class="pj-and-qual" title="Sem data de entrega ao usuário: mostra a do dev">dev</span>' : '')
-        : '') +
+    const abre = '<li onclick="openModalMelhoria(' + JSON.stringify(m.id).replace(/"/g, '&quot;') + ')"' +
+      ' title="' + esc((m.codigo ? m.codigo + ' · ' : '') + m.titulo) + '">';
+    const tit = '<span class="pj-and-tit">' + (m.codigo ? '<b>' + esc(m.codigo) + '</b> ' : '') + esc(m.titulo || '') + '</span>';
+    if (tipo !== 'plan') return abre + dataCel(x.data, false, 'Concluída em') + tit + '</li>';
+    return abre + dataCel(x.dev, x.dev && x.dev < hoje, 'Entrega do dev') + tit +
+      (sp ? '<span class="pj-and-sp">' + esc(SPRINTPO.rotuloCurto(sp)) + '</span>' : '') +
+      '<span class="pj-and-usu">' + dataCel(x.usu, x.usu && x.usu < hoje, 'Entrega ao usuário') + '</span>' +
       '</li>';
   };
+  const cab = tipo => tipo === 'plan'
+    ? '<div class="pj-and-cab"><span>Entrega dev</span><span>Demanda</span><span>Entrega usuário</span></div>'
+    : '<div class="pj-and-cab"><span>Concluída em</span><span>Demanda</span></div>';
   const coluna = (titulo, itens, tipo, vazio) =>
     '<div class="pj-and-col"><div class="pj-and-col-tit">' + titulo + ' <span>(' + itens.length + ')</span></div>' +
-    (itens.length ? '<ul>' + itens.map(x => linha(x, tipo)).join('') + '</ul>'
+    (itens.length ? cab(tipo) + '<ul>' + itens.map(x => linha(x, tipo)).join('') + '</ul>'
                   : '<p class="pj-and-vazio">' + vazio + '</p>') + '</div>';
 
   const naSprint = ms.filter(pjNaSprintAtualOuFutura).length;
