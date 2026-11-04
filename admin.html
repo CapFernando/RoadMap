@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="64c3ab6aef">
+<html lang="pt-BR" data-build="a1fc008694">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -5270,7 +5270,6 @@ function renderEntregasSprint() {
      A linha de texto virou quatro cartoes no padrao da aba Mes (`ger-kpi`).
      Clicar num cartao filtra a lista; clicar de novo volta a mostrar tudo.
      Embaixo, o que falta por pessoa — o "faltando no nome". */
-  const ptsDe = l => l.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
   const temDono = m => !!String(m.dev || '').trim();
   const vencida = m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje;
   const lEntregues = ms.filter(m => statusKey(m) === 'concluido');
@@ -5278,7 +5277,8 @@ function renderEntregasSprint() {
   const lFaltaSem = ms.filter(m => aberta(m) && !temDono(m));
   const validas = ms.length - negadas;
   const pctEnt = validas ? Math.round(lEntregues.length / validas * 100) : 0;
-  const pctPts = pts ? Math.round(ptsFeitos / pts * 100) : 0;
+  // Resumo por QUANTIDADE de tasks, nao por pontos (pedido de 04/11/2026).
+  const pctDe = n => validas ? Math.round(n / validas * 100) : 0;
   const kpiEs = (f, v, rot, sub, cor, extra) =>
     `<div class="ger-kpi es-kpi${_esFiltro === f ? ' ativo' : ''}" onclick="esFiltrar('${f}')" title="Clique para filtrar a lista">` +
     `<div class="ger-kpi-label">${rot}</div>` +
@@ -5286,13 +5286,13 @@ function renderEntregasSprint() {
     `<div class="es-kpi-sub">${sub}</div>${extra || ''}</div>`;
   const vencCom = lFaltaCom.filter(vencida).length;
   document.getElementById('es-kpis').innerHTML = ms.length ? (
-    kpiEs('todas', ms.length, 'Na sprint', `${pts} pts` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto`) +
-    kpiEs('entregues', lEntregues.length, 'Entregues', `${pctEnt}% das demandas · ${ptsFeitos}/${pts} pts (${pctPts}%)`, 'var(--green)',
+    kpiEs('todas', ms.length, 'Na sprint', `${ms.length} task(s)` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto`) +
+    kpiEs('entregues', lEntregues.length, 'Entregues', `${lEntregues.length} de ${validas} task(s) · ${pctEnt}%`, 'var(--green)',
           `<div class="es-barra"><i style="width:${pctEnt}%"></i></div>`) +
-    kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${ptsDe(lFaltaCom)} pts` +
+    kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${pctDe(lFaltaCom.length)}% das tasks` +
           (vencCom ? ` · <span style="color:var(--red-tx,#F9A0A0);font-weight:600">${vencCom} com entrega vencida</span>` : ''),
           lFaltaCom.length ? 'var(--amber-tx,#FFC470)' : '') +
-    kpiEs('falta_sem', lFaltaSem.length, 'Faltando · sem responsável', lFaltaSem.length ? `${ptsDe(lFaltaSem)} pts · precisam de dono` : 'todas têm dono',
+    kpiEs('falta_sem', lFaltaSem.length, 'Faltando · sem responsável', lFaltaSem.length ? `${pctDe(lFaltaSem.length)}% das tasks · precisam de dono` : 'todas têm dono',
           lFaltaSem.length ? 'var(--red)' : 'var(--green)')
   ) : '';
   // O que falta por pessoa — da que tem mais para a que tem menos.
