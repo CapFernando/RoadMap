@@ -1668,6 +1668,33 @@ function tiraInicioDoBacklog(data) {
   return n;
 }
 
+/* ═══ TEMA DE DADOS LEVA A FLAG DADOS/BI (04/11/2026) ══════════════════════
+ *
+ * "Me garanta que tudo que for BI, a flag de BI esteja marcada." Havia 106
+ * demandas nos temas de dados sem a flag — o filtro Dados/BI e o selo do card
+ * deixavam de fora o trabalho da Marina, do Dan, do Jhonatan e do Jose.
+ *
+ * A regra e pelo TEMA, e nao pelo dev: quem e de dados tambem faz demanda de
+ * outros temas (Encargos, Negativacao), e essas nao sao BI. O nome do tema
+ * decide, e nao uma lista de ids, para um tema de dados novo ("BI - ...")
+ * entrar sozinho. Dados/BI e Sales Ops sao exclusivos (`demanda-nova`), entao
+ * marcar um desliga o outro. So LIGA: tirar a flag de tema de dados nao e
+ * possivel, e demanda de outro tema com a flag marcada a mao fica como esta. */
+const TEMA_DADOS_RE = /^\s*(BI\b|Data\s?bricks|Extra[cç][aã]o de dados|Banco de dados)/i;
+function marcaDadosBiPorTema(data) {
+  if (!data || !Array.isArray(data.melhorias) || !Array.isArray(data.temas)) return 0;
+  const dados = new Set(data.temas.filter(t => t && TEMA_DADOS_RE.test(String(t.nome || ''))).map(t => t.id));
+  let n = 0;
+  for (const m of data.melhorias) {
+    if (m && dados.has(m.tema_id) && m.dados_bi !== true) {
+      m.dados_bi = true;
+      m.sales_ops = false;
+      n += 1;
+    }
+  }
+  return n;
+}
+
 function carimbaCasoDeUso(data, agora) {
   if (!data || !Array.isArray(data.melhorias)) return [];
   const quando = agora || new Date().toISOString();
@@ -4725,6 +4752,7 @@ async function rotear(request, env, _histFila) {
         promoveAreaVencida(data);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
         carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
         tiraInicioDoBacklog(data);   // voltou ao Backlog: sem data de inicio
+        marcaDadosBiPorTema(data);   // tema de dados: flag Dados/BI
         data.atualizado_em = iso;
         const risco = gravacaoSuspeita(data, file.size || 0);
         if (risco) return json({ error: risco }, 409, headers);
@@ -4787,6 +4815,7 @@ async function rotear(request, env, _histFila) {
         promoveAreaVencida(dataE);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
         carimbaCasoDeUso(dataE);   // entrou em Em aprovacao de requisitos: abre o caso de uso
         tiraInicioDoBacklog(dataE);   // voltou ao Backlog: sem data de inicio
+        marcaDadosBiPorTema(dataE);   // tema de dados: flag Dados/BI
         dataE.atualizado_em = iso;
         const riscoE = gravacaoSuspeita(dataE, fileE.size || 0);
         if (riscoE) return json({ error: riscoE }, 409, headers);
@@ -4847,6 +4876,7 @@ async function rotear(request, env, _histFila) {
         promoveAreaVencida(dataN);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
         carimbaCasoDeUso(dataN);   // entrou em Em aprovacao de requisitos: abre o caso de uso
         tiraInicioDoBacklog(dataN);   // voltou ao Backlog: sem data de inicio
+        marcaDadosBiPorTema(dataN);   // tema de dados: flag Dados/BI
         dataN.atualizado_em = iso;
         const riscoN = gravacaoSuspeita(dataN, fileN.size || 0);
         if (riscoN) return json({ error: riscoN }, 409, headers);
@@ -4945,6 +4975,7 @@ async function rotear(request, env, _histFila) {
       promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(dataM);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       tiraInicioDoBacklog(dataM);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(dataM);   // tema de dados: flag Dados/BI
       dataM.atualizado_em = agoraM;
 
       const riscoM = gravacaoSuspeita(dataM, fileM.size || 0);
@@ -6177,6 +6208,7 @@ async function rotear(request, env, _histFila) {
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atual);   // tema de dados: flag Dados/BI
       atual.atualizado_em = new Date().toISOString();
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -6358,6 +6390,7 @@ async function rotear(request, env, _histFila) {
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atual);   // tema de dados: flag Dados/BI
       atual.atualizado_em = agora;
       const versoes = [...new Set(pedidos.map(p => p.ver).filter(Boolean))];
       const msg = 'deploy: ' + mexidas + ' demanda(s)' +
@@ -6719,6 +6752,7 @@ async function rotear(request, env, _histFila) {
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atual);   // tema de dados: flag Dados/BI
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -7019,6 +7053,7 @@ async function rotear(request, env, _histFila) {
       promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atual);   // tema de dados: flag Dados/BI
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -7194,6 +7229,7 @@ async function rotear(request, env, _histFila) {
       promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(dataM);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       tiraInicioDoBacklog(dataM);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(dataM);   // tema de dados: flag Dados/BI
       dataM.atualizado_em = new Date().toISOString();
       const putM = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -7504,6 +7540,7 @@ async function rotear(request, env, _histFila) {
       promoveAreaVencida(atualS);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
       carimbaCasoDeUso(atualS);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       tiraInicioDoBacklog(atualS);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atualS);   // tema de dados: flag Dados/BI
       atualS.atualizado_em = new Date().toISOString();
       const putS = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
@@ -8048,6 +8085,7 @@ async function rotear(request, env, _histFila) {
       promoveAreaVencida(data);
       carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       tiraInicioDoBacklog(data);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(data);   // tema de dados: flag Dados/BI
       // ANTES do historico, como o carimbo do mes: assim a entrada na area
       // tambem vira linha no card, e nao um campo que muda sozinho sem rastro.
       carimbaAreaValidacao(data, antesPub);
@@ -8332,6 +8370,7 @@ async function rotear(request, env, _histFila) {
       promoveAreaVencida(data);
       carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
       tiraInicioDoBacklog(data);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(data);   // tema de dados: flag Dados/BI
       // O dev e quem mais vai mover o card para a area — sem esta linha o
       // carimbo so nasceria quando o PM/PO publicasse pelo Admin.
       carimbaAreaValidacao(data, antesDev);

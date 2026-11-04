@@ -25034,6 +25034,39 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o Admin aplica o mesmo na publicacao, para o card mudar de coluna na hora');
   }
 
+  /* ═══ TEMA DE DADOS LEVA A FLAG DADOS/BI (04/11/2026) ═══════════════════
+     "Me garanta que tudo que for BI, a flag de BI esteja marcada." */
+  {
+    const linhaRe = (W.match(/const TEMA_DADOS_RE = .*;/) || [''])[0];
+    const fab = new Function(linhaRe + '\n' + corpo(W, 'function marcaDadosBiPorTema(') +
+                             '\nreturn [marcaDadosBiPorTema, TEMA_DADOS_RE];');
+    const [marca, RE] = fab();
+    const temas = ['BI', 'BI - Reports', 'BI - Atualização', 'Extração de dados', 'Banco de dados',
+                   'Databricks - Planejamento', 'Data Bricks', 'AXCred - Jurídico', 'Cobrança', 'AxBalance']
+      .map((nome, k) => ({ id: 't' + k, nome }));
+    const d = { temas, melhorias: [
+      { id: 'a', tema_id: 't0', dados_bi: false, sales_ops: true },
+      { id: 'b', tema_id: 't3' },
+      { id: 'c', tema_id: 't6', dados_bi: true },
+      { id: 'd', tema_id: 't7', dados_bi: false },
+      { id: 'e', tema_id: 't9', dados_bi: true },
+    ] };
+    const n = marca(d);
+    const M = Object.fromEntries(d.melhorias.map(m => [m.id, m]));
+    ok(n === 2 && M.a.dados_bi === true && M.b.dados_bi === true,
+       'marcaDadosBiPorTema liga a flag nos temas de dados');
+    ok(M.a.sales_ops === false, 'e desliga Sales Ops, que e exclusiva com Dados/BI');
+    ok(M.d.dados_bi === false && M.e.dados_bi === true,
+       'tema que nao e de dados fica como esta (a flag so liga)');
+    ok(temas.slice(0, 7).every(t => RE.test(t.nome)) && !temas.slice(7).some(t => RE.test(t.nome)),
+       'o nome do tema decide: BI, Databricks, Extracao e Banco de dados entram; AXCred, Cobranca e AxBalance nao');
+    ok((W.match(/marcaDadosBiPorTema\(\w+\);/g) || []).length ===
+       (W.match(/carimbaCasoDeUso\(\w+\);/g) || []).length,
+       'a regra de Dados/BI roda em toda porta de gravacao (ao lado do caso de uso)');
+    ok(ADMIN.includes(linhaRe.trim()) && /temasDados\.has\(m\.tema_id\) && m\.dados_bi !== true/.test(ADMIN),
+       'e o Admin aplica a mesma regra de Dados/BI na publicacao');
+  }
+
   /* ═══ O HISTORICO NO D1 (03/11/2026) ═════════════════════════════════════
      A base passou de 4,3 MB e o Worker estourava CPU em toda publicacao; a
      trilha (1,6 MB) foi para o D1. Executa as pecas de verdade. */

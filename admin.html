@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="cd64981e18">
+<html lang="pt-BR" data-build="8356b918c1">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3984,6 +3984,13 @@ async function publicaAgora(tentativa = 1, redes = 0) {
        certa ja nesta tela: Backlog com inicio e desenhado em Em andamento. */
     state.melhorias.forEach(m => {
       if (m && m.status_planejamento === 'backlog' && String(m.inicio || '').trim()) m.inicio = '';
+    });
+    /* TEMA DE DADOS LEVA A FLAG DADOS/BI — a mesma regra do Worker
+       (`marcaDadosBiPorTema`): o nome do tema decide, e a flag so liga. */
+    const TEMA_DADOS_RE = /^\s*(BI\b|Data\s?bricks|Extra[cç][aã]o de dados|Banco de dados)/i;
+    const temasDados = new Set((state.temas || []).filter(t => t && TEMA_DADOS_RE.test(String(t.nome || ''))).map(t => t.id));
+    state.melhorias.forEach(m => {
+      if (m && temasDados.has(m.tema_id) && m.dados_bi !== true) { m.dados_bi = true; m.sales_ops = false; }
     });
     // `devs_perfil` funde por CHAVE, e nao por substituicao: o Planejamento tambem
     // edita esse mapa, e trocar o objeto inteiro faria a marcacao de quem publicou
