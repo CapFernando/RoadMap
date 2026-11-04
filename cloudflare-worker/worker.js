@@ -2475,6 +2475,35 @@ function entrandoEmValidacaoSemEntrega(recebido, servidor) {
   return presos;
 }
 
+/* ═══ SAIR DE EM ANDAMENTO EXIGE AS HORAS (04/11/2026) ══════════════════
+ *
+ * "Coloque como obrigatorio o lancamento das horas para o dev movimentar da
+ *  etapa Em andamento. Atualmente eu que estou tendo que lancar para validar na
+ *  etapa Validacao PM/PO. O campo ja deve vir preenchido independente por onde
+ *  foi movimentado (painel ou api)."
+ *
+ * As validacoes ja exigiam horas na ENTRADA (`entrandoEmValidacaoSemEntrega`,
+ * desde 30/10). Faltava a SAIDA para qualquer outro lado: pela API o dev tirava
+ * a demanda de Em andamento (de volta a Planejado, por exemplo) sem lancar nada,
+ * e o trabalho feito ficava sem custo. A regra e pela etapa de ORIGEM, entao
+ * vale para todo destino, inclusive os que ainda nao existem.
+ *
+ * So nas portas do dev (dev-publish e API). O publish do Admin e do PM/PO, que
+ * e justamente quem nao deve precisar lancar por ninguem. */
+function saindoDeAndamentoSemHoras(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    const velha = m && antes.get(m.id);
+    if (!velha || String(velha.status_planejamento || '') !== 'em_andamento') continue;
+    if (String(m.status_planejamento || '') === 'em_andamento') continue;   // ficou
+    if (faltaHoras(m)) presos.push(m.codigo || m.id);
+  }
+  return presos;
+}
+
 function faltaHoras(m) {
   const h = Number(m && m.horas_realizadas);
   return !Number.isFinite(h) || h <= 0;
@@ -5892,6 +5921,15 @@ async function rotear(request, env, _histFila) {
                           detail: 'Depois da Planning a demanda precisa estar numa sprint. ' +
                                   'Quem escolhe a sprint e o PM/PO — peca o repasse antes.' }, 403, headers);
           }
+          /* SAIR DE EM ANDAMENTO EXIGE AS HORAS — ver `saindoDeAndamentoSemHoras`.
+             As horas do proprio corpo ja foram aplicadas acima, entao mandar
+             `horas_realizadas` junto com a etapa resolve na mesma chamada. */
+          if (String(m.status_planejamento || '') === 'em_andamento' && e !== 'em_andamento' &&
+              faltaHoras(m)) {
+            return json({ error: 'horas_realizadas',
+                          detail: 'Para tirar a demanda de Em andamento, informe as horas trabalhadas ' +
+                                  '(horas_realizadas maior que zero) nesta mesma chamada.' }, 400, headers);
+          }
           m.status_planejamento = e; mudou.push('etapa');
         }
         /* ═══ AS DATAS DA TASK ══════════════════════════════════════════
@@ -8230,6 +8268,13 @@ async function rotear(request, env, _histFila) {
       // resto segue; aqui nao ha valor anterior para restaurar — a demanda estaria
       // entrando num estado que nao se sustenta, e deixar passar e o que produziu
       // a AX-179.
+      const semHorasSaida = saindoDeAndamentoSemHoras(data, antesDev);
+      if (semHorasSaida.length) {
+        return json({ error: 'horas_obrigatorias',
+                      codigos: semHorasSaida,
+                      detail: 'Para tirar de Em andamento (' + semHorasSaida.join(', ') + ') ' +
+                              'lance as horas trabalhadas.' }, 400, headers);
+      }
       const semEntrega = entrandoEmValidacaoSemEntrega(data, antesDev);
       if (semEntrega.length) {
         return json({ error: 'entrega_incompleta',

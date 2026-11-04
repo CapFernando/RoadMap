@@ -2049,6 +2049,30 @@ ok(/ETAPAS_EXIGEM_ENTREGA\.includes\(colKey\)/.test(DEV),
 ok(!DEV.includes("if (colKey === 'concluido') {"),
    'o teste por "concluido" sozinho nao voltou');
 // A tela nao pode ser a unica trava: foi um caminho de tela que criou o problema.
+/* ═══ SAIR DE EM ANDAMENTO EXIGE AS HORAS (04/11/2026) ═══════════════════ */
+{
+  const fh = corpo(W, 'function faltaHoras(');
+  const sa = new Function(fh + '\n' + corpo(W, 'function saindoDeAndamentoSemHoras(') + '\nreturn saindoDeAndamentoSemHoras;')();
+  const srv = { melhorias: [
+    { id: 'a', codigo: 'AX-1', status_planejamento: 'em_andamento', horas_realizadas: 0 },
+    { id: 'b', codigo: 'AX-2', status_planejamento: 'em_andamento', horas_realizadas: 3 },
+    { id: 'c', codigo: 'AX-3', status_planejamento: 'planejado', horas_realizadas: 0 },
+    { id: 'd', codigo: 'AX-4', status_planejamento: 'em_andamento', horas_realizadas: 0 },
+  ] };
+  const rec = { melhorias: [
+    { id: 'a', codigo: 'AX-1', status_planejamento: 'planejado', horas_realizadas: 0 },
+    { id: 'b', codigo: 'AX-2', status_planejamento: 'planejado', horas_realizadas: 3 },
+    { id: 'c', codigo: 'AX-3', status_planejamento: 'em_andamento', horas_realizadas: 0 },
+    { id: 'd', codigo: 'AX-4', status_planejamento: 'em_andamento', horas_realizadas: 0 },
+  ] };
+  const r = sa(rec, srv);
+  ok(r.length === 1 && r[0] === 'AX-1', 'sair de Em andamento sem horas e barrado; com horas, entrar ou ficar, passa');
+  ok(/saindoDeAndamentoSemHoras\(data, antesDev\)/.test(W), 'o dev-publish aplica a trava de saida de Em andamento');
+  ok(!/saindoDeAndamentoSemHoras\(data, antesPub\)/.test(W), 'o publish do Admin/PM-PO nao e travado pela saida de Em andamento');
+  ok(/status_planejamento \|\| ''\) === 'em_andamento' && e !== 'em_andamento' &&\s*faltaHoras\(m\)/.test(W),
+     'a API (demanda-atualizar) recusa tirar de Em andamento sem horas');
+}
+
 const semEnt = corpo(W, 'function entrandoEmValidacaoSemEntrega(');
 ok(!!semEnt, 'o servidor tem a trava de entrega incompleta');
 ok(!!semEnt && /if \(!velha\) continue;/.test(semEnt), 'demanda nova nao e travada');
