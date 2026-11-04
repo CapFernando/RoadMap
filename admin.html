@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="8356b918c1">
+<html lang="pt-BR" data-build="64c3ab6aef">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -948,6 +948,18 @@
     .ger-kpi-value.green { color:var(--green); }
     .ger-kpi-value.amber { color:var(--amber); }
     .ger-kpi-value.red { color:var(--red); }
+    /* Entregas por sprint: os cartoes do resumo filtram a lista. */
+    .es-kpi { cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+    .es-kpi:hover { border-color:var(--border2,#555); }
+    .es-kpi.ativo { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue) inset; }
+    .es-kpi-sub { font-size:11.5px; color:var(--text3); margin-top:2px; }
+    .es-barra { height:6px; background:var(--bg4,rgba(255,255,255,.08)); border-radius:99px; overflow:hidden; margin-top:8px; }
+    .es-barra i { display:block; height:100%; background:var(--green); }
+    .es-pessoas { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 16px; font-size:12.5px; }
+    .es-pessoas .rot { color:var(--text2); font-weight:600; margin-right:4px; }
+    .es-pessoa { border:1px solid var(--border); border-radius:999px; padding:2px 10px; color:var(--text2); background:var(--bg2); }
+    .es-pessoa b { color:var(--text); }
+    .es-pessoa.venc b { color:var(--red-tx,#F9A0A0); }
     .ger-charts { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:32px; }
     @media(max-width:900px){ .ger-charts{ grid-template-columns:1fr; } }
     .ger-section-title {
@@ -2194,6 +2206,8 @@
         </div>
         <span class="fb-count" id="es-resumo"></span>
       </div>
+      <div id="es-kpis" class="ger-summary" style="margin:6px 0 10px"></div>
+      <div id="es-pessoas" class="es-pessoas"></div>
       <div id="es-lista"></div>
     </div>
 
@@ -5211,6 +5225,10 @@ function renderAll() {
  * negadas entram: e a lista do que a sprint ENTREGA, e nao so do que falta.
  * Abre na sprint de hoje. */
 let _esSprint = '';
+/* O cartao clicado no resumo filtra a lista: 'todas', 'entregues',
+   'falta_com' (com responsavel) ou 'falta_sem' (sem responsavel). */
+let _esFiltro = 'todas';
+function esFiltrar(f) { _esFiltro = (_esFiltro === f ? 'todas' : f); renderEntregasSprint(); }
 
 
 function renderEntregasSprint() {
@@ -5245,18 +5263,63 @@ function renderEntregasSprint() {
   const vencidas = ms.filter(m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) &&
                                   m.entrega_usuario < hoje).length;
   const comProj = ms.filter(m => m.projeto_id && (state.projetos || []).some(p => p.id === m.projeto_id)).length;
-  document.getElementById('es-resumo').textContent = ms.length
-    ? `${ms.length} demanda(s) · ${feitas} concluída(s) · ${ms.length - feitas - negadas} em aberto` +
-      (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${ptsFeitos}/${pts} pts entregues` +
-      (vencidas ? ` · ${vencidas} com entrega vencida` : '') + ` · ${comProj} em projeto`
+  /* ═══ O RESUMO EM CARTOES (04/11/2026) ════════════════════════════════
+     "Melhore esse campo para maior visibilidade. Traga o que tem na sprint, o
+      que ja foi entregue e deixe claro o que esta faltando. Faltando no nome e
+      faltando sem nome."
+     A linha de texto virou quatro cartoes no padrao da aba Mes (`ger-kpi`).
+     Clicar num cartao filtra a lista; clicar de novo volta a mostrar tudo.
+     Embaixo, o que falta por pessoa — o "faltando no nome". */
+  const ptsDe = l => l.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+  const temDono = m => !!String(m.dev || '').trim();
+  const vencida = m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje;
+  const lEntregues = ms.filter(m => statusKey(m) === 'concluido');
+  const lFaltaCom = ms.filter(m => aberta(m) && temDono(m));
+  const lFaltaSem = ms.filter(m => aberta(m) && !temDono(m));
+  const validas = ms.length - negadas;
+  const pctEnt = validas ? Math.round(lEntregues.length / validas * 100) : 0;
+  const pctPts = pts ? Math.round(ptsFeitos / pts * 100) : 0;
+  const kpiEs = (f, v, rot, sub, cor, extra) =>
+    `<div class="ger-kpi es-kpi${_esFiltro === f ? ' ativo' : ''}" onclick="esFiltrar('${f}')" title="Clique para filtrar a lista">` +
+    `<div class="ger-kpi-label">${rot}</div>` +
+    `<div class="ger-kpi-value"${cor ? ` style="color:${cor}"` : ''}>${v}</div>` +
+    `<div class="es-kpi-sub">${sub}</div>${extra || ''}</div>`;
+  const vencCom = lFaltaCom.filter(vencida).length;
+  document.getElementById('es-kpis').innerHTML = ms.length ? (
+    kpiEs('todas', ms.length, 'Na sprint', `${pts} pts` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto`) +
+    kpiEs('entregues', lEntregues.length, 'Entregues', `${pctEnt}% das demandas · ${ptsFeitos}/${pts} pts (${pctPts}%)`, 'var(--green)',
+          `<div class="es-barra"><i style="width:${pctEnt}%"></i></div>`) +
+    kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${ptsDe(lFaltaCom)} pts` +
+          (vencCom ? ` · <span style="color:var(--red-tx,#F9A0A0);font-weight:600">${vencCom} com entrega vencida</span>` : ''),
+          lFaltaCom.length ? 'var(--amber-tx,#FFC470)' : '') +
+    kpiEs('falta_sem', lFaltaSem.length, 'Faltando · sem responsável', lFaltaSem.length ? `${ptsDe(lFaltaSem)} pts · precisam de dono` : 'todas têm dono',
+          lFaltaSem.length ? 'var(--red)' : 'var(--green)')
+  ) : '';
+  // O que falta por pessoa — da que tem mais para a que tem menos.
+  const porPessoa = {};
+  lFaltaCom.forEach(m => { const k = String(m.dev).trim(); (porPessoa[k] = porPessoa[k] || []).push(m); });
+  const pessoas = Object.keys(porPessoa).sort((a, b) => porPessoa[b].length - porPessoa[a].length || a.localeCompare(b, 'pt-BR'));
+  document.getElementById('es-pessoas').innerHTML = pessoas.length
+    ? '<span class="rot">Faltando por pessoa:</span>' + pessoas.map(p => {
+        const l = porPessoa[p], v = l.filter(vencida).length;
+        return `<span class="es-pessoa${v ? ' venc' : ''}" title="${v ? v + ' com entrega vencida' : ''}">${esc(p)} <b>${l.length}</b>` +
+               `${v ? ` · ${v} vencida(s)` : ''}</span>`;
+      }).join('')
     : '';
+  document.getElementById('es-resumo').textContent = vencidas ? `${vencidas} com entrega vencida` : '';
   if (!ms.length) {
     box.innerHTML = '<div class="empty">Nenhuma demanda nesta sprint.</div>';
     return;
   }
+  const filtrada = _esFiltro === 'entregues' ? lEntregues : _esFiltro === 'falta_com' ? lFaltaCom
+                 : _esFiltro === 'falta_sem' ? lFaltaSem : ms;
+  if (!filtrada.length) {
+    box.innerHTML = '<div class="empty">Nada nesta situação.</div>';
+    return;
+  }
 
   const grupos = {};
-  ms.forEach(m => { const k = m.tema_id || '__sem_tema__'; (grupos[k] = grupos[k] || []).push(m); });
+  filtrada.forEach(m => { const k = m.tema_id || '__sem_tema__'; (grupos[k] = grupos[k] || []).push(m); });
   const nomeTema = k => k === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === k)?.nome || '—');
   const chaves = Object.keys(grupos).sort((a, b) => {
     if (a === '__sem_tema__') return 1;
