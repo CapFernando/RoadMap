@@ -24959,7 +24959,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'e a sem frente, para quem nao e de Dados');
       // AS DATAS DO TAMANHO DA SPRINT (05/11/2026): o seletor abre na semana e escolher a sprint preenche a segunda.
       ok(/<select id="m-sprint" onchange="mSprintAviso\(\);mSprintDatas\(true\)">/.test(ADMIN) &&
-         /function mSprintDatas\(escolheu\) \{[\s\S]{0,600}SPRINTPO\.faixaDaSprint\(sp, state\.feriados[\s\S]{0,300}el\.min = faixa\.de; el\.max = faixa\.ate;/.test(ADMIN) &&
+         /function mSprintDatas\(escolheu\) \{[\s\S]{0,600}SPRINTPO\.faixaDaSprint\(sp, state\.feriados[\s\S]{0,400}SPRINTPO\.segundaDaSemana\(_fx\.de\)[\s\S]{0,300}el\.min = faixa\.de; el\.max = faixa\.ate;/.test(ADMIN) &&
          /if \(escolheu && usu && segunda\) \{ usu\.value = segunda;/.test(ADMIN) &&
          /m\?\.entrega_usuario  \|\| '';\n  mSprintDatas\(false\);/.test(ADMIN),
          'no card do Admin as datas do dev abrem na semana da sprint e escolher a sprint preenche a entrega ao usuario (abrir nao preenche)');

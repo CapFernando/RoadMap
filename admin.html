@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="9681632fa1">
+<html lang="pt-BR" data-build="594b7475f8">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14133,7 +14133,7 @@ function mSprintAviso() {
     S1-11 abrir as datas possíveis da semana da sprint e entrega já preencher a
     próxima segunda."
    - Início e entrega do dev: o calendário abre só nos dias da semana da sprint
-     (`SPRINTPO.faixaDaSprint`, que já pula feriado — a S1-11 começa em 03/11).
+     (`SPRINTPO.faixaDaSprint`, aberta desde a segunda — a S1-11 vai de 02/11 a 06/11).
      É limite do seletor, não trava: data antiga de quem rolou de sprint
      continua salvando, e o aviso diz que está fora da semana.
    - Entrega ao usuário: ESCOLHER a sprint preenche a segunda seguinte
@@ -14143,7 +14143,10 @@ function mSprintAviso() {
 function mSprintDatas(escolheu) {
   if (!window.SPRINTPO) return;
   const sp = (document.getElementById('m-sprint') || {}).value || '';
-  const faixa = sp ? SPRINTPO.faixaDaSprint(sp, state.feriados || []) : null;
+  const _fx = sp ? SPRINTPO.faixaDaSprint(sp, state.feriados || []) : null;
+  /* A SEMANA COMECA NA SEGUNDA, mesmo feriado (05/11/2026): "Se fizer parte da
+     S1-11, preencher 02/11 a 06/11 mantendo a entrega dia 09/11". */
+  const faixa = _fx ? { de: SPRINTPO.segundaDaSemana(_fx.de), ate: _fx.ate } : null;
   const ini = document.getElementById('m-inicio');
   const ent = document.getElementById('m-entrega');
   [ini, ent].forEach(el => {
