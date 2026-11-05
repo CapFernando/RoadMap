@@ -24965,6 +24965,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'no card do Admin as datas do dev abrem na semana da sprint e escolher a sprint preenche a entrega ao usuario (abrir nao preenche)');
       ok(SP.faixaDaSprint('S1-11-2026', ['2026-11-02']).de === '2026-11-03' && SP.entregaDaSprint('S1-11-2026', ['2026-11-02']) === '2026-11-09',
          'a S1-11 vai de 03/11 (02/11 e feriado) e entrega ao usuario na segunda 09/11');
+      // ENTREGAS POR SPRINT: o nome da pessoa filtra a lista e mostra os numeros dela (05/11/2026).
+      ok(/function esPessoa\(nome\) \{ _esPessoa = \(_esPessoa === nome \? '' : nome\); renderEntregasSprint\(\); \}/.test(ADMIN) &&
+         /onclick="esPessoa\(\$\{esc\(JSON\.stringify\(p\)\)\}\)"/.test(ADMIN) &&
+         /\.filter\(m => !_esPessoa \|\| daPessoa\(m\)\);/.test(ADMIN),
+         'em Entregas por sprint, clicar no nome mostra as tasks e os numeros da pessoa, e clicar de novo volta a todos');
       // ── NA VALIDACAO DA AREA, FORA DO PLACAR (05/11/2026) ──────────────────
       {
         const SPA = require('./sprint.js'); const rA = 'S1-11-2026';

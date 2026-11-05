@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="cf542e0064">
+<html lang="pt-BR" data-build="41b7aca386">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -961,6 +961,12 @@
     .es-pessoa { border:1px solid var(--border); border-radius:999px; padding:2px 10px; color:var(--text2); background:var(--bg2); }
     .es-pessoa b { color:var(--text); }
     .es-pessoa.venc b { color:var(--red-tx,#F9A0A0); }
+    .es-pessoa { cursor:pointer; }
+    .es-pessoa:hover { border-color:var(--border2,#555); }
+    .es-pessoa.ativo { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue) inset; color:var(--text); }
+    .es-pessoa-resumo { margin:-8px 0 14px; padding:10px 14px; border:1px solid var(--blue); border-radius:10px;
+                        background:var(--bg2); font-size:13px; color:var(--text2); display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; }
+    .es-pessoa-resumo b { color:var(--text); font-size:15px; }
     .ger-charts { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:32px; }
     @media(max-width:900px){ .ger-charts{ grid-template-columns:1fr; } }
     .ger-section-title {
@@ -5230,6 +5236,11 @@ let _esSprint = '';
    'falta_com' (com responsavel) ou 'falta_sem' (sem responsavel). */
 let _esFiltro = 'todas';
 function esFiltrar(f) { _esFiltro = (_esFiltro === f ? 'todas' : f); renderEntregasSprint(); }
+/* A PESSOA CLICADA (05/11/2026): "ao clicar quero ver a quantidade por dev".
+   O nome em "Faltando por pessoa" filtra a lista para as tasks dela na sprint
+   e mostra os numeros dela; clicar de novo volta a todos. Soma com o cartao. */
+let _esPessoa = '';
+function esPessoa(nome) { _esPessoa = (_esPessoa === nome ? '' : nome); renderEntregasSprint(); }
 
 
 function renderEntregasSprint() {
@@ -5303,17 +5314,50 @@ function renderEntregasSprint() {
   document.getElementById('es-pessoas').innerHTML = pessoas.length
     ? '<span class="rot">Faltando por pessoa:</span>' + pessoas.map(p => {
         const l = porPessoa[p], v = l.filter(vencida).length;
-        return `<span class="es-pessoa${v ? ' venc' : ''}" title="${v ? v + ' com entrega vencida' : ''}">${esc(p)} <b>${l.length}</b>` +
+        return `<span class="es-pessoa${v ? ' venc' : ''}${_esPessoa === p ? ' ativo' : ''}" ` +
+               `onclick="esPessoa(${esc(JSON.stringify(p))})" title="Clique para ver as tasks de ${esc(p)}` +
+               `${v ? ' · ' + v + ' com entrega vencida' : ''}">${esc(p)} <b>${l.length}</b>` +
                `${v ? ` · ${v} vencida(s)` : ''}</span>`;
       }).join('')
     : '';
+  // A pessoa escolhida que nao tem mais nada faltando continua valendo (os
+  // numeros dela ainda dizem algo); so some se nao tiver task nenhuma na sprint.
+  const daPessoa = m => String(m.dev || '').trim() === _esPessoa;
+  if (_esPessoa && !ms.some(daPessoa)) _esPessoa = '';
+  let resumoPessoa = document.getElementById('es-pessoa-resumo');
+  if (!resumoPessoa) {
+    resumoPessoa = document.createElement('div');
+    resumoPessoa.id = 'es-pessoa-resumo';
+    document.getElementById('es-pessoas').after(resumoPessoa);
+  }
+  if (_esPessoa) {
+    const lp = ms.filter(daPessoa);
+    const ent = lp.filter(m => statusKey(m) === 'concluido').length;
+    const neg = lp.filter(m => statusKey(m) === 'negada').length;
+    const falta = lp.filter(aberta);
+    const venc = falta.filter(vencida).length;
+    const ptsP = lp.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+    const val = lp.length - neg;
+    resumoPessoa.className = 'es-pessoa-resumo';
+    resumoPessoa.innerHTML = `<span>👤 <b>${esc(_esPessoa)}</b></span>` +
+      `<span><b>${lp.length}</b> na sprint</span>` +
+      `<span style="color:var(--green)"><b style="color:inherit">${ent}</b> entregue(s)${val ? ' · ' + Math.round(ent / val * 100) + '%' : ''}</span>` +
+      `<span style="color:var(--amber-tx,#FFC470)"><b style="color:inherit">${falta.length}</b> faltando</span>` +
+      (venc ? `<span style="color:var(--red-tx,#F9A0A0)"><b style="color:inherit">${venc}</b> com entrega vencida</span>` : '') +
+      (neg ? `<span>${neg} negada(s)</span>` : '') +
+      `<span>${ptsP} pts</span>` +
+      `<button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="esPessoa('')">Ver todos</button>`;
+  } else {
+    resumoPessoa.className = '';
+    resumoPessoa.innerHTML = '';
+  }
   document.getElementById('es-resumo').textContent = vencidas ? `${vencidas} com entrega vencida` : '';
   if (!ms.length) {
     box.innerHTML = '<div class="empty">Nenhuma demanda nesta sprint.</div>';
     return;
   }
-  const filtrada = _esFiltro === 'entregues' ? lEntregues : _esFiltro === 'falta_com' ? lFaltaCom
-                 : _esFiltro === 'falta_sem' ? lFaltaSem : ms;
+  const filtrada = (_esFiltro === 'entregues' ? lEntregues : _esFiltro === 'falta_com' ? lFaltaCom
+                 : _esFiltro === 'falta_sem' ? lFaltaSem : ms).filter(m => !_esPessoa || daPessoa(m));
   if (!filtrada.length) {
     box.innerHTML = '<div class="empty">Nada nesta situação.</div>';
     return;
