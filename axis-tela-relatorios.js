@@ -8,6 +8,12 @@
    — e e isso que a aba mostra, cada um com os numeros de agora e o botao que
    leva ao admin, onde ele de fato sai.
 
+   DOIS PPTs SAEM DAQUI MESMO: Projetos em andamento (`projetos-ppt.js`) e
+   Em aprovacao de requisitos (`aprovacao-ppt.js`), os mesmos geradores do
+   admin. Eles nao calculam nada; recebem os dados prontos, e por isso o app
+   gera o mesmo arquivo. Qualquer botao com `data-axis-ppt` (Projetos, Quadro
+   ou esta tela) cai em `gerarPPT`, logo abaixo.
+
    As contas vem de `AXIS_GER` (axis-tela-paineis.js), que copiou as do admin
    com o nome da funcao de origem; aqui so se le e se desenha.
    ───────────────────────────────────────────────────────────────────────── */
@@ -68,6 +74,12 @@
     { id: 'csv', rot: 'Base do mês (CSV)', onde: 'Admin › Gerencial › Base do mês', aba: 'gerencial', acao: 'Baixar no admin',
       desc: 'Uma linha por demanda × pessoa, com sistema, frente, projeto, pontos (cheios e rateados), horas, datas e prazo. Para o Excel ou para quem não tem acesso.',
       secoes: ['Demanda e pessoa', 'Sistema, frente e projeto', 'Pontos cheios e rateados', 'Horas do mês', 'Datas e prazo'] },
+    { id: 'ppt-projetos', rot: 'Projetos em andamento (PPT)', onde: 'AXIS › Projetos › Em andamento', ppt: 'projetos', acao: 'Gerar PPT',
+      desc: 'Os projetos com demanda aberta na sprint atual ou nas próximas: capa, visão geral e um slide por projeto com o que foi feito, o que está em andamento e o planejado, cada um com a data e a sprint.',
+      secoes: ['Capa', 'Visão geral dos projetos', 'Um slide por projeto: Feitas, Em andamento e Planejado'] },
+    { id: 'ppt-aprovacao', rot: 'Em aprovação de requisitos (PPT)', onde: 'AXIS › Quadro › coluna Em aprovação de requisitos', ppt: 'aprovacao', acao: 'Gerar PPT',
+      desc: 'A folha de decisão da etapa: todas as demandas em aprovação de requisitos, com código, título, sistema/módulo, tipo, prioridade, impacto, urgência e quem solicitou, e a coluna Decisão para marcar à caneta se segue ou segura para a sprint.',
+      secoes: ['Capa', 'Resumo por impacto e urgência', 'Decisão: as demandas, das que mais pesam para as que menos pesam'] },
     { id: 'fechamento', rot: 'Fechamento do mês', onde: 'AXIS › Fechamento do mês', href: '#fechamento', acao: 'Abrir',
       desc: 'Comprometidas no dia 1, o que entrou depois, o que foi entregue, o cumprimento e o que transbordou para o mês seguinte.',
       secoes: ['Comprometidas e entraram depois', 'Entregues e cumprimento', 'Por sprint e por dev', 'O que não saiu'] },
@@ -83,11 +95,11 @@
     var g = G(), D = ctx.D, alvo = g.mesCorrente(), j = g.janelaMes(alvo);
     var r = g.relComoAndou(D, j, ''), t = g.relTemasDe(D, '', j);
     var h = g.cabecalho('Relatórios',
-      'Os relatórios que o RoadMap já gera, com os números de ' + esc(g.rotuloMes(alvo)) + '. Os que saem em PPT, CSV ou ata são gerados no admin.');
+      'Os relatórios que o RoadMap já gera, com os números de ' + esc(g.rotuloMes(alvo)) + '. Os PPTs de projetos e de aprovação de requisitos saem aqui; a ata, o deck do mês e o CSV, no admin.');
     h += '<div class="gx-g gx-as"><aside class="gx-col-f"><section class="pn" style="gap:4px"><span class="lab" style="padding:0 0 6px">MODELOS</span>' +
       MODELOS.map(function (m) {
         return '<button type="button" class="gx-mod' + (m.id === _modelo ? ' on' : '') + '" data-modelo="' + m.id + '"><span>' + esc(m.rot) + '</span>' +
-          '<span class="note" style="font-size:11px">' + (m.href ? 'no AXIS' : 'admin') + '</span></button>';
+          '<span class="note" style="font-size:11px">' + (m.href || m.ppt ? 'no AXIS' : 'admin') + '</span></button>';
       }).join('') + '</section>' +
       '<section class="pn" style="gap:8px"><span class="lab">AINDA NÃO EXISTE</span><span class="note">Modelo salvo com filtros próprios e envio agendado por e-mail ou Teams não estão no RoadMap. Hoje cada relatório é gerado na hora, na tela de origem.</span></section></aside>' +
       '<div class="gx-col-f">' +
@@ -129,11 +141,19 @@
       var n = 0;
       raiz.AXIS_GER.vivas(D).forEach(function (m) { if (raiz.FILA.ehEntregaDe(m, L.de, L.ate)) n += Math.max(1, String(m.dev || '').split('/').filter(function (x) { return x.trim(); }).length); });
       prev = linhaPrev([['Linhas (demanda × pessoa) em ' + g.rotuloMes(alvo), H.num(n)]]);
+    } else if (M.id === 'ppt-projetos') {
+      var pa = raiz.AXIS_PROJETOS ? raiz.AXIS_PROJETOS.andamentoPPT() : [];
+      var nIt = 0;
+      pa.forEach(function (x) { nIt += x.feitas.length + x.andamento.length + x.planejado.length; });
+      prev = linhaPrev([['Projetos em andamento', String(pa.length)], ['Atividades com data nos slides', H.num(nIt)]]);
+    } else if (M.id === 'ppt-aprovacao') {
+      prev = linhaPrev([['Demandas em aprovação de requisitos', H.num(demandasAprovacao().length)]]);
     } else if (M.id === 'time') {
       var r = g.relComoAndou(D, j, '');
       prev = linhaPrev([['Planejado', r.agora.plan + ' pt'], ['Entregue', r.agora.entregue + ' pt'], ['Leitura', raiz.CAPACIDADE.rotulo(r.agora.plan, r.agora.entregue)]]);
     }
-    var botao = M.href ? '<a class="btnp" href="' + M.href + '">' + esc(M.acao) + '</a>'
+    var botao = M.ppt ? '<button type="button" class="btnp" data-axis-ppt="' + M.ppt + '">' + H.ico('printer') + ' ' + esc(M.acao) + '</button>'
+      : M.href ? '<a class="btnp" href="' + M.href + '">' + esc(M.acao) + '</a>'
       : (H.pode('editar') ? H.linkAdmin(M.aba, M.acao, 'btnp') : '<span class="note">Gerado pelo PM/PO no admin.</span>');
     return '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">' +
       '<span style="display:flex;flex-direction:column;gap:3px"><h2 class="h2">' + esc(M.rot) + '</h2><span class="note">' + esc(M.onde) + '</span></span>' + botao + '</div>' +
@@ -149,6 +169,48 @@
         '<span class="note ell">' + esc(p[0]) + '</span><b class="mono" style="font-weight:600">' + esc(p[1]) + '</b></div>';
     }).join('') + '</div>';
   }
+
+  // ═══ Os PPTs que saem no app ═══════════════════════════════════════════
+  /* IMPRIMIR — EM APROVACAO DE REQUISITOS (`imprimirAprovacaoReq`, admin.html):
+     todas as demandas da etapa, e nao so as do recorte do quadro — a folha e
+     para decidir a etapa inteira. */
+  function demandasAprovacao() {
+    return H.visiveis().filter(function (m) { return H.colunaDe(m) === 'levantar_req'; });
+  }
+  var _gerando = false;
+  async function gerarPPT(qual, botao) {
+    if (_gerando) return;
+    var G2 = qual === 'aprovacao' ? raiz.APROVACAOPPT : raiz.PROJETOSPPT;
+    if (!G2) { H.toast('O gerador do PPT não carregou. Recarregue a página (Ctrl+F5).', 'erro'); return; }
+    var rot = botao ? botao.innerHTML : '';
+    _gerando = true;
+    if (botao) { botao.disabled = true; botao.textContent = 'Gerando…'; }
+    try {
+      if (qual === 'aprovacao') {
+        var r1 = await G2.gera(demandasAprovacao(), { temas: (raiz.AXIS_APP.APP.D || {}).temas || [] });
+        H.toast('PPT gerado: ' + H.plural(r1.demandas, 'demanda', 'demandas') + ' em aprovação de requisitos.');
+      } else {
+        var ps = raiz.AXIS_PROJETOS ? raiz.AXIS_PROJETOS.andamentoPPT() : [];
+        var r2 = await G2.gera(ps, { hoje: H.hoje(), sprint: raiz.SPRINTPO ? raiz.SPRINTPO.rotuloCurto(H.sprintAtual()) : '' });
+        H.toast('PPT gerado: ' + H.plural(r2.projetos, 'projeto', 'projetos') + ' em andamento.');
+      }
+    } catch (e) {
+      H.toast('Não foi possível gerar o PPT: ' + ((e && e.message) || e), 'erro');
+    } finally {
+      _gerando = false;
+      if (botao) { botao.disabled = false; botao.innerHTML = rot; }
+    }
+  }
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-axis-ppt]');
+      if (!b) return;
+      e.preventDefault();
+      e.stopPropagation();
+      gerarPPT(b.getAttribute('data-axis-ppt'), b);
+    });
+  }
+  raiz.AXIS_PPT = { gerar: gerarPPT, aprovacao: demandasAprovacao };
 
   // ═══ Entregues ═════════════════════════════════════════════════════════
   function periodo() {

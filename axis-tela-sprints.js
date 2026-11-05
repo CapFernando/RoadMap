@@ -14,8 +14,8 @@
    `entregue_em` (CAPACIDADE.diaDaEntrega).
 
    GRAVAR CONTINUA NAS TELAS ANTIGAS. Fechar sprint e iniciar sprint moram no
-   admin.html; estimar e no poker.html. Os botoes levam para la, so para o
-   perfil que pode agir. Mover, alocar, ausencia e feriado sao a tela
+   admin.html, e os botoes levam para la so para o perfil que pode agir.
+   Estimar e a tela Poker do app (#poker, axis-tela-poker.js). Mover, alocar, ausencia e feriado sao a tela
    Planejamento do app (#planejamento, axis-tela-planejamento.js).
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
@@ -133,7 +133,30 @@
       '.axa .sp-tb td{padding:8px 6px;border-bottom:1px solid var(--bd3);color:var(--tx2)}',
       '.axa .sp-tb td.n,.axa .sp-tb th.n{text-align:right;font-variant-numeric:tabular-nums}',
       '.axa .sp-mais{align-self:center}',
+      // Entregas por sprint: os cartoes do resumo filtram a lista (como no admin).
+      '.axa .sp-k4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}',
+      '.axa .es-k{cursor:pointer;text-align:left;font:inherit;color:var(--tx)}',
+      '.axa .es-k:hover{border-color:var(--bd4)}',
+      '.axa .es-k.on{border-color:rgba(var(--ac-rgb),.6);box-shadow:inset 0 0 0 1px rgba(var(--ac-rgb),.6)}',
+      '.axa .es-k .sp-bar{margin-top:6px}',
+      '.axa .es-pes{display:flex;flex-wrap:wrap;gap:6px;align-items:center}',
+      '.axa .es-pes .lab{margin-right:4px}',
+      '.axa .es-pes .chip{height:24px;font-size:11.5px;gap:5px}',
+      '.axa .es-gh{display:flex;align-items:baseline;gap:8px;padding:8px 2px 6px;border-bottom:1px solid var(--bd);margin-top:6px}',
+      '.axa .es-gh .n{font-family:var(--font-mono);font-size:11.5px;color:var(--tx4)}',
+      '.axa .es-ln{display:grid;grid-template-columns:78px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 14px;border-radius:11px;background:var(--sf2);border:1px solid transparent;font-size:13px;text-decoration:none;color:var(--tx)}',
+      '.axa a.es-ln:hover{border-color:var(--bd4);color:var(--tx)}',
+      '.axa .es-ln .cd{font-family:var(--font-mono);font-size:12px;color:var(--tx3)}',
+      '.axa .es-ln .ti{display:flex;flex-direction:column;gap:3px;min-width:0}',
+      '.axa .es-ln .ti b{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.axa .es-ln .ti > span{font-size:12px;color:var(--tx3);line-height:17px}',
+      '.axa .es-ln .ti > span b{font-weight:700;color:var(--tx2)}',
+      '.axa .es-ln .x{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;align-items:center;max-width:340px}',
+      '.axa .es-ln .x .chip{height:20px;font-size:10.5px;gap:4px;max-width:220px;overflow:hidden;text-overflow:ellipsis}',
       '@container app (max-width: 760px){',
+      '.axa .sp-k4{grid-template-columns:repeat(2,minmax(0,1fr))}',
+      '.axa .es-ln{grid-template-columns:62px minmax(0,1fr)}',
+      '.axa .es-ln .x{grid-column:2;justify-content:flex-start;max-width:none}',
       '.axa .sp-k5{grid-template-columns:repeat(2,minmax(0,1fr))}',
       '.axa .sp-2,.axa .sp-2e,.axa .sp-pl,.axa .sp-pj,.axa .sp-k3{grid-template-columns:minmax(0,1fr)}',
       '.axa .sp-pp{grid-template-columns:110px minmax(0,1fr) 64px}',
@@ -636,7 +659,7 @@
       '<span class="sub">' + esc(txtFaixa(f)) + (dias ? ' · ' + plural(dias.dias, 'dia útil', 'dias úteis') : '') +
       '. A fila é o que está em Planning; os pontos vêm do Planning Poker.</span></div>' +
       '<div class="ac"><select class="sp-sel" id="sp-sel-pl" aria-label="Sprint a planejar">' + opcoes + '</select>' +
-      linkAntigo('poker.html', 'Abrir Planning Poker', 'Abre o Planning Poker para estimar a fila', 'btnp') +
+      '<a class="btnp" href="#poker" title="Abre o Planning Poker para estimar a fila">Abrir Planning Poker</a>' +
       (H.donoDaSprint() ? linkAntigo('admin.html', 'Repassar no quadro', 'Abre o Admin, no Kanban: o PM/PO escolhe a sprint no card ou pelo Sprint em lote', 'btn', 'kanban') : '') +
       '</div></header>';
 
@@ -1055,9 +1078,306 @@
     el.innerHTML = h;
   }
 
+  // ═══ FILTRO DE SPRINT COM VARIAS ESCOLHAS (admin.html, 4d7c38f) ═════════
+  /* "Preciso selecionar qual sprint quero e ter opcao de selecionar todas."
+     O Quadro e o Backlog filtram por ele, e a aba Entregas le as mesmas
+     opcoes para escolher a sprint. As tres funcoes sao COPIA de `listaOuNulo`,
+     `matchSprintKb` e `opcoesSprintKb` (admin.html), com o modulo de sprint e
+     a base por parametro; a suite executa cada uma ao lado da do admin
+     (secao "App AXIS: Entregas por sprint, projetos em andamento e os PPTs").
+     O valor e null (todas) ou uma lista de chaves: '__fora__' (sem sprint do
+     PO) e/ou rotulos. Lista vazia volta a ser null: desmarcar tudo e nao
+     querer filtro, e um quadro vazio faria a pessoa achar que sumiu dado. */
+  function spListaOuNulo(v) {
+    var l = (Array.isArray(v) ? v : (v ? [v] : [])).filter(Boolean);
+    return l.length ? l : null;
+  }
+  function spCasaSprint(SPm, m, f) {
+    if (!f || (Array.isArray(f) && !f.length)) return true;
+    // VARIAS SPRINTS: basta estar em uma delas.
+    if (Array.isArray(f)) return f.some(function (k) { return spCasaSprint(SPm, m, k); });
+    if (f === '__fora__') return SPm.foraDaSprint(m);
+    return SPm.naSprint(m, f);
+  }
+  /** As sprints que tem demanda, mais a atual e as proximas, em ordem. O
+   *  rotulo sai sem o "● " do admin: aqui a cor da sprint vai num ponto. */
+  function spOpcoesSprint(SPm, vivas, hoje, feriados) {
+    var chave = function (r) { return r.slice(6, 10) + r.slice(3, 5) + r.slice(1, 2); };
+    var set = {};
+    vivas.forEach(function (m) { var s = SPm.doPO(m); if (s) set[s] = true; });
+    SPm.proximasSprints(hoje, 5, feriados || []).forEach(function (x) { set[x.rotulo] = true; });
+    return [{ key: '', label: 'Todas', n: vivas.length },
+            { key: '__fora__', label: 'Sem sprint', n: vivas.filter(function (m) { return SPm.foraDaSprint(m); }).length }]
+      .concat(Object.keys(set).sort(function (a, b) { return chave(a).localeCompare(chave(b)); }).map(function (r) {
+        return { key: r, label: SPm.rotuloCurto(r), n: vivas.filter(function (m) { return SPm.naSprint(m, r); }).length };
+      }));
+  }
+
+  /* O CONTROLE: um botao com cara de select e uma lista de caixas. As telas
+     redesenham a cada escolha, entao o aberto/fechado mora aqui (`_fspAberto`)
+     para a lista nao fechar no meio da escolha. Quem usa passa `aoMudar`, que
+     recebe o valor novo (null ou lista) e redesenha a propria tela. */
+  var _fspAberto = '';
+  var _fsp = {};
+  function cssFiltro() {
+    if (typeof document === 'undefined' || document.getElementById('css-filtro-sprint')) return;
+    var s = document.createElement('style');
+    s.id = 'css-filtro-sprint';
+    s.textContent = [
+      '.axa .fsp{position:relative;display:inline-flex;min-width:0}',
+      // .fsp .fsp-btn.in: vence o `background` das barras de filtro das telas (.bk-fil .in), que apagaria a seta.
+      '.axa .fsp .fsp-btn.in{appearance:none;cursor:pointer;min-width:150px;max-width:240px;padding-right:34px;text-align:left;' +
+        'background-image:linear-gradient(45deg,transparent 50%,var(--tx3) 50%),linear-gradient(135deg,var(--tx3) 50%,transparent 50%);' +
+        'background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;background-size:5px 5px;background-repeat:no-repeat}',
+      '.axa .fsp-btn > span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}',
+      '.axa .fsp.on .fsp-btn{border-color:rgba(var(--ac-rgb),.5)}',
+      '.axa .fsp-pop{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;min-width:240px;max-height:340px;overflow-y:auto;' +
+        'padding:6px;border-radius:12px;background:var(--sf3);border:1px solid var(--bd2);box-shadow:0 24px 60px var(--shadow);flex-direction:column;gap:2px}',
+      '.axa .fsp.aberto .fsp-pop{display:flex}',
+      '.axa .fsp-op{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;font-size:13px;color:var(--tx);cursor:pointer;white-space:nowrap}',
+      '.axa .fsp-op:hover{background:var(--sf4)}',
+      '.axa .fsp-op input{accent-color:var(--ac);margin:0}',
+      '.axa .fsp-op .n{margin-left:auto;padding-left:12px;font-family:var(--font-mono);font-size:11.5px;color:var(--tx3)}',
+      '.axa .fsp-op.tod{font-weight:700;border-bottom:1px solid var(--bd);border-radius:8px 8px 0 0;margin-bottom:4px}'
+    ].join('\n');
+    document.head.appendChild(s);
+  }
+  /** O resumo no botao: "Todas (n)", ate tres rotulos, ou "N selecionadas". */
+  function fspResumo(sel, opcoes) {
+    var todas = opcoes.filter(function (o) { return o.key === ''; })[0];
+    if (!sel.length) return todas ? todas.label + ' (' + todas.n + ')' : 'Todas';
+    if (sel.length > 3) return sel.length + ' selecionadas';
+    return sel.map(function (k) { var o = opcoes.filter(function (x) { return x.key === k; })[0]; return o ? o.label : curto(k); }).join(' + ');
+  }
+  function controleSprint(id, valor, opcoes, aoMudar, cls) {
+    cssFiltro();
+    var sel = spListaOuNulo(valor) || [];
+    _fsp[id] = { sel: sel, aoMudar: aoMudar };
+    var caixa = function (o, on, extra) {
+      var cor = o.key && o.key !== '__fora__' && SP().corDaSprint ? SP().corDaSprint(o.key) : '';
+      return '<label class="fsp-op' + (extra || '') + '"><input type="checkbox" data-fsp-k="' + esc(o.key) + '"' + (on ? ' checked' : '') + '>' +
+        (cor ? '<span class="dotc" style="background:' + cor + '"></span>' : '') + esc(o.label) +
+        (o.n == null ? '' : '<span class="n">' + o.n + '</span>') + '</label>';
+    };
+    var aberto = _fspAberto === id;
+    return '<span class="fsp' + (aberto ? ' aberto' : '') + (sel.length ? ' on' : '') + '" data-fsp="' + esc(id) + '">' +
+      '<button type="button" class="in fsp-btn' + (cls ? ' ' + cls : '') + '" data-fsp-abre="' + esc(id) + '" aria-haspopup="true" aria-expanded="' + aberto + '"' +
+      ' aria-label="Sprint: ' + esc(fspResumo(sel, opcoes)) + '"><span>' + esc(fspResumo(sel, opcoes)) + '</span></button>' +
+      '<span class="fsp-pop" role="group" aria-label="Sprints">' +
+      caixa(opcoes.filter(function (o) { return o.key === ''; })[0] || { key: '', label: 'Todas' }, !sel.length, ' tod') +
+      opcoes.filter(function (o) { return o.key !== ''; }).map(function (o) { return caixa(o, sel.indexOf(o.key) >= 0); }).join('') +
+      '</span></span>';
+  }
+  function fspMarca(id) {
+    _fspAberto = id || '';
+    if (typeof document === 'undefined') return;
+    Array.prototype.forEach.call(document.querySelectorAll('.fsp'), function (el) {
+      var on = el.getAttribute('data-fsp') === _fspAberto;
+      el.classList.toggle('aberto', on);
+      var b = el.querySelector('.fsp-btn');
+      if (b) b.setAttribute('aria-expanded', String(on));
+    });
+  }
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('click', function (e) {
+      var ab = e.target.closest && e.target.closest('[data-fsp-abre]');
+      if (ab) { e.preventDefault(); var id = ab.getAttribute('data-fsp-abre'); fspMarca(_fspAberto === id ? '' : id); return; }
+      if (_fspAberto && !(e.target.closest && e.target.closest('.fsp'))) fspMarca('');
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && _fspAberto) {
+        var id = _fspAberto; fspMarca('');
+        var b = document.querySelector('[data-fsp-abre="' + id + '"]');
+        if (b) b.focus();
+      }
+    });
+    document.addEventListener('change', function (e) {
+      var cx = e.target.closest && e.target.closest('[data-fsp-k]');
+      var box = cx && cx.closest('[data-fsp]');
+      if (!box) return;
+      var st = _fsp[box.getAttribute('data-fsp')];
+      if (!st) return;
+      var k = cx.getAttribute('data-fsp-k');
+      var novo = !k ? null : (st.sel.indexOf(k) >= 0 ? st.sel.filter(function (x) { return x !== k; }) : st.sel.concat([k]));
+      st.aoMudar(spListaOuNulo(novo));
+    });
+  }
+
+  // ═══ ABA: ENTREGAS POR SPRINT (admin.html, 953e68c a 43706a7) ═══════════
+  /* "Crie uma nova aba, entregas por sprint. Ali quero a mesma logica [...],
+      com temas e suas respectivas datas e com quem esta. Preciso que seja
+      possivel escolher a sprint para ter o resultado."
+     MORA EM SPRINTS, e nao em Paineis: a prancha de Sprints ja e a da sprint
+     escolhida (entregue, por pessoa, escopo) e o seletor de sprint e dela;
+     Paineis le periodo (30/90 dias, ano) e e da consulta. Aqui ficam os
+     quatro cartoes do resumo (por QUANTIDADE de tasks, 04/11/2026), o que
+     falta por pessoa e a lista por tema, com quem esta cada uma, a entrega ao
+     usuario e o projeto.
+     As contas sao recortes de `renderEntregasSprint` (admin.html) com a base
+     por parametro; a suite roda as duas lado a lado. A base e a do app
+     (`H.visiveis`, sem `oculto`); o admin conta tambem a demanda oculta. */
+  function esResumo(SPm, etapa, vivas, r, hoje, projetos) {
+    var ms = vivas.filter(function (m) { return SPm.naSprint(m, r); });
+    var aberta = function (m) { var k = etapa(m); return k !== 'concluido' && k !== 'negada'; };
+    var temDono = function (m) { return !!String(m.dev || '').trim(); };
+    var vencida = function (m) { return aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje; };
+    var negadas = ms.filter(function (m) { return etapa(m) === 'negada'; }).length;
+    var entregues = ms.filter(function (m) { return etapa(m) === 'concluido'; });
+    var faltaCom = ms.filter(function (m) { return aberta(m) && temDono(m); });
+    var faltaSem = ms.filter(function (m) { return aberta(m) && !temDono(m); });
+    var validas = ms.length - negadas;
+    // Resumo por QUANTIDADE de tasks, nao por pontos (pedido de 04/11/2026).
+    var pctDe = function (n) { return validas ? Math.round(n / validas * 100) : 0; };
+    var ps = projetos || [];
+    var comProj = ms.filter(function (m) { return m.projeto_id && ps.some(function (p) { return p.id === m.projeto_id; }); }).length;
+    // O que falta por pessoa — da que tem mais para a que tem menos.
+    var porPessoa = {};
+    faltaCom.forEach(function (m) { var k = String(m.dev).trim(); (porPessoa[k] = porPessoa[k] || []).push(m); });
+    var pessoas = Object.keys(porPessoa).sort(function (a, b) { return porPessoa[b].length - porPessoa[a].length || a.localeCompare(b, 'pt-BR'); })
+      .map(function (n) { return { nome: n, n: porPessoa[n].length, vencidas: porPessoa[n].filter(vencida).length }; });
+    return { ms: ms, entregues: entregues, faltaCom: faltaCom, faltaSem: faltaSem, negadas: negadas, validas: validas,
+             pctEntregues: pctDe(entregues.length), pctFaltaCom: pctDe(faltaCom.length), pctFaltaSem: pctDe(faltaSem.length),
+             comProj: comProj, vencidas: ms.filter(vencida).length, vencCom: faltaCom.filter(vencida).length, pessoas: pessoas };
+  }
+  /** Grupos por tema em ordem alfabetica, "Sem tema" no fim; dentro do tema,
+   *  pela entrega ao usuario (sem data no fim) e pelo titulo. */
+  function esGrupos(lista, temas) {
+    var grupos = {};
+    lista.forEach(function (m) { var k = m.tema_id || '__sem_tema__'; (grupos[k] = grupos[k] || []).push(m); });
+    var nomeTema = function (k) {
+      if (k === '__sem_tema__') return 'Sem tema';
+      var t = (temas || []).filter(function (x) { return x.id === k; })[0];
+      return (t && t.nome) || '—';
+    };
+    var dataDe = function (m) { return m.entrega_usuario || '9999'; };
+    return Object.keys(grupos).sort(function (a, b) {
+      if (a === '__sem_tema__') return 1;
+      if (b === '__sem_tema__') return -1;
+      return nomeTema(a).localeCompare(nomeTema(b), 'pt-BR', { sensitivity: 'base' });
+    }).map(function (k) {
+      return { chave: k, nome: nomeTema(k), itens: grupos[k].slice().sort(function (a, b) {
+        return dataDe(a).localeCompare(dataDe(b)) || (a.titulo || '').localeCompare(b.titulo || '');
+      }) };
+    });
+  }
+  /** A entrega ao usuario e o aviso dela (o `dataHTML` do admin): vencida em
+   *  vermelho, hoje e nos proximos sete dias em amarelo — so enquanto aberta. */
+  function esEntregaUsuario(m, hoje, aberta) {
+    if (!m.entrega_usuario) return { data: '', tag: '', nivel: '' };
+    var tag = '', nivel = '';
+    if (aberta) {
+      var dias = Math.round((new Date(m.entrega_usuario + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000);
+      if (dias < 0) { nivel = 'dg'; tag = ' (vencida há ' + (-dias) + 'd)'; }
+      else if (dias === 0) { nivel = 'wn'; tag = ' (vence hoje)'; }
+      else if (dias <= 7) { nivel = 'wn'; tag = ' (em ' + dias + 'd)'; }
+    }
+    return { data: m.entrega_usuario, tag: tag, nivel: nivel };
+  }
+
+  /** "Com: Fulano · Entrega usuario: 10/11/2026 (em 5d)" — a linha do
+   *  "com quem esta" da lista de Melhorias do admin (372b92f). O Backlog
+   *  usa a mesma. */
+  function comQuemHtml(m) {
+    var k = H.colunaDe(m);
+    var aberta = k !== 'concluido' && k !== 'negada';
+    var eu = esEntregaUsuario(m, H.hoje(), aberta);
+    var cor = eu.nivel === 'dg' ? 'var(--dg-t)' : eu.nivel === 'wn' ? 'var(--wn-t)' : '';
+    return (m.dev ? 'Com: <b>' + esc(m.dev) + '</b>' : '<span style="color:var(--tx4)">Sem responsável</span>') + ' · ' +
+      (eu.data ? '<span' + (cor ? ' style="color:' + cor + ';font-weight:600"' : '') + '>Entrega usuário: ' + esc(H.dma(eu.data) + eu.tag) + '</span>'
+               : '<span style="color:var(--tx4)">Entrega usuário: a definir</span>');
+  }
+
+  var _ent = { filtro: 'todas' };
+
+  function abaEntregas(el, ctx) {
+    var D = ctx.D;
+    var vivas = H.visiveis();
+    var ops = spOpcoesSprint(SP(), vivas, H.hoje(), fer(D)).filter(function (o) { return o.key && o.key !== '__fora__'; });
+    var agora = H.sprintAtual();
+    var p = String(ctx.param || '').toUpperCase();
+    var r = ops.some(function (o) { return o.key === p; }) ? p : (ops.some(function (o) { return o.key === agora; }) ? agora : (ops[0] ? ops[0].key : ''));
+    var opcoes = ops.map(function (o) {
+      return '<option value="' + esc(o.key) + '"' + (o.key === r ? ' selected' : '') + '>' + esc(o.label + (o.key === agora ? ' (atual)' : '') + ' · ' + o.n) + '</option>';
+    }).join('');
+    var x = esResumo(SP(), H.colunaDe, vivas, r, H.hoje(), D.projetos || []);
+    var f = r ? SP().faixaDaSprint(r, fer(D)) : null;
+
+    var h = '<header class="sp-hd"><div class="tt"><div class="row" style="gap:10px">' +
+      '<h1 class="h1">Entregas da sprint ' + esc(r ? curto(r) : '') + '</h1>' + (r ? chipsSituacao(D, r) : '') + '</div>' +
+      '<span class="sub">' + (f ? esc(txtFaixa(f)) + ' · ' : '') + 'As demandas da sprint por tema, com quem está cada uma, a entrega ao usuário e o projeto de que fazem parte.' +
+      (x.vencidas ? ' <b style="color:var(--dg-t)">' + plural(x.vencidas, 'com entrega vencida', 'com entrega vencida') + '.</b>' : '') + '</span></div>' +
+      '<div class="ac"><select class="sp-sel" id="sp-sel-es" aria-label="Sprint">' + opcoes + '</select></div></header>';
+
+    if (!x.ms.length) {
+      el.innerHTML = h + '<section class="sp-pn">' + H.vazio('inbox', 'Nenhuma demanda nesta sprint', 'O PM/PO repassa as demandas para a sprint pelo Quadro ou pelo Planejamento.') + '</section>';
+      return;
+    }
+    var cartao = function (k, v, rot, sub, cor, borda, extra) {
+      var on = _ent.filtro === k;
+      return '<button type="button" class="sp-k es-k' + (borda ? ' x-' + borda : '') + (on ? ' on' : '') + '" data-es-filtro="' + k + '" aria-pressed="' + on + '"' +
+        ' title="' + (on ? 'Clique de novo para ver tudo' : 'Clique para filtrar a lista') + '">' +
+        '<span class="l">' + rot + '</span><span class="v"' + (cor ? ' style="color:' + cor + '"' : '') + '>' + v + '</span>' +
+        '<span class="s">' + sub + '</span>' + (extra || '') + '</button>';
+    };
+    h += '<div class="sp-k4">' +
+      cartao('todas', x.ms.length, 'Na sprint', plural(x.ms.length, 'task', 'tasks') + (x.negadas ? ' · ' + plural(x.negadas, 'negada', 'negadas') : '') + ' · ' + x.comProj + ' em projeto') +
+      cartao('entregues', x.entregues.length, 'Entregues', x.entregues.length + ' de ' + plural(x.validas, 'task', 'tasks') + ' · ' + x.pctEntregues + '%', 'var(--ok-t)', 'ok',
+        '<span class="sp-bar"><i style="width:' + x.pctEntregues + '%;background:var(--ok)"></i></span>') +
+      cartao('falta_com', x.faltaCom.length, 'Faltando · com responsável', x.pctFaltaCom + '% das tasks' +
+        (x.vencCom ? ' · <b style="color:var(--dg-t)">' + plural(x.vencCom, 'com entrega vencida', 'com entrega vencida') + '</b>' : ''),
+        x.faltaCom.length ? 'var(--wn-t)' : '', x.faltaCom.length ? 'wn' : '') +
+      cartao('falta_sem', x.faltaSem.length, 'Faltando · sem responsável', x.faltaSem.length ? x.pctFaltaSem + '% das tasks · precisam de dono' : 'todas têm dono',
+        x.faltaSem.length ? 'var(--dg-t)' : 'var(--ok-t)', x.faltaSem.length ? 'dg' : '') +
+      '</div>';
+    if (x.pessoas.length) {
+      h += '<div class="es-pes"><span class="lab">FALTANDO POR PESSOA</span>' + x.pessoas.map(function (pp) {
+        return H.chip(esc(pp.nome) + ' <b>' + pp.n + '</b>' + (pp.vencidas ? ' · ' + plural(pp.vencidas, 'vencida', 'vencidas') : ''), pp.vencidas ? 'dg' : 'bk',
+          pp.vencidas ? pp.vencidas + ' com entrega vencida' : '');
+      }).join('') + '</div>';
+    }
+
+    var lista = _ent.filtro === 'entregues' ? x.entregues : _ent.filtro === 'falta_com' ? x.faltaCom : _ent.filtro === 'falta_sem' ? x.faltaSem : x.ms;
+    var ROT = { todas: 'tudo', entregues: 'só as entregues', falta_com: 'só o que falta com responsável', falta_sem: 'só o que falta sem responsável' };
+    h += '<section class="sp-pn" style="gap:6px"><div class="hh"><h2 class="h2">Por tema <span class="note" style="font-family:var(--font-ui);font-weight:600">· ' + lista.length + '</span></h2>' +
+      '<span class="note" style="font-size:12.5px">' + (_ent.filtro === 'todas' ? 'Clique num cartão para filtrar a lista.' :
+        'Mostrando ' + ROT[_ent.filtro] + '. <button type="button" class="btns" data-es-filtro="todas" style="height:26px;margin-left:6px">Ver tudo</button>') + '</span></div>';
+    if (!lista.length) {
+      h += H.vazio('inbox', 'Nada nesta situação', 'Clique no cartão de novo para ver a sprint inteira.');
+    } else {
+      h += esGrupos(lista, D.temas || []).map(function (g) {
+        return '<div class="es-gh"><span class="lab">' + esc(String(g.nome).toUpperCase()) + '</span><span class="n">' + g.itens.length + '</span></div>' +
+          g.itens.map(function (m) {
+            var k = H.colunaDe(m);
+            var pj = m.projeto_id ? H.projeto(m.projeto_id) : null;
+            var chips = [H.chipEtapa(m)];
+            if (m.poker_pontos != null) chips.push(H.chip(ico('cards') + ' ' + esc(m.poker_pontos), 'in', 'Pontos do Planning Poker'));
+            if (pj) chips.push(H.chip(ico('folder') + ' ' + esc((pj.codigo ? pj.codigo + ' · ' : '') + (pj.nome || '')), 'pu', 'Faz parte do projeto ' + (pj.nome || '')));
+            var fim = k === 'concluido' && m.concluido_em ? ' · Concluída em ' + esc(H.dma(String(m.concluido_em).slice(0, 10))) : '';
+            return '<a class="es-ln" href="' + H.hrefItem(m) + '"><span class="cd">' + esc(m.codigo || '—') + '</span>' +
+              '<span class="ti"><b>' + esc(m.titulo || '') + '</b><span>' + comQuemHtml(m) + fim + '</span></span>' +
+              '<span class="x">' + chips.join('') + '</span></a>';
+          }).join('');
+      }).join('');
+    }
+    h += '</section>';
+    el.innerHTML = h;
+  }
+
+  /* O que as outras telas leem daqui: o filtro de sprint (Quadro, Backlog) e
+     a linha "com quem esta" (Backlog). */
+  raiz.AXIS_SPRINTS = {
+    opcoes: function (lista) { return spOpcoesSprint(SP(), lista || H.visiveis(), H.hoje(), fer(AX.APP.D)); },
+    casa: function (m, f) { return spCasaSprint(SP(), m, f); },
+    listaOuNulo: spListaOuNulo,
+    controle: controleSprint,
+    comQuem: comQuemHtml,
+    entregaUsuario: esEntregaUsuario
+  };
+
   // ── Registro ──────────────────────────────────────────────────────────
   var ABAS = [
     { id: 'atual',        rotulo: 'Sprint atual' },
+    { id: 'entregas',     rotulo: 'Entregas por sprint' },
     { id: 'planning',     rotulo: 'Planning' },
     { id: 'planejamento', rotulo: 'Planejamento' },
     { id: 'encerrar',     rotulo: 'Encerrar sprint', papeis: ['admin'] },
@@ -1089,11 +1409,14 @@
       else if (ctx.aba === 'planejamento') abaPlanejamento(el, ctx);
       else if (ctx.aba === 'encerrar') abaEncerrar(el, ctx);
       else if (ctx.aba === 'calendario') abaCalendario(el, ctx);
+      else if (ctx.aba === 'entregas') abaEntregas(el, ctx);
       else abaAtual(el, ctx);
     },
     depois: function (el, ctx) {
       var sel = el.querySelector('#sp-sel');
       if (sel) sel.addEventListener('change', function () { _esc.n = 25; H.ir('sprints/atual/' + sel.value); });
+      var selEs = el.querySelector('#sp-sel-es');
+      if (selEs) selEs.addEventListener('change', function () { H.ir('sprints/entregas/' + selEs.value); });
       var selPl = el.querySelector('#sp-sel-pl');
       if (selPl) selPl.addEventListener('change', function () { H.ir('sprints/planning/' + selPl.value); });
       var proj = el.querySelector('#sp-proj');
@@ -1101,6 +1424,9 @@
       el.addEventListener('click', function (e) {
         var t = e.target.closest('[data-sp-trilha]');
         if (t) { _trilha = t.getAttribute('data-sp-trilha'); _esc.n = 25; AX.desenhar(); return; }
+        // O cartao do resumo das Entregas filtra a lista; clicar de novo volta a tudo.
+        var ef = e.target.closest('[data-es-filtro]');
+        if (ef) { var fv = ef.getAttribute('data-es-filtro'); _ent.filtro = _ent.filtro === fv ? 'todas' : fv; AX.desenhar(true); return; }
         var fl = e.target.closest('[data-sp-filtro]');
         if (fl) {
           _esc.filtro = fl.getAttribute('data-sp-filtro'); _esc.n = 25; desenharEscopo(el);

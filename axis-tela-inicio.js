@@ -17,7 +17,12 @@
    O QUE GRAVA NAO MORA AQUI. "+ Novo item" abre o formulario do app
    (axis-form-demanda.js) e "Registrar" a homologacao e o gesto de
    axis-acoes.js; "Validar" leva a aba Validacao do PO, onde estao o que o dev
-   entregou e as duas decisoes. Estimar continua no poker.html.
+   entregou e as duas decisoes. Estimar leva a tela de Poker do app (#poker).
+
+   O DEV VE O QUE E DELE E A FILA DO TIME (dev.html, 82bff39): em Meu
+   trabalho, o filtro "Mostrar" (no meu nome + fila, so no meu nome, so a
+   fila), a marca de quem e cada cartao e o "Pegar" da fila (axis-acoes.js,
+   que poe o nome de quem pegou). Os indicadores seguem sendo so os dele.
 
    AS CONTAS SAO DOS MODULOS (sprint.js, prazo.js, capacidade.js,
    homologacao.js, devolucao.js). O que nao existe em modulo e foi copiado de
@@ -36,7 +41,8 @@
     cronDev: '',           // filtro de dev do cronograma do time (admin)
     cronLimite: 40,
     ntfFiltro: 'acao',
-    ntfLimite: 30
+    ntfLimite: 30,
+    mostrar: ''            // Meu trabalho do dev: '' (no meu nome + fila), 'meu', 'fila'
   };
 
   // ── CSS proprio, injetado uma vez ─────────────────────────────────────
@@ -196,10 +202,6 @@
   }
 
   function link(m, ctx) { return ctx.papel === 'consulta' ? '' : H.hrefItem(m); }
-  function externo(txt, href, titulo, cls) {
-    return '<a class="' + (cls || 'btn') + '" href="' + href + '" title="' + H.esc(titulo) + '">' + txt +
-      ' ' + H.ico('external', 'style="font-size:12px;opacity:.7"') + '</a>';
-  }
   function kpi(rot, valor, nota, o) {
     o = o || {};
     var tag = o.href ? 'a' : 'div';
@@ -226,7 +228,7 @@
     var linhaData = H.dataLonga(hoje) + (sprint ? ' · Sprint ' + H.esc(S.rotuloCurto(sprint)) + ' · ' + textoDia(sprint, ctx) : '');
     var acoes = '<button type="button" class="in ini-busca" data-ini="busca">' + H.ico('search', 'style="margin-right:8px"') + 'Buscar AX-, título, dev…</button>';
     if (papel !== 'consulta') {
-      acoes += externo('Planning Poker', 'poker.html', 'Abre a sala de Planning Poker (poker.html)');
+      acoes += '<a class="btn" href="#poker" title="Abre o Planning Poker do app">' + H.ico('cards') + ' Planning Poker</a>';
       acoes += '<button type="button" class="btnp" data-axa-form="novo">+ Novo item</button>';
     }
     var h = '<header class="ini-hd"><div style="display:flex;flex-direction:column;gap:4px">' +
@@ -368,7 +370,7 @@
       var hom = vs.filter(cobraHom);
       if (hom.length) linha('users', 'var(--pu-t)', '<b>' + H.plural(hom.length, 'homologação', 'homologações') + '</b> a cobrar da área', hom,
         hom.length === 1 ? H.hrefItem(hom[0]) : '#inicio/meu', 'Na Validação da área há ' + window.HOMOLOGACAO.DIAS_ATE_COBRAR + ' dias ou mais, sem registro de quem homologou');
-      if (poker.length) linha('cards', 'var(--in-t)', '<b>' + H.plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', poker, 'poker.html', 'Abre o Planning Poker (poker.html)');
+      if (poker.length) linha('cards', 'var(--in-t)', '<b>' + H.plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', poker, '#poker', 'Abre o Planning Poker');
       var pend = S && S.pendentesDeFechamento ? S.pendentesDeFechamento(ctx.D, hoje, feriados(ctx), H.colunaDe) : [];
       if (pend.length) L.push({ ico: 'refresh', cor: 'var(--wn-t)', txt: '<b>' + H.plural(pend.length, 'sprint', 'sprints') + '</b> para fechar',
         meta: pend.slice(0, 2).map(function (p) { return H.esc(S.rotuloCurto(p.rotulo)); }).join(' · '), href: '#sprints/encerrar' });
@@ -376,7 +378,15 @@
       var dv = minhas.filter(devolvida);
       if (dv.length) linha('undo', 'var(--wn-t)', '<b>' + H.plural(dv.length, 'devolvida', 'devolvidas') + '</b> para ajuste', dv,
         dv.length === 1 ? H.hrefItem(dv[0]) : '#inicio/meu', 'O PM/PO devolveu com motivo: abra a demanda para ler');
-      if (poker.length) linha('cards', 'var(--in-t)', '<b>' + H.plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', poker, 'poker.html', 'Abre o Planning Poker (poker.html)');
+      if (poker.length) linha('cards', 'var(--in-t)', '<b>' + H.plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', poker, '#poker', 'Abre o Planning Poker');
+      var AC = window.AXIS_ACOES;
+      var fila = AC && AC.mostraNoPainel ? vs.filter(function (m) {
+        var c = H.colunaDe(m);
+        return !String(m.dev || '').trim() && ['em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'].indexOf(c) < 0 &&
+          AC.mostraNoPainel(m, AC.contexto(), 'fila');
+      }) : [];
+      if (fila.length) linha('inbox', 'var(--in-t)', '<b>' + H.plural(fila.length, 'demanda', 'demandas') + '</b> na fila do time, sem dono', fila, '#inicio/meu',
+        'Na sprint e sem dono: qualquer um do time pode pegar — combine antes de começar');
       var sp = minhas.filter(semPontos);
       if (sp.length) linha('alert', 'var(--wn-t)', '<b>' + H.plural(sp.length, 'demanda sua', 'demandas suas') + '</b> sem pontos', sp, '#inicio/meu', 'Comprometidas (de Planejado em diante) sem pontuação do Poker');
       var hm = minhas.filter(cobraHom);
@@ -427,6 +437,9 @@
     o = o || {};
     var fl = [];
     var c = H.colunaDe(m);
+    var AC = window.AXIS_ACOES;
+    if (o.dono && AC && AC.marcaDono) { var mk = AC.marcaDono(m); if (mk) fl.push(mk); }
+    if (o.dono && !o.acao && AC && AC.botaoPegar) o.acao = AC.botaoPegar(m, 'btns', 'Pegar da fila');
     if (H.pausada(m)) fl.push(H.chip(H.ico('pause') + ' pausada', 'mg'));
     else if (atrasada(m)) fl.push(H.chip('atrasada ' + H.atrasoDe(m) + 'd', 'dg'));
     else if (venceHoje(m)) fl.push(H.chip('vence hoje', 'dg'));
@@ -470,7 +483,13 @@
     var mes = mesAtual();
     var noMes = function (m) { return CAP && CAP.diaDaEntrega(m).slice(0, 7) === mes; };
 
-    var col = function (f) { return minhas.filter(function (m) { return f(H.colunaDe(m), m); }).sort(ordemDeAtencao); };
+    /* O QUADRO PESSOAL MOSTRA O QUE O PAINEL DO DEV MOSTRA (`getFiltered`):
+       no nome dele e a fila do time, com o filtro "Mostrar". */
+    var AC = window.AXIS_ACOES;
+    var noQuadro = AC && AC.mostraNoPainel
+      ? vs.filter(function (m) { return AC.mostraNoPainel(m, AC.contexto(), EST.mostrar); })
+      : minhas;
+    var col = function (f) { return noQuadro.filter(function (m) { return f(H.colunaDe(m), m); }).sort(ordemDeAtencao); };
     var planning = col(function (c) { return c === 'levantar_req' || c === 'planning'; });
     var planejado = col(function (c) { return c === 'planejado'; });
     var andamento = col(function (c) { return c === 'em_andamento'; });
@@ -498,10 +517,15 @@
     var pct = sp.total ? Math.round(sp.feitos / sp.total * 100) : 0;
     var vHoje = minhas.filter(venceHoje), atr = minhas.filter(atrasada);
 
-    var sub = 'Só o que está com você.' + (sprint ? ' Sprint ' + H.esc(S.rotuloCurto(sprint)) + ' · ' +
+    var sub = (EST.mostrar === 'meu' ? 'Só o que está no seu nome.' : EST.mostrar === 'fila' ? 'A fila do time: na sprint, sem dono ou com outra pessoa.' : 'O que está com você e a fila do time.') + (sprint ? ' Sprint ' + H.esc(S.rotuloCurto(sprint)) + ' · ' +
       (d ? (d.acabou ? 'terminou ' + H.dm(d.ate) : 'faltam ' + H.plural(d.faltam, 'dia útil', 'dias úteis')) : '') + '.' : '');
     var h = '<header class="ini-hd fim"><div style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">Meu trabalho</h1><span class="sub">' + sub + '</span></div>' +
-      '<div class="row"><button type="button" class="btnp" data-axa-form="novo">+ Nova demanda</button></div></header>';
+      '<div class="row" style="flex-wrap:wrap"><label class="note" for="ini-mostrar">Mostrar</label>' +
+      '<select id="ini-mostrar" class="in" data-ini="mostrar" style="height:36px" title="Separa as demandas no seu nome das que estão na fila do time.">' +
+      [['', 'No meu nome + fila do time'], ['meu', 'Só no meu nome'], ['fila', 'Só a fila do time']].map(function (o) {
+        return '<option value="' + o[0] + '"' + (EST.mostrar === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+      }).join('') + '</select>' +
+      '<button type="button" class="btnp" data-axa-form="novo">+ Nova demanda</button></div></header>';
 
     var kp = '<div class="ini-kg seis">' +
       kpi('Em andamento', andamento.length, null, { cor: 'var(--ac-t)' }) +
@@ -515,7 +539,7 @@
           '<div class="bar"><span style="width:' + pct + '%;background:linear-gradient(90deg,var(--ac),var(--ac-t))"></span></div>' }) +
       '</div>';
 
-    var r = function (m) { return cartao(m, ctx); };
+    var r = function (m) { return cartao(m, ctx, { dono: true }); };
     var cols = '<div class="ini-cols">' +
       coluna('PLANNING', 'var(--tl)', planning, r) +
       coluna('PLANEJADO', 'var(--in)', planejado, r) +
@@ -525,7 +549,10 @@
       '</div>';
     var bk = minhas.filter(function (m) { return H.colunaDe(m) === 'backlog'; }).length;
     var rod = bk ? '<span class="note">Mais ' + H.plural(bk, 'demanda sua', 'demandas suas') + ' no backlog, fora deste quadro. <a href="#backlog">Ver backlog</a></span>' : '';
-    if (!minhas.length) {
+    if (!noQuadro.length && EST.mostrar === 'fila') {
+      return h + kp + H.vazio('inbox', 'A fila do time está vazia', 'Nada na sprint em curso está sem dono agora.');
+    }
+    if (!minhas.length && !noQuadro.length) {
       return h + H.vazio('user', 'Nenhuma demanda com o seu nome',
         'O RoadMap procura por ' + (H.meusNomes().join(', ') || 'seu nome') + ' no campo dev. Se o nome nas demandas estiver diferente, ajuste no Meu painel (dev.html).');
     }
@@ -546,13 +573,13 @@
 
     var h = '<header class="ini-hd fim"><div style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">O que pede você</h1>' +
       '<span class="sub">Entregas para validar, homologações paradas na área, prazos vencidos e itens para estimar.</span></div>' +
-      '<div class="row" style="flex-wrap:wrap">' + externo('Planning Poker', 'poker.html', 'Abre a sala de Planning Poker (poker.html)') +
+      '<div class="row" style="flex-wrap:wrap"><a class="btn" href="#poker" title="Abre o Planning Poker do app">' + H.ico('cards') + ' Planning Poker</a>' +
       '<a class="btnp" href="#backlog/validacao" title="As entregas esperando o seu aceite, com o que o dev implementou">Ir à validação</a></div></header>';
     var kp = '<div class="ini-kg">' +
       kpi('Para validar', val.length, val.length ? 'mais antiga entregue ' + (H.dm(val[0].entregue_em) || '—') : 'fila vazia', { cls: val.length ? 'ac' : '', href: '#backlog/validacao' }) +
       kpi('Homologações a cobrar', hom.length, HO.DIAS_ATE_COBRAR + '+ dias na área sem registro', { cor: hom.length ? 'var(--pu-t)' : '' }) +
       kpi('Atrasadas', atr.length, atr.length ? codigos(atr) : 'tudo no prazo', { cls: atr.length ? 'dg' : '', cor: atr.length ? 'var(--dg-t)' : '', href: '#backlog/vencido' }) +
-      kpi('Para estimar', pok.length, 'em Planning sem pontos', { href: 'poker.html' }) +
+      kpi('Para estimar', pok.length, 'em Planning sem pontos', { href: '#poker' }) +
       kpi('Sprints a fechar', pend.length, pend.length ? pend.map(function (p) { return H.esc(S.rotuloCurto(p.rotulo)); }).join(', ') : 'nenhuma pendente', { cls: pend.length ? 'ac' : '', href: '#sprints/encerrar' }) +
       '</div>';
     var AC = window.AXIS_ACOES;
@@ -820,6 +847,8 @@
       var c = e.target.closest('.ini-card[data-href]');
       if (c) location.hash = c.getAttribute('data-href');
     };
+    var mo = el.querySelector('[data-ini="mostrar"]');
+    if (mo) mo.onchange = function () { EST.mostrar = mo.value; redesenha(el, ctx); var n = el.querySelector('[data-ini="mostrar"]'); if (n) n.focus(); };
     var sel = el.querySelector('[data-ini="cron-dev"]');
     if (sel) sel.onchange = function () { EST.cronDev = sel.value; EST.cronLimite = 40; redesenha(el, ctx); };
   }

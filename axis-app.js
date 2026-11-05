@@ -489,7 +489,7 @@
       if (dev.length) lista.push({ ico: 'undo', cor: 'var(--wn-t)', txt: '<b>' + plural(dev.length, 'demanda devolvida', 'demandas devolvidas') + '</b> para ajuste', href: '#inicio/meu' });
     }
     var poker = vs.filter(function (m) { return colunaDe(m) === 'planning' && !pontosDe(m); });
-    if (poker.length && APP.papel !== 'consulta') lista.push({ ico: 'cards', cor: 'var(--in-t)', txt: '<b>' + plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', href: 'poker.html' });
+    if (poker.length && APP.papel !== 'consulta') lista.push({ ico: 'cards', cor: 'var(--in-t)', txt: '<b>' + plural(poker.length, 'item', 'itens') + '</b> para estimar no Poker', href: '#poker' });
     return lista;
   }
 

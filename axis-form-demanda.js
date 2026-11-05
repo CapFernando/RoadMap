@@ -40,11 +40,20 @@
    `colaboradores.js`). O servidor confere tudo de novo; a tela so evita que a
    pessoa descubra a regra pela recusa.
 
-   O QUE FICOU NO EDITOR DA AREA ADMINISTRATIVA: Validado em Comite, BIs
-   impactados, links de referencia, links do GitHub, versao e producao, mes
-   alvo, grill, mesclar, media do Poker, destaque e o texto da entrega (resumo
-   e implementacao, que o dev escreve ao entregar). O link "Mais campos no
-   editor" abre a demanda la.
+   OS CAMPOS RAROS DO EDITOR DO ADMIN vieram para ca (PM/PO e analista):
+   Validado em Comite (`comiteDoForm`; so quem `SELO.podeComite` marca), BIs
+   impactados (`bisAdiciona`), links de referencia (`refAdiciona`), a
+   referencia no GitHub (`ghLinkColeta`, links-github.js), versao e producao,
+   mes de compromisso (`mesPreencheCampo`), grill (`GRILL.marca`), media do
+   Poker (`sugereFibonacci`), destaque (`destaqueAlterna`) e o texto da
+   entrega (resumo e implementacao). Na edicao cada grupo so entra no patch se
+   foi mexido. Mesclar e acao do Item (axis-acoes.js). Do editor antigo nao
+   sobrou campo; sobram la as assinaturas do spike e a aba de votos do Poker,
+   que nao sao campos da demanda.
+
+   SISTEMA NOVO ("+ outro"): a lista de temas vai inteira na gravacao, entao
+   ela e montada sobre a base FRESCA lida logo antes (`H.api('dados')`), e
+   nao sobre a da tela — a mesma ideia das ausencias no Planejamento.
 
    Publica `window.AXIS_FORM = { abrir(m|null, { foco }) }` e, no Node,
    `module.exports` com as regras puras (`nova`, `edicao`).
@@ -109,6 +118,129 @@
     var r = escolhida ? SP.repassar(obj, escolhida, c.quem, c.hoje, { dados: c.D || {} })
                       : SP.retirar(obj, c.quem, c.hoje, { dados: c.D || {} });
     return r.ok ? null : falha(r.erro, 'sprint');
+  }
+
+  // ── Os campos raros do editor do admin ─────────────────────────────────
+  /* As cartas do Poker e a sugestao pela media — COPIA de `FIBONACCI` e
+     `fibonacciMaisProximo` (admin.html). Os pontos seguem a media digitada ate
+     alguem escolher a carta na mao (`_pokerNaMao`). */
+  var FIBONACCI = [1, 2, 3, 5, 8, 12, 22];
+  function fibonacciMaisProximo(media) {
+    var n = parseFloat(media);
+    if (!isFinite(n) || n <= 0) return '';
+    return String(FIBONACCI.reduce(function (a, b) { return Math.abs(b - n) < Math.abs(a - n) ? b : a; }));
+  }
+
+  /* VALIDADO EM COMITE — COPIA de `comiteDoForm` (admin.html). Sem nome nao ha
+     marca (`null`); a data e a do PRIMEIRO registro: corrigir o nome nao
+     reescreve quando o comite aconteceu. `cm` = { liga, quem, obs }. */
+  function comiteDe(cm, antes, agora) {
+    if (!cm || !cm.liga) return null;
+    var quem = txt(cm.quem);
+    if (!quem) return null;
+    var a = (antes && antes.comite) || null;
+    return { quem: quem.slice(0, 120), em: (a && a.em) || agora, obs: txt(cm.obs).slice(0, 300) };
+  }
+
+  /* OS BIs IMPACTADOS — COPIA de `bisAdiciona` (admin.html): nome limpo pelo
+     `bis.js`, repetido nao entra (comparado pela normalizada) e ha um teto. */
+  function biAdiciona(lista, nome, c) {
+    var B = mod(c, 'BIS');
+    var n = B ? B.limpa(nome) : txt(nome);
+    if (!n) return falha('Escreva o nome do BI.', 'bi');
+    var nr = function (x) { return B ? B.norm(x) : txt(x).toLowerCase(); };
+    if ((lista || []).some(function (x) { return nr(x) === nr(n); })) return falha('Esse BI já está marcado nesta demanda.', 'bi');
+    var max = B ? B.MAX_POR_DEMANDA : 20;
+    if ((lista || []).length >= max) return falha('Limite de ' + max + ' BIs por demanda.', 'bi');
+    return { ok: true, lista: (lista || []).concat([n]) };
+  }
+
+  /* OS LINKS DE REFERENCIA — COPIA de `refAdiciona` (admin.html). O endereco
+     passa pela mesma limpeza do Worker (`referencia.js`: so http e https);
+     sem descricao, entra o host. */
+  function refAdiciona(lista, desc, url, c) {
+    var R = mod(c, 'REFERENCIA');
+    if (!R) return falha('referencia.js não carregado');
+    var u = R.limpaUrl(url);
+    if (!u) return falha(txt(url) ? 'Endereço inválido. Use um link http ou https.' : 'Informe o endereço do link.', 'ref-url');
+    if ((lista || []).some(function (r) { return r.url === u; })) return falha('Esse link já está nesta demanda.', 'ref-url');
+    if ((lista || []).length >= R.MAX_LINKS) return falha('Limite de ' + R.MAX_LINKS + ' links por demanda.', 'ref-url');
+    return { ok: true, lista: (lista || []).concat([{ descricao: R.limpaDesc(desc) || R.host(u), url: u }]) };
+  }
+
+  /* A REFERENCIA NO GITHUB — a regra de `ghLinkColeta` (links-github.js): numero
+     solo so com o repositorio escolhido, link completo sempre, e engano de
+     campo (issue colada no PR) recusado. `g` = { repo, issue, pr, milestone }. */
+  function githubDe(g, c) {
+    var GH = mod(c, 'GH') || (raiz.ghLinkErro ? { erro: raiz.ghLinkErro, normaliza: raiz.ghLinkNormaliza } : null);
+    if (!GH) return { ok: true, links: {} };
+    var out = {};
+    var tipos = ['issue', 'pr', 'milestone'];
+    for (var i = 0; i < tipos.length; i++) {
+      var t = tipos[i];
+      if (!g || !(t in g)) continue;
+      var msg = GH.erro(t, g[t], g.repo || '');
+      if (msg) return falha(msg, /Escolha o repositório/.test(msg) ? 'gh-repo' : 'gh-' + t);
+      out['link_' + t] = GH.normaliza(t, g[t], g.repo || '');
+    }
+    return { ok: true, links: out };
+  }
+
+  /* O MES DE COMPROMISSO — `mesPreencheCampo` (admin.html): doze meses em
+     torno do corrente (seis para tras, cinco para a frente) e o ja gravado,
+     mesmo fora da janela. A tela manda a INTENCAO (`mes_alvo`); quem escreve
+     a trilha `meses` e o Worker (`carimbaMeses`). */
+  function mesSoma(iso, n) {
+    var a = parseInt(String(iso).slice(0, 4), 10), b = parseInt(String(iso).slice(5, 7), 10);
+    var t = (a * 12 + (b - 1)) + n;
+    return String(Math.floor(t / 12)) + '-' + String((t % 12) + 1).padStart(2, '0');
+  }
+  function trilhaDe(m) {
+    return (m && Array.isArray(m.meses) ? m.meses : []).filter(function (x) { return x && /^\d{4}-(0[1-9]|1[0-2])$/.test(String(x.mes)); });
+  }
+  function mesesDoCampo(m, hoje) {
+    var t = trilhaDe(m);
+    var atual = t.length ? t[t.length - 1].mes : '';
+    var base = String(hoje).slice(0, 7);
+    var meses = [];
+    for (var i = -6; i <= 5; i++) meses.push(mesSoma(base, i));
+    if (atual && meses.indexOf(atual) < 0) meses.push(atual);
+    meses.sort();
+    return { atual: atual, meses: meses };
+  }
+
+  /* SISTEMA NOVO ("+ outro") — a regra de `catalogoResolve` (catalogo.js): o
+     nome que ja existe (sem diferenca de caixa) e o tema que existe. A tranca
+     do catalogo (lista vazia com a leitura falhada) nao se aplica: aqui a
+     lista e a da base lida com sucesso, e a gravacao rele a base antes. */
+  function temaNovo(nome, temas, id) {
+    var n = txt(nome);
+    if (!n) return falha('Escreva o caminho do sistema novo, com " - " entre os níveis (ex.: AXCred - Cobrança).', 'tema-novo');
+    var achou = (temas || []).find(function (t) { return String((t && t.nome) || '').toLowerCase() === n.toLowerCase(); });
+    if (achou) return { ok: true, id: achou.id, novo: null };
+    return { ok: true, id: id, novo: { id: id, nome: n } };
+  }
+
+  /** Os campos raros do admin, sobre `obj` (a demanda nova ou a copia em
+   *  edicao). So entra o que veio em `f` — e o formulario so manda o grupo que
+   *  a pessoa mexeu. Booleano compara como booleano: `false` sobre `undefined`
+   *  nao e mudanca. Muta `obj`; devolve a recusa ou null. */
+  function extras(obj, antes, f, c) {
+    var bool = function (k) { if (k in f && (!antes || !!f[k] !== !!antes[k])) obj[k] = !!f[k]; };
+    if ('comite' in f) obj.comite = comiteDe(f.comite, antes, c.agora);
+    var B = mod(c, 'BIS'), R = mod(c, 'REFERENCIA');
+    if ('bis' in f) obj.bis_impactados = B ? B.daDemanda({ bis_impactados: f.bis }) : (f.bis || []).slice();
+    if ('links' in f) obj.links = R ? R.daDemanda({ links: f.links }) : (f.links || []).slice();
+    if ('gh' in f) { var g = githubDe(f.gh, c); if (!g.ok) return g; Object.assign(obj, g.links); }
+    if ('versao' in f) obj.versao = txt(f.versao);
+    bool('em_producao');
+    if ('mes_alvo' in f) obj.mes_alvo = txt(f.mes_alvo);
+    if ('poker_media' in f) { var pm = txt(f.poker_media); obj.poker_media = pm !== '' ? parseFloat(pm) : null; }
+    if ('grill' in f) obj.grill = JSON.parse(JSON.stringify(f.grill || {}));
+    if ('resumo_entrega' in f) obj.resumo_entrega = txt(f.resumo_entrega);
+    if ('implementacao' in f) obj.implementacao = txt(f.implementacao);
+    bool('destaque');
+    return null;
   }
 
   /** O que vale para nova e edicao, na ordem do `saveMelhoria`/`saveNewDemand`. */
@@ -190,6 +322,8 @@
         historico: [], anexos: (f.anexos || []).slice(), horas_realizadas: parseFloat(f.horas) || 0,
         criado_em: c.agora
       };
+      var ex = extras(obj, null, f, c);
+      if (ex) return ex;
       if (gestoSemDev(null, sp, obj.dev, f.sprint || '', c)) {
         return falha('Escolha o desenvolvedor: ' + (acoes(c) ? acoes(c).rotulo(sp) : sp) + ' exige responsável.', 'dev');
       }
@@ -252,8 +386,12 @@
       if ('data_solicitacao' in f) poe('data_solicitacao', txt(f.data_solicitacao));
       if ('poker_pontos' in f) poe('poker_pontos', numOuNulo(f.poker_pontos, true));
       if ('horas' in f) poe('horas_realizadas', parseFloat(f.horas) || Number(m.horas_realizadas) || 0);
-      ['debito_tecnico', 'spike'].forEach(function (k) { if (k in f) poe(k, !!f[k]); });
-      if ('dados_bi' in f) { poe('dados_bi', !!f.dados_bi); poe('sales_ops', !f.dados_bi && !!f.sales_ops); }
+      // Marca compara como booleano: `false` sobre campo ausente nao e mudanca (e ia no patch de toda demanda antiga).
+      var marca = function (k, v) { if (!!v !== !!m[k]) poe(k, !!v); };
+      ['debito_tecnico', 'spike'].forEach(function (k) { if (k in f) marca(k, f[k]); });
+      if ('dados_bi' in f) { marca('dados_bi', f.dados_bi); marca('sales_ops', !f.dados_bi && !!f.sales_ops); }
+      var ex = extras(depois, m, f, c);
+      if (ex) return ex;
     }
     if (f.anexos) poe('anexos', f.anexos.slice());
     var sp = txt(m.status_planejamento);
@@ -270,7 +408,9 @@
   }
 
   var api = { nova: nova, edicao: edicao, ETAPAS_DATA_TRAVADA: ETAPAS_DATA_TRAVADA,
-              marcaDadosBiPorTema: marcaDadosBiPorTema, TEMA_DADOS_RE: TEMA_DADOS_RE };
+              marcaDadosBiPorTema: marcaDadosBiPorTema, TEMA_DADOS_RE: TEMA_DADOS_RE,
+              fibonacciMaisProximo: fibonacciMaisProximo, comiteDe: comiteDe, biAdiciona: biAdiciona,
+              refAdiciona: refAdiciona, githubDe: githubDe, mesesDoCampo: mesesDoCampo, temaNovo: temaNovo, extras: extras };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
   // ══ INTERFACE ═════════════════════════════════════════════════════════
@@ -316,7 +456,19 @@
       '.axa .axf .anexo-zona:hover,.axa .axf .anexo-zona:focus{border-color:rgba(var(--ac-rgb),.6)}',
       '.axa .axf .anexo-zona.sobre{border-style:solid;border-color:var(--ok);background:rgba(var(--ok-rgb),.08)}',
       '.axa .axf .anexo-zona b{color:var(--tx2)}',
+      // Os campos raros do admin: textos curtos, listas que crescem e a caixa do comite.
+      '.axa .axf textarea.in.axf-curto{min-height:84px;font-family:inherit;font-size:13px}',
+      '.axa .axf-lin{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) auto;gap:8px;align-items:center}',
+      '.axa .axf-gh{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}',
+      '.axa .axf-it{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--sf2);border:1px solid var(--bd2);font-size:12.5px;min-width:0}',
+      '.axa .axf-it .ell{min-width:0}',
+      '.axa .axf-it a{color:var(--tx3);font-size:11.5px;display:block}',
+      '.axa .axf-sub{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:var(--sf2);border:1px solid var(--bd2)}',
+      '.axa .axf-in-erro{border-color:var(--dg) !important}',
+      '.axa .axf .poker-aplicar{background:none;border:0;padding:0;color:var(--ac-t);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}',
+      '.axa .axf .gh-refs{margin-top:2px}',
       '@container app (max-width: 760px){.axa .axf-sec{grid-template-columns:minmax(0,1fr)}.axa .axf{padding:18px}}',
+      '@media (max-width: 760px){.axa .axf-lin,.axa .axf-gh{grid-template-columns:minmax(0,1fr)}}',
       '@media (max-width: 760px){.axa .axf-sec{grid-template-columns:minmax(0,1fr)}.axa .axf{padding:18px 16px}.axa .axf-pe{margin:0 -16px -18px;padding:12px 16px}}'
     ].join('\n');
     document.head.appendChild(s);
@@ -345,11 +497,23 @@
     return opt('', '— Selecione —', atual);
   }
 
+  /* COM "+ outro", como no editor de sempre. Criar sistema troca a lista
+     inteira de temas — e a lista da tela pode estar velha. Por isso a gravacao
+     le a base FRESCA logo antes e acrescenta o tema a lista de la (`salvar`),
+     como o Planejamento faz com ausencias e feriados. */
   function opcoesSistema(atual) {
     var temas = D().temas || [];
-    // Sem "+ outro": criar sistema e trocar a lista inteira de temas, e isso fica em Configuracoes.
-    return raiz.catalogoOpcoesHTML ? raiz.catalogoOpcoesHTML(temas, atual || '', { rotuloVazio: '— selecione o sistema —' })
-      : '<option value="">— selecione o sistema —</option>' + temas.map(function (t) { return opt(t.id, t.nome, atual); }).join('');
+    return raiz.catalogoOpcoesHTML ? raiz.catalogoOpcoesHTML(temas, atual || '', { rotuloVazio: '— selecione o sistema —', outro: true })
+      : '<option value="">— selecione o sistema —</option>' + temas.map(function (t) { return opt(t.id, t.nome, atual); }).join('') +
+        '<option value="__novo__">+ outro (escrever)…</option>';
+  }
+  /** A previa da arvore que o nome vira (`temaPrevia`, admin.html). */
+  function previaTema(v) {
+    v = String(v || '').trim();
+    if (!v) return 'Separe os níveis com " - " (espaço, hífen, espaço).';
+    var p = v.split(' - ').map(function (x) { return x.trim(); }).filter(Boolean);
+    return p.map(function (x, i) { return (i ? ' › ' : '') + (i === 0 ? '<b>' + H.esc(x) + '</b>' : H.esc(x)); }).join('') +
+      (p.length === 1 ? ' <span style="color:var(--tx3)">(sistema, sem módulo)</span>' : '');
   }
   function opcoesProjeto(atual) {
     var ps = (D().projetos || []).filter(function (p) { return String((p && p.aprovacao) || 'aprovado') === 'aprovado' || p.id === atual; });
@@ -376,8 +540,19 @@
     return { html: h, fechada: fechada };
   }
 
+  /** A trilha de meses em texto (`mesPreencheCampo`): de onde veio e quantas vezes rolou. */
+  function trilhaTxt(m, atual) {
+    var t = trilhaDe(m);
+    if (t.length <= 1) {
+      var em = t.length && /^\d{4}-\d{2}-\d{2}$/.test(String(t[0].em || '')) ? t[0].em : (atual ? atual + '-01' : '');
+      return atual ? 'Entrou neste mês em ' + H.dma(em) + '.' : 'O mês é carimbado quando a demanda entra em Planejado.';
+    }
+    return '<span style="color:var(--dg-t);font-weight:700">' + H.plural(t.length - 1, 'rolagem', 'rolagens') + '</span> · ' +
+      t.map(function (x) { return H.esc(H.MESES_C[parseInt(x.mes.slice(5), 10) - 1] + '/' + x.mes.slice(2, 4)); }).join(' → ');
+  }
+
   // ── O formulario ─────────────────────────────────────────────────────
-  var EST = null;   // { m, anexos, enviando, inicial, ov }
+  var EST = null;   // { m, anexos, enviando, inicial, ov, bis, refs, grill, pokerNaMao, grupos }
 
   function html(m) {
     var papel = AX.APP.papel, dev = papel === 'dev', po = H.donoDaSprint();
@@ -396,7 +571,10 @@
       campo('axf-tipo', dev ? 'É problema ou melhoria?' : 'Tipo', '<select class="in" id="axf-tipo"' + (tipoTravado ? ' disabled' : '') + '>' +
         opt('', '— Selecione —', m ? m.tipo : '') + opt('sustentacao', 'Sustentação (erro, bug, ajuste)', m ? m.tipo : '') + opt('evolucao', 'Evolução (melhoria, novo)', m ? m.tipo : '') + '</select>',
         { obrig: true, nota: tipoTravado ? 'A classificação de demanda existente é do PM/PO.' : '' }) +
-      campo('axf-tema', 'Sistema / módulo', '<select class="in" id="axf-tema">' + opcoesSistema(m ? m.tema_id : '') + '</select>', { obrig: !m || dev }) +
+      campo('axf-tema', 'Sistema / módulo', '<select class="in" id="axf-tema">' + opcoesSistema(m ? m.tema_id : '') + '</select>' +
+        '<div id="axf-tema-novo-caixa" style="display:none;flex-direction:column;gap:6px">' +
+        entrada('axf-tema-novo', '', { dica: 'Ex.: NovoSistema - Módulo', extra: ' maxlength="160" aria-describedby="axf-tema-previa"' }) +
+        '<span class="note" id="axf-tema-previa"></span></div>', { obrig: !m || dev }) +
       campo('axf-impacto', 'Impacto', '<select class="in" id="axf-impacto">' + opcoesNivel('impacto', m ? m.impacto : '') + '</select>', { obrig: !m }) +
       campo('axf-urgencia', 'Urgência', '<select class="in" id="axf-urgencia">' + opcoesNivel('urgencia', m ? m.urgencia : '') + '</select>',
         { obrig: !m, nota: !m ? 'Seguem a demanda pela esteira; não calculam a prioridade.' : '' }) +
@@ -445,14 +623,60 @@
       var baralho = ['1', '2', '3', '5', '8', '12', '22'];
       if (pk && baralho.indexOf(pk) < 0) baralho.push(pk);
       h += '<section class="axf-sec"><span class="lab">ESFORÇO E MARCAS</span>' +
-        campo('axf-pontos', 'Pontos', '<select class="in" id="axf-pontos">' + opt('', '—', pk) + baralho.map(function (p) { return opt(p, p, pk); }).join('') + '</select>',
-          { nota: m && m.poker_media != null && m.poker_media !== '' ? 'Média do Poker: ' + H.esc(m.poker_media) : '' }) +
-        campo('axf-horas', 'Horas realizadas', entrada('axf-horas', m && m.horas_realizadas ? m.horas_realizadas : '', { tipo: 'number', extra: ' min="0" step="0.5"' }),
+        campo('axf-poker-media', 'Média do Planning Poker', entrada('axf-poker-media', m && m.poker_media != null ? m.poker_media : '', { tipo: 'number', dica: 'ex.: 4,4', extra: ' min="0" step="0.1"' }),
+          { nota: 'A votação sugere; o time decide os pontos.' }) +
+        campo('axf-pontos', 'Pontos', '<select class="in" id="axf-pontos">' + opt('', '—', pk) + baralho.map(function (p) { return opt(p, p, pk); }).join('') + '</select>' +
+          '<span class="note" id="axf-poker-nota"></span>') +
+        campo('axf-horas', 'Horas realizadas', entrada('axf-horas', m && m.horas_realizadas ? m.horas_realizadas : '', { tipo: 'number', extra: ' min="0" step="0.25"' }),
           { nota: 'Obrigatórias para concluir.' }) +
         '<div class="axf-f axf-l"><span class="rt">Marcas</span><div class="axf-chk">' +
         [['debito_tecnico', 'Débito técnico'], ['dados_bi', 'Dados/BI'], ['sales_ops', 'Sales Ops'], ['spike', 'Spike']].map(function (k) {
           return '<label><input type="checkbox" id="axf-' + k[0] + '"' + (m && m[k[0]] && !(k[0] === 'sales_ops' && m.dados_bi) ? ' checked' : '') + '> ' + k[1] + '</label>';
-        }).join('') + '</div></div></section>';
+        }).join('') + '</div></div>' +
+        // OS BIs presos a marca Dados/BI (`bisMostraCaixa`): some sem a marca, mas o que ja foi marcado nao se perde.
+        '<div class="axf-f axf-l" id="axf-bis-caixa" style="display:none"><span class="rt">BIs impactados <span class="note">— para rastrear o que foi feito em cada um</span></span>' +
+        '<div class="axf-an" id="axf-bis"></div>' +
+        '<div class="row" style="gap:8px">' + entrada('axf-bi-novo', '', { dica: 'Nome do BI — digite ou escolha', extra: ' list="axf-bi-lista" style="flex:1;min-width:0"' }) +
+        '<datalist id="axf-bi-lista"></datalist><button type="button" class="btn" data-axf="bi">+ Incluir</button></div></div></section>';
+
+      // ENTREGA E CODIGO: o texto da entrega (do dev, que o PM/PO pode corrigir), GitHub, versao e links.
+      var prodQuando = m && m.em_producao && m.producao_em ? 'No ar desde ' + H.dma(String(m.producao_em).slice(0, 10)) + (m.producao_por ? ' · marcado por ' + H.esc(m.producao_por) : '') : '';
+      h += '<section class="axf-sec"><span class="lab">ENTREGA E CÓDIGO</span>' +
+        campo('axf-resumo', 'Resumo da entrega', '<textarea class="in axf-curto" id="axf-resumo" rows="3" maxlength="300" placeholder="Uma frase do que mudou, na linguagem de quem vai ler o slide.">' + H.esc(m ? m.resumo_entrega || '' : '') + '</textarea>',
+          { lg: true, nota: '<span id="axf-resumo-conta"></span> · vai para o relatório e a apresentação' }) +
+        campo('axf-impl', 'O que foi implementado', '<textarea class="in axf-curto" id="axf-impl" rows="4" placeholder="Preenchido pelo dev ao entregar. É por este texto que a entrega é validada.">' + H.esc(m ? m.implementacao || '' : '') + '</textarea>', { lg: true }) +
+        '<div class="axf-f axf-l"><label for="axf-link-repo">Referência no GitHub <span class="note">— escolha o repositório e use só o número, ou cole o link completo</span></label>' +
+        '<select class="in" id="axf-link-repo"></select><div class="axf-gh">' +
+        entrada('axf-link-issue', '', { dica: 'Issue: 683', extra: ' aria-label="Issue no GitHub"' }) + entrada('axf-link-pr', '', { dica: 'PR: 712, 715', extra: ' aria-label="Pull request"' }) + entrada('axf-link-milestone', '', { dica: 'Milestone: 4', extra: ' aria-label="Milestone no GitHub"' }) +
+        '</div><div id="axf-gh-chips">' + (m && raiz.ghLinkChips ? raiz.ghLinkChips(m) : '') + '</div></div>' +
+        campo('axf-versao', 'Versão', entrada('axf-versao', m ? m.versao || '' : '', { dica: 'Versão: 1.4.2' }), { nota: 'Alimentada pela esteira (deploy-versao) ou escrita aqui.' }) +
+        '<div class="axf-f"><span class="rt">Produção</span><div class="axf-chk"><label><input type="checkbox" id="axf-em-producao"' + (m && m.em_producao ? ' checked' : '') + '> Em produção</label></div>' +
+        (prodQuando ? '<span class="note">' + prodQuando + '</span>' : '') + '</div>' +
+        '<div class="axf-f axf-l"><span class="rt">Links de referência <span class="note">— planilha, Figma, chamado, thread</span></span>' +
+        '<div class="axf-lin">' + entrada('axf-ref-desc', '', { dica: 'Descrição: Planilha do cliente', extra: ' maxlength="120" aria-label="Descrição do link"' }) +
+        entrada('axf-ref-url', '', { dica: 'https://...', extra: ' aria-label="Endereço do link"' }) + '<button type="button" class="btn" data-axf="ref">+ Incluir</button></div>' +
+        '<div id="axf-refs" style="display:grid;gap:6px"></div></div></section>';
+
+      // VALIDACAO E PLANEJAMENTO: comite, grill, mes de compromisso e destaque.
+      var podeCmt = !!(raiz.SELO && raiz.SELO.podeComite(AX.APP.eu));
+      var cmt = (raiz.SELO && raiz.SELO.comite(m || {})) || null;
+      var mc = mesesDoCampo(m, H.hoje());
+      h += '<section class="axf-sec"><span class="lab">VALIDAÇÃO E PLANEJAMENTO</span>' +
+        '<div class="axf-f axf-l"><div class="axf-chk"><label' + (podeCmt ? '' : ' title="Só PM/PO ou liderança marcam a validação em Comitê." style="opacity:.6"') + '>' +
+        '<input type="checkbox" id="axf-comite"' + (cmt ? ' checked' : '') + (podeCmt ? '' : ' disabled') + '> ' + H.ico('shield') + ' Validado em Comitê</label></div>' +
+        '<div class="axf-sub" id="axf-comite-caixa" style="display:' + (cmt ? 'flex' : 'none') + '">' +
+        '<label for="axf-comite-quem" style="font-size:12.5px;font-weight:700;color:var(--tx2)">Quem validou no comitê <span class="note">— sem nome a marca não vale</span></label>' +
+        entrada('axf-comite-quem', cmt ? cmt.quem : '', { dica: 'Nome de quem levou ou aprovou no comitê', desligado: !podeCmt, extra: ' maxlength="120"' }) +
+        entrada('axf-comite-obs', cmt ? cmt.obs || '' : '', { dica: 'Observação do comitê (opcional)', desligado: !podeCmt, extra: ' maxlength="300" aria-label="Observação do comitê"' }) +
+        (cmt && cmt.em ? '<span class="note">Registrado em ' + H.esc(H.dma(String(cmt.em).slice(0, 10))) + '</span>' : '') + '</div></div>' +
+        '<div class="axf-f axf-l"><div class="axf-chk"><label><input type="checkbox" id="axf-grill"> ' + H.ico('flag') + ' Grill — o dev julga a demanda antes de ela entrar no planejamento</label></div>' +
+        '<span class="note" id="axf-grill-estado"></span><div id="axf-grill-pontos" style="display:grid;gap:6px"></div></div>' +
+        campo('axf-mes-alvo', 'Mês de compromisso', '<select class="in" id="axf-mes-alvo">' + opt('', '— sem mês —', mc.atual) +
+          mc.meses.map(function (x) { return opt(x, H.MESES[parseInt(x.slice(5), 10) - 1] + ' de ' + x.slice(0, 4), mc.atual); }).join('') + '</select>',
+          { nota: trilhaTxt(m, mc.atual) }) +
+        (m ? '<div class="axf-f"><span class="rt">Apresentação</span><div class="axf-chk"><label title="Sai como destaque na apresentação do mês"><input type="checkbox" id="axf-destaque"' + (m.destaque ? ' checked' : '') + '> ' +
+          H.ico('star') + ' Destaque da apresentação</label></div></div>' : '') +
+        '</section>';
     }
 
     // ANEXOS
@@ -461,7 +685,6 @@
       '<div class="axf-an" id="axf-anexos"></div><span class="note">Até 1,5 MB por arquivo.' + (dev && m ? ' Os anexos que já estão na demanda ficam; os novos entram junto.' : '') + '</span></div></section>';
 
     h += '<div class="axf-pe"><span class="axf-erro" id="axf-erro" role="alert"></span>' +
-      (m && m.codigo && po ? '<a class="btns" href="admin.html#' + encodeURIComponent(m.codigo) + '" title="Comitê, BIs, links, versão e os outros campos ficam no editor da Área administrativa">Mais campos no editor ' + H.ico('external', 'style="font-size:11px;opacity:.7"') + '</a>' : '') +
       '<button type="button" class="btn" data-axf="fechar">Cancelar</button>' +
       '<button type="button" class="btnp" id="axf-salvar" data-axf="salvar">' + (m ? 'Salvar alterações' : 'Criar demanda') + '</button></div></div>';
     return h;
@@ -521,18 +744,121 @@
       f.sales_ops = marcado('axf-sales_ops'); f.spike = marcado('axf-spike');
       var s = el('axf-sprint');
       if (s && !s.disabled) f.sprint = s.value;
+      /* OS CAMPOS RAROS SO VAO QUANDO MEXIDOS (na edicao): o patch leva o que
+         mudou, e reescrever um link ou o comite que ninguem tocou so trocaria
+         a forma do que ja estava gravado. Na demanda nova vai tudo. */
+      var rx = rawExtras(), r0 = EST.extras0 || {};
+      if (rx) {
+        var mudou = function (k) { return !EST.m || rx[k] !== r0[k]; };
+        if (mudou('comite') && raiz.SELO && raiz.SELO.podeComite(AX.APP.eu)) f.comite = { liga: marcado('axf-comite'), quem: val('axf-comite-quem'), obs: val('axf-comite-obs') };
+        if (mudou('gh')) f.gh = { repo: val('axf-link-repo'), issue: val('axf-link-issue'), pr: val('axf-link-pr'), milestone: val('axf-link-milestone') };
+        ['versao', 'mes_alvo', 'poker_media', 'resumo_entrega', 'implementacao', 'em_producao'].forEach(function (k) { if (mudou(k)) f[k] = rx[k]; });
+        if (EST.m && rx.destaque !== null && mudou('destaque')) f.destaque = rx.destaque;
+        if (!EST.m || EST.bisMexidos) f.bis = EST.bis.slice();
+        if (!EST.m || EST.refsMexidos) f.links = EST.refs.slice();
+        if (!EST.m || EST.grillMexido) f.grill = EST.grill;
+      }
     }
+    if (f.tema_id === '__novo__') f.tema_novo = val('axf-tema-novo');
     if (EST.m && !EST.anexosMexidos) delete f.anexos;
     return f;
+  }
+  /** Os campos raros como estao na tela, para saber o que foi mexido. */
+  function rawExtras() {
+    if (!el('axf-resumo')) return null;
+    return { comite: [marcado('axf-comite'), val('axf-comite-quem'), val('axf-comite-obs')].join('|'),
+             gh: [val('axf-link-repo'), val('axf-link-issue'), val('axf-link-pr'), val('axf-link-milestone')].join('|'),
+             versao: val('axf-versao'), em_producao: marcado('axf-em-producao'), mes_alvo: val('axf-mes-alvo'),
+             poker_media: val('axf-poker-media'), resumo_entrega: val('axf-resumo'), implementacao: val('axf-impl'),
+             destaque: el('axf-destaque') ? marcado('axf-destaque') : null };
+  }
+
+  // ── Os pedacos vivos dos campos raros ────────────────────────────────
+  function pintaBis() {
+    var box = el('axf-bis'), cx = el('axf-bis-caixa'), dl = el('axf-bi-lista');
+    if (!box || !cx) return;
+    box.innerHTML = EST.bis.length ? EST.bis.map(function (n, i) {
+      return '<span class="chip c-in">' + H.ico('trend') + ' ' + H.esc(n) + '<button type="button" data-axf-bi-tira="' + i + '" aria-label="Tirar o BI ' + H.esc(n) + '">' + H.ico('x') + '</button></span>';
+    }).join('') : '<span class="note">Nenhum BI marcado ainda.</span>';
+    // O catalogo e o da base inteira, menos os que esta demanda ja tem (`bisRender`).
+    var B = raiz.BIS;
+    if (dl && B) {
+      var ja = EST.bis.map(function (x) { return B.norm(x); });
+      dl.innerHTML = B.catalogo(D().melhorias || []).filter(function (b) { return ja.indexOf(B.norm(b.nome)) < 0; })
+        .map(function (b) { return '<option value="' + H.esc(b.nome) + '">' + b.qtd + ' demanda(s)</option>'; }).join('');
+    }
+    cx.style.display = marcado('axf-dados_bi') || EST.bis.length ? 'flex' : 'none';
+  }
+  function pintaRefs() {
+    var box = el('axf-refs');
+    if (!box) return;
+    box.innerHTML = EST.refs.length ? EST.refs.map(function (r, i) {
+      return '<div class="axf-it">' + H.ico('link', 'style="color:var(--tx3)"') + '<span class="ell" style="flex:1"><b class="ell" style="display:block">' + H.esc(r.descricao) + '</b>' +
+        '<a href="' + H.esc(r.url) + '" target="_blank" rel="noopener noreferrer" class="ell">' + H.esc(r.url) + '</a></span>' +
+        '<button type="button" class="btns" data-axf-ref-tira="' + i + '" aria-label="Tirar o link ' + H.esc(r.descricao) + '">' + H.ico('x') + '</button></div>';
+    }).join('') : '<span class="note">Nenhum link ainda.</span>';
+  }
+  function pintaGrill() {
+    var G = raiz.GRILL, est = el('axf-grill-estado'), pts = el('axf-grill-pontos'), cx = el('axf-grill');
+    if (!G || !est || !pts || !cx) return;
+    var g = G.dados({ grill: EST.grill });
+    cx.checked = g.marcado;
+    var e = G.estado({ grill: EST.grill });
+    est.innerHTML = e === 'pendente' ? H.chip('aguardando o dev', 'wn') + ' Ele responde <b>entendi</b> (a demanda vai para Planning) ou <b>tenho dúvidas</b> (vai para Em aprovação de requisitos, com os pontos abaixo).'
+      : e === 'ok' ? H.chip('entendido', 'ok') + ' O dev leu e não tem dúvida' + (g.respondido_por ? ' — ' + H.esc(g.respondido_por) : '') + '.'
+      : e === 'duvida' ? H.chip('devolvida com dúvidas', 'in') + ' O dev levantou os pontos abaixo' + (g.respondido_por ? ', ' + H.esc(g.respondido_por) : '') + '. Resolva e mova para Planning.'
+      : 'Marque quando a demanda precisar passar pelo crivo de quem vai executá-la antes de entrar no planejamento.';
+    // As duvidas aparecem mesmo desmarcada: e depois de resolver que se rele o que foi perguntado.
+    pts.innerHTML = g.pontos.map(function (p) {
+      return '<div class="axf-it" style="flex-direction:column;align-items:flex-start;gap:3px"><span>' + H.esc(p.texto) + '</span>' +
+        (p.por || p.em ? '<span class="note" style="font-size:11.5px">' + H.esc(p.por || '') + (p.em ? ' · ' + H.esc(H.dma(String(p.em).slice(0, 10))) : '') + '</span>' : '') + '</div>';
+    }).join('');
+  }
+  /* A media manda nos pontos, a menos que alguem tenha escolhido a carta na
+     mao (`sugereFibonacci`); a divergencia vira botao, e nao texto cinza. */
+  function garanteCarta(sel, v) {
+    if (!v || [].some.call(sel.options, function (o) { return o.value === v; })) return;
+    var o = document.createElement('option'); o.value = v; o.textContent = v + ' (fora do baralho)'; sel.appendChild(o);
+  }
+  function pintaPoker() {
+    var sel = el('axf-pontos'), nota = el('axf-poker-nota');
+    if (!sel || !nota) return;
+    var sug = fibonacciMaisProximo(val('axf-poker-media'));
+    if (!sug) { nota.textContent = ''; return; }
+    if (!EST.pokerNaMao) { garanteCarta(sel, sug); sel.value = sug; }
+    nota.innerHTML = sel.value === sug ? 'sugerido pela média'
+      : 'você escolheu <b>' + H.esc(sel.value || '—') + '</b>; a média sugere <b>' + H.esc(sug) + '</b> · <button type="button" class="poker-aplicar" data-axf="poker-aplicar">aplicar ' + H.esc(sug) + '</button>';
+  }
+  function contaResumo() {
+    var t = el('axf-resumo'), n = el('axf-resumo-conta');
+    if (!t || !n) return;
+    var resta = 300 - t.value.length;
+    n.textContent = resta === 0 ? 'limite de 300 caracteres atingido — cabe em 5 linhas' : 'restam ' + resta + ' de 300 caracteres';
+    n.style.color = resta <= 30 ? 'var(--wn-t)' : '';
+  }
+  function incluiBi() {
+    var c = el('axf-bi-novo');
+    var r = biAdiciona(EST.bis, c ? c.value : '', { R: { BIS: raiz.BIS } });
+    if (!r.ok) { if (r.erro && txt(c && c.value)) H.toast(r.erro, 'erro'); if (c) { if (/marcado/.test(r.erro)) c.value = ''; c.focus(); } return; }
+    EST.bis = r.lista; EST.bisMexidos = true; c.value = ''; pintaBis(); c.focus();
+  }
+  function incluiRef() {
+    var d = el('axf-ref-desc'), u = el('axf-ref-url');
+    var r = refAdiciona(EST.refs, d.value, u.value, { R: { REFERENCIA: raiz.REFERENCIA } });
+    if (!r.ok) { H.toast(r.erro, 'erro'); if (/já está/.test(r.erro)) u.value = ''; u.focus(); return; }
+    EST.refs = r.lista; EST.refsMexidos = true; d.value = ''; u.value = ''; pintaRefs(); d.focus();
   }
 
   var FOCO = { titulo: 'axf-titulo', tipo: 'axf-tipo', tema: 'axf-tema', solicitante: 'axf-solicitante', dev: 'axf-dev',
                sprint: 'axf-sprint', inicio: 'axf-inicio', entrega: 'axf-entrega', horas: 'axf-horas', etapa: 'axf-etapa',
-               impacto: 'axf-impacto', urgencia: 'axf-urgencia' };
+               impacto: 'axf-impacto', urgencia: 'axf-urgencia', 'tema-novo': 'axf-tema-novo', 'gh-repo': 'axf-link-repo',
+               'gh-issue': 'axf-link-issue', 'gh-pr': 'axf-link-pr', 'gh-milestone': 'axf-link-milestone', bi: 'axf-bi-novo', 'ref-url': 'axf-ref-url' };
   function mostraErro(msg, campoLogico) {
     var e = el('axf-erro');
     if (e) e.textContent = msg || '';
     var alvo = el(FOCO[campoLogico] || '');
+    [].forEach.call((EST && EST.ov ? EST.ov.querySelectorAll('.axf-in-erro') : []), function (x) { x.classList.remove('axf-in-erro'); });
+    if (alvo && /^gh-/.test(campoLogico || '')) alvo.classList.add('axf-in-erro');
     if (alvo && !alvo.disabled) { alvo.focus(); try { alvo.scrollIntoView({ block: 'center' }); } catch (_) {} }
   }
 
@@ -554,6 +880,16 @@
     var f = ler();
     var id = m ? m.id : (EST.id || (EST.id = uid()));
     var c = contexto(id);
+    // "+ outro": o nome que ja existe e o tema que existe; senao nasce um tema (gravado logo abaixo).
+    var temaCriado = null;
+    if (f.tema_id === '__novo__') {
+      var tn = temaNovo(f.tema_novo, D().temas, EST.temaId || (EST.temaId = uid()));
+      if (!tn.ok) { mostraErro(tn.erro, tn.campo); return; }
+      f.tema_id = tn.id;
+      temaCriado = tn.novo;
+      if (temaCriado) c.D = Object.assign({}, c.D, { temas: (c.D.temas || []).concat([temaCriado]) });
+    }
+    delete f.tema_novo;
     var r = m ? edicao(m, f, c) : nova(f, c);
     if (!r.ok) { mostraErro(r.erro, r.campo); return; }
     if (m && !r.patch) { fecha(true); H.toast('Nada mudou.'); return; }
@@ -571,8 +907,22 @@
     var patch = {};
     patch[id] = m ? r.patch : r.obj;
     var out;
+    var opts = { ok: m ? 'Demanda salva.' : 'Demanda criada.' };
     try {
-      out = await H.gravar(patch, { ok: m ? 'Demanda salva.' : 'Demanda criada.' });
+      /* O SISTEMA NOVO ENTRA NA LISTA FRESCA DO SERVIDOR, e nao na da tela: a
+         lista de temas vai inteira, e uma tela aberta ha horas desfaria a
+         renomeacao que outra pessoa fez nesse meio tempo. Se alguem criou o
+         mesmo nome enquanto isso, vale o dele. */
+      if (temaCriado) {
+        var base;
+        try { base = await H.api('dados'); }
+        catch (e) { mostraErro(e.status === 401 ? 'Sessão expirada — saia e entre de novo.' : 'Sem conexão com o servidor: ' + (e.message || e)); return; }
+        var tf = temaNovo(temaCriado.nome, base.temas || [], temaCriado.id);
+        if (!tf.ok) { mostraErro(tf.erro, tf.campo); return; }
+        if (tf.novo) { opts.raiz = { temas: (base.temas || []).concat([tf.novo]) }; opts.ok += ' Sistema "' + tf.novo.nome + '" criado.'; }
+        else patch[id].tema_id = tf.id;
+      }
+      out = await H.gravar(patch, opts);
     } finally {
       if (b.isConnected) { b.disabled = false; b.textContent = rot; }
     }
@@ -614,7 +964,43 @@
     ov.className = 'ovl axf-ovl';
     ov.innerHTML = html(m || null);
     document.body.appendChild(ov);
-    EST = { m: m || null, ov: ov, anexos: JSON.parse(JSON.stringify((m && m.anexos) || [])), enviando: 0, anexosMexidos: false };
+    EST = { m: m || null, ov: ov, anexos: JSON.parse(JSON.stringify((m && m.anexos) || [])), enviando: 0, anexosMexidos: false,
+            // Copias em edicao, como `_mBis`, `_mRefs` e `_mGrill` do admin: cancelar nao deixa nada aplicado.
+            bis: raiz.BIS ? raiz.BIS.daDemanda(m || {}) : [], refs: raiz.REFERENCIA ? raiz.REFERENCIA.daDemanda(m || {}) : [],
+            grill: JSON.parse(JSON.stringify((m && m.grill) || {})), pokerNaMao: false };
+    if (el('axf-link-repo') && raiz.ghLinkPreenche) raiz.ghLinkPreenche('axf', m || null, D().melhorias || []);
+    pintaBis(); pintaRefs(); pintaGrill(); contaResumo();
+    var tsel = el('axf-tema');
+    if (tsel) tsel.addEventListener('change', function () {
+      var novo = tsel.value === '__novo__';
+      el('axf-tema-novo-caixa').style.display = novo ? 'flex' : 'none';
+      el('axf-tema-previa').innerHTML = previaTema(val('axf-tema-novo'));
+      if (novo) el('axf-tema-novo').focus();
+    });
+    var tnovo = el('axf-tema-novo');
+    if (tnovo) tnovo.addEventListener('input', function () { el('axf-tema-previa').innerHTML = previaTema(tnovo.value); });
+    var cmt = el('axf-comite');
+    if (cmt) cmt.addEventListener('change', function () { el('axf-comite-caixa').style.display = cmt.checked ? 'flex' : 'none'; if (cmt.checked) el('axf-comite-quem').focus(); });
+    var gr = el('axf-grill');
+    if (gr) gr.addEventListener('change', function () {
+      var alvo = { grill: EST.grill };
+      if (raiz.GRILL) { if (gr.checked) raiz.GRILL.marca(alvo, quem()); else raiz.GRILL.desmarca(alvo); }
+      EST.grill = alvo.grill; EST.grillMexido = true;
+      pintaGrill();
+    });
+    var pm = el('axf-poker-media'), pts = el('axf-pontos');
+    if (pm) pm.addEventListener('input', pintaPoker);
+    if (pts) pts.addEventListener('change', function () { EST.pokerNaMao = true; pintaPoker(); });
+    var rs = el('axf-resumo');
+    if (rs) rs.addEventListener('input', contaResumo);
+    var dbi = el('axf-dados_bi'), sop = el('axf-sales_ops');
+    [dbi, sop].forEach(function (x) { if (x) x.addEventListener('change', pintaBis); });
+    // Enter nos campos de lista inclui, como no admin (sem Enter a pessoa clicaria no "+ Incluir" toda vez).
+    ov.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.ctrlKey || e.metaKey) return;
+      if (e.target.id === 'axf-bi-novo') { e.preventDefault(); incluiBi(); }
+      else if (e.target.id === 'axf-ref-desc' || e.target.id === 'axf-ref-url') { e.preventDefault(); incluiRef(); }
+    });
     if (raiz.ligaModeloDescricao) raiz.ligaModeloDescricao('axf-descricao', { auto: !m });
     if (raiz.COLABORADORES) raiz.COLABORADORES.ligar(el('axf-solicitante'), AX.WORKER, function () { return { token: AX.APP.token }; });
     if (raiz.ligaZonaAnexo) raiz.ligaZonaAnexo('axf-arquivo', function (fs) { EST.anexosMexidos = true; sobe(fs); });
@@ -636,9 +1022,20 @@
       if (e.target === ov) { fecha(false); return; }
       var t = e.target.closest('[data-axf-tira]');
       if (t) { EST.anexos.splice(+t.getAttribute('data-axf-tira'), 1); EST.anexosMexidos = true; pintaAnexos(); return; }
+      var tb = e.target.closest('[data-axf-bi-tira]');
+      if (tb) { EST.bis.splice(+tb.getAttribute('data-axf-bi-tira'), 1); EST.bisMexidos = true; pintaBis(); return; }
+      var tr = e.target.closest('[data-axf-ref-tira]');
+      if (tr) { EST.refs.splice(+tr.getAttribute('data-axf-ref-tira'), 1); EST.refsMexidos = true; pintaRefs(); return; }
       var b = e.target.closest('[data-axf]');
       if (!b) return;
-      if (b.getAttribute('data-axf') === 'salvar') salvar(); else fecha(false);
+      var q = b.getAttribute('data-axf');
+      if (q === 'salvar') salvar();
+      else if (q === 'bi') incluiBi();
+      else if (q === 'ref') incluiRef();
+      else if (q === 'poker-aplicar') {
+        var sg = fibonacciMaisProximo(val('axf-poker-media')), sl = el('axf-pontos');
+        if (sg && sl) { garanteCarta(sl, sg); sl.value = sg; EST.pokerNaMao = false; pintaPoker(); }
+      } else fecha(false);
     });
     EST.tecla = function (e) {
       if (!EST || document.querySelector('.ovl:not(.axf-ovl)')) return;
@@ -646,6 +1043,7 @@
       else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); salvar(); }
     };
     document.addEventListener('keydown', EST.tecla, true);
+    EST.extras0 = rawExtras();
     EST.inicial = retrato();
     setTimeout(function () {
       var alvo = el(FOCO[o.foco] || 'axf-titulo');

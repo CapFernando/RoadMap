@@ -28,6 +28,13 @@
      entregar       saveStatus/updateStatus para a area ou o PM/PO (dev.html)
      casoUso        cuMarcar (admin.html): enviado, aprovado ou ajustes do
                     caso de uso de "Em aprovacao de requisitos"
+     mesclar        mescConfirmar (admin.html): a outra entra nesta e sai do
+                    fluxo, sem ser apagada; o patch e da absorvida
+     separar        mescDesfazer (admin.html)
+     pegar, subtarefas, salvarEntrega, referencias, grill, vincular, anexar
+     e mensagem     os gestos do painel do dev (dev.html) e a escrita da
+                    conversa (mensageria.html) — ver "OS GESTOS DO PAINEL DO
+                    DEV", logo antes de REGRAS
 
    As regras de verdade sao dos modulos (`pausa.js`, `homologacao.js`,
    `devolucao.js`, `sprint.js`, `prevoo.js`, `vinculo.js`): aqui so se escolhe
@@ -440,7 +447,349 @@
     return { ok: true, patch: { caso_uso: base }, msg: MSG[st] };
   }
 
+  /* MESCLAR — COPIA DE `mescConfirmar`/`mescDesfazer` (admin.html). Duas
+     pessoas pediram a mesma coisa: a outra demanda entra nesta e sai do fluxo,
+     SEM ser apagada (quem pediu, quando e os anexos seguem dentro da
+     principal). O patch e da ABSORVIDA, e nao desta: `{ id, patch }`. As
+     mesmas exclusoes da busca do admin (`mescBuscar`): nem a propria, nem a ja
+     mesclada, nem a que ja absorveu outras. */
+  function mescladasDe(lista, id) {
+    return (lista || []).filter(function (x) { return x && txt(x.mesclado_em) === txt(id) && txt(id); });
+  }
+  function podeAbsorver(principal, x, lista) {
+    return !!x && x.id !== principal.id && !txt(x.mesclado_em) && !mescladasDe(lista, x.id).length;
+  }
+  /** As candidatas a entrar nesta, pelo termo (`mescBuscar`: codigo ou titulo, sem acento e sem caixa). */
+  function candidatasMescla(principal, termo, lista) {
+    var n = function (s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); };
+    var t = n(txt(termo));
+    if (t.length < 2) return [];
+    return (lista || []).filter(function (x) { return podeAbsorver(principal, x, lista); })
+      .filter(function (x) { return n(x.codigo).indexOf(t) >= 0 || n(x.titulo).indexOf(t) >= 0; });
+  }
+  function mesclar(m, a, c) {
+    if (ehDev(c)) return falha('Mesclar é do PM/PO ou do analista de requisitos.');
+    if (!m || !m.id) return falha('Salve a demanda antes de mesclar.');
+    if (txt(m.mesclado_em)) return falha('Esta demanda já foi mesclada em outra: abra a principal.');
+    var lista = (c && c.lista) || [];
+    var f = (a || {}).filha;
+    if (!f) return falha('Escolha a demanda que será absorvida.', 'filha');
+    if (!podeAbsorver(m, f, lista)) {
+      return falha(f.id === m.id ? 'Uma demanda não se mescla nela mesma.'
+        : txt(f.mesclado_em) ? '"' + (f.codigo || f.titulo) + '" já está mesclada em outra.'
+        : '"' + (f.codigo || f.titulo) + '" já absorveu outras demandas: mescle as dela antes.', 'filha');
+    }
+    return { ok: true, id: f.id, msg: (f.codigo || '') + ' mesclada em ' + (m.codigo || '') + '.', patch: {
+      mesclado_em: m.id, mesclado_data: c.agora, mesclado_por: txt(c.quem) || 'admin', oculto: true } };
+  }
+  function separar(m, a, c) {
+    if (ehDev(c)) return falha('Separar é do PM/PO ou do analista de requisitos.');
+    if (!m || !txt(m.mesclado_em)) return falha('Esta demanda não está mesclada.');
+    return { ok: true, id: m.id, msg: 'Demanda separada e de volta ao fluxo.', patch: {
+      mesclado_em: '', mesclado_data: '', mesclado_por: '', oculto: false } };
+  }
+
+  // ══ OS GESTOS DO PAINEL DO DEV E A CONVERSA (puras) ════════════════════
+  /* O QUE SO EXISTIA NO dev.html E NA mensageria.html. Cada regra e copia da
+     funcao de la, devolvendo o patch em vez de mexer no `state`:
+
+       pegar          o arraste do card da fila para Em andamento: o
+                      `updateStatus` com `assumiu` (e5cace1). A marca do card e
+                      o filtro "Mostrar" sao `donoDoCard` e `mostraNoPainel`,
+                      copias do `renderCard` e do `getFiltered` (82bff39)
+       subtarefas     `msSubParaGravar` e os editores `msSub*` do modal
+       salvarEntrega  `salvarEntrega`: horas, o que foi implementado e o resumo
+                      corrigidos com a demanda na Validacao do PM/PO
+       referencias    `ghLinkColeta` (links-github.js) no modal do dev
+       grill          `msGrillResponde`: entendi -> Planning, duvida -> Em
+                      aprovacao de requisitos, com os pontos escritos
+       vincular       `saveNewDep`: a quebra (vinculada, nao trava) ou a
+                      dependencia (trava), nascendo no Backlog fora da sprint
+       anexar         `msAddFiles` + o `anexos` do patch do modal
+       mensagem       o envio da mensageria.html (`mensagem-nova` do Worker)
+
+     `c` ganha `D` (a base), `nomes` (os nomes do dev logado) e os modulos
+     PIPELINES, ETAPA, DEVNOME, GRILL, COLABORADORES e GHLINK ({ erro,
+     normaliza } de links-github.js) — no Node, por `c.R`. */
+
+  function etapaGravada(m, c) { var E = mod(c, 'ETAPA'); return E ? E.gravada(m) : etapa(m); }
+  function ehMeu(m, c) {
+    var DN = mod(c, 'DEVNOME');
+    var nomes = (c && Array.isArray(c.nomes) && c.nomes.length) ? c.nomes : [txt((c || {}).quem)];
+    return nomes.some(function (n) { return txt(n) && (DN ? DN.eDe(m, n) : txt((m || {}).dev) === txt(n)); });
+  }
+
+  /* COPIA DE `doMeuTime` (dev.html, 30/10/2026): a fila e a vitrine sao da
+     mesma frente de quem olha — Dados/BI de um lado, o resto do outro. */
+  function doMeuTime(m, c) {
+    var PI = mod(c, 'PIPELINES');
+    var eu = txt((c || {}).quem);
+    if (!PI || !eu) return true;
+    var perfis = ((c || {}).D || {}).devs_perfil;
+    var DADOS = PI.FRENTE_DADOS;
+    var souDados = PI.doDev(eu, perfis) === DADOS;
+    var demDados = !!(m && m.dados_bi) ||
+      (!(m && m.sales_ops) && PI.daDemanda(m, perfis) === DADOS);
+    return souDados ? demDados : !demDados;
+  }
+
+  /** O `doTime` do `getFiltered`: na sprint em curso sem dono, ou na vitrine. */
+  function daFilaDoTime(m, c) {
+    var SP = mod(c, 'SPRINTPO');
+    var D = (c || {}).D || {};
+    return !!(SP && (SP.naPoolDoTime(D, m) || SP.naVitrine(m, etapaGravada(m, c)))) && doMeuTime(m, c);
+  }
+
+  /* DE QUEM E O CARD, para o dev (`renderCard`, dev.html): 'meu' ("No seu
+     nome"), 'outro' ("Do time · com Fulano"), 'fila' ("Fila do time · sem
+     dono") ou '' — o card que o painel do dev nao mostra. */
+  function donoDoCard(m, c) {
+    if (!m) return '';
+    if (ehMeu(m, c)) return 'meu';
+    if (!daFilaDoTime(m, c)) return '';
+    return txt(m.dev) ? 'outro' : 'fila';
+  }
+
+  /* O RECORTE DO PAINEL DO DEV E O FILTRO "MOSTRAR" (`getFiltered`): a
+     montagem que o PO nao iniciou fica escondida; aparece o que esta no nome
+     dele e a fila do time. `filtro`: '' (no meu nome + fila), 'meu', 'fila'. */
+  function mostraNoPainel(m, c, filtro) {
+    if (!m || txt(m.mesclado_em)) return false;
+    var SP = mod(c, 'SPRINTPO');
+    if (SP && SP.escondidaDoTime((c || {}).D || {}, m)) return false;
+    if (etapaGravada(m, c) === 'negada') return false;
+    var d = donoDoCard(m, c);
+    if (!d) return false;
+    if (filtro === 'meu') return d === 'meu';
+    if (filtro === 'fila') return d !== 'meu';
+    return true;
+  }
+
+  /* A DEMANDA DE OUTRA PESSOA ABRE EM LEITURA (`msModoLeitura`, dev.html): o
+     dev mexe no que esta no nome dele ou no que ainda nao tem dono. */
+  function soLeitura(m, c) {
+    if (!ehDev(c) || !txt((m || {}).dev) || ehMeu(m, c)) return null;
+    return falha('Demanda de ' + txt(m.dev) + ' — aberta para leitura.');
+  }
+
+  /** PEGAR DA FILA: comecar a demanda sem dono, com o nome de quem pegou. */
+  function pegar(m, a, c) {
+    if (!ehDev(c)) return falha('Pegar da fila é do dev; o PM/PO escolhe o responsável no formulário.');
+    if (txt(m.dev)) return falha('"' + (m.codigo || m.titulo) + '" já está com ' + txt(m.dev) + '.');
+    if (ETAPAS_DO_DEV.concat(['concluido', 'negada']).indexOf(etapa(m)) >= 0) {
+      return falha('Só se pega da fila o que ainda não começou.');
+    }
+    return mover(m, { destino: 'em_andamento' }, c);
+  }
+
+  /* AS SUBTAREFAS EM EDICAO — COPIA DOS `msSub*` (dev.html), devolvendo a lista
+     nova em vez de mexer em `_msSubs`. `hoje` e o `hojeISOdev` (dia local). */
+  var MAX_SUB = 140;
+  var SUB = {
+    adiciona: function (l) { return copia(l || []).concat([{ titulo: '', data: '', feita: false }]); },
+    marca: function (l, i, valor, hoje) {
+      var x = copia(l || []);
+      if (!x[i]) return x;
+      x[i].feita = !!valor;
+      if (valor && !x[i].data) x[i].data = hoje;
+      return x;
+    },
+    texto: function (l, i, valor) {
+      var x = copia(l || []);
+      if (x[i]) x[i].titulo = String(valor || '').slice(0, MAX_SUB);
+      return x;
+    },
+    data: function (l, i, valor, qual) {
+      var x = copia(l || []);
+      if (!x[i]) return x;
+      var d = String(valor || '').slice(0, 10);
+      if (qual === 'inicio') x[i].inicio = d;
+      else { x[i].fim = d; x[i].data = d; }
+      return x;
+    },
+    horas: function (l, i, v) {
+      var x = copia(l || []);
+      if (x[i]) x[i].horas = String(v);
+      return x;
+    },
+    remove: function (l, i) { var x = copia(l || []); x.splice(i, 1); return x; },
+    /** `msSubParaGravar`: sem as vazias, no maximo 30, horas so com numero. */
+    paraGravar: function (l) {
+      return (l || [])
+        .filter(function (x) { return String((x || {}).titulo || '').trim(); })
+        .slice(0, 30)
+        .map(function (x) {
+          var o = { titulo: x.titulo.trim(), data: x.data || '', feita: !!x.feita };
+          var h = Number(x.horas);
+          if (String(x.horas || '').trim() !== '' && isFinite(h) && h >= 0) o.horas = h;
+          return o;
+        });
+    }
+  };
+
+  /** SALVAR AS SUBTAREFAS. `a` = { lista } (a lista em edicao). */
+  function subtarefas(m, a, c) {
+    if (!ehDev(c)) return falha('As subtarefas são do dev: é ele quem quebra a demanda em passos.');
+    var l = soLeitura(m, c);
+    if (l) return l;
+    if (['validacao', 'concluido', 'negada'].indexOf(etapa(m)) >= 0) return falha('Esta demanda está com o PM/PO e não pode ser alterada aqui.');
+    return { ok: true, patch: { subtarefas: SUB.paraGravar((a || {}).lista || []) }, msg: 'Subtarefas salvas.' };
+  }
+
+  /** CORRIGIR A ENTREGA (`salvarEntrega`): sem mexer na etapa. */
+  function salvarEntrega(m, a, c) {
+    a = a || {};
+    if (etapa(m) === 'concluido') return falha('Demanda concluída e validada: não há mais o que alterar.');
+    var l = soLeitura(m, c);
+    if (l) return l;
+    var horas = parseFloat(a.horas);
+    if (!horas || horas <= 0) return falha('Informe as horas de desenvolvimento.', 'horas');
+    var impl = txt(a.implementacao);
+    if (!impl) return falha('Descreva o que foi implementado — o PM/PO valida por este texto.', 'implementacao');
+    var resumo = txt(a.resumo);
+    if (!resumo) return falha('Escreva o resumo da entrega — é ele que vai para o relatório e a apresentação.', 'resumo');
+    return { ok: true, msg: 'Texto da entrega salvo. A demanda segue com o PM/PO.',
+             patch: { horas_realizadas: horas, implementacao: impl, resumo_entrega: resumo } };
+  }
+
+  /* AS REFERENCIAS NO GITHUB (`ghLinkColeta`): o numero com o repositorio
+     vira a URL; a recusa e a frase do `ghLinkErro`. Os tres campos vao sempre,
+     como no modal do dev. `a` = { repo, issue, pr, milestone }. */
+  function referencias(m, a, c) {
+    a = a || {};
+    var GH = mod(c, 'GHLINK') || (raiz.ghLinkErro ? { erro: raiz.ghLinkErro, normaliza: raiz.ghLinkNormaliza } : null);
+    if (!GH) return falha('links-github.js não carregado');
+    if (txt(c.papel) === 'consulta') return falha('Seu perfil é só de leitura.');
+    if (etapa(m) === 'concluido' && ehDev(c)) return falha('Concluída e validada: não há mais o que alterar por aqui.');
+    var l = soLeitura(m, c);
+    if (l) return l;
+    var repo = txt(a.repo);
+    var p = {};
+    var tipos = ['issue', 'pr', 'milestone'];
+    for (var i = 0; i < tipos.length; i++) {
+      var t = tipos[i];
+      var msg = GH.erro(t, a[t], repo);
+      if (msg) return falha(msg, /Escolha o repositório/.test(msg) ? 'repo' : t);
+      p['link_' + t] = GH.normaliza(t, a[t], repo);
+    }
+    return { ok: true, patch: p, msg: 'Referências do GitHub salvas.' };
+  }
+
+  /** O PARECER DO GRILL (`msGrillResponde`). `a` = { veredito: ok|duvida, pontos (texto, uma por linha) }. */
+  function grill(m, a, c) {
+    a = a || {};
+    var G = mod(c, 'GRILL');
+    if (!G) return falha('grill.js não carregado');
+    if (!ehDev(c)) return falha('O parecer do Grill é do dev: o PM/PO pede, o time responde.');
+    var l = soLeitura(m, c);
+    if (l) return l;
+    if (G.estado(m) !== 'pendente') return falha('Esta demanda não espera parecer do Grill.');
+    /* MAIS ESTRITO QUE O dev.html, de proposito: la o modal aceita responder o
+       Grill de uma demanda concluida (ha marcas antigas pendentes na base), e o
+       veredito a levaria de volta ao Planning. */
+    if (encerrada(m)) return falha('Concluída ou negada não volta ao planejamento pelo Grill.');
+    var veredito = txt(a.veredito);
+    var pontos = String(a.pontos || '').split('\n').map(function (t) { return t.trim(); }).filter(Boolean);
+    if (veredito === 'duvida' && !pontos.length) return falha('Escreva pelo menos uma dúvida — é ela que vai com a demanda.', 'pontos');
+    var alvo = { grill: copia(m.grill || {}) };
+    var destino = G.responde(alvo, veredito, pontos, txt(c.quem));
+    if (!destino) return falha('Não foi possível registrar o parecer.');
+    return { ok: true, patch: { grill: alvo.grill, status_planejamento: destino, status: STATUS_DEV[destino] || 'recebida' },
+             msg: veredito === 'ok' ? 'Parecer registrado — a demanda seguiu para o Planning.'
+                : pontos.length + (pontos.length === 1 ? ' dúvida enviada' : ' dúvidas enviadas') + ' — a demanda voltou para Em aprovação de requisitos.' };
+  }
+
+  /** Os nomes do seletor de responsavel (`getDevList`, dev.html). */
+  function devsParaVincular(D) {
+    var corta = function (s) { return s ? String(s).split(/[\/,]/).map(function (x) { return x.trim(); }).filter(Boolean) : []; };
+    var de = [];
+    ((D || {}).desenvolvedores || []).forEach(function (d) { de = de.concat(corta(d)); });
+    ((D || {}).melhorias || []).forEach(function (m) { de = de.concat(corta((m || {}).dev)); });
+    return de.filter(function (x, i) { return de.indexOf(x) === i; }).sort();
+  }
+
+  /* VINCULAR (`saveNewDep`): a demanda nova pendurada nesta. Devolve `novo`
+     (a demanda inteira, como o painel grava) e `id`. `a` = { tipo: parte|
+     dependencia, titulo, dev, entrega, descricao, id }. */
+  function vincular(m, a, c) {
+    a = a || {};
+    if (!ehDev(c)) return falha('Vincular por aqui é o gesto do painel do dev; o PM/PO vincula no editor.');
+    if (etapa(m) === 'concluido') return falha('Concluída não recebe vínculo novo: o total dela já entrou no relatório.');
+    var titulo = txt(a.titulo);
+    if (!titulo) return falha('Informe o que está aguardando.', 'titulo');
+    if (!a.dev) return falha('Selecione o responsável.', 'dev');
+    var sol = txt(c.quem) || txt(m.solicitante);
+    var CO = mod(c, 'COLABORADORES');
+    var novo = {
+      id: a.id || c.id, titulo: titulo, descricao: txt(a.descricao), dev: a.dev,
+      tema_id: m.tema_id, tipo: m.tipo || '', impacto: m.impacto || '', urgencia: m.urgencia || '',
+      entrega: a.entrega || '', parent_id: m.id, is_dependency: a.tipo === 'dependencia',
+      horas_realizadas: 0, criado_em: c.agora, solicitante: sol, solicitante_email: CO ? CO.emailPara(sol, null) : ''
+    };
+    var SP = mod(c, 'SPRINTPO');
+    if (SP) SP.nasceForaDaSprint(novo);
+    return { ok: true, id: novo.id, novo: novo, patch: novo,
+             msg: (a.tipo === 'dependencia' ? 'Dependência aberta' : 'Demanda vinculada') + ' a ' + (m.codigo || 'esta') + ' — nasce no Backlog, fora da sprint.' };
+  }
+
+  /** ANEXAR: os enviados pelo `anexo-subir` entram depois dos que ja estao. `a` = { novos }. */
+  function anexar(m, a, c) {
+    var novos = ((a || {}).novos || []).filter(Boolean);
+    if (!novos.length) return falha('Escolha o arquivo.');
+    if (txt(c.papel) === 'consulta') return falha('Seu perfil é só de leitura.');
+    if (ehDev(c) && etapa(m) === 'concluido') return falha('Concluída e validada: não há mais o que alterar por aqui.');
+    var l = soLeitura(m, c);
+    if (l) return l;
+    var antes = Array.isArray(m.anexos) ? copia(m.anexos) : [];
+    return { ok: true, msg: novos.length === 1 ? 'Anexo incluído.' : novos.length + ' anexos incluídos.', patch: {
+      anexos: antes.concat(novos.map(function (x) { return { nome: x.nome, tipo: x.tipo, tamanho: x.tamanho, chave: x.chave }; })) } };
+  }
+
+  /* A MENSAGEM DA CONVERSA (mensageria.html). Quem e quando vem do servidor; o
+     corpo e o do envio de la. Com anexo, o nome dele fecha o texto: o arquivo
+     vai para os anexos da demanda e a conversa diz o que foi mandado. */
+  function mensagem(m, a, c) {
+    a = a || {};
+    if (!m || !m.id) return falha('Demanda sem id: recarregue a tela.');
+    var nomes = (a.anexos || []).map(function (x) { return txt((x || {}).nome); }).filter(Boolean);
+    var texto = txt(a.texto);
+    if (!texto && !nomes.length) return falha('Escreva a mensagem antes de enviar.', 'texto');
+    if (nomes.length) texto = (texto ? texto + '\n\n' : '') + (nomes.length === 1 ? 'Anexo: ' : 'Anexos: ') + nomes.join(', ');
+    return { ok: true, corpo: { melhoria_id: m.id, texto: texto } };
+  }
+
+  /* AS PESSOAS DO `@` (`carrega`, mensageria.html): os devs cadastrados mais os
+     que aparecem nas demandas. */
+  function pessoasDaConversa(D) {
+    var nomes = {};
+    ((D || {}).desenvolvedores || []).forEach(function (x) { nomes[String(x || '').trim()] = 1; });
+    ((D || {}).melhorias || []).forEach(function (m) {
+      String((m || {}).dev || '').split(/[,;\/]/).forEach(function (x) { var t = x.trim(); if (t) nomes[t] = 1; });
+    });
+    return Object.keys(nomes).filter(Boolean).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+  }
+
+  /* A CAIXA DE SUGESTOES DO `@` (`abreSugestoes` e `escolhe`, mensageria.html):
+     o `@` no comeco ou depois de espaco; ate 8 nomes que contem o que se digitou. */
+  function sugestoesArroba(texto, pos, pessoas) {
+    var antes = String(texto || '').slice(0, pos);
+    var mm = antes.match(/(^|\s)@([\p{L}.'-]*)$/u);
+    if (!mm) return { inicio: -1, nomes: [] };
+    var q = mm[2].toLowerCase();
+    var nomes = (pessoas || []).filter(function (p) { return !q || p.toLowerCase().includes(q); }).slice(0, 8);
+    return nomes.length ? { inicio: pos - mm[2].length - 1, nomes: nomes } : { inicio: -1, nomes: [] };
+  }
+  function escolheArroba(texto, inicio, fimCursor, nome) {
+    var t = String(texto || '');
+    var depois = t.slice(fimCursor);
+    return { texto: t.slice(0, inicio) + '@' + nome + ' ' + depois, cursor: inicio + nome.length + 2 };
+  }
+
+  var REGRAS_DO_DEV = { pegar: pegar, subtarefas: subtarefas, salvarEntrega: salvarEntrega, referencias: referencias,
+                        grill: grill, vincular: vincular, anexar: anexar, mensagem: mensagem };
+
   var REGRAS = {
+    mesclar: mesclar, separar: separar,
     casoUso: casoUso,
     mover: mover, validar: validar, devolver: devolver, homologar: homologar, replanejar: replanejar,
     pausar: pausar, pedirPausa: pedirPausa, desistirPausa: desistirPausa, aprovarPausa: aprovarPausa,
@@ -449,8 +798,13 @@
   var api = {
     REGRAS: REGRAS, gestoSemDev: gestoSemDev, marcaConclusao: marcaConclusao, destinosDeEntrega: destinosDeEntrega,
     tiraInicioDoBacklog: tiraInicioDoBacklog, assumeAoComecar: assumeAoComecar,
+    candidatasMescla: candidatasMescla, mescladasDe: mescladasDe,
     STATUS_ADMIN: STATUS_ADMIN, STATUS_DEV: STATUS_DEV, ETAPAS_DO_DEV: ETAPAS_DO_DEV, rotulo: rotulo
   };
+  Object.assign(REGRAS, REGRAS_DO_DEV);
+  Object.assign(api, { SUB: SUB, donoDoCard: donoDoCard, mostraNoPainel: mostraNoPainel, doMeuTime: doMeuTime,
+                       devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
+                       sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
   // ══ INTERFACE ═════════════════════════════════════════════════════════
@@ -498,7 +852,13 @@
         var id = 'axc-' + f.nome;
         var v = f.valor == null ? '' : String(f.valor);
         var ctl;
-        if (f.tipo === 'area') ctl = '<textarea class="in" id="' + id + '" rows="' + (f.linhas || 4) + '" placeholder="' + H.esc(f.dica || '') + '">' + H.esc(v) + '</textarea>';
+        var max = f.max ? ' maxlength="' + f.max + '"' : '';
+        if (f.tipo === 'area') ctl = '<textarea class="in" id="' + id + '" rows="' + (f.linhas || 4) + '"' + max + ' placeholder="' + H.esc(f.dica || '') + '">' + H.esc(v) + '</textarea>';
+        else if (f.tipo === 'lista') {
+          ctl = '<select class="in" id="' + id + '">' + (f.opcoes || []).map(function (op) {
+            return '<option value="' + H.esc(op.v) + '"' + (v === op.v ? ' selected' : '') + '>' + H.esc(op.r) + '</option>';
+          }).join('') + '</select>';
+        }
         else if (f.tipo === 'opcoes') {
           ctl = '<div style="display:flex;flex-direction:column;gap:8px" role="radiogroup">' + (f.opcoes || []).map(function (op, j) {
             return '<label class="axc-op"><input type="radio" name="' + id + '" value="' + H.esc(op.v) + '"' + ((v ? v === op.v : j === 0) ? ' checked' : '') + '>' +
@@ -506,7 +866,7 @@
           }).join('') + '</div>';
         } else {
           var tp = f.tipo === 'data' ? 'date' : f.tipo === 'numero' ? 'number' : 'text';
-          ctl = '<input class="in" id="' + id + '" type="' + tp + '"' + (tp === 'number' ? ' min="0" step="0.5" inputmode="decimal"' : '') +
+          ctl = '<input class="in" id="' + id + '" type="' + tp + '"' + max + (tp === 'number' ? ' min="0" step="' + (f.passo || '0.5') + '" inputmode="decimal"' : '') +
             ' value="' + H.esc(v) + '" placeholder="' + H.esc(f.dica || '') + '" autocomplete="off">';
         }
         return '<div class="axc-f">' + (f.rotulo ? (f.tipo === 'opcoes' ? '<span style="font-size:12.5px;font-weight:700;color:var(--tx2)">' + H.esc(f.rotulo) + '</span>' : '<label for="' + id + '">' + H.esc(f.rotulo) + '</label>') : '') +
@@ -568,7 +928,8 @@
   function contexto() {
     var D = AX.APP.D || {};
     return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(), dono: H.donoDaSprint(),
-             lista: D.melhorias || [], aprovadores: Array.isArray(D.spike_aprovadores) ? D.spike_aprovadores : null };
+             lista: D.melhorias || [], aprovadores: Array.isArray(D.spike_aprovadores) ? D.spike_aprovadores : null,
+             D: D, nomes: H.meusNomes() };
   }
   function porId(id) { return ((AX.APP.D || {}).melhorias || []).find(function (x) { return x && x.id === id; }) || null; }
 
@@ -641,6 +1002,8 @@
       if (col !== 'negada') poe('negar', 'Negar', 'ban', 'btn perigo');
     } else if (papel === 'dev' && minha(m)) {
       if (col !== 'concluido') poe('editar', 'Editar', 'edit');
+      // Com o PM/PO, o dev ainda corrige o proprio texto (`btn-save-entrega`, dev.html).
+      if (col === 'validacao') poe('salvarEntrega', 'Corrigir entrega', 'edit', 'btn', 'Horas, o que foi implementado e o resumo — sem mexer na etapa');
       if (col === 'validacao_area' && !(HO && HO.registro(m))) poe('homologar', 'Registrar homologação', 'check');
       if (sit === 'aguardando') { var ped = P.pedido(m); if (ped && H.meusNomes().concat([quem()]).indexOf(ped.por) >= 0) poe('desistirPausa', 'Cancelar pedido de pausa', 'x'); }
       else if (sit === 'pausada') poe('retomar', 'Retomar', 'refresh');
@@ -837,6 +1200,45 @@
       if (v) return aplicar('casoUso', m, Object.assign({}, fixo, v));
     },
 
+    /* MESCLAR (o "Mesclar outra demanda nesta" do editor do admin). A busca e a
+       do `mescBuscar`; com mais de uma candidata a caixa lista as primeiras e
+       pede o codigo, em vez de escolher por conta propria. */
+    mesclar: async function (m) {
+      var c = contexto();
+      var escolhida = null;
+      var acha = function (termo) {
+        var cs = candidatasMescla(m, termo, c.lista);
+        var cod = String(termo || '').trim().toUpperCase().replace(/-/g, '');
+        var exata = cs.filter(function (x) { return String(x.codigo || '').toUpperCase().replace(/-/g, '') === cod; });
+        return exata.length === 1 ? exata : cs;
+      };
+      var v = await caixa({ titulo: 'Mesclar outra demanda em ' + cod(m),
+        texto: 'A demanda escolhida será absorvida por "' + (m.titulo || '') + '". Ela sai do Quadro, do Planejamento e do painel do dev — mas não é apagada: os dados continuam acessíveis por dentro desta, e dá para separar depois.',
+        campos: [{ nome: 'busca', rotulo: 'Código ou título da demanda a absorver', dica: 'Ex.: AX-042 ou cobrança', obrig: true,
+                   nota: 'Demandas já mescladas, ou que já absorveram outras, não aparecem.' }],
+        ok: 'Continuar', valida: function (x) {
+          var cs = acha(x.busca);
+          if (cs.length === 1) { escolhida = cs[0]; return ''; }
+          if (!cs.length) return { erro: 'Nada encontrado com "' + x.busca + '".', campo: 'busca' };
+          return { erro: 'Achei ' + cs.length + ': ' + cs.slice(0, 5).map(function (y) { return (y.codigo || '—') + ' ' + y.titulo; }).join(' · ') +
+            (cs.length > 5 ? ' …' : '') + '. Digite o código da que quer absorver.', campo: 'busca' };
+        } });
+      if (!v || !escolhida) return;
+      var r = REGRAS.mesclar(m, { filha: escolhida }, contexto());
+      if (!r.ok) { recusa(m, r); return; }
+      var ok = await caixa({ titulo: 'Mesclar demandas',
+        texto: '"' + escolhida.titulo + '" entra em "' + m.titulo + '" e sai do Quadro, do Planejamento e do painel do dev. Ela NÃO é apagada: os dados seguem acessíveis por dentro da principal, e dá para separar depois.',
+        ok: 'Mesclar' });
+      if (ok) return grava(escolhida, r);
+    },
+
+    separar: async function (m) {
+      var r = REGRAS.separar(m, {}, contexto());
+      if (!r.ok) { recusa(m, r); return; }
+      var ok = await caixa({ titulo: 'Separar demanda', texto: '"' + (m.titulo || '') + '" volta para o fluxo no estágio em que estava.', ok: 'Separar' });
+      if (ok) return grava(m, r);
+    },
+
     entregar: async function (m, el) {
       var c = contexto();
       var pedido = el && el.getAttribute('data-axa-destino');
@@ -863,6 +1265,197 @@
       if (v) return aplicar('entregar', m, Object.assign({ destino: fixo.destino }, v));
     }
   };
+
+  // ── Os gestos do painel do dev e a conversa ──────────────────────────
+  /** O id de demanda nova (`uid`, dev.html). */
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+  function patchDe(id, p) { var o = {}; o[id] = p; return o; }
+
+  /* O ENVIO DO ANEXO (`subirAnexo` + `msAddFiles`, dev.html): o binario vai ao
+     R2 pelo Worker e a demanda guarda a referencia. Os formatos sao os do
+     ANEXOTIPO e o teto e 1,5 MB (`MS_MAX`), conferidos ANTES de subir. */
+  var ANEXO_MAX = 1.5 * 1024 * 1024;
+  function subirAnexo(f) {
+    var T = raiz.ANEXOTIPO;
+    var nome = (f && f.name) || '';
+    if (!(T && T.permitido(nome))) return Promise.reject(new Error(T ? T.recusa(nome) : '"' + nome + '" não foi anexado.'));
+    if (f.size > ANEXO_MAX) return Promise.reject(new Error('"' + nome + '" excede 1,5 MB e não foi anexado.'));
+    return new Promise(function (ok, nao) {
+      var rd = new FileReader();
+      rd.onload = function () {
+        H.api('anexo-subir', { nome: nome, dados: rd.result })
+          .then(function (j) { ok({ nome: j.nome, tipo: j.tipo, tamanho: j.tamanho, chave: j.chave }); }, nao);
+      };
+      rd.onerror = function () { nao(new Error('Não consegui ler "' + nome + '" do disco.')); };
+      rd.readAsDataURL(f);
+    });
+  }
+
+  /** Sobe os arquivos e grava a lista nova de anexos da demanda. */
+  async function anexarArquivos(m, arquivos) {
+    var l = [].slice.call(arquivos || []);
+    if (!l.length) return null;
+    var pre = REGRAS.anexar(m, { novos: [{ nome: '-' }] }, contexto());
+    if (!pre.ok) { recusa(m, pre); return pre; }
+    var novos = [];
+    for (var i = 0; i < l.length; i++) {
+      try { H.toast('Enviando "' + l[i].name + '"…'); novos.push(await subirAnexo(l[i])); }
+      catch (e) { H.toast('Anexo "' + l[i].name + '" não subiu: ' + (e.message || e), 'erro'); }
+    }
+    return novos.length ? aplicar('anexar', m, { novos: novos }) : null;
+  }
+
+  /* A MENSAGEM DA CONVERSA: o anexo entra primeiro na demanda (o patch do
+     `anexar`), e so entao a mensagem vai pela rota `mensagem-nova`. A tela le
+     de novo do servidor em vez de acrescentar o que se digitou — a mesma razao
+     da mensageria.html: o registro mostrado e o gravado. */
+  async function enviarMensagem(m, texto, anexos) {
+    var r = REGRAS.mensagem(m, { texto: texto, anexos: anexos }, contexto());
+    if (!r.ok) return r;
+    if ((anexos || []).length) {
+      var ra = REGRAS.anexar(m, { novos: anexos }, contexto());
+      if (!ra.ok) return ra;
+      var g = await H.gravar(patchDe(m.id, ra.patch), { ok: false });
+      if (!g || !g.ok) return { ok: false, erro: 'O anexo não entrou na demanda, e a mensagem não foi enviada.' };
+    }
+    try { await H.api('mensagem-nova', r.corpo); }
+    catch (e) { return { ok: false, erro: e.status === 401 ? 'Sessão expirada — saia e entre de novo.' : (e.message || String(e)) }; }
+    try {
+      AX.APP.D = await H.hidrata(await H.api('dados'));
+      AX.APP.carregadoEm = Date.now();
+    } catch (_) { /* a mensagem foi; a releitura volta no proximo foco */ }
+    AX.desenhar(true);
+    return { ok: true };
+  }
+
+  function curtoGh(m, t) {
+    var b = String(m['link_' + t] || '').trim();
+    if (!raiz.ghLinkCurto) return b;
+    return t === 'pr' ? b.split(/\s+/).filter(Boolean).map(function (u) { return raiz.ghLinkCurto('pr', u); }).join(', ') : raiz.ghLinkCurto(t, b);
+  }
+
+  var GESTOS_DO_DEV = {
+    pegar: async function (m) {
+      var r = REGRAS.pegar(m, {}, contexto());
+      if (!r.ok) { recusa(m, r); return; }
+      var v = await caixa({ titulo: 'Pegar ' + cod(m) + ' da fila',
+        texto: '"' + (m.titulo || '') + '" vai para Em andamento no seu nome. Ela está na fila do time, sem dono: combine com o time antes de começar, para duas pessoas não pegarem a mesma.',
+        ok: 'Pegar e começar' });
+      if (v) return grava(m, r);
+    },
+
+    salvarEntrega: async function (m) {
+      var fixo = { naCaixa: { horas: 1 } };
+      var v = await caixa({ titulo: 'Corrigir a entrega de ' + cod(m),
+        texto: 'A demanda segue com o PM/PO: a etapa não muda. Muda o que ele lê para validar.',
+        campos: [{ nome: 'horas', rotulo: 'Horas de desenvolvimento', tipo: 'numero', passo: '0.25', valor: m.horas_realizadas || '', obrig: true },
+                 { nome: 'resumo', rotulo: 'Resumo da entrega', tipo: 'area', linhas: 3, max: 300, valor: m.resumo_entrega || '',
+                   dica: 'Uma frase do que mudou: vai para o relatório e a apresentação.', obrig: true },
+                 { nome: 'implementacao', rotulo: 'O que foi implementado', tipo: 'area', valor: m.implementacao || '',
+                   dica: 'Escreva para quem não acompanhou o desenvolvimento.', obrig: true }],
+        ok: 'Salvar texto da entrega', valida: validaCom('salvarEntrega', m, fixo) });
+      if (v) return aplicar('salvarEntrega', m, v);
+    },
+
+    referencias: async function (m) {
+      var refs = raiz.ghLinkRefs ? raiz.ghLinkRefs(m) : [];
+      var repo = (refs.find(function (x) { return x.repo; }) || {}).repo || '';
+      var repos = raiz.ghLinkRepos ? raiz.ghLinkRepos((AX.APP.D || {}).melhorias || []) : [];
+      if (repo && repos.indexOf(repo) < 0) repos.push(repo);
+      var v = await caixa({ titulo: 'Referências no GitHub de ' + cod(m),
+        texto: 'Escolha o repositório e use só o número, ou cole o link completo. Mais de um PR: 712, 715.',
+        campos: [{ nome: 'repo', rotulo: 'Repositório', tipo: 'lista', valor: repo,
+                   opcoes: [{ v: '', r: '— escolha o repositório —' }].concat(repos.map(function (r) { return { v: r, r: r }; })) },
+                 { nome: 'issue', rotulo: 'Issue', valor: curtoGh(m, 'issue'), dica: 'Ex.: 683' },
+                 { nome: 'pr', rotulo: 'Pull request', valor: curtoGh(m, 'pr'), dica: 'Ex.: 712, 715' },
+                 { nome: 'milestone', rotulo: 'Milestone', valor: curtoGh(m, 'milestone'), dica: 'Ex.: 4' }],
+        ok: 'Salvar referências', valida: validaCom('referencias', m) });
+      if (v) return aplicar('referencias', m, v);
+    },
+
+    /* O GRILL: as duas saidas sao o destino (`msGrillResponde`). O texto vem
+       da caixa do Item (#it-grill-pontos), uma duvida por linha. */
+    grillOk: async function (m) {
+      var t = document.getElementById('it-grill-pontos');
+      var pontos = t ? t.value : '';
+      var n = pontos.split('\n').filter(function (x) { return x.trim(); }).length;
+      if (n) {
+        var segue = await caixa({ titulo: 'Seguir para o Planning?',
+          texto: 'Você escreveu ' + n + (n === 1 ? ' ponto' : ' pontos') + ', mas "Entendi" manda a demanda para o Planning sem eles. Para enviar suas dúvidas, use "Tenho dúvidas".',
+          ok: 'Seguir assim' });
+        if (!segue) return;
+      }
+      return aplicar('grill', m, { veredito: 'ok', pontos: pontos });
+    },
+    grillDuvida: function (m) {
+      var t = document.getElementById('it-grill-pontos');
+      var r = REGRAS.grill(m, { veredito: 'duvida', pontos: t ? t.value : '' }, contexto());
+      if (!r.ok) { H.toast(r.erro, 'erro'); if (t && r.campo === 'pontos') t.focus(); return; }
+      return grava(m, r);
+    },
+
+    vincular: async function (m) {
+      var devs = devsParaVincular(AX.APP.D || {});
+      var fixo = { id: uid(), naCaixa: { dev: 1 } };
+      var v = await caixa({ titulo: 'Vincular demanda a ' + cod(m),
+        texto: 'Principal: "' + (m.titulo || '') + '"' + (m.tema_id ? ' · ' + H.caminho(m.tema_id) : '') +
+          '. A nova nasce no Backlog, fora da sprint — quem a coloca na sprint é o PM/PO.',
+        campos: [{ nome: 'tipo', rotulo: 'Que tipo de vínculo?', tipo: 'opcoes', valor: 'parte', opcoes: [
+                    { v: 'parte', r: 'Vinculada', d: 'Faz parte deste card e soma pontos nele. Não trava o avanço.' },
+                    { v: 'dependencia', r: 'Dependência', d: 'Este card não avança enquanto ela estiver aberta.' }] },
+                 { nome: 'titulo', rotulo: 'O que faz parte deste card, ou o que está aguardando?', dica: 'Ex.: Tela de conferência do cadastro', obrig: true },
+                 { nome: 'dev', rotulo: 'Responsável', tipo: 'lista', valor: '', obrig: true,
+                   opcoes: [{ v: '', r: '— Selecione o responsável —' }].concat(devs.map(function (d) { return { v: d, r: d }; })) },
+                 { nome: 'entrega', rotulo: 'Data prevista de retorno', tipo: 'data' },
+                 { nome: 'descricao', rotulo: 'Descrição / contexto', tipo: 'area', linhas: 3, dica: 'O que precisa da outra parte' }],
+        ok: 'Vincular', valida: validaCom('vincular', m, fixo) });
+      if (!v) return;
+      var r = REGRAS.vincular(m, Object.assign({}, v, { id: fixo.id }), contexto());
+      if (!r.ok) { recusa(m, r); return; }
+      return grava({ id: r.id }, r);
+    }
+  };
+  Object.assign(GESTOS, GESTOS_DO_DEV);
+
+  /* A MARCA DE QUEM E O CARD, para o dev (a faixa `kcard-dono` do dev.html):
+     no nome dele, do time com outra pessoa, ou na fila sem dono. */
+  function marcaDono(m) {
+    if (AX.APP.papel !== 'dev' || !m) return '';
+    var d = donoDoCard(m, contexto());
+    if (d === 'meu') return H.chip(H.ico('user') + ' No seu nome', 'ok', 'Esta demanda está no seu nome: você é o responsável.');
+    if (d === 'outro') return H.chip(H.ico('users') + ' Do time · com ' + H.esc(m.dev), 'bk',
+      'Não está no seu nome — aparece para o time porque está na sprint. Quem responde é ' + m.dev + '.');
+    if (d === 'fila') return H.chip(H.ico('inbox') + ' Fila do time · sem dono', 'in',
+      'Fila do time: está na sprint e ainda não tem dono. Qualquer um pode pegar — combine antes de começar.');
+    return '';
+  }
+
+  /** O botao "Pegar" do card da fila: desligado, com o motivo, quando a regra recusa. */
+  function botaoPegar(m, cls, rotulo) {
+    if (AX.APP.papel !== 'dev' || !m || donoDoCard(m, contexto()) !== 'fila') return '';
+    if (ETAPAS_DO_DEV.concat(['concluido', 'negada']).indexOf(etapa(m)) >= 0) return '';
+    var r = REGRAS.pegar(m, {}, contexto());
+    return botao('pegar', m, rotulo || 'Pegar da fila', cls || 'btnp',
+      { ico: 'user', titulo: r.ok ? 'Vai para Em andamento no seu nome' : r.erro, desligado: !r.ok });
+  }
+
+  /** A regra deixa este perfil fazer o gesto nesta demanda? Recusa de CAMPO conta como sim. */
+  function permite(acao, m, a) {
+    var r = REGRAS[acao] ? REGRAS[acao](m, a || {}, contexto()) : { ok: false };
+    return !!(r.ok || r.campo);
+  }
+
+  /* O ANEXO SOBE PELO <input type="file" data-axa-anexar="id">, dentro de um
+     <label>: o clique abre o seletor do navegador, e o `change` grava. */
+  document.addEventListener('change', function (e) {
+    var inp = e.target && e.target.closest ? e.target.closest('input[data-axa-anexar]') : null;
+    if (!inp) return;
+    var m = porId(inp.getAttribute('data-axa-anexar'));
+    var arqs = [].slice.call(inp.files || []);
+    inp.value = '';
+    if (!m) { H.toast('Demanda não encontrada na base carregada. Recarregue a tela.', 'erro'); return; }
+    anexarArquivos(m, arqs).catch(function (ex) { console.error(ex); H.toast('Não foi possível anexar: ' + (ex.message || ex), 'erro'); });
+  });
 
   /* O ANEXO ABRE DAQUI (`abrirAnexo`, dev.html e admin.html): baixa pelo
      Worker com a sessao e entrega pelo `ANEXOTIPO`, que decide entre abrir e
@@ -915,6 +1508,8 @@
 
   raiz.AXIS_ACOES = Object.assign(api, {
     caixa: caixa, aplicar: aplicar, disponiveis: disponiveis, botao: botao, podeEditar: podeEditar,
-    contexto: contexto, avisaRevertidos: avisaRevertidos, abrirAnexo: abrirAnexo, GESTOS: GESTOS, textoCasoUso: textoCasoUso
+    contexto: contexto, avisaRevertidos: avisaRevertidos, abrirAnexo: abrirAnexo, GESTOS: GESTOS, textoCasoUso: textoCasoUso,
+    subirAnexo: subirAnexo, anexarArquivos: anexarArquivos, enviarMensagem: enviarMensagem,
+    marcaDono: marcaDono, botaoPegar: botaoPegar, permite: permite
   });
 }(typeof window !== 'undefined' ? window : globalThis));

@@ -47,12 +47,12 @@
    etapa-demanda.js; frente do pipelines.js; ordem da fila do ordem-kanban.js;
    selo do selo-validacao.js. A tela so recorta pela janela e desenha.
 
-   O QUE FICOU NO gantt.html, e por que: juntar demandas (mesclar e do editor,
-   como no formulario do app), gerenciar devs e juntar dois nomes da mesma
-   pessoa (cadastro, nao planejamento), o resumo e o ranking do mes (estao em
-   Paineis e Fechamento), o link de visualizacao sem login e criar demanda
-   clicando no dia vazio (o formulario do app nao recebe dev e data prontos;
-   "+ Nova demanda" continua no topo).
+   O QUE FICOU NO gantt.html, e por que: juntar varias demandas numa principal
+   (o vinculo "parte" em lote; mesclar e acao do Item), o resumo e o ranking
+   do mes (estao em Paineis e Fechamento) e criar demanda clicando no dia
+   vazio (o formulario do app nao recebe dev e data prontos; "+ Nova demanda"
+   continua no topo). Gerenciar devs, juntar dois nomes da mesma pessoa e o
+   link de visualizacao sem login estao em Configuracoes > Pessoas e perfis.
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   'use strict';

@@ -18,6 +18,11 @@
    Code review / Testes / Em producao, epico EPI-, PR no card. Nada disso e
    inventado aqui — o card mostra o equivalente real (pontos do Poker, projeto
    EP-, sprint, subtarefas, "no ar").
+
+   PARA O DEV, O QUE E DELE E O QUE E FILA (dev.html, 82bff39 e e5cace1): o
+   card diz de quem e ("No seu nome", "Do time · com Fulano", "Fila do time ·
+   sem dono"), o filtro "Mostrar" recorta como o painel dele, e o card da fila
+   tem "Pegar" — o gesto de axis-acoes.js, que poe o nome de quem pegou.
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   'use strict';
@@ -36,7 +41,9 @@
   /* O ESTADO DOS FILTROS vive enquanto o app esta aberto: voltar do Item para o
      Quadro devolve o quadro como a pessoa o deixou. `meus` nasce `null` para
      o primeiro desenho decidir pelo perfil (dev = ligado). */
-  var F = { frente: '', tipo: '', sistema: '', dev: '', meus: null, vencidas: false,
+  /* `sprint`: null (todas) ou lista de sprints e/ou '__fora__' — o filtro de
+     varias escolhas do admin (4d7c38f), em AXIS_SPRINTS (axis-tela-sprints.js). */
+  var F = { frente: '', tipo: '', sistema: '', dev: '', meus: null, vencidas: false, sprint: null,
             todasConcluidas: false, negadaAberta: false, mais: {} };
 
   // ── CSS proprio, injetado uma vez ────────────────────────────────────
@@ -79,6 +86,11 @@
       '.axa .qd-card:hover{border-color:var(--bd4);color:var(--tx)}',
       '.axa .qd-card.late{border-color:rgba(var(--dg-rgb),.45)}',
       '.axa .qd-card.meu{box-shadow:inset 3px 0 0 var(--ac)}',
+      // Nao e do dev (fila ou do time): borda tracejada e fundo apagado (`kcard-fila`, dev.html).
+      '.axa .qd-card.fila{border-style:dashed;border-color:rgba(var(--in-rgb),.45);background:rgba(var(--in-rgb),.05)}',
+      '.axa .qd-dono{display:flex}',
+      '.axa .qd-acao{display:flex;justify-content:flex-end}',
+      '.axa .qd-card .qd-pega{height:28px;padding:0 10px;font-size:12px}',
       '.axa .qd-top{display:flex;justify-content:space-between;align-items:center;gap:6px}',
       '.axa .qd-cod{font-family:var(--font-mono);font-size:11.5px;color:var(--tx3)}',
       '.axa .qd-tit{font-size:13px;line-height:18px;font-weight:700;overflow-wrap:anywhere}',
@@ -147,7 +159,8 @@
       if (F.sistema.indexOf('t:') === 0 && m.tema_id !== F.sistema.slice(2)) return false;
       if (F.sistema.indexOf('r:') === 0 && raizTema(H.tema(m.tema_id)) !== F.sistema.slice(2)) return false;
     }
-    if (F.meus) { if (!H.minha(m)) return false; }
+    if (F.sprint && window.AXIS_SPRINTS && !AXIS_SPRINTS.casa(m, F.sprint)) return false;
+    if (F.meus) { if (!mostraDoDev(m)) return false; }
     else if (F.dev === '__sem__') { if (H.devsDe(m).length) return false; }
     else if (F.dev && !(window.DEVNOME ? DEVNOME.eDe(m, F.dev) : H.devsDe(m).indexOf(F.dev) >= 0)) return false;
     return true;
@@ -239,6 +252,7 @@
     // Impacto, urgencia e o caso de uso da etapa seguem a demanda (`requisitos.js`, como no Kanban do admin).
     var rq = H.chipsReq(m) + H.chipCasoUso(m);
     if (rq) c.push(rq);
+    if (window.GRILL && GRILL.pendente(m) && ['concluido', 'negada'].indexOf(H.colunaDe(m)) < 0) c.push(H.chip(H.ico('flame') + ' Grill', 'wn', 'O PM/PO pediu o parecer do time antes do planejamento.'));
     if (window.SUBTAREFA) {
       var p = SUBTAREFA.progresso(SUBTAREFA.lista(m));
       if (p.total) c.push(H.chip(H.ico('check') + ' ' + p.feitas + '/' + p.total, p.feitas === p.total ? 'ok' : 'bk', p.feitas + ' de ' + p.total + ' subtarefas'));
@@ -246,9 +260,23 @@
     return c;
   }
 
+  /* O QUE O DEV VE (`F.meus`), copia do painel dele (`AXIS_ACOES.mostraNoPainel`,
+     82bff39): 'meu_fila' = no meu nome + a fila do time, 'meu', 'fila'; vazio =
+     o quadro inteiro, como o do PM/PO. */
+  function mostraDoDev(m) {
+    var AC = window.AXIS_ACOES;
+    if (!AC || !AC.mostraNoPainel) return H.minha(m);
+    return AC.mostraNoPainel(m, AC.contexto(), F.meus === 'meu_fila' ? '' : F.meus);
+  }
+
   function card(m, col) {
     var late = H.etapaDe(m) === 'atrasado';
     var meu = H.minha(m);
+    var AC = window.AXIS_ACOES;
+    // De quem e o card, para o dev: a marca e o "Pegar" da fila (dev.html, `kcard-dono`).
+    var marca = AC && AC.marcaDono ? AC.marcaDono(m) : '';
+    var pega = AC && AC.botaoPegar ? AC.botaoPegar(m, 'btns qd-pega', 'Pegar') : '';
+    var naFila = AX.APP.papel === 'dev' && !meu && !!marca;
     var tipo = H.TIPOS[m.tipo];
     var pts = H.pontosDe(m);
     var proj = m.projeto_id ? H.projeto(m.projeto_id) : null;
@@ -257,8 +285,9 @@
     var chips = chipsDoCard(m, col);
     var prio = window.ORDEMKB ? ORDEMKB.rotulo(m) : '';
     var votado = m.poker_media != null && m.poker_media !== '';
-    return '<a class="qd-card' + (late ? ' late' : '') + (meu ? ' meu' : '') + '" href="' + H.hrefItem(m) + '" draggable="false"' +
+    return '<a class="qd-card' + (late ? ' late' : '') + (meu ? ' meu' : '') + (naFila ? ' fila' : '') + '" href="' + H.hrefItem(m) + '" draggable="false"' +
       ' title="' + attr((m.codigo || '') + ' · prioridade ' + prio + (meu ? ' · é seu' : '')) + '">' +
+      (marca ? '<span class="qd-dono">' + marca + '</span>' : '') +
       '<span class="qd-top"><span class="qd-cod">' + H.esc(m.codigo || '—') + '</span>' +
       (tipo ? H.chip(H.esc(tipo.rotulo), 'bk') : '') + '</span>' +
       '<span class="qd-tit">' + H.esc(m.titulo || '(sem título)') + '</span>' +
@@ -270,7 +299,7 @@
       (proj ? '<span class="qd-mini" title="' + attr(proj.nome || '') + '">' + H.esc(proj.codigo || '') + '</span>' : '') +
       (sp ? '<span class="qd-mini mono" title="' + attr(sp) + '">' + H.esc(SPRINTPO.rotuloCurto(sp)) + '</span>' : '') +
       '<span class="qd-avs">' + (devs.length ? devs.slice(0, 3).map(function (n) { return H.av(n); }).join('') : H.av('')) + '</span>' +
-      '</span></a>';
+      '</span>' + (pega ? '<span class="qd-acao">' + pega + '</span>' : '') + '</a>';
   }
 
   function coluna(k, itens, extra) {
@@ -281,6 +310,9 @@
     return '<section class="qd-col" data-col="' + k + '" aria-label="' + attr(e.rotulo) + '">' +
       '<div class="qd-ch"><span class="dotc" style="background:' + e.dot + '"></span>' +
       '<h2>' + H.esc(e.rotulo.toUpperCase()) + '</h2><span class="n" title="' + itens.length + ' nesta coluna · ordem: prioridade, depois a data prometida">' + itens.length + '</span>' +
+      // A folha de decisao da etapa (aprovacao-ppt.js): o clique e de axis-tela-relatorios.js.
+      (k === 'levantar_req' && window.AXIS_PPT ? '<button type="button" class="btns" data-axis-ppt="aprovacao" style="height:24px;padding:0 8px;margin-left:4px"' +
+        ' title="Imprimir - Em aprovação de requisitos (PPT de todas as demandas da etapa)" aria-label="Imprimir - Em aprovação de requisitos">' + H.ico('printer') + '</button>' : '') +
       (k === 'negada' ? '<button type="button" class="btns" data-acao-qd="negada" style="height:24px;padding:0 8px;margin-left:4px" title="Recolher">' + H.ico('x') + '</button>' : '') +
       '</div>' +
       (vis.length ? vis.map(function (m) { return card(m, k); }).join('') : '<div class="qd-vz">Nada aqui</div>') +
@@ -329,7 +361,7 @@
 
   function montar(ctx) {
     var D = ctx.D;
-    if (F.meus === null) F.meus = ctx.papel === 'dev';
+    if (F.meus === null) F.meus = ctx.papel === 'dev' ? 'meu_fila' : '';
     var todos = universo(ctx);
     // A contagem de cada frente sai do quadro ja filtrado, sem o filtro da frente.
     var filtradas = todos.filter(function (m) { return casaFiltros(m, D); });
@@ -388,7 +420,7 @@
       '</div></header>';
 
     // ── Alertas e filtros ──
-    var ativos = (F.tipo ? 1 : 0) + (F.sistema ? 1 : 0) + (!F.meus && F.dev ? 1 : 0) + (F.vencidas ? 1 : 0) + (F.frente ? 1 : 0);
+    var ativos = (F.sprint ? 1 : 0) + (F.tipo ? 1 : 0) + (F.sistema ? 1 : 0) + (!F.meus && F.dev ? 1 : 0) + (F.vencidas ? 1 : 0) + (F.frente ? 1 : 0);
     h += '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">';
     if (vencidas.length) {
       h += '<button type="button" class="qd-alerta dg' + (F.vencidas ? ' on' : '') + '" data-acao-qd="vencidas" aria-pressed="' + F.vencidas + '"' +
@@ -407,9 +439,20 @@
        ao lado dos alertas, descem juntos para a linha de baixo. */
     h += '<div style="margin-left:auto;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end">';
     if (ctx.papel === 'dev') {
-      h += '<button type="button" class="qd-meus" data-acao-qd="meus" aria-pressed="' + !!F.meus + '"><span class="sw"><i></i></span>Só os meus</button>';
+      // "Mostrar" do painel do dev (82bff39): o que e seu e o que e fila, bem separados.
+      h += '<span class="qd-par"><label class="qd-fl" for="qd-mostrar">Mostrar</label><select id="qd-mostrar" class="in qd-sel" data-filtro="meus"' +
+        ' title="Separa as demandas no seu nome das que estão na fila do time.">' +
+        opcao('meu_fila', 'No meu nome + fila do time', F.meus) + opcao('meu', 'Só no meu nome', F.meus) +
+        opcao('fila', 'Só a fila do time', F.meus) + opcao('', 'Todo o quadro', F.meus) + '</select></span>';
     }
     // Rotulo e seletor andam juntos: no celular a linha quebra entre pares, nunca no meio.
+    if (window.AXIS_SPRINTS) {
+      h += '<span class="qd-par"><span class="qd-fl">Sprint</span>' + AXIS_SPRINTS.controle('qd-sprint', F.sprint, AXIS_SPRINTS.opcoes(todos), function (v) {
+        F.sprint = v; F.mais = {};
+        var vz = document.getElementById('vista');
+        if (vz) redesenhar(vz, ctx);
+      }, 'qd-sel') + '</span>';
+    }
     h += '<span class="qd-par"><label class="qd-fl" for="qd-tipo">Tipo</label><select id="qd-tipo" class="in qd-sel" data-filtro="tipo">' +
       opcao('', 'Todos', F.tipo) + opcao('evolucao', 'Evolução', F.tipo) + opcao('sustentacao', 'Sustentação', F.tipo) + opcao('__sem__', 'Sem tipo', F.tipo) + '</select></span>' +
       '<span class="qd-par"><label class="qd-fl" for="qd-sis">Sistema</label><select id="qd-sis" class="in qd-sel" data-filtro="sistema">' + opcoesSistema(todos) + '</select></span>';
@@ -421,7 +464,7 @@
     var total = COLUNAS.reduce(function (t, k) { return t + porCol[k].length; }, 0) + porCol.negada.length;
     if (!total && !escondidas) {
       h += '<div class="pn">' + H.vazio('board', F.meus ? 'Nada seu no quadro com estes filtros' : 'Nada no quadro com estes filtros',
-        F.meus ? 'Desligue "Só os meus" para ver o quadro do time.' : 'Troque a frente ou limpe os filtros.',
+        F.meus ? 'Em "Mostrar", escolha "Todo o quadro" para ver o quadro do time.' : 'Troque a frente ou limpe os filtros.',
         ativos || F.meus ? '<button type="button" class="btn" data-acao-qd="' + (F.meus && !ativos ? 'meus' : 'limpar') + '">' + (F.meus && !ativos ? 'Ver o quadro do time' : 'Limpar filtros') + '</button>' : '') + '</div>';
     } else {
       h += '<div id="qd-rolo" style="overflow-x: auto;padding-bottom:8px"><div class="qd-board">';
@@ -473,10 +516,10 @@
       } else {
         var a = b.getAttribute('data-acao-qd');
         if (a === 'vencidas') F.vencidas = !F.vencidas;
-        else if (a === 'meus') { F.meus = !F.meus; F.mais = {}; }
+        else if (a === 'meus') { F.meus = F.meus ? '' : 'meu_fila'; F.mais = {}; }
         else if (a === 'periodo') F.todasConcluidas = !F.todasConcluidas;
         else if (a === 'negada') F.negadaAberta = !F.negadaAberta;
-        else if (a === 'limpar') { F.tipo = F.sistema = F.dev = F.frente = ''; F.vencidas = false; F.mais = {}; }
+        else if (a === 'limpar') { F.tipo = F.sistema = F.dev = F.frente = ''; F.sprint = null; F.vencidas = false; F.mais = {}; }
       }
       redesenhar(el, ctx);
     });

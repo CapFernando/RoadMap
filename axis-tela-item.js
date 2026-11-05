@@ -13,8 +13,14 @@
    retomar, negar e entregar sao os gestos de axis-acoes.js, cada um com o
    patch que o editor do admin ou o painel do dev gravaria. O que este arquivo
    decide e so QUAIS botoes cada perfil ve (`AXIS_ACOES.disponiveis`) e qual e
-   o principal. Continuam fora: escrever na conversa (Mensageria) e estimar
-   (Planning Poker).
+   o principal. Estimar leva a tela de Poker do app (#poker).
+
+   OS GESTOS DO PAINEL DO DEV TAMBEM GRAVAM DAQUI (axis-acoes.js): pegar da
+   fila do time, as subtarefas (TASKS), corrigir a entrega com o PM/PO, o
+   parecer do Grill, vincular demanda, as referencias do GitHub e anexar —
+   cada um com o patch do dev.html. A CONVERSA ESCREVE: a mensagem vai pela
+   rota `mensagem-nova`, com @ para marcar alguem e anexo pelo `anexo-subir`,
+   como na mensageria.html.
 
    O MOTIVO DA TRAVA nao e inventado nem recalculado: e o que os modulos de
    regra responderiam se a demanda fosse movida para a proxima etapa agora —
@@ -83,6 +89,25 @@
       '.axa .it .chip{gap:4px}',
       // Desligado como no prototipo: cinza, e nao o laranja apagado.
       '.axa .it .btnp:disabled{background:var(--sf5);color:var(--tx3);box-shadow:none;opacity:1}',
+      '.axa .it textarea.in{height:auto;min-height:84px;padding:10px 14px;line-height:20px;resize:vertical;display:block;width:100%;box-sizing:border-box}',
+      '.axa .it-sub{display:flex;flex-wrap:wrap;gap:7px;align-items:center}',
+      '.axa .it-sub input[type=checkbox]{accent-color:var(--ac);width:16px;height:16px;flex:0 0 auto;margin:0}',
+      '.axa .it-sub .in{height:34px;font-size:13px}',
+      '.axa .it-sub .it-sub-t{flex:1 1 160px;min-width:0}',
+      '.axa .it-sub.feita .it-sub-t{text-decoration:line-through;color:var(--tx3)}',
+      '.axa .it-sub .it-sub-d{flex:0 0 150px;min-width:0}',
+      '.axa .it-sub .it-sub-h{flex:0 0 76px;min-width:0}',
+      '.axa .it-grill{border-color:rgba(var(--wn-rgb),.45)}',
+      '.axa .it-grill-ja{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:10px;background:var(--sf2);font-size:13px;color:var(--tx2)}',
+      '.axa .it-grill-ja b{font-size:12px;color:var(--tx3)}',
+      '.axa .it-escrever{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--bd)}',
+      '.axa .it-sug{position:absolute;left:0;bottom:100%;margin:0 0 6px;padding:4px;list-style:none;min-width:220px;max-height:240px;overflow:auto;border-radius:12px;background:var(--sf3);border:1px solid var(--bd2);box-shadow:0 12px 28px rgba(0,0,0,.25);z-index:5}',
+      '.axa .it-sug li{padding:7px 10px;border-radius:8px;font-size:13px;cursor:pointer}',
+      '.axa .it-sug li[aria-selected="true"]{background:var(--sf5);color:var(--tx-hi)}',
+      '.axa .it-tira{border:0;background:transparent;color:var(--tx3);cursor:pointer;padding:0;display:inline-flex}',
+      '.axa .it-tira:hover{color:var(--dg-t)}',
+      '.axa .it-erro{font-size:12.5px;color:var(--dg-t)}',
+      '.axa .it-erro:empty{display:none}',
       '@container app (max-width: 760px){.axa .it-bolha{max-width:88%}}'
     ].join('\n');
     document.head.appendChild(s);
@@ -116,7 +141,13 @@
     return ((AX.APP.D || {}).feriados || []).map(function (f) { return f && typeof f === 'object' ? f.data : f; });
   }
 
-  function podeAgir(m, papel) { return papel === 'admin' || papel === 'analista' || (papel === 'dev' && H.minha(m)); }
+  function podeAgir(m, papel) {
+    if (papel === 'admin' || papel === 'analista' || (papel === 'dev' && H.minha(m))) return true;
+    // A fila do time: o dev nao e dono, mas pode pegar (`AXIS_ACOES.botaoPegar`).
+    var AC = window.AXIS_ACOES;
+    return papel === 'dev' && !!AC && !!AC.botaoPegar(m);
+  }
+  function permite(acao, m, a) { var AC = window.AXIS_ACOES; return !!(AC && AC.permite && AC.permite(acao, m, a)); }
 
   /* A PROXIMA ETAPA no caminho do fluxo. Sustentacao pode pular a area com
      registro (homologacao.js), mas o caminho padrao — e o que a barra mostra —
@@ -342,8 +373,11 @@
 
   function chipsTopo(m) {
     var c = [];
+    var AC = window.AXIS_ACOES;
+    if (AC && AC.marcaDono) c.push(AC.marcaDono(m));
     var t = H.TIPOS[m.tipo];
     if (t) c.push(H.chip(H.ico(t.ico) + ' ' + t.rotulo, 'bk'));
+    if (window.GRILL && GRILL.pendente(m) && ['concluido', 'negada'].indexOf(H.colunaDe(m)) < 0) c.push(H.chip(H.ico('flame') + ' Grill — parecer pendente', 'wn', 'O PM/PO pediu o parecer do time antes do planejamento.'));
     if (H.etapaDe(m) === 'atrasado') {
       var a = H.atrasoDe(m);
       c.push(H.chip('atrasada' + (a > 0 ? ' ' + H.plural(a, 'dia', 'dias') : ''), 'dg'));
@@ -374,14 +408,20 @@
       return AC.botao(d.acao, m, d.rotulo, d.cls, { ico: d.ico, titulo: d.titulo });
     });
     if (ctx.papel === 'admin' && col === 'planning' && !H.pontosDe(m)) {
-      b.push('<a class="btn" href="poker.html" title="Abre o Planning Poker">' + H.ico('cards') + ' Estimar no Poker ' + H.ico('external', 'style="font-size:12px;color:var(--tx4)"') + '</a>');
+      b.push('<a class="btn" href="#poker" title="Abre o Planning Poker do app">' + H.ico('cards') + ' Estimar no Poker</a>');
     }
+    var pega = ctx.papel === 'dev' && !H.minha(m) ? AC.botaoPegar(m) : '';
+    // Mesclar (`mescAbrirBusca` do editor do admin): a outra entra nesta e sai do fluxo.
+    if (H.pode('editar') && AC.REGRAS.mesclar) b.push(AC.botao('mesclar', m, 'Mesclar outra nesta', 'btn', { ico: 'link', titulo: 'Duas pessoas pediram a mesma coisa: a outra entra nesta e sai do fluxo, sem ser apagada' }));
     var trava = { desligado: tv.travada, descrito: tv.travada ? 'it-trava' : '', titulo: tv.travada ? 'Veja abaixo o que falta' : '' };
     /* O BOTAO PRINCIPAL. Na validacao do PM/PO e a decisao (devolver ou
        validar e fechar); para o dev, entregar E o avanco de Em andamento e da
        area — um botao so para o mesmo gesto; no resto, o proximo passo do
        fluxo, desligado quando algo trava (o motivo vem logo abaixo). */
-    if (ctx.papel === 'admin' && col === 'validacao') {
+    if (pega) {
+      // A FILA DO TIME: pegar e o avanco, e o nome de quem pegou vai junto.
+      b.push(pega);
+    } else if (ctx.papel === 'admin' && col === 'validacao') {
       b.push(AC.botao('devolver', m, 'Devolver com motivo', 'btn perigo', { ico: 'undo' }));
       b.push(AC.botao('validar', m, 'Validar e fechar', 'btnp ok', { ico: 'check' }));
     } else if (ctx.papel === 'dev' && (col === 'em_andamento' || col === 'validacao_area')) {
@@ -483,13 +523,16 @@
 
     // CODIGO: o equivalente real do "PR #1912" do prototipo.
     var gh = refsGithub(m);
-    if (gh.length || m.em_producao || m.versao) {
-      h += sec('CÓDIGO', gh.map(function (r) {
+    var AC = window.AXIS_ACOES;
+    var podeRef = !!AC && permite('referencias', m, {});
+    if (gh.length || m.em_producao || m.versao || podeRef) {
+      h += sec('CÓDIGO', (gh.length || m.em_producao || m.versao ? '' : '<span class="note">Sem issue, PR ou milestone.</span>') + gh.map(function (r) {
         return '<a class="it-linha" href="' + H.esc(r.url) + '" target="_blank" rel="noopener noreferrer" title="' + H.esc(r.url) + '">' +
           '<span class="ell"><span class="mono">' + H.esc(r.rot) + '</span>' + (r.repo ? ' · ' + H.esc(r.repo) : '') + '</span>' + H.ico('external', 'style="color:var(--tx4)"') + '</a>';
       }).join('') + (m.em_producao || m.versao ? '<div class="it-linha"><span>Produção</span><span>' +
         (m.em_producao ? H.chip('no ar' + (m.producao_em ? ' desde ' + H.dm(m.producao_em) : ''), 'ok') : H.chip('fora do ar', 'bk')) +
-        (m.versao ? ' <span class="mono" style="font-size:12px;color:var(--tx3)">' + H.esc(m.versao) + '</span>' : '') + '</span></div>' : ''));
+        (m.versao ? ' <span class="mono" style="font-size:12px;color:var(--tx3)">' + H.esc(m.versao) + '</span>' : '') + '</span></div>' : ''),
+        podeRef ? AC.botao('referencias', m, 'Editar', 'btns', { ico: 'edit', titulo: 'Issue, PR e milestone no GitHub' }) : '');
     }
 
     // VINCULOS: a principal, e o que pendura nesta.
@@ -504,7 +547,8 @@
           (VINCULO.bloqueia(f) ? 'Depende de' : 'Inclui') + ' <span class="note">· ' + H.esc(rotEtapa(H.colunaDe(f))) + '</span></span>' +
           '<span class="code" style="font-size:13px;' + (trava ? 'color:var(--wn-c)' : '') + '">' + H.esc(f.codigo || '—') + '</span></a>');
       });
-      h += sec('VÍNCULOS', L.length ? L.join('') : '<span class="note">Sem vínculos com outras demandas.</span>');
+      h += sec('VÍNCULOS', L.length ? L.join('') : '<span class="note">Sem vínculos com outras demandas.</span>',
+        AC && permite('vincular', m, {}) ? AC.botao('vincular', m, 'Vincular', 'btns', { ico: 'plus', titulo: 'Pendura nesta uma parte (vinculada) ou uma dependência' }) : '');
     }
 
     // ENTREGA: os carimbos reais do fluxo, no lugar da "Definition of done".
@@ -526,11 +570,25 @@
     }
 
     var anexos = (Array.isArray(m.anexos) ? m.anexos : []).filter(Boolean);
-    if (anexos.length) {
+    var podeAnexar = !!AC && permite('anexar', m, { novos: [{ nome: '-' }] });
+    if (anexos.length || podeAnexar) {
       // O anexo abre daqui (`AXIS_ACOES.abrirAnexo`): baixa com a sessao e entrega pelo ANEXOTIPO.
-      h += sec('ANEXOS', anexos.map(function (x, i) {
+      h += sec('ANEXOS', (anexos.length ? '' : '<span class="note">Nenhum anexo. Até 1,5 MB por arquivo.</span>') + anexos.map(function (x, i) {
         return '<button type="button" class="it-linha" style="border:0;font:inherit;cursor:pointer;text-align:left;width:100%" data-axa-anexo="' + m.anexos.indexOf(x) + '" data-axa-id="' + H.esc(m.id) + '" title="Abrir ' + H.esc(x.nome || 'anexo') + '"><span class="ell">' + H.ico('clip', 'style="color:var(--tx3)"') + ' ' + H.esc(x.nome || x.chave || 'anexo') + '</span>' +
           (x.tamanho ? '<span class="note" style="font-size:11.5px">' + Math.max(1, Math.round(x.tamanho / 1024)) + ' KB</span>' : '') + '</button>';
+      }).join(''), podeAnexar ? botaoArquivo('data-axa-anexar="' + H.esc(m.id) + '"', 'Anexar', 'btns') : '');
+    }
+
+    /* AS MESCLADAS NESTA (`mescRenderBloco` do admin): saem do fluxo e vivem
+       aqui dentro, com quem pediu; "Separar" devolve ao fluxo. */
+    var AC = window.AXIS_ACOES;
+    var mescs = AC && AC.mescladasDe ? AC.mescladasDe(lista(), m.id) : [];
+    if (mescs.length) {
+      h += sec('MESCLADAS NESTA', mescs.map(function (f) {
+        return '<div class="it-linha"><span class="ell" title="' + H.esc(f.titulo || '') + '"><span class="code" style="font-size:12.5px">' + H.esc(f.codigo || '—') + '</span> ' +
+          H.esc(f.titulo || '') + '<span class="note" style="display:block;font-size:11.5px">' + (f.solicitante ? 'Pedido por ' + H.esc(f.solicitante) : 'Sem solicitante') +
+          (f.criado_em ? ' · ' + H.esc(H.dma(String(f.criado_em).slice(0, 10))) : '') + '</span></span>' +
+          (H.pode('editar') ? AC.botao('separar', f, 'Separar', 'btns', { titulo: 'Volta para o fluxo no estágio em que estava' }) : '') + '</div>';
       }).join(''));
     }
 
@@ -538,6 +596,14 @@
     if (bis.length) h += sec('BIs IMPACTADOS', '<div style="display:flex;flex-wrap:wrap;gap:6px">' + bis.map(function (b) { return H.chip(H.ico('chart') + ' ' + H.esc(b), 'in'); }).join('') + '</div>');
 
     return '<aside class="it-aside" style="display:flex;flex-direction:column;gap:16px;min-width:0">' + h + '</aside>';
+  }
+
+  /* O BOTAO DE ARQUIVO: um <label> com o <input type="file"> dentro, para o
+     clique abrir o seletor do navegador sem JS. */
+  function botaoArquivo(attrs, rotulo, cls) {
+    var T = window.ANEXOTIPO;
+    return '<label class="' + (cls || 'btns') + '" style="cursor:pointer" title="PDF, imagem e os formatos do ANEXOTIPO, até 1,5 MB">' + H.ico('clip') + ' ' + H.esc(rotulo) +
+      '<input type="file" multiple hidden ' + attrs + (T ? ' accept="' + H.esc(T.aceita()) + '"' : '') + '></label>';
   }
 
   /* O CASO DE USO de "Em aprovacao de requisitos" — o painel `m-caso-uso` do
@@ -574,21 +640,170 @@
       H.chip(H.esc(R.ESTADOS[st]), H.CASO_USO_COR[st]));
   }
 
+  // ── Grill: o parecer do dev (`msGrillRender`, dev.html) ──────────────
+  function grillSec(m) {
+    var G = window.GRILL, AC = window.AXIS_ACOES;
+    if (!G || !AC) return '';
+    var est = G.estado(m);
+    if (est === 'nao') return '';
+    var g = G.dados(m);
+    var ja = g.pontos.length ? '<div class="it-grill-ja"><b>Já levantado</b>' + g.pontos.map(function (p) {
+      return '<span>' + H.esc(p.texto) + (p.por ? ' <span class="note" style="font-size:11.5px">· ' + H.esc(p.por) + '</span>' : '') + '</span>';
+    }).join('') + '</div>' : '';
+    if (est !== 'pendente') {
+      return sec('GRILL', '<span class="note">' + (est === 'ok' ? 'Respondido: entendido' : 'Respondido: devolvido com dúvidas') +
+        (g.respondido_por ? ' por ' + H.esc(g.respondido_por) : '') + (g.respondido_em ? ' em ' + H.esc(H.dma(g.respondido_em.slice(0, 10))) : '') + '.</span>' + ja,
+        H.chip(H.esc(G.rotulo(m)), est === 'ok' ? 'ok' : 'wn'));
+    }
+    if (['concluido', 'negada'].indexOf(H.colunaDe(m)) >= 0) {
+      return sec('GRILL', '<span class="note">Marcado e sem parecer; a demanda já saiu do fluxo.</span>' + ja, H.chip('sem parecer', 'bk'));
+    }
+    if (!permite('grill', m, { veredito: 'duvida' })) {
+      return sec('GRILL', '<span class="note">O PM/PO pediu o parecer do time antes de esta demanda entrar no planejamento. Quem responde é o dev, no Item.</span>' + ja,
+        H.chip('aguardando parecer', 'wn'));
+    }
+    return '<section class="it-sec it-grill">' +
+      '<div class="row" style="justify-content:space-between"><h2 class="it-h2">' + H.ico('flame') + ' GRILL — DÊ SEU PARECER</h2>' + H.chip('antes do planejamento', 'wn') + '</div>' +
+      '<span class="note">Leia a demanda. Se faltar algo para estimar e executar, escreva os pontos — <b>uma dúvida por linha</b>. ' +
+      'Ela volta para Em aprovação de requisitos com o que você perguntou. Se estiver claro, segue para o Planning.</span>' + ja +
+      '<textarea class="in" id="it-grill-pontos" rows="3" aria-label="Suas dúvidas, uma por linha" placeholder="Ex.: De onde vem o valor do limite?&#10;O que acontece quando o cedente tem dois contratos?"></textarea>' +
+      '<div class="row" style="flex-wrap:wrap;gap:8px;justify-content:flex-end">' +
+      AC.botao('grillDuvida', m, 'Tenho dúvidas → Aprov. requisitos', 'btn', { ico: 'help' }) +
+      AC.botao('grillOk', m, 'Entendi → Planning', 'btnp', { ico: 'check' }) + '</div></section>';
+  }
+
+  // ── TASKS: as subtarefas, editaveis por quem faz a demanda ──────────
+  /* O MODAL DO dev.html, no Item: marcar, escrever, a data, as horas do
+     passo, tirar e acrescentar. A lista em edicao fica em RASCUNHO ate
+     "Salvar subtarefas" (o patch so leva `subtarefas`, como o modal so manda
+     o campo quando mexeu). A data de INICIO do passo nao aparece: o
+     `msSubParaGravar` do dev.html grava so `data` (o fim), e oferecer o
+     inicio seria prometer o que nao se grava. */
+  var RASCUNHO = {};
+  function subsDe(m) {
+    var r = RASCUNHO[m.id];
+    return r ? r.lista : (window.SUBTAREFA ? SUBTAREFA.lista(m) : []);
+  }
+  function hojeLocal() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function tasksProgresso(subs) {
+    var pg = window.SUBTAREFA ? SUBTAREFA.progresso(subs) : { total: 0 };
+    return pg.total ? '<span class="mono" style="font-size:12px;color:' + (pg.feitas === pg.total ? 'var(--ok-t)' : 'var(--tx3)') + '">' +
+      pg.feitas + ' de ' + pg.total + (pg.pct != null ? ' · ' + pg.pct + '%' : '') + '</span>' : '';
+  }
+  function tasksPe(m) {
+    var subs = subsDe(m);
+    var r = RASCUNHO[m.id];
+    var tot = window.SUBTAREFA ? SUBTAREFA.horasTotal(subs) : null;
+    return (tot != null ? '<span class="note">Somado dos passos: <b class="mono">' + tot + 'h</b>. Entra nas horas da demanda quando você registra a entrega.</span>' : '') +
+      '<div class="row" style="flex-wrap:wrap;gap:8px"><button type="button" class="btns" data-it-sub="adiciona">' + H.ico('plus') + ' subtarefa</button>' +
+      (r && r.mexido ? '<span style="flex:1"></span><button type="button" class="btn" data-it-sub="descarta">Descartar</button>' +
+        '<button type="button" class="btnp" data-it-sub="salva"' + (r.salvando ? ' disabled' : '') + '>' + H.ico('save') + ' Salvar subtarefas</button>' : '') + '</div>';
+  }
+  function tasksInterno(m) {
+    var subs = subsDe(m);
+    var S = window.SUBTAREFA;
+    var edita = permite('subtarefas', m, { lista: [] });
+    var cab = '<div class="row" style="justify-content:space-between"><h2 class="it-h2">TASKS</h2><span id="it-tasks-pg">' + tasksProgresso(subs) + '</span></div>';
+    if (!edita) {
+      return cab + (subs.length ? subs.map(function (x) {
+        var per = S.periodo(x);
+        return '<label class="it-task' + (x.feita ? ' feita' : '') + '"><input type="checkbox" disabled' + (x.feita ? ' checked' : '') + '>' +
+          '<span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="t">' + H.esc(x.titulo) + '</span>' +
+          (per || x.horas ? '<span class="note" style="font-size:11.5px">' + H.esc(per) + (per && x.horas ? ' · ' : '') + (x.horas ? H.esc(x.horas) + 'h' : '') + '</span>' : '') + '</span></label>';
+      }).join('') : '<span class="note">Sem subtarefas. Quem faz a demanda a quebra em passos.</span>');
+    }
+    var linhas = subs.map(function (x, i) {
+      return '<div class="it-sub' + (x.feita ? ' feita' : '') + '" data-linha="' + i + '">' +
+        '<input type="checkbox" data-it-sub="marca" data-i="' + i + '"' + (x.feita ? ' checked' : '') + ' aria-label="Passo ' + (i + 1) + ' feito">' +
+        '<input class="in it-sub-t" data-it-sub="texto" data-i="' + i + '" maxlength="140" value="' + H.esc(x.titulo) + '" placeholder="O que é este passo" aria-label="Passo ' + (i + 1) + '">' +
+        '<input class="in it-sub-d" type="date" data-it-sub="data" data-i="' + i + '" value="' + H.esc(x.fim || x.data || '') + '" title="Data de fim do passo" aria-label="Data do passo ' + (i + 1) + '">' +
+        '<input class="in it-sub-h" type="number" min="0" step="0.25" data-it-sub="horas" data-i="' + i + '" value="' + H.esc(x.horas) + '" placeholder="h" title="Horas neste passo (de 15 em 15 min)" aria-label="Horas do passo ' + (i + 1) + '">' +
+        '<button type="button" class="btns" data-it-sub="remove" data-i="' + i + '" title="Remover esta subtarefa" aria-label="Remover o passo ' + (i + 1) + '">' + H.ico('x') + '</button></div>';
+    }).join('');
+    return cab + (linhas || '<span class="note">Nenhuma subtarefa. Quebre a demanda em passos para acompanhar o quanto já andou.</span>') +
+      '<div id="it-tasks-pe" style="display:flex;flex-direction:column;gap:8px">' + tasksPe(m) + '</div>';
+  }
+
+  /* Os editores dos passos (`msSubMarca`, `msSubTexto`, `msSubData`,
+     `msSubHoras`, `msSubRemove`, `msSubAdiciona`) sao `AXIS_ACOES.SUB`. Digitar,
+     marcar e trocar a data NAO redesenham a lista — o campo seguinte, que
+     acabou de receber o foco, seria trocado por outro; so o rodape (o total e
+     "Salvar") e o progresso se atualizam. Acrescentar e tirar redesenham. */
+  function ligarTasks(el, m) {
+    var AC = window.AXIS_ACOES;
+    var box = el.querySelector('#it-tasks');
+    if (!box || !AC || !AC.SUB) return;
+    var atual = function () { return porId(m.id) || m; };
+    var pinta = function (foco) {
+      var b = document.getElementById('it-tasks');
+      if (!b) return;
+      b.innerHTML = tasksInterno(atual());
+      if (foco) { var f = b.querySelector(foco); if (f) f.focus(); }
+    };
+    var rodape = function () {
+      var pe = document.getElementById('it-tasks-pe'), pg = document.getElementById('it-tasks-pg');
+      if (pe) pe.innerHTML = tasksPe(atual());
+      if (pg) pg.innerHTML = tasksProgresso(subsDe(m));
+    };
+    var muda = function (lista) {
+      var r = RASCUNHO[m.id] || (RASCUNHO[m.id] = { lista: subsDe(m) });
+      r.lista = lista; r.mexido = true;
+      rodape();
+    };
+    box.addEventListener('input', function (e) {
+      var t = e.target.closest('[data-it-sub]');
+      if (!t) return;
+      var q = t.getAttribute('data-it-sub'), i = +t.getAttribute('data-i');
+      if (q === 'texto') muda(AC.SUB.texto(subsDe(m), i, t.value));
+      else if (q === 'horas') muda(AC.SUB.horas(subsDe(m), i, t.value));
+    });
+    box.addEventListener('change', function (e) {
+      var t = e.target.closest('[data-it-sub]');
+      if (!t) return;
+      var q = t.getAttribute('data-it-sub'), i = +t.getAttribute('data-i');
+      if (q === 'marca') {
+        muda(AC.SUB.marca(subsDe(m), i, t.checked, hojeLocal()));
+        var ln = t.closest('.it-sub');
+        if (ln) ln.classList.toggle('feita', t.checked);
+        var d = box.querySelector('[data-it-sub="data"][data-i="' + i + '"]');
+        var x = subsDe(m)[i];
+        if (d && x && !d.value) d.value = x.fim || x.data || '';
+      } else if (q === 'data') {
+        muda(AC.SUB.data(subsDe(m), i, t.value, 'fim'));
+        if (window.SUBTAREFA && SUBTAREFA.periodoInvertido(subsDe(m)[i])) H.toast('Nesse passo o fim está antes do início — confira as datas.', 'erro');
+      }
+    });
+    box.addEventListener('click', async function (e) {
+      var t = e.target.closest('button[data-it-sub]');
+      if (!t) return;
+      var q = t.getAttribute('data-it-sub'), i = +t.getAttribute('data-i');
+      if (q === 'adiciona') {
+        muda(AC.SUB.adiciona(subsDe(m)));
+        pinta('[data-it-sub="texto"][data-i="' + (subsDe(m).length - 1) + '"]');
+      } else if (q === 'remove') { muda(AC.SUB.remove(subsDe(m), i)); pinta(); }
+      else if (q === 'descarta') { delete RASCUNHO[m.id]; pinta(); }
+      else if (q === 'salva') {
+        var r = RASCUNHO[m.id];
+        if (!r || r.salvando) return;
+        r.salvando = true; t.disabled = true;
+        var out = await AC.aplicar('subtarefas', atual(), { lista: r.lista });
+        if (out && out.ok) delete RASCUNHO[m.id]; else r.salvando = false;
+        pinta();
+      }
+    });
+  }
+
   function principal(m, ctx) {
     var sp = separa(m.descricao);
     var h = sec('DESCRIÇÃO', sp.desc ? '<p class="it-desc">' + descHTML(sp.desc) + '</p>' : '<span class="note">Sem descrição registrada.</span>');
     h += casoUso(m, ctx);
     if (sp.crit.length) h += sec('CRITÉRIOS DE ACEITE', sp.crit.map(function (l) { return '<div class="it-crit">' + critHTML(l) + '</div>'; }).join(''));
 
-    var subs = window.SUBTAREFA ? SUBTAREFA.lista(m) : [];
-    var pg = window.SUBTAREFA ? SUBTAREFA.progresso(subs) : { total: 0 };
-    h += sec('TASKS', subs.length ? subs.map(function (x) {
-      var per = SUBTAREFA.periodo(x);
-      return '<label class="it-task' + (x.feita ? ' feita' : '') + '"><input type="checkbox" disabled' + (x.feita ? ' checked' : '') + '>' +
-        '<span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="t">' + H.esc(x.titulo) + '</span>' +
-        (per || x.horas ? '<span class="note" style="font-size:11.5px">' + H.esc(per) + (per && x.horas ? ' · ' : '') + (x.horas ? H.esc(x.horas) + 'h' : '') + '</span>' : '') + '</span></label>';
-    }).join('') : '<span class="note">Sem subtarefas. O dev quebra a demanda em passos no painel dele.</span>',
-      pg.total ? '<span class="mono" style="font-size:12px;color:' + (pg.feitas === pg.total ? 'var(--ok-t)' : 'var(--tx3)') + '">' + pg.feitas + ' de ' + pg.total + '</span>' : '');
+    h += grillSec(m);
+    h += '<section class="it-sec" id="it-tasks">' + tasksInterno(m) + '</section>';
 
     // Um resumo da conversa, como no prototipo; a conversa inteira e a aba.
     var msgs = mensagens(m);
@@ -611,6 +826,133 @@
       barraEtapas(m, tv) +
       '<div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start">' +
       principal(m, ctx) + lateral(m, ctx) + '</div>';
+  }
+
+  // ── Aba Conversa: escrever (mensageria.html) ─────────────────────────
+  /* O RASCUNHO SOBREVIVE AO REDESENHO: a tela rele a base sozinha (foco depois
+     de um minuto, gravacao de outra acao) e o texto digitado nao pode sumir. */
+  var RASC_MSG = {};
+  function rascMsg(m) { return RASC_MSG[m.id] || (RASC_MSG[m.id] = { texto: '', anexos: [], subindo: 0, enviando: false }); }
+  function anexosRasc(r) {
+    return r.anexos.map(function (a, i) {
+      return '<span class="chip c-bk" style="gap:6px">' + H.ico('clip') + ' ' + H.esc(a.nome) +
+        '<button type="button" class="it-tira" data-it-msg-tira="' + i + '" aria-label="Tirar ' + H.esc(a.nome) + '">' + H.ico('x') + '</button></span>';
+    }).join('') + (r.subindo ? '<span class="note">Enviando ' + H.plural(r.subindo, 'arquivo', 'arquivos') + '…</span>' : '');
+  }
+  function compositor(m) {
+    var AC = window.AXIS_ACOES;
+    if (!AC || !AC.enviarMensagem) return '';
+    var r = rascMsg(m);
+    var podeAnexar = permite('anexar', m, { novos: [{ nome: '-' }] });
+    return '<div class="it-escrever">' +
+      '<label class="lab" for="it-msg">ESCREVER</label>' +
+      '<div style="position:relative"><ul class="it-sug" id="it-sug" role="listbox" aria-label="Pessoas" hidden></ul>' +
+      '<textarea class="in" id="it-msg" rows="3" placeholder="Escreva uma mensagem — use @ para marcar alguém" aria-autocomplete="list" aria-controls="it-sug" aria-describedby="it-msg-dica">' + H.esc(r.texto) + '</textarea></div>' +
+      '<div class="row" id="it-msg-anx" style="flex-wrap:wrap;gap:6px">' + anexosRasc(r) + '</div>' +
+      '<div class="row" style="flex-wrap:wrap;gap:10px">' +
+      (podeAnexar ? botaoArquivo('id="it-msg-arq"', 'Anexar', 'btn') : '') +
+      '<span class="note" id="it-msg-dica" style="flex:1;min-width:200px">A mensagem entra no registro da demanda e não pode ser apagada.' +
+      (podeAnexar ? ' O anexo vai para os anexos da demanda.' : '') + ' Ctrl+Enter envia.</span>' +
+      '<button type="button" class="btnp" id="it-msg-enviar"' + (r.enviando ? ' disabled' : '') + '>' + H.ico('send') + ' ' + (r.enviando ? 'Enviando…' : 'Enviar') + '</button></div>' +
+      '<div class="it-erro" id="it-msg-erro" role="alert"></div></div>';
+  }
+
+  /* O `@` E O ENVIO (mensageria.html): seta anda, Enter ou Tab escolhe, Esc
+     fecha. As pessoas e a regra da caixa sao `AXIS_ACOES.pessoasDaConversa` e
+     `sugestoesArroba`, copias da mensageria. */
+  function ligarCompositor(el, m) {
+    var AC = window.AXIS_ACOES;
+    var cx = el.querySelector('#it-msg');
+    if (!cx || !AC) return;
+    var sug = el.querySelector('#it-sug');
+    var erro = el.querySelector('#it-msg-erro');
+    var r = rascMsg(m);
+    var PESSOAS = AC.pessoasDaConversa(AX.APP.D || {});
+    var filtradas = [], ativo = 0, inicio = -1;
+    function fecha() { sug.hidden = true; filtradas = []; inicio = -1; cx.removeAttribute('aria-activedescendant'); }
+    function abre() {
+      var s = AC.sugestoesArroba(cx.value, cx.selectionStart, PESSOAS);
+      if (s.inicio < 0 || !s.nomes.length) { fecha(); return; }
+      filtradas = s.nomes; inicio = s.inicio; ativo = 0;
+      sug.innerHTML = filtradas.map(function (p, i) { return '<li id="it-sug-' + i + '" role="option" aria-selected="' + (i === 0) + '">' + H.esc(p) + '</li>'; }).join('');
+      sug.hidden = false;
+      cx.setAttribute('aria-activedescendant', 'it-sug-0');
+    }
+    function marca() {
+      [].forEach.call(sug.children, function (li, i) { li.setAttribute('aria-selected', String(i === ativo)); });
+      cx.setAttribute('aria-activedescendant', 'it-sug-' + ativo);
+    }
+    function escolhe(i) {
+      if (!filtradas[i] || inicio < 0) return;
+      var e = AC.escolheArroba(cx.value, inicio, cx.selectionStart, filtradas[i]);
+      cx.value = e.texto; r.texto = e.texto;
+      fecha(); cx.focus(); cx.setSelectionRange(e.cursor, e.cursor);
+    }
+    async function envia() {
+      erro.textContent = '';
+      if (r.subindo) { erro.textContent = 'Espere o anexo terminar de subir — enviar agora deixaria o arquivo de fora.'; return; }
+      if (r.enviando) return;
+      r.texto = cx.value;
+      r.enviando = true;
+      var b = el.querySelector('#it-msg-enviar');
+      if (b) { b.disabled = true; b.textContent = 'Enviando…'; }
+      var out;
+      try { out = await AC.enviarMensagem(m, r.texto, r.anexos); }
+      catch (e) { out = { ok: false, erro: e.message || String(e) }; }
+      r.enviando = false;
+      if (out && out.ok) {
+        delete RASC_MSG[m.id];
+        AX.desenhar(true);
+        H.toast('Mensagem enviada.');
+        var novo = document.getElementById('it-msg');
+        if (novo) novo.focus();
+        return;
+      }
+      // O redesenho da gravacao do anexo refez o compositor: a frase vai no de agora.
+      var e2 = document.getElementById('it-msg-erro');
+      var b2 = document.getElementById('it-msg-enviar');
+      if (b2) { b2.disabled = false; b2.innerHTML = H.ico('send') + ' Enviar'; }
+      if (e2) e2.textContent = (out && out.erro) || 'Não foi possível enviar.';
+    }
+    cx.addEventListener('input', function () { r.texto = cx.value; abre(); });
+    cx.addEventListener('keydown', function (e) {
+      if (!sug.hidden && filtradas.length) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); ativo = (ativo + 1) % filtradas.length; marca(); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); ativo = (ativo - 1 + filtradas.length) % filtradas.length; marca(); return; }
+        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); escolhe(ativo); return; }
+        if (e.key === 'Escape') { e.preventDefault(); fecha(); return; }
+      }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); envia(); }
+    });
+    cx.addEventListener('blur', function () { setTimeout(fecha, 120); });
+    sug.addEventListener('mousedown', function (e) {
+      var li = e.target.closest('li');
+      if (!li) return;
+      e.preventDefault();
+      escolhe([].indexOf.call(sug.children, li));
+    });
+    var bt = el.querySelector('#it-msg-enviar');
+    if (bt) bt.addEventListener('click', envia);
+    var anx = el.querySelector('#it-msg-anx');
+    function pintaAnexos() { var a = document.getElementById('it-msg-anx'); if (a) a.innerHTML = anexosRasc(r); }
+    if (anx) anx.addEventListener('click', function (e) {
+      var t = e.target.closest('[data-it-msg-tira]');
+      if (!t) return;
+      r.anexos.splice(+t.getAttribute('data-it-msg-tira'), 1);
+      pintaAnexos();
+    });
+    var arq = el.querySelector('#it-msg-arq');
+    if (arq) arq.addEventListener('change', function () {
+      var fs = [].slice.call(arq.files || []);
+      arq.value = '';
+      fs.forEach(function (f) {
+        r.subindo++;
+        pintaAnexos();
+        AC.subirAnexo(f).then(function (a) { r.anexos.push(a); }, function (e) {
+          H.toast('Anexo "' + f.name + '" não subiu: ' + (e.message || e) + '. O texto segue; tente o anexo de novo.', 'erro');
+        }).then(function () { r.subindo--; pintaAnexos(); });
+      });
+    });
   }
 
   // ── Aba Conversa ─────────────────────────────────────────────────────
@@ -637,9 +979,8 @@
     h += '<div class="grid" style="grid-template-columns:minmax(0,1fr) 300px;align-items:start">' +
       '<div style="display:flex;flex-direction:column;gap:16px;min-width:0">' +
       '<section class="pn" style="gap:14px"><span class="lab">MENSAGENS' + (msgs.length ? ' · ' + msgs.length : '') + '</span>' +
-      (msgs.length ? msgs.map(function (g) { return bolha(g, ps); }).join('') : H.vazio('message', 'Nenhuma mensagem ainda', 'A conversa desta demanda começa na Mensageria.')) +
-      '<div class="note" style="padding:10px 12px;border-radius:11px;border:1px dashed var(--bd4)">Para escrever ou responder, use a ' +
-      '<a href="' + hrefMsg + '" data-mensageria="' + H.esc(ref) + '">Mensageria</a>: a conversa ainda se escreve lá. Use @ para mencionar alguém.</div></section>' +
+      (msgs.length ? msgs.map(function (g) { return bolha(g, ps); }).join('') : H.vazio('message', 'Nenhuma mensagem ainda', 'Escreva abaixo para começar a conversa desta demanda.')) +
+      compositor(m) + '</section>' +
       '<section class="pn" style="gap:10px"><span class="lab">HISTÓRICO' + (hist.length ? ' · ' + hist.length : '') + '</span>' +
       (hist.length ? '<span class="note">Mais recente primeiro. O servidor guarda as 25 últimas alterações de cada demanda.</span>' + hist.map(entradaHist).join('')
         : '<span class="note">Nenhuma alteração registrada nesta demanda.</span>') +
@@ -698,7 +1039,8 @@
       if (!a.m && a.mesclada) {
         return '<div class="pn">' + H.vazio('link', (a.mesclada.codigo || 'Esta demanda') + ' foi mesclada',
           a.principal ? 'Ela agora vive dentro de ' + (a.principal.codigo || '') + ' · ' + (a.principal.titulo || '') + '.' : 'Ela saiu do fluxo e vive dentro de outra demanda.',
-          '<div class="row" style="flex-wrap:wrap;justify-content:center">' + (a.principal ? '<a class="btnp" href="' + H.hrefItem(a.principal) + '">Abrir ' + H.esc(a.principal.codigo || 'a principal') + '</a>' : '') + volta + '</div>') + '</div>';
+          '<div class="row" style="flex-wrap:wrap;justify-content:center">' + (a.principal ? '<a class="btnp" href="' + H.hrefItem(a.principal) + '">Abrir ' + H.esc(a.principal.codigo || 'a principal') + '</a>' : '') +
+          (H.pode('editar') && window.AXIS_ACOES && AXIS_ACOES.REGRAS.separar ? AXIS_ACOES.botao('separar', a.mesclada, 'Desfazer mesclagem', 'btn', { ico: 'undo' }) : '') + volta + '</div>') + '</div>';
       }
       if (!a.m) {
         return '<div class="pn">' + H.vazio('search', 'Item não encontrado',
@@ -706,7 +1048,10 @@
       }
       return '<div class="it">' + (ctx.rota.aba === 'conversa' ? conversa(a.m, ctx) : detalhe(a.m, ctx)) + '</div>';
     },
-    depois: function (el) {
+    depois: function (el, ctx) {
+      var alvo = acha(((ctx || {}).rota || {}).param).m;
+      if (alvo && ctx.rota.aba === 'conversa') ligarCompositor(el, alvo);
+      if (alvo) ligarTasks(el, alvo);
       /* A Mensageria abre em JANELA, como mensageria-abrir.js faz: so assim a
          janela nova herda a sessao (copia do sessionStorage). O href fica como
          reserva para quem abre em aba nova pelo menu do navegador. */

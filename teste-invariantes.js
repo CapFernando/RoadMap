@@ -25722,6 +25722,808 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     })());
   })();
 
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('App AXIS: Entregas por sprint, projetos em andamento e os PPTs (main de 03 a 05/11/2026)');
+
+  /* AS CONTAS QUE A MAIN TROUXE PARA O ADMIN, NO APP. Entregas por sprint
+     (Sprints > Entregas por sprint), o filtro de varias sprints (Quadro e
+     Backlog), Projetos em andamento e o que vai para os dois PPTs foram
+     recortados do admin.html para axis-tela-sprints.js e
+     axis-tela-projetos.js. Aqui as do admin e as do app rodam lado a lado, na
+     mesma amostra, com o relogio fixo: o render do admin escreve num
+     `document` de mentira e o que ele desenhou e comparado com o que o app
+     calcula. Os geradores de PPT nao calculam nada — o que precisa ser igual
+     e o que cada tela entrega a eles. */
+  (() => {
+    const SP = require('./sprint.js');
+    const ET = require('./etapa-demanda.js');
+    const SPT = lerTela('axis-tela-sprints.js');
+    const PJT = lerTela('axis-tela-projetos.js');
+    const REL = lerTela('axis-tela-relatorios.js');
+    const HOJE = '2026-11-05';
+    const PRAZO_ = { hojeISO: () => HOJE };
+    const linhaAdm = (re) => (ADMIN.match(re) || [''])[0];
+    const BASE_ADM = [linhaAdm(/^const mescladaEm = .*$/m), linhaAdm(/^const ehMesclada = .*$/m),
+      linhaAdm(/^const STATUS_LABELS = \{[\s\S]*?\n\};/m), linhaAdm(/^function esc\(s\) \{.*$/m),
+      corpo(ADMIN, 'function formatDate(s) {'), corpo(ADMIN, 'function statusKey(m) {'), corpo(ADMIN, 'function statusEfetivo(m) {')].join('\n');
+    const docFalso = () => {
+      const els = {};
+      return { els, getElementById: (id) => (els[id] = els[id] || { innerHTML: '', textContent: '', value: '' }) };
+    };
+
+    // ── A amostra: sprints, etapas, donos, datas, temas e projetos variados ──
+    const ETAPAS_A = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'];
+    const SPRS = ['S5-10-2026', 'S1-11-2026', 'S2-11-2026', 'S4-11-2026', '', 'lixo'];
+    const DEVS = ['', 'Ana', 'Bia / Caio', ' Ana ', 'Davi'];
+    const EU = ['', '2026-11-02', '2026-11-05', '2026-11-08', '2026-11-20', '2026-10-01'];
+    const TEMAS = ['t1', 't2', 't3', '', 'tx', 't4'];
+    const PJS = ['', 'p1', 'p2', 'p3', 'p4', 'px', 'p5'];
+    const ms = [];
+    for (let i = 0; i < 90; i++) {
+      const st = ETAPAS_A[i % ETAPAS_A.length];
+      ms.push({ id: 'm' + i, codigo: 'AX-' + (100 + i), titulo: ['Zeta', 'alfa', 'Beta', 'Ômega', 'beta'][i % 5] + ' ' + (i % 7),
+        status_planejamento: st, sprint_po: SPRS[(i * 7 + Math.floor(i / 6)) % SPRS.length], dev: DEVS[(i * 3) % DEVS.length],
+        entrega_usuario: EU[(i * 5) % EU.length], entrega: i % 4 ? '2026-11-' + String(3 + (i % 20)).padStart(2, '0') : '',
+        tema_id: TEMAS[(i * 5) % TEMAS.length], projeto_id: PJS[i % PJS.length],
+        concluido_em: st === 'concluido' && i % 3 ? '2026-10-' + String(10 + (i % 18)) + 'T12:00:00.000Z' : '',
+        entregue_em: st === 'concluido' && !(i % 3) && i % 2 ? '2026-10-20' : '',
+        poker_pontos: i % 4 ? (i % 8) + 1 : null, mesclado_em: i % 29 === 5 ? 'm1' : '' });
+    }
+    const temas = [{ id: 't1', nome: 'AXCred - Operações' }, { id: 't2', nome: 'auto' }, { id: 't3', nome: 'Ácaro - Base' }, { id: 't4', nome: 'Zeta - Portal' }];
+    const projetos = [{ id: 'p1', codigo: 'EP-001', nome: 'Um', responsavel: 'Rui', fim: '2026-12-01' },
+      { id: 'p2', codigo: 'EP-002', nome: 'Dois' }, { id: 'p3', codigo: '', nome: 'Proposto', aprovacao: 'pendente' },
+      { id: 'p4', codigo: 'EP-004', nome: 'Quatro', aprovacao: 'aprovado', fim: '2026-10-30' }, { id: 'p5', codigo: 'EP-005', nome: 'Cinco', aprovacao: 'recusado' }];
+    const state = { melhorias: ms, temas, projetos, feriados: [] };
+    const vivas = ms.filter(m => !m.mesclado_em);
+    const statusKey = m => ET.gravada(m);
+
+    // ── O filtro de varias sprints (4d7c38f) ────────────────────────────
+    const fsAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', BASE_ADM + '\n' + corpo(ADMIN, 'function listaOuNulo(v) {') + '\n' +
+      corpo(ADMIN, 'function matchSprintKb(m, f) {') + '\n' + corpo(ADMIN, 'function opcoesSprintKb() {') +
+      '\nreturn { listaOuNulo, matchSprintKb, opcoesSprintKb };')(state, SP, PRAZO_, ET);
+    const fsApp = new Function([corpo(SPT, 'function spListaOuNulo(v) {'), corpo(SPT, 'function spCasaSprint(SPm, m, f) {'),
+      corpo(SPT, 'function spOpcoesSprint(SPm, vivas, hoje, feriados) {')].join('\n') + '\nreturn { spListaOuNulo, spCasaSprint, spOpcoesSprint };')();
+    const opA = fsAdm.opcoesSprintKb().map(o => o.key + '=' + o.label.replace(/^● /, '') + ':' + o.n);
+    const opP = fsApp.spOpcoesSprint(SP, vivas, HOJE, []).map(o => o.key + '=' + o.label + ':' + o.n);
+    ok(opA.length > 4 && JSON.stringify(opA) === JSON.stringify(opP), 'as opcoes do filtro de sprint do app = opcoesSprintKb do admin (Todas, Sem sprint e cada sprint com a contagem)',
+       opA.join(' ') + ' // ' + opP.join(' '));
+    const filtros = [null, [], '', '__fora__', ['__fora__'], 'S1-11-2026', ['S1-11-2026', '__fora__'], ['S2-11-2026', 'S5-10-2026'], ['S9-01-2027']];
+    const divF = [];
+    filtros.forEach(f => {
+      if (JSON.stringify(fsAdm.listaOuNulo(f)) !== JSON.stringify(fsApp.spListaOuNulo(f))) divF.push('lista ' + JSON.stringify(f));
+      ms.forEach(m => { if (fsAdm.matchSprintKb(m, f) !== fsApp.spCasaSprint(SP, m, f)) divF.push(JSON.stringify(f) + '/' + m.codigo); });
+    });
+    ok(divF.length === 0, 'casa sprint do app = matchSprintKb do admin, e a lista vazia volta a ser "todas" (' + filtros.length * ms.length + ' casos)', divF.slice(0, 6).join(', '));
+
+    // ── Entregas por sprint (953e68c a 43706a7) ─────────────────────────
+    const esAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'document', BASE_ADM + '\nlet _esSprint = \'\';\nlet _esFiltro = \'todas\';\n' +
+      corpo(ADMIN, 'function opcoesSprintKb() {') + '\n' + corpo(ADMIN, 'function renderEntregasSprint() {') +
+      '\nreturn function (s, f) { _esSprint = s; _esFiltro = f; renderEntregasSprint(); return _esSprint; };');
+    const esApp = new Function([corpo(SPT, 'function esResumo(SPm, etapa, vivas, r, hoje, projetos) {'), corpo(SPT, 'function esGrupos(lista, temas) {'),
+      corpo(SPT, 'function esEntregaUsuario(m, hoje, aberta) {')].join('\n') + '\nreturn { esResumo, esGrupos, esEntregaUsuario };')();
+    const br = (d) => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
+    const semTag = (t) => String(t).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    const divE = [];
+    let casosE = 0;
+    ['S5-10-2026', 'S1-11-2026', 'S2-11-2026', 'S4-11-2026', 'S1-12-2026'].forEach(r => ['todas', 'entregues', 'falta_com', 'falta_sem'].forEach(f => {
+      casosE++;
+      const doc = docFalso();
+      esAdm(state, SP, PRAZO_, ET, doc)(r, f);
+      const E = doc.els;
+      const x = esApp.esResumo(SP, statusKey, vivas, r, HOJE, projetos);
+      const tag = r + '/' + f;
+      if (String(E['es-conta'].textContent) !== String(x.ms.length)) divE.push(tag + ' conta ' + E['es-conta'].textContent + '/' + x.ms.length);
+      const kv = [...E['es-kpis'].innerHTML.matchAll(/class="ger-kpi-value"[^>]*>([^<]*)</g)].map(a => a[1]).join(',');
+      const kp = x.ms.length ? [x.ms.length, x.entregues.length, x.faltaCom.length, x.faltaSem.length].join(',') : '';
+      if (kv !== kp) divE.push(tag + ' cartoes ' + kv + '/' + kp);
+      const subs = [...E['es-kpis'].innerHTML.matchAll(/class="es-kpi-sub">([\s\S]*?)<\/div>/g)].map(a => semTag(a[1]));
+      if (x.ms.length) {
+        const espera = [x.ms.length + ' task(s)' + (x.negadas ? ' · ' + x.negadas + ' negada(s)' : '') + ' · ' + x.comProj + ' em projeto',
+          x.entregues.length + ' de ' + x.validas + ' task(s) · ' + x.pctEntregues + '%',
+          x.pctFaltaCom + '% das tasks' + (x.vencCom ? ' · ' + x.vencCom + ' com entrega vencida' : ''),
+          x.faltaSem.length ? x.pctFaltaSem + '% das tasks · precisam de dono' : 'todas têm dono'];
+        if (JSON.stringify(subs) !== JSON.stringify(espera)) divE.push(tag + ' notas ' + JSON.stringify(subs) + ' / ' + JSON.stringify(espera));
+      }
+      const pes = [...E['es-pessoas'].innerHTML.matchAll(/class="es-pessoa[^"]*"[^>]*>([\s\S]*?)<\/span>/g)].map(a => semTag(a[1]));
+      const pesP = x.pessoas.map(p => p.nome + ' ' + p.n + (p.vencidas ? ' · ' + p.vencidas + ' vencida(s)' : ''));
+      if (JSON.stringify(pes) !== JSON.stringify(pesP)) divE.push(tag + ' por pessoa ' + JSON.stringify(pes) + ' / ' + JSON.stringify(pesP));
+      const venc = (E['es-resumo'].textContent.match(/^(\d+)/) || [0, 0])[1];
+      if (+venc !== x.vencidas) divE.push(tag + ' vencidas ' + venc + '/' + x.vencidas);
+      // A lista: grupos, ordem e a entrega ao usuario de cada linha.
+      const lista = f === 'entregues' ? x.entregues : f === 'falta_com' ? x.faltaCom : f === 'falta_sem' ? x.faltaSem : x.ms;
+      const gs = esApp.esGrupos(lista, temas);
+      const gA = [...E['es-lista'].innerHTML.matchAll(/margin-bottom:8px;">([^<]*) <span[^>]*>\((\d+)\)/g)].map(a => a[1] + ':' + a[2]);
+      const gP = gs.map(g => g.nome + ':' + g.itens.length);
+      if (JSON.stringify(gA) !== JSON.stringify(gP)) divE.push(tag + ' grupos ' + gA.join('|') + ' / ' + gP.join('|'));
+      const cards = E['es-lista'].innerHTML.split('<div class="card"').slice(1);
+      const lA = cards.map(c => (c.match(/monospace;font-size:12px;color:var\(--text3\)">([^<]*)</) || [])[1] + ' ' + semTag((c.match(/(Entrega usuário: [^<]*)<\/span>/) || [])[1] || ''));
+      const lP = [];
+      gs.forEach(g => g.itens.forEach(m => {
+        const k = statusKey(m), u = esApp.esEntregaUsuario(m, HOJE, k !== 'concluido' && k !== 'negada');
+        lP.push(m.codigo + ' Entrega usuário: ' + (u.data ? br(u.data) + u.tag : 'a definir'));
+      }));
+      if (JSON.stringify(lA) !== JSON.stringify(lP)) divE.push(tag + ' linhas ' + lA.slice(0, 4).join('|') + ' / ' + lP.slice(0, 4).join('|'));
+    }));
+    ok(divE.length === 0, 'Entregas por sprint do app = renderEntregasSprint do admin: cartoes, notas, por pessoa, grupos, ordem e entrega ao usuario (' + casosE + ' sprint x filtro)',
+       divE.slice(0, 4).join(' ;; '));
+    ok(/var ops = spOpcoesSprint\(SP\(\), vivas, H\.hoje\(\), fer\(D\)\)\.filter\(function \(o\) \{ return o\.key && o\.key !== '__fora__'; \}\);/.test(SPT) &&
+       /var x = esResumo\(SP\(\), H\.colunaDe, vivas, r, H\.hoje\(\), D\.projetos \|\| \[\]\);/.test(SPT) && /esGrupos\(lista, D\.temas \|\| \[\]\)/.test(SPT),
+       'e a aba Entregas le das funcoes medidas acima (as sprints do filtro, sem Todas e Sem sprint)');
+
+    // ── Projetos em andamento e o PPT deles (7143668 a 321cd68) ───────────
+    const PJ_ADM = [BASE_ADM, linhaAdm(/^const pjAprovado\s*=.*$/m), linhaAdm(/^const pjPendente\s*=.*$/m), linhaAdm(/^const pjRecusado\s*=.*$/m),
+      linhaAdm(/^const pjLista = .*$/m), linhaAdm(/^const pjDemandas = .*$/m), corpo(ADMIN, 'function pjResumo(p) {'),
+      linhaAdm(/^const pjChaveSprint = .*$/m), linhaAdm(/^const pjSprintAtual = .*$/m), linhaAdm(/^const pjAberta = .*$/m),
+      corpo(ADMIN, 'function pjNaSprintAtualOuFutura(m) {'), corpo(ADMIN, 'function pjEmAndamento(p) {'),
+      linhaAdm(/^const PJ_EM_ANDAMENTO = .*$/m), linhaAdm(/^const PJ_ETAPA_ROT = \{[\s\S]*?\};/m),
+      corpo(ADMIN, 'function pjAndamentoDados(p) {'), corpo(ADMIN, 'function pjAndamentoHTML(p) {'), corpo(ADMIN, 'function renderProjetos() {'),
+      "let _pjVisao = 'andamento';", corpo(ADMIN, 'async function imprimirProjetosAndamento(botao) {'),
+      corpo(ADMIN, 'async function imprimirAprovacaoReq(botao) {')].join('\n');
+    const pjAppSrc = [(PJT.match(/^ {2}var PJA_EM_ANDAMENTO = .*$/m) || [''])[0], corpo(PJT, 'function pjaChave(r) {'),
+      corpo(PJT, 'function pjaNaSprint(SPm, etapa, m, atual) {'), corpo(PJT, 'function pjaEmAndamento(SPm, etapa, p, ms, atual) {'),
+      corpo(PJT, 'function pjaDados(SPm, etapa, p, ms, atual) {'), corpo(PJT, 'function pjaParaPPT(SPm, etapa, rotulos, ps, ms, temas, atual) {'),
+      corpo(PJT, 'function pjaOrdena(gravada, efetiva, ps, ms) {')].join('\n');
+    const pjApp = new Function(pjAppSrc + '\nreturn { pjaParaPPT, pjaOrdena, pjaEmAndamento };')();
+    const ROT_APP = {};
+    new Function((lerTela('axis-app.js').match(/var ETAPAS = \[[\s\S]*?\];/) || ['var ETAPAS = [];'])[0].replace('var ETAPAS =', 'return'))()
+      .forEach(e => { ROT_APP[e.id] = e.rotulo; });
+    const capt = {};
+    const doc = docFalso();
+    const pjAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'document', 'window', 'PROJETOSPPT', 'APROVACAOPPT', 'toast',
+      PJ_ADM + '\nreturn { renderProjetos, imprimirProjetosAndamento, imprimirAprovacaoReq };');
+    const GER = { gera: async (ps, o) => { capt.ps = ps; capt.o = o; return { projetos: ps.length }; } };
+    const GER2 = { gera: async (l, o) => { capt.apr = l; capt.aprO = o; return { demandas: l.length }; } };
+    const fA = pjAdm(state, SP, PRAZO_, ET, doc, { PROJETOSPPT: GER, APROVACAOPPT: GER2 }, GER, GER2, () => {});
+    fA.renderProjetos();
+    const ordA = [...doc.els['pj-lista'].innerHTML.matchAll(/<div class="pj-and-topo"[^>]*>(?:<span class="pj-cod">([^<]*)<\/span>)?<span class="pj-nome">([^<]*)</g)].map(a => (a[1] || '') + '·' + a[2]);
+    const ordP = pjApp.pjaOrdena(statusKey, m => ET.efetiva(m, HOJE), projetos, vivas)
+      .filter(p => pjApp.pjaEmAndamento(SP, statusKey, p, vivas, SP.sprintCorrente(HOJE, []))).map(p => (p.codigo || '') + '·' + p.nome);
+    ok(ordA.length >= 2 && JSON.stringify(ordA) === JSON.stringify(ordP), 'Projetos em andamento do app: os mesmos projetos, na mesma ordem do renderProjetos do admin',
+       ordA.join(', ') + ' // ' + ordP.join(', '));
+    pendentes.push((async () => {
+      await fA.imprimirProjetosAndamento(null);
+      const pP = pjApp.pjaParaPPT(SP, statusKey, ROT_APP, projetos, vivas, temas, SP.sprintCorrente(HOJE, []));
+      const nLinhas = (capt.ps || []).reduce((t, p) => t + p.feitas.length + p.andamento.length + p.planejado.length, 0);
+      ok(nLinhas > 10 && JSON.stringify(capt.ps) === JSON.stringify(pP),
+         'o que o app entrega ao projetos-ppt.js = o que o admin entrega (projetos, entrega, Feitas, Em andamento, Planejado, etapa, data e sprint)',
+         JSON.stringify(capt.ps).slice(0, 300) + ' // ' + JSON.stringify(pP).slice(0, 300));
+      ok(/sprint: raiz\.SPRINTPO \? raiz\.SPRINTPO\.rotuloCurto\(H\.sprintAtual\(\)\) : ''/.test(REL) && /\{ hoje: H\.hoje\(\), sprint:/.test(REL) &&
+         capt.o && capt.o.hoje === HOJE && capt.o.sprint === SP.rotuloCurto(SP.sprintCorrente(HOJE, [])),
+         'e as opcoes do PPT (hoje e a sprint atual curta) sao as mesmas', JSON.stringify(capt.o));
+      await fA.imprimirAprovacaoReq(null);
+      const espApr = ms.filter(m => !m.oculto && !m.mesclado_em && statusKey(m) === 'levantar_req').map(m => m.codigo);
+      ok((capt.apr || []).length > 3 && JSON.stringify(capt.apr.map(m => m.codigo)) === JSON.stringify(espApr) &&
+         /function demandasAprovacao\(\) \{\s*return H\.visiveis\(\)\.filter\(function \(m\) \{ return H\.colunaDe\(m\) === 'levantar_req'; \}\);/.test(REL) &&
+         /G2\.gera\(demandasAprovacao\(\), \{ temas: \(raiz\.AXIS_APP\.APP\.D \|\| \{\}\)\.temas \|\| \[\] \}\)/.test(REL),
+         'o PPT de aprovacao de requisitos recebe no app o mesmo que no admin: a etapa inteira (sem mesclada nem oculta) e os temas',
+         JSON.stringify((capt.apr || []).map(m => m.codigo)) + ' // ' + JSON.stringify(espApr));
+    })());
+    ok(/data-axis-ppt="aprovacao"/.test(lerTela('axis-tela-quadro.js')) && /data-axis-ppt="projetos"/.test(PJT) &&
+       /aprovacao-ppt\.js\?v=/.test(lerTela('axis.html')) && /projetos-ppt\.js\?v=/.test(lerTela('axis.html')) && /apresentacao\.js\?v=/.test(lerTela('axis.html')),
+       'o Quadro e Projetos tem o botao Imprimir, e o axis.html carrega os geradores e o kit (apresentacao.js) que carrega a biblioteca');
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('App AXIS: os gestos do painel do dev e a conversa (dev.html, mensageria.html)');
+
+  /* O QUE SO O PAINEL DO DEV E A MENSAGERIA GRAVAVAM, AGORA NO APP. Cada
+     funcao da tela antiga e recortada e executada com um `state` e um DOM de
+     mentira; o que ela mandaria ao `saveToGitHub` (ou ao Worker) e comparado
+     ao patch da regra do app, caso a caso. Divergir aqui e o app gravar outra
+     coisa em silencio. */
+  (() => {
+    const AC = require('./axis-acoes.js');
+    const SPm = require('./sprint.js'), GRm = require('./grill.js'), SUBm = require('./subtarefa.js');
+    const DNm = require('./dev-nome.js'), ETm = require('./etapa-demanda.js'), PIm = require('./pipelines.js');
+    const HOm = require('./homologacao.js');
+    const MSG = lerTela('mensageria.html');
+    const HOJE = '2026-11-05', AGORA = '2026-11-05T14:00:00.000Z';
+    const EU = 'Ana Dev';
+    const copia = (x) => JSON.parse(JSON.stringify(x));
+    const ordena = (o) => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v))
+      ? Object.keys(v).sort().reduce((acc, x) => { acc[x] = v[x]; return acc; }, {}) : v);
+    const R = { SPRINTPO: SPm, GRILL: GRm, DEVNOME: DNm, ETAPA: ETm, PIPELINES: PIm, HOMOLOGACAO: HOm,
+                PAUSA: require('./pausa.js'), VINCULO: require('./vinculo.js'), PREVOO: require('./prevoo.js'),
+                COLABORADORES: { emailPara: (n) => (n ? String(n).toLowerCase().replace(/\s+/g, '.') + '@x' : '') } };
+    const ctx = (D, extra) => Object.assign({ papel: 'dev', quem: EU, nomes: [EU], hoje: HOJE, agora: AGORA, D: D, lista: D.melhorias, aprovadores: null, R }, extra || {});
+    const corte = (a) => { const c = corpo(DEV, a); if (!c) throw new Error('nao achei no dev.html: ' + a); return c; };
+    const ETAPAS_DO_DEV_SRC = (DEV.match(/const ETAPAS_DO_DEV = \[[^\]]*\];/) || [''])[0];
+    const STATUS_SRC = (DEV.match(/const STATUS_POR_ETAPA = \{[\s\S]*?\n\};/) || [''])[0] + '\n' + (DEV.match(/const statusDaEtapa = [^\n]+/) || [''])[0];
+    ok(!!ETAPAS_DO_DEV_SRC && /statusDaEtapa/.test(STATUS_SRC), 'o painel do dev tem ETAPAS_DO_DEV e STATUS_POR_ETAPA para serem recortados');
+
+    // A base de mentira: a S1-11 em curso, a S2-11 montando.
+    const base = (ms) => ({ melhorias: ms, devs_perfil: {}, desenvolvedores: [EU, 'Bia'],
+                            sprints: [{ rotulo: 'S1-11-2026', iniciada_em: '2026-11-03' }, { rotulo: 'S2-11-2026' }] });
+    const F = [
+      { id: 'a', codigo: 'AX-A', status_planejamento: 'em_andamento', status: 'iniciada', dev: EU, sprint_po: 'S1-11-2026', tipo: 'evolucao', entrega: '2026-11-20' },
+      { id: 'b', codigo: 'AX-B', status_planejamento: 'planejado', status: 'estimada', dev: '', sprint_po: 'S1-11-2026', tipo: 'evolucao', entrega: '2026-11-20' },
+      { id: 'c', codigo: 'AX-C', status_planejamento: 'planejado', status: 'estimada', dev: 'Bia', sprint_po: 'S1-11-2026', tipo: 'evolucao' },
+      { id: 'd', codigo: 'AX-D', status_planejamento: 'planning', status: 'estimada', dev: 'Bia', sprint_po: 'S2-11-2026', tipo: 'evolucao' },
+      { id: 'e', codigo: 'AX-E', status_planejamento: 'backlog', status: 'recebida', dev: '', tipo: 'evolucao' },
+      { id: 'f', codigo: 'AX-F', status_planejamento: 'planejado', status: 'estimada', dev: '', sprint_po: 'S2-11-2026', tipo: 'evolucao' },
+      { id: 'g', codigo: 'AX-G', status_planejamento: 'planning', status: 'estimada', dev: '', sprint_po: 'S2-11-2026', tipo: 'evolucao', dados_bi: true },
+      { id: 'h', codigo: 'AX-H', status_planejamento: 'planejado', status: 'estimada', dev: EU, sprint_po: 'S2-11-2026', tipo: 'evolucao' },
+      { id: 'i', codigo: 'AX-I', status_planejamento: 'planejado', status: 'estimada', dev: '', sprint_po: 'S1-11-2026', mesclado_em: 'a' },
+      { id: 'j', codigo: 'AX-J', status_planejamento: 'validacao_area', status: 'iniciada', dev: 'Bia / ' + EU, sprint_po: 'S1-11-2026', tipo: 'evolucao' },
+      { id: 'k', codigo: 'AX-K', status_planejamento: 'levantar_req', status: 'recebida', dev: '', sprint_po: 'S1-11-2026', tipo: 'evolucao' },
+      { id: 'l', codigo: 'AX-L', status_planejamento: 'backlog', status: 'recebida', dev: '', sprint_po: 'S2-11-2026', tipo: 'sustentacao' },
+      { id: 'n', codigo: 'AX-N', status_planejamento: 'negada', status: 'negada', dev: EU }
+    ];
+
+    // ── 82bff39: o que e meu, o que e fila, e o filtro "Mostrar" ──────────
+    const filtroVelho = new Function('window', 'document', 'state', 'currentDev', 'SPRINTPO', 'DEVNOME', 'PIPELINES', 'ETAPA',
+      'let _temaFilter = null;\n' + corte('function getStatusKey(m) {') + '\n' + corte('function doMeuTime(m) {') + '\n' +
+      corte('function getFiltered() {') + '\nreturn getFiltered;');
+    let divF = [];
+    ['', 'meu', 'fila'].forEach(fd => {
+      const D = base(copia(F));
+      const doc = { getElementById: (id) => ({ value: id === 'f-dono' ? fd : '' }) };
+      const velho = filtroVelho({ SPRINTPO: SPm, PIPELINES: PIm }, doc, D, EU, SPm, DNm, PIm, ETm)().map(m => m.id).sort().join();
+      const app = D.melhorias.filter(m => AC.mostraNoPainel(m, ctx(D), fd)).map(m => m.id).sort().join();
+      if (velho !== app) divF.push('"' + fd + '": ' + velho + ' / ' + app);
+    });
+    ok(divF.length === 0, 'o recorte do painel do dev (getFiltered) = o do app, nos tres "Mostrar"', divF.join(' | '));
+    const marcaSrc = /\$\{DEVNOME\.eDe\(m, currentDev\)\s*\? '<div class="kcard-dono meu"[\s\S]*?: String\(m\.dev \|\| ''\)\.trim\(\)\s*\? '<div class="kcard-dono outro"[\s\S]*?: '<div class="kcard-dono fila"/.test(DEV);
+    ok(marcaSrc, 'a marca do card do dev.html e "meu" se esta no nome, "outro" se tem dev, "fila" se nao tem');
+    if (marcaSrc) {
+      const D = base(copia(F));
+      const vis = D.melhorias.filter(m => AC.mostraNoPainel(m, ctx(D), ''));
+      const div = vis.filter(m => AC.donoDoCard(m, ctx(D)) !== (DNm.eDe(m, EU) ? 'meu' : String(m.dev || '').trim() ? 'outro' : 'fila'));
+      ok(vis.length >= 6 && div.length === 0, 'a marca de cada card visivel no app = a do renderCard (' + vis.length + ' cards)', div.map(m => m.id).join());
+    }
+
+    // ── e5cace1: pegar da fila = o updateStatus do arraste, com o dono ────
+    const atualizaVelho = (D, subsGravar) => new Function('state', 'currentDev', 'window', 'SPRINTPO', 'ETAPA', 'saida', 'subsGravar',
+      ETAPAS_DO_DEV_SRC + '\n' + STATUS_SRC + '\n' +
+      'let _msAnexosMexidos = false, _msAnexos = [], _msProjetoMexido = false, _msSolicitanteMexido = false, _msSubsMexido = !!subsGravar;\n' +
+      'const renderKanban = () => {}; const toast = (t) => { saida.toast = t; }; const msAguardaAnexos = async () => true;\n' +
+      'const msSubParaGravar = () => subsGravar; const saveToGitHub = async (p) => { saida.patch = p; return true; };\n' +
+      corte('function getStatusKey(m) {') + '\n' + corte('function travaSprintBarra(id, colKey) {') + '\n' + corte('async function updateStatus(') + '\nreturn updateStatus;');
+    const WIN = { SPRINTPO: SPm, PRAZO: { hojeISO: () => HOJE } };
+    pendentes.push((async () => {
+      const div = [];
+      let pegou = 0;
+      for (const m0 of F.filter(m => AC.donoDoCard(m, ctx(base(copia(F)))) === 'fila').concat([
+        { id: 'z', codigo: 'AX-Z', status_planejamento: 'planejado', status: 'estimada', dev: '', tipo: 'evolucao' }])) {
+        const D = base(copia(F).concat(m0.id === 'z' ? [copia(m0)] : []));
+        const saida = {};
+        await atualizaVelho(D)(D, EU, WIN, SPm, ETm, saida, null)(m0.id, 'em_andamento');
+        const velho = saida.patch ? saida.patch[m0.id] : null;
+        const r = AC.REGRAS.pegar(copia(m0), {}, ctx(base(copia(F))));
+        const app = r.ok ? r.patch : null;
+        if (app) pegou++;
+        if (JSON.stringify(velho && ordena(velho)) !== JSON.stringify(app && ordena(app))) div.push(m0.id + ': ' + JSON.stringify(velho) + ' / ' + JSON.stringify(app));
+      }
+      ok(div.length === 0 && pegou >= 2, 'pegar da fila: o patch do app = o do updateStatus com `assumiu` (e a recusa sem sprint e a mesma)', div.join(' | '));
+    })());
+    ok(!AC.REGRAS.pegar(F[2], {}, ctx(base(copia(F)))).ok && !AC.REGRAS.pegar(F[1], {}, ctx(base(copia(F)), { papel: 'admin' })).ok,
+       'pegar so vale para o dev e para a demanda sem dono');
+
+    // ── Subtarefas: os editores msSub* e o patch do modal ─────────────────
+    const subsVelho = new Function('SUBTAREFA', 'HOJE', 'inicial',
+      'let _msSubs = JSON.parse(JSON.stringify(inicial)); let _msSubsMexido = false;\n' +
+      'const msSubRender = () => {}; const msSubAplicaTotal = () => {}; const toast = () => {}; const hojeISOdev = () => HOJE;\n' +
+      'const document = { getElementById: () => null, querySelectorAll: () => [] };\n' +
+      ['function msSubProgresso(subs) {', 'function msSubAdiciona() {', 'function msSubMarca(i, valor) {', 'function msSubTexto(i, valor) {',
+       'function msSubData(i, valor, qual) {', 'function msSubHoras(i, v) {', 'function msSubRemove(i) {', 'function msSubParaGravar() {'].map(corte).join('\n') +
+      '\nreturn { adiciona: msSubAdiciona, marca: msSubMarca, texto: msSubTexto, data: msSubData, horas: msSubHoras, remove: msSubRemove, grava: msSubParaGravar };');
+    const inicial = SUBm.lista({ subtarefas: [{ titulo: 'Tela', data: '2026-11-04', feita: true, horas: 2 }, null,
+                                              { titulo: 'API', inicio: '2026-11-01', fim: '2026-11-03', horas: 0 }, { titulo: '  Testes  ', feita: false }] });
+    const OPS = [['adiciona'], ['texto', 3, 'Novo passo'], ['marca', 3, true], ['horas', 3, '0.75'], ['data', 0, '2026-11-10', 'fim'],
+                 ['data', 0, '2026-11-01', 'inicio'], ['marca', 1, false], ['remove', 2], ['adiciona'], ['texto', 1, 'x'.repeat(200)],
+                 ['horas', 0, ''], ['marca', 4, true], ['horas', 1, 'abc']];
+    const v = subsVelho(SUBm, HOJE, inicial);
+    let l = copia(inicial);
+    OPS.forEach(o => {
+      v[o[0]].apply(null, o.slice(1));
+      l = o[0] === 'marca' ? AC.SUB.marca(l, o[1], o[2], HOJE) : AC.SUB[o[0]].apply(null, [l].concat(o.slice(1)));
+    });
+    ok(JSON.stringify(v.grava()) === JSON.stringify(AC.SUB.paraGravar(l)),
+       'as subtarefas editadas no app gravam o mesmo que os msSub* do dev.html (' + OPS.length + ' edicoes)', JSON.stringify(v.grava()) + ' / ' + JSON.stringify(AC.SUB.paraGravar(l)));
+    pendentes.push((async () => {
+      const div = [];
+      for (const e of ['em_andamento', 'planejado']) {
+        const m0 = { id: 's', codigo: 'AX-S', status_planejamento: e, status: e === 'planejado' ? 'estimada' : 'iniciada', dev: EU, sprint_po: 'S1-11-2026',
+                     tipo: 'evolucao', horas_realizadas: 3, implementacao: 'feito', subtarefas: [] };
+        const gravar = AC.SUB.paraGravar(l);
+        const D = base([copia(m0)]);
+        const saida = {};
+        // `saveStatus` com o select em "manter": updateStatus(id, etapa crua, undefined, texto ja escrito).
+        await atualizaVelho(D, gravar)(D, EU, WIN, SPm, ETm, saida, gravar)('s', e, undefined, m0.implementacao || undefined);
+        const r = AC.REGRAS.subtarefas(copia(m0), { lista: l }, ctx(base([copia(m0)])));
+        const a = Object.assign(copia(m0), saida.patch ? saida.patch.s : {}), b = Object.assign(copia(m0), r.ok ? r.patch : {});
+        if (!r.ok || !saida.patch || ordena(a) !== ordena(b) || Object.keys(r.patch).join() !== 'subtarefas') div.push(e + ': ' + JSON.stringify(saida.patch) + ' / ' + JSON.stringify(r));
+      }
+      ok(div.length === 0, 'salvar as subtarefas: a demanda fica igual a do modal do dev.html, e o patch do app so leva `subtarefas`', div.join(' | '));
+    })());
+    ok(!AC.REGRAS.subtarefas({ id: 's', status_planejamento: 'validacao', dev: EU }, { lista: [] }, ctx(base([]))).ok &&
+       !AC.REGRAS.subtarefas({ id: 's', status_planejamento: 'em_andamento', dev: 'Bia' }, { lista: [] }, ctx(base([]))).ok &&
+       AC.REGRAS.subtarefas({ id: 's', status_planejamento: 'planejado', dev: '' }, { lista: [] }, ctx(base([]))).ok,
+       'subtarefas: com o PM/PO nao (saveStatus), demanda de outra pessoa e leitura (msModoLeitura), a sem dono e de quem abrir');
+
+    // ── salvarEntrega: horas, texto e resumo com o PM/PO ──────────────────
+    const entregaVelho = new Function('state', 'ETAPA', 'saida', 'valores',
+      'let _msAnexosMexidos = false, _msAnexos = [], _msSubsMexido = false; const msSubParaGravar = () => [];\n' +
+      'const window = {}; const toast = (t) => { saida.toast = t; }; const closeModal = () => {}; const renderKanban = () => {};\n' +
+      'const msAguardaAnexos = async () => true; const saveToGitHub = async (p) => { saida.patch = p; return true; };\n' +
+      'const document = { getElementById: (id) => ({ value: valores[id] == null ? \'\' : valores[id], focus() {} }) };\n' +
+      corte('function getStatusKey(m) {') + '\n' + corte('async function salvarEntrega() {') + '\nreturn salvarEntrega;');
+    pendentes.push((async () => {
+      const div = [];
+      const CASOS = [['validacao', '9', 'tela nova', 'Uma frase'], ['validacao', '0', 'x', 'y'], ['validacao', '4', '  ', 'y'],
+                     ['validacao', '4', 'x', ''], ['concluido', '4', 'x', 'y'], ['validacao', '2.75', ' com espaco ', ' resumo ']];
+      for (const [e, h, impl, res] of CASOS) {
+        const m0 = { id: 'v', codigo: 'AX-V', status_planejamento: e, dev: EU, horas_realizadas: 1, implementacao: 'antes', resumo_entrega: 'antes' };
+        const saida = {};
+        await entregaVelho({ melhorias: [copia(m0)] }, ETm, saida, { 'ms-id': 'v', 'ms-horas': h, 'ms-implementacao': impl, 'ms-resumo': res })();
+        const r = AC.REGRAS.salvarEntrega(copia(m0), { horas: h, implementacao: impl, resumo: res }, ctx(base([])));
+        const velho = saida.patch ? ordena(saida.patch.v) : null, app = r.ok ? ordena(r.patch) : null;
+        if (velho !== app) div.push(e + '/' + h + '/' + impl + '/' + res + ': ' + velho + ' / ' + app);
+      }
+      ok(div.length === 0, 'corrigir a entrega: o patch do app = o do salvarEntrega do dev.html, e recusa nos mesmos casos', div.join(' | '));
+    })());
+
+    // ── Referencias do GitHub: ghLinkColeta ──────────────────────────────
+    const LG = lerTela('links-github.js');
+    const docGh = { v: {}, createElement: () => ({}), head: { appendChild() {} }, getElementById(id) { const k = id.replace(/^ms-link-/, ''); return k in this.v ? { value: this.v[k], classList: { add() {}, remove() {} }, focus() {} } : null; } };
+    const WG = {};
+    new Function('window', 'document', LG)(WG, docGh);
+    const GH = { erro: WG.ghLinkErro, normaliza: WG.ghLinkNormaliza };
+    let divG = [];
+    [{ repo: 'audaxcapitalsa/AXCRED-DJANGO', issue: '683', pr: '712, 715', milestone: '4' }, { repo: '', issue: '683', pr: '', milestone: '' },
+     { repo: '', issue: 'https://github.com/a/b/issues/9', pr: '', milestone: '' }, { repo: 'a/b', issue: '', pr: 'https://github.com/a/b/issues/3', milestone: '' },
+     { repo: 'a/b', issue: '', pr: '', milestone: '' }, { repo: 'a/b', issue: '#12', pr: '7 8;9', milestone: 'https://jira.x/1' }].forEach((cs, i) => {
+      docGh.v = Object.assign({}, cs);
+      const velho = WG.ghLinkColeta('ms', () => {});
+      const r = AC.REGRAS.referencias({ id: 'r', status_planejamento: 'em_andamento', dev: EU }, cs, ctx(base([]), { R: Object.assign({}, R, { GHLINK: GH }) }));
+      if (JSON.stringify(velho) !== JSON.stringify(r.ok ? r.patch : null)) divG.push(i + ': ' + JSON.stringify(velho) + ' / ' + JSON.stringify(r));
+    });
+    ok(divG.length === 0, 'referencias do GitHub: o patch do app = o ghLinkColeta do modal (e recusa onde ele recusa)', divG.join(' | '));
+
+    // ── Grill: msGrillResponde ───────────────────────────────────────────
+    const grillVelho = new Function('state', 'GRILL', 'currentDev', 'saida', 'valores',
+      STATUS_SRC + '\n' +
+      'const toast = (t) => { saida.toast = t; }; const closeModal = () => {}; const renderKanban = () => {};\n' +
+      'const confirmar = async () => true; const saveToGitHub = async (p) => { saida.patch = p; return true; };\n' +
+      'const document = { getElementById: (id) => ({ value: valores[id] == null ? \'\' : valores[id], focus() {} }) };\n' +
+      corte('async function msGrillResponde(veredito) {') + '\nreturn msGrillResponde;');
+    const semHora = (p) => { if (!p) return null; const x = copia(p); if (x.grill) { x.grill.respondido_em = 'T'; (x.grill.pontos || []).forEach(q => { if (q.em) q.em = 'T'; }); } return ordena(x); };
+    pendentes.push((async () => {
+      const div = [];
+      for (const [ver, txt] of [['ok', ''], ['ok', 'uma duvida que ficou'], ['duvida', 'De onde vem o limite?\n\n  E com dois contratos?  '], ['duvida', '   ']]) {
+        const m0 = { id: 'g', codigo: 'AX-G', status_planejamento: 'backlog', dev: EU,
+                     grill: { marcado: true, marcado_em: '2026-11-01T10:00:00Z', marcado_por: 'PO', pontos: [{ texto: 'ja perguntado', em: 'x', por: 'Bia' }] } };
+        const saida = {};
+        await grillVelho({ melhorias: [copia(m0)] }, GRm, EU, saida, { 'ms-id': 'g', 'ms-grill-pontos': txt })(ver);
+        const r = AC.REGRAS.grill(copia(m0), { veredito: ver, pontos: txt }, ctx(base([])));
+        const velho = saida.patch ? semHora(saida.patch.g) : null, app = r.ok ? semHora(r.patch) : null;
+        if (velho !== app) div.push(ver + '/' + JSON.stringify(txt) + ': ' + velho + ' / ' + app);
+      }
+      ok(div.length === 0, 'o parecer do Grill: o patch do app = o do msGrillResponde (entendi -> Planning, duvida -> requisitos, com os pontos)', div.join(' | '));
+    })());
+    ok(!AC.REGRAS.grill({ id: 'g', status_planejamento: 'concluido', dev: EU, grill: { marcado: true } }, { veredito: 'ok' }, ctx(base([]))).ok,
+       'o app NAO devolve ao Planning, pelo Grill, uma demanda concluida (a marca antiga pendente da base) — o dev.html deixaria');
+
+    // ── Vincular: saveNewDep ─────────────────────────────────────────────
+    const vincVelho = new Function('state', 'SPRINTPO', 'COLABORADORES', 'currentDev', 'saida', 'valores',
+      'const window = { COLABORADORES: COLABORADORES }; const uid = () => \'NOVO\'; const closeModal = () => {}; const renderKanban = () => {};\n' +
+      'const toast = (t) => { saida.toast = t; }; const saveToGitHub = async (p) => { saida.patch = p; return true; };\n' +
+      'const document = { getElementById: (id) => ({ value: valores[id] == null ? \'\' : valores[id] }), querySelector: () => ({ value: valores.tipo }) };\n' +
+      corte('function depTipoEscolhido() {') + '\n' + corte('function solicitanteDaDependencia(parent) {') + '\n' + corte('async function saveNewDep() {') + '\nreturn saveNewDep;');
+    pendentes.push((async () => {
+      const div = [];
+      const pai = { id: 'p', codigo: 'AX-P', status_planejamento: 'em_andamento', dev: EU, tema_id: 't1', tipo: 'evolucao', impacto: 'alto', urgencia: '', solicitante: 'Carla' };
+      for (const [tipo, tit, dev, ent, desc, eu] of [['dependencia', ' Validar com Credito ', 'Bia', '2026-11-20', ' contexto ', EU], ['parte', 'Tela B', EU, '', '', EU],
+                                                     ['parte', '', 'Bia', '', '', EU], ['parte', 'Sem dev', '', '', '', EU], ['parte', 'Sem conta', 'Bia', '', '', '']]) {
+        const saida = {};
+        await vincVelho({ melhorias: [copia(pai)] }, SPm, R.COLABORADORES, eu, saida,
+          { 'dep-parent-id': 'p', 'dep-titulo': tit, 'dep-dev': dev, 'dep-entrega': ent, 'dep-desc': desc, tipo })();
+        const r = AC.REGRAS.vincular(copia(pai), { tipo, titulo: tit, dev, entrega: ent, descricao: desc, id: 'NOVO' }, ctx(base([]), { quem: eu }));
+        const velho = saida.patch ? Object.assign(copia(saida.patch.NOVO), { criado_em: 'T' }) : null;
+        const app = r.ok ? Object.assign(copia(r.novo), { criado_em: 'T' }) : null;
+        if (JSON.stringify(velho && ordena(velho)) !== JSON.stringify(app && ordena(app))) div.push(tipo + '/' + tit + ': ' + JSON.stringify(velho) + ' / ' + JSON.stringify(app));
+      }
+      ok(div.length === 0, 'vincular: a demanda que o app cria = a do saveNewDep (Backlog, fora da sprint, quem vinculou e o solicitante)', div.join(' | '));
+    })());
+
+    // ── Anexar: o anexo novo entra depois dos que ja estao ────────────────
+    ok(/_msAnexos = JSON\.parse\(JSON\.stringify\(m\.anexos \|\| \[\]\)\);/.test(DEV) && /_msAnexos\.push\(await subirAnexo\(/.test(DEV) &&
+       /return \{ nome: j\.nome, tipo: j\.tipo, tamanho: j\.tamanho, chave: j\.chave \};/.test(DEV) && /if \(_msAnexosMexidos\) campos\.anexos = _msAnexos;/.test(DEV),
+       'o modal do dev grava `anexos` = os da demanda + o que subiu, cada um { nome, tipo, tamanho, chave }');
+    const ma = { id: 'x', status_planejamento: 'em_andamento', dev: EU, anexos: [{ nome: 'a.pdf', tipo: 'application/pdf', tamanho: 9, chave: 'a/1' }] };
+    const ra = AC.REGRAS.anexar(ma, { novos: [{ nome: 'b.png', tipo: 'image/png', tamanho: 3, chave: 'a/2', extra: 1 }] }, ctx(base([])));
+    ok(ra.ok && JSON.stringify(ra.patch.anexos) === JSON.stringify(ma.anexos.concat([{ nome: 'b.png', tipo: 'image/png', tamanho: 3, chave: 'a/2' }])) && ma.anexos.length === 1,
+       'anexar no app: o mesmo `anexos`, sem mutar a demanda recebida', JSON.stringify(ra.patch));
+    const ASRC = semComentario(lerTela('axis-acoes.js'));
+    ok(/H\.api\('anexo-subir', \{ nome: nome, dados: rd\.result \}\)/.test(ASRC) && /ok\(\{ nome: j\.nome, tipo: j\.tipo, tamanho: j\.tamanho, chave: j\.chave \}\)/.test(ASRC) &&
+       /if \(f\.size > ANEXO_MAX\)/.test(ASRC) && /var ANEXO_MAX = 1\.5 \* 1024 \* 1024;/.test(ASRC) && /const MS_MAX = 1\.5 \* 1024 \* 1024;/.test(DEV),
+       'o app sobe pelo `anexo-subir` com o mesmo teto de 1,5 MB do modal');
+
+    // ── A conversa: mensageria.html ──────────────────────────────────────
+    const pesSrc = (MSG.match(/const nomes = new Set\(\(data\.desenvolvedores[\s\S]*?PESSOAS = \[\.\.\.nomes\][^\n]*\n/) || [''])[0];
+    ok(!!pesSrc, 'a lista de pessoas do @ existe na mensageria para ser comparada');
+    if (pesSrc) {
+      const dados = { desenvolvedores: [' Bia ', 'Ana Dev', null], melhorias: [{ dev: 'Carla; Davi / Ana Dev' }, { dev: 'Élcio' }, {}] };
+      const velho = new Function('data', 'lista', 'let PESSOAS;\n' + pesSrc + '\nreturn PESSOAS;')(dados, dados.melhorias);
+      ok(JSON.stringify(velho) === JSON.stringify(AC.pessoasDaConversa(dados)), 'as pessoas do @ do app = as da mensageria', JSON.stringify(velho) + ' / ' + JSON.stringify(AC.pessoasDaConversa(dados)));
+    }
+    const corteM = (a) => corpo(MSG, a) || '';
+    const arrobaVelho = new Function('PESSOAS', 'cx', 'sug', 'esc',
+      'let filtradas = [], ativo = 0, inicioArroba = -1;\n' + ['function fechaSugestoes() {', 'function abreSugestoes() {', 'function escolhe(i) {'].map(corteM).join('\n') +
+      '\nreturn { abre: () => { abreSugestoes(); return { inicio: inicioArroba, nomes: filtradas.slice() }; }, escolhe: escolhe };');
+    const PES = ['Ana Dev', 'Bia', 'Maury Teixeira', 'Mário', 'Élcio'];
+    let divA = [];
+    ['Oi @Ma', 'a@b', '@', 'linha\n@', 'oi @xyz', 'oi @ma confere', '@Él'].forEach(t => {
+      const cx = { value: t, selectionStart: t.length, removeAttribute() {}, setAttribute() {}, focus() {}, setSelectionRange(a) { this.selectionStart = a; } };
+      const sug = { hidden: true, innerHTML: '', children: [] };
+      const fn = arrobaVelho(PES, cx, sug, (s) => s);
+      const a = fn.abre();
+      const b = AC.sugestoesArroba(t, t.length, PES);
+      if (JSON.stringify(a) !== JSON.stringify(b)) divA.push(t + ': ' + JSON.stringify(a) + ' / ' + JSON.stringify(b));
+      if (a.nomes.length) {
+        fn.escolhe(0);
+        const e = AC.escolheArroba(t, b.inicio, t.length, b.nomes[0]);
+        if (cx.value !== e.texto || cx.selectionStart !== e.cursor) divA.push('escolhe ' + t + ': ' + cx.value + ' / ' + e.texto);
+      }
+    });
+    ok(divA.length === 0, 'a caixa do @ do app abre, filtra e completa como a da mensageria', divA.join(' | '));
+    ok(/const texto = cx\.value\.trim\(\);/.test(MSG) && /action: 'mensagem-nova', melhoria_id: DEMANDA\.id, texto,/.test(MSG),
+       'a mensageria manda { melhoria_id, texto aparado } pela rota mensagem-nova');
+    const rmsg = AC.REGRAS.mensagem({ id: 'm1' }, { texto: '  oi @Bia  ' }, ctx(base([])));
+    ok(rmsg.ok && JSON.stringify(rmsg.corpo) === JSON.stringify({ melhoria_id: 'm1', texto: 'oi @Bia' }) && !AC.REGRAS.mensagem({ id: 'm1' }, { texto: '  ' }, ctx(base([]))).ok &&
+       /H\.api\('mensagem-nova', r\.corpo\)/.test(ASRC),
+       'o app manda o mesmo corpo pela mesma rota, e recusa a mensagem vazia');
+    const rma = AC.REGRAS.mensagem({ id: 'm1' }, { texto: 'veja', anexos: [{ nome: 'p.png' }] }, ctx(base([])));
+    ok(rma.ok && rma.corpo.texto === 'veja\n\nAnexo: p.png', 'com anexo, a mensagem diz o nome do arquivo que foi para a demanda');
+
+    // ── "Estimar no Poker" leva a tela do app ────────────────────────────
+    const MEUS = ['axis-app.js', 'axis-acoes.js', 'axis-tela-item.js', 'axis-tela-inicio.js', 'axis-tela-quadro.js'];
+    const comPoker = MEUS.filter(a => /['"]poker\.html['"#?]/.test(semComentario(lerTela(a))));
+    ok(comPoker.length === 0, 'Item, Inicio, Quadro e o sino nao mandam mais para o poker.html: vao a #poker', comPoker.join(', '));
+    ok(/href="#poker"/.test(lerTela('axis-tela-item.js')) && /'#poker'/.test(lerTela('axis-app.js')), 'e o Item e o sino apontam para #poker');
+  })();
+
+  sec('App AXIS: as funcoes de admin que so existiam no admin.html e no gantt.html');
+
+  /* O FORMULARIO, O MESCLAR E OS CADASTROS DO APP SAO COPIAS: cada regra e
+     recortada da tela antiga (admin.html, gantt.html, links-github.js,
+     catalogo.js) e executada AO LADO da do app, caso a caso. Uma divergencia
+     aqui e o app gravando um patch que a tela antiga nao gravaria. */
+  (() => {
+    const F = require('./axis-form-demanda.js');
+    const AC = require('./axis-acoes.js');
+    const CF = require('./axis-tela-configuracoes.js');
+    const BISm = require('./bis.js'), REFm = require('./referencia.js');
+    const doc = (vals) => ({ getElementById: id => vals[id] || null, querySelector: () => null, querySelectorAll: () => [],
+                             createElement: () => ({ style: {}, setAttribute() {}, appendChild() {} }), head: { appendChild() {} }, body: { appendChild() {} } });
+    const escA = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const sem = (o, ks) => JSON.stringify(Object.assign({}, o, ...ks.filter(k => o && o[k]).map(k => ({ [k]: 'T' }))));
+
+    // ── Mesclar e separar (mescConfirmar, mescDesfazer, mescBuscar) ──────
+    const mcSrc = corpo(ADMIN, 'async function mescConfirmar(idFilha) {');
+    const mdSrc = corpo(ADMIN, 'async function mescDesfazer(idFilha) {');
+    const mbSrc = corpo(ADMIN, 'function mescBuscar() {');
+    const ntSrc = corpo(ADMIN, 'function normTexto(s) {');
+    const linhasMesc = (ADMIN.match(/const mescladaEm = [^\n]*\nconst ehMesclada = [^\n]*\nconst mescladasDe = [^\n]*/) || [''])[0];
+    ok(!!(mcSrc && mdSrc && mbSrc && ntSrc && linhasMesc), 'mescConfirmar, mescDesfazer e mescBuscar existem no admin para serem comparados');
+    if (mcSrc && mdSrc && mbSrc && linhasMesc) {
+      const mescAdmin = (state, vals) => new Function('state', 'document', 'esc',
+        'const _eu = { nome: "Paula PO" }; const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false;\n' +
+        'const confirmar = async () => true; const closeModal = () => {}; const saveViaProxy = async () => true; const toast = () => {}; const avisaFalha = () => {};\n' +
+        'const mescRenderBloco = () => {}; const renderAll = () => {}; const STATUS_LABELS = {}; const statusKey = m => m.status_planejamento;\n' +
+        ntSrc + '\n' + linhasMesc + '\n' + mcSrc + '\n' + mdSrc + '\n' + mbSrc + '\nreturn { mescConfirmar, mescDesfazer, mescBuscar };')(state, doc(vals), escA);
+      const base = () => [
+        { id: 'p', codigo: 'AX-1', titulo: 'Cobrança automática', status_planejamento: 'backlog' },
+        { id: 'f1', codigo: 'AX-2', titulo: 'Régua de cobrança', status_planejamento: 'planning' },
+        { id: 'f2', codigo: 'AX-3', titulo: 'Cobranca por e-mail', mesclado_em: 'p', oculto: true },
+        { id: 'f3', codigo: 'AX-4', titulo: 'Cobrança WhatsApp', status_planejamento: 'backlog' },
+        { id: 'g', codigo: 'AX-5', titulo: 'Cobrança SMS', mesclado_em: 'f3', oculto: true },
+        { id: 'f4', codigo: 'AX-6', titulo: 'Outra coisa', status_planejamento: 'concluido' }];
+      const cx = (lista) => ({ papel: 'admin', quem: 'Paula PO', hoje: '2026-11-05', agora: '2026-11-05T14:00:00.000Z', lista });
+      let divBusca = [];
+      ['cob', 'COBRANÇA', 'ax-', 'ax', 'outra', 'x', 'regua'].forEach(t => ['p', 'f1', 'f3'].forEach(alvo => {
+        const st = { melhorias: base() };
+        const box = { innerHTML: '' };
+        mescAdmin(st, { 'mesc-busca': { value: t }, 'mesc-alvo': { value: alvo }, 'mesc-sugestao': box }).mescBuscar();
+        const a = [...box.innerHTML.matchAll(/mescConfirmar\(&quot;([^&]*)&quot;\)/g)].map(x => x[1]).join();
+        const pr = st.melhorias.find(m => m.id === alvo);
+        const b = AC.candidatasMescla(pr, t, st.melhorias).slice(0, 8).map(m => m.id).join();
+        if (a !== b) divBusca.push(t + '@' + alvo + ' admin=' + a + ' app=' + b);
+      }));
+      ok(divBusca.length === 0, 'as candidatas a mesclar do app = as do mescBuscar do admin (nem a propria, nem a mesclada, nem a que ja absorveu)', divBusca.slice(0, 4).join(' | '));
+      pendentes.push((async () => {
+        const st = { melhorias: base() };
+        await mescAdmin(st, { 'mesc-alvo': { value: 'p' } }).mescConfirmar('f1');
+        const fa = st.melhorias.find(m => m.id === 'f1');
+        const r = AC.REGRAS.mesclar(base()[0], { filha: base()[1] }, cx(base()));
+        const fb = Object.assign(base()[1], r.patch);
+        ok(r.ok && r.id === 'f1' && sem(fa, ['mesclado_data']) === sem(fb, ['mesclado_data']),
+           'mesclar: a absorvida fica igual a do mescConfirmar (mesclado_em, quando, por quem, oculta)', sem(fa, ['mesclado_data']) + ' / ' + sem(fb, ['mesclado_data']));
+        const st2 = { melhorias: base() };
+        await mescAdmin(st2, { 'm-id': { value: '' } }).mescDesfazer('f2');
+        const sa = st2.melhorias.find(m => m.id === 'f2');
+        const rs = AC.REGRAS.separar(base()[2], {}, cx(base()));
+        ok(rs.ok && JSON.stringify(sa) === JSON.stringify(Object.assign(base()[2], rs.patch)), 'separar = o mescDesfazer: volta ao fluxo, sem marca de mesclada', JSON.stringify([sa, rs.patch]));
+      })());
+      const L = base();
+      ok(!AC.REGRAS.mesclar(L[0], { filha: L[2] }, cx(L)).ok && !AC.REGRAS.mesclar(L[0], { filha: L[3] }, cx(L)).ok &&
+         !AC.REGRAS.mesclar(L[0], { filha: L[0] }, cx(L)).ok && !AC.REGRAS.mesclar(L[2], { filha: L[1] }, cx(L)).ok &&
+         !AC.REGRAS.mesclar(L[0], { filha: L[1] }, Object.assign(cx(L), { papel: 'dev' })).ok && !AC.REGRAS.separar(L[1], {}, cx(L)).ok,
+         'mesclar recusa o que a busca do admin nao oferece (a mesclada, a que absorveu, a propria, a principal ja mesclada), e o dev nao mescla');
+      ok(/AC\.botao\('mesclar', m,/.test(lerTela('axis-tela-item.js')) && /AC\.botao\('separar', f,/.test(lerTela('axis-tela-item.js')),
+         'o Item oferece "Mesclar outra nesta" e "Separar" nas mescladas');
+    }
+
+    // ── Comite (comiteDoForm) ──────────────────────────────────────────
+    const cdSrc = corpo(ADMIN, 'function comiteDoForm(existing) {');
+    ok(!!cdSrc, 'comiteDoForm existe no admin para ser comparado');
+    if (cdSrc) {
+      let divC = [];
+      [true, false].forEach(liga => ['', '  Gui Augusto ', 'x'.repeat(150)].forEach(quem => ['', ' obs ', 'o'.repeat(400)].forEach(obs =>
+        [null, { comite: { quem: 'A', em: '2026-10-01T10:00:00Z', obs: '' } }, { comite: {} }].forEach(ex => {
+          const a = new Function('document', cdSrc + '\nreturn comiteDoForm;')(doc({ 'm-comite': { checked: liga }, 'm-comite-quem': { value: quem }, 'm-comite-obs': { value: obs } }))(ex);
+          const b = F.comiteDe({ liga, quem, obs }, ex, 'AGORA');
+          const n = x => x ? JSON.stringify(Object.assign({}, x, { em: x.em === 'AGORA' || /^\d{4}-\d\d-\d\dT/.test(x.em) && x.em !== '2026-10-01T10:00:00Z' ? 'NOVA' : x.em })) : 'null';
+          if (n(a) !== n(b)) divC.push([liga, quem.length, obs.length, !!ex].join('/') + ' ' + n(a) + ' ' + n(b));
+        }))));
+      ok(divC.length === 0, 'o comite que o app grava = o comiteDoForm (sem nome nao ha marca; a data e a do primeiro registro)', divC.slice(0, 3).join(' | '));
+    }
+
+    // ── A media do Poker sugere os pontos (fibonacciMaisProximo) ─────────
+    const fbLinha = (ADMIN.match(/const FIBONACCI = \[[^\]]*\];/) || [''])[0];
+    const fbSrc = corpo(ADMIN, 'function fibonacciMaisProximo(media) {');
+    if (fbLinha && fbSrc) {
+      const fa = new Function(fbLinha + '\n' + fbSrc + '\nreturn fibonacciMaisProximo;')();
+      const vals = ['', '0', '-2', 'abc', '1', '1.4', '1.5', '2.5', '4', '4.4', '6.5', '7', '10', '10.5', '17', '30', '100'];
+      const div = vals.filter(v => fa(v) !== F.fibonacciMaisProximo(v));
+      ok(div.length === 0, 'a sugestao de pontos pela media e a do admin', div.join(', '));
+    } else ok(false, 'fibonacciMaisProximo existe no admin para ser comparado');
+
+    // ── BIs e links de referencia (bisAdiciona, refAdiciona) ────────────
+    const biSrc = corpo(ADMIN, 'function bisAdiciona() {');
+    const rfSrc = corpo(ADMIN, 'function refAdiciona() {');
+    ok(!!(biSrc && rfSrc), 'bisAdiciona e refAdiciona existem no admin para serem comparados');
+    if (biSrc && rfSrc) {
+      let divB = [];
+      const muitos = Array.from({ length: BISm.MAX_POR_DEMANDA }, (_, i) => 'BI ' + i);
+      [[[], 'Carteira'], [['Carteira'], ' carteira '], [['Carteira'], 'Cartéira'], [[], '   '], [muitos, 'Mais um'], [['A'], '  Painel   de  Risco ']].forEach(([lista, nome]) => {
+        const msgs = [];
+        const a = new Function('BIS', 'document', 'toast', 'lista', 'let _mBis = lista.slice(); const bisRender = () => {};\n' + biSrc + '\nbisAdiciona(); return _mBis;')(
+          BISm, doc({ 'm-bi-novo': { value: nome, focus() {} } }), (m) => msgs.push(m), lista);
+        const r = F.biAdiciona(lista, nome, { R: { BIS: BISm } });
+        const b = r.ok ? r.lista : lista;
+        if (JSON.stringify(a) !== JSON.stringify(b) || (msgs[0] || '') !== (r.ok || !msgs.length ? '' : r.erro)) divB.push(nome + ': ' + JSON.stringify([a, msgs, b, r.erro]));
+      });
+      ok(divB.length === 0, 'incluir BI no app = o bisAdiciona (limpo, sem repetido pela normalizada, com teto)', divB.slice(0, 3).join(' | '));
+      let divR = [];
+      const cheia = Array.from({ length: REFm.MAX_LINKS }, (_, i) => ({ descricao: 'd' + i, url: 'https://a.com/' + i }));
+      [[[], 'Planilha', 'https://docs.x.com/a'], [[], '', 'https://figma.com/file/1'], [[], 'x', 'javascript:alert(1)'], [[], 'x', '   '],
+       [[{ descricao: 'a', url: 'https://a.com/' }], 'b', 'https://a.com/'], [cheia, 'x', 'https://b.com'], [[], 'x', 'ftp://a.com']].forEach(([lista, desc, url]) => {
+        const msgs = [];
+        const a = new Function('REFERENCIA', 'document', 'toast', 'lista', 'let _mRefs = lista.slice(); const refRender = () => {};\n' + rfSrc + '\nrefAdiciona(); return _mRefs;')(
+          REFm, doc({ 'm-ref-desc': { value: desc, focus() {} }, 'm-ref-url': { value: url, focus() {} } }), (m) => msgs.push(m), lista);
+        const r = F.refAdiciona(lista, desc, url, { R: { REFERENCIA: REFm } });
+        const b = r.ok ? r.lista : lista;
+        if (JSON.stringify(a) !== JSON.stringify(b) || (msgs[0] || '') !== (r.ok ? '' : r.erro)) divR.push(url + ': ' + JSON.stringify([a, msgs, b, r.erro]));
+      });
+      ok(divR.length === 0, 'incluir link no app = o refAdiciona (so http/https, sem repetido, com teto, host como descricao)', divR.slice(0, 3).join(' | '));
+    }
+
+    // ── A referencia no GitHub (ghLinkColeta, links-github.js) ──────────
+    const LG = lerTela('links-github.js');
+    const winG = {}, valsG = {};
+    new Function('window', 'document', LG)(winG, { getElementById: id => valsG[id] || null, createElement: () => ({}), head: { appendChild() {} } });
+    ok(typeof winG.ghLinkColeta === 'function', 'links-github.js carregou para a comparacao');
+    if (winG.ghLinkColeta) {
+      let divG = [];
+      const GH = { erro: winG.ghLinkErro, normaliza: winG.ghLinkNormaliza };
+      ['', 'audaxcapitalsa/axcaixa'].forEach(repo => ['', '683', '#683', 'https://github.com/a/b/pull/9', 'abc'].forEach(issue =>
+        ['', '712, 715', 'https://github.com/a/b/issues/3'].forEach(pr => ['', '4'].forEach(ms => {
+          const el = v => ({ value: v, classList: { add() {}, remove() {} }, focus() {} });
+          Object.assign(valsG, { 'm-link-repo': el(repo), 'm-link-issue': el(issue), 'm-link-pr': el(pr), 'm-link-milestone': el(ms) });
+          const msgs = [];
+          const a = winG.ghLinkColeta('m', m => msgs.push(m));
+          const r = F.githubDe({ repo, issue, pr, milestone: ms }, { R: { GH } });
+          const A = a === null ? 'ERRO ' + msgs[0] : JSON.stringify(a), B = r.ok ? JSON.stringify(r.links) : 'ERRO ' + r.erro;
+          if (A !== B) divG.push([repo, issue, pr, ms].join('|') + ' ' + A + ' / ' + B);
+        }))));
+      ok(divG.length === 0, 'a referencia no GitHub do app = o ghLinkColeta: numero so com repositorio, engano de campo recusado, URL normalizada', divG.slice(0, 3).join(' | '));
+      const rsab = F.githubDe({ repo: '', issue: '683' }, { R: { GH: { erro: () => '', normaliza: GH.normaliza } } });
+      ok(rsab.ok && rsab.links.link_issue === '683', 'SABOTAGEM: sem a recusa do ghLinkErro, o numero solo sem repositorio seria gravado cru');
+    }
+
+    // ── O mes de compromisso (mesPreencheCampo) ──────────────────────────
+    const mpSrc = ['function mesTrilhaDe(m) {', 'function mesDe(m) {', 'function mesEntrouEm(m) {', 'function mesSomaLocal(iso, n) {', 'function mesPreencheCampo(m) {']
+      .map(a => corpo(ADMIN, a));
+    const mnLinha = (ADMIN.match(/const MES_NOMES = \[[^\]]*\];/) || [''])[0];
+    ok(mpSrc.every(Boolean) && !!mnLinha, 'mesPreencheCampo e os auxiliares existem no admin para serem comparados');
+    if (mpSrc.every(Boolean) && mnLinha) {
+      const d = new Date();
+      const hojeL = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      let divM = [];
+      [{}, { meses: [{ mes: '2025-01', em: '2025-01-03' }] }, { meses: [{ mes: hojeL.slice(0, 7), em: hojeL }] },
+       { meses: [{ mes: '2026-08', em: '2026-08-01' }, { mes: '2026-09', em: '2026-09-01' }] }, { meses: [{ mes: 'lixo' }] }].forEach(m => {
+        const sel = { innerHTML: '' }, tr = { textContent: '', innerHTML: '' };
+        new Function('document', 'formatDate', 'esc', mnLinha + '\n' + mpSrc.join('\n') + '\nreturn mesPreencheCampo;')(
+          doc({ 'm-mes-alvo': sel, 'm-mes-trilha': tr }), s => s, escA)(m);
+        const ops = [...sel.innerHTML.matchAll(/<option value="([^"]*)"( selected)?/g)];
+        const a = { meses: ops.map(x => x[1]).filter(Boolean), atual: (ops.find(x => x[2]) || [])[1] || '' };
+        const bm = F.mesesDoCampo(m, hojeL), b = { meses: bm.meses, atual: bm.atual };
+        if (JSON.stringify(a) !== JSON.stringify(b)) divM.push(JSON.stringify(m) + ' ' + JSON.stringify(a) + ' / ' + JSON.stringify(b));
+      });
+      ok(divM.length === 0, 'os meses oferecidos e o marcado sao os do mesPreencheCampo (doze em volta de hoje e o gravado)', divM.slice(0, 2).join(' | '));
+    }
+
+    // ── Na edicao, so vai o que mudou ────────────────────────────────────
+    const R = { BIS: BISm, REFERENCIA: REFm, SPRINTPO: require('./sprint.js'), ABERTURA: require('./abertura.js'), AXIS_ACOES: AC,
+                REQUISITOS: require('./requisitos.js'), COLABORADORES: { emailPara: () => '' } };
+    const cE = { papel: 'admin', quem: 'Paula PO', hoje: '2026-11-05', agora: 'AGORA', D: { temas: [], feriados: [] }, R, dono: true };
+    const mAnt = { id: 'e', titulo: 'Antiga', tipo: 'evolucao', tema_id: 't', status_planejamento: 'backlog', solicitante: 'Bia' };
+    const fTela = { titulo: 'Antiga', tipo: 'evolucao', tema_id: 't', solicitante: 'Bia', debito_tecnico: false, spike: false, dados_bi: false, sales_ops: false,
+                    em_producao: false, destaque: false, mes_alvo: '', poker_media: '', versao: '', resumo_entrega: '', implementacao: '' };
+    const eq = F.edicao(mAnt, fTela, cE);
+    ok(eq.ok && eq.patch === null, 'demanda antiga sem as marcas, salva sem mexer: patch vazio (false sobre ausente nao e mudanca)', JSON.stringify(eq.patch));
+    const mud = F.edicao(mAnt, Object.assign({}, fTela, { comite: { liga: true, quem: 'Gui' }, versao: '1.2', em_producao: true, destaque: true, mes_alvo: '2026-12',
+      poker_media: '4.4', bis: ['BI X'], links: [{ descricao: 'd', url: 'https://a.com' }], resumo_entrega: ' r ', implementacao: 'i' }), cE);
+    ok(mud.ok && JSON.stringify(mud.patch) === JSON.stringify({ comite: { quem: 'Gui', em: 'AGORA', obs: '' }, bis_impactados: ['BI X'], links: [{ descricao: 'd', url: 'https://a.com/' }],
+      versao: '1.2', em_producao: true, mes_alvo: '2026-12', poker_media: 4.4, resumo_entrega: 'r', implementacao: 'i', destaque: true }),
+      'mexidos, os campos raros vao no patch no formato do saveMelhoria', JSON.stringify(mud.patch));
+    const devE = F.edicao(Object.assign({}, mAnt, { dev: 'Ana Dev' }), Object.assign({}, fTela, { versao: '9', comite: { liga: true, quem: 'X' } }), Object.assign({}, cE, { papel: 'dev', quem: 'Ana Dev' }));
+    ok(devE.ok && !devE.patch, 'o dev nao grava os campos do admin, mesmo que cheguem no formulario', JSON.stringify(devE.patch));
+    const FSRC = lerTela('axis-form-demanda.js');
+    ok(!/Mais campos no editor/.test(FSRC) && !/admin\.html#/.test(semComentario(FSRC)), 'o formulario nao manda mais para o editor do admin');
+
+    // ── Sistema novo ("+ outro"): catalogoResolve ───────────────────────
+    const winC = {};
+    const valsC = {};
+    new Function('window', 'document', CATALOGO)(winC, { getElementById: id => valsC[id] || null });
+    ok(typeof winC.catalogoResolve === 'function' && typeof winC.catalogoDentro === 'function', 'catalogo.js carregou para a comparacao');
+    if (winC.catalogoResolve) {
+      let divT = [];
+      const TM = [{ id: 'a', nome: 'AXCred - Cobrança' }, { id: 'b', nome: 'BI' }];
+      [[TM, 'axcred - cobrança'], [TM, '  BI  '], [TM, 'AXCred - Régua'], [[], 'Novo'], [TM, '']].forEach(([temas, nome]) => {
+        Object.assign(valsC, { 'm-tema': { value: '__novo__' }, 'm-tema-novo': { value: nome } });
+        const a = winC.catalogoResolve('m', temas, '', n => 'NOVO:' + n);
+        const r = F.temaNovo(nome, temas, 'id9');
+        const b = !r.ok ? '' : r.novo ? 'NOVO:' + r.novo.nome : r.id;
+        if (a !== b) divT.push(nome + ' admin=' + a + ' app=' + b);
+      });
+      ok(divT.length === 0, 'o "+ outro" do app = o catalogoResolve: o nome que existe e o tema que existe, e o nome novo cria', divT.join(' | '));
+    }
+    ok(/opts\.raiz = \{ temas: \(base\.temas \|\| \[\]\)\.concat\(\[tf\.novo\]\) \}/.test(FSRC) && /base = await H\.api\('dados'\)/.test(FSRC),
+       'o tema novo entra na lista FRESCA do servidor, lida logo antes de gravar');
+
+    // ── Temas (saveTema, juntarTemas, deleteTema) ───────────────────────
+    const stSrc = corpo(ADMIN, 'async function saveTema() {');
+    const jtSrc = corpo(ADMIN, 'async function juntarTemas() {');
+    const tfSrc = corpo(ADMIN, 'function temaFilhosDe(nome) {');
+    ok(!!(stSrc && jtSrc && tfSrc), 'saveTema, juntarTemas e temaFilhosDe existem no admin para serem comparados');
+    if (stSrc && jtSrc && tfSrc && winC.catalogoDentro) {
+      const temasT = () => [{ id: 'a', nome: 'AXCred - Cobrança' }, { id: 'b', nome: 'Cobrança' }, { id: 'c', nome: 'AXCred' }, { id: 'd', nome: 'AXCred - Cobrança - Régua' }, { id: 'e', nome: 'BI' }];
+      const melT = () => [{ id: 'm1', tema_id: 'b' }, { id: 'm2', tema_id: 'b' }, { id: 'm3', tema_id: 'a' }, { id: 'm4', tema_id: 'e' }];
+      const admT = (src, nomeFn, state, vals) => new Function('state', 'document', 'catalogoDentro',
+        'const window = {}; const msgs = []; const toast = (m) => msgs.push(m); const avisar = async (t, x) => msgs.push(t); const confirmar = async () => true;\n' +
+        'const _dirtyMelhoriaIds = new Set(); const _deletedIds = new Set(); const _temasMexidos = new Set(); let _pendingEdits = false;\n' +
+        'const closeModal = () => {}; const renderAll = () => {}; const mPersistir = async () => true; const uid = () => "novo1";\n' +
+        tfSrc + '\n' + src + '\nreturn async () => { await ' + nomeFn + '(); return msgs; };')(state, doc(vals), winC.catalogoDentro);
+      pendentes.push((async () => {
+        let divS = [];
+        for (const [id, nome] of [['', 'Nova - Coisa'], ['', 'bi'], ['', '  '], ['a', 'AXCred - Cobrança'], ['a', 'cobrança'], ['a', 'AXCred - Cobranças']]) {
+          const st = { temas: temasT(), melhorias: melT() };
+          const msgs = await admT(stSrc, 'saveTema', st, { 't-nome': { value: nome }, 't-id': { value: id } })();
+          const r = CF.temaSalvar(temasT(), id, nome, 'novo1');
+          const A = msgs.length ? 'ERRO ' + msgs[0] : JSON.stringify(st.temas), B = r.ok ? JSON.stringify(r.temas) : 'ERRO ' + r.erro;
+          if (A !== B) divS.push(id + '/' + nome + ' ' + A + ' / ' + B);
+        }
+        ok(divS.length === 0, 'criar e renomear tema no app = o saveTema (repetido sem caixa e recusado; renomear mantem o id)', divS.slice(0, 3).join(' | '));
+        let divJ = [];
+        for (const [de, para] of [['b', 'a'], ['a', 'b'], ['c', 'e'], ['e', 'e'], ['', 'a'], ['x', 'a'], ['d', 'a']]) {
+          const st = { temas: temasT(), melhorias: melT() };
+          const msgs = await admT(jtSrc, 'juntarTemas', st, { 'juntar-tema-de': { value: de }, 'juntar-tema-para': { value: para } })();
+          const r = CF.temaJuntar({ temas: temasT(), melhorias: melT() }, de, para, winC.catalogoDentro);
+          const depois = r.ok ? melT().map(m => Object.assign(m, (r.patch[m.id] || {}))) : melT();
+          const A = msgs.length && !/demanda\(s\) agora/.test(msgs[0]) ? 'RECUSA' : JSON.stringify([st.temas, st.melhorias]);
+          const B = r.ok ? JSON.stringify([r.temas, depois]) : 'RECUSA';
+          if (A !== B) divJ.push(de + '>' + para + ' ' + A.slice(0, 80) + ' / ' + B.slice(0, 80));
+        }
+        ok(divJ.length === 0, 'juntar temas no app = o juntarTemas: as demandas passam, o tema sai, e quem tem submodulo e recusado', divJ.slice(0, 3).join(' | '));
+      })());
+      const ex = CF.temaExcluir({ temas: temasT(), melhorias: melT() }, 'b');
+      ok(ex.ok && ex.n === 2 && ex.temas.map(t => t.id).join() === 'a,c,d,e', 'excluir tema tira da lista e conta as demandas que ficam sem tema (deleteTema)');
+    }
+
+    // ── Devs: juntar dois nomes, tirar, incluir (gantt.html) ─────────────
+    const gjSrc = corpo(GANTT, 'function gJuntaDevEm(valorDev, de, para) {');
+    const spSrc = corpo(GANTT, 'function splitDevs(str) {');
+    const jdSrc = corpo(GANTT, 'async function juntarDevs() {');
+    const rdSrc = corpo(GANTT, 'async function removeDev(i) {');
+    ok(!!(gjSrc && spSrc && jdSrc && rdSrc), 'gJuntaDevEm, juntarDevs e removeDev existem no gantt para serem comparados');
+    if (gjSrc && spSrc && jdSrc && rdSrc) {
+      const gj = new Function(spSrc + '\n' + gjSrc + '\nreturn gJuntaDevEm;')();
+      let divD = [];
+      ['Murillo', 'Murillo / Murillo Jesus', 'murillo,Ana', 'Murílo / Bia', 'Murillo Jesus', '', ' Ana / Murillo ', 'Bia'].forEach(v =>
+        [['Murillo', 'Murillo Jesus'], ['murillo', 'Ana'], ['Ana', 'Bia']].forEach(([de, para]) => {
+          if (gj(v, de, para) !== CF.juntaDevEm(v, de, para)) divD.push(v + ' ' + de + '>' + para);
+        }));
+      ok(divD.length === 0, 'trocar um nome no campo composto e o gJuntaDevEm (parte inteira, sem caixa nem acento, sem repetir o destino)', divD.join(', '));
+      const stD = () => ({ desenvolvedores: ['Murillo', 'Murillo Jesus', 'Ana', 'Livre'], devs_removidos: ['Velho'], devs_perfil: { Murillo: { axcred: true } },
+        melhorias: [{ id: '1', dev: 'Murillo', status_planejamento: 'em_andamento' }, { id: '2', dev: 'Murillo / Ana', status_planejamento: 'concluido' },
+                    { id: '3', dev: 'Ana', status_planejamento: 'backlog' }, { id: '4', dev: 'Murillo Jesus', status_planejamento: 'planejado' }, { id: '5', dev: 'Livre', status_planejamento: 'concluido' }] });
+      const admG = (src, chamada, st, vals) => new Function('state', 'document', spSrc + '\n' + gjSrc + '\n' +
+        'const window = {}; const msgs = []; const toast = (m) => msgs.push(m); const avisar = async (t) => msgs.push(t); const confirmar = async () => true;\n' +
+        'const renderDevsList = () => {}; const renderFilters = () => {}; const renderGantt = () => {}; const saveToGitHub = async () => true; const _gDeletedDevs = new Set();\n' +
+        'const esc = s => s;\n' + src + '\nreturn async () => { await ' + chamada + '; return msgs; };')(st, doc(vals));
+      pendentes.push((async () => {
+        let divJ = [];
+        for (const [de, para] of [['Murillo', 'Murillo Jesus'], ['Ana', 'Bia'], ['Murillo', 'Murillo'], ['', 'Ana']]) {
+          const st = stD();
+          const msgs = await admG(jdSrc, 'juntarDevs()', st, { 'juntar-de': { value: de }, 'juntar-para': { value: para } })();
+          const r = CF.devsJuntar(stD(), de, para);
+          const A = /agora são de/.test(msgs[0] || '') ? JSON.stringify([st.desenvolvedores, st.devs_removidos, st.devs_perfil, st.melhorias.map(m => m.dev)]) : 'RECUSA';
+          const B = r.ok ? JSON.stringify([r.raiz.desenvolvedores, r.raiz.devs_removidos, r.raiz.devs_perfil, stD().melhorias.map(m => (r.patch[m.id] || m).dev)]) : 'RECUSA';
+          if (A !== B) divJ.push(de + '>' + para + ' ' + A + ' / ' + B);
+        }
+        ok(divJ.length === 0, 'juntar dois nomes no app = o juntarDevs do gantt (todas as demandas, a lista, devs_removidos e o perfil)', divJ.slice(0, 2).join(' | '));
+        let divR = [];
+        for (const nome of ['Murillo', 'Murillo Jesus', 'Ana', 'Livre']) {
+          const st = stD();
+          const i = st.desenvolvedores.indexOf(nome);
+          if (i < 0) continue;
+          const msgs = await admG(rdSrc, 'removeDev(' + i + ')', st, {})();
+          const r = CF.devTirar(stD(), nome);
+          const A = /removido/.test(msgs[0] || '') ? JSON.stringify([st.desenvolvedores, st.devs_removidos]) : 'RECUSA';
+          const B = r.ok ? JSON.stringify([r.raiz.desenvolvedores, r.raiz.devs_removidos]) : 'RECUSA';
+          if (A !== B) divR.push(nome + ' ' + A + ' / ' + B);
+        }
+        ok(divR.length === 0, 'tirar da lista de devs no app = o removeDev do gantt (com demanda ativa nao sai; saindo, vira devs_removidos)', divR.join(' | '));
+      })());
+      const inc = CF.devIncluir({ desenvolvedores: ['Ana'], devs_removidos: ['Bia', 'Cairo'] }, 'Bia');
+      ok(inc.ok && inc.raiz.desenvolvedores.join() === 'Ana,Bia' && inc.raiz.devs_removidos.join() === 'Cairo' && !CF.devIncluir({ desenvolvedores: ['Ana'], devs_removidos: [] }, 'Ana').ok,
+         'reincluir quem saiu tira o nome de devs_removidos (senao o limpaDevs do Worker o tiraria de novo); repetido e recusado como no addDev');
+    }
+
+    // ── Perfil do dev (uSetPerfil) e a conta nova (uCriar) ───────────────
+    const upSrc = corpo(ADMIN, 'async function uSetPerfil(nome, campo, valor) {');
+    if (upSrc) {
+      pendentes.push((async () => {
+        let divP = [];
+        for (const [antes, campo, valor] of [[{}, 'axcred', true], [{ A: { axcred: true } }, 'axcred', false], [{ A: { axcred: true, pipeline: 'Dados' } }, 'pipeline', ''], [{ A: { pipeline: 'X' } }, 'pipeline', 'Dados']]) {
+          const st = { devs_perfil: JSON.parse(JSON.stringify(antes)) };
+          await new Function('state', 'const uPintaAxcred = () => {}; const saveViaProxy = async () => true; const uAviso = () => {};\n' + upSrc + '\nreturn uSetPerfil;')(st)('A', campo, valor);
+          if (JSON.stringify(st.devs_perfil) !== JSON.stringify(CF.perfilCom(antes, 'A', campo, valor))) divP.push(campo + '=' + valor);
+        }
+        ok(divP.length === 0, 'DEV-AXCred e frente no app = o uSetPerfil (vazio tira o campo; perfil vazio sai do mapa)', divP.join(', '));
+      })());
+    } else ok(false, 'uSetPerfil existe no admin para ser comparado');
+    const ucSrc = corpo(ADMIN, 'async function uCriar() {');
+    if (ucSrc) {
+      pendentes.push((async () => {
+        let divU = [];
+        for (const v of [{ nome: '', email: 'a@audaxcapitalsa.com.br', senha: '12345678' }, { nome: 'Ana', email: 'a@gmail.com', senha: '12345678' },
+                         { nome: 'Ana', email: '@audaxcapitalsa.com.br', senha: '12345678' }, { nome: 'Ana', email: 'A@AUDAXCAPITALSA.COM.BR', senha: '1234567' },
+                         { nome: 'Ana', email: 'a@audaxcapitalsa.com.br', senha: '123' }, { nome: 'Ana', email: 'a@audaxcapitalsa.com.br', senha: '12345678' }]) {
+          const msgs = [];
+          const el = (x) => ({ value: x, focus() {}, scrollIntoView() {} });
+          await new Function('document', 'uAviso', 'const uChamar = async () => ({}); const renderUsuarios = () => {};\n' + ucSrc + '\nreturn uCriar;')(
+            doc({ 'u-nome': el(v.nome), 'u-email': el(v.email), 'u-papel': el('dev'), 'u-senha': el(v.senha) }), (m, e) => msgs.push(e ? m : 'OK'))();
+          const r = CF.contaNova(v);
+          if ((msgs[0] === 'OK' ? '' : msgs[0]) !== (r ? r.erro : '')) divU.push(JSON.stringify(v) + ' ' + msgs[0] + ' / ' + (r && r.erro));
+        }
+        ok(divU.length === 0, 'criar conta no app confere o que o uCriar confere, com a mesma frase', divU.join(' | '));
+      })());
+    } else ok(false, 'uCriar existe no admin para ser comparado');
+
+    // ── O link de visualizacao sem login (copiarLinkVisualizacao) ───────
+    const vk = (GANTT.match(/const VIEW_KEY = '([^']+)';/) || [])[1];
+    ok(vk && vk === CF.VIEW_KEY && CF.linkVisualizacao('https://x/', 'k&1') === 'https://x/gantt.html?view=' + vk + '&k=k%261' &&
+       CF.linkVisualizacao('https://x/', '') === 'https://x/gantt.html?view=' + vk,
+       'o link de visualizacao do app e o do gantt (mesma chave de modo leitura e o &k= da VIEW_CHAVE)', vk);
+
+    // ── O que ainda manda para as telas antigas ─────────────────────────
+    const CFG = semComentario(lerTela('axis-tela-configuracoes.js'));
+    ok(!/linkAdmin\(/.test(CFG) && !/admin\.html/.test(CFG), 'Configuracoes nao manda mais para o admin (temas e usuarios gravam daqui)');
+  })();
+
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao

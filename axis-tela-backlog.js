@@ -30,7 +30,8 @@
   // ── Estado de cada aba ────────────────────────────────────────────────
   // Fica no modulo, e nao na URL: trocar de aba e voltar mantem o recorte que
   // a pessoa montou. A URL guarda so o que se compartilha (a aba e o item).
-  var F = { chip: 'todos', q: '', agrupar: 'projeto', tipo: '', tema: '', dev: '', mais: {} };
+  // `sprint`: null (todas) ou lista — o filtro de varias escolhas do admin (4d7c38f), em AXIS_SPRINTS.
+  var F = { chip: 'todos', q: '', agrupar: 'projeto', tipo: '', tema: '', dev: '', sprint: null, mais: {} };
   var V = { ordem: 'antigas' };
   var A = { recorte: 'todas', dev: '', mais: 0 };
   var POR_GRUPO = 25;      // linhas por grupo antes do "mostrar mais"
@@ -165,7 +166,8 @@
     var vs = H.visiveis();
     var b = filtroBusca(vs, F.q);
     return vs.filter(function (m) {
-      return (!b || b(m)) && casaDev(m, F.dev) && casaTipo(m, F.tipo) && casaTema(m, F.tema, D);
+      return (!b || b(m)) && casaDev(m, F.dev) && casaTipo(m, F.tipo) && casaTema(m, F.tema, D) &&
+        (!F.sprint || !W.AXIS_SPRINTS || W.AXIS_SPRINTS.casa(m, F.sprint));
     });
   }
 
@@ -241,7 +243,8 @@
     return '<a class="bk-ln' + (eDev && H.minha(m) ? ' minha' : '') + '" href="' + H.hrefItem(m) + '">' +
       '<span class="ci">' + H.esc(m.codigo || '—') + '</span>' +
       '<span style="display:flex;flex-direction:column;min-width:0"><span class="tt">' + H.esc(m.titulo || '(sem título)') + '</span>' +
-      '<span class="cm">' + (cam ? H.esc(cam) : 'Sem sistema') + '</span>' +
+      // Com quem esta e a entrega ao usuario: a linha da lista de Melhorias do admin (372b92f).
+      '<span class="cm">' + (cam ? H.esc(cam) : 'Sem sistema') + (W.AXIS_SPRINTS ? ' · ' + W.AXIS_SPRINTS.comQuem(m) : '') + '</span>' +
       // Impacto e urgencia ao lado do titulo, como na lista de Melhorias do admin.
       (H.chipsReq(m) ? '<span class="row" style="gap:4px;flex-wrap:wrap;margin-top:3px">' + H.chipsReq(m) + '</span>' : '') + '</span>' +
       tipoCel(m) +
@@ -304,6 +307,21 @@
         if (!a.chave !== !b.chave) return a.chave ? -1 : 1;
         if (!!a.fechado !== !!b.fechado) return a.fechado ? 1 : -1;
         return String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true });
+      });
+    }
+
+    /* POR TEMA, em ordem alfabetica e "Sem tema" no fim: a lista de Melhorias
+       do admin (372b92f). Por sistema junta os modulos na raiz do catalogo; por
+       tema, cada modulo e um grupo, e o mesmo tema esta sempre no mesmo lugar. */
+    if (F.agrupar === 'tema') {
+      lista.forEach(function (m) { poe(m.tema_id || '', m); });
+      var nomeTema = function (k) { return k ? (H.tema(k) || '—') : ''; };
+      return ordem.map(function (k) {
+        var c = conta(function (m) { return (m.tema_id || '') === k; });
+        return { chave: k, codigo: k ? 'TEMA' : 'SEM TEMA', nome: k ? nomeTema(k).split(/\s+-\s+/).join(' › ') : 'Itens sem tema', itens: mapa[k], feitas: c.feitas, total: c.total };
+      }).sort(function (a, b) {
+        if (!a.chave !== !b.chave) return a.chave ? -1 : 1;
+        return nomeTema(a.chave).localeCompare(nomeTema(b.chave), 'pt-BR', { sensitivity: 'base' });
       });
     }
 
@@ -420,8 +438,11 @@
       '<label for="bk-q" style="position:absolute;left:-9999px">Buscar no backlog</label>' +
       '<input class="in" id="bk-q" type="search" autocomplete="off" placeholder="AX-179, título, dev, solicitante" value="' + H.esc(F.q) + '">' +
       '<select class="in" id="bk-agr" aria-label="Agrupar">' +
-      sel('projeto', 'Agrupar por projeto', F.agrupar) + sel('sistema', 'Agrupar por sistema', F.agrupar) +
+      sel('projeto', 'Agrupar por projeto', F.agrupar) + sel('sistema', 'Agrupar por sistema', F.agrupar) + sel('tema', 'Agrupar por tema', F.agrupar) +
       sel('sprint', 'Agrupar por sprint', F.agrupar) + sel('nada', 'Sem agrupar', F.agrupar) + '</select>' +
+      (W.AXIS_SPRINTS ? W.AXIS_SPRINTS.controle('bk-sprint', F.sprint, W.AXIS_SPRINTS.opcoes(H.visiveis()), function (v) {
+        F.sprint = v; F.mais = {}; AX.desenhar(true);
+      }) : '') +
       '<select class="in" id="bk-tipo" aria-label="Tipo">' + sel('', 'Todos os tipos', F.tipo) + sel('evolucao', 'Evolução', F.tipo) +
       sel('sustentacao', 'Sustentação', F.tipo) + sel(SEM_TIPO, 'Sem tipo', F.tipo) + '</select>' +
       '<select class="in" id="bk-tema" aria-label="Sistema">' + temasOp + '</select>' +
@@ -455,7 +476,7 @@
       var todos = e.target.closest('[data-bk-todos]');
       if (todos) { F.mais[todos.getAttribute('data-bk-todos')] = 1e9; repinta(false); return; }
       if (e.target.closest('[data-bk-limpar]')) {
-        F.chip = 'todos'; F.q = ''; F.tipo = ''; F.tema = ''; F.dev = '';
+        F.chip = 'todos'; F.q = ''; F.tipo = ''; F.tema = ''; F.dev = ''; F.sprint = null;
         AX.desenhar();
       }
     });

@@ -89,6 +89,24 @@
     '.axa .pj-res{margin:0;padding:14px 16px;border-radius:12px;background:var(--sf2);border:1px solid var(--bd);font-family:var(--font-mono);font-size:12px;line-height:19px;color:var(--tx2);white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto}',
     '.axa .pj-pager{display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:12.5px;color:var(--tx3)}',
     '.axa .pj-ok{color:var(--ok-t)} .axa .pj-dg{color:var(--dg-t)} .axa .pj-wn{color:var(--wn-t)}',
+    // Projetos em andamento: um painel por projeto, com Feitas, Em andamento e Planejado.
+    '.axa .pja{padding:18px 20px;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);display:flex;flex-direction:column;gap:14px;min-width:0}',
+    '.axa .pja-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0}',
+    '.axa .pja-top .dir{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px;align-items:center}',
+    '.axa .pja-top .chip{gap:5px}',
+    '.axa .pja-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}',
+    '.axa .pja-col{display:flex;flex-direction:column;gap:2px;min-width:0;padding:10px;border-radius:12px;background:var(--sf2)}',
+    '.axa .pja-col .hd{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:800;letter-spacing:.1em;color:var(--tx2);padding:2px 4px 8px;border-bottom:1px solid var(--bd);margin-bottom:4px}',
+    '.axa .pja-col .hd .n{margin-left:auto;font-family:var(--font-mono);font-weight:600;color:var(--tx4);letter-spacing:0}',
+    '.axa .pja-col .cb{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--tx4);padding:0 6px 2px}',
+    '.axa .pja-ln{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px;border-radius:8px;text-decoration:none;color:var(--tx);font-size:12.5px}',
+    '.axa a.pja-ln:hover{background:var(--sf4);color:var(--tx)}',
+    '.axa .pja-ln .t{display:flex;align-items:center;gap:6px;min-width:0}',
+    '.axa .pja-ln .t span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}',
+    '.axa .pja-ln .t b{font-family:var(--font-mono);font-weight:600;font-size:11.5px;color:var(--tx3);flex-shrink:0}',
+    '.axa .pja-ln .d{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11.5px;color:var(--tx2);white-space:nowrap}',
+    '.axa .pja-ln .chip{height:18px;font-size:10px;padding:0 6px;gap:4px}',
+    '.axa .pja-vz{font-size:12px;color:var(--tx4);padding:6px}',
     /* Celular: o nucleo empilha toda grade inline em uma coluna; os KPIs ficam
        em duas (como no prototipo celular), e a linha do tempo encolhe a coluna
        de rotulo para a trilha ter onde aparecer antes de rolar de lado. */
@@ -96,6 +114,8 @@
     '.axa .app .main .grid.pj-k{grid-template-columns:repeat(2,minmax(0,1fr)) !important}',
     '.axa .tl{min-width:560px;--tl-lab:150px !important}',
     '.axa .tl-lb{padding:8px 10px !important}',
+    '.axa .pja-cols{grid-template-columns:minmax(0,1fr)}',
+    '.axa .pja-top .dir{margin-left:0}',
     '}'
   ].join('\n');
   function garanteCss() {
@@ -403,6 +423,167 @@
     h += '<span class="lab" style="margin-top:4px">ENTREGAS</span>' + marcos(p, l, 4);
     return h + '</div>';
   }
+
+  // ═══ PROJETOS EM ANDAMENTO (admin.html, 7143668 a 321cd68) ═══════════════
+  /* "Quero uma visao dos projetos em andamento. Todo projeto que tiver task em
+      alguma sprint futura, quero visualizar a data da entrega e atividades ja
+      feitas e planejadas (so com data)."
+     EM ANDAMENTO = projeto aprovado com demanda ABERTA na sprint de hoje ou
+     numa posterior (`sprint_po`). Feita entra pela data de conclusao; aberta,
+     se tem alguma data de entrega, e a que aparece e a do USUARIO. Em
+     andamento (dev trabalhando ou validacao) separado do Planejado.
+     As funcoes `pja*` sao COPIA de pjChaveSprint, pjAberta,
+     pjNaSprintAtualOuFutura, pjEmAndamento, pjAndamentoDados e da montagem
+     de `imprimirProjetosAndamento` (admin.html), com o modulo de sprint, a
+     etapa gravada e a base por parametro. A tela e o PPT leem de `pjaDados`,
+     como no admin; a suite roda as do admin e as do app lado a lado. A base
+     e a do app (`H.visiveis`): o admin conta tambem a demanda `oculto`. */
+  var PJA_EM_ANDAMENTO = ['em_andamento', 'validacao_area', 'validacao'];
+  var PJA_ETAPA_ROT = { validacao_area: 'Val. área', validacao: 'Val. PM/PO', planning: 'Planning', levantar_req: 'Aprov. req.', backlog: 'Backlog' };
+  // S1-11-2026 -> 2026 11 1: ano, mes e semana, comparaveis como texto.
+  function pjaChave(r) { var s = String(r || ''); return s.slice(6, 10) + s.slice(3, 5) + s.slice(1, 2); }
+  function pjaNaSprint(SPm, etapa, m, atual) {
+    var sp = SPm.doPO(m), k = etapa(m);
+    return !!sp && !m.mesclado_em && k !== 'concluido' && k !== 'negada' && pjaChave(sp) >= pjaChave(atual);
+  }
+  function pjaEmAndamento(SPm, etapa, p, ms, atual) {
+    return String((p && p.aprovacao) || 'aprovado') === 'aprovado' &&
+      ms.some(function (m) { return m.projeto_id === p.id && pjaNaSprint(SPm, etapa, m, atual); });
+  }
+  function pjaDados(SPm, etapa, p, ms, atual) {
+    var ehDia = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(v); };
+    var doProj = ms.filter(function (m) { return m.projeto_id === p.id && !m.mesclado_em; });
+    var feitas = doProj.filter(function (m) { return etapa(m) === 'concluido'; })
+      .map(function (m) { return { m: m, data: String(m.concluido_em || m.entregue_em || '').slice(0, 10) }; })
+      .filter(function (x) { return ehDia(x.data); })
+      .sort(function (a, b) { return b.data.localeCompare(a.data); });
+    var abertas = doProj.filter(function (m) { var k = etapa(m); return k !== 'concluido' && k !== 'negada'; })
+      .map(function (m) { return { m: m, dev: String(m.entrega || '').slice(0, 10), usu: String(m.entrega_usuario || '').slice(0, 10) }; })
+      .filter(function (x) { return ehDia(x.dev) || ehDia(x.usu); })
+      .sort(function (a, b) { return (a.usu || '9999').localeCompare(b.usu || '9999') || (a.dev || '').localeCompare(b.dev || ''); });
+    var andamento = abertas.filter(function (x) { return PJA_EM_ANDAMENTO.indexOf(etapa(x.m)) >= 0; });
+    var planejado = abertas.filter(function (x) { return PJA_EM_ANDAMENTO.indexOf(etapa(x.m)) < 0; });
+    // A ENTREGA DO PROJETO: a data dele, se o PM a pos; senao a ultima ao usuario.
+    var entrega = '', fonte = '';
+    var usus = abertas.map(function (x) { return x.usu; }).filter(ehDia).sort();
+    if (ehDia(String(p.fim || '').slice(0, 10))) { entrega = String(p.fim).slice(0, 10); fonte = 'data do projeto'; }
+    else if (usus.length) { entrega = usus[usus.length - 1]; fonte = 'última entrega planejada'; }
+    return { feitas: feitas, andamento: andamento, planejado: planejado, entrega: entrega, fonte: fonte,
+             naSprint: doProj.filter(function (m) { return pjaNaSprint(SPm, etapa, m, atual); }).length };
+  }
+  /** O que o `projetos-ppt.js` desenha: os projetos na ordem do cadastro,
+   *  cada linha com sistema › modulo, etapa, data e a sprint na cor dela. */
+  function pjaParaPPT(SPm, etapa, rotulos, ps, ms, temas, atual) {
+    var temaNome = {};
+    (temas || []).forEach(function (t) { temaNome[t.id] = t.nome || ''; });
+    var sm = function (m) { return (temaNome[m.tema_id] || '').split(' - ').map(function (s) { return s.trim(); }).filter(Boolean).join(' › '); };
+    var linha = function (x, data) {
+      var sp = SPm.doPO(x.m);
+      return { codigo: x.m.codigo || '', titulo: x.m.titulo || '', sistema: sm(x.m), etapa: rotulos[etapa(x.m)] || etapa(x.m), data: data,
+               sprint: sp ? SPm.rotuloCurto(sp) : '', cor: sp && SPm.corDaSprint ? (SPm.corDaSprint(sp) || '') : '' };
+    };
+    return (ps || []).filter(function (p) { return pjaEmAndamento(SPm, etapa, p, ms, atual); }).map(function (p) {
+      var d = pjaDados(SPm, etapa, p, ms, atual);
+      return { codigo: p.codigo || '', nome: p.nome || '', responsavel: p.responsavel || '',
+               entrega: d.entrega, fonte: d.fonte, naSprint: d.naSprint,
+               feitas: d.feitas.map(function (x) { return linha(x, x.data); }),
+               andamento: d.andamento.map(function (x) { return linha(x, x.usu); }),
+               planejado: d.planejado.map(function (x) { return linha(x, x.usu); }) };
+    });
+  }
+  /** A ordem da tela (renderProjetos do admin): quem tem atrasada primeiro,
+   *  mais atrasadas antes, depois o maior progresso. */
+  function pjaOrdena(gravada, efetiva, ps, ms) {
+    var cache = {};
+    var res = function (p) {
+      if (cache[p.id]) return cache[p.id];
+      var l = ms.filter(function (m) { return m.projeto_id === p.id; });
+      var feitas = l.filter(function (m) { return gravada(m) === 'concluido'; }).length;
+      return (cache[p.id] = { atrasadas: l.filter(function (m) { return efetiva(m) === 'atrasado'; }).length,
+                              pct: l.length ? Math.round(feitas / l.length * 100) : 0 });
+    };
+    return ps.slice().sort(function (a, b) {
+      var ra = res(a), rb = res(b);
+      if ((rb.atrasadas > 0) !== (ra.atrasadas > 0)) return rb.atrasadas > 0 ? 1 : -1;
+      if (rb.atrasadas !== ra.atrasadas) return rb.atrasadas - ra.atrasadas;
+      return rb.pct - ra.pct;
+    });
+  }
+  function rotulosEtapa() {
+    var r = {};
+    H.ETAPAS.forEach(function (e) { r[e.id] = e.rotulo; });
+    return r;
+  }
+
+  function htmlAndamento(ctx) {
+    var D = ctx.D, SPm = raiz.SPRINTPO;
+    var cab = function (botao) {
+      return '<header style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px">' +
+        '<div style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">Projetos em andamento</h1>' +
+        '<span class="sub">Projetos com demanda aberta na sprint atual' + (SPm ? ' (' + esc(SPm.rotuloCurto(H.sprintAtual())) + ')' : '') +
+        ' ou numa sprint futura. Só entram as atividades que têm data.</span></div>' + (botao || '') + '</header>';
+    };
+    if (!SPm) return cab() + H.vazio('alert', 'Regra de sprint não carregada', 'O sprint.js não foi lido pela página.');
+    var ms = H.visiveis(), atual = H.sprintAtual(), hj = H.hoje();
+    var lista = pjaOrdena(H.colunaDe, H.etapaDe, D.projetos || [], ms).filter(function (p) { return pjaEmAndamento(SPm, H.colunaDe, p, ms, atual); });
+    if (!lista.length) return cab() + H.vazio('package', 'Nenhum projeto com demanda na sprint atual ou nas próximas', 'O projeto aparece aqui quando uma demanda dele entra numa sprint.');
+    var botao = '<button type="button" class="btn" data-axis-ppt="projetos" title="Gera o PPT dos projetos em andamento">' + ico('printer') + ' Imprimir - Projetos em andamento</button>';
+
+    var data = function (v, venc, dica) {
+      return H.ehISO(v) ? '<span title="' + dica + '"' + (venc ? ' style="color:var(--dg-t);font-weight:700"' : '') + '>' + H.dma(v) + '</span>'
+                        : '<span title="' + dica + '" style="color:var(--tx4)">—</span>';
+    };
+    var linha = function (x, tipo) {
+      var m = x.m, sp = SPm.doPO(m);
+      var t = '<span class="t">' + (m.codigo ? '<b>' + esc(m.codigo) + '</b>' : '') + '<span>' + esc(m.titulo || '') + '</span>';
+      if (tipo === 'feita') {
+        return '<a class="pja-ln" href="' + H.hrefItem(m) + '" title="' + esc((m.codigo ? m.codigo + ' · ' : '') + (m.titulo || '')) + '">' + t + '</span>' +
+          '<span class="d">' + data(x.data, false, 'Concluída em') + '</span></a>';
+      }
+      /* A ETAPA SO APARECE QUANDO NAO E A DA COLUNA: em "Em andamento" a que esta
+         em validacao, em "Planejado" a que ainda esta em Planning ou Backlog. */
+      var et = H.colunaDe(m);
+      if (et !== tipo && PJA_ETAPA_ROT[et]) t += H.chip(PJA_ETAPA_ROT[et], 'bk');
+      var cor = sp && SPm.corDaSprint ? SPm.corDaSprint(sp) : '';
+      var chipSp = sp ? H.chip((cor ? '<span class="dotc" style="background:' + cor + '"></span>' : '') + esc(SPm.rotuloCurto(sp)), 'bk', 'Sprint ' + sp)
+                      : '<span title="Fora de sprint" style="color:var(--tx4)">—</span>';
+      return '<a class="pja-ln" href="' + H.hrefItem(m) + '" title="' + esc((m.codigo ? m.codigo + ' · ' : '') + (m.titulo || '')) + '">' + t + '</span>' +
+        '<span class="d">' + data(x.usu, x.usu && x.usu < hj, 'Entrega ao usuário') + chipSp + '</span></a>';
+    };
+    var coluna = function (rot, icone, cor, itens, tipo, vz) {
+      return '<div class="pja-col"><div class="hd"><span style="color:' + cor + '">' + ico(icone) + '</span>' + rot + '<span class="n">' + itens.length + '</span></div>' +
+        (itens.length ? '<div class="cb"><span>DEMANDA</span><span>' + (tipo === 'feita' ? 'CONCLUÍDA EM' : 'ENTREGA USUÁRIO · SPRINT') + '</span></div>' +
+          itens.map(function (x) { return linha(x, tipo); }).join('') : '<span class="pja-vz">' + vz + '</span>') + '</div>';
+    };
+    var corpo = lista.map(function (p) {
+      var d = pjaDados(SPm, H.colunaDe, p, ms, atual);
+      var entrega = d.entrega
+        ? H.chip(ico('flag') + ' Entrega: ' + H.dma(d.entrega) + ' · ' + esc(d.fonte), d.entrega < hj ? 'dg' : 'bk', d.entrega < hj ? 'Entrega vencida' : '')
+        : H.chip(ico('flag') + ' Entrega: a definir', 'bk');
+      return '<section class="pja"><div class="pja-top">' + (p.codigo ? '<span class="code">' + esc(p.codigo) + '</span>' : '') +
+        '<a class="pj-nm" href="' + hrefProjeto(p) + '">' + esc(p.nome || '(sem nome)') + '</a>' +
+        '<span class="dir">' + (p.responsavel ? '<span class="pj-meta">' + H.av(p.responsavel, 22) + esc(p.responsavel) + '</span>' : '') +
+        H.chip(ico('refresh') + ' ' + d.naSprint + ' na sprint atual/próximas', 'in') + entrega + '</span></div>' +
+        '<div class="pja-cols">' +
+          coluna('FEITAS', 'check', 'var(--ok-t)', d.feitas, 'feita', 'Nenhuma concluída com data.') +
+          coluna('EM ANDAMENTO', 'pulse', 'var(--ac-t)', d.andamento, 'em_andamento', 'Nada em andamento com data.') +
+          coluna('PLANEJADO', 'calendar', 'var(--in-t)', d.planejado, 'planejado', 'Nada planejado com data.') +
+        '</div></section>';
+    }).join('');
+    return cab(botao) + corpo;
+  }
+
+  /* O PPT (axis-tela-relatorios.js, `data-axis-ppt="projetos"`) le daqui. */
+  raiz.AXIS_PROJETOS = {
+    andamentoPPT: function () {
+      var D = AX.APP.D || {};
+      return pjaParaPPT(raiz.SPRINTPO, H.colunaDe, rotulosEtapa(), D.projetos || [], H.visiveis(), D.temas || [], H.sprintAtual());
+    },
+    andamento: function () {
+      var D = AX.APP.D || {};
+      return raiz.SPRINTPO ? (D.projetos || []).filter(function (p) { return pjaEmAndamento(raiz.SPRINTPO, H.colunaDe, p, H.visiveis(), H.sprintAtual()); }) : [];
+    }
+  };
 
   // ── Linha do tempo (roadmap e detalhe) ─────────────────────────────────
   function primeiroDoMes(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
@@ -761,17 +942,21 @@
 
   garanteCss();
 
+  function miolo(ctx) {
+    return ctx.aba === 'roadmap' ? htmlRoadmap(ctx) : ctx.aba === 'andamento' ? htmlAndamento(ctx) : htmlLista(ctx);
+  }
+
   AX.tela({
     id: 'projetos', rotulo: 'Projetos', ico: 'package', papeis: ['admin', 'dev', 'consulta'],
-    abas: [{ id: 'lista', rotulo: 'Projetos' }, { id: 'roadmap', rotulo: 'Roadmap' }],
-    titulo: function (r) { return r.aba === 'roadmap' ? 'Roadmap' : 'Projetos'; },
+    abas: [{ id: 'lista', rotulo: 'Projetos' }, { id: 'andamento', rotulo: 'Em andamento' }, { id: 'roadmap', rotulo: 'Roadmap' }],
+    titulo: function (r) { return r.aba === 'roadmap' ? 'Roadmap' : r.aba === 'andamento' ? 'Projetos em andamento' : 'Projetos'; },
     render: function (el, ctx) {
       garanteCss();
-      return '<div class="view">' + (ctx.aba === 'roadmap' ? htmlRoadmap(ctx) : htmlLista(ctx)) + '</div>';
+      return '<div class="view">' + miolo(ctx) + '</div>';
     },
     depois: function (el, ctx) {
       ligar(el, ctx, function () {
-        el.innerHTML = '<div class="view">' + (ctx.aba === 'roadmap' ? htmlRoadmap(ctx) : htmlLista(ctx)) + '</div>';
+        el.innerHTML = '<div class="view">' + miolo(ctx) + '</div>';
       });
     }
   });
