@@ -24957,6 +24957,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'a marcada Dados/BI so para Dados');
       ok(!ver('Marina', { dev: '' }) && ver('Gabriel Fernandes', { dev: '' }),
          'e a sem frente, para quem nao e de Dados');
+      // AS DATAS DO TAMANHO DA SPRINT (05/11/2026): o seletor abre na semana e escolher a sprint preenche a segunda.
+      ok(/<select id="m-sprint" onchange="mSprintAviso\(\);mSprintDatas\(true\)">/.test(ADMIN) &&
+         /function mSprintDatas\(escolheu\) \{[\s\S]{0,600}SPRINTPO\.faixaDaSprint\(sp, state\.feriados[\s\S]{0,300}el\.min = faixa\.de; el\.max = faixa\.ate;/.test(ADMIN) &&
+         /if \(escolheu && usu && segunda\) \{ usu\.value = segunda;/.test(ADMIN) &&
+         /m\?\.entrega_usuario  \|\| '';\n  mSprintDatas\(false\);/.test(ADMIN),
+         'no card do Admin as datas do dev abrem na semana da sprint e escolher a sprint preenche a entrega ao usuario (abrir nao preenche)');
+      ok(SP.faixaDaSprint('S1-11-2026', ['2026-11-02']).de === '2026-11-03' && SP.entregaDaSprint('S1-11-2026', ['2026-11-02']) === '2026-11-09',
+         'a S1-11 vai de 03/11 (02/11 e feriado) e entrega ao usuario na segunda 09/11');
       // O filtro opcional "Times" (05/11/2026) soma outro time sem mudar o padrao.
       ok(ver('Gabriel Fernandes', { dados_bi: true }, 'dados') && !ver('Gabriel Fernandes', { dados_bi: true }, 'sales'),
          'com o filtro Times em Dados/BI, o dev de Desenvolvimento ve a fila de Dados');

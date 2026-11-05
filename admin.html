@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a1fc008694">
+<html lang="pt-BR" data-build="9681632fa1">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -2607,7 +2607,7 @@
     <div class="form-row">
       <div class="form-group">
         <label>Sprint <span id="m-sprint-obrig" style="color:var(--red,#E84444)"></span></label>
-        <select id="m-sprint" onchange="mSprintAviso()"></select>
+        <select id="m-sprint" onchange="mSprintAviso();mSprintDatas(true)"></select>
         <div id="m-sprint-hint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
       </div>
     </div>
@@ -2779,11 +2779,11 @@
     <div class="form-row">
       <div class="form-group">
         <label>Data de início</label>
-        <input type="date" id="m-inicio" oninput="atualizaHorasPlanejadas();entregaUsuRender()" />
+        <input type="date" id="m-inicio" oninput="atualizaHorasPlanejadas();entregaUsuRender();mSprintDatas(false)" />
       </div>
       <div class="form-group">
         <label>Data de entrega prevista <span class="eu-sub">(fim do dev)</span></label>
-        <input type="date" id="m-entrega" oninput="atualizaHorasPlanejadas();entregaUsuRender()" />
+        <input type="date" id="m-entrega" oninput="atualizaHorasPlanejadas();entregaUsuRender();mSprintDatas(false)" />
       </div>
       <!-- A ENTREGA AO USUARIO FICA COLADA NA DO DEV, e nao numa aba a parte: a
            distancia entre as duas e a propria informacao ("quantos dias a PR
@@ -13938,6 +13938,7 @@ function openModalMelhoria(id) {
      nada — e as 279 que so herdam deixariam de ser distinguiveis das que
      foram organizadas de verdade. A heranca aparece no aviso ao lado. */
   document.getElementById('m-entrega-usuario').value = m?.entrega_usuario  || '';
+  mSprintDatas(false);
   entregaUsuRender(m);
   mesPreencheCampo(m);
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
@@ -14109,6 +14110,8 @@ function mSprintAviso() {
   if (obrig) obrig.textContent = exige ? '*' : '';
   const id = (document.getElementById('m-id') || {}).value;
   const m = id ? (state.melhorias || []).find(x => x.id === id) : null;
+  const _semana = document.getElementById('m-sprint-semana');
+  if (_semana && !sel.value) _semana.textContent = '';
   if (!sel.value) {
     hint.style.color = exige ? 'var(--red,#E84444)' : 'var(--text3)';
     hint.textContent = exige
@@ -14123,6 +14126,44 @@ function mSprintAviso() {
       (m.sprint_po_em ? ' em ' + formatDate(m.sprint_po_em) : '') +
       (n ? ' · entrou atrasada (' + n + (n === 1 ? ' pulo' : ' pulos') + ')' : '')
     : 'Vai para ' + SPRINTPO.rotuloCurto(sel.value) + ' ao salvar.';
+}
+
+/* ═══ AS DATAS DO TAMANHO DA SPRINT (05/11/2026) ═══════════════════════════
+   "Ajuste as datas conforme tamanho da sprint. Por exemplo se eu estiver na
+    S1-11 abrir as datas possíveis da semana da sprint e entrega já preencher a
+    próxima segunda."
+   - Início e entrega do dev: o calendário abre só nos dias da semana da sprint
+     (`SPRINTPO.faixaDaSprint`, que já pula feriado — a S1-11 começa em 03/11).
+     É limite do seletor, não trava: data antiga de quem rolou de sprint
+     continua salvando, e o aviso diz que está fora da semana.
+   - Entrega ao usuário: ESCOLHER a sprint preenche a segunda seguinte
+     (`SPRINTPO.entregaDaSprint`), como o repasse já fazia ao salvar. Só no
+     gesto — abrir o card não grava nada que ninguém decidiu (ver a nota do
+     campo em `openModal`). */
+function mSprintDatas(escolheu) {
+  if (!window.SPRINTPO) return;
+  const sp = (document.getElementById('m-sprint') || {}).value || '';
+  const faixa = sp ? SPRINTPO.faixaDaSprint(sp, state.feriados || []) : null;
+  const ini = document.getElementById('m-inicio');
+  const ent = document.getElementById('m-entrega');
+  [ini, ent].forEach(el => {
+    if (!el) return;
+    if (faixa) { el.min = faixa.de; el.max = faixa.ate; }
+    else { el.removeAttribute('min'); el.removeAttribute('max'); }
+  });
+  const usu = document.getElementById('m-entrega-usuario');
+  const segunda = sp ? SPRINTPO.entregaDaSprint(sp, state.feriados || []) : '';
+  if (escolheu && usu && segunda) { usu.value = segunda; entregaUsuRender(); }
+  const hint = document.getElementById('m-sprint-hint');
+  if (!hint || !faixa) return;
+  let el = document.getElementById('m-sprint-semana');
+  if (!el) { el = document.createElement('div'); el.id = 'm-sprint-semana'; hint.after(el); }
+  const fora = [['início', ini && ini.value], ['entrega', ent && ent.value]]
+    .filter(([, v]) => v && (v < faixa.de || v > faixa.ate)).map(([r]) => r);
+  el.style.cssText = 'font-size:11px;margin-top:2px;color:' + (fora.length ? 'var(--amber-tx,#FFC470)' : 'var(--text3)');
+  el.textContent = '📅 Semana da sprint: ' + formatDate(faixa.de) + ' a ' + formatDate(faixa.ate) +
+    (segunda ? ' · entrega ao usuário ' + formatDate(segunda) : '') +
+    (fora.length ? ' · ⚠ ' + fora.join(' e ') + ' fora da semana' : '');
 }
 
 function calcHorasPlanejadas(inicio, entrega) {
