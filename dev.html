@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="4f88a9b72b">
+<html lang="pt-BR" data-build="b94b22216b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -578,12 +578,12 @@
        está no nome da pessoa. Os devs estão se confundindo." O card que NÃO é
        do dev ganha borda tracejada, fundo apagado e uma faixa no topo dizendo
        de quem é; o que é dele ganha a marca "no seu nome". */
-    .kcard.kcard-fila { border-style:dashed; border-color:#2E6E88; background:rgba(18,58,82,.25); }
+    .kcard.kcard-fila { border-style:dashed; border-color:rgba(var(--tl-rgb),.45); background:rgba(var(--tl-rgb),.06); }
     .kcard-dono { font-size:10px; font-weight:700; letter-spacing:.3px; text-transform:uppercase;
       border-radius:5px; padding:3px 7px; margin:-2px 0 8px; display:inline-block; }
-    .kcard-dono.fila { color:var(--cyan-tx,#8AD5F0); background:var(--cyan-bg,#123A52); border:1px solid #2E6E88; }
-    .kcard-dono.outro { color:var(--text2); background:var(--bg3); border:1px dashed var(--border2,#555); }
-    .kcard-dono.meu { color:var(--green-tx,#8FE0A8); background:rgba(46,139,87,.15); border:1px solid rgba(46,139,87,.5); }
+    .kcard-dono.fila { color:var(--teal-tx); background:var(--teal-bg); border:1px solid rgba(var(--tl-rgb),.45); }
+    .kcard-dono.outro { color:var(--text2); background:var(--bg3); border:1px dashed var(--border2); }
+    .kcard-dono.meu { color:var(--green-tx); background:var(--green-bg); border:1px solid rgba(var(--ok-rgb),.45); }
     .kcard-meta span { display:flex; align-items:center; gap:3px; }
     .kcard-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; display:inline-block; }
     .kcard-actions { display:flex; gap:6px; margin-top:8px; border-top:1px solid var(--border); padding-top:8px; }
@@ -764,7 +764,7 @@
 <script src="sprint.js?v=d64ea6d269"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
-<script src="requisitos.js?v=1987238fe2"></script>
+<script src="requisitos.js?v=cac792c192"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
@@ -950,8 +950,8 @@
     <select id="f-dono" class="filter-select" onchange="renderKanban()"
             title="Separa as demandas no seu nome das que estão na fila do time.">
       <option value="">No meu nome + fila do time</option>
-      <option value="meu">👤 Só no meu nome</option>
-      <option value="fila">📥 Só a fila do time</option>
+      <option value="meu">Só no meu nome</option>
+      <option value="fila">Só a fila do time</option>
     </select>
     <div class="filter-sep"></div>
     <button id="f-limpar" class="btn btn-secondary btn-sm" onclick="limparFiltrosDev()">Limpar</button>
@@ -4824,10 +4824,10 @@ function renderCard(m, colKey) {
       ${grillFaixa}
       ${/* DE QUEM E — ver a nota de `.kcard-fila`. */''}
       ${DEVNOME.eDe(m, currentDev)
-        ? '<div class="kcard-dono meu" title="Esta demanda está no seu nome: você é o responsável.">👤 No seu nome</div>'
+        ? '<div class="kcard-dono meu" title="Esta demanda está no seu nome: você é o responsável."><i class="axi axi-user"></i> No seu nome</div>'
         : String(m.dev || '').trim()
-          ? '<div class="kcard-dono outro" title="Não está no seu nome — aparece para o time porque está na sprint. Quem responde é ' + escAttr(m.dev) + '.">👥 Do time · com ' + escAttr(m.dev) + '</div>'
-          : '<div class="kcard-dono fila" title="Fila do time: está na sprint e ainda não tem dono. Qualquer um pode pegar — combine antes de começar.">📥 Fila do time · sem dono</div>'}
+          ? '<div class="kcard-dono outro" title="Não está no seu nome — aparece para o time porque está na sprint. Quem responde é ' + escAttr(m.dev) + '."><i class="axi axi-users"></i> Do time · com ' + escAttr(m.dev) + '</div>'
+          : '<div class="kcard-dono fila" title="Fila do time: está na sprint e ainda não tem dono. Qualquer um pode pegar — combine antes de começar."><i class="axi axi-inbox"></i> Fila do time · sem dono</div>'}
       ${parentInfo}
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}"><i class="axi axi-pause"></i> Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'<i class="axi axi-alert"></i> vence hoje':'<i class="axi axi-clock"></i> vence amanhã'}</div>` : ''}
@@ -6522,7 +6522,7 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
     m.dev = devAnterior;
     renderKanban();
   } else {
-    if (assumiu) toast('👤 ' + (m.codigo || 'Demanda') + ' agora está no seu nome.', 'ok');
+    if (assumiu) toast((m.codigo || 'Demanda') + ' agora está no seu nome.', 'ok');
     _msAnexosMexidos = false;
     _msProjetoMexido = false;
   }

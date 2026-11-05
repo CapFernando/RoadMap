@@ -37,6 +37,8 @@
     var s = document.createElement('style');
     s.id = 'css-tela-item';
     s.textContent = [
+      '.axa .it-cu{box-sizing:border-box;width:100%;min-height:260px;padding:12px 14px;border-radius:12px;border:1px solid var(--bd2);background:var(--sf2);color:var(--tx);font-family:var(--font-mono);font-size:12.5px;line-height:20px;resize:vertical}',
+      '.axa .it-cu[readonly]{color:var(--tx2)}',
       '.axa .it-sec{padding:20px;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);display:flex;flex-direction:column;gap:10px;min-width:0}',
       '.axa .it-aside .it-sec{padding:18px}',
       '.axa .it-h2{margin:0;font-family:var(--font-ui);font-size:13px;font-weight:800;letter-spacing:.12em;color:var(--tx3)}',
@@ -359,6 +361,7 @@
     if (m.spike) c.push(H.chip(H.ico('search') + ' Spike', 'in'));
     if (m.debito_tecnico) c.push(H.chip('Débito técnico', 'pu'));
     if (m.destaque) c.push(H.chip(H.ico('star') + ' Destaque', 'ac'));
+    c.push(H.chipsReq(m));
     return c.join('');
   }
 
@@ -427,6 +430,10 @@
     row('Responsável', devs.length ? devs.map(H.esc).join(' / ') : '<span class="dim">sem responsável</span>');
     row('Solicitante', m.solicitante ? H.esc(m.solicitante) : '<span class="dim">sem solicitante</span>');
     if (window.ORDEMKB) row('Prioridade', H.esc(ORDEMKB.rotulo(m)));
+    if (window.REQUISITOS) {
+      row('Impacto', REQUISITOS.rotuloImpacto(m.impacto) ? H.esc(REQUISITOS.rotuloImpacto(m.impacto)) : '<span class="dim">não informado</span>');
+      row('Urgência', REQUISITOS.rotuloUrgencia(m.urgencia) ? H.esc(REQUISITOS.rotuloUrgencia(m.urgencia)) : '<span class="dim">não informada</span>');
+    }
     var sp = window.SPRINTPO ? SPRINTPO.doPO(m) : '';
     row('Sprint', sp ? '<span title="' + H.esc(sp) + '">' + H.esc(SPRINTPO.rotuloCurto(sp)) + '</span>' +
       (SPRINTPO.entrouAtrasada(m) ? ' <span class="dim">· veio de ' + H.esc(SPRINTPO.rotuloCurto(SPRINTPO.sprintDeOrigem(m) || '')) + '</span>' : '')
@@ -533,9 +540,44 @@
     return '<aside class="it-aside" style="display:flex;flex-direction:column;gap:16px;min-width:0">' + h + '</aside>';
   }
 
+  /* O CASO DE USO de "Em aprovacao de requisitos" — o painel `m-caso-uso` do
+     editor do admin (`cuRender`): aparece na etapa, ou quando a demanda ja
+     teve um. O Worker abre o caso de uso na entrada da etapa; aqui o PM/PO
+     monta o texto, copia, imprime e registra envio, aprovacao ou ajustes
+     (axis-acoes.js). Para os outros perfis, so a leitura. */
+  function casoUso(m, ctx) {
+    var R = window.REQUISITOS, AC = window.AXIS_ACOES;
+    if (!R) return '';
+    var naEtapa = String(m.status_planejamento || '') === R.ETAPA;
+    var c = m.caso_uso && typeof m.caso_uso === 'object' ? m.caso_uso : null;
+    if (!naEtapa && !c) return '';
+    var st = R.ESTADOS[(c || {}).status] ? c.status : 'a_enviar';
+    var pm = ctx.papel === 'admin' && !!AC;
+    var texto = (c && c.texto) || (AC ? AC.textoCasoUso(m) : R.casoDeUso(m, { tema: H.tema(m.tema_id), hoje: H.hoje() }));
+    var q = function (iso) { return iso ? H.dma(iso) : ''; };
+    var info = c ? [
+      c.gerado_em ? 'Entrou na etapa em ' + q(c.gerado_em) : '',
+      c.enviado_em ? 'enviado em ' + q(c.enviado_em) + (c.enviado_por ? ' por ' + c.enviado_por : '') : '',
+      c.respondido_em ? 'resposta em ' + q(c.respondido_em) + (c.respondido_por ? ' (' + c.respondido_por + ')' : '') : '',
+      c.saiu_em ? 'saiu da etapa em ' + q(c.saiu_em) : ''
+    ].filter(Boolean).join(' · ') : '';
+    var bt = function (acao, rot, ico, cls) { return AC.botao(acao, m, rot, cls || 'btn', { ico: ico }); };
+    return sec('CASO DE USO PARA APROVAÇÃO DO USUÁRIO',
+      (info ? '<span class="note">' + H.esc(info) + '</span>' : '') +
+      (c && c.resposta ? '<div class="lock">' + H.ico('edit') + '<span><b>Ajustes pedidos:</b> ' + H.esc(c.resposta) + '</span></div>' : '') +
+      '<textarea class="it-cu" id="it-cu-texto" aria-label="Texto do caso de uso"' + (pm ? '' : ' readonly') + '>' + H.esc(texto) + '</textarea>' +
+      (pm ? '<div class="row" style="flex-wrap:wrap;gap:8px">' +
+        bt('casoUsoGerar', 'Gerar de novo', 'refresh') + bt('casoUsoCopiar', 'Copiar', 'clipboard') + bt('casoUsoImprimir', 'Imprimir / PDF', 'printer') +
+        bt('casoUsoEnviado', 'Marquei como enviado', 'send') + bt('casoUsoAprovado', 'Usuário aprovou', 'check', 'btn') +
+        bt('casoUsoAjustes', 'Usuário pediu ajustes', 'edit') + '</div>'
+         : '<span class="note">Quem envia ao usuário e registra a resposta é o PM/PO.</span>'),
+      H.chip(H.esc(R.ESTADOS[st]), H.CASO_USO_COR[st]));
+  }
+
   function principal(m, ctx) {
     var sp = separa(m.descricao);
     var h = sec('DESCRIÇÃO', sp.desc ? '<p class="it-desc">' + descHTML(sp.desc) + '</p>' : '<span class="note">Sem descrição registrada.</span>');
+    h += casoUso(m, ctx);
     if (sp.crit.length) h += sec('CRITÉRIOS DE ACEITE', sp.crit.map(function (l) { return '<div class="it-crit">' + critHTML(l) + '</div>'; }).join(''));
 
     var subs = window.SUBTAREFA ? SUBTAREFA.lista(m) : [];

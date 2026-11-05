@@ -26,6 +26,8 @@
      retomar        aplicarRetomada (admin.html e dev.html, iguais)
      negar          saveMelhoria com etapa Negada (motivo obrigatorio)
      entregar       saveStatus/updateStatus para a area ou o PM/PO (dev.html)
+     casoUso        cuMarcar (admin.html): enviado, aprovado ou ajustes do
+                    caso de uso de "Em aprovacao de requisitos"
 
    As regras de verdade sao dos modulos (`pausa.js`, `homologacao.js`,
    `devolucao.js`, `sprint.js`, `prevoo.js`, `vinculo.js`): aqui so se escolhe
@@ -142,7 +144,7 @@
     return null;
   }
 
-  var ROTULOS = { backlog: 'Backlog', levantar_req: 'Levantar Requisitos', planning: 'Planning', planejado: 'Planejado',
+  var ROTULOS = { backlog: 'Backlog', levantar_req: 'Em aprovação de requisitos', planning: 'Planning', planejado: 'Planejado',
                   em_andamento: 'Em Andamento', validacao_area: 'Validação da área', validacao: 'Validação PM/PO',
                   concluido: 'Concluído', negada: 'Negada' };
   function rotulo(e) { return ROTULOS[e] || e; }
@@ -156,6 +158,32 @@
     if (destino === 'validacao' && (!vindoDaArea || !m.entregue_em)) return agora;
     if (destino === 'concluido' && !m.entregue_em) return agora;
     return m.entregue_em || '';
+  }
+
+  /* VOLTOU AO BACKLOG, SAI SEM DATA DE INICIO — `tiraInicioDoBacklog` do
+     Worker, que o admin repete na publicacao: Backlog com inicio no passado e
+     lido como Em andamento (`ETAPA.gravada`), e o card nao mudaria de coluna. */
+  function tiraInicioDoBacklog(m) {
+    return m && m.status_planejamento === 'backlog' && String(m.inicio || '').trim() ? { inicio: '' } : {};
+  }
+
+  /* AS PORTAS DO `dev-publish` QUE O PAINEL DO PM/PO NAO TEM. Quem nao e admin
+     (analista e dev) grava por ali, e o servidor recusa: tirar de Em andamento
+     sem horas (`saindoDeAndamentoSemHoras`, 04/11/2026) e entrar numa validacao
+     sem as horas e o texto do que foi feito (`entrandoEmValidacaoSemEntrega`,
+     o texto tambem na area desde 02/11/2026). O publish do admin nao muda. */
+  function travaDoDevPublish(m, destino, c) {
+    if (txt((c || {}).papel) === 'admin') return null;
+    var h = Number((m || {}).horas_realizadas);
+    var semHoras = !isFinite(h) || h <= 0;
+    if (etapa(m) === 'em_andamento' && destino !== 'em_andamento' && semHoras) {
+      return falha('Para tirar "' + (m.codigo || m.titulo) + '" de Em andamento, lance as horas trabalhadas.', 'horas');
+    }
+    if ((destino === 'validacao' || destino === 'validacao_area') && etapa(m) !== destino) {
+      if (semHoras) return falha('Informe as horas trabalhadas para mandar a ' + rotulo(destino) + '.', 'horas');
+      if (!txt(m.implementacao)) return falha('Para ir a ' + rotulo(destino) + ' falta o texto do que foi implementado — a área e o PM/PO validam por ele, e quem o escreve é o dev ao entregar.');
+    }
+    return null;
   }
 
   /** MOVER DE ETAPA. `a` = { destino }. */
@@ -176,15 +204,26 @@
       var tad = SPd ? SPd.travaDeAlocacao(m, etapa(m), destino, c.hoje) : null;
       if (tad && tad.trava) return falha(tad.motivo, '');
       var pd = { status_planejamento: destino, status: STATUS_DEV[destino], horas_realizadas: m.horas_realizadas || 0 };
+      /* QUEM TIRA DA FILA VIRA O DONO (`updateStatus`, dev.html, 03/11/2026):
+         em andamento sem responsavel nao esta na fila nem no nome de ninguem,
+         e o `dev-publish` recusa (`comecar_sem_dono`). */
+      var assumiu = assumeAoComecar(m, destino, c);
+      if (assumiu) pd.dev = assumiu;
       var ent = carimboDeEntrega(m, destino, c.agora);
       if (ent) pd.entregue_em = ent;
-      return { ok: true, patch: pd, msg: 'Movida para ' + rotulo(destino) + '.' };
+      return { ok: true, patch: pd, msg: assumiu ? (m.codigo || 'Demanda') + ' agora está no seu nome.' : 'Movida para ' + rotulo(destino) + '.' };
     }
-    var t = travaDoMovimento(m, destino, c);
+    var t = travaDoMovimento(m, destino, c) || travaDoDevPublish(m, destino, c);
     if (t) return t;
     var p = { status_planejamento: destino, status: STATUS_ADMIN[destino] || m.status };
     Object.assign(p, marcaConclusao(m, destino, c.hoje));
+    Object.assign(p, tiraInicioDoBacklog(Object.assign({}, m, p)));
     return { ok: true, patch: p, msg: 'Movida para ' + rotulo(destino) + '.' };
+  }
+
+  /** O nome que entra como dono ao comecar sem responsavel (`assumiu`, dev.html). */
+  function assumeAoComecar(m, destino, c) {
+    return ETAPAS_DO_DEV.indexOf(destino) >= 0 && !txt((m || {}).dev) && txt((c || {}).quem) ? txt(c.quem) : '';
   }
 
   /** VALIDAR E FECHAR — o selo de quem validou (`valDecidir(true)`). */
@@ -195,6 +234,11 @@
     }
     var sp = faltaAssinatura(m, c);
     if (sp) return falha(sp, '');
+    /* APROVAR E CONCLUIR, e concluir exige sprint (`valDecidir`, 02/11/2026) —
+       a mesma `SPRINTPO.travaDeAlocacao` do arraste; o servidor recusa igual. */
+    var SP = mod(c, 'SPRINTPO');
+    var ta = SP ? SP.travaDeAlocacao(m, etapa(m), 'concluido', c.hoje) : null;
+    if (ta && ta.trava) return falha(ta.motivo, 'sprint');
     if (gestoSemDev(m, 'concluido', m.dev, m.sprint_po, c)) {
       return falha('Esta entrega está sem responsável. Escolha o desenvolvedor antes de aprovar — sem ele a entrega não entra em nenhum relatório por pessoa.', 'dev');
     }
@@ -347,6 +391,9 @@
     }
     var impl = txt(a.implementacao);
     if (destino === 'validacao' && !impl) return falha('Descreva o que foi implementado — o PM/PO valida por este texto.', 'implementacao');
+    /* E O TEXTO TAMBEM NA AREA (`saveStatus`, 02/11/2026): vencidos os 5 dias
+       uteis, a demanda vai sozinha para o PM/PO — o que ele le entra aqui. */
+    if (destino === 'validacao_area' && !impl) return falha('Descreva o que foi implementado — a área e o PM/PO validam por este texto.', 'implementacao');
     var VI = mod(c, 'VINCULO');
     if (destino === 'validacao_area' && VI && VI.abertos(c.lista || [], m.id).length) {
       return falha('Conclua a dependência antes de avançar: "' + (VI.abertos(c.lista || [], m.id)[0].titulo || '') + '".');
@@ -366,13 +413,42 @@
     return { ok: true, patch: p, msg: destino === 'validacao' ? 'Entregue para validação do PM/PO.' : 'Entregue para a Validação da área.' };
   }
 
+  /* O CASO DE USO DE "EM APROVACAO DE REQUISITOS" — COPIA DE `cuMarcar`
+     (admin.html), devolvendo o `caso_uso` em vez de guardar no card. `a` =
+     { status: enviado|aprovado|ajustes, texto, resposta }. Ao marcar ENVIADO,
+     o texto que foi para o usuario fica guardado: o que se aprova e o que se
+     enviou. O caso de uso e do PM/PO — o `dev-publish` devolve o do servidor. */
+  function casoUso(m, a, c) {
+    a = a || {};
+    if (txt((c || {}).papel) !== 'admin') return falha('O caso de uso é do PM/PO: é ele quem envia ao usuário e registra a resposta.');
+    var st = txt(a.status);
+    if (['enviado', 'aprovado', 'ajustes'].indexOf(st) < 0) return falha('Situação do caso de uso desconhecida: ' + st + '.');
+    var base = Object.assign({ status: 'a_enviar', gerado_em: '' }, copia(m.caso_uso && typeof m.caso_uso === 'object' ? m.caso_uso : {}));
+    var quem = txt(c.quem) || 'PM/PO';
+    if (st === 'enviado') {
+      if (!txt(a.texto)) return falha('O texto do caso de uso está vazio: gere de novo antes de enviar.', 'texto');
+      Object.assign(base, { status: 'enviado', texto: String(a.texto), enviado_em: c.agora, enviado_por: quem });
+    } else {
+      var resp = txt(a.resposta);
+      if (!resp) return falha(st === 'ajustes' ? 'Diga o que o usuário pediu para ajustar.' : 'Diga quem aprovou (o nome do usuário).', 'resposta');
+      if (!base.texto) base.texto = String(a.texto || '');
+      Object.assign(base, { status: st, respondido_em: c.agora,
+                            respondido_por: st === 'aprovado' ? resp : (m.solicitante || ''),
+                            resposta: st === 'ajustes' ? resp : '' });
+    }
+    var MSG = { enviado: 'Caso de uso marcado como enviado.', aprovado: 'Requisitos aprovados pelo usuário.', ajustes: 'Pedido de ajustes registrado.' };
+    return { ok: true, patch: { caso_uso: base }, msg: MSG[st] };
+  }
+
   var REGRAS = {
+    casoUso: casoUso,
     mover: mover, validar: validar, devolver: devolver, homologar: homologar, replanejar: replanejar,
     pausar: pausar, pedirPausa: pedirPausa, desistirPausa: desistirPausa, aprovarPausa: aprovarPausa,
     recusarPausa: recusarPausa, retomar: retomar, negar: negar, entregar: entregar
   };
   var api = {
     REGRAS: REGRAS, gestoSemDev: gestoSemDev, marcaConclusao: marcaConclusao, destinosDeEntrega: destinosDeEntrega,
+    tiraInicioDoBacklog: tiraInicioDoBacklog, assumeAoComecar: assumeAoComecar,
     STATUS_ADMIN: STATUS_ADMIN, STATUS_DEV: STATUS_DEV, ETAPAS_DO_DEV: ETAPAS_DO_DEV, rotulo: rotulo
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
@@ -491,7 +567,7 @@
   }
   function contexto() {
     var D = AX.APP.D || {};
-    return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(),
+    return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(), dono: H.donoDaSprint(),
              lista: D.melhorias || [], aprovadores: Array.isArray(D.spike_aprovadores) ? D.spike_aprovadores : null };
   }
   function porId(id) { return ((AX.APP.D || {}).melhorias || []).find(function (x) { return x && x.id === id; }) || null; }
@@ -507,6 +583,8 @@
     if ((rs.sprints_revertidas || []).length) partes.push('a sprint é do PM/PO (' + rs.sprints_revertidas.join(', ') + ')');
     if ((rs.tipos_revertidos || []).length) partes.push('a classificação ficou a de antes (' + rs.tipos_revertidos.join(', ') + ')');
     if ((rs.solicitantes_revertidos || []).length) partes.push('o solicitante ficou o de antes (' + rs.solicitantes_revertidos.join(', ') + ')');
+    // Quem nao e dono da sprint so abre no Backlog (`nascendoForaDoBacklog`).
+    if ((rs.nascidas_no_backlog || []).length) partes.push('abriu no Backlog — só o PM/PO coloca em outra etapa e na sprint (' + rs.nascidas_no_backlog.join(', ') + ')');
     if (partes.length) H.toast('O servidor gravou com ajustes: ' + partes.join('; ') + '.', 'erro');
   }
 
@@ -582,6 +660,11 @@
   }
 
   // ── Os gestos: cada um pergunta o que falta e grava ──────────────────
+  /** O texto do caso de uso, com os dados de agora (`cuTextoNovo`, admin.html). */
+  function textoCasoUso(m) {
+    var R = raiz.REQUISITOS;
+    return R ? R.casoDeUso(m, { tema: H.tema(m.tema_id), hoje: H.hoje() }) : '';
+  }
   function rotEtapa(k) { return (H.ETAPA_POR_ID[k] || {}).rotulo || rotulo(k); }
   function cod(m) { return m.codigo || m.titulo || ''; }
   /** Valida a regra DENTRO da caixa: a recusa aparece ao lado do campo. */
@@ -707,6 +790,53 @@
       if (v) return aplicar('negar', m, v);
     },
 
+    /* O CASO DE USO (o painel `m-caso-uso` do editor do admin): o texto e
+       montado da demanda (`REQUISITOS.casoDeUso`), ajustado na caixa do Item
+       (#it-cu-texto) e, marcado como enviado, guardado no card. */
+    casoUsoGerar: function (m) {
+      var t = document.getElementById('it-cu-texto');
+      if (t) { t.value = textoCasoUso(m); H.toast('Caso de uso montado de novo a partir da demanda.'); }
+    },
+    casoUsoCopiar: async function (m) {
+      var t = document.getElementById('it-cu-texto');
+      var v = t ? t.value : textoCasoUso(m);
+      try { await navigator.clipboard.writeText(v); H.toast('Caso de uso copiado.'); }
+      catch (_) { if (t) t.select(); H.toast('Selecionei o texto: copie com Ctrl+C.'); }
+    },
+    casoUsoImprimir: function (m) {
+      var R = raiz.REQUISITOS;
+      if (!R) return;
+      var t = document.getElementById('it-cu-texto');
+      var w = window.open('', '_blank');
+      if (!w) { H.toast('O navegador bloqueou a janela: libere pop-ups para imprimir.', 'erro'); return; }
+      w.document.write(R.paginaImpressao(t ? t.value : textoCasoUso(m), 'Caso de uso ' + (m.codigo || '')));
+      w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300);
+    },
+    casoUsoEnviado: async function (m) {
+      var t = document.getElementById('it-cu-texto');
+      var texto = t ? t.value : textoCasoUso(m);
+      var v = await caixa({ titulo: 'Marcar o caso de uso de ' + cod(m) + ' como enviado',
+        texto: 'O texto como está agora fica guardado no card: é ele que o usuário aprova, e não o que a demanda virar depois.',
+        ok: 'Marquei como enviado', valida: validaCom('casoUso', m, { status: 'enviado', texto: texto }) });
+      if (v) return aplicar('casoUso', m, { status: 'enviado', texto: texto });
+    },
+    casoUsoAprovado: async function (m) {
+      var t = document.getElementById('it-cu-texto');
+      var fixo = { status: 'aprovado', texto: t ? t.value : '' };
+      var v = await caixa({ titulo: 'Usuário aprovou os requisitos de ' + cod(m),
+        campos: [{ nome: 'resposta', rotulo: 'Quem aprovou (nome do usuário)', valor: m.solicitante || '', obrig: true }],
+        ok: 'Registrar', verde: true, valida: validaCom('casoUso', m, fixo) });
+      if (v) return aplicar('casoUso', m, Object.assign({}, fixo, v));
+    },
+    casoUsoAjustes: async function (m) {
+      var t = document.getElementById('it-cu-texto');
+      var fixo = { status: 'ajustes', texto: t ? t.value : '' };
+      var v = await caixa({ titulo: 'Usuário pediu ajustes em ' + cod(m),
+        campos: [{ nome: 'resposta', rotulo: 'O que o usuário pediu para ajustar?', tipo: 'area', obrig: true }],
+        ok: 'Registrar', valida: validaCom('casoUso', m, fixo) });
+      if (v) return aplicar('casoUso', m, Object.assign({}, fixo, v));
+    },
+
     entregar: async function (m, el) {
       var c = contexto();
       var pedido = el && el.getAttribute('data-axa-destino');
@@ -717,7 +847,7 @@
         recusa(m, { erro: hb ? hb.motivo : 'Daqui não há para onde entregar.', campo: hb && hb.campo });
         return;
       }
-      var NOTA = { validacao_area: 'A área (quem pediu) confere primeiro. Pede as horas.',
+      var NOTA = { validacao_area: 'A área (quem pediu) confere primeiro. Pede as horas e o que foi implementado.',
                    validacao: 'Vai direto ao PM/PO. Pede as horas e o que foi implementado.' };
       var campos = [];
       if (ds.length > 1 || H.colunaDe(m) === 'em_andamento') {
@@ -725,7 +855,7 @@
           opcoes: ds.map(function (d) { return { v: d, r: rotEtapa(d), d: NOTA[d] }; }) });
       }
       campos.push({ nome: 'horas', rotulo: 'Horas de desenvolvimento', tipo: 'numero', valor: m.horas_realizadas || '', obrig: true });
-      campos.push({ nome: 'implementacao', rotulo: 'O que foi implementado', tipo: 'area', valor: m.implementacao || '', dica: 'É o texto que o PM/PO lê para validar.' });
+      campos.push({ nome: 'implementacao', rotulo: 'O que foi implementado', tipo: 'area', valor: m.implementacao || '', dica: 'É o texto que a área e o PM/PO leem para validar.', obrig: true });
       campos.push({ nome: 'resumo', rotulo: 'Resumo da entrega', tipo: 'area', linhas: 2, valor: m.resumo_entrega || '', dica: 'Vai para o relatório e a apresentação.' });
       var fixo = campos[0].nome === 'destino' ? {} : { destino: ds[0] };
       fixo.naCaixa = { horas: 1 };
@@ -785,6 +915,6 @@
 
   raiz.AXIS_ACOES = Object.assign(api, {
     caixa: caixa, aplicar: aplicar, disponiveis: disponiveis, botao: botao, podeEditar: podeEditar,
-    contexto: contexto, avisaRevertidos: avisaRevertidos, abrirAnexo: abrirAnexo, GESTOS: GESTOS
+    contexto: contexto, avisaRevertidos: avisaRevertidos, abrirAnexo: abrirAnexo, GESTOS: GESTOS, textoCasoUso: textoCasoUso
   });
 }(typeof window !== 'undefined' ? window : globalThis));

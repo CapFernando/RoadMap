@@ -14,8 +14,9 @@
    `entregue_em` (CAPACIDADE.diaDaEntrega).
 
    GRAVAR CONTINUA NAS TELAS ANTIGAS. Fechar sprint e iniciar sprint moram no
-   admin.html; ausencia e feriado moram no gantt.html; estimar e no poker.html.
-   Os botoes levam para la, so para o perfil que pode agir.
+   admin.html; estimar e no poker.html. Os botoes levam para la, so para o
+   perfil que pode agir. Mover, alocar, ausencia e feriado sao a tela
+   Planejamento do app (#planejamento, axis-tela-planejamento.js).
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   var raiz = typeof window !== 'undefined' ? window : globalThis;
@@ -459,7 +460,8 @@
     var botao = '';
     if (admin && sit === 'em_curso' && SP().sprintVencida(r, H.hoje(), fer(D))) {
       botao = '<a class="btnp" href="#sprints/encerrar">Encerrar sprint</a>';
-    } else if (admin && sit === 'montando' && SP().demandasDaSprint(D, r).length) {
+    } else if (H.donoDaSprint() && sit === 'montando' && SP().demandasDaSprint(D, r).length) {
+      // So o dono da sprint inicia (`sprintIniciar`, admin.html, 02/11/2026).
       botao = linkAntigo('admin.html', 'Iniciar sprint', 'Abre o Admin, aba Gerencial › Sprint, onde a sprint é iniciada', 'btnp', 'gerencial');
     }
 
@@ -635,7 +637,7 @@
       '. A fila é o que está em Planning; os pontos vêm do Planning Poker.</span></div>' +
       '<div class="ac"><select class="sp-sel" id="sp-sel-pl" aria-label="Sprint a planejar">' + opcoes + '</select>' +
       linkAntigo('poker.html', 'Abrir Planning Poker', 'Abre o Planning Poker para estimar a fila', 'btnp') +
-      (admin ? linkAntigo('admin.html', 'Repassar no quadro', 'Abre o Admin, no Kanban: o PM/PO escolhe a sprint no card ou pelo Sprint em lote', 'btn', 'kanban') : '') +
+      (H.donoDaSprint() ? linkAntigo('admin.html', 'Repassar no quadro', 'Abre o Admin, no Kanban: o PM/PO escolhe a sprint no card ou pelo Sprint em lote', 'btn', 'kanban') : '') +
       '</div></header>';
 
     // Fila
@@ -825,7 +827,7 @@
       (r1 !== H.sprintAtual() ? '<a class="btn" href="#sprints/planejamento">Hoje</a>' : '') +
       '<select class="sp-sel" id="sp-proj" aria-label="Projeto"><option value="">Todos os projetos</option>' +
       projs.map(function (p) { return '<option value="' + esc(p.id) + '"' + (p.id === _projeto ? ' selected' : '') + '>' + esc((p.codigo ? p.codigo + ' · ' : '') + (p.nome || '')) + '</option>'; }).join('') + '</select>' +
-      (H.pode('editar') ? linkAntigo('gantt.html', 'Abrir planejamento completo', 'Abre o Gantt (gantt.html), onde se move, aloca e registra ausência', 'btnp') : '') +
+      '<a class="btnp" href="#planejamento/' + esc(r1) + '" title="' + (H.pode('editar') ? 'Abre o Planejamento, onde se move, aloca e registra ausência' : 'Abre o Planejamento com filtros e zoom') + '">Abrir planejamento completo</a>' +
       '</div></header>';
 
     h += '<div class="sp-pj"><div class="sp-gt" style="overflow-x: auto"><div class="in2">' + corpo + '</div></div>' +
@@ -851,6 +853,8 @@
     var pend = SP().pendentesDeFechamento(D, H.hoje(), F, etapa);
     var h = '';
     var fechaBtn = function (cls) {
+      // So o dono da sprint fecha (`sprintFecharAbrir`, admin.html, 02/11/2026).
+      if (!H.donoDaSprint()) return '<span class="note">Só o Fernando (PM/PO) fecha a sprint.</span>';
       return linkAntigo('admin.html', 'Fechar no Admin', 'Abre o Admin no Kanban; a faixa "terminou e não foi fechada" tem o botão Fechar agora, com destino e motivo de cada demanda', cls || 'btnp', 'kanban');
     };
     if (!pend.length) {
@@ -1020,7 +1024,8 @@
       '<span class="in" style="height:32px">' + esc(H.MESES[mes - 1]) + ' de ' + ano + '</span>' +
       '<a class="btns" href="#sprints/calendario/' + prx + '" aria-label="Próximo mês">›</a>' +
       (chaveMes !== hoje.slice(0, 7) ? '<a class="btns" href="#sprints/calendario">Este mês</a>' : '') +
-      (H.pode('editar') ? linkAntigo('gantt.html', 'Registrar ausência', 'Abre o Gantt (gantt.html), onde ficam o cadastro de ausências e de feriados', 'btn') : '') +
+      (H.pode('editar') ? '<a class="btn" href="#planejamento/ausencias" title="Abre o cadastro de ausências do Planejamento">Registrar ausência</a>' : '') +
+      (AX.APP.papel === 'admin' ? '<a class="btns" href="#planejamento/feriados" title="Abre o cadastro de feriados do Planejamento">Feriados</a>' : '') +
       '</div></header>';
     h += '<section class="pn" style="padding:0;gap:0;overflow:hidden">' + grade + '</section>';
 

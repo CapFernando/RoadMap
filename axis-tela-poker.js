@@ -264,7 +264,7 @@
   /* A base do app tambem muda quando a sala grava: rele em silencio, sem
      redesenhar a sala (o resumo e as sessoes leem dela). */
   function releBase() {
-    H.api('dados').then(function (j) { A.APP.D = j; A.APP.carregadoEm = Date.now(); }).catch(function () {});
+    H.api('dados').then(H.hidrata).then(function (j) { A.APP.D = j; A.APP.carregadoEm = Date.now(); }).catch(function () {});
   }
 
   function filaMelhorias() { return (S.fila && S.fila.melhorias) || []; }
@@ -276,13 +276,35 @@
     return t ? t.nome : H.tema(id);
   }
 
+  /* O QUE JA FOI VOTADO SAI DA FILA (03/11/2026) — COPIA DE `pkNaFila`
+     (poker.html). Votada = tem `poker_votado_em`; fica so se a data, no fuso
+     de Sao Paulo, for a de hoje. Pontos sem data de votacao (postos a mao)
+     tambem contam como ja estimados. A demanda EM PAUTA nunca sai. */
+  function pkHoje() {
+    return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  }
+  function pkDiaDaVotacao(m) {
+    var s = String((m && m.poker_votado_em) || '');
+    if (!s) return '';
+    var d = new Date(s);
+    return isNaN(d) ? s.slice(0, 10) : d.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  }
+  function pkJaVotadaAntes(m) {
+    var dia = pkDiaDaVotacao(m);
+    if (dia) return dia !== pkHoje();
+    return !!m && m.poker_pontos != null;
+  }
+  function pkNaFila(m, atual) {
+    return (m.status_planejamento || '') === 'planning' && (m.id === atual || !pkJaVotadaAntes(m));
+  }
+
   /* A fila da Planning com a estrelada no topo e o indice original como
      desempate; a demanda em pauta nunca sai pelo filtro de frente. Mesma regra
      de `filaPlanning` do poker.html. */
   function filaPlanning() {
     var atual = S.estado ? S.estado.melhoria_id : '';
     return filaMelhorias()
-      .filter(function (m) { return (m.status_planejamento || '') === 'planning'; })
+      .filter(function (m) { return pkNaFila(m, atual); })
       .filter(function (m) {
         return !S.filaFrente || m.id === atual ||
           (S.filaFrente === FILA_MARCADAS ? !!m.dados_bi : frenteDe(m) === S.filaFrente);
@@ -373,7 +395,8 @@
      (`montaSprintDaMesa` do poker.html). So para admin. */
   function opcoesSprint() {
     var SP = raiz.SPRINTPO;
-    if (!SP || A.APP.papel !== 'admin') return null;
+    // So o DONO da sprint escolhe a sprint na mesa (`pkDonoDaSprint`, poker.html).
+    if (!SP || !H.donoDaSprint()) return null;
     var fer = (S.fila && S.fila.feriados) || [], fechadas = (S.fila && S.fila.sprints_fechadas) || [];
     var hoje = H.hoje(), ano = +hoje.slice(0, 4), mes = +hoje.slice(5, 7);
     var agora = SP.rotuloDeData(hoje, fer);
@@ -390,7 +413,7 @@
     if (!S.estado || !S.estado.melhoria_id) { H.toast('Nenhuma demanda em votação.', 'erro'); return false; }
     var b = document.getElementById('pk-gravar');
     if (b) { b.disabled = true; b.textContent = 'Gravando…'; }
-    var sprint = A.APP.papel === 'admin' ? S.valores.sprint : '';
+    var sprint = H.donoDaSprint() ? S.valores.sprint : '';
     var id = S.estado.melhoria_id;
     var r = await chama('poker-gravar', { codigo: S.codigo, melhoria_id: id, poker_media: S.valores.media,
                                           poker_pontos: S.valores.pontos, sprint_po: sprint });
@@ -888,7 +911,10 @@
   function htmlFila() {
     if (S.filaErro && !S.fila) return '<span class="lab">FILA · PLANNING</span><span class="note" style="color:var(--dg-t)">Falha ao carregar a fila: ' + esc(S.filaErro) + '</span>';
     if (!S.fila) return '<span class="lab">FILA · PLANNING</span><div class="sk" style="height:54px"></div><div class="sk" style="height:54px"></div>';
-    var naPlanning = filaMelhorias().filter(function (m) { return (m.status_planejamento || '') === 'planning'; });
+    var emPauta = S.estado ? S.estado.melhoria_id : '';
+    var naPlanning = filaMelhorias().filter(function (m) { return pkNaFila(m, emPauta); });
+    // As ja votadas em outro dia nao aparecem; a contagem diz quantas sairam.
+    var votadasAntes = filaMelhorias().filter(function (m) { return (m.status_planejamento || '') === 'planning' && !pkNaFila(m, emPauta); }).length;
     var conta = {};
     naPlanning.forEach(function (m) { var fr = frenteDe(m); conta[fr] = (conta[fr] || 0) + 1; });
     var marcadas = naPlanning.filter(function (m) { return m.dados_bi; }).length;
@@ -908,7 +934,9 @@
         '<span class="note ell" style="font-size:11.5px">' + esc([frenteDe(m), m.dev].filter(Boolean).join(' · ')) + '</span></' + (f ? 'button' : 'div') + '>';
     }).join('') : '<span class="note">' + (S.filaFrente ? 'Nenhuma demanda desta frente na fila.' : 'Nenhuma demanda na etapa Planning. Mova cards para Planning no Quadro.') + '</span>';
     return '<div class="row" style="justify-content:space-between"><span class="lab" style="color:var(--pu-t)">FILA · PLANNING</span><span class="note">' +
-      (S.filaFrente ? lista.length + ' de ' + naPlanning.length : H.plural(lista.length, 'item', 'itens')) + '</span></div>' + sel + '<div class="pk-fl">' + itens + '</div>';
+      (S.filaFrente ? lista.length + ' de ' + naPlanning.length : H.plural(lista.length, 'item', 'itens')) + '</span></div>' + sel +
+      (votadasAntes ? '<span class="note" style="font-size:12px">' + H.plural(votadasAntes, 'já votada antes de hoje fica', 'já votadas antes de hoje ficam') + ' fora da lista.</span>' : '') +
+      '<div class="pk-fl">' + itens + '</div>';
   }
 
   // ── "Sala aberta agora" (aba Sessoes) ──────────────────────────────────

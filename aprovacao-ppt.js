@@ -19,12 +19,29 @@
 (function () {
   'use strict';
 
-  var NAVY = '14213D', TEXTO = '1B2333', MUTED = '6B7686', LINHA = 'D5DAE1', ZEBRA = 'F7F8FA';
+  /* A PALETA E A DO AXIS NO CLARO, e nao a escura do deck mensal: esta folha e
+     para imprimir e marcar a caneta, entao o papel continua branco. O cabecalho
+     das tabelas e os titulos vao no marinho do AXIS (#0D162A), os textos nos
+     tons claros dele (#0B1220, #5B6B85), a borda e a zebra nas superficies
+     (#CFD7E3, #F2F5F9), e o laranja da marca entra SO como moldura — o traco
+     sob o titulo, igual ao `slideTitulo` do deck mensal.
+
+     A CAPA CORPORATIVA FICA (CAPA, o azul-marinho da Audax), como ficou a capa
+     do deck mensal: e a cara do documento que sai da casa. */
+  var CAPA = '14213D', NAVY = '0D162A', TEXTO = '0B1220', MUTED = '5B6B85', LINHA = 'CFD7E3', ZEBRA = 'F2F5F9';
+  var PAINEL = 'F2F5F9', LARANJA = 'FF6B1A';
+  /* Os estados do AXIS no claro (perigo, atencao, ok), com fundo a 10% da cor
+     cheia — um pouco mais claro que o chip da tela (14%) para o texto colorido
+     em negrito passar de 4,5:1 sobre ele. */
   var NIVEL = { // baixo/medio/alto — mesma escala de impacto e urgencia
-    alto: { cor: 'C0392B', fundo: 'FBE3E0' }, alta: { cor: 'C0392B', fundo: 'FBE3E0' },
-    medio: { cor: 'B7791F', fundo: 'FDF1DE' }, media: { cor: 'B7791F', fundo: 'FDF1DE' },
-    baixo: { cor: '2E7D4F', fundo: 'E2F1E5' }, baixa: { cor: '2E7D4F', fundo: 'E2F1E5' },
+    alto: { cor: 'C62828', fundo: 'FCE9E9' }, alta: { cor: 'C62828', fundo: 'FCE9E9' },
+    medio: { cor: '8A5A00', fundo: 'FBF1E6' }, media: { cor: '8A5A00', fundo: 'FBF1E6' },
+    baixo: { cor: '15803D', fundo: 'E8F6ED' }, baixa: { cor: '15803D', fundo: 'E8F6ED' },
   };
+  function traco(pptx, sl) {
+    sl.addShape(pptx.shapes.RECTANGLE, { x: 0.5, y: 0.96, w: 0.6, h: 0.04, fill: { color: LARANJA },
+                                         line: { color: LARANJA } });
+  }
   var PRIO = { alta: 'Alta', media: 'Média', baixa: 'Baixa', critica: 'Crítica' };
   var TIPO = { sustentacao: 'Sustentação', evolucao: 'Evolução' };
   var PESO = { alto: 3, alta: 3, medio: 2, media: 2, baixo: 1, baixa: 1 };
@@ -80,7 +97,7 @@
 
     // ── Capa ──
     var s = pptx.addSlide();
-    s.background = { color: NAVY };
+    s.background = { color: CAPA };
     s.addText(rotuloEtapa, { x: 0.8, y: 2.2, w: 11.7, h: 1.2, fontFace: 'Calibri', fontSize: 44, bold: true,
                              color: 'FFFFFF', margin: 0, valign: 'bottom' });
     s.addText(ms.length + (ms.length === 1 ? ' demanda' : ' demandas') +
@@ -98,6 +115,7 @@
       s.background = { color: 'FFFFFF' };
       s.addText('Resumo por impacto e urgência', { x: 0.5, y: 0.3, w: 12.3, h: 0.65, fontFace: 'Calibri',
                                                   fontSize: 28, bold: true, color: NAVY, margin: 0 });
+      traco(pptx, s);
       var niveis = [['alto', 'alta', 'Alto / Alta'], ['medio', 'media', 'Médio / Média'], ['baixo', 'baixa', 'Baixo / Baixa']];
       var conta = function (campo, v) {
         return ms.filter(function (m) { return txt(m[campo]).toLowerCase() === v; }).length;
@@ -118,8 +136,8 @@
                    celula(String(semUrg), { align: 'center', fontSize: 16, color: MUTED })]);
       s.addTable([cab].concat(linhas), { x: 0.5, y: 1.3, w: 7.2, colW: [2.8, 2.2, 2.2], rowH: 0.55,
                                          border: { type: 'solid', pt: 0.5, color: LINHA } });
-      s.addShape(pptx.shapes.ROUNDED_RECTANGLE, { x: 8.2, y: 1.3, w: 4.6, h: 2.2, fill: { color: 'F3F5F8' },
-                                                  line: { color: 'F3F5F8' }, rectRadius: 0.08 });
+      s.addShape(pptx.shapes.ROUNDED_RECTANGLE, { x: 8.2, y: 1.3, w: 4.6, h: 2.2, fill: { color: PAINEL },
+                                                  line: { color: PAINEL }, rectRadius: 0.08 });
       s.addText(String(ms.length), { x: 8.5, y: 1.4, w: 4, h: 1.1, fontFace: 'Calibri', fontSize: 60, bold: true,
                                      color: NAVY, margin: 0 });
       s.addText('demandas em aprovação de requisitos', { x: 8.5, y: 2.55, w: 4, h: 0.7, fontFace: 'Calibri',
@@ -168,6 +186,7 @@
                  com(PRIO[txt(m.prioridade).toLowerCase()] ? { align: 'center' } : { align: 'center', italic: true, color: MUTED })),
           nivelCel(m.impacto, 'impacto', fundo),
           nivelCel(m.urgencia, 'urgencia', fundo),
+          // A caixa (U+2610) e o campo de marcar a caneta, e nao enfeite: fica.
           celula('☐ Segue   ☐ Segura', com({ align: 'center' })),
         ]);
         y += h;
@@ -177,6 +196,7 @@
         sl.background = { color: 'FFFFFF' };
         sl.addText('Decisão · ' + rotuloEtapa + (paginas.length > 1 ? '  (' + (i + 1) + '/' + paginas.length + ')' : ''),
                    { x: 0.5, y: 0.3, w: 12.3, h: 0.65, fontFace: 'Calibri', fontSize: 28, bold: true, color: NAVY, margin: 0 });
+        traco(pptx, sl);
         sl.addTable(r, { x: 0.5, y: Y0, w: 12.3, colW: COLS, border: { type: 'solid', pt: 0.5, color: LINHA }, autoPage: false });
         sl.addText(RODAPE, { x: 0.5, y: 7.05, w: 10, h: 0.3, fontFace: 'Calibri', fontSize: 10, color: MUTED, margin: 0 });
         sl.addText(String(i + 3), { x: 12.2, y: 7.05, w: 0.6, h: 0.3, fontFace: 'Calibri', fontSize: 10, color: MUTED,

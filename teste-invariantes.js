@@ -2410,6 +2410,12 @@ ok(/prazoClassifica\(m\)/.test(corpo(ADMIN, 'async function apresGerar(') || '')
    'o deck reusa a classificacao de prazo da tela, sem recalcular por fora');
 // Emoji em slide de diretoria vira quadrado se a fonte do projetor nao tiver.
 ok(!/addText\('👤/.test(AP), 'sem emoji nos campos do slide');
+// As folhas de impressao (aprovacao de requisitos e projetos em andamento) tambem.
+// A caixa de marcar (U+2610) nao e pictografica e passa.
+['aprovacao-ppt.js', 'projetos-ppt.js'].forEach(arq => {
+  const em = semComentario(lerTela(arq)).match(/\p{Extended_Pictographic}/u);
+  ok(!em, 'sem emoji nos slides de ' + arq, em ? em[0] : '');
+});
 
 
 sec('Apresentacao: caixinha ao lado do nome, barra nitida, promessa que confere');
@@ -25362,7 +25368,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     const and = { id: 'e', status_planejamento: 'em_andamento', tipo: 'evolucao', solicitante: 'Bia', dev: 'Ana Dev', sprint_po: 'S1-11-2026' };
     ok(R_.entregar(and, { destino: 'validacao_area', horas: '0' }, ctx('dev')).campo === 'horas', 'entregar sem horas e recusado');
     ok(!R_.entregar(and, { destino: 'validacao', horas: '4', implementacao: 'x' }, ctx('dev')).ok, 'evolucao nao pula a Validacao da area');
-    const re = R_.entregar(and, { destino: 'validacao_area', horas: '4', resumo: 'feito' }, ctx('dev'));
+    const re = R_.entregar(and, { destino: 'validacao_area', horas: '4', resumo: 'feito', implementacao: 'tela nova' }, ctx('dev'));
     ok(re.ok && re.patch.entregue_em === AGORA && re.patch.horas_realizadas === 4 && re.patch.resumo_entrega === 'feito', 'entregar a area carimba a entrega do dev', JSON.stringify(re.patch));
     const area = Object.assign({}, and, { status_planejamento: 'validacao_area', entregue_em: '2026-11-01T10:00:00Z', homologacao: { quem: 'Bia', ok: true } });
     const re2 = R_.entregar(area, { destino: 'validacao', horas: '4', implementacao: 'tela nova' }, ctx('dev'));
@@ -25402,14 +25408,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
                 HOMOLOGACAO: require('./homologacao.js'), COLABORADORES: { emailPara: () => '' } };
     const HOJE = '2026-11-05', AGORA = '2026-11-05T14:00:00.000Z';
     const c = (papel, extra) => Object.assign({ papel, quem: papel === 'dev' ? 'Ana Dev' : 'Paula PO', hoje: HOJE, agora: AGORA, id: 'n1', D: { feriados: [], sprints_fechadas: [] }, R }, extra || {});
-    const base = { titulo: 'Tela nova', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', descricao: 'x' };
+    const base = { titulo: 'Tela nova', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', descricao: 'x', impacto: 'medio', urgencia: 'alta' };
 
     const d1 = F.nova(Object.assign({}, base, { etapa: 'em_andamento' }), c('dev'));
-    ok(d1.ok && d1.obj.dev === 'Ana Dev' && d1.obj.origem === 'dev' && d1.obj.status_planejamento === 'em_andamento' && d1.obj.status === 'iniciada' &&
-       d1.obj.criado_em === AGORA && d1.obj.id === 'n1', 'dev: nasce com o nome dele, origem dev e o status da etapa', JSON.stringify(d1.obj));
-    ok(F.nova(Object.assign({}, base, { etapa: 'planejado', projeto_id: 'p1' }), c('dev')).obj.status_planejamento === 'backlog',
-       'dev: demanda de projeto nasce no Backlog (nProjetoMudou)');
-    ok(!F.nova(Object.assign({}, base, { etapa: 'concluido' }), c('dev')).ok, 'dev: nao nasce fora de Backlog/Planejado/Em andamento');
+    ok(d1.ok && d1.obj.dev === 'Ana Dev' && d1.obj.origem === 'dev' && d1.obj.status_planejamento === 'backlog' && d1.obj.status === 'recebida' &&
+       d1.obj.criado_em === AGORA && d1.obj.id === 'n1', 'dev: nasce com o nome dele, origem dev e no Backlog (saveNewDemand, 02/11/2026)', JSON.stringify(d1.obj));
+    ok(F.nova(Object.assign({}, base, { etapa: 'concluido' }), c('dev')).obj.status_planejamento === 'backlog', 'dev: pedir outra etapa tambem nasce no Backlog');
     ok(F.nova(Object.assign({}, base, { entrega: '2026-11-20' }), c('dev')).campo === 'entrega', 'dev: pelo painel nao nasce com prazo no futuro (abertura.js)');
     ok(F.nova(Object.assign({}, base, { solicitante: '' }), c('dev')).campo === 'solicitante', 'sem quem pediu, a abertura e recusada');
     ok(F.nova(Object.assign({}, base, { tipo: '' }), c('admin')).campo === 'tipo' && F.nova(Object.assign({}, base, { tema_id: '' }), c('admin')).campo === 'tema',
@@ -25441,6 +25445,281 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(e4.ok && e4.patch.prioridade === 'alta' && e4.patch.sprint_po === 'S2-11-2026' && e4.patch.sprint_po_historico.length === 1 && !('titulo' in e4.patch),
        'admin: prioridade e sprint (pelo repassar) no patch; o resto fica o do servidor', JSON.stringify(e4.patch || e4.erro));
     ok(m.titulo === 'Antes' && m.sprint_po === 'S1-11-2026', 'a edicao nao muta a demanda lida');
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('App AXIS: as regras que a main trouxe (26 commits de 02 a 05/11/2026)');
+
+  /* O APP NOVO FAZ O QUE AS TELAS ANTIGAS PASSARAM A FAZER. Cada regra e
+     recortada da tela antiga (ou do Worker, quando e ele quem decide) e
+     executada AO LADO da do app, caso a caso. Sem isto o app grava um patch
+     que o servidor recusa — ou, pior, que ele aceita diferente. */
+  (() => {
+    const AC = require('./axis-acoes.js');
+    const F = require('./axis-form-demanda.js');
+    const RQ = require('./requisitos.js');
+    const SPm = require('./sprint.js');
+    const R = { PAUSA: require('./pausa.js'), HOMOLOGACAO: require('./homologacao.js'), SPRINTPO: SPm,
+                DEVOLUCAO: require('./devolucao.js'), PREVOO: require('./prevoo.js'), VINCULO: require('./vinculo.js'),
+                ABERTURA: require('./abertura.js'), AXIS_ACOES: AC, REQUISITOS: RQ, COLABORADORES: { emailPara: () => '' } };
+    const HOJE = '2026-11-05', AGORA = '2026-11-05T14:00:00.000Z';
+    const ctx = (papel, extra) => Object.assign({ papel, quem: papel === 'dev' ? 'Ana Dev' : 'Paula PO', hoje: HOJE, agora: AGORA, lista: [], aprovadores: null,
+                                                 id: 'n1', D: { feriados: [], sprints_fechadas: [], temas: [] }, R }, extra || {});
+    const R_ = AC.REGRAS;
+    const WCo = W.replace(/export default \{[\s\S]*$/, '');
+    const WF = new Function(WCo + '; return { alocacaoSemSprint, entrandoNoTrabalhoSemDev, saindoDeAndamentoSemHoras, ' +
+      'entrandoEmValidacaoSemEntrega, tiraInicioDoBacklog, marcaDadosBiPorTema, nascendoForaDoBacklog, travaSprintDoPO, TEMA_DADOS_RE };')();
+    /* O que o servidor faria com o patch: a base com a demanda de antes e a
+       mesma demanda com o patch por cima — o que `H.gravar` manda. */
+    const par = (m, patch) => ({ antes: { melhorias: [JSON.parse(JSON.stringify(m))] },
+                                 depois: { melhorias: [Object.assign(JSON.parse(JSON.stringify(m)), patch || {})] } });
+
+    // ── fd5fc0e: a etapa se chama "Em aprovacao de requisitos" ──────────
+    const ROT_ADMIN = ((ADMIN.match(/const STATUS_LABELS = \{[\s\S]*?\n\};/) || [''])[0].match(/levantar_req:\s*'([^']+)'/) || [])[1];
+    ok(AC.rotulo('levantar_req') === ROT_ADMIN && ROT_ADMIN === RQ.ROTULO,
+       'o rotulo da etapa no app e o do STATUS_LABELS do admin (e o do requisitos.js)', AC.rotulo('levantar_req') + ' / ' + ROT_ADMIN);
+    const APPS = ['axis-app.js', 'axis-acoes.js', 'axis-form-demanda.js', 'axis-tela-backlog.js', 'axis-tela-paineis.js', 'axis-tela-quadro.js', 'axis-tela-item.js']
+      .map(a => [a, fs.readFileSync(a, 'utf8')]);
+    ok(APPS.every(([, t]) => !/'Levantar Requisitos'/.test(t)), 'nenhuma tela do app guarda o nome antigo da etapa',
+       APPS.filter(([, t]) => /'Levantar Requisitos'/.test(t)).map(([a]) => a).join(', '));
+    const AXH = fs.readFileSync('axis.html', 'utf8');
+    ok(/<script src="requisitos\.js\?v=[0-9a-f]{10}"><\/script>/.test(AXH) && /<script src="historico-cliente\.js\?v=[0-9a-f]{10}"><\/script>/.test(AXH) &&
+       AXH.indexOf('<script src="requisitos.js') < AXH.indexOf('<script src="axis-app.js') &&
+       AXH.indexOf('<script src="historico-cliente.js') < AXH.indexOf('<script src="axis-app.js'),
+       'o axis.html carrega requisitos.js e historico-cliente.js antes do app');
+
+    // Impacto e urgencia: obrigatorios na abertura, livres na edicao.
+    const fb = { titulo: 'Tela nova', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', descricao: 'x' };
+    ['admin', 'analista', 'dev'].forEach(pp => {
+      const sem = F.nova(Object.assign({}, fb, { urgencia: 'alta' }), ctx(pp));
+      const sem2 = F.nova(Object.assign({}, fb, { impacto: 'baixo' }), ctx(pp));
+      const com = F.nova(Object.assign({}, fb, { impacto: 'Médio', urgencia: 'ALTA' }), ctx(pp));
+      ok(!sem.ok && sem.campo === 'impacto' && sem.erro === 'Informe o impacto e a urgência da demanda.' && sem2.campo === 'urgencia' &&
+         com.ok && com.obj.impacto === 'medio' && com.obj.urgencia === 'alta',
+         pp + ': abrir sem impacto ou urgencia e recusado com a frase do admin; o valor sai normalizado (REQUISITOS)', JSON.stringify([sem, sem2.campo, com.obj && com.obj.impacto]));
+    });
+    ok(/Informe o impacto e a urgência da demanda\./.test(ADMIN) && /Informe o impacto e a urgência da demanda\./.test(DEV),
+       'a frase e a mesma do admin e do painel do dev');
+    const mAntiga = { id: 'e1', codigo: 'AX-9', titulo: 'Antes', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', status_planejamento: 'backlog' };
+    const ea = F.edicao(mAntiga, { titulo: 'Depois', tipo: 'evolucao', tema_id: 't1', impacto: '', urgencia: '' }, ctx('admin'));
+    ok(ea.ok && Object.keys(ea.patch).join() === 'titulo', 'demanda antiga sem impacto edita sem ser cobrada', JSON.stringify(ea));
+    const ed = F.edicao(Object.assign({}, mAntiga, { impacto: 'alto', dev: 'Ana Dev' }), { titulo: 'Antes', tipo: 'evolucao', tema_id: 't1', impacto: '', urgencia: 'baixa' }, ctx('dev'));
+    ok(ed.ok && !('impacto' in ed.patch) && ed.patch.urgencia === 'baixa', 'dev: em branco fica o que estava (dev.html); escolhido, grava', JSON.stringify(ed.patch));
+
+    // O caso de uso: `cuMarcar` do admin, recortado, ao lado da regra do app.
+    const cuSrc = corpo(ADMIN, 'async function cuMarcar(st) {');
+    ok(!!cuSrc, 'cuMarcar existe no admin para ser comparado');
+    if (cuSrc) {
+      const cuAdmin = new Function('state', 'doc', 'eu', 'respostas',
+        'let _cuEdit = null; const _eu = eu; const document = doc; const toast = () => {}; const cuPintaEstado = () => {};\n' +
+        'const pedirTexto = async () => respostas.shift();\n' + cuSrc + '\nreturn async (st) => { await cuMarcar(st); return _cuEdit; };');
+      const casos = [
+        { m: { id: 'q', codigo: 'AX-5', status_planejamento: 'levantar_req', solicitante: 'Bia', caso_uso: { status: 'a_enviar', gerado_em: '2026-11-03T10:00:00Z', texto: '' } }, st: 'enviado', resp: null },
+        { m: { id: 'q', codigo: 'AX-5', status_planejamento: 'levantar_req', solicitante: 'Bia', caso_uso: { status: 'enviado', gerado_em: 'g', texto: 'enviado antes' } }, st: 'aprovado', resp: 'Bia Usuaria' },
+        { m: { id: 'q', codigo: 'AX-5', status_planejamento: 'levantar_req', solicitante: 'Bia', caso_uso: { status: 'enviado', gerado_em: 'g', texto: '' } }, st: 'ajustes', resp: 'trocar o campo X' },
+        { m: { id: 'q', codigo: 'AX-5', status_planejamento: 'levantar_req', solicitante: 'Bia' }, st: 'aprovado', resp: 'Bia' }
+      ];
+      pendentes.push((async () => {
+        const diverge = [];
+        for (const k of casos) {
+          const doc = { getElementById: id => ({ 'm-id': { value: 'q' }, 'm-cu-texto': { value: 'O TEXTO DA CAIXA' } })[id] || { value: '' } };
+          const fnA = cuAdmin({ melhorias: [JSON.parse(JSON.stringify(k.m))] }, doc, { nome: 'Paula PO' }, [k.resp]);
+          const a = await fnA(k.st);
+          const r = R_.casoUso(k.m, { status: k.st, texto: 'O TEXTO DA CAIXA', resposta: k.resp }, ctx('admin'));
+          const b = r.ok ? r.patch.caso_uso : null;
+          const sem = x => JSON.stringify(Object.assign({}, x, x && x.enviado_em ? { enviado_em: 'T' } : {}, x && x.respondido_em ? { respondido_em: 'T' } : {}));
+          if (sem(a) !== sem(b)) diverge.push(k.st + ': ' + sem(a) + ' / ' + sem(b));
+        }
+        ok(diverge.length === 0, 'o caso de uso que o app grava = o que o cuMarcar do admin guarda (enviado, aprovado, ajustes)', diverge.join(' | '));
+      })());
+    }
+    ok(!R_.casoUso({ id: 'q', status_planejamento: 'levantar_req' }, { status: 'enviado', texto: 'x' }, ctx('analista')).ok &&
+       !R_.casoUso({ id: 'q', status_planejamento: 'levantar_req' }, { status: 'enviado', texto: 'x' }, ctx('dev')).ok,
+       'o caso de uso e do PM/PO: o dev-publish devolve o do servidor (`_casoAntes`), e o app nem oferece');
+    ok(!R_.casoUso({ id: 'q' }, { status: 'aprovado', resposta: ' ' }, ctx('admin')).ok, 'aprovar sem dizer quem aprovou e recusado (o pedirTexto obrigatorio)');
+
+    // ── bc00604 / be14f82: aprovar e concluir, e concluir exige sprint ──
+    const fAloc = (antes, depois) => WF.alocacaoSemSprint(depois, antes, 'admin', HOJE).length > 0;
+    let divVal = [];
+    ['', 'S1-11-2026'].forEach(sp => ['2026-10-28T10:00:00Z', '2026-11-03T10:00:00Z', ''].forEach(ent => ['evolucao', 'sustentacao'].forEach(tipo => {
+      const m = { id: 'v', codigo: 'AX-V', tipo, status_planejamento: 'validacao', dev: 'Ana', horas_realizadas: 4, sprint_po: sp, entregue_em: ent };
+      const r = R_.validar(m, {}, ctx('admin'));
+      const travaApp = !r.ok && r.campo === 'sprint';
+      const travaSrv = fAloc({ melhorias: [m] }, { melhorias: [Object.assign({}, m, { status_planejamento: 'concluido' })] });
+      if (travaApp !== travaSrv) divVal.push([sp || 'sem', ent.slice(0, 10) || 'sem', tipo, travaApp, travaSrv].join('/'));
+    })));
+    ok(divVal.length === 0, 'Validar e fechar sem sprint: o app recusa exatamente onde o servidor recusa (entregue a partir de 02/11)', divVal.join(', '));
+    ok(/const trvA = SPRINTPO\.travaDeAlocacao\(m, m\.status_planejamento, 'concluido', PRAZO\.hojeISO\(\)\);/.test(ADMIN),
+       'e e a mesma trava que o valDecidir do admin consulta');
+
+    // ── e5cace1: quem tira a demanda da fila vira o dono ────────────────
+    const exprAssumiu = (DEV.match(/const assumiu = (ETAPAS_DO_DEV\.includes\(colKey\) && !String\(m\.dev \|\| ''\)\.trim\(\) && !!currentDev);/) || [])[1];
+    ok(!!exprAssumiu, 'a regra `assumiu` do painel do dev existe para ser comparada');
+    if (exprAssumiu) {
+      const assumiuDev = new Function('ETAPAS_DO_DEV', 'colKey', 'm', 'currentDev', 'return ' + exprAssumiu + ';');
+      let divA = [];
+      ['backlog', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido'].forEach(para => ['', 'Bia'].forEach(dev => ['', 'Ana Dev'].forEach(eu => {
+        const m = { dev };
+        const a = assumiuDev(AC.ETAPAS_DO_DEV, para, m, eu);
+        const b = !!AC.assumeAoComecar(m, para, { quem: eu });
+        if (a !== b) divA.push(para + '/' + (dev || '-') + '/' + (eu || '-'));
+      })));
+      ok(divA.length === 0, 'assumeAoComecar do app = o `assumiu` do updateStatus (dev.html)', divA.join(', '));
+    }
+    const fila = { id: 'f', codigo: 'AX-F', tipo: 'evolucao', status_planejamento: 'planejado', dev: '', sprint_po: 'S1-11-2026' };
+    const rf = R_.mover(fila, { destino: 'em_andamento' }, ctx('dev'));
+    const pf = par(fila, rf.patch);
+    ok(rf.ok && rf.patch.dev === 'Ana Dev' && WF.entrandoNoTrabalhoSemDev(pf.depois, pf.antes).length === 0,
+       'o dev comeca a demanda da fila e o nome dele vai junto: o dev-publish nao recusa (comecar_sem_dono)', JSON.stringify(rf.patch));
+    const pfSab = par(fila, Object.assign({}, rf.patch, { dev: '' }));
+    ok(WF.entrandoNoTrabalhoSemDev(pfSab.depois, pfSab.antes).length === 1, 'SABOTAGEM: o mesmo patch sem o nome seria recusado pelo servidor');
+
+    // ── 36e3344: a demanda que volta ao Backlog perde a data de inicio ──
+    const exprBk = (ADMIN.match(/if \(m && m\.status_planejamento === 'backlog' && String\(m\.inicio \|\| ''\)\.trim\(\)\) m\.inicio = '';/) || [])[0];
+    ok(!!exprBk, 'a regra do Backlog sem inicio existe no admin para ser comparada');
+    if (exprBk) {
+      const bkAdmin = new Function('m', exprBk + ' return m;');
+      let divB = [];
+      ['backlog', 'planejado', 'em_andamento'].forEach(e => ['', '2026-10-27'].forEach(ini => {
+        const m = { status_planejamento: e, inicio: ini };
+        const a = bkAdmin(Object.assign({}, m)).inicio;
+        const b = Object.assign({}, m, AC.tiraInicioDoBacklog(m)).inicio;
+        const w = { melhorias: [Object.assign({}, m)] }; WF.tiraInicioDoBacklog(w);
+        if (a !== b || b !== w.melhorias[0].inicio) divB.push(e + '/' + (ini || '-'));
+      }));
+      ok(divB.length === 0, 'tiraInicioDoBacklog do app = a do admin = a do Worker', divB.join(', '));
+    }
+    const plan = { id: 'b', codigo: 'AX-B', tipo: 'evolucao', status_planejamento: 'planejado', dev: 'Ana', inicio: '2026-10-27', sprint_po: 'S1-11-2026' };
+    const rb = R_.mover(plan, { destino: 'backlog' }, ctx('admin'));
+    const ETx = require('./etapa-demanda.js');
+    ok(rb.ok && rb.patch.inicio === '' && ETx.gravada(Object.assign({}, plan, rb.patch), HOJE) === 'backlog',
+       'mover para o Backlog leva `inicio: ""` no patch, e o card passa a ser lido no Backlog (AX-879)', JSON.stringify(rb.patch));
+    ok(R_.mover(plan, { destino: 'backlog' }, ctx('admin')).patch.inicio === '' && !('inicio' in R_.mover(plan, { destino: 'em_andamento' }, ctx('admin')).patch),
+       'e so quem vai ao Backlog perde a data');
+    const nbk = F.nova(Object.assign({}, fb, { impacto: 'baixo', urgencia: 'baixa', etapa: 'backlog', inicio: HOJE }), ctx('admin'));
+    ok(nbk.ok && nbk.obj.inicio === '', 'demanda nova no Backlog nasce sem inicio', JSON.stringify(nbk.obj && nbk.obj.inicio));
+
+    // ── 9bd0a9d: sair de Em andamento exige as horas (portas do dev) ────
+    let divH = [];
+    ['analista', 'admin'].forEach(pp => ['backlog', 'planejado', 'planning', 'concluido'].forEach(para => [0, 3].forEach(h => {
+      const m = { id: 'h', codigo: 'AX-H', tipo: 'sustentacao', status_planejamento: 'em_andamento', dev: 'Ana', sprint_po: 'S1-11-2026', horas_realizadas: h, entregue_em: '2026-11-04' };
+      const r = R_.mover(m, { destino: para }, ctx(pp));
+      const recusaApp = !r.ok && r.campo === 'horas';
+      const pr = par(m, Object.assign({ status_planejamento: para }, r.patch || {}));
+      // O publish do admin nao tem a porta; concluir sem horas e outra regra, que vale para todos.
+      const srv = pp === 'admin' ? false : WF.saindoDeAndamentoSemHoras(pr.depois, pr.antes).length > 0;
+      const esperado = srv || (para === 'concluido' && !h);
+      if (recusaApp !== esperado) divH.push(pp + '>' + para + '/' + h + ' app=' + recusaApp + ' srv=' + srv);
+    })));
+    ok(divH.length === 0, 'tirar de Em andamento sem horas: o app recusa onde o dev-publish recusa, e o publish do admin segue livre', divH.join(', '));
+
+    // ── e55f057: na area, as horas E o texto do que foi feito ───────────
+    let divE = [];
+    [['', 0], ['', 4], ['tela nova', 0], ['tela nova', 4]].forEach(([impl, h]) => {
+      const m = { id: 'a', codigo: 'AX-A', tipo: 'evolucao', status_planejamento: 'em_andamento', solicitante: 'Bia', dev: 'Ana Dev', sprint_po: 'S1-11-2026' };
+      const r = R_.entregar(m, { destino: 'validacao_area', horas: String(h), implementacao: impl }, ctx('dev'));
+      const pr = par(m, Object.assign({ status_planejamento: 'validacao_area', horas_realizadas: h, implementacao: impl }, r.patch || {}));
+      const srv = WF.entrandoEmValidacaoSemEntrega(pr.depois, pr.antes).length > 0;
+      if (r.ok === srv) divE.push((impl || 'sem texto') + '/' + h + 'h');
+    });
+    ok(divE.length === 0, 'entregar a area: o app pede o que o servidor exige (horas e o texto, 02/11/2026)', divE.join(', '));
+    const anM = { id: 'a', codigo: 'AX-A', tipo: 'sustentacao', status_planejamento: 'em_andamento', dev: 'Ana', sprint_po: 'S1-11-2026', horas_realizadas: 4 };
+    const ran = R_.mover(anM, { destino: 'validacao_area' }, ctx('analista'));
+    const pran = par(anM, { status_planejamento: 'validacao_area' });
+    ok(!ran.ok && WF.entrandoEmValidacaoSemEntrega(pran.depois, pran.antes).length === 1,
+       'o analista (dev-publish) nao poe em validacao sem o texto do dev — o servidor recusaria');
+
+    // ── e55f057: so o dono da sprint marca sprint; quem nao e abre no Backlog
+    ok(SPm.ehDonoDaSprint({ papel: 'admin', login: 'fernando' }) && !SPm.ehDonoDaSprint({ papel: 'admin', login: 'paula' }) && SPm.ehDonoDaSprint(null),
+       'o dono e por conta (sprint.js), e a senha administrativa conta como dono');
+    let divN = [];
+    [true, false].forEach(dn => ['admin', 'analista', 'dev'].forEach(pp => ['backlog', 'planning', 'planejado', 'em_andamento'].forEach(et => {
+      const f = Object.assign({}, fb, { impacto: 'medio', urgencia: 'media', etapa: et, dev: 'Ana', sprint: et === 'planejado' || et === 'em_andamento' ? 'S2-11-2026' : '' });
+      const r = F.nova(f, ctx(pp, { dono: dn && pp === 'admin' }));
+      if (!r.ok) { divN.push(pp + '/' + dn + '/' + et + ' recusou: ' + r.erro); return; }
+      const rec = { melhorias: [JSON.parse(JSON.stringify(r.obj))] };
+      const ajustou = WF.nascendoForaDoBacklog(rec, { melhorias: [] }).length > 0;
+      const dono = dn && pp === 'admin';
+      // Para o dono o servidor nao roda a guarda; para os outros, nada pode sobrar para ela ajustar.
+      if (!dono && ajustou) divN.push(pp + '/' + et + ' o servidor ajustaria');
+      if (!dono && (r.obj.status_planejamento !== 'backlog' || r.obj.sprint_po)) divN.push(pp + '/' + et + ' nasceu fora do backlog');
+      if (dono && r.obj.status_planejamento !== et) divN.push('dono/' + et + ' trocou a etapa');
+      if (!dono && pp !== 'dev' && et !== 'backlog' && !r.aviso) divN.push(pp + '/' + et + ' sem o aviso do admin');
+    })));
+    ok(divN.length === 0, 'quem nao e dono da sprint abre no Backlog, sem inicio e sem sprint — nada sobra para o nascendoForaDoBacklog', divN.slice(0, 6).join(' | '));
+    ok(/Demanda aberta no Backlog — só o PM\/PO coloca em outra etapa e na sprint\./.test(ADMIN), 'o aviso e a frase do saveMelhoria');
+    const mSp = { id: 's', codigo: 'AX-S', titulo: 'T', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', status_planejamento: 'planning', dev: 'Ana', sprint_po: '' };
+    const esN = F.edicao(mSp, { titulo: 'T', tipo: 'evolucao', tema_id: 't1', dev: 'Ana', sprint: 'S2-11-2026' }, ctx('admin', { dono: false }));
+    const esD = F.edicao(mSp, { titulo: 'T', tipo: 'evolucao', tema_id: 't1', dev: 'Ana', sprint: 'S2-11-2026' }, ctx('admin', { dono: true }));
+    const prs = par(mSp, esN.patch || {});
+    ok(esN.ok && !(esN.patch && 'sprint_po' in esN.patch) && WF.travaSprintDoPO(prs.depois, prs.antes, false).length === 0 &&
+       esD.ok && esD.patch.sprint_po === 'S2-11-2026',
+       'editar: so o dono muda a sprint; o patch de quem nao e nao leva nada que o travaSprintDoPO reverteria', JSON.stringify([esN.patch, esD.patch && esD.patch.sprint_po]));
+
+    // ── 8da228e: o tema de dados marca a flag Dados/BI ──────────────────
+    const lAdm = (ADMIN.match(/const TEMA_DADOS_RE = .*;/) || [''])[0];
+    const lMarca = (ADMIN.match(/if \(m && temasDados\.has\(m\.tema_id\) && m\.dados_bi !== true\) \{ m\.dados_bi = true; m\.sales_ops = false; \}/) || [''])[0];
+    ok(!!lAdm && !!lMarca, 'a regra de Dados/BI existe no admin para ser comparada');
+    const temasD = ['BI', 'BI - Reports', 'Extração de dados', 'Banco de dados', 'Databricks - Planejamento', 'Data Bricks', 'AXCred - Jurídico', 'Cobrança', 'Biblioteca', 'AxBalance']
+      .map((nome, k) => ({ id: 't' + k, nome }));
+    const admDados = new Function('state', lAdm + '\nconst temasDados = new Set((state.temas || []).filter(t => t && TEMA_DADOS_RE.test(String(t.nome || ""))).map(t => t.id));\n' +
+      'state.melhorias.forEach(m => { ' + lMarca + ' });\nreturn state;');
+    let divD = [];
+    temasD.forEach(t => [undefined, false, true].forEach(db => [false, true].forEach(so => {
+      const m = { id: 'x', tema_id: t.id, dados_bi: db, sales_ops: so };
+      const a = admDados({ temas: temasD, melhorias: [Object.assign({}, m)] }).melhorias[0];
+      const b = F.marcaDadosBiPorTema(Object.assign({}, m), temasD);
+      const w = { temas: temasD, melhorias: [Object.assign({}, m)] }; WF.marcaDadosBiPorTema(w);
+      if (JSON.stringify(a) !== JSON.stringify(b) || JSON.stringify(b) !== JSON.stringify(w.melhorias[0])) divD.push(t.nome + '/' + db + '/' + so);
+    })));
+    ok(divD.length === 0, 'marcaDadosBiPorTema do app = a do admin = a do Worker, em ' + (temasD.length * 6) + ' casos', divD.slice(0, 5).join(', '));
+    ok(String(F.TEMA_DADOS_RE) === String(WF.TEMA_DADOS_RE), 'a expressao do tema de dados e a mesma do Worker', String(F.TEMA_DADOS_RE));
+    const cBI = ctx('admin', { D: { feriados: [], sprints_fechadas: [], temas: temasD } });
+    const nBI = F.nova(Object.assign({}, fb, { tema_id: 't1', impacto: 'baixo', urgencia: 'baixa', sales_ops: true }), cBI);
+    const eBI = F.edicao(Object.assign({}, mAntiga, { tema_id: 't7', dados_bi: false }), { titulo: 'Antes', tipo: 'evolucao', tema_id: 't0' }, ctx('dev', { D: cBI.D }));
+    ok(nBI.ok && nBI.obj.dados_bi === true && nBI.obj.sales_ops === false && eBI.ok && eBI.patch.dados_bi === true,
+       'abrir ou mudar para um tema de dados liga a flag no proprio patch, em qualquer perfil', JSON.stringify([nBI.obj && nBI.obj.dados_bi, eBI.patch]));
+
+    // ── b6654ff: a fila do poker esconde o que ja foi votado antes de hoje
+    const PKT = lerTela('axis-tela-poker.js');
+    const pkCorte = (src) => ['function pkHoje(', 'function pkDiaDaVotacao(', 'function pkJaVotadaAntes(', 'function pkNaFila('].map(a => corpo(src, a)).join('\n');
+    const pkVelho = new Function('_estado', pkCorte(POKER) + '\nreturn pkNaFila;');
+    const pkApp = new Function(pkCorte(PKT) + '\nreturn pkNaFila;')();
+    const agoraI = new Date().toISOString(), ontem = new Date(Date.now() - 2 * 86400000).toISOString();
+    const msP = [{ id: 'nova', status_planejamento: 'planning' }, { id: 'hoje', status_planejamento: 'planning', poker_pontos: 5, poker_votado_em: agoraI },
+                 { id: 'antes', status_planejamento: 'planning', poker_pontos: 8, poker_votado_em: ontem }, { id: 'mao', status_planejamento: 'planning', poker_pontos: 3 },
+                 { id: 'fora', status_planejamento: 'planejado' }];
+    let divP = [];
+    [null, { melhoria_id: 'antes' }, { melhoria_id: 'mao' }].forEach(est => msP.forEach(m => {
+      const a = pkVelho(est)(m), b = pkApp(m, est ? est.melhoria_id : '');
+      if (a !== b) divP.push((est ? est.melhoria_id : '-') + '/' + m.id);
+    }));
+    ok(divP.length === 0 && msP.filter(m => pkApp(m, '')).map(m => m.id).join() === 'nova,hoje',
+       'a fila do poker do app = a do poker.html: so o nao votado e o votado HOJE, e a demanda em pauta nunca sai', divP.join(', '));
+    ok(/\.filter\(function \(m\) \{ return pkNaFila\(m, atual\); \}\)/.test(PKT), 'e a filaPlanning do app filtra por ela');
+    ok(/function opcoesSprint\(\) \{\s*var SP = raiz\.SPRINTPO;\s*\/\/[^\n]*\n\s*if \(!SP \|\| !H\.donoDaSprint\(\)\) return null;/.test(PKT) &&
+       /var sprint = H\.donoDaSprint\(\) \? S\.valores\.sprint : '';/.test(PKT),
+       'so o dono da sprint ve e manda a sprint na mesa (pkDonoDaSprint)');
+
+    // ── 4dc2aba / bf2d464: a trilha vem do D1 ───────────────────────────
+    const APP_SRC = lerTela('axis-app.js');
+    ok(/var j = await hidrata\(await api\('dados'\)\);/.test(APP_SRC) && /H\.api\('dados'\)\.then\(H\.hidrata\)/.test(PKT),
+       'o app hidrata a trilha em toda leitura da base para a tela (carregar e a releitura do poker)');
+    /* O historico-cliente.js de verdade faz a busca (a invariante dele esta
+       acima); aqui se mede o que o APP passa a ele: o endereco do Worker do app
+       e o token da sessao. Sem `fetch` global, para nao cruzar com a de cima. */
+    const HCx = require('./historico-cliente.js');
+    const chamou = [];
+    global.HISTCLIENTE = { hidrata: async (d, url, cred) => { chamou.push({ url, cred }); return HCx.aplica(d, { a: [{ em: '1', mudancas: [] }] }); } };
+    const AXA = require('./axis-app.js');
+    pendentes.push((async () => {
+      AXA.APP.token = 'tk';
+      const d = await AXA.H.hidrata({ atualizado_em: 'v-app', melhorias: [{ id: 'a' }, { id: 'b' }] });
+      delete global.HISTCLIENTE; delete global.AXIS_APP;
+      ok(d.melhorias[0].historico.length === 1 && d.melhorias[1].historico.length === 0 && chamou.length === 1 &&
+         chamou[0].url === AXA.WORKER && chamou[0].cred.token === 'tk',
+         'H.hidrata passa o Worker do app e o token da sessao, e m.historico volta', JSON.stringify(chamou));
+    })());
   })();
 
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir

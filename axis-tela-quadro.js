@@ -236,6 +236,9 @@
     if (window.SPRINTPO && SPRINTPO.ehPrioritariaDaSprint(m)) c.push(H.chip(H.ico('zap') + ' prioritária', 'ac'));
     if (m.spike) c.push(H.chip(H.ico('search') + ' Spike', 'in'));
     if (m.debito_tecnico) c.push(H.chip('Débito técnico', 'pu'));
+    // Impacto, urgencia e o caso de uso da etapa seguem a demanda (`requisitos.js`, como no Kanban do admin).
+    var rq = H.chipsReq(m) + H.chipCasoUso(m);
+    if (rq) c.push(rq);
     if (window.SUBTAREFA) {
       var p = SUBTAREFA.progresso(SUBTAREFA.lista(m));
       if (p.total) c.push(H.chip(H.ico('check') + ' ' + p.feitas + '/' + p.total, p.feitas === p.total ? 'ok' : 'bk', p.feitas + ' de ' + p.total + ' subtarefas'));

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="88a8028c37">
+<html lang="pt-BR" data-build="2c9c3228e0">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -251,18 +251,18 @@
       border-radius:10px; padding:3px; margin-bottom:12px; }
     .pj-visao button { background:transparent; border:0; color:var(--text2); font:inherit; font-size:13px;
       font-weight:600; padding:6px 14px; border-radius:7px; cursor:pointer; }
-    .pj-visao button.on { background:var(--blue); color:#fff; }
+    .pj-visao button.on { background:var(--blue); color:var(--on-ac); }
     .pj-and { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:14px; }
     .pj-and-topo { display:flex; align-items:center; gap:10px; flex-wrap:wrap; cursor:pointer; margin-bottom:10px; }
     .pj-and-topo .pj-nome { font-size:16px; }
     .pj-and-resp, .pj-and-nsp { font-size:12px; color:var(--text3); }
     .pj-and-entrega { margin-left:auto; font-size:13px; color:var(--text); }
     .pj-and-entrega em { color:var(--text3); font-size:12px; }
-    .pj-and-entrega.venc strong { color:var(--red-tx,#F9A0A0); }
+    .pj-and-entrega.venc strong { color:var(--red-tx); }
     .pj-and-entrega.sem { color:var(--text3); }
     .pj-and-cols { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
     @media (max-width:1200px) { .pj-and-cols { grid-template-columns:1fr; } }
-    .pj-and-etapa { flex:0 0 auto; font-size:10.5px; color:var(--amber-tx,#FFC470);
+    .pj-and-etapa { flex:0 0 auto; font-size:10.5px; color:var(--amber-tx);
       border:1px solid currentColor; border-radius:4px; padding:0 5px; }
     .pj-and-usu { display:inline-flex; align-items:baseline; gap:6px; }
     .pj-and-sp.sem { color:var(--text3); border-color:transparent; }
@@ -274,12 +274,12 @@
     .pj-and-col li { display:flex; align-items:baseline; gap:8px; padding:5px 4px; border-bottom:1px solid var(--border);
       font-size:13px; cursor:pointer; border-radius:4px; }
     .pj-and-col li:last-child { border-bottom:0; }
-    .pj-and-col li:hover { background:var(--bg4,rgba(255,255,255,.05)); }
+    .pj-and-col li:hover { background:var(--bg4); }
     .pj-and-data { flex:0 0 auto; font-variant-numeric:tabular-nums; color:var(--text2); font-weight:600; }
-    .pj-and-data.venc { color:var(--red-tx,#F9A0A0); }
+    .pj-and-data.venc { color:var(--red-tx); }
     .pj-and-tit { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
     .pj-and-tit b { color:var(--text3); font-weight:600; }
-    .pj-and-sp, .pj-and-qual { flex:0 0 auto; font-size:11px; color:var(--green-tx,#8FE0A8);
+    .pj-and-sp, .pj-and-qual { flex:0 0 auto; font-size:11px; color:var(--green-tx);
       border:1px solid currentColor; border-radius:4px; padding:0 5px; }
     .pj-and-qual { color:var(--text3); }
     .pj-and-vazio { font-size:12px; color:var(--text3); margin:4px 0; }
@@ -293,7 +293,7 @@
     .pj-and-data.sem { color:var(--text3); font-weight:400; }
     .pj-and-usu { flex:0 0 auto; }
     .pj-and-usu .pj-and-data { color:var(--text); }
-    .pj-and-usu .pj-and-data.venc { color:var(--red-tx,#F9A0A0); }
+    .pj-and-usu .pj-and-data.venc { color:var(--red-tx); }
     .pj-card { background:var(--bg2); border:1px solid var(--border); border-radius:14px;
       padding:18px 20px; display:flex; flex-direction:column; gap:12px; cursor:pointer;
       transition:border-color .12s, transform .12s; }
@@ -953,16 +953,16 @@
     .ger-kpi-value.red { color:var(--red); }
     /* Entregas por sprint: os cartoes do resumo filtram a lista. */
     .es-kpi { cursor:pointer; transition:border-color .15s, box-shadow .15s; }
-    .es-kpi:hover { border-color:var(--border2,#555); }
+    .es-kpi:hover { border-color:var(--border2); }
     .es-kpi.ativo { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue) inset; }
     .es-kpi-sub { font-size:11.5px; color:var(--text3); margin-top:2px; }
-    .es-barra { height:6px; background:var(--bg4,rgba(255,255,255,.08)); border-radius:99px; overflow:hidden; margin-top:8px; }
+    .es-barra { height:6px; background:var(--bg4); border-radius:99px; overflow:hidden; margin-top:8px; }
     .es-barra i { display:block; height:100%; background:var(--green); }
     .es-pessoas { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 16px; font-size:12.5px; }
     .es-pessoas .rot { color:var(--text2); font-weight:600; margin-right:4px; }
     .es-pessoa { border:1px solid var(--border); border-radius:999px; padding:2px 10px; color:var(--text2); background:var(--bg2); }
     .es-pessoa b { color:var(--text); }
-    .es-pessoa.venc b { color:var(--red-tx,#F9A0A0); }
+    .es-pessoa.venc b { color:var(--red-tx); }
     .ger-charts { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:32px; }
     @media(max-width:900px){ .ger-charts{ grid-template-columns:1fr; } }
     .ger-section-title {
@@ -1652,13 +1652,13 @@
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
-<script src="requisitos.js?v=1987238fe2"></script>
+<script src="requisitos.js?v=cac792c192"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
 <script src="capacidade.js?v=e7e1449a7d"></script>
 <script src="apresentacao.js?v=8e03c136ab"></script>
 <script src="relatorio-ppt.js?v=9f92cf151d"></script>
-<script src="aprovacao-ppt.js?v=fbb42677c3"></script>
-<script src="projetos-ppt.js?v=b053dd2816"></script>
+<script src="aprovacao-ppt.js?v=2ed7c9629b"></script>
+<script src="projetos-ppt.js?v=e424353d27"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="historico-cliente.js?v=2b0fcaf502"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
@@ -2676,18 +2676,18 @@
       <div class="form-group" id="m-caso-uso" style="grid-column:1/-1;display:none">
         <div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--bg3)">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-            <strong>📄 Caso de uso para aprovação do usuário</strong>
+            <strong><i class="axi axi-receipt"></i> Caso de uso para aprovação do usuário</strong>
             <span id="m-cu-estado" style="font-size:12px;font-weight:700"></span>
           </div>
           <textarea id="m-cu-texto" rows="12" style="font-family:monospace;font-size:12px;width:100%"></textarea>
           <div id="m-cu-info" style="font-size:12px;color:var(--text3);margin:6px 0"></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="cuGerar()" title="Monta de novo a partir da demanda como está agora">🔄 Gerar de novo</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="cuCopiar()">📋 Copiar</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="cuImprimir()">🖨️ Imprimir / PDF</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('enviado')">📨 Marquei como enviado</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('aprovado')">✅ Usuário aprovou</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('ajustes')">✏️ Usuário pediu ajustes</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuGerar()" title="Monta de novo a partir da demanda como está agora"><i class="axi axi-refresh"></i> Gerar de novo</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuCopiar()"><i class="axi axi-clipboard"></i> Copiar</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuImprimir()"><i class="axi axi-printer"></i> Imprimir / PDF</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('enviado')"><i class="axi axi-send"></i> Marquei como enviado</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('aprovado')"><i class="axi axi-check"></i> Usuário aprovou</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('ajustes')"><i class="axi axi-edit"></i> Usuário pediu ajustes</button>
           </div>
         </div>
       </div>
@@ -5299,8 +5299,8 @@ function renderEntregasSprint() {
     kpiEs('entregues', lEntregues.length, 'Entregues', `${lEntregues.length} de ${validas} task(s) · ${pctEnt}%`, 'var(--green)',
           `<div class="es-barra"><i style="width:${pctEnt}%"></i></div>`) +
     kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${pctDe(lFaltaCom.length)}% das tasks` +
-          (vencCom ? ` · <span style="color:var(--red-tx,#F9A0A0);font-weight:600">${vencCom} com entrega vencida</span>` : ''),
-          lFaltaCom.length ? 'var(--amber-tx,#FFC470)' : '') +
+          (vencCom ? ` · <span style="color:var(--red-tx);font-weight:600">${vencCom} com entrega vencida</span>` : ''),
+          lFaltaCom.length ? 'var(--amber-tx)' : '') +
     kpiEs('falta_sem', lFaltaSem.length, 'Faltando · sem responsável', lFaltaSem.length ? `${pctDe(lFaltaSem.length)}% das tasks · precisam de dono` : 'todas têm dono',
           lFaltaSem.length ? 'var(--red)' : 'var(--green)')
   ) : '';
@@ -5338,15 +5338,15 @@ function renderEntregasSprint() {
   // Dentro do tema: pela entrega ao usuario, sem data no fim.
   const dataDe = m => m.entrega_usuario || '9999';
   const dataHTML = m => {
-    if (!m.entrega_usuario) return '<span style="color:var(--text3)">📅 Entrega usuário: a definir</span>';
+    if (!m.entrega_usuario) return '<span style="color:var(--text3)"><i class="axi axi-calendar"></i> Entrega usuário: a definir</span>';
     let cor = '', tag = '';
     if (aberta(m)) {
       const dias = Math.round((new Date(m.entrega_usuario + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000);
-      if (dias < 0)        { cor = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
-      else if (dias === 0) { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ' (vence hoje)'; }
-      else if (dias <= 7)  { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ` (em ${dias}d)`; }
+      if (dias < 0)        { cor = 'color:var(--red-tx);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
+      else if (dias === 0) { cor = 'color:var(--amber-tx);font-weight:600'; tag = ' (vence hoje)'; }
+      else if (dias <= 7)  { cor = 'color:var(--amber-tx);font-weight:600'; tag = ` (em ${dias}d)`; }
     }
-    return `<span style="${cor}">📅 Entrega usuário: ${formatDate(m.entrega_usuario)}${tag}</span>`;
+    return `<span style="${cor}"><i class="axi axi-calendar"></i> Entrega usuário: ${formatDate(m.entrega_usuario)}${tag}</span>`;
   };
 
   box.innerHTML = chaves.map(k => {
@@ -5355,19 +5355,19 @@ function renderEntregasSprint() {
       .map(m => {
         const sk = statusEfetivo(m);
         const pj = m.projeto_id ? (state.projetos || []).find(p => p.id === m.projeto_id) : null;
-        const com = m.dev ? `👤 Com: <strong>${esc(m.dev)}</strong>`
-                          : '<span style="color:var(--text3)">👤 Sem responsável</span>';
+        const com = m.dev ? `<i class="axi axi-user"></i> Com: <strong>${esc(m.dev)}</strong>`
+                          : '<span style="color:var(--text3)"><i class="axi axi-user"></i> Sem responsável</span>';
         return `<div class="card" style="cursor:pointer" onclick="openModalMelhoria('${m.id}')">
           <div class="card-info">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
               ${m.codigo ? `<span style="font-family:monospace;font-size:12px;color:var(--text3)">${esc(m.codigo)}</span>` : ''}
               <div class="card-nome">${esc(m.titulo)}</div>
               <span class="badge badge-${sk}">${STATUS_LABELS[sk] || sk}</span>
-              ${m.poker_pontos != null ? `<span style="font-size:11px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 7px;">🃏 ${m.poker_pontos}</span>` : ''}
-              ${pj ? `<span title="Faz parte do projeto ${esc(pj.nome || '')}" style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;">📁 ${pj.codigo ? esc(pj.codigo) + ' · ' : ''}${esc(pj.nome || '')}</span>` : ''}
+              ${m.poker_pontos != null ? `<span style="font-size:11px;background:var(--blue-bg);color:var(--blue-tx);border-radius:4px;padding:2px 7px;"><i class="axi axi-cards"></i> ${m.poker_pontos}</span>` : ''}
+              ${pj ? `<span title="Faz parte do projeto ${esc(pj.nome || '')}" style="font-size:11px;background:var(--purple-bg);color:var(--purple-tx);border-radius:4px;padding:2px 7px;"><i class="axi axi-folder"></i> ${pj.codigo ? esc(pj.codigo) + ' · ' : ''}${esc(pj.nome || '')}</span>` : ''}
             </div>
             <div class="card-sub">${com} · ${dataHTML(m)}` +
-              `${statusKey(m) === 'concluido' && m.concluido_em ? ' · ✅ Concluída em ' + formatDate(String(m.concluido_em).slice(0, 10)) : ''}</div>
+              `${statusKey(m) === 'concluido' && m.concluido_em ? ' · <i class="axi axi-check"></i> Concluída em ' + formatDate(String(m.concluido_em).slice(0, 10)) : ''}</div>
           </div>
         </div>`;
       }).join('');
@@ -5475,8 +5475,8 @@ function renderMelhorias() {
         : '';
       /* COM QUEM ESTA, dito com todas as letras — o nome solto nao deixava claro
          se era o dev ou o solicitante. */
-      let sub = m.dev ? `👤 Com: <strong>${esc(m.dev)}</strong>`
-                      : '<span style="color:var(--text3)">👤 Sem responsável</span>';
+      let sub = m.dev ? `<i class="axi axi-user"></i> Com: <strong>${esc(m.dev)}</strong>`
+                      : '<span style="color:var(--text3)"><i class="axi axi-user"></i> Sem responsável</span>';
       if (m.entrega) {
         let cor = '', tag = '';
         if (isDemandaAberta(m)) {
@@ -5499,13 +5499,13 @@ function renderMelhorias() {
         if (isDemandaAberta(m)) {
           const hojeU = new Date(); hojeU.setHours(0,0,0,0);
           const diasU = Math.round((new Date(m.entrega_usuario + 'T00:00:00') - hojeU) / 86400000);
-          if (diasU < 0)       { corU = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tagU = ` (vencida há ${-diasU}d)`; }
-          else if (diasU === 0){ corU = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tagU = ' (vence hoje)'; }
-          else if (diasU <= 7) { corU = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tagU = ` (em ${diasU}d)`; }
+          if (diasU < 0)       { corU = 'color:var(--red-tx);font-weight:600'; tagU = ` (vencida há ${-diasU}d)`; }
+          else if (diasU === 0){ corU = 'color:var(--amber-tx);font-weight:600'; tagU = ' (vence hoje)'; }
+          else if (diasU <= 7) { corU = 'color:var(--amber-tx);font-weight:600'; tagU = ` (em ${diasU}d)`; }
         }
-        sub += ' · ' + `<span style="${corU}">📅 Entrega usuário: ${formatDate(m.entrega_usuario)}${tagU}</span>`;
+        sub += ' · ' + `<span style="${corU}"><i class="axi axi-calendar"></i> Entrega usuário: ${formatDate(m.entrega_usuario)}${tagU}</span>`;
       } else {
-        sub += ' · <span style="color:var(--text3)">📅 Entrega usuário: a definir</span>';
+        sub += ' · <span style="color:var(--text3)"><i class="axi axi-calendar"></i> Entrega usuário: a definir</span>';
       }
       /* NO AR — a marca que responde "isso ja chegou ao usuario?".
          Ela e a razao de o campo existir: sem marca no cartao, saber que a
@@ -5844,15 +5844,15 @@ function kbProdEscolhe(coluna, valor) {
 async function imprimirAprovacaoReq(botao) {
   const ms = (state.melhorias || []).filter(m => !ehMesclada(m) && !m.oculto && statusKey(m) === 'levantar_req');
   if (!window.APROVACAOPPT) { toast('O gerador do PPT não carregou. Recarregue a página (Ctrl+F5).', 'err'); return; }
-  const rot = botao ? botao.textContent : '';
-  if (botao) { botao.disabled = true; botao.textContent = '⏳ Gerando…'; }
+  const rot = botao ? botao.innerHTML : '';
+  if (botao) { botao.disabled = true; botao.textContent = 'Gerando…'; }
   try {
     const r = await APROVACAOPPT.gera(ms, { temas: state.temas || [] });
-    toast('🖨 PPT gerado: ' + r.demandas + ' demanda(s) em aprovação de requisitos.', 'ok');
+    toast('PPT gerado: ' + r.demandas + ' demanda(s) em aprovação de requisitos.', 'ok');
   } catch (e) {
     toast('Não foi possível gerar o PPT: ' + ((e && e.message) || e), 'err');
   } finally {
-    if (botao) { botao.disabled = false; botao.textContent = rot; }
+    if (botao) { botao.disabled = false; botao.innerHTML = rot; }
   }
 }
 
@@ -5900,7 +5900,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
     '<div class="ger-filter-group"><label>&nbsp;</label>' +
     '<button type="button" class="btn btn-secondary btn-sm" onclick="imprimirAprovacaoReq(this)"' +
     ' title="Gera o PPT das demandas em Em aprovação de requisitos, para decidir se seguem para a sprint">' +
-    '🖨 Imprimir - Em aprovação de requisitos</button>' +
+    '<i class="axi axi-printer"></i> Imprimir - Em aprovação de requisitos</button>' +
     '</div>' +
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}` +
     /* COM BUSCA ATIVA A TELA DIZ QUE O PERIODO FOI IGNORADO. Sem isso, quem
@@ -13836,8 +13836,8 @@ function cuTextoNovo(m) {
 }
 function cuPintaEstado(c) {
   const st = REQUISITOS.ESTADOS[c.status] ? c.status : 'a_enviar';
-  const cor = { a_enviar: 'var(--amber-tx,#FFC470)', enviado: 'var(--blue-tx,#9BC8F8)',
-                aprovado: 'var(--green-tx,#8FE0A8)', ajustes: 'var(--red-tx,#F9A0A0)' }[st];
+  const cor = { a_enviar: 'var(--amber-tx)', enviado: 'var(--blue-tx)',
+                aprovado: 'var(--green-tx)', ajustes: 'var(--red-tx)' }[st];
   const el = document.getElementById('m-cu-estado');
   el.textContent = REQUISITOS.ESTADOS[st]; el.style.color = cor;
   const q = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -17089,13 +17089,13 @@ function renderProjetos() {
   const andamento = ordenados.filter(pjEmAndamento);
   const seletor = '<div class="pj-visao">' +
     '<button type="button" class="' + (_pjVisao === 'andamento' ? 'on' : '') + '" onclick="pjVisao(\'andamento\')">' +
-      '🚧 Em andamento (' + andamento.length + ')</button>' +
+      '<i class="axi axi-alert"></i> Em andamento (' + andamento.length + ')</button>' +
     '<button type="button" class="' + (_pjVisao === 'todos' ? 'on' : '') + '" onclick="pjVisao(\'todos\')">' +
       'Todos (' + ps.length + ')</button></div>' +
     (andamento.length
       ? '<button type="button" class="btn btn-secondary btn-sm" style="margin-left:10px;vertical-align:top"' +
         ' onclick="imprimirProjetosAndamento(this)" title="Gera o PPT dos projetos em andamento">' +
-        '🖨 Imprimir - Projetos em andamento</button>'
+        '<i class="axi axi-printer"></i> Imprimir - Projetos em andamento</button>'
       : '');
   if (_pjVisao === 'andamento') {
     box.innerHTML = seletor + (andamento.length
@@ -17176,9 +17176,9 @@ function pjAndamentoHTML(p) {
   const d = pjAndamentoDados(p);
   const hoje = PRAZO.hojeISO();
   const entregaHTML = d.entrega
-    ? '<span class="pj-and-entrega' + (d.entrega < hoje ? ' venc' : '') + '">🏁 Entrega: <strong>' +
+    ? '<span class="pj-and-entrega' + (d.entrega < hoje ? ' venc' : '') + '"><i class="axi axi-flag"></i> Entrega: <strong>' +
       esc(formatDate(d.entrega)) + '</strong> <em>(' + d.fonte + ')</em></span>'
-    : '<span class="pj-and-entrega sem">🏁 Entrega: a definir</span>';
+    : '<span class="pj-and-entrega sem"><i class="axi axi-flag"></i> Entrega: a definir</span>';
 
   const dataCel = (v, venc, dica) => /^\d{4}-\d{2}-\d{2}$/.test(v)
     ? '<span class="pj-and-data' + (venc ? ' venc' : '') + '" title="' + dica + '">' + esc(formatDate(v)) + '</span>'
@@ -17214,14 +17214,14 @@ function pjAndamentoHTML(p) {
     '<div class="pj-and-topo" onclick="pjAbrir(' + JSON.stringify(p.id).replace(/"/g, '&quot;') + ')">' +
       (p.codigo ? '<span class="pj-cod">' + esc(p.codigo) + '</span>' : '') +
       '<span class="pj-nome">' + esc(p.nome || '(sem nome)') + '</span>' +
-      (p.responsavel ? '<span class="pj-and-resp">👤 ' + esc(p.responsavel) + '</span>' : '') +
-      '<span class="pj-and-nsp">🏃 ' + d.naSprint + ' na sprint atual/próximas</span>' +
+      (p.responsavel ? '<span class="pj-and-resp"><i class="axi axi-user"></i> ' + esc(p.responsavel) + '</span>' : '') +
+      '<span class="pj-and-nsp"><i class="axi axi-refresh"></i> ' + d.naSprint + ' na sprint atual/próximas</span>' +
       entregaHTML +
     '</div>' +
     '<div class="pj-and-cols">' +
-      coluna('✅ Feitas', d.feitas, 'feita', 'Nenhuma concluída com data.') +
-      coluna('🚧 Em andamento', d.andamento, 'em_andamento', 'Nada em andamento com data.') +
-      coluna('📅 Planejado', d.planejado, 'planejado', 'Nada planejado com data.') +
+      coluna('<i class="axi axi-check"></i> Feitas', d.feitas, 'feita', 'Nenhuma concluída com data.') +
+      coluna('<i class="axi axi-alert"></i> Em andamento', d.andamento, 'em_andamento', 'Nada em andamento com data.') +
+      coluna('<i class="axi axi-calendar"></i> Planejado', d.planejado, 'planejado', 'Nada planejado com data.') +
     '</div>' +
   '</div>';
 }
@@ -17248,15 +17248,15 @@ async function imprimirProjetosAndamento(botao) {
              andamento: d.andamento.map(x => linha(x, x.usu)),
              planejado: d.planejado.map(x => linha(x, x.usu)) };
   });
-  const rot = botao ? botao.textContent : '';
-  if (botao) { botao.disabled = true; botao.textContent = '⏳ Gerando…'; }
+  const rot = botao ? botao.innerHTML : '';
+  if (botao) { botao.disabled = true; botao.textContent = 'Gerando…'; }
   try {
     const r = await PROJETOSPPT.gera(projetos, { hoje: PRAZO.hojeISO(), sprint: SPRINTPO.rotuloCurto(pjSprintAtual()) });
-    toast('🖨 PPT gerado: ' + r.projetos + ' projeto(s) em andamento.', 'ok');
+    toast('PPT gerado: ' + r.projetos + ' projeto(s) em andamento.', 'ok');
   } catch (e) {
     toast('Não foi possível gerar o PPT: ' + ((e && e.message) || e), 'err');
   } finally {
-    if (botao) { botao.disabled = false; botao.textContent = rot; }
+    if (botao) { botao.disabled = false; botao.innerHTML = rot; }
   }
 }
 

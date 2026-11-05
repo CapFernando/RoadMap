@@ -62,7 +62,7 @@
   // etapa com dois nomes conforme a tela seria pior que qualquer nome.
   var ETAPAS = [
     { id: 'backlog',        rotulo: 'Backlog',             cor: 'bk', dot: 'var(--tx4)' },
-    { id: 'levantar_req',   rotulo: 'Levantar Requisitos', cor: 'pu', dot: 'var(--pu)' },
+    { id: 'levantar_req',   rotulo: 'Em aprovação de requisitos', cor: 'pu', dot: 'var(--pu)' },
     { id: 'planning',       rotulo: 'Planning',            cor: 'tl', dot: 'var(--tl)' },
     { id: 'planejado',      rotulo: 'Planejado',           cor: 'in', dot: 'var(--in)' },
     { id: 'em_andamento',   rotulo: 'Em Andamento',        cor: 'ac', dot: 'var(--ac)' },
@@ -148,8 +148,15 @@
     desenhar();
   }
 
+  /* A TRILHA DAS DEMANDAS VEM DO D1 quando a base nao a traz (historico-cliente.js):
+     Item > Historico, a Validacao do PO, o funil dos Paineis e o Inicio leem
+     `m.historico`, e a base deixou de leva-lo. O mesmo `lerDados` do admin. */
+  function hidrata(j) {
+    return raiz.HISTCLIENTE ? raiz.HISTCLIENTE.hidrata(j, WORKER, APP.token ? { token: APP.token } : {}) : Promise.resolve(j);
+  }
+
   async function carregar() {
-    var j = await api('dados');
+    var j = await hidrata(await api('dados'));
     APP.D = j;
     APP.carregadoEm = Date.now();
     return j;
@@ -252,6 +259,15 @@
     if (!nomes.length) return false;
     return nomes.some(function (n) { return raiz.DEVNOME ? raiz.DEVNOME.eDe(m, n) : devsDe(m).indexOf(n) >= 0; });
   }
+  /* O DONO DA SPRINT (`SPRINTPO.ehDonoDaSprint`): por CONTA, e nao pelo papel
+     admin, que e de varias pessoas. So ele marca a sprint, inicia e fecha; quem
+     nao e abre demanda nova no Backlog. Sem `eu` com login e a senha
+     administrativa, que o Worker trata como dono. */
+  function donoDaSprint() {
+    if (APP.papel !== 'admin') return false;
+    var e = APP.eu && APP.eu.login ? APP.eu : null;
+    return raiz.SPRINTPO && raiz.SPRINTPO.ehDonoDaSprint ? raiz.SPRINTPO.ehDonoDaSprint(e) : true;
+  }
   function pode(acao) {
     var p = APP.papel;
     var M = {
@@ -277,6 +293,32 @@
   function chipTipo(m) {
     var t = TIPOS[m.tipo];
     return t ? chip(ico(t.ico) + ' ' + t.rotulo, 'bk') : '';
+  }
+  /* IMPACTO E URGENCIA seguem a demanda pela esteira (`REQUISITOS.chips` no
+     card do admin e do gantt), aqui no desenho dos chips do app: baixo verde,
+     medio amarelo, alto vermelho. Vazio quando a demanda nao tem nenhum. */
+  var COR_REQ = ['ok', 'wn', 'dg'];
+  function chipsReq(m) {
+    var R = raiz.REQUISITOS;
+    if (!R || !m) return '';
+    var out = '';
+    [['Impacto', R.IMPACTOS, R.impacto(m.impacto)], ['Urgência', R.URGENCIAS, R.urgencia(m.urgencia)]].forEach(function (c) {
+      for (var i = 0; i < c[1].length; i++) {
+        if (c[1][i].v === c[2]) { out += chip(c[0] + ' ' + esc(c[1][i].r), COR_REQ[i], c[0] + ': ' + c[1][i].r); return; }
+      }
+    });
+    return out;
+  }
+  /* O CASO DE USO de "Em aprovacao de requisitos", no card da etapa (o selo
+     do Kanban do admin). Na etapa e ainda sem o carimbo do Worker: a enviar. */
+  var CASO_USO_CURTO = { a_enviar: 'Caso de uso a enviar', enviado: 'Aguardando aprovação',
+                         aprovado: 'Requisitos aprovados', ajustes: 'Usuário pediu ajustes' };
+  var CASO_USO_COR = { a_enviar: 'wn', enviado: 'in', aprovado: 'ok', ajustes: 'dg' };
+  function chipCasoUso(m) {
+    var R = raiz.REQUISITOS;
+    if (!R || !m || String(m.status_planejamento || '') !== R.ETAPA) return '';
+    var st = R.estado(m) || 'a_enviar';
+    return chip(ico('file') + ' ' + esc(CASO_USO_CURTO[st]), CASO_USO_COR[st], 'Caso de uso: ' + R.ESTADOS[st]);
   }
   /** Avatar com cor estavel por nome (a do acento para quem esta logado). */
   function av(nome, tam) {
@@ -678,8 +720,8 @@
     ETAPAS: ETAPAS, ETAPA_POR_ID: ETAPA_POR_ID, TIPOS: TIPOS,
     visiveis: visiveis, etapaDe: etapaDe, colunaDe: colunaDe, pausada: pausada, prazoDe: prazoDe, atrasoDe: atrasoDe,
     pontosDe: pontosDe, devsDe: devsDe, tema: tema, caminho: caminho, projeto: projeto, sprintAtual: sprintAtual,
-    porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode,
-    ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, av: av, cod: cod, hrefItem: hrefItem, hrefEditar: hrefEditar,
+    porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode, donoDaSprint: donoDaSprint, hidrata: hidrata,
+    ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, chipsReq: chipsReq, chipCasoUso: chipCasoUso, CASO_USO_COR: CASO_USO_COR, av: av, cod: cod, hrefItem: hrefItem, hrefEditar: hrefEditar,
     prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); }
   };
 

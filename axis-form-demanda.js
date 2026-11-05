@@ -12,8 +12,18 @@
      dev             o `openNewModal`/`openEditDemand`/`saveNewDemand`
                      (dev.html): titulo, sistema, descricao, tipo, quem pediu,
                      projeto, datas e anexos. A demanda nasce com o nome dele
-                     como responsavel e `origem: 'dev'`; a etapa inicial e
-                     Backlog, Planejado ou Em andamento, e com projeto e Backlog.
+                     como responsavel, `origem: 'dev'` e no Backlog.
+
+   IMPACTO E URGENCIA (`requisitos.js`) sao pedidos na abertura em todo
+   perfil, como nas telas antigas; na edicao seguem editaveis.
+
+   QUEM NAO E DONO DA SPRINT SO ABRE NO BACKLOG (`SPRINTPO.ehDonoDaSprint`):
+   a etapa inicial e a sprint sao do dono, por conta, e nao do papel admin. O
+   servidor faz o mesmo (`nascendoForaDoBacklog`).
+
+   NA GRAVACAO, as regras que o admin aplica na publicacao: tema de dados liga
+   a flag Dados/BI (`marcaDadosBiPorTema`) e Backlog sai sem data de inicio
+   (`tiraInicioDoBacklog`).
 
    EDITAR NAO MUDA ETAPA. Mover, validar, devolver, pausar, negar e entregar
    sao as acoes do Item (axis-acoes.js), cada uma com a sua regra — o select de
@@ -52,17 +62,38 @@
                        em_andamento: 'iniciada', concluido: 'iniciada', atrasado: 'iniciada', negada: 'negada' };
   var STATUS_DEV = { backlog: 'recebida', levantar_req: 'recebida', planning: 'estimada', planejado: 'estimada',
                      em_andamento: 'iniciada', validacao_area: 'iniciada', validacao: 'iniciada', concluido: 'iniciada' };
-  var ETAPAS_NOVA_DEV = ['backlog', 'planejado', 'em_andamento'];
   /* A partir de Planejado a data e do PM/PO: o servidor devolve a do dev
      (`travaDatasComprometidas`). O formulario mostra e nao deixa mexer. */
   var ETAPAS_DATA_TRAVADA = ['planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido'];
   var TIPOS = ['sustentacao', 'evolucao'];
 
   function ehPO(c) { return txt((c || {}).papel) === 'admin'; }
+  /** O dono da sprint (o contexto traz `dono`; sem ele, vale o papel admin). */
+  function dono(c) { return c && 'dono' in c ? !!c.dono : ehPO(c); }
   function ehDev(c) { return txt((c || {}).papel) === 'dev'; }
   function datasTravadas(m, c) { return !!m && !ehPO(c) && ETAPAS_DATA_TRAVADA.indexOf(txt(m.status_planejamento)) >= 0; }
 
   function acoes(c) { return mod(c, 'AXIS_ACOES'); }
+
+  /* TEMA DE DADOS LEVA A FLAG DADOS/BI — a regra de `marcaDadosBiPorTema`
+     (Worker) que o admin repete na publicacao: o nome do tema decide, e a flag
+     so liga (desligando Sales Ops, que e exclusiva). Muta `obj`. */
+  var TEMA_DADOS_RE = /^\s*(BI\b|Data\s?bricks|Extra[cç][aã]o de dados|Banco de dados)/i;
+  function marcaDadosBiPorTema(obj, temas) {
+    var t = (temas || []).find(function (x) { return x && x.id === obj.tema_id; });
+    if (t && TEMA_DADOS_RE.test(String(t.nome || '')) && obj.dados_bi !== true) { obj.dados_bi = true; obj.sales_ops = false; }
+    return obj;
+  }
+  /** Backlog sai sem data de inicio (`tiraInicioDoBacklog`). Muta `obj`. */
+  function semInicioNoBacklog(obj) {
+    if (obj.status_planejamento === 'backlog' && String(obj.inicio || '').trim()) obj.inicio = '';
+    return obj;
+  }
+  /** Impacto e urgencia no valor gravado (`REQUISITOS.impacto`/`urgencia`). */
+  function nivel(qual, v, c) {
+    var R = mod(c, 'REQUISITOS');
+    return R ? R[qual](v) : txt(v);
+  }
   function gestoSemDev(velha, destino, dev, sprint, c) {
     var A = acoes(c);
     return A ? A.gestoSemDev(velha, destino, dev, sprint, c) : false;
@@ -85,6 +116,12 @@
     if (!txt(f.titulo)) return falha('Informe o título.', 'titulo');
     var tipo = m && m.tipo && ehDev(c) ? m.tipo : f.tipo;
     if (TIPOS.indexOf(tipo) < 0) return falha(ehDev(c) ? 'Diga se é problema (Sustentação) ou melhoria (Evolução).' : 'Selecione o tipo: Sustentação ou Evolução.', 'tipo');
+    /* IMPACTO E URGENCIA SAO DA ABERTURA, e so dela (`saveMelhoria`): as
+       demandas antigas nao os tem, e cobrar em toda gravacao prenderia quem so
+       corrige um texto. */
+    if (!m && (!nivel('impacto', f.impacto, c) || !nivel('urgencia', f.urgencia, c))) {
+      return falha('Informe o impacto e a urgência da demanda.', nivel('impacto', f.impacto, c) ? 'urgencia' : 'impacto');
+    }
     // Sistema: obrigatorio na abertura; no admin, demanda antiga sem sistema segue como esta.
     if (!txt(f.tema_id) && (!m || ehDev(c))) return falha('Selecione o sistema.', 'tema');
     if (!m && !txt(f.solicitante)) {
@@ -111,12 +148,16 @@
     var b = basicas(f, null, c);
     if (b) return b;
     var titulo = txt(f.titulo);
-    var sp = txt(f.etapa) || (ehDev(c) ? 'planejado' : 'backlog');
+    var sp = txt(f.etapa) || 'backlog';
+    var aviso = '';
+    /* QUEM NAO E DONO DA SPRINT SO ABRE NO BACKLOG (02/11/2026): o dev sempre
+       (`saveNewDemand`), e o admin que nao e o dono (`saveMelhoria`). */
+    if (!dono(c) && sp !== 'backlog') {
+      sp = 'backlog';
+      if (!ehDev(c)) aviso = 'Demanda aberta no Backlog — só o PM/PO coloca em outra etapa e na sprint.';
+    }
     var obj;
     if (ehDev(c)) {
-      if (ETAPAS_NOVA_DEV.indexOf(sp) < 0) return falha('Pelo seu painel a demanda nasce em Backlog, Planejado ou Em andamento.', 'etapa');
-      // Demanda de projeto e dimensionada no planning junto das outras (`nProjetoMudou`).
-      if (txt(f.projeto_id)) sp = 'backlog';
       obj = {
         id: c.id, titulo: titulo, tema_id: txt(f.tema_id), descricao: txt(f.descricao),
         dev: txt(c.quem), tipo: f.tipo,
@@ -124,6 +165,7 @@
         origem: 'dev', projeto_id: txt(f.projeto_id), anexos: (f.anexos || []).slice(),
         inicio: txt(f.inicio), entrega: txt(f.entrega),
         status: STATUS_DEV[sp] || 'recebida', status_planejamento: sp,
+        impacto: nivel('impacto', f.impacto, c), urgencia: nivel('urgencia', f.urgencia, c),
         estimativa: '', motivo_negacao: '', criado_em: c.agora
       };
     } else {
@@ -133,6 +175,7 @@
         poker_media: null, poker_pontos: numOuNulo(f.poker_pontos, true),
         status: STATUS_ADMIN[sp] || 'recebida', status_planejamento: sp, estimativa: '',
         dev: txt(f.dev), prioridade: txt(f.prioridade),
+        impacto: nivel('impacto', f.impacto, c), urgencia: nivel('urgencia', f.urgencia, c),
         solicitante: txt(f.solicitante), solicitante_email: emailDe(f.solicitante, null, c),
         data_solicitacao: txt(f.data_solicitacao), inicio: txt(f.inicio), entrega: txt(f.entrega),
         entrega_usuario: txt(f.entrega_usuario), mes_alvo: '', meses: [], motivo_negacao: '',
@@ -150,7 +193,7 @@
       if (gestoSemDev(null, sp, obj.dev, f.sprint || '', c)) {
         return falha('Escolha o desenvolvedor: ' + (acoes(c) ? acoes(c).rotulo(sp) : sp) + ' exige responsável.', 'dev');
       }
-      if (ehPO(c)) { var e = aplicaSprint(obj, f.sprint || '', c); if (e) return e; }
+      if (dono(c)) { var e = aplicaSprint(obj, f.sprint || '', c); if (e) return e; }
       var SP = mod(c, 'SPRINTPO');
       if (SP && SP.travaDeAlocacao(obj, 'backlog', sp, c.hoje).trava) {
         return falha('Escolha a sprint: depois da Planning ela é obrigatória.', 'sprint');
@@ -163,12 +206,14 @@
     }
     /* NENHUMA DEMANDA NASCE COM DATA NO PASSADO — e, pelo painel, nem no futuro
        (`abertura.js`). So na criacao. */
+    semInicioNoBacklog(obj);
+    marcaDadosBiPorTema(obj, (c.D || {}).temas);
     var AB = mod(c, 'ABERTURA');
     if (AB) {
       var ab = AB.checa(obj, ehDev(c) ? 'dev' : 'admin', c.hoje);
       if (!ab.ok) return falha(ab.erro, ab.campo);
     }
-    return { ok: true, obj: obj };
+    return { ok: true, obj: obj, aviso: aviso };
   }
 
   /** A EDICAO: o patch com o que mudou. `f` traz so os campos que o
@@ -190,6 +235,12 @@
       if (sol !== txt(m.solicitante)) { poe('solicitante', sol); poe('solicitante_email', emailDe(sol, m, c)); }
     }
     if ('projeto_id' in f) poe('projeto_id', txt(f.projeto_id));
+    // Impacto e urgencia: em branco, o dev deixa o que estava (dev.html); o admin pode limpar.
+    ['impacto', 'urgencia'].forEach(function (k) {
+      if (!(k in f)) return;
+      var v = nivel(k, f[k], c);
+      if (v || !ehDev(c)) poe(k, v);
+    });
     if (!datasTravadas(m, c)) {
       if ('inicio' in f) poe('inicio', txt(f.inicio));
       if ('entrega' in f) poe('entrega', txt(f.entrega));
@@ -209,14 +260,17 @@
     if (!ehDev(c) && gestoSemDev(m, sp, depois.dev, f.sprint != null ? f.sprint : m.sprint_po, c)) {
       return falha('Escolha o desenvolvedor: ' + (acoes(c) ? acoes(c).rotulo(sp) : sp) + ' exige responsável.', 'dev');
     }
-    if (ehPO(c) && f.sprint != null) { var e = aplicaSprint(depois, f.sprint, c); if (e) return e; }
+    if (dono(c) && f.sprint != null) { var e = aplicaSprint(depois, f.sprint, c); if (e) return e; }
+    semInicioNoBacklog(depois);
+    marcaDadosBiPorTema(depois, (c.D || {}).temas);
     var patch = {};
     Object.keys(depois).forEach(function (k) { if (!igual(depois[k], m[k])) patch[k] = depois[k]; });
     if (!Object.keys(patch).length) return { ok: true, patch: null };
     return { ok: true, patch: patch };
   }
 
-  var api = { nova: nova, edicao: edicao, ETAPAS_NOVA_DEV: ETAPAS_NOVA_DEV, ETAPAS_DATA_TRAVADA: ETAPAS_DATA_TRAVADA };
+  var api = { nova: nova, edicao: edicao, ETAPAS_DATA_TRAVADA: ETAPAS_DATA_TRAVADA,
+              marcaDadosBiPorTema: marcaDadosBiPorTema, TEMA_DADOS_RE: TEMA_DADOS_RE };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
   // ══ INTERFACE ═════════════════════════════════════════════════════════
@@ -283,7 +337,13 @@
   }
 
   function quem() { return AX.APP.papel === 'dev' ? (H.meusNomes()[0] || (AX.APP.eu || {}).nome || '') : ((AX.APP.eu || {}).nome || (AX.APP.eu || {}).login || 'admin'); }
-  function contexto(id) { return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(), id: id, D: D() }; }
+  function contexto(id) { return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(), id: id, D: D(), dono: H.donoDaSprint() }; }
+  /** O select de impacto ou urgencia (`REQUISITOS.opcoes`). */
+  function opcoesNivel(qual, atual) {
+    var R = raiz.REQUISITOS;
+    if (R) return R.opcoes(qual, atual);
+    return opt('', '— Selecione —', atual);
+  }
 
   function opcoesSistema(atual) {
     var temas = D().temas || [];
@@ -320,7 +380,7 @@
   var EST = null;   // { m, anexos, enviando, inicial, ov }
 
   function html(m) {
-    var papel = AX.APP.papel, dev = papel === 'dev', po = papel === 'admin';
+    var papel = AX.APP.papel, dev = papel === 'dev', po = H.donoDaSprint();
     var c = contexto('');
     var trava = datasTravadas(m, c);
     var tipoTravado = dev && m && m.tipo;
@@ -337,6 +397,9 @@
         opt('', '— Selecione —', m ? m.tipo : '') + opt('sustentacao', 'Sustentação (erro, bug, ajuste)', m ? m.tipo : '') + opt('evolucao', 'Evolução (melhoria, novo)', m ? m.tipo : '') + '</select>',
         { obrig: true, nota: tipoTravado ? 'A classificação de demanda existente é do PM/PO.' : '' }) +
       campo('axf-tema', 'Sistema / módulo', '<select class="in" id="axf-tema">' + opcoesSistema(m ? m.tema_id : '') + '</select>', { obrig: !m || dev }) +
+      campo('axf-impacto', 'Impacto', '<select class="in" id="axf-impacto">' + opcoesNivel('impacto', m ? m.impacto : '') + '</select>', { obrig: !m }) +
+      campo('axf-urgencia', 'Urgência', '<select class="in" id="axf-urgencia">' + opcoesNivel('urgencia', m ? m.urgencia : '') + '</select>',
+        { obrig: !m, nota: !m ? 'Seguem a demanda pela esteira; não calculam a prioridade.' : '' }) +
       campo('axf-descricao', 'Descrição', '<textarea class="in" id="axf-descricao" rows="10">' + H.esc(m ? m.descricao || '' : '') + '</textarea>', { lg: true }) +
       '</section>';
 
@@ -359,14 +422,14 @@
     // QUANDO
     h += '<section class="axf-sec"><span class="lab">QUANDO</span>';
     if (!m) {
-      var etapas = dev ? ETAPAS_NOVA_DEV : H.ETAPAS.map(function (e) { return e.id; }).filter(function (e) { return e !== 'negada'; });
-      var padrao = dev ? 'planejado' : 'backlog';
-      h += campo('axf-etapa', 'Etapa inicial', '<select class="in" id="axf-etapa">' + etapas.map(function (e) { return opt(e, (H.ETAPA_POR_ID[e] || {}).rotulo || e, padrao); }).join('') + '</select>');
+      var etapas = !po ? ['backlog'] : H.ETAPAS.map(function (e) { return e.id; }).filter(function (e) { return e !== 'negada'; });
+      h += campo('axf-etapa', 'Etapa inicial', '<select class="in" id="axf-etapa"' + (!po ? ' disabled' : '') + '>' + etapas.map(function (e) { return opt(e, (H.ETAPA_POR_ID[e] || {}).rotulo || e, 'backlog'); }).join('') + '</select>',
+        { nota: !po ? 'Demanda nova nasce no Backlog: só o PM/PO coloca em outra etapa e na sprint.' : '' });
     }
     if (!dev) {
       var os = opcoesSprint(m && raiz.SPRINTPO ? raiz.SPRINTPO.doPO(m) : '');
       h += campo('axf-sprint', 'Sprint', '<select class="in" id="axf-sprint"' + (!po || os.fechada ? ' disabled' : '') + '>' + os.html + '</select>',
-        { nota: !po ? 'Só o PM/PO escolhe a sprint.' : os.fechada ? 'Sprint fechada — a demanda não sai mais dela.' : 'Obrigatória depois da Planning.' });
+        { nota: !po ? 'Só o Fernando (PM/PO) escolhe a sprint.' : os.fechada ? 'Sprint fechada — a demanda não sai mais dela.' : 'Obrigatória depois da Planning.' });
     }
     h += campo('axf-inicio', 'Início previsto', entrada('axf-inicio', m ? m.inicio : '', { tipo: 'date', desligado: trava })) +
       campo('axf-entrega', 'Entrega prevista', entrada('axf-entrega', m ? m.entrega : '', { tipo: 'date', desligado: trava }),
@@ -446,6 +509,7 @@
               solicitante: val('axf-solicitante'), projeto_id: val('axf-projeto'), anexos: EST.anexos.slice() };
     if (!el('axf-inicio').disabled) { f.inicio = val('axf-inicio'); f.entrega = val('axf-entrega'); }
     if (el('axf-etapa')) f.etapa = val('axf-etapa');
+    f.impacto = val('axf-impacto'); f.urgencia = val('axf-urgencia');
     if (!dev) {
       f.dev = val('axf-dev') === '__manual__' ? val('axf-dev-manual') : val('axf-dev');
       f.prioridade = val('axf-prioridade');
@@ -463,7 +527,8 @@
   }
 
   var FOCO = { titulo: 'axf-titulo', tipo: 'axf-tipo', tema: 'axf-tema', solicitante: 'axf-solicitante', dev: 'axf-dev',
-               sprint: 'axf-sprint', inicio: 'axf-inicio', entrega: 'axf-entrega', horas: 'axf-horas', etapa: 'axf-etapa' };
+               sprint: 'axf-sprint', inicio: 'axf-inicio', entrega: 'axf-entrega', horas: 'axf-horas', etapa: 'axf-etapa',
+               impacto: 'axf-impacto', urgencia: 'axf-urgencia' };
   function mostraErro(msg, campoLogico) {
     var e = el('axf-erro');
     if (e) e.textContent = msg || '';
@@ -517,6 +582,7 @@
       return;
     }
     if (raiz.AXIS_ACOES) raiz.AXIS_ACOES.avisaRevertidos(out);
+    if (r.aviso) H.toast(r.aviso);
     fecha(true);
     // O `publish` devolve o codigo novo; o `dev-publish` nao — ai vale a base relida.
     var nasceu = ((D().melhorias) || []).find(function (x) { return x && x.id === id; });
@@ -565,10 +631,6 @@
     ['axf-dados_bi', 'axf-sales_ops'].forEach(function (id, i) {
       var x = el(id);
       if (x) x.addEventListener('change', function () { var y = el(i ? 'axf-dados_bi' : 'axf-sales_ops'); if (x.checked && y) y.checked = false; });
-    });
-    var pj = el('axf-projeto'), et = el('axf-etapa');
-    if (pj && et && AX.APP.papel === 'dev') pj.addEventListener('change', function () {
-      if (pj.value) { et.value = 'backlog'; et.disabled = true; } else et.disabled = false;
     });
     ov.addEventListener('click', function (e) {
       if (e.target === ov) { fecha(false); return; }

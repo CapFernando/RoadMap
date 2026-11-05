@@ -38,7 +38,7 @@
 
   var IMPACTOS  = [{ v: 'baixo', r: 'Baixo' }, { v: 'medio', r: 'Médio' }, { v: 'alto', r: 'Alto' }];
   var URGENCIAS = [{ v: 'baixa', r: 'Baixa' }, { v: 'media', r: 'Média' }, { v: 'alta', r: 'Alta' }];
-  var CORES = { 0: '#3FB27F', 1: '#E0A82E', 2: '#E25C5C' };
+  var CORES = { 0: 'var(--green-tx)', 1: 'var(--amber-tx)', 2: 'var(--red-tx)' };
 
   function txt(v) { return String(v == null ? '' : v).trim(); }
   function sem(s) { return txt(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }

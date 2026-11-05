@@ -100,7 +100,7 @@
       },
       {
         id: 'demanda-nova', grupo: 'ABRIR', d: 'abre uma demanda', quem: DEV_ADMIN, grava: true,
-        o_que: 'Abre uma demanda no nome da conta. Nasce em <code>em_andamento</code> (ou na etapa pedida), com o código AX- que o servidor dá. Título igual ao de uma demanda viva é recusado — procure antes com <code>demanda-procurar</code>. Pela API a data nasce <b>hoje</b>: data no passado é recusada, e prazo à frente é combinado pelo PM/PO no planejamento. <code>poker_pontos</code>, <code>entrega_usuario</code> e <code>mes_alvo</code> não entram (400 <code>campo_bloqueado</code>).',
+        o_que: 'Abre uma demanda no nome da conta. Nasce no <code>backlog</code>, com o código AX- que o servidor dá: só o dono da sprint (o PM/PO) abre em outra etapa, e para ele o padrão é <code>em_andamento</code> — pedida outra etapa por quem não é, a resposta traz <code>aviso</code>. Título igual ao de uma demanda viva é recusado — procure antes com <code>demanda-procurar</code>. Pela API a data nasce <b>hoje</b>: data no passado é recusada, e prazo à frente é combinado pelo PM/PO no planejamento. <code>poker_pontos</code>, <code>entrega_usuario</code> e <code>mes_alvo</code> não entram (400 <code>campo_bloqueado</code>).',
         campos: [
           ['titulo', 'obrigatório', 'mínimo 3 letras, até 200'],
           ['tipo', 'obrigatório*', '<code>sustentacao</code> (erro/bug) ou <code>evolucao</code> (melhoria). *herda da principal com <code>parent_id</code>'],
@@ -111,6 +111,7 @@
           ['dev', 'opcional', 'padrão: o nome da conta. <code>null</code> (ou <code>"sem_dono": true</code>) abre sem dono, em backlog'],
           ['inicio, entrega', 'opcional', '<code>AAAA-MM-DD</code>; pela API, só a data de hoje'],
           ['prioridade', 'opcional', '<code>alta</code>, <code>media</code> ou <code>baixa</code>'],
+          ['impacto, urgencia', 'pedido', '<code>baixo</code>/<code>medio</code>/<code>alto</code> e <code>baixa</code>/<code>media</code>/<code>alta</code>; sem eles a resposta traz <code>aviso_classificacao</code>'],
           ['parent_id', 'opcional', 'pendura em outra demanda: o código (<code>AX-042</code>, <code>42</code>) ou o id'],
           ['vinculo', 'opcional', '<code>parte</code> (padrão, não trava a principal) ou <code>dependencia</code> (trava até concluir)'],
           ['projeto_id', 'opcional', 'projeto existente'],
@@ -148,7 +149,8 @@
           ['codigo ou id', 'obrigatório', 'a demanda'],
           ['resumo_entrega', 'opcional', 'a frase do relatório e da apresentação (até 300)'],
           ['implementacao, descricao, observacao', 'opcional', 'texto'],
-          ['horas_realizadas', 'opcional', 'número ≥ 0'],
+          ['horas_realizadas', 'opcional', 'número ≥ 0; tirar de <code>em_andamento</code> exige horas maiores que zero (400 <code>horas_realizadas</code>), e podem ir nesta mesma chamada'],
+          ['impacto, urgencia', 'opcional', '<code>baixo</code>/<code>medio</code>/<code>alto</code> e <code>baixa</code>/<code>media</code>/<code>alta</code>; outro valor é recusado'],
           ['inicio, entrega', 'opcional', '<code>AAAA-MM-DD</code>, ou <code>""</code> para limpar'],
           ['etapa', 'opcional', 'até <code>em_andamento</code>; depois da Planning exige sprint'],
           ['link_issue, link_pr, link_milestone, link_repo', 'opcional', 'endereço completo, ou só o número com <code>link_repo</code> (<code>"audaxcapitalsa/axcaixa"</code>)'],

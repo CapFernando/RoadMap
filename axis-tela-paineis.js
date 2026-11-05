@@ -287,7 +287,7 @@
      historico, gravado so a partir de 05/08/2026; a recepcao vem de criado_em. */
   var PM_FUNIS = [
     { k: 'backlog', rot: 'Backlog (recepção)', curto: 'Backlog', cor: 'var(--tx4)' },
-    { k: 'levantar_req', rot: 'Levantar Requisitos', curto: 'Requisitos', cor: 'var(--in)' },
+    { k: 'levantar_req', rot: 'Em aprovação de requisitos', curto: 'Aprov. req.', cor: 'var(--in)' },
     { k: 'planning', rot: 'Planning', curto: 'Planning', cor: 'var(--pu)' },
     { k: 'validacao', rot: 'Validação PM/PO', curto: 'Validação', cor: 'var(--wn)' }
   ];
@@ -957,7 +957,7 @@
     var D = ctx.D, f = pmFluxo(D, alvo), pz = prazoDoMes(D, alvo), fc = fechamentoDoMes(D, alvo);
     var L = limites(alvo), hj = H.hoje();
     var h = cabecalho('Fluxo do PM/PO e cumprimento por pessoa',
-      'O que passou por Backlog, Levantar Requisitos, Planning e Validação, e o que cada dev prometeu e entregou.',
+      'O que passou por Backlog, Em aprovação de requisitos, Planning e Validação, e o que cada dev prometeu e entregou.',
       seletorMes('paineis/fluxo', alvo) + (H.pode('editar') ? H.linkAdmin('gerencial', 'Abrir o gerencial') : ''),
       '<span class="note">' + esc(rotuloMes(alvo)) + '</span>');
     var val = f.funis.find(function (x) { return x.k === 'validacao'; });

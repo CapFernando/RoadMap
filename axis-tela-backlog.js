@@ -114,7 +114,7 @@
   var CHIPS = [
     { id: 'todos',     rotulo: 'Todos',               casa: function () { return true; } },
     { id: 'backlog',   rotulo: 'Backlog',             casa: function (m) { return H.colunaDe(m) === 'backlog'; } },
-    { id: 'levantar',  rotulo: 'Levantar Requisitos', casa: function (m) { return H.colunaDe(m) === 'levantar_req'; } },
+    { id: 'levantar',  rotulo: 'Em aprovação de requisitos', casa: function (m) { return H.colunaDe(m) === 'levantar_req'; } },
     { id: 'planning',  rotulo: 'Planning',            casa: function (m) { return H.colunaDe(m) === 'planning'; } },
     { id: 'planejado', rotulo: 'Planejado',           casa: function (m) { return H.colunaDe(m) === 'planejado'; } },
     { id: 'andamento', rotulo: 'Em andamento',        casa: function (m) { return H.colunaDe(m) === 'em_andamento'; } },
@@ -241,7 +241,9 @@
     return '<a class="bk-ln' + (eDev && H.minha(m) ? ' minha' : '') + '" href="' + H.hrefItem(m) + '">' +
       '<span class="ci">' + H.esc(m.codigo || '—') + '</span>' +
       '<span style="display:flex;flex-direction:column;min-width:0"><span class="tt">' + H.esc(m.titulo || '(sem título)') + '</span>' +
-      '<span class="cm">' + (cam ? H.esc(cam) : 'Sem sistema') + '</span></span>' +
+      '<span class="cm">' + (cam ? H.esc(cam) : 'Sem sistema') + '</span>' +
+      // Impacto e urgencia ao lado do titulo, como na lista de Melhorias do admin.
+      (H.chipsReq(m) ? '<span class="row" style="gap:4px;flex-wrap:wrap;margin-top:3px">' + H.chipsReq(m) + '</span>' : '') + '</span>' +
       tipoCel(m) +
       '<span class="et">' + chipColuna(m) + '</span>' +
       sprintCel(m) + pontosCel(m) + devCel(m) +

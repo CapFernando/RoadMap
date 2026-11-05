@@ -76,6 +76,8 @@
     H.ETAPAS.forEach(function (e) { m[norm(e.id)] = e.id; m[norm(e.rotulo)] = e.id; });
     var legado = {
       'levantar req': 'levantar_req', 'levantar req.': 'levantar_req', 'levantamento': 'levantar_req',
+      // O nome antigo da etapa, que as planilhas de antes de 03/11/2026 ainda trazem.
+      'levantar requisitos': 'levantar_req', 'aprov. requisitos': 'levantar_req', 'aprovacao de requisitos': 'levantar_req',
       'estimado': 'planejado', 'refinado': 'planejado', 'andamento': 'em_andamento', 'iniciado': 'em_andamento', 'wip': 'em_andamento',
       'plan': 'planning', 'planejamento': 'planning', 'deploy': 'concluido',
       'homologacao': 'validacao_area', 'homolog': 'validacao_area', 'validacao da area': 'validacao_area', 'validacao_area': 'validacao_area',

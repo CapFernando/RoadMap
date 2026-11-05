@@ -534,9 +534,9 @@
     var doMes = S.sprintsDoMes(ano, mes, fer);
     var prox = S.proximasSprints ? (S.proximasSprints(hoje, 3, fer) || []).filter(function (x) { return !x.agora; }).slice(0, 3) : [];
     // Duracao e pontos sao codigo (sprint.js): nao ha onde editar. O que se
-    // edita hoje e a ausencia, no Gantt; o andamento da sprint mora em Sprints.
+    // edita e a ausencia e o feriado, no Planejamento; o andamento da sprint mora em Sprints.
     var acoes = '<a class="btn" href="#sprints">' + ico('refresh') + ' Ver sprints</a>' +
-      (H.pode('editar') ? linkExt('gantt.html', 'Ausências no Gantt', 'btnp', 'Abre o Gantt; as ausências ficam no botão Ausências') : '');
+      (H.pode('editar') ? '<a class="btnp" href="#planejamento/ausencias" title="Abre o cadastro de ausências do Planejamento">Ausências</a>' : '');
 
     // Capacidade nominal por grupo: a MESMA chamada do Gantt (`renderCapSprint`).
     var grupos = S.capacidadePorTrilha(D, atual, {
@@ -603,10 +603,10 @@
         return '<div class="cfg-lin"><span>' + (f.nome ? esc(f.nome) : '<span class="note">sem nome</span>') + '</span><span class="mono note">' + H.dma(f.data) + '</span></div>';
       }).join('') : '<span class="note">Nenhum feriado cadastrado daqui para a frente.</span>') +
       (ferPass ? '<span class="note" style="font-size:12px">' + H.plural(ferPass, 'feriado já passou', 'feriados já passaram') + ' em ' + ano + '.</span>' : '') +
-      '<span class="note" style="font-size:12px">Os feriados vêm do cadastro da base e são lidos pelo Gantt, pelo admin e pelo Worker. Ainda não há tela para editá-los.</span></section>';
+      '<span class="note" style="font-size:12px">Os feriados vêm do cadastro da base e são lidos pelo Gantt, pelo admin e pelo Worker. <a href="#planejamento/feriados">Editar no Planejamento</a>.</span></section>';
     // Ausencias (no lugar do Plantao do prototipo)
     h += '<section class="pn"><div class="row" style="justify-content:space-between"><h2 class="h2">Ausências</h2>' +
-      (H.pode('editar') ? linkExt('gantt.html', 'Gantt', 'btns', 'Abre o Gantt; as ausências ficam no botão Ausências') : '') + '</div>' +
+      (H.pode('editar') ? '<a class="btns" href="#planejamento/ausencias" title="Abre o cadastro de ausências do Planejamento">Planejamento</a>' : '') + '</div>' +
       '<span class="note">Férias, atestados e folgas. Dia ausente sai da capacidade do mês no Gantt.</span>' +
       (ausVem.length ? ausVem.map(function (a) {
         var t = AUS[a.tipo] || AUS.outro;
