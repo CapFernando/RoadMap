@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="2c9c3228e0">
+<html lang="pt-BR" data-build="cdee4b7b70">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7339,7 +7339,7 @@ async function mesFecharAbrir() {
     const res = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'mes-fechar', mes: alvo, para: prox,
-                                           base: state.atualizado_em }, credAdmin())),
+                                           base: _pollTs }, credAdmin())),
     });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) { toast('Não consegui fechar: ' + (j.detail || j.error || res.status), 'err'); return; }
@@ -9470,7 +9470,8 @@ async function fechaCongelar(iso) {
   const rot = btn.textContent;
   btn.disabled = true; btn.textContent = 'Congelando…';
   try {
-    const apuracao = apresApuracao(iso);
+    // apresApuracao e async: sem o await ia a Promise, que vira {} no JSON.
+    const apuracao = await apresApuracao(iso);
     const r = await fetch(ADMIN_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({

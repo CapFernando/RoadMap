@@ -7219,7 +7219,9 @@ async function rotear(request, env, _histFila) {
     // que agosto prometeu e o que agosto entregou.
     if (body.action === 'mes-fechar') {
       const negaMes = await exigePapel(env, body, 'admin', headers);
-      if (negaMes) return negaMes;
+      // exigePapel devolve { ident } ou { recusa }: o objeto e sempre verdadeiro.
+      // Testar ele inteiro devolvia `{ident}` como resposta e a rota dava 500.
+      if (negaMes.recusa) return negaMes.recusa;
       const mesDe = String(body.mes || '');
       if (!mesValido(mesDe)) return json({ error: 'mes_invalido' }, 400, headers);
       const mesPara = mesValido(body.para) ? String(body.para) : mesSoma(mesDe, 1);

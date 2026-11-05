@@ -27051,7 +27051,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!faltam.length && !!AG && extras.every(Boolean), 'o deck, a ata, o deck de assunto, o CSV e o fechar existem no admin para serem comparados', faltam.join(','));
     if (faltam.length || !AG) return;
     const admin = (state, vals, capt) => new Function('state', 'window', 'document', 'FILA', 'PRAZO', 'SELO', 'SPRINTPO', 'ETAPA', 'catalogoCurto', 'apresentacaoMesNome', 'capt',
-      "let _pendingEdits = false, _kbDirty = false; const _dirtyMelhoriaIds = new Set();\n" +
+      "let _pendingEdits = false, _kbDirty = false; const _dirtyMelhoriaIds = new Set(); let _pollTs = state.atualizado_em || null;\n" +
       "const loadFromGitHub = async () => {}; const apModo = () => 'mes'; const relPptGerar = async () => {}; const toast = (m) => { (capt.toasts = capt.toasts || []).push(m); }; const closeModal = () => {};\n" +
       "const fechaApuracaoDe = async () => capt.cong || null; const relMontaSprints = () => {}; const renderMes = () => {}; const showSaving = () => {};\n" +
       "const confirmar = async (o) => { capt.confirmar = o; return true; }; const credAdmin = () => ({}); const ADMIN_PROXY_URL = 'x';\n" +
@@ -27180,10 +27180,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           const codA = ((c.confirmar || {}).texto || '').split('\n').filter(l => / · /.test(l)).map(l => l.split(' · ')[0]);
           const nA = c.confirmar ? +(c.confirmar.texto.match(/^(\d+) demanda/) || [])[1] : 0;
           if (nA !== lista.length || JSON.stringify(codA) !== JSON.stringify(lista.slice(0, 8).map(m => m.codigo))) divF.push(alvo + ' lista ' + nA + '/' + lista.length);
-          if (lista.length && (!c.pedido || c.pedido.mes !== p.mes || c.pedido.para !== p.para || c.pedido.action !== p.action)) divF.push(alvo + ' pedido ' + JSON.stringify(c.pedido));
+          if (lista.length && (!c.pedido || c.pedido.mes !== p.mes || c.pedido.para !== p.para || c.pedido.action !== p.action || c.pedido.base !== p.base)) divF.push(alvo + ' pedido ' + JSON.stringify(c.pedido));
           if (!lista.length && c.pedido) divF.push(alvo + ' pediu sem ter o que rolar');
         }
-        ok(divF.length === 0 && FE.aRolar(S, '2026-10').length > 3, 'Fechar o mes: o app confere a mesma lista e pede o mesmo mes-fechar (mes e destino) que o mesFecharAbrir do admin', divF.join(', '));
+        ok(divF.length === 0 && FE.aRolar(S, '2026-10').length > 3, 'Fechar o mes: o app confere a mesma lista e pede o mesmo mes-fechar (mes, destino e versao da base) que o mesFecharAbrir do admin', divF.join(', '));
         ok(FE.pedidoFechar(S, '2026-12').base === S.atualizado_em && FE.pedidoFechar(S, '2026-12').para === '2027-01',
            'e o pedido leva a versao da base lida (o `conflito` do Worker exige `base`), virando o ano certo');
       } catch (e) {
@@ -27208,6 +27208,59 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        AXH.indexOf('capa-tecnologia.js') < AXH.indexOf('apresentacao.js') && AXH.indexOf('apresentacao.js') < AXH.indexOf('axis-tela-fechamento.js'),
        'o axis.html carrega o que o deck e o deck de assunto usam (fundo, capa, selo, relatorio-ppt) antes das telas');
   })();
+  /* FECHAR E CONGELAR O MES NAO FUNCIONAVAM, por tres pecas soltas: a rota
+     `mes-fechar` testava o objeto inteiro de `exigePapel` (sempre verdadeiro) e
+     devolvia `{ident}` como resposta, um 500; o admin mandava `base:
+     state.atualizado_em`, que a carga nunca preenche, e o Worker pedia
+     "recarregue"; e o congelar mandava a Promise de `apresApuracao`, que vira
+     `{}` no JSON. As tres sao executadas aqui, e nao procuradas no texto. */
+  sec('Fechar e congelar o mes: rota, versao da base e apuracao');
+  {
+    const exige = new Function('identifica', 'json', 'return ' + corpo(W, 'async function exigePapel('))(
+      async (env, b) => (b.quem ? { papel: b.quem } : null), (o, st) => ({ st, o }));
+    pendentes.push((async () => {
+      const sim = await exige({}, { quem: 'admin' }, ['admin'], {});
+      const nao = await exige({}, { quem: 'dev' }, ['admin'], {});
+      ok(sim && sim.ident && !sim.recusa && nao && nao.recusa && !nao.ident,
+         'exigePapel devolve { ident } ou { recusa }: os dois sao objetos verdadeiros');
+    })());
+    const sitios = [...W.matchAll(/const (\w+) = await exigePapel\(/g)].map((m) => m[1]);
+    const malUsados = sitios.filter((v) =>
+      !new RegExp('if \\(' + v + '\\.recusa\\) return ' + v + '\\.recusa').test(W));
+    ok(sitios.length >= 10 && !malUsados.length,
+       'toda rota que chama exigePapel responde pelo .recusa, e nao pelo objeto', malUsados.join(', '));
+
+    let enviado = null;
+    const btnF = { textContent: 'Congelar', disabled: false };
+    const congela = new Function('fechaDoMes', 'apresPeriodoNome', 'confirmar', 'document', 'apresApuracao',
+      'fetch', 'ADMIN_PROXY_URL', 'credAdmin', 'toast', 'fechaCarregar',
+      'return ' + corpo(ADMIN, 'async function fechaCongelar('))(
+      () => null, () => 'outubro', async () => true, { getElementById: () => btnF },
+      async () => ({ pontos: { total: 7 } }),
+      async (u, o) => { enviado = JSON.parse(o.body); return { ok: true, json: async () => ({ ok: true }) }; },
+      'x', () => ({}), () => {}, async () => {});
+    pendentes.push((async () => {
+      await congela('2026-10');
+      ok(enviado && enviado.apuracao && enviado.apuracao.pontos && enviado.apuracao.pontos.total === 7,
+         'congelar manda a apuracao calculada, e nao a Promise (que vira {} no JSON)',
+         JSON.stringify(enviado && enviado.apuracao));
+    })());
+
+    let pedido = null;
+    const fecha = new Function('mesAlvoSelecionado', 'mesDoPeriodo', 'mesDe', 'mesSomaLocal', 'toast',
+      'confirmar', 'showSaving', 'fetch', 'ADMIN_PROXY_URL', 'credAdmin', '_pollTs', 'state',
+      'loadFromGitHub', 'renderMes', 'return ' + corpo(ADMIN, 'async function mesFecharAbrir('))(
+      () => '2026-10', () => [{ codigo: 'AX-1', titulo: 't', status_planejamento: 'planejado' }],
+      () => '2026-10', () => '2026-11', () => {}, async () => true, () => {},
+      async (u, o) => { pedido = JSON.parse(o.body); return { ok: true, json: async () => ({ roladas: [] }) }; },
+      'x', () => ({}), '2026-11-05T10:00:00.000Z', { melhorias: [] }, async () => {}, () => {});
+    pendentes.push((async () => {
+      await fecha();
+      ok(pedido && pedido.action === 'mes-fechar' && pedido.base === '2026-11-05T10:00:00.000Z',
+         'fechar o mes manda a versao da base que a tela leu (sem ela o Worker pede para recarregar)',
+         pedido && String(pedido.base));
+    })());
+  }
 
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
