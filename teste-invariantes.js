@@ -3297,8 +3297,9 @@ sec('Ranking do mes: conta o que foi ENTREGUE no mes');
 // entregou 12 em agosto e o ranking via 4 — 3 com prazo de julho e 5 sem data.
 ok(/const entregues = \(state\.melhorias \|\| \[\]\)/.test(GANTT),
    'existe o recorte por data de conclusao');
-ok(/entregues[\s\S]{0,400}?String\(m\.concluido_em \|\| ''\)\.slice\(0, 10\) >= A/.test(GANTT),
-   'o recorte usa concluido_em, e nao entrega');
+ok(/const diaEntregaMes = m => \{[\s\S]{0,300}?REGRA_ENTREGA_DESDE \? ida : String\(m\.concluido_em \|\| ''\)\.slice\(0, 10\)/.test(GANTT) &&
+   /m\.status_planejamento === 'concluido' &&\s*diaEntregaMes\(m\) >= A/.test(GANTT),
+   'o recorte e da concluida, no dia da primeira ida para validacao (regra de 05/11) ou da conclusao antes dela — e nao pela entrega prevista');
 ok(/renderRankingMes\(entregues\)/.test(GANTT), 'o ranking recebe as entregues');
 ok(!/renderRankingMes\(concluidas\)/.test(GANTT),
    'o ranking NAO usa mais o recorte por data de entrega');
@@ -24978,10 +24979,35 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           mkA('E', 'em_andamento', { sprint_po: 'S2-11-2026', sprint_po_historico: [{ sprint: rA }, { sprint: 'S2-11-2026', de: rA, devolvida_area: true }] }),
           mkA('F', 'em_andamento', { sprint_po: 'S2-11-2026', sprint_po_historico: [{ sprint: rA }, { sprint: 'S2-11-2026' }] })] };
         const pA = SPA.placarDaSprint(dA, rA);
-        ok(pA.total === 4 && pA.validados === 1 && pA.aguardando === 1 && pA.emCurso === 1 && pA.saiu === 1 && pA.naArea === 2,
-           'na Validacao da area a task sai do placar da sprint (nem total, nem entregue, nem pendente)', JSON.stringify(pA.naArea));
-        ok(SPA.balancoDaSprint(dA, rA).pendentes.map(m => m.id).join() === 'C' && SPA.rankingDaSprint(dA, rA)[0].total === 4,
-           'e tambem do balanco do fechamento e do ranking');
+        /* REGRA DE 05/11/2026 (substitui "a area sai do placar"): "para sprint deve
+           considerar a partir do momento que o dev coloca em validacao da area ou
+           validacao PM/PO". Na area e AGUARDANDO aprovacao, dentro do placar. */
+        ok(pA.total === 6 && pA.validados === 1 && pA.aguardando === 2 && pA.emCurso === 1 && pA.saiu === 2 && pA.naArea === 0,
+           'na Validacao da area a task conta no placar como aguardando aprovacao (regra de 05/11)', JSON.stringify(pA));
+        ok(SPA.balancoDaSprint(dA, rA).pendentes.map(m => m.id).join() === 'C' && SPA.rankingDaSprint(dA, rA)[0].total === 6,
+           'o balanco do fechamento segue cobrando so quem nao entregou, e o ranking conta as mesmas do placar');
+        /* ENTREGUE SO APOS O PM/PO, NA SPRINT DA PRIMEIRA IDA PARA VALIDACAO. */
+        {
+          const r1 = 'S1-11-2026', r2 = 'S2-11-2026';
+          const hsE = (...ss) => ss.map(x => ({ sprint: x }));
+          const dE = { feriados: ['2026-11-02'], melhorias: [
+            // foi para a area na S1-11, PM/PO aprovou na S2-11: entrega da S1-11
+            { id: 'P', status_planejamento: 'concluido', sprint_po: r2, sprint_po_historico: hsE(r1, r2),
+              primeira_validacao_em: '2026-11-05', entregue_em: '2026-11-11', concluido_em: '2026-11-12', poker_pontos: 5, dev: 'Ana' },
+            // foi para validacao na S1-11 e ainda esta la: aguardando na S1-11, nada na S2-11
+            { id: 'Q', status_planejamento: 'validacao', sprint_po: r1, sprint_po_historico: hsE(r1),
+              primeira_validacao_em: '2026-11-04', poker_pontos: 3, dev: 'Ana' },
+            // devolvida e reentregue: conta uma vez, na primeira ida (S1-11)
+            { id: 'R', status_planejamento: 'concluido', sprint_po: r2, sprint_po_historico: hsE(r1, r2),
+              primeira_validacao_em: '2026-11-04', entregue_em: '2026-11-10', concluido_em: '2026-11-11', poker_pontos: 2, dev: 'Bia' },
+          ] };
+          const e1 = SPA.placarDaSprint(dE, r1), e2 = SPA.placarDaSprint(dE, r2);
+          ok(e1.validados === 2 && e1.aguardando === 1 && e2.total === 0,
+             'entregue so depois do PM/PO, na sprint da primeira ida para validacao (area ou PM/PO); reentrega conta uma vez',
+             JSON.stringify({ s1: [e1.validados, e1.aguardando], s2: e2.total }));
+          ok(SPA.placarDaSprint(dE, 'S5-10-2026').regraEntrega === undefined,
+             'sprint anterior a regra segue a conta antiga, pela sprint marcada');
+        }
         ok(SPA.acompanhamentoDaSprint(dA, rA, null, '2026-11-05').filter(x => x.situacao === 'na_area').length === 2,
            'o acompanhamento ainda mostra a task, marcada como na area');
         ok(SPA.entrouAtrasada(dA.melhorias[4]) && SPA.balancoDaSprint(dA, 'S2-11-2026').pendentes.some(m => m.id === 'E'),

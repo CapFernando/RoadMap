@@ -1559,6 +1559,23 @@ function carimbaAreaValidacao(recebido, servidor) {
   for (const m of recebido.melhorias) {
     if (!m || !m.id) continue;
     const velha = antes.get(m.id);
+    /* A PRIMEIRA IDA PARA VALIDACAO (05/11/2026). "So conta entregue apos
+       aprovacao PM/PO; para sprint deve considerar a partir do momento que o
+       dev coloca em validacao da area ou validacao PM/PO." E reentrega conta
+       uma unica entrega, na primeira ida. Por isso um carimbo proprio, gravado
+       UMA VEZ e nunca mais trocado: o `entregue_em` recarimba a cada reentrega
+       (ele encerra o prazo) e o `validacao_area_em` some ao sair da area.
+       Vale o do servidor; sem ele, aceita a data valida que veio (a carga
+       retroativa pelo historico); sem nenhuma, nasce hoje ao entrar. */
+    const naValidacao = ['validacao_area', 'validacao'].includes(String(m.status_planejamento || ''));
+    const pvServ = velha && /^\d{4}-\d{2}-\d{2}/.test(String(velha.primeira_validacao_em || ''))
+      ? String(velha.primeira_validacao_em).slice(0, 10) : '';
+    const pvVeio = /^\d{4}-\d{2}-\d{2}/.test(String(m.primeira_validacao_em || ''))
+      ? String(m.primeira_validacao_em).slice(0, 10) : '';
+    if (pvServ) m.primeira_validacao_em = pvServ;
+    else if (pvVeio) m.primeira_validacao_em = pvVeio;
+    else if (naValidacao) { m.primeira_validacao_em = hoje; n += 1; }
+    else if ('primeira_validacao_em' in m) delete m.primeira_validacao_em;
     const agoraNaArea = String(m.status_planejamento || '') === 'validacao_area';
     const estavaNaArea = !!velha && String(velha.status_planejamento || '') === 'validacao_area';
     if (agoraNaArea && estavaNaArea) {
@@ -6287,6 +6304,10 @@ async function rotear(request, env, _histFila) {
            direto ao PM/PO e nao tem dia na area para contar. */
         if (m.status_planejamento === HOMOLOG_AREA && !m.validacao_area_em) {
           m.validacao_area_em = hojeBR();
+        }
+        // A primeira ida para validacao, uma vez so — ver `carimbaAreaValidacao`.
+        if (!/^\d{4}-\d{2}-\d{2}/.test(String(m.primeira_validacao_em || ''))) {
+          m.primeira_validacao_em = hojeBR();
         }
         // NAO grava concluido_em: quem entrega nao conclui. A data nasce na
         // aprovacao do PM/PO.

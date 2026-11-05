@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="5aae15eec4">
+<html lang="pt-BR" data-build="510e296523">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1181,7 +1181,7 @@
   <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
-<script src="capacidade.js?v=e7e1449a7d"></script>
+<script src="capacidade.js?v=efaf632603"></script>
 <script src="dialogo.js?v=3061e0568f"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="historico-cliente.js?v=2b0fcaf502"></script>
@@ -1199,7 +1199,7 @@
 <script src="mensageria-abrir.js?v=aa283f3dc4"></script>
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=f141739bd7"></script>
+<script src="sprint.js?v=c5600b91fd"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -6361,11 +6361,18 @@ function renderResumoMes() {
   // fechou, e quem nao tem data de entrega nao conta em mes nenhum. Medido na
   // base: Murillo entregou 12 em agosto e o ranking via 4 — 3 tinham prazo de
   // julho e 5 estavam sem data.
+  // REGRA DE 05/11/2026: so a concluida pelo PM/PO e entrega, e ela conta no
+  // dia da PRIMEIRA ida para validacao (area ou PM/PO) — ver
+  // `primeiraIdaValidacao` em capacidade.js. Ida antes da regra: aprovacao.
+  const CAPm = window.CAPACIDADE;
+  const diaEntregaMes = m => {
+    const ida = CAPm && CAPm.primeiraIdaValidacao ? CAPm.primeiraIdaValidacao(m) : '';
+    return ida && ida >= CAPm.REGRA_ENTREGA_DESDE ? ida : String(m.concluido_em || '').slice(0, 10);
+  };
   const entregues = (state.melhorias || []).filter(m =>
     !m.oculto && !m.mesclado_em &&
     m.status_planejamento === 'concluido' &&
-    String(m.concluido_em || '').slice(0, 10) >= A &&
-    String(m.concluido_em || '').slice(0, 10) <= B);
+    diaEntregaMes(m) >= A && diaEntregaMes(m) <= B);
   const atrasadas = noMes.filter(m => spEfetivo(m) === 'atrasado');
   const validando = noMes.filter(m => m.status_planejamento === 'validacao');
   const pontos = noMes.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="41b7aca386">
+<html lang="pt-BR" data-build="a5bda38718">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1649,14 +1649,14 @@
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-projeto.js?v=2e30585cbe"></script>
-  <script src="fila.js?v=90c9b67421"></script>
+  <script src="fila.js?v=3e7bb2500a"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="dialogo.js?v=3061e0568f"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="requisitos.js?v=1987238fe2"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
-<script src="capacidade.js?v=e7e1449a7d"></script>
+<script src="capacidade.js?v=efaf632603"></script>
 <script src="apresentacao.js?v=d1432be37a"></script>
 <script src="relatorio-ppt.js?v=b4db2e69eb"></script>
 <script src="aprovacao-ppt.js?v=fbb42677c3"></script>
@@ -1678,7 +1678,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=f141739bd7"></script>
+<script src="sprint.js?v=c5600b91fd"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -5257,7 +5257,31 @@ function renderEntregasSprint() {
     `<option value="${esc(o.key)}"${o.key === _esSprint ? ' selected' : ''}>` +
     `${esc(o.label.replace(/^● /, ''))}${o.key === atual ? ' (atual)' : ''} (${o.n})</option>`).join('');
 
-  const ms = (state.melhorias || []).filter(m => !ehMesclada(m) && SPRINTPO.naSprint(m, _esSprint));
+  /* ═══ ENTREGUE SO APOS O PM/PO, NA SPRINT DA IDA PARA VALIDACAO (05/11/2026)
+     "So conta entregue apos aprovacao PM/PO, para sprint deve considerar a
+      partir do momento que o dev coloca em validacao da area ou validacao
+      PM/PO. Ajustar em todas visoes." A regra mora em `SPRINTPO.situacaoNaSprint`
+     (a mesma do placar): entregue = concluida com a 1a ida para validacao
+     nesta sprint; aguardando = foi para validacao nesta sprint e o PM/PO ainda
+     nao aprovou. A que foi para validacao numa sprint ANTERIOR e entrega de
+     la, e sai daqui. Sprint anterior a regra: a conta antiga. */
+  const ferEs = state.feriados || [];
+  const regraEs = !!(SPRINTPO.sprintNoRegimeDeEntrega && SPRINTPO.sprintNoRegimeDeEntrega(_esSprint, ferEs));
+  const sitEs = m => {
+    const sk = statusKey(m);
+    if (sk === 'negada') return 'negada';
+    if (!regraEs) return sk === 'concluido' ? 'entregue' : 'aberta';
+    const s = SPRINTPO.situacaoNaSprint(m, _esSprint, sk, ferEs);
+    if (s === 'entregue' || s === 'aguardando') return s;
+    if (s === 'em_curso') return 'aberta';
+    return s === 'saiu' && SPRINTPO.naSprint(m, _esSprint) ? 'aberta' : null;
+  };
+  const ms = (state.melhorias || []).filter(m => {
+    if (ehMesclada(m)) return false;
+    if (!regraEs) return SPRINTPO.naSprint(m, _esSprint);
+    const st = sitEs(m);
+    return st === 'negada' ? SPRINTPO.naSprint(m, _esSprint) : !!st;
+  });
   document.getElementById('es-conta').textContent = ms.length;
 
   /* ═══ EM LISTA, NO PADRAO DA ABA MELHORIAS (03/11/2026) ══════════════════
@@ -5267,11 +5291,11 @@ function renderEntregasSprint() {
      o cartao de linha de sempre, e em cada demanda o selo do PROJETO de que
      ela faz parte. O resumo da sprint e uma linha de texto. */
   const hoje = PRAZO.hojeISO();
-  const feitas = ms.filter(m => statusKey(m) === 'concluido').length;
+  const feitas = ms.filter(m => sitEs(m) === 'entregue').length;
   const negadas = ms.filter(m => statusKey(m) === 'negada').length;
   const pts = ms.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
-  const ptsFeitos = ms.filter(m => statusKey(m) === 'concluido').reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
-  const aberta = m => !['concluido', 'negada'].includes(statusKey(m));
+  const ptsFeitos = ms.filter(m => sitEs(m) === 'entregue').reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+  const aberta = m => sitEs(m) === 'aberta';
   const vencidas = ms.filter(m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) &&
                                   m.entrega_usuario < hoje).length;
   const comProj = ms.filter(m => m.projeto_id && (state.projetos || []).some(p => p.id === m.projeto_id)).length;
@@ -5284,7 +5308,8 @@ function renderEntregasSprint() {
      Embaixo, o que falta por pessoa — o "faltando no nome". */
   const temDono = m => !!String(m.dev || '').trim();
   const vencida = m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje;
-  const lEntregues = ms.filter(m => statusKey(m) === 'concluido');
+  const lEntregues = ms.filter(m => sitEs(m) === 'entregue');
+  const lAguardando = ms.filter(m => sitEs(m) === 'aguardando');
   const lFaltaCom = ms.filter(m => aberta(m) && temDono(m));
   const lFaltaSem = ms.filter(m => aberta(m) && !temDono(m));
   const validas = ms.length - negadas;
@@ -5301,6 +5326,9 @@ function renderEntregasSprint() {
     kpiEs('todas', ms.length, 'Na sprint', `${ms.length} task(s)` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto`) +
     kpiEs('entregues', lEntregues.length, 'Entregues', `${lEntregues.length} de ${validas} task(s) · ${pctEnt}%`, 'var(--green)',
           `<div class="es-barra"><i style="width:${pctEnt}%"></i></div>`) +
+    (regraEs ? kpiEs('aguardando', lAguardando.length, 'Aguardando aprovação',
+          lAguardando.length ? `${pctDe(lAguardando.length)}% · foram para validação nesta sprint` : 'nada parado na validação',
+          lAguardando.length ? 'var(--blue-tx,#8AB4F8)' : '') : '') +
     kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${pctDe(lFaltaCom.length)}% das tasks` +
           (vencCom ? ` · <span style="color:var(--red-tx,#F9A0A0);font-weight:600">${vencCom} com entrega vencida</span>` : ''),
           lFaltaCom.length ? 'var(--amber-tx,#FFC470)' : '') +
@@ -5332,7 +5360,8 @@ function renderEntregasSprint() {
   }
   if (_esPessoa) {
     const lp = ms.filter(daPessoa);
-    const ent = lp.filter(m => statusKey(m) === 'concluido').length;
+    const ent = lp.filter(m => sitEs(m) === 'entregue').length;
+    const agu = lp.filter(m => sitEs(m) === 'aguardando').length;
     const neg = lp.filter(m => statusKey(m) === 'negada').length;
     const falta = lp.filter(aberta);
     const venc = falta.filter(vencida).length;
@@ -5342,6 +5371,7 @@ function renderEntregasSprint() {
     resumoPessoa.innerHTML = `<span>👤 <b>${esc(_esPessoa)}</b></span>` +
       `<span><b>${lp.length}</b> na sprint</span>` +
       `<span style="color:var(--green)"><b style="color:inherit">${ent}</b> entregue(s)${val ? ' · ' + Math.round(ent / val * 100) + '%' : ''}</span>` +
+      (agu ? `<span><b>${agu}</b> aguardando aprovação</span>` : '') +
       `<span style="color:var(--amber-tx,#FFC470)"><b style="color:inherit">${falta.length}</b> faltando</span>` +
       (venc ? `<span style="color:var(--red-tx,#F9A0A0)"><b style="color:inherit">${venc}</b> com entrega vencida</span>` : '') +
       (neg ? `<span>${neg} negada(s)</span>` : '') +
@@ -5356,7 +5386,8 @@ function renderEntregasSprint() {
     box.innerHTML = '<div class="empty">Nenhuma demanda nesta sprint.</div>';
     return;
   }
-  const filtrada = (_esFiltro === 'entregues' ? lEntregues : _esFiltro === 'falta_com' ? lFaltaCom
+  const filtrada = (_esFiltro === 'entregues' ? lEntregues : _esFiltro === 'aguardando' ? lAguardando
+                 : _esFiltro === 'falta_com' ? lFaltaCom
                  : _esFiltro === 'falta_sem' ? lFaltaSem : ms).filter(m => !_esPessoa || daPessoa(m));
   if (!filtrada.length) {
     box.innerHTML = '<div class="empty">Nada nesta situação.</div>';
