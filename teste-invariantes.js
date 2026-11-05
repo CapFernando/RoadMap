@@ -26524,6 +26524,691 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(!/linkAdmin\(/.test(CFG) && !/admin\.html/.test(CFG), 'Configuracoes nao manda mais para o admin (temas e usuarios gravam daqui)');
   })();
 
+  sec('App AXIS: projetos, proposta do dev, recuperar senha e criar conta no app');
+
+  /* NOVO PROJETO, EDITAR, APROVAR, RECUSAR, EXCLUIR E PROPOR deixaram de abrir
+     o admin.html e o dev.html: as regras foram copiadas para
+     axis-tela-projetos.js (`pjRegra*`), e o recuperar senha e o criar conta da
+     tela de login, de senha.js e do dev.html para axis-tela-conta.js
+     (`conta*`). Aqui as originais rodam com um `document` de mentira, ao lado
+     das do app, caso a caso: uma divergencia e o app gravando um projeto, ou
+     mandando um corpo, que a tela antiga nao mandaria. */
+  (() => {
+    const PJT = lerTela('axis-tela-projetos.js');
+    const CT = lerTela('axis-tela-conta.js');
+    const SNx = lerTela('senha.js');
+    const tira = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const linhaDe = (src, re) => (src.match(re) || [''])[0];
+    const el = (v) => ({ value: v == null ? '' : v, textContent: '', innerHTML: '', style: {}, disabled: false, focus() {}, classList: { add() {}, remove() {} } });
+    const docDe = (vals) => ({ getElementById: id => (vals[id] = vals[id] || el('')), querySelector: () => el('') });
+
+    // ── As regras do app, recortadas como a suite recorta as do admin ───
+    const pjSrc = [linhaDe(PJT, /^ {2}var PJ_STATUS = .*$/m), corpo(PJT, 'function pjRegraSalvar(lista, id, f, c) {'),
+      corpo(PJT, 'function pjRegraAprovar(lista, id, c) {'), corpo(PJT, 'function pjRegraRecusar(lista, id, motivo, c, ms) {'),
+      corpo(PJT, 'function pjRegraExcluir(lista, id, ms) {'), corpo(PJT, 'function pjRegraPropor(f) {')];
+    ok(pjSrc.every(Boolean), 'as regras de projeto do app foram isoladas (salvar, aprovar, recusar, excluir, propor)');
+    const PJ = pjSrc.every(Boolean) ? new Function(pjSrc.join('\n') + '\nreturn { pjRegraSalvar, pjRegraAprovar, pjRegraRecusar, pjRegraExcluir, pjRegraPropor };')() : null;
+
+    // As consts do admin que as funcoes de projeto leem.
+    const PJ_CONSTS = [/^const pjAprovado {2}= .*$/m, /^const pjPendente {2}= .*$/m, /^const pjRecusado {2}= .*$/m,
+      /^const pjLista = .*$/m, /^const pjPorId = .*$/m, /^const pjDemandas = .*$/m].map(re => linhaDe(ADMIN, re)).join('\n');
+    const STUBS = 'let _pendingEdits = false; const _dirtyMelhoriaIds = new Set(); const _deletedIds = new Set();\n' +
+      'const saveViaProxy = async () => true; const renderProjetos = () => {}; const renderAll = () => {}; const pjRenderDemandas = () => {};\n' +
+      'const pjAprovRender = () => {}; const avisaFalha = () => {}; const closeModal = () => {};\n';
+    const admPj = (state, vals, eu, extra) => new Function('state', 'document', '_eu', 'toast', 'pedirTexto', 'confirmar', 'extra',
+      PJ_CONSTS + '\n' + STUBS + 'let _pjAnexos = (extra && extra.anexos) || [];\n' + ['async function pjSalvar() {', 'async function pjAprovar() {',
+        'async function pjAprovSalvar(p, msg) {', 'async function pjRecusar() {', 'async function pjExcluir() {'].map(a => corpo(ADMIN, a)).join('\n') +
+      '\nreturn { pjSalvar, pjAprovar, pjRecusar, pjExcluir };')(
+      state, docDe(vals), eu, (m, t) => (extra.toasts = extra.toasts || []).push((t || '') + ':' + m),
+      async () => extra.motivo, async () => true, extra);
+    const TEMPO = ['criado_em', 'aprovado_em', 'atualizado_em'];
+    const mascara = (ps) => JSON.stringify((ps || []).map(p => { const o = Object.assign({}, p); TEMPO.forEach(k => { if (o[k]) o[k] = 'T'; }); if (/^prj-/.test(o.id)) o.id = 'ID'; return o; }));
+    const ctxDe = (eu) => ({ quem: (eu && (eu.nome || eu.login)) || '', agora: 'T', novoId: 'ID' });
+    const baseP = () => [{ id: 'p1', codigo: 'EP-001', nome: 'Um', status: 'planejado', aprovacao: 'pendente', solicitado_por: 'Ana', justificativa: 'j', anexos: [{ nome: 'x' }] },
+                         { id: 'p2', codigo: 'EP-002', nome: 'Dois', status: 'em_andamento' }];
+    const baseM = () => [{ id: 'm1', projeto_id: 'p1' }, { id: 'm2', projeto_id: 'p2' }, { id: 'm3', projeto_id: 'p1' }, { id: 'm4', projeto_id: '' }];
+
+    if (PJ && PJ_CONSTS.split('\n').every(Boolean)) {
+      pendentes.push((async () => {
+        // ── pjSalvar: novo e editar ──────────────────────────────────────
+        const casos = [];
+        for (const eu of [{ nome: 'Paula PO' }, { login: 'paula' }, null]) {
+          for (const f of [{ nome: '' }, { nome: '   ' }, { nome: ' Cobrança ', descricao: '  d ', status: 'concluido', responsavel: ' Rui ', inicio: '', fim: '2026-12-01' },
+                           { nome: 'X', status: 'pausado', inicio: '2026-11-01', fim: '', anexos: [{ nome: 'a.pdf', chave: 'k' }] }]) {
+            for (const id of ['', 'p1', 'p2']) casos.push([eu, f, id]);
+          }
+        }
+        const divS = [];
+        for (const [eu, f, id] of casos) {
+          const st = { projetos: baseP(), melhorias: baseM() };
+          const extra = { anexos: f.anexos || (id ? (baseP().find(p => p.id === id).anexos || []) : []) };
+          await admPj(st, { 'pj-id': el(id), 'pj-nome': el(f.nome), 'pj-desc': el(f.descricao), 'pj-status': el(f.status || 'planejado'),
+                            'pj-responsavel': el(f.responsavel), 'pj-inicio': el(f.inicio), 'pj-fim': el(f.fim) }, eu, extra).pjSalvar();
+          const r = PJ.pjRegraSalvar(baseP(), id, Object.assign({ status: 'planejado' }, f, { anexos: extra.anexos }), ctxDe(eu));
+          const errAdm = (extra.toasts || []).find(t => /^err:/.test(t));
+          const a = errAdm ? 'erro ' + errAdm.slice(4) : mascara(st.projetos);
+          const b = r.ok ? mascara(r.projetos) : 'erro ' + r.erro;
+          if (a !== b) divS.push(JSON.stringify([eu, f.nome, id]) + ' admin=' + a.slice(0, 160) + ' app=' + b.slice(0, 160));
+        }
+        ok(divS.length === 0, 'salvar projeto no app = o pjSalvar do admin (novo nasce aprovado por quem criou, sem EP-; editar so troca os campos do formulario) (' + casos.length + ' casos)', divS.slice(0, 3).join(' | '));
+
+        // ── pjAprovar, pjRecusar, pjExcluir ──────────────────────────────
+        const divA = [];
+        for (const eu of [{ nome: 'Paula PO' }, { login: 'paula' }, null]) {
+          for (const id of ['p1', 'p2']) {
+            const st = { projetos: baseP(), melhorias: baseM() };
+            await admPj(st, { 'pj-id': el(id) }, eu, {}).pjAprovar();
+            const r = PJ.pjRegraAprovar(baseP(), id, ctxDe(eu));
+            if (!r.ok || mascara(st.projetos) !== mascara(r.projetos)) divA.push('aprovar ' + id + ' ' + JSON.stringify(eu));
+            for (const motivo of ['  Fora do escopo ', '   ', '']) {
+              const st2 = { projetos: baseP(), melhorias: baseM() };
+              const ex = { motivo };
+              await admPj(st2, { 'pj-id': el(id) }, eu, ex).pjRecusar();
+              const rr = PJ.pjRegraRecusar(baseP(), id, motivo, ctxDe(eu), baseM());
+              const errAdm = (ex.toasts || []).find(t => /^err:/.test(t));
+              if (errAdm || !rr.ok) {
+                if (!(errAdm && !rr.ok && errAdm.slice(4) === rr.erro && mascara(st2.projetos) === mascara(baseP()))) divA.push('recusar ' + JSON.stringify(motivo) + ' ' + errAdm + ' / ' + rr.erro);
+                continue;
+              }
+              const soltasAdm = st2.melhorias.filter(m => baseM().find(x => x.id === m.id).projeto_id && !m.projeto_id).map(m => m.id).join();
+              if (mascara(st2.projetos) !== mascara(rr.projetos) || soltasAdm !== rr.soltar.join()) divA.push('recusar ' + id + ' ' + soltasAdm + '/' + rr.soltar.join());
+            }
+            const st3 = { projetos: baseP(), melhorias: baseM() };
+            await admPj(st3, { 'pj-id': el(id) }, eu, {}).pjExcluir();
+            const re = PJ.pjRegraExcluir(baseP(), id, baseM());
+            const soltas3 = st3.melhorias.filter(m => baseM().find(x => x.id === m.id).projeto_id && !m.projeto_id).map(m => m.id).join();
+            if (JSON.stringify(st3.projetos) !== JSON.stringify(re.projetos) || soltas3 !== re.soltar.join()) divA.push('excluir ' + id);
+          }
+        }
+        ok(divA.length === 0, 'aprovar, recusar (motivo obrigatorio, solta as demandas) e excluir (solta as demandas) no app = pjAprovar, pjRecusar e pjExcluir do admin', divA.slice(0, 4).join(' | '));
+        ok(!PJ.pjRegraAprovar(baseP(), 'px', ctxDe(null)).ok && !PJ.pjRegraSalvar(baseP(), 'px', { nome: 'a' }, ctxDe(null)).ok,
+           'projeto excluido por outra pessoa com a tela aberta: o app para e avisa, em vez de recriar com outro id');
+
+        // ── dpSalvar (dev.html): a proposta pela rota projeto-novo ─────────
+        const dpSrc = corpo(DEV, 'async function dpSalvar() {');
+        ok(!!dpSrc, 'dpSalvar existe no dev.html para ser comparado');
+        if (dpSrc) {
+          const divP = [];
+          for (const f of [{ nome: '' }, { nome: ' ab ' }, { nome: 'abc' }, { nome: '  Régua nova  ', descricao: ' entrega ', justificativa: ' dói ' }]) {
+            const vals = { 'dp-nome': el(f.nome), 'dp-desc': el(f.descricao), 'dp-just': el(f.justificativa) };
+            let corpoAdm = null;
+            await new Function('document', 'fetch', 'const ADMIN_PROXY_URL = "u"; const credDev = () => ({ token: "t" }); const currentDev = "Ana";\n' +
+              'const closeModal = () => {}; const toast = () => {}; const loadData = async () => {}; const renderProjetosDev = () => {};\n' + dpSrc + '\nreturn dpSalvar;')(
+              docDe(vals), async (u, o) => { corpoAdm = JSON.parse(o.body); return { ok: true, json: async () => ({}) }; })();
+            const r = PJ.pjRegraPropor(Object.assign({ dev: 'Ana' }, f));
+            const a = corpoAdm ? JSON.stringify(Object.assign({}, corpoAdm, { action: undefined, token: undefined })) : 'erro ' + vals['dp-erro'].textContent;
+            const b = r.ok ? JSON.stringify(Object.assign({ action: undefined }, r.corpo, { token: undefined })) : 'erro ' + r.erro;
+            if (a !== b) divP.push(JSON.stringify(f.nome) + ' admin=' + a + ' app=' + b);
+            if (corpoAdm && corpoAdm.action !== 'projeto-novo') divP.push('rota ' + corpoAdm.action);
+          }
+          ok(divP.length === 0, 'propor projeto no app = o dpSalvar do dev.html (nome de 3 letras ou mais, o mesmo corpo da rota projeto-novo)', divP.join(' | '));
+        }
+      })());
+    }
+    const PJC = semComentario(PJT);
+    ok(!/linkAdmin\(/.test(PJC) && !/admin\.html|dev\.html/.test(PJC), 'Projetos nao manda mais para o admin.html nem para o dev.html');
+    ok(/H\.api\('projeto-novo', pr\.corpo\)/.test(PJC) && /raiz: \{ projetos: r\.projetos \}/.test(PJC) && /await baseFresca\(\)/.test(PJC),
+       'o dev propoe pela rota projeto-novo; o PM/PO grava a lista de projetos sobre a base fresca, pelo publish (H.gravar)');
+    ok(/data-pj-aprovar/.test(PJC) && /data-pj-recusar/.test(PJC) && /function faixaAprovacao\(p, ctx\)/.test(PJC),
+       'o detalhe do projeto pendente oferece aprovar e recusar ao PM/PO, e diz ao dev que aguarda validacao');
+
+    // ── Recuperar senha e criar conta (senha.js, dev.html) ───────────────
+    const ctSrc = [linhaDe(CT, /^ {2}var DOMINIO = .*$/m), linhaDe(CT, /^ {2}var SENHA_MIN = .*$/m), corpo(CT, 'function contaRegraEmail(email) {'),
+      corpo(CT, 'function contaRegraNova(nova, conf) {'), corpo(CT, 'function contaJanela(j, agora) {'), corpo(CT, 'function contaForca(s) {'),
+      corpo(CT, 'function contaRegraCadastro(nome, email, senha) {')];
+    ok(ctSrc.every(Boolean), 'as regras da tela de entrar do app foram isoladas (e-mail, senha nova, janela, forca, cadastro)');
+    const CTR = ctSrc.every(Boolean) ? new Function(ctSrc.join('\n') + '\nreturn { contaRegraEmail, contaRegraNova, contaJanela, contaForca, contaRegraCadastro };')() : null;
+    const recorteOnclick = (sel) => { const c = corpo(SNx, "ov.querySelector('" + sel + "').onclick = async function () {"); return c ? c.slice(c.indexOf('async function')) : null; };
+    const pedir = recorteOnclick('#rc-pedir'), salvar = recorteOnclick('#rc-salvar');
+    ok(!!(pedir && salvar), 'os dois passos do recuperar senha (pedir e definir) foram isolados do senha.js');
+    if (CTR && pedir && salvar) {
+      const ovDe = (vals) => ({ querySelector: (s) => (vals[s] = vals[s] || el('')) });
+      const rodaSn = async (src, vals) => {
+        const avisos = [], corpos = [];
+        const f = new Function('ov', 'aviso', 'fetch', 'setInterval', 'clearInterval', 'setTimeout', 'e1', 'e2', 'tique', 'relogio', 'fecha',
+          'var URL_API = "u", MIN = 8, tk = "TK", fim = 0, timer = null;\nreturn ' + src + ';')(
+          ovDe(vals), (t) => avisos.push(t), async (u, o) => { corpos.push(JSON.parse(o.body)); return { ok: true, json: async () => ({ token: 'T', minutos: 5 }) }; },
+          () => 1, () => {}, () => {}, el(''), el(''), () => {}, el(''), () => {});
+        await f();
+        return { aviso: avisos[0] || '', corpo: corpos[0] || null };
+      };
+      pendentes.push((async () => {
+        const divE = [];
+        for (const e of ['', '   ', 'ana@gmail.com', ' Ana.Silva@AudaxCapitalSA.com.br ', 'ana@audaxcapitalsa.com.br', 'x@audaxcapitalsa.com.br.evil']) {
+          const s = await rodaSn(pedir, { '#rc-email': el(e) });
+          const r = CTR.contaRegraEmail(e);
+          const a = s.corpo ? 'manda ' + JSON.stringify(s.corpo) : 'erro ' + s.aviso;
+          const b = r.ok ? 'manda ' + JSON.stringify({ action: 'senha-recuperar', email: r.email }) : 'erro ' + r.erro;
+          if (a !== b) divE.push(JSON.stringify(e) + ' senha.js=' + a + ' app=' + b);
+        }
+        ok(divE.length === 0, 'pedir a recuperacao no app = o abrirRecuperarSenha do senha.js (e-mail obrigatorio, do dominio, aparado e minusculo)', divE.join(' | '));
+        const divN = [];
+        for (const [n, c] of [['', ''], ['1234567', '1234567'], ['12345678', '1234567'], ['12345678', '12345678'], ['frase longa', 'frase longa ']]) {
+          const s = await rodaSn(salvar, { '#rc-nova': el(n), '#rc-conf': el(c) });
+          const r = CTR.contaRegraNova(n, c);
+          const a = s.corpo ? 'manda ' + JSON.stringify(s.corpo) : 'erro ' + tira(s.aviso);
+          const b = r.ok ? 'manda ' + JSON.stringify({ action: 'senha-redefinir', token: 'TK', senhaNova: n }) : 'erro ' + tira(r.erro);
+          if (a !== b) divN.push(JSON.stringify([n, c]) + ' senha.js=' + a + ' app=' + b);
+        }
+        ok(divN.length === 0, 'definir a senha nova no app = o do senha.js (8 caracteres, confirmacao igual, a mesma frase sem contar acento)', divN.join(' | '));
+      })());
+      const atrib = SNx.slice(SNx.indexOf('tk = j.token;'), SNx.indexOf('aviso(\'Conta encontrada\''));
+      const divJ = [];
+      for (const j of [{ minutos: 5 }, { minutos: 15 }, { minutos: '10' }, { minutos: 0 }, { minutos: -3 }, {}, { expira_em: new Date(Date.now() - 3600e3).toISOString() }]) {
+        const a = new Function('j', 'Date', 'var tk = "", fim = 0;\n' + atrib + '\nreturn fim;')(j, { now: () => 1e12 });
+        const b = CTR.contaJanela(j, 1e12);
+        if (a !== b) divJ.push(JSON.stringify(j) + ' ' + a + '/' + b);
+      }
+      ok(atrib.trim() && divJ.length === 0, 'a janela do cronometro do app = a do senha.js: `minutos` do servidor contado do relogio local, nunca expira_em menos a hora local', divJ.join(' | '));
+      const fc = corpo(SNx, 'function forca(s) {');
+      const forcaSn = fc ? new Function('var MIN = 8;\n' + fc + '\nreturn forca;')() : null;
+      const amostras = ['', 'abc', 'abcdefgh', 'abcdefghij', 'Abcdefgh1', 'abcdefghijklmn', 'abc!1234'];
+      ok(forcaSn && amostras.every(s => forcaSn(s).txt === CTR.contaForca(s).txt), 'a dica de forca da senha no app = a do senha.js',
+         forcaSn ? amostras.filter(s => forcaSn(s).txt !== CTR.contaForca(s).txt).join(',') : 'forca nao achada');
+
+      // ── fazerCadastro (dev.html) ──────────────────────────────────────
+      const fcSrc = corpo(DEV, 'async function fazerCadastro() {');
+      const domDev = linhaDe(DEV, /^const EMAIL_DOMINIO = .*$/m);
+      ok(!!(fcSrc && domDev), 'fazerCadastro existe no dev.html para ser comparado');
+      if (fcSrc && domDev) {
+        pendentes.push((async () => {
+          const divC = [];
+          for (const v of [{ nome: '', email: 'a@audaxcapitalsa.com.br', senha: '12345678' }, { nome: ' Al ', email: 'a@audaxcapitalsa.com.br', senha: '12345678' },
+                           { nome: 'Ana', email: 'a@gmail.com', senha: '12345678' }, { nome: 'Ana', email: '@audaxcapitalsa.com.br', senha: '12345678' },
+                           { nome: 'Ana', email: ' A@AUDAXCAPITALSA.COM.BR ', senha: '1234567' }, { nome: 'Ana', email: 'a@audaxcapitalsa.com.br', senha: '1' },
+                           { nome: '  Ana Lima ', email: ' Ana@AudaxCapitalSA.com.br', senha: 'uma senha boa' }]) {
+            const falhas = [];
+            let corpoDev = null;
+            await new Function('document', 'fetch', 'cadLimpaErro', 'cadFalha', 'const ADMIN_PROXY_URL = "u";\n' + domDev + '\n' + fcSrc + '\nreturn fazerCadastro;')(
+              docDe({ 'cad-nome': el(v.nome), 'cad-email': el(v.email), 'cad-senha': el(v.senha) }),
+              async (u, o) => { corpoDev = JSON.parse(o.body); return { ok: true, json: async () => ({}) }; },
+              () => {}, (campo, msg) => falhas.push(campo.replace('cad-', '') + ': ' + msg))();
+            const r = CTR.contaRegraCadastro(v.nome, v.email, v.senha);
+            const a = corpoDev ? 'manda ' + JSON.stringify(corpoDev) : 'erro ' + falhas[0];
+            const b = r.ok ? 'manda ' + JSON.stringify(Object.assign({ action: 'cadastro' }, r.corpo)) : 'erro ' + r.campo + ': ' + r.erro;
+            if (a !== b) divC.push(JSON.stringify(v) + ' dev=' + a + ' app=' + b);
+          }
+          ok(divC.length === 0, 'criar conta no login do app = o fazerCadastro do dev.html (o mesmo campo acusado, a mesma frase, o mesmo corpo da rota cadastro)', divC.join(' | '));
+        })());
+      }
+    }
+    const CTC = semComentario(CT), APC = semComentario(lerTela('axis-app.js'));
+    ok(/H\.api\('senha-recuperar'/.test(CTC) && /H\.api\('senha-redefinir'/.test(CTC) && /H\.api\('cadastro'/.test(CTC) && /H\.api\('recuperar'/.test(CTC),
+       'a tela de entrar do app usa as rotas de sempre: senha-recuperar, senha-redefinir, cadastro e recuperar (conta de admin)');
+    ok(!/Math\.round\(\(new Date\(j\.expira_em\)/.test(CTC) && /clearInterval/.test(CTC) && !/\.disabled = true;[^\n]*resta/.test(CTC),
+       'o cronometro do app conta do relogio local e avisa, sem trancar o botao');
+    ok(/data-lg="recuperar"/.test(APC) && /data-lg="cadastro"/.test(APC) && /AXIS_CONTA\.passo/.test(APC) && !/Peça a troca em/.test(APC),
+       'o login do app oferece "Esqueci a senha" e "Criar minha conta" ali mesmo, sem mandar para o admin ou o dev.html');
+    const usamEditar = fs.readdirSync('.').filter(f => /^axis-.*\.js$/.test(f) && /hrefEditar/.test(lerTela(f)));
+    ok(usamEditar.length === 0 && !/admin\.html#novo|dev\.html#novo/.test(APC),
+       'sem hrefEditar nem o "+ Novo" para admin.html#novo e dev.html#novo: o formulario e o do app', usamEditar.join(', '));
+  })();
+
+  sec('App AXIS: o ciclo da sprint (iniciar, repassar em lote, fechar) e o que sobrou no gantt');
+
+  /* O CICLO DA SPRINT SAIU DO ADMIN. Iniciar (`sprintIniciar`), repassar em
+     lote (`sprintLoteCandidatas` + `sprintLoteAplicar`) e fechar
+     (`sprintFecharAbrir` + `sprintFecharAplicar`) rodam aqui lado a lado com
+     as `ciclo*`/`lote*` de axis-tela-sprints.js, na mesma base e com o relogio
+     fixo numa terca (10/11/2026): a S1-11 terminou e espera fechamento, a
+     S2-11 esta montando. O admin muta o `state`; o app devolve patch + raiz,
+     e o que se compara e a base que cada um entregaria ao servidor
+     (GRAVACAO.aplicar sobre a base de antes). Juntar e soltar do gantt.html
+     contra as regras `juntar`/`soltar` do axis-acoes.js. */
+  (() => {
+    const SP = require('./sprint.js');
+    const ET = require('./etapa-demanda.js');
+    const GR = require('./gravacao.js');
+    const OKB = require('./ordem-kanban.js');
+    const EUm = require('./entrega-usuario.js');
+    const AC = require('./axis-acoes.js');
+    const SPT = lerTela('axis-tela-sprints.js');
+    const PLT = lerTela('axis-tela-planejamento.js');
+    const FRM = lerTela('axis-form-demanda.js');
+    const HOJE = '2026-11-10';
+    const PRAZO_ = Object.assign({}, PRZM, { hojeISO: () => HOJE });
+    const statusKey = m => ET.gravada(m, HOJE);
+    const pausada = m => ET.pausada(m);
+    const copia = (x) => JSON.parse(JSON.stringify(x));
+    const QUEM = 'Paula PO';
+    const linhaAdm = (re) => (ADMIN.match(re) || [''])[0];
+
+    const nomes = ['function cicloCopia(base) {', 'function cicloPatch(antes, depois) {', 'function cicloTextoIniciar(SPm, D, r, hoje, opts) {',
+      'function cicloIniciar(SPm, base, r, quem, hoje, opts) {', 'function cicloRepassar(SPm, base, ids, alvo, quem, hoje) {',
+      'function cicloDecisoesIniciais(SPm, D, r, etapaDe, pausada) {', 'function cicloFaltam(SPm, D, r, etapaDe, dec) {',
+      'function cicloFechar(SPm, base, r, quem, hoje, decisoes, etapaDe) {', 'function loteGrupos(SPm, gravada, efetiva, pausada, hoje, feriados) {',
+      'function loteCandidatas(lista, f, o) {'];
+    const srcs = nomes.map(n => corpo(SPT, n));
+    ok(srcs.every(Boolean), 'as funcoes puras do ciclo existem em axis-tela-sprints.js para serem comparadas', nomes.filter((n, i) => !srcs[i]).join(', '));
+    if (!srcs.every(Boolean)) return;
+    const APP = new Function(srcs.join('\n') + '\nreturn { cicloCopia, cicloPatch, cicloTextoIniciar, cicloIniciar, cicloRepassar, cicloDecisoesIniciais, cicloFaltam, cicloFechar, loteGrupos, loteCandidatas };')();
+
+    // ── A amostra ─────────────────────────────────────────────────────────
+    const ETS = ['backlog', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'];
+    const SPRS = ['S5-10-2026', 'S1-11-2026', 'S1-11-2026', 'S2-11-2026', '', 'S3-11-2026', '', 'S1-11-2026'];
+    const DEVS = ['Ana', '', 'Bia / Caio', 'Davi', 'Ana', ''];
+    const base = () => {
+      const ms = [];
+      for (let i = 0; i < 48; i++) {
+        const sp = SPRS[i % SPRS.length], st = ETS[(i * 3) % ETS.length];
+        const m = { id: 'm' + i, codigo: 'AX-' + (500 + i), titulo: ['Cobrança', 'Régua', 'Portal', 'Cadastro'][i % 4] + ' ' + i,
+          status_planejamento: st, dev: DEVS[i % DEVS.length], prioridade: ['alta', 'media', 'baixa', ''][i % 4],
+          inicio: i % 3 ? '2026-10-' + String(10 + (i % 15)) : '', entrega: i % 5 ? '2026-11-' + String(1 + (i % 20)).padStart(2, '0') : '',
+          poker_pontos: i % 3 ? (i % 8) + 1 : null, sprint_po: sp };
+        if (sp) {
+          m.sprint_po_em = '2026-10-30'; m.sprint_po_por = 'Fernando';
+          m.sprint_po_historico = i % 7 === 2 ? [{ sprint: 'S4-10-2026', em: '2026-10-20', por: 'F' }, { sprint: sp, em: '2026-10-30', por: 'F' }] : [{ sprint: sp, em: '2026-10-30', por: 'F' }];
+        }
+        if (i % 9 === 4 || i % 16 === 9) { m.pausado_em = '2026-11-03'; m.pausa_motivo = i === 9 || i === 13 ? 'aguardando o banco' : ''; }
+        if (i === 40) { m.oculto = true; }
+        if (i === 41) { m.mesclado_em = 'm1'; }
+        // Etapas legadas: `deploy` grava como concluida e `atrasado` como em andamento (ETAPA.gravada).
+        if (i === 42) m.status_planejamento = 'deploy';
+        if (i === 43) { m.status_planejamento = 'atrasado'; m.sprint_po = 'S1-11-2026'; }
+        ms.push(m);
+      }
+      return { melhorias: ms, feriados: [], atualizado_em: 'x',
+        sprints: [{ rotulo: 'S5-10-2026', em: '2026-11-02', por: 'Fernando', carry: [] }, { rotulo: 'S1-11-2026', iniciada_em: '2026-11-03', iniciada_por: 'Fernando' }] };
+    };
+    const vista = (b) => JSON.stringify({ m: b.melhorias, s: b.sprints });
+    const comApp = (b, c) => GR.aplicar(b, c.patch, c.raiz);
+
+    // ── Iniciar (sprintIniciar) ───────────────────────────────────────────
+    const iniSrc = corpo(ADMIN, 'async function sprintIniciar() {');
+    ok(!!iniSrc, 'sprintIniciar existe no admin para ser comparado');
+    if (iniSrc) {
+      const iniAdm = (state, r, saida) => new Function('state', 'SPRINTPO', 'PRAZO', 'saida', 'statusKey',
+        'const window = { PRAZO: PRAZO }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin" }; let _sprSel = saida.r;\n' +
+        'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
+        'const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
+        'const confirmar = async (o) => { saida.conf = o; return true; };\n' + iniSrc + '\nreturn sprintIniciar;')(state, SP, PRAZO_, Object.assign(saida, { r }), statusKey)();
+      pendentes.push((async () => {
+        const div = [];
+        for (const r of ['S2-11-2026', 'S3-11-2026', 'S1-11-2026', 'S5-10-2026', 'lixo']) {
+          const st = base(), saida = {};
+          await iniAdm(st, r, saida);
+          const opts = { prazo: PRAZO_, etapaDe: statusKey };
+          const t = APP.cicloTextoIniciar(SP, base(), r, HOJE, opts);
+          const c = APP.cicloIniciar(SP, base(), r, QUEM, HOJE, opts);
+          const A = saida.tipo === 'err' ? 'RECUSA ' + saida.toast : vista(st) + ' | ' + String(saida.toast).replace(/^▶ /, '');
+          const B = c.ok ? vista(comApp(base(), c)) + ' | ' + c.msg : 'RECUSA ' + c.erro;
+          if (A !== B) div.push(r + ': ' + A.slice(-160) + ' // ' + B.slice(-160));
+          if (saida.conf && (saida.conf.texto !== t.texto || saida.conf.titulo.replace(/^▶ /, '') !== t.titulo)) div.push(r + ' pergunta: ' + JSON.stringify(saida.conf) + ' // ' + JSON.stringify(t));
+        }
+        ok(div.length === 0, 'iniciar no app = o sprintIniciar do admin: a mesma pergunta, as vencidas prioritarias, as pausadas, o registro em `sprints` e o aviso (5 sprints, inclusive em curso, fechada e invalida)', div.slice(0, 2).join(' | '));
+        const c = APP.cicloIniciar(SP, base(), 'S2-11-2026', QUEM, HOJE, { prazo: PRAZO_, etapaDe: statusKey });
+        const reg = (c.raiz.sprints || []).filter(x => x.rotulo === 'S2-11-2026')[0] || {};
+        ok(c.ok && reg.iniciada_em === HOJE && Object.keys(c.patch).length > 0 && c.raiz.sprints.length === 3 &&
+           Object.keys(c.patch).every(id => Object.keys(c.patch[id]).every(k => ['sprint_po', 'sprint_po_em', 'sprint_po_por', 'sprint_po_historico', 'entrega_usuario', 'prioridade', 'sprint_prioritaria'].includes(k))),
+           'o patch do inicio leva so os campos de sprint e prioridade das demandas puxadas, e a raiz a lista `sprints` com o registro novo', JSON.stringify(reg));
+      })());
+    }
+
+    // ── Repassar em lote: as candidatas e a gravacao ──────────────────────
+    const candSrc = corpo(ADMIN, 'function sprintLoteCandidatas() {');
+    const aplSrc = corpo(ADMIN, 'async function sprintLoteAplicar(sprint) {');
+    const gruposSrc = linhaAdm(/^const LOTE_GRUPOS = \[[\s\S]*?\n\];/m);
+    ok(!!(candSrc && aplSrc && gruposSrc), 'sprintLoteCandidatas, sprintLoteAplicar e LOTE_GRUPOS existem no admin para serem comparados');
+    if (candSrc && aplSrc && gruposSrc) {
+      const loteAdm = (state, f, saida) => new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'ORDEMKB', 'ENTREGAUSU', 'statusKey', 'estaPausado', 'saida', 'f',
+        'const window = { ENTREGAUSU: ENTREGAUSU }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin" };\n' +
+        linhaAdm(/^const mescladaEm = .*$/m) + '\n' + linhaAdm(/^const ehMesclada = .*$/m) + '\n' +
+        'let _loteSel = new Set(f.sel || []); let _loteBusca = f.q || ""; let _loteSoFora = !!f.soFora; let _loteGrupos = new Set(f.grupos || []);\n' +
+        'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
+        'const document = { getElementById: () => null }; const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
+        gruposSrc + '\n' + candSrc + '\n' + aplSrc + '\nreturn { candidatas: sprintLoteCandidatas, aplicar: sprintLoteAplicar };')(
+          state, SP, PRAZO_, ET, OKB, EUm, statusKey, pausada, saida, f);
+      const oApp = (efetiva) => ({ SPm: SP, ETAPAm: ET, ORDEMKBm: OKB, dataUsu: EUm.data, hoje: HOJE, grupos: APP.loteGrupos(SP, statusKey, efetiva, pausada, HOJE, []) });
+      const divC = [];
+      let casos = 0;
+      ['', 'ax-50', 'cobr', 'ana'].forEach(q => [true, false].forEach(soFora => [[], ['planning'], ['pausadas'], ['planning', 'pausadas'], ['atrasadas']].forEach(gs => {
+        casos++;
+        const st = base();
+        const a = loteAdm(st, { q, soFora, grupos: gs }, {}).candidatas().map(m => m.id).join();
+        const g = {}; gs.forEach(k => { g[k] = true; });
+        const b = APP.loteCandidatas(base().melhorias, { q, soFora, grupos: g }, oApp(statusKey)).map(m => m.id).join();
+        if (a !== b) divC.push(q + '/' + soFora + '/' + gs + ': ' + a + ' // ' + b);
+      })));
+      ok(divC.length === 0, 'as candidatas do lote no app = sprintLoteCandidatas (abertas, sem oculta nem mesclada; grupo manda sobre o "so fora"; busca por codigo, titulo ou dev; ordem do quadro) em ' + casos + ' casos', divC.slice(0, 3).join(' | '));
+      /* O GRUPO "ATRASADAS" DO ADMIN NUNCA CASA: ele pergunta `statusKey`
+         (ETAPA.gravada), que nao devolve `atrasado`. O app pergunta a etapa
+         efetiva, que e o que o comentario do LOTE_GRUPOS descreve. */
+      const efetiva = m => (PRZM.estaAtrasada(m, statusKey(m), HOJE) ? 'atrasado' : statusKey(m));
+      const nAdm = loteAdm(base(), { grupos: ['atrasadas'] }, {}).candidatas().length;
+      const nApp = APP.loteCandidatas(base().melhorias, { grupos: { atrasadas: true } }, oApp(efetiva)).length;
+      ok(nAdm === 0 && nApp > 0, 'o grupo "Atrasadas da sprint atual" do app acha as vencidas da sprint (efetiva); o do admin fica vazio porque `statusKey` virou a etapa gravada', 'admin ' + nAdm + ' / app ' + nApp);
+      pendentes.push((async () => {
+        const div = [];
+        const casosL = [['S2-11-2026', ['m3', 'm4', 'm12', 'm20']], ['S3-11-2026', ['m5', 'm13', 'm21', 'm2']], ['S1-11-2026', ['m1', 'm7']],
+                        ['S5-10-2026', ['m4']], ['S2-11-2026', ['m3', 'm0']], ['', ['m4']], ['S2-11-2026', ['nao-existe']]];
+        for (const [alvo, ids] of casosL) {
+          const st = base(), saida = {};
+          await loteAdm(st, { sel: ids }, saida).aplicar(alvo);
+          const c = APP.cicloRepassar(SP, base(), ids, alvo, QUEM, HOJE);
+          const A = saida.tipo === 'err' ? 'RECUSA ' + saida.toast : vista(st) + ' | ' + saida.toast;
+          const B = c.ok ? vista(comApp(base(), c)) + ' | ' + c.msg : 'RECUSA ' + c.erro;
+          if (A !== B) div.push(alvo + '/' + ids + ': ' + A.slice(-140) + ' // ' + B.slice(-140));
+        }
+        ok(div.length === 0, 'repassar em lote no app = sprintLoteAplicar: historico, entrega ao usuario, as atrasadas e as que ja estavam, e a mesma recusa (' + casosL.length + ' lotes)', div.slice(0, 2).join(' | '));
+      })());
+    }
+
+    // ── Fechar (sprintFecharAbrir + sprintFecharAplicar) ─────────────────
+    const fechSrcs = ['function sprintOpcoes(atual) {', 'function sprintFecharAbrir(rotulo) {', 'function sprintFecharDecide(id, campo, valor) {',
+      'function sprintFecharPendencias() {', 'function sprintFecharAtualizaBotao() {', 'function sprintFecharRender() {', 'async function sprintFecharAplicar() {'].map(n => corpo(ADMIN, n));
+    ok(fechSrcs.every(Boolean), 'o fechamento do admin (sprintFecharAbrir a sprintFecharAplicar) existe para ser comparado');
+    if (fechSrcs.every(Boolean)) {
+      const fechAdm = (state, saida) => {
+        const el = () => ({ innerHTML: '', textContent: '', disabled: false, style: {}, onclick: null, addEventListener() {}, querySelector: () => el(), remove() {} });
+        const document = { getElementById: () => el(), createElement: () => el(), body: { appendChild() {} } };
+        return new Function('state', 'SPRINTPO', 'PRAZO', 'statusKey', 'estaPausado', 'saida', 'document',
+          'const window = { PRAZO: PRAZO }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin" };\n' +
+          linhaAdm(/^function esc\(s\) \{.*$/m) + '\nlet _fechDecisoes = {}; let _fechRotulo = "";\n' +
+          'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
+          'const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
+          fechSrcs.join('\n') + '\nreturn { abrir: (r) => { sprintFecharAbrir(r); return _fechDecisoes; }, faltam: (r, d) => { _fechRotulo = r; _fechDecisoes = d; return sprintFecharPendencias().filter(p => p.erro).length; },' +
+          ' aplicar: (r, d) => { _fechRotulo = r; _fechDecisoes = d; return sprintFecharAplicar(); } };')(state, SP, PRAZO_, statusKey, pausada, saida, document);
+      };
+      const r = 'S1-11-2026';
+      const decA = fechAdm(base(), {}).abrir(r);
+      const decB = APP.cicloDecisoesIniciais(SP, base(), r, statusKey, pausada);
+      ok(Object.keys(decA).length > 0 && JSON.stringify(decA) === JSON.stringify(decB),
+         'o fechamento abre com as mesmas decisoes do sprintFecharAbrir: a pausada ja vai para a sprint seguinte, com a pausa como motivo', JSON.stringify(decA) + ' // ' + JSON.stringify(decB));
+      const pend = SP.balancoDaSprint(base(), r, statusKey).pendentes;
+      const todas = (destino, motivo) => { const d = {}; pend.forEach((m, i) => { d[m.id] = { destino: typeof destino === 'function' ? destino(i) : destino, motivo: typeof motivo === 'function' ? motivo(i) : motivo }; }); return d; };
+      const decs = [decB, todas('', 'Faltou tempo na semana'), todas(i => (i % 2 ? 'S2-11-2026' : ''), i => (i % 3 ? 'Dependia do banco' : 'curto')),
+                    todas('S2-11-2026', 'Aguardando o usuário'), todas('S1-11-2026', 'Para a própria sprint'), todas('S5-10-2026', 'Sprint que já fechou'), todas('lixo', 'Destino que não existe')];
+      const divF = decs.map((d, i) => fechAdm(base(), {}).faltam(r, copia(d)) === APP.cicloFaltam(SP, base(), r, statusKey, copia(d)) ? '' : 'faltam#' + i).filter(Boolean);
+      ok(divF.length === 0, 'o botao do app conta os motivos que faltam como o sprintFecharAtualizaBotao', divF.join(', '));
+      pendentes.push((async () => {
+        const div = [];
+        for (const [rr, d] of decs.map(d => [r, d]).concat([['S5-10-2026', {}], ['S2-11-2026', todas('', 'Faltou tempo na semana')]])) {
+          const st = base(), saida = {};
+          await fechAdm(st, saida).aplicar(rr, copia(d));
+          const c = APP.cicloFechar(SP, base(), rr, QUEM, HOJE, copia(d), statusKey);
+          const A = saida.tipo === 'err' ? 'RECUSA ' + saida.toast : vista(st) + ' | ' + saida.toast;
+          const B = c.ok ? vista(comApp(base(), c)) + ' | ' + c.msg : 'RECUSA ' + c.erro;
+          if (A !== B) div.push(rr + ': ' + A.slice(-160) + ' // ' + B.slice(-160));
+        }
+        ok(div.length === 0, 'fechar no app = sprintFecharAplicar: destino e motivo no historico, volta ao backlog registrada, o carry no registro da sprint e a mesma recusa (' + (decs.length + 2) + ' casos)', div.slice(0, 2).join(' | '));
+        const c = APP.cicloFechar(SP, base(), r, QUEM, HOJE, todas('S2-11-2026', 'Aguardando o usuário'), statusKey);
+        const reg = c.raiz.sprints.filter(x => x.rotulo === r)[0] || {};
+        ok(c.ok && reg.iniciada_em === '2026-11-03' && reg.em === HOJE && reg.carry.length === pend.length && c.raiz.sprints.length === 2,
+           'fechar escreve no registro que ja existe (quem iniciou fica), e a lista `sprints` vai inteira na raiz', JSON.stringify(reg).slice(0, 160));
+      })());
+    }
+
+    // ── Juntar e soltar (gantt.html) ──────────────────────────────────────
+    const gjSrc = corpo(GANTT, 'async function gJuntarConfirmar() {');
+    const gsSrc = corpo(GANTT, 'async function gSoltar(id, ev) {');
+    ok(!!(gjSrc && gsSrc), 'gJuntarConfirmar e gSoltar existem no gantt para serem comparados');
+    if (gjSrc && gsSrc) {
+      const arv = () => [{ id: 'a', codigo: 'AX-1', titulo: 'Principal' }, { id: 'b', codigo: 'AX-2', titulo: 'Filha', parent_id: 'a', is_dependency: true },
+        { id: 'c', codigo: 'AX-3', titulo: 'Neta', parent_id: 'b' }, { id: 'd', codigo: 'AX-4', titulo: 'Solta' }, { id: 'e', codigo: '', titulo: 'Sem código' }];
+      const ganttJ = (state, sel, saida) => new Function('state', 'VINCULO', '_gSel', 'saida',
+        'const confirmar = async (o) => { saida.conf = o; return true; }; const gJuntarModo = () => {}; const renderGantt = () => {};\n' +
+        'const saveToGitHub = async () => { saida.salvou = true; return true; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
+        gjSrc + '\n' + gsSrc + '\nreturn { juntar: gJuntarConfirmar, soltar: gSoltar };')(state, VINCULO, sel, saida);
+      pendentes.push((async () => {
+        const div = [];
+        for (const sel of [['d', 'e'], ['a', 'd', 'e'], ['c', 'a'], ['b', 'a'], ['d', 'c', 'b'], ['a'], ['d', 'd2']]) {
+          const st = { melhorias: arv() }, saida = {};
+          await ganttJ(st, sel.slice(), saida).juntar();
+          const L = arv(), por = id => L.filter(x => x.id === id)[0];
+          const fs2 = sel.slice(1).map(por).filter(Boolean);
+          const rr = sel.length < 2 || !por(sel[0]) || !fs2.length ? null : AC.REGRAS.juntar(por(sel[0]), { filhas: fs2 }, { papel: 'admin', lista: L, R: { VINCULO } });
+          const A = !saida.salvou ? (saida.tipo === 'err' ? 'RECUSA ' + saida.toast : 'NADA') : JSON.stringify(st.melhorias) + ' | ' + saida.toast;
+          const B = !rr ? 'NADA' : !rr.ok ? 'RECUSA ' + rr.erro : JSON.stringify(arv().map(m => Object.assign(m, rr.patches[m.id] || {}))) + ' | ' + rr.msg;
+          if (A !== B) div.push(sel + ': ' + A + ' // ' + B);
+        }
+        ok(div.length === 0, 'juntar no app = o gJuntarConfirmar do gantt: as outras viram parte da primeira (parent_id, sem trava), o ciclo e recusado antes, e o mesmo aviso', div.slice(0, 2).join(' | '));
+        const divS = [];
+        for (const id of ['b', 'c', 'd']) {
+          const st = { melhorias: arv() }, saida = {};
+          await ganttJ(st, [], saida).soltar(id);
+          const L = arv(), m = L.filter(x => x.id === id)[0];
+          const rs = AC.REGRAS.soltar(m, {}, { papel: 'admin', lista: L });
+          const A = saida.salvou ? JSON.stringify(st.melhorias) + ' | ' + saida.toast : 'NADA';
+          const B = rs.ok ? JSON.stringify(arv().map(x => (x.id === id ? Object.assign(x, rs.patch) : x))) + ' | ' + rs.msg : 'NADA';
+          if (A !== B) divS.push(id + ': ' + A + ' // ' + B);
+        }
+        ok(divS.length === 0, 'tirar do grupo no app = o gSoltar (parent_id vazio, sem trava; a solta nao tem o que tirar)', divS.join(' | '));
+      })());
+      const L = arv();
+      ok(!AC.REGRAS.juntar(L[0], { filhas: [L[3]] }, { papel: 'dev', lista: L, R: { VINCULO } }).ok && !AC.REGRAS.juntar(L[0], { filhas: [L[3]] }, { papel: 'consulta', lista: L, R: { VINCULO } }).ok &&
+         AC.REGRAS.juntar(L[0], { filhas: [L[3]] }, { papel: 'analista', lista: L, R: { VINCULO } }).ok,
+         'juntar e do PM/PO e do analista, como o resto do Planejamento; o dev e a consulta nao juntam');
+    }
+
+    // ── Criar no dia vazio (openModal(null, dev, dia)) ───────────────────
+    const PLC = semComentario(PLT);
+    ok(/onLayerClick[\s\S]{0,900}openModal\(null, dev, d\.str\)/.test(GANTT) && /getElementById\('e-inicio'\)\.value\s*= m\?\.inicio \|\| prefillDate/.test(GANTT) &&
+       /getElementById\('e-fim'\)\.value\s*= m\?\.entrega \|\| prefillDate/.test(GANTT) &&
+       /raiz\.AXIS_FORM\.abrir\(null, \{ dev: lnC\.getAttribute\('data-pl-dev'\), inicio: dd\.d, entrega: dd\.d \}\)/.test(PLC) && /if \(dd && !dd\.fe\)/.test(PLC),
+       'clicar no dia vazio da linha abre a demanda nova com o dev e o dia em inicio e entrega, e nao no feriado — o openModal(null, dev, dia) do gantt');
+    ok(/if \(!m\) preencheNova\(o\);\s*EST\.extras0 = rawExtras\(\);\s*EST\.inicial = retrato\(\);/.test(FRM) && /function preencheNova\(o\)/.test(FRM),
+       'o formulario aceita dev, inicio e entrega iniciais so na demanda nova, antes do retrato (fechar sem mexer nao pergunta)');
+
+    // ── O que nao manda mais para as telas antigas ─────────────────────
+    const SPC = semComentario(SPT);
+    ok(!/admin\.html/.test(SPC) && !/data-sp-admin-aba|linkAntigo/.test(SPC), 'Sprints nao manda mais para o admin: iniciar, repassar e fechar gravam do app');
+    ok(/H\.gravar\(c\.patch, \{ raiz: c\.raiz, ok: c\.msg \}\)/.test(SPC) && (SPC.match(/var base = await baseFresca\(\);/g) || []).length === 3 && /await baseFresca\(\);[\s\S]{0,200}cicloRepassar\(SP\(\), base,/.test(SPC),
+       'iniciar, fechar e repassar rodam sobre a base FRESCA do servidor, e iniciar e fechar levam a lista `sprints` na raiz');
+    ok(/H\.donoDaSprint\(\)\) \{ H\.toast\('Só o Fernando \(PM\/PO\) inicia a sprint\.'/.test(SPC) && /H\.donoDaSprint\(\)\) \{ H\.toast\('Só o Fernando \(PM\/PO\) fecha a sprint\.'/.test(SPC) &&
+       /H\.donoDaSprint\(\)\) \{ H\.toast\('Só o Fernando \(PM\/PO\) repassa demandas para a sprint\.'/.test(SPC),
+       'so o dono da sprint inicia, fecha e repassa em lote (a mesma frase do admin)');
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('App AXIS: o gerencial do mes — fechar, congelar, o deck, a ata, o deck de assunto e o CSV');
+
+  /* O QUE SO O ADMIN GERAVA, AGORA NO APP. O deck do mes (`apresGerar`), o
+     congelamento (que pede a MESMA apuracao), o "Fechar o mes"
+     (`mesFecharAbrir`), a ata (`relTexto`), o deck de um assunto
+     (`relPptDados`) e a base do mes em CSV (`csvBaseDoMes`) foram copiados
+     para axis-tela-fechamento.js e axis-tela-relatorios.js. Aqui as do admin
+     rodam AO LADO das do app, na mesma amostra e com o relogio parado: o que
+     o admin entrega ao apresentacao.js (capturado no lugar do gerador), o
+     texto da ata e o CSV tem de sair iguais, caractere a caractere.
+
+     O RELOGIO E O DE 05/11/2026 15h. As contas leem `new Date()` (o corte do
+     mes em curso, a idade do backlog, a data do "o que vem") e trocar o Date
+     global e o unico jeito de as duas pontas olharem o mesmo instante. O bloco
+     espera os outros assincronos terminarem antes de trocar, e devolve o Date
+     no fim, falhe ou nao. */
+  (() => {
+    const FEC = lerTela('axis-tela-fechamento.js');
+    const RLT = lerTela('axis-tela-relatorios.js');
+    const PNT = lerTela('axis-tela-paineis.js');
+    const AXH = lerTela('axis.html');
+    const FE = require('./axis-tela-fechamento.js');
+    const RL = require('./axis-tela-relatorios.js');
+    const J = {};
+    new Function('window', lerTela('catalogo.js'))(J);
+    new Function('window', 'document', APRES)(J, {});
+    Object.assign(J, { FILA, PRAZO: PRZM, CAPACIDADE: CAPI, PIPELINES: PIPELINES_API, SELO: require('./selo-validacao.js'),
+                       SPRINTPO: require('./sprint.js'), ETAPA: require('./etapa-demanda.js'), AXIS_FECHA: FE });
+    FE.usar(J); RL.usar(J);
+
+    // ── O admin, recortado: o deck, a ata, o deck de assunto e o CSV ─────
+    const fns = ['formatDate(s) {', 'resumoDaEntrega(m, soResumo) {', 'rateiaHoras(lista, janela, de, ate) {', 'horasReaisDe(m, rateado) {',
+      'horasDoMes(m, deISO, ateISO, rateado) {', 'prazoClassifica(m) {', 'gerSemanasDoMes(ano, mes1) {', 'gerSemanaIndex(dataStr, semanas) {',
+      'gerDataRefPontos(m) {', 'gerItensPontuados(ano, mes1) {', 'cortePontosPorDev(itens, splitDevs) {', 'gerCortesDePontos(ano, mes, temaMap, splitDevs) {',
+      'relRaizNome(nome) {', 'apresTimeEAreas(conc, cl) {', 'apresPipelines(conc, de, ate) {', 'apresMesAno() {', 'apresConcluidasDoMes() {',
+      'relRaizDe(m) {', 'janelaDe(escala, valor) {', 'relVivasDe(raiz) {', 'relVivas() {', 'relTemaFiltro() {', 'relTemaFiltroNome() {', 'relComoAndou(j) {',
+      'relTemas(j) {', 'relTemasDe(raiz, j) {', 'relOQueVem() {', 'relOQueVemDe(raiz) {', 'relBacklogDe(raiz) {', 'relBacklog() {',
+      'relPptFaixas(j) {', 'relPptAssunto(raiz, j) {', 'relPptEscopos(j) {', 'relPptSprint(j) {', 'relPptDados(escopo, j, comBacklog) {',
+      'relPptNomeArquivo(escopo, j) {', 'relDados() {', 'relSistemaModulo(m) {', 'relAgrupaPorTema(lista) {', 'relSoResumo() {', 'relTexto(secao) {',
+      'relJanela() {', 'relEscala() {', 'parseTemaNome(nome) {', 'statusKey(m) {', 'statusEfetivo(m) {', 'segundaDa(d) {',
+      'csvBaseDoMes(de, ate) {', 'csvTexto(linhas) {', 'sprintsComDados() {', 'mesTrilhaDe(m) {', 'mesDe(m) {', 'mesSomaLocal(iso, n) {',
+      'mesDoPeriodo(alvo) {', 'mesAlvoSelecionado() {', 'async mesFecharAbrir() {']
+      .map(n => corpo(ADMIN, n.indexOf('async ') === 0 ? 'async function ' + n.slice(6) : 'function ' + n));
+    const AG = corpo(ADMIN, 'async function apresGerar(opts) {');
+    const linhaA = (re) => (ADMIN.match(re) || [''])[0];
+    const extras = [linhaA(/^const mescladaEm = .*$/m), linhaA(/^const ehMesclada = .*$/m), linhaA(/^const AP_SECOES = \[[\s\S]*?\n\];/m), 'const HORAS_DIA = 8;', 'const REL_PPT_TOP = 5;',
+      linhaA(/^const iso = \(d\) => .*$/m), linhaA(/^const maisDias = .*$/m), "let _sprTrilha = 'tecnologia';"];
+    const faltam = fns.map((f, i) => f ? '' : i).filter(x => x !== '');
+    ok(!faltam.length && !!AG && extras.every(Boolean), 'o deck, a ata, o deck de assunto, o CSV e o fechar existem no admin para serem comparados', faltam.join(','));
+    if (faltam.length || !AG) return;
+    const admin = (state, vals, capt) => new Function('state', 'window', 'document', 'FILA', 'PRAZO', 'SELO', 'SPRINTPO', 'ETAPA', 'catalogoCurto', 'apresentacaoMesNome', 'capt',
+      "let _pendingEdits = false, _kbDirty = false; const _dirtyMelhoriaIds = new Set();\n" +
+      "const loadFromGitHub = async () => {}; const apModo = () => 'mes'; const relPptGerar = async () => {}; const toast = (m) => { (capt.toasts = capt.toasts || []).push(m); }; const closeModal = () => {};\n" +
+      "const fechaApuracaoDe = async () => capt.cong || null; const relMontaSprints = () => {}; const renderMes = () => {}; const showSaving = () => {};\n" +
+      "const confirmar = async (o) => { capt.confirmar = o; return true; }; const credAdmin = () => ({}); const ADMIN_PROXY_URL = 'x';\n" +
+      "const fetch = async (u, o) => { capt.pedido = JSON.parse(o.body); return { ok: false, json: async () => ({ error: 'teste' }) }; };\n" +
+      "const apresentacaoMontaDeck = async (d) => { capt.dados = d; return { writeFile: async (o) => { capt.nome = o.fileName; } }; };\n" +
+      extras.join('\n') + '\n' + fns.join('\n') + '\n' + AG +
+      '\nreturn { apresGerar, relTexto, relPptDados, relPptNomeArquivo, csvBaseDoMes, csvTexto, janelaDe, sprintsComDados, mesFecharAbrir };')(
+      state, J, { getElementById: (id) => vals[id] || null, querySelectorAll: (q) => q === '.ap-dest:checked' ? (vals.dest || []).map(x => ({ value: x })) : [], querySelector: () => null },
+      J.FILA, J.PRAZO, J.SELO, J.SPRINTPO, J.ETAPA, J.catalogoCurto, J.apresentacaoMesNome, capt);
+
+    // ── A amostra: tres meses de entregas, duplas, frentes, projetos, pausas,
+    //    trilha de meses, sprints, ausencias e feriados ───────────────────
+    const ETS = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao', 'concluido', 'concluido', 'concluido', 'negada'];
+    const DEVS = ['Ana', 'Bia / Caio', 'Caio', 'Davi', '', 'Ana, Davi', 'Eva'];
+    const dia = (mes, d) => '2026-' + String(mes).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    const ms = [];
+    for (let i = 0; i < 150; i++) {
+      const st = ETS[i % ETS.length], mesC = 8 + (i % 4), d = 1 + ((i * 7) % 28);
+      const conc = st === 'concluido';
+      ms.push({
+        id: 'g' + i, codigo: 'AX-' + (500 + i), titulo: ['Cobrança', 'Régua', 'Painel', 'Cadastro "rápido"', 'Ajuste; fino'][i % 5] + ' ' + i,
+        status_planejamento: st, status: conc ? 'concluida' : st === 'negada' ? 'negada' : 'iniciada',
+        dev: DEVS[i % DEVS.length], tema_id: ['t1', 't2', 't3', 't4', '', 't5'][i % 6], projeto_id: ['', 'p1', 'p2', '', 'p3'][i % 5],
+        tipo: ['evolucao', 'sustentacao', ''][i % 3], solicitante: ['Rui', '', 'Lia', 'Rui'][i % 4],
+        poker_pontos: i % 5 ? [1, 2, 3, 5, 8, 12][i % 6] : null, horas_realizadas: i % 3 === 0 ? String(4 + (i % 9)) + ',5' : '',
+        criado_em: dia(Math.max(7, mesC - (i % 2)), Math.max(1, d - (i % 5))) + 'T12:00:00.000Z',
+        inicio: i % 7 ? dia(mesC, Math.max(1, d - 5)) : '', entrega: i % 6 && i % 11 ? dia(mesC, Math.min(28, d + 2)) : '',
+        concluido_em: conc ? dia(mesC, Math.min(28, d + (i % 4))) + 'T18:30:00.000Z' : '',
+        entregue_em: (conc || st === 'validacao') && i % 2 ? dia(mesC, Math.min(28, d + 1)) : '',
+        negada_em: st === 'negada' ? dia(mesC, d) : '', pausado_em: i % 23 === 4 ? '2026-10-10' : '', pausa_motivo: i % 23 === 4 ? 'esperando a área' : '',
+        destaque: i % 17 === 0, resumo_entrega: i % 4 ? 'Saiu a parte ' + i : '', implementacao: 'Detalhe longo da entrega ' + i,
+        meses: i % 3 ? [{ mes: '2026-' + String(mesC).padStart(2, '0'), em: dia(mesC, i % 2 ? 1 : 12) }].concat(i % 9 === 1 ? [{ mes: '2026-' + String(mesC + 1).padStart(2, '0'), em: dia(mesC + 1, 1) }] : []) : [],
+        sprint_po: ['S1-10-2026', 'S5-10-2026', 'S1-11-2026', ''][i % 4], sprint: ['S1-10-2026', '', 'S2-09-2026'][i % 3],
+        oculto: i % 41 === 3, mesclado_em: i % 37 === 5 ? 'g1' : ''
+      });
+    }
+    const S = {
+      melhorias: ms, atualizado_em: '2026-11-05T12:00:00.000Z', feriados: FERIADOS_PROVA,
+      temas: [{ id: 't1', nome: 'AXCred - Cobrança - Régua' }, { id: 't2', nome: 'AXCred - Cadastro' }, { id: 't3', nome: 'BI - Reports' }, { id: 't4', nome: 'Site Audax' }, { id: 't5', nome: 'BI' }],
+      projetos: [{ id: 'p1', codigo: 'EP-001', nome: 'Régua', status: 'em_andamento', responsavel: 'Rui', descricao: 'A régua nova' },
+                 { id: 'p2', codigo: 'EP-002', nome: 'Portal', status: 'planejado', inicio: '2026-09-01', fim: '2026-10-15' },
+                 { id: 'p3', codigo: '', nome: 'Pausado', status: 'pausado' }],
+      ausencias: [{ dev: 'Ana', inicio: '2026-10-20', fim: '2026-11-03', tipo: 'ferias' }, { dev: 'Eva', inicio: '2026-11-04', tipo: 'atestado' }],
+      devs_perfil: { Ana: { pipeline: 'Dados' }, Caio: { axcred: true } }
+    };
+
+    const DataReal = Date;
+    const AGORA = new DataReal('2026-11-05T15:00:00-03:00').getTime();
+    class DataParada extends DataReal { constructor(...a) { if (a.length) super(...a); else super(AGORA); } static now() { return AGORA; } }
+    const antes = pendentes.slice();
+    registra(Promise.all(antes).then(async () => {
+      global.Date = DataParada;
+      try {
+        const dif = (a, b) => { const A = JSON.stringify(a), B = JSON.stringify(b); if (A === B) return ''; let i = 0; while (i < A.length && A[i] === B[i]) i++; return A.slice(Math.max(0, i - 80), i + 80) + ' // ' + B.slice(Math.max(0, i - 80), i + 80); };
+        // ── A apuracao do congelamento e o deck do mes ───────────────────
+        const divA = [], divD = [], divC = [];
+        let nDest = 0, nNome = 0;
+        for (const iso of ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12']) {
+          const ano = +iso.slice(0, 4), mes = +iso.slice(5, 7);
+          const vals = { 'ger-mes': { value: String(mes) }, 'ger-ano': { value: String(ano) } };
+          const a1 = await admin(S, vals, {}).apresGerar({ soApuracao: true });
+          const d1 = dif(a1, FE.apuracao(S, { ano, mes, soApuracao: true }));
+          if (d1 || !a1.kpi) divA.push(iso + ' ' + d1);
+          const sec = {}; FE.AP_SECOES.forEach((s, i) => { sec[s.k] = (i + mes) % 3 !== 0; vals['ap-s-' + s.k] = { checked: sec[s.k] }; });
+          const dest = FE.candidatasDestaque(S, iso).slice(0, 3).map(m => m.id);
+          nDest += dest.length;
+          Object.assign(vals, { dest, 'ap-mensagem': { value: '  O mês fechou.  ' } });
+          const c2 = {};
+          await admin(S, vals, c2).apresGerar({});
+          const dB = FE.apuracao(S, { ano, mes, secoes: sec, idsDestaque: dest, mensagem: '  O mês fechou.  ' });
+          const d2 = dif(c2.dados, dB);
+          if (d2) divD.push(iso + ' ' + d2);
+          if (c2.nome === FE.nomeArquivoDeck(ano, mes)) nNome++;
+          const c3 = { cong: { apuracao: a1, congelado_em: '2026-11-02T10:00:00.000Z', por: 'Paula' } };
+          await admin(S, vals, c3).apresGerar({});
+          const d3 = dif(c3.dados, FE.comCongelada(dB, c3.cong));
+          if (d3 || !/congelada em 02\/11\/2026/.test((c3.toasts || []).join(' '))) divC.push(iso + ' ' + d3);
+        }
+        ok(divA.length === 0, 'a apuracao que o app congela = apresGerar({ soApuracao: true }) do admin, cinco meses (fechados, o corrente e o futuro)', divA.slice(0, 2).join(' ;; '));
+        ok(divD.length === 0 && nDest >= 6 && nNome === 5, 'o objeto que o app entrega ao apresentacao.js = o do admin, com slides, destaques e frase escolhidos, e o mesmo nome de arquivo', divD.slice(0, 2).join(' ;; '));
+        ok(divC.length === 0, 'mes congelado: a apuracao congelada vence a base viva e o slide diz que esta congelado, igual ao admin', divC.slice(0, 2).join(' ;; '));
+        // ── O CSV da base do mes ─────────────────────────────────────────
+        const divCsv = [];
+        let linhasCsv = 0;
+        for (const [de, ate] of [['2026-09-01', '2026-09-30'], ['2026-10-01', '2026-10-31'], ['2026-11-01', '2026-11-30']]) {
+          const A = admin(S, {}, {});
+          const ta = A.csvTexto(A.csvBaseDoMes(de, ate)), tb = RL.csvTexto(RL.csvBaseDoMes(S, de, ate));
+          linhasCsv += tb.split('\n').length;
+          if (ta !== tb) divCsv.push(de + ' ' + dif(ta, tb));
+        }
+        ok(divCsv.length === 0 && linhasCsv > 20, 'a base do mes em CSV do app = a do admin, byte a byte (BOM, virgula, aspas, horas e prazo)', divCsv.join(' ;; '));
+        // ── A ata e o deck de assunto, em cada escala ────────────────────
+        const sprints = admin(S, {}, {}).sprintsComDados();
+        ok(JSON.stringify(sprints) === JSON.stringify(RL.sprintsComDados(S)), 'as sprints oferecidas na ata = sprintsComDados do admin', sprints.join(','));
+        const divT = [], divP = [];
+        let casosT = 0, tamT = 0;
+        for (const [esc, val] of [['mes', '2026-08'], ['mes', '2026-10'], ['mes', '2026-11'], ['semana', ''], ['semana', '2026-10-19'], ['sprint', ''], ['sprint', 'S1-10-2026']]) {
+          for (const sis of ['', 'AXCred', 'BI', 'Site Audax']) {
+            const j = RL.janelaDe(S, esc, val);
+            for (const texto of ['completo', 'resumo']) {
+              const A = admin(S, { 'rel-escala': { value: esc }, 'rel-mes': { value: val }, 'rel-semana': { value: val }, 'rel-sprint': { value: val },
+                                   'rel-sistema': { value: sis }, 'rel-texto': { value: texto } }, {});
+              if (dif(A.janelaDe(esc, val), j)) divT.push('janela ' + esc + val);
+              for (const secao of ['', 'entregues', 'andamento', 'vem', 'backlog']) {
+                casosT++;
+                const ta = A.relTexto(secao), tb = RL.relTexto(S, { j, raiz: sis, soResumo: texto === 'resumo', secao });
+                tamT += tb.length;
+                if (ta !== tb) divT.push(esc + '/' + val + '/' + sis + '/' + texto + '/' + secao + ' ' + dif(ta, tb));
+              }
+            }
+            for (const bk of [false, true]) {
+              const A = admin(S, {}, {});
+              const d = dif(A.relPptDados(sis, j, bk), RL.relPptDados(S, sis, j, bk));
+              if (d || A.relPptNomeArquivo(sis, j) !== RL.relPptNomeArquivo(sis, j)) divP.push(esc + '/' + val + '/' + sis + '/' + bk + ' ' + d);
+            }
+          }
+        }
+        ok(divT.length === 0 && tamT > 50000, 'a ata do app = o "Copiar tudo" do admin, caractere a caractere (' + casosT + ' casos: escala, periodo, sistema, texto e secao)', divT.slice(0, 2).join(' ;; '));
+        ok(divP.length === 0, 'o deck de um assunto: o que o app entrega ao relatorio-ppt.js = o do admin, e o mesmo nome de arquivo (consolidado e por sistema, com e sem backlog)', divP.slice(0, 2).join(' ;; '));
+        // ── Fechar o mes: a conferencia e o pedido ───────────────────────
+        const divF = [];
+        for (const alvo of ['2026-08', '2026-09', '2026-10', '2026-11']) {
+          const c = {};
+          await admin(S, { 'mes-mes': { value: String(+alvo.slice(5)) }, 'mes-ano': { value: alvo.slice(0, 4) } }, c).mesFecharAbrir();
+          const lista = FE.aRolar(S, alvo), p = FE.pedidoFechar(S, alvo);
+          const codA = ((c.confirmar || {}).texto || '').split('\n').filter(l => / · /.test(l)).map(l => l.split(' · ')[0]);
+          const nA = c.confirmar ? +(c.confirmar.texto.match(/^(\d+) demanda/) || [])[1] : 0;
+          if (nA !== lista.length || JSON.stringify(codA) !== JSON.stringify(lista.slice(0, 8).map(m => m.codigo))) divF.push(alvo + ' lista ' + nA + '/' + lista.length);
+          if (lista.length && (!c.pedido || c.pedido.mes !== p.mes || c.pedido.para !== p.para || c.pedido.action !== p.action)) divF.push(alvo + ' pedido ' + JSON.stringify(c.pedido));
+          if (!lista.length && c.pedido) divF.push(alvo + ' pediu sem ter o que rolar');
+        }
+        ok(divF.length === 0 && FE.aRolar(S, '2026-10').length > 3, 'Fechar o mes: o app confere a mesma lista e pede o mesmo mes-fechar (mes e destino) que o mesFecharAbrir do admin', divF.join(', '));
+        ok(FE.pedidoFechar(S, '2026-12').base === S.atualizado_em && FE.pedidoFechar(S, '2026-12').para === '2027-01',
+           'e o pedido leva a versao da base lida (o `conflito` do Worker exige `base`), virando o ano certo');
+      } catch (e) {
+        ok(false, 'o gerencial do mes rodou ate o fim, no admin e no app', (e && e.stack || String(e)).split('\n').slice(0, 3).join(' | '));
+      } finally {
+        global.Date = DataReal;
+      }
+    }));
+
+    // ── O que o codigo das telas tem de dizer ───────────────────────────
+    ok(/var apu = REGRAS_FECHA\.apuracao\(S, \{ ano: \+alvo\.slice\(0, 4\), mes: \+alvo\.slice\(5, 7\), soApuracao: true \}\);\s*var jg = await H\.api\('fechamento-gravar', \{ mes: alvo, apuracao: apu, refazer: false \}\);/.test(FEC),
+       'congelar manda a apuracao JA CALCULADA (o admin manda a Promise sem await, que vira {} no JSON)');
+    ok(/H\.api\('fechamento-apagar', \{ mes: alvo \}\)/.test(FEC) && /H\.api\('mes-fechar', \{ mes: p\.mes, para: p\.para, base: p\.base \}\)/.test(FEC) &&
+       /var dados = comCongelada\(apu, cong\);[\s\S]{0,300}raiz\.apresentacaoMontaDeck\(dados\)/.test(FEC),
+       'descongelar, fechar o mes e gerar o deck (da apuracao congelada, quando houver) chamam o Worker e o gerador como o admin');
+    ok(/relatorioPptMonta\(relPptDados\(S, _rf\.escopo, j, backlogLembrado\(\), _rf\.trilha\)\)/.test(RLT) && /csvTexto\(linhas\)/.test(RLT) && /copiar\(textoAta\(/.test(RLT),
+       'os botoes da tela usam as funcoes medidas acima (deck de assunto, CSV e ata)');
+    const semC = (t) => semComentario(t);
+    ok(![FEC, RLT, PNT].some(t => /linkAdmin\(|href="admin\.html|data-admin-aba/.test(semC(t))),
+       'Fechamento, Paineis e Relatorios nao mandam mais para o admin');
+    ok(['deck-fundo.js', 'capa-tecnologia.js', 'apresentacao.js', 'relatorio-ppt.js', 'selo-validacao.js'].every(f => new RegExp('<script src="' + f.replace('.', '\\.') + '\\?v=').test(AXH)) &&
+       AXH.indexOf('capa-tecnologia.js') < AXH.indexOf('apresentacao.js') && AXH.indexOf('apresentacao.js') < AXH.indexOf('axis-tela-fechamento.js'),
+       'o axis.html carrega o que o deck e o deck de assunto usam (fundo, capa, selo, relatorio-ppt) antes das telas');
+  })();
+
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao

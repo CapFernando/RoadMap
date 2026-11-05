@@ -12,8 +12,10 @@
    epicos EPI-; aqui o agrupamento real que existe e o SISTEMA (tema_id), e e
    ele que ocupa esse lugar — com o nome certo, para ninguem procurar um EPI-.
 
-   GRAVAR CONTINUA NO ADMIN: "+ Novo projeto" e "Editar" abrem admin.html na
-   aba Projetos; o dev propoe projeto pelo Meu painel (dev.html).
+   GRAVAR E DAQUI (ver "GRAVAR PROJETO", mais abaixo): o PM/PO cria, edita,
+   exclui, aprova e recusa pelo mesmo caminho do admin (`publish` com a lista
+   `projetos` inteira, montada sobre a base fresca); o dev propoe pela rota
+   `projeto-novo`, como no Meu painel, e a proposta nasce pendente.
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   var raiz = typeof window !== 'undefined' ? window : globalThis;
@@ -107,6 +109,30 @@
     '.axa .pja-ln .d{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11.5px;color:var(--tx2);white-space:nowrap}',
     '.axa .pja-ln .chip{height:18px;font-size:10px;padding:0 6px;gap:4px}',
     '.axa .pja-vz{font-size:12px;color:var(--tx4);padding:6px}',
+    // Formulario do projeto e a faixa da aprovacao.
+    '.axa .pjf{max-width:620px}',
+    '.axa .pjf-t{margin:0;font-family:var(--font-title);font-size:19px;font-weight:800;padding-right:36px;line-height:25px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}',
+    '.axa .pjf-f{display:flex;flex-direction:column;gap:6px;min-width:0}',
+    '.axa .pjf-f > label{font-size:12.5px;font-weight:700;color:var(--tx2)}',
+    '.axa .pjf-f > label small{font-weight:500;color:var(--tx4)}',
+    '.axa .pjf-f .in{width:100%;box-sizing:border-box}',
+    '.axa .pjf textarea.in{height:auto;min-height:84px;padding:10px 14px;line-height:20px;resize:vertical;display:block}',
+    '.axa .pjf-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}',
+    '.axa .pjf-anx{display:flex;flex-wrap:wrap;gap:6px}',
+    '.axa .pjf-anx .chip{gap:6px}',
+    '.axa .pjf-anx .chip button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font:inherit;display:inline-flex}',
+    '.axa .pjf-erro{font-size:12.5px;line-height:18px;color:var(--dg-t)}',
+    '.axa .pjf-erro:empty{display:none}',
+    '.axa .pjf-pe{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding-top:4px}',
+    '.axa .pjf-pe .perigo{margin-right:auto;color:var(--dg-t);border-color:rgba(var(--dg-rgb),.4)}',
+    '.axa .pj-aprov{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:14px 18px;border-radius:14px;border:1px solid var(--bd2);background:var(--sf2);font-size:13px;line-height:20px;color:var(--tx2)}',
+    '.axa .pj-aprov.pend{border-color:rgba(var(--wn-rgb),.45);background:rgba(var(--wn-rgb),.07)}',
+    '.axa .pj-aprov.rec{border-color:rgba(var(--dg-rgb),.45);background:rgba(var(--dg-rgb),.07)}',
+    '.axa .pj-aprov > span{flex:1 1 320px;min-width:0;overflow-wrap:anywhere}',
+    '.axa .pj-aprov b{color:var(--tx)}',
+    '.axa .pj-aprov .row{gap:8px;flex-wrap:wrap}',
+    '.axa .pj-aprov .btn.perigo{color:var(--dg-t);border-color:rgba(var(--dg-rgb),.4)}',
+    '.axa .pj-aprov .btnp.ok{background:linear-gradient(180deg,var(--ok-t),var(--ok));box-shadow:0 8px 22px rgba(var(--ok-rgb),.25)}',
     /* Celular: o nucleo empilha toda grade inline em uma coluna; os KPIs ficam
        em duas (como no prototipo celular), e a linha do tempo encolhe a coluna
        de rotulo para a trilha ter onde aparecer antes de rolar de lado. */
@@ -357,8 +383,8 @@
       '</div>';
 
     var acoes = '';
-    if (ctx.papel === 'admin') acoes = H.linkAdmin('projetos', '+ Novo projeto', 'btnp');
-    else if (dev) acoes = '<a class="btn" href="dev.html" title="Abre o Meu painel (dev.html): a proposta fica na seção Projetos">Propor projeto ' + ico('external', 'style="font-size:12px;opacity:.7"') + '</a>';
+    if (ctx.papel === 'admin') acoes = '<button type="button" class="btnp" data-pj-novo>+ Novo projeto</button>';
+    else if (dev) acoes = '<button type="button" class="btn" data-pj-propor title="A proposta vai para a validação do PM/PO">' + ico('plus') + ' Propor projeto</button>';
 
     var lista = ps.filter(function (p) {
       if (!passaStatus(p, F.status)) return false;
@@ -379,7 +405,7 @@
       '<span class="pj-leg"><span><i style="background:var(--ok)"></i>concluído</span><span><i style="background:var(--ac)"></i>em andamento</span><span><i style="background:var(--track);box-shadow:inset 0 0 0 1px var(--bd4)"></i>a fazer</span></span></div>';
 
     if (!ps.length) {
-      return '<div class="view" style="gap:18px">' + cab + H.vazio('package', 'Nenhum projeto cadastrado', 'Projetos são criados na área administrativa, aba Projetos.') + '</div>';
+      return '<div class="view" style="gap:18px">' + cab + H.vazio('package', 'Nenhum projeto cadastrado', ctx.papel === 'admin' ? 'Use "+ Novo projeto" acima.' : dev ? 'Use "Propor projeto" acima: o PM/PO valida.' : 'O PM/PO cadastra os projetos.') + '</div>';
     }
     var corpo;
     if (!lista.length) {
@@ -724,13 +750,14 @@
     if (p.aprovado_por && aprovacao(p) === 'aprovado') sub.push('aprovado por ' + esc(p.aprovado_por));
     sub.push(esc(periodo(p)));
     var acoes = '<button type="button" class="btn" data-pj-copiar title="Copia o resumo executivo em texto, pronto para colar no grupo">' + ico('clipboard') + ' Copiar resumo</button>';
-    if (ctx.papel === 'admin') acoes = H.linkAdmin('projetos', 'Editar', 'btn') + acoes;
+    if (ctx.papel === 'admin') acoes = '<button type="button" class="btn" data-pj-editar>' + ico('edit') + ' Editar</button>' + acoes;
     var cab = '<header style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px">' +
       '<div style="display:flex;flex-direction:column;gap:6px;min-width:0">' +
       '<span class="note"><a href="#projetos">Projetos</a> › ' + esc(p.codigo || p.nome) + '</span>' +
       '<div class="row" style="flex-wrap:wrap">' + (p.codigo ? '<span class="code" style="font-size:13px">' + esc(p.codigo) + '</span>' : '') + chipStatus(p) +
       (p.responsavel ? H.av(p.responsavel, 22) : '') + '<span class="note">' + sub.join(' · ') + '</span></div>' +
-      '<h1 class="h1">' + esc(p.nome || '(sem nome)') + '</h1></div><div class="row" style="flex-wrap:wrap">' + acoes + '</div></header>';
+      '<h1 class="h1">' + esc(p.nome || '(sem nome)') + '</h1></div><div class="row" style="flex-wrap:wrap">' + acoes + '</div></header>' +
+      faixaAprovacao(p, ctx);
 
     // KPIs
     var dAlvo = p.fim ? H.dias(hj, p.fim) : null;
@@ -748,9 +775,14 @@
     var tl = htmlLinhaProjeto(p, l);
 
     // Coluna da direita: descricao, progresso por etapa, entregas.
+    var anexos = (p.anexos || []).map(function (a, i) { return a && (a.chave || a.dados) ? { a: a, i: i } : null; }).filter(Boolean);
     var desc = '<section class="pn"><span class="lab">DESCRIÇÃO</span>' + (p.descricao
       ? '<span style="font-size:13.5px;line-height:21px;color:var(--tx2);overflow-wrap:anywhere;white-space:pre-wrap">' + esc(String(p.descricao).trim()) + '</span>'
-      : '<span class="note">Sem descrição registrada no RoadMap.</span>') + '</section>';
+      : '<span class="note">Sem descrição registrada no RoadMap.</span>') +
+      (p.justificativa ? '<span class="lab" style="margin-top:6px">POR QUE AGORA</span><span style="font-size:13.5px;line-height:21px;color:var(--tx2);overflow-wrap:anywhere;white-space:pre-wrap">' + esc(String(p.justificativa).trim()) + '</span>' : '') +
+      (anexos.length ? '<span class="lab" style="margin-top:6px">ANEXOS</span><div class="pjf-anx">' + anexos.map(function (x) {
+        return '<button type="button" class="btns" data-pj-anexo="' + x.i + '">' + ico('clip') + ' ' + esc(x.a.nome || 'anexo') + '</button>';
+      }).join('') + '</div>' : '') + '</section>';
     var cont = {};
     l.ms.forEach(function (m) { var c = H.colunaDe(m); cont[c] = (cont[c] || 0) + 1; });
     var etapas = H.ETAPAS.filter(function (e) { return cont[e.id]; });
@@ -871,7 +903,7 @@
       var n = ms.filter(x[2]).length;
       return '<button type="button" class="btns' + (x[0] === f[0] ? ' on' : '') + '" data-pj-if="' + x[0] + '" aria-pressed="' + (x[0] === f[0]) + '">' + x[1] + ' ' + n + '</button>';
     }).join('');
-    var corpo = !ms.length ? H.vazio('inbox', 'Nenhum item ligado a este projeto', 'O vínculo é feito no editor da demanda ou na aba Projetos do admin.')
+    var corpo = !ms.length ? H.vazio('inbox', 'Nenhum item ligado a este projeto', 'O vínculo é feito no formulário da demanda, no campo Projeto.')
       : !lista.length ? '<span class="note">Nenhum item neste filtro.</span>'
       : '<table class="tbl"><thead><tr><th>ITEM</th><th>TÍTULO</th><th>ETAPA</th><th>DEV</th><th class="num">PTS</th><th>PRAZO</th></tr></thead><tbody>' +
         pg.map(function (m) {
@@ -894,6 +926,295 @@
       '<div class="row" style="gap:6px;flex-wrap:wrap">' + btns + '</div></div>' + corpo + pager + '</section>';
   }
 
+  // ═══ GRAVAR PROJETO ══════════════════════════════════════════════════════
+  /* AS REGRAS SAO COPIAS: `pjRegraSalvar` e o pjSalvar do admin.html,
+     `pjRegraAprovar` o pjAprovar (+ pjAprovSalvar), `pjRegraRecusar` o
+     pjRecusar, `pjRegraExcluir` o pjExcluir e `pjRegraPropor` o dpSalvar do
+     dev.html. Nao tocam DOM nem rede: recebem a lista da base FRESCA e o
+     contexto (`c` = { quem, agora, novoId }) e devolvem a lista nova e as
+     demandas a soltar, ou `{ ok: false, erro, campo }` com a frase da tela
+     antiga. A suite roda cada uma ao lado da original.
+     O CODIGO EP- NAO NASCE AQUI: o Worker o da na gravacao
+     (`atribuiCodigosProjeto`), so ao projeto aprovado — proposta pendente
+     nao queima numero.
+     UMA DIFERENCA DELIBERADA: o admin, ao salvar um projeto que outra pessoa
+     excluiu com a tela aberta, o recriava com outro id; aqui a gravacao para
+     e diz o que aconteceu. */
+  var PJ_STATUS = { planejado: 'Planejado', em_andamento: 'Em andamento', pausado: 'Pausado', concluido: 'Concluído' };
+  function pjRegraSalvar(lista, id, f, c) {
+    var nome = String(f.nome || '').trim();
+    if (!nome) return { ok: false, erro: 'Dê um nome ao projeto.', campo: 'nome' };
+    var campos = {
+      nome: nome,
+      descricao: String(f.descricao || '').trim(),
+      status: PJ_STATUS[f.status] ? f.status : 'planejado',
+      responsavel: String(f.responsavel || '').trim(),
+      inicio: f.inicio || '',
+      fim: f.fim || '',
+      anexos: f.anexos || [],
+      atualizado_em: c.agora
+    };
+    var out = (lista || []).slice();
+    if (id) {
+      var i = -1;
+      out.forEach(function (p, k) { if (p && p.id === id) i = k; });
+      if (i < 0) return { ok: false, erro: 'O projeto foi excluído por outra pessoa enquanto a tela estava aberta.', campo: '' };
+      out[i] = Object.assign({}, out[i], campos);
+      return { ok: true, projetos: out, id: id, novo: false };
+    }
+    // Criado pelo PM/PO: criar JA e a aprovacao. Proposta de dev entra pela
+    // rota projeto-novo e nasce pendente.
+    var novo = Object.assign({ id: c.novoId, codigo: '', criado_em: c.agora, origem: 'admin',
+                               aprovacao: 'aprovado', aprovado_em: c.agora, aprovado_por: c.quem || 'admin',
+                               solicitado_por: '', recusa_motivo: '' }, campos);
+    out.push(novo);
+    return { ok: true, projetos: out, id: novo.id, novo: true };
+  }
+  function pjRegraAprovar(lista, id, c) {
+    var achou = false;
+    var out = (lista || []).map(function (p) {
+      if (!p || p.id !== id) return p;
+      achou = true;
+      return Object.assign({}, p, { aprovacao: 'aprovado', aprovado_em: c.agora, aprovado_por: c.quem || 'admin',
+                                    recusa_motivo: '', atualizado_em: c.agora });
+    });
+    if (!achou) return { ok: false, erro: 'O projeto foi excluído por outra pessoa enquanto a tela estava aberta.', campo: '' };
+    return { ok: true, projetos: out, soltar: [] };
+  }
+  /** Recusar solta as demandas do projeto: o Worker as soltaria na gravacao
+      (corrigeProjetoInvalido), e a tela mostraria um vinculo que ja nao vale. */
+  function pjRegraRecusar(lista, id, motivo, c, ms) {
+    var mot = String(motivo == null ? '' : motivo).trim();
+    if (!mot) return { ok: false, erro: 'O motivo da recusa é obrigatório.', campo: 'motivo' };
+    var achou = false;
+    var out = (lista || []).map(function (p) {
+      if (!p || p.id !== id) return p;
+      achou = true;
+      return Object.assign({}, p, { aprovacao: 'recusado', recusa_motivo: mot, aprovado_em: c.agora,
+                                    aprovado_por: c.quem || 'admin', atualizado_em: c.agora });
+    });
+    if (!achou) return { ok: false, erro: 'O projeto foi excluído por outra pessoa enquanto a tela estava aberta.', campo: '' };
+    var soltar = (ms || []).filter(function (m) { return m && m.projeto_id === id; }).map(function (m) { return m.id; });
+    return { ok: true, projetos: out, soltar: soltar };
+  }
+  /** Excluir nao apaga as demandas: elas so deixam de pertencer ao projeto. */
+  function pjRegraExcluir(lista, id, ms) {
+    var out = (lista || []).filter(function (p) { return !(p && p.id === id); });
+    var soltar = (ms || []).filter(function (m) { return m && m.projeto_id === id; }).map(function (m) { return m.id; });
+    return { ok: true, projetos: out, soltar: soltar };
+  }
+  /** A proposta do dev: o corpo da rota projeto-novo, como o dpSalvar manda. */
+  function pjRegraPropor(f) {
+    var nome = String(f.nome || '').trim();
+    if (nome.length < 3) return { ok: false, erro: 'Dê um nome ao projeto — pelo menos 3 letras.', campo: 'nome' };
+    return { ok: true, corpo: { nome: nome, descricao: String(f.descricao || '').trim(),
+                                justificativa: String(f.justificativa || '').trim(), dev: f.dev || '' } };
+  }
+
+  // ── A parte que toca a tela e o servidor ──────────────────────────────
+  function quemSou() { var e = AX.APP.eu || {}; return e.nome || e.login || 'admin'; }
+  function novoIdProjeto() { return 'prj-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
+  function contextoPj() { return { quem: quemSou(), agora: new Date().toISOString(), novoId: novoIdProjeto() }; }
+  async function baseFresca() {
+    try { return await H.api('dados'); }
+    catch (e) { H.toast(e.status === 401 ? 'Sessão expirada — saia e entre de novo.' : 'Sem conexão com o servidor: ' + (e.message || e), 'erro'); return null; }
+  }
+  /* Monta a lista sobre a base fresca e grava pelo `publish` (H.gravar), com
+     as demandas a soltar no patch. `fn(base)` devolve a saida de uma regra. */
+  async function gravaProjetos(fn, ok) {
+    var base = await baseFresca();
+    if (!base) return { ok: false };
+    var r = fn(base);
+    if (!r.ok) { H.toast(r.erro, 'erro'); return r; }
+    var patch = {};
+    (r.soltar || []).forEach(function (id) { patch[id] = { projeto_id: '' }; });
+    var g = await H.gravar(patch, { raiz: { projetos: r.projetos }, ok: typeof ok === 'function' ? ok(r) : ok });
+    return Object.assign({}, r, { ok: !!(g && g.ok), gravacao: g });
+  }
+  function porIdNaBase(id) { return ((AX.APP.D || {}).projetos || []).find(function (p) { return p && p.id === id; }) || null; }
+
+  /* O FORMULARIO (o modal-projeto do admin, aba Dados): nome, descricao,
+     situacao, responsavel, inicio e entrega previstos e anexos. As demandas
+     se ligam pelo campo Projeto do formulario da demanda. */
+  function abrirForm(p) {
+    garanteCss();
+    var D = AX.APP.D || {};
+    var anexos = p ? JSON.parse(JSON.stringify(p.anexos || [])) : [];
+    var enviando = 0;
+    var nomes = {};
+    (D.projetos || []).forEach(function (x) { if (x && x.responsavel) nomes[x.responsavel] = 1; });
+    (D.desenvolvedores || []).forEach(function (n) { if (n) nomes[n] = 1; });
+    var ov = document.createElement('div');
+    ov.className = 'ovl';
+    var campo = function (id, rot, ctl) { return '<div class="pjf-f"><label for="' + id + '">' + rot + '</label>' + ctl + '</div>'; };
+    ov.innerHTML = '<div class="dlg pjf" role="dialog" aria-modal="true" aria-labelledby="pjf-t">' +
+      '<button type="button" class="dlg-x" data-pjf="fechar" aria-label="Fechar">' + ico('x') + '</button>' +
+      '<h2 class="pjf-t" id="pjf-t">' + (p ? 'Editar projeto' : 'Novo projeto') + (p && p.codigo ? ' <span class="code" style="font-size:13px">' + esc(p.codigo) + '</span>' : '') + '</h2>' +
+      (p ? '' : '<span class="note" style="margin-top:-8px">Criado pelo PM/PO, já nasce aprovado. O código EP- vem do servidor ao salvar.</span>') +
+      campo('pjf-nome', 'Nome do projeto *', '<input class="in" id="pjf-nome" maxlength="160" placeholder="Ex.: Reformulação do fluxo de cobrança" value="' + esc(p ? p.nome || '' : '') + '">') +
+      campo('pjf-desc', 'Descrição <small>— o resultado esperado, não a lista de tarefas</small>', '<textarea class="in" id="pjf-desc" rows="3" placeholder="Ex.: Reduzir a inadimplência automatizando a régua e dando visibilidade ao time">' + esc(p ? p.descricao || '' : '') + '</textarea>') +
+      '<div class="pjf-2">' +
+        campo('pjf-status', 'Situação', '<select class="in" id="pjf-status">' + Object.keys(PJ_STATUS).map(function (k) {
+          return '<option value="' + k + '"' + ((p && PJ_STATUS[p.status] ? p.status : 'planejado') === k ? ' selected' : '') + '>' + PJ_STATUS[k] + '</option>';
+        }).join('') + '</select>') +
+        campo('pjf-resp', 'Responsável', '<input class="in" id="pjf-resp" list="pjf-resp-l" autocomplete="off" placeholder="Quem responde pelo projeto" value="' + esc(p ? p.responsavel || '' : '') + '">' +
+          '<datalist id="pjf-resp-l">' + Object.keys(nomes).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }).map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>') +
+      '</div><div class="pjf-2">' +
+        campo('pjf-inicio', 'Início previsto', '<input class="in" type="date" id="pjf-inicio" value="' + esc(p ? p.inicio || '' : '') + '">') +
+        campo('pjf-fim', 'Entrega prevista', '<input class="in" type="date" id="pjf-fim" value="' + esc(p ? p.fim || '' : '') + '">') +
+      '</div>' +
+      '<div class="pjf-f"><label for="pjf-file">Anexos <small>(até 1,5 MB cada)</small></label>' +
+        '<input class="in" type="file" id="pjf-file" multiple style="padding:8px;height:auto">' +
+        '<div class="pjf-anx" id="pjf-anx"></div></div>' +
+      '<div class="pjf-erro" id="pjf-erro" role="alert"></div>' +
+      '<div class="pjf-pe">' + (p ? '<button type="button" class="btn perigo" data-pjf="excluir">' + ico('trash') + ' Excluir projeto</button>' : '') +
+        '<button type="button" class="btn" data-pjf="fechar">Cancelar</button>' +
+        '<button type="button" class="btnp" data-pjf="salvar">Salvar</button></div></div>';
+    document.body.appendChild(ov);
+    var $ = function (id) { return ov.querySelector('#' + id); };
+    var erro = $('pjf-erro');
+    var antes = document.activeElement;
+    var fecha = function () { ov.remove(); try { if (antes && antes.focus) antes.focus(); } catch (_) {} };
+    var pinta = function () {
+      $('pjf-anx').innerHTML = anexos.map(function (a, i) {
+        return '<span class="chip c-bk">' + (a.chave || a.dados ? '<button type="button" data-pjf-ver="' + i + '" title="Abrir">' + ico('clip') + ' ' + esc(a.nome || 'arquivo') + '</button>' : ico('clip') + ' ' + esc(a.nome || 'arquivo')) +
+          '<button type="button" data-pjf-tira="' + i + '" aria-label="Remover ' + esc(a.nome || 'arquivo') + '">' + ico('x') + '</button></span>';
+      }).join('') + (enviando ? '<span class="note">Enviando ' + H.plural(enviando, 'arquivo', 'arquivos') + '…</span>' : '');
+    };
+    pinta();
+    $('pjf-file').addEventListener('change', function (e) {
+      var A = raiz.AXIS_ACOES;
+      [].slice.call(e.target.files || []).forEach(function (f) {
+        if (!A || !A.subirAnexo) { H.toast('axis-acoes.js não carregado.', 'erro'); return; }
+        enviando++; pinta();
+        A.subirAnexo(f).then(function (a) { anexos.push(a); }, function (ex) { H.toast(ex.message || String(ex), 'erro'); })
+          .then(function () { enviando--; pinta(); });
+      });
+      e.target.value = '';
+    });
+    var salvando = false;
+    async function salvar() {
+      if (salvando) return;
+      if (enviando) { erro.textContent = 'Espere os anexos terminarem de subir.'; return; }
+      var f = { nome: $('pjf-nome').value, descricao: $('pjf-desc').value, status: $('pjf-status').value,
+                responsavel: $('pjf-resp').value, inicio: $('pjf-inicio').value, fim: $('pjf-fim').value, anexos: anexos };
+      // Confere antes de ir ao servidor: o erro aparece ao lado do campo.
+      var pre = pjRegraSalvar(p ? [p] : [], p ? p.id : '', f, contextoPj());
+      if (!pre.ok) { erro.textContent = pre.erro; if (pre.campo) $('pjf-' + pre.campo).focus(); return; }
+      salvando = true;
+      var b = ov.querySelector('[data-pjf="salvar"]');
+      b.disabled = true; b.textContent = 'Salvando…';
+      var r = await gravaProjetos(function (base) { return pjRegraSalvar(base.projetos, p ? p.id : '', f, contextoPj()); }, 'Projeto salvo.');
+      salvando = false;
+      if (!r.ok) { b.disabled = false; b.textContent = 'Salvar'; if (r.erro) erro.textContent = r.erro; return; }
+      fecha();
+      // Novo: vai para o detalhe, ja com o EP- que o servidor deu.
+      if (r.novo) {
+        var salvo = porIdNaBase(r.id);
+        if (salvo) location.hash = hrefProjeto(salvo);
+      }
+    }
+    ov.addEventListener('click', async function (e) {
+      if (e.target === ov) { fecha(); return; }
+      var v = e.target.closest('[data-pjf-ver]');
+      if (v) { var A = raiz.AXIS_ACOES; if (A && A.abrirAnexo) A.abrirAnexo({ anexos: anexos }, +v.getAttribute('data-pjf-ver')); return; }
+      var t = e.target.closest('[data-pjf-tira]');
+      if (t) { anexos.splice(+t.getAttribute('data-pjf-tira'), 1); pinta(); return; }
+      var b = e.target.closest('[data-pjf]');
+      if (!b) return;
+      var q = b.getAttribute('data-pjf');
+      if (q === 'fechar') fecha();
+      else if (q === 'salvar') salvar();
+      else if (q === 'excluir') { fecha(); excluir(p); }
+    });
+    ov.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); fecha(); }
+      else if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'file') { e.preventDefault(); salvar(); }
+    });
+    ov.addEventListener('input', function () { erro.textContent = ''; });
+    setTimeout(function () { $('pjf-nome').focus(); }, 0);
+  }
+
+  function caixa(o) {
+    var A = raiz.AXIS_ACOES;
+    if (!A || !A.caixa) { H.toast('axis-acoes.js não carregado.', 'erro'); return Promise.resolve(null); }
+    return A.caixa(o);
+  }
+
+  async function excluir(p) {
+    if (!p) return;
+    var n = (((AX.APP.D || {}).melhorias) || []).filter(function (m) { return m && m.projeto_id === p.id; }).length;
+    var sim = await caixa({ titulo: 'Excluir projeto', perigo: true, ok: 'Excluir',
+      texto: '"' + (p.nome || '') + '". ' + (n ? 'As ' + n + ' demandas vinculadas NÃO são apagadas — apenas deixam de pertencer a ele.' : 'Ele não tem demandas vinculadas.') });
+    if (!sim) return;
+    var r = await gravaProjetos(function (base) { return pjRegraExcluir(base.projetos, p.id, base.melhorias); }, 'Projeto excluído.');
+    if (r.ok) location.hash = '#projetos';
+  }
+
+  async function aprovar(p) {
+    await gravaProjetos(function (base) { return pjRegraAprovar(base.projetos, p.id, contextoPj()); }, 'Projeto aprovado. Já aceita demandas.');
+  }
+
+  async function recusar(p) {
+    var v = await caixa({ titulo: 'Recusar projeto', perigo: true, ok: 'Recusar',
+      texto: 'O dev que propôs vai ler. Sem motivo ele não sabe o que ajustar.',
+      campos: [{ nome: 'motivo', rotulo: 'Motivo da recusa', tipo: 'area', obrig: true, linhas: 4 }],
+      valida: function (x) { var r = pjRegraRecusar([{ id: 'x' }], 'x', x.motivo, contextoPj(), []); return r.ok ? '' : r; } });
+    if (!v) return;
+    await gravaProjetos(function (base) { return pjRegraRecusar(base.projetos, p.id, v.motivo, contextoPj(), base.melhorias); },
+      function (r) { var n = r.soltar.length; return 'Projeto recusado.' + (n ? ' ' + n + ' demanda(s) foram desvinculadas.' : ''); });
+  }
+
+  /* PROPOR (dev): a caixa do Meu painel; a recusa do servidor (nome repetido,
+     limite) reabre a caixa com o que foi escrito, em vez de perder o texto. */
+  async function propor() {
+    var v = { nome: '', descricao: '', justificativa: '' }, aviso = '';
+    for (;;) {
+      var r = await caixa({ titulo: 'Propor projeto', ok: 'Enviar para validação',
+        texto: (aviso ? aviso + '\n\n' : '') + 'Vai para a fila de validação do PM/PO. A resposta aparece aqui, na tela do projeto, com o motivo em caso de recusa.',
+        campos: [{ nome: 'nome', rotulo: 'Nome do projeto *', valor: v.nome, max: 160, dica: 'Ex.: Reformulação do fluxo de cobrança' },
+                 { nome: 'descricao', rotulo: 'O que o projeto entrega', tipo: 'area', linhas: 3, valor: v.descricao, dica: 'Em uma frase, qual o resultado no fim' },
+                 { nome: 'justificativa', rotulo: 'Por que agora', tipo: 'area', linhas: 3, valor: v.justificativa, dica: 'O que dói hoje, e o que acontece se ficar como está' }],
+        valida: function (x) { var p = pjRegraPropor(x); return p.ok ? '' : p; } });
+      if (!r) return;
+      v = r;
+      var pr = pjRegraPropor(Object.assign({ dev: H.meusNomes()[0] || (AX.APP.eu || {}).nome || '' }, r));
+      try {
+        var j = await H.api('projeto-novo', pr.corpo);
+        H.toast('Proposta enviada. O PM/PO vai validar.');
+        try { await H.recarregar(); } catch (_) {}
+        var novo = porIdNaBase(j.id);
+        if (novo) location.hash = hrefProjeto(novo);
+        return;
+      } catch (e) {
+        aviso = (e.corpo && e.corpo.detail) || (e.status === 429 ? 'Muitas tentativas em pouco tempo. Espere um minuto.' : 'Não foi possível enviar a proposta: ' + (e.message || e));
+      }
+    }
+  }
+
+  /* A FAIXA DA APROVACAO no detalhe (pjAprovRender do admin, dp-faixa do
+     painel do dev): pendente e recusado dizem quem propos, por que, e o que
+     falta; o PM/PO decide dali mesmo. */
+  function faixaAprovacao(p, ctx) {
+    var a = aprovacao(p), adm = ctx.papel === 'admin';
+    var meu = H.meusNomes().indexOf(p.solicitado_por) >= 0 || (ctx.eu && ctx.eu.nome === p.solicitado_por);
+    if (a === 'pendente') {
+      return '<div class="pj-aprov pend">' + ico('hourglass', 'style="color:var(--wn-t);font-size:18px"') + '<span>' +
+        (adm ? '<b>Aguardando sua validação.</b> ' : '<b>Aguardando validação do PM/PO' + (meu ? ' — sua proposta' : '') + '.</b> ') +
+        'Proposto por ' + esc(p.solicitado_por || '—') + (p.criado_em ? ' em ' + H.dma(p.criado_em) : '') + '. ' +
+        'Enquanto não for aprovado, ninguém vincula demanda a ele.</span>' +
+        (adm ? '<span class="row" style="flex:0 0 auto"><button type="button" class="btnp ok" data-pj-aprovar>' + ico('check') + ' Aprovar projeto</button>' +
+               '<button type="button" class="btn perigo" data-pj-recusar>' + ico('x') + ' Recusar</button></span>' : '') + '</div>';
+    }
+    if (a === 'recusado') {
+      return '<div class="pj-aprov rec">' + ico('ban', 'style="color:var(--dg-t);font-size:18px"') + '<span><b>Recusado</b>' +
+        (p.aprovado_por ? ' por ' + esc(p.aprovado_por) : '') + '.' + (p.recusa_motivo ? ' <b>Motivo:</b> ' + esc(p.recusa_motivo) : '') +
+        ' Não aceita demandas.' + (adm ? ' Se mudou de ideia, aprove aqui.' : '') + '</span>' +
+        (adm ? '<span class="row" style="flex:0 0 auto"><button type="button" class="btnp ok" data-pj-aprovar>' + ico('check') + ' Aprovar agora</button></span>' : '') + '</div>';
+    }
+    return '';
+  }
+
   // ── Eventos (delegados na vista: o render troca o miolo, o ouvinte fica) ─
   function copiar(texto) {
     var ok = function () { H.toast('Resumo copiado.'); };
@@ -911,6 +1232,18 @@
 
   function ligar(el, ctx, desenha) {
     el.addEventListener('click', function (e) {
+      var g = e.target.closest('[data-pj-novo],[data-pj-editar],[data-pj-propor],[data-pj-aprovar],[data-pj-recusar],[data-pj-anexo]');
+      if (g) {
+        var pj = acharProjeto(ctx.D, ctx.param);
+        if (g.hasAttribute('data-pj-novo')) abrirForm(null);
+        else if (g.hasAttribute('data-pj-propor')) propor();
+        else if (!pj) return;
+        else if (g.hasAttribute('data-pj-editar')) abrirForm(pj);
+        else if (g.hasAttribute('data-pj-aprovar')) { g.disabled = true; aprovar(pj).then(function () { g.disabled = false; }); }
+        else if (g.hasAttribute('data-pj-recusar')) recusar(pj);
+        else if (g.hasAttribute('data-pj-anexo')) { var A = raiz.AXIS_ACOES; if (A && A.abrirAnexo) A.abrirAnexo(pj, +g.getAttribute('data-pj-anexo')); }
+        return;
+      }
       var b = e.target.closest('[data-pj-st],[data-pj-rst],[data-pj-jan],[data-pj-meus],[data-pj-if],[data-pj-pag],[data-pj-copiar]');
       if (b) {
         if (b.hasAttribute('data-pj-st')) F.status = b.getAttribute('data-pj-st');

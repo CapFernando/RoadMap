@@ -28,7 +28,20 @@
                                      `ausencias` inteira, { id, dev, tipo,
                                      inicio, fim, obs } — aqui tambem editar;
      feriados                        a lista `feriados` ({ data, nome }). Nao
-                                     havia tela para ela (o gantt so lia).
+                                     havia tela para ela (o gantt so lia);
+     clicar no dia vazio da linha    onLayerClick/onDayCellClick -> openModal(
+                                     null, dev, dia): o formulario do app
+                                     (`AXIS_FORM.abrir(null, { dev, inicio,
+                                     entrega })`) abre a nova com o dev e o
+                                     dia; grava pela regra do formulario;
+     juntar demandas                 gJuntarConfirmar: a primeira marcada e a
+                                     principal, as outras ganham { parent_id:
+                                     principal, is_dependency: false } — a
+                                     regra `juntar` do axis-acoes.js, com o
+                                     ciclo recusado antes (`criaCiclo`);
+     tirar do grupo                  gSoltar: { parent_id: '', is_dependency:
+                                     false } (regra `soltar`), no dialogo da
+                                     barra.
 
    QUEM PODE O QUE. O gantt gravava so por `publish` (admin). Aqui grava
    `H.gravar`: admin por `publish`, analista por `dev-publish`. Por isso:
@@ -47,12 +60,10 @@
    etapa-demanda.js; frente do pipelines.js; ordem da fila do ordem-kanban.js;
    selo do selo-validacao.js. A tela so recorta pela janela e desenha.
 
-   O QUE FICOU NO gantt.html, e por que: juntar varias demandas numa principal
-   (o vinculo "parte" em lote; mesclar e acao do Item), o resumo e o ranking
-   do mes (estao em Paineis e Fechamento) e criar demanda clicando no dia
-   vazio (o formulario do app nao recebe dev e data prontos; "+ Nova demanda"
-   continua no topo). Gerenciar devs, juntar dois nomes da mesma pessoa e o
-   link de visualizacao sem login estao em Configuracoes > Pessoas e perfis.
+   O QUE FICOU NO gantt.html, e por que: o resumo e o ranking do mes (estao
+   em Paineis e Fechamento). Gerenciar devs, juntar dois nomes da mesma
+   pessoa e o link de visualizacao sem login estao em Configuracoes >
+   Pessoas e perfis.
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   'use strict';
@@ -123,7 +134,8 @@
     limbo: lerLS('axis_plan_limbo') === '1',
     rolagem: 0,
     el: null,
-    M: null            // o que o ultimo desenho calculou (janela, linhas, barras)
+    M: null,           // o que o ultimo desenho calculou (janela, linhas, barras)
+    juntar: null       // { sel: [ids] } no modo "juntar": [0] e a principal
   };
   if (!ZOOMS.some(function (z) { return z.n === EST.zoom; })) EST.zoom = 2;
   var _arr = null, _suprime = false;
@@ -257,6 +269,18 @@
       '.axa .pl-li .btns{height:28px}',
       '.axa .pl-li.ed{box-shadow:inset 0 0 0 1px rgba(var(--ac-rgb),.55)}',
       '.axa .pl-lst{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto}',
+      // O dia vazio da linha cria demanda (onLayerClick do gantt).
+      '.axa .pl-ln.cria .pl-c:not(.fe){cursor:copy}',
+      '.axa .pl-ln.cria .pl-c:not(.fe):hover{background:rgba(var(--ac-rgb),.10);box-shadow:inset 0 0 0 1px rgba(var(--ac-rgb),.35)}',
+      // Juntar: a primeira marcada e a principal.
+      '.axa .pl-jt{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:12px 16px;border-radius:14px;background:rgba(var(--ac-rgb),.06);border:1px solid rgba(var(--ac-rgb),.3);font-size:13px}',
+      '.axa .pl-jt .lb{font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--ac-t)}',
+      '.axa .pl-jt .dir{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}',
+      '.axa .pl-jt .btnp:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}',
+      '.axa .pl-gt.juntando .pl-br{cursor:pointer}',
+      '.axa .pl-br.jsel{box-shadow:0 0 0 2px rgba(var(--ac-rgb),.55)}',
+      '.axa .pl-br.jpri{box-shadow:0 0 0 2px var(--ac)}',
+      '.axa .pl-br .jtag{flex-shrink:0;height:16px;padding:0 5px;border-radius:5px;background:var(--ac);color:var(--on-ac);font-size:9.5px;font-weight:800;letter-spacing:.06em;display:inline-flex;align-items:center}',
       '@container app (max-width: 760px){',
       '.axa .pl-lay{grid-template-columns:minmax(0,1fr)}',
       '.axa .pl-gt{--lw:128px}',
@@ -644,7 +668,8 @@
 
   function htmlBarra(M, l, x) {
     var m = x.m, J = M.J;
-    var ed = podeEditar() && !x.derivada && !EST.apresentar && !EST.pend[m.id];
+    var ed = podeEditar() && !x.derivada && !EST.apresentar && !EST.pend[m.id] && !EST.juntar;
+    var js = EST.juntar ? EST.juntar.sel.indexOf(m.id) : -1;
     var arr = ed && !travada(m);
     var paus = H.pausada(m);
     var semPts = raiz.CAPACIDADE ? raiz.CAPACIDADE.semPontuacao(m) : false;
@@ -659,12 +684,14 @@
       (semPts ? '\nSem pontos do Planning Poker.' : '') +
       (ed && !arr ? '\nData comprometida: quem muda é o PM/PO.' : '') +
       (arr ? '\nArraste para mover; puxe as pontas para mudar início e prazo.' : '');
-    var cls = 'pl-br k-' + corDe(m) + (paus ? ' pa' : '') + (x.her ? ' he' : '') + (x.grupo ? ' gr' : '') + (arr ? ' ed' : '') + (EST.pend[m.id] ? ' sv' : '');
+    var cls = 'pl-br k-' + corDe(m) + (paus ? ' pa' : '') + (x.her ? ' he' : '') + (x.grupo ? ' gr' : '') + (arr ? ' ed' : '') + (EST.pend[m.id] ? ' sv' : '') +
+      (js === 0 ? ' jpri' : js > 0 ? ' jsel' : '');
     var sprintsFora = x.her && raiz.PRAZO ? raiz.PRAZO.sprintsEstouradas(m, etapaGravada(m), M.hoje) : 0;
     return '<a class="' + cls + '" href="' + H.hrefItem(m) + '" draggable="false" data-id="' + esc(m.id) + '" data-ln="' + esc(l.nome) + '"' +
       ' data-s="' + x.s + '" data-e="' + x.e + '"' + (arr ? ' data-arr="1"' : '') + (ed ? ' data-ed="1"' : '') +
       ' style="grid-column:' + (x.s + 2) + ' / ' + (x.e + 3) + ';grid-row:' + (x.f + 1) + '" title="' + esc(tit) + '">' +
       (arr && !x.cs && !x.her ? '<i class="pl-h pl-hi" aria-hidden="true"></i>' : '') +
+      (js === 0 ? '<span class="jtag">PRINCIPAL</span>' : '') +
       '<span class="c">' + esc(m.codigo || '') + '</span>' +
       (paus ? '<span class="x">' + ico('pause') + '</span>' : '') +
       (x.her ? '<span class="x">⇥ ' + esc(H.dm(x.b)) + (sprintsFora ? ' +' + sprintsFora + 's' : '') + '</span>' : '') +
@@ -719,7 +746,7 @@
         return (AUS[x.tipo] || AUS.outro).rot.toLowerCase() + ' ' + H.dm(x.inicio) + (x.fim && x.fim !== x.inicio ? '–' + H.dm(x.fim) : '');
       }).join(' · ');
       var nota = l.livres + ' de ' + l.disp + ' dias livres' + (ausTxt ? ' · ' + ausTxt : (P ? ' · ' + (P.doDev(l.nome, D.devs_perfil) || '') : ''));
-      var h = '<div class="pl-ln" data-pl-dev="' + esc(l.nome) + '" style="' + vars + ';--nr:' + nr + '">' +
+      var h = '<div class="pl-ln' + (criaNoDia() ? ' cria' : '') + '" data-pl-dev="' + esc(l.nome) + '" style="' + vars + ';--nr:' + nr + '">' +
         '<div class="pl-lb"><span class="nm"><b' + (meus.indexOf(l.k) >= 0 ? ' style="color:var(--ac-t)"' : '') + ' title="' + esc(l.nome) + '">' + esc(l.nome) + '</b>' +
         ((perfil[l.nome] || {}).axcred ? chip('AXCred', 'wn', 'DEV-AXCred: aparece primeiro') : '') + '</span>' +
         '<span class="cp" style="color:' + cor + '" title="Pontos das demandas que o PM/PO pôs nas sprints da janela, contra 30 por sprint">' +
@@ -798,6 +825,39 @@
         }).join('') + '</div>' : '') + '</section>';
   }
 
+  /** Criar clicando no dia vazio: quem edita, fora da apresentacao e do juntar. */
+  function criaNoDia() { return podeEditar() && !EST.apresentar && !EST.juntar && !!(raiz.AXIS_FORM && raiz.AXIS_FORM.abrir); }
+
+  /** A faixa do modo juntar (`g-juntar-bar` do gantt), com a contagem dele. */
+  function htmlJuntar() {
+    var n = EST.juntar.sel.length;
+    return '<section class="pl-jt" role="region" aria-label="Juntar demandas"><span class="lb">JUNTAR</span>' +
+      '<span>Clique na principal e depois nas que ficam dentro dela.</span>' +
+      '<b aria-live="polite">' + (n === 0 ? 'nenhuma selecionada' : n === 1 ? '1 selecionada (a principal) — marque as que ficam dentro dela'
+        : n + ' selecionadas · ' + (n - 1) + (n - 1 === 1 ? ' quebra' : ' quebras') + ' dentro da principal') + '</b>' +
+      '<span class="dir"><button type="button" class="btn" data-pl="juntar-sai">Cancelar</button>' +
+      '<button type="button" class="btnp" data-pl="juntar-ok"' + (n < 2 ? ' disabled' : '') + '>' + ico('link') + ' Juntar</button></span></section>';
+  }
+
+  /** JUNTAR (`gJuntarConfirmar`): o ciclo e recusado ANTES de perguntar, e a
+   *  pergunta diz quem vira principal e o que fica dentro. */
+  async function juntarAgora() {
+    var A = raiz.AXIS_ACOES;
+    var sel = EST.juntar ? EST.juntar.sel : [];
+    if (sel.length < 2 || !A) return;
+    var principal = porId(sel[0]);
+    var filhas = sel.slice(1).map(porId).filter(Boolean);
+    if (!principal || !filhas.length) return;
+    var r = A.REGRAS.juntar(principal, { filhas: filhas }, A.contexto());
+    if (!r.ok) { H.toast(r.erro, 'erro'); return; }
+    var rot = function (m) { return (m.codigo ? m.codigo + ' ' : '') + (m.titulo || ''); };
+    if (!(await A.caixa({ titulo: 'Juntar ' + filhas.length + (filhas.length === 1 ? ' demanda' : ' demandas'), ok: 'Juntar',
+      texto: 'A principal passa a ser:\n\n' + rot(principal) + '\n\nE ficam dentro dela:\n· ' + filhas.map(rot).join('\n· ') +
+        '\n\nOs pontos delas passam a somar na principal, e a barra da principal cobre o período de todas. Nada é apagado.' }))) return;
+    EST.juntar = null;
+    grava(r.patches, r.msg);
+  }
+
   function htmlTela(D, ctx) {
     var r1 = rotaSprint(ctx);
     var M = montar(D, r1);
@@ -809,7 +869,7 @@
     var noHoje = J.ini <= M.hoje && M.hoje <= J.fim;
     var h = '<header class="pl-hd"><div class="tt"><span class="note"><a href="#sprints/planejamento/' + esc(r1) + '">Sprints</a> › Planejamento</span>' +
       '<h1 class="h1">Planejamento</h1>' +
-      '<span class="sub">' + (ed ? 'Arraste um item pontuado da fila para a linha do dev, no dia de início. Arraste a barra para mover e puxe as pontas para mudar início e prazo.'
+      '<span class="sub">' + (ed ? 'Arraste um item pontuado da fila para a linha do dev, no dia de início. Arraste a barra para mover e puxe as pontas para mudar início e prazo. Clique num dia vazio da linha para criar uma demanda já com o dev e a data.'
         : 'Quem está com o quê em cada dia útil, pelas datas de início e prazo. Mover e alocar é do PM/PO e do analista.') + '</span></div>' +
       '<div class="ac"><div class="pl-nav"><a href="#planejamento/' + esc(antes) + '" aria-label="Período anterior" title="Período anterior">‹</a>' +
       '<span>' + esc(H.dm(J.ini) + ' – ' + H.dm(J.fim)) + '</span>' +
@@ -818,12 +878,15 @@
       '<select class="pl-sel" id="pl-zoom" aria-label="Zoom da régua">' + ZOOMS.map(function (z) { return opt(z.n, z.rot, EST.zoom); }).join('') + '</select>' +
       '<button type="button" class="btn" data-pl="aus">' + ico('calendar') + ' Ausências</button>' +
       (ehAdmin() ? '<button type="button" class="btn" data-pl="fer">' + ico('flag') + ' Feriados</button>' : '') +
+      (ed && !EST.apresentar ? '<button type="button" class="btn' + (EST.juntar ? ' on" style="border-color:rgba(var(--ac-rgb),.55)' : '') + '" data-pl="juntar" aria-pressed="' + !!EST.juntar + '"' +
+        ' title="Marque a principal e as que ficam dentro dela">' + ico('link') + ' Juntar demandas</button>' : '') +
       '<button type="button" class="btn' + (EST.apresentar ? ' on" style="border-color:rgba(var(--ac-rgb),.55)' : '') + '" data-pl="apres" aria-pressed="' + EST.apresentar + '" title="Esconde filtros, fila e capacidade para projetar na reunião">' + ico('present') + ' ' + (EST.apresentar ? 'Sair da apresentação' : 'Apresentar') + '</button>' +
       '</div></header>';
     if (!EST.apresentar) h += htmlFiltros(D, M);
     if (!EST.apresentar && noHoje) h += htmlLimbo(D, M);
+    if (EST.juntar) h += htmlJuntar();
     var fl = EST.apresentar ? null : htmlFilaLista(D);
-    h += '<div class="pl-lay' + (EST.apresentar ? ' so' : '') + '"><div class="pl-gt" id="pl-gt" style="overflow-x: auto">' + htmlQuadro(D, M) + '</div>' +
+    h += '<div class="pl-lay' + (EST.apresentar ? ' so' : '') + '"><div class="pl-gt' + (EST.juntar ? ' juntando' : '') + '" id="pl-gt" style="overflow-x: auto">' + htmlQuadro(D, M) + '</div>' +
       (fl ? '<aside class="pl-fila" aria-label="Fila da Planning"><div class="row" style="justify-content:space-between"><span class="lab" style="color:var(--pu-t)">' +
         (fl.etapa ? esc(((H.ETAPA_POR_ID[fl.etapa] || {}).rotulo || fl.etapa).toUpperCase()) + ' FORA DO QUADRO' : 'PRONTO PARA PLANNING') + '</span>' +
         '<span class="mono note" id="pl-fila-n">' + fl.total + '</span></div>' +
@@ -945,7 +1008,7 @@
   }
 
   function inicioArraste(el, e) {
-    if (e.button !== 0 || e.pointerType === 'touch' || !EST.M) return;
+    if (e.button !== 0 || e.pointerType === 'touch' || !EST.M || EST.juntar) return;
     var br = e.target.closest('.pl-br[data-arr]');
     var fc = !br && e.target.closest('.pl-fc[data-arr]');
     if (!br && !fc) return;
@@ -1154,12 +1217,24 @@
       '<div class="pl-er" id="plp-er" role="alert"></div>' +
       '<div class="pl-pe"><span class="esq"><a class="btns" href="' + H.hrefItem(m) + '" data-plx="1">Abrir item</a>' +
       (raiz.AXIS_FORM && raiz.AXIS_FORM.abrir ? '<button type="button" class="btns" id="plp-form">Mais campos</button>' : '') +
-      (podeVoltar ? '<button type="button" class="btns" id="plp-volta">' + ico('undo') + ' Voltar ao backlog</button>' : '') + '</span>' +
+      (podeVoltar ? '<button type="button" class="btns" id="plp-volta">' + ico('undo') + ' Voltar ao backlog</button>' : '') +
+      (String(m.parent_id || '') ? '<button type="button" class="btns" id="plp-solta" title="Volta a ser uma demanda solta">' + ico('link') + ' Tirar do grupo</button>' : '') + '</span>' +
       '<button type="button" class="btn" data-plx="1">Cancelar</button><button type="button" class="btnp" id="plp-ok">Salvar</button></div>';
     dialogo(html, function (d) {
       var erro = d.q('#plp-er');
       var form = d.q('#plp-form');
       if (form) form.addEventListener('click', function () { d.fecha(); raiz.AXIS_FORM.abrir(m0); });
+      var solta = d.q('#plp-solta');
+      if (solta) solta.addEventListener('click', async function () {
+        d.fecha();
+        // gSoltar (gantt.html)
+        if (!(await confirma('Tirar do grupo', (m.codigo ? m.codigo + ' ' : '') + (m.titulo || '') +
+          ' volta a ser uma demanda solta. Os pontos dela saem da soma da principal.', 'Tirar'))) return;
+        var rs = raiz.AXIS_ACOES.REGRAS.soltar(m, {}, raiz.AXIS_ACOES.contexto());
+        if (!rs.ok) { H.toast(rs.erro, 'erro'); return; }
+        var ps = {}; ps[m.id] = rs.patch;
+        grava(ps, rs.msg);
+      });
       var volta = d.q('#plp-volta');
       if (volta) volta.addEventListener('click', async function () {
         d.fecha();
@@ -1418,6 +1493,23 @@
     el.addEventListener('dragstart', function (e) { if (e.target.closest && e.target.closest('.pl-br, .pl-fc')) e.preventDefault(); });
     el.addEventListener('click', function (e) {
       if (_suprime) { e.preventDefault(); e.stopPropagation(); return; }
+      // JUNTAR: o clique na barra marca (a primeira e a principal) em vez de abrir.
+      var bj = EST.juntar && !e.ctrlKey && !e.metaKey ? e.target.closest('.pl-br[data-id]') : null;
+      if (bj) {
+        e.preventDefault();
+        var sid = bj.getAttribute('data-id'), sel = EST.juntar.sel, i = sel.indexOf(sid);
+        if (i >= 0) sel.splice(i, 1); else sel.push(sid);
+        repinta();
+        return;
+      }
+      // O dia vazio da linha: a demanda nova ja com o dev e o dia (onLayerClick).
+      var cel = criaNoDia() ? e.target.closest('.pl-c[data-i]') : null;
+      var lnC = cel && cel.closest('.pl-ln[data-pl-dev]');
+      if (lnC && EST.M) {
+        var dd = EST.M.J.dias[+cel.getAttribute('data-i')];
+        if (dd && !dd.fe) raiz.AXIS_FORM.abrir(null, { dev: lnC.getAttribute('data-pl-dev'), inicio: dd.d, entrega: dd.d });
+        return;
+      }
       var br = e.target.closest('.pl-br[data-ed], .pl-fc[data-arr], .pl-lim .it');
       if (br && podeEditar() && !e.ctrlKey && !e.metaKey) {
         var m = porId(br.getAttribute('data-id'));
@@ -1433,6 +1525,8 @@
         else if (a === 'limpar') { Object.keys(F).forEach(function (k) { if (k !== 'q') F[k] = ''; }); repinta(); }
         else if (a === 'todos') { F.dev = '__todos__'; repinta(); }
         else if (a === 'limbo') { EST.limbo = !EST.limbo; poeLS('axis_plan_limbo', EST.limbo ? '1' : ''); repinta(); }
+        else if (a === 'juntar' || a === 'juntar-sai') { EST.juntar = a === 'juntar' && !EST.juntar ? { sel: [] } : null; repinta(); }
+        else if (a === 'juntar-ok') juntarAgora().catch(function (ex) { console.error(ex); H.toast('Não foi possível juntar: ' + (ex.message || ex), 'erro'); });
         return;
       }
       var hs = e.target.closest('[data-pl-sprint]');

@@ -55,7 +55,12 @@
    ela e montada sobre a base FRESCA lida logo antes (`H.api('dados')`), e
    nao sobre a da tela — a mesma ideia das ausencias no Planejamento.
 
-   Publica `window.AXIS_FORM = { abrir(m|null, { foco }) }` e, no Node,
+   VALORES INICIAIS DA NOVA: `abrir(null, { dev, inicio, entrega })` abre a
+   demanda nova ja com o responsavel e as datas — o clique no dia vazio da
+   linha de um dev no Planejamento (o `openModal(null, dev, data)` do
+   gantt.html). So preenche a tela: a regra de gravar e a de sempre.
+
+   Publica `window.AXIS_FORM = { abrir(m|null, { foco, dev, inicio, entrega }) }` e, no Node,
    `module.exports` com as regras puras (`nova`, `edicao`).
    ───────────────────────────────────────────────────────────────────────── */
 (function (raiz) {
@@ -954,6 +959,21 @@
     document.removeEventListener('keydown', e.tecla, true);
   }
 
+  /** Os valores iniciais da demanda nova (ver o cabecalho). Antes do
+   *  `retrato`: fechar sem mexer nao pergunta se descarta o que veio pronto. */
+  function preencheNova(o) {
+    var dsel = el('axf-dev');
+    if (dsel && o.dev) {
+      var tem = [].some.call(dsel.options, function (x) { return x.value === o.dev; });
+      dsel.value = tem ? o.dev : '__manual__';
+      if (!tem) { el('axf-dev-manual').value = o.dev; el('axf-dev-manual').style.display = ''; }
+    }
+    ['inicio', 'entrega'].forEach(function (k) {
+      var x = el('axf-' + k);
+      if (x && !x.disabled && /^\d{4}-\d{2}-\d{2}$/.test(String(o[k] || ''))) x.value = o[k];
+    });
+  }
+
   function abrir(m, o) {
     o = o || {};
     if (!H.pode('gravar')) { H.toast('Seu perfil é só de leitura.', 'erro'); return; }
@@ -1043,6 +1063,7 @@
       else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); salvar(); }
     };
     document.addEventListener('keydown', EST.tecla, true);
+    if (!m) preencheNova(o);
     EST.extras0 = rawExtras();
     EST.inicial = retrato();
     setTimeout(function () {

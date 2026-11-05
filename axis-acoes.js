@@ -31,6 +31,10 @@
      mesclar        mescConfirmar (admin.html): a outra entra nesta e sai do
                     fluxo, sem ser apagada; o patch e da absorvida
      separar        mescDesfazer (admin.html)
+     juntar         gJuntarConfirmar (gantt.html): varias demandas que ja
+                    existem passam a ser parte desta, em lote — o mesmo elo
+                    do `vincular` (`elo`), com o ciclo recusado antes
+     soltar         gSoltar (gantt.html): tira do grupo, volta a ser solta
      pegar, subtarefas, salvarEntrega, referencias, grill, vincular, anexar
      e mensagem     os gestos do painel do dev (dev.html) e a escrita da
                     conversa (mensageria.html) — ver "OS GESTOS DO PAINEL DO
@@ -708,6 +712,11 @@
     return de.filter(function (x, i) { return de.indexOf(x) === i; }).sort();
   }
 
+  /** O ELO DE VINCULO (vinculo.js): `parent_id` aponta a principal e
+   *  `is_dependency` diz se trava (dependencia) ou nao (parte). Os dois campos
+   *  andam juntos; gravar so um deixaria o elo sem tipo. */
+  function elo(principal, tipo) { return { parent_id: principal.id, is_dependency: tipo === 'dependencia' }; }
+
   /* VINCULAR (`saveNewDep`): a demanda nova pendurada nesta. Devolve `novo`
      (a demanda inteira, como o painel grava) e `id`. `a` = { tipo: parte|
      dependencia, titulo, dev, entrega, descricao, id }. */
@@ -723,13 +732,47 @@
     var novo = {
       id: a.id || c.id, titulo: titulo, descricao: txt(a.descricao), dev: a.dev,
       tema_id: m.tema_id, tipo: m.tipo || '', impacto: m.impacto || '', urgencia: m.urgencia || '',
-      entrega: a.entrega || '', parent_id: m.id, is_dependency: a.tipo === 'dependencia',
+      entrega: a.entrega || '',
       horas_realizadas: 0, criado_em: c.agora, solicitante: sol, solicitante_email: CO ? CO.emailPara(sol, null) : ''
     };
+    Object.assign(novo, elo(m, a.tipo));
     var SP = mod(c, 'SPRINTPO');
     if (SP) SP.nasceForaDaSprint(novo);
     return { ok: true, id: novo.id, novo: novo, patch: novo,
              msg: (a.tipo === 'dependencia' ? 'Dependência aberta' : 'Demanda vinculada') + ' a ' + (m.codigo || 'esta') + ' — nasce no Backlog, fora da sprint.' };
+  }
+
+  /* JUNTAR (`gJuntarConfirmar`, gantt.html): "juntar varias demandas em uma
+     unica. Ao juntar, essa se transforma na principal e as demais ficam
+     visiveis dentro." O elo e `parte`, e NAO `dependencia`: juntar para
+     organizar nao pode travar o avanco da principal. O CICLO E RECUSADO
+     ANTES (`VINCULO.criaCiclo`, a regra que a API usa): marcar a principal e
+     um ancestral dela fecharia um laco. `m` e a principal; `a` = { filhas }.
+     Devolve `patches` ({ id: patch }), um por filha. O gantt so gravava pelo
+     `publish` (admin); aqui e do PM/PO e do analista, como o resto do
+     Planejamento. */
+  function juntar(m, a, c) {
+    var filhas = ((a || {}).filhas || []).filter(Boolean);
+    if (!m || !filhas.length) return falha('Marque a principal e ao menos uma demanda para ficar dentro dela.');
+    if (ehDev(c) || txt(c.papel) === 'consulta') return falha('Juntar demandas é do PM/PO e do analista.');
+    var VI = mod(c, 'VINCULO');
+    var lista = c.lista || [];
+    var ciclo = VI ? filhas.filter(function (f) { return VI.criaCiclo(lista, f.id, m.id); }) : [];
+    if (ciclo.length) {
+      return falha('Não dá: ' + ciclo.map(function (f) { return f.codigo || f.titulo; }).join(', ') + ' já está acima da principal na árvore.');
+    }
+    var patches = {};
+    filhas.forEach(function (f) { patches[f.id] = elo(m, 'parte'); });
+    return { ok: true, patches: patches, n: filhas.length,
+             msg: filhas.length + (filhas.length === 1 ? ' demanda juntada' : ' demandas juntadas') + ' em ' + (m.codigo || m.titulo) + '.' };
+  }
+
+  /** SOLTAR (`gSoltar`, gantt.html): a demanda sai do grupo e volta a ser
+   *  solta; os pontos dela saem da soma da principal. */
+  function soltar(m, a, c) {
+    if (!m || !txt(m.parent_id)) return falha('Esta demanda não está dentro de outra.');
+    if (ehDev(c) || txt(c.papel) === 'consulta') return falha('Tirar do grupo é do PM/PO e do analista.');
+    return { ok: true, patch: { parent_id: '', is_dependency: false }, msg: 'Tirada do grupo.' };
   }
 
   /** ANEXAR: os enviados pelo `anexo-subir` entram depois dos que ja estao. `a` = { novos }. */
@@ -789,7 +832,7 @@
                         grill: grill, vincular: vincular, anexar: anexar, mensagem: mensagem };
 
   var REGRAS = {
-    mesclar: mesclar, separar: separar,
+    mesclar: mesclar, separar: separar, juntar: juntar, soltar: soltar,
     casoUso: casoUso,
     mover: mover, validar: validar, devolver: devolver, homologar: homologar, replanejar: replanejar,
     pausar: pausar, pedirPausa: pedirPausa, desistirPausa: desistirPausa, aprovarPausa: aprovarPausa,

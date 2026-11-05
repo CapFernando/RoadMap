@@ -332,8 +332,6 @@
   }
   function cod(m) { return '<span class="code">' + esc(m.codigo || '—') + '</span>'; }
   function hrefItem(m) { return '#item/' + encodeURIComponent(m.codigo || m.id); }
-  /** O editor de sempre, ja logado: admin.html e dev.html abrem o card pelo hash. */
-  function hrefEditar(m) { return (APP.papel === 'admin' ? 'admin.html#' : 'dev.html#') + encodeURIComponent(m.codigo || ''); }
   /** Prazo em texto curto, com a cor que o prototipo usa (vermelho = atrasado ou hoje). */
   function prazoTxt(m) {
     if (pausada(m)) return { txt: 'prazo suspenso', cor: 'var(--tx3)' };
@@ -354,8 +352,9 @@
     if (d === 1) return { txt: 'amanhã', cor: 'var(--wn-t)' };
     return { txt: dm(pz), cor: 'var(--tx2)' };
   }
-  /** Link para uma aba do admin (melhorias, kanban, temas, projetos, mes,
-      gerencial, relatorios, usuarios), com o icone de "sai do app". */
+  /** Link para uma aba do admin (mes, gerencial, relatorios), com o icone de
+      "sai do app". So o que ainda nao foi portado (Fechamento, Paineis e
+      Relatorios) o usa. */
   function linkAdmin(aba, rotulo, cls) {
     return '<a class="' + (cls || 'btn') + '" href="admin.html" data-admin-aba="' + esc(aba) + '" title="Abre no editor (admin)">' +
       esc(rotulo) + ' ' + ico('external', 'style="font-size:12px;opacity:.7"') + '</a>';
@@ -546,7 +545,11 @@
       '<circle cx="560" cy="30" r="6" fill="var(--tx-hi)"/></svg>';
   }
 
-  function desenharLogin(msg) {
+  /* `o.ok`: a frase e de sucesso (senha redefinida), e nao erro; `o.usuario`
+     ja vem no campo. Recuperar a senha e criar a conta sao passos desta mesma
+     caixa (AXIS_CONTA.passo, axis-tela-conta.js). */
+  function desenharLogin(msg, o) {
+    o = o || {};
     raizEl.innerHTML =
       '<div class="lg"><div class="lg-esq"><span class="axis-logo" role="img" aria-label="AXIS"></span>' +
       '<h1 class="lg-tit">Todas as demandas da tecnologia em um só eixo.</h1>' +
@@ -555,12 +558,21 @@
       '<span class="sb-mark" style="width:56px;height:56px;border-radius:16px"><img src="axis/marca/axis-leao-branco.png" alt="" style="width:36px"></span>' +
       '<h2 style="margin:6px 0 0;font-family:var(--font-title);font-size:26px;font-weight:800">Bem-vindo de volta</h2>' +
       '<span class="sub" style="margin-bottom:8px">Entre com a sua conta da Tecnologia.</span>' +
-      '<label for="lg-usuario">Usuário ou e-mail</label><input class="in" id="lg-usuario" autocomplete="username" required>' +
-      '<label for="lg-senha">Senha</label><input class="in" id="lg-senha" type="password" autocomplete="current-password" required>' +
-      '<div class="lg-err" id="lg-err" role="alert">' + esc(msg || '') + '</div>' +
+      '<label for="lg-usuario">Usuário ou e-mail</label><input class="in" id="lg-usuario" autocomplete="username" required value="' + esc(o.usuario || '') + '">' +
+      '<span style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><label for="lg-senha">Senha</label>' +
+      '<button type="button" class="link" data-lg="recuperar" style="font-size:12.5px;font-weight:700">Esqueci a senha</button></span>' +
+      '<input class="in" id="lg-senha" type="password" autocomplete="current-password" required>' +
+      '<div class="lg-err" id="lg-err" role="alert"' + (o.ok ? ' style="color:var(--ok-t)"' : '') + '>' + esc(msg || '') + '</div>' +
       '<button class="btnp" id="lg-btn" type="submit">Entrar</button>' +
-      '<span class="note" style="text-align:center">Esqueceu a senha? Peça a troca em <a href="admin.html">Área administrativa</a> ou no <a href="dev.html">Meu painel</a>.</span>' +
+      '<span class="note" style="text-align:center">Primeiro acesso? <button type="button" class="link" data-lg="cadastro">Criar minha conta</button></span>' +
       '</form></div></div>';
+    raizEl.querySelectorAll('[data-lg]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var modo = b.getAttribute('data-lg');
+        if (raiz.AXIS_CONTA && raiz.AXIS_CONTA.passo) raiz.AXIS_CONTA.passo(raizEl.querySelector('.lg-dir'), modo, desenharLogin);
+        else if (modo === 'recuperar' && raiz.abrirRecuperarSenha) raiz.abrirRecuperarSenha();
+      });
+    });
     var f = raizEl.querySelector('#lg-form');
     f.addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -574,7 +586,7 @@
         b.disabled = false; b.textContent = 'Entrar';
       }
     });
-    setTimeout(function () { var u = raizEl.querySelector('#lg-usuario'); if (u) u.focus(); }, 0);
+    setTimeout(function () { var u = raizEl.querySelector(o.usuario ? '#lg-senha' : '#lg-usuario'); if (u) u.focus(); }, 0);
   }
 
   function telaPermitida(id) {
@@ -688,10 +700,10 @@
         if (acao === 'busca') { abrirBusca(); return; }
         if (acao === 'tema') { if (raiz.temaAlternar) raiz.temaAlternar(); desenhar(); return; }
         if (acao === 'ntf') { abrirNotificacoes(a); return; }
-        // "+ Novo": o formulario do app (axis-form-demanda.js); sem ele, o de sempre.
+        // "+ Nova demanda": o formulario do app (axis-form-demanda.js).
         if (acao === 'novo') {
           if (raiz.AXIS_FORM && raiz.AXIS_FORM.abrir) raiz.AXIS_FORM.abrir(null);
-          else location.href = APP.papel === 'admin' ? 'admin.html#novo' : 'dev.html#novo';
+          else toast('O formulário de demanda não carregou. Recarregue a página.', 'erro');
           return;
         }
       }
@@ -721,7 +733,7 @@
     visiveis: visiveis, etapaDe: etapaDe, colunaDe: colunaDe, pausada: pausada, prazoDe: prazoDe, atrasoDe: atrasoDe,
     pontosDe: pontosDe, devsDe: devsDe, tema: tema, caminho: caminho, projeto: projeto, sprintAtual: sprintAtual,
     porCodigo: porCodigo, meusNomes: meusNomes, minha: minha, pode: pode, donoDaSprint: donoDaSprint, hidrata: hidrata,
-    ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, chipsReq: chipsReq, chipCasoUso: chipCasoUso, CASO_USO_COR: CASO_USO_COR, av: av, cod: cod, hrefItem: hrefItem, hrefEditar: hrefEditar,
+    ico: ico, chip: chip, chipEtapa: chipEtapa, chipTipo: chipTipo, chipsReq: chipsReq, chipCasoUso: chipCasoUso, CASO_USO_COR: CASO_USO_COR, av: av, cod: cod, hrefItem: hrefItem,
     prazoTxt: prazoTxt, vazio: vazio, linkAdmin: linkAdmin, gravar: gravar, kpi: kpi, toast: toast, ir: ir, api: api, recarregar: function () { return carregar().then(desenhar); }
   };
 

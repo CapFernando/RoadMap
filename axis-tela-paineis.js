@@ -549,8 +549,9 @@
   }
 
   /** OS SLIDES DO DECK DO MES — copia de `AP_SECOES` (admin.html). `pad` e o
-   *  "Padrao do fechamento"; `n`, quantos slides a secao gera. O deck so sai no
-   *  admin (apresentacao.js); aqui a lista serve para a previa. */
+   *  "Padrao do fechamento"; `n`, quantos slides a secao gera. O deck sai do
+   *  Fechamento do mes (axis-tela-fechamento.js, que tem a lista com as notas);
+   *  aqui ela serve para o resumo dos Relatorios. */
   var AP_SECOES = [
     { k: 'entregas', rot: 'O mês: backlog, o que entrou e o que saiu', n: 1, pad: true },
     { k: 'evolucao', rot: 'Evolução: este mês e o anterior', n: 1, pad: true },
@@ -812,7 +813,7 @@
   function visao(ctx, alvo) {
     var D = ctx.D, g = gerencialDoMes(D, alvo), en = entradasDoMes(D, alvo);
     var hj = H.hoje();
-    var botoes = H.pode('editar') ? H.linkAdmin('gerencial', 'Abrir o gerencial') : '';
+    var botoes = acoesDoMes(alvo);
     var h = cabecalho('Visão gerencial', 'Saúde do fluxo em ' + esc(rotuloMes(alvo)) + '. As horas e as demandas são as do início no mês, como no Gerencial do admin.',
       seletorMes('paineis/visao', alvo) + botoes);
 
@@ -885,6 +886,11 @@
         (devs.length ? barrasH(devs, { duas: true, cor: 'var(--in)', cor2: 'var(--ok)' }) : H.vazio('users', 'Sem demandas com dev no mês')) + '</section>' +
       cobertura(g.concluidos) + '</div>';
 
+    // O que o Gerencial do admin tinha e esta tela nao: as demandas por dev
+    // empilhadas por tema, as comprometidas sem pontuacao e as entradas do mes
+    // por tema.
+    h += '<div class="gx-g gx-2">' + devsPorTemaHtml(D, g.items) + semPontosHtml(D) + '</div>' + entradasPorTemaHtml(D, alvo, en);
+
     // A lista que compoe os numeros: "todo numero abre a lista de itens".
     var linhasT = g.items.slice().sort(function (a, b) { return String(a.inicio || '').localeCompare(String(b.inicio || '')); });
     var pg = paginar(linhasT, _pagDem, 20);
@@ -907,6 +913,105 @@
         }).join('') + '</tbody></table></div>' + navPag(pg, linhasT.length, 'pag-dem')
         : H.vazio('calendar', 'Nenhuma demanda com início em ' + rotuloMes(alvo))) + '</section>';
     return h;
+  }
+
+  /** O QUE SAIA DO GERENCIAL DO ADMIN, AGORA DAQUI: o deck do mes (montado no
+   *  Fechamento, que e do PM/PO) e a base do mes em CSV (`data-axis-csv`, em
+   *  axis-tela-relatorios.js), do mes que esta na tela. */
+  function acoesDoMes(alvo) {
+    return (H.pode('fechar') ? '<a class="btn" href="#fechamento/apresentacao/' + alvo + '" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">' + H.ico('present') + ' Gerar apresentação</a>' : '') +
+      (H.pode('gerencial') ? '<button type="button" class="btn" data-axis-csv="' + alvo + '" title="Uma linha por demanda × pessoa, com pontos, horas, prazo, frente e projeto">' + H.ico('download') + ' Base do mês (CSV)</button>' : '');
+  }
+
+  /* ── Comprometidas sem pontuacao: `ETAPAS_COMPROMETIDAS`, `semPontuacao` e
+     `renderGerSemPontos` (admin.html). Nao filtra por mes: e o que esta na
+     esteira agora, com data combinada e sem estimativa. */
+  var ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido'];
+  function semPontosDe(D) {
+    var comprometidas = todas(D).filter(function (m) { return !m.oculto && !m.mesclado_em && ETAPAS_COMPROMETIDAS.indexOf(m.status_planejamento || '') >= 0; });
+    var sem = comprometidas.filter(function (m) { return !(Number(m.poker_pontos) > 0); });
+    var porDev = {};
+    sem.forEach(function (m) { var k = String(m.dev || '').trim() || '(sem responsável)'; (porDev[k] = porDev[k] || []).push(m); });
+    return { comprometidas: comprometidas, sem: sem, pct: comprometidas.length ? Math.round(sem.length / comprometidas.length * 100) : 0,
+             porDev: Object.keys(porDev).map(function (k) { return [k, porDev[k]]; }).sort(function (a, b) { return b[1].length - a[1].length; }) };
+  }
+  function semPontosHtml(D) {
+    var r = semPontosDe(D);
+    var h = '<section class="pn"><div class="row" style="justify-content:space-between"><h2 class="h2">Comprometidas sem pontuação</h2><span class="note">de Planejado em diante · hoje</span></div>' +
+      '<div class="gx-g gx-k4" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">' +
+        k('Sem pontuação', H.num(r.sem.length), r.pct + '% das comprometidas', r.sem.length ? 'var(--wn-t)' : '') +
+        k('Comprometidas', H.num(r.comprometidas.length), 'de Planejado em diante') +
+        k('Com pontuação', H.num(r.comprometidas.length - r.sem.length), 'base para a data') + '</div>';
+    if (!r.sem.length) return h + H.vazio('check', 'Todas as demandas comprometidas estão pontuadas') + '</section>';
+    return h + '<div class="gx-tw"><table class="tbl"><thead><tr><th>RESPONSÁVEL</th><th class="num">SEM PONTOS</th><th>DEMANDAS</th></tr></thead><tbody>' +
+      r.porDev.slice(0, 12).map(function (x) {
+        return '<tr><td style="color:var(--tx);white-space:nowrap">' + esc(x[0]) + '</td><td class="num mono">' + x[1].length + '</td><td><span class="row" style="gap:6px;flex-wrap:wrap">' +
+          x[1].map(function (m) { return codLink(m); }).join('') + '</span></td></tr>';
+      }).join('') + '</tbody></table></div>' + (r.porDev.length > 12 ? '<span class="note">e mais ' + (r.porDev.length - 12) + ' responsáveis.</span>' : '') +
+      '<span class="note">Sem pontos, o planejado de quem recebeu a demanda aparece menor do que é.</span></section>';
+  }
+
+  /** Entradas do mes por tema (`renderGerEntradas`): pela data de criacao,
+   *  com o tipo de cada uma. */
+  function entradasPorTemaHtml(D, alvo, en) {
+    var tipoDe = function (m) { return m.tipo === 'sustentacao' ? 'sust' : (m.tipo === 'evolucao' ? 'evo' : 'sem'); };
+    var por = {};
+    en.doMes.forEach(function (m) {
+      var kk = m.tema_id == null ? '__sem__' : m.tema_id;
+      por[kk] = por[kk] || { total: 0, sust: 0, evo: 0, sem: 0 };
+      por[kk].total++; por[kk][tipoDe(m)]++;
+    });
+    var nomeT = function (kk) { return kk === '__sem__' ? '(sem tema)' : (((D || {}).temas || []).find(function (t) { return String(t.id) === String(kk); }) || {}).nome || '(tema removido)'; };
+    var linhasE = Object.keys(por).map(function (kk) { return [kk, por[kk]]; }).sort(function (a, b) { return b[1].total - a[1].total; });
+    var h = '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><h2 class="h2">Entradas do mês por tema</h2><span class="note">abertas em ' + esc(rotuloMes(alvo)) + ', pela data de criação</span></div>';
+    if (!linhasE.length) return h + H.vazio('inbox', 'Nenhuma demanda foi aberta neste mês') + '</section>';
+    var cel = function (v, cor) { return '<td class="num mono"' + (v ? ' style="color:' + cor + '"' : '') + '>' + (v || '—') + '</td>'; };
+    return h + '<div class="gx-tw"><table class="tbl"><thead><tr><th>TEMA</th><th class="num">TOTAL</th><th class="num">SUSTENTAÇÃO</th><th class="num">EVOLUÇÃO</th><th class="num">SEM TIPO</th><th style="width:22%">PROPORÇÃO</th></tr></thead><tbody>' +
+      linhasE.map(function (x) {
+        var v = x[1], pS = Math.round(v.sust / v.total * 100), pE = Math.round(v.evo / v.total * 100);
+        return '<tr><td class="ell" style="color:var(--tx);max-width:320px">' + esc(nomeT(x[0])) + '</td><td class="num mono" style="color:var(--tx);font-weight:700">' + v.total + '</td>' +
+          cel(v.sust, 'var(--in-t)') + cel(v.evo, 'var(--ac-t)') + cel(v.sem, 'var(--tx3)') +
+          '<td><div class="bar" title="' + pS + '% sustentação · ' + pE + '% evolução"><span style="width:' + pS + '%;background:var(--in)"></span><span style="width:' + pE + '%;background:var(--ac)"></span></div></td></tr>';
+      }).join('') +
+      '<tr><td style="color:var(--tx);font-weight:700">Total do mês</td><td class="num mono" style="font-weight:700">' + en.doMes.length + '</td>' +
+        '<td class="num mono">' + (en.sust || '—') + '</td><td class="num mono">' + (en.evo || '—') + '</td><td class="num mono">' + (en.sem || '—') + '</td><td></td></tr>' +
+      '</tbody></table></div><div class="gx-leg">' + leg('var(--in)', 'sustentação (erro/bug)') + leg('var(--ac)', 'evolução (melhoria)') + '</div></section>';
+  }
+
+  /** Demandas por desenvolvedor, empilhadas por tema (`renderGerDevChart`):
+   *  as demandas do mes (pelo inicio), contadas para cada dev da dupla. */
+  function devsPorTemaHtml(D, items) {
+    var temas = (D || {}).temas || [];
+    var devs = [];
+    items.forEach(function (m) { splitDevsLocal(m.dev).forEach(function (d) { if (d && d !== 'Sem dev' && devs.indexOf(d) < 0) devs.push(d); }); });
+    devs.sort();
+    var h = '<section class="pn"><div class="row" style="justify-content:space-between"><h2 class="h2">Demandas por desenvolvedor</h2><span class="note">empilhado por tema · demandas do mês</span></div>';
+    if (!devs.length) return h + H.vazio('users', 'Sem demandas com dev no período') + '</section>';
+    var eDe = function (m, d) { return raiz.DEVNOME ? raiz.DEVNOME.eDe(m, d) : splitDevsLocal(m.dev).indexOf(d) >= 0; };
+    var cont = function (d, temaId) {
+      return items.filter(function (m) { return eDe(m, d) && (temaId === null ? !temas.find(function (t) { return t.id === m.tema_id; }) : m.tema_id === temaId); }).length;
+    };
+    var series = temas.map(function (t) { return { nome: t.nome, v: devs.map(function (d) { return cont(d, t.id); }) }; })
+      .filter(function (x) { return x.v.some(function (n) { return n > 0; }); });
+    var semT = devs.map(function (d) { return cont(d, null); });
+    if (semT.some(function (n) { return n > 0; })) series.push({ nome: 'Sem tema', v: semT, sem: true });
+    // Cor por tema: os sete de maior volume tem a sua; o resto divide o cinza.
+    var tot = function (x) { return x.v.reduce(function (a, b) { return a + b; }, 0); };
+    var ordem = series.slice().sort(function (a, b) { return tot(b) - tot(a); });
+    var cor = new Map();
+    ordem.forEach(function (x, i) { cor.set(x, x.sem || i >= 7 ? 'var(--tx4)' : PALETA[i]); });
+    var totDev = devs.map(function (d, i) { return series.reduce(function (t, x) { return t + x.v[i]; }, 0); });
+    var max = Math.max.apply(null, [1].concat(totDev));
+    var linhasD = devs.map(function (d, i) { return { d: d, i: i, t: totDev[i] }; }).sort(function (a, b) { return b.t - a.t || a.d.localeCompare(b.d, 'pt-BR'); });
+    return h + '<div class="gx-bh">' + linhasD.map(function (l) {
+      return '<div class="gx-bl"><span class="gx-bn ell">' + esc(l.d) + '</span><span class="gx-bb"><span class="gx-bt" style="display:flex">' +
+        ordem.map(function (x) {
+          var v = x.v[l.i];
+          return v ? '<i style="display:block;height:100%;border-radius:0;width:' + (v / max * 100).toFixed(2) + '%;background:' + cor.get(x) + '" title="' + esc(x.nome + ': ' + v) + '"></i>' : '';
+        }).join('') + '</span></span><span class="gx-bv mono">' + l.t + '</span></div>';
+    }).join('') + '</div><div class="gx-leg">' + ordem.slice(0, 7).filter(function (x) { return !x.sem; }).map(function (x) { return leg(cor.get(x), esc(x.nome) + ' · ' + tot(x)); }).join('') +
+      (ordem.length > 7 || ordem.some(function (x) { return x.sem; }) ? leg('var(--tx4)', 'outros temas e sem tema') : '') + '</div>' +
+      '<span class="note">Demanda de dupla conta para os dois. Passe o mouse sobre a barra para ver o tema.</span></section>';
   }
 
   /** "Pedem atencao": o que a propria base diz que espera alguem. As mesmas
@@ -958,7 +1063,7 @@
     var L = limites(alvo), hj = H.hoje();
     var h = cabecalho('Fluxo do PM/PO e cumprimento por pessoa',
       'O que passou por Backlog, Em aprovação de requisitos, Planning e Validação, e o que cada dev prometeu e entregou.',
-      seletorMes('paineis/fluxo', alvo) + (H.pode('editar') ? H.linkAdmin('gerencial', 'Abrir o gerencial') : ''),
+      seletorMes('paineis/fluxo', alvo) + acoesDoMes(alvo),
       '<span class="note">' + esc(rotuloMes(alvo)) + '</span>');
     var val = f.funis.find(function (x) { return x.k === 'validacao'; });
     h += '<div class="gx-g gx-k4">' +
@@ -1121,7 +1226,7 @@
     var D = ctx.D, ct = gerCortesDePontos(D, alvo), L = limites(alvo), C = raiz.CAPACIDADE;
     var h = cabecalho('Pontos do Planning Poker',
       'Planejado conta na data do prazo combinado; entregue, na data em que o dev entregou. Pontuação feita depois da conclusão não entra como planejado.',
-      seletorMes('paineis/pontos', alvo) + (H.pode('editar') ? H.linkAdmin('gerencial', 'Abrir o gerencial') : ''),
+      seletorMes('paineis/pontos', alvo) + acoesDoMes(alvo),
       '<span class="note">' + esc(rotuloMes(alvo)) + '</span>');
     // KPIs de `renderGerPontos`.
     var semanasAt = Object.keys(ct.porSemana).filter(function (x) { return ct.porSemana[x] > 0 && x !== 'Fora do mês'; }).length;

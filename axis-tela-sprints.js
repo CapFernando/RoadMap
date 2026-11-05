@@ -13,10 +13,12 @@
    sprint esta em `sprint_po_historico` e a data em que o dev entregou esta em
    `entregue_em` (CAPACIDADE.diaDaEntrega).
 
-   GRAVAR CONTINUA NAS TELAS ANTIGAS. Fechar sprint e iniciar sprint moram no
-   admin.html, e os botoes levam para la so para o perfil que pode agir.
-   Estimar e a tela Poker do app (#poker, axis-tela-poker.js). Mover, alocar, ausencia e feriado sao a tela
-   Planejamento do app (#planejamento, axis-tela-planejamento.js).
+   O CICLO DA SPRINT GRAVA DAQUI (ver "O CICLO DA SPRINT", mais abaixo):
+   iniciar (Sprint atual e Planning), repassar em lote (Planning) e fechar,
+   com destino e motivo de cada demanda que nao entregou (Encerrar sprint).
+   As tres sao do dono da sprint, como no admin.html. Estimar e a tela Poker
+   do app (#poker, axis-tela-poker.js). Mover, alocar, ausencia e feriado sao
+   a tela Planejamento do app (#planejamento, axis-tela-planejamento.js).
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   var raiz = typeof window !== 'undefined' ? window : globalThis;
@@ -153,7 +155,37 @@
       '.axa .es-ln .ti > span b{font-weight:700;color:var(--tx2)}',
       '.axa .es-ln .x{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;align-items:center;max-width:340px}',
       '.axa .es-ln .x .chip{height:20px;font-size:10.5px;gap:4px;max-width:220px;overflow:hidden;text-overflow:ellipsis}',
+      // Fechamento: cada pendente com o destino e o motivo embaixo.
+      '.axa .sp-fd{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:12px;background:var(--sf2);border:1px solid var(--bd)}',
+      '.axa .sp-fd .sp-fd-cab{padding:0;background:transparent;border:0}',
+      '.axa .sp-fd-ed{display:grid;grid-template-columns:minmax(0,200px) minmax(0,1fr);gap:8px}',
+      '.axa .sp-fd-ed .in{height:36px;font-size:12.5px;width:100%;min-width:0;background:var(--sf)}',
+      '.axa .btnp.perigo{background:var(--dg);box-shadow:0 8px 22px rgba(var(--dg-rgb),.25);color:#fff}',
+      '.axa .btnp:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}',
+      // Repassar em lote (o dialogo do `sprintLoteAbrir`).
+      '.axa .sp-lt{max-width:720px;width:100%}',
+      '.axa .sp-lt-t{margin:0;font-family:var(--font-title);font-size:19px;font-weight:800;padding-right:40px}',
+      '.axa .sp-lt-topo{display:grid;grid-template-columns:minmax(0,240px) minmax(0,1fr);gap:10px}',
+      '.axa .sp-lt-topo .in{height:40px}',
+      '.axa .sp-lt-g{display:flex;flex-wrap:wrap;gap:6px;align-items:center}',
+      '.axa .sp-lt-g .lab{margin-right:4px}',
+      '.axa .sp-lt-g .btns .n{margin-left:4px;font-family:var(--font-mono);font-size:11px;color:var(--tx4)}',
+      '.axa .sp-lt-ck{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx2);cursor:pointer}',
+      '.axa .sp-lt-ck input{accent-color:var(--ac)}',
+      '.axa .sp-lt-l{display:flex;flex-direction:column;gap:4px;max-height:44vh;overflow-y:auto;padding:2px}',
+      '.axa .sp-lt-it{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:var(--sf2);border:1px solid transparent;font-size:13px;cursor:pointer;min-width:0}',
+      '.axa .sp-lt-it:hover{border-color:var(--bd4)}',
+      '.axa .sp-lt-it.on{border-color:rgba(var(--ac-rgb),.55);background:rgba(var(--ac-rgb),.08)}',
+      '.axa .sp-lt-it input{accent-color:var(--ac);margin:0;flex-shrink:0}',
+      '.axa .sp-lt-it .t{flex:1;min-width:0;line-height:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.axa .sp-lt-it .t small{margin-left:8px;font-size:11.5px;color:var(--tx3)}',
+      '.axa .sp-lt-it .gi{color:var(--tx3);font-size:13px}',
+      '.axa .sp-lt-it .chip{height:20px;font-size:10.5px;flex-shrink:0}',
+      '.axa .sp-lt-pe{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}',
+      // O dialogo mora no <body>, fora do container `app`: a regra do celular e por media.
+      '@media (max-width: 760px){.axa .sp-lt-topo{grid-template-columns:minmax(0,1fr)}}',
       '@container app (max-width: 760px){',
+      '.axa .sp-fd-ed{grid-template-columns:minmax(0,1fr)}',
       '.axa .sp-k4{grid-template-columns:repeat(2,minmax(0,1fr))}',
       '.axa .es-ln{grid-template-columns:62px minmax(0,1fr)}',
       '.axa .es-ln .x{grid-column:2;justify-content:flex-start;max-width:none}',
@@ -255,13 +287,6 @@
     if (sit === 'fechada') return 'fechada em ' + H.dm(reg.em) + (reg.por ? ' por ' + reg.por : '');
     if (sit === 'em_curso') return 'iniciada em ' + H.dm(reg.iniciada_em) + (reg.iniciada_por ? ' por ' + reg.iniciada_por : '');
     return 'montando: o time ainda não vê o que não tem dev';
-  }
-
-  /** Link para uma tela antiga, com o icone discreto e o destino no title. */
-  function linkAntigo(href, rot, titulo, cls, abaAdmin) {
-    return '<a class="' + (cls || 'btn') + '" href="' + href + '" title="' + esc(titulo) + '"' +
-      (abaAdmin ? ' data-sp-admin-aba="' + abaAdmin + '"' : '') + '>' + rot + ' ' +
-      ico('external', 'style="font-size:12px;opacity:.7"') + '</a>';
   }
 
   // ── A TRILHA ──────────────────────────────────────────────────────────
@@ -485,7 +510,7 @@
       botao = '<a class="btnp" href="#sprints/encerrar">Encerrar sprint</a>';
     } else if (H.donoDaSprint() && sit === 'montando' && SP().demandasDaSprint(D, r).length) {
       // So o dono da sprint inicia (`sprintIniciar`, admin.html, 02/11/2026).
-      botao = linkAntigo('admin.html', 'Iniciar sprint', 'Abre o Admin, aba Gerencial › Sprint, onde a sprint é iniciada', 'btnp', 'gerencial');
+      botao = botaoIniciar(r);
     }
 
     var h = '<header class="sp-hd"><div class="tt"><div class="row" style="gap:10px">' +
@@ -553,7 +578,7 @@
           '<span class="tr"><i class="' + (pct >= 100 ? 'ok' : '') + '" style="width:' + pct + '%"></i></span>' +
           '<span class="lv">' + (base ? d.pontos + ' / ' + base : d.validados + ' / ' + d.total + ' it') + '</span></div>';
       }).join('') + (temDupla ? '<span class="note" style="font-size:11.5px">Demanda de dupla divide os pontos entre os dois.</span>' : '')
-      : H.vazio('users', 'Ninguém nesta sprint ainda', 'O PM/PO repassa as demandas pelo quadro do Admin.')) + '</section>';
+      : H.vazio('users', 'Ninguém nesta sprint ainda', 'O PM/PO repassa as demandas pela aba Planning ou pelo campo Sprint do card.')) + '</section>';
     h += '<div class="sp-2">' + blocoBd + blocoPp + '</div>';
 
     // Escopo
@@ -591,7 +616,7 @@
       }).join('') + '</div>';
     if (!lista.length) {
       h += H.vazio('inbox', st.acomp.length ? 'Nada neste filtro' : 'Nenhuma demanda nesta sprint',
-        st.acomp.length ? 'Troque o filtro para ver o resto do escopo.' : 'O PM/PO repassa as demandas para a sprint pelo quadro do Admin.');
+        st.acomp.length ? 'Troque o filtro para ver o resto do escopo.' : 'O PM/PO repassa as demandas para a sprint pela aba Planning ou pelo campo Sprint do card.');
     } else {
       h += vis.map(function (x) {
         var m = x.m, e = st.entrada[m.id] || { tipo: 'planejado' };
@@ -659,8 +684,10 @@
       '<span class="sub">' + esc(txtFaixa(f)) + (dias ? ' · ' + plural(dias.dias, 'dia útil', 'dias úteis') : '') +
       '. A fila é o que está em Planning; os pontos vêm do Planning Poker.</span></div>' +
       '<div class="ac"><select class="sp-sel" id="sp-sel-pl" aria-label="Sprint a planejar">' + opcoes + '</select>' +
-      '<a class="btnp" href="#poker" title="Abre o Planning Poker para estimar a fila">Abrir Planning Poker</a>' +
-      (H.donoDaSprint() ? linkAntigo('admin.html', 'Repassar no quadro', 'Abre o Admin, no Kanban: o PM/PO escolhe a sprint no card ou pelo Sprint em lote', 'btn', 'kanban') : '') +
+      '<a class="' + (H.donoDaSprint() ? 'btn' : 'btnp') + '" href="#poker" title="Abre o Planning Poker para estimar a fila">Abrir Planning Poker</a>' +
+      (H.donoDaSprint() ? '<button type="button" class="btn" data-sp-ciclo="lote" data-r="' + esc(r) + '" title="Escolha a sprint e marque as demandas: uma gravação só para o lote inteiro">' +
+        ico('refresh') + ' Repassar para a sprint</button>' : '') +
+      (H.donoDaSprint() && SP().situacaoDaSprint(D, r) === 'montando' && SP().demandasDaSprint(D, r).length ? botaoIniciar(r) : '') +
       '</div></header>';
 
     // Fila
@@ -689,7 +716,7 @@
           '<span class="t">' + esc(m.titulo || '') + '<small>' + H.chipEtapa(m) + '</small></span>' +
           H.av(d || '', 24) + '<span class="p">' + (H.pontosDe(m) || '—') + '</span></a>';
       }).join('') + (naSprint.length > 40 ? '<span class="note">e mais ' + (naSprint.length - 40) + '.</span>' : '')
-      : H.vazio('inbox', 'Nada repassado ainda', 'O PM/PO escolhe a sprint no card ou pelo Sprint em lote do Admin.')) + '</section>';
+      : H.vazio('inbox', 'Nada repassado ainda', 'O PM/PO escolhe a sprint no card ou pelo Repassar para a sprint, aqui em cima.')) + '</section>';
 
     // Capacidade
     var linhaCap = function (e, nome, sub) {
@@ -875,10 +902,13 @@
     var etapa = H.colunaDe;
     var pend = SP().pendentesDeFechamento(D, H.hoje(), F, etapa);
     var h = '';
-    var fechaBtn = function (cls) {
+    var dono = H.donoDaSprint();
+    var fechaBtn = function (r) {
       // So o dono da sprint fecha (`sprintFecharAbrir`, admin.html, 02/11/2026).
-      if (!H.donoDaSprint()) return '<span class="note">Só o Fernando (PM/PO) fecha a sprint.</span>';
-      return linkAntigo('admin.html', 'Fechar no Admin', 'Abre o Admin no Kanban; a faixa "terminou e não foi fechada" tem o botão Fechar agora, com destino e motivo de cada demanda', cls || 'btnp', 'kanban');
+      if (!dono) return '<span class="note">Só o Fernando (PM/PO) fecha a sprint.</span>';
+      var falta = fechFaltam(D, r);
+      return '<button type="button" class="btnp perigo" data-sp-ciclo="fechar" data-r="' + esc(r) + '"' + (falta ? ' disabled' : '') + '>' +
+        ico('lock') + ' <span data-fech-rot="' + esc(r) + '">' + esc(rotuloFechar(falta)) + '</span></button>';
     };
     if (!pend.length) {
       var agora = H.sprintAtual(), fa = SP().faixaDaSprint(agora, F);
@@ -898,7 +928,7 @@
       h += '<header class="sp-hd"><div class="tt"><span class="note"><a href="#sprints/atual/' + esc(r) + '">Sprint</a> › Fechamento da ' + esc(curto(r)) + '</span>' +
         '<div class="row" style="gap:10px"><h1 class="h1">Encerrar ' + esc(curto(r)) + '</h1>' + chipsSituacao(D, r) + '</div>' +
         '<span class="sub">' + esc(txtFaixa(f)) + ' · ' + esc(situacaoTxt(D, r)) + '. Decida o destino e o motivo de cada demanda que não saiu; o fechamento não tem volta.</span></div>' +
-        fechaBtn() + '</header>';
+        fechaBtn(r) + '</header>';
       h += '<div class="sp-k5">' +
         kpi('Pontos validados', p.pontosValidados + ' / ' + p.pontosTotal, '', p.pctPontos != null ? p.pctPontos + '% por ponto' : 'sem pontuação') +
         kpi('Itens validados', bal.entregues.length, '', p.pct + '% de ' + p.total + ' por item', 'ok', 'var(--ok-t)') +
@@ -911,14 +941,33 @@
           '<span class="t">' + esc(m.titulo || '') + '<small>' + (m.dev ? esc(m.dev) : 'sem dev') + ' · ' + esc((H.ETAPA_POR_ID[H.colunaDe(m)] || {}).rotulo || '') +
           (H.pontosDe(m) ? ' · ' + H.pontosDe(m) + ' pts' : '') + '</small></span>' + dir + '</a>';
       };
+      /* O DESTINO E O MOTIVO DE CADA UMA, aqui mesmo (o dialogo do
+         `sprintFecharRender`). O destino oferece as sprints abertas menos a que
+         esta fechando: o modulo recusa "empurrar para a propria sprint". */
+      var dec = fechDecisoes(D, r);
+      var destinos = SP().proximasSprints(H.hoje(), 5, F, SP().rotulosFechados(D)).filter(function (o) { return o.rotulo !== r; });
       var colNao = '<section class="pn"><h2 class="h2">O que não saiu · escolha o destino</h2>' +
         (bal.pendentes.length ? bal.pendentes.map(function (m) {
-          var pausada = H.pausada(m);
+          var d = dec[m.id] || { destino: '', motivo: '' };
           var rs = SP().riscosDaDemanda(m, r, H.hoje(), raiz.PRAZO).filter(function (x) { return x.chave !== 'sem_pontos'; });
-          return linha(m, '<span class="in" style="height:30px;font-size:12px;white-space:nowrap;' + (pausada ? '' : 'color:var(--tx3)') + '"' +
-            (rs.length ? ' title="' + esc(rs.map(function (x) { return x.texto; }).join(' · ')) + '"' : '') + '>' +
-            (pausada ? '→ ' + esc(curto(seg)) + ' (pausada)' : 'decidir no Admin') + '</span>');
-        }).join('') + '<span class="note" style="font-size:11.5px">Pausada já vem com destino na ' + esc(curto(seg)) + ' e a pausa como motivo; o PM/PO pode trocar. As outras vão para uma sprint aberta ou voltam ao backlog, cada uma com o motivo.</span>'
+          var n = SP().pulos(m);
+          var cab = '<a class="sp-li sp-fd-cab" href="' + H.hrefItem(m) + '"' + (rs.length ? ' title="' + esc(rs.map(function (x) { return x.texto; }).join(' · ')) + '"' : '') + '>' +
+            '<span class="code" style="font-size:11px">' + esc(m.codigo || '—') + '</span>' +
+            '<span class="t">' + esc(m.titulo || '') + '<small>' + (m.dev ? esc(m.dev) : 'sem dev') + ' · ' + esc((H.ETAPA_POR_ID[H.colunaDe(m)] || {}).rotulo || '') +
+            (H.pontosDe(m) ? ' · ' + H.pontosDe(m) + ' pts' : '') + '</small></span>' +
+            // A REINCIDENCIA GRITA: empurrar pela terceira vez e decisao diferente da primeira.
+            (n ? chip((n + 1) + 'ª vez', 'dg', 'Já rolou ' + plural(n, 'vez', 'vezes')) : '') +
+            (H.pausada(m) ? chip(ico('pause') + ' Pausada', 'mg') : '') + '</a>';
+          if (!dono) return cab;
+          var idDest = 'fd-' + r + '-' + m.id;
+          return '<div class="sp-fd">' + cab + '<div class="sp-fd-ed">' +
+            '<select class="in" id="' + esc(idDest) + '" data-fech-r="' + esc(r) + '" data-fech-id="' + esc(m.id) + '" data-fech-campo="destino" aria-label="Destino de ' + esc(m.codigo || m.titulo || '') + '">' +
+            '<option value="">Voltar ao backlog</option>' + destinos.map(function (o) {
+              return '<option value="' + esc(o.rotulo) + '"' + (d.destino === o.rotulo ? ' selected' : '') + '>' + esc(curto(o.rotulo) + ' · ' + H.dm(o.de) + '–' + H.dm(o.ate) + (o.agora ? ' · agora' : '')) + '</option>';
+            }).join('') + '</select>' +
+            '<input class="in" type="text" maxlength="300" autocomplete="off" placeholder="Por que não entregou?" value="' + esc(d.motivo) + '"' +
+            ' data-fech-r="' + esc(r) + '" data-fech-id="' + esc(m.id) + '" data-fech-campo="motivo" aria-label="Motivo de ' + esc(m.codigo || m.titulo || '') + '"></div></div>';
+        }).join('') + '<span class="note" style="font-size:11.5px">Pausada já vem com destino na ' + esc(curto(seg)) + ' e a pausa como motivo; o PM/PO pode trocar. As outras vão para uma sprint aberta ou voltam ao backlog, cada uma com o motivo (ao menos ' + SP().MIN_MOTIVO_CARRY + ' caracteres).</span>'
         : H.vazio('check', 'Nada a decidir', 'Tudo entregou ou está em validação. Fechar só carimba a sprint.')) + '</section>';
       var colVai = '<section class="pn"><h2 class="h2">O que fica na sprint</h2>' +
         (bal.entregues.length || bal.aguardando.length
@@ -1374,6 +1423,361 @@
     entregaUsuario: esEntregaUsuario
   };
 
+  // ═══ O CICLO DA SPRINT: INICIAR, REPASSAR EM LOTE E FECHAR ═════════════
+  /* Os tres gestos que levavam ao admin.html. A REGRA E A DO sprint.js
+     (`iniciar`, `repassar`, `fechar`), a mesma que o admin chama; o que muda
+     e como o resultado chega ao servidor.
+
+     O ADMIN MUTA O `state` E PUBLICA TUDO. Aqui o ato roda numa COPIA da base
+     FRESCA do servidor (lida logo antes, como as ausencias do Planejamento) e
+     vira patch: os campos que mudaram em cada demanda e, na raiz, a lista
+     `sprints` inteira (o registro de inicio e de fechamento). `H.gravar` rele
+     a base e aplica os dois por cima; a janela que sobra e a de uma leitura.
+
+     SO O DONO DA SPRINT (`SPRINTPO.ehDonoDaSprint`, por conta). O Worker
+     devolve a lista `sprints` do servidor e reverte `sprint_po` e
+     `sprint_prioritaria` de quem nao e (`travaSprintDoPO`), e recusa mexer em
+     sprint fechada (`mexeuEmSprintFechada`, `fechamentoApagado`).
+
+     As funcoes `ciclo*` e `lote*` sao puras, com o modulo e a base por
+     parametro: a suite as executa ao lado de `sprintIniciar`,
+     `sprintLoteCandidatas`, `sprintLoteAplicar`, `sprintFecharAbrir` e
+     `sprintFecharAplicar` (admin.html). */
+
+  /** O que o ato le e escreve: as demandas, o registro das sprints e os feriados. */
+  function cicloCopia(base) {
+    var b = base || {};
+    return { melhorias: JSON.parse(JSON.stringify(b.melhorias || [])),
+             sprints: Array.isArray(b.sprints) ? JSON.parse(JSON.stringify(b.sprints)) : [],
+             feriados: b.feriados || [] };
+  }
+  /** O patch do ato: em cada demanda, so os campos que ficaram diferentes. */
+  function cicloPatch(antes, depois) {
+    var porId = {};
+    (antes || []).forEach(function (m) { if (m && m.id) porId[m.id] = m; });
+    var patch = {};
+    (depois || []).forEach(function (m) {
+      var a = m && porId[m.id];
+      if (!a) return;
+      var p = {}, mudou = false;
+      Object.keys(Object.assign({}, a, m)).forEach(function (k) {
+        if (JSON.stringify(a[k]) !== JSON.stringify(m[k])) { p[k] = m[k]; mudou = true; }
+      });
+      if (mudou) patch[m.id] = p;
+    });
+    return patch;
+  }
+  /** A pergunta antes de iniciar (`sprintIniciar`): quantas vao, quantas
+   *  estao sem dono, e as vencidas e pausadas que o inicio puxa. */
+  function cicloTextoIniciar(SPm, D, r, hoje, opts) {
+    var dem = SPm.demandasDaSprint(D, r);
+    var semDev = dem.filter(function (m) { return !String(m.dev || '').trim(); });
+    var venc = SPm.vencidasParaPriorizar(D, r, hoje, opts);
+    var vencIds = {};
+    venc.forEach(function (m) { vencIds[m.id] = true; });
+    var paus = SPm.pausadasParaTransbordar(D, r, opts).filter(function (m) { return !vencIds[m.id]; });
+    var cods = function (l) { return l.map(function (m) { return m.codigo || m.id; }).join(', '); };
+    return {
+      titulo: 'Iniciar ' + SPm.rotuloCurto(r) + '?',
+      texto: dem.length + (dem.length === 1 ? ' demanda passa' : ' demandas passam') + ' a aparecer no painel do time.' +
+        (semDev.length
+          ? '\n\n' + semDev.length + (semDev.length === 1 ? ' está' : ' estão') + ' sem dono (' + cods(semDev) + ') e ' +
+            (semDev.length === 1 ? 'vai aparecer' : 'vão aparecer') + ' no backlog de todos os devs, para quem pegar primeiro.'
+          : '\n\nTodas já têm dev alocado.') +
+        (venc.length
+          ? '\n\n' + venc.length + (venc.length === 1 ? ' demanda alocada está vencida e entra' : ' demandas alocadas estão vencidas e entram') +
+            ' nesta sprint como prioritária (prioridade Alta): ' + cods(venc) + '.'
+          : '') +
+        (paus.length
+          ? '\n\n' + paus.length + (paus.length === 1 ? ' demanda pausada transborda' : ' demandas pausadas transbordam') +
+            ' para esta sprint (continuam pausadas): ' + cods(paus) + '.'
+          : '')
+    };
+  }
+  /** INICIAR (`SPRINTPO.iniciar`): o registro ganha `iniciada_em`, e as
+   *  vencidas e pausadas entram na sprint. */
+  function cicloIniciar(SPm, base, r, quem, hoje, opts) {
+    var D = cicloCopia(base);
+    var res = SPm.iniciar(D, r, quem, hoje, opts);
+    if (!res.ok) return res;
+    var n = res.prioritarias.length, np = res.pausadas.length;
+    return { ok: true, res: res, patch: cicloPatch((base || {}).melhorias, D.melhorias), raiz: { sprints: D.sprints },
+             msg: SPm.rotuloCurto(r) + ' em curso · ' + res.demandas + (res.demandas === 1 ? ' demanda liberada' : ' demandas liberadas') +
+               (res.semDev ? ', ' + res.semDev + ' sem dono no backlog do time' : '') +
+               (n ? ', ' + n + ' vencida' + (n === 1 ? ' entrou' : 's entraram') + ' como prioritária' + (n === 1 ? '' : 's') : '') +
+               (np ? ', ' + np + ' pausada' + (np === 1 ? ' transbordou' : 's transbordaram') : '') + '.' };
+  }
+  /** REPASSAR EM LOTE (`sprintLoteAplicar`): `repassar` em cada uma. A que
+   *  ja estava na sprint (ou o modulo recusa) sai da conta e o lote segue. */
+  function cicloRepassar(SPm, base, ids, alvo, quem, hoje) {
+    var s = String(alvo || '');
+    if (!SPm.rotuloValido(s)) return { ok: false, erro: 'Escolha uma sprint.' };
+    var D = cicloCopia(base);
+    var mexidas = [], recusadas = [];
+    (ids || []).forEach(function (id) {
+      var m = D.melhorias.filter(function (x) { return String(x.id) === String(id); })[0];
+      if (!m) return;
+      var r = SPm.repassar(m, s, quem, hoje, { dados: D });
+      if (!r.ok) { recusadas.push(m.codigo || m.id); return; }
+      mexidas.push({ id: m.id, atrasada: r.entrouAtrasada });
+    });
+    if (!mexidas.length) return { ok: false, erro: recusadas.length ? 'Nada a repassar: já estavam nesta sprint.' : 'Nada a repassar.' };
+    var n = mexidas.length, nAtr = mexidas.filter(function (x) { return x.atrasada; }).length;
+    return { ok: true, n: n, atrasadas: nAtr, recusadas: recusadas, patch: cicloPatch((base || {}).melhorias, D.melhorias),
+             msg: n + (n > 1 ? ' repassadas' : ' repassada') + ' para ' + SPm.rotuloCurto(s) +
+               (nAtr ? ' — ' + nAtr + (nAtr > 1 ? ' entraram atrasadas' : ' entrou atrasada') : '') +
+               (recusadas.length ? ' · ' + recusadas.length + (recusadas.length > 1 ? ' já estavam nela' : ' já estava nela') : '') + '.' };
+  }
+  /** As decisoes com que o fechamento abre (`sprintFecharAbrir`): a PAUSADA
+   *  ja vem com destino na sprint seguinte e a pausa como motivo. */
+  function cicloDecisoesIniciais(SPm, D, r, etapaDe, pausada) {
+    var seg = SPm.sprintSeguinte(r, (D || {}).feriados || []);
+    var dec = {};
+    SPm.balancoDaSprint(D, r, etapaDe).pendentes.filter(pausada).forEach(function (m) {
+      dec[m.id] = { destino: seg, motivo: ('Pausada' + (m.pausa_motivo ? ': ' + m.pausa_motivo : ' aguardando terceiro')).slice(0, 300) };
+    });
+    return dec;
+  }
+  /** Quantas pendentes ainda estao sem motivo valido (`sprintFecharAtualizaBotao`). */
+  function cicloFaltam(SPm, D, r, etapaDe, dec) {
+    return SPm.balancoDaSprint(D, r, etapaDe).pendentes.filter(function (m) {
+      return SPm.problemaNoMotivoCarry(((dec || {})[m.id] || {}).motivo);
+    }).length;
+  }
+  /** FECHAR (`SPRINTPO.fechar`): destino e motivo de cada pendente, e o
+   *  registro ganha `em`, `por` e `carry`. Sem volta. */
+  function cicloFechar(SPm, base, r, quem, hoje, decisoes, etapaDe) {
+    var D = cicloCopia(base);
+    var res = SPm.fechar(D, r, quem, hoje, decisoes, etapaDe);
+    if (!res.ok) return res;
+    return { ok: true, res: res, patch: cicloPatch((base || {}).melhorias, D.melhorias), raiz: { sprints: D.sprints },
+             msg: SPm.rotuloCurto(r) + ' fechada · ' + res.entregues + ' entregue' + (res.entregues === 1 ? '' : 's') +
+               (res.aguardando ? ', ' + res.aguardando + ' aguardando você' : '') +
+               (res.fechados ? ', ' + res.fechados + ' com destino novo' : '') + '.' };
+  }
+
+  /* OS GRUPOS DO LOTE (`LOTE_GRUPOS`, admin.html, 30/10/2026). "Atrasadas da
+     sprint atual" pergunta a etapa EFETIVA, que e o que o comentario de la
+     descreve: o admin pergunta a `statusKey`, que virou `ETAPA.gravada` e
+     nunca responde `atrasado` — o grupo dele fica sempre vazio. */
+  function loteGrupos(SPm, gravada, efetiva, pausada, hoje, feriados) {
+    return [
+      { k: 'planning', rot: 'Pontuadas em Planning', ico: 'cards',
+        casa: function (m) { return gravada(m) === 'planning' && SPm.pontosDe(m) > 0; } },
+      { k: 'atrasadas', rot: 'Atrasadas da sprint atual', ico: 'clock',
+        casa: function (m) { return SPm.naSprint(m, SPm.rotuloDeData(hoje, feriados || [])) && efetiva(m) === 'atrasado'; } },
+      { k: 'pausadas', rot: 'Pausadas', ico: 'pause', casa: function (m) { return pausada(m); } }
+    ];
+  }
+  /** As candidatas do lote (`sprintLoteCandidatas`): tudo em aberto. Com
+   *  grupo marcado, o grupo manda; sem, vale o "so fora de sprint". `f` =
+   *  { q, soFora, grupos: { k: true } }; `o` = { SPm, ETAPAm, ORDEMKBm,
+   *  dataUsu, hoje, grupos }. */
+  function loteCandidatas(lista, f, o) {
+    var q = String(f.q || '').trim().toLowerCase();
+    var marcados = Object.keys(f.grupos || {}).filter(function (k) { return f.grupos[k]; });
+    var abertas = (lista || []).filter(function (m) {
+      if (!m || m.oculto || m.mesclado_em) return false;
+      if (!o.ETAPAm.aberta(m, o.hoje)) return false;
+      if (marcados.length) {
+        if (!o.grupos.some(function (g) { return marcados.indexOf(g.k) >= 0 && g.casa(m); })) return false;
+      } else if (f.soFora && o.SPm.doPO(m)) return false;
+      if (!q) return true;
+      return (String(m.codigo || '') + ' ' + String(m.titulo || '') + ' ' + String(m.dev || '')).toLowerCase().indexOf(q) >= 0;
+    });
+    return o.ORDEMKBm ? o.ORDEMKBm.ordena(abertas, o.dataUsu) : abertas;
+  }
+
+  // ── O ciclo na tela ──────────────────────────────────────────────────
+  function quemGrava() { var e = AX.APP.eu; return (e && (e.nome || e.login)) || 'PM/PO'; }
+  function optsIniciar() { return { prazo: raiz.PRAZO, etapaDe: H.colunaDe }; }
+  function botaoIniciar(r) {
+    return '<button type="button" class="btnp" data-sp-ciclo="iniciar" data-r="' + esc(r) + '" title="O time passa a ver as demandas desta sprint">' +
+      ico('rocket') + ' Iniciar sprint</button>';
+  }
+  /** A base FRESCA do servidor, para o ato rodar sobre ela. */
+  async function baseFresca() {
+    try { return await H.api('dados'); }
+    catch (e) { H.toast(e.status === 401 ? 'Sessão expirada — saia e entre de novo.' : 'Sem conexão com o servidor: ' + (e.message || e), 'erro'); return null; }
+  }
+  function caixa(o) {
+    if (raiz.AXIS_ACOES && raiz.AXIS_ACOES.caixa) return raiz.AXIS_ACOES.caixa(o);
+    return Promise.resolve(raiz.confirm && raiz.confirm(o.titulo + '\n\n' + (o.texto || '')) ? {} : null);
+  }
+  function avisa(r) { if (r && r.ok && raiz.AXIS_ACOES && raiz.AXIS_ACOES.avisaRevertidos) raiz.AXIS_ACOES.avisaRevertidos(r); }
+
+  /* INICIAR (`sprintIniciar`): CONFIRMA ANTES, dizendo quantas vao e quantas
+     estao sem dono — e o momento em que o PO descobre que esqueceu de alocar. */
+  async function iniciarSprint(r) {
+    if (!H.donoDaSprint()) { H.toast('Só o Fernando (PM/PO) inicia a sprint.', 'erro'); return; }
+    var t = cicloTextoIniciar(SP(), AX.APP.D, r, H.hoje(), optsIniciar());
+    if (!(await caixa({ titulo: t.titulo, texto: t.texto, ok: 'Iniciar' }))) return;
+    var base = await baseFresca();
+    if (!base) return;
+    var c = cicloIniciar(SP(), base, r, quemGrava(), H.hoje(), optsIniciar());
+    if (!c.ok) { H.toast(c.erro, 'erro'); return; }
+    avisa(await H.gravar(c.patch, { raiz: c.raiz, ok: c.msg }));
+  }
+
+  /* FECHAR. As decisoes vivem aqui enquanto a aba Encerrar esta aberta (o
+     `_fechDecisoes` do admin): digitar o motivo nao redesenha a lista, so o
+     botao, para o foco nao sair do campo na primeira letra. */
+  var _fech = {};
+  function fechDecisoes(D, r) {
+    if (!_fech[r]) _fech[r] = cicloDecisoesIniciais(SP(), D, r, H.colunaDe, H.pausada);
+    return _fech[r];
+  }
+  function fechFaltam(D, r) { return cicloFaltam(SP(), D, r, H.colunaDe, fechDecisoes(D, r)); }
+  function rotuloFechar(falta) { return falta ? 'Faltam ' + falta + ' motivo' + (falta > 1 ? 's' : '') : 'Fechar sprint'; }
+  function fechAtualizaBotao(el, r) {
+    var falta = fechFaltam(AX.APP.D, r);
+    var b = el.querySelector('[data-sp-ciclo="fechar"][data-r="' + r + '"]');
+    if (!b) return;
+    b.disabled = falta > 0;
+    var t = b.querySelector('[data-fech-rot]');
+    if (t) t.textContent = rotuloFechar(falta);
+  }
+  async function fecharSprint(r) {
+    if (!H.donoDaSprint()) { H.toast('Só o Fernando (PM/PO) fecha a sprint.', 'erro'); return; }
+    var D = AX.APP.D, dec = fechDecisoes(D, r);
+    var bal = SP().balancoDaSprint(D, r, H.colunaDe);
+    var pts = function (l) { return l.reduce(function (t, m) { return t + (Number(m.poker_pontos) || 0); }, 0); };
+    var nVolta = bal.pendentes.filter(function (m) { return !(dec[m.id] || {}).destino; }).length;
+    var ok = await caixa({
+      titulo: 'Fechar ' + curto(r) + '?', ok: 'Fechar sprint', perigo: true,
+      texto: 'Fechada, a sprint não aceita mais entrada nem saída — e não há como reabrir.\n\n' +
+        plural(bal.entregues.length, 'entregue', 'entregues') + ' · ' + pts(bal.entregues) + ' pts' +
+        (bal.aguardando.length ? '\n' + bal.aguardando.length + ' aguardando você · ' + pts(bal.aguardando) + ' pts (contam nesta sprint ao validar)' : '') +
+        (bal.pendentes.length ? '\n' + plural(bal.pendentes.length, 'não entregue', 'não entregues') + ' · ' + pts(bal.pendentes) + ' pts: ' +
+          (bal.pendentes.length - nVolta) + ' para outra sprint, ' + nVolta + ' de volta ao backlog' : '')
+    });
+    if (!ok) return;
+    var base = await baseFresca();
+    if (!base) return;
+    var c = cicloFechar(SP(), base, r, quemGrava(), H.hoje(), dec, H.colunaDe);
+    if (!c.ok) { H.toast(c.erro, 'erro'); return; }
+    var out = await H.gravar(c.patch, { raiz: c.raiz, ok: c.msg });
+    if (out && out.ok) delete _fech[r];
+    avisa(out);
+  }
+
+  /* REPASSAR EM LOTE (`sprintLoteAbrir`). A SELECAO SOBREVIVE AO FILTRO:
+     marcar dez, digitar na busca e perder as dez seria o jeito mais rapido de
+     desistir do lote. O contador diz o total marcado, inclusive o escondido. */
+  function abrirLote(rPadrao) {
+    if (!H.donoDaSprint()) { H.toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'erro'); return; }
+    var D = AX.APP.D, F = fer(D);
+    var ops = SP().proximasSprints(H.hoje(), 5, F, SP().rotulosFechados(D));
+    var agora = H.sprintAtual();
+    var tem = function (x) { return ops.some(function (o) { return o.rotulo === x; }); };
+    var st = { sel: {}, q: '', soFora: true, grupos: {} };
+    var ov = document.createElement('div');
+    ov.className = 'ovl';
+    ov.innerHTML = '<div class="dlg sp-lt" role="dialog" aria-modal="true" aria-labelledby="sp-lt-t">' +
+      '<button type="button" class="dlg-x" data-lt="fechar" aria-label="Fechar">' + ico('x') + '</button>' +
+      '<h2 class="sp-lt-t" id="sp-lt-t">Repassar para a sprint</h2>' +
+      '<span class="sub">Escolha a sprint e marque as demandas. Uma gravação só para o lote inteiro. A entrega ao usuário de todas vai para a segunda seguinte à sprint.</span>' +
+      '<div class="sp-lt-topo"><select class="sp-sel" id="sp-lt-sprint" aria-label="Sprint de destino">' + ops.map(function (o) {
+        var x = tem(rPadrao) ? rPadrao : tem(agora) ? agora : '';
+        return '<option value="' + esc(o.rotulo) + '"' + (o.rotulo === x ? ' selected' : '') + '>' +
+          esc(curto(o.rotulo) + '  ·  ' + H.dm(o.de) + '–' + H.dm(o.ate) + (o.agora ? ' · agora' : '')) + '</option>';
+      }).join('') + '</select>' +
+      '<input class="in" type="search" id="sp-lt-q" autocomplete="off" placeholder="Filtrar por código, título ou dev" aria-label="Filtrar a lista"></div>' +
+      '<div class="sp-lt-g" id="sp-lt-g" role="group" aria-label="Mostrar"></div>' +
+      '<label class="sp-lt-ck" id="sp-lt-fora-r"><input type="checkbox" id="sp-lt-fora" checked> Só as que estão fora de sprint</label>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btns" data-lt="todas">Marcar todas</button>' +
+      '<button type="button" class="btns" data-lt="nenhuma">Desmarcar</button><span class="note" id="sp-lt-n" aria-live="polite"></span></div>' +
+      '<div class="sp-lt-l" id="sp-lt-l"></div>' +
+      '<div class="sp-lt-pe"><button type="button" class="btn" data-lt="fechar">Cancelar</button>' +
+      '<button type="button" class="btnp" id="sp-lt-ok" data-lt="ok" disabled>Repassar</button></div></div>';
+    document.body.appendChild(ov);
+    var q = function (s) { return ov.querySelector(s); };
+    var antes = document.activeElement;
+    var fecha = function () {
+      document.removeEventListener('keydown', tecla, true);
+      ov.remove();
+      try { if (antes && antes.focus && antes.isConnected) antes.focus(); } catch (_) {}
+    };
+    var tecla = function (e) { if (e.key === 'Escape') { e.preventDefault(); fecha(); } };
+    document.addEventListener('keydown', tecla, true);
+    var grupos = loteGrupos(SP(), H.colunaDe, H.etapaDe, H.pausada, H.hoje(), F);
+    var cand = function () {
+      return loteCandidatas(H.visiveis(), st, { SPm: SP(), ETAPAm: raiz.ETAPA, ORDEMKBm: raiz.ORDEMKB,
+        dataUsu: raiz.ENTREGAUSU && raiz.ENTREGAUSU.data, hoje: H.hoje(), grupos: grupos });
+    };
+    var pinta = function () {
+      var abertas = H.visiveis().filter(function (m) { return raiz.ETAPA.aberta(m, H.hoje()); });
+      q('#sp-lt-g').innerHTML = '<span class="lab">MOSTRAR</span>' + grupos.map(function (g) {
+        var on = !!st.grupos[g.k];
+        return '<button type="button" class="btns' + (on ? ' on' : '') + '" data-lt-g="' + g.k + '" aria-pressed="' + on + '">' + ico(g.ico) + ' ' + esc(g.rot) +
+          ' <span class="n">' + abertas.filter(g.casa).length + '</span></button>';
+      }).join('');
+      var algum = Object.keys(st.grupos).some(function (k) { return st.grupos[k]; });
+      q('#sp-lt-fora-r').style.opacity = algum ? '.45' : '';
+      q('#sp-lt-fora-r').title = algum ? 'Com um grupo marcado, o grupo manda: a atrasada da sprint atual já tem sprint.' : '';
+      var lista = cand();
+      q('#sp-lt-l').innerHTML = lista.length ? lista.slice(0, 200).map(function (m) {
+        var on = !!st.sel[m.id];
+        var prio = String(m.prioridade || '').toLowerCase();
+        var s = SP().doPO(m);
+        return '<label class="sp-lt-it' + (on ? ' on' : '') + '"><input type="checkbox" data-lt-id="' + esc(m.id) + '"' + (on ? ' checked' : '') + '>' +
+          '<span class="code" style="font-size:11px">' + esc(m.codigo || '—') + '</span>' +
+          '<span class="t">' + esc(m.titulo || '') + (m.dev ? '<small>' + esc(m.dev) + '</small>' : '') + '</span>' +
+          grupos.filter(function (g) { return g.casa(m); }).map(function (g) { return '<span class="gi" title="' + esc(g.rot) + '">' + ico(g.ico) + '</span>'; }).join('') +
+          (prio ? chip(esc(prio === 'media' ? 'média' : prio), prio === 'alta' ? 'dg' : prio === 'media' ? 'wn' : 'bk') : '') +
+          (s ? chip(esc(curto(s)), 'bk', 'Hoje na ' + s) : '') + '</label>';
+      }).join('') + (lista.length > 200 ? '<span class="note">e mais ' + (lista.length - 200) + '. Refine pela busca.</span>' : '')
+        : '<span class="note" style="padding:12px">Nada aqui com esse filtro.</span>';
+      var n = Object.keys(st.sel).length;
+      q('#sp-lt-n').textContent = n ? n + (n === 1 ? ' marcada' : ' marcadas') : 'nenhuma marcada';
+      var ok = q('#sp-lt-ok');
+      ok.disabled = !n;
+      ok.textContent = n ? 'Repassar ' + n : 'Repassar';
+    };
+    q('#sp-lt-q').addEventListener('input', function (e) { st.q = e.target.value; pinta(); });
+    q('#sp-lt-fora').addEventListener('change', function (e) { st.soFora = e.target.checked; pinta(); });
+    ov.addEventListener('change', function (e) {
+      var id = e.target.getAttribute && e.target.getAttribute('data-lt-id');
+      if (!id) return;
+      if (e.target.checked) st.sel[id] = true; else delete st.sel[id];
+      pinta();
+    });
+    ov.addEventListener('click', async function (e) {
+      if (e.target === ov) { fecha(); return; }
+      var g = e.target.closest('[data-lt-g]');
+      if (g) { var k = g.getAttribute('data-lt-g'); if (st.grupos[k]) delete st.grupos[k]; else st.grupos[k] = true; pinta(); return; }
+      var b = e.target.closest('[data-lt]');
+      if (!b) return;
+      var a = b.getAttribute('data-lt');
+      if (a === 'fechar') fecha();
+      else if (a === 'todas') { cand().forEach(function (m) { st.sel[m.id] = true; }); pinta(); }
+      else if (a === 'nenhuma') { st.sel = {}; pinta(); }
+      else if (a === 'ok') {
+        var alvo = q('#sp-lt-sprint').value, ids = Object.keys(st.sel);
+        b.disabled = true;
+        var base = await baseFresca();
+        if (!base) { b.disabled = false; return; }
+        var c = cicloRepassar(SP(), base, ids, alvo, quemGrava(), H.hoje());
+        if (!c.ok) { H.toast(c.erro, 'erro'); b.disabled = false; return; }
+        fecha();
+        avisa(await H.gravar(c.patch, { ok: c.msg }));
+      }
+    });
+    pinta();
+    setTimeout(function () { q('#sp-lt-sprint').focus(); }, 0);
+  }
+
+  var _ocupado = false;
+  function ciclo(acao, r, b) {
+    if (_ocupado) return;
+    _ocupado = true;
+    if (b) b.disabled = true;
+    var f = acao === 'iniciar' ? iniciarSprint : acao === 'fechar' ? fecharSprint : null;
+    Promise.resolve().then(function () { return f ? f(r) : abrirLote(r); })
+      .catch(function (ex) { console.error(ex); H.toast('Não foi possível: ' + (ex.message || ex), 'erro'); })
+      .then(function () { _ocupado = false; if (b && b.isConnected && acao !== 'fechar') b.disabled = false; if (acao === 'fechar' && b && b.isConnected) fechAtualizaBotao(document, r); });
+  }
+
   // ── Registro ──────────────────────────────────────────────────────────
   var ABAS = [
     { id: 'atual',        rotulo: 'Sprint atual' },
@@ -1434,12 +1838,20 @@
           return;
         }
         if (e.target.closest('[data-sp-mais]')) { _esc.n += 25; desenharEscopo(el); return; }
-        /* A aba certa do Admin: ele reabre na ultima aba guardada em
-           `rm_admin_tab` (restoreLastTab). Sem rota por hash para o fechamento,
-           e o jeito de cair onde o botao "Fechar agora" mora. */
-        var ad = e.target.closest('[data-sp-admin-aba]');
-        if (ad) { try { localStorage.setItem('rm_admin_tab', ad.getAttribute('data-sp-admin-aba')); } catch (_) {} }
+        var cb = e.target.closest('[data-sp-ciclo]');
+        if (cb) { e.preventDefault(); ciclo(cb.getAttribute('data-sp-ciclo'), cb.getAttribute('data-r'), cb); }
       });
+      // O destino e o motivo do fechamento: guarda e reavalia so o botao.
+      var decide = function (e) {
+        var t = e.target, r = t.getAttribute && t.getAttribute('data-fech-r');
+        if (!r) return;
+        var dec = fechDecisoes(AX.APP.D, r), id = t.getAttribute('data-fech-id');
+        if (!dec[id]) dec[id] = { destino: '', motivo: '' };
+        dec[id][t.getAttribute('data-fech-campo')] = t.value;
+        fechAtualizaBotao(el, r);
+      };
+      el.addEventListener('input', decide);
+      el.addEventListener('change', decide);
     }
   });
 })();

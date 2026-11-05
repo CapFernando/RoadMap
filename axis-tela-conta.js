@@ -129,7 +129,7 @@
       '  -d \'{"action":"login","login":"' + (e.login || 'seu.usuario') + '","senhaUsuario":"SUA_SENHA"}\'\n' +
       '# resposta: {"ok":true,"token":"...","usuario":{...}}';
     var api = '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><h2 class="h2">Acesso pela API</h2>' +
-      (papel !== 'consulta' ? '<a class="btns" href="dev.html" title="A documentação das rotas fica na aba Endpoint do Meu painel (dev.html)">Ver as rotas ' + H.ico('external', 'style="font-size:11px"') + '</a>' : '') + '</div>' +
+      (papel !== 'consulta' ? '<a class="btns" href="#api" title="A documentação das rotas, com exemplo de chamada">Ver as rotas</a>' : '') + '</div>' +
       '<span class="note">Token pessoal da API ainda não disponível. Scripts entram com o seu usuário e senha pela rota <span class="mono">login</span> e usam o token que ela devolve, com a mesma permissão que você tem na tela.</span>' +
       '<pre class="mono ct-pre">' + H.esc(exemplo) + '</pre>' +
       '</section>';
@@ -156,6 +156,182 @@
       }
     };
   }
+
+  // ═══ NA TELA DE ENTRAR: RECUPERAR A SENHA E CRIAR A CONTA ═══════════════
+  /* AS REGRAS SAO COPIAS, e a suite roda cada uma ao lado da original:
+       contaRegraEmail    o pedido do `abrirRecuperarSenha` (senha.js)
+       contaRegraNova     o "Definir senha" do mesmo modal
+       contaJanela        a janela do cronometro (senha.js: `minutos` contado
+                          do relogio DESTE navegador, nunca `expira_em` menos a
+                          hora local — foi o que prendeu o Dan)
+       contaForca         a dica de forca (senha.js, `forca`)
+       contaRegraCadastro o `fazerCadastro` do dev.html
+     As rotas sao as mesmas (`senha-recuperar`, `senha-redefinir`, `recuperar`
+     para conta de admin e `cadastro`), e nenhuma pede Turnstile: o Worker so o
+     cobra na sugestao publica e no anexo sem sessao. A conta criada nasce
+     pendente; quem libera e o admin, em Configuracoes › Pessoas e perfis. */
+  var DOMINIO = '@audaxcapitalsa.com.br';
+  var SENHA_MIN = 8;
+  function contaRegraEmail(email) {
+    var e = String(email || '').trim().toLowerCase();
+    if (!e) return { ok: false, erro: 'Informe seu e-mail corporativo.', campo: 'email' };
+    if (e.indexOf(DOMINIO) < 0) return { ok: false, erro: 'Use o e-mail corporativo, terminando em ' + DOMINIO + '.', campo: 'email' };
+    return { ok: true, email: e };
+  }
+  function contaRegraNova(nova, conf) {
+    if (String(nova || '').length < SENHA_MIN) return { ok: false, erro: 'A senha precisa de ao menos ' + SENHA_MIN + ' caracteres.', campo: 'nova' };
+    if (nova !== conf) return { ok: false, erro: 'A confirmação não confere.', campo: 'conf' };
+    return { ok: true };
+  }
+  function contaJanela(j, agora) {
+    var jan = Number(j && j.minutos) > 0 ? Number(j.minutos) : 5;
+    return agora + jan * 60 * 1000;
+  }
+  function contaForca(s) {
+    var v = String(s || '');
+    if (v.length < SENHA_MIN) return { txt: 'faltam ' + (SENHA_MIN - v.length) + ' caractere(s)', cor: 'var(--dg-t)' };
+    var variedade = (/[a-z]/.test(v) ? 1 : 0) + (/[A-Z]/.test(v) ? 1 : 0) + (/\d/.test(v) ? 1 : 0) + (/[^A-Za-z0-9]/.test(v) ? 1 : 0);
+    if (v.length >= 14 || variedade >= 3) return { txt: 'boa', cor: 'var(--ok-t)' };
+    if (v.length >= 10) return { txt: 'razoável — uma frase longa é mais forte', cor: 'var(--wn-t)' };
+    return { txt: 'fraca — prefira uma frase de 14+ caracteres', cor: 'var(--wn-t)' };
+  }
+  function contaRegraCadastro(nome, email, senha) {
+    var n = String(nome || '').trim(), e = String(email || '').trim().toLowerCase(), s = String(senha || '');
+    if (n.length < 3) return { ok: false, erro: 'Escreva seu nome completo aqui.', campo: 'nome' };
+    if (!e.endsWith(DOMINIO) || e.indexOf('@') < 1) return { ok: false, erro: 'Precisa ser seu e-mail da Audax, o que termina com ' + DOMINIO, campo: 'email' };
+    if (s.length < SENHA_MIN) {
+      var f = SENHA_MIN - s.length;
+      return { ok: false, erro: 'Sua senha está curta: faltam ' + f + ' caractere' + (f > 1 ? 's' : '') + ' para chegar a ' + SENHA_MIN + '.', campo: 'senha' };
+    }
+    return { ok: true, corpo: { nome: n, email: e, senhaUsuario: s } };
+  }
+
+  /* O PASSO NA CAIXA DE ENTRAR: troca o formulario de login pelo do passo,
+     no mesmo lugar e no mesmo desenho; `voltar(msg, o)` redesenha o login. */
+  function passo(dir, modo, voltar) {
+    var esc = H.esc;
+    var topo = function (tit, sub) {
+      return '<span class="sb-mark" style="width:56px;height:56px;border-radius:16px"><img src="axis/marca/axis-leao-branco.png" alt="" style="width:36px"></span>' +
+        '<h2 style="margin:6px 0 0;font-family:var(--font-title);font-size:26px;font-weight:800">' + tit + '</h2>' +
+        '<span class="sub" style="margin-bottom:8px">' + sub + '</span>';
+    };
+    var pe = '<button type="button" class="link" data-lg-volta style="align-self:center;font-size:13px;font-weight:700">' + H.ico('undo') + ' Voltar para entrar</button>';
+    var timer = null;
+    var limpa = function () { if (timer) { clearInterval(timer); timer = null; } };
+    var $ = function (id) { return dir.querySelector('#' + id); };
+    var aviso = function (t, ok) { var e = $('lg-err'); e.innerHTML = t; e.style.color = ok ? 'var(--ok-t)' : ''; };
+    var falha = function (r) { aviso(esc(r.erro)); var c = r.campo && $('lg-' + r.campo); if (c) c.focus(); };
+
+    if (modo === 'cadastro') {
+      dir.innerHTML = '<form class="lg-box" id="lg-cad" autocomplete="on" novalidate>' + topo('Criar acesso', 'A conta nasce pendente: um administrador libera o seu acesso.') +
+        '<label for="lg-nome">Nome completo</label><input class="in" id="lg-nome" autocomplete="name" maxlength="80">' +
+        '<span class="note" style="margin-top:-8px">Use o mesmo nome que aparece nas suas demandas.</span>' +
+        '<label for="lg-email">E-mail corporativo</label><input class="in" id="lg-email" type="email" autocomplete="email" placeholder="nome.sobrenome' + DOMINIO + '">' +
+        '<label for="lg-senha">Crie uma senha</label><input class="in" id="lg-senha" type="password" autocomplete="new-password">' +
+        '<span class="note" id="lg-forca" style="margin-top:-8px;min-height:16px"></span>' +
+        '<div class="lg-err" id="lg-err" role="alert"></div>' +
+        '<button class="btnp" id="lg-btn" type="submit">Criar conta</button>' + pe + '</form>';
+      $('lg-senha').addEventListener('input', function (e) { var f = contaForca(e.target.value); var el = $('lg-forca'); el.textContent = e.target.value ? f.txt : ''; el.style.color = f.cor; });
+      $('lg-cad').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var r = contaRegraCadastro($('lg-nome').value, $('lg-email').value, $('lg-senha').value);
+        if (!r.ok) { falha(r); return; }
+        var b = $('lg-btn');
+        b.disabled = true; b.textContent = 'Enviando…'; aviso('');
+        try {
+          await H.api('cadastro', r.corpo);
+          dir.querySelector('form').innerHTML = topo('Cadastro enviado', 'Avise um administrador para liberar o seu acesso.') +
+            '<div class="lg-err" id="lg-err" role="status" style="color:var(--ok-t)">' + H.ico('check') + ' Depois entre com <b>' + esc(r.corpo.email) + '</b> e a senha que você acabou de escolher.</div>' + pe;
+        } catch (ex) {
+          var c = ex.codigo === 'email' || ex.codigo === 'existe' ? 'email' : ex.codigo === 'nome' ? 'nome' : 'senha';
+          falha({ erro: (ex.corpo && ex.corpo.detail) || (ex.status === 429 ? 'Muitas tentativas em pouco tempo. Espere um minuto e tente de novo.' : 'Não foi possível cadastrar agora. Tente novamente.'), campo: c });
+          b.disabled = false; b.textContent = 'Criar conta';
+        }
+      });
+      setTimeout(function () { $('lg-nome').focus(); }, 0);
+    } else {
+      var tk = '', email = '', fim = 0;
+      dir.innerHTML = '<form class="lg-box" id="lg-rec" autocomplete="on" novalidate>' + topo('Recuperar senha', 'Informe seu e-mail corporativo. Se houver conta, você define a nova senha aqui mesmo, na hora.') +
+        '<div id="lg-et1" style="display:flex;flex-direction:column;gap:14px">' +
+          '<label for="lg-email">E-mail corporativo</label><input class="in" id="lg-email" type="email" autocomplete="username" placeholder="nome.sobrenome' + DOMINIO + '">' +
+        '</div>' +
+        '<div id="lg-et2" style="display:none;flex-direction:column;gap:14px">' +
+          '<span class="chip c-bk" id="lg-relogio" style="align-self:flex-start"></span>' +
+          '<label for="lg-nova">Nova senha</label><input class="in" id="lg-nova" type="password" autocomplete="new-password">' +
+          '<span class="note" id="lg-forca" style="margin-top:-8px;min-height:16px"></span>' +
+          '<label for="lg-conf">Repita a nova senha</label><input class="in" id="lg-conf" type="password" autocomplete="new-password">' +
+        '</div>' +
+        '<div class="lg-err" id="lg-err" role="alert"></div>' +
+        '<button class="btnp" id="lg-btn" type="submit">Continuar</button>' + pe + '</form>';
+      /* O cronometro AVISA e nao tranca: quem decide se o pedido vale e o
+         servidor, que responde 410 com texto proprio. */
+      var tique = function () {
+        var resta = Math.max(0, Math.round((fim - Date.now()) / 1000));
+        var el = $('lg-relogio');
+        if (!el) { limpa(); return; }
+        el.innerHTML = H.ico('clock') + ' ' + (resta > 0
+          ? Math.floor(resta / 60) + ':' + String(resta % 60).padStart(2, '0') + ' para definir a nova senha'
+          : 'Tempo esgotado — tente salvar; se não valer mais, o servidor avisa e você pede de novo');
+        el.className = 'chip ' + (resta <= 60 ? 'c-dg' : 'c-bk');
+        if (resta <= 0) limpa();
+      };
+      $('lg-nova').addEventListener('input', function (e) { var f = contaForca(e.target.value); var el = $('lg-forca'); el.textContent = e.target.value ? f.txt : ''; el.style.color = f.cor; });
+      $('lg-rec').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var b = $('lg-btn');
+        if (!tk) {
+          var r = contaRegraEmail($('lg-email').value);
+          if (!r.ok) { falha(r); return; }
+          email = r.email;
+          b.disabled = true; b.textContent = 'Verificando…'; aviso('');
+          try {
+            var j = await H.api('senha-recuperar', { email: email });
+            tk = j.token;
+            fim = contaJanela(j, Date.now());
+            aviso('Conta encontrada' + (j.nome ? ': <b>' + esc(j.nome) + '</b>' : '') + '. Defina a nova senha antes de o tempo acabar.', true);
+            $('lg-et1').style.display = 'none';
+            $('lg-et2').style.display = 'flex';
+            b.textContent = 'Definir senha';
+            tique(); timer = setInterval(tique, 1000);
+            $('lg-nova').focus();
+          } catch (ex) {
+            if (ex.codigo === 'admin') {
+              // Conta de admin nao se redefine so com o e-mail: a fila antiga
+              // (`recuperar`) avisa os outros administradores.
+              aviso(esc((ex.corpo && ex.corpo.detail) || '') + '<br><button type="button" class="btn" data-lg-avisar style="margin-top:10px">Avisar os administradores</button>');
+            } else {
+              falha({ erro: (ex.corpo && ex.corpo.detail) || (ex.status === 429 ? 'Muitas tentativas em pouco tempo. Espere um minuto.' : 'Não foi possível continuar: ' + (ex.message || ex)), campo: 'email' });
+            }
+            b.textContent = 'Continuar';
+          }
+          b.disabled = false;
+          return;
+        }
+        var n = contaRegraNova($('lg-nova').value, $('lg-conf').value);
+        if (!n.ok) { falha(n); return; }
+        b.disabled = true; b.textContent = 'Salvando…';
+        try {
+          await H.api('senha-redefinir', { token: tk, senhaNova: $('lg-nova').value });
+          limpa();
+          voltar('Senha definida. Entre com a nova senha.', { ok: true, usuario: email });
+        } catch (ex) {
+          falha({ erro: (ex.corpo && ex.corpo.detail) || 'Falha de rede. A senha NÃO foi alterada.', campo: 'nova' });
+          b.disabled = false; b.textContent = 'Definir senha';
+        }
+      });
+      setTimeout(function () { $('lg-email').focus(); }, 0);
+    }
+    dir.addEventListener('click', async function (e) {
+      if (e.target.closest('[data-lg-volta]')) { limpa(); voltar(''); return; }
+      var av = e.target.closest('[data-lg-avisar]');
+      if (av) {
+        av.disabled = true; av.textContent = 'Enviando…';
+        try { await H.api('recuperar', { email: email }); aviso('Pedido registrado. Um administrador vai gerar sua nova senha.', true); }
+        catch (_) { aviso('Falha de rede ao registrar o pedido.'); }
+      }
+    });
+  }
+  window.AXIS_CONTA = { passo: passo };
 
   A.tela({
     id: 'conta',
