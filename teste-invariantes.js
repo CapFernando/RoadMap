@@ -24965,6 +24965,48 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'no card do Admin as datas do dev abrem na semana da sprint e escolher a sprint preenche a entrega ao usuario (abrir nao preenche)');
       ok(SP.faixaDaSprint('S1-11-2026', ['2026-11-02']).de === '2026-11-03' && SP.entregaDaSprint('S1-11-2026', ['2026-11-02']) === '2026-11-09',
          'a S1-11 vai de 03/11 (02/11 e feriado) e entrega ao usuario na segunda 09/11');
+      // ── NA VALIDACAO DA AREA, FORA DO PLACAR (05/11/2026) ──────────────────
+      {
+        const SPA = require('./sprint.js'); const rA = 'S1-11-2026';
+        const mkA = (id, et, extra) => Object.assign({ id, codigo: id, status_planejamento: et, sprint_po: rA, poker_pontos: 3, dev: 'Ana' }, extra || {});
+        const dA = { melhorias: [mkA('A', 'concluido'), mkA('B', 'validacao_area'), mkA('C', 'em_andamento'), mkA('D', 'validacao'),
+          mkA('E', 'em_andamento', { sprint_po: 'S2-11-2026', sprint_po_historico: [{ sprint: rA }, { sprint: 'S2-11-2026', de: rA, devolvida_area: true }] }),
+          mkA('F', 'em_andamento', { sprint_po: 'S2-11-2026', sprint_po_historico: [{ sprint: rA }, { sprint: 'S2-11-2026' }] })] };
+        const pA = SPA.placarDaSprint(dA, rA);
+        ok(pA.total === 4 && pA.validados === 1 && pA.aguardando === 1 && pA.emCurso === 1 && pA.saiu === 1 && pA.naArea === 2,
+           'na Validacao da area a task sai do placar da sprint (nem total, nem entregue, nem pendente)', JSON.stringify(pA.naArea));
+        ok(SPA.balancoDaSprint(dA, rA).pendentes.map(m => m.id).join() === 'C' && SPA.rankingDaSprint(dA, rA)[0].total === 4,
+           'e tambem do balanco do fechamento e do ranking');
+        ok(SPA.acompanhamentoDaSprint(dA, rA, null, '2026-11-05').filter(x => x.situacao === 'na_area').length === 2,
+           'o acompanhamento ainda mostra a task, marcada como na area');
+        ok(SPA.entrouAtrasada(dA.melhorias[4]) && SPA.balancoDaSprint(dA, 'S2-11-2026').pendentes.some(m => m.id === 'E'),
+           'devolvida pela area depois da sprint: conta na sprint nova como atraso, e fora do placar da antiga');
+        const fnW = new Function(['hojeBR', 'segundaDaSemana', 'feriadosSetW', 'sprintsDoMesW', 'sprintDaDataW', 'fimDaSprintW', 'rolaDevolvidaDaArea']
+          .map(n => n === 'hojeBR' ? "function hojeBR(){return '2026-11-05';}" : corpo(WKS, 'function ' + n + '(')).join('\n') +
+          '; return { sprintDaDataW, feriadosSetW, rolaDevolvidaDaArea };')();
+        const ferA = ['2026-11-02', '2026-11-20', '2026-12-25', '2027-01-01'];
+        let difA = '';
+        for (let t = Date.UTC(2026, 0, 1); t <= Date.UTC(2027, 11, 31) && !difA; t += 86400000) {
+          const dia = new Date(t).toISOString().slice(0, 10);
+          const w = fnW.sprintDaDataW(dia, fnW.feriadosSetW({ feriados: ferA })), sj = SPA.rotuloDeData(dia, ferA);
+          if (w !== sj) difA = dia + ': worker ' + w + ' x sprint.js ' + sj;
+        }
+        ok(!difA, 'o calendario de sprint do Worker e o mesmo do sprint.js, dia a dia (2026-2027)', difA);
+        const rec = (sp, et) => ({ feriados: ['2026-11-02'], sprints: [], melhorias: [{ id: 'x', codigo: 'AX-X', status_planejamento: et, sprint_po: sp }] });
+        const srvA = { melhorias: [{ id: 'x', status_planejamento: 'validacao_area' }] };
+        const r1 = rec('S5-10-2026', 'em_andamento'); fnW.rolaDevolvidaDaArea(r1, srvA, '2026-11-05');
+        const r2 = rec('S1-11-2026', 'em_andamento'); fnW.rolaDevolvidaDaArea(r2, srvA, '2026-11-05');
+        const r3 = rec('S5-10-2026', 'validacao'); fnW.rolaDevolvidaDaArea(r3, srvA, '2026-11-05');
+        ok(r1.melhorias[0].sprint_po === 'S1-11-2026' && r1.melhorias[0].sprint_po_historico[0].devolvida_area === true &&
+           r1.melhorias[0].sprint_po_historico[0].de === 'S5-10-2026',
+           'o servidor leva para a sprint atual a task que a area devolve depois do fim da sprint dela');
+        ok(r2.melhorias[0].sprint_po === 'S1-11-2026' && !r2.melhorias[0].sprint_po_historico &&
+           r3.melhorias[0].sprint_po === 'S5-10-2026',
+           'e nao mexe quando a sprint ainda corre, nem quando a area manda para o PM/PO');
+        ok((WKS.match(/rolaDevolvidaDaArea\(data, antes(Pub|Dev)\);/g) || []).length === 2 &&
+           /m\.status_planejamento = e; mudou\.push\('etapa'\);\s*\/\/[^\n]*\n\s*if \(rolaDevolvidaDaArea\(/.test(WKS),
+           'a regra roda nas tres portas: publish, dev-publish e a API');
+      }
       // O PAINEL DO DEV ABRE NA SPRINT ATUAL (05/11/2026); Limpar volta para ela e ela nao conta como filtro.
       ok(/if \(!_sprintPadraoAplicado && agora\) \{ _sprintPadraoAplicado = true; sel\.value = agora; return; \}/.test(DEV) &&
          /if \(_fs && sprintAtualDev\(\)\) _fs\.value = sprintAtualDev\(\);/.test(DEV) &&

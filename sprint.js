@@ -1168,6 +1168,28 @@
     return rotuloValido(s) ? s.slice(6, 10) + '-' + s.slice(3, 5) + '-' + s.slice(1, 2) : s;
   }
 
+  /* ═══ NA VALIDAÇÃO DA ÁREA, FORA DO PLACAR (05/11/2026) ════════════════════
+   *
+   * "A partir do momento que a task entrar em validação da área não deverá ser
+   *  mais contabilizada no fechamento da sprint (caso ela volte para o dev — Em
+   *  andamento deverá voltar a fazer parte da sprint e caso volte já na próxima
+   *  sprint, entra como atraso)."
+   *
+   * - NA ÁREA: some do placar, do ranking e do balanço da sprint — nem no total,
+   *   nem como entregue, nem como pendente. O % é do que ficou com o dev e o PM/PO.
+   * - VOLTOU NA MESMA SPRINT: a etapa volta a ser Em andamento e ela volta a
+   *   contar sozinha — nada a fazer aqui.
+   * - VOLTOU DEPOIS QUE A SPRINT ACABOU: o servidor a repassa para a sprint
+   *   corrente com a marca `devolvida_area` no histórico (ver
+   *   `rolaDevolvidaDaArea` no Worker). O passo conta como pulo — é o atraso — e
+   *   na sprint de onde ela saiu continua FORA do placar, como estava quando
+   *   entrou na área: sair por devolução não é "saiu sem entregar".          */
+  function naArea(etapa) { return txt(etapa) === 'validacao_area'; }
+  function saiuPelaArea(m, rotulo) {
+    var r = txt(rotulo);
+    return historico(m).some(function (h) { return h && h.devolvida_area && txt(h.de) === r; });
+  }
+
   /** O QUE SOBROU NA SPRINT — o que o fechamento precisa decidir.
    *
    *  `entregues` são as concluídas pelo PM/PO; `aguardando` o dev já entregou e
@@ -1179,8 +1201,9 @@
       if (!m || m.oculto || m.mesclado_em) return;
       if (!naSprint(m, rotulo)) return;
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (naArea(e)) return;                 // na área: fora do fechamento
       if (e === 'concluido') saida.entregues.push(m);
-      else if (e === 'validacao' || e === 'validacao_area') saida.aguardando.push(m);
+      else if (e === 'validacao') saida.aguardando.push(m);
       else if (e !== 'negada') saida.pendentes.push(m);
     });
     return saida;
@@ -1348,13 +1371,16 @@
   function placarDaSprint(dados, rotulo, etapaDe, trilha) {
     var r = txt(rotulo);
     var lista = demandasDaSprint(dados, r, trilha);
-    var p = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, emCurso: 0, saiu: 0,
+    var p = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, emCurso: 0, saiu: 0, naArea: 0,
               pontosTotal: 0, pontosValidados: 0, pontosAguardando: 0,
               semPontuacao: 0, pct: 0, pctPontos: null,
               itens: { validados: [], aguardando: [], emCurso: [], saiu: [] } };
     lista.forEach(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
       if (e === 'negada') return;          // recusada nao e compromisso da sprint
+      var aquiA = doPO(m) === r;
+      // Na área, ou saiu daqui devolvida pela área: fora do placar — ver `naArea`.
+      if ((aquiA && naArea(e)) || (!aquiA && saiuPelaArea(m, r))) { p.naArea += 1; return; }
       var pts = pontosDe(m);
       p.total += 1;
       p.pontosTotal += pts;
@@ -1362,7 +1388,7 @@
       var aqui = doPO(m) === r;
       if (aqui && e === 'concluido') {
         p.validados += 1; p.pontosValidados += pts; p.itens.validados.push(m);
-      } else if (aqui && (e === 'validacao' || e === 'validacao_area')) {
+      } else if (aqui && e === 'validacao') {
         p.aguardando += 1; p.pontosAguardando += pts; p.itens.aguardando.push(m);
       } else if (aqui) {
         p.emCurso += 1; p.itens.emCurso.push(m);
@@ -1412,6 +1438,7 @@
     demandasDaSprint(dados, r, trilha).forEach(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
       if (e === 'negada') return;
+      if ((doPO(m) === r && naArea(e)) || (doPO(m) !== r && saiuPelaArea(m, r))) return;   // ver `naArea`
       var nomes = txt(m.dev).split('/').map(function (x) { return x.trim(); }).filter(Boolean);
       if (!nomes.length) nomes = ['(sem dev)'];
       var q = nomes.length;
@@ -1422,7 +1449,7 @@
         a.total += 1;                      // item inteiro — ver o cabeçalho
         a.pontosTotal += pts / q;          // ponto repartido
         if (aqui && e === 'concluido') { a.validados += 1; a.pontos += pts / q; }
-        else if (aqui && (e === 'validacao' || e === 'validacao_area')) a.aguardando += 1;
+        else if (aqui && e === 'validacao') a.aguardando += 1;
         else if (aqui) a.emCurso += 1;
         else a.saiu += 1;
         if (q > 1) a.dupla = true;         // a tela avisa por que a coluna não soma
@@ -1496,14 +1523,15 @@
     return demandasDaSprint(dados, r, trilha).map(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
       var aqui = doPO(m) === r;
-      var situacao = !aqui ? 'saiu'
+      var situacao = (aqui && naArea(e)) || (!aqui && saiuPelaArea(m, r)) ? 'na_area'
+        : !aqui ? 'saiu'
         : e === 'concluido' ? 'validado'
-        : (e === 'validacao' || e === 'validacao_area') ? 'aguardando'
+        : e === 'validacao' ? 'aguardando'
         : e === 'negada' ? 'negada' : 'em_curso';
       /* QUEM JÁ ENTREGOU NÃO TEM RISCO DE NÃO ENTREGAR. Acender "prazo
          vencido" num card concluído é ruído sobre fato consumado — e ruído
          numa lista de risco ensina a ignorar a lista. */
-      var riscos = (situacao === 'validado' || situacao === 'negada')
+      var riscos = (situacao === 'validado' || situacao === 'negada' || situacao === 'na_area')
         ? [] : riscosDaDemanda(m, r, hoje, prazoApi);
       return { m: m, situacao: situacao, riscos: riscos, pontos: pontosDe(m),
                prioritaria: aqui && ehPrioritariaDaSprint(m, r) };
@@ -1511,7 +1539,7 @@
       // a vencida puxada no início vem primeiro: foi o que o PM/PO priorizou
       if (a.prioritaria !== b.prioritaria) return a.prioritaria ? -1 : 1;
       if (a.riscos.length !== b.riscos.length) return b.riscos.length - a.riscos.length;
-      var ordem = { em_curso: 0, aguardando: 1, saiu: 2, validado: 3, negada: 4 };
+      var ordem = { em_curso: 0, aguardando: 1, na_area: 2, saiu: 3, validado: 4, negada: 5 };
       if (ordem[a.situacao] !== ordem[b.situacao]) return ordem[a.situacao] - ordem[b.situacao];
       return b.pontos - a.pontos;
     });
@@ -1747,6 +1775,8 @@
     esteveNaSprint: esteveNaSprint,
     demandasDaSprint: demandasDaSprint,
     placarDaSprint: placarDaSprint,
+    naArea: naArea,
+    saiuPelaArea: saiuPelaArea,
     rankingDaSprint: rankingDaSprint,
     riscosDaDemanda: riscosDaDemanda,
     acompanhamentoDaSprint: acompanhamentoDaSprint,

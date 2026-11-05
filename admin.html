@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="594b7475f8">
+<html lang="pt-BR" data-build="cf542e0064">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -669,6 +669,7 @@
     .spr-sit[data-s="em_curso"]   { color:var(--blue-tx,#9BC8F8); background:var(--blue-bg,#0C3260); }
     .spr-sit[data-s="saiu"]       { color:var(--red-tx,#F9A0A0); background:var(--red-bg,#5C0A0A); }
     .spr-sit[data-s="negada"]     { color:var(--text3); background:var(--bg4); }
+    .spr-sit[data-s="na_area"]    { color:var(--purple-tx,#D2B6F7); background:var(--purple-bg,#2E1A4D); }
     .spr-tit-d { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; }
     .spr-pts { flex:0 0 auto; font-size:11px; color:var(--text3); }
@@ -1671,7 +1672,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=ecd63fa9f5"></script>
+<script src="sprint.js?v=f141739bd7"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -10372,6 +10373,8 @@ function renderGerSprint() {
   }
   const SIT = { validado: ['✅', 'Validado'], aguardando: ['⏳', 'Esperando você'],
                 em_curso: ['🔧', 'Em curso'], saiu: ['↪', 'Saiu da sprint'],
+                // Na Validacao da area: fora do placar (`SPRINTPO.naArea`, 05/11/2026).
+                na_area: ['🧪', 'Na área · fora do placar'],
                 negada: ['✕', 'Negada'] };
   const lst = document.getElementById('spr-lista');
   const mostrar = soRisco ? emRisco : acomp;

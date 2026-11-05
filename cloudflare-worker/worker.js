@@ -1574,6 +1574,98 @@ function carimbaAreaValidacao(recebido, servidor) {
   return n;
 }
 
+/* ═══ DEVOLVIDA PELA AREA DEPOIS DA SPRINT: ENTRA NA ATUAL, COMO ATRASO ════
+ *
+ * "A partir do momento que a task entrar em validacao da area nao devera ser
+ *  mais contabilizada no fechamento da sprint (caso ela volte para o dev — Em
+ *  andamento devera voltar a fazer parte da sprint e caso volte ja na proxima
+ *  sprint, entra como atraso)." (05/11/2026)
+ *
+ * O placar ja tira da conta quem esta na area (`SPRINTPO.naArea`). Aqui fica a
+ * outra metade, que so o servidor ve — a TRANSICAO area -> Em andamento:
+ * - a sprint da demanda ainda corre (ou e futura): nada, ela volta a contar
+ *   sozinha porque a etapa voltou;
+ * - a sprint ja acabou: vai para a sprint CORRENTE, e o passo entra no
+ *   historico com `devolvida_area` — conta como pulo (o atraso) e mantem a
+ *   demanda fora do placar da sprint de onde saiu (`SPRINTPO.saiuPelaArea`).
+ *
+ * POR QUE NO SERVIDOR: quem devolve e a area pelo Admin, o PM/PO ou o proprio
+ * dev, por tres portas (publish, dev-publish e a API). E o repasse de sprint e
+ * do PM/PO — o painel do dev nem pode mexer nela (`travaSprintDoPO`). Esta
+ * regra e do sistema, e roda DEPOIS dessas travas.
+ *
+ * O CALENDARIO E O DE `sprint.js` (semana util do mes, feriado pulado),
+ * repetido porque o Worker nao importa o modulo. Ha invariante comparando os
+ * dois dia a dia. */
+function feriadosSetW(data) {
+  const fer = {};
+  for (const f of (data && data.feriados) || []) {
+    const d = String(f && typeof f === 'object' ? f.data : f || '').slice(0, 10);
+    if (d) fer[d] = true;
+  }
+  return fer;
+}
+function sprintsDoMesW(ano, mes, fer) {
+  if (!isFinite(ano) || !isFinite(mes) || mes < 1 || mes > 12) return [];
+  const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+  const grupos = []; let chave = '';
+  for (let d = 1; d <= ultimo; d++) {
+    const dt = new Date(Date.UTC(ano, mes - 1, d));
+    const dow = dt.getUTCDay();
+    const iso = dt.toISOString().slice(0, 10);
+    if (dow === 0 || dow === 6 || fer[iso]) continue;
+    const k = segundaDaSemana(iso);
+    if (k !== chave) { grupos.push([]); chave = k; }
+    grupos[grupos.length - 1].push(iso);
+  }
+  return grupos.map((g, i) => ({ rotulo: 'S' + (i + 1) + '-' + String(mes).padStart(2, '0') + '-' + ano,
+                                 de: g[0], ate: g[g.length - 1] }));
+}
+function sprintDaDataW(dia, fer) {
+  const sp = sprintsDoMesW(+dia.slice(0, 4), +dia.slice(5, 7), fer);
+  if (!sp.length) return '';
+  for (const x of sp) if (dia >= x.de && dia <= x.ate) return x.rotulo;
+  for (const x of sp) if (x.de > dia) return x.rotulo;
+  return sp[sp.length - 1].rotulo;
+}
+function fimDaSprintW(rotulo, fer) {
+  const r = String(rotulo || '');
+  if (!/^S[1-5]-(0[1-9]|1[0-2])-\d{4}$/.test(r)) return '';
+  const x = sprintsDoMesW(+r.slice(6, 10), +r.slice(3, 5), fer).find(y => y.rotulo === r);
+  return x ? x.ate : '';
+}
+function rolaDevolvidaDaArea(recebido, servidor, hoje) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const dia = String(hoje || hojeBR()).slice(0, 10);
+  const fer = feriadosSetW(recebido.feriados ? recebido : servidor);
+  const atual = sprintDaDataW(dia, fer);
+  const fechadas = new Set(((recebido.sprints || (servidor && servidor.sprints)) || [])
+    .filter(x => x && String(x.em || '').trim()).map(x => String(x.rotulo || '')));
+  const rolou = [];
+  if (!atual || fechadas.has(atual)) return rolou;
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id) continue;
+    const velha = antes.get(m.id);
+    if (!velha || String(velha.status_planejamento || '') !== 'validacao_area') continue;
+    if (String(m.status_planejamento || '') !== 'em_andamento') continue;
+    const de = String(m.sprint_po || '').trim();
+    if (!de || de === atual) continue;
+    const fim = fimDaSprintW(de, fer);
+    if (!fim || fim >= dia) continue;          // a sprint dela ainda corre (ou e futura)
+    const h = Array.isArray(m.sprint_po_historico) ? m.sprint_po_historico.slice() : [];
+    h.push({ sprint: atual, de: de, em: dia, por: 'Devolvida pela area', devolvida_area: true,
+             motivo: 'Voltou da Validacao da area depois do fim da ' + de + ' — entra como atraso.' });
+    m.sprint_po = atual;
+    m.sprint_po_em = dia;
+    m.sprint_po_por = 'Devolvida pela area';
+    m.sprint_po_historico = h;
+    rolou.push((m.codigo || m.id) + ': ' + de + ' -> ' + atual);
+  }
+  return rolou;
+}
+
 /* ═══ A AREA TEM CINCO DIAS UTEIS, E DEPOIS DISSO A DEMANDA SEGUE ══════════
  *
  * "Quando estiver em validacao da area, apos 5 dias uteis a demanda devera ir
@@ -5931,6 +6023,11 @@ async function rotear(request, env, _histFila) {
                                   '(horas_realizadas maior que zero) nesta mesma chamada.' }, 400, headers);
           }
           m.status_planejamento = e; mudou.push('etapa');
+          // Voltou da area depois do fim da sprint: entra na atual, como atraso.
+          if (rolaDevolvidaDaArea({ melhorias: [m], feriados: atual.feriados, sprints: atual.sprints },
+                                  { melhorias: [{ id: m.id, status_planejamento: etapaAntes }] }).length) {
+            mudou.push('sprint_po');
+          }
         }
         /* ═══ AS DATAS DA TASK ══════════════════════════════════════════
          *
@@ -8127,6 +8224,7 @@ async function rotear(request, env, _histFila) {
       // ANTES do historico, como o carimbo do mes: assim a entrada na area
       // tambem vira linha no card, e nao um campo que muda sozinho sem rastro.
       carimbaAreaValidacao(data, antesPub);
+      rolaDevolvidaDaArea(data, antesPub);   // voltou da area depois da sprint: atual, como atraso
       limpaBis(data);
       registraHistorico(data, antesPub, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel');
@@ -8419,6 +8517,7 @@ async function rotear(request, env, _histFila) {
       // O dev e quem mais vai mover o card para a area — sem esta linha o
       // carimbo so nasceria quando o PM/PO publicasse pelo Admin.
       carimbaAreaValidacao(data, antesDev);
+      rolaDevolvidaDaArea(data, antesDev);   // voltou da area depois da sprint: atual, como atraso
       limpaBis(data);
       registraHistorico(data, antesDev, (_ident && _ident.usuario && _ident.usuario.nome) ||
                         (await papelAtual()) || '', 'painel dev');
