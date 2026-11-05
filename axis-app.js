@@ -11,10 +11,12 @@
    dos modulos compartilhados — os mesmos que a suite de invariantes executa.
    Nenhuma conta de negocio e reescrita aqui: duas copias divergem.
 
-   GRAVAR AINDA E NAS TELAS ANTIGAS. A publicacao do admin mescla por campo,
-   trata corrida e guarda rascunho (`saveViaProxy`); portar isso pede etapa
-   propria, com invariante. Ate la, "Editar" abre a demanda no editor de
-   sempre (admin.html#AX-123), e a sessao e compartilhada: nao pede login.
+   GRAVAR E POR PATCH (`gravar`, logo abaixo, sobre gravacao.js): cada acao
+   manda so os campos que mudou, sobre a base fresca do servidor. O formulario
+   de demanda (nova e editar) e axis-form-demanda.js; mover, validar, devolver,
+   homologar, replanejar, pausar, negar e entregar sao axis-acoes.js. O que
+   ainda nao foi portado abre o editor de sempre (admin.html, dev.html), com a
+   sessao compartilhada: nao pede login.
 
    As telas se registram com AXIS_APP.tela({...}) em arquivos axis-tela-*.js.
    ───────────────────────────────────────────────────────────────────────── */
@@ -122,6 +124,10 @@
     if (!r.ok) {
       var e = new Error(j.detail || j.error || ('HTTP ' + r.status));
       e.status = r.status;
+      // O codigo do erro (`conflito`, `titulo_repetido`...) e o corpo inteiro:
+      // dois 409 com motivos diferentes pedem respostas diferentes da tela.
+      e.codigo = j.error || '';
+      e.corpo = j;
       throw e;
     }
     return j;

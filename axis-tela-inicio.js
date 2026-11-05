@@ -14,8 +14,10 @@
    A consulta ve so a Visao geral, e sem "meus": ela nao tem demandas proprias
    e nao age sobre nenhuma (DOC-04).
 
-   NADA E GRAVADO AQUI. Os botoes de acao levam a tela antiga que faz a acao
-   (admin.html, dev.html, poker.html), com a mesma sessao.
+   O QUE GRAVA NAO MORA AQUI. "+ Novo item" abre o formulario do app
+   (axis-form-demanda.js) e "Registrar" a homologacao e o gesto de
+   axis-acoes.js; "Validar" leva a aba Validacao do PO, onde estao o que o dev
+   entregou e as duas decisoes. Estimar continua no poker.html.
 
    AS CONTAS SAO DOS MODULOS (sprint.js, prazo.js, capacidade.js,
    homologacao.js, devolucao.js). O que nao existe em modulo e foi copiado de
@@ -225,8 +227,7 @@
     var acoes = '<button type="button" class="in ini-busca" data-ini="busca">' + H.ico('search', 'style="margin-right:8px"') + 'Buscar AX-, título, dev…</button>';
     if (papel !== 'consulta') {
       acoes += externo('Planning Poker', 'poker.html', 'Abre a sala de Planning Poker (poker.html)');
-      acoes += externo('+ Novo item', papel === 'admin' ? 'admin.html#novo' : 'dev.html#novo',
-        papel === 'admin' ? 'Abre o formulário de nova demanda no Admin (admin.html)' : 'Abre o formulário de nova demanda no Meu painel (dev.html)', 'btnp');
+      acoes += '<button type="button" class="btnp" data-axa-form="novo">+ Novo item</button>';
     }
     var h = '<header class="ini-hd"><div style="display:flex;flex-direction:column;gap:4px">' +
       '<span class="ini-data">' + linhaData + '</span>' +
@@ -500,7 +501,7 @@
     var sub = 'Só o que está com você.' + (sprint ? ' Sprint ' + H.esc(S.rotuloCurto(sprint)) + ' · ' +
       (d ? (d.acabou ? 'terminou ' + H.dm(d.ate) : 'faltam ' + H.plural(d.faltam, 'dia útil', 'dias úteis')) : '') + '.' : '');
     var h = '<header class="ini-hd fim"><div style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">Meu trabalho</h1><span class="sub">' + sub + '</span></div>' +
-      '<div class="row">' + externo('+ Nova demanda', 'dev.html#novo', 'Abre o formulário de nova demanda no Meu painel (dev.html)', 'btnp') + '</div></header>';
+      '<div class="row"><button type="button" class="btnp" data-axa-form="novo">+ Nova demanda</button></div></header>';
 
     var kp = '<div class="ini-kg seis">' +
       kpi('Em andamento', andamento.length, null, { cor: 'var(--ac-t)' }) +
@@ -546,7 +547,7 @@
     var h = '<header class="ini-hd fim"><div style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">O que pede você</h1>' +
       '<span class="sub">Entregas para validar, homologações paradas na área, prazos vencidos e itens para estimar.</span></div>' +
       '<div class="row" style="flex-wrap:wrap">' + externo('Planning Poker', 'poker.html', 'Abre a sala de Planning Poker (poker.html)') +
-      externo('Abrir o Admin', 'admin.html', 'Validar, devolver e registrar homologação são feitos no Admin (admin.html)', 'btnp') + '</div></header>';
+      '<a class="btnp" href="#backlog/validacao" title="As entregas esperando o seu aceite, com o que o dev implementou">Ir à validação</a></div></header>';
     var kp = '<div class="ini-kg">' +
       kpi('Para validar', val.length, val.length ? 'mais antiga entregue ' + (H.dm(val[0].entregue_em) || '—') : 'fila vazia', { cls: val.length ? 'ac' : '', href: '#backlog/validacao' }) +
       kpi('Homologações a cobrar', hom.length, HO.DIAS_ATE_COBRAR + '+ dias na área sem registro', { cor: hom.length ? 'var(--pu-t)' : '' }) +
@@ -554,15 +555,15 @@
       kpi('Para estimar', pok.length, 'em Planning sem pontos', { href: 'poker.html' }) +
       kpi('Sprints a fechar', pend.length, pend.length ? pend.map(function (p) { return H.esc(S.rotuloCurto(p.rotulo)); }).join(', ') : 'nenhuma pendente', { cls: pend.length ? 'ac' : '', href: '#sprints/encerrar' }) +
       '</div>';
-    var acaoEd = function (m, txt, tit) { return externo(txt, H.hrefEditar(m), tit, 'btns'); };
+    var AC = window.AXIS_ACOES;
     var cols = '<div class="ini-cols q4">' +
       coluna('VALIDAÇÃO PM/PO', 'var(--wn)', val, function (m) {
         return cartao(m, ctx, { comDev: true, meta: m.entregue_em ? 'entregue ' + H.dm(m.entregue_em) : 'aguardando o PO',
-          acao: acaoEd(m, 'Validar', 'Abre ' + (m.codigo || '') + ' no editor do Admin para validar ou devolver') });
+          acao: '<a class="btns" href="#backlog/validacao/' + encodeURIComponent(m.codigo || m.id) + '" title="Abre ' + H.esc(m.codigo || '') + ' na Validação do PO: o que foi entregue, validar ou devolver">Validar</a>' });
       }) +
       coluna('HOMOLOGAÇÃO A COBRAR', 'var(--pu)', hom, function (m) {
         return cartao(m, ctx, { comDev: true, meta: (HO.diasNaArea(m, hoje) || 0) + ' dias na área · ' + (m.solicitante || 'sem solicitante'),
-          acao: acaoEd(m, 'Registrar', 'Abre ' + (m.codigo || '') + ' no editor do Admin para registrar quem homologou') });
+          acao: AC ? AC.botao('homologar', m, 'Registrar', 'btns', { titulo: 'Registra quem homologou ' + (m.codigo || '') + ' na área' }) : '' });
       }) +
       coluna('PRAZO VENCIDO', 'var(--dg)', atr, function (m) { return cartao(m, ctx, { comDev: true }); }) +
       coluna('PARA ESTIMAR', 'var(--in)', pok, function (m) { return cartao(m, ctx, { comDev: true, meta: 'sem pontos do Poker' }); }) +
@@ -814,8 +815,8 @@
         if (q === 'ntf-mais') { EST.ntfLimite += 30; redesenha(el, ctx); return; }
       }
       // Cartao do quadro pessoal: o cartao inteiro abre o item, menos o botao
-      // de acao dentro dele (que leva a tela antiga).
-      if (e.target.closest('a')) return;
+      // de acao dentro dele.
+      if (e.target.closest('a, button')) return;
       var c = e.target.closest('.ini-card[data-href]');
       if (c) location.hash = c.getAttribute('data-href');
     };

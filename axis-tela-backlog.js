@@ -5,7 +5,7 @@
      lista      todos os itens, agrupados (projeto, sistema, sprint ou nada)
      validacao  entregas esperando o PM/PO (so admin, que e quem valida)
      vencido    o que esta com prazo vencido, da mais antiga para a mais nova
-     importar   a porta para o importador de sempre (importar.html)
+     importar   a porta para o importador do app (#importar, axis-tela-importar.js)
 
    NENHUMA CONTA MORA AQUI. Etapa e `ETAPA` (pelo H.colunaDe/H.etapaDe), prazo e
    atraso sao `PRAZO`, progresso de projeto e `RESUMOPROJETO`, roll-up do
@@ -13,8 +13,10 @@
    `SPRINTPO`, remarcacao de prazo e `CAPACIDADE.rolagemDeSprint`, area e
    `HOMOLOGACAO`. A tela so escolhe o que mostrar e em que ordem.
 
-   GRAVAR CONTINUA NAS TELAS ANTIGAS: Validar, Devolver, Replanejar, Novo item
-   e Importar levam ao editor de sempre, com a sessao compartilhada.
+   AS ACOES GRAVAM DAQUI: Validar e fechar, Devolver com motivo, Registrar
+   homologacao, Replanejar e Pausar sao os gestos de axis-acoes.js, e "+ Novo
+   item" abre o formulario do app (axis-form-demanda.js). Importar e a tela
+   #importar (axis-tela-importar.js).
 
    "Ready 5/5", epico (EPI-) e o detalhe de criterios marcados da prancha nao
    existem no RoadMap; no lugar do Ready vai a coluna Sprint (a do PO).
@@ -405,8 +407,8 @@
       : '<option value="">Todos os sistemas</option>' + temas(D).map(function (t) { return sel(H.esc(t.id), H.esc(t.nome), F.tema); }).join('');
     var c = htmlCorpo(D, eDev);
     var botoes = H.pode('editar')
-      ? '<div class="row">' + link('importar.html', 'Importar', 'Abre o importador (importar.html)', 'btn') +
-        link('admin.html#novo', '+ Novo item', 'Abre o formulário de demanda nova no admin', 'btnp') + '</div>'
+      ? '<div class="row">' + '<a class="btn" href="#importar" title="Importar demandas de uma planilha">Importar</a>' +
+        '<button type="button" class="btnp" data-axa-form="novo">+ Novo item</button></div>'
       : '';
     return '<header style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px">' +
       '<div style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">Backlog</h1>' +
@@ -549,11 +551,12 @@
     if (atr != null && !v.area) rodape.push(atr > 0 ? '<span style="color:var(--dg-t)">' + H.plural(atr, 'dia', 'dias') + ' depois do prazo</span>' : '<span style="color:var(--ok-t)">no prazo</span>');
 
     var acoes = '';
-    if (H.pode('validar')) {
+    var AC = W.AXIS_ACOES;
+    if (H.pode('validar') && AC) {
       acoes = v.area
-        ? link(H.hrefEditar(m), 'Registrar homologação', 'Abre ' + (m.codigo || '') + ' no editor (admin) para registrar quem homologou', 'btnp')
-        : link(H.hrefEditar(m), 'Devolver com motivo', 'Abre ' + (m.codigo || '') + ' no editor (admin), onde a devolução pede o motivo', 'btn" style="color:var(--dg-t);border-color:rgba(var(--dg-rgb),.4)') +
-          link(H.hrefEditar(m), 'Validar e fechar', 'Abre ' + (m.codigo || '') + ' no editor (admin), onde a aprovação grava o selo', 'btnp" style="background:linear-gradient(180deg,var(--ok-t),var(--ok));box-shadow:0 8px 22px rgba(var(--ok-rgb),.25)');
+        ? AC.botao('homologar', m, 'Registrar homologação', 'btnp', { titulo: 'Registra quem homologou na área; a demanda segue para o PM/PO depois' })
+        : AC.botao('devolver', m, 'Devolver com motivo', 'btn perigo', { titulo: 'Volta para o dev, com o motivo que ele vai ler' }) +
+          AC.botao('validar', m, 'Validar e fechar', 'btnp ok', { titulo: 'Conclui a demanda com o seu nome como quem validou' });
     }
 
     var quem = v.area
@@ -691,8 +694,13 @@
       var ds = H.devsDe(m);
       var rg = W.CAPACIDADE ? W.CAPACIDADE.rolagemDeSprint(m) : null;
       var acao = '';
-      if (H.pode('editar')) acao = link(H.hrefEditar(m), 'Replanejar ou pausar', 'Abre ' + (m.codigo || '') + ' no editor (admin): nova data ou pausa', 'btns" style="height:28px');
-      else if (eDev && H.minha(m)) acao = link(H.hrefEditar(m), 'Abrir no painel', 'Abre ' + (m.codigo || '') + ' no Meu painel (dev.html)', 'btns" style="height:28px');
+      var AC = W.AXIS_ACOES;
+      // O PM/PO replaneja ou pausa daqui; o dev entrega ou pede a pausa pelo Item.
+      if (AC && H.pode('validar')) {
+        acao = '<span style="display:flex;flex-direction:column;gap:4px;align-items:stretch">' + AC.botao('replanejar', m, 'Replanejar', 'btns" style="height:28px', { titulo: 'Nova data de entrega' }) +
+          (H.pausada(m) ? '' : W.PAUSA && W.PAUSA.situacao(m) === 'aguardando' ? AC.botao('aprovarPausa', m, 'Aprovar pausa', 'btns" style="height:28px', { titulo: 'O dev pediu pausa' })
+            : AC.botao('pausar', m, 'Pausar', 'btns" style="height:28px', { titulo: 'Suspende o prazo: os dias parados não contam como atraso' })) + '</span>';
+      } else if (eDev && H.minha(m)) acao = '<a class="btns" href="' + H.hrefItem(m) + '" title="Entregar ou pedir pausa pelo item">Abrir</a>';
       return '<tr class="click" data-href="' + H.hrefItem(m) + '"' + (eDev && H.minha(m) ? ' style="box-shadow:inset 3px 0 0 var(--ac)"' : '') + '>' +
         '<td style="max-width:420px"><span class="row" style="gap:8px;min-width:0"><span class="code">' + H.esc(m.codigo || '—') + '</span>' +
         '<span style="display:flex;flex-direction:column;min-width:0"><span class="ell" style="color:var(--tx);font-weight:700">' + H.esc(m.titulo || '(sem título)') + '</span>' +
@@ -727,9 +735,9 @@
 
   // ── Aba Importar ──────────────────────────────────────────────────────
   function renderImportar() {
-    // Os passos sao os do importar.html, com os nomes de la.
-    var passos = [['1 · Preencher dados', 'tabela ou colar do Excel/CSV'], ['2 · Duplicatas', 'revisar possíveis duplicatas'],
-                  ['3 · Revisar e validar', 'conferir erros antes de importar'], ['4 · Importar', 'grava na base']];
+    // Os passos sao os da tela #importar (axis-tela-importar.js).
+    var passos = [['1 · Arquivo', '.csv ou colar do Excel'], ['2 · Mapeamento', 'qual coluna vai em qual campo'],
+                  ['3 · Revisão', 'duplicatas e erros antes de gravar'], ['4 · Importar', 'grava na base']];
     var cols = ['titulo', 'descricao', 'tema', 'dev', 'status', 'tipo', 'inicio', 'entrega', 'horas_realizadas', 'solicitante', 'prioridade'];
     return '<header style="display:flex;flex-direction:column;gap:6px">' +
       '<span class="note"><a href="#backlog/lista">Backlog</a> › Importar</span>' +
@@ -738,12 +746,12 @@
       '<div class="bk-passos">' + passos.map(function (p) { return '<span>' + H.esc(p[0]) + '<small>' + H.esc(p[1]) + '</small></span>'; }).join('') + '</div>' +
       '<section class="pn" style="gap:14px">' +
       '<span class="lab">COMO FUNCIONA</span>' +
-      '<span style="font-size:13.5px;line-height:21px;color:var(--tx2)">A importação continua no importador de sempre: ele lê a planilha, aponta as linhas parecidas com demandas que já existem e mostra os erros antes de gravar. Copie as linhas da planilha (Ctrl+C) com o cabeçalho na primeira linha; o separador pode ser TAB (o padrão do Excel) ou ponto e vírgula.</span>' +
+      '<span style="font-size:13.5px;line-height:21px;color:var(--tx2)">O importador lê a planilha, aponta as linhas parecidas com demandas que já existem e mostra os erros antes de gravar. Envie um .csv ou cole as linhas da planilha (Ctrl+C) com o cabeçalho na primeira linha; o separador pode ser TAB (o padrão do Excel) ou ponto e vírgula.</span>' +
       '<span class="lab">COLUNAS DA PLANILHA</span>' +
       '<div class="row" style="flex-wrap:wrap;gap:6px">' + cols.map(function (c) { return '<span class="chip c-bk mono">' + c + '</span>'; }).join('') + '</div>' +
       '<div class="row" style="justify-content:space-between;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--bd)">' +
       '<span class="note">O que for importado aparece aqui no Backlog na próxima leitura da base.</span>' +
-      link('importar.html', 'Abrir o importador', 'Abre importar.html, onde a importação é feita', 'btnp') + '</div></section>';
+      '<a class="btnp" href="#importar" title="Abre a importação no AXIS">Abrir o importador</a>' + '</div></section>';
   }
 
   // ── Registro ──────────────────────────────────────────────────────────

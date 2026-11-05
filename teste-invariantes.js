@@ -24959,6 +24959,197 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     }).then(r => ok(!r.ok && /vazia/.test(r.erro), 'leitura vazia aborta a gravacao')));
   })();
 
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('Acoes do app AXIS (axis-acoes.js): o patch de cada gesto e o da tela antiga');
+
+  /* CADA ACAO DO ITEM GRAVA O QUE A TELA ANTIGA GRAVARIA. Onde a regra existe
+     escrita no admin.html (`gestoSemDev`, `marcaConclusao`, `aplicarRetomada`),
+     a funcao de la e recortada e executada AO LADO da do app, caso a caso: se
+     as duas divergirem, o app passa a gravar outra coisa em silencio. */
+  (() => {
+    const AC = require('./axis-acoes.js');
+    const R = { PAUSA: require('./pausa.js'), HOMOLOGACAO: require('./homologacao.js'), SPRINTPO: require('./sprint.js'),
+                DEVOLUCAO: require('./devolucao.js'), PREVOO: require('./prevoo.js'), VINCULO: require('./vinculo.js') };
+    const HOJE = '2026-11-05', AGORA = '2026-11-05T14:00:00.000Z';
+    const ctx = (papel, extra) => Object.assign({ papel, quem: papel === 'dev' ? 'Ana Dev' : 'Paula PO', hoje: HOJE, agora: AGORA, lista: [], aprovadores: null, R }, extra || {});
+    const R_ = AC.REGRAS;
+
+    // gestoSemDev: a do admin e a do app, na mesma matriz.
+    const gAdmin = new Function('window', 'SPRINTPO',
+      (ADMIN.match(/const ETAPAS_COM_DEV = [^\n]+/) || [''])[0] + '\n' +
+      (corpo(ADMIN, 'function exigeDev(sp) {') || '') + '\n' + (corpo(ADMIN, 'function gestoSemDev(') || '') + '\nreturn gestoSemDev;')({ SPRINTPO: R.SPRINTPO }, R.SPRINTPO);
+    const ETS = ['backlog', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'];
+    let divergeDev = [];
+    ETS.forEach(de => ETS.forEach(para => ['', 'Ana'].forEach(dev => ['', 'S2-11-2026'].forEach(sp => {
+      const v = { status_planejamento: de };
+      if (gAdmin(v, para, dev, sp) !== AC.gestoSemDev(v, para, dev, sp, { R })) divergeDev.push(de + '>' + para + '/' + dev + '/' + sp);
+    }))));
+    ok(divergeDev.length === 0, 'gestoSemDev do app = o do admin em ' + (ETS.length * ETS.length * 4) + ' casos', divergeDev.slice(0, 5).join(', '));
+
+    // marcaConclusao: o admin muta; o app devolve os campos. O resultado tem de ser o mesmo.
+    const mAdmin = new Function((corpo(ADMIN, 'function marcaConclusao(m, etapaNova) {') || '') + '\nreturn marcaConclusao;')();
+    const hojeLocal = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+    let divergeMc = [];
+    [{}, { concluido_em: '2026-10-01', concluido_retroativo: true }, { entregue_em: '2026-09-30' }].forEach((base, i) => ETS.forEach(para => {
+      const a = JSON.parse(JSON.stringify(base)); mAdmin(a, para);
+      const b = Object.assign(JSON.parse(JSON.stringify(base)), AC.marcaConclusao(base, para, hojeLocal));
+      Object.keys(b).forEach(k => { if (b[k] === undefined) delete b[k]; });
+      if (JSON.stringify(a) !== JSON.stringify(b)) divergeMc.push(i + '>' + para);
+    }));
+    ok(divergeMc.length === 0, 'marcaConclusao do app = a do admin (concluir estampa, sair limpa)', divergeMc.join(', '));
+
+    // retomar: `aplicarRetomada` do admin, com o relogio fixo.
+    const ret = new Function('ETAPA', 'HOJE',
+      'const estaPausado = m => ETAPA.pausada(m);\nfunction _isoHoje() { return HOJE; }\n' +
+      (corpo(ADMIN, 'function _somaDias(iso, n) {') || '') + '\n' + (corpo(ADMIN, 'function _difDias(de, ate) {') || '') + '\n' +
+      (ADMIN.match(/const diasPausadoAgora = [^\n]+/) || [''])[0] + '\n' + (corpo(ADMIN, 'function aplicarRetomada(m) {') || '') + '\nreturn aplicarRetomada;')(require('./etapa-demanda.js'), HOJE);
+    [{ entrega: '2026-11-10', pausado_em: '2026-10-28', pausa_motivo: 'banco', pausa_dias: 2, pausa_historico: [{ de: 'x' }] },
+     { entrega: '', pausado_em: '2026-11-01', pausa_motivo: 'm' }, { entrega: '2026-12-30', pausado_em: HOJE, pausa_motivo: 'm' }].forEach((m, i) => {
+      const adm = JSON.parse(JSON.stringify(m)); ret(adm, HOJE);
+      const r = R_.retomar(m, {}, ctx('admin'));
+      const app = Object.assign(JSON.parse(JSON.stringify(m)), r.patch);
+      const ks = ['entrega', 'pausado_em', 'pausa_motivo', 'pausa_por', 'pausa_dias', 'pausa_historico'];
+      ok(r.ok && ks.every(k => JSON.stringify(adm[k] == null ? '' : adm[k]) === JSON.stringify(app[k] == null ? '' : app[k])),
+         'retomar ' + (i + 1) + ': o patch do app = aplicarRetomada do admin (entrega empurrada, historico da pausa)',
+         ks.map(k => k + ' ' + JSON.stringify(adm[k]) + '/' + JSON.stringify(app[k])).join('; '));
+    });
+
+    // Validar e devolver: os campos do `valDecidir`.
+    const val = { id: 'v', codigo: 'AX-1', status_planejamento: 'validacao', dev: 'Ana', horas_realizadas: 8, tipo: 'evolucao' };
+    const rv = R_.validar(val, {}, ctx('admin'));
+    ok(rv.ok && rv.patch.status_planejamento === 'concluido' && rv.patch.status === 'concluida' && rv.patch.validado_por === 'Paula PO' &&
+       rv.patch.validado_em === AGORA && rv.patch.concluido_em === '2026-11-05' && rv.patch.validacao_obs === '',
+       'validar grava o selo de quem validou e conclui com a data da aprovacao', JSON.stringify(rv.patch));
+    ok(R_.validar(Object.assign({}, val, { horas_realizadas: 0 }), {}, ctx('admin')).campo === 'horas', 'validar sem horas e recusado e aponta o campo');
+    ok(R_.validar(Object.assign({}, val, { dev: '' }), {}, ctx('admin')).campo === 'dev', 'validar sem responsavel e recusado (concluir sem dono)');
+    ok(!R_.validar(Object.assign({}, val, { status_planejamento: 'em_andamento' }), {}, ctx('admin')).ok, 'so se valida o que esta em Validacao PM/PO');
+    const rd = R_.devolver(val, { obs: '  refazer o saldo  ' }, ctx('admin'));
+    ok(rd.ok && rd.patch.status_planejamento === R.DEVOLUCAO.ETAPA_AO_DEVOLVER && rd.patch.validacao_obs === 'refazer o saldo' &&
+       rd.patch.validado_por === '' && rd.patch.concluido_em === '', 'devolver volta para a etapa da devolucao, com o motivo e sem selo', JSON.stringify(rd.patch));
+    ok(!R_.devolver(val, { obs: '  ' }, ctx('admin')).ok, 'devolver sem motivo e recusado');
+
+    // Pausa: as transicoes sao as do pausa.js, e o patch leva so os campos da pausa.
+    const viva = { id: 'p', status_planejamento: 'em_andamento', entrega: '2026-11-20' };
+    const rp = R_.pausar(viva, { motivo: 'aguardando o banco responder' }, ctx('admin'));
+    ok(rp.ok && rp.patch.pausado_em === HOJE && rp.patch.pausa_por === 'Paula PO' && rp.patch.pausa_pedido === null &&
+       Object.keys(rp.patch).sort().join() === 'pausa_aprovada_em,pausa_aprovada_por,pausa_motivo,pausa_pedido,pausa_por,pausado_em',
+       'o PM/PO pausa direto: os campos de `pausarComoAdm`, e nada alem', Object.keys(rp.patch).join());
+    ok(!R_.pausar(viva, { motivo: 'curto' }, ctx('admin')).ok, 'pausar com justificativa curta e recusado (PAUSA.problemaNoMotivo)');
+    ok(!R_.pausar(viva, { motivo: 'aguardando o banco responder' }, ctx('dev')).ok, 'o dev nao pausa: pede');
+    const rpp = R_.pedirPausa(viva, { motivo: 'aguardando o banco responder' }, ctx('dev'));
+    ok(rpp.ok && Object.keys(rpp.patch).join() === 'pausa_pedido' && rpp.patch.pausa_pedido.em === HOJE && rpp.patch.pausa_pedido.por === 'Ana Dev',
+       'o dev pede: so `pausa_pedido`, com a data de hoje e o nome dele');
+    const comPedido = Object.assign({}, viva, { pausa_pedido: { em: '2026-11-02', por: 'Ana Dev', motivo: 'aguardando o banco responder' } });
+    const ra = R_.aprovarPausa(comPedido, {}, ctx('admin'));
+    ok(ra.ok && ra.patch.pausado_em === '2026-11-02' && ra.patch.pausa_pedido === null, 'aprovar vale desde a data DO PEDIDO, e nao de hoje', JSON.stringify(ra.patch));
+    ok(!R_.aprovarPausa(comPedido, {}, ctx('dev')).ok, 'o dev nao aprova pausa');
+    const rr = R_.recusarPausa(comPedido, { motivo: 'o fornecedor ja respondeu' }, ctx('admin'));
+    ok(rr.ok && rr.patch.pausa_pedido === null && rr.patch.pausa_recusas.length === 1 && rr.patch.pausa_recusas[0].pedido_em === '2026-11-02',
+       'recusar guarda a recusa com o pedido que foi negado');
+    ok(R_.desistirPausa(comPedido, {}, ctx('dev')).patch.pausa_pedido === null, 'desistir apaga so o pedido');
+    ok(comPedido.pausa_pedido && !viva.pausado_em, 'nenhuma regra muta a demanda recebida');
+
+    // Mover: o dev so move o que o painel dele move, e entregar e outro gesto.
+    const plan = { id: 'm', codigo: 'AX-2', status_planejamento: 'planejado', dev: 'Ana Dev', tipo: 'evolucao', sprint_po: 'S1-11-2026' };
+    const rm = R_.mover(plan, { destino: 'em_andamento' }, ctx('dev'));
+    ok(rm.ok && rm.patch.status_planejamento === 'em_andamento' && rm.patch.status === 'iniciada', 'o dev comeca (Planejado -> Em andamento)', JSON.stringify(rm.patch));
+    ok(!R_.mover(plan, { destino: 'concluido' }, ctx('dev')).ok && !R_.mover(plan, { destino: 'planning' }, ctx('dev')).ok,
+       'o dev nao move para fora de ETAPAS_DO_DEV (o servidor devolveria)');
+    ok(!R_.mover(Object.assign({}, plan, { sprint_po: '' }), { destino: 'em_andamento' }, ctx('dev')).ok, 'comecar sem sprint e recusado (SPRINTPO.travaDeAlocacao)');
+    ok(R_.mover({ id: 'x', status_planejamento: 'planning', tipo: 'evolucao' }, { destino: 'planejado' }, ctx('admin')).campo === 'dev',
+       'admin: Planejado sem dono nem sprint pede o responsavel (gestoSemDev)');
+    ok(R_.mover({ id: 'x', status_planejamento: 'planning', tipo: 'evolucao', dev: 'Ana' }, { destino: 'planejado' }, ctx('admin')).campo === 'sprint',
+       'admin: atravessar a Planning sem sprint pede a sprint');
+    const rc = R_.mover({ id: 'x', status_planejamento: 'em_andamento', tipo: 'sustentacao', dev: 'Ana', sprint_po: 'S1-11-2026', horas_realizadas: 0 }, { destino: 'concluido' }, ctx('admin'));
+    ok(!rc.ok && rc.campo === 'horas', 'concluir sem horas e recusado e leva ao campo das horas');
+    const rok = R_.mover({ id: 'x', status_planejamento: 'backlog', tipo: 'evolucao' }, { destino: 'levantar_req' }, ctx('admin'));
+    ok(rok.ok && rok.patch.status === 'recebida' && !('concluido_em' in rok.patch), 'admin move com o status do SP_TO_STATUS e sem tocar na conclusao');
+
+    // Entregar: as exigencias do saveStatus e a regra da homologacao.
+    const and = { id: 'e', status_planejamento: 'em_andamento', tipo: 'evolucao', solicitante: 'Bia', dev: 'Ana Dev', sprint_po: 'S1-11-2026' };
+    ok(R_.entregar(and, { destino: 'validacao_area', horas: '0' }, ctx('dev')).campo === 'horas', 'entregar sem horas e recusado');
+    ok(!R_.entregar(and, { destino: 'validacao', horas: '4', implementacao: 'x' }, ctx('dev')).ok, 'evolucao nao pula a Validacao da area');
+    const re = R_.entregar(and, { destino: 'validacao_area', horas: '4', resumo: 'feito' }, ctx('dev'));
+    ok(re.ok && re.patch.entregue_em === AGORA && re.patch.horas_realizadas === 4 && re.patch.resumo_entrega === 'feito', 'entregar a area carimba a entrega do dev', JSON.stringify(re.patch));
+    const area = Object.assign({}, and, { status_planejamento: 'validacao_area', entregue_em: '2026-11-01T10:00:00Z', homologacao: { quem: 'Bia', ok: true } });
+    const re2 = R_.entregar(area, { destino: 'validacao', horas: '4', implementacao: 'tela nova' }, ctx('dev'));
+    ok(re2.ok && re2.patch.entregue_em === '2026-11-01T10:00:00Z', 'da area ao PM/PO NAO recarimba: e a mesma entrega seguindo');
+    ok(!R_.entregar(area, { destino: 'validacao', horas: '4', implementacao: '' }, ctx('dev')).ok, 'ao PM/PO sem o que foi implementado e recusado');
+    ok(!R_.entregar(Object.assign({}, area, { homologacao: null }), { destino: 'validacao', horas: '4', implementacao: 'x' }, ctx('dev')).ok,
+       'sair da area para o PM/PO sem homologacao e recusado');
+    ok(AC.destinosDeEntrega(and, ctx('dev')).join() === 'validacao_area', 'evolucao em andamento so oferece a area como destino');
+
+    // Homologar, negar, replanejar.
+    const rh = R_.homologar({ id: 'h', status_planejamento: 'validacao_area' }, { quem: 'Bia', obs: 'ok' }, ctx('dev'));
+    ok(rh.ok && Object.keys(rh.patch).join() === 'homologacao' && rh.patch.homologacao.quem === 'Bia' && rh.patch.homologacao.ok === true,
+       'homologar grava o registro e NAO move a demanda');
+    ok(!R_.homologar({ id: 'h', status_planejamento: 'validacao_area' }, { quem: '' }, ctx('dev')).ok, 'homologar sem quem e recusado');
+    const rn = R_.negar({ id: 'n', status_planejamento: 'concluido', concluido_em: '2026-10-01' }, { motivo: 'fora do escopo' }, ctx('admin'));
+    ok(rn.ok && rn.patch.status_planejamento === 'negada' && rn.patch.motivo_negacao === 'fora do escopo' && rn.patch.concluido_em === '',
+       'negar grava o motivo e tira a conclusao');
+    ok(!R_.negar({ id: 'n', status_planejamento: 'backlog' }, { motivo: 'x' }, ctx('dev')).ok, 'o dev nao nega');
+    ok(R_.replanejar({ id: 'r', status_planejamento: 'em_andamento', entrega: '2026-11-10' }, { entrega: '2026-11-24' }, ctx('admin')).patch.entrega === '2026-11-24' &&
+       !R_.replanejar({ id: 'r', status_planejamento: 'em_andamento' }, { entrega: '2026-11-24' }, ctx('dev')).ok &&
+       !R_.replanejar({ id: 'r', status_planejamento: 'em_andamento', inicio: '2026-11-20' }, { entrega: '2026-11-15' }, ctx('admin')).ok,
+       'replanejar: so o PM/PO, e nunca antes do inicio');
+
+    // SABOTAGEM: um patch que levasse a demanda inteira passaria nas contas de valor
+    // acima, mas nao na de chaves — e e ela que protege o resto do servidor.
+    const sabot = Object.assign({}, viva, rp.patch);
+    ok(Object.keys(sabot).length > Object.keys(rp.patch).length, 'a sabotagem (gravar a demanda inteira) teria mais chaves — e a invariante de chaves acusaria');
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('Formulario de demanda do app AXIS (axis-form-demanda.js): nova e editar');
+
+  (() => {
+    const AC = require('./axis-acoes.js');
+    const F = require('./axis-form-demanda.js');
+    const R = { SPRINTPO: require('./sprint.js'), ABERTURA: require('./abertura.js'), AXIS_ACOES: AC, PREVOO: require('./prevoo.js'),
+                HOMOLOGACAO: require('./homologacao.js'), COLABORADORES: { emailPara: () => '' } };
+    const HOJE = '2026-11-05', AGORA = '2026-11-05T14:00:00.000Z';
+    const c = (papel, extra) => Object.assign({ papel, quem: papel === 'dev' ? 'Ana Dev' : 'Paula PO', hoje: HOJE, agora: AGORA, id: 'n1', D: { feriados: [], sprints_fechadas: [] }, R }, extra || {});
+    const base = { titulo: 'Tela nova', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', descricao: 'x' };
+
+    const d1 = F.nova(Object.assign({}, base, { etapa: 'em_andamento' }), c('dev'));
+    ok(d1.ok && d1.obj.dev === 'Ana Dev' && d1.obj.origem === 'dev' && d1.obj.status_planejamento === 'em_andamento' && d1.obj.status === 'iniciada' &&
+       d1.obj.criado_em === AGORA && d1.obj.id === 'n1', 'dev: nasce com o nome dele, origem dev e o status da etapa', JSON.stringify(d1.obj));
+    ok(F.nova(Object.assign({}, base, { etapa: 'planejado', projeto_id: 'p1' }), c('dev')).obj.status_planejamento === 'backlog',
+       'dev: demanda de projeto nasce no Backlog (nProjetoMudou)');
+    ok(!F.nova(Object.assign({}, base, { etapa: 'concluido' }), c('dev')).ok, 'dev: nao nasce fora de Backlog/Planejado/Em andamento');
+    ok(F.nova(Object.assign({}, base, { entrega: '2026-11-20' }), c('dev')).campo === 'entrega', 'dev: pelo painel nao nasce com prazo no futuro (abertura.js)');
+    ok(F.nova(Object.assign({}, base, { solicitante: '' }), c('dev')).campo === 'solicitante', 'sem quem pediu, a abertura e recusada');
+    ok(F.nova(Object.assign({}, base, { tipo: '' }), c('admin')).campo === 'tipo' && F.nova(Object.assign({}, base, { tema_id: '' }), c('admin')).campo === 'tema',
+       'tipo e sistema sao obrigatorios na abertura');
+
+    const a1 = F.nova(Object.assign({}, base, { etapa: 'backlog', prioridade: 'alta', poker_pontos: '5', entrega: '2026-12-01', dados_bi: true, sales_ops: true }), c('admin'));
+    ok(a1.ok && a1.obj.poker_pontos === 5 && a1.obj.prioridade === 'alta' && a1.obj.entrega === '2026-12-01' && a1.obj.dados_bi === true && a1.obj.sales_ops === false &&
+       a1.obj.comite === null && Array.isArray(a1.obj.historico) && a1.obj.homologacao === null, 'admin: os padroes do saveMelhoria; Dados/BI e Sales Ops sao exclusivos');
+    ok(F.nova(Object.assign({}, base, { entrega: '2026-10-01' }), c('admin')).campo === 'entrega', 'admin: tambem nao nasce com data no passado');
+    ok(F.nova(Object.assign({}, base, { etapa: 'planejado', dev: 'Ana' }), c('admin')).campo === 'sprint', 'admin: Planejado sem sprint pede a sprint');
+    const a2 = F.nova(Object.assign({}, base, { etapa: 'planejado', sprint: 'S2-11-2026' }), c('admin'));
+    ok(a2.ok && a2.obj.sprint_po === 'S2-11-2026' && a2.obj.sprint_po_por === 'Paula PO' && a2.obj.sprint_po_historico.length === 1,
+       'admin: a sprint entra por SPRINTPO.repassar, e Planejado com sprint dispensa o dono', JSON.stringify(a2.erro || ''));
+    ok(F.nova(Object.assign({}, base, { etapa: 'concluido', dev: 'Ana', sprint: 'S1-11-2026' }), c('admin')).campo === 'horas', 'admin: nascer concluida pede as horas');
+
+    // Edicao: o patch leva SO o que mudou.
+    const m = { id: 'e1', codigo: 'AX-9', titulo: 'Antes', tipo: 'evolucao', tema_id: 't1', descricao: 'd', solicitante: 'Bia', status_planejamento: 'em_andamento',
+                dev: 'Ana Dev', inicio: '2026-11-01', entrega: '2026-11-10', prioridade: 'media', sprint_po: 'S1-11-2026', anexos: [{ nome: 'a.pdf' }] };
+    const f = { titulo: 'Depois', tipo: 'evolucao', tema_id: 't1', descricao: 'd', solicitante: 'Bia', projeto_id: '', inicio: '2026-11-01', entrega: '2026-11-10' };
+    const e1 = F.edicao(m, f, c('dev'));
+    ok(e1.ok && Object.keys(e1.patch).sort().join() === 'titulo', 'editar manda so o que mudou (vazio igual a ausente nao conta como mudanca)', Object.keys(e1.patch || {}).join());
+    const e2 = F.edicao(m, Object.assign({}, f, { entrega: '2026-12-31' }), c('dev'));
+    ok(!('entrega' in e2.patch), 'dev: a partir de Planejado a data e do PM/PO e nao entra no patch');
+    ok(F.edicao(m, Object.assign({}, f, { tipo: 'sustentacao' }), c('dev')).patch.tipo === undefined, 'dev: a classificacao de demanda existente nao muda');
+    ok(F.edicao(m, Object.assign({}, f, { titulo: 'Antes', projeto_id: undefined }), c('dev')).patch === null, 'sem mudanca, nada a gravar');
+    const e3 = F.edicao(m, Object.assign({}, f, { titulo: 'Antes', dev: '', prioridade: 'media' }), c('admin'));
+    ok(!e3.ok && e3.campo === 'dev', 'admin: tirar o dono de uma demanda Em andamento e recusado');
+    const e4 = F.edicao(m, Object.assign({}, f, { titulo: 'Antes', dev: 'Ana Dev', prioridade: 'alta', sprint: 'S2-11-2026' }), c('admin'));
+    ok(e4.ok && e4.patch.prioridade === 'alta' && e4.patch.sprint_po === 'S2-11-2026' && e4.patch.sprint_po_historico.length === 1 && !('titulo' in e4.patch),
+       'admin: prioridade e sprint (pelo repassar) no patch; o resto fica o do servidor', JSON.stringify(e4.patch || e4.erro));
+    ok(m.titulo === 'Antes' && m.sprint_po === 'S1-11-2026', 'a edicao nao muta a demanda lida');
+  })();
+
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao

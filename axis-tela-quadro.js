@@ -9,9 +9,10 @@
    A ORDEM DENTRO DA COLUNA vem de `ordem-kanban.js` (prioridade, depois a data
    prometida), igual ao admin e ao painel do dev. Nenhuma ordenacao propria.
 
-   NAO HA ARRASTE. Mudar etapa grava, e gravar continua nas telas antigas
-   (ver axis-app.js). O card e um link para o Item; de la, quem pode age no
-   editor de sempre.
+   NAO HA ARRASTE. O card e um link para o Item, e e la que a etapa muda: os
+   gestos de axis-acoes.js mostram a trava ANTES do clique, o que um arraste
+   so descobriria ao soltar. "+ Novo item" abre o formulario do app
+   (axis-form-demanda.js).
 
    O QUE O PROTOTIPO TEM E A BASE NAO: limite de WIP por coluna, colunas de
    Code review / Testes / Em producao, epico EPI-, PR no card. Nada disso e
@@ -363,7 +364,6 @@
 
     var cab = cabecalhoSprint(ctx);
     var podeCriar = ctx.papel === 'admin' || ctx.papel === 'dev';
-    var hrefNovo = ctx.papel === 'admin' ? 'admin.html#novo' : 'dev.html#novo';
     var lsFrentes = frentes().filter(function (f) { return porFrente[f] || f === F.frente; });
 
     var h = '<div class="qd" style="display:flex;flex-direction:column;gap:18px;min-width:0">';
@@ -381,8 +381,7 @@
         return '<button type="button" role="tab" data-frente="' + attr(f) + '" aria-selected="' + (F.frente === f) + '">' + H.esc(f) +
           '<span class="n">' + (porFrente[f] || 0) + '</span></button>';
       }).join('') + '</div>') +
-      (podeCriar ? '<a class="btnp" href="' + hrefNovo + '" title="Abre o formulário de nova demanda em ' + (ctx.papel === 'admin' ? 'Área administrativa' : 'Meu painel') + '">+ Novo item ' +
-        H.ico('external', 'style="font-size:12px;opacity:.8"') + '</a>' : '') +
+      (podeCriar ? '<button type="button" class="btnp" data-axa-form="novo">+ Novo item</button>' : '') +
       '</div></header>';
 
     // ── Alertas e filtros ──

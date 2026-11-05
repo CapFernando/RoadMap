@@ -8,9 +8,13 @@
    PROPRIO objeto da rota — o nucleo chama `abasDe` antes de montar o `ctx`, e
    e por isso que o `render` ja recebe a aba certa.
 
-   SO LEITURA. Toda acao (editar, mover, validar, pausar, entregar) abre a
-   demanda na tela antiga que grava: o editor do admin (admin.html#AX-123) ou
-   o painel do dev (dev.html#AX-123), ambos ja logados pela sessao comum.
+   AS ACOES GRAVAM DAQUI. Editar abre o formulario do app (axis-form-
+   demanda.js); mover, validar, devolver, homologar, replanejar, pausar e
+   retomar, negar e entregar sao os gestos de axis-acoes.js, cada um com o
+   patch que o editor do admin ou o painel do dev gravaria. O que este arquivo
+   decide e so QUAIS botoes cada perfil ve (`AXIS_ACOES.disponiveis`) e qual e
+   o principal. Continuam fora: escrever na conversa (Mensageria) e estimar
+   (Planning Poker).
 
    O MOTIVO DA TRAVA nao e inventado nem recalculado: e o que os modulos de
    regra responderiam se a demanda fosse movida para a proxima etapa agora —
@@ -110,14 +114,7 @@
     return ((AX.APP.D || {}).feriados || []).map(function (f) { return f && typeof f === 'object' ? f.data : f; });
   }
 
-  /** Para onde o botao de acao leva quem pode agir. O dev abre o card no
-   *  painel dele pelo codigo (dev.html aceita #AX-123, como o admin). */
-  function hrefAcao(m, papel) {
-    if (papel === 'admin') return H.hrefEditar(m);
-    return 'dev.html' + (m.codigo ? '#' + encodeURIComponent(m.codigo) : '');
-  }
-  function podeAgir(m, papel) { return papel === 'admin' || (papel === 'dev' && H.minha(m)); }
-  function onde(papel) { return papel === 'admin' ? 'no editor da Área administrativa' : 'no Meu painel'; }
+  function podeAgir(m, papel) { return papel === 'admin' || papel === 'analista' || (papel === 'dev' && H.minha(m)); }
 
   /* A PROXIMA ETAPA no caminho do fluxo. Sustentacao pode pular a area com
      registro (homologacao.js), mas o caminho padrao — e o que a barra mostra —
@@ -367,33 +364,30 @@
 
   function acoes(m, ctx, tv) {
     if (!podeAgir(m, ctx.papel)) return '';
-    var href = hrefAcao(m, ctx.papel);
-    var ext = H.ico('external', 'style="font-size:12px;color:var(--tx4)"');
-    var tit = 'Abre esta demanda ' + onde(ctx.papel);
+    var AC = window.AXIS_ACOES;
+    if (!AC) return '';
     var col = H.colunaDe(m);
-    var b = [];
-    if (ctx.papel === 'admin') {
-      b.push('<a class="btn" href="' + href + '" title="' + tit + '">' + H.ico('edit') + ' Editar ' + ext + '</a>');
-      if (col === 'validacao') b.push('<a class="btn" href="' + href + '" title="' + tit + ', na validação">' + H.ico('check') + ' Validar ou devolver ' + ext + '</a>');
-      if (window.PAUSA && PAUSA.situacao(m) === 'aguardando') b.push('<a class="btn" href="' + href + '" title="' + tit + ', no pedido de pausa">' + H.ico('pause') + ' Responder pausa ' + ext + '</a>');
-      if (col === 'planning' && !H.pontosDe(m)) b.push('<a class="btn" href="poker.html" title="Abre o Planning Poker">' + H.ico('cards') + ' Estimar no Poker ' + ext + '</a>');
-    } else {
-      b.push('<a class="btn" href="' + href + '" title="' + tit + '">' + H.ico('laptop') + ' Abrir no meu painel ' + ext + '</a>');
-      if (col === 'em_andamento' && window.PAUSA && PAUSA.situacao(m) === 'correndo') b.push('<a class="btn" href="' + href + '" title="' + tit + ' para pedir a pausa">' + H.ico('pause') + ' Pedir pausa ' + ext + '</a>');
+    var b = AC.disponiveis(m).map(function (d) {
+      return AC.botao(d.acao, m, d.rotulo, d.cls, { ico: d.ico, titulo: d.titulo });
+    });
+    if (ctx.papel === 'admin' && col === 'planning' && !H.pontosDe(m)) {
+      b.push('<a class="btn" href="poker.html" title="Abre o Planning Poker">' + H.ico('cards') + ' Estimar no Poker ' + H.ico('external', 'style="font-size:12px;color:var(--tx4)"') + '</a>');
     }
-    /* Para o dev, entregar E o avanco de Em andamento: o botao principal vira
-       "Registrar entrega" (desligado quando algo trava), em vez de dois
-       botoes para o mesmo gesto. */
-    if (ctx.papel === 'dev' && col === 'em_andamento') {
-      if (tv.travada) b.push('<button type="button" class="btnp" disabled aria-describedby="it-trava" title="Veja abaixo o que falta">' + H.ico('send') + ' Registrar entrega</button>');
-      else b.push('<a class="btnp" href="' + href + '" title="' + tit + ' para registrar a entrega">' + H.ico('send') + ' Registrar entrega ' + H.ico('external', 'style="font-size:12px;opacity:.8"') + '</a>');
-      return '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">' + b.join('') + '</div>';
-    }
-    // O avanco: travado mostra o botao desligado e aponta o motivo logo abaixo.
-    if (tv.prox && (ctx.papel === 'admin' || tv.prox !== 'concluido')) {
-      var rot = 'Mover para ' + rotEtapa(tv.prox);
-      if (tv.travada) b.push('<button type="button" class="btnp" disabled aria-describedby="it-trava" title="Veja abaixo o que falta">' + H.esc(rot) + '</button>');
-      else b.push('<a class="btnp" href="' + href + '" title="' + tit + ' para mudar a etapa">' + H.esc(rot) + ' ' + H.ico('external', 'style="font-size:12px;opacity:.8"') + '</a>');
+    var trava = { desligado: tv.travada, descrito: tv.travada ? 'it-trava' : '', titulo: tv.travada ? 'Veja abaixo o que falta' : '' };
+    /* O BOTAO PRINCIPAL. Na validacao do PM/PO e a decisao (devolver ou
+       validar e fechar); para o dev, entregar E o avanco de Em andamento e da
+       area — um botao so para o mesmo gesto; no resto, o proximo passo do
+       fluxo, desligado quando algo trava (o motivo vem logo abaixo). */
+    if (ctx.papel === 'admin' && col === 'validacao') {
+      b.push(AC.botao('devolver', m, 'Devolver com motivo', 'btn perigo', { ico: 'undo' }));
+      b.push(AC.botao('validar', m, 'Validar e fechar', 'btnp ok', { ico: 'check' }));
+    } else if (ctx.papel === 'dev' && (col === 'em_andamento' || col === 'validacao_area')) {
+      b.push(AC.botao('entregar', m, col === 'em_andamento' ? 'Registrar entrega' : 'Enviar ao PM/PO', 'btnp',
+        Object.assign({ ico: 'send', dados: { destino: tv.prox } }, trava)));
+    } else if (ctx.papel === 'dev' && col === 'planejado') {
+      b.push(AC.botao('mover', m, 'Começar', 'btnp', Object.assign({ dados: { destino: 'em_andamento' } }, trava)));
+    } else if (tv.prox && ctx.papel !== 'dev') {
+      b.push(AC.botao('mover', m, 'Mover para ' + rotEtapa(tv.prox), 'btnp', Object.assign({ dados: { destino: tv.prox } }, trava)));
     }
     return '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">' + b.join('') + '</div>';
   }
@@ -526,11 +520,11 @@
 
     var anexos = (Array.isArray(m.anexos) ? m.anexos : []).filter(Boolean);
     if (anexos.length) {
-      h += sec('ANEXOS', anexos.map(function (x) {
-        return '<div class="it-linha"><span class="ell">' + H.ico('clip', 'style="color:var(--tx3)"') + ' ' + H.esc(x.nome || x.chave || 'anexo') + '</span>' +
-          (x.tamanho ? '<span class="note" style="font-size:11.5px">' + Math.max(1, Math.round(x.tamanho / 1024)) + ' KB</span>' : '') + '</div>';
-      }).join('') + (podeAgir(m, ctx.papel) ? '<a href="' + hrefAcao(m, ctx.papel) + '" class="note" title="Abre esta demanda ' + onde(ctx.papel) + '">Abrir os arquivos ' + onde(ctx.papel) + ' ' + H.ico('external', 'style="font-size:11px"') + '</a>'
-        : '<span class="note">Os arquivos abrem pelo card da demanda nas telas antigas.</span>'));
+      // O anexo abre daqui (`AXIS_ACOES.abrirAnexo`): baixa com a sessao e entrega pelo ANEXOTIPO.
+      h += sec('ANEXOS', anexos.map(function (x, i) {
+        return '<button type="button" class="it-linha" style="border:0;font:inherit;cursor:pointer;text-align:left;width:100%" data-axa-anexo="' + m.anexos.indexOf(x) + '" data-axa-id="' + H.esc(m.id) + '" title="Abrir ' + H.esc(x.nome || 'anexo') + '"><span class="ell">' + H.ico('clip', 'style="color:var(--tx3)"') + ' ' + H.esc(x.nome || x.chave || 'anexo') + '</span>' +
+          (x.tamanho ? '<span class="note" style="font-size:11.5px">' + Math.max(1, Math.round(x.tamanho / 1024)) + ' KB</span>' : '') + '</button>';
+      }).join(''));
     }
 
     var bis = window.BIS ? BIS.daDemanda(m) : [];
@@ -603,7 +597,7 @@
       '<section class="pn" style="gap:14px"><span class="lab">MENSAGENS' + (msgs.length ? ' · ' + msgs.length : '') + '</span>' +
       (msgs.length ? msgs.map(function (g) { return bolha(g, ps); }).join('') : H.vazio('message', 'Nenhuma mensagem ainda', 'A conversa desta demanda começa na Mensageria.')) +
       '<div class="note" style="padding:10px 12px;border-radius:11px;border:1px dashed var(--bd4)">Para escrever ou responder, use a ' +
-      '<a href="' + hrefMsg + '" data-mensageria="' + H.esc(ref) + '">Mensageria</a>: o AXIS ainda só lê. Use @ para mencionar alguém.</div></section>' +
+      '<a href="' + hrefMsg + '" data-mensageria="' + H.esc(ref) + '">Mensageria</a>: a conversa ainda se escreve lá. Use @ para mencionar alguém.</div></section>' +
       '<section class="pn" style="gap:10px"><span class="lab">HISTÓRICO' + (hist.length ? ' · ' + hist.length : '') + '</span>' +
       (hist.length ? '<span class="note">Mais recente primeiro. O servidor guarda as 25 últimas alterações de cada demanda.</span>' + hist.map(entradaHist).join('')
         : '<span class="note">Nenhuma alteração registrada nesta demanda.</span>') +

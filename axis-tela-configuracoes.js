@@ -46,7 +46,8 @@
       { id: 'catalogo', rotulo: 'Catálogo de sistemas', real: true }
     ] },
     { grp: 'INTEGRAÇÕES', itens: [
-      { id: 'api', rotulo: 'API e integrações', real: false },
+      // A secao e uma tela propria (axis-tela-api.js): o item leva ate ela.
+      { id: 'api', rotulo: 'API e integrações', real: true, href: '#api' },
       { id: 'widget', rotulo: 'Widget', real: false }
     ] },
     { grp: 'SEGURANÇA', itens: [
@@ -131,7 +132,7 @@
       h += '<span class="grp">' + esc(g.grp) + '</span>';
       g.itens.forEach(function (i) {
         var on = i.id === aba;
-        h += '<a href="#configuracoes/' + i.id + '" class="tab' + (on ? ' on' : '') + (i.real ? '' : ' fut') + '"' +
+        h += '<a href="' + (i.href || '#configuracoes/' + i.id) + '" class="tab' + (on ? ' on' : '') + (i.real ? '' : ' fut') + '"' +
           (on ? ' aria-current="page"' : '') + (i.real ? '' : ' title="Chega com o AXIS completo"') + '>' +
           esc(i.rotulo) + (i.real ? '' : '<span class="pend">' + ico('lock') + '</span>') + '</a>';
       });

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a1e27fe9ba">
+<html lang="pt-BR" data-build="22afe5e168">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -3631,7 +3631,7 @@ function desfazerPendentes(ids) {
   rascunhoSalvar();
   if (!_dirtyMelhoriaIds.size) { _pendingEdits = false; _kbDirty = false; }
   try { renderKanban(); } catch (_) {}
-  try { render(); } catch (_) {}
+  try { renderAll(); } catch (_) {}
   toast('Desfeito: ' + volta.join(', ') + ' — como está no servidor.', 'ok');
   return volta.length;
 }
