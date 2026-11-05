@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="b76284344e">
+<html lang="pt-BR" data-build="85e87441b1">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -943,6 +943,21 @@
       <option value="">No meu nome + fila do time</option>
       <option value="meu">👤 Só no meu nome</option>
       <option value="fila">📥 Só a fila do time</option>
+    </select>
+    <div class="filter-sep"></div>
+    <!-- OUTROS TIMES (05/11/2026): "Criar filtro para eu poder visualizar
+         demandas de outros times (BI/DADOS, SALES). Manter a regra padrao e
+         filtro opcional quando necessario para que outros times consigam
+         ajudar." O padrao continua sendo so o seu time (`doMeuTime`); a escolha
+         SOMA a fila e a vitrine do time escolhido e nao fica gravada — ao
+         recarregar, volta ao padrao. -->
+    <label for="f-times">Times:</label>
+    <select id="f-times" class="filter-select" onchange="renderKanban()"
+            title="Por padrão aparece só o seu time. Escolha outro para ver a fila dele e poder ajudar.">
+      <option value="">Só o meu time</option>
+      <option value="dados">+ 📊 Dados/BI</option>
+      <option value="sales">+ 📈 Sales Ops</option>
+      <option value="todos">Todos os times</option>
     </select>
     <div class="filter-sep"></div>
     <button id="f-limpar" class="btn btn-secondary btn-sm" onclick="limparFiltrosDev()">Limpar</button>
@@ -4581,7 +4596,7 @@ function setTema(id) { _temaFilter = id || null; buildTemaSelect(); buildSprintS
 
 function limparFiltrosDev() {
   _temaFilter = null;
-  ['f-ano','f-mes','f-tipo','f-tema','f-sprint'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; });
+  ['f-ano','f-mes','f-tipo','f-tema','f-sprint','f-times'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; });
   buildTemaSelect();
   buildSprintSelect();
   renderKanban();
@@ -4592,7 +4607,7 @@ function atualizaContagemDev() {
   const doDev = state.melhorias.filter(m => !m.mesclado_em && DEVNOME.eDe(m, currentDev));
   const el = document.getElementById('f-contagem');
   if (el) el.textContent = `Mostrando ${getFiltered().length} de ${doDev.length}`;
-  const ativos = ['f-ano','f-mes','f-tipo','f-tema','f-sprint'].filter(i => (document.getElementById(i)||{}).value).length;
+  const ativos = ['f-ano','f-mes','f-tipo','f-tema','f-sprint','f-times'].filter(i => (document.getElementById(i)||{}).value).length;
   const btn = document.getElementById('f-limpar');
   if (btn) {
     btn.textContent = ativos ? `Limpar (${ativos})` : 'Limpar';
@@ -4609,7 +4624,9 @@ function atualizaContagemDev() {
    - demanda sem frente (sem dev e sem marca): para quem não é de Dados;
    - quem olha sem frente conhecida vê tudo, como antes — esconder trabalho de
      quem o cadastro não alcança é o defeito que tirou o Crisley do deck. */
-function doMeuTime(m) {
+function doMeuTimePadrao(m) { return doMeuTime(m, ''); }
+
+function doMeuTime(m, extra = document.getElementById('f-times')?.value || '') {
   if (!window.PIPELINES || !String(currentDev || '').trim()) return true;
   /* POR GRUPO, como a capacidade: Dados/BI de um lado, Desenvolvimento (geral,
      com IA, RPA e quem nao tem frente) do outro. Sales Ops nao tem time no
@@ -4618,7 +4635,12 @@ function doMeuTime(m) {
   const souDados = PIPELINES.doDev(currentDev, state.devs_perfil) === DADOS;
   const demDados = !!(m && m.dados_bi) ||
     (!(m && m.sales_ops) && PIPELINES.daDemanda(m, state.devs_perfil) === DADOS);
-  return souDados ? demDados : !demDados;
+  if (souDados ? demDados : !demDados) return true;
+  // O filtro opcional "Times" soma o time escolhido ao seu.
+  if (extra === 'todos') return true;
+  if (extra === 'dados') return demDados;
+  if (extra === 'sales') return !!(m && m.sales_ops && !m.dados_bi);
+  return false;
 }
 
 function getFiltered() {
@@ -4814,6 +4836,10 @@ function renderCard(m, colKey) {
         : String(m.dev || '').trim()
           ? '<div class="kcard-dono outro" title="Não está no seu nome — aparece para o time porque está na sprint. Quem responde é ' + escAttr(m.dev) + '.">👥 Do time · com ' + escAttr(m.dev) + '</div>'
           : '<div class="kcard-dono fila" title="Fila do time: está na sprint e ainda não tem dono. Qualquer um pode pegar — combine antes de começar.">📥 Fila do time · sem dono</div>'}
+      ${/* De outro time (filtro "Times"): o card diz de qual, para nao parecer da sua fila. */''}
+      ${document.getElementById('f-times')?.value && !DEVNOME.eDe(m, currentDev) && !doMeuTimePadrao(m)
+        ? '<div class="kcard-dono outro" title="Demanda de outro time — aparece porque o filtro Times está ligado. Combine com o time antes de pegar.">' +
+          (m.dados_bi ? '📊 Time Dados/BI' : m.sales_ops ? '📈 Time Sales Ops' : '💻 Time Desenvolvimento') + '</div>' : ''}
       ${parentInfo}
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}">⏸ Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'⚠ vence hoje':'⏰ vence amanhã'}</div>` : ''}

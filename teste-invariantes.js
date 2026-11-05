@@ -24949,14 +24949,22 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     {
       const PIPE_ = (() => { const g = {}; new Function('globalThis', lerTela('pipelines.js'))(g); return g.PIPELINES; })();
       const fnTime = new Function('PIPELINES', 'currentDev', 'state', 'window',
-        corpo(DEV, 'function doMeuTime(m) {') + '; return doMeuTime;');
-      const ver = (quem, m) => fnTime(PIPE_, quem, {}, { PIPELINES: PIPE_ })(m);
+        corpo(DEV, "function doMeuTime(m, extra = document.getElementById('f-times')?.value || '') {") + '; return doMeuTime;');
+      const ver = (quem, m, extra = '') => fnTime(PIPE_, quem, {}, { PIPELINES: PIPE_ })(m, extra);
       ok(!ver('Marina', { dev: 'Lucas Santos' }) && ver('Gabriel Fernandes', { dev: 'Lucas Santos' }),
          'a task do Lucas (Desenvolvimento) aparece para o time de Desenvolvimento e nao para Dados');
       ok(ver('Marina', { dados_bi: true }) && !ver('Gabriel Fernandes', { dados_bi: true }),
          'a marcada Dados/BI so para Dados');
       ok(!ver('Marina', { dev: '' }) && ver('Gabriel Fernandes', { dev: '' }),
          'e a sem frente, para quem nao e de Dados');
+      // O filtro opcional "Times" (05/11/2026) soma outro time sem mudar o padrao.
+      ok(ver('Gabriel Fernandes', { dados_bi: true }, 'dados') && !ver('Gabriel Fernandes', { dados_bi: true }, 'sales'),
+         'com o filtro Times em Dados/BI, o dev de Desenvolvimento ve a fila de Dados');
+      ok(!ver('Marina', { sales_ops: true }) && ver('Marina', { sales_ops: true }, 'sales') && ver('Marina', { dev: 'Lucas Santos' }, 'todos'),
+         'e quem e de Dados ve Sales Ops ou todos os times so quando escolhe');
+      ok(/<select id="f-times"[\s\S]{0,400}<option value="">Só o meu time<\/option>/.test(DEV) &&
+         /\['f-ano','f-mes','f-tipo','f-tema','f-sprint','f-times'\]\.forEach/.test(DEV),
+         'o padrao do filtro Times e so o meu time, e Limpar volta a ele');
     }
     // ── HORAS AO MANDAR PARA A VALIDACAO DA AREA (e ao PM/PO) ──────────────
     const fnEnt = new Function(corpo(WKS, 'function entrandoEmValidacaoSemEntrega(') + '; return entrandoEmValidacaoSemEntrega;')();
