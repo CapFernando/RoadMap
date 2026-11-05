@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="85e87441b1">
+<html lang="pt-BR" data-build="e34aa7d366">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -924,9 +924,9 @@
          coluna onde ele esta, e ai o quadro deixaria de dizer em que pe esta o
          trabalho, que e para o que ele serve.
 
-         "Todas" E O PADRAO, de proposito. No dia em que isto subir nenhuma
-         demanda tem sprint do PO — abrir filtrado mostraria um painel VAZIO a
-         todo mundo, e o dev concluiria que perdeu as demandas dele. -->
+         A SPRINT ATUAL E O PADRAO desde 05/11/2026 (ver `sprintAtualDev`).
+         Era "Todas" enquanto nenhuma demanda tinha sprint do PO; outra sprint,
+         "Todas" ou "Fora da sprint" se escolhem aqui. -->
     <div class="filter-sep"></div>
     <label>Sprint:</label>
     <select id="f-sprint" class="filter-select" onchange="renderKanban()"
@@ -4563,6 +4563,17 @@ function buildTemaSelect() {
  * A SPRINT CORRENTE VEM MARCADA no rotulo. Rotulo de sprint e um codigo
  * ('S2-11-2026'), e nenhum deles se parece com "esta semana" ate alguem contar
  * as semanas do mes na cabeca.                                               */
+/* O PAINEL ABRE NA SPRINT ATUAL (05/11/2026): "painel dev, acessa já olhando
+   para sprint atual, caso ele queira filtrar itens de outra sprint ele usa o
+   filtro". Antes o padrao era "Todas" porque no dia em que o filtro subiu
+   nenhuma demanda tinha sprint; hoje a semana corrente e o que o dev trabalha.
+   So a PRIMEIRA montagem escolhe — depois a escolha dele sobrevive ao
+   redesenho, e o Limpar volta para a sprint atual, que e o padrao. */
+let _sprintPadraoAplicado = false;
+function sprintAtualDev() {
+  return window.SPRINTPO ? SPRINTPO.sprintCorrente(window.PRAZO ? PRAZO.hojeISO() : null, state.feriados || []) : '';
+}
+
 function buildSprintSelect() {
   const sel = document.getElementById('f-sprint');
   if (!sel || !window.SPRINTPO) return;
@@ -4576,8 +4587,9 @@ function buildSprintSelect() {
     if (!s) { fora++; return; }
     conta[s] = (conta[s] || 0) + 1;
   });
-  const agora = SPRINTPO.sprintCorrente(
-    window.PRAZO ? PRAZO.hojeISO() : null, state.feriados || []);
+  const agora = sprintAtualDev();
+  // A sprint atual fica na lista mesmo vazia: e o padrao, e o select nao pode abrir sem ela.
+  if (agora && !conta[agora]) conta[agora] = 0;
   const rotulos = Object.keys(conta).sort();
   sel.innerHTML =
     '<option value="">Todas (' + doDev.length + ')</option>' +
@@ -4587,6 +4599,7 @@ function buildSprintSelect() {
   /* A ESCOLHA SOBREVIVE AO REDESENHO — a nao ser que a sprint tenha ficado sem
      demanda nenhuma. Ai ela sai da lista, e manter o valor deixaria o painel
      vazio sem opcao visivel que explicasse por que. */
+  if (!_sprintPadraoAplicado && agora) { _sprintPadraoAplicado = true; sel.value = agora; return; }
   sel.value = [...rotulos, '__fora__', ''].includes(antes) ? antes : '';
 }
 
@@ -4599,6 +4612,9 @@ function limparFiltrosDev() {
   ['f-ano','f-mes','f-tipo','f-tema','f-sprint','f-times'].forEach(i => { const e = document.getElementById(i); if (e) e.value = ''; });
   buildTemaSelect();
   buildSprintSelect();
+  // O padrao do filtro de sprint e a sprint atual, e nao "Todas".
+  const _fs = document.getElementById('f-sprint');
+  if (_fs && sprintAtualDev()) _fs.value = sprintAtualDev();
   renderKanban();
 }
 
@@ -4607,7 +4623,11 @@ function atualizaContagemDev() {
   const doDev = state.melhorias.filter(m => !m.mesclado_em && DEVNOME.eDe(m, currentDev));
   const el = document.getElementById('f-contagem');
   if (el) el.textContent = `Mostrando ${getFiltered().length} de ${doDev.length}`;
-  const ativos = ['f-ano','f-mes','f-tipo','f-tema','f-sprint','f-times'].filter(i => (document.getElementById(i)||{}).value).length;
+  // A sprint atual e o padrao: so conta como filtro quando o dev escolhe outra.
+  const ativos = ['f-ano','f-mes','f-tipo','f-tema','f-sprint','f-times'].filter(i => {
+    const v = (document.getElementById(i) || {}).value;
+    return i === 'f-sprint' ? v !== sprintAtualDev() : !!v;
+  }).length;
   const btn = document.getElementById('f-limpar');
   if (btn) {
     btn.textContent = ativos ? `Limpar (${ativos})` : 'Limpar';

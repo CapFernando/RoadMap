@@ -24965,6 +24965,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'no card do Admin as datas do dev abrem na semana da sprint e escolher a sprint preenche a entrega ao usuario (abrir nao preenche)');
       ok(SP.faixaDaSprint('S1-11-2026', ['2026-11-02']).de === '2026-11-03' && SP.entregaDaSprint('S1-11-2026', ['2026-11-02']) === '2026-11-09',
          'a S1-11 vai de 03/11 (02/11 e feriado) e entrega ao usuario na segunda 09/11');
+      // O PAINEL DO DEV ABRE NA SPRINT ATUAL (05/11/2026); Limpar volta para ela e ela nao conta como filtro.
+      ok(/if \(!_sprintPadraoAplicado && agora\) \{ _sprintPadraoAplicado = true; sel\.value = agora; return; \}/.test(DEV) &&
+         /if \(_fs && sprintAtualDev\(\)\) _fs\.value = sprintAtualDev\(\);/.test(DEV) &&
+         /i === 'f-sprint' \? v !== sprintAtualDev\(\) : !!v/.test(DEV),
+         'o painel do dev abre na sprint atual, outra sprint pelo filtro, e o Limpar volta para a atual');
       // O filtro opcional "Times" (05/11/2026) soma outro time sem mudar o padrao.
       ok(ver('Gabriel Fernandes', { dados_bi: true }, 'dados') && !ver('Gabriel Fernandes', { dados_bi: true }, 'sales'),
          'com o filtro Times em Dados/BI, o dev de Desenvolvimento ve a fila de Dados');
