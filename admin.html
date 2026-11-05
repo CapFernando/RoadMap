@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="22afe5e168">
+<html lang="pt-BR" data-build="88a8028c37">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -246,6 +246,54 @@
     .pj-topo h3 { margin:0; font-size:17px; font-weight:700; }
     .pj-hint { font-size:13px; color:var(--text2); line-height:1.55; margin:0 0 18px; max-width:76ch; }
     .pj-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+    /* Projetos em andamento: seletor e a linha do tempo de cada projeto. */
+    .pj-visao { display:inline-flex; gap:4px; background:var(--bg3); border:1px solid var(--border);
+      border-radius:10px; padding:3px; margin-bottom:12px; }
+    .pj-visao button { background:transparent; border:0; color:var(--text2); font:inherit; font-size:13px;
+      font-weight:600; padding:6px 14px; border-radius:7px; cursor:pointer; }
+    .pj-visao button.on { background:var(--blue); color:#fff; }
+    .pj-and { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:14px; }
+    .pj-and-topo { display:flex; align-items:center; gap:10px; flex-wrap:wrap; cursor:pointer; margin-bottom:10px; }
+    .pj-and-topo .pj-nome { font-size:16px; }
+    .pj-and-resp, .pj-and-nsp { font-size:12px; color:var(--text3); }
+    .pj-and-entrega { margin-left:auto; font-size:13px; color:var(--text); }
+    .pj-and-entrega em { color:var(--text3); font-size:12px; }
+    .pj-and-entrega.venc strong { color:var(--red-tx,#F9A0A0); }
+    .pj-and-entrega.sem { color:var(--text3); }
+    .pj-and-cols { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+    @media (max-width:1200px) { .pj-and-cols { grid-template-columns:1fr; } }
+    .pj-and-etapa { flex:0 0 auto; font-size:10.5px; color:var(--amber-tx,#FFC470);
+      border:1px solid currentColor; border-radius:4px; padding:0 5px; }
+    .pj-and-usu { display:inline-flex; align-items:baseline; gap:6px; }
+    .pj-and-sp.sem { color:var(--text3); border-color:transparent; }
+    .pj-and-col { background:var(--bg3); border-radius:10px; padding:10px 12px; min-width:0; }
+    .pj-and-col-tit { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+      color:var(--text2); margin-bottom:6px; }
+    .pj-and-col-tit span { font-weight:400; color:var(--text3); }
+    .pj-and-col ul { list-style:none; margin:0; padding:0; max-height:260px; overflow-y:auto; }
+    .pj-and-col li { display:flex; align-items:baseline; gap:8px; padding:5px 4px; border-bottom:1px solid var(--border);
+      font-size:13px; cursor:pointer; border-radius:4px; }
+    .pj-and-col li:last-child { border-bottom:0; }
+    .pj-and-col li:hover { background:var(--bg4,rgba(255,255,255,.05)); }
+    .pj-and-data { flex:0 0 auto; font-variant-numeric:tabular-nums; color:var(--text2); font-weight:600; }
+    .pj-and-data.venc { color:var(--red-tx,#F9A0A0); }
+    .pj-and-tit { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+    .pj-and-tit b { color:var(--text3); font-weight:600; }
+    .pj-and-sp, .pj-and-qual { flex:0 0 auto; font-size:11px; color:var(--green-tx,#8FE0A8);
+      border:1px solid currentColor; border-radius:4px; padding:0 5px; }
+    .pj-and-qual { color:var(--text3); }
+    .pj-and-vazio { font-size:12px; color:var(--text3); margin:4px 0; }
+    .pj-and-cab { display:flex; gap:8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+      color:var(--text3); padding:0 4px 4px; border-bottom:1px solid var(--border); }
+    .pj-and-cab span:first-child { flex:0 0 88px; }
+    .pj-and-cab span.pj-and-cab-dem { flex:1; }
+    .pj-and-cab span:nth-child(2) { flex:1; }
+    .pj-and-cab span:nth-child(3) { flex:0 0 auto; }
+    .pj-and-col li .pj-and-data { flex:0 0 88px; }
+    .pj-and-data.sem { color:var(--text3); font-weight:400; }
+    .pj-and-usu { flex:0 0 auto; }
+    .pj-and-usu .pj-and-data { color:var(--text); }
+    .pj-and-usu .pj-and-data.venc { color:var(--red-tx,#F9A0A0); }
     .pj-card { background:var(--bg2); border:1px solid var(--border); border-radius:14px;
       padding:18px 20px; display:flex; flex-direction:column; gap:12px; cursor:pointer;
       transition:border-color .12s, transform .12s; }
@@ -821,6 +869,29 @@
     .filter-bar select { padding:6px 10px; font-size:13px; max-width:230px; }
     .filter-bar label { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text3); }
     .filter-bar .fb-count { font-size:12px; color:var(--text3); margin-left:auto; white-space:nowrap; }
+    /* O FILTRO DE VARIAS SPRINTS: botao com cara de select + lista de caixas. */
+    .fb-multi { position:relative; }
+    .fb-multi-btn {
+      background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); padding:6px 10px; font-size:13px; font-family:inherit; cursor:pointer;
+      min-width:150px; max-width:230px; text-align:left; display:flex; align-items:center; gap:8px;
+    }
+    .fb-multi-btn span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .fb-multi-btn:focus, .fb-multi.aberto .fb-multi-btn { border-color:var(--blue); outline:none; }
+    .fb-multi-pop {
+      display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:60; min-width:240px;
+      max-height:340px; overflow-y:auto; background:var(--bg2); border:1px solid var(--border);
+      border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.35); padding:6px;
+    }
+    .fb-multi.aberto .fb-multi-pop { display:block; }
+    .filter-bar .fb-multi-pop label {
+      display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer;
+      font-size:13px; text-transform:none; letter-spacing:0; color:var(--text);
+    }
+    .fb-multi-pop label:hover { background:var(--bg3); }
+    .fb-multi-pop label.fb-multi-todas { font-weight:600; border-bottom:1px solid var(--border);
+      border-radius:6px 6px 0 0; margin-bottom:4px; }
+    .fb-multi-pop .fb-multi-n { margin-left:auto; color:var(--text3); font-size:12px; }
     .filter-bar input[type="text"].fb-busca {
       background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
       color:var(--text); padding:6px 10px; font-size:13px; font-family:inherit; outline:none; min-width:190px;
@@ -880,6 +951,18 @@
     .ger-kpi-value.green { color:var(--green); }
     .ger-kpi-value.amber { color:var(--amber); }
     .ger-kpi-value.red { color:var(--red); }
+    /* Entregas por sprint: os cartoes do resumo filtram a lista. */
+    .es-kpi { cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+    .es-kpi:hover { border-color:var(--border2,#555); }
+    .es-kpi.ativo { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue) inset; }
+    .es-kpi-sub { font-size:11.5px; color:var(--text3); margin-top:2px; }
+    .es-barra { height:6px; background:var(--bg4,rgba(255,255,255,.08)); border-radius:99px; overflow:hidden; margin-top:8px; }
+    .es-barra i { display:block; height:100%; background:var(--green); }
+    .es-pessoas { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 16px; font-size:12.5px; }
+    .es-pessoas .rot { color:var(--text2); font-weight:600; margin-right:4px; }
+    .es-pessoa { border:1px solid var(--border); border-radius:999px; padding:2px 10px; color:var(--text2); background:var(--bg2); }
+    .es-pessoa b { color:var(--text); }
+    .es-pessoa.venc b { color:var(--red-tx,#F9A0A0); }
     .ger-charts { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:32px; }
     @media(max-width:900px){ .ger-charts{ grid-template-columns:1fr; } }
     .ger-section-title {
@@ -1554,7 +1637,7 @@
   <!-- Links de referencia da demanda: descricao + endereco, varios. A regra do
        esquema aceito mora la — `javascript:` num href e execucao de script. -->
   <script src="referencia.js?v=1750882d31"></script>
-  <script src="grill.js?v=c85bb8b63f"></script>
+  <script src="grill.js?v=cffd670be6"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="prevoo.js?v=ab2758c54c"></script>
@@ -1569,11 +1652,15 @@
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
+<script src="requisitos.js?v=1987238fe2"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
 <script src="capacidade.js?v=e7e1449a7d"></script>
-<script src="apresentacao.js?v=2b32dc2ac1"></script>
-<script src="relatorio-ppt.js?v=867129faa4"></script>
+<script src="apresentacao.js?v=8e03c136ab"></script>
+<script src="relatorio-ppt.js?v=9f92cf151d"></script>
+<script src="aprovacao-ppt.js?v=fbb42677c3"></script>
+<script src="projetos-ppt.js?v=b053dd2816"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
+<script src="historico-cliente.js?v=2b0fcaf502"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=4daaef730c"></script>
 <script src="pausa.js?v=06c4b82f84"></script>
@@ -1589,7 +1676,7 @@
 <script src="selo-validacao.js?v=0b6fdb5439"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=495432df68"></script>
+<script src="sprint.js?v=d64ea6d269"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -1675,6 +1762,7 @@
       <div class="tab" onclick="switchTab('gerencial')">Gerencial</div>
       <div class="tab" onclick="switchTab('relatorios')">Relatórios</div>
       <div class="tab" onclick="switchTab('usuarios')">Usuários</div>
+      <div class="tab" onclick="switchTab('entregas')">Entregas por sprint</div>
       <a href="importar.html" class="tab tab-externa" style="text-decoration:none">Importar ↗</a>
     </div>
 
@@ -1893,8 +1981,8 @@
               <input type="checkbox" id="rp-backlog" onchange="relPptBacklogMarcou()" />
               <span>
                 <strong>Incluir o backlog</strong>
-                <small>Um slide a mais, com o que está parado em Backlog e Levantar
-                Requisitos — o que ainda não foi prometido a ninguém.</small>
+                <small>Um slide a mais, com o que está parado em Backlog e Em aprovação
+                de requisitos — o que ainda não foi prometido a ninguém.</small>
               </span>
             </label>
           </div>
@@ -2107,6 +2195,26 @@
       <!-- Diz de onde vem a hora. Numero aproximado sem aviso e lido como medicao,
            e foi assim que "1554h" chegou a um slide de diretoria. -->
       <p class="ger-legenda" id="ger-legenda"></p>
+    </div>
+
+    <!-- ABA ENTREGAS POR SPRINT — o que cada sprint entrega, por tema -->
+    <div class="tab-content" id="tab-entregas">
+      <div class="pj-topo">
+        <h3>Entregas por sprint</h3>
+        <span class="us-conta" id="es-conta">0</span>
+      </div>
+      <p class="pj-hint">As demandas da sprint escolhida, agrupadas por tema, com quem está cada uma, a entrega ao
+        usuário e o projeto de que fazem parte. Clique numa demanda para abri-la.</p>
+      <div class="filter-bar" style="display:flex;flex-wrap:wrap;align-items:flex-end">
+        <div class="ger-filter-group">
+          <label>Sprint</label>
+          <select id="es-sprint" onchange="_esSprint = this.value; renderEntregasSprint()"></select>
+        </div>
+        <span class="fb-count" id="es-resumo"></span>
+      </div>
+      <div id="es-kpis" class="ger-summary" style="margin:6px 0 10px"></div>
+      <div id="es-pessoas" class="es-pessoas"></div>
+      <div id="es-lista"></div>
     </div>
 
     <!-- ABA RELATÓRIOS — apoio à reunião de comitê de produto -->
@@ -2486,7 +2594,7 @@
         <label>Status *</label>
         <select id="m-status" onchange="onStatusChange()">
           <option value="backlog">Backlog</option>
-          <option value="levantar_req">Levantar Requisitos</option>
+          <option value="levantar_req">Em aprovação de requisitos</option>
           <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em Andamento</option>
@@ -2515,7 +2623,7 @@
 
          Fica logo abaixo do Status porque é do Status que ela trata: o veredito
          do dev MOVE a demanda — "entendi" leva para Planning, "tenho dúvidas"
-         leva para Levantar Requisitos. Pôr isto num canto do formulário faria a
+         leva para Em aprovação de requisitos. Pôr isto num canto do formulário faria a
          marca parecer um rótulo, e ela é um pedido de decisão.
 
          O bloco cresce quando há dúvidas: aí ele deixa de ser um interruptor e
@@ -2551,6 +2659,37 @@
           <option value="sustentacao">Sustentação</option>
           <option value="evolucao">Evolução</option>
         </select>
+      </div>
+      <!-- IMPACTO E URGÊNCIA (03/11/2026): pedidos na abertura, seguem a demanda
+           pela esteira inteira. Não calculam a prioridade — ver `requisitos.js`. -->
+      <div class="form-group">
+        <label>Impacto *</label>
+        <select id="m-impacto"></select>
+      </div>
+      <div class="form-group">
+        <label>Urgência *</label>
+        <select id="m-urgencia"></select>
+      </div>
+      <!-- O CASO DE USO de "Em aprovação de requisitos": aparece quando a demanda
+           está na etapa (ou já teve um). Texto montado da demanda, ajustável;
+           o PM/PO envia ao usuário e registra a resposta aqui. -->
+      <div class="form-group" id="m-caso-uso" style="grid-column:1/-1;display:none">
+        <div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--bg3)">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <strong>📄 Caso de uso para aprovação do usuário</strong>
+            <span id="m-cu-estado" style="font-size:12px;font-weight:700"></span>
+          </div>
+          <textarea id="m-cu-texto" rows="12" style="font-family:monospace;font-size:12px;width:100%"></textarea>
+          <div id="m-cu-info" style="font-size:12px;color:var(--text3);margin:6px 0"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuGerar()" title="Monta de novo a partir da demanda como está agora">🔄 Gerar de novo</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuCopiar()">📋 Copiar</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuImprimir()">🖨️ Imprimir / PDF</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('enviado')">📨 Marquei como enviado</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('aprovado')">✅ Usuário aprovou</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="cuMarcar('ajustes')">✏️ Usuário pediu ajustes</button>
+          </div>
+        </div>
       </div>
       <div class="form-group" style="grid-column:1/-1">
         <div id="m-pausa" style="display:none;margin-bottom:10px"></div>
@@ -3375,7 +3514,11 @@ async function lerDados(permitirCache, jaTentou) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'dados' }, credenciaisLeitura()))
     });
-    if (r.ok) return await r.json();
+    // A trilha das demandas vem do D1 quando a base nao a traz — ver historico-cliente.js.
+    if (r.ok) {
+      const d = await r.json();
+      return window.HISTCLIENTE ? await HISTCLIENTE.hidrata(d, ADMIN_PROXY_URL, credenciaisLeitura()) : d;
+    }
     /* O `detail` do servidor e a frase mais util que existe aqui: e ele que diz
        "Muitas requisicoes. Aguarde um minuto" num 429, e ninguem adivinha isso
        de um "nao foi possivel". */
@@ -3856,6 +3999,19 @@ async function publicaAgora(tentativa = 1, redes = 0) {
     const baseVersao = server.atualizado_em || null;
     state.temas = mesclaTemas(server.temas);
     state.melhorias = mesclaMelhorias(server.melhorias);
+    /* VOLTOU AO BACKLOG, SAI SEM DATA DE INICIO — a mesma regra do Worker
+       (`tiraInicioDoBacklog`). Feita aqui tambem para o card ir para a coluna
+       certa ja nesta tela: Backlog com inicio e desenhado em Em andamento. */
+    state.melhorias.forEach(m => {
+      if (m && m.status_planejamento === 'backlog' && String(m.inicio || '').trim()) m.inicio = '';
+    });
+    /* TEMA DE DADOS LEVA A FLAG DADOS/BI — a mesma regra do Worker
+       (`marcaDadosBiPorTema`): o nome do tema decide, e a flag so liga. */
+    const TEMA_DADOS_RE = /^\s*(BI\b|Data\s?bricks|Extra[cç][aã]o de dados|Banco de dados)/i;
+    const temasDados = new Set((state.temas || []).filter(t => t && TEMA_DADOS_RE.test(String(t.nome || ''))).map(t => t.id));
+    state.melhorias.forEach(m => {
+      if (m && temasDados.has(m.tema_id) && m.dados_bi !== true) { m.dados_bi = true; m.sales_ops = false; }
+    });
     // `devs_perfil` funde por CHAVE, e nao por substituicao: o Planejamento tambem
     // edita esse mapa, e trocar o objeto inteiro faria a marcacao de quem publicou
     // primeiro sumir sem aviso. Local vence no proprio nome; o resto vem do servidor.
@@ -3888,9 +4044,15 @@ async function publicaAgora(tentativa = 1, redes = 0) {
     // linhas acima — e a marcacao recem-feita era apagada ANTES de ser enviada.
     // Era por isso que a flag DEV-AXCred "nao ficava salva": ela nunca chegava a
     // sair da tela.
+    //
+    // `sprints` TAMBEM (02/11/2026). Iniciar e fechar a sprint mexem em
+    // `state.sprints`, e o laco abaixo trocava a lista pela do servidor ANTES de
+    // enviar: a S5-10 foi "fechada" e voltou a pedir fechamento, e iniciar a S1-11
+    // teria o mesmo destino. Quem pode mexer nela e o dono da sprint — o Worker
+    // devolve a lista do servidor quando quem grava nao e (`ehDonoDaSprint`).
     const MEUS_CAMPOS = ['temas', 'melhorias', 'desenvolvedores', 'devs_perfil',
                          'devs_removidos', 'feriados',
-                         'ausencias', 'projetos', 'atualizado_em'];
+                         'ausencias', 'projetos', 'sprints', 'atualizado_em'];
     Object.keys(server || {}).forEach(k => {
       if (!MEUS_CAMPOS.includes(k)) state[k] = server[k];
     });
@@ -4245,7 +4407,7 @@ async function saveToGitHub(attempt = 1, quedas = 0) {
 // ─── RENDER ───────────────────────────────────────────────────────
 const STATUS_LABELS = {
   backlog:      'Backlog',
-  levantar_req: 'Levantar Requisitos',
+  levantar_req: 'Em aprovação de requisitos',
   planning:     'Planning',
   planejado:    'Planejado',
   em_andamento: 'Em Andamento',
@@ -4278,7 +4440,7 @@ let _filtroPrazo  = null; // null|'vencidas'|'semana'|'mes'|'sem_data'
 let _filtroDev    = null; // null|nome do dev|SEM_DEV
 let _filtroTipo   = null; // null|'sustentacao'|'evolucao'|SEM_TIPO
 let _filtroProd   = null; // null|'falta_subir'|'no_ar'
-let _filtroSprint = null; // null|'__fora__'|rotulo da sprint do PO
+let _filtroSprint = null; // null (todas) | lista de chaves: '__fora__' e/ou rotulos da sprint do PO
 let _buscaMel     = '';   // texto livre: título, descrição, dev, solicitante
 
 // Demanda "em aberto" (relevante para prazos): exclui concluída/negada
@@ -4805,6 +4967,61 @@ function fbGroup(label, valor, opcoes, handler) {
   </div>`;
 }
 
+/* O FILTRO DE VARIAS ESCOLHAS (hoje: a sprint).
+   "Preciso selecionar qual sprint quero e ter opcao de selecionar todas."
+   O `<select>` so escolhe uma; aqui sao caixas. O valor e `null` (todas) ou
+   uma lista de chaves — e lista vazia VOLTA a ser `null`: desmarcar tudo e
+   nao querer filtro, e um quadro vazio so faria a pessoa achar que sumiu dado.
+   A barra e redesenhada a cada clique, entao o aberto/fechado mora em
+   `_fbMultiAberto` para a lista nao fechar no meio da escolha. */
+let _fbMultiAberto = null;
+function fbMulti(id, label, valor, opcoes, handler) {
+  const sel = Array.isArray(valor) ? valor : (valor ? [valor] : []);
+  const todas = opcoes.find(o => o.key === '');
+  const itens = opcoes.filter(o => o.key !== '');
+  const resumo = !sel.length
+    ? (todas ? todas.label + (todas.n === undefined ? '' : ` (${todas.n})`) : 'Todas')
+    : sel.length <= 3
+      ? sel.map(k => (itens.find(o => String(o.key) === String(k)) || { label: k }).label
+          .replace(/^● /, '')).join(' + ')
+      : sel.length + ' selecionadas';
+  const caixa = (o, marcado, classe, acao) =>
+    `<label${classe ? ' class="' + classe + '"' : ''}><input type="checkbox"${marcado ? ' checked' : ''}` +
+    ` onchange="${acao}"> ${esc(o.label)}` +
+    (o.n === undefined ? '' : `<span class="fb-multi-n">${o.n}</span>`) + '</label>';
+  return `<div class="ger-filter-group fb-multi${_fbMultiAberto === id ? ' aberto' : ''}" id="${id}">
+    <label>${esc(label)}</label>
+    <button type="button" class="fb-multi-btn" aria-haspopup="true"
+      aria-expanded="${_fbMultiAberto === id}" onclick="fbMultiAbre('${id}', event)">
+      <span>${esc(resumo)}</span>▾</button>
+    <div class="fb-multi-pop" onclick="event.stopPropagation()">` +
+      caixa(todas || { label: 'Todas' }, !sel.length, 'fb-multi-todas', `${handler}(null)`) +
+      itens.map(o => {
+        const on = sel.some(k => String(k) === String(o.key));
+        const prox = on ? sel.filter(k => String(k) !== String(o.key)) : sel.concat([o.key]);
+        return caixa(o, on, '', `${handler}(${esc(JSON.stringify(prox.length ? prox : null))})`);
+      }).join('') +
+    `</div>
+  </div>`;
+}
+function fbMultiAbre(id, ev) {
+  if (ev) ev.stopPropagation();
+  _fbMultiAberto = _fbMultiAberto === id ? null : id;
+  document.querySelectorAll('.fb-multi').forEach(el => {
+    const on = el.id === _fbMultiAberto;
+    el.classList.toggle('aberto', on);
+    const b = el.querySelector('.fb-multi-btn');
+    if (b) b.setAttribute('aria-expanded', on);
+  });
+}
+// Clique fora ou Escape fecha a lista.
+document.addEventListener('click', e => {
+  if (_fbMultiAberto && !e.target.closest('.fb-multi')) fbMultiAbre(null);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && _fbMultiAberto) fbMultiAbre(null);
+});
+
 /* O MESMO INVOLUCRO DO `fbGroup`, com as opcoes ja montadas por fora.
    O `fbGroup` monta `<option>` a partir de uma lista chapada, e a arvore de
    temas precisa de `<optgroup>` e recuo — coisas que uma lista de
@@ -4930,7 +5147,7 @@ function setFiltroDev(v)    { _filtroDev    = vazioNulo(v); renderMelToolbar(); 
 function setFiltroPrazo(v)  { _filtroPrazo  = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroTipo(v)   { _filtroTipo   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setFiltroProd(v)   { _filtroProd   = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
-function setFiltroSprint(v) { _filtroSprint = vazioNulo(v); renderMelToolbar(); renderMelhorias(); }
+function setFiltroSprint(v) { _filtroSprint = listaOuNulo(v); renderMelToolbar(); renderMelhorias(); }
 function setBuscaMel(v) {
   _buscaMel = v || '';
   comFocoPreservado('mel-toolbar', () => { renderMelToolbar(); renderMelhorias(); });
@@ -4948,7 +5165,7 @@ function renderMelToolbar() {
                   _filtroProd, _filtroSprint, _buscaMel].filter(Boolean).length;
   el.innerHTML =
     // A SPRINT PRIMEIRO: e o recorte mais usado na semana de planejamento.
-    fbGroup('Sprint', _filtroSprint, opcoesSprintKb(), 'setFiltroSprint') +
+    fbMulti('fbm-mel-sprint', 'Sprint', _filtroSprint, opcoesSprintKb(), 'setFiltroSprint') +
     fbGroup('Tipo',  _filtroTipo,  opcoesTipo(),  'setFiltroTipo') +
     fbGroupHTML('Tema', temaOpcoesHTML(_filtroTema), 'setFiltroTema') +
     fbGroup('Dev',   _filtroDev,   opcoesDev(),   'setFiltroDev') +
@@ -4972,7 +5189,7 @@ function renderStatusFilters() {
   const todos = [
     { key: null,          label: 'Todos',        cls: 'all' },
     { key: 'backlog',      label: 'Backlog',              cls: 'backlog' },
-    { key: 'levantar_req', label: 'Levantar Requisitos', cls: 'levantar_req' },
+    { key: 'levantar_req', label: 'Em aprovação de requisitos', cls: 'levantar_req' },
     { key: 'planning',     label: 'Planning',             cls: 'planning' },
     { key: 'planejado',    label: 'Planejado',            cls: 'planejado' },
     { key: 'em_andamento',label: 'Em Andamento',  cls: 'em_andamento' },
@@ -5000,8 +5217,165 @@ function renderAll() {
   renderTemas(); renderStatusFilters(); renderMelToolbar(); renderMelhorias();
   renderRiscoBanner(); renderValBanner();
   if (document.getElementById('tab-kanban')?.classList.contains('active')) renderKanban();
+  if (document.getElementById('tab-entregas')?.classList.contains('active')) renderEntregasSprint();
   bannerPendentes();
   if (Math.abs(window.scrollY - y) > 2) window.scrollTo({ top: y });
+}
+
+/* ═══ ENTREGAS POR SPRINT (03/11/2026) ═══════════════════════════════════════
+ *
+ * "Crie uma nova aba, entregas por sprint. Ali quero a mesma logica que criamos
+ *  agora, com temas e suas respectivas datas e com quem esta. Preciso que seja
+ *  possivel escolher a sprint para ter o resultado."
+ *
+ * A MESMA LOGICA DA ABA MELHORIAS: grupos por tema em ordem alfabetica, e em
+ * cada linha "Com: <dev>", a entrega do dev e a entrega ao usuario. A sprint e
+ * a do PO (`sprint_po`), a mesma do Kanban e do painel do dev. Concluidas e
+ * negadas entram: e a lista do que a sprint ENTREGA, e nao so do que falta.
+ * Abre na sprint de hoje. */
+let _esSprint = '';
+/* O cartao clicado no resumo filtra a lista: 'todas', 'entregues',
+   'falta_com' (com responsavel) ou 'falta_sem' (sem responsavel). */
+let _esFiltro = 'todas';
+function esFiltrar(f) { _esFiltro = (_esFiltro === f ? 'todas' : f); renderEntregasSprint(); }
+
+
+function renderEntregasSprint() {
+  const sel = document.getElementById('es-sprint');
+  const box = document.getElementById('es-lista');
+  if (!sel || !box) return;
+  // As opcoes sao as do filtro do Kanban, sem "Todas" e sem "Sem sprint".
+  const opcoes = opcoesSprintKb().filter(o => o.key && o.key !== '__fora__');
+  const atual = SPRINTPO.sprintCorrente(PRAZO.hojeISO(), state.feriados || []);
+  if (!_esSprint || !opcoes.some(o => o.key === _esSprint)) {
+    _esSprint = opcoes.some(o => o.key === atual) ? atual : (opcoes[0] ? opcoes[0].key : '');
+  }
+  sel.innerHTML = opcoes.map(o =>
+    `<option value="${esc(o.key)}"${o.key === _esSprint ? ' selected' : ''}>` +
+    `${esc(o.label.replace(/^● /, ''))}${o.key === atual ? ' (atual)' : ''} (${o.n})</option>`).join('');
+
+  const ms = (state.melhorias || []).filter(m => !ehMesclada(m) && SPRINTPO.naSprint(m, _esSprint));
+  document.getElementById('es-conta').textContent = ms.length;
+
+  /* ═══ EM LISTA, NO PADRAO DA ABA MELHORIAS (03/11/2026) ══════════════════
+     "Esta muito confuso, varios quadros fora do padrao. Organize e traga em
+      lista, mencionando o projeto que a demanda faz parte. Agrupe por tema."
+     O quadro de cartoes saiu. Ficam os grupos por tema (ordem alfabetica) com
+     o cartao de linha de sempre, e em cada demanda o selo do PROJETO de que
+     ela faz parte. O resumo da sprint e uma linha de texto. */
+  const hoje = PRAZO.hojeISO();
+  const feitas = ms.filter(m => statusKey(m) === 'concluido').length;
+  const negadas = ms.filter(m => statusKey(m) === 'negada').length;
+  const pts = ms.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+  const ptsFeitos = ms.filter(m => statusKey(m) === 'concluido').reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+  const aberta = m => !['concluido', 'negada'].includes(statusKey(m));
+  const vencidas = ms.filter(m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) &&
+                                  m.entrega_usuario < hoje).length;
+  const comProj = ms.filter(m => m.projeto_id && (state.projetos || []).some(p => p.id === m.projeto_id)).length;
+  /* ═══ O RESUMO EM CARTOES (04/11/2026) ════════════════════════════════
+     "Melhore esse campo para maior visibilidade. Traga o que tem na sprint, o
+      que ja foi entregue e deixe claro o que esta faltando. Faltando no nome e
+      faltando sem nome."
+     A linha de texto virou quatro cartoes no padrao da aba Mes (`ger-kpi`).
+     Clicar num cartao filtra a lista; clicar de novo volta a mostrar tudo.
+     Embaixo, o que falta por pessoa — o "faltando no nome". */
+  const temDono = m => !!String(m.dev || '').trim();
+  const vencida = m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje;
+  const lEntregues = ms.filter(m => statusKey(m) === 'concluido');
+  const lFaltaCom = ms.filter(m => aberta(m) && temDono(m));
+  const lFaltaSem = ms.filter(m => aberta(m) && !temDono(m));
+  const validas = ms.length - negadas;
+  const pctEnt = validas ? Math.round(lEntregues.length / validas * 100) : 0;
+  // Resumo por QUANTIDADE de tasks, nao por pontos (pedido de 04/11/2026).
+  const pctDe = n => validas ? Math.round(n / validas * 100) : 0;
+  const kpiEs = (f, v, rot, sub, cor, extra) =>
+    `<div class="ger-kpi es-kpi${_esFiltro === f ? ' ativo' : ''}" onclick="esFiltrar('${f}')" title="Clique para filtrar a lista">` +
+    `<div class="ger-kpi-label">${rot}</div>` +
+    `<div class="ger-kpi-value"${cor ? ` style="color:${cor}"` : ''}>${v}</div>` +
+    `<div class="es-kpi-sub">${sub}</div>${extra || ''}</div>`;
+  const vencCom = lFaltaCom.filter(vencida).length;
+  document.getElementById('es-kpis').innerHTML = ms.length ? (
+    kpiEs('todas', ms.length, 'Na sprint', `${ms.length} task(s)` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto`) +
+    kpiEs('entregues', lEntregues.length, 'Entregues', `${lEntregues.length} de ${validas} task(s) · ${pctEnt}%`, 'var(--green)',
+          `<div class="es-barra"><i style="width:${pctEnt}%"></i></div>`) +
+    kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${pctDe(lFaltaCom.length)}% das tasks` +
+          (vencCom ? ` · <span style="color:var(--red-tx,#F9A0A0);font-weight:600">${vencCom} com entrega vencida</span>` : ''),
+          lFaltaCom.length ? 'var(--amber-tx,#FFC470)' : '') +
+    kpiEs('falta_sem', lFaltaSem.length, 'Faltando · sem responsável', lFaltaSem.length ? `${pctDe(lFaltaSem.length)}% das tasks · precisam de dono` : 'todas têm dono',
+          lFaltaSem.length ? 'var(--red)' : 'var(--green)')
+  ) : '';
+  // O que falta por pessoa — da que tem mais para a que tem menos.
+  const porPessoa = {};
+  lFaltaCom.forEach(m => { const k = String(m.dev).trim(); (porPessoa[k] = porPessoa[k] || []).push(m); });
+  const pessoas = Object.keys(porPessoa).sort((a, b) => porPessoa[b].length - porPessoa[a].length || a.localeCompare(b, 'pt-BR'));
+  document.getElementById('es-pessoas').innerHTML = pessoas.length
+    ? '<span class="rot">Faltando por pessoa:</span>' + pessoas.map(p => {
+        const l = porPessoa[p], v = l.filter(vencida).length;
+        return `<span class="es-pessoa${v ? ' venc' : ''}" title="${v ? v + ' com entrega vencida' : ''}">${esc(p)} <b>${l.length}</b>` +
+               `${v ? ` · ${v} vencida(s)` : ''}</span>`;
+      }).join('')
+    : '';
+  document.getElementById('es-resumo').textContent = vencidas ? `${vencidas} com entrega vencida` : '';
+  if (!ms.length) {
+    box.innerHTML = '<div class="empty">Nenhuma demanda nesta sprint.</div>';
+    return;
+  }
+  const filtrada = _esFiltro === 'entregues' ? lEntregues : _esFiltro === 'falta_com' ? lFaltaCom
+                 : _esFiltro === 'falta_sem' ? lFaltaSem : ms;
+  if (!filtrada.length) {
+    box.innerHTML = '<div class="empty">Nada nesta situação.</div>';
+    return;
+  }
+
+  const grupos = {};
+  filtrada.forEach(m => { const k = m.tema_id || '__sem_tema__'; (grupos[k] = grupos[k] || []).push(m); });
+  const nomeTema = k => k === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === k)?.nome || '—');
+  const chaves = Object.keys(grupos).sort((a, b) => {
+    if (a === '__sem_tema__') return 1;
+    if (b === '__sem_tema__') return -1;
+    return nomeTema(a).localeCompare(nomeTema(b), 'pt-BR', { sensitivity: 'base' });
+  });
+  // Dentro do tema: pela entrega ao usuario, sem data no fim.
+  const dataDe = m => m.entrega_usuario || '9999';
+  const dataHTML = m => {
+    if (!m.entrega_usuario) return '<span style="color:var(--text3)">📅 Entrega usuário: a definir</span>';
+    let cor = '', tag = '';
+    if (aberta(m)) {
+      const dias = Math.round((new Date(m.entrega_usuario + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000);
+      if (dias < 0)        { cor = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tag = ` (vencida há ${-dias}d)`; }
+      else if (dias === 0) { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ' (vence hoje)'; }
+      else if (dias <= 7)  { cor = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tag = ` (em ${dias}d)`; }
+    }
+    return `<span style="${cor}">📅 Entrega usuário: ${formatDate(m.entrega_usuario)}${tag}</span>`;
+  };
+
+  box.innerHTML = chaves.map(k => {
+    const linhas = grupos[k].sort((a, b) => dataDe(a).localeCompare(dataDe(b)) ||
+                                            (a.titulo || '').localeCompare(b.titulo || ''))
+      .map(m => {
+        const sk = statusEfetivo(m);
+        const pj = m.projeto_id ? (state.projetos || []).find(p => p.id === m.projeto_id) : null;
+        const com = m.dev ? `👤 Com: <strong>${esc(m.dev)}</strong>`
+                          : '<span style="color:var(--text3)">👤 Sem responsável</span>';
+        return `<div class="card" style="cursor:pointer" onclick="openModalMelhoria('${m.id}')">
+          <div class="card-info">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+              ${m.codigo ? `<span style="font-family:monospace;font-size:12px;color:var(--text3)">${esc(m.codigo)}</span>` : ''}
+              <div class="card-nome">${esc(m.titulo)}</div>
+              <span class="badge badge-${sk}">${STATUS_LABELS[sk] || sk}</span>
+              ${m.poker_pontos != null ? `<span style="font-size:11px;background:#123A52;color:#8AD5F0;border-radius:4px;padding:2px 7px;">🃏 ${m.poker_pontos}</span>` : ''}
+              ${pj ? `<span title="Faz parte do projeto ${esc(pj.nome || '')}" style="font-size:11px;background:#341A6E;color:#C9AEFF;border-radius:4px;padding:2px 7px;">📁 ${pj.codigo ? esc(pj.codigo) + ' · ' : ''}${esc(pj.nome || '')}</span>` : ''}
+            </div>
+            <div class="card-sub">${com} · ${dataHTML(m)}` +
+              `${statusKey(m) === 'concluido' && m.concluido_em ? ' · ✅ Concluída em ' + formatDate(String(m.concluido_em).slice(0, 10)) : ''}</div>
+          </div>
+        </div>`;
+      }).join('');
+    return `<div style="margin-bottom:18px;">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;">${esc(nomeTema(k))} <span style="font-weight:400;opacity:.7;">(${grupos[k].length})</span></div>
+      ${linhas}
+    </div>`;
+  }).join('');
 }
 
 function renderTemas() {
@@ -5071,26 +5445,21 @@ function renderMelhorias() {
     return (a.titulo || '').localeCompare(b.titulo || '');
   });
   // Group by tema
-  const temaOrder = state.temas.map(t => t.id);
   const groups = {};
   sorted.forEach(m => {
     const key = m.tema_id || '__sem_tema__';
     if (!groups[key]) groups[key] = [];
     groups[key].push(m);
   });
-  // Urgência do tema = entrega mais próxima/vencida entre suas demandas em aberto
-  function grupoUrgencia(key) {
-    const comData = groups[key].filter(m => m.entrega && isDemandaAberta(m));
-    if (!comData.length) return Infinity;
-    return Math.min(...comData.map(m => new Date(m.entrega + 'T00:00:00').getTime()));
-  }
   const groupKeys = Object.keys(groups).sort((a, b) => {
     if (a === '__sem_tema__') return 1;
     if (b === '__sem_tema__') return -1;
-    const ua = grupoUrgencia(a), ub = grupoUrgencia(b);
-    if (ua !== ub) return ua - ub; // tema mais urgente primeiro
-    const ia = temaOrder.indexOf(a), ib = temaOrder.indexOf(b);
-    return (ia === -1 ? 9999 : ia) - (ib === -1 ? 9999 : ib);
+    /* PELO NOME DO TEMA, e nao mais pelo mais urgente (03/11/2026): "ordenando
+       pelos temas". Em ordem alfabetica os sistemas ficam juntos (AXCred - ...),
+       e o mesmo tema esta sempre no mesmo lugar da lista. A urgencia continua
+       visivel em cada linha, pelas datas de entrega. */
+    const na = state.temas.find(t => t.id === a)?.nome || '', nb = state.temas.find(t => t.id === b)?.nome || '';
+    return na.localeCompare(nb, 'pt-BR', { sensitivity: 'base' });
   });
   el.innerHTML = groupKeys.map(tKey => {
     const temaNome = tKey === '__sem_tema__' ? 'Sem tema' : (state.temas.find(t => t.id === tKey)?.nome || '—');
@@ -5104,8 +5473,10 @@ function renderMelhorias() {
       const tipoBadge = m.tipo && TIPO_LABELS[m.tipo]
         ? `<span style="font-size:11px;background:var(--bg4);color:var(--text2);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;"><i class="axi axi-${TIPO_ICONE[m.tipo]}"></i> ${TIPO_LABELS[m.tipo]}</span>`
         : '';
-      let sub = '';
-      if (m.dev) sub += m.dev;
+      /* COM QUEM ESTA, dito com todas as letras — o nome solto nao deixava claro
+         se era o dev ou o solicitante. */
+      let sub = m.dev ? `👤 Com: <strong>${esc(m.dev)}</strong>`
+                      : '<span style="color:var(--text3)">👤 Sem responsável</span>';
       if (m.entrega) {
         let cor = '', tag = '';
         if (isDemandaAberta(m)) {
@@ -5119,7 +5490,22 @@ function renderMelhorias() {
           else if (dias === 0){ cor = 'color:var(--amber-tx);font-weight:600'; tag = ' (vence hoje)'; }
           else if (dias <= 7) { cor = 'color:var(--amber-tx);font-weight:600'; tag = ` (em ${dias}d)`; }
         }
-        sub += (sub ? ' · ' : '') + `<span style="${cor}">Entrega: ${formatDate(m.entrega)}${tag}</span>`;
+        sub += (sub ? ' · ' : '') + `<span style="${cor}">Entrega dev: ${formatDate(m.entrega)}${tag}</span>`;
+      }
+      /* A DATA PROMETIDA AO USUARIO, ao lado da do dev. E a que o solicitante
+         cobra; vencida so conta enquanto a demanda esta aberta. */
+      if (m.entrega_usuario) {
+        let corU = '', tagU = '';
+        if (isDemandaAberta(m)) {
+          const hojeU = new Date(); hojeU.setHours(0,0,0,0);
+          const diasU = Math.round((new Date(m.entrega_usuario + 'T00:00:00') - hojeU) / 86400000);
+          if (diasU < 0)       { corU = 'color:var(--red-tx,#F9A0A0);font-weight:600'; tagU = ` (vencida há ${-diasU}d)`; }
+          else if (diasU === 0){ corU = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tagU = ' (vence hoje)'; }
+          else if (diasU <= 7) { corU = 'color:var(--amber-tx,#FFB84D);font-weight:600'; tagU = ` (em ${diasU}d)`; }
+        }
+        sub += ' · ' + `<span style="${corU}">📅 Entrega usuário: ${formatDate(m.entrega_usuario)}${tagU}</span>`;
+      } else {
+        sub += ' · <span style="color:var(--text3)">📅 Entrega usuário: a definir</span>';
       }
       /* NO AR — a marca que responde "isso ja chegou ao usuario?".
          Ela e a razao de o campo existir: sem marca no cartao, saber que a
@@ -5160,7 +5546,7 @@ function renderMelhorias() {
       return `<div class="card${estaPausado(m) ? ' card-pausada' : ''}${_spEstL ? ' card-comsprint' : ''}" style="${_spEstL}">
         <div class="card-info">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <div class="card-nome">${esc(m.titulo)}</div>${badge}${SPRINTPO.doPO(m) ? SPRINTPO.badge(m, 'kb-sprint') : ''}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}${pesoBadge}${prodBadge}
+            <div class="card-nome">${esc(m.titulo)}</div>${badge}${SPRINTPO.doPO(m) ? SPRINTPO.badge(m, 'kb-sprint') : ''}${window.REQUISITOS ? REQUISITOS.chips(m) : ''}${pausaBadge}${tipoBadge}${pokerBadge}${parentBadge}${depBadge}${pesoBadge}${prodBadge}
           </div>
           ${sub ? `<div class="card-sub">${sub}</div>` : ''}
           ${m.descricao ? `<div style="font-size:13px;color:var(--text3);margin-top:4px;">${esc(m.descricao.substring(0,120))}${m.descricao.length>120?'…':''}</div>` : ''}
@@ -5208,6 +5594,7 @@ function switchTab(name, el) {
   }
   if (name === 'relatorios') renderRelatorios();
   if (name === 'usuarios') renderUsuarios();
+  if (name === 'entregas') renderEntregasSprint();
   if (name === 'projetos') renderProjetos();
   renderValBanner();
   renderRiscoBanner();
@@ -5230,7 +5617,7 @@ function restoreLastTab() {
 // Agora o card fica na etapa dele e ganha marca vermelha.
 const KB_COLS = [
   { key:'backlog',      label:'Backlog' },
-  { key:'levantar_req', label:'Levantar Requisitos' },
+  { key:'levantar_req', label:'Em aprovação de requisitos' },
   { key:'planning',     label:'Planning' },
   { key:'planejado',    label:'Planejado' },
   { key:'em_andamento', label:'Em Andamento' },
@@ -5249,8 +5636,9 @@ let _kbDev   = null;
 let _kbPrazo = null;
 let _kbTipo  = null;
 let _kbDados = null;
-/* O FILTRO DA SPRINT: '' todas, '__fora__' fora de sprint, ou o rotulo. Le
-   `sprint_po` (a escolha do PO), e nao a semana deduzida das datas. */
+/* O FILTRO DA SPRINT: null todas, ou uma lista com '__fora__' e/ou rotulos —
+   varias sprints de uma vez. Le `sprint_po` (a escolha do PO), e nao a semana
+   deduzida das datas. */
 let _kbSprint = null;
 let _kbBi    = null;
 let _kbProd  = null;       // null|'falta_subir'|'no_ar' — ver PRODUCAO_BUCKETS
@@ -5307,9 +5695,16 @@ function setKbDev(v)   { _kbDev   = vazioNulo(v); renderKanban(); }
 function setKbPrazo(v) { _kbPrazo = vazioNulo(v); renderKanban(); }
 function setKbTipo(v)  { _kbTipo  = vazioNulo(v); renderKanban(); }
 function setKbDados(v) { _kbDados = vazioNulo(v); renderKanban(); }
-function setKbSprint(v) { _kbSprint = vazioNulo(v); renderKanban(); }
+function setKbSprint(v) { _kbSprint = listaOuNulo(v); renderKanban(); }
+/** Lista vazia ou '' vira null (= todas); uma chave solta vira lista de uma. */
+function listaOuNulo(v) {
+  const l = (Array.isArray(v) ? v : (v ? [v] : [])).filter(Boolean);
+  return l.length ? l : null;
+}
 function matchSprintKb(m, f) {
-  if (!f) return true;
+  if (!f || (Array.isArray(f) && !f.length)) return true;
+  // VARIAS SPRINTS: basta estar em uma delas.
+  if (Array.isArray(f)) return f.some(k => matchSprintKb(m, k));
   if (f === '__fora__') return SPRINTPO.foraDaSprint(m);
   return SPRINTPO.naSprint(m, f);
 }
@@ -5320,7 +5715,7 @@ function opcoesSprintKb() {
   const set = new Set(vivas.map(m => SPRINTPO.doPO(m)).filter(Boolean));
   SPRINTPO.proximasSprints(PRAZO.hojeISO(), 5, state.feriados || []).forEach(x => set.add(x.rotulo));
   return [{ key: '', label: 'Todas', n: vivas.length },
-          { key: '__fora__', label: 'Fora da sprint', n: vivas.filter(m => SPRINTPO.foraDaSprint(m)).length }]
+          { key: '__fora__', label: 'Sem sprint', n: vivas.filter(m => SPRINTPO.foraDaSprint(m)).length }]
     .concat([...set].sort((a, b) => chave(a).localeCompare(chave(b))).map(r => ({
       key: r, label: '● ' + SPRINTPO.rotuloCurto(r), n: vivas.filter(m => SPRINTPO.naSprint(m, r)).length })));
 }
@@ -5332,7 +5727,7 @@ function setBuscaKb(v) {
 }
 function setKbPeriodo(v) { _kbPeriodo = v || 'mes_atual'; renderKanban(); }
 function limparFiltrosKb() {
-  _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = _kbDados = _kbBi = null;
+  _kbSprint = _kbTema = _kbDev = _kbPrazo = _kbTipo = _kbProd = _kbDados = _kbBi = null;
   // O da coluna entra aqui tambem: ele conta no "Limpar (n)", e um filtro que
   // conta mas nao limpa deixa o botao mentindo sobre o que acabou de fazer.
   _kbProdCol = {};
@@ -5444,6 +5839,23 @@ function kbProdEscolhe(coluna, valor) {
   if (botao) botao.focus();
 }
 
+/* IMPRIMIR — EM APROVACAO DE REQUISITOS. Todas as demandas da etapa, e nao so
+   as do recorte do quadro: a folha e para decidir a etapa inteira. */
+async function imprimirAprovacaoReq(botao) {
+  const ms = (state.melhorias || []).filter(m => !ehMesclada(m) && !m.oculto && statusKey(m) === 'levantar_req');
+  if (!window.APROVACAOPPT) { toast('O gerador do PPT não carregou. Recarregue a página (Ctrl+F5).', 'err'); return; }
+  const rot = botao ? botao.textContent : '';
+  if (botao) { botao.disabled = true; botao.textContent = '⏳ Gerando…'; }
+  try {
+    const r = await APROVACAOPPT.gera(ms, { temas: state.temas || [] });
+    toast('🖨 PPT gerado: ' + r.demandas + ' demanda(s) em aprovação de requisitos.', 'ok');
+  } catch (e) {
+    toast('Não foi possível gerar o PPT: ' + ((e && e.message) || e), 'err');
+  } finally {
+    if (botao) { botao.disabled = false; botao.textContent = rot; }
+  }
+}
+
 function renderKbToolbar(exibidas, mescladasAchadas) {
   const el = document.getElementById('kb-toolbar');
   if (!el) return;
@@ -5457,7 +5869,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
   });
   // 'mes_atual' é o padrão de higiene, não uma escolha explícita — só conta
   // como filtro "ativo" quando alguém pede para ver mais (3 meses/tudo).
-  const ativos = [_kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbDados, _kbBi, _kbBusca,
+  const ativos = [_kbSprint, _kbTema, _kbDev, _kbPrazo, _kbTipo, _kbProd, _kbDados, _kbBi, _kbBusca,
                   _kbPeriodo !== 'mes_atual' ? _kbPeriodo : null].filter(Boolean).length +
     /* CADA COLUNA FILTRADA CONTA UMA. Sem isto, o filtro do contador seria o
        segundo "filtro invisivel na conta" desta tela — o primeiro foi o periodo,
@@ -5465,7 +5877,7 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
        o "Limpar" diz que nao ha filtro, e conclui que sumiu dado. */
     Object.keys(_kbProdCol).length;
   el.innerHTML =
-    fbGroup('Sprint', _kbSprint, opcoesSprintKb(), 'setKbSprint') +
+    fbMulti('fbm-kb-sprint', 'Sprint', _kbSprint, opcoesSprintKb(), 'setKbSprint') +
     fbGroup('Tipo',    _kbTipo,    opcoesTipo(),    'setKbTipo') +
     fbGroupHTML('Tema', temaOpcoesHTML(_kbTema), 'setKbTema') +
     fbGroup('Dev',     _kbDev,     opcoesDev(),     'setKbDev') +
@@ -5483,6 +5895,12 @@ function renderKbToolbar(exibidas, mescladasAchadas) {
     '<div class="ger-filter-group"><label>&nbsp;</label>' +
     '<button type="button" class="btn btn-secondary btn-sm" onclick="sprintLoteAbrir()"' +
     ' title="Repassar várias demandas para uma sprint de uma vez"><i class="axi axi-refresh"></i> Sprint em lote</button>' +
+    '</div>' +
+    /* A FOLHA DE DECISAO DA ETAPA — ver `aprovacao-ppt.js`. */
+    '<div class="ger-filter-group"><label>&nbsp;</label>' +
+    '<button type="button" class="btn btn-secondary btn-sm" onclick="imprimirAprovacaoReq(this)"' +
+    ' title="Gera o PPT das demandas em Em aprovação de requisitos, para decidir se seguem para a sprint">' +
+    '🖨 Imprimir - Em aprovação de requisitos</button>' +
     '</div>' +
     `<span class="fb-count">Mostrando ${exibidas} de ${state.melhorias.length}` +
     /* COM BUSCA ATIVA A TELA DIZ QUE O PERIODO FOI IGNORADO. Sem isso, quem
@@ -5737,6 +6155,18 @@ function renderKanban() {
         ' title="Duplo clique para repassar esta demanda para uma sprint">' +
         SPRINTPO.badge(m, 'kb-sprint') + '</span>');
       if (m.debito_tecnico) badges.push('<span class="kb-debito"><i class="axi axi-package"></i> Déb. técnico</span>');
+      // Impacto e urgência seguem a demanda pela esteira (`requisitos.js`).
+      if (window.REQUISITOS) {
+        const _req = REQUISITOS.chips(m);
+        if (_req) badges.push(_req);
+        // Na etapa e ainda sem o carimbo do Worker (antes da primeira gravação): a enviar.
+        const _cu = REQUISITOS.estado(m) || (m.status_planejamento === REQUISITOS.ETAPA ? 'a_enviar' : '');
+        if (_cu && m.status_planejamento === REQUISITOS.ETAPA) {
+          badges.push('<span class="kb-debito" title="Caso de uso: ' + esc(REQUISITOS.ESTADOS[_cu]) + '"><i class="axi axi-receipt"></i> ' +
+            esc({ a_enviar: 'Caso de uso a enviar', enviado: 'Aguardando aprovação',
+                  aprovado: 'Requisitos aprovados', ajustes: 'Usuário pediu ajustes' }[_cu]) + '</span>');
+        }
+      }
       if (m.dados_bi) badges.push('<span class="kb-dados" title="Demanda do time de Dados/BI"><i class="axi axi-chart"></i> Dados/BI</span>');
       else if (m.sales_ops) badges.push('<span class="kb-dados" title="Demanda de Sales Ops — sprint contabilizada à parte"><i class="axi axi-trend"></i> Sales Ops</span>');
       if (SPRINTPO.ehPrioritariaDaSprint(m)) badges.push('<span class="kb-debito" title="Vencida no início da ' +
@@ -6954,7 +7384,7 @@ function mesSomaLocal(iso, n) {
 
 const PM_FUNIS = [
   { k: 'backlog',      rot: 'Backlog (recepção)', curto: 'Backlog',   cor: 'var(--text3)' },
-  { k: 'levantar_req', rot: 'Levantar Requisitos', curto: 'Requisitos', cor: 'var(--blue)' },
+  { k: 'levantar_req', rot: 'Em aprovação de requisitos', curto: 'Aprov. req.', cor: 'var(--blue)' },
   { k: 'planning',     rot: 'Planning',            curto: 'Planning',  cor: 'var(--purple-tx)' },
   { k: 'validacao',    rot: 'Validação PM/PO',     curto: 'Validação', cor: 'var(--amber-tx)' },
 ];
@@ -9193,6 +9623,7 @@ function sprintOpcoes(atual) {
 
 async function sprintEscolher(ev, id) {
   if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'err'); return; }
   const m = (state.melhorias || []).find(x => String(x.id) === String(id));
   if (!m) return;
   const atual = SPRINTPO.doPO(m);
@@ -9319,6 +9750,7 @@ function sprintLoteCandidatas() {
 }
 
 function sprintLoteAbrir() {
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) repassa demandas para a sprint.', 'err'); return; }
   _loteSel = new Set();
   _loteBusca = '';
   _loteSoFora = true;
@@ -9509,6 +9941,7 @@ let _fechDecisoes = {};
 let _fechRotulo = '';
 
 function sprintFecharAbrir(rotulo) {
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) fecha a sprint.', 'err'); return; }
   _fechRotulo = String(rotulo || '');
   _fechDecisoes = {};
   /* A PAUSADA JÁ VEM DECIDIDA: transborda para a sprint seguinte, com a pausa
@@ -9915,7 +10348,7 @@ function renderGerSprint() {
     const bk = SPRINTPO.backlogDaSprint(state, _sprSel, etapa, _sprTrilha);
     const nBk = bk.reduce((t, g) => t + g.itens.length, 0);
     const devs = devsDisponiveis();
-    const ETQ = { backlog: 'Backlog', levantar_req: 'Levantar req.', planning: 'Planning',
+    const ETQ = { backlog: 'Backlog', levantar_req: 'Aprov. requisitos', planning: 'Planning',
                   planejado: 'Planejado' };
     bkEl.innerHTML = !nBk ? '' :
       '<div class="spr-tit">Backlog da sprint <span class="spr-dica">— ' + nBk +
@@ -10018,6 +10451,7 @@ async function sprDirecionar(id, nome) {
  *  depois, pelo dev perguntando, é o que esta confirmação evita. Não é um ato
  *  irreversível como o fechamento, mas é o que o time passa a ver. */
 async function sprintIniciar() {
+  if (!SPRINTPO.ehDonoDaSprint(_eu)) { toast('Só o Fernando (PM/PO) inicia a sprint.', 'err'); return; }
   const r = _sprSel;
   if (!r) return;
   const dem = SPRINTPO.demandasDaSprint(state, r);
@@ -10365,7 +10799,7 @@ function renderGerencial() {
   renderGerEntradas(ano, mes);
 
   const STATUS_LABEL = {
-    backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado',
+    backlog:'Backlog', levantar_req:'Aprov. requisitos', planning:'Planning', planejado:'Planejado',
     em_andamento:'Em Andamento', validacao:'Validação PM/PO', concluido:'Concluído',
     atrasado:'Atrasado', negada:'Negada'
   };
@@ -12702,8 +13136,8 @@ function relRenderBacklog() {
   box.innerHTML = '<div class="rel-vem-grupo">' +
     '<div class="rel-vem-head"><span class="rel-vem-tit">Nada foi prometido</span>' +
       '<span class="rel-vem-tot">' + esc(resumo) + '</span></div>' +
-    '<p class="rel-vem-por">Etapas <strong>Backlog</strong> e <strong>Levantar ' +
-      'Requisitos</strong>: ninguém combinou data para nenhuma delas. As que já ' +
+    '<p class="rel-vem-por">Etapas <strong>Backlog</strong> e <strong>Em aprovação ' +
+      'de requisitos</strong>: ninguém combinou data para nenhuma delas. As que já ' +
       'têm pontuação aparecem também em “Pontuadas, falta planejar” acima — são a ' +
       'mesma demanda respondendo a duas perguntas, e não devem ser somadas.</p>' +
     linhas + '</div>';
@@ -13026,7 +13460,7 @@ function relTexto(secao) {
       if (partes.length) partes.push('');
       partes.push('BACKLOG (na data desta ata) — ' + b.total +
         (b.pontos ? ' · ' + b.pontos + ' pt ja estimados' : ''));
-      partes.push('  Etapas Backlog e Levantar Requisitos: sem data combinada.' +
+      partes.push('  Etapas Backlog e Em aprovação de requisitos: sem data combinada.' +
         (b.maisVelha != null ? ' A mais antiga espera ha ' + b.maisVelha + ' dias.' : ''));
       b.itens.forEach(x => partes.push('    ' + (x.codigo || '—').padEnd(9) +
         (x.dias == null ? '   —  ' : String(x.dias).padStart(4) + 'd ') +
@@ -13380,6 +13814,97 @@ function mResumoConta() {
   alvo.style.color = restam <= 30 ? 'var(--amber-tx)' : 'var(--text3)';
 }
 
+/* ─── O CASO DE USO NO CARD (Em aprovação de requisitos) ────────────────
+   O Worker abre o `caso_uso` quando a demanda entra na etapa; aqui ele é
+   escrito, enviado e respondido. `_cuEdit` é a cópia em edição — só vai para
+   a gravação junto com o resto do card, no Salvar. */
+let _cuEdit = null;
+function cuRender(m) {
+  _cuEdit = null;
+  const box = document.getElementById('m-caso-uso');
+  if (!box) return;
+  const naEtapa = (m?.status_planejamento || '') === REQUISITOS.ETAPA;
+  const c = m && m.caso_uso && typeof m.caso_uso === 'object' ? m.caso_uso : null;
+  box.style.display = (m && (naEtapa || c)) ? '' : 'none';
+  if (!m || (!naEtapa && !c)) return;
+  document.getElementById('m-cu-texto').value = (c && c.texto) || cuTextoNovo(m);
+  cuPintaEstado(c || { status: 'a_enviar' });
+}
+function cuTextoNovo(m) {
+  const tema = (state.temas || []).find(t => t.id === m.tema_id);
+  return REQUISITOS.casoDeUso(m, { tema: tema && tema.nome, hoje: PRAZO.hojeISO() });
+}
+function cuPintaEstado(c) {
+  const st = REQUISITOS.ESTADOS[c.status] ? c.status : 'a_enviar';
+  const cor = { a_enviar: 'var(--amber-tx,#FFC470)', enviado: 'var(--blue-tx,#9BC8F8)',
+                aprovado: 'var(--green-tx,#8FE0A8)', ajustes: 'var(--red-tx,#F9A0A0)' }[st];
+  const el = document.getElementById('m-cu-estado');
+  el.textContent = REQUISITOS.ESTADOS[st]; el.style.color = cor;
+  const q = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  document.getElementById('m-cu-info').textContent = [
+    c.gerado_em ? 'Entrou na etapa em ' + q(c.gerado_em) : '',
+    c.enviado_em ? 'enviado em ' + q(c.enviado_em) + (c.enviado_por ? ' por ' + c.enviado_por : '') : '',
+    c.respondido_em ? 'resposta em ' + q(c.respondido_em) + (c.respondido_por ? ' (' + c.respondido_por + ')' : '') : '',
+    c.resposta ? 'Ajustes: ' + c.resposta : '',
+  ].filter(Boolean).join(' · ');
+}
+function cuDemandaNaTela() {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id) || {};
+  return Object.assign({}, m, {
+    titulo: document.getElementById('m-titulo').value,
+    descricao: document.getElementById('m-descricao').value,
+    solicitante: document.getElementById('m-solicitante').value,
+    impacto: document.getElementById('m-impacto').value,
+    urgencia: document.getElementById('m-urgencia').value,
+    dev: getDevValue(),
+  });
+}
+function cuGerar() { document.getElementById('m-cu-texto').value = cuTextoNovo(cuDemandaNaTela()); }
+async function cuCopiar() {
+  try {
+    await navigator.clipboard.writeText(document.getElementById('m-cu-texto').value);
+    toast('Caso de uso copiado.', 'ok');
+  } catch (_) {
+    document.getElementById('m-cu-texto').select();
+    toast('Selecionei o texto: copie com Ctrl+C.', 'ok');
+  }
+}
+function cuImprimir() {
+  const m = cuDemandaNaTela();
+  const w = window.open('', '_blank');
+  if (!w) { toast('O navegador bloqueou a janela: libere pop-ups para imprimir.', 'err'); return; }
+  w.document.write(REQUISITOS.paginaImpressao(document.getElementById('m-cu-texto').value,
+    'Caso de uso ' + (m.codigo || '')));
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+}
+async function cuMarcar(st) {
+  const id = document.getElementById('m-id').value;
+  const m = (state.melhorias || []).find(x => x.id === id);
+  if (!m) { toast('Salve a demanda antes.', 'err'); return; }
+  const base = Object.assign({ status: 'a_enviar', gerado_em: '' }, _cuEdit || m.caso_uso || {});
+  const agora = new Date().toISOString();
+  const quem = (_eu && (_eu.nome || _eu.login)) || 'PM/PO';
+  if (st === 'enviado') {
+    Object.assign(base, { status: 'enviado', texto: document.getElementById('m-cu-texto').value,
+                          enviado_em: agora, enviado_por: quem });
+  } else {
+    const resp = st === 'ajustes'
+      ? await pedirTexto({ titulo: 'O que o usuário pediu para ajustar?', multilinha: true,
+                           obrigatorio: true, ok: 'Registrar' })
+      : await pedirTexto({ titulo: 'Quem aprovou? (nome do usuário)', obrigatorio: true,
+                           ok: 'Registrar', valor: m.solicitante || '' });
+    if (resp == null) return;
+    if (!base.texto) base.texto = document.getElementById('m-cu-texto').value;
+    Object.assign(base, { status: st, respondido_em: agora,
+                          respondido_por: st === 'aprovado' ? String(resp).trim() : (m.solicitante || ''),
+                          resposta: st === 'ajustes' ? String(resp).trim() : '' });
+  }
+  _cuEdit = base;
+  cuPintaEstado(base);
+  toast('Registrado no card — clique em Salvar para gravar.', 'ok');
+}
+
 function openModalMelhoria(id) {
   const m = id ? state.melhorias.find(x => x.id === id) : null;
   document.getElementById('modal-melhoria-title').textContent = m ? 'Editar issue' : 'Nova issue';
@@ -13413,6 +13938,9 @@ function openModalMelhoria(id) {
   populateDevSelect(m?.dev || '');
   document.getElementById('m-prioridade').value      = m?.prioridade       || '';
   document.getElementById('m-tipo').value            = m?.tipo            || '';
+  document.getElementById('m-impacto').innerHTML      = REQUISITOS.opcoes('impacto', m?.impacto);
+  document.getElementById('m-urgencia').innerHTML     = REQUISITOS.opcoes('urgencia', m?.urgencia);
+  cuRender(m);
   document.getElementById('m-poker-media').value      = m?.poker_media != null ? m.poker_media : '';
   // Abrir outro card zera a marca: "escolhi na mao" vale para o card que estava
   // aberto, nao para o proximo.
@@ -13586,11 +14114,12 @@ function mSprintRender(m) {
       ? opt(atual, SPRINTPO.rotuloCurto(atual) + (fechada ? ' · fechada' : ' · anterior')) : '') +
     ops.map(o => opt(o.valor, o.rotulo + ' · ' + o.nota)).join('');
   sel.value = atual;
-  const souPO = !_eu || String(_eu.papel || 'admin') === 'admin';
+  // O dono da sprint, por conta — ver `SPRINTPO.ehDonoDaSprint` (02/11/2026).
+  const souPO = SPRINTPO.ehDonoDaSprint(_eu);
   // Sprint fechada não entra nem sai: o campo mostra, e não deixa mexer.
   sel.disabled = !souPO || fechada;
   sel.title = fechada ? 'Sprint fechada — a demanda não sai mais dela.'
-            : !souPO ? 'Só o PM/PO escolhe a sprint.' : '';
+            : !souPO ? 'Só o Fernando (PM/PO) escolhe a sprint.' : '';
   mSprintAviso();
 }
 
@@ -13671,7 +14200,7 @@ function mGrillRender(m) {
     est.innerHTML = selo('pendente', 'aguardando o dev') +
       'Aparece no painel dele com o visual de Grill. Ele responde ' +
       '<b>entendi</b> — e a demanda vai para Planning — ou <b>tenho dúvidas</b>, ' +
-      'e ela vai para Levantar Requisitos com os pontos escritos aqui embaixo.';
+      'e ela vai para Em aprovação de requisitos com os pontos escritos aqui embaixo.';
   } else if (e === 'ok') {
     est.innerHTML = selo('ok', 'entendido') +
       'O dev leu e não tem dúvida' + (g.respondido_por ? ' — ' + esc(g.respondido_por) : '') + '.';
@@ -14204,10 +14733,24 @@ async function saveMelhoria() {
   if (btnSalvar && btnSalvar.disabled) return;
   const titulo = document.getElementById('m-titulo').value.trim();
   const temaId = resolveTemaSelecao('m', document.getElementById('m-id').value ? (state.melhorias.find(x => x.id === document.getElementById('m-id').value)||{}).tema_id : '');
-  const sp     = document.getElementById('m-status').value; // agora é o status_planejamento
+  let sp       = document.getElementById('m-status').value; // agora é o status_planejamento
+  /* QUEM NÃO É DONO DA SPRINT SÓ ABRE NO BACKLOG (02/11/2026). Demanda NOVA;
+     a edição segue as regras de sempre. O servidor faz o mesmo. */
+  if (!document.getElementById('m-id').value && !SPRINTPO.ehDonoDaSprint(_eu) && sp !== 'backlog') {
+    sp = 'backlog';
+    toast('Demanda aberta no Backlog — só o PM/PO coloca em outra etapa e na sprint.', 'ok');
+  }
   const tipo   = document.getElementById('m-tipo').value;
   if (!titulo) { toast('Informe o título.', 'err'); return; }
   if (!tipo) { toast('Selecione o tipo: Sustentação ou Evolução.', 'err'); return; }
+  /* IMPACTO E URGÊNCIA SÃO DA ABERTURA, e só dela: as demandas antigas não os
+     têm, e cobrar em toda gravação prenderia quem só corrige um texto. */
+  if (!document.getElementById('m-id').value &&
+      (!document.getElementById('m-impacto').value || !document.getElementById('m-urgencia').value)) {
+    toast('Informe o impacto e a urgência da demanda.', 'err');
+    document.getElementById(document.getElementById('m-impacto').value ? 'm-urgencia' : 'm-impacto').focus();
+    return;
+  }
   // O modelo NAO bloqueia a gravacao. Ele bloqueava, e atrapalhou: abrir uma task
   // exigia preencher seis secoes antes de gravar qualquer coisa, inclusive quando a
   // pessoa so queria registrar a demanda e detalhar depois. Bloqueio aqui e so para
@@ -14309,6 +14852,11 @@ async function saveMelhoria() {
     estimativa:          existing.estimativa || '',
     dev:                 getDevValue(),
     prioridade:          prioridade,
+    impacto:             document.getElementById('m-impacto').value,
+    urgencia:            document.getElementById('m-urgencia').value,
+    /* O CASO DE USO vem do painel (`_cuEdit`), que guarda o que foi enviado e
+       a resposta; sem mexer, repassa o que existe — o Worker abre e fecha. */
+    caso_uso:            _cuEdit || existing.caso_uso || undefined,
     discovery:           discovery,
     solicitante:         document.getElementById('m-solicitante').value.trim(),
     // O endereco de quem pediu, para o aviso pelo AXCred. Vazio quando o nome
@@ -16213,6 +16761,15 @@ async function valDecidir(aprovar, obs, idExplicito) {
       return;
     }
   }
+  /* APROVAR E CONCLUIR, e concluir exige sprint (02/11/2026) — a mesma regra do
+     arraste e do modal (`SPRINTPO.travaDeAlocacao`); o servidor recusa igual. */
+  if (aprovar && window.SPRINTPO) {
+    const trvA = SPRINTPO.travaDeAlocacao(m, m.status_planejamento, 'concluido', PRAZO.hojeISO());
+    if (trvA.trava) {
+      levaAoCampo(id, 'm-sprint', trvA.motivo);
+      return;
+    }
+  }
   if (aprovar && gestoSemDev(m, 'concluido', m.dev)) {
     /* `levaAoCampo` porque aprovar tambem acontece pelo BOTAO DO CARD, com o
        modal fechado — ali um `focus()` no campo nao acha elemento nenhum e a
@@ -16463,7 +17020,7 @@ async function pjAprovSalvar(p, msg) {
 // A marca existe para isso aparecer no card, em vez de sair no relatorio do mes
 // como capacidade que nunca foi medida.
 //
-// Backlog, Levantar Requisitos e Planning ficam de fora de proposito: nessas
+// Backlog, Em aprovação de requisitos e Planning ficam de fora de proposito: nessas
 // etapas a demanda ainda nao foi estimada porque ainda nao chegou a hora.
 const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao_area',
                               'validacao', 'concluido'];
@@ -16529,7 +17086,178 @@ function renderProjetos() {
     if (rb.atrasadas !== ra.atrasadas) return rb.atrasadas - ra.atrasadas;
     return rb.pct - ra.pct;
   });
-  box.innerHTML = '<div class="pj-grid">' + ordenados.map(pjCardHTML).join('') + '</div>';
+  const andamento = ordenados.filter(pjEmAndamento);
+  const seletor = '<div class="pj-visao">' +
+    '<button type="button" class="' + (_pjVisao === 'andamento' ? 'on' : '') + '" onclick="pjVisao(\'andamento\')">' +
+      '🚧 Em andamento (' + andamento.length + ')</button>' +
+    '<button type="button" class="' + (_pjVisao === 'todos' ? 'on' : '') + '" onclick="pjVisao(\'todos\')">' +
+      'Todos (' + ps.length + ')</button></div>' +
+    (andamento.length
+      ? '<button type="button" class="btn btn-secondary btn-sm" style="margin-left:10px;vertical-align:top"' +
+        ' onclick="imprimirProjetosAndamento(this)" title="Gera o PPT dos projetos em andamento">' +
+        '🖨 Imprimir - Projetos em andamento</button>'
+      : '');
+  if (_pjVisao === 'andamento') {
+    box.innerHTML = seletor + (andamento.length
+      ? '<p class="pj-hint">Projetos com demanda aberta na sprint atual (' +
+        esc(SPRINTPO.rotuloCurto(pjSprintAtual())) + ') ou numa sprint futura. ' +
+        'Só entram as atividades que têm data.</p>' + andamento.map(pjAndamentoHTML).join('')
+      : '<p class="pj-vazio">Nenhum projeto com demanda na sprint atual ou nas próximas.</p>');
+    return;
+  }
+  box.innerHTML = seletor + '<div class="pj-grid">' + ordenados.map(pjCardHTML).join('') + '</div>';
+}
+
+/* ═══ PROJETOS EM ANDAMENTO (03/11/2026) ═════════════════════════════════════
+ *
+ * "Quero uma visao dos projetos em andamento. Todo projeto que tiver task em
+ *  alguma sprint futura, quero visualizar a data da entrega e atividades ja
+ *  feitas e planejadas (so com data)."
+ *
+ * EM ANDAMENTO = projeto aprovado com demanda ABERTA na sprint de hoje ou numa
+ * posterior (a sprint do PO, `sprint_po`). A de hoje entra: e trabalho desta
+ * semana, e sem ela o projeto sumiria da visao justamente enquanto anda.
+ *
+ * SO COM DATA: feita entra pela data de conclusao (ou de entrega do dev);
+ * planejada, pela entrega ao usuario (ou a do dev). Sem data, nao ha o que pôr
+ * numa linha do tempo — e ela continua no projeto, na visao "Todos". */
+let _pjVisao = 'andamento';
+function pjVisao(v) { _pjVisao = v === 'todos' ? 'todos' : 'andamento'; renderProjetos(); }
+
+// S1-11-2026 -> 2026 11 1: ano, mes e semana, comparaveis como texto.
+const pjChaveSprint = r => { const s = String(r || ''); return s.slice(6, 10) + s.slice(3, 5) + s.slice(1, 2); };
+const pjSprintAtual = () => SPRINTPO.sprintCorrente(PRAZO.hojeISO(), state.feriados || []);
+const pjAberta = m => !ehMesclada(m) && !['concluido', 'negada'].includes(statusKey(m));
+
+function pjNaSprintAtualOuFutura(m) {
+  const sp = SPRINTPO.doPO(m);
+  return !!sp && pjAberta(m) && pjChaveSprint(sp) >= pjChaveSprint(pjSprintAtual());
+}
+function pjEmAndamento(p) {
+  return pjAprovado(p) && pjDemandas(p.id).some(pjNaSprintAtualOuFutura);
+}
+
+/* "Diferencie planejado e em andamento": o trabalho comecado (em andamento e
+   as validacoes, que ja tem entrega do dev) separado do que ainda vai comecar
+   (planejado e, com data, Planning, requisitos e Backlog). */
+const PJ_EM_ANDAMENTO = ['em_andamento', 'validacao_area', 'validacao'];
+const PJ_ETAPA_ROT = { validacao_area: 'Val. área', validacao: 'Val. PM/PO',
+                       planning: 'Planning', levantar_req: 'Aprov. req.', backlog: 'Backlog' };
+
+/* OS DADOS DE UM PROJETO EM ANDAMENTO — a tela e o PPT leem DAQUI, e nao cada
+   um a sua conta: um projeto impresso com numeros diferentes dos da tela seria
+   o slide perdendo a credibilidade da tela.
+   Feita entra pela data de conclusao. Aberta entra se tem alguma data de
+   entrega; a que aparece e a do USUARIO ("retire a coluna entrega dev"), e a do
+   dev so desempata a ordem e decide se ela entra. */
+function pjAndamentoDados(p) {
+  const ms = pjDemandas(p.id).filter(m => !ehMesclada(m));
+  const ehDia = v => /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const feitas = ms.filter(m => statusKey(m) === 'concluido')
+    .map(m => ({ m, data: String(m.concluido_em || m.entregue_em || '').slice(0, 10) }))
+    .filter(x => ehDia(x.data))
+    .sort((a, b) => b.data.localeCompare(a.data));
+  const abertas = ms.filter(pjAberta)
+    .map(m => ({ m, dev: String(m.entrega || '').slice(0, 10), usu: String(m.entrega_usuario || '').slice(0, 10) }))
+    .filter(x => ehDia(x.dev) || ehDia(x.usu))
+    .sort((a, b) => (a.usu || '9999').localeCompare(b.usu || '9999') || (a.dev || '').localeCompare(b.dev || ''));
+  const andamento = abertas.filter(x => PJ_EM_ANDAMENTO.includes(statusKey(x.m)));
+  const planejado = abertas.filter(x => !PJ_EM_ANDAMENTO.includes(statusKey(x.m)));
+  // A ENTREGA DO PROJETO: a data dele, se o PM a pos; senao a ultima ao usuario.
+  let entrega = '', fonte = '';
+  const usus = abertas.map(x => x.usu).filter(ehDia).sort();
+  if (ehDia(String(p.fim || '').slice(0, 10))) { entrega = String(p.fim).slice(0, 10); fonte = 'data do projeto'; }
+  else if (usus.length) { entrega = usus[usus.length - 1]; fonte = 'última entrega planejada'; }
+  return { feitas, andamento, planejado, entrega, fonte,
+           naSprint: ms.filter(pjNaSprintAtualOuFutura).length };
+}
+
+function pjAndamentoHTML(p) {
+  const d = pjAndamentoDados(p);
+  const hoje = PRAZO.hojeISO();
+  const entregaHTML = d.entrega
+    ? '<span class="pj-and-entrega' + (d.entrega < hoje ? ' venc' : '') + '">🏁 Entrega: <strong>' +
+      esc(formatDate(d.entrega)) + '</strong> <em>(' + d.fonte + ')</em></span>'
+    : '<span class="pj-and-entrega sem">🏁 Entrega: a definir</span>';
+
+  const dataCel = (v, venc, dica) => /^\d{4}-\d{2}-\d{2}$/.test(v)
+    ? '<span class="pj-and-data' + (venc ? ' venc' : '') + '" title="' + dica + '">' + esc(formatDate(v)) + '</span>'
+    : '<span class="pj-and-data sem" title="' + dica + '">—</span>';
+  const linha = (x, tipo) => {
+    const m = x.m, sp = SPRINTPO.doPO(m);
+    const abre = '<li onclick="openModalMelhoria(' + JSON.stringify(m.id).replace(/"/g, '&quot;') + ')"' +
+      ' title="' + esc((m.codigo ? m.codigo + ' · ' : '') + m.titulo) + '">';
+    const tit = '<span class="pj-and-tit">' + (m.codigo ? '<b>' + esc(m.codigo) + '</b> ' : '') + esc(m.titulo || '') + '</span>';
+    if (tipo === 'feita') return abre + dataCel(x.data, false, 'Concluída em') + tit + '</li>';
+    /* A ETAPA SO APARECE QUANDO NAO E A DA COLUNA: em "Em andamento" a que esta
+       em validacao, em "Planejado" a que ainda esta em Planning ou Backlog. */
+    const et = statusKey(m);
+    const tag = et !== tipo && PJ_ETAPA_ROT[et]
+      ? '<span class="pj-and-etapa">' + PJ_ETAPA_ROT[et] + '</span>' : '';
+    // A DATA NA FRENTE DA SPRINT: entrega ao usuario e, colada nela, a sprint.
+    return abre + tit + tag +
+      '<span class="pj-and-usu">' + dataCel(x.usu, x.usu && x.usu < hoje, 'Entrega ao usuário') +
+        // O CHIP PADRAO DA SPRINT, com a cor dela — o mesmo do Kanban e da lista.
+        (sp ? SPRINTPO.badge(m, 'kb-sprint')
+            : '<span class="pj-and-sp sem" title="Fora de sprint">—</span>') + '</span>' +
+      '</li>';
+  };
+  const cab = tipo => tipo === 'feita'
+    ? '<div class="pj-and-cab"><span>Concluída em</span><span>Demanda</span></div>'
+    : '<div class="pj-and-cab"><span class="pj-and-cab-dem">Demanda</span><span>Entrega usuário · Sprint</span></div>';
+  const coluna = (titulo, itens, tipo, vazio) =>
+    '<div class="pj-and-col"><div class="pj-and-col-tit">' + titulo + ' <span>(' + itens.length + ')</span></div>' +
+    (itens.length ? cab(tipo) + '<ul>' + itens.map(x => linha(x, tipo)).join('') + '</ul>'
+                  : '<p class="pj-and-vazio">' + vazio + '</p>') + '</div>';
+
+  return '<div class="pj-and">' +
+    '<div class="pj-and-topo" onclick="pjAbrir(' + JSON.stringify(p.id).replace(/"/g, '&quot;') + ')">' +
+      (p.codigo ? '<span class="pj-cod">' + esc(p.codigo) + '</span>' : '') +
+      '<span class="pj-nome">' + esc(p.nome || '(sem nome)') + '</span>' +
+      (p.responsavel ? '<span class="pj-and-resp">👤 ' + esc(p.responsavel) + '</span>' : '') +
+      '<span class="pj-and-nsp">🏃 ' + d.naSprint + ' na sprint atual/próximas</span>' +
+      entregaHTML +
+    '</div>' +
+    '<div class="pj-and-cols">' +
+      coluna('✅ Feitas', d.feitas, 'feita', 'Nenhuma concluída com data.') +
+      coluna('🚧 Em andamento', d.andamento, 'em_andamento', 'Nada em andamento com data.') +
+      coluna('📅 Planejado', d.planejado, 'planejado', 'Nada planejado com data.') +
+    '</div>' +
+  '</div>';
+}
+
+/* IMPRIMIR — PROJETOS EM ANDAMENTO. Mesmo estilo da folha de aprovacao de
+   requisitos (`projetos-ppt.js`), com os mesmos dados desta tela. */
+async function imprimirProjetosAndamento(botao) {
+  if (!window.PROJETOSPPT) { toast('O gerador do PPT não carregou. Recarregue a página (Ctrl+F5).', 'err'); return; }
+  const temaNome = {};
+  (state.temas || []).forEach(t => { temaNome[t.id] = t.nome || ''; });
+  const sm = m => (temaNome[m.tema_id] || '').split(' - ').map(s => s.trim()).filter(Boolean).join(' › ');
+  const linha = (x, data) => {
+    const sp = SPRINTPO.doPO(x.m);
+    return { codigo: x.m.codigo || '', titulo: x.m.titulo || '', sistema: sm(x.m),
+             etapa: STATUS_LABELS[statusKey(x.m)] || statusKey(x.m), data,
+             sprint: sp ? SPRINTPO.rotuloCurto(sp) : '',
+             cor: sp && SPRINTPO.corDaSprint ? (SPRINTPO.corDaSprint(sp) || '') : '' };
+  };
+  const projetos = pjLista().filter(pjEmAndamento).map(p => {
+    const d = pjAndamentoDados(p);
+    return { codigo: p.codigo || '', nome: p.nome || '', responsavel: p.responsavel || '',
+             entrega: d.entrega, fonte: d.fonte, naSprint: d.naSprint,
+             feitas: d.feitas.map(x => linha(x, x.data)),
+             andamento: d.andamento.map(x => linha(x, x.usu)),
+             planejado: d.planejado.map(x => linha(x, x.usu)) };
+  });
+  const rot = botao ? botao.textContent : '';
+  if (botao) { botao.disabled = true; botao.textContent = '⏳ Gerando…'; }
+  try {
+    const r = await PROJETOSPPT.gera(projetos, { hoje: PRAZO.hojeISO(), sprint: SPRINTPO.rotuloCurto(pjSprintAtual()) });
+    toast('🖨 PPT gerado: ' + r.projetos + ' projeto(s) em andamento.', 'ok');
+  } catch (e) {
+    toast('Não foi possível gerar o PPT: ' + ((e && e.message) || e), 'err');
+  } finally {
+    if (botao) { botao.disabled = false; botao.textContent = rot; }
+  }
 }
 
 function pjAba(qual) {

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="0ae03d0408">
+<html lang="pt-BR" data-build="4f88a9b72b">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -574,6 +574,16 @@
       background:var(--teal-bg); border:1px solid rgba(var(--tl-rgb),.45);
       border-radius:5px; padding:1px 6px; cursor:help; }
     .kcard-meta  { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; font-size:11px; color:var(--text3); }
+    /* FILA x NO SEU NOME (03/11/2026): "deixe mais claro o que é fila e o que
+       está no nome da pessoa. Os devs estão se confundindo." O card que NÃO é
+       do dev ganha borda tracejada, fundo apagado e uma faixa no topo dizendo
+       de quem é; o que é dele ganha a marca "no seu nome". */
+    .kcard.kcard-fila { border-style:dashed; border-color:#2E6E88; background:rgba(18,58,82,.25); }
+    .kcard-dono { font-size:10px; font-weight:700; letter-spacing:.3px; text-transform:uppercase;
+      border-radius:5px; padding:3px 7px; margin:-2px 0 8px; display:inline-block; }
+    .kcard-dono.fila { color:var(--cyan-tx,#8AD5F0); background:var(--cyan-bg,#123A52); border:1px solid #2E6E88; }
+    .kcard-dono.outro { color:var(--text2); background:var(--bg3); border:1px dashed var(--border2,#555); }
+    .kcard-dono.meu { color:var(--green-tx,#8FE0A8); background:rgba(46,139,87,.15); border:1px solid rgba(46,139,87,.5); }
     .kcard-meta span { display:flex; align-items:center; gap:3px; }
     .kcard-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; display:inline-block; }
     .kcard-actions { display:flex; gap:6px; margin-top:8px; border-top:1px solid var(--border); padding-top:8px; }
@@ -718,7 +728,7 @@
   <script src="subtarefa.js?v=23179d9523"></script>
   <script src="bis.js?v=735ed4e46d"></script>
   <script src="referencia.js?v=1750882d31"></script>
-  <script src="grill.js?v=c85bb8b63f"></script>
+  <script src="grill.js?v=cffd670be6"></script>
   <script src="abertura.js?v=8ef3cc419d"></script>
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="prevoo.js?v=ab2758c54c"></script>
@@ -751,9 +761,10 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=495432df68"></script>
+<script src="sprint.js?v=d64ea6d269"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
+<script src="requisitos.js?v=1987238fe2"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
@@ -930,6 +941,17 @@
     <select id="f-sprint" class="filter-select" onchange="renderKanban()"
             title="Mostra só o que o PM/PO repassou para a sprint escolhida.">
       <option value="">Todas</option>
+    </select>
+    <div class="filter-sep"></div>
+    <!-- O QUE E SEU E O QUE E FILA. "No meu nome" = demandas com o seu nome no
+         responsavel; "Fila do time" = sem dono (qualquer um pode pegar) ou
+         do time a caminho da sprint, com outra pessoa. -->
+    <label>Mostrar:</label>
+    <select id="f-dono" class="filter-select" onchange="renderKanban()"
+            title="Separa as demandas no seu nome das que estão na fila do time.">
+      <option value="">No meu nome + fila do time</option>
+      <option value="meu">👤 Só no meu nome</option>
+      <option value="fila">📥 Só a fila do time</option>
     </select>
     <div class="filter-sep"></div>
     <button id="f-limpar" class="btn btn-secondary btn-sm" onclick="limparFiltrosDev()">Limpar</button>
@@ -1195,7 +1217,7 @@
          formulário faria o dev responder na semana seguinte.
 
          AS DUAS SAÍDAS SÃO O DESTINO: "entendi" manda para Planning, "tenho
-         dúvidas" manda para Levantar Requisitos com os pontos escritos. Por
+         dúvidas" manda para Em aprovação de requisitos com os pontos escritos. Por
          isso elas são botões, e não mais uma opção do "Mover para" — a lista de
          lá é do fluxo normal, e misturar faria o dev escolher Planning à toa. -->
     <div id="ms-grill" style="display:none"></div>
@@ -1405,6 +1427,16 @@
           <option value="sustentacao">Sustentação (Erro/Bug)</option>
           <option value="evolucao">Evolução (Melhoria)</option>
         </select>
+      </div>
+      <!-- IMPACTO E URGÊNCIA (03/11/2026): pedidos na abertura, seguem a demanda
+           pela esteira inteira — ver `requisitos.js`. -->
+      <div class="form-group">
+        <label>Impacto *</label>
+        <select id="n-impacto"></select>
+      </div>
+      <div class="form-group">
+        <label>Urgência *</label>
+        <select id="n-urgencia"></select>
       </div>
       <div class="form-group">
         <label>Quem pediu <span style="color:var(--red)">*</span> <small style="font-weight:400;color:var(--text3)">— é quem confere a entrega</small></label>
@@ -2731,7 +2763,7 @@ const prodNum = n => Number.isInteger(n) ? String(n) : String(Math.round(n * 10)
 // A marca existe para isso aparecer no card, em vez de sair no relatorio do mes
 // como capacidade que nunca foi medida.
 //
-// Backlog, Levantar Requisitos e Planning ficam de fora de proposito: nessas
+// Backlog, Em aprovação de requisitos e Planning ficam de fora de proposito: nessas
 // etapas a demanda ainda nao foi estimada porque ainda nao chegou a hora.
 const ETAPAS_COMPROMETIDAS = ['planejado', 'em_andamento', 'validacao_area',
                               'validacao', 'concluido'];
@@ -3298,7 +3330,7 @@ const STATUS_POR_ETAPA = {
 const statusDaEtapa = (e) => STATUS_POR_ETAPA[e] || 'recebida';
 
 const STATUS_LABELS = {
-  backlog:'Backlog', levantar_req:'Levantar Req.', planejado:'Planejado',
+  backlog:'Backlog', levantar_req:'Aprov. requisitos', planejado:'Planejado',
   planning:'Planning', em_andamento:'Em Andamento',
   validacao_area:'Validação da área', validacao:'Em validação',
   concluido:'Concluído', atrasado:'Atrasado', negada:'Negada'
@@ -4631,6 +4663,9 @@ function getFiltered() {
                                           SPRINTPO.naVitrine(m, getStatusKey(m)))) &&
                    doMeuTime(m);
     if (!meu && !doTime) return false;
+    const fDono = document.getElementById('f-dono')?.value || '';
+    if (fDono === 'meu' && !meu) return false;
+    if (fDono === 'fila' && meu) return false;
     if (_temaFilter && m.tema_id !== _temaFilter) return false;
     const fTipo = document.getElementById('f-tipo')?.value || '';
     if (fTipo === '__sem_tipo__') { if (m.tipo) return false; }
@@ -4775,7 +4810,7 @@ function renderCard(m, colKey) {
       'demanda entrar no planejamento. Abra e responda."><i class="axi axi-flame"></i> Grill — dê seu parecer</div>'
     : '';
   return `
-    <div class="kcard prazo-${prazoNivel(m)}${grillEst === 'pendente' ? ' kcard-grill-on' : ''}${
+    <div class="kcard prazo-${prazoNivel(m)}${DEVNOME.eDe(m, currentDev) ? '' : ' kcard-fila'}${grillEst === 'pendente' ? ' kcard-grill-on' : ''}${
            window.NAOPUBLICADA && NAOPUBLICADA.tem(m.id) ? ' nao-pub-card' : ''}" draggable="true" id="card-${m.id}"
          ondragstart="onDragStart(event,'${m.id}')"
          ondragend="onDragEnd(event)"
@@ -4787,6 +4822,12 @@ function renderCard(m, colKey) {
         ? '<div class="kcard-naopub" title="A gravação falhou. Esta demanda só existe nesta tela — ' +
           'ela some se você recarregar a página, e ninguém mais a enxerga."><i class="axi axi-alert"></i> NÃO GRAVADA</div>' : ''}
       ${grillFaixa}
+      ${/* DE QUEM E — ver a nota de `.kcard-fila`. */''}
+      ${DEVNOME.eDe(m, currentDev)
+        ? '<div class="kcard-dono meu" title="Esta demanda está no seu nome: você é o responsável.">👤 No seu nome</div>'
+        : String(m.dev || '').trim()
+          ? '<div class="kcard-dono outro" title="Não está no seu nome — aparece para o time porque está na sprint. Quem responde é ' + escAttr(m.dev) + '.">👥 Do time · com ' + escAttr(m.dev) + '</div>'
+          : '<div class="kcard-dono fila" title="Fila do time: está na sprint e ainda não tem dono. Qualquer um pode pegar — combine antes de começar.">📥 Fila do time · sem dono</div>'}
       ${parentInfo}
       ${estaPausado(m) ? `<div class="kcard-prazo pausada" title="${devEsc(m.pausa_motivo || '')}"><i class="axi axi-pause"></i> Pausada há ${diasPausadoAgora(m)} dia(s) · entrega suspensa</div>` : ''}
       ${!estaPausado(m) && ['hoje','amanha'].includes(prazoNivel(m)) ? `<div class="kcard-prazo ${prazoNivel(m)}">${prazoNivel(m)==='hoje'?'<i class="axi axi-alert"></i> vence hoje':'<i class="axi axi-clock"></i> vence amanhã'}</div>` : ''}
@@ -4841,6 +4882,7 @@ function renderCard(m, colKey) {
             tivesse sido alocada a ele e dois começam a mesma coisa. */''}
       <div class="kcard-rodape">${badge}${
         window.SPRINTPO ? SPRINTPO.badge(m, 'kcard-sprint') : ''}${
+        window.REQUISITOS ? REQUISITOS.chips(m) : ''}${
         (window.SPRINTPO && SPRINTPO.naPoolDoTime(state, m))
           ? '<span class="kcard-pool" title="Está na sprint e ainda não tem dono. Qualquer um do time pode pegar — avise antes de começar."><i class="axi axi-users"></i> sem dono</span>'
           : ''}${
@@ -5054,6 +5096,9 @@ async function saveNewDep() {
     id: uid(), titulo, descricao: desc, dev,
     tema_id: parent.tema_id,
     tipo: parent.tipo || '',   // dependência herda a classificação do card pai
+    // ...e o impacto e a urgência: o vínculo não tem exigências próprias.
+    impacto: parent.impacto || '',
+    urgencia: parent.urgencia || '',
     entrega,
     parent_id: parentId,
     /* `is_dependency` É O TIPO DO ELO, e não "existe elo" — `parent_id` já diz
@@ -5669,7 +5714,7 @@ let _msSolicitanteMexido = false;
  *
  * DUAS SAÍDAS, E CADA UMA É UM DESTINO:
  *   ENTENDI       → Planning
- *   TENHO DÚVIDAS → Levantar Requisitos, com os pontos escritos
+ *   TENHO DÚVIDAS → Em aprovação de requisitos, com os pontos escritos
  *
  * São BOTÕES, e não opções do "Mover para". A lista de lá é do fluxo normal do
  * dev (começar, entregar); pôr Planning nela faria qualquer demanda poder ir
@@ -5705,13 +5750,13 @@ function msGrillRender(m) {
     '<div class="ms-grill-tit"><i class="axi axi-flame"></i> Grill — dê seu parecer antes do planejamento</div>' +
     '<div class="ms-grill-txt">Leia a demanda acima. Se faltar alguma coisa para você ' +
     'conseguir estimar e executar, escreva os pontos — <b>uma dúvida por linha</b>. ' +
-    'Ela volta para Levantar Requisitos com o que você perguntou. Se estiver claro, ' +
+    'Ela volta para Em aprovação de requisitos com o que você perguntou. Se estiver claro, ' +
     'ela segue para o Planning.</div>' +
     jaPerguntou +
     '<textarea id="ms-grill-pontos" rows="3" placeholder="Ex.: De onde vem o valor do limite?&#10;O que acontece quando o cedente tem dois contratos?"></textarea>' +
     '<div class="ms-grill-acoes">' +
     '<button type="button" class="btn btn-secondary btn-sm" onclick="msGrillResponde(\'duvida\')">' +
-    'Tenho dúvidas → Levantar Req.</button>' +
+    'Tenho dúvidas → Aprov. requisitos</button>' +
     '<button type="button" class="btn btn-primary btn-sm" onclick="msGrillResponde(\'ok\')">' +
     'Entendi → Planning</button>' +
     '</div></div>';
@@ -5763,7 +5808,7 @@ async function msGrillResponde(veredito) {
   toast(veredito === 'ok'
     ? 'Parecer registrado — a demanda seguiu para o Planning.'
     : pontos.length + (pontos.length === 1 ? ' dúvida enviada' : ' dúvidas enviadas') +
-      ' — a demanda voltou para Levantar Requisitos.', 'ok');
+      ' — a demanda voltou para Em aprovação de requisitos.', 'ok');
 }
 
 /** O projeto de um card, aberto pelo chip EP-XXX.
@@ -6331,9 +6376,16 @@ async function saveStatus() {
       document.getElementById('ms-horas').focus();
       return;
     }
+    /* E O TEXTO TAMBEM (02/11/2026): vencidos os 5 dias uteis da area, a demanda
+       vai sozinha para o PM/PO — o que ele le precisa estar preenchido aqui. */
     const impl = document.getElementById('ms-implementacao').value.trim();
+    if (!impl) {
+      toast('Descreva o que foi implementado — a área e o PM/PO validam por este texto.', 'err');
+      document.getElementById('ms-implementacao').focus();
+      return;
+    }
     closeModal('modal-status');
-    await updateStatus(id, newColKey, horas, impl || undefined);
+    await updateStatus(id, newColKey, horas, impl);
     return;
   }
   if (newColKey === 'validacao') {
@@ -6374,6 +6426,14 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   const implAnterior = m.implementacao;
   const projAnterior = m.projeto_id;
   const anexosAnterior = m.anexos;
+  const devAnterior = m.dev;
+  /* QUEM PEGA DA FILA VIRA O DONO (03/11/2026). A Marina puxou a AX-1144 da
+     fila do time para Em andamento e ela sumiu: a etapa mudou, o responsável
+     ficou vazio, e demanda em andamento sem dono não está na fila (que é de
+     quem ainda não começou) nem no nome de ninguém. Começar é pegar — o nome
+     de quem moveu entra junto. O `dev-publish` recusa o caso que escapar. */
+  const assumiu = ETAPAS_DO_DEV.includes(colKey) && !String(m.dev || '').trim() && !!currentDev;
+  if (assumiu) m.dev = currentDev;
   // DELEGA — ver `STATUS_POR_ETAPA`, que era escrito duas vezes.
   // Atualiza localmente (otimista)
   m.status_planejamento = colKey;
@@ -6430,6 +6490,7 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
   Object.assign(m, ghLinks);
   const campos = Object.assign({ status_planejamento: colKey, status: m.status,
                    horas_realizadas: m.horas_realizadas || 0 }, ghLinks);
+  if (assumiu) campos.dev = m.dev;
   if (m.entregue_em) campos.entregue_em = m.entregue_em;
   if (implementacao !== undefined) campos.implementacao = implementacao;
   if (_msAnexosMexidos) campos.anexos = _msAnexos;
@@ -6458,8 +6519,10 @@ async function updateStatus(id, colKey, horasRealizadas, implementacao) {
     m.implementacao = implAnterior;
     m.anexos = anexosAnterior;
     m.projeto_id = projAnterior;
+    m.dev = devAnterior;
     renderKanban();
   } else {
+    if (assumiu) toast('👤 ' + (m.codigo || 'Demanda') + ' agora está no seu nome.', 'ok');
     _msAnexosMexidos = false;
     _msProjetoMexido = false;
   }
@@ -6498,7 +6561,7 @@ function nProjetoMudou() {
   // escolhido — regra certa para demanda NOVA (demanda de projeto e dimensionada no
   // planning junto das outras), e errada para demanda que ja esta andando.
   //
-  // Foi o que tirou AX-195 de Levantar Requisitos as 16:52 de 17/08: quem vinculou
+  // Foi o que tirou AX-195 de Em aprovação de requisitos as 16:52 de 17/08: quem vinculou
   // ao EP-003 nao pediu para voltar ao Backlog, e o campo ficava desabilitado, sem
   // como corrigir na mesma tela. A demanda "sumiu" da coluna onde estava.
   const editando = !!(document.getElementById('n-id') || {}).value;
@@ -6513,7 +6576,8 @@ function nProjetoMudou() {
         'dimensionada no planning junto das outras do mesmo projeto. Depois disso ela ' +
         'aparece na aba Projetos com a pontuação.';
   } else {
-    if (etapa) etapa.disabled = false;
+    // Demanda NOVA fica travada no Backlog (02/11/2026); so a edicao libera a etapa.
+    if (etapa) etapa.disabled = !editando;
     aviso.style.display = 'none';
   }
 }
@@ -6553,12 +6617,16 @@ function openNewModal() {
   document.getElementById('n-entrega').value = '';
   travaDatasNoCard(null);   // demanda nova: datas liberadas
   document.getElementById('n-tipo').value = '';
+  document.getElementById('n-impacto').innerHTML = REQUISITOS.opcoes('impacto', '');
+  document.getElementById('n-urgencia').innerHTML = REQUISITOS.opcoes('urgencia', '');
   document.getElementById('n-solicitante').value = '';
   _nAnexos = [];
   document.getElementById('n-file').value = '';
   nRenderAnexos();
   resetStatusOptions();
-  document.getElementById('n-status').value = 'planejado';
+  // Demanda nova nasce no Backlog e o campo fica travado (ver `saveNewDemand`).
+  document.getElementById('n-status').value = 'backlog';
+  document.getElementById('n-status').disabled = true;
   // Projeto: lista os aprovados e reabilita a etapa, caso a abertura anterior a
   // tenha travado em Backlog por ter projeto escolhido.
   document.getElementById('n-projeto').value = '';
@@ -6607,6 +6675,7 @@ function openEditDemand(id) {
     sel.innerHTML += `<option value="${sk}">${STATUS_LABELS[sk] || sk}</option>`;
   }
   sel.value = sk;
+  sel.disabled = false;   // a trava do Backlog e so da demanda nova
   // O projeto do card, e a lista para trocar. Sem isto o campo abria vazio mesmo em
   // demanda vinculada, e quem olhasse concluiria que o vinculo nao existe.
   nPopulaProjetos();
@@ -6722,6 +6791,12 @@ async function saveNewDemand() {
   const tipoSel = document.getElementById('n-tipo').value;
   if (!tipoSel) { toast('Diga se é problema (Erro/Bug) ou melhoria.','err');
                   document.getElementById('n-tipo').focus(); return; }
+  const impSel = document.getElementById('n-impacto').value;
+  const urgSel = document.getElementById('n-urgencia').value;
+  if (!existing && (!impSel || !urgSel)) {
+    toast('Informe o impacto e a urgência da demanda.', 'err');
+    document.getElementById(impSel ? 'n-urgencia' : 'n-impacto').focus(); return;
+  }
   // O modelo nao bloqueia: ver o comentario equivalente no admin.html. Aqui pesa
   // mais ainda — quem abre a demanda pelo painel dev costuma estar no meio de outra
   // coisa, e travar o registro faz a demanda nao ser aberta.
@@ -6769,7 +6844,10 @@ async function saveNewDemand() {
       return;
     }
   }
-  const sp = document.getElementById('n-status').value;
+  /* DEMANDA NOVA SÓ NASCE NO BACKLOG (02/11/2026): "qualquer dev só consegue
+     abrir demanda para cair no backlog". A edição segue as regras de sempre;
+     o servidor força o mesmo (`nascendoForaDoBacklog`). */
+  const sp = editId ? document.getElementById('n-status').value : 'backlog';
   // DELEGA — ver `STATUS_POR_ETAPA`. Esta copia nao tinha `levantar_req`.
   const obj = {
     ...(existing || {}),
@@ -6779,6 +6857,8 @@ async function saveNewDemand() {
     descricao: document.getElementById('n-desc').value.trim(),
     dev: existing?.dev || currentDev,
     tipo: existing?.tipo || tipoSel,
+    impacto: impSel || existing?.impacto || '',
+    urgencia: urgSel || existing?.urgencia || '',
     /* O `|| currentDev` SAIU: a abertura agora exige o campo (ver acima), e o
        silencio virando o nome do dev fazia dele o homologador da propria
        entrega. Na EDICAO o que ja estava gravado continua valendo — inclusive

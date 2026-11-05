@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="f92a0b8a4f">
+<html lang="pt-BR" data-build="04f93fd79d">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -530,6 +530,25 @@
               <option value="evolucao">Evolução (Melhoria)</option>
             </select>
           </label>
+          <!-- IMPACTO E URGÊNCIA (03/11/2026): pedidos em toda abertura e
+               levados pela esteira inteira — ver `requisitos.js`. O id não é
+               `nm-impacto`, que já é o texto "o que muda na sua rotina". -->
+          <label class="nm-f">Impacto *
+            <select id="nm-nivel-impacto">
+              <option value="">— Selecione —</option>
+              <option value="baixo">Baixo</option>
+              <option value="medio">Médio</option>
+              <option value="alto">Alto</option>
+            </select>
+          </label>
+          <label class="nm-f">Urgência *
+            <select id="nm-urgencia">
+              <option value="">— Selecione —</option>
+              <option value="baixa">Baixa</option>
+              <option value="media">Média</option>
+              <option value="alta">Alta</option>
+            </select>
+          </label>
           <label class="nm-f">Área do solicitante <span class="nm-opc">opcional</span>
             <select id="nm-area">
               <option value="">—</option>
@@ -696,7 +715,7 @@ const API_URL     = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/
 
 const STATUS_META = {
   backlog:      { label: 'Backlog',             cls: 'badge-recebida',     cor: '#3B8FE8' },
-  levantar_req: { label: 'Levantar Requisitos', cls: 'badge-levantar_req', cor: '#9B6FE8' },
+  levantar_req: { label: 'Em aprovação de requisitos', cls: 'badge-levantar_req', cor: '#9B6FE8' },
   planning:     { label: 'Planning',            cls: 'badge-planning',     cor: '#2BBFA0' },
   planejado:    { label: 'Planejado',           cls: 'badge-planejado',    cor: '#E89C2F' },
   em_andamento: { label: 'Em Andamento',        cls: 'badge-iniciada',     cor: '#FFE14D' },
@@ -974,7 +993,7 @@ function statusEfetivo(m) {
 const STATUS_CARDS = [
   { key:'total',        label:'Total',              cor:'var(--blue)' },
   { key:'backlog',      label:'Backlog',             cor:'var(--blue)' },
-  { key:'levantar_req', label:'Levantar Requisitos', cor:'#9B6FE8' },
+  { key:'levantar_req', label:'Em aprovação de requisitos', cor:'#9B6FE8' },
   { key:'planning',     label:'Planning',            cor:'#2BBFA0' },
   { key:'planejado',    label:'Planejado',           cor:'var(--blue)' },
   { key:'em_andamento', label:'Em Andamento',        cor:'#FFE14D' },
@@ -1579,7 +1598,7 @@ document.addEventListener('visibilitychange', () => {
 // ── EXPORTAR ──────────────────────────────────────────────────────────
 const STATUS_BADGE_PRINT = {
   backlog:      { label: 'Backlog',       bg: '#0C3260', color: '#9BC8F8' },
-  levantar_req: { label: 'Levantar req.', bg: '#341A6E', color: '#C9AEFF' },
+  levantar_req: { label: 'Aprov. requisitos', bg: '#341A6E', color: '#C9AEFF' },
   planning:     { label: 'Planning',      bg: '#0E3A3A', color: '#7ED8D8' },
   planejado:    { label: 'Planejado',     bg: '#5C3608', color: '#F9C97A' },
   em_andamento: { label: 'Em Andamento',  bg: '#3D3600', color: '#FFE14D' },
@@ -1948,6 +1967,8 @@ const NM_OBRIGATORIOS = [
   { id: 'nm-titulo',     nome: 'o resumo em uma linha' },
   { id: 'nm-tema',       nome: 'o sistema' },
   { id: 'nm-tipo-issue', nome: 'se é problema ou melhoria' },
+  { id: 'nm-nivel-impacto', nome: 'o impacto' },
+  { id: 'nm-urgencia',   nome: 'a urgência' },
   { id: 'nm-objetivo',   nome: 'para que serve' },
 ];
 
@@ -2227,6 +2248,8 @@ function openNovaMelhoria() {
   document.getElementById('nm-ganho-res').textContent = 'Preencha os dois campos acima';
   document.getElementById('nm-tipo').value = 'ganho'; nmOnTipo();
   document.getElementById('nm-tipo-issue').value = '';
+  document.getElementById('nm-nivel-impacto').value = '';
+  document.getElementById('nm-urgencia').value = '';
   nmPopulateSistema();
   document.getElementById('nm-listRF').innerHTML = '';
   document.getElementById('nm-listRN').innerHTML = '';
@@ -2350,6 +2373,12 @@ async function saveNovaMelhoria() {
   if (!document.getElementById('nm-tipo-issue').value) {
     nmFalha('nm-tipo-issue', 'Diga se é um problema (Erro/Bug) ou uma melhoria.'); return;
   }
+  if (!document.getElementById('nm-nivel-impacto').value) {
+    nmFalha('nm-nivel-impacto', 'Diga o impacto: baixo, médio ou alto.'); return;
+  }
+  if (!document.getElementById('nm-urgencia').value) {
+    nmFalha('nm-urgencia', 'Diga a urgência: baixa, média ou alta.'); return;
+  }
   if (!objetivo) { nmFalha('nm-objetivo', 'Explique para que serve.'); return; }
 
   const g = (id) => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
@@ -2367,6 +2396,8 @@ async function saveNovaMelhoria() {
     estimativa: '',
     status: 'recebida',
     tipo: g('nm-tipo-issue'),         // opcional aqui: o Admin classifica ao planejar
+    impacto: g('nm-nivel-impacto'),
+    urgencia: g('nm-urgencia'),
     status_planejamento: 'backlog',   // entra sempre no backlog
     criado_em: new Date().toISOString(),
     anexos: _nmAnexos,

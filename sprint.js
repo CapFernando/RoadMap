@@ -502,6 +502,19 @@
    *
    *  Devolve `{ trava, motivo }`. `trava: false` é o caminho normal — a função
    *  é chamada em TODA gravação do painel do dev, e o caso comum é passar.     */
+  /* O QUE CHEGOU À VALIDAÇÃO ANTES DO REGIME CONCLUI SEM SPRINT (03/11/2026).
+   * "Demandas que foram para validação atrasadas, sprint já fechada, não posso
+   *  fechar dentro da nova sprint. Sistema está me obrigando a fazer isso."
+   * A sprint delas já fechou e não aceita entrada; pôr na S1-11 só para
+   * concluir contaria na semana errada. Concluir exige sprint só para o que o
+   * dev ENTREGOU a partir do início da S1-11 — o resto é passado. Sem data de
+   * entrega também é passado: a entrega é carimbada desde antes do regime. */
+  var CONCLUIR_EXIGE_SPRINT_DESDE = '2026-11-02';
+  function entregueNoRegime(m) {
+    var e = iso((m || {}).entregue_em) || iso((m || {}).validacao_area_em);
+    return !!e && e >= CONCLUIR_EXIGE_SPRINT_DESDE;
+  }
+
   function travaDeAlocacao(m, etapaAntes, etapaDepois, hoje) {
     var dia = iso(hoje) || new Date().toISOString().slice(0, 10);
     if (dia < TRAVA_DESDE) return { trava: false };
@@ -514,9 +527,20 @@
        para impedir. Quem já está em andamento não é reexaminado. */
     var cruza = !posPlanning(etapaAntes);
     var comeca = txt(etapaDepois) === ETAPA_TRAVADA && txt(etapaAntes) !== ETAPA_TRAVADA;
-    if (!cruza && !comeca) return { trava: false };
+    /* A TERCEIRA FRONTEIRA (02/11/2026): CONCLUIR. "Sprint passa a ser
+       obrigatória para fechar, e apenas eu posso colocar. Bloqueante." Quem
+       chega em Concluído sem sprint fica fora de toda conta de sprint — é o que
+       fez a S5-10 fechar com 1 entrega numa semana de 141. */
+    var conclui = txt(etapaDepois) === 'concluido' && txt(etapaAntes) !== 'concluido' &&
+                  entregueNoRegime(m);
+    if (!cruza && !comeca && !conclui) return { trava: false };
     if (tipoLivre(m)) return { trava: false };
     if (doPO(m)) return { trava: false };
+    if (conclui && !cruza && !comeca) {
+      return { trava: true,
+               motivo: 'Para concluir, a demanda precisa estar numa sprint, e esta não está ' +
+                       'em nenhuma. Só o PM/PO marca a sprint — marque (ou peça) antes de concluir.' };
+    }
     return {
       trava: true,
       motivo: 'Depois da Planning a demanda precisa estar numa sprint, e esta não ' +
@@ -1548,6 +1572,18 @@
     return (o.dados && Array.isArray(o.dados.feriados)) ? o.dados.feriados : [];
   }
 
+  /* O DONO DA SPRINT (02/11/2026) — espelho de `ehDonoDaSprint` do Worker.
+   * "Somente eu consigo marcar a sprint que a demanda fará parte." Por CONTA
+   * (login), e não pelo papel admin, que é de oito pessoas. `eu` ausente é a
+   * senha administrativa compartilhada. A trava de verdade é do servidor; aqui
+   * é a cortesia de não oferecer o gesto a quem não pode. */
+  var SPRINT_DONOS = ['fernando'];
+  function ehDonoDaSprint(eu) {
+    if (!eu) return true;
+    if (txt(eu.papel) !== 'admin') return false;
+    return SPRINT_DONOS.indexOf(txt(eu.login).toLowerCase()) >= 0;
+  }
+
   /** O PM/PO REPASSA a demanda para uma sprint. */
   function repassar(m, sprint, quem, hoje, opts) {
     if (!m) return { ok: false, erro: 'Demanda não encontrada.' };
@@ -1725,6 +1761,8 @@
     travaDeAlocacao: travaDeAlocacao,
     proximasSprints: proximasSprints,
     podeRepassar: podeRepassar,
+    SPRINT_DONOS: SPRINT_DONOS,
+    ehDonoDaSprint: ehDonoDaSprint,
     repassar: repassar,
     retirar: retirar,
     nasceForaDaSprint: nasceForaDaSprint,

@@ -887,9 +887,31 @@ sec('Planning Poker: estrela no topo, e o convite na tela');
   /* `FILA_MARCADAS` entrou junto com o recorte pela MARCA, separado do recorte
      pela frente deduzida. Mais uma dependencia que estourou aqui porque este
      bloco executa a funcao de verdade. */
+  /* `pkNaFila` (e as tres que ela usa) entrou quando a fila passou a esconder o
+     que ja foi votado em outro dia — vai junto, pelo mesmo motivo dos stubs. */
+  const PK = ['function pkHoje(', 'function pkDiaDaVotacao(', 'function pkJaVotadaAntes(',
+              'function pkNaFila('].map(a => corpo(POKER, a)).join('\n');
   const F = new Function('_melhorias', '_estado', '_filaFrente', 'frenteDaDemanda',
     'FILA_MARCADAS',
-    corpo(POKER, 'function filaPlanning(') + ' return filaPlanning;');
+    PK + '\n' + corpo(POKER, 'function filaPlanning(') + ' return filaPlanning;');
+
+  /* ── O QUE JA FOI VOTADO SAI DA FILA, MENOS O DE HOJE (03/11/2026) ── */
+  {
+    const agora = new Date().toISOString();
+    const ontem = new Date(Date.now() - 2 * 86400000).toISOString();
+    const ms = [
+      { id: 'nova', status_planejamento: 'planning' },
+      { id: 'hoje', status_planejamento: 'planning', poker_pontos: 5, poker_votado_em: agora },
+      { id: 'antes', status_planejamento: 'planning', poker_pontos: 8, poker_votado_em: ontem },
+      { id: 'mao', status_planejamento: 'planning', poker_pontos: 3 },
+    ];
+    const ids = F(ms, null, '', () => '', '__m__')().map(m => m.id).join(',');
+    ok(ids === 'nova,hoje', 'a fila do poker so mostra o nao votado e o votado HOJE', ids);
+    const emPauta = F(ms, { melhoria_id: 'antes' }, '', () => '', '__m__')().map(m => m.id);
+    ok(emPauta.includes('antes'), 'mas a demanda EM PAUTA nunca sai, mesmo votada antes');
+    ok(/poker_votado_em: m\.poker_votado_em \|\| ''/.test(enx),
+       'o worker manda `poker_votado_em` para a tela do poker');
+  }
   /* OS IDS ESTAO FORA DE ORDEM ALFABETICA DE PROPOSITO. Com 'a','b','c','d' o
      desempate por indice e o desempate por id davam o mesmo resultado, e a
      sabotagem que trocava um pelo outro passava lisa — o teste nao media a
@@ -2027,6 +2049,30 @@ ok(/ETAPAS_EXIGEM_ENTREGA\.includes\(colKey\)/.test(DEV),
 ok(!DEV.includes("if (colKey === 'concluido') {"),
    'o teste por "concluido" sozinho nao voltou');
 // A tela nao pode ser a unica trava: foi um caminho de tela que criou o problema.
+/* ═══ SAIR DE EM ANDAMENTO EXIGE AS HORAS (04/11/2026) ═══════════════════ */
+{
+  const fh = corpo(W, 'function faltaHoras(');
+  const sa = new Function(fh + '\n' + corpo(W, 'function saindoDeAndamentoSemHoras(') + '\nreturn saindoDeAndamentoSemHoras;')();
+  const srv = { melhorias: [
+    { id: 'a', codigo: 'AX-1', status_planejamento: 'em_andamento', horas_realizadas: 0 },
+    { id: 'b', codigo: 'AX-2', status_planejamento: 'em_andamento', horas_realizadas: 3 },
+    { id: 'c', codigo: 'AX-3', status_planejamento: 'planejado', horas_realizadas: 0 },
+    { id: 'd', codigo: 'AX-4', status_planejamento: 'em_andamento', horas_realizadas: 0 },
+  ] };
+  const rec = { melhorias: [
+    { id: 'a', codigo: 'AX-1', status_planejamento: 'planejado', horas_realizadas: 0 },
+    { id: 'b', codigo: 'AX-2', status_planejamento: 'planejado', horas_realizadas: 3 },
+    { id: 'c', codigo: 'AX-3', status_planejamento: 'em_andamento', horas_realizadas: 0 },
+    { id: 'd', codigo: 'AX-4', status_planejamento: 'em_andamento', horas_realizadas: 0 },
+  ] };
+  const r = sa(rec, srv);
+  ok(r.length === 1 && r[0] === 'AX-1', 'sair de Em andamento sem horas e barrado; com horas, entrar ou ficar, passa');
+  ok(/saindoDeAndamentoSemHoras\(data, antesDev\)/.test(W), 'o dev-publish aplica a trava de saida de Em andamento');
+  ok(!/saindoDeAndamentoSemHoras\(data, antesPub\)/.test(W), 'o publish do Admin/PM-PO nao e travado pela saida de Em andamento');
+  ok(/status_planejamento \|\| ''\) === 'em_andamento' && e !== 'em_andamento' &&\s*faltaHoras\(m\)/.test(W),
+     'a API (demanda-atualizar) recusa tirar de Em andamento sem horas');
+}
+
 const semEnt = corpo(W, 'function entrandoEmValidacaoSemEntrega(');
 ok(!!semEnt, 'o servidor tem a trava de entrega incompleta');
 ok(!!semEnt && /if \(!velha\) continue;/.test(semEnt), 'demanda nova nao e travada');
@@ -21222,8 +21268,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        existente comecaria a abrir demanda orfa sem ter mudado nada. */
     ok(!/body\.dev == null/.test(rota) && !/!body\.dev\b/.test(rota),
        'e OMITIR o campo continua herdando a conta — so `null` significa sem dono');
-    ok(/const sp = semDono \? 'backlog' : spPedido;/.test(rota),
-       'sem dono a demanda nasce em Backlog, e nao e movida em silencio depois');
+    // Desde 02/11/2026 quem nao e dono da sprint tambem so abre no Backlog.
+    ok(/const sp = \(semDono \|\| !donoNova\) \? 'backlog' : spPedido;/.test(rota),
+       'sem dono (ou aberta por quem nao e dono da sprint) a demanda nasce em Backlog, e nao e movida em silencio depois');
 
     /* ── Os tres bloqueados, EXECUTADOS ──────────────────────────────────
        Procurar `error: 'campo_bloqueado'` no texto nao prova nada: trocar a
@@ -21664,11 +21711,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        passar a ler `historico` do que chegou, o envio magro vira perda de
        dado — silenciosa, porque nada falha. */
     const leituras = (WC.match(/\.historico\b/g) || []).length;
+    /* `textoDaBaseFila` tambem aparece, mas so para APAGAR a trilha do objeto
+       na hora de gravar, depois da virada para o D1 (HIST_NA_BASE). Apagar nao
+       le o corpo — e a invariante abaixo confere que la so ha `delete`. */
+    const noTexto = semComentario(corpo(W, 'function textoDaBaseFila(') || '');
     const noReata = (semComentario(corpo(W, 'function registraHistorico(') || '')
-                     .match(/\.historico\b/g) || []).length;
+                     .match(/\.historico\b/g) || []).length +
+                    (noTexto.match(/\.historico\b/g) || []).length;
     ok(leituras === noReata,
        'so `registraHistorico` toca em `historico`, e so do lado do servidor',
-       leituras + ' no Worker, ' + noReata + ' dentro de registraHistorico');
+       leituras + ' no Worker, ' + noReata + ' dentro de registraHistorico/textoDaBaseFila');
+    ok((noTexto.match(/\.historico\b/g) || []).length ===
+       (noTexto.match(/delete m\.historico\b/g) || []).length,
+       '`textoDaBaseFila` so apaga a trilha, nunca a le');
     ok(/const anterior = Array\.isArray\(velha\.historico\)/.test(WC),
        'e a trilha vem de `velha` (o arquivo gravado), nunca de `m` (o corpo)');
   }
@@ -23366,9 +23421,14 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* A ORDEM DAS DUAS CHAMADAS. `carimbaAreaValidacao` e quem LIMPA o carimbo
        de quem saiu da etapa — promover depois dele deixaria o card no PM/PO
        ainda dizendo "ha 6 dias na area". E tem de valer nas DUAS rotas. */
-    const trechos = WC.split('promoveAreaVencida(data)');
+    // As duas rotas que gravam o estado inteiro (publish e dev-publish) chamam
+    // na linha propria, antes de carimbar; desde 02/11/2026 as outras rotas que
+    // gravam a base tambem promovem (linha com comentario), sem o carimbo.
+    const trechos = WC.split('promoveAreaVencida(data);\n');
     ok(trechos.length === 3, 'as duas rotas de gravacao promovem a area vencida',
        'encontradas: ' + (trechos.length - 1));
+    ok((WC.match(/promoveAreaVencida\(\w+\);   \/\/ 5 dias uteis na area/g) || []).length >= 9,
+       'e toda outra rota que grava a base tambem promove a area vencida (nao ha agendador no plano Free)');
     for (let i = 1; i < trechos.length; i++) {
       const depois = trechos[i].slice(0, 400);
       ok(/carimbaAreaValidacao\(data,/.test(depois),
@@ -24149,11 +24209,11 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     // ── A SPRINT LOGO DEPOIS DA PLANNING ───────────────────────────────────
     ok(/src="sprint\.js\?v=/.test(POKER), 'o poker carrega o modulo da sprint');
     const pg = semComentario(corpo(POKER, 'async function gravarNoCard() {') || '');
-    ok(/sprint_po: sprint/.test(pg) && /_papel === 'admin'/.test(pg),
-       'o poker manda a sprint junto dos pontos, e so quando quem conduz e PM/PO');
+    ok(/sprint_po: sprint/.test(pg) && /pkDonoDaSprint\(\)/.test(pg),
+       'o poker manda a sprint junto dos pontos, e so quando quem conduz e o dono da sprint');
     const pm = semComentario(corpo(POKER, 'function montaSprintDaMesa() {') || '');
-    ok(/if \(_papel !== 'admin'\) \{ lb\.style\.display = 'none'; return; \}/.test(pm),
-       'e a caixa nem aparece para quem nao e PM/PO',
+    ok(/if \(!pkDonoDaSprint\(\)\) \{ lb\.style\.display = 'none'; return; \}/.test(pm),
+       'e a caixa nem aparece para quem nao e o dono da sprint',
        'facilitadorOk aceita analista E a senha compartilhada da sala');
     /* A CHAMADA, e nao a palavra. `_feriados` tambem aparece no calculo da
        sprint corrente logo acima — trocar so a lista por `[]` deixava a palavra
@@ -24170,8 +24230,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        quem tem a senha da sala. */
     const ig = WC.indexOf("body.action === 'poker-gravar'");
     const trG = ig < 0 ? '' : WC.slice(ig, ig + 6000);
-    ok(/const ehAdmPoker = \(await papelAtual\(\)\) === 'admin';/.test(trG),
-       'e o Worker confere o papel antes de aceitar a sprint pelo poker');
+    ok(/const ehAdmPoker = ehDonoDaSprint\(_ident\);/.test(trG),
+       'e o Worker confere o dono da sprint antes de aceitar a sprint pelo poker');
     /* MESMO CUIDADO: `if (!ehAdmPoker)` trocado por `if (false)` deixava a
        mensagem de recusa no arquivo e a trava sem efeito. */
     ok(/if \(!ehAdmPoker\) \{\s*sprintRecusa = 'Repassar para a sprint e do PM\/PO/.test(trG),
@@ -24729,6 +24789,114 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'e o servidor nao rebaixa ao backlog o Planejado sem dev que esta numa sprint');
     ok(/revertidas\.push\(\(m\.codigo \|\| m\.id\) \+ '\.sprint_prioritaria'\)/.test(WKS),
        'quem nao e PM/PO nao muda a marca de prioritaria');
+    // -- CONCLUIR EXIGE SPRINT (bloqueante, tela e servidor) -----------------
+    {
+      // entregue a partir de 02/11 (regime de sprint); antes disso conclui sem sprint
+      const semS = { tipo: 'evolucao', status_planejamento: 'validacao', entregue_em: '2026-11-03' };
+      ok(SP.travaDeAlocacao(semS, 'validacao', 'concluido', '2026-11-02').trava &&
+         !SP.travaDeAlocacao(Object.assign({ sprint_po: 'S1-11-2026' }, semS), 'validacao', 'concluido', '2026-11-02').trava,
+         'concluir sem sprint trava; com sprint passa');
+      ok(!SP.travaDeAlocacao(semS, 'validacao_area', 'validacao', '2026-11-02').trava,
+         'e ENTREGAR (ir para a validacao) continua sem travar');
+      const WCo = WKS.replace(/export default \{[\s\S]*$/, '');
+      const fco = new Function(WCo + '; return alocacaoSemSprint;')();
+      // QUEM PEGA DA FILA VIRA DONO (AX-1144 sumiu do painel da Marina)
+      const fsd = new Function(WCo + '; return entrandoNoTrabalhoSemDev;')();
+      ok(fsd({ melhorias: [{ id: 'f', codigo: 'AX-F', status_planejamento: 'em_andamento', dev: '' }] },
+             { melhorias: [{ id: 'f', status_planejamento: 'planning' }] }).length === 1 &&
+         fsd({ melhorias: [{ id: 'f', status_planejamento: 'em_andamento', dev: 'Marina' }] },
+             { melhorias: [{ id: 'f', status_planejamento: 'planning' }] }).length === 0 &&
+         fsd({ melhorias: [{ id: 'f', status_planejamento: 'em_andamento', dev: '' }] },
+             { melhorias: [{ id: 'f', status_planejamento: 'em_andamento' }] }).length === 0,
+         'comecar sem dono e recusado no dev-publish; com dono passa; o que ja estava assim nao trava');
+      ok(/entrandoNoTrabalhoSemDev\(data, antesDev\)/.test(WKS), 'a guarda esta ligada no dev-publish');
+      // EM APROVACAO DE REQUISITOS: o caso de uso nasce na entrada (03/11/2026)
+      const fcu = new Function(WCo + '; return carimbaCasoDeUso;')();
+      const dcu = { melhorias: [{ id: 'r', status_planejamento: 'levantar_req', impacto: 'Médio', urgencia: 'ALTA' },
+                                { id: 'b', status_planejamento: 'backlog', impacto: 'xyz' }] };
+      fcu(dcu, '2026-11-03T12:00:00Z');
+      const cu1 = dcu.melhorias[0].caso_uso;
+      ok(cu1 && cu1.status === 'a_enviar' && !dcu.melhorias[1].caso_uso,
+         'entrar em Em aprovacao de requisitos abre o caso de uso; fora dela, nao');
+      ok(dcu.melhorias[0].impacto === 'medio' && dcu.melhorias[0].urgencia === 'alta' && dcu.melhorias[1].impacto === '',
+         'impacto e urgencia sao normalizados; valor fora da lista vira vazio');
+      cu1.status = 'aprovado';
+      fcu(dcu, '2026-11-03T13:00:00Z');
+      ok(dcu.melhorias[0].caso_uso.status === 'aprovado', 'gravar de novo na etapa nao reabre o caso de uso');
+      dcu.melhorias[0].status_planejamento = 'planning'; fcu(dcu, '2026-11-04T10:00:00Z');
+      ok(dcu.melhorias[0].caso_uso.saiu_em === '2026-11-04T10:00:00Z', 'sair da etapa fecha o caso de uso');
+      dcu.melhorias[0].status_planejamento = 'levantar_req'; fcu(dcu, '2026-11-05T10:00:00Z');
+      ok(dcu.melhorias[0].caso_uso.status === 'a_enviar' &&
+         dcu.melhorias[0].caso_uso.ciclos_anteriores.length === 1 &&
+         dcu.melhorias[0].caso_uso.ciclos_anteriores[0].status === 'aprovado',
+         'voltar para a etapa abre um ciclo novo e guarda o anterior');
+      ok((WKS.match(/^\s+carimbaCasoDeUso\(\w+\);/gm) || []).length ===
+         (WKS.match(/^\s+promoveAreaVencida\(\w+\);/gm) || []).length,
+         'o caso de uso e carimbado em toda rota de gravacao');
+      ok(/const _casoAntes = new Map/.test(WKS), 'o painel dev nao altera o caso de uso (o servidor vence)');
+      const RQ = require('./requisitos.js');
+      ok(RQ.ROTULO === 'Em aprovação de requisitos' && !/Levantar Requisitos/.test(ADMIN + DEV),
+         'a etapa se chama "Em aprovação de requisitos" nas telas');
+      ok(/caso de uso/i.test(RQ.casoDeUso({ titulo: 'x' }, {})) &&
+         /FLUXO PRINCIPAL/.test(RQ.casoDeUso({ titulo: 'x' }, {})), 'o modulo monta o texto do caso de uso');
+      ok(/Informe o impacto e a urgência/.test(ADMIN) && /Informe o impacto e a urgência/.test(DEV),
+         'admin e painel dev exigem impacto e urgencia na abertura');
+      ok(/const assumiu = ETAPAS_DO_DEV\.includes\(colKey\) && !String\(m\.dev \|\| ''\)\.trim\(\) && !!currentDev;/.test(DEV) &&
+         /if \(assumiu\) campos\.dev = m\.dev;/.test(DEV),
+         'o painel dev grava o nome de quem tirou a demanda da fila');
+      const presoC = fco({ melhorias: [{ id: 'c', codigo: 'AX-C', tipo: 'evolucao', status_planejamento: 'concluido', entregue_em: '2026-11-03' }] },
+                         { melhorias: [{ id: 'c', status_planejamento: 'validacao' }] }, 'admin', '2026-11-02');
+      ok(presoC.length === 1, 'o servidor recusa concluir sem sprint, inclusive para o PM/PO');
+      const velhaV = { tipo: 'evolucao', status_planejamento: 'validacao', entregue_em: '2026-10-31' };
+      ok(!SP.travaDeAlocacao(velhaV, 'validacao', 'concluido', '2026-11-03').trava &&
+         !SP.travaDeAlocacao({ tipo: 'evolucao', status_planejamento: 'validacao' }, 'validacao', 'concluido', '2026-11-03').trava,
+         'o que chegou a validacao antes da S1-11 (ou sem data de entrega) conclui sem sprint — a sprint dele ja fechou');
+      ok(fco({ melhorias: [{ id: 'v', codigo: 'AX-V', tipo: 'evolucao', status_planejamento: 'concluido', entregue_em: '2026-10-31' }] },
+             { melhorias: [{ id: 'v', status_planejamento: 'validacao' }] }, 'admin', '2026-11-03').length === 0,
+         'e o servidor aceita igual');
+      ok(/SPRINTPO\.travaDeAlocacao\(m, m\.status_planejamento, 'concluido'/.test(ADMIN),
+         'e o botao Aprovar da validacao passa pela mesma trava');
+    }
+    // -- INICIAR E FECHAR SPRINT CHEGAM AO SERVIDOR --------------------------
+    ok(/const MEUS_CAMPOS = \[[^\]]*'sprints'/.test(ADMIN),
+       'o Admin envia a lista de sprints que ele mudou (iniciar/fechar) — antes a trocava pela do servidor e o fechamento sumia');
+    // -- SO O DONO DA SPRINT (o Fernando) MARCA SPRINT; QUEM NAO E, SO ABRE NO BACKLOG --
+    {
+      const WD = WKS.replace(/export default \{[\s\S]*$/, '');
+      const fd = new Function(WD + '; return { ehDonoDaSprint, nascendoForaDoBacklog, travaSprintDoPO };')();
+      const fern = { papel: 'admin', usuario: { login: 'fernando' } };
+      const joao = { papel: 'admin', usuario: { login: 'joao.siqueira' } };
+      const dev = { papel: 'dev', usuario: { login: 'lucas' } };
+      ok(fd.ehDonoDaSprint(fern) && fd.ehDonoDaSprint({ papel: 'admin', usuario: null }) &&
+         !fd.ehDonoDaSprint(joao) && !fd.ehDonoDaSprint(dev),
+         'o dono da sprint e a CONTA do Fernando (e a senha administrativa), nao o papel admin');
+      const servD = { melhorias: [{ id: 'v', codigo: 'AX-1', sprint_po: '' }] };
+      const recD = () => ({ melhorias: [
+        { id: 'v', codigo: 'AX-1', sprint_po: 'S1-11-2026', sprint_po_historico: [{ sprint: 'S1-11-2026' }] },
+        { id: 'n', titulo: 'Nova', status_planejamento: 'em_andamento', inicio: '2026-11-02', sprint_po: 'S1-11-2026' } ] });
+      const rJ = recD();
+      fd.travaSprintDoPO(rJ, servD, fd.ehDonoDaSprint(joao));
+      const nasc = fd.nascendoForaDoBacklog(rJ, servD);
+      ok(rJ.melhorias[0].sprint_po === '' && rJ.melhorias[1].sprint_po === '',
+         'admin que nao e dono nao repassa nem cria dentro da sprint — volta ao que estava');
+      ok(nasc.length === 1 && rJ.melhorias[1].status_planejamento === 'backlog' && rJ.melhorias[1].inicio === '',
+         'e a demanda que ele cria nasce no Backlog, sem inicio');
+      const rF = recD();
+      ok(fd.travaSprintDoPO(rF, servD, fd.ehDonoDaSprint(fern)).length === 0 && rF.melhorias[0].sprint_po === 'S1-11-2026',
+         'o Fernando repassa normalmente');
+      ok(/const _donoPub = ehDonoDaSprint\(_ident\);/.test(WKS) && /if \(!_donoPub\) data\.sprints = /.test(WKS),
+         'o publish (Admin e Gantt) passa pelo dono, inclusive iniciar e fechar sprint');
+      ok(/const _donoDev = ehDonoDaSprint\(_ident\);/.test(WKS) && /nascendoForaDoBacklog\(data, antesDev\)/.test(WKS),
+         'o painel do dev tambem');
+      ok(/const sp = \(semDono \|\| !donoNova\) \? 'backlog' : spPedido;/.test(WKS),
+         'e a API de criacao abre no Backlog para quem nao e dono');
+      ok(SP.ehDonoDaSprint({ papel: 'admin', login: 'fernando' }) && !SP.ehDonoDaSprint({ papel: 'admin', login: 'joao.siqueira' }) &&
+         /SPRINTPO\.ehDonoDaSprint\(_eu\)/.test(ADMIN) && /SPRINTPO\.ehDonoDaSprint\(/.test(GANTT) &&
+         /pkDonoDaSprint\(\)/.test(lerTela('poker.html')),
+         'as telas usam a mesma regra para oferecer (ou nao) o gesto de sprint');
+      ok(/editId \? document\.getElementById\('n-status'\)\.value : 'backlog'/.test(DEV),
+         'e o painel do dev cria demanda sempre no Backlog');
+    }
     // -- REPASSAR PREENCHE A ENTREGA AO USUARIO COM A SEGUNDA SEGUINTE A SPRINT --
     {
       ok(SP.entregaDaSprint('S1-11-2026', []) === '2026-11-09' && SP.entregaDaSprint('S1-11-2026', ['2026-11-09']) === '2026-11-10',
@@ -24814,9 +24982,10 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       { id: 'h2', codigo: 'AX-H2', status_planejamento: 'validacao_area', horas_realizadas: 3 },
       { id: 'h3', codigo: 'AX-H3', status_planejamento: 'validacao', horas_realizadas: 4, implementacao: '' } ] };
     const presosH = fnEnt(rec, serv);
-    ok(presosH.includes('AX-H1') && !presosH.includes('AX-H2'),
-       'o servidor recusa mandar para a Validacao da area sem horas — com horas passa, sem exigir texto',
-       presosH.join());
+    // Desde 02/11/2026 a area exige horas E texto (o que e obrigatorio entra na area).
+      ok(presosH.includes('AX-H1') && presosH.includes('AX-H2'),
+         'o servidor recusa mandar para a Validacao da area sem horas ou sem o texto do que foi feito',
+         presosH.join());
     ok(presosH.includes('AX-H3'),
        'e a entrega ao PM/PO continua exigindo horas E o texto');
     ok(/newColKey === 'validacao_area'\) \{\s*const horas/.test(DEV),
@@ -24879,6 +25048,130 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(/gcard-comsprint/.test(GANTT) && /id="f-sprint-po"/.test(GANTT) &&
        /SPRINTPO\.naSprint\(m, filters\.sprintPo\)/.test(GANTT),
        'o Gantt tambem');
+  }
+
+  /* ═══ VOLTAR AO BACKLOG TIRA A DATA DE INICIO (03/11/2026) ═══════════════
+     AX-879: gravada em Backlog, desenhada em Em andamento pelo `inicio`. */
+  {
+    const tira = new Function(corpo(W, 'function tiraInicioDoBacklog(') + '\nreturn tiraInicioDoBacklog;')();
+    const ETx = require('./etapa-demanda.js');
+    const d = { melhorias: [
+      { id: 'a', status_planejamento: 'backlog', inicio: '2026-10-27' },
+      { id: 'b', status_planejamento: 'planejado', inicio: '2026-10-27' },
+    ] };
+    ok(ETx.gravada(d.melhorias[0], '2026-11-03') === 'em_andamento',
+       'o caso da AX-879 e real: Backlog com inicio e lido como Em andamento');
+    const n = tira(d);
+    ok(n === 1 && d.melhorias[0].inicio === '' && d.melhorias[1].inicio === '2026-10-27',
+       'tiraInicioDoBacklog tira a data so de quem esta no Backlog');
+    ok(ETx.gravada(d.melhorias[0], '2026-11-03') === 'backlog',
+       'e a demanda passa a ser lida no Backlog, onde foi posta');
+    ok((W.match(/tiraInicioDoBacklog\(\w+\);/g) || []).length ===
+       (W.match(/carimbaCasoDeUso\(\w+\);/g) || []).length,
+       'a regra roda em toda porta de gravacao (ao lado do caso de uso)');
+    ok(/m\.status_planejamento === 'backlog' && String\(m\.inicio \|\| ''\)\.trim\(\)\) m\.inicio = ''/.test(ADMIN),
+       'e o Admin aplica o mesmo na publicacao, para o card mudar de coluna na hora');
+  }
+
+  /* ═══ TEMA DE DADOS LEVA A FLAG DADOS/BI (04/11/2026) ═══════════════════
+     "Me garanta que tudo que for BI, a flag de BI esteja marcada." */
+  {
+    const linhaRe = (W.match(/const TEMA_DADOS_RE = .*;/) || [''])[0];
+    const fab = new Function(linhaRe + '\n' + corpo(W, 'function marcaDadosBiPorTema(') +
+                             '\nreturn [marcaDadosBiPorTema, TEMA_DADOS_RE];');
+    const [marca, RE] = fab();
+    const temas = ['BI', 'BI - Reports', 'BI - Atualização', 'Extração de dados', 'Banco de dados',
+                   'Databricks - Planejamento', 'Data Bricks', 'AXCred - Jurídico', 'Cobrança', 'AxBalance']
+      .map((nome, k) => ({ id: 't' + k, nome }));
+    const d = { temas, melhorias: [
+      { id: 'a', tema_id: 't0', dados_bi: false, sales_ops: true },
+      { id: 'b', tema_id: 't3' },
+      { id: 'c', tema_id: 't6', dados_bi: true },
+      { id: 'd', tema_id: 't7', dados_bi: false },
+      { id: 'e', tema_id: 't9', dados_bi: true },
+    ] };
+    const n = marca(d);
+    const M = Object.fromEntries(d.melhorias.map(m => [m.id, m]));
+    ok(n === 2 && M.a.dados_bi === true && M.b.dados_bi === true,
+       'marcaDadosBiPorTema liga a flag nos temas de dados');
+    ok(M.a.sales_ops === false, 'e desliga Sales Ops, que e exclusiva com Dados/BI');
+    ok(M.d.dados_bi === false && M.e.dados_bi === true,
+       'tema que nao e de dados fica como esta (a flag so liga)');
+    ok(temas.slice(0, 7).every(t => RE.test(t.nome)) && !temas.slice(7).some(t => RE.test(t.nome)),
+       'o nome do tema decide: BI, Databricks, Extracao e Banco de dados entram; AXCred, Cobranca e AxBalance nao');
+    ok((W.match(/marcaDadosBiPorTema\(\w+\);/g) || []).length ===
+       (W.match(/carimbaCasoDeUso\(\w+\);/g) || []).length,
+       'a regra de Dados/BI roda em toda porta de gravacao (ao lado do caso de uso)');
+    ok(ADMIN.includes(linhaRe.trim()) && /temasDados\.has\(m\.tema_id\) && m\.dados_bi !== true/.test(ADMIN),
+       'e o Admin aplica a mesma regra de Dados/BI na publicacao');
+  }
+
+  /* ═══ O HISTORICO NO D1 (03/11/2026) ═════════════════════════════════════
+     A base passou de 4,3 MB e o Worker estourava CPU em toda publicacao; a
+     trilha (1,6 MB) foi para o D1. Executa as pecas de verdade. */
+  {
+    const HC = fs.readFileSync('historico-cliente.js', 'utf8');
+    const textoFn = corpo(W, 'function textoDaBaseFila(');
+    const mesclaFn = corpo(W, 'function mesclaHist(');
+    const mk = (flag) => new Function('const HIST_MAX = 25; const HIST_NA_BASE = ' + flag + ';\n' +
+      textoFn + '\n' + mesclaFn + '\nreturn { textoDaBaseFila, mesclaHist };')();
+    const v1 = mk('true'), v2 = mk('false');
+
+    const dado = () => {
+      const d = { melhorias: [{ id: 'a', historico: [{ em: '1' }] }, { id: 'b' }] };
+      Object.defineProperty(d, '__histNovos', { value: [{ id: 'a', entrada: { em: '2' } }], enumerable: false, writable: true });
+      return d;
+    };
+    let fila = [], d = dado();
+    let txt = v1.textoDaBaseFila(d, fila);
+    ok(fila.length === 1 && fila[0].id === 'a' && !/__histNovos/.test(txt) && /"historico"/.test(txt),
+       'gravacao dupla: a entrada nova vai para a fila, e a base continua com a trilha');
+    v1.textoDaBaseFila(d, fila);
+    ok(fila.length === 1, 'gravar duas vezes o mesmo objeto nao repete a entrada na fila');
+    fila = []; d = dado(); txt = v2.textoDaBaseFila(d, fila);
+    ok(fila.length === 1 && !/"historico"/.test(txt), 'depois da virada a base sai sem historico');
+
+    const a = [{ em: '2026-01-01', quem: 'x', origem: 'p' }, { em: '2026-01-03', quem: 'x', origem: 'p' }];
+    const m = v1.mesclaHist(a, [{ em: '2026-01-02', quem: 'y', origem: 'api' }, a[1]]);
+    ok(m.length === 3 && m.map(e => e.em).join() === '2026-01-01,2026-01-02,2026-01-03',
+       'mesclaHist junta sem repetir e em ordem de data');
+    ok(v1.mesclaHist(Array.from({ length: 40 }, (_, i) => ({ em: String(1000 + i) })), []).length === 25,
+       'e respeita o limite de 25 entradas');
+
+    ok(/const HIST_NA_BASE = (true|false);/.test(W), 'a chave da virada existe no Worker');
+    const putsBase = (W.match(/gh\('contents\/' \+ FILE_PATH, \{/g) || []).length;
+    const putsTexto = (W.match(/toB64\(textoDaBase\(/g) || []).length;
+    ok(putsBase === putsTexto && /gravaTexto\(gh, FILE_PATH, corpoFinal/.test(W) &&
+       /const corpoFinal = textoDaBase\(data\)/.test(W) && /gravaTexto\(gh, FILE_PATH, textoDaBase\(data\)/.test(W),
+       'TODA gravacao da base passa por textoDaBase', putsBase + ' PUTs, ' + putsTexto + ' com textoDaBase');
+    ok(/if \(_histFila\.length && resp && resp\.status >= 200 && resp\.status < 300\)/.test(W),
+       'a fila so vai para o D1 quando a rota terminou bem');
+
+    const HCx = new Function('module', HC + '\nreturn module.exports;')({ exports: {} });
+    const base = () => ({ atualizado_em: 'v1', melhorias: [{ id: 'a' }, { id: 'b' }] });
+    ok(HCx.baseTemTrilha({ melhorias: [{ id: 'a', historico: [] }] }) && !HCx.baseTemTrilha(base()),
+       'a tela reconhece base com e sem trilha');
+    let chamadas = 0;
+    const fetchAntes = global.fetch;
+    global.fetch = async () => { chamadas++; return { ok: true, json: async () => ({ itens: { a: [{ em: '1' }] } }) }; };
+    pendentes.push((async () => {
+      const d1 = await HCx.hidrata(base(), 'u', {});
+      const d2 = await HCx.hidrata(base(), 'u', {});
+      const comTrilha = await HCx.hidrata({ atualizado_em: 'v1', melhorias: [{ id: 'a', historico: [{ em: 'x' }] }] }, 'u', {});
+      global.fetch = fetchAntes;
+      ok(d1.melhorias[0].historico.length === 1 && Array.isArray(d1.melhorias[1].historico) &&
+         d1.melhorias[1].historico.length === 0,
+         'hidrata recoloca a trilha em m.historico (e [] onde nao ha)');
+      ok(chamadas === 1 && d2.melhorias[0].historico.length === 1,
+         'uma busca por versao da base: o polling nao repete');
+      ok(comTrilha.melhorias[0].historico[0].em === 'x' && chamadas === 1,
+         'base que ainda traz a trilha nao dispara busca nem e sobrescrita');
+    })());
+    ok(/HISTCLIENTE\.hidrata\(d, ADMIN_PROXY_URL, credenciaisLeitura\(\)\)/.test(ADMIN) &&
+       /HISTCLIENTE\.hidrata\(d, PROXY_URL, credenciaisLeitura\(\)\)/.test(GANTT) &&
+       /<script src="historico-cliente\.js\?v=[0-9a-f]{10}"><\/script>/.test(ADMIN) &&
+       /<script src="historico-cliente\.js\?v=[0-9a-f]{10}"><\/script>/.test(GANTT),
+       'Admin e Gantt hidratam a trilha no lerDados, com o selo de cache');
   }
 
   let erroPz = null;

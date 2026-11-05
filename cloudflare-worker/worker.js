@@ -282,6 +282,8 @@ const LIMITES = {
   // tudo em loop. Nao substitui a trava de leitura (VIEW_SENHA) — apenas encarece
   // a coleta em massa enquanto ela nao estiver ligada.
   'dados':          { max: 40,  janela: 60 },
+  'historico':      { max: 40,  janela: 60 },
+  'historico-importar': { max: 30, janela: 60 },
   // poker-estado fica de fora: o painel faz polling a cada 1,5s (~40/min por pessoa)
 };
 
@@ -642,6 +644,8 @@ const HIST_CAMPOS = {
    * silencio a data que decide se alguem esta atrasado e exatamente o que o
    * historico existe para impedir.                                            */
   prioridade:          'prioridade',
+  impacto:             'impacto',
+  urgencia:            'urgencia',
   sprint:              'sprint',
   /* A SPRINT QUE O PO ESCOLHEU, ao lado da derivada e nao no lugar dela. Sao
    * duas perguntas diferentes (ver `sprint.js`): `sprint` e "em que semana cai a
@@ -673,6 +677,24 @@ const HIST_CAMPOS = {
 // o arquivo (164 KB hoje) cresceria sem controle — ele e lido inteiro em toda
 // abertura de tela.
 const HIST_MAX = 25;
+/* ═══ O HISTORICO SAI DA BASE E VAI PARA O D1 (03/11/2026) ════════════════════
+ *
+ * "Worker exceeded CPU time limit" em toda publicacao: a base chegou a 4,3 MB e
+ * cada gravacao le, compara e regrava o arquivo inteiro. O historico e 1,6 MB
+ * disso — e, por ser milhares de objetos pequenos, e a parte mais cara de ler:
+ * sem ele, o `JSON.parse` da base cai de 17,5 ms para 6,9 ms (medido).
+ *
+ * Ele passa a morar na tabela `historico_demanda` do D1, uma linha por demanda.
+ * Gravar vira acrescentar as entradas novas das poucas demandas que mudaram, e
+ * as telas buscam a trilha em `historico` e a recolocam em `m.historico` — as
+ * contas que leem dali (funil, rolagens, selo da planning, origem) nao mudam.
+ *
+ * A VIRADA E EM DUAS ETAPAS, e esta chave e a fronteira entre elas:
+ *   true  → grava nos DOIS lugares (base e D1). Enquanto isso, a trilha antiga
+ *           e copiada para o D1 pela rota `historico-importar`.
+ *   false → a base deixa de levar historico: a primeira gravacao o retira.
+ * Desligar antes de a copia estar conferida apagaria a trilha. */
+const HIST_NA_BASE = false;
 
 // ─── VINCULO: A TAREFA PRINCIPAL E O QUE PENDURA NELA ────────────────────
 //
@@ -1038,12 +1060,94 @@ function registraHistorico(recebido, servidor, quem, origem) {
                       mudancas };
     if (anexosAntes !== anexosDepois) entrada.anexos = anexosAntes + ' -> ' + anexosDepois;
     m.historico = anterior.concat([entrada]).slice(-HIST_MAX);
+    /* A ENTRADA NOVA VAI TAMBEM PARA O D1 — so ela, e nao a trilha inteira.
+       Fica numa propriedade NAO enumeravel: nao entra no `JSON.stringify` da
+       base, e `limpaEspelhos` (que tira as chaves com `_`) nao a ve. Quem a
+       recolhe e `textoDaBase`, no momento de gravar. */
+    if (!Array.isArray(recebido.__histNovos)) {
+      Object.defineProperty(recebido, '__histNovos', { value: [], enumerable: false, writable: true });
+    }
+    recebido.__histNovos.push({ id: m.id, entrada });
     n += mudancas.length;
   }
   return n;
 }
 
 
+
+/* O TEXTO QUE VAI PARA O ARQUIVO. Toda gravacao da base passa por aqui, e e
+   aqui que (1) as entradas novas do historico sao recolhidas para a fila do D1
+   e (2), depois da virada, o historico sai do objeto antes de virar texto.
+   Ver HIST_NA_BASE. */
+function textoDaBaseFila(data, fila) {
+  if (data && Array.isArray(data.__histNovos) && fila) {
+    data.__histNovos.forEach(x => fila.push(x));
+    data.__histNovos = [];
+  }
+  if (!HIST_NA_BASE && data && Array.isArray(data.melhorias)) {
+    for (const m of data.melhorias) { if (m && 'historico' in m) delete m.historico; }
+  }
+  return JSON.stringify(data);
+}
+
+/* Junta duas trilhas sem repetir evento: a mesma entrada pode chegar pela copia
+   e pela gravacao dupla. A chave e quando, quem e de onde. */
+function mesclaHist(a, b) {
+  const vistos = new Set(), fora = [];
+  (Array.isArray(a) ? a : []).concat(Array.isArray(b) ? b : []).forEach(e => {
+    if (!e || typeof e !== 'object') return;
+    const k = String(e.em || '') + '|' + String(e.quem || '') + '|' + String(e.origem || '');
+    if (vistos.has(k)) return;
+    vistos.add(k); fora.push(e);
+  });
+  fora.sort((x, y) => String(x.em || '').localeCompare(String(y.em || '')));
+  return fora.slice(-HIST_MAX);
+}
+
+let _criouHistorico = false;
+async function historicoTabela(db) {
+  if (_criouHistorico) return;
+  await db.prepare('CREATE TABLE IF NOT EXISTS historico_demanda ' +
+    '(id TEXT PRIMARY KEY, hist TEXT NOT NULL, atualizado_em TEXT)').run();
+  _criouHistorico = true;
+}
+
+/** Acrescenta entradas (`[{id, entrada}]` ou `{id: [entradas]}`) a trilha de
+ *  cada demanda no D1. Le so as linhas das demandas tocadas. */
+async function guardaHistorico(env, novos) {
+  const db = env && env.POKER_DB;
+  if (!db) return 0;
+  const porId = new Map();
+  if (Array.isArray(novos)) {
+    novos.forEach(x => {
+      if (!x || !x.id || !x.entrada) return;
+      if (!porId.has(x.id)) porId.set(x.id, []);
+      porId.get(x.id).push(x.entrada);
+    });
+  } else if (novos && typeof novos === 'object') {
+    Object.keys(novos).forEach(id => { if (id && Array.isArray(novos[id])) porId.set(id, novos[id]); });
+  }
+  if (!porId.size) return 0;
+  await historicoTabela(db);
+  const ids = [...porId.keys()];
+  const atuais = new Map();
+  for (let i = 0; i < ids.length; i += 50) {
+    const lote = ids.slice(i, i + 50);
+    const r = await db.prepare('SELECT id, hist FROM historico_demanda WHERE id IN (' +
+      lote.map(() => '?').join(',') + ')').bind(...lote).all();
+    ((r && r.results) || []).forEach(x => atuais.set(x.id, x.hist));
+  }
+  const agora = new Date().toISOString();
+  const stmts = ids.map(id => {
+    let ant = [];
+    try { ant = JSON.parse(atuais.get(id) || '[]'); } catch (_) { ant = []; }
+    return db.prepare('INSERT INTO historico_demanda (id, hist, atualizado_em) VALUES (?, ?, ?) ' +
+      'ON CONFLICT(id) DO UPDATE SET hist = excluded.hist, atualizado_em = excluded.atualizado_em')
+      .bind(id, JSON.stringify(mesclaHist(ant, porId.get(id))), agora);
+  });
+  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
+  return ids.length;
+}
 
 // ─── EXIGENCIA DE PAPEL ───────────────────────────────────────────────
 // Quatro rotas repetiam este trecho: chamar identifica, conferir o papel na mao e
@@ -1511,6 +1615,112 @@ function carimbaAreaValidacao(recebido, servidor) {
  * o campo novo falta. Mexer num campo que nenhuma outra rota daqui escreve seria
  * a unica excecao, e excecao e o que diverge depois.
  */
+/* ═══ EM APROVACAO DE REQUISITOS: O CASO DE USO NASCE NA ENTRADA ═══════════
+ *
+ * "Toda demanda que cair nessa etapa, o sistema devera gerar um fluxo de caso
+ *  de uso para o usuario aprovar (por hora eu enviarei manual)."  (03/11/2026)
+ *
+ * A etapa e `levantar_req` (so o NOME mudou — ver `requisitos.js`). Aqui, e
+ * nao na tela, porque a demanda chega nela por varias portas: Admin, Gantt,
+ * o "tenho duvidas" do grill no painel dev, a API. O Worker e o unico ponto por
+ * onde todas passam.
+ *
+ * SEM ESTADO ANTERIOR: a entrada se reconhece pelo proprio campo. Na etapa sem
+ * `caso_uso` aberto -> abre um (a_enviar). Fora dela com um aberto -> fecha
+ * (`saiu_em`). Voltar para a etapa depois abre um ciclo novo, guardando o
+ * anterior em `ciclos_anteriores` — o que foi aprovado antes nao some.
+ *
+ * O TEXTO NAO E ESCRITO AQUI: a tela monta com os dados de agora e grava o que
+ * foi ENVIADO. Impacto e urgencia sao normalizados aqui tambem — o que vier
+ * fora das tres opcoes vira vazio, nao um quarto valor. */
+const CASO_USO_ESTADOS = ['a_enviar', 'enviado', 'aprovado', 'ajustes'];
+function normNivel(v, lista) {
+  const s = String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  if (!s) return '';
+  return lista.find(x => x === s || x.slice(0, 3) === s.slice(0, 3)) || '';
+}
+function normImpacto(v)  { return normNivel(v, ['baixo', 'medio', 'alto']); }
+function normUrgencia(v) { return normNivel(v, ['baixa', 'media', 'alta']); }
+
+/* ═══ QUEM VOLTA PARA O BACKLOG PERDE A DATA DE INICIO (03/11/2026) ════════
+ *
+ * "Nao consigo voltar demanda p/ backlog, aparece que deu certo, porem a
+ *  demanda nao retorna" — AX-878 e AX-879, de Planejado para Backlog.
+ *
+ * A gravacao entrou; quem desfazia era a LEITURA. Em `etapa-demanda.js`, Backlog
+ * com `inicio` no passado e trabalho comecado (`gravada` devolve em_andamento —
+ * regra de proposito, fixada nas invariantes). As duas guardavam o inicio de
+ * quando estavam planejadas e continuavam desenhadas em Em andamento.
+ *
+ * Quem NASCE no Backlog ja perdia a data (`nascendoForaDoBacklog`); faltava quem
+ * VOLTA. Fica aqui, ao lado do caso de uso, porque roda nas mesmas portas de
+ * gravacao. Sem olhar a base: Backlog com inicio nunca e mostrado como Backlog,
+ * entao tirar a data so faz a demanda aparecer onde foi posta. */
+function tiraInicioDoBacklog(data) {
+  if (!data || !Array.isArray(data.melhorias)) return 0;
+  let n = 0;
+  for (const m of data.melhorias) {
+    if (m && m.status_planejamento === 'backlog' && String(m.inicio || '').trim()) {
+      m.inicio = '';
+      n += 1;
+    }
+  }
+  return n;
+}
+
+/* ═══ TEMA DE DADOS LEVA A FLAG DADOS/BI (04/11/2026) ══════════════════════
+ *
+ * "Me garanta que tudo que for BI, a flag de BI esteja marcada." Havia 106
+ * demandas nos temas de dados sem a flag — o filtro Dados/BI e o selo do card
+ * deixavam de fora o trabalho da Marina, do Dan, do Jhonatan e do Jose.
+ *
+ * A regra e pelo TEMA, e nao pelo dev: quem e de dados tambem faz demanda de
+ * outros temas (Encargos, Negativacao), e essas nao sao BI. O nome do tema
+ * decide, e nao uma lista de ids, para um tema de dados novo ("BI - ...")
+ * entrar sozinho. Dados/BI e Sales Ops sao exclusivos (`demanda-nova`), entao
+ * marcar um desliga o outro. So LIGA: tirar a flag de tema de dados nao e
+ * possivel, e demanda de outro tema com a flag marcada a mao fica como esta. */
+const TEMA_DADOS_RE = /^\s*(BI\b|Data\s?bricks|Extra[cç][aã]o de dados|Banco de dados)/i;
+function marcaDadosBiPorTema(data) {
+  if (!data || !Array.isArray(data.melhorias) || !Array.isArray(data.temas)) return 0;
+  const dados = new Set(data.temas.filter(t => t && TEMA_DADOS_RE.test(String(t.nome || ''))).map(t => t.id));
+  let n = 0;
+  for (const m of data.melhorias) {
+    if (m && dados.has(m.tema_id) && m.dados_bi !== true) {
+      m.dados_bi = true;
+      m.sales_ops = false;
+      n += 1;
+    }
+  }
+  return n;
+}
+
+function carimbaCasoDeUso(data, agora) {
+  if (!data || !Array.isArray(data.melhorias)) return [];
+  const quando = agora || new Date().toISOString();
+  const abertos = [];
+  for (const m of data.melhorias) {
+    if (!m) continue;
+    if (m.impacto !== undefined)  m.impacto  = normImpacto(m.impacto);
+    if (m.urgencia !== undefined) m.urgencia = normUrgencia(m.urgencia);
+    if (m.oculto || m.mesclado_em) continue;
+    const c = (m.caso_uso && typeof m.caso_uso === 'object') ? m.caso_uso : null;
+    if (c && !CASO_USO_ESTADOS.includes(c.status)) c.status = 'a_enviar';
+    const naEtapa = String(m.status_planejamento || '') === 'levantar_req';
+    if (naEtapa && (!c || c.saiu_em)) {
+      const ant = c ? (Array.isArray(c.ciclos_anteriores) ? c.ciclos_anteriores : [])
+        .concat([Object.assign({}, c, { ciclos_anteriores: undefined })]).slice(-10) : [];
+      m.caso_uso = { status: 'a_enviar', gerado_em: quando, texto: '',
+                     enviado_em: '', enviado_por: '', respondido_em: '', respondido_por: '',
+                     resposta: '', saiu_em: '', ciclos_anteriores: ant };
+      abertos.push(m.codigo || m.id);
+    } else if (!naEtapa && c && !c.saiu_em) {
+      c.saiu_em = quando;
+    }
+  }
+  return abertos;
+}
+
 const DIAS_UTEIS_NA_AREA = 5;
 
 function promoveAreaVencida(data, hoje) {
@@ -1681,8 +1891,55 @@ async function colaboradoresWorkos(env) {
  * task nascendo dentro da sprint, que e o que a regra proibe. Zerar e o certo:
  * ela nasce no backlog e o PO a repassa quando decidir.
  */
+/* ═══ O DONO DA SPRINT (02/11/2026) ════════════════════════════════════════
+ *
+ * "A partir de agora, qualquer dev so consegue abrir demanda para cair no
+ *  backlog. Fica bloqueado lancar via painel ou via API o lancamento direto.
+ *  Somente eu consigo marcar a sprint que a demanda fara parte, assim passo a
+ *  ter controle do que entra e sai da sprint."
+ *
+ * POR CONTA, E NAO POR PAPEL. O papel `admin` hoje e de oito pessoas — varios
+ * sao devs. "Somente eu" nao cabe nele. O dono e a CONTA do Fernando (login
+ * `fernando`) e a senha administrativa compartilhada, que nao tem pessoa por
+ * tras e e o caminho das automacoes do PM/PO. Nova pessoa com esse poder entra
+ * nesta lista, de proposito, e nao por ganhar um papel.
+ *
+ * Quem NAO e dono: cria demanda sempre no backlog e fora de sprint; nao repassa,
+ * nao tira, nao marca prioritaria e nao inicia/fecha sprint. As tentativas sao
+ * REVERTIDAS (o resto da gravacao segue) e a resposta diz o que voltou. */
+const SPRINT_DONOS = ['fernando'];
+
+function ehDonoDaSprint(ident) {
+  if (!ident || String(ident.papel || '') !== 'admin') return false;
+  if (!ident.usuario) return true;                 // senha administrativa
+  const l = String(ident.usuario.login || '').trim().toLowerCase();
+  return !!l && SPRINT_DONOS.includes(l);
+}
+
+/* QUEM NAO E DONO SO ABRE NO BACKLOG. Demanda que o servidor nunca viu, vinda
+ * de quem nao e dono, nasce em `backlog`, sem `inicio` (backlog com inicio no
+ * passado vira "em andamento" por `etapa-demanda.js`) e fora de sprint — a
+ * sprint ja e zerada por `travaSprintDoPO`. */
+function nascendoForaDoBacklog(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Set();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.add(m.id);
+  const ajustadas = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !m.id || antes.has(m.id)) continue;
+    if (String(m.status_planejamento || '') === 'backlog' && !String(m.inicio || '').trim()) continue;
+    m.status_planejamento = 'backlog';
+    m.status = 'recebida';
+    m.inicio = '';
+    ajustadas.push(m.codigo || m.titulo || m.id);
+  }
+  return ajustadas;
+}
+
 function travaSprintDoPO(recebido, servidor, papel) {
-  if (String(papel || '') === 'admin') return [];
+  // `true` = dono da sprint (ver `ehDonoDaSprint`); a string 'admin' segue
+  // valendo para quem chama pelo papel.
+  if (papel === true || String(papel || '') === 'admin') return [];
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Map();
   for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
@@ -1883,7 +2140,16 @@ function alocacaoSemSprint(recebido, servidor, papel, hoje) {
     const antesEt = String(velha.status_planejamento || '');
     const cruza = !ETAPAS_POS_PLANNING.includes(antesEt);
     const comeca = depois === 'em_andamento' && antesEt !== 'em_andamento';
-    if (!cruza && !comeca) continue;
+    /* CONCLUIR TAMBEM EXIGE SPRINT (02/11/2026) — bloqueante, em toda porta.
+       Concluida sem sprint fica fora de toda conta de sprint. */
+    /* ...mas so para o que o dev ENTREGOU a partir do inicio da S1-11 (03/11/2026):
+       o que chegou a validacao antes tem a sprint ja fechada, que nao aceita
+       entrada, e por na S1-11 so para concluir contaria na semana errada. Mesma
+       regra de `SPRINTPO.entregueNoRegime`. */
+    const entregaEm = String(m.entregue_em || m.validacao_area_em || '').slice(0, 10);
+    const conclui = depois === 'concluido' && antesEt !== 'concluido' &&
+                    /^\d{4}-\d{2}-\d{2}$/.test(entregaEm) && entregaEm >= '2026-11-02';
+    if (!cruza && !comeca && !conclui) continue;
     if (TIPOS_LIVRES_DA_SPRINT.includes(String(m.tipo || '').toLowerCase())) continue;
     if (String(m.sprint_po || '').trim()) continue;
     presos.push({ id: m.id, codigo: m.codigo || m.id,
@@ -2200,7 +2466,40 @@ function entrandoEmValidacaoSemEntrega(recebido, servidor) {
     if (String(velha.status_planejamento || '') === etapa) continue;  // ja estava
     const h = Number(m.horas_realizadas);
     const t = String(m.implementacao || '').trim();
-    if (!Number.isFinite(h) || h <= 0 || (etapa === 'validacao' && !t)) presos.push(m.codigo || m.id);
+    /* O TEXTO TAMBEM NA AREA (02/11/2026): "o que e obrigatorio devera ser
+       preenchido na validacao da area". A area tem 5 dias uteis e, vencidos, a
+       demanda segue sozinha para o PM/PO (`promoveAreaVencida`) — sem passar de
+       novo por esta porta. Entao o que o PM/PO precisa ler entra aqui. */
+    if (!Number.isFinite(h) || h <= 0 || !t) presos.push(m.codigo || m.id);
+  }
+  return presos;
+}
+
+/* ═══ SAIR DE EM ANDAMENTO EXIGE AS HORAS (04/11/2026) ══════════════════
+ *
+ * "Coloque como obrigatorio o lancamento das horas para o dev movimentar da
+ *  etapa Em andamento. Atualmente eu que estou tendo que lancar para validar na
+ *  etapa Validacao PM/PO. O campo ja deve vir preenchido independente por onde
+ *  foi movimentado (painel ou api)."
+ *
+ * As validacoes ja exigiam horas na ENTRADA (`entrandoEmValidacaoSemEntrega`,
+ * desde 30/10). Faltava a SAIDA para qualquer outro lado: pela API o dev tirava
+ * a demanda de Em andamento (de volta a Planejado, por exemplo) sem lancar nada,
+ * e o trabalho feito ficava sem custo. A regra e pela etapa de ORIGEM, entao
+ * vale para todo destino, inclusive os que ainda nao existem.
+ *
+ * So nas portas do dev (dev-publish e API). O publish do Admin e do PM/PO, que
+ * e justamente quem nao deve precisar lancar por ninguem. */
+function saindoDeAndamentoSemHoras(recebido, servidor) {
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    const velha = m && antes.get(m.id);
+    if (!velha || String(velha.status_planejamento || '') !== 'em_andamento') continue;
+    if (String(m.status_planejamento || '') === 'em_andamento') continue;   // ficou
+    if (faltaHoras(m)) presos.push(m.codigo || m.id);
   }
   return presos;
 }
@@ -2763,6 +3062,31 @@ function criandoTituloRepetido(recebido, servidor) {
 //
 // Sem esta guarda sobra o que sobrou na base: AX-079, concluida sem dev desde a
 // carga inicial, invisivel em todo relatorio por pessoa.
+/* COMECAR SEM DONO, PELO PAINEL DO DEV (03/11/2026). A Marina puxou a AX-1144
+   da fila do time para Em andamento e ela sumiu: a etapa mudou, o responsavel
+   ficou vazio, e demanda em andamento sem dono nao esta na fila (que e de quem
+   ainda nao comecou) nem no nome de ninguem. A tela agora grava o nome de quem
+   moveu; esta guarda pega o que escapar (tela em cache, corpo montado a mao).
+   So a TRANSICAO: o que ja estava assim no servidor nao trava a gravacao de
+   outra coisa. */
+function entrandoNoTrabalhoSemDev(recebido, servidor) {
+  const ETAPAS = ['em_andamento', 'validacao_area', 'validacao'];
+  if (!recebido || !Array.isArray(recebido.melhorias)) return [];
+  const antes = new Map();
+  for (const m of (servidor && servidor.melhorias) || []) if (m && m.id) antes.set(m.id, m);
+  const presos = [];
+  for (const m of recebido.melhorias) {
+    if (!m || !ETAPAS.includes(String(m.status_planejamento || ''))) continue;
+    if (String(m.dev || '').trim()) continue;
+    const velha = antes.get(m.id);
+    if (velha && String(velha.status_planejamento || '') === String(m.status_planejamento || '')) continue;
+    const titulo = String(m.titulo || '').trim();
+    presos.push({ id: m.id || '', codigo: m.codigo || '', titulo: titulo,
+                  rotulo: (m.codigo || '') + (titulo ? ' · ' + titulo.slice(0, 60) : '') });
+  }
+  return presos;
+}
+
 function entrandoEmConcluidoSemDev(recebido, servidor) {
   if (!recebido || !Array.isArray(recebido.melhorias)) return [];
   const antes = new Map();
@@ -3761,7 +4085,22 @@ async function pokerEstado(db, codigo) {
 }
 
 export default {
+  /* A FILA DO HISTORICO E POR REQUISICAO. As rotas recolhem as entradas novas
+     ao gravar (`textoDaBase`); elas so vao para o D1 se a rota terminou bem —
+     gravacao recusada ou com conflito nao deixa evento que nao aconteceu. */
   async fetch(request, env) {
+    const _histFila = [];
+    const resp = await rotear(request, env, _histFila);
+    if (_histFila.length && resp && resp.status >= 200 && resp.status < 300) {
+      try { await guardaHistorico(env, _histFila); }
+      catch (e) { console.log('historico: ' + ((e && e.message) || e)); }
+    }
+    return resp;
+  },
+};
+
+async function rotear(request, env, _histFila) {
+    const textoDaBase = (d) => textoDaBaseFila(d, _histFila);
     const headers = corsHeaders();
     /* ═══ NADA SAI DAQUI SEM CABECALHO CORS ════════════════════════════════
      *
@@ -4038,6 +4377,8 @@ export default {
           id: m.id, titulo: m.titulo || '', dev: m.dev || '', tipo: m.tipo || '',
           tema_id: m.tema_id || '', poker_pontos: m.poker_pontos ?? null,
           poker_media: m.poker_media ?? null, status_planejamento: m.status_planejamento || '',
+          // Quando foi votada: a mesa so mostra o que ainda nao foi, ou foi hoje.
+          poker_votado_em: m.poker_votado_em || '',
           codigo: m.codigo || '', descricao: m.descricao || '',
           solicitante: m.solicitante || '', entrega: m.entrega || '',
           criado_em: m.criado_em || '', debito_tecnico: !!m.debito_tecnico,
@@ -4047,6 +4388,8 @@ export default {
              existe, porque e la que o time de Dados e acompanhado. */
           dados_bi: !!m.dados_bi,
           sales_ops: !!m.sales_ops,
+          // impacto e urgencia seguem a demanda pela esteira, a mesa inclusive
+          impacto: m.impacto || '', urgencia: m.urgencia || '',
           /* OS BIs IMPACTADOS NA MESA. Quem estima uma demanda de Dados precisa
              saber quantos paineis ela encosta — e a diferenca entre 3 e 13
              pontos, e e justamente o que a sala discute. */
@@ -4346,7 +4689,8 @@ export default {
         let sprintRecusa = '';
         const sprintPedida = String(body.sprint_po || '').trim();
         if (sprintPedida) {
-          const ehAdmPoker = (await papelAtual()) === 'admin';
+          await papelAtual();
+          const ehAdmPoker = ehDonoDaSprint(_ident);   // o dono da sprint, e nao o papel
           const fechadasP = new Set(((data.sprints) || [])
             .filter(s => s && String(s.em || '').trim())
             .map(s => String(s.rotulo || '')).filter(Boolean));
@@ -4434,13 +4778,17 @@ export default {
         registraHistorico(data, { melhorias: [antesPoker] },
                           (_ident && _ident.usuario && _ident.usuario.nome) || 'facilitador',
                           'planning poker');
+        promoveAreaVencida(data);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+        carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+        tiraInicioDoBacklog(data);   // voltou ao Backlog: sem data de inicio
+        marcaDadosBiPorTema(data);   // tema de dados: flag Dados/BI
         data.atualizado_em = iso;
         const risco = gravacaoSuspeita(data, file.size || 0);
         if (risco) return json({ error: risco }, 409, headers);
         const putRes = await gh('contents/' + FILE_PATH, {
           method: 'PUT',
           body: JSON.stringify({ message: 'chore: planning poker - ' + String(alvo.titulo || mid).slice(0, 60),
-                                 content: toB64(JSON.stringify(data)), sha: file.sha }),
+                                 content: toB64(textoDaBase(data)), sha: file.sha }),
         });
         if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
         return json({ ok: true, poker_media: media, poker_pontos: pontos,
@@ -4493,13 +4841,17 @@ export default {
           alvoE.anexos = (alvoE.anexos || []).concat(novosAnexos);
         }
         registraHistorico(dataE, { melhorias: [antesE] }, quemE, 'planning poker');
+        promoveAreaVencida(dataE);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+        carimbaCasoDeUso(dataE);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+        tiraInicioDoBacklog(dataE);   // voltou ao Backlog: sem data de inicio
+        marcaDadosBiPorTema(dataE);   // tema de dados: flag Dados/BI
         dataE.atualizado_em = iso;
         const riscoE = gravacaoSuspeita(dataE, fileE.size || 0);
         if (riscoE) return json({ error: riscoE }, 409, headers);
         const putE = await gh('contents/' + FILE_PATH, {
           method: 'PUT',
           body: JSON.stringify({ message: 'chore: planning complementa ' + (alvoE.codigo || mid),
-                                 content: toB64(JSON.stringify(dataE)), sha: fileE.sha }),
+                                 content: toB64(textoDaBase(dataE)), sha: fileE.sha }),
         });
         if (!putE.ok) { const e = await putE.text(); return json({ error: 'Falha ao salvar', detail: e.slice(0, 200) }, 502, headers); }
         return json({ ok: true, descricao: alvoE.descricao,
@@ -4550,13 +4902,17 @@ export default {
         await db.prepare('DELETE FROM poker_voto WHERE codigo = ? AND melhoria_id = ?')
           .bind(codigo, mid).run();
         registraHistorico(dataN, { melhorias: [antesN] }, quemN, 'planning poker');
+        promoveAreaVencida(dataN);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+        carimbaCasoDeUso(dataN);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+        tiraInicioDoBacklog(dataN);   // voltou ao Backlog: sem data de inicio
+        marcaDadosBiPorTema(dataN);   // tema de dados: flag Dados/BI
         dataN.atualizado_em = iso;
         const riscoN = gravacaoSuspeita(dataN, fileN.size || 0);
         if (riscoN) return json({ error: riscoN }, 409, headers);
         const putN = await gh('contents/' + FILE_PATH, {
           method: 'PUT',
           body: JSON.stringify({ message: 'chore: planning nega ' + (alvoN.codigo || mid),
-                                 content: toB64(JSON.stringify(dataN)), sha: fileN.sha }),
+                                 content: toB64(textoDaBase(dataN)), sha: fileN.sha }),
         });
         if (!putN.ok) { const e = await putN.text(); return json({ error: 'Falha ao salvar', detail: e.slice(0, 200) }, 502, headers); }
         return json({ ok: true, codigo: alvoN.codigo || '',
@@ -4645,6 +5001,10 @@ export default {
       const entradaM = { em: agoraM, quem: quemM, texto };
       if (mencoes.length) entradaM.mencoes = mencoes;
       alvoM.mensagens = anteriorM.concat([entradaM]).slice(-MSG_MAX);
+      promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(dataM);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(dataM);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(dataM);   // tema de dados: flag Dados/BI
       dataM.atualizado_em = agoraM;
 
       const riscoM = gravacaoSuspeita(dataM, fileM.size || 0);
@@ -4653,7 +5013,7 @@ export default {
         method: 'PUT',
         body: JSON.stringify({
           message: 'chore: mensageria ' + (alvoM.codigo || mid),
-          content: toB64(JSON.stringify(dataM)), sha: fileM.sha }),
+          content: toB64(textoDaBase(dataM)), sha: fileM.sha }),
       });
       if (!putM.ok) {
         const e = await putM.text();
@@ -4995,6 +5355,8 @@ export default {
       dados_bi: !!m.dados_bi,
       sales_ops: !!m.sales_ops,
       sprint_prioritaria: m.sprint_prioritaria || null,
+      impacto: m.impacto || '', urgencia: m.urgencia || '',
+      caso_uso_status: (m.caso_uso && m.caso_uso.status) || '',
       bis_impactados: bisDaDemanda(m),
     });
 
@@ -5522,6 +5884,16 @@ export default {
         if (body.anexos !== undefined) {
           m.anexos = anexosDoPedido(body.anexos); mudou.push('anexos');
         }
+        // Impacto e urgencia: so os tres valores de cada; outro valor e recusado.
+        for (const [campo, norm] of [['impacto', normImpacto], ['urgencia', normUrgencia]]) {
+          if (body[campo] === undefined) continue;
+          const v = norm(body[campo]);
+          if (!v && String(body[campo] || '').trim()) {
+            return json({ error: campo, detail: campo === 'impacto'
+              ? 'Impacto: baixo, medio ou alto.' : 'Urgencia: baixa, media ou alta.' }, 400, headers);
+          }
+          m[campo] = v; mudou.push(campo);
+        }
         if (body.horas_realizadas !== undefined) {
           const h = Number(body.horas_realizadas);
           if (!Number.isFinite(h) || h < 0) {
@@ -5548,6 +5920,15 @@ export default {
             return json({ error: 'fora_da_sprint', codigos: [m.codigo || m.id],
                           detail: 'Depois da Planning a demanda precisa estar numa sprint. ' +
                                   'Quem escolhe a sprint e o PM/PO — peca o repasse antes.' }, 403, headers);
+          }
+          /* SAIR DE EM ANDAMENTO EXIGE AS HORAS — ver `saindoDeAndamentoSemHoras`.
+             As horas do proprio corpo ja foram aplicadas acima, entao mandar
+             `horas_realizadas` junto com a etapa resolve na mesma chamada. */
+          if (String(m.status_planejamento || '') === 'em_andamento' && e !== 'em_andamento' &&
+              faltaHoras(m)) {
+            return json({ error: 'horas_realizadas',
+                          detail: 'Para tirar a demanda de Em andamento, informe as horas trabalhadas ' +
+                                  '(horas_realizadas maior que zero) nesta mesma chamada.' }, 400, headers);
           }
           m.status_planejamento = e; mudou.push('etapa');
         }
@@ -5862,10 +6243,14 @@ export default {
       registraHistorico(atual, base, eu || ident.papel, 'api');
       atribuiCodigos(atual);
       corrigeProjetoInvalido(atual);
+      promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atual);   // tema de dados: flag Dados/BI
       atual.atualizado_em = new Date().toISOString();
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
-        body: JSON.stringify({ message: msg, content: toB64(JSON.stringify(atual)), sha: file.sha }),
+        body: JSON.stringify({ message: msg, content: toB64(textoDaBase(atual)), sha: file.sha }),
       });
       if (!put.ok) {
         const t = await put.text();
@@ -6040,6 +6425,10 @@ export default {
       }
 
       registraHistorico(atual, base, quem, 'deploy');
+      promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atual);   // tema de dados: flag Dados/BI
       atual.atualizado_em = agora;
       const versoes = [...new Set(pedidos.map(p => p.ver).filter(Boolean))];
       const msg = 'deploy: ' + mexidas + ' demanda(s)' +
@@ -6047,7 +6436,7 @@ export default {
                   ' por ' + quem;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
-        body: JSON.stringify({ message: msg, content: toB64(JSON.stringify(atual)),
+        body: JSON.stringify({ message: msg, content: toB64(textoDaBase(atual)),
                                sha: file.sha }),
       });
       if (!put.ok) {
@@ -6398,11 +6787,15 @@ export default {
       };
       atual.projetos.push(novo);
       atribuiCodigosProjeto(atual);
+      promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atual);   // tema de dados: flag Dados/BI
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
         body: JSON.stringify({ message: 'chore: projeto proposto por ' + quem,
-                               content: toB64(JSON.stringify(atual)), sha: file.sha }),
+                               content: toB64(textoDaBase(atual)), sha: file.sha }),
       });
       if (!put.ok) {
         const t = await put.text();
@@ -6583,7 +6976,10 @@ export default {
       }
       const spPedido = ['backlog', 'planejado', 'em_andamento'].includes(body.status_planejamento)
         ? body.status_planejamento : 'em_andamento';
-      const sp = semDono ? 'backlog' : spPedido;
+      /* QUEM NAO E DONO DA SPRINT ABRE NO BACKLOG (02/11/2026), mesmo pedindo
+         outra etapa — e sem `inicio`, que no backlog viraria "em andamento". */
+      const donoNova = ehDonoDaSprint(perm.ident);
+      const sp = (semDono || !donoNova) ? 'backlog' : spPedido;
       const agora = new Date().toISOString();
       const nova = {
         id: 'ep-' + Date.now().toString(36) + '-' + crypto.randomUUID().slice(0, 6),
@@ -6597,7 +6993,7 @@ export default {
         origem: 'endpoint',
         status_planejamento: sp,
         status: sp === 'backlog' ? 'recebida' : (sp === 'planejado' ? 'estimada' : 'iniciada'),
-        inicio: /^\d{4}-\d{2}-\d{2}$/.test(String(body.inicio || '')) ? body.inicio : '',
+        inicio: (sp !== 'backlog' && /^\d{4}-\d{2}-\d{2}$/.test(String(body.inicio || ''))) ? body.inicio : '',
         entrega: /^\d{4}-\d{2}-\d{2}$/.test(String(body.entrega || '')) ? body.entrega : '',
         /* ═══ OS CAMPOS LIBERADOS NA CRIACAO ═════════════════════════════
          * Todos passam pela MESMA limpeza das telas: `limpaTexto` no que e
@@ -6607,6 +7003,9 @@ export default {
          * dentro do Admin. */
         prioridade: ['alta', 'media', 'baixa'].includes(String(body.prioridade || ''))
           ? body.prioridade : '',
+        // Impacto e urgencia da abertura (03/11/2026) — ver `carimbaCasoDeUso`.
+        impacto: normImpacto(body.impacto),
+        urgencia: normUrgencia(body.urgencia),
         estimativa: '',
         estimativa_horas: Number(body.estimativa_horas) > 0 ? Number(body.estimativa_horas) : 0,
         horas_realizadas: Number(body.horas_realizadas) > 0 ? Number(body.horas_realizadas) : 0,
@@ -6689,11 +7088,15 @@ export default {
       atual.melhorias.push(nova);
       atribuiCodigos(atual);
       corrigeSemDev(atual);
+      promoveAreaVencida(atual);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atual);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atual);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atual);   // tema de dados: flag Dados/BI
       atual.atualizado_em = agora;
       const put = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
         body: JSON.stringify({ message: 'chore: demanda aberta por ' + devNome + ' (endpoint)',
-                               content: toB64(JSON.stringify(atual)), sha: file.sha }),
+                               content: toB64(textoDaBase(atual)), sha: file.sha }),
       });
       if (!put.ok) {
         const t = await put.text();
@@ -6702,6 +7105,15 @@ export default {
       const salva = atual.melhorias.find(m => m.id === nova.id);
       return json({ ok: true, codigo: salva.codigo, id: salva.id,
                     status_planejamento: salva.status_planejamento, dev: salva.dev,
+                    // Diz quando a etapa pedida foi trocada pelo backlog (quem nao e
+                    // dono da sprint so abre no backlog — ver `ehDonoDaSprint`).
+                    ...((!donoNova && !semDono && spPedido !== 'backlog')
+                      ? { aviso: 'Demanda aberta no backlog: so o PM/PO coloca demanda em ' +
+                                 'outra etapa e na sprint.' } : {}),
+                    impacto: salva.impacto || '', urgencia: salva.urgencia || '',
+                    ...((!salva.impacto || !salva.urgencia)
+                      ? { aviso_classificacao: 'Informe impacto (baixo|medio|alto) e urgencia ' +
+                          '(baixa|media|alta) na abertura: eles seguem a demanda pela esteira.' } : {}),
                     /* O VINCULO VOLTA NA RESPOSTA, com o CODIGO da principal. Sem
                        isto quem chama grava `parent_id` e nao tem como saber se
                        pegou a demanda certa — mandou "42", e "42" casa com AX-042
@@ -6852,12 +7264,16 @@ export default {
 
       const quemM = (await papelAtual()) || 'admin';
       registraHistorico(dataM, JSON.parse(textoM), quemM, 'fechamento do mes');
+      promoveAreaVencida(dataM);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(dataM);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(dataM);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(dataM);   // tema de dados: flag Dados/BI
       dataM.atualizado_em = new Date().toISOString();
       const putM = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
         body: JSON.stringify({ message: 'chore: fecha ' + mesDe + ' e rola ' + roladas.length +
                                         ' para ' + mesPara,
-                               content: toB64(JSON.stringify(dataM)), sha: fileM.sha }),
+                               content: toB64(textoDaBase(dataM)), sha: fileM.sha }),
       });
       if (!putM.ok) { const e = await putM.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
       return json({ ok: true, roladas, mes: mesDe, para: mesPara,
@@ -7159,13 +7575,17 @@ export default {
           em: new Date().toISOString(),
         }]);
       }
+      promoveAreaVencida(atualS);   // 5 dias uteis na area: segue para o PM/PO (toda gravacao)
+      carimbaCasoDeUso(atualS);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(atualS);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(atualS);   // tema de dados: flag Dados/BI
       atualS.atualizado_em = new Date().toISOString();
       const putS = await gh('contents/' + FILE_PATH, {
         method: 'PUT',
         body: JSON.stringify({
           message: 'chore: spike ' + (retirar ? 'assinatura retirada' : 'assinada') +
                    ' por ' + uS.login,
-          content: toB64(JSON.stringify(atualS)), sha: fileS.sha }),
+          content: toB64(textoDaBase(atualS)), sha: fileS.sha }),
       });
       if (!putS.ok) {
         return json({ error: 'Falha ao salvar', detail: await putS.text() }, 502, headers);
@@ -7457,6 +7877,32 @@ export default {
       });
     }
 
+    /* ═══ A TRILHA DAS DEMANDAS, DO D1 ═══════════════════════════════════════
+     * Mesma credencial de `dados`. A resposta e montada colando os textos das
+     * linhas — nada e parseado aqui: `{ "itens": { "<id>": [entradas] } }`. */
+    if (body.action === 'historico') {
+      if (!(await leituraLiberadaAsync(body))) return json({ error: 'credencial' }, 401, headers);
+      if (!env.POKER_DB) return json({ itens: {} }, 200, headers);
+      await historicoTabela(env.POKER_DB);
+      const rh = await env.POKER_DB.prepare('SELECT id, hist FROM historico_demanda').all();
+      const partes = ((rh && rh.results) || []).map(x => JSON.stringify(x.id) + ':' + (x.hist || '[]'));
+      return new Response('{"itens":{' + partes.join(',') + '}}', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
+      });
+    }
+
+    /* A COPIA DA TRILHA ANTIGA PARA O D1, em lotes, pelo admin. Junta com o que
+       ja estiver la (a gravacao dupla pode ter chegado antes), sem repetir. */
+    if (body.action === 'historico-importar') {
+      if (!(await ehAdmin())) return json({ error: 'senha' }, 401, headers);
+      const itens = body.itens && typeof body.itens === 'object' ? body.itens : null;
+      if (!itens || Array.isArray(itens)) return json({ error: 'itens invalidos' }, 400, headers);
+      if (Object.keys(itens).length > 300) return json({ error: 'lote grande', detail: 'Ate 300 demandas por lote.' }, 413, headers);
+      const n = await guardaHistorico(env, itens);
+      return json({ ok: true, demandas: n }, 200, headers);
+    }
+
     // ── Login do Admin ──
     if (body.action === 'auth') {
       if (senhaOk(body.senha)) return json({ ok: true }, 200, headers);
@@ -7509,6 +7955,13 @@ export default {
       /* DEPOIS DA PLANNING, SO COM SPRINT — tambem para o PM/PO. E ele quem
          escolhe, e a regra e que escolha ANTES de mover: a tela ja abre o
          seletor; isto e a rede de baixo. */
+      /* O PUBLISH TAMBEM PASSA PELO DONO. Ele e do papel admin, que hoje e de
+         oito pessoas: sem isto, qualquer uma delas repassava, iniciava e
+         fechava sprint pelo Admin ou pelo Gantt. */
+      const _donoPub = ehDonoDaSprint(_ident);
+      const sprintsRevPub = travaSprintDoPO(data, antesPub, _donoPub);
+      const nascidasNoBacklogPub = _donoPub ? [] : nascendoForaDoBacklog(data, antesPub);
+      if (!_donoPub) data.sprints = (antesPub && antesPub.sprints) || [];
       const semSprintPub = alocacaoSemSprint(data, antesPub, 'admin');
       if (semSprintPub.length) {
         return json({ error: 'fora_da_sprint',
@@ -7668,6 +8121,9 @@ export default {
          carimbo do mes: a promocao vira linha no card em vez de uma etapa que
          muda sozinha sem rastro. */
       promoveAreaVencida(data);
+      carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(data);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(data);   // tema de dados: flag Dados/BI
       // ANTES do historico, como o carimbo do mes: assim a entrada na area
       // tambem vira linha no card, e nao um campo que muda sozinho sem rastro.
       carimbaAreaValidacao(data, antesPub);
@@ -7691,7 +8147,7 @@ export default {
          CPU que falta nesta conta. O tempo gasto aqui vai para o log: com o
          numero na mao da para saber se ainda falta cortar, e onde. */
       const t0 = Date.now();
-      const corpoFinal = JSON.stringify(data);
+      const corpoFinal = textoDaBase(data);
       const gravou = await gravaTexto(gh, FILE_PATH, corpoFinal,
         'chore: admin publica ' + new Date().toISOString());
       console.log('publish: ' + (corpoFinal.length / 1048576).toFixed(2) + ' MB, ' +
@@ -7714,6 +8170,9 @@ export default {
       return json({ ok: true, codigos: codigosMel, codigos_projeto: codigosPrj,
                     sem_dev: semDev, sem_projeto: soltas,
                     comite_revertidas: comiteRevPub,
+                    // so o dono da sprint repassa e cria fora do backlog (`ehDonoDaSprint`)
+                    sprints_revertidas: sprintsRevPub,
+                    nascidas_no_backlog: nascidasNoBacklogPub,
                     espelhos_descartados: espelhos,
                     // Diz o que saiu: limpeza silenciosa vira "sumiu um dev da
                     // lista e ninguem sabe por que".
@@ -7774,7 +8233,18 @@ export default {
          demanda seria uma ida de rede por card. */
       const _papelDev = await papelAtual();
       const solicitantesRevertidos = travaSolicitantePreenchido(data, antesDev, _papelDev);
-      const sprintsRevertidas = travaSprintDoPO(data, antesDev, _papelDev);
+      const _donoDev = ehDonoDaSprint(_ident);
+      const sprintsRevertidas = travaSprintDoPO(data, antesDev, _donoDev);
+      /* O CASO DE USO E DO PM/PO: quem envia ao usuario e registra a aprovacao.
+         O painel dev nao tem tela para ele; o valor do servidor vence, para
+         "aprovado" nao poder nascer de um corpo montado a mao. */
+      const _casoAntes = new Map((antesDev.melhorias || []).filter(x => x && x.id).map(x => [x.id, x.caso_uso]));
+      for (const m of data.melhorias) {
+        if (!m || !_casoAntes.has(m.id)) continue;
+        const c = _casoAntes.get(m.id);
+        if (c === undefined) delete m.caso_uso; else m.caso_uso = c;
+      }
+      const nascidasNoBacklogDev = _donoDev ? [] : nascendoForaDoBacklog(data, antesDev);
       /* A CLASSIFICACAO ANTES DA TRAVA DE ALOCACAO, e a ordem e obrigatoria:
          a trava le `m.tipo` para decidir se Sustentacao passa. Invertido, um
          `evolucao` reclassificado no caminho seria lido como Sustentacao e a
@@ -7798,6 +8268,13 @@ export default {
       // resto segue; aqui nao ha valor anterior para restaurar — a demanda estaria
       // entrando num estado que nao se sustenta, e deixar passar e o que produziu
       // a AX-179.
+      const semHorasSaida = saindoDeAndamentoSemHoras(data, antesDev);
+      if (semHorasSaida.length) {
+        return json({ error: 'horas_obrigatorias',
+                      codigos: semHorasSaida,
+                      detail: 'Para tirar de Em andamento (' + semHorasSaida.join(', ') + ') ' +
+                              'lance as horas trabalhadas.' }, 400, headers);
+      }
       const semEntrega = entrandoEmValidacaoSemEntrega(data, antesDev);
       if (semEntrega.length) {
         return json({ error: 'entrega_incompleta',
@@ -7906,6 +8383,16 @@ export default {
                               'entrega não entra em nenhum relatório por pessoa.' },
                     400, headers);
       }
+      const comecaSemDev = entrandoNoTrabalhoSemDev(data, antesDev);
+      if (comecaSemDev.length) {
+        return json({ error: 'comecar_sem_dono',
+                      itens: comecaSemDev,
+                      codigos: comecaSemDev.map(x => x.codigo || x.titulo),
+                      detail: 'Sem responsável: ' + comecaSemDev.map(x => x.rotulo).join(', ') +
+                              '. Quem tira a demanda da fila passa a ser o dono — recarregue o ' +
+                              'painel (Ctrl+F5) e mova de novo, que o seu nome entra junto.' },
+                    400, headers);
+      }
       if (semHorasDev.length) {
         return json({ error: 'horas_obrigatorias',
                       codigos: semHorasDev,
@@ -7926,6 +8413,9 @@ export default {
       // que mais grava no dia a dia — deixar a promocao so no Admin faria o
       // prazo da area depender de o PM/PO publicar alguma coisa.
       promoveAreaVencida(data);
+      carimbaCasoDeUso(data);   // entrou em Em aprovacao de requisitos: abre o caso de uso
+      tiraInicioDoBacklog(data);   // voltou ao Backlog: sem data de inicio
+      marcaDadosBiPorTema(data);   // tema de dados: flag Dados/BI
       // O dev e quem mais vai mover o card para a area — sem esta linha o
       // carimbo so nasceria quando o PM/PO publicasse pelo Admin.
       carimbaAreaValidacao(data, antesDev);
@@ -7938,7 +8428,7 @@ export default {
       corrigeProjetoInvalido(data);
       data.atualizado_em = new Date().toISOString();
       // Mesma gravacao sem base64 do `publish` — ver `gravaTexto`.
-      const gravouDev = await gravaTexto(gh, FILE_PATH, JSON.stringify(data),
+      const gravouDev = await gravaTexto(gh, FILE_PATH, textoDaBase(data),
         'chore: dev atualiza ' + new Date().toISOString());
       /* CORRIDA NO RAMO vira CONFLITO, e nao 502. `gravaTexto` marca quando o
          GitHub recusou por "not a fast forward": outra gravacao entrou na
@@ -7957,6 +8447,7 @@ export default {
                     etapas_revertidas: etapasRevertidas,
                     solicitantes_revertidos: solicitantesRevertidos,
                     sprints_revertidas: sprintsRevertidas,
+                    nascidas_no_backlog: nascidasNoBacklogDev,
                     tipos_revertidos: tiposRevertidos,
                     comite_revertidas: comiteRevDev,
                     espelhos_descartados: espelhos,
@@ -8039,6 +8530,8 @@ export default {
       tema_id: temaId,
       tipo: tipo,
       solicitante: limpaTexto(m.solicitante, 120),
+      impacto: normImpacto(m.impacto),
+      urgencia: normUrgencia(m.urgencia),
       discovery: m.discovery ? limpaProfundo(m.discovery, 0) : undefined,
       anexos: sanitizaAnexos(m.anexos),
       id: uid(),
@@ -8059,7 +8552,7 @@ export default {
 
     const putRes = await gh('contents/' + FILE_PATH, {
       method: 'PUT',
-      body: JSON.stringify({ message: 'feat: nova sugestao (publico) - ' + nova.titulo, content: toB64(JSON.stringify(data)), sha: file.sha }),
+      body: JSON.stringify({ message: 'feat: nova sugestao (publico) - ' + nova.titulo, content: toB64(textoDaBase(data)), sha: file.sha }),
     });
     if (!putRes.ok) { const e = await putRes.text(); return json({ error: 'Falha ao salvar', detail: e }, 502, headers); }
     // Devolve o codigo: quem abriu precisa saber o numero para acompanhar.
@@ -8071,5 +8564,4 @@ export default {
       return json({ error: 'erro_interno',
                     detail: String((e && e.message) || e) }, 500, headers);
     }
-  },
-};
+}

@@ -630,7 +630,7 @@
       /* DUAS LINHAS DE FOLGA no subtítulo, e é medida: 0,30" comporta duas
          linhas de 10pt e para em 1,00" — dois centésimos acima da régua. Os
          subtítulos do deck de um assunto são frases inteiras ("18 demandas sem
-         data combinada — Backlog e Levantar Requisitos. A mais antiga espera há
+         data combinada — Backlog e Em aprovação de requisitos. A mais antiga espera há
          120 dias."), e numa linha só elas seriam cortadas. */
       s.addText(sub, {
         x: 0.5, y: 0.70, w: L_TIT, h: 0.30, fontSize: 10, color: C.fraco });

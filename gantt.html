@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="0749cb38e8">
+<html lang="pt-BR" data-build="6fcc096e08">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -187,7 +187,7 @@
     .ind-chip.validacao      { background:#4A2800; border-color:#8A5000; color:#FFC470; }
     /* Magenta e nao rose avermelhado: 'Atrasado' e vermelho, e num chip deste
        tamanho um rose vizinho do vermelho se confunde com ele a um metro da tela.
-       Magenta tambem nao colide com o purpura de 'Levantar Req.' (#C9AEFF). */
+       Magenta tambem nao colide com o purpura de 'Aprov. requisitos' (#C9AEFF). */
     .ind-chip.pausado        { background:#48123F; border-color:#93257F; color:#F2A0DA; }
     /* MES PASSADO — BRANCO COM AS MESMAS LISTRAS PRETAS do 'Atrasado', e o corpo
        branco e o que separa os dois. Era rosa choque, e o rosa ficava colado no
@@ -533,6 +533,10 @@
     .cap-rolou-alerta { color: var(--amber-tx, #FFC470); display: block; white-space: normal;
       line-height: 1.4; }
     .cap-text { font-size: 10px; color: var(--text3); white-space: nowrap; }
+    /* O ALERTA DE "ROLOU DE SPRINT" QUEBRA LINHA. A regra dele (acima) pedia
+       `white-space: normal`, mas `.cap-text` vem depois com a mesma forca e
+       ganhava: a lista de codigos saia numa linha so e invadia o quadro. */
+    .cap-text.cap-rolou-alerta { white-space: normal; overflow-wrap: anywhere; }
     /* Os pontos por semana quebram linha em vez de serem cortados: com a pontuacao
        retroativa os numeros passaram de 2 para 3 digitos e o total ("Tot 5...")
        ficava fora da coluna de 230px, que e a informacao que mais interessa. */
@@ -1174,6 +1178,7 @@
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <!-- A frente de trabalho de cada pessoa, para o filtro de frente do quadro. -->
+  <script src="requisitos.js?v=1987238fe2"></script>
   <script src="pipelines.js?v=2374e11d52"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-dev.js?v=d113e5ce31"></script>
@@ -1183,6 +1188,7 @@
 <script src="capacidade.js?v=e7e1449a7d"></script>
 <script src="dialogo.js?v=9e20f6c47f"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
+<script src="historico-cliente.js?v=2b0fcaf502"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
 <script src="rede-repete.js?v=4daaef730c"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
@@ -1197,7 +1203,7 @@
 <script src="mensageria-abrir.js?v=2b19b49af3"></script>
 <script src="selo-validacao.js?v=0b6fdb5439"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=495432df68"></script>
+<script src="sprint.js?v=d64ea6d269"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -1438,6 +1444,16 @@
           <option value="evolucao">Evolução</option>
         </select>
       </div>
+      <!-- IMPACTO E URGÊNCIA (03/11/2026): pedidos na abertura, seguem a demanda
+           pela esteira inteira — ver `requisitos.js`. -->
+      <div class="form-group">
+        <label>Impacto *</label>
+        <select id="e-impacto"></select>
+      </div>
+      <div class="form-group">
+        <label>Urgência *</label>
+        <select id="e-urgencia"></select>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -1487,7 +1503,7 @@
         <label>Status Planejamento</label>
         <select id="e-status-plan" onchange="gSprintAviso()">
           <option value="backlog">Backlog</option>
-          <option value="levantar_req">Levantar Requisitos</option>
+          <option value="levantar_req">Em aprovação de requisitos</option>
           <option value="planning">Planning</option>
           <option value="planejado">Planejado</option>
           <option value="em_andamento">Em andamento</option>
@@ -2218,7 +2234,11 @@ async function lerDados(permitirCache, jaTentou) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action: 'dados' }, credenciaisLeitura()))
     });
-    if (r.ok) return await r.json();
+    // A trilha das demandas vem do D1 quando a base nao a traz — ver historico-cliente.js.
+    if (r.ok) {
+      const d = await r.json();
+      return window.HISTCLIENTE ? await HISTCLIENTE.hidrata(d, PROXY_URL, credenciaisLeitura()) : d;
+    }
     if (r.status === 401) {
       // Credencial invalida ou ausente: pede uma vez e repete. Nao cai no
       // fallback publico, que deixaria de existir com o repositorio privado.
@@ -2917,7 +2937,7 @@ function spEfetivo(m) {
 /* OS ROTULOS DAS ETAPAS, num lugar so. Estavam dentro de `renderIndicators`, e a
    fila lateral passou a precisar dos mesmos nomes para dizer de que etapa ela
    esta falando. Duas listas divergiriam no dia em que uma etapa fosse renomeada. */
-const ETAPA_LABELS = { backlog:'Backlog', levantar_req:'Levantar Req.', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação', concluido:'Concluído', atrasado:'Atrasado' };
+const ETAPA_LABELS = { backlog:'Backlog', levantar_req:'Aprov. requisitos', planning:'Planning', planejado:'Planejado', em_andamento:'Em andamento', validacao:'Validação', concluido:'Concluído', atrasado:'Atrasado' };
 
 function renderIndicators() {
   const visible = state.melhorias.filter(m => !m.oculto);
@@ -3123,6 +3143,7 @@ function renderBacklog() {
               demanda SEM data — a derivada sairia vazia para todas elas, e é
               justamente aqui que "já foi repassada?" precisa de resposta. */''}
         ${window.SPRINTPO ? SPRINTPO.badge(m, 'bl-sprint') : ''}
+        ${window.REQUISITOS ? REQUISITOS.chips(m) : ''}
         ${estaPausado(m) ? `<span class="bl-pausa" title="Pausada${m.pausa_motivo ? ': ' + esc(m.pausa_motivo) : ''}"><i class="axi axi-pause"></i> ${diasPausadoAgora(m)}d</span>` : ''}
         ${pontuado
           ? `<span title="Pontos do Planning Poker${m.poker_media != null ? ' — média ' + String(m.poker_media).replace('.', ',') : ''}" style="font-size:10px;background:var(--blue-bg);color:var(--blue-tx);border-radius:4px;padding:2px 6px;font-weight:700"><i class="axi axi-cards"></i> ${m.poker_pontos}</span>`
@@ -4569,7 +4590,10 @@ function gSprintRender(m) {
     ops.map(o => opt(o.rotulo, SPRINTPO.rotuloCurto(o.rotulo) + ' · ' + dm(o.de) + '–' +
                                 dm(o.ate) + (o.agora ? ' · agora' : ''))).join('');
   sel.value = atual;
-  sel.disabled = fechada;
+  // So o dono da sprint escolhe (`SPRINTPO.ehDonoDaSprint`, 02/11/2026).
+  const donoSp = SPRINTPO.ehDonoDaSprint(typeof _gEu !== 'undefined' ? _gEu : null);
+  sel.disabled = fechada || !donoSp;
+  sel.title = !donoSp ? 'Só o Fernando (PM/PO) escolhe a sprint.' : '';
   sel.title = fechada ? 'Sprint fechada — a demanda não sai mais dela.' : '';
   gSprintAviso();
 }
@@ -4708,6 +4732,8 @@ function openModal(id, prefillDev, prefillDate) {
   renderDiscoveryGantt(m);
   document.getElementById('e-prio').value      = m?.prioridade || '';
   document.getElementById('e-tipo').value      = m?.tipo || '';
+  document.getElementById('e-impacto').innerHTML  = REQUISITOS.opcoes('impacto', m?.impacto);
+  document.getElementById('e-urgencia').innerHTML = REQUISITOS.opcoes('urgencia', m?.urgencia);
   document.getElementById('e-sprint').value    = m?.sprint || '';
   // Pontos: o gantt mostrava o valor no card da fila mas nao tinha onde digitar.
   // Se a demanda tiver um valor antigo fora do baralho, acrescenta a opcao para
@@ -5072,12 +5098,24 @@ async function saveTask() {
   if (!titulo) { toast('Informe o título.', 'err'); return; }
   const tipo = document.getElementById('e-tipo').value;
   if (!tipo) { toast('Selecione o tipo: Sustentação ou Evolução.', 'err'); return; }
+  // Impacto e urgência: obrigatórios na abertura (as antigas não os têm).
+  const impacto = document.getElementById('e-impacto').value;
+  const urgencia = document.getElementById('e-urgencia').value;
+  if (!editingId && (!impacto || !urgencia)) {
+    toast('Informe o impacto e a urgência da demanda.', 'err');
+    document.getElementById(impacto ? 'e-urgencia' : 'e-impacto').focus(); return;
+  }
 
   const inicio = document.getElementById('e-inicio').value;
   const fim    = document.getElementById('e-fim').value;
   if (inicio && fim && fim < inicio) { toast('Data fim deve ser >= data início.', 'err'); return; }
 
-  const sp = document.getElementById('e-status-plan').value;
+  let sp = document.getElementById('e-status-plan').value;
+  /* QUEM NAO E DONO DA SPRINT SO ABRE NO BACKLOG (02/11/2026) — demanda nova. */
+  if (!editingId && window.SPRINTPO && !SPRINTPO.ehDonoDaSprint(typeof _gEu !== 'undefined' ? _gEu : null) && sp !== 'backlog') {
+    sp = 'backlog';
+    toast('Demanda aberta no Backlog — só o PM/PO coloca em outra etapa e na sprint.', 'ok');
+  }
   /* O AVISO VEM ANTES de qualquer gravação, e depois de a etapa ser conhecida:
      a consequência depende dela. */
   if (!(await gConfirmaRetroativo(inicio, fim, sp))) return;
@@ -5131,6 +5169,8 @@ async function saveTask() {
     descricao:          document.getElementById('e-descricao').value.trim(),
     tema_id:            temaId,
     tipo:               tipo,
+    impacto:            impacto,
+    urgencia:           urgencia,
     status:             spToStatus(sp),
     dev:                document.getElementById('e-dev').value,
     inicio:             inicio,
