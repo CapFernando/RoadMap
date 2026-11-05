@@ -25167,6 +25167,60 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   try { new Function(PIPE); } catch (e) { erroP = e.message; }
   ok(!erroP, 'pipelines.js sem erro de sintaxe', erroP || '');
 
+  /* FECHAR E CONGELAR O MES NAO FUNCIONAVAM, por tres pecas soltas: a rota
+     `mes-fechar` testava o objeto inteiro de `exigePapel` (sempre verdadeiro) e
+     devolvia `{ident}` como resposta, um 500; o admin mandava `base:
+     state.atualizado_em`, que a carga nunca preenche, e o Worker pedia
+     "recarregue"; e o congelar mandava a Promise de `apresApuracao`, que vira
+     `{}` no JSON. As tres sao executadas aqui, e nao procuradas no texto. */
+  sec('Fechar e congelar o mes: rota, versao da base e apuracao');
+  {
+    const exige = new Function('identifica', 'json', 'return ' + corpo(W, 'async function exigePapel('))(
+      async (env, b) => (b.quem ? { papel: b.quem } : null), (o, st) => ({ st, o }));
+    pendentes.push((async () => {
+      const sim = await exige({}, { quem: 'admin' }, ['admin'], {});
+      const nao = await exige({}, { quem: 'dev' }, ['admin'], {});
+      ok(sim && sim.ident && !sim.recusa && nao && nao.recusa && !nao.ident,
+         'exigePapel devolve { ident } ou { recusa }: os dois sao objetos verdadeiros');
+    })());
+    const sitios = [...W.matchAll(/const (\w+) = await exigePapel\(/g)].map((m) => m[1]);
+    const malUsados = sitios.filter((v) =>
+      !new RegExp('if \\(' + v + '\\.recusa\\) return ' + v + '\\.recusa').test(W));
+    ok(sitios.length >= 10 && !malUsados.length,
+       'toda rota que chama exigePapel responde pelo .recusa, e nao pelo objeto', malUsados.join(', '));
+
+    let enviado = null;
+    const btnF = { textContent: 'Congelar', disabled: false };
+    const congela = new Function('fechaDoMes', 'apresPeriodoNome', 'confirmar', 'document', 'apresApuracao',
+      'fetch', 'ADMIN_PROXY_URL', 'credAdmin', 'toast', 'fechaCarregar',
+      'return ' + corpo(ADMIN, 'async function fechaCongelar('))(
+      () => null, () => 'outubro', async () => true, { getElementById: () => btnF },
+      async () => ({ pontos: { total: 7 } }),
+      async (u, o) => { enviado = JSON.parse(o.body); return { ok: true, json: async () => ({ ok: true }) }; },
+      'x', () => ({}), () => {}, async () => {});
+    pendentes.push((async () => {
+      await congela('2026-10');
+      ok(enviado && enviado.apuracao && enviado.apuracao.pontos && enviado.apuracao.pontos.total === 7,
+         'congelar manda a apuracao calculada, e nao a Promise (que vira {} no JSON)',
+         JSON.stringify(enviado && enviado.apuracao));
+    })());
+
+    let pedido = null;
+    const fecha = new Function('mesAlvoSelecionado', 'mesDoPeriodo', 'mesDe', 'mesSomaLocal', 'toast',
+      'confirmar', 'showSaving', 'fetch', 'ADMIN_PROXY_URL', 'credAdmin', '_pollTs', 'state',
+      'loadFromGitHub', 'renderMes', 'return ' + corpo(ADMIN, 'async function mesFecharAbrir('))(
+      () => '2026-10', () => [{ codigo: 'AX-1', titulo: 't', status_planejamento: 'planejado' }],
+      () => '2026-10', () => '2026-11', () => {}, async () => true, () => {},
+      async (u, o) => { pedido = JSON.parse(o.body); return { ok: true, json: async () => ({ roladas: [] }) }; },
+      'x', () => ({}), '2026-11-05T10:00:00.000Z', { melhorias: [] }, async () => {}, () => {});
+    pendentes.push((async () => {
+      await fecha();
+      ok(pedido && pedido.action === 'mes-fechar' && pedido.base === '2026-11-05T10:00:00.000Z',
+         'fechar o mes manda a versao da base que a tela leu (sem ela o Worker pede para recarregar)',
+         pedido && String(pedido.base));
+    })());
+  }
+
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao
