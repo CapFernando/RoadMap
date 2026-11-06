@@ -287,19 +287,19 @@
   var SECOES = [
     /* PRIMEIRO, e só quando existe. A daily abre por "o que saiu", e esta é a
        única seção que fala do passado — as outras são estado de agora. */
-    { k: 'fim', lista: 'concluidoHoje', rot: '✅ Concluído hoje', soSeTiver: true,
+    { k: 'fim', lista: 'concluidoHoje', rot: '<i class="axi axi-check"></i> Concluído hoje', soSeTiver: true,
       dica: 'aprovado hoje pelo PM/PO', txt: 'CONCLUÍDO HOJE' },
-    { k: 'atr', lista: 'atrasado',  rot: '⚠ Atrasado',
+    { k: 'atr', lista: 'atrasado',  rot: '<i class="axi axi-alert"></i> Atrasado',
       dica: 'o prazo venceu e ainda é dele', txt: 'ATRASADO' },
     { k: 'and', lista: 'andamento', rot: '▶ Em andamento',
       dica: 'a bola está com o dev', txt: 'EM ANDAMENTO' },
-    { k: 'val', lista: 'validacao', rot: '⏳ Em validação',
+    { k: 'val', lista: 'validacao', rot: '<i class="axi axi-hourglass"></i> Em validação',
       dica: 'o dev entregou; está com o PM/PO', txt: 'EM VALIDAÇÃO' },
     /* POR ÚLTIMO, e não por ser menos importante: os três de cima são o que
        está acontecendo, e este é o que vem. Numa daily a leitura corre nessa
        ordem — primeiro o que trava, depois o que anda, depois o que espera
        terceiro, e por fim o que entra em seguida. */
-    { k: 'pla', lista: 'planejado', rot: '📅 Planejado',
+    { k: 'pla', lista: 'planejado', rot: '<i class="axi axi-calendar"></i> Planejado',
       dica: 'combinado, e ainda não começou', txt: 'PLANEJADO' },
     /* POR ÚLTIMO, seguindo o funil: planning vem ANTES de planejado no fluxo,
        mas DEPOIS na leitura — é o mais distante do que a pessoa faz hoje.
@@ -320,7 +320,7 @@
        OS OUTROS QUATRO CONTINUAM APARECENDO VAZIOS, e isso é deliberado:
        "0 atrasado" é resposta, e some junto com a pergunta se o bloco sumir.
        "0 em planning" não é resposta — é ausência de assunto. */
-    { k: 'pln', lista: 'planning', rot: '🃏 Planning', soSeTiver: true,
+    { k: 'pln', lista: 'planning', rot: '<i class="axi axi-cards"></i> Planning', soSeTiver: true,
       dica: 'o tamanho é definido na reunião', txt: 'PLANNING' },
   ];
 
@@ -484,7 +484,7 @@
         '<div id="dr-corpo"></div>' +
         '<div class="form-actions" style="margin-top:16px">' +
           '<button class="btn btn-secondary" data-dr-fechar>Fechar</button>' +
-          '<button class="btn btn-primary" id="dr-copiar">📋 Copiar para o grupo</button>' +
+          '<button class="btn btn-primary" id="dr-copiar"><i class="axi axi-clipboard"></i> Copiar para o grupo</button>' +
         '</div>' +
       '</div>';
     d.body.appendChild(el);

@@ -1,0 +1,196 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   TEMA CLARO — so as cores especiais
+   A paleta geral (fundo, texto, borda, azul, verde...) mora em axis.css, nos
+   tokens do AXIS, e vale para os dois temas. Este bloco NAO pode redeclara-la:
+   `:root[data-tema="claro"]` (0,2,0) venceria o `html:root` do axis.css e a
+   tela clara voltaria para a paleta antiga.
+
+   Ficam aqui so as cores que nao sao do AXIS e tem par proprio no claro: o
+   podio e o pausado. Os tokens que NAO sao cor (--day-w, --dev-label,
+   --radius) tambem ficam de fora, de proposito: sobrescreve-los destruiria o
+   layout da linha do tempo.
+   ───────────────────────────────────────────────────────────────────────── */
+:root[data-tema="claro"] {
+  /* Podio. Os tons escuros do ouro/prata/bronze ficam ilegiveis sobre branco;
+     par invertido, com o ouro guardando mais saturacao que os outros dois para a
+     diferenca entre primeiro e segundo continuar visivel no tema claro tambem.
+     Contraste medido: ouro 6,7:1 | prata 7,3:1 | bronze 7,2:1. */
+  --ouro-bg:   #FBEFC8;  --ouro-bd:   #C79A17;  --ouro-tx:   #6B4E00;
+  --prata-bg:  #EDEEF0;  --prata-bd:  #B9BCC2;  --prata-tx:  #4A4D53;
+  --bronze-bg: #F6E3D2;  --bronze-bd: #C08F63;  --bronze-tx: #6B3F1C;
+  /* Pausado. O par escuro (#45142F/#F5A8CE) inverte para fundo tingido claro
+     + texto escuro; #85116E sobre #FBDDF3 da 6.4:1. */
+  --rose:      #A81C8C;
+  --rose-bg:   #FBDDF3;
+  --rose-bd:   #E9A2DC;
+  --rose-tx:   #85116E;
+}
+
+/* ── SELO DE VALIDACAO DO PLANNING POKER ──────────────────────────────────
+   A UNICA COR DESTE ARQUIVO QUE NAO MUDA COM O TEMA, e e de proposito.
+
+   Carimbo tem cor propria: e a mesma em papel branco e em papel escuro, e e
+   assim que um carimbo e reconhecido. Prata com texto preto tambem resolve o
+   problema que o azul nao resolvia — DESTAQUE. O selo e desenhado por cima das
+   sete cores de barra do Gantt, e um azul escuro sobre a barra azul de
+   'planejado' era duas tonalidades da mesma cor uma sobre a outra.
+
+   Prata destoa de todas as sete: nenhuma etapa e cinza, e nenhum estado —
+   atraso, pausa, heranca — usa esse tom. E preto sobre prata da 13,6:1, o maior
+   contraste de qualquer marca do cartao.
+
+   Fica num `:root` sem seletor de tema porque vale nos dois; o bloco claro
+   acima nao precisa sobrescrever nada.                                       */
+:root {
+  --selo-bg: #C6CBD4;
+  --selo-bd: #7C838F;
+  --selo-tx: #0A0A0A;
+}
+
+/* Faz o navegador desenhar barra de rolagem, cursor de texto e controles
+   nativos na variante certa. Sem isso, campos e scrollbars continuam escuros. */
+:root[data-tema="claro"] { color-scheme: light; }
+:root:not([data-tema="claro"]) { color-scheme: dark; }
+
+
+/* ── Chips de status com fundo translucido ───────────────────────────────
+   Estes chips pintam o fundo com alfa baixo (#1E420822, rgba(...,.15)), ou
+   seja: o fundo efetivo e o da PAGINA. No escuro isso da chip escuro com texto
+   claro; no claro o fundo vira claro e o texto claro desaparece — media de
+   1.3:1 a 1.6:1, ilegivel. Aqui cada um recebe o par opaco do tema claro.
+   Chips de fundo opaco escuro nao entram: eles seguem escuros e legiveis. */
+:root[data-tema="claro"] .s-levantar_req {
+  background: var(--amber-bg); color: var(--amber-tx);
+}
+:root[data-tema="claro"] .badge-planejado,
+:root[data-tema="claro"] .s-backlog {
+  background: var(--blue-bg); color: var(--blue-tx);
+}
+:root[data-tema="claro"] .badge-concluida,
+:root[data-tema="claro"] .s-concluido,
+:root[data-tema="claro"] .s-em_andamento {
+  background: var(--green-bg); color: var(--green-tx);
+}
+:root[data-tema="claro"] .badge-levantar_req {
+  background: var(--purple-bg); color: var(--purple-tx);
+}
+:root[data-tema="claro"] .badge-planning,
+:root[data-tema="claro"] .s-planning {
+  background: var(--teal-bg); color: var(--teal-tx);
+}
+
+/* ── Botao de alternancia ────────────────────────────────────────────────
+   Injetado por tema.js no cabecalho de cada pagina. */
+.tema-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex-shrink: 0;
+  background: var(--bg3, #1E1E1C);
+  border: 1px solid var(--border, #2E2E2B);
+  border-radius: 9px;
+  color: var(--text, #ECEAE2);
+  font-size: 16px; line-height: 1; cursor: pointer;
+  font-family: inherit;
+  /* NAO animar `color`: quando o valor vem de var(--text) e o token troca de
+     tema, a transicao fica presa no valor interpolado antigo — o botao ficava
+     com o texto do tema claro dentro do tema escuro (1.05:1). */
+  transition: border-color .15s;
+}
+.tema-btn:hover { border-color: var(--border2, #3A3A36); color: var(--text, #ECEAE2); }
+/* Quando nao existe cabecalho onde encaixar, o botao vira flutuante. */
+.tema-btn.solta { position: fixed; top: 14px; right: 14px; z-index: 9999; }
+
+/* A cor dos botoes (principal, sucesso, perigo) mora em axis.css, nos
+   componentes do AXIS. Aqui ficava um azul fixo para o tema escuro, de antes
+   da identidade nova. */
+
+/* ── Troca de tema sem animação ──────────────────────────────────────────
+   Quando uma propriedade animada (color, background) tem valor vindo de var() e
+   o token muda de tema, a transicao fica PRESA no valor interpolado antigo — o
+   elemento passa a exibir a cor do tema anterior, indefinidamente. Foi o que
+   fez o botao "↻ Atualizar" mostrar a cor clara dentro do tema escuro.
+   tema.js poe esta classe durante a troca e tira logo depois. */
+html.trocando-tema, html.trocando-tema *, html.trocando-tema *::before, html.trocando-tema *::after {
+  transition: none !important;
+}
+
+/* ── PODIO: o chip de colocacao ──────────────────────────────────────────
+   Usado no painel Dev (produtividade individual) e no Planejamento (ranking do
+   mes). Vive aqui porque e o MESMO componente nas duas telas: duas copias
+   divergiriam na primeira mexida, e o time compara as duas telas lado a lado.
+
+   Diferente do resto deste arquivo, este bloco NAO e do tema claro — ele vale nos
+   dois. As cores vem de tokens (--ouro-*, --prata-*, --bronze-*) que cada pagina
+   declara no seu :root escuro, e que a secao :root[data-tema="claro"] acima
+   substitui pelo par claro.
+
+   O primeiro lugar e maior e em ouro cheio; os outros dois recuam em tamanho e em
+   saturacao. So o emoji nao diferenciava: no tamanho de um chip a medalha de ouro
+   e a de prata tem quase o mesmo desenho, e a distincao morria — foi reportado. */
+.prod-medalha { display:inline-flex; align-items:center; gap:5px;
+  background:var(--bg2); border:1px solid var(--border); border-radius:20px;
+  padding:2px 10px 2px 7px; white-space:nowrap; color:var(--text2); font-size:12px; }
+.prod-medalha b { color:var(--text); font-weight:600; }
+.prod-medalha .prod-num { color:var(--text3); font-size:11px; }
+.prod-medalha.p1 { font-size:13.5px; padding:4px 13px 4px 9px; font-weight:600;
+  background:var(--ouro-bg,#3D2F08); border-color:var(--ouro-bd,#9C7A14);
+  color:var(--ouro-tx,#F7D774); }
+.prod-medalha.p1 b { color:var(--ouro-tx,#F7D774); font-weight:700; }
+.prod-medalha.p1 .prod-num { color:var(--ouro-tx,#F7D774); opacity:.82; font-size:12px; }
+.prod-medalha.p1 .prod-med { font-size:15px; }
+.prod-medalha.p2 { font-size:12px;
+  background:var(--prata-bg,#2B2D31); border-color:var(--prata-bd,#52565D);
+  color:var(--prata-tx,#DBDEE4); }
+.prod-medalha.p2 b { color:var(--prata-tx,#DBDEE4); }
+.prod-medalha.p2 .prod-num { color:var(--prata-tx,#DBDEE4); opacity:.72; }
+.prod-medalha.p3 { font-size:11.5px; padding:2px 9px 2px 6px;
+  background:var(--bronze-bg,#33241A); border-color:var(--bronze-bd,#7A5537);
+  color:var(--bronze-tx,#E3B389); }
+.prod-medalha.p3 b { color:var(--bronze-tx,#E3B389); font-weight:600; }
+.prod-medalha.p3 .prod-num { color:var(--bronze-tx,#E3B389); opacity:.7; }
+/* O seu lugar fica marcado por um anel, nao trocando o preenchimento: pintar de
+   azul apagaria a cor do lugar, que e a informacao principal. */
+.prod-medalha.eu { box-shadow:0 0 0 2px var(--blue); }
+/* Clicavel no Planejamento: o chip filtra a linha do tempo pelo dev. */
+button.prod-medalha { cursor:pointer; font-family:inherit; }
+button.prod-medalha:hover { filter:brightness(1.14); }
+
+/* ─── A FAIXA DE "OS DADOS NÃO FORAM LIDOS" ─────────────────────────────────
+   Ver `leitura-estado.js` para o motivo de ela existir. Aqui só a aparência.
+
+   FIXA NO TOPO E COM `z-index` ALTO: ela responde "em que estado esta tela
+   está", e uma faixa que rola para fora da vista deixa de responder isso
+   justamente quando a pessoa desce até o formulário — que é onde o dado que
+   falta faz diferença.
+
+   VERMELHO DO TEMA, e não hex solto: `--red-bg`/`--red-tx` já existem com par
+   claro e escuro. As duas telas medem acima de 4.5:1 — o texto aqui é o aviso
+   inteiro, não uma etiqueta, e ilegível ele não avisa nada. */
+#leitura-faixa {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 14px;
+  background: var(--red-bg, #3A1414);
+  color: var(--red-tx, #FFD8D8);
+  border-bottom: 2px solid var(--red, #CC3232);
+  font-size: 13px; line-height: 1.45;
+}
+/* O MOTIVO SE SEPARA POR TAMANHO, e não por cor.
+   A primeira versão punha `color: var(--red)` nele e a medição deu 3,15:1 sobre
+   o fundo da faixa — abaixo do mínimo de 4,5:1 para texto pequeno. Era o mesmo
+   erro de sempre: usar a cor de DESTAQUE como se fosse cor de texto secundário.
+   Esmaecer também está fora (ver a nota do `--esmaecido` acima), então sobra o
+   corpo da letra: 12px contra 13px do aviso, mesma cor, 12,45:1 nos dois temas.
+   O detalhe técnico (`HTTP 401`) não precisa saltar — precisa ser legível quando
+   alguém for procurá-lo. */
+#leitura-faixa .lf-motivo { font-size: 12px; }
+#leitura-faixa #lf-retry {
+  margin-left: auto;
+  background: transparent; color: inherit;
+  border: 1px solid currentColor; border-radius: 6px;
+  padding: 4px 12px; font: inherit; font-weight: 600; cursor: pointer;
+}
+#leitura-faixa #lf-retry:hover:not(:disabled) { filter: brightness(1.15); }
+#leitura-faixa #lf-retry:disabled { cursor: progress; }
+/* A faixa é fixa e cobriria o topo da página. Empurra o conteúdo para baixo
+   enquanto ela existe, em vez de deixá-la por cima do cabeçalho. */
+body:has(#leitura-faixa:not([style*="display: none"])) { padding-top: 46px; }

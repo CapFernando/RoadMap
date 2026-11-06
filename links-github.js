@@ -185,9 +185,9 @@
     '.gh-ref:hover { color:var(--text,#ECEAE2); border-color:var(--border2,#3A3A36); }',
     /* Cor por tipo: azul = issue (pedido), verde = PR (entrega), roxo =
        milestone (agrupamento). Distingue de relance sem depender do texto. */
-    '.gh-ref.gh-issue { color:var(--blue-tx,#9BC8F8); border-color:#1a5080; }',
-    '.gh-ref.gh-pr { color:var(--green,#3EC98E); border-color:#306010; }',
-    '.gh-ref.gh-milestone { color:#C9AEFF; border-color:#5A3A9E; }',
+    '.gh-ref.gh-issue { color:var(--blue-tx,#9BC8F8); border-color:rgba(var(--in-rgb),.4); }',
+    '.gh-ref.gh-pr { color:var(--green,#3EC98E); border-color:rgba(var(--ok-rgb),.4); }',
+    '.gh-ref.gh-milestone { color:var(--purple-tx); border-color:rgba(var(--pu-rgb),.4); }',
     '.gh-input-erro { border-color:var(--red,#E5484D) !important; }',
     '.gh-repo-sel { font-size:12px; max-width:100%; }',
   ].join('\n');

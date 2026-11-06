@@ -1,0 +1,433 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   AXIS — design system compartilhado pelas telas.
+
+   A identidade nova (EP-013) entra por TOKEN, e nao reescrevendo cada tela.
+   As telas foram escritas cada uma com o seu :root, mas todas falam o mesmo
+   vocabulario (--bg, --bg2, --text, --blue...). Este arquivo faz duas coisas:
+
+   1. Declara os tokens do AXIS (--sf, --tx, --ac...) nos dois temas.
+   2. Reaponta o vocabulario antigo para eles, num seletor `html:root`
+      (especificidade 0,1,1). Isso vence o `:root` de cada pagina (0,1,0) sem
+      depender da ordem dos arquivos, e perde para `:root[data-tema="claro"]`
+      (0,2,0) — por isso o bloco claro do tema.css NAO pode mais redeclarar
+      a paleta geral, so as cores especiais (podio, pausado).
+
+   O acento e whitelabel: tudo o que e "cor da marca" sai de --ac e dos seus
+   tons, gerados da cor #FF6B1A pela mesma formula do theme.js do AXIS
+   (claro 18% para branco, texto 30%/38%, hover 52%, escuro 20% para preto).
+   Para trocar a cor, recalcule os tons e troque so os --ac-*.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Tokens do AXIS · escuro (padrao) ──────────────────────────────────── */
+:root {
+  --ac:    #FF6B1A;
+  --ac-l:  #FF8643;
+  --ac-t:  #FF975F;
+  --ac-h:  #FFB891;
+  --ac-d:  #CC5615;
+  --ac-xl: #FFDECD;
+  --on-ac: #FFFFFF;
+  --ac-rgb: 255,107,26;
+
+  --bg-top: #0A1428;
+  --bg0:    #05070C;
+  --side:   #04060B;
+  --sf-rgb: 13,22,42;
+  --sf:     #0D162A;
+  --sf2:    #0F1A30;
+  --sf2b:   #0F1A2F;
+  --sf3:    #0B1323;
+  --sf4:    #13203A;
+  --sf5:    #16243F;
+  --track:  #1C2A45;
+  --bd:     #18243D;
+  --bd2:    #22314F;
+  --bd3:    #111B30;
+  --bd4:    #2A3A5C;
+  --tx:     #F3F6FB;
+  --tx-hi:  #FFFFFF;
+  --tx2:    #C9D3E3;
+  --tx2b:   #DCE3EE;
+  --tx3:    #8C9AB3;
+  --tx4:    #5F6E88;
+  --tx5:    #3E4C66;
+
+  /* Estados. Cada um tem a cor cheia (borda, barra, ponto) e o tom de TEXTO,
+     que e o que vai em cima de fundo — a cor cheia como texto pequeno nao
+     passa no contraste. O fundo do chip e a cor a 14% (DOC-18 §18.4). */
+  --ok: #22C55E;  --ok-t: #4ADE80;  --ok-rgb: 34,197,94;   --ok-xl: #BDF5D0;
+  --in: #4C8DFF;  --in-t: #8CB4FF;  --in-rgb: 76,141,255;  --in-xl: #C7D8FF;
+  --wn: #F5B83D;  --wn-t: #F5D58A;  --wn-rgb: 245,184,61;  --wn-c: #F5B83D;
+  --dg: #F04B4B;  --dg-t: #FF9A9A;  --dg-rgb: 240,75,75;
+  --pu: #8B5CF6;  --pu-t: #C4B5FD;  --pu-rgb: 139,92,246;
+  --tl: #2DD4BF;  --tl-t: #99F6E4;  --tl-rgb: 45,212,191;
+
+  --shadow: rgba(0,0,0,0.45);
+  --overlay: rgba(3,5,10,0.66);
+
+  --font-ui:    'Manrope', 'Segoe UI', system-ui, sans-serif;
+  --font-title: 'Montserrat', 'Manrope', sans-serif;
+  --font-mono:  'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+}
+
+/* ── Tokens do AXIS · claro ────────────────────────────────────────────── */
+:root[data-tema="claro"] {
+  --ac-t:  #9E4210;
+  --ac-h:  #7A330C;
+  --ac-xl: #61290A;
+
+  --bg-top: #F6F8FB;
+  --bg0:    #ECF0F5;
+  --side:   #FFFFFF;
+  --sf-rgb: 255,255,255;
+  --sf:     #FFFFFF;
+  --sf2:    #F2F5F9;
+  --sf2b:   #FFFFFF;
+  --sf3:    #FFFFFF;
+  --sf4:    #E7ECF3;
+  --sf5:    #E2E8F0;
+  --track:  #E3E8F0;
+  --bd:     #E1E6EE;
+  --bd2:    #CFD7E3;
+  --bd3:    #EDF1F6;
+  --bd4:    #C5CEDB;
+  --tx:     #0B1220;
+  --tx-hi:  #0B1220;
+  --tx2:    #334155;
+  --tx2b:   #1E293B;
+  --tx3:    #5B6B85;
+  --tx4:    #7C8AA0;
+  --tx5:    #A9B4C4;
+
+  --ok: #16A34A;  --ok-t: #15803D;  --ok-rgb: 22,163,74;   --ok-xl: #166534;
+  --in: #2563EB;  --in-t: #1D4ED8;  --in-rgb: 37,99,235;   --in-xl: #1E40AF;
+  --wn: #D97706;  --wn-t: #8A5A00;  --wn-rgb: 217,119,6;   --wn-c: #B45309;
+  --dg: #DC2626;  --dg-t: #C62828;  --dg-rgb: 220,38,38;
+  --pu: #7C3AED;  --pu-t: #6D28D9;  --pu-rgb: 124,58,237;
+  --tl: #0D9488;  --tl-t: #0F766E;  --tl-rgb: 13,148,136;
+
+  --shadow: rgba(15,23,42,0.12);
+  --overlay: rgba(15,23,42,0.42);
+}
+
+/* ── O vocabulario antigo, reapontado ──────────────────────────────────── */
+html:root {
+  --bg:   var(--bg0);
+  --bg1:  var(--bg0);   /* so o importar usa, e como fundo da pagina */
+  --bg2:  var(--sf);
+  --bg3:  var(--sf4);
+  --bg4:  var(--sf5);
+  --card: var(--sf2);
+  --nm-sec-bg: var(--sf3);
+
+  --border:  var(--bd);
+  --border2: var(--bd2);
+
+  --text:  var(--tx);
+  --text1: var(--tx);
+  --text2: var(--tx2);
+  --text3: var(--tx3);
+
+  --blue:   var(--in);  --blue-bg:   rgba(var(--in-rgb),.14);  --blue-tx:   var(--in-t);
+  --green:  var(--ok);  --green-bg:  rgba(var(--ok-rgb),.14);  --green-tx:  var(--ok-t);
+  --amber:  var(--wn);  --amber-bg:  rgba(var(--wn-rgb),.14);  --amber-tx:  var(--wn-t);
+  --red:    var(--dg);  --red-bg:    rgba(var(--dg-rgb),.14);  --red-tx:    var(--dg-t);
+  --purple: var(--pu);  --purple-bg: rgba(var(--pu-rgb),.16);  --purple-tx: var(--pu-t);
+  --teal:   var(--tl);  --teal-bg:   rgba(var(--tl-rgb),.14);  --teal-tx:   var(--tl-t);
+  --yellow: var(--wn);
+
+  /* O "acento" do importar era roxo; no AXIS o acento e a cor da marca. */
+  --accent:  var(--ac);
+  --accent2: var(--ac-l);
+}
+/* No claro a secao do formulario precisa destoar do modal branco. */
+html:root[data-tema="claro"] { --nm-sec-bg: var(--sf2); }
+
+/* ── Base ──────────────────────────────────────────────────────────────── */
+html body {
+  font-family: var(--font-ui);
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg0) 60%) fixed;
+  background-color: var(--bg0);
+  color: var(--tx);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font-family: inherit; }
+code, kbd, samp, pre { font-family: var(--font-mono); }
+::selection { background: rgba(var(--ac-rgb), .32); }
+/* So o link solto: <a class="btn"> e aba-link tem cor propria. */
+a:not([class]) { color: var(--ac-t); }
+a:not([class]):hover { color: var(--ac-h); }
+
+/* Foco visivel em tudo que e operavel por teclado (DOC-18 §18.5). */
+:focus-visible { outline: 2px solid rgba(var(--ac-rgb), .7); outline-offset: 2px; }
+
+/* Barra de rolagem discreta, no tom do painel. */
+* { scrollbar-color: var(--bd4) transparent; }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   COMPONENTES
+   Medidas do DOC-18 §18.4 e do CSS do prototipo (prototipo/fonte/Sidebar).
+   Prefixo `html` em tudo: soma 0,0,1 e vence a regra de mesma classe que cada
+   pagina declara no proprio <style>, sem depender da ordem dos arquivos. O
+   que uma pagina escreveu com seletor MAIS especifico continua valendo — e
+   de proposito: e la que mora o desenho proprio de cada tela.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── Titulos ───────────────────────────────────────────────────────────── */
+html h1, html h2 { font-family: var(--font-title); letter-spacing: -0.01em; }
+html h1 { font-weight: 800; }
+html h2 { font-weight: 700; }
+
+/* ── Botoes ────────────────────────────────────────────────────────────── */
+html .btn {
+  min-height: 38px; padding: 0 16px; border-radius: 11px;
+  font-size: 13px; font-weight: 600; line-height: 1.2;
+  justify-content: center;
+  transition: background .15s, border-color .15s, box-shadow .15s, filter .15s;
+}
+html .btn:hover { opacity: 1; filter: brightness(1.08); }
+html .btn:disabled, html .btn[disabled] { opacity: .5; filter: none; cursor: not-allowed; }
+html .btn-sm { min-height: 32px; padding: 0 12px; border-radius: 9px; font-size: 12.5px; }
+
+/* Principal: gradiente do acento, texto pela cor de contraste do acento.
+   !important porque alguns destes botoes tem `style` inline no HTML, e inline
+   vence qualquer folha de estilo. */
+html .btn-primary, html .btn-green,
+html #nm-save-btn, html #btn-nova-melhoria {
+  background: linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%) !important;
+  color: var(--on-ac) !important;
+  border: 0 !important;
+  font-weight: 700;
+  box-shadow: 0 8px 22px rgba(var(--ac-rgb), .26);
+}
+html .btn-secondary, html .btn-ghost, html .btn-2 {
+  background: var(--sf2b); color: var(--tx); border: 1px solid var(--bd2);
+}
+html .btn-secondary:hover, html .btn-ghost:hover, html .btn-2:hover {
+  background: var(--sf4); border-color: var(--bd4); filter: none;
+}
+/* Sucesso cheio: verde do estado com texto escuro (7:1 nos dois temas). */
+html .btn-success {
+  background: linear-gradient(180deg, #2BD46A 0%, #16A34A 100%) !important;
+  color: #05070C !important; border: 0 !important; font-weight: 700;
+}
+/* Perigo e tonal, como o chip: vermelho cheio gritava mais que o principal. */
+html .btn-danger, html .btn-perigo {
+  background: rgba(var(--dg-rgb), .14) !important;
+  color: var(--dg-t) !important;
+  border: 1px solid rgba(var(--dg-rgb), .45) !important;
+}
+html .btn-danger:hover, html .btn-perigo:hover { background: rgba(var(--dg-rgb), .22) !important; }
+
+/* ── Abas ──────────────────────────────────────────────────────────────── */
+html .tabs { border-bottom-color: var(--bd); gap: 4px; }
+html .tab {
+  color: var(--tx3); font-size: 13.5px; font-weight: 600;
+  border-radius: 0; padding: 11px 14px;
+}
+html .tab:hover { color: var(--tx); background: transparent; }
+html .tab.active { color: var(--tx); border-bottom-color: var(--ac); font-weight: 800; }
+
+/* ── Cabecalho das telas ───────────────────────────────────────────────── */
+html body > header, html #admin-app > header, html .header {
+  background: rgba(var(--sf-rgb), .55);
+  border-bottom: 1px solid var(--bd3);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+html .header-left h1 { font-size: 20px; }
+html .header-left p { color: var(--tx3); }
+
+/* ── Campos ────────────────────────────────────────────────────────────── */
+html input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):focus,
+html select:focus, html textarea:focus {
+  border-color: rgba(var(--ac-rgb), .65);
+  box-shadow: 0 0 0 3px rgba(var(--ac-rgb), .14);
+  outline: none;
+}
+html input[type="checkbox"], html input[type="radio"], html input[type="range"] { accent-color: var(--ac); }
+
+/* ── Modal ─────────────────────────────────────────────────────────────── */
+html .modal-overlay, html .overlay {
+  background: var(--overlay);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+html .modal, html .card-modal {
+  background: var(--sf3); border: 1px solid var(--bd2);
+  border-radius: 20px; box-shadow: 0 30px 80px var(--shadow);
+}
+html .modal h2, html .modal h3 { font-family: var(--font-title); }
+
+/* ── Codigos (AX-, CH-) e numeros tabulares ────────────────────────────── */
+html .kcard-cod, html .kb-card-cod, html .codigo, html .cod { font-family: var(--font-mono); font-weight: 500; }
+/* Os dialogos de dialogo.js e senha.js injetam o proprio <style> no <head>,
+   DEPOIS deste arquivo; o prefixo `html` e o que faz estas regras valerem. */
+html .dlg-ov, html .sn-ov {
+  background: var(--overlay);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+html .dlg-box, html .sn-box {
+  background: var(--sf3); border-color: var(--bd2);
+  border-radius: 20px; padding: 24px; box-shadow: 0 30px 80px var(--shadow);
+}
+html .dlg-box h3, html .sn-box h3 { font-family: var(--font-title); font-weight: 700; }
+html .dlg-b, html .sn-b { border-radius: 11px; min-height: 38px; }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   CASCA: MENU LATERAL (axis.js monta; DOC-18 §18.4, 248 px)
+   ═════════════════════════════════════════════════════════════════════════ */
+.ax-ico { vertical-align: -0.2em; flex-shrink: 0; }
+
+.axis-sb {
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 900;
+  width: 248px; box-sizing: border-box; padding: 22px 14px 14px;
+  display: flex; flex-direction: column; gap: 16px; overflow-y: auto;
+  background: var(--side); border-right: 1px solid var(--bd3);
+  font-family: var(--font-ui); color: var(--tx2);
+  scrollbar-width: none;
+}
+.axis-sb::-webkit-scrollbar { display: none; }
+.axis-sb-logo { display: flex; align-items: center; gap: 12px; padding: 0 8px; text-decoration: none; }
+.axis-sb-mark {
+  width: 38px; height: 38px; border-radius: 11px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(150deg, var(--ac-l) 0%, var(--ac) 45%, var(--ac-d) 100%);
+  box-shadow: 0 8px 22px rgba(var(--ac-rgb), .35);
+}
+.axis-sb-mark img { width: 25px; height: auto; display: block; }
+.axis-sb-word {
+  font-family: var(--font-title); font-weight: 800; font-size: 22px;
+  letter-spacing: -0.02em; color: var(--tx);
+}
+.axis-sb-word i { font-style: normal; color: var(--ac); }
+.axis-sb-grp { display: flex; flex-direction: column; gap: 2px; }
+.axis-sb-lab {
+  padding: 0 12px 6px; font-size: 10px; font-weight: 800;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--tx4);
+}
+.axis-sb-it {
+  display: flex; align-items: center; gap: 11px; height: 34px; padding: 0 12px;
+  border-radius: 9px; text-decoration: none; font-size: 13px; font-weight: 500;
+  color: var(--tx2); transition: background .12s, color .12s;
+}
+.axis-sb-it .ax-ico { color: var(--tx3); }
+.axis-sb-it:hover { background: var(--sf2); color: var(--tx); }
+.axis-sb-it.on {
+  background: linear-gradient(90deg, rgba(var(--ac-rgb), .22) 0%, rgba(var(--ac-rgb), .04) 100%);
+  box-shadow: inset 0 0 0 1px rgba(var(--ac-rgb), .28);
+  color: var(--tx-hi); font-weight: 700;
+}
+.axis-sb-it.on .ax-ico { color: var(--ac-t); }
+.axis-sb-t { flex: 1; white-space: nowrap; }
+.axis-sb-user {
+  margin-top: auto; display: flex; align-items: center; gap: 11px; padding: 11px;
+  border-radius: 12px; background: var(--sf3); border: 1px solid var(--bd); color: var(--tx);
+}
+.axis-sb-av {
+  width: 34px; height: 34px; border-radius: 17px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ac); color: var(--on-ac); font-size: 12px; font-weight: 800;
+}
+.axis-sb-quem { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.3; }
+.axis-sb-quem b { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.axis-sb-quem small { font-size: 11.5px; color: var(--tx3); }
+.axis-sb-sair {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid var(--bd2); color: var(--tx3);
+}
+.axis-sb-sair:hover { color: var(--dg-t); border-color: rgba(var(--dg-rgb), .45); }
+
+/* O conteudo da tela anda para a direita do menu. */
+body.axis-com-menu { padding-left: 248px; }
+
+/* Durante o login nao ha menu: ele ofereceria telas que ainda nao abrem. */
+body.axis-com-menu:has(#login-screen:not([style*="none"])) { padding-left: 0; }
+body.axis-com-menu:has(#login-screen:not([style*="none"])) .axis-sb { display: none; }
+
+/* Com o menu, os atalhos de navegacao do cabecalho e a regua de abas do admin
+   viram redundantes: os mesmos destinos estao no menu. Somem so do olho — o
+   HTML continua la, e `switchTab` continua procurando a aba na regua. */
+body.axis-com-menu header a.btn[href$=".html"],
+body.axis-com-menu header a.btn[href*=".html?"],
+body.axis-com-menu #admin-app > main > .tabs { display: none; }
+
+/* O Kanban do admin estica com 100vw para sair do limite do <main>. Com o
+   menu ao lado, 100vw passa da tela: a conta desconta o menu. */
+body.axis-com-menu #tab-kanban.active { width: calc(100vw - 248px - 48px); }
+
+/* ── Celular: o menu vira uma faixa no topo (prototipo, < 760 px) ────── */
+@media (max-width: 760px) {
+  .axis-sb {
+    position: sticky; bottom: auto; width: 100%; height: auto;
+    flex-direction: row; align-items: center; gap: 6px;
+    padding: 10px 12px; overflow-x: auto; overflow-y: hidden;
+    border-right: 0; border-bottom: 1px solid var(--bd);
+  }
+  .axis-sb .axis-sb-lab, .axis-sb .axis-sb-word, .axis-sb .axis-sb-quem { display: none; }
+  .axis-sb .axis-sb-grp { flex-direction: row; gap: 4px; }
+  .axis-sb .axis-sb-it { flex-shrink: 0; height: 36px; padding: 0 10px; }
+  .axis-sb .axis-sb-mark { width: 34px; height: 34px; }
+  .axis-sb .axis-sb-user { margin: 0; padding: 0; border: 0; background: none; }
+  .axis-sb .axis-sb-av { display: none; }
+  body.axis-com-menu { padding-left: 0; }
+  body.axis-com-menu #tab-kanban.active { width: calc(100vw - 24px); }
+}
+
+/* ── Marca nas telas de entrada e no painel publico ───────────────────── */
+/* A logo e fundo, e nao <img>: o tema claro troca a versao branca pela
+   marinho, e `content: url()` num <img> nao funciona no Firefox. */
+.axis-logo {
+  display: inline-block; aspect-ratio: 1490 / 392;
+  background: url("axis/marca/axis-logo-duo.png") left center / contain no-repeat;
+}
+:root[data-tema="claro"] .axis-logo { background-image: url("axis/marca/axis-logo-navy-crop.png"); }
+.axis-login-logo { display: block; height: 30px; margin: 0 auto 22px; }
+html .login-box {
+  background: rgba(var(--sf-rgb), .78); border: 1px solid var(--bd2);
+  border-radius: 20px; box-shadow: 0 30px 80px var(--shadow);
+}
+html .login-box h2 { font-family: var(--font-title); font-size: 22px; font-weight: 800; }
+html .login-box p { color: var(--tx3); }
+html .login-box > button:not(.login-esqueci), html #btn-entrar {
+  background: linear-gradient(180deg, var(--ac-l) 0%, var(--ac) 100%);
+  color: var(--on-ac); font-weight: 700; border-radius: 11px;
+  box-shadow: 0 8px 22px rgba(var(--ac-rgb), .3);
+}
+html .login-box input { background: var(--sf3); border-color: var(--bd2); border-radius: 11px; letter-spacing: normal; }
+/* As telas de entrada ganham o brilho do acento no canto, como no prototipo. */
+html #login-screen {
+  background:
+    radial-gradient(60% 50% at 85% 100%, rgba(var(--ac-rgb), .16) 0%, transparent 70%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg0) 70%);
+}
+.axis-head-logo { height: 22px; vertical-align: -3px; margin-right: 12px; }
+.axis-head-t { font-family: var(--font-title); }
+
+/* Botao de tema (tema.js) no padrao dos icones da barra do topo. */
+html .tema-btn {
+  width: 38px; height: 38px; border-radius: 11px;
+  background: var(--sf2b); border: 1px solid var(--bd2); color: var(--tx2);
+}
+html .tema-btn:hover { color: var(--tx); border-color: var(--bd4); }
+
+/* "Esqueci minha senha" e link de texto, e nao segundo botao principal. */
+html .login-box .login-esqueci {
+  background: none; border: 0; box-shadow: none; color: var(--ac-t);
+  font-size: 13px; font-weight: 600; padding: 6px; margin-top: 4px; width: auto;
+}
+html .login-box .login-esqueci:hover { color: var(--ac-h); }
+
+/* Codigo da demanda (AX-123): mono do AXIS e nunca quebrado no hifen. */
+html .cod-tag { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+
+/* Abas do painel do dev, no mesmo desenho das abas do AXIS. */
+html .dv-tab { color: var(--tx3); font-size: 13.5px; font-weight: 600; border-radius: 0; }
+html .dv-tab:hover { color: var(--tx); background: transparent; }
+html .dv-tab.ativa { color: var(--tx); border-bottom-color: var(--ac); font-weight: 800; }
+
+/* Com o menu ao lado, as oito colunas do Kanban dividiam 1150 px e o titulo
+   vazava do card. Coluna com largura minima legivel; o quadro rola na
+   horizontal (o .kb-board ja tem overflow-x), como o Quadro do prototipo. */
+html .kb-col { min-width: 208px; }
+html .kb-card-title { overflow-wrap: anywhere; }
+html .login-box .login-esqueci { display: block; margin: 8px auto 0; }

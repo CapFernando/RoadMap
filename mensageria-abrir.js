@@ -80,7 +80,7 @@
     };
     return '<button type="button" class="' + (classe || 'btn btn-secondary btn-sm') + '"' +
       ' title="Histórico e mensagens de ' + esc(ref) + '"' +
-      ' onclick="MENSAGERIA.abre(\'' + esc(ref) + '\')">💬 Mensageria</button>';
+      ' onclick="MENSAGERIA.abre(\'' + esc(ref) + '\')"><i class="axi axi-message"></i> Mensageria</button>';
   }
 
   raiz.MENSAGERIA = { abre: abre, botaoHTML: botaoHTML, referencia: referencia };

@@ -1,0 +1,389 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   AXIS — componentes do app novo (axis.html).
+
+   GERADO a partir do CSS do prototipo (EP-013-axis/prototipo/fonte/Sidebar.dc.html),
+   com cada seletor prefixado por `.axa` (a classe do <html> do app). O prefixo
+   existe porque axis.css veste as telas antigas com regras `html .btn`, `html
+   .tab`...: sem ele, os dois desenhos do mesmo nome brigariam. Os tokens (--sf,
+   --tx, --ac...) continuam vindo de axis.css, nos dois temas.
+
+   Medidas e nomes sao os do prototipo de proposito: quem abrir uma prancha
+   .dc.html encontra aqui a mesma classe com o mesmo desenho.
+   ───────────────────────────────────────────────────────────────────────── */
+.axa body{margin:0;background:var(--bg0,#05070C)}
+.axa a{color:var(--ac-t,#FF9A4D)}
+.axa a:hover{color:var(--ac-h,#FFB27F)}
+.axa .app{container:app / inline-size;min-height:100vh;display:flex;flex-wrap:wrap;align-items:stretch;font-family:var(--font-ui);color:var(--tx);background:linear-gradient(180deg,var(--bg-top) 0%,var(--bg0) 60%);position:relative}
+.axa .app.bare{display:block}
+.axa .main{flex:999 1 560px;min-width:0;box-sizing:border-box;padding:18px 32px 40px;display:flex;flex-direction:column;gap:18px}
+.axa .view{display:flex;flex-direction:column;gap:18px;min-width:0}
+.axa .topbar{display:flex;align-items:center;gap:10px}
+.axa .tb-search{flex:0 1 420px;height:40px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:11px;border:1px solid var(--bd2);background:var(--sf3);color:var(--tx3);font:inherit;font-size:13px;cursor:pointer;text-align:left}
+.axa .tb-search .lbl{flex:1}
+.axa .kbd{font-family:var(--font-mono);font-size:11px;padding:2px 6px;border-radius:6px;background:var(--sf4);color:var(--tx3)}
+.axa .tb-ico{width:40px;height:40px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;position:relative;color:var(--tx2);border:1px solid var(--bd2);background:var(--sf2b);text-decoration:none}
+.axa .tb-ico .dot{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;background:var(--ac);color:var(--on-ac);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.axa .tb-av{width:40px;height:40px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;background:var(--ac);color:var(--on-ac);font-size:13px;font-weight:800;text-decoration:none}
+.axa .tabs{display:flex;gap:4px;border-bottom:1px solid var(--bd);margin-top:-4px}
+.axa .tab{height:40px;padding:0 14px;border:0;background:transparent;color:var(--tx3);font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.axa .tab.on{color:var(--tx);font-weight:800;border-bottom-color:var(--ac)}
+.axa .cfg{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;align-items:start}
+.axa .tabs.vert{flex-direction:column;border:0;margin:0;padding:8px;border-radius:14px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd)}
+.axa .tabs.vert .tab{height:36px;border:0;border-radius:9px;text-align:left;margin:0}
+.axa .tabs.vert .tab.on{background:var(--sf4);box-shadow:inset 3px 0 0 var(--ac)}
+.axa .tabs.vert .grp{font-size:10.5px;font-weight:800;letter-spacing:.14em;color:var(--tx4);padding:10px 14px 4px}
+.axa .ovl{position:fixed;inset:0;z-index:50;background:rgba(3,5,10,.66);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:48px 24px;box-sizing:border-box;overflow:auto}
+.axa .dlg{position:relative;width:100%;box-sizing:border-box;padding:26px;border-radius:20px;background:var(--sf3);border:1px solid var(--bd2);box-shadow:0 30px 80px var(--shadow);display:flex;flex-direction:column;gap:16px;color:var(--tx)}
+.axa .dlg-x{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:10px;border:1px solid var(--bd2);background:transparent;color:var(--tx3);cursor:pointer;font:inherit;font-size:14px}
+.axa .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;background:var(--sf3);border:1px solid rgba(var(--ok-rgb),.4);color:var(--tx);font-size:13.5px;box-shadow:0 16px 40px var(--shadow);max-width:calc(100% - 32px)}
+.axa .toast svg{color:var(--ok-t)}
+.axa .h1{margin:0;font-family:var(--font-title);font-weight:800;font-size:28px;line-height:34px;letter-spacing:-0.02em}
+.axa .sub{font-size:13px;color:var(--tx3)}
+.axa .pn{padding:20px;border-radius:16px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);display:flex;flex-direction:column;gap:12px;min-width:0}
+.axa .pnh{padding:20px;border-radius:18px;background:rgba(var(--sf-rgb),.8);border:1px solid rgba(var(--ac-rgb),.35);display:flex;flex-direction:column;gap:12px;min-width:0}
+.axa .lab{font-size:11px;font-weight:800;letter-spacing:0.14em;color:var(--tx3)}
+.axa .labo{font-size:11px;font-weight:800;letter-spacing:0.14em;color:var(--ac-t)}
+.axa .mono{font-family:var(--font-mono)}
+.axa .code{font-family:var(--font-mono);font-size:12px;color:var(--ac-t)}
+.axa .h2{margin:0;font-family:var(--font-title);font-size:16px;font-weight:700}
+.axa .btn{height:40px;padding:0 16px;border-radius:11px;cursor:pointer;font:inherit;font-size:13px;font-weight:600;color:var(--tx);background:var(--sf2b);border:1px solid var(--bd2)}
+.axa .btnp{height:40px;padding:0 18px;border:0;border-radius:11px;cursor:pointer;font:inherit;font-size:13px;font-weight:700;color:var(--on-ac);background:linear-gradient(180deg,var(--ac-l) 0%,var(--ac) 100%);box-shadow:0 8px 22px rgba(var(--ac-rgb),0.3);text-decoration:none}
+.axa .btns{height:32px;padding:0 12px;border-radius:9px;cursor:pointer;font:inherit;font-size:12.5px;font-weight:600;color:var(--tx2);background:transparent;border:1px solid var(--bd2)}
+.axa .btns.on{background:var(--sf4);color:var(--tx);border-color:rgba(var(--ac-rgb),0.45);font-weight:700}
+.axa .chip{height:22px;padding:0 8px;border-radius:6px;display:inline-flex;align-items:center;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0}
+.axa .k{padding:16px 18px;border-radius:14px;background:rgba(var(--sf-rgb),.72);border:1px solid var(--bd);display:flex;flex-direction:column;gap:4px;min-width:0}
+.axa .kv{font-family:var(--font-title);font-size:28px;font-weight:800;line-height:34px}
+.axa .kl{font-size:12px;color:var(--tx3)}
+.axa .row{display:flex;align-items:center;gap:10px}
+.axa .grid{display:grid;gap:16px}
+.axa .tbl{width:100%;border-collapse:collapse;font-size:13px}
+.axa .tbl th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:0.12em;color:var(--tx4);padding:0 10px 10px;border-bottom:1px solid var(--bd)}
+.axa .tbl td{padding:11px 10px;border-bottom:1px solid var(--bd3);color:var(--tx2);vertical-align:middle}
+.axa .bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--track)}
+.axa .in{height:40px;box-sizing:border-box;padding:0 14px;border-radius:11px;background:var(--sf3);border:1px solid var(--bd2);color:var(--tx);font:inherit;font-size:13px;display:flex;align-items:center}
+.axa .av{width:28px;height:28px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;color:#05070C;flex-shrink:0}
+.axa .note{font-size:12.5px;line-height:19px;color:var(--tx3)}
+.axa .lock{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:rgba(245,184,61,0.08);border:1px solid rgba(245,184,61,0.3);font-size:12.5px;line-height:19px;color:var(--wn-t)}
+.axa .sb{width:248px;min-height:100%;box-sizing:border-box;padding:22px 14px;display:flex;flex-direction:column;gap:16px;background:var(--side);border-right:1px solid var(--bd3);font-family:var(--font-ui);color:var(--tx2)}
+.axa .sb-logo{display:flex;align-items:center;gap:12px;padding:0 8px;text-decoration:none}
+.axa .sb-mark{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,var(--ac-l) 0%,var(--ac) 45%,var(--ac-d) 100%);box-shadow:0 8px 22px rgba(var(--ac-rgb),.35);flex-shrink:0}
+.axa .sb-word{font-family:var(--font-title);font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--tx)}
+.axa .sb-word i{font-style:normal;color:var(--ac)}
+.axa .sb-grp{display:flex;flex-direction:column;gap:2px}
+.axa .sb-lab{padding:0 12px 6px;font-size:10px;font-weight:800;letter-spacing:.16em;color:var(--tx4)}
+.axa .sb-it{display:flex;align-items:center;gap:11px;height:34px;padding:0 12px;border-radius:9px;text-decoration:none;font-size:13px;font-weight:500;color:var(--tx2)}
+.axa .sb-it svg{color:var(--tx3)}
+.axa .sb-it.on{background:linear-gradient(90deg,rgba(var(--ac-rgb),.22) 0%,rgba(var(--ac-rgb),.04) 100%);box-shadow:inset 0 0 0 1px rgba(var(--ac-rgb),.28);color:var(--tx-hi);font-weight:700}
+.axa .sb-it.on svg{color:var(--ac-t)}
+.axa .sb-t{flex:1;white-space:nowrap}
+.axa .sb-badge{min-width:20px;height:18px;padding:0 6px;box-sizing:border-box;border-radius:6px;color:#05070C;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.axa .sb-user{margin-top:auto;display:flex;align-items:center;gap:11px;padding:11px;border-radius:12px;background:var(--sf3);border:1px solid var(--bd);text-decoration:none;color:var(--tx)}
+@container app (max-width: 760px){
+.axa .main{padding:12px 14px 32px !important;gap:14px !important}
+.axa .main [style*="grid-template-columns"]:not([style*="overflow-x: auto"] *),.axa .dlg [style*="grid-template-columns"]:not([style*="overflow-x: auto"] *){grid-template-columns:minmax(0,1fr) !important}
+.axa .main [style*="repeat(4, minmax"]:not([style*="overflow-x: auto"] *),.axa .main [style*="repeat(5, minmax"]:not([style*="overflow-x: auto"] *),.axa .main [style*="repeat(6, minmax"]:not([style*="overflow-x: auto"] *),.axa .dlg [style*="repeat(4, "]:not([style*="overflow-x: auto"] *){grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+.axa .main [style*="overflow-x: auto"] [style*="grid-template-columns"]{min-width:760px}
+.axa .tbl{display:block;overflow-x:auto}
+.axa .h1{font-size:22px !important;line-height:28px !important}
+.axa .kv{font-size:22px !important;line-height:28px !important}
+.axa .tb-search .lbl,.axa .tb-search .kbd{display:none}
+.axa .tb-search{flex:0 0 40px;padding:0;justify-content:center}
+.axa .tabs{overflow-x:auto}
+.axa .cfg{grid-template-columns:minmax(0,1fr) !important}
+.axa .tabs.vert{flex-direction:row;overflow-x:auto;padding:4px}
+.axa .tabs.vert .grp{display:none}
+.axa .sb{width:100% !important;min-height:0 !important;flex-direction:row !important;align-items:center;gap:6px !important;padding:10px 12px !important;overflow-x:auto;border-right:0 !important;border-bottom:1px solid var(--bd)}
+.axa .sb .sb-lab,.axa .sb .sb-user,.axa .sb .sb-word{display:none !important}
+.axa .sb .sb-grp{flex-direction:row !important;gap:4px !important}
+.axa .sb .sb-it{flex-shrink:0;height:36px;padding:0 10px}
+.axa .sb .sb-mark{width:34px;height:34px}
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   CASCA DO APP (o que o prototipo desenha estatico e aqui tem de funcionar)
+   ═════════════════════════════════════════════════════════════════════════ */
+.axa, .axa body { min-height: 100%; }
+.axa body { font-family: var(--font-ui); color: var(--tx); background: var(--bg0); }
+/* O menu acompanha a rolagem: no prototipo a prancha tinha altura fixa. */
+.axa .sb { position: sticky; top: 0; height: 100vh; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.axa .sb::-webkit-scrollbar { display: none; }
+.axa .sb-badge { background: var(--wn); }
+.axa .sb-badge.in { background: var(--in); color: #fff; }
+.axa .sb-sair { margin-left: auto; width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--bd2);
+  background: transparent; color: var(--tx3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.axa .sb-sair:hover { color: var(--dg-t); border-color: rgba(var(--dg-rgb), .45); }
+.axa .tb-ico { cursor: pointer; }
+.axa .tab:focus-visible, .axa .btn:focus-visible, .axa .btnp:focus-visible, .axa .btns:focus-visible { outline: 2px solid rgba(var(--ac-rgb), .7); outline-offset: 2px; }
+.axa .btn:hover { border-color: var(--bd4); background: var(--sf4); }
+.axa .btnp:hover { filter: brightness(1.06); }
+.axa .btns:hover { color: var(--tx); border-color: var(--bd4); }
+.axa .btn:disabled, .axa .btnp:disabled, .axa .btns:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+.axa a.btn, .axa a.btns, .axa a.btnp { display: inline-flex; align-items: center; text-decoration: none; }
+.axa .btn, .axa .btnp, .axa .btns { display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; }
+.axa .in::placeholder { color: var(--tx4); }
+.axa select.in { appearance: none; padding-right: 34px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--tx3) 50%), linear-gradient(135deg, var(--tx3) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.axa .in:focus { outline: none; border-color: rgba(var(--ac-rgb), .65); box-shadow: 0 0 0 3px rgba(var(--ac-rgb), .14); }
+.axa .tbl tr.click { cursor: pointer; }
+.axa .tbl tr.click:hover td { background: rgba(var(--sf-rgb), .55); }
+.axa .tbl td.num, .axa .tbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.axa .link { color: var(--ac-t); cursor: pointer; text-decoration: none; background: none; border: 0; font: inherit; padding: 0; }
+.axa .link:hover { color: var(--ac-h); }
+
+/* Chip de etapa e de estado: fundo da cor a 14%, texto no tom de texto. */
+.axa .chip.c-bk { background: rgba(var(--sf-rgb), 1); box-shadow: inset 0 0 0 1px var(--bd2); color: var(--tx2); }
+.axa .chip.c-in { background: rgba(var(--in-rgb), .14); color: var(--in-t); }
+.axa .chip.c-ac { background: rgba(var(--ac-rgb), .16); color: var(--ac-t); }
+.axa .chip.c-pu { background: rgba(var(--pu-rgb), .16); color: var(--pu-t); }
+.axa .chip.c-wn { background: rgba(var(--wn-rgb), .14); color: var(--wn-t); }
+.axa .chip.c-ok { background: rgba(var(--ok-rgb), .14); color: var(--ok-t); }
+.axa .chip.c-dg { background: rgba(var(--dg-rgb), .14); color: var(--dg-t); }
+.axa .chip.c-tl { background: rgba(var(--tl-rgb), .14); color: var(--tl-t); }
+.axa .chip.c-mg { background: rgba(217,72,184,.16); color: var(--rose-tx, #F2A0DA); }
+.axa .dotc { width: 8px; height: 8px; border-radius: 4px; display: inline-block; flex-shrink: 0; }
+
+/* Indicadores (KPI) com destaque de estado na borda. */
+.axa .k.k-ac { border-color: rgba(var(--ac-rgb), .45); }
+.axa .k.k-dg { border-color: rgba(var(--dg-rgb), .45); }
+.axa .k.k-ok { border-color: rgba(var(--ok-rgb), .4); }
+.axa .k.k-in { border-color: rgba(var(--in-rgb), .4); }
+.axa .k.click { cursor: pointer; }
+.axa .k.click:hover { border-color: var(--bd4); }
+
+/* Linha de lista (itens em cartao, como "Meus itens na sprint"). */
+.axa .li { display: grid; grid-template-columns: 76px minmax(0,1fr) auto auto; gap: 14px; align-items: center;
+  padding: 12px 14px; border-radius: 12px; background: var(--sf2); border: 1px solid var(--bd); cursor: pointer; text-decoration: none; color: var(--tx); }
+.axa .li:hover { border-color: var(--bd4); }
+.axa .li.dg { border-color: rgba(var(--dg-rgb), .45); }
+.axa .li .t { font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.axa .li .s { font-size: 12px; color: var(--tx3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.axa .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* ── Estados da interface (prancha Estados) ───────────────────────────── */
+.axa .est { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center;
+  padding: 48px 20px; color: var(--tx3); font-size: 13px; }
+.axa .est > .axi { font-size: 28px; color: var(--tx4); }
+.axa .est b { color: var(--tx); font-size: 15px; }
+.axa .sk { background: linear-gradient(90deg, var(--sf2) 0%, var(--sf4) 50%, var(--sf2) 100%); background-size: 200% 100%;
+  animation: ax-sk 1.2s ease-in-out infinite; border-radius: 10px; }
+@keyframes ax-sk { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .axa .sk { animation: none; } }
+
+/* ── Busca (Ctrl K) ───────────────────────────────────────────────────── */
+.axa .pal { width: 100%; max-width: 640px; padding: 0; gap: 0; overflow: hidden; }
+.axa .pal-in { display: flex; align-items: center; gap: 10px; padding: 0 18px; height: 56px; border-bottom: 1px solid var(--bd); color: var(--tx3); }
+.axa .pal-in input { flex: 1; height: 100%; border: 0; background: transparent; color: var(--tx); font: inherit; font-size: 15px; outline: none; }
+.axa .pal-res { max-height: 60vh; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.axa .pal-it { display: grid; grid-template-columns: 70px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 10px 12px;
+  border-radius: 10px; cursor: pointer; color: var(--tx); text-decoration: none; }
+.axa .pal-it.on, .axa .pal-it:hover { background: var(--sf4); }
+.axa .pal-x { display: none; }
+.axa .pal-vazio { padding: 22px; text-align: center; color: var(--tx3); font-size: 13px; }
+
+/* ── Notificacoes (sino) ──────────────────────────────────────────────── */
+.axa .ntf { position: absolute; top: 48px; right: 0; z-index: 40; width: 380px; max-width: calc(100vw - 32px);
+  padding: 10px; border-radius: 16px; background: var(--sf3); border: 1px solid var(--bd2); box-shadow: 0 24px 60px var(--shadow);
+  display: flex; flex-direction: column; gap: 4px; }
+.axa .ntf-it { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; text-decoration: none; color: var(--tx); font-size: 13px; line-height: 18px; cursor: pointer; }
+.axa .ntf-it:hover { background: var(--sf4); }
+.axa .ntf-it .axi { margin-top: 1px; }
+
+/* ── Entrar ───────────────────────────────────────────────────────────── */
+.axa .lg { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+.axa .lg-esq { position: relative; overflow: hidden; padding: 56px 64px; display: flex; flex-direction: column; gap: 22px;
+  background: radial-gradient(70% 60% at 0% 0%, rgba(76,141,255,.16), transparent 70%),
+              radial-gradient(60% 50% at 100% 100%, rgba(var(--ac-rgb), .22), transparent 70%),
+              linear-gradient(180deg, var(--bg-top), var(--bg0)); }
+.axa .lg-esq .axis-logo { height: 44px; }
+.axa .lg-tit { margin: auto 0 0; font-family: var(--font-title); font-weight: 800; font-size: 46px; line-height: 54px; letter-spacing: -.02em; max-width: 520px; text-wrap: balance; }
+.axa .lg-sub { font-size: 17px; color: var(--tx3); margin: 0 0 auto; }
+.axa .lg-curva { position: absolute; left: 64px; right: 64px; bottom: 56px; height: 140px; color: var(--ac); opacity: .9; }
+.axa .lg-dir { display: flex; align-items: center; justify-content: center; padding: 40px 24px; background: var(--bg0); }
+.axa .lg-box { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 14px; }
+.axa .lg-box label { font-size: 12.5px; font-weight: 700; color: var(--tx2); }
+.axa .lg-box .in { width: 100%; height: 46px; }
+.axa .lg-box .btnp { height: 48px; width: 100%; font-size: 14px; }
+.axa .lg-err { min-height: 18px; font-size: 13px; color: var(--dg-t); }
+@media (max-width: 860px) {
+  .axa .lg { grid-template-columns: 1fr; }
+  .axa .lg-esq { padding: 28px 20px; min-height: 0; }
+  .axa .lg-tit { font-size: 28px; line-height: 34px; margin-top: 18px; }
+  .axa .lg-curva { display: none; }
+}
+
+/* Abas: contador opcional ao lado do nome. */
+.axa .tab .n { margin-left: 6px; font-size: 11px; font-weight: 800; color: var(--tx4); }
+.axa .tab.on .n { color: var(--ac-t); }
+/* Barra de progresso simples (pontos, conclusao). */
+.axa .pg { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.axa .pg > i { display: block; height: 100%; border-radius: 3px; background: var(--ac); }
+.axa .pg > i.ok { background: var(--ok); } .axa .pg > i.wn { background: var(--wn); } .axa .pg > i.dg { background: var(--dg); }
+/* No celular o menu vira faixa no topo (container query do prototipo): a
+   altura de tela inteira do modo lateral deixava um vao enorme acima do conteudo. */
+@container app (max-width: 760px) {
+  .axa .sb { position: static; height: auto; overflow-y: visible; }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   CELULAR (MOBILE FIRST). O que esta abaixo e a BASE: barra inferior, topo
+   compacto, gaveta, filtros recolhidos, tabela que vira cartoes, janelas em
+   tela cheia e os minimos de toque (44 px) e de texto (12 px). O uso de cada
+   peca esta no comentario do topo do axis-app.js.
+
+   O que mora dentro do app (.app) responde a container query `app`; o que
+   o nucleo pendura no <body> (.ovl, .gv-fundo, .toast) fica fora do
+   container e responde a media query da mesma largura.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── No computador: barra inferior e logo do topo escondidos; os filtros
+   recolhidos sao transparentes (os controles ficam no flex da tela). ──── */
+.axa .bn, .axa .tb-logo { display: none; }
+.axa .fl, .axa .fl-gv, .axa .fl-corpo { display: contents; }
+.axa .fl-btn, .axa .fl-fundo, .axa .fl-gv > .gv-cab, .axa .fl-gv > .gv-pe { display: none; }
+
+/* ── Gaveta (bottom sheet): a generica (H.gaveta) e a dos filtros ─────── */
+.axa .gv-fundo { position: fixed; inset: 0; z-index: 70; background: rgba(3,5,10,.6); backdrop-filter: blur(2px);
+  display: flex; align-items: flex-end; justify-content: center; animation: gv-fundo .18s ease-out; }
+.axa .gv, .axa .fl.aberto .fl-gv { width: 100%; max-width: 560px; max-height: 88vh; max-height: 88dvh; box-sizing: border-box;
+  display: flex; flex-direction: column; background: var(--sf3); color: var(--tx); border: 1px solid var(--bd2); border-bottom: 0;
+  border-radius: 20px 20px 0 0; box-shadow: 0 -20px 60px var(--shadow); padding-bottom: env(safe-area-inset-bottom);
+  transition: transform .2s ease; animation: gv-sobe .22s ease-out; outline: none; font-family: var(--font-ui); }
+.axa .gv-cab { position: relative; display: flex; align-items: center; gap: 10px; padding: 20px 12px 8px 20px; flex-shrink: 0;
+  touch-action: none; cursor: grab; user-select: none; }
+.axa .gv-alca { position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: var(--bd4); }
+.axa .gv-t { flex: 1; min-width: 0; font-family: var(--font-title); font-size: 17px; font-weight: 800; }
+.axa .gv-x { width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; border: 1px solid var(--bd2); background: transparent; color: var(--tx3);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font: inherit; font-size: 16px; }
+.axa .gv-corpo, .axa .fl.aberto .fl-corpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 6px 20px 18px; display: flex; flex-direction: column; gap: 12px; }
+.axa .gv-pe { flex-shrink: 0; display: flex; gap: 10px; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--bd2); }
+.axa .gv-pe .btnp { flex: 1; height: 48px; font-size: 14px; }
+.axa .gv-grp { display: flex; flex-direction: column; gap: 2px; }
+.axa .gv-grp .sb-lab { padding: 10px 12px 4px; font-size: 12px; }
+.axa .gv-it { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0 12px; box-sizing: border-box; border: 0; border-radius: 12px;
+  background: transparent; color: var(--tx2); font: inherit; font-size: 15px; font-weight: 600; text-decoration: none; text-align: left; cursor: pointer; }
+.axa .gv-it .axi { font-size: 18px; color: var(--tx3); }
+.axa .gv-it:hover { background: var(--sf4); color: var(--tx); }
+.axa .gv-it.on { background: linear-gradient(90deg, rgba(var(--ac-rgb),.22) 0%, rgba(var(--ac-rgb),.04) 100%); box-shadow: inset 0 0 0 1px rgba(var(--ac-rgb),.28); color: var(--tx-hi); font-weight: 700; }
+.axa .gv-it.on .axi { color: var(--ac-t); }
+.axa .gv-eu { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 12px; border-radius: 14px; background: var(--sf2); border: 1px solid var(--bd); text-decoration: none; color: var(--tx); }
+@keyframes gv-sobe { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes gv-fundo { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .axa .gv, .axa .fl-gv, .axa .gv-fundo { animation: none !important; transition: none !important; } }
+.axa.gv-trava { overflow: hidden; }
+@media (max-width: 760px) { .axa.fl-trava { overflow: hidden; } }
+
+@container app (max-width: 760px) {
+  /* ── Menu: a lateral sai, a barra inferior entra ─────────────────────── */
+  .axa .sb { display: none !important; }
+  .axa .main { padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+  .axa .bn { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); background: var(--side); border-top: 1px solid var(--bd3);
+    box-shadow: 0 -12px 30px var(--shadow); font-family: var(--font-ui); }
+  .axa .bn-it { position: relative; min-width: 0; min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    padding: 4px 2px; border: 0; border-radius: 12px; background: transparent; color: var(--tx3); font: inherit; font-size: 12px; font-weight: 600;
+    text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .axa .bn-it .axi { font-size: 20px; }
+  .axa .bn-t { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 15px; letter-spacing: -.01em; }
+  .axa .bn-it:hover, .axa .bn-it:focus-visible { color: var(--tx); }
+  .axa .bn-it.on { color: var(--ac-t); font-weight: 800; }
+  .axa .bn-it.on::before { content: ""; position: absolute; top: 0; left: 50%; width: 28px; height: 3px; margin-left: -14px; border-radius: 0 0 3px 3px; background: var(--ac); }
+  .axa .bn-badge { position: absolute; top: 3px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
+    background: var(--wn); color: #05070C; font-size: 12px; font-weight: 800; line-height: 18px; text-align: center; }
+
+  /* ── Topo compacto: logo, e o resto em botoes de icone de 44 px ───────── */
+  .axa .topbar { gap: 8px; }
+  .axa .tb-logo { display: inline-flex; flex-shrink: 0; text-decoration: none; }
+  .axa .tb-logo .sb-mark { width: 40px; height: 40px; }
+  .axa .tb-search, .axa .tb-ico, .axa .tb-av { width: 44px; height: 44px; flex: 0 0 44px; }
+  .axa .tb-novo { width: 44px; height: 44px; flex: 0 0 44px; padding: 0; font-size: 22px; font-weight: 600; line-height: 1; }
+  .axa .tb-novo .lbl { display: none; }
+  .axa .ntf { position: fixed; top: 64px; left: 12px; right: 12px; width: auto; max-width: none; max-height: 70vh; overflow-y: auto; }
+
+  /* ── Minimo de toque: 44 px ────────────────────────────────────────────── */
+  .axa .btn, .axa .btnp { height: 44px; min-width: 44px; }
+  .axa .btns { height: auto; min-height: 44px; min-width: 44px; font-size: 13px; }
+  .axa .in, .axa select { min-height: 44px; }
+  .axa .tab { height: 44px; }
+  .axa .tabs.vert .tab { height: 44px; }
+  .axa .pal-it, .axa .ntf-it, .axa .li { min-height: 44px; box-sizing: border-box; }
+  /* Desenho menor que o dedo: a area cresce, o desenho e o layout ficam. */
+  .axa button.chip, .axa a.chip, .axa .chip[data-acao], .axa .chip[role="button"] {
+    border-top: 11px solid transparent; border-bottom: 11px solid transparent; background-clip: padding-box; margin-top: -11px; margin-bottom: -11px; }
+  .axa button.link { padding-top: 12px; padding-bottom: 12px; margin-top: -12px; margin-bottom: -12px; }
+  .axa .main a[href]:not([class]):not([style]) { padding: 12px 4px; margin: -12px -4px; }
+  /* Campo com letra de 16 px: abaixo disso o iPhone aproxima a tela ao focar. */
+  .axa .main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .axa .main select, .axa .main textarea { font-size: 16px; }
+
+  /* ── Minimo de texto: 12 px nos componentes e nos estilos de linha ────── */
+  .axa .chip, .axa .lab, .axa .labo, .axa .kbd, .axa .kl, .axa .av, .axa .tbl th, .axa .tab .n, .axa .sb-lab, .axa .sb-badge, .axa .tb-ico .dot { font-size: 12px !important; }
+  .axa .main [style*="font-size:9"], .axa .main [style*="font-size: 9"], .axa .main [style*="font-size:10"], .axa .main [style*="font-size: 10"],
+  .axa .main [style*="font-size:11"], .axa .main [style*="font-size: 11"] { font-size: 12px !important; }
+  .axa .tb-ico .dot { min-width: 20px; height: 20px; border-radius: 10px; }
+
+  /* ── Filtros recolhidos (H.filtros): o botao no lugar, a gaveta por cima ─ */
+  .axa .fl { display: block; flex: 0 0 auto; }
+  .axa .fl-btn { display: inline-flex; }
+  .axa .fl-btn .fl-n { min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: var(--ac); color: var(--on-ac);
+    font-size: 12px; font-weight: 800; line-height: 20px; text-align: center; }
+  .axa .fl-btn.on { border-color: rgba(var(--ac-rgb), .5); }
+  .axa .fl-gv { display: none; }
+  .axa .fl.aberto .fl-fundo { display: block; position: fixed; inset: 0; z-index: 69; background: rgba(3,5,10,.6); animation: gv-fundo .18s ease-out; }
+  .axa .fl.aberto .fl-gv { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; margin: 0 auto; }
+  .axa .fl.aberto .fl-gv > .gv-cab, .axa .fl.aberto .fl-gv > .gv-pe { display: flex; }
+  .axa .fl-corpo > span, .axa .fl-corpo > div, .axa .fl-corpo > label { display: flex; flex-direction: column; align-items: stretch; gap: 6px; width: 100%; margin: 0; }
+  .axa .fl-corpo > .btns, .axa .fl-corpo > button { align-self: flex-start; }
+  .axa .fl-corpo select, .axa .fl-corpo .in, .axa .fl-corpo .fsp, .axa .fl-corpo .fsp-btn {
+    width: 100% !important; max-width: none !important; min-width: 0 !important; flex: none !important; height: 44px; box-sizing: border-box; }
+  .axa .fl-corpo .fsp { height: auto; flex-direction: column; }
+  .axa .fl-corpo .fsp-pop { position: static; max-height: none; min-width: 0; margin-top: 6px; box-shadow: none; }
+  .axa .fl-corpo .fsp-op { min-height: 44px; box-sizing: border-box; }
+  .axa .fl-corpo label, .axa .fl-corpo .qd-fl { font-size: 12.5px; font-weight: 700; color: var(--tx2); }
+
+  /* ── Tabela que vira lista de cartoes (.tc + data-label) ─────────────── */
+  .axa .tc thead, .axa .tc .tc-cab { display: none !important; }
+  .axa table.tc, .axa table.tc tbody { display: block; width: 100%; overflow: visible; }
+  .axa .tc tr, .axa .tc .tc-ln { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px 14px; align-items: start;
+    padding: 14px !important; margin: 0 0 10px; box-sizing: border-box; min-width: 0; border: 1px solid var(--bd); border-radius: 14px; background: var(--sf2); }
+  .axa .tc td, .axa .tc .tc-ln > * { display: flex !important; flex-wrap: wrap !important; align-items: center; gap: 4px 6px; min-width: 0; max-width: none !important;
+    padding: 0 !important; border: 0 !important; text-align: left !important; font-size: 13px; }
+  .axa .tc td > *, .axa .tc .tc-ln > * > * { min-width: 0; max-width: 100%; }
+  .axa .tc td[data-label]:not([data-label=""])::before, .axa .tc .tc-ln > [data-label]:not([data-label=""])::before {
+    content: attr(data-label); display: block; flex: 0 0 100%; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tx4); line-height: 16px; }
+  .axa .tc [data-tc="topo"], .axa .tc [data-tc="topo-fim"] { order: -3; }
+  .axa .tc [data-tc="topo-fim"] { justify-content: flex-end; text-align: right !important; }
+  .axa .tc [data-tc="titulo"], .axa .tc [data-tc="largo"], .axa .tc [data-tc="acao"] { grid-column: 1 / -1; }
+  .axa .tc [data-tc="titulo"] { order: -2; align-items: stretch; }
+  .axa .tc [data-tc="acao"] { order: 9; }
+  .axa .tc [data-tc="topo"]::before, .axa .tc [data-tc="topo-fim"]::before, .axa .tc [data-tc="titulo"]::before { content: none !important; }
+  .axa .tc [data-tc="fora"], .axa .tc td:empty { display: none !important; }
+}
+
+/* ── Janelas (.ovl/.dlg): o formulario de demanda, as caixas das acoes e a
+   busca ocupam a tela inteira. Ficam no <body>: media query. ──────────── */
+@media (max-width: 760px) {
+  .axa .ovl { padding: 0 !important; align-items: stretch !important; justify-content: stretch !important; }
+  .axa .ovl > .dlg { width: 100% !important; max-width: none !important; min-height: 100%; margin: 0 !important; border-radius: 0 !important; border: 0 !important;
+    padding: calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom)) !important; box-shadow: none !important; }
+  .axa .ovl > .dlg.pal { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) !important; }
+  .axa .pal-res { max-height: none; }
+  .axa .pal-in { padding: 0 6px 0 16px; }
+  .axa .pal-in .kbd { display: none; }
+  .axa .pal-x { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border: 0; border-radius: 12px;
+    background: transparent; color: var(--tx3); cursor: pointer; font: inherit; font-size: 18px; }
+  .axa .dlg-x { width: 44px !important; height: 44px !important; top: calc(10px + env(safe-area-inset-top)) !important; right: 10px !important; }
+  .axa .ovl .btn, .axa .ovl .btnp { height: 44px; }
+  .axa .ovl .btns { height: auto; min-height: 44px; }
+  .axa .ovl .in, .axa .ovl select { min-height: 44px; }
+  .axa .ovl input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), .axa .ovl select, .axa .ovl textarea { font-size: 16px; }
+  .axa .ovl .chip, .axa .ovl .lab, .axa .ovl .kbd { font-size: 12px !important; }
+  .axa .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
+}
+
+/* ── Celular: o logo do topo e o link de texto solto chegam a 44 px de
+   toque (o desenho fica: a area cresce por padding com margem negativa). ── */
+@container app (max-width: 760px) {
+  .axa .tb-logo { min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
+  .axa .main a[href]:not([class]):not([style]) { padding-top: 14px; padding-bottom: 14px; margin-top: -14px; margin-bottom: -14px; }
+}

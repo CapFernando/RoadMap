@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="axa" data-build="854233debe">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>AXIS</title>
+  <link rel="icon" type="image/svg+xml" href="axis/marca/axis-icone.svg">
+  <!-- AXIS, o app novo: uma pagina so, com as telas do prototipo do EP-013
+       (Inicio, Quadro, Backlog, Item, Sprints, Projetos, Paineis...). Le a mesma
+       base das telas antigas pela mesma sessao. Ver axis-app.js. -->
+  <script src="config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="axis-tema.css?v=25141b56d3">
+  <link rel="stylesheet" href="axis.css?v=d413ccd898">
+  <link rel="stylesheet" href="axis-app.css?v=ad04ab488c">
+  <script src="tema.js?v=7df38474d4"></script>
+  <script src="axis.js?v=1eb606be26"></script>
+</head>
+<body>
+<!-- tema.js procura um .tema-btn para atualizar; sem este, ele criaria um botao
+     flutuante por cima do app. O botao de verdade fica na barra do topo. -->
+<button class="tema-btn" type="button" hidden aria-hidden="true" style="display:none"></button>
+<div id="axa"></div>
+<script src="etapa-demanda.js?v=710bc19507"></script>
+<script src="subtarefa.js?v=23179d9523"></script>
+<script src="bis.js?v=735ed4e46d"></script>
+<script src="referencia.js?v=1750882d31"></script>
+<script src="grill.js?v=cffd670be6"></script>
+<script src="abertura.js?v=8ef3cc419d"></script>
+<script src="anexo-tipos.js?v=f38cdc110c"></script>
+<script src="prevoo.js?v=ab2758c54c"></script>
+<script src="deck-grafico.js?v=e976ac3777"></script>
+<script src="deck-fundo.js?v=3c4f91ef7c"></script>
+<script src="dev-nome.js?v=c2db4198e7"></script>
+<script src="vinculo.js?v=e4ad177106"></script>
+<script src="fila.js?v=3e7bb2500a"></script>
+<script src="prazo.js?v=88870a48ae"></script>
+<script src="dialogo.js?v=9e20f6c47f"></script>
+<script src="pipelines.js?v=2374e11d52"></script>
+<script src="capacidade.js?v=efaf632603"></script>
+<script src="leitura-estado.js?v=0242a709f1"></script>
+<script src="publicacao.js?v=8abd4d5426"></script>
+<script src="pausa.js?v=06c4b82f84"></script>
+<script src="nao-publicada.js?v=0086fe18be"></script>
+<script src="homologacao.js?v=dd3f1895a3"></script>
+<script src="colaboradores.js?v=c94edfa2e2"></script>
+<script src="senha.js?v=ae10842c4b"></script>
+<script src="catalogo.js?v=05a8c1ce93"></script>
+<script src="busca-demanda.js?v=1380650a7a"></script>
+<script src="devolucao.js?v=d85c42cb31"></script>
+<script src="entrega-usuario.js?v=1b8aac9457"></script>
+<script src="sprint.js?v=d54f0f863a"></script>
+<script src="ordem-kanban.js?v=c2f290e2ad"></script>
+<script src="resumo-projeto.js?v=5f25c0c2ff"></script>
+<script src="resumo-dev.js?v=d113e5ce31"></script>
+<script src="selo-validacao.js?v=0b6fdb5439"></script>
+<script src="gravacao.js?v=2830d7e94c"></script>
+<script src="anexo-cola.js?v=a860e5baad"></script>
+<script src="links-github.js?v=5ebb0e63ab"></script>
+<script src="qr.js?v=77f17395bd"></script>
+<script src="mensageria-abrir.js?v=2b19b49af3"></script>
+<script src="rede-repete.js?v=4daaef730c"></script>
+<script src="modelo-descricao.js?v=82c7923cdc"></script>
+<script src="requisitos.js?v=cac792c192"></script>
+<script src="historico-cliente.js?v=2b0fcaf502"></script>
+<script src="capa-tecnologia.js?v=4084a759ff"></script>
+<script src="apresentacao.js?v=8e03c136ab"></script>
+<script src="relatorio-ppt.js?v=9f92cf151d"></script>
+<script src="aprovacao-ppt.js?v=2ed7c9629b"></script>
+<script src="projetos-ppt.js?v=e424353d27"></script>
+<script src="axis-interface.js?v=312bfdaff4"></script>
+<script src="axis-app.js?v=de7c46020a"></script>
+<script src="axis-tela-inicio.js?v=cacde7a729"></script>
+<script src="axis-tela-quadro.js?v=f74f375500"></script>
+<script src="axis-tela-backlog.js?v=b252848c99"></script>
+<script src="axis-tela-item.js?v=48efc32e3d"></script>
+<script src="axis-tela-sprints.js?v=3979f5230d"></script>
+<script src="axis-tela-projetos.js?v=863759ad6c"></script>
+<script src="axis-tela-paineis.js?v=3c6075659b"></script>
+<script src="axis-tela-relatorios.js?v=b42ba84462"></script>
+<script src="axis-tela-fechamento.js?v=96abeea72d"></script>
+<script src="axis-tela-configuracoes.js?v=aabc601617"></script>
+<script src="axis-tela-conta.js?v=e7e2a56b85"></script>
+<!-- telas e acoes: cada frente acrescenta a sua linha ACIMA deste marcador -->
+<script src="axis-acoes.js?v=bf7f99d275"></script>
+<script src="axis-form-demanda.js?v=c0baa80052"></script>
+<script src="axis-tela-poker.js?v=aa07161acd"></script>
+<script src="axis-tela-acompanhamentos.js?v=ec5dc1fc65"></script>
+<script src="axis-tela-planejamento.js?v=ed6c27aed1"></script>
+<script src="axis-tela-importar.js?v=dc96dbf9fd"></script>
+<script src="axis-tela-api.js?v=e8eef9c610"></script>
+</body>
+</html>

@@ -49,14 +49,14 @@
     '  display:flex; align-items:center; justify-content:center; padding:18px; }',
     '.sn-box { background:var(--bg2,#161614); border:1px solid var(--border,#2E2E2B);',
     '  border-radius:12px; padding:20px; width:100%; max-width:400px;',
-    '  font-family:Inter,system-ui,sans-serif; color:var(--text,#ECEAE2); }',
+    '  font-family:var(--font-ui,system-ui,sans-serif); color:var(--text,#ECEAE2); }',
     '.sn-box h3 { margin:0 0 4px; font-size:16px; }',
     '.sn-sub { font-size:12px; color:var(--text3,#8B8B85); margin-bottom:14px; line-height:1.5; }',
     '.sn-f { display:block; margin-bottom:11px; font-size:12px; color:var(--text2,#A8A49A); }',
     '.sn-f input { width:100%; margin-top:4px; padding:9px 11px; font-size:14px;',
     '  font-family:inherit; color:var(--text,#ECEAE2); background:var(--bg3,#1E1E1C);',
     '  border:1px solid var(--border,#2E2E2B); border-radius:7px; outline:none; box-sizing:border-box; }',
-    '.sn-f input:focus { border-color:var(--blue,#3B8FE8); }',
+    '.sn-f input:focus { border-color:var(--ac,#FF6B1A); }',
     '.sn-forca { font-size:11px; margin-top:4px; min-height:14px; }',
     '.sn-msg { font-size:12.5px; line-height:1.5; border-radius:7px; padding:9px 11px;',
     '  margin-bottom:11px; display:none; }',
@@ -65,7 +65,7 @@
     '.sn-acoes { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }',
     '.sn-b { font-family:inherit; font-size:13px; padding:8px 15px; border-radius:7px; cursor:pointer; }',
     '.sn-b.sec { background:none; color:var(--text2,#A8A49A); border:1px solid var(--border,#2E2E2B); }',
-    '.sn-b.pri { background:var(--blue,#3B8FE8); color:#fff; border:none; font-weight:600; }',
+    '.sn-b.pri { background:linear-gradient(180deg,var(--ac-l,#FF8643),var(--ac,#FF6B1A)); color:var(--on-ac,#fff); border:none; font-weight:600; }',
     '.sn-b[disabled] { opacity:.55; cursor:default; }',
     /* O "Esqueci minha senha" das telas de login. Fica aqui, e nao em cada tela,
        porque sao quatro telas e o texto e o mesmo. */
@@ -190,12 +190,12 @@
     function tique() {
       var resta = Math.max(0, Math.round((fim - Date.now()) / 1000));
       var mm = Math.floor(resta / 60), ss = resta % 60;
-      relogio.textContent = '⏱ ' + mm + ':' + (ss < 10 ? '0' : '') + ss +
+      relogio.textContent = mm + ':' + (ss < 10 ? '0' : '') + ss +
                             ' para definir a nova senha';
       relogio.style.color = resta <= 60 ? 'var(--red-tx,#F9A0A0)' : 'var(--text3,#8B8B85)';
       if (resta <= 0) {
         clearInterval(timer);
-        relogio.textContent = '⏱ tempo esgotado — tente salvar; se nao valer mais, ' +
+        relogio.textContent = 'Tempo esgotado — tente salvar; se nao valer mais, ' +
                               'o servidor avisa e voce pede de novo';
       }
     }

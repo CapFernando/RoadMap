@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="e7b944d5f2">
+<html lang="pt-BR" data-build="0c7ff56949">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,6 +11,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="config.js"></script>
+<!-- Quem tem a interface nova ligada na conta vai para o app (axis-interface.js); os icones .axi dos modulos compartilhados vem do axis.js. -->
+<script src="axis.js?v=1eb606be26"></script>
+<script src="axis-interface.js?v=312bfdaff4"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -727,36 +730,36 @@
   <script src="prevoo.js?v=ab2758c54c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=e4ad177106"></script>
-<script src="resumo-dev.js?v=bbb3cfc8d6"></script>
+<script src="resumo-dev.js?v=d113e5ce31"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
 <script src="capacidade.js?v=efaf632603"></script>
-<script src="dialogo.js?v=3061e0568f"></script>
+<script src="dialogo.js?v=9e20f6c47f"></script>
 <script src="leitura-estado.js?v=0242a709f1"></script>
 <script src="publicacao.js?v=8abd4d5426"></script>
-<script src="rede-repete.js?v=ff7a669a03"></script>
+<script src="rede-repete.js?v=4daaef730c"></script>
 <script src="pausa.js?v=06c4b82f84"></script>
 <script src="nao-publicada.js?v=0086fe18be"></script>
 <script src="homologacao.js?v=dd3f1895a3"></script>
 <script src="colaboradores.js?v=c94edfa2e2"></script>
-<script src="resumo-projeto.js?v=2e30585cbe"></script>
-<script src="senha.js?v=3965a6f502"></script>
+<script src="resumo-projeto.js?v=5f25c0c2ff"></script>
+<script src="senha.js?v=ae10842c4b"></script>
 <script src="catalogo.js?v=05a8c1ce93"></script>
 <script src="busca-demanda.js?v=1380650a7a"></script>
-<script src="modelo-descricao.js?v=b8fbe1a51e"></script>
-<script src="links-github.js?v=0108ec6e06"></script>
+<script src="modelo-descricao.js?v=82c7923cdc"></script>
+<script src="links-github.js?v=5ebb0e63ab"></script>
   <script src="anexo-cola.js?v=a860e5baad"></script>
-<script src="mensageria-abrir.js?v=aa283f3dc4"></script>
-<script src="selo-validacao.js?v=6fcec3ad51"></script>
+<script src="mensageria-abrir.js?v=2b19b49af3"></script>
+<script src="selo-validacao.js?v=0b6fdb5439"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <!-- A data prometida ao solicitante faltava NESTE painel, e e ele que ordena
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=f4a4af42dc"></script>
+<script src="sprint.js?v=d54f0f863a"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
-<script src="requisitos.js?v=1987238fe2"></script>
+<script src="requisitos.js?v=cac792c192"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
@@ -3885,7 +3888,10 @@ async function sessaoDevValida() {
     if (!res.ok) return false;
     const j = await res.json().catch(() => ({}));
     if (j && j.usuario) {
-      _eu = j.usuario;
+      // O `quem-sou` devolve o papel FORA do usuario ({ papel, usuario }). Gravar
+      // so o usuario apagava o papel do `rm_eu`, que o app AXIS e a escolha da
+      // interface leem.
+      _eu = Object.assign({}, j.usuario, j.papel ? { papel: j.papel } : {});
       try { sessionStorage.setItem('rm_eu', JSON.stringify(_eu)); } catch (_) {}
     }
     return true;

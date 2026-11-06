@@ -35,11 +35,13 @@
   /* A PALETA DO DADO. São as mesmas do `apresentacao.js` — há invariante
      cobrando que não divirjam, porque duas paletas é como o deck já errou
      antes (o mesmo âmbar significando duas coisas em slides vizinhos).
-     Medido: todas passam 4.5:1 sobre os três fundos do deck. */
+     Medido: todas passam 4.5:1 sobre os três fundos do deck.
+     Sao os valores do AXIS; o vermelho e o roxo saem um tom acima do token pelo
+     motivo escrito junto da paleta do `apresentacao.js`. */
   var COR = {
-    fundo: '070B16', fundo2: '0E1428', fundo3: '141C36', borda: '223052',
-    texto: 'FFFFFF', fraco: '8792AD',
-    azul: '60A5FA', verde: '4ADE80', vermelho: 'F87171', ambar: 'FBBF24', roxo: 'A78BFA',
+    fundo: '05070C', fundo2: '0D162A', fundo3: '13203A', borda: '18243D',
+    texto: 'F3F6FB', fraco: '8C9AB3',
+    azul: '4C8DFF', verde: '22C55E', vermelho: 'F25252', ambar: 'F5B83D', roxo: 'C4B5FD',
   };
 
   /* ─── NÚMERO NO FORMATO DE QUEM LÊ ─────────────────────────────────────

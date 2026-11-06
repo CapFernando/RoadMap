@@ -87,7 +87,7 @@ novo nunca rodou.
 Ao criar um `.js` novo, inclua-o com o placeholder `?v=0000000000` e deixe o
 script preencher.
 
-### 3.2 As invariantes — 3.489 asserções
+### 3.2 As invariantes — mais de 5.100 asserções
 
 `teste-invariantes.js` não casa regex contra o código: ele **recorta a função do
 arquivo e a executa**, com `new Function`, contra casos construídos. Uma
@@ -205,12 +205,39 @@ conta aparece em duas telas, ela vira módulo — duas cópias divergem.
 | `follow.html` | acompanhamentos |
 | `mensageria.html` | mensageria |
 | `importar.html` | importação de demandas |
+| `axis.html` | **o app AXIS**: todas as telas acima numa página só, na identidade AXIS |
+
+### O app AXIS (`axis.html`)
+
+Uma página só, com rota por hash (`#quadro`, `#item/AX-123`, `#sprints/entregas`…),
+que lê e grava a **mesma base** pelo **mesmo Worker** das telas antigas, com a
+mesma sessão. As telas antigas continuam no ar e funcionando; o app não depende
+delas para nada.
+
+| Arquivo | O que é |
+|---|---|
+| `axis-app.js` | núcleo: sessão, leitura (`dados`), menu por perfil, rotas, `H.gravar` |
+| `gravacao.js` | gravar por patch sobre a base fresca, com retry de corrida — o modelo do `dev.html` |
+| `axis-acoes.js` | os gestos sobre a demanda (mover, validar, devolver, pausar, pegar da fila, mesclar…) |
+| `axis-form-demanda.js` | formulário de demanda nova e de edição, com os campos de cada perfil |
+| `axis-tela-*.js` | uma tela cada; registram-se com `AXIS_APP.tela({ id, papeis, render })` |
+| `axis-app.css` | os componentes do app; cores só por token |
+
+**As regras não são reescritas.** O app chama os mesmos módulos (`sprint.js`,
+`prazo.js`, `etapa-demanda.js`, `capacidade.js`…). Onde uma regra ainda mora
+dentro de `admin.html`, `dev.html` ou `gantt.html`, o app tem uma cópia — e
+`teste-invariantes.js` recorta a função da tela antiga e a do app e roda as duas
+lado a lado (seções "App AXIS"). **Mudou uma regra numa tela antiga? A invariante
+lado a lado fica vermelha até o app receber a mesma mudança.** É de propósito.
+
+Script novo no app entra no `axis.html` com `?v=0000000000`, como em qualquer
+tela, e o `scripts-tema-versao.py` preenche.
 
 ---
 
 ## 7. Como se corrige um defeito aqui
 
-O ciclo que o projeto usa, e que as 3.489 invariantes sustentam:
+O ciclo que o projeto usa, e que as mais de 5.100 invariantes sustentam:
 
 1. **Meça antes de concluir.** Rode a regra candidata contra a base real e veja
    quantos casos ela muda. Boa parte das suposições deste projeto morreu assim —

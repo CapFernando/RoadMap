@@ -267,7 +267,7 @@
     if (!selo) return '';
     return '<span class="' + (classe || 'selo-validado') + ' selo-planning" title="' +
            esc(titulo(selo)) + '">' +
-           '<span aria-hidden="true">✔</span> Validado Planning</span>';
+           '<i class="axi axi-check" aria-hidden="true"></i> Validado Planning</span>';
   }
 
   function badgeComite(m, classe) {
@@ -275,7 +275,7 @@
     if (!selo) return '';
     return '<span class="' + (classe || 'selo-validado') + ' selo-comite" title="' +
            esc(tituloComite(selo)) + '">' +
-           '<span aria-hidden="true">🏛</span> Validado em Comitê</span>';
+           '<i class="axi axi-shield" aria-hidden="true"></i> Validado em Comitê</span>';
   }
 
   /** AS DUAS, na ordem do fluxo: planning dimensiona, comitê aprova.

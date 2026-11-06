@@ -277,9 +277,9 @@
    * se uma demanda antiga chegar com as duas, Dados/BI vence, porque é a marca
    * mais antiga e a que o time de Dados já acompanha.                        */
   var TRILHAS = [
-    { k: 'tecnologia', nome: 'Tecnologia', icone: '💻' },
-    { k: 'dados_bi', nome: 'Dados/BI', icone: '📊' },
-    { k: 'sales_ops', nome: 'Sales Ops', icone: '📈' },
+    { k: 'tecnologia', nome: 'Tecnologia', icone: '<i class="axi axi-laptop"></i>' },
+    { k: 'dados_bi', nome: 'Dados/BI', icone: '<i class="axi axi-chart"></i>' },
+    { k: 'sales_ops', nome: 'Sales Ops', icone: '<i class="axi axi-trend"></i>' },
   ];
 
   function trilhaDe(m) {
@@ -400,7 +400,7 @@
          (ver `travaDeAlocacao`), então ela vive em Em Andamento com este chip.
          O chip responde "em que sprint está?", e a resposta é "em nenhuma". */
       return '<span class="' + cls + ' sp-fora" title="Fora da sprint — o PM/PO ' +
-             'ainda não a repassou para nenhuma semana.">📋 Fora da sprint</span>';
+             'ainda não a repassou para nenhuma semana."><i class="axi axi-clipboard"></i> Fora da sprint</span>';
     }
     /* CURTO NO CHIP, INTEIRO NO `title`. O quadro se lê de relance e o ano é a
        parte que nunca muda entre dois cards; no `title` ele volta, porque é lá
@@ -420,11 +420,11 @@
     if (!n) {
       return '<span class="' + cls + ' sp-cor" style="' + estiloSprint(m) + '" title="Sprint ' + esc(s) +
              (txt((m || {}).sprint_po_por) ? ', repassada por ' + esc(m.sprint_po_por) : '') +
-             '.">🏃 ' + esc(curto) + '</span>';
+             '."><i class="axi axi-refresh"></i> ' + esc(curto) + '</span>';
     }
     return '<span class="' + cls + ' sp-atrasada sp-cor" style="' + estiloSprint(m) + '" title="Sprint ' + esc(s) +
            ' — ENTROU ATRASADA: veio de ' + esc(sprintDeOrigem(m)) + ' e já rolou ' +
-           n + (n === 1 ? ' sprint' : ' sprints') + '.">🏃 ' + esc(curto) +
+           n + (n === 1 ? ' sprint' : ' sprints') + '."><i class="axi axi-refresh"></i> ' + esc(curto) +
            ' · atrasada ' + n + '×</span>';
   }
 

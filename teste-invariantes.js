@@ -77,6 +77,12 @@ const semComentario = (t) => String(t || '')
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/^\s*\/\/.*$/gm, ' ');
 const WC = semComentario(W);
+/* AS TELAS ANTIGAS VOLTARAM A SER AS DA MAIN (06/11/2026), com os emojis de
+   enfeite nos avisos ("🏃 3 repassadas", "⚡ 2 vencidas"); o app nao tem emoji.
+   Nas comparacoes de TEXTO entre as duas o enfeite sai do lado da tela antiga —
+   o numero, a ordem e as palavras continuam tendo de ser os mesmos. */
+const semEmoji = (t) => String(t == null ? '' : t)
+  .replace(/(?:[\u{1F300}-\u{1FAFF}\u2600-\u26FF\u2705\u270E\u2728\u23E9-\u23FA\u25B6]\uFE0F?) ?/gu, '');
 const lerTela = (f) => fs.readFileSync(f, 'utf8');
 const ADMIN = lerTela('admin.html');
 const GANTT = lerTela('gantt.html');
@@ -2410,6 +2416,12 @@ ok(/prazoClassifica\(m\)/.test(corpo(ADMIN, 'async function apresGerar(') || '')
    'o deck reusa a classificacao de prazo da tela, sem recalcular por fora');
 // Emoji em slide de diretoria vira quadrado se a fonte do projetor nao tiver.
 ok(!/addText\('👤/.test(AP), 'sem emoji nos campos do slide');
+// As folhas de impressao (aprovacao de requisitos e projetos em andamento) tambem.
+// A caixa de marcar (U+2610) nao e pictografica e passa.
+['aprovacao-ppt.js', 'projetos-ppt.js'].forEach(arq => {
+  const em = semComentario(lerTela(arq)).match(/\p{Extended_Pictographic}/u);
+  ok(!em, 'sem emoji nos slides de ' + arq, em ? em[0] : '');
+});
 
 
 sec('Apresentacao: caixinha ao lado do nome, barra nitida, promessa que confere');
@@ -5777,8 +5789,10 @@ sec('O slide das frentes cabe no slide');
    Era um preto neutro; virou o azul-quase-preto daquele quadro. Nenhum slide
    escreve cor na mao — e essa regra que faz a troca valer no deck todo em vez de
    nos slides que alguem lembrou de atualizar. */
-ok(/fundo:\s*'070B16'/.test(APRES), 'o fundo do deck e o azul do painel');
-ok(/borda:\s*'223052'/.test(APRES), 'e existe a cor de borda dos cartoes');
+/* A PALETA PASSOU A SER A DO AXIS: o fundo e o marinho profundo dele e a borda,
+   a dele. A regra continua a mesma — um valor declarado num lugar so. */
+ok(/fundo:\s*'05070C'/.test(APRES), 'o fundo do deck e o marinho do AXIS');
+ok(/borda:\s*'18243D'/.test(APRES), 'e existe a cor de borda dos cartoes');
 (() => {
   // Cor escrita direto no slide, fora do objeto C: cada uma dessas e um lugar que
   // a proxima troca de paleta vai esquecer.
@@ -17246,14 +17260,19 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       const m = String(css).match(/(\d+),\s*(\d+),\s*(\d+)/);
       return m ? [m[1], m[2], m[3]].map(v => Number(v).toString(16).padStart(2, '0')).join('') : '';
     };
-    const curva = rgbHex(DF.clareia('070B16', 16));
-    ok(!!curva, 'a cor da curva e derivada do fundo', '#' + curva);
+    /* NO AXIS O FUNDO E UM DEGRADE (#0A1428 no alto, #05070C embaixo), e a
+       curva SOMA o realce a cor local. Entao ha duas curvas a medir, uma em cada
+       ponta — e o realce e o do modulo, e nao um numero copiado aqui. */
+    const PONTAS = ['05070C', '0A1428'];
+    const curvas = PONTAS.map(f => rgbHex(DF.clareia(f, DF.REALCE)));
+    ok(curvas.every(Boolean), 'a cor da curva e derivada do fundo',
+       curvas.map(c => '#' + c).join(' / '));
 
     /* ── E ELA E TEXTURA, E NAO FORMA ──
        `trend-emphasis` do padrao citado diz para nao por textura por cima do
        dado. Este fundo respeita por CONTRASTE: a curva fica perto demais do
        fundo para competir com qualquer coisa. */
-    const rCurva = razao(curva, '070B16');
+    const rCurva = Math.max(...PONTAS.map((f, i) => razao(curvas[i], f)));
     ok(rCurva < 1.3,
        'a curva fica abaixo de 1,3:1 do fundo — visivel como textura, invisivel ' +
        'como forma', rCurva.toFixed(3) + ':1');
@@ -17261,11 +17280,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* ── E O DADO POR CIMA DELA NAO PERDE LEGIBILIDADE ──
        E a unica pergunta que importa: a textura pode existir se ela nao empurra
        nenhum numero abaixo do minimo. Medido no PIOR caso, que e o dado sobre a
-       propria linha. */
+       propria linha — e na ponta clara do degrade. As cores sao as da paleta do
+       modulo, para a lista nao envelhecer na proxima troca. */
     const ruins = [];
-    ['FFFFFF', '4ADE80', 'F87171', '60A5FA', 'FBBF24', 'A78BFA', '8792AD'].forEach(c => {
-      const r = razao(c, curva);
-      if (r < 4.5) ruins.push('#' + c + ' = ' + r.toFixed(2));
+    ['texto', 'verde', 'vermelho', 'azul', 'ambar', 'roxo', 'fraco'].forEach(k => {
+      const c = require('./deck-grafico.js').COR[k];
+      curvas.forEach(cv => {
+        const r = razao(c, cv);
+        if (r < 4.5) ruins.push(k + ' #' + c + ' = ' + r.toFixed(2));
+      });
     });
     ok(ruins.length === 0,
        'e todo dado sobre a CURVA continua acima de 4.5:1 — a textura nao custa ' +
@@ -17298,7 +17321,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        Sao vinte slides pedindo o mesmo fundo. Sem cache, o .pptx levaria vinte
        copias do mesmo PNG. */
     ok(/var _cache = null;/.test(fs.readFileSync('deck-fundo.js', 'utf8')) &&
-       /if \(_cache && _cache\.fundo === fundo\) return _cache\.dado;/
+       /if \(_cache && _cache\.fundo === fundo && _cache\.topo === topo\) return _cache\.dado;/
          .test(fs.readFileSync('deck-fundo.js', 'utf8')),
        'o PNG e gerado uma vez por deck, e nao por slide');
 
@@ -17899,9 +17922,9 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      * invariante: a funcao roda com um dubla de pptxgenjs e o desenho inteiro e
      * medido. */
     const deps = {
-      C: { fundo: '070B16', fundo2: '0E1428', fundo3: '141C36', borda: '223052',
-           texto: 'FFFFFF', fraco: '8792AD', azul: '60A5FA', verde: '4ADE80',
-           vermelho: 'F87171', ambar: 'FBBF24', ouro: 'FCD34D', prata: 'CBD5E1',
+      C: { fundo: '05070C', fundo2: '0D162A', fundo3: '13203A', borda: '18243D',
+           texto: 'F3F6FB', fraco: '8C9AB3', azul: '4C8DFF', verde: '22C55E',
+           vermelho: 'F25252', ambar: 'F5B83D', ouro: 'FCD34D', prata: 'CBD5E1',
            bronze: 'D8A07A' },
       DECKG: require('./deck-grafico.js'),
     };
@@ -23591,7 +23614,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        COLUNA nas duas telas, e um card em Em Andamento com esse chip se le
        como "este card esta na coluna errada". Demanda de Sustentacao vive
        exatamente assim — comeca sem sprint e fica em Em Andamento. */
-    ok(!/>📋 Backlog</.test(chipFora) && /Fora da sprint/.test(chipFora),
+    ok(!/Backlog</.test(chipFora) && /Fora da sprint/.test(chipFora),
        'e nao usa a palavra que ja nomeia uma coluna do quadro', chipFora.slice(-40));
     ok(/sp-atrasada/.test(chipAtr) && !/sp-atrasada/.test(chipNa),
        'e quem entrou atrasada aparece diferente de quem entrou na hora');
@@ -23603,11 +23626,15 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        nao aparecesse na saida — e acusou codigo CORRETO: escapado, o texto vira
        `&lt;img src=x onerror=alert(1)&gt;` dentro do `title`, inerte, e a
        palavra continua la como texto. O que faz mal e a ASPA que fecha o
-       atributo e o `<` que abre a tag; e isso que se mede. */
+       atributo e o `<` que abre a tag; e isso que se mede.
+       O icone (`<i class="axi ..."></i>`) e marcacao do proprio chip, logo
+       apos o `title`: sai antes da busca, e qualquer outra tag depois de uma
+       aspa continua acusando. */
     const chipSujo = SP.badge({ sprint_po: 'S1-11-2026',
                                 sprint_po_por: '"><img src=x onerror=alert(1)>',
                                 sprint_po_historico: [{ sprint: 'S1-11-2026' }] });
-    ok(!/"><|<img/.test(chipSujo) && /&quot;&gt;&lt;img/.test(chipSujo),
+    ok(!/"><|<img/.test(chipSujo.replace(/<i class="axi [\w-]+"><\/i>/g, '')) &&
+       /&quot;&gt;&lt;img/.test(chipSujo),
        'e o nome de quem repassou e escapado antes de entrar no chip',
        chipSujo.slice(0, 90));
 
@@ -23638,8 +23665,8 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     /* E O CHIP MOSTRA O CURTO, COM O INTEIRO NO `title`. As duas metades: o
        quadro se le de relance, e quem precisa do ano passa o mouse. */
     const chipAno = SP.badge(em2026);
-    ok(/>🏃 S1-10</.test(chipAno), 'o chip desenha o rotulo CURTO',
-       chipAno.slice(chipAno.indexOf('>🏃')));
+    ok(/axi-refresh"><\/i> S1-10</.test(chipAno), 'o chip desenha o rotulo CURTO',
+       chipAno.slice(chipAno.indexOf('axi-refresh')));
     ok(/title="[^"]*S1-10-2026/.test(chipAno),
        'e o ano continua a um passar de mouse, no title');
     ok(/title="[^"]*S2-11-2026/.test(chipNa) && /title="[^"]*S3-11-2026/.test(chipAtr),
@@ -25301,6 +25328,4544 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
   try { new Function(PIPE); } catch (e) { erroP = e.message; }
   ok(!erroP, 'pipelines.js sem erro de sintaxe', erroP || '');
 
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('Gravacao do app AXIS (gravacao.js): o patch muda SO o que pede');
+
+  /* O APP NOVO GRAVA POR PATCH sobre a base fresca, como o painel do dev. A
+     garantia que importa e a mesma do `camposAlterados` do admin: o que a acao
+     nao tocou continua sendo o do servidor. Aqui a funcao do ADMIN e executada
+     sobre o resultado do `aplicar` — se o diff dela der algo alem do patch, o
+     `aplicar` esta mexendo onde nao devia. */
+  (() => {
+    const G = require('./gravacao.js');
+    const DIFF = corpo(ADMIN, 'function camposAlterados(local, baseStr) {') || '';
+    const SEMVALOR = (ADMIN.match(/const semValor = [^\n]+/) || [''])[0];
+    const diffAdmin = new Function(SEMVALOR + '\n' + DIFF + '\nreturn camposAlterados;')();
+    const base = { atualizado_em: 't0', temas: [{ id: 't1' }], melhorias: [
+      { id: 'a', titulo: 'A', status_planejamento: 'em_andamento', dev: 'Ana', entrega: '2026-11-05', anexos: [{ nome: 'x' }] },
+      { id: 'b', titulo: 'B', status_planejamento: 'backlog' },
+    ] };
+    const copia = JSON.stringify(base);
+    const patch = { a: { status_planejamento: 'validacao', entrega: undefined } };
+    const depois = G.aplicar(base, patch);
+    const a2 = depois.melhorias.find(m => m.id === 'a');
+    ok(JSON.stringify(base) === copia, 'aplicar nao altera a base recebida');
+    ok(a2.status_planejamento === 'validacao' && !('entrega' in a2) && a2.dev === 'Ana' &&
+       a2.anexos.length === 1, 'o campo do patch muda, undefined apaga, o resto fica o do servidor');
+    const d = diffAdmin(a2, JSON.stringify(base.melhorias[0]));
+    ok(Object.keys(d).sort().join() === 'entrega,status_planejamento',
+       'o camposAlterados do admin ve exatamente o patch, nada alem', Object.keys(d).join());
+    ok(depois.melhorias.find(m => m.id === 'b') === base.melhorias[1],
+       'demanda fora do patch e a mesma do servidor');
+    // Demanda nova: so com id e titulo — patch de campo solto nao vira demanda.
+    const comNova = G.aplicar(base, { n1: { id: 'n1', titulo: 'Nova', status_planejamento: 'backlog' }, x9: { dev: 'Ana' } });
+    ok(comNova.melhorias.some(m => m.id === 'n1') && !comNova.melhorias.some(m => m.id === 'x9'),
+       'demanda nova entra; patch de demanda que sumiu nao cria fantasma');
+    ok(G.orfaos(base, { x9: { dev: 'Ana' }, a: { dev: 'Bia' } }).join() === 'x9',
+       'e o patch orfao e apontado para a tela avisar');
+    ok(G.aplicar(base, {}, { temas: [] }).temas.length === 0, 'chave do topo troca pelo raizPatch');
+
+    // SABOTAGEM: um aplicar que grava undefined em vez de apagar seria pego.
+    const sabotado = (b, pt) => ({ ...b, melhorias: b.melhorias.map(m => pt[m.id] ? { ...m, ...pt[m.id] } : m) });
+    const s2 = sabotado(base, patch).melhorias.find(m => m.id === 'a');
+    ok('entrega' in s2, 'a sabotagem (spread que nao apaga) deixaria a chave — e a invariante acima acusaria');
+
+    // O fluxo: 409 conflito refaz UMA vez a partir de nova leitura; erro volta com os itens.
+    let leituras = 0, envios = 0;
+    const fluxo = G.gravar({
+      papel: 'dev', patch: { a: { status_planejamento: 'validacao' } }, semPrevoo: true,
+      ler: async () => { leituras++; return JSON.parse(copia); },
+      enviar: async (c) => { envios++; return envios === 1 ? { status: 409, corpo: { error: 'conflito' } } : { status: 200, corpo: { ok: true } }; },
+    }).then(r => {
+      ok(r.ok && leituras === 2 && envios === 2, 'conflito: rele a base e reenvia uma vez', leituras + '/' + envios);
+    });
+    registra(fluxo);
+    let envia2 = 0;
+    registra(G.gravar({
+      papel: 'admin', patch: { a: { dev: 'Bia' } }, semPrevoo: true,
+      ler: async () => JSON.parse(copia),
+      enviar: async (c) => { envia2++; return { status: 409, corpo: { error: 'conflito' } }; },
+    }).then(r => ok(!r.ok && envia2 === 2, 'e nao fica em laco: o segundo conflito volta como erro')));
+    let acao = '';
+    registra(G.gravar({
+      papel: 'admin', patch: { a: { dev: 'Bia' } }, semPrevoo: true,
+      ler: async () => JSON.parse(copia),
+      enviar: async (c) => { acao = c.action + '|' + c.base; return { status: 200, corpo: {} }; },
+    }).then(() => ok(acao === 'publish|t0', 'admin grava por publish com a versao lida como base', acao)));
+    registra(G.gravar({
+      papel: 'dev', patch: { a: { dev: 'Bia' } },
+      ler: async () => ({ melhorias: [] }), enviar: async () => ({ status: 200, corpo: {} }),
+    }).then(r => ok(!r.ok && /vazia/.test(r.erro), 'leitura vazia aborta a gravacao')));
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('Acoes do app AXIS (axis-acoes.js): o patch de cada gesto e o da tela antiga');
+
+  /* CADA ACAO DO ITEM GRAVA O QUE A TELA ANTIGA GRAVARIA. Onde a regra existe
+     escrita no admin.html (`gestoSemDev`, `marcaConclusao`, `aplicarRetomada`),
+     a funcao de la e recortada e executada AO LADO da do app, caso a caso: se
+     as duas divergirem, o app passa a gravar outra coisa em silencio. */
+  (() => {
+    const AC = require('./axis-acoes.js');
+    const R = { PAUSA: require('./pausa.js'), HOMOLOGACAO: require('./homologacao.js'), SPRINTPO: require('./sprint.js'),
+                DEVOLUCAO: require('./devolucao.js'), PREVOO: require('./prevoo.js'), VINCULO: require('./vinculo.js') };
+    const HOJE = '2026-11-05', AGORA = '2026-11-05T14:00:00.000Z';
+    const ctx = (papel, extra) => Object.assign({ papel, quem: papel === 'dev' ? 'Ana Dev' : 'Paula PO', hoje: HOJE, agora: AGORA, lista: [], aprovadores: null, R }, extra || {});
+    const R_ = AC.REGRAS;
+
+    // gestoSemDev: a do admin e a do app, na mesma matriz.
+    const gAdmin = new Function('window', 'SPRINTPO',
+      (ADMIN.match(/const ETAPAS_COM_DEV = [^\n]+/) || [''])[0] + '\n' +
+      (corpo(ADMIN, 'function exigeDev(sp) {') || '') + '\n' + (corpo(ADMIN, 'function gestoSemDev(') || '') + '\nreturn gestoSemDev;')({ SPRINTPO: R.SPRINTPO }, R.SPRINTPO);
+    const ETS = ['backlog', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'];
+    let divergeDev = [];
+    ETS.forEach(de => ETS.forEach(para => ['', 'Ana'].forEach(dev => ['', 'S2-11-2026'].forEach(sp => {
+      const v = { status_planejamento: de };
+      if (gAdmin(v, para, dev, sp) !== AC.gestoSemDev(v, para, dev, sp, { R })) divergeDev.push(de + '>' + para + '/' + dev + '/' + sp);
+    }))));
+    ok(divergeDev.length === 0, 'gestoSemDev do app = o do admin em ' + (ETS.length * ETS.length * 4) + ' casos', divergeDev.slice(0, 5).join(', '));
+
+    // marcaConclusao: o admin muta; o app devolve os campos. O resultado tem de ser o mesmo.
+    const mAdmin = new Function((corpo(ADMIN, 'function marcaConclusao(m, etapaNova) {') || '') + '\nreturn marcaConclusao;')();
+    const hojeLocal = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+    let divergeMc = [];
+    [{}, { concluido_em: '2026-10-01', concluido_retroativo: true }, { entregue_em: '2026-09-30' }].forEach((base, i) => ETS.forEach(para => {
+      const a = JSON.parse(JSON.stringify(base)); mAdmin(a, para);
+      const b = Object.assign(JSON.parse(JSON.stringify(base)), AC.marcaConclusao(base, para, hojeLocal));
+      Object.keys(b).forEach(k => { if (b[k] === undefined) delete b[k]; });
+      if (JSON.stringify(a) !== JSON.stringify(b)) divergeMc.push(i + '>' + para);
+    }));
+    ok(divergeMc.length === 0, 'marcaConclusao do app = a do admin (concluir estampa, sair limpa)', divergeMc.join(', '));
+
+    // retomar: `aplicarRetomada` do admin, com o relogio fixo.
+    const ret = new Function('ETAPA', 'HOJE',
+      'const estaPausado = m => ETAPA.pausada(m);\nfunction _isoHoje() { return HOJE; }\n' +
+      (corpo(ADMIN, 'function _somaDias(iso, n) {') || '') + '\n' + (corpo(ADMIN, 'function _difDias(de, ate) {') || '') + '\n' +
+      (ADMIN.match(/const diasPausadoAgora = [^\n]+/) || [''])[0] + '\n' + (corpo(ADMIN, 'function aplicarRetomada(m) {') || '') + '\nreturn aplicarRetomada;')(require('./etapa-demanda.js'), HOJE);
+    [{ entrega: '2026-11-10', pausado_em: '2026-10-28', pausa_motivo: 'banco', pausa_dias: 2, pausa_historico: [{ de: 'x' }] },
+     { entrega: '', pausado_em: '2026-11-01', pausa_motivo: 'm' }, { entrega: '2026-12-30', pausado_em: HOJE, pausa_motivo: 'm' }].forEach((m, i) => {
+      const adm = JSON.parse(JSON.stringify(m)); ret(adm, HOJE);
+      const r = R_.retomar(m, {}, ctx('admin'));
+      const app = Object.assign(JSON.parse(JSON.stringify(m)), r.patch);
+      const ks = ['entrega', 'pausado_em', 'pausa_motivo', 'pausa_por', 'pausa_dias', 'pausa_historico'];
+      ok(r.ok && ks.every(k => JSON.stringify(adm[k] == null ? '' : adm[k]) === JSON.stringify(app[k] == null ? '' : app[k])),
+         'retomar ' + (i + 1) + ': o patch do app = aplicarRetomada do admin (entrega empurrada, historico da pausa)',
+         ks.map(k => k + ' ' + JSON.stringify(adm[k]) + '/' + JSON.stringify(app[k])).join('; '));
+    });
+
+    // Validar e devolver: os campos do `valDecidir`.
+    const val = { id: 'v', codigo: 'AX-1', status_planejamento: 'validacao', dev: 'Ana', horas_realizadas: 8, tipo: 'evolucao' };
+    const rv = R_.validar(val, {}, ctx('admin'));
+    ok(rv.ok && rv.patch.status_planejamento === 'concluido' && rv.patch.status === 'concluida' && rv.patch.validado_por === 'Paula PO' &&
+       rv.patch.validado_em === AGORA && rv.patch.concluido_em === '2026-11-05' && rv.patch.validacao_obs === '',
+       'validar grava o selo de quem validou e conclui com a data da aprovacao', JSON.stringify(rv.patch));
+    ok(R_.validar(Object.assign({}, val, { horas_realizadas: 0 }), {}, ctx('admin')).campo === 'horas', 'validar sem horas e recusado e aponta o campo');
+    ok(R_.validar(Object.assign({}, val, { dev: '' }), {}, ctx('admin')).campo === 'dev', 'validar sem responsavel e recusado (concluir sem dono)');
+    ok(!R_.validar(Object.assign({}, val, { status_planejamento: 'em_andamento' }), {}, ctx('admin')).ok, 'so se valida o que esta em Validacao PM/PO');
+    const rd = R_.devolver(val, { obs: '  refazer o saldo  ' }, ctx('admin'));
+    ok(rd.ok && rd.patch.status_planejamento === R.DEVOLUCAO.ETAPA_AO_DEVOLVER && rd.patch.validacao_obs === 'refazer o saldo' &&
+       rd.patch.validado_por === '' && rd.patch.concluido_em === '', 'devolver volta para a etapa da devolucao, com o motivo e sem selo', JSON.stringify(rd.patch));
+    ok(!R_.devolver(val, { obs: '  ' }, ctx('admin')).ok, 'devolver sem motivo e recusado');
+
+    // Pausa: as transicoes sao as do pausa.js, e o patch leva so os campos da pausa.
+    const viva = { id: 'p', status_planejamento: 'em_andamento', entrega: '2026-11-20' };
+    const rp = R_.pausar(viva, { motivo: 'aguardando o banco responder' }, ctx('admin'));
+    ok(rp.ok && rp.patch.pausado_em === HOJE && rp.patch.pausa_por === 'Paula PO' && rp.patch.pausa_pedido === null &&
+       Object.keys(rp.patch).sort().join() === 'pausa_aprovada_em,pausa_aprovada_por,pausa_motivo,pausa_pedido,pausa_por,pausado_em',
+       'o PM/PO pausa direto: os campos de `pausarComoAdm`, e nada alem', Object.keys(rp.patch).join());
+    ok(!R_.pausar(viva, { motivo: 'curto' }, ctx('admin')).ok, 'pausar com justificativa curta e recusado (PAUSA.problemaNoMotivo)');
+    ok(!R_.pausar(viva, { motivo: 'aguardando o banco responder' }, ctx('dev')).ok, 'o dev nao pausa: pede');
+    const rpp = R_.pedirPausa(viva, { motivo: 'aguardando o banco responder' }, ctx('dev'));
+    ok(rpp.ok && Object.keys(rpp.patch).join() === 'pausa_pedido' && rpp.patch.pausa_pedido.em === HOJE && rpp.patch.pausa_pedido.por === 'Ana Dev',
+       'o dev pede: so `pausa_pedido`, com a data de hoje e o nome dele');
+    const comPedido = Object.assign({}, viva, { pausa_pedido: { em: '2026-11-02', por: 'Ana Dev', motivo: 'aguardando o banco responder' } });
+    const ra = R_.aprovarPausa(comPedido, {}, ctx('admin'));
+    ok(ra.ok && ra.patch.pausado_em === '2026-11-02' && ra.patch.pausa_pedido === null, 'aprovar vale desde a data DO PEDIDO, e nao de hoje', JSON.stringify(ra.patch));
+    ok(!R_.aprovarPausa(comPedido, {}, ctx('dev')).ok, 'o dev nao aprova pausa');
+    const rr = R_.recusarPausa(comPedido, { motivo: 'o fornecedor ja respondeu' }, ctx('admin'));
+    ok(rr.ok && rr.patch.pausa_pedido === null && rr.patch.pausa_recusas.length === 1 && rr.patch.pausa_recusas[0].pedido_em === '2026-11-02',
+       'recusar guarda a recusa com o pedido que foi negado');
+    ok(R_.desistirPausa(comPedido, {}, ctx('dev')).patch.pausa_pedido === null, 'desistir apaga so o pedido');
+    ok(comPedido.pausa_pedido && !viva.pausado_em, 'nenhuma regra muta a demanda recebida');
+
+    // Mover: o dev so move o que o painel dele move, e entregar e outro gesto.
+    const plan = { id: 'm', codigo: 'AX-2', status_planejamento: 'planejado', dev: 'Ana Dev', tipo: 'evolucao', sprint_po: 'S1-11-2026' };
+    const rm = R_.mover(plan, { destino: 'em_andamento' }, ctx('dev'));
+    ok(rm.ok && rm.patch.status_planejamento === 'em_andamento' && rm.patch.status === 'iniciada', 'o dev comeca (Planejado -> Em andamento)', JSON.stringify(rm.patch));
+    ok(!R_.mover(plan, { destino: 'concluido' }, ctx('dev')).ok && !R_.mover(plan, { destino: 'planning' }, ctx('dev')).ok,
+       'o dev nao move para fora de ETAPAS_DO_DEV (o servidor devolveria)');
+    ok(!R_.mover(Object.assign({}, plan, { sprint_po: '' }), { destino: 'em_andamento' }, ctx('dev')).ok, 'comecar sem sprint e recusado (SPRINTPO.travaDeAlocacao)');
+    ok(R_.mover({ id: 'x', status_planejamento: 'planning', tipo: 'evolucao' }, { destino: 'planejado' }, ctx('admin')).campo === 'dev',
+       'admin: Planejado sem dono nem sprint pede o responsavel (gestoSemDev)');
+    ok(R_.mover({ id: 'x', status_planejamento: 'planning', tipo: 'evolucao', dev: 'Ana' }, { destino: 'planejado' }, ctx('admin')).campo === 'sprint',
+       'admin: atravessar a Planning sem sprint pede a sprint');
+    const rc = R_.mover({ id: 'x', status_planejamento: 'em_andamento', tipo: 'sustentacao', dev: 'Ana', sprint_po: 'S1-11-2026', horas_realizadas: 0 }, { destino: 'concluido' }, ctx('admin'));
+    ok(!rc.ok && rc.campo === 'horas', 'concluir sem horas e recusado e leva ao campo das horas');
+    const rok = R_.mover({ id: 'x', status_planejamento: 'backlog', tipo: 'evolucao' }, { destino: 'levantar_req' }, ctx('admin'));
+    ok(rok.ok && rok.patch.status === 'recebida' && !('concluido_em' in rok.patch), 'admin move com o status do SP_TO_STATUS e sem tocar na conclusao');
+
+    // Entregar: as exigencias do saveStatus e a regra da homologacao.
+    const and = { id: 'e', status_planejamento: 'em_andamento', tipo: 'evolucao', solicitante: 'Bia', dev: 'Ana Dev', sprint_po: 'S1-11-2026' };
+    ok(R_.entregar(and, { destino: 'validacao_area', horas: '0' }, ctx('dev')).campo === 'horas', 'entregar sem horas e recusado');
+    ok(!R_.entregar(and, { destino: 'validacao', horas: '4', implementacao: 'x' }, ctx('dev')).ok, 'evolucao nao pula a Validacao da area');
+    const re = R_.entregar(and, { destino: 'validacao_area', horas: '4', resumo: 'feito', implementacao: 'tela nova' }, ctx('dev'));
+    ok(re.ok && re.patch.entregue_em === AGORA && re.patch.horas_realizadas === 4 && re.patch.resumo_entrega === 'feito', 'entregar a area carimba a entrega do dev', JSON.stringify(re.patch));
+    const area = Object.assign({}, and, { status_planejamento: 'validacao_area', entregue_em: '2026-11-01T10:00:00Z', homologacao: { quem: 'Bia', ok: true } });
+    const re2 = R_.entregar(area, { destino: 'validacao', horas: '4', implementacao: 'tela nova' }, ctx('dev'));
+    ok(re2.ok && re2.patch.entregue_em === '2026-11-01T10:00:00Z', 'da area ao PM/PO NAO recarimba: e a mesma entrega seguindo');
+    ok(!R_.entregar(area, { destino: 'validacao', horas: '4', implementacao: '' }, ctx('dev')).ok, 'ao PM/PO sem o que foi implementado e recusado');
+    ok(!R_.entregar(Object.assign({}, area, { homologacao: null }), { destino: 'validacao', horas: '4', implementacao: 'x' }, ctx('dev')).ok,
+       'sair da area para o PM/PO sem homologacao e recusado');
+    ok(AC.destinosDeEntrega(and, ctx('dev')).join() === 'validacao_area', 'evolucao em andamento so oferece a area como destino');
+
+    // Homologar, negar, replanejar.
+    const rh = R_.homologar({ id: 'h', status_planejamento: 'validacao_area' }, { quem: 'Bia', obs: 'ok' }, ctx('dev'));
+    ok(rh.ok && Object.keys(rh.patch).join() === 'homologacao' && rh.patch.homologacao.quem === 'Bia' && rh.patch.homologacao.ok === true,
+       'homologar grava o registro e NAO move a demanda');
+    ok(!R_.homologar({ id: 'h', status_planejamento: 'validacao_area' }, { quem: '' }, ctx('dev')).ok, 'homologar sem quem e recusado');
+    const rn = R_.negar({ id: 'n', status_planejamento: 'concluido', concluido_em: '2026-10-01' }, { motivo: 'fora do escopo' }, ctx('admin'));
+    ok(rn.ok && rn.patch.status_planejamento === 'negada' && rn.patch.motivo_negacao === 'fora do escopo' && rn.patch.concluido_em === '',
+       'negar grava o motivo e tira a conclusao');
+    ok(!R_.negar({ id: 'n', status_planejamento: 'backlog' }, { motivo: 'x' }, ctx('dev')).ok, 'o dev nao nega');
+    ok(R_.replanejar({ id: 'r', status_planejamento: 'em_andamento', entrega: '2026-11-10' }, { entrega: '2026-11-24' }, ctx('admin')).patch.entrega === '2026-11-24' &&
+       !R_.replanejar({ id: 'r', status_planejamento: 'em_andamento' }, { entrega: '2026-11-24' }, ctx('dev')).ok &&
+       !R_.replanejar({ id: 'r', status_planejamento: 'em_andamento', inicio: '2026-11-20' }, { entrega: '2026-11-15' }, ctx('admin')).ok,
+       'replanejar: so o PM/PO, e nunca antes do inicio');
+
+    // SABOTAGEM: um patch que levasse a demanda inteira passaria nas contas de valor
+    // acima, mas nao na de chaves — e e ela que protege o resto do servidor.
+    const sabot = Object.assign({}, viva, rp.patch);
+    ok(Object.keys(sabot).length > Object.keys(rp.patch).length, 'a sabotagem (gravar a demanda inteira) teria mais chaves — e a invariante de chaves acusaria');
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('Formulario de demanda do app AXIS (axis-form-demanda.js): nova e editar');
+
+  (() => {
+    const AC = require('./axis-acoes.js');
+    const F = require('./axis-form-demanda.js');
+    const R = { SPRINTPO: require('./sprint.js'), ABERTURA: require('./abertura.js'), AXIS_ACOES: AC, PREVOO: require('./prevoo.js'),
+                HOMOLOGACAO: require('./homologacao.js'), COLABORADORES: { emailPara: () => '' } };
+    const HOJE = '2026-11-05', AGORA = '2026-11-05T14:00:00.000Z';
+    const c = (papel, extra) => Object.assign({ papel, quem: papel === 'dev' ? 'Ana Dev' : 'Paula PO', hoje: HOJE, agora: AGORA, id: 'n1', D: { feriados: [], sprints_fechadas: [] }, R }, extra || {});
+    const base = { titulo: 'Tela nova', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', descricao: 'x', impacto: 'medio', urgencia: 'alta' };
+
+    const d1 = F.nova(Object.assign({}, base, { etapa: 'em_andamento' }), c('dev'));
+    ok(d1.ok && d1.obj.dev === 'Ana Dev' && d1.obj.origem === 'dev' && d1.obj.status_planejamento === 'backlog' && d1.obj.status === 'recebida' &&
+       d1.obj.criado_em === AGORA && d1.obj.id === 'n1', 'dev: nasce com o nome dele, origem dev e no Backlog (saveNewDemand, 02/11/2026)', JSON.stringify(d1.obj));
+    ok(F.nova(Object.assign({}, base, { etapa: 'concluido' }), c('dev')).obj.status_planejamento === 'backlog', 'dev: pedir outra etapa tambem nasce no Backlog');
+    ok(F.nova(Object.assign({}, base, { entrega: '2026-11-20' }), c('dev')).campo === 'entrega', 'dev: pelo painel nao nasce com prazo no futuro (abertura.js)');
+    ok(F.nova(Object.assign({}, base, { solicitante: '' }), c('dev')).campo === 'solicitante', 'sem quem pediu, a abertura e recusada');
+    ok(F.nova(Object.assign({}, base, { tipo: '' }), c('admin')).campo === 'tipo' && F.nova(Object.assign({}, base, { tema_id: '' }), c('admin')).campo === 'tema',
+       'tipo e sistema sao obrigatorios na abertura');
+
+    const a1 = F.nova(Object.assign({}, base, { etapa: 'backlog', prioridade: 'alta', poker_pontos: '5', entrega: '2026-12-01', dados_bi: true, sales_ops: true }), c('admin'));
+    ok(a1.ok && a1.obj.poker_pontos === 5 && a1.obj.prioridade === 'alta' && a1.obj.entrega === '2026-12-01' && a1.obj.dados_bi === true && a1.obj.sales_ops === false &&
+       a1.obj.comite === null && Array.isArray(a1.obj.historico) && a1.obj.homologacao === null, 'admin: os padroes do saveMelhoria; Dados/BI e Sales Ops sao exclusivos');
+    ok(F.nova(Object.assign({}, base, { entrega: '2026-10-01' }), c('admin')).campo === 'entrega', 'admin: tambem nao nasce com data no passado');
+    ok(F.nova(Object.assign({}, base, { etapa: 'planejado', dev: 'Ana' }), c('admin')).campo === 'sprint', 'admin: Planejado sem sprint pede a sprint');
+    const a2 = F.nova(Object.assign({}, base, { etapa: 'planejado', sprint: 'S2-11-2026' }), c('admin'));
+    ok(a2.ok && a2.obj.sprint_po === 'S2-11-2026' && a2.obj.sprint_po_por === 'Paula PO' && a2.obj.sprint_po_historico.length === 1,
+       'admin: a sprint entra por SPRINTPO.repassar, e Planejado com sprint dispensa o dono', JSON.stringify(a2.erro || ''));
+    ok(F.nova(Object.assign({}, base, { etapa: 'concluido', dev: 'Ana', sprint: 'S1-11-2026' }), c('admin')).campo === 'horas', 'admin: nascer concluida pede as horas');
+
+    // Edicao: o patch leva SO o que mudou.
+    const m = { id: 'e1', codigo: 'AX-9', titulo: 'Antes', tipo: 'evolucao', tema_id: 't1', descricao: 'd', solicitante: 'Bia', status_planejamento: 'em_andamento',
+                dev: 'Ana Dev', inicio: '2026-11-01', entrega: '2026-11-10', prioridade: 'media', sprint_po: 'S1-11-2026', anexos: [{ nome: 'a.pdf' }] };
+    const f = { titulo: 'Depois', tipo: 'evolucao', tema_id: 't1', descricao: 'd', solicitante: 'Bia', projeto_id: '', inicio: '2026-11-01', entrega: '2026-11-10' };
+    const e1 = F.edicao(m, f, c('dev'));
+    ok(e1.ok && Object.keys(e1.patch).sort().join() === 'titulo', 'editar manda so o que mudou (vazio igual a ausente nao conta como mudanca)', Object.keys(e1.patch || {}).join());
+    const e2 = F.edicao(m, Object.assign({}, f, { entrega: '2026-12-31' }), c('dev'));
+    ok(!('entrega' in e2.patch), 'dev: a partir de Planejado a data e do PM/PO e nao entra no patch');
+    ok(F.edicao(m, Object.assign({}, f, { tipo: 'sustentacao' }), c('dev')).patch.tipo === undefined, 'dev: a classificacao de demanda existente nao muda');
+    ok(F.edicao(m, Object.assign({}, f, { titulo: 'Antes', projeto_id: undefined }), c('dev')).patch === null, 'sem mudanca, nada a gravar');
+    const e3 = F.edicao(m, Object.assign({}, f, { titulo: 'Antes', dev: '', prioridade: 'media' }), c('admin'));
+    ok(!e3.ok && e3.campo === 'dev', 'admin: tirar o dono de uma demanda Em andamento e recusado');
+    const e4 = F.edicao(m, Object.assign({}, f, { titulo: 'Antes', dev: 'Ana Dev', prioridade: 'alta', sprint: 'S2-11-2026' }), c('admin'));
+    ok(e4.ok && e4.patch.prioridade === 'alta' && e4.patch.sprint_po === 'S2-11-2026' && e4.patch.sprint_po_historico.length === 1 && !('titulo' in e4.patch),
+       'admin: prioridade e sprint (pelo repassar) no patch; o resto fica o do servidor', JSON.stringify(e4.patch || e4.erro));
+    ok(m.titulo === 'Antes' && m.sprint_po === 'S1-11-2026', 'a edicao nao muta a demanda lida');
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('App AXIS: as regras que a main trouxe (26 commits de 02 a 05/11/2026)');
+
+  /* O APP NOVO FAZ O QUE AS TELAS ANTIGAS PASSARAM A FAZER. Cada regra e
+     recortada da tela antiga (ou do Worker, quando e ele quem decide) e
+     executada AO LADO da do app, caso a caso. Sem isto o app grava um patch
+     que o servidor recusa — ou, pior, que ele aceita diferente. */
+  (() => {
+    const AC = require('./axis-acoes.js');
+    const F = require('./axis-form-demanda.js');
+    const RQ = require('./requisitos.js');
+    const SPm = require('./sprint.js');
+    const R = { PAUSA: require('./pausa.js'), HOMOLOGACAO: require('./homologacao.js'), SPRINTPO: SPm,
+                DEVOLUCAO: require('./devolucao.js'), PREVOO: require('./prevoo.js'), VINCULO: require('./vinculo.js'),
+                ABERTURA: require('./abertura.js'), AXIS_ACOES: AC, REQUISITOS: RQ, COLABORADORES: { emailPara: () => '' } };
+    const HOJE = '2026-11-05', AGORA = '2026-11-05T14:00:00.000Z';
+    const ctx = (papel, extra) => Object.assign({ papel, quem: papel === 'dev' ? 'Ana Dev' : 'Paula PO', hoje: HOJE, agora: AGORA, lista: [], aprovadores: null,
+                                                 id: 'n1', D: { feriados: [], sprints_fechadas: [], temas: [] }, R }, extra || {});
+    const R_ = AC.REGRAS;
+    const WCo = W.replace(/export default \{[\s\S]*$/, '');
+    const WF = new Function(WCo + '; return { alocacaoSemSprint, entrandoNoTrabalhoSemDev, saindoDeAndamentoSemHoras, ' +
+      'entrandoEmValidacaoSemEntrega, tiraInicioDoBacklog, marcaDadosBiPorTema, nascendoForaDoBacklog, travaSprintDoPO, TEMA_DADOS_RE };')();
+    /* O que o servidor faria com o patch: a base com a demanda de antes e a
+       mesma demanda com o patch por cima — o que `H.gravar` manda. */
+    const par = (m, patch) => ({ antes: { melhorias: [JSON.parse(JSON.stringify(m))] },
+                                 depois: { melhorias: [Object.assign(JSON.parse(JSON.stringify(m)), patch || {})] } });
+
+    // ── fd5fc0e: a etapa se chama "Em aprovacao de requisitos" ──────────
+    const ROT_ADMIN = ((ADMIN.match(/const STATUS_LABELS = \{[\s\S]*?\n\};/) || [''])[0].match(/levantar_req:\s*'([^']+)'/) || [])[1];
+    ok(AC.rotulo('levantar_req') === ROT_ADMIN && ROT_ADMIN === RQ.ROTULO,
+       'o rotulo da etapa no app e o do STATUS_LABELS do admin (e o do requisitos.js)', AC.rotulo('levantar_req') + ' / ' + ROT_ADMIN);
+    const APPS = ['axis-app.js', 'axis-acoes.js', 'axis-form-demanda.js', 'axis-tela-backlog.js', 'axis-tela-paineis.js', 'axis-tela-quadro.js', 'axis-tela-item.js']
+      .map(a => [a, fs.readFileSync(a, 'utf8')]);
+    ok(APPS.every(([, t]) => !/'Levantar Requisitos'/.test(t)), 'nenhuma tela do app guarda o nome antigo da etapa',
+       APPS.filter(([, t]) => /'Levantar Requisitos'/.test(t)).map(([a]) => a).join(', '));
+    const AXH = fs.readFileSync('axis.html', 'utf8');
+    ok(/<script src="requisitos\.js\?v=[0-9a-f]{10}"><\/script>/.test(AXH) && /<script src="historico-cliente\.js\?v=[0-9a-f]{10}"><\/script>/.test(AXH) &&
+       AXH.indexOf('<script src="requisitos.js') < AXH.indexOf('<script src="axis-app.js') &&
+       AXH.indexOf('<script src="historico-cliente.js') < AXH.indexOf('<script src="axis-app.js'),
+       'o axis.html carrega requisitos.js e historico-cliente.js antes do app');
+
+    // Impacto e urgencia: obrigatorios na abertura, livres na edicao.
+    const fb = { titulo: 'Tela nova', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', descricao: 'x' };
+    ['admin', 'analista', 'dev'].forEach(pp => {
+      const sem = F.nova(Object.assign({}, fb, { urgencia: 'alta' }), ctx(pp));
+      const sem2 = F.nova(Object.assign({}, fb, { impacto: 'baixo' }), ctx(pp));
+      const com = F.nova(Object.assign({}, fb, { impacto: 'Médio', urgencia: 'ALTA' }), ctx(pp));
+      ok(!sem.ok && sem.campo === 'impacto' && sem.erro === 'Informe o impacto e a urgência da demanda.' && sem2.campo === 'urgencia' &&
+         com.ok && com.obj.impacto === 'medio' && com.obj.urgencia === 'alta',
+         pp + ': abrir sem impacto ou urgencia e recusado com a frase do admin; o valor sai normalizado (REQUISITOS)', JSON.stringify([sem, sem2.campo, com.obj && com.obj.impacto]));
+    });
+    ok(/Informe o impacto e a urgência da demanda\./.test(ADMIN) && /Informe o impacto e a urgência da demanda\./.test(DEV),
+       'a frase e a mesma do admin e do painel do dev');
+    const mAntiga = { id: 'e1', codigo: 'AX-9', titulo: 'Antes', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', status_planejamento: 'backlog' };
+    const ea = F.edicao(mAntiga, { titulo: 'Depois', tipo: 'evolucao', tema_id: 't1', impacto: '', urgencia: '' }, ctx('admin'));
+    ok(ea.ok && Object.keys(ea.patch).join() === 'titulo', 'demanda antiga sem impacto edita sem ser cobrada', JSON.stringify(ea));
+    const ed = F.edicao(Object.assign({}, mAntiga, { impacto: 'alto', dev: 'Ana Dev' }), { titulo: 'Antes', tipo: 'evolucao', tema_id: 't1', impacto: '', urgencia: 'baixa' }, ctx('dev'));
+    ok(ed.ok && !('impacto' in ed.patch) && ed.patch.urgencia === 'baixa', 'dev: em branco fica o que estava (dev.html); escolhido, grava', JSON.stringify(ed.patch));
+
+    // O caso de uso: `cuMarcar` do admin, recortado, ao lado da regra do app.
+    const cuSrc = corpo(ADMIN, 'async function cuMarcar(st) {');
+    ok(!!cuSrc, 'cuMarcar existe no admin para ser comparado');
+    if (cuSrc) {
+      const cuAdmin = new Function('state', 'doc', 'eu', 'respostas',
+        'let _cuEdit = null; const _eu = eu; const document = doc; const toast = () => {}; const cuPintaEstado = () => {};\n' +
+        'const pedirTexto = async () => respostas.shift();\n' + cuSrc + '\nreturn async (st) => { await cuMarcar(st); return _cuEdit; };');
+      const casos = [
+        { m: { id: 'q', codigo: 'AX-5', status_planejamento: 'levantar_req', solicitante: 'Bia', caso_uso: { status: 'a_enviar', gerado_em: '2026-11-03T10:00:00Z', texto: '' } }, st: 'enviado', resp: null },
+        { m: { id: 'q', codigo: 'AX-5', status_planejamento: 'levantar_req', solicitante: 'Bia', caso_uso: { status: 'enviado', gerado_em: 'g', texto: 'enviado antes' } }, st: 'aprovado', resp: 'Bia Usuaria' },
+        { m: { id: 'q', codigo: 'AX-5', status_planejamento: 'levantar_req', solicitante: 'Bia', caso_uso: { status: 'enviado', gerado_em: 'g', texto: '' } }, st: 'ajustes', resp: 'trocar o campo X' },
+        { m: { id: 'q', codigo: 'AX-5', status_planejamento: 'levantar_req', solicitante: 'Bia' }, st: 'aprovado', resp: 'Bia' }
+      ];
+      pendentes.push((async () => {
+        const diverge = [];
+        for (const k of casos) {
+          const doc = { getElementById: id => ({ 'm-id': { value: 'q' }, 'm-cu-texto': { value: 'O TEXTO DA CAIXA' } })[id] || { value: '' } };
+          const fnA = cuAdmin({ melhorias: [JSON.parse(JSON.stringify(k.m))] }, doc, { nome: 'Paula PO' }, [k.resp]);
+          const a = await fnA(k.st);
+          const r = R_.casoUso(k.m, { status: k.st, texto: 'O TEXTO DA CAIXA', resposta: k.resp }, ctx('admin'));
+          const b = r.ok ? r.patch.caso_uso : null;
+          const sem = x => JSON.stringify(Object.assign({}, x, x && x.enviado_em ? { enviado_em: 'T' } : {}, x && x.respondido_em ? { respondido_em: 'T' } : {}));
+          if (sem(a) !== sem(b)) diverge.push(k.st + ': ' + sem(a) + ' / ' + sem(b));
+        }
+        ok(diverge.length === 0, 'o caso de uso que o app grava = o que o cuMarcar do admin guarda (enviado, aprovado, ajustes)', diverge.join(' | '));
+      })());
+    }
+    ok(!R_.casoUso({ id: 'q', status_planejamento: 'levantar_req' }, { status: 'enviado', texto: 'x' }, ctx('analista')).ok &&
+       !R_.casoUso({ id: 'q', status_planejamento: 'levantar_req' }, { status: 'enviado', texto: 'x' }, ctx('dev')).ok,
+       'o caso de uso e do PM/PO: o dev-publish devolve o do servidor (`_casoAntes`), e o app nem oferece');
+    ok(!R_.casoUso({ id: 'q' }, { status: 'aprovado', resposta: ' ' }, ctx('admin')).ok, 'aprovar sem dizer quem aprovou e recusado (o pedirTexto obrigatorio)');
+
+    // ── bc00604 / be14f82: aprovar e concluir, e concluir exige sprint ──
+    const fAloc = (antes, depois) => WF.alocacaoSemSprint(depois, antes, 'admin', HOJE).length > 0;
+    let divVal = [];
+    ['', 'S1-11-2026'].forEach(sp => ['2026-10-28T10:00:00Z', '2026-11-03T10:00:00Z', ''].forEach(ent => ['evolucao', 'sustentacao'].forEach(tipo => {
+      const m = { id: 'v', codigo: 'AX-V', tipo, status_planejamento: 'validacao', dev: 'Ana', horas_realizadas: 4, sprint_po: sp, entregue_em: ent };
+      const r = R_.validar(m, {}, ctx('admin'));
+      const travaApp = !r.ok && r.campo === 'sprint';
+      const travaSrv = fAloc({ melhorias: [m] }, { melhorias: [Object.assign({}, m, { status_planejamento: 'concluido' })] });
+      if (travaApp !== travaSrv) divVal.push([sp || 'sem', ent.slice(0, 10) || 'sem', tipo, travaApp, travaSrv].join('/'));
+    })));
+    ok(divVal.length === 0, 'Validar e fechar sem sprint: o app recusa exatamente onde o servidor recusa (entregue a partir de 02/11)', divVal.join(', '));
+    ok(/const trvA = SPRINTPO\.travaDeAlocacao\(m, m\.status_planejamento, 'concluido', PRAZO\.hojeISO\(\)\);/.test(ADMIN),
+       'e e a mesma trava que o valDecidir do admin consulta');
+
+    // ── e5cace1: quem tira a demanda da fila vira o dono ────────────────
+    const exprAssumiu = (DEV.match(/const assumiu = (ETAPAS_DO_DEV\.includes\(colKey\) && !String\(m\.dev \|\| ''\)\.trim\(\) && !!currentDev);/) || [])[1];
+    ok(!!exprAssumiu, 'a regra `assumiu` do painel do dev existe para ser comparada');
+    if (exprAssumiu) {
+      const assumiuDev = new Function('ETAPAS_DO_DEV', 'colKey', 'm', 'currentDev', 'return ' + exprAssumiu + ';');
+      let divA = [];
+      ['backlog', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido'].forEach(para => ['', 'Bia'].forEach(dev => ['', 'Ana Dev'].forEach(eu => {
+        const m = { dev };
+        const a = assumiuDev(AC.ETAPAS_DO_DEV, para, m, eu);
+        const b = !!AC.assumeAoComecar(m, para, { quem: eu });
+        if (a !== b) divA.push(para + '/' + (dev || '-') + '/' + (eu || '-'));
+      })));
+      ok(divA.length === 0, 'assumeAoComecar do app = o `assumiu` do updateStatus (dev.html)', divA.join(', '));
+    }
+    const fila = { id: 'f', codigo: 'AX-F', tipo: 'evolucao', status_planejamento: 'planejado', dev: '', sprint_po: 'S1-11-2026' };
+    const rf = R_.mover(fila, { destino: 'em_andamento' }, ctx('dev'));
+    const pf = par(fila, rf.patch);
+    ok(rf.ok && rf.patch.dev === 'Ana Dev' && WF.entrandoNoTrabalhoSemDev(pf.depois, pf.antes).length === 0,
+       'o dev comeca a demanda da fila e o nome dele vai junto: o dev-publish nao recusa (comecar_sem_dono)', JSON.stringify(rf.patch));
+    const pfSab = par(fila, Object.assign({}, rf.patch, { dev: '' }));
+    ok(WF.entrandoNoTrabalhoSemDev(pfSab.depois, pfSab.antes).length === 1, 'SABOTAGEM: o mesmo patch sem o nome seria recusado pelo servidor');
+
+    // ── 36e3344: a demanda que volta ao Backlog perde a data de inicio ──
+    const exprBk = (ADMIN.match(/if \(m && m\.status_planejamento === 'backlog' && String\(m\.inicio \|\| ''\)\.trim\(\)\) m\.inicio = '';/) || [])[0];
+    ok(!!exprBk, 'a regra do Backlog sem inicio existe no admin para ser comparada');
+    if (exprBk) {
+      const bkAdmin = new Function('m', exprBk + ' return m;');
+      let divB = [];
+      ['backlog', 'planejado', 'em_andamento'].forEach(e => ['', '2026-10-27'].forEach(ini => {
+        const m = { status_planejamento: e, inicio: ini };
+        const a = bkAdmin(Object.assign({}, m)).inicio;
+        const b = Object.assign({}, m, AC.tiraInicioDoBacklog(m)).inicio;
+        const w = { melhorias: [Object.assign({}, m)] }; WF.tiraInicioDoBacklog(w);
+        if (a !== b || b !== w.melhorias[0].inicio) divB.push(e + '/' + (ini || '-'));
+      }));
+      ok(divB.length === 0, 'tiraInicioDoBacklog do app = a do admin = a do Worker', divB.join(', '));
+    }
+    const plan = { id: 'b', codigo: 'AX-B', tipo: 'evolucao', status_planejamento: 'planejado', dev: 'Ana', inicio: '2026-10-27', sprint_po: 'S1-11-2026' };
+    const rb = R_.mover(plan, { destino: 'backlog' }, ctx('admin'));
+    const ETx = require('./etapa-demanda.js');
+    ok(rb.ok && rb.patch.inicio === '' && ETx.gravada(Object.assign({}, plan, rb.patch), HOJE) === 'backlog',
+       'mover para o Backlog leva `inicio: ""` no patch, e o card passa a ser lido no Backlog (AX-879)', JSON.stringify(rb.patch));
+    ok(R_.mover(plan, { destino: 'backlog' }, ctx('admin')).patch.inicio === '' && !('inicio' in R_.mover(plan, { destino: 'em_andamento' }, ctx('admin')).patch),
+       'e so quem vai ao Backlog perde a data');
+    const nbk = F.nova(Object.assign({}, fb, { impacto: 'baixo', urgencia: 'baixa', etapa: 'backlog', inicio: HOJE }), ctx('admin'));
+    ok(nbk.ok && nbk.obj.inicio === '', 'demanda nova no Backlog nasce sem inicio', JSON.stringify(nbk.obj && nbk.obj.inicio));
+
+    // ── 9bd0a9d: sair de Em andamento exige as horas (portas do dev) ────
+    let divH = [];
+    ['analista', 'admin'].forEach(pp => ['backlog', 'planejado', 'planning', 'concluido'].forEach(para => [0, 3].forEach(h => {
+      const m = { id: 'h', codigo: 'AX-H', tipo: 'sustentacao', status_planejamento: 'em_andamento', dev: 'Ana', sprint_po: 'S1-11-2026', horas_realizadas: h, entregue_em: '2026-11-04' };
+      const r = R_.mover(m, { destino: para }, ctx(pp));
+      const recusaApp = !r.ok && r.campo === 'horas';
+      const pr = par(m, Object.assign({ status_planejamento: para }, r.patch || {}));
+      // O publish do admin nao tem a porta; concluir sem horas e outra regra, que vale para todos.
+      const srv = pp === 'admin' ? false : WF.saindoDeAndamentoSemHoras(pr.depois, pr.antes).length > 0;
+      const esperado = srv || (para === 'concluido' && !h);
+      if (recusaApp !== esperado) divH.push(pp + '>' + para + '/' + h + ' app=' + recusaApp + ' srv=' + srv);
+    })));
+    ok(divH.length === 0, 'tirar de Em andamento sem horas: o app recusa onde o dev-publish recusa, e o publish do admin segue livre', divH.join(', '));
+
+    // ── e55f057: na area, as horas E o texto do que foi feito ───────────
+    let divE = [];
+    [['', 0], ['', 4], ['tela nova', 0], ['tela nova', 4]].forEach(([impl, h]) => {
+      const m = { id: 'a', codigo: 'AX-A', tipo: 'evolucao', status_planejamento: 'em_andamento', solicitante: 'Bia', dev: 'Ana Dev', sprint_po: 'S1-11-2026' };
+      const r = R_.entregar(m, { destino: 'validacao_area', horas: String(h), implementacao: impl }, ctx('dev'));
+      const pr = par(m, Object.assign({ status_planejamento: 'validacao_area', horas_realizadas: h, implementacao: impl }, r.patch || {}));
+      const srv = WF.entrandoEmValidacaoSemEntrega(pr.depois, pr.antes).length > 0;
+      if (r.ok === srv) divE.push((impl || 'sem texto') + '/' + h + 'h');
+    });
+    ok(divE.length === 0, 'entregar a area: o app pede o que o servidor exige (horas e o texto, 02/11/2026)', divE.join(', '));
+    const anM = { id: 'a', codigo: 'AX-A', tipo: 'sustentacao', status_planejamento: 'em_andamento', dev: 'Ana', sprint_po: 'S1-11-2026', horas_realizadas: 4 };
+    const ran = R_.mover(anM, { destino: 'validacao_area' }, ctx('analista'));
+    const pran = par(anM, { status_planejamento: 'validacao_area' });
+    ok(!ran.ok && WF.entrandoEmValidacaoSemEntrega(pran.depois, pran.antes).length === 1,
+       'o analista (dev-publish) nao poe em validacao sem o texto do dev — o servidor recusaria');
+
+    // ── e55f057: so o dono da sprint marca sprint; quem nao e abre no Backlog
+    ok(SPm.ehDonoDaSprint({ papel: 'admin', login: 'fernando' }) && !SPm.ehDonoDaSprint({ papel: 'admin', login: 'paula' }) && SPm.ehDonoDaSprint(null),
+       'o dono e por conta (sprint.js), e a senha administrativa conta como dono');
+    let divN = [];
+    [true, false].forEach(dn => ['admin', 'analista', 'dev'].forEach(pp => ['backlog', 'planning', 'planejado', 'em_andamento'].forEach(et => {
+      const f = Object.assign({}, fb, { impacto: 'medio', urgencia: 'media', etapa: et, dev: 'Ana', sprint: et === 'planejado' || et === 'em_andamento' ? 'S2-11-2026' : '' });
+      const r = F.nova(f, ctx(pp, { dono: dn && pp === 'admin' }));
+      if (!r.ok) { divN.push(pp + '/' + dn + '/' + et + ' recusou: ' + r.erro); return; }
+      const rec = { melhorias: [JSON.parse(JSON.stringify(r.obj))] };
+      const ajustou = WF.nascendoForaDoBacklog(rec, { melhorias: [] }).length > 0;
+      const dono = dn && pp === 'admin';
+      // Para o dono o servidor nao roda a guarda; para os outros, nada pode sobrar para ela ajustar.
+      if (!dono && ajustou) divN.push(pp + '/' + et + ' o servidor ajustaria');
+      if (!dono && (r.obj.status_planejamento !== 'backlog' || r.obj.sprint_po)) divN.push(pp + '/' + et + ' nasceu fora do backlog');
+      if (dono && r.obj.status_planejamento !== et) divN.push('dono/' + et + ' trocou a etapa');
+      if (!dono && pp !== 'dev' && et !== 'backlog' && !r.aviso) divN.push(pp + '/' + et + ' sem o aviso do admin');
+    })));
+    ok(divN.length === 0, 'quem nao e dono da sprint abre no Backlog, sem inicio e sem sprint — nada sobra para o nascendoForaDoBacklog', divN.slice(0, 6).join(' | '));
+    ok(/Demanda aberta no Backlog — só o PM\/PO coloca em outra etapa e na sprint\./.test(ADMIN), 'o aviso e a frase do saveMelhoria');
+    const mSp = { id: 's', codigo: 'AX-S', titulo: 'T', tipo: 'evolucao', tema_id: 't1', solicitante: 'Bia', status_planejamento: 'planning', dev: 'Ana', sprint_po: '' };
+    const esN = F.edicao(mSp, { titulo: 'T', tipo: 'evolucao', tema_id: 't1', dev: 'Ana', sprint: 'S2-11-2026' }, ctx('admin', { dono: false }));
+    const esD = F.edicao(mSp, { titulo: 'T', tipo: 'evolucao', tema_id: 't1', dev: 'Ana', sprint: 'S2-11-2026' }, ctx('admin', { dono: true }));
+    const prs = par(mSp, esN.patch || {});
+    ok(esN.ok && !(esN.patch && 'sprint_po' in esN.patch) && WF.travaSprintDoPO(prs.depois, prs.antes, false).length === 0 &&
+       esD.ok && esD.patch.sprint_po === 'S2-11-2026',
+       'editar: so o dono muda a sprint; o patch de quem nao e nao leva nada que o travaSprintDoPO reverteria', JSON.stringify([esN.patch, esD.patch && esD.patch.sprint_po]));
+
+    // ── 8da228e: o tema de dados marca a flag Dados/BI ──────────────────
+    const lAdm = (ADMIN.match(/const TEMA_DADOS_RE = .*;/) || [''])[0];
+    const lMarca = (ADMIN.match(/if \(m && temasDados\.has\(m\.tema_id\) && m\.dados_bi !== true\) \{ m\.dados_bi = true; m\.sales_ops = false; \}/) || [''])[0];
+    ok(!!lAdm && !!lMarca, 'a regra de Dados/BI existe no admin para ser comparada');
+    const temasD = ['BI', 'BI - Reports', 'Extração de dados', 'Banco de dados', 'Databricks - Planejamento', 'Data Bricks', 'AXCred - Jurídico', 'Cobrança', 'Biblioteca', 'AxBalance']
+      .map((nome, k) => ({ id: 't' + k, nome }));
+    const admDados = new Function('state', lAdm + '\nconst temasDados = new Set((state.temas || []).filter(t => t && TEMA_DADOS_RE.test(String(t.nome || ""))).map(t => t.id));\n' +
+      'state.melhorias.forEach(m => { ' + lMarca + ' });\nreturn state;');
+    let divD = [];
+    temasD.forEach(t => [undefined, false, true].forEach(db => [false, true].forEach(so => {
+      const m = { id: 'x', tema_id: t.id, dados_bi: db, sales_ops: so };
+      const a = admDados({ temas: temasD, melhorias: [Object.assign({}, m)] }).melhorias[0];
+      const b = F.marcaDadosBiPorTema(Object.assign({}, m), temasD);
+      const w = { temas: temasD, melhorias: [Object.assign({}, m)] }; WF.marcaDadosBiPorTema(w);
+      if (JSON.stringify(a) !== JSON.stringify(b) || JSON.stringify(b) !== JSON.stringify(w.melhorias[0])) divD.push(t.nome + '/' + db + '/' + so);
+    })));
+    ok(divD.length === 0, 'marcaDadosBiPorTema do app = a do admin = a do Worker, em ' + (temasD.length * 6) + ' casos', divD.slice(0, 5).join(', '));
+    ok(String(F.TEMA_DADOS_RE) === String(WF.TEMA_DADOS_RE), 'a expressao do tema de dados e a mesma do Worker', String(F.TEMA_DADOS_RE));
+    const cBI = ctx('admin', { D: { feriados: [], sprints_fechadas: [], temas: temasD } });
+    const nBI = F.nova(Object.assign({}, fb, { tema_id: 't1', impacto: 'baixo', urgencia: 'baixa', sales_ops: true }), cBI);
+    const eBI = F.edicao(Object.assign({}, mAntiga, { tema_id: 't7', dados_bi: false }), { titulo: 'Antes', tipo: 'evolucao', tema_id: 't0' }, ctx('dev', { D: cBI.D }));
+    ok(nBI.ok && nBI.obj.dados_bi === true && nBI.obj.sales_ops === false && eBI.ok && eBI.patch.dados_bi === true,
+       'abrir ou mudar para um tema de dados liga a flag no proprio patch, em qualquer perfil', JSON.stringify([nBI.obj && nBI.obj.dados_bi, eBI.patch]));
+
+    // ── b6654ff: a fila do poker esconde o que ja foi votado antes de hoje
+    const PKT = lerTela('axis-tela-poker.js');
+    const pkCorte = (src) => ['function pkHoje(', 'function pkDiaDaVotacao(', 'function pkJaVotadaAntes(', 'function pkNaFila('].map(a => corpo(src, a)).join('\n');
+    const pkVelho = new Function('_estado', pkCorte(POKER) + '\nreturn pkNaFila;');
+    const pkApp = new Function(pkCorte(PKT) + '\nreturn pkNaFila;')();
+    const agoraI = new Date().toISOString(), ontem = new Date(Date.now() - 2 * 86400000).toISOString();
+    const msP = [{ id: 'nova', status_planejamento: 'planning' }, { id: 'hoje', status_planejamento: 'planning', poker_pontos: 5, poker_votado_em: agoraI },
+                 { id: 'antes', status_planejamento: 'planning', poker_pontos: 8, poker_votado_em: ontem }, { id: 'mao', status_planejamento: 'planning', poker_pontos: 3 },
+                 { id: 'fora', status_planejamento: 'planejado' }];
+    let divP = [];
+    [null, { melhoria_id: 'antes' }, { melhoria_id: 'mao' }].forEach(est => msP.forEach(m => {
+      const a = pkVelho(est)(m), b = pkApp(m, est ? est.melhoria_id : '');
+      if (a !== b) divP.push((est ? est.melhoria_id : '-') + '/' + m.id);
+    }));
+    ok(divP.length === 0 && msP.filter(m => pkApp(m, '')).map(m => m.id).join() === 'nova,hoje',
+       'a fila do poker do app = a do poker.html: so o nao votado e o votado HOJE, e a demanda em pauta nunca sai', divP.join(', '));
+    ok(/\.filter\(function \(m\) \{ return pkNaFila\(m, atual\); \}\)/.test(PKT), 'e a filaPlanning do app filtra por ela');
+    ok(/function opcoesSprint\(\) \{\s*var SP = raiz\.SPRINTPO;\s*\/\/[^\n]*\n\s*if \(!SP \|\| !H\.donoDaSprint\(\)\) return null;/.test(PKT) &&
+       /var sprint = H\.donoDaSprint\(\) \? S\.valores\.sprint : '';/.test(PKT),
+       'so o dono da sprint ve e manda a sprint na mesa (pkDonoDaSprint)');
+
+    // ── 4dc2aba / bf2d464: a trilha vem do D1 ───────────────────────────
+    const APP_SRC = lerTela('axis-app.js');
+    ok(/var j = await hidrata\(await api\('dados'\)\);/.test(APP_SRC) && /H\.api\('dados'\)\.then\(H\.hidrata\)/.test(PKT),
+       'o app hidrata a trilha em toda leitura da base para a tela (carregar e a releitura do poker)');
+    /* O historico-cliente.js de verdade faz a busca (a invariante dele esta
+       acima); aqui se mede o que o APP passa a ele: o endereco do Worker do app
+       e o token da sessao. Sem `fetch` global, para nao cruzar com a de cima. */
+    const HCx = require('./historico-cliente.js');
+    const chamou = [];
+    global.HISTCLIENTE = { hidrata: async (d, url, cred) => { chamou.push({ url, cred }); return HCx.aplica(d, { a: [{ em: '1', mudancas: [] }] }); } };
+    const AXA = require('./axis-app.js');
+    pendentes.push((async () => {
+      AXA.APP.token = 'tk';
+      const d = await AXA.H.hidrata({ atualizado_em: 'v-app', melhorias: [{ id: 'a' }, { id: 'b' }] });
+      delete global.HISTCLIENTE; delete global.AXIS_APP;
+      ok(d.melhorias[0].historico.length === 1 && d.melhorias[1].historico.length === 0 && chamou.length === 1 &&
+         chamou[0].url === AXA.WORKER && chamou[0].cred.token === 'tk',
+         'H.hidrata passa o Worker do app e o token da sessao, e m.historico volta', JSON.stringify(chamou));
+    })());
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('App AXIS: Entregas por sprint, projetos em andamento e os PPTs (main de 03 a 05/11/2026)');
+
+  /* AS CONTAS QUE A MAIN TROUXE PARA O ADMIN, NO APP. Entregas por sprint
+     (Sprints > Entregas por sprint), o filtro de varias sprints (Quadro e
+     Backlog), Projetos em andamento e o que vai para os dois PPTs foram
+     recortados do admin.html para axis-tela-sprints.js e
+     axis-tela-projetos.js. Aqui as do admin e as do app rodam lado a lado, na
+     mesma amostra, com o relogio fixo: o render do admin escreve num
+     `document` de mentira e o que ele desenhou e comparado com o que o app
+     calcula. Os geradores de PPT nao calculam nada — o que precisa ser igual
+     e o que cada tela entrega a eles. */
+  (() => {
+    const SP = require('./sprint.js');
+    const ET = require('./etapa-demanda.js');
+    const SPT = lerTela('axis-tela-sprints.js');
+    const PJT = lerTela('axis-tela-projetos.js');
+    const REL = lerTela('axis-tela-relatorios.js');
+    const HOJE = '2026-11-05';
+    const PRAZO_ = { hojeISO: () => HOJE };
+    const linhaAdm = (re) => (ADMIN.match(re) || [''])[0];
+    const BASE_ADM = [linhaAdm(/^const mescladaEm = .*$/m), linhaAdm(/^const ehMesclada = .*$/m),
+      linhaAdm(/^const STATUS_LABELS = \{[\s\S]*?\n\};/m), linhaAdm(/^function esc\(s\) \{.*$/m),
+      corpo(ADMIN, 'function formatDate(s) {'), corpo(ADMIN, 'function statusKey(m) {'), corpo(ADMIN, 'function statusEfetivo(m) {')].join('\n');
+    const docFalso = () => {
+      const els = {};
+      return { els, getElementById: (id) => (els[id] = els[id] || { innerHTML: '', textContent: '', value: '' }) };
+    };
+
+    // ── A amostra: sprints, etapas, donos, datas, temas e projetos variados ──
+    const ETAPAS_A = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'];
+    const SPRS = ['S5-10-2026', 'S1-11-2026', 'S2-11-2026', 'S4-11-2026', '', 'lixo'];
+    const DEVS = ['', 'Ana', 'Bia / Caio', ' Ana ', 'Davi'];
+    const EU = ['', '2026-11-02', '2026-11-05', '2026-11-08', '2026-11-20', '2026-10-01'];
+    const TEMAS = ['t1', 't2', 't3', '', 'tx', 't4'];
+    const PJS = ['', 'p1', 'p2', 'p3', 'p4', 'px', 'p5'];
+    const ms = [];
+    for (let i = 0; i < 90; i++) {
+      const st = ETAPAS_A[i % ETAPAS_A.length];
+      ms.push({ id: 'm' + i, codigo: 'AX-' + (100 + i), titulo: ['Zeta', 'alfa', 'Beta', 'Ômega', 'beta'][i % 5] + ' ' + (i % 7),
+        status_planejamento: st, sprint_po: SPRS[(i * 7 + Math.floor(i / 6)) % SPRS.length], dev: DEVS[(i * 3) % DEVS.length],
+        entrega_usuario: EU[(i * 5) % EU.length], entrega: i % 4 ? '2026-11-' + String(3 + (i % 20)).padStart(2, '0') : '',
+        tema_id: TEMAS[(i * 5) % TEMAS.length], projeto_id: PJS[i % PJS.length],
+        concluido_em: st === 'concluido' && i % 3 ? '2026-10-' + String(10 + (i % 18)) + 'T12:00:00.000Z' : '',
+        entregue_em: st === 'concluido' && !(i % 3) && i % 2 ? '2026-10-20' : '',
+        poker_pontos: i % 4 ? (i % 8) + 1 : null, mesclado_em: i % 29 === 5 ? 'm1' : '' });
+    }
+    const temas = [{ id: 't1', nome: 'AXCred - Operações' }, { id: 't2', nome: 'auto' }, { id: 't3', nome: 'Ácaro - Base' }, { id: 't4', nome: 'Zeta - Portal' }];
+    const projetos = [{ id: 'p1', codigo: 'EP-001', nome: 'Um', responsavel: 'Rui', fim: '2026-12-01' },
+      { id: 'p2', codigo: 'EP-002', nome: 'Dois' }, { id: 'p3', codigo: '', nome: 'Proposto', aprovacao: 'pendente' },
+      { id: 'p4', codigo: 'EP-004', nome: 'Quatro', aprovacao: 'aprovado', fim: '2026-10-30' }, { id: 'p5', codigo: 'EP-005', nome: 'Cinco', aprovacao: 'recusado' }];
+    const state = { melhorias: ms, temas, projetos, feriados: [] };
+    const vivas = ms.filter(m => !m.mesclado_em);
+    const statusKey = m => ET.gravada(m);
+
+    // ── O filtro de varias sprints (4d7c38f) ────────────────────────────
+    const fsAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', BASE_ADM + '\n' + corpo(ADMIN, 'function listaOuNulo(v) {') + '\n' +
+      corpo(ADMIN, 'function matchSprintKb(m, f) {') + '\n' + corpo(ADMIN, 'function opcoesSprintKb() {') +
+      '\nreturn { listaOuNulo, matchSprintKb, opcoesSprintKb };')(state, SP, PRAZO_, ET);
+    const fsApp = new Function([corpo(SPT, 'function spListaOuNulo(v) {'), corpo(SPT, 'function spCasaSprint(SPm, m, f) {'),
+      corpo(SPT, 'function spOpcoesSprint(SPm, vivas, hoje, feriados) {')].join('\n') + '\nreturn { spListaOuNulo, spCasaSprint, spOpcoesSprint };')();
+    const opA = fsAdm.opcoesSprintKb().map(o => o.key + '=' + o.label.replace(/^● /, '') + ':' + o.n);
+    const opP = fsApp.spOpcoesSprint(SP, vivas, HOJE, []).map(o => o.key + '=' + o.label + ':' + o.n);
+    ok(opA.length > 4 && JSON.stringify(opA) === JSON.stringify(opP), 'as opcoes do filtro de sprint do app = opcoesSprintKb do admin (Todas, Sem sprint e cada sprint com a contagem)',
+       opA.join(' ') + ' // ' + opP.join(' '));
+    const filtros = [null, [], '', '__fora__', ['__fora__'], 'S1-11-2026', ['S1-11-2026', '__fora__'], ['S2-11-2026', 'S5-10-2026'], ['S9-01-2027']];
+    const divF = [];
+    filtros.forEach(f => {
+      if (JSON.stringify(fsAdm.listaOuNulo(f)) !== JSON.stringify(fsApp.spListaOuNulo(f))) divF.push('lista ' + JSON.stringify(f));
+      ms.forEach(m => { if (fsAdm.matchSprintKb(m, f) !== fsApp.spCasaSprint(SP, m, f)) divF.push(JSON.stringify(f) + '/' + m.codigo); });
+    });
+    ok(divF.length === 0, 'casa sprint do app = matchSprintKb do admin, e a lista vazia volta a ser "todas" (' + filtros.length * ms.length + ' casos)', divF.slice(0, 6).join(', '));
+
+    // ── Entregas por sprint (953e68c a 43706a7, 8f236cf, 3ca7514) ───────
+    /* A amostra das Entregas soma a de cima com a regra de 05/11 (3ca7514): ida
+       para validacao numa sprint e aprovacao em outra, reentrega, concluida
+       sem passar por validacao e a sprint com feriado na segunda. */
+    const hsE = (...ss) => ss.map(x => ({ sprint: x }));
+    const extrasE = [
+      { id: 'e1', codigo: 'AX-901', titulo: 'ida na S1, aprovada na S2', status_planejamento: 'concluido', sprint_po: 'S2-11-2026', sprint_po_historico: hsE('S1-11-2026', 'S2-11-2026'),
+        primeira_validacao_em: '2026-11-05', entregue_em: '2026-11-11', concluido_em: '2026-11-12T10:00:00.000Z', dev: 'Ana', poker_pontos: 5, tema_id: 't1', entrega_usuario: '2026-11-09' },
+      { id: 'e2', codigo: 'AX-902', titulo: 'na validacao do PM/PO', status_planejamento: 'validacao', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        primeira_validacao_em: '2026-11-04', dev: 'Ana', poker_pontos: 3, tema_id: 't2', entrega_usuario: '2026-11-03' },
+      { id: 'e3', codigo: 'AX-903', titulo: 'na area, ida na S2', status_planejamento: 'validacao_area', sprint_po: 'S2-11-2026', sprint_po_historico: hsE('S1-11-2026', 'S2-11-2026'),
+        validacao_area_em: '2026-11-10', dev: 'Davi', poker_pontos: 2, tema_id: 't3', entrega_usuario: '2026-11-04' },
+      { id: 'e4', codigo: 'AX-904', titulo: 'concluida com ida na S2', status_planejamento: 'concluido', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        entregue_em: '2026-11-12', concluido_em: '2026-11-13', dev: 'Davi', poker_pontos: 8, tema_id: 't1', entrega_usuario: '2026-11-02' },
+      { id: 'e5', codigo: 'AX-905', titulo: 'reentrega', status_planejamento: 'concluido', sprint_po: 'S2-11-2026', sprint_po_historico: hsE('S1-11-2026', 'S2-11-2026'),
+        validacao_area_em: '2026-11-04', entregue_em: '2026-11-10', concluido_em: '2026-11-11', dev: 'Bia / Caio', poker_pontos: 2, tema_id: 't4' },
+      { id: 'e6', codigo: 'AX-906', titulo: 'devolvida para ajuste', status_planejamento: 'em_andamento', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        primeira_validacao_em: '2026-11-03', dev: 'Ana', poker_pontos: 1, tema_id: 't2', entrega_usuario: '2026-11-04' },
+      { id: 'e7', codigo: 'AX-907', titulo: 'ida antes da regra', status_planejamento: 'concluido', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S5-10-2026', 'S1-11-2026'),
+        primeira_validacao_em: '2026-10-29', concluido_em: '2026-11-03', dev: 'Ana', poker_pontos: 3, tema_id: '' },
+      // Nomes que contem outro ('Ana' em 'Ana Paula', 'Bia' em 'Bia / Caio'): a pessoa e o `dev` inteiro.
+      { id: 'e8', codigo: 'AX-908', titulo: 'outra Ana', status_planejamento: 'em_andamento', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        dev: 'Ana Paula', poker_pontos: 2, tema_id: 't1', entrega_usuario: '2026-11-06' },
+      { id: 'e9', codigo: 'AX-909', titulo: 'so a Bia', status_planejamento: 'planejado', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        dev: 'Bia', poker_pontos: 1, tema_id: 't2' },
+      /* Atrasadas de sprints antigas (c11b681): a Entrega dev venceu na S5-09 e na
+         S4-10 — o grupo segue a data, e nao o rotulo ("S5-09" vem antes de "S1-10"). */
+      { id: 'e10', codigo: 'AX-810', titulo: 'prazo do dev de setembro', status_planejamento: 'em_andamento', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        dev: 'Davi', poker_pontos: 2, tema_id: 't1', entrega: '2026-09-29', entrega_usuario: '2026-11-20' },
+      { id: 'e11', codigo: 'AX-811', titulo: 'prazo do dev de outubro', status_planejamento: 'planejado', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        dev: 'Ana', poker_pontos: 3, tema_id: 't4', entrega: '2026-10-20' }
+    ];
+    /* A ESTEIRA (fdf14e2): marcas de Dados/BI e Sales Ops espalhadas (algumas
+       com as duas) e um dev da frente de Dados no cadastro, para as tres
+       esteiras terem o que contar — inclusive a de Dados sem a marca. */
+    const msE = ms.map((m, i) => Object.assign({}, m, { dados_bi: i % 6 === 1, sales_ops: i % 5 === 2 })).concat(extrasE);
+    const stateE = { melhorias: msE, temas, projetos, feriados: ['2026-11-02'], devs_perfil: { Davi: { pipeline: 'Dados & Power BI' }, Ana: { axcred: true } } };
+    const vivasE = msE.filter(m => !m.mesclado_em);
+    const esAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'document', 'window', BASE_ADM + '\nlet _esSprint = \'\';\nlet _esFiltro = \'todas\';\nlet _esPessoa = \'\';\nlet _esEsteira = \'\';\nlet _esSoVenc = false;\n' +
+      linhaAdm(/^const ES_ESTEIRAS = .*$/m) + '\n' + corpo(ADMIN, 'function esteiraDe(m) {') + '\n' +
+      corpo(ADMIN, 'function opcoesSprintKb() {') + '\n' + corpo(ADMIN, 'function renderEntregasSprint() {') +
+      '\nreturn function (s, f, p, e, v) { _esSprint = s; _esFiltro = f; _esPessoa = p || \'\'; _esEsteira = e || \'\'; _esSoVenc = !!v; renderEntregasSprint(); return _esPessoa; };');
+    const esApp = new Function([(SPT.match(/^ {2}var ES_ESTEIRAS = .*$/m) || [''])[0], corpo(SPT, 'function esEsteiraDe(PI, perfis, m) {'),
+      corpo(SPT, 'function esSituacao(SPm, etapa, r, feriados) {'), corpo(SPT, 'function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados, esteira, esteiraDe) {'),
+      corpo(SPT, 'function esDaPessoa(x, nome) {'), corpo(SPT, 'function esGrupos(lista, temas) {'),
+      corpo(SPT, 'function esGruposFalta(SPm, lista, x, feriados) {'), corpo(SPT, 'function esEntregaDev(m, hoje) {'),
+      corpo(SPT, 'function esEntregaUsuario(m, hoje, aberta) {')].join('\n') + '\nreturn { esEsteiraDe, esResumo, esDaPessoa, esGrupos, esGruposFalta, esEntregaDev, esEntregaUsuario };')();
+    const winE = { PIPELINES: PIPELINES_API };
+    const deEApp = (m) => esApp.esEsteiraDe(PIPELINES_API, stateE.devs_perfil, m);
+    {
+      // A esteira de cada demanda: a do app = a do admin, demanda a demanda.
+      const deEAdm = new Function('state', 'window', corpo(ADMIN, 'function esteiraDe(m) {') + '\nreturn esteiraDe;')(stateE, winE);
+      const divT = vivasE.filter(m => deEAdm(m) !== deEApp(m)).map(m => m.codigo + ' ' + deEAdm(m) + '/' + deEApp(m));
+      const nT = ['dev', 'dados', 'sales'].map(k => vivasE.filter(m => deEApp(m) === k).length);
+      ok(divT.length === 0 && nT.every(n => n > 5) && vivasE.some(m => !m.dados_bi && !m.sales_ops && deEApp(m) === 'dados'),
+         'a esteira de cada demanda no app = esteiraDe do admin (Desenvolvimento, Dados/BI pela marca ou pela frente do dev, Sales Ops)',
+         divT.slice(0, 6).join(', ') + ' [' + nT.join('/') + ']');
+    }
+    const br = (d) => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
+    const semTag = (t) => String(t).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    const divE = [];
+    let casosE = 0, casosP = 0, comRegra = 0, comAgu = 0, casosT = 0, casosF = 0, gruposVenc = 0, comDev = 0, comNota = 0;
+    /* O cartao "Aguardando aprovacao" saiu em fdf14e2 (em validacao conta como
+       entregue), e a sprint e vista em cada esteira e em todas. O Faltando
+       (c11b681 e 93b6d4c) entra duas vezes: tudo o que falta e "So vencidas". */
+    const FILTROS_E = [['todas'], ['entregues'], ['falta_com'], ['falta_com', true], ['falta_sem']];
+    ['S5-10-2026', 'S1-11-2026', 'S2-11-2026', 'S4-11-2026', 'S1-12-2026'].forEach(r => ['', 'dev', 'dados', 'sales'].forEach(est => FILTROS_E.forEach(([f, soVenc]) => {
+      const x = esApp.esResumo(SP, statusKey, vivasE, r, HOJE, projetos, stateE.feriados, est, deEApp);
+      const modoF = f === 'falta_com';
+      // Cada pessoa da sprint (com ou sem nada faltando), ninguem e um nome de fora.
+      const nomes = [''].concat([...new Set(x.ms.map(m => String(m.dev || '').trim()).filter(Boolean))], ['Ninguem']);
+      nomes.forEach(pessoa => {
+        casosE++;
+        if (pessoa) casosP++;
+        const doc = docFalso();
+        const pAdm = esAdm(stateE, SP, PRAZO_, ET, doc, winE)(r, f, pessoa, est, soVenc);
+        const E = doc.els;
+        const pes = esApp.esDaPessoa(x, pessoa);
+        const tag = r + '/' + (est || 'todas') + '/' + f + (soVenc ? '+vencidas' : '') + '/' + (pessoa || '-');
+        if (est) casosT++;
+        if (modoF) casosF++;
+        // A esteira: o seletor (com a contagem) e a linha de andamento, sempre sobre a sprint inteira.
+        const opT = [...E['es-esteira'].innerHTML.matchAll(/<option value="([^"]*)"( selected)?>([^<]*)<\/option>/g)]
+          .map(a => a[1] + (a[2] ? '*' : '') + ':' + (a[3].match(/\((\d+)\)$/) || [])[1]);
+        const opTP = ['Todas'].concat(x.esteiras.map(e => e.k)).map((k, i) => (i ? k + (est === k ? '*' : '') + ':' + x.esteiras[i - 1].n : ':' + x.todas.length));
+        if (JSON.stringify(opT) !== JSON.stringify(opTP)) divE.push(tag + ' seletor de esteira ' + opT.join(' ') + ' / ' + opTP.join(' '));
+        const linT = [...E['es-esteiras'].innerHTML.matchAll(/class="es-pessoa( ativo)?"[^>]*>([\s\S]*?)<\/span>/g)]
+          .map(a => (a[1] ? '*' : '') + semEmoji(semTag(a[2])));
+        const linTP = x.esteiras.map(e => (est === e.k ? '*' : '') + e.rot + ' ' + e.entregues + '/' + e.total + ' entregues · ' + e.pct + '%' +
+          (e.aguardando ? ' (' + e.aguardando + ' em validação)' : ''));
+        if (JSON.stringify(linT) !== JSON.stringify(linTP)) divE.push(tag + ' andamento por esteira ' + JSON.stringify(linT) + ' / ' + JSON.stringify(linTP));
+        if (x.regra) comRegra++;
+        if (x.aguardando.length) comAgu++;
+        if (pAdm !== (pes ? pes.nome : '')) divE.push(tag + ' pessoa valendo ' + pAdm + '/' + (pes ? pes.nome : ''));
+        if (String(E['es-conta'].textContent) !== String(x.ms.length)) divE.push(tag + ' conta ' + E['es-conta'].textContent + '/' + x.ms.length);
+        const kv = [...E['es-kpis'].innerHTML.matchAll(/class="ger-kpi-value"[^>]*>([^<]*)</g)].map(a => a[1]).join(',');
+        const kp = x.ms.length ? [x.ms.length, x.entregues.length, x.faltaCom.length, x.faltaSem.length].join(',') : '';
+        if (kv !== kp) divE.push(tag + ' cartoes ' + kv + '/' + kp);
+        const subs = [...E['es-kpis'].innerHTML.matchAll(/class="es-kpi-sub">([\s\S]*?)<\/div>/g)].map(a => semTag(a[1]));
+        if (x.ms.length) {
+          const espera = [x.ms.length + ' task(s)' + (x.negadas ? ' · ' + x.negadas + ' negada(s)' : '') + ' · ' + x.comProj + ' em projeto',
+            x.fechadas.length + ' fechada(s) + ' + x.aguardando.length + ' em validação · ' + x.pctEntregues + '% da sprint',
+            x.pctFaltaCom + '% das tasks' + (x.vencCom ? ' · ' + x.vencCom + ' com entrega vencida' : ''),
+            x.faltaSem.length ? x.pctFaltaSem + '% das tasks · precisam de dono' : 'todas têm dono'];
+          if (JSON.stringify(subs) !== JSON.stringify(espera)) divE.push(tag + ' notas ' + JSON.stringify(subs) + ' / ' + JSON.stringify(espera));
+        }
+        /* Por pessoa: fora do Faltando, "Faltando por pessoa" com as vencidas; no
+           Faltando, "Faltando com" (a vencida em vermelho) e o "So vencidas". */
+        const pesH = E['es-pessoas'].innerHTML;
+        const pes1 = [...pesH.matchAll(/class="es-pessoa[^"]*"\s+onclick="esPessoa[^>]*>([^<]*<b>\d+<\/b>(?: · (?:<span[^>]*>[^<]*<\/span>|[^<]*))?)<\/span>/g)].map(a => semTag(a[1]));
+        const pesP = x.pessoas.map(p => p.nome + ' ' + p.n + (!p.vencidas ? '' : modoF ? ' · ' + p.vencidas + ' vencida' + (p.vencidas === 1 ? '' : 's') : ' · ' + p.vencidas + ' vencida(s)'));
+        if (JSON.stringify(pes1) !== JSON.stringify(pesP)) divE.push(tag + ' por pessoa ' + JSON.stringify(pes1) + ' / ' + JSON.stringify(pesP));
+        const rotA = (pesH.match(/<span class="rot">([^<]*)<\/span>/) || [])[1] || '';
+        const rotP = modoF ? 'Faltando com:' : x.pessoas.length ? 'Faltando por pessoa:' : '';
+        if (rotA !== rotP) divE.push(tag + ' rotulo da linha ' + rotA + '/' + rotP);
+        const soA = (pesH.match(/class="es-pessoa( ativo)?"[^>]*onclick="esSoVenc\(\)"[^>]*>([^<]*)<\/span>/) || []);
+        const soAt = soA[2] ? (soA[1] ? '*' : '') + semEmoji(soA[2]) : '';
+        const soP = modoF && x.vencCom ? (soVenc ? '*' : '') + 'Só vencidas (' + x.vencCom + ')' : '';
+        if (soAt !== soP) divE.push(tag + ' botao so vencidas ' + soAt + '/' + soP);
+        // O nome marcado e o resumo da pessoa (8f236cf).
+        const ativo = (pesH.match(/class="es-pessoa[^"]* ativo"\s+onclick="esPessoa[^>]*>([^<]*) </) || [])[1] || '';
+        const ativoP = pes && x.pessoas.some(p => p.nome === pes.nome) ? pes.nome : '';
+        if (ativo !== ativoP) divE.push(tag + ' nome marcado ' + ativo + '/' + ativoP);
+        // O 👤 do admin (tela da main) e um icone no app.
+        const resA = semEmoji(semTag(E['es-pessoa-resumo'].innerHTML.replace(/<\/span>/g, ' </span>')));
+        const resP = pes ? [pes.nome, pes.total + ' na sprint', pes.entregues + ' entregue(s)' + (pes.pct != null ? ' · ' + pes.pct + '%' : '')]
+          .concat(pes.aguardando ? ['(' + pes.aguardando + ' em validação)'] : [], [pes.faltando + ' faltando'],
+            pes.vencidas ? [pes.vencidas + ' com entrega vencida'] : [], pes.negadas ? [pes.negadas + ' negada(s)'] : [], [pes.pontos + ' pts', 'Ver todos']).join(' ') : '';
+        if (resA !== resP) divE.push(tag + ' resumo da pessoa "' + resA + '" / "' + resP + '"');
+        const venc = (E['es-resumo'].textContent.match(/^(\d+)/) || [0, 0])[1];
+        if (+venc !== x.vencidas) divE.push(tag + ' vencidas ' + venc + '/' + x.vencidas);
+        /* A lista: grupos, ordem e a entrega ao usuario de cada linha. No
+           Faltando, os grupos sao a sprint em que a data venceu, "No prazo" e
+           "Sem data de entrega", e a Entrega dev vem na linha. */
+        const lista = (f === 'entregues' ? x.entregues : modoF ? x.faltaCom.filter(m => !soVenc || x.vencida(m)) : f === 'falta_sem' ? x.faltaSem : x.ms)
+          .filter(m => !pes || pes.casa(m));
+        const gs = modoF ? esApp.esGruposFalta(SP, lista, x, stateE.feriados) : esApp.esGrupos(lista, temas);
+        gruposVenc += gs.filter(g => /^Venceu na /.test(g.nome)).length;
+        const notaA = +((E['es-lista'].innerHTML.match(/\+ (\d+) faltando ainda no prazo/) || [0, 0])[1]);
+        const notaP = modoF && soVenc ? x.faltaCom.filter(m => !x.vencida(m) && (!pes || pes.casa(m))).length : 0;
+        if (notaA !== notaP) divE.push(tag + ' fora do so vencidas ' + notaA + '/' + notaP);
+        if (notaP) comNota++;
+        const gA = [...E['es-lista'].innerHTML.matchAll(/margin-bottom:8px;">([^<]*) <span[^>]*>\((\d+)\)/g)].map(a => a[1] + ':' + a[2]);
+        const gP = gs.map(g => g.nome + ':' + g.itens.length);
+        if (JSON.stringify(gA) !== JSON.stringify(gP)) divE.push(tag + ' grupos ' + gA.join('|') + ' / ' + gP.join('|'));
+        const cards = E['es-lista'].innerHTML.split('<div class="card"').slice(1);
+        const lA = cards.map(c => (c.match(/monospace;font-size:12px;color:var\(--text3\)">([^<]*)</) || [])[1] + ' ' +
+          semEmoji(semTag((c.match(/(⏰ Entrega dev: [^<]*)<\/span>/) || [])[1] || '')) + '|' + semTag((c.match(/(Entrega usuário: [^<]*)<\/span>/) || [])[1] || ''));
+        const lP = [];
+        gs.forEach(g => g.itens.forEach(m => {
+          const u = esApp.esEntregaUsuario(m, HOJE, x.aberta(m));
+          const d = modoF ? esApp.esEntregaDev(m, HOJE) : null;
+          if (d) comDev++;
+          lP.push(m.codigo + ' ' + (d ? 'Entrega dev: ' + br(d.data) + d.tag : '') + '|Entrega usuário: ' + (u.data ? br(u.data) + u.tag : 'a definir'));
+        }));
+        if (JSON.stringify(lA) !== JSON.stringify(lP)) divE.push(tag + ' linhas ' + lA.slice(0, 4).join('|') + ' / ' + lP.slice(0, 4).join('|'));
+      });
+    })));
+    ok(divE.length === 0 && comRegra > 20 && comAgu > 10 && casosP > 30 && casosT > 60 && casosF > 60 && gruposVenc > 20 && comDev > 20 && comNota > 5,
+       'Entregas por sprint do app = renderEntregasSprint do admin: cartoes (Entregues = fechadas + em validacao, fdf14e2), notas, por pessoa, a pessoa clicada, o filtro e o andamento por esteira, ' +
+       'o Faltando (com quem esta, vencidas pela Entrega dev ou ao usuario, "So vencidas" e os grupos pela sprint em que venceu, c11b681 e 93b6d4c), grupos, ordem e entrega ao usuario (' +
+       casosE + ' sprint x esteira x filtro x pessoa)', divE.slice(0, 4).join(' ;; ') +
+       ` [regra ${comRegra}, aguardando ${comAgu}, pessoa ${casosP}, esteira ${casosT}, faltando ${casosF}, grupos vencidos ${gruposVenc}, entrega dev ${comDev}, nota ${comNota}]`);
+    {
+      // A regra de 05/11 na amostra: o que a S1-11 e a S2-11 contam, pelo codigo.
+      const cod = (l) => l.map(m => m.codigo).filter(c => /^AX-9/.test(c)).sort().join();
+      const s1 = esApp.esResumo(SP, statusKey, vivasE, 'S1-11-2026', HOJE, projetos, stateE.feriados, '', deEApp);
+      const s2 = esApp.esResumo(SP, statusKey, vivasE, 'S2-11-2026', HOJE, projetos, stateE.feriados, '', deEApp);
+      const s5 = esApp.esResumo(SP, statusKey, vivasE, 'S5-10-2026', HOJE, projetos, stateE.feriados, '', deEApp);
+      /* Regra de 06/11 (fdf14e2): em validacao conta como entregue da sprint, e a
+         devolvida para ajuste (AX-906) volta a ser item em aberto. */
+      ok(cod(s1.fechadas) === 'AX-901,AX-905,AX-907' && cod(s1.aguardando) === 'AX-902' && cod(s1.entregues) === 'AX-901,AX-902,AX-905,AX-907' &&
+         cod(s1.faltaCom) === 'AX-904,AX-906,AX-908,AX-909' &&
+         cod(s2.fechadas) === 'AX-904' && cod(s2.aguardando) === 'AX-903' && cod(s2.entregues) === 'AX-903,AX-904' && !cod(s2.ms).includes('AX-901') && !cod(s2.ms).includes('AX-905') &&
+         !s5.regra && s1.regra && !cod(s5.ms),
+         'entregue = fechada pelo PM/PO ou em validacao, na sprint da primeira ida para validacao; reentrega conta uma vez; a devolvida volta a ser item em aberto; sprint antes da regra fica na conta antiga',
+         JSON.stringify({ s1: [cod(s1.fechadas), cod(s1.aguardando), cod(s1.faltaCom)], s2: [cod(s2.fechadas), cod(s2.aguardando), cod(s2.ms)] }));
+    }
+    ok(/var ops = spOpcoesSprint\(SP\(\), vivas, H\.hoje\(\), fer\(D\)\)\.filter\(function \(o\) \{ return o\.key && o\.key !== '__fora__'; \}\);/.test(SPT) &&
+       /var x = esResumo\(SP\(\), H\.colunaDe, vivas, r, H\.hoje\(\), D\.projetos \|\| \[\], fer\(D\), _ent\.esteira,\s*function \(m\) \{ return esEsteiraDe\(PI, D\.devs_perfil, m\); \}\);/.test(SPT) &&
+       /var PI = raiz\.PIPELINES;/.test(SPT) && /data-es-esteira="' \+ e\.k \+ '"/.test(SPT) && /_ent\.esteira = _ent\.esteira === evv \? '' : evv;/.test(SPT) &&
+       /_ent\.esteira = selEst\.value;/.test(SPT) && /\(modoFalta \? esGruposFalta\(SP\(\), lista, x, fer\(D\)\) : esGrupos\(lista, D\.temas \|\| \[\]\)\)/.test(SPT) &&
+       /var modoFalta = _ent\.filtro === 'falta_com';\s*if \(!modoFalta\) _ent\.soVenc = false;/.test(SPT) &&
+       /_ent\.filtro === 'falta_com' \? x\.faltaCom\.filter\(function \(m\) \{ return !_ent\.soVenc \|\| x\.vencida\(m\); \}\)/.test(SPT) &&
+       /var noPrazo = modoFalta && _ent\.soVenc \? x\.faltaCom\.filter\(function \(m\) \{ return !x\.vencida\(m\) && \(!pes \|\| pes\.casa\(m\)\); \}\)\.length : 0;/.test(SPT) &&
+       /comQuemHtml\(m, x\.aberta\(m\), modoFalta\)/.test(SPT) && /if \(e\.target\.closest\('\[data-es-sovenc\]'\)\) \{ _ent\.soVenc = !_ent\.soVenc;/.test(SPT) &&
+       /var pes = esDaPessoa\(x, _ent\.pessoa\);/.test(SPT) && /\.filter\(function \(m\) \{ return !pes \|\| pes\.casa\(m\); \}\);/.test(SPT) &&
+       /data-es-pessoa="' \+ esc\(pp\.nome\) \+ '"/.test(SPT) &&
+       /_ent\.pessoa = _ent\.pessoa === pv \? '' : pv;/.test(SPT),
+       'e a aba Entregas le das funcoes medidas acima: as sprints do filtro, o resumo com os feriados e a esteira (seletor e linha, de novo, todas), a pessoa clicada (de novo, todos) e a entrega ao usuario pela situacao');
+    // ── As datas do card no tamanho da sprint (585196d e 84bc1b8) ─────────
+    /* O `mSprintDatas` do admin roda num DOM de mentira ao lado do
+       `pintaSemana` do formulario do app, nos mesmos gestos: abrir o card
+       (escolheu = false) e escolher a sprint (true). */
+    {
+      const FRMs = lerTela('axis-form-demanda.js');
+      const elFalso = (v) => ({ value: v || '', style: {}, textContent: '', innerHTML: '', after() {}, removeAttribute(k) { delete this[k]; } });
+      const sdAdm = new Function('state', 'SPRINTPO', 'window', 'document', BASE_ADM + '\nconst entregaUsuRender = () => {};\n' +
+        corpo(ADMIN, 'function mSprintDatas(escolheu) {') + '\nreturn mSprintDatas;');
+      const sdApp = new Function('el', 'val', 'D', 'H', 'raiz', corpo(FRMs, 'function semanaDaSprint(SPm, sp, feriados, inicio, entrega) {') + '\n' +
+        corpo(FRMs, 'function pintaSemana(escolheu) {') + '\nreturn pintaSemana;');
+      const Hf = { ico: () => '', esc: (x) => String(x), dma: (d) => (d ? br(d) : '') };
+      const divS = [];
+      let casosS = 0, preencheu = 0, foraN = 0;
+      ['', 'S1-11-2026', 'S2-11-2026', 'S5-10-2026', 'S4-12-2026', 'S1-01-2027'].forEach(sp =>
+        [[], ['2026-11-02'], [{ data: '2026-11-02', nome: 'Finados' }, { data: '2027-01-01', nome: 'Ano novo' }]].forEach(fer =>
+          [['', ''], ['2026-11-02', '2026-11-06'], ['2026-10-30', '2026-11-09'], ['2026-11-03', ''], ['', '2027-01-08']].forEach(([ini, ent]) =>
+            [true, false].forEach(escolheu => ['', '2026-12-01'].forEach(usu0 => {
+              casosS++;
+              const mk = () => ({ sp: elFalso(sp), ini: elFalso(ini), ent: elFalso(ent), usu: elFalso(usu0), hint: elFalso(), sem: elFalso() });
+              const a = mk(), b = mk();
+              const idsA = { 'm-sprint': a.sp, 'm-inicio': a.ini, 'm-entrega': a.ent, 'm-entrega-usuario': a.usu, 'm-sprint-hint': a.hint, 'm-sprint-semana': a.sem };
+              sdAdm({ feriados: fer }, SP, { SPRINTPO: SP }, { getElementById: (id) => idsA[id] || null })(escolheu);
+              const idsB = { 'axf-sprint': b.sp, 'axf-inicio': b.ini, 'axf-entrega': b.ent, 'axf-entrega-usuario': b.usu, 'axf-sprint-semana': b.sem };
+              sdApp((id) => idsB[id] || null, (id) => (idsB[id] ? String(idsB[id].value || '').trim() : undefined), () => ({ feriados: fer }), Hf, { SPRINTPO: SP })(escolheu);
+              const tag = (sp || '-') + '/' + JSON.stringify(fer).length + '/' + ini + '-' + ent + '/' + escolheu + '/' + usu0;
+              const lim = (x) => [x.ini.min, x.ini.max, x.ent.min, x.ent.max].join(',');
+              if (lim(a) !== lim(b)) divS.push(tag + ' limites ' + lim(a) + ' / ' + lim(b));
+              if (a.usu.value !== b.usu.value) divS.push(tag + ' entrega ao usuario ' + a.usu.value + ' / ' + b.usu.value);
+              if (a.usu.value !== usu0) preencheu++;
+              const tA = semEmoji(semTag(a.sem.textContent)), tB = semTag(b.sem.innerHTML);
+              if (a.ini.min && tA !== tB) divS.push(tag + ' aviso "' + tA + '" / "' + tB + '"');
+              if (/fora da semana/.test(tB)) foraN++;
+            })))));
+      ok(divS.length === 0 && preencheu > 20 && foraN > 20,
+         'as datas do card no app = mSprintDatas do admin: o calendario na semana da sprint desde a segunda (mesmo feriado), a segunda seguinte so ao escolher a sprint e o aviso de fora da semana (' + casosS + ' casos)',
+         divS.slice(0, 3).join(' | ') + ' [preencheu ' + preencheu + ', fora ' + foraN + ']');
+      ok(/if \(ssel\) ssel\.addEventListener\('change', function \(\) \{ pintaSemana\(true\); \}\);/.test(FRMs) &&
+         /\['axf-inicio', 'axf-entrega'\]\.forEach\(function \(id\) \{ var x = el\(id\); if \(x\) x\.addEventListener\('input', function \(\) \{ pintaSemana\(false\); \}\); \}\);\s*pintaSemana\(false\);/.test(FRMs) &&
+         /<select id="m-sprint" onchange="mSprintAviso\(\);mSprintDatas\(true\)">/.test(ADMIN),
+         'e o formulario liga como o card do admin: escolher a sprint preenche (true), mexer nas datas e abrir so conferem (false)');
+    }
+    // ── Na Validacao da area no escopo da sprint (fd4e5e8 e 3ca7514) ──────
+    ok(/na_area: \['[^']*', 'Na área · fora do placar'\]/.test(ADMIN) &&
+       /na_area: \['pu', st\.regra \? 'Na área · aguardando aprovação' : 'Na área · fora do placar'\]/.test(SPT) &&
+       /el\._sp = \{ D: D, r: r, acomp: acomp, entrada: entrada, regra: !!p\.regraEntrega \};/.test(SPT),
+       'o escopo da sprint marca a task na Validacao da area como o acompanhamento do admin, e diz que ela aguarda aprovacao na regra de 05/11');
+
+    // ── Projetos em andamento e o PPT deles (7143668 a 321cd68) ───────────
+    const PJ_ADM = [BASE_ADM, linhaAdm(/^const pjAprovado\s*=.*$/m), linhaAdm(/^const pjPendente\s*=.*$/m), linhaAdm(/^const pjRecusado\s*=.*$/m),
+      linhaAdm(/^const pjLista = .*$/m), linhaAdm(/^const pjDemandas = .*$/m), corpo(ADMIN, 'function pjResumo(p) {'),
+      linhaAdm(/^const pjChaveSprint = .*$/m), linhaAdm(/^const pjSprintAtual = .*$/m), linhaAdm(/^const pjAberta = .*$/m),
+      corpo(ADMIN, 'function pjNaSprintAtualOuFutura(m) {'), corpo(ADMIN, 'function pjEmAndamento(p) {'),
+      linhaAdm(/^const PJ_EM_ANDAMENTO = .*$/m), linhaAdm(/^const PJ_ETAPA_ROT = \{[\s\S]*?\};/m),
+      corpo(ADMIN, 'function pjAndamentoDados(p) {'), corpo(ADMIN, 'function pjAndamentoHTML(p) {'), corpo(ADMIN, 'function renderProjetos() {'),
+      "let _pjVisao = 'andamento';", corpo(ADMIN, 'async function imprimirProjetosAndamento(botao) {'),
+      corpo(ADMIN, 'async function imprimirAprovacaoReq(botao) {')].join('\n');
+    const pjAppSrc = [(PJT.match(/^ {2}var PJA_EM_ANDAMENTO = .*$/m) || [''])[0], corpo(PJT, 'function pjaChave(r) {'),
+      corpo(PJT, 'function pjaNaSprint(SPm, etapa, m, atual) {'), corpo(PJT, 'function pjaEmAndamento(SPm, etapa, p, ms, atual) {'),
+      corpo(PJT, 'function pjaDados(SPm, etapa, p, ms, atual) {'), corpo(PJT, 'function pjaParaPPT(SPm, etapa, rotulos, ps, ms, temas, atual) {'),
+      corpo(PJT, 'function pjaOrdena(gravada, efetiva, ps, ms) {')].join('\n');
+    const pjApp = new Function(pjAppSrc + '\nreturn { pjaParaPPT, pjaOrdena, pjaEmAndamento };')();
+    const ROT_APP = {};
+    new Function((lerTela('axis-app.js').match(/var ETAPAS = \[[\s\S]*?\];/) || ['var ETAPAS = [];'])[0].replace('var ETAPAS =', 'return'))()
+      .forEach(e => { ROT_APP[e.id] = e.rotulo; });
+    const capt = {};
+    const doc = docFalso();
+    const pjAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'document', 'window', 'PROJETOSPPT', 'APROVACAOPPT', 'toast',
+      PJ_ADM + '\nreturn { renderProjetos, imprimirProjetosAndamento, imprimirAprovacaoReq };');
+    const GER = { gera: async (ps, o) => { capt.ps = ps; capt.o = o; return { projetos: ps.length }; } };
+    const GER2 = { gera: async (l, o) => { capt.apr = l; capt.aprO = o; return { demandas: l.length }; } };
+    const fA = pjAdm(state, SP, PRAZO_, ET, doc, { PROJETOSPPT: GER, APROVACAOPPT: GER2 }, GER, GER2, () => {});
+    fA.renderProjetos();
+    const ordA = [...doc.els['pj-lista'].innerHTML.matchAll(/<div class="pj-and-topo"[^>]*>(?:<span class="pj-cod">([^<]*)<\/span>)?<span class="pj-nome">([^<]*)</g)].map(a => (a[1] || '') + '·' + a[2]);
+    const ordP = pjApp.pjaOrdena(statusKey, m => ET.efetiva(m, HOJE), projetos, vivas)
+      .filter(p => pjApp.pjaEmAndamento(SP, statusKey, p, vivas, SP.sprintCorrente(HOJE, []))).map(p => (p.codigo || '') + '·' + p.nome);
+    ok(ordA.length >= 2 && JSON.stringify(ordA) === JSON.stringify(ordP), 'Projetos em andamento do app: os mesmos projetos, na mesma ordem do renderProjetos do admin',
+       ordA.join(', ') + ' // ' + ordP.join(', '));
+    pendentes.push((async () => {
+      await fA.imprimirProjetosAndamento(null);
+      const pP = pjApp.pjaParaPPT(SP, statusKey, ROT_APP, projetos, vivas, temas, SP.sprintCorrente(HOJE, []));
+      const nLinhas = (capt.ps || []).reduce((t, p) => t + p.feitas.length + p.andamento.length + p.planejado.length, 0);
+      ok(nLinhas > 10 && JSON.stringify(capt.ps) === JSON.stringify(pP),
+         'o que o app entrega ao projetos-ppt.js = o que o admin entrega (projetos, entrega, Feitas, Em andamento, Planejado, etapa, data e sprint)',
+         JSON.stringify(capt.ps).slice(0, 300) + ' // ' + JSON.stringify(pP).slice(0, 300));
+      ok(/sprint: raiz\.SPRINTPO \? raiz\.SPRINTPO\.rotuloCurto\(H\.sprintAtual\(\)\) : ''/.test(REL) && /\{ hoje: H\.hoje\(\), sprint:/.test(REL) &&
+         capt.o && capt.o.hoje === HOJE && capt.o.sprint === SP.rotuloCurto(SP.sprintCorrente(HOJE, [])),
+         'e as opcoes do PPT (hoje e a sprint atual curta) sao as mesmas', JSON.stringify(capt.o));
+      await fA.imprimirAprovacaoReq(null);
+      const espApr = ms.filter(m => !m.oculto && !m.mesclado_em && statusKey(m) === 'levantar_req').map(m => m.codigo);
+      ok((capt.apr || []).length > 3 && JSON.stringify(capt.apr.map(m => m.codigo)) === JSON.stringify(espApr) &&
+         /function demandasAprovacao\(\) \{\s*return H\.visiveis\(\)\.filter\(function \(m\) \{ return H\.colunaDe\(m\) === 'levantar_req'; \}\);/.test(REL) &&
+         /G2\.gera\(demandasAprovacao\(\), \{ temas: \(raiz\.AXIS_APP\.APP\.D \|\| \{\}\)\.temas \|\| \[\] \}\)/.test(REL),
+         'o PPT de aprovacao de requisitos recebe no app o mesmo que no admin: a etapa inteira (sem mesclada nem oculta) e os temas',
+         JSON.stringify((capt.apr || []).map(m => m.codigo)) + ' // ' + JSON.stringify(espApr));
+    })());
+    ok(/data-axis-ppt="aprovacao"/.test(lerTela('axis-tela-quadro.js')) && /data-axis-ppt="projetos"/.test(PJT) &&
+       /aprovacao-ppt\.js\?v=/.test(lerTela('axis.html')) && /projetos-ppt\.js\?v=/.test(lerTela('axis.html')) && /apresentacao\.js\?v=/.test(lerTela('axis.html')),
+       'o Quadro e Projetos tem o botao Imprimir, e o axis.html carrega os geradores e o kit (apresentacao.js) que carrega a biblioteca');
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('App AXIS: os gestos do painel do dev e a conversa (dev.html, mensageria.html)');
+
+  /* O QUE SO O PAINEL DO DEV E A MENSAGERIA GRAVAVAM, AGORA NO APP. Cada
+     funcao da tela antiga e recortada e executada com um `state` e um DOM de
+     mentira; o que ela mandaria ao `saveToGitHub` (ou ao Worker) e comparado
+     ao patch da regra do app, caso a caso. Divergir aqui e o app gravar outra
+     coisa em silencio. */
+  (() => {
+    const AC = require('./axis-acoes.js');
+    const SPm = require('./sprint.js'), GRm = require('./grill.js'), SUBm = require('./subtarefa.js');
+    const DNm = require('./dev-nome.js'), ETm = require('./etapa-demanda.js'), PIm = require('./pipelines.js');
+    const HOm = require('./homologacao.js');
+    const MSG = lerTela('mensageria.html');
+    const HOJE = '2026-11-05', AGORA = '2026-11-05T14:00:00.000Z';
+    const EU = 'Ana Dev';
+    const copia = (x) => JSON.parse(JSON.stringify(x));
+    const ordena = (o) => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v))
+      ? Object.keys(v).sort().reduce((acc, x) => { acc[x] = v[x]; return acc; }, {}) : v);
+    const R = { SPRINTPO: SPm, GRILL: GRm, DEVNOME: DNm, ETAPA: ETm, PIPELINES: PIm, HOMOLOGACAO: HOm,
+                PAUSA: require('./pausa.js'), VINCULO: require('./vinculo.js'), PREVOO: require('./prevoo.js'),
+                COLABORADORES: { emailPara: (n) => (n ? String(n).toLowerCase().replace(/\s+/g, '.') + '@x' : '') } };
+    const ctx = (D, extra) => Object.assign({ papel: 'dev', quem: EU, nomes: [EU], hoje: HOJE, agora: AGORA, D: D, lista: D.melhorias, aprovadores: null, R }, extra || {});
+    const corte = (a) => { const c = corpo(DEV, a); if (!c) throw new Error('nao achei no dev.html: ' + a); return c; };
+    const ETAPAS_DO_DEV_SRC = (DEV.match(/const ETAPAS_DO_DEV = \[[^\]]*\];/) || [''])[0];
+    const STATUS_SRC = (DEV.match(/const STATUS_POR_ETAPA = \{[\s\S]*?\n\};/) || [''])[0] + '\n' + (DEV.match(/const statusDaEtapa = [^\n]+/) || [''])[0];
+    ok(!!ETAPAS_DO_DEV_SRC && /statusDaEtapa/.test(STATUS_SRC), 'o painel do dev tem ETAPAS_DO_DEV e STATUS_POR_ETAPA para serem recortados');
+
+    // A base de mentira: a S1-11 em curso, a S2-11 montando.
+    const base = (ms) => ({ melhorias: ms, devs_perfil: {}, desenvolvedores: [EU, 'Bia'],
+                            sprints: [{ rotulo: 'S1-11-2026', iniciada_em: '2026-11-03' }, { rotulo: 'S2-11-2026' }] });
+    const F = [
+      { id: 'a', codigo: 'AX-A', status_planejamento: 'em_andamento', status: 'iniciada', dev: EU, sprint_po: 'S1-11-2026', tipo: 'evolucao', entrega: '2026-11-20' },
+      { id: 'b', codigo: 'AX-B', status_planejamento: 'planejado', status: 'estimada', dev: '', sprint_po: 'S1-11-2026', tipo: 'evolucao', entrega: '2026-11-20' },
+      { id: 'c', codigo: 'AX-C', status_planejamento: 'planejado', status: 'estimada', dev: 'Bia', sprint_po: 'S1-11-2026', tipo: 'evolucao' },
+      { id: 'd', codigo: 'AX-D', status_planejamento: 'planning', status: 'estimada', dev: 'Bia', sprint_po: 'S2-11-2026', tipo: 'evolucao' },
+      { id: 'e', codigo: 'AX-E', status_planejamento: 'backlog', status: 'recebida', dev: '', tipo: 'evolucao' },
+      { id: 'f', codigo: 'AX-F', status_planejamento: 'planejado', status: 'estimada', dev: '', sprint_po: 'S2-11-2026', tipo: 'evolucao' },
+      { id: 'g', codigo: 'AX-G', status_planejamento: 'planning', status: 'estimada', dev: '', sprint_po: 'S2-11-2026', tipo: 'evolucao', dados_bi: true },
+      { id: 'h', codigo: 'AX-H', status_planejamento: 'planejado', status: 'estimada', dev: EU, sprint_po: 'S2-11-2026', tipo: 'evolucao' },
+      { id: 'i', codigo: 'AX-I', status_planejamento: 'planejado', status: 'estimada', dev: '', sprint_po: 'S1-11-2026', mesclado_em: 'a' },
+      { id: 'j', codigo: 'AX-J', status_planejamento: 'validacao_area', status: 'iniciada', dev: 'Bia / ' + EU, sprint_po: 'S1-11-2026', tipo: 'evolucao' },
+      { id: 'k', codigo: 'AX-K', status_planejamento: 'levantar_req', status: 'recebida', dev: '', sprint_po: 'S1-11-2026', tipo: 'evolucao' },
+      { id: 'l', codigo: 'AX-L', status_planejamento: 'backlog', status: 'recebida', dev: '', sprint_po: 'S2-11-2026', tipo: 'sustentacao' },
+      { id: 'n', codigo: 'AX-N', status_planejamento: 'negada', status: 'negada', dev: EU }
+    ];
+
+    // ── 82bff39: o que e meu, o que e fila, e o filtro "Mostrar" ──────────
+    /* O doMeuTime ganhou o filtro "Times" (5c849fb) e o painel abre na sprint
+       atual (368342d): o recorte e medido em Mostrar x Times x Sprint, para
+       quem e de Desenvolvimento e para quem e de Dados. */
+    const DOMEUTIME_DEV = "function doMeuTime(m, extra = document.getElementById('f-times')?.value || '') {";
+    const filtroVelho = new Function('window', 'document', 'state', 'currentDev', 'SPRINTPO', 'DEVNOME', 'PIPELINES', 'ETAPA',
+      'let _temaFilter = null;\n' + corte('function getStatusKey(m) {') + '\n' + corte('function doMeuTimePadrao(m) {') + '\n' + corte(DOMEUTIME_DEV) + '\n' +
+      corte('function getFiltered() {') + '\nreturn { getFiltered, doMeuTimePadrao };');
+    const FT = F.concat([
+      { id: 't1', codigo: 'AX-T1', status_planejamento: 'planejado', status: 'estimada', dev: '', sprint_po: 'S1-11-2026', tipo: 'evolucao', sales_ops: true },
+      { id: 't2', codigo: 'AX-T2', status_planejamento: 'em_andamento', status: 'iniciada', dev: 'Marina', sprint_po: 'S1-11-2026', tipo: 'evolucao', dados_bi: true },
+      { id: 't3', codigo: 'AX-T3', status_planejamento: 'planning', status: 'estimada', dev: '', sprint_po: 'S1-11-2026', tipo: 'evolucao', dados_bi: true, sales_ops: true },
+      { id: 't4', codigo: 'AX-T4', status_planejamento: 'planejado', status: 'estimada', dev: 'Lucas Santos', sprint_po: 'S1-11-2026', tipo: 'evolucao' },
+      { id: 't5', codigo: 'AX-T5', status_planejamento: 'backlog', status: 'recebida', dev: 'Marina', tipo: 'evolucao', dados_bi: true },
+      { id: 't6', codigo: 'AX-T6', status_planejamento: 'planning', status: 'estimada', dev: '', sprint_po: 'S2-11-2026', tipo: 'evolucao', sales_ops: true },
+      // Esteve na S1-11 e foi repassada: o filtro de sprint e a sprint do PO de hoje, nao o historico.
+      { id: 't7', codigo: 'AX-T7', status_planejamento: 'planejado', status: 'estimada', dev: EU, sprint_po: 'S2-11-2026', tipo: 'evolucao',
+        sprint_po_historico: [{ sprint: 'S1-11-2026' }, { sprint: 'S2-11-2026', de: 'S1-11-2026' }] }
+    ]);
+    let divF = [];
+    let casosF = 0, somaTimes = 0;
+    [EU, 'Marina'].forEach(quem => ['', 'meu', 'fila'].forEach(fd => ['', 'dados', 'sales', 'todos'].forEach(tm => ['', 'S1-11-2026', 'S2-11-2026', '__fora__'].forEach(sp => {
+      casosF++;
+      const D = base(copia(FT));
+      const val = { 'f-dono': fd, 'f-times': tm, 'f-sprint': sp };
+      const doc = { getElementById: (id) => ({ value: val[id] || '' }) };
+      const velho = filtroVelho({ SPRINTPO: SPm, PIPELINES: PIm }, doc, D, quem, SPm, DNm, PIm, ETm).getFiltered().map(m => m.id).sort().join();
+      const c = ctx(D, { quem, nomes: [quem], times: tm });
+      const app = D.melhorias.filter(m => AC.mostraNoPainel(m, c, fd) && AC.casaSprintDoPainel(m, c, sp)).map(m => m.id).sort().join();
+      if (tm && !sp && fd !== 'meu') {
+        const sem = D.melhorias.filter(m => AC.mostraNoPainel(m, ctx(D, { quem, nomes: [quem] }), fd)).length;
+        if (app.split(',').filter(Boolean).length > sem) somaTimes++;
+      }
+      if (velho !== app) divF.push(quem + '/"' + fd + '"/' + (tm || '-') + '/' + (sp || '-') + ': ' + velho + ' / ' + app);
+    }))));
+    ok(divF.length === 0 && somaTimes >= 4, 'o recorte do painel do dev (getFiltered) = o do app, em Mostrar x Times x Sprint, para Desenvolvimento e Dados (' + casosF + ' casos)',
+       divF.slice(0, 3).join(' | ') + ' [Times somou em ' + somaTimes + ']');
+    {
+      // O card de outro time diz de qual time e (renderCard, 5c849fb).
+      const divT = [];
+      [EU, 'Marina'].forEach(quem => ['', 'dados', 'sales', 'todos'].forEach(tm => {
+        const D = base(copia(FT));
+        const doc = { getElementById: (id) => ({ value: id === 'f-times' ? tm : '' }) };
+        const velho = filtroVelho({ SPRINTPO: SPm, PIPELINES: PIm }, doc, D, quem, SPm, DNm, PIm, ETm);
+        D.melhorias.forEach(m => {
+          const v = tm && !DNm.eDe(m, quem) && !velho.doMeuTimePadrao(m) ? (m.dados_bi ? 'dados' : m.sales_ops ? 'sales' : 'dev') : '';
+          const a = AC.timeDeOutro(m, ctx(D, { quem, nomes: [quem], times: tm }));
+          if (v !== a) divT.push(quem + '/' + (tm || '-') + '/' + m.id + ': ' + v + ' / ' + a);
+        });
+      }));
+      ok(divT.length === 0 && /\? '<div class="kcard-dono outro" title="Demanda de outro time[\s\S]{0,200}\(m\.dados_bi \? '[^']*Time Dados\/BI' : m\.sales_ops \? '[^']*Time Sales Ops' : '[^']*Time Desenvolvimento'\)/.test(DEV),
+         'o card de outro time no app diz o mesmo time que o renderCard do painel (so com o filtro Times ligado)', divT.slice(0, 4).join(' | '));
+    }
+    {
+      // As opcoes do filtro de sprint e o padrao na sprint atual (buildSprintSelect, 368342d).
+      const selVelho = new Function('window', 'document', 'state', 'currentDev', 'SPRINTPO', 'DEVNOME', 'PRAZO',
+        'let _sprintPadraoAplicado = false;\n' + corte('function sprintAtualDev() {') + '\n' + corte('function escAttr(x) {') + '\n' +
+        corte('function buildSprintSelect() {') + '\nreturn buildSprintSelect;');
+      const divS = [];
+      [[EU, '2026-11-05'], [EU, '2026-11-10'], ['Bia', '2026-11-05'], ['Ninguem', '2026-11-20']].forEach(([quem, hoje]) => {
+        const D = base(copia(FT));
+        const sel = { value: '', innerHTML: '' };
+        const PRZ = { hojeISO: () => hoje };
+        const build = selVelho({ SPRINTPO: SPm, PRAZO: PRZ }, { getElementById: (id) => (id === 'f-sprint' ? sel : null) }, D, quem, SPm, DNm, PRZ);
+        build();
+        const opV = [...sel.innerHTML.matchAll(/<option value="([^"]*)">[^<]*\((\d+)\)<\/option>/g)].map(a => a[1] + ':' + a[2]).join(' ');
+        const agora = SPm.sprintCorrente(hoje, []);
+        const opA = AC.sprintsDoPainel(D.melhorias, ctx(D, { quem, nomes: [quem] }), agora).map(o => o.v + ':' + o.n).join(' ');
+        const padraoV = sel.value;
+        sel.value = '__fora__'; build();
+        if (opV !== opA || padraoV !== agora || sel.value !== '__fora__')
+          divS.push(quem + '/' + hoje + ': ' + opV + ' [' + padraoV + '] / ' + opA + ' [' + agora + ']');
+      });
+      ok(divS.length === 0, 'as opcoes do filtro de sprint do Meu trabalho = buildSprintSelect do painel (a atual mesmo vazia, Fora da sprint), e o padrao e a sprint atual so na primeira montagem',
+         divS.join(' | '));
+    }
+    const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
+    ok(/if \(!EST\.sprintPadrao && sprint\) \{ EST\.sprintPadrao = true; EST\.sprint = sprint; \}/.test(INI) &&
+       /AC\.casaSprintDoPainel\(m, cx, EST\.sprint\)/.test(INI) && /if \(q === 'limpar'\) \{ EST\.sprint = H\.sprintAtual\(\) \|\| ''; [^\n]*AXIS_ACOES\.times\(''\)/.test(INI) &&
+       /var filtrosAtivos = \(EST\.sprint !== \(sprint \|\| ''\) \? 1 : 0\) \+ \(times \? 1 : 0\);/.test(INI) && /data-ini="times"/.test(INI),
+       'Meu trabalho do dev abre na sprint atual, a atual nao conta como filtro, e o Limpar volta para ela e para o seu time');
+    ok(/if \(!F\.sprintPadrao && ctx\.papel === 'dev'\) \{ F\.sprintPadrao = true; if \(sprintPadraoDev\(ctx\)\) F\.sprint = sprintPadraoDev\(ctx\); \}/.test(QDT) &&
+       /F\.sprint = sprintPadraoDev\(ctx\); F\.vencidas = false;/.test(QDT) && /var sprintAtivo = sprintPadraoDev\(ctx\) \? !sprintEhPadrao\(ctx\) : !!F\.sprint;/.test(QDT) && /var ativos = \(sprintAtivo \? 1 : 0\)/.test(QDT) &&
+       /data-filtro="times"/.test(QDT) && /AXIS_ACOES\.times\(s\.value\)/.test(QDT),
+       'e o Quadro do dev tambem: sprint atual por padrao (outra pelo filtro), Times ao lado do Mostrar, e o Limpar volta ao padrao');
+    const marcaSrc = /\$\{DEVNOME\.eDe\(m, currentDev\)\s*\? '<div class="kcard-dono meu"[\s\S]*?: String\(m\.dev \|\| ''\)\.trim\(\)\s*\? '<div class="kcard-dono outro"[\s\S]*?: '<div class="kcard-dono fila"/.test(DEV);
+    ok(marcaSrc, 'a marca do card do dev.html e "meu" se esta no nome, "outro" se tem dev, "fila" se nao tem');
+    if (marcaSrc) {
+      const D = base(copia(F));
+      const vis = D.melhorias.filter(m => AC.mostraNoPainel(m, ctx(D), ''));
+      const div = vis.filter(m => AC.donoDoCard(m, ctx(D)) !== (DNm.eDe(m, EU) ? 'meu' : String(m.dev || '').trim() ? 'outro' : 'fila'));
+      ok(vis.length >= 6 && div.length === 0, 'a marca de cada card visivel no app = a do renderCard (' + vis.length + ' cards)', div.map(m => m.id).join());
+    }
+
+    // ── e5cace1: pegar da fila = o updateStatus do arraste, com o dono ────
+    const atualizaVelho = (D, subsGravar) => new Function('state', 'currentDev', 'window', 'SPRINTPO', 'ETAPA', 'saida', 'subsGravar',
+      ETAPAS_DO_DEV_SRC + '\n' + STATUS_SRC + '\n' +
+      'let _msAnexosMexidos = false, _msAnexos = [], _msProjetoMexido = false, _msSolicitanteMexido = false, _msSubsMexido = !!subsGravar;\n' +
+      'const renderKanban = () => {}; const toast = (t) => { saida.toast = t; }; const msAguardaAnexos = async () => true;\n' +
+      'const msSubParaGravar = () => subsGravar; const saveToGitHub = async (p) => { saida.patch = p; return true; };\n' +
+      corte('function getStatusKey(m) {') + '\n' + corte('function travaSprintBarra(id, colKey) {') + '\n' + corte('async function updateStatus(') + '\nreturn updateStatus;');
+    const WIN = { SPRINTPO: SPm, PRAZO: { hojeISO: () => HOJE } };
+    pendentes.push((async () => {
+      const div = [];
+      let pegou = 0;
+      for (const m0 of F.filter(m => AC.donoDoCard(m, ctx(base(copia(F)))) === 'fila').concat([
+        { id: 'z', codigo: 'AX-Z', status_planejamento: 'planejado', status: 'estimada', dev: '', tipo: 'evolucao' }])) {
+        const D = base(copia(F).concat(m0.id === 'z' ? [copia(m0)] : []));
+        const saida = {};
+        await atualizaVelho(D)(D, EU, WIN, SPm, ETm, saida, null)(m0.id, 'em_andamento');
+        const velho = saida.patch ? saida.patch[m0.id] : null;
+        const r = AC.REGRAS.pegar(copia(m0), {}, ctx(base(copia(F))));
+        const app = r.ok ? r.patch : null;
+        if (app) pegou++;
+        if (JSON.stringify(velho && ordena(velho)) !== JSON.stringify(app && ordena(app))) div.push(m0.id + ': ' + JSON.stringify(velho) + ' / ' + JSON.stringify(app));
+      }
+      ok(div.length === 0 && pegou >= 2, 'pegar da fila: o patch do app = o do updateStatus com `assumiu` (e a recusa sem sprint e a mesma)', div.join(' | '));
+    })());
+    ok(!AC.REGRAS.pegar(F[2], {}, ctx(base(copia(F)))).ok && !AC.REGRAS.pegar(F[1], {}, ctx(base(copia(F)), { papel: 'admin' })).ok,
+       'pegar so vale para o dev e para a demanda sem dono');
+
+    // ── Subtarefas: os editores msSub* e o patch do modal ─────────────────
+    const subsVelho = new Function('SUBTAREFA', 'HOJE', 'inicial',
+      'let _msSubs = JSON.parse(JSON.stringify(inicial)); let _msSubsMexido = false;\n' +
+      'const msSubRender = () => {}; const msSubAplicaTotal = () => {}; const toast = () => {}; const hojeISOdev = () => HOJE;\n' +
+      'const document = { getElementById: () => null, querySelectorAll: () => [] };\n' +
+      ['function msSubProgresso(subs) {', 'function msSubAdiciona() {', 'function msSubMarca(i, valor) {', 'function msSubTexto(i, valor) {',
+       'function msSubData(i, valor, qual) {', 'function msSubHoras(i, v) {', 'function msSubRemove(i) {', 'function msSubParaGravar() {'].map(corte).join('\n') +
+      '\nreturn { adiciona: msSubAdiciona, marca: msSubMarca, texto: msSubTexto, data: msSubData, horas: msSubHoras, remove: msSubRemove, grava: msSubParaGravar };');
+    const inicial = SUBm.lista({ subtarefas: [{ titulo: 'Tela', data: '2026-11-04', feita: true, horas: 2 }, null,
+                                              { titulo: 'API', inicio: '2026-11-01', fim: '2026-11-03', horas: 0 }, { titulo: '  Testes  ', feita: false }] });
+    const OPS = [['adiciona'], ['texto', 3, 'Novo passo'], ['marca', 3, true], ['horas', 3, '0.75'], ['data', 0, '2026-11-10', 'fim'],
+                 ['data', 0, '2026-11-01', 'inicio'], ['marca', 1, false], ['remove', 2], ['adiciona'], ['texto', 1, 'x'.repeat(200)],
+                 ['horas', 0, ''], ['marca', 4, true], ['horas', 1, 'abc']];
+    const v = subsVelho(SUBm, HOJE, inicial);
+    let l = copia(inicial);
+    OPS.forEach(o => {
+      v[o[0]].apply(null, o.slice(1));
+      l = o[0] === 'marca' ? AC.SUB.marca(l, o[1], o[2], HOJE) : AC.SUB[o[0]].apply(null, [l].concat(o.slice(1)));
+    });
+    ok(JSON.stringify(v.grava()) === JSON.stringify(AC.SUB.paraGravar(l)),
+       'as subtarefas editadas no app gravam o mesmo que os msSub* do dev.html (' + OPS.length + ' edicoes)', JSON.stringify(v.grava()) + ' / ' + JSON.stringify(AC.SUB.paraGravar(l)));
+    pendentes.push((async () => {
+      const div = [];
+      for (const e of ['em_andamento', 'planejado']) {
+        const m0 = { id: 's', codigo: 'AX-S', status_planejamento: e, status: e === 'planejado' ? 'estimada' : 'iniciada', dev: EU, sprint_po: 'S1-11-2026',
+                     tipo: 'evolucao', horas_realizadas: 3, implementacao: 'feito', subtarefas: [] };
+        const gravar = AC.SUB.paraGravar(l);
+        const D = base([copia(m0)]);
+        const saida = {};
+        // `saveStatus` com o select em "manter": updateStatus(id, etapa crua, undefined, texto ja escrito).
+        await atualizaVelho(D, gravar)(D, EU, WIN, SPm, ETm, saida, gravar)('s', e, undefined, m0.implementacao || undefined);
+        const r = AC.REGRAS.subtarefas(copia(m0), { lista: l }, ctx(base([copia(m0)])));
+        const a = Object.assign(copia(m0), saida.patch ? saida.patch.s : {}), b = Object.assign(copia(m0), r.ok ? r.patch : {});
+        if (!r.ok || !saida.patch || ordena(a) !== ordena(b) || Object.keys(r.patch).join() !== 'subtarefas') div.push(e + ': ' + JSON.stringify(saida.patch) + ' / ' + JSON.stringify(r));
+      }
+      ok(div.length === 0, 'salvar as subtarefas: a demanda fica igual a do modal do dev.html, e o patch do app so leva `subtarefas`', div.join(' | '));
+    })());
+    ok(!AC.REGRAS.subtarefas({ id: 's', status_planejamento: 'validacao', dev: EU }, { lista: [] }, ctx(base([]))).ok &&
+       !AC.REGRAS.subtarefas({ id: 's', status_planejamento: 'em_andamento', dev: 'Bia' }, { lista: [] }, ctx(base([]))).ok &&
+       AC.REGRAS.subtarefas({ id: 's', status_planejamento: 'planejado', dev: '' }, { lista: [] }, ctx(base([]))).ok,
+       'subtarefas: com o PM/PO nao (saveStatus), demanda de outra pessoa e leitura (msModoLeitura), a sem dono e de quem abrir');
+
+    // ── salvarEntrega: horas, texto e resumo com o PM/PO ──────────────────
+    const entregaVelho = new Function('state', 'ETAPA', 'saida', 'valores',
+      'let _msAnexosMexidos = false, _msAnexos = [], _msSubsMexido = false; const msSubParaGravar = () => [];\n' +
+      'const window = {}; const toast = (t) => { saida.toast = t; }; const closeModal = () => {}; const renderKanban = () => {};\n' +
+      'const msAguardaAnexos = async () => true; const saveToGitHub = async (p) => { saida.patch = p; return true; };\n' +
+      'const document = { getElementById: (id) => ({ value: valores[id] == null ? \'\' : valores[id], focus() {} }) };\n' +
+      corte('function getStatusKey(m) {') + '\n' + corte('async function salvarEntrega() {') + '\nreturn salvarEntrega;');
+    pendentes.push((async () => {
+      const div = [];
+      const CASOS = [['validacao', '9', 'tela nova', 'Uma frase'], ['validacao', '0', 'x', 'y'], ['validacao', '4', '  ', 'y'],
+                     ['validacao', '4', 'x', ''], ['concluido', '4', 'x', 'y'], ['validacao', '2.75', ' com espaco ', ' resumo ']];
+      for (const [e, h, impl, res] of CASOS) {
+        const m0 = { id: 'v', codigo: 'AX-V', status_planejamento: e, dev: EU, horas_realizadas: 1, implementacao: 'antes', resumo_entrega: 'antes' };
+        const saida = {};
+        await entregaVelho({ melhorias: [copia(m0)] }, ETm, saida, { 'ms-id': 'v', 'ms-horas': h, 'ms-implementacao': impl, 'ms-resumo': res })();
+        const r = AC.REGRAS.salvarEntrega(copia(m0), { horas: h, implementacao: impl, resumo: res }, ctx(base([])));
+        const velho = saida.patch ? ordena(saida.patch.v) : null, app = r.ok ? ordena(r.patch) : null;
+        if (velho !== app) div.push(e + '/' + h + '/' + impl + '/' + res + ': ' + velho + ' / ' + app);
+      }
+      ok(div.length === 0, 'corrigir a entrega: o patch do app = o do salvarEntrega do dev.html, e recusa nos mesmos casos', div.join(' | '));
+    })());
+
+    // ── Referencias do GitHub: ghLinkColeta ──────────────────────────────
+    const LG = lerTela('links-github.js');
+    const docGh = { v: {}, createElement: () => ({}), head: { appendChild() {} }, getElementById(id) { const k = id.replace(/^ms-link-/, ''); return k in this.v ? { value: this.v[k], classList: { add() {}, remove() {} }, focus() {} } : null; } };
+    const WG = {};
+    new Function('window', 'document', LG)(WG, docGh);
+    const GH = { erro: WG.ghLinkErro, normaliza: WG.ghLinkNormaliza };
+    let divG = [];
+    [{ repo: 'audaxcapitalsa/AXCRED-DJANGO', issue: '683', pr: '712, 715', milestone: '4' }, { repo: '', issue: '683', pr: '', milestone: '' },
+     { repo: '', issue: 'https://github.com/a/b/issues/9', pr: '', milestone: '' }, { repo: 'a/b', issue: '', pr: 'https://github.com/a/b/issues/3', milestone: '' },
+     { repo: 'a/b', issue: '', pr: '', milestone: '' }, { repo: 'a/b', issue: '#12', pr: '7 8;9', milestone: 'https://jira.x/1' }].forEach((cs, i) => {
+      docGh.v = Object.assign({}, cs);
+      const velho = WG.ghLinkColeta('ms', () => {});
+      const r = AC.REGRAS.referencias({ id: 'r', status_planejamento: 'em_andamento', dev: EU }, cs, ctx(base([]), { R: Object.assign({}, R, { GHLINK: GH }) }));
+      if (JSON.stringify(velho) !== JSON.stringify(r.ok ? r.patch : null)) divG.push(i + ': ' + JSON.stringify(velho) + ' / ' + JSON.stringify(r));
+    });
+    ok(divG.length === 0, 'referencias do GitHub: o patch do app = o ghLinkColeta do modal (e recusa onde ele recusa)', divG.join(' | '));
+
+    // ── Grill: msGrillResponde ───────────────────────────────────────────
+    const grillVelho = new Function('state', 'GRILL', 'currentDev', 'saida', 'valores',
+      STATUS_SRC + '\n' +
+      'const toast = (t) => { saida.toast = t; }; const closeModal = () => {}; const renderKanban = () => {};\n' +
+      'const confirmar = async () => true; const saveToGitHub = async (p) => { saida.patch = p; return true; };\n' +
+      'const document = { getElementById: (id) => ({ value: valores[id] == null ? \'\' : valores[id], focus() {} }) };\n' +
+      corte('async function msGrillResponde(veredito) {') + '\nreturn msGrillResponde;');
+    const semHora = (p) => { if (!p) return null; const x = copia(p); if (x.grill) { x.grill.respondido_em = 'T'; (x.grill.pontos || []).forEach(q => { if (q.em) q.em = 'T'; }); } return ordena(x); };
+    pendentes.push((async () => {
+      const div = [];
+      for (const [ver, txt] of [['ok', ''], ['ok', 'uma duvida que ficou'], ['duvida', 'De onde vem o limite?\n\n  E com dois contratos?  '], ['duvida', '   ']]) {
+        const m0 = { id: 'g', codigo: 'AX-G', status_planejamento: 'backlog', dev: EU,
+                     grill: { marcado: true, marcado_em: '2026-11-01T10:00:00Z', marcado_por: 'PO', pontos: [{ texto: 'ja perguntado', em: 'x', por: 'Bia' }] } };
+        const saida = {};
+        await grillVelho({ melhorias: [copia(m0)] }, GRm, EU, saida, { 'ms-id': 'g', 'ms-grill-pontos': txt })(ver);
+        const r = AC.REGRAS.grill(copia(m0), { veredito: ver, pontos: txt }, ctx(base([])));
+        const velho = saida.patch ? semHora(saida.patch.g) : null, app = r.ok ? semHora(r.patch) : null;
+        if (velho !== app) div.push(ver + '/' + JSON.stringify(txt) + ': ' + velho + ' / ' + app);
+      }
+      ok(div.length === 0, 'o parecer do Grill: o patch do app = o do msGrillResponde (entendi -> Planning, duvida -> requisitos, com os pontos)', div.join(' | '));
+    })());
+    ok(!AC.REGRAS.grill({ id: 'g', status_planejamento: 'concluido', dev: EU, grill: { marcado: true } }, { veredito: 'ok' }, ctx(base([]))).ok,
+       'o app NAO devolve ao Planning, pelo Grill, uma demanda concluida (a marca antiga pendente da base) — o dev.html deixaria');
+
+    // ── Vincular: saveNewDep ─────────────────────────────────────────────
+    const vincVelho = new Function('state', 'SPRINTPO', 'COLABORADORES', 'currentDev', 'saida', 'valores',
+      'const window = { COLABORADORES: COLABORADORES }; const uid = () => \'NOVO\'; const closeModal = () => {}; const renderKanban = () => {};\n' +
+      'const toast = (t) => { saida.toast = t; }; const saveToGitHub = async (p) => { saida.patch = p; return true; };\n' +
+      'const document = { getElementById: (id) => ({ value: valores[id] == null ? \'\' : valores[id] }), querySelector: () => ({ value: valores.tipo }) };\n' +
+      corte('function depTipoEscolhido() {') + '\n' + corte('function solicitanteDaDependencia(parent) {') + '\n' + corte('async function saveNewDep() {') + '\nreturn saveNewDep;');
+    pendentes.push((async () => {
+      const div = [];
+      const pai = { id: 'p', codigo: 'AX-P', status_planejamento: 'em_andamento', dev: EU, tema_id: 't1', tipo: 'evolucao', impacto: 'alto', urgencia: '', solicitante: 'Carla' };
+      for (const [tipo, tit, dev, ent, desc, eu] of [['dependencia', ' Validar com Credito ', 'Bia', '2026-11-20', ' contexto ', EU], ['parte', 'Tela B', EU, '', '', EU],
+                                                     ['parte', '', 'Bia', '', '', EU], ['parte', 'Sem dev', '', '', '', EU], ['parte', 'Sem conta', 'Bia', '', '', '']]) {
+        const saida = {};
+        await vincVelho({ melhorias: [copia(pai)] }, SPm, R.COLABORADORES, eu, saida,
+          { 'dep-parent-id': 'p', 'dep-titulo': tit, 'dep-dev': dev, 'dep-entrega': ent, 'dep-desc': desc, tipo })();
+        const r = AC.REGRAS.vincular(copia(pai), { tipo, titulo: tit, dev, entrega: ent, descricao: desc, id: 'NOVO' }, ctx(base([]), { quem: eu }));
+        const velho = saida.patch ? Object.assign(copia(saida.patch.NOVO), { criado_em: 'T' }) : null;
+        const app = r.ok ? Object.assign(copia(r.novo), { criado_em: 'T' }) : null;
+        if (JSON.stringify(velho && ordena(velho)) !== JSON.stringify(app && ordena(app))) div.push(tipo + '/' + tit + ': ' + JSON.stringify(velho) + ' / ' + JSON.stringify(app));
+      }
+      ok(div.length === 0, 'vincular: a demanda que o app cria = a do saveNewDep (Backlog, fora da sprint, quem vinculou e o solicitante)', div.join(' | '));
+    })());
+
+    // ── Anexar: o anexo novo entra depois dos que ja estao ────────────────
+    ok(/_msAnexos = JSON\.parse\(JSON\.stringify\(m\.anexos \|\| \[\]\)\);/.test(DEV) && /_msAnexos\.push\(await subirAnexo\(/.test(DEV) &&
+       /return \{ nome: j\.nome, tipo: j\.tipo, tamanho: j\.tamanho, chave: j\.chave \};/.test(DEV) && /if \(_msAnexosMexidos\) campos\.anexos = _msAnexos;/.test(DEV),
+       'o modal do dev grava `anexos` = os da demanda + o que subiu, cada um { nome, tipo, tamanho, chave }');
+    const ma = { id: 'x', status_planejamento: 'em_andamento', dev: EU, anexos: [{ nome: 'a.pdf', tipo: 'application/pdf', tamanho: 9, chave: 'a/1' }] };
+    const ra = AC.REGRAS.anexar(ma, { novos: [{ nome: 'b.png', tipo: 'image/png', tamanho: 3, chave: 'a/2', extra: 1 }] }, ctx(base([])));
+    ok(ra.ok && JSON.stringify(ra.patch.anexos) === JSON.stringify(ma.anexos.concat([{ nome: 'b.png', tipo: 'image/png', tamanho: 3, chave: 'a/2' }])) && ma.anexos.length === 1,
+       'anexar no app: o mesmo `anexos`, sem mutar a demanda recebida', JSON.stringify(ra.patch));
+    const ASRC = semComentario(lerTela('axis-acoes.js'));
+    ok(/H\.api\('anexo-subir', \{ nome: nome, dados: rd\.result \}\)/.test(ASRC) && /ok\(\{ nome: j\.nome, tipo: j\.tipo, tamanho: j\.tamanho, chave: j\.chave \}\)/.test(ASRC) &&
+       /if \(f\.size > ANEXO_MAX\)/.test(ASRC) && /var ANEXO_MAX = 1\.5 \* 1024 \* 1024;/.test(ASRC) && /const MS_MAX = 1\.5 \* 1024 \* 1024;/.test(DEV),
+       'o app sobe pelo `anexo-subir` com o mesmo teto de 1,5 MB do modal');
+
+    // ── A conversa: mensageria.html ──────────────────────────────────────
+    const pesSrc = (MSG.match(/const nomes = new Set\(\(data\.desenvolvedores[\s\S]*?PESSOAS = \[\.\.\.nomes\][^\n]*\n/) || [''])[0];
+    ok(!!pesSrc, 'a lista de pessoas do @ existe na mensageria para ser comparada');
+    if (pesSrc) {
+      const dados = { desenvolvedores: [' Bia ', 'Ana Dev', null], melhorias: [{ dev: 'Carla; Davi / Ana Dev' }, { dev: 'Élcio' }, {}] };
+      const velho = new Function('data', 'lista', 'let PESSOAS;\n' + pesSrc + '\nreturn PESSOAS;')(dados, dados.melhorias);
+      ok(JSON.stringify(velho) === JSON.stringify(AC.pessoasDaConversa(dados)), 'as pessoas do @ do app = as da mensageria', JSON.stringify(velho) + ' / ' + JSON.stringify(AC.pessoasDaConversa(dados)));
+    }
+    const corteM = (a) => corpo(MSG, a) || '';
+    const arrobaVelho = new Function('PESSOAS', 'cx', 'sug', 'esc',
+      'let filtradas = [], ativo = 0, inicioArroba = -1;\n' + ['function fechaSugestoes() {', 'function abreSugestoes() {', 'function escolhe(i) {'].map(corteM).join('\n') +
+      '\nreturn { abre: () => { abreSugestoes(); return { inicio: inicioArroba, nomes: filtradas.slice() }; }, escolhe: escolhe };');
+    const PES = ['Ana Dev', 'Bia', 'Maury Teixeira', 'Mário', 'Élcio'];
+    let divA = [];
+    ['Oi @Ma', 'a@b', '@', 'linha\n@', 'oi @xyz', 'oi @ma confere', '@Él'].forEach(t => {
+      const cx = { value: t, selectionStart: t.length, removeAttribute() {}, setAttribute() {}, focus() {}, setSelectionRange(a) { this.selectionStart = a; } };
+      const sug = { hidden: true, innerHTML: '', children: [] };
+      const fn = arrobaVelho(PES, cx, sug, (s) => s);
+      const a = fn.abre();
+      const b = AC.sugestoesArroba(t, t.length, PES);
+      if (JSON.stringify(a) !== JSON.stringify(b)) divA.push(t + ': ' + JSON.stringify(a) + ' / ' + JSON.stringify(b));
+      if (a.nomes.length) {
+        fn.escolhe(0);
+        const e = AC.escolheArroba(t, b.inicio, t.length, b.nomes[0]);
+        if (cx.value !== e.texto || cx.selectionStart !== e.cursor) divA.push('escolhe ' + t + ': ' + cx.value + ' / ' + e.texto);
+      }
+    });
+    ok(divA.length === 0, 'a caixa do @ do app abre, filtra e completa como a da mensageria', divA.join(' | '));
+    ok(/const texto = cx\.value\.trim\(\);/.test(MSG) && /action: 'mensagem-nova', melhoria_id: DEMANDA\.id, texto,/.test(MSG),
+       'a mensageria manda { melhoria_id, texto aparado } pela rota mensagem-nova');
+    const rmsg = AC.REGRAS.mensagem({ id: 'm1' }, { texto: '  oi @Bia  ' }, ctx(base([])));
+    ok(rmsg.ok && JSON.stringify(rmsg.corpo) === JSON.stringify({ melhoria_id: 'm1', texto: 'oi @Bia' }) && !AC.REGRAS.mensagem({ id: 'm1' }, { texto: '  ' }, ctx(base([]))).ok &&
+       /H\.api\('mensagem-nova', r\.corpo\)/.test(ASRC),
+       'o app manda o mesmo corpo pela mesma rota, e recusa a mensagem vazia');
+    const rma = AC.REGRAS.mensagem({ id: 'm1' }, { texto: 'veja', anexos: [{ nome: 'p.png' }] }, ctx(base([])));
+    ok(rma.ok && rma.corpo.texto === 'veja\n\nAnexo: p.png', 'com anexo, a mensagem diz o nome do arquivo que foi para a demanda');
+
+    // ── "Estimar no Poker" leva a tela do app ────────────────────────────
+    const MEUS = ['axis-app.js', 'axis-acoes.js', 'axis-tela-item.js', 'axis-tela-inicio.js', 'axis-tela-quadro.js'];
+    const comPoker = MEUS.filter(a => /['"]poker\.html['"#?]/.test(semComentario(lerTela(a))));
+    ok(comPoker.length === 0, 'Item, Inicio, Quadro e o sino nao mandam mais para o poker.html: vao a #poker', comPoker.join(', '));
+    ok(/href="#poker"/.test(lerTela('axis-tela-item.js')) && /'#poker'/.test(lerTela('axis-app.js')), 'e o Item e o sino apontam para #poker');
+  })();
+
+  sec('App AXIS: as funcoes de admin que so existiam no admin.html e no gantt.html');
+
+  /* O FORMULARIO, O MESCLAR E OS CADASTROS DO APP SAO COPIAS: cada regra e
+     recortada da tela antiga (admin.html, gantt.html, links-github.js,
+     catalogo.js) e executada AO LADO da do app, caso a caso. Uma divergencia
+     aqui e o app gravando um patch que a tela antiga nao gravaria. */
+  (() => {
+    const F = require('./axis-form-demanda.js');
+    const AC = require('./axis-acoes.js');
+    const CF = require('./axis-tela-configuracoes.js');
+    const BISm = require('./bis.js'), REFm = require('./referencia.js');
+    const doc = (vals) => ({ getElementById: id => vals[id] || null, querySelector: () => null, querySelectorAll: () => [],
+                             createElement: () => ({ style: {}, setAttribute() {}, appendChild() {} }), head: { appendChild() {} }, body: { appendChild() {} } });
+    const escA = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const sem = (o, ks) => JSON.stringify(Object.assign({}, o, ...ks.filter(k => o && o[k]).map(k => ({ [k]: 'T' }))));
+
+    // ── Mesclar e separar (mescConfirmar, mescDesfazer, mescBuscar) ──────
+    const mcSrc = corpo(ADMIN, 'async function mescConfirmar(idFilha) {');
+    const mdSrc = corpo(ADMIN, 'async function mescDesfazer(idFilha) {');
+    const mbSrc = corpo(ADMIN, 'function mescBuscar() {');
+    const ntSrc = corpo(ADMIN, 'function normTexto(s) {');
+    const linhasMesc = (ADMIN.match(/const mescladaEm = [^\n]*\nconst ehMesclada = [^\n]*\nconst mescladasDe = [^\n]*/) || [''])[0];
+    ok(!!(mcSrc && mdSrc && mbSrc && ntSrc && linhasMesc), 'mescConfirmar, mescDesfazer e mescBuscar existem no admin para serem comparados');
+    if (mcSrc && mdSrc && mbSrc && linhasMesc) {
+      const mescAdmin = (state, vals) => new Function('state', 'document', 'esc',
+        'const _eu = { nome: "Paula PO" }; const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false;\n' +
+        'const confirmar = async () => true; const closeModal = () => {}; const saveViaProxy = async () => true; const toast = () => {}; const avisaFalha = () => {};\n' +
+        'const mescRenderBloco = () => {}; const renderAll = () => {}; const STATUS_LABELS = {}; const statusKey = m => m.status_planejamento;\n' +
+        ntSrc + '\n' + linhasMesc + '\n' + mcSrc + '\n' + mdSrc + '\n' + mbSrc + '\nreturn { mescConfirmar, mescDesfazer, mescBuscar };')(state, doc(vals), escA);
+      const base = () => [
+        { id: 'p', codigo: 'AX-1', titulo: 'Cobrança automática', status_planejamento: 'backlog' },
+        { id: 'f1', codigo: 'AX-2', titulo: 'Régua de cobrança', status_planejamento: 'planning' },
+        { id: 'f2', codigo: 'AX-3', titulo: 'Cobranca por e-mail', mesclado_em: 'p', oculto: true },
+        { id: 'f3', codigo: 'AX-4', titulo: 'Cobrança WhatsApp', status_planejamento: 'backlog' },
+        { id: 'g', codigo: 'AX-5', titulo: 'Cobrança SMS', mesclado_em: 'f3', oculto: true },
+        { id: 'f4', codigo: 'AX-6', titulo: 'Outra coisa', status_planejamento: 'concluido' }];
+      const cx = (lista) => ({ papel: 'admin', quem: 'Paula PO', hoje: '2026-11-05', agora: '2026-11-05T14:00:00.000Z', lista });
+      let divBusca = [];
+      ['cob', 'COBRANÇA', 'ax-', 'ax', 'outra', 'x', 'regua'].forEach(t => ['p', 'f1', 'f3'].forEach(alvo => {
+        const st = { melhorias: base() };
+        const box = { innerHTML: '' };
+        mescAdmin(st, { 'mesc-busca': { value: t }, 'mesc-alvo': { value: alvo }, 'mesc-sugestao': box }).mescBuscar();
+        const a = [...box.innerHTML.matchAll(/mescConfirmar\(&quot;([^&]*)&quot;\)/g)].map(x => x[1]).join();
+        const pr = st.melhorias.find(m => m.id === alvo);
+        const b = AC.candidatasMescla(pr, t, st.melhorias).slice(0, 8).map(m => m.id).join();
+        if (a !== b) divBusca.push(t + '@' + alvo + ' admin=' + a + ' app=' + b);
+      }));
+      ok(divBusca.length === 0, 'as candidatas a mesclar do app = as do mescBuscar do admin (nem a propria, nem a mesclada, nem a que ja absorveu)', divBusca.slice(0, 4).join(' | '));
+      pendentes.push((async () => {
+        const st = { melhorias: base() };
+        await mescAdmin(st, { 'mesc-alvo': { value: 'p' } }).mescConfirmar('f1');
+        const fa = st.melhorias.find(m => m.id === 'f1');
+        const r = AC.REGRAS.mesclar(base()[0], { filha: base()[1] }, cx(base()));
+        const fb = Object.assign(base()[1], r.patch);
+        ok(r.ok && r.id === 'f1' && sem(fa, ['mesclado_data']) === sem(fb, ['mesclado_data']),
+           'mesclar: a absorvida fica igual a do mescConfirmar (mesclado_em, quando, por quem, oculta)', sem(fa, ['mesclado_data']) + ' / ' + sem(fb, ['mesclado_data']));
+        const st2 = { melhorias: base() };
+        await mescAdmin(st2, { 'm-id': { value: '' } }).mescDesfazer('f2');
+        const sa = st2.melhorias.find(m => m.id === 'f2');
+        const rs = AC.REGRAS.separar(base()[2], {}, cx(base()));
+        ok(rs.ok && JSON.stringify(sa) === JSON.stringify(Object.assign(base()[2], rs.patch)), 'separar = o mescDesfazer: volta ao fluxo, sem marca de mesclada', JSON.stringify([sa, rs.patch]));
+      })());
+      const L = base();
+      ok(!AC.REGRAS.mesclar(L[0], { filha: L[2] }, cx(L)).ok && !AC.REGRAS.mesclar(L[0], { filha: L[3] }, cx(L)).ok &&
+         !AC.REGRAS.mesclar(L[0], { filha: L[0] }, cx(L)).ok && !AC.REGRAS.mesclar(L[2], { filha: L[1] }, cx(L)).ok &&
+         !AC.REGRAS.mesclar(L[0], { filha: L[1] }, Object.assign(cx(L), { papel: 'dev' })).ok && !AC.REGRAS.separar(L[1], {}, cx(L)).ok,
+         'mesclar recusa o que a busca do admin nao oferece (a mesclada, a que absorveu, a propria, a principal ja mesclada), e o dev nao mescla');
+      ok(/AC\.botao\('mesclar', m,/.test(lerTela('axis-tela-item.js')) && /AC\.botao\('separar', f,/.test(lerTela('axis-tela-item.js')),
+         'o Item oferece "Mesclar outra nesta" e "Separar" nas mescladas');
+    }
+
+    // ── Comite (comiteDoForm) ──────────────────────────────────────────
+    const cdSrc = corpo(ADMIN, 'function comiteDoForm(existing) {');
+    ok(!!cdSrc, 'comiteDoForm existe no admin para ser comparado');
+    if (cdSrc) {
+      let divC = [];
+      [true, false].forEach(liga => ['', '  Gui Augusto ', 'x'.repeat(150)].forEach(quem => ['', ' obs ', 'o'.repeat(400)].forEach(obs =>
+        [null, { comite: { quem: 'A', em: '2026-10-01T10:00:00Z', obs: '' } }, { comite: {} }].forEach(ex => {
+          const a = new Function('document', cdSrc + '\nreturn comiteDoForm;')(doc({ 'm-comite': { checked: liga }, 'm-comite-quem': { value: quem }, 'm-comite-obs': { value: obs } }))(ex);
+          const b = F.comiteDe({ liga, quem, obs }, ex, 'AGORA');
+          const n = x => x ? JSON.stringify(Object.assign({}, x, { em: x.em === 'AGORA' || /^\d{4}-\d\d-\d\dT/.test(x.em) && x.em !== '2026-10-01T10:00:00Z' ? 'NOVA' : x.em })) : 'null';
+          if (n(a) !== n(b)) divC.push([liga, quem.length, obs.length, !!ex].join('/') + ' ' + n(a) + ' ' + n(b));
+        }))));
+      ok(divC.length === 0, 'o comite que o app grava = o comiteDoForm (sem nome nao ha marca; a data e a do primeiro registro)', divC.slice(0, 3).join(' | '));
+    }
+
+    // ── A media do Poker sugere os pontos (fibonacciMaisProximo) ─────────
+    const fbLinha = (ADMIN.match(/const FIBONACCI = \[[^\]]*\];/) || [''])[0];
+    const fbSrc = corpo(ADMIN, 'function fibonacciMaisProximo(media) {');
+    if (fbLinha && fbSrc) {
+      const fa = new Function(fbLinha + '\n' + fbSrc + '\nreturn fibonacciMaisProximo;')();
+      const vals = ['', '0', '-2', 'abc', '1', '1.4', '1.5', '2.5', '4', '4.4', '6.5', '7', '10', '10.5', '17', '30', '100'];
+      const div = vals.filter(v => fa(v) !== F.fibonacciMaisProximo(v));
+      ok(div.length === 0, 'a sugestao de pontos pela media e a do admin', div.join(', '));
+    } else ok(false, 'fibonacciMaisProximo existe no admin para ser comparado');
+
+    // ── BIs e links de referencia (bisAdiciona, refAdiciona) ────────────
+    const biSrc = corpo(ADMIN, 'function bisAdiciona() {');
+    const rfSrc = corpo(ADMIN, 'function refAdiciona() {');
+    ok(!!(biSrc && rfSrc), 'bisAdiciona e refAdiciona existem no admin para serem comparados');
+    if (biSrc && rfSrc) {
+      let divB = [];
+      const muitos = Array.from({ length: BISm.MAX_POR_DEMANDA }, (_, i) => 'BI ' + i);
+      [[[], 'Carteira'], [['Carteira'], ' carteira '], [['Carteira'], 'Cartéira'], [[], '   '], [muitos, 'Mais um'], [['A'], '  Painel   de  Risco ']].forEach(([lista, nome]) => {
+        const msgs = [];
+        const a = new Function('BIS', 'document', 'toast', 'lista', 'let _mBis = lista.slice(); const bisRender = () => {};\n' + biSrc + '\nbisAdiciona(); return _mBis;')(
+          BISm, doc({ 'm-bi-novo': { value: nome, focus() {} } }), (m) => msgs.push(m), lista);
+        const r = F.biAdiciona(lista, nome, { R: { BIS: BISm } });
+        const b = r.ok ? r.lista : lista;
+        if (JSON.stringify(a) !== JSON.stringify(b) || (msgs[0] || '') !== (r.ok || !msgs.length ? '' : r.erro)) divB.push(nome + ': ' + JSON.stringify([a, msgs, b, r.erro]));
+      });
+      ok(divB.length === 0, 'incluir BI no app = o bisAdiciona (limpo, sem repetido pela normalizada, com teto)', divB.slice(0, 3).join(' | '));
+      let divR = [];
+      const cheia = Array.from({ length: REFm.MAX_LINKS }, (_, i) => ({ descricao: 'd' + i, url: 'https://a.com/' + i }));
+      [[[], 'Planilha', 'https://docs.x.com/a'], [[], '', 'https://figma.com/file/1'], [[], 'x', 'javascript:alert(1)'], [[], 'x', '   '],
+       [[{ descricao: 'a', url: 'https://a.com/' }], 'b', 'https://a.com/'], [cheia, 'x', 'https://b.com'], [[], 'x', 'ftp://a.com']].forEach(([lista, desc, url]) => {
+        const msgs = [];
+        const a = new Function('REFERENCIA', 'document', 'toast', 'lista', 'let _mRefs = lista.slice(); const refRender = () => {};\n' + rfSrc + '\nrefAdiciona(); return _mRefs;')(
+          REFm, doc({ 'm-ref-desc': { value: desc, focus() {} }, 'm-ref-url': { value: url, focus() {} } }), (m) => msgs.push(m), lista);
+        const r = F.refAdiciona(lista, desc, url, { R: { REFERENCIA: REFm } });
+        const b = r.ok ? r.lista : lista;
+        if (JSON.stringify(a) !== JSON.stringify(b) || (msgs[0] || '') !== (r.ok ? '' : r.erro)) divR.push(url + ': ' + JSON.stringify([a, msgs, b, r.erro]));
+      });
+      ok(divR.length === 0, 'incluir link no app = o refAdiciona (so http/https, sem repetido, com teto, host como descricao)', divR.slice(0, 3).join(' | '));
+    }
+
+    // ── A referencia no GitHub (ghLinkColeta, links-github.js) ──────────
+    const LG = lerTela('links-github.js');
+    const winG = {}, valsG = {};
+    new Function('window', 'document', LG)(winG, { getElementById: id => valsG[id] || null, createElement: () => ({}), head: { appendChild() {} } });
+    ok(typeof winG.ghLinkColeta === 'function', 'links-github.js carregou para a comparacao');
+    if (winG.ghLinkColeta) {
+      let divG = [];
+      const GH = { erro: winG.ghLinkErro, normaliza: winG.ghLinkNormaliza };
+      ['', 'audaxcapitalsa/axcaixa'].forEach(repo => ['', '683', '#683', 'https://github.com/a/b/pull/9', 'abc'].forEach(issue =>
+        ['', '712, 715', 'https://github.com/a/b/issues/3'].forEach(pr => ['', '4'].forEach(ms => {
+          const el = v => ({ value: v, classList: { add() {}, remove() {} }, focus() {} });
+          Object.assign(valsG, { 'm-link-repo': el(repo), 'm-link-issue': el(issue), 'm-link-pr': el(pr), 'm-link-milestone': el(ms) });
+          const msgs = [];
+          const a = winG.ghLinkColeta('m', m => msgs.push(m));
+          const r = F.githubDe({ repo, issue, pr, milestone: ms }, { R: { GH } });
+          const A = a === null ? 'ERRO ' + msgs[0] : JSON.stringify(a), B = r.ok ? JSON.stringify(r.links) : 'ERRO ' + r.erro;
+          if (A !== B) divG.push([repo, issue, pr, ms].join('|') + ' ' + A + ' / ' + B);
+        }))));
+      ok(divG.length === 0, 'a referencia no GitHub do app = o ghLinkColeta: numero so com repositorio, engano de campo recusado, URL normalizada', divG.slice(0, 3).join(' | '));
+      const rsab = F.githubDe({ repo: '', issue: '683' }, { R: { GH: { erro: () => '', normaliza: GH.normaliza } } });
+      ok(rsab.ok && rsab.links.link_issue === '683', 'SABOTAGEM: sem a recusa do ghLinkErro, o numero solo sem repositorio seria gravado cru');
+    }
+
+    // ── O mes de compromisso (mesPreencheCampo) ──────────────────────────
+    const mpSrc = ['function mesTrilhaDe(m) {', 'function mesDe(m) {', 'function mesEntrouEm(m) {', 'function mesSomaLocal(iso, n) {', 'function mesPreencheCampo(m) {']
+      .map(a => corpo(ADMIN, a));
+    const mnLinha = (ADMIN.match(/const MES_NOMES = \[[^\]]*\];/) || [''])[0];
+    ok(mpSrc.every(Boolean) && !!mnLinha, 'mesPreencheCampo e os auxiliares existem no admin para serem comparados');
+    if (mpSrc.every(Boolean) && mnLinha) {
+      const d = new Date();
+      const hojeL = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      let divM = [];
+      [{}, { meses: [{ mes: '2025-01', em: '2025-01-03' }] }, { meses: [{ mes: hojeL.slice(0, 7), em: hojeL }] },
+       { meses: [{ mes: '2026-08', em: '2026-08-01' }, { mes: '2026-09', em: '2026-09-01' }] }, { meses: [{ mes: 'lixo' }] }].forEach(m => {
+        const sel = { innerHTML: '' }, tr = { textContent: '', innerHTML: '' };
+        new Function('document', 'formatDate', 'esc', mnLinha + '\n' + mpSrc.join('\n') + '\nreturn mesPreencheCampo;')(
+          doc({ 'm-mes-alvo': sel, 'm-mes-trilha': tr }), s => s, escA)(m);
+        const ops = [...sel.innerHTML.matchAll(/<option value="([^"]*)"( selected)?/g)];
+        const a = { meses: ops.map(x => x[1]).filter(Boolean), atual: (ops.find(x => x[2]) || [])[1] || '' };
+        const bm = F.mesesDoCampo(m, hojeL), b = { meses: bm.meses, atual: bm.atual };
+        if (JSON.stringify(a) !== JSON.stringify(b)) divM.push(JSON.stringify(m) + ' ' + JSON.stringify(a) + ' / ' + JSON.stringify(b));
+      });
+      ok(divM.length === 0, 'os meses oferecidos e o marcado sao os do mesPreencheCampo (doze em volta de hoje e o gravado)', divM.slice(0, 2).join(' | '));
+    }
+
+    // ── Na edicao, so vai o que mudou ────────────────────────────────────
+    const R = { BIS: BISm, REFERENCIA: REFm, SPRINTPO: require('./sprint.js'), ABERTURA: require('./abertura.js'), AXIS_ACOES: AC,
+                REQUISITOS: require('./requisitos.js'), COLABORADORES: { emailPara: () => '' } };
+    const cE = { papel: 'admin', quem: 'Paula PO', hoje: '2026-11-05', agora: 'AGORA', D: { temas: [], feriados: [] }, R, dono: true };
+    const mAnt = { id: 'e', titulo: 'Antiga', tipo: 'evolucao', tema_id: 't', status_planejamento: 'backlog', solicitante: 'Bia' };
+    const fTela = { titulo: 'Antiga', tipo: 'evolucao', tema_id: 't', solicitante: 'Bia', debito_tecnico: false, spike: false, dados_bi: false, sales_ops: false,
+                    em_producao: false, destaque: false, mes_alvo: '', poker_media: '', versao: '', resumo_entrega: '', implementacao: '' };
+    const eq = F.edicao(mAnt, fTela, cE);
+    ok(eq.ok && eq.patch === null, 'demanda antiga sem as marcas, salva sem mexer: patch vazio (false sobre ausente nao e mudanca)', JSON.stringify(eq.patch));
+    const mud = F.edicao(mAnt, Object.assign({}, fTela, { comite: { liga: true, quem: 'Gui' }, versao: '1.2', em_producao: true, destaque: true, mes_alvo: '2026-12',
+      poker_media: '4.4', bis: ['BI X'], links: [{ descricao: 'd', url: 'https://a.com' }], resumo_entrega: ' r ', implementacao: 'i' }), cE);
+    ok(mud.ok && JSON.stringify(mud.patch) === JSON.stringify({ comite: { quem: 'Gui', em: 'AGORA', obs: '' }, bis_impactados: ['BI X'], links: [{ descricao: 'd', url: 'https://a.com/' }],
+      versao: '1.2', em_producao: true, mes_alvo: '2026-12', poker_media: 4.4, resumo_entrega: 'r', implementacao: 'i', destaque: true }),
+      'mexidos, os campos raros vao no patch no formato do saveMelhoria', JSON.stringify(mud.patch));
+    const devE = F.edicao(Object.assign({}, mAnt, { dev: 'Ana Dev' }), Object.assign({}, fTela, { versao: '9', comite: { liga: true, quem: 'X' } }), Object.assign({}, cE, { papel: 'dev', quem: 'Ana Dev' }));
+    ok(devE.ok && !devE.patch, 'o dev nao grava os campos do admin, mesmo que cheguem no formulario', JSON.stringify(devE.patch));
+    const FSRC = lerTela('axis-form-demanda.js');
+    ok(!/Mais campos no editor/.test(FSRC) && !/admin\.html#/.test(semComentario(FSRC)), 'o formulario nao manda mais para o editor do admin');
+
+    // ── Sistema novo ("+ outro"): catalogoResolve ───────────────────────
+    const winC = {};
+    const valsC = {};
+    new Function('window', 'document', CATALOGO)(winC, { getElementById: id => valsC[id] || null });
+    ok(typeof winC.catalogoResolve === 'function' && typeof winC.catalogoDentro === 'function', 'catalogo.js carregou para a comparacao');
+    if (winC.catalogoResolve) {
+      let divT = [];
+      const TM = [{ id: 'a', nome: 'AXCred - Cobrança' }, { id: 'b', nome: 'BI' }];
+      [[TM, 'axcred - cobrança'], [TM, '  BI  '], [TM, 'AXCred - Régua'], [[], 'Novo'], [TM, '']].forEach(([temas, nome]) => {
+        Object.assign(valsC, { 'm-tema': { value: '__novo__' }, 'm-tema-novo': { value: nome } });
+        const a = winC.catalogoResolve('m', temas, '', n => 'NOVO:' + n);
+        const r = F.temaNovo(nome, temas, 'id9');
+        const b = !r.ok ? '' : r.novo ? 'NOVO:' + r.novo.nome : r.id;
+        if (a !== b) divT.push(nome + ' admin=' + a + ' app=' + b);
+      });
+      ok(divT.length === 0, 'o "+ outro" do app = o catalogoResolve: o nome que existe e o tema que existe, e o nome novo cria', divT.join(' | '));
+    }
+    ok(/opts\.raiz = \{ temas: \(base\.temas \|\| \[\]\)\.concat\(\[tf\.novo\]\) \}/.test(FSRC) && /base = await H\.api\('dados'\)/.test(FSRC),
+       'o tema novo entra na lista FRESCA do servidor, lida logo antes de gravar');
+
+    // ── Temas (saveTema, juntarTemas, deleteTema) ───────────────────────
+    const stSrc = corpo(ADMIN, 'async function saveTema() {');
+    const jtSrc = corpo(ADMIN, 'async function juntarTemas() {');
+    const tfSrc = corpo(ADMIN, 'function temaFilhosDe(nome) {');
+    ok(!!(stSrc && jtSrc && tfSrc), 'saveTema, juntarTemas e temaFilhosDe existem no admin para serem comparados');
+    if (stSrc && jtSrc && tfSrc && winC.catalogoDentro) {
+      const temasT = () => [{ id: 'a', nome: 'AXCred - Cobrança' }, { id: 'b', nome: 'Cobrança' }, { id: 'c', nome: 'AXCred' }, { id: 'd', nome: 'AXCred - Cobrança - Régua' }, { id: 'e', nome: 'BI' }];
+      const melT = () => [{ id: 'm1', tema_id: 'b' }, { id: 'm2', tema_id: 'b' }, { id: 'm3', tema_id: 'a' }, { id: 'm4', tema_id: 'e' }];
+      const admT = (src, nomeFn, state, vals) => new Function('state', 'document', 'catalogoDentro',
+        'const window = {}; const msgs = []; const toast = (m) => msgs.push(m); const avisar = async (t, x) => msgs.push(t); const confirmar = async () => true;\n' +
+        'const _dirtyMelhoriaIds = new Set(); const _deletedIds = new Set(); const _temasMexidos = new Set(); let _pendingEdits = false;\n' +
+        'const closeModal = () => {}; const renderAll = () => {}; const mPersistir = async () => true; const uid = () => "novo1";\n' +
+        tfSrc + '\n' + src + '\nreturn async () => { await ' + nomeFn + '(); return msgs; };')(state, doc(vals), winC.catalogoDentro);
+      pendentes.push((async () => {
+        let divS = [];
+        for (const [id, nome] of [['', 'Nova - Coisa'], ['', 'bi'], ['', '  '], ['a', 'AXCred - Cobrança'], ['a', 'cobrança'], ['a', 'AXCred - Cobranças']]) {
+          const st = { temas: temasT(), melhorias: melT() };
+          const msgs = await admT(stSrc, 'saveTema', st, { 't-nome': { value: nome }, 't-id': { value: id } })();
+          const r = CF.temaSalvar(temasT(), id, nome, 'novo1');
+          const A = msgs.length ? 'ERRO ' + msgs[0] : JSON.stringify(st.temas), B = r.ok ? JSON.stringify(r.temas) : 'ERRO ' + r.erro;
+          if (A !== B) divS.push(id + '/' + nome + ' ' + A + ' / ' + B);
+        }
+        ok(divS.length === 0, 'criar e renomear tema no app = o saveTema (repetido sem caixa e recusado; renomear mantem o id)', divS.slice(0, 3).join(' | '));
+        let divJ = [];
+        for (const [de, para] of [['b', 'a'], ['a', 'b'], ['c', 'e'], ['e', 'e'], ['', 'a'], ['x', 'a'], ['d', 'a']]) {
+          const st = { temas: temasT(), melhorias: melT() };
+          const msgs = await admT(jtSrc, 'juntarTemas', st, { 'juntar-tema-de': { value: de }, 'juntar-tema-para': { value: para } })();
+          const r = CF.temaJuntar({ temas: temasT(), melhorias: melT() }, de, para, winC.catalogoDentro);
+          const depois = r.ok ? melT().map(m => Object.assign(m, (r.patch[m.id] || {}))) : melT();
+          const A = msgs.length && !/demanda\(s\) agora/.test(msgs[0]) ? 'RECUSA' : JSON.stringify([st.temas, st.melhorias]);
+          const B = r.ok ? JSON.stringify([r.temas, depois]) : 'RECUSA';
+          if (A !== B) divJ.push(de + '>' + para + ' ' + A.slice(0, 80) + ' / ' + B.slice(0, 80));
+        }
+        ok(divJ.length === 0, 'juntar temas no app = o juntarTemas: as demandas passam, o tema sai, e quem tem submodulo e recusado', divJ.slice(0, 3).join(' | '));
+      })());
+      const ex = CF.temaExcluir({ temas: temasT(), melhorias: melT() }, 'b');
+      ok(ex.ok && ex.n === 2 && ex.temas.map(t => t.id).join() === 'a,c,d,e', 'excluir tema tira da lista e conta as demandas que ficam sem tema (deleteTema)');
+    }
+
+    // ── Devs: juntar dois nomes, tirar, incluir (gantt.html) ─────────────
+    const gjSrc = corpo(GANTT, 'function gJuntaDevEm(valorDev, de, para) {');
+    const spSrc = corpo(GANTT, 'function splitDevs(str) {');
+    const jdSrc = corpo(GANTT, 'async function juntarDevs() {');
+    const rdSrc = corpo(GANTT, 'async function removeDev(i) {');
+    ok(!!(gjSrc && spSrc && jdSrc && rdSrc), 'gJuntaDevEm, juntarDevs e removeDev existem no gantt para serem comparados');
+    if (gjSrc && spSrc && jdSrc && rdSrc) {
+      const gj = new Function(spSrc + '\n' + gjSrc + '\nreturn gJuntaDevEm;')();
+      let divD = [];
+      ['Murillo', 'Murillo / Murillo Jesus', 'murillo,Ana', 'Murílo / Bia', 'Murillo Jesus', '', ' Ana / Murillo ', 'Bia'].forEach(v =>
+        [['Murillo', 'Murillo Jesus'], ['murillo', 'Ana'], ['Ana', 'Bia']].forEach(([de, para]) => {
+          if (gj(v, de, para) !== CF.juntaDevEm(v, de, para)) divD.push(v + ' ' + de + '>' + para);
+        }));
+      ok(divD.length === 0, 'trocar um nome no campo composto e o gJuntaDevEm (parte inteira, sem caixa nem acento, sem repetir o destino)', divD.join(', '));
+      const stD = () => ({ desenvolvedores: ['Murillo', 'Murillo Jesus', 'Ana', 'Livre'], devs_removidos: ['Velho'], devs_perfil: { Murillo: { axcred: true } },
+        melhorias: [{ id: '1', dev: 'Murillo', status_planejamento: 'em_andamento' }, { id: '2', dev: 'Murillo / Ana', status_planejamento: 'concluido' },
+                    { id: '3', dev: 'Ana', status_planejamento: 'backlog' }, { id: '4', dev: 'Murillo Jesus', status_planejamento: 'planejado' }, { id: '5', dev: 'Livre', status_planejamento: 'concluido' }] });
+      const admG = (src, chamada, st, vals) => new Function('state', 'document', spSrc + '\n' + gjSrc + '\n' +
+        'const window = {}; const msgs = []; const toast = (m) => msgs.push(m); const avisar = async (t) => msgs.push(t); const confirmar = async () => true;\n' +
+        'const renderDevsList = () => {}; const renderFilters = () => {}; const renderGantt = () => {}; const saveToGitHub = async () => true; const _gDeletedDevs = new Set();\n' +
+        'const esc = s => s;\n' + src + '\nreturn async () => { await ' + chamada + '; return msgs; };')(st, doc(vals));
+      pendentes.push((async () => {
+        let divJ = [];
+        for (const [de, para] of [['Murillo', 'Murillo Jesus'], ['Ana', 'Bia'], ['Murillo', 'Murillo'], ['', 'Ana']]) {
+          const st = stD();
+          const msgs = await admG(jdSrc, 'juntarDevs()', st, { 'juntar-de': { value: de }, 'juntar-para': { value: para } })();
+          const r = CF.devsJuntar(stD(), de, para);
+          const A = /agora são de/.test(msgs[0] || '') ? JSON.stringify([st.desenvolvedores, st.devs_removidos, st.devs_perfil, st.melhorias.map(m => m.dev)]) : 'RECUSA';
+          const B = r.ok ? JSON.stringify([r.raiz.desenvolvedores, r.raiz.devs_removidos, r.raiz.devs_perfil, stD().melhorias.map(m => (r.patch[m.id] || m).dev)]) : 'RECUSA';
+          if (A !== B) divJ.push(de + '>' + para + ' ' + A + ' / ' + B);
+        }
+        ok(divJ.length === 0, 'juntar dois nomes no app = o juntarDevs do gantt (todas as demandas, a lista, devs_removidos e o perfil)', divJ.slice(0, 2).join(' | '));
+        let divR = [];
+        for (const nome of ['Murillo', 'Murillo Jesus', 'Ana', 'Livre']) {
+          const st = stD();
+          const i = st.desenvolvedores.indexOf(nome);
+          if (i < 0) continue;
+          const msgs = await admG(rdSrc, 'removeDev(' + i + ')', st, {})();
+          const r = CF.devTirar(stD(), nome);
+          const A = /removido/.test(msgs[0] || '') ? JSON.stringify([st.desenvolvedores, st.devs_removidos]) : 'RECUSA';
+          const B = r.ok ? JSON.stringify([r.raiz.desenvolvedores, r.raiz.devs_removidos]) : 'RECUSA';
+          if (A !== B) divR.push(nome + ' ' + A + ' / ' + B);
+        }
+        ok(divR.length === 0, 'tirar da lista de devs no app = o removeDev do gantt (com demanda ativa nao sai; saindo, vira devs_removidos)', divR.join(' | '));
+      })());
+      const inc = CF.devIncluir({ desenvolvedores: ['Ana'], devs_removidos: ['Bia', 'Cairo'] }, 'Bia');
+      ok(inc.ok && inc.raiz.desenvolvedores.join() === 'Ana,Bia' && inc.raiz.devs_removidos.join() === 'Cairo' && !CF.devIncluir({ desenvolvedores: ['Ana'], devs_removidos: [] }, 'Ana').ok,
+         'reincluir quem saiu tira o nome de devs_removidos (senao o limpaDevs do Worker o tiraria de novo); repetido e recusado como no addDev');
+    }
+
+    // ── Perfil do dev (uSetPerfil) e a conta nova (uCriar) ───────────────
+    const upSrc = corpo(ADMIN, 'async function uSetPerfil(nome, campo, valor) {');
+    if (upSrc) {
+      pendentes.push((async () => {
+        let divP = [];
+        for (const [antes, campo, valor] of [[{}, 'axcred', true], [{ A: { axcred: true } }, 'axcred', false], [{ A: { axcred: true, pipeline: 'Dados' } }, 'pipeline', ''], [{ A: { pipeline: 'X' } }, 'pipeline', 'Dados']]) {
+          const st = { devs_perfil: JSON.parse(JSON.stringify(antes)) };
+          await new Function('state', 'const uPintaAxcred = () => {}; const saveViaProxy = async () => true; const uAviso = () => {};\n' + upSrc + '\nreturn uSetPerfil;')(st)('A', campo, valor);
+          if (JSON.stringify(st.devs_perfil) !== JSON.stringify(CF.perfilCom(antes, 'A', campo, valor))) divP.push(campo + '=' + valor);
+        }
+        ok(divP.length === 0, 'DEV-AXCred e frente no app = o uSetPerfil (vazio tira o campo; perfil vazio sai do mapa)', divP.join(', '));
+      })());
+    } else ok(false, 'uSetPerfil existe no admin para ser comparado');
+    const ucSrc = corpo(ADMIN, 'async function uCriar() {');
+    if (ucSrc) {
+      pendentes.push((async () => {
+        let divU = [];
+        for (const v of [{ nome: '', email: 'a@audaxcapitalsa.com.br', senha: '12345678' }, { nome: 'Ana', email: 'a@gmail.com', senha: '12345678' },
+                         { nome: 'Ana', email: '@audaxcapitalsa.com.br', senha: '12345678' }, { nome: 'Ana', email: 'A@AUDAXCAPITALSA.COM.BR', senha: '1234567' },
+                         { nome: 'Ana', email: 'a@audaxcapitalsa.com.br', senha: '123' }, { nome: 'Ana', email: 'a@audaxcapitalsa.com.br', senha: '12345678' }]) {
+          const msgs = [];
+          const el = (x) => ({ value: x, focus() {}, scrollIntoView() {} });
+          await new Function('document', 'uAviso', 'const uChamar = async () => ({}); const renderUsuarios = () => {};\n' + ucSrc + '\nreturn uCriar;')(
+            doc({ 'u-nome': el(v.nome), 'u-email': el(v.email), 'u-papel': el('dev'), 'u-senha': el(v.senha) }), (m, e) => msgs.push(e ? m : 'OK'))();
+          const r = CF.contaNova(v);
+          if ((msgs[0] === 'OK' ? '' : msgs[0]) !== (r ? r.erro : '')) divU.push(JSON.stringify(v) + ' ' + msgs[0] + ' / ' + (r && r.erro));
+        }
+        ok(divU.length === 0, 'criar conta no app confere o que o uCriar confere, com a mesma frase', divU.join(' | '));
+      })());
+    } else ok(false, 'uCriar existe no admin para ser comparado');
+
+    // ── O link de visualizacao sem login (copiarLinkVisualizacao) ───────
+    const vk = (GANTT.match(/const VIEW_KEY = '([^']+)';/) || [])[1];
+    ok(vk && vk === CF.VIEW_KEY && CF.linkVisualizacao('https://x/', 'k&1') === 'https://x/gantt.html?view=' + vk + '&k=k%261' &&
+       CF.linkVisualizacao('https://x/', '') === 'https://x/gantt.html?view=' + vk,
+       'o link de visualizacao do app e o do gantt (mesma chave de modo leitura e o &k= da VIEW_CHAVE)', vk);
+
+    // ── O que ainda manda para as telas antigas ─────────────────────────
+    const CFG = semComentario(lerTela('axis-tela-configuracoes.js'));
+    ok(!/linkAdmin\(/.test(CFG) && !/admin\.html/.test(CFG), 'Configuracoes nao manda mais para o admin (temas e usuarios gravam daqui)');
+  })();
+
+  sec('App AXIS: projetos, proposta do dev, recuperar senha e criar conta no app');
+
+  /* NOVO PROJETO, EDITAR, APROVAR, RECUSAR, EXCLUIR E PROPOR deixaram de abrir
+     o admin.html e o dev.html: as regras foram copiadas para
+     axis-tela-projetos.js (`pjRegra*`), e o recuperar senha e o criar conta da
+     tela de login, de senha.js e do dev.html para axis-tela-conta.js
+     (`conta*`). Aqui as originais rodam com um `document` de mentira, ao lado
+     das do app, caso a caso: uma divergencia e o app gravando um projeto, ou
+     mandando um corpo, que a tela antiga nao mandaria. */
+  (() => {
+    const PJT = lerTela('axis-tela-projetos.js');
+    const CT = lerTela('axis-tela-conta.js');
+    const SNx = lerTela('senha.js');
+    const tira = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const linhaDe = (src, re) => (src.match(re) || [''])[0];
+    const el = (v) => ({ value: v == null ? '' : v, textContent: '', innerHTML: '', style: {}, disabled: false, focus() {}, classList: { add() {}, remove() {} } });
+    const docDe = (vals) => ({ getElementById: id => (vals[id] = vals[id] || el('')), querySelector: () => el('') });
+
+    // ── As regras do app, recortadas como a suite recorta as do admin ───
+    const pjSrc = [linhaDe(PJT, /^ {2}var PJ_STATUS = .*$/m), corpo(PJT, 'function pjRegraSalvar(lista, id, f, c) {'),
+      corpo(PJT, 'function pjRegraAprovar(lista, id, c) {'), corpo(PJT, 'function pjRegraRecusar(lista, id, motivo, c, ms) {'),
+      corpo(PJT, 'function pjRegraExcluir(lista, id, ms) {'), corpo(PJT, 'function pjRegraPropor(f) {')];
+    ok(pjSrc.every(Boolean), 'as regras de projeto do app foram isoladas (salvar, aprovar, recusar, excluir, propor)');
+    const PJ = pjSrc.every(Boolean) ? new Function(pjSrc.join('\n') + '\nreturn { pjRegraSalvar, pjRegraAprovar, pjRegraRecusar, pjRegraExcluir, pjRegraPropor };')() : null;
+
+    // As consts do admin que as funcoes de projeto leem.
+    const PJ_CONSTS = [/^const pjAprovado {2}= .*$/m, /^const pjPendente {2}= .*$/m, /^const pjRecusado {2}= .*$/m,
+      /^const pjLista = .*$/m, /^const pjPorId = .*$/m, /^const pjDemandas = .*$/m].map(re => linhaDe(ADMIN, re)).join('\n');
+    const STUBS = 'let _pendingEdits = false; const _dirtyMelhoriaIds = new Set(); const _deletedIds = new Set();\n' +
+      'const saveViaProxy = async () => true; const renderProjetos = () => {}; const renderAll = () => {}; const pjRenderDemandas = () => {};\n' +
+      'const pjAprovRender = () => {}; const avisaFalha = () => {}; const closeModal = () => {};\n';
+    const admPj = (state, vals, eu, extra) => new Function('state', 'document', '_eu', 'toast', 'pedirTexto', 'confirmar', 'extra',
+      PJ_CONSTS + '\n' + STUBS + 'let _pjAnexos = (extra && extra.anexos) || [];\n' + ['async function pjSalvar() {', 'async function pjAprovar() {',
+        'async function pjAprovSalvar(p, msg) {', 'async function pjRecusar() {', 'async function pjExcluir() {'].map(a => corpo(ADMIN, a)).join('\n') +
+      '\nreturn { pjSalvar, pjAprovar, pjRecusar, pjExcluir };')(
+      state, docDe(vals), eu, (m, t) => (extra.toasts = extra.toasts || []).push((t || '') + ':' + m),
+      async () => extra.motivo, async () => true, extra);
+    const TEMPO = ['criado_em', 'aprovado_em', 'atualizado_em'];
+    const mascara = (ps) => JSON.stringify((ps || []).map(p => { const o = Object.assign({}, p); TEMPO.forEach(k => { if (o[k]) o[k] = 'T'; }); if (/^prj-/.test(o.id)) o.id = 'ID'; return o; }));
+    const ctxDe = (eu) => ({ quem: (eu && (eu.nome || eu.login)) || '', agora: 'T', novoId: 'ID' });
+    const baseP = () => [{ id: 'p1', codigo: 'EP-001', nome: 'Um', status: 'planejado', aprovacao: 'pendente', solicitado_por: 'Ana', justificativa: 'j', anexos: [{ nome: 'x' }] },
+                         { id: 'p2', codigo: 'EP-002', nome: 'Dois', status: 'em_andamento' }];
+    const baseM = () => [{ id: 'm1', projeto_id: 'p1' }, { id: 'm2', projeto_id: 'p2' }, { id: 'm3', projeto_id: 'p1' }, { id: 'm4', projeto_id: '' }];
+
+    if (PJ && PJ_CONSTS.split('\n').every(Boolean)) {
+      pendentes.push((async () => {
+        // ── pjSalvar: novo e editar ──────────────────────────────────────
+        const casos = [];
+        for (const eu of [{ nome: 'Paula PO' }, { login: 'paula' }, null]) {
+          for (const f of [{ nome: '' }, { nome: '   ' }, { nome: ' Cobrança ', descricao: '  d ', status: 'concluido', responsavel: ' Rui ', inicio: '', fim: '2026-12-01' },
+                           { nome: 'X', status: 'pausado', inicio: '2026-11-01', fim: '', anexos: [{ nome: 'a.pdf', chave: 'k' }] }]) {
+            for (const id of ['', 'p1', 'p2']) casos.push([eu, f, id]);
+          }
+        }
+        const divS = [];
+        for (const [eu, f, id] of casos) {
+          const st = { projetos: baseP(), melhorias: baseM() };
+          const extra = { anexos: f.anexos || (id ? (baseP().find(p => p.id === id).anexos || []) : []) };
+          await admPj(st, { 'pj-id': el(id), 'pj-nome': el(f.nome), 'pj-desc': el(f.descricao), 'pj-status': el(f.status || 'planejado'),
+                            'pj-responsavel': el(f.responsavel), 'pj-inicio': el(f.inicio), 'pj-fim': el(f.fim) }, eu, extra).pjSalvar();
+          const r = PJ.pjRegraSalvar(baseP(), id, Object.assign({ status: 'planejado' }, f, { anexos: extra.anexos }), ctxDe(eu));
+          const errAdm = (extra.toasts || []).find(t => /^err:/.test(t));
+          const a = errAdm ? 'erro ' + errAdm.slice(4) : mascara(st.projetos);
+          const b = r.ok ? mascara(r.projetos) : 'erro ' + r.erro;
+          if (a !== b) divS.push(JSON.stringify([eu, f.nome, id]) + ' admin=' + a.slice(0, 160) + ' app=' + b.slice(0, 160));
+        }
+        ok(divS.length === 0, 'salvar projeto no app = o pjSalvar do admin (novo nasce aprovado por quem criou, sem EP-; editar so troca os campos do formulario) (' + casos.length + ' casos)', divS.slice(0, 3).join(' | '));
+
+        // ── pjAprovar, pjRecusar, pjExcluir ──────────────────────────────
+        const divA = [];
+        for (const eu of [{ nome: 'Paula PO' }, { login: 'paula' }, null]) {
+          for (const id of ['p1', 'p2']) {
+            const st = { projetos: baseP(), melhorias: baseM() };
+            await admPj(st, { 'pj-id': el(id) }, eu, {}).pjAprovar();
+            const r = PJ.pjRegraAprovar(baseP(), id, ctxDe(eu));
+            if (!r.ok || mascara(st.projetos) !== mascara(r.projetos)) divA.push('aprovar ' + id + ' ' + JSON.stringify(eu));
+            for (const motivo of ['  Fora do escopo ', '   ', '']) {
+              const st2 = { projetos: baseP(), melhorias: baseM() };
+              const ex = { motivo };
+              await admPj(st2, { 'pj-id': el(id) }, eu, ex).pjRecusar();
+              const rr = PJ.pjRegraRecusar(baseP(), id, motivo, ctxDe(eu), baseM());
+              const errAdm = (ex.toasts || []).find(t => /^err:/.test(t));
+              if (errAdm || !rr.ok) {
+                if (!(errAdm && !rr.ok && errAdm.slice(4) === rr.erro && mascara(st2.projetos) === mascara(baseP()))) divA.push('recusar ' + JSON.stringify(motivo) + ' ' + errAdm + ' / ' + rr.erro);
+                continue;
+              }
+              const soltasAdm = st2.melhorias.filter(m => baseM().find(x => x.id === m.id).projeto_id && !m.projeto_id).map(m => m.id).join();
+              if (mascara(st2.projetos) !== mascara(rr.projetos) || soltasAdm !== rr.soltar.join()) divA.push('recusar ' + id + ' ' + soltasAdm + '/' + rr.soltar.join());
+            }
+            const st3 = { projetos: baseP(), melhorias: baseM() };
+            await admPj(st3, { 'pj-id': el(id) }, eu, {}).pjExcluir();
+            const re = PJ.pjRegraExcluir(baseP(), id, baseM());
+            const soltas3 = st3.melhorias.filter(m => baseM().find(x => x.id === m.id).projeto_id && !m.projeto_id).map(m => m.id).join();
+            if (JSON.stringify(st3.projetos) !== JSON.stringify(re.projetos) || soltas3 !== re.soltar.join()) divA.push('excluir ' + id);
+          }
+        }
+        ok(divA.length === 0, 'aprovar, recusar (motivo obrigatorio, solta as demandas) e excluir (solta as demandas) no app = pjAprovar, pjRecusar e pjExcluir do admin', divA.slice(0, 4).join(' | '));
+        ok(!PJ.pjRegraAprovar(baseP(), 'px', ctxDe(null)).ok && !PJ.pjRegraSalvar(baseP(), 'px', { nome: 'a' }, ctxDe(null)).ok,
+           'projeto excluido por outra pessoa com a tela aberta: o app para e avisa, em vez de recriar com outro id');
+
+        // ── dpSalvar (dev.html): a proposta pela rota projeto-novo ─────────
+        const dpSrc = corpo(DEV, 'async function dpSalvar() {');
+        ok(!!dpSrc, 'dpSalvar existe no dev.html para ser comparado');
+        if (dpSrc) {
+          const divP = [];
+          for (const f of [{ nome: '' }, { nome: ' ab ' }, { nome: 'abc' }, { nome: '  Régua nova  ', descricao: ' entrega ', justificativa: ' dói ' }]) {
+            const vals = { 'dp-nome': el(f.nome), 'dp-desc': el(f.descricao), 'dp-just': el(f.justificativa) };
+            let corpoAdm = null;
+            await new Function('document', 'fetch', 'const ADMIN_PROXY_URL = "u"; const credDev = () => ({ token: "t" }); const currentDev = "Ana";\n' +
+              'const closeModal = () => {}; const toast = () => {}; const loadData = async () => {}; const renderProjetosDev = () => {};\n' + dpSrc + '\nreturn dpSalvar;')(
+              docDe(vals), async (u, o) => { corpoAdm = JSON.parse(o.body); return { ok: true, json: async () => ({}) }; })();
+            const r = PJ.pjRegraPropor(Object.assign({ dev: 'Ana' }, f));
+            const a = corpoAdm ? JSON.stringify(Object.assign({}, corpoAdm, { action: undefined, token: undefined })) : 'erro ' + vals['dp-erro'].textContent;
+            const b = r.ok ? JSON.stringify(Object.assign({ action: undefined }, r.corpo, { token: undefined })) : 'erro ' + r.erro;
+            if (a !== b) divP.push(JSON.stringify(f.nome) + ' admin=' + a + ' app=' + b);
+            if (corpoAdm && corpoAdm.action !== 'projeto-novo') divP.push('rota ' + corpoAdm.action);
+          }
+          ok(divP.length === 0, 'propor projeto no app = o dpSalvar do dev.html (nome de 3 letras ou mais, o mesmo corpo da rota projeto-novo)', divP.join(' | '));
+        }
+      })());
+    }
+    const PJC = semComentario(PJT);
+    ok(!/linkAdmin\(/.test(PJC) && !/admin\.html|dev\.html/.test(PJC), 'Projetos nao manda mais para o admin.html nem para o dev.html');
+    ok(/H\.api\('projeto-novo', pr\.corpo\)/.test(PJC) && /raiz: \{ projetos: r\.projetos \}/.test(PJC) && /await baseFresca\(\)/.test(PJC),
+       'o dev propoe pela rota projeto-novo; o PM/PO grava a lista de projetos sobre a base fresca, pelo publish (H.gravar)');
+    ok(/data-pj-aprovar/.test(PJC) && /data-pj-recusar/.test(PJC) && /function faixaAprovacao\(p, ctx\)/.test(PJC),
+       'o detalhe do projeto pendente oferece aprovar e recusar ao PM/PO, e diz ao dev que aguarda validacao');
+
+    // ── Recuperar senha e criar conta (senha.js, dev.html) ───────────────
+    const ctSrc = [linhaDe(CT, /^ {2}var DOMINIO = .*$/m), linhaDe(CT, /^ {2}var SENHA_MIN = .*$/m), corpo(CT, 'function contaRegraEmail(email) {'),
+      corpo(CT, 'function contaRegraNova(nova, conf) {'), corpo(CT, 'function contaJanela(j, agora) {'), corpo(CT, 'function contaForca(s) {'),
+      corpo(CT, 'function contaRegraCadastro(nome, email, senha) {')];
+    ok(ctSrc.every(Boolean), 'as regras da tela de entrar do app foram isoladas (e-mail, senha nova, janela, forca, cadastro)');
+    const CTR = ctSrc.every(Boolean) ? new Function(ctSrc.join('\n') + '\nreturn { contaRegraEmail, contaRegraNova, contaJanela, contaForca, contaRegraCadastro };')() : null;
+    const recorteOnclick = (sel) => { const c = corpo(SNx, "ov.querySelector('" + sel + "').onclick = async function () {"); return c ? c.slice(c.indexOf('async function')) : null; };
+    const pedir = recorteOnclick('#rc-pedir'), salvar = recorteOnclick('#rc-salvar');
+    ok(!!(pedir && salvar), 'os dois passos do recuperar senha (pedir e definir) foram isolados do senha.js');
+    if (CTR && pedir && salvar) {
+      const ovDe = (vals) => ({ querySelector: (s) => (vals[s] = vals[s] || el('')) });
+      const rodaSn = async (src, vals) => {
+        const avisos = [], corpos = [];
+        const f = new Function('ov', 'aviso', 'fetch', 'setInterval', 'clearInterval', 'setTimeout', 'e1', 'e2', 'tique', 'relogio', 'fecha',
+          'var URL_API = "u", MIN = 8, tk = "TK", fim = 0, timer = null;\nreturn ' + src + ';')(
+          ovDe(vals), (t) => avisos.push(t), async (u, o) => { corpos.push(JSON.parse(o.body)); return { ok: true, json: async () => ({ token: 'T', minutos: 5 }) }; },
+          () => 1, () => {}, () => {}, el(''), el(''), () => {}, el(''), () => {});
+        await f();
+        return { aviso: avisos[0] || '', corpo: corpos[0] || null };
+      };
+      pendentes.push((async () => {
+        const divE = [];
+        for (const e of ['', '   ', 'ana@gmail.com', ' Ana.Silva@AudaxCapitalSA.com.br ', 'ana@audaxcapitalsa.com.br', 'x@audaxcapitalsa.com.br.evil']) {
+          const s = await rodaSn(pedir, { '#rc-email': el(e) });
+          const r = CTR.contaRegraEmail(e);
+          const a = s.corpo ? 'manda ' + JSON.stringify(s.corpo) : 'erro ' + s.aviso;
+          const b = r.ok ? 'manda ' + JSON.stringify({ action: 'senha-recuperar', email: r.email }) : 'erro ' + r.erro;
+          if (a !== b) divE.push(JSON.stringify(e) + ' senha.js=' + a + ' app=' + b);
+        }
+        ok(divE.length === 0, 'pedir a recuperacao no app = o abrirRecuperarSenha do senha.js (e-mail obrigatorio, do dominio, aparado e minusculo)', divE.join(' | '));
+        const divN = [];
+        for (const [n, c] of [['', ''], ['1234567', '1234567'], ['12345678', '1234567'], ['12345678', '12345678'], ['frase longa', 'frase longa ']]) {
+          const s = await rodaSn(salvar, { '#rc-nova': el(n), '#rc-conf': el(c) });
+          const r = CTR.contaRegraNova(n, c);
+          const a = s.corpo ? 'manda ' + JSON.stringify(s.corpo) : 'erro ' + tira(s.aviso);
+          const b = r.ok ? 'manda ' + JSON.stringify({ action: 'senha-redefinir', token: 'TK', senhaNova: n }) : 'erro ' + tira(r.erro);
+          if (a !== b) divN.push(JSON.stringify([n, c]) + ' senha.js=' + a + ' app=' + b);
+        }
+        ok(divN.length === 0, 'definir a senha nova no app = o do senha.js (8 caracteres, confirmacao igual, a mesma frase sem contar acento)', divN.join(' | '));
+      })());
+      const atrib = SNx.slice(SNx.indexOf('tk = j.token;'), SNx.indexOf('aviso(\'Conta encontrada\''));
+      const divJ = [];
+      for (const j of [{ minutos: 5 }, { minutos: 15 }, { minutos: '10' }, { minutos: 0 }, { minutos: -3 }, {}, { expira_em: new Date(Date.now() - 3600e3).toISOString() }]) {
+        const a = new Function('j', 'Date', 'var tk = "", fim = 0;\n' + atrib + '\nreturn fim;')(j, { now: () => 1e12 });
+        const b = CTR.contaJanela(j, 1e12);
+        if (a !== b) divJ.push(JSON.stringify(j) + ' ' + a + '/' + b);
+      }
+      ok(atrib.trim() && divJ.length === 0, 'a janela do cronometro do app = a do senha.js: `minutos` do servidor contado do relogio local, nunca expira_em menos a hora local', divJ.join(' | '));
+      const fc = corpo(SNx, 'function forca(s) {');
+      const forcaSn = fc ? new Function('var MIN = 8;\n' + fc + '\nreturn forca;')() : null;
+      const amostras = ['', 'abc', 'abcdefgh', 'abcdefghij', 'Abcdefgh1', 'abcdefghijklmn', 'abc!1234'];
+      ok(forcaSn && amostras.every(s => forcaSn(s).txt === CTR.contaForca(s).txt), 'a dica de forca da senha no app = a do senha.js',
+         forcaSn ? amostras.filter(s => forcaSn(s).txt !== CTR.contaForca(s).txt).join(',') : 'forca nao achada');
+
+      // ── fazerCadastro (dev.html) ──────────────────────────────────────
+      const fcSrc = corpo(DEV, 'async function fazerCadastro() {');
+      const domDev = linhaDe(DEV, /^const EMAIL_DOMINIO = .*$/m);
+      ok(!!(fcSrc && domDev), 'fazerCadastro existe no dev.html para ser comparado');
+      if (fcSrc && domDev) {
+        pendentes.push((async () => {
+          const divC = [];
+          for (const v of [{ nome: '', email: 'a@audaxcapitalsa.com.br', senha: '12345678' }, { nome: ' Al ', email: 'a@audaxcapitalsa.com.br', senha: '12345678' },
+                           { nome: 'Ana', email: 'a@gmail.com', senha: '12345678' }, { nome: 'Ana', email: '@audaxcapitalsa.com.br', senha: '12345678' },
+                           { nome: 'Ana', email: ' A@AUDAXCAPITALSA.COM.BR ', senha: '1234567' }, { nome: 'Ana', email: 'a@audaxcapitalsa.com.br', senha: '1' },
+                           { nome: '  Ana Lima ', email: ' Ana@AudaxCapitalSA.com.br', senha: 'uma senha boa' }]) {
+            const falhas = [];
+            let corpoDev = null;
+            await new Function('document', 'fetch', 'cadLimpaErro', 'cadFalha', 'const ADMIN_PROXY_URL = "u";\n' + domDev + '\n' + fcSrc + '\nreturn fazerCadastro;')(
+              docDe({ 'cad-nome': el(v.nome), 'cad-email': el(v.email), 'cad-senha': el(v.senha) }),
+              async (u, o) => { corpoDev = JSON.parse(o.body); return { ok: true, json: async () => ({}) }; },
+              () => {}, (campo, msg) => falhas.push(campo.replace('cad-', '') + ': ' + msg))();
+            const r = CTR.contaRegraCadastro(v.nome, v.email, v.senha);
+            const a = corpoDev ? 'manda ' + JSON.stringify(corpoDev) : 'erro ' + falhas[0];
+            const b = r.ok ? 'manda ' + JSON.stringify(Object.assign({ action: 'cadastro' }, r.corpo)) : 'erro ' + r.campo + ': ' + r.erro;
+            if (a !== b) divC.push(JSON.stringify(v) + ' dev=' + a + ' app=' + b);
+          }
+          ok(divC.length === 0, 'criar conta no login do app = o fazerCadastro do dev.html (o mesmo campo acusado, a mesma frase, o mesmo corpo da rota cadastro)', divC.join(' | '));
+        })());
+      }
+    }
+    const CTC = semComentario(CT), APC = semComentario(lerTela('axis-app.js'));
+    ok(/H\.api\('senha-recuperar'/.test(CTC) && /H\.api\('senha-redefinir'/.test(CTC) && /H\.api\('cadastro'/.test(CTC) && /H\.api\('recuperar'/.test(CTC),
+       'a tela de entrar do app usa as rotas de sempre: senha-recuperar, senha-redefinir, cadastro e recuperar (conta de admin)');
+    ok(!/Math\.round\(\(new Date\(j\.expira_em\)/.test(CTC) && /clearInterval/.test(CTC) && !/\.disabled = true;[^\n]*resta/.test(CTC),
+       'o cronometro do app conta do relogio local e avisa, sem trancar o botao');
+    ok(/data-lg="recuperar"/.test(APC) && /data-lg="cadastro"/.test(APC) && /AXIS_CONTA\.passo/.test(APC) && !/Peça a troca em/.test(APC),
+       'o login do app oferece "Esqueci a senha" e "Criar minha conta" ali mesmo, sem mandar para o admin ou o dev.html');
+    const usamEditar = fs.readdirSync('.').filter(f => /^axis-.*\.js$/.test(f) && /hrefEditar/.test(lerTela(f)));
+    ok(usamEditar.length === 0 && !/admin\.html#novo|dev\.html#novo/.test(APC),
+       'sem hrefEditar nem o "+ Novo" para admin.html#novo e dev.html#novo: o formulario e o do app', usamEditar.join(', '));
+  })();
+
+  sec('App AXIS: o ciclo da sprint (iniciar, repassar em lote, fechar) e o que sobrou no gantt');
+
+  /* O CICLO DA SPRINT SAIU DO ADMIN. Iniciar (`sprintIniciar`), repassar em
+     lote (`sprintLoteCandidatas` + `sprintLoteAplicar`) e fechar
+     (`sprintFecharAbrir` + `sprintFecharAplicar`) rodam aqui lado a lado com
+     as `ciclo*`/`lote*` de axis-tela-sprints.js, na mesma base e com o relogio
+     fixo numa terca (10/11/2026): a S1-11 terminou e espera fechamento, a
+     S2-11 esta montando. O admin muta o `state`; o app devolve patch + raiz,
+     e o que se compara e a base que cada um entregaria ao servidor
+     (GRAVACAO.aplicar sobre a base de antes). Juntar e soltar do gantt.html
+     contra as regras `juntar`/`soltar` do axis-acoes.js. */
+  (() => {
+    const SP = require('./sprint.js');
+    const ET = require('./etapa-demanda.js');
+    const GR = require('./gravacao.js');
+    const OKB = require('./ordem-kanban.js');
+    const EUm = require('./entrega-usuario.js');
+    const AC = require('./axis-acoes.js');
+    const SPT = lerTela('axis-tela-sprints.js');
+    const PLT = lerTela('axis-tela-planejamento.js');
+    const FRM = lerTela('axis-form-demanda.js');
+    const HOJE = '2026-11-10';
+    const PRAZO_ = Object.assign({}, PRZM, { hojeISO: () => HOJE });
+    const statusKey = m => ET.gravada(m, HOJE);
+    const pausada = m => ET.pausada(m);
+    const copia = (x) => JSON.parse(JSON.stringify(x));
+    const QUEM = 'Paula PO';
+    const linhaAdm = (re) => (ADMIN.match(re) || [''])[0];
+
+    const nomes = ['function cicloCopia(base) {', 'function cicloPatch(antes, depois) {', 'function cicloTextoIniciar(SPm, D, r, hoje, opts) {',
+      'function cicloIniciar(SPm, base, r, quem, hoje, opts) {', 'function cicloRepassar(SPm, base, ids, alvo, quem, hoje) {',
+      'function cicloDecisoesIniciais(SPm, D, r, etapaDe, pausada) {', 'function cicloFaltam(SPm, D, r, etapaDe, dec) {',
+      'function cicloFechar(SPm, base, r, quem, hoje, decisoes, etapaDe) {', 'function loteGrupos(SPm, gravada, efetiva, pausada, hoje, feriados) {',
+      'function loteCandidatas(lista, f, o) {'];
+    const srcs = nomes.map(n => corpo(SPT, n));
+    ok(srcs.every(Boolean), 'as funcoes puras do ciclo existem em axis-tela-sprints.js para serem comparadas', nomes.filter((n, i) => !srcs[i]).join(', '));
+    if (!srcs.every(Boolean)) return;
+    const APP = new Function(srcs.join('\n') + '\nreturn { cicloCopia, cicloPatch, cicloTextoIniciar, cicloIniciar, cicloRepassar, cicloDecisoesIniciais, cicloFaltam, cicloFechar, loteGrupos, loteCandidatas };')();
+
+    // ── A amostra ─────────────────────────────────────────────────────────
+    const ETS = ['backlog', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'];
+    const SPRS = ['S5-10-2026', 'S1-11-2026', 'S1-11-2026', 'S2-11-2026', '', 'S3-11-2026', '', 'S1-11-2026'];
+    const DEVS = ['Ana', '', 'Bia / Caio', 'Davi', 'Ana', ''];
+    const base = () => {
+      const ms = [];
+      for (let i = 0; i < 48; i++) {
+        const sp = SPRS[i % SPRS.length], st = ETS[(i * 3) % ETS.length];
+        const m = { id: 'm' + i, codigo: 'AX-' + (500 + i), titulo: ['Cobrança', 'Régua', 'Portal', 'Cadastro'][i % 4] + ' ' + i,
+          status_planejamento: st, dev: DEVS[i % DEVS.length], prioridade: ['alta', 'media', 'baixa', ''][i % 4],
+          inicio: i % 3 ? '2026-10-' + String(10 + (i % 15)) : '', entrega: i % 5 ? '2026-11-' + String(1 + (i % 20)).padStart(2, '0') : '',
+          poker_pontos: i % 3 ? (i % 8) + 1 : null, sprint_po: sp };
+        if (sp) {
+          m.sprint_po_em = '2026-10-30'; m.sprint_po_por = 'Fernando';
+          m.sprint_po_historico = i % 7 === 2 ? [{ sprint: 'S4-10-2026', em: '2026-10-20', por: 'F' }, { sprint: sp, em: '2026-10-30', por: 'F' }] : [{ sprint: sp, em: '2026-10-30', por: 'F' }];
+        }
+        if (i % 9 === 4 || i % 16 === 9) { m.pausado_em = '2026-11-03'; m.pausa_motivo = i === 9 || i === 13 ? 'aguardando o banco' : ''; }
+        if (i === 40) { m.oculto = true; }
+        if (i === 41) { m.mesclado_em = 'm1'; }
+        // Etapas legadas: `deploy` grava como concluida e `atrasado` como em andamento (ETAPA.gravada).
+        if (i === 42) m.status_planejamento = 'deploy';
+        if (i === 43) { m.status_planejamento = 'atrasado'; m.sprint_po = 'S1-11-2026'; }
+        ms.push(m);
+      }
+      return { melhorias: ms, feriados: [], atualizado_em: 'x',
+        sprints: [{ rotulo: 'S5-10-2026', em: '2026-11-02', por: 'Fernando', carry: [] }, { rotulo: 'S1-11-2026', iniciada_em: '2026-11-03', iniciada_por: 'Fernando' }] };
+    };
+    const vista = (b) => JSON.stringify({ m: b.melhorias, s: b.sprints });
+    const comApp = (b, c) => GR.aplicar(b, c.patch, c.raiz);
+
+    // ── Iniciar (sprintIniciar) ───────────────────────────────────────────
+    const iniSrc = corpo(ADMIN, 'async function sprintIniciar() {');
+    ok(!!iniSrc, 'sprintIniciar existe no admin para ser comparado');
+    if (iniSrc) {
+      const iniAdm = (state, r, saida) => new Function('state', 'SPRINTPO', 'PRAZO', 'saida', 'statusKey',
+        'const window = { PRAZO: PRAZO }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin" }; let _sprSel = saida.r;\n' +
+        'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
+        'const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
+        'const confirmar = async (o) => { saida.conf = o; return true; };\n' + iniSrc + '\nreturn sprintIniciar;')(state, SP, PRAZO_, Object.assign(saida, { r }), statusKey)();
+      pendentes.push((async () => {
+        const div = [];
+        for (const r of ['S2-11-2026', 'S3-11-2026', 'S1-11-2026', 'S5-10-2026', 'lixo']) {
+          const st = base(), saida = {};
+          await iniAdm(st, r, saida);
+          const opts = { prazo: PRAZO_, etapaDe: statusKey };
+          const t = APP.cicloTextoIniciar(SP, base(), r, HOJE, opts);
+          const c = APP.cicloIniciar(SP, base(), r, QUEM, HOJE, opts);
+          const A = saida.tipo === 'err' ? 'RECUSA ' + semEmoji(saida.toast) : vista(st) + ' | ' + semEmoji(saida.toast);
+          const B = c.ok ? vista(comApp(base(), c)) + ' | ' + c.msg : 'RECUSA ' + c.erro;
+          if (A !== B) div.push(r + ': ' + A.slice(-160) + ' // ' + B.slice(-160));
+          if (saida.conf && (semEmoji(saida.conf.texto) !== t.texto || semEmoji(saida.conf.titulo) !== t.titulo)) div.push(r + ' pergunta: ' + JSON.stringify(saida.conf) + ' // ' + JSON.stringify(t));
+        }
+        ok(div.length === 0, 'iniciar no app = o sprintIniciar do admin: a mesma pergunta, as vencidas prioritarias, as pausadas, o registro em `sprints` e o aviso (5 sprints, inclusive em curso, fechada e invalida)', div.slice(0, 2).join(' | '));
+        const c = APP.cicloIniciar(SP, base(), 'S2-11-2026', QUEM, HOJE, { prazo: PRAZO_, etapaDe: statusKey });
+        const reg = (c.raiz.sprints || []).filter(x => x.rotulo === 'S2-11-2026')[0] || {};
+        ok(c.ok && reg.iniciada_em === HOJE && Object.keys(c.patch).length > 0 && c.raiz.sprints.length === 3 &&
+           Object.keys(c.patch).every(id => Object.keys(c.patch[id]).every(k => ['sprint_po', 'sprint_po_em', 'sprint_po_por', 'sprint_po_historico', 'entrega_usuario', 'prioridade', 'sprint_prioritaria'].includes(k))),
+           'o patch do inicio leva so os campos de sprint e prioridade das demandas puxadas, e a raiz a lista `sprints` com o registro novo', JSON.stringify(reg));
+      })());
+    }
+
+    // ── Repassar em lote: as candidatas e a gravacao ──────────────────────
+    const candSrc = corpo(ADMIN, 'function sprintLoteCandidatas() {');
+    const aplSrc = corpo(ADMIN, 'async function sprintLoteAplicar(sprint) {');
+    const gruposSrc = linhaAdm(/^const LOTE_GRUPOS = \[[\s\S]*?\n\];/m);
+    ok(!!(candSrc && aplSrc && gruposSrc), 'sprintLoteCandidatas, sprintLoteAplicar e LOTE_GRUPOS existem no admin para serem comparados');
+    if (candSrc && aplSrc && gruposSrc) {
+      const loteAdm = (state, f, saida) => new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'ORDEMKB', 'ENTREGAUSU', 'statusKey', 'estaPausado', 'saida', 'f',
+        'const window = { ENTREGAUSU: ENTREGAUSU }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin" };\n' +
+        linhaAdm(/^const mescladaEm = .*$/m) + '\n' + linhaAdm(/^const ehMesclada = .*$/m) + '\n' +
+        'let _loteSel = new Set(f.sel || []); let _loteBusca = f.q || ""; let _loteSoFora = !!f.soFora; let _loteGrupos = new Set(f.grupos || []);\n' +
+        'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
+        'const document = { getElementById: () => null }; const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
+        gruposSrc + '\n' + candSrc + '\n' + aplSrc + '\nreturn { candidatas: sprintLoteCandidatas, aplicar: sprintLoteAplicar };')(
+          state, SP, PRAZO_, ETx, OKB, EUm, statusKey, pausada, saida, f);
+      /* O atraso e da etapa EFETIVA: o admin pergunta `ETAPA.efetiva` desde a
+         resolucao do merge de 05/11 (antes perguntava `statusKey`, que virou a
+         gravada, e o grupo ficava vazio); o app sempre passou a efetiva. No
+         Node a efetiva le o PRAZO pelo relogio fixo da suite. */
+      const efetiva = m => (PRZM.estaAtrasada(m, statusKey(m), HOJE) ? 'atrasado' : statusKey(m));
+      const ETx = Object.assign({}, ET, { efetiva });
+      const oApp = (efetiva) => ({ SPm: SP, ETAPAm: ET, ORDEMKBm: OKB, dataUsu: EUm.data, hoje: HOJE, grupos: APP.loteGrupos(SP, statusKey, efetiva, pausada, HOJE, []) });
+      const divC = [];
+      let casos = 0;
+      ['', 'ax-50', 'cobr', 'ana'].forEach(q => [true, false].forEach(soFora => [[], ['planning'], ['pausadas'], ['planning', 'pausadas'], ['atrasadas']].forEach(gs => {
+        casos++;
+        const st = base();
+        const a = loteAdm(st, { q, soFora, grupos: gs }, {}).candidatas().map(m => m.id).join();
+        const g = {}; gs.forEach(k => { g[k] = true; });
+        const b = APP.loteCandidatas(base().melhorias, { q, soFora, grupos: g }, oApp(efetiva)).map(m => m.id).join();
+        if (a !== b) divC.push(q + '/' + soFora + '/' + gs + ': ' + a + ' // ' + b);
+      })));
+      ok(divC.length === 0, 'as candidatas do lote no app = sprintLoteCandidatas (abertas, sem oculta nem mesclada; grupo manda sobre o "so fora"; busca por codigo, titulo ou dev; ordem do quadro) em ' + casos + ' casos', divC.slice(0, 3).join(' | '));
+      // O grupo "Atrasadas da sprint atual" acha as vencidas da sprint nos dois (etapa efetiva).
+      const nAdm = loteAdm(base(), { grupos: ['atrasadas'] }, {}).candidatas().length;
+      const nApp = APP.loteCandidatas(base().melhorias, { grupos: { atrasadas: true } }, oApp(efetiva)).length;
+      ok(nAdm === nApp && nApp > 0 && /return SPRINTPO\.naSprint\(m, atual\) && ETAPA\.efetiva\(m\) === 'atrasado';/.test(ADMIN) &&
+         /var grupos = loteGrupos\(SP\(\), H\.colunaDe, H\.etapaDe, H\.pausada, H\.hoje\(\), F\);/.test(lerTela('axis-tela-sprints.js')),
+         'o grupo "Atrasadas da sprint atual" acha as vencidas da sprint pela etapa efetiva, no app e no admin', 'admin ' + nAdm + ' / app ' + nApp);
+      pendentes.push((async () => {
+        const div = [];
+        const casosL = [['S2-11-2026', ['m3', 'm4', 'm12', 'm20']], ['S3-11-2026', ['m5', 'm13', 'm21', 'm2']], ['S1-11-2026', ['m1', 'm7']],
+                        ['S5-10-2026', ['m4']], ['S2-11-2026', ['m3', 'm0']], ['', ['m4']], ['S2-11-2026', ['nao-existe']]];
+        for (const [alvo, ids] of casosL) {
+          const st = base(), saida = {};
+          await loteAdm(st, { sel: ids }, saida).aplicar(alvo);
+          const c = APP.cicloRepassar(SP, base(), ids, alvo, QUEM, HOJE);
+          const A = saida.tipo === 'err' ? 'RECUSA ' + semEmoji(saida.toast) : vista(st) + ' | ' + semEmoji(saida.toast);
+          const B = c.ok ? vista(comApp(base(), c)) + ' | ' + c.msg : 'RECUSA ' + c.erro;
+          if (A !== B) div.push(alvo + '/' + ids + ': ' + A.slice(-140) + ' // ' + B.slice(-140));
+        }
+        ok(div.length === 0, 'repassar em lote no app = sprintLoteAplicar: historico, entrega ao usuario, as atrasadas e as que ja estavam, e a mesma recusa (' + casosL.length + ' lotes)', div.slice(0, 2).join(' | '));
+      })());
+    }
+
+    // ── Fechar (sprintFecharAbrir + sprintFecharAplicar) ─────────────────
+    const fechSrcs = ['function sprintOpcoes(atual) {', 'function sprintFecharAbrir(rotulo) {', 'function sprintFecharDecide(id, campo, valor) {',
+      'function sprintFecharPendencias() {', 'function sprintFecharAtualizaBotao() {', 'function sprintFecharRender() {', 'async function sprintFecharAplicar() {'].map(n => corpo(ADMIN, n));
+    ok(fechSrcs.every(Boolean), 'o fechamento do admin (sprintFecharAbrir a sprintFecharAplicar) existe para ser comparado');
+    if (fechSrcs.every(Boolean)) {
+      const fechAdm = (state, saida) => {
+        const el = () => ({ innerHTML: '', textContent: '', disabled: false, style: {}, onclick: null, addEventListener() {}, querySelector: () => el(), remove() {} });
+        const document = { getElementById: () => el(), createElement: () => el(), body: { appendChild() {} } };
+        return new Function('state', 'SPRINTPO', 'PRAZO', 'statusKey', 'estaPausado', 'saida', 'document',
+          'const window = { PRAZO: PRAZO }; const _eu = { nome: "' + QUEM + '", login: "fernando", papel: "admin" };\n' +
+          linhaAdm(/^function esc\(s\) \{.*$/m) + '\nlet _fechDecisoes = {}; let _fechRotulo = "";\n' +
+          'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
+          'const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
+          fechSrcs.join('\n') + '\nreturn { abrir: (r) => { sprintFecharAbrir(r); return _fechDecisoes; }, faltam: (r, d) => { _fechRotulo = r; _fechDecisoes = d; return sprintFecharPendencias().filter(p => p.erro).length; },' +
+          ' aplicar: (r, d) => { _fechRotulo = r; _fechDecisoes = d; return sprintFecharAplicar(); } };')(state, SP, PRAZO_, statusKey, pausada, saida, document);
+      };
+      const r = 'S1-11-2026';
+      const decA = fechAdm(base(), {}).abrir(r);
+      const decB = APP.cicloDecisoesIniciais(SP, base(), r, statusKey, pausada);
+      ok(Object.keys(decA).length > 0 && JSON.stringify(decA) === JSON.stringify(decB),
+         'o fechamento abre com as mesmas decisoes do sprintFecharAbrir: a pausada ja vai para a sprint seguinte, com a pausa como motivo', JSON.stringify(decA) + ' // ' + JSON.stringify(decB));
+      const pend = SP.balancoDaSprint(base(), r, statusKey).pendentes;
+      const todas = (destino, motivo) => { const d = {}; pend.forEach((m, i) => { d[m.id] = { destino: typeof destino === 'function' ? destino(i) : destino, motivo: typeof motivo === 'function' ? motivo(i) : motivo }; }); return d; };
+      const decs = [decB, todas('', 'Faltou tempo na semana'), todas(i => (i % 2 ? 'S2-11-2026' : ''), i => (i % 3 ? 'Dependia do banco' : 'curto')),
+                    todas('S2-11-2026', 'Aguardando o usuário'), todas('S1-11-2026', 'Para a própria sprint'), todas('S5-10-2026', 'Sprint que já fechou'), todas('lixo', 'Destino que não existe')];
+      const divF = decs.map((d, i) => fechAdm(base(), {}).faltam(r, copia(d)) === APP.cicloFaltam(SP, base(), r, statusKey, copia(d)) ? '' : 'faltam#' + i).filter(Boolean);
+      ok(divF.length === 0, 'o botao do app conta os motivos que faltam como o sprintFecharAtualizaBotao', divF.join(', '));
+      pendentes.push((async () => {
+        const div = [];
+        for (const [rr, d] of decs.map(d => [r, d]).concat([['S5-10-2026', {}], ['S2-11-2026', todas('', 'Faltou tempo na semana')]])) {
+          const st = base(), saida = {};
+          await fechAdm(st, saida).aplicar(rr, copia(d));
+          const c = APP.cicloFechar(SP, base(), rr, QUEM, HOJE, copia(d), statusKey);
+          const A = saida.tipo === 'err' ? 'RECUSA ' + semEmoji(saida.toast) : vista(st) + ' | ' + semEmoji(saida.toast);
+          const B = c.ok ? vista(comApp(base(), c)) + ' | ' + c.msg : 'RECUSA ' + c.erro;
+          if (A !== B) div.push(rr + ': ' + A.slice(-160) + ' // ' + B.slice(-160));
+        }
+        ok(div.length === 0, 'fechar no app = sprintFecharAplicar: destino e motivo no historico, volta ao backlog registrada, o carry no registro da sprint e a mesma recusa (' + (decs.length + 2) + ' casos)', div.slice(0, 2).join(' | '));
+        const c = APP.cicloFechar(SP, base(), r, QUEM, HOJE, todas('S2-11-2026', 'Aguardando o usuário'), statusKey);
+        const reg = c.raiz.sprints.filter(x => x.rotulo === r)[0] || {};
+        ok(c.ok && reg.iniciada_em === '2026-11-03' && reg.em === HOJE && reg.carry.length === pend.length && c.raiz.sprints.length === 2,
+           'fechar escreve no registro que ja existe (quem iniciou fica), e a lista `sprints` vai inteira na raiz', JSON.stringify(reg).slice(0, 160));
+      })());
+    }
+
+    // ── Juntar e soltar (gantt.html) ──────────────────────────────────────
+    const gjSrc = corpo(GANTT, 'async function gJuntarConfirmar() {');
+    const gsSrc = corpo(GANTT, 'async function gSoltar(id, ev) {');
+    ok(!!(gjSrc && gsSrc), 'gJuntarConfirmar e gSoltar existem no gantt para serem comparados');
+    if (gjSrc && gsSrc) {
+      const arv = () => [{ id: 'a', codigo: 'AX-1', titulo: 'Principal' }, { id: 'b', codigo: 'AX-2', titulo: 'Filha', parent_id: 'a', is_dependency: true },
+        { id: 'c', codigo: 'AX-3', titulo: 'Neta', parent_id: 'b' }, { id: 'd', codigo: 'AX-4', titulo: 'Solta' }, { id: 'e', codigo: '', titulo: 'Sem código' }];
+      const ganttJ = (state, sel, saida) => new Function('state', 'VINCULO', '_gSel', 'saida',
+        'const confirmar = async (o) => { saida.conf = o; return true; }; const gJuntarModo = () => {}; const renderGantt = () => {};\n' +
+        'const saveToGitHub = async () => { saida.salvou = true; return true; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
+        gjSrc + '\n' + gsSrc + '\nreturn { juntar: gJuntarConfirmar, soltar: gSoltar };')(state, VINCULO, sel, saida);
+      pendentes.push((async () => {
+        const div = [];
+        for (const sel of [['d', 'e'], ['a', 'd', 'e'], ['c', 'a'], ['b', 'a'], ['d', 'c', 'b'], ['a'], ['d', 'd2']]) {
+          const st = { melhorias: arv() }, saida = {};
+          await ganttJ(st, sel.slice(), saida).juntar();
+          const L = arv(), por = id => L.filter(x => x.id === id)[0];
+          const fs2 = sel.slice(1).map(por).filter(Boolean);
+          const rr = sel.length < 2 || !por(sel[0]) || !fs2.length ? null : AC.REGRAS.juntar(por(sel[0]), { filhas: fs2 }, { papel: 'admin', lista: L, R: { VINCULO } });
+          const A = !saida.salvou ? (saida.tipo === 'err' ? 'RECUSA ' + semEmoji(saida.toast) : 'NADA') : JSON.stringify(st.melhorias) + ' | ' + semEmoji(saida.toast);
+          const B = !rr ? 'NADA' : !rr.ok ? 'RECUSA ' + rr.erro : JSON.stringify(arv().map(m => Object.assign(m, rr.patches[m.id] || {}))) + ' | ' + rr.msg;
+          if (A !== B) div.push(sel + ': ' + A + ' // ' + B);
+        }
+        ok(div.length === 0, 'juntar no app = o gJuntarConfirmar do gantt: as outras viram parte da primeira (parent_id, sem trava), o ciclo e recusado antes, e o mesmo aviso', div.slice(0, 2).join(' | '));
+        const divS = [];
+        for (const id of ['b', 'c', 'd']) {
+          const st = { melhorias: arv() }, saida = {};
+          await ganttJ(st, [], saida).soltar(id);
+          const L = arv(), m = L.filter(x => x.id === id)[0];
+          const rs = AC.REGRAS.soltar(m, {}, { papel: 'admin', lista: L });
+          const A = saida.salvou ? JSON.stringify(st.melhorias) + ' | ' + saida.toast : 'NADA';
+          const B = rs.ok ? JSON.stringify(arv().map(x => (x.id === id ? Object.assign(x, rs.patch) : x))) + ' | ' + rs.msg : 'NADA';
+          if (A !== B) divS.push(id + ': ' + A + ' // ' + B);
+        }
+        ok(divS.length === 0, 'tirar do grupo no app = o gSoltar (parent_id vazio, sem trava; a solta nao tem o que tirar)', divS.join(' | '));
+      })());
+      const L = arv();
+      ok(!AC.REGRAS.juntar(L[0], { filhas: [L[3]] }, { papel: 'dev', lista: L, R: { VINCULO } }).ok && !AC.REGRAS.juntar(L[0], { filhas: [L[3]] }, { papel: 'consulta', lista: L, R: { VINCULO } }).ok &&
+         AC.REGRAS.juntar(L[0], { filhas: [L[3]] }, { papel: 'analista', lista: L, R: { VINCULO } }).ok,
+         'juntar e do PM/PO e do analista, como o resto do Planejamento; o dev e a consulta nao juntam');
+    }
+
+    // ── Criar no dia vazio (openModal(null, dev, dia)) ───────────────────
+    const PLC = semComentario(PLT);
+    ok(/onLayerClick[\s\S]{0,900}openModal\(null, dev, d\.str\)/.test(GANTT) && /getElementById\('e-inicio'\)\.value\s*= m\?\.inicio \|\| prefillDate/.test(GANTT) &&
+       /getElementById\('e-fim'\)\.value\s*= m\?\.entrega \|\| prefillDate/.test(GANTT) &&
+       /raiz\.AXIS_FORM\.abrir\(null, \{ dev: lnC\.getAttribute\('data-pl-dev'\), inicio: dd\.d, entrega: dd\.d \}\)/.test(PLC) && /if \(dd && !dd\.fe\)/.test(PLC),
+       'clicar no dia vazio da linha abre a demanda nova com o dev e o dia em inicio e entrega, e nao no feriado — o openModal(null, dev, dia) do gantt');
+    ok(/if \(!m\) preencheNova\(o\);\s*EST\.extras0 = rawExtras\(\);\s*EST\.inicial = retrato\(\);/.test(FRM) && /function preencheNova\(o\)/.test(FRM),
+       'o formulario aceita dev, inicio e entrega iniciais so na demanda nova, antes do retrato (fechar sem mexer nao pergunta)');
+
+    // ── O que nao manda mais para as telas antigas ─────────────────────
+    const SPC = semComentario(SPT);
+    ok(!/admin\.html/.test(SPC) && !/data-sp-admin-aba|linkAntigo/.test(SPC), 'Sprints nao manda mais para o admin: iniciar, repassar e fechar gravam do app');
+    ok(/H\.gravar\(c\.patch, \{ raiz: c\.raiz, ok: c\.msg \}\)/.test(SPC) && (SPC.match(/var base = await baseFresca\(\);/g) || []).length === 3 && /await baseFresca\(\);[\s\S]{0,200}cicloRepassar\(SP\(\), base,/.test(SPC),
+       'iniciar, fechar e repassar rodam sobre a base FRESCA do servidor, e iniciar e fechar levam a lista `sprints` na raiz');
+    ok(/H\.donoDaSprint\(\)\) \{ H\.toast\('Só o Fernando \(PM\/PO\) inicia a sprint\.'/.test(SPC) && /H\.donoDaSprint\(\)\) \{ H\.toast\('Só o Fernando \(PM\/PO\) fecha a sprint\.'/.test(SPC) &&
+       /H\.donoDaSprint\(\)\) \{ H\.toast\('Só o Fernando \(PM\/PO\) repassa demandas para a sprint\.'/.test(SPC),
+       'so o dono da sprint inicia, fecha e repassa em lote (a mesma frase do admin)');
+  })();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  sec('App AXIS: o gerencial do mes — fechar, congelar, o deck, a ata, o deck de assunto e o CSV');
+
+  /* O QUE SO O ADMIN GERAVA, AGORA NO APP. O deck do mes (`apresGerar`), o
+     congelamento (que pede a MESMA apuracao), o "Fechar o mes"
+     (`mesFecharAbrir`), a ata (`relTexto`), o deck de um assunto
+     (`relPptDados`) e a base do mes em CSV (`csvBaseDoMes`) foram copiados
+     para axis-tela-fechamento.js e axis-tela-relatorios.js. Aqui as do admin
+     rodam AO LADO das do app, na mesma amostra e com o relogio parado: o que
+     o admin entrega ao apresentacao.js (capturado no lugar do gerador), o
+     texto da ata e o CSV tem de sair iguais, caractere a caractere.
+
+     O RELOGIO E O DE 05/11/2026 15h. As contas leem `new Date()` (o corte do
+     mes em curso, a idade do backlog, a data do "o que vem") e trocar o Date
+     global e o unico jeito de as duas pontas olharem o mesmo instante. O bloco
+     espera os outros assincronos terminarem antes de trocar, e devolve o Date
+     no fim, falhe ou nao. */
+  (() => {
+    const FEC = lerTela('axis-tela-fechamento.js');
+    const RLT = lerTela('axis-tela-relatorios.js');
+    const PNT = lerTela('axis-tela-paineis.js');
+    const AXH = lerTela('axis.html');
+    const FE = require('./axis-tela-fechamento.js');
+    const RL = require('./axis-tela-relatorios.js');
+    const J = {};
+    new Function('window', lerTela('catalogo.js'))(J);
+    new Function('window', 'document', APRES)(J, {});
+    Object.assign(J, { FILA, PRAZO: PRZM, CAPACIDADE: CAPI, PIPELINES: PIPELINES_API, SELO: require('./selo-validacao.js'),
+                       SPRINTPO: require('./sprint.js'), ETAPA: require('./etapa-demanda.js'), AXIS_FECHA: FE });
+    FE.usar(J); RL.usar(J);
+
+    // ── O admin, recortado: o deck, a ata, o deck de assunto e o CSV ─────
+    const fns = ['formatDate(s) {', 'resumoDaEntrega(m, soResumo) {', 'rateiaHoras(lista, janela, de, ate) {', 'horasReaisDe(m, rateado) {',
+      'horasDoMes(m, deISO, ateISO, rateado) {', 'prazoClassifica(m) {', 'gerSemanasDoMes(ano, mes1) {', 'gerSemanaIndex(dataStr, semanas) {',
+      'gerDataRefPontos(m) {', 'gerItensPontuados(ano, mes1) {', 'cortePontosPorDev(itens, splitDevs) {', 'gerCortesDePontos(ano, mes, temaMap, splitDevs) {',
+      'relRaizNome(nome) {', 'apresTimeEAreas(conc, cl) {', 'apresPipelines(conc, de, ate) {', 'apresMesAno() {', 'apresConcluidasDoMes() {',
+      'relRaizDe(m) {', 'janelaDe(escala, valor) {', 'relVivasDe(raiz) {', 'relVivas() {', 'relTemaFiltro() {', 'relTemaFiltroNome() {', 'relComoAndou(j) {',
+      'relTemas(j) {', 'relTemasDe(raiz, j) {', 'relOQueVem() {', 'relOQueVemDe(raiz) {', 'relBacklogDe(raiz) {', 'relBacklog() {',
+      'relPptFaixas(j) {', 'relPptAssunto(raiz, j) {', 'relPptEscopos(j) {', 'relPptSprint(j) {', 'relPptDados(escopo, j, comBacklog) {',
+      'relPptNomeArquivo(escopo, j) {', 'relDados() {', 'relSistemaModulo(m) {', 'relAgrupaPorTema(lista) {', 'relSoResumo() {', 'relTexto(secao) {',
+      'relJanela() {', 'relEscala() {', 'parseTemaNome(nome) {', 'statusKey(m) {', 'statusEfetivo(m) {', 'segundaDa(d) {',
+      'csvBaseDoMes(de, ate) {', 'csvTexto(linhas) {', 'sprintsComDados() {', 'mesTrilhaDe(m) {', 'mesDe(m) {', 'mesSomaLocal(iso, n) {',
+      'mesDoPeriodo(alvo) {', 'mesAlvoSelecionado() {', 'async mesFecharAbrir() {']
+      .map(n => corpo(ADMIN, n.indexOf('async ') === 0 ? 'async function ' + n.slice(6) : 'function ' + n));
+    const AG = corpo(ADMIN, 'async function apresGerar(opts) {');
+    const linhaA = (re) => (ADMIN.match(re) || [''])[0];
+    const extras = [linhaA(/^const mescladaEm = .*$/m), linhaA(/^const ehMesclada = .*$/m), linhaA(/^const AP_SECOES = \[[\s\S]*?\n\];/m), 'const HORAS_DIA = 8;', 'const REL_PPT_TOP = 5;',
+      linhaA(/^const iso = \(d\) => .*$/m), linhaA(/^const maisDias = .*$/m), "let _sprTrilha = 'tecnologia';"];
+    const faltam = fns.map((f, i) => f ? '' : i).filter(x => x !== '');
+    ok(!faltam.length && !!AG && extras.every(Boolean), 'o deck, a ata, o deck de assunto, o CSV e o fechar existem no admin para serem comparados', faltam.join(','));
+    if (faltam.length || !AG) return;
+    const admin = (state, vals, capt) => new Function('state', 'window', 'document', 'FILA', 'PRAZO', 'SELO', 'SPRINTPO', 'ETAPA', 'catalogoCurto', 'apresentacaoMesNome', 'capt',
+      "let _pendingEdits = false, _kbDirty = false; const _dirtyMelhoriaIds = new Set(); let _pollTs = state.atualizado_em || null;\n" +
+      "const loadFromGitHub = async () => {}; const apModo = () => 'mes'; const relPptGerar = async () => {}; const toast = (m) => { (capt.toasts = capt.toasts || []).push(m); }; const closeModal = () => {};\n" +
+      "const fechaApuracaoDe = async () => capt.cong || null; const relMontaSprints = () => {}; const renderMes = () => {}; const showSaving = () => {};\n" +
+      "const confirmar = async (o) => { capt.confirmar = o; return true; }; const credAdmin = () => ({}); const ADMIN_PROXY_URL = 'x';\n" +
+      "const fetch = async (u, o) => { capt.pedido = JSON.parse(o.body); return { ok: false, json: async () => ({ error: 'teste' }) }; };\n" +
+      "const apresentacaoMontaDeck = async (d) => { capt.dados = d; return { writeFile: async (o) => { capt.nome = o.fileName; } }; };\n" +
+      extras.join('\n') + '\n' + fns.join('\n') + '\n' + AG +
+      '\nreturn { apresGerar, relTexto, relPptDados, relPptNomeArquivo, csvBaseDoMes, csvTexto, janelaDe, sprintsComDados, mesFecharAbrir };')(
+      state, J, { getElementById: (id) => vals[id] || null, querySelectorAll: (q) => q === '.ap-dest:checked' ? (vals.dest || []).map(x => ({ value: x })) : [], querySelector: () => null },
+      J.FILA, J.PRAZO, J.SELO, J.SPRINTPO, J.ETAPA, J.catalogoCurto, J.apresentacaoMesNome, capt);
+
+    // ── A amostra: tres meses de entregas, duplas, frentes, projetos, pausas,
+    //    trilha de meses, sprints, ausencias e feriados ───────────────────
+    const ETS = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao', 'concluido', 'concluido', 'concluido', 'negada'];
+    const DEVS = ['Ana', 'Bia / Caio', 'Caio', 'Davi', '', 'Ana, Davi', 'Eva'];
+    const dia = (mes, d) => '2026-' + String(mes).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    const ms = [];
+    for (let i = 0; i < 150; i++) {
+      const st = ETS[i % ETS.length], mesC = 8 + (i % 4), d = 1 + ((i * 7) % 28);
+      const conc = st === 'concluido';
+      ms.push({
+        id: 'g' + i, codigo: 'AX-' + (500 + i), titulo: ['Cobrança', 'Régua', 'Painel', 'Cadastro "rápido"', 'Ajuste; fino'][i % 5] + ' ' + i,
+        status_planejamento: st, status: conc ? 'concluida' : st === 'negada' ? 'negada' : 'iniciada',
+        dev: DEVS[i % DEVS.length], tema_id: ['t1', 't2', 't3', 't4', '', 't5'][i % 6], projeto_id: ['', 'p1', 'p2', '', 'p3'][i % 5],
+        tipo: ['evolucao', 'sustentacao', ''][i % 3], solicitante: ['Rui', '', 'Lia', 'Rui'][i % 4],
+        poker_pontos: i % 5 ? [1, 2, 3, 5, 8, 12][i % 6] : null, horas_realizadas: i % 3 === 0 ? String(4 + (i % 9)) + ',5' : '',
+        criado_em: dia(Math.max(7, mesC - (i % 2)), Math.max(1, d - (i % 5))) + 'T12:00:00.000Z',
+        inicio: i % 7 ? dia(mesC, Math.max(1, d - 5)) : '', entrega: i % 6 && i % 11 ? dia(mesC, Math.min(28, d + 2)) : '',
+        concluido_em: conc ? dia(mesC, Math.min(28, d + (i % 4))) + 'T18:30:00.000Z' : '',
+        entregue_em: (conc || st === 'validacao') && i % 2 ? dia(mesC, Math.min(28, d + 1)) : '',
+        negada_em: st === 'negada' ? dia(mesC, d) : '', pausado_em: i % 23 === 4 ? '2026-10-10' : '', pausa_motivo: i % 23 === 4 ? 'esperando a área' : '',
+        destaque: i % 17 === 0, resumo_entrega: i % 4 ? 'Saiu a parte ' + i : '', implementacao: 'Detalhe longo da entrega ' + i,
+        meses: i % 3 ? [{ mes: '2026-' + String(mesC).padStart(2, '0'), em: dia(mesC, i % 2 ? 1 : 12) }].concat(i % 9 === 1 ? [{ mes: '2026-' + String(mesC + 1).padStart(2, '0'), em: dia(mesC + 1, 1) }] : []) : [],
+        sprint_po: ['S1-10-2026', 'S5-10-2026', 'S1-11-2026', ''][i % 4], sprint: ['S1-10-2026', '', 'S2-09-2026'][i % 3],
+        oculto: i % 41 === 3, mesclado_em: i % 37 === 5 ? 'g1' : ''
+      });
+    }
+    const S = {
+      melhorias: ms, atualizado_em: '2026-11-05T12:00:00.000Z', feriados: FERIADOS_PROVA,
+      temas: [{ id: 't1', nome: 'AXCred - Cobrança - Régua' }, { id: 't2', nome: 'AXCred - Cadastro' }, { id: 't3', nome: 'BI - Reports' }, { id: 't4', nome: 'Site Audax' }, { id: 't5', nome: 'BI' }],
+      projetos: [{ id: 'p1', codigo: 'EP-001', nome: 'Régua', status: 'em_andamento', responsavel: 'Rui', descricao: 'A régua nova' },
+                 { id: 'p2', codigo: 'EP-002', nome: 'Portal', status: 'planejado', inicio: '2026-09-01', fim: '2026-10-15' },
+                 { id: 'p3', codigo: '', nome: 'Pausado', status: 'pausado' }],
+      ausencias: [{ dev: 'Ana', inicio: '2026-10-20', fim: '2026-11-03', tipo: 'ferias' }, { dev: 'Eva', inicio: '2026-11-04', tipo: 'atestado' }],
+      devs_perfil: { Ana: { pipeline: 'Dados' }, Caio: { axcred: true } }
+    };
+
+    const DataReal = Date;
+    const AGORA = new DataReal('2026-11-05T15:00:00-03:00').getTime();
+    class DataParada extends DataReal { constructor(...a) { if (a.length) super(...a); else super(AGORA); } static now() { return AGORA; } }
+    const antes = pendentes.slice();
+    registra(Promise.all(antes).then(async () => {
+      global.Date = DataParada;
+      try {
+        const dif = (a, b) => { const A = JSON.stringify(a), B = JSON.stringify(b); if (A === B) return ''; let i = 0; while (i < A.length && A[i] === B[i]) i++; return A.slice(Math.max(0, i - 80), i + 80) + ' // ' + B.slice(Math.max(0, i - 80), i + 80); };
+        // ── A apuracao do congelamento e o deck do mes ───────────────────
+        /* O titulo do deck e a marca de cada tela: o admin da main diz "Roadmap de
+           Melhorias", o app diz "AXIS". O resto do objeto tem de ser o mesmo. */
+        const marca = (x) => (x && typeof x === 'object' && /^(Roadmap de Melhorias|AXIS)$/.test(x.titulo) ? Object.assign({}, x, { titulo: '(marca)' }) : x);
+        const divA = [], divD = [], divC = [], semItens = [];
+        let nDest = 0, nNome = 0;
+        for (const iso of ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12']) {
+          const ano = +iso.slice(0, 4), mes = +iso.slice(5, 7);
+          const vals = { 'ger-mes': { value: String(mes) }, 'ger-ano': { value: String(ano) } };
+          const a1 = await admin(S, vals, {}).apresGerar({ soApuracao: true });
+          const d1 = dif(marca(a1), marca(FE.apuracao(S, { ano, mes, soApuracao: true })));
+          if (d1 || !a1.kpi) divA.push(iso + ' ' + d1);
+          // O congelado nao leva as demandas inteiras: o Worker recusa acima de 1 MB.
+          if (!a1.pontos || 'itens' in a1.pontos || !('porDev' in a1.pontos)) semItens.push(iso);
+          const ap1 = FE.apuracao(S, { ano, mes, soApuracao: true });
+          if (!ap1.pontos || 'itens' in ap1.pontos) semItens.push(iso + ' (app)');
+          const vivo = FE.apuracao(S, { ano, mes });
+          if (vivo.pontos && vivo.pontos.total > 0 && !Array.isArray(vivo.pontos.itens)) semItens.push(iso + ' (deck vivo perdeu os itens)');
+          const sec = {}; FE.AP_SECOES.forEach((s, i) => { sec[s.k] = (i + mes) % 3 !== 0; vals['ap-s-' + s.k] = { checked: sec[s.k] }; });
+          const dest = FE.candidatasDestaque(S, iso).slice(0, 3).map(m => m.id);
+          nDest += dest.length;
+          Object.assign(vals, { dest, 'ap-mensagem': { value: '  O mês fechou.  ' } });
+          const c2 = {};
+          await admin(S, vals, c2).apresGerar({});
+          const dB = FE.apuracao(S, { ano, mes, secoes: sec, idsDestaque: dest, mensagem: '  O mês fechou.  ' });
+          const d2 = dif(marca(c2.dados), marca(dB));
+          if (d2) divD.push(iso + ' ' + d2);
+          if (c2.nome === FE.nomeArquivoDeck(ano, mes)) nNome++;
+          const c3 = { cong: { apuracao: a1, congelado_em: '2026-11-02T10:00:00.000Z', por: 'Paula' } };
+          await admin(S, vals, c3).apresGerar({});
+          const d3 = dif(c3.dados, FE.comCongelada(dB, c3.cong));
+          if (d3 || !/congelada em 02\/11\/2026/.test((c3.toasts || []).join(' '))) divC.push(iso + ' ' + d3);
+        }
+        ok(divA.length === 0, 'a apuracao que o app congela = apresGerar({ soApuracao: true }) do admin, cinco meses (fechados, o corrente e o futuro)', divA.slice(0, 2).join(' ;; '));
+        ok(semItens.length === 0, 'congelar tira pontos.itens (as demandas inteiras) no admin e no app, e so no congelado: o deck vivo segue com eles', semItens.join(', '));
+        ok(divD.length === 0 && nDest >= 6 && nNome === 5, 'o objeto que o app entrega ao apresentacao.js = o do admin, com slides, destaques e frase escolhidos, e o mesmo nome de arquivo', divD.slice(0, 2).join(' ;; '));
+        ok(divC.length === 0, 'mes congelado: a apuracao congelada vence a base viva e o slide diz que esta congelado, igual ao admin', divC.slice(0, 2).join(' ;; '));
+        // ── O CSV da base do mes ─────────────────────────────────────────
+        const divCsv = [];
+        let linhasCsv = 0;
+        for (const [de, ate] of [['2026-09-01', '2026-09-30'], ['2026-10-01', '2026-10-31'], ['2026-11-01', '2026-11-30']]) {
+          const A = admin(S, {}, {});
+          const ta = A.csvTexto(A.csvBaseDoMes(de, ate)), tb = RL.csvTexto(RL.csvBaseDoMes(S, de, ate));
+          linhasCsv += tb.split('\n').length;
+          if (ta !== tb) divCsv.push(de + ' ' + dif(ta, tb));
+        }
+        ok(divCsv.length === 0 && linhasCsv > 20, 'a base do mes em CSV do app = a do admin, byte a byte (BOM, virgula, aspas, horas e prazo)', divCsv.join(' ;; '));
+        // ── A ata e o deck de assunto, em cada escala ────────────────────
+        const sprints = admin(S, {}, {}).sprintsComDados();
+        ok(JSON.stringify(sprints) === JSON.stringify(RL.sprintsComDados(S)), 'as sprints oferecidas na ata = sprintsComDados do admin', sprints.join(','));
+        const divT = [], divP = [];
+        let casosT = 0, tamT = 0;
+        for (const [esc, val] of [['mes', '2026-08'], ['mes', '2026-10'], ['mes', '2026-11'], ['semana', ''], ['semana', '2026-10-19'], ['sprint', ''], ['sprint', 'S1-10-2026']]) {
+          for (const sis of ['', 'AXCred', 'BI', 'Site Audax']) {
+            const j = RL.janelaDe(S, esc, val);
+            for (const texto of ['completo', 'resumo']) {
+              const A = admin(S, { 'rel-escala': { value: esc }, 'rel-mes': { value: val }, 'rel-semana': { value: val }, 'rel-sprint': { value: val },
+                                   'rel-sistema': { value: sis }, 'rel-texto': { value: texto } }, {});
+              if (dif(A.janelaDe(esc, val), j)) divT.push('janela ' + esc + val);
+              for (const secao of ['', 'entregues', 'andamento', 'vem', 'backlog']) {
+                casosT++;
+                const ta = A.relTexto(secao), tb = RL.relTexto(S, { j, raiz: sis, soResumo: texto === 'resumo', secao });
+                tamT += tb.length;
+                if (ta !== tb) divT.push(esc + '/' + val + '/' + sis + '/' + texto + '/' + secao + ' ' + dif(ta, tb));
+              }
+            }
+            for (const bk of [false, true]) {
+              const A = admin(S, {}, {});
+              const d = dif(A.relPptDados(sis, j, bk), RL.relPptDados(S, sis, j, bk));
+              if (d || A.relPptNomeArquivo(sis, j) !== RL.relPptNomeArquivo(sis, j)) divP.push(esc + '/' + val + '/' + sis + '/' + bk + ' ' + d);
+            }
+          }
+        }
+        ok(divT.length === 0 && tamT > 50000, 'a ata do app = o "Copiar tudo" do admin, caractere a caractere (' + casosT + ' casos: escala, periodo, sistema, texto e secao)', divT.slice(0, 2).join(' ;; '));
+        ok(divP.length === 0, 'o deck de um assunto: o que o app entrega ao relatorio-ppt.js = o do admin, e o mesmo nome de arquivo (consolidado e por sistema, com e sem backlog)', divP.slice(0, 2).join(' ;; '));
+        // ── Fechar o mes: a conferencia e o pedido ───────────────────────
+        const divF = [];
+        for (const alvo of ['2026-08', '2026-09', '2026-10', '2026-11']) {
+          const c = {};
+          await admin(S, { 'mes-mes': { value: String(+alvo.slice(5)) }, 'mes-ano': { value: alvo.slice(0, 4) } }, c).mesFecharAbrir();
+          const lista = FE.aRolar(S, alvo), p = FE.pedidoFechar(S, alvo);
+          const codA = ((c.confirmar || {}).texto || '').split('\n').filter(l => / · /.test(l)).map(l => l.split(' · ')[0]);
+          const nA = c.confirmar ? +(c.confirmar.texto.match(/^(\d+) demanda/) || [])[1] : 0;
+          if (nA !== lista.length || JSON.stringify(codA) !== JSON.stringify(lista.slice(0, 8).map(m => m.codigo))) divF.push(alvo + ' lista ' + nA + '/' + lista.length);
+          if (lista.length && (!c.pedido || c.pedido.mes !== p.mes || c.pedido.para !== p.para || c.pedido.action !== p.action || c.pedido.base !== p.base)) divF.push(alvo + ' pedido ' + JSON.stringify(c.pedido));
+          if (!lista.length && c.pedido) divF.push(alvo + ' pediu sem ter o que rolar');
+        }
+        ok(divF.length === 0 && FE.aRolar(S, '2026-10').length > 3, 'Fechar o mes: o app confere a mesma lista e pede o mesmo mes-fechar (mes, destino e versao da base) que o mesFecharAbrir do admin', divF.join(', '));
+        ok(FE.pedidoFechar(S, '2026-12').base === S.atualizado_em && FE.pedidoFechar(S, '2026-12').para === '2027-01',
+           'e o pedido leva a versao da base lida (o `conflito` do Worker exige `base`), virando o ano certo');
+      } catch (e) {
+        ok(false, 'o gerencial do mes rodou ate o fim, no admin e no app', (e && e.stack || String(e)).split('\n').slice(0, 3).join(' | '));
+      } finally {
+        global.Date = DataReal;
+      }
+    }));
+
+    // ── O que o codigo das telas tem de dizer ───────────────────────────
+    ok(/var apu = REGRAS_FECHA\.apuracao\(S, \{ ano: \+alvo\.slice\(0, 4\), mes: \+alvo\.slice\(5, 7\), soApuracao: true \}\);\s*var jg = await H\.api\('fechamento-gravar', \{ mes: alvo, apuracao: apu, refazer: false \}\);/.test(FEC),
+       'congelar manda a apuracao JA CALCULADA (o admin manda a Promise sem await, que vira {} no JSON)');
+    ok(/H\.api\('fechamento-apagar', \{ mes: alvo \}\)/.test(FEC) && /H\.api\('mes-fechar', \{ mes: p\.mes, para: p\.para, base: p\.base \}\)/.test(FEC) &&
+       /var dados = comCongelada\(apu, cong\);[\s\S]{0,300}raiz\.apresentacaoMontaDeck\(dados\)/.test(FEC),
+       'descongelar, fechar o mes e gerar o deck (da apuracao congelada, quando houver) chamam o Worker e o gerador como o admin');
+    ok(/relatorioPptMonta\(relPptDados\(S, _rf\.escopo, j, backlogLembrado\(\), _rf\.trilha\)\)/.test(RLT) && /csvTexto\(linhas\)/.test(RLT) && /copiar\(textoAta\(/.test(RLT),
+       'os botoes da tela usam as funcoes medidas acima (deck de assunto, CSV e ata)');
+    const semC = (t) => semComentario(t);
+    ok(![FEC, RLT, PNT].some(t => /linkAdmin\(|href="admin\.html|data-admin-aba/.test(semC(t))),
+       'Fechamento, Paineis e Relatorios nao mandam mais para o admin');
+    ok(['deck-fundo.js', 'capa-tecnologia.js', 'apresentacao.js', 'relatorio-ppt.js', 'selo-validacao.js'].every(f => new RegExp('<script src="' + f.replace('.', '\\.') + '\\?v=').test(AXH)) &&
+       AXH.indexOf('capa-tecnologia.js') < AXH.indexOf('apresentacao.js') && AXH.indexOf('apresentacao.js') < AXH.indexOf('axis-tela-fechamento.js'),
+       'o axis.html carrega o que o deck e o deck de assunto usam (fundo, capa, selo, relatorio-ppt) antes das telas');
+  })();
+  /* FECHAR E CONGELAR O MES NAO FUNCIONAVAM, por tres pecas soltas: a rota
+     `mes-fechar` testava o objeto inteiro de `exigePapel` (sempre verdadeiro) e
+     devolvia `{ident}` como resposta, um 500; o admin mandava `base:
+     state.atualizado_em`, que a carga nunca preenche, e o Worker pedia
+     "recarregue"; e o congelar mandava a Promise de `apresApuracao`, que vira
+     `{}` no JSON. As tres sao executadas aqui, e nao procuradas no texto. */
+  sec('Fechar e congelar o mes: rota, versao da base e apuracao');
+  {
+    const exige = new Function('identifica', 'json', 'return ' + corpo(W, 'async function exigePapel('))(
+      async (env, b) => (b.quem ? { papel: b.quem } : null), (o, st) => ({ st, o }));
+    pendentes.push((async () => {
+      const sim = await exige({}, { quem: 'admin' }, ['admin'], {});
+      const nao = await exige({}, { quem: 'dev' }, ['admin'], {});
+      ok(sim && sim.ident && !sim.recusa && nao && nao.recusa && !nao.ident,
+         'exigePapel devolve { ident } ou { recusa }: os dois sao objetos verdadeiros');
+    })());
+    const sitios = [...W.matchAll(/const (\w+) = await exigePapel\(/g)].map((m) => m[1]);
+    const malUsados = sitios.filter((v) =>
+      !new RegExp('if \\(' + v + '\\.recusa\\) return ' + v + '\\.recusa').test(W));
+    ok(sitios.length >= 10 && !malUsados.length,
+       'toda rota que chama exigePapel responde pelo .recusa, e nao pelo objeto', malUsados.join(', '));
+
+    let enviado = null;
+    const btnF = { textContent: 'Congelar', disabled: false };
+    const congela = new Function('fechaDoMes', 'apresPeriodoNome', 'confirmar', 'document', 'apresApuracao',
+      'fetch', 'ADMIN_PROXY_URL', 'credAdmin', 'toast', 'fechaCarregar',
+      'return ' + corpo(ADMIN, 'async function fechaCongelar('))(
+      () => null, () => 'outubro', async () => true, { getElementById: () => btnF },
+      async () => ({ pontos: { total: 7 } }),
+      async (u, o) => { enviado = JSON.parse(o.body); return { ok: true, json: async () => ({ ok: true }) }; },
+      'x', () => ({}), () => {}, async () => {});
+    pendentes.push((async () => {
+      await congela('2026-10');
+      ok(enviado && enviado.apuracao && enviado.apuracao.pontos && enviado.apuracao.pontos.total === 7,
+         'congelar manda a apuracao calculada, e nao a Promise (que vira {} no JSON)',
+         JSON.stringify(enviado && enviado.apuracao));
+    })());
+
+    let pedido = null;
+    const fecha = new Function('mesAlvoSelecionado', 'mesDoPeriodo', 'mesDe', 'mesSomaLocal', 'toast',
+      'confirmar', 'showSaving', 'fetch', 'ADMIN_PROXY_URL', 'credAdmin', '_pollTs', 'state',
+      'loadFromGitHub', 'renderMes', 'return ' + corpo(ADMIN, 'async function mesFecharAbrir('))(
+      () => '2026-10', () => [{ codigo: 'AX-1', titulo: 't', status_planejamento: 'planejado' }],
+      () => '2026-10', () => '2026-11', () => {}, async () => true, () => {},
+      async (u, o) => { pedido = JSON.parse(o.body); return { ok: true, json: async () => ({ roladas: [] }) }; },
+      'x', () => ({}), '2026-11-05T10:00:00.000Z', { melhorias: [] }, async () => {}, () => {});
+    pendentes.push((async () => {
+      await fecha();
+      ok(pedido && pedido.action === 'mes-fechar' && pedido.base === '2026-11-05T10:00:00.000Z',
+         'fechar o mes manda a versao da base que a tela leu (sem ela o Worker pede para recarregar)',
+         pedido && String(pedido.base));
+    })());
+  }
+
+  /* AS TELAS ANTIGAS VOLTARAM A SER AS DA MAIN (06/11/2026). O menu lateral do
+     AXIS saiu delas: quem usa a interface nova vai para o app pela marca da
+     conta (`axis-interface.js`), e a tela antiga navega pelos proprios botoes.
+     Ficam os icones (`axis.js`), que os modulos compartilhados desenham. E o
+     `quem-sou` do dev.html gravava o `rm_eu` SEM o papel (ele vem fora do
+     usuario) — correcao de defeito que continua valendo, executada aqui. */
+  sec('Telas antigas: os icones e a passagem para o app, e o papel nao se perde no dev.html');
+  {
+    const AXJ = lerTela('axis.js');
+    const ANTIGAS = ['admin.html', 'dev.html', 'gantt.html', 'poker.html', 'follow.html', 'projetos.html', 'importar.html', 'mensageria.html'];
+    const sem = ANTIGAS.filter((pg) => { const h = lerTela(pg); return !/<script src="axis\.js(\?v=[^"]*)?"><\/script>/.test(h) || !/<script src="axis-interface\.js(\?v=[^"]*)?"><\/script>/.test(h); });
+    const mod = { exports: {} };
+    new Function('window', 'document', 'module', AXJ)(undefined, { readyState: 'complete', head: { appendChild() {} }, documentElement: { appendChild() {} }, createElement: () => ({}),
+      getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] }, mod);
+    ok(!sem.length && !mod.exports.htmlMenu,
+       'as telas antigas carregam os icones (axis.js) e a passagem para o app (axis-interface.js), sem o menu lateral do AXIS',
+       sem.join(', ') + (mod.exports.htmlMenu ? ' | axis.js ainda publica htmlMenu' : ''));
+
+    const fn = corpo(lerTela('dev.html'), 'async function sessaoDevValida(');
+    const guarda = {};
+    const sessao = new Function('credDev', 'fetch', 'ADMIN_PROXY_URL', 'sessionStorage',
+      'let _eu = null;\n' + fn + '\nreturn async () => { const ok = await sessaoDevValida(); return { ok, _eu }; };')(
+      () => ({ token: 't' }),
+      async () => ({ ok: true, json: async () => ({ ok: true, papel: 'admin', usuario: { id: 1, login: 'ana', nome: 'Ana' } }) }),
+      'x', { setItem: (k, v) => { guarda[k] = v; } });
+    pendentes.push(sessao().then((r) => {
+      const gravado = JSON.parse(guarda.rm_eu || '{}');
+      ok(r.ok && gravado.papel === 'admin' && gravado.login === 'ana',
+         'dev.html: o quem-sou grava o rm_eu COM o papel (senao o menu de um admin vira o de dev no F5)', guarda.rm_eu);
+    }));
+  }
+
+  /* QUEM COORDENA E DESENVOLVE VE AS DUAS COISAS. A aba `meu` do Inicio virava
+     "O que pede voce" para o admin e o painel do dev sumia para quem e PM/PO
+     com demanda no nome. Agora sao duas abas; aqui a definicao da tela e
+     executada com um nucleo falso, por perfil. */
+  sec('Inicio: "O que pede voce" (admin) e "Meu trabalho" (todos que trabalham) sao abas separadas');
+  {
+    let def = null;
+    const FAKE = { tela: (d) => { def = d; }, APP: { papel: 'admin' }, notificacoes: () => [], H: { esc: (x) => x } };
+    new Function('window', lerTela('axis-tela-inicio.js'))({ AXIS_APP: FAKE });
+    const abasDe = (papel) => { FAKE.APP.papel = papel; return def.abasDe({}).map((a) => a.id + ':' + a.rotulo).join(','); };
+    const adm = abasDe('admin'), ana = abasDe('analista'), dev = abasDe('dev'), con = abasDe('consulta');
+    ok(/pede:O que pede você/.test(adm) && /meu:Meu trabalho/.test(adm), 'admin tem as duas: O que pede voce e Meu trabalho', adm);
+    ok(/meu:Meu trabalho/.test(ana) && !/pede/.test(ana) && /meu:Meu trabalho/.test(dev) && !/pede/.test(dev),
+       'analista e dev tem Meu trabalho, sem a fila do PM/PO', ana + ' | ' + dev);
+    ok(!/meu|pede/.test(con), 'consulta nao tem nenhuma das duas', con);
+    ok(def.papeis.indexOf('analista') >= 0, 'o analista entra no Inicio');
+    // Qual visao cada aba desenha: a do PM/PO so na `pede`.
+    const fonte = lerTela('axis-tela-inicio.js');
+    const desp = new Function('meuTrabalhoPO', 'meuTrabalhoDev', corpo(fonte, 'function meuTrabalho(ctx) {') + '\nreturn meuTrabalho;')(() => 'PO', () => 'DEV');
+    ok(desp({ aba: 'pede', papel: 'admin' }) === 'PO' && desp({ aba: 'meu', papel: 'admin' }) === 'DEV' && desp({ aba: 'meu', papel: 'dev' }) === 'DEV',
+       'a aba meu desenha o painel do dev tambem para o admin; a pede, a fila do PM/PO');
+  }
+
+  /* "ATRASADAS" CONTA SO O QUE AINDA CORRE. `PRAZO.diasDeAtraso` devolve o
+     atraso congelado de quem ja foi entregue; o Inicio contava esse tambem e
+     mostrava 71 concluidas como atrasadas para um dev. Executado com o
+     prazo.js de verdade (relogioParou). */
+  sec('Inicio e Paineis: concluida ou em validacao entregue com atraso nao e "atrasada"');
+  {
+    const PZ = require('./prazo.js');
+    const fn = corpo(lerTela('axis-tela-inicio.js'), 'function atrasada(m) {');
+    const col = { a: 'em_andamento', b: 'concluido', c: 'validacao', d: 'planejado', e: 'validacao_area' };
+    const atr = { a: 3, b: 5, c: 2, d: 0, e: 4 };
+    const H = { atrasoDe: (m) => atr[m.id], colunaDe: (m) => col[m.id] };
+    const atrasada = new Function('H', 'window', fn + '\nreturn atrasada;')(H, { PRAZO: PZ });
+    const sim = ['a', 'b', 'c', 'd', 'e'].filter((id) => atrasada({ id }));
+    ok(sim.join() === 'a', 'so a que corre e passou do prazo e atrasada (concluida, validacao e area ficam de fora)', sim.join());
+    const PAI = lerTela('axis-tela-paineis.js');
+    ok((PAI.match(/relogioParou\(H\.colunaDe\(m\)\)/g) || []).length >= 2,
+       'os dois "prazo vencido em aberto" dos Paineis tambem perguntam se o relogio corre');
+  }
+
+  /* QUEM VE O ITEM NO MENU ABRE A TELA. O analista via Quadro, Backlog, Sprints,
+     Projetos e o Item no menu, mas essas telas nao o listavam: o clique voltava
+     ao Inicio. E o consulta, que le Projetos e Paineis, era barrado no Item que
+     eles linkam. Executa o MENU do nucleo contra a definicao de cada tela. */
+  sec('App AXIS: todo item do menu abre para quem o ve; consulta le o Item');
+  {
+    const telas = {}, carga = [];
+    const fake = { tela: (d) => { telas[d.id] = d; }, APP: { papel: 'admin', D: {} }, H: new Proxy({ ETAPAS: [], TIPOS: {}, ETAPA_POR_ID: {}, MESES: [], MESES_C: [] }, { get: (o, k) => (k in o ? o[k] : () => '') }),
+                   notificacoes: () => [], desenhar: () => {} };
+    for (const f of fs.readdirSync('.').filter((n) => /^axis-tela-.*\.js$/.test(n))) {
+      try { new Function('window', 'document', lerTela(f))({ AXIS_APP: fake, addEventListener() {} }, { getElementById: () => null, addEventListener() {}, head: { appendChild() {} }, createElement: () => ({ style: {} }) }); } catch (e) { carga.push(f + ': ' + e.message); }
+    }
+    const NUC = require('./axis-app.js');
+    const itens = [];
+    (NUC.MENU || []).forEach((g) => g.itens.forEach((it) => { if (!it.href) itens.push(it); }));
+    const barrados = [];
+    itens.forEach((it) => {
+      const t = telas[(it.rota || it.id).split('/')[0]];
+      if (!t) { barrados.push(it.id + ': tela nao registrada'); return; }
+      it.papeis.forEach((pp) => { if (t.papeis && t.papeis.indexOf(pp) < 0) barrados.push(it.id + '/' + pp); });
+    });
+    ok(!carga.length, 'toda tela do app carrega no Node sem erro', carga.join(' | '));
+    ok(itens.length >= 10 && !barrados.length, 'todo item do menu abre para cada perfil que o ve (analista inclusive)', barrados.join(', ') || String(itens.length));
+    ok(telas.item && telas.item.papeis.indexOf('consulta') >= 0 && telas.item.papeis.indexOf('analista') >= 0,
+       'o Item abre para consulta (leitura, as acoes dependem de H.pode) e para analista');
+  }
+
+  /* A INTERFACE NOVA E POR CONTA (axis-interface.js + coluna interface_nova do
+     Worker). Sem a marca a pessoa fica nas telas de sempre; com ela, cada tela
+     antiga leva a equivalente do app, e o app devolve quem nao tem a marca. */
+  sec('Interface por conta: quem vai para o app e quem fica nas telas de sempre');
+  {
+    const I = require('./axis-interface.js');
+    ok(!I.nova(null) && !I.nova({ papel: 'admin' }) && !I.nova({ interface_nova: false }) && I.nova({ interface_nova: true }),
+       'sem a marca na sessao (inclusive sessao antiga, sem o campo) e interface antiga');
+    ok(I.rotaNova('admin.html', '') === 'inicio' && I.rotaNova('dev.html', '') === 'inicio/meu' &&
+       I.rotaNova('gantt.html', '') === 'planejamento' && I.rotaNova('ADMIN.HTML', '#ax-887') === 'item/AX-887' &&
+       I.rotaNova('dev.html', '#AX-12') === 'item/AX-12' && I.rotaNova('index.html', '') === '',
+       'cada tela antiga tem a sua rota no app; #AX-n abre o Item; o painel publico nao muda');
+    ok(I.rotaNova('projetos.html', '') === 'paineis/visao', 'projetos.html (horas por tema) vai para a visao dos Paineis, e nao para os projetos EP-');
+    ok(I.rotaNova('mensageria.html', '', '?codigo=AX-1091') === 'item/AX-1091/conversa' &&
+       I.rotaNova('mensageria.html', '', '?codigo=1091') === 'item/AX-1091/conversa' && I.rotaNova('mensageria.html', '', '') === 'api',
+       'mensageria.html?codigo=AX-n abre a Conversa daquela demanda no app (antes caia em #api e perdia o codigo)');
+    ok(I.destinoAntigo('admin') === 'admin.html' && I.destinoAntigo('dev') === 'dev.html' &&
+       I.destinoAntigo('analista') === 'dev.html' && I.destinoAntigo('consulta') === 'index.html',
+       'quem nao tem a marca volta a tela de sempre do seu perfil');
+    const WK = lerTela('cloudflare-worker/worker.js');
+    ok(/colunaSeFaltar\(db, 'usuario', 'interface_nova', 'INTEGER NOT NULL DEFAULT 0'\)/.test(WK) &&
+       /SELECT s\.expira_em, u\.\*/.test(WK) && /interface_nova: !!r\.interface_nova/.test(WK) && /interface_nova: !!u\.interface_nova/.test(WK) &&
+       /if \(op === 'interface'\)/.test(WK),
+       'Worker: coluna com padrao desligado, sessao le u.* (coluna nova nao derruba ninguem antes da migracao), login e quem-sou devolvem a marca');
+    const APPJ = lerTela('axis-app.js');
+    ok(/function interfaceCerta\(\)/.test(APPJ) && /if \(!interfaceCerta\(\)\) return;/.test(APPJ),
+       'o app devolve para a tela de sempre quem nao tem a marca, antes de desenhar');
+  }
+
+  /* O PLANNING POKER DO APP CONTRA O poker.html (06/11/2026). "Perdeu muito do
+     comportamento do Poker antigo": a tela do app foi portada do poker.html e
+     estas sao as regras que ela tem de repetir, recortadas das DUAS telas e
+     rodadas lado a lado na mesma amostra — o que a fila mostra e em que
+     ordem, o que e o requisito e o que e anexo, e o que o discovery diz. */
+  sec('Planning Poker do app = poker.html: fila, requisito, anexos e discovery');
+  {
+    const PKA = lerTela('axis-tela-poker.js');
+    const PKV = POKER;
+    const T = require('./anexo-tipos.js');
+
+    // ── O requisito e os demais anexos ──────────────────────────────────
+    const reqV = new Function(corpo(PKV, 'function ehRequisito(a, m) {') + '\nreturn ehRequisito;')();
+    const reqA = new Function(corpo(PKA, 'function ehRequisito(a, m) {') + '\nreturn ehRequisito;')();
+    const sepA = new Function('ehRequisito', corpo(PKA, 'function separaAnexos(m) {') + '\nreturn separaAnexos;')(reqA);
+    /* O recorte do poker.html e o de `renderDetalhe`: o primeiro que passa por
+       `ehRequisito` e o requisito; os outros seguem na lista, na ordem. */
+    const sepV = (m) => {
+      const anexos = (m.anexos || []);
+      const iReq = anexos.findIndex(a => reqV(a, m));
+      return { iReq, outros: anexos.map((a, i) => ({ a, i })).filter(x => x.i !== iReq) };
+    };
+    const NOMES = ['AX-12.png', 'ax-12.PDF', 'AX-13.png', 'image.png', 'AX-12.svg', ' AX-12 requisito.jpeg', 'AX-12.webp', 'AX-12.gif',
+                   'AX-12.docx', 'requisito AX-12.png', 'AX-120.png', 'AX-12.png.exe'];
+    const anexoDe = (n, k) => k % 5 === 4 ? { nome: n, inline: true } : k % 7 === 6 ? { nome: n } : { nome: n, chave: 'a/x' + k, tipo: T.tipoDe(n) };
+    let divR = [], casosR = 0;
+    /* Cada nome passa com chave, sem chave e como anexo antigo (`inline`):
+       com um so jeito por nome, o `.svg` caia sempre no inline e a amostra
+       nunca perguntava se um `.svg` com chave vira requisito. */
+    ['AX-12', '', 'AX-13'].forEach(cod => NOMES.forEach((n, k) => [0, 4, 6].forEach(kk => {
+      const m = { codigo: cod }, a = anexoDe(n, kk);
+      casosR++;
+      if (reqV(a, m) !== reqA(a, m)) divR.push(cod + '/' + n + (a.chave ? '' : a.inline ? ' (inline)' : ' (sem chave)'));
+    })));
+    ok(!divR.length, 'o que e REQUISITO no app = no poker.html, em ' + casosR + ' casos (AX-### da demanda, PNG/JPG/WEBP/GIF/PDF, com chave)', divR.join(', '));
+    const listas = [];
+    for (let k = 0; k < 40; k++) {
+      const n = (k % 4) + 1, l = [];
+      for (let j = 0; j < n; j++) l.push(anexoDe(NOMES[(k * 3 + j * 5) % NOMES.length], k + j));
+      listas.push({ codigo: k % 3 ? 'AX-12' : '', anexos: l });
+    }
+    const divS = listas.filter(m => {
+      const a = sepA(m), v = sepV(m);
+      return a.iReq !== v.iReq || a.outros.map(x => x.i).join() !== v.outros.map(x => x.i).join();
+    });
+    ok(!divS.length && listas.some(m => sepV(m).iReq >= 0 && sepV(m).outros.length),
+       'o app separa requisito e demais anexos como a pauta do poker.html, em ' + listas.length + ' demandas', String(divS.length));
+    /* O que abre no visor da sala e a lista INLINE do anexo-tipos.js (imagem e
+       PDF), e todo requisito abre nele — senao o quadro da pauta teria um
+       requisito que a lupa nao amplia. */
+    const visor = new Function('raiz', [corpo(PKA, 'function tipoDoAnexo(a) {'), corpo(PKA, 'function abreNoVisor(a) {')].join('\n') + '\nreturn abreNoVisor;')({ ANEXOTIPO: T });
+    const nomesV = NOMES.concat(['x.xlsx', 'diagrama.excalidraw', 'foto.JPG', 'sem-extensao']);
+    const errV = nomesV.filter(n => visor({ nome: n }) !== !!T.INLINE[T.ext(n)]);
+    const reqForaV = listas.filter(m => { const i = sepA(m).iReq; return i >= 0 && !visor(m.anexos[i]); });
+    ok(!errV.length && !reqForaV.length && visor({ nome: 'antigo', tipo: 'image/png' }),
+       'abre no visor da sala = INLINE do anexo-tipos (pelo tipo gravado ou pela extensao), e todo requisito abre nele', errV.concat(reqForaV.map(m => m.codigo)).join(', '));
+    ok(/'anexo-baixar', chave: a\.chave, token: A\.APP\.token/.test(PKA) && /\(res\.status === 401 \|\| res\.status === 403\) && S\.participante && ehRequisito\(a, m\)/.test(PKA) &&
+       /action: 'poker-requisito', codigo: S\.codigo, participante: S\.participante, chave: a\.chave/.test(PKA),
+       'o arquivo vem pelo anexo-baixar com a sessao, e o requisito cai para a rota da sala (poker-requisito) se a conta nao puder ler');
+    ok(!/workers\.dev/.test(PKA), 'a tela do app nao tem endereco de Worker escrito (usa A.WORKER)');
+
+    // ── A fila: o que aparece e em que ordem ────────────────────────────
+    const CORTE_NAFILA = (src) => ['function pkHoje(', 'function pkDiaDaVotacao(', 'function pkJaVotadaAntes(', 'function pkNaFila('].map(a => corpo(src, a)).join('\n');
+    const frente = (m) => m.frente || '';
+    const filaV = (ms, est, recorte) => new Function('_melhorias', '_estado', '_filaFrente', 'frenteDaDemanda', 'FILA_MARCADAS',
+      CORTE_NAFILA(PKV) + '\n' + corpo(PKV, 'function filaPlanning() {') + '\n' + corpo(PKV, 'function proximoDaFila() {') +
+      '\nreturn { fila: filaPlanning(), prox: proximoDaFila() };')(ms, est, recorte, frente, '__marcadas__');
+    const filaA = (ms, est, recorte) => new Function('S', 'filaMelhorias', 'frenteDe', 'FILA_MARCADAS',
+      CORTE_NAFILA(PKA) + '\n' + corpo(PKA, 'function filaPlanning() {') + '\n' + corpo(PKA, 'function proximoDaFila() {') +
+      '\nreturn { fila: filaPlanning(), prox: proximoDaFila() };')({ estado: est, filaFrente: recorte }, () => ms, frente, '__marcadas__');
+    const agoraF = new Date().toISOString(), antesF = new Date(Date.now() - 3 * 86400000).toISOString();
+    const FRENTES = ['Desenvolvimento', 'Dados & Power BI', 'Automação & RPA'];
+    const msF = [];
+    for (let i = 0; i < 30; i++) {
+      msF.push({ id: 'f' + i, status_planejamento: i % 9 === 8 ? 'planejado' : 'planning', destaque: i % 4 === 1,
+        dados_bi: i % 5 === 2, frente: FRENTES[i % 3],
+        poker_votado_em: i % 7 === 3 ? agoraF : i % 7 === 5 ? antesF : '', poker_pontos: i % 7 === 3 || i % 7 === 5 || i % 11 === 6 ? 5 : null });
+    }
+    let divF = [], casosF = 0;
+    [null, { melhoria_id: '' }, { melhoria_id: 'f5' }, { melhoria_id: 'f8' }, { melhoria_id: 'f13' }, { melhoria_id: 'f29' }].forEach(est =>
+      ['', '__marcadas__'].concat(FRENTES).forEach(rec => {
+        casosF++;
+        const v = filaV(msF, est, rec), a = filaA(msF, est, rec);
+        const fv = v.fila.map(m => m.id).join(), fa = a.fila.map(m => m.id).join();
+        if (fv !== fa || (v.prox && v.prox.id) !== (a.prox && a.prox.id)) divF.push((est ? est.melhoria_id || '-' : 'null') + '/' + (rec || 'todas'));
+      }));
+    const base = filaA(msF, null, '').fila.map(m => m.id);
+    ok(!divF.length && base[0] === 'f1' && base.indexOf('f5') < 0 && base.indexOf('f8') < 0,
+       'a fila do app = a do poker.html em ' + casosF + ' casos: Planning, sem o votado antes de hoje, estreladas no topo, recorte por frente ou marca, a pauta nunca sai, e a mesma proxima',
+       divF.join(', '));
+
+    // ── O cartao da fila e o discovery ──────────────────────────────────
+    const hf = corpo(PKA, 'function htmlFila() {') || '';
+    ok(/chipTipoFila\(m\) \|\| chip\('Sem tipo'/.test(hf) && /chipFrente\(m\)/.test(hf) && /m\.dados_bi \? chip\(/.test(hf) &&
+       /m\.dev \? chip\(/.test(hf) && /nomeTema\(m\.tema_id\)/.test(hf) && /data-pk="todas-frentes"/.test(hf),
+       'o cartao da fila leva tipo, frente, Dados/BI, dev e tema, e o recorte vazio oferece "Ver todas as frentes" (renderFila do poker.html)');
+    const discV = new Function('esc', corpo(PKV, 'function discoveryHTML(m) {') + '\nreturn discoveryHTML;')((s) => String(s == null ? '' : s));
+    const discA = new Function('esc', corpo(PKA, 'function discovery(m) {') + '\nreturn discovery;')((s) => String(s == null ? '' : s));
+    const linhasD = (h) => (String(h).match(/<b>[^<]*<\/b>[^<]*/g) || []).join('\n');
+    const DISC = [
+      { discovery: null },
+      { discovery: { tipo: 'ganho', area_solicitante: 'Fin', ganho: { resumo: 'menos retrabalho', horas_dia: 2, pessoas: 3 } }, criado_em: '2026-10-01T13:05:00Z' },
+      { discovery: { tipo: 'ajuste', local_implementacao: 'AXCred', documentos_afetados: ['CCB', 'NP'], documentos_obs: 'v2', impacto: 'alto', beneficiarios: 'Ops',
+          contexto: { as_is: 'manual', dor: 'erro', nao_fazer: 'multa' }, requisitos_funcionais: [{ desc: 'a', prio: 'alta' }, null, { desc: 'b' }],
+          regras_negocio: [{ regra: 'r1', fonte: 'lei' }], escopo: { dentro: 'x', fora: 'y', premissas: 'z' },
+          criterios_aceite: [{ dado: 'd', quando: 'q', entao: 'e' }, { dado: 'so dado' }, {}] } },
+      { discovery: {}, criado_em: '2026-10-01T13:05:00Z' },
+    ];
+    const divD2 = DISC.filter(m => linhasD(discV(m)) !== linhasD(discA(m)) || !discV(m) !== !discA(m));
+    ok(!divD2.length && /Enviado pelo painel em/.test(discA(DISC[1])),
+       'o discovery do app diz o mesmo que o do poker.html, linha a linha (inclusive "Enviado pelo painel em")', String(divD2.length));
+    ok(!/<details class="pk-disc"/.test(PKA), 'o discovery fica aberto na pauta, como no poker.html (recolhido, ninguem abre no meio da votacao)');
+
+    // ── Gestos que o poker.html tem e o app tinha perdido ───────────────
+    ok(/function abrirRanking\(\)/.test(PKA) && /data-pk="ranking"/.test(PKA) && /A semana atual ainda está correndo/.test(PKA),
+       'a faixa de entregas abre o painel completo das duas semanas, com o aviso da semana parcial (abrirRanking)');
+    ok(/function htmlConviteFixo\(\)/.test(PKA) && /if \(!facil\(\) \|\| !S\.codigo\) return '';/.test(PKA) && /data-pk="cp-cod"/.test(PKA) && /data-pk="cp-link"/.test(PKA),
+       'quem conduz tem o QR e o codigo fixos ao lado do baralho, com copiar codigo e link (renderConviteFixo)');
+    ok(/Ver o PDF em tela cheia/.test(PKA) && /toque na imagem para ver em tamanho real/.test(PKA) && /'ArrowRight'/.test(PKA) && /e\.key === 'Escape'/.test(PKA),
+       'requisito em PDF tem o botao de reserva; o visor anuncia o gesto, alterna o tamanho real, anda pelas setas e sai com Esc');
+    ok(!/JSON\.stringify\(\[est\.melhoria_id, f, S\.filaVer, est\.revelado\]\)/.test(PKA) && /function assinaturaPauta\(/.test(PKA),
+       'revelar ou gravar nao redesenha a pauta (o PDF do requisito nao recarrega e a leitura nao volta ao topo)');
+  }
+
+  /* LEVA 1 DA PARIDADE (06/11/2026): o que o PM/PO sentia falta no Item e na
+     Sprint atual, mais o Excluir, que nao existia em lugar nenhum do app.
+     Cada regra do admin.html e RECORTADA e executada ao lado da do app, na
+     mesma amostra:
+
+       A7  a entrega onde se valida: os avisos da aba Entrega (`entregaHTML`,
+           e `homologHTML` na area) contra `avisosEntrega`, e o texto do que
+           foi implementado contra o da secao `entregaSec` do Item;
+       A8  a faixa "N demandas depois da Planning sem sprint" (`renderSprLinha`)
+           contra `semSprintDepoisDaPlanning` + `faixaSemSprint`;
+       A9  o backlog da sprint por dev (o bloco de `renderGerSprint`) contra
+           `htmlBacklogSprint`, grupo a grupo, linha a linha, opcao a opcao;
+       A10 o direcionar (`sprDirecionar`) contra `direcionarPatch` aplicado
+           pelo GRAVACAO, e a lista de quem pode receber (`devsDisponiveis`)
+           contra `devsParaDirecionar`;
+       e   excluir (`deleteMelhoria`) contra `REGRAS.excluir` + `semADemanda`,
+           e o `gravaExclusao` numa corrida (409) — a nova tentativa tambem
+           tem de sair sem a demanda. */
+  sec('App AXIS: a entrega no Item, o que falta direcionar na sprint e o Excluir, lado a lado com o admin.html');
+  (() => {
+    const ITM = lerTela('axis-tela-item.js');
+    const SPT = lerTela('axis-tela-sprints.js');
+    const ACS = lerTela('axis-acoes.js');
+    const AC = require('./axis-acoes.js');
+    const SP = require('./sprint.js');
+    const ET = require('./etapa-demanda.js');
+    const GR = require('./gravacao.js');
+    const HOM = require('./homologacao.js');
+    const HOJE = '2026-11-06';
+    const copia = (x) => JSON.parse(JSON.stringify(x));
+    const gravada = (m) => ET.gravada(m, HOJE);
+    const ehMesc = (m) => !!String(m && m.mesclado_em || '');
+    const escA = new Function(corpo(ADMIN, 'function esc(s) {') + '\nreturn esc;')();
+    const escApp = new Function(corpo(lerTela('axis-app.js'), 'function esc(s) {') + '\nreturn esc;')();
+    // O texto visivel: sem tag, sem o enfeite do admin (emoji, triangulos) e com as entidades lidas.
+    const texto = (h) => semEmoji(String(h == null ? '' : h).replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, ''))
+      .replace(/[▲△]\s?/g, '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+
+    // ── A7: a entrega onde se valida ────────────────────────────────────
+    const fnsAdm = ['function formatDate(s) {', 'function homologHTML(m, leitura) {', 'function entregaHTML(m, opts) {'].map((a) => corpo(ADMIN, a));
+    // A leva 3 pos o spike e os dados da entrega dentro da secao: vao junto no recorte.
+    const fnsApp = ['function quandoEnt(v) {', 'function dataEnt(s) {', 'function avisosEntrega(m, col, leitura, hoje, HO) {', 'function dadosEntrega(m) {',
+      'function spikeBloco(m, podem, eu, leitura, PV) {', 'function entregaSec(m, ctx) {'].map((a) => corpo(ITM, a));
+    const corAviso = (ITM.match(/var COR_AVISO = [^\n]+/) || [''])[0];
+    ok(fnsAdm.every(Boolean) && fnsApp.every(Boolean) && !!corAviso, 'a entrega existe no admin (entregaHTML, homologHTML) e no Item do app (avisosEntrega, entregaSec) para ser comparada');
+    if (fnsAdm.every(Boolean) && fnsApp.every(Boolean) && corAviso) {
+      const entregaAdm = new Function('statusKey', 'esc', 'window', 'HOMOLOGACAO', 'PRAZO', 'BIS', 'spikeQuemAssina', '_eu',
+        fnsAdm.join('\n') + '\nreturn entregaHTML;')(gravada, escA, { HOMOLOGACAO: HOM, PRAZO: { hojeISO: () => HOJE } }, HOM,
+        { hojeISO: () => HOJE }, { daDemanda: () => [] }, () => [], null);
+      const appDe = (minha) => new Function('H', 'window', 'var SPIKE = { lista: null }, AX = { APP: {} };\n' + corAviso + '\n' + fnsApp.join('\n') + '\nreturn { avisosEntrega, entregaSec };')(
+        { esc: escApp, ico: () => '', hoje: () => HOJE, colunaDe: gravada, minha: () => !!minha },
+        { HOMOLOGACAO: HOM, AXIS_ACOES: { botao: (a) => '<button data-axa-acao="' + a + '"></button>',
+                                          disponiveis: (m) => (HOM.registro(m) ? [] : [{ acao: 'homologar' }]) } });
+      const APPE = appDe(false);
+      const AM = [
+        { id: 'e1', codigo: 'AX-1', titulo: 'Saldo', status_planejamento: 'validacao', dev: 'Ana', implementacao: 'Calculo do saldo com estorno.\nCaso do print coberto.',
+          resumo_entrega: 'O saldo agora desconta o estorno.', entregue_em: '2026-11-05T17:46:00.000Z' },
+        { id: 'e2', codigo: 'AX-2', status_planejamento: 'validacao', implementacao: '', validacao_obs: 'faltou o caso do print',
+          em_producao: true, versao: '2589', producao_em: '2026-11-05', producao_por: 'ROBO' },
+        { id: 'e3', codigo: 'AX-3', status_planejamento: 'validacao', implementacao: 'tem <b>tag</b> & "aspas"', versao: '2600', entregue_em: '2026-11-02T09:05:00Z' },
+        { id: 'e4', codigo: 'AX-4', status_planejamento: 'concluido', validado_em: '2026-11-05T16:21:00.000Z', validado_por: 'Fernando',
+          implementacao: 'y', em_producao: true, producao_em: '2026-11-04T10:00:00Z' },
+        { id: 'e5', codigo: 'AX-5', status_planejamento: 'concluido', implementacao: 'z', validacao_obs: 'voltou uma vez' },
+        { id: 'e6', codigo: 'AX-6', status_planejamento: 'deploy', validado_em: '2026-10-01T12:00:00Z', validado_por: '' },
+        { id: 'e7', codigo: 'AX-7', status_planejamento: 'validacao_area', validacao_area_em: '2026-11-04', implementacao: 'para a area conferir' },
+        { id: 'e8', codigo: 'AX-8', status_planejamento: 'validacao_area', validacao_area_em: '2026-10-27' },
+        { id: 'e9', codigo: 'AX-9', status_planejamento: 'validacao_area', homologacao: { quem: 'Nathalia', em: '2026-11-05T12:00:00Z', ok: true, obs: 'conferido no AXCred' } },
+        { id: 'e10', codigo: 'AX-10', status_planejamento: 'validacao_area', homologacao: { quem: 'Nathalia', em: '' } },
+        { id: 'e11', codigo: 'AX-11', status_planejamento: 'validacao_area' },
+      ];
+      const avAdm = (m, leitura) => [...entregaAdm(m, { leitura }).matchAll(/<div class="ent-aviso[^"]*">([\s\S]*?)<\/div>/g)].map((x) => texto(x[1]));
+      const avApp = (m, leitura) => APPE.avisosEntrega(m, gravada(m), leitura, HOJE, HOM).map((a) => texto(a.html));
+      const divAv = [];
+      AM.forEach((m) => [false, true].forEach((l) => {
+        const a = avAdm(m, l), b = avApp(m, l);
+        if (JSON.stringify(a) !== JSON.stringify(b)) divAv.push(m.codigo + (l ? '/leitura' : '') + ': admin ' + JSON.stringify(a) + ' app ' + JSON.stringify(b));
+      }));
+      ok(!divAv.length && avApp(AM[0], false)[0].indexOf('Aguardando sua validação.') === 0 && avApp(AM[0], true)[0].indexOf('Ainda não validada.') === 0,
+         'A7: os avisos da entrega dizem o mesmo que a aba Entrega do admin em ' + AM.length * 2 + ' casos (aguardando ou "ainda nao validada", aprovada, ultima devolucao, no ar ou nao, e a homologacao na area)',
+         divAv.slice(0, 2).join(' || '));
+
+      const implAdm = (m) => {
+        const h = entregaAdm(m, {});
+        const b = h.slice(h.indexOf('<h4>O que foi implementado</h4>'));
+        const x = /<(?:div class="ent-impl"|p class="ent-vazio")>([\s\S]*?)<\/(?:div|p)>/.exec(b);
+        return x ? texto(x[1]) : null;
+      };
+      const blocos = (h) => [...String(h).matchAll(/<div class="it-ent-t[^"]*">([\s\S]*?)<\/div>/g)].map((x) => texto(x[1]));
+      const divImpl = AM.filter((m) => gravada(m) === 'validacao').filter((m) => implAdm(m) !== blocos(APPE.entregaSec(m, { papel: 'admin' }))[0]);
+      ok(!divImpl.length, 'A7: "O que foi implementado" no Item = o da aba Entrega do admin para quem valida (inclusive o pedido de descricao quando o dev nao escreveu)',
+         divImpl.map((m) => m.codigo + ': ' + implAdm(m) + ' x ' + blocos(APPE.entregaSec(m, { papel: 'admin' }))[0]).join(' | '));
+      const s1 = APPE.entregaSec(AM[0], { papel: 'admin' });
+      const sArea = APPE.entregaSec(AM[6], { papel: 'admin' });
+      ok(blocos(s1)[1] === 'O saldo agora desconta o estorno.' && blocos(sArea)[0] === 'para a area conferir',
+         'A7: o resumo da entrega vem junto, e na Validacao da area o texto do dev tambem aparece (a area confere o que foi feito)');
+      ok(/<button data-axa-acao="devolver">/.test(s1) && /<button data-axa-acao="validar">/.test(s1) &&
+         /valAprovar\(\)/.test(entregaAdm(AM[0], {})) && /valRejeitar\(\)/.test(entregaAdm(AM[0], {})) &&
+         !/data-axa-acao/.test(APPE.entregaSec(AM[0], { papel: 'dev' })) && !/valAprovar/.test(entregaAdm(AM[0], { leitura: true })) &&
+         /data-axa-acao="homologar"/.test(APPE.entregaSec(AM[7], { papel: 'admin' })) && !/data-axa-acao="homologar"/.test(APPE.entregaSec(AM[8], { papel: 'admin' })),
+         'A7: Devolver e Aprovar ficam junto do texto para o PM/PO (como no admin), e nao para quem so le; na area, Registrar homologacao enquanto nao ha registro');
+      const fora = ['backlog', 'planning', 'planejado', 'em_andamento', 'negada'].filter((e) => APPE.entregaSec({ id: 'f', status_planejamento: e, implementacao: 'x' }, { papel: 'admin' }));
+      ok(!fora.length && /ainda não foi entregue/.test(entregaAdm({ status_planejamento: 'em_andamento' }, {})) &&
+         /var h = \(noTopo \? ent : ''\)/.test(ITM) && /if \(!noTopo\) h \+= ent;/.test(ITM),
+         'A7: a secao so existe depois da entrega (area, PM/PO, concluida) e, na validacao, vem antes da descricao', fora.join(', '));
+    }
+
+    // ── A8: sem sprint depois da Planning ────────────────────────────────
+    const linhaSrc = corpo(ADMIN, 'function renderSprLinha() {') || '';
+    const semExpr = (linhaSrc.match(/const sem = [\s\S]*?\)\);/) || [''])[0];
+    const sprNomes = ['function plural(n, um, varios) {', 'function semSprintDepoisDaPlanning(SPm, lista, gravada) {', 'function faixaSemSprint(sem, r, dono) {',
+      'function devsParaDirecionar(D, inativos) {', 'function htmlBacklogSprint(grupos, devs, pode) {', 'function direcionarPatch(m, nome) {'];
+    const sprSrcs = sprNomes.map((n) => corpo(SPT, n));
+    const etqBk = (SPT.match(/var ETQ_BK = [^\n]+/) || [''])[0];
+    ok(!!semExpr && sprSrcs.every(Boolean) && !!etqBk, 'o filtro e o aviso do admin (renderSprLinha) e as funcoes da Sprint atual do app existem para serem comparadas',
+       sprNomes.filter((n, i) => !sprSrcs[i]).join(', '));
+    if (!semExpr || !sprSrcs.every(Boolean) || !etqBk) return;
+    const SPA = new Function('SP', 'H', 'esc', 'ico', etqBk + '\n' + sprSrcs.join('\n') +
+      '\nreturn { semSprintDepoisDaPlanning, faixaSemSprint, devsParaDirecionar, htmlBacklogSprint, direcionarPatch };')(
+      () => SP, { hrefItem: (m) => '#item/' + (m.codigo || m.id) }, escApp, () => '');
+    const semAdm = (base) => new Function('state', 'SPRINTPO', 'statusKey', 'ehMesclada', semExpr + '\nreturn sem;')(base, SP, gravada, ehMesc);
+    const avisoAdm = (base) => {
+      const av = { textContent: '' };
+      new Function('document', 'window', 'state', 'SPRINTPO', 'PRAZO', 'statusKey', 'ehMesclada', 'esc', 'sprintsComDados', '_sprSel', '_sprTrilha',
+        linhaSrc + '\nrenderSprLinha();')(
+        { getElementById: (id) => (id === 'spr-linha' ? { innerHTML: '', insertAdjacentElement() {} } : id === 'spr-alerta-linha' ? av : null) },
+        { SPRINTPO: SP }, base, SP, { hojeISO: () => HOJE }, gravada, ehMesc, escA, () => [], '', '');
+      return av.textContent;
+    };
+    const ETS = ['backlog', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada', 'atrasado', 'deploy', 'levantar_req'];
+    const baseSem = (n) => {
+      const ms = [];
+      for (let i = 0; i < n; i++) {
+        const m = { id: 's' + i, codigo: i % 13 === 5 ? '' : 'AX-' + (700 + i), titulo: 'T' + i, status_planejamento: ETS[i % ETS.length],
+          sprint_po: i % 4 === 0 ? 'S1-11-2026' : i % 7 === 3 ? 'lixo' : '', dev: i % 3 ? 'Ana' : '' };
+        if (i % 17 === 2) m.oculto = true;
+        if (i % 19 === 6) m.mesclado_em = 's0';
+        ms.push(m);
+      }
+      return { melhorias: ms, feriados: [] };
+    };
+    const divSem = [];
+    [0, 3, 12, 40, 90].forEach((n) => {
+      const b = baseSem(n);
+      const ia = semAdm(b).map((m) => m.id).join(), ib = SPA.semSprintDepoisDaPlanning(SP, b.melhorias, gravada).map((m) => m.id).join();
+      const ta = avisoAdm(b).replace(/^⚠\s*/, '').split('. Escolha')[0];
+      const fa = SPA.faixaSemSprint(SPA.semSprintDepoisDaPlanning(SP, b.melhorias, gravada), 'S1-11-2026', true);
+      const tb = texto(fa).replace(/^SEM SPRINT\s*/, '').split('. Escolha')[0];
+      if (ia !== ib || ta !== tb || (!ta) !== (!fa)) divSem.push(n + ': admin [' + ta + '] app [' + tb + ']' + (ia !== ib ? ' ids ' + ia + ' x ' + ib : ''));
+    });
+    ok(!divSem.length && /…/.test(avisoAdm(baseSem(90))),
+       'A8: o aviso "N demandas depois da Planning sem sprint" do app = o do admin (mesmas demandas, mesma contagem, os 6 primeiros codigos e o "…") em 5 bases, inclusive a vazia',
+       divSem.join(' || '));
+    ok(/if \(AX\.APP\.papel === 'admin'\) h \+= faixaSemSprint\(semSprintDepoisDaPlanning\(SP\(\), \(D \|\| \{\}\)\.melhorias, H\.colunaDe\), r, H\.donoDaSprint\(\)\);/.test(SPT) &&
+       !/data-sp-ciclo="lote"/.test(SPA.faixaSemSprint(SPA.semSprintDepoisDaPlanning(SP, baseSem(12).melhorias, gravada), 'S1-11-2026', false)),
+       'A8: a faixa fica na Sprint atual, para o PM/PO, pela etapa gravada (a do admin); "Repassar em lote" so para o dono da sprint');
+
+    // ── A9 e A10: o backlog da sprint e o direcionar ─────────────────────
+    const gerSrc = corpo(ADMIN, 'function renderGerSprint() {') || '';
+    const bkSrc = gerSrc.slice(gerSrc.indexOf("const bkEl = document.getElementById('spr-backlog');"), gerSrc.indexOf('/* ── TODAS AS DEMANDAS'));
+    const devsSrc = ['function kbSplitDevs(s) {', 'function normTexto(s) {', 'function devsComTrabalhoAberto() {', 'function devsDisponiveis() {'].map((a) => corpo(ADMIN, a));
+    ok(bkSrc.length > 200 && devsSrc.every(Boolean), 'o bloco do backlog da sprint e o devsDisponiveis do admin foram recortados');
+    const devsAdm = (base) => new Function('state', 'ehMesclada', devsSrc.join('\n') + '\nreturn devsDisponiveis();')(base, ehMesc);
+    const bkAdm = (base, r, tr) => {
+      const box = { innerHTML: '' };
+      new Function('document', 'state', 'SPRINTPO', '_sprSel', 'etapa', '_sprTrilha', 'esc', 'ehMesclada', devsSrc.join('\n') + '\n' + bkSrc)(
+        { getElementById: (id) => (id === 'spr-backlog' ? box : null) }, base, SP, r, gravada, tr, escA, ehMesc);
+      return box.innerHTML;
+    };
+    const bkApp = (base, r, tr) => SPA.htmlBacklogSprint(SP.backlogDaSprint(base, r, gravada, tr), SPA.devsParaDirecionar(base, base.devs_inativos), true);
+    const lerAdm = (h) => String(h).split('<div class="spr-bk-grupo">').slice(1).map((g) => {
+      const cab = /<div class="spr-bk-dev( sem)?">([\s\S]*?) · (\d+)<\/div>/.exec(g) || [];
+      return { dev: cab[1] ? '' : texto(cab[2]), n: +cab[3], itens: g.split('<div class="spr-item"').slice(1).map((it) => ({
+        cod: texto((/<span class="lote-cod">([\s\S]*?)<\/span>/.exec(it) || [])[1]),
+        etapa: texto((/<span class="spr-sit">([\s\S]*?)<\/span>/.exec(it) || [])[1]),
+        prio: /class="spr-prio"/.test(it), pts: (/<span class="spr-pts">(\d+) pts<\/span>/.exec(it) || [])[1] || '',
+        opcoes: [...it.matchAll(/<option value="([^"]*)">([\s\S]*?)<\/option>/g)].map((o) => texto(o[1]) + '=' + texto(o[2])) })) };
+    });
+    const lerApp = (h) => String(h).split('<div class="sp-bk-g">').slice(1).map((g) => {
+      const dev = (/data-sp-bk-dev="([^"]*)"/.exec(g) || [])[1];
+      return { dev: texto(dev), n: +((/<span class="n">· (\d+)<\/span>/.exec(g) || [])[1]), itens: g.split('<div class="sp-bk-it').slice(1).map((it) => {
+        const partes = texto((/<span class="ti"><b>[\s\S]*?<\/b><span>([\s\S]*?)<\/span><\/span>/.exec(it) || [])[1]).split(' · ');
+        return { cod: texto((/<span class="cd">([\s\S]*?)<\/span>/.exec(it) || [])[1]), etapa: partes[0], prio: partes.indexOf('Prioritária') >= 0,
+          pts: (partes.filter((p) => / pts$/.test(p))[0] || '').replace(' pts', ''),
+          opcoes: [...it.matchAll(/<option value="([^"]*)">([\s\S]*?)<\/option>/g)].map((o) => texto(o[1]) + '=' + texto(o[2])) };
+      }) };
+    });
+    const dicaAdm = (h) => texto((/<span class="spr-dica">([\s\S]*?)<\/span>/.exec(h) || [])[1]).replace(/^— /, '');
+    const dicaApp = (h) => texto((/<\/div><span class="note">([\s\S]*?)<\/span>/.exec(h) || [])[1]);
+    const SPRS = ['S1-11-2026', 'S2-11-2026', '', 'S1-11-2026', 'S5-10-2026'];
+    const DEVS = ['', 'Ana', 'Bia / Caio', 'Íris', 'Zeca', 'ana', 'Davi,Eva', ''];
+    const baseBk = () => {
+      const ms = [];
+      for (let i = 0; i < 60; i++) {
+        const m = { id: 'b' + i, codigo: 'AX-' + (900 + i), titulo: ['Régua', 'Portal', 'Cobrança "nova"', 'Cadastro <PJ>'][i % 4] + ' ' + i,
+          status_planejamento: ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao', 'concluido'][i % 7],
+          dev: DEVS[i % DEVS.length], sprint_po: SPRS[i % SPRS.length], poker_pontos: i % 3 ? (i % 8) + 1 : null };
+        if (i % 9 === 4) m.dados_bi = true;
+        if (i % 11 === 7) m.sales_ops = true;
+        if (i % 6 === 1) m.sprint_prioritaria = { sprint: m.sprint_po || 'S1-11-2026', em: '2026-11-03' };
+        if (i === 50) m.oculto = true;
+        if (i === 51) m.mesclado_em = 'b1';
+        ms.push(m);
+      }
+      // Zeca saiu e so tem demanda concluida; Ines esta inativa mas voltou a ter trabalho aberto.
+      ms.push({ id: 'z1', codigo: 'AX-999', titulo: 'velha', status_planejamento: 'concluido', dev: 'Zeca Antigo', sprint_po: '' });
+      ms.push({ id: 'z2', codigo: 'AX-998', titulo: 'aberta', status_planejamento: 'planejado', dev: 'Inês', sprint_po: 'S2-11-2026' });
+      return { melhorias: ms, feriados: [], desenvolvedores: ['Ana', 'Bia', 'Fábio', 'Zeca Antigo', 'Inês', 'Gil'],
+               devs_removidos: ['zeca antigo', 'Gil'], devs_inativos: ['Ines', 'Fabio'] };
+    };
+    const B0 = baseBk();
+    const dA = devsAdm(B0), dB = SPA.devsParaDirecionar(B0, B0.devs_inativos), dNulo = SPA.devsParaDirecionar(Object.assign({}, B0, { devs_inativos: undefined }), null);
+    ok(JSON.stringify(dA) === JSON.stringify(dB) && dB.indexOf('Inês') >= 0 && dB.indexOf('Fábio') < 0 && dB.indexOf('Zeca Antigo') < 0 && dB.indexOf('Gil') < 0 &&
+       dNulo.indexOf('Fábio') >= 0,
+       'A10: quem pode receber = devsDisponiveis do admin (sem quem saiu nem conta desativada, salvo quem voltou a ter trabalho aberto; sem a lista de inativas, ninguem sai por ela)',
+       JSON.stringify(dA) + ' x ' + JSON.stringify(dB));
+    const divBk = [];
+    let casosBk = 0;
+    ['S1-11-2026', 'S2-11-2026', 'S5-10-2026', 'S4-11-2026'].forEach((r) => ['', 'tecnologia', 'dados_bi', 'sales_ops'].forEach((tr) => {
+      casosBk++;
+      const ha = bkAdm(B0, r, tr), hb = bkApp(B0, r, tr);
+      const a = lerAdm(ha), b = lerApp(hb);
+      if (JSON.stringify(a) !== JSON.stringify(b) || dicaAdm(ha) !== dicaApp(hb) || (!ha) !== (!hb)) {
+        divBk.push(r + '/' + (tr || 'todas') + ': ' + JSON.stringify(a).slice(0, 160) + ' x ' + JSON.stringify(b).slice(0, 160) + ' | ' + dicaAdm(ha) + ' x ' + dicaApp(hb));
+      }
+    }));
+    const amostra = lerApp(bkApp(B0, 'S1-11-2026', ''));
+    ok(!divBk.length && amostra.length > 2 && amostra[0].dev === '' && amostra.some((g) => g.itens.some((x) => x.prio)) &&
+       amostra[0].itens[0].opcoes[0] === '=Direcionar para…' && amostra[1].itens[0].opcoes[0] === '=Trocar dev…',
+       'A9/A10: o backlog da sprint do app = o do admin em ' + casosBk + ' casos (sprint x trilha): grupos por dev com "Sem dev — para direcionar" primeiro, ' +
+       'etapa, codigo, Prioritaria, pontos, a contagem e cada opcao do seletor (sem o dev atual)', divBk.slice(0, 2).join(' || '));
+    ok(!/<select/.test(SPA.htmlBacklogSprint(SP.backlogDaSprint(B0, 'S1-11-2026', gravada, ''), [], false)) &&
+       /h \+= htmlBacklogSprint\(SP\(\)\.backlogDaSprint\(D, r, etapa, tr\), admDir \? devsParaDirecionar\(D, inativosDevs\(\)\) : \[\], admDir\);/.test(SPT) &&
+       /var etapa = H\.colunaDe;/.test(corpo(SPT, 'function abaAtual(el, ctx) {') || ''),
+       'A9: a Sprint atual mostra o backlog pela etapa gravada e na sprint/trilha escolhidas; o seletor so aparece para o PM/PO');
+
+    const dirSrc = corpo(ADMIN, 'async function sprDirecionar(id, nome) {');
+    ok(!!dirSrc, 'sprDirecionar existe no admin para ser comparado');
+    if (dirSrc) {
+      pendentes.push((async () => {
+        const casos = [['b1', 'Bia'], ['b1', ''], ['naoexiste', 'Bia'], ['b8', 'Davi'], ['b0', 'Inês']];
+        const div = [];
+        for (const [id, nome] of casos) {
+          const st = copia(B0);
+          await new Function('state', '_dirtyMelhoriaIds', 'renderAll', 'saveViaProxy', 'avisaFalha', 'toast',
+            'let _pendingEdits = false;\n' + dirSrc + '\nreturn sprDirecionar;')(st, new Set(), () => {}, async () => true, () => {}, () => {})(id, nome);
+          const m = B0.melhorias.find((x) => x.id === id);
+          const p = SPA.direcionarPatch(m, nome);
+          const app = GR.aplicar(B0, p || {});
+          if (JSON.stringify(st.melhorias) !== JSON.stringify(app.melhorias)) div.push(id + '/' + (nome || 'vazio'));
+          if (p && Object.keys(p[m.id]).join() !== 'dev') div.push(id + ': o patch leva mais que o dev');
+        }
+        ok(!div.length, 'A10: direcionar grava o mesmo que o sprDirecionar do admin (so o dev; sem nome ou sem demanda, nada) em ' + casos.length + ' casos', div.join(', '));
+      })());
+    }
+    ok(/el\.addEventListener\('change', function \(e\) \{\s*var s = e\.target\.closest && e\.target\.closest\('select\[data-sp-dir\]'\);\s*if \(s\) direcionar\(s\)/.test(SPT) &&
+       /if \(AX\.APP\.papel !== 'admin'\) \{ sel\.value = ''; H\.toast\(/.test(SPT) && /var out = await H\.gravar\(p, \{ ok:/.test(SPT),
+       'A10: escolher no seletor grava na hora (H.gravar), so para o PM/PO');
+
+    // ── Excluir ─────────────────────────────────────────────────────────
+    const delSrc = corpo(ADMIN, 'async function deleteMelhoria(id, opcoes) {');
+    const kbxSrc = corpo(ADMIN, 'async function kbExcluir(ev, id) {') || '';
+    const gxSrc = corpo(ACS, 'async function gravaExclusao(r) {');
+    const semSrc = corpo(ACS, 'function semADemanda(base, id) {');
+    ok(!!delSrc && !!gxSrc && !!semSrc && !!AC.REGRAS.excluir, 'deleteMelhoria (admin) e REGRAS.excluir + semADemanda + gravaExclusao (app) existem');
+    if (delSrc && gxSrc && semSrc && AC.REGRAS.excluir) {
+      const papeis = ['admin', 'analista', 'dev', 'consulta'].map((p) => p + '=' + AC.REGRAS.excluir(B0.melhorias[3], {}, { papel: p }).ok).join(',');
+      ok(papeis === 'admin=true,analista=false,dev=false,consulta=false' &&
+         /if \(body\.action === 'publish'\) \{\s*\/\/[^\n]*\n\s*if \(!\(await ehAdmin\(\)\)\) return json\(\{ error: 'senha' \}, 401/.test(W),
+         'Excluir: so o PM/PO, como no admin.html (a exclusao e uma publicacao, e o publish e so do admin)', papeis);
+      pendentes.push((async () => {
+        const div = [];
+        for (const id of ['b0', 'b3', 'b59', 'z2']) {
+          const st = copia(B0);
+          await new Function('state', '_deletedIds', 'confirmar', 'renderAll', 'mPersistir', 'let _pendingEdits = false;\n' + delSrc + '\nreturn deleteMelhoria;')(
+            st, new Set(), async () => true, () => {}, async () => {})(id);
+          const r = AC.REGRAS.excluir(B0.melhorias.find((x) => x.id === id), {}, { papel: 'admin' });
+          const s = AC.semADemanda(B0, r.excluir);
+          if (!s.achou || JSON.stringify(st.melhorias) !== JSON.stringify(s.base.melhorias)) div.push(id);
+        }
+        ok(!div.length && !AC.semADemanda(B0, 'naoexiste').achou && B0.melhorias.length === 62,
+           'Excluir: a base que o app grava = a que o deleteMelhoria do admin publica (a demanda sai, o resto fica na ordem), sem tocar a base recebida', div.join(', '));
+
+        // A corrida: o primeiro envio leva 409, o segundo le de novo — e as duas leituras tem de sair sem a demanda.
+        const enviados = [];
+        let leituras = 0;
+        const baseX = { atualizado_em: 'v1', melhorias: [{ id: 'x1', titulo: 'a' }, { id: 'x2', titulo: 'b' }, { id: 'x3', titulo: 'c' }] };
+        const gx = (base) => new Function('raiz', 'H', 'AX', 'fetch', semSrc + '\n' + gxSrc + '\nreturn gravaExclusao;')(
+          { GRAVACAO: GR }, { api: async () => { leituras++; return copia(base); }, toast: () => {}, ir: () => {}, recarregar: async () => {} },
+          { APP: { papel: 'admin', token: 't' }, WORKER: 'w', desenhar: () => {} },
+          async (u, o) => { enviados.push(JSON.parse(o.body)); return enviados.length === 1 ? { status: 409, json: async () => ({ error: 'conflito' }) } : { status: 200, json: async () => ({}) }; });
+        const out = await gx(baseX)({ excluir: 'x2', msg: 'Demanda removida.' });
+        ok(out.ok && leituras === 2 && enviados.length === 2 &&
+           enviados.every((c) => c.action === 'publish' && c.base === 'v1' && c.token === 't' && c.data.melhorias.map((m) => m.id).join() === 'x1,x3'),
+           'Excluir: grava pela base fresca sem a demanda, e a nova tentativa depois do 409 tambem sai sem ela', JSON.stringify(enviados.map((c) => c.data.melhorias.map((m) => m.id))));
+        const antes = enviados.length;
+        const out2 = await gx({ atualizado_em: 'v2', melhorias: [{ id: 'x1', titulo: 'a' }] })({ excluir: 'x2', msg: 'Demanda removida.' });
+        ok(out2.ok && enviados.length === antes, 'Excluir: se outra pessoa ja excluiu, nada e enviado');
+      })());
+      const nomeAdm = /const nome = \(m\.codigo \? m\.codigo \+ ' · ' : ''\) \+ \(m\.titulo \|\| '\(sem título\)'\);/;
+      ok(nomeAdm.test(kbxSrc) && nomeAdm.test(ACS.replace('var nome =', 'const nome =')) &&
+         /sai do quadro e de todos os relatórios\. ' \+\s*'Não há como desfazer\./.test(kbxSrc) &&
+         /'" sai do quadro e de todos os relatórios\. Não há como desfazer\.', ok: 'Excluir', perigo: true/.test(ACS) &&
+         /if \(AC\.REGRAS\.excluir && permite\('excluir', m, \{\}\)\) b\.push\(AC\.botao\('excluir', m, 'Excluir', 'btn perigo'/.test(ITM),
+         'Excluir: o Item oferece o botao a quem pode, e a confirmacao diz QUAL demanda sai, com a frase do kbExcluir');
+    }
+  })();
+
+  /* O APP NO CELULAR (06/11/2026): a base mobile first do nucleo. A barra
+     inferior troca a lateral abaixo de 760 px; quem vai para ela e uma regra
+     pura do nucleo (`barraInferior`), e o resto do menu do perfil vai para a
+     gaveta do "Mais" — nenhum item some, nenhum aparece duas vezes. Os
+     helpers (filtros recolhidos, tabela-cartao) sao o que as telas usam. */
+  sec('App AXIS no celular: barra inferior por perfil, gaveta do Mais e os componentes base');
+  {
+    const AXM = require('./axis-app.js');
+    const ids = (l) => l.map((it) => it.id);
+    const B = {};
+    ['admin', 'analista', 'dev', 'consulta'].forEach((pp) => { B[pp] = AXM.barraInferior(pp); });
+    ok(['admin', 'analista', 'dev'].every((pp) => ids(B[pp].barra).join() === 'inicio,meu,quadro'),
+       'na barra inferior de admin, analista e dev: Inicio, Meu trabalho e Quadro', JSON.stringify(ids(B.dev.barra)));
+    ok(ids(B.consulta.barra).join() === 'inicio,projetos,paineis',
+       'a consulta, que nao ve Meu trabalho nem Quadro, completa a barra com Projetos e Paineis (sem o link que sai do app)', JSON.stringify(ids(B.consulta.barra)));
+    const furos = [];
+    Object.keys(B).forEach((pp) => {
+      const ve = [];
+      AXM.MENU.forEach((g) => g.itens.forEach((it) => { if (it.papeis.indexOf(pp) >= 0) ve.push(it.id); }));
+      const tem = ids(B[pp].barra).concat(...B[pp].mais.map((g) => ids(g.itens)));
+      const dup = tem.filter((x, i) => tem.indexOf(x) !== i);
+      if (ve.slice().sort().join() !== tem.slice().sort().join() || dup.length) furos.push(pp + ': ve ' + ve.join('/') + ' tem ' + tem.join('/'));
+      if (B[pp].mais.some((g) => !g.itens.length)) furos.push(pp + ': grupo vazio no Mais');
+    });
+    ok(!furos.length, 'barra + gaveta do Mais = exatamente o MENU do perfil (nada some, nada repete, sem grupo vazio)', furos.join(' | '));
+    ok(ids(B.admin.rodape).join() === 'configuracoes' && !B.dev.rodape.length && !B.consulta.rodape.length && !B.analista.rodape.length,
+       'Configuracoes (o rodape do menu) so vai para a gaveta do admin');
+    ok(B.dev.barra.length <= 3 && B.consulta.barra.length <= 3, 'a barra tem no maximo tres telas, mais Buscar e Mais (cinco alvos)');
+
+    const H = AXM.H;
+    ok(H.celula('<span class="mo">5</span>', 'Pontos') === '<span data-label="Pontos" class="mo">5</span>' &&
+       H.celula('<td>x</td>', 'Item', 'titulo') === '<td data-label="Item" data-tc="titulo">x</td>',
+       'H.celula marca a primeira tag com data-label e data-tc, sem embrulhar (o grid do computador nao muda)');
+    const fl = H.filtros('<select id="s"></select>', 2, { id: 'teste' });
+    const fl0 = H.filtros('<select></select>', 0, { id: 'teste' });
+    ok(/class="fl" data-fl="teste"/.test(fl) && /data-fl-abrir/.test(fl) && /<span class="fl-n">2<\/span>/.test(fl) &&
+       /<div class="fl-corpo"><select id="s"><\/select><\/div>/.test(fl) && /class="fl-n" hidden>0</.test(fl0) && !/role="dialog"/.test(fl),
+       'H.filtros: os controles entram intactos, o botao leva o numero de ativos (escondido quando zero) e a gaveta fechada nao e dialogo');
+    ok(typeof H.gaveta === 'function' && typeof H.filtrosN === 'function', 'o nucleo publica H.gaveta e H.filtrosN');
+
+    const CSSA = lerTela('axis-app.css'), APJ = lerTela('axis-app.js');
+    ok(/@container app \(max-width: 760px\) \{[\s\S]*\.axa \.sb \{ display: none !important; \}[\s\S]*\.axa \.bn \{[^}]*position: fixed;[^}]*env\(safe-area-inset-bottom\)/.test(CSSA) &&
+       /\.axa \.main \{ padding-bottom: calc\(96px \+ env\(safe-area-inset-bottom\)\) !important; \}/.test(CSSA) &&
+       /viewport-fit=cover/.test(fs.readFileSync('axis.html', 'utf8')),
+       'no celular a lateral some, a barra inferior respeita a area segura e o conteudo nao fica atras dela');
+    ok(/\.axa \.fl, \.axa \.fl-gv, \.axa \.fl-corpo \{ display: contents; \}/.test(CSSA) && /\.axa \.ovl > \.dlg \{ width: 100% !important; max-width: none !important; min-height: 100%;/.test(CSSA),
+       'no computador os filtros recolhidos sao transparentes; no celular as janelas (.ovl/.dlg) ocupam a tela');
+    ok(/document\.addEventListener\('keydown', tecladoGaveta, true\)/.test(APJ) && /ligarGestoGaveta\(\)/.test(APJ),
+       'a gaveta fecha no Esc, prende o Tab e fecha arrastando, ligados uma vez no nucleo');
+    const QDT = lerTela('axis-tela-quadro.js'), BKT = lerTela('axis-tela-backlog.js'), PLT = lerTela('axis-tela-planejamento.js');
+    ok(/H\.filtros\(h, ativos/.test(QDT) && /H\.filtros\('<select class="in" id="bk-agr"/.test(BKT) && /H\.filtrosN\('backlog', nFiltros\(\)\)/.test(BKT) &&
+       /'<div class="pl-fil" role="group" aria-label="Filtros">' \+ H\.filtros\(/.test(PLT),
+       'Quadro, Backlog e Planejamento recolhem os filtros no celular (H.filtros)');
+    ok(/class="bk-ln tc-ln/.test(BKT) && /class="bk-tab tc"/.test(BKT) && /class="bk-cols tc-cab"/.test(BKT) && /<table class="tbl tc">/.test(BKT),
+       'a lista do Backlog e a tabela de Prazo vencido viram cartoes no celular (.tc + data-label)');
+  }
+
+  /* LEVA 3 DA PARIDADE (06/11/2026): o Item no nivel do modal da demanda (o
+     `modal-melhoria` do admin.html e o `modal-status` do dev.html). Cada regra
+     antiga e RECORTADA e executada ao lado da do app, na mesma amostra:
+
+       Discovery    `renderMDiscovery` (admin) e `discoveryHTMLDev` (dev)
+                    contra `discoveryLinhas`, linha a linha;
+       Comecar      as barreiras do `saveStatus` + `travaSprintBarra` (dev)
+                    contra o botao "Comecar" de `acoes`, em toda etapa antes do
+                    andamento;
+       Mover para   o `ms-status` do dev e o `m-status` do admin contra
+                    `etapasDoSeletor`;
+       Spike/dados  o `spike-bloco` e o `ent-linha` de `entregaHTML` contra
+                    `spikeBloco` e `dadosEntrega`;
+       e mais       `msRemoveAnexo` contra `tirarAnexo`, `checkDepBlock` contra
+                    `entregar`, `msSubAplicaTotal` contra `horasDaEntrega`, a
+                    ultima recusa de `devPausaRender` e `destaqueAlterna`. */
+  sec('App AXIS: o Item no nivel do modal da demanda (admin.html e dev.html), lado a lado');
+  (() => {
+    const ITM = lerTela('axis-tela-item.js');
+    const ACS = lerTela('axis-acoes.js');
+    const APJ = lerTela('axis-app.js');
+    const AC = require('./axis-acoes.js');
+    const SP = require('./sprint.js');
+    const ET = require('./etapa-demanda.js');
+    const HOM = require('./homologacao.js');
+    const PV = require('./prevoo.js');
+    const PA = require('./pausa.js');
+    const SUB = require('./subtarefa.js');
+    const HOJE = '2026-11-06';
+    const gravada = (m) => ET.gravada(m, HOJE);
+    const escA = new Function(corpo(ADMIN, 'function esc(s) {') + '\nreturn esc;')();
+    const escD = new Function(corpo(DEV, 'function devEsc(s) {') + '\nreturn devEsc;')();
+    const escApp = new Function(corpo(APJ, 'function esc(s) {') + '\nreturn esc;')();
+    const dmaApp = new Function(['function ehISO(s) {', 'function data(iso) {', 'function dm(iso) {', 'function dma(iso) {']
+      .map((a) => corpo(APJ, a)).join('\n') + '\nreturn dma;')();
+    const texto = (h) => semEmoji(String(h == null ? '' : h).replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, ' '))
+      .replace(/[✕⬚▲△↩✍]\s?/g, '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+    const ctxDe = (papel, extra) => Object.assign({ papel, quem: 'Ana', nomes: ['Ana'], hoje: HOJE, agora: HOJE + 'T15:00:00.000Z', lista: [],
+      aprovadores: null, R: { SPRINTPO: SP, HOMOLOGACAO: HOM, PREVOO: PV, PAUSA: PA, SUBTAREFA: SUB, VINCULO: require('./vinculo.js') } }, extra || {});
+
+    // ── Discovery ────────────────────────────────────────────────────────
+    const dAdm = corpo(ADMIN, 'function renderMDiscovery(m) {');
+    const dDev = corpo(DEV, 'function discoveryHTMLDev(m) {');
+    const dApp = corpo(ITM, 'function discoveryLinhas(m) {');
+    ok(!!dAdm && !!dDev && !!dApp && /h \+= discoverySec\(m\);/.test(ITM), 'o Discovery existe no admin, no dev e no Item do app (discoveryLinhas, chamado no Detalhe)');
+    if (dAdm && dDev && dApp) {
+      const linhasAdm = (m) => {
+        const el = { innerHTML: '', style: {} };
+        new Function('document', 'esc', dAdm + '\nrenderMDiscovery(m);').call(null, { getElementById: () => el }, escA);
+        return el;
+      };
+      const admDe = (m) => {
+        const el = { innerHTML: '', style: {} };
+        new Function('document', 'esc', 'm', dAdm + '\nrenderMDiscovery(m);')({ getElementById: () => el }, escA, m);
+        const sec1 = el.innerHTML.split('<div class="disc-h">Anexos</div>')[0];
+        return [...sec1.matchAll(/<div class="disc-row"><b>([^<]+):<\/b> ([\s\S]*?)<\/div>/g)].map((x) => x[1] + ' = ' + texto(x[2]));
+      };
+      const devDe = (m) => [...new Function('devEsc', 'm', dDev + '\nreturn discoveryHTMLDev(m);')(escD, m)
+        .matchAll(/<div class="disc-row"><b>([^<]+):<\/b> ([\s\S]*?)<\/div>/g)].map((x) => x[1] + ' = ' + texto(x[2]));
+      const linhasApp = new Function('H', dApp + '\nreturn discoveryLinhas;')({ esc: escApp });
+      const appDe = (m) => linhasApp(m).map((x) => x[0] + ' = ' + texto(x[1]));
+      const DS = [
+        { id: 'd1', solicitante: 'Nathalia', criado_em: '2026-10-05T19:06:00.000Z', discovery: {
+          tipo: 'ganho', area_solicitante: 'Cadastro', local_implementacao: 'AXCred > Cedentes', documentos_afetados: ['Contrato', 'Aditivo'], documentos_obs: 'só os novos',
+          impacto: 'Visual para diretoria', beneficiarios: 'Comitê', ganho: { resumo: '40 h/mês', horas_dia: 2, pessoas: 3 },
+          contexto: { as_is: 'Planilha', dor: 'Retrabalho', nao_fazer: 'Multa' },
+          requisitos_funcionais: [{ desc: 'Trazer na mesma linha', prio: 'Desejável' }, { desc: '' }, { desc: 'Exportar <csv>', prio: 'Alta' }],
+          regras_negocio: [{ regra: 'Somar só aprovados', fonte: 'Manual' }, { regra: 'Sem fonte' }],
+          escopo: { dentro: 'Tela', fora: 'Relatório', premissas: 'Base pronta' },
+          criterios_aceite: [{ dado: 'um cedente', quando: 'abrir', entao: 'vejo o valor' }, { quando: 'só quando' }, {}] } },
+        { id: 'd2', discovery: { tipo: 'correcao', impacto: 'Baixo', ganho: { horas_dia: 1 } } },
+        { id: 'd3', criado_em: '2026-10-05', discovery: {} },
+        { id: 'd4', discovery: { ganho: {}, contexto: {}, escopo: {}, documentos_afetados: [] } },
+        { id: 'd5' },
+      ];
+      const divD = [], divDev = [];
+      DS.forEach((m) => {
+        const a = admDe(m), b = appDe(m);
+        if (JSON.stringify(a) !== JSON.stringify(b)) divD.push(m.id + ': admin ' + JSON.stringify(a) + ' app ' + JSON.stringify(b));
+        // O do dev e o mesmo sem local e documentos, e com o solicitante (que o Item mostra nas propriedades).
+        const dv = devDe(m).filter((l) => !/^Solicitante = /.test(l));
+        const ap = b.filter((l) => !/^(Local da implementação|Documentos afetados) = /.test(l));
+        if (JSON.stringify(dv) !== JSON.stringify(ap)) divDev.push(m.id + ': dev ' + JSON.stringify(dv) + ' app ' + JSON.stringify(ap));
+      });
+      ok(!divD.length && appDe(DS[0]).length === 20 && !appDe(DS[4]).length,
+         'Discovery: as linhas do Item = as do renderMDiscovery do admin em ' + DS.length + ' casos (rotulos, ordem, RF/RN/CA numerados, ganho com h/dia x pessoas, "Enviado pelo painel em")',
+         divD.slice(0, 2).join(' || '));
+      ok(!divDev.length, 'Discovery: e = ao discoveryHTMLDev do dev.html (fora local/documentos, que so o admin tem, e o solicitante, que o Item mostra nas propriedades)', divDev.slice(0, 2).join(' || '));
+    }
+
+    // ── Comecar a partir de qualquer etapa antes do andamento ────────────
+    const tsb = corpo(DEV, 'function travaSprintBarra(id, colKey) {');
+    const fnsAc = ['function podeAgir(m, papel) {', 'function permite(acao, m, a) {', 'function podeEntregar(m) {', 'function acoes(m, ctx, tv) {'].map((a) => corpo(ITM, a));
+    const antes = (ITM.match(/var ANTES_DE_COMECAR = [^\n]+/) || [''])[0];
+    ok(!!tsb && fnsAc.every(Boolean) && !!antes, 'a trava de sprint do dev (travaSprintBarra) e o acoes do Item foram recortados');
+    if (tsb && fnsAc.every(Boolean) && antes) {
+      // As barreiras do `saveStatus` para Em Andamento, na ordem de la, e a do `updateStatus`.
+      const devAntigoComeca = (m) => {
+        if (['validacao', 'concluido'].includes(gravada(m))) return false;
+        if (HOM.barra(m, 'em_andamento', HOJE)) return false;
+        const barra = new Function('window', 'state', 'SPRINTPO', 'PRAZO', 'getStatusKey', tsb + '\nreturn travaSprintBarra;')(
+          { SPRINTPO: SP, PRAZO: { hojeISO: () => HOJE } }, { melhorias: [m] }, SP, { hojeISO: () => HOJE }, gravada)(m.id, 'em_andamento');
+        return !barra;
+      };
+      const cD = ctxDe('dev');
+      const ACX = Object.assign({}, AC, {
+        botao: (acao, m, rot, cls, o) => '<button data-axa-acao="' + acao + '"' + (o && o.desligado ? ' disabled' : '') + '>' + rot + '</button>',
+        disponiveis: () => [], contexto: () => cD, botaoPegar: () => '',
+        permite: (acao, m, a) => { const r = AC.REGRAS[acao](m, a || {}, cD); return !!(r.ok || r.campo); } });
+      const acoesDe = (minha) => new Function('H', 'window', 'rotEtapa', antes + '\n' + fnsAc.join('\n') + '\nreturn acoes;')(
+        { colunaDe: gravada, minha: () => minha, pontosDe: () => 0, pode: () => false, hoje: () => HOJE },
+        { AXIS_ACOES: ACX, HOMOLOGACAO: HOM }, (k) => k);
+      const comecar = (h) => { const x = /<button data-axa-acao="mover"( disabled)?>Começar<\/button>/.exec(h); return x ? (x[1] ? 'travado' : 'livre') : 'sem botao'; };
+      const ETS = ['backlog', 'levantar_req', 'planning', 'planejado'];
+      const AM = [];
+      ETS.forEach((e) => ['', 'S1-11-2026'].forEach((s) => ['evolucao', 'sustentacao'].forEach((t) => {
+        AM.push({ id: 'c' + AM.length, codigo: 'AX-' + (900 + AM.length), status_planejamento: e, sprint_po: s, tipo: t, dev: 'Ana', solicitante: 'Bia' });
+      })));
+      const divC = [];
+      let livres = 0, travados = 0;
+      AM.forEach((m) => {
+        const velho = devAntigoComeca(m) ? 'livre' : 'travado';
+        const novo = comecar(acoesDe(true)(m, { papel: 'dev', D: {} }, { travada: false, prox: 'em_andamento' }));
+        if (velho !== novo) divC.push(m.status_planejamento + '/' + (m.sprint_po || 'sem sprint') + '/' + m.tipo + ': dev.html ' + velho + ', app ' + novo);
+        if (novo === 'livre') livres++; else if (novo === 'travado') travados++;
+      });
+      ok(!divC.length && livres > 0 && travados > 0,
+         'Comecar: o Item oferece "Comecar" ao dev em Backlog, Aprov. requisitos, Planning e Planejado, livre ou travado como o saveStatus + travaSprintBarra do dev.html (' + AM.length + ' casos: ' + livres + ' livres, ' + travados + ' pela sprint)',
+         divC.slice(0, 3).join(' | '));
+      const alheia = comecar(acoesDe(false)(AM[7], { papel: 'dev', D: {} }, { travada: false, prox: 'em_andamento' }));
+      const andando = acoesDe(true)({ id: 'z', status_planejamento: 'em_andamento', dev: 'Ana', solicitante: 'Bia', sprint_po: 'S1-11-2026' }, { papel: 'dev', D: {} }, { travada: false, prox: 'validacao_area' });
+      ok(alheia === 'sem botao' && comecar(andando) === 'sem botao' && /data-axa-acao="entregar"/.test(andando),
+         'Comecar: so na demanda do proprio dev (a alheia so le) e so antes do andamento; em andamento o principal e Registrar entrega');
+
+      // A dependencia so barra a area (checkDepBlock); entregar ao PM/PO segue, e o botao tambem.
+      const cdb = corpo(DEV, 'function checkDepBlock(id, targetColKey) {');
+      const pai = { id: 'p', codigo: 'AX-1', status_planejamento: 'em_andamento', dev: 'Ana', solicitante: 'Bia', tipo: 'sustentacao', sprint_po: 'S1-11-2026' };
+      const filha = { id: 'f', codigo: 'AX-2', status_planejamento: 'planejado', parent_id: 'p', is_dependency: true };
+      const lista = [pai, filha];
+      const velhoBarra = (alvo) => new Function('hasBlockingDep', cdb + '\nreturn checkDepBlock;')(() => require('./vinculo.js').abertos(lista, 'p').length > 0)('p', alvo);
+      const cDep = ctxDe('dev', { lista });
+      const novoBarra = (alvo) => {
+        const r = AC.REGRAS.entregar(pai, { destino: alvo, horas: 2, implementacao: 'x' }, cDep);
+        return !r.ok && /depend/i.test(r.erro || '');
+      };
+      const divDep = ['validacao_area', 'validacao'].filter((d) => velhoBarra(d) !== novoBarra(d));
+      ok(!!cdb && !divDep.length && velhoBarra('validacao_area') && !velhoBarra('validacao'),
+         'Entregar: a dependencia aberta barra a Validacao da area e deixa ir ao PM/PO, como o checkDepBlock do dev.html', divDep.join(', '));
+    }
+
+    // ── Mover para: o seletor unico ─────────────────────────────────────
+    const opsAdm = [...((ADMIN.match(/<select id="m-status"[\s\S]*?<\/select>/) || [''])[0]).matchAll(/<option value="([a-z_]+)"/g)].map((x) => x[1]);
+    const opsDev = [...((DEV.match(/<select id="ms-status"[\s\S]*?<\/select>/) || [''])[0]).matchAll(/<option value="([a-z_]+)"/g)].map((x) => x[1]);
+    ok(opsAdm.length === 9 && opsDev.join() === 'em_andamento,validacao_area,validacao', 'os selects de etapa do admin (m-status) e do dev (ms-status) foram lidos', opsAdm.join() + ' | ' + opsDev.join());
+    const divS = [];
+    ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'].forEach((e) => {
+      const m = { id: 's-' + e, status_planejamento: e, dev: 'Ana', solicitante: 'Bia', tipo: 'sustentacao', sprint_po: 'S1-11-2026', horas_realizadas: 2, implementacao: 'x' };
+      ['admin', 'analista'].forEach((p) => {
+        const app = AC.etapasDoSeletor(m, ctxDe(p)).map((o) => o.v).join();
+        const velho = opsAdm.filter((v) => v !== e).join();
+        if (app !== velho) divS.push(p + '/' + e + ': admin ' + velho + ' app ' + app);
+      });
+      // Dev: o grupo some com o PM/PO ou concluida (`openStatusModal`); o resto, as opcoes do select que a regra deixa entregar.
+      const app = AC.etapasDoSeletor(m, ctxDe('dev'));
+      const velho = ['validacao', 'concluido'].includes(e) ? [] : opsDev.filter((v) => v !== e);
+      const fora = app.filter((o) => velho.indexOf(o.v) < 0);
+      const semComecar = velho.indexOf('em_andamento') >= 0 && !app.some((o) => o.v === 'em_andamento');
+      if (e !== 'negada' && (fora.length || semComecar)) divS.push('dev/' + e + ': dev.html ' + velho.join() + ' app ' + app.map((o) => o.v).join());
+    });
+    const viaNeg = AC.etapasDoSeletor({ status_planejamento: 'planning' }, ctxDe('admin')).find((o) => o.v === 'negada');
+    const viaEnt = AC.etapasDoSeletor({ id: 'e', status_planejamento: 'em_andamento', dev: 'Ana', solicitante: 'Bia', tipo: 'sustentacao' }, ctxDe('dev'));
+    const alheiaS = AC.etapasDoSeletor({ id: 'o', status_planejamento: 'planejado', dev: 'Outro' }, ctxDe('dev'));
+    ok(!divS.length && viaNeg && viaNeg.via === 'negar' && viaEnt.length && viaEnt.every((o) => o.via === 'entregar') && !alheiaS.length &&
+       !AC.etapasDoSeletor({ status_planejamento: 'planning' }, ctxDe('consulta')).length,
+       'Mover para: o admin e o analista veem as 9 etapas do m-status (menos a atual; Negada pede o motivo), o dev as do ms-status (Em Andamento e as entregas que a regra deixa, que pedem horas e texto), nada com o PM/PO, na alheia ou para a consulta',
+       divS.slice(0, 3).join(' | '));
+    ok(/if \(etapasDoSeletor\(m, contexto\(\)\)\.length\) poe\('moverPara', 'Mover para…', 'board'\);/.test(ACS) &&
+       /if \(op\.via === 'negar'\) return GESTOS\.negar\(m\);/.test(ACS) && /if \(op\.via === 'entregar'\) return GESTOS\.entregar\(m,/.test(ACS) &&
+       /else if \(aberta\) poe\('pedirPausa', 'Pedir pausa', 'pause'\);/.test(ACS),
+       'Mover para: o dev ganha o botao, e o gesto manda Negada para "Negar" e a entrega para "Registrar entrega"; Pedir pausa vale em qualquer etapa aberta (devPausaRender)');
+
+    // ── Spike e dados da entrega ─────────────────────────────────────────
+    const fnsAdm = ['function formatDate(s) {', 'function homologHTML(m, leitura) {', 'function entregaHTML(m, opts) {'].map((a) => corpo(ADMIN, a));
+    const fnsApp = ['function quandoEnt(v) {', 'function dataEnt(s) {', 'function dadosEntrega(m) {', 'function spikeBloco(m, podem, eu, leitura, PV) {'].map((a) => corpo(ITM, a));
+    ok(fnsAdm.every(Boolean) && fnsApp.every(Boolean), 'entregaHTML do admin e spikeBloco/dadosEntrega do Item foram recortados');
+    if (fnsAdm.every(Boolean) && fnsApp.every(Boolean)) {
+      const BISm = { daDemanda: (m) => (m.bis || []) };
+      const admDe = (podem, eu) => new Function('statusKey', 'esc', 'window', 'HOMOLOGACAO', 'PRAZO', 'BIS', 'spikeQuemAssina', '_eu', 'PREVOO',
+        fnsAdm.join('\n') + '\nreturn entregaHTML;')(gravada, escA, { HOMOLOGACAO: HOM, PRAZO: { hojeISO: () => HOJE }, PREVOO: PV }, HOM,
+        { hojeISO: () => HOJE }, BISm, () => podem, eu, PV);
+      const app = new Function('H', 'window', 'BIS', fnsApp.join('\n') + '\nreturn { dadosEntrega, spikeBloco };')(
+        { esc: escApp, ico: () => '' },
+        { BIS: BISm, AXIS_ACOES: { botao: (a, m, rot) => '<button data-axa-acao="' + a + '">' + rot + '</button>' } }, BISm);
+      const spikeAdm = (h) => { const x = /<div class="ent-bloco spike-bloco[^"]*">([\s\S]*?)<\/div><div class="ent-bloco"><h4>O que foi implementado/.exec(h); return x ? texto(x[1]) : ''; };
+      const P3 = [{ login: 'ana', nome: 'Ana' }, { login: 'bia', nome: 'Bia' }, { login: 'caio', nome: '' }];
+      const ass = (l) => ({ login: l, nome: l, em: '2026-11-05T13:10:00.000Z' });
+      const CASOS = [
+        ['lista nao chegou', null, null, []], ['sem aprovadores', [], null, []], ['so dois', P3.slice(0, 2), { login: 'ana', nome: 'Ana' }, [ass('ana')]],
+        ['0 de 3, eu nao aprovo', P3, { login: 'zeca' }, []], ['1 de 3, eu aprovo', P3, { login: 'bia', nome: 'Bia' }, [ass('ana')]],
+        ['eu ja assinei', P3, { login: 'ANA', nome: 'Ana' }, [ass('ana'), ass('caio')]], ['3 de 3', P3, null, [ass('ana'), ass('bia'), ass('caio')]],
+        ['assinatura de quem saiu', P3, null, [ass('ana'), ass('ex')]],
+      ];
+      const divSp = [];
+      CASOS.forEach(([nome, podem, eu, aprov]) => ['validacao', 'concluido'].forEach((e) => {
+        const m = { id: 'sp', codigo: 'AX-9', status_planejamento: e, spike: true, spike_aprovacoes: aprov, implementacao: 'x' };
+        const a = spikeAdm(admDe(podem, eu)(m)).replace(/^Spike · /, 'SPIKE · ').replace(/ de (\d) aprovações/, ' DE $1 APROVAÇÕES').replace(/^Spike /, 'SPIKE ');
+        const b = texto(app.spikeBloco(m, podem, eu, false, PV));
+        if (a !== b) divSp.push(nome + '/' + e + ': admin [' + a + '] app [' + b + ']');
+      }));
+      ok(!divSp.length && !app.spikeBloco({ spike: false }, P3, null, false, PV) &&
+         !/data-axa-acao/.test(app.spikeBloco({ spike: true, spike_aprovacoes: [] }, P3, { login: 'ana' }, true, PV)),
+         'Spike: o bloco do Item = o da aba Entrega do admin em ' + CASOS.length * 2 + ' casos (conferindo, poucos aprovadores, lista nominal com data, "N de 3", assinado, Aprovar como / Retirar so para quem aprova)',
+         divSp.slice(0, 2).join(' || '));
+      const dadosAdm = (m) => { const x = /<h4>Dados da entrega<\/h4><div class="ent-linha">([\s\S]*?)<\/div><\/div>/.exec(admDe([], null)(m));
+        return x ? [...x[1].matchAll(/<span>([\s\S]*?)<\/span>/g)].map((y) => texto(y[1])) : null; };
+      const dadosApp = (m) => app.dadosEntrega(m).map((d) => d.length > 1 ? d[0] + ': ' + d[1] : d[0]);
+      const DM = [
+        { status_planejamento: 'validacao', dev: 'Ana', horas_realizadas: 12.5, entrega: '2026-11-04', debito_tecnico: true, dados_bi: true, sales_ops: true, bis: ['Funil', 'Caixa'], sprint: 'S1-11-2026' },
+        { status_planejamento: 'concluido', concluido_em: '2026-11-05T21:30:00Z', sales_ops: true },
+        { status_planejamento: 'validacao' },
+        { status_planejamento: 'concluido', dev: 'Bia / Caio', horas_realizadas: '3', entrega: '2026-10-30T12:00:00Z', concluido_em: '2026-10-31' },
+      ];
+      const divDa = DM.filter((m) => JSON.stringify(dadosAdm(m)) !== JSON.stringify(dadosApp(m)));
+      ok(!divDa.length && /dadosEntrega\(m\)\.map/.test(ITM),
+         'Dados da entrega: o bloco do Item = o "Dados da entrega" do admin em ' + DM.length + ' casos (dev, horas, prazo, concluida em, debito, Dados/BI ou Sales Ops, BIs, sprint)',
+         divDa.map((m) => JSON.stringify(dadosAdm(m)) + ' x ' + JSON.stringify(dadosApp(m))).join(' | '));
+      ok(/spikeBloco\(m, SPIKE\.lista, AX\.APP\.eu \|\| null/.test(ITM) && /H\.api\('spike-aprovadores'\)/.test(ITM) && /H\.api\('spike-assinar', \{ id: m\.id, retirar: !assinar \}\)/.test(ACS) &&
+         !/editor da Área administrativa/.test(ACS),
+         'Spike: a lista vem da rota spike-aprovadores (como o admin), assinar e retirar vao pela rota spike-assinar (quem assina vem da sessao) e a recusa nao manda mais ao editor antigo');
+    }
+
+    // ── Anexos: tirar e colar ───────────────────────────────────────────
+    const rmv = corpo(DEV, 'function msRemoveAnexo(i) {');
+    const LA = [{ nome: 'a.png', chave: 'k1' }, { nome: 'b.pdf', chave: 'k2' }, { nome: 'c.txt', chave: 'k3' }];
+    const divA = [0, 1, 2].filter((i) => {
+      const st = { _msAnexos: JSON.parse(JSON.stringify(LA)) };
+      new Function('_msAnexos', 'msRenderAnexosEdit', 'var _msAnexosMexidos = false;\n' + rmv + '\nmsRemoveAnexo(' + i + ');')(st._msAnexos, () => {});
+      const r = AC.REGRAS.tirarAnexo({ id: 'x', dev: 'Ana', status_planejamento: 'em_andamento', anexos: LA }, { i, nome: LA[i].nome }, ctxDe('dev'));
+      return !r.ok || JSON.stringify(r.patch.anexos) !== JSON.stringify(st._msAnexos);
+    });
+    const recusas = [
+      AC.REGRAS.tirarAnexo({ anexos: LA }, { i: 1, nome: 'outro.png' }, ctxDe('admin')).ok,
+      AC.REGRAS.tirarAnexo({ anexos: LA, dev: 'Outro', status_planejamento: 'planejado' }, { i: 0, nome: 'a.png' }, ctxDe('dev')).ok,
+      AC.REGRAS.tirarAnexo({ anexos: LA }, { i: 0, nome: 'a.png' }, ctxDe('consulta')).ok,
+      AC.REGRAS.tirarAnexo({ anexos: LA, dev: 'Ana', status_planejamento: 'concluido' }, { i: 0, nome: 'a.png' }, ctxDe('dev')).ok,
+    ];
+    ok(!!rmv && !divA.length && recusas.every((x) => !x),
+       'Anexo: o ✕ do Item tira o mesmo arquivo que o msRemoveAnexo do dev.html; recusa indice que mudou de arquivo, demanda alheia, consulta e concluida do dev', divA.join(','));
+    ok(/ligaZonaAnexo\('ms-file', msAddFiles\)/.test(DEV) && /ligaZonaAnexo\('it-anx-arq', function \(fs\) \{\s*AC\.anexarArquivos\(/.test(ITM) &&
+       /<input type="file" multiple hidden id="it-anx-arq" data-axa-anexar="/.test(ITM) && /src="anexo-cola\.js\?v=/.test(lerTela('axis.html')),
+       'Anexo: o Item liga a mesma .anexo-zona do modal do dev (colar com Ctrl+V, arrastar, duplo clique) e grava pelo anexarArquivos, com o anexo-cola.js carregado no app');
+
+    // ── Conversa sem a ida a mensageria ─────────────────────────────────
+    ok(!/mensageria\.html\?codigo/.test(ITM) && !/data-mensageria/.test(ITM) && /data-axa-anexo="' \+ m\.anexos\.indexOf\(x\) \+ '" data-axa-id="' \+ H\.esc\(m\.id\) \+ '" title="Abrir/.test(ITM),
+       'Conversa: sem o botao "Abrir na mensageria" (a conversa ja esta no Item) e os anexos ao lado abrem como na secao ANEXOS');
+
+    // ── Horas somadas, ultima recusa de pausa e a estrela ────────────────
+    const msat = corpo(DEV, 'function msSubAplicaTotal() {');
+    const SUBS = [[], [{ titulo: 'a', horas: '' }], [{ titulo: 'a', horas: '2' }, { titulo: 'b', horas: '1.25' }, { titulo: 'c' }], [{ titulo: 'a', horas: '0' }]];
+    const divH = SUBS.filter((l) => {
+      const campo = { value: '7', readOnly: false, style: {} };
+      new Function('document', '_msSubs', 'msSubHorasTotal', msat + '\nmsSubAplicaTotal();')({ getElementById: (id) => (id === 'ms-horas' ? campo : null) }, l, (s) => SUB.horasTotal(s));
+      const h = AC.horasDaEntrega({ subtarefas: l, horas_realizadas: 7 }, ctxDe('dev'));
+      return String(campo.value) !== String(h.horas) || campo.readOnly !== h.somado;
+    });
+    ok(!!msat && !divH.length && /valor: hz\.horas/.test(ACS) && /valor: horasDaEntrega\(m, contexto\(\)\)\.horas/.test(ACS),
+       'Entrega: as horas propostas = as do msSubAplicaTotal (a soma dos passos quando ha hora lancada; senao, o campo de sempre), em Registrar e em Corrigir entrega',
+       divH.map((l) => JSON.stringify(l)).join(' | '));
+
+    const dpr = corpo(DEV, 'function devPausaRender(m) {');
+    const urSrc = corpo(ITM, 'function ultimaRecusa(m) {');
+    const recusaDev = (m) => {
+      const box = { innerHTML: '', style: {} };
+      new Function('document', 'getStatusKey', 'estaPausado', 'PAUSA', 'formatDate', 'escAttr', '_isoHoje', dpr + '\ndevPausaRender(m);'.replace('(m)', '(arguments[7])'))(
+        { getElementById: () => box }, gravada, (x) => !!x.pausado_em, PA, new Function(corpo(DEV, 'function formatDate(s) {') + '\nreturn formatDate;')(), escD, () => HOJE, m);
+      const x = /<div style="color:var\(--red-tx[^"]*">([\s\S]*?)<\/div>/.exec(box.innerHTML);
+      return x ? texto(x[1]) : '';
+    };
+    const urApp = new Function('H', urSrc + '\nreturn ultimaRecusa;')({ esc: escApp, dma: dmaApp });
+    const PR = [
+      { status_planejamento: 'planejado' },
+      { status_planejamento: 'em_andamento', pausa_recusas: [{ em: '2026-11-03', por: 'Fernando', motivo: 'segue pelo caminho B' }] },
+      { status_planejamento: 'planejado', pausa_recusas: [{ em: '2026-10-01', por: 'X', motivo: 'a' }, { em: '2026-11-04', por: '', motivo: '<b>não</b>' }] },
+    ];
+    const divR = PR.filter((m) => recusaDev(m) !== texto(urApp(m)));
+    ok(!!dpr && !!urSrc && !divR.length && /var rec = ultimaRecusa\(m\);/.test(ITM),
+       'Pausa: a ultima recusa aparece no Item com a frase do devPausaRender (data, quem, motivo e a "Nª recusa")', divR.map((m) => recusaDev(m) + ' x ' + texto(urApp(m))).join(' | '));
+
+    const dal = corpo(ADMIN, 'async function destaqueAlterna(ev, id) {');
+    const corte = dal ? dal.slice(0, dal.indexOf('renderAll();')) + '}' : '';
+    const divE = [undefined, false, true].filter((v) => {
+      const st = { melhorias: [{ id: 'q', destaque: v }] };
+      new Function('state', '_dirtyMelhoriaIds', '_pendingEdits', corte.replace('async function', 'function') + '\ndestaqueAlterna(null, "q");')(st, new Set(), false);
+      const r = AC.REGRAS.destaque({ id: 'q', destaque: v }, {}, ctxDe('admin'));
+      return !r.ok || r.patch.destaque !== st.melhorias[0].destaque;
+    });
+    ok(!!dal && !divE.length && !AC.REGRAS.destaque({}, {}, ctxDe('dev')).ok && /data-axa-acao="destaque"/.test(ITM),
+       'Destaque: a estrela do Item liga e desliga como o destaqueAlterna do admin, em um clique, e so para o PM/PO', divE.join(','));
+  })();
+
+  /* LEVA 2 DA PARIDADE (06/11/2026): o Quadro e o Meu trabalho do app no
+     nivel do Kanban do admin.html e do painel do dev.html. Cada regra do
+     antigo e RECORTADA e executada ao lado da do app, na mesma amostra:
+
+       arraste    `kbDrop` (admin) contra `soltarEm` + `REGRAS.mover`: mover
+                  ou recusar, o campo que o card abre e o patch; e
+                  `onDragOver` + `onDrop` (dev.html) contra `podeSoltar` +
+                  `soltarEm`: coluna fechada, homologacao, dependencia,
+                  entrega pedida ou movida;
+       quem       todo card do admin arrasta; o do dev, o que o painel mostra;
+       busca      `matchBusca` contra `casaBusca`;
+       data       o "🏁" de `renderKanban` contra `dataNoCard`;
+       validacao  o `kb-val` (Aprovar e Devolver) contra `decideNoCard`;
+       colunas    `COLUMNS` do dev.html contra `COLUNAS_DEV`;
+       sem corte  o "e mais N" do Meu trabalho abre o resto;
+       devolucao  a faixa do card (`kcard-devolucao`) contra `faixaDevolucao`;
+       vencidas   `renderRiscoDev` contra `riscoDoPainel` + `faixaRisco`. */
+  sec('App AXIS: o Quadro e o Meu trabalho no nivel do Kanban do admin.html e do painel do dev.html, lado a lado');
+  (() => {
+    const QDT = lerTela('axis-tela-quadro.js');
+    const INI = lerTela('axis-tela-inicio.js');
+    const APJ = lerTela('axis-app.js');
+    const AC = require('./axis-acoes.js');
+    const SP = require('./sprint.js');
+    const ET = require('./etapa-demanda.js');
+    const HOM = require('./homologacao.js');
+    const PV = require('./prevoo.js');
+    const VI = require('./vinculo.js');
+    const DV = require('./devolucao.js');
+    const DN = require('./dev-nome.js');
+    const HOJE = '2026-11-06';
+    const gravada = (m) => ET.gravada(m, HOJE);
+    // A etapa efetiva pergunta o atraso ao prazo.js pelo global, como na pagina.
+    const efetiva = (m) => { const antes = globalThis.PRAZO; globalThis.PRAZO = require('./prazo.js'); try { return ET.efetiva(m, HOJE); } finally { globalThis.PRAZO = antes; } };
+    const copia = (x) => JSON.parse(JSON.stringify(x));
+    const agora = new Date();
+    const hojeReal = agora.getFullYear() + '-' + String(agora.getMonth() + 1).padStart(2, '0') + '-' + String(agora.getDate()).padStart(2, '0');
+    const sem = (t) => semEmoji(String(t || '')).replace(/^[🔒🏃]\s*/u, '').trim();
+    // Recorta `const X = [ ... ]` (ou `{ ... }`) pela contagem do delimitador.
+    const fatia = (src, inicio) => {
+      const i = src.indexOf(inicio);
+      if (i < 0) return null;
+      const ab = inicio.slice(-1), fe = ab === '[' ? ']' : '}';
+      let d = 0;
+      for (let k = i + inicio.length - 1; k < src.length; k++) {
+        if (src[k] === ab) d++;
+        else if (src[k] === fe) { d--; if (!d) return src.slice(i, k + 1); }
+      }
+      return null;
+    };
+    const escApp = new Function(corpo(APJ, 'function esc(s) {') + '\nreturn esc;')();
+    const dmApp = new Function(['function ehISO(s) {', 'function data(iso) {', 'function dm(iso) {', 'function dma(iso) {']
+      .map((a) => corpo(APJ, a)).join('\n') + '\nreturn { ehISO, dm, dma };')();
+    const R = { SPRINTPO: SP, HOMOLOGACAO: HOM, PREVOO: PV, VINCULO: VI, ETAPA: { gravada, efetiva }, DEVNOME: DN };
+    const ctx = (papel, lista, extra) => Object.assign({ papel, quem: 'Ana', nomes: ['Ana'], hoje: HOJE, agora: HOJE + 'T15:00:00.000Z',
+      lista: lista || [], aprovadores: null, R, D: { melhorias: lista || [] } }, extra || {});
+    const SPR = 'S1-11-2026';
+    const base = [
+      { id: 'a1', codigo: 'AX-1', titulo: 'Sem dono no backlog', status_planejamento: 'backlog', tipo: 'evolucao' },
+      { id: 'a2', codigo: 'AX-2', titulo: 'No Planning, sem sprint', status_planejamento: 'planning', dev: 'Ana', tipo: 'evolucao' },
+      { id: 'a3', codigo: 'AX-3', titulo: 'Planejada', status_planejamento: 'planejado', dev: 'Ana', tipo: 'evolucao', sprint_po: SPR, solicitante: 'Bia' },
+      { id: 'a4', codigo: 'AX-4', titulo: 'Andando sem horas', status_planejamento: 'em_andamento', dev: 'Ana', tipo: 'evolucao', sprint_po: SPR, solicitante: 'Bia' },
+      { id: 'a5', codigo: 'AX-5', titulo: 'Andando sem solicitante', status_planejamento: 'em_andamento', dev: 'Ana', tipo: 'evolucao', sprint_po: SPR, horas_realizadas: 5, implementacao: 'feito', solicitante: '' },
+      { id: 'a6', codigo: 'AX-6', titulo: 'Na area sem registro', status_planejamento: 'validacao_area', dev: 'Ana', tipo: 'evolucao', sprint_po: SPR, horas_realizadas: 4, implementacao: 'x', solicitante: 'Bia', validacao_area_em: '2026-11-04' },
+      { id: 'a7', codigo: 'AX-7', titulo: 'Com o PO', status_planejamento: 'validacao', dev: 'Ana', tipo: 'sustentacao', sprint_po: SPR, horas_realizadas: 3, implementacao: 'y', solicitante: 'Bia', validacao_obs: 'faltou o caso do estorno' },
+      { id: 'a8', codigo: 'AX-8', titulo: 'Concluida', status_planejamento: 'concluido', dev: 'Ana', tipo: 'evolucao', sprint_po: SPR, horas_realizadas: 2, concluido_em: '2026-11-02', entregue_em: '2026-11-01' },
+      { id: 'a9', codigo: 'AX-9', titulo: 'Sustentacao sem dono', status_planejamento: 'planejado', tipo: 'sustentacao' },
+      { id: 'a10', codigo: 'AX-10', titulo: 'Com dependencia aberta', status_planejamento: 'em_andamento', dev: 'Ana', tipo: 'sustentacao', horas_realizadas: 6, implementacao: 'z', solicitante: 'Bia' },
+      { id: 'a11', codigo: 'AX-11', titulo: 'A dependencia', status_planejamento: 'planejado', dev: 'Caio', parent_id: 'a10', is_dependency: true, tipo: 'sustentacao' },
+      { id: 'a12', codigo: 'AX-12', titulo: 'Concluida sem horas', status_planejamento: 'validacao', dev: 'Ana', tipo: 'sustentacao', sprint_po: SPR, solicitante: 'Bia' },
+    ];
+    const DESTINOS = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'];
+
+    // ── 1. O arraste do PM/PO: kbDrop x soltarEm + mover ────────────────
+    const DROP = corpo(ADMIN, 'function kbDrop(e, colKey) {');
+    const fnsAdm = ['function gestoSemDev(velha, destino, dev, sprint) {', 'function faltaHorasPara(m, etapaNova) {', 'function pedeHoras(m, etapaNova) {',
+      'function marcaConclusao(m, etapaNova) {'].map((a) => corpo(ADMIN, a));
+    const consts = [(ADMIN.match(/const ETAPAS_COM_DEV = \[[^\]]*\];/) || [''])[0], (ADMIN.match(/const SP_TO_STATUS = \{[^}]*\};/) || [''])[0]];
+    ok(!!DROP && fnsAdm.every(Boolean) && consts.every(Boolean) && typeof AC.soltarEm === 'function',
+       'o arraste existe no Kanban do admin (kbDrop) e no app (AXIS_ACOES.soltarEm) para ser comparado');
+    if (DROP && fnsAdm.every(Boolean) && consts.every(Boolean)) {
+      const kbDrop = (m0, destino) => {
+        const m = copia(m0);
+        const feito = { toast: '', foco: '', aba: '', salvou: false };
+        const tarefas = [];
+        const amb = {
+          state: { melhorias: [m] }, renderKanban() {}, openModalMelhoria() {}, kbAutoSave() { feito.salvou = true; },
+          toast(t) { if (!feito.toast) feito.toast = String(t); }, mAba(a) { feito.aba = a; }, onStatusChange() {},
+          setTimeout(fn) { tarefas.push(fn); }, spikeQuemAssina: () => null, statusEfetivo: efetiva,
+          document: { getElementById: (id) => ({ value: '', focus() { feito.foco = id; }, select() {} }) },
+          STATUS_LABELS: AC.REGRAS ? new Proxy({}, { get: (_, k) => AC.rotulo(k) }) : {},
+          _dirtyMelhoriaIds: new Set(), window: { SPRINTPO: SP, HOMOLOGACAO: HOM, PREVOO: PV, PRAZO: { hojeISO: () => HOJE } },
+          SPRINTPO: SP, HOMOLOGACAO: HOM, PREVOO: PV, PRAZO: { hojeISO: () => HOJE },
+        };
+        const nomes = Object.keys(amb);
+        new Function(...nomes, consts.join('\n') + '\nfunction exigeDev(sp) { return ETAPAS_COM_DEV.includes(sp); }\n' + fnsAdm.join('\n') +
+          '\nlet _kbDragId = ' + JSON.stringify(m.id) + ';\n' + DROP + '\nkbDrop({ preventDefault() {}, currentTarget: { classList: { remove() {} } } }, ' + JSON.stringify(destino) + ');')(...nomes.map((n) => amb[n]));
+        tarefas.forEach((t) => t());
+        const campo = { 'm-dev': 'dev', 'm-sprint': 'sprint', 'm-horas-real': 'horas', 'm-solicitante': 'solicitante' }[feito.foco] || (feito.aba === 'entrega' ? 'homologacao' : '');
+        return { moveu: m.status_planejamento !== m0.status_planejamento, m, toast: feito.toast, campo };
+      };
+      const app = (m0, destino) => {
+        const c = ctx('admin', base);
+        const s = AC.soltarEm(m0, destino, c);
+        if (s.via !== 'mover') return { via: s.via };
+        const r = AC.REGRAS.mover(m0, { destino }, c);
+        return { via: 'mover', moveu: !!r.ok, m: r.ok ? Object.assign(copia(m0), r.patch) : m0, erro: r.erro || '', campo: r.campo || '' };
+      };
+      const div = [], negadas = [];
+      base.forEach((m) => DESTINOS.forEach((d) => {
+        if (d === m.status_planejamento) { if (app(m, d).via !== 'nada') div.push(m.codigo + '>' + d + ' (mesma coluna)'); return; }
+        const o = kbDrop(m, d), a = app(m, d);
+        if (d === 'negada') { negadas.push({ ok: a.via === 'negar' && (o.moveu || !!o.toast), det: m.codigo + ': antigo ' + (o.moveu ? 'negou' : o.toast) + ' | app ' + a.via }); return; }
+        if (o.moveu !== a.moveu) { div.push(m.codigo + '>' + d + ': antigo ' + (o.moveu ? 'moveu' : 'recusou: ' + o.toast) + ' | app ' + (a.moveu ? 'moveu' : 'recusou: ' + a.erro)); return; }
+        if (o.moveu) {
+          const campos = ['status_planejamento', 'status', 'concluido_em', 'entregue_em'];
+          // O admin carimba a conclusao com o relogio da maquina; o app, com o `hoje` do contexto.
+          const n = (v) => String(v || '').replace(hojeReal, 'HOJE').replace(HOJE, 'HOJE');
+          const dif = campos.filter((k) => n(o.m[k]) !== n(a.m[k]));
+          if (dif.length) div.push(m.codigo + '>' + d + ' patch: ' + dif.map((k) => k + ' ' + o.m[k] + ' x ' + a.m[k]).join(', '));
+        } else if (o.campo !== a.campo) div.push(m.codigo + '>' + d + ' campo: antigo ' + o.campo + ' | app ' + a.campo + ' (' + o.toast + ' | ' + a.erro + ')');
+      }));
+      ok(!div.length, 'Arraste do PM/PO: em ' + (base.length * DESTINOS.length) + ' pares demanda x coluna, o app move quando o kbDrop move, com o mesmo patch (etapa, status, conclusao, entrega), e recusa quando ele recusa, abrindo o mesmo campo', div.slice(0, 6).join(' || '));
+      ok(negadas.length && negadas.every((x) => x.ok), 'Arraste para Negada: o admin nega no ato (ou recusa pela trava); o app pede o motivo (gesto Negar), como o editor do admin pede',
+         negadas.filter((x) => !x.ok).map((x) => x.det).join(' | ') || negadas.map((x) => x.det).slice(0, 3).join(' | '));
+      ok(base.every((m) => AC.arrastavel(m, ctx('admin', base)) && AC.arrastavel(m, ctx('analista', base))) && /draggable="true"/.test(corpo(ADMIN, 'function renderKanban() {') || ''),
+         'Todo card do Kanban do admin arrasta, e todo card do Quadro arrasta para o PM/PO');
+    }
+
+    // ── 2. O arraste do dev: onDragOver + onDrop x podeSoltar + soltarEm ─
+    const OVER = corpo(DEV, 'function onDragOver(e, colKey) {');
+    const SOLTA = corpo(DEV, 'function onDrop(e, colKey) {');
+    const fnsDev = ['function travaSprintBarra(id, colKey) {', 'function getDeps(parentId) {', 'function hasBlockingDep(id) {', 'function checkDepBlock(id, targetColKey) {'].map((a) => corpo(DEV, a));
+    const COLS = fatia(DEV, 'const COLUMNS = [');
+    const BLOQ = corpo(DEV, 'const COLUNAS_BLOQUEADAS_MSG = {');
+    const EDEV = (DEV.match(/const ETAPAS_DO_DEV = \[[^\]]*\];/) || [''])[0];
+    const EENT = (DEV.match(/const ETAPAS_EXIGEM_ENTREGA = \[[^\]]*\];/) || [''])[0];
+    const CDEV = fatia(QDT, 'var COLUNAS_DEV = [');
+    ok(!!OVER && !!SOLTA && fnsDev.every(Boolean) && !!COLS && !!BLOQ && !!EDEV && !!EENT && !!CDEV,
+       'o arraste existe no painel do dev (onDragOver, onDrop, COLUMNS) e no app (soltarEm, podeSoltar, COLUNAS_DEV) para ser comparado');
+    if (OVER && SOLTA && fnsDev.every(Boolean) && COLS && BLOQ && EDEV && EENT && CDEV) {
+      const colunasDev = new Function(COLS + ';\nreturn COLUMNS;')();
+      const colunasApp = new Function(CDEV + ';\nreturn COLUNAS_DEV;')();
+      ok(JSON.stringify(colunasDev.map((c) => [c.key, c.maps])) === JSON.stringify(colunasApp.map((c) => [c.k, c.junto])),
+         'Meu trabalho tem as colunas do painel do dev, na ordem: com Backlog, Planejado reunindo Em aprovacao de requisitos, e a Validacao da area separada da Validacao PM/PO',
+         JSON.stringify(colunasApp.map((c) => c.k)));
+      const dev = (m0, destino, lista) => {
+        const st = { melhorias: copia(lista) };
+        const m = st.melhorias.find((x) => x.id === m0.id);
+        const feito = { toast: '', modal: null, update: null, efeito: '' };
+        const amb = {
+          state: st, toast(t) { if (!feito.toast) feito.toast = String(t); }, openStatusModal(id, k) { feito.modal = k || 'abre'; },
+          updateStatus(id, k) { feito.update = k; }, setTimeout(fn) { fn(); }, getStatusKey: gravada, statusEfetivo: efetiva,
+          document: { querySelectorAll: () => [], getElementById: () => null }, window: { SPRINTPO: SP, HOMOLOGACAO: HOM, PRAZO: { hojeISO: () => HOJE } },
+          SPRINTPO: SP, HOMOLOGACAO: HOM, VINCULO: VI, PRAZO: { hojeISO: () => HOJE },
+        };
+        const nomes = Object.keys(amb);
+        const fns = new Function(...nomes, EDEV + '\n' + EENT + '\n' + COLS + ';\n' + BLOQ + ';\n' + fnsDev.join('\n') + '\nlet dragId = null;\n' + OVER + '\n' + SOLTA +
+          '\nreturn { over(id, k) { dragId = id; const e = { preventDefault() {}, dataTransfer: {} }; onDragOver(e, k); return e.dataTransfer.dropEffect; },' +
+          ' drop(id, k) { dragId = id; onDrop({ preventDefault() {} }, k); } };')(...nomes.map((n) => amb[n]));
+        const efeito = fns.over(m.id, destino);
+        fns.drop(m.id, destino);
+        const saida = feito.update ? 'mover' : feito.modal && feito.modal !== 'abre' ? 'entregar' : feito.toast ? 'recusa' : 'nada';
+        return { pode: efeito === 'move', saida, toast: feito.toast, abriu: feito.modal === 'abre' };
+      };
+      const div = [];
+      const listas = [base, base.map((m) => (m.id === 'a11' ? Object.assign({}, m, { status_planejamento: 'concluido', horas_realizadas: 1 }) : m))];
+      listas.forEach((lista) => lista.filter((m) => ['a3', 'a4', 'a5', 'a6', 'a7', 'a10', 'a9'].indexOf(m.id) >= 0).forEach((m) => colunasDev.forEach((col) => {
+        const c = ctx('dev', lista);
+        const o = dev(m, col.key, lista);
+        const pode = AC.podeSoltar(m, col.key, c);
+        const s = AC.soltarEm(m, col.key, c, colunasApp.find((x) => x.k === col.key).junto);
+        const rot = m.codigo + '>' + col.key;
+        if (o.pode !== pode) { div.push(rot + ' coluna acesa: antigo ' + o.pode + ' | app ' + pode); return; }
+        /* Coluna apagada: no navegador o dev.html nem recebe o solta. O app diz o
+           motivo: a frase do `onDrop` na coluna que nao e do dev, a da trava de sprint na outra. */
+        if (!o.pode) {
+          if (s.via === 'nada') return;
+          if (s.via !== 'recusa') div.push(rot + ' coluna apagada, mas o app ' + s.via);
+          else if (col.key !== 'em_andamento' && ['validacao_area', 'validacao'].indexOf(col.key) < 0 && sem(o.toast) !== sem(s.erro)) div.push(rot + ' frase: "' + sem(o.toast) + '" x "' + sem(s.erro) + '"');
+          return;
+        }
+        const appSaida = s.via;
+        if (o.saida !== appSaida) { div.push(rot + ': antigo ' + o.saida + ' (' + o.toast + ') | app ' + appSaida + ' (' + (s.erro || '') + ')'); return; }
+        if (o.saida === 'recusa' && sem(o.toast) !== sem(s.erro)) div.push(rot + ' frase: "' + sem(o.toast) + '" x "' + sem(s.erro) + '"');
+        if (o.saida === 'entregar' && s.destino !== col.key) div.push(rot + ' entrega para ' + s.destino);
+        if (o.abriu && ['homologacao', 'solicitante'].indexOf(s.campo) < 0) div.push(rot + ' o antigo abre o card, o app nao (' + s.campo + ')');
+      })));
+      ok(!div.length, 'Arraste do dev: a coluna que acende, a recusa (com a frase de COLUNAS_BLOQUEADAS_MSG, da homologacao e da dependencia), a entrega pedida nas validacoes e o mover para Em andamento sao os do onDragOver + onDrop', div.slice(0, 6).join(' || '));
+      const naoMove = base.filter((m) => ['a3', 'a4', 'a5', 'a6', 'a7', 'a10'].indexOf(m.id) >= 0);
+      ok(naoMove.every((m) => AC.arrastavel(m, ctx('dev', base)) === AC.mostraNoPainel(m, ctx('dev', base), '')) && /draggable="true" id="card-/.test(DEV),
+         'O dev arrasta todo card do painel dele (dev.html: draggable em todo kcard); no app, o que o painel mostra');
+      ok(!AC.arrastavel(base[0], ctx('consulta', base)), 'A consulta nao arrasta nada');
+    }
+
+    // ── 3. Busca, data no card, Aprovar e Devolver, faixa da devolucao ──
+    const mb = ['function normTexto(s) {', 'function matchBusca(m, termo) {'].map((a) => corpo(ADMIN, a));
+    const cb = ['function normTexto(s) {', 'function casaBusca(m, termo) {'].map((a) => corpo(QDT, a));
+    ok(mb.every(Boolean) && cb.every(Boolean) && /F\.busca \? todos\.filter\(function \(m\) \{ return casaBusca\(m, F\.busca\); \}\)/.test(QDT) &&
+       /!F\.todasConcluidas && !F\.busca && !doPeriodo\(m\)/.test(QDT),
+       'a busca existe no admin (matchBusca) e no Quadro (casaBusca), vem antes dos filtros e vence o periodo das concluidas, como no renderKanban');
+    if (mb.every(Boolean) && cb.every(Boolean)) {
+      const adm = new Function(mb.join('\n') + '\nreturn matchBusca;')();
+      const qd = new Function(cb.join('\n') + '\nreturn casaBusca;')();
+      const amostra = base.concat([
+        { codigo: 'AX-179', titulo: 'Reanálise de crédito', descricao: 'Revisar o conluio', dev: 'Nathália Neres', solicitante: 'Lívia' },
+        { codigo: '', titulo: 'Sem código', descricao: null, dev: null, solicitante: undefined },
+      ]);
+      const termos = ['', 'AX-179', 'AX179', '179', 'reanalise', 'REANÁLISE', 'conluio', 'nathalia', 'livia', 'Ana', 'bia', 'estorno', 'sem cod', 'x-1', 'ax-1'];
+      const divB = [];
+      amostra.forEach((m) => termos.forEach((t) => { if (adm(m, t) !== qd(m, t)) divB.push((m.codigo || '?') + '/' + t); }));
+      ok(!divB.length, 'Busca no Quadro: codigo com e sem hifen, titulo, descricao, dev e solicitante, sem acento, igual ao matchBusca do Kanban (' + amostra.length * termos.length + ' casos)', divB.join(', '));
+    }
+    const fd = corpo(ADMIN, 'function formatDate(s) {');
+    const dc = corpo(QDT, 'function dataNoCard(m) {');
+    ok(!!fd && !!dc && /if \(m\.entrega\) meta\.push\('🏁 ' \+ formatDate\(m\.entrega\)\)/.test(ADMIN) && /var dt = dataNoCard\(m\);/.test(QDT) && /H\.ico\('flag'\) \+ ' ' \+ dt\.txt/.test(QDT),
+       'a data de entrega esta no card do Kanban ("🏁") e no card do Quadro (dataNoCard, com o icone da bandeira)');
+    if (fd && dc) {
+      const fmt = new Function(fd + '\nreturn formatDate;')();
+      const dnc = new Function('H', dc + '\nreturn dataNoCard;')(dmApp);
+      const ms = [{ entrega: '2026-11-03' }, { entrega: '2026-01-31' }, { entrega: '' }, {}];
+      const divD = ms.filter((m) => {
+        const o = m.entrega ? fmt(m.entrega) : '';
+        const a = dnc(m);
+        return o ? !a || o.slice(0, 5) !== a.txt || fmt(a.iso) !== o : !!a;
+      });
+      ok(!divD.length, 'Data no card: o app mostra o dia e o mes da mesma `entrega` do "🏁 dd/mm/aaaa" do admin, e nada sem data', divD.map((m) => m.entrega).join(', '));
+    }
+    const dnc2 = corpo(QDT, 'function decideNoCard(m, col, papel) {');
+    const kbVal = /statusKey\(m\) === 'validacao' \? `<div class="kb-val">[\s\S]*?valDecidirNoCard\(event,'\$\{m\.id\}','aprovar'\)[\s\S]*?valDecidirNoCard\(event,'\$\{m\.id\}','devolver'\)/.test(ADMIN);
+    ok(!!dnc2 && kbVal && /AC\.botao\('validar', m, 'Aprovar'/.test(QDT) && /AC\.botao\('devolver', m, 'Devolver'/.test(QDT),
+       'Aprovar e Devolver estao no card da Validacao PM/PO no Kanban (valDecidirNoCard) e no Quadro (os gestos validar e devolver de axis-acoes.js)');
+    if (dnc2) {
+      const dec = new Function(dnc2 + '\nreturn decideNoCard;')();
+      const divV = DESTINOS.filter((k) => dec({}, k, 'admin') !== (k === 'validacao')).concat(['dev', 'analista', 'consulta'].filter((p) => dec({}, 'validacao', p)));
+      ok(!divV.length, 'Aprovar e Devolver so na coluna Validacao PM/PO e so para o PM/PO (o admin.html e do papel admin)', divV.join(','));
+      const val = AC.REGRAS.validar(base[6], {}, ctx('admin', base));
+      const dvl = AC.REGRAS.devolver(base[6], { obs: 'refazer' }, ctx('admin', base));
+      ok(val.ok && val.patch.status_planejamento === 'concluido' && dvl.ok && dvl.patch.validacao_obs === 'refazer' && !AC.REGRAS.devolver(base[6], { obs: '' }, ctx('admin', base)).ok &&
+         !AC.REGRAS.validar(base[11], {}, ctx('admin', base)).ok,
+         'e os botoes do card gravam pelas mesmas regras do Item: aprovar conclui (e recusa sem horas, como o valAprovar), devolver exige o motivo (valRejeitar)');
+    }
+    const fx = corpo(QDT, 'function faixaDevolucao(m) {');
+    ok(!!fx && /DEVOLUCAO\.faixa\(m, 'kcard-devolucao'\)/.test(DEV) && /faixaDevolucao\(m\) \+/.test(QDT) && !/' devolvida', 'dg'/.test(QDT),
+       'o motivo da devolucao e uma faixa visivel no card do dev.html e do Quadro (e nao mais o chip com o motivo so no title)');
+    if (fx) {
+      const appFx = new Function('window', 'DEVOLUCAO', fx + '\nreturn faixaDevolucao;')({ DEVOLUCAO: DV }, DV);
+      const ms = [base[6], { validacao_obs: '  <b>refazer</b> o "saldo"  ' }, { validacao_obs: '' }, {}];
+      const divF = ms.filter((m) => appFx(m).replace('qd-devol', 'kcard-devolucao') !== DV.faixa(m, 'kcard-devolucao'));
+      ok(!divF.length && /Devolvida pelo PM\/PO:/.test(appFx(base[6])) && appFx(base[6]).indexOf('faltou o caso do estorno') > 0,
+         'Faixa da devolucao: o mesmo texto do card do dev.html, com o motivo inteiro no HTML (corte de 3 linhas por CSS)', divF.length + ' divergencias');
+    }
+
+    // ── 4. Meu trabalho: sem corte de 10 e a faixa do prazo vencido ─────
+    const col = corpo(QDT, 'function coluna(k, itens, o) {');
+    ok(!!col && /cards\.map\(m => renderCard\(m, col\.key\)\)\.join\(''\)/.test(DEV) &&
+       /lim: EST\.mais\[c\.k\] \? Math\.max\(c\.itens\.length, 1\) : POR_COLUNA, todos: true/.test(INI) &&
+       /if \(mb && el\.contains\(mb\)\) \{ EST\.mais\[mb\.getAttribute\('data-mais'\)\] = true; redesenha\(el, ctx\); return; \}/.test(INI),
+       'o painel do dev mostra todos os cards da coluna; o Meu trabalho mostra 10 e o "e mais N" e um botao que abre o resto');
+    if (col) {
+      const H0 = { ETAPA_POR_ID: { planejado: { rotulo: 'Planejado', dot: 'x' } }, esc: escApp, ico: () => '' };
+      const colApp = new Function('H', 'attr', 'card', 'POR_PAGINA', 'window', col + '\nreturn coluna;')(H0, escApp, (m) => '<a class="qd-card">' + m.id + '</a>', 20, {});
+      const itens = Array.from({ length: 25 }, (_, i) => ({ id: 'c' + i }));
+      const corta = colApp('planejado', itens, { lim: 10, todos: true });
+      const tudo = colApp('planejado', itens, { lim: 25, todos: true });
+      const nCards = (h) => (h.match(/class="qd-card"/g) || []).length;
+      ok(nCards(corta) === 10 && /<button type="button" class="qd-mais" data-mais="planejado">e mais 15<\/button>/.test(corta) && nCards(tudo) === 25 && !/data-mais/.test(tudo),
+         'Coluna do Meu trabalho: 10 cards e o botao "e mais 15"; aberta, os 25 e nenhum corte', nCards(corta) + ' / ' + nCards(tudo));
+    }
+    const rr = corpo(DEV, 'function renderRiscoDev() {');
+    const rp = corpo(INI, 'function riscoDoPainel(lista, eMinha, visiveis) {');
+    const fr = corpo(INI, 'function faixaRisco(r) {');
+    ok(!!rr && !!rp && !!fr && /kpi\('Atrasadas', risco\.minhas\.length/.test(INI) && /ini: risco\.minhas\.length \? 'risco' : ''/.test(INI) &&
+       /if \(q === 'risco-abre'\) \{ irParaDemanda\(el, ctx, b\.getAttribute\('data-id'\)\); return; \}/.test(INI),
+       'a faixa do prazo vencido existe no dev.html (renderRiscoDev) e no Meu trabalho (riscoDoPainel + faixaRisco), e o numero "Atrasadas" leva a ela');
+    if (rr && rp && fr) {
+      const lista = [
+        { id: 'r1', codigo: 'AX-21', titulo: 'Vencida minha', dev: 'Ana', status_planejamento: 'em_andamento', entrega: '2026-10-20' },
+        { id: 'r2', codigo: 'AX-22', titulo: 'Vencida minha 2', dev: 'Ana / Caio', status_planejamento: 'planejado', entrega: '2026-11-03' },
+        { id: 'r3', codigo: 'AX-23', titulo: 'Vencida de outro', dev: 'Caio', status_planejamento: 'em_andamento', entrega: '2026-10-01' },
+        { id: 'r4', codigo: 'AX-24', titulo: 'Minha no prazo', dev: 'Ana', status_planejamento: 'em_andamento', entrega: '2026-12-01' },
+        { id: 'r5', codigo: 'AX-25', titulo: 'Minha mesclada', dev: 'Ana', status_planejamento: 'em_andamento', entrega: '2026-10-01', mesclado_em: 'r1' },
+        { id: 'r6', codigo: 'AX-26', titulo: 'Minha <b>vencida</b>', dev: 'Ana', status_planejamento: 'validacao', entrega: '2026-10-01' },
+        { id: 'r7', codigo: 'AX-27', titulo: 'Vencida 3', dev: 'Ana', status_planejamento: 'planejado', entrega: '2026-11-05' },
+        { id: 'r8', codigo: 'AX-28', titulo: 'Vencida 4', dev: 'Ana', status_planejamento: 'em_andamento', entrega: '2026-11-04' },
+      ];
+      const caso = (visiveis) => {
+        const el = { style: {}, innerHTML: '' };
+        new Function('document', 'state', 'currentDev', 'DEVNOME', 'statusEfetivo', 'getFiltered', 'escAttr', rr + '\nrenderRiscoDev();')(
+          { getElementById: () => el }, { melhorias: lista }, 'Ana', DN, efetiva, () => lista.filter((m) => visiveis.indexOf(m.id) >= 0),
+          (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])));
+        const H1 = { etapaDe: efetiva, esc: escApp, ico: () => '' };
+        const fns = new Function('H', rp + '\n' + fr + '\nreturn { riscoDoPainel, faixaRisco };')(H1);
+        const vis = {}; visiveis.forEach((id) => { vis[id] = true; });
+        const r = fns.riscoDoPainel(lista, (m) => DN.eDe(m, 'Ana'), vis);
+        const h = fns.faixaRisco(r);
+        const idsOld = [...el.innerHTML.matchAll(/devIrPara\(&quot;(\w+)&quot;\)/g)].map((x) => x[1]);
+        const idsApp = [...h.matchAll(/data-id="(\w+)"/g)].map((x) => x[1]);
+        const n = (s) => ((semEmoji(s.replace(/<[^>]+>/g, ' ')).match(/(\d+) demandas? suas? (?:está|estão)/) || [])[1]);
+        const esc = (s) => ((s.replace(/<[^>]+>/g, ' ').match(/(\d+) (?:está|estão) escondida/) || [])[1] || '0');
+        const mais = (s) => ((s.replace(/<[^>]+>/g, ' ').match(/e mais (\d+)/) || [])[1] || '0');
+        return { iguais: JSON.stringify(idsOld) === JSON.stringify(idsApp) && n(el.innerHTML) === n(h) && esc(el.innerHTML) === esc(h) && mais(el.innerHTML) === mais(h) &&
+          (el.style.display === 'none') === (h === ''), det: idsOld + ' x ' + idsApp + ' | ' + n(el.innerHTML) + '/' + n(h) + ' | esc ' + esc(el.innerHTML) + '/' + esc(h) };
+      };
+      const casos = [['r1', 'r2', 'r6', 'r7', 'r8'], ['r1'], [], ['r1', 'r2', 'r3', 'r4', 'r6', 'r7', 'r8']].map(caso);
+      const vencidas = lista.filter((m) => efetiva(m) === 'atrasado').map((m) => m.id).join(',');
+      ok(vencidas === 'r1,r2,r3,r7,r8', 'a amostra da faixa tem vencidas de verdade (quatro minhas, uma de outro), para a comparacao nao passar no vazio', vencidas);
+      ok(casos.every((c) => c.iguais), 'Faixa do prazo vencido: as mesmas demandas suas (efetiva Atrasado, sem mesclada), as tres primeiras como links que abrem, o "e mais N" e quantas o filtro esconde, como o renderRiscoDev',
+         casos.filter((c) => !c.iguais).map((c) => c.det).join(' || '));
+    }
+
+    // ── 5. A demanda por cima do quadro e o celular ─────────────────────
+    ok(/var t = AX\.APP\.telas && AX\.APP\.telas\.item;/.test(QDT) && /var out = t\.render\(novo, cx\);/.test(QDT) && /if \(t\.depois\) t\.depois\(novo, cx\);/.test(QDT) &&
+       /abrirItem\(porId\(cd\.getAttribute\('data-qd-id'\)\)\);/.test(QDT) && /\['validacao', 'validacao_area'\]\.indexOf\(H\.colunaDe\(m\)\) >= 0 \? novo\.querySelector\('#it-entrega'\)/.test(QDT) &&
+       /if \(Q\) Q\.pintaItem\(false\);/.test(INI) && /pintaItem\(false\); \}/.test(QDT),
+       'O clique no card abre a demanda numa gaveta por cima do quadro, desenhada pela propria tela Item (render + depois), na entrega quando em validacao, e redesenhada depois de gravar');
+    ok(/'\.axa \.qd-rolo\{scroll-snap-type:x mandatory;/.test(QDT) && /'\.axa \.qd-col\{flex:0 0 100%;width:100%;scroll-snap-align:start;/.test(QDT) &&
+       /h \+= abasEtapas\(abas, F\.etapa\);/.test(QDT) && /Q\.abasEtapas\(cols\.map/.test(INI) && /AC\.botao\('moverPara', m, 'Mover', 'btns qd-mover'/.test(QDT) && /H\.filtros\(fl, filtrosAtivos/.test(INI),
+       'No celular o Quadro e o Meu trabalho mostram uma etapa por vez (abas com a contagem e deslize), o card tem o "Mover para…" do seletor unico (o do Item) e os filtros recolhem');
+  })();
+
+  sec('Planejamento do app (axis-tela-planejamento.js) = gantt.html: chips, mover, ocupacao, pontos por sprint');
+  /* AS REGRAS QUE O PLANEJAMENTO DO APP TROUXE DO gantt.html, lado a lado. Cada
+     uma e recortada do gantt (a funcao, ou o trecho de dentro do renderGantt)
+     e rodada na mesma amostra que a regra pura do app: os chips de etapa com a
+     contagem (renderIndicators), soltar a barra (onLayerDrop: dias corridos e o
+     dev de quem recebeu), a barra de capacidade em dias ocupados, o planejado x
+     entregue por sprint (pontosPokerPorSemana, com a reparticao Valid./S-plan)
+     e a cor do executado. As duas diferencas que o app tem de proposito sao
+     afirmadas como diferenca: o chip de Validacao da area (o gantt nao contava
+     a etapa em chip nenhum) e soltar a barra na propria linha (o gantt desfazia
+     a dupla num arraste que era so de data). */
+  (() => {
+    const PLT = lerTela('axis-tela-planejamento.js');
+    const ET = require('./etapa-demanda.js');
+    const SELOm = require('./selo-validacao.js');
+    const ABm = require('./abertura.js');
+    const DEVNOME_ = require('./dev-nome.js');
+    const HOJE = '2026-11-10';
+    const copia = (x) => JSON.parse(JSON.stringify(x));
+    const nomes = ['function soltarBarra(m, dia, devDestino, mesmaLinha) {', 'function contaEtapas(lista, o) {', 'function herdadaNaJanela(m, gravada, ini, hoje, herdam) {',
+      'function ocupacaoDoDev(devCards, dias, ausencias, ehAgrupador) {', 'function semanaIndexFor(dataStr, semanas) {', 'function distribuiPorSprint(pontos, inicio, entrega, semanas) {',
+      'function pontosDoDev(devCards, semanas, de, ate, o) {', 'function execDaSprint(p, f, fechou, CAP) {'];
+    const srcs = nomes.map(n => corpo(PLT, n));
+    ok(srcs.every(Boolean), 'as regras puras do Planejamento existem em axis-tela-planejamento.js para serem comparadas', nomes.filter((n, i) => !srcs[i]).join(', '));
+    if (!srcs.every(Boolean)) return;
+    const APP = new Function(srcs.join('\n') + '\nreturn { soltarBarra, contaEtapas, herdadaNaJanela, ocupacaoDoDev, pontosDoDev, execDaSprint };')();
+
+    // ── A amostra: novembro de 2026, com o feriado do dia 2 e o do dia 20 ──
+    const FER = ['2026-11-02', '2026-11-20'];
+    const workDays = [];
+    for (let d = 1; d <= 30; d++) {
+      const s = '2026-11-' + String(d).padStart(2, '0'), w = new Date(Date.UTC(2026, 10, d)).getUTCDay();
+      if (w !== 0 && w !== 6) workDays.push({ str: s, holiday: FER.includes(s) });
+    }
+    const ETS = ['backlog', 'levantar_req', 'planning', 'planejado', 'em_andamento', 'validacao_area', 'validacao', 'concluido', 'negada'];
+    const DEVS = ['Ana', 'Bia', 'Ana / Caio', 'Caio', '', 'Davi'];
+    const DIAS = ['2026-10-14', '2026-10-28', '2026-11-03', '2026-11-05', '2026-11-06', '2026-11-09', '2026-11-12', '2026-11-16', '2026-11-19', '2026-11-21', '2026-11-25', '2026-12-02', ''];
+    const base = [];
+    for (let i = 0; i < 90; i++) {
+      const a = DIAS[(i * 5) % DIAS.length], b = DIAS[(i * 5 + 1 + (i % 4)) % DIAS.length];
+      const m = { id: 'p' + i, codigo: 'AX-' + (700 + i), titulo: 'Demanda ' + i, status_planejamento: ETS[(i * 7) % ETS.length], dev: DEVS[i % DEVS.length],
+        inicio: i % 6 === 5 ? '' : a, entrega: i % 9 === 4 ? '' : (b && a && b < a ? a : b), poker_pontos: i % 5 ? (i % 13) + 1 : null };
+      if (i % 11 === 3) m.pontos_planejados = 8;
+      if (i % 4 === 1) { m.poker_validado_por = 'Fernando Nascimento'; m.poker_validado_login = 'fernando'; m.poker_validado_em = '2026-11-01'; }
+      if (m.status_planejamento === 'concluido' || m.status_planejamento === 'validacao') m.entregue_em = DIAS[(i * 3) % 12];
+      if (i % 10 === 7) { m.pausado_em = '2026-11-04'; m.pausa_motivo = 'banco'; }
+      if (i % 8 === 2) m.origem = 'endpoint';
+      if (i % 8 === 6) m.origem = 'dev';
+      if (i === 30) m.oculto = true;
+      // A D0 do Davi cobre o mes sem ser trabalho: as quebras e que ocupam dia.
+      if (i === 40) Object.assign(m, { dev: 'Davi', inicio: '2026-11-03', entrega: '2026-11-27', status_planejamento: 'planejado' });
+      if (i === 41 || i === 42) m.parent_id = 'p40';
+      base.push(m);
+    }
+    const efetiva = (m) => (PRZM.estaAtrasada(m, ET.gravada(m, HOJE), HOJE) ? 'atrasado' : ET.gravada(m, HOJE));
+
+    // ── 1. Os chips de etapa (renderIndicators) ──────────────────────────
+    const indSrc = corpo(GANTT, 'function renderIndicators() {');
+    const labSrc = (GANTT.match(/^const ETAPA_LABELS = \{.*\};$/m) || [''])[0];
+    ok(!!indSrc && !!labSrc, 'renderIndicators e ETAPA_LABELS existem no gantt para serem comparados');
+    if (indSrc && labSrc) {
+      const HERDAM = PRZM.ETAPAS_QUE_HERDAM;
+      const div = [];
+      // O mes do gantt contra a janela do app que comeca no dia 1: o corrente, um que passou e um futuro.
+      [[base, '2026-11'], [base.slice(0, 40), '2026-11'], [base.filter(m => m.dev), '2026-12'], [base, '2026-10']].forEach(([lista, mes], n) => {
+        const herdG = (m) => PRZM.herdadaDeMesAnterior(m, ET.gravada(m, HOJE), mes, HOJE);
+        const herdA = (m) => APP.herdadaNaJanela(m, ET.gravada(m, HOJE), mes + '-01', HOJE, HERDAM);
+        const el = { innerHTML: '' };
+        new Function('state', 'filters', 'spEfetivo', 'estaPausado', 'ehHerdada', 'ABERTURA', 'document',
+          'const window = { ABERTURA: ABERTURA }; const MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]; const viewMonth = 10;\n' +
+          labSrc + '\n' + indSrc + '\nrenderIndicators();')({ melhorias: lista }, { indicator: 'nenhum' }, efetiva, (m) => ET.pausada(m), herdG, ABm, { getElementById: () => el });
+        const g = {};
+        for (const x of el.innerHTML.matchAll(/class="ind-chip ([\w-]*)[^"]*"[^>]*>[^<]*<strong>(\d+)<\/strong>/g)) g[x[1] || 'todos'] = +x[2];
+        const a = APP.contaEtapas(lista.filter(m => !m.oculto && !m.mesclado_em), { etapaDe: efetiva, pausada: (m) => ET.pausada(m), herdada: herdA, viaApi: ABm.viaEndpoint, viaPainel: ABm.viaPainelDev });
+        const par = { pausado: '__pausada__', mes_passado: '__herdada__', 'origem-api': '__api__', 'origem-painel': '__painel__' };
+        Object.keys(g).forEach((k) => {
+          const v = k === 'todos' ? a.todos - a.etapas.validacao_area : par[k] ? a.paralelos[par[k]] : a.etapas[k];
+          if (v !== g[k]) div.push('#' + n + ' ' + k + ': gantt ' + g[k] + ' / app ' + v);
+        });
+        Object.keys(par).forEach((k) => { if (!(k in g) && a.paralelos[par[k]]) div.push('#' + n + ' ' + k + ' some no gantt com ' + a.paralelos[par[k]] + ' no app'); });
+        if (n === 0 && !(a.etapas.validacao_area > 0 && g.pausado > 0 && g.mes_passado > 0 && g['origem-api'] > 0 && g['origem-painel'] > 0 && g.atrasado > 0)) div.push('a amostra nao exercita todos os chips: ' + JSON.stringify(g));
+      });
+      ok(div.length === 0, 'Chips de etapa: a mesma contagem do renderIndicators (base inteira; Todos = soma das etapas; pausada, mes passado/veio de antes, API e Painel Dev por fora e so quando ha), e o app soma tambem a Validacao da area, que o gantt deixava fora de todos os chips', div.slice(0, 4).join(' | '));
+      ok(/var c = contaEtapas\(H\.visiveis\(\), \{/.test(PLT) && /if \(ce\) \{ var k0 = ce\.getAttribute\('data-pl-etapa'\); F\.etapa = F\.etapa === k0 \? '' : k0; repinta\(\); return; \}/.test(PLT) &&
+         !/s\('etapa', 'Etapa'/.test(PLT) && /else if \(F\.etapa === '__herdada__'\)/.test(PLT),
+         'Os chips desenham a contagem da base visivel, filtram o quadro e a fila ao clicar (de novo, limpa) e substituem o select de etapa');
+    }
+
+    // ── 2. Soltar a barra (onLayerDrop) ──────────────────────────────────
+    const dropSrc = corpo(GANTT, 'function onLayerDrop(e, dev) {');
+    const tdsSrc = corpo(GANTT, 'function toDateStr(d) {');
+    ok(!!dropSrc && !!tdsSrc, 'onLayerDrop e toDateStr existem no gantt para serem comparados');
+    if (dropSrc && tdsSrc) {
+      const soltaG = (m0, dia, dev) => {
+        const st = { melhorias: [copia(m0)] };
+        new Function('state', 'dia', 'dev',
+          'const VIEWER_MODE = false; const document = { querySelectorAll: () => [] }; const toast = () => {}; const renderAll = () => {}; const debouncedSave = () => {}; const promoveAoAgendar = () => {};\n' +
+          'let dragData = { type: "card", id: state.melhorias[0].id }; const _layerDayFromEvent = () => ({ str: dia, holiday: false });\n' +
+          tdsSrc + '\n' + dropSrc + '\nonLayerDrop({ preventDefault() {} }, dev);')(st, dia, dev);
+        return st.melhorias[0];
+      };
+      const div = [], dupla = [];
+      let casos = 0;
+      base.filter(m => m.inicio || m.entrega).forEach((m) => ['2026-11-03', '2026-11-13', '2026-11-30', '2026-12-31'].forEach((dia) => ['Bia', 'Caio'].forEach((dev) => {
+        const g = soltaG(m, dia, dev);
+        const rowDe = DEVNOME_.daDemanda(m)[0] || '';
+        const mesma = rowDe === dev;
+        const a = Object.assign({}, m, APP.soltarBarra(m, dia, dev, mesma));
+        casos++;
+        if (a.inicio !== g.inicio || a.entrega !== g.entrega) div.push(m.id + '@' + dia + ': ' + g.inicio + '→' + g.entrega + ' / ' + a.inicio + '→' + a.entrega);
+        if (!mesma && a.dev !== g.dev) div.push(m.id + ' dev: ' + g.dev + ' / ' + a.dev);
+        if (mesma && (g.dev !== dev || a.dev !== m.dev)) dupla.push(m.id + ': gantt ' + g.dev + ' / app ' + a.dev);
+      })));
+      ok(div.length === 0 && casos > 200, 'Soltar a barra = onLayerDrop: o inicio vai ao dia, o prazo anda os mesmos dias corridos (sem uma das datas, as duas viram o dia), e em outra linha o dev passa a ser so quem recebeu (' + casos + ' casos)', div.slice(0, 3).join(' | '));
+      const exDupla = base.find(m => m.dev === 'Ana / Caio' && m.inicio && m.entrega);
+      const gD = soltaG(exDupla, '2026-11-13', 'Ana'), aD = Object.assign({}, exDupla, APP.soltarBarra(exDupla, '2026-11-13', 'Ana', true));
+      ok(dupla.length === 0 && gD.dev === 'Ana' && aD.dev === 'Ana / Caio' && gD.inicio === aD.inicio && gD.entrega === aD.entrega,
+         'A diferenca de proposito: soltar na PROPRIA linha so mexe nas datas no app; o gantt gravava o dev da linha e desfazia a dupla (' + exDupla.dev + ' -> ' + gD.dev + ')', dupla.slice(0, 2).join(' | '));
+      ok(/var p = soltarBarra\(m, dia, '', true\);/.test(PLT) && /pt\.dev = soltarBarra\(m, nd\.ini, destino, false\)\.dev;/.test(PLT) && !/function trocaDev/.test(PLT),
+         'O arraste da barra usa soltarBarra para as datas e para o dev (a troca que mantinha a dupla saiu)');
+    }
+
+    // ── 3. A barra de capacidade: dias ocupados (renderGantt) ────────────
+    const iOc = GANTT.indexOf('    const totalWD = workDays.filter(d => !d.holiday).length;');
+    const fOc = GANTT.indexOf('const conflitos = [...occupiedDays].filter(s => ausentes.has(s)).length;');
+    const ausSrc = corpo(GANTT, 'function diasAusentes(dev, workDays) {');
+    ok(iOc > 0 && fOc > iOc && !!ausSrc, 'a conta da barra de capacidade (totalWD a conflitos) e diasAusentes existem no renderGantt para serem comparadas');
+    if (iOc > 0 && fOc > iOc && ausSrc) {
+      const ocSrc = GANTT.slice(iOc, fOc) + 'const conflitos = [...occupiedDays].filter(s => ausentes.has(s)).length;';
+      const AUSs = [{ dev: 'Ana', inicio: '2026-11-09', fim: '2026-11-13' }, { dev: 'Caio', inicio: '2026-11-19', fim: '2026-11-24' }, { dev: 'Davi', inicio: '2026-11-01', fim: '2026-11-30' }];
+      const div = [];
+      ['Ana', 'Bia', 'Caio', 'Davi', 'Ninguem'].forEach((dev) => [workDays, workDays.slice(0, 9), workDays.slice(10)].forEach((wd, n) => {
+        const state = { melhorias: base, ausencias: AUSs };
+        const devCards = base.filter(m => !m.oculto && DEVNOME_.eDe(m, dev) && (m.inicio || m.entrega) && m.status_planejamento !== 'negada');
+        const g = new Function('state', 'workDays', 'devCards', 'VINCULO', 'dev', ausSrc + '\n' + ocSrc + '\nreturn { pct, free, disponivel, occ, conflitos, aus: ausentes.size };')(state, wd, devCards, VINCULO, dev);
+        const a = APP.ocupacaoDoDev(devCards, wd.map(w => ({ d: w.str, fe: w.holiday })), AUSs.filter(x => x.dev === dev), (m) => VINCULO.ehAgrupador(base, m));
+        if (g.pct !== a.pct || g.free !== a.livres || g.disponivel !== a.disp || g.occ !== a.occ || g.conflitos !== a.conflitos || g.aus !== a.nAus) div.push(dev + '#' + n + ': ' + JSON.stringify(g) + ' / ' + JSON.stringify(a));
+      }));
+      ok(div.length === 0, 'Capacidade em dias = a do gantt: % de dias uteis ocupados sobre os disponiveis (feriado fora, ausencia fora, a D0 nao ocupa), dias livres, ausentes e em conflito (5 pessoas x 3 janelas)', div.slice(0, 2).join(' | '));
+    }
+
+    // ── 4. Planejado x entregue por sprint (pontosPokerPorSemana) ────────
+    const ppSrcs = ['function distribuiPorSprint(pontos, inicio, entrega, semanas) {', 'function semanaIndexFor(dataStr, semanas) {',
+      'function pontosPokerPorSemana(devCards, semanas, de, ate) {', 'function ganttTemSelo(m) {'].map(n => corpo(GANTT, n));
+    ok(ppSrcs.every(Boolean), 'distribuiPorSprint, semanaIndexFor, pontosPokerPorSemana e ganttTemSelo existem no gantt para serem comparados');
+    if (ppSrcs.every(Boolean)) {
+      const sem = [];
+      let k0 = '';
+      workDays.filter(d => !d.holiday).forEach((d) => {
+        const w = new Date(d.str + 'T12:00:00Z').getUTCDay(), seg = new Date(Date.UTC(+d.str.slice(0, 4), +d.str.slice(5, 7) - 1, +d.str.slice(8, 10) - (w + 6) % 7)).toISOString().slice(0, 10);
+        if (seg !== k0) { sem.push([]); k0 = seg; }
+        sem[sem.length - 1].push({ str: d.str });
+      });
+      const ppG = new Function('state', 'VINCULO', 'SELO', 'CAPACIDADE', 'const window = { CAPACIDADE: CAPACIDADE, VINCULO: VINCULO, SELO: SELO };\n' + ppSrcs.join('\n') + '\nreturn pontosPokerPorSemana;')(
+        { melhorias: base }, VINCULO, SELOm, CAPI);
+      const div = [];
+      let comPontos = 0;
+      ['Ana', 'Bia', 'Caio', 'Davi'].forEach((dev) => [[sem, '2026-11-02', '2026-11-30'], [sem.slice(0, 2), '2026-11-02', '2026-11-13'], [sem.slice(2), '2026-11-16', '2026-11-30']].forEach(([s, de, ate], n) => {
+        const cards = base.filter(m => !m.oculto && DEVNOME_.eDe(m, dev) && (m.inicio || m.entrega) && m.status_planejamento !== 'negada');
+        const g = ppG(cards, s, de, ate);
+        const a = APP.pontosDoDev(cards, s, de, ate, { CAP: CAPI, ehAgrupador: (m) => VINCULO.ehAgrupador(base, m), temSelo: (m) => !!SELOm.de(m) });
+        if (JSON.stringify(g) !== JSON.stringify(a)) div.push(dev + '#' + n + ': ' + JSON.stringify(g).slice(0, 160) + ' / ' + JSON.stringify(a).slice(0, 160));
+        if (g.total && g.totalFeito && g.totalValidado && g.total !== g.totalValidado) comPontos++;
+      }));
+      ok(div.length === 0 && comPontos > 0, 'Planejado x entregue por sprint = pontosPokerPorSemana: total, entregue, sem pontuar, a reparticao Valid./S-plan e o executado por sprint (4 pessoas x 3 janelas)', div.slice(0, 2).join(' | '));
+
+      // A cor do executado: o callback do quadro, recortado.
+      const exSrc = corpo(GANTT, 'feitoSemana.map((f, i) => {');
+      ok(!!exSrc, 'o executado por sprint (feitoSemana.map) existe no gantt para ser comparado');
+      if (exSrc) {
+        const divE = [];
+        [[0, 0], [10, 0], [10, 5], [10, 10], [10, 14], [0, 20], [0, 100], [120, 100], [50, 120]].forEach(([p, f]) => ['2026-11-04', '2026-11-30'].forEach((hoje) => {
+          const fn = new Function('semanas', 'todayStr', 'porSemana', 'CAPACIDADE', 'const window = { CAPACIDADE: CAPACIDADE };\nreturn ' + exSrc.slice('feitoSemana.map('.length) + ';')(sem, hoje, [p, p, p, p, p], CAPI);
+          const h = fn(f, 0);
+          const cls = (h.match(/class="cq-v ([\w-]+)"/) || [])[1], tit = (h.match(/title="([^"]*)"/) || [])[1];
+          const fechou = sem[0][sem[0].length - 1].str < hoje;
+          const a = APP.execDaSprint(p, f, fechou, CAPI);
+          const sa = (t) => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '');
+          if (cls !== a.cls || sa(tit) !== sa(a.rot)) divE.push(p + '/' + f + '@' + hoje + ': ' + cls + ' "' + tit + '" / ' + a.cls + ' "' + a.rot + '"');
+        }));
+        ok(divE.length === 0, 'A cor do executado = a do quadro do gantt: verde ao bater o plano ou na semana forte, vermelho so com a sprint fechada abaixo do plano, neutro no resto', divE.slice(0, 2).join(' | '));
+      }
+    }
+
+    // ── 5. O rotulo, a gaveta e o celular ────────────────────────────────
+    ok(/l\.oc = ocupacaoDoDev\(cards, J\.dias,/.test(PLT) && /l\.pts = CAP \? pontosDoDev\(cards, semanas, J\.ini, J\.fim,/.test(PLT) &&
+       /pt planejados · <b class="ok">' \+ pt\.totalFeito \+ '<\/b> entregues/.test(PLT) && /linha\('Valid\.'/.test(PLT) && /linha\('S\/plan'/.test(PLT) && /linha\('Exec\.'/.test(PLT) &&
+       /CAP\.rolagens\(cards\)/.test(PLT) && /sem pontuar<\/span>/.test(PLT),
+       'O rotulo do dev desenha as contas acima: % de dias ocupados, "pts planejados · entregues", o quadro Valid./S-plan/Exec. por sprint, sem pontuar, veio de antes e rolou de sprint');
+    ok(/var br = e\.target\.closest\('\.pl-br\[data-id\], \.pl-fc\[data-id\], \.pl-lim \.it, \[data-pl-card\]'\);/.test(PLT) && /Q\.abrirItem\(m\);/.test(PLT) &&
+       /raiz\.AXIS_QUADRO\.pintaItem\(false\)/.test(PLT) && /raiz\.AXIS_ACOES\.GESTOS\.moverPara\(m0\)/.test(PLT) && /botao\('moverPara', m, 'Mover'/.test(PLT),
+       'O clique na barra, no cartao, na fila e no "fora do quadro" abre a demanda inteira na gaveta do Item (AXIS_QUADRO.abrirItem), redesenhada depois de gravar; a etapa muda pelo seletor unico "Mover para"');
+    ok(/var cel = EST\.celular = celular\(\);/.test(PLT) && /data-pl-modo="pessoa"/.test(PLT) && /data-pl-modo="dia"/.test(PLT) && /\(fl \? htmlFila\(fl, true\) : ''\) \+ htmlAgenda\(D, M\)/.test(PLT) &&
+       /data-pl="menu"/.test(PLT) && /'\.axa \.pl-nav a\{width:44px;height:44px;/.test(PLT),
+       'No celular o Planejamento e a agenda (por pessoa ou por dia), com a fila recolhida em cima, os quatro botoes num menu e as setas de 44 px');
+  })();
+
+  sec('App AXIS: sessao vencida, releitura de 30 s, vinculo do nome, Meu resumo e rascunho, lado a lado com admin.html e dev.html');
+  (() => {
+    const APJ = lerTela('axis-app.js'), APC = semComentario(APJ);
+    const CONTA = lerTela('axis-tela-conta.js');
+    const INI = lerTela('axis-tela-inicio.js');
+    const FRM = lerTela('axis-form-demanda.js');
+    const AXA = require('./axis-app.js');
+    const FORM = require('./axis-form-demanda.js');
+    const URLP = 'https://worker.exemplo/';
+
+    // ── 1. Sessao vencida: o 401 de qualquer chamada derruba a sessao ─────
+    /* O embrulho do `fetch` das telas antigas (admin.html e dev.html), recortado
+       e executado, contra o `vigiaSessao` do app, com as mesmas respostas. */
+    const embrulhoAntigo = (src) => {
+      const i = src.indexOf('const _ACOES_SEM_SESSAO');
+      const j = i < 0 ? -1 : src.indexOf('})();', i);
+      return i < 0 || j < 0 ? null : src.slice(i, j + 5);
+    };
+    const CASOS_SESSAO = [
+      { st: 401, acao: 'dados', erro: 'credencial' }, { st: 401, acao: 'dados', erro: 'sessao' },
+      { st: 401, acao: 'dev-publish', erro: 'token' }, { st: 401, acao: 'publish', erro: 'senha' },
+      { st: 401, acao: 'quem-sou', erro: 'credencial' }, { st: 401, acao: 'login', erro: 'credencial' },
+      { st: 401, acao: 'cadastrar', erro: 'credencial' }, { st: 401, acao: 'redefinir', erro: 'senha' },
+      { st: 401, acao: 'meu-nome-demandas', erro: 'sem_conta' }, { st: 403, acao: 'dados', erro: 'credencial' },
+      { st: 200, acao: 'dados', erro: '' }, { st: 401, acao: 'dados', erro: 'credencial', outra: true },
+      { st: 401, acao: 'dados', erro: '', cru: 'Unauthorized' }, { st: 401, acao: 'senha-alterar', erro: 'credencial' }
+    ];
+    const resposta = (c) => new Response(c.cru != null ? c.cru : JSON.stringify(c.erro ? { error: c.erro, detail: 'x' } : { ok: true }), { status: c.st });
+    const rodaSessao = async (montaFetch) => {
+      const out = [];
+      for (const c of CASOS_SESSAO) {
+        let caiu = 0;
+        const nativo = async () => resposta(c);
+        const f = montaFetch(nativo, () => { caiu++; });
+        const r = await f(c.outra ? 'https://outro.exemplo/' : URLP, { method: 'POST', body: JSON.stringify({ action: c.acao, token: 't' }) });
+        const corpo = await r.text();
+        out.push({ caiu: caiu > 0, status: r.status, corpoIntacto: corpo === (c.cru != null ? c.cru : JSON.stringify(c.erro ? { error: c.erro, detail: 'x' } : { ok: true })) });
+      }
+      return out;
+    };
+    const antigoFetch = (src) => (nativo, aoCair) => {
+      const win = { fetch: nativo };
+      new Function('window', 'ADMIN_PROXY_URL', 'sessaoExpirou', 'Response', embrulhoAntigo(src))(win, URLP, aoCair, Response);
+      return win.fetch;
+    };
+    const appFetch = (nativo, aoCair) => AXA.vigiaSessao(nativo, URLP, aoCair);
+    ok(!!embrulhoAntigo(ADMIN) && !!embrulhoAntigo(DEV) && typeof AXA.vigiaSessao === 'function' && typeof AXA.caiuASessao === 'function',
+       'o embrulho do fetch que derruba a sessao existe no admin.html, no dev.html e no app (vigiaSessao)');
+    if (embrulhoAntigo(ADMIN) && embrulhoAntigo(DEV) && AXA.vigiaSessao) {
+      registra((async () => {
+        const [adm, dev, app] = [await rodaSessao(antigoFetch(ADMIN)), await rodaSessao(antigoFetch(DEV)), await rodaSessao(appFetch)];
+        const k = (r) => r.map((x) => (x.caiu ? 'C' : '-') + x.status + (x.corpoIntacto ? '' : '!')).join(' ');
+        const ultimo = CASOS_SESSAO.length - 1;   // senha-alterar: a diferenca de proposito
+        const iguais = CASOS_SESSAO.every((c, i) => i === ultimo || (adm[i].caiu === app[i].caiu && dev[i].caiu === app[i].caiu && app[i].corpoIntacto && app[i].status === c.st));
+        ok(iguais && CASOS_SESSAO.filter((c, i) => app[i].caiu).length === 5,
+           'Sessao vencida: o mesmo 401 (dados, publicacao, quem-sou) derruba a sessao no app, no admin.html e no dev.html; login, cadastro, redefinir, sem_conta, 403, 200, outra URL e corpo sem JSON nao; quem chamou le a resposta inteira',
+           'admin ' + k(adm) + ' | dev ' + k(dev) + ' | app ' + k(app));
+        ok(adm[ultimo].caiu && dev[ultimo].caiu && !app[ultimo].caiu,
+           'Unica diferenca, de proposito: errar a SENHA ATUAL na troca (senha-alterar, 401 credencial) derrubava a sessao nas telas antigas; no app nao',
+           'admin ' + adm[ultimo].caiu + ' dev ' + dev[ultimo].caiu + ' app ' + app[ultimo].caiu);
+      })());
+    }
+    const sx = corpo(APJ, 'function sessaoExpirou() {') || '';
+    const vs = corpo(APJ, 'function voltaDaSessao() {') || '';
+    const ia = corpo(APJ, 'async function iniciarApp() {') || '';
+    const msgAdm = semEspaco((corpo(ADMIN, 'function sessaoExpirou() {') || '').replace(/'\s*\+\s*'/g, ''));
+    ok(/raiz\.fetch = vigiaSessao\(raiz\.fetch, WORKER, sessaoExpirou\)/.test(APC) &&
+       /if \(_sessaoCaiu \|\| !APP\.token\) return;/.test(sx) && /raiz\.AXIS_FORM\.guardaRascunho\(\)/.test(sx) &&
+       /querySelectorAll\('body > \.ovl, body > \.gv-fundo, body > \.modal-overlay'\)/.test(sx) && /o\.style\.display = 'none'/.test(sx) &&
+       /limparSessao\(\);/.test(sx) && !/location\.hash|sair\(\)|\.remove\(\)/.test(sx) &&
+       /desenharLogin\(comTela \? 'Sua sessão expirou \(ela vale 12 horas\)\. Entre de novo — o que está na tela não se perdeu\.'/.test(sx) &&
+       msgAdm.indexOf('Sua sessão expirou (ela vale 12 horas). Entre de novo — o que está na tela não se perdeu.') >= 0,
+       'O app instala o embrulho no fetch; a queda guarda o rascunho, ESCONDE (nao fecha) o que esta aberto, nao mexe na rota e mostra a frase do admin.html');
+    ok(/x\.el\.style\.display = x\.display/.test(vs) && /if \(raiz\.AXIS_FORM && raiz\.AXIS_FORM\.soltar\) raiz\.AXIS_FORM\.soltar\(\);/.test(vs) &&
+       /toast\('Bem-vindo de volta\. O que estava na tela continua aqui/.test(vs) && /if \(APP\.token\) voltaDaSessao\(\);/.test(ia) &&
+       /if \(_sessaoCaiu\) return;/.test(corpo(APJ, 'function tecladoGaveta(e) {') || '') &&
+       /EST\.ov\.style\.display === 'none'/.test(FRM),
+       'Entrando de novo: a mesma conta tem o formulario e as gavetas de volta (o "Bem-vindo de volta" do admin.html); outra conta nao ve o da anterior; o teclado nao fica preso no que esta escondido');
+    ok(!/Sessão expirada — saia e entre de novo/.test(APJ) && /if \(r\.status === 401\) r\.erro = MSG_SESSAO;/.test(APJ) && /e\.status === 401 \? \{ ok: false, status: 401, erro: MSG_SESSAO \}/.test(APJ),
+       'A gravacao que pega a sessao vencida diz para entrar e salvar de novo, e nao mais "saia e entre de novo" (o 401 da leitura previa tambem)');
+
+    // ── 2. Releitura a cada 30 s ──────────────────────────────────────────
+    /* O `adminCheckUpdates` do admin.html executado com a tela montada, contra o
+       `conferirServidor` do app, nas mesmas situacoes: base igual, base nova com
+       a tela livre, base nova com card/formulario aberto. */
+    const acu = corpo(ADMIN, 'async function adminCheckUpdates() {');
+    const csv = corpo(APJ, 'async function conferirServidor() {');
+    const dre = corpo(APJ, 'function decisaoDaReleitura(tsTela, tsServidor, bloqueado) {');
+    ok(!!acu && !!csv && !!dre, 'adminCheckUpdates (admin.html) e conferirServidor/decisaoDaReleitura (app) existem');
+    if (acu && csv && dre) {
+      const CASOS_REL = [['t1', 't1', false], ['t1', 't1', true], ['t1', 't2', false], ['t1', 't2', true], [null, 't2', false], [null, null, true]];
+      const antigo = async ([tela, srv, aberto]) => {
+        const deu = [];
+        const doc = { getElementById: () => ({ style: { display: 'block' } }), querySelectorAll: () => (aberto ? [{ aberto: true }] : []) };
+        const f = new Function('document', 'getComputedStyle', 'window', 'lerDados', 'avisaDesatualizado', 'loadFromGitHub', 'fetch', 'API_URL', 'ts',
+          'let _adminPollActive = false, _pollTs = ts, _kbDirty = false, _pendingEdits = false, runtimeToken = "", fileSha = null;' +
+          'const _dirtyMelhoriaIds = new Set();\n' + acu + '\nreturn adminCheckUpdates;')(
+          doc, (o) => ({ display: o.aberto ? 'flex' : 'none' }), {}, async () => ({ atualizado_em: srv }),
+          (m) => deu.push(m ? 'aviso' : 'nada'), async () => deu.push('rele'), null, '', tela);
+        await f();
+        return deu.join(',');
+      };
+      const app = async ([tela, srv, aberto]) => {
+        const deu = [];
+        const APP = { token: 'tk', D: { atualizado_em: tela } };
+        const f = new Function('api', 'hidrata', 'desenhar', 'avisaNovo', 'telaOcupada', 'APP', 'document',
+          'var _relendo = false, _naFila = 0, _sessaoCaiu = false, _novoNoServidor = false, _noVinculo = false;\n' + dre + '\n' + csv + '\nreturn conferirServidor;')(
+          async () => ({ atualizado_em: srv }), async (j) => j, () => deu.push('rele'), (m) => deu.push(m ? 'aviso' : 'nada'),
+          () => aberto, APP, { visibilityState: 'visible' });
+        await f();
+        return deu.join(',');
+      };
+      registra((async () => {
+        const res = [];
+        for (const c of CASOS_REL) res.push({ c: c.join('/'), adm: await antigo(c), app: await app(c) });
+        ok(res.every((r) => r.adm === r.app) && res.map((r) => r.app).join(' ') === 'nada nada rele aviso rele nada',
+           'Releitura: base igual tira a faixa; base nova com a tela livre rele e redesenha; base nova com card ou formulario aberto NAO redesenha e mostra "Ha alteracoes mais novas no servidor" — igual ao adminCheckUpdates',
+           res.map((r) => r.c + ' ' + r.adm + '/' + r.app).join(' | '));
+      })());
+    }
+    const intAdm = (ADMIN.match(/setInterval\(adminCheckUpdates, (\d+)\)/) || [])[1];
+    ok(intAdm === '30000' && AXA.RELEITURA_MS === 30000 && /setInterval\(conferirServidor, RELEITURA_MS\)/.test(APC) &&
+       /document\.addEventListener\('visibilitychange', function \(\) \{ if \(document\.visibilityState === 'visible'\) conferirServidor\(\); \}\)/.test(APC) &&
+       /visibilitychange', \(\) => \{ if \(document\.visibilityState === 'visible'\) adminCheckUpdates\(\); \}/.test(ADMIN) &&
+       !/Date\.now\(\) - APP\.carregadoEm > 60000/.test(APJ),
+       'Releitura a cada 30 s e ao voltar para a aba, nos dois (o app relia so ao voltar o foco depois de 1 minuto)', 'admin ' + intAdm + ' ms, app ' + AXA.RELEITURA_MS + ' ms');
+    const toc = corpo(APJ, 'function telaOcupada() {') || '';
+    ok(/document\.querySelector\('\.ovl, \.gv-fundo, \.fl\.aberto, \.ntf'\)/.test(toc) && /a\.tagName === 'TEXTAREA'/.test(toc) && /if \(_arrastando\) return true;/.test(toc) &&
+       /if \(_relendo \|\| _naFila \|\| !APP\.token \|\| !APP\.D \|\| _sessaoCaiu \|\| _noVinculo\) return;/.test(csv || '') &&
+       /Há alterações mais novas no servidor \(feitas no Planejamento, no Painel Dev ou por outra pessoa\)\. Esta tela está mostrando uma versão anterior\./.test(APJ) &&
+       /data-acao="atualizar">Atualizar agora<\/button>/.test(APJ) && /data-acao="depois">Depois<\/button>/.test(APJ),
+       'O que bloqueia o redesenho no app: formulario, caixa, gaveta, filtros abertos, campo de texto em uso e card no meio do arraste; nao rele no meio de uma gravacao nem com o passo do vinculo na tela; a faixa tem o texto e os botoes do admin.html');
+
+    // ── 3. Vinculo do nome no 1o acesso ──────────────────────────────────
+    const fOld = ['function splitDevs(s) {', 'function getDevList() {', 'function normNome(s) {', 'function meusNomesDeclarados() {', 'function resolveMeuDev() {', 'function pedirVinculo() {'].map((a) => corpo(DEV, a));
+    const fApp = ['function contaSplitDevs(s) {', 'function contaListaDevs(D) {', 'function contaNorm(s) {', 'function contaMeuDev(eu, devs) {', 'function contaPalpite(nome, devs) {', 'function precisaVinculo(eu, papel, D) {'].map((a) => corpo(CONTA, a));
+    ok(fOld.every(Boolean) && fApp.every(Boolean), 'as regras do vinculo existem no dev.html (getDevList, resolveMeuDev, pedirVinculo) e no app (axis-tela-conta.js)');
+    if (fOld.every(Boolean) && fApp.every(Boolean)) {
+      const D = {
+        desenvolvedores: ['Ana Souza', 'João Siqueira / Joao Vitor Batista de Siqueira', 'Bruno, Caio'],
+        melhorias: [{ dev: 'João Siqueira' }, { dev: 'Joao David, Ana Souza' }, { dev: 'Emilly Viana' }, { dev: 'Emilly Souza' },
+                    { dev: '' }, {}, { dev: 'JHONANTAN' }, { dev: 'Dan Weine/Caio' }, { dev: 'Ana Souza' }]
+      };
+      const contas = [{ nome: 'João Siqueira' }, { nome: 'joao siqueira' }, { nome: 'Carlos Siqueira Teste' }, { nome: 'Emilly Teste' },
+        { nome: 'Ana Teste' }, { nome: 'Fulano de Tal' }, { nome: 'Outro', nome_demandas: 'Jhonantan / Jhonatan' },
+        { nome: 'Dan', nome_demandas: 'Dan Weine' }, { nome: '', nome_demandas: '' }, { nome: 'Caio Bruno' }];
+      const velho = (eu) => {
+        const sel = { innerHTML: '', value: '' }, exp = { innerHTML: '' }, err = { textContent: 'x' };
+        const doc = { getElementById: (id) => (id === 'vin-nome' ? sel : id === 'vin-explica' ? exp : err) };
+        const r = new Function('state', '_eu', 'document', 'mostrarPasso', 'devEsc',
+          'let _vinculoInferido = false;\n' + fOld.join('\n') + '\nconst meu = resolveMeuDev(); pedirVinculo(); return { lista: getDevList(), meu };')(
+          { desenvolvedores: D.desenvolvedores, melhorias: D.melhorias }, eu, doc, () => {}, (s) => String(s));
+        return { lista: r.lista.join('|'), meu: r.meu, palpite: sel.value };
+      };
+      const novo = new Function(fApp.join('\n') + '\nreturn { contaListaDevs, contaMeuDev, contaPalpite, precisaVinculo };')();
+      const lado = contas.map((eu) => {
+        const o = velho(eu);
+        const lista = novo.contaListaDevs(D);
+        const a = { lista: lista.join('|'), meu: novo.contaMeuDev(eu, lista), palpite: novo.contaPalpite(eu.nome, lista) };
+        return { eu: eu.nome || '(vazio)', o, a, igual: o.lista === a.lista && o.meu === a.meu && o.palpite === a.palpite,
+                 pede: novo.precisaVinculo(eu, 'dev', D) === !o.meu && !novo.precisaVinculo(eu, 'admin', D) && !novo.precisaVinculo(eu, 'analista', D) };
+      });
+      const resumo = lado.map((x) => x.eu + ': ' + (x.o.meu || '-') + '/' + (x.o.palpite || '-') + (x.igual ? '' : ' x ' + (x.a.meu || '-') + '/' + (x.a.palpite || '-'))).join(' | ');
+      ok(lado.every((x) => x.igual), 'Vinculo: a mesma lista de nomes, o mesmo nome reconhecido (igualdade sem acento e sem caixa, o declarado manda) e o mesmo palpite (vencedor unico; empate nao marca) que o dev.html', resumo);
+      ok(lado.every((x) => x.pede) && lado.filter((x) => !x.o.meu).length >= 5 && lado.filter((x) => x.o.palpite).length >= 2,
+         'Quem e perguntado: o perfil dev que nao casou com nenhum nome; PM/PO e analista nao (no dev.html eles escolhem a fila de quem ver)');
+    }
+    const vin = corpo(CONTA, 'function vinculo(dir, o) {') || '';
+    ok(/await gravaNome\(nome\)/.test(vin) && /H\.api\('meu-nome-demandas', \{ nome_demandas: nome \}\)/.test(corpo(CONTA, 'async function gravaNome(nome) {') || '') &&
+       /opcoesNome\(devs, palpite\)/.test(vin) && /opcoesNome\(lista, atual\)/.test(corpo(CONTA, 'function seletorNome(ctx, nomesDem) {') || '') &&
+       /await gravaNome\(nome\);\s*H\.toast\('Pronto/.test(CONTA) &&
+       /Escolha um nome da lista\./.test(vin) && /Escolha um nome da lista\./.test(corpo(DEV, 'async function vincularNome() {') || '') &&
+       /Ainda não tenho demandas — entrar assim mesmo/.test(vin) && /Ainda não tenho demandas — entrar assim mesmo/.test(DEV) &&
+       /if \(!_sessaoCaiu && precisaVinculo\(\)\) \{ pedirVinculo\(\); return; \}/.test(ia),
+       'O passo do vinculo grava por meu-nome-demandas com o MESMO seletor e a mesma gravacao da Minha conta, e entra logo depois de carregar a base, antes de desenhar o app');
+    ok(/data-ini="vinculo">Escolher meu nome nas demandas<\/button>/.test(INI) && /if \(q === 'vinculo'\) \{ if \(A\.vincular\) A\.vincular\(\); return; \}/.test(INI) && !/dev\.html/.test(semComentario(corpo(INI, 'function meuTrabalhoDev(ctx) {') || '')),
+       'O Meu trabalho vazio leva ao mesmo passo do vinculo, e nao manda ajustar em outra tela');
+
+    // ── 4. "Meu resumo" no Meu cronograma ────────────────────────────────
+    ok(/onclick="RESUMODEV\.abrir\(state, currentDev, \{ proprio: true \}\)"/.test(DEV) &&
+       /R\.abrir\(ctx\.D, nome, \{ proprio: dev \}\)/.test(INI) && /data-ini="resumo"/.test(corpo(INI, 'function cronograma(ctx) {') || '') &&
+       /if \(q === 'resumo'\) \{ abrirResumo\(ctx\); return; \}/.test(INI) && /C\.meuDev\(ctx\.eu, ctx\.D\)/.test(INI) &&
+       /return contaMeuDev\(eu, contaListaDevs\(D\)\)/.test(CONTA),
+       'O "Meu resumo" do Cronograma do dev.html esta no Meu cronograma do app: o mesmo RESUMODEV.abrir, com o nome na grafia da base (o currentDev)');
+    if (fOld.every(Boolean)) {
+      const RD = require('./resumo-dev.js');
+      const ant = { PRAZO: global.PRAZO, ETAPA: global.ETAPA, DEVNOME: global.DEVNOME };
+      global.PRAZO = require('./prazo.js'); global.ETAPA = require('./etapa-demanda.js'); global.DEVNOME = require('./dev-nome.js');
+      try {
+        const st = { temas: [{ id: 't1', nome: 'AXCred - Cobrança' }], desenvolvedores: ['Ana Souza'], melhorias: [
+          { id: '1', codigo: 'AX-1', titulo: 'Vencida', dev: 'Ana Souza', tema_id: 't1', status_planejamento: 'em_andamento', entrega: '2026-10-01' },
+          { id: '2', codigo: 'AX-2', titulo: 'Andando', dev: 'Ana Souza / Caio', tema_id: 't1', status_planejamento: 'em_andamento', entrega: '2026-12-01' },
+          { id: '3', codigo: 'AX-3', titulo: 'Entregue', dev: 'ana souza', tema_id: 't1', status_planejamento: 'validacao' },
+          { id: '4', codigo: 'AX-4', titulo: 'De outro', dev: 'Caio', tema_id: 't1', status_planejamento: 'em_andamento' }] };
+        const eu = { nome: 'Ana', nome_demandas: 'Ana Souza' };
+        const nomeOld = new Function('state', '_eu', 'let _vinculoInferido = false;\n' + fOld.slice(0, 5).join('\n') + '\nreturn resolveMeuDev();')(st, eu);
+        const nomeApp = new Function(fApp.slice(0, 4).join('\n') + '\nreturn contaMeuDev;')()(eu, new Function(fApp.slice(0, 2).join('\n') + '\nreturn contaListaDevs;')()(st));
+        const tOld = RD.texto(RD.montar(st, nomeOld, '2026-11-06')), tApp = RD.texto(RD.montar(st, nomeApp, '2026-11-06'));
+        ok(nomeOld === 'Ana Souza' && nomeOld === nomeApp && tOld === tApp && /AX-1/.test(tApp) && /AX-3/.test(tApp) && !/AX-4/.test(tApp),
+           'Meu resumo: o mesmo nome e o mesmo texto para o grupo no app e no dev.html', nomeOld + ' / ' + nomeApp);
+      } finally { Object.assign(global, ant); }
+    }
+    ok(/'html\.axa #modal-dev-resumo \.dr-cod,html\.axa #modal-dev-resumo \.dr-sis,html\.axa #modal-dev-resumo \.dr-sit,html\.axa #modal-dev-resumo \.dr-sis small,' \+\s*'html\.axa #modal-dev-resumo \.dr-sit small,html\.axa #modal-dev-resumo \.dr-kpi span,html\.axa #modal-dev-resumo \.dr-sec-tit small\{font-size:12px\}'/.test(INI) &&
+       /'html\.axa #modal-dev-resumo \.form-actions \.btn\{flex:1 1 140px;min-height:44px\}'/.test(INI) && /\.modal-close-btn\{position:absolute;top:10px;right:10px;width:44px;height:44px/.test(INI),
+       'No celular o resumo ocupa a tela, com toque de 44 px e texto de 12 px (o modulo usa 10,5 e 11,5)');
+
+    // ── 5. Rascunho quando a gravacao falha ──────────────────────────────
+    /* O `mPersistir` do admin.html (guarda antes, publica, limpa so se gravou)
+       executado contra o `comRascunho` do app, com a gravacao dando certo,
+       falhando e caindo no meio. */
+    const mp = corpo(ADMIN, 'async function mPersistir(msgOk) {');
+    const rsS = corpo(ADMIN, 'function rascunhoSalvar() {'), rsL = corpo(ADMIN, 'function rascunhoLer() {'), rsZ = corpo(ADMIN, 'function rascunhoLimpar() {');
+    ok(!!mp && !!rsS && !!rsL && !!rsZ && typeof FORM.comRascunho === 'function', 'mPersistir e o rascunho do admin.html, e comRascunho do formulario do app, existem');
+    if (mp && rsS && rsL && rsZ && FORM.comRascunho) {
+      const loja = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
+      const velho = async (saida) => {
+        const ls = loja(), vistos = [];
+        const f = new Function('localStorage', 'saveViaProxy', 'toast', 'renderAll', 'bannerPendentes', 'avisaFalha', 'camposAlterados', 'state',
+          "const RASCUNHO_KEY = 'rm_admin_rascunho'; let _pendingEdits = true; const _dirtyMelhoriaIds = new Set(['m1']); const _baseMelhorias = new Map();\n" +
+          rsS + '\n' + rsL + '\n' + rsZ + '\n' + mp + '\nreturn { mPersistir, rascunhoLer };')(
+          ls, async () => { vistos.push(!!ls.getItem('rm_admin_rascunho')); if (saida === 'cai') throw new Error('rede'); return saida === 'ok'; },
+          () => {}, () => {}, () => {}, () => {}, (m) => ({ titulo: m.titulo }), { melhorias: [{ id: 'm1', titulo: 'Escrito e nao publicado' }] });
+        let jogou = false;
+        try { await f.mPersistir('ok'); } catch (_) { jogou = true; }
+        return { antes: vistos[0], depois: !!f.rascunhoLer(), jogou };
+      };
+      const novo = async (saida) => {
+        let itens = [], vistos = [];
+        const r = { login: 'ana', alvo: 'nova', titulo: 'Escrito e nao gravado' };
+        let jogou = false;
+        try {
+          await FORM.comRascunho(() => { itens = FORM.rascunhoPoe(itens, r); }, async () => { vistos.push(!!FORM.rascunhoDe(itens, 'ana', 'nova')); if (saida === 'cai') throw new Error('rede'); return { ok: saida === 'ok' }; },
+            () => { itens = FORM.rascunhoTira(itens, 'ana', 'nova'); });
+        } catch (_) { jogou = true; }
+        return { antes: vistos[0], depois: !!FORM.rascunhoDe(itens, 'ana', 'nova'), jogou, outraConta: !!FORM.rascunhoDe(itens, 'bia', 'nova') };
+      };
+      registra((async () => {
+        const res = [];
+        for (const s of ['ok', 'falha', 'cai']) res.push({ s, v: await velho(s), n: await novo(s) });
+        const k = (x) => (x.antes ? 'G' : '-') + (x.depois ? 'R' : '-') + (x.jogou ? '!' : '');
+        ok(res.every((r) => k(r.v) === k(r.n)) && res.map((r) => k(r.n)).join(' ') === 'G- GR GR!' && res.every((r) => !r.n.outraConta),
+           'Rascunho: guardado ANTES de tentar gravar; gravou, sai; falhou ou a rede caiu no meio, fica para voltar — o mesmo ciclo do mPersistir (admin.html); e so a conta dona o ve',
+           res.map((r) => r.s + ' admin ' + k(r.v) + ' app ' + k(r.n)).join(' | '));
+      })());
+    }
+    const sv = corpo(FRM, 'async function salvar() {') || '', fc = corpo(FRM, 'async function fecha(forcado) {') || '', ab = corpo(FRM, 'function abrir(m, o) {') || '';
+    ok(/out = await comRascunho\(function \(\) \{ guardaRascunho\(true\); \}, function \(\) \{ return H\.gravar\(patch, opts\); \}, apagaRascunho\);/.test(sv) &&
+       /if \(!EST\.rascOferta\) apagaRascunho\(\);/.test(fc) && /ov\.addEventListener\('input', guardaLogo\);/.test(ab) &&
+       /if \(antes\) \{ if \(o\.rascunho\) \{ EST\.rascOferta = antes; recupera\(\); \} else ofereceRascunho\(antes\); \}/.test(ab) &&
+       /localStorage\.setItem\(RASCUNHO_KEY/.test(FRM) && /var RASCUNHO_KEY = 'rm_axis_rascunho';/.test(FRM) &&
+       /raiz\.AXIS_FORM\.rascunhos \? raiz\.AXIS_FORM\.rascunhos\(\) : \[\]/.test(APJ) && /ainda NÃO ' \+ \(rs\.length === 1 \? 'gravada' : 'gravadas'\) \+ ' no servidor/.test(APJ) &&
+       /ainda NÃO publicadas no servidor/.test(ADMIN),
+       'No formulario do app: cada mudanca guarda o rascunho no navegador, gravar passa pelo comRascunho, fechar de fato leva o rascunho, reabrir o oferece de volta, e a faixa do topo lista o que nao foi gravado (a "nao publicadas" do admin.html)');
+  })();
+
+  /* ═══ A PARIDADE RESTANTE (L7, .demo/verifica/paridade-restante.md) ══════
+     O que o levantamento achou faltando no card do Quadro e do Meu trabalho,
+     no Meu trabalho, no Backlog, no Planejamento e no Item, cada regra
+     recortada da tela antiga e executada lado a lado com a do app:
+       vinculos   `renderDepSection` (dev.html) e `depCount` (admin) x `vinculosDe`;
+       grill      `grillEst === 'pendente'` (dev.html) x `grillPendente`;
+       chips      Dados/BI, Sales Ops, spike "v/3" e "N dep. abertas" (admin) e
+                  "sem pontuacao" (dev.html) x `chipsDoCard`;
+       sprint     `sprintOpcoes` + `sprintEscolher` (admin) x `sprintOpcoes` +
+                  a regra `sprint`, com o desfazer quando a gravacao falha;
+       meu        `buildTemaSelect`, o periodo e o tipo de `getFiltered`,
+                  `prodIntervalo` e `prodAgrega` (dev.html) x o Meu trabalho;
+       backlog    `matchBusca`, HIDDEN_BY_DEFAULT, `matchProducao` e
+                  `matchDados` (admin) x a busca, as fechadas e os filtros;
+       contador   `kbContadorHTML` (admin) x `contador`;
+       item       `votosRender` e o `m-solicitante` (admin), `msModoLeitura`
+                  (dev.html), `comMencoes` e `quando` (mensageria.html);
+       pausadas   `renderPausadas` (gantt.html) x `pausadasDaJanela`. */
+  sec('App AXIS: paridade restante (L7) — card, Meu trabalho, Backlog, Planejamento e Item, lado a lado com as telas antigas');
+  (() => {
+    const QDT = lerTela('axis-tela-quadro.js'), INI = lerTela('axis-tela-inicio.js'), BKT = lerTela('axis-tela-backlog.js');
+    const PLT = lerTela('axis-tela-planejamento.js'), ITT = lerTela('axis-tela-item.js'), MSG = lerTela('mensageria.html'), ACJ = lerTela('axis-acoes.js');
+    const AC = require('./axis-acoes.js'), SP = require('./sprint.js'), ET = require('./etapa-demanda.js'), VI = require('./vinculo.js');
+    const DN = require('./dev-nome.js'), PV = require('./prevoo.js'), GR = require('./grill.js'), PZ = require('./prazo.js'), CO = require('./colaboradores.js');
+    const HOJE = '2026-11-06';
+    const gravada = (m) => ET.gravada(m, HOJE);
+    const copia = (x) => JSON.parse(JSON.stringify(x));
+    const escH = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const R = { VINCULO: VI, SPRINTPO: SP, ETAPA: { gravada, efetiva: gravada, pausada: ET.pausada }, DEVNOME: DN, PREVOO: PV, COLABORADORES: CO };
+    const ctx = (papel, lista, extra) => Object.assign({ papel, quem: 'Ana', nomes: ['Ana'], hoje: HOJE, agora: HOJE + 'T12:00:00.000Z',
+      lista: lista || [], aprovadores: null, R, D: { melhorias: lista || [] } }, extra || {});
+    // A CAPACIDADE (capacidade.js) le a etapa pelo global, como na pagina.
+    const comEtapa = (fn) => { const a = globalThis.ETAPA; globalThis.ETAPA = ET; try { return fn(); } finally { globalThis.ETAPA = a; } };
+    const CAPM = require('./capacidade.js');
+
+    // ── 1. Os vinculos do card ───────────────────────────────────────────
+    const rds = ['function getDeps(parentId) {', 'function hasBlockingDep(id) {', 'function renderDepSection(m) {'].map((a) => corpo(DEV, a));
+    const vd = corpo(QDT, 'function vinculosDe(m, lista, VI) {');
+    ok(rds.every(Boolean) && !!vd && /htmlVinculos\(m, vinculosDe\(m, lista, window\.VINCULO\), vincular\)/.test(QDT) && /AC\.permite\('vincular', m, \{\}\)/.test(QDT) &&
+       /const depCount = VINCULO\.abertos\(state\.melhorias, m\.id\)\.length;/.test(ADMIN) && /VINCULO\.abertos\(\(AX\.APP\.D \|\| \{\}\)\.melhorias \|\| \[\], m\.id\)\.length/.test(QDT) &&
+       /data-qd-ver="/.test(QDT) && /if \(abreDoCard\(e\.target, el\)\) \{ e\.preventDefault\(\); return; \}/.test(QDT),
+       'Os vinculos estao no card do dev.html (renderDepSection), no do admin ("N dep. abertas") e no card do app (vinculosDe), com a linha que abre a outra demanda na gaveta');
+    if (rds.every(Boolean) && vd) {
+      const lista = [
+        { id: 'p', codigo: 'AX-1', titulo: 'Principal', status_planejamento: 'em_andamento', dev: 'Ana', poker_pontos: 5 },
+        { id: 'f1', codigo: 'AX-2', titulo: 'Parte', status_planejamento: 'planejado', dev: 'Ana', parent_id: 'p', is_dependency: false, poker_pontos: 3 },
+        { id: 'f2', codigo: 'AX-3', titulo: 'Dependencia aberta', status_planejamento: 'em_andamento', dev: 'Caio', parent_id: 'p', is_dependency: true, poker_pontos: 2 },
+        { id: 'f3', codigo: 'AX-4', titulo: 'Dependencia feita', status_planejamento: 'concluido', dev: 'Caio', parent_id: 'p', is_dependency: true, poker_pontos: 1 },
+        { id: 'f4', codigo: 'AX-5', titulo: 'Mesclada', status_planejamento: 'planejado', parent_id: 'p', mesclado_em: 'p' },
+        { id: 'n', codigo: 'AX-6', titulo: 'Neta', status_planejamento: 'backlog', parent_id: 'f1', is_dependency: true },
+        { id: 's', codigo: 'AX-7', titulo: 'Solta e concluida', status_planejamento: 'concluido' },
+        { id: 'o', codigo: 'AX-8', titulo: 'Filha de quem nao existe', status_planejamento: 'backlog', parent_id: 'zz' },
+        { id: 'g', codigo: 'AX-9', titulo: 'Negada', status_planejamento: 'negada', parent_id: 'p' },
+      ];
+      const dev = (m) => {
+        const html = new Function('state', 'VINCULO', 'getStatusKey', 'STATUS_LABELS', 'devEsc', 'formatDate', rds.join('\n') + '\nreturn renderDepSection;')(
+          { melhorias: lista }, VI, gravada, {}, (s) => String(s == null ? '' : s), (s) => s)(m);
+        return { ids: [...html.matchAll(/data-ver="([^"]+)"/g)].map((x) => x[1]).join(','), bloq: /dep-blocked-banner/.test(html),
+                 peso: ((html.match(/class="dep-peso"[^>]*>🧮 ([^<]*)</) || [])[1] || ''), vinc: /btn-dep-open/.test(html) };
+      };
+      const app = new Function(vd + '\nreturn vinculosDe;')();
+      const div = lista.map((m) => {
+        const o = dev(m), v = app(m, lista, VI);
+        /* Concluida sem filhas: o dev.html some com a secao inteira, e o card do
+           admin ainda diz "Dep. de AX-n" (`parentBadge`) — o app segue o admin. */
+        if (!o.ids && !o.vinc) { const paiAdm = lista.find((x) => x.id === m.parent_id); if (paiAdm) o.ids = paiAdm.id; }
+        const r = AC.REGRAS.vincular(m, {}, ctx('dev', lista));
+        const a = { ids: [v.pai ? v.pai.id : null].concat(v.filhas.map((f) => f.id)).filter(Boolean).join(','), bloq: v.bloqueado, peso: v.frase, vinc: !!(r.ok || r.campo) };
+        return JSON.stringify(o) === JSON.stringify(a) && VI.abertos(lista, m.id).length === v.abertas ? '' : m.codigo + ' dev ' + JSON.stringify(o) + ' app ' + JSON.stringify(a);
+      }).filter(Boolean);
+      const temTudo = app(lista[0], lista, VI);
+      ok(!div.length && temTudo.filhas.length === 4 && temTudo.bloqueado && temTudo.frase,
+         'Vinculos no card: a principal e as filhas na mesma ordem, "Avanço bloqueado", a soma da arvore e o "+ Vincular" do renderDepSection, e o "N dep. abertas" do admin (' + lista.length + ' casos)', div.join(' || '));
+    }
+
+    // ── 2. O Grill pendente ──────────────────────────────────────────────
+    const gp = corpo(QDT, 'function grillPendente(m) {');
+    ok(!!gp && /const grillEst = window\.GRILL \? GRILL\.estado\(m\) : 'nao';/.test(DEV) && /grillEst === 'pendente' \? ' kcard-grill-on' : ''/.test(DEV) &&
+       /Grill — dê seu parecer/.test(DEV) && /Grill — dê seu parecer/.test(QDT) && /\(grill \? ' grill' : ''\)/.test(QDT) && !/H\.ico\('flame'\) \+ ' Grill', 'wn'/.test(QDT),
+       'A faixa "Grill — dê seu parecer" e a borda do pendente estao no card do dev.html e no do app (a faixa toma o lugar do chip)');
+    if (gp) {
+      const app = new Function('window', 'GRILL', 'H', gp + '\nreturn grillPendente;')({ GRILL: GR }, GR, { colunaDe: gravada });
+      const ms = [{}, { grill: { marcado: true } }, { grill: { marcado: true, veredito: 'ok' } }, { grill: { marcado: true, veredito: 'duvida' } }]
+        .flatMap((g) => ['planning', 'levantar_req', 'em_andamento', 'concluido', 'negada'].map((e) => Object.assign({ status_planejamento: e }, g)));
+      const div = ms.filter((m) => {
+        const enc = ['concluido', 'negada'].indexOf(m.status_planejamento) >= 0;
+        return enc ? app(m) : (GR.estado(m) === 'pendente') !== app(m);
+      });
+      ok(!div.length && ms.filter((m) => app(m)).length === 3,
+         'Grill no card: pinta o mesmo pendente do dev.html (GRILL.estado) e, como a regra `grill` do app, nao a concluida nem a negada', div.length + ' divergencias');
+    }
+
+    // ── 3. As marcas do card: Dados/BI, Sales Ops, spike "v/3", dependencias abertas e "sem pontuacao" ──
+    const cdc = corpo(QDT, 'function chipsDoCard(m, col) {'), fiso = corpo(QDT, 'function feriadosISO() {');
+    const spikeAdm = (ADMIN.match(/ {6}if \(m\.spike\) \{\n {8}const _quem = spikeQuemAssina\(\);[\s\S]*?\n {6}\}\n/) || [''])[0];
+    const dadosAdm = (ADMIN.match(/ {6}if \(m\.dados_bi\) badges\.push\([^\n]*\n {6}else if \(m\.sales_ops\) badges\.push\([^\n]*\n/) || [''])[0];
+    const semPtDev = [(DEV.match(/const ETAPAS_COMPROMETIDAS = \[[^\]]*\];/) || [''])[0], corpo(DEV, 'function semPontuacao(m) {')];
+    ok(!!cdc && !!fiso && !!spikeAdm && !!dadosAdm && semPtDev.every(Boolean),
+       'As marcas existem no renderKanban do admin (Dados/BI, Sales Ops, spike "v/3", dependencias abertas), no card do dev.html ("sem pontuacao") e no chipsDoCard do app');
+    if (cdc && fiso && spikeAdm && dadosAdm && semPtDev.every(Boolean)) {
+      const lista = [
+        { id: 'a', codigo: 'AX-1', status_planejamento: 'em_andamento', dev: 'Ana', dados_bi: true, poker_pontos: 3 },
+        { id: 'b', codigo: 'AX-2', status_planejamento: 'planejado', dev: 'Ana', sales_ops: true },
+        { id: 'c', codigo: 'AX-3', status_planejamento: 'planejado', dev: 'Ana', dados_bi: true, sales_ops: true, poker_pontos: 2 },
+        { id: 'd', codigo: 'AX-4', status_planejamento: 'validacao', dev: 'Ana', spike: true, spike_aprovacoes: [{ login: 'bia', nome: 'Bia' }, { login: 'caio', nome: 'Caio' }, { login: 'zeca' }], poker_pontos: 1 },
+        { id: 'e', codigo: 'AX-5', status_planejamento: 'planning', dev: 'Ana', spike: true },
+        { id: 'f', codigo: 'AX-6', status_planejamento: 'backlog' },
+        { id: 'g', codigo: 'AX-7', status_planejamento: 'planejado', parent_id: 'a', is_dependency: true },
+        { id: 'h', codigo: 'AX-8', status_planejamento: 'em_andamento', parent_id: 'a', is_dependency: true },
+        { id: 'i', codigo: 'AX-9', status_planejamento: 'concluido', dev: 'Ana' },
+      ];
+      const aprovs = [null, [], [{ login: 'bia' }, { login: 'caio' }, { login: 'dani' }]];
+      const div = [];
+      aprovs.forEach((ap) => {
+        const D = { melhorias: lista, spike_aprovadores: ap === null ? undefined : ap };
+        const H0 = { hoje: () => HOJE, etapaDe: gravada, colunaDe: gravada, pausada: ET.pausada, atrasoDe: () => 0, prazoDe: () => '', dias: () => null,
+                     chip: (t, c) => '<i class="c-' + c + '">' + t + '</i>', ico: (n) => '[' + n + ']', esc: escH, chipsReq: () => '', chipCasoUso: () => '' };
+        const PRZ0 = { relogioParou: () => true, diasPausados: () => 0, diasNaArea: () => null };
+        const W0 = { PREVOO: PV, CAPACIDADE: CAPM, VINCULO: VI, SPRINTPO: SP, PRAZO: PRZ0 };
+        const chips = new Function('window', 'H', 'AX', 'PRAZO', 'SPRINTPO', 'CAPACIDADE', 'VINCULO', fiso + '\n' + cdc + '\nreturn chipsDoCard;')(
+          W0, H0, { APP: { D } }, PRZ0, SP, CAPM, VI);
+        lista.forEach((m) => {
+          const a = comEtapa(() => chips(m, gravada(m)).join(' ')).replace(/<[^>]+>/g, ' ');
+          const badges = [];
+          new Function('m', 'badges', 'spikeQuemAssina', 'PREVOO', 'window', spikeAdm + dadosAdm)(m, badges, () => (ap === null ? null : ap), PV, { PREVOO: PV });
+          const adm = badges.join(' ').replace(/<[^>]+>/g, ' ');
+          const sp = (adm.match(/🔬 (\d+\/\d+|…)/) || [])[1] || '', spA = (a.match(/Spike (\d+\/\d+|…)/) || [])[1] || '';
+          const dados = [/Dados\/BI/.test(adm), /Sales Ops/.test(adm)].join('+'), dadosA = [/Dados\/BI/.test(a), /Sales Ops/.test(a)].join('+');
+          const dep = VI.abertos(lista, m.id).length, depA = +((a.match(/(\d+) dep\. abertas?/) || [])[1] || 0);
+          const sem = new Function(semPtDev.join('\n') + '\nreturn semPontuacao;')()(m), semA = /sem pontuação/.test(a);
+          if (sp !== spA || dados !== dadosA || dep !== depA || sem !== semA) div.push(m.codigo + '/' + JSON.stringify(ap) + ': admin ' + [sp, dados, dep, sem] + ' app ' + [spA, dadosA, depA, semA]);
+        });
+      });
+      ok(!div.length, 'Marcas do card: Dados/BI ou Sales Ops pela marca, o spike com as assinaturas validas ("…" sem a lista de quem aprova), "N dep. abertas" e "sem pontuação" como no admin e no dev.html (' + lista.length * aprovs.length + ' casos)', div.slice(0, 4).join(' || '));
+    }
+
+    // ── 4. A sprint pelo chip do card e do Item ──────────────────────────
+    const so = corpo(ADMIN, 'function sprintOpcoes(atual) {'), se = corpo(ADMIN, 'async function sprintEscolher(ev, id) {');
+    ok(!!so && !!se && typeof AC.sprintOpcoes === 'function' && typeof AC.REGRAS.sprint === 'function' &&
+       /AC\.botao\('sprint', m, sp \? SPRINTPO\.rotuloCurto\(sp\) : 'Sprint…', 'qd-spb'/.test(QDT) && /AC\.botao\('sprint', m, sp \? 'Trocar' : 'Repassar', 'btns it-pbt'/.test(ITT) &&
+       /GESTOS\.sprint = async function \(m\) \{/.test(ACJ) && /return aplicar\('sprint', m, \{ sprint: v\.sprint \}\);/.test(ACJ),
+       'O gesto "Sprint…" existe no chip do Kanban do admin (sprintEscolher) e no card e no Item do app (o gesto `sprint` de axis-acoes.js)');
+    if (so && se) {
+      const D = { melhorias: [], feriados: FERIADOS_PROVA, sprints: [{ rotulo: 'S2-11-2026', iniciada_em: '2026-11-09', em: '2026-11-13', por: 'Fernando' }] };
+      const opsAdm = (atual) => new Function('state', 'SPRINTPO', 'PRAZO', 'window', so + '\nreturn sprintOpcoes;')(D, SP, { hojeISO: () => HOJE }, { PRAZO: { hojeISO: () => HOJE } })(atual);
+      const cx = (extra) => ctx('admin', D.melhorias, Object.assign({ quem: 'Fernando', dono: true, D }, extra || {}));
+      const norm = (l) => l.map((o) => [o.valor, semEmoji(o.rotulo), o.nota, !!o.perigo].join('|')).join(' ; ');
+      const divO = ['', 'S1-11-2026', 'S2-11-2026'].filter((s) => norm(opsAdm(s)) !== norm(AC.sprintOpcoes({ sprint_po: s }, cx())));
+      ok(!divO.length && opsAdm('').length === 6 && !opsAdm('').some((o) => o.valor === 'S2-11-2026') && opsAdm('S1-11-2026').some((o) => o.valor === ''),
+         'As sprints oferecidas: a atual e as cinco seguintes sem a fechada, e "Tirar da sprint" so para quem esta numa, como o sprintOpcoes do admin', divO.join(','));
+      const escolhe = async (m0, escolha, eu, salva) => {
+        const m = copia(m0); const st = { melhorias: [m], feriados: D.feriados, sprints: D.sprints }; let aviso = '';
+        await new Function('state', 'SPRINTPO', 'PRAZO', 'window', '_eu', 'escolherDaLista', 'renderAll', 'saveViaProxy', 'avisaFalha', 'toast',
+          'let _pendingEdits = false; const _dirtyMelhoriaIds = new Set();\n' + so + '\n' + se + '\nreturn sprintEscolher;')(
+          st, SP, { hojeISO: () => HOJE }, { PRAZO: { hojeISO: () => HOJE } }, eu, async () => escolha, () => {}, async () => salva,
+          (t) => { aviso = String(t); }, (t) => { aviso = String(t); })(null, m.id);
+        return { m, aviso };
+      };
+      const casos = [
+        [{ id: 'x1', status_planejamento: 'planejado' }, 'S1-11-2026'],
+        [{ id: 'x2', status_planejamento: 'planejado', sprint_po: 'S1-11-2026', sprint_po_historico: [{ sprint: 'S1-11-2026', em: '2026-11-02', por: 'Fernando' }] }, 'S3-11-2026'],
+        [{ id: 'x3', status_planejamento: 'planejado', sprint_po: 'S1-11-2026', sprint_po_historico: [{ sprint: 'S1-11-2026', em: '2026-11-02', por: 'Fernando' }] }, ''],
+        [{ id: 'x4', status_planejamento: 'planejado' }, 'S2-11-2026'],
+        [{ id: 'x5', status_planejamento: 'planejado', sprint_po: 'S2-11-2026' }, ''],
+        [{ id: 'x6', status_planejamento: 'planejado', sprint_po: 'S1-11-2026' }, 'S1-11-2026'],
+      ];
+      const CAMPOS = ['sprint_po', 'sprint_po_em', 'sprint_po_por', 'sprint_po_historico', 'entrega_usuario'];
+      const so5 = (m) => JSON.stringify(CAMPOS.map((k) => (m[k] === undefined || m[k] === null ? '' : m[k])));
+      registra((async () => {
+        const divS = [];
+        for (const [m0, esc] of casos) {
+          const dono = { login: 'fernando', nome: 'Fernando', papel: 'admin' };
+          const o = await escolhe(m0, esc, dono, true), f = await escolhe(m0, esc, dono, false), n = await escolhe(m0, esc, { login: 'ana', nome: 'Ana', papel: 'admin' }, true);
+          const antes = JSON.stringify(m0);
+          const r = AC.REGRAS.sprint(m0, { sprint: esc }, cx());
+          const rn = AC.REGRAS.sprint(m0, { sprint: esc }, cx({ dono: false }));
+          const depois = r.ok ? Object.assign(copia(m0), r.patch) : copia(m0);
+          if (so5(o.m) !== so5(depois)) divS.push(m0.id + ' grava: admin ' + so5(o.m) + ' app ' + so5(depois));
+          if (semEmoji(o.aviso).trim() !== (r.ok ? r.msg : r.erro)) divS.push(m0.id + ' aviso: "' + semEmoji(o.aviso).trim() + '" x "' + (r.ok ? r.msg : r.erro) + '"');
+          // Gravacao que falha: o admin devolve o retrato `antes`; a regra do app nem toca a demanda.
+          if (so5(f.m) !== so5(m0) || JSON.stringify(m0) !== antes) divS.push(m0.id + ' falha: o antes nao voltou');
+          if (rn.ok || semEmoji(n.aviso).trim() !== rn.erro) divS.push(m0.id + ' nao-dono: "' + n.aviso + '" x "' + rn.erro + '"');
+        }
+        ok(!divS.length, 'Sprint pelo chip: repassar (com a entrega ao usuario e o "entrou ATRASADA (n pulo)"), tirar da sprint, a recusa da fechada e da mesma sprint, quem nao e dono e a gravacao que falha (nada muda) sao os do sprintEscolher do admin (' + casos.length + ' casos)', divS.slice(0, 4).join(' || '));
+      })());
+    }
+
+    // ── 5. Meu trabalho: Tipo, Tema com contagem, Periodo e a produtividade ──
+    const bts = corpo(DEV, 'function buildTemaSelect() {'), gf = corpo(DEV, 'function getFiltered() {');
+    const ctm = corpo(INI, 'function contaTemas(dev, temas, atual) {'), cpe = corpo(INI, 'function casaPeriodo(m, ano, mes) {'), cmeu = corpo(INI, 'function casaMeu(m, D) {');
+    const piD = corpo(DEV, 'function prodIntervalo(qual) {'), paD = corpo(DEV, 'function prodAgrega(de, ate) {');
+    const piA = corpo(INI, 'function prodIntervalo(qual, hojeISO) {'), paA = corpo(INI, 'function prodAgrega(lista, de, ate, eDeMim) {');
+    ok([bts, gf, ctm, cpe, cmeu, piD, paD, piA, paA].every(Boolean) && /data-meu="tipo"/.test(INI) && /data-meu="tema"/.test(INI) && /data-meu="ano"/.test(INI) && /data-meu="mes"/.test(INI) &&
+       /\.filter\(function \(m\) \{ return casaMeu\(m, ctx\.D\); \}\)/.test(INI) && /htmlProdutividade\(ctx\) \+ faixaRisco\(risco\)/.test(INI) &&
+       /MEU\.tipo = MEU\.tema = MEU\.ano = MEU\.mes = '';/.test(corpo(INI, 'function depois(el, ctx) {') || ''),
+       'Tipo, Tema, Periodo e a produtividade (podio) estao no painel do dev.html e no Meu trabalho do app, e o Limpar volta todos');
+    if ([bts, gf, ctm, cpe, cmeu, piD, paD, piA, paA].every(Boolean)) {
+      const g = {}; new Function('window', CAT)(g);
+      const temas = [{ id: 'a', nome: 'AXCred' }, { id: 'b', nome: 'AXCred - Cadastro' }, { id: 'd', nome: 'AXCred - Cadastro - Análise de Crédito - Reanálise' },
+                     { id: 'e', nome: 'AXCred - Cobrança' }, { id: 'f', nome: 'BI - Reports' }, { id: 'h', nome: 'AXCred - Operações' }];
+      const L = [
+        { id: '1', dev: 'Ana', tema_id: 'd', tipo: 'evolucao', status_planejamento: 'em_andamento', inicio: '2026-11-03', criado_em: '2026-10-20T10:00:00Z' },
+        { id: '2', dev: 'Ana', tema_id: 'b', tipo: 'sustentacao', status_planejamento: 'planejado', inicio: '2026-10-10', criado_em: '2026-09-01T10:00:00Z' },
+        { id: '3', dev: 'Ana / Caio', tema_id: 'e', tipo: '', status_planejamento: 'backlog', criado_em: '2025-12-30T10:00:00Z' },
+        { id: '4', dev: 'Ana', tema_id: 'f', tipo: 'evolucao', status_planejamento: 'concluido', inicio: '2026-03-02', entrega: '2026-03-20', criado_em: '2026-02-01T10:00:00Z', poker_pontos: 5, entregue_em: '2026-03-19T10:00:00Z' },
+        { id: '5', dev: 'Caio', tema_id: 'd', tipo: 'evolucao', status_planejamento: 'em_andamento', inicio: '2026-11-02', criado_em: '2026-10-01T10:00:00Z' },
+        { id: '6', dev: 'Ana', tema_id: 'd', tipo: 'evolucao', status_planejamento: 'em_andamento', mesclado_em: '1', criado_em: '2026-10-01T10:00:00Z' },
+        { id: '7', dev: 'ana', tema_id: 'h', tipo: 'sustentacao', status_planejamento: 'validacao', inicio: '2026-11-02', entrega: '2026-11-04', criado_em: '2026-10-30T10:00:00Z', poker_pontos: 3, entregue_em: '2026-11-04T15:00:00Z' },
+        { id: '8', dev: 'Caio', tema_id: 'h', status_planejamento: 'concluido', inicio: '2026-11-02', entrega: '2026-11-03', criado_em: '2026-10-30T10:00:00Z', poker_pontos: 8, entregue_em: '2026-11-03T15:00:00Z' },
+        { id: '9', dev: 'Ana', status_planejamento: 'concluido', criado_em: '2026-01-05T10:00:00Z' },
+        { id: '10', dev: 'Ana', status_planejamento: 'concluido', inicio: '2026-11-02', entrega: '2026-11-05', criado_em: '2026-10-30T10:00:00Z', poker_pontos: 1, entregue_em: '2026-11-05T15:00:00Z' },
+        { id: '11', dev: 'Ana', status_planejamento: 'concluido', inicio: '2026-11-02', entrega: '2026-11-04', criado_em: '2026-10-30T10:00:00Z', poker_pontos: 1, entregue_em: '2026-11-04T15:00:00Z' },
+      ];
+      // Tema: as opcoes e as contagens do buildTemaSelect.
+      const temaDev = (filtro) => {
+        const sel = { innerHTML: '', value: '' };
+        new Function('document', 'state', 'DEVNOME', 'currentDev', 'catalogoCasa', 'catalogoOpcoesHTML', '_temaFilter', bts + '\nbuildTemaSelect();')(
+          { getElementById: () => sel }, { melhorias: L, temas }, DN, 'Ana', g.catalogoCasa, g.catalogoOpcoesHTML, filtro);
+        return [...sel.innerHTML.matchAll(/<option[^>]*>([^<]*)<\/option>/g)].map((x) => x[1].replace(/\s+/g, ' ').trim()).join(' | ');
+      };
+      const temaApp = (filtro) => {
+        const dev = L.filter((m) => m && !m.mesclado_em && DN.eDe(m, 'Ana'));
+        const c = new Function('window', ctm + '\nreturn contaTemas;')(g)(dev, temas, filtro);
+        const h = '<option value="">Todos (' + dev.length + ')</option>' + g.catalogoOpcoesHTML(c.visiveis, filtro || '', { vazio: false, contagem: c.conta });
+        return [...h.matchAll(/<option[^>]*>([^<]*)<\/option>/g)].map((x) => x[1].replace(/\s+/g, ' ').trim()).join(' | ');
+      };
+      const divT = ['', 'b', 'f'].filter((f) => temaDev(f || null) !== temaApp(f));
+      ok(!divT.length && /Cadastro \(2\)/.test(temaApp('')), 'Tema do Meu trabalho: os mesmos temas (so os do dev, ou o escolhido) e a mesma contagem por subarvore do buildTemaSelect', divT.map((f) => f + ': ' + temaDev(f || null) + ' x ' + temaApp(f)).join(' || '));
+      // Periodo e tipo: o getFiltered com ano/mes escolhidos x casaMeu.
+      const filtraDev = (ano, mes, tipo, tema) => {
+        const vals = { 'f-ano': ano, 'f-mes': mes, 'f-tipo': tipo, 'f-sprint': '', 'f-dono': '', 'f-times': '' };
+        return new Function('document', 'state', 'DEVNOME', 'currentDev', 'SPRINTPO', 'getStatusKey', '_temaFilter', 'doMeuTime', 'window', gf + '\nreturn getFiltered();')(
+          { getElementById: (id) => ({ value: vals[id] == null ? '' : vals[id] }) }, { melhorias: L }, DN, 'Ana', SP, gravada, tema || null, () => true, { SPRINTPO: SP })
+          .map((m) => m.id).join(',');
+      };
+      const filtraApp = (ano, mes, tipo, tema) => {
+        const MEU = { tipo: tipo === '__sem_tipo__' ? '__sem__' : tipo, tema: tema || '', ano, mes };
+        const casaP = new Function(cpe + '\nreturn casaPeriodo;')();
+        const casa = new Function('MEU', 'window', 'casaPeriodo', cmeu + '\nreturn casaMeu;')(MEU, g, casaP);
+        return L.filter((m) => !m.mesclado_em && DN.eDe(m, 'Ana') && gravada(m) !== 'negada' && casa(m, { temas })).map((m) => m.id).join(',');
+      };
+      const combos = [['2026', '', ''], ['2026', '10', ''], ['', '10', ''], ['2025', '', ''], ['2026', '', 'evolucao'], ['2026', '', '__sem_tipo__'], ['', '2', 'evolucao'], ['2026', '', '', 'f'], ['2026', '', '', 'h']];
+      const divP = combos.filter((c) => filtraDev(...c) !== filtraApp(...c));
+      ok(!divP.length, 'Periodo (ano e mes, pelo inicio ou pela criacao, e as concluidas do periodo de volta), Tipo e o tema folha recortam o Meu trabalho como o getFiltered (' + combos.length + ' combinacoes)',
+         divP.map((c) => c.join('/') + ': ' + filtraDev(...c) + ' x ' + filtraApp(...c)).join(' || '));
+      // O tema do meio: o dev.html contava a subarvore e filtrava so o proprio no; o app filtra o que conta.
+      const nB = (temaApp('').match(/Cadastro \((\d+)\)/) || [])[1];
+      ok(filtraApp('2026', '', '', 'b').split(',').filter(Boolean).length + filtraApp('2025', '', '', 'b').split(',').filter(Boolean).length === +nB && filtraDev('2026', '', '', 'b') === '2',
+         'Tema do meio (AXCred - Cadastro): o app devolve as ' + nB + ' que a contagem promete; o dev.html so a do proprio no (diferenca de proposito, registrada no comentario)');
+      // A produtividade: o intervalo e o podio.
+      const hojeReal = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+      const intD = new Function(piD + '\nreturn prodIntervalo;')(), intA = new Function(piA + '\nreturn prodIntervalo;')();
+      const divI = ['semana', 'mes', 'mes_ant'].filter((q) => JSON.stringify(intD(q)) !== JSON.stringify(intA(q, hojeReal)));
+      ok(!divI.length, 'Periodo da produtividade: a semana de segunda a domingo, o mes atual e o anterior do prodIntervalo', divI.join(','));
+      const agD = (de, ate) => comEtapa(() => new Function('state', 'window', 'getStatusKey', 'DEVNOME', 'currentDev', paD + '\nreturn prodAgrega;')(
+        { melhorias: L }, { CAPACIDADE: CAPM }, gravada, DN, 'Ana')(de, ate));
+      const agA = (de, ate) => comEtapa(() => new Function('window', 'H', paA + '\nreturn prodAgrega;')({ CAPACIDADE: CAPM }, { colunaDe: gravada })(L, de, ate, (m) => DN.eDe(m, 'Ana')));
+      const janelas = [['2026-11-02', '2026-11-08'], ['2026-11-01', '2026-11-30'], ['2026-03-01', '2026-03-31'], ['2026-01-01', '2026-12-31']];
+      const divA = janelas.filter((j) => JSON.stringify(agD(...j)) !== JSON.stringify(agA(...j)));
+      const nov = agA('2026-11-01', '2026-11-30').rank;
+      ok(!divA.length && nov.length >= 2 && nov.some((r) => r.issues > nov[0].issues) && agA('2026-01-01', '2026-12-31').semDataMinhas === 1,
+         'Podio e a minha linha: o ranking (pontos, issues, nome), o planejado, o % e o "sem pontuar", e as entregas minhas sem data, como o prodAgrega (' + janelas.length + ' periodos)', divA.join(' || '));
+    }
+
+    // ── 6. Backlog: a busca na descricao, as fechadas com filtro, Prazo, Producao e Dados ──
+    const mb = ['function normTexto(s) {', 'function matchBusca(m, termo) {'].map((a) => corpo(ADMIN, a));
+    const fb = [corpo(BKT, 'function norm(s) {'), corpo(BKT, 'function filtroBusca(vs, termo) {')];
+    const mf = corpo(BKT, 'function mostraFechadas() {');
+    const mp = [corpo(ADMIN, 'function matchProducao(m, filtro) {'), corpo(ADMIN, 'function matchDados(m, filtro) {')];
+    const cp = [corpo(QDT, 'function casaProducao(m, filtro, gravada, pausada) {'), corpo(QDT, 'function casaDados(m, filtro) {')];
+    ok(mb.every(Boolean) && fb.every(Boolean) && !!mf && mp.every(Boolean) && cp.every(Boolean) &&
+       /if \(!_filtroStatus && !_filtroPrazo && !_filtroProd && !_filtroSprint && !_buscaMel &&\s*HIDDEN_BY_DEFAULT\.includes\(sk\)\) return false;/.test(ADMIN) &&
+       /casaPrazo\(m, F\.prazo\) && casaProducao\(m, F\.prod\)/.test(BKT) && /Q\.casaPrazo\(m, f, H\.hoje\(\), H\.colunaDe\(m\)\)/.test(BKT) &&
+       /if \(F\.dados && !casaDados\(m, F\.dados\)\) return false;/.test(QDT) && /!F\.busca && !doPeriodo\(m\) && !F\.prod\)/.test(QDT),
+       'A busca, as fechadas escondidas, Prazo, Producao e Dados/BI existem no admin e no Backlog e no Quadro do app, para comparar');
+    if (mb.every(Boolean) && fb.every(Boolean) && mf && mp.every(Boolean) && cp.every(Boolean)) {
+      const adm = new Function(mb.join('\n') + '\nreturn matchBusca;')();
+      const bk = new Function('W', fb.join('\n') + '\nreturn filtroBusca;')({});
+      const amostra = [{ codigo: 'AX-179', titulo: 'Reanálise de crédito', descricao: 'Revisar o CONLUIO de cedentes', dev: 'Nathália', solicitante: 'Lívia' },
+                       { codigo: 'AX-180', titulo: 'Outra', descricao: '', dev: null, solicitante: undefined }, { codigo: '', titulo: 'Sem código', descricao: null }];
+      const termos = ['conluio', 'cedentes', 'reanalise', 'AX179', '179', 'livia', 'nathalia', 'outra', 'sem cod', 'zzz'];
+      const divB = [];
+      amostra.forEach((m) => termos.forEach((t) => { const p = bk(amostra, t); if (adm(m, t) !== (!p || p(m))) divB.push((m.codigo || '?') + '/' + t); }));
+      ok(!divB.length && bk(amostra, 'conluio')(amostra[0]), 'Busca do Backlog: tambem na descricao, sem acento, com o codigo com e sem hifen — o matchBusca do admin (' + amostra.length * termos.length + ' casos)', divB.join(', '));
+      const fech = (F) => new Function('F', mf + '\nreturn mostraFechadas;')(F)();
+      const combos = [{}, { q: 'x' }, { sprint: ['S1-11-2026'] }, { prazo: 'vencidas' }, { prod: 'falta_subir' }, { chip: 'concluido' }, { chip: 'negada' }, { chip: 'backlog' }];
+      const divF = combos.filter((c) => {
+        const F = Object.assign({ chip: 'todos', q: '', sprint: null, prazo: '', prod: '' }, c);
+        const status = ['concluido', 'negada'].indexOf(F.chip) >= 0 ? F.chip : '';
+        const escondeAdm = !status && !F.prazo && !F.prod && !F.sprint && !F.q;
+        return escondeAdm === fech(F) && !(F.chip === 'backlog');
+      });
+      ok(!divF.length, 'Concluidas e negadas aparecem com busca, sprint, prazo ou producao escolhidos, como o HIDDEN_BY_DEFAULT do renderMelhorias', divF.map((c) => JSON.stringify(c)).join(' '));
+      const ms = ['backlog', 'em_andamento', 'validacao', 'concluido', 'negada'].flatMap((e) => [{}, { em_producao: true }, { pausado_em: '2026-10-01' }, { dados_bi: true }, { sales_ops: true }, { dados_bi: true, sales_ops: true }]
+        .map((x) => Object.assign({ status_planejamento: e }, x)));
+      const mProd = new Function('statusKey', 'window', 'ETAPA', mp[0] + '\nreturn matchProducao;')(gravada, { ETAPA: ET }, ET);
+      const mDados = new Function(mp[1] + '\nreturn matchDados;')();
+      const cProd = new Function(cp[0] + '\nreturn casaProducao;')(), cDados = new Function(cp[1] + '\nreturn casaDados;')();
+      const divP = [];
+      ms.forEach((m) => {
+        ['', 'falta_subir', 'no_ar', 'fora_ar', 'pausado'].forEach((f) => { if (mProd(m, f) !== cProd(m, f, gravada(m), ET.pausada(m))) divP.push('prod ' + f + ' ' + JSON.stringify(m)); });
+        ['', 'dados', 'sales', 'fora'].forEach((f) => { if (mDados(m, f) !== cDados(m, f)) divP.push('dados ' + f + ' ' + JSON.stringify(m)); });
+      });
+      ok(!divP.length, 'Producao (Concluidas fora do ar, No ar e, no menu da coluna, Fora do ar e Em pausa) e Dados/BI pela marca (Dados, Sales Ops, Fora de Dados): matchProducao e matchDados do admin (' + ms.length * 9 + ' casos)', divP.slice(0, 3).join(' || '));
+    }
+
+    // ── 7. O contador da coluna ──────────────────────────────────────────
+    const kc = corpo(ADMIN, 'function kbContadorHTML(col, exibidas, total) {'), kpc = (ADMIN.match(/const KB_PROD_COL = \[[\s\S]*?\n\];/) || [''])[0];
+    const ct = corpo(QDT, 'function contador(k, rot, exibidas, total, f) {'), pcol = (QDT.match(/var PROD_COL = \[[^\n]*\];/) || [''])[0];
+    ok(!!kc && !!kpc && !!ct && !!pcol && /data-qd-prod="/.test(QDT) && /async function menuProducao\(el, ctx, k, rot\) \{/.test(QDT) && /Object\.keys\(F\.prodCol\)\.length/.test(QDT),
+       'O contador da coluna e um botao que abre o menu de producao no Kanban do admin (kbContadorHTML) e no Quadro do app (contador + menuProducao), e conta no Limpar');
+    if (kc && kpc && ct && pcol) {
+      const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const divC = [];
+      ['', 'no_ar', 'fora_ar', 'pausado'].forEach((f) => [[5, 18], [0, 3], [7, 7]].forEach(([e, t]) => {
+        const col = { key: 'validacao', label: 'Validação PM/PO' };
+        const a = new Function('_kbProdCol', 'esc', kpc + '\n' + kc + '\nreturn kbContadorHTML;')({ validacao: f || undefined }, esc)(col, e, t);
+        const n = new Function('H', 'attr', pcol + '\n' + ct + '\nreturn contador;')({ esc }, esc)('validacao', 'Validação PM/PO', e, t, f);
+        const tA = (a.match(/title="([^"]*)"/) || [])[1], tN = (n.match(/title="([^"]*)"/) || [])[1];
+        const vA = a.replace(/<[^>]+>/g, ''), vN = n.replace(/<span class="cr">[\s\S]*?<\/span>/, '').replace(/<[^>]+>/g, '');
+        if (tA !== tN || vA !== vN) divC.push(f + ' ' + e + '/' + t + ': "' + vA + '" ' + tA + ' x "' + vN + '" ' + tN);
+      }));
+      ok(!divC.length, 'Contador da coluna: o numero (ou "▲ 5/18" filtrado) e a dica com o filtro e "mostrando X de Y" do kbContadorHTML', divC.slice(0, 3).join(' || '));
+    }
+
+    // ── 8. O Item: votos do Poker, quem pediu, a faixa de leitura e a conversa ──
+    const vr = corpo(ADMIN, 'function votosRender() {'), vdA = corpo(ITT, 'function votosDe(m) {');
+    ok(!!vr && !!vdA && /h = props\(m\) \+ votosSec\(m\);/.test(ITT), 'Os votos do Poker estao na aba Votos do admin (votosRender) e na lateral do Item (votosDe)');
+    if (vr && vdA) {
+      const casos = [
+        { id: 'v1', poker_media: 6.5, poker_pontos: 8, poker_votos: [{ nome: 'Ana', voto: '3' }, { nome: 'Caio', voto: '8' }, { nome: 'Bia', voto: '13' }, { nome: 'Dani', voto: '8' }] },
+        { id: 'v2', poker_media: 5, poker_pontos: 5, poker_votos: [{ nome: 'Ana', voto: '5' }, { nome: 'Caio', voto: '5' }] },
+        { id: 'v3', poker_votos: [{ nome: 'Ana', voto: '?' }, { nome: 'Caio', voto: '2,5' }, { nome: 'Bia', voto: '1' }] },
+        { id: 'v4' },
+      ];
+      const divV = casos.filter((m) => {
+        const box = { innerHTML: '' };
+        new Function('document', 'state', 'esc', 'uQuando', vr + '\nvotosRender();')(
+          { getElementById: (id) => (id === 'm-id' ? { value: m.id } : box) }, { melhorias: [m] }, (s) => String(s == null ? '' : s), (s) => s);
+        const marcas = [...box.innerHTML.matchAll(/<tr class="([^"]*)"><td>([^<]*)/g)].map((x) => x[2].trim() + ':' + (x[1] === 'vt-min' ? 'menor' : x[1] === 'vt-max' ? 'maior' : ''));
+        const faixa = (box.innerHTML.match(/de (\S+) a (\S+) — leituras/) || []).slice(1).join('-');
+        const a = new Function(vdA + '\nreturn votosDe;')()(m);
+        const marcasA = a.votos.map((v) => v.nome + ':' + v.marca);
+        return marcas.join(',') !== marcasA.join(',') || faixa !== (a.espalhou ? a.min + '-' + a.max : '');
+      });
+      ok(!divV.length, 'Votos do Poker: quem votou o que, o menor e o maior marcados so quando houve divergencia e o "de X a Y", como o votosRender (' + casos.length + ' casos)', divV.map((m) => m.id).join(','));
+    }
+    ok(typeof AC.REGRAS.solicitante === 'function' && /solicitante_email:\s+window\.COLABORADORES\s+\? COLABORADORES\.emailPara\(document\.getElementById\('m-solicitante'\)\.value, existing\)/.test(ADMIN) &&
+       /AC\.botao\('solicitante', m, 'Editar', 'btns it-pbt'/.test(ITT) && /raiz\.COLABORADORES\.ligar\(inp, AX\.WORKER/.test(ACJ),
+       'Quem pediu se edita no modal do admin (m-solicitante) e no Item do app (o gesto `solicitante`, com a sugestao dos colaboradores)');
+    {
+      const m = { id: 's1', codigo: 'AX-1', dev: 'Ana', solicitante: 'Bia Souza', solicitante_email: 'bia@x' };
+      const adm = (v) => ({ solicitante: v.trim(), solicitante_email: CO.emailPara(v, m) });
+      const casos = [['  Carla Dias  ', 'admin'], ['Bia Souza ', 'analista'], ['bia souza', 'admin'], ['', 'admin'], ['', 'dev'], ['Duda', 'dev'], ['Duda', 'consulta']];
+      const divSo = casos.filter(([v, papel]) => {
+        const r = AC.REGRAS.solicitante(m, { solicitante: v }, ctx(papel));
+        if (papel === 'consulta') return r.ok;
+        if (papel === 'dev' && !v.trim()) return r.ok || r.campo !== 'solicitante';
+        if (v.trim() === m.solicitante) return r.ok;
+        return !r.ok || JSON.stringify(r.patch) !== JSON.stringify(adm(v));
+      });
+      const outro = AC.REGRAS.solicitante(Object.assign({}, m, { dev: 'Caio' }), { solicitante: 'Duda' }, ctx('dev'));
+      ok(!divSo.length && !outro.ok, 'Quem pediu: o nome sem espacos e o e-mail do colaborador (o de antes se for o mesmo nome) como o saveMelhoria; em branco so o PM/PO apaga; o dev na demanda de outro e a consulta nao editam', divSo.map((c) => c.join('/')).join(' '));
+    }
+    const ml = corpo(DEV, 'function msModoLeitura(m) {');
+    ok(!!ml && typeof AC.soLeitura === 'function' && /function faixaLeitura\(m, ctx\) \{/.test(ITT) && /'<\/header>' \+ faixaLeitura\(m, ctx\) \+/.test(ITT),
+       'A faixa "Demanda de X — aberta para leitura" esta no modal do dev.html (msModoLeitura) e no Item do app (soLeitura)');
+    if (ml) {
+      const casos = [{ dev: 'Ana' }, { dev: '' }, { dev: 'Caio' }, { dev: 'ana' }, { dev: 'Ana / Caio' }];
+      const res = casos.map((m) => {
+        let aviso = { textContent: '', style: {} }, criado = false;
+        const doc = { getElementById: (id) => (id === 'modal-status' ? { querySelectorAll: () => [] } : id === 'ms-leitura' ? (criado ? aviso : null) : id === 'ms-title' ? { parentNode: { insertBefore: () => {} }, nextSibling: null } : null),
+                      createElement: () => { criado = true; return aviso; } };
+        new Function('document', 'DEVNOME', 'currentDev', ml + '\nmsModoLeitura(arguments[3]);')(doc, DN, 'Ana', m);
+        const o = criado && aviso.style.display !== 'none' ? semEmoji(aviso.textContent).trim() : '';
+        const l = AC.soLeitura(m, ctx('dev'));
+        return { dev: m.dev, o, a: l ? l.erro : '' };
+      });
+      const iguais = res.filter((x) => x.o === x.a).length;
+      ok(iguais === 4 && res[4].o && !res[4].a,
+         'Faixa de leitura: a mesma frase e os mesmos casos do msModoLeitura; a demanda dividida ("Ana / Caio") o app trata como sua, como o resto do painel (DEVNOME.eDe), e o dev.html como leitura', JSON.stringify(res.filter((x) => x.o !== x.a)));
+    }
+    const cmM = corpo(MSG, 'function comMencoes(texto) {'), qM = corpo(MSG, 'function quando(iso) {');
+    const cmA = corpo(ITT, 'function comMencoes(texto, ps) {'), cbA = corpo(ITT, 'function carimbo(iso) {');
+    ok(!!cmM && !!qM && !!cmA && !!cbA && /return AC && AC\.pessoasDaConversa \? AC\.pessoasDaConversa\(D \|\| \{\}\) : \[\];/.test(ITT) &&
+       /title="' \+ H\.esc\(carimbo\(g\.em\)\) \+ '"/.test(ITT) && /if \(!H\.pode\('gravar'\)\) return '<span class="note">Seu perfil é de leitura/.test(ITT),
+       'Na conversa do Item: a mencao e o carimbo da mensageria, com a lista do @ (pessoasDaConversa), e a consulta sem o campo de escrever (temSessao)');
+    if (cmM && qM && cmA && cbA) {
+      const D = { desenvolvedores: ['Ana Souza', 'Caio'], melhorias: [{ dev: 'Bia Lima / Dani' }] };
+      const ps = AC.pessoasDaConversa(D);
+      const escM = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const velho = new Function('esc', 'PESSOAS', cmM + '\nreturn comMencoes;')(escM, ps);
+      const novo = new Function('H', cmA + '\nreturn comMencoes;')({ esc: escM });
+      const textos = ['Oi @Ana Souza, pode ver?', '@caio olha isso', '@Bia', 'email a@b.com', '@Ninguem aqui', 'fala @Dani e @Ana', '<b>@Caio</b>'];
+      const divM = textos.filter((t) => velho(t).replace(/class="mencao"/g, 'class="it-mencao"') !== novo(t, ps));
+      const qV = new Function(qM + '\nreturn quando;')(), qN = new Function(cbA + '\nreturn carimbo;')();
+      const isos = ['2026-11-06T14:03:00.000Z', '2026-01-02T03:04:00Z', 'lixo', ''];
+      const divQ = isos.filter((x) => qV(x) !== qN(x));
+      ok(!divM.length && !divQ.length, 'Mencoes e carimbo: o mesmo destaque do comMencoes (so quem esta na lista do @) e o mesmo DD-MM-AAAA HH:MM do quando da mensageria', divM.concat(divQ).join(' | '));
+    }
+
+    const dsM = corpo(MSG, 'function desenha() {'), lnM = corpo(MSG, 'function linha(classe, iso, cabecalho, corpo) {'), evA = corpo(ITT, 'function eventosConversa(m, lista) {');
+    ok(!!dsM && !!lnM && !!evA && /data-it-reg="1"/.test(ITT) && /registroUnico\(m, ps\) \+ compositor\(m\)/.test(ITT),
+       'A linha do tempo unica da mensageria (desenha) esta na Conversa do Item como "Registro único" (eventosConversa), com o campo de escrever no fim');
+    if (dsM && lnM && evA) {
+      const pai = { id: 'p', codigo: 'AX-9', titulo: 'Pai' };
+      const casos = [
+        { id: 'c1', codigo: 'AX-1', criado_em: '2026-10-01T10:00:00Z', historico: [{ em: '2026-10-03T09:00:00Z', quem: 'Ana', mudancas: [{ campo: 'dev', de: '', para: 'Ana' }] }, { em: '2026-10-02T09:00:00Z', quem: 'PO', mudancas: [] }],
+          mensagens: [{ em: '2026-10-02T12:00:00Z', quem: 'Bia', texto: 'oi' }, { em: '2026-10-05T12:00:00Z', quem: 'Ana', texto: 'feito' }] },
+        { id: 'c2', codigo: 'AX-2', data_solicitacao: '2026-09-01', parent_id: 'p', atualizado_em: '2026-09-10T08:00:00Z', mensagens: [{ em: '2026-09-05T08:00:00Z', quem: 'Ana', texto: 'x' }] },
+        { id: 'c3', codigo: 'AX-3', parent_id: 'p', criado_em: '2026-09-01T00:00:00Z', historico: [{ em: '2026-09-02T00:00:00Z', mudancas: [{ campo: 'parent_id', de: '', para: 'p' }] }] },
+        { id: 'c4', codigo: 'AX-4' },
+      ];
+      const divR = casos.filter((m) => {
+        const alvo = { innerHTML: '' }, nada = { textContent: '' };
+        new Function('document', 'DEMANDA', '_eu', 'esc', 'comMencoes', 'codigoDe', 'talvezData', 'POR_ID', lnM + '\nfunction quando(x) { return String(x || \'\'); }\n' + dsM + '\ndesenha();')(
+          { getElementById: (id) => (id === 'linha-do-tempo' ? alvo : nada), title: '' }, m, null, (x) => String(x == null ? '' : x), (x) => x, (x) => x, (x) => x, new Map([['p', pai]]));
+        const velho = [...alvo.innerHTML.matchAll(/class="linha (ev-[a-z]+)"/g)].map((x) => x[1]);
+        const novo = new Function('H', evA + '\nreturn eventosConversa;')({})(m, [pai]).map((x) => ({ marco: 'ev-marco', dep: 'ev-marco', hist: 'ev-hist', msg: 'ev-msg' }[x.tipo]));
+        return velho.join(',') !== novo.join(',');
+      });
+      ok(!divR.length, 'Registro unico: a criacao, o historico, as mensagens e a dependencia sem rastro na mesma ordem (do mais antigo) que o desenha da mensageria (' + casos.length + ' casos)', divR.map((m) => m.id).join(','));
+    }
+
+    // ── 9. Planejamento: a faixa das pausadas ────────────────────────────
+    const rp = corpo(GANTT, 'function renderPausadas() {'), pj = corpo(PLT, 'function pausadasDaJanela(lista, J, hoje, pausada, desenhadas) {');
+    ok(!!rp && !!pj && /if \(!EST\.apresentar\) h \+= htmlPausadas\(D, M\);/.test(PLT) && /F\.etapa === '__pausada__'\) return '<div class="pl-in" style="' \+ vars \+ '">' \+ cab \+ vazioPausadas\(D, M\)/.test(PLT) &&
+       /poeLS\('axis_plan_pausadas'/.test(PLT) && /if \(!EST\.apresentar && M\.J\.ini <= M\.hoje\) h \+= htmlLimbo\(D, M\);/.test(PLT) && /'não coube no período em exibição'/.test(PLT),
+       'A faixa das pausadas (que lembra se esta aberta), o quadro vazio do filtro Pausada e o "fora do quadro" em periodo passado estao no gantt.html e no Planejamento do app');
+    if (rp && pj) {
+      const L = [
+        { id: 'p1', codigo: 'AX-1', titulo: 'Sem data', dev: 'Ana', status_planejamento: 'em_andamento', pausado_em: '2026-10-01', pausa_motivo: 'aguarda' },
+        { id: 'p2', codigo: 'AX-2', titulo: 'No mes', dev: '', status_planejamento: 'planejado', pausado_em: '2026-11-02', inicio: '2026-11-03', entrega: '2026-11-20' },
+        { id: 'p3', codigo: 'AX-3', titulo: 'Mes passado', dev: 'Caio', status_planejamento: 'em_andamento', pausado_em: '2026-08-10', inicio: '2026-07-01', entrega: '2026-07-31' },
+        { id: 'p4', codigo: 'AX-4', titulo: 'So entrega', dev: 'Caio', status_planejamento: 'planejado', pausado_em: '2026-09-15', entrega: '2026-11-10' },
+        { id: 'p5', codigo: 'AX-5', titulo: 'Correndo', dev: 'Ana', status_planejamento: 'em_andamento', inicio: '2026-11-03', entrega: '2026-11-07' },
+        { id: 'p6', codigo: 'AX-6', titulo: 'Concluida pausada', dev: 'Ana', status_planejamento: 'concluido', pausado_em: '2026-10-20', entrega: '2026-10-25' },
+      ];
+      const box = { innerHTML: '', style: {}, classList: { toggle() {} } };
+      new Function('document', 'state', 'estaPausado', 'viewYear', 'viewMonth', 'diasPausadoAgora', 'esc', '_pausadasAberta', rp + '\nrenderPausadas();')(
+        { getElementById: () => box }, { melhorias: L }, ET.pausada, 2026, 10, (m) => PZ.diasPausados(m, HOJE),
+        (s) => String(s == null ? '' : s), true);
+      const itens = box.innerHTML.split('class="g-pausada-item"').slice(1).map((x) => ({
+        id: ((x.match(/openModal\(&quot;([^&]+)&quot;\)/) || [])[1]), dias: +((x.match(/gp-dias">(\d+)/) || [])[1]), fora: /gp-fora/.test(x) }));
+      const fora = +((box.innerHTML.match(/<small>· (\d+) sem barra/) || [])[1] || 0);
+      const app = new Function('iso', 'raiz', pj + '\nreturn pausadasDaJanela;')((v) => { const s = String(v == null ? '' : v).slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }, { PRAZO: PZ })(
+        L, { ini: '2026-11-01', fim: '2026-11-30' }, HOJE, ET.pausada, null);
+      const itA = app.itens.map((x) => ({ id: x.m.id, dias: x.dias, fora: !x.naJanela }));
+      ok(itens.length >= 4 && JSON.stringify(itens) === JSON.stringify(itA) && fora === app.fora,
+         'Pausadas: todas (inclusive as sem data), de quem parou primeiro, com os dias parados e "fora deste periodo", e quantas sem barra — o renderPausadas do gantt.html', JSON.stringify(itens) + ' x ' + JSON.stringify(itA));
+      const desenhada = new Function('iso', 'raiz', pj + '\nreturn pausadasDaJanela;')((v) => String(v || '').slice(0, 10), { PRAZO: PZ })(L, { ini: '2026-11-01', fim: '2026-11-30' }, HOJE, ET.pausada, { p3: true });
+      ok(desenhada.fora === app.fora - 1 && desenhada.itens.find((x) => x.m.id === 'p3').naJanela,
+         'e a herdada pausada que o Planejamento desenhou nao conta como "sem barra" (o gantt contava pela data)');
+    }
+
+    // ── 10. O resto do card, da linha do Backlog e da barra do Planejamento ──
+    ok(/SPRINTPO\.estiloSprint\(m\)/.test(QDT) && /\(spEst \? ' comsp' : ''\)/.test(QDT) && /kb-comsprint/.test(ADMIN) && /W\.SPRINTPO\.estiloSprint\(m\)/.test(BKT) && /card-comsprint/.test(ADMIN) &&
+       /if \(m\.inicio\)  meta\.push\(`📅 \$\{formatDate\(m\.inicio\)\}`\);/.test(DEV) && /H\.ico\('calendar'\) \+ ' ' \+ H\.dm\(String\(m\.inicio\)\.slice\(0, 10\)\)/.test(QDT) &&
+       /if \(m\.estimativa\) meta\.push\(`⏱ \$\{devEsc\(m\.estimativa\)\}`\);/.test(DEV) && /H\.ico\('clock'\) \+ ' ' \+ H\.esc\(String\(m\.estimativa\)\.trim\(\)\)/.test(QDT) &&
+       /pjAbrirDoCard/.test(ADMIN) && /location\.hash = '#projeto\/' \+ p\.getAttribute\('data-qd-proj'\)/.test(QDT) &&
+       /onclick="sprintLoteAbrir\(\)"/.test(ADMIN) && /data-acao-qd="lote"/.test(QDT) && /document\.querySelector\('#vista \[data-sp-ciclo="lote"\]'\)/.test(QDT),
+       'No card: a cor da sprint do PO (estiloSprint, no card e na linha do Backlog), o inicio e a estimativa do dev.html, o projeto que abre o projeto e o "Sprint em lote" da barra do Kanban');
+    ok(/if \(out && out\.ok === false && \(out\.campo === 'homologacao' \|\| \(m\.spike && r\.destino === 'concluido' && !out\.campo\)\)\) abrirItem\(m\);/.test(QDT) &&
+       /mAba\('entrega'\)/.test(corpo(ADMIN, 'function kbDrop(e, colKey) {') || ''),
+       'Arraste recusado do PM/PO: o campo do formulario abre pelo `recusa` de axis-acoes.js, e a homologacao e o spike abrem a entrega no Item, como o kbDrop abre a aba Entrega');
+    {
+      const ml = corpo(BKT, 'function marcasLinha(m) {');
+      const lista = [{ id: 'p', codigo: 'AX-1', titulo: 'Principal', status_planejamento: 'em_andamento', poker_pontos: 5 },
+        { id: 'f', codigo: 'AX-2', parent_id: 'p', is_dependency: true, status_planejamento: 'planejado', poker_pontos: 3, em_producao: true, versao: '2.4' },
+        { id: 's', codigo: 'AX-3', status_planejamento: 'concluido', em_producao: true }];
+      const mk = ml ? new Function('W', 'AX', 'H', ml + '\nreturn marcasLinha;')({ VINCULO: VI }, { APP: { D: { melhorias: lista } } },
+        { chip: (t) => '<i>' + t + '</i>', ico: () => '', esc: escH, dma: (x) => x }) : null;
+      const txt = mk ? lista.map((m) => mk(m).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) : [];
+      ok(!!mk && /▲ no ar 2\.4/.test(txt[1]) && /Dep\. de AX-1/.test(txt[1]) && /1 dep\. aberta/.test(txt[0]) && txt[0].indexOf(VI.frase(lista, lista[0])) >= 0 && /▲ no ar/.test(txt[2]) && !/Dep\./.test(txt[2]) &&
+         /▲ no ar\$\{m\.versao \? ' ' \+ esc\(m\.versao\) : ''\}/.test(ADMIN) && /🔗 Dep\. de: \$\{esc\(parentM\.codigo/.test(ADMIN) &&
+         /H\.ico\('pause'\) \+ ' Pausada' \+ \(dp \? ' · ' \+ dp \+ 'd' : ''\)/.test(BKT) && /m\.descricao\.substring\(0,120\)/.test(ADMIN) && /ds\.slice\(0, 120\)/.test(BKT),
+         'Marcas da linha do Backlog: "▲ no ar" com a versao, "Dep. de AX-n", as dependencias abertas, a soma da arvore, a pausa com os dias e a previa de 120 caracteres da descricao, como na lista do admin', txt.join(' | '));
+    }
+    ok(/\$\{m\.is_dependency \? `<span title="Dependência"/.test(GANTT) && /\(m\.is_dependency \? '<span class="x">' \+ ico\('link'\)/.test(PLT) &&
+       /VINCULO\.abertos\(state\.melhorias, m\.id\)\.length \? `<span title="Tem dependência aberta"/.test(GANTT) && /raiz\.VINCULO\.abertos\(\(AX\.APP\.D \|\| \{\}\)\.melhorias \|\| \[\], m\.id\)\.length/.test(PLT) &&
+       /window\.SELO \? SELO\.badges\(m, 'card-selo'\)/.test(GANTT) && /raiz\.SELO \? raiz\.SELO\.de\(m\)/.test(PLT) && /raiz\.SELO\.comite\(m\)/.test(PLT) &&
+       /const foiDireto = window\.ABERTURA \? ABERTURA\.foiDireto\(m\) : false;/.test(GANTT) && /direto = AB && AB\.foiDireto \? AB\.foiDireto\(m\) : false;/.test(PLT) && /\(viaApi \? ' api' : viaPainel \? ' painel' : ''\)/.test(PLT),
+       'Na barra do Planejamento, as marcas do card do gantt: dependencia, dependencia aberta, os selos (planning e comite), o sistema e a borda de quem nasceu pela API ou no Painel Dev (ABERTURA.foiDireto)');
+
+    ok(/body\.apresentando \.filter-bar,\s*body\.apresentando \.backlog-sidebar \{ display:none !important; \}/.test(GANTT) && /localStorage\.setItem\('rm_apresentando'/.test(GANTT) &&
+       /body\.apresentando \.gcard \{ font-size:13px; \}/.test(GANTT) &&
+       /apresentar: lerLS\('axis_plan_apres'\) === '1',/.test(PLT) && (PLT.match(/poeLS\('axis_plan_apres', EST\.apresentar \? '1' : ''\)/g) || []).length === 2 &&
+       /\n    h \+= htmlChips\(D, M\);\n    if \(!EST\.apresentar\) h \+= htmlFiltros\(D, M\);/.test(PLT) && /\n    h \+= htmlCapacidade\(D, M\);/.test(PLT) &&
+       /var fl = EST\.apresentar \? null : htmlFilaLista\(D\);/.test(PLT) && /'\.axa \.pl-lay\.so \.pl-br\{font-size:13\.5px\}'/.test(PLT),
+       'Apresentar no Planejamento = o do gantt: tira filtros e fila, mantem os chips e a capacidade, aumenta o texto e lembra ao recarregar');
+
+    // ── 11. No celular: toque de 44 px e texto de 12 px no que entrou ────
+    ok(/'\.axa \.qd-vl\{min-height:44px;padding:0 6px\}'/.test(QDT) && /'\.axa \.qd-card \.qd-vinc,\.axa \.qd-spb,\.axa \.qd-cnt\{min-height:44px;height:auto\}'/.test(QDT) &&
+       /'\.axa \.qd-cnt\{min-width:44px;/.test(QDT) && /\.axa \.qd-grill,\.axa \.qd-bloq,\.axa \.qd-peso,\.axa \.qd-vl,\.axa \.qd-spb,\.axa \.qd-cnt\{font-size:12px !important\}/.test(QDT) &&
+       /\.axa \.qd-proj\{display:inline-flex;align-items:center;min-height:44px\}/.test(QDT) &&
+       /\.axa \.ini-pd select\.in\{min-height:44px;/.test(INI) && /\.axa \.ini-pd-tg\{display:inline-flex;align-items:center;min-height:44px;/.test(INI) &&
+       /\.axa \.bk-chip\{min-height:44px\}\.axa \.bk-ln \.cm,\.axa \.bk-ln \.cm \*,\.axa \.bk-gp\{font-size:12px\}/.test(BKT) &&
+       /\.axa \.it-props \.it-pbt\{min-height:44px;/.test(ITT) && /'\.axa \.pl-pau \.it\{grid-template-columns:auto minmax\(0,1fr\) auto\}'/.test(PLT),
+       'No celular, o que entrou no card, no Meu trabalho, no Backlog, no Item e no Planejamento tem toque de 44 px e texto de 12 px (medido a 390 px em .demo/verifica/l7)');
+  })();
+
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao
@@ -25323,4 +29888,3 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     process.exit(falhas ? 1 : 0);
   });
 })();
-

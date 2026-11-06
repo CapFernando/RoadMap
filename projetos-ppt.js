@@ -16,11 +16,18 @@
 (function () {
   'use strict';
 
-  var NAVY = '14213D', TEXTO = '1B2333', MUTED = '6B7686', LINHA = 'D5DAE1', ZEBRA = 'F7F8FA', VERM = 'C0392B';
+  /* A PALETA E A DO AXIS NO CLARO, como a da folha de aprovacao
+     (`aprovacao-ppt.js`): papel branco para imprimir, marinho do AXIS no
+     cabecalho e nos titulos, laranja so no traco sob o titulo, e a capa
+     corporativa (CAPA) mantida. As faixas sao os estados ok, info e roxo do
+     AXIS a 14%, o mesmo fundo dos chips da tela. Sem emoji: no slide ele vira
+     quadrado quando a fonte de quem abre nao o tem. */
+  var CAPA = '14213D', NAVY = '0D162A', TEXTO = '0B1220', MUTED = '5B6B85', LINHA = 'CFD7E3', ZEBRA = 'F2F5F9', VERM = 'C62828';
+  var LARANJA = 'FF6B1A';
   var FAIXAS = [
-    { k: 'feitas', nome: '✅ Feitas', tint: 'E2F1E5', data: 'Concluída em' },
-    { k: 'andamento', nome: '🚧 Em andamento', tint: 'E3EEFB', data: 'Entrega usuário' },
-    { k: 'planejado', nome: '📅 Planejado', tint: 'ECE6F8', data: 'Entrega usuário' },
+    { k: 'feitas', nome: 'Feitas', tint: 'DEF2E6', data: 'Concluída em' },
+    { k: 'andamento', nome: 'Em andamento', tint: 'E0E9FC', data: 'Entrega usuário' },
+    { k: 'planejado', nome: 'Planejado', tint: 'EDE3FC', data: 'Entrega usuário' },
   ];
 
   function txt(v) { return String(v == null ? '' : v).trim(); }
@@ -55,11 +62,14 @@
     var titulo = function (sl, t) {
       sl.background = { color: 'FFFFFF' };
       sl.addText(t, { x: 0.5, y: 0.3, w: 12.3, h: 0.65, fontFace: 'Calibri', fontSize: 28, bold: true, color: NAVY, margin: 0 });
+      // Termina em 0,98", onde comeca a linha do responsavel no slide do projeto.
+      sl.addShape(pptx.shapes.RECTANGLE, { x: 0.5, y: 0.94, w: 0.6, h: 0.04, fill: { color: LARANJA },
+                                           line: { color: LARANJA } });
     };
 
     // ── Capa ──
     var s = pptx.addSlide();
-    s.background = { color: NAVY };
+    s.background = { color: CAPA };
     s.addText('Projetos em andamento', { x: 0.8, y: 2.2, w: 11.7, h: 1.2, fontFace: 'Calibri', fontSize: 44, bold: true,
                                          color: 'FFFFFF', margin: 0, valign: 'bottom' });
     s.addText(ps.length + (ps.length === 1 ? ' projeto' : ' projetos') + ' com demanda na sprint atual' +
