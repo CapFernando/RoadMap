@@ -24293,7 +24293,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ok(pl.pontosValidados === 22 && pl.pontosTotal === 92,
        'a pontuacao e a dos validados aqui, sobre tudo que passou',
        pl.pct + '% · ' + pl.pontosValidados + '/' + pl.pontosTotal);
-    ok(pl.pctPontos === 24,
+    /* REGRA DE 06/11/2026: em validacao CONTA como entrega da sprint. 3 fechadas
+       + 1 em validacao de 8 = 50% por item; (22 + 21) / 92 pontos = 47%. */
+    ok(pl.pct === 50 && pl.entregues === 4,
+       'o cumprimento da sprint soma fechadas e em validacao',
+       'por item ' + pl.pct + '%');
+    ok(pl.pctPontos === 47,
        'e ha o percentual por PONTO ao lado, que pesa o tamanho',
        'por item ' + pl.pct + '%, por ponto ' + pl.pctPontos + '%');
     ok(SP.placarDaSprint({ sprints: [], melhorias: [
@@ -25007,6 +25012,23 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
              JSON.stringify({ s1: [e1.validados, e1.aguardando], s2: e2.total }));
           ok(SPA.placarDaSprint(dE, 'S5-10-2026').regraEntrega === undefined,
              'sprint anterior a regra segue a conta antiga, pela sprint marcada');
+          /* O EXEMPLO DO FERNANDO (06/11/2026): "10 itens na sprint, 5 fechados,
+             3 em validacao, 2 demandas em aberto ainda (80% da sprint concluida)". */
+          const mkF = (id, et, ida) => Object.assign({ id, status_planejamento: et, sprint_po: r2,
+            sprint_po_historico: hsE(r2), dev: 'Ana', poker_pontos: 1 }, ida ? { primeira_validacao_em: '2026-11-10' } : {});
+          const dF = { feriados: [], melhorias: [
+            mkF('1', 'concluido', 1), mkF('2', 'concluido', 1), mkF('3', 'concluido', 1), mkF('4', 'concluido', 1), mkF('5', 'concluido', 1),
+            mkF('6', 'validacao', 1), mkF('7', 'validacao_area', 1), mkF('8', 'validacao', 1),
+            mkF('9', 'em_andamento'), mkF('10', 'planejado')] };
+          const pF = SPA.placarDaSprint(dF, r2);
+          ok(pF.total === 10 && pF.validados === 5 && pF.aguardando === 3 && pF.emCurso === 2 && pF.pct === 80,
+             '10 itens, 5 fechados e 3 em validacao: 80% da sprint (em validacao conta como entrega)',
+             JSON.stringify({ t: pF.total, f: pF.validados, v: pF.aguardando, a: pF.emCurso, pct: pF.pct }));
+          // Devolvida para ajuste ja nao esta em validacao: volta a ser item em aberto.
+          dF.melhorias[7].status_planejamento = 'em_andamento';
+          const pD = SPA.placarDaSprint(dF, r2);
+          ok(pD.aguardando === 2 && pD.emCurso === 3 && pD.pct === 70,
+             'a devolvida para ajuste volta a ser item em aberto da sprint', 'pct ' + pD.pct);
         }
         ok(SPA.acompanhamentoDaSprint(dA, rA, null, '2026-11-05').filter(x => x.situacao === 'na_area').length === 2,
            'o acompanhamento ainda mostra a task, marcada como na area');

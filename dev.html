@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="43a7fd5b72">
+<html lang="pt-BR" data-build="63d025fb73">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -753,7 +753,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=c5600b91fd"></script>
+<script src="sprint.js?v=d4c225eafd"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
 <script src="requisitos.js?v=1987238fe2"></script>
@@ -2350,9 +2350,9 @@ function renderSprintDev() {
     ? '<div class="dsp-vazio">Nada nesta sprint ainda.</div>'
     : bloco(p.pontosValidados, p.pontosTotal, 'pontos validados pelo PM/PO') +
       bloco(p.validados, p.total, 'itens validados pelo PM/PO') +
-      bloco(p.pct + '%', null, 'cumprimento da sprint (itens)') +
+      bloco(p.pct + '%', null, p.entregues != null ? 'cumprimento (fechadas + em validação)' : 'cumprimento da sprint (itens)') +
       (p.pctPontos === null ? '' : bloco(p.pctPontos + '%', null, 'cumprimento (pontos)')) +
-      (p.aguardando ? bloco(p.aguardando, null, 'esperando validação') : '');
+      (p.aguardando ? bloco(p.aguardando, null, p.entregues != null ? 'em validação (já contam)' : 'esperando validação') : '');
 
   const temDupla = rk.some(d => d.dupla);
   const eu = DEVNOME.norm(currentDev || '');

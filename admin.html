@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="a5bda38718">
+<html lang="pt-BR" data-build="756a6d9f20">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -1678,7 +1678,7 @@
 <script src="selo-validacao.js?v=6fcec3ad51"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=c5600b91fd"></script>
+<script src="sprint.js?v=d4c225eafd"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -2211,8 +2211,13 @@
           <label>Sprint</label>
           <select id="es-sprint" onchange="_esSprint = this.value; renderEntregasSprint()"></select>
         </div>
+        <div class="ger-filter-group">
+          <label>Esteira</label>
+          <select id="es-esteira" onchange="_esEsteira = this.value; renderEntregasSprint()"></select>
+        </div>
         <span class="fb-count" id="es-resumo"></span>
       </div>
+      <div id="es-esteiras" class="es-pessoas"></div>
       <div id="es-kpis" class="ger-summary" style="margin:6px 0 10px"></div>
       <div id="es-pessoas" class="es-pessoas"></div>
       <div id="es-lista"></div>
@@ -5241,6 +5246,21 @@ function esFiltrar(f) { _esFiltro = (_esFiltro === f ? 'todas' : f); renderEntre
    e mostra os numeros dela; clicar de novo volta a todos. Soma com o cartao. */
 let _esPessoa = '';
 function esPessoa(nome) { _esPessoa = (_esPessoa === nome ? '' : nome); renderEntregasSprint(); }
+/* A ESTEIRA (05/11/2026): "Crie um filtro com Dados/BI, Sales OPs e
+   desenvolvimento para sabermos o andamento por esteira." A mesma separacao do
+   filtro Times do painel do dev (`doMeuTime`): marcada Sales Ops (e nao Dados)
+   e Sales Ops; marcada Dados/BI, ou de dev da frente de Dados, e Dados/BI; o
+   resto — inclusive sem frente — e Desenvolvimento. */
+let _esEsteira = '';
+const ES_ESTEIRAS = [['dev', '💻 Desenvolvimento'], ['dados', '📊 Dados/BI'], ['sales', '📈 Sales Ops']];
+function esteiraDe(m) {
+  if (m && m.sales_ops && !m.dados_bi) return 'sales';
+  if (m && m.dados_bi) return 'dados';
+  const P = window.PIPELINES;
+  if (P && P.FRENTE_DADOS && P.daDemanda(m, state.devs_perfil) === P.FRENTE_DADOS) return 'dados';
+  return 'dev';
+}
+function esEsteira(v) { _esEsteira = (_esEsteira === v ? '' : v); renderEntregasSprint(); }
 
 
 function renderEntregasSprint() {
@@ -5276,12 +5296,32 @@ function renderEntregasSprint() {
     if (s === 'em_curso') return 'aberta';
     return s === 'saiu' && SPRINTPO.naSprint(m, _esSprint) ? 'aberta' : null;
   };
-  const ms = (state.melhorias || []).filter(m => {
+  const msTodas = (state.melhorias || []).filter(m => {
     if (ehMesclada(m)) return false;
     if (!regraEs) return SPRINTPO.naSprint(m, _esSprint);
     const st = sitEs(m);
     return st === 'negada' ? SPRINTPO.naSprint(m, _esSprint) : !!st;
   });
+  /* O ANDAMENTO POR ESTEIRA — uma linha antes dos cartoes, sempre sobre a
+     sprint inteira; clicar filtra (o mesmo que o seletor). */
+  const selE = document.getElementById('es-esteira');
+  if (selE) {
+    selE.innerHTML = `<option value="">Todas (${msTodas.length})</option>` + ES_ESTEIRAS.map(([k, rot]) =>
+      `<option value="${k}"${_esEsteira === k ? ' selected' : ''}>${rot} (${msTodas.filter(m => esteiraDe(m) === k).length})</option>`).join('');
+  }
+  const boxE = document.getElementById('es-esteiras');
+  if (boxE) {
+    boxE.innerHTML = '<span class="rot">Andamento por esteira:</span>' + ES_ESTEIRAS.map(([k, rot]) => {
+      const l = msTodas.filter(m => esteiraDe(m) === k && sitEs(m) !== 'negada');
+      const agu = l.filter(m => sitEs(m) === 'aguardando').length;
+      const ent = l.filter(m => sitEs(m) === 'entregue').length + agu;
+      const pct = l.length ? Math.round(ent / l.length * 100) : 0;
+      return `<span class="es-pessoa${_esEsteira === k ? ' ativo' : ''}" onclick="esEsteira('${k}')" ` +
+             `title="Clique para ver só esta esteira">${rot} <b>${ent}/${l.length}</b> entregues · ${pct}%` +
+             `${agu ? ` (${agu} em validação)` : ''}</span>`;
+    }).join('');
+  }
+  const ms = msTodas.filter(m => !_esEsteira || esteiraDe(m) === _esEsteira);
   document.getElementById('es-conta').textContent = ms.length;
 
   /* ═══ EM LISTA, NO PADRAO DA ABA MELHORIAS (03/11/2026) ══════════════════
@@ -5308,8 +5348,13 @@ function renderEntregasSprint() {
      Embaixo, o que falta por pessoa — o "faltando no nome". */
   const temDono = m => !!String(m.dev || '').trim();
   const vencida = m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje;
-  const lEntregues = ms.filter(m => sitEs(m) === 'entregue');
+  /* ENTREGUE DA SPRINT = FECHADA + EM VALIDACAO (06/11/2026): "a sprint conta
+     por itens em aberto x entregues. A partir do momento que a demanda esta em
+     validacao da area ou validacao PM/PO, deve contar como uma entrega da
+     sprint." 10 itens, 5 fechados, 3 em validacao → 8 entregues, 80%. */
+  const lFechadas = ms.filter(m => sitEs(m) === 'entregue');
   const lAguardando = ms.filter(m => sitEs(m) === 'aguardando');
+  const lEntregues = lFechadas.concat(lAguardando);
   const lFaltaCom = ms.filter(m => aberta(m) && temDono(m));
   const lFaltaSem = ms.filter(m => aberta(m) && !temDono(m));
   const validas = ms.length - negadas;
@@ -5324,11 +5369,8 @@ function renderEntregasSprint() {
   const vencCom = lFaltaCom.filter(vencida).length;
   document.getElementById('es-kpis').innerHTML = ms.length ? (
     kpiEs('todas', ms.length, 'Na sprint', `${ms.length} task(s)` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto`) +
-    kpiEs('entregues', lEntregues.length, 'Entregues', `${lEntregues.length} de ${validas} task(s) · ${pctEnt}%`, 'var(--green)',
+    kpiEs('entregues', lEntregues.length, 'Entregues', `${lFechadas.length} fechada(s) + ${lAguardando.length} em validação · ${pctEnt}% da sprint`, 'var(--green)',
           `<div class="es-barra"><i style="width:${pctEnt}%"></i></div>`) +
-    (regraEs ? kpiEs('aguardando', lAguardando.length, 'Aguardando aprovação',
-          lAguardando.length ? `${pctDe(lAguardando.length)}% · foram para validação nesta sprint` : 'nada parado na validação',
-          lAguardando.length ? 'var(--blue-tx,#8AB4F8)' : '') : '') +
     kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${pctDe(lFaltaCom.length)}% das tasks` +
           (vencCom ? ` · <span style="color:var(--red-tx,#F9A0A0);font-weight:600">${vencCom} com entrega vencida</span>` : ''),
           lFaltaCom.length ? 'var(--amber-tx,#FFC470)' : '') +
@@ -5360,8 +5402,8 @@ function renderEntregasSprint() {
   }
   if (_esPessoa) {
     const lp = ms.filter(daPessoa);
-    const ent = lp.filter(m => sitEs(m) === 'entregue').length;
     const agu = lp.filter(m => sitEs(m) === 'aguardando').length;
+    const ent = lp.filter(m => sitEs(m) === 'entregue').length + agu;
     const neg = lp.filter(m => statusKey(m) === 'negada').length;
     const falta = lp.filter(aberta);
     const venc = falta.filter(vencida).length;
@@ -5371,7 +5413,7 @@ function renderEntregasSprint() {
     resumoPessoa.innerHTML = `<span>👤 <b>${esc(_esPessoa)}</b></span>` +
       `<span><b>${lp.length}</b> na sprint</span>` +
       `<span style="color:var(--green)"><b style="color:inherit">${ent}</b> entregue(s)${val ? ' · ' + Math.round(ent / val * 100) + '%' : ''}</span>` +
-      (agu ? `<span><b>${agu}</b> aguardando aprovação</span>` : '') +
+      (agu ? `<span>(${agu} em validação)</span>` : '') +
       `<span style="color:var(--amber-tx,#FFC470)"><b style="color:inherit">${falta.length}</b> faltando</span>` +
       (venc ? `<span style="color:var(--red-tx,#F9A0A0)"><b style="color:inherit">${venc}</b> com entrega vencida</span>` : '') +
       (neg ? `<span>${neg} negada(s)</span>` : '') +
@@ -10342,8 +10384,11 @@ function renderGerSprint() {
   if (res) {
     res.innerHTML = p.total
       ? '<strong>' + esc(SPRINTPO.rotuloCurto(_sprSel)) + '</strong> · ' +
-        p.validados + ' de ' + p.total + ' validada' + (p.validados === 1 ? '' : 's') +
-        ' pelo PM/PO (' + p.pct + '%) · ' + p.pontosValidados + ' de ' +
+        (p.entregues != null ? p.entregues + ' de ' + p.total + ' entregue' + (p.entregues === 1 ? '' : 's') +
+           ' (' + p.pct + '%: ' + p.validados + ' fechada' + (p.validados === 1 ? '' : 's') + ' + ' +
+           p.aguardando + ' em validação) · '
+         : p.validados + ' de ' + p.total + ' validada' + (p.validados === 1 ? '' : 's') +
+           ' pelo PM/PO (' + p.pct + '%) · ') + p.pontosValidados + ' de ' +
         p.pontosTotal + ' pts' +
         (fech ? ' · <span class="spr-fechada">🔒 fechada em ' +
                 esc(formatDate(fech.em)) + '</span>' : '')
@@ -10364,12 +10409,14 @@ function renderGerSprint() {
          ("a contagem deve ser feita sobre todas as tasks"). O de pontos vem ao
          lado porque duas entregas grandes com oito ajustes pendentes dariam
          20% numa semana em que quase todo o trabalho saiu. */
-      bloco('pct', p.pct + '%', 'cumprimento (por item)',
-            'Validadas pelo PM/PO dividido por tudo que passou pela sprint.') +
+      bloco('pct', p.pct + '%', p.entregues != null ? 'cumprimento (fechadas + em validação)' : 'cumprimento (por item)',
+            p.entregues != null
+              ? 'Fechadas pelo PM/PO mais as que estão em validação (área ou PM/PO), sobre tudo que passou pela sprint. Regra de 06/11/2026.'
+              : 'Validadas pelo PM/PO dividido por tudo que passou pela sprint.') +
       (p.pctPontos === null ? '' :
         bloco('pctp', p.pctPontos + '%', 'cumprimento (por ponto)',
               'A mesma conta, pesando o tamanho de cada demanda.')) +
-      (p.aguardando ? bloco('esp', p.aguardando, 'esperando você validar',
+      (p.aguardando ? bloco('esp', p.aguardando, p.entregues != null ? 'em validação (já contam)' : 'esperando você validar',
         'O dev entregou e falta a sua validação. Estes pontos entram nesta sprint quando você validar — retroativamente.') : '') +
       (p.saiu ? bloco('sai', p.saiu, 'saíram sem entregar',
         'Rolaram para outra sprint ou voltaram ao backlog. Continuam no total desta sprint: foi aqui que elas falharam.') : '');
@@ -12996,12 +13043,12 @@ function relRenderSprint(j) {
       '<div class="spr-b val"><div class="spr-b-n">' + p.validados + ' / ' + p.total +
         '</div><div class="spr-b-r">itens validados pelo PM/PO</div></div>' +
       '<div class="spr-b pct"><div class="spr-b-n">' + p.pct +
-        '%</div><div class="spr-b-r">cumprimento (por item)</div></div>' +
+        '%</div><div class="spr-b-r">' + (p.entregues != null ? 'cumprimento (fechadas + em validação)' : 'cumprimento (por item)') + '</div></div>' +
       (p.pctPontos === null ? '' :
         '<div class="spr-b pctp"><div class="spr-b-n">' + p.pctPontos +
         '%</div><div class="spr-b-r">cumprimento (por ponto)</div></div>') +
       (p.aguardando ? '<div class="spr-b esp"><div class="spr-b-n">' + p.aguardando +
-        '</div><div class="spr-b-r">esperando o PM/PO validar</div></div>' : '') +
+        '</div><div class="spr-b-r">' + (p.entregues != null ? 'em validação (já contam)' : 'esperando o PM/PO validar') + '</div></div>' : '') +
       (p.saiu ? '<div class="spr-b sai"><div class="spr-b-n">' + p.saiu +
         '</div><div class="spr-b-r">saíram sem entregar</div></div>' : '') +
     '</div>' +
