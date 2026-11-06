@@ -81,7 +81,8 @@
     assin: {},
     reqCache: {},
     reqUrl: '',
-    reqPdf: false
+    visorTecla: null,
+    rankAberto: false
   };
 
   function facil() { return H.pode('facilitar'); }
@@ -575,61 +576,244 @@
     if (!doNome) return false;
     return !cod || doNome.toUpperCase() === cod;
   }
-  async function baixar(chave) {
-    var res = await fetch(A.WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'anexo-baixar', chave: chave, token: A.APP.token }) });
-    if (!res.ok) { var e = new Error('HTTP ' + res.status); e.status = res.status; throw e; }
-    return res.blob();
+
+  /* O REQUISITO SEPARADO DOS DEMAIS ANEXOS (`renderDetalhe`, poker.html): o
+     primeiro que passa por `ehRequisito` vai para o quadro da pauta; os outros
+     ficam na lista de anexos, na ordem em que estao na demanda. */
+  function separaAnexos(m) {
+    var anexos = (m && m.anexos) || [];
+    var iReq = anexos.findIndex(function (a) { return ehRequisito(a, m); });
+    var outros = anexos.map(function (a, i) { return { a: a, i: i }; }).filter(function (x) { return x.i !== iReq; });
+    return { iReq: iReq, outros: outros };
   }
-  async function carregaRequisito(a) {
-    var q = document.getElementById('pk-req');
-    if (!q || !a) return;
-    var pdf = /\.pdf$/i.test(String(a.nome || ''));
-    var mostra = function (url) {
-      if (!q.isConnected) return;
-      q.innerHTML = pdf
-        ? '<iframe class="pk-req-pdf" title="Requisito ' + esc(a.nome) + '" src="' + url + '"></iframe>'
-        : '<img class="pk-req-img" alt="Requisito ' + esc(a.nome) + '" title="Clique para ver maior" data-pk="ampliar" src="' + url + '">';
-      S.reqUrl = url; S.reqPdf = pdf;
-    };
-    var recado = function (st) {
-      if (q.isConnected) q.innerHTML = '<span class="note">' + (st === 401 || st === 403 ? 'Sua conta não tem permissão para ver o requisito.'
-        : st === 404 ? 'O arquivo do requisito não está no armazenamento de anexos.' : 'Não foi possível carregar o requisito.') + '</span>';
-    };
-    var c = S.reqCache[a.chave];
-    // A falha tambem fica guardada: a pauta se redesenha, e sem isto o mesmo
-    // arquivo ausente seria pedido de novo a cada redesenho.
-    if (c) { if (c.url) mostra(c.url); else recado(c.erro); return; }
+
+  /* ABRE NA PROPRIA SALA OU BAIXA? Imagem e PDF abrem no visor, por cima da
+     mesa; o resto (docx, xlsx, excalidraw...) so baixa — e a mesma lista
+     `INLINE` do anexo-tipos.js, perguntada pelo tipo gravado ou, sem ele,
+     pela extensao do nome. */
+  function tipoDoAnexo(a) {
+    var T = raiz.ANEXOTIPO;
+    var t = String((a && a.tipo) || '').toLowerCase();
+    if (T && T.abreNaTela(t)) return t;
+    return T ? T.tipoDe(a && a.nome) : '';
+  }
+  function abreNoVisor(a) {
+    var T = raiz.ANEXOTIPO;
+    return !!(a && T && T.abreNaTela(tipoDoAnexo(a)));
+  }
+  function ehPdf(a, tipo) { return /pdf/.test(String(tipo || '')) || /\.pdf$/i.test(String((a && a.nome) || '')); }
+
+  /* A demanda como esta na base do app. A fila da sala chega sem o base64 do
+     anexo antigo (`inline`, guardado dentro do arquivo); a base do app o tem,
+     e e por ela que esse anexo abre aqui em vez de mandar abrir pelo Admin. */
+  function daBase(m) {
+    var ms = ((A.APP.D || {}).melhorias) || [];
+    for (var k = 0; k < ms.length; k++) if (ms[k] && ms[k].id === m.id) return ms[k];
+    return null;
+  }
+
+  function erroHttp(st) { var e = new Error('HTTP ' + st); e.status = st; return e; }
+  function posta(corpo) {
+    return fetch(A.WORKER, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+  }
+
+  /* O ARQUIVO DO ANEXO, PELA PORTA DE QUEM PEDE (`carregaRequisito`, poker.html).
+     Com a sessao, o `anexo-baixar` de sempre. Se a conta nao puder ler e a
+     pessoa estiver na mesa, o requisito ainda vem pela rota da sala
+     (`poker-requisito`), que confere estar na mesa e so entrega o requisito
+     da demanda em pauta — a mesma porta que o celular usa pelo QR.
+
+     O CACHE E POR ANEXO: a pauta se redesenha a cada troca de estado, e sem
+     ele a sala inteira puxaria o mesmo arquivo em laco. A falha tambem fica
+     guardada, pelo mesmo motivo. */
+  function chaveCache(m, a) { return a.chave || ('inline|' + m.id + '|' + a.nome); }
+  async function arquivo(m, i) {
+    var a = (m.anexos || [])[i];
+    if (!a) throw erroHttp(404);
+    var k = chaveCache(m, a), c = S.reqCache[k];
+    if (c) { if (c.url) return c; throw erroHttp(c.erro); }
+    var blob;
     try {
-      var url = URL.createObjectURL(await baixar(a.chave));
-      S.reqCache[a.chave] = { url: url };
-      mostra(url);
+      if (a.chave) {
+        var res = await posta({ action: 'anexo-baixar', chave: a.chave, token: A.APP.token });
+        if ((res.status === 401 || res.status === 403) && S.participante && ehRequisito(a, m)) {
+          res = await posta({ action: 'poker-requisito', codigo: S.codigo, participante: S.participante, chave: a.chave });
+        }
+        if (!res.ok) throw erroHttp(res.status);
+        blob = await res.blob();
+      } else {
+        var cheio = daBase(m);
+        var b = cheio && (cheio.anexos || []).filter(function (x) { return x && x.nome === a.nome && x.dados; })[0];
+        if (!b) throw erroHttp(410);
+        var partes = String(b.dados).split(',');
+        var mime = (/:(.*?);/.exec(partes[0]) || [])[1] || tipoDoAnexo(a) || 'application/octet-stream';
+        var bin = atob(partes[1] || ''), arr = new Uint8Array(bin.length);
+        for (var j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+        blob = new Blob([arr], { type: mime });
+      }
     } catch (e) {
-      if (e.status) S.reqCache[a.chave] = { erro: e.status };
-      recado(e.status);
+      if (e.status) S.reqCache[k] = { erro: e.status };
+      throw e;
+    }
+    c = S.reqCache[k] = { url: URL.createObjectURL(blob), blob: blob, tipo: blob.type || tipoDoAnexo(a) };
+    return c;
+  }
+  /* O recado diz O QUE FAZER (poker.html): "Erro 401" faria a pessoa chamar
+     quem conduz no meio da votacao para descobrir a mesma coisa. */
+  function recadoArquivo(e, oQue) {
+    var st = e && e.status;
+    if (st === 401 || st === 403) return 'Sua conta não tem permissão para ver ' + oQue + '.';
+    if (st === 404) return 'O arquivo não está no armazenamento de anexos.';
+    if (st === 410) return 'Anexo antigo, guardado dentro do arquivo, e a base desta tela ainda não o trouxe. Abra pelo item.';
+    if (st) return 'Não foi possível carregar ' + oQue + ' (HTTP ' + st + ').';
+    return 'Falha de rede ao carregar ' + oQue + '.';
+  }
+
+  /* O QUADRO DO REQUISITO NA PAUTA (`carregaRequisito`, poker.html). A imagem
+     ocupa a LARGURA do quadro e o quadro rola: encolher um print de 1900px
+     para caber na altura o deixava ilegivel, que e o oposto do motivo de ele
+     estar ali. O PDF desenha num `iframe` com um botao de reserva SEMPRE a
+     vista: num navegador sem visor de PDF o quadro fica vazio, e o botao e a
+     resposta — ele amplia na sala, nao abre outra aba. */
+  async function carregaRequisito(m, i) {
+    var q = document.getElementById('pk-req');
+    if (!q) return;
+    var a = m.anexos[i];
+    try {
+      var c = await arquivo(m, i);
+      if (!q.isConnected) return;   // a pauta virou enquanto o arquivo vinha
+      q.innerHTML = ehPdf(a, c.tipo)
+        ? '<iframe class="pk-req-pdf" title="Requisito ' + esc(a.nome) + '" src="' + c.url + '"></iframe>' +
+          '<button type="button" class="btns pk-req-alt" data-pk="ampliar">⤢ Ver o PDF em tela cheia</button>'
+        : '<img class="pk-req-img" alt="Requisito ' + esc(a.nome) + '" title="Clique para ver maior" data-pk="ampliar" src="' + c.url + '">';
+      S.reqUrl = c.url;
+    } catch (e) {
+      if (q.isConnected) q.innerHTML = '<div class="pk-req-msg">' + esc(recadoArquivo(e, 'o requisito')) + '</div>';
     }
   }
-  /* Ampliar sem sair da sala: a lupa fica por cima e sai com clique fora ou Esc. */
-  function ampliar() {
-    if (!S.reqUrl) { H.toast('O requisito ainda está carregando.'); return; }
+
+  /* ─── O VISOR DE ANEXO, POR CIMA DA SALA ───────────────────────────────
+     A lupa do requisito do poker.html (`ampliaRequisito`), e agora tambem dos
+     demais anexos que o navegador desenha. Abrir noutra aba tira a pessoa da
+     votacao: ela perde a mesa e a propria carta, e volta perguntando "em que
+     pe estamos?". Aqui a sala continua atras.
+       • imagem: o toque ALTERNA entre caber na tela e o tamanho real (com
+         rolagem nos dois eixos) e nao fecha — no celular "caber" e ilegivel;
+       • PDF: a moldura ganha a tela inteira, e o zoom e o do visor do
+         navegador (dois zooms disputariam o mesmo toque);
+       • ‹ › e as setas do teclado andam entre os anexos que abrem aqui;
+       • Esc, o X ou o clique fora voltam para a sala. A dica diz o gesto,
+         porque gesto que ninguem anuncia e gesto que nao existe. */
+  function abrirVisor(m, i) {
+    if (!m) return;
+    var lista = (m.anexos || []).map(function (a, k) { return { a: a, i: k }; })
+      .filter(function (x) { return abreNoVisor(x.a) && (x.a.chave || x.a.inline); });
+    // O requisito primeiro: e o que a sala abre mais vezes.
+    var r = separaAnexos(m).iReq;
+    lista.sort(function (x, y) { return (y.i === r) - (x.i === r) || x.i - y.i; });
+    var pos = Math.max(0, lista.findIndex(function (x) { return x.i === i; }));
+    if (!lista.length) return;
+    fechaVisor();
     var ov = document.createElement('div');
     ov.className = 'ovl pk-lupa';
-    ov.innerHTML = S.reqPdf ? '<iframe title="Requisito ampliado" src="' + S.reqUrl + '"></iframe>' : '<img alt="Requisito ampliado" src="' + S.reqUrl + '">';
-    var fecha = function () { ov.remove(); document.removeEventListener('keydown', esc1); };
-    var esc1 = function (e) { if (e.key === 'Escape') fecha(); };
-    ov.addEventListener('click', function (e) { if (e.target.tagName === 'IMG') { ov.classList.toggle('real'); return; } fecha(); });
-    document.addEventListener('keydown', esc1);
+    ov.id = 'pk-lupa';
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
+    ov.setAttribute('aria-label', 'Anexo da demanda em pauta');
+    var varios = lista.length > 1;
+    ov.innerHTML = '<div class="pk-lupa-bar">' +
+        '<span class="pk-lupa-nome ell"></span><span class="note pk-lupa-dica"></span>' +
+        '<span class="row" style="gap:8px;margin-left:auto">' +
+          (varios ? '<button type="button" class="btns" data-lp="ant" aria-label="Anexo anterior" title="Anterior (seta para a esquerda)">‹</button>' +
+                    '<button type="button" class="btns" data-lp="prox" aria-label="Próximo anexo" title="Próximo (seta para a direita)">›</button>' : '') +
+          '<button type="button" class="btns" data-lp="baixar" title="Baixar o arquivo">' + ico('download') + ' Baixar</button>' +
+          '<button type="button" class="btns" data-lp="x" aria-label="Fechar" title="Fechar (Esc)">' + ico('x') + '</button>' +
+        '</span></div><div class="pk-lupa-corpo"></div>';
+    var corpo = ov.querySelector('.pk-lupa-corpo'), dica = ov.querySelector('.pk-lupa-dica'), nome = ov.querySelector('.pk-lupa-nome');
+    var atual = null;
+    var diz = function () {
+      dica.textContent = !atual ? '' : atual.pdf ? 'use o visor do navegador para rolar e ampliar · Esc ou fora para voltar'
+        : ov.classList.contains('real') ? 'toque na imagem para ajustar à tela · Esc ou fora para voltar'
+        : 'toque na imagem para ver em tamanho real · Esc ou fora para voltar';
+    };
+    var mostra = async function () {
+      var x = lista[pos];
+      ov.classList.remove('real');
+      atual = null;
+      nome.textContent = x.a.nome + (varios ? '  (' + (pos + 1) + ' de ' + lista.length + ')' : '');
+      corpo.innerHTML = '<div class="pk-req-msg">carregando…</div>';
+      diz();
+      try {
+        var c = await arquivo(m, x.i);
+        if (lista[pos] !== x || !ov.isConnected) return;
+        atual = { c: c, a: x.a, pdf: ehPdf(x.a, c.tipo) };
+        corpo.innerHTML = atual.pdf
+          ? '<iframe title="' + esc(x.a.nome) + '" src="' + c.url + '"></iframe>'
+          : '<img alt="' + esc(x.a.nome) + '" src="' + c.url + '">';
+      } catch (e) {
+        if (lista[pos] === x) corpo.innerHTML = '<div class="pk-req-msg">' + esc(recadoArquivo(e, 'o anexo')) + '</div>';
+      }
+      diz();
+    };
+    var anda = function (d) { if (!varios) return; pos = (pos + d + lista.length) % lista.length; mostra(); };
+    var tecla = function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); fechaVisor(); }
+      else if (e.key === 'ArrowLeft') anda(-1);
+      else if (e.key === 'ArrowRight') anda(1);
+    };
+    ov.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-lp]');
+      if (b) {
+        var q = b.getAttribute('data-lp');
+        if (q === 'x') fechaVisor();
+        else if (q === 'ant') anda(-1);
+        else if (q === 'prox') anda(1);
+        else if (q === 'baixar' && atual && raiz.ANEXOTIPO) {
+          var T = raiz.ANEXOTIPO;
+          // Baixar e baixar: o tipo vai como octet-stream para o `entrega` nao abrir aba.
+          T.entrega(atual.c.blob, atual.a.nome || 'anexo', 'application/octet-stream', raiz);
+        }
+        return;
+      }
+      if (e.target.tagName === 'IMG') {
+        ov.classList.toggle('real');
+        if (ov.classList.contains('real')) corpo.scrollTop = 0;
+        diz();
+        return;
+      }
+      if (e.target === ov || e.target === corpo) fechaVisor();
+    });
+    S.visorTecla = tecla;
+    document.addEventListener('keydown', tecla);
     document.body.appendChild(ov);
+    document.body.style.overflow = 'hidden';
+    mostra();
   }
+  function fechaVisor() {
+    var v = document.getElementById('pk-lupa');
+    if (v) v.remove();
+    if (S.visorTecla) document.removeEventListener('keydown', S.visorTecla);
+    S.visorTecla = null;
+    document.body.style.overflow = '';
+  }
+  function ampliar() {
+    var m = demandaEmPauta();
+    var r = m ? separaAnexos(m).iReq : -1;
+    if (r < 0) return;
+    abrirVisor(m, r);
+  }
+  /* Os demais anexos: imagem e PDF abrem no visor da sala; o resto baixa pelo
+     `ANEXOTIPO.entrega`, como no poker.html (`abrirAnexoPauta`). */
   async function abrirAnexo(i) {
     var m = demandaEmPauta();
     var a = m && (m.anexos || [])[i];
-    if (!a || !a.chave) { H.toast('Anexo sem referência para abrir.', 'erro'); return; }
+    if (!a || (!a.chave && !a.inline)) { H.toast('Anexo sem referência para abrir.', 'erro'); return; }
+    if (abreNoVisor(a)) { abrirVisor(m, i); return; }
     try {
-      var blob = await baixar(a.chave);
-      raiz.ANEXOTIPO.entrega(blob, a.nome || 'anexo', a.tipo || blob.type, raiz);
+      var c = await arquivo(m, i);
+      raiz.ANEXOTIPO.entrega(c.blob, a.nome || 'anexo', a.tipo || c.tipo, raiz);
     } catch (e) {
-      H.toast(e.status === 401 || e.status === 403 ? 'Sua conta não tem permissão para abrir o anexo.' : 'Não foi possível abrir o anexo.', 'erro');
+      H.toast(recadoArquivo(e, 'o anexo'), 'erro');
     }
   }
 
@@ -659,7 +843,15 @@
     (d.criterios_aceite || []).forEach(function (c, i) {
       if (c && (c.dado || c.quando || c.entao)) por('CA-' + String(i + 1).padStart(2, '0'), 'Dado ' + (c.dado || '…') + ', quando ' + (c.quando || '…') + ', então ' + (c.entao || '…'));
     });
-    return L.length ? '<details class="pk-disc"><summary>Discovery — preenchido por quem pediu</summary>' + L.join('') + '</details>' : '';
+    // Quando chegou pelo painel: item vindo do dash nao tem "data da solicitacao".
+    if (m.criado_em) {
+      var dt = new Date(m.criado_em);
+      if (!isNaN(dt)) por('Enviado pelo painel em', dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    }
+    /* ABERTO, e nao recolhido: no poker.html o discovery fica a vista na pauta.
+       Recolhido, ninguem abre no meio de uma votacao de dois minutos — e o time
+       volta a votar pelo titulo, que e o que ele existe para evitar. */
+    return L.length ? '<div class="pk-disc"><span class="pk-disc-h">Discovery — preenchido por quem pediu</span>' + L.join('') + '</div>' : '';
   }
 
   function chipFrente(m) {
@@ -701,19 +893,26 @@
     parte('pk-fila', JSON.stringify([S.filaVer, est && est.melhoria_id, S.filaFrente, f]), htmlFila);
     if (!est) return;
     var m = demandaEmPauta();
-    var pauta = parte('pk-pauta', JSON.stringify([est.melhoria_id, f, S.filaVer, est.revelado]), function () { return htmlPauta(m); });
+    /* A PAUTA SO SE REDESENHA QUANDO O QUE ELA MOSTRA MUDA (`assinaturaDetalhe`
+       do poker.html). Antes a assinatura levava a versao da fila e o
+       "revelado": revelar ou gravar recarregava o PDF do requisito e devolvia
+       ao topo quem estava lendo a descricao. O rotulo EM VOTACAO / REVELADA
+       muda sozinho, logo abaixo, sem tocar no resto. */
+    var pauta = parte('pk-pauta', assinaturaPauta(est.melhoria_id, m, f), function () { return htmlPauta(m); });
     if (pauta && m) {
-      var a = (m.anexos || []).filter(function (x) { return ehRequisito(x, m); })[0];
+      var iR = separaAnexos(m).iReq;
       S.reqUrl = '';
-      if (a) carregaRequisito(a);
+      if (iR >= 0) carregaRequisito(m, iR);
     }
+    var rot = document.getElementById('pk-pauta-rot');
+    if (rot) rot.textContent = est.revelado ? 'VOTAÇÃO REVELADA' : 'EM VOTAÇÃO';
     var ps = (est.participantes || []).map(function (p) { return [p.id, p.nome, p.votou, p.online, p.valor]; });
     parte('pk-votos', JSON.stringify([est.revelado, est.melhoria_id, est.total_votos, est.media, ps, S.participante, f, restantes()]), htmlVotos);
     var g = document.getElementById('pk-grava');
     if (g) g.style.display = f && est.revelado && est.melhoria_id ? '' : 'none';
     parte('pk-grava', JSON.stringify([est.melhoria_id, est.revelado, est.media, S.gravadoDe === est.melhoria_id, restantes(), S.filaVer]), htmlGrava);
     var travado = !est.melhoria_id || est.revelado || !S.participante;
-    parte('pk-deck', JSON.stringify([est.cartas, S.meuVoto, travado, S.participante, est.revelado, est.melhoria_id, S.refAberta, S.filaVer]), htmlDeck);
+    parte('pk-deck', JSON.stringify([est.cartas, S.meuVoto, travado, S.participante, est.revelado, est.melhoria_id, S.refAberta, S.filaVer, S.codigo, f]), htmlDeck);
     parte('pk-gente', JSON.stringify([ps, S.participante, est.revelado]), htmlGente);
   }
 
@@ -729,7 +928,8 @@
     };
     var sem = rk.semanas && rk.semanas.atual;
     var parcial = sem && sem.uteisCorridos < sem.uteisTotal;
-    return '<span class="lab" title="Pela data em que o dev entregou. A contagem não mede tamanho: os pontos estão no título de cada nome.">ENTREGAS DA SEMANA</span>' +
+    return '<button type="button" class="pk-rk-abre" data-pk="ranking" title="Clique para ver as duas semanas inteiras">' +
+      '<span class="lab">ENTREGAS DA SEMANA</span>' +
       devs.map(function (d) {
         var v = d.atual.entregas - d.anterior.entregas;
         var dl = v > 0 ? '<i style="color:var(--ok-t)">▲' + v + '</i>' : v < 0 ? '<i style="color:var(--dg-t)">▼' + (-v) + '</i>' : '<i style="color:var(--tx4)">=</i>';
@@ -737,7 +937,55 @@
           d.anterior.entregas + ' na anterior (' + d.anterior.pontos + ' pts), ' + d.emMaos + ' em mãos') + '">' + esc(curto(d.nome)) +
           ' <b>' + d.atual.entregas + '</b>' + dl + '</span>';
       }).join('') +
-      (parcial ? '<span class="note" style="font-size:11.5px">semana correndo: ' + sem.uteisCorridos + ' de ' + sem.uteisTotal + ' dias úteis</span>' : '');
+      (parcial ? '<span class="note" style="font-size:11.5px">semana correndo: ' + sem.uteisCorridos + ' de ' + sem.uteisTotal + ' dias úteis</span>' : '') +
+      '<span class="note" style="font-size:11.5px;color:var(--ac-t)">ver as duas semanas ›</span></button>';
+  }
+
+  /* O PAINEL COMPLETO DO RANKING (`abrirRanking`, poker.html). Abre POR CIMA da
+     sala, como o visor do requisito: quem sai da aba perde a mesa e a propria
+     carta. A lista inteira e o que responde "quem entregou menos" — e ela
+     nunca coube numa faixa de chips. */
+  function abrirRanking() {
+    var rk = S.fila && S.fila.ranking;
+    if (!rk || !rk.devs || !rk.semanas) { H.toast('Ranking ainda não carregou.'); return; }
+    var dt = function (iso) { return String(iso || '').split('-').reverse().join('/').slice(0, 5); };
+    var an = rk.semanas.anterior || {}, at = rk.semanas.atual || {};
+    var corpo = rk.devs.map(function (d, i) {
+      var v = d.atual.entregas - d.anterior.entregas;
+      var dl = v > 0 ? '<span style="color:var(--ok-t)">▲' + v + '</span>' : v < 0 ? '<span style="color:var(--dg-t)">▼' + (-v) + '</span>' : '<span style="color:var(--tx4)">=</span>';
+      return '<tr' + (d.atual.entregas ? '' : ' style="color:var(--tx3)"') + '><td class="note">' + (i + 1) + '</td><td style="font-weight:600">' + esc(d.nome) + '</td>' +
+        '<td class="num">' + d.anterior.entregas + ' <span class="note">(' + d.anterior.pontos + ' pts)</span></td>' +
+        '<td class="num">' + d.atual.entregas + ' <span class="note">(' + d.atual.pontos + ' pts)</span></td>' +
+        '<td class="num">' + dl + '</td><td class="num">' + esc(d.emMaos) + '</td></tr>';
+    }).join('');
+    /* O AVISO NAO E DECORACAO: numa quarta a semana atual teve 3 dias uteis e a
+       anterior 5 — sem dizer isso, todo mundo aparece "caindo" toda segunda. */
+    var parcial = at.uteisCorridos < at.uteisTotal;
+    var ov = document.createElement('div');
+    ov.className = 'ovl';
+    ov.innerHTML = '<section class="dlg" role="dialog" aria-modal="true" aria-label="Entregas por dev" style="max-width:760px">' +
+      '<button type="button" class="dlg-x" data-x aria-label="Fechar">' + ico('x') + '</button>' +
+      '<div style="display:flex;flex-direction:column;gap:4px"><h2 class="h2" style="font-size:19px">Entregas por dev</h2>' +
+      '<span class="note">Semana anterior ' + dt(an.de) + '–' + dt(an.ate) + ' · esta semana ' + dt(at.de) + '–' + dt(at.ate) + '</span></div>' +
+      '<div style="overflow:auto;max-height:60vh"><table class="tbl"><thead><tr><th></th><th>DEV</th><th class="num">SEMANA ANTERIOR</th><th class="num">ESTA SEMANA</th><th class="num">VAR.</th><th class="num">EM MÃOS</th></tr></thead><tbody>' + corpo + '</tbody></table></div>' +
+      '<span class="note" style="font-size:12px;line-height:18px">' + (parcial ? '<b>A semana atual ainda está correndo:</b> ' + at.uteisCorridos + ' de ' + at.uteisTotal +
+        ' dias úteis. Comparar a coluna cheia com a parcial faz todo mundo parecer em queda. ' : '') +
+        'A entrega conta pela data em que <b>o dev entregou</b>, e não pela conclusão da esteira — espera em validação não é atraso dele. ' +
+        'E a contagem de demandas não mede tamanho: os pontos ao lado existem para isso — três ajustes rápidos somam 3, uma entrega de 13 pontos soma 1.</span></section>';
+    var fecha = function () { ov.remove(); document.removeEventListener('keydown', tecla); };
+    var tecla = function (e) { if (e.key === 'Escape') fecha(); };
+    ov.addEventListener('click', function (e) { if (e.target === ov || e.target.closest('[data-x]')) fecha(); });
+    document.addEventListener('keydown', tecla);
+    document.body.appendChild(ov);
+  }
+
+  function assinaturaPauta(id, m, f) {
+    if (!m) return JSON.stringify([id, f, 'sem-demanda']);
+    try {
+      return JSON.stringify([id, f, m.titulo, m.codigo, m.descricao, m.solicitante, m.dev, m.entrega, m.tema_id, m.tipo,
+        m.dados_bi, m.destaque, m.poker_pontos, m.criado_em, (m.anexos || []).map(function (a) { return a.nome + ':' + (a.tamanho || 0); }),
+        m.discovery, frenteDe(m)]);
+    } catch (_) { return String(Math.random()); }
   }
 
   function htmlPauta(m) {
@@ -751,9 +999,8 @@
     var noApp = m.codigo ? H.porCodigo(m.codigo) : null;
     var linha = function (rot, val) { return val ? '<span><span class="pk-rot">' + rot + '</span>' + esc(val) + '</span>' : ''; };
     var anexos = m.anexos || [];
-    var iReq = anexos.findIndex(function (a) { return ehRequisito(a, m); });
-    var outros = anexos.map(function (a, i) { return { a: a, i: i }; }).filter(function (x) { return x.i !== iReq; });
-    return '<div class="row" style="justify-content:space-between"><span class="labo">' + (est.revelado ? 'VOTAÇÃO REVELADA' : 'EM VOTAÇÃO') + '</span>' +
+    var sep = separaAnexos(m), iReq = sep.iReq, outros = sep.outros;
+    return '<div class="row" style="justify-content:space-between"><span class="labo" id="pk-pauta-rot">' + (est.revelado ? 'VOTAÇÃO REVELADA' : 'EM VOTAÇÃO') + '</span>' +
         (m.destaque ? '<span class="chip c-wn" title="Prioridade para estimativa">' + ico('star') + ' prioridade</span>' : '') + '</div>' +
       '<div class="row" style="align-items:baseline;flex-wrap:wrap;gap:6px 10px">' + (m.codigo ? '<span class="code" style="font-size:13px">' + esc(m.codigo) + '</span>' : '') +
         '<h2 class="h2" style="font-size:21px;line-height:27px">' + esc(m.titulo || '(sem título)') + '</h2></div>' +
@@ -767,11 +1014,15 @@
                    : '<span class="note" style="color:var(--wn-t)">Sem descrição — vale perguntar ao solicitante antes de estimar.</span>') +
       (iReq >= 0 ? '<div class="pk-reqbox"><div class="row" style="justify-content:space-between"><span class="pk-rot">Requisito</span>' +
           '<button type="button" class="btns" data-pk="ampliar" title="Ver maior, sem sair da sala">⤢ ' + esc(anexos[iReq].nome) + '</button></div>' +
-          '<div id="pk-req" class="pk-req"><span class="note">carregando o requisito…</span></div></div>' : '') +
+          '<div id="pk-req" class="pk-req"><div class="pk-req-msg">carregando o requisito…</div></div></div>' : '') +
       discovery(m) +
       (outros.length ? '<div class="row" style="gap:6px;flex-wrap:wrap"><span class="pk-rot">Anexos</span>' + outros.map(function (x) {
-          return x.a.inline ? '<span class="chip c-bk" title="Anexo antigo, guardado dentro do arquivo: abra pelo Admin">' + ico('clip') + ' ' + esc(x.a.nome) + '</span>'
-            : '<button type="button" class="btns" data-pk="anexo" data-i="' + x.i + '">' + ico('clip') + ' ' + esc(x.a.nome) + (x.a.tamanho ? ' <small>(' + Math.round(x.a.tamanho / 1024) + ' KB)</small>' : '') + '</button>';
+          /* Imagem e PDF abrem no visor da sala; o resto baixa. O anexo antigo
+             (`inline`) abre pela base do app, que guarda o conteudo. */
+          var vis = abreNoVisor(x.a);
+          return '<button type="button" class="btns" data-pk="anexo" data-i="' + x.i + '" title="' + (vis ? 'Abrir aqui, sem sair da sala' : 'Baixar o arquivo') + '">' +
+            ico(vis ? (ehPdf(x.a, tipoDoAnexo(x.a)) ? 'file' : 'image') : 'download') + ' ' + esc(x.a.nome) +
+            (x.a.tamanho ? ' <small>(' + Math.round(x.a.tamanho / 1024) + ' KB)</small>' : '') + '</button>';
         }).join('') + '</div>' : '') +
       (f ? '<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:2px"><button type="button" class="btns" data-pk="complementar">' + ico('edit') + ' Complementar</button>' +
            '<button type="button" class="btns pk-perigo" data-pk="negar">' + ico('ban') + ' Negar com motivo</button></div>' : '');
@@ -865,7 +1116,26 @@
         '<button type="button" class="btns" data-pk="zerar" style="margin-left:auto">' + ico('trash') + ' Zerar valores</button></div>';
   }
 
+  /* O CONVITE FICA NA TELA, ao lado do baralho, e nao so atras de um botao
+     (`renderConviteFixo`, poker.html): quem chega atrasado aponta a camera sem
+     interromper a votacao. So para quem conduz — para quem so vota seria
+     espaco morto grudado nas cartas. O QR sempre em fundo branco: e lido por
+     camera, e QR claro sobre fundo escuro inverte o contraste. */
+  function htmlConviteFixo() {
+    if (!facil() || !S.codigo) return '';
+    var svg = raiz.QR && raiz.QR.qrSVG ? raiz.QR.qrSVG(linkConvite(), 150) : null;
+    return '<aside class="pk-cf"><span class="lab">ENTRE NA SALA</span>' +
+      (svg ? '<div class="pk-cf-qr">' + svg + '</div>' : '<span class="note" style="font-size:11.5px;text-align:center">Sem QR para este link — use o código abaixo.</span>') +
+      '<button type="button" class="pk-cf-cod mono" data-pk="cp-cod" title="Clique para copiar o código">' + esc(S.codigo) + '</button>' +
+      '<button type="button" class="link" data-pk="cp-link" style="font-size:12px" title="Clique para copiar o link do convite">copiar o link</button></aside>';
+  }
+
   function htmlDeck() {
+    var cf = htmlConviteFixo();
+    return cf ? '<div class="pk-deckg">' + cf + '<div class="pk-deckm">' + htmlDeckMesa() + '</div></div>' : htmlDeckMesa();
+  }
+
+  function htmlDeckMesa() {
     var est = S.estado;
     if (!S.participante) {
       return '<div class="row" style="justify-content:space-between;flex-wrap:wrap"><span class="lab">SEU VOTO</span>' +
@@ -925,14 +1195,23 @@
     var sel = '<select class="in" data-pkf style="height:32px;font-size:12.5px"><option value="">Todas as frentes (' + naPlanning.length + ')</option>' +
       (marcadas ? '<option value="' + FILA_MARCADAS + '"' + (S.filaFrente === FILA_MARCADAS ? ' selected' : '') + '>Dados/BI — marcadas (' + marcadas + ')</option>' : '') +
       nomes.map(function (n) { return '<option value="' + esc(n) + '"' + (S.filaFrente === n ? ' selected' : '') + '>' + esc(n) + ' (' + conta[n] + ')</option>'; }).join('') + '</select>';
+    /* O CARTAO DA FILA LEVA O QUE O DO poker.html LEVA (`renderFila`): tipo,
+       frente, a marca de Dados/BI, o dev, os pontos e o tema. So o titulo
+       obrigava a abrir a demanda para saber de qual time ela e. */
     var itens = lista.length ? lista.map(function (m) {
       var on = m.id === atual;
+      var tema = nomeTema(m.tema_id);
       return '<' + (f ? 'button type="button" data-pk="pauta" data-id="' + esc(m.id) + '" title="Clique para votar esta demanda"' : 'div') + ' class="pk-fi' + (on ? ' on' : '') + (m.destaque ? ' star' : '') + '">' +
-        '<span class="row" style="justify-content:space-between;gap:6px"><span class="code" style="font-size:11px">' + (m.destaque ? ico('star') + ' ' : '') + esc(m.codigo || '—') + '</span>' +
+        '<span class="row" style="justify-content:space-between;gap:6px"><span class="code" style="font-size:11px">' + (m.destaque ? ico('star', 'title="Prioridade para estimativa"') + ' ' : '') + esc(m.codigo || '—') + '</span>' +
         '<span class="mono" style="font-size:11px;color:' + (m.poker_pontos != null ? 'var(--ok-t)' : 'var(--tx4)') + '">' + (m.poker_pontos != null ? esc(m.poker_pontos) + ' pts' : on ? 'votando' : '—') + '</span></span>' +
         '<span class="pk-ft">' + esc(m.titulo || '(sem título)') + '</span>' +
-        '<span class="note ell" style="font-size:11.5px">' + esc([frenteDe(m), m.dev].filter(Boolean).join(' · ')) + '</span></' + (f ? 'button' : 'div') + '>';
-    }).join('') : '<span class="note">' + (S.filaFrente ? 'Nenhuma demanda desta frente na fila.' : 'Nenhuma demanda na etapa Planning. Mova cards para Planning no Quadro.') + '</span>';
+        '<span class="pk-fchips">' + (chipTipoFila(m) || chip('Sem tipo', 'bk')) + chipFrente(m) +
+          (m.dados_bi ? chip(ico('chart') + ' Dados/BI', 'in') : '') + (m.dev ? chip(esc(m.dev), 'bk') : '') + '</span>' +
+        (tema ? '<span class="note ell" style="font-size:11.5px">' + esc(tema) + '</span>' : '') + '</' + (f ? 'button' : 'div') + '>';
+    }).join('') : (S.filaFrente
+      ? '<div class="pk-fvazia"><span class="note">Nenhuma demanda de <b>' + esc(S.filaFrente === FILA_MARCADAS ? 'Dados/BI marcada' : S.filaFrente) + '</b> na fila.</span>' +
+        '<button type="button" class="btns" data-pk="todas-frentes">Ver todas as frentes</button></div>'
+      : '<span class="note">Nenhuma demanda na etapa Planning. Mova cards para Planning no Quadro.</span>');
     return '<div class="row" style="justify-content:space-between"><span class="lab" style="color:var(--pu-t)">FILA · PLANNING</span><span class="note">' +
       (S.filaFrente ? lista.length + ' de ' + naPlanning.length : H.plural(lista.length, 'item', 'itens')) + '</span></div>' + sel +
       (votadasAntes ? '<span class="note" style="font-size:12px">' + H.plural(votadasAntes, 'já votada antes de hoje fica', 'já votadas antes de hoje ficam') + ' fora da lista.</span>' : '') +
@@ -1160,15 +1439,37 @@
       '.axa .pk-rot{font-size:10.5px;font-weight:800;letter-spacing:.12em;color:var(--tx4);margin-right:6px;text-transform:uppercase}',
       '.axa .pk-desc{font-size:13.5px;line-height:21px;color:var(--tx2);white-space:pre-wrap;max-height:260px;overflow:auto;padding-right:4px}',
       '.axa .pk-reqbox{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:var(--sf2);border:1px solid var(--bd)}',
-      '.axa .pk-req{display:flex;justify-content:center;min-height:40px}',
-      '.axa .pk-req-img{max-width:100%;max-height:320px;border-radius:8px;cursor:zoom-in;background:#fff}',
-      '.axa .pk-req-pdf{width:100%;height:320px;border:0;border-radius:8px;background:#fff}',
-      '.axa .pk-lupa{align-items:center;padding:24px}',
-      '.axa .pk-lupa img{max-width:100%;max-height:calc(100vh - 48px);border-radius:10px;background:#fff;cursor:zoom-in}',
-      '.axa .pk-lupa.real{align-items:flex-start} .axa .pk-lupa.real img{max-width:none;max-height:none;cursor:zoom-out}',
-      '.axa .pk-lupa iframe{width:min(1100px,100%);height:calc(100vh - 48px);border:0;border-radius:10px;background:#fff}',
-      '.axa .pk-disc{font-size:12.5px;line-height:19px;color:var(--tx2);padding:10px 12px;border-radius:12px;background:var(--sf2);display:flex;flex-direction:column;gap:4px}',
-      '.axa .pk-disc summary{cursor:pointer;font-weight:700;color:var(--tx)} .axa .pk-disc b{color:var(--tx)}',
+      /* O quadro do requisito NAO centraliza por flex: com overflow:auto, o item
+         centralizado maior que a caixa e cortado nas duas pontas e a rolagem
+         nao alcanca o topo (poker.html, .pd-req-quadro). Alinhado ao topo. */
+      '.axa .pk-req{display:block;min-height:60px;max-height:360px;overflow:auto;border-radius:8px;text-align:center}',
+      '.axa .pk-req-img{max-width:100%;display:block;margin:0 auto;border-radius:6px;cursor:zoom-in;background:#fff}',
+      '.axa .pk-req-pdf{width:100%;height:300px;border:0;border-radius:8px;background:#fff;display:block}',
+      '.axa .pk-req-alt{width:100%;margin-top:6px}',
+      '.axa .pk-req-msg{font-size:12.5px;color:var(--tx3);padding:18px 12px;text-align:center}',
+      '.axa .pk-lupa{z-index:60;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:10px;padding:14px 20px 20px;background:rgba(3,5,10,.92);overflow:hidden}',
+      '.axa .pk-lupa-bar{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;color:var(--tx);min-width:0}',
+      '.axa .pk-lupa-nome{font-size:13.5px;font-weight:700;max-width:50%}',
+      '.axa .pk-lupa-dica{font-size:12px}',
+      '.axa .pk-lupa-corpo{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:zoom-out}',
+      '.axa .pk-lupa-corpo img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;background:#fff;cursor:zoom-in;box-shadow:0 12px 48px rgba(0,0,0,.6)}',
+      /* Tamanho real: display:block no lugar do flex, senao o topo de um print
+         maior que a tela fica inalcancavel; nunca menor que a tela. */
+      '.axa .pk-lupa.real .pk-lupa-corpo{display:block;overflow:auto;-webkit-overflow-scrolling:touch}',
+      '.axa .pk-lupa.real .pk-lupa-corpo img{max-width:none;max-height:none;min-width:100%;display:block;margin:0 auto;cursor:zoom-out}',
+      '.axa .pk-lupa-corpo iframe{width:100%;height:100%;border:0;border-radius:6px;background:#fff;cursor:default}',
+      '.axa .pk-disc{font-size:12.5px;line-height:19px;color:var(--tx2);padding:10px 12px;border-radius:12px;background:var(--sf2);display:flex;flex-direction:column;gap:4px;max-height:280px;overflow:auto}',
+      '.axa .pk-disc-h{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--in-t);margin-bottom:2px} .axa .pk-disc b{color:var(--tx)}',
+      '.axa .pk-rk-abre{all:unset;box-sizing:border-box;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;cursor:pointer;border-radius:10px;padding:2px}',
+      '.axa .pk-rk-abre:hover .lab{color:var(--tx)} .axa .pk-rk-abre:focus-visible{outline:2px solid rgba(var(--ac-rgb),.7)}',
+      '.axa .pk-fchips{display:flex;flex-wrap:wrap;gap:4px}',
+      '.axa .pk-fchips .chip{height:20px;font-size:10.5px}',
+      '.axa .pk-fvazia{display:flex;flex-direction:column;gap:8px;align-items:flex-start}',
+      '.axa .pk-deckg{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start}',
+      '.axa .pk-deckm{display:flex;flex-direction:column;gap:12px;min-width:0}',
+      '.axa .pk-cf{width:178px;padding:12px;border-radius:12px;background:var(--sf2);border:1px solid var(--bd2);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}',
+      '.axa .pk-cf-qr{background:#fff;padding:8px;border-radius:9px;line-height:0} .axa .pk-cf-qr svg{display:block;width:150px;height:150px}',
+      '.axa .pk-cf-cod{all:unset;cursor:pointer;font-size:19px;font-weight:700;letter-spacing:.14em;color:var(--ok-t)} .axa .pk-cf-cod:hover{filter:brightness(1.2)}',
       '.axa .pk-mesa{display:flex;flex-wrap:wrap;gap:14px}',
       '.axa .pk-seat{display:flex;flex-direction:column;align-items:center;gap:8px;width:86px}',
       '.axa .pk-seat.off{opacity:.45}',
@@ -1224,6 +1525,10 @@
       '.axa .pk-k4,.axa .pk-k5{grid-template-columns:repeat(2,minmax(0,1fr)) !important}',
       '.axa .pk-dc{width:52px;height:72px}',
       '.axa .pk-seat{width:72px} .axa .pk-carta{width:56px;height:78px}',
+      /* Numa tela estreita o convite vai para baixo do baralho: acima dele,
+         empurraria as cartas para fora da primeira dobra (poker.html). */
+      '.axa .pk-deckg{grid-template-columns:minmax(0,1fr) !important} .axa .pk-cf{order:2;width:100%;max-width:280px;margin:0 auto}',
+      '.axa .pk-lupa{padding:10px !important} .axa .pk-lupa-nome{max-width:100%}',
       '}'
     ].join('\n');
     document.head.appendChild(st);
@@ -1260,6 +1565,10 @@
       else if (q === 'ampliar') ampliar();
       else if (q === 'anexo') abrirAnexo(+b.getAttribute('data-i'));
       else if (q === 'ref') { S.refAberta = !S.refAberta; pintar(); }
+      else if (q === 'ranking') abrirRanking();
+      else if (q === 'todas-frentes') { S.filaFrente = ''; S.assin['pk-fila'] = null; pintar(); }
+      else if (q === 'cp-cod') copiar(S.codigo, 'Código copiado.', 'Código da sala');
+      else if (q === 'cp-link') copiar(linkConvite(), 'Link copiado.', 'Copie o link');
       else if (q === 'votar-tambem') entrarNaSala(S.codigo, meuNome());
       else if (q === 'copiar-resumo') copiar(textoResumo(b.getAttribute('data-dia')), 'Resumo copiado.', 'Copie o resumo');
     };
@@ -1294,7 +1603,10 @@
 
   if (typeof window !== 'undefined') {
     // Saiu da rota #poker: para o polling e avisa a mesa (sem apagar o voto).
-    window.addEventListener('hashchange', function () { if (!naRota() && S.timer) { paraPolling(); avisarAusencia(); } });
+    window.addEventListener('hashchange', function () {
+      if (!naRota()) fechaVisor();
+      if (!naRota() && S.timer) { paraPolling(); avisarAusencia(); }
+    });
     window.addEventListener('pagehide', avisarAusencia);
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && naRota() && S.codigo) atualizar(true); });
   }

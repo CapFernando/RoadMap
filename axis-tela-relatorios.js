@@ -983,7 +983,9 @@
       g.k(nova ? 'Em validação' : 'Esperando validação', H.num(p.aguardando), nova ? 'já contam como entrega' : 'entregues pelo dev', p.aguardando ? 'var(--wn-t)' : '') +
       g.k('Saíram sem entregar', H.num(p.saiu), 'contam no total', p.saiu ? 'var(--dg-t)' : '') + '</div>' +
       '<span class="note">' + esc(p.rotulo + ' · ' + p.sub) + (p.temDupla ? ' · demanda de dupla conta para os dois' : '') + '</span>';
-    h += p.ranking.length ? '<div class="gx-tw"><table class="tbl"><thead><tr><th>DEV</th><th class="num">VALIDADOS</th><th class="num">PONTOS</th><th class="num">%</th></tr></thead><tbody>' +
+    // Na regra nova o % do ranking e de fechadas + em validacao (rankingDaSprint, c11b681).
+    h += p.ranking.length ? '<div class="gx-tw"><table class="tbl"><thead><tr><th>DEV</th><th class="num">VALIDADOS</th><th class="num">PONTOS</th>' +
+      (nova ? '<th class="num" title="(Fechadas + em validação) ÷ itens da pessoa na sprint">% ENTREGUE</th>' : '<th class="num">%</th>') + '</tr></thead><tbody>' +
       p.ranking.map(function (d) {
         return '<tr><td style="color:var(--tx)">' + esc(d.nome) + '</td><td class="num mono">' + d.validados + ' / ' + d.total + '</td><td class="num mono">' + d.pontos + '</td><td class="num">' + g.chipPct(d.pct) + '</td></tr>';
       }).join('') + '</tbody></table></div>' : '';

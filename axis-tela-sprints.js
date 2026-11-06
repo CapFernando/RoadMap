@@ -591,7 +591,9 @@
         var base = d.pontosTotal || 0;
         var pct = base ? Math.min(100, Math.round(d.pontos / base * 100)) : (d.total ? Math.round(d.validados / d.total * 100) : 0);
         var eu = meus.indexOf(d.nome) >= 0;
-        return '<div class="sp-pp" title="' + esc(d.nome + ': ' + d.validados + ' de ' + d.total + ' itens validados' +
+        // Na regra nova o ranking ordena por fechadas + em validacao (rankingDaSprint, c11b681).
+        return '<div class="sp-pp" title="' + esc(d.nome + ': ' + (d.entregues != null ? d.entregues + ' de ' + d.total + ' entregues (fechados + em validação), ' : '') +
+          d.validados + ' de ' + d.total + ' itens validados' +
           (d.aguardando ? ', ' + d.aguardando + ' aguardando' : '') + (d.emCurso ? ', ' + d.emCurso + ' em curso' : '') + (d.saiu ? ', ' + d.saiu + ' saíram' : '')) + '">' +
           '<span class="nm ell' + (eu ? ' eu' : '') + '">' + esc(d.nome) + '</span>' +
           '<span class="tr"><i class="' + (pct >= 100 ? 'ok' : '') + '" style="width:' + pct + '%"></i></span>' +
@@ -1353,7 +1355,14 @@
     var ms = todas.filter(function (m) { return !esteira || deE(m) === esteira; });
     var aberta = function (m) { return sit(m) === 'aberta'; };
     var temDono = function (m) { return !!String(m.dev || '').trim(); };
-    var vencida = function (m) { return aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje; };
+    /* VENCIDA (admin.html, c11b681): em aberto com a Entrega dev (`entrega`, o
+       prazo do dev, o mesmo do filtro "Vencidas" do Kanban) ou a entrega ao
+       usuario antes de hoje. Na S1-11 a entrega ao usuario foi toda remarcada
+       para novembro; o atraso real estava no prazo do dev. `diaVenc` = a data
+       vencida mais antiga. */
+    var ehDia = function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')); };
+    var diaVenc = function (m) { return [m.entrega, m.entrega_usuario].filter(function (d) { return ehDia(d) && d < hoje; }).sort()[0] || ''; };
+    var vencida = function (m) { return aberta(m) && !!diaVenc(m); };
     var negadas = ms.filter(function (m) { return etapa(m) === 'negada'; }).length;
     var fechadas = ms.filter(function (m) { return sit(m) === 'entregue'; });
     var aguardando = ms.filter(function (m) { return sit(m) === 'aguardando'; });
@@ -1374,7 +1383,8 @@
              entregues: entregues, fechadas: fechadas, aguardando: aguardando, faltaCom: faltaCom, faltaSem: faltaSem, negadas: negadas, validas: validas,
              pctEntregues: pctDe(entregues.length),
              pctFaltaCom: pctDe(faltaCom.length), pctFaltaSem: pctDe(faltaSem.length),
-             comProj: comProj, vencidas: ms.filter(vencida).length, vencCom: faltaCom.filter(vencida).length, pessoas: pessoas };
+             comProj: comProj, vencidas: ms.filter(vencida).length, vencCom: faltaCom.filter(vencida).length, pessoas: pessoas,
+             diaVenc: diaVenc, ehDia: ehDia };
   }
   /* A PESSOA CLICADA (admin.html, 8f236cf): "ao clicar quero ver a quantidade
      por dev". O nome em "Faltando por pessoa" recorta a lista para as tasks
@@ -1417,6 +1427,45 @@
       }) };
     });
   }
+  /* O QUE FALTA, AGRUPADO PELO VENCIMENTO (admin.html, c11b681 e 93b6d4c): "ao
+     clicar em faltando, eu quero que me traga os vencidos por dev [...] e logo
+     abaixo ter a lista das demandas atrasadas por sprint" e, no ajuste, "Preciso
+     ver o que falta da sprint e com quem esta". Com o cartao Faltando ativo a
+     lista e TUDO o que falta (ou so as vencidas, pelo botao), agrupada assim: as
+     vencidas pela sprint em que a data venceu (da mais antiga para a mais
+     recente), depois "No prazo" e "Sem data de entrega". Dentro do grupo, pela
+     data vencida (ou a Entrega dev, ou a entrega ao usuario) e pelo titulo. */
+  function esGruposFalta(SPm, lista, x, feriados) {
+    var grupos = {};
+    var sprintVenc = function (m) { return SPm.sprintCorrente(x.diaVenc(m), feriados || []) || ''; };
+    var chave = function (m) {
+      return x.vencida(m) ? 'venc:' + sprintVenc(m) : (x.ehDia(m.entrega) || x.ehDia(m.entrega_usuario)) ? 'zprazo' : 'zsemdata';
+    };
+    lista.forEach(function (m) { var k = chave(m); (grupos[k] = grupos[k] || []).push(m); });
+    var dm = function (d) { return d.slice(8, 10) + '/' + d.slice(5, 7); };
+    var nome = function (k) {
+      if (k === 'zprazo') return 'No prazo';
+      if (k === 'zsemdata') return 'Sem data de entrega';
+      var r = k.slice(5);
+      var fx = r && SPm.faixaDaSprint ? SPm.faixaDaSprint(r, feriados || []) : null;
+      return 'Venceu na ' + (SPm.rotuloCurto(r) || 'sprint ?') + (fx ? ' · ' + dm(fx.de) + ' a ' + dm(fx.ate) : '');
+    };
+    var primeiroDia = function (k) { return grupos[k].reduce(function (d, m) { return x.diaVenc(m) < d ? x.diaVenc(m) : d; }, '9999'); };
+    var ordem = function (k) { return k.indexOf('venc:') === 0 ? primeiroDia(k) : k; };
+    var dataDe = function (m) { return (x.diaVenc(m) || m.entrega || m.entrega_usuario) || '9999'; };
+    return Object.keys(grupos).sort(function (a, b) { return ordem(a).localeCompare(ordem(b)); }).map(function (k) {
+      return { chave: k, nome: nome(k), vencidas: k.indexOf('venc:') === 0, itens: grupos[k].slice().sort(function (a, b) {
+        return dataDe(a).localeCompare(dataDe(b)) || (a.titulo || '').localeCompare(b.titulo || '');
+      }) };
+    });
+  }
+  /** A Entrega dev na lista do Faltando (o `devHTML` do admin, c11b681): a data
+   *  e, se ja passou, ha quantos dias venceu. */
+  function esEntregaDev(m, hoje) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega || ''))) return null;
+    var dias = Math.round((new Date(hoje + 'T00:00:00') - new Date(m.entrega + 'T00:00:00')) / 86400000);
+    return { data: m.entrega, tag: dias > 0 ? ' (vencida há ' + dias + 'd)' : '', nivel: dias > 0 ? 'dg' : '' };
+  }
   /** A entrega ao usuario e o aviso dela (o `dataHTML` do admin): vencida em
    *  vermelho, hoje e nos proximos sete dias em amarelo — so enquanto aberta. */
   function esEntregaUsuario(m, hoje, aberta) {
@@ -1435,17 +1484,21 @@
    *  "com quem esta" da lista de Melhorias do admin (372b92f). O Backlog
    *  usa a mesma. `abertaJa` (opcional) vem da aba Entregas: la a que esta
    *  aguardando o PM/PO ja saiu da mao do dev e nao acende vencida. */
-  function comQuemHtml(m, abertaJa) {
+  function comQuemHtml(m, abertaJa, comEntregaDev) {
     var k = H.colunaDe(m);
     var aberta = typeof abertaJa === 'boolean' ? abertaJa : k !== 'concluido' && k !== 'negada';
     var eu = esEntregaUsuario(m, H.hoje(), aberta);
     var cor = eu.nivel === 'dg' ? 'var(--dg-t)' : eu.nivel === 'wn' ? 'var(--wn-t)' : '';
+    // No Faltando das Entregas a Entrega dev vem antes (c11b681): e nela que o atraso aparece.
+    var ed = comEntregaDev ? esEntregaDev(m, H.hoje()) : null;
     return (m.dev ? 'Com: <b>' + esc(m.dev) + '</b>' : '<span style="color:var(--tx4)">Sem responsável</span>') + ' · ' +
+      (ed ? '<span' + (ed.nivel ? ' style="color:var(--dg-t);font-weight:600"' : '') + '>Entrega dev: ' + esc(H.dma(ed.data) + ed.tag) + '</span> · ' : '') +
       (eu.data ? '<span' + (cor ? ' style="color:' + cor + ';font-weight:600"' : '') + '>Entrega usuário: ' + esc(H.dma(eu.data) + eu.tag) + '</span>'
                : '<span style="color:var(--tx4)">Entrega usuário: a definir</span>');
   }
 
-  var _ent = { filtro: 'todas', pessoa: '', esteira: '' };
+  // `soVenc`: o botao "So vencidas" dentro do Faltando (93b6d4c); fora dele, desliga.
+  var _ent = { filtro: 'todas', pessoa: '', esteira: '', soVenc: false };
 
   function abaEntregas(el, ctx) {
     var D = ctx.D;
@@ -1509,7 +1562,20 @@
       cartao('falta_sem', x.faltaSem.length, 'Faltando · sem responsável', x.faltaSem.length ? x.pctFaltaSem + '% das tasks · precisam de dono' : 'todas têm dono',
         x.faltaSem.length ? 'var(--dg-t)' : 'var(--ok-t)', x.faltaSem.length ? 'dg' : '') +
       '</div>';
-    if (x.pessoas.length) {
+    /* Com o Faltando ativo (c11b681 e 93b6d4c) a linha diz com quem esta o que
+       falta, as vencidas de cada um em vermelho, e traz o botao "So vencidas". */
+    var modoFalta = _ent.filtro === 'falta_com';
+    if (!modoFalta) _ent.soVenc = false;
+    if (modoFalta) {
+      h += '<div class="es-pes"><span class="lab">FALTANDO COM</span>' + x.pessoas.map(function (pp) {
+        var on = _ent.pessoa === pp.nome;
+        return '<button type="button" class="chip c-' + (pp.vencidas ? 'dg' : 'bk') + ' es-pn' + (on ? ' on' : '') + '" data-es-pessoa="' + esc(pp.nome) + '" aria-pressed="' + on + '"' +
+          ' title="' + esc(on ? 'Clique de novo para ver todos' : 'Clique para ver o que falta com ' + pp.nome) + '">' +
+          esc(pp.nome) + ' <b>' + pp.n + '</b>' + (pp.vencidas ? ' · <span style="color:var(--dg-t)">' + plural(pp.vencidas, 'vencida', 'vencidas') + '</span>' : '') + '</button>';
+      }).join('') +
+        (x.vencCom ? '<button type="button" class="chip c-dg es-pn' + (_ent.soVenc ? ' on' : '') + '" data-es-sovenc="1" aria-pressed="' + _ent.soVenc + '"' +
+          ' style="margin-left:auto" title="Mostrar só as que têm entrega vencida">' + ico('clock') + ' Só vencidas (' + x.vencCom + ')</button>' : '') + '</div>';
+    } else if (x.pessoas.length) {
       // O nome e um botao: mostra as tasks e os numeros da pessoa (8f236cf).
       h += '<div class="es-pes"><span class="lab">FALTANDO POR PESSOA</span>' + x.pessoas.map(function (pp) {
         var on = _ent.pessoa === pp.nome;
@@ -1530,19 +1596,26 @@
         '<button type="button" class="btns" data-es-pessoa="" style="margin-left:auto;height:28px">Ver todos</button></div>';
     }
 
-    var lista = (_ent.filtro === 'entregues' ? x.entregues : _ent.filtro === 'falta_com' ? x.faltaCom
+    var lista = (_ent.filtro === 'entregues' ? x.entregues
+      : _ent.filtro === 'falta_com' ? x.faltaCom.filter(function (m) { return !_ent.soVenc || x.vencida(m); })
       : _ent.filtro === 'falta_sem' ? x.faltaSem : x.ms).filter(function (m) { return !pes || pes.casa(m); });
+    // Com "So vencidas": quantas ainda estao no prazo (ou sem data) e ficaram fora.
+    var noPrazo = modoFalta && _ent.soVenc ? x.faltaCom.filter(function (m) { return !x.vencida(m) && (!pes || pes.casa(m)); }).length : 0;
+    var notaPrazo = noPrazo ? '<span class="note" style="font-size:12.5px">+ ' + noPrazo + ' faltando ainda no prazo ou sem data de entrega — ' +
+      '<button type="button" class="btns" data-es-sovenc="1" style="height:26px">ver tudo o que falta</button></span>' : '';
     var ROT = { todas: 'tudo', entregues: 'só as entregues (fechadas e em validação)',
-                falta_com: 'só o que falta com responsável', falta_sem: 'só o que falta sem responsável' };
+                falta_com: _ent.soVenc ? 'só o que falta com responsável e venceu' : 'só o que falta com responsável', falta_sem: 'só o que falta sem responsável' };
     var recorte = (_ent.filtro === 'todas' ? '' : ROT[_ent.filtro]) + (pes ? (_ent.filtro === 'todas' ? 'as tasks' : ',') + ' de ' + pes.nome : '');
-    h += '<section class="sp-pn" style="gap:6px"><div class="hh"><h2 class="h2">Por tema <span class="note" style="font-family:var(--font-ui);font-weight:600">· ' + lista.length + '</span></h2>' +
+    h += '<section class="sp-pn" style="gap:6px"><div class="hh"><h2 class="h2">' + (modoFalta ? 'Pelo vencimento' : 'Por tema') +
+      ' <span class="note" style="font-family:var(--font-ui);font-weight:600">· ' + lista.length + '</span></h2>' +
       '<span class="note" style="font-size:12.5px">' + (!recorte ? 'Clique num cartão ou num nome para filtrar a lista.' :
         'Mostrando ' + esc(recorte) + '. <button type="button" class="btns" data-es-filtro="todas" data-es-pessoa="" style="height:26px;margin-left:6px">Ver tudo</button>') + '</span></div>';
     if (!lista.length) {
-      h += H.vazio('inbox', 'Nada nesta situação', 'Clique no cartão de novo para ver a sprint inteira.');
+      h += modoFalta ? H.vazio('check', 'Nenhuma demanda com entrega vencida', 'O que ainda falta está no prazo ou sem data.')
+                     : H.vazio('inbox', 'Nada nesta situação', 'Clique no cartão de novo para ver a sprint inteira.');
     } else {
-      h += esGrupos(lista, D.temas || []).map(function (g) {
-        return '<div class="es-gh"><span class="lab">' + esc(String(g.nome).toUpperCase()) + '</span><span class="n">' + g.itens.length + '</span></div>' +
+      h += (modoFalta ? esGruposFalta(SP(), lista, x, fer(D)) : esGrupos(lista, D.temas || [])).map(function (g) {
+        return '<div class="es-gh"><span class="lab"' + (g.vencidas ? ' style="color:var(--dg-t)"' : '') + '>' + esc(String(g.nome).toUpperCase()) + '</span><span class="n">' + g.itens.length + '</span></div>' +
           g.itens.map(function (m) {
             var k = H.colunaDe(m);
             var pj = m.projeto_id ? H.projeto(m.projeto_id) : null;
@@ -1551,12 +1624,12 @@
             if (pj) chips.push(H.chip(ico('folder') + ' ' + esc((pj.codigo ? pj.codigo + ' · ' : '') + (pj.nome || '')), 'pu', 'Faz parte do projeto ' + (pj.nome || '')));
             var fim = k === 'concluido' && m.concluido_em ? ' · Concluída em ' + esc(H.dma(String(m.concluido_em).slice(0, 10))) : '';
             return '<a class="es-ln" href="' + H.hrefItem(m) + '"><span class="cd">' + esc(m.codigo || '—') + '</span>' +
-              '<span class="ti"><b>' + esc(m.titulo || '') + '</b><span>' + comQuemHtml(m, x.aberta(m)) + fim + '</span></span>' +
+              '<span class="ti"><b>' + esc(m.titulo || '') + '</b><span>' + comQuemHtml(m, x.aberta(m), modoFalta) + fim + '</span></span>' +
               '<span class="x">' + chips.join('') + '</span></a>';
           }).join('');
       }).join('');
     }
-    h += '</section>';
+    h += notaPrazo + '</section>';
     el.innerHTML = h;
   }
 
@@ -1985,6 +2058,8 @@
           if (ef.hasAttribute('data-es-pessoa')) _ent.pessoa = '';
           AX.desenhar(true); return;
         }
+        // "So vencidas" no Faltando (93b6d4c): liga e desliga.
+        if (e.target.closest('[data-es-sovenc]')) { _ent.soVenc = !_ent.soVenc; AX.desenhar(true); return; }
         // A esteira no "Andamento por esteira": so ela; de novo, todas (fdf14e2).
         var ee = e.target.closest('[data-es-esteira]');
         if (ee) { var evv = ee.getAttribute('data-es-esteira'); _ent.esteira = _ent.esteira === evv ? '' : evv; AX.desenhar(true); return; }

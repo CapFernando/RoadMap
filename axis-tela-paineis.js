@@ -1334,8 +1334,11 @@
     }).join('');
     if (_sprSel) {
       var rk = S.rankingDaSprint(D, _sprSel, etapa, 'tecnologia');
+      // Na regra nova o % e a ordem sao de fechadas + em validacao (rankingDaSprint, c11b681).
+      var rkNova = rk.some(function (d) { return d.entregues != null; });
       h += '<h2 class="h2" style="margin-top:6px">Ranking da ' + esc(S.rotuloCurto(_sprSel)) + '</h2>' +
-        '<div class="gx-tw"><table class="tbl"><thead><tr><th>DEV</th><th class="num">VALIDADOS</th><th class="num">PONTOS</th><th class="num">%</th></tr></thead><tbody>' +
+        '<div class="gx-tw"><table class="tbl"><thead><tr><th>DEV</th><th class="num">VALIDADOS</th><th class="num">PONTOS</th>' +
+        (rkNova ? '<th class="num" title="(Fechadas + em validação) ÷ itens da pessoa na sprint">% ENTREGUE</th>' : '<th class="num">%</th>') + '</tr></thead><tbody>' +
         rk.map(function (d) {
           return '<tr><td style="color:var(--tx)"><span class="row" style="gap:8px">' + H.av(d.nome, 24) + esc(d.nome) + '</span></td>' +
             '<td class="num mono">' + d.validados + ' de ' + d.total + '</td><td class="num mono">' + d.pontos + ' de ' + d.pontosTotal + '</td><td class="num">' + chipPct(d.pct) + '</td></tr>';

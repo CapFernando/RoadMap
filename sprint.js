@@ -1587,15 +1587,22 @@
         if (q > 1) a.dupla = true;         // a tela avisa por que a coluna não soma
       });
     });
+    /* REGRA DE 06/11/2026 tambem por pessoa: na sprint pela regra nova, em
+       validacao (area ou PM/PO) conta como entrega, entao o % e a ordem saem de
+       fechadas + em validacao. Pontos continuam so do que o PM/PO fechou. */
     return Object.keys(acc).map(function (n) {
       var a = acc[n];
-      return { nome: a.nome, total: a.total, validados: a.validados,
+      var ent = regraNova ? a.validados + a.aguardando : a.validados;
+      var o = { nome: a.nome, total: a.total, validados: a.validados,
                aguardando: a.aguardando, emCurso: a.emCurso,
                saiu: a.saiu, pontos: Math.round(a.pontos),
                pontosTotal: Math.round(a.pontosTotal), dupla: !!a.dupla,
-               pct: a.total ? Math.round(a.validados / a.total * 100) : 0 };
+               pct: a.total ? Math.round(ent / a.total * 100) : 0 };
+      if (regraNova) o.entregues = ent;
+      return o;
     }).sort(function (x, y) {
-      return y.validados - x.validados || y.pontos - x.pontos ||
+      return (y.entregues || y.validados) - (x.entregues || x.validados) ||
+             y.validados - x.validados || y.pontos - x.pontos ||
              x.nome.localeCompare(y.nome, 'pt-BR');
     });
   }
