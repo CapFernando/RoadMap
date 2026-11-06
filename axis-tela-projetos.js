@@ -740,7 +740,7 @@
     var D = ctx.D, p = acharProjeto(D, ctx.param);
     var volta = '<span class="note"><a href="#projetos">Projetos</a> › ' + esc(ctx.param || '') + '</span>';
     if (!p) return volta + H.vazio('package', 'Projeto não encontrado', 'Nenhum projeto com o código ' + (ctx.param || '') + ' na base.', '<a class="btn" href="#projetos">Ver todos os projetos</a>');
-    if (FD.pid !== p.id) { FD.pid = p.id; FD.filtro = 'todos'; FD.pag = 0; }
+    if (FD.pid !== p.id) { FD.pid = p.id; FD.filtro = 'todos'; FD.pag = 0; FD.busca = ''; }
     var l = leitura(D, p, {}), r = l.r, hj = H.hoje();
     var dev = ctx.papel === 'dev';
 
@@ -797,7 +797,7 @@
 
     var meio = '<div class="grid" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:start">' +
       '<div style="display:flex;flex-direction:column;gap:16px;min-width:0">' + tl + ent + '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:16px;min-width:0">' + desc + prog + '</div></div>' + htmlItens(l, dev);
+      '<div style="display:flex;flex-direction:column;gap:16px;min-width:0">' + desc + prog + '</div></div>' + htmlItens(l, dev, p, D);
 
     // Resumo pronto: o MESMO texto do botao "Copiar" do resumo executivo do admin.
     var txt = raiz.RESUMOPROJETO ? raiz.RESUMOPROJETO.texto(r) : '';
@@ -876,8 +876,36 @@
     return { txt: txt, cor: c === 'concluido' ? 'var(--ok-t)' : 'var(--tx2)' };
   }
 
-  function htmlItens(l, dev) {
+  /* VINCULAR PELA TELA DO PROJETO (`pjBusca`/`pjVincular`/`pjDesvincular` do
+     admin): a demanda ganha ou perde `projeto_id`. Projeto pendente ou
+     recusado nao aceita demanda, e trazer uma que esta em outro projeto pede
+     confirmacao, porque a tira de la. */
+  function podeVincular(p) { return !!p && H.pode('editar') && aprovacao(p) === 'aprovado'; }
+  function normBusca(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+  function achadosParaVincular(D, p, termo) {
+    var q = normBusca(termo).trim();
+    if (q.length < 2) return [];
+    return (D.melhorias || []).filter(function (m) {
+      return m && !m.mesclado_em && m.projeto_id !== p.id &&
+        (normBusca(m.codigo).indexOf(q) >= 0 || normBusca(m.titulo).indexOf(q) >= 0);
+    }).slice(0, 8);
+  }
+  function htmlAchados(D, p, termo) {
+    var l = achadosParaVincular(D, p, termo);
+    if (normBusca(termo).trim().length < 2) return '';
+    if (!l.length) return '<span class="note">Nada encontrado.</span>';
+    return l.map(function (m) {
+      var outro = m.projeto_id ? (D.projetos || []).find(function (x) { return x.id === m.projeto_id; }) : null;
+      return '<div class="row" style="justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--bd)">' +
+        '<span style="min-width:0"><span class="mono" style="color:var(--ac-t)">' + esc(m.codigo || '') + '</span> ' + esc(m.titulo || '') +
+        (outro ? ' <span class="note" style="color:var(--wn-t)">· já em ' + esc(outro.codigo || outro.nome) + '</span>' : '') + '</span>' +
+        '<button type="button" class="btns" data-pj-add="' + esc(m.id) + '">Adicionar</button></div>';
+    }).join('');
+  }
+
+  function htmlItens(l, dev, pj, D) {
     var ms = l.ms.slice();
+    var edita = podeVincular(pj);
     var abertos = function (m) { var c = H.colunaDe(m); return c !== 'concluido' && c !== 'negada'; };
     var atras = function (m) { return H.etapaDe(m) === 'atrasado' && H.colunaDe(m) !== 'concluido'; };
     var FILT = [
@@ -903,9 +931,9 @@
       var n = ms.filter(x[2]).length;
       return '<button type="button" class="btns' + (x[0] === f[0] ? ' on' : '') + '" data-pj-if="' + x[0] + '" aria-pressed="' + (x[0] === f[0]) + '">' + x[1] + ' ' + n + '</button>';
     }).join('');
-    var corpo = !ms.length ? H.vazio('inbox', 'Nenhum item ligado a este projeto', 'O vínculo é feito no formulário da demanda, no campo Projeto.')
+    var corpo = !ms.length ? H.vazio('inbox', 'Nenhum item ligado a este projeto', edita ? 'Busque uma demanda acima para adicionar, ou use o campo Projeto no formulário da demanda.' : 'O vínculo é feito no formulário da demanda, no campo Projeto.')
       : !lista.length ? '<span class="note">Nenhum item neste filtro.</span>'
-      : '<table class="tbl"><thead><tr><th>ITEM</th><th>TÍTULO</th><th>ETAPA</th><th>DEV</th><th class="num">PTS</th><th>PRAZO</th></tr></thead><tbody>' +
+      : '<table class="tbl"><thead><tr><th>ITEM</th><th>TÍTULO</th><th>ETAPA</th><th>DEV</th><th class="num">PTS</th><th>PRAZO</th>' + (edita ? '<th></th>' : '') + '</tr></thead><tbody>' +
         pg.map(function (m) {
           var pz = prazoCelula(m), devs = H.devsDe(m), pts = H.pontosDe(m);
           return '<tr class="click' + (dev && H.minha(m) ? ' minha' : '') + '" data-href="' + esc(H.hrefItem(m)) + '" tabindex="0">' +
@@ -915,15 +943,20 @@
             '<td>' + H.chipEtapa(m) + '</td>' +
             '<td><span class="row" style="gap:6px">' + (devs.length ? devs.slice(0, 2).map(function (d) { return H.av(d, 22); }).join('') + '<span class="ell" style="max-width:120px;font-size:12.5px">' + esc(devs[0]) + (devs.length > 1 ? ' +' + (devs.length - 1) : '') + '</span>' : '<span style="color:var(--tx4)">—</span>') + '</span></td>' +
             '<td class="num">' + (pts ? pts : '<span style="color:var(--tx4)">—</span>') + '</td>' +
-            '<td style="white-space:nowrap;color:' + pz.cor + '">' + esc(pz.txt) + '</td></tr>';
+            '<td style="white-space:nowrap;color:' + pz.cor + '">' + esc(pz.txt) + '</td>' +
+            (edita ? '<td><button type="button" class="btns" data-pj-tirar="' + esc(m.id) + '" title="Tira esta demanda do projeto">Tirar</button></td>' : '') + '</tr>';
         }).join('') + '</tbody></table>';
     var pager = lista.length > POR_PAG
       ? '<div class="pj-pager"><span>' + (FD.pag * POR_PAG + 1) + '–' + Math.min(lista.length, (FD.pag + 1) * POR_PAG) + ' de ' + lista.length + '</span>' +
         '<button type="button" class="btns" data-pj-pag="-1"' + (FD.pag ? '' : ' disabled') + ' aria-label="Página anterior">‹</button>' +
         '<button type="button" class="btns" data-pj-pag="1"' + (FD.pag < pags - 1 ? '' : ' disabled') + ' aria-label="Próxima página">›</button></div>'
       : '';
+    var vincular = edita
+      ? '<div style="display:flex;flex-direction:column;gap:4px"><input class="in" type="search" data-pj-busca placeholder="Adicionar demanda: código ou parte do título" aria-label="Buscar demanda para adicionar ao projeto" value="' + esc(FD.busca || '') + '">' +
+        '<div id="pj-achados">' + htmlAchados(D, pj, FD.busca) + '</div></div>'
+      : '';
     return '<section class="pn"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><h2 class="h2">Itens do projeto</h2>' +
-      '<div class="row" style="gap:6px;flex-wrap:wrap">' + btns + '</div></div>' + corpo + pager + '</section>';
+      '<div class="row" style="gap:6px;flex-wrap:wrap">' + btns + '</div></div>' + vincular + corpo + pager + '</section>';
   }
 
   // ═══ GRAVAR PROJETO ══════════════════════════════════════════════════════
@@ -1230,6 +1263,23 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(ok, falha); else falha();
   }
 
+  async function vincularDemanda(p, melId, entra, btn) {
+    var m = ((AX.APP.D || {}).melhorias || []).find(function (x) { return x.id === melId; });
+    if (!m) return;
+    if (entra && aprovacao(p) !== 'aprovado') {
+      H.toast(aprovacao(p) === 'pendente' ? 'Aprove o projeto antes de vincular demandas a ele.' : 'Projeto recusado não aceita demandas.', 'erro');
+      return;
+    }
+    var anterior = entra && m.projeto_id ? ((AX.APP.D || {}).projetos || []).find(function (x) { return x.id === m.projeto_id; }) : null;
+    if (anterior && window.confirmar && !(await window.confirmar({ titulo: 'Mover de projeto',
+        texto: '"' + m.titulo + '" está em ' + (anterior.codigo || anterior.nome) + '.', ok: 'Mover' }))) return;
+    if (btn) btn.disabled = true;
+    var patch = {}; patch[m.id] = { projeto_id: entra ? p.id : '' };
+    if (entra) FD.busca = '';
+    var r = await H.gravar(patch, { ok: (m.codigo || 'Demanda') + (entra ? ' entrou em ' : ' saiu de ') + (p.codigo || p.nome) + '.' });
+    if (btn && !(r && r.ok)) btn.disabled = false;
+  }
+
   function ligar(el, ctx, desenha) {
     el.addEventListener('click', function (e) {
       var g = e.target.closest('[data-pj-novo],[data-pj-editar],[data-pj-propor],[data-pj-aprovar],[data-pj-recusar],[data-pj-anexo]');
@@ -1242,6 +1292,12 @@
         else if (g.hasAttribute('data-pj-aprovar')) { g.disabled = true; aprovar(pj).then(function () { g.disabled = false; }); }
         else if (g.hasAttribute('data-pj-recusar')) recusar(pj);
         else if (g.hasAttribute('data-pj-anexo')) { var A = raiz.AXIS_ACOES; if (A && A.abrirAnexo) A.abrirAnexo(pj, +g.getAttribute('data-pj-anexo')); }
+        return;
+      }
+      var v = e.target.closest('[data-pj-add],[data-pj-tirar]');
+      if (v) {
+        var pv = acharProjeto(ctx.D, ctx.param);
+        if (pv) vincularDemanda(pv, v.getAttribute('data-pj-add') || v.getAttribute('data-pj-tirar'), v.hasAttribute('data-pj-add'), v);
         return;
       }
       var b = e.target.closest('[data-pj-st],[data-pj-rst],[data-pj-jan],[data-pj-meus],[data-pj-if],[data-pj-pag],[data-pj-copiar]');
@@ -1268,6 +1324,13 @@
       var tr = e.target.closest && e.target.closest('tr[data-href]');
       if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); location.hash = tr.getAttribute('data-href'); }
     });
+    // A busca so redesenha a lista de achados: o campo nao perde o foco.
+    el.addEventListener('input', function (e) {
+      if (!e.target.matches('[data-pj-busca]')) return;
+      FD.busca = e.target.value;
+      var pb = acharProjeto(ctx.D, ctx.param), box = el.querySelector('#pj-achados');
+      if (pb && box) box.innerHTML = htmlAchados(ctx.D, pb, FD.busca);
+    });
     el.addEventListener('change', function (e) {
       if (e.target.matches('[data-pj-resp]')) { F.resp = e.target.value; desenha(); }
     });
@@ -1280,7 +1343,7 @@
   }
 
   AX.tela({
-    id: 'projetos', rotulo: 'Projetos', ico: 'package', papeis: ['admin', 'dev', 'consulta'],
+    id: 'projetos', rotulo: 'Projetos', ico: 'package', papeis: ['admin', 'analista', 'dev', 'consulta'],
     abas: [{ id: 'lista', rotulo: 'Projetos' }, { id: 'andamento', rotulo: 'Em andamento' }, { id: 'roadmap', rotulo: 'Roadmap' }],
     titulo: function (r) { return r.aba === 'roadmap' ? 'Roadmap' : r.aba === 'andamento' ? 'Projetos em andamento' : 'Projetos'; },
     render: function (el, ctx) {
@@ -1295,7 +1358,7 @@
   });
 
   AX.tela({
-    id: 'projeto', rotulo: 'Projeto', ico: 'package', papeis: ['admin', 'dev', 'consulta'], param: true, menu: false,
+    id: 'projeto', rotulo: 'Projeto', ico: 'package', papeis: ['admin', 'analista', 'dev', 'consulta'], param: true, menu: false,
     titulo: function (r) { return (r.param || 'Projeto') + ' · Projeto'; },
     render: function (el, ctx) {
       garanteCss();

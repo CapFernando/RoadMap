@@ -87,7 +87,7 @@ novo nunca rodou.
 Ao criar um `.js` novo, inclua-o com o placeholder `?v=0000000000` e deixe o
 script preencher.
 
-### 3.2 As invariantes — 3.489 asserções
+### 3.2 As invariantes — mais de 5.100 asserções
 
 `teste-invariantes.js` não casa regex contra o código: ele **recorta a função do
 arquivo e a executa**, com `new Function`, contra casos construídos. Uma
@@ -237,7 +237,7 @@ tela, e o `scripts-tema-versao.py` preenche.
 
 ## 7. Como se corrige um defeito aqui
 
-O ciclo que o projeto usa, e que as 3.489 invariantes sustentam:
+O ciclo que o projeto usa, e que as mais de 5.100 invariantes sustentam:
 
 1. **Meça antes de concluir.** Rode a regra candidata contra a base real e veja
    quantos casos ela muda. Boa parte das suposições deste projeto morreu assim —

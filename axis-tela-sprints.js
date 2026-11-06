@@ -1881,7 +1881,7 @@
   AX.tela({
     id: 'sprints',
     rotulo: 'Sprints',
-    papeis: ['admin', 'dev'],
+    papeis: ['admin', 'analista', 'dev'],
     abas: ABAS,
     /* O contador da aba Encerrar: quantas sprints terminaram sem fechar. */
     abasDe: function () {

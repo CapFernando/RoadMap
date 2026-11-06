@@ -27638,6 +27638,33 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
        'os dois "prazo vencido em aberto" dos Paineis tambem perguntam se o relogio corre');
   }
 
+  /* QUEM VE O ITEM NO MENU ABRE A TELA. O analista via Quadro, Backlog, Sprints,
+     Projetos e o Item no menu, mas essas telas nao o listavam: o clique voltava
+     ao Inicio. E o consulta, que le Projetos e Paineis, era barrado no Item que
+     eles linkam. Executa o MENU do nucleo contra a definicao de cada tela. */
+  sec('App AXIS: todo item do menu abre para quem o ve; consulta le o Item');
+  {
+    const telas = {}, carga = [];
+    const fake = { tela: (d) => { telas[d.id] = d; }, APP: { papel: 'admin', D: {} }, H: new Proxy({ ETAPAS: [], TIPOS: {}, ETAPA_POR_ID: {}, MESES: [], MESES_C: [] }, { get: (o, k) => (k in o ? o[k] : () => '') }),
+                   notificacoes: () => [], desenhar: () => {} };
+    for (const f of fs.readdirSync('.').filter((n) => /^axis-tela-.*\.js$/.test(n))) {
+      try { new Function('window', 'document', lerTela(f))({ AXIS_APP: fake, addEventListener() {} }, { getElementById: () => null, addEventListener() {}, head: { appendChild() {} }, createElement: () => ({ style: {} }) }); } catch (e) { carga.push(f + ': ' + e.message); }
+    }
+    const NUC = require('./axis-app.js');
+    const itens = [];
+    (NUC.MENU || []).forEach((g) => g.itens.forEach((it) => { if (!it.href) itens.push(it); }));
+    const barrados = [];
+    itens.forEach((it) => {
+      const t = telas[(it.rota || it.id).split('/')[0]];
+      if (!t) { barrados.push(it.id + ': tela nao registrada'); return; }
+      it.papeis.forEach((pp) => { if (t.papeis && t.papeis.indexOf(pp) < 0) barrados.push(it.id + '/' + pp); });
+    });
+    ok(!carga.length, 'toda tela do app carrega no Node sem erro', carga.join(' | '));
+    ok(itens.length >= 10 && !barrados.length, 'todo item do menu abre para cada perfil que o ve (analista inclusive)', barrados.join(', ') || String(itens.length));
+    ok(telas.item && telas.item.papeis.indexOf('consulta') >= 0 && telas.item.papeis.indexOf('analista') >= 0,
+       'o Item abre para consulta (leitura, as acoes dependem de H.pode) e para analista');
+  }
+
   /* O VEREDITO ESPERA O QUE E ASSINCRONO. Nem toda invariante da para medir
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao

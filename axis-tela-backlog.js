@@ -789,7 +789,7 @@
   AX.tela({
     id: 'backlog',
     rotulo: 'Backlog',
-    papeis: ['admin', 'dev'],
+    papeis: ['admin', 'analista', 'dev'],
     abas: ABAS,
     // As abas com contador: o que espera o PO e o que venceu. Filtra o papel
     // aqui porque o nucleo usa esta lista no lugar da ja filtrada.

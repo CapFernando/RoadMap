@@ -1015,7 +1015,7 @@
   AX.tela({
     id: 'item',
     rotulo: 'Item',
-    papeis: ['admin', 'dev'],
+    papeis: ['admin', 'analista', 'dev', 'consulta'],
     param: true,
     abasDe: function (r) {
       lerAba(r);

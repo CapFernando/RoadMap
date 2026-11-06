@@ -115,12 +115,12 @@
       pref('Tema', 'escuro é o padrão da marca; vale para todas as telas deste navegador', temaBtn) +
       (papel !== 'consulta'
         ? pref('Nome nas demandas', 'como você aparece no campo dev dos cards e relatórios',
-            '<span class="in v">' + H.esc(nomesDem.join(' / ') || '—') + '</span>')
+            seletorNome(ctx, nomesDem))
         : '') +
       pref('Tela inicial', 'onde o AXIS abre depois do login — hoje sempre o Início', nd) +
       pref('Notificações', 'Teams, e-mail e resumo diário', nd) +
-      (papel === 'dev'
-        ? '<span class="note">O nome nas demandas é ligado pelo administrador. Se as demandas mostradas não forem as suas, use “Não são as minhas demandas” no <a href="dev.html" title="Abre o Meu painel (dev.html)">Meu painel ' + H.ico('external', 'style="font-size:11px"') + '</a>.</span>'
+      (papel !== 'consulta'
+        ? '<span class="note">Se as demandas do Meu trabalho não forem as suas, escolha aqui o nome com que você aparece nelas. É o mesmo ajuste do “Não são as minhas demandas” do painel antigo.</span>'
         : '') +
       '</section>';
 
@@ -139,14 +139,55 @@
       '<div class="ct-grid">' + cartao + '<div style="display:flex;flex-direction:column;gap:16px;min-width:0">' + prefs + api + '</div></div>';
   }
 
+  /* "NAO SAO AS MINHAS DEMANDAS" (dev.html, `vincularNome`): a pessoa escolhe o
+     nome com que aparece no campo dev. Os nomes sao os que a base conhece (lista
+     de devs e o que esta grafado nas demandas); grava pela rota
+     `meu-nome-demandas`, que so mexe na propria conta. */
+  function nomesDaBase(D) {
+    var vistos = {};
+    (D.desenvolvedores || []).forEach(function (n) { if (n) vistos[String(n).trim()] = 1; });
+    (D.melhorias || []).forEach(function (m) { H.devsDe(m).forEach(function (n) { if (n) vistos[n] = 1; }); });
+    return Object.keys(vistos).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+  }
+  function seletorNome(ctx, nomesDem) {
+    var atual = nomesDem[0] || '';
+    var lista = nomesDaBase(ctx.D || {});
+    if (atual && lista.indexOf(atual) < 0) lista.unshift(atual);
+    return '<span class="row" style="gap:6px;flex-wrap:wrap">' +
+      '<select class="in" id="ct-nome" style="height:32px" aria-label="Nome nas demandas">' +
+      '<option value="">— escolha —</option>' + lista.map(function (n) {
+        return '<option value="' + H.esc(n) + '"' + (n === atual ? ' selected' : '') + '>' + H.esc(n) + '</option>';
+      }).join('') + '</select>' +
+      '<button type="button" class="btns" data-ct="nome">Salvar</button></span>';
+  }
+
   function depois(el) {
-    el.onclick = function (ev) {
+    el.onclick = async function (ev) {
       var b = ev.target.closest('[data-ct]');
       if (!b) return;
       var q = b.getAttribute('data-ct');
       if (q === 'senha') {
         if (typeof window.abrirTrocaSenha === 'function') window.abrirTrocaSenha();
         else H.toast('A troca de senha não carregou. Use a tela Minha senha do Admin ou do Meu painel.', 'erro');
+        return;
+      }
+      if (q === 'nome') {
+        var sel = el.querySelector('#ct-nome');
+        var nome = sel ? String(sel.value || '').trim() : '';
+        if (!nome) { H.toast('Escolha um nome da lista.', 'erro'); return; }
+        b.disabled = true;
+        try {
+          var j = await H.api('meu-nome-demandas', { nome_demandas: nome });
+          var eu = {};
+          try { eu = JSON.parse(sessionStorage.getItem('rm_eu') || '{}') || {}; } catch (_) {}
+          eu.nome_demandas = j.nome_demandas || nome;
+          try { sessionStorage.setItem('rm_eu', JSON.stringify(eu)); } catch (_) {}
+          H.toast('Pronto: suas demandas agora são as de ' + nome + '.', 'ok');
+          A.desenhar();
+        } catch (e) {
+          H.toast(e.message || 'Não consegui gravar o nome.', 'erro');
+          b.disabled = false;
+        }
         return;
       }
       if (q === 'tema') {
@@ -336,7 +377,7 @@
   A.tela({
     id: 'conta',
     rotulo: 'Minha conta',
-    papeis: ['admin', 'dev', 'consulta'],
+    papeis: ['admin', 'analista', 'dev', 'consulta'],
     titulo: function () { return 'Minha conta'; },
     render: render,
     depois: depois

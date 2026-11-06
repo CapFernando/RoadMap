@@ -566,7 +566,7 @@
   AX.tela({
     id: 'quadro',
     rotulo: 'Quadro',
-    papeis: ['admin', 'dev'],
+    papeis: ['admin', 'analista', 'dev'],
     titulo: function () { return 'Quadro'; },
     render: function (el, ctx) { css(); return montar(ctx); },
     depois: function (el, ctx) { ligar(el, ctx); }
