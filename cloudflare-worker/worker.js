@@ -2129,7 +2129,17 @@ function mexeuEmSprintFechada(recebido, servidor) {
     // OS DOIS LADOS: entrar numa fechada, e sair de uma fechada. Conferir so o
     // destino deixaria a demanda ESCAPAR, e o numero mudaria por subtracao.
     if (fechadas.has(nova)) {
-      presos.push({ codigo: m.codigo || m.id, sprint: nova, mov: 'entrar' });
+      /* LANCADO FORA DO PRAZO (06/11/2026) — decisao do Fernando: "S5-10; se
+         nao der, registre 'lancado fora do prazo'". A UNICA entrada aceita
+         numa sprint fechada: demanda CONCLUIDA, vinda de fora de qualquer
+         sprint fechada, com o registro explicito para AQUELA sprint. O
+         registro fica gravado na demanda (quem e quando, carimbados pelo
+         servidor), entao o numero que mudou depois do fechamento se explica.
+         Sair continua proibido, sem excecao. */
+      const lf = m.lancado_fora_do_prazo;
+      const liberado = !!lf && typeof lf === 'object' && String(lf.sprint || '') === nova &&
+                       !fechadas.has(orig) && String(m.status_planejamento || '') === 'concluido';
+      if (!liberado) presos.push({ codigo: m.codigo || m.id, sprint: nova, mov: 'entrar' });
     } else if (fechadas.has(orig)) {
       presos.push({ codigo: m.codigo || m.id, sprint: orig, mov: 'sair' });
     }
@@ -8221,6 +8231,23 @@ async function rotear(request, env, _histFila) {
                       detail: emFechada.map(p => p.codigo + ' nao pode ' + p.mov +
                         ' de ' + p.sprint + ': a sprint esta fechada').join('; ') +
                         '. Sprint fechada nao aceita entrada nem saida.' }, 409, headers);
+      }
+      /* O REGISTRO "LANCADO FORA DO PRAZO" E CARIMBADO AQUI e nao se apaga:
+         quem e quando vem do servidor, nunca do corpo; e um envio que o omita
+         (tela antiga) recebe de volta o que ja estava gravado. */
+      {
+        const velhas = new Map(((antesPub && antesPub.melhorias) || []).map(v => [v && v.id, v]));
+        for (const m of (data && data.melhorias) || []) {
+          if (!m || !m.id) continue;
+          const v = velhas.get(m.id), antigo = v && v.lancado_fora_do_prazo;
+          if (antigo && typeof antigo === 'object') { m.lancado_fora_do_prazo = antigo; continue; }
+          const lf = m.lancado_fora_do_prazo;
+          if (!lf || typeof lf !== 'object' || String(lf.sprint || '') !== String(m.sprint_po || '')) {
+            delete m.lancado_fora_do_prazo; continue;
+          }
+          m.lancado_fora_do_prazo = { sprint: String(lf.sprint || ''), em: hojeBR(),
+            por: (_ident && (_ident.nome || _ident.login)) || 'admin' };
+        }
       }
       const desfeitos = fechamentoApagado(data, antesPub);
       if (desfeitos.length) {

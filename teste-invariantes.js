@@ -24123,6 +24123,20 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
          'e recusa SAIR dela');
       ok(!WF.mexeu({ melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S2-11-2026' }] }, srv).length,
          'e deixa em paz quem nao mexeu');
+      /* LANCADO FORA DO PRAZO (06/11/2026): a unica entrada aceita. */
+      const lfOk = { sprint: 'S2-11-2026' };
+      ok(!WF.mexeu({ melhorias: [{ id: '2', codigo: 'AX-2', sprint_po: 'S2-11-2026',
+                                    status_planejamento: 'concluido', lancado_fora_do_prazo: lfOk }] }, srv).length,
+         'concluida com o registro "lancado fora do prazo" ENTRA na sprint fechada');
+      ok(WF.mexeu({ melhorias: [{ id: '2', codigo: 'AX-2', sprint_po: 'S2-11-2026',
+                                   status_planejamento: 'em_andamento', lancado_fora_do_prazo: lfOk }] }, srv).length === 1,
+         'mas so concluida — em andamento continua recusada');
+      ok(WF.mexeu({ melhorias: [{ id: '2', codigo: 'AX-2', sprint_po: 'S2-11-2026',
+                                   status_planejamento: 'concluido', lancado_fora_do_prazo: { sprint: 'S1-11-2026' } }] }, srv).length === 1,
+         'e o registro tem de ser para AQUELA sprint');
+      ok(WF.mexeu({ melhorias: [{ id: '1', codigo: 'AX-1', sprint_po: 'S3-11-2026',
+                                   status_planejamento: 'concluido', lancado_fora_do_prazo: { sprint: 'S3-11-2026' } }] }, srv).length === 1,
+         'e sair da fechada continua proibido, com ou sem registro');
       /* A LISTA DE FECHADAS VEM DO SERVIDOR, E E ISSO QUE FAZ O FECHAMENTO
          FUNCIONAR: fechar a S2-11 e UM envio que move as nao entregues para a
          S3-11 E acrescenta a S2-11 as fechadas. Lida do CORPO, a S2-11 ja
@@ -25291,8 +25305,22 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
      de forma sincrona — a do `conflito` executa uma funcao `async` —, e sem
      esta espera o resumo sairia antes delas e um `ok` que falhasse depois nao
      contaria. `pendentes` reune essas poucas; o resto continua sincrono. */
+  /* DEPENDENCIA NEGADA NAO TRAVA (06/11/2026): "permita a conclusao mesmo
+     quando a task estiver negada". */
+  {
+    const L = [
+      { id: 'p', titulo: 'Principal', status_planejamento: 'em_andamento' },
+      { id: 'n', titulo: 'Dependencia negada', status_planejamento: 'negada', parent_id: 'p', is_dependency: true },
+      { id: 'a', titulo: 'Dependencia aberta', status_planejamento: 'planejado', parent_id: 'q', is_dependency: true },
+      { id: 'q', titulo: 'Outra principal', status_planejamento: 'em_andamento' },
+    ];
+    ok(VINCULO.abertos(L, 'p').length === 0, 'dependencia negada nao trava a principal');
+    ok(VINCULO.abertos(L, 'q').length === 1, 'dependencia aberta continua travando');
+  }
+
   Promise.all(pendentes).then(() => {
     console.log('\n' + (falhas ? falhas + ' INVARIANTE(S) VIOLADA(S)' : 'todas as invariantes de pe'));
     process.exit(falhas ? 1 : 0);
   });
 })();
+

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="8b4a51b11b">
+<html lang="pt-BR" data-build="e7b944d5f2">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -726,7 +726,7 @@
   <script src="anexo-tipos.js?v=f38cdc110c"></script>
   <script src="prevoo.js?v=ab2758c54c"></script>
   <script src="dev-nome.js?v=c2db4198e7"></script>
-  <script src="vinculo.js?v=56499cb6e1"></script>
+  <script src="vinculo.js?v=e4ad177106"></script>
 <script src="resumo-dev.js?v=bbb3cfc8d6"></script>
 <script src="tema.js?v=7df38474d4"></script>
 <script src="prazo.js?v=88870a48ae"></script>
@@ -753,7 +753,7 @@
      pelo vencimento a partir de novembro. Sem o modulo, o quadro do dev
      desempataria por uma data e os do PM/PO por outra. -->
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=6e9d8b30f1"></script>
+<script src="sprint.js?v=f4a4af42dc"></script>
 <!-- A frente de cada um (`pipelines.js`): a vitrine e o backlog sem dono da
      sprint aparecem só para o time da mesma frente — ver `doMeuTime`. -->
 <script src="requisitos.js?v=1987238fe2"></script>
@@ -5283,7 +5283,7 @@ function onDrop(e, colKey) {
   // Difere para depois que dragend completar — evita re-render durante drag ativo
   setTimeout(() => {
     if (checkDepBlock(id, colKey)) {
-      const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
+      const deps = VINCULO.abertos(state.melhorias, id);
       toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
       return;
     }
@@ -6394,7 +6394,7 @@ async function saveStatus() {
   }
   // Bloqueio por dependência
   if (checkDepBlock(id, newColKey)) {
-    const deps = getDeps(id).filter(d => getStatusKey(d) !== 'concluido');
+    const deps = VINCULO.abertos(state.melhorias, id);
     toast(`🔒 Conclua a dependência antes de avançar: "${deps[0]?.titulo || ''}"`, 'err');
     return;
   }
