@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="25130f3969">
+<html lang="pt-BR" data-build="d5e2420b56">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -5240,6 +5240,10 @@ let _esSprint = '';
 /* O cartao clicado no resumo filtra a lista: 'todas', 'entregues',
    'falta_com' (com responsavel) ou 'falta_sem' (sem responsavel). */
 let _esFiltro = 'todas';
+/* So as vencidas, dentro do Faltando (06/11/2026). Clicar no Faltando mostra
+   TUDO o que falta; este botao recorta para as vencidas. */
+let _esSoVenc = false;
+function esSoVenc() { _esSoVenc = !_esSoVenc; renderEntregasSprint(); }
 function esFiltrar(f) { _esFiltro = (_esFiltro === f ? 'todas' : f); renderEntregasSprint(); }
 /* A PESSOA CLICADA (05/11/2026): "ao clicar quero ver a quantidade por dev".
    O nome em "Faltando por pessoa" filtra a lista para as tasks dela na sprint
@@ -5391,16 +5395,23 @@ function renderEntregasSprint() {
      sprint." Com o cartao Faltando ativo, a linha conta so as vencidas (entrega
      ao usuario antes de hoje), de quem tem mais para quem tem menos; a lista
      embaixo agrupa as atrasadas pela sprint em que a entrega venceu. */
+  /* 06/11/2026, ajuste: "a imagem me mostra 65 itens faltantes, com 14
+     vencidas. Ao clicar mostra apenas as vencidas. Preciso ver o que falta da
+     sprint e com quem esta." O Faltando mostra TUDO o que falta; a pessoa
+     mostra quanto falta com ela e, em vermelho, quantas venceram. O botao
+     "So vencidas" recorta a lista. */
   const modoVenc = _esFiltro === 'falta_com';
-  const pessoasVenc = pessoas.map(p => [p, porPessoa[p].filter(vencida).length]).filter(x => x[1])
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+  if (!modoVenc) _esSoVenc = false;
+  const totVenc = lFaltaCom.filter(vencida).length;
   document.getElementById('es-pessoas').innerHTML = modoVenc
-    ? (pessoasVenc.length
-        ? '<span class="rot">Vencidos por pessoa:</span>' + pessoasVenc.map(([p, v]) =>
-            `<span class="es-pessoa venc${_esPessoa === p ? ' ativo' : ''}" onclick="esPessoa(${esc(JSON.stringify(p))})" ` +
-            `title="Clique para ver as atrasadas de ${esc(p)} · ${porPessoa[p].length} faltando no total">` +
-            `${esc(p)} <b>${v}</b> vencida${v === 1 ? '' : 's'}</span>`).join('')
-        : '<span class="rot">Vencidos por pessoa:</span><span style="color:var(--green)">nenhuma entrega vencida</span>')
+    ? '<span class="rot">Faltando com:</span>' + pessoas.map(p => {
+        const l = porPessoa[p], v = l.filter(vencida).length;
+        return `<span class="es-pessoa${v ? ' venc' : ''}${_esPessoa === p ? ' ativo' : ''}" onclick="esPessoa(${esc(JSON.stringify(p))})" ` +
+               `title="Clique para ver o que falta com ${esc(p)}">${esc(p)} <b>${l.length}</b>` +
+               `${v ? ` · <span style="color:var(--red-tx,#F9A0A0)">${v} vencida${v === 1 ? '' : 's'}</span>` : ''}</span>`;
+      }).join('') +
+      (totVenc ? `<span class="es-pessoa${_esSoVenc ? ' ativo' : ''}" style="margin-left:auto;border-color:var(--red-tx,#F9A0A0)" onclick="esSoVenc()" ` +
+                 `title="Mostrar só as que têm entrega vencida">⏰ Só vencidas (${totVenc})</span>` : '')
     : pessoas.length
     ? '<span class="rot">Faltando por pessoa:</span>' + pessoas.map(p => {
         const l = porPessoa[p], v = l.filter(vencida).length;
@@ -5450,12 +5461,12 @@ function renderEntregasSprint() {
     return;
   }
   const filtrada = (_esFiltro === 'entregues' ? lEntregues : _esFiltro === 'aguardando' ? lAguardando
-                 : _esFiltro === 'falta_com' ? lFaltaCom.filter(vencida)
+                 : _esFiltro === 'falta_com' ? lFaltaCom.filter(m => !_esSoVenc || vencida(m))
                  : _esFiltro === 'falta_sem' ? lFaltaSem : ms).filter(m => !_esPessoa || daPessoa(m));
   // No modo Faltando: quantas ainda estao no prazo (ou sem data) e ficaram fora.
-  const noPrazo = modoVenc ? lFaltaCom.filter(m => !vencida(m) && (!_esPessoa || daPessoa(m))).length : 0;
+  const noPrazo = modoVenc && _esSoVenc ? lFaltaCom.filter(m => !vencida(m) && (!_esPessoa || daPessoa(m))).length : 0;
   const notaPrazo = noPrazo ? `<div class="es-kpi-sub" style="margin:4px 0 0">+ ${noPrazo} faltando ainda no prazo ou sem data de entrega` +
-    ` — <a href="#" onclick="esFiltrar('todas');return false">ver a sprint toda</a></div>` : '';
+    ` — <a href="#" onclick="esSoVenc();return false">ver tudo o que falta</a></div>` : '';
   if (!filtrada.length) {
     box.innerHTML = '<div class="empty">' + (modoVenc ? 'Nenhuma demanda com entrega vencida.' : 'Nada nesta situação.') + '</div>' + notaPrazo;
     return;
@@ -5465,8 +5476,12 @@ function renderEntregasSprint() {
   /* Atrasadas: o grupo e a sprint em que a entrega ao usuario venceu, da mais
      antiga para a mais recente. Fora desse modo, o grupo e o tema. */
   const sprintVenc = m => SPRINTPO.sprintCorrente(diaVenc(m), ferEs) || '';
-  filtrada.forEach(m => { const k = modoVenc ? 'venc:' + sprintVenc(m) : (m.tema_id || '__sem_tema__'); (grupos[k] = grupos[k] || []).push(m); });
+  const chaveFalta = m => vencida(m) ? 'venc:' + sprintVenc(m)
+    : (ehDia(m.entrega) || ehDia(m.entrega_usuario)) ? 'zprazo' : 'zsemdata';
+  filtrada.forEach(m => { const k = modoVenc ? chaveFalta(m) : (m.tema_id || '__sem_tema__'); (grupos[k] = grupos[k] || []).push(m); });
   const nomeTema = k => {
+    if (k === 'zprazo') return 'No prazo';
+    if (k === 'zsemdata') return 'Sem data de entrega';
     if (k.startsWith('venc:')) {
       const r = k.slice(5);
       const fx = r && SPRINTPO.faixaDaSprint ? SPRINTPO.faixaDaSprint(r, ferEs) : null;
@@ -5477,13 +5492,13 @@ function renderEntregasSprint() {
   };
   const primeiroDia = k => grupos[k].reduce((d, m) => diaVenc(m) < d ? diaVenc(m) : d, '9999');
   const chaves = Object.keys(grupos).sort((a, b) => {
-    if (modoVenc) return primeiroDia(a).localeCompare(primeiroDia(b));
+    if (modoVenc) return (a.startsWith('venc:') ? primeiroDia(a) : a).localeCompare(b.startsWith('venc:') ? primeiroDia(b) : b);
     if (a === '__sem_tema__') return 1;
     if (b === '__sem_tema__') return -1;
     return nomeTema(a).localeCompare(nomeTema(b), 'pt-BR', { sensitivity: 'base' });
   });
   // Dentro do tema: pela entrega ao usuario, sem data no fim.
-  const dataDe = m => (modoVenc ? diaVenc(m) : m.entrega_usuario) || '9999';
+  const dataDe = m => (modoVenc ? (diaVenc(m) || m.entrega || m.entrega_usuario) : m.entrega_usuario) || '9999';
   const dataHTML = m => {
     if (!m.entrega_usuario) return '<span style="color:var(--text3)">📅 Entrega usuário: a definir</span>';
     let cor = '', tag = '';
