@@ -545,6 +545,25 @@
     return { html: h, fechada: fechada };
   }
 
+  /* AS DATAS DO TAMANHO DA SPRINT — COPIA de `mSprintDatas` (admin.html,
+     585196d e 84bc1b8): "se eu estiver na S1-11 abrir as datas possiveis da
+     semana da sprint e entrega ja preencher a proxima segunda".
+     - Inicio e entrega do dev: o calendario abre so na semana da sprint, da
+       SEGUNDA (mesmo feriado: a S1-11 vai de 02/11 a 06/11) ao fim de
+       `SPRINTPO.faixaDaSprint`. E limite do seletor, nao trava: data antiga de
+       quem rolou de sprint continua salvando, e o aviso diz que esta fora.
+     - Entrega ao usuario: ESCOLHER a sprint preenche a segunda seguinte
+       (`SPRINTPO.entregaDaSprint`). So no gesto — abrir o card nao preenche.
+     Devolve null sem sprint (o seletor fica livre). */
+  function semanaDaSprint(SPm, sp, feriados, inicio, entrega) {
+    var fx = SPm && sp ? SPm.faixaDaSprint(sp, feriados || []) : null;
+    if (!fx) return null;
+    var faixa = { de: SPm.segundaDaSemana(fx.de), ate: fx.ate };
+    var fora = [['início', inicio], ['entrega', entrega]]
+      .filter(function (x) { return x[1] && (x[1] < faixa.de || x[1] > faixa.ate); }).map(function (x) { return x[0]; });
+    return { de: faixa.de, ate: faixa.ate, segunda: SPm.entregaDaSprint(sp, feriados || []) || '', fora: fora };
+  }
+
   /** A trilha de meses em texto (`mesPreencheCampo`): de onde veio e quantas vezes rolou. */
   function trilhaTxt(m, atual) {
     var t = trilhaDe(m);
@@ -611,7 +630,8 @@
     }
     if (!dev) {
       var os = opcoesSprint(m && raiz.SPRINTPO ? raiz.SPRINTPO.doPO(m) : '');
-      h += campo('axf-sprint', 'Sprint', '<select class="in" id="axf-sprint"' + (!po || os.fechada ? ' disabled' : '') + '>' + os.html + '</select>',
+      h += campo('axf-sprint', 'Sprint', '<select class="in" id="axf-sprint"' + (!po || os.fechada ? ' disabled' : '') + '>' + os.html + '</select>' +
+        '<span class="note" id="axf-sprint-semana" aria-live="polite"></span>',
         { nota: !po ? 'Só o Fernando (PM/PO) escolhe a sprint.' : os.fechada ? 'Sprint fechada — a demanda não sai mais dela.' : 'Obrigatória depois da Planning.' });
     }
     h += campo('axf-inicio', 'Início previsto', entrada('axf-inicio', m ? m.inicio : '', { tipo: 'date', desligado: trava })) +
@@ -945,6 +965,25 @@
     if (!m && codigo) location.hash = '#item/' + encodeURIComponent(codigo);
   }
 
+  /** O `mSprintDatas` na tela: limites do calendario, a segunda ao escolher e o aviso. */
+  function pintaSemana(escolheu) {
+    var sp = el('axf-sprint') ? val('axf-sprint') : '';
+    var ini = el('axf-inicio'), ent = el('axf-entrega');
+    var w = semanaDaSprint(raiz.SPRINTPO, sp, D().feriados || [], ini && ini.value, ent && ent.value);
+    [ini, ent].forEach(function (x) {
+      if (!x) return;
+      if (w) { x.min = w.de; x.max = w.ate; } else { x.removeAttribute('min'); x.removeAttribute('max'); }
+    });
+    var usu = el('axf-entrega-usuario');
+    if (escolheu && usu && w && w.segunda) usu.value = w.segunda;
+    var nota = el('axf-sprint-semana');
+    if (!nota) return;
+    nota.style.color = w && w.fora.length ? 'var(--wn-t)' : '';
+    nota.innerHTML = !w ? '' : H.ico('calendar') + ' Semana da sprint: ' + H.esc(H.dma(w.de) + ' a ' + H.dma(w.ate)) +
+      (w.segunda ? ' · entrega ao usuário ' + H.esc(H.dma(w.segunda)) : '') +
+      (w.fora.length ? ' · ' + H.ico('alert') + ' ' + H.esc(w.fora.join(' e ')) + ' fora da semana' : '');
+  }
+
   function retrato() { try { return JSON.stringify(ler()); } catch (_) { return ''; } }
 
   async function fecha(forcado) {
@@ -1063,6 +1102,11 @@
       else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); salvar(); }
     };
     document.addEventListener('keydown', EST.tecla, true);
+    // Datas no tamanho da sprint: escolher a sprint preenche a segunda; abrir nao preenche nada.
+    var ssel = el('axf-sprint');
+    if (ssel) ssel.addEventListener('change', function () { pintaSemana(true); });
+    ['axf-inicio', 'axf-entrega'].forEach(function (id) { var x = el(id); if (x) x.addEventListener('input', function () { pintaSemana(false); }); });
+    pintaSemana(false);
     if (!m) preencheNova(o);
     EST.extras0 = rawExtras();
     EST.inicial = retrato();

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" data-build="cdee4b7b70">
+<html lang="pt-BR" data-build="5f4a49ad74">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -670,6 +670,7 @@
     .spr-sit[data-s="em_curso"]   { color:var(--blue-tx); background:var(--blue-bg); }
     .spr-sit[data-s="saiu"]       { color:var(--red-tx); background:var(--red-bg); }
     .spr-sit[data-s="negada"]     { color:var(--text3); background:var(--bg4); }
+    .spr-sit[data-s="na_area"]    { color:var(--purple-tx); background:var(--purple-bg); }
     .spr-tit-d { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
       white-space:nowrap; }
     .spr-pts { flex:0 0 auto; font-size:11px; color:var(--text3); }
@@ -963,6 +964,12 @@
     .es-pessoa { border:1px solid var(--border); border-radius:999px; padding:2px 10px; color:var(--text2); background:var(--bg2); }
     .es-pessoa b { color:var(--text); }
     .es-pessoa.venc b { color:var(--red-tx); }
+    .es-pessoa { cursor:pointer; }
+    .es-pessoa:hover { border-color:var(--border2); }
+    .es-pessoa.ativo { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue) inset; color:var(--text); }
+    .es-pessoa-resumo { margin:-8px 0 14px; padding:10px 14px; border:1px solid var(--blue); border-radius:10px;
+                        background:var(--bg2); font-size:13px; color:var(--text2); display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; }
+    .es-pessoa-resumo b { color:var(--text); font-size:15px; }
     .ger-charts { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:32px; }
     @media(max-width:900px){ .ger-charts{ grid-template-columns:1fr; } }
     .ger-section-title {
@@ -1646,7 +1653,7 @@
   <script src="dev-nome.js?v=c2db4198e7"></script>
   <script src="vinculo.js?v=56499cb6e1"></script>
   <script src="resumo-projeto.js?v=5f25c0c2ff"></script>
-  <script src="fila.js?v=90c9b67421"></script>
+  <script src="fila.js?v=3e7bb2500a"></script>
 <script src="tema.js?v=5d9c25fd66"></script>
 <script src="axis.js?v=d59365ebfe"></script>
 <script src="prazo.js?v=88870a48ae"></script>
@@ -1654,7 +1661,7 @@
 <script src="capa-tecnologia.js?v=4084a759ff"></script>
 <script src="requisitos.js?v=cac792c192"></script>
 <script src="pipelines.js?v=2374e11d52"></script>
-<script src="capacidade.js?v=e7e1449a7d"></script>
+<script src="capacidade.js?v=efaf632603"></script>
 <script src="apresentacao.js?v=8e03c136ab"></script>
 <script src="relatorio-ppt.js?v=9f92cf151d"></script>
 <script src="aprovacao-ppt.js?v=2ed7c9629b"></script>
@@ -1676,7 +1683,7 @@
 <script src="selo-validacao.js?v=0b6fdb5439"></script>
 <script src="devolucao.js?v=d85c42cb31"></script>
 <script src="entrega-usuario.js?v=1b8aac9457"></script>
-<script src="sprint.js?v=d64ea6d269"></script>
+<script src="sprint.js?v=a4430b25e8"></script>
 <script src="ordem-kanban.js?v=c2f290e2ad"></script>
 </head>
 <body>
@@ -2613,7 +2620,7 @@
     <div class="form-row">
       <div class="form-group">
         <label>Sprint <span id="m-sprint-obrig" style="color:var(--red)"></span></label>
-        <select id="m-sprint" onchange="mSprintAviso()"></select>
+        <select id="m-sprint" onchange="mSprintAviso();mSprintDatas(true)"></select>
         <div id="m-sprint-hint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
       </div>
     </div>
@@ -2785,11 +2792,11 @@
     <div class="form-row">
       <div class="form-group">
         <label>Data de início</label>
-        <input type="date" id="m-inicio" oninput="atualizaHorasPlanejadas();entregaUsuRender()" />
+        <input type="date" id="m-inicio" oninput="atualizaHorasPlanejadas();entregaUsuRender();mSprintDatas(false)" />
       </div>
       <div class="form-group">
         <label>Data de entrega prevista <span class="eu-sub">(fim do dev)</span></label>
-        <input type="date" id="m-entrega" oninput="atualizaHorasPlanejadas();entregaUsuRender()" />
+        <input type="date" id="m-entrega" oninput="atualizaHorasPlanejadas();entregaUsuRender();mSprintDatas(false)" />
       </div>
       <!-- A ENTREGA AO USUARIO FICA COLADA NA DO DEV, e nao numa aba a parte: a
            distancia entre as duas e a propria informacao ("quantos dias a PR
@@ -5238,6 +5245,11 @@ let _esSprint = '';
    'falta_com' (com responsavel) ou 'falta_sem' (sem responsavel). */
 let _esFiltro = 'todas';
 function esFiltrar(f) { _esFiltro = (_esFiltro === f ? 'todas' : f); renderEntregasSprint(); }
+/* A PESSOA CLICADA (05/11/2026): "ao clicar quero ver a quantidade por dev".
+   O nome em "Faltando por pessoa" filtra a lista para as tasks dela na sprint
+   e mostra os numeros dela; clicar de novo volta a todos. Soma com o cartao. */
+let _esPessoa = '';
+function esPessoa(nome) { _esPessoa = (_esPessoa === nome ? '' : nome); renderEntregasSprint(); }
 
 
 function renderEntregasSprint() {
@@ -5254,7 +5266,31 @@ function renderEntregasSprint() {
     `<option value="${esc(o.key)}"${o.key === _esSprint ? ' selected' : ''}>` +
     `${esc(o.label.replace(/^● /, ''))}${o.key === atual ? ' (atual)' : ''} (${o.n})</option>`).join('');
 
-  const ms = (state.melhorias || []).filter(m => !ehMesclada(m) && SPRINTPO.naSprint(m, _esSprint));
+  /* ═══ ENTREGUE SO APOS O PM/PO, NA SPRINT DA IDA PARA VALIDACAO (05/11/2026)
+     "So conta entregue apos aprovacao PM/PO, para sprint deve considerar a
+      partir do momento que o dev coloca em validacao da area ou validacao
+      PM/PO. Ajustar em todas visoes." A regra mora em `SPRINTPO.situacaoNaSprint`
+     (a mesma do placar): entregue = concluida com a 1a ida para validacao
+     nesta sprint; aguardando = foi para validacao nesta sprint e o PM/PO ainda
+     nao aprovou. A que foi para validacao numa sprint ANTERIOR e entrega de
+     la, e sai daqui. Sprint anterior a regra: a conta antiga. */
+  const ferEs = state.feriados || [];
+  const regraEs = !!(SPRINTPO.sprintNoRegimeDeEntrega && SPRINTPO.sprintNoRegimeDeEntrega(_esSprint, ferEs));
+  const sitEs = m => {
+    const sk = statusKey(m);
+    if (sk === 'negada') return 'negada';
+    if (!regraEs) return sk === 'concluido' ? 'entregue' : 'aberta';
+    const s = SPRINTPO.situacaoNaSprint(m, _esSprint, sk, ferEs);
+    if (s === 'entregue' || s === 'aguardando') return s;
+    if (s === 'em_curso') return 'aberta';
+    return s === 'saiu' && SPRINTPO.naSprint(m, _esSprint) ? 'aberta' : null;
+  };
+  const ms = (state.melhorias || []).filter(m => {
+    if (ehMesclada(m)) return false;
+    if (!regraEs) return SPRINTPO.naSprint(m, _esSprint);
+    const st = sitEs(m);
+    return st === 'negada' ? SPRINTPO.naSprint(m, _esSprint) : !!st;
+  });
   document.getElementById('es-conta').textContent = ms.length;
 
   /* ═══ EM LISTA, NO PADRAO DA ABA MELHORIAS (03/11/2026) ══════════════════
@@ -5264,11 +5300,11 @@ function renderEntregasSprint() {
      o cartao de linha de sempre, e em cada demanda o selo do PROJETO de que
      ela faz parte. O resumo da sprint e uma linha de texto. */
   const hoje = PRAZO.hojeISO();
-  const feitas = ms.filter(m => statusKey(m) === 'concluido').length;
+  const feitas = ms.filter(m => sitEs(m) === 'entregue').length;
   const negadas = ms.filter(m => statusKey(m) === 'negada').length;
   const pts = ms.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
-  const ptsFeitos = ms.filter(m => statusKey(m) === 'concluido').reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
-  const aberta = m => !['concluido', 'negada'].includes(statusKey(m));
+  const ptsFeitos = ms.filter(m => sitEs(m) === 'entregue').reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+  const aberta = m => sitEs(m) === 'aberta';
   const vencidas = ms.filter(m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) &&
                                   m.entrega_usuario < hoje).length;
   const comProj = ms.filter(m => m.projeto_id && (state.projetos || []).some(p => p.id === m.projeto_id)).length;
@@ -5281,7 +5317,8 @@ function renderEntregasSprint() {
      Embaixo, o que falta por pessoa — o "faltando no nome". */
   const temDono = m => !!String(m.dev || '').trim();
   const vencida = m => aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje;
-  const lEntregues = ms.filter(m => statusKey(m) === 'concluido');
+  const lEntregues = ms.filter(m => sitEs(m) === 'entregue');
+  const lAguardando = ms.filter(m => sitEs(m) === 'aguardando');
   const lFaltaCom = ms.filter(m => aberta(m) && temDono(m));
   const lFaltaSem = ms.filter(m => aberta(m) && !temDono(m));
   const validas = ms.length - negadas;
@@ -5298,6 +5335,9 @@ function renderEntregasSprint() {
     kpiEs('todas', ms.length, 'Na sprint', `${ms.length} task(s)` + (negadas ? ` · ${negadas} negada(s)` : '') + ` · ${comProj} em projeto`) +
     kpiEs('entregues', lEntregues.length, 'Entregues', `${lEntregues.length} de ${validas} task(s) · ${pctEnt}%`, 'var(--green)',
           `<div class="es-barra"><i style="width:${pctEnt}%"></i></div>`) +
+    (regraEs ? kpiEs('aguardando', lAguardando.length, 'Aguardando aprovação',
+          lAguardando.length ? `${pctDe(lAguardando.length)}% · foram para validação nesta sprint` : 'nada parado na validação',
+          lAguardando.length ? 'var(--blue-tx)' : '') : '') +
     kpiEs('falta_com', lFaltaCom.length, 'Faltando · com responsável', `${pctDe(lFaltaCom.length)}% das tasks` +
           (vencCom ? ` · <span style="color:var(--red-tx);font-weight:600">${vencCom} com entrega vencida</span>` : ''),
           lFaltaCom.length ? 'var(--amber-tx)' : '') +
@@ -5311,17 +5351,53 @@ function renderEntregasSprint() {
   document.getElementById('es-pessoas').innerHTML = pessoas.length
     ? '<span class="rot">Faltando por pessoa:</span>' + pessoas.map(p => {
         const l = porPessoa[p], v = l.filter(vencida).length;
-        return `<span class="es-pessoa${v ? ' venc' : ''}" title="${v ? v + ' com entrega vencida' : ''}">${esc(p)} <b>${l.length}</b>` +
+        return `<span class="es-pessoa${v ? ' venc' : ''}${_esPessoa === p ? ' ativo' : ''}" ` +
+               `onclick="esPessoa(${esc(JSON.stringify(p))})" title="Clique para ver as tasks de ${esc(p)}` +
+               `${v ? ' · ' + v + ' com entrega vencida' : ''}">${esc(p)} <b>${l.length}</b>` +
                `${v ? ` · ${v} vencida(s)` : ''}</span>`;
       }).join('')
     : '';
+  // A pessoa escolhida que nao tem mais nada faltando continua valendo (os
+  // numeros dela ainda dizem algo); so some se nao tiver task nenhuma na sprint.
+  const daPessoa = m => String(m.dev || '').trim() === _esPessoa;
+  if (_esPessoa && !ms.some(daPessoa)) _esPessoa = '';
+  let resumoPessoa = document.getElementById('es-pessoa-resumo');
+  if (!resumoPessoa) {
+    resumoPessoa = document.createElement('div');
+    resumoPessoa.id = 'es-pessoa-resumo';
+    document.getElementById('es-pessoas').after(resumoPessoa);
+  }
+  if (_esPessoa) {
+    const lp = ms.filter(daPessoa);
+    const ent = lp.filter(m => sitEs(m) === 'entregue').length;
+    const agu = lp.filter(m => sitEs(m) === 'aguardando').length;
+    const neg = lp.filter(m => statusKey(m) === 'negada').length;
+    const falta = lp.filter(aberta);
+    const venc = falta.filter(vencida).length;
+    const ptsP = lp.reduce((t, m) => t + (Number(m.poker_pontos) || 0), 0);
+    const val = lp.length - neg;
+    resumoPessoa.className = 'es-pessoa-resumo';
+    resumoPessoa.innerHTML = `<span><i class="axi axi-user"></i> <b>${esc(_esPessoa)}</b></span>` +
+      `<span><b>${lp.length}</b> na sprint</span>` +
+      `<span style="color:var(--green)"><b style="color:inherit">${ent}</b> entregue(s)${val ? ' · ' + Math.round(ent / val * 100) + '%' : ''}</span>` +
+      (agu ? `<span><b>${agu}</b> aguardando aprovação</span>` : '') +
+      `<span style="color:var(--amber-tx)"><b style="color:inherit">${falta.length}</b> faltando</span>` +
+      (venc ? `<span style="color:var(--red-tx)"><b style="color:inherit">${venc}</b> com entrega vencida</span>` : '') +
+      (neg ? `<span>${neg} negada(s)</span>` : '') +
+      `<span>${ptsP} pts</span>` +
+      `<button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="esPessoa('')">Ver todos</button>`;
+  } else {
+    resumoPessoa.className = '';
+    resumoPessoa.innerHTML = '';
+  }
   document.getElementById('es-resumo').textContent = vencidas ? `${vencidas} com entrega vencida` : '';
   if (!ms.length) {
     box.innerHTML = '<div class="empty">Nenhuma demanda nesta sprint.</div>';
     return;
   }
-  const filtrada = _esFiltro === 'entregues' ? lEntregues : _esFiltro === 'falta_com' ? lFaltaCom
-                 : _esFiltro === 'falta_sem' ? lFaltaSem : ms;
+  const filtrada = (_esFiltro === 'entregues' ? lEntregues : _esFiltro === 'aguardando' ? lAguardando
+                 : _esFiltro === 'falta_com' ? lFaltaCom
+                 : _esFiltro === 'falta_sem' ? lFaltaSem : ms).filter(m => !_esPessoa || daPessoa(m));
   if (!filtrada.length) {
     box.innerHTML = '<div class="empty">Nada nesta situação.</div>';
     return;
@@ -9287,6 +9363,11 @@ async function apresGerar(opts) {
     if (soApuracao) {
       const apu = Object.assign({}, apuracao);
       delete apu.secoes; delete apu.imagens; delete apu.mensagem;
+      /* `pontos.itens` sao as demandas INTEIRAS do mes (`gerCortesDePontos`), e
+         o deck so le os cortes (total, porSemana, porDev, porAssunto, porSprint).
+         Em outubro/2026 eram 975 KB de 1076 KB, e o Worker recusa acima de 1 MB:
+         o mes nao congelava. */
+      if (apu.pontos) { apu.pontos = Object.assign({}, apu.pontos); delete apu.pontos.itens; }
       return apu;
     }
 
@@ -9714,8 +9795,9 @@ const LOTE_GRUPOS = [
   { k: 'atrasadas', rot: 'Atrasadas da sprint atual', ico: 'clock',
     casa: m => {
       const atual = SPRINTPO.rotuloDeData(PRAZO.hojeISO(), state.feriados || []);
-      // o atraso vem da etapa efetiva (`statusKey` → `ETAPA.efetiva`), a regra unica
-      return SPRINTPO.naSprint(m, atual) && statusKey(m) === 'atrasado';
+      // O atraso vem da etapa EFETIVA. `statusKey` virou `ETAPA.gravada`, que
+      // traduz o atrasado para em_andamento: perguntar a ela deixava o grupo vazio.
+      return SPRINTPO.naSprint(m, atual) && ETAPA.efetiva(m) === 'atrasado';
     } },
   { k: 'pausadas', rot: 'Pausadas', ico: 'pause', casa: m => estaPausado(m) },
 ];
@@ -10389,6 +10471,8 @@ function renderGerSprint() {
   const SIT = { validado: ['<i class="axi axi-check"></i>', 'Validado'],
                 aguardando: ['<i class="axi axi-hourglass"></i>', 'Esperando você'],
                 em_curso: ['<i class="axi axi-wrench"></i>', 'Em curso'], saiu: ['↪', 'Saiu da sprint'],
+                // Na Validacao da area: fora do placar (`SPRINTPO.naArea`, 05/11/2026).
+                na_area: ['<i class="axi axi-eye"></i>', 'Na área · fora do placar'],
                 negada: ['✕', 'Negada'] };
   const lst = document.getElementById('spr-lista');
   const mostrar = soRisco ? emRisco : acomp;
@@ -13963,6 +14047,7 @@ function openModalMelhoria(id) {
      nada — e as 279 que so herdam deixariam de ser distinguiveis das que
      foram organizadas de verdade. A heranca aparece no aviso ao lado. */
   document.getElementById('m-entrega-usuario').value = m?.entrega_usuario  || '';
+  mSprintDatas(false);
   entregaUsuRender(m);
   mesPreencheCampo(m);
   document.getElementById('m-motivo').value          = m?.motivo_negacao   || '';
@@ -14134,6 +14219,8 @@ function mSprintAviso() {
   if (obrig) obrig.textContent = exige ? '*' : '';
   const id = (document.getElementById('m-id') || {}).value;
   const m = id ? (state.melhorias || []).find(x => x.id === id) : null;
+  const _semana = document.getElementById('m-sprint-semana');
+  if (_semana && !sel.value) _semana.textContent = '';
   if (!sel.value) {
     hint.style.color = exige ? 'var(--red)' : 'var(--text3)';
     hint.textContent = exige
@@ -14148,6 +14235,47 @@ function mSprintAviso() {
       (m.sprint_po_em ? ' em ' + formatDate(m.sprint_po_em) : '') +
       (n ? ' · entrou atrasada (' + n + (n === 1 ? ' pulo' : ' pulos') + ')' : '')
     : 'Vai para ' + SPRINTPO.rotuloCurto(sel.value) + ' ao salvar.';
+}
+
+/* ═══ AS DATAS DO TAMANHO DA SPRINT (05/11/2026) ═══════════════════════════
+   "Ajuste as datas conforme tamanho da sprint. Por exemplo se eu estiver na
+    S1-11 abrir as datas possíveis da semana da sprint e entrega já preencher a
+    próxima segunda."
+   - Início e entrega do dev: o calendário abre só nos dias da semana da sprint
+     (`SPRINTPO.faixaDaSprint`, aberta desde a segunda — a S1-11 vai de 02/11 a 06/11).
+     É limite do seletor, não trava: data antiga de quem rolou de sprint
+     continua salvando, e o aviso diz que está fora da semana.
+   - Entrega ao usuário: ESCOLHER a sprint preenche a segunda seguinte
+     (`SPRINTPO.entregaDaSprint`), como o repasse já fazia ao salvar. Só no
+     gesto — abrir o card não grava nada que ninguém decidiu (ver a nota do
+     campo em `openModal`). */
+function mSprintDatas(escolheu) {
+  if (!window.SPRINTPO) return;
+  const sp = (document.getElementById('m-sprint') || {}).value || '';
+  const _fx = sp ? SPRINTPO.faixaDaSprint(sp, state.feriados || []) : null;
+  /* A SEMANA COMECA NA SEGUNDA, mesmo feriado (05/11/2026): "Se fizer parte da
+     S1-11, preencher 02/11 a 06/11 mantendo a entrega dia 09/11". */
+  const faixa = _fx ? { de: SPRINTPO.segundaDaSemana(_fx.de), ate: _fx.ate } : null;
+  const ini = document.getElementById('m-inicio');
+  const ent = document.getElementById('m-entrega');
+  [ini, ent].forEach(el => {
+    if (!el) return;
+    if (faixa) { el.min = faixa.de; el.max = faixa.ate; }
+    else { el.removeAttribute('min'); el.removeAttribute('max'); }
+  });
+  const usu = document.getElementById('m-entrega-usuario');
+  const segunda = sp ? SPRINTPO.entregaDaSprint(sp, state.feriados || []) : '';
+  if (escolheu && usu && segunda) { usu.value = segunda; entregaUsuRender(); }
+  const hint = document.getElementById('m-sprint-hint');
+  if (!hint || !faixa) return;
+  let el = document.getElementById('m-sprint-semana');
+  if (!el) { el = document.createElement('div'); el.id = 'm-sprint-semana'; hint.after(el); }
+  const fora = [['início', ini && ini.value], ['entrega', ent && ent.value]]
+    .filter(([, v]) => v && (v < faixa.de || v > faixa.ate)).map(([r]) => r);
+  el.style.cssText = 'font-size:11px;margin-top:2px;color:' + (fora.length ? 'var(--amber-tx)' : 'var(--text3)');
+  el.textContent = 'Semana da sprint: ' + formatDate(faixa.de) + ' a ' + formatDate(faixa.ate) +
+    (segunda ? ' · entrega ao usuário ' + formatDate(segunda) : '') +
+    (fora.length ? ' · ' + fora.join(' e ') + ' fora da semana' : '');
 }
 
 function calcHorasPlanejadas(inicio, entrega) {
@@ -17090,7 +17218,7 @@ function renderProjetos() {
   const andamento = ordenados.filter(pjEmAndamento);
   const seletor = '<div class="pj-visao">' +
     '<button type="button" class="' + (_pjVisao === 'andamento' ? 'on' : '') + '" onclick="pjVisao(\'andamento\')">' +
-      '<i class="axi axi-alert"></i> Em andamento (' + andamento.length + ')</button>' +
+      '<i class="axi axi-pulse"></i> Em andamento (' + andamento.length + ')</button>' +
     '<button type="button" class="' + (_pjVisao === 'todos' ? 'on' : '') + '" onclick="pjVisao(\'todos\')">' +
       'Todos (' + ps.length + ')</button></div>' +
     (andamento.length
@@ -17221,7 +17349,7 @@ function pjAndamentoHTML(p) {
     '</div>' +
     '<div class="pj-and-cols">' +
       coluna('<i class="axi axi-check"></i> Feitas', d.feitas, 'feita', 'Nenhuma concluída com data.') +
-      coluna('<i class="axi axi-alert"></i> Em andamento', d.andamento, 'em_andamento', 'Nada em andamento com data.') +
+      coluna('<i class="axi axi-pulse"></i> Em andamento', d.andamento, 'em_andamento', 'Nada em andamento com data.') +
       coluna('<i class="axi axi-calendar"></i> Planejado', d.planejado, 'planejado', 'Nada planejado com data.') +
     '</div>' +
   '</div>';

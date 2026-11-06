@@ -23,6 +23,9 @@
    card diz de quem e ("No seu nome", "Do time · com Fulano", "Fila do time ·
    sem dono"), o filtro "Mostrar" recorta como o painel dele, e o card da fila
    tem "Pegar" — o gesto de axis-acoes.js, que poe o nome de quem pegou.
+   Como o painel dele (368342d e 5c849fb), o dev abre o Quadro na sprint atual
+   (outra sprint pelo filtro; o Limpar volta para ela) e tem o filtro "Times",
+   que soma a fila de Dados/BI ou Sales Ops a do seu time.
    ───────────────────────────────────────────────────────────────────────── */
 (function () {
   'use strict';
@@ -43,8 +46,17 @@
      o primeiro desenho decidir pelo perfil (dev = ligado). */
   /* `sprint`: null (todas) ou lista de sprints e/ou '__fora__' — o filtro de
      varias escolhas do admin (4d7c38f), em AXIS_SPRINTS (axis-tela-sprints.js). */
-  var F = { frente: '', tipo: '', sistema: '', dev: '', meus: null, vencidas: false, sprint: null,
+  /* `sprintPadrao`: o dev abre na sprint atual so na PRIMEIRA montagem; depois
+     a escolha dele sobrevive ao redesenho (`_sprintPadraoAplicado`, dev.html). */
+  var F = { frente: '', tipo: '', sistema: '', dev: '', meus: null, vencidas: false, sprint: null, sprintPadrao: false,
             todasConcluidas: false, negadaAberta: false, mais: {} };
+
+  /* A sprint atual e o padrao do dev: so conta como filtro quando ele escolhe outra. */
+  function sprintPadraoDev(ctx) { var a = H.sprintAtual(); return ctx.papel === 'dev' && a ? [a] : null; }
+  function sprintEhPadrao(ctx) {
+    var p = sprintPadraoDev(ctx);
+    return !!p && !!F.sprint && F.sprint.length === 1 && F.sprint[0] === p[0];
+  }
 
   // ── CSS proprio, injetado uma vez ────────────────────────────────────
   function css() {
@@ -88,7 +100,7 @@
       '.axa .qd-card.meu{box-shadow:inset 3px 0 0 var(--ac)}',
       // Nao e do dev (fila ou do time): borda tracejada e fundo apagado (`kcard-fila`, dev.html).
       '.axa .qd-card.fila{border-style:dashed;border-color:rgba(var(--in-rgb),.45);background:rgba(var(--in-rgb),.05)}',
-      '.axa .qd-dono{display:flex}',
+      '.axa .qd-dono{display:flex;flex-wrap:wrap;gap:5px}',
       '.axa .qd-acao{display:flex;justify-content:flex-end}',
       '.axa .qd-card .qd-pega{height:28px;padding:0 10px;font-size:12px}',
       '.axa .qd-top{display:flex;justify-content:space-between;align-items:center;gap:6px}',
@@ -362,6 +374,9 @@
   function montar(ctx) {
     var D = ctx.D;
     if (F.meus === null) F.meus = ctx.papel === 'dev' ? 'meu_fila' : '';
+    if (!F.sprintPadrao && ctx.papel === 'dev') { F.sprintPadrao = true; if (sprintPadraoDev(ctx)) F.sprint = sprintPadraoDev(ctx); }
+    var AC = window.AXIS_ACOES;
+    var times = ctx.papel === 'dev' && AC && AC.times ? AC.times() : '';
     var todos = universo(ctx);
     // A contagem de cada frente sai do quadro ja filtrado, sem o filtro da frente.
     var filtradas = todos.filter(function (m) { return casaFiltros(m, D); });
@@ -420,7 +435,9 @@
       '</div></header>';
 
     // ── Alertas e filtros ──
-    var ativos = (F.sprint ? 1 : 0) + (F.tipo ? 1 : 0) + (F.sistema ? 1 : 0) + (!F.meus && F.dev ? 1 : 0) + (F.vencidas ? 1 : 0) + (F.frente ? 1 : 0);
+    // Para o dev o padrao e a sprint atual: "Todas" ou outra sprint contam como filtro.
+    var sprintAtivo = sprintPadraoDev(ctx) ? !sprintEhPadrao(ctx) : !!F.sprint;
+    var ativos = (sprintAtivo ? 1 : 0) + (F.meus && times ? 1 : 0) + (F.tipo ? 1 : 0) + (F.sistema ? 1 : 0) + (!F.meus && F.dev ? 1 : 0) + (F.vencidas ? 1 : 0) + (F.frente ? 1 : 0);
     h += '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">';
     if (vencidas.length) {
       h += '<button type="button" class="qd-alerta dg' + (F.vencidas ? ' on' : '') + '" data-acao-qd="vencidas" aria-pressed="' + F.vencidas + '"' +
@@ -444,6 +461,13 @@
         ' title="Separa as demandas no seu nome das que estão na fila do time.">' +
         opcao('meu_fila', 'No meu nome + fila do time', F.meus) + opcao('meu', 'Só no meu nome', F.meus) +
         opcao('fila', 'Só a fila do time', F.meus) + opcao('', 'Todo o quadro', F.meus) + '</select></span>';
+      // "Times" (5c849fb): por padrao so o seu time; a escolha soma a fila e a vitrine do outro.
+      if (F.meus && AC && AC.times) {
+        h += '<span class="qd-par"><label class="qd-fl" for="qd-times">Times</label><select id="qd-times" class="in qd-sel" data-filtro="times"' +
+          ' title="Por padrão aparece só o seu time. Escolha outro para ver a fila dele e poder ajudar.">' +
+          opcao('', 'Só o meu time', times) + opcao('dados', '+ Dados/BI', times) + opcao('sales', '+ Sales Ops', times) +
+          opcao('todos', 'Todos os times', times) + '</select></span>';
+      }
     }
     // Rotulo e seletor andam juntos: no celular a linha quebra entre pares, nunca no meio.
     if (window.AXIS_SPRINTS) {
@@ -519,14 +543,19 @@
         else if (a === 'meus') { F.meus = F.meus ? '' : 'meu_fila'; F.mais = {}; }
         else if (a === 'periodo') F.todasConcluidas = !F.todasConcluidas;
         else if (a === 'negada') F.negadaAberta = !F.negadaAberta;
-        else if (a === 'limpar') { F.tipo = F.sistema = F.dev = F.frente = ''; F.sprint = null; F.vencidas = false; F.mais = {}; }
+        else if (a === 'limpar') {
+          // O Limpar do dev volta a sprint atual e ao seu time, que sao o padrao.
+          F.tipo = F.sistema = F.dev = F.frente = ''; F.sprint = sprintPadraoDev(ctx); F.vencidas = false; F.mais = {};
+          if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times('');
+        }
       }
       redesenhar(el, ctx);
     });
     el.addEventListener('change', function (e) {
       var s = e.target.closest('[data-filtro]');
       if (!s) return;
-      F[s.getAttribute('data-filtro')] = s.value;
+      if (s.getAttribute('data-filtro') === 'times') { if (window.AXIS_ACOES) AXIS_ACOES.times(s.value); }
+      else F[s.getAttribute('data-filtro')] = s.value;
       F.mais = {};
       redesenhar(el, ctx);
       var de = el.querySelector('[data-filtro="' + s.getAttribute('data-filtro') + '"]');

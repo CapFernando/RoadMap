@@ -3303,8 +3303,9 @@ sec('Ranking do mes: conta o que foi ENTREGUE no mes');
 // entregou 12 em agosto e o ranking via 4 — 3 com prazo de julho e 5 sem data.
 ok(/const entregues = \(state\.melhorias \|\| \[\]\)/.test(GANTT),
    'existe o recorte por data de conclusao');
-ok(/entregues[\s\S]{0,400}?String\(m\.concluido_em \|\| ''\)\.slice\(0, 10\) >= A/.test(GANTT),
-   'o recorte usa concluido_em, e nao entrega');
+ok(/const diaEntregaMes = m => \{[\s\S]{0,300}?REGRA_ENTREGA_DESDE \? ida : String\(m\.concluido_em \|\| ''\)\.slice\(0, 10\)/.test(GANTT) &&
+   /m\.status_planejamento === 'concluido' &&\s*diaEntregaMes\(m\) >= A/.test(GANTT),
+   'o recorte e da concluida, no dia da primeira ida para validacao (regra de 05/11) ou da conclusao antes dela — e nao pela entrega prevista');
 ok(/renderRankingMes\(entregues\)/.test(GANTT), 'o ranking recebe as entregues');
 ok(!/renderRankingMes\(concluidas\)/.test(GANTT),
    'o ranking NAO usa mais o recorte por data de entrega');
@@ -24970,14 +24971,107 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     {
       const PIPE_ = (() => { const g = {}; new Function('globalThis', lerTela('pipelines.js'))(g); return g.PIPELINES; })();
       const fnTime = new Function('PIPELINES', 'currentDev', 'state', 'window',
-        corpo(DEV, 'function doMeuTime(m) {') + '; return doMeuTime;');
-      const ver = (quem, m) => fnTime(PIPE_, quem, {}, { PIPELINES: PIPE_ })(m);
+        corpo(DEV, "function doMeuTime(m, extra = document.getElementById('f-times')?.value || '') {") + '; return doMeuTime;');
+      const ver = (quem, m, extra = '') => fnTime(PIPE_, quem, {}, { PIPELINES: PIPE_ })(m, extra);
       ok(!ver('Marina', { dev: 'Lucas Santos' }) && ver('Gabriel Fernandes', { dev: 'Lucas Santos' }),
          'a task do Lucas (Desenvolvimento) aparece para o time de Desenvolvimento e nao para Dados');
       ok(ver('Marina', { dados_bi: true }) && !ver('Gabriel Fernandes', { dados_bi: true }),
          'a marcada Dados/BI so para Dados');
       ok(!ver('Marina', { dev: '' }) && ver('Gabriel Fernandes', { dev: '' }),
          'e a sem frente, para quem nao e de Dados');
+      // AS DATAS DO TAMANHO DA SPRINT (05/11/2026): o seletor abre na semana e escolher a sprint preenche a segunda.
+      ok(/<select id="m-sprint" onchange="mSprintAviso\(\);mSprintDatas\(true\)">/.test(ADMIN) &&
+         /function mSprintDatas\(escolheu\) \{[\s\S]{0,600}SPRINTPO\.faixaDaSprint\(sp, state\.feriados[\s\S]{0,400}SPRINTPO\.segundaDaSemana\(_fx\.de\)[\s\S]{0,300}el\.min = faixa\.de; el\.max = faixa\.ate;/.test(ADMIN) &&
+         /if \(escolheu && usu && segunda\) \{ usu\.value = segunda;/.test(ADMIN) &&
+         /m\?\.entrega_usuario  \|\| '';\n  mSprintDatas\(false\);/.test(ADMIN),
+         'no card do Admin as datas do dev abrem na semana da sprint e escolher a sprint preenche a entrega ao usuario (abrir nao preenche)');
+      ok(SP.faixaDaSprint('S1-11-2026', ['2026-11-02']).de === '2026-11-03' && SP.entregaDaSprint('S1-11-2026', ['2026-11-02']) === '2026-11-09',
+         'a S1-11 vai de 03/11 (02/11 e feriado) e entrega ao usuario na segunda 09/11');
+      // ENTREGAS POR SPRINT: o nome da pessoa filtra a lista e mostra os numeros dela (05/11/2026).
+      ok(/function esPessoa\(nome\) \{ _esPessoa = \(_esPessoa === nome \? '' : nome\); renderEntregasSprint\(\); \}/.test(ADMIN) &&
+         /onclick="esPessoa\(\$\{esc\(JSON\.stringify\(p\)\)\}\)"/.test(ADMIN) &&
+         /\.filter\(m => !_esPessoa \|\| daPessoa\(m\)\);/.test(ADMIN),
+         'em Entregas por sprint, clicar no nome mostra as tasks e os numeros da pessoa, e clicar de novo volta a todos');
+      // ── NA VALIDACAO DA AREA, FORA DO PLACAR (05/11/2026) ──────────────────
+      {
+        const SPA = require('./sprint.js'); const rA = 'S1-11-2026';
+        const mkA = (id, et, extra) => Object.assign({ id, codigo: id, status_planejamento: et, sprint_po: rA, poker_pontos: 3, dev: 'Ana' }, extra || {});
+        const dA = { melhorias: [mkA('A', 'concluido'), mkA('B', 'validacao_area'), mkA('C', 'em_andamento'), mkA('D', 'validacao'),
+          mkA('E', 'em_andamento', { sprint_po: 'S2-11-2026', sprint_po_historico: [{ sprint: rA }, { sprint: 'S2-11-2026', de: rA, devolvida_area: true }] }),
+          mkA('F', 'em_andamento', { sprint_po: 'S2-11-2026', sprint_po_historico: [{ sprint: rA }, { sprint: 'S2-11-2026' }] })] };
+        const pA = SPA.placarDaSprint(dA, rA);
+        /* REGRA DE 05/11/2026 (substitui "a area sai do placar"): "para sprint deve
+           considerar a partir do momento que o dev coloca em validacao da area ou
+           validacao PM/PO". Na area e AGUARDANDO aprovacao, dentro do placar. */
+        ok(pA.total === 6 && pA.validados === 1 && pA.aguardando === 2 && pA.emCurso === 1 && pA.saiu === 2 && pA.naArea === 0,
+           'na Validacao da area a task conta no placar como aguardando aprovacao (regra de 05/11)', JSON.stringify(pA));
+        ok(SPA.balancoDaSprint(dA, rA).pendentes.map(m => m.id).join() === 'C' && SPA.rankingDaSprint(dA, rA)[0].total === 6,
+           'o balanco do fechamento segue cobrando so quem nao entregou, e o ranking conta as mesmas do placar');
+        /* ENTREGUE SO APOS O PM/PO, NA SPRINT DA PRIMEIRA IDA PARA VALIDACAO. */
+        {
+          const r1 = 'S1-11-2026', r2 = 'S2-11-2026';
+          const hsE = (...ss) => ss.map(x => ({ sprint: x }));
+          const dE = { feriados: ['2026-11-02'], melhorias: [
+            // foi para a area na S1-11, PM/PO aprovou na S2-11: entrega da S1-11
+            { id: 'P', status_planejamento: 'concluido', sprint_po: r2, sprint_po_historico: hsE(r1, r2),
+              primeira_validacao_em: '2026-11-05', entregue_em: '2026-11-11', concluido_em: '2026-11-12', poker_pontos: 5, dev: 'Ana' },
+            // foi para validacao na S1-11 e ainda esta la: aguardando na S1-11, nada na S2-11
+            { id: 'Q', status_planejamento: 'validacao', sprint_po: r1, sprint_po_historico: hsE(r1),
+              primeira_validacao_em: '2026-11-04', poker_pontos: 3, dev: 'Ana' },
+            // devolvida e reentregue: conta uma vez, na primeira ida (S1-11)
+            { id: 'R', status_planejamento: 'concluido', sprint_po: r2, sprint_po_historico: hsE(r1, r2),
+              primeira_validacao_em: '2026-11-04', entregue_em: '2026-11-10', concluido_em: '2026-11-11', poker_pontos: 2, dev: 'Bia' },
+          ] };
+          const e1 = SPA.placarDaSprint(dE, r1), e2 = SPA.placarDaSprint(dE, r2);
+          ok(e1.validados === 2 && e1.aguardando === 1 && e2.total === 0,
+             'entregue so depois do PM/PO, na sprint da primeira ida para validacao (area ou PM/PO); reentrega conta uma vez',
+             JSON.stringify({ s1: [e1.validados, e1.aguardando], s2: e2.total }));
+          ok(SPA.placarDaSprint(dE, 'S5-10-2026').regraEntrega === undefined,
+             'sprint anterior a regra segue a conta antiga, pela sprint marcada');
+        }
+        ok(SPA.acompanhamentoDaSprint(dA, rA, null, '2026-11-05').filter(x => x.situacao === 'na_area').length === 2,
+           'o acompanhamento ainda mostra a task, marcada como na area');
+        ok(SPA.entrouAtrasada(dA.melhorias[4]) && SPA.balancoDaSprint(dA, 'S2-11-2026').pendentes.some(m => m.id === 'E'),
+           'devolvida pela area depois da sprint: conta na sprint nova como atraso, e fora do placar da antiga');
+        const fnW = new Function(['hojeBR', 'segundaDaSemana', 'feriadosSetW', 'sprintsDoMesW', 'sprintDaDataW', 'fimDaSprintW', 'rolaDevolvidaDaArea']
+          .map(n => n === 'hojeBR' ? "function hojeBR(){return '2026-11-05';}" : corpo(WKS, 'function ' + n + '(')).join('\n') +
+          '; return { sprintDaDataW, feriadosSetW, rolaDevolvidaDaArea };')();
+        const ferA = ['2026-11-02', '2026-11-20', '2026-12-25', '2027-01-01'];
+        let difA = '';
+        for (let t = Date.UTC(2026, 0, 1); t <= Date.UTC(2027, 11, 31) && !difA; t += 86400000) {
+          const dia = new Date(t).toISOString().slice(0, 10);
+          const w = fnW.sprintDaDataW(dia, fnW.feriadosSetW({ feriados: ferA })), sj = SPA.rotuloDeData(dia, ferA);
+          if (w !== sj) difA = dia + ': worker ' + w + ' x sprint.js ' + sj;
+        }
+        ok(!difA, 'o calendario de sprint do Worker e o mesmo do sprint.js, dia a dia (2026-2027)', difA);
+        const rec = (sp, et) => ({ feriados: ['2026-11-02'], sprints: [], melhorias: [{ id: 'x', codigo: 'AX-X', status_planejamento: et, sprint_po: sp }] });
+        const srvA = { melhorias: [{ id: 'x', status_planejamento: 'validacao_area' }] };
+        const r1 = rec('S5-10-2026', 'em_andamento'); fnW.rolaDevolvidaDaArea(r1, srvA, '2026-11-05');
+        const r2 = rec('S1-11-2026', 'em_andamento'); fnW.rolaDevolvidaDaArea(r2, srvA, '2026-11-05');
+        const r3 = rec('S5-10-2026', 'validacao'); fnW.rolaDevolvidaDaArea(r3, srvA, '2026-11-05');
+        ok(r1.melhorias[0].sprint_po === 'S1-11-2026' && r1.melhorias[0].sprint_po_historico[0].devolvida_area === true &&
+           r1.melhorias[0].sprint_po_historico[0].de === 'S5-10-2026',
+           'o servidor leva para a sprint atual a task que a area devolve depois do fim da sprint dela');
+        ok(r2.melhorias[0].sprint_po === 'S1-11-2026' && !r2.melhorias[0].sprint_po_historico &&
+           r3.melhorias[0].sprint_po === 'S5-10-2026',
+           'e nao mexe quando a sprint ainda corre, nem quando a area manda para o PM/PO');
+        ok((WKS.match(/rolaDevolvidaDaArea\(data, antes(Pub|Dev)\);/g) || []).length === 2 &&
+           /m\.status_planejamento = e; mudou\.push\('etapa'\);\s*\/\/[^\n]*\n\s*if \(rolaDevolvidaDaArea\(/.test(WKS),
+           'a regra roda nas tres portas: publish, dev-publish e a API');
+      }
+      // O PAINEL DO DEV ABRE NA SPRINT ATUAL (05/11/2026); Limpar volta para ela e ela nao conta como filtro.
+      ok(/if \(!_sprintPadraoAplicado && agora\) \{ _sprintPadraoAplicado = true; sel\.value = agora; return; \}/.test(DEV) &&
+         /if \(_fs && sprintAtualDev\(\)\) _fs\.value = sprintAtualDev\(\);/.test(DEV) &&
+         /i === 'f-sprint' \? v !== sprintAtualDev\(\) : !!v/.test(DEV),
+         'o painel do dev abre na sprint atual, outra sprint pelo filtro, e o Limpar volta para a atual');
+      // O filtro opcional "Times" (05/11/2026) soma outro time sem mudar o padrao.
+      ok(ver('Gabriel Fernandes', { dados_bi: true }, 'dados') && !ver('Gabriel Fernandes', { dados_bi: true }, 'sales'),
+         'com o filtro Times em Dados/BI, o dev de Desenvolvimento ve a fila de Dados');
+      ok(!ver('Marina', { sales_ops: true }) && ver('Marina', { sales_ops: true }, 'sales') && ver('Marina', { dev: 'Lucas Santos' }, 'todos'),
+         'e quem e de Dados ve Sales Ops ou todos os times so quando escolhe');
+      ok(/<select id="f-times"[\s\S]{0,400}<option value="">Só o meu time<\/option>/.test(DEV) &&
+         /\['f-ano','f-mes','f-tipo','f-tema','f-sprint','f-times'\]\.forEach/.test(DEV),
+         'o padrao do filtro Times e so o meu time, e Limpar volta a ele');
     }
     // ── HORAS AO MANDAR PARA A VALIDACAO DA AREA (e ao PM/PO) ──────────────
     const fnEnt = new Function(corpo(WKS, 'function entrandoEmValidacaoSemEntrega(') + '; return entrandoEmValidacaoSemEntrega;')();
@@ -25795,60 +25889,173 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     });
     ok(divF.length === 0, 'casa sprint do app = matchSprintKb do admin, e a lista vazia volta a ser "todas" (' + filtros.length * ms.length + ' casos)', divF.slice(0, 6).join(', '));
 
-    // ── Entregas por sprint (953e68c a 43706a7) ─────────────────────────
-    const esAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'document', BASE_ADM + '\nlet _esSprint = \'\';\nlet _esFiltro = \'todas\';\n' +
+    // ── Entregas por sprint (953e68c a 43706a7, 8f236cf, 3ca7514) ───────
+    /* A amostra das Entregas soma a de cima com a regra de 05/11 (3ca7514): ida
+       para validacao numa sprint e aprovacao em outra, reentrega, concluida
+       sem passar por validacao e a sprint com feriado na segunda. */
+    const hsE = (...ss) => ss.map(x => ({ sprint: x }));
+    const extrasE = [
+      { id: 'e1', codigo: 'AX-901', titulo: 'ida na S1, aprovada na S2', status_planejamento: 'concluido', sprint_po: 'S2-11-2026', sprint_po_historico: hsE('S1-11-2026', 'S2-11-2026'),
+        primeira_validacao_em: '2026-11-05', entregue_em: '2026-11-11', concluido_em: '2026-11-12T10:00:00.000Z', dev: 'Ana', poker_pontos: 5, tema_id: 't1', entrega_usuario: '2026-11-09' },
+      { id: 'e2', codigo: 'AX-902', titulo: 'na validacao do PM/PO', status_planejamento: 'validacao', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        primeira_validacao_em: '2026-11-04', dev: 'Ana', poker_pontos: 3, tema_id: 't2', entrega_usuario: '2026-11-03' },
+      { id: 'e3', codigo: 'AX-903', titulo: 'na area, ida na S2', status_planejamento: 'validacao_area', sprint_po: 'S2-11-2026', sprint_po_historico: hsE('S1-11-2026', 'S2-11-2026'),
+        validacao_area_em: '2026-11-10', dev: 'Davi', poker_pontos: 2, tema_id: 't3', entrega_usuario: '2026-11-04' },
+      { id: 'e4', codigo: 'AX-904', titulo: 'concluida com ida na S2', status_planejamento: 'concluido', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        entregue_em: '2026-11-12', concluido_em: '2026-11-13', dev: 'Davi', poker_pontos: 8, tema_id: 't1', entrega_usuario: '2026-11-02' },
+      { id: 'e5', codigo: 'AX-905', titulo: 'reentrega', status_planejamento: 'concluido', sprint_po: 'S2-11-2026', sprint_po_historico: hsE('S1-11-2026', 'S2-11-2026'),
+        validacao_area_em: '2026-11-04', entregue_em: '2026-11-10', concluido_em: '2026-11-11', dev: 'Bia / Caio', poker_pontos: 2, tema_id: 't4' },
+      { id: 'e6', codigo: 'AX-906', titulo: 'devolvida para ajuste', status_planejamento: 'em_andamento', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        primeira_validacao_em: '2026-11-03', dev: 'Ana', poker_pontos: 1, tema_id: 't2', entrega_usuario: '2026-11-04' },
+      { id: 'e7', codigo: 'AX-907', titulo: 'ida antes da regra', status_planejamento: 'concluido', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S5-10-2026', 'S1-11-2026'),
+        primeira_validacao_em: '2026-10-29', concluido_em: '2026-11-03', dev: 'Ana', poker_pontos: 3, tema_id: '' },
+      // Nomes que contem outro ('Ana' em 'Ana Paula', 'Bia' em 'Bia / Caio'): a pessoa e o `dev` inteiro.
+      { id: 'e8', codigo: 'AX-908', titulo: 'outra Ana', status_planejamento: 'em_andamento', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        dev: 'Ana Paula', poker_pontos: 2, tema_id: 't1', entrega_usuario: '2026-11-06' },
+      { id: 'e9', codigo: 'AX-909', titulo: 'so a Bia', status_planejamento: 'planejado', sprint_po: 'S1-11-2026', sprint_po_historico: hsE('S1-11-2026'),
+        dev: 'Bia', poker_pontos: 1, tema_id: 't2' }
+    ];
+    const msE = ms.concat(extrasE);
+    const stateE = { melhorias: msE, temas, projetos, feriados: ['2026-11-02'] };
+    const vivasE = msE.filter(m => !m.mesclado_em);
+    const esAdm = new Function('state', 'SPRINTPO', 'PRAZO', 'ETAPA', 'document', BASE_ADM + '\nlet _esSprint = \'\';\nlet _esFiltro = \'todas\';\nlet _esPessoa = \'\';\n' +
       corpo(ADMIN, 'function opcoesSprintKb() {') + '\n' + corpo(ADMIN, 'function renderEntregasSprint() {') +
-      '\nreturn function (s, f) { _esSprint = s; _esFiltro = f; renderEntregasSprint(); return _esSprint; };');
-    const esApp = new Function([corpo(SPT, 'function esResumo(SPm, etapa, vivas, r, hoje, projetos) {'), corpo(SPT, 'function esGrupos(lista, temas) {'),
-      corpo(SPT, 'function esEntregaUsuario(m, hoje, aberta) {')].join('\n') + '\nreturn { esResumo, esGrupos, esEntregaUsuario };')();
+      '\nreturn function (s, f, p) { _esSprint = s; _esFiltro = f; _esPessoa = p || \'\'; renderEntregasSprint(); return _esPessoa; };');
+    const esApp = new Function([corpo(SPT, 'function esSituacao(SPm, etapa, r, feriados) {'), corpo(SPT, 'function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados) {'),
+      corpo(SPT, 'function esDaPessoa(x, nome) {'), corpo(SPT, 'function esGrupos(lista, temas) {'),
+      corpo(SPT, 'function esEntregaUsuario(m, hoje, aberta) {')].join('\n') + '\nreturn { esResumo, esDaPessoa, esGrupos, esEntregaUsuario };')();
     const br = (d) => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4);
     const semTag = (t) => String(t).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
     const divE = [];
-    let casosE = 0;
-    ['S5-10-2026', 'S1-11-2026', 'S2-11-2026', 'S4-11-2026', 'S1-12-2026'].forEach(r => ['todas', 'entregues', 'falta_com', 'falta_sem'].forEach(f => {
-      casosE++;
-      const doc = docFalso();
-      esAdm(state, SP, PRAZO_, ET, doc)(r, f);
-      const E = doc.els;
-      const x = esApp.esResumo(SP, statusKey, vivas, r, HOJE, projetos);
-      const tag = r + '/' + f;
-      if (String(E['es-conta'].textContent) !== String(x.ms.length)) divE.push(tag + ' conta ' + E['es-conta'].textContent + '/' + x.ms.length);
-      const kv = [...E['es-kpis'].innerHTML.matchAll(/class="ger-kpi-value"[^>]*>([^<]*)</g)].map(a => a[1]).join(',');
-      const kp = x.ms.length ? [x.ms.length, x.entregues.length, x.faltaCom.length, x.faltaSem.length].join(',') : '';
-      if (kv !== kp) divE.push(tag + ' cartoes ' + kv + '/' + kp);
-      const subs = [...E['es-kpis'].innerHTML.matchAll(/class="es-kpi-sub">([\s\S]*?)<\/div>/g)].map(a => semTag(a[1]));
-      if (x.ms.length) {
-        const espera = [x.ms.length + ' task(s)' + (x.negadas ? ' · ' + x.negadas + ' negada(s)' : '') + ' · ' + x.comProj + ' em projeto',
-          x.entregues.length + ' de ' + x.validas + ' task(s) · ' + x.pctEntregues + '%',
-          x.pctFaltaCom + '% das tasks' + (x.vencCom ? ' · ' + x.vencCom + ' com entrega vencida' : ''),
-          x.faltaSem.length ? x.pctFaltaSem + '% das tasks · precisam de dono' : 'todas têm dono'];
-        if (JSON.stringify(subs) !== JSON.stringify(espera)) divE.push(tag + ' notas ' + JSON.stringify(subs) + ' / ' + JSON.stringify(espera));
-      }
-      const pes = [...E['es-pessoas'].innerHTML.matchAll(/class="es-pessoa[^"]*"[^>]*>([\s\S]*?)<\/span>/g)].map(a => semTag(a[1]));
-      const pesP = x.pessoas.map(p => p.nome + ' ' + p.n + (p.vencidas ? ' · ' + p.vencidas + ' vencida(s)' : ''));
-      if (JSON.stringify(pes) !== JSON.stringify(pesP)) divE.push(tag + ' por pessoa ' + JSON.stringify(pes) + ' / ' + JSON.stringify(pesP));
-      const venc = (E['es-resumo'].textContent.match(/^(\d+)/) || [0, 0])[1];
-      if (+venc !== x.vencidas) divE.push(tag + ' vencidas ' + venc + '/' + x.vencidas);
-      // A lista: grupos, ordem e a entrega ao usuario de cada linha.
-      const lista = f === 'entregues' ? x.entregues : f === 'falta_com' ? x.faltaCom : f === 'falta_sem' ? x.faltaSem : x.ms;
-      const gs = esApp.esGrupos(lista, temas);
-      const gA = [...E['es-lista'].innerHTML.matchAll(/margin-bottom:8px;">([^<]*) <span[^>]*>\((\d+)\)/g)].map(a => a[1] + ':' + a[2]);
-      const gP = gs.map(g => g.nome + ':' + g.itens.length);
-      if (JSON.stringify(gA) !== JSON.stringify(gP)) divE.push(tag + ' grupos ' + gA.join('|') + ' / ' + gP.join('|'));
-      const cards = E['es-lista'].innerHTML.split('<div class="card"').slice(1);
-      const lA = cards.map(c => (c.match(/monospace;font-size:12px;color:var\(--text3\)">([^<]*)</) || [])[1] + ' ' + semTag((c.match(/(Entrega usuário: [^<]*)<\/span>/) || [])[1] || ''));
-      const lP = [];
-      gs.forEach(g => g.itens.forEach(m => {
-        const k = statusKey(m), u = esApp.esEntregaUsuario(m, HOJE, k !== 'concluido' && k !== 'negada');
-        lP.push(m.codigo + ' Entrega usuário: ' + (u.data ? br(u.data) + u.tag : 'a definir'));
-      }));
-      if (JSON.stringify(lA) !== JSON.stringify(lP)) divE.push(tag + ' linhas ' + lA.slice(0, 4).join('|') + ' / ' + lP.slice(0, 4).join('|'));
+    let casosE = 0, casosP = 0, comRegra = 0, comAgu = 0;
+    ['S5-10-2026', 'S1-11-2026', 'S2-11-2026', 'S4-11-2026', 'S1-12-2026'].forEach(r => ['todas', 'entregues', 'aguardando', 'falta_com', 'falta_sem'].forEach(f => {
+      const x = esApp.esResumo(SP, statusKey, vivasE, r, HOJE, projetos, stateE.feriados);
+      if (f === 'aguardando' && !x.regra) return;   // sem a regra o cartao nao existe
+      // Cada pessoa da sprint (com ou sem nada faltando), ninguem e um nome de fora.
+      const nomes = [''].concat([...new Set(x.ms.map(m => String(m.dev || '').trim()).filter(Boolean))], ['Ninguem']);
+      nomes.forEach(pessoa => {
+        casosE++;
+        if (pessoa) casosP++;
+        const doc = docFalso();
+        const pAdm = esAdm(stateE, SP, PRAZO_, ET, doc)(r, f, pessoa);
+        const E = doc.els;
+        const pes = esApp.esDaPessoa(x, pessoa);
+        const tag = r + '/' + f + '/' + (pessoa || '-');
+        if (x.regra) comRegra++;
+        if (x.aguardando.length) comAgu++;
+        if (pAdm !== (pes ? pes.nome : '')) divE.push(tag + ' pessoa valendo ' + pAdm + '/' + (pes ? pes.nome : ''));
+        if (String(E['es-conta'].textContent) !== String(x.ms.length)) divE.push(tag + ' conta ' + E['es-conta'].textContent + '/' + x.ms.length);
+        const kv = [...E['es-kpis'].innerHTML.matchAll(/class="ger-kpi-value"[^>]*>([^<]*)</g)].map(a => a[1]).join(',');
+        const kp = x.ms.length ? [x.ms.length, x.entregues.length].concat(x.regra ? [x.aguardando.length] : [], [x.faltaCom.length, x.faltaSem.length]).join(',') : '';
+        if (kv !== kp) divE.push(tag + ' cartoes ' + kv + '/' + kp);
+        const subs = [...E['es-kpis'].innerHTML.matchAll(/class="es-kpi-sub">([\s\S]*?)<\/div>/g)].map(a => semTag(a[1]));
+        if (x.ms.length) {
+          const espera = [x.ms.length + ' task(s)' + (x.negadas ? ' · ' + x.negadas + ' negada(s)' : '') + ' · ' + x.comProj + ' em projeto',
+            x.entregues.length + ' de ' + x.validas + ' task(s) · ' + x.pctEntregues + '%']
+            .concat(x.regra ? [x.aguardando.length ? x.pctAguardando + '% · foram para validação nesta sprint' : 'nada parado na validação'] : [],
+              [x.pctFaltaCom + '% das tasks' + (x.vencCom ? ' · ' + x.vencCom + ' com entrega vencida' : ''),
+               x.faltaSem.length ? x.pctFaltaSem + '% das tasks · precisam de dono' : 'todas têm dono']);
+          if (JSON.stringify(subs) !== JSON.stringify(espera)) divE.push(tag + ' notas ' + JSON.stringify(subs) + ' / ' + JSON.stringify(espera));
+        }
+        const pes1 = [...E['es-pessoas'].innerHTML.matchAll(/class="es-pessoa[^"]*"[^>]*>([\s\S]*?)<\/span>/g)].map(a => semTag(a[1]));
+        const pesP = x.pessoas.map(p => p.nome + ' ' + p.n + (p.vencidas ? ' · ' + p.vencidas + ' vencida(s)' : ''));
+        if (JSON.stringify(pes1) !== JSON.stringify(pesP)) divE.push(tag + ' por pessoa ' + JSON.stringify(pes1) + ' / ' + JSON.stringify(pesP));
+        // O nome marcado e o resumo da pessoa (8f236cf).
+        const ativo = (E['es-pessoas'].innerHTML.match(/class="es-pessoa[^"]* ativo"[^>]*>([^<]*) </) || [])[1] || '';
+        const ativoP = pes && x.pessoas.some(p => p.nome === pes.nome) ? pes.nome : '';
+        if (ativo !== ativoP) divE.push(tag + ' nome marcado ' + ativo + '/' + ativoP);
+        const resA = semTag(E['es-pessoa-resumo'].innerHTML.replace(/<\/span>/g, ' </span>'));
+        const resP = pes ? [pes.nome, pes.total + ' na sprint', pes.entregues + ' entregue(s)' + (pes.pct != null ? ' · ' + pes.pct + '%' : '')]
+          .concat(pes.aguardando ? [pes.aguardando + ' aguardando aprovação'] : [], [pes.faltando + ' faltando'],
+            pes.vencidas ? [pes.vencidas + ' com entrega vencida'] : [], pes.negadas ? [pes.negadas + ' negada(s)'] : [], [pes.pontos + ' pts', 'Ver todos']).join(' ') : '';
+        if (resA !== resP) divE.push(tag + ' resumo da pessoa "' + resA + '" / "' + resP + '"');
+        const venc = (E['es-resumo'].textContent.match(/^(\d+)/) || [0, 0])[1];
+        if (+venc !== x.vencidas) divE.push(tag + ' vencidas ' + venc + '/' + x.vencidas);
+        // A lista: grupos, ordem e a entrega ao usuario de cada linha.
+        const lista = (f === 'entregues' ? x.entregues : f === 'aguardando' ? x.aguardando : f === 'falta_com' ? x.faltaCom : f === 'falta_sem' ? x.faltaSem : x.ms)
+          .filter(m => !pes || pes.casa(m));
+        const gs = esApp.esGrupos(lista, temas);
+        const gA = [...E['es-lista'].innerHTML.matchAll(/margin-bottom:8px;">([^<]*) <span[^>]*>\((\d+)\)/g)].map(a => a[1] + ':' + a[2]);
+        const gP = gs.map(g => g.nome + ':' + g.itens.length);
+        if (JSON.stringify(gA) !== JSON.stringify(gP)) divE.push(tag + ' grupos ' + gA.join('|') + ' / ' + gP.join('|'));
+        const cards = E['es-lista'].innerHTML.split('<div class="card"').slice(1);
+        const lA = cards.map(c => (c.match(/monospace;font-size:12px;color:var\(--text3\)">([^<]*)</) || [])[1] + ' ' + semTag((c.match(/(Entrega usuário: [^<]*)<\/span>/) || [])[1] || ''));
+        const lP = [];
+        gs.forEach(g => g.itens.forEach(m => {
+          const u = esApp.esEntregaUsuario(m, HOJE, x.aberta(m));
+          lP.push(m.codigo + ' Entrega usuário: ' + (u.data ? br(u.data) + u.tag : 'a definir'));
+        }));
+        if (JSON.stringify(lA) !== JSON.stringify(lP)) divE.push(tag + ' linhas ' + lA.slice(0, 4).join('|') + ' / ' + lP.slice(0, 4).join('|'));
+      });
     }));
-    ok(divE.length === 0, 'Entregas por sprint do app = renderEntregasSprint do admin: cartoes, notas, por pessoa, grupos, ordem e entrega ao usuario (' + casosE + ' sprint x filtro)',
-       divE.slice(0, 4).join(' ;; '));
+    ok(divE.length === 0 && comRegra > 20 && comAgu > 10 && casosP > 30,
+       'Entregas por sprint do app = renderEntregasSprint do admin: cartoes (com Aguardando aprovacao na regra de 05/11), notas, por pessoa, a pessoa clicada, grupos, ordem e entrega ao usuario (' +
+       casosE + ' sprint x filtro x pessoa)', divE.slice(0, 4).join(' ;; ') + ` [regra ${comRegra}, aguardando ${comAgu}, pessoa ${casosP}]`);
+    {
+      // A regra de 05/11 na amostra: o que a S1-11 e a S2-11 contam, pelo codigo.
+      const cod = (l) => l.map(m => m.codigo).filter(c => /^AX-9/.test(c)).sort().join();
+      const s1 = esApp.esResumo(SP, statusKey, vivasE, 'S1-11-2026', HOJE, projetos, stateE.feriados);
+      const s2 = esApp.esResumo(SP, statusKey, vivasE, 'S2-11-2026', HOJE, projetos, stateE.feriados);
+      const s5 = esApp.esResumo(SP, statusKey, vivasE, 'S5-10-2026', HOJE, projetos, stateE.feriados);
+      ok(cod(s1.entregues) === 'AX-901,AX-905,AX-907' && cod(s1.aguardando) === 'AX-902,AX-906' && cod(s1.faltaCom) === 'AX-904,AX-908,AX-909' &&
+         cod(s2.entregues) === 'AX-904' && cod(s2.aguardando) === 'AX-903' && !cod(s2.ms).includes('AX-901') && !cod(s2.ms).includes('AX-905') &&
+         !s5.regra && s1.regra && !cod(s5.ms),
+         'entregue so depois do PM/PO, na sprint da primeira ida para validacao; reentrega conta uma vez; a devolvida espera aprovacao; sprint antes da regra fica na conta antiga',
+         JSON.stringify({ s1: [cod(s1.entregues), cod(s1.aguardando), cod(s1.faltaCom)], s2: [cod(s2.entregues), cod(s2.aguardando), cod(s2.ms)] }));
+    }
     ok(/var ops = spOpcoesSprint\(SP\(\), vivas, H\.hoje\(\), fer\(D\)\)\.filter\(function \(o\) \{ return o\.key && o\.key !== '__fora__'; \}\);/.test(SPT) &&
-       /var x = esResumo\(SP\(\), H\.colunaDe, vivas, r, H\.hoje\(\), D\.projetos \|\| \[\]\);/.test(SPT) && /esGrupos\(lista, D\.temas \|\| \[\]\)/.test(SPT),
-       'e a aba Entregas le das funcoes medidas acima (as sprints do filtro, sem Todas e Sem sprint)');
+       /var x = esResumo\(SP\(\), H\.colunaDe, vivas, r, H\.hoje\(\), D\.projetos \|\| \[\], fer\(D\)\);/.test(SPT) && /esGrupos\(lista, D\.temas \|\| \[\]\)/.test(SPT) &&
+       /var pes = esDaPessoa\(x, _ent\.pessoa\);/.test(SPT) && /\.filter\(function \(m\) \{ return !pes \|\| pes\.casa\(m\); \}\);/.test(SPT) &&
+       /comQuemHtml\(m, x\.aberta\(m\)\)/.test(SPT) && /data-es-pessoa="' \+ esc\(pp\.nome\) \+ '"/.test(SPT) &&
+       /_ent\.pessoa = _ent\.pessoa === pv \? '' : pv;/.test(SPT),
+       'e a aba Entregas le das funcoes medidas acima: as sprints do filtro, o resumo com os feriados, a pessoa clicada (de novo, todos) e a entrega ao usuario pela situacao');
+    // ── As datas do card no tamanho da sprint (585196d e 84bc1b8) ─────────
+    /* O `mSprintDatas` do admin roda num DOM de mentira ao lado do
+       `pintaSemana` do formulario do app, nos mesmos gestos: abrir o card
+       (escolheu = false) e escolher a sprint (true). */
+    {
+      const FRMs = lerTela('axis-form-demanda.js');
+      const elFalso = (v) => ({ value: v || '', style: {}, textContent: '', innerHTML: '', after() {}, removeAttribute(k) { delete this[k]; } });
+      const sdAdm = new Function('state', 'SPRINTPO', 'window', 'document', BASE_ADM + '\nconst entregaUsuRender = () => {};\n' +
+        corpo(ADMIN, 'function mSprintDatas(escolheu) {') + '\nreturn mSprintDatas;');
+      const sdApp = new Function('el', 'val', 'D', 'H', 'raiz', corpo(FRMs, 'function semanaDaSprint(SPm, sp, feriados, inicio, entrega) {') + '\n' +
+        corpo(FRMs, 'function pintaSemana(escolheu) {') + '\nreturn pintaSemana;');
+      const Hf = { ico: () => '', esc: (x) => String(x), dma: (d) => (d ? br(d) : '') };
+      const divS = [];
+      let casosS = 0, preencheu = 0, foraN = 0;
+      ['', 'S1-11-2026', 'S2-11-2026', 'S5-10-2026', 'S4-12-2026', 'S1-01-2027'].forEach(sp =>
+        [[], ['2026-11-02'], [{ data: '2026-11-02', nome: 'Finados' }, { data: '2027-01-01', nome: 'Ano novo' }]].forEach(fer =>
+          [['', ''], ['2026-11-02', '2026-11-06'], ['2026-10-30', '2026-11-09'], ['2026-11-03', ''], ['', '2027-01-08']].forEach(([ini, ent]) =>
+            [true, false].forEach(escolheu => ['', '2026-12-01'].forEach(usu0 => {
+              casosS++;
+              const mk = () => ({ sp: elFalso(sp), ini: elFalso(ini), ent: elFalso(ent), usu: elFalso(usu0), hint: elFalso(), sem: elFalso() });
+              const a = mk(), b = mk();
+              const idsA = { 'm-sprint': a.sp, 'm-inicio': a.ini, 'm-entrega': a.ent, 'm-entrega-usuario': a.usu, 'm-sprint-hint': a.hint, 'm-sprint-semana': a.sem };
+              sdAdm({ feriados: fer }, SP, { SPRINTPO: SP }, { getElementById: (id) => idsA[id] || null })(escolheu);
+              const idsB = { 'axf-sprint': b.sp, 'axf-inicio': b.ini, 'axf-entrega': b.ent, 'axf-entrega-usuario': b.usu, 'axf-sprint-semana': b.sem };
+              sdApp((id) => idsB[id] || null, (id) => (idsB[id] ? String(idsB[id].value || '').trim() : undefined), () => ({ feriados: fer }), Hf, { SPRINTPO: SP })(escolheu);
+              const tag = (sp || '-') + '/' + JSON.stringify(fer).length + '/' + ini + '-' + ent + '/' + escolheu + '/' + usu0;
+              const lim = (x) => [x.ini.min, x.ini.max, x.ent.min, x.ent.max].join(',');
+              if (lim(a) !== lim(b)) divS.push(tag + ' limites ' + lim(a) + ' / ' + lim(b));
+              if (a.usu.value !== b.usu.value) divS.push(tag + ' entrega ao usuario ' + a.usu.value + ' / ' + b.usu.value);
+              if (a.usu.value !== usu0) preencheu++;
+              const tA = semTag(a.sem.textContent), tB = semTag(b.sem.innerHTML);
+              if (a.ini.min && tA !== tB) divS.push(tag + ' aviso "' + tA + '" / "' + tB + '"');
+              if (/fora da semana/.test(tB)) foraN++;
+            })))));
+      ok(divS.length === 0 && preencheu > 20 && foraN > 20,
+         'as datas do card no app = mSprintDatas do admin: o calendario na semana da sprint desde a segunda (mesmo feriado), a segunda seguinte so ao escolher a sprint e o aviso de fora da semana (' + casosS + ' casos)',
+         divS.slice(0, 3).join(' | ') + ' [preencheu ' + preencheu + ', fora ' + foraN + ']');
+      ok(/if \(ssel\) ssel\.addEventListener\('change', function \(\) \{ pintaSemana\(true\); \}\);/.test(FRMs) &&
+         /\['axf-inicio', 'axf-entrega'\]\.forEach\(function \(id\) \{ var x = el\(id\); if \(x\) x\.addEventListener\('input', function \(\) \{ pintaSemana\(false\); \}\); \}\);\s*pintaSemana\(false\);/.test(FRMs) &&
+         /<select id="m-sprint" onchange="mSprintAviso\(\);mSprintDatas\(true\)">/.test(ADMIN),
+         'e o formulario liga como o card do admin: escolher a sprint preenche (true), mexer nas datas e abrir so conferem (false)');
+    }
+    // ── Na Validacao da area no escopo da sprint (fd4e5e8 e 3ca7514) ──────
+    ok(/na_area: \['[^']*', 'Na área · fora do placar'\]/.test(ADMIN) &&
+       /na_area: \['pu', st\.regra \? 'Na área · aguardando aprovação' : 'Na área · fora do placar'\]/.test(SPT) &&
+       /el\._sp = \{ D: D, r: r, acomp: acomp, entrada: entrada, regra: !!p\.regraEntrega \};/.test(SPT),
+       'o escopo da sprint marca a task na Validacao da area como o acompanhamento do admin, e diz que ela aguarda aprovacao na regra de 05/11');
 
     // ── Projetos em andamento e o PPT deles (7143668 a 321cd68) ───────────
     const PJ_ADM = [BASE_ADM, linhaAdm(/^const pjAprovado\s*=.*$/m), linhaAdm(/^const pjPendente\s*=.*$/m), linhaAdm(/^const pjRecusado\s*=.*$/m),
@@ -25951,18 +26158,90 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
     ];
 
     // ── 82bff39: o que e meu, o que e fila, e o filtro "Mostrar" ──────────
+    /* O doMeuTime ganhou o filtro "Times" (5c849fb) e o painel abre na sprint
+       atual (368342d): o recorte e medido em Mostrar x Times x Sprint, para
+       quem e de Desenvolvimento e para quem e de Dados. */
+    const DOMEUTIME_DEV = "function doMeuTime(m, extra = document.getElementById('f-times')?.value || '') {";
     const filtroVelho = new Function('window', 'document', 'state', 'currentDev', 'SPRINTPO', 'DEVNOME', 'PIPELINES', 'ETAPA',
-      'let _temaFilter = null;\n' + corte('function getStatusKey(m) {') + '\n' + corte('function doMeuTime(m) {') + '\n' +
-      corte('function getFiltered() {') + '\nreturn getFiltered;');
+      'let _temaFilter = null;\n' + corte('function getStatusKey(m) {') + '\n' + corte('function doMeuTimePadrao(m) {') + '\n' + corte(DOMEUTIME_DEV) + '\n' +
+      corte('function getFiltered() {') + '\nreturn { getFiltered, doMeuTimePadrao };');
+    const FT = F.concat([
+      { id: 't1', codigo: 'AX-T1', status_planejamento: 'planejado', status: 'estimada', dev: '', sprint_po: 'S1-11-2026', tipo: 'evolucao', sales_ops: true },
+      { id: 't2', codigo: 'AX-T2', status_planejamento: 'em_andamento', status: 'iniciada', dev: 'Marina', sprint_po: 'S1-11-2026', tipo: 'evolucao', dados_bi: true },
+      { id: 't3', codigo: 'AX-T3', status_planejamento: 'planning', status: 'estimada', dev: '', sprint_po: 'S1-11-2026', tipo: 'evolucao', dados_bi: true, sales_ops: true },
+      { id: 't4', codigo: 'AX-T4', status_planejamento: 'planejado', status: 'estimada', dev: 'Lucas Santos', sprint_po: 'S1-11-2026', tipo: 'evolucao' },
+      { id: 't5', codigo: 'AX-T5', status_planejamento: 'backlog', status: 'recebida', dev: 'Marina', tipo: 'evolucao', dados_bi: true },
+      { id: 't6', codigo: 'AX-T6', status_planejamento: 'planning', status: 'estimada', dev: '', sprint_po: 'S2-11-2026', tipo: 'evolucao', sales_ops: true },
+      // Esteve na S1-11 e foi repassada: o filtro de sprint e a sprint do PO de hoje, nao o historico.
+      { id: 't7', codigo: 'AX-T7', status_planejamento: 'planejado', status: 'estimada', dev: EU, sprint_po: 'S2-11-2026', tipo: 'evolucao',
+        sprint_po_historico: [{ sprint: 'S1-11-2026' }, { sprint: 'S2-11-2026', de: 'S1-11-2026' }] }
+    ]);
     let divF = [];
-    ['', 'meu', 'fila'].forEach(fd => {
-      const D = base(copia(F));
-      const doc = { getElementById: (id) => ({ value: id === 'f-dono' ? fd : '' }) };
-      const velho = filtroVelho({ SPRINTPO: SPm, PIPELINES: PIm }, doc, D, EU, SPm, DNm, PIm, ETm)().map(m => m.id).sort().join();
-      const app = D.melhorias.filter(m => AC.mostraNoPainel(m, ctx(D), fd)).map(m => m.id).sort().join();
-      if (velho !== app) divF.push('"' + fd + '": ' + velho + ' / ' + app);
-    });
-    ok(divF.length === 0, 'o recorte do painel do dev (getFiltered) = o do app, nos tres "Mostrar"', divF.join(' | '));
+    let casosF = 0, somaTimes = 0;
+    [EU, 'Marina'].forEach(quem => ['', 'meu', 'fila'].forEach(fd => ['', 'dados', 'sales', 'todos'].forEach(tm => ['', 'S1-11-2026', 'S2-11-2026', '__fora__'].forEach(sp => {
+      casosF++;
+      const D = base(copia(FT));
+      const val = { 'f-dono': fd, 'f-times': tm, 'f-sprint': sp };
+      const doc = { getElementById: (id) => ({ value: val[id] || '' }) };
+      const velho = filtroVelho({ SPRINTPO: SPm, PIPELINES: PIm }, doc, D, quem, SPm, DNm, PIm, ETm).getFiltered().map(m => m.id).sort().join();
+      const c = ctx(D, { quem, nomes: [quem], times: tm });
+      const app = D.melhorias.filter(m => AC.mostraNoPainel(m, c, fd) && AC.casaSprintDoPainel(m, c, sp)).map(m => m.id).sort().join();
+      if (tm && !sp && fd !== 'meu') {
+        const sem = D.melhorias.filter(m => AC.mostraNoPainel(m, ctx(D, { quem, nomes: [quem] }), fd)).length;
+        if (app.split(',').filter(Boolean).length > sem) somaTimes++;
+      }
+      if (velho !== app) divF.push(quem + '/"' + fd + '"/' + (tm || '-') + '/' + (sp || '-') + ': ' + velho + ' / ' + app);
+    }))));
+    ok(divF.length === 0 && somaTimes >= 4, 'o recorte do painel do dev (getFiltered) = o do app, em Mostrar x Times x Sprint, para Desenvolvimento e Dados (' + casosF + ' casos)',
+       divF.slice(0, 3).join(' | ') + ' [Times somou em ' + somaTimes + ']');
+    {
+      // O card de outro time diz de qual time e (renderCard, 5c849fb).
+      const divT = [];
+      [EU, 'Marina'].forEach(quem => ['', 'dados', 'sales', 'todos'].forEach(tm => {
+        const D = base(copia(FT));
+        const doc = { getElementById: (id) => ({ value: id === 'f-times' ? tm : '' }) };
+        const velho = filtroVelho({ SPRINTPO: SPm, PIPELINES: PIm }, doc, D, quem, SPm, DNm, PIm, ETm);
+        D.melhorias.forEach(m => {
+          const v = tm && !DNm.eDe(m, quem) && !velho.doMeuTimePadrao(m) ? (m.dados_bi ? 'dados' : m.sales_ops ? 'sales' : 'dev') : '';
+          const a = AC.timeDeOutro(m, ctx(D, { quem, nomes: [quem], times: tm }));
+          if (v !== a) divT.push(quem + '/' + (tm || '-') + '/' + m.id + ': ' + v + ' / ' + a);
+        });
+      }));
+      ok(divT.length === 0 && /\? '<div class="kcard-dono outro" title="Demanda de outro time[\s\S]{0,200}\(m\.dados_bi \? '[^']*Time Dados\/BI' : m\.sales_ops \? '[^']*Time Sales Ops' : '[^']*Time Desenvolvimento'\)/.test(DEV),
+         'o card de outro time no app diz o mesmo time que o renderCard do painel (so com o filtro Times ligado)', divT.slice(0, 4).join(' | '));
+    }
+    {
+      // As opcoes do filtro de sprint e o padrao na sprint atual (buildSprintSelect, 368342d).
+      const selVelho = new Function('window', 'document', 'state', 'currentDev', 'SPRINTPO', 'DEVNOME', 'PRAZO',
+        'let _sprintPadraoAplicado = false;\n' + corte('function sprintAtualDev() {') + '\n' + corte('function escAttr(x) {') + '\n' +
+        corte('function buildSprintSelect() {') + '\nreturn buildSprintSelect;');
+      const divS = [];
+      [[EU, '2026-11-05'], [EU, '2026-11-10'], ['Bia', '2026-11-05'], ['Ninguem', '2026-11-20']].forEach(([quem, hoje]) => {
+        const D = base(copia(FT));
+        const sel = { value: '', innerHTML: '' };
+        const PRZ = { hojeISO: () => hoje };
+        const build = selVelho({ SPRINTPO: SPm, PRAZO: PRZ }, { getElementById: (id) => (id === 'f-sprint' ? sel : null) }, D, quem, SPm, DNm, PRZ);
+        build();
+        const opV = [...sel.innerHTML.matchAll(/<option value="([^"]*)">[^<]*\((\d+)\)<\/option>/g)].map(a => a[1] + ':' + a[2]).join(' ');
+        const agora = SPm.sprintCorrente(hoje, []);
+        const opA = AC.sprintsDoPainel(D.melhorias, ctx(D, { quem, nomes: [quem] }), agora).map(o => o.v + ':' + o.n).join(' ');
+        const padraoV = sel.value;
+        sel.value = '__fora__'; build();
+        if (opV !== opA || padraoV !== agora || sel.value !== '__fora__')
+          divS.push(quem + '/' + hoje + ': ' + opV + ' [' + padraoV + '] / ' + opA + ' [' + agora + ']');
+      });
+      ok(divS.length === 0, 'as opcoes do filtro de sprint do Meu trabalho = buildSprintSelect do painel (a atual mesmo vazia, Fora da sprint), e o padrao e a sprint atual so na primeira montagem',
+         divS.join(' | '));
+    }
+    const INI = lerTela('axis-tela-inicio.js'), QDT = lerTela('axis-tela-quadro.js');
+    ok(/if \(!EST\.sprintPadrao && sprint\) \{ EST\.sprintPadrao = true; EST\.sprint = sprint; \}/.test(INI) &&
+       /AC\.casaSprintDoPainel\(m, cx, EST\.sprint\)/.test(INI) && /if \(q === 'limpar'\) \{ EST\.sprint = H\.sprintAtual\(\) \|\| ''; [^\n]*AXIS_ACOES\.times\(''\)/.test(INI) &&
+       /var filtrosAtivos = \(EST\.sprint !== \(sprint \|\| ''\) \? 1 : 0\) \+ \(times \? 1 : 0\);/.test(INI) && /data-ini="times"/.test(INI),
+       'Meu trabalho do dev abre na sprint atual, a atual nao conta como filtro, e o Limpar volta para ela e para o seu time');
+    ok(/if \(!F\.sprintPadrao && ctx\.papel === 'dev'\) \{ F\.sprintPadrao = true; if \(sprintPadraoDev\(ctx\)\) F\.sprint = sprintPadraoDev\(ctx\); \}/.test(QDT) &&
+       /F\.sprint = sprintPadraoDev\(ctx\); F\.vencidas = false;/.test(QDT) && /var sprintAtivo = sprintPadraoDev\(ctx\) \? !sprintEhPadrao\(ctx\) : !!F\.sprint;/.test(QDT) && /var ativos = \(sprintAtivo \? 1 : 0\)/.test(QDT) &&
+       /data-filtro="times"/.test(QDT) && /AXIS_ACOES\.times\(s\.value\)/.test(QDT),
+       'e o Quadro do dev tambem: sprint atual por padrao (outra pelo filtro), Times ao lado do Mostrar, e o Limpar volta ao padrao');
     const marcaSrc = /\$\{DEVNOME\.eDe\(m, currentDev\)\s*\? '<div class="kcard-dono meu"[\s\S]*?: String\(m\.dev \|\| ''\)\.trim\(\)\s*\? '<div class="kcard-dono outro"[\s\S]*?: '<div class="kcard-dono fila"/.test(DEV);
     ok(marcaSrc, 'a marca do card do dev.html e "meu" se esta no nome, "outro" se tem dev, "fila" se nao tem');
     if (marcaSrc) {
@@ -26857,7 +27136,13 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         'const _dirtyMelhoriaIds = new Set(); let _pendingEdits = false; const renderAll = () => {}; const saveViaProxy = async () => true;\n' +
         'const document = { getElementById: () => null }; const avisaFalha = (t) => { saida.falha = t; }; const toast = (t, k) => { saida.toast = t; saida.tipo = k; };\n' +
         gruposSrc + '\n' + candSrc + '\n' + aplSrc + '\nreturn { candidatas: sprintLoteCandidatas, aplicar: sprintLoteAplicar };')(
-          state, SP, PRAZO_, ET, OKB, EUm, statusKey, pausada, saida, f);
+          state, SP, PRAZO_, ETx, OKB, EUm, statusKey, pausada, saida, f);
+      /* O atraso e da etapa EFETIVA: o admin pergunta `ETAPA.efetiva` desde a
+         resolucao do merge de 05/11 (antes perguntava `statusKey`, que virou a
+         gravada, e o grupo ficava vazio); o app sempre passou a efetiva. No
+         Node a efetiva le o PRAZO pelo relogio fixo da suite. */
+      const efetiva = m => (PRZM.estaAtrasada(m, statusKey(m), HOJE) ? 'atrasado' : statusKey(m));
+      const ETx = Object.assign({}, ET, { efetiva });
       const oApp = (efetiva) => ({ SPm: SP, ETAPAm: ET, ORDEMKBm: OKB, dataUsu: EUm.data, hoje: HOJE, grupos: APP.loteGrupos(SP, statusKey, efetiva, pausada, HOJE, []) });
       const divC = [];
       let casos = 0;
@@ -26866,17 +27151,16 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
         const st = base();
         const a = loteAdm(st, { q, soFora, grupos: gs }, {}).candidatas().map(m => m.id).join();
         const g = {}; gs.forEach(k => { g[k] = true; });
-        const b = APP.loteCandidatas(base().melhorias, { q, soFora, grupos: g }, oApp(statusKey)).map(m => m.id).join();
+        const b = APP.loteCandidatas(base().melhorias, { q, soFora, grupos: g }, oApp(efetiva)).map(m => m.id).join();
         if (a !== b) divC.push(q + '/' + soFora + '/' + gs + ': ' + a + ' // ' + b);
       })));
       ok(divC.length === 0, 'as candidatas do lote no app = sprintLoteCandidatas (abertas, sem oculta nem mesclada; grupo manda sobre o "so fora"; busca por codigo, titulo ou dev; ordem do quadro) em ' + casos + ' casos', divC.slice(0, 3).join(' | '));
-      /* O GRUPO "ATRASADAS" DO ADMIN NUNCA CASA: ele pergunta `statusKey`
-         (ETAPA.gravada), que nao devolve `atrasado`. O app pergunta a etapa
-         efetiva, que e o que o comentario do LOTE_GRUPOS descreve. */
-      const efetiva = m => (PRZM.estaAtrasada(m, statusKey(m), HOJE) ? 'atrasado' : statusKey(m));
+      // O grupo "Atrasadas da sprint atual" acha as vencidas da sprint nos dois (etapa efetiva).
       const nAdm = loteAdm(base(), { grupos: ['atrasadas'] }, {}).candidatas().length;
       const nApp = APP.loteCandidatas(base().melhorias, { grupos: { atrasadas: true } }, oApp(efetiva)).length;
-      ok(nAdm === 0 && nApp > 0, 'o grupo "Atrasadas da sprint atual" do app acha as vencidas da sprint (efetiva); o do admin fica vazio porque `statusKey` virou a etapa gravada', 'admin ' + nAdm + ' / app ' + nApp);
+      ok(nAdm === nApp && nApp > 0 && /return SPRINTPO\.naSprint\(m, atual\) && ETAPA\.efetiva\(m\) === 'atrasado';/.test(ADMIN) &&
+         /var grupos = loteGrupos\(SP\(\), H\.colunaDe, H\.etapaDe, H\.pausada, H\.hoje\(\), F\);/.test(lerTela('axis-tela-sprints.js')),
+         'o grupo "Atrasadas da sprint atual" acha as vencidas da sprint pela etapa efetiva, no app e no admin', 'admin ' + nAdm + ' / app ' + nApp);
       pendentes.push((async () => {
         const div = [];
         const casosL = [['S2-11-2026', ['m3', 'm4', 'm12', 'm20']], ['S3-11-2026', ['m5', 'm13', 'm21', 'm2']], ['S1-11-2026', ['m1', 'm7']],
@@ -27107,7 +27391,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
       try {
         const dif = (a, b) => { const A = JSON.stringify(a), B = JSON.stringify(b); if (A === B) return ''; let i = 0; while (i < A.length && A[i] === B[i]) i++; return A.slice(Math.max(0, i - 80), i + 80) + ' // ' + B.slice(Math.max(0, i - 80), i + 80); };
         // ── A apuracao do congelamento e o deck do mes ───────────────────
-        const divA = [], divD = [], divC = [];
+        const divA = [], divD = [], divC = [], semItens = [];
         let nDest = 0, nNome = 0;
         for (const iso of ['2026-08', '2026-09', '2026-10', '2026-11', '2026-12']) {
           const ano = +iso.slice(0, 4), mes = +iso.slice(5, 7);
@@ -27115,6 +27399,12 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           const a1 = await admin(S, vals, {}).apresGerar({ soApuracao: true });
           const d1 = dif(a1, FE.apuracao(S, { ano, mes, soApuracao: true }));
           if (d1 || !a1.kpi) divA.push(iso + ' ' + d1);
+          // O congelado nao leva as demandas inteiras: o Worker recusa acima de 1 MB.
+          if (!a1.pontos || 'itens' in a1.pontos || !('porDev' in a1.pontos)) semItens.push(iso);
+          const ap1 = FE.apuracao(S, { ano, mes, soApuracao: true });
+          if (!ap1.pontos || 'itens' in ap1.pontos) semItens.push(iso + ' (app)');
+          const vivo = FE.apuracao(S, { ano, mes });
+          if (vivo.pontos && vivo.pontos.total > 0 && !Array.isArray(vivo.pontos.itens)) semItens.push(iso + ' (deck vivo perdeu os itens)');
           const sec = {}; FE.AP_SECOES.forEach((s, i) => { sec[s.k] = (i + mes) % 3 !== 0; vals['ap-s-' + s.k] = { checked: sec[s.k] }; });
           const dest = FE.candidatasDestaque(S, iso).slice(0, 3).map(m => m.id);
           nDest += dest.length;
@@ -27131,6 +27421,7 @@ sec('Relatorio: dentro do tema, a maior pontuacao primeiro');
           if (d3 || !/congelada em 02\/11\/2026/.test((c3.toasts || []).join(' '))) divC.push(iso + ' ' + d3);
         }
         ok(divA.length === 0, 'a apuracao que o app congela = apresGerar({ soApuracao: true }) do admin, cinco meses (fechados, o corrente e o futuro)', divA.slice(0, 2).join(' ;; '));
+        ok(semItens.length === 0, 'congelar tira pontos.itens (as demandas inteiras) no admin e no app, e so no congelado: o deck vivo segue com eles', semItens.join(', '));
         ok(divD.length === 0 && nDest >= 6 && nNome === 5, 'o objeto que o app entrega ao apresentacao.js = o do admin, com slides, destaques e frase escolhidos, e o mesmo nome de arquivo', divD.slice(0, 2).join(' ;; '));
         ok(divC.length === 0, 'mes congelado: a apuracao congelada vence a base viva e o slide diz que esta congelado, igual ao admin', divC.slice(0, 2).join(' ;; '));
         // ── O CSV da base do mes ─────────────────────────────────────────

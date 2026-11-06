@@ -23,6 +23,9 @@
    trabalho, o filtro "Mostrar" (no meu nome + fila, so no meu nome, so a
    fila), a marca de quem e cada cartao e o "Pegar" da fila (axis-acoes.js,
    que poe o nome de quem pegou). Os indicadores seguem sendo so os dele.
+   Como o painel (368342d e 5c849fb): o quadro abre na sprint atual — outra
+   sprint, "Todas" ou "Fora da sprint" pelo filtro, e o Limpar volta para ela
+   — e o filtro "Times" soma a fila de Dados/BI ou Sales Ops a do seu time.
 
    AS CONTAS SAO DOS MODULOS (sprint.js, prazo.js, capacidade.js,
    homologacao.js, devolucao.js). O que nao existe em modulo e foi copiado de
@@ -42,7 +45,9 @@
     cronLimite: 40,
     ntfFiltro: 'acao',
     ntfLimite: 30,
-    mostrar: ''            // Meu trabalho do dev: '' (no meu nome + fila), 'meu', 'fila'
+    mostrar: '',           // Meu trabalho do dev: '' (no meu nome + fila), 'meu', 'fila'
+    sprint: '',            // Meu trabalho do dev: '' (todas), '__fora__' ou o rotulo
+    sprintPadrao: false    // a sprint atual so e escolhida na primeira montagem
   };
 
   // ── CSS proprio, injetado uma vez ─────────────────────────────────────
@@ -486,9 +491,20 @@
     /* O QUADRO PESSOAL MOSTRA O QUE O PAINEL DO DEV MOSTRA (`getFiltered`):
        no nome dele e a fila do time, com o filtro "Mostrar". */
     var AC = window.AXIS_ACOES;
-    var noQuadro = AC && AC.mostraNoPainel
-      ? vs.filter(function (m) { return AC.mostraNoPainel(m, AC.contexto(), EST.mostrar); })
+    var cx = AC && AC.contexto ? AC.contexto() : null;
+    // A sprint atual e o padrao (368342d): escolhida so na primeira montagem.
+    if (!EST.sprintPadrao && sprint) { EST.sprintPadrao = true; EST.sprint = sprint; }
+    var opsSprint = AC && AC.sprintsDoPainel ? AC.sprintsDoPainel(vs, cx, sprint) : [];
+    // A escolha sobrevive ao redesenho, a nao ser que a sprint tenha saido da lista.
+    if (EST.sprint && !opsSprint.some(function (o) { return o.v === EST.sprint; })) EST.sprint = '';
+    var doPainel = AC && AC.mostraNoPainel
+      ? vs.filter(function (m) { return AC.mostraNoPainel(m, cx, EST.mostrar); })
       : minhas;
+    var noQuadro = AC && AC.casaSprintDoPainel
+      ? doPainel.filter(function (m) { return AC.casaSprintDoPainel(m, cx, EST.sprint); })
+      : doPainel;
+    var times = AC && AC.times ? AC.times() : '';
+    var filtrosAtivos = (EST.sprint !== (sprint || '') ? 1 : 0) + (times ? 1 : 0);
     var col = function (f) { return noQuadro.filter(function (m) { return f(H.colunaDe(m), m); }).sort(ordemDeAtencao); };
     var planning = col(function (c) { return c === 'levantar_req' || c === 'planning'; });
     var planejado = col(function (c) { return c === 'planejado'; });
@@ -519,12 +535,25 @@
 
     var sub = (EST.mostrar === 'meu' ? 'Só o que está no seu nome.' : EST.mostrar === 'fila' ? 'A fila do time: na sprint, sem dono ou com outra pessoa.' : 'O que está com você e a fila do time.') + (sprint ? ' Sprint ' + H.esc(S.rotuloCurto(sprint)) + ' · ' +
       (d ? (d.acabou ? 'terminou ' + H.dm(d.ate) : 'faltam ' + H.plural(d.faltam, 'dia útil', 'dias úteis')) : '') + '.' : '');
+    var opt = function (v, rot, sel) { return '<option value="' + H.esc(v) + '"' + (v === sel ? ' selected' : '') + '>' + H.esc(rot) + '</option>'; };
     var h = '<header class="ini-hd fim"><div style="display:flex;flex-direction:column;gap:6px"><h1 class="h1">Meu trabalho</h1><span class="sub">' + sub + '</span></div>' +
       '<div class="row" style="flex-wrap:wrap"><label class="note" for="ini-mostrar">Mostrar</label>' +
       '<select id="ini-mostrar" class="in" data-ini="mostrar" style="height:36px" title="Separa as demandas no seu nome das que estão na fila do time.">' +
       [['', 'No meu nome + fila do time'], ['meu', 'Só no meu nome'], ['fila', 'Só a fila do time']].map(function (o) {
         return '<option value="' + o[0] + '"' + (EST.mostrar === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
       }).join('') + '</select>' +
+      // Sprint (368342d): abre na atual; a contagem e a das demandas no seu nome, como no painel.
+      (opsSprint.length ? '<label class="note" for="ini-sprint">Sprint</label>' +
+        '<select id="ini-sprint" class="in" data-ini="sprint" style="height:36px" title="Abre na sprint atual. Escolha outra, Todas ou Fora da sprint.">' +
+        opsSprint.map(function (o) {
+          var rot = o.v === '' ? 'Todas' : o.v === '__fora__' ? 'Fora da sprint' : S.rotuloCurto(o.v) + (o.agora ? ' · agora' : '');
+          return opt(o.v, rot + ' (' + o.n + ')', EST.sprint);
+        }).join('') + '</select>' : '') +
+      // Times (5c849fb): por padrao so o seu time; a escolha soma a fila e a vitrine do outro.
+      (AC && AC.times ? '<label class="note" for="ini-times">Times</label>' +
+        '<select id="ini-times" class="in" data-ini="times" style="height:36px" title="Por padrão aparece só o seu time. Escolha outro para ver a fila dele e poder ajudar.">' +
+        opt('', 'Só o meu time', times) + opt('dados', '+ Dados/BI', times) + opt('sales', '+ Sales Ops', times) + opt('todos', 'Todos os times', times) + '</select>' : '') +
+      (filtrosAtivos ? '<button type="button" class="btns" data-ini="limpar" style="height:36px" title="Volta para a sprint atual e só o seu time">Limpar (' + filtrosAtivos + ')</button>' : '') +
       '<button type="button" class="btnp" data-axa-form="novo">+ Nova demanda</button></div></header>';
 
     var kp = '<div class="ini-kg seis">' +
@@ -532,7 +561,8 @@
       kpi('Vencem hoje', vHoje.length, null, { cls: vHoje.length ? 'dg' : '', cor: vHoje.length ? 'var(--dg-t)' : '' }) +
       kpi('Em validação', validacao.length, null) +
       kpi('Atrasadas', atr.length, null, { cls: atr.length ? 'dg' : '', cor: atr.length ? 'var(--dg-t)' : '' }) +
-      kpi('Entregues no mês', concl.length, null, { cor: 'var(--ok-t)' }) +
+      // "No mes" nao depende da sprint escolhida: conta o que o painel mostra no mes inteiro.
+      kpi('Entregues no mês', doPainel.filter(function (m) { return H.colunaDe(m) === 'concluido' && noMes(m); }).length, null, { cor: 'var(--ok-t)' }) +
       kpi('Meus pontos na sprint', sp.feitos + ' / ' + sp.total, null, {
         extra: '<span class="note" style="margin-top:-2px">' + ent.entregue + ' pts entregues em ' + H.esc(H.MESES[+mes.slice(5, 7) - 1]) +
           (ent.plan ? ' de ' + ent.plan + ' planejados' : '') + '</span>' +
@@ -551,6 +581,9 @@
     var rod = bk ? '<span class="note">Mais ' + H.plural(bk, 'demanda sua', 'demandas suas') + ' no backlog, fora deste quadro. <a href="#backlog">Ver backlog</a></span>' : '';
     if (!noQuadro.length && EST.mostrar === 'fila') {
       return h + kp + H.vazio('inbox', 'A fila do time está vazia', 'Nada na sprint em curso está sem dono agora.');
+    }
+    if (!noQuadro.length && doPainel.length) {
+      return h + kp + H.vazio('inbox', 'Nada nesta sprint com estes filtros', 'Troque a sprint no filtro ou escolha Todas.');
     }
     if (!minhas.length && !noQuadro.length) {
       return h + H.vazio('user', 'Nenhuma demanda com o seu nome',
@@ -840,6 +873,8 @@
         if (q === 'cron-mais') { EST.cronLimite += 40; redesenha(el, ctx); return; }
         if (q === 'ntf') { EST.ntfFiltro = b.getAttribute('data-f'); EST.ntfLimite = 30; redesenha(el, ctx); return; }
         if (q === 'ntf-mais') { EST.ntfLimite += 30; redesenha(el, ctx); return; }
+        // O Limpar do Meu trabalho volta para a sprint atual e so o seu time (o padrao).
+        if (q === 'limpar') { EST.sprint = H.sprintAtual() || ''; if (window.AXIS_ACOES && AXIS_ACOES.times) AXIS_ACOES.times(''); redesenha(el, ctx); return; }
       }
       // Cartao do quadro pessoal: o cartao inteiro abre o item, menos o botao
       // de acao dentro dele.
@@ -849,6 +884,10 @@
     };
     var mo = el.querySelector('[data-ini="mostrar"]');
     if (mo) mo.onchange = function () { EST.mostrar = mo.value; redesenha(el, ctx); var n = el.querySelector('[data-ini="mostrar"]'); if (n) n.focus(); };
+    var spr = el.querySelector('[data-ini="sprint"]');
+    if (spr) spr.onchange = function () { EST.sprint = spr.value; redesenha(el, ctx); var n = el.querySelector('[data-ini="sprint"]'); if (n) n.focus(); };
+    var tm = el.querySelector('[data-ini="times"]');
+    if (tm) tm.onchange = function () { if (window.AXIS_ACOES) AXIS_ACOES.times(tm.value); redesenha(el, ctx); var n = el.querySelector('[data-ini="times"]'); if (n) n.focus(); };
     var sel = el.querySelector('[data-ini="cron-dev"]');
     if (sel) sel.onchange = function () { EST.cronDev = sel.value; EST.cronLimite = 40; redesenha(el, ctx); };
   }

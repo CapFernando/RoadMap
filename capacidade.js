@@ -216,7 +216,30 @@
    *  `entregue_em` primeiro, `concluido_em` de reserva — a mesma regra do atraso
    *  e do ranking da semana. Contar pela aprovação jogaria para a semana
    *  seguinte tudo que ficou parado em validação. */
+
+  /* A PRIMEIRA IDA PARA VALIDAÇÃO (05/11/2026) — espelho de
+   * `SPRINTPO.primeiraIdaValidacao`. "Para sprint deve considerar a partir do
+   * momento que o dev coloca em validação da área ou validação PM/PO";
+   * reentrega conta uma vez só, na primeira ida. Vale para ida a partir de
+   * `REGRA_ENTREGA_DESDE`; antes disso fica a âncora antiga, para mês já
+   * apresentado não mudar de número. */
+  var REGRA_ENTREGA_DESDE = '2026-11-01';
+  function primeiraIdaValidacao(m) {
+    var d10 = function (v) { var s = String(v == null ? '' : v).slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; };
+    var pv = d10((m || {}).primeira_validacao_em);
+    if (pv) return pv;
+    var a = d10((m || {}).validacao_area_em), e = d10((m || {}).entregue_em);
+    if (a && e) return a < e ? a : e;
+    return a || e || '';
+  }
+  function idaNoRegime(m) {
+    var d = primeiraIdaValidacao(m);
+    return d && d >= REGRA_ENTREGA_DESDE ? d : '';
+  }
+
   function diaDaEntrega(m) {
+    var ida = idaNoRegime(m);
+    if (ida) return ida;   // a primeira ida para validação — ver acima
     var e = String((m || {}).entregue_em || '').slice(0, 10);
     if (/^\d{4}-\d{2}-\d{2}$/.test(e)) return e;
     var c = String((m || {}).concluido_em || '').slice(0, 10);
@@ -452,6 +475,8 @@
     ETAPAS_ENTREGUE: ETAPAS_ENTREGUE,
     ETAPAS_ESPERANDO: ETAPAS_ESPERANDO,
     REGRA_PONTOS_DESDE: REGRA_PONTOS_DESDE,
+    REGRA_ENTREGA_DESDE: REGRA_ENTREGA_DESDE,
+    primeiraIdaValidacao: primeiraIdaValidacao,
     regraNova: regraNova,
     liberaPontos: liberaPontos,
     aguardando: aguardando,

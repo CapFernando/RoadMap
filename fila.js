@@ -121,9 +121,32 @@
    * concluída SEM `concluido_em` nenhuma. Tratá-los diferente aqui faria
    * "ENTREGAS 170" e "Das saídas: 171 entregues" continuarem discordando por
    * uma demanda — que foi exatamente o que aconteceu no deck de agosto.        */
+
+  /* A PRIMEIRA IDA PARA VALIDAÇÃO (05/11/2026) — espelho de
+   * `SPRINTPO.primeiraIdaValidacao`. "Para sprint deve considerar a partir do
+   * momento que o dev coloca em validação da área ou validação PM/PO";
+   * reentrega conta uma vez só, na primeira ida. Vale para ida a partir de
+   * `REGRA_ENTREGA_DESDE`; antes disso fica a âncora antiga, para mês já
+   * apresentado não mudar de número. */
+  var REGRA_ENTREGA_DESDE = '2026-11-01';
+  function primeiraIdaValidacao(m) {
+    var d10 = function (v) { var s = String(v == null ? '' : v).slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; };
+    var pv = d10((m || {}).primeira_validacao_em);
+    if (pv) return pv;
+    var a = d10((m || {}).validacao_area_em), e = d10((m || {}).entregue_em);
+    if (a && e) return a < e ? a : e;
+    return a || e || '';
+  }
+  function idaNoRegime(m) {
+    var d = primeiraIdaValidacao(m);
+    return d && d >= REGRA_ENTREGA_DESDE ? d : '';
+  }
+
+  /* Concluída pelo PM/PO (só ela é entrega), no dia da primeira ida para
+     validação; antes da regra, no dia da aprovação, como sempre foi. */
   function entregaEm(m) {
     if (String((m || {}).status_planejamento || '') !== 'concluido') return '';
-    return saida(m);
+    return idaNoRegime(m) || saida(m);
   }
 
   /** Esta demanda é entrega deste período? */

@@ -524,8 +524,13 @@
   }
 
   /* COPIA DE `doMeuTime` (dev.html, 30/10/2026): a fila e a vitrine sao da
-     mesma frente de quem olha — Dados/BI de um lado, o resto do outro. */
-  function doMeuTime(m, c) {
+     mesma frente de quem olha — Dados/BI de um lado, o resto do outro.
+     O FILTRO OPCIONAL "TIMES" (dev.html, 5c849fb): "criar filtro para eu
+     poder visualizar demandas de outros times (BI/DADOS, SALES). Manter a
+     regra padrao e filtro opcional quando necessario." `extra` (ou `c.times`)
+     SOMA o time escolhido ao seu: 'dados', 'sales', 'todos'; vazio e o
+     padrao, so o seu time. */
+  function doMeuTime(m, c, extra) {
     var PI = mod(c, 'PIPELINES');
     var eu = txt((c || {}).quem);
     if (!PI || !eu) return true;
@@ -534,7 +539,21 @@
     var souDados = PI.doDev(eu, perfis) === DADOS;
     var demDados = !!(m && m.dados_bi) ||
       (!(m && m.sales_ops) && PI.daDemanda(m, perfis) === DADOS);
-    return souDados ? demDados : !demDados;
+    if (souDados ? demDados : !demDados) return true;
+    var x = extra != null ? txt(extra) : txt((c || {}).times);
+    if (x === 'todos') return true;
+    if (x === 'dados') return demDados;
+    if (x === 'sales') return !!(m && m.sales_ops && !m.dados_bi);
+    return false;
+  }
+
+  /* O CARD DE OUTRO TIME (`renderCard`, dev.html, 5c849fb): com o filtro Times
+     ligado, o card que nao e seu nem do seu time diz de qual time e, para nao
+     parecer da sua fila. '' quando o filtro esta desligado ou o card e do seu
+     time; senao 'dados', 'sales' ou 'dev'. */
+  function timeDeOutro(m, c) {
+    if (!m || !txt((c || {}).times) || ehMeu(m, c) || doMeuTime(m, c, '')) return '';
+    return m.dados_bi ? 'dados' : m.sales_ops ? 'sales' : 'dev';
   }
 
   /** O `doTime` do `getFiltered`: na sprint em curso sem dono, ou na vitrine. */
@@ -567,6 +586,35 @@
     if (filtro === 'meu') return d === 'meu';
     if (filtro === 'fila') return d !== 'meu';
     return true;
+  }
+
+  /* O FILTRO DE SPRINT DO PAINEL DO DEV (`buildSprintSelect` e `getFiltered`,
+     dev.html, 368342d): "painel dev, acessa ja olhando para sprint atual, caso
+     ele queira filtrar itens de outra sprint ele usa o filtro". As opcoes sao
+     as sprints das demandas no nome dele, a atual mesmo vazia (e o padrao) e
+     "Fora da sprint" quando ha; `n` conta as dele. A tela escolhe a atual so
+     na PRIMEIRA montagem, e o Limpar volta para ela.
+     `casaSprintDoPainel`: '' e todas, '__fora__' o que o PM/PO nao repassou,
+     um rotulo e a sprint do PO. */
+  function sprintsDoPainel(lista, c, agora) {
+    var SP = mod(c, 'SPRINTPO');
+    if (!SP) return [];
+    var doDev = (lista || []).filter(function (m) { return m && !m.mesclado_em && !m.oculto && ehMeu(m, c); });
+    var conta = {}, fora = 0;
+    doDev.forEach(function (m) {
+      var s = SP.doPO(m);
+      if (!s) { fora++; return; }
+      conta[s] = (conta[s] || 0) + 1;
+    });
+    if (agora && !conta[agora]) conta[agora] = 0;
+    return [{ v: '', n: doDev.length }]
+      .concat(Object.keys(conta).sort().map(function (s) { return { v: s, n: conta[s], agora: s === agora }; }))
+      .concat(fora ? [{ v: '__fora__', n: fora }] : []);
+  }
+  function casaSprintDoPainel(m, c, f) {
+    var SP = mod(c, 'SPRINTPO');
+    if (!f || !SP) return true;
+    return f === '__fora__' ? SP.foraDaSprint(m) : SP.naSprint(m, f);
   }
 
   /* A DEMANDA DE OUTRA PESSOA ABRE EM LEITURA (`msModoLeitura`, dev.html): o
@@ -845,7 +893,8 @@
     STATUS_ADMIN: STATUS_ADMIN, STATUS_DEV: STATUS_DEV, ETAPAS_DO_DEV: ETAPAS_DO_DEV, rotulo: rotulo
   };
   Object.assign(REGRAS, REGRAS_DO_DEV);
-  Object.assign(api, { SUB: SUB, donoDoCard: donoDoCard, mostraNoPainel: mostraNoPainel, doMeuTime: doMeuTime,
+  Object.assign(api, { SUB: SUB, donoDoCard: donoDoCard, mostraNoPainel: mostraNoPainel, doMeuTime: doMeuTime, timeDeOutro: timeDeOutro,
+                       sprintsDoPainel: sprintsDoPainel, casaSprintDoPainel: casaSprintDoPainel,
                        devsParaVincular: devsParaVincular, pessoasDaConversa: pessoasDaConversa,
                        sugestoesArroba: sugestoesArroba, escolheArroba: escolheArroba });
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
@@ -968,11 +1017,18 @@
     if (AX.APP.papel === 'dev') return H.meusNomes()[0] || e.nome || e.login || 'dev';
     return e.nome || e.login || 'admin';
   }
+  /* O FILTRO "TIMES" DO DEV (5c849fb) vale para o Quadro e o Meu trabalho, como
+     o `f-times` do painel: nao fica gravado — recarregar volta ao padrao. */
+  var _times = '';
+  function times(v) {
+    if (arguments.length) _times = ['dados', 'sales', 'todos'].indexOf(v) >= 0 ? v : '';
+    return _times;
+  }
   function contexto() {
     var D = AX.APP.D || {};
     return { papel: AX.APP.papel, quem: quem(), hoje: H.hoje(), agora: new Date().toISOString(), dono: H.donoDaSprint(),
              lista: D.melhorias || [], aprovadores: Array.isArray(D.spike_aprovadores) ? D.spike_aprovadores : null,
-             D: D, nomes: H.meusNomes() };
+             D: D, nomes: H.meusNomes(), times: _times };
   }
   function porId(id) { return ((AX.APP.D || {}).melhorias || []).find(function (x) { return x && x.id === id; }) || null; }
 
@@ -1468,9 +1524,13 @@
     if (d === 'meu') return H.chip(H.ico('user') + ' No seu nome', 'ok', 'Esta demanda está no seu nome: você é o responsável.');
     if (d === 'outro') return H.chip(H.ico('users') + ' Do time · com ' + H.esc(m.dev), 'bk',
       'Não está no seu nome — aparece para o time porque está na sprint. Quem responde é ' + m.dev + '.');
+    var outro = d && d !== 'meu' ? timeDeOutro(m, contexto()) : '';
+    var deOutro = !outro ? '' : H.chip(H.ico(outro === 'dados' ? 'chart' : outro === 'sales' ? 'trend' : 'laptop') + ' Time ' +
+      (outro === 'dados' ? 'Dados/BI' : outro === 'sales' ? 'Sales Ops' : 'Desenvolvimento'), 'pu',
+      'Demanda de outro time — aparece porque o filtro Times está ligado. Combine com o time antes de pegar.');
     if (d === 'fila') return H.chip(H.ico('inbox') + ' Fila do time · sem dono', 'in',
-      'Fila do time: está na sprint e ainda não tem dono. Qualquer um pode pegar — combine antes de começar.');
-    return '';
+      'Fila do time: está na sprint e ainda não tem dono. Qualquer um pode pegar — combine antes de começar.') + deOutro;
+    return d === 'outro' ? deOutro : '';
   }
 
   /** O botao "Pegar" do card da fila: desligado, com o motivo, quando a regra recusa. */
@@ -1553,6 +1613,6 @@
     caixa: caixa, aplicar: aplicar, disponiveis: disponiveis, botao: botao, podeEditar: podeEditar,
     contexto: contexto, avisaRevertidos: avisaRevertidos, abrirAnexo: abrirAnexo, GESTOS: GESTOS, textoCasoUso: textoCasoUso,
     subirAnexo: subirAnexo, anexarArquivos: anexarArquivos, enviarMensagem: enviarMensagem,
-    marcaDono: marcaDono, botaoPegar: botaoPegar, permite: permite
+    marcaDono: marcaDono, botaoPegar: botaoPegar, permite: permite, times: times
   });
 }(typeof window !== 'undefined' ? window : globalThis));

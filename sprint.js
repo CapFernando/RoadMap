@@ -1168,6 +1168,28 @@
     return rotuloValido(s) ? s.slice(6, 10) + '-' + s.slice(3, 5) + '-' + s.slice(1, 2) : s;
   }
 
+  /* ═══ NA VALIDAÇÃO DA ÁREA, FORA DO PLACAR (05/11/2026) ════════════════════
+   *
+   * "A partir do momento que a task entrar em validação da área não deverá ser
+   *  mais contabilizada no fechamento da sprint (caso ela volte para o dev — Em
+   *  andamento deverá voltar a fazer parte da sprint e caso volte já na próxima
+   *  sprint, entra como atraso)."
+   *
+   * - NA ÁREA: some do placar, do ranking e do balanço da sprint — nem no total,
+   *   nem como entregue, nem como pendente. O % é do que ficou com o dev e o PM/PO.
+   * - VOLTOU NA MESMA SPRINT: a etapa volta a ser Em andamento e ela volta a
+   *   contar sozinha — nada a fazer aqui.
+   * - VOLTOU DEPOIS QUE A SPRINT ACABOU: o servidor a repassa para a sprint
+   *   corrente com a marca `devolvida_area` no histórico (ver
+   *   `rolaDevolvidaDaArea` no Worker). O passo conta como pulo — é o atraso — e
+   *   na sprint de onde ela saiu continua FORA do placar, como estava quando
+   *   entrou na área: sair por devolução não é "saiu sem entregar".          */
+  function naArea(etapa) { return txt(etapa) === 'validacao_area'; }
+  function saiuPelaArea(m, rotulo) {
+    var r = txt(rotulo);
+    return historico(m).some(function (h) { return h && h.devolvida_area && txt(h.de) === r; });
+  }
+
   /** O QUE SOBROU NA SPRINT — o que o fechamento precisa decidir.
    *
    *  `entregues` são as concluídas pelo PM/PO; `aguardando` o dev já entregou e
@@ -1179,8 +1201,9 @@
       if (!m || m.oculto || m.mesclado_em) return;
       if (!naSprint(m, rotulo)) return;
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      if (naArea(e)) return;                 // na área: fora do fechamento
       if (e === 'concluido') saida.entregues.push(m);
-      else if (e === 'validacao' || e === 'validacao_area') saida.aguardando.push(m);
+      else if (e === 'validacao') saida.aguardando.push(m);
       else if (e !== 'negada') saida.pendentes.push(m);
     });
     return saida;
@@ -1344,17 +1367,121 @@
     return Number.isFinite(n) && n > 0 ? n : 0;
   }
 
+
+  /* ═══ A ENTREGA PELA PRIMEIRA IDA PARA VALIDAÇÃO (05/11/2026) ═══════════════
+   *
+   * "Só conta entregue após aprovação PM/PO; para sprint deve considerar a
+   *  partir do momento que o dev coloca em validação da área ou validação
+   *  PM/PO. Ajustar em todas as visões." E antes: "reentrega deve contar 1
+   *  única entrega".
+   *
+   * ENTREGUE = CONCLUÍDA pelo PM/PO. A SPRINT dela = a do dia em que o dev a
+   * levou para validação (área ou PM/PO) PELA PRIMEIRA VEZ. Concluída numa
+   * sprint posterior conta na sprint da ida, retroativamente; enquanto o
+   * PM/PO não aprova, ela fica "aguardando aprovação" naquela sprint.
+   *
+   * O DIA vem de `primeira_validacao_em` (carimbo do servidor, gravado uma vez
+   * só). Sem ele, o menor entre `validacao_area_em` e `entregue_em` — o
+   * `entregue_em` recarimba a cada reentrega, então sozinho jogaria a entrega
+   * para a sprint da reentrega.
+   *
+   * VALE DAQUI PARA A FRENTE (`REGRA_ENTREGA_DESDE`): sprint e mês já
+   * apresentados não mudam de número por troca de regra — o mesmo corte de
+   * `capacidade.js` (REGRA_PONTOS_DESDE). */
+  var REGRA_ENTREGA_DESDE = '2026-11-01';
+
+  function primeiraIdaValidacao(m) {
+    var pv = iso((m || {}).primeira_validacao_em);
+    if (pv) return pv;
+    var a = iso((m || {}).validacao_area_em), e = iso((m || {}).entregue_em);
+    if (a && e) return a < e ? a : e;
+    return a || e || '';
+  }
+
+  /** A sprint em que a entrega conta — '' quando não há ida para validação
+   *  ou ela é anterior à regra (aí vale a regra antiga, pela sprint marcada). */
+  function sprintDaIdaValidacao(m, feriados) {
+    var d = primeiraIdaValidacao(m);
+    if (!d || d < REGRA_ENTREGA_DESDE) return '';
+    return rotuloDeData(d, feriados);
+  }
+
+  /** A regra nova vale para esta sprint? Pelo último dia dela. */
+  function sprintNoRegimeDeEntrega(rotulo, feriados) {
+    var f = faixaDaSprint(rotulo, feriados);
+    return !!f && f.ate >= REGRA_ENTREGA_DESDE;
+  }
+
+  /** A SITUAÇÃO DA DEMANDA NESTA SPRINT, pela regra nova:
+   *    'entregue'   — foi para validação nesta sprint e o PM/PO concluiu;
+   *    'aguardando' — foi para validação nesta sprint e ainda não foi aprovada
+   *                   (na área, no PM/PO ou devolvida para ajuste);
+   *    'em_curso'   — está nesta sprint e ainda não foi para validação;
+   *    'saiu'       — esteve aqui e foi para validação numa sprint posterior,
+   *                   ou rolou para outra sprint sem ir;
+   *    null         — não é desta sprint (inclusive a que foi para validação
+   *                   numa sprint ANTERIOR: a entrega é de lá).            */
+  function situacaoNaSprint(m, rotulo, etapa, feriados) {
+    var r = txt(rotulo);
+    var e = txt(etapa);
+    if (!m || !r || e === 'negada') return null;
+    var ida = sprintDaIdaValidacao(m, feriados);
+    if (ida === r) return e === 'concluido' ? 'entregue' : 'aguardando';
+    if (!esteveNaSprint(m, r)) return null;
+    if (ida) return chaveOrdem(ida) < chaveOrdem(r) ? null : 'saiu';
+    if (doPO(m) !== r) return 'saiu';
+    if (e === 'concluido') return 'entregue';   // concluída direto, sem passar por validação
+    // Na validação sem data nenhuma (dado antigo, de antes dos carimbos): já saiu da mão do dev.
+    if (e === 'validacao' || e === 'validacao_area') return 'aguardando';
+    return 'em_curso';
+  }
+
+  /** As demandas que contam nesta sprint pela regra nova — as que estiveram
+   *  nela e as que foram para validação nela, vindas de onde for. */
+  function demandasDaSprintPorEntrega(dados, rotulo, trilha, etapaDe) {
+    var r = txt(rotulo), fer = (dados || {}).feriados || [];
+    return ((dados || {}).melhorias || []).filter(function (m) {
+      if (!m || m.oculto || m.mesclado_em || !daTrilha(m, trilha)) return false;
+      var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      return !!situacaoNaSprint(m, r, e, fer);
+    });
+  }
+
   /** O PLACAR. */
   function placarDaSprint(dados, rotulo, etapaDe, trilha) {
     var r = txt(rotulo);
+    if (sprintNoRegimeDeEntrega(r, (dados || {}).feriados)) {
+      var fer = (dados || {}).feriados || [];
+      var q = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, emCurso: 0, saiu: 0, naArea: 0,
+                pontosTotal: 0, pontosValidados: 0, pontosAguardando: 0,
+                semPontuacao: 0, pct: 0, pctPontos: null, regraEntrega: true,
+                itens: { validados: [], aguardando: [], emCurso: [], saiu: [] } };
+      demandasDaSprintPorEntrega(dados, r, trilha, etapaDe).forEach(function (m) {
+        var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+        var sit = situacaoNaSprint(m, r, e, fer);
+        var pts = pontosDe(m);
+        q.total += 1; q.pontosTotal += pts;
+        if (!pts) q.semPontuacao += 1;
+        if (sit === 'entregue') { q.validados += 1; q.pontosValidados += pts; q.itens.validados.push(m); }
+        else if (sit === 'aguardando') { q.aguardando += 1; q.pontosAguardando += pts; q.itens.aguardando.push(m); }
+        else if (sit === 'em_curso') { q.emCurso += 1; q.itens.emCurso.push(m); }
+        else { q.saiu += 1; q.itens.saiu.push(m); }
+      });
+      q.pct = q.total ? Math.round(q.validados / q.total * 100) : 0;
+      q.pctPontos = q.pontosTotal ? Math.round(q.pontosValidados / q.pontosTotal * 100) : null;
+      return q;
+    }
     var lista = demandasDaSprint(dados, r, trilha);
-    var p = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, emCurso: 0, saiu: 0,
+    var p = { rotulo: r, trilha: txt(trilha), total: 0, validados: 0, aguardando: 0, emCurso: 0, saiu: 0, naArea: 0,
               pontosTotal: 0, pontosValidados: 0, pontosAguardando: 0,
               semPontuacao: 0, pct: 0, pctPontos: null,
               itens: { validados: [], aguardando: [], emCurso: [], saiu: [] } };
     lista.forEach(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
       if (e === 'negada') return;          // recusada nao e compromisso da sprint
+      var aquiA = doPO(m) === r;
+      // Na área, ou saiu daqui devolvida pela área: fora do placar — ver `naArea`.
+      if ((aquiA && naArea(e)) || (!aquiA && saiuPelaArea(m, r))) { p.naArea += 1; return; }
       var pts = pontosDe(m);
       p.total += 1;
       p.pontosTotal += pts;
@@ -1362,7 +1489,7 @@
       var aqui = doPO(m) === r;
       if (aqui && e === 'concluido') {
         p.validados += 1; p.pontosValidados += pts; p.itens.validados.push(m);
-      } else if (aqui && (e === 'validacao' || e === 'validacao_area')) {
+      } else if (aqui && e === 'validacao') {
         p.aguardando += 1; p.pontosAguardando += pts; p.itens.aguardando.push(m);
       } else if (aqui) {
         p.emCurso += 1; p.itens.emCurso.push(m);
@@ -1409,9 +1536,29 @@
       }
       return acc[nome];
     };
-    demandasDaSprint(dados, r, trilha).forEach(function (m) {
+    var regraNova = sprintNoRegimeDeEntrega(r, (dados || {}).feriados);
+    var ferR = (dados || {}).feriados || [];
+    (regraNova ? demandasDaSprintPorEntrega(dados, r, trilha, etapaDe) : []).forEach(function (m) {
+      var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
+      var sit = situacaoNaSprint(m, r, e, ferR);
+      var nomes = txt(m.dev).split('/').map(function (x) { return x.trim(); }).filter(Boolean);
+      if (!nomes.length) nomes = ['(sem dev)'];
+      var qn = nomes.length, pts = pontosDe(m);
+      nomes.forEach(function (nome) {
+        var a = pega(nome);
+        a.total += 1; a.pontosTotal += pts / qn;
+        if (sit === 'entregue') { a.validados += 1; a.pontos += pts / qn; }
+        else if (sit === 'aguardando') a.aguardando += 1;
+        else if (sit === 'em_curso') a.emCurso += 1;
+        else a.saiu += 1;
+        if (qn > 1) a.dupla = true;
+      });
+    });
+    // Sprint anterior à regra: a conta antiga, pela sprint marcada.
+    (regraNova ? [] : demandasDaSprint(dados, r, trilha)).forEach(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
       if (e === 'negada') return;
+      if ((doPO(m) === r && naArea(e)) || (doPO(m) !== r && saiuPelaArea(m, r))) return;   // ver `naArea`
       var nomes = txt(m.dev).split('/').map(function (x) { return x.trim(); }).filter(Boolean);
       if (!nomes.length) nomes = ['(sem dev)'];
       var q = nomes.length;
@@ -1422,7 +1569,7 @@
         a.total += 1;                      // item inteiro — ver o cabeçalho
         a.pontosTotal += pts / q;          // ponto repartido
         if (aqui && e === 'concluido') { a.validados += 1; a.pontos += pts / q; }
-        else if (aqui && (e === 'validacao' || e === 'validacao_area')) a.aguardando += 1;
+        else if (aqui && e === 'validacao') a.aguardando += 1;
         else if (aqui) a.emCurso += 1;
         else a.saiu += 1;
         if (q > 1) a.dupla = true;         // a tela avisa por que a coluna não soma
@@ -1496,14 +1643,15 @@
     return demandasDaSprint(dados, r, trilha).map(function (m) {
       var e = etapaDe ? etapaDe(m) : txt(m.status_planejamento);
       var aqui = doPO(m) === r;
-      var situacao = !aqui ? 'saiu'
+      var situacao = (aqui && naArea(e)) || (!aqui && saiuPelaArea(m, r)) ? 'na_area'
+        : !aqui ? 'saiu'
         : e === 'concluido' ? 'validado'
-        : (e === 'validacao' || e === 'validacao_area') ? 'aguardando'
+        : e === 'validacao' ? 'aguardando'
         : e === 'negada' ? 'negada' : 'em_curso';
       /* QUEM JÁ ENTREGOU NÃO TEM RISCO DE NÃO ENTREGAR. Acender "prazo
          vencido" num card concluído é ruído sobre fato consumado — e ruído
          numa lista de risco ensina a ignorar a lista. */
-      var riscos = (situacao === 'validado' || situacao === 'negada')
+      var riscos = (situacao === 'validado' || situacao === 'negada' || situacao === 'na_area')
         ? [] : riscosDaDemanda(m, r, hoje, prazoApi);
       return { m: m, situacao: situacao, riscos: riscos, pontos: pontosDe(m),
                prioritaria: aqui && ehPrioritariaDaSprint(m, r) };
@@ -1511,7 +1659,7 @@
       // a vencida puxada no início vem primeiro: foi o que o PM/PO priorizou
       if (a.prioritaria !== b.prioritaria) return a.prioritaria ? -1 : 1;
       if (a.riscos.length !== b.riscos.length) return b.riscos.length - a.riscos.length;
-      var ordem = { em_curso: 0, aguardando: 1, saiu: 2, validado: 3, negada: 4 };
+      var ordem = { em_curso: 0, aguardando: 1, na_area: 2, saiu: 3, validado: 4, negada: 5 };
       if (ordem[a.situacao] !== ordem[b.situacao]) return ordem[a.situacao] - ordem[b.situacao];
       return b.pontos - a.pontos;
     });
@@ -1747,6 +1895,14 @@
     esteveNaSprint: esteveNaSprint,
     demandasDaSprint: demandasDaSprint,
     placarDaSprint: placarDaSprint,
+    REGRA_ENTREGA_DESDE: REGRA_ENTREGA_DESDE,
+    primeiraIdaValidacao: primeiraIdaValidacao,
+    sprintDaIdaValidacao: sprintDaIdaValidacao,
+    sprintNoRegimeDeEntrega: sprintNoRegimeDeEntrega,
+    situacaoNaSprint: situacaoNaSprint,
+    demandasDaSprintPorEntrega: demandasDaSprintPorEntrega,
+    naArea: naArea,
+    saiuPelaArea: saiuPelaArea,
     rankingDaSprint: rankingDaSprint,
     riscosDaDemanda: riscosDaDemanda,
     acompanhamentoDaSprint: acompanhamentoDaSprint,

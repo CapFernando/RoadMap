@@ -885,6 +885,11 @@
     if (soApuracao) {
       var so = Object.assign({}, apu);
       delete so.secoes; delete so.imagens; delete so.mensagem;
+      /* `pontos.itens` sao as demandas INTEIRAS do mes, e o deck so le os cortes
+         (total, porSemana, porDev, porAssunto, porSprint). Em outubro/2026 eram
+         975 KB de 1076 KB, e o Worker recusa acima de 1 MB: o mes nao congelava
+         (admin.html, `apresGerar`, na resolucao do merge de 05/11/2026). */
+      if (so.pontos) { so.pontos = Object.assign({}, so.pontos); delete so.pontos.itens; }
       return so;
     }
     return apu;

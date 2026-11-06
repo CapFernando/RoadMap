@@ -144,6 +144,14 @@
       '.axa .es-pes{display:flex;flex-wrap:wrap;gap:6px;align-items:center}',
       '.axa .es-pes .lab{margin-right:4px}',
       '.axa .es-pes .chip{height:24px;font-size:11.5px;gap:5px}',
+      // O nome em "Faltando por pessoa" e botao (8f236cf); a faixa da pessoa escolhida vem embaixo.
+      '.axa .es-pes .es-pn{border:0;font-family:inherit;cursor:pointer}',
+      '.axa .es-pes .es-pn:hover{box-shadow:inset 0 0 0 1px var(--bd4)}',
+      '.axa .es-pes .es-pn.on{box-shadow:inset 0 0 0 1px rgba(var(--ac-rgb),.7);color:var(--tx)}',
+      '.axa .es-pr{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;padding:10px 14px;border-radius:12px;background:var(--sf2);' +
+        'border:1px solid rgba(var(--ac-rgb),.45);font-size:13px;color:var(--tx2)}',
+      '.axa .es-pr b{font-size:15px;color:inherit}',
+      '.axa .es-pr > span:first-child b{color:var(--tx)}',
       '.axa .es-gh{display:flex;align-items:baseline;gap:8px;padding:8px 2px 6px;border-bottom:1px solid var(--bd);margin-top:6px}',
       '.axa .es-gh .n{font-family:var(--font-mono);font-size:11.5px;color:var(--tx4)}',
       '.axa .es-ln{display:grid;grid-template-columns:78px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 14px;border-radius:11px;background:var(--sf2);border:1px solid transparent;font-size:13px;text-decoration:none;color:var(--tx)}',
@@ -545,7 +553,10 @@
         (p.saiu ? ' · ' + p.saiu + ' saí' + (p.saiu === 1 ? 'u' : 'ram') + ' sem entregar' : '')) +
       kpi('Adicionado depois', H.num(ad.pts), 'pts', ad.n ? plural(ad.n, 'item', 'itens') + ' depois de iniciada' : 'nada entrou depois do início', ad.n ? 'wn' : '', ad.n ? 'var(--wn-t)' : '') +
       kpi('Entregue e validado', H.num(p.pontosValidados), 'pts', pctPl + ' · ' + p.validados + ' de ' + p.total + ' itens (' + p.pct + '%)', 'ok', 'var(--ok-t)') +
-      kpi('Aguardando validação', H.num(p.pontosAguardando), 'pts', p.aguardando ? plural(p.aguardando, 'item espera', 'itens esperam') + ' o PM/PO; contam aqui ao validar' : 'nada esperando o PM/PO', p.aguardando ? 'in' : '', p.aguardando ? 'var(--in-t)' : '') +
+      // Regra de 05/11 (3ca7514): aguardando = foi para validacao (area ou PM/PO) nesta sprint e o PM/PO ainda nao aprovou.
+      kpi(p.regraEntrega ? 'Aguardando aprovação' : 'Aguardando validação', H.num(p.pontosAguardando), 'pts', p.aguardando
+        ? plural(p.aguardando, 'item espera', 'itens esperam') + (p.regraEntrega ? ' a aprovação (área ou PM/PO); contam nesta sprint ao aprovar' : ' o PM/PO; contam aqui ao validar')
+        : 'nada esperando o PM/PO', p.aguardando ? 'in' : '', p.aguardando ? 'var(--in-t)' : '') +
       '</div>';
 
     // Burndown + Por pessoa
@@ -584,7 +595,7 @@
     // Escopo
     h += '<section class="sp-pn" id="sp-escopo"></section>';
     el.innerHTML = h;
-    el._sp = { D: D, r: r, acomp: acomp, entrada: entrada };
+    el._sp = { D: D, r: r, acomp: acomp, entrada: entrada, regra: !!p.regraEntrega };
     desenharEscopo(el);
   }
 
@@ -605,7 +616,11 @@
     if (!F[_esc.filtro] || (_esc.filtro === 'meus' && !dev)) _esc.filtro = 'todos';
     var lista = st.acomp.filter(F[_esc.filtro]);
     var vis = lista.slice(0, _esc.n);
-    var SIT = { validado: ['ok', 'Validado'], aguardando: ['wn', 'Aguardando PM/PO'], saiu: ['bk', 'Saiu da sprint'], negada: ['dg', 'Negada'] };
+    /* Na Validacao da area (`SPRINTPO.naArea`, fd4e5e8): o admin marca "Na area ·
+       fora do placar". Da regra de 05/11 em diante ela volta ao placar como
+       aguardando aprovacao (3ca7514), e o chip diz isso. */
+    var SIT = { validado: ['ok', 'Validado'], aguardando: ['wn', 'Aguardando PM/PO'], saiu: ['bk', 'Saiu da sprint'], negada: ['dg', 'Negada'],
+                na_area: ['pu', st.regra ? 'Na área · aguardando aprovação' : 'Na área · fora do placar'] };
     var h = '<div class="hh"><h2 class="h2">Escopo <span class="note" style="font-family:var(--font-ui);font-weight:600">· ' + st.acomp.length + '</span></h2>' +
       '<span class="note" style="font-size:12.5px">Item que entra depois de iniciada fica marcado como Adicionado; o que veio de outra sprint, como Repassada.</span></div>' +
       '<div class="sp-fl" role="group" aria-label="Filtro do escopo">' + ordem.map(function (k) {
@@ -1252,7 +1267,7 @@
     });
   }
 
-  // ═══ ABA: ENTREGAS POR SPRINT (admin.html, 953e68c a 43706a7) ═══════════
+  // ═══ ABA: ENTREGAS POR SPRINT (admin.html, 953e68c a 43706a7, 8f236cf, 3ca7514)
   /* "Crie uma nova aba, entregas por sprint. Ali quero a mesma logica [...],
       com temas e suas respectivas datas e com quem esta. Preciso que seja
       possivel escolher a sprint para ter o resultado."
@@ -1265,13 +1280,42 @@
      As contas sao recortes de `renderEntregasSprint` (admin.html) com a base
      por parametro; a suite roda as duas lado a lado. A base e a do app
      (`H.visiveis`, sem `oculto`); o admin conta tambem a demanda oculta. */
-  function esResumo(SPm, etapa, vivas, r, hoje, projetos) {
-    var ms = vivas.filter(function (m) { return SPm.naSprint(m, r); });
-    var aberta = function (m) { var k = etapa(m); return k !== 'concluido' && k !== 'negada'; };
+  /* ENTREGUE SO APOS O PM/PO, NA SPRINT DA PRIMEIRA IDA PARA VALIDACAO
+     (admin.html, 3ca7514). "So conta entregue apos aprovacao PM/PO; para sprint
+     deve considerar a partir do momento que o dev coloca em validacao da area
+     ou validacao PM/PO." A regra e `SPRINTPO.situacaoNaSprint`, a mesma do
+     placar: entregue = concluida com a 1a ida para validacao nesta sprint;
+     aguardando = foi para validacao nesta sprint e o PM/PO ainda nao aprovou.
+     A que foi para validacao numa sprint ANTERIOR e entrega de la e sai daqui.
+     Sprint anterior a regra (`sprintNoRegimeDeEntrega`): a conta antiga, pela
+     sprint marcada. Devolve 'entregue', 'aguardando', 'aberta', 'negada' ou
+     null (fora desta sprint) — o `sitEs` do admin. */
+  function esSituacao(SPm, etapa, r, feriados) {
+    var regra = !!(SPm.sprintNoRegimeDeEntrega && SPm.sprintNoRegimeDeEntrega(r, feriados));
+    var sit = function (m) {
+      var sk = etapa(m);
+      if (sk === 'negada') return 'negada';
+      if (!regra) return sk === 'concluido' ? 'entregue' : 'aberta';
+      var s = SPm.situacaoNaSprint(m, r, sk, feriados);
+      if (s === 'entregue' || s === 'aguardando') return s;
+      if (s === 'em_curso') return 'aberta';
+      return s === 'saiu' && SPm.naSprint(m, r) ? 'aberta' : null;
+    };
+    return { regra: regra, sit: sit };
+  }
+  function esResumo(SPm, etapa, vivas, r, hoje, projetos, feriados) {
+    var S = esSituacao(SPm, etapa, r, feriados || []), sit = S.sit;
+    var ms = vivas.filter(function (m) {
+      if (!S.regra) return SPm.naSprint(m, r);
+      var st = sit(m);
+      return st === 'negada' ? SPm.naSprint(m, r) : !!st;
+    });
+    var aberta = function (m) { return sit(m) === 'aberta'; };
     var temDono = function (m) { return !!String(m.dev || '').trim(); };
     var vencida = function (m) { return aberta(m) && /^\d{4}-\d{2}-\d{2}$/.test(String(m.entrega_usuario || '')) && m.entrega_usuario < hoje; };
     var negadas = ms.filter(function (m) { return etapa(m) === 'negada'; }).length;
-    var entregues = ms.filter(function (m) { return etapa(m) === 'concluido'; });
+    var entregues = ms.filter(function (m) { return sit(m) === 'entregue'; });
+    var aguardando = ms.filter(function (m) { return sit(m) === 'aguardando'; });
     var faltaCom = ms.filter(function (m) { return aberta(m) && temDono(m); });
     var faltaSem = ms.filter(function (m) { return aberta(m) && !temDono(m); });
     var validas = ms.length - negadas;
@@ -1284,9 +1328,30 @@
     faltaCom.forEach(function (m) { var k = String(m.dev).trim(); (porPessoa[k] = porPessoa[k] || []).push(m); });
     var pessoas = Object.keys(porPessoa).sort(function (a, b) { return porPessoa[b].length - porPessoa[a].length || a.localeCompare(b, 'pt-BR'); })
       .map(function (n) { return { nome: n, n: porPessoa[n].length, vencidas: porPessoa[n].filter(vencida).length }; });
-    return { ms: ms, entregues: entregues, faltaCom: faltaCom, faltaSem: faltaSem, negadas: negadas, validas: validas,
-             pctEntregues: pctDe(entregues.length), pctFaltaCom: pctDe(faltaCom.length), pctFaltaSem: pctDe(faltaSem.length),
+    return { ms: ms, regra: S.regra, sit: sit, aberta: aberta, vencida: vencida,
+             entregues: entregues, aguardando: aguardando, faltaCom: faltaCom, faltaSem: faltaSem, negadas: negadas, validas: validas,
+             pctEntregues: pctDe(entregues.length), pctAguardando: pctDe(aguardando.length),
+             pctFaltaCom: pctDe(faltaCom.length), pctFaltaSem: pctDe(faltaSem.length),
              comProj: comProj, vencidas: ms.filter(vencida).length, vencCom: faltaCom.filter(vencida).length, pessoas: pessoas };
+  }
+  /* A PESSOA CLICADA (admin.html, 8f236cf): "ao clicar quero ver a quantidade
+     por dev". O nome em "Faltando por pessoa" recorta a lista para as tasks
+     dela na sprint (o `dev` inteiro, como o admin compara) e traz os numeros
+     dela; clicar de novo volta a todos. Quem nao tem task nenhuma na sprint
+     deixa de valer (''), mesmo sem nada faltando os numeros ainda dizem algo. */
+  function esDaPessoa(x, nome) {
+    var daPessoa = function (m) { return String(m.dev || '').trim() === nome; };
+    if (!nome || !x.ms.some(daPessoa)) return null;
+    var lp = x.ms.filter(daPessoa);
+    var ent = lp.filter(function (m) { return x.sit(m) === 'entregue'; }).length;
+    var agu = lp.filter(function (m) { return x.sit(m) === 'aguardando'; }).length;
+    var neg = lp.filter(function (m) { return x.sit(m) === 'negada'; }).length;
+    var falta = lp.filter(x.aberta);
+    var val = lp.length - neg;
+    return { nome: nome, casa: daPessoa, total: lp.length, entregues: ent, aguardando: agu, negadas: neg,
+             faltando: falta.length, vencidas: falta.filter(x.vencida).length,
+             pontos: lp.reduce(function (t, m) { return t + (Number(m.poker_pontos) || 0); }, 0),
+             pct: val ? Math.round(ent / val * 100) : null };
   }
   /** Grupos por tema em ordem alfabetica, "Sem tema" no fim; dentro do tema,
    *  pela entrega ao usuario (sem data no fim) e pelo titulo. */
@@ -1325,10 +1390,11 @@
 
   /** "Com: Fulano · Entrega usuario: 10/11/2026 (em 5d)" — a linha do
    *  "com quem esta" da lista de Melhorias do admin (372b92f). O Backlog
-   *  usa a mesma. */
-  function comQuemHtml(m) {
+   *  usa a mesma. `abertaJa` (opcional) vem da aba Entregas: la a que esta
+   *  aguardando o PM/PO ja saiu da mao do dev e nao acende vencida. */
+  function comQuemHtml(m, abertaJa) {
     var k = H.colunaDe(m);
-    var aberta = k !== 'concluido' && k !== 'negada';
+    var aberta = typeof abertaJa === 'boolean' ? abertaJa : k !== 'concluido' && k !== 'negada';
     var eu = esEntregaUsuario(m, H.hoje(), aberta);
     var cor = eu.nivel === 'dg' ? 'var(--dg-t)' : eu.nivel === 'wn' ? 'var(--wn-t)' : '';
     return (m.dev ? 'Com: <b>' + esc(m.dev) + '</b>' : '<span style="color:var(--tx4)">Sem responsável</span>') + ' · ' +
@@ -1336,7 +1402,7 @@
                : '<span style="color:var(--tx4)">Entrega usuário: a definir</span>');
   }
 
-  var _ent = { filtro: 'todas' };
+  var _ent = { filtro: 'todas', pessoa: '' };
 
   function abaEntregas(el, ctx) {
     var D = ctx.D;
@@ -1348,7 +1414,10 @@
     var opcoes = ops.map(function (o) {
       return '<option value="' + esc(o.key) + '"' + (o.key === r ? ' selected' : '') + '>' + esc(o.label + (o.key === agora ? ' (atual)' : '') + ' · ' + o.n) + '</option>';
     }).join('');
-    var x = esResumo(SP(), H.colunaDe, vivas, r, H.hoje(), D.projetos || []);
+    var x = esResumo(SP(), H.colunaDe, vivas, r, H.hoje(), D.projetos || [], fer(D));
+    var pes = esDaPessoa(x, _ent.pessoa);
+    if (!pes) _ent.pessoa = '';
+    if (_ent.filtro === 'aguardando' && !x.regra) _ent.filtro = 'todas';
     var f = r ? SP().faixaDaSprint(r, fer(D)) : null;
 
     var h = '<header class="sp-hd"><div class="tt"><div class="row" style="gap:10px">' +
@@ -1368,10 +1437,14 @@
         '<span class="l">' + rot + '</span><span class="v"' + (cor ? ' style="color:' + cor + '"' : '') + '>' + v + '</span>' +
         '<span class="s">' + sub + '</span>' + (extra || '') + '</button>';
     };
-    h += '<div class="sp-k4">' +
+    // Com a regra de 05/11 entra o quinto cartao, "Aguardando aprovacao", fora do Faltando.
+    h += '<div class="' + (x.regra ? 'sp-k5' : 'sp-k4') + '">' +
       cartao('todas', x.ms.length, 'Na sprint', plural(x.ms.length, 'task', 'tasks') + (x.negadas ? ' · ' + plural(x.negadas, 'negada', 'negadas') : '') + ' · ' + x.comProj + ' em projeto') +
       cartao('entregues', x.entregues.length, 'Entregues', x.entregues.length + ' de ' + plural(x.validas, 'task', 'tasks') + ' · ' + x.pctEntregues + '%', 'var(--ok-t)', 'ok',
         '<span class="sp-bar"><i style="width:' + x.pctEntregues + '%;background:var(--ok)"></i></span>') +
+      (x.regra ? cartao('aguardando', x.aguardando.length, 'Aguardando aprovação',
+        x.aguardando.length ? x.pctAguardando + '% · foram para validação nesta sprint' : 'nada parado na validação',
+        x.aguardando.length ? 'var(--in-t)' : '', x.aguardando.length ? 'in' : '') : '') +
       cartao('falta_com', x.faltaCom.length, 'Faltando · com responsável', x.pctFaltaCom + '% das tasks' +
         (x.vencCom ? ' · <b style="color:var(--dg-t)">' + plural(x.vencCom, 'com entrega vencida', 'com entrega vencida') + '</b>' : ''),
         x.faltaCom.length ? 'var(--wn-t)' : '', x.faltaCom.length ? 'wn' : '') +
@@ -1379,17 +1452,34 @@
         x.faltaSem.length ? 'var(--dg-t)' : 'var(--ok-t)', x.faltaSem.length ? 'dg' : '') +
       '</div>';
     if (x.pessoas.length) {
+      // O nome e um botao: mostra as tasks e os numeros da pessoa (8f236cf).
       h += '<div class="es-pes"><span class="lab">FALTANDO POR PESSOA</span>' + x.pessoas.map(function (pp) {
-        return H.chip(esc(pp.nome) + ' <b>' + pp.n + '</b>' + (pp.vencidas ? ' · ' + plural(pp.vencidas, 'vencida', 'vencidas') : ''), pp.vencidas ? 'dg' : 'bk',
-          pp.vencidas ? pp.vencidas + ' com entrega vencida' : '');
+        var on = _ent.pessoa === pp.nome;
+        return '<button type="button" class="chip c-' + (pp.vencidas ? 'dg' : 'bk') + ' es-pn' + (on ? ' on' : '') + '" data-es-pessoa="' + esc(pp.nome) + '" aria-pressed="' + on + '"' +
+          ' title="' + esc((on ? 'Clique de novo para ver todos' : 'Clique para ver as tasks de ' + pp.nome) + (pp.vencidas ? ' · ' + pp.vencidas + ' com entrega vencida' : '')) + '">' +
+          esc(pp.nome) + ' <b>' + pp.n + '</b>' + (pp.vencidas ? ' · ' + plural(pp.vencidas, 'vencida', 'vencidas') : '') + '</button>';
       }).join('') + '</div>';
     }
+    if (pes) {
+      h += '<div class="es-pr" role="status"><span class="row" style="gap:6px">' + ico('user') + ' <b>' + esc(pes.nome) + '</b></span>' +
+        '<span><b>' + pes.total + '</b> na sprint</span>' +
+        '<span style="color:var(--ok-t)"><b>' + pes.entregues + '</b> ' + (pes.entregues === 1 ? 'entregue' : 'entregues') + (pes.pct != null ? ' · ' + pes.pct + '%' : '') + '</span>' +
+        (pes.aguardando ? '<span style="color:var(--in-t)"><b>' + pes.aguardando + '</b> aguardando aprovação</span>' : '') +
+        '<span style="color:var(--wn-t)"><b>' + pes.faltando + '</b> faltando</span>' +
+        (pes.vencidas ? '<span style="color:var(--dg-t)"><b>' + pes.vencidas + '</b> com entrega vencida</span>' : '') +
+        (pes.negadas ? '<span>' + plural(pes.negadas, 'negada', 'negadas') + '</span>' : '') +
+        '<span>' + pes.pontos + ' pts</span>' +
+        '<button type="button" class="btns" data-es-pessoa="" style="margin-left:auto;height:28px">Ver todos</button></div>';
+    }
 
-    var lista = _ent.filtro === 'entregues' ? x.entregues : _ent.filtro === 'falta_com' ? x.faltaCom : _ent.filtro === 'falta_sem' ? x.faltaSem : x.ms;
-    var ROT = { todas: 'tudo', entregues: 'só as entregues', falta_com: 'só o que falta com responsável', falta_sem: 'só o que falta sem responsável' };
+    var lista = (_ent.filtro === 'entregues' ? x.entregues : _ent.filtro === 'aguardando' ? x.aguardando : _ent.filtro === 'falta_com' ? x.faltaCom
+      : _ent.filtro === 'falta_sem' ? x.faltaSem : x.ms).filter(function (m) { return !pes || pes.casa(m); });
+    var ROT = { todas: 'tudo', entregues: 'só as entregues', aguardando: 'só o que aguarda a aprovação do PM/PO',
+                falta_com: 'só o que falta com responsável', falta_sem: 'só o que falta sem responsável' };
+    var recorte = (_ent.filtro === 'todas' ? '' : ROT[_ent.filtro]) + (pes ? (_ent.filtro === 'todas' ? 'as tasks' : ',') + ' de ' + pes.nome : '');
     h += '<section class="sp-pn" style="gap:6px"><div class="hh"><h2 class="h2">Por tema <span class="note" style="font-family:var(--font-ui);font-weight:600">· ' + lista.length + '</span></h2>' +
-      '<span class="note" style="font-size:12.5px">' + (_ent.filtro === 'todas' ? 'Clique num cartão para filtrar a lista.' :
-        'Mostrando ' + ROT[_ent.filtro] + '. <button type="button" class="btns" data-es-filtro="todas" style="height:26px;margin-left:6px">Ver tudo</button>') + '</span></div>';
+      '<span class="note" style="font-size:12.5px">' + (!recorte ? 'Clique num cartão ou num nome para filtrar a lista.' :
+        'Mostrando ' + esc(recorte) + '. <button type="button" class="btns" data-es-filtro="todas" data-es-pessoa="" style="height:26px;margin-left:6px">Ver tudo</button>') + '</span></div>';
     if (!lista.length) {
       h += H.vazio('inbox', 'Nada nesta situação', 'Clique no cartão de novo para ver a sprint inteira.');
     } else {
@@ -1403,7 +1493,7 @@
             if (pj) chips.push(H.chip(ico('folder') + ' ' + esc((pj.codigo ? pj.codigo + ' · ' : '') + (pj.nome || '')), 'pu', 'Faz parte do projeto ' + (pj.nome || '')));
             var fim = k === 'concluido' && m.concluido_em ? ' · Concluída em ' + esc(H.dma(String(m.concluido_em).slice(0, 10))) : '';
             return '<a class="es-ln" href="' + H.hrefItem(m) + '"><span class="cd">' + esc(m.codigo || '—') + '</span>' +
-              '<span class="ti"><b>' + esc(m.titulo || '') + '</b><span>' + comQuemHtml(m) + fim + '</span></span>' +
+              '<span class="ti"><b>' + esc(m.titulo || '') + '</b><span>' + comQuemHtml(m, x.aberta(m)) + fim + '</span></span>' +
               '<span class="x">' + chips.join('') + '</span></a>';
           }).join('');
       }).join('');
@@ -1830,7 +1920,14 @@
         if (t) { _trilha = t.getAttribute('data-sp-trilha'); _esc.n = 25; AX.desenhar(); return; }
         // O cartao do resumo das Entregas filtra a lista; clicar de novo volta a tudo.
         var ef = e.target.closest('[data-es-filtro]');
-        if (ef) { var fv = ef.getAttribute('data-es-filtro'); _ent.filtro = _ent.filtro === fv ? 'todas' : fv; AX.desenhar(true); return; }
+        if (ef) {
+          var fv = ef.getAttribute('data-es-filtro'); _ent.filtro = _ent.filtro === fv ? 'todas' : fv;
+          if (ef.hasAttribute('data-es-pessoa')) _ent.pessoa = '';
+          AX.desenhar(true); return;
+        }
+        // O nome em "Faltando por pessoa": as tasks dela; de novo, todos.
+        var ep = e.target.closest('[data-es-pessoa]');
+        if (ep) { var pv = ep.getAttribute('data-es-pessoa'); _ent.pessoa = _ent.pessoa === pv ? '' : pv; AX.desenhar(true); return; }
         var fl = e.target.closest('[data-sp-filtro]');
         if (fl) {
           _esc.filtro = fl.getAttribute('data-sp-filtro'); _esc.n = 25; desenharEscopo(el);
